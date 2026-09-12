@@ -33,8 +33,10 @@ public struct MediaControlSnapshot: Decodable {
     /// 这首歌(实测见 `RadioTrackClock` 头注),所以 duration 置 nil(未知),elapsedTime 换成
     /// `RadioTrackClock` 自己按曲目边界起的表。下游拿到的因此是一份正常的单曲快照,不需要各自再判一次。
     ///
-    /// ⚠️ 只在走 media-control 的路径上有值。设置里**只**选了 Apple Music 时走的是纯 JXA 路
-    /// (fetchAppleMusicSnapshot),那条路拿不到这个字段,电台仍是旧行为 —— 见 02 章「电台」一节。
+    /// ⚠️ 纯 JXA 路(fetchAppleMusicSnapshot)拿不到这个字段 —— AppleScript 问 Music.app 要不到
+    /// MediaRemote 独有的键。设置里**只**选了 Apple Music 时走的正是那条路,2026-09-11 之前
+    /// 电台在这一种配置下完全不生效;现在那条路按曲目探一次 media-control 把判据补回来
+    /// (见 `MediaControlClient.radioAwareAppleMusicSnapshot`),见 02 章「电台」一节。
     public let isRadio: Bool?
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
@@ -58,5 +60,36 @@ public struct MediaControlSnapshot: Decodable {
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
+    }
+
+    /// 换掉时长的副本(2026-09-10)。唯一的用处是电台:系统报的 `duration` 是**整档节目**的
+    /// (实测 3390.122s),而位置已经换成单曲口径,分母不跟着换就会显示成「2:29 / 56:30」。
+    /// 真曲长由 collector 从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
+    /// 里读出来替换。写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withDuration(_ newDuration: Double) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: newDuration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
+    }
+
+    /// 换成电台口径的副本(2026-09-11)。位置**和锚点**都换成 `RadioTrackClock` 那块按曲目边界
+    /// 起的单曲表,并置上 `isRadio` —— 走 media-control 的路径在
+    /// `MediaControlClient.fetchRawMediaControlSnapshot` 里就地构造出同样的形状,这个方法是给
+    /// 「只勾了 Apple Music」那条纯 AppleScript 路径补的(见
+    /// `MediaControlClient.radioAwareAppleMusicSnapshot`)。锚点跟着换的理由与那边逐字相同:
+    /// 留着原始值会让下游"锚点是不是开播那个"的判定按整档节目的钟去解读,自相矛盾。
+    ///
+    /// ⚠️ `duration` **原样不动**:系统那份报的是整档节目(实测 3390.122s),但置 nil 会让
+    /// `LocalPlaybackSource.apply` 建不起进度锚点、整档节目都没有歌词(2026-09-10 真踩过)。
+    /// 真曲长由 collector 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换。
+    /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withRadio(position: Double) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: position, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: position, isRadio: true)
     }
 }

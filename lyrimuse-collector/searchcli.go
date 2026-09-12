@@ -85,10 +85,24 @@ func runSearchLyricsCLI(args []string) {
 		// 同理,Apple 各商店曲目署名那份也要读——道理跟上面 MB 主名那段一样,这条 CLI
 		// 每次都是新进程,不读的话每次开弹窗都要重新打几次 iTunes Search。
 		loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+		// ⚠️ 同一次商店遍历的第二个产物(这一条录音在原产地商店的曲名)**单独一份**、也必须在这里
+		// 读 —— 这条 CLI 在 main() 里 flag.Parse() **之前**就分支走掉了(见 main.go 那个
+		// os.Args[1] == "search-lyrics" 分支),常驻那边的加载点它一行都够不到。漏了不会报错,
+		// 只会让每次开弹窗都重打两次 iTunes(2026-09-12 就这么漏过一次,靠"缓存文件压根没生成"
+		// 才发现)。见 appleStorefrontCanonicalTitle。
+		loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-storefront-title-cache.json"))
 		// 同理,QQ 音乐歌手搜索建议那份缓存也要读——retryArtistIdentities/
 		// resolveGenericArtistCanonicalName 都会用到,不读的话每次开弹窗都要重新打一次
 		// QQ smartbox。
 		loadQQArtistNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-qq-artist-name-cache.json"))
+		// 同理,enrich 缓存本身也要读(2026-09-09):retryArtistIdentities 新增的
+		// learnedSourceArtistAlias 那一档,证据就在这份缓存里(同一歌手别的歌成功解析时
+		// 源那边署的名)。不读的话它在手动搜索里恒为空 —— 而"播放器把歌手名本地化了"
+		// (王子=Prince)恰恰是用户最会跑来手动搜一把的场景,这一档在那时缺席等于白加;
+		// 顺带也会重蹈上面 Apple 目录锚点/同源加权那两段警告的覆辙:弹窗的名次跟自动
+		// 决策对不上。⚠️ 这条 CLI **只读不写**这份缓存(整条搜索链路不碰 commitEnrichEntry),
+		// 不会跟常驻 collector 抢写同一个文件。
+		loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))
 		// ⚠️ 2026-08-21 补:main() 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
 		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSources 一直是空集,
 		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。
@@ -200,7 +214,11 @@ func runSearchLyricsCLI(args []string) {
 	go retryArtistIdentities(context.Background(), sArtist)
 
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
-	_, results := scoredLyricCandidatesStreaming(context.Background(), sArtist, sTitle, sAlbum, effectiveDuration, emit)
+	// 手动搜索这条路径也记查询词(借鉴清单 V1):「重新自动匹配」采纳后写进缓存的决策存档
+	// 就是下面这一份,不挂收集器的话它会是唯一一条没有 queries_tried 的路径。
+	// 这个一次性进程没有熔断态(见 sourcebreaker.go 头注),所以只挂 query log、不挂 round。
+	searchCtx, queries := withLyricQueryLog(context.Background())
+	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在
 	// "这轮搜索结束了"那行之前同步重跑一整轮 CN+US 搜索,把收尾挂住几秒(2026-08-12 审阅);
@@ -257,6 +275,7 @@ func runSearchLyricsCLI(args []string) {
 		if p.Decidable {
 			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, effectiveDuration,
 				results, picked, picked != nil && picked.Source != *currentSource)
+			d.QueriesTried = queries.queries()
 			if raw, err := json.Marshal(d); err == nil {
 				p.DecisionJSON = string(raw)
 			}

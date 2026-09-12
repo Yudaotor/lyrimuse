@@ -119,8 +119,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let url = URL(string: urlString), url.scheme == LyrimuseIdentity.urlScheme else {
             return
         }
-        // 目前只有这一种回调用途,不需要按 host/path 再分流;后续如果这个 scheme 挂了
-        // 别的用途,再在这里加判断。
+        // 两种用途(2026-09-12 起按 host 分流):
+        //   lyrimuse://settings/software-update → 把设置窗口翻到「软件更新」页(仿系统设置的
+        //     x-apple.systempreferences: 深链;发版说明 / 支持回复里可以直接给这个链接,也是本机核对那一页
+        //     外观的唯一非点按入口);带 ?check=1 则顺手发起一次检查(支持回复里「点这个链接检查更新」)。
+        //     settings 下别的路径暂无定义,只打开设置窗口。
+        //   其它(lyrimuse://lastfm-auth-callback)→ Last.fm 授权回跳,原样。
+        if url.host == "settings" {
+            if url.path == "/software-update" {
+                let wantsCheck = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                    .contains { $0.name == "check" && $0.value != "0" } ?? false
+                if wantsCheck {
+                    SparkleUpdaterManager.shared.checkForUpdates()
+                } else {
+                    SparkleUpdaterManager.shared.showUpdatePage()
+                }
+            } else {
+                AppActions.shared.openSettings?()
+            }
+            return
+        }
         LastfmConnectController.shared.handleAuthCallback()
     }
 
@@ -371,19 +389,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //    `check-windows` 能看到它 onscreen=false 地挂在那儿)。返回 false = "这次 reopen
     //    我自己处理完了",AppKit 不再多做动作,于是只有歌词窗口会出来。
     //
-    // 不看 hasVisibleWindows(系统给的这个参数只反映"当前有没有窗口**可见**",最小化的
-    // 窗口会让它变 false,不足以回答"这几扇窗口有没有任意一扇还开着"),改看
+    // 不看 hasVisibleWindows——2026-09-09 隔离探针坐实这个参数对本 App **恒为 true**(悬浮/
+    // 灵动岛的 NSPanel、状态栏窗口都算"可见"),7 天 23 次 reopen 日志无一例外;改看
     // AuxiliaryWindowActivation.hasAnyOpen——2026-08-25 用户进一步收窄了这条规则:
     // 只有在设置/歌词管理/歌词窗口/引导这四扇窗**一扇都没开着**时,才顺便开歌词窗口;
-    // 只要还有任意一扇开着(哪怕被最小化到 Dock 里),就交还给 AppKit 的默认 reopen 行为
-    // (还原被最小化的窗口、把已有窗口带到前台),不再额外抢开歌词窗口。这不会重新踩上面
-    // ②警告过的坑:那个坑是"用户明确关掉的设置窗被系统默认行为带回来";而 hasAnyOpen
-    // 为 true 时,意味着确实还有窗口**没被关掉**(`.onDisappear` 只在真正关闭时触发,
+    // 只要还有任意一扇开着(哪怕被最小化到 Dock 里),就把开着的窗口带回来(还原被最小化的、
+    // 把已有窗口带到前台),不再额外抢开歌词窗口。这不会重新踩上面②警告过的坑:那个坑是
+    // "用户明确关掉的设置窗被系统默认行为带回来";而 hasAnyOpen 为 true 时,意味着确实还有
+    // 窗口**没被关掉**(`.onDisappear` 只在真正关闭时触发、最小化不触发——探针实测,
     // AuxiliaryWindowActivation 的 Dock 图标借用/还原逻辑早就在依赖这条),不会误判"已关闭"
     // 为"开着"。
+    //
+    // ⚠️ "带回来"这一步**自己做**,不能 `return true` 交给 AppKit(2026-09-09 之前的写法,用户报
+    // 「有时候点 Dock 图标没有任何反应」):AppKit 默认 reopen 只在**没有任何普通窗口可见**时
+    // 还原**一扇**最小化窗口,有一扇可见就什么都不做——设置窗开着、歌词窗口最小化,点 Dock 就是
+    // 没反应(02:25 那段日志用户连点 12 下,每一条都停在旧的 `return true`)。探针与结论见
+    // AuxiliaryWindowActivation.bringOpenWindowsForward 的注释。
+    //
+    // 再补一条兜底,保证**每一下点击都有可见结果**:App **本来就在前台**、开着的窗口也本来就全在
+    // 最前面(比如用户正在设置窗里,又去点了一下 Dock 图标;或者上一下点击已经把窗口带回来了、
+    // 用户再点一下)时,"带回来"什么都改变不了,这时落回开歌词窗口那条路——它不违背 08-25 的意思
+    // (那条是"不要**替代**还原动作去抢开歌词窗口",不是"设置开着就永远不准开");歌词窗口本来就在
+    // 最前面时这一步只是把它再 front 一次,无副作用。
+    //
+    // "本来就在前台"这个前提**必须**有:从别的 App 点 Dock 切回来的那一下,激活本身就把窗口带到
+    // 前台了(那就是可见结果),这一下不能再多开歌词窗口。判据不能用 NSApp.isActive(reopen 跑的
+    // 时候它已经是 true)、也不能只看 didBecomeActive 有没有到——日志里两种顺序都出现过
+    // (多数是 didBecomeActive 早 ~100ms 到,02:25 那次是 reopen 早 1ms 到),所以两头都记:
+    // didResignActive 把 isActiveForReopen 清掉、didBecomeActive 设上并记时间,reopen 时
+    // 「标记还没设上」或「设上不到 1 秒」都算"这一下是切回来的点击"。
+    private var isActiveForReopen = false
+    private var becameActiveAt = Date.distantPast
     /// 见 applicationShouldHandleReopen —— 延后开歌词窗口的那个任务。
     private var reopenLyricsTask: Task<Void, Never>?
     private let reopenLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "reopen")
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        isActiveForReopen = true
+        becameActiveAt = Date()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        isActiveForReopen = false
+    }
+
+    /// 这次 reopen 之前 App 是否早已在前台(而不是被这一下点击激活的)。
+    private var wasAlreadyActiveBeforeReopen: Bool {
+        isActiveForReopen && Date().timeIntervalSince(becameActiveAt) > 1.0
+    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // ⚠️ **点系统通知也会走到这里** —— 系统激活 App 时就会触发 reopen,而那时用户要的是
@@ -413,12 +466,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reopenLogger.notice("reopen: lyrics window suppressed (immediate)")
             return false
         }
-        // 设置/歌词管理/歌词窗口/引导四扇里只要还有一扇开着(哪怕被最小化),就交还给
-        // AppKit 的默认 reopen 行为——还原被最小化的窗口、把已有窗口带到前台;只有一扇
-        // 都没开时才顺便开歌词窗口。理由见上面 applicationShouldHandleReopen 声明前那段注释。
+        // 设置/歌词管理/歌词窗口/引导四扇里只要还有一扇开着(哪怕被最小化),就把它们带回来——
+        // 还原被最小化的、把最前那扇带到前台;只有一扇都没开、或者 App 本来就在前台且开着的
+        // 窗口本来就全在最前面(这一下什么都没变)时才落到下面开歌词窗口。理由见上面声明前那段注释。
         if AuxiliaryWindowActivation.hasAnyOpen {
-            reopenLogger.notice("reopen: auxiliary window(s) already open, deferring to AppKit default")
-            return true
+            let wasActive = wasAlreadyActiveBeforeReopen
+            let r = AuxiliaryWindowActivation.bringOpenWindowsForward()
+            reopenLogger.notice("reopen: auxiliary window(s) open → restored=\(r.restored, privacy: .public) fronted=\(r.fronted, privacy: .public) alreadyFront=\(r.alreadyFront, privacy: .public) wasActive=\(wasActive, privacy: .public)")
+            if r.foundNone {
+                // 计数器说有窗口开着、枚举却一扇都没找到:按"一扇都没开"处理,别卡在什么都不做上。
+                reopenLogger.notice("reopen: counter says open but no window found, falling through to lyrics window")
+            } else if r.alreadyFront && wasActive {
+                reopenLogger.notice("reopen: app already in front and nothing to bring forward, falling through to lyrics window")
+            } else {
+                return false
+            }
         }
         reopenLyricsTask?.cancel()
         reopenLyricsTask = Task { @MainActor in

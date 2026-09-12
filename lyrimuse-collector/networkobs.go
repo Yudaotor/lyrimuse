@@ -285,3 +285,19 @@ func beginNetworkRound() func() (attempts, failures int32) {
 func roundLooksNetworkDown(attempts, failures int32) bool {
 	return attempts >= 3 && failures == attempts
 }
+
+// lyricsRoundConfirmsNoResult 判断这一轮"什么都没查到"是不是一个**可以下结论**的结果
+// (2026-09-09,给 resolveEnrichAsync 那道全空守卫用,理由见那边的长注释)。
+//
+// 判据是"至少有一个请求真的成功了" —— 网络通、源确实回了话、就是没有这首歌。
+//
+// ⚠️ 刻意不写成 `!roundLooksNetworkDown(...)`:那个要 attempts>=3 **且**全挂才算不通,
+// 于是"这一轮只发出去 1~2 个请求、而且全挂"(大部分源被熔断跳过时就是这个形状,见
+// sourcebreaker.go)会从它的网眼里漏过去、被当成确证查无 —— 那明明更像没查成。
+// 这里宁可严一点:漏判的代价只是这一轮继续显示"搜索歌词中…",下一轮自愈会再来;
+// 误判的代价是把"没查成"写成"这首歌没有歌词"。
+//
+// attempts==0(整轮全命中缓存、一个请求都没发)同样不算数:它不构成任何证据。
+func lyricsRoundConfirmsNoResult(attempts, failures int32) bool {
+	return attempts > 0 && failures < attempts
+}

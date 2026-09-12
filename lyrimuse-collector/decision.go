@@ -66,6 +66,18 @@ type lyricsDecision struct {
 	// ⚠️ 仍然服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。
 	RetryMethod    string `json:"retry_method,omitempty"`
 	CorrectedTitle string `json:"corrected_title,omitempty"`
+	// QueriesTried:这一轮**实际问出去的每一组查询词**,以及那一组只问了哪几个源
+	// (借鉴清单 V1,2026-09-12,机制与实测依据见 querylog.go 头注)。
+	//
+	// 上面 QueryArtist/QueryTitle/QueryAlbum 记的只是**首轮**那一组;而一轮解析最多会换
+	// 五种问法(拆分重入 / 别名轮 / 首歌手变体轮 / 两种标题反查)。RetryMethod 只在胜者恰好
+	// 来自反查轮时才有值 —— 实测全库 4390 条存档里它非空的只有 9 条(0.2%),所以"我到底
+	// 拿哪些词问的"此前基本无从查起,而 09 章五条真实的"搜不到 / 配错了"根因全是问错了词。
+	//
+	// ⚠️ 同样服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。由三处写缓存点 +
+	// 手动搜索 CLI 在 buildLyricsDecision **之后**填(跟 SourcesSkipped 同一个位置、
+	// 同一个理由:不给这个函数再加参数)。
+	QueriesTried []lyricQueryRecord `json:"queries_tried,omitempty"`
 }
 
 // 一条候选的元数据 —— 字段跟 scoredLyricCandidateResult 一一对应,唯独**没有歌词正文**。
@@ -95,6 +107,12 @@ type lyricsDecisionCandidate struct {
 	Instrumental               bool    `json:"instrumental,omitempty"`
 	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段(2026-09-04)。
 	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
+	// ConsensusPeers:这条候选的正文跟**哪些**其它源高度一致(借鉴清单 V2,2026-09-12)。
+	// 存档里原来只有 score_terms 里那一行 consensus +250/+150 的**分数**,答不出"跟谁"——
+	// 而"冠亚军是不是同一份词"正是复盘微弱分差时唯一要问的问题(全库 4110 场竞争,分差
+	// 中位 23 分、55.9% 是"分差<=40 且双方都有共识分")。名单由 contentConsensusPeers
+	// 算好、经 scoredLyricCandidateResult.ConsensusPeers 抄进来,服从"只写不读"铁律。
+	ConsensusPeers []string `json:"consensus_peers,omitempty"`
 }
 
 // buildLyricsDecision 把一轮完整评估固化成决策记录。picked 传 nil 表示没选出;
@@ -160,6 +178,7 @@ func buildLyricsDecision(
 			HasWordTiming:              c.HasWordTiming,
 			Instrumental:               c.Instrumental,
 			BakedTranslationLines:      c.BakedTranslationLines,
+			ConsensusPeers:             c.ConsensusPeers,
 		})
 	}
 	return d

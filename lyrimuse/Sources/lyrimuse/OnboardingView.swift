@@ -3,7 +3,7 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-// 首次启动的完整引导向导,参照 Jukebox/PlayStatus/Tuneful 这类"一步步走一遍"的
+// 首次启动的完整引导向导,做的是同类菜单栏音乐 App 常见的那种"一步步走一遍"的
 // 体验。每一步的设置项都直接绑定到 AppSettings/FeatureSettingsStore 对应属性、立即
 // 生效(跟 SettingsView 里同一批设置项一样,不做"最后统一确认"),向导只是把它们串成
 // 一个有引导性的首次体验,不是另一套独立状态。
@@ -50,6 +50,11 @@ struct OnboardingView: View {
     /// 「从应用程序中选择…」挑到一个驱不动的 App 时的错误文案(本体在
     /// `BrowserPairing.chooseFromApplications`,那边只返回文案、不碰视图状态)。
     @State private var browserPickerError: String?
+    /// 撒花放过几次 —— 换一个更大的值就重放一阵(见 `ConfettiOverlay.burst`)。
+    ///
+    /// 跟 `step` / `furthestStep` 同一档**不持久化**:引导本身是一次性流程,存下来只会多一个
+    /// 跟"这次走到哪"对不上的字段。
+    @State private var confettiBurst = 0
 
     // 2026-09-03 这一版的三处结构调整:
     //  ① `.language` 整个去掉 —— 语言选择并进 `.welcome`。它原来排在第 6 步,而前 5 步
@@ -219,6 +224,10 @@ struct OnboardingView: View {
             .padding(16)
         }
         .frame(width: 480, height: 420)
+        // 撒花盖在**整扇窗**上(叠在 `.frame` 之后,所以它正好是窗口那么大):纸片会从进度点和
+        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 420pt 高的窗口里
+        // 看着像"纸片撞在一条看不见的线上"。它自己从不吃点击,按钮照常能按(见 ConfettiOverlay)。
+        .overlay { ConfettiOverlay(burst: confettiBurst) }
         // 窗口标题跟着界面语言走。App.swift 里 `Window(L10n.t("欢迎使用 Lyrimuse"), id:)`
         // 的那个标题在 scene 构造时**只求值一次**,用户在第一步把语言切成英文之后它还是
         // 中文;`.navigationTitle` 每次重算 body 都会重新应用,正好补上这一处。
@@ -237,6 +246,13 @@ struct OnboardingView: View {
             guard currentStep == .done || currentStep == .background else { return }
             automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
             collectorRunning = CollectorServiceManager.isRunning
+        }
+        // 走到最后一页就撒一阵花(2026-09-11)。判据挂 `currentStep` 而不是 `step`:最后一页的
+        // **下标**会因为设置窗口同时改播放器集合而变(见 `currentStep` 头注),而"到了 .done
+        // 这一步"才是要庆祝的那件事。`onChange` 只在值真变了时触发,所以停在这一页不会反复
+        // 重放;退回去再翻回来会再撒一阵(那是用户主动重新走到终点)。
+        .onChange(of: currentStep) { _, new in
+            if new == .done { confettiBurst += 1 }
         }
         .onAppear {
             automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
@@ -392,7 +408,16 @@ struct OnboardingView: View {
                     //
                     // 切换和"最后一个不能取消"的判断走 `features.togglePlayer` —— 跟设置页
                     // 共用同一份,见那个方法的头注(选中集合的非空不变量在那里)。
-                    PlayerChoiceCard(player: player, isSelected: features.players.contains(player)) {
+                    //
+                    // `isCoveredByAuto`:勾着「自动识别」(全新安装的默认值就是它)时,没单独
+                    // 勾上的那几张显示成"由自动识别接管" —— 跟设置页同一个组件、同一份判据
+                    // (两处网格必须长得一样,见 PlayerChoiceCard 头注)。这一页**不**跟着放
+                    // 设置页那行说明:高度预算本来就紧(见 body 顶部那条 ScrollView 兜底的
+                    // ⚠️),而这一步的副标题已经点过「自动识别」,卡片上指向就能读到那句提示。
+                    PlayerChoiceCard(player: player,
+                                     isSelected: features.players.contains(player),
+                                     isCoveredByAuto: features.players.contains(.auto)
+                                         && !features.players.contains(player)) {
                         features.togglePlayer(player)
                     }
                 }

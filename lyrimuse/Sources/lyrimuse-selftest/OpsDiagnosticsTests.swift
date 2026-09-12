@@ -685,4 +685,85 @@ func runOpsDiagnosticsTests() {
             }
         }
     }
+
+    // ---- build.sh 用什么身份签(2026-09-11)----
+    //
+    // ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash,而 TCC(辅助功能 / 自动化授权)存的正是这条要求:
+    // 二进制一重编 cdhash 就变,存的那条再也对不上 —— 界面上勾还亮着、App 却说没授权,每次 build.sh 之后
+    // 都要手动取消再勾一遍(用户 2026-09-11 撞上第 N 次:「为什么我明明已经有授权了,每次点击跳过广告
+    // 还是会说让我去授权?」)。改成本机一张固定的自签名证书之后,要求变成
+    // `identifier "..." and certificate root = H"<证书>"`,跟二进制内容无关。
+    //
+    // 这一组钉住那个改动不被顺手改回去:签名点必须**全部**走 `$SIGN_ID`,而 `$SIGN_ID` 必须保留
+    // "没证书就退回 ad-hoc" 的兜底(CI 和别人的机器上没有这张证书,退不回去就直接签不了)。
+    // 放在 ops 组而不是 contracts:它盯的是**构建 / 装机**这条链路,跟 launchd / 进程那几条同类。
+    do {
+        let buildScript = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("build.sh")
+        if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
+            // 注释里有好几处在讲"当年那行 `codesign -s - --force`",扫的时候得先把注释行剥掉 ——
+            // 同 contracts 组那几条源码守卫踩过的坑(第一版整份 contains,被自己的注释打红)。
+            let codeLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+            let adHocLiterals = codeLines.filter { $0.contains("--sign -\"") || $0.contains("-s - ") }
+            expectEqual(adHocLiterals, [],
+                        "构建签名: build.sh 里不准再出现裸 ad-hoc 签名调用,全部走 $SIGN_ID(否则 TCC 授权每次重装即失效)")
+            expectEqual(text.contains("SIGN_ID=\"${LYRIMUSE_SIGN_ID:-}\""), true,
+                        "构建签名: LYRIMUSE_SIGN_ID 这个显式覆盖口子还在")
+            expectEqual(text.contains("SIGN_ID=\"-\""), true,
+                        "构建签名: 没有那张自签名证书时必须退回 ad-hoc(CI / 别人的机器上就是这条路)")
+            expectEqual(text.contains("DEV_SIGN_NAME=\"Lyrimuse Dev Signing\""), true,
+                        "构建签名: 本机证书的 CN 还是那一个(改名要连同这条守卫一起改,别让自动探测静默失效)")
+            let signCalls = codeLines.filter { $0.contains("codesign") && $0.contains("$SIGN_ID") }.count
+            expectEqual(signCalls >= 8, true,
+                        "构建签名: 走 $SIGN_ID 的签名调用点至少 8 处(嵌套二进制 + 框架 + 最外层 .app),实际 \(signCalls)")
+        } else {
+            expectEqual(true, false, "构建签名: 读不到 build.sh(路径挪了?)")
+        }
+    }
+
+    // ---- build.sh 装完必须确认进程真换了(2026-09-12)----
+    //
+    // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本
+    // 最后那句 `pgrep` 会把同一个旧 pid 当成"新起来的",照样打印 running 并 EXIT=0 ——
+    // 磁盘上是新代码、内存里跑的还是旧的,后面一切真机验证都在验旧代码。实测起因:App 开着
+    // 「解析决策」那张 modal sheet,AppKit 把 terminate 整个取消掉(系统日志
+    // "App termination blocked by modal sheet" + "Termination aborted"),SIGTERM 之后再等
+    // 10 秒仍然活着 —— 不是等久一点能解决的,只能如实报错。
+    do {
+        let buildScript = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("build.sh")
+        if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
+            // ⚠️ 先把注释行剥掉再扫 —— 上面那段注释里就复述了 "running, pid" 和
+            // "modal sheet",整份 contains 会命中注释、让守卫变成假通过(顺序那条第一次
+            // 就是这么红的:注释排在校验之前)。同签名守卫那条踩过的坑。
+            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+                .joined(separator: "\n")
+            expectEqual(code.contains("OLD_PIDS="), true,
+                        "装机校验: kill 之前要把旧 pid 记下来,否则没法判断进程到底换没换")
+            expectEqual(code.contains("[ \"$pid\" = \"$OLD_PIDS\" ]"), true,
+                        "装机校验: 起来之后必须比对 pid 变没变(这是那条假成功的唯一拦截点)")
+            expectEqual(code.contains("modal sheet"), true,
+                        "装机校验: 失败提示里要说出最常见的原因(有弹窗开着),否则看到报错也不知道该关什么")
+            // 报成功那句必须排在校验**之后** —— 顺序反了等于没校验。
+            if let guardRange = code.range(of: "= \"$OLD_PIDS\" ]"),
+               let okRange = code.range(of: "echo \"==> $APP_NAME running, pid") {
+                expectEqual(guardRange.lowerBound < okRange.lowerBound, true,
+                            "装机校验: pid 比对要排在那句 running 成功提示之前")
+            } else {
+                expectEqual(true, false, "装机校验: 找不到 pid 比对或成功提示(改写法了?)")
+            }
+        } else {
+            expectEqual(true, false, "装机校验: 读不到 build.sh(路径挪了?)")
+        }
+    }
 }

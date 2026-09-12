@@ -833,6 +833,42 @@ func runLastfmTests() {
                     "次数退避: 时钟倒退(now 早于记录时刻)不算到期")
     }
 
+    // ---- 次数记账三态:字段缺失 ≠ 那边是 0(2026-09-10) ----
+    //
+    // 用户报「为什么这三个 lastfm 里面没有播放次数」。现场:10:56:00 那一批 20 首里 17 首正常,
+    // prince|1999 / prince|little red corvette / prince & the revolution|kiss (extended) 三首
+    // 同时"没有次数",日志里那一批**全是 200、一条 api error 都没有**;5 分钟后拿同样的参数
+    // 直接问,分别是 18 / 20 / 1 次,user.getTrackScrobbles 显示这些收听最早可追到 2026-07-07。
+    // 根因是判据把 `userplaycount` **字段缺失**(Last.fm 的按用户计数是另一次后端查询,高并发下
+    // 会静默缺字段)当成了"那边回答 0 次",于是一次抖动被写成定论、还随快照落盘 —— 而进了
+    // 「那边没有」名单的行连 `···` 占位都不画,看起来就是"这行天生没有次数"。
+    do {
+        typealias O = PlayCountOutcome
+        func c(_ ok: Bool, _ n: Int?, _ old: Bool) -> O {
+            O.classify(requestSucceeded: ok, reportedCount: n, rowIsOldEnough: old)
+        }
+        // ① 本次修复的那一条:请求成功、行也够老,但响应没带 userplaycount → 不许记定论
+        expectEqual(c(true, nil, true), .unanswered,
+                    "次数三态: 成功返回但没带 userplaycount → 没答上来,不记进「那边没有」")
+        // ② 那边真的回答 0,且行够老 → 这才是定论
+        expectEqual(c(true, 0, true), .definitivelyNone,
+                    "次数三态: 够老的行拿到 0 → 那边确实没有")
+        // ③ 已知坑:刚 scrobble 完的 0 是"还没并账",不是答案(playCountZeroGraceSecs)
+        expectEqual(c(true, 0, false), .unanswered,
+                    "次数三态: 行还太新,0 不算数(Last.fm 还没并账)")
+        // ④ 正数照常记,新老都一样
+        expectEqual(c(true, 18, true), .counted(18), "次数三态: 拿到正数就记(够老的行)")
+        expectEqual(c(true, 1, false), .counted(1), "次数三态: 拿到正数就记(刚 scrobble 的行也算)")
+        // ⑤ 请求本身失败(超时/限流)一律没答上来 —— 带回来的数无论是什么都不该被采信
+        expectEqual(c(false, nil, true), .unanswered, "次数三态: 请求失败 → 没答上来")
+        expectEqual(c(false, 0, true), .unanswered, "次数三态: 请求失败时的 0 不算定论")
+        expectEqual(c(false, 5, true), .unanswered, "次数三态: 请求失败时的正数也不采信")
+        // ⑥ error 6 那条路:调用方传 reportedCount: 0 —— "压根没这个实体"跟"0 次"是同一个答案,
+        //    必须仍是定论,否则本机那 7 首有声书章节会每轮重问、永不收敛(2026-09-03 的原始动机)
+        expectEqual(c(true, 0, true), .definitivelyNone,
+                    "次数三态: error 6(按 0 传入)仍是定论,不能退化成每轮重问")
+    }
+
     // ---- 「第 N 次听」合并明细:为什么并进来 + 跨写法合并/编号(2026-09-04) ----
     //
     // 弹框上半段每种写法旁边挂的原因标签,由 PlayCountFoldExplainer 沿 PlayCountFold 的真实折叠

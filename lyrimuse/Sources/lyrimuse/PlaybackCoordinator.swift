@@ -111,6 +111,16 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var collectorNetworkDown: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
+    /// 电台口白(2026-09-11):当前这首歌已经放完、台里在说话。语义与 `isCurrentTrackAdBreak`
+    /// 平行 —— 都是"这一刻在放的不是歌",三个展示面据此把歌词那一格换成「口白」。
+    @Published private(set) var isRadioTalkBreak: Bool = false
+    /// 口白期间顶上去的台名与台标。抓不到台卡时是 nil,界面退回原样(还显示上一首),
+    /// 判据与实测见 `RadioStationCard`。
+    @Published private(set) var radioStationName: String?
+    @Published private(set) var radioStationImage: NSImage?
+    /// 这条广告是插播里的第几条 / 一共几条(2026-09-09)。只有 YT Music 网页广告给得出,
+    /// 拿不到是 nil、界面上那一段不画。语义与生命周期见 `LocalPlaybackSource.currentAdSlot`。
+    @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
     @Published private(set) var anchor: ProgressAnchor?
     // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentLineIndex: Int?
@@ -142,7 +152,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 放在这一层而不是 LocalPlaybackSource:跟 artworkAccentColor 同一个分层理由——
     // LyrimuseCore 那一层不引入 AppKit/SwiftUI,类型转换只能在这一层做。
     @Published private(set) var artworkImage: NSImage?
-    /// 上面那张的**高清替代**,只在系统给的那份实在太小时才有值(否则 nil,消费方退回
+    /// 上面那张的**高清替代**,只在系统给的那份实在太小、或者压根不是封面的形状时才有值(否则 nil,消费方退回
     /// artworkImage)。给歌词窗口那张最大 460pt(Retina 下 920px)的封面卡用。
     ///
     /// 为什么需要:系统 Now Playing 的封面分辨率由播放器决定,而网易云 macOS 客户端只给
@@ -157,9 +167,16 @@ final class PlaybackCoordinator: ObservableObject {
     /// `EnrichCacheReader.nativeSizedCoverURL` 把图源自己的尺寸档顶到最大(网易云摘 param、
     /// QQ 提到 800、Apple 提到 1200),否则 QQ 源那张存的也只有 300、白替一趟。
     ///
-    /// ⚠️ 只在系统那份 ≤ lowResArtworkThreshold 时才替。系统那份才是"正在播的这一项"的
+    /// ⚠️ 只在系统那份 ≤ lowResArtworkThreshold、或者**不是方形**时才替(判定收在
+    /// `CoverArtReplacementGate`,形状容差跟 collector 逐字一致)。系统那份才是"正在播的这一项"的
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
+    ///
+    /// **第二个触发条件的来历**(2026-09-08,用户报 YouTube Music 的 MV 条目「封面是视频的第一帧」):
+    /// Safari 经 MediaSession 上报的 artwork 是 **320×180 的视频缩略图**,宽 320 刚越过 300 的
+    /// 门槛被当成"够大的正经封面"原样显示,再被展示面的 scaledToFill 裁成方块。collector 那头
+    /// (deviceartwork.go)一直有 15% 的长宽比容差把这张图拒收了,所以网页显示的是真封面、只有
+    /// 本机 App 显示视频帧 —— 两端口径不一致才是根因,这里把形状判据补齐。
     @Published private(set) var highResArtworkImage: NSImage?
     /// 上面那张高清替代的**预缩小图**(≤256px,2026-09-03 加),给菜单栏面板 44pt 那格小封面
     /// 用。`highResArtworkImage` 是 `NSImage(data:)` 懒解码的**原图档**(给歌词窗口 920pt@2x
@@ -188,6 +205,16 @@ final class PlaybackCoordinator: ObservableObject {
     /// 界面上实际显示的是高清替代,强调色还按占位图算就是一团跟画面无关的灰。nil = 没有
     /// 高清替代,强调色回落到系统那份的均值(见下面两条管线的 highResHex ?? systemHex)。
     @Published private(set) var highResAverageHex: String?
+
+    /// 当前这首歌的**动态封面**本地文件(2026-09-09,Apple Music 的 motion artwork)。
+    /// nil = 这张专辑没有 / 还没下好 / 用户关了开关 —— 三种情况在界面上都是"铺静态封面",
+    /// 消费面不需要区分。整条链路见 `MotionCoverStore` 与 `MotionCoverManifest` 的头注。
+    ///
+    /// ⚠️ 它跟 `highResArtworkImage` 是**并行**的两件事,不互相替代:静态高清图管"这一格画什么",
+    /// 动态封面只在它之上再叠一层会动的画面,拿不到就退回静态图。所以这里**不**参与均值取色 ——
+    /// 强调色仍旧按静态图算,不然同一张专辑会因为"动画播到哪一帧"而颜色抖动。
+    @Published private(set) var motionCoverFile: URL?
+    private var motionCoverTask: Task<Void, Never>?
     // 从封面均值算出来的动态高亮色,**桌面悬浮歌词专用**(已经从 LocalPlaybackSource
     // 转发的十六进制字符串转成 Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在
     // 这一层做,见 LocalPlaybackSource.artworkAverageHex 的注释)。供"跟随封面"外观模式
@@ -307,7 +334,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 不再显示浏览器;如果是浏览器里面播放 spotify 就显示 spotify;其他的不是这两个的话
     /// 就正常显示浏览器图标"。判据全在 `BrowserPositionProbe.playingPlatformID`(证据优先、
     /// 配对推断兜底,那边有完整取舍),这里只负责把它接上当前这条播放。
-    private var resolvedWebPlatformID: String? {
+    /// 2026-09-10 放开给歌词窗口简介面板的「网页」行用(Spotify 网页版要认成 Spotify 那个平台)。
+    var resolvedWebPlatformID: String? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
         return BrowserPositionProbe.shared.playingPlatformID(forBundleID: id)
     }
@@ -754,6 +782,13 @@ final class PlaybackCoordinator: ObservableObject {
             s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
             s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
+            s.$isRadioTalkBreak.assign(to: \.isRadioTalkBreak, on: self),
+            s.$radioStationName.assign(to: \.radioStationName, on: self),
+            // 台标同样在这一层解一次码,消费方直接拿 NSImage —— 理由同下面 artworkImage 那条。
+            s.$radioStationArtwork
+                .map { $0.flatMap { NSImage(data: $0) } }
+                .assign(to: \.radioStationImage, on: self),
+            s.$currentAdSlot.assign(to: \.currentAdSlot, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$scrollLineIndex.assign(to: \.scrollLineIndex, on: self),
             s.$compactLine.assign(to: \.compactLine, on: self),
@@ -781,7 +816,12 @@ final class PlaybackCoordinator: ObservableObject {
             // 这 300ms 用户看不见 —— 系统那张小图在第一帧就已经显示了。
             Publishers.CombineLatest4(s.$title, s.$artist, s.$album, s.$artworkData)
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-                .sink { [weak self] _, _, _, _ in self?.refreshHighResCover() },
+                .sink { [weak self] _, _, _, _ in
+                    self?.refreshHighResCover()
+                    // 动态封面挂同一个时机、同一个理由(避开 willSet、300ms 用户无感),
+                    // 不另起一条 debounce。
+                    self?.refreshMotionCover()
+                },
             // 第二个触发点(2026-08-24):**缓存里多了东西**也要补查一次。
             //
             // 上面那条只在 曲目/封面字节 变化时跑,而 collector 解析一首没听过的歌要好几秒
@@ -797,7 +837,20 @@ final class PlaybackCoordinator: ObservableObject {
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-                .sink { [weak self] _ in self?.refreshHighResCover(onlyIfMissing: true) },
+                .sink { [weak self] _ in
+                    self?.refreshHighResCover(onlyIfMissing: true)
+                    // 动态封面同样需要这条补查路 —— 它读的是 collector 写的同一份 enrich 缓存,
+                    // 第一次听的歌在换歌后 300ms 那一次必然查空(解析要好几秒)。
+                    self?.refreshMotionCover(onlyIfMissing: true)
+                },
+            // 动态封面的两个总闸变化时立刻重算:用户拨了开关、或者系统进出低电量模式。
+            // 关掉要当场停下(而不是等下一首),打开也该当场生效。
+            settings.$motionCoverEnabled
+                .dropFirst()
+                .sink { [weak self] _ in self?.refreshMotionCover() },
+            NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
+                .receive(on: RunLoop.main)
+                .sink { [weak self] _ in self?.refreshMotionCover() },
             // 第三个触发点(2026-09-09):Spotify 原生客户端的图床地址到了(开播 2.5s 后的位置探针顺带带回,
             // 见 LocalPlaybackSource.spotifyArtworkURL),或者系统封面字节变了(上面那条路会顺手清掉高清图,
             // 这里按同一地址放回去)。跟 artworkData 合在一起订阅、比上面多等 50ms,保证跑在
@@ -1376,6 +1429,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 300×300),于是这条自愈路径对 QQ 音乐**一次都没触发过** —— 300px 顶到 820px 的封面
     /// 卡上是 2.73 倍放大,正是用户报的"QQ 音乐这个封面很模糊"。恰好落在边界上的那一档
     /// 本来就是这个阈值的注释自己在说"3 倍放大、肉眼能看出软"的那一档,该替。
+    ///
+    /// 2026-09-08 起这不是唯一的触发条件:系统那份**不是方形**(长宽比偏离正方形超过 15%)时
+    /// 也替,判定收在 `CoverArtReplacementGate`,来历见 highResArtworkImage 的注释。
     private static let lowResArtworkThreshold = 300
 
     private var highResCoverTask: Task<Void, Never>?
@@ -1410,10 +1466,14 @@ final class PlaybackCoordinator: ObservableObject {
             clearHighRes()
             return
         }
-        let systemPixels = Self.pixelWidth(of: s.artworkData)
-        // 系统那份够大(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
+        let systemSize = Self.pixelSize(of: s.artworkData)
+        let systemPixels = systemSize.width
+        // 系统那份够大且是方形(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
         // 匹配到的另一张图)就不动。
-        guard systemPixels > 0, systemPixels <= Self.lowResArtworkThreshold else {
+        // 「不是封面的形状」(YouTube Music MV 的 16:9 视频缩略图)跟「太小」一样要找替代,两条
+        // 的后续接受判据不同,见 CoverArtReplacementGate.accepts。
+        guard let reason = CoverArtReplacementGate.reason(width: systemSize.width, height: systemSize.height,
+                                                          lowResThreshold: Self.lowResArtworkThreshold) else {
             clearHighRes()
             return
         }
@@ -1427,7 +1487,7 @@ final class PlaybackCoordinator: ObservableObject {
         guard let cached = EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album) else {
             // 这条分支就是「第一次听的歌封面一直糊」的现场:collector 还没解析完。
             // 现在缓存写入会再触发一次补查(见订阅处),所以这里不再是终点。
-            logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
+            logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
             clearHighRes()
             return
         }
@@ -1442,10 +1502,14 @@ final class PlaybackCoordinator: ObservableObject {
                   !Task.isCancelled else { return }
             // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
             guard LocalPlaybackSource.shared.title == title else { return }
-            // 拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图)。尺寸按像素比
-            // (NSImage.pixelWidth),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,出处见 CachedImage.swift
-            // 里那个 extension 的注释(2026-09-09)。
-            guard image.pixelWidth > systemPixels else { return }
+            // 太小那条:拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图);
+            // 形状那条:替代图自己得是张方形封面,不再拿"比系统那份宽"当门槛 —— 换的是形状
+            // 不是分辨率,否则 1280×720 的视频帧会把 600×600 的真封面挡在外面。
+            // 尺寸按像素比(NSImage.pixelWidth / pixelHeight),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,
+            // 出处见 CachedImage.swift 里那个 extension 的注释(2026-09-09)。
+            guard CoverArtReplacementGate.accepts(candidateWidth: image.pixelWidth,
+                                                  candidateHeight: image.pixelHeight,
+                                                  systemWidth: systemPixels, reason: reason) else { return }
             // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
             // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
             var hex: String?
@@ -1459,10 +1523,65 @@ final class PlaybackCoordinator: ObservableObject {
                 }.value
             }
             guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
-            logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
+            logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
             self?.highResArtworkImage = image
             self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
+        }
+    }
+
+    /// 动态封面:查这张专辑有没有,有就把本地文件备好(2026-09-09)。
+    ///
+    /// 纪律逐条照 `refreshHighResCover`,理由也一样:
+    ///   * **重新从数据源读快照**,不用订阅回调的参数(那几个值来自 willSet 时机,彼此可能不是
+    ///     同一首歌的);
+    ///   * **换歌立刻撤掉上一首那份** —— 留着的话新歌开头会顶着上一首的动画,比"先静态后动"糟；
+    ///   * 已是 nil 就不再赋 nil(@Published 是 willSet 语义,白广播会穿透下游去重);
+    ///   * 下载回来后再校验一次 `title` 没变。
+    ///
+    /// 跟那条**不同**的两点:
+    ///   * 用 `albumMatchedMotionCover`(精确 key → 仍然认专辑的 looseMatch),同样不退到"忽略专辑"
+    ///     那一级 —— 在这里退一步拿到的是**另一张专辑的动画**,比一张静态错图扎眼得多；
+    ///   * 盘上已经有那份文件时**同步**换上、不走 Task:同一张专辑的下一首歌不该再闪一次静态图。
+    private func refreshMotionCover(onlyIfMissing: Bool = false) {
+        if onlyIfMissing, motionCoverFile != nil { return }
+        motionCoverTask?.cancel()
+        motionCoverTask = nil
+        let s = LocalPlaybackSource.shared
+        let (title, artist, album) = (s.title, s.artist, s.album)
+        func clear() {
+            if motionCoverFile != nil { motionCoverFile = nil }
+        }
+        guard !title.isEmpty else {
+            clear()
+            return
+        }
+        // 总闸收在这里算一次:用户的开关、以及低电量模式。两者都**不是视图环境值**,而两个消费面
+        // (歌词窗口封面卡、灵动岛)要问的是同一个问题 —— 各自 body 里判一遍必然漂。视图侧只剩
+        // 两件它自己才知道的事:`reduceMotion`(环境值)和"我这一面此刻可不可见"。
+        //
+        // 低电量模式下不动:macOS 的低电量本来就降刷新、限后台活动,一个装饰性的 24fps 循环正是
+        // 该第一个让位的东西。它变化时有 NSProcessInfoPowerStateDidChange,下面订阅了。
+        guard AppSettings.shared.motionCoverEnabled,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else {
+            clear()
+            return
+        }
+        guard let found = EnrichCacheReader.albumMatchedMotionCover(artist: artist, title: title, album: album) else {
+            clear()
+            return
+        }
+        if let hit = MotionCoverStore.shared.cachedFile(master: found.master) {
+            if motionCoverFile != hit { motionCoverFile = hit }
+            return
+        }
+        clear()
+        motionCoverTask = Task { [weak self] in
+            let file = await MotionCoverStore.shared.prepare(master: found.master)
+            guard let file, !Task.isCancelled else { return }
+            // 下载期间换歌了 —— 这份是上一首的。
+            guard LocalPlaybackSource.shared.title == title else { return }
+            self?.motionCoverFile = file
         }
     }
 
@@ -1558,14 +1677,17 @@ final class PlaybackCoordinator: ObservableObject {
         return NSImage(cgImage: out, size: NSSize(width: tw, height: th))
     }
 
-    /// 封面原始字节的像素宽度。用 CGImageSource 只读图头,不解码整张图。
-    private static func pixelWidth(of data: Data?) -> Int {
+    /// 只读图头取系统封面的像素宽高(CGImageSource,不解码整图);没有图 / 读不出来返回 (0, 0)。
+    /// 2026-09-08 起连高一起取:高清替代的触发判据多了「不是方形」这一条(CoverArtReplacementGate),
+    /// 光有宽分不出 320×180 的视频缩略图和 320×320 的小封面。
+    private static func pixelSize(of data: Data?) -> (width: Int, height: Int) {
         guard let data,
               let src = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
-              let w = props[kCGImagePropertyPixelWidth] as? Int
-        else { return 0 }
-        return w
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int
+        else { return (0, 0) }
+        return (w, h)
     }
 
     // 悬浮歌词实际显示用的前景色——"跟随封面"外观模式开着且这首歌已经算出动态高亮色

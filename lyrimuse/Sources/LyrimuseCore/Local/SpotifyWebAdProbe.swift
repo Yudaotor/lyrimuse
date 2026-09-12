@@ -121,17 +121,41 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     public static let eventTimeoutSeconds = 4
     /// 整个 osascript 子进程的硬超时,兜最后一层。
     static let processTimeout: TimeInterval = 6
-    /// 判定的有效期。广告在 media-control 里是**独立的 now-playing 条目**(自己的
+    /// 判定的**可读**有效期。广告在 media-control 里是**独立的 now-playing 条目**(自己的
     /// title/artist),换成广告身份缓存 key 自然失效,所以这个值只兜"同一条广告播很久"。
-    static let verdictMaxAge: TimeInterval = 60
+    public static let verdictMaxAge: TimeInterval = 60
+
+    /// 距上次探测多久之后才**再探一次**(`kickIfNeeded` 的跳过条件)。
+    ///
+    /// ⚠️ **必须严格小于 `verdictMaxAge`**,selftest 钉着。2026-09-11 之前 `kickIfNeeded`
+    /// 直接拿 `verdictMaxAge` 当跳过条件(两个 60),跟 `YouTubeMusicAdProbe` 当时是同一个洞:
+    /// 可读期与再探间隔同时到点,age 跨过 60 的那一拍必然「刚过期读到 nil + 这一拍才开始异步
+    /// 重探」,`gate` fail-closed 把快照整条丢掉,三个展示面一起塌成"没有在播放"。
+    /// 完整的机制推导、真机日志与"Go 侧为什么不用跟着改"都写在
+    /// `YouTubeMusicAdProbe.songRefreshInterval` 上,那边是主场,这里不复述。
+    ///
+    /// 不按判定分档(YT Music 那边歌 45 / 广告 5):Spotify 网页版的广告是**独立的**
+    /// now-playing 条目(`artist` 空、`title` 是「广告」),判定翻转必然伴随 key 变化、缓存
+    /// 自然失效 —— 不存在 YT Music 那种「MV 前贴片与正片共用同一份元数据」的同 key 翻转,
+    /// 没有必要为广告档单独收紧。
+    public static let refreshInterval: TimeInterval = 45
 
     private let lock = NSLock()
     private var cachedKey: String?
     private var cachedVerdictValue: Verdict?
     private var cachedAt: Date?
     private var inFlightKey: String?
+    /// 探针结果落地时的回调,语义与 `YouTubeMusicAdProbe.resultSink` 逐字相同(2026-09-11) ——
+    /// 换曲那一拍新 key 下必然没有缓存,挂上它把"干等一整个 2s 轮询周期"压成探针往返本身。
+    private var resultSink: (@Sendable (_ key: String) -> Void)?
 
     private init() {}
+
+    public func setResultSink(_ sink: @escaping @Sendable (_ key: String) -> Void) {
+        lock.lock()
+        resultSink = sink
+        lock.unlock()
+    }
 
     /// 把探针的裸文本输出解成判定。纯函数,可单测。
     ///
@@ -181,7 +205,9 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
             lock.unlock()
             return
         }
-        if cachedKey == key, let at = cachedAt, Date().timeIntervalSince(at) <= Self.verdictMaxAge,
+        // ⚠️ 这里是 `refreshInterval`(45s)不是 `verdictMaxAge`(60s) —— 两者必须留出重叠窗,
+        // 否则判定过期那一拍必然 fail-closed。理由见 `refreshInterval` 的注释。
+        if cachedKey == key, let at = cachedAt, Date().timeIntervalSince(at) <= Self.refreshInterval,
            cachedVerdictValue != nil {
             lock.unlock()
             return
@@ -206,7 +232,11 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
                     logger.notice("spotify web: classified as advertisement, passing through and flagging")
                 }
             }
+            // 只有真的写了缓存才唤醒补查;失败(nil)时缓存没变,补查也只会读到同样的 nil。
+            // 语义与 YouTubeMusicAdProbe 那边逐字相同,包括"在锁外调"这一条。
+            let sink = verdict != nil ? self.resultSink : nil
             self.lock.unlock()
+            sink?(key)
         }
     }
 

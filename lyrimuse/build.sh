@@ -58,6 +58,38 @@ if [ "$UNIVERSAL" = 1 ]; then
 else
   ARCHES="$(uname -m)"
 fi
+
+# 拿什么身份签(2026-09-11)。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
+#
+# 为什么要这个:ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash
+# (`codesign -d -r-` → `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
+# 二进制一重编 cdhash 就变,存的那条再也对不上 —— 用户看到的是「设置里的勾还亮着,App 却说没授权」,
+# 每次 build.sh 之后都要手动把勾取消再勾上一遍(2026-09-11 用户第 N 次撞上:「为什么我明明已经有授权了,
+# 每次点击跳过广告还是会说让我去授权?」)。换成一张固定的自签名证书之后,要求变成
+# `identifier "..." and certificate root = H"<证书>"` —— **跟二进制内容无关**,重编多少次授权都还在。
+#
+# 身份怎么来:本机 login 钥匙串里一张自签名的 Code Signing 证书(CN 见 DEV_SIGN_NAME),不入库、不进 CI、
+# 不需要 sudo、不改系统信任设置(实测:不受信任的自签名证书照样能用来 codesign,`codesign -v` 也过 ——
+# Gatekeeper 那一关本来就不靠它,这个 App 从来就没公证过)。没有这张证书(CI、别人的机器、证书被删)时
+# 自动退回 `-`,行为跟改动前逐字相同。`LYRIMUSE_SIGN_ID=-` 可以显式强制 ad-hoc。
+#
+# ⚠️ 代价说清楚:换成证书之后,**任何**用这张证书签、且 identifier 相同的二进制都会继承已有的 TCC 授权
+# (ad-hoc 那条是钉死到某一个二进制的)。这张私钥待在 login 钥匙串里、由系统按 ACL 管,只有 codesign
+# 用得到;要更严格就把证书删掉,下次构建自动退回 ad-hoc。
+DEV_SIGN_NAME="Lyrimuse Dev Signing"
+SIGN_ID="${LYRIMUSE_SIGN_ID:-}"
+if [ -z "$SIGN_ID" ]; then
+  if security find-identity -p codesigning 2>/dev/null | grep -q "$DEV_SIGN_NAME"; then
+    SIGN_ID="$DEV_SIGN_NAME"
+  else
+    SIGN_ID="-"
+  fi
+fi
+if [ "$SIGN_ID" = "-" ]; then
+  echo "==> codesign identity: ad-hoc(授权会在每次重装后失效,见脚本里这一段注释)"
+else
+  echo "==> codesign identity: $SIGN_ID"
+fi
 # --dest 是给打包用的:组装到别处就不该去碰用户正在跑的那个实例。
 [ -n "$DEST" ] && NO_RESTART=1
 # 单架构时直接拷,不套一层只含一个架构的 fat 文件(那种文件能跑,但没必要)。
@@ -262,7 +294,7 @@ cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 # 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
-codesign --force --sign - "$APP_DIR/Contents/Resources/collector"
+codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/collector"
 
 # 端上歌词翻译小助手。collector(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
 # Swift 可执行文件,由 collector 按自身可执行文件的相对路径调起 —— 跟 media-control 同一
@@ -270,13 +302,13 @@ codesign --force --sign - "$APP_DIR/Contents/Resources/collector"
 # 失效 + 覆盖同 inode 容易踩内核签名缓存)。
 rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
 cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
-codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-translate"
+codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-translate"
 
 # 罗马音预生成小助手(2026-09-03)。同上:collector 算不了 CFStringTokenizer/ICU 那一步。
 # 三步(先删再拷再补签)与上面逐字对称,理由见 collector 那段注释。
 rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
 cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
-codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-romanize"
+codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
 
 # 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
@@ -340,7 +372,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 补签,不然可能被 Gatekeeper 拦下来。MediaRemoteAdapter.framework 内部那个 Mach-O
   # 已经带着 Homebrew 自己的 ad-hoc 签名,不需要(也不应该)重复处理;
   # mediaremote-adapter.pl 是纯文本 Perl 脚本,同样不需要签名。
-  codesign --force --sign - "$APP_DIR/Contents/Resources/media-control/bin/media-control"
+  codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/media-control/bin/media-control"
   # 2026-08-06:universal 构建时把 x86_64 那半也 lipo 进来。
   #
   # Homebrew 在 Apple Silicon 上只会装 arm64 那份,而且不让你拉异架构 bottle
@@ -403,8 +435,8 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
           fi
         done
         if [ "$merged" -gt 0 ]; then
-          codesign --force --sign - "$MC_FW"
-          codesign --force --sign - "$APP_DIR/Contents/Resources/media-control/lib/media-control/MediaRemoteAdapterTestClient" 2>/dev/null || true
+          codesign --force --sign "$SIGN_ID" "$MC_FW"
+          codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/media-control/lib/media-control/MediaRemoteAdapterTestClient" 2>/dev/null || true
           echo "    media-control x86_64 切片已合入($merged 个 Mach-O, bottle tag=$MC_TAG)"
         else
           echo "!! media-control x86_64 bottle 里没找到预期的 Mach-O,跳过 lipo" >&2
@@ -485,8 +517,8 @@ if ! otool -l "$BIN" | grep -q "@executable_path/../Frameworks"; then
 fi
 find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
     \( -name "*.xpc" -o -name "*.app" -o -name "Autoupdate" \) \
-    -exec codesign --force --sign - {} \;
-codesign --force --sign - "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+    -exec codesign --force --sign "$SIGN_ID" {} \;
+codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 echo "    Sparkle.framework embedded + signed"
 fi  # SPARKLE_SKIPPED
 # 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
@@ -631,7 +663,7 @@ PLIST
 # 字符串不变，从裸可执行文件迁移到 .app 包这次代码结构本身发生了变化，系统确实没有认成
 # 同一个 App，自动化权限(控制 Music.app 播放)重新弹了一次系统授权对话框——这是这次
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
-codesign -s - --force --identifier "$LABEL" "$APP_DIR"
+codesign -s "$SIGN_ID" --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
 # collector 已经在上面 lipo 之后显式 ad-hoc 签过一次(见那一步的注释:lipo 会让 go build
 # 产物自带的那份签名失效,所以不能再像以前那样只验证不签)——最外层这行 codesign 没加
@@ -759,9 +791,11 @@ if launchctl list "$LABEL" >/dev/null 2>&1; then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
   sleep 1
 fi
-if pid=$(pgrep -f "$BIN" 2>/dev/null); then
-  echo "==> stopping running instance (pid $pid)"
-  kill $pid 2>/dev/null || true
+# 旧实例的 pid **必须**记下来给最后那道校验用 —— 见下面 "pid 没变" 那一段。
+OLD_PIDS="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
+if [ -n "$OLD_PIDS" ]; then
+  echo "==> stopping running instance (pid ${OLD_PIDS% })"
+  kill $OLD_PIDS 2>/dev/null || true
   # 等它真的退出:旧进程还在时 `open` 只会把它激活、不会起新二进制(LaunchServices 单实例)。
   for _ in 1 2 3 4 5; do
     pgrep -f "$BIN" >/dev/null 2>&1 || break
@@ -774,15 +808,34 @@ open -g "$APP_DIR"
 # 2 秒经常不够 —— 2026-09-05 实测被误判成「没起来」(进程其实起了)。
 pid=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if pid=$(pgrep -f "$BIN" 2>/dev/null); then break; fi
+  pid="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
+  [ -n "$pid" ] && break
   sleep 1
 done
-if [ -n "$pid" ]; then
-  echo "==> $APP_NAME running, pid $pid"
-else
+if [ -z "$pid" ]; then
   echo "!! $APP_NAME not running — check $LOG_FILE" >&2
   exit 1
 fi
+# pid 没变 = 上面那次 kill 没能把旧实例送走,`open -g` 撞上 LaunchServices 单实例只是把它
+# **激活**了一下 —— 磁盘上已经是新二进制,内存里跑的还是旧的。此前这里只判 `[ -n "$pid" ]`,
+# 于是这种情况照样打印 "running, pid N" 并 EXIT=0:**假成功**,而后面一切"真机验证"都在验
+# 旧代码,查起来极难(看起来一切正常,只是改动"没生效")。
+#
+# 2026-09-12 实测踩到。当时 App 拒绝退出,系统日志三行写得很直白:
+#   [AppKit:Application] terminate:
+#   [AppKit:Application] App termination blocked by modal sheet
+#   [AppKit:Application] Termination aborted
+# 开着的是「解析决策」那张 sheet。**AppKit 在有 modal sheet 时会把 terminate 整个取消掉**,
+# 所以这不是"等久一点"能解决的(实测 SIGTERM 之后再等 10 秒仍然活着),只能如实报错、
+# 把该关的东西告诉人。
+if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
+  echo "!! $APP_NAME 旧实例没有退出(pid 仍是 ${pid% })。磁盘上已是新二进制,但内存里跑的还是旧的。" >&2
+  echo "!! 最常见的原因:App 有 modal sheet 开着(设置 / 解析决策 / 搜索候选歌词 等弹窗)," >&2
+  echo "!! AppKit 会把 terminate 整个取消掉,等多久都没用 —— 关掉那张面板再跑一次就行。" >&2
+  echo "!! 想确认是不是这个原因:/usr/bin/log show --last 5m --predicate 'process == \"lyrimuse\"' | grep 'blocked by'" >&2
+  exit 1
+fi
+echo "==> $APP_NAME running, pid ${pid% }"
 
 # collector 是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
 # bootout 只管 $LABEL 这个 App job，从来没管过它 —— 而这个脚本每跑一次，都会把

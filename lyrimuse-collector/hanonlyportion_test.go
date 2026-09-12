@@ -27,6 +27,7 @@ func TestHanOnlyPortion(t *testing.T) {
 
 // retryArtistIdentities 接上 hanOnlyPortion 之后的端到端行为——真实案例复现。
 func TestRetryArtistIdentitiesHanOnlyPortion(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Gary 曹格": ""})
 	withCachedMBAliases(t, map[string][]string{"Gary 曹格": nil})
 	withCachedQQArtistNames(t, map[string]string{"Gary 曹格": ""})

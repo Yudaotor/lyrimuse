@@ -97,17 +97,47 @@ public enum UnknownPlayerAlert {
         hasDisplayName: Bool, stableFor: TimeInterval, stableHits: Int,
         log: [String: AnnounceLog]
     ) -> Bool {
+        guard qualifiesForAnnounce(bundleID: bundleID, artist: artist, album: album,
+                                   observedAt: observedAt, isAutoDetect: isAutoDetect, now: now,
+                                   isAccepted: isAccepted, hasDisplayName: hasDisplayName,
+                                   stableFor: stableFor, stableHits: stableHits) else { return false }
+        let id = bundleID.trimmingCharacters(in: .whitespaces)
+        guard let seen = log[id] else { return true }
+        guard seen.count < maxAnnounces else { return false }
+        return now.timeIntervalSince(seen.lastAt) >= announceCooldown
+    }
+
+    /// 第二层里**不看提醒记录**的那部分(⑤ 静音名单 / ⑥ 反查得到 App 名 / ⑦ 稳定性),2026-09-11 从
+    /// `shouldAnnounce` 拆出来给灵动岛的**被动**提示用(收起态左耳换成那个 App 的图标 + 小圆点、hover 展开
+    /// 的空闲面板变成信任提议,见 App 层 `NotchUnknownPlayerPrompt`):它不打扰人 —— 没 hover 就是一枚换了
+    /// 图的图标 —— 所以不受 ⑧ 次数 / 冷却限制,播放器一直放着就一直挂着;但 ⑤⑥⑦ 一条不少:播客这类 App
+    /// 不该在灵动岛上天天挂一枚带红点的图标(跟通知同一个理由,用户 2026-09-11 对播客也定了「不处理」),
+    /// 反查不到名字的标题只能摆 bundle id,稳定性门槛则是左耳图标不能为两秒的焦点抖动来回换。
+    /// `shouldAnnounce` = 这个 && ⑧,两者永远同源。
+    public static func qualifiesForAnnounce(
+        bundleID: String, artist: String, album: String, observedAt: Date,
+        isAutoDetect: Bool, now: Date, isAccepted: (String) -> Bool,
+        hasDisplayName: Bool, stableFor: TimeInterval, stableHits: Int
+    ) -> Bool {
         guard shouldOffer(bundleID: bundleID, artist: artist, album: album,
                           observedAt: observedAt, isAutoDetect: isAutoDetect, now: now,
                           isAccepted: isAccepted) else { return false }
         let id = bundleID.trimmingCharacters(in: .whitespaces)
         guard !mutedForAnnounce.contains(id) else { return false }
         guard hasDisplayName else { return false }
-        guard stableFor >= stableWindow, stableHits >= stableHitsNeeded else { return false }
-        guard let seen = log[id] else { return true }
-        guard seen.count < maxAnnounces else { return false }
-        return now.timeIntervalSince(seen.lastAt) >= announceCooldown
+        return stableFor >= stableWindow && stableHits >= stableHitsNeeded
     }
+
+    /// 「正在放:歌手 - 歌名」那一截,通知正文与灵动岛提示共用(2026-09-11 从 UnknownPlayerNotifier 里抽出来,
+    /// 两处别各拼一份);两段都空给 nil,调用方退回 bundle id。
+    public static func nowPlayingDescription(artist: String, title: String) -> String? {
+        let parts = [artist, title].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " - ")
+    }
+
+    /// 灵动岛主动提醒(卡片自己展开一次,对齐 iPhone 灵动岛的 AirPods 连接提醒)停留的时长:读完两行字、把光标
+    /// 挪过去点一下的余量;光标停在卡片上不收,到点后由 hover 那一路接管。
+    public static let notchAlertDuration: TimeInterval = 8
 
     /// 稳定性门槛:同一个 bundle id 至少连续被观察到这么久、这么多次。
     /// 两条都要 —— 次数单独不够(事件密集时三次可能只跨 0.3 秒),时长单独也不够

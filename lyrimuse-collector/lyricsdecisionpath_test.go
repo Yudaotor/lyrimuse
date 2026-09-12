@@ -23,15 +23,27 @@ func TestLyricsDecisionPathsHaveChineseLabels(t *testing.T) {
 		t.Fatalf("读不到 %s: %v(路径变了就跟着改,别把这个测试删掉)", sheet, err)
 	}
 	src := string(data)
+	// ⚠️ 反方向那一段(下面)必须只看 **pathLabel 自己的函数体**。2026-09-12 加查询词留痕
+	// (借鉴清单 V1)时同一个文件里多了个 queryReasonLabel,里面也是一串 `case "…":`,
+	// 全文件扫的话它们会被当成"没登记的决策路径"报错 —— 两份清单互相顶替对方的缺口。
+	const fnMarker = "private func pathLabel("
+	start := strings.Index(src, fnMarker)
+	if start < 0 {
+		t.Fatalf("%s 里找不到 pathLabel —— 函数改名了就同步改这个测试", sheet)
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n    }\n"); end > 0 {
+		body = body[:end]
+	}
 	for _, path := range lyricsDecisionPaths() {
 		needle := `case "` + path + `":`
-		if !strings.Contains(src, needle) {
+		if !strings.Contains(body, needle) {
 			t.Errorf("path %q 在 LyricsDecisionSheet.pathLabel 里没有中文译名(缺 %s)——"+
 				"不补的话界面上会直接把这个英文串印给用户看", path, needle)
 		}
 	}
 	// 反方向:Swift 那边写了译名、Go 这边却没有登记进 lyricsDecisionPaths,说明清单漏了。
-	for _, line := range strings.Split(src, "\n") {
+	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, `case "`) {
 			continue

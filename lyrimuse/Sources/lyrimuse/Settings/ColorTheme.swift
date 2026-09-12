@@ -2,8 +2,8 @@ import AppKit
 import AppKit
 import Foundation
 
-// 经典悬浮窗"配色主题"——内置预设一键套用 + 自定义主题另存复用,对标 PlayStatus/
-// Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的配色主题功能。只打包这四个
+// 经典悬浮窗"配色主题"——内置预设一键套用 + 自定义主题另存复用,这是这一类歌词/
+// 播放器 App 的常规配置(调研过五个同类实现,都有)。只打包这四个
 // "配色"相关字段(不含字体/字号——那是排版,不是配色,两者概念上不是一回事,不该被同一个
 // "主题"捆在一起改动)。textStrokeEnabled/textStrokeColorHex 对应的渲染效果是实心描边
 // (非模糊阴影,见 LyricsOverlayView.swift 的 OptionalTextStroke)。

@@ -10,12 +10,16 @@ import (
 
 // snapshot is the subset of the media-control state we care about.
 type snapshot struct {
-	Title    string
-	Artist   string
-	Album    string
-	Bundle   string
-	Duration float64
-	Playing  bool
+	Title  string
+	Artist string
+	Album  string
+	// AlbumHint:播放器**没报**专辑名时,由 Apple 目录按「署名 + 曲名 + 时长」反查出来的专辑名(albumhint.go
+	// appleAlbumHint,2026-09-08)。只给**呈现 / 上送**用(见 albumForUpload),**绝不**进 enrich 缓存 key:App 侧
+	// EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,这边 key 若带上它,两边就对不上了。Album 非空时恒为空。
+	AlbumHint string
+	Bundle    string
+	Duration  float64
+	Playing   bool
 	// media-control's own reading: at McTS the position was Elapsed, advancing at
 	// Rate (1 playing, 0 paused). media-control freezes Elapsed/McTS during steady
 	// play (only refreshed on events) and McTS drifts stale across sleep/idle, so
@@ -46,6 +50,17 @@ func (s snapshot) key() string {
 	return s.Title + "|" + s.Artist + "|" + s.Album
 }
 
+// albumForUpload:对外呈现 / 上送用的专辑名 —— 播放器报了就用它,没报就用 Apple 目录反查的 AlbumHint。
+// ⚠️ 只在「呈现 / 上送」的出口用(relay 网页、Last.fm album、LB release_name、本地收听日志);歌词缓存 key
+// (trackEnrichment)、广告判据(isAdBreak 看 Spotify 原生 album 为空)、专辑预取、会话 key 都继续用 Album 本身 ——
+// 否则 App 侧按播放器原始标签查歌词会对不上 key,或者一首歌中途回填出专辑就被当成换了歌。
+func (s snapshot) albumForUpload() string {
+	if s.Album != "" {
+		return s.Album
+	}
+	return s.AlbumHint
+}
+
 func extract(state map[string]any) snapshot {
 	str := func(k string) string { v, _ := state[k].(string); return v }
 	num := func(k string) float64 { v, _ := state[k].(float64); return v }
@@ -56,13 +71,15 @@ func extract(state map[string]any) snapshot {
 			mcTS = t
 		}
 	}
-	// 电台:`duration` 报的是**整档节目**(实测 3390.122s = 56 分半),不是当前这首歌 —— 当"未知"处理。
-	// 不这么做的话它会被写进歌词缓存的 resolved_duration,之后正常播放同一首歌时两者差 94%、
-	// 超过 durationMismatch 的 12% 阈值,每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
+	// 电台:`duration` 报的是**整档节目**(实测 3390.122s = 56 分半),不是当前这首歌。
+	// 优先换成 Apple 目录查到的权威曲长(见 system.go 的 catalogDurationSecs,实测把 3390.122 纠成
+	// 226.283);目录也不知道就当"未知"(0)。两条路都不能让整档节目那个数留下来:它会被写进歌词缓存的
+	// resolved_duration,之后正常播放同一首歌时两者差 94%、超过 durationMismatch 的 12% 阈值,
+	// 每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
 	radio := str("radioStationHash") != ""
 	duration := num("duration")
 	if radio {
-		duration = 0
+		duration = num("catalogDurationSecs")
 	}
 	return snapshot{
 		Title:         str("title"),

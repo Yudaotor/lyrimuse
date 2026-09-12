@@ -266,16 +266,188 @@ func TestSiblingAlbumCover(t *testing.T) {
 		"方大同|烦|JTW西游记": {CoverURL: "https://qq/wrong-album.jpg", CoverSource: "qq"},
 	}
 
-	url, source := siblingAlbumCover("方大同", "Once", album)
+	url, source, verified := siblingAlbumCover("方大同", "Once", album)
 	if url != "https://qq/right.jpg" || source != "qq" {
 		t.Errorf("siblingAlbumCover = (%q, %q), want (https://qq/right.jpg, qq)", url, source)
+	}
+	// 2026-09-07:借到的 qq 图**不认领专辑归属** —— QQ 从不回传专辑名,这一档的
+	// cover_album 本来就是空的,借用不该把它升级成"已核实"。见 siblingAlbumCover 头注。
+	if verified {
+		t.Error("借来的 qq 封面不该报 albumVerified —— 那会让调用方盖上 cover_album,凭空造出一条归属证据")
 	}
 
 	// 专辑里一个 qq 定案的邻居都没有:原样返回空,不该瞎凑。
 	enrichCache = map[string]enrichEntry{
 		"方大同|放不过自己|" + album: {CoverURL: "https://netease/loose.jpg", CoverSource: "netease", CoverAlbum: "JTW 西游记 (Gold)"},
 	}
-	if url, _ := siblingAlbumCover("方大同", "Once", album); url != "" {
+	if url, _, _ := siblingAlbumCover("方大同", "Once", album); url != "" {
 		t.Errorf("没有 qq 定案的邻居时不该借到东西,got %q", url)
+	}
+}
+
+// 2026-09-07 用户报《Michael》/「Hold My Hand (with Akon)」封面不对:显示的是 QQ 的
+// 《The Ultimate Collection》,而同一张专辑另外三首在本机播过、拿到的是设备直送的正确
+// 封面。第一档就是为这种形态加的 —— 归属由播放时刻本身保证的那张图,可以连归属一起借走。
+func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+
+	const album = "Michael"
+	deviceCover := "file:///Users/x/.config/lyrimuse/artwork/abc.jpg"
+	enrichCache = map[string]enrichEntry{
+		// 本机播过、cover_album 已经逐字对上这张专辑 → 归属可外借。
+		"Michael Jackson|Hollywood Tonight|" + album: {CoverURL: deviceCover, CoverSource: "device", CoverAlbum: album},
+		// QQ 那张精选集图也在,但排在第二档。
+		"Michael Jackson|Much Too Soon|" + album: {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"},
+	}
+	url, source, verified := siblingAlbumCover("Michael Jackson", "Hold My Hand", album)
+	if url != deviceCover || source != "device" || !verified {
+		t.Errorf("siblingAlbumCover = (%q, %q, %v), want (%q, device, true) —— device 邻居该赢过 qq 邻居",
+			url, source, verified, deviceCover)
+	}
+
+	// device 邻居自己的 cover_album 对不上(或为空)时**不够格**:这个函数不替它推断归属,
+	// 退回第二档的 qq 图。
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Hollywood Tonight|" + album: {CoverURL: deviceCover, CoverSource: "device"},
+		"Michael Jackson|Much Too Soon|" + album:     {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"},
+	}
+	url, source, verified = siblingAlbumCover("Michael Jackson", "Hold My Hand", album)
+	if url != "https://qq/ultimate.jpg" || source != "qq" || verified {
+		t.Errorf("siblingAlbumCover = (%q, %q, %v), want (https://qq/ultimate.jpg, qq, false)", url, source, verified)
+	}
+
+	// netease/apple 的戳是**源自己报的专辑名**(同名不同版照样逐字对上),这两档仍然不借 ——
+	// 跟原有那条"不借网易云/Apple"是同一条理由。
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Hollywood Tonight|" + album: {CoverURL: "https://netease/exact.jpg", CoverSource: "netease", CoverAlbum: album},
+		"Michael Jackson|Best of Joy|" + album:       {CoverURL: "https://apple/exact.jpg", CoverSource: "apple", CoverAlbum: album},
+	}
+	if url, _, _ := siblingAlbumCover("Michael Jackson", "Hold My Hand", album); url != "" {
+		t.Errorf("netease/apple 的已核实邻居不该被借用,got %q", url)
+	}
+}
+
+// 同专辑有多条可借邻居时,借到哪一张必须是**确定的**:Go 的 map 迭代顺序随机,不定序的话
+// 每次启动可能借到不同的图,表现是"封面偶尔自己变了"且复现不出来。
+func TestSiblingAlbumCoverIsDeterministic(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+
+	const album = "同一张专辑"
+	enrichCache = map[string]enrichEntry{
+		"某歌手|甲|" + album: {CoverURL: "https://qq/a.jpg", CoverSource: "qq"},
+		"某歌手|乙|" + album: {CoverURL: "https://qq/b.jpg", CoverSource: "qq"},
+		"某歌手|丙|" + album: {CoverURL: "https://qq/c.jpg", CoverSource: "qq"},
+	}
+	first, _, _ := siblingAlbumCover("某歌手", "丁", album)
+	if first == "" {
+		t.Fatal("该借到一张 qq 邻居的图")
+	}
+	for i := 0; i < 30; i++ {
+		if got, _, _ := siblingAlbumCover("某歌手", "丁", album); got != first {
+			t.Fatalf("第 %d 次借到的是 %q,跟第一次的 %q 不一样 —— 借用结果必须跟 map 迭代顺序无关", i+1, got, first)
+		}
+	}
+}
+
+// 自愈触发判据(2026-09-07)。刻意收得很窄:只有"同专辑真有一张归属可外借的邻居"才算缺,
+// 否则 QQ 正常给对图的那一大类(cover_album 恒空、补不上)会每条白重试满 5 次。
+func TestCoverCanUpgradeToVerifiedSibling(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+
+	const album = "Michael"
+	deviceSibling := map[string]enrichEntry{
+		"Michael Jackson|Hollywood Tonight|" + album: {
+			CoverURL: "file:///Users/x/.config/lyrimuse/artwork/abc.jpg", CoverSource: "device", CoverAlbum: album,
+		},
+	}
+	qqStamped := enrichEntry{CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"}
+
+	enrichCache = deviceSibling
+	if !coverCanUpgradeToVerifiedSiblingLocked(qqStamped, "Michael Jackson", album) {
+		t.Error("qq 档 + 同专辑有 device 已核实邻居 → 该补一次重解析")
+	}
+	// 自己就是已核实的那一档:没什么可升的。
+	if coverCanUpgradeToVerifiedSiblingLocked(
+		enrichEntry{CoverURL: "u", CoverSource: "apple", CoverAlbum: album}, "Michael Jackson", album) {
+		t.Error("cover_album 已经逐字对上的条目不该被判成缺")
+	}
+	// device 档身份最硬,不参与升级。
+	if coverCanUpgradeToVerifiedSiblingLocked(
+		enrichEntry{CoverURL: "u", CoverSource: "device"}, "Michael Jackson", album) {
+		t.Error("device 档不该被判成缺")
+	}
+	if coverCanUpgradeToVerifiedSiblingLocked(qqStamped, "Michael Jackson", "") {
+		t.Error("本地没有专辑标签时判不出来,不该补查")
+	}
+	// 没有可借邻居:不制造白重试。
+	enrichCache = map[string]enrichEntry{
+		"Michael Jackson|Much Too Soon|" + album: {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"},
+	}
+	if coverCanUpgradeToVerifiedSiblingLocked(qqStamped, "Michael Jackson", album) {
+		t.Error("同专辑没有归属可外借的邻居时不该补查 —— 重解析拿不到更好的答案,只会白重试满 5 次")
+	}
+}
+
+// 借来的 device 封面要过得了外围自愈那道换封面闸(2026-09-07)。这条路径上 fresh 只可能靠
+// 借拿到 device 来源,而它的归属是实测证据,不该再被"网易云这一轮应答过没有"那条代理证据拦住。
+func TestCoverSwapAllowedAcceptsBorrowedDeviceCover(t *testing.T) {
+	const album = "Michael"
+	old := enrichEntry{CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"}
+	fresh := enrichEntry{
+		CoverURL: "file:///Users/x/.config/lyrimuse/artwork/abc.jpg", CoverSource: "device", CoverAlbum: album,
+	}
+	if !coverSwapAllowed(old, fresh, album) {
+		t.Error("借来的 device 封面该被接受 —— 它不带 NeteaseURL,旧判据会把它永远拦在缓存外")
+	}
+	// old 本身是 device 时仍然只走"是不是同一张图的高清版"那条判据,新档不许绕过它
+	// (2026-08-31《Immortal》那次真实 bug 就是被这条守住的)。
+	saved := deviceCoverUpgradable
+	defer func() { deviceCoverUpgradable = saved }()
+	deviceCoverUpgradable = func(string, string) bool { return false }
+	oldDevice := enrichEntry{CoverURL: "file:///Users/x/.config/lyrimuse/artwork/old.jpg", CoverSource: "device", CoverAlbum: album}
+	if coverSwapAllowed(oldDevice, fresh, album) {
+		t.Error("old 是 device 时必须先过 deviceCoverUpgradable,不该被新加的 fresh-device 档绕过")
+	}
+}
+
+// 存量清洗:擦掉借用时盖上的假归属戳(2026-09-07,本机实测 386 条)。
+func TestMigrateBorrowedCoverAlbums(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+
+	enrichCache = map[string]enrichEntry{
+		// 被盖过章的:擦掉。
+		"Michael Jackson|Hold My Hand|Michael": {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq", CoverAlbum: "Michael"},
+		// qq 档本来就没戳:不动(也证明这个迁移是幂等的)。
+		"某歌手|甲|某专辑": {CoverURL: "https://qq/a.jpg", CoverSource: "qq"},
+		// 另外三档的戳都是真的,一个字节都不许动。
+		"某歌手|乙|某专辑": {CoverURL: "file:///x/artwork/b.jpg", CoverSource: "device", CoverAlbum: "某专辑"},
+		"某歌手|丙|某专辑": {CoverURL: "https://netease/c.jpg", CoverSource: "netease", CoverAlbum: "某专辑"},
+		"某歌手|丁|某专辑": {CoverURL: "https://apple/d.jpg", CoverSource: "apple", CoverAlbum: "某专辑"},
+	}
+	migrateBorrowedCoverAlbums()
+	if got := enrichCache["Michael Jackson|Hold My Hand|Michael"].CoverAlbum; got != "" {
+		t.Errorf("被盖过章的 qq 条目该被擦掉 cover_album, got %q", got)
+	}
+	// 封面本身不动:换封面交给自愈路径(理由见 coverstampmigrate.go 头注)。
+	if got := enrichCache["Michael Jackson|Hold My Hand|Michael"].CoverURL; got != "https://qq/ultimate.jpg" {
+		t.Errorf("迁移不该动 cover_url, got %q", got)
+	}
+	for _, k := range []string{"某歌手|乙|某专辑", "某歌手|丙|某专辑", "某歌手|丁|某专辑"} {
+		if enrichCache[k].CoverAlbum != "某专辑" {
+			t.Errorf("%s 的 cover_album 是真的,不该被擦", k)
+		}
+	}
+	// 幂等:再跑一遍什么都不变。enrichEntry 带切片字段、不能直接比,挑这次迁移唯一
+	// 会碰的三个字段比。
+	before := enrichCache["某歌手|甲|某专辑"]
+	migrateBorrowedCoverAlbums()
+	after := enrichCache["某歌手|甲|某专辑"]
+	if after.CoverURL != before.CoverURL || after.CoverSource != before.CoverSource ||
+		after.CoverAlbum != before.CoverAlbum {
+		t.Error("第二遍迁移不该改动任何条目")
 	}
 }

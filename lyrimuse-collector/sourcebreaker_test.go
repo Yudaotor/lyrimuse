@@ -53,7 +53,9 @@ func TestLyricSourceForHost(t *testing.T) {
 	}
 }
 
-// 连续两次网络失败才开;之后每次再失败按 15/30/60/120/300 秒升档;一次成功整体清零。
+// 连续两次网络失败才开;之后**每熔断一轮**按 15/30/60/120/300 秒升一档;一次成功整体清零。
+// "每熔断一轮"是 2026-09-09 修正过的口径(原来是每失败一个请求升一档),所以这里每升一档
+// 之前都得先把上一档的冷却等过去 —— 冷却窗口里的失败不升档,那一条由下面那个测试单独钉。
 func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	b, clk := newTestBreaker()
 	b.observe("music.163.com", errProbeDial, 0, "")
@@ -73,11 +75,13 @@ func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	if d, _ := b.coolingDown("netease"); d != 30*time.Second {
 		t.Fatalf("第三次失败应升到 30s,实际 %s", d)
 	}
-	for i := 0; i < 10; i++ {
+	for _, want := range []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute, 5 * time.Minute} {
+		d, _ := b.coolingDown("netease")
+		clk.advance(d)
 		b.observe("music.163.com", errProbeDial, 0, "")
-	}
-	if d, _ := b.coolingDown("netease"); d != 5*time.Minute {
-		t.Fatalf("阶梯应封顶 5 分钟,实际 %s", d)
+		if got, _ := b.coolingDown("netease"); got != want {
+			t.Fatalf("冷却到期后再失败应升到 %s,实际 %s", want, got)
+		}
 	}
 	// 同源另一个主机的一次成功即清
 	b.observe("music.163.com", nil, 200, "")
@@ -88,6 +92,47 @@ func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	b.observe("music.163.com", errProbeDial, 0, "")
 	if _, cooling := b.coolingDown("netease"); cooling {
 		t.Fatal("成功清零后单次失败不应熔断")
+	}
+}
+
+// ⚠️ 回归钉:一轮搜索里同一个源要发好几个请求(网易云 4 个歌手别名变体、QQ 的 smartbox +
+// client_search),源整个挂掉时它们在同一瞬间一起失败 —— 这**一波**故障只能升一档。
+//
+// 2026-09-09 之前档位是 `st.consecutive - lyricSourceBreakerTripAfter`,拿失败请求数当档位,
+// 于是一次抖动就把阶梯走到头。实测日志:QQ 在 14:38:19.804 这同一毫秒里连跳 15s→30s→1m→2m
+// →5m 五档,网易云 0.8 秒内到顶、consecutive 一路涨到 22;整份日志冷却到顶 5 分钟 331 次,
+// 可配对的 35 例里 14 例是"第一档 15 秒都没过完就到顶"。用户看得见的后果是一次 2 秒的 DNS
+// 抖动换来七个源停摆 5 分钟(《One Last Kiss》首播被判"暂无歌词")。
+func TestLyricSourceBreakerDoesNotEscalateWithinOneCooldown(t *testing.T) {
+	b, clk := newTestBreaker()
+	// 一波 20 个失败请求,时间上挤在 40 毫秒里 —— 只该开成第一档 15 秒。
+	for i := 0; i < 20; i++ {
+		b.observe("c.y.qq.com", errProbeDial, 0, "")
+		clk.advance(2 * time.Millisecond)
+	}
+	d, cooling := b.coolingDown("qq")
+	if !cooling {
+		t.Fatal("一波失败之后应该在冷却中")
+	}
+	if d > 15*time.Second {
+		t.Fatalf("同一个冷却窗口里的连发失败不该升档,期望仍是第一档 15s,实际 %s", d)
+	}
+	// 冷却窗口里的失败也不该把冷却**续期**——不然"上限 5 分钟"会变成"只要还在失败就永远冷却"。
+	if d < 14*time.Second {
+		t.Fatalf("冷却不该被窗口内的失败续期(还剩 %s,说明 until 被往后推了)", d)
+	}
+	// 等它过期,再失败一次:这才是第二轮熔断,升到 30s。
+	clk.advance(15 * time.Second)
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	if got, _ := b.coolingDown("qq"); got != 30*time.Second {
+		t.Fatalf("冷却过期后的新一轮失败应升到 30s,实际 %s", got)
+	}
+	// 成功一次把档位也清零:再来一波失败要从 15s 重新数起。
+	b.observe("c.y.qq.com", nil, 200, "")
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	if got, _ := b.coolingDown("qq"); got != 15*time.Second {
+		t.Fatalf("成功清零后应从第一档 15s 重新开始,实际 %s", got)
 	}
 }
 
@@ -337,17 +382,22 @@ func TestLyricSourceRoundViaContext(t *testing.T) {
 	}
 }
 
-// 这一轮有源被跳过而落成"没歌词"的条目,10 分钟后就该补搜;没跳过的照旧 24 小时;
-// 补过一次之后回到正常退避。
+// 这一轮有源被跳过而落成"没歌词"的条目该早点补搜,分两档:被跳过的源还在冷却 → 等 10 分钟;
+// 都不冷却了 → 30 秒。没跳过的照旧 24 小时;补过一次之后回到正常退避。
 func TestNeedsLyricsFirstFillShortIntervalWhenSourcesSkipped(t *testing.T) {
+	orig := anyLyricSourceCooling
+	defer func() { anyLyricSourceCooling = orig }()
+
 	now := time.Now().Unix()
+	// 第一档:那些源还在冷却里 —— 10 分钟。
+	anyLyricSourceCooling = func([]string) bool { return true }
 	skipped := enrichEntry{TS: now - 11*60, LyricsSourcesSkipped: []string{"netease"}}
 	if !needsLyricsFirstFill(skipped) {
 		t.Fatal("有源被跳过、11 分钟后应重试")
 	}
 	tooSoon := enrichEntry{TS: now - 5*60, LyricsSourcesSkipped: []string{"netease"}}
 	if needsLyricsFirstFill(tooSoon) {
-		t.Fatal("5 分钟还不到 10 分钟的间隔")
+		t.Fatal("源还在冷却中,5 分钟还不到 10 分钟的间隔")
 	}
 	plain := enrichEntry{TS: now - 11*60}
 	if needsLyricsFirstFill(plain) {
@@ -356,5 +406,24 @@ func TestNeedsLyricsFirstFillShortIntervalWhenSourcesSkipped(t *testing.T) {
 	retried := enrichEntry{TS: now - 11*60, LyricsFillTS: now - 11*60, LyricsFillCount: 1, LyricsSourcesSkipped: []string{"netease"}}
 	if needsLyricsFirstFill(retried) {
 		t.Fatal("补过一次之后应回到正常退避")
+	}
+
+	// 第二档:那些源都不冷却了 —— 30 秒就重来,让重搜落在同一次播放里
+	// (《One Last Kiss》那一例:歌只有 4 分 12 秒,等 10 分钟等于整首歌都挂着"暂无歌词")。
+	anyLyricSourceCooling = func([]string) bool { return false }
+	ready := enrichEntry{TS: now - 31, LyricsSourcesSkipped: []string{"netease"}}
+	if !needsLyricsFirstFill(ready) {
+		t.Fatal("被跳过的源都不冷却了,31 秒后就该补搜")
+	}
+	tooFresh := enrichEntry{TS: now - 10, LyricsSourcesSkipped: []string{"netease"}}
+	if needsLyricsFirstFill(tooFresh) {
+		t.Fatal("10 秒还不到 30 秒——那 30 秒是给抖动型故障留的观察期,不能省")
+	}
+	// 快速这一档同样只对第一次补空生效,也同样不碰"没有源被跳过"的条目。
+	if needsLyricsFirstFill(enrichEntry{TS: now - 31, LyricsFillCount: 1, LyricsSourcesSkipped: []string{"netease"}}) {
+		t.Fatal("补过一次之后不该再走 30 秒这一档")
+	}
+	if needsLyricsFirstFill(enrichEntry{TS: now - 31}) {
+		t.Fatal("没有源被跳过的条目不该因为熔断器是空的就被拉进快速档")
 	}
 }

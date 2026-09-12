@@ -32,6 +32,9 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var currentTrackHasNoLyrics = false
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
+    /// 电台口白 / 台卡(2026-09-11):这一刻在放的不是歌。语义与 isCurrentTrackAdBreak 平行。
+    @Published private(set) var isRadioTalkBreak = false
+    @Published private(set) var radioStationName: String?
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkImage: NSImage?
     /// 系统那张封面的**高清替代**(`PlaybackCoordinator.highResArtworkImage`),系统给的
@@ -89,6 +92,8 @@ private final class PanelPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
+            p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
+            p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
@@ -269,6 +274,8 @@ private struct MenuBarPanelView: View {
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
     @State private var quickTarget: LyricsSurface?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 封面小图按像素预先重采样要知道显示倍率(见 coverView)。
+    @Environment(\.displayScale) private var displayScale
     /// Last.fm 连接情况,开窗那一刻取一次快照(见 lastfmFooterItem)。
     @State private var lastfmStatus: DestinationStatus?
     /// 有没有查到还没装的新版本,开窗那一刻取一次快照(同 lastfmStatus 的理由:面板是短命
@@ -406,6 +413,10 @@ private struct MenuBarPanelView: View {
     // (NotchLyricsView)和歌词窗口歌词区(emptyStateSpec)早就是「广告中」了,口径统一。
     private var displayTitle: String {
         if playback.isCurrentTrackAdBreak { return L10n.t("广告中") }
+        // 电台口白 / 台卡:换成台名(2026-09-11),跟灵动岛、歌词窗口同一口径。抓不到台卡就照旧。
+        if playback.isRadioTalkBreak, let station = playback.radioStationName, !station.isEmpty {
+            return station
+        }
         // 没歌在放就留白,不再摆一个占位破折号(2026-08-19 用户要求)。那一横不携带任何
         // 信息:封面已经是空封面、歌手/专辑也都是空的,"没在放"这件事已经说得很清楚了,
         // 再画一横反倒像"有一首歌但名字读不出来"。
@@ -568,6 +579,7 @@ private struct MenuBarPanelView: View {
             hasWordTiming: !(playback.compactLine?.words ?? []).isEmpty,
             hasCurrentLine: playback.compactLine != nil,
             isAdBreak: playback.isCurrentTrackAdBreak,
+            isRadioTalk: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
             networkDown: playback.collectorNetworkDown,
@@ -583,6 +595,8 @@ private struct MenuBarPanelView: View {
             // 这一格**故意留空**:广告时卡片标题已经是「广告中」了(见 displayTitle),
             // 正下方再说一遍是同一件事说两遍。另外三个展示面没有标题行,才需要自己说。
             Text("")
+        case .radioTalk:
+            statusText(L10n.t("口白"))
         case .instrumental:
             statusText(L10n.t("纯音乐"))
         case .noLyrics:
@@ -645,10 +659,28 @@ private struct MenuBarPanelView: View {
     @ViewBuilder private var coverView: some View {
         // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
         // 悬浮歌词一致(见那个属性的注释,以及用户 2026-09-02 报的《白发》两处封面不一样)。
-        if let image = playback.displayArtworkImage {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
+        if playback.isCurrentTrackAdBreak {
+            // 广告期间换成广告标识(2026-09-09,用户:「只要识别到是广告的话,封面部分都用这个
+            // 替代」)。底沿用下面"没有封面"那块同一个渐变,只把符号从 music.note 换成
+            // megaphone.fill —— 跟灵动岛、歌词窗口是同一枚,同一件事全App 一种画法。
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 44, height: 44)
+                .overlay(Image(systemName: "megaphone.fill").foregroundStyle(.white.opacity(0.85)))
+        } else if let image = playback.displayArtworkImage {
+            // 按 44pt × 显示倍率预先重采样成位图再贴,不在运行期缩(2026-09-09,半调网点封面在灵动岛小图上
+            // 缩成摩尔纹黑斑,这里同一张图、同一种缩法;理由与算法见 ArtworkThumbnail / ArtworkThumbnailCache)。
+            let scale = max(1, displayScale)
+            Group {
+                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((44 * scale).rounded())) {
+                    Image(decorative: bitmap, scale: scale)
+                } else {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+            }
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         } else {
@@ -808,7 +840,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ Sparkle 窗口)。
+    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ 设置的「软件更新」页)。
     ///
     /// 状态来自 `SparkleUpdaterManager.availableUpdate`(Sparkle 委托只记状态、不接管显示,
     /// 见那边注释),开窗时取一次快照。升级提示用强调色 + 下载图标,而不是只换文字——跟
@@ -821,15 +853,14 @@ private struct MenuBarPanelView: View {
                 // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
                 title: String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
                               update.version),
-                tint: .accentColor, help: L10n.t("点击打开更新窗口"),
+                tint: .accentColor, help: L10n.t("打开软件更新"),
                 icon: { Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.5)) }
             ) {
                 close()
-                // 跟右键菜单「检查更新…」同一个坑:.accessory 策略下 Sparkle 的窗口要先激活
-                // App 才出得来。用户发起的检查由 Sparkle 标准流程接管,直接把已发现的更新
-                // 窗口拉到最前。
-                NSApp.activate(ignoringOtherApps: true)
-                SparkleUpdaterManager.shared.checkForUpdates()
+                // 2026-09-12 起更新界面在设置窗口的「软件更新」页(不再是 Sparkle 的弹窗),跟下面版本号
+                // 那格同一条路翻过去;页面上已经摆着查到的版本和「立即更新」。
+                AppActions.shared.requestSettings(.softwareUpdate)
+                AppActions.shared.openSettings?()
             }
         } else {
             footerItem(

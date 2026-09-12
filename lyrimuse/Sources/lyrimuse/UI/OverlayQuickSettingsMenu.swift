@@ -67,6 +67,10 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
                             action: #selector(toggleNextLinePreview)))
         menu.addItem(submenu(L10n.t("更改配色"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
         menu.addItem(submenu(offsetMenuTitle, symbol: "timer", menu: lyricsOffsetMenu()))
+        // 「位置」(2026-09-11,issue #5):自由 / 顶部居中 / 底部居中。放在这里是因为预设模式下
+        // 想拖窗口只会得到一条「🔒 已固定为…，在 ⚙ 菜单里可改」+ 抖一下,用户下一步最可能就是想切模式 —— 就近给出口,
+        // 不必去设置页翻「行为」浮层。写的是同一个 AppSettings 值,控制器订阅它自己落位。
+        menu.addItem(submenu(L10n.t("位置"), symbol: "dock.rectangle", menu: placementMenu(settings)))
         // 没歌在播时不给这一项——跟 LyricsWindowView 的「⋯」菜单同一条件
         // (`if !playback.title.isEmpty`),搜索面板本身就是按"当前播放的这首歌"算的,
         // 没有曲目信息搜什么都没意义。
@@ -91,6 +95,21 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
                          action: #selector(setChineseVariantSimplified)))
         m.addItem(toggle(L10n.t("繁体"), symbol: "", on: current == .traditional,
                          action: #selector(setChineseVariantTraditional)))
+        return m
+    }
+
+    /// 「位置」子菜单:三态,同「简繁转换」做成子菜单里的三个可勾选行。标签跟设置页那个分段控件
+    /// 同一份(`OverlayPlacementSegmentedControl.label`),两处一个口径。
+    private func placementMenu(_ settings: AppSettings) -> NSMenu {
+        let m = NSMenu()
+        m.autoenablesItems = false
+        let current = settings.overlayPlacementMode
+        m.addItem(toggle(OverlayPlacementSegmentedControl.label(for: .free), symbol: "", on: current == .free,
+                         action: #selector(setPlacementFree)))
+        m.addItem(toggle(OverlayPlacementSegmentedControl.label(for: .topCenter), symbol: "", on: current == .topCenter,
+                         action: #selector(setPlacementTopCenter)))
+        m.addItem(toggle(OverlayPlacementSegmentedControl.label(for: .bottomCenter), symbol: "",
+                         on: current == .bottomCenter, action: #selector(setPlacementBottomCenter)))
         return m
     }
 
@@ -228,6 +247,11 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     @objc private func setChineseVariantOff() { setChineseVariant(.off) }
     @objc private func setChineseVariantSimplified() { setChineseVariant(.simplified) }
     @objc private func setChineseVariantTraditional() { setChineseVariant(.traditional) }
+
+    // 位置模式只写 AppSettings:控制器订阅它自己落位、视图订阅它切贴顶/贴底,这里不用再调谁。
+    @objc private func setPlacementFree() { AppSettings.shared.overlayPlacementMode = .free }
+    @objc private func setPlacementTopCenter() { AppSettings.shared.overlayPlacementMode = .topCenter }
+    @objc private func setPlacementBottomCenter() { AppSettings.shared.overlayPlacementMode = .bottomCenter }
 
     @objc private func toggleFollowsCoverArt() {
         AppSettings.shared.followsCoverArt.toggle()

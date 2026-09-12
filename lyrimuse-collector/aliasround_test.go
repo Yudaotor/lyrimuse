@@ -98,9 +98,15 @@ func TestAliasRoundTargetingIsWired(t *testing.T) {
 	for _, needle := range []string{
 		"only := lyricSourceOnlyFrom(ctx)",
 		"if only != nil && !only[source] {",
-		"altCtx := withLyricSourceOnly(ctx, only)",
+		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 2026-09-12 起外面还包了
+		// 一层 withLyricQueryReason(借鉴清单 V1 的查询词留痕),所以只钉内层这一段。
+		"withLyricSourceOnly(ctx, only)",
 		"fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)",
 		"missing := lyricSourcesWorthAliasRetry(results)",
+		// 别名轮的三个触发理由必须各自标注到查询留痕里,否则存档只知道"换了个名字查",
+		// 分不出这一轮是救急、缺罗马音、还是只补缺席的那几个源(处置完全不同)。
+		"aliasReason := lyricQueryReasonAliasMissing",
+		"altCtx := withLyricQueryReason(withLyricSourceOnly(ctx, only), aliasReason)",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("enrich.go 缺 %q", needle)

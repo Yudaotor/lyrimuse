@@ -492,13 +492,13 @@ func runSyncEngineTests() {
     // 所以拿断言钉住。
 
     do {
-        func d(words: Bool = false, line: Bool = false, ad: Bool = false, inst: Bool = false,
-               noLyrics: Bool = false, netDown: Bool = false, content: Bool = false,
+        func d(words: Bool = false, line: Bool = false, ad: Bool = false, talk: Bool = false,
+               inst: Bool = false, noLyrics: Bool = false, netDown: Bool = false, content: Bool = false,
                playing: Bool = true) -> LyricsLineDisplay {
             LyricsLineDisplay.resolve(
-                hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad, isInstrumental: inst,
-                hasNoLyrics: noLyrics, networkDown: netDown, hasLyricsContent: content,
-                isPlaying: playing)
+                hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad, isRadioTalk: talk,
+                isInstrumental: inst, hasNoLyrics: noLyrics, networkDown: netDown,
+                hasLyricsContent: content, isPlaying: playing)
         }
 
         expectEqual(d(words: true, line: true, content: true), .words, "歌词行: 有逐字数据就唱")
@@ -511,6 +511,13 @@ func runSyncEngineTests() {
         // 三条"必须排在谁前面"的硬约束
         expectEqual(d(inst: true), .instrumental, "歌词行: 纯音乐排在「搜索中」前(否则永远转圈)")
         expectEqual(d(ad: true), .adBreak, "歌词行: 广告排在「搜索中」前")
+        // 电台口白 / 台卡(2026-09-11 用户在歌词窗口上报的:开台那几十秒一直转圈搜)。
+        expectEqual(d(talk: true), .radioTalk, "歌词行: 电台口白排在「搜索中」前(否则永远转圈)")
+        expectEqual(d(talk: true, noLyrics: true), .radioTalk,
+                    "歌词行: 口白排在「暂无歌词」前 —— 那段本来就不是歌,说「没有歌词」是答非所问")
+        expectEqual(d(ad: true, talk: true), .adBreak, "歌词行: 广告仍然优先(它有跳过键那一整套)")
+        expectEqual(d(words: true, line: true, talk: true, content: true), .words,
+                    "歌词行: 真有词就唱 —— 口白判定不该压掉已经在唱的那一句")
         expectEqual(d(noLyrics: true, netDown: true), .noLyrics,
                     "歌词行: 「暂无歌词」排在「网络失败」前(搜完了确实没有)")
         expectEqual(d(netDown: true), .networkDown, "歌词行: 「网络失败」排在「搜索中」前")

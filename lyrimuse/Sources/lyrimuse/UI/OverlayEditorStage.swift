@@ -197,10 +197,17 @@ final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
     /// 恒 false —— 控制排在编辑台里根本不显示(上一条恒 false),更不会有指针压上去;
     /// 它只影响"要不要冻住控制排的横向落点",预览里没有可冻的东西。
     let isHoveringControlPill = false
+    /// 恒 nil —— 同上:控制排在编辑台里根本不显示,没有可悬停的按钮。⚠️ 别为了"让预览更生动"
+    /// 把 `.onHover` 接进来:那排按钮在这里只画得出来、点不动(见类型头注),高亮一颗点不动的
+    /// 按钮是在骗人。
+    let hoveredControl: OverlayControlID? = nil
     let isDragArmed = false
     let showDragHint = false
     /// 恒 nil,理由同上一条:编辑台里没有能触发它的全局快捷键,预览也不该有副作用。
     let transientHint: String? = nil
+    /// 恒 nil / 恒 0:编辑台里拖不了窗口,自然也没有"拖动被拒"这回事。
+    let placementLockNotice: String? = nil
+    let placementLockShakeTick = 0
 
     /// 真窗口借这一下重读「喜欢」(要起 osascript 子进程)。预览里**故意空实现** —— 同
     /// `NotchPreviewChrome.setExpanded`,理由是同一条:预览不该产生任何副作用。
@@ -564,7 +571,7 @@ struct OverlayEditorStage: View {
                 // 是作用范围声明、不能"可能没显示出来"。
                 // ⚠️ 两句 2026-09-03 都改过(老那两句合起来在说谎),理由见抽屉里那份
                 // `OverlayAllSettingsDrawer.resetRow` 的头注 —— **两个入口必须一字不差**。
-                Text(L10n.t("不含排版、行为和宽度"))
+                Text(L10n.t("不含排版、行为、位置和宽度"))
             } label: {
                 Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
             }
@@ -611,6 +618,16 @@ struct OverlayEditorStage: View {
                 summary: behaviorSummary,
                 target: .behavior
             )
+            // 2026-09-11 第三颗:「位置」(自由 / 顶部居中 / 底部居中,issue #5)。上午先当「行为」浮层
+            // 里的一行,用户实机看过后要求「也给上面放一个」。摘要就是当前模式名 —— 跟「排版」报
+            // 「双行 · 自动」是同一种"报当前取值"的摘要,不是开关摘要。第二行三颗仍远低于第一行
+            // 量到的 535pt 预算(中文 位置 · 底部居中 约 110pt),不用重量。
+            toolbarButton(
+                icon: "dock.rectangle",
+                title: L10n.t("位置"),
+                summary: OverlayPlacementSegmentedControl.label(for: settings.overlayPlacementMode),
+                target: .placement
+            )
             Spacer(minLength: 8)
         }
         .font(.system(size: 12))
@@ -634,6 +651,9 @@ struct OverlayEditorStage: View {
     ///
     /// 五项都开时摘要会拼成一长串,交给 `toolbarButton` 里那 140pt 限宽 + 尾部省略处理 ——
     /// 跟「文字」按钮遇到超长字体名是同一个兜底,不为这里另写一套截断。
+    ///
+    /// 「位置」三选一 2026-09-11 上午短暂在这句摘要里挂过前缀(「底部居中 · 全部关闭」),同日搬成
+    /// 独立的工具栏入口之后不再算进来 —— 它有自己的摘要。
     private var behaviorSummary: String {
         SettingsToggleSummary.text(
             OverlayBehaviorItem.allCases.map { (title: $0.title, isOn: $0.binding.wrappedValue) }
@@ -697,6 +717,8 @@ struct OverlayEditorStage: View {
         case layout
         /// 2026-09-02 加,跟 `.layout` 一起挂在工具栏第二行。见 `toolbarRow2`。
         case behavior
+        /// 2026-09-11 加(issue #5 位置预设),第二行第三颗。见 `toolbarRow2`。
+        case placement
     }
 
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
@@ -717,6 +739,7 @@ struct OverlayEditorStage: View {
         case .background: OverlayBackgroundPopover()
         case .layout: OverlayLayoutPopover()
         case .behavior: OverlayBehaviorPopover()
+        case .placement: OverlayPlacementPopover()
         }
     }
 
@@ -848,7 +871,7 @@ struct OverlayEditorStage: View {
     /// PlaybackCoordinator/AppSettings(见 OverlayPlayback),不需要这边喂任何数据。
     ///
     /// 宽度必须**恰好等于** settings.overlayWidth(1:1,不缩放):真视图算对唱两侧内缩用的
-    /// 是 `overlayWidth − 40`(OverlayPlayback.duetInsetUnit),给个别的宽度就自相矛盾了。
+    /// 是 `overlayWidth − 40`(OverlayPlayback.duetInsetUnit / duetStageInset),给个别的宽度就自相矛盾了。
     ///
     /// 高度用真视图报上来的内容高度(见 cardHeight)。它内部最后一句是
     /// `.frame(maxHeight: .infinity, alignment: .top)`,内容永远贴着这个框的顶边 —— 跟真窗口

@@ -15,6 +15,13 @@ public struct EnrichCacheEntry: Decodable {
     // collector 解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
     // 没人用 —— 直到「最近播放」列表需要一个 Last.fm 之外的兜底,见 coverURL(artist:...)。
     let coverURL: String?
+    /// 这张**专辑**的 Apple Music 动态封面(motion artwork)master m3u8,由 collector 的
+    /// motioncover.go 按已校验的目录专辑 ID 查出来(空 = 没有 / 不是 Apple 目录曲目)。
+    /// 选档、下载、播放在 `MotionCoverManifest` / `MotionCoverStore` / `MotionCoverLayer`。
+    let motionCoverURL: String?
+    /// 同一份资源的静态首帧模板(尾部 `{w}x{h}bb.{f}`)。动态封面还没下好时先铺它;它本身也是
+    /// 一张按专辑 ID 精确定位的高清静态图(实测 3840²),比按歌名匹配来的更权威。
+    let motionPreviewURL: String?
     // 这张封面在**来源平台上属于哪张专辑**(collector/enrich.go 的 e.CoverAlbum,
     // 2026-08-20 起落盘)。2026-09-01 起 Swift 侧解码——「最近记录」需要区分"缓存里有图"
     // 和"缓存里这张图确实属于这行的专辑":后者才有资格纠正 Last.fm 自带图,见
@@ -40,6 +47,10 @@ public struct EnrichCacheEntry: Decodable {
     let neteaseURL: String?
     let qqAlbumMid: String?
     let qqSingerMid: String?
+    // Spotify 真曲目 ID(collector/spotifytrack.go,Spotify 原生播放换曲那一拍从 `spotify url` 留下的
+    // 22 位 base62)。2026-09-10 起解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
+    // 本地拼的搜索页兜底,刻意不读。
+    let spotifyTrackID: String?
     // 这首歌的语种真值(collector/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
     // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。2026-08-29 起
@@ -56,6 +67,11 @@ public struct EnrichCacheEntry: Decodable {
     // 所配歌词候选在来源上的时长(秒,collector 的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
     // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
     let resolvedDurationSecs: Double?
+    // 这一轮解析里因为源级熔断被跳过的歌词源(collector 的 LyricsSourcesSkipped),以及
+    // "一条歌词都没有"这条自愈路径已经补搜过几次(LyricsFillCount)。2026-09-09 起解码,
+    // 只服务 EnrichCacheLyrics.searchIncomplete 一件事,见那个字段的头注。
+    let lyricsSourcesSkipped: [String]?
+    let lyricsFillCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -65,6 +81,8 @@ public struct EnrichCacheEntry: Decodable {
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
+        case motionCoverURL = "motion_cover_url"
+        case motionPreviewURL = "motion_preview_url"
         case coverAlbum = "cover_album"
         case instrumental
         case ts
@@ -73,11 +91,23 @@ public struct EnrichCacheEntry: Decodable {
         case neteaseURL = "netease_url"
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
+        case spotifyTrackID = "spotify_track_id"
         case songLanguage = "song_language"
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
         case resolvedDurationSecs = "resolved_duration_secs"
+        case lyricsSourcesSkipped = "lyrics_sources_skipped"
+        case lyricsFillCount = "lyrics_fill_count"
     }
+}
+
+/// EnrichCacheLyrics.searchIncomplete 的判据本体(2026-09-09)。
+///
+/// 抽成自由函数只为可测:EnrichCacheReader 整体是 @MainActor、而且读的是固定路径上的那份
+/// 真缓存文件,selftest 没法喂输入进去跑真值表。判据本身要跟 collector 侧
+/// needsLyricsFirstFill 那道"快速补搜"闸口逐条对上,见 searchIncomplete 的头注。
+public func enrichLyricsSearchIncomplete(lyrics: String, sourcesSkipped: [String], fillCount: Int) -> Bool {
+    lyrics.isEmpty && !sourcesSkipped.isEmpty && fillCount == 0
 }
 
 // collector 那边 songLanguageCantonese 的取值("yue"),两边必须完全一致——match.go/enrich.go
@@ -101,6 +131,20 @@ public struct EnrichCacheLyrics {
     /// 才非空(见 EnrichCacheEntry.plainLyrics 头注)。「歌词窗口」用它决定要不要走静态
     /// 展示;桌面悬浮歌词/灵动岛这些依赖时间戳的展示面不读这个字段,继续如实显示"无歌词"。
     public let plainLyrics: String
+    /// 这一轮搜索**没跑完整**:一条歌词都没搜到,而且有源是因为熔断冷却被整个跳过的
+    /// (collector 的 lyrics_sources_skipped),collector 那边还欠这条一次快速补搜。
+    ///
+    /// 为什么要单独有它(2026-09-09,用户报《One Last Kiss》"这里可以搜到,但是首次播放的
+    /// 时候显示无歌词"):resolved 回答的是"这一轮跑完了吗",而那一轮确实跑完了 —— 只是
+    /// 九个源里七个压根没被问过(那 36 秒直连 DNS 全挂,见 collector 的 sourcebreaker.go)。
+    /// 拿 resolved 直接当"查过了,这首歌没有"就是把一次网络事故说成了结论。所以这里如实
+    /// 多传一位:currentTrackHasNoLyrics 见到它就不下"暂无歌词"这个结论。
+    ///
+    /// 它**不会**让界面无限转圈——这正是 2026-09-09 早些时候《1999 (Edit)》那一版要避免的
+    /// 事情。判据里的 lyrics_fill_count == 0 就是"快速补搜还没跑过";补搜一跑(collector 侧
+    /// needsLyricsFirstFill,跳过的源不冷却了 30 秒后就跑)这个字段立刻变成 false,不管补
+    /// 搜有没有找到歌词,界面都会落定。
+    public let searchIncomplete: Bool
 }
 
 @MainActor
@@ -169,8 +213,29 @@ public enum EnrichCacheReader {
             qqSong: qqSong,
             qqAlbum: PlatformLinks.qqAlbumURL(mid: entry.qqAlbumMid ?? ""),
             qqArtist: PlatformLinks.qqArtistURL(mid: entry.qqSingerMid ?? ""),
-            neteaseSong: (entry.neteaseURL?.isEmpty == false) ? URL(string: entry.neteaseURL!) : nil)
+            neteaseSong: (entry.neteaseURL?.isEmpty == false) ? URL(string: entry.neteaseURL!) : nil,
+            // 只认真曲目 ID;spotify_url 那个搜索页兜底不进来(理由见 PlatformLinks.spotifySong)。
+            spotifySong: PlatformLinks.spotifyTrackURL(id: entry.spotifyTrackID ?? ""))
         return links.isEmpty ? nil : links
+    }
+
+    /// 这首歌的**真实曲长**(秒),来自 collector 写进缓存的那份。零网络,沿用 lookup/sourceInfo
+    /// 同款的 精确 key → 宽松 key 两级匹配;查不到或值非正返回 nil。
+    ///
+    /// 唯一的用处是电台(2026-09-10):Apple Music 电台的系统快照里 `duration` 报的是**整档节目**
+    /// (实测 3390.122s = 56 分半),拿它当分母,进度条和时间读数就永远是「2:29 / 56:30」这种自相
+    /// 矛盾的样子。collector 那边能从 Apple 目录查到这首歌的权威时长(实测把 3390.122 纠成
+    /// 226.283)并写进这份缓存,App 在电台下改读它。缓存里还没有这首歌时(刚换曲、歌词还在解析)
+    /// 返回 nil,调用方退回快照自己那份 —— **绝不能因此让时长变成 0**:进度锚点按 durationMs
+    /// 夹位置(ProgressClock),0 会把位置钉死在开头,表现成整档没有歌词(2026-09-10 真踩过)。
+    public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        for candidate in [entry.resolvedDurationSecs, entry.durationSecs] {
+            if let candidate, candidate > 0 { return candidate }
+        }
+        return nil
     }
 
     public static func resolvedKey(artist: String, title: String, album: String) -> String? {
@@ -202,7 +267,11 @@ public enum EnrichCacheReader {
             instrumental: entry.instrumental ?? false,
             resolved: (entry.ts ?? 0) > 0,
             isCantonese: entry.songLanguage == songLanguageCantonese,
-            plainLyrics: entry.plainLyrics ?? ""
+            plainLyrics: entry.plainLyrics ?? "",
+            searchIncomplete: enrichLyricsSearchIncomplete(
+                lyrics: entry.lyrics ?? "",
+                sourcesSkipped: entry.lyricsSourcesSkipped ?? [],
+                fillCount: entry.lyricsFillCount ?? 0)
         )
     }
 
@@ -271,6 +340,21 @@ public enum EnrichCacheReader {
         if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
         if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         return nil
+    }
+
+    /// 这一行的**动态封面**(2026-09-09):master m3u8 + 静态首帧模板,两个都可能为空。
+    ///
+    /// 查法跟 `albumMatchedCoverURL` 逐字一致(精确 key → 仍然认专辑的 looseMatch),连
+    /// "不要退到忽略专辑那一级"这条也一样,而且在这里更严重:退一步拿到的会是**另一张专辑的
+    /// 动态画面**,而动态的东西比一张静态错图扎眼得多。collector 侧同样只按已校验的目录专辑 ID
+    /// 查,不做文字猜测(motioncover.go 文件头 ⚠️ 1)—— 两侧一致地宁缺毋滥。
+    public static func albumMatchedMotionCover(artist: String, title: String,
+                                               album: String) -> (master: URL, preview: String?)? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let entry = all[key] ?? looseMatch(key, in: all)
+        guard let entry, let s = entry.motionCoverURL, let url = URL(string: s) else { return nil }
+        return (url, entry.motionPreviewURL)
     }
 
     /// 比 albumMatchedCoverURL 再严一档:不光条目按专辑键命中,**这张封面自己**(cover_album,

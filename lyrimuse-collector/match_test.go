@@ -116,10 +116,16 @@ func TestTitleVersionTags(t *testing.T) {
 		{"Blue Gangsta (Demo", []string{"demo"}},
 		// 2026-08-26 补中文版本限定词(真实bug案例:「蜗牛 (伴奏)」查 lyricfind,词表原来
 		// 只认拉丁词,伴奏版被当成正常版收了)。
-		{"蜗牛 (伴奏)", []string{"伴奏"}},
+		// 2026-09-11 起中文词折成英文规范键进集合(见 versionTagAliases):「(现场)」跟「(Live)」
+		// 是同一个版本声明,不能是两个键。
+		{"蜗牛 (伴奏)", []string{"instrumental"}},
 		{"起风了 (Live)", []string{"live"}},
-		{"晴天 [现场版]", []string{"现场"}},
-		{"告白气球 (阿卡贝拉版本)", []string{"阿卡贝拉"}},
+		{"晴天 [现场版]", []string{"live"}},
+		{"告白气球 (阿卡贝拉版本)", []string{"a cappella"}},
+		{"Song (Acapella)", []string{"a cappella"}},
+		{"Song (A Cappella)", []string{"a cappella"}},
+		{"晴天 (不插电)", []string{"unplugged"}},
+		{"晴天 (混音)", []string{"remix"}},
 		// 假阳性陷阱同样适用于中文:词只在括号/破折号段里找。
 		{"不插电的夏天", nil},
 		// 2026-09-04 补裸 "edit"(PRINCE《Diamonds and Pearls (2023 Remaster)》配了《… (Edit)》的词,
@@ -143,6 +149,66 @@ func TestTitleVersionTags(t *testing.T) {
 				t.Errorf("titleVersionTags(%q) = %v, 缺 %q", c.title, got, w)
 			}
 		}
+	}
+}
+
+// ---- v16(2026-09-11):中英同义的版本限定词折成同一个键 ----
+//
+// 字符串取自真实案例:陶喆《今天没回家 (Live)》,本地专辑「Soul Power (现场原音专辑)」,酷狗候选
+// 「今天没回家 (Live)」/「Soul Power (Live Concert)」——同一场演唱会的现场版,却因为本地集合是
+// {live, 现场}(曲名括号 + 专辑括号)、候选是 {live},集合大小 2≠1 吃了 -600。全库 4214 条决策回放:
+// 22 个 -600 取消、0 个新增,冠军变化 1 首(陶喆《二十二 (Live)》lrclib 319 → 酷狗 768,同专辑逐字版)。
+func TestVersionTagsMismatchFoldsBilingualSynonyms(t *testing.T) {
+	cases := []struct {
+		name                 string
+		localTitle, localAlb string
+		candTitle, candAlb   string
+		want                 bool
+	}{
+		{"陶喆 今天没回家:曲名 Live + 专辑括号「现场」 vs Live/Live Concert", "今天没回家 (Live)", "Soul Power (现场原音专辑)", "今天没回家 (Live)", "Soul Power (Live Concert)", false},
+		{"同案 网易云:专辑「Soul Power Live 陶喆现场原音专辑」", "今天没回家 (Live)", "Soul Power (现场原音专辑)", "今天没回家 (Live)", "Soul Power Live 陶喆现场原音专辑", false},
+		{"(Live) 对 (现场) 是同一个版本", "龙拳 (Live)", "The One", "龙拳 (现场)", "The One 演唱会", false},
+		{"(现场) 对 (Live) 反向同理", "龙拳 (现场)", "The One", "龙拳 (Live)", "The One", false},
+		{"(Unplugged) 对 (不插电)", "晴天 (Unplugged)", "", "晴天 (不插电)", "", false},
+		{"(Acapella) 对 (A Cappella) 两种拼法", "Song (Acapella)", "", "Song (A Cappella)", "", false},
+		{"(Instrumental) 对 (伴奏)", "蜗牛 (Instrumental)", "", "蜗牛 (伴奏)", "", false},
+		// 折键只合并同义词,不放松判定:本地正式版对候选「(现场)」照罚,「(Live)」对「(伴奏)」照罚。
+		{"正式版 对 (现场) 仍是版本不符", "龙拳", "The One", "龙拳 (现场)", "", true},
+		{"(Live) 对 (伴奏) 仍是版本不符", "蜗牛 (Live)", "", "蜗牛 (伴奏)", "", true},
+		{"(现场) 对 正式版 仍是版本不符", "龙拳 (现场)", "", "龙拳", "The One", true},
+	}
+	for _, c := range cases {
+		if got := versionTagsMismatch(c.localTitle, c.localAlb, c.candTitle, c.candAlb); got != c.want {
+			t.Errorf("%s: versionTagsMismatch = %v, want %v(本地 %v / 候选 %v)", c.name, got, c.want,
+				recordingVersionTags(c.localTitle, c.localAlb), recordingVersionTags(c.candTitle, c.candAlb))
+		}
+	}
+	// 每个别名都必须指向词表里真实存在的规范键,且规范键自己不再有别名(不许链式)。
+	inVocab := map[string]bool{}
+	for _, tag := range distinctRecordingVersionTags {
+		inVocab[tag] = true
+	}
+	for alias, canon := range versionTagAliases {
+		if !inVocab[alias] {
+			t.Errorf("别名 %q 不在 distinctRecordingVersionTags 里,永远匹配不到", alias)
+		}
+		if !inVocab[canon] {
+			t.Errorf("规范键 %q(来自 %q)不在词表里", canon, alias)
+		}
+		if _, chained := versionTagAliases[canon]; chained {
+			t.Errorf("规范键 %q 自己又有别名,折键会不稳定", canon)
+		}
+	}
+	// 打分层:同案的酷狗候选不再吃 versionTags,标题精确同名 120 也保住。
+	lyr := "[00:10.00]占位第一句\n[00:12.00]占位第二句\n[00:14.00]占位第三句\n[04:00.00]占位末句"
+	cand := lyricCandidate{source: "kugou", lyrics: lyr, hasWordTiming: true, sourceReportedDurationSecs: 245,
+		title: "今天没回家 (Live)", artist: "陶喆", album: "Soul Power (Live Concert)"}
+	_, terms := scoreLyricCandidateDetailed("陶喆", "今天没回家 (Live)", "Soul Power (现场原音专辑)", 245, cand, false, 2)
+	if p := scoreTermPoints(terms, scoreTermVersionTags); p != 0 {
+		t.Errorf("同一场现场版不该吃 versionTags,实际 %d(%v)", p, terms)
+	}
+	if p := scoreTermPoints(terms, scoreTermTitleMatch); p != 120 {
+		t.Errorf("精确同名应拿 120,实际 %d(%v)", p, terms)
 	}
 }
 
@@ -184,6 +250,167 @@ func TestScoreLyricCandidatePenalizesSingleEdit(t *testing.T) {
 	}
 }
 
+// ---- v17(2026-09-11):album version 出词表 / single version 的命名不对称可豁免 ----
+//
+// 起因是一次面向数据的普查(见 09 章第 51 条):全库 632 条现存 versionTags 罚分按"差在哪个键"
+// 聚合、拿候选自报时长当地面真相。album version 一侧独有的 49 条里时长差 >12% 的 0 条(对照组
+// edit 是 10/12),说明它没在区分录音;single version 是 12/56,说明它在区分,但沉默的一侧只是
+// "这个源没做区分",所以留在词表、靠时长+专辑两道硬证据豁免。
+func TestDefaultVersionTagSemantics(t *testing.T) {
+	// ---- album version 已不算版本限定词(跟 remaster/deluxe 同类)----
+	if tags := titleVersionTags("Everybody Has An Aura (Album Version)"); len(tags) != 0 {
+		t.Errorf("(Album Version) 不该再是版本限定词,实际 %v", tags)
+	}
+	if tags := titleVersionTags("妳和吉他 (album ver.)"); len(tags) != 0 {
+		t.Errorf("(album ver.) 同理,实际 %v", tags)
+	}
+	// 真实数据(Chaka Khan & Rufus《Everybody Has An Aura (Album Version)》对酷狗裸标题,
+	// 同专辑、229.2s vs 227s):不再判版本不符,且标题吻合回到精确档 120。
+	if versionTagsMismatch("Everybody Has An Aura (Album Version)", "Rufus Featuring Chaka Khan",
+		"Everybody Has An Aura", "Rufus Featuring Chaka Khan") {
+		t.Error("本地 (Album Version) 对候选裸标题不该判版本不符")
+	}
+	if p := titleMatchTierPoints("Everybody Has An Aura", "Everybody Has An Aura (Album Version)"); p != 120 {
+		t.Errorf("剥掉 (Album Version) 后是精确同名,标题档应为 120,实际 %d", p)
+	}
+	// ⚠️ 但它不该顺带放过**真的**另一版:album version 对 single version / edit / live 照罚。
+	for _, c := range []struct{ cand string }{{"X (Single Version)"}, {"X (Edit)"}, {"X (Live)"}, {"X (Instrumental)"}} {
+		if !versionTagsMismatch("X (Album Version)", "A", c.cand, "A") {
+			t.Errorf("本地 (Album Version) 对候选 %s 仍应判版本不符", c.cand)
+		}
+	}
+
+	// ---- single version:留在词表,只在时长逐位吻合 + 专辑亲和时豁免 ----
+	if tags := titleVersionTags("Beat It (Single Version)"); !tags["single version"] || len(tags) != 1 {
+		t.Errorf("(Single Version) 仍应是版本限定词,实际 %v", tags)
+	}
+	// 真实数据 Jackson 5《Never Can Say Goodbye (Single Version)》(180.8s)对 QQ 裸标题
+	// (同专辑、自报 180s):限定词对不上,但两道硬证据坐实同一次录音 → 豁免。
+	const jTitle, jAlbum = "Never Can Say Goodbye (Single Version)", "Michael: Songs From The Motion Picture"
+	if !versionTagsMismatch(jTitle, jAlbum, "Never Can Say Goodbye", jAlbum) {
+		t.Error("限定词层面本来就是对不上的(豁免走的是 sameRecording 那条路)")
+	}
+	if !sameRecordingDespiteVersionTags(jTitle, jAlbum, 180.8, "Never Can Say Goodbye", jAlbum, 180) {
+		t.Error("时长 180.8 vs 180(0.4%)+ 同专辑,应判同一次录音")
+	}
+	// 时长对不上 → 不豁免(那 12 条真的是剪短过的单曲版)
+	if sameRecordingDespiteVersionTags(jTitle, jAlbum, 240, "Never Can Say Goodbye", jAlbum, 180) {
+		t.Error("时长差 25% 不该豁免")
+	}
+	// 专辑对不上 → 不豁免(只剩一道证据不够)
+	if sameRecordingDespiteVersionTags(jTitle, jAlbum, 180.8, "Never Can Say Goodbye", "Greatest Hits", 180) {
+		t.Error("专辑无亲和不该豁免")
+	}
+	// 反向(候选写了、本地没写)同样豁免 —— 这张白名单是双向的
+	if !sameRecordingDespiteVersionTags("Rock With You", "HIStory", 219.9, "Rock with You (Single Version)", "HIStory", 219) {
+		t.Error("候选独有 single version、时长吻合+同专辑,也该豁免")
+	}
+
+	// ⚠️ 方向不对称是有意的:acoustic 家族只在"候选多出"那一侧豁免。本地标了 acoustic 而
+	// 候选没标时,候选可能就是普通录音室版,而不插电版跟原版时长常常差不多 —— 时长替它作保不住。
+	if sameRecordingDespiteVersionTags("Burning Bridges (Acoustic)", "Native", 200, "Burning Bridges", "Native", 200) {
+		t.Error("本地独有 acoustic 不该被豁免(第③门只认 sameRecordingNamingOnlyTags)")
+	}
+	if !sameRecordingDespiteVersionTags("Turn It Off", "Brand New Eyes", 259.7, "Turn It Off (Acoustic Version)", "Brand New Eyes", 259) {
+		t.Error("候选多出 acoustic 仍应豁免(第④门的既有白名单)")
+	}
+	// live 两侧都不豁免(录音室版可以跟现场版时长一样)
+	if sameRecordingDespiteVersionTags("X (Live)", "A", 200, "X", "A", 200) {
+		t.Error("live 永不豁免")
+	}
+	if sameRecordingDespiteVersionTags("X", "A", 200, "X (Live)", "A", 200) {
+		t.Error("live 永不豁免(反向)")
+	}
+
+	// 白名单里的键必须真在词表里(不然是死配置);两张白名单不许把 live/demo 这类放进来。
+	inVocab := map[string]bool{}
+	for _, tag := range distinctRecordingVersionTags {
+		inVocab[canonicalVersionTag(tag)] = true
+	}
+	for tag := range sameRecordingNamingOnlyTags {
+		if !inVocab[tag] {
+			t.Errorf("命名不对称白名单里的 %q 不在词表里", tag)
+		}
+	}
+	for _, forbidden := range []string{"live", "demo", "instrumental", "remix", "edit", "karaoke"} {
+		if sameRecordingNamingOnlyTags[forbidden] {
+			t.Errorf("%q 绝不能进命名不对称白名单:沉默的一侧就是另一次录音", forbidden)
+		}
+	}
+	// 打分层端到端:同案 QQ 候选不吃 versionTags(标题仍是剥括号档 60,single version 还在词表)。
+	lyr := "[00:10.00]placeholder one\n[00:12.00]placeholder two\n[00:14.00]placeholder three\n[02:59.00]placeholder last"
+	cand := lyricCandidate{source: "qq", lyrics: lyr, hasWordTiming: true, sourceReportedDurationSecs: 180,
+		title: "Never Can Say Goodbye", artist: "Jackson 5", album: jAlbum}
+	_, terms := scoreLyricCandidateDetailed("Jackson 5", jTitle, jAlbum, 180.8, cand, false, 2)
+	if p := scoreTermPoints(terms, scoreTermVersionTags); p != 0 {
+		t.Errorf("同一次录音不该吃 versionTags,实际 %d(%v)", p, terms)
+	}
+}
+
+// ---- v16(2026-09-11):限定段的中心词是中文现场标记 → 视同声明 live ----
+//
+// 词表里只有「现场」没有「演唱会」,同一形态只差一个用词就待遇不同。真实数据:酷我
+// 「Will You Be There (1992罗马尼亚布加勒斯特危险之旅演唱会)」(专辑空)对本地
+// 《Will You Be There (Immortal Version)》—— 全库回放里这条是唯一受影响的候选,-600 从此
+// 正确落在它头上(它确实是 1992 年那场演唱会的录音,时间轴跟 Immortal 版对不上)。
+func TestQualifierDeclaresCJKLive(t *testing.T) {
+	segCases := []struct {
+		in   string
+		want bool
+	}{
+		// 中心词是现场标记 → 声明 live
+		{"晴天 (2004无与伦比演唱会)", true},
+		{"Will You Be There (1992罗马尼亚布加勒斯特危险之旅演唱会)", true},
+		{"稻香 (2018 CCTV-15音乐频道精彩音乐汇现场)", true},
+		{"爱的初体验 (音乐会)", true},
+		{"X - 2004演唱会", true}, // 破折号尾段同样算(口径同 titleQualifierSegments)
+		// ⚠️ 中心词不是现场标记 → 不声明。「(演唱会主题曲)」是录音室曲目;第二条是 v9 当年
+		// 刻意让专辑推导只看 stripParens 之后的那条真实误伤(韦礼安《女孩》的 lrclib 专辑名)。
+		{"晴天 (演唱会主题曲)", false},
+		{"女孩 (2015 韦礼安 《放开那女孩》 小巨蛋演唱会求爱主题曲/电视剧插曲)", false},
+		// 括号外的字一律不看(限定词只在限定段里找,跟 titleVersionTags 同一条纪律)
+		{"我的滑板鞋演唱会", false},
+		{"", false},
+	}
+	for _, c := range segCases {
+		if got := qualifierDeclaresCJKLive(c.in); got != c.want {
+			t.Errorf("qualifierDeclaresCJKLive(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+	// 进 recordingVersionTags 之后的效果:声明了 live,且不影响别的键。
+	if tags := recordingVersionTags("晴天 (2004无与伦比演唱会)", ""); !tags["live"] || len(tags) != 1 {
+		t.Errorf("recordingVersionTags 应只多出 live,实际 %v", tags)
+	}
+	if tags := recordingVersionTags("晴天 (演唱会主题曲)", ""); len(tags) != 0 {
+		t.Errorf("「(演唱会主题曲)」不该声明任何限定词,实际 %v", tags)
+	}
+	// 判决:同一场演出的两种写法不再互扣;录音室本地对现场候选照罚。
+	mismatchCases := []struct {
+		name                 string
+		localTitle, localAlb string
+		candTitle, candAlb   string
+		want                 bool
+	}{
+		{"同场:本地 (Live) vs 候选括号写演唱会", "稻香 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"稻香 (地表最强世界巡回演唱会)", "", false},
+		{"真实:录音室本地 vs 酷我 1992 演唱会候选", "Will You Be There (Immortal Version)", "Immortal (Deluxe Edition)",
+			"Will You Be There (1992罗马尼亚布加勒斯特危险之旅演唱会)", "", true},
+		{"「(演唱会主题曲)」候选对录音室本地不算版本不符", "爱的初体验", "爱的初体验",
+			"爱的初体验 (演唱会主题曲)", "", false},
+	}
+	for _, c := range mismatchCases {
+		if got := versionTagsMismatch(c.localTitle, c.localAlb, c.candTitle, c.candAlb); got != c.want {
+			t.Errorf("%s: versionTagsMismatch = %v, want %v(本地 %v / 候选 %v)", c.name, got, c.want,
+				recordingVersionTags(c.localTitle, c.localAlb), recordingVersionTags(c.candTitle, c.candAlb))
+		}
+	}
+	// 身份词那条判据的口径**刻意更宽**(拉丁 (Live In Montreal) 的场馆词也要算进身份):
+	// 声明 live 是 ±600 的判决、要保守;"这一段里哪些词是场次名"只在已经确定是现场之后才问。
+	if got := liveIdentityTokens("Queen", "Save Me (Live In Montreal / November 1981)", ""); !got["montreal"] {
+		t.Errorf("拉丁现场段的场馆词必须算进身份词,实际 %v", got)
+	}
+}
+
 // ---- v7(2026-09-01):liveAlbumIdentityConflict(「两场不同演唱会」判据) ----
 //
 // 全部字符串取自真实曲库的 lyrics_decision 记录(2339 条全库回放的命中/放行样本),不是编的。
@@ -192,43 +419,64 @@ func TestScoreLyricCandidatePenalizesSingleEdit(t *testing.T) {
 // 的限定词集合相等、必然静默,而标题/专辑亲和分全部打平,错的那份靠逐字或时长巧合赢。
 func TestLiveAlbumIdentityConflict(t *testing.T) {
 	cases := []struct {
-		name                 string
-		artist, localAlbum   string
-		candTitle, candAlbum string
-		want                 bool
+		name                           string
+		artist, localTitle, localAlbum string
+		candTitle, candAlbum           string
+		want                           bool
 	}{
 		// 核心案例:两场不同命名的演唱会 → 冲突
-		{"陈奕迅 Easy Ride vs Get A Life", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+		{"陈奕迅 Easy Ride vs Get A Life", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
 			"活着多好 (Live)", "Get A Life (Live)", true},
-		{"陈奕迅 Easy Ride vs 2003演唱会", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+		{"陈奕迅 Easy Ride vs 2003演唱会", "陈奕迅", "Shall We Talk (Live)", "The Easy Ride 演唱会 (Live)",
 			"Shall We Talk (Live)", "2003演唱会", true},
-		{"方大同 大事发声 vs Timeless演唱会", "方大同", "大事发声.录音棚现场: 方大同 专场",
+		{"方大同 大事发声 vs Timeless演唱会", "方大同", "公园 (Live)", "大事发声.录音棚现场: 方大同 专场",
 			"公园 (Live)", "Timeless演唱会", true},
-		{"周杰伦 地表最强 vs 无与伦比2004", "周杰伦", "周杰伦地表最强世界巡回演唱会 (Live)",
+		{"周杰伦 地表最强 vs 无与伦比2004", "周杰伦", "晴天 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
 			"晴天 (Live)", "周杰伦 2004 无与伦比 演唱会 Live CD", true},
 		// 同一场演出的不同写法 → 放行(四道门之④:共享身份词元)
-		{"同场:Easy Ride 网易云写法(共享 easy/ride)", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+		{"同场:Easy Ride 网易云写法(共享 easy/ride)", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
 			"活着多好(Live)", "The Easy Ride Live 陈奕迅演唱会", false},
-		{"同场:15 香港演唱会 中英命名(共享 15/2011)", "Khalil Fong", "15 Khalil Fong Live in Hong Kong 2011",
+		{"同场:15 香港演唱会 中英命名(共享 15/2011)", "Khalil Fong", "Rosy (Live)", "15 Khalil Fong Live in Hong Kong 2011",
 			"Rosy (Live)", "15 香港演唱会(2011Live)", false},
 		// 歌手名前缀粘连 → 放行(剥掉歌手名后共享整个演出名;lrclib 真实数据)
-		{"同场:歌手名粘连前缀", "周杰伦", "周杰伦地表最强世界巡回演唱会 (Live)",
+		{"同场:歌手名粘连前缀", "周杰伦", "以父之名 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
 			"以父之名 (Live)", "地表最强世界巡回演唱会", false},
 		// 本地专辑名不是现场专辑 → 放行(四道门之①;Queen 全库回放的真实假阳性:
 		// 《The Game (Deluxe Edition)》的 bonus 现场曲,候选《Queen Rock Montreal》
 		// 是本地标题里写的同一场蒙特利尔演出,录音室专辑名对"是哪场演出"没有发言权)
-		{"本地是录音室专辑的 bonus 现场曲", "Queen", "The Game (Deluxe Edition)",
+		{"本地是录音室专辑的 bonus 现场曲", "Queen", "Save Me (Live In Montreal / November 1981)", "The Game (Deluxe Edition)",
 			"Save Me (Live In Montreal / November 1981)", "Queen Rock Montreal", false},
 		// 候选是录音室版 → 放行(四道门之②,归 versionTagsMismatch 管)
-		{"候选是录音室版", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+		{"候选是录音室版", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
 			"活着多好", "The Easy Ride", false},
-		// 候选专辑为空 → 放行(没有身份声明构不成矛盾)
-		{"候选专辑为空", "陈奕迅", "The Easy Ride 演唱会 (Live)", "活着多好 (Live)", "", false},
+		// 候选专辑为空、曲名只写「(Live)」→ 放行:剔掉通用词后没有身份词,构不成矛盾(四道门之③)
+		{"候选专辑为空且曲名只有 (Live)", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
+			"活着多好 (Live)", "", false},
+		// ---- v16(2026-09-11):身份词也看曲名里自带现场标记的限定段(liveIdentityTokens) ----
+		// 真实数据:酷狗对现场版常不给专辑、把场次写进曲名括号。本地是地表最强巡演的现场专辑,
+		// 候选是 2018 年 CCTV 音乐频道节目现场 —— 另一场演出,v16 前因候选专辑为空直接放行。
+		{"v16 候选专辑空、场次在曲名括号里 → 冲突", "周杰伦", "稻香 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"稻香 (2018 CCTV-15音乐频道精彩音乐汇现场)", "", true},
+		{"v16 同上 青花瓷", "周杰伦", "青花瓷 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"青花瓷 (2012CCTV-15音乐频道精彩音乐汇现场)", "", true},
+		// 曲名括号里的场次跟本地专辑共享词元 → 同一场的另一种写法,放行(构造用例:2011 共享)
+		{"v16 候选专辑空、曲名括号场次与本地专辑共享年份 → 放行", "Khalil Fong", "Rosy (Live)", "15 Khalil Fong Live in Hong Kong 2011",
+			"Rosy (2011 香港演唱会 Live)", "", false},
+		// 不带现场标记的括号段不算身份声明:feat. 名单里的名字不能被当成场次词元制造冲突
+		{"v16 feat. 段不参与身份词", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
+			"活着多好 (feat. 王菲) (Live)", "", false},
+		// 本地侧同一口径:本地曲名括号里写了场次,候选专辑与之共享词元 → 放行(构造用例)
+		{"v16 本地曲名括号里的场次也算本地身份词", "周杰伦", "晴天 (2004 无与伦比演唱会 Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"晴天 (Live)", "周杰伦 2004 无与伦比 演唱会 Live CD", false},
+		// 候选专辑非空且有身份词时,曲名段只可能让"共享词元"更容易(放行),不会新增冲突
+		{"v16 候选专辑有身份词、曲名段共享 → 放行", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
+			"活着多好 (Easy Ride Live)", "Get A Life (Live)", false},
 	}
 	for _, c := range cases {
-		if got := liveAlbumIdentityConflict(c.artist, c.localAlbum, c.candTitle, c.candAlbum); got != c.want {
-			t.Errorf("%s: liveAlbumIdentityConflict(%q, %q, %q, %q) = %v, want %v",
-				c.name, c.artist, c.localAlbum, c.candTitle, c.candAlbum, got, c.want)
+		if got := liveAlbumIdentityConflict(c.artist, c.localTitle, c.localAlbum, c.candTitle, c.candAlbum); got != c.want {
+			t.Errorf("%s: liveAlbumIdentityConflict(%q, %q, %q, %q, %q) = %v, want %v(本地身份词 %v / 候选身份词 %v)",
+				c.name, c.artist, c.localTitle, c.localAlbum, c.candTitle, c.candAlbum, got, c.want,
+				liveIdentityTokens(c.artist, c.localTitle, c.localAlbum), liveIdentityTokens(c.artist, c.candTitle, c.candAlbum))
 		}
 	}
 }
@@ -766,11 +1014,19 @@ func TestContentConsensusPeers(t *testing.T) {
 		{source: "kugou", lyrics: diff},
 	}
 	peers := contentConsensusPeers("someone", "song", cands, 0)
-	if peers["netease"] != 1 || peers["qq"] != 1 {
-		t.Errorf("内容一致的两源应互为 peer(各 1),实际 netease=%d qq=%d", peers["netease"], peers["qq"])
+	if len(peers["netease"]) != 1 || len(peers["qq"]) != 1 {
+		t.Errorf("内容一致的两源应互为 peer(各 1),实际 netease=%v qq=%v", peers["netease"], peers["qq"])
 	}
-	if peers["kugou"] != 0 {
-		t.Errorf("内容孤立的源 peers 应为 0,实际 %d", peers["kugou"])
+	// 借鉴清单 V2:名单不只是计数,得**指名道姓**指向对方 —— 决策留痕要靠它回答
+	// "冠亚军这两份是不是同一份词",只有个数答不了。
+	if len(peers["netease"]) != 1 || peers["netease"][0] != "qq" {
+		t.Errorf("netease 的互证对象应当是 qq,实际 %v", peers["netease"])
+	}
+	if len(peers["qq"]) != 1 || peers["qq"][0] != "netease" {
+		t.Errorf("qq 的互证对象应当是 netease,实际 %v", peers["qq"])
+	}
+	if len(peers["kugou"]) != 0 {
+		t.Errorf("内容孤立的源 peers 应为空,实际 %v", peers["kugou"])
 	}
 	// 防搜歪共伴闸:批内存在时长吻合的候选时,自身时长不吻合的候选领不到共识分。
 	// same 末句 9s,diffFits 末句 98s 吻合 100s 曲长 → netease/qq 的 peer 数被闸成 0。
@@ -781,8 +1037,8 @@ func TestContentConsensusPeers(t *testing.T) {
 		{source: "lrclib", lyrics: diffFits},
 	}
 	peers2 := contentConsensusPeers("someone", "song", cands2, 100)
-	if peers2["netease"] != 0 || peers2["qq"] != 0 {
-		t.Errorf("存在时长吻合候选时,时长不吻合的候选不该领共识分,实际 netease=%d qq=%d", peers2["netease"], peers2["qq"])
+	if len(peers2["netease"]) != 0 || len(peers2["qq"]) != 0 {
+		t.Errorf("存在时长吻合候选时,时长不吻合的候选不该领共识分,实际 netease=%v qq=%v", peers2["netease"], peers2["qq"])
 	}
 	// 打分侧:peers>=2 → +250,peers==1 → +150
 	lyr := "[00:10.00]first real line here\n[00:20.00]second real line here\n[00:30.00]third real line here"
@@ -896,8 +1152,8 @@ func TestConsensusDeniedToOvershoot(t *testing.T) {
 		{source: "kugou", lyrics: long},
 	}
 	peers := contentConsensusPeers("someone", "song", cands, 100) // 曲长 100s,末句 150s
-	if peers["qq"] != 0 || peers["kugou"] != 0 {
-		t.Errorf("overshoot 候选不该领跨源共识分,实际 qq=%d kugou=%d", peers["qq"], peers["kugou"])
+	if len(peers["qq"]) != 0 || len(peers["kugou"]) != 0 {
+		t.Errorf("overshoot 候选不该领跨源共识分,实际 qq=%v kugou=%v", peers["qq"], peers["kugou"])
 	}
 }
 

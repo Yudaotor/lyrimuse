@@ -12,7 +12,10 @@ import UserNotifications
 /// ## 分层
 ///
 /// 判据全部在 `LyrimuseCore.UnknownPlayerAlert`(纯函数,selftest 覆盖),这里只负责管道:
-/// 轮询取观察值、稳定性计数、授权、投递、处理按钮、落盘去重。UserNotifications 的调用
+/// 轮询取观察值、稳定性计数、授权、投递、处理按钮、落盘去重。2026-09-11 起同一条管道多喂一个出口:
+/// 灵动岛(`NotchUnknownPlayerPrompt`,被动提示每拍喂、主动提醒跟通知同一拍出发,只在灵动岛开着时
+/// 有内容)—— 用户要的是"通知里的逻辑加到灵动岛里,更明显一点",所以两条路**同一份判据、同一份
+/// 提醒记录**,不是灵动岛另起一套。UserNotifications 的调用
 /// **一律留在 app target** —— selftest 只依赖 LyrimuseCore,把 UN 拖进去会让它一 import 就有
 /// 崩的可能(`UNUserNotificationCenter.current()` 在没有 bundle 的进程里会抛
 /// `bundleProxyForCurrentProcess is nil`)。
@@ -101,8 +104,9 @@ final class UnknownPlayerNotifier: NSObject {
     // MARK: - 一拍
 
     private func tick() {
+        let prompt = NotchUnknownPlayerPrompt.shared
         guard let seen = MediaControlClient.lastUngatedNowPlaying else {
-            resetPending(); return
+            resetPending(); prompt.update(offer: nil); return
         }
         let features = FeatureSettingsStore.shared
         // 第一层判据(跟设置页那张卡共用)。不过就把稳定性计数清零 —— 计数只对
@@ -111,7 +115,7 @@ final class UnknownPlayerNotifier: NSObject {
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: features.players.contains(.auto), now: Date(),
             isAccepted: { TrustedPlayers.isAccepted($0) })
-        else { resetPending(); return }
+        else { resetPending(); prompt.update(offer: nil); return }
 
         if pendingBundleID != seen.bundleID {
             pendingBundleID = seen.bundleID
@@ -120,12 +124,29 @@ final class UnknownPlayerNotifier: NSObject {
         }
         pendingHits += 1
         let stableFor = pendingSince.map { Date().timeIntervalSince($0) } ?? 0
+        let displayName = FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID)
+
+        // 灵动岛的被动提示(2026-09-11):过了 ⑤⑥⑦(静音名单 / 反查得到 App 名 / 稳定性)就挂上,不看 ⑧ 次数
+        // 与冷却 —— 它不打扰人。只在灵动岛开着时喂(用户定的边界);关着或不够格就喂 nil,让挂着的撤掉。
+        let qualifies = UnknownPlayerAlert.qualifiesForAnnounce(
+            bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
+            observedAt: seen.at, isAutoDetect: true, now: Date(),
+            isAccepted: { TrustedPlayers.isAccepted($0) },
+            hasDisplayName: displayName != nil, stableFor: stableFor, stableHits: pendingHits)
+        if qualifies, AppSettings.shared.notchOverlayEnabled {
+            prompt.update(offer: .init(
+                bundleID: seen.bundleID, displayName: displayName ?? seen.bundleID,
+                nowPlayingText: UnknownPlayerAlert.nowPlayingDescription(artist: seen.artist, title: seen.title)
+                    ?? seen.bundleID))
+        } else {
+            prompt.update(offer: nil)
+        }
 
         guard UnknownPlayerAlert.shouldAnnounce(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: true, now: Date(),
             isAccepted: { TrustedPlayers.isAccepted($0) },
-            hasDisplayName: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) != nil,
+            hasDisplayName: displayName != nil,
             stableFor: stableFor, stableHits: pendingHits, log: loadLog())
         else { return }
 
@@ -140,18 +161,29 @@ final class UnknownPlayerNotifier: NSObject {
 
     // MARK: - 投递
 
+    /// 一次「提醒」= 灵动岛那一拍 + 系统通知,两条路同一拍出发、共用同一份 3 次 / 24h 记录。
+    ///
+    /// 灵动岛先走:它不需要任何授权,而通知那一路第一次会弹授权对话框、被拒后永远静默。**任一条真的出了声
+    /// 就记账** —— 只按通知记账的话,授权被拒的机器上通知永远 false、记录永远空,灵动岛就会每 5 秒重新提醒
+    /// 一次(shouldAnnounce 每拍都过)。
     private func announce(_ seen: MediaControlClient.UngatedNowPlaying) async {
-        guard await ensureAuthorized() else { return }
+        let alerted = NotchUnknownPlayerPrompt.shared.alert()
+        let notified = await deliverNotification(seen)
+        if alerted || notified { recordAnnounced(seen.bundleID) }
+    }
+
+    /// 系统通知那一条路;投递成功才 true。
+    private func deliverNotification(_ seen: MediaControlClient.UngatedNowPlaying) async -> Bool {
+        guard await ensureAuthorized() else { return false }
         // 授权对话框可能开了好几秒,期间用户完全可能已经在设置页点了信任 —— 投递前再查一次。
-        guard !TrustedPlayers.isAccepted(seen.bundleID) else { return }
+        guard !TrustedPlayers.isAccepted(seen.bundleID) else { return false }
         let name = FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID
-        let what = [seen.artist, seen.title].filter { !$0.isEmpty }.joined(separator: " - ")
+        let what = UnknownPlayerAlert.nowPlayingDescription(artist: seen.artist, title: seen.title)
 
         let content = UNMutableNotificationContent()
         content.title = L10n.t("检测到新的播放器")
         content.subtitle = name
-        content.body = what.isEmpty ? seen.bundleID
-            : String(format: L10n.t("正在放：%@"), what)
+        content.body = what.map { String(format: L10n.t("正在放：%@"), $0) } ?? seen.bundleID
         content.categoryIdentifier = Self.categoryID
         content.userInfo = [Self.bundleIDKey: seen.bundleID]
         // 同一个 App 多个未信任播放器时在通知中心归一组,不刷屏
@@ -164,10 +196,11 @@ final class UnknownPlayerNotifier: NSObject {
             identifier: "\(Self.categoryID).\(seen.bundleID)", content: content, trigger: nil)
         do {
             try await UNUserNotificationCenter.current().add(request)
-            recordAnnounced(seen.bundleID)
             log.notice("announced unknown player \(seen.bundleID, privacy: .public)")
+            return true
         } catch {
             log.error("announce failed for \(seen.bundleID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
@@ -296,7 +329,8 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
         }
     }
 
-    private static func trust(_ bundleID: String) async {
+    /// 通知上那颗「加入信任列表」与灵动岛上那颗(`NotchUnknownPlayerPrompt.trust`)共用的写入路。
+    static func trust(_ bundleID: String) async {
         // 通知可能躺了很久 —— 写之前再查一遍,别把一个已经信任(或已被内置覆盖)的再写一遍。
         guard !TrustedPlayers.isAccepted(bundleID) else { return }
         await FeatureSettingsStore.shared.trust(bundleID: bundleID)

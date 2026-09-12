@@ -96,6 +96,11 @@ enum ConfigPortability {
         // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
         // 显示"已启用",用户找不到那个能把它真正装上的开关。
         "np:collectorServiceEnabled",
+        // Spotify 探针钟相对耳朵的领先量,按输出设备 UID 记的一张表(2026-09-09,LocalPlaybackSource.
+        // probeLeadByDevice):设备 UID 是这台机器上的身份,搬到别的机器一个都对不上,让它重新学。
+        // 同日早几小时的单值键 np:spotifyProbeLeadSecs 已迁移进表并删除,这里一并排除掉旧备份里的它。
+        "np:spotifyProbeLeadByDevice",
+        "np:spotifyProbeLeadSecs",
         // 「接收测试版更新」(2026-09-05)。测试版本来就是「只给自己另一台机器试」的东西,跟着备份搬去新机器等于
         // 让那台机器默认收测试版,正好把这道闸绕开;而且它开着时 Sparkle 会多查一次 GitHub Release 列表,
         // 新机器上的人未必知道自己在收什么。宁可在新机器上自己再开一次。

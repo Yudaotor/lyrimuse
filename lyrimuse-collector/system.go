@@ -82,9 +82,11 @@ const getStateScript = `(() => {
 // 三条路径,按优先级:
 //   - 选了「自动识别」(不管还同时勾了别的具体播放器,auto 是超集,行为跟单选年代的
 //     playerAuto 完全一样)→ getAutoDetectedState;
-//   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
-//     getAppleMusicState 的 AppleScript 路径(跟单选年代的 playerAppleMusic 完全
-//     一样,不多背一次子进程往返);
+//   - 恰好只选了 Apple Music 一个、没有 auto → getAppleMusicOnlyState:主体仍是
+//     getAppleMusicState 的 AppleScript 路径(跟单选年代的 playerAppleMusic 一样),
+//     再补两个 MediaRemote 独有的键。⚠️ 2026-09-11 之前这里直接 return
+//     getAppleMusicState(ctx)、一次 media-control 都不问,于是电台那一整层在这一种
+//     配置下完全不生效 —— 理由见 getAppleMusicOnlyState 头注;
 //   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,同样没有
 //     auto)→ getMultiSelectedState,核对 media-control 报的系统级 Now Playing 焦点
 //     是不是落在选中的这个子集里,是的话才认(跟 getAutoDetectedState 同一套"系统只有
@@ -94,9 +96,74 @@ func getState(ctx context.Context) (map[string]any, bool) {
 		return getAutoDetectedState(ctx)
 	}
 	if len(features.Players) == 1 && features.Players[playerAppleMusic] {
-		return getAppleMusicState(ctx)
+		return getAppleMusicOnlyState(ctx)
 	}
 	return getMultiSelectedState(ctx)
+}
+
+// getAppleMusicOnlyState 是「只勾了 Apple Music、没勾自动识别」这一种配置的读取路径。
+//
+// 主体仍是 getAppleMusicState 那份 AppleScript state(位置精度更高,实测
+// 289.7659912109375 vs 目录 289.766),只额外把 media-control 那两个 **MediaRemote
+// 独有**的键补进来 —— 跟 refineAppleMusicState 补的是同两个键、同一条理由,只是方向
+// 相反(那边从 raw 出发合 AppleScript,这边从 AppleScript state 出发合 raw),合并动作
+// 共用 mergeRadioKeys 一份实现。
+//
+// 2026-09-11 加。在这之前这条路直接 `return getAppleMusicState(ctx)`,一次
+// media-control 都不问,于是:
+//   - `radioStationHash` 拿不到 → 电台判据恒假 → radioclock.go 那套单曲口径、
+//     radiostationcard.go 那道"别把台名当一首歌写进歌词缓存"的守卫,全都不生效;
+//   - `catalogDurationSecs` 拿不到 → 就算判据补上了,snapshot.extract() 也只能把整档
+//     节目那个数(实测 3390.122s)当曲长 → App 的进度条分母、口白判据跟着一起废。
+//
+// 讽刺的是判据本身一处 bundle id 都不认(谁报 radioStationHash 就算谁),**只勾
+// Apple Music 反而是唯一不生效的配置**;默认勾着「自动识别」走 getAutoDetectedState,
+// 一直是好的。用户 2026-09-11 问「这个模式是不是仅限于 Apple Music」时查出来的。
+//
+// # 为什么每拍都问,而 Swift 侧是按曲目探一次
+//
+// 两边要的东西不一样:App 只要判据本身,而"是不是电台"在同一个曲目 key 内不会翻转,
+// 所以那边能按 key 缓存、换歌才多一次 fork(见 MediaControlClient
+// .radioAwareAppleMusicSnapshot 头注)。这边还要 `catalogDurationSecs` —— 目录锚点是
+// **异步**的,一首歌刚换过来那几拍通常还是 0,几秒后才到位(见 radioduration.go 头注);
+// 按曲目缓存会把那个 0 钉死一整首歌,正好废掉这个字段唯一的用处。所以这里跟
+// getAutoDetectedState 一样每拍问一次,轮询 5 秒一拍,代价与默认配置持平。
+func getAppleMusicOnlyState(ctx context.Context) (map[string]any, bool) {
+	state, ok := getAppleMusicState(ctx)
+	// 读不到(osascript 跑不起来)或者没有可报告的正在播放 —— 两种都照原样交给调用方,
+	// 不为了补两个必然用不上的键再 fork 一次子进程。
+	if !ok || len(state) == 0 {
+		return state, ok
+	}
+	raw, bundleID, rawOK := fetchRawMediaControlState(ctx)
+	if !rawOK || bundleID != appleMusicBundleID {
+		// media-control 不可用,或者系统 Now Playing 焦点根本不是 Apple Music(网页视频
+		// 之类占着焦点)—— 后一种情况那份 hash 属于**别人**,不能扣到 Music.app 头上,跟
+		// matchMediaControlState 那道核对同一条理由。两种都退回改动前的行为:AppleScript
+		// 那份原样报上去,电台这一层这一拍不生效。
+		return state, true
+	}
+	mergeRadioKeys(state, raw)
+	return state, true
+}
+
+// mergeRadioKeys 把 media-control 那份 raw 里**只有 MediaRemote 才有**的两个键补进
+// AppleScript 那份 state。refineAppleMusicState(auto / 多选)与 getAppleMusicOnlyState
+// (只勾 Apple Music)共用这一份实现 —— 两条路补的是同两个键,各写一份迟早会漏。
+//
+// 只在 hash 非空(= 确实是电台)时动 state:非电台时 AppleScript 自己的 duration 精度
+// 更高(实测 289.7659912109375 vs 目录 289.766),拿目录值去盖反而是降精度。
+func mergeRadioKeys(state, raw map[string]any) {
+	hash, _ := raw["radioStationHash"].(string)
+	if hash == "" {
+		return
+	}
+	state["radioStationHash"] = hash
+	// 目录查到的权威曲长:电台上 AppleScript 给的 duration 同样是整档节目(实测
+	// 3390.1220703125),只有目录知道这首歌真实多长。0 = 还没查到 / 自校验没过,不带。
+	if d, ok := raw["catalogDurationSecs"].(float64); ok && d > 0 {
+		state["catalogDurationSecs"] = d
+	}
 }
 
 func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
@@ -440,6 +507,9 @@ type mediaControlRawState struct {
 	// 换到权威元数据;本地导入的文件放的是任意 64 位持久 ID(可以是负数)。所有消费方
 	// 都必须先过 appleCatalogAnchor 的守卫+自校验,别直接信这个数——见 applecatalog.go。
 	UniqueIdentifier int64 `json:"uniqueIdentifier"`
+	// RadioStationHash:电台 / 直播流才有(2026-09-10 实测,值形如 "CgkIBRoFwOSKqxkQBA")。
+	// 只当"这是不是电台"的判据用,值本身不看。见 radioclock.go 头注。
+	RadioStationHash string `json:"radioStationHash"`
 	// ArtworkData/ArtworkMimeType:只有 fetchNowPlayingArtwork 那次不带 --no-artwork
 	// 的调用才会非空(见其头注,主 poll 路径的 fetchRawMediaControlState 一直带这个
 	// 参数,这两个字段在那条路径上恒为空)。base64 编码的封面原始字节。
@@ -550,6 +620,13 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 // 已经读到的这份基础数据,不整个放弃。
 func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]any {
 	if state, ok := getAppleMusicState(ctx); ok && len(state) > 0 {
+		// ⚠️ AppleScript 那份 state 是**整份顶替**上来的(位置更精确),但它拿不到
+		// `radioStationHash` —— 那是 MediaRemote 独有的字段。不带过去的话,Apple Music 放电台时
+		// 判据恒为假,radioclock.go 那套单曲口径在"自动识别 / 多选"这个最常见的配置下完全不生效
+		// (2026-09-10 当天就是这么漏的:改完发现缓存里照旧写进整档节目的时长)。
+		// 只带这两个键,其余一律以 AppleScript 那份为准。合并动作跟
+		// getAppleMusicOnlyState(只勾 Apple Music 那条路)共用 mergeRadioKeys 一份实现。
+		mergeRadioKeys(state, raw)
 		return state
 	}
 	return raw
@@ -655,6 +732,15 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 			rate = 0
 		}
 		elapsed = playingPositionSecs(raw.ElapsedTime, raw.ElapsedTimeNow, rate, anchorTS, now)
+		// App 量出的锚点偏置(见 positionbias.go):Spotify 给歌曲晚打 ~2s 的开播锚点,这里的外推
+		// 跟 App 一样恒定落后,由 App 问过 Spotify 自己的钟之后写文件告诉我们扣多少。放在
+		// rememberPlayingPosition 之前 —— 暂停规则回退到"最后一次播放位置"时拿到的也是扣过的值。
+		// 时间戳用 resolvePlayingAnchorTS 解出来的 anchorTS 而不是 raw.Timestamp:陈旧锚点重发
+		// (同一个 elapsed 带着新时间戳,见 isStaleAnchorRepublish)时前者仍是这个锚点**最初**发布的
+		// 时刻,偏置判"量在这个锚点之后"要对着它;拿重发的新时间戳比会把一份正确的偏置误判成过期。
+		if bias, ok := currentPositionBias(raw.Artist, raw.Title, raw.BundleID, raw.ElapsedTime, anchorTS, now); ok {
+			elapsed -= bias
+		}
 		rememberPlayingPosition(trackKey, elapsed)
 	} else {
 		age, hasAge := mediaControlAnchorAge(raw.Timestamp, time.Now())
@@ -688,12 +774,17 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// 曲目名对得上,所以它给的一定是**当前这首**的时长。校验不过就原样退回快照值,不会更差。
 	// 时长是这里唯一被覆盖的字段:标签本身没有"脏"的已知形态,而且换掉它会牵动缓存 key。
 	duration := raw.Duration
+	// catalogDuration:只在目录锚点**通过自校验**时才非零 —— 也就是"这个时长是权威的、属于当前这首歌"。
+	// 电台要靠它:那条路上快照报的是整档节目时长,而目录知道单曲的真实长度(实测 3390.122 → 226.283)。
+	// 单独一个键而不是复用 duration:下面 refineAppleMusicState 整份顶替时,只有"权威"这一层信息值得带过去。
+	catalogDuration := 0.0
 	if anchor, ok := appleCatalogAnchor(raw.BundleID, raw.UniqueIdentifier, raw.TrackNumber, title, album); ok && anchor.DurationSecs > 0 {
 		if math.Abs(anchor.DurationSecs-duration) > appleCatalogDurationLogThreshold {
 			log.Printf("apple catalog anchor overrode duration for %q: media-control %.3fs -> catalog %.3fs (track id %d)",
 				title, duration, anchor.DurationSecs, raw.UniqueIdentifier)
 		}
 		duration = anchor.DurationSecs
+		catalogDuration = anchor.DurationSecs
 	}
 	return map[string]any{
 		"title": title, "artist": artistTag, "album": album,
@@ -702,6 +793,12 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		"anchorElapsedTime": raw.ElapsedTime,
 		"playing":           raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
+		// 电台判据透传(见 radioclock.go)。⚠️ Apple Music 在 auto / 多选下最终走的是
+		// refineAppleMusicState 里那份 **AppleScript** state,它没有这个字段 —— 那边会把这里的值
+		// 带过去,否则电台判据在最常见的配置下形同虚设(2026-09-10 当天就是这么漏的)。
+		"radioStationHash": raw.RadioStationHash,
+		// 目录查到的权威曲长(0 = 没查到 / 自校验没过)。电台的时长以它为准,见 extract()。
+		"catalogDurationSecs": catalogDuration,
 	}, raw.BundleID, true
 }
 

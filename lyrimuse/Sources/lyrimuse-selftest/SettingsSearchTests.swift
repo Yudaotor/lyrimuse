@@ -77,6 +77,7 @@ func runSettingsSearchTests() {
         switch entry.destination {
         case .tab(let raw): if !tabCases.contains(raw) { badDestinations.append("\(entry.titleKey)→tab:\(raw)") }
         case .account(let name): if !accountCases.contains(name) { badDestinations.append("\(entry.titleKey)→account:\(name)") }
+        case .softwareUpdate: break   // 单页,没有枚举值要对
         }
         switch (entry.sectionKey, entry.sectionValue) {
         case (nil, nil): break
@@ -117,8 +118,9 @@ func runSettingsSearchTests() {
     /// 刻意不登记的标题:纯分组标题(其下每一行都登记了)与只读状态行。
     let intentionallyUnindexed: Set<String> = [
         "主题", "文字", "背景", "排版", "行为",                       // 悬浮歌词抽屉的组标题
-        "菜单栏与 Dock", "语言与启动", "备份与迁移",                     // 通用页卡头
+        "封面", "菜单栏与 Dock", "语言与启动", "备份与迁移",             // 通用页卡头
         "更新", "反馈与社区", "许可与版权", "诊断与数据",                 // 关于页卡头
+        "自动更新", "已安装",                                         // 软件更新页:卡头与只读状态行
         "已改用自定义位置",                                           // 歌词文件夹的状态子行
         "译文", "已缓存罗马音",                                       // 歌词库统计的只读行
     ]
@@ -128,6 +130,7 @@ func runSettingsSearchTests() {
         "UI/OverlayStyleSettingsRows.swift", "UI/OverlayBehaviorSettingsRows.swift", "UI/AutoHideSettingsRows.swift",
         "UI/OverlayAllSettingsDrawer.swift",
         "Settings/LanguagePackRow.swift", "Settings/PlayerLinkageRow.swift", "Settings/LyricsLibraryStats.swift",
+        "Settings/SoftwareUpdatePage.swift",
     ]
     let titlePattern = #/title:\s*L10n\.t\("((?:[^"\\]|\\.)*)"\)/#
     var scannedTitles: [String: [String]] = [:]   // 标题 → 出现的文件

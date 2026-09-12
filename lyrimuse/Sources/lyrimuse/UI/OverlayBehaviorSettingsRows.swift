@@ -162,6 +162,9 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 struct OverlayBehaviorSettingsRows: View {
     var body: some View {
         VStack(spacing: 0) {
+            // 「位置」三选一(issue #5)**不在这一组**:2026-09-11 上午先塞进这里当第一行,同日用户看过
+            // 之后要求「这个位置的配置项也给上面放一个」—— 工具栏第二行单开一颗「位置」入口,抽屉
+            // 跟着单开一组,见 `OverlayPlacementSettingsRows.swift`。这一组回到三个开关 + 两行自动隐藏。
             ForEach(Array(OverlayBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { CardDivider() }
                 SettingsRow(icon: item.icon, title: item.title) {

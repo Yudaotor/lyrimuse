@@ -41,7 +41,7 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 	// 现拿一份未裁剪的完整歌词字段——enrichCache 在 lbMeta 内部已经解析过一次,这里
 	// 只是再查一次内存缓存,没有额外网络开销。
 	// isNewTrack 传 false,理由同 lb.go 那处同名调用——这里也只是再查一次内存缓存。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false)
+	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
 	st := map[string]any{
 		"ok": true, "playing": playing, "current": current,
 		// artist 用 meta.ArtistName(可能已被网易云/QQ 音乐核实的官方写法覆盖,统一大小写/

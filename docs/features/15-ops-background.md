@@ -1,6 +1,6 @@
 # 15. 运行、部署与后台任务
 
-> 最后核对：2026-09-03 · 基线：e103532+工作树
+> 最后核对：2026-09-12 · 基线：b7e08ef+工作树（2026-09-12 补 build.sh「装了但 App 没换」的静默退化形状**及其修法**，见第 1 节末与决策 14；同日更新界面改成 App 内「软件更新」页、Sparkle 换自定义 `SPUUserDriver`，见决策 15）
 
 ## 定位
 
@@ -15,7 +15,7 @@
 
 ### 1. build.sh（构建+打包+部署一条龙）
 
-`swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（ad-hoc）→ 重启 App：先 `bootout` 本次登录里可能残留的旧 LaunchAgent job（升级前登录时加载的），再 kill 旧实例、**`open -g` 经 LaunchServices 起**（2026-09-06 起；此前是 `launchctl kickstart` + LWCR 陈旧签名约束的 `bootout+bootstrap` 自愈，那条路起出来的是 `spawn type = daemon`、主线程优先级 20 的进程，见第 14 章 §5）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
+`swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（**本机有自签名证书就用它，没有才 ad-hoc**，2026-09-11 起，见下面「签名身份」）→ 重启 App：先 `bootout` 本次登录里可能残留的旧 LaunchAgent job（升级前登录时加载的），再 kill 旧实例、**`open -g` 经 LaunchServices 起**（2026-09-06 起；此前是 `launchctl kickstart` + LWCR 陈旧签名约束的 `bootout+bootstrap` 自愈，那条路起出来的是 `spawn type = daemon`、主线程优先级 20 的进程，见第 14 章 §5）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
 
 **⚠️ collector 的版本号由这里注入（2026-09-02 加）**：`go build` collector 那步带
 `-ldflags "-X main.clientVersion=$APP_VERSION"`，`$APP_VERSION` 就是写进 Info.plist 的那个值
@@ -37,6 +37,8 @@
 
   ⚠️ **这只解决「安装」这一类冲突，不解决「构建」那一类**。多会话共用同一棵源码树时，`error: input file '.../Foo.swift' was modified during the build` 仍然会发生——那是 SwiftPM 在编译期发现输入文件 mtime/内容变了，跟产物往哪放毫无关系，只能靠「同一时刻只有一个会话在改+编这棵树」解决（打招呼，或各自用独立 worktree）。同理 launchd 重启竞争（两边各自 bootout+bootstrap 同一个 label，正是 `Bootstrap failed: 5` 的另一半成因）也没被这次改动覆盖。顺带把 `FAT_DIR` 从固定的 `.build/fat` 改成 per-run `mktemp -d`——那是同一族的共享可写路径，一个会话的 `rm -rf` 会删掉另一个刚 lipo 出来的切片，SwiftPM 的 `.build/.lock` 只锁 `swift build` 本身、管不到它。
 
+⚠️ **「装了但 App 没换」的静默退化（2026-09-12 实测）**：停旧实例那步是 `kill $pid`（SIGTERM）+ 最多等 5 秒。App 从 2026-09-03 起把 SIGTERM 转成**正常退出流程**（`AppExit.installSigtermHandler`：`signal(SIGTERM, SIG_IGN)` + DispatchSource 在主队列上 `request(.sigterm)` → `applicationShouldTerminate`，配置脏时还 `.terminateLater`）——而 AppKit 在**有 modal sheet 开着**时会直接把 terminate 取消掉（系统日志原话：`[AppKit:Application] terminate:` → `App termination blocked by modal sheet` → `Termination aborted`，15:54:41 与 15:55:52 各一组，ls-Amy 2026-09-12 从 log 里捞出来的；当时用户正开着「解析决策」sheet）。AppKit 是在**调 delegate 之前**就 abort 的，所以 `applicationShouldTerminate` 那行 lifecycle 日志一条都不会有——别据此误判成「AppExit 的 SIGTERM DispatchSource 没触发」（ls-Kelly 同日差点这么记）。查这类日志要写 `/usr/bin/log show`：`log` 在这个 zsh 环境里是 builtin，裸写 `log show` 会空转或报 `too many arguments`，再接 `2>/dev/null` 就把唯一的报错吞掉了。SIGTERM 已被 SIG_IGN，于是后续再 kill 多少次都无效，直到用户把那张面板关掉。另有一条**尚未触发过的隐患**（ls-Laurie 同日读码指出）：`applicationShouldTerminate` 配置脏时 `return .terminateLater`、等 `ConfigStore.save()` 才 reply，没有超时兜底，等不到也会永久卡住——这次不是它，但形状一样。此时脚本照常 `open -g`，LaunchServices 单实例只会**激活老进程**，末尾那句 `==> Lyrimuse running, pid N` 报的是老 pid，**长得跟成功一模一样**；collector 那半却已经换新（launchctl bootout/bootstrap 是硬重启）。结果是运行态混合：collector 新、App 旧，App 侧改动「装了没生效」，看着像改错了。判法：`ps -o lstart= -p <pid>` 的启动时间早于 `/Applications/Lyrimuse.app/Contents/MacOS/lyrimuse` 的 mtime 就是没换。处置：请用户手动退出重开（不要改成 SIGKILL——那会跳过配置落盘，而且用户可能正在实机验证）。**脚本侧修法已落地（2026-09-12，用户拍板「做」）**：kill 之前把旧 pid 记进 `OLD_PIDS`，`open -g` 起来之后要求新 pid **≠** 旧 pid；相同就打红字（写明「最常见原因：有 modal sheet 开着」+ 怎么用 `/usr/bin/log show` 核实）并 `exit 1`，不再报那个假成功。selftest ops 组四条钉住：记了旧 pid / 有那个比对 / 提示里说出 modal sheet / **比对必须排在成功提示之前**（最后这条第一次就红了——守卫整份 `contains` 命中了注释里复述的 "running, pid"，得先剥注释行，同签名守卫踩过的同一个坑）。⚠️ **刻意没有**改成「等到退出为止」：AppKit 是把 terminate 整个取消掉、SIGTERM 又已被 SIG_IGN，等多久都不会退（实测再等 10 秒仍在），延长等待只是把失败推迟、还让人以为脚本卡住了。
+
 ### 2. 常驻形态（一个登录项 + 一个 LaunchAgent）
 
 | Job | 管理者 | 策略 |
@@ -52,7 +54,45 @@ collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 
 
 - 判据是**二进制指纹**（`np:collectorInstalledFingerprint` = collector 路径+大小+mtime）变了 **或** 服务没在跑，且用户开着 `np:collectorServiceEnabled`；命中就重跑 `install()`（它本身就是完整的 bootout→写 plist→bootstrap→kickstart→LWCR 重试三级自愈，这里缺的只是一个启动触发点）。
 - **为什么不能只看「在不在跑」**：更新之后老 collector 往往还活着（要等下一次缺页才被 SIGKILL），那一刻 `isRunning` 仍是 true，只看运行状态会整个错过这次更新；而等它真死掉时 App 早就启动完了，没有人再检查。
-- **为什么不算 cdhash**：`codesign -dvvv` 要 fork 进程读整个二进制算哈希，而这里只需要回答「跟上次装的是不是同一个文件」。每次打包都是重新 `cp` + 重新 ad-hoc 签名，mtime 必变，stat 一次就够，启动路径上零感知。指纹拿不到（直接 `swift build` 跑、没有 bundle）时退回只看运行状态。
+### 签名身份（2026-09-11）
+
+`build.sh` 默认仍然是 ad-hoc（`--sign -`），**CI 和别人的机器上一个字节都不变**；本机 login 钥匙串里存在一张 CN = `Lyrimuse Dev Signing` 的自签名 Code Signing 证书时自动改用它（`SIGN_ID`，`LYRIMUSE_SIGN_ID=-` 可显式强制 ad-hoc）。九个签名调用点（collector / lyrics-translate / lyrics-romanize / media-control 两个 + 框架 / Sparkle 框架内外 / 最外层 `.app`）全部走同一个变量。
+
+**为什么**：ad-hoc 签名的「指定要求」是一条光秃秃的 cdhash——
+
+```
+$ codesign -d -r- /Applications/Lyrimuse.app     # 改动前
+designated => cdhash H"4d6d5e62…"
+```
+
+而 TCC（辅助功能 / 自动化授权）存的正是这条要求。二进制一重编 cdhash 就变，存的那条再也对不上：**设置里的勾还亮着、`AXIsProcessTrusted()` 却返回 false**，用户必须把勾取消再勾上。「跳过广告」那颗键每次 build.sh 之后第一次按都会撞上（用户 2026-09-11 第 N 次问「为什么我明明已经有授权了，每次点击跳过广告还是会说让我去授权？」）。换成固定证书之后要求变成——
+
+```
+designated => identifier "me.yudaotor.lyrimuse" and certificate root = H"adb4df7f…"
+```
+
+**跟二进制内容无关**，重编多少次授权都还在。
+
+**证书怎么来**（丢了就照这个重造；重造出来的是另一张证书，授权要重给一次）：
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes \
+  -subj "/CN=Lyrimuse Dev Signing/O=Lyrimuse Local Build/C=CN" \
+  -addext "basicConstraints=critical,CA:false" \
+  -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning"
+openssl pkcs12 -export -out ident.p12 -inkey key.pem -in cert.pem -name "Lyrimuse Dev Signing" -passout pass:<随便>
+security import ident.p12 -k ~/Library/Keychains/login.keychain-db -P <同上> -T /usr/bin/codesign
+rm -f key.pem ident.p12          # 私钥已经进钥匙串,别留在磁盘上
+```
+
+⚠️ **不需要** sudo、不需要改系统信任设置：`security find-identity -p codesigning` 会把它标成 `CSSMERR_TP_NOT_TRUSTED`，但 `codesign` 照样用得了，`codesign -v` 也过（Gatekeeper 那一关本来就不靠它——这个 App 从来没公证过，下载来的包照旧要右键打开 / `xattr -cr`）。
+
+⚠️ **代价**：任何用这张证书签、且 identifier 相同的二进制都会继承已有的 TCC 授权（ad-hoc 那条是钉死到某一个二进制的）。私钥待在 login 钥匙串里由系统按 ACL 管，只有 `codesign` 够得着；要更严就把证书删掉，下次构建自动退回 ad-hoc。
+
+⚠️ **换证书 / 换成 Developer ID 之后授权要重给一次**——TCC 存的是旧要求，换了就对不上，界面上勾还亮着但已经失效，取消再勾上即可。selftest `ops-diagnostics` 组钉住「签名点全走 `$SIGN_ID`」「没证书要退得回 ad-hoc」「证书 CN 没被改名」三件事。
+
+- **为什么不算 cdhash**：`codesign -dvvv` 要 fork 进程读整个二进制算哈希，而这里只需要回答「跟上次装的是不是同一个文件」。每次打包都是重新 `cp` + 重新签名，mtime 必变，stat 一次就够，启动路径上零感知。指纹拿不到（直接 `swift build` 跑、没有 bundle）时退回只看运行状态。
 - 指纹只在 `install()` 之后**确认跑起来了**才写（`recordInstalledFingerprint`，用 `defer` 收口三条 early return），装完仍起不来就清掉——否则会因为「指纹对得上」而再也不管它。`uninstall()` 一并清掉。
 - 这个键是**机器本地状态**，在 `ConfigPortability.machineLocalDefaultsKeys` 里（第 14 章）：跟着备份搬到新机器，会让新机器误以为「没变过」而跳过那次本该做的重装，正好把这条兜底关掉。
 - 不阻塞启动：整段跑在 `CollectorServiceManager` 已有的串行队列上（顺带保证不跟设置页/引导页的装卸并发）。
@@ -110,6 +150,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 无 XCTest（无完整 Xcode）。`swift run lyrimuse-selftest` 跑手写 `expectEqual` 断言（歌词引擎/取色/偏移/本地化守卫等）。2026-09-03 起按领域拆成 `Sources/lyrimuse-selftest/` 下 17 个 `XxxTests.swift`（每文件一个 `runXxxTests()`）+ `Harness.swift`（断言函数、`failures`/`assertions`/`quietOutput` 三个计数器）+ `main.swift`（`groups` 注册表、参数、逐组汇总）；`--filter <组名子串>`（可重复、不区分大小写）只跑子集，`--quiet` 只留 FAIL 与每组一行「N 条断言, X ms」，`--list` 列组；退出码 0 通过 / 1 有 FAIL / 2 参数错或 `--filter` 零匹配。`main.swift` 开头内置「注册表守卫」：扫目录里所有 `run…Tests()` 定义，逐个核对 `groups` 有没有引用，漏注册直接 FAIL（拆多文件后唯一新增的坑，编译过、一条不跑、输出看不出少了什么）。拆分是纯机械搬迁：拆前后各跑一遍、`ok - ` 标签多重集逐字节一致（2241 条），断言内容一字未改。两条实测细节：① 原顶层语句搬进函数后，引用 Core 里 `@MainActor` 属性的断言会报「nonisolated context」（main.swift 顶层在本包语言模式下也不是主 actor 上下文，直接调 `@MainActor` 函数编不过），所以每个 `runXxxTests()` 标 `@MainActor`、注册表调用处包一层 `MainActor.assumeIsolated`；② 好几条守卫靠 `#filePath` 往上数目录层数定位仓库文件，领域文件必须平铺在 `Sources/lyrimuse-selftest/`、不能建子目录。Go 侧 `GOTOOLCHAIN=go1.24.4 go test ./...`（默认 go 1.21 编译产物会被 AMFI 拒签、启动即死，repo CLAUDE.md 硬规则）。真机界面验证用只读方式：`swift lyrimuse/scripts/check-windows.swift` + `screencapture -l <窗口ID>`，**禁止** AppleScript/System Events 驱动界面（毁过用户数据）。
 
 2026-09-05 起 contracts 组另有「项目级 skill」守卫：`.claude/skills/*/SKILL.md`（真机验证 / 歌词排查 / 发版三份操作型流程，借鉴清单 #49；只写步骤与判据，理由回链 AGENTS.md 与本目录各章）每份 ≤ 80 行、frontmatter 的 name 与目录名一致且有 description、正文引用的仓库路径与文档链接必须存在、发版那份必须 `disable-model-invocation: true`、真机验证那份开头必须是禁 AppleScript 那条硬规则，AGENTS.md 与 CLAUDE.md 都要指向 `.claude/skills/`。skill 最常见的死法是锚点腐烂（脚本改名、文档挪位）和越写越长变成第二份 AGENTS.md，守卫比纪律可靠。
+   ⚠️ **2026-09-11 起这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**（用户定：AI 协作文件只留本地，对使用者和贡献者没有意义、又随会话频繁改动）。这道守卫因此改成**`.claude/skills` 不存在就整段跳过**（`skillGuard: do { … break skillGuard }`）：作者本地照旧逐条查，别人 clone 出来跑 CI 不会因为「文件缺失」而红。它们仍在工作树里正常生效，删的只是 git 跟踪（`.gitignore` 里有对应三条）。
 
 ## 设置项
 
@@ -264,3 +305,14 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     写出的正文与 `%(contents)` 一致；真实 7 个 tag 里 v1.1.0 起全过、v1.0.0/v1.0.1 按预期被拒；release.yml 过 YAML 解析、步骤顺序
     Checkout → Validate → Set up Go；contracts 组「tag 校验」钉住脚本判据、步骤顺序、正文单次读取与两处文档。**yaml 那一步本身只能等
     下一个真实 tag 验**。
+14. **build.sh 的「停旧实例」在 App 不肯 5 秒内退出时静默退化成「装了但没换」，日志还报成功（2026-09-12，ls-Alex 装「歌词(LRC)」编辑框改动时撞到，ls-Rocky 核实运行态）**。
+    **现场**：`==> stopping running instance (pid 69379)` → `==> Lyrimuse running, pid 69379`——前后同一个 pid；`ps -o lstart=` 显示它 11:15 起（上一轮 build 的），盘上二进制 15:54，
+    collector 已换成 15:54 那份。也就是 App 老、collector 新的混合运行态，App 侧改动一点没生效。
+    **为什么**（两个独立缺陷叠加）：① 09-03 起 App 把 SIGTERM 转成正常终止流程（`AppExit.swift`，理由是让配置落盘有机会跑完），而 AppKit 遇到开着的 modal sheet 会直接 `Termination aborted`（ls-Amy 从系统日志坐实：`App termination blocked by modal sheet`，用户当时开着「解析决策」sheet），SIGTERM 又已被忽略，于是不退；`.terminateLater` 无超时兜底（ls-Laurie 读码指出）是同形状的另一条隐患，这次没触发。② 脚本只等 5 秒就 `open -g`，之后的验证只问「有没有进程」不问「是不是新起的那个」，
+    LaunchServices 单实例语义下这一步只是激活老进程。上一轮（11:14）是真换了（664 → 69379），所以不是必现，取决于当时 App 在干什么。
+    **这次怎么处置**：没有强杀（SIGKILL 会跳过落盘，且用户可能正在用老实例实机验证别人的改动），请用户手动退出重开，另挂了一个「老 pid 一退就 `open -g` 一次」的后台守护兜底。
+    **修法（2026-09-12 已落地，用户拍板「做」）**：kill 前把旧 pid 记进 `OLD_PIDS`，`open -g` 之后要求新 pid ≠ 旧 pid，不满足就打红字（`旧实例没有退出…最常见的原因：App 有 modal sheet 开着`，并给出核实用的 `/usr/bin/log show … | grep 'blocked by'`）并 `exit 1`，让调用方——人或别的会话——看得见。
+    **没有**选另一条「把 5 秒改成等到退出为止、上限 60 秒」：AppKit 是在调 delegate 之前就把 terminate 整个取消掉的，SIGTERM 又已被 SIG_IGN，等多久都不会退（实测再等 10 秒仍在），那条路只会把失败推迟 60 秒、还让人以为脚本卡死。
+    **仍未处理**：App 侧 `.terminateLater` 没有超时兜底（ls-Laurie 指出的同形状隐患）。修法仍是给它加看门狗，例如 2 秒后无条件 `NSApp.reply(toApplicationShouldTerminate: true)`——卡住的落盘不该把终止流程永久别死。这条这次没动，因为它跟本次现场无关（本次是 modal sheet，不是落盘卡住）。
+
+15. **更新界面改成 App 内「软件更新」页，Sparkle 换自定义 `SPUUserDriver`（2026-09-12，用户拍板方案 B）**：`SPUStandardUpdaterController` 换成 `SPUUpdater(hostBundle:applicationBundle:userDriver:delegate:)` + `Settings/SoftwareUpdateDriver.swift`；发现 / 下载 / 解包 / 待装 / 安装中 / 失败全部显示在设置窗口的「软件更新」页，一个 Sparkle 弹窗都不弹。发布链路（appcast 生成、双语 `<description xml:lang>`、beta 通道、tag 校验）一个字节没动——页面上的发版日志读的就是那份 `<description>`（Sparkle 按系统语言挑好），ⓘ 打开 appcast 的 link / fullReleaseNotesLink、都没有就按 tag 拼 Release 页。Sparkle 语义上要记住的三条：reply 闭包必须且只能答一次；「下完待装」那步 dismiss = 退出时安装；周期检查发现更新时我们立刻 dismiss 只留信息，用户真要装时再查一次并自动答 install。界面、意图机制、窗口关闭收尾与深链 `lyrimuse://settings/software-update` 的完整记录在 14 章决策 #25。

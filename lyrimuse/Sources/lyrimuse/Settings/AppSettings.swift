@@ -287,6 +287,8 @@ final class AppSettings: ObservableObject {
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
+        // 悬浮歌词位置预设(2026-09-11,issue #5),取值见 OverlayPlacementMode。
+        static let overlayPlacementMode = "np:overlayPlacementMode"
         static let debugHUDEnabled = "np:debugHUD"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
@@ -300,6 +302,7 @@ final class AppSettings: ObservableObject {
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
         static let notchShowLyrics = "np:notchShowLyrics"
+        static let motionCoverEnabled = "np:motionCoverEnabled"
         static let notchCollapsesWhenPaused = "np:notchCollapsesWhenPaused"
         static let notchShowsEqualizer = "np:notchShowsEqualizer"
         static let notchEqualizerEar = "np:notchEqualizerEar"
@@ -414,6 +417,17 @@ final class AppSettings: ObservableObject {
     static let defaultNotchHideDuringScreenCapture = false
     static let defaultNotchHideWhenNotPlaying = false
     static let defaultNotchShowLyrics = true
+    /// 动态封面(Apple Music 的 motion artwork)默认**开**(2026-09-09)。
+    ///
+    /// 默认开的理由跟大多数装饰性开关相反,但站得住:① 它是用户点名要的功能;② 覆盖率只有三成
+    /// 上下(抽 10 张专辑 3 张有),没有的专辑照旧铺静态图、用户完全无感,不存在"默认开就到处在动"
+    /// 这回事;③ 它之上还有两道省电闸,真正在解码的时间比"开着"听起来少得多 —— **低电量模式**
+    /// (`PlaybackCoordinator.refreshMotionCover`,连下载都不发)和**减弱动态效果**
+    /// (`LyricsWindowView.artworkCard`,视图环境值只能在视图里判);④ 2026-09-10 之后唯一的
+    /// 消费面是歌词窗口那张按需打开的卡,窗口没开就完全不存在这回事。
+    /// ⚠️ 这里原来写着"见 `MotionCoverGate`" —— **没有这个类型**,是落地时留下的错引用,
+    /// 三道闸各自实现在上面点名的位置。
+    static let defaultMotionCoverEnabled = true
     /// 暂停时是否收起成一条(2026-09-07 从 true 改成 false):用户在用的是"暂停也保持展开",
     /// 暂停时卡片留在原地比缩回去更容易接着看。
     static let defaultNotchCollapsesWhenPaused = false
@@ -757,8 +771,8 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(textStrokeEnabled, forKey: Keys.textStrokeEnabled) }
     }
     // #RRGGBBAA。只让用户调"颜色"(含 alpha),描边粗细是代码里的固定常量
-    // (OptionalTextStroke 的 width,1.2pt),不做成单独的滑杆——参考 LyricsX 的
-    // AlphaColorWell/shadowColor,保持这个克制的取舍。默认 #000000A6(黑色、
+    // (OptionalTextStroke 的 width,1.2pt),不做成单独的滑杆——同类实现普遍也只开一个
+    // 带 alpha 的取色器,保持这个克制的取舍。默认 #000000A6(黑色、
     // alpha≈0.65),没碰过这个设置的人从阴影切到描边后颜色不会跳变。
     @Published var textStrokeColorHex: String {
         didSet {
@@ -839,6 +853,15 @@ final class AppSettings: ObservableObject {
     /// 穿不到下层 —— 想保留"点哪儿都能穿透、只有长按才拖"的旧行为就打开它。
     @Published var overlayDragNeedsLongPress: Bool {
         didSet { defaults.set(overlayDragNeedsLongPress, forKey: Keys.overlayDragNeedsLongPress) }
+    }
+    /// 悬浮歌词的位置模式(2026-09-11,GitHub issue #5):自由拖动 / 顶部居中 / 底部居中(Dock 之上)。
+    ///
+    /// 只负责持久化,"生效"在 `LyricsOverlayWindowController` 那边 —— 它订阅这个 @Published
+    /// 自己落位(跟 lockPosition 那种"设置行的 set 里顺手调控制器"不同:位置要在屏幕 / Dock
+    /// 变化时反复重算,控制器本来就得持有这个值,直接订阅比让每个入口都记得调一次稳)。
+    /// 视图侧 `OverlayPlayback` 也读它决定内容在窗口里贴顶还是贴底。默认 `.free` = 改动前的全部行为。
+    @Published var overlayPlacementMode: OverlayPlacementMode {
+        didSet { defaults.set(overlayPlacementMode.rawValue, forKey: Keys.overlayPlacementMode) }
     }
     // 调试 HUD:在悬浮歌词角落显示实测帧率(FrameRateProbe)。
     //
@@ -963,6 +986,21 @@ final class AppSettings: ObservableObject {
     /// 高度还留着"。
     @Published var notchShowLyrics: Bool {
         didSet { defaults.set(notchShowLyrics, forKey: Keys.notchShowLyrics) }
+    }
+    /// 有动态封面的专辑要不要让封面动起来(2026-09-09,用户:「帮我看看怎么把我们的封面搞成
+    /// applemusic 里面的那种会动的效果」)。
+    ///
+    /// ⚠️ **消费面只有一个:歌词窗口左栏那张封面卡**。落地当天灵动岛那枚缩略图也叠了一层,
+    /// 2026-09-10 用户看过实机后拍板撤掉(原话:「帮我把灵动岛上的封面全部改为静态的吧,只有
+    /// 歌词窗口的保留;因为灵动岛上的效果不是很好」)—— 那一格最大也就 trackInfoArtworkSide
+    /// 这个量级、耳朵那档只有 32pt,而 motion artwork 是给整张专辑封面设计的慢镜头,缩到那么
+    /// 小只剩一片蠕动的色块。详见 `NotchLyricsView.artworkThumbnail` 上方那段。
+    ///
+    /// ⚠️ 这只是**总闸**。关着 = 一定不动;开着 ≠ 一定在动 —— 还有低电量模式
+    /// (`PlaybackCoordinator.refreshMotionCover`)和「减弱动态效果」
+    /// (`LyricsWindowView.artworkCard`)两道。整条链路见 `MotionCoverStore` 头注。
+    @Published var motionCoverEnabled: Bool {
+        didSet { defaults.set(motionCoverEnabled, forKey: Keys.motionCoverEnabled) }
     }
     /// 暂停(或广告插播)时灵动岛要不要缩到最小 —— 只剩贴着刘海的一小块,两只耳朵退化成
     /// "左封面、右音浪"的 iPhone 灵动岛式极简形态(2026-08-19 用户拍板过这个默认形态,
@@ -1446,6 +1484,9 @@ final class AppSettings: ObservableObject {
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
         overlayDragNeedsLongPress =
             (defaults.object(forKey: Keys.overlayDragNeedsLongPress) as? Bool) ?? false
+        // 默认自由拖动:这是改动前唯一的行为,老用户的窗口不能因为升级自己跑去居中。
+        overlayPlacementMode = defaults.string(forKey: Keys.overlayPlacementMode)
+            .flatMap(OverlayPlacementMode.init(rawValue:)) ?? .free
         debugHUDEnabled = (defaults.object(forKey: Keys.debugHUDEnabled) as? Bool) ?? false
         // ⚠️ 灵动岛那两个的**兜底不是 false,而是悬浮歌词那一份的值**(2026-09-01 拆分时的
         // 迁移)。拆之前两个形态共用一份,老用户如果配的是"截屏时隐藏",拆完必须两边都还
@@ -1507,6 +1548,7 @@ final class AppSettings: ObservableObject {
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle)
             .flatMap(NotchCardStyle.init(rawValue:)) ?? Self.defaultNotchCardStyle
         notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics
+        motionCoverEnabled = (defaults.object(forKey: Keys.motionCoverEnabled) as? Bool) ?? Self.defaultMotionCoverEnabled
         notchCollapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool)
             ?? Self.defaultNotchCollapsesWhenPaused
         notchShowsEqualizer = (defaults.object(forKey: Keys.notchShowsEqualizer) as? Bool) ?? Self.defaultNotchShowsEqualizer

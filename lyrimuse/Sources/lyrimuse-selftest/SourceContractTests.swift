@@ -469,12 +469,134 @@ func runSourceContractTests() {
             if let mcc = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc.contains("radioStationHash"), true, "电台: RawPayload 要解 radioStationHash 这个判据字段")
                 expectEqual(mcc.contains("RadioTrackClock.advance("), true, "电台: 位置要走 RadioTrackClock(纯算术在 Core,selftest 钉住)")
-                expectEqual(mcc.contains("duration: isRadio ? nil : raw.duration"), true,
-                            "电台: duration 是整档节目的,构造快照时就要当未知,别让它流进歌词缓存")
+                // ⚠️ 反向守卫(2026-09-10 当天第二轮):电台的 duration **必须原样传**。第一版把它置成 nil,
+                // 结果 LocalPlaybackSource 建进度锚点那一支的闸 `duration > 0` 不成立、锚点建不起来,
+                // 电台放到歌也没有歌词。这一侧的 duration 只影响进度条分母,不写歌词缓存。
+                expectEqual(mcc.contains("duration: isRadio ? nil"), false,
+                            "电台: App 侧不能把 duration 置空 —— 进度锚点以 duration > 0 为闸,置空等于整档没歌词")
+                expectEqual(mcc.contains("elapsedTime: radioPosition ?? elapsed"), true,
+                            "电台: 位置要用自己那块单曲表,取不到再退回原读数")
                 expectEqual(mcc.contains("guard snapshot.isRadio != true else { return snapshot }"), true,
                             "电台: 不能借 AppleScript 那份位置(它同样是整档节目的)")
+                // 起表时刻(2026-09-10 第三轮,用户报「歌词进度偏慢」):必须用 stream watcher 观察到
+                // 换歌的那一刻,不是这一拍轮询的时刻。差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
+                // 而这条链路断了不会编译失败 —— 只是位置又从 0 起,表现成"整首歌恒慢一点"。
+                expectEqual(mcc.contains("startedAt: Self.lastTrackChangeObserved(forKey: trackKey)"), true,
+                            "电台: 起表要用观察到换歌的那一刻,不是轮询那一拍")
+                // 落盘副本(2026-09-11):重启后接得回去。这两处任一断掉都不会编译失败 ——
+                // 只是又变回"一重启就从 0 起",而那正是用户报过的现象。
+                expectEqual(mcc.contains("RadioClockFile.restorable("), true, "电台: 冷启动要尝试接上一个进程的表")
+                expectEqual(mcc.contains("RadioClockFile.write(record)"), true, "电台: 推进时要落盘,否则下次没得接")
+                // 「只勾了 Apple Music」这条路(2026-09-11):它走纯 JXA,AppleScript 拿不到
+                // radioStationHash,于是电台整层在这一种配置下曾经完全不生效 —— 而判据本身一处
+                // bundleID 都不认,所以这是唯一不生效的配置。退回去直接调 fetchAppleMusicSnapshot
+                // 不会编译失败,只会让电台在那种配置下再次"安静地没有"。
+                expectEqual(mcc.contains("if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }"), true,
+                            "电台: 只勾 Apple Music 那条路要过 radioAwareAppleMusicSnapshot,不能直接调 fetchAppleMusicSnapshot")
+                expectEqual(mcc.contains("snapshot.withRadio(position: position)"), true,
+                            "电台: 纯 JXA 那条路同样要把位置换成单曲表(否则判据补上了、位置还是整档节目的)")
+                expectEqual(mcc.contains("guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }"), true,
+                            "电台: 探针必须核对 Now Playing 焦点是 Apple Music —— 别人的台标哈希不能扣到 Music.app 头上")
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlClient.swift(路径挪了?)")
+            }
+            // withRadio 的形状(2026-09-11):MediaControlSnapshot 的 memberwise init 是 internal,
+            // selftest 够不着,只能在源文本上钉住这三件事。三件都不会编译失败,错了只会安静地错。
+            if let mcs = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlSnapshot.swift") {
+                expectEqual(mcs.contains("elapsedTime: position, playing: playing"), true,
+                            "电台: withRadio 要把位置换成单曲表")
+                expectEqual(mcs.contains("anchorElapsedTime: position, isRadio: true"), true,
+                            "电台: withRadio 的锚点要跟着换 —— 留着原值,下游判「是不是开播锚点」会按整档节目的钟解读")
+                // 只有 withRadio 是这个形状:withAlbum 那处是 `album: newAlbum, duration: duration`,
+                // withDuration 那处是 `album: album, duration: newDuration`。
+                expectEqual(mcs.contains("album: album, duration: duration,"), true,
+                            "电台: withRadio 不能动 duration(置空会让进度锚点建不起来,整档没歌词)")
+            } else {
+                expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlSnapshot.swift(路径挪了?)")
+            }
+            if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
+                // 主持人说话那一段收歌词(2026-09-11)。判定必须用**快照里没被夹过的**位置:
+                // 进度锚点会把位置夹在 [0, duration],从那边永远看不到"越过曲长"。
+                expectEqual(lps.contains("RadioTrackClock.passedTrackEnd("), true,
+                            "电台: 越过真曲长要把歌词收掉(主持人说话那一两分钟)")
+                expectEqual(lps.contains("if radioTrackFinished {"), true,
+                            "电台: 收歌词的闸要挂在 20Hz 那条 tick 上,不然只有 2 秒轮询那一拍生效")
+                // 台卡(2026-09-11):开台那一刻是唯一能拿到台名台标的时机,漏抓就永远没有。
+                expectEqual(lps.contains("RadioStationCardFile.stationName("), true,
+                            "电台: 开台那一刻要把台名记下来(口白期间系统什么都不给)")
+                // 台卡也算「不是歌」(2026-09-11):不收的话开台那几十秒会走到「搜索歌词中…」再到
+                // 「暂无歌词」——用户报过一次。判据要跟 collector 那侧的 radioStationCard 同义。
+                expectEqual(lps.contains("let finished = stationCardName != nil || RadioTrackClock.passedTrackEnd("), true,
+                            "电台: 台卡期间要跟口白一样收歌词,不能当成一首歌去搜")
+                expectEqual(lps.contains("noteRadioStationArtwork(data, forKey: expectedKey)"), true,
+                            "电台: 台标要在取图落地那一刻补进台卡(台卡那一拍常常还没有图)")
+                // 时间轴校正分流(2026-09-11):电台上调的必须落进电台那一档。写错桶不会报错,
+                // 表现是"正常播放这首歌反而不准了"——用户实测正常播放本来是对的,这是整个需求的要害。
+                expectEqual(lps.contains("LyricsOffsetStore.shared.nudgeRadio(by: deltaMs, forKey: radioKey)"), true,
+                            "电台: 微调要落进电台那一档,不能写进按曲目那层")
+                expectEqual(lps.contains("radioKey: radioKey"), true,
+                            "电台: 生效偏移要把电台那一层算进去,否则调了没反应")
+            } else {
+                expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+            }
+            // 三个展示面在口白期间都要把歌词那一格换成「口白」。少一个不会编译失败,只会那一面
+            // 继续显示「搜索歌词中…」——元数据在口白期间还停在上一首,拦不住就是这个后果。
+            // ⚠️ 四个面,不是三个(2026-09-11 用户截图报的就是漏掉的那一个:歌词窗口的**空状态**
+            // 那一格,跟它的元数据行是两条独立分支)。菜单栏面板走的是共用判定链 LyricsLineDisplay。
+            for (rel, face) in [("lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift", "灵动岛"),
+                                ("lyrimuse/Sources/lyrimuse/UI/LyricsOverlayView.swift", "桌面悬浮歌词"),
+                                ("lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift", "歌词窗口"),
+                                ("lyrimuse/Sources/lyrimuse/MenuBar/MenuBarPanel.swift", "菜单栏面板")] {
+                if let face_text = text(rel) {
+                    expectEqual(face_text.contains("L10n.t(\"口白\")"), true, "电台: \(face)要显示「口白」")
+                    // 歌词窗口有**三条**独立分支:元数据行(lyricsKind)、空状态(emptyStateSpec),
+                    // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次用户报障:
+                    // 只补元数据行 → 标题对了、中间那格还在转圈搜(2026-09-11 第一次截图);
+                    // 再补空状态仍不够 → 口白期间上一首的 allLines 原样留着,走不到空状态,
+                    // 那一栏继续滚上一首的词(2026-09-11 第二次截图)。灵动岛 / 悬浮窗只显示
+                    // "当前这一行",各自的 isRadioTalkBreak 分支天然盖住,唯独这里是整段列表。
+                    if rel.hasSuffix("LyricsWindowView.swift") {
+                        expectEqual(face_text.contains("if playback.isRadioTalkBreak { return (\"dot.radiowaves.left.and.right\""), true,
+                                    "电台: 歌词窗口的空状态那一格也要认口白,不能只改元数据行")
+                        expectEqual(face_text.contains("if playback.isRadioTalkBreak {\n            // 口白期间不显示任何歌词"), true,
+                                    "电台: 歌词窗口的歌词列表那一栏要在口白期间整段挡掉(闸要排在 allLines.isEmpty 之前)")
+                    }
+                } else {
+                    expectEqual(true, false, "电台: 读不到 \(rel)(路径挪了?)")
+                }
+            }
+            if let watcher = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlStreamWatcher.swift") {
+                expectEqual(watcher.contains("MediaControlClient.noteTrackChangeObserved(key: changed, at: at)"), true,
+                            "电台: watcher 看到换歌要把时刻记下来,否则上面那个 startedAt 恒为 nil")
+            } else {
+                expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlStreamWatcher.swift(路径挪了?)")
+            }
+            if let enrich = text("lyrimuse-collector/enrich.go") {
+                // collector 那侧的对称守卫:台卡不能拿去搜歌词,否则每开一次台就往歌词缓存里
+                // 写一条 `|台名|` 空壳(发现时已攒了 6 条)。判据在 radiostationcard.go,Go 单测钉住。
+                expectEqual(enrich.contains("if radioStationCard(radio, artist, title) {"), true,
+                            "电台: collector 不能把台卡写进歌词缓存")
+            } else {
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/enrich.go(路径挪了?)")
+            }
+            // 分母:位置换成单曲口径之后,时长也得换,否则显示成「2:29 / 56:30」。真曲长由 collector
+            // 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换 —— 读不到时**保留**快照那份,
+            // 绝不置 0(进度锚点按 durationMs 夹位置,0 会把位置钉死在开头、整档没歌词)。
+            if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
+                expectEqual(lps.contains("EnrichCacheReader.trackDurationSecs("), true,
+                            "电台: apply 要用缓存里的真曲长当分母")
+                expectEqual(lps.contains("rawSnapshot.withDuration(cached)"), true,
+                            "电台: 换分母走 withDuration,别就地用 memberwise init")
+            } else {
+                expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+            }
+            if let sys2 = text("lyrimuse-collector/system.go") {
+                expectEqual(sys2.contains("\"catalogDurationSecs\": catalogDuration"), true,
+                            "电台: 目录查到的权威曲长要透传出来")
+                expectEqual(sys2.contains("state[\"catalogDurationSecs\"] = d"), true,
+                            "电台: AppleScript 整份顶替时也要把它带过去(否则电台的分母又回到整档节目)")
+            } else {
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/system.go(路径挪了?)")
             }
             if let poller = text("lyrimuse-collector/poller.go") {
                 expectEqual(poller.contains("applyRadioClock(&p.cur,"), true, "电台: collector 取到快照后要换成单曲口径")
@@ -482,12 +604,37 @@ func runSourceContractTests() {
                             "电台台标: 没有歌手不宣布正在播放(两个平台都把 artist 当必填,发过去只会 400)")
                 expectEqual(poller.contains("if lm.ArtistName == \"\" {"), true, "电台台标: 没有歌手不提交收听")
                 expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
+                // 电台不借 AppleScript 那份播放头(2026-09-11)。App 侧同义的闸 2026-09-10 就有了
+                // (上面那条 `guard snapshot.isRadio != true`),collector 漏了整整一天 —— 后果不是
+                // "位置不准"这么轻:整档节目的位置写进 trackPos → 每拍都命中单曲循环判定 → 会话每
+                // 5 秒重建、playedSecs 归零 → 电台上一条收听都提交不了(实测 4.5 小时 2397 次
+                // loop restart、只有 4 条 listen recorded)。两侧必须同时成立,少一边就是这个形态。
+                expectEqual(poller.contains("playing, tracked, radio bool) bool {"), true,
+                            "电台: collector 借不借 AppleScript 位置要走 borrowAppleScriptPosition(纯函数,Go 单测钉住)")
+                expectEqual(poller.contains("&& playing && tracked && !radio"), true,
+                            "电台: collector 一律不借 AppleScript 播放头 —— 那是整档节目的位置,借了会让会话每拍重建")
+                expectEqual(poller.contains("p.cur.Playing, p.isTracked(), p.cur.Radio)"), true,
+                            "电台: 那道闸要真的把 p.cur.Radio 传进去,不然纯函数写对了也没接上")
+                // 第二道闸(2026-09-11,修完上面那道之后实测仍然一条都不打卡):电台真曲长由 Apple
+                // 目录**异步**给出,实测比会话起点晚 4.7 秒,而 sess.meta 是会话创建那一刻的快照 ——
+                // 不回填的话 listenThreshold 拿到 0、退回 240s 上限,2~4 分钟的电台曲目永远够不着。
+                expectEqual(poller.contains("needsRadioDurationBackfill("), true,
+                            "电台: 真曲长晚到时要补进会话元数据,否则打卡阈值退回 240s、电台一条都记不上")
             } else {
                 expectEqual(true, false, "电台: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
             }
+            if let sys = text("lyrimuse-collector/system.go") {
+                expectEqual(sys.contains("\"radioStationHash\": raw.RadioStationHash"), true,
+                            "电台: fetchRawMediaControlState 要把判据字段透传出来")
+                expectEqual(sys.contains("state[\"radioStationHash\"] = hash"), true,
+                            "电台: Apple Music 走 AppleScript 整份顶替时要把判据带过去 —— 不带就等于在最常见的配置下不生效")
+            } else {
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/system.go(路径挪了?)")
+            }
             if let snap = text("lyrimuse-collector/snapshot.go") {
                 expectEqual(snap.contains("str(\"radioStationHash\") != \"\""), true, "电台: collector 侧同一个判据字段")
-                expectEqual(snap.contains("duration = 0"), true, "电台: collector 侧 duration 也当未知")
+                expectEqual(snap.contains("duration = num(\"catalogDurationSecs\")"), true,
+                            "电台: collector 侧的时长换成目录查到的真曲长(查不到自然是 0 = 未知),绝不留整档节目那个数")
             } else {
                 expectEqual(true, false, "电台: 读不到 lyrimuse-collector/snapshot.go(路径挪了?)")
             }
@@ -1031,6 +1178,23 @@ func runSourceContractTests() {
                         "译文来源哨兵: collector translate.go 的 lyricsTrSourceMachine 必须逐字节等于 Swift 的 LyricsTranslationSource.machineSentinel(改一边不改另一边会静默把机翻全算成社区译文)")
         } else {
             expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
+        }
+
+        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**(2026-09-09)。
+        // Swift 侧 PositionBiasFile 写、Go 侧 positionbias.go 读;改了一边不改另一边,collector 会安静地
+        // 读不到 / 解不出,网页那边 Spotify 歌词就悄悄回到慢 2 秒。
+        let biasGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/positionbias.go").path
+        let biasMainPath = repoRoot.appendingPathComponent("lyrimuse-collector/main.go").path
+        if let goSource = try? String(contentsOfFile: biasGoPath, encoding: .utf8),
+           let mainSource = try? String(contentsOfFile: biasMainPath, encoding: .utf8) {
+            for tag in ["\"artist\"", "\"title\"", "\"bundle_id\"", "\"anchor_elapsed\"", "\"bias_secs\"", "\"written_at_ms\""] {
+                expectEqual(goSource.contains("json:\(tag)"), true, "位置偏置文件: Go 侧 positionBiasRecord 要有 json:\(tag) 字段")
+            }
+            let suffix = PositionBiasFile.fileName.replacingOccurrences(of: "lyrimuse", with: "")
+            expectEqual(mainSource.contains("clientName+\"\(suffix)\""), true,
+                        "位置偏置文件: Go 侧 main.go 要用 clientName+\"\(suffix)\" 拼出与 Swift 相同的文件名")
+        } else {
+            expectEqual(true, false, "位置偏置文件: 读不到 lyrimuse-collector/positionbias.go 或 main.go(路径挪了?)")
         }
 
         // ⑮ **整行罗马音的判定阶梯只允许有一份**(2026-09-03)。
@@ -1612,6 +1776,71 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 「这一轮没跑完整」两侧同一套判据(2026-09-09)----
+    //
+    // 起因是用户报《One Last Kiss》"这里可以搜到,但是首次播放的时候显示无歌词":那 36 秒
+    // 直连 DNS 全挂,九个源里七个因熔断被整轮跳过、一条候选都没有,而封面/Apple 链接从别处
+    // 照常拿到了 —— 于是条目照常落盘带上 ts,而 App 侧判"搜完了没有"的唯一依据就是 ts,
+    // 一次网络事故就这样被读成了这首歌的属性。
+    //
+    // 修法是两侧各多认一位:collector 的 needsLyricsFirstFill 欠这类条目一次快速补搜,
+    // App 的 EnrichCacheLyrics.searchIncomplete 在那次补搜跑完之前不下"暂无歌词"的结论。
+    // 两边闸口必须**同一套**:App 严了就提前认输(回到这个 bug),松了就在补搜跑完之后继续
+    // 转圈(那是同一天早些时候《1999 (Edit)》那个"没有时间上限"的老问题)。字段名同样是
+    // 契约 —— Go 的 struct tag 改了而 Swift 的 CodingKeys 没跟,解码恒为 nil、守卫全绿而
+    // 功能静默失效,所以这里连 JSON 键一起钉。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func read(_ url: URL) -> String? { try? String(contentsOfFile: url.path, encoding: .utf8) }
+        let enrichGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/enrich.go"))
+        let breakerGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/sourcebreaker.go"))
+        let reader = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/EnrichCacheReader.swift"))
+        let source = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/LocalPlaybackSource.swift"))
+        if let enrichGo, let breakerGo, let reader, let source {
+            // ① collector 侧闸口:三个条件 + 冷却与否分两档。
+            expectEqual(enrichGo.contains("if len(e.LyricsSourcesSkipped) > 0 && e.LyricsFillCount == 0 {"), true,
+                        "没跑完整: collector 快速补搜的闸口仍是「有源被跳过 + 还没补过」")
+            expectEqual(enrichGo.contains("if !anyLyricSourceCooling(e.LyricsSourcesSkipped) {"), true,
+                        "没跑完整: 快速补搜要先问熔断器那些源还冷不冷却")
+            // ② 两个 JSON 键:Go 的 struct tag 与 Swift 的 CodingKeys 一一对上。
+            for (tag, codingKey) in [("lyrics_sources_skipped", "case lyricsSourcesSkipped = \"lyrics_sources_skipped\""),
+                                     ("lyrics_fill_count", "case lyricsFillCount = \"lyrics_fill_count\"")] {
+                expectEqual(enrichGo.contains("json:\"\(tag),omitempty\""), true,
+                            "没跑完整: collector 的 \(tag) struct tag")
+                expectEqual(reader.contains(codingKey), true,
+                            "没跑完整: Swift 侧解码 \(tag)(键没对上就恒为 nil,功能静默失效)")
+            }
+            // ③ App 侧判据本体,以及它真的被 currentTrackHasNoLyrics 读到。
+            expectEqual(reader.contains("lyrics.isEmpty && !sourcesSkipped.isEmpty && fillCount == 0"), true,
+                        "没跑完整: App 侧判据跟 collector 闸口逐条对上")
+            expectEqual(source.contains("&& !(found?.searchIncomplete ?? false)"), true,
+                        "没跑完整: currentTrackHasNoLyrics 要把这一位算进去")
+            // ④ 熔断阶梯按「熔断了几轮」升档,不是按「失败了几个请求」——后者正是这次事故里
+            //    一次 2 秒抖动换来五分钟停摆的原因(见 sourcebreaker.go 那段 ⚠️)。
+            expectEqual(breakerGo.contains("idx := st.trips"), true,
+                        "熔断阶梯: 档位取自 trips(熔断轮次)")
+            //    ⚠️ 只看非注释行:那段 ⚠️ 注释里原样引着旧写法当反面教材,连注释一起扫会永远红。
+            let breakerCode = breakerGo.split(separator: "\n").filter {
+                !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//")
+            }.joined(separator: "\n")
+            expectEqual(breakerCode.contains("st.consecutive - lyricSourceBreakerTripAfter"), false,
+                        "熔断阶梯: 不准回到用失败请求数当档位")
+        } else {
+            expectEqual(true, false, "没跑完整: 读不到 enrich.go / sourcebreaker.go / EnrichCacheReader.swift / LocalPlaybackSource.swift(路径挪了?)")
+        }
+        // 判据真值表(判据抽成自由函数就是为了能在这里直接跑)。
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "", sourcesSkipped: ["netease"], fillCount: 0), true,
+                    "没跑完整: 空歌词 + 有源被跳过 + 还没补过 = 结论未定")
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "[00:00.00] a", sourcesSkipped: ["netease"], fillCount: 0), false,
+                    "没跑完整: 已经有歌词了就不是这条路径的事")
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "", sourcesSkipped: [], fillCount: 0), false,
+                    "没跑完整: 九个源都问过了、就是没有 —— 那是确证查无,该说「暂无歌词」")
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "", sourcesSkipped: ["netease"], fillCount: 1), false,
+                    "没跑完整: 快速补搜跑过一次就落定,不许无限转圈")
+    }
+
     // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份(2026-09-06)----
     //
     // 名单在 collector 侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
@@ -1951,12 +2180,17 @@ func runSourceContractTests() {
     // 只写步骤与判据,理由回链 AGENTS.md 与 docs。它最常见的死法是锚点腐烂(脚本改名、文档挪位、链接失效)和
     // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
     // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
-    do {
+    skillGuard: do {
         // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift → 上 4 层到仓库根
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let skillsDir = repoRoot.appendingPathComponent(".claude/skills")
+        // ⚠️ **这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(2026-09-11 用户定:AI 协作文件只留
+        // 作者本地)。所以在别人的 clone 和 CI 上它们**根本不存在** —— 那时整段跳过,不是失败。
+        // 本地有就照旧全查(锚点腐烂、超长、发版 skill 漏 disable-model-invocation 都还是红)。
+        // 别把这个 guard 改成 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
+        guard FileManager.default.fileExists(atPath: skillsDir.path) else { break skillGuard }
         let expected = ["lyrimuse-lyrics-triage", "lyrimuse-release", "lyrimuse-verify-ui"]
         let found = ((try? FileManager.default.contentsOfDirectory(atPath: skillsDir.path)) ?? [])
             .filter { !$0.hasPrefix(".") }.sorted()
@@ -2072,7 +2306,15 @@ func runSourceContractTests() {
         expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
                     "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
         expectEqual(read("docs/releasing.md").contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
-        expectEqual(read("AGENTS.md").contains("check_release_tag.sh"), true, "tag 校验: AGENTS.md「提交」写明 CI 拒什么")
+        // ⚠️ **AGENTS.md 不进版本库**(2026-09-11,理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
+        // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
+        // 和贡献者没有意义。⚠️ 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
+        // (2026-09-11 实测:第一次只给 .claude/skills 那段加了跳过、漏了这一条,在模拟 clone 里当场红。
+        //  同类读点共 6 处,其余 5 处都在上面那个 skillGuard 块里、已被整段跳过覆盖。)
+        let agentsDoc = read("AGENTS.md")
+        if !agentsDoc.isEmpty {
+            expectEqual(agentsDoc.contains("check_release_tag.sh"), true, "tag 校验: AGENTS.md「提交」写明 CI 拒什么")
+        }
     }
 
     // ---- 身份与路径收口(2026-09-05,借鉴清单 #33 第一步)----
@@ -2244,6 +2486,145 @@ func runSourceContractTests() {
         expectEqual(core.contains("FileManager"), false, "崩溃报告段: Core 侧不碰文件系统(目录扫描在 App 侧)")
         expectEqual(read("lyrimuse/Sources/lyrimuse-selftest/OpsDiagnosticsTests.swift").contains("CrashReportSummary.parse("), true,
                     "崩溃报告段: selftest 覆盖解析")
+    }
+
+    // ---- 补提交的反馈不许长在会消失的容器里(2026-09-12)----
+    //
+    // 用户报「补提交之后没有反馈」。根因不是忘了写文案,而是那句「已补 N 条」长在
+    // pendingListensRow 的副标题里,而那一行的出现条件是 `eligible > 0`(lastfmProfileCard
+    // 里的 if)—— 补得越干净 eligible 越接近 0,整行连同结果一起从界面上消失。
+    // **补全成功 = 零反馈**,最该庆祝的那一次最安静。
+    //
+    // 钉三件事,任何一条被拆掉都会把「点完没动静」放回来:
+    // ① 结果文案有独立产出点 backfillRunResultText(),且**至少两处消费**(清单还在时作副标题、
+    //    清单空了时作独立行)——只剩一处就说明它又被塞回某个会消失的条件容器里了;
+    // ② lastRunFailed 还在:它是「跑了但失败」跟「还没跑过」的唯一区分(两者的 lastRun 都是 nil),
+    //    没它失败就是静默的;
+    // ③ abortedReason 在界面层有消费点 —— 限流(29)/凭据失效/服务端拒收整批**只**经由它出声,
+    //    而它从加进 Outcome 那天起到 2026-09-12 一直只被解码、从没有过任何显示面。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        // 只数代码行:这两个文件的注释比代码长,注释里提到符号名不算数(同「身份与路径收口」
+        // 那道守卫 2026-09-06 收紧时踩过的坑)。
+        func codeHits(_ src: String, _ needle: String) -> Int {
+            src.split(separator: "\n", omittingEmptySubsequences: false).reduce(0) { acc, line in
+                if line.trimmingCharacters(in: .whitespaces).hasPrefix("//") { return acc }
+                let code = String(line.split(separator: "//", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+                return acc + (code.contains(needle) ? 1 : 0)
+            }
+        }
+        let tab = read("lyrimuse/Sources/lyrimuse/AccountLinkingTab.swift")
+        let svc = read("lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift")
+        if tab.isEmpty || svc.isEmpty {
+            expectEqual(true, false, "补提交反馈: 读不到 AccountLinkingTab / ScrobbleBackfillService —— 守卫本身失效了")
+        } else {
+            let produced = codeHits(tab, "backfillRunResultText(")
+            expectEqual(produced >= 3, true,
+                        "补提交反馈: 结果文案要 1 处产出 + 至少 2 处消费(清单在/清单空各一处),实际 \(produced)")
+            expectEqual(codeHits(tab, "backfillResultRow") >= 2, true,
+                        "补提交反馈: 清单空掉之后那一行还在(声明 + 挂载两处)")
+            expectEqual(svc.contains("var lastRunFailed"), true,
+                        "补提交反馈: lastRunFailed 还在 —— 没它「跑了但失败」跟「还没跑过」是同一个状态")
+            expectEqual(codeHits(tab, "abortedReason") >= 1, true,
+                        "补提交反馈: abortedReason 要有界面消费点(限流/凭据失效/整批被拒只经由它出声)")
+        }
+    }
+
+    // ---- Go 的 omitempty 撞 Swift 的合成解码器(2026-09-12,同一个坑第二次)----
+    //
+    // Swift 自动合成的 init(from:) 对**非可选**属性一律走 decode(_:forKey:),缺 key 直接
+    // throw ——「属性写了默认值、缺 key 就退回默认值」是错的(两次都是这么以为才写成那样)。
+    // 而 Go 的 `omitempty` 恰恰让零值字段整个不出现。两边一撞,一行完全正常的输出会**整行**
+    // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
+    //
+    // 两次事故,同一条 Go→Swift 边界:
+    //  ① 2026-08-25 searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
+    //     正常的分支里 collector 不写 decisionJSON,于是那一行解码失败、pick 恒为 nil,好几种
+    //     该有专属文案的正常结局被吞成兜底那一句;
+    //  ② 2026-09-12 backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
+    //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
+    //     功能上线那天起就这样(两侧一个字没改过),只是 lastRunFailed 那天才把它从"一声不吭"
+    //     变成"界面报一句失败" —— 用户那趟 26 条全补进了 Last.fm、markBackfilled 的回执也落了
+    //     盘,界面却说「补提交没能完成，请稍后再试」。
+    //
+    // 守卫从 **Go 的 struct tag** 反推要求,不是抄一份键名清单:谁哪天给别的字段加个 omitempty
+    // 这里就会红。Swift 侧满足其一即可 —— 那个键用 decodeIfPresent 解,或者属性本身是可选。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        /// Go 某个 struct 体内所有带 omitempty 的 json 键。
+        func omitemptyKeys(_ go: String, _ name: String) -> [String] {
+            guard let start = go.range(of: "\ntype \(name) struct {") else { return [] }
+            let rest = go[start.upperBound...]
+            guard let end = rest.range(of: "\n}") else { return [] }
+            var keys: [String] = []
+            for line in rest[..<end.lowerBound].split(separator: "\n") {
+                guard let open = line.range(of: "json:\"") else { continue }
+                let after = line[open.upperBound...]
+                guard let close = after.range(of: "\"") else { continue }
+                let parts = after[..<close.lowerBound].split(separator: ",").map(String.init)
+                if parts.count > 1, parts.dropFirst().contains("omitempty"), let key = parts.first {
+                    keys.append(key)
+                }
+            }
+            return keys
+        }
+        /// Swift 侧对应结构体的源码块。按大括号配平截出来,免得命中同一文件里别的结构体的同名属性。
+        func swiftStruct(_ swift: String, _ name: String) -> String? {
+            guard let start = swift.range(of: "struct \(name):") else { return nil }
+            var depth = 0
+            var opened = false
+            var out: [Substring] = []
+            for line in swift[start.lowerBound...].split(separator: "\n", omittingEmptySubsequences: false) {
+                out.append(line)
+                depth += line.filter { $0 == "{" }.count
+                depth -= line.filter { $0 == "}" }.count
+                if line.contains("{") { opened = true }
+                if opened, depth <= 0 { break }
+            }
+            return out.joined(separator: "\n")
+        }
+        /// 这个键缺了会不会炸:用 decodeIfPresent 解的、或者属性本身可选的,都不会。
+        func tolerant(_ body: String, _ key: String) -> Bool {
+            for raw in body.split(separator: "\n", omittingEmptySubsequences: false) {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.hasPrefix("//") { continue }
+                // 收尾的右括号一起匹配,否则 `.winner` 会被 `.winnerScore` 那行顶掉。
+                if line.contains("decodeIfPresent("), line.contains("forKey: .\(key))") { return true }
+                if line.hasPrefix("var \(key):") || line.hasPrefix("let \(key):"), line.contains("?") { return true }
+            }
+            return false
+        }
+        let boundaries: [(go: String, goStruct: String, swift: String, swiftStruct: String)] = [
+            ("lyrimuse-collector/backfill.go", "backfillOutcome",
+             "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Outcome"),
+            ("lyrimuse-collector/backfill.go", "backfillItem",
+             "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Item"),
+            ("lyrimuse-collector/searchcli.go", "searchLyricsPick",
+             "lyrimuse/Sources/lyrimuse/LyricsManager/LyricsSearchService.swift", "Pick"),
+        ]
+        for b in boundaries {
+            let go = read(b.go)
+            guard !go.isEmpty, let body = swiftStruct(read(b.swift), b.swiftStruct) else {
+                expectEqual(true, false,
+                            "omitempty 边界: 读不到 \(b.go) 的 \(b.goStruct) 或 \(b.swift) 的 \(b.swiftStruct) —— 守卫本身失效了")
+                continue
+            }
+            let keys = omitemptyKeys(go, b.goStruct)
+            expectEqual(keys.isEmpty, false,
+                        "omitempty 边界: \(b.goStruct) 里一个 omitempty 都没解出来(守卫自身跑空了)")
+            expectEqual(keys.filter { !tolerant(body, $0) }, [],
+                        "omitempty 边界: \(b.swiftStruct) 这些键缺了会让整行解不出来,要 decodeIfPresent 或把属性改成可选")
+        }
     }
 
     // ---- 日志规范(2026-09-04)----

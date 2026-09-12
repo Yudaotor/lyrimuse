@@ -150,6 +150,62 @@ func TestLanguageVersionTagCanonicalKeys(t *testing.T) {
 	}
 }
 
+// TestCrossLanguageVersionTags 钉住 2026-09-12 补的三个跨语言键(用户报「为什么这首歌匹配错
+// 版本了,匹配成英文版本了」——优里《ドライフラワー》)。原来这套只认粤语/国语,「(English ver.)」
+// 压根不进限定词集合,于是本地与候选两边都是空集、不算版本不符,那 600 分一分没扣,英文版靠
+// 逐字+译文以 1036 分顶掉了日文原曲(919)。两版时长还差不到 0.1 秒,时长判据救不了。
+func TestCrossLanguageVersionTags(t *testing.T) {
+	cases := []struct {
+		name        string
+		local, cand string
+		want        bool
+	}{
+		{"英文版顶原曲(本案)", "Dried Flower", "Dried flower (English ver.)", true},
+		{"本地也是英文版就不算不符", "Dried Flower (English ver.)", "Dried flower (English ver.)", false},
+		{"日文版同理", "Song", "Song (Japanese ver.)", true},
+		{"同一声明的不同拼法要折成一个键", "Song (日文版)", "Song (Japanese ver.)", false},
+		// ⚠️ 这两条是"中文版归到国语同一个键"的正反面:分成两个键的话第一条会变成 true,
+		// 凭空造出一批新的错配 —— 比漏判更糟。
+		{"中文版与国语是同一个声明", "Song (中文版)", "Song (国语)", false},
+		{"中文版与粤语仍然是两个版本", "Song (中文版)", "Song (粤语)", true},
+		{"两个不同语种版本", "Song (English ver.)", "Song (Japanese ver.)", true},
+	}
+	for _, c := range cases {
+		if got := versionTagsMismatch(c.local, "", c.cand, ""); got != c.want {
+			t.Errorf("%s: versionTagsMismatch(%q, %q) = %v, want %v", c.name, c.local, c.cand, got, c.want)
+		}
+	}
+
+	// 声明读取这一路也要认得出新键(批级语种判决走的是它)。
+	if got := declaredLanguageVersion("Dried flower (English ver.)"); got != languageVersionTagEnglish {
+		t.Errorf("declaredLanguageVersion 应读出英语键, got %q", got)
+	}
+	if got := declaredLanguageVersion("Song (韩语版)"); got != languageVersionTagKorean {
+		t.Errorf("declaredLanguageVersion 应读出韩语键, got %q", got)
+	}
+	// 本地标题没有任何语种声明时保持空 —— 这正是本案本地侧的形状。
+	if got := declaredLanguageVersion("Dried Flower"); got != "" {
+		t.Errorf("没写语种版本时应返回空串, got %q", got)
+	}
+
+	// withoutLanguageVersionTags 必须把**全部**语种键摘干净:漏一个,批级判决说"同语种"时
+	// 那个键会留在集合里继续参与相等比对,等于判决白下。
+	tags := map[string]bool{
+		languageVersionTagEnglish: true, languageVersionTagJapanese: true,
+		languageVersionTagKorean: true, languageVersionTagCantonese: true,
+		languageVersionTagMandarin: true, "live": true,
+	}
+	got := withoutLanguageVersionTags(tags)
+	if len(got) != 1 || !got["live"] {
+		t.Errorf("语种键应被全部摘掉、只剩 live, got %v", got)
+	}
+	for tag := range languageVersionTagSet {
+		if got[tag] {
+			t.Errorf("语种键 %q 没被摘掉", tag)
+		}
+	}
+}
+
 func TestLastLRCTimestampSkipsTrailingCredit(t *testing.T) {
 	// 网易云《K歌之王》末尾:[03:19.53]末句 + [03:39.53]监制署名行。
 	lrc := "[00:13.23]我唱得不够动人\n[03:14.97]而你那呵欠绝得不能绝\n[03:19.53]绝到溶掉我\n[03:39.53]监制：陈辉阳\n"

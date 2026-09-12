@@ -33,6 +33,8 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         /// 账号页之一,值是 App 侧 `AccountDestination` 的 case 名(那个枚举没有 rawValue,
         /// App 侧用 `String(describing:)` 对回去)。
         case account(String)
+        /// 「软件更新」页(2026-09-12):不属于六分类,App 侧是 `SettingsSidebarItem.softwareUpdate`。
+        case softwareUpdate
     }
 
     public let destination: Destination
@@ -64,6 +66,7 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         switch destination {
         case .tab(let raw): dest = "tab:\(raw)"
         case .account(let name): dest = "account:\(name)"
+        case .softwareUpdate: dest = "softwareUpdate"
         }
         return "\(dest)|\(sectionValue ?? "")|\(pathKeys.joined(separator: "/"))|\(titleKey)"
     }
@@ -138,6 +141,12 @@ public enum SettingsSearchCatalog {
                             pathKeys: ["关于", group])
     }
 
+    private static func softwareUpdate(_ title: String, sub: String? = nil, kw: [String] = [],
+                                       group: String?) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .softwareUpdate, titleKey: title, subtitleKey: sub, keywords: kw,
+                            pathKeys: ["软件更新"] + (group.map { [$0] } ?? []))
+    }
+
     private static func account(_ name: String, path: [String], sectionValue: String? = nil, _ title: String,
                                 kw: [String] = []) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .account(name),
@@ -203,7 +212,9 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "悬浮淡化", kw: ["鼠标", "指针", "淡出", "让开"], group: "行为"),
         surface(.overlay, "截屏/录屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕"], group: "行为"),
         surface(.overlay, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
-        surface(.overlay, "恢复默认", sub: "不含排版、行为和宽度", kw: ["重置"]),
+        // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
+        surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
+        surface(.overlay, "恢复默认", sub: "不含排版、行为、位置和宽度", kw: ["重置"]),
 
         // ---- 歌词显示 › 灵动岛 ----
         surface(.notch, "灵动岛歌词", sub: "紧凑地贴着屏幕顶部的刘海显示", kw: ["开关", "刘海", "总开关"], inDrawer: false),
@@ -276,13 +287,16 @@ public enum SettingsSearchCatalog {
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
         general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
         general("设置文件", sub: "含明文凭证；导入会覆盖全部设置并重启", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
+        general("动态封面", sub: "歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
         general("清除所有设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除"]),
 
         // ---- 关于 ----
-        about("检查更新", kw: ["更新", "Sparkle", "版本"], group: "更新"),
-        about("自动检查", kw: ["更新", "自动"], group: "更新"),
-        about("自动下载并安装", kw: ["更新", "自动"], group: "更新"),
-        about("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: "更新"),
+        // 「软件更新」页(2026-09-12;此前这四条住在「关于 › 更新」卡里)。「软件更新」同时也是「关于 › 更新」
+        // 卡里那一行入口的标题,目的地都是这一页。
+        softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
+        softwareUpdate("自动检查", kw: ["更新", "自动"], group: "自动更新"),
+        softwareUpdate("自动下载并安装", kw: ["更新", "自动"], group: "自动更新"),
+        softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: nil),
         about("反馈问题", sub: "GitHub Issues", kw: ["issue", "bug", "反馈"], group: "反馈与社区"),
         about("想法与建议", sub: "GitHub Discussions", kw: ["discussion", "建议"], group: "反馈与社区"),
         about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),

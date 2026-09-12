@@ -80,6 +80,11 @@ func lastfmFeedActivityAt(page lastfmRecentPage, fetchedAt time.Time) time.Time 
 // 而 poller 的字段只允许主循环碰(见 poller.go 顶部不变量);主循环在 bridge() 里读它。
 var lastfmFeedNudgeAt atomic.Int64
 
+// backfillFeedNudgeDelay:消费掉回填的跨进程信号文件之后,再等多久才真去拉 feed。
+// 跟镜像 scrobble 那条路径(poller.go 里 requestLastfmFeedRefresh(5*time.Second))取同一个
+// 值 —— 两边等的是同一件事:Last.fm 把刚收到的 scrobble 并进 recenttracks 的那一两秒。
+const backfillFeedNudgeDelay = 5 * time.Second
+
 // requestLastfmFeedRefresh 让 bridge() 在 after 之后尽快拉一次(不早于 after:Last.fm 把
 // 刚收到的 scrobble 并进 recenttracks 需要一两秒,立刻拉多半还看不到)。
 func requestLastfmFeedRefresh(after time.Duration) {

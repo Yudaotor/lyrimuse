@@ -257,6 +257,11 @@ type itunesResult struct {
 	// TrackTimeMillis:2026-08-30 加,给 appleMusicMatch.durationSecs 用——同样是
 	// iTunes Search 一直在回、之前没解码的字段。
 	TrackTimeMillis float64 `json:"trackTimeMillis"`
+	// ReleaseDate / CollectionArtistName:2026-09-08 加,给 pickAppleAlbumHint 用 —— 挑"这首歌出自哪张
+	// 专辑"时按发行日期取最早那张、并把群星合辑(collectionArtistName 是 Various Artists 之类、跟曲目
+	// 署名不是一个人)排到后面。同样是 iTunes Search 一直在回、之前没解码的字段。
+	ReleaseDate          string `json:"releaseDate"`
+	CollectionArtistName string `json:"collectionArtistName"`
 }
 
 func itunesSearch(ctx context.Context, q, country string) []itunesResult {

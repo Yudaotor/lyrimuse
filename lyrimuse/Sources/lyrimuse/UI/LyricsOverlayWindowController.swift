@@ -88,6 +88,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
+    private var placementModeObserver: AnyCancellable?
+    /// 位置模式(2026-09-11,issue #5)。真值在 `AppSettings.overlayPlacementMode`,这里是订阅
+    /// 来的镜像 —— 高度增长方向 / 热区换算 / 拖动闸 / 插拔屏对账每次都要读,不能每次去碰单例。
+    /// 预设模式下位置由 `OverlayPlacement.presetFrame` 按**窗口所在那块屏**推导:切模式、宽度变、
+    /// 屏幕或 Dock 变都重算;用户拖不动它(见 `armDragIfStillPressed`),要挪就切回「自由」。
+    private var placementMode: OverlayPlacementMode = AppSettings.shared.overlayPlacementMode
+    /// 视图最近一次上报的内容高度(`updateHeight` 收到的原值)。「底部居中」下内容贴着窗口底边放,
+    /// 热区换算要用它算内容块离窗口顶边多远(`OverlayControlHitTest.contentTopInset`);贴顶时用不着。
+    private var lastContentHeight: CGFloat = 0
 
     // MARK: - 点击穿透 + 悬停热区 + 长按拖动
     //
@@ -112,12 +121,27 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 只挂在播放控制排那一支上),退回按钮矩形本身 —— 锁定态那一格只有解锁一颗按钮,
     /// 用它自己的矩形足够。
     @Published private(set) var isHoveringControlPill: Bool = false
+    /// 指针此刻压在**哪一颗**按钮上(nil = 不在任何一颗上)。只给 View 画悬停高亮用 ——
+    /// 判据在 `OverlayControlHitTest.hoveredControl`(含"指针得在窗口里""锁定态只认解锁键"
+    /// 两道闸,那边有 selftest)。
+    ///
+    /// 为什么不是 View 自己 `.onHover`:窗口常年 `ignoresMouseEvents = true`,SwiftUI 一个
+    /// 鼠标事件都收不到(同这一排按钮的点击为什么要由控制器按矩形分发,见 iconButton 头注)。
+    /// 值直接取自 `.mouseMoved` 分支里**本来就要算的那一次**命中测试,不额外多一次。
+    @Published private(set) var hoveredControl: OverlayControlID?
     // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
     @Published private(set) var isDragArmed: Bool = false
     // 见 hasShownDragHintKey 处的注释——只在第一次解锁时短暂为 true,几秒后自动收回。
     @Published private(set) var showDragHint: Bool = false
     /// 通用瞬态提示(全局快捷键的操作回声)。见 flashTransientHint。
     @Published private(set) var transientHint: String?
+    /// 预设模式下想拖窗口被拒(2026-09-11)。第一版只在卡片里闪一行 caption 小字(`transientHint`
+    /// 那条路),用户实机反馈「太不醒目了」—— 31pt 的歌词旁边一行 12pt 的字确实等于没有。改成
+    /// 两件事一起做:控制排槽位换成一条「🔒 已固定为「底部居中」…」胶囊(跟播放控制排同底、
+    /// 等高、多一整句话),同时歌词卡左右抖一下(计数 +1,视图挂 `OverlayRejectShake`)。
+    @Published private(set) var placementLockNotice: String?
+    @Published private(set) var placementLockShakeTick = 0
+    private var placementLockNoticeTimer: Timer?
 
     /// 播放控制排刚露出来(见 OverlayChromeSource)。真窗口这一下要重读「喜欢」——理由和
     /// 时机全在 LyricsOverlayView 那个 .onChange(of: controlsVisible) 的注释里。
@@ -129,9 +153,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 关掉划过让开)共用同一份口径 —— 2026-09-03 加第三个悬停量(isHoveringControlPill)时
     /// 就得挨个改四处,漏一处就会留下一份陈旧的 true。`isHoveringLyrics` 不并进来:那四处
     /// 对它的处理本来就各不相同(setLocked 压根不碰它)。
+    ///
+    /// 2026-09-11 加第四个(`hoveredControl`,按钮悬停高亮)—— 它更需要这条收口:留一份陈旧
+    /// 的 id 就是"控制排都藏起来了,某颗按钮底下还亮着一圈高亮"。
     private func clearControlsHoverState() {
         if isHoveringForControls { isHoveringForControls = false }
         if isHoveringControlPill { isHoveringControlPill = false }
+        if hoveredControl != nil { hoveredControl = nil }
     }
 
     private var globalMouseMonitor: Any?
@@ -169,11 +197,21 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 按下之后到长按计时器触发之前,鼠标移动超过这个距离就当成"这是想让点击/拖拽
     // 穿透到下层 App 的普通手势",取消长按判定,不武装拖动。
     private let dragMoveTolerance: CGFloat = 4
+    /// 预设模式下"明确在拖"的判据:按在歌词上、并且拖出这么远,才给「已固定」那条反馈
+    /// (2026-09-11 用户:「不要一点击就触发拒绝拖动的提示,要明确感受到有在拖动才触发」)。
+    /// 比上面那 4pt 大得多 —— 4pt 是"手抖也算动"的取消容差,这里要的是"人在拉"。
+    private let presetDragIntentDistance: CGFloat = 12
+    /// 这一次按住有没有已经给过反馈。同一次按住只给一次,松手清零(cancelPendingPress)。
+    private var presetDragRejectedThisPress = false
 
     convenience init() {
         let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
         let placement = Self.restoredPlacement(size: size)
-        let panel = LyricsOverlayWindow(contentRect: NSRect(origin: placement.origin, size: size))
+        // 预设模式:锚点只用来决定"在哪块屏上",落点本身按预设重算(见 presetOrigin)。
+        let origin = Self.presetOrigin(
+            mode: AppSettings.shared.overlayPlacementMode, restored: placement.origin, size: size
+        ) ?? placement.origin
+        let panel = LyricsOverlayWindow(contentRect: NSRect(origin: origin, size: size))
         self.init(window: panel)
         // 存的位置在当前显示器配置下一块屏都看不见(外接屏拔了/睡了)时,上面那个落点是临时
         // 借主屏摆的 —— 标记成"借来的",这次运行不许把它写回磁盘,那块屏回来自己回去。
@@ -220,6 +258,16 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         shadowObserver = AppSettings.shared.$backgroundIsVisible.sink { [weak self] visible in
             self?.window?.hasShadow = visible
         }
+
+        // 位置模式(2026-09-11)。初始值上面建窗口时已经用过(presetOrigin),这里只接**之后的**
+        // 变化:用户在设置里切模式 → 当场按新预设落位。sink 里只用收到的参数值(willSet 时机,
+        // 回读 AppSettings 拿到的是旧值 —— 本文件 isPlayingObserver 那段注释里的坑)。
+        placementModeObserver = AppSettings.shared.$overlayPlacementMode
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] mode in
+                self?.applyPlacementMode(mode)
+            }
 
         // 显示器配置变了(拔插外接屏、改分辨率、改排列、外接屏睡醒)之后对一次账:该救的救、
         // 该送回去的送回去,好端端在屏上的一概不动。详见 reconcilePlacementWithScreens()。
@@ -362,6 +410,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // "长按可拖动"提示,4 秒后自动收回,且只弹这一次(用 UserDefaults 记一个已展示过
     // 的标记,不是每次解锁都刷)。
     private func maybeShowDragHintOnFirstUnlock() {
+        // 预设模式下本来就拖不动,「长按即可拖动位置」是句假话;标记也不设,等他真在自由
+        // 模式下第一次解锁时再教这一次。
+        guard !placementMode.isPreset else { return }
         guard !UserDefaults.standard.bool(forKey: hasShownDragHintKey) else { return }
         UserDefaults.standard.set(true, forKey: hasShownDragHintKey)
         dragHintDismissTimer?.invalidate()
@@ -405,25 +456,34 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 已经放好的位置跳动),下限钉在 overlayDefaultSize.height,不会比默认更矮。不持久化
     // 这个高度——跟位置不是一回事,每次内容变化重新算,窗口重启后从默认高度开始正常
     // 动态调整。
+    //
+    // 「底部居中」(2026-09-11)是唯一的例外:底边固定、向上增高 —— 贴着 Dock 的窗口照旧向下长
+    // 会撞上下面那条"底边不许越过可见区底边"的夹取、一点都长不了,译文一出来直接被裁掉。
+    // 几何本体在 OverlayPlacement.grownFrame(两个方向都有 selftest)。
     private func updateHeight(_ contentHeight: CGFloat) {
         guard let window else { return }
-        let rawHeight = max(overlayDefaultHeight, ceil(contentHeight))
+        let contentChanged = abs(contentHeight - lastContentHeight) >= 0.5
+        lastContentHeight = contentHeight
         let current = baseFrame(of: window)
-        let top = current.origin.y + current.height
-        // 顶边固定、向下增高的同时,不能让底边超出当前屏幕可见区域——2026-08-02 实测
-        // 排查坐实:早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+
-        // 下一句预览都开着、又遇上长歌词多行换行)可能把窗口下半部分撑到 Dock 后面甚至
-        // 屏幕外,用户看不到、也没有任何自我纠正机制。跟 restoredPlacement() 里"存的位置在
-        // 一块屏上都看不见就救回来"是同一个思路,这里对称地夹一下高度上限——最多只
-        // 长到"顶边到屏幕可见区域底边"这么高,同时仍然保证不低于默认高度(用户内容真的
-        // 需要更多空间时优先满足默认下限,不能反过来让默认高度本身失效)。
+        // 增高的同时,不能让另一侧的边超出当前屏幕可见区域——2026-08-02 实测排查坐实:
+        // 早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+下一句预览都
+        // 开着、又遇上长歌词多行换行)可能把窗口下半部分撑到 Dock 后面甚至屏幕外,用户看不到、
+        // 也没有任何自我纠正机制。跟 restoredPlacement() 里"存的位置在一块屏上都看不见就救
+        // 回来"是同一个思路,这里对称地夹一下高度上限——最多只长到"锚边到屏幕可见区域另一
+        // 侧"这么高,同时仍然保证不低于默认高度(用户内容真的需要更多空间时优先满足默认
+        // 下限,不能反过来让默认高度本身失效)。
         // 依据的是**窗口自己落在**的那块屏,不是 NSScreen.main(那是"有键盘焦点的屏",跟这个
         // 窗口在哪儿无关;window.screen 又会在刚 orderOut 过等时刻拿不到值)。一块屏都不沾时
         // 干脆不夹 —— 没有可信的边界可用,硬按主屏算只会把副屏上的窗口往主屏方向推。
-        let maxHeight = Self.hostVisibleFrame(of: current).map { max(overlayDefaultHeight, top - $0.minY) }
-        let newHeight = min(rawHeight, maxHeight ?? rawHeight)
-        guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
-        let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
+        let newFrame = OverlayPlacement.grownFrame(
+            current: current, contentHeight: contentHeight, minHeight: overlayDefaultHeight,
+            anchorsBottom: placementMode.anchorsBottom, visibleFrame: Self.hostVisibleFrame(of: current))
+        guard abs(newFrame.height - current.height) >= 0.5 else { // 避免亚像素抖动反复触发
+            // 贴底时热区换算依赖内容高(内容块离窗口顶边 = 窗高 − 内容高):窗高没变、内容高变了
+            // (比如单行歌词在 120pt 地板之下的 70→90),按钮的真实位置也跟着挪了,得重算一次。
+            if contentChanged, placementMode.anchorsBottom { recomputeHitRegions() }
+            return
+        }
         setFrameAnimated(window, to: newFrame)
         // 窗口高度真的变了——按钮/热区的原始 SwiftUI 坐标很可能没变(顶边对齐、跟高度无关),
         // 不能干等 SwiftUI 那边偶然再报一次坐标才刷新换算结果,见 controlRectsRaw 声明处注释。
@@ -695,16 +755,22 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 见 updateControlRects 原来那条注释(现已并入这里);baseFrame(of:) 在动画途中
         // 返回的是**目标**高度,跟这次换算用的坐标同属一代,不会读到中间帧。
         let windowHeight = baseFrame(of: window).height
+        // 内容块贴顶时是 0;「底部居中」下内容贴底,内容块顶边离窗口顶边 = 窗高 − 内容高
+        // (见 OverlayControlHitTest.contentTopInset)。lastContentHeight 还没收到过(0)时贴底
+        // 算出来会偏,但那一拍紧接着就是 updateHeight 送高度进来、再调一次这里。
+        let inset = OverlayControlHitTest.contentTopInset(
+            anchorsBottom: placementMode.anchorsBottom, windowHeight: windowHeight, contentHeight: lastContentHeight)
         var out: [OverlayControlID: CGRect] = [:]
         for (id, rect) in controlRectsRaw {
-            out[id] = OverlayControlHitTest.windowLocalRect(swiftUI: rect, windowHeight: windowHeight)
+            out[id] = OverlayControlHitTest.windowLocalRect(
+                swiftUI: rect, windowHeight: windowHeight, contentTopInset: inset)
         }
         controlRectsLocal = out
         controlsHotZoneLocal = controlsHotZoneRaw.map {
-            OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight)
+            OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight, contentTopInset: inset)
         }
         lyricsHotZoneLocal = lyricsHotZoneRaw.map {
-            OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight)
+            OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight, contentTopInset: inset)
         }
     }
 
@@ -768,11 +834,23 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 指针压没压在控制排本身上 —— 只用来冻住它的横向落点(见 OverlayControlsSidePin),
             // 跟"要不要显示"(上面那行整窗判定)、"要不要拦截点击"(下面 insideHotZone)都
             // 是独立的三件事,不要合并。锁定态没有胶囊热区,退回按钮矩形,见声明处注释。
+            // 这一次命中测试**两个用途共用**:下面那个"压没压在控制排上",以及再下面那个
+            // "该把哪一颗画亮"。别拆成两次算 —— 两次之间用的是同一批矩形、同一个点,拆开
+            // 只会多一次遍历,还给"两处判据慢慢长歪"留了口子。
+            let hit = OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal)
             let onControlPill = insideWindow
-                && ((controlsHotZoneLocal?.contains(localPoint) ?? false)
-                    || OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) != nil)
+                && ((controlsHotZoneLocal?.contains(localPoint) ?? false) || hit != nil)
             if isHoveringControlPill != onControlPill {
                 isHoveringControlPill = onControlPill
+            }
+            // 按钮悬停高亮(2026-09-11)。可见性两道闸在 Core 那边,见 hoveredControl 声明处。
+            // ⚠️ 只在**真的变了**时候赋值:这是 @Published,每次鼠标移动都写一遍会让整个
+            // 悬浮窗按鼠标移动的频率重算 body(移动事件一秒几十上百个)。
+            let nowHovered = OverlayControlHitTest.hoveredControl(
+                at: localPoint, in: controlRectsLocal,
+                insideWindow: insideWindow, positionLocked: isPositionLocked)
+            if hoveredControl != nowHovered {
+                hoveredControl = nowHovered
             }
             // 歌词命中是**独立**的一套:窗口内 + 压在文字矩形上才算。热区还没上报上来
             // (刚显示、或者这一轮没有任何文字)时退回窗口判定,别让功能整个失灵。
@@ -798,6 +876,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 return
             }
             guard frame.contains(loc), !insideHotZone else { return }
+            // 预设模式(顶部 / 底部居中):不武装也不起长按计时,只记下按在**歌词文字**上的这一下,
+            // 等 .leftMouseDragged 看它有没有真的拖出 presetDragIntentDistance —— 拖了才给「已固定」
+            // 反馈。第一版在这里(长按拖动关着时)直接给反馈,用户反馈「一点击就触发」;单击本该
+            // 原样穿透到桌面,什么都不说。按在四周透明区域的按下不记(拖桌面图标路过窗口不该抖)。
+            if placementMode.isPreset {
+                if let zone = lyricsHotZoneLocal, zone.contains(localPoint) {
+                    pressStartLocation = loc
+                    presetDragRejectedThisPress = false
+                }
+                return
+            }
             pressStartLocation = loc
             longPressTimer?.invalidate()
             // 「拖动前先长按」关掉时:压在**歌词文字**上就立刻武装,压在四周空白上什么都不做
@@ -822,7 +911,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // (那是一个同步阻塞调用,函数返回时拖动已经结束)——这里只需要在"还没
             // 武装"这段时间处理"移动太多就取消长按判定"。
             guard !isDragArmed, let start = pressStartLocation else { return }
-            if hypot(loc.x - start.x, loc.y - start.y) > dragMoveTolerance {
+            let moved = hypot(loc.x - start.x, loc.y - start.y)
+            if placementMode.isPreset {
+                // 按在歌词上、拉出一段距离 = 明确在拖窗口 → 给一次「已固定」反馈(胶囊 + 抖动);
+                // 这次按住之后再怎么拖都不重复,松手才复位。事件本身照旧穿透到下层。
+                if !presetDragRejectedThisPress, moved > presetDragIntentDistance {
+                    presetDragRejectedThisPress = true
+                    rejectDragForPreset()
+                }
+                return
+            }
+            if moved > dragMoveTolerance {
                 // 计时器还没到点,鼠标就已经挪动超过容差——这是想穿透到下层的普通拖拽
                 // 手势(比如在桌面拖框选),不是想拖悬浮窗,取消长按判定。
                 cancelPendingPress()
@@ -864,6 +963,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             cancelPendingPress()
             return
         }
+        // 预设模式(顶部/底部居中)下位置由几何推导,不接拖动。正常情况下到不了这里 —— .leftMouseDown
+        // 在预设模式下既不起长按计时也不立刻武装(反馈改由 .leftMouseDragged 按位移给,见那两处);
+        // 这一道只是防御:万一模式在按住的半途切成预设,计时器到点也别把窗口拖走。
+        if placementMode.isPreset {
+            cancelPendingPress()
+            return
+        }
         isDragArmed = true
         window.ignoresMouseEvents = false
         defer {
@@ -896,11 +1002,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         )
     }
 
+    /// 预设模式下拖动被拒的反馈:槽位胶囊 + 抖动,2.4 秒后收回(比 flashTransientHint 的 1.6 秒长——
+    /// 这句话带模式名和去处,要读完)。触发点是 .leftMouseDragged 里"按在歌词上且拖出
+    /// presetDragIntentDistance"(不是按下、不是长按到点);再按住再拖一次:文字续期、再抖一次。
+    private func rejectDragForPreset() {
+        let label = OverlayPlacementSegmentedControl.label(for: placementMode)
+        placementLockNotice = String(format: L10n.t("位置已固定为「%@」，在 ⚙ 菜单里可改"), label)
+        placementLockShakeTick += 1
+        placementLockNoticeTimer?.invalidate()
+        placementLockNoticeTimer = Timer.scheduledTimer(withTimeInterval: 2.4, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.placementLockNotice = nil }
+        }
+    }
+
     private func cancelPendingPress() {
         longPressTimer?.invalidate()
         longPressTimer = nil
         pressStartLocation = nil
         isDragArmed = false
+        presetDragRejectedThisPress = false
     }
 
     // 屏幕配置变化后对一次账。判断/夹取的几何都在 OverlayPlacement(LyrimuseCore)里,
@@ -920,6 +1040,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func reconcilePlacementWithScreens() {
         guard let window else { return }
         let screens = Self.allVisibleFrames()
+
+        // 预设模式(2026-09-11):位置由几何推导,对账 = 在该在的那块屏上按预设重算。Dock 改大小 /
+        // 换边 / 开关自动隐藏也走这条通知(visibleFrame 变了),所以"Dock 之上"能跟着 Dock 走。
+        if placementMode.isPreset {
+            reconcilePresetPlacement(window: window, screens: screens)
+            return
+        }
 
         if let home = Self.homeFrame(size: window.frame.size),
            OverlayPlacement.isSufficientlyVisible(frame: home, screens: screens) {
@@ -943,6 +1070,77 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         window.setFrameOrigin(target)
         // 这个落点故意不落盘(scheduleSavePosition 在借屏期间直接返回):磁盘上留着的仍是用户
         // 自己拖出来的那个锚点,那块屏回来时上面 ① 那一支照它把窗口送回去。
+    }
+
+    // MARK: - 位置预设(OverlayPlacementMode,2026-09-11,GitHub issue #5)
+    //
+    // 三个入口,几何全在 OverlayPlacement.presetFrame(selftest 覆盖),这里只回答"在哪块屏上算":
+    //   · 启动(presetOrigin):锚点还原出的落点在哪块屏,就在那块屏上按预设算 —— 锚点在预设模式下
+    //     只承担"记住在哪块屏"这一件事(位置本身每次重算);没锚点 / 锚点那块屏不在 → 主屏。
+    //   · 切模式(applyPlacementMode):窗口此刻在哪块屏,就在那块屏上算;切回「自由」什么都不动
+    //     (锚点一直跟着写,当前位置就是锚点),只是从此按顶边长、内容贴顶。
+    //   · 屏幕参数变化(reconcilePresetPlacement):沿用自由模式那套"借屏"语义 —— 锚点那块屏回来了
+    //     就回去;窗口被系统搬到别的屏(锚点那块屏没了)就在现在这块屏上算但**不写盘**,免得一次
+    //     拔屏把"在外接屏上"这条记忆永久改写成内置屏(04 章「多屏」一节的不变量在预设模式下同样成立)。
+    //
+    // 两条边界(v1 刻意不做):不提供"选哪块屏"(要换屏:切回「自由」拖过去再切回预设);预设模式下
+    // 宽度调整条照旧保持中心伸缩,预设的中心就是屏幕中心,天然对齐。
+
+    /// 启动落位。`restored` 是按锚点还原(或救援)出来的左下角,只用来判断"在哪块屏"。
+    private static func presetOrigin(mode: OverlayPlacementMode, restored: NSPoint, size: NSSize) -> NSPoint? {
+        guard mode.isPreset else { return nil }
+        let screens = allVisibleFrames()
+        let frame = NSRect(origin: restored, size: size)
+        guard let host = OverlayPlacement.hostVisibleFrame(of: frame, screens: screens) ?? screens.first else {
+            return nil
+        }
+        return OverlayPlacement.presetFrame(mode: mode, size: size, visibleFrame: host)?.origin
+    }
+
+    /// 用户在设置里切了模式。
+    private func applyPlacementMode(_ mode: OverlayPlacementMode) {
+        guard mode != placementMode else { return }
+        placementMode = mode
+        guard let window else { return }
+        // 贴顶 / 贴底换了,内容块在窗口里的位置就换了;上报的内容坐标不会因此重发,得主动重算
+        // (同 updateHeight 那条理由)。切成自由或顶部居中时 inset 归 0,重算一次同样对。
+        recomputeHitRegions()
+        guard mode.isPreset else { return }
+        let current = baseFrame(of: window)
+        let screens = Self.allVisibleFrames()
+        guard let host = OverlayPlacement.hostVisibleFrame(of: current, screens: screens) ?? screens.first,
+              let target = OverlayPlacement.presetFrame(mode: mode, size: current.size, visibleFrame: host)
+        else { return }
+        if target != current { setFrameAnimated(window, to: target) }
+    }
+
+    /// 屏幕 / Dock 参数变了,预设模式下的对账。
+    private func reconcilePresetPlacement(window: NSWindow, screens: [CGRect]) {
+        let current = baseFrame(of: window)
+        let anchorHost = Self.homeFrame(size: current.size)
+            .flatMap { OverlayPlacement.hostVisibleFrame(of: $0, screens: screens) }
+        let currentHost = OverlayPlacement.hostVisibleFrame(of: current, screens: screens)
+        let host: CGRect
+        if isBorrowingScreen, let anchorHost {
+            // 锚点那块屏回来了(外接屏插回 / 睡醒)→ 回去。
+            host = anchorHost
+            isBorrowingScreen = false
+        } else if let currentHost {
+            host = currentHost
+            // 有锚点、但锚点那块屏一块都看不见了 —— 窗口是被系统搬到现在这块屏的,不是用户的意思:
+            // 标记借屏,这次(以及之后在这块屏上的)落点都不写盘,锚点继续指着那块不在的屏。
+            if Self.savedAnchor() != nil, anchorHost == nil { isBorrowingScreen = true }
+        } else if let primary = screens.first {
+            host = primary
+            isBorrowingScreen = true
+        } else {
+            return
+        }
+        guard let target = OverlayPlacement.presetFrame(mode: placementMode, size: current.size, visibleFrame: host)
+        else { return }
+        // 亚像素之内不动 —— 会白白触发一次 didMove → 位置持久化。
+        if abs(target.minX - current.minX) < 0.5, abs(target.minY - current.minY) < 0.5 { return }
+        window.setFrameOrigin(target.origin)
     }
 
     private func scheduleSavePosition(_ source: PositionSaveSource) {

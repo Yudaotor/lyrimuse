@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// "联网搜索候选歌词"弹窗,参考 LyricsX 的 SearchLyricsViewController:左侧候选列表
+// "联网搜索候选歌词"弹窗,沿用这类工具常见的双栏形态:左侧候选列表
 // (来源+分数+是否逐字),右侧选中候选的完整预览,"采用此候选"把内容交回调用方
 // (调用方负责真正写回缓存,这里只管搜索和展示)。onApply 是可等待的、回报有没有真的落盘:
 // 面板据此挪「当前使用」徽标、给一条回声;`keepsOpenAfterApply` 决定采纳后关窗还是留着
@@ -602,8 +602,23 @@ struct LyricsSearchSheet: View {
                     scoreLine(c, font: .caption2)
                 }
                 Spacer(minLength: 0)
+                // 2026-09-08 用户要求把来源标挪到这里(每行**右上角**),不再混在下面那排
+                // 标签里。跟上面 08-26 那条是同一个诉求的延伸而不是推翻它:那次要的是
+                // "标签排别跟着文字长短漂移",而来源标在标签排**内部**仍然在漂——它前面
+                // 站着无时间戳/逐字/译文/罗马音四个可有可无的标签,有几个全看这条候选的
+                // 成色,于是九条候选扫下来"这条是谁给的"每行都在不同的 x,窄列时还会被
+                // 挤到第二行。来源跟那几个标签也不是一类东西:那几个说的是"这条候选有
+                // 什么"(越多越好的加分项),来源说的是"这条是谁给的"(身份),身份钉在
+                // 行的右上角、九行右缘对齐,扫起来最省事。
+                //
+                // `fixedSize()`:列宽最窄能拖到 250pt,不钉住的话 SwiftUI 会先压这个
+                // 胶囊(「网易云音乐」折成两行、「Musixmatch」被截成「Musixmat…」)。
+                // 来源名截半个字等于没标,宁可让上面的歌名先换行——它本来就允许两行 + 悬停看全文。
+                sourceBadge(c.source)
+                    .fixedSize()
             }
-            characteristicBadges(c, source: c.source, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
+            // showsSource: false —— 这一处的来源标已经在上面的右上角了,别在标签排里再来一遍。
+            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
         }
         .tag(c.source)
         .padding(.vertical, 3)
@@ -707,7 +722,10 @@ struct LyricsSearchSheet: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(applyingSource != nil)
             }
-            characteristicBadges(c, source: c.source, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
+            // showsSource: true —— 右侧详情**不跟着**挪去右上角(2026-09-08):挪的收益是
+            // "多行之间对齐、好扫",而这里永远只有一条候选,没有可对齐的对象;这一行的
+            // 右上角又被「采用此候选」这颗主按钮占着,塞个胶囊进去只会跟它抢视线。
+            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
             if c.isPlainTextOnly {
                 Label(
                     L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
@@ -819,50 +837,72 @@ struct LyricsSearchSheet: View {
     // 逐字/译文/罗马音——分别对应"是否有逐字时间戳""是否带翻译""是否带罗马音标注",
     // 跟 LyricsManagerView 详情页三个编辑区(歌词/译文/罗马音)用同一组图标,方便用户
     // 把候选列表里的图标和保存后详情页里的字段对上号。
+    ///
+    /// `showsSource`:来源标算不算这一排里的一员。左侧列表传 false —— 那边 2026-09-08 起
+    /// 把来源单独钉在行的右上角(理由见 `candidateRow`);右侧详情仍是 true。
     @ViewBuilder
     private func characteristicBadges(
-        _ c: LyricsSearchService.Candidate, source: String, isCurrent: Bool, duplicateOf: String?
+        _ c: LyricsSearchService.Candidate, source: String, showsSource: Bool,
+        isCurrent: Bool, duplicateOf: String?
     ) -> some View {
-        // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/文字相同/当前使用),
-        // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
-        WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
-            // 2026-08-30 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
-            // 开——那几个都是"越多越好"的加分项,这一个反过来是"用之前必须知道的限制"。
-            // 放在最前面,不用等用户扫完整排标签才注意到。
-            if c.isPlainTextOnly {
-                characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
+        // 一个标签都没有时整排不渲染(而不是渲染一个空的 WrapLayout):空 Layout 高度是 0
+        // 但外层 VStack 照样给它算 4pt 间距,那一行看起来就比别的行多垫了一截。来源标从
+        // 这排挪走之后这种"全空"是真会发生的——一条有逐行时间戳、没译文没罗马音、既不
+        // 重复也不是当前使用的普通候选,剩下的就是空。
+        if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicateOf: duplicateOf) {
+            // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/文字相同/当前使用),
+            // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
+            WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
+                // 2026-08-30 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
+                // 开——那几个都是"越多越好"的加分项,这一个反过来是"用之前必须知道的限制"。
+                // 放在最前面,不用等用户扫完整排标签才注意到。
+                if c.isPlainTextOnly {
+                    characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
+                }
+                if c.hasWordTiming {
+                    characteristicBadge(L10n.t("逐字时间戳"), "text.word.spacing", .blue)
+                }
+                if c.hasTranslation {
+                    characteristicBadge(L10n.t("译文"), "character.book.closed", .green)
+                }
+                if c.hasRomanization {
+                    characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple, latinIcon: true)
+                }
+                // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
+                if showsSource {
+                    sourceBadge(source)
+                }
+                if let duplicateOf {
+                    // 2026-09-04:跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
+                    // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学;所以文案写「文字相同」
+                    // 不写「完全相同」,悬停说明把口径讲清。灰色:它是"这条跟别人重复"的提示,不是加分项。
+                    characteristicBadge(
+                        String(format: L10n.t("歌词文字与 %@ 相同"), LyricsSource(rawValue: duplicateOf)?.displayName ?? duplicateOf),
+                        "equal.circle", .secondary)
+                        .help(L10n.t("只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文"))
+                }
+                if isCurrent {
+                    // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
+                    // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
+                    Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor, in: Capsule())
+                }
             }
-            if c.hasWordTiming {
-                characteristicBadge(L10n.t("逐字时间戳"), "text.word.spacing", .blue)
-            }
-            if c.hasTranslation {
-                characteristicBadge(L10n.t("译文"), "character.book.closed", .green)
-            }
-            if c.hasRomanization {
-                characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple, latinIcon: true)
-            }
-            // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
-            sourceBadge(source)
-            if let duplicateOf {
-                // 2026-09-04:跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
-                // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学;所以文案写「文字相同」
-                // 不写「完全相同」,悬停说明把口径讲清。灰色:它是"这条跟别人重复"的提示,不是加分项。
-                characteristicBadge(
-                    String(format: L10n.t("歌词文字与 %@ 相同"), LyricsSource(rawValue: duplicateOf)?.displayName ?? duplicateOf),
-                    "equal.circle", .secondary)
-                    .help(L10n.t("只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文"))
-            }
-            if isCurrent {
-                // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
-                // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
-                Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor, in: Capsule())
-            }
+            .font(.caption2)
         }
-        .font(.caption2)
+    }
+
+    /// 上面那排里这条候选到底会不会长出至少一个标签 —— 判断顺序、判断条件跟
+    /// `characteristicBadges` 的渲染体一一对应,改那边记得改这里(漏一项 = 那一排明明
+    /// 有内容却被整个跳过)。
+    private func hasAnyCharacteristicBadge(
+        _ c: LyricsSearchService.Candidate, showsSource: Bool, isCurrent: Bool, duplicateOf: String?
+    ) -> Bool {
+        c.isPlainTextOnly || c.hasWordTiming || c.hasTranslation || c.hasRomanization
+            || showsSource || duplicateOf != nil || isCurrent
     }
 
     private func sourceBadge(_ source: String) -> some View {

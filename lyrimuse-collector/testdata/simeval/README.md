@@ -53,6 +53,44 @@ SIMEVAL_DATA=<目录> SIMEVAL_WRITE_GOLDEN=1 go test -run TestSimEval .
 数据本身(simruns/、dataset.json、golden_shipped.json)不入库:体量大、且随各源返回内容
 天然漂移,按上面的步骤几分钟就能重建。
 
+## 四点五、也能反过来测「已经在引擎里的项该不该留」(2026-09-10 加)
+
+`dims` 那组评的是"还没进引擎的维度值不值得加";`inEngine` 那组反过来,delta 取负号就是把
+已入引擎的项拿掉。报告里单独一格 `in_engine_ablation`,别跟上面那组混着读。
+
+同日一起加的两格,都是被"全维度 improve=0 regress=0"这个结果逼出来的:
+
+- **`yardstick_liveness`**:三把量尺在**本轮样本**上的取值分布。全 neutral 有两种完全
+  不同的解释——「这个维度确实不改变对错」和「量尺在这批样本上根本判不出对错」,不把
+  分布打出来就分不开,而后者会让整份报告变成一句空话。行数项那轮实测:799 条候选里
+  内容判"错"的只有 6 条、时长非 fit 的 59 条 —— 量尺是活的,但很薄,尾部风险测不到,
+  这句话必须写进结论。
+- **`lines_flip_pairs`**:翻盘的那两条候选**到底差在哪**(原始行数 / 正文行数 / 归一化
+  正文字符数 / 两份正文的 3-gram Jaccard)。right/wrong/fit/mismatch 是粗档,全 right→right
+  时答不出"是不是其实一份更完整";量到字符层面才看得出行数项那 +7 行只换来 +15 个字符。
+
+## 四点六、⚠️ 取样会写用户真实的五份缓存,必须隔离
+
+`collector search-lyrics` 在 `load*` 里顺手把**落盘路径**也设上了,一共五份
+(`searchcli.go:76/81/85/88/92`):`artist-alias` / `artist-primary` / `apple-catalog` /
+`apple-storefront-artist` / `qq-artist-name`。保存走 `<path>.tmp` + rename,而 **tmp 名
+固定、不带 pid**(`musicbrainz.go:88/472` 等)。`run_searches.py` 并发 3 再叠上常驻
+collector = 四个进程抢同一个 `.tmp`:轻则丢更新(各写各内存里那份完整 map),重则 rename
+出半截 JSON。
+
+隔离办法:给采样进程设 `LYRIMUSE_CONFIG_DIR`(`paths.go:17`,**要绝对路径**),目录里铺:
+
+- `lyrimuse-features.json` — **拷贝**。缺了不会全禁用(静默退默认值),但退的是默认集合、
+  不是用户当前的「歌词来源」开关,源覆盖面会跟真实配置对不上。
+- 上面那五份 — **拷贝**(隔离的正题)。
+- `lyrimuse-musixmatch-token.json` — **拷贝**。不给的话每个一次性子进程各自 `token.get`,
+  一密集就 401,Musixmatch 在样本里基本等于整体失效,命中率系统性偏低。
+- `lyrimuse-enrich-cache.json` — **symlink 就行**(`loadEnrichCacheReadOnly` 刻意不设
+  `enrichPath`)。别省掉:不给的话 `learnedSourceArtistAlias` 那一档恒空,打分会变。
+
+另外:采样跟常驻 collector 抢同一份 iTunes 限流额度(2026-09-10 实测被连带回了两次 429、
+一次 403,正撞在用户换歌那一秒),**用户在听歌时把并发降到 1**。
+
 ## 五、踩过的坑(都真的踩过,别再踩一遍)
 
 1. **delta 必须加在夹底前的原始项和上**再统一 `max(1,·)`。加在已夹底的分上会把引擎

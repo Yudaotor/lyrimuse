@@ -87,6 +87,24 @@ final class LastfmStatsService: ObservableObject {
         return URL(string: raw)
     }
 
+    /// 设置侧栏身份区的头像 URL(2026-09-12,见 Settings/SettingsSidebarChrome.swift):`user.getinfo`
+    /// 的 image 数组里挑最大的那张;用户没设头像时 Last.fm 给的是占位星,过滤成 nil(由调用方退回
+    /// 品牌图)。只认当前凭据对应的那个用户名,换过账号就不给旧账号取图。走统一的 request 通道,
+    /// 限速与审计日志都在那边。
+    func fetchUserAvatarURL(user: String) async -> URL? {
+        guard let cred = credentials, cred.user == user else { return nil }
+        guard let json = await request(method: "user.getinfo", cred: cred),
+              let userObject = json["user"] as? [String: Any],
+              let images = userObject["image"] as? [[String: Any]] else { return nil }
+        for size in ["extralarge", "large", "medium", "small"] {
+            if let raw = images.first(where: { ($0["size"] as? String) == size })?["#text"] as? String,
+               let url = Self.filteredImageURL(raw) {
+                return url
+            }
+        }
+        return nil
+    }
+
     /// 把一份 feed 并进界面状态。理由与流程见本节头注。
     private func ingestFeed(_ feed: LastfmRecentFeed) {
         guard let cred = credentials, feed.username == cred.user else { return }
@@ -995,7 +1013,9 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// track.getinfo 的 userplaycount + 响应里的规范身份(纠正后的 歌手|歌名 小写键)。
-    /// count nil = 请求失败,或那边没有这个实体/没记过次数;identity nil = 请求失败。
+    /// count nil = **没答上来**(请求失败 / error 6 / 响应没带 userplaycount);identity nil = 请求失败。
+    /// ⚠️ 孪生查询这条路上 nil 一律只当"这一本少算了",不参与"那边确实没有"的定论
+    /// (那个只看本尊那次响应,见 PlayCountOutcome)。
     /// identity 用来识别「孪生查询被 autocorrect 折回了同一个实体」—— 见调用处。
     private func userPlayCount(artist: String, title: String,
                                cred: (user: String, key: String),
@@ -3104,13 +3124,19 @@ final class LastfmStatsService: ObservableObject {
                                                                      "autocorrect": "1", "username": cred.user],
                                                              priority: priority)
                         guard let json = res.json else {
-                            // Last.fm 明确说"没有这个实体"(error 6)= 成功返回但两项都为空:ok=true,
-                            // 让下面按 unavailable 记账,别每轮重问(见 requestDetailed 注释)。
+                            // Last.fm 明确说"没有这个实体"(error 6):ok=true,让下面按 unavailable
+                            // 记账,别每轮重问(见 requestDetailed 注释)。次数显式传 0 而不是 nil ——
+                            // "压根没这个实体"跟"0 次"是同一个答案,而 nil 在 PlayCountOutcome 里
+                            // 专门表示"这次没答上来"(2026-09-10,见那个文件的头注)。
                             // 其它失败(超时/限流)照旧 ok=false,留给下次重试。
-                            return (item.key, item.artist, item.album, res.notFound, nil, nil,
+                            return (item.key, item.artist, item.album, res.notFound,
+                                    res.notFound ? 0 : nil, nil,
                                     item.wantsCount, item.zeroIsFinal)
                         }
                         let parsed = await MainActor.run { () -> (Int?, URL?, String?) in
+                            // ⚠️ nil 在这里的意思是「响应**没带** userplaycount 这个字段」,
+                            // 跟"那边回答 0 次"是两件事 —— 别在下游把它们折成一件(2026-09-10
+                            // 用户报的那三首没有次数就是折在一起造成的,见 PlayCountOutcome)。
                             let n = (self.dig(json, "track", "userplaycount") as? String).flatMap { Int($0) }
                             // 规范身份(纠正后的 歌手|歌名),给下面的孪生查询做同实体比对
                             var identity: String?
@@ -3137,6 +3163,11 @@ final class LastfmStatsService: ObservableObject {
                                                                     cred: cred, priority: priority)
                                 guard let tc = twin.count, let tid = twin.identity,
                                       identities.insert(tid).inserted else { continue }
+                                // ⚠️ 本尊那次**没带 userplaycount**(count == nil)时,孪生报回来的
+                                // 0 不许替它凑出一个 0 —— 那会让下面的三态判据把"这次没答上来"
+                                // 误判成"那边确实没有"(正是 2026-09-10 这次修复要消掉的混淆,
+                                // 只是走了另一条路进来)。孪生报正数则照收:那是真问到了一本账。
+                                if count == nil && tc == 0 { continue }
                                 count = (count ?? 0) + tc
                             }
                         }
@@ -3167,12 +3198,21 @@ final class LastfmStatsService: ObservableObject {
                         // 判据③的节流基准:记的是"为它问过一次次数",不是"问到了" ——
                         // 只有请求真的成功返回才算(超时/限流不该顶着节流让下一轮不敢重试)。
                         if ok { countFetched.insert(key) }
-                        if let n, n > 0 {
-                            counts[key] = n
-                        } else if ok, zeroIsFinal {
+                        // 三态判据下沉到 Core(2026-09-10):此前这里是 `if let n, n>0 … else if
+                        // ok, zeroIsFinal`,而 n == nil 同时代表「那边回答 0」和「响应没带这个
+                        // 字段」,后者被当成前者写成定论 —— 用户报的那三首 Prince 就是这么来的。
+                        // 完整现场与实测数据见 PlayCountOutcome 的头注。
+                        switch PlayCountOutcome.classify(requestSucceeded: ok, reportedCount: n,
+                                                         rowIsOldEnough: zeroIsFinal) {
+                        case .counted(let resolved):
+                            counts[key] = resolved
+                        case .definitivelyNone:
                             // 只有**够老**的行拿到 0 才算定论。刚 scrobble 完的 0 是
                             // Last.fm 还没并账,记进去就永久放弃了(见 playCountUnavailable)。
                             noCount.insert(key)
+                        case .unanswered:
+                            // 请求失败,或成功但没带 userplaycount —— 什么都不记,下一轮重问。
+                            break
                         }
                     }
                     if let cover {

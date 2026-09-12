@@ -179,7 +179,7 @@ enum DiagnosticsExporter {
         // Sparkle 自己的这两个字段(是否开着周期检查、上一次真的检查是什么时候)足够
         // 回答大半——不用再让用户去猜"是不是它压根没在检查"。lastUpdateCheckDate 是
         // Sparkle 自己维护的只读字段,读取本身零成本,不涉及联网。
-        let sparkle = SparkleUpdaterManager.shared.controller.updater
+        let sparkle = SparkleUpdaterManager.shared.updater
         lines.append("Auto-update checks: \(sparkle.automaticallyChecksForUpdates)"
                      + (sparkle.lastUpdateCheckDate.map { " (last checked: \(ISO8601DateFormatter().string(from: $0)))" }
                         ?? " (never checked this run)"))

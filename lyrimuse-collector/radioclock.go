@@ -31,18 +31,25 @@ type radioClockState struct {
 	trackKey string
 	position float64
 	tickedAt time.Time
+	// playing:**上一拍**在不在播。决定这一拍要不要把 [上一拍, 现在] 这段算成播放时间,见 advanceRadioClock。
+	playing bool
 }
 
 // advanceRadioClock 推进一拍并返回新状态。纯函数。
 //   - 换歌(key 变了)或第一次见 → 归零重新起表,位置 0;
-//   - 播放中 → 按墙钟累加(单拍夹在 [0, radioMaxAdvancePerTick]);
-//   - 暂停 → 位置冻结,只把 tick 时刻推到现在,恢复后不会把暂停的那段补进去。
+//   - 否则按**上一拍**的播放状态决定要不要累加 [上一拍, 现在] 这段(单拍夹在 [0, radioMaxAdvancePerTick])。
+//
+// ⚠️ 判据是**上一拍**在不在播,不是这一拍(2026-09-10 当天第二轮,修一个真实回归)。按"这一拍在播"累加的话,
+// 「上一拍暂停、这一拍恢复」会把整段暂停间隔当成播放时间加进去,停得越久跳得越多(App 侧暂停时轮询降到 6s、
+// 空闲 10s;collector 是 5s)。用户报「暂停久一点再恢复,歌词进度就不正常」,App 日志里的 resume transition
+// 逐条坐实跳了 3.5~5.8 秒。反过来「上一拍在播、这一拍暂停」照旧累加:那一段确实基本都在播。
+// Swift 侧 RadioTrackClock.advance 必须同规则,改一边就要改另一边。
 func advanceRadioClock(prev radioClockState, key string, playing bool, now time.Time) radioClockState {
 	if prev.trackKey != key || prev.tickedAt.IsZero() {
-		return radioClockState{trackKey: key, position: 0, tickedAt: now}
+		return radioClockState{trackKey: key, position: 0, tickedAt: now, playing: playing}
 	}
-	if !playing {
-		return radioClockState{trackKey: key, position: prev.position, tickedAt: now}
+	if !prev.playing {
+		return radioClockState{trackKey: key, position: prev.position, tickedAt: now, playing: playing}
 	}
 	step := now.Sub(prev.tickedAt)
 	if step < 0 {
@@ -51,7 +58,7 @@ func advanceRadioClock(prev radioClockState, key string, playing bool, now time.
 	if step > radioMaxAdvancePerTick {
 		step = radioMaxAdvancePerTick
 	}
-	return radioClockState{trackKey: key, position: prev.position + step.Seconds(), tickedAt: now}
+	return radioClockState{trackKey: key, position: prev.position + step.Seconds(), tickedAt: now, playing: playing}
 }
 
 var (

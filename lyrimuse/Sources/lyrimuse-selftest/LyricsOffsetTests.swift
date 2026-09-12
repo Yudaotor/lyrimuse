@@ -337,4 +337,65 @@ func runLyricsOffsetTests() {
         store.setGlobalOffset(0)
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
+
+    // ---- 第四层:电台校正(2026-09-11)----
+    // 只在放电台时生效,按「台标哈希 + 曲目」记。成因见 LyricsOffsetStore.radioOffsets 头注:
+    // 电台元数据比声音晚,δ 每首不同但同一首可复现,系统里量不出来,只能靠耳朵校一次。
+    do {
+        typealias S = LyricsOffsetStore
+        let hashA = "CgkIBRoF0aDTpxkQBA"   // 实测值:petal radio
+        let hashB = "CgkIBRoF6d-JrhkQBA"   // 实测值:另一个台
+        let track = S.trackKey(artist: "Ariana Grande", title: "kiss me", lyrics: "[00:01.00]a\n", lyricsYRC: "")
+
+        // key 的三道闸。
+        expectEqual(S.radioKey(stationHash: "", trackKey: track), "", "电台 key: 没有台标哈希就不适用")
+        expectEqual(S.radioKey(stationHash: hashA, trackKey: ""), "", "电台 key: 没有曲目身份就不适用")
+        expectEqual(S.radioKey(stationHash: hashA, trackKey: "||"), "", "电台 key: 空壳曲目 key 同样不认")
+        expectEqual(S.radioKey(stationHash: "带|竖线的台", trackKey: track), "",
+                    "电台 key: 台标哈希含分隔符会让四段拼法产生歧义,直接不认")
+        expectEqual(S.radioKey(stationHash: hashA, trackKey: track), "\(hashA)|\(track)", "电台 key: 台在前、曲目在后")
+
+        let store = S.shared
+        let keyA = S.radioKey(stationHash: hashA, trackKey: track)
+        let keyB = S.radioKey(stationHash: hashB, trackKey: track)
+        store.setGlobalOffset(0)
+        store.reset(forKey: track, pinKey: "")
+        store.clearAllRadioOffsets()
+        expectEqual(store.radioOffsetCount, 0, "电台校正: 起点是空的")
+
+        // 同一首歌、两个台,互不相干 —— 用户 2026-09-11 明确要求"仅适用于这个电台里播放的歌"。
+        store.nudgeRadio(by: 1500, forKey: keyA)
+        expectEqual(store.radioOffset(forKey: keyA), 1500, "电台校正: 调进去了")
+        expectEqual(store.radioOffset(forKey: keyB), 0, "电台校正: 同一首歌换个台不套用(δ 未必一样,扣错比不扣更糟)")
+        expectEqual(store.radioOffsetCount, 1, "电台校正: 计数跟着走")
+
+        // 不是电台时这一层压根不参与 —— 这是整个需求的要害:正常播放这首歌本来是准的。
+        expectEqual(store.effectiveOffset(forKey: track), 0,
+                    "电台校正: 不传 radioKey(= 正常播放)时完全不生效")
+        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 1500,
+                    "电台校正: 放电台时才加进来")
+
+        // 跟另外两层是相加,不是二选一(两者成因不同,同一首歌可能两样都占)。
+        store.setGlobalOffset(300)
+        store.nudge(by: -100, forKey: track, pinKey: "")
+        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 300 - 100 + 1500,
+                    "电台校正: 全局 + 单曲 + 电台三层相加")
+        expectEqual(store.effectiveOffset(forKey: track), 300 - 100,
+                    "电台校正: 同一首歌正常播放时仍然只有前两层")
+
+        // 归零不落盘,跟另外两层同一个约定。
+        store.setRadioOffset(0, forKey: keyA)
+        expectEqual(store.radioOffsetCount, 0, "电台校正: 归零 = 撤掉这条记录,不是留一个 0")
+
+        // 清空只清自己这一层。
+        store.nudgeRadio(by: 800, forKey: keyA)
+        store.clearAllRadioOffsets()
+        expectEqual(store.radioOffset(forKey: keyA), 0, "电台校正: 清空生效")
+        expectEqual(store.globalOffsetMs, 300, "电台校正: 绝不连带清掉全局基准")
+        expectEqual(store.offset(forKey: track), -100, "电台校正: 也绝不连带清掉单曲那层")
+
+        // 收尾
+        store.setGlobalOffset(0)
+        store.reset(forKey: track, pinKey: "")
+    }
 }

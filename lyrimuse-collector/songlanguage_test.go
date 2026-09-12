@@ -27,7 +27,7 @@ func TestTitleVersionTagsCantoneseMandarin(t *testing.T) {
 		{"Mau U So(国)", []string{"国语"}},
 		// 单字形态只认整段就是这一个字:「(国际版)」「(中国之星现场)」不是语种声明。
 		{"Song (国际版)", nil},
-		{"Song (中国之星现场)", []string{"现场"}},
+		{"Song (中国之星现场)", []string{"live"}}, // 「现场」折成 live 键(2026-09-11)
 		// 假阳性陷阱:限定词只在括号/破折号段里找,裸标题不该被误判。
 		{"国语老歌精选", nil},
 		{"粤语金曲", nil},

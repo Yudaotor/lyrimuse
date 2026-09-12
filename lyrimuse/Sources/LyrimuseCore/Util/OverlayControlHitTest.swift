@@ -42,8 +42,26 @@ public enum OverlayControlHitTest {
     /// (2026-08-23 用户报的「移动之后按钮会失效」)。
     ///
     /// 修法是**只存窗口本地坐标**、判定时把鼠标点转进来 —— 窗口本地坐标不随窗口移动改变。
-    public static func windowLocalRect(swiftUI rect: CGRect, windowHeight: CGFloat) -> CGRect {
-        CGRect(x: rect.minX, y: windowHeight - rect.maxY, width: rect.width, height: rect.height)
+    ///
+    /// `contentTopInset`(2026-09-11,位置预设「底部居中」引入):内容块顶边离窗口顶边多远。
+    /// 上报的矩形都是**内容块自己**的坐标空间(`overlayContent`,原点在内容块左上角),原来
+    /// 直接拿 `windowHeight - rect.maxY` 换算,隐含"内容块顶边 == 窗口顶边"—— 内容贴顶时成立
+    /// (见 `LyricsOverlayView` 根部那条 `.frame(alignment:)` 的注释),内容贴底时内容块顶边在
+    /// 窗口顶边下方 `windowHeight - contentHeight`,不扣掉的话整排按钮的命中区会整体上偏这么多。
+    /// 默认 0 = 原口径,既有调用点一个字不用改。
+    public static func windowLocalRect(
+        swiftUI rect: CGRect, windowHeight: CGFloat, contentTopInset: CGFloat = 0
+    ) -> CGRect {
+        CGRect(x: rect.minX, y: windowHeight - contentTopInset - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// 内容块顶边离窗口顶边多远(给上面那个换算用)。贴顶恒为 0;贴底 = 窗高 − 内容高(内容比
+    /// 窗还高、被顶部裁掉时为负 —— SwiftUI 的 `.frame(alignment: .bottom)` 对超高的子视图正是
+    /// 对齐底边、从顶上溢出,负值换算出来的位置才是真的)。
+    public static func contentTopInset(
+        anchorsBottom: Bool, windowHeight: CGFloat, contentHeight: CGFloat
+    ) -> CGFloat {
+        anchorsBottom ? windowHeight - contentHeight : 0
     }
 
     public static func control(
@@ -53,5 +71,28 @@ public enum OverlayControlHitTest {
             .filter { $0.value.contains(point) }
             .min { $0.value.width * $0.value.height < $1.value.width * $1.value.height }?
             .key
+    }
+
+    /// 指针此刻**该高亮哪一颗**按钮(2026-09-11,用户:「悬浮歌词这上面的按钮帮我开一个鼠标
+    /// 移上去有交互的动效视觉 ux 效果」)。nil = 不高亮任何一颗。
+    ///
+    /// 跟 `control(at:in:)` 分成两个函数,因为它们回答的是两个问题:那个是"这一下点击该派给
+    /// 谁"(点击本来就只在按钮显示时才分发,调用点自己守着可见性);这个是"现在该把哪一颗画亮",
+    /// 会在**每一次鼠标移动**上求值,所以可见性必须由它自己兜住 —— 画亮一颗其实没显示的按钮
+    /// 是"看得见的 bug",画错方向比少画更糟。
+    ///
+    /// 两道闸:
+    ///  ① 指针不在窗口里就不高亮。窗口常年点击穿透,监听器是**全局**的,指针早跑到别的 App
+    ///     上去了照样有事件进来;只比矩形的话,窗口边上那颗按钮会在指针离开之后一直亮着。
+    ///  ② 锁定态只认 `unlockPill`。那一格此刻只画得出解锁这一颗(见 `LyricsOverlayView`
+    ///     的 `unlockPill` / `playbackControls` 两个分支),别的矩形要么压根没上报、要么是上
+    ///     一轮布局的残留 —— 残留矩形亮起来就是"高亮浮在一颗看不见的按钮上"。
+    public static func hoveredControl(
+        at point: CGPoint, in rects: [OverlayControlID: CGRect],
+        insideWindow: Bool, positionLocked: Bool
+    ) -> OverlayControlID? {
+        guard insideWindow, let id = control(at: point, in: rects) else { return nil }
+        if positionLocked && id != .unlockPill { return nil }
+        return id
     }
 }

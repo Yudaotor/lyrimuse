@@ -360,6 +360,41 @@ func runLyricsParsingTests() {
         expectEqual(LyricsPreviewText.forPreview("[ti:]\n[ar:]\n"), "", "预览: 整份只有元信息 → 空")
     }
 
+    // ---- LyricsBodyEdit(2026-09-12) ----
+    //
+    // 「歌词管理」详情页「歌词(LRC)」编辑框只显示正文,但保存时被摘掉的行一行都不能丢(`[offset:]` 有人消费)。
+    // 用户圈图那首(宇多田光《One Last Kiss》,QQ 源)的真实形状:十行元信息标签 + 「曲名 - 歌手」+「词:」「曲:」三行署名。
+    do {
+        let raw = "[id:$00000000]\n[ar:宇多田光 (宇多田ヒカル)]\n[ti:One Last Kiss (最后一吻)]\n[by:]\n[hash:]\n[al:One Last Kiss]\n[sign:]\n[qq:]\n[total:0]\n[offset:0]\n[00:00.00]One Last Kiss - 宇多田光 (宇多田ヒカル)\n[00:09.57]词: 宇多田ヒカル\n[00:14.67]曲: 宇多田ヒカル\n[00:20.69]初めてのルーブルは\n[00:23.01]なんてことはなかったわ\n[03:00.00]词: 宇多田ヒカル\n"
+        let edit = LyricsBodyEdit(lyrics: raw, title: "One Last Kiss", artist: "宇多田光")
+        expectEqual(edit.body, "[00:20.69]初めてのルーブルは\n[00:23.01]なんてことはなかったわ", "正文编辑: 元信息标签 + 开头「曲名 - 歌手」/ 词 / 曲 署名全部摘掉,只剩正文")
+        expectEqual(edit.hiddenPrefix.count, 13, "正文编辑: 第一条正文之前的 13 行原样留底(10 标签 + 3 署名)")
+        expectEqual(edit.hiddenPrefix.first ?? "", "[id:$00000000]", "正文编辑: 留底原序 —— 首行")
+        expectEqual(edit.hiddenPrefix.last ?? "", "[00:14.67]曲: 宇多田ヒカル", "正文编辑: 留底原序 —— 末行")
+        expectEqual(edit.hiddenSuffix, ["[03:00.00]词: 宇多田ヒカル"], "正文编辑: 正文之后的署名留底到后缀")
+        expectEqual(edit.reassembled(body: edit.body), raw, "正文编辑: 没改过 → 原文一字不动(指纹 / 脏判定不受影响)")
+        expectEqual(
+            edit.reassembled(body: "[00:20.69]改过的第一句\n[00:23.01]なんてことはなかったわ"),
+            "[id:$00000000]\n[ar:宇多田光 (宇多田ヒカル)]\n[ti:One Last Kiss (最后一吻)]\n[by:]\n[hash:]\n[al:One Last Kiss]\n[sign:]\n[qq:]\n[total:0]\n[offset:0]\n[00:00.00]One Last Kiss - 宇多田光 (宇多田ヒカル)\n[00:09.57]词: 宇多田ヒカル\n[00:14.67]曲: 宇多田ヒカル\n[00:20.69]改过的第一句\n[00:23.01]なんてことはなかったわ\n[03:00.00]词: 宇多田ヒカル\n",
+            "正文编辑: 改过 → 前缀 + 新正文 + 后缀,offset 等标签不丢,尾部换行保留"
+        )
+        // 用户在正文里加空行 / 删行也照样拼回去,不做任何归一。
+        expectEqual(
+            LyricsBodyEdit(lyrics: "[offset:0]\n[00:01.00]a\n[00:02.00]b").reassembled(body: "[00:01.00]a\n\n[00:02.00]b"),
+            "[offset:0]\n[00:01.00]a\n\n[00:02.00]b",
+            "正文编辑: 正文里新加的空行原样保留,原文不以换行收尾就不补"
+        )
+        expectEqual(LyricsBodyEdit(lyrics: "").body, "", "正文编辑: 空输入")
+        expectEqual(LyricsBodyEdit(lyrics: "").reassembled(body: ""), "", "正文编辑: 空输入拼回仍为空")
+        expectEqual(LyricsBodyEdit(lyrics: "[00:20.50]a\n[00:24.25]b").body, "[00:20.50]a\n[00:24.25]b", "正文编辑: 没有可摘的行时正文 = 原文")
+        // 跟预览同一套判据 —— 两处必须同源。
+        expectEqual(LyricsPreviewText.forPreview(raw, title: "One Last Kiss", artist: "宇多田光"), edit.body, "正文编辑: 与预览框摘的行完全一致")
+        // 纯元信息 → 正文为空,全部留底在前缀,拼回空正文 = 原文。
+        let metaOnly = LyricsBodyEdit(lyrics: "[ti:]\n[ar:]\n")
+        expectEqual(metaOnly.body, "", "正文编辑: 整份只有元信息 → 正文空")
+        expectEqual(metaOnly.reassembled(body: ""), "[ti:]\n[ar:]\n", "正文编辑: 整份只有元信息 → 拼回原文")
+    }
+
     // ---- LyricsQueryFieldLayout(2026-09-04) ----
     //
     // 「搜索候选歌词」那排查询词输入框按内容长度分宽。三条规则各钉边界。

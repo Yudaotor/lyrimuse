@@ -112,7 +112,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
 	// isNewTrack 传 false:这里只是再查一次已经解析好的缓存(或触发首次解析),不是
 	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false)
+	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
@@ -179,9 +179,10 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// (那份缓存的键是归一后的名字,给榜单用的)。Last.fm 侧则根本没有艺人 mbid 字段
 	// (它的 mbid 参数是 **Track** ID),所以对 Last.fm 而言"原样上送"就是唯一正解。
 	return lbTrackMeta{
-		ArtistName:     s.Artist,
-		TrackName:      s.Title,
-		ReleaseName:    s.Album,
+		ArtistName: s.Artist,
+		TrackName:  s.Title,
+		// 播放器没报专辑名时用 Apple 目录回填的(snapshot.albumForUpload,2026-09-08);报了就原样。
+		ReleaseName:    s.albumForUpload(),
 		AdditionalInfo: info,
 	}
 }

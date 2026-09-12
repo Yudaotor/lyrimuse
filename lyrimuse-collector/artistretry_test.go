@@ -58,9 +58,26 @@ func withCachedMBAliases(t *testing.T, entries map[string][]string) {
 	})
 }
 
+// 把 enrich 缓存换成指定内容(不传就是空),隔离 retryArtistIdentities 的第四个数据源
+// ——learnedSourceArtistAlias(2026-09-09 加,从本机同一歌手的成功条目里学源侧署名)。
+// 不隔离的话这些测试会依赖执行顺序:同包别的测试往 enrichCache 里塞过什么,这里就多出
+// 什么候选;而真机上跑测试更是会读到用户的真实缓存。`SkipsOriginalName` 那条尤其明显
+// ——它断言 "Prince" 返回空,而缓存里只要有一条 `Prince|…` 的成功条目就不成立了。
+// 用完恢复原样,别污染同包的其它测试。
+func withEnrichCache(t *testing.T, m map[string]enrichEntry) {
+	t.Helper()
+	saved := enrichCache
+	t.Cleanup(func() { enrichCache = saved })
+	if m == nil {
+		m = map[string]enrichEntry{}
+	}
+	enrichCache = m
+}
+
 // 核心缺陷：MusicBrainz 查到的中文名以前只写进 CanonicalArtist 这个展示字段，
 // 从不拿回去当检索词用。零候选重试唯一的备选身份是那张 5 条的手工表。
 func TestRetryArtistIdentitiesUsesMusicBrainzName(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Faye Wong": "王菲"})
 	withCachedMBAliases(t, map[string][]string{"Faye Wong": nil})
 	withCachedQQArtistNames(t, map[string]string{"Faye Wong": ""})
@@ -73,6 +90,7 @@ func TestRetryArtistIdentitiesUsesMusicBrainzName(t *testing.T) {
 
 // 三个来源给出同一个名字时只搜一遍。
 func TestRetryArtistIdentitiesDedupes(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"david tao": "陶喆"})
 	withCachedMBAliases(t, map[string][]string{"david tao": {"陶喆"}})
 	withCachedQQArtistNames(t, map[string]string{"david tao": "陶喆"})
@@ -89,6 +107,7 @@ func TestRetryArtistIdentitiesDedupes(t *testing.T) {
 // 更难查。"david tao" 是手工表里确实登记过的真实条目(对应"陶喆"),这里故意验证它
 // **不再**出现——三个来源都显式缓存成查空,隔离掉真实网络请求。
 func TestRetryArtistIdentitiesDoesNotFallBackToHandTable(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"david tao": ""}) // canonicalArtistViaMusicBrainz 查空
 	withCachedMBAliases(t, map[string][]string{"david tao": nil})
 	withCachedQQArtistNames(t, map[string]string{"david tao": ""})
@@ -100,6 +119,7 @@ func TestRetryArtistIdentitiesDoesNotFallBackToHandTable(t *testing.T) {
 
 // 别名跟原名实际是同一个（只差大小写/空格）时不该重试——那是拿同样的词再查一遍。
 func TestRetryArtistIdentitiesSkipsOriginalName(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Prince": "  prince  "})
 	withCachedMBAliases(t, map[string][]string{"Prince": nil})
 	withCachedQQArtistNames(t, map[string]string{"Prince": ""})
@@ -113,6 +133,7 @@ func TestRetryArtistIdentitiesSkipsOriginalName(t *testing.T) {
 // 手工表也没有对应项。musicBrainzArtistAliases 缓存命中("某个没登记过的歌手"确实
 // 不存在，模拟一次真实查询查空后的缓存状态),所以列表是空的。
 func TestRetryArtistIdentitiesEmptyForUnknownChineseArtist(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedMBAliases(t, map[string][]string{"某个没登记过的歌手": nil})
 	if got := retryArtistIdentities(context.Background(), "某个没登记过的歌手"); len(got) != 0 {
 		t.Fatalf("没有任何备选身份时应为空, got %v", got)
@@ -123,6 +144,7 @@ func TestRetryArtistIdentitiesEmptyForUnknownChineseArtist(t *testing.T) {
 // 查空时,QQ 歌手搜索建议应该能顶上,成为重试列表里唯一的候选(那英真实案例:MusicBrainz
 // 对"Na Ying"排第一的是查不到中文别名的结果,QQ 反而查得到"那英")。
 func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
+	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Na Ying": ""})
 	withCachedMBAliases(t, map[string][]string{"Na Ying": nil})
 	withCachedQQArtistNames(t, map[string]string{"Na Ying": "那英"})
@@ -142,6 +164,7 @@ func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 // "Khalil Fong"，不依赖任何手工登记。命中 MusicBrainz 的真实数据、发起真实网络请求
 // (跟同文件里 TestRetryArtistIdentitiesUsesMusicBrainzName 等测试同一个前提)。
 func TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection(t *testing.T) {
+	withEnrichCache(t, nil)
 	const artist = "方大同"
 	hit := func() bool {
 		for _, s := range retryArtistIdentities(context.Background(), artist) {
@@ -244,5 +267,23 @@ func TestHasUsableLyricCandidate(t *testing.T) {
 		if got := hasUsableLyricCandidate(c.in); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// 第四条来源接进来了没有:三条在线来源全查空(「王子」在真实 MusicBrainz / QQ 上就是
+// 这个下场,见 learnedSourceArtistAlias 头注里的实测),本机缓存里同一歌手的成功条目
+// 却明明白白写着源那边署 "Prince" —— 这一条必须能救回来,否则《1999 (Edit)》那类
+// "播放器把歌手名本地化了"的歌永远搜不到词。
+func TestRetryArtistIdentitiesLearnsFromLocalCache(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),
+	})
+	withCachedAliases(t, map[string]string{"王子": ""})
+	withCachedMBAliases(t, map[string][]string{"王子": nil})
+	withCachedQQArtistNames(t, map[string]string{"王子": ""})
+
+	got := retryArtistIdentities(context.Background(), "王子")
+	if len(got) != 1 || got[0] != "Prince" {
+		t.Fatalf(`retryArtistIdentities("王子") = %v, want ["Prince"]`, got)
 	}
 }

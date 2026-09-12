@@ -21,6 +21,8 @@ public enum LyricsLineDisplay: Equatable, Sendable {
     /// 只有整行文本(行级 LRC,没有逐字数据)。
     case plain
     case adBreak
+    /// 电台口白 / 台卡(2026-09-11):这一刻在放的不是歌。语义与 adBreak 平行,顺序也挨着它。
+    case radioTalk
     case instrumental
     case noLyrics
     case networkDown
@@ -33,6 +35,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         hasWordTiming: Bool,
         hasCurrentLine: Bool,
         isAdBreak: Bool,
+        isRadioTalk: Bool,
         isInstrumental: Bool,
         hasNoLyrics: Bool,
         networkDown: Bool,
@@ -42,6 +45,10 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         // 有词就直接唱 —— 排在所有状态之前,跟另外三处一致。
         if hasWordTiming { return .words }
         if isAdBreak { return .adBreak }
+        // 电台口白 / 台卡:跟广告同一个理由必须排在 searching 之前 —— 那段元数据还停在上一首(口白)
+        // 或者压根不是歌(台卡),歌词永远不会有下文,不拦就一直显示「搜索歌词中…」。
+        // 用户 2026-09-11 在歌词窗口上报过这个(截图里正是开台那几十秒还在转圈搜)。
+        if isRadioTalk { return .radioTalk }
         if isInstrumental { return .instrumental }
         if hasNoLyrics { return .noLyrics }
         if networkDown, !hasLyricsContent { return .networkDown }

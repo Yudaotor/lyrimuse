@@ -44,13 +44,39 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "次数用尽:不为一次规则升级无限重搜",
-			e:    func() enrichEntry { e := stale; e.LyricsRescoreCount = lyricsRescoreMaxAttempts; return e }(),
+			name: "本版次数用尽:不为一次规则升级无限重搜",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount, e.LyricsRescoreVersion = lyricsRescoreMaxAttempts, lyricsScoringVersion
+				return e
+			}(),
 			want: false,
 		},
 		{
-			name: "差一次到上限:还重选",
-			e:    func() enrichEntry { e := stale; e.LyricsRescoreCount = lyricsRescoreMaxAttempts - 1; return e }(),
+			name: "本版差一次到上限:还重选",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount, e.LyricsRescoreVersion = lyricsRescoreMaxAttempts-1, lyricsScoringVersion
+				return e
+			}(),
+			want: true,
+		},
+		{
+			// 2026-09-13:此前 LyricsRescoreCount 是终身上限,打分版本 6 天连升三次(15→17→18)后
+			// 本机 37 条已被永久冻结、112 条只剩一次。上限改成按版本计:旧版本下用掉的次数不算。
+			name: "次数是旧版本下用掉的:版本再升就解冻(上限按版本计,不是终身)",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount, e.LyricsRescoreVersion = lyricsRescoreMaxAttempts, lyricsScoringVersion-1
+				return e
+			}(),
+			want: true,
+		},
+		{
+			// 老条目没有 lyrics_rescore_version 字段(读成 0),哪怕计数早已超过上限(本机有 2 条计到 4,
+			// 来自 resync-lyrics 子命令不过上限闸)也视同清零 —— 已冻结的那批不需要迁移就自动解冻。
+			name: "老条目没记尝试针对的版本、计数超上限:也解冻",
+			e:    func() enrichEntry { e := stale; e.LyricsRescoreCount = lyricsRescoreMaxAttempts + 1; return e }(),
 			want: true,
 		},
 		{
@@ -59,20 +85,34 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "刚尝试过:等间隔到了再来(不然一秒内就把次数烧光,全烧在同一个网络时机上)",
+			name: "本版刚尝试过:等间隔到了再来(不然一秒内就把次数烧光,全烧在同一个网络时机上)",
 			e: func() enrichEntry {
 				e := stale
 				e.LyricsRescoreCount, e.LyricsRescoreTS = 1, time.Now().Unix()
+				e.LyricsRescoreVersion = lyricsScoringVersion
 				return e
 			}(),
 			want: false,
 		},
 		{
-			name: "间隔已过:再试一次",
+			name: "本版间隔已过:再试一次",
 			e: func() enrichEntry {
 				e := stale
 				e.LyricsRescoreCount = 1
 				e.LyricsRescoreTS = time.Now().Unix() - int64(lyricsRescoreDeferInterval/time.Second) - 1
+				e.LyricsRescoreVersion = lyricsScoringVersion
+				return e
+			}(),
+			want: true,
+		},
+		{
+			// 版本刚升、本版还一次没试:不套节流,跟原来"第一次尝试没有时间门槛"同义。第二次进来时
+			// rescoreLyrics 已把版本对齐,上面"本版刚尝试过"那条闸照常生效,同一秒连烧两次的老坑不会回来。
+			name: "旧版本下刚尝试过(还在节流窗口内):版本一升第一次不套节流",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount, e.LyricsRescoreTS = 1, time.Now().Unix()
+				e.LyricsRescoreVersion = lyricsScoringVersion - 1
 				return e
 			}(),
 			want: true,

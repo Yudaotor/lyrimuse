@@ -207,7 +207,7 @@ func (p *poller) settleLastfmPending(s *playSession) bool {
 	}
 	l := s.lastfmPending
 	s.lastfmPending, s.lastfmSettled = nil, true
-	p.mirrorScrobbleTracked(l.artistName, l.meta.Title, l.meta.Album, l.startedAt, l.meta.Artist, l.meta.Duration)
+	p.mirrorScrobbleTracked(l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration)
 	// 本地收听日志:**只在没有在往 Last.fm 提交时**才记(见 appendListen 的注释)。
 	//
 	// ⚠️ 这一段原来的注释写的是"**无条件**记一笔,不看任何账号配没配",而紧跟着的就是
@@ -215,7 +215,7 @@ func (p *poller) settleLastfmPending(s *playSession) bool {
 	// 被塞在末尾当补充。2026-08-30 通盘梳理时坐实这确实误导过判断(照字面读会以为镜像
 	// 失败时本地还有一份兜底,实际没有,那正是那次数据丢失能瞒住这么久的原因之一)。
 	if p.lfm == nil {
-		appendListen(l.meta.Artist, l.meta.Title, l.meta.Album, l.startedAt, l.meta.Duration)
+		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
 	}
 	return true
 }
@@ -228,9 +228,9 @@ func (p *poller) settleLastfmPendingSync(ctx context.Context, s *playSession) {
 	}
 	l := s.lastfmPending
 	s.lastfmPending, s.lastfmSettled = nil, true
-	p.mirrorScrobbleSync(ctx, l.artistName, l.meta.Title, l.meta.Album, l.startedAt, l.meta.Artist, l.meta.Duration)
+	p.mirrorScrobbleSync(ctx, l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration)
 	if p.lfm == nil {
-		appendListen(l.meta.Artist, l.meta.Title, l.meta.Album, l.startedAt, l.meta.Duration)
+		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
 	}
 }
 
@@ -847,16 +847,16 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)
 		payload = relayState(p.cur, true, "mac", 0, true)
-		key = "mac|" + p.cur.key()
+		key = "mac|" + p.cur.key() + relayAlbumHintSuffix(p.cur)
 	case iphonePlaying: // iPhone(经 Last.fm 桥接)正在放
 		payload = relayState(p.remoteTrack, true, "iphone", 0, true)
 		key = "ip|" + p.remoteTrack.key()
 	case macHasTrack: // Mac 有当前曲目但暂停 → 显示暂停态,让位给 iPhone 正在放
 		payload = relayState(p.cur, false, "mac", 0, true) // 暂停但仍是 Mac 界面上此刻的曲目,current=true
-		key = "macpause|" + p.cur.key()
+		key = "macpause|" + p.cur.key() + relayAlbumHintSuffix(p.cur)
 	case p.lastListen.key() != "":
 		payload = relayState(p.lastListen, false, p.lastListenDev, p.lastListenAt, false) // 纯历史,current=false
-		key = "last|" + p.lastListen.key()
+		key = "last|" + p.lastListen.key() + relayAlbumHintSuffix(p.lastListen)
 	default:
 		payload = map[string]any{"ok": true, "empty": true, "playing": false}
 		key = "empty"
@@ -909,6 +909,26 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 // 空闲时"上次播放"显示 + pushRelayState 兜底态用。
 func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
 	p.lastListen, p.lastListenAt, p.lastListenDev = s, listenedAt, device
+}
+
+// albumHintFor:这条快照要不要、能不能补一个 Apple 目录反查的专辑名(2026-09-08,见 albumhint.go 头注)。
+// 已经有专辑名的不动;广告不查 —— Spotify 原生广告的形状恰好就是 album 为空,拿广告标题去 iTunes 搜只会白烧
+// 请求。appleAlbumHint 只读缓存、没命中就后台补取,这一拍先按现状走;旁证(lyricResolvedArtists)每拍重读,
+// 歌词晚几秒解析出来、回填就晚几秒出现。
+func (p *poller) albumHintFor(s snapshot) string {
+	if s.Album != "" || s.Title == "" || s.Artist == "" || isAdBreak(s.Bundle, s.Artist, s.Title, s.Album) {
+		return ""
+	}
+	return appleAlbumHint(p.ctx, s.Artist, s.Title, s.Duration, lyricResolvedArtists(s.Artist, s.Title, s.Album))
+}
+
+// relayAlbumHintSuffix:Apple 目录回填的专辑名到位后(通常比换歌晚一拍),同一首歌的 relay 负载里 album 会从空
+// 变有 —— 跟封面那个 `|c` 一样并进去重 key,触发一次补推;否则 key 没变会被吞、网页要等 4 分钟心跳才看到专辑。
+func relayAlbumHintSuffix(s snapshot) string {
+	if s.Album == "" && s.AlbumHint != "" {
+		return "|a"
+	}
+	return ""
 }
 
 // submitOutcome/announceOutcome 是后台 goroutine 提交完成后、经 channel 送回单一
@@ -1095,7 +1115,8 @@ func (p *poller) announce(now time.Time, why string) {
 	// 标签。原注释描述的是那次替换(为了解决"方大同/Khalil Fong 在 Last.fm 分裂"),
 	// 现在那个问题改由**显示/统计层**归并解决,上送层只如实记录 —— 完整依据见 lb.go
 	// 里 lbMeta 那段(Last.fm 官方反对自动套用纠正 / 业界无一默认这么做 / 实测有真错)。
-	artist, title, album := m.ArtistName, p.cur.Title, p.cur.Album
+	// album 走 albumForUpload:播放器没报专辑名时用 Apple 目录回填的那个(2026-09-08),报了就原样。
+	artist, title, album := m.ArtistName, p.cur.Title, p.cur.albumForUpload()
 	// 跟 artist/title/album 一样在**闭包外**取值:下面那个 goroutine 直接读 p.cur 就是
 	// 跨 goroutine 读 poller 状态,违反"所有状态只在 poll 主循环里碰"那条不变量。
 	durationSecs := p.cur.Duration
@@ -1132,6 +1153,27 @@ func (p *poller) announce(now time.Time, why string) {
 func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	key := p.cur.key()
 	isMusic := p.isTracked()
+	// 专辑回填通常比换歌晚一拍到(见 albumHintFor):同一首歌的会话元数据跟着补上,这样到点提交的
+	// Last.fm scrobble / 本地收听日志(它们用的是会话开始时那份 meta)也带上专辑。
+	if p.sess != nil && p.sess.key == key && p.sess.meta.AlbumHint == "" && p.cur.AlbumHint != "" {
+		p.sess.meta.AlbumHint = p.cur.AlbumHint
+	}
+	// 电台真曲长同样比会话起点晚到,补同一份 meta(2026-09-11,修 borrowAppleScriptPosition
+	// 那道闸之后剩下的第二道)。电台的 duration 只有 Apple 目录知道(快照自己报的是整档节目,
+	// 实测 7074.538s),而目录锚点是**异步**的:实测 Dolly Parton《Dumb Blonde》会话 20:15:45.030
+	// 建立、目录 20:15:49.740 才给出 150.447s,晚 4.7 秒。sess.meta 是会话创建那一刻的快照,
+	// 不补的话 listenThreshold 拿到的是 0 → 退回 240s 上限 → 电台曲目(普遍 2~4 分钟)永远够不着,
+	// 一条收听都提交不了 —— 跟 radioduration.go 头注里"条目落盘那一拍目录还没命中"是同一个异步坑,
+	// 只是那边补的是歌词缓存的时长、这边补的是打卡阈值的分母。
+	//
+	// 只填空缺、不覆盖已有值(同上面专辑回填的规则):有值就说明会话起点那一拍已经拿到了权威时长。
+	// **只对电台生效**:非电台时 p.cur.Duration 来自播放器自己,而 media-control 在换曲预载窗口
+	// 里会把**下一首**的时长拼进当前曲目(见 enrich.go 的 observeWrongDuration),拿那种脏值回填
+	// 等于把一个错的分母钉死一整首歌;电台这一路的 duration 只可能来自过了自校验的目录锚点。
+	if p.sess != nil && needsRadioDurationBackfill(p.sess.key == key, p.cur.Radio,
+		p.sess.meta.Duration, p.cur.Duration) {
+		p.sess.meta.Duration = p.cur.Duration
+	}
 
 	// Player quit or another app took over: finalize and drop the session.
 	if !isMusic {
@@ -1171,7 +1213,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -1194,7 +1236,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.isAd = p.detectAdAtSessionStart()
 		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
 			p.announce(now, "loop restart")
 		} else {
 			p.sess.pnPending = true
@@ -1218,7 +1260,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// isNewTrack 传 false:这是同一个 session 里等 enrich 完成的轮询重试,不是新曲目
 		// 开始播放的那一刻,不该再问一次 media-control 要设备封面(那一刻已经在上面
 		// "New track" 分支问过了)。
-		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false)) > 0
+		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false, p.cur.Radio)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
@@ -1300,9 +1342,22 @@ func (p *poller) bridge(now time.Time) {
 	}
 	localPlaying := p.cur.Playing && p.isTracked()
 	due := now.Sub(p.lastfmCheckedAt) >= lastfmFeedInterval(localPlaying, p.feedActivityAt, now)
-	// 三个触发源任一成立就拉:到周期、进程内提前拉(镜像 scrobble 刚成功)、跨进程信号文件
-	// (回填子命令刚补进一批,见 lastfmFeedNudgePath)。
-	if !due && !lastfmFeedNudgeDue(now) && !lastfmFeedNudgeFileDue() {
+	// 跨进程信号文件(回填子命令刚补进一批,见 lastfmFeedNudgePath):**消费掉,但不当场拉**,
+	// 改成排一个延迟拉取。理由跟 requestLastfmFeedRefresh 头注是同一条 —— Last.fm 把刚收到的
+	// scrobble 并进 recenttracks 要一两秒,立刻拉多半还看不到。
+	//
+	// ⚠️ 当场拉的代价不止"这一次白拉"(2026-09-12 用户**第三次**报「补提交之后下面的列表没
+	// 刷新」的根因,前两次修在别处):拉回来的是旧内容,却照样把 feed 的 fetchedAt 刷成此刻,
+	// 于是 App 侧那道兜底强刷(ScrobbleBackfillService 在 accepted > 0 之后 8 秒发、判据是
+	// LastfmStatsService.feedIsFresh → LastfmRecentFeed.isFresh,fetchedAt 在 180 s 窗口内)
+	// **永远判"新鲜"、永远不触发** —— 而 feed 只要 collector 活着就每 60 s 心跳重写一次
+	// (feedHeartbeat),fetchedAt 跟内容有没有变没关系。两头一叠,用户只能干等下一个
+	// 15 s/60 s 周期。镜像 scrobble 那条路径从一开始就是延迟 5 秒的,这里跟它对齐。
+	if lastfmFeedNudgeFileDue() {
+		requestLastfmFeedRefresh(backfillFeedNudgeDelay)
+	}
+	// 两个触发源任一成立就拉:到周期、提前拉到期(镜像 scrobble / 回填,两者都带延迟)。
+	if !due && !lastfmFeedNudgeDue(now) {
 		return
 	}
 	p.lastfmCheckedAt = now
@@ -1474,6 +1529,39 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // source. `media-control get` also intermittently returns "null" while a
 // track is playing; treat a lone null as a glitch (keep the last state), and
 // only declare playback stopped after a few consecutive nulls.
+// borrowAppleScriptPosition 判「这一拍要不要再问一次 Music.app 要精确播放头」(纯函数,单测钉住)。
+//
+// ⚠️ **电台一律不借**(2026-09-11 修,用户报「电台听的歌都没记到 Last.fm」)。Swift 侧
+// `MediaControlClient.refinedAppleMusicSnapshotIfNeeded` 2026-09-10 就加了同义的一道闸
+// (`guard snapshot.isRadio != true else { return snapshot }`),collector 是独立实现,那次**没跟过来** ——
+// 正是 02 章 537 行警告过的「改一边只修一半」,只是上次方向相反(只改了采集器、悬浮窗还是慢)。
+//
+// 电台上 `player position` 报的是**整档节目**走了多少(实测同一档 4005.696s),不是这首歌的位置。
+// 借过来会把 poll() 上面 applyRadioClock 刚换好的那块单曲表整个覆盖回去,而覆盖是直接写
+// `p.trackPos` 的(为了让下一拍从校准值续算,见下面那段 2026-08-04 的注释)。后果是一条完整的链:
+//
+//	整档位置写进 trackPos → 下一拍 prevTrackPos 是几千秒、曲长却是一百多秒
+//	→「上一拍已过 90%、这一拍越过曲尾」的单曲循环判定必然成立(loopRestart)
+//	→ handle() 走 loopRestart 分支:finalize 当前会话 + 新建一个 playSession,playedSecs 归零
+//	→ 每一拍都这样,已播时长永远涨不过一拍
+//	→ 到不了 listenThreshold(曲长的一半),**一条收听都提交不了**
+//
+// 实测(2026-09-10 那 4.5 小时电台):`loop restart` 2397 次,单曲最高 145 次、每 5 秒一次贯穿整首;
+// 同期 `listen recorded` 只有 4 条。副作用还有 relay 每拍都当 reanchor 写一次(日志里 30 秒涨 8 个),
+// 按 5 秒一拍约 3200 次写 —— 正是 pushRelayState 注释里担心的「烧穿 1000 写/天」。
+//
+// 其余四个条件维持原样,理由见调用处那段长注释(没勾 Apple Music 就短路、别拿 Music.app 的位置
+// 盖掉别的播放器算对的值)。`tracked` 由调用方先算好传进来:isTracked() 是纯判断、无副作用。
+func borrowAppleScriptPosition(applePlayerSelected bool, bundle string, playing, tracked, radio bool) bool {
+	return applePlayerSelected && bundle == appleMusicBundleID && playing && tracked && !radio
+}
+
+// needsRadioDurationBackfill 判「这一拍要不要把电台的真曲长补进会话元数据」(纯函数,单测钉住)。
+// 语义、理由与四个条件各自防什么,见 handle() 里唯一那处调用点上方的注释。
+func needsRadioDurationBackfill(sameTrack, radio bool, sessionDuration, currentDuration float64) bool {
+	return sameTrack && radio && sessionDuration <= 0 && currentDuration > 0
+}
+
 func (p *poller) poll() {
 	// snapshotStale:这一轮 p.cur 是否还是上一轮的陈旧残留——getState 直接失败,或
 	// 瞬时 null 未达 3 连清空门槛时,p.cur 原样保留,但它的 Elapsed 已经落后墙钟一整拍,
@@ -1495,6 +1583,14 @@ func (p *poller) poll() {
 			// 因此是一份正常的单曲快照,一行也不用改。
 			// 这里还没到下面那句 now := time.Now(),差几微秒,对一块以秒计的表没有意义。
 			applyRadioClock(&p.cur, time.Now())
+			// 电台:目录查到的真曲长记成提示,条目下一次被读到时补进歌词缓存(见 radioduration.go)。
+			// 每拍都记 —— 换曲那一拍目录通常还没命中,几秒后才有值。
+			if p.cur.Radio {
+				noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+			}
+			// 播放器没报专辑名 → 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
+			// 挂在 AlbumHint 上、不动 Album:它只给呈现 / 上送用,见 snapshot.albumForUpload。
+			p.cur.AlbumHint = p.albumHintFor(p.cur)
 			p.snapshotStale = false
 		}
 	}
@@ -1519,8 +1615,8 @@ func (p *poller) poll() {
 	// 或者勾的是自动识别),按"这一轮观测到的 bundle 是不是恰好是 Apple Music"决定要不要
 	// 补这次 AppleScript 精确定位——跟改动前 playerAuto 分支的道理完全一样,只是现在
 	// 多选/自动识别共用同一条判断,不需要再分两个 case。
-	if features.Players[playerAppleMusic] && p.cur.Bundle == "com.apple.Music" &&
-		p.cur.Playing && p.isTracked() {
+	if borrowAppleScriptPosition(features.Players[playerAppleMusic], p.cur.Bundle,
+		p.cur.Playing, p.isTracked(), p.cur.Radio) {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			correctedAt := time.Now()
 			p.cur.Position, p.cur.AnchorTS = pos, correctedAt

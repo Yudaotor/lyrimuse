@@ -19,7 +19,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 /// 或者措辞改了,这里跟着改;别用会随语言变的词做判据。
 private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooling down"]
 
-// "联网搜索候选歌词"——参考 LyricsX 的 SearchLyricsViewController,但不在 Swift 这边
+// "联网搜索候选歌词"——形态是这类工具常见的双栏候选面板,但**不**在 Swift 这边
 // 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go collector 那份
 // 走样的实现)。改用一次性子进程调用 `collector search-lyrics`(collector/searchcli.go),
 // 复用 scoredLyricCandidates(collector/enrich.go)——跟自动解析路径完全同一份取分/排序

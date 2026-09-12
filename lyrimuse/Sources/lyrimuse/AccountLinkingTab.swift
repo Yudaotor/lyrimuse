@@ -176,7 +176,7 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
 // AccountDestination 这一种目的地需要"某个 case 换成自定义图片"这个分支,不该让通用的
 // iconBadge 也认识 AccountDestination。
 @ViewBuilder
-func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 22, cornerRadius: CGFloat = 6) -> some View {
+func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 20, cornerRadius: CGFloat = 5) -> some View {
     switch destination {
     case .listenBrainz:
         Image(nsImage: listenBrainzBadgeImage)
@@ -897,19 +897,65 @@ struct AccountLinkingTab: View {
     /// 出现条件本来就是 `eligible > 0`,pending == 0 永远进不来,是一直没人察觉的死代码。
     private func backfillStatusLine() -> String? {
         // 刚跑完就报这次的结果,比"还剩几条"更是用户此刻想知道的。
-        if let last = backfill.lastRun, last.accepted + last.ignored + last.quarantined > 0 {
-            var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
-            if last.quarantined > 0 {
-                parts.append(String(format: L10n.t("%@ 条状态未知，不会自动重试"), "\(last.quarantined)"))
-            }
-            if last.ignored > 0 {
-                parts.append(String(format: L10n.t("%@ 条被 Last.fm 拒绝"), "\(last.ignored)"))
-            }
-            return parts.joined(separator: "，")
-        }
+        if let result = backfillRunResultText() { return result }
         let tooOld = backfill.pending?.skippedTooOld ?? 0
         guard tooOld > 0 else { return nil }
         return String(format: L10n.t("另有 %@ 条太旧、Last.fm 不再接受"), "\(tooOld)")
+    }
+
+    /// 「补提交」跑完之后的那句结果。nil = 这一趟还没跑过。
+    ///
+    /// ⚠️ 这句话**必须在待补清单消失之后仍然显示**(2026-09-12 用户报「补提交之后没有反馈」)。
+    /// 它原来只长在 pendingListensRow 的副标题上,而那一行的出现条件是 `eligible > 0` ——
+    /// 于是**全部补成功**(eligible 归 0)恰恰成了唯一什么都看不到的情况:点一下,整行连同这
+    /// 句结果一起从界面上消失,跟没点过一样。补得越干净、反馈越少。
+    ///
+    /// 同源的另外两个洞一并堵上:
+    /// - 子进程压根没跑成(spawn 失败/非零退出/输出解不出来)时 `lastRun` 是 nil,以前一声不吭,
+    ///   现在靠 `lastRunFailed` 跟"还没跑过"区分开;
+    /// - `abortedReason` 从加进 Outcome 那天起就**没有任何显示面** —— 限流(29)、凭据失效、
+    ///   服务端拒收整批全走它,用户同样什么都看不到。
+    private func backfillRunResultText() -> String? {
+        if backfill.lastRunFailed { return L10n.t("补提交没能完成，请稍后再试") }
+        guard let last = backfill.lastRun else { return nil }
+        // 无条件先报「已补 N 条」,0 也报。用户要的是"我点的那一下到底发生了什么",
+        // 而"一条都没补上"同样是一个答案 —— 原来这里要求三项之和 > 0 才出声,
+        // 于是"什么都没发生"这种最需要解释的情况反而最安静。
+        var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
+        if last.quarantined > 0 {
+            parts.append(String(format: L10n.t("%@ 条状态未知，不会自动重试"), "\(last.quarantined)"))
+        }
+        if last.ignored > 0 {
+            parts.append(String(format: L10n.t("%@ 条被 Last.fm 拒绝"), "\(last.ignored)"))
+        }
+        if let reason = last.abortedReason, !reason.isEmpty {
+            parts.append(String(format: L10n.t("已中断：%@"), reason))
+        }
+        return parts.joined(separator: "，")
+    }
+
+    /// 补提交跑完、而待补清单已经空掉时的那一行。
+    ///
+    /// 只在清单消失之后才出现:清单还在的话同一句话由 pendingListensRow 的副标题给出,
+    /// 不把同一件事摆两遍(那正是 2026-08-18 合并掉「补提交历史收听」独立行的理由)。
+    @ViewBuilder
+    private func backfillResultRow(_ text: String) -> some View {
+        SettingsRawRow(insetToText: true,
+                       icon: backfill.lastRunFailed ? "exclamationmark.triangle" : "checkmark.circle") {
+            HStack(spacing: 6) {
+                Text(text)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button { backfill.dismissLastRun() } label: {
+                    // 锁拉丁语区,理由同 SettingsRawRow 里那处注释。
+                    Image(systemName: "xmark").environment(\.locale, Locale(identifier: "en"))
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .accessibilityLabel(L10n.t("关闭"))
+            }
+        }
     }
 
     @ViewBuilder
@@ -1159,9 +1205,19 @@ struct AccountLinkingTab: View {
             if (backfill.pending?.eligible ?? 0) > 0 {
                 CardDivider()
                 pendingListensRow
+            } else if let result = backfillRunResultText() {
+                // 清单空了 = 这一次把能补的都补上去了。这恰恰是最该说一句话的时刻,
+                // 而在此之前它是唯一一种一句话都没有的时刻(见 backfillRunResultText)。
+                CardDivider()
+                backfillResultRow(result)
             }
         }
-        .onAppear { backfill.refreshPending() }
+        .onAppear {
+            backfill.refreshPending()
+            // 上一趟留下的那句结果不跟着用户跑:重新进这一页不该还挂着"已补 12 条"。
+            // (跑完那一刻用户必然就在这一页上 —— 按钮就在这儿 —— 所以不会漏看。)
+            backfill.dismissLastRun()
+        }
         // 连接状态一变就重算:刚断开的那一刻要立刻列出本地已记的歌,刚连上的那一刻要立刻
         // 露出补提交那一行。只靠 .onAppear 的话,用户不离开这一页就什么都不会变。
         .onChange(of: lastfmConnected) { _, _ in backfill.refreshPending() }

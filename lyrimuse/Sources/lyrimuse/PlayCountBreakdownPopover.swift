@@ -265,8 +265,18 @@ struct PlayCountBreakdownPopover: View {
             // 刻意不在这里重复写法的歌名:色点对回上面的清单就够了,多一列字反而挤(2026-09-04 用户反馈)。
             Spacer(minLength: 8)
             if let album = p.album {
-                Text(album).font(.system(size: 10.5)).foregroundStyle(.quaternary).lineLimit(1)
-                    .frame(maxWidth: 150, alignment: .trailing)
+                // 字号/色跟上半段的专辑分组行、跟同行的次数与时刻取齐。原来是 10.5 + `.quaternary`:
+                // `.quaternary` 在这套界面里本是背景填充色,唯二的文字用法是「···」占位和「未取到」
+                // 这种刻意淡掉的态 —— 拿它显示真实内容,浅色模式下 10.5pt 几乎读不出来(2026-09-09
+                // 用户截图圈出这一列「根本看不清」)。
+                //
+                // 宽度 150 → 240:440 的框里这一行左侧固定只吃掉 14+64+8+35+8+8+14 ≈ 151,余量一直
+                // 在那儿闲着,而 150 把「The Best of Earth, Wind & Fire Vol. 1」这类精选集名截成
+                // 省略号 —— 同一张专辑的相邻两行长得一模一样,本来能一眼看出的"这两次同一张"反而
+                // 看不出来了。真正超长的仍会截,`help` 兜住全名。
+                Text(album).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .frame(maxWidth: 240, alignment: .trailing)
+                    .help(album)
             }
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)

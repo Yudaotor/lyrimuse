@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import LyrimuseCore
+import os
 
 /// 灵动岛的**窄订阅代理**(2026-08-19 性能审计落地,与悬浮歌词的 OverlayPlayback 同款
 /// 模式,那边的注释讲了完整机制,这里不重复):PlaybackCoordinator 36 个 @Published 灵动岛
@@ -50,9 +51,20 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var currentTrackHasNoLyrics = false
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
+    /// 电台口白(2026-09-11):这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
+    @Published private(set) var isRadioTalkBreak = false
+    @Published private(set) var radioStationName: String?
+    @Published private(set) var radioStationImage: NSImage?
+    /// 这条广告是插播里的第几条 / 一共几条(2026-09-09,用户要求「广告中,还剩几个广告」
+    /// 显示出来)。只有 YT Music 网页广告给得出;拿不到是 nil,那一段整个不画 —— 同
+    /// 「时长未知不画倒计时」那条纪律,不编数字。语义见 `LocalPlaybackSource.currentAdSlot`。
+    @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkImage: NSImage?
     @Published private(set) var highResArtworkImage: NSImage?
+    // ⚠️ **这里刻意没有 `motionCoverFile`**(2026-09-10 撤掉)。灵动岛这一面的封面只画静态图 ——
+    // 动态封面只留在歌词窗口那张 460pt 的大卡上。理由见 artworkThumbnail 上方那段。
+    // `PlaybackCoordinator.motionCoverFile` 本身还在(歌词窗口在用),别顺手把它一起删了。
     @Published private(set) var blurredArtworkImage: NSImage?
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
@@ -122,6 +134,127 @@ private final class NotchPlayback: ObservableObject {
     var secondaryLyricAlignment: Alignment {
         secondaryLine == .nextLine ? nextLineAlignment : mainLyricAlignment
     }
+
+    /// 「跳过广告」有没有对象(2026-09-08):广告中,**且**这条广告是 YT Music 网页广告(探针强信号判定,
+    /// 见 `YouTubeMusicAdSkipper.isYouTubeMusicAd`)。计算属性、不另发布:`isCurrentTrackAdBreak` 翻成 true
+    /// 的那一拍正是探针把 `.ad` 写进缓存的那一拍(`LocalPlaybackSource.apply()` 读的是同一份缓存),视图
+    /// 因 `isCurrentTrackAdBreak` 重估时读到的就是它;广告期间那份缓存每 5 秒被刷一次。Spotify 广告
+    /// (原生 / 网页)的 YT 判定恒 nil,键不出现。
+    var canSkipAd: Bool {
+        isCurrentTrackAdBreak && YouTubeMusicAdSkipper.isYouTubeMusicAd(artist: artist, title: title)
+            && adSkipAvailable
+    }
+
+    /// 页面上那颗「跳过」键此刻放出来没有(2026-09-11,用户:「如果当前广告不支持跳过的话就不要显示那个
+    /// 跳过的按钮」)。
+    ///
+    /// 在此之前 `canSkipAd` 只问"是不是 YT Music 的广告",于是**不可跳过**的广告上也挂着一颗键,按下去
+    /// 只换来一句「这条广告还不能跳过」—— 一颗永远按不动的键比没有更糟。这个值由 `adSkipGate()` 在广告
+    /// 期间探页面得到(`YouTubeMusicAdSkipper.probeSkippability`,只读、不按键)。
+    ///
+    /// ⚠️ 必须是 `@Published`,不能做成计算属性去读某份缓存:倒计时那 5 秒过完、键刚放出来的那一刻,
+    /// 广告态这一格**没有任何别的东西在变**(「还剩 0:21」那截自己排了一张 `TimelineView`,只重画它自己
+    /// 那一小块),计算属性不会被重估,键就一直不出现。
+    ///
+    /// 初值 false:没问过页面之前不画键 —— 但"问不出来"(脚本跑不成)会被 `showsSkipButton` 判成**画**,
+    /// 见那边那条 fail-open。
+    @Published private(set) var adSkipAvailable = false
+
+    /// 这一轮广告的门槛轮询。广告结束 / 换歌就取消。
+    private var adSkipGateTask: Task<Void, Never>?
+
+    /// 广告开始时起一轮门槛轮询;广告结束时收摊。由 `isCurrentTrackAdBreak` 那条订阅驱动。
+    ///
+    /// 节奏见 `YouTubeMusicAdSkipper.gateRetryDelay(after:)`:倒计时那一档等到点再问(否则最坏要等满
+    /// 一个 5 秒心跳,而整条广告可能就 15 秒),其余走 5 秒心跳 —— 一次插播可能连放两条(徽章 1/2 → 2/2),
+    /// 第一条不给跳、第二条给跳,所以问出 `.never` **也要**继续心跳,不能问出一次就收摊。
+    /// 门槛轮询自己的日志(跟 Core 那一侧同一个 category,时间线连得上)。
+    static let skipGateLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
+
+    /// ⚠️ **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动,不挂在上面那条 `$isCurrentTrackAdBreak`
+    /// 订阅上**(2026-09-11 改)。两者对真窗口是同一件事,但**预览 chrome 的 `isAdBreakNow` 恒 false**
+    /// (`NotchEditorStage`),而 `NotchPlayback` 在预览里照样订阅真的 `PlaybackCoordinator` —— 挂在订阅上
+    /// 的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对用户的浏览器发一次 AppleScript。
+    /// 真机日志坐实过(每一行都打了两遍),而"预览不该产生任何副作用"是这个仓库既有的纪律
+    /// (同 `controlsDidBecomeVisible` 在预览里是空实现)。
+    func syncAdSkipGate(adBreak: Bool) {
+        NotchPlayback.skipGateLogger.info("gate: adBreak \(adBreak, privacy: .public) → \(adBreak ? "start" : "stop", privacy: .public)")
+        adSkipGateTask?.cancel()
+        adSkipGateTask = nil
+        guard adBreak else {
+            if adSkipAvailable { adSkipAvailable = false }
+            return
+        }
+        adSkipAvailable = false
+        let bundleID = LocalPlaybackSource.shared.lastResolvedBundleID
+        adSkipGateTask = Task.detached(priority: .utility) { [weak self] in
+            for round in 0 ..< YouTubeMusicAdSkipper.gateMaxRounds {
+                if Task.isCancelled { return }
+                let state = YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)
+                let shows = YouTubeMusicAdSkipper.showsSkipButton(state)
+                await MainActor.run { [weak self] in
+                    guard let self, !Task.isCancelled else { return }
+                    if self.adSkipAvailable != shows {
+                        self.adSkipAvailable = shows
+                        NotchPlayback.skipGateLogger.info(
+                            "gate: adSkipAvailable -> \(shows, privacy: .public) (state \(String(describing: state), privacy: .public))")
+                    }
+                }
+                // 脚本没跑成(nil)就别再往返了:原因(不是浏览器 / 没授权 / 超时)不会在几秒内自己变好,
+                // 而这一档已经按 fail-open 把键画出来了,用户按下去会走既有那条反馈路径。
+                guard let state, state != .notInAd else { return }
+                try? await Task.sleep(for: .seconds(YouTubeMusicAdSkipper.gateRetryDelay(after: state, round: round)))
+            }
+        }
+    }
+
+    /// 一次「跳过广告」正在跑(点 + 复核,约 1～3s)。期间再点忽略、键压淡 —— 第三版真机日志里用户连按几下,
+    /// 几份并行的 run 交错,各自的复核读到的是别人点完的页面,横幅也叠着闪。
+    @Published private(set) var skipAdInFlight = false
+
+    /// 去点 YT Music 页面自己的「跳过广告」按钮。点 + 复核两次 AppleEvent 往返加 0.8s 等页面切换(正常 ~1.2s,
+    /// 极端 6s 超时),放后台线程;结果回主线程用歌词行上的瞬态横幅回报(跟音量提示同一条通道):
+    ///   * 点到了且复核广告已走 → 只给一下触觉(页面随即切正片,灵动岛按换曲流程自己刷新);
+    ///   * 按钮还没出现 → 页面上读得到「N 秒后可跳过」就说「N 秒后可跳过」,读不到(不可跳过的广告)说
+    ///     「这条广告还不能跳过」;
+    ///   * 点了没生效 / 没有标签页在放广告 / 脚本没跑成 → 「没能跳过这条广告」。
+    /// **每一种结果都有反馈**(2026-09-08 第二版):首版"点到了就只给触觉",用户真机遇到"点了页面没动、灵动岛也
+    /// 一片安静"—— 触觉在 Mac 上几乎察觉不到,一颗键按下去没有任何可见反应是最坏的交互。
+    /// 不套 `controlButton` 那层 Apple Music 自动化权限守卫:这是浏览器自动化,权限在 `BrowserAutomationPermission`
+    /// 那一套里,没权限时 osascript 直接失败、走「没能跳过」那句。
+    func skipAd() {
+        guard !skipAdInFlight else { return }
+        skipAdInFlight = true
+        let bundleID = LocalPlaybackSource.shared.lastResolvedBundleID
+        Task.detached(priority: .userInitiated) {
+            let outcome = YouTubeMusicAdSkipper.skip(reportedBundleID: bundleID)
+            await MainActor.run { [weak self] in
+                self?.skipAdInFlight = false
+                NotchPlayback.reportSkipOutcome(outcome)
+            }
+        }
+    }
+
+    private static func reportSkipOutcome(_ outcome: YouTubeMusicAdSkipper.Outcome?) {
+        switch outcome {
+        case .skipped?:
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        case .notYetSkippable(let seconds)?:
+            let text = seconds.map { String(format: L10n.t("%@ 秒后可跳过"), String($0)) } ?? L10n.t("这条广告还不能跳过")
+            NotchTransientCenter.shared.show(.init(icon: "forward.end", text: text, progress: nil))
+        case .needsAccessibility?:
+            // 系统自己那个"想要控制这台电脑"的对话框(带「打开系统设置」)+ 横幅说明为什么。ad-hoc 签名每次重装 cdhash
+            // 都变,设置里的勾会失效,这一句在每次升级后第一次按时都会再见一次,见 AccessibilitySkipPress 头注。
+            AccessibilitySkipPress.promptForTrust()
+            NotchTransientCenter.shared.show(.init(icon: "hand.raised", text: L10n.t("跳过广告需要「辅助功能」权限"), progress: nil),
+                                             for: 2.4)
+        case .tabNotFrontmost?:
+            NotchTransientCenter.shared.show(.init(icon: "macwindow", text: L10n.t("把 YouTube Music 标签页切到前面再试"), progress: nil),
+                                             for: 2.4)
+        case .clickedNoEffect?, .notFound?, nil:
+            NotchTransientCenter.shared.show(.init(icon: "megaphone", text: L10n.t("没能跳过这条广告"), progress: nil))
+        }
+    }
     /// 展开区时间行中间要不要显示「歌词时间轴微调」(2026-09-01)。同上走这里现读——只影响
     /// `NotchScrubber` 内部时间行怎么排,不影响卡片高度,理由见
     /// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️。
@@ -172,6 +305,11 @@ private final class NotchPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
+            p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
+            p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
+            p.$radioStationImage.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.radioStationImage = $0 },
+            p.$currentAdSlot.removeDuplicates().sink { [weak self] in self?.currentAdSlot = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
@@ -468,6 +606,13 @@ enum NotchMetrics {
     static func earAppIconSide(contentTopInset: CGFloat) -> CGFloat {
         min(contentTopInset - 4, earArtworkSide(contentTopInset: contentTopInset) + 4)
     }
+
+    /// 广告期间左耳那枚喇叭的**字号**(2026-09-09)。SF Symbol 按字号渲染、不是按边长,所以这里
+    /// 给的不是 side —— 取封面那一档边长的 0.56 倍(约 13pt),视觉重量跟它要替代的那枚 23pt
+    /// 封面小图接近,又不至于在只有一个符号时显得过重。下界 11 兜住极矮刘海。
+    static func earAdIconSize(contentTopInset: CGFloat) -> CGFloat {
+        max(11, earArtworkSide(contentTopInset: contentTopInset) * 0.56)
+    }
 }
 
 /// NotchLyricsView 需要从"承载它的那个东西"那里知道的全部几何/状态 —— 一共就这几项。
@@ -501,6 +646,12 @@ protocol NotchChromeSource: ObservableObject {
     /// 按同一个判据留白了),44pt 白占着正是用户 2026-08-21 说的"占用空间"。
     /// 刻意不看"在不在播":暂停中仍然有曲目,歌名/歌词/封面都该照常显示。
     var hasTrack: Bool { get }
+    /// 此刻在放的是不是广告(2026-09-08)。决定展开态**头部整块不画**(见 `showsExpandedTrackInfo`):
+    /// 广告期间歌名位只会写「广告中」、歌手/专辑一律留空(`metadataText` 的既有规矩),四颗快捷键里
+    /// 「搜索歌词」「显示歌词」无物可指 —— 画出来就是一块只有一个灰词的空头部,正是用户 2026-09-08
+    /// 圈图说的「太呆了」。广告态的状态文字与倒计时改由歌词行接管(`adStatusColumn`)。
+    /// 真窗口 = 控制器镜像的 `isAdBreakNow`(它同时也是 `isCollapsed` 的第三个输入);预览恒 false。
+    var isAdBreakNow: Bool { get }
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
     ///
@@ -569,12 +720,16 @@ extension NotchChromeSource {
 
     /// 展开区「曲目信息头部」到底画不画——只要四个开关(封面/歌名/歌手/专辑)有一个开着,
     /// 且此刻有曲目(没曲目时四者都是空的,画一块空头部没有意义,理由同
-    /// `showsLyricRow` 对 `hasTrack` 的处理)。
+    /// `showsLyricRow` 对 `hasTrack` 的处理),且**不在广告中**(2026-09-08:广告期间头部能画的只有
+    /// 一个灰词「广告中」+ 两颗没对象的快捷键,整块让位,状态由歌词行接管,见 `isAdBreakNow`)。
+    /// 广告态切换只改这里的算术、不改窗口几何 —— 窗口常驻最大尺寸(`expandedExtraHeightMax`),
+    /// 跟 `hasTrack` 那条空闲面板路一样不需要 `recomputeGeometry`。
     var showsExpandedTrackInfo: Bool {
-        hasTrack && (expandedTrackInfoShowsArtwork || expandedTrackInfoShowsTitle
-                     || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum
-                     // 快捷操作是头部的第五项(2026-09-07):四项全关、只开它时头部就是一条按钮行。
-                     || expandedShowsQuickActions)
+        hasTrack && !isAdBreakNow
+            && (expandedTrackInfoShowsArtwork || expandedTrackInfoShowsTitle
+                || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum
+                // 快捷操作是头部的第五项(2026-09-07):四项全关、只开它时头部就是一条按钮行。
+                || expandedShowsQuickActions)
     }
 
     /// 曲目信息头部按当前设置算出来的高度,`0` = 不画(见 `showsExpandedTrackInfo`)。
@@ -639,6 +794,10 @@ extension NotchChromeSource {
 
 struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @ObservedObject var controller: Chrome
+    /// 「发现新播放器」提示的状态源(2026-09-11)。**这里不订阅**(不是 @ObservedObject),只往下传给两个宿主
+    /// 子视图(`NotchIdleEarIconHost` / `NotchIdlePanelHost`)各自订阅 —— 同 NotchTransientCenter 那条纪律,
+    /// 提示挂上 / 撤掉只失效那一块。默认是惰性替身(编辑台预览永远看不到提示),真窗口传 `.shared`。
+    var prompt: NotchUnknownPlayerPrompt = .inert
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 NotchPlayback 的注释。
     // NotchTransientCenter 也不在这里订阅:banner 只被歌词行消费,订阅下沉到
     // NotchTransientHost 子视图,横幅出现/消失只失效那一行,不打醒整卡。
@@ -655,6 +814,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @Environment(\.notchCardLayerActive) private var cardLayerActive
     /// 这块内容所在显示器的像素倍率 —— 只给 `idleAppIcon` 算"要几像素的位图"用(2026-09-07)。
     @Environment(\.displayScale) private var displayScale
+    /// 快捷操作里此刻被指到的那颗键(2026-09-09,见 `QuickActionTooltipOverlay`);nil = 指针不在任何一颗上。
+    @State private var hoveredQuickAction: QuickActionHint?
+    /// 真正画出来的那一条。跟 `hoveredQuickAction` 分开存是为了那 260ms 的首次延迟(扫过一排键时
+    /// 不该一路闪气泡);存整个 hint 而不只是文案,是因为气泡要**定位到那颗键**,文案和落点必须同源。
+    @State private var shownQuickActionTooltip: QuickActionHint?
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -687,8 +851,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 完全融合在一起」):没有曲目就没有封面可跟、没有内容要衬,底色只剩"像不像刘海"一个
                 // 标准 —— 跟收起态同一个理由,只是收起态还要求缩尺寸,这里尺寸由 collapsesWhenPaused 管、
                 // 底色不再看它。hover 展开时同样黑底(没曲目时展开区本来就是空的)。
+                // 2026-09-09 再加**广告期间**这一档(用户圈图:「广告时候的灵动岛的配色帮我设置为
+                // 和机器刘海一样的纯黑色」):理由跟上面没有曲目那一档同构 —— 广告没有封面可跟
+                // (`accent` 退回默认冷色、`coverArt` 风格退回那块灰),底色于是既衬不了内容、也
+                // 代表不了这一刻在放什么,只剩"像不像刘海"一个标准。广告一结束自动退回原风格,
+                // 跟着同一条弹簧渐变淡回去,不硬切。
                 Color.black
-                    .opacity(controller.isCollapsed || isIdleNoTrack ? 1 : 0)
+                    .opacity(controller.isCollapsed || isIdleNoTrack || controller.isAdBreakNow ? 1 : 0)
                 // 刘海空当里的品牌胶囊(notchSeam)直接钉在 ZStack 顶部**居中**,不再画在顶行的 HStack 里
                 // (2026-09-06,用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」)。
                 // 逐帧抓窗坐实:当时顶行是 collapsedRow / topRow 两个视图在 VStack 里整行互换,SwiftUI 对
@@ -747,7 +916,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // `NotchChromeSource.cardHeight` 的 !hasTrack 分支读同一个值。跟 cardBodyLayer 里
                     // 各块同一套做法 —— 常驻、定宽、定 y、只切透明度(NotchCardLayerActive),稳态下
                     // 它透明地挂在顶行下面、被外层裁剪裁掉,展开时在最终位置原地淡入。
-                    idleExpandedPanel
+                    // 有「发现新播放器」的信任提议挂着时(2026-09-11,决策 #37)这一块换成提议的变体,
+                    // 同高同排法,由宿主子视图自己订阅、自己切,见 NotchIdlePanelHost。
+                    NotchIdlePanelHost(prompt: prompt, tint: accentOrWhite) { idleExpandedPanel }
                         .frame(width: controller.expandedCardWidth,
                                height: NotchMetrics.idleExpandedPanelHeight, alignment: .top)
                         .padding(.top, controller.contentTopInset)
@@ -765,6 +936,28 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
             // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
             .modifier(NotchCardClip(enabled: !hostClipsCard))
+        }
+        // 「跳过广告」那颗键的门槛轮询,起停挂在这里(2026-09-11)。
+        //
+        // ⚠️ 判据是 **chrome 的 `isAdBreakNow`**,不是 `playback.isCurrentTrackAdBreak` —— 两者对真窗口
+        // 是同一件事,但预览 chrome 的 `isAdBreakNow` 恒 false,而 `NotchPlayback` 在预览里照样订阅真的
+        // `PlaybackCoordinator`:挂在后者上的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对
+        // 用户的浏览器发一次 AppleScript(真机日志坐实过 —— 每一行都打了两遍)。理由同
+        // `controlsDidBecomeVisible` 在预览里是空实现:预览不产生副作用。
+        //
+        // `.onAppear` 那一下是为了"窗口刚出现时已经在放广告"这种情形 —— `onChange` 只在值变化时触发。
+        .onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }
+        .onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }
+        // 一次性诊断(2026-09-11,用户报「稳态那枚提示不实时更新,展开一次才出来」)。
+        // 问题只可能落在两处:body 压根没被这次翻转叫醒(那 onChange 也不会响),或者 body 看见了、
+        // 但三道门里有一条此刻是假的(那 canSkipAd 响、hint 不响)。两条探针正好把这两种分开。
+        .onChange(of: playback.canSkipAd) { _, value in
+            NotchPlayback.skipGateLogger.info("""
+                view: canSkipAd=\(value, privacy: .public) expanded=\(controller.isExpanded, privacy: .public)                 showsLyrics=\(controller.showsLyrics, privacy: .public) hint=\(showsAdSkipHint, privacy: .public)
+                """)
+        }
+        .onChange(of: showsAdSkipHint) { _, value in
+            NotchPlayback.skipGateLogger.info("view: adSkipHint=\(value, privacy: .public)")
         }
         // 2026-08-16 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
         // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
@@ -990,7 +1183,24 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 空白 —— 图标占的是这片空白,不是抢走谁的位置;左耳配了「播放控制」的,没有曲目时
                 // 三键也无物可控,一并让位。有曲目的那一刻它让回配置的模块。
                 if isIdleNoTrack {
-                    idleAppIcon(alignment: .leading)
+                    // 2026-09-11 起经 idleEarIcon 再包一层:有「发现新播放器」的信任提议挂着时换成那个播放器的图标。
+                    idleEarIcon(alignment: .leading)
+                } else if controller.isAdBreakNow {
+                    // 广告期间左耳那枚喇叭(2026-09-09,用户圈图:「在左耳那边加上一个广告的标识
+                    // 图标」)。**不看配置、也不看这一格原本有没有内容**。这一档当天走了三步:
+                    // 第一版做成"只占空白"(为了不推翻 09-08「广告期间封面位保留播放器给的图」
+                    // 那条拍板)→ 问用户"要不要任何广告都固定显示",答"任何"→ 他随后又扩成
+                    // 「只要识别到是广告的话,封面部分都用这个替代」。所以 09-08 那条拍板**整条**
+                    // 被他自己推翻了,不止左耳:全 App 四个当前曲目封面位(左耳、歌词行末尾、
+                    // 歌词窗口封面卡、菜单栏面板那枚)广告期间一律让位给同一枚喇叭,清单与
+                    // "为什么灵动岛展开头部那枚不用改"见 05 章「广告态」⑦。
+                    //
+                    // 让位的代价说清楚:左耳配了「播放控制」的用户,广告期间那三颗键会被这枚图标
+                    // 顶掉 —— 可接受,因为 hover 展开卡的进度条下方本来就有一整排三键(广告期间
+                    // 照旧渲染,见 adStatusColumn 头注),能力没丢,只是位置变了。这跟决策 #30
+                    // (没有曲目时左耳固定画 App 图标、配了播放控制的一并让位)是同一个取舍。
+                    // 收起态自动一并覆盖:上面 `leftModule` 在收起时固定是 `.artwork`。
+                    adBreakEarIcon(alignment: .leading)
                 } else if leftModule != .none {
                     earContent(leftModule, alignment: .leading)
                 }
@@ -1079,7 +1289,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 没有封面数据时**整块不画**(不摆占位方块)—— 跟歌词行末尾那枚同一个取舍,理由见那边。
     @ViewBuilder
     private func earArtwork(alignment: Alignment) -> some View {
-        if let image = playback.highResArtworkImage ?? playback.artworkImage {
+        if let image = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
             artworkThumbnail(
                 image,
                 side: NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset))
@@ -1087,6 +1297,57 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         } else {
             Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
         }
+    }
+
+    /// 广告期间左耳那枚喇叭(2026-09-09)。
+    ///
+    /// 符号沿用 `adStatusColumn` 和「没能跳过这条广告」瞬态横幅里的同一枚 `megaphone.fill` ——
+    /// 同一件事在这张卡上不该出现两种画法。前景色也跟那一行同口径(`accentOrWhite` 七成不透明
+    /// + 同一道投影);广告期间底已经是纯黑(见 body 里那层 `Color.black`),七成白在纯黑上足够清楚。
+    ///
+    /// 不接点击:它是个状态标记,不是按钮 —— 广告期间真正能点的那件事(「跳过广告」)有自己的键,
+    /// 在展开卡的状态行右侧,见 `adStatusColumn`。读屏也不念(装饰元素):同一行的「广告中 · 还剩
+    /// 0:20」已经把这件事说清楚了,再念一遍是重复。
+    @ViewBuilder
+    private func adBreakEarIcon(alignment: Alignment) -> some View {
+        let side = NotchMetrics.earAdIconSize(contentTopInset: controller.contentTopInset)
+        let hint = showsAdSkipHint
+        HStack(spacing: side * 0.22) {
+            Image(systemName: "megaphone.fill")
+                .font(.system(size: side, weight: .semibold))
+            if hint {
+                // 比喇叭小一号、再淡一点:它是**附注**(这条广告能跳),不是这一格的主语(在放广告)。
+                // 符号跟展开卡那颗「跳过广告」键同一枚 `forward.end.fill` —— 同一件事在这张卡上
+                // 不该出现两种画法(同喇叭那条)。
+                // 0.78:喇叭 ~13pt 时这枚约 10pt,跟悬浮窗那排非主按钮的 10.5pt 同量级(那是这个
+                // 仓库验过的"小到不挡视线、又还认得出"的下界),再小就开始糊成一个点。
+                Image(systemName: "forward.end.fill")
+                    .font(.system(size: side * 0.78, weight: .semibold))
+                    .opacity(0.85)
+            }
+        }
+        .foregroundStyle(accentOrWhite.opacity(0.7))
+        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+        .frame(maxWidth: .infinity, alignment: alignment)
+        // 喇叭本身是装饰(同一行的「广告中 · 还剩 0:20」已经说清楚了);带上提示之后这一组就有了
+        // 独立信息 —— 稳态下它**是**读屏用户唯一能知道"这条能跳"的地方,所以这时候要念。
+        .accessibilityHidden(!hint)
+        .accessibilityLabel(hint ? L10n.t("这条广告可以跳过") : "")
+    }
+
+    /// 稳态下要不要在左耳那枚喇叭旁边补一枚「可跳过」提示(2026-09-11,用户:「这个按钮目前只在展开
+    /// 状态有;帮我在灵动岛歌词行那里也加一个,虽然移动上去就展开了,但是可以起到提示可以跳过的作用」)。
+    ///
+    /// 两道门,都是"别把同一件事说两遍":
+    ///  ① **展开态不画** —— 那时 `adStatusColumn` 右端就是那颗真的「跳过广告」键,再加一枚图标是重复。
+    ///  ② **稳态歌词行画得出来时也不画** —— 开着「显示歌词」的人,稳态那份 `lyricRow` 渲染的就是
+    ///     `adStatusColumn`(带真键),同理重复。关着的人稳态只剩顶行,那枚喇叭是广告这件事在卡上
+    ///     唯一的落点,提示只能挂在它旁边(用户正是这一档:`notchShowLyrics = 0`)。
+    ///
+    /// 刻意**只是个标记、不接点击**:稳态下指针一压上来卡片就展开了,这一格根本没有"被点到"的时机,
+    /// 做成按钮只会是又一段永不触发的死代码(同喇叭那条、同悬浮窗那排按钮为什么不是 Button)。
+    private var showsAdSkipHint: Bool {
+        playback.canSkipAd && !controller.isExpanded && !controller.showsLyrics
     }
 
     /// 没有曲目时左耳里的 App 图标(2026-09-07,用户圈图要的「左侧显示我们的图标」)。
@@ -1155,15 +1416,27 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private func metadataText(_ module: NotchEarModule) -> String {
         if isIdleNoTrack { return "" }
         let isAd = playback.isCurrentTrackAdBreak
+        // 口白(2026-09-11,用户:「口白期间,可以恢复到原本电台的封面以及名字」):歌名位换成台名,
+        // 歌手/专辑留空 —— 理由跟广告那条一模一样,口白没有"歌手"可言,画上去是假信息。
+        // 抓不到台卡(`radioTalkStation` 为 nil)就整条不生效,还显示上一首,见 RadioStationCard。
+        let station = radioTalkStation
         switch module {
         case .title:
             if isAd { return L10n.t("广告中") }
+            if let station { return station.name }
             return playback.title.isEmpty ? "♪" : playback.title
-        case .artist: return isAd ? "" : playback.artist
-        case .album: return isAd ? "" : playback.album
+        case .artist: return (isAd || station != nil) ? "" : playback.artist
+        case .album: return (isAd || station != nil) ? "" : playback.album
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
         case .artwork, .controls, .elapsed, .remaining, .none: return ""
         }
+    }
+
+    /// 口白期间顶替曲目卡的台名 / 台标。抓不到台卡就是 nil —— 那时一切照旧(还显示上一首),
+    /// 宁可保持现状也不要编一个台名出来,判据与实测见 `RadioStationCard`。
+    private var radioTalkStation: (name: String, image: NSImage?)? {
+        guard playback.isRadioTalkBreak, let name = playback.radioStationName, !name.isEmpty else { return nil }
+        return (name, playback.radioStationImage)
     }
 
     /// 已播 / 剩余。位置口径跟卡片里那条迷你进度条同源:锚点外推 ?? 暂停冻结位置;歌词时间轴
@@ -1250,25 +1523,61 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 描边 + 投影是给"卡片背景可能是浅色"兜底:磨砂玻璃风格会透出桌面颜色,浅色壁纸下
     // 一张浅色封面直接贴上去边界会糊成一片,一圈极淡的白描边能把方块轮廓钉住。
     /// side:不给就按歌词行那一档(32pt)。耳朵里那枚要小一号,理由见 earArtwork。
+    ///
+    /// 图**不在运行期缩**(2026-09-09,用户圈图:「这个灵动岛小图怎么和大图长得不一样,上面有黑斑,并且
+    /// 展开的时候黑斑还会动」):`Image(nsImage:).resizable().scaledToFill()` 把 600px 的封面一步缩到 46px
+    /// 走的是线性采样、没有面积平均,半调网点封面(陶喆《I'm O.K.》黄底黑点)缩出来是一片摩尔纹黑斑,
+    /// 而且随展开动画里的亚像素相位一帧一个样。改成按目标像素边长预先重采样一次(`ArtworkThumbnailCache`
+    /// → `ArtworkThumbnail.squareBitmap`,`.high` 插值),`Image(decorative:scale:)` 逐像素贴,跟左耳
+    /// App 图标(`NotchIdleAppIcon`,决策 #30)同一招。裁方(aspect-fill 居中裁)也挪进位图里做,
+    /// 所以这里不再 `.scaledToFill()`;`.frame` 仍钉一次,`clipShape` 才按这枚的尺寸裁圆角(见上)。
+    /// 悬停 / 按下反馈 2026-09-11 补(用户:「目前这几处的悬浮动效还没做好」)。状态由
+    /// `HoverReveal` 持有而不是放在本视图上 —— 理由见那个壳的注释(这是函数,三处调用点共用)。
     private func artworkThumbnail(_ image: NSImage, side: CGFloat? = nil) -> some View {
         let side = side ?? Self.artworkSide(rowHeight: NotchMetrics.compactRowHeight)
+        return HoverReveal { hovering in
+            artworkButton(image, side: side, hovering: hovering)
+        }
+    }
+
+    /// 封面键的本体。拆成单独一个函数只为**不给下面这四十行整体缩进**:壳套在外面、本体原位不动,
+    /// diff 就只有签名和 buttonStyle 两行(这个文件同时有别的会话在改,小 diff 是硬要求)。
+    private func artworkButton(_ image: NSImage, side: CGFloat, hovering: Bool) -> some View {
+        let scale = max(1, displayScale)
         // 点封面 → 打开歌词窗口(2026-08-19 用户要求)。走 AppActions 统一入口,激活
         // 时序(先 NSApp.activate 再 openWindow)在注册处已处理,跟快捷键/菜单/面板同路。
         return Button {
             AppActions.shared.openLyricsWindow?()
         } label: {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
+            Group {
+                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((side * scale).rounded())) {
+                    Image(decorative: bitmap, scale: scale)
+                } else {
+                    // 理论上到不了:CGContext 建不出来才会 nil。退回运行期缩放,至少有图。
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
                 .frame(width: side, height: side)
+                // ⚠️ **这一格只画静态封面,不许再叠动态封面那一层**(2026-09-10 用户拍板撤掉,
+                // 原话:「帮我把灵动岛上的封面全部改为静态的吧,只有歌词窗口的保留;因为灵动岛
+                // 上的效果不是很好」)。
+                //
+                // 2026-09-09 落地时这里确实叠过一层 `MotionCoverView`(只在展开态、过 reduceMotion
+                // 闸)。撤掉的理由是**尺寸**,不是实现:这一格最大也就 NotchMetrics.trackInfoArtworkSide
+                // 这个量级(耳朵那档只有 32pt),Apple 的 motion artwork 是给整张专辑封面设计的
+                // 慢镜头,缩到这么小基本只剩一片蠕动的色块,看不出画的是什么 —— 用户实机看完的
+                // 判断。歌词窗口那张 460pt 的卡不受影响,那才是它该出现的地方(03 章第 6 节)。
+                //
+                // 别"顺手"加回来:加回来就要重新论证这个尺寸下动效能不能看清,而那已经实测过一次了。
                 .clipShape(RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
-                )
+                // ⚠️ 那圈 0.18 白描边搬进了 `NotchArtworkButtonStyle` —— 它现在要随悬停 / 按下
+                // 抬亮(0.18 → 0.38 → 0.5),留在标签里只能是定值。
                 .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchArtworkButtonStyle(cornerRadius: NotchMetrics.artworkCornerRadius,
+                                             hovering: hovering))
         .help(L10n.t("打开歌词窗口"))
     }
 
@@ -1366,7 +1675,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 文字是在"除封面之外的剩余宽度"里居中、相对整卡略偏封面对侧。这是刻意的 ——
             // 要相对整卡居中就得把封面改成 overlay 叠在歌词上,那会直接违反上面那段
             // `.animation(nil, value:)` 治的"封面遮挡歌词"(2026-08-22 用户报的真 bug)。
-            lyricTextColumn
+            // 广告插播(2026-09-08):这一格整个换成「📣 广告中 · 还剩 0:21   [跳过广告]」,不走歌词那套
+            // (副行 / 跑马灯 / 逐字染色对广告全无意义)。分流放在这一层而不是 `mainLyricLine` 的那个
+            // 「广告中」分支里,因为倒计时和跳过键要占满这一格的宽度,而那个分支只是一段文字。
+            Group {
+                if playback.isCurrentTrackAdBreak {
+                    adStatusColumn
+                } else {
+                    lyricTextColumn
+                }
+            }
             // MarqueeText 内层是 GeometryReader(没有固有尺寸、能吃下任何被提议的宽度),
             // HStack 会先给定尺寸的封面分配它那 32pt,剩下的宽度都留给歌词。这里仍然显式
             // 写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"这个意图钉死,不依赖
@@ -1408,6 +1726,96 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 那一刻可能撞上活动动画的同一次更新窗口——虽然实测未必能复现,但没有理由把
         // 判据故意做窄。
         .animation(nil, value: !lyricRowArtworkPresent)
+    }
+
+    /// 广告插播时歌词那一格的内容(2026-09-08,用户圈出广告态展开卡:「有什么好 ui 调整吗,目前这样太呆了」,
+    /// 随后拍板「选用可以跳过广告的方案」):
+    ///
+    ///     📣 广告中 · 还剩 0:21                              [⏭ 跳过广告]
+    ///
+    /// * 左边是这一态**唯一有信息量**的东西:还要多久结束。改前它只藏在展开区时间行右下角的 `-0:21` 里,
+    ///   而卡片上「广告中」写了两遍(头部歌名位 + 这里),两处都是一个不动的灰词。倒计时按 1Hz 走
+    ///   (`adCountdown`),跟耳朵里的时间模块同一套调度(`NotchTimeFormat.clockSchedule`,相位对齐到曲目
+    ///   位置的整秒,跟正下方进度条同源同相),暂停时冻结、时长未知时不编数字。图标跟歌词窗口空态那档
+    ///   同一枚 `megaphone`。字号 / 七成不透明 / 投影跟 `mainLyricLine` 里那个「广告中」分支逐字相同 ——
+    ///   稳态(不展开)时这一行也是这一格,用户看到的是同一句话变成了带倒计时的版本,不是一套新版式。
+    /// * 右边那颗「跳过广告」只在 `playback.canSkipAd` 时出现:广告中 **且** 这是 YT Music 网页广告
+    ///   (`YouTubeMusicAdSkipper.isYouTubeMusicAd`,探针强信号)**且页面此刻真的放出了跳过键**
+    ///   (`adSkipAvailable`,2026-09-11 用户要求「如果当前广告不支持跳过的话就不要显示那个跳过的按钮」——
+    ///   在此之前不可跳过的广告上也挂着一颗按下去只回一句「这条广告还不能跳过」的键)。Spotify 的广告
+    ///   没有可点的东西,不给键。点了去点页面自己的跳过按钮(`NotchPlayback.skipAd`,不做拖到结尾那种
+    ///   绕过),结果用瞬态横幅回报。
+    /// * 头部在广告期间整块不画(`showsExpandedTrackInfo`),所以这一行就是展开卡最上面那一行。封面位
+    ///   (左耳 / 歌词行末尾那枚)09-08 拍板是「保留播放器给的图」,09-09 被用户整条推翻——广告期间全 App
+    ///   四个封面位都让位给同一枚 `megaphone.fill`(`adBreakArtworkTile` 等,清单见 05 章「广告态」⑦);
+    ///   这一列自己不画封面,不受那次改动影响。
+    private var adStatusColumn: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "megaphone.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                // 字体跟歌词主行同一份派生值(2026-09-09):这一格就是歌词那一格换了内容,用户换了字体后它不该
+                // 突然变回系统字体。倒计时那截同字号、细一档(`mainDetailFont`),保住原来 semibold / medium 的主次。
+                Text(L10n.t("广告中"))
+                    .font(playback.mainFont)
+                adSlotText
+                    .font(playback.mainDetailFont)
+                adCountdown
+                    .font(playback.mainDetailFont)
+            }
+            .foregroundStyle(accentOrWhite.opacity(0.7))
+            .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            .lineLimit(1)
+            Spacer(minLength: 0)
+            if playback.canSkipAd {
+                NotchPillButton(systemName: "forward.end.fill", title: L10n.t("跳过广告"), tint: accentOrWhite) {
+                    playback.skipAd()
+                }
+                // 正在跑(点 + 复核)时压淡、不接第二下,理由见 `NotchPlayback.skipAdInFlight`。
+                .opacity(playback.skipAdInFlight ? 0.45 : 1)
+                .disabled(playback.skipAdInFlight)
+            }
+        }
+    }
+
+    /// 「· 还剩 0:21」。位置口径同 `clockText`:锚点外推 ?? 暂停冻结位置;时长未知就整个不画(不为拿不到的
+    /// 数据编占位)。TimelineView 只在这一层可见(`cardLayerActive`)且有锚点时才排表 —— 收起态 / 编辑台预览
+    /// 都不该有一张每秒空转的表(理由同 `earContent` 时间模块那条 ⚠️)。采样用 `Date()` 而不是
+    /// `context.date`,理由见 `earContent` 头注第 ③ 条。
+    @ViewBuilder
+    private var adCountdown: some View {
+        if let total = playback.currentDurationMs, total > 0 {
+            if let anchor = playback.anchor, cardLayerActive {
+                TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
+                    Text(adRemainingText(total: total, position: anchor.extrapolatedPositionMs(now: Date())))
+                }
+            } else if let position = playback.anchor?.extrapolatedPositionMs(now: Date()) ?? playback.pausedPositionMs {
+                Text(adRemainingText(total: total, position: position))
+            }
+        }
+    }
+
+    private func adRemainingText(total: Int, position: Int) -> String {
+        "· " + String(format: L10n.t("还剩 %@"), NotchTimeFormat.mmss(ms: max(0, total - position)))
+    }
+
+    /// 「这是插播里的第几条」(2026-09-09,用户:「广告中,还剩几个广告可以在灵动岛上展开显示
+    /// 出来吗」)。排在「广告中」和倒计时之间,连起来读是「广告中 · 1/2 · 还剩 0:20」。
+    ///
+    /// 字号跟倒计时同一档(`mainDetailFont`,主行同字号细一档),两段都是"广告中"这句话的
+    /// 补充说明,不该有各自的字重。
+    ///
+    /// **写成 `1/2` 而不是「还剩 1 条」**(用户在两个方案里选的前者):它跟 YouTube 自己
+    /// 徽章上的写法逐字一致,用户在页面上看到什么、在灵动岛上就看到什么,不用在心里做减法;
+    /// 而且纯数字对不需要新增本地化文案。
+    ///
+    /// 拿不到就整段不画 —— 只有 YT Music 网页广告给得出这个数,Spotify 恒 nil,YT Music 英文
+    /// 界面(`Ad 1 of 2`)也抓不到。宁可少一段,不编。
+    @ViewBuilder
+    private var adSlotText: some View {
+        if let slot = playback.currentAdSlot {
+            Text(verbatim: "· \(slot.index)/\(slot.total)")
+        }
     }
 
     /// 歌词这一格:副行关着就是改动前那一行 `MarqueeText`(逐像素不变);副行开着(2026-09-06,
@@ -1473,15 +1881,47 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 失败)或开关关着时都不画占位方块,理由见 `artworkThumbnail` 上面那段。
     @ViewBuilder
     private var lyricRowArtwork: some View {
-        if playback.lyricRowShowsArtwork, let image = playback.highResArtworkImage ?? playback.artworkImage {
-            artworkThumbnail(image)
+        if playback.lyricRowShowsArtwork {
+            if controller.isAdBreakNow {
+                // 广告期间这一格换成广告标识(2026-09-09,用户:「只要识别到是广告的话,封面部分
+                // 都用这个替代」)—— 播放器在广告时给的图是广告物料的缩略图,不是"这一刻在听
+                // 什么"的封面,四个封面位统一让位给同一枚喇叭。开关(`notchLyricRowShowsArtwork`)
+                // 仍然管这一格在不在:关了就还是不画,广告不该把用户关掉的东西请回来。
+                adBreakArtworkTile(side: Self.artworkSide(rowHeight: NotchMetrics.compactRowHeight))
+            } else if let image = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
+                artworkThumbnail(image)
+            }
         }
+    }
+
+    /// 广告期间顶替封面的那枚方块(2026-09-09)。外框跟 `artworkThumbnail` 逐项对齐(同一个
+    /// 圆角、同一道 0.5pt 白描边、同一层投影),这样广告开始/结束时这一格只是内容换了、
+    /// 几何一点不动;里面是跟状态行、跟左耳同一枚 `megaphone.fill`。
+    /// 不接点击:`artworkThumbnail` 那枚点了会打开歌词窗口,而广告没有歌词可看。
+    private func adBreakArtworkTile(side: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous)
+            .fill(.white.opacity(0.10))
+            .frame(width: side, height: side)
+            .overlay(
+                Image(systemName: "megaphone.fill")
+                    .font(.system(size: side * 0.44, weight: .semibold))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+            .accessibilityHidden(true)
     }
 
     /// 上面那枚封面此刻是不是真的占着一个位置——给 `.animation(nil, value:)` 当判据用,
     /// 见那一行的注释。
     private var lyricRowArtworkPresent: Bool {
-        playback.lyricRowShowsArtwork && (playback.highResArtworkImage ?? playback.artworkImage) != nil
+        // 广告期间那枚替代方块同样占着这个位置(见 lyricRowArtwork),判据要跟着算上,
+        // 否则 `.animation(nil, value:)` 会以为这一格是空的、放行一次不该有的布局动画。
+        playback.lyricRowShowsArtwork
+            && (controller.isAdBreakNow || (playback.highResArtworkImage ?? playback.artworkImage) != nil)
     }
 
     private var lyricContent: some View {
@@ -1523,7 +1963,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             } else if playback.isCurrentTrackAdBreak {
                 // 同 LyricsOverlayView.mainLine 的区分,必须排在"还在搜索中"分支前面,
                 // 见 PlaybackCoordinator.isCurrentTrackAdBreak 定义处的注释。
+                // 2026-09-08 起广告态在 `lyricRowContent` 那一层就分流到 `adStatusColumn` 了,这个分支
+                // 正常到不了;留着当兜底(顺序契约不变),别删。
                 Text(L10n.t("广告中"))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            } else if playback.isRadioTalkBreak {
+                // 电台口白(2026-09-11):这首歌已经放完、台里在说话。必须排在"还在搜索中"之前,
+                // 理由同上面那条广告分支 —— 口白期间元数据还停在上一首,不拦就会显示成
+                // 「搜索歌词中…」。收歌词的判定在 LocalPlaybackSource.radioTrackFinished。
+                Text(L10n.t("口白"))
                     .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if playback.isCurrentTrackInstrumental {
@@ -1669,7 +2118,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 durationMs: playback.currentDurationMs,
                 isPlayingNow: playback.isPlayingNow,
                 tint: accentOrWhite,
-                showsLyricsOffsetControls: playback.showsLyricsOffsetControls,
+                // 广告期间不画「− 歌词 0.0s +」(2026-09-08):广告没有歌词,校准无物可校。
+                showsLyricsOffsetControls: playback.showsLyricsOffsetControls && !playback.isCurrentTrackAdBreak,
                 trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
                 lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
 
@@ -1746,6 +2196,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 trackInfoTextStack
                 trackInfoQuickActions
             }
+                // 悬浮提示挂在**整行**上、不挂在那排按钮上:气泡要收敛在卡片里,而"卡片内容区有多宽"
+                // 只有这一层的 GeometryReader 量得到(按钮排自己只有 100pt 宽)。见 `QuickActionTooltipOverlay`。
+                .modifier(QuickActionTooltipOverlay(hovered: hoveredQuickAction,
+                                                    shown: $shownQuickActionTooltip,
+                                                    tint: accentOrWhite, edge: .bottom))
                 // 左内边距**跟下面歌词行的首字对齐**,不是跟上面 topRow 对齐——2026-09-01
                 // 同一天先按 topRow 的 NotchMetrics.cardHorizontalPadding(10pt)对齐过一版,
                 // 用户看完又改口"和下面的歌词首字左对齐更好看",所以这里改成跟
@@ -1861,6 +2316,18 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         AppActions.shared.openSettings?()
     }
 
+    /// 没有曲目时左耳那一格(2026-09-11,决策 #37):平时是 `idleAppIcon`;有「发现新播放器」的信任提议挂着时
+    /// 换成**那个播放器**的图标 + 右上角一粒小圆点 —— 收起态下这是提示存在的唯一线索(用户要的"更明显一点"
+    /// 里被动的那一半;主动的那一半是卡片自己撑开一次,见 NotchUnknownPlayerPrompt)。切换与订阅都在宿主
+    /// 子视图里,这里只把尺寸账(同 idleAppIcon:`earAppIconSide` × 显示倍率)交下去。
+    private func idleEarIcon(alignment: Alignment) -> some View {
+        NotchIdleEarIconHost(prompt: prompt,
+                             side: NotchMetrics.earAppIconSide(contentTopInset: controller.contentTopInset),
+                             scale: max(1, displayScale), alignment: alignment) {
+            idleAppIcon(alignment: alignment)
+        }
+    }
+
     /// 没有曲目时 hover 展开出来的那一块(2026-09-07,用户报「没有播放的展开状态目前看起来不是很友好」)。
     ///
     /// 改前的样子:`cardHeight` 照有曲目的通式给展开区留"三键 + 进度条"的 59～76pt,而那块内容整个被
@@ -1918,17 +2385,43 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
             .frame(height: NotchMetrics.trackInfoActionsHeight)
         }
+        // 同一份提示,但**往上**弹:这块面板贴着卡片底(下面只剩 idlePanelBottomSpacing 那 10pt),
+        // 气泡往下会被窗口硬裁;往上是顶行,空闲态那儿只有一枚 App 图标,盖一下无妨。
+        .modifier(QuickActionTooltipOverlay(hovered: hoveredQuickAction,
+                                            shown: $shownQuickActionTooltip,
+                                            tint: accentOrWhite, edge: .top))
         .padding(.horizontal, 16)
         .padding(.top, NotchMetrics.trackInfoTopSpacing)
     }
 
-    /// 快捷操作里的一颗图标键。`label` 同时当 tooltip 和读屏标签 —— 四颗都是纯图标,没有文字。
-    /// 悬停 / 按下反馈在 `NotchIconButton` 里(2026-09-07 加,跟三键同一份)。
+    /// 快捷操作里的一颗图标键。`label` 当读屏标签,同时喂给自绘的悬浮提示(见 `QuickActionTooltipOverlay`)
+    /// —— 这几颗都是纯图标,没有文字。悬停 / 按下反馈在 `NotchIconButton` 里(2026-09-07 加,跟三键同一份)。
+    ///
+    /// ⚠️ `.help(label)` 2026-09-09 撤掉了:系统 tooltip 在这扇窗上一次都没弹过,理由与替代方案见
+    /// `QuickActionTooltipOverlay` 的头注。
     private func quickActionButton(_ systemName: String, label: String, dimmed: Bool = false,
                                    action: @escaping () -> Void) -> some View {
         NotchIconButton(systemName: systemName, glyphSize: 11, hitSize: NotchMetrics.trackInfoActionsHeight,
                         tint: accentOrWhite, glyphOpacity: dimmed ? 0.4 : 0.75, action: action)
-            .help(label)
+            // 指针进出这颗键。离开时**只在"记着的还是自己"时**才清 —— 相邻两颗键的 enter/exit
+            // 到达顺序没有保证,少了这道守卫会出现 B 刚记上就被 A 那条迟到的 exit 抹掉。
+            .onHover { inside in
+                if inside {
+                    hoveredQuickAction = QuickActionHint(key: systemName, text: label)
+                } else if hoveredQuickAction?.key == systemName {
+                    hoveredQuickAction = nil
+                }
+            }
+            // 「显示 / 隐藏歌词」那颗点完 `label` 就变,但指针没动、`onHover` 不会再来一次 —— 不同步
+            // 的话气泡会停在点之前那句,而这颗键的状态本来就靠这句提示交代(05 章决策 28)。
+            .onChange(of: label) { _, newLabel in
+                if hoveredQuickAction?.key == systemName {
+                    hoveredQuickAction = QuickActionHint(key: systemName, text: newLabel)
+                }
+            }
+            // 把自己的位置报给上面那层,气泡靠它对准这颗键 —— 几何交给 SwiftUI 算,不在别处照着
+            // 「22 + spacing 2 + 分隔线」再手写一份坐标(那种两处各算一份的数迟早会漂)。
+            .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [systemName: $0] }
             .accessibilityLabel(label)
     }
 
@@ -1957,6 +2450,156 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 action()
             }
         }
+    }
+}
+
+/// 快捷操作那排键上此刻被指到的那一颗。`key` 用 SF Symbol 名(每颗键都不重复、且**不随状态变**),
+/// `text` 是要弹的那句 —— 「显示 / 隐藏歌词」那颗的文案会跟着开关翻,所以两者得分开存:靠 key 认人,
+/// 靠 text 显示(见 `quickActionButton` 里那条 `onChange`)。
+private struct QuickActionHint: Equatable {
+    let key: String
+    let text: String
+}
+
+/// 快捷操作那排图标键的悬浮文案提示(2026-09-09,用户:「帮我灵动岛展开状态的这几个按钮,悬浮上面加
+/// 一个对应的文案提示」)。
+///
+/// ⚠️ **不能靠 `.help()`** —— 那行代码 2026-09-07 起就写在 `quickActionButton` 里、注释还写着「label
+/// 同时当 tooltip 和读屏标签」,但它一次都没弹过:AppKit 的 tooltip(`NSToolTipManager`)只在**前台
+/// App** 的窗口上显示,而 lyrimuse 是 LSUIElement、灵动岛这扇 `.nonactivatingPanel` 又刻意不激活 App
+/// (见 `NotchLyricsWindow.canBecomeKey` 那段)—— 用户 hover 的时候前台是他正在用的那个 App,小黄框
+/// 永远不会来。跟悬浮歌词那排图标 2026-08 删掉 `.help()` 属同一类死代码(那边的成因是窗口点击穿透、
+/// 连 hover 都收不到)。所以这里自绘,并把 `.help()` 一并撤掉:留着的话哪天 App 恰好在前台,系统气泡
+/// 会跟自绘的这个一起弹两个。
+///
+/// **落点对准那颗键**:头部那排往**下**弹(下面是歌词行)、空闲面板那排往**上**弹(它贴着卡片底,
+/// `idlePanelBottomSpacing` 只剩 10pt,往下会被窗口硬裁 —— 窗口恒按 `cardHeight` 开,放不进就是裁掉,
+/// 不会自己长高)。第一版把气泡钉在按钮排**左侧**固定位置,离线渲染一看就废了:指到最右那颗 ✕ 时
+/// 气泡出现在最左边、跟高亮的键隔着四个图标,"这句话说的是哪颗"当场断掉。
+///
+/// 位置怎么来的:每颗键用 `anchorPreference` 把自己的 bounds 报上来(见 `quickActionButton`),这里
+/// `proxy[anchor]` 取回来 —— **几何交给 SwiftUI 算**,不在这儿照着「22 + spacing 2 + 分隔线 1 + 6」
+/// 再手写一份坐标(那种两处各算一份的数迟早会漂,同 `cardHeight` 与内容高度共用一个函数的理由)。
+/// 挂在**整行**上而不是那排按钮上,是因为要把气泡收敛在卡片内:按钮排自己只有 100pt 宽,量不到
+/// "内容区还剩多少"。气泡尺寸靠一层 `GeometryReader` 回填(同 `NotchScrubber` 量宽度的老办法),
+/// 量到之前不显示 —— 否则第一帧会按半宽 0 定位、然后跳一下。
+///
+/// `overlay` 不参与布局,邻居一个像素不动(同 `NotchIconButton` 那条「悬停不许推动邻居」);整层
+/// `allowsHitTesting(false)`,气泡不拦下面歌词行 / 顶行的点击。底色**破例用黑**、不用这张卡惯用的
+/// `tint` 低透明度:它得**盖住**底下的歌词才读得清,而 tint 低透明度是透的;卡片永远深底(纯黑 /
+/// 深色渐变 / 封面模糊),黑底气泡不突兀。
+///
+/// 时序照系统 tooltip 的手感:**首次悬停等 `initialDelayMs`** 再弹(扫过一排键时不该一路闪)、
+/// **已经弹着时换键立即换字**。`shown` 与 `hovered` 因此是两个 state,不是一个。
+private struct QuickActionTooltipOverlay: ViewModifier {
+    let hovered: QuickActionHint?
+    @Binding var shown: QuickActionHint?
+    let tint: Color
+    /// 气泡贴在那颗键的哪一侧。
+    let edge: VerticalEdge
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 气泡自己量出来的尺寸(见下面那层 preference)。**只用来收敛边界**,不是显示的前提 ——
+    /// 量不到时走 `fallbackHeight` 那条降级路,气泡照画,只是不夹边;拿它当前提就变成
+    /// "量不到 → 永远不显示"的全有全无。
+    @State private var bubbleSize: CGSize = .zero
+
+    private static let gap: CGFloat = 5
+    /// 首次悬停到弹出的延迟。**跟系统 tooltip 在这个 App 里的延迟同一档** —— `AppDelegate` 把
+    /// `NSInitialToolTipDelay` 注册成了 150(系统默认 1～1.5s "太长,容易被误以为悬浮提示没工作"),
+    /// 自绘的这份要是另取一个数,同一个 App 里就有两种悬浮提示、两种手感。
+    private static let initialDelayMs = 150
+    /// 还没量到时的估算高度:11pt 字 + 上下各 3pt 内边距,离线量过就是 20。垂直位置对得上比
+    /// 夹边重要 —— 差一点会压在键上。
+    private static let fallbackHeight: CGFloat = 20
+
+    func body(content: Content) -> some View {
+        content
+            .overlayPreferenceValue(QuickActionAnchorKey.self) { anchors in
+                GeometryReader { proxy in
+                    if let shown, let anchor = anchors[shown.key] {
+                        let key = proxy[anchor]
+                        let half = bubbleSize.width / 2
+                        let height = bubbleSize.height > 0 ? bubbleSize.height : Self.fallbackHeight
+                        bubble(shown.text)
+                            // 量自己多宽多高,回填给上面收敛用。走 preference 而不是
+                            // `onAppear`:preference 是布局的产物,不靠视图生命周期的回调
+                            // (同 `SettingsPopoverShell` 量浮层高度那份)。
+                            .background(
+                                GeometryReader { g in
+                                    Color.clear.preference(key: QuickActionBubbleSizeKey.self,
+                                                           value: g.size)
+                                }
+                            )
+                            .position(
+                                // 对准键的中心,再夹进内容区 —— 最右那颗 ✕ 的气泡不夹的话会溢出
+                                // 卡片、被那道圆角裁掉半句话。
+                                x: min(max(key.midX, half), max(half, proxy.size.width - half)),
+                                y: edge == .bottom
+                                    ? key.maxY + Self.gap + height / 2
+                                    : key.minY - Self.gap - height / 2)
+                    }
+                }
+                // 收在 overlay 里面接:气泡的 preference 只要传到同一层的这个祖先,不用穿出
+                // overlay 边界。
+                .onPreferenceChange(QuickActionBubbleSizeKey.self) { bubbleSize = $0 }
+                .allowsHitTesting(false)
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: shown)
+            .task(id: hovered) {
+                guard let hovered else {
+                    shown = nil
+                    return
+                }
+                if shown == nil {
+                    try? await Task.sleep(for: .milliseconds(Self.initialDelayMs))
+                    if Task.isCancelled { return }
+                }
+                shown = hovered
+            }
+            // 兜底:这块内容整个走掉时别把气泡的状态留在身上(展开/收起走的是透明度、不会 disappear,
+            // 真正会走的是切屏幕镜像 / 关灵动岛那种整树重建)。
+            .onDisappear { shown = nil }
+    }
+
+    /// 气泡本体。字形 11pt medium、`tint` **全亮** —— 它是"要读的那句话",不该比旁边 0.75 的图标还淡
+    /// (同日「合并明细」那一列专辑名的教训:次要 ≠ 该看不清)。
+    private func bubble(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    // 0.78 而不是更轻的一档:卡片底可以是**封面模糊**(亮封面时那块底是浅的),
+                    // 离线渲染过 0.62 那版 —— 底下的字会从气泡里透出来。它的活儿是盖住,不是透。
+                    .fill(Color.black.opacity(0.78))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(tint.opacity(0.14))
+                    )
+            )
+            .fixedSize()
+    }
+}
+
+/// 气泡量出来的尺寸,只给 `QuickActionTooltipOverlay` 收敛边界用。
+private struct QuickActionBubbleSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
+/// 那排键各自的位置(键名 → bounds),`quickActionButton` 报上来、`QuickActionTooltipOverlay` 取用。
+private struct QuickActionAnchorKey: PreferenceKey {
+    static let defaultValue: [String: Anchor<CGRect>] = [:]
+    static func reduce(value: inout [String: Anchor<CGRect>],
+                       nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
@@ -2007,11 +2650,15 @@ private struct NotchIconButtonStyle: ButtonStyle {
     let tint: Color
     let cornerRadius: CGFloat
     let hovering: Bool
+    /// 静止时底色的透明度。纯图标键是 0(静止时没有底,悬停才浮出来);带文字的胶囊键(`NotchPillButton`)
+    /// 给 0.12 —— 没有底的一句文字看起来是标签,不是键。悬停 / 按下在它之上再抬一档,三档单调递增。
+    var restingLevel: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
-        let level: Double = pressed ? 0.24 : (hovering ? 0.14 : 0)
+        let level: Double = pressed ? max(0.24, restingLevel + 0.12)
+            : (hovering ? max(0.14, restingLevel + 0.08) : restingLevel)
         return configuration.label
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -2021,6 +2668,81 @@ private struct NotchIconButtonStyle: ButtonStyle {
             .scaleEffect(pressed ? 0.9 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.65), value: pressed)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// 「自己持有 hover 状态」的一层壳(2026-09-11)。
+///
+/// 为什么需要它:`artworkThumbnail` / `lyricsOffsetButton` 都是**函数**,同一个函数有多个调用点
+/// (封面那份三处:耳朵 32pt、稳态歌词行、展开头部)。把 `@State private var hovering` 放进宿主
+/// 视图,三处会共用同一个布尔值 —— 悬停耳朵那张会把展开头部那张一起点亮。壳把状态关进每个实例
+/// 自己的身体里,调用点不用改成三个独立 struct。
+private struct HoverReveal<Content: View>: View {
+    @ViewBuilder let content: (Bool) -> Content
+    @State private var hovering = false
+
+    var body: some View {
+        content(hovering).onHover { hovering = $0 }
+    }
+}
+
+/// 封面缩略图的悬停 / 按下反馈(2026-09-11,用户:「目前这几处的悬浮动效还没做好,做一下」)。
+///
+/// ⚠️ **不能复用 `NotchIconButtonStyle`**:那份靠"图标背后浮出一层底色"给反馈,而这里的标签是
+/// 一张**不透明的图**,背后画什么都看不见。所以改成在图**上面**叠一层白纱,同时把那圈描边抬亮
+/// 一档 —— 描边因此从标签里搬进这个 style(它要随状态变,留在标签里只能是定值)。
+///
+/// ⚠️ **悬停不放大,只有按下才缩到 0.96**。放大会顶出容器:`artworkThumbnail` 最小的调用点是
+/// 耳朵那档 32pt,外层是按 32pt 排的;缩小没有这个风险。这条跟 `lyricsOffsetButton` 上那条
+/// "别撑高时间行"是同一个纪律 —— 这张卡的几何余量是算过账的,反馈只准在原地做。
+private struct NotchArtworkButtonStyle: ButtonStyle {
+    let cornerRadius: CGFloat
+    let hovering: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return configuration.label
+            .overlay(shape.fill(.white.opacity(pressed ? 0.16 : (hovering ? 0.08 : 0))))
+            .overlay(shape.strokeBorder(.white.opacity(pressed ? 0.5 : (hovering ? 0.38 : 0.18)),
+                                        lineWidth: 0.5))
+            .scaleEffect(pressed ? 0.96 : 1)
+            // 曲线跟 NotchIconButtonStyle 一字不差 —— 同一张卡上两种键的手感不该有差别。
+            .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.65), value: pressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// 带文字的胶囊键(2026-09-08,首个用途是广告态那颗「跳过广告」)。悬停 / 按下反馈跟 `NotchIconButton`
+/// 同一份 `NotchIconButtonStyle`,只多一层 12% 的静止底(理由见 `restingLevel`);高度跟快捷操作 / 三键
+/// 同档 22pt,文字 11pt semibold —— 它跟那些图标键排在同一张卡上,不该比它们重。
+private struct NotchPillButton: View {
+    let systemName: String
+    let title: String
+    let tint: Color
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: systemName)
+                    .font(.system(size: 9.5, weight: .bold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(tint.opacity(hovering ? 1 : 0.85))
+            .padding(.horizontal, 9)
+            .frame(height: NotchMetrics.trackInfoActionsHeight)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(NotchIconButtonStyle(tint: tint, cornerRadius: NotchMetrics.trackInfoActionsHeight / 2,
+                                          hovering: hovering, restingLevel: 0.12))
+        .onHover { hovering = $0 }
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 
@@ -2201,13 +2923,7 @@ private struct NotchScrubber: View {
             lyricsOffsetButton("minus", help: nudgeHelp(L10n.t("延后"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
             }
-            Text(offsetText)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard trackLyricsOffsetMs != 0 else { return }
-                    PlaybackCoordinator.shared.resetLyricsOffset()
-                }
-                .modifier(OptionalHelp(text: trackLyricsOffsetMs != 0 ? L10n.t("点击归零") : nil))
+            offsetReadout
             lyricsOffsetButton("plus", help: nudgeHelp(L10n.t("提前"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: lyricsOffsetStepMs)
             }
@@ -2220,22 +2936,88 @@ private struct NotchScrubber: View {
         "\(L10n.t("歌词")) \(AppSettings.signedSeconds(ms: trackLyricsOffsetMs))s"
     }
 
+    /// 中间那块数值。⚠️ **定宽**:数值从「0.0」变到「+10.2」时,两侧的 − / + 不许跟着移位
+    /// (2026-09-11 用户要求「歌词偏移调整之后不要改变 -+ 的位置」)。
+    ///
+    /// 做法是拿**最宽的那个变体**当隐形垫片撑出宽度、真文案叠在上面居中 —— `.hidden()` 仍然
+    /// 参与布局,宽度由垫片说了算。为什么不写死一个 pt 宽度:「歌词」这个前缀是本地化的(en 是
+    /// "Lyrics"、繁体是「歌詞」),写死的宽度换个语言就不对;垫片跟真文案共用同一份
+    /// `L10n.t("歌词")`,三种语言都自动成立。
+    ///
+    /// `.monospacedDigit()` 管另一半:等宽数字让「+0.2」→「+0.8」这种同位数变化也不抖。
+    /// 偏移**没有上下界**(`LyricsOffsetStore.nudge` 不 clamp),真调到 ±100s 就靠
+    /// `minimumScaleFactor` 把字缩一点,而不是把按钮推走 —— 位置稳定优先于字号。
+    private var offsetReadout: some View {
+        let canReset = trackLyricsOffsetMs != 0
+        return HoverReveal { hovering in
+            // ⚠️ 垫片必须**独占尺寸**、真文案走 `.overlay`。**写成 ZStack 是错的**:ZStack 的宽度
+            // 取最宽的那个子视图,真文案照样能把它撑大 —— 离屏实测(NSHostingView.fittingSize):
+            // ZStack 版在两位整数秒时 46 → 51/52pt、「+100.0s」到 58pt,极差 12pt,等于没修;
+            // overlay 版七种数值全是 46pt,极差 0.00pt。`minimumScaleFactor` 只在宽度**被约束**
+            // 时才介入,而 ZStack 压根没约束它;overlay 的尺寸由父视图说了算、反过来撑不大父视图,
+            // 所以约束是真的存在,超长值走缩放而不是推走按钮。
+            Text(offsetWidthTemplate)
+                .hidden()
+                .overlay {
+                    Text(offsetText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .monospacedDigit()
+                // 这块是可点的(点击归零),所以也该有悬停反馈;底色语言跟两侧的 − / + 同一档
+                // (NotchIconButtonStyle 的 hover 也是 0.14)。归零无意义时(值本来就是 0)不亮。
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(tint.opacity(canReset && hovering ? 0.14 : 0))
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard canReset else { return }
+                    PlaybackCoordinator.shared.resetLyricsOffset()
+                }
+                .modifier(OptionalHelp(text: canReset ? L10n.t("点击归零") : nil))
+        }
+    }
+
+    /// 撑宽度用的最宽变体:符号 + **一位**整数 + 一位小数。
+    ///
+    /// ⚠️ 为什么不预留两位整数(`+10.2s`):那样静止态(`0.0s`)会永久多出 12pt 空隙、− / + 被推得
+    /// 离数字明显更远(实测 40pt → 52pt);收成一位只多 6pt(40 → 46)。而歌词偏移调到 ±10 秒
+    /// 这首歌的词已经完全对不上了,不值得为这个量级常驻一份空隙。真超过就由
+    /// `minimumScaleFactor(0.7)` 把字缩一点(`+10.2s` 需要 50pt/46pt ≈ 0.92,远在 0.7 之内,
+    /// 缩了也看不出来),**宽度仍然恒定** —— 位置稳定是硬要求,字号不是。
+    /// 这个"缩而不是推"只有在 `offsetReadout` 用 overlay(而不是 ZStack)时才成立,见那边的 ⚠️。
+    private var offsetWidthTemplate: String {
+        "\(L10n.t("歌词")) +2.2s"
+    }
+
     private func nudgeHelp(_ verb: String) -> String {
         "\(verb) \(AppSettings.formattedSeconds(ms: lyricsOffsetStepMs))\(L10n.t("秒"))"
     }
 
+    /// ⚠️ 悬停 / 按下的底色**只能画在 10×11 这个标签尺寸上**(2026-09-11 补反馈时的约束)。
+    /// 这一行的高度是 9pt 字号撑出来的(见 `lyricsOffsetControls` 上面那段),键只要比行高一点,
+    /// 就会把时间行顶出 `expandedContent` 预留的高度、被 `.frame(alignment: .top)` 从底部裁掉。
+    /// `NotchIconButtonStyle` 正好满足:它的 background 不改布局尺寸,press 的 scaleEffect 只缩
+    /// 不放。**别**改成用 padding 把底色撑大 —— 那等于把这颗键的高度交还给布局。
+    ///
+    /// 负 padding 刻意留在 `HoverReveal` **外面**:壳把 `.onHover` 挂在它收到的那份内容上,而
+    /// 那份内容到 `.contentShape(Rectangle())` 为止是**扩过的 20×21**。这样"能按到的范围"和
+    /// "会亮的范围"是同一块;把负 padding 挪进去,hover 就缩回 10×11、按得到却不亮。
     private func lyricsOffsetButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 7, weight: .semibold))
-                .frame(width: 10, height: 11)
+        HoverReveal { hovering in
+            Button(action: action) {
+                Image(systemName: symbol)
+                    .font(.system(size: 7, weight: .semibold))
+                    .frame(width: 10, height: 11)
+            }
+            .buttonStyle(NotchIconButtonStyle(tint: tint, cornerRadius: 3, hovering: hovering))
+            // 命中区上下左右各扩 5pt,跟上面进度条命中区同一个技巧:padding 撑开
+            // contentShape,再用等量负 padding 抵消对布局尺寸的影响——按钮本身画多小,
+            // 手指/鼠标能按到的范围都不因此缩水,但不会把这一行的实际高度撑高。
+            .padding(5)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        // 命中区上下左右各扩 5pt,跟上面进度条命中区同一个技巧:padding 撑开
-        // contentShape,再用等量负 padding 抵消对布局尺寸的影响——按钮本身画多小,
-        // 手指/鼠标能按到的范围都不因此缩水,但不会把这一行的实际高度撑高。
-        .padding(5)
-        .contentShape(Rectangle())
         .padding(-5)
         .modifier(OptionalHelp(text: help))
     }
@@ -2356,3 +3138,150 @@ struct NotchHangingShape: Shape {
     }
 }
 
+
+// MARK: - 「发现新播放器」的两个宿主(2026-09-11,决策 #37)
+
+/// 收起态左耳那一格的宿主:平时是 fallback(`idleAppIcon`,Lyrimuse 自己的图标);`NotchUnknownPlayerPrompt`
+/// 挂着信任提议时换成**那个播放器**的图标 + 右上角一粒小圆点。订阅下沉到这里,提议挂上 / 撤掉只失效这一格
+///(同 `NotchTransientHost` 那条 2026-08-19 性能审计纪律)。
+///
+/// 图标走 `AppIconResolver.icon(forBundleID:)`(跟菜单栏面板那枚来源角标、设置页「已信任的其它播放器」列表
+/// 同一份缓存),再经 `NotchIdleAppIcon.bitmap(of:cacheKey:pixelSide:)` 按像素预先光栅化 —— 跟 App 图标那枚
+/// 同一个锯齿问题、同一个解法。反查不到图标(App 装在非常规位置)时退回 fallback:提议本身还在,hover 展开
+/// 照样能看到、能点,只是收起态少了那条线索。
+///
+/// 小圆点**破例用红**、不走这张卡的 tint:它是"有事等你处理"的角标,不是内容装饰 —— Dock / 系统通知的角标
+/// 就是红的,换成 tint 在「跟随封面取色」下会变成一粒随机颜色的点,读不出"未处理"的意思。外面描 1pt 黑边,
+/// 跟图标的浅色边角分开(卡片底本来就是纯黑,黑边等于一圈留白)。
+private struct NotchIdleEarIconHost<Fallback: View>: View {
+    @ObservedObject private var prompt: NotchUnknownPlayerPrompt
+    let side: CGFloat
+    let scale: CGFloat
+    let alignment: Alignment
+    @ViewBuilder let fallback: () -> Fallback
+
+    init(prompt: NotchUnknownPlayerPrompt, side: CGFloat, scale: CGFloat, alignment: Alignment,
+         @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.prompt = prompt
+        self.side = side
+        self.scale = scale
+        self.alignment = alignment
+        self.fallback = fallback
+    }
+
+    /// 圆点直径。7pt 在 26pt 的图标角上是 iOS 角标那个量级,再小看不见、再大盖住图标一角。
+    /// (泛型类型里放不了 static 存储属性,所以是计算属性。)
+    private static var badgeSide: CGFloat { 7 }
+
+    var body: some View {
+        if let offer = prompt.offer,
+           let icon = AppIconResolver.icon(forBundleID: offer.bundleID),
+           let bitmap = NotchIdleAppIcon.bitmap(of: icon, cacheKey: offer.bundleID,
+                                                pixelSide: Int((side * scale).rounded())) {
+            Image(decorative: bitmap, scale: scale)
+                .frame(width: side, height: side)
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(Color.red)
+                        .overlay(Circle().strokeBorder(Color.black, lineWidth: 1))
+                        .frame(width: Self.badgeSide, height: Self.badgeSide)
+                        // 往角外挪一点:压在图标圆角上而不是整颗落在图标里面,角标的惯例。
+                        .offset(x: 2, y: -2)
+                }
+                .frame(maxWidth: .infinity, alignment: alignment)
+                .accessibilityLabel(L10n.t("检测到新的播放器") + " " + offer.displayName)
+                .transition(.opacity)
+        } else {
+            fallback()
+        }
+    }
+}
+
+/// 没有曲目时 hover 展开出来那一块的宿主:平时是 fallback(`idleExpandedPanel`,「没有在播放」+ 三颗键);
+/// `NotchUnknownPlayerPrompt` 挂着信任提议时换成:
+///
+///     检测到新的播放器                                [✓ 加入信任列表] [×]
+///     Podcasts · 正在放:热可可 - 28. …
+///
+/// 排法、字号、行距、按钮档位**逐项照抄** `idleExpandedPanel`(左边两行字按头部歌名 / 歌手两档行高,右边一排
+/// 22pt 键,同样的 16pt 左右内边距与 `trackInfoTopSpacing`)—— 高度必须跟它**一样**:`NotchChromeSource.cardHeight`
+/// 的 `!hasTrack` 分支只认 `idlePanelHeight` 一个数,这里若高一截就被窗口硬裁、矮一截就底下留空。第一行只用
+/// 通知那条现成的标题键,播放器名挪到第二行行首(`名字 · 正在放:…`),不新造带占位符的词条 —— 本地化表是四份
+/// 手写文件 + 一份 xcstrings 真源,加一条键要动五个文件、且 xcstrings 多会话并发改会丢更新(11 章有记录)。
+///
+/// 「加入信任列表」是文字胶囊键(`NotchPillButton`,跟广告态那颗「跳过广告」同款):这颗键要是做成纯图标,用户
+/// 得先猜它是什么才敢点 —— 提议信任是个有后果的动作(信任之后这个 App 的播放会进 Last.fm / ListenBrainz),
+/// 文案必须摆在明面上。× 是"这次别烦我"(`NotchUnknownPlayerPrompt.dismiss`,同一段播放里不再挂),纯图标 +
+/// 自绘悬浮提示(`QuickActionTooltipOverlay`,`.help()` 在这扇窗上永远不弹,理由见那个类型的头注)。
+///
+/// 这一块自己**不**读 `hasTrack` / `isExpanded`:它跟 `idleExpandedPanel` 一样只在没有曲目时被外层挂上,
+/// 稳态下透明地待在顶行下面、展开时原地淡入,那套由外层的 `NotchCardLayerActive` 管。
+private struct NotchIdlePanelHost<Fallback: View>: View {
+    @ObservedObject private var prompt: NotchUnknownPlayerPrompt
+    let tint: Color
+    @ViewBuilder let fallback: () -> Fallback
+
+    /// × 的悬浮提示状态,跟 `NotchLyricsView.hoveredQuickAction` / `shownQuickActionTooltip` 是同一套两段式
+    ///(首次 150ms 才弹、已弹着时立即换字),这一块是独立视图,得自己存一份。
+    @State private var hoveredAction: QuickActionHint?
+    @State private var shownTooltip: QuickActionHint?
+
+    init(prompt: NotchUnknownPlayerPrompt, tint: Color, @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.prompt = prompt
+        self.tint = tint
+        self.fallback = fallback
+    }
+
+    var body: some View {
+        if let offer = prompt.offer {
+            unknownPlayerPanel(offer)
+                .transition(.opacity)
+        } else {
+            fallback()
+        }
+    }
+
+    /// × 那颗键在悬浮提示登记表里的 key(同 quickActionButton:用 SF Symbol 名)。泛型里放不了 static 存储属性。
+    private static var dismissKey: String { "xmark" }
+
+    private func unknownPlayerPanel(_ offer: NotchUnknownPlayerPrompt.Offer) -> some View {
+        let dismissLabel = L10n.t("关闭")
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
+                Text(L10n.t("检测到新的播放器"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint.opacity(0.9))
+                Text(offer.displayName + " · " + String(format: L10n.t("正在放：%@"), offer.nowPlayingText))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(tint.opacity(0.6))
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 2) {
+                NotchPillButton(systemName: "checkmark.shield.fill", title: L10n.t("加入信任列表"), tint: tint) {
+                    prompt.trust()
+                }
+                NotchIconButton(systemName: Self.dismissKey, glyphSize: 11, hitSize: NotchMetrics.trackInfoActionsHeight,
+                                tint: tint, glyphOpacity: 0.75) {
+                    prompt.dismiss()
+                }
+                // 下面三样照抄 NotchLyricsView.quickActionButton:进出登记 / 位置上报 / 读屏标签。
+                .onHover { inside in
+                    if inside {
+                        hoveredAction = QuickActionHint(key: Self.dismissKey, text: dismissLabel)
+                    } else if hoveredAction?.key == Self.dismissKey {
+                        hoveredAction = nil
+                    }
+                }
+                .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [Self.dismissKey: $0] }
+                .accessibilityLabel(dismissLabel)
+            }
+            .frame(height: NotchMetrics.trackInfoActionsHeight)
+        }
+        // 气泡往上弹:这块面板贴着卡片底,理由同 idleExpandedPanel 那处。
+        .modifier(QuickActionTooltipOverlay(hovered: hoveredAction, shown: $shownTooltip, tint: tint, edge: .top))
+        .padding(.horizontal, 16)
+        .padding(.top, NotchMetrics.trackInfoTopSpacing)
+    }
+}

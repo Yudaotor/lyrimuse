@@ -87,6 +87,9 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var expandedShowsScrubber: Bool { true }
     /// 预览恒按"有曲目"画,理由同 isCollapsed 恒 false:用户来这儿是看样式的。
     var hasTrack: Bool { true }
+    /// 预览永远不进广告态(2026-09-08):广告态会把展开头部整块藏掉、歌词行换成倒计时 —— 用户来编辑台是调
+    /// 头部那四项和歌词行样式的,给他一张看不见头部的样张没有意义。同 hasTrack 恒 true 的理由。
+    var isAdBreakNow: Bool { false }
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。

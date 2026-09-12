@@ -64,6 +64,7 @@ struct OverlayAllSettingsDrawer: View {
                 widthRow
                 CardDivider()
                 behaviorGroup
+                placementGroup
                 CardDivider()
                 resetRow
             }
@@ -180,6 +181,16 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
+    /// 跟工具栏「位置」浮层同名、同一份视图(2026-09-11,issue #5)。排在「行为」之后 = 工具栏第二行
+    /// 的顺序(排版 / 行为 / 位置),用户按浮层的记忆到抽屉里找不会落空。
+    private var placementGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("位置"))
+            CardDivider()
+            OverlayPlacementSettingsRows()
+        }
+    }
+
     /// 宽度滑杆。编辑台里那条宽度调整条改的是同一个值,这里是它的兜底通路(键盘/VoiceOver,
     /// 以及"我想输一个准数"的场合)。
     ///
@@ -239,7 +250,7 @@ struct OverlayAllSettingsDrawer: View {
         SettingsRow(
             icon: "arrow.uturn.backward",
             title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含排版、行为和宽度")
+            subtitle: L10n.t("不含排版、行为、位置和宽度")
         ) {
             Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
         }

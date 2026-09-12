@@ -226,5 +226,49 @@ func runIdlePageTests() {
         expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil,
                                   qqArtist: nil, neteaseSong: nil).isEmpty, true,
                     "一个链接都没有时 isEmpty")
+        expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil, qqArtist: nil, neteaseSong: nil,
+                                  spotifySong: URL(string: "https://open.spotify.com/track/1")).isEmpty, false,
+                    "只有 Spotify 曲目页也不算 isEmpty(2026-09-10 新字段要进判据)")
+
+        // Spotify 曲目 ID 形状闸(与 collector 的 spotifyTrackIDFromURI 同源:22 位 base62)。
+        expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05PJ")?.absoluteString,
+                    "https://open.spotify.com/track/1Xyo4u8uXC1ZmMpatF05PJ", "Spotify 曲目页 URL")
+        expectEqual(P.spotifyTrackURL(id: "") == nil, true, "Spotify ID:空串不给链接")
+        expectEqual(P.spotifyTrackURL(id: "missing value") == nil, true, "Spotify ID:脚本回声挡掉")
+        expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05P") == nil, true, "Spotify ID:21 位挡掉")
+        expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05P/") == nil, true, "Spotify ID:带斜杠挡掉")
+
+        // 「网页」行只给当前播放器自己那个平台的歌曲页(2026-09-10,用户定的规则)。
+        let am = URL(string: "music://music.apple.com/cn/album/x/1?i=2")!
+        let qq = URL(string: "https://y.qq.com/n/ryqq/songDetail/004Yi5BD3ksoAN")!
+        let ne = URL(string: "https://music.163.com/song?id=277787")!
+        let sp = URL(string: "https://open.spotify.com/track/1Xyo4u8uXC1ZmMpatF05PJ")!
+        let all = PlatformLinks(appleMusic: am, qqSong: qq, qqAlbum: nil, qqArtist: nil, neteaseSong: ne, spotifySong: sp)
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.appleMusic.bundleIdentifier)?.url, am,
+                    "网页行:Apple Music 播放 → Apple Music 曲目页")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.appleMusic.bundleIdentifier)?.platform, .appleMusic,
+                    "网页行:Apple Music 播放 → 平台身份也对")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.qqMusic.bundleIdentifier)?.url, qq,
+                    "网页行:QQ 音乐播放 → 只给 QQ 歌曲页")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.netease.bundleIdentifier)?.url, ne,
+                    "网页行:网易云播放 → 只给网易云歌曲页")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.spotify.bundleIdentifier)?.url, sp,
+                    "网页行:Spotify 原生播放 → Spotify 曲目页")
+        expectEqual(all.songLink(forPlayerBundleID: "com.google.Chrome", webPlatformID: "spotifyWeb")?.platform, .spotify,
+                    "网页行:浏览器里放 Spotify 网页版 → 按 Spotify 算(bundle id 是浏览器,靠平台 id 认)")
+        expectEqual(all.songLink(forPlayerBundleID: "com.google.Chrome", webPlatformID: "youtubeMusic") == nil, true,
+                    "网页行:YouTube Music 没存链接 → 整行不出现,不拿别的平台顶上")
+        expectEqual(all.songLink(forPlayerBundleID: "com.google.Chrome") == nil, true,
+                    "网页行:认不出在放哪个网页平台的浏览器 → nil")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.kugou.bundleIdentifier) == nil, true,
+                    "网页行:酷狗播放 → nil(collector 没存酷狗歌曲页;用户那张截图的场景)")
+        expectEqual(all.songLink(forPlayerBundleID: nil) == nil, true, "网页行:还没认出播放器 → nil")
+        expectEqual(all.songLink(forPlayerBundleID: "") == nil, true, "网页行:.auto 的空 bundle id → nil")
+        // 播放器认得出、但这首歌在它那个平台上没链接:同样 nil,不退到别的平台。
+        let noNetease = PlatformLinks(appleMusic: am, qqSong: qq, qqAlbum: nil, qqArtist: nil, neteaseSong: nil)
+        expectEqual(noNetease.songLink(forPlayerBundleID: PlaybackPlayer.netease.bundleIdentifier) == nil, true,
+                    "网页行:网易云播放但没有网易云链接(周杰伦那类版权下架)→ nil,不拿 QQ / AM 顶上")
+        expectEqual(noNetease.songLink(forPlayerBundleID: PlaybackPlayer.spotify.bundleIdentifier) == nil, true,
+                    "网页行:Spotify 播放但缓存里只有搜索页兜底、没有真 ID → nil")
     }
 }

@@ -160,7 +160,7 @@ struct OverlayTextSettingsRows: View {
                         set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
                     ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
                                               // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——参考的是 LyricsX 的做法。
+                                              // 不额外加调节项——同类实现普遍也是这个取舍。
                 }
             }
         }

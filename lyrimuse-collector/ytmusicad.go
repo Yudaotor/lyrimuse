@@ -121,6 +121,9 @@ const ytmusicAdProbeJS = `(function(){` +
 	`var cls = p ? (p.className || '') : '';` +
 	`var adShowing = cls.indexOf('ad-showing') >= 0 ? '1' : '0';` +
 	`var badge = document.querySelector('.ytp-ad-badge, .ytp-ad-simple-ad-badge, .ytp-ad-text, .ytp-ad-preview-container') ? '1' : '0';` +
+	`var slotEl = document.querySelector('.ytp-ad-simple-ad-badge, .ytp-ad-badge');` +
+	`var slot = '';` +
+	`if (slotEl) { var st = String(slotEl.textContent || '').replace(new RegExp('[0-9]+:[0-9]+', 'g'), ''); var sm = st.match(new RegExp('([0-9]+)[^0-9]{1,12}([0-9]+)')); if (sm) { slot = sm[1] + '/' + sm[2]; } }` +
 	`var t = (document.title || '').trim();` +
 	`var bare = (t === 'YouTube Music') ? '1' : '0';` +
 	`var bl = document.querySelectorAll('ytmusic-player-bar .byline a');` +
@@ -129,7 +132,7 @@ const ytmusicAdProbeJS = `(function(){` +
 	`var h = bl[i].getAttribute('href') || '';` +
 	`if (h.indexOf('browse/MPREb') >= 0) { album = (bl[i].textContent || '').trim(); break; }` +
 	`}` +
-	`return adShowing + '|' + badge + '|' + bare + '|' + album;` +
+	`return adShowing + '|' + badge + '|' + bare + '|' + slot + '|' + album;` +
 	`})()`
 
 // browserScriptFamily 回答"这个 bundle id 该用哪种 AppleScript 方言"。
@@ -153,9 +156,16 @@ func browserScriptFamily(bundleID string) string {
 // 三个标志任一为 1 就算广告,理由见文件头注(误判成广告只丢一轮,误判成歌是永久污染)。
 // 形状不认识(空、NOTFOUND、段数不够、前三段非 0/1)一律 unknown —— 不猜。
 //
-// ⚠️ 只切 4 段(SplitN):第四段是专辑名,是任意文本、可能自带 `|`,原样保留。用普通 Split
+// ⚠️ 只切 5 段(SplitN):最后一段是专辑名,是任意文本、可能自带 `|`,原样保留。用普通 Split
 // 的话专辑名里一个竖线就会让整条读数退化成"形状不对",连带把广告判定一起丢掉。
-// 段数只有 3(旧形状)照样解得出,专辑为空。
+//
+// ⚠️ 2026-09-09 探针多返回了一段「广告徽章上的计数」(第四段,形如 `1/2`),专辑名因此挪到
+// 第五段。collector 这边**不消费**那个计数(它只做 gate 和专辑补全,计数是给 App 侧界面用的),
+// 但必须正确跳过它 —— 不改这里的话 SplitN 4 会把 `1/2|专辑名` 整个当成专辑名。
+//
+// ⚠️ **只认 5 段,不给旧形状留兼容分支**(跟 Swift 侧 parse 同一套,理由也同):专辑名里
+// 自带 `|` 是明确支持的,那时旧的 4 段形状切出来也是 5 段、跟新形状逐字同形,分不开。
+// 少于 5 段就是畸形输入 —— 专辑名取不到,但前三段的判定照样解。
 //
 // ⚠️ 跟 Swift 侧 `YouTubeMusicAdProbe.parse` 是同一套语义,两边必须同时改。
 func parseYTMusicAdProbe(raw string) (ytmusicAdVerdict, string) {
@@ -166,7 +176,7 @@ func parseYTMusicAdProbe(raw string) (ytmusicAdVerdict, string) {
 	if s == "" || strings.Contains(s, "NOTFOUND") {
 		return ytmusicAdUnknown, ""
 	}
-	parts := strings.SplitN(s, "|", 4)
+	parts := strings.SplitN(s, "|", 5)
 	if len(parts) < 3 {
 		return ytmusicAdUnknown, ""
 	}
@@ -182,11 +192,11 @@ func parseYTMusicAdProbe(raw string) (ytmusicAdVerdict, string) {
 		}
 	}
 	album := ""
-	if len(parts) == 4 {
+	if len(parts) == 5 {
 		// 专辑名里的换行压平:osascript 的输出是按行读的,真混进换行会让下游的日志/比较
 		// 莫名其妙。压平放在这儿而不是 JS 里 —— JS 那边写 `\s` 要用反斜杠,而整段 JS 嵌在
 		// AppleScript 的双引号字符串里,反斜杠是那边的转义字符。
-		album = strings.NewReplacer("\n", " ", "\r", " ").Replace(parts[3])
+		album = strings.NewReplacer("\n", " ", "\r", " ").Replace(parts[4])
 		album = strings.TrimSpace(album)
 	}
 	verdict := ytmusicAdIsSong
@@ -286,9 +296,37 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 // 歌曲的 album 常常是空的,所以这些歌播放期间**每一轮轮询**都会走到这里。一次 AppleScript 往返
 // 实测 ~0.9s(见 Swift 侧 BrowserPositionProbe 的实测记录),每 5 秒烧 0.9s 不值当。
 //
-// 按曲目身份缓存是**安全**的:广告在 media-control 里是一条**独立的 now-playing 条目**
+// 按曲目身份缓存对**音频歌曲**是安全的:广告在 media-control 里是一条**独立的 now-playing 条目**
 // (自己的 title/artist/duration,实测如此),换成广告身份就变了、缓存自然失效。
+//
+// ⚠️ 对**音乐视频(MV)的前贴片广告**不成立(2026-09-08,用户报「有视频的歌识别错了,变成广告了」):
+// 前贴片在 #movie_player 里放,MediaSession 元数据却一直是这首歌自己的 —— 本仓日志 08:30:22～
+// 08:30:37 三轮 `rejected as advertisement (王子 - Why You Wanna Treat Me So Bad?)`,08:31:27 才
+// `now playing`,正好是这 60 秒缓存到期后的第一轮。也就是说同一个 key 下判定会从 ad 翻成 song。
+// 所以复用窗口按判定分档(ytmusicAdReuseWindow):判定是歌 60 秒不动;判定是广告只复用 5 秒,
+// 之后每轮再问页面 —— 广告本来只有 5～30 秒,前贴片一过下一轮就能放行,而不是白丢 60 秒。
+// Swift 侧 YouTubeMusicAdProbe.refreshInterval(for:) 是同一套分档。
+//
+// ⚠️ **但"两边同时改"只管判据,不管这两个缓存常数**(2026-09-11 订正,02 章决策 32)。Swift 侧的
+// 歌档 2026-09-11 起是 45 秒、不再是 60:那边 `kickIfNeeded` 是**异步**的(同步路径不能被一次
+// AppleScript 往返卡住 UI 轮询),再探间隔一旦等于可读有效期就没有重叠窗 —— 判定过期那一拍必然
+// 「读缓存拿到 nil + 这一拍才开始重探」,fail-closed 把快照整条丢掉、三个展示面一起塌成"没有在
+// 播放";真机日志坐实一首 album 为空的歌每 60 秒塌一次。**这里不需要跟着改**:下面
+// ytmusicAdProbe 是**同步**的,缓存过期就当场 runYTMusicAdProbe 阻塞探一次再返回,压根没有
+// "过期了但结果还没到"的那一拍。要逐字一致的是**判据**(probeJS 与判定映射,selftest 跨语言比着),
+// 缓存 / 节流策略本来就该各按各的执行模型走。
 const ytmusicAdMaxAge = 60 * time.Second
+
+// ytmusicAdRefreshWhenAd 是"上次判定是广告"时的复用窗口,见 ytmusicAdMaxAge 上面那段⚠️。
+const ytmusicAdRefreshWhenAd = 5 * time.Second
+
+// ytmusicAdReuseWindow 给出某个缓存判定还能复用多久:歌 60 秒,广告 5 秒。
+func ytmusicAdReuseWindow(v ytmusicAdVerdict) time.Duration {
+	if v == ytmusicAdIsAd {
+		return ytmusicAdRefreshWhenAd
+	}
+	return ytmusicAdMaxAge
+}
 
 var (
 	ytmusicAdMu    sync.Mutex
@@ -314,7 +352,7 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 
 	cacheKey := target + "\x00" + trackKey
 	ytmusicAdMu.Lock()
-	if ytmusicAdKey == cacheKey && time.Since(ytmusicAdAt) < ytmusicAdMaxAge {
+	if ytmusicAdKey == cacheKey && time.Since(ytmusicAdAt) < ytmusicAdReuseWindow(ytmusicAdVal) {
 		v, al := ytmusicAdVal, ytmusicAdAlbum
 		ytmusicAdMu.Unlock()
 		return v, al

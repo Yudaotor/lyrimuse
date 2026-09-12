@@ -1,5 +1,5 @@
 # 05. 灵动岛歌词
-> 最后核对:2026-09-09 · 基线:f30bca2+工作树
+> 最后核对:2026-09-11 · 基线:b7e08ef+工作树
 
 ## 定位
 
@@ -32,7 +32,7 @@
 - **收起**(`isCollapsed`,计算属性 `(!isPlayingNow || isAdBreakNow) && !isExpanded`,2026-08-19 加入广告维度):卡片收**高度**——只留顶行那一条(高度 = 刘海高/菜单栏高),歌词行和展开区连同内容整块淡出+向上轻缩(anchor 在顶部,跟卡片同一条弹簧,不是硬切);**宽度缩到 `min(稳态宽, 刘海宽 + 2 × 34 + 20)`**(`NotchWindowRoot.cardWidth` 的收起分支,2026-08-19 三键搬进展开卡后耳朵只剩封面/音浪,见「顶行」节的 `collapsedRow`)。
   - ⚠️ 代码里多处旧注释(`NotchLyricsWindowController` 文件头、`NotchChromeSource.isCollapsed` 的 doc)仍写着"收起缩到刘海本身大小/兜底胶囊 120pt",这是 2026-08-16 窗口重构前的旧行为(本节此前也写过一版"收起宽度不变、恒为 steadyCardWidth",2026-09-06 按代码订正)。控制器里的 `collapsedCardWidth` 属性仍在计算和发布,但当前工作树**没有任何消费方**(死状态)。
   - 收起态 hover 上去仍能重新展开出完整内容(含播放按钮,可用来恢复播放)——2026-08-17 把 `isCollapsed` 从"只在 recomputeGeometry 里赋值的存储属性"改成计算属性,修的就是"暂停时鼠标移上去没反应"。
-  - **Spotify 广告插播也收起**(2026-08-19 用户拍板"和暂停一样缩回去"):广告期间歌名位显示「广告中」而不是广告物料名(`NotchLyricsView.topRow` 的 displayTitle,MarqueeText id 用显示串以便切进/切出广告时重置跑马灯),歌词行随收起不渲染;hover 仍可展开(控制按钮可切歌跳过广告)。`isAdBreakNow` 由 `$isCurrentTrackAdBreak` 的 sink 写入,同 `isPlayingNow` 的 willSet 坑同一修法:只取 sink 参数值。
+  - **Spotify 广告插播也收起**(2026-08-19 用户拍板"和暂停一样缩回去"):广告期间歌名位显示「广告中」而不是广告物料名(`NotchLyricsView.topRow` 的 displayTitle,MarqueeText id 用显示串以便切进/切出广告时重置跑马灯),歌词行随收起不渲染;hover 仍可展开 —— 展开出来的是**广告态**版式(2026-09-08,见「展开区 → 广告态」):头部整块不画,歌词行变成「📣 广告中 · 还剩 0:21」+ YT Music 网页广告时右端一颗「跳过广告」,时间行不画歌词校准控件,三键照旧。`isAdBreakNow` 由 `$isCurrentTrackAdBreak` 的 sink 写入,同 `isPlayingNow` 的 willSet 坑同一修法:只取 sink 参数值;2026-09-08 起它也进了 `NotchChromeSource` 协议(预览恒 false),供 `showsExpandedTrackInfo` 读。
 - **稳态**(播放中、没 hover):顶行 + 歌词行(44pt,`NotchMetrics.compactRowHeight`)。
 - **展开**(hover):在下面再长出 40pt(`NotchMetrics.expandedExtraHeight`):下一句歌词预览(有才显示)+ 迷你进度条 + 时间行。**宽度也可以一起撑开**(2026-09-06):卡片从稳态宽长到展开宽(`NotchWindowRoot.cardWidth` 的 `isExpanded` 分支读 `expandedCardWidth`),两只耳朵和歌词行跟着变宽(`NotchLyricsView` 按 `proxy.size.width` 反推耳宽,视图层不用改);默认两宽相等、不撑开。宽度变化跟高度同一条弹簧。**没有曲目时**(2026-09-07,决策 #31)展开只长出一块 49pt 的「空闲面板」(`idleExpandedPanel`:「没有在播放」+ 提示句 + [继续播放/打开 X │ 设置 · 关闭] 三颗键),不留歌词行也不留三键/进度条那块 —— `cardHeight` 的 `!hasTrack` 分支与面板 frame 读同一个 `NotchExpandedMetrics.idlePanelHeight`。**触发**展开的命中区仍是稳态卡片,展开后光标停在多撑出来的两截上仍算在卡片上、维持展开 —— 展开卡片包含稳态卡片,不会"进了又出"抖动。详见「宽度 → 展开态可以更宽」。
   - ⚠️ **命中区不能只靠 `contentShape`**(2026-09-07 真实 bug,用户报「鼠标还没移到灵动岛上、只是移到它下面,它就已经展开了」)。真机探针实测(在 `NotchWindowRoot.updateHover` 打 hover 进入/退出边沿的 local 坐标 + `NSEvent.mouseLocation` + 窗口 frame,四条记录逐条交叉核对、误差 ≤1pt):`.contentShape(Rectangle())` **只管住了横向** —— local 的原点确实是卡片左上角、x 也确实被约束在卡片宽内,但 **y 一路给到 177,而当时稳态卡片只有 77pt 高**(窗口 482×191),于是卡片下方那片压在用户自己窗口上的透明区照样把它捅开。这是同一个现象的第二形态:2026-08-16 就为它把命中判定从 `NotchLyricsView` 自带的 `.onHover` 挪到宿主层并加了 `contentShape`(当时实测「光标停在卡片下方 24pt 的透明处照样展开」),那次的措施只挡住了一半。**现在 `.active` 分支自己拿坐标跟当前卡片矩形比**(`LyrimuseCore.NotchHoverHit.isInside`,纯函数,selftest 用那四条实测坐标当回归样本),跟设置页编辑台那侧(`NotchEditorStage` 一直是 `point.y <= cardHeight`)口径一致。传的是**当前**卡片尺寸,所以展开后那几个点又算在里面,维持展开的语义不变。
@@ -57,7 +57,7 @@
     - **仍然不是 `NotchEarModule` 的一个选项**——塞进选项列表会把"贴哪只耳朵"和"这只耳朵显示什么内容"合成一个互斥选择,一旦音浪占了一个模块位就没法再跟别的内容共存,正好推翻上面②那条用户明确要的效果。这条边界是这次改动特意保留、不是漏做。
     - **关掉音浪能让灵动岛的最小宽度显著变窄**(两只耳朵恒等宽,音浪占的那部分宽度会在总宽度上翻倍算;贴哪只耳朵不影响下限,左右对称)。具体数字随屏幕/刘海尺寸而变,算法见下面「宽度」节。
   - **封面 / 播放控制**(2026-08-31 用户点名要加)。两个各自都有一段**曾经被判定为"不该放进耳朵"的历史**,加进来之后那些顾虑没有消失,只是变成了用户自己的取舍:
-    - **封面**:`artworkThumbnail` 上方那段实测记录量的是**歌词行那一档 32pt** —— 360pt 宽配实测 179pt 刘海时单耳只有 80.5pt,32pt 塞进来"实机看过就是放不下"。耳朵里这枚按**收起态那一档**走(`contentTopInset − 10`,约 23pt),放得下。代价是选了它之后歌词行末尾那枚仍在,同一张封面在卡上出现两次。没有封面数据时整块不画(不摆占位方块),跟另外两处同一取舍。
+    - **封面**(⚠️ 这一面的封面**一律静态**:2026-09-09 曾给展开态叠过一层 Apple 动态封面,2026-09-10 用户看过实机后撤掉——那一格太小,motion artwork 缩到这个尺寸只剩蠕动色块;动态封面只留在歌词窗口,见 03 章第 6 节):`artworkThumbnail` 上方那段实测记录量的是**歌词行那一档 32pt** —— 360pt 宽配实测 179pt 刘海时单耳只有 80.5pt,32pt 塞进来"实机看过就是放不下"。耳朵里这枚按**收起态那一档**走(`contentTopInset − 10`,约 23pt),放得下。三枚 `artworkThumbnail`(左耳 / 歌词行末尾 / 展开头部)2026-09-09 起都**不在运行期缩图**:按 pt × 显示倍率预先重采样成位图再贴(`ArtworkThumbnailCache`,见决策 #36 与 03 章「小图不在运行期缩」)。同日起,有 **Apple Music 动态封面**的专辑会在这枚小图上叠一层循环视频 —— ⚠️ **只在展开态播**:灵动岛是常驻面,32pt 上动效基本看不出、却要为它全天候占一个解码器,展开是 hover 才发生的、有明确用户意图的时刻。总闸与另外两道省电闸见 03 章第 6 节。代价是选了它之后歌词行末尾那枚仍在,同一张封面在卡上出现两次。没有封面数据时整块不画(不摆占位方块),跟另外两处同一取舍。
     - **播放控制**:2026-08-19 刚从耳朵挪进展开卡,理由是"岛本来就是 hover 展开的,光标到达耳朵之前卡片已经展开,耳朵里再留一枚播放键是重复目标"。那条论证今天依然成立 —— 但它论的是**默认**该摆哪儿,不是"不许摆"。尺寸沿用当年耳朵里那一档(`controlButton` 的 `primary` 两档默认值:侧键 glyph 9.5 / 命中 15,播放键 11 / 18,比展开卡里的 22pt 小一号);那两档默认值从那次搬家起就一直留在代码里没有调用方,现在重新有了。
     - **横向账**(最窄宽度下也要放得下):三键 15+18+15 = **48pt**,`spacing: 0`(命中框本身就比图标大一圈,15 的框装 9.5 的图标、两侧各 2.75pt,再加间距只会白白撑宽)。它是所有模块里最宽的一档 —— 选了它的那只耳朵最窄是 **54pt**(`minEarContentWidth = 48` + 朝刘海那侧 6pt 内缩,见「宽度」节那张表;2026-08-31 之前是不分模块一律 70pt),减掉内缩正好 48pt —— 放得下,一格不多。右耳若再挤进音浪的 15+5pt 就要 74pt,这正是上面那条"音浪让位"的第二个理由。
   - 年份/流派仍然没有:`PlaybackCoordinator` 里压根没有这两个字段,要新拉数据链路。
@@ -127,7 +127,7 @@
   - **浮层宽度 220 → 420**(2026-09-07 晚些再 → **470**:第四段 "Automatic" 12pt semibold 量得 60.3 + 2pt 段间距,英文整行 392.1 + 62.3 = 454.4,420 会折行;中文四段 400.6;悬浮歌词装同一套四段控件的「排版」浮层是 460,这里多 10 是因为这一行带 ⓘ),离屏 `NSHostingView.fittingSize` 量的:分段控件本体中文 176.0pt / **英文 216.0pt**(英文标签 "Left-Aligned"/"Right-Aligned" 撑破了每段 56pt 的下限,中文三个标签都在下限之内 —— 只按中文估会差 40pt),加 `SettingsRow` 固定开销 96pt(2×14 内边距 + 20 图标列 + **3×12** iconTextSpacing + 12 `Spacer(minLength:)`)+ 标题(中文 51.6 / 英文 61.1)+ ⓘ 19pt = 中文 342.6 / **英文 392.1**。顺带修掉一个既有偏窄:原来那个 220 连这个浮层本来的两行都装不下(「Show Artwork」需要 253.2pt),2026-09-02 的注释里就记着"同样偏窄"、当时没动。
   - 工具栏「歌词行」按钮摘要**只在非默认时**报这一项(三选一不是开关,套不进"只列开着的"规则;默认值是绝大多数人的状态,无条件报出来等于给每个人的按钮加一句恒定噪声、还要跟 140pt 限宽抢地方)。文案走 `LyricsAlignmentSegmentedControl.label(for:)`,跟控件里的标签同一份口径。
 - **逐字高亮**:当前行有逐字数据时,`TimelineView` 按 `WordKaraokeGradient.refreshInterval` 帧率现算每个字的填色比例(词最短时长下限 80ms、过渡带 0.08,与桌面悬浮歌词同一组经验值),时间基准 = 锚点外推位置 + `currentLyricsOffsetMs`(不加会填到一半卡住;anchor/offset 由闭包直读 PlaybackCoordinator,不经窄代理订阅)。整行套 `compositingGroup + shadow`。paused 条件是 `!isPlayingNow || currentLineFillSettled`(2026-08-19,与悬浮窗同款):行填完到下一行开始之前(行尾/间奏/曲末)视觉零变化,表停掉不再空转。
-- **无逐字数据时的占位文字**,分支顺序固定(先特殊后一般):`广告中` → `纯音乐` → `暂无歌词` → `网络连接失败`(collector 网络不通且无歌词)→ `搜索歌词中…`(播放中但歌词还没解析回来)→ 整行纯文本 / "♪"。
+- **无逐字数据时的占位文字**,分支顺序固定(先特殊后一般):`广告中` → `纯音乐` → `暂无歌词` → `网络连接失败`(collector 网络不通且无歌词)→ `搜索歌词中…`(播放中但歌词还没解析回来)→ 整行纯文本 / "♪"。⚠️ 2026-09-08 起 `广告中` 那一档在**上一层**(`lyricRowContent`)就分流走了:广告期间歌词这一格整个换成 `adStatusColumn`(📣 + 「广告中」+ 「· 还剩 m:ss」倒计时 + 右端「跳过广告」),`mainLyricLine` 里那个分支正常到不了、留作兜底(顺序契约不变)。倒计时 1Hz、`NotchTimeFormat.clockSchedule` 那套相位对齐调度,只在这一层可见且有锚点时排表;暂停冻结,时长未知不画。见「展开区 → 广告态」与决策 #33。
 - **副行**(2026-09-06,用户拍板方案二,见决策 24):主行下面再放一行 11pt,内容 `notchSecondaryLine` 四选一 —— 不显示 / **下一句**(默认)/ 译文 / 罗马音。(同日晚些菜单栏歌词也接了同一套副行,见 06 章「副行:双排歌词」;枚举从 `NotchSecondaryLine` 改名 `LyricSecondaryLine`、取值规则下沉为 `secondaryText(currentLine:nextLineText:)` 两面共用,灵动岛行为不变。)入口在工具栏「歌词行」浮层与「全部设置」抽屉的「歌词行」组,紧跟「对齐方式」(`LyricSecondaryLineRow`,`Picker(.menu)`),「显示歌词」关着时随之隐藏。**行高仍是 44**:15 + 3 + 13 = 31 竖直居中(`NotchLyricRowMetrics`,selftest 钉 `twoLineStackHeight ≤ rowHeight`),不进 `NotchChromeSource` 几何链路。副行开着时主行改看 `currentLine`(唱完停在填满的样子直到下一句开始,不再「唱完就切」——下一句已经在下面,提前切会变成两行同一句;译文 / 罗马音对应的是当前句,主行提前切两行就对不上号),关着时照旧 `compactLine`;两者合成为 `NotchPlayback.displayLine`,卡拉OK关着仍在合成之后压 `lineLevel`。副行**不滚动**、装不下尾部省略号,取不到内容(最后一句 / 这首歌没译文)留空不缩高;透明度下一句 45% / 译文 75% / 罗马音 60%,对齐跟主行吃同一个「对齐方式」。选「下一句」时展开区那行下一句预览被顶掉(见「展开区」节)。工具栏「歌词行」摘要只在非默认时报一句「副行 · 译文」。
 - **字体**(2026-09-09,用户:「在灵动岛里面加上一个设置,可支持配置字体」):字体族 / 粗细 / 字号三件,`notchFontFamilyName`(空串 = 系统字体)/ `notchFontWeight`(`OverlayFontWeight` 六档,默认 较粗 semibold)/ `notchFontSize`(默认 13,范围 **11～17**)。入口是工具栏第二行的「字体」浮层(`NotchFontPopover`,紧跟「歌词行」)与「全部设置」抽屉的「字体」组,两处调同一份 `NotchFontSettingsRows`,三行控件照搬悬浮歌词「文字」浮层前三行(同一个 `FontFamilyPicker`、同一个粗细下拉、同一根 `SteppedSlider`)。按钮摘要「系统字体 较粗 13pt」跟悬浮歌词「文字」按钮走同一个函数(`OverlayStyleSummary.fontText`)。
   - **只管歌词文字**:主行、副行、展开态「下一句」预览、广告态那一格(「广告中」+ 倒计时)五处,都从 `NotchPlayback` 读 `AppSettings` 算好的三个派生 `Font`(`notchMainFont` / `notchMainDetailFont` / `notchSecondaryFont`,`recomputeNotchFonts()`);耳朵里的歌名 / 歌手模块、曲目信息头部、时间和按键是卡片本身的界面,不跟着走 —— 悬浮歌词和菜单栏的字体设置也只管歌词,三个面同一条边界。逐字染色是每个字一个 `Text` 从容器继承字体、跑马灯用 `GeometryReader` 量宽,换任意字体族都不会让染色和滚动错位(菜单栏那条 `NSFont` 位图路径的坑这里没有)。
@@ -251,8 +251,8 @@
   的 UI),工具栏「展开态」浮层里一行「快捷操作」(带 ⓘ),一颗开关管四颗键。排法照悬浮歌词那排控制胶囊
   「对这首歌的操作 │ 窗口级操作」,中间一条细竖线:**搜索歌词 · 显示歌词 │ 设置 · 关闭**。语义(用户拍板):
   搜索歌词 → `AppActions.openLyricsQuickSearch`(跟悬浮歌词 ⚙ 菜单「搜索歌词…」同一扇小窗);显示歌词 →
-  切 `notchShowLyrics`(稳态那 44pt 歌词行的开关;展开态里看不出变化,关着时字形压淡到四成、tooltip 换成
-  「显示歌词」);设置 → 直接翻到 设置 › 歌词显示 › 灵动岛(照抄 `OverlayQuickSettingsMenu.openMoreSettings`
+  切 `notchShowLyrics`(稳态那 44pt 歌词行的开关;展开态里看不出变化,关着时字形压淡到四成、提示文案换成
+  「显示歌词」——2026-09-09 起那句提示是自绘气泡、不是系统 tooltip,见下面「悬浮文案提示」);设置 → 直接翻到 设置 › 歌词显示 › 灵动岛(照抄 `OverlayQuickSettingsMenu.openMoreSettings`
   三行);关闭 → 关掉「灵动岛歌词」**总开关**(`NotchChromeSource.closeFromQuickAction` → 真窗口
   `setVisible(false)`,预览空实现),跟悬浮歌词那颗 ✕ 一个意思,再打开走菜单栏面板 / 设置 / 快捷键——备选
   的「只收起这一次」被否(hover 展开本来移开指针就收)、「隐藏到下一首」要新造一种临时隐藏态,都没选。
@@ -267,8 +267,173 @@
   空闲面板三颗全走 `NotchIconButton` 一份壳 —— 悬停底下浮出 `accentOrWhite` 14% 的圆角底、字形抬到全亮
   (关着的「显示歌词」从 0.4 抬到 0.65,仍读得出是关的);按下底色加深到 24%、整颗缩到 0.9,松手弹回。命中框
   尺寸不变,底画在框里,邻居一个像素不动;`reduceMotion` 只去补间不去反馈。见决策 #32。
+  **悬浮文案提示**(2026-09-09,用户:「帮我灵动岛展开状态的这几个按钮,悬浮上面加一个对应的文案提示」):
+  指到某颗键上停 150ms,那颗键旁边浮出一个黑底小气泡写它是干什么的(文案就是原来喂给 `.help()` 的那批,
+  零新增本地化);已经弹着时换键**立即换字**。气泡对准**那颗键** —— 头部那排往下弹、空闲面板那排往上弹
+  (它贴着卡片底,往下会被窗口硬裁),位置由每颗键 `anchorPreference` 上报的 bounds 算出、并夹在卡片内
+  (最右那颗 ✕ 不夹会溢出 34.5pt / 英文 53.5pt)。⚠️ **`.help()` 在这扇窗上一次都没弹过**:AppKit 的
+  tooltip 只在前台 App 的窗口上显示,而这是 LSUIElement + `.nonactivatingPanel`;那行代码 2026-09-07
+  起就在、是死代码,这次一并撤掉。播放三键 / 耳朵三键**不给**提示(图标即语义),`NotchPillButton` 自带
+  文字也不需要。实现 `QuickActionTooltipOverlay` / `QuickActionHint` / `QuickActionAnchorKey`。见决策 #35。
   预览卡上这块随头部一起属于「展开态」可点区域(矩形取 `expandedTrackInfoHeaderHeight`,自动盖住),点了
   开浮层、不会真的把灵动岛关掉。真机核过:展开卡头部右侧四颗键与歌名同一行、垂直居中,✕ 贴在最右。
+- **广告态**(2026-09-08,用户圈出广告期间的展开卡:「有什么好 ui 调整吗,目前这样太呆了」,随后拍板「选用可以
+  跳过广告的方案」「封面保留播放器给的图」——后一条 09-09 被他自己整条推翻:广告期间所有封面位让位给喇叭,见下面 ⑦):
+  `isAdBreakNow` 时展开卡长这样 ——
+  ```
+  📣 广告中 · 还剩 0:21                              [⏭ 跳过广告]   ← 歌词行接管状态(+ 末尾那枚封面位画喇叭,见 ⑦)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    ← 进度条照旧(广告的真实进度)
+  0:08                                                      -0:21   ← 时间行,**不画**「− 歌词 0.0s +」
+                        ◀◀     ❚❚     ▶▶                            ← 三键照旧
+  ```
+  改前的样子:头部歌名位一个灰词「广告中」+ 广告物料的封面 + 四颗快捷键(其中「搜索歌词」「显示歌词」无物可指),
+  歌词行再一个灰词「广告中」,时间行中间一组对广告毫无意义的歌词校准键 —— 两个不动的灰词、一大块空白,
+  唯一有信息量的"还剩多久"藏在右下角的 `-0:21` 里。四处改动:① **头部整块不画**(`showsExpandedTrackInfo`
+  加 `!isAdBreakNow`,`isAdBreakNow` 进协议、预览恒 false):不是把它改成"广告头",而是让它让位 ——
+  这一态只画这一态有的东西,跟决策 #31 空闲面板同一条思路;卡片因此矮 ~70pt,窗口几何不动(窗口常驻
+  `expandedExtraHeightMax`,同 `hasTrack` 那条路)。② **歌词行接管**(`adStatusColumn`):📣 图标跟歌词窗口
+  空态那档同一枚 `megaphone`,「广告中」字号 / 七成不透明 / 投影跟原来那个分支逐字相同,后面接「· 还剩 m:ss」
+  倒计时(1Hz,`clockSchedule` 相位对齐,跟正下方进度条同源同相;暂停冻结;时长未知不画,不编数字)。稳态
+  不展开时这一行也是它,两种形态是同一句话。③ **「跳过广告」**(`NotchPillButton`,22pt 胶囊、11pt 文字、
+  12% 静止底 + 跟图标键同一份悬停 / 按下反馈):只在 `NotchPlayback.canSkipAd` 时出现 = 广告中 **且** 这是
+  YT Music 网页广告(`YouTubeMusicAdSkipper.isYouTubeMusicAd`:探针**强信号**判定为 ad,02 章决策 #26 那套
+  `cachedBadgeVerdict`)**且页面此刻真的放出了跳过键**;Spotify 广告(原生 / 网页)没有可点的东西,不给键。
+  ⚠️ 最后那道门槛是 **2026-09-11 补的**(用户:「如果当前广告不支持跳过的话就不要显示那个跳过的按钮」)——
+  在此之前只看前两条,于是**不可跳过的广告**上也挂着一颗键,按下去只换来一句「这条广告还不能跳过」,
+  一颗永远按不动的键比没有更糟。做法:广告期间由 `NotchPlayback.syncAdSkipGate` 起一轮轮询,调
+  `YouTubeMusicAdSkipper.probeSkippability`(**跑的就是那段既有的只读门槛 `skipJS`,不按键、不复核** ——
+  判据只有一份,不会在"画不画"和"按不按得动"两处各判一次然后长歪),把返回折成
+  `Skippability`:`.ready`(键有尺寸)/ `.after(n)`(页面写着「N 秒后可跳过」)/ `.never`(既没键也没倒计时)/
+  `.notInAd`。**`.notYet(nil) → .never` 是这次的核心判据**:那句「你可以在 N 秒后 跳转到视频」是可跳过广告
+  **独有**的元素(09-08 真机抓 DOM 坐实),读不到不是"读失败"、是"这条广告没有跳过这回事"。节奏
+  `gateRetryDelay`:`.after(n)` 直接等到点(+0.4s 给渲染,不然最坏要干等一个 5 秒心跳,而整条广告可能就 15 秒),
+  其余走 5 秒心跳、跟 `adRefreshInterval` 同拍 —— 问出 `.never` **也继续心跳**,因为一次插播可能连放两条
+  (徽章 1/2 → 2/2),第一条不给跳第二条给跳;上限 `gateMaxRounds = 12`(一分钟,比任何插播都长)。
+  ⚠️ **广告开头 `fastStartRounds = 4` 拍按 `fastStartDelay = 1.2s` 快探**(2026-09-11 补):真机只读时间线
+  `t+0.2 never → t+5.4 after(1) → t+8.4 ready` —— 第一拍那个 `never` 不是"这条不给跳",是**页面那一刻还没
+  渲染出**跳过键 / 「N 秒后可跳过」那个预览元素,而按 5 秒心跳等下一拍就把提示推迟到第 8 秒之后,YouTube
+  通常第 5 秒就把键放出来。头几拍快探之后总有一拍读到倒计时,读到就精确等到点,提示落在第 5~6 秒。
+  代价是每条广告开头多两三次 AppleEvent 往返。⚠️ 这条是**用户报「稳态那枚提示不实时更新」查出来的,
+  而第一反应(视图没被叫醒)是错的** —— 加了视图侧探针(`.onChange(of: playback.canSkipAd)` /
+  `showsAdSkipHint`,常驻)之后日志显示 body 在模型翻转后 **20ms** 就重算且三道门全过,只读截图
+  (`screencapture -l <灵动岛窗口ID>`)也拍到提示确实画上了 —— 晚的是**模型**,不是视图。教训:这条链路上
+  "该出现没出现"至少有模型晚到 / 视图没刷新两类成因,两侧各留一条日志才分得开(第一次查它时只有模型侧
+  有日志,于是把成因归错了一次)。
+  ⚠️ **脚本压根没跑成(nil)按"画"处理**,是刻意的 fail-**open**、跟这条链路其它地方的 fail-closed 相反:
+  跑不成的原因(不是浏览器 / 没有自动化权限 / osascript 超时)对用户不可见,这时候连键也藏了,用户看到的是
+  "功能凭空没了";画出来、按下去至少会走到「没能跳过这条广告」那条既有反馈路径。⚠️ `adSkipAvailable`
+  必须是 `@Published`,**不能做成读缓存的计算属性**:倒计时那几秒过完、键刚放出来的那一刻,广告态这一格
+  没有任何别的东西在变(「还剩 0:21」那截自己排了一张 `TimelineView`、只重画它自己那一小块),计算属性
+  不会被重估,键就永远不出现。selftest `notch` 组钉住三种返回的映射、四档该不该画(含 nil 那条 fail-open)、
+  三档节奏,外加几条源码契约。
+  ⚠️ **轮询的起停挂 chrome 的 `isAdBreakNow`,不挂 `playback.isCurrentTrackAdBreak`**(2026-09-11 当天改):
+  两者对真窗口是同一件事,但预览 chrome 的 `isAdBreakNow` 恒 false,而 `NotchPlayback` 在预览里照样订阅真的
+  `PlaybackCoordinator` —— 挂在订阅上的话,**设置页只要开着,编辑台那块预览就跟着真广告每 5 秒对用户的浏览器
+  发一次 AppleScript**。真机日志坐实(那天每一行 `gate:` 都打了两遍),这跟「预览不产生副作用」
+  (同 `controlsDidBecomeVisible` 空实现)是同一条纪律;selftest 两头都钉(必须有 `.onChange(of: controller.isAdBreakNow)`、
+  不准出现 `self?.syncAdSkipGate`)。另加 `.onAppear` 一下,覆盖"窗口刚出现时已经在放广告"(onChange 只认变化)。
+  ⚠️ 门槛探测带 **1.5s 短缓存**(`YouTubeMusicAdSkipper.gateCache`):灵动岛是**每块屏一份**
+  (`NotchMirrorManager` 给每块屏建一个完整 controller、各自一份 `NotchPlayback`),N 份轮询会按同一个节奏起跳,
+  缓存让同一拍里的后来者复用结果、不多发 AppleEvent。TTL 远小于 5s 心跳,不会让心跳读到陈旧值。
+  ⚠️ **这条路必须有日志**:落地当天它一行日志都没有,于是用户报「展开态下按钮不会自己刷出来」时完全无从排查
+  (只能靠猜,而且猜错过一次)。现在每探一次记一行 `gate: <判定> (host …)`、每次翻转记 `gate: adSkipAvailable -> …`、
+  起停也记 —— 加上日志之后当场看清:`after(seconds: 5)` → 5.4s 后 `ready` → 翻 true → 用户点了 `verify=CLEAR`,
+  机制本来就是对的,那次是撞在广告自己的节奏上。点了 → `NotchPlayback.skipAd()` 后台
+  跑一次 `YouTubeMusicAdSkipper.skip`,**门槛在 JS、动作在辅助功能、复核在 JS**(同日六版才定型,过程见决策 #33):
+  ① 门槛 `skipJS`(走 `BrowserTabProbeScript` 往 YT Music 标签页注入、**只读**):播放器在 `ad-showing` 且页面自己的
+  跳过键(`.ytp-ad-skip-button-modern` 等)**有尺寸** —— YouTube 已经放出「跳过」的那一刻;否则回 NOTYET(带页面上
+  「N 秒后可跳过」的数字)。② 动作 `AccessibilitySkipPress.press`:在浏览器**当前标签页**的 AX 树里找 URL 含
+  `music.youtube.com` 的 `AXWebArea`,按 `AXDOMClassList`(含 `ytp-ad-skip-button…` / `ytp-skip-ad-button…`,跟界面
+  语言无关;标题「跳过 / Skip / 略過…」只做兜底)认出那颗 `AXButton`,执行一次 `AXPress` —— WebKit 把它当真实用户
+  点击(`isTrusted`),这是 JS 五种点法全被挡之后唯一走得通的路。③ 复核 `verifyJS`:等 0.8s 再探,离开广告态或徽章
+  「1/2 → 2/2」才算跳了。结果回主线程用瞬态横幅回报,**每一种都有反馈**:跳了 → 只给一下触觉(页面随即切正片,
+  灵动岛按换曲流程自己刷新);还没放出跳过键 → 「N 秒后可跳过」/「这条广告还不能跳过」;App 没有辅助功能权限 →
+  弹系统授权对话框 + 「跳过广告需要「辅助功能」权限」;YT Music 标签页不是当前标签页(后台标签页不在 AX 树里)→
+  「把 YouTube Music 标签页切到前面再试」;按了没生效 / 没有标签页在广告态 / 脚本没跑成 → 「没能跳过这条广告」。
+  每一步记进 `ytmusic-skip` 日志类别(`log show --info` 才看得到)。MV 的前贴片广告同样是 `.ad`,键对它同样有效。
+  ⚠️ **辅助功能授权按「指定要求」存,而 ad-hoc 签名的指定要求就是一条 cdhash** —— 二进制一重编就对不上,
+  设置里的勾还亮着但 `AXIsProcessTrusted()` 回 false,每次 build.sh / 每次升级之后第一次按都要把勾取消
+  再勾上。**2026-09-11 已治**(用户第 N 次撞上之后拍板):build.sh 改用本机一张固定的自签名证书签,
+  指定要求变成 `identifier "…" and certificate root = H"…"`、跟二进制内容无关,授权从此跨重装存活;
+  没有那张证书(CI / 别人的机器)时自动退回 ad-hoc、行为照旧。做法与代价见 15 章「签名身份」。
+  ⚠️ 换证书那一次授权仍然要**重给一遍**(TCC 里存的还是旧要求)。⚠️⚠️ **重给完必须重启 App 才生效** ——
+  AX 授权状态在进程启动时就定下来了,中途在设置里勾上,**已经跑着的那个进程看不到**(2026-09-11 实测:
+  用户重新勾过之后仍然弹授权,查出正在跑的进程比那次勾选早两个多小时;`open -g` 重启后立刻正常)。
+  这也解释了为什么以前"取消再勾上"看着有效 —— 那套流程里紧接着总会再跑一次 build.sh,等于重启了。
+  诊断这件事有个干净的办法:拿**同一张证书、同一个 identifier** 签一个只调 `AXIsProcessTrustedWithOptions(nil)`
+  的小探针(不带 prompt 选项 = 不弹窗、不改状态)跑一下 —— 它答 true 就说明 TCC 那条要求已经对上了、
+  剩下的只是 App 自己要重启,不必再去猜是不是勾没给对。④ 时间行 `showsLyricsOffsetControls && !isCurrentTrackAdBreak`。
+  ⑤ **稳态下左耳那枚喇叭旁边补一枚「可跳过」提示**(2026-09-11,用户:「这个按钮目前只在展开状态有;帮我在
+  灵动岛歌词行那里也加一个,虽然移动上去就展开了,但是可以起到提示可以跳过的作用」)。背景:那颗真的
+  「跳过广告」键在 `adStatusColumn` 里,而**稳态那份 `lyricRow` 被 `if controller.showsLyrics` 挡着** ——
+  关掉「显示歌词」的人(用户正是这一档,`np:notchShowLyrics = 0`)稳态压根没有那一格,于是"这条广告能跳"这件事
+  只有 hover 展开才看得见。做法:`adBreakEarIcon` 从单枚喇叭改成 HStack,`showsAdSkipHint` 为真时在它右边加一枚
+  `forward.end.fill`(0.78 倍字号 ≈ 10pt、85% 不透明,跟那颗键**同一枚符号** —— 同一件事在这张卡上不画两种,
+  同喇叭那条)。三道门:`canSkipAd`(页面真的放出了跳过键,见上面那段门槛)**且** `!isExpanded`(展开态右边就是
+  真键,再加图标是重复)**且** `!showsLyrics`(开着的人稳态那份歌词行渲染的就是带真键的 `adStatusColumn`,同理
+  重复)。**刻意只是标记、不接点击**:稳态下指针一压上来卡片就展开了,这一格没有"被点到"的时机,做成按钮就是
+  又一段永不触发的死代码(同喇叭、同悬浮窗那排按钮为什么不是 Button)。读屏:喇叭单独在时仍是装饰
+  (`accessibilityHidden`),带上提示之后整组要念(`这条广告可以跳过`,三语齐)—— 稳态下它是读屏用户唯一能知道
+  这件事的地方。selftest `notch` 组四条钉住(三道门的表达式、喇叭还在、符号同源、带提示时不再对读屏隐藏)。
+  **不动的**:三键照旧(暂停广告是正当操作,
+  上一首 / 下一首在 Spotify 广告期间无效、YT Music 未核实,先不动)。新增 4 条三语键:「跳过广告」「还剩 %@」
+  「这条广告还不能跳过」「没能跳过这条广告」「%@ 秒后可跳过」「跳过广告需要「辅助功能」权限」「把 YouTube Music 标签页切到前面再试」。
+- **广告态的外观:整卡纯黑 + 左耳广告标识**(2026-09-09,用户圈图:「广告时候的灵动岛的配色帮我设置为和机器
+  刘海一样的纯黑色」「并且在左耳那边加上一个广告的标识图标」)。上面那四处改的是广告态**画什么**,这两处改的
+  是它**长什么样**。
+  - ⑤ **整卡盖成纯黑**:`body` 里那层 `Color.black` 的 opacity 条件从 `isCollapsed || isIdleNoTrack` 再加一档
+    `|| controller.isAdBreakNow`。跟决策 #30(没有曲目时纯黑卡)是同一条道理:广告没有封面可跟 —— `accent` 退回
+    默认冷色、`coverArt` 风格退回那块灰 —— 底色于是既衬不了内容、也代表不了这一刻在放什么,只剩"像不像刘海"
+    一个标准。用户截图里那块深蓝灰正是这么来的。广告一结束自动退回用户配的风格,跟着同一条弹簧渐变淡回去,
+    不硬切(用 opacity 而不是 if/else 换填充,理由同那一层的原注释)。
+  - ⑥ **左耳广告标识**(`adBreakEarIcon`):`megaphone.fill`,跟状态行那枚、跟「没能跳过这条广告」瞬态横幅是
+    同一枚符号 —— 同一件事在这张卡上不该有两种画法;前景色 / 不透明度 / 投影跟 `adStatusColumn` 那一行同口径;
+    字号 `NotchMetrics.earAdIconSize`(封面那档边长 × 0.56 ≈ 13pt,下界 11)。不接点击、读屏不念:它是状态标记,
+    广告期间真正能点的那件事(「跳过广告」)有自己的键,而同一行的「广告中 · 还剩 0:20」已经把这件事说清楚了。
+    **收起态一并覆盖**(顶行那个 `leftModule` 在收起时固定是 `.artwork`,这一档排在它前面)。
+  - ⚠️ **⑥ 在广告期间恒显示,不看配置、也不看这一格原本有没有内容 —— 这一条当天反复过一次**。第一版做成
+    「只在左耳本来就空的时候画」(`earShowsNothing`),用意是不推翻 09-08 那条「广告期间封面位保留播放器给的
+    图」;交付时把这个取舍摆给用户选,问「要不要任何广告都固定显示、哪怕它有缩略图」,答**「任何」**。于是
+    09-08 那条拍板在**左耳**这一半由他自己推翻,判空函数连同分支一起删掉(selftest 反向钉住 `earShowsNothing`
+    不再出现,免得留死代码);歌词行末尾那枚封面不在这次范围内(他只说左耳),那半条仍然作数。
+    **让位的代价**:左耳配了「播放控制」的用户,广告期间那三颗键被图标顶掉 —— 可接受,hover 展开卡的进度条
+    下方本来就有一整排三键、广告期间照旧渲染,能力没丢只是位置变了。这跟决策 #30(没有曲目时左耳固定画
+    App 图标、配了播放控制的一并让位)是同一个取舍。
+  - ⚠️ **⑦ 同一天第三轮扩到「所有封面位」**(用户:「或者这么说吧,只要识别到是广告的话,封面部分都用这个
+    替代,你扫一下」)。扫下来全 App 一共**四个**「当前曲目封面」渲染点,广告期间一律让位给同一枚
+    `megaphone.fill`:①灵动岛左耳(上面 ⑥);②灵动岛**歌词行末尾**那枚(`lyricRowArtwork` → `adBreakArtworkTile`,
+    外框跟 `artworkThumbnail` 逐项对齐 —— 同圆角、同 0.5pt 白描边、同投影,广告起止时这一格只换内容、
+    几何不动;`lyricRowArtworkPresent` 也跟着算上它,否则 `.animation(nil, value:)` 会以为这格是空的、
+    放行一次不该有的布局动画;开关 `notchLyricRowShowsArtwork` 关着时仍然不画 —— 广告不该把用户关掉的
+    东西请回来);③歌词窗口那张最大 460pt 的封面卡(07 章);④菜单栏面板那枚 44pt(06 章)。**第五个不用改**:
+    灵动岛展开态头部那枚(`trackInfoArtwork`)在广告期间整块头部本来就不画(`showsExpandedTrackInfo` 含
+    `!isAdBreakNow`,见上面 ①)。理由是同一条:播放器在广告时给的是**广告物料**的缩略图,不是"这一刻在听
+    什么"的封面 —— 把它当专辑封面摆着(尤其摆在歌词窗口那张大卡上)最误导。②③④三处的底都沿用各自
+    原本"没有封面"那一档的占位样式(灵动岛 10% 白、歌词窗口跟着 `hasArtworkBackground`、菜单栏那道蓝紫
+    渐变),只把符号换掉,不新发明一套视觉。selftest 反向钉住这四处 + 状态行用的是同一枚符号。
+  - 不需要新文案(符号无 label、读屏不念),所以这一笔没动 `Localizable.xcstrings`。selftest「广告态契约」组
+    补了 11 条源码守卫(含跨文件读 LyricsWindowView / MenuBarPanel 那两处) —— 纯黑那条是一个 `||` 分支、左耳那条夹在两个 `else if` 之间,都容易被后来的改动无声
+    抹掉;「恒显示」那条还反向钉住 `earShowsNothing` 不再出现,免得后人看见"广告有缩略图时喇叭把图顶掉了"
+    当成 bug 修回去。
+- **⑧ 广告态显示「第几条广告」**(2026-09-09,用户:「广告中,还剩几个广告可以在灵动岛上展开显示出来吗」):
+  状态行从「📣 广告中 · 还剩 0:20」变成「📣 广告中 · **1/2** · 还剩 0:20」。数据是 YouTube 自己写在广告
+  徽章上的(`.ytp-ad-simple-ad-badge`,「赞助商广告 1/2 ·」)—— `YouTubeMusicAdSkipper` 的跳过复核早就在读
+  这个元素(靠徽章翻页 1/2→2/2 判断「跳到下一条了」),但常驻探针只问了「在不在」,文本被丢掉,所以显示不出来;
+  这次让探针把它一起带回来(返回值加第四段,见 02 章)。**写成 `1/2` 不是「还剩 1 条」**是用户在两个方案里
+  选的:跟他在页面上看到的写法逐字一致,不用在心里做减法,而且纯数字对不需要新增本地化文案。
+  - 排在「广告中」和倒计时**之间**,三段连起来是一句话;字号跟倒计时同一档(`mainDetailFont`),
+    两段都是对「广告中」的补充,不该各有各的字重。
+  - **抓法语言无关**(2026-09-09 当天第二版,用户追问「YT Music 不是中文的应该也可以吧」):第一版只认
+    斜杠写法,英文界面的 `Ad 1 of 2` 抓不到;现在 JS 里先剔掉时间样式的数字、再抓「整数 + 非数字 + 整数」,
+    中文 / 英文 / 德语 / 法语那几种「序号 + 一个词 + 总数」的写法一网打尽(等价正则对 11 条真实徽章文本
+    复演过,含只有时间、单条无计数、总数在前几种边界)。归一在 JS 侧完成,Swift / Go 两侧 parse 一个字没改。
+  - **拿不到就整段不画**(同「时长未知不画倒计时」那条纪律,不编):只有 YT Music 网页广告有这个徽章,
+    Spotify(原生和网页)恒无;只播一条广告时徽章通常也不带计数;日韩「2件中1件目」这种总数在前的
+    写法解出来是 `2/1`,被「总数不小于序号」挡掉 —— 宁缺毋错。
+  - **1/2 → 2/2 最多滞后一个探测周期**(广告期间 5 秒一探)。评审时确认可接受:每探一次是一趟进浏览器的
+    AppleEvent 往返,为一个装饰性计数把频率翻倍不值。跳过链路不受影响 —— `verifyJS` 自己读徽章、不吃探针缓存。
+  - 计数跟着 `isCurrentTrackAdBreak` 一起收(`LocalPlaybackSource.currentAdSlot`):广告一结束必须清掉,
+    否则下一首歌的卡片上会挂着上一次插播的「1/2」。
 - 进度条三态口径与歌词窗口一致:播放中按锚点逐帧外推;**暂停时**用冻结位置 `pausedPositionMs` + `currentDurationMs` 照常显示(2026-08-17 补上,之前一暂停整条进度条凭空消失,连带"暂停时下一句跑到正中间"的布局 bug);两者都拿不到(如无时长)则整段不渲染。
 - 可拖动 seek:拖动中显示手指位置(`@GestureState`,手势取消自动复位),按下那一帧给一次触觉,**松手才真发 seek**(`poller.seek` → `LocalPlaybackSource.seek`)。命中区只盖进度条这一行(上下各虚扩 8pt),不含时间行——原来挂整块上,点"剩余时间"文字等于跳到 ~94%。轨道粗细 3pt → 悬停 5pt → 按住 6pt(幅度刻意克制,40pt 展开区再粗就把时间行挤出可见区);reduceMotion 下仍变粗(功能反馈)只去掉补间。
 - ⚠️待核对:暂停态下拖完进度条松手后 seek 的实际生效情况(`LocalPlaybackSource.seek` 对暂停状态/不同播放器的行为)本章未核对,UI 层只是照常发出调用。
@@ -277,8 +442,9 @@
 
 一条短暂**盖住歌词行**的提示(图标 + 文字 + 可选进度细条),不改卡片高度、不动顶行,0.18s 淡入淡出,与歌词行同高同排版重量。单例中心做 cancel-rearm:连按多次以最后一次为准(每次 `show` 先取消上一个隐藏任务;`Task.sleep` 被取消后还要再查 `Task.isCancelled`,光 `try?` 挡不住被取消的任务去清空)。默认时长 1.4s。
 
-当前两个生产者:
+当前三个生产者:
 1. **歌词时间轴微调快捷键**(`GlobalHotkeys`):按一次闪"歌词偏移 +0.50s"(正号显式带出,方向可辨)。只有灵动岛这一种形态有此反馈;只开桌面悬浮歌词的用户按快捷键仍无任何视觉反馈。注意:菜单栏「歌词时间轴」里的等价按钮**不**闪横幅,只有快捷键路径闪。
+3. **「跳过广告」的结果**(2026-09-08,`NotchPlayback.reportSkipOutcome`):按钮还没出现 → 「N 秒后可跳过」(页面上读得到倒数)或「这条广告还不能跳过」;没有辅助功能权限 → 「跳过广告需要「辅助功能」权限」(2.4s,同时弹系统授权对话框);标签页不在前面 → 「把 YouTube Music 标签页切到前面再试」(2.4s);按了没生效 / 没找到广告标签页 / 脚本没跑成 → 「没能跳过这条广告」,默认 1.4s;跳了不闪横幅、只给一下触觉。
 2. **系统音量/静音变化**(`VolumeMonitor.apply`):显示音量百分比 + 分档 speaker 图标 + 进度条,1.2s。启停**固定跟随灵动岛总开关**(2026-08-17 删掉了独立开关;灵动岛关着提示无处显示,监听也不挂)。⚠️待核对:VolumeMonitor 对输出设备切换/多输出设备场景的监听行为本章未核对(只核对了启停条件与渲染)。
 
 可见性推论(代码结构直接决定):横幅挂在歌词行上,收起态(没在播放且没 hover)歌词行不渲染,横幅不可见;开着「暂停/无播放时隐藏」时窗口整个 orderOut,更看不到。「所有屏幕」模式下横幅在每块屏的灵动岛上同时显示(单例被所有实例的视图观察)。
@@ -467,6 +633,7 @@
 - **歌词时间轴微调**(全局快捷键):唯一的视觉反馈渠道就是灵动岛横幅;菜单栏等价按钮无横幅。
 - **系统音量**:音量/静音变化 → 灵动岛横幅;监听启停绑定灵动岛开关(`AppDelegate.startObservingVolumeBannerPreference`)。
 - **播放控制**:三个按钮和进度条 seek 打的是 `MusicPlaybackController` / `LocalPlaybackSource`,与从哪个窗口(真窗口/预览/副本)点的无关;都过自动化权限异步检查。
+- **YouTube Music 网页广告**(2026-09-08):广告态那颗「跳过广告」读 `YouTubeMusicAdProbe` 的强信号缓存判断有没有对象(02 章「YouTube Music 广告」段与决策 #26),动作走 `YouTubeMusicAdSkipper`(`LyrimuseCore/Local`,跟探针同一条 `BrowserTabProbeScript` 通道),浏览器自动化权限由 `BrowserAutomationPermission` 那一套管,**不**过 Apple Music 那道自动化权限守卫。
 - **设置页编辑台**(`NotchEditorStage` + `NotchPreviewChrome`,2026-08-31 起;此前是页顶钉条 `NotchPreviewBar`):同一份视图代码;chrome 走不碰 `.shared` 的 static 几何函数;恒不收起(用户来看样式,收起是空白);**放得下就按真实 pt 画,放不下就整组等比缩小到刚好放下**(2026-09-06 上限抬到 800 之后才有"放不下",见「宽度」节;此前上限 500 < 舞台最窄约 499+,恒 1:1)。
 - **菜单栏歌词/歌词窗口**:无直接耦合(各读各的设置和数据)。
 - **配置导出/导入**(`ConfigPortability`):`notchScreenID` 被列为机器本地键**不随配置迁移**(屏幕 UUID 在新机器上必然解析不出);其余灵动岛设置正常迁移。
@@ -481,7 +648,7 @@
 
 | 主题 | 位置 |
 |---|---|
-| 卡片内容视图(顶行/歌词行/展开区/背景/强调色) | `lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift` — `NotchLyricsView`、`backgroundLayer`、`topRow`、`cardBodyLayer`(顶行以下全部内容的 overlay 层:头部 / 两份歌词行 / 展开区,常驻定宽定 y,`NotchCardLayerActive` 切可见)、`lyricRow`、`expandedContent`、`progressSection`、`accentOrWhite`;图标键的悬停 / 按下反馈壳 `NotchIconButton` + `NotchIconButtonStyle`(同文件,`quickActionButton` / `controlButton` 都套它);刘海胶囊 `notchSeam`(挂在 body 的 ZStack 上)与顶行空当占位 `notchGap`;环境值 `notchCardLayerActive`(`NotchRevealShape.swift`) |
+| 卡片内容视图(顶行/歌词行/展开区/背景/强调色) | `lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift` — `NotchLyricsView`、`backgroundLayer`、`topRow`、`cardBodyLayer`(顶行以下全部内容的 overlay 层:头部 / 两份歌词行 / 展开区,常驻定宽定 y,`NotchCardLayerActive` 切可见)、`lyricRow`、`expandedContent`、`progressSection`、`accentOrWhite`;图标键的悬停 / 按下反馈壳 `NotchIconButton` + `NotchIconButtonStyle`(同文件,`quickActionButton` / `controlButton` 都套它)与文字胶囊键 `NotchPillButton`;快捷操作的悬浮文案提示 `QuickActionTooltipOverlay` + `QuickActionHint` + `QuickActionAnchorKey` + `QuickActionBubbleSizeKey`(同文件);广告态歌词行 `adStatusColumn` / `adCountdown`、`NotchPlayback.canSkipAd` / `skipAd()`;刘海胶囊 `notchSeam`(挂在 body 的 ZStack 上)与顶行空当占位 `notchGap`;环境值 `notchCardLayerActive`(`NotchRevealShape.swift`) |
 | 卡片形状(顶直角底圆角) | 同上 — `NotchHangingShape`;卡片自己那道可按宿主关掉的裁剪 `NotchCardClip`,开关是环境值 `notchHostClipsCard`(`NotchRevealShape.swift`,真窗口 `NotchWindowRoot` 设 true、编辑台默认 false) |
 | 固定尺寸常量 | 同上 — `NotchMetrics`(`compactRowHeight` 等歌词行度量 2026-09-06 起转发 Core `NotchLyricRowMetrics`) |
 | 歌词行「副行」四选一(枚举 / 展开区预览顶掉判据 / 行内度量,纯类型,有 selftest) | `lyrimuse/Sources/LyrimuseCore/Models/LyricSecondaryLine.swift` — `LyricSecondaryLine`、`NotchLyricRowMetrics`;App 侧 `NotchLyricsView.swift` — `NotchPlayback.displayLine`/`secondaryText`、`lyricTextColumn`、`mainLyricLine`、`secondaryLyricLine`;设置行 `SettingsView.swift` — `LyricSecondaryLineRow`、`NotchBehaviorItemRows.isVisible` |
@@ -494,6 +661,7 @@
 | 双滑块区间滑杆(自绘) | `lyrimuse/Sources/lyrimuse/UI/RangeSlider.swift` — `RangeSlider` |
 | 多屏副本管理 | `lyrimuse/Sources/lyrimuse/UI/NotchMirrorManager.swift` — `NotchMirrorManager.start/refresh/syncAll` |
 | 瞬态横幅中心与横幅行 | `lyrimuse/Sources/lyrimuse/UI/NotchTransientCenter.swift` — `NotchTransientCenter`、`NotchTransientRow` |
+| 「发现新播放器」提示(2026-09-11,决策 #37;判据在 Core 有 selftest) | `lyrimuse/Sources/lyrimuse/UI/NotchUnknownPlayerPrompt.swift` — `NotchUnknownPlayerPrompt`(offer / isAlerting / trust / dismiss);`NotchLyricsView.swift` 末尾 `NotchIdleEarIconHost` / `NotchIdlePanelHost`、`idleEarIcon`;控制器 `alertHold` / `refreshExpanded` / `setAlertHold`;喂数据的是 `Settings/UnknownPlayerNotifier.swift` `tick` / `announce`;判据 `LyrimuseCore/Local/UnknownPlayerAlert.swift` — `qualifiesForAnnounce`、`nowPlayingDescription`、`notchAlertDuration` |
 | 屏幕身份(跨插拔稳定 UUID) | `lyrimuse/Sources/lyrimuse/UI/ScreenIdentity.swift` — `ScreenIdentity.id(of:)/screen(withID:)/notched` |
 | 强调色管线(HSB 地板 + luma 地板) | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` — `brightenedAccent`、`accentForDarkBackdrop`;`lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `notchAccentColor` |
 | 播放状态平滑(0.25s 停止宽限) | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `isPlayingSmoothed`、`stopGracePeriod` |
@@ -503,6 +671,8 @@
 | 浮层外壳(与悬浮歌词三个浮层共用) | `lyrimuse/Sources/lyrimuse/Settings/SettingsDesignSystem.swift` — `SettingsPopoverShell` |
 | 设置页装配 | `lyrimuse/Sources/lyrimuse/SettingsView.swift` — `AppearanceSettingsTab.currentSection` |
 | 自动隐藏两项(与悬浮歌词共用真源) | `lyrimuse/Sources/lyrimuse/UI/AutoHideSettingsRows.swift` — `AutoHideSurface`/`AutoHideItem`/`AutoHideSettingsRows`。灵动岛这边两个宿主:`NotchBehaviorPopover`、`NotchAllSettingsDrawer.behaviorGroup`;摘要还要算进 `NotchEditorStage.behaviorSummary` |
+| 「跳过广告」门槛 + 复核(JS 只读;纯函数部分有 selftest;日志类别 `ytmusic-skip`) | `lyrimuse/Sources/LyrimuseCore/Local/YouTubeMusicAdSkipper.swift` — `skipJS`、`verifyJS`、`verifyDelay`、`parseClick`、`parseVerify`、`adAdvanced`、`isYouTubeMusicAd`、`skip(reportedBundleID:)` |
+| 「跳过广告」动作(辅助功能 AXPress,按 DOM class 认键;纯函数部分有 selftest) | `lyrimuse/Sources/LyrimuseCore/Local/AccessibilitySkipPress.swift` — `skipButtonClassPrefixes`、`matchesSkipClass`、`matchesSkipTitle`、`isTrusted`、`promptForTrust`、`press(browserBundleID:hostMarker:)` |
 | 横幅生产者 | `lyrimuse/Sources/lyrimuse/Settings/GlobalHotkeys.swift` — `showOffsetBanner`;`lyrimuse/Sources/lyrimuse/Settings/VolumeMonitor.swift` — `VolumeMonitor.apply` |
 | 播放指示条 / 跑马灯 | `lyrimuse/Sources/lyrimuse/UI/EqualizerBars.swift`;`lyrimuse/Sources/lyrimuse/UI/MarqueeText.swift` — `edgeFadeWidth`、`fadeMask` |
 | 跑马灯溢出判定 / 渐隐带宽度(纯几何,有 selftest) | `lyrimuse/Sources/LyrimuseCore/Lyrics/MarqueeMath.swift` — `isOverflowing`、`trailingFadeWidth` |
@@ -849,4 +1019,12 @@
 30. **没有曲目时:左耳画 App 图标、卡片整块纯黑(2026-09-07,用户圈图提出)**。起因:用户在悬浮歌词那条「存在感太低」(04 章决策 22)之后,又圈了灵动岛没放歌时的截图 —— 他的机器关着「暂停/广告时收起」(`notchCollapsesWhenPaused = 0`),所以没有曲目时卡片按**稳态尺寸**挂着,底色是「跟随封面」拿不到封面时兜底的深色渐变、左耳(配的「封面」)一片空、右耳五个静止的点;要求「左侧显示我们的图标,整体颜色也和真实刘海保持一致,完全融合在一起」。**两处改动都钉在 `isIdleNoTrack`(`!controller.hasTrack`)上,不看收起没收起**:① `body` 里那层收起态黑罩(2026-08-19 加的 `Color.black`)的 opacity 条件从 `isCollapsed` 扩成 `isCollapsed || isIdleNoTrack` —— 理由跟收起态那次一模一样(没有内容要衬、没有封面可跟,底色只剩"像不像刘海"一个标准),只是尺寸仍由 `collapsesWhenPaused` 管、底色不再看它;hover 展开时同样黑底(没曲目时展开区本来就是空的)。② `topRow` 左耳:`isIdleNoTrack` 时不走 `earContent(leftModule)`,固定画 `idleAppIcon` —— `NSApplication.shared.applicationIconImage`(bundle 的 AppIcon.icns,多档位图),`scaledToFit`、不裁圆角不描边不投影(它自己就是圆角方块,再套 `artworkThumbnail` 那圈会裁掉一截),不接点击(没有曲目时能做的事 hover 展开卡和菜单栏都有),读屏不念。边长 `NotchMetrics.earAppIconSide` = `min(顶行高 − 4, 封面档 + 4)`(用户机器 26pt):macOS 图标位图自带约 12% 透明外边,同边长下比封面缩一圈,补 4pt 让肉眼看到的方块跟封面那枚差不多大;不进宽度下限的账(只在没曲目时出现且比任何模块都窄)。**同日第二版(用户目验后:「左边那个图标很有锯齿感」)**:第一版 `Image(nsImage:).resizable().scaledToFit()` 让 SwiftUI 把 `.icns` 里 1024px 那档一步线性采样到 ~52px,二十倍缩放没有面积平均,圆角与音符边缘全是台阶。改成 `UI/NotchIdleAppIcon.swift` 按「pt 边长 × `@Environment(\.displayScale)`」**预先光栅化一次**(px×px 的 CGContext、`.high` 插值、`NSImage.draw(in:)` 让 AppKit 按目标像素挑最合适那档位图再缩),按像素边长缓存,视图层 `Image(decorative:scale:)` 逐像素贴、运行期零缩放;2x / 3x / 外接 1x 屏各自一份。**为什么左耳不看配置**:没有曲目时八个模块里除「播放控制」外每个都是空的(`metadataText` / `clockText` 对 `isIdleNoTrack` 一律回空串、封面为 nil 整块不画),图标占的是这片本来就空的位置;左耳配了「播放控制」的,没有曲目时三键也无物可控,一并让位。有曲目的那一刻让回配置的模块,右耳与音浪一律不动。**收起态(`collapsesWhenPaused` 开着)也一样**:收起态左耳本来固定是封面、没曲目时同样为空,34pt 耳朵减 6 内缩剩 28,放得下 26pt 的图标;这让收起的空闲黑块从"纯黑一块"变成"黑块左角一枚图标",跟 iPhone 灵动岛挂着某个 App 图标的形态同构 —— 如果用户更想要纯黑,把 `idleAppIcon` 那条 `if` 再加 `!controller.isCollapsed` 即可,故意先不加。**不动的**:`NotchPreviewChrome`(编辑台把 `hasTrack` 写死 true,预览永远画不到这一档,协议无需加属性);`notchSeam` 仍只在 `hasTrack` 时画;菜单栏面板的 `isIdleNoTrack` 语义与此无关。无新文案键。验证:`swift build` 通过;离线 `ImageRenderer` 按用户机器几何(顶行 32 / 刘海 180 / 内容宽 252)拼了一张顶行:黑底、左 26pt 图标、右五点,看过;真机效果需没有曲目时看一眼(退出 Music / 停止播放)。
 31. **没有曲目时 hover 展开只长出一块「空闲面板」,不再长出一大块空黑(2026-09-07,用户:「没有播放的展开状态目前看起来不是很友好」)**。改前:`cardHeight` 对 `!hasTrack` 走有曲目的通式 —— 歌词行被 `hasTrack` 守着不留,但展开区照常按"三键 + 进度条"留 59～76pt,而那块内容(`cardBodyLayer`)整个被 `hasTrack` 挡掉,hover 上去就是宽 482、高 91～108 的一块什么都没有的黑,右上角五个点。改法三处:① `NotchChromeSource.cardHeight` 加 `!hasTrack` 分支 = `顶行 + (展开 ? idleExpandedPanelHeight : 0)`;② `body` 的 overlay 加 `else if !isCollapsed` 分支渲染 `idleExpandedPanel`,常驻、定宽(展开宽)、定 y、只切透明度(`NotchCardLayerActive(active: isExpanded)`),跟 cardBodyLayer 各块同一套"原地淡入"做法;③ 面板高度 `NotchExpandedMetrics.idlePanelHeight`(Core)= 头部歌名/歌手两档行高(14+12+1)+ 快捷键 22 取 max + 顶部 12 + **底部 10**(`idlePanelBottomSpacing`,新常量:它贴底,头部接歌词行那 4pt 太紧,取三键块的 10pt 底边距那一档)= 49pt;selftest 钉「≤ 歌词行 44 + 最省配置的 maxHeight(只剩进度条 24)」—— 窗口恒按那个尺寸开,放不进就会被硬裁。**内容**照曲目信息头部的版式(左两行字、右一排 22pt 图标键、左内边距同歌词那列的 16pt):「没有在播放」/「在播放器里播放任意歌曲,歌词会自动出现」+ [继续播放 ▶ │ 设置 ⚙ · 关闭 ✕](提示句**不点名播放器** —— 同日用户目验后改:「这里不应该强调 Apple Music,改为播放器」;第一版复用停播页那句带 `%@` 的模板填了播放器名。灵动岛这句是泛指,不像歌词窗口停播页那句要跟旁边「打开 X」按钮对上;右边那颗键的 tooltip 仍带具体名字,那是一个具体动作的目标。为此新增 1 条三语键「在播放器里播放任意歌曲，歌词会自动出现」,en「Play something in your player and lyrics will appear here」、zh-Hant「在播放器裡播放任意歌曲，歌詞會自動出現」,按排序位插进 catalog、`generate-strings.py` 重生成三份 .strings);文案与动作全部复用歌词窗口停播页那套 —— 为此把 `LyricsWindowView` 里私有的 `idlePlayer` / `resumeFromIdle` / `openIdlePlayerApp` **原样抽成** `UI/IdlePlaybackActions.swift`(`player` / `canResume` / `resume(player:)` / `openPlayerApp`),歌词窗口那三个成员只剩转发,逻辑一个字没改(AM 三段式、失败兜底激活 App、非 AM/Spotify 只给「打开 X」+ `arrow.up.forward.app` 图标)。「设置…」的三行动作同时抽成 `openNotchSettingsPage()`,头部快捷操作那颗改成调它。**刻意的取舍**:面板上的键**不看** `expandedShowsQuickActions` 开关 —— 那个开关管"头部右侧空地要不要塞按钮",这里的键是面板存在的全部理由;不放「搜索歌词」「显示歌词」(没有曲目,无物可指);不再画第二枚 App 图标(顶行左耳已有);不做"没曲目时干脆不展开" —— 空闲时 hover 的人多半想开始放歌,「继续播放」正是给这个动作的。`NotchPreviewChrome` 不受影响(hasTrack 恒 true)。文案键:六颗键与「没有在播放」全部已有,只新增上面那 1 条提示句。验证:`swift build` 通过;selftest 3463 ALL PASS(新增 3 条);离线 ImageRenderer 按用户机器几何拼过一张展开态看过版式;真机需没有曲目时 hover 一次(用户目验)。
 32. **卡片上所有图标键统一一份悬停 / 按下反馈,不只改用户点名的那四颗(2026-09-07,用户:「帮我给灵动岛上那几个按钮加上悬浮高亮的效果,交互提交好一点,现在移动上去都没有什么反馈」)**。改前这些键全是 `.buttonStyle(.plain)`,指针压上去零变化、按下也零变化 —— 悬浮歌词那排图标是刻意如此(04 章:窗口常年 ignoresMouseEvents,挂 Button 也是死代码),但灵动岛这扇窗**收得到**鼠标事件(hover 展开、进度条悬停变粗都靠它),没有反馈就是单纯没做。**范围扩到三键与空闲面板**:用户说的「那几个按钮」是头部快捷操作,但同一张展开卡下面就是 22pt 的播放三键,只亮一排等于把不一致做进去;耳朵三键、空闲面板三颗走的本来就是同两个函数(`quickActionButton` / `controlButton`),顺带覆盖,不另开分支。**做成一份壳** `NotchIconButton`(独立 View,不是 modifier 函数,理由同菜单栏面板 `ChipButton`:悬停 `@State` 要每颗键各一份)+ `NotchIconButtonStyle`(按下态从 `Configuration.isPressed` 读):悬停 = 字形底下一块 `tint` 14% 的连续圆角底 + 字形透明度 +0.25(0.75 → 1,关着的「显示歌词」0.4 → 0.65,仍看得出关着但看得出在响应,三键本来就是 1 不变);按下 = 底色 24% + 整颗 0.9 缩放,弹簧 0.18/0.65 回弹,悬停变色 easeOut 0.12 —— 数值照抄菜单栏面板 `ChipStyle`(那边定的"悬停给「这里可按」、按下给「按到了」"两档),圆角按命中框比例取(22 → 6 / 18 → 5 / 15 → 4,跟歌词窗口 22pt 的 `OffsetNudgeButton` 用 6 一致)。**三条刻意**:① 反馈色用 `accentOrWhite` 低透明度、不用 `ChipStyle` 那个 `.primary` —— 卡片永远深底,`.primary` 在浅色系统外观下是黑的;强调色模式下底色跟字形同色系。② 悬停**不改尺寸**:命中框恒 `hitSize`,底画在框里,邻居一个像素不动(2026-08-19 进度条「悬停变粗不许推动邻居」同一条教训)。③ `reduceMotion` 只去补间、保留变色和缩放本身(同歌词窗口 `TransportButtonStyle`:那是"点到了"的功能反馈,不是装饰)。设置页预览卡整块 `allowsHitTesting(false)`,那里不会亮,也不该亮(那块是点开浮层的热区)。无新文案、无几何变化、无新设置项。验证:`swift build` 通过;真机 `screencapture -l` 逐颗看过 —— 搜索 / 显示歌词 / 设置 / 关闭 / 暂停五颗悬停时都出了圆角底、字形变亮;连贯扫过多颗键时的高亮切换用合成光标事件核不干净(用户同时在用鼠标,采样到光标被拽走),用户叫停「不要验证了,应该没问题」,留给真机手感。
+33. **广告态:头部让位、歌词行接管状态 + 倒计时、YT Music 网页广告给一颗「跳过广告」——只点页面自己的按钮(2026-09-08,用户圈图:「帮我想想这种广告中这个展开状态有什么好 ui 调整吗,目前这样太呆了」)**。诊断:改前广告期间的展开卡上「广告中」写了两遍(头部歌名位 + 歌词行),都是不动的灰词;头部封面是广告物料的图;四颗快捷键里「搜索歌词」「显示歌词」无物可指;时间行中间一组歌词校准键对广告毫无意义;卡片按满高撑着,一大半是空白 —— 而广告期间用户唯一关心的"还要多久结束"藏在右下角 `-0:21` 里。给了三个方案(A 头部整块隐掉 / B 头部只留 ⚙ ✕ / C 头部不动只改其它),用户选了「可以跳过广告的方案,你设计一下」+ 封面「保留播放器给的图」。**设计**:① 头部按 A 让位 —— 不做"广告头"(那会把「广告中」再写一遍,或者让 39pt 只为两颗窗口级键撑着),这一态只画这一态有的东西,同决策 #31 空闲面板的思路;`showsExpandedTrackInfo` 加 `!isAdBreakNow`,`isAdBreakNow` 进 `NotchChromeSource`(控制器已有的 `@Published` 直接满足,预览恒 false),窗口几何不动。② 歌词行接管:`lyricRowContent` 那一层按 `isCurrentTrackAdBreak` 分流到 `adStatusColumn`(不是改 `mainLyricLine` 那个「广告中」分支 —— 倒计时和跳过键要占满这一格,那个分支只是一段文字;它留作兜底、顺序契约不变),📣 + 「广告中」+ 「· 还剩 m:ss」,倒计时用耳朵时间模块同一套 `clockSchedule`(相位对齐曲目整秒,跟进度条同源同相)、只在层可见且有锚点时排表、暂停冻结、时长未知不画。稳态不展开时这一行也是它 —— 两种形态看到的是同一句话变成带倒计时的版本。③ **「跳过广告」的边界是刻意的**:`YouTubeMusicAdSkipper` 只在 `#movie_player` 处于 `ad-showing` 时找**可见的**(有尺寸的)跳过按钮点一下 —— 跟用户自己挪鼠标去点是同一个动作,只是从灵动岛远程触发;按钮还没出现 / 不可跳过的广告就原样回报,**不做**把 `video.currentTime` 拖到结尾那种广告拦截器式的绕过(selftest 钉着 JS 里没有 `currentTime`)。所以它的语义是"把页面上那颗按钮搬到手边",不是"让广告消失",用户看到「这条广告还不能跳过」是预期行为。只给 YT Music 网页广告(`canSkipAd` = 广告中 ∧ 探针强信号 `.ad`):Spotify 的广告没有可点的东西,给键就是骗人;MV 前贴片同样是 `.ad`、同样有效。通道复用探针那条 `BrowserTabProbeScript`(不另起一份 AppleScript 模板;多标签页时对非广告态的播放器回 `NOTFOUND` 让搜索继续),结果回主线程走瞬态横幅(第三个生产者),点到了只给触觉。④ 时间行不画歌词校准控件。**不动的**:封面位照常画播放器给的图(用户拍板;左耳 / 歌词行末尾那枚都不换徽章——这半条 09-09 被他自己整条推翻,全 App 四个封面位广告期间都让位给喇叭,见上面「广告态」⑦);三键照旧(暂停广告正当;上一首 / 下一首在 Spotify 广告期间无效、YT Music 未核实)。**跟并行改动的关系**:`canSkipAd` 读的 `cachedBadgeVerdict(forKey:)` 是 02 章决策 #26 同日新加的 badge 口径(只认强信号;裸标题撑起来的读数是 nil,换歌边界不会闪出一颗键),ls-Alex 确认签名不再动;skipper 是新文件,不碰探针与 `LocalPlaybackSource`。新增 4 条三语键。验证:`swift build` 通过;selftest 3527 ALL PASS(新增 21 条:JS 契约 / parse / AppleScript 模板 / `isYouTubeMusicAd` 空缓存为 false / 五条源码契约);离线 ImageRenderer 按卡宽 468 拼了四种组合(有无倒计时 / 有无跳过键 / 有无封面)看过版式;已装机(pid 54833)。**未真机核对**:当时没有广告在放,「跳过广告」点页面按钮那一下(选择器对当前 YT 播放器版本是否命中)要等下一条 YT Music 广告 —— 若点了回「没能跳过」而页面上明明有按钮,先查 `skipJS` 的选择器列表。
+    **同日第二版(用户真机:「刚开始放广告的时候点跳过广告会出现现在还不能跳过广告的字样,但是过了一段时间再去点就没有任何反应」)**。读法:前半句说明整条链路(灵动岛键 → osascript → Safari 标签页 → JS 读到 `ad-showing`、没找到有尺寸的按钮 → NOTYET → 横幅)是通的;后半句"没有任何反应"只能是 JS 回了 `SKIPPED` —— 它找到了一颗有尺寸的按钮、`click()` 也调了、Swift 侧按"点到了"只给了一下触觉(Mac 上几乎察觉不到),而页面上的广告纹丝不动。两个问题叠在一起:① 裸 `.click()` 对 YouTube 播放器那颗按钮没生效(合成 click 事件、`isTrusted=false`,播放器监听的未必是 `click`);② "点到了"这一档没有可见反馈,成功和静默失败在用户眼里一个样。改法:① 点法换成完整指针事件序列 pointerdown → mousedown → pointerup → mouseup → click(都 bubbles、带坐标),选择器再加 `.ytp-skip-ad button` / `button[id^=skip-button]`;② **点完复核**:等 `verifyDelay` 0.8s 再探一次播放器还挂不挂 `ad-showing`(`verifyJS`),还挂着就回 `.clickedNoEffect` → 「没能跳过这条广告」,用户至少知道"它试了、没成";③ `NOTYET` 顺带把页面上「N 秒后可跳过」的数字带回来(`/[0-9]+/`,JS 里不能有反斜杠所以不用 `\d`),横幅改闪「N 秒后可跳过」,用户知道该等几秒再按;④ 点到的元素描述 + 复核结果记进 os_log `ytmusic-skip` 类别,下次能对着日志改选择器而不是猜。仍不做 `currentTime` 绕过。
+    **同日三～六版(用户连报三次「没能跳过」,每版都有真机日志)**。第三版把四种 DOM 点法逐个试逐个复核(mousemove 唤出控件 + `pointerType: mouse` 的完整指针 / 鼠标序列、同一序列发给按钮里的文字节点、`focus()+click()`、`focus()` + 键盘 Enter)—— 20:15～20:16 三条广告**四档全部** `verify=STILL`,视频时间逐秒照走。只读 DOM 监控同时抓到按钮的真实标记:`BUTTON.ytp-ad-skip-button-modern.ytp-button` 5 秒后 87×36,容器因播放器 `ytp-autohide` opacity 0;徽章「赞助商广告 1/2 ·」说明一次插播会连放两条。结论:播放器对**合成 DOM 事件**一概不认(`isTrusted` 那一类检查)。第四版换入口:只读枚举 `#movie_player` 元素上的播放器 API(`getAdState` / `onAdUxClicked` / `nextVideo` …),对页面上每个 `skip-button:*` 元素调 `onAdUxClicked('skip-button', <id>)` 外加不带 id 一次 —— 20:25 不抛错、不生效,`getAdState()` 广告期间还是 -1。第五版按用户拍板(AskUserQuestion 三选一,选「只在平台已放出跳过键时 seek 到结尾」)把 `<video>.currentTime` 拨到 `duration` —— 21:59 八次:**广告从头重放**,视频时间归 0、徽章仍 1/2,等于把 20 秒广告再看一遍,当场撤掉;顺带暴露 `adAdvanced` 那条"视频时间倒回 = 跳到下一条了"判据是错的(重放也倒回),删掉,只认徽章翻页 / 离开广告态。至此 JS 注入三类(DOM 事件、播放器 API、seek)全部无效。**第六版走辅助功能**:先用持辅助功能权限的终端进程做只读试验 —— Safari 把当前标签页的网页挂在 AX 树里(86 颗 AXButton,遍历 10ms),22:17 那条广告跳过键一出现就对 `AXButton title=[跳过]` 做 `AXPress` → success,1.5s 后播放器离开 `ad-showing`、视频切到正片 1.2/230s。落地:`skipJS` 退成**只读门槛**(selftest 钉着不含 `click()` / `dispatchEvent` / `currentTime =` / `onAdUxClicked`),新文件 `AccessibilitySkipPress` 按 `AXDOMClassList`(WebKit 把 DOM class 暴露成 AX 属性,实测确认)认键、前缀与门槛脚本的选择器同源(selftest 钉两边对得上),`AXPress` 一次;两个新 outcome 各有横幅(没权限 → 弹系统对话框 + 说明;标签页不在前面 → 让用户切过去)。**已知代价**:App 是 ad-hoc 签名(`security find-identity` 0 个证书),TCC 按 cdhash 存授权,每次 build.sh 重装后勾还在但失效,用户要取消再勾 —— 开发期每次装机都会碰到,发布包升级后也会碰到一次;换 Developer ID 签名才能根治。**为什么不走另外两条**:按屏幕坐标发真实点击要把 Safari 拉到最前且窗口不能被挡,会抢焦点、会点错窗口;System Events UI 脚本同样要辅助功能权限、且本仓库明令不用 AppleScript / System Events 驱动界面。**未真机核对**第六版装进 App 之后的完整链路(权限对话框 → 授权 → 按 → 跳):AXPress 本身 22:17 已坐实,差的是 App 进程持权限那一段,等用户授权后按一次。
 34. **灵动岛歌词的字体三件可配,字号只调主行、行高不变(2026-09-09,用户:「在灵动岛里面加上一个设置,可支持配置字体」)**。改前灵动岛是三个展示面里唯一没有任何字体设置的(主行 13pt semibold / 副行与展开预览 11pt medium 全硬编码),悬浮歌词有 字体 / 粗细 / 字号 三行、菜单栏有 粗细 / 字号 两行。这次照悬浮歌词那三行搬:同一个 `FontFamilyPicker`、同一个六档粗细下拉、同一根 `SteppedSlider`,绑到灵动岛自己的三个键;入口是工具栏第二行第四颗「字体」+ 抽屉「字体」组,调同一份 `NotchFontSettingsRows`。三个取舍:① **只管歌词文字**(主行 / 副行 / 展开预览 / 广告态那一格),耳朵模块、头部、按键不跟 —— 悬浮歌词和菜单栏的字体设置也只管歌词,三个面同一条边界;② **字号范围 11～17、只调主行、副行与展开预览固定 11pt**:行高 44 是决策 22 / 24 刻意守住的(不动卡片高度公式、舞台常量、出场动画),字号只能在行内调,上限按"两行 + 间距仍塞进 44 且上下各留 ≥ 4pt"倒推(17 → 19 + 3 + 13 = 35),Core `NotchLyricRowMetrics` 有 selftest 钉着;副行不随主行放大,是为了范围不依赖「副行」开没开 —— 否则就得像菜单栏那样在副行开着时让字号失效(「由副行决定」),用户调好的值会因为翻了另一个开关而自己变;③ **默认值 = 改动前的硬编码**(系统字体 / semibold / 13pt),派生的副行粗细按 `OverlayFontWeight.notchSecondarySteps = 1` 推出 medium、主行行高按"字号 + 2"推出 15,升级上来的用户一个像素不变(selftest 钉着这三个等式)。广告态那一格也跟字体走(「广告中」用主行字体、倒计时同字号细一档 `notchMainDetailFont`),不然用户换了字体后广告期间那一格会突然变回系统字体、而决策 33 的前提正是"它就是歌词那一格换了内容"。工具栏第二行加第四颗前离屏量过预算(见「编辑台改造 → 搬过来的四件事」表后两行):硬下限中英都在 499 之内,标题不截、摘要被压,跟第一行同一种降级。接线由 selftest 源码扫描守着(五处消费点 + 四条镜像订阅,`SourceContractTests`「灵动岛字体」),重置覆盖闸自动盯住三个 `defaultNotchFont*` 常量。
+
+35. **快捷操作那几颗键的悬浮文案提示改成自绘气泡 —— 因为 `.help()` 在这扇窗上从来没弹过(2026-09-09,用户:「帮我灵动岛展开状态的这几个按钮,悬浮上面加一个对应的文案提示」)**。**先说诊断**:`quickActionButton` 里 2026-09-07 就写着 `.help(label)`、注释还写着「label 同时当 tooltip 和读屏标签」,决策 #28 甚至把「显示歌词」那颗的状态交代**托付**给了它(「关着时字形压淡 + tooltip 换文案」)—— 但 AppKit 的 tooltip(`NSToolTipManager`)只在**前台 App** 的窗口上显示,而 lyrimuse 是 LSUIElement、灵动岛这扇 `.nonactivatingPanel` 又刻意不激活 App(`NotchLyricsWindow.canBecomeKey` 那段),用户 hover 时前台是他正在用的那个 App。所以那是一行死代码,跟 04 章悬浮歌词那排图标 2026-08 删掉 `.help()` 是同一类(那边的成因是窗口点击穿透、连 hover 都收不到),这次一并撤掉:留着的话哪天 App 恰好在前台,系统气泡会跟自绘的一起弹两个。**文案零新增**:直接用原来喂给 `.help()` 的那批已有键(搜索歌词… / 显示·隐藏歌词 / 设置… / 关闭灵动岛歌词 / 继续播放 / 打开 %@),三语都在。**位置两处刻意**:① 气泡对准**那颗键**而不是钉在按钮排一侧 —— 第一版把它固定在按钮排左边,离线渲染一看就废:指到最右那颗 ✕ 时气泡出现在最左、跟高亮的键隔着四个图标,"这句话说的是哪颗"当场断掉;② 头部那排往**下**弹、空闲面板那排往**上**弹 —— 后者贴着卡片底(`idlePanelBottomSpacing` 只剩 10pt),往下会被**窗口硬裁**(窗口恒按 `cardHeight` 开,放不进就是裁掉),往上是顶行、空闲态那儿只有一枚 App 图标。**几何交给 SwiftUI 算**:每颗键 `.anchorPreference(value: .bounds)` 上报自己的位置,`overlayPreferenceValue` + `proxy[anchor]` 取回来定位,不在别处照着「22 + spacing 2 + 分隔线 1 + 6」再手写一份坐标(那种两处各算一份的数迟早会漂,同 `cardHeight` 与内容高度共用一个函数的理由);挂在**整行**上而不是那排按钮上,是因为要把气泡夹在卡片内、而"内容区还剩多少宽"只有那一层量得到(按钮排自己只有约 101pt)—— 离线量过:最右那颗 ✕ 的气泡不夹会溢出内容区 34.5pt(英文 `Turn Off Notch Lyrics` 是 53.5pt),夹后右沿正好落在 450 的边界上。气泡尺寸靠 `QuickActionBubbleSizeKey` 回填(preference 是布局的产物,不靠 `onAppear` 那类生命周期回调,同 `SettingsPopoverShell` 量浮层高度那份),且**只用来夹边**、不是显示的前提 —— 量不到时走 20pt 的估算高度照画,免得变成"量不到 → 永远不显示"的全有全无。**三个数值**:底色 `black` 0.78(**破例不用这张卡惯用的 `tint` 低透明度**:它得盖住底下的歌词才读得清,而 tint 低透明度是透的;离线在亮封面模糊底上比过 0.62 那版 —— 底下的字会从气泡里透出来)、字形 11pt medium + `tint` **全亮**(它是要读的那句话,不该比旁边 0.75 的图标还淡)、离键 5pt。首次悬停等 **150ms**、已弹着时换键立即换字(系统 tooltip 的手感,扫过一排键时不该一路闪),`hovered` 与 `shown` 因此是两个 state;150 不是随手取的 —— `AppDelegate` 早就把 `NSInitialToolTipDelay` 注册成了 150(系统默认 1～1.5s"太长,容易被误以为悬浮提示没工作"),自绘的这份另取一个数就会让同一个 App 里有两种悬浮提示、两种手感;整层 `allowsHitTesting(false)`,气泡不拦下面歌词行 / 顶行的点击;`overlay` 不参与布局,邻居一个像素不动(同决策 #32 那条「悬停不许推动邻居」)。**范围刻意收窄**:只给快捷操作那几颗(头部四颗 + 空闲面板三颗,同一个 `quickActionButton`),播放三键 / 耳朵三键**不给** —— 播放/上一首/下一首图标即语义,`NotchPillButton`(「跳过广告」)自带文字更不需要;这跟决策 #32 那次"反馈必须一排排都一致所以扩到三键"不冲突:那次是**触觉反馈**(所有键都该有),这次是**解释语义**(只有说不清自己是谁的键才需要)。「显示 / 隐藏歌词」那颗点完 `label` 就变而指针没动、`onHover` 不会再来一次,所以额外挂了一条 `onChange(of: label)` 同步 —— 不然气泡会停在点之前那句,而这颗键的状态本来就靠这句提示交代(决策 #28)。无几何变化、无新设置项、无新文案。验证:`swift build` 通过;selftest 21 组 3667 ALL PASS;离线 ImageRenderer 复刻头部 / 空闲面板 + 同一套定位公式渲过六种组合(最左 / 最右 / 英文最长 / 强调色 / 往上弹 / 往上弹+收敛)并打过收敛前后的数字;已装机。**未真机核对**:提示要指针真的停在键上才出得来,而本项目硬规则不许用 AppleScript / 合成光标事件驱动界面(决策 #32 那次就是这么核不干净、被用户叫停的),留给用户 hover 一次目验。**跟 App 里其它几处「悬浮提示不工作」的记载区分清楚**(ls-Alex 提示去核对的,核完发现三处成因两两不同,不能合并成一句"`.help()` 全 App 不可靠"):① `SettingsView.swift` 侧边栏折叠表头那条注释说的是**延迟**——tooltip 在设置窗里是**工作的**,只是系统默认 1～1.5s 让人以为没反应,调整点是 `AppDelegate` 的 `NSInitialToolTipDelay`(已注册成 150);② 同文件 `sourceTestAccessory` 那条 2026-08-31 的实机反馈("悬浮并没有提示出来")成因是**两个重叠的 tooltip 注册区在 AppKit 层打架**(当时那个控件叠在 `sourceCheckbox` 上),现在已经不叠了、但保留 `.popover` 自绘是为了多行换行可控;③ 04 章悬浮歌词那排图标的成因是**窗口点击穿透**,连 hover 都收不到;④ 本条的成因是**App 不在前台**(LSUIElement + `.nonactivatingPanel`),跟窗口有没有收到鼠标无关——灵动岛这扇窗 hover 是收得到的(展开靠它)。所以设置窗里的 `.help()` 该留、灵动岛与悬浮歌词里的该撤,不是一条通则。
+
+36. **小封面按像素预先重采样,不再让 SwiftUI 运行期缩图(2026-09-09,用户圈图:「这个灵动岛小图怎么和大图长得不一样,上面有黑斑,并且展开的时候黑斑还会动」)**。现场:Spotify 放陶喆《天天》,《I'm O.K.》的封面是**黄底黑点的半调网点**图(600×589);左耳那枚 ~23pt 缩略图上是几块跟原图毫无关系的大黑斑,hover 展开时黑斑还会挪位。**成因**:三枚 `artworkThumbnail` 都是 `Image(nsImage:).resizable().scaledToFill()` 让 Core Animation 一步把 600px 缩到 46px(@2x)—— 线性采样、没有面积平均,每个目标像素只看源图一两个点,黑点阵的频率跟采样网格打拍就是摩尔纹;展开 / 收起动画里卡片尺寸每帧变、这枚落在亚像素上的相位跟着变,黑斑于是"会动"。离屏复现(scratchpad thumbtest,拿 media-control 给的那张真图):线性采样两帧相位差 0.37px 图案全换;`.high` 重采样后跟大图一致(网点被平均成灰调),`.medium` 也够但略糙。**修法**跟决策 #30 左耳 App 图标的锯齿同一招:`ArtworkThumbnailCache.bitmap(for:pixelSide:)` 按目标像素边长(pt × 显示倍率)用 CoreGraphics `.high` 插值预先光栅化一次(纯函数 `ArtworkThumbnail.squareBitmap` 放 LyrimuseCore,aspect-fill 居中裁方也在位图里做),视图层 `Image(decorative:scale:)` 逐像素贴、`.frame` 仍钉一次给 `clipShape` 定圆角;建不出位图退回老路。缓存按 (源图身份, 像素边长),持有源图强引用(`ObjectIdentifier` 释放后会被复用,不持有会画出上一首的图),只留最近两张源图(高清替代先到 / 后到会让同一首歌两张图交替)。**同一批一起改的**:菜单栏面板 44pt `coverView`、Last.fm「正在播放」行 26pt 的本机位图兜底 —— 同一张图、同一种缩法,不能只修被圈出来的那一枚;歌词窗口 460pt 那张接近原生尺寸不动。耗时实测 600px JPEG 缩到 46/64/88px 各 4~9ms、每张封面每尺寸一次。**验证**:selftest `cover-art` 组新增 —— 1px 黑白棋盘格 600px 缩到 46px 全是灰(无黑/白极值像素),**对照组**朴素 `.none` 采样过半像素是极值(证明断言区分得开,不是摆设);横图 600×300 / 竖图 300×600 三段色带居中裁方只剩中间那条;边长 0 → nil。22 组 3799 条 ALL PASS。真机待用户下次看到同一张封面核对。
+37. **「发现新播放器」的提醒进灵动岛:跟系统通知同一拍、同一份判据,卡片自己撑开一次 + 左耳换成那个播放器的图标(2026-09-11,用户:「正常那些软件被识别到之后,不是会有一个通知吗?那个通知里的逻辑,我是否可以把它加到灵动岛里?这样可能会更明显一点」;边界:「如果这个时候用户开启了灵动岛才生效哦」)**。起因是前一晚的 Podcasts 那条:用户点到设置页才看见「加入信任列表」那张卡,问为什么没通知 —— 那是静音名单(02 章「发现通知」)故意的,他对播客定了「不处理」,但顺势要把通知那套逻辑镜像到灵动岛上。**为什么不能套现有的瞬态横幅**:横幅盖在**歌词行**上,而"检测到新播放器"发生的那一刻 App 视角**没有曲目**(未信任的播放器被 MediaControlClient 的闸挡在外面),卡片收起、歌词行压根不渲染,横幅无处可显示 —— 只能挂在"没有曲目"那套形态(决策 #30/#31)上。**两层**(状态都在 App 层单例 `NotchUnknownPlayerPrompt`,判据全在 Core):①**被动提示**:`UnknownPlayerAlert.qualifiesForAnnounce` = 通知门槛里的 ⑤ 静音名单 / ⑥ 反查得到 App 名 / ⑦ 稳定 6 秒 3 次,**不看** ⑧ 次数 / 冷却(它不打扰人,播放器一直放就一直挂着);`shouldAnnounce` 改成 `qualifies && ⑧`,两者永远同源,selftest 钉住。挂着时收起态左耳那枚 Lyrimuse 图标换成**那个播放器**的图标(`AppIconResolver` → `NotchIdleAppIcon.bitmap(of:cacheKey:pixelSide:)`,跟 App 图标那枚同一套按像素预光栅化)+ 右上角一粒 7pt 红点(破例不用 tint:它是"有事等你处理"的角标,Dock / 系统通知的角标就是红的,跟随封面取色下换成 tint 会变成一粒随机颜色的点);hover 展开的空闲面板换成变体「检测到新的播放器 / Podcasts · 正在放:… [✓ 加入信任列表] [×]」,排法、行高、按钮档位逐项照抄 `idleExpandedPanel`,**高度必须一样**(`cardHeight` 的 `!hasTrack` 分支只认 `idlePanelHeight` 一个数)。「加入信任列表」是文字胶囊键(`NotchPillButton`,跟「跳过广告」同款),不做纯图标 —— 信任是有后果的动作(这个 App 的播放会进 Last.fm / ListenBrainz),文案必须在明面上;× 是"这次别烦我"(同一段播放里不再挂,不落盘)。②**主动提醒**:`UnknownPlayerNotifier.announce` 在发系统通知的同一拍调 `prompt.alert()`,控制器订阅 `isAlerting` 把 `alertHold` 打开 —— `isExpanded` 从只有 hover 一个输入拆成 `hoverExpanded || alertHold`(`refreshExpanded` 是唯一写入点),卡片自己撑开 `UnknownPlayerAlert.notchAlertDuration` = 8 秒,对齐 iPhone 灵动岛的 AirPods 连接提醒;`updateActualVisibility` 的两处 shouldShow / stillShow 判据加 `|| alertHold`,开着「暂停/无播放时隐藏」的机器上窗口被叫回来(走常规出场路,含「从刘海撑开」),到点再照常隐藏。`setExpandedFromWindow` 改比 `hoverExpanded` 不比 `isExpanded`:提醒撑开期间光标进来照样记成 hover,到点收提醒时卡片才不会从光标底下塌回去;触觉反馈只在 `expanded && !wasExpanded` 时给(卡片本来就撑开着时没有视觉动作可对应)。「所有屏幕」的每个副本各自订阅同一个单例,每块屏同时提醒,不经 NotchMirrorManager。**记账**:任一条路(灵动岛 / 通知)真的出了声就 `recordAnnounced` —— 只按通知记账的话,通知授权被拒的机器上记录永远空、`shouldAnnounce` 每拍都过,灵动岛会每 5 秒重新提醒一次。**边界**:notifier 只在 `AppSettings.notchOverlayEnabled` 时往 prompt 里喂 offer,关着时 offer 恒 nil、alert 返回 false,用户只剩系统通知那条路;`NotchLyricsView` 多一个 `prompt` 入参,默认是惰性替身 `.inert`(编辑台预览永远看不到提示),只有 `NotchWindowRoot` 传 `.shared`;订阅下沉到两个宿主子视图(`NotchIdleEarIconHost` / `NotchIdlePanelHost`),提示挂上 / 撤掉只失效那一格,不打醒整卡(2026-08-19 那条性能纪律);prompt 这个类**不引用**控制器 `.shared`(是控制器来订阅它),文件头那条不变量不破。**没做的**:不新造带占位符的本地化词条(第一行复用通知标题键、播放器名挪到第二行行首)—— 本地化是四份手写 .strings + 一份 xcstrings 真源,加一条键要动五个文件、且 xcstrings 多会话并发改会丢更新。selftest 16 条(`qualifiesForAnnounce` 六条门槛 + 同源不变量 + 时长 + `nowPlayingDescription` 四条),23 组 4172 条 ALL PASS。真机:等下一个未信任播放器稳定播放 6 秒;日志 `notify` 分类多一行 `notch alert for <bundle id>`。

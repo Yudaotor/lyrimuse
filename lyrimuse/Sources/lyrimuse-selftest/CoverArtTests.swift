@@ -1,5 +1,6 @@
 import LyrimuseCore
 import Foundation
+import CoreGraphics
 
 // 封面取图 / 取色 / 高清替代。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
@@ -588,5 +589,233 @@ func runCoverArtTests() {
             native("https://evilmusic.126.net/a.jpg?param=600y600"),
             "https://evilmusic.126.net/a.jpg?param=600y600",
             "封面URL: 拼在一起的同后缀域名不算网易云")
+    }
+
+    // ---- 高清替代的触发判定:太小 / 不是封面形状(2026-09-08) ----
+    //
+    // 用户报 YouTube Music 的 MV「封面是视频的第一帧」:media-control 给的是 320×180 的视频缩略图
+    // (实测,TIFF),宽 320 越过 300 的门槛被当成够大的封面原样显示。collector 那头的
+    // deviceartwork.go 一直有 15% 的长宽比容差把它拒收,App 侧没有 —— 这里把两端口径对齐。
+    do {
+        typealias G = CoverArtReplacementGate
+        let t = 300
+        // 现场那两张图:MV 缩略图按形状触发;下一首歌曲条目给的 544×544 方形封面不动。
+        expectEqual(G.reason(width: 320, height: 180, lowResThreshold: t), .notCoverShaped,
+                    "高清替代: 320×180 视频缩略图按形状触发")
+        expectEqual(G.reason(width: 544, height: 544, lowResThreshold: t), nil,
+                    "高清替代: 544×544 方形大图不替")
+        // 竖屏视频同样不是封面;形状先于尺寸判 —— 1280×720 再大也不是封面。
+        expectEqual(G.reason(width: 180, height: 320, lowResThreshold: t), .notCoverShaped,
+                    "高清替代: 竖屏缩略图按形状触发")
+        expectEqual(G.reason(width: 1280, height: 720, lowResThreshold: t), .notCoverShaped,
+                    "高清替代: 大视频帧仍按形状触发")
+        // 原有的"太小"那条不变:网易云 100×100、QQ 300×300(边界含等号,2026-08-24 修)。
+        expectEqual(G.reason(width: 100, height: 100, lowResThreshold: t), .lowRes,
+                    "高清替代: 100×100 按太小触发")
+        expectEqual(G.reason(width: 300, height: 300, lowResThreshold: t), .lowRes,
+                    "高清替代: 300×300 边界按太小触发")
+        expectEqual(G.reason(width: 301, height: 301, lowResThreshold: t), nil,
+                    "高清替代: 301×301 不替")
+        // 没有图不替(该显示占位音符,不该悄悄换成缓存匹配出来的另一张)。
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: t), nil, "高清替代: 没有图不替")
+        // 容差跟 collector 的 deviceArtworkMaxAspectSkew 一致:正好 15% 算封面,再多一点不算。
+        expectEqual(G.isCoverShaped(width: 1000, height: 850), true, "高清替代: 15% 偏差仍算封面形状")
+        expectEqual(G.isCoverShaped(width: 1000, height: 849), false, "高清替代: 超过 15% 不算封面形状")
+        expectEqual(G.maxAspectSkew, 0.15, "高清替代: 形状容差与 collector 逐字一致")
+        // 带留白边框那类小幅不规则的封面落在容差内、且够大 → 不替(权威图不动)。
+        expectEqual(G.reason(width: 600, height: 520, lowResThreshold: t), nil,
+                    "高清替代: 容差内的非严格方形大图不替")
+        // 下载回来之后值不值得换:太小那条要比系统那份宽;形状那条只看替代图自己是不是方形。
+        expectEqual(G.accepts(candidateWidth: 600, candidateHeight: 600, systemWidth: 300, reason: .lowRes), true,
+                    "高清替代: 太小→替代图更宽才换")
+        expectEqual(G.accepts(candidateWidth: 300, candidateHeight: 300, systemWidth: 300, reason: .lowRes), false,
+                    "高清替代: 太小→同样小不换")
+        expectEqual(G.accepts(candidateWidth: 1200, candidateHeight: 1200, systemWidth: 320, reason: .notCoverShaped), true,
+                    "高清替代: 形状→方形替代图换")
+        expectEqual(G.accepts(candidateWidth: 600, candidateHeight: 600, systemWidth: 1280, reason: .notCoverShaped), true,
+                    "高清替代: 形状→替代图比视频帧窄也换")
+        expectEqual(G.accepts(candidateWidth: 640, candidateHeight: 360, systemWidth: 320, reason: .notCoverShaped), false,
+                    "高清替代: 形状→替代图自己也不是方形不换")
+    }
+
+    // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑(2026-09-09) ----
+    //
+    // 用户圈图报灵动岛左耳那枚封面「和大图长得不一样,上面有黑斑,展开的时候黑斑还会动」——陶喆
+    // 《I'm O.K.》是黄底黑点的半调网点封面,600px 线性缩到 46px 没有面积平均就拍出摩尔纹。这里拿
+    // 一张合成的 1px 黑白棋盘格代替那张封面:正确的重采样把它平均成灰,朴素采样(对照组,.none)
+    // 出来是黑白噪点。对照组是为了证明这条断言真能区分两种缩法,不是摆设。
+    do {
+        typealias T = ArtworkThumbnail
+        // 把 CGImage 读成 RGBA 字节(premultipliedLast,alpha 恒 255),行序自上而下。
+        func rgba(_ image: CGImage) -> [UInt8] {
+            let w = image.width, h = image.height
+            var bytes = [UInt8](repeating: 0, count: w * h * 4)
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return bytes }
+            bytes.withUnsafeMutableBytes { buf in
+                guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                                          bytesPerRow: w * 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                ctx.interpolationQuality = .none
+                ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            }
+            return bytes
+        }
+        // 合成源图:w×h,按列/行分带上色(fill 回调给 (x, y) 返回 RGB)。
+        func synthesize(width: Int, height: Int, fill: (Int, Int) -> (UInt8, UInt8, UInt8)) -> CGImage? {
+            var bytes = [UInt8](repeating: 255, count: width * height * 4)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let (r, g, b) = fill(x, y)
+                    let o = (y * width + x) * 4
+                    bytes[o] = r; bytes[o + 1] = g; bytes[o + 2] = b
+                }
+            }
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+            return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                           bytesPerRow: width * 4, space: space,
+                           bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                           provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        }
+        // 1px 黑白棋盘格 600×600 → 46px
+        if let board = synthesize(width: 600, height: 600, fill: { x, y in (x + y) % 2 == 0 ? (0, 0, 0) : (255, 255, 255) }) {
+            if let thumb = T.squareBitmap(from: board, pixelSide: 46) {
+                expectEqual(thumb.width, 46, "小封面重采样: 输出像素宽 = 目标边长")
+                expectEqual(thumb.height, 46, "小封面重采样: 输出像素高 = 目标边长")
+                let px = rgba(thumb)
+                var extremes = 0
+                for i in stride(from: 0, to: px.count, by: 4) where px[i] < 64 || px[i] > 192 { extremes += 1 }
+                expectEqual(extremes, 0, "小封面重采样: 棋盘格缩到 46px 全是灰(没有黑/白极值像素 = 没有摩尔纹)")
+            } else {
+                expectEqual(false, true, "小封面重采样: 棋盘格缩图建不出来")
+            }
+            // 对照组:朴素 .none 采样同一张图,必然满是黑白极值 —— 证明上面那条断言区分得开。
+            if let space = CGColorSpace(name: CGColorSpace.sRGB),
+               let ctx = CGContext(data: nil, width: 46, height: 46, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                ctx.interpolationQuality = .none
+                ctx.draw(board, in: CGRect(x: 0, y: 0, width: 46, height: 46))
+                if let naive = ctx.makeImage() {
+                    let px = rgba(naive)
+                    var extremes = 0
+                    for i in stride(from: 0, to: px.count, by: 4) where px[i] < 64 || px[i] > 192 { extremes += 1 }
+                    expectEqual(extremes > 46 * 46 / 2, true, "小封面重采样(对照组): 朴素采样过半像素是黑/白极值")
+                }
+            }
+        } else {
+            expectEqual(false, true, "小封面重采样: 合成棋盘格失败")
+        }
+        // aspect-fill 居中裁方:横图 600×300 三段竖带(左红 150 / 中绿 300 / 右蓝 150)→ 裁出来正好是绿带。
+        if let wide = synthesize(width: 600, height: 300, fill: { x, _ in x < 150 ? (255, 0, 0) : (x < 450 ? (0, 255, 0) : (0, 0, 255)) }),
+           let thumb = T.squareBitmap(from: wide, pixelSide: 32) {
+            let px = rgba(thumb)
+            var nonGreen = 0
+            for i in stride(from: 0, to: px.count, by: 4) where !(px[i] < 16 && px[i + 1] > 239 && px[i + 2] < 16) { nonGreen += 1 }
+            expectEqual(nonGreen, 0, "小封面重采样: 横图居中裁方只剩中间那条带")
+        } else {
+            expectEqual(false, true, "小封面重采样: 横图缩图建不出来")
+        }
+        // 竖图 300×600 三段横带(上红 / 中绿 / 下蓝)→ 同样只剩绿带。
+        if let tall = synthesize(width: 300, height: 600, fill: { _, y in y < 150 ? (255, 0, 0) : (y < 450 ? (0, 255, 0) : (0, 0, 255)) }),
+           let thumb = T.squareBitmap(from: tall, pixelSide: 32) {
+            let px = rgba(thumb)
+            var nonGreen = 0
+            for i in stride(from: 0, to: px.count, by: 4) where !(px[i] < 16 && px[i + 1] > 239 && px[i + 2] < 16) { nonGreen += 1 }
+            expectEqual(nonGreen, 0, "小封面重采样: 竖图居中裁方只剩中间那条带")
+        } else {
+            expectEqual(false, true, "小封面重采样: 竖图缩图建不出来")
+        }
+        // 非法边长 → nil(调用方退回运行期缩放)。
+        if let board = synthesize(width: 8, height: 8, fill: { _, _ in (0, 0, 0) }) {
+            expectEqual(T.squareBitmap(from: board, pixelSide: 0) == nil, true, "小封面重采样: 边长 0 → nil")
+        }
+    }
+
+    // ---- 动态封面(motion artwork)的 HLS 清单解析(2026-09-09)----
+    //
+    // fixture 是 2026-09-09 从 Prince《Timeless》(collectionId 6773830957)那条真 master m3u8
+    // 上原样抄下来的片段:同时含 trick-play 的 I 帧轨(必须被排掉)、同尺寸多码率(486² 有三条)、
+    // H.264 与 HEVC 并存,以及 `AVERAGE-BANDWIDTH` / `_AVG-BANDWIDTH` / `BANDWIDTH` 三个名字
+    // 都以 `BANDWIDTH` 结尾这个真实的属性名陷阱。
+    do {
+        typealias M = MotionCoverManifest
+        let base = "https://mvod.itunes.apple.com/itunes-assets/HLSVideo211/v4/b4/00/a8/x"
+        let master = """
+        #EXTM3U
+        #EXT-X-VERSION:7
+        #EXT-X-INDEPENDENT-SEGMENTS
+
+        #EXT-X-I-FRAME-STREAM-INF:AVERAGE-BANDWIDTH=173201,_AVG-BANDWIDTH=173201,BANDWIDTH=177631,VIDEO-RANGE=SDR,CODECS="avc1.64001f",RESOLUTION=486x486,URI="\(base)/P_trickPlay_gr210_sdr_486x486_iframes.m3u8"
+        #EXT-X-I-FRAME-STREAM-INF:AVERAGE-BANDWIDTH=887781,_AVG-BANDWIDTH=887781,BANDWIDTH=942325,VIDEO-RANGE=SDR,CODECS="avc1.640020",RESOLUTION=1080x1080,URI="\(base)/P_trickPlay_gr265_sdr_1080x1080_iframes.m3u8"
+
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=265893,_AVG-BANDWIDTH=265893,BANDWIDTH=334704,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="avc1.64001f",FRAME-RATE=24.000,RESOLUTION=360x360,STABLE-VARIANT-ID="dfb6"
+        \(base)/P_Anull_video_gr203_sdr_360x360.m3u8
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=771275,_AVG-BANDWIDTH=771275,BANDWIDTH=983664,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="avc1.64001f",FRAME-RATE=24.000,RESOLUTION=486x486,STABLE-VARIANT-ID="39f3"
+        \(base)/P_Anull_video_gr210_sdr_486x486.m3u8
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=1118698,_AVG-BANDWIDTH=1118698,BANDWIDTH=1448322,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="avc1.64001f",FRAME-RATE=24.000,RESOLUTION=486x486,STABLE-VARIANT-ID="b709"
+        \(base)/P_Anull_video_gr220_sdr_486x486.m3u8
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=2154918,_AVG-BANDWIDTH=2154918,BANDWIDTH=2887412,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="avc1.64001f",FRAME-RATE=24.000,RESOLUTION=768x768,STABLE-VARIANT-ID="99cf"
+        \(base)/P_Anull_video_gr240_sdr_768x768.m3u8
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=1577673,_AVG-BANDWIDTH=1577673,BANDWIDTH=2128046,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="hvc1.2.20000000.L123.B0",FRAME-RATE=24.000,RESOLUTION=768x768,STABLE-VARIANT-ID="9263"
+        \(base)/P_Anull_video_gr540_sdr_768x768.m3u8
+        #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=2868023,_AVG-BANDWIDTH=2868023,BANDWIDTH=3704874,VIDEO-RANGE=SDR,CLOSED-CAPTIONS=NONE,CODECS="avc1.64001f",FRAME-RATE=24.000,RESOLUTION=960x960,STABLE-VARIANT-ID="d2b0"
+        \(base)/P_Anull_video_gr250_sdr_960x960.m3u8
+        """
+        let vs = M.parseVariants(master: master)
+        expectEqual(vs.count, 6, "动态封面: 只收 STREAM-INF,trick-play 的 I 帧轨全部排掉")
+        expectEqual(vs.map(\.width), [360, 486, 486, 768, 768, 960], "动态封面: 档位按出现顺序解出来")
+        expectEqual(vs.filter(\.isHEVC).count, 1, "动态封面: CODECS 里的 hvc1 认得出来")
+        expectEqual(vs[0].bandwidth, 265893, "动态封面: 取 AVERAGE-BANDWIDTH,不被 _AVG-/BANDWIDTH 串台")
+
+        // 选档:够用的最小那一档。歌词窗口封面卡是 460pt@2x = 920px → 该选 960²。
+        expectEqual(M.pick(vs, minimumWidth: 920)?.width, 960, "动态封面: 920px 要求 → 选 960²")
+        expectEqual(M.pick(vs, minimumWidth: 920)?.isHEVC, false, "动态封面: 选中的档是 H.264")
+        // 灵动岛那 32pt@2x = 64px,最小档就够。
+        expectEqual(M.pick(vs, minimumWidth: 64)?.width, 360, "动态封面: 小尺寸要求 → 选最小档,不白下字节")
+        // 同尺寸多码率:取码率低的那条(486² 有 771k 与 1118k 两条)。
+        expectEqual(M.pick(vs, minimumWidth: 400)?.bandwidth, 771275, "动态封面: 同尺寸取低码率")
+        // 同尺寸 H.264 与 HEVC 并存(768²)时优先 H.264 —— 实测 HEVC 那档的 variant 清单连不上。
+        expectEqual(M.pick(vs, minimumWidth: 500)?.isHEVC, false, "动态封面: 同尺寸优先 H.264")
+        // 一档都不够宽 → 退回最大档,宁可放大也别不动。
+        expectEqual(M.pick(vs, minimumWidth: 4096)?.width, 960, "动态封面: 都不够宽 → 退最大档")
+        expectEqual(M.pick([], minimumWidth: 920) == nil, true, "动态封面: 空清单 → nil")
+
+        // variant 清单 → 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
+        let variant = """
+        #EXTM3U
+        #EXT-X-TARGETDURATION:4
+        #EXT-X-VERSION:7
+        #EXT-X-PLAYLIST-TYPE:VOD
+        #EXT-X-MAP:URI="P_Anull_video_gr240_sdr_768x768-.mp4",BYTERANGE="877@0"
+        #EXTINF:4.00000,
+        #EXT-X-BYTERANGE:600435@877
+        P_Anull_video_gr240_sdr_768x768-.mp4
+        #EXTINF:4.00000,
+        #EXT-X-BYTERANGE:1331742@601312
+        P_Anull_video_gr240_sdr_768x768-.mp4
+        #EXT-X-ENDLIST
+        """
+        expectEqual(M.mediaFileName(fromVariant: variant), "P_Anull_video_gr240_sdr_768x768-.mp4",
+                    "动态封面: 从 EXT-X-MAP 取出那个单文件名")
+        expectEqual(M.mediaFileName(fromVariant: "#EXTM3U\n#EXT-X-ENDLIST") == nil, true,
+                    "动态封面: 没有 EXT-X-MAP → nil(当这档没有单文件形态)")
+
+        // 相对 URI 解析:Apple 现在给绝对地址,但 HLS 允许相对。
+        let vbase = URL(string: "\(base)/P_Anull_video_gr240_sdr_768x768.m3u8")!
+        expectEqual(M.absolute("P_Anull_video_gr240_sdr_768x768-.mp4", relativeTo: vbase)?.absoluteString,
+                    "\(base)/P_Anull_video_gr240_sdr_768x768-.mp4",
+                    "动态封面: 相对 URI 按 variant 地址解成绝对")
+        expectEqual(M.absolute("https://other/x.mp4", relativeTo: vbase)?.absoluteString, "https://other/x.mp4",
+                    "动态封面: 已经是绝对地址就原样用")
+
+        // 属性解析本身:值里带逗号(CODECS)、带等号(STABLE-VARIANT-ID 风格)都不能切错。
+        expectEqual(M.attribute("CODECS", in: "BANDWIDTH=1,CODECS=\"avc1.64001f,mp4a.40.2\",X=2"),
+                    "avc1.64001f,mp4a.40.2", "动态封面: 带引号的值里含逗号不被切断")
+        expectEqual(M.attribute("BANDWIDTH", in: "AVERAGE-BANDWIDTH=111,BANDWIDTH=222"), "222",
+                    "动态封面: BANDWIDTH 不会命中 AVERAGE-BANDWIDTH 的尾巴")
+        expectEqual(M.attribute("RESOLUTION", in: "A=1,RESOLUTION=768x768"), "768x768", "动态封面: 无引号值读到逗号为止")
+        expectEqual(M.attribute("MISSING", in: "A=1") == nil, true, "动态封面: 没有的键 → nil")
+        expectEqual(M.parseResolution("960x960")?.0, 960, "动态封面: 分辨率解析")
+        expectEqual(M.parseResolution("bad") == nil, true, "动态封面: 坏分辨率 → nil")
     }
 }

@@ -533,7 +533,8 @@ func runLyricsManagerTests() {
             album: String = "al",
             source: String = "",
             updated: Double? = nil,
-            resolved: Double? = nil
+            resolved: Double? = nil,
+            responded: Int = 0
         ) -> LyricsSortKey {
             LyricsSortKey(
                 normPrimaryArtist: artist,
@@ -543,7 +544,8 @@ func runLyricsManagerTests() {
                 sourceDisplayName: source.isEmpty ? "无来源" : source,
                 hasSource: !source.isEmpty,
                 lyricsUpdatedAt: updated.map { Date(timeIntervalSince1970: $0) },
-                resolvedAt: resolved.map { Date(timeIntervalSince1970: $0) }
+                resolvedAt: resolved.map { Date(timeIntervalSince1970: $0) },
+                sourcesRespondedCount: responded
             )
         }
         func order(_ keys: [LyricsSortKey], _ o: LyricsSortOrder) -> [String] {
@@ -601,6 +603,44 @@ func runLyricsManagerTests() {
         let noTS = [k("hasTS", artist: "z", resolved: 500), k("noTS", artist: "a")]
         expectEqual(order(noTS, .updated(ascending: false)), ["hasTS", "noTS"], "排序: 尾块内连 ts 都没有的再排最后(新→旧)")
         expectEqual(order(noTS, .updated(ascending: true)), ["hasTS", "noTS"], "排序: 尾块内连 ts 都没有的再排最后(旧→新)")
+
+        // —— 应答源数(借鉴清单 V3):证据最薄的排最前,"不知道"(0)两个方向都最后 ——
+        let byEvidence = [
+            k("thick", artist: "a", responded: 6),
+            k("thin", artist: "z", responded: 2),
+            k("mid", artist: "m", responded: 4),
+        ]
+        expectEqual(
+            order(byEvidence, .evidence(ascending: true)), ["thin", "mid", "thick"],
+            "排序: 应答源最少 —— 证据最薄的排最前(这一档存在的全部理由)"
+        )
+        // 0 = **老条目没有 lyrics_sources_responded 字段**(不知道),不是"零个源应答"。
+        // 跟 hasSource / lyricsUpdatedAt 两档对缺失值的处置逐字同构:两个方向都收进尾块,
+        // 不能让一屏"不知道"占住开头 —— 那正是 2026-09-02 那个"选了没反应"的形状。
+        let withUnknown = [
+            k("unknown", artist: "a", resolved: 9999, responded: 0),
+            k("known", artist: "z", responded: 2),
+        ]
+        expectEqual(
+            order(withUnknown, .evidence(ascending: true)), ["known", "unknown"],
+            "排序: 应答源数未知(0)的行排最后,不是当成'最薄'塞到开头"
+        )
+        // 尾块内部按 ts 排,而不是退回歌手字母序 —— 否则老库(整屏都没有这个字段)选这一档
+        // 会整体退化成默认排序。⚠️ ts 顺序与歌手字母序**相反**,否则这条断言等于没测
+        // (同上面「来源」那组 2026-09-02 变异测试逮到过的写法)。
+        let allUnknown = [
+            k("A", artist: "a", resolved: 100),
+            k("B", artist: "b", resolved: 300),
+            k("C", artist: "c", resolved: 200),
+        ]
+        expectEqual(
+            order(allUnknown, .evidence(ascending: true)), ["A", "C", "B"],
+            "排序: 全是未知应答源数的行时,尾块内按 ts 排(不退化成默认排序)"
+        )
+        expectNotEqual(
+            order(allUnknown, .evidence(ascending: true)), order(byEvidence, .defaultOrder),
+            "排序: 未知尾块的结果不该跟默认排序撞上"
+        )
 
         // —— 来源:有来源按展示名排,无来源两个方向都最后 ——
         let bySource = [
@@ -747,6 +787,257 @@ func runLyricsManagerTests() {
         expectEqual(a == b && !a.isEmpty, true, "同词标注: 复用只取词的指纹,时间戳/CRLF 不影响")
     }
 
+
+    // ---- 查询词分组摘要(LyricQueryDigest,2026-09-12,借鉴清单 V1 续篇)----
+    //
+    // 起因:V1 落地当天用户报「这部分可读性很差」并截图 —— 逐条平铺时曲名重复 9 遍、
+    // 同一串七个源的名单重复 8 遍,20 多个视觉行里真正的信息只有「曲名没变,换了 9 个歌手名」。
+    do {
+        let SRC = ["netease", "qq", "lrclib", "musixmatch", "amll", "kuwo", "migu"]
+        let TITLE = "Beautiful World (Da Capo Version) [Instrumental]"
+        // 用户截图里那一轮的真实形状:首轮 1 组 + 别名轮 8 组,曲名与源名单全同。
+        let rounds = [LyricQueryRound(artist: "Utada", title: TITLE, reason: "", sources: [])]
+            + ["Hikaru Utada", "宇多田ヒカル", "Cubic U", "Hikki",
+               "Utada Hikaru", "ヒッキー", "宇多田光", "うただひかる"].map {
+                LyricQueryRound(artist: $0, title: TITLE, reason: "alias-missing", sources: SRC)
+            }
+        let d = LyricQueryDigestBuilder.build(rounds)
+        expectEqual(d.total, 9, "查询摘要: total 保留压缩前的条数(压缩不该让人以为只问了两次)")
+        expectEqual(d.sharedTitle, TITLE, "查询摘要: 曲名全同 → 提取到顶部说一次")
+        expectEqual(d.groups.count, 2, "查询摘要: 9 条压成 2 组(首轮 + 别名轮),这是可读性的全部来源")
+        expectEqual(d.groups[0].reason, "", "查询摘要: 第一组是首轮")
+        expectEqual(d.groups[0].queries, [LyricQueryPair(artist: "Utada", title: "")],
+                    "查询摘要: 曲名被提取后,组内只剩歌手名(曲名字段留空)")
+        expectEqual(d.groups[1].queries.count, 8, "查询摘要: 八个别名并进同一组")
+        expectEqual(d.groups[1].queries.first?.artist, "Hikaru Utada", "查询摘要: 组内按出现顺序,不排序")
+        expectEqual(d.groups[1].sources, SRC, "查询摘要: 源名单每组只留一份")
+
+        // 曲名变过(标题反查轮)→ 不提取,曲名并回每一条,不丢信息。
+        let mixed = [
+            LyricQueryRound(artist: "方大同", title: "Love Love Love", reason: "", sources: []),
+            LyricQueryRound(artist: "方大同", title: "爱爱爱", reason: "title-from-artist-search", sources: []),
+        ]
+        let dm = LyricQueryDigestBuilder.build(mixed)
+        expectEqual(dm.sharedTitle, nil, "查询摘要: 曲名变过就不提取(标题反查轮改写过标题)")
+        // ⚠️ **刻意不在 Core 里拼成「歌手 - 曲名」**:那是展示决定。2026-09-12 用户截图报
+        // 「需要能看出来分别是歌名、歌手、专辑」——拼起来之后连"这是几个值"都读不出来
+        // (值里本来就有顿号/连字符)。Core 只给字段,View 自己加标签和「」。
+        expectEqual(dm.groups[0].queries,
+                    [LyricQueryPair(artist: "方大同", title: "Love Love Love")],
+                    "查询摘要: 不提取时曲名并回每一条,且**分字段**给出、不在 Core 里拼字符串")
+        expectEqual(dm.groups[1].queries,
+                    [LyricQueryPair(artist: "方大同", title: "爱爱爱")],
+                    "查询摘要: 反查轮那条带改写后的曲名")
+
+        // 分组按首次出现排序,不按字母/来路排 —— 先问什么后问什么本身是复盘信息。
+        let ordered = [
+            LyricQueryRound(artist: "A", title: "T", reason: "title-split", sources: []),
+            LyricQueryRound(artist: "B", title: "T", reason: "", sources: []),
+            LyricQueryRound(artist: "C", title: "T", reason: "title-split", sources: []),
+        ]
+        let dord = LyricQueryDigestBuilder.build(ordered)
+        expectEqual(dord.groups.map(\.reason), ["title-split", ""], "查询摘要: 组按首次出现顺序,不排序")
+        expectEqual(dord.groups[0].queries.map(\.artist), ["A", "C"],
+                    "查询摘要: 同组的后来者并回原组,不新开一组")
+
+        // 同一来路但源名单不同 = 两组(定向重查问了哪几个源是关键差异,不能合并)。
+        let diffSrc = [
+            LyricQueryRound(artist: "A", title: "T", reason: "alias-missing", sources: ["qq"]),
+            LyricQueryRound(artist: "B", title: "T", reason: "alias-missing", sources: ["kugou"]),
+        ]
+        expectEqual(LyricQueryDigestBuilder.build(diffSrc).groups.count, 2,
+                    "查询摘要: 来路相同但源名单不同要分开 —— 问了哪几个源是关键差异")
+
+        // 组内去重(collector 侧只挡得住相邻重复,跨轮撞上的挡不住)。
+        let dup = [
+            LyricQueryRound(artist: "A", title: "T", reason: "primary-artist-variant", sources: []),
+            LyricQueryRound(artist: "B", title: "T", reason: "primary-artist-variant", sources: []),
+            LyricQueryRound(artist: "A", title: "T", reason: "primary-artist-variant", sources: []),
+        ]
+        let ddup = LyricQueryDigestBuilder.build(dup)
+        expectEqual(ddup.queriesFlatCount, 2, "查询摘要: 组内去重(A 出现两次只留一条)")
+        expectEqual(ddup.total, 3, "查询摘要: 去重不改 total —— 它数的是原始记录条数")
+
+        expectEqual(LyricQueryDigestBuilder.build([]).groups.count, 0, "查询摘要: 空输入不崩")
+        // 曲名全为空时不该提取出一个空字符串当"共享曲名"。
+        let noTitle = [LyricQueryRound(artist: "A", title: "", reason: "", sources: [])]
+        expectEqual(LyricQueryDigestBuilder.build(noTitle).sharedTitle, nil,
+                    "查询摘要: 曲名全空不算共享曲名")
+        expectEqual(LyricQueryDigestBuilder.build(noTitle).groups[0].queries,
+                    [LyricQueryPair(artist: "A", title: "")],
+                    "查询摘要: 没有曲名时只列歌手名,不留一个孤零零的分隔符")
+    }
+
+
+    // ---- 解析决策:判词 / 差值分解 / 共有项(LyricsDecisionAnalysis,2026-09-12)----
+    //
+    // 起因:同一天第三次改「解析决策」面板。前两次压的是查询词,这次是候选表本身 ——
+    // 全库 5200 条缓存的只读统计:打分明细中位 27 行、32% 的行在每条候选上一模一样、
+    // 24% 的对局冠亚分差 ≤1 分(其中 78% 纯粹差在「行数」)。
+    //
+    // 下面两组夹具是**真实存档**原样搬过来的,不是编的:
+    //   A. back number《Hanataba》—— 最常见的形状:五个源给的是同一份词,1 分定胜负;
+    //   C. Blondie《Call Me (Instrumental)》—— 硬骨头:两条吃了版本不符 −600、一条被拒、
+    //      一条分项合计 −353 被夹到 1。
+    // 挑这两条是因为它们的需求**相反**(一个要"别废话说结论",一个要"把证据摆全"),
+    // 只在其中一种上成立的判据是错的。
+    do {
+        typealias V = LyricsVerdictBuilder
+        func term(_ k: String, _ p: Int) -> LyricsScoreTermValue {
+            LyricsScoreTermValue(kind: k, points: p)
+        }
+        func cand(_ src: String, _ score: Int, _ t: [(String, Int)],
+                  instrumental: Bool? = nil, peers: [String] = []) -> LyricsScoredCandidate {
+            LyricsScoredCandidate(source: src, score: score, terms: t.map { term($0.0, $0.1) },
+                                  instrumental: instrumental, consensusPeers: peers)
+        }
+
+        // ---- A:back number《Hanataba》(匹配到《水平線》)----
+        let peersA = ["netease", "qq", "kugou", "lrclib", "musixmatch"]
+        let sampleA = [
+            cand("qq", 945, [("duration", 164), ("wordTiming", 400), ("lines", 51),
+                             ("consensus", 250), ("translation", 50), ("romanization", 30)],
+                 peers: peersA),
+            cand("kugou", 944, [("duration", 164), ("wordTiming", 400), ("lines", 50),
+                                ("consensus", 250), ("translation", 50), ("romanization", 30)]),
+            cand("netease", 942, [("duration", 163), ("wordTiming", 400), ("lines", 49),
+                                  ("consensus", 250), ("translation", 50), ("romanization", 30)]),
+            cand("musixmatch", 892, [("duration", 164), ("wordTiming", 400), ("lines", 28),
+                                     ("consensus", 250), ("translation", 50)]),
+            cand("lrclib", 460, [("duration", 180), ("lines", 30), ("consensus", 250)]),
+        ]
+        let vA = V.build(candidates: sampleA, winner: "qq")
+        expectEqual(vA, .sameLyrics(contenders: 5, gap: 1,
+                                    gapPercent: 100.0 / 945.0, nearTie: true,
+                                    separator: .single(term("lines", 1))),
+                    "判词A: 五个源都有 consensus → 同一份词;1 分之差 → nearTie;唯一差异是行数 +1")
+
+        // 这一条是整个重设计的支点:面板原来要靠肉眼 diff 两段七行文字才看得出「差在行数」。
+        let dA = V.deltas(champion: sampleA[0], others: Array(sampleA.dropFirst()))
+        expectEqual(dA.count, 4, "差值A: 冠军不在落选名单里")
+        expectEqual(dA[0].scoreGap, -1, "差值A: 酷狗落后 1 分")
+        expectEqual(dA[0].terms, [term("lines", -1)],
+                    "差值A: 相同的项自动消失,只剩「行数 −1」——那 32% 的冗余就是这么消掉的")
+        expectEqual(dA[1].terms, [term("lines", -2), term("duration", -1)],
+                    "差值A: 多项有差时按绝对值从大到小")
+        expectEqual(dA[2].terms, [term("romanization", -30), term("lines", -23)],
+                    "差值A: 冠军有、自己没有的项(罗马音)记成负差值")
+        expectEqual(dA[3].scoreGap, -485, "差值A: 总分差用存档里的总分相减")
+        expectEqual(dA.allSatisfy { $0.clampedRawSum == nil }, true,
+                    "差值A: 没有一条被夹过分,不该冒出「分项合计」那句话")
+
+        // 共有项:五条里只有 consensus 的 kind 和分值都一样(逐字/译文/罗马音 LRCLIB 没有)。
+        expectEqual(V.sharedTerms(among: sampleA), [term("consensus", 250)],
+                    "共有项A: kind 和分值都相同才算,种类相同但分值不同的(时长/行数)不算")
+
+        // ---- C:Blondie《Call Me (Instrumental)》----
+        let sampleC = [
+            cand("kugou", 850, [("duration", 276), ("wordTiming", 400), ("lines", 39),
+                                ("album", 75), ("titleMatch", 60)]),
+            cand("netease", 629, [("duration", 278), ("wordTiming", 400), ("lines", 41),
+                                  ("versionTags", -600), ("album", 150), ("titleMatch", 60),
+                                  ("consensus", 250), ("translation", 50)]),
+            cand("qq", 429, [("duration", 275), ("wordTiming", 400), ("lines", 44),
+                             ("versionTags", -600), ("titleMatch", 60), ("consensus", 250)]),
+            cand("musixmatch", 1, [("durationOvershoot", -700), ("lines", 77),
+                                   ("album", 150), ("titleMatch", 120)]),
+            cand("lrclib", -1, [("rejectPlainTextOnly", 0)]),
+        ]
+        expectEqual(V.build(candidates: sampleC, winner: "kugou"),
+                    .decisiveNegative(term: term("versionTags", -600), loser: "netease", gap: 221),
+                    "判词C: 亚军吃了冠军没有的 −600,绝对值 ≥ 221 分的分差 → 这一项就是胜负手")
+        // ⚠️ 被拒的那条(rejectPlainTextOnly,存档里 score 恒为 -1)不参赛 —— 它进了候选表就会
+        // 把 ranked/champion/共有项全带偏,而那个 -1 是内部手段不是评价。
+        expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "musixmatch"],
+                    "参赛: 被拒的候选不参与排名")
+        expectEqual(sampleC[4].isRejected, true, "参赛: 首项 kind 以 reject 开头即被拒")
+        expectEqual(V.sharedTerms(among: sampleC), [],
+                    "共有项C: 四条各匹配到不同的东西,没有一项是全员共有的")
+
+        // 夹分兜底:分项合计 −353,存档里的总分是 1(collector match.go 把负分统一夹到 1)。
+        // 全库 644 行(3.74%)、443 份存档(10%)是这个形状 —— 不交代的话,逐项差值加起来
+        // 对不上总分差,谁真去加一遍都会以为界面算错了。
+        expectEqual(sampleC[3].rawTermSum, -353, "夹分: 分项之和")
+        expectEqual(sampleC[3].clampedRawSum, -353, "夹分: 和 ≠ 总分时给出原始和")
+        expectEqual(sampleC[0].clampedRawSum, nil, "夹分: 对得上就不该冒出这句话")
+        let dC = V.deltas(champion: sampleC[0], others: Array(sampleC[1 ... 3]))
+        expectEqual(dC[2].clampedRawSum, -353, "夹分: 差值分解把它带出来")
+        expectEqual(dC[2].terms.first, term("durationOvershoot", -700),
+                    "差值C: 最大的那一项排第一 —— 用户在问的是「它凭什么输」")
+
+        // ---- 判词的其余分档与边界 ----
+        // 真平局:打分项完全相同(全库 134 场)。存档里的 winner 是 collector 挑的那条,
+        // 优先认它 —— 界面上戴皇冠的必须跟判词说的"胜者"是同一个。
+        let tie = [cand("qq", 500, [("duration", 250), ("consensus", 250)]),
+                   cand("kugou", 500, [("duration", 250), ("consensus", 250)])]
+        expectEqual(V.build(candidates: tie, winner: "kugou"),
+                    .sameLyrics(contenders: 2, gap: 0, gapPercent: 0.0, nearTie: true,
+                                separator: .identical),
+                    "判词: 打分项完全相同 → identical,分差 0")
+        expectEqual(V.champion(among: tie, winner: "kugou")?.source, "kugou",
+                    "取胜者: 并列最高分时认存档里的 winner,而不是数组顺序")
+        expectEqual(V.champion(among: tie, winner: "netease")?.source, "kugou",
+                    "取胜者: winner 不在并列最高分里就退回最高分那条(qq/kugou 同分,按源名定序)")
+
+        // 差在多项上 → .multiple,**什么都不说**。此前实测否掉过一版「一句话解释凭什么赢」:
+        // 只有 13.2% 的对局存在单一强势维度能真的解释分差,其余硬写一句就是编。
+        // 这一组同时验另一条分水岭:网易云没有 consensus → 不是「全员一致」,退到 tooClose。
+        let tooCloseMulti = [
+            cand("qq", 700, [("duration", 300), ("lines", 150), ("consensus", 250)]),
+            cand("kugou", 696, [("duration", 297), ("lines", 149), ("consensus", 250)]),
+            cand("netease", 100, [("duration", 100)]),
+        ]
+        expectEqual(V.build(candidates: tooCloseMulti, winner: "qq"),
+                    .tooClose(contenders: 3, corroborated: 2, gap: 4,
+                              gapPercent: 400.0 / 700.0, separator: .multiple),
+                    "判词: 不是全员 consensus → tooClose;差在两项上 → multiple,不挑一项当理由")
+        // 计数要给准:只说「不是每条候选都有印证」时,读的人眼睛在冠亚两行上,
+        // 容易读成"这两份不是同一份词"——而这里冠亚**都**有印证,没有的是第三名。
+        if case let .tooClose(n, ok, _, _, _)? = V.build(candidates: tooCloseMulti, winner: "qq") {
+            expectEqual([n, ok], [3, 2], "判词: tooClose 带出「3 条里 2 条拿到印证」")
+        }
+
+        // 冠军排第一:同分时按源名定序会把没戴皇冠的排前面(实测方大同《1234567》
+        // 酷狗与 QQ 同为 1219 分、存档 winner 是 QQ,按源名却是酷狗在前)——
+        // 列表第一行不是胜者,读起来像出了错。
+        expectEqual(V.ranked(tie).map(\.source), ["kugou", "qq"],
+                    "排序: 不传 winner 时同分按源名定序")
+        expectEqual(V.ranked(tie, winner: "qq").map(\.source), ["qq", "kugou"],
+                    "排序: 传了 winner 且它并列最高分 → 提到第一位")
+        expectEqual(V.ranked(sampleA, winner: "qq").map(\.source).first, "qq",
+                    "排序: 冠军本来就是第一时不动")
+        expectEqual(V.ranked(tie, winner: "netease").map(\.source), ["kugou", "qq"],
+                    "排序: winner 不在并列最高分里就不动次序")
+
+        // nearTie 的两条判据都要:低分局里 1% 还不到 2 分,高分局里 1% 是 12 分。
+        expectEqual(V.isNearTie(gap: 1, championScore: 50), true, "nearTie: ≤1 分绝对算")
+        expectEqual(V.isNearTie(gap: 5, championScore: 1200), true, "nearTie: 高分局 5/1200 <1%")
+        expectEqual(V.isNearTie(gap: 5, championScore: 200), false, "nearTie: 低分局 5/200 =2.5%,不算")
+        expectEqual(V.isNearTie(gap: 2, championScore: 0), false, "nearTie: 冠军分非正时只认绝对值")
+
+        // 命不中任何一档 → nil,面板整块不渲染(常驻一块「暂无判词」的灰框只会占地方)。
+        let noVerdict = [cand("qq", 900, [("duration", 300), ("wordTiming", 400), ("lines", 200)]),
+                         cand("kugou", 500, [("duration", 300), ("lines", 200)])]
+        expectEqual(V.build(candidates: noVerdict, winner: "qq"), nil,
+                    "判词: 既非全员一致、又不接近、也没有否决性负分 → 不编,返回 nil")
+        expectEqual(V.build(candidates: [sampleA[0]], winner: "qq"), nil, "判词: 独苗没有对局")
+        expectEqual(V.build(candidates: [], winner: nil), nil, "判词: 空输入不崩")
+
+        // 纯音乐标记(score<0 且 instrumental)同样不参赛 —— 它是信号不是候选。
+        let withMarker = tie + [cand("lrclib", -1, [], instrumental: true)]
+        expectEqual(V.ranked(withMarker).count, 2, "参赛: 纯音乐标记不参与排名")
+        expectEqual(V.sharedTerms(among: withMarker), [term("duration", 250), term("consensus", 250)],
+                    "共有项: 只看参赛的两条,不被纯音乐标记的空 terms 清零")
+
+        // 否决性负分要**冠军自己没有**才算 —— 两边都吃了同一项就不是胜负手。
+        let bothPenalized = [
+            cand("qq", 400, [("duration", 300), ("versionTags", -600), ("lines", 700)]),
+            cand("kugou", 100, [("duration", 300), ("versionTags", -600), ("lines", 400)]),
+        ]
+        expectEqual(V.build(candidates: bothPenalized, winner: "qq"), nil,
+                    "判词: 冠军也吃了同一项负分 → 它解释不了分差,不算胜负手")
+    }
+
     // ---- 「源里有歌、无词」判据(EnrichSourcePresence,2026-09-05)----
     //
     // 网易云 url 只在真的匹配到曲目时才写;QQ 那条有"搜索页兜底"这一档,不需要网络就能拼出来,
@@ -760,6 +1051,19 @@ func runLyricsManagerTests() {
         expectEqual(P.knownOnSources(neteaseURL: "", qqMusicURL: "https://y.qq.com/n/ryqq/search?w=%E8%8C%83%E9%80%B8%E8%87%A3+%E9%9D%A9%E5%91%BD"), false,
                     "源里有歌: QQ 搜索页兜底不算(本地拼的,不是证据)")
         expectEqual(P.knownOnSources(neteaseURL: nil, qqMusicURL: nil), false, "源里有歌: 两个都没有就是没有")
+
+        // 「最近一轮没有源应答」(借鉴清单 V4,2026-09-12)。
+        // ⚠️ 判据是「决策存档在不在」而不是「顶层 lyrics_sources_responded 空不空」——
+        // 那个字段带 omitempty,空数组根本不会序列化出来,「老条目没这个字段」和「真的零应答」
+        // 在顶层字段上完全不可区分。下面两条把这个区分本身钉住。
+        expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: true, respondedCount: 0), true,
+                    "零应答: 有存档 + 存档里一个应答源都没有 = 那一轮确实没人应答")
+        expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: false, respondedCount: 0), false,
+                    "零应答: **没有存档**不算零应答 —— 那是老条目/从没解析过,不该被标成可疑")
+        expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: true, respondedCount: 1), false,
+                    "零应答: 有一个源应答过就不算")
+        expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: true, respondedCount: 9), false,
+                    "零应答: 九源全应答自然不算")
     }
 
     // ---- 补空扫描通道(LyricsFillSweep,2026-09-05)----
@@ -784,5 +1088,66 @@ func runLyricsManagerTests() {
         """.utf8))
         expectEqual(done?.cancelled, true, "补空进度: cancelled 解出来")
         expectEqual(done?.finishedAt, 3, "补空进度: finishedAt 解出来")
+    }
+
+    // ---- 「解析决策」面板里的纯音乐标记(2026-09-12)----
+    //
+    // 用户截图问「它怎么是空的,并且是 -1?」:面板最后一行只有一个 LRCLIB 徽章和一个红色
+    // -1,标题/歌手/专辑/打分明细全空。那不是候选,是 collector 借候选列表搭车传出来的
+    // 「这首是纯音乐」信号(见 LyricsDecisionRow 头注)。
+    do {
+        typealias R = LyricsDecisionRow
+        expectEqual(R.isInstrumentalMarker(instrumental: true, score: -1), true,
+                    "纯音乐标记: collector 塞的那条就是 instrumental=true + 负分")
+        expectEqual(R.isInstrumentalMarker(instrumental: nil, score: -1), false,
+                    "纯音乐标记: 老存档没有 instrumental 字段(nil),只能继续按普通候选显示 —— 存档不能事后补")
+        expectEqual(R.isInstrumentalMarker(instrumental: false, score: -1), false,
+                    "纯音乐标记: 负分但没标 instrumental 的,是被判废的真候选,不是标记")
+        expectEqual(R.isInstrumentalMarker(instrumental: true, score: 0), false,
+                    "纯音乐标记: 第二道保险 —— 非负分不算标记")
+        expectEqual(R.isInstrumentalMarker(instrumental: true, score: 1208), false,
+                    "纯音乐标记: 万一某个源既给了词又标 instrumental,那是能被选中的真候选,不许当空壳吞掉")
+        expectEqual(R.isInstrumentalMarker(instrumental: nil, score: 1208), false,
+                    "纯音乐标记: 普通胜者不受影响")
+    }
+
+    // 面板与「拷贝」出去的纯文本必须**用同一个判据**分流 —— 界面上改好了、拷出去还是
+    // 一行看不懂的 "LRCLIB · -1",等于没修(这个面板存在的意义就是贴进 issue 复盘)。
+    //
+    // 2026-09-12 重设计时口径**扩了一类**:不参赛的其实有两种,纯音乐标记(148 行)和
+    // 被判不可用的候选(604 行 / 301 个条目,rejectPlainTextOnly 占大头)。当初用户截图问
+    // 「它怎么是空的,并且是 -1?」时只修了前者,后者还印着红色 -1 —— 而它**常见 4 倍**。
+    // 两类现在共用 sidelinedRow,守卫也一起盯。
+    do {
+        let sheet = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsDecisionSheet.swift")
+        if let text = try? String(contentsOfFile: sheet.path, encoding: .utf8) {
+            // 判据本身住在 Core(LyricsScoredCandidate.isInstrumentalMarker → LyricsDecisionRow),
+            // 面板只负责调用 —— 渲染和 dumpLines 两处都要调,少一处就是一边对一边错。
+            let marker = text.components(separatedBy: "isInstrumentalMarker").count - 1
+            expectEqual(marker >= 2, true,
+                        "不参赛的候选: 面板渲染和 dumpLines 都要走 isInstrumentalMarker,实际 \(marker) 处")
+            let rejected = text.components(separatedBy: "isRejected").count - 1
+            expectEqual(rejected >= 2, true,
+                        "不参赛的候选: 被拒那一类同样要两处都分流,实际 \(rejected) 处")
+            expectEqual(text.contains("sidelinedRow"), true,
+                        "不参赛的候选: 走自己那条渲染分支,不混进 candidateRow")
+            // 这两类都绝不能再印分数:存档里它们的 score 恒为 -1,那是让选词函数跳过这条的
+            // 手段,不是对歌词的评价。⚠️ 只禁**裸印分数**,不禁把 score 传给 explanation ——
+            // 后者对被拒的候选吐的是「不可用:X」那句话,正是这里要显示的东西。
+            if let start = text.range(of: "private func sidelinedRow"),
+               let end = text.range(of: "private func scoreBar") {
+                let row = String(text[start.lowerBound..<end.lowerBound])
+                expectEqual(row.contains("Text(\"\\(c.score)\")"), false,
+                            "不参赛的候选: 不准裸印分数(-1 是内部实现细节,印出来只会让人以为某个源给了份烂词)")
+            } else {
+                expectEqual(true, false, "不参赛的候选: 找不到 sidelinedRow / scoreBar(改名了?)")
+            }
+        } else {
+            expectEqual(true, false, "不参赛的候选: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
+        }
     }
 }

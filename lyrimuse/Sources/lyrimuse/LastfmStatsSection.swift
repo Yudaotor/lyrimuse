@@ -1062,6 +1062,8 @@ private struct LiveScrobbleRow: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @State private var hovered = false
     @State private var pendingForceRefresh: Task<Void, Never>?
+    /// 本机位图兜底那枚 26pt 小封面按像素预先重采样要知道显示倍率(见下面 live.artwork 那支)。
+    @Environment(\.displayScale) private var displayScale
 
     /// 这一行说的是「**现在正在被 Last.fm 记录的**那首歌」,不是「本机正在放的歌」——
     /// 两者只在"播放源就是这台 Mac"时才重合。2026-08-12 用户实测:手机在放、本机暂停时,
@@ -1205,7 +1207,14 @@ private struct LiveScrobbleRow: View {
                                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                             }
                         } else if let img = live.artwork {
-                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                            // 预先重采样成 26pt × 倍率的位图再贴,不在运行期缩(2026-09-09,同灵动岛 / 菜单栏面板
+                            // 的小封面:半调网点封面线性缩小会变成摩尔纹黑斑,见 ArtworkThumbnail)。
+                            let scale = max(1, displayScale)
+                            if let bitmap = ArtworkThumbnailCache.bitmap(for: img, pixelSide: Int((26 * scale).rounded())) {
+                                Image(decorative: bitmap, scale: scale)
+                            } else {
+                                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                            }
                         } else {
                             RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                         }

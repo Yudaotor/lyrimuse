@@ -36,6 +36,11 @@ public struct LyricsSortKey: Sendable, Equatable {
     /// 这条记录上次被解析出来的时刻(缓存里的 `ts`)。**只作次级键**,见
     /// `LyricsSortOrder` 里 updated/source 两档的注释。
     public let resolvedAt: Date?
+    /// 这份歌词当初是在**几个源应答**的情况下定下来的(借鉴清单 V3)。
+    /// **0 = 不知道**(老条目没有 `lyrics_sources_responded` 字段),不是"零个源应答" ——
+    /// 所以 `.evidence` 那一档把 0 当"未知"收进尾块,跟 `hasSource` / `lyricsUpdatedAt`
+    /// 两档对缺失值的处置同一个取舍。详见 `EnrichCacheStore.Summary.sourcesRespondedCount`。
+    public let sourcesRespondedCount: Int
 
     public init(
         normPrimaryArtist: String,
@@ -45,7 +50,8 @@ public struct LyricsSortKey: Sendable, Equatable {
         sourceDisplayName: String,
         hasSource: Bool,
         lyricsUpdatedAt: Date?,
-        resolvedAt: Date?
+        resolvedAt: Date?,
+        sourcesRespondedCount: Int = 0
     ) {
         self.normPrimaryArtist = normPrimaryArtist
         self.normAlbum = normAlbum
@@ -55,6 +61,7 @@ public struct LyricsSortKey: Sendable, Equatable {
         self.hasSource = hasSource
         self.lyricsUpdatedAt = lyricsUpdatedAt
         self.resolvedAt = resolvedAt
+        self.sourcesRespondedCount = sourcesRespondedCount
     }
 }
 
@@ -68,6 +75,9 @@ public enum LyricsSortOrder: Sendable, Equatable {
     case album(ascending: Bool)
     case source(ascending: Bool)
     case updated(ascending: Bool)
+    /// 按"当初有几个源应答"排(借鉴清单 V3)。升序 = 证据最薄的排最前 —— 这一档存在的
+    /// 理由就是把那批"20 秒截止里只等到两三个源就定了案"的条目捞出来重搜。
+    case evidence(ascending: Bool)
 
     /// 严格弱序比较器。
     public func less(_ a: LyricsSortKey, _ b: LyricsSortKey) -> Bool {
@@ -115,6 +125,28 @@ public enum LyricsSortOrder: Sendable, Equatable {
                 // 字母序 —— 否则一旦当前视图里全是无来源的行(「仅无歌词」筛选就是这种
                 // 形状:2026-09-02 实测本机 14 条命中,`lyrics_source` 全为空),这一档
                 // 排序会**整体退化成默认排序**,用户看到的就是"选了没反应"。
+                if let r = Self.compareOptional(a.resolvedAt, b.resolvedAt, ascending: ascending) {
+                    return r
+                }
+            }
+
+        case .evidence(let ascending):
+            // 0 = **不知道**(老条目没这个字段),不是"零个源应答" —— 两个方向都收进尾块,
+            // 块内按 resolvedAt 断平局。跟 source/updated 两档对缺失值的处置逐字同构:
+            // 用户按证据厚薄排是想看"哪些是在信息不全的时候定的",一串"不知道"占住列表
+            // 开头对这个问题没有任何回答。
+            switch (a.sourcesRespondedCount > 0, b.sourcesRespondedCount > 0) {
+            case (true, false):
+                return true
+            case (false, true):
+                return false
+            case (true, true):
+                if a.sourcesRespondedCount != b.sourcesRespondedCount {
+                    return ascending
+                        ? a.sourcesRespondedCount < b.sourcesRespondedCount
+                        : a.sourcesRespondedCount > b.sourcesRespondedCount
+                }
+            case (false, false):
                 if let r = Self.compareOptional(a.resolvedAt, b.resolvedAt, ascending: ascending) {
                     return r
                 }

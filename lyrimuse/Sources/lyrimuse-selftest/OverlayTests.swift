@@ -53,6 +53,39 @@ func runOverlayTests() {
         expectEqual(results.first ?? nil, .next, "命中测试: 重叠时命中面积更小的那个")
     }
 
+    // ---- OverlayControlHitTest.hoveredControl: 该把哪一颗按钮画亮(2026-09-11) ----
+    //
+    // 跟上面"点击派给谁"是两个问题:点击本来就只在按钮显示时才分发,而这个每次鼠标移动都要
+    // 求值,可见性得它自己兜住 —— 画亮一颗其实没显示的按钮是"看得见的 bug"。
+    do {
+        let rects: [OverlayControlID: CGRect] = [
+            .playPause: CGRect(x: 144, y: 198, width: 30, height: 30),
+            .unlockPill: CGRect(x: 240, y: 198, width: 22, height: 22),
+        ]
+        let onPlay = CGPoint(x: 159, y: 213)
+        let onUnlock = CGPoint(x: 251, y: 209)
+        let H = OverlayControlHitTest.self
+
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: false),
+                    .playPause, "悬停高亮: 压在播放键上就亮播放键")
+        // 窗口常年点击穿透、监听器是全局的:指针早跑到别的 App 上去了照样有事件进来。
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: false, positionLocked: false) == nil,
+                    true, "悬停高亮: 指针不在窗口里就不亮(全局监听器照样会送事件进来)")
+        // 锁定态那一格只画得出解锁一颗,别的矩形是上一轮布局的残留。
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: true) == nil,
+                    true, "悬停高亮: 锁定态不认播放键(那颗此刻根本没画出来)")
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true),
+                    .unlockPill, "悬停高亮: 锁定态只认解锁键")
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: false),
+                    .unlockPill, "悬停高亮: 未锁定时解锁键自己也照常(显示与否由上报矩形决定)")
+        // 缝里/胶囊外/没上报矩形三种"没压着"都该是 nil,不能留着上一颗亮着。
+        expectEqual(H.hoveredControl(at: CGPoint(x: 200, y: 213), in: rects,
+                                     insideWindow: true, positionLocked: false) == nil,
+                    true, "悬停高亮: 两颗之间的缝里不亮")
+        expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false) == nil,
+                    true, "悬停高亮: 没有上报矩形时一颗都不亮")
+    }
+
     // ---- LyricDuetLayout: 对唱行的两侧内缩(2026-08-23) ----
     do {
         let L = LyricDuetLayout.self
@@ -197,6 +230,93 @@ func runOverlayTests() {
                             "控制排落点: 覆盖-\(override) 下右侧只剩卡片内边距(real=\(String(describing: real)))")
             }
         }
+    }
+
+    // ---- OverlayCardGeometry.duetStageInset: 对唱舞台(2026-09-10) ----
+    //
+    // 用户:「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开……哪怕宽度拉得
+    // 很宽,也尽量还是居中显示;剩余的宽度留给很长的歌词做冗余」。左右声部只在卡片正中一条
+    // 固定宽度的带(舞台)里分栏:近侧多缩进"舞台两侧各让出的量",远侧照旧;带外的宽度是
+    // 长句的冗余,换行点跟改动前一样。
+    do {
+        let G = OverlayCardGeometry.self
+        let D = LyricDuet.Side.self
+        let pad: CGFloat = 20 // = OverlayPlayback.cardHorizontalPadding(App target 里的常量)
+        let ref = G.duetStageReferenceWidth
+        expectEqual(ref, 448, "对唱舞台: 基准宽度 = 默认窗宽 488 − 两侧 20pt 卡片内边距")
+
+        // 回归护栏:不比默认宽的窗口(含默认本身)舞台就是整张卡片,一个像素都不挪。
+        expectEqual(G.duetStageInset(availableWidth: 448, fontSize: 31), 0, "对唱舞台: 默认窗宽下不缩进")
+        expectEqual(G.duetStageInset(availableWidth: 300, fontSize: 31), 0, "对唱舞台: 比默认窄也不缩进")
+        // 拉宽:多出来的宽度两侧各分一半 —— 1400 窗宽可用 1360,减 448 舞台,各让 456。
+        expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: 31), 456,
+                    "对唱舞台: 1400 窗宽 / 31pt 两侧各让 (1360−448)/2")
+        // 大字号按 12 个字宽兜底:48pt × 12 = 576 > 448,舞台按 576 算。
+        expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: 48), (1360 - 576) / 2,
+                    "对唱舞台: 大字号时舞台按 12 个字宽兜底")
+        // 字宽兜底不会把舞台撑出卡片:可用 500、字号 48 → 舞台 min(500, 576) = 500 → 不缩进。
+        expectEqual(G.duetStageInset(availableWidth: 500, fontSize: 48), 0,
+                    "对唱舞台: 12 字宽超过可用宽度时舞台就是整张卡片")
+        // 退化输入不产生负值/NaN。
+        expectEqual(G.duetStageInset(availableWidth: 0, fontSize: 31), 0, "对唱舞台: 宽度 0 → 0")
+        expectEqual(G.duetStageInset(availableWidth: -100, fontSize: 31), 0, "对唱舞台: 负宽度 → 0")
+        expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: 0), 456, "对唱舞台: 字号 0 时只剩基准宽度")
+        expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: -5), 456, "对唱舞台: 负字号同字号 0")
+
+        // 1400 窗宽 / 31pt 那一档:远侧 unit 走 LyricDuetLayout(15% 被 4 字宽封顶 = 124)。
+        let unit = LyricDuetLayout.insets(for: .leading, availableWidth: 1360, fontSize: 31).trailing
+        expectEqual(unit, 124, "对唱舞台: 这一档的远侧内缩是 4 字宽封顶的 124")
+        let stage = G.duetStageInset(availableWidth: 1360, fontSize: 31)
+
+        // 舞台进 cardInsets:近侧 = 舞台让出的量,远侧照旧 unit;合唱本来就居中、不需要舞台;
+        // nil(普通歌 / 前奏 / 覆盖生效)恒 0。
+        expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).leading, stage, "对唱舞台: 左声部近侧缩进舞台让出的量")
+        expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing, unit, "对唱舞台: 左声部远侧照旧 unit")
+        expectEqual(G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).leading, unit, "对唱舞台: 右声部远侧照旧 unit")
+        expectEqual(G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).trailing, stage, "对唱舞台: 右声部近侧缩进舞台让出的量")
+        expectEqual(G.cardInsets(for: D.center, unit: unit, stageInset: stage).leading, unit, "对唱舞台: 合唱左侧不加舞台")
+        expectEqual(G.cardInsets(for: D.center, unit: unit, stageInset: stage).trailing, unit, "对唱舞台: 合唱右侧不加舞台")
+        expectEqual(G.cardInsets(for: nil, unit: unit, stageInset: stage).leading, 0, "对唱舞台: 无声部左侧仍是 0")
+        expectEqual(G.cardInsets(for: nil, unit: unit, stageInset: stage).trailing, 0, "对唱舞台: 无声部右侧仍是 0")
+        expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: -10).leading, 0, "对唱舞台: 负的舞台量不产生负内缩")
+
+        // 缺省 stageInset = 0 就是改动前的结果 —— 不传的调用方(歌词窗口那套不走这里,但护栏要在)行为不变。
+        for side: LyricDuet.Side? in [nil, D.leading, D.trailing, D.center] {
+            let old = G.cardInsets(for: side, unit: unit)
+            let new = G.cardInsets(for: side, unit: unit, stageInset: 0)
+            let tag = String(describing: side)
+            expectEqual(old.leading, new.leading, "对唱舞台: stageInset 缺省时左侧同旧值(side=\(tag))")
+            expectEqual(old.trailing, new.trailing, "对唱舞台: stageInset 缺省时右侧同旧值(side=\(tag))")
+        }
+
+        // 控制排不变式带着舞台照样成立:两侧留白 = 卡片内缩 + 一份卡片内边距 —— 按钮排跟着
+        // 歌词块一起收进舞台,不会歌词进了正中、按钮还钉在窗口两端。
+        for side: LyricDuet.Side? in [nil, D.leading, D.trailing, D.center] {
+            let card = G.cardInsets(for: side, unit: unit, stageInset: stage)
+            let ctrl = G.controlsInsets(for: side, unit: unit, stageInset: stage, cardHorizontalPadding: pad)
+            let tag = String(describing: side)
+            expectEqual(ctrl.leading - card.leading, pad, "对唱舞台: 控制排左侧只比卡片多一份内边距(side=\(tag))")
+            expectEqual(ctrl.trailing - card.trailing, pad, "对唱舞台: 控制排右侧只比卡片多一份内边距(side=\(tag))")
+        }
+
+        // 几何核算(1400 窗宽 / 31pt):左声部的字从 x=20+456=476 起,右声部的字到 1400−20−456=924
+        // 止 —— 两栏落在正中一条 448 宽的带里,而不是像改动前那样隔着 1360。
+        let leftStart = pad + G.cardInsets(for: D.leading, unit: unit, stageInset: stage).leading
+        let rightEnd = 1400 - pad - G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).trailing
+        expectEqual(leftStart, 476, "对唱舞台: 左声部起笔 x")
+        expectEqual(rightEnd, 924, "对唱舞台: 右声部收笔 x")
+        expectEqual(rightEnd - leftStart, ref, "对唱舞台: 两栏之间正好一个舞台宽")
+        expectEqual((leftStart + rightEnd) / 2, 700, "对唱舞台: 舞台在窗口正中")
+        let oldLeftStart = pad + G.cardInsets(for: D.leading, unit: unit).leading
+        let oldRightEnd = 1400 - pad - G.cardInsets(for: D.trailing, unit: unit).trailing
+        expectEqual(oldRightEnd - oldLeftStart, 1360, "对唱舞台: 改动前两栏隔着整个可用宽度(对照)")
+
+        // 长句冗余:左声部的换行点仍在远侧内缩处 1400−20−124=1256,跟改动前一样 —— 舞台只挪
+        // 起笔位置,不吃掉长句的空间。
+        let leftWrapAt = 1400 - pad - G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing
+        expectEqual(leftWrapAt, 1256, "对唱舞台: 左声部换行点")
+        expectEqual(leftWrapAt, 1400 - pad - G.cardInsets(for: D.leading, unit: unit).trailing,
+                    "对唱舞台: 左声部换行点跟改动前相同")
     }
 
     // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
@@ -468,6 +588,112 @@ func runOverlayTests() {
         let nowhere = CGRect(x: 9000, y: 9000, width: 100, height: 100)
         expectEqual(OverlayPlacement.hostVisibleFrame(of: nowhere, screens: [builtIn, external]) == nil, true,
                     "OverlayPlacement: 不沾任何屏时没有可信边界")
+    }
+
+    // ---- 位置预设:自由 / 顶部居中 / 底部居中(2026-09-11,GitHub issue #5) ----
+    //
+    // 几何取这台机器内置屏的真实 visibleFrame (0, 70, 1470, 853):Dock 在底部占掉 70pt,菜单栏在
+    // 顶上扣掉之后可见区顶边在 923。窗口 488×120(默认宽 / 地板高)。
+    do {
+        let screen = CGRect(x: 0, y: 70, width: 1470, height: 853)
+        let size = CGSize(width: 488, height: 120)
+
+        // 模式本身:rawValue 是持久化格式,别改;默认 free 才能让老用户零迁移。
+        expectEqual(OverlayPlacementMode(rawValue: "free"), .free, "位置预设: rawValue free")
+        expectEqual(OverlayPlacementMode(rawValue: "topCenter"), .topCenter, "位置预设: rawValue topCenter")
+        expectEqual(OverlayPlacementMode(rawValue: "bottomCenter"), .bottomCenter, "位置预设: rawValue bottomCenter")
+        expectEqual(OverlayPlacementMode.free.isPreset, false, "位置预设: free 不是预设")
+        expectEqual(OverlayPlacementMode.topCenter.isPreset, true, "位置预设: topCenter 是预设")
+        expectEqual(OverlayPlacementMode.bottomCenter.anchorsBottom, true, "位置预设: 只有 bottomCenter 守底边")
+        expectEqual(OverlayPlacementMode.topCenter.anchorsBottom, false, "位置预设: topCenter 守顶边")
+        expectEqual(OverlayPlacementMode.free.anchorsBottom, false, "位置预设: free 守顶边(现状)")
+        expectEqual(OverlayPlacementMode.allCases.count, 3, "位置预设: 三档")
+
+        // 自由:没有预设落点,调用方"那就别动"。
+        expectEqual(OverlayPlacement.presetFrame(mode: .free, size: size, visibleFrame: screen) == nil, true,
+                    "位置预设: free 不给落点")
+
+        // 顶部居中 = x 居中、顶边贴着可见区顶(菜单栏底)下方 12 —— 跟底部同一个数(2026-09-11 从 40 收紧)。
+        let top = OverlayPlacement.presetFrame(mode: .topCenter, size: size, visibleFrame: screen)
+        expectEqual(top?.midX, 735, "位置预设: 顶部居中 x 居中 (1470/2)")
+        expectEqual(top?.maxY, 923 - OverlayPlacement.presetTopMargin, "位置预设: 顶部居中顶边距可见区顶 = 顶部边距")
+        expectEqual(top?.size.height, 120, "位置预设: 顶部居中不改尺寸")
+        expectEqual(OverlayPlacement.presetTopMargin, 12, "位置预设: 顶部边距 12(贴菜单栏,不是默认落点那个 40)")
+        expectEqual(OverlayPlacement.presetTopMargin, OverlayPlacement.presetBottomMargin, "位置预设: 上下边距对称")
+
+        // 底部居中 = 贴着可见区底边(Dock 顶)上方 12pt。
+        let bottom = OverlayPlacement.presetFrame(mode: .bottomCenter, size: size, visibleFrame: screen)
+        expectEqual(bottom?.midX, 735, "位置预设: 底部居中 x 居中")
+        expectEqual(bottom?.minY, 70 + OverlayPlacement.presetBottomMargin, "位置预设: 底部居中底边在 Dock 顶上方 12")
+        expectEqual(bottom?.size.width, 488, "位置预设: 底部居中不改尺寸")
+
+        // 屏幕原点不是 (0,0)(外接屏常有负坐标)时跟着屏走。
+        let external = CGRect(x: -526, y: 956, width: 2560, height: 1440)
+        let onExternal = OverlayPlacement.presetFrame(mode: .bottomCenter, size: size, visibleFrame: external)
+        expectEqual(onExternal?.midX, external.midX, "位置预设: 外接屏上按外接屏居中")
+        expectEqual(onExternal?.minY, 956 + 12, "位置预设: 外接屏上贴外接屏的底边")
+
+        // 增高:守顶边向下长(现状,逐字对得上 updateHeight 原逻辑)。
+        let topFrame = top!
+        let grownDown = OverlayPlacement.grownFrame(
+            current: topFrame, contentHeight: 150.4, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
+        expectEqual(grownDown.maxY, topFrame.maxY, "增高: 守顶边时顶边不动")
+        expectEqual(grownDown.height, 151, "增高: 高度 = ceil(内容高)")
+        expectEqual(grownDown.minX, topFrame.minX, "增高: x 不动")
+        // 地板:内容比 120 矮时窗口仍是 120。
+        expectEqual(OverlayPlacement.grownFrame(
+            current: topFrame, contentHeight: 70, minHeight: 120, anchorsBottom: false, visibleFrame: screen).height,
+            120, "增高: 不低于地板")
+        // 夹取:守顶边时底边不许越过可见区底边 —— 顶边 911(923−12)、可见区底 70,最多 841。
+        let tallDown = OverlayPlacement.grownFrame(
+            current: topFrame, contentHeight: 2000, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
+        expectEqual(tallDown.minY, 70, "增高: 守顶边时底边夹到可见区底边")
+        expectEqual(tallDown.height, topFrame.maxY - 70, "增高: 守顶边时上限 = 顶边 − 可见区底边")
+
+        // 增高:守底边向上长(底部居中)。这就是 issue #5 的坑:手动拖到底边贴着 Dock 顶的窗口
+        // 照旧向下长的话,上限 = 顶边 − 可见区底边 = 120 = 地板,一点都长不了,译文直接被裁;
+        // 预设留的 12pt 边距也只多给 12pt,150 的内容仍被裁掉一截。
+        let flush = CGRect(x: 491, y: 70, width: 488, height: 120)
+        let stuck = OverlayPlacement.grownFrame(
+            current: flush, contentHeight: 150, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
+        expectEqual(stuck.height, 120, "增高: 底边贴 Dock 的窗口守顶边时长不了(坐实 issue #5 的坑)")
+        let bottomFrame = bottom!
+        let stuckPreset = OverlayPlacement.grownFrame(
+            current: bottomFrame, contentHeight: 150, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
+        expectEqual(stuckPreset.height, 132, "增高: 底部预设位置守顶边时只能长到 Dock 顶(132),150 装不下")
+        let grownUp = OverlayPlacement.grownFrame(
+            current: bottomFrame, contentHeight: 150, minHeight: 120, anchorsBottom: true, visibleFrame: screen)
+        expectEqual(grownUp.minY, bottomFrame.minY, "增高: 守底边时底边不动")
+        expectEqual(grownUp.height, 150, "增高: 守底边时按内容长到 150")
+        expectEqual(grownUp.maxY, bottomFrame.minY + 150, "增高: 守底边时顶边上移")
+        // 夹取对称:守底边时顶边不许越过可见区顶边 —— 底边 82、可见区顶 923,最多 841。
+        let tallUp = OverlayPlacement.grownFrame(
+            current: bottomFrame, contentHeight: 2000, minHeight: 120, anchorsBottom: true, visibleFrame: screen)
+        expectEqual(tallUp.maxY, 923, "增高: 守底边时顶边夹到可见区顶边")
+        expectEqual(tallUp.height, 841, "增高: 守底边时上限 = 可见区顶边 − 底边")
+        // 一块屏都不沾:不夹。
+        expectEqual(OverlayPlacement.grownFrame(
+            current: bottomFrame, contentHeight: 2000, minHeight: 120, anchorsBottom: true, visibleFrame: nil).height,
+            2000, "增高: 没有可信边界时不夹")
+
+        // 热区换算:内容贴底时内容块顶边离窗口顶边 = 窗高 − 内容高,按钮矩形要多扣这一截。
+        typealias H = OverlayControlHitTest
+        expectEqual(H.contentTopInset(anchorsBottom: false, windowHeight: 120, contentHeight: 70), 0,
+                    "热区: 贴顶时 inset 恒为 0")
+        expectEqual(H.contentTopInset(anchorsBottom: true, windowHeight: 120, contentHeight: 70), 50,
+                    "热区: 贴底时 inset = 窗高 − 内容高")
+        expectEqual(H.contentTopInset(anchorsBottom: true, windowHeight: 120, contentHeight: 150), -30,
+                    "热区: 内容比窗还高(从顶上溢出)时 inset 为负")
+        // 内容块里顶部 (y 0…20) 的一排按钮,在 120pt 窗里贴底放、内容高 70:按钮实际占窗口的 y 50…70。
+        let btn = CGRect(x: 10, y: 0, width: 30, height: 20)
+        let local = H.windowLocalRect(swiftUI: btn, windowHeight: 120, contentTopInset: 50)
+        expectEqual(local.minY, 50, "热区: 贴底换算后按钮底边在窗口本地 y=50")
+        expectEqual(local.maxY, 70, "热区: 贴底换算后按钮顶边在窗口本地 y=70")
+        expectEqual(local.minX, 10, "热区: x 不受对齐影响")
+        // inset 默认 0 = 原口径,既有调用点不变。
+        expectEqual(H.windowLocalRect(swiftUI: btn, windowHeight: 120),
+                    H.windowLocalRect(swiftUI: btn, windowHeight: 120, contentTopInset: 0),
+                    "热区: 不传 inset 等于贴顶")
     }
 
     // ---- 圆钮块的短按 / 长按 / 右键判定(2026-08-19) ----

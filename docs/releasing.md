@@ -2,7 +2,7 @@
 
 > 每一条都来自 v1.5.0（2026-09-03）发版实录——括号里标着当时踩到/差点踩到的坑。
 > 顺序执行；「发布后」几步也属于发版的一部分，不做完不算发完。
-> 规范性约束（分支策略、tag 注释格式）在 [AGENTS.md「提交」一节](../AGENTS.md)，本文是操作序列。
+> 规范性约束（分支策略、tag 注释格式）在仓库根的 `AGENTS.md`「提交」一节——那份是作者本地文件、不随仓库发布（2026-09-11 起），所以这里不做链接；本文是操作序列。
 
 ## 一、写发布日志（`RELEASE_NOTES_v<版本>.md`）
 
@@ -55,7 +55,11 @@
 - [ ] 真机 `./build.sh` 装机跑过 tip（swift build 通过 ≠ 装好了）。
 - [ ] 本地打一份 arm64 测试包在另一台机器过一眼：临时删掉 package.sh 里 intel 变体行
       跑 arm-only；要美化版 dmg 先 `python3 -m pip install --user dmgbuild`。
-- [ ] `main` fast-forward 到发布点（惯例是打 tag **前**做）。
+- [ ] `main` fast-forward 到发布点（惯例是打 tag **前**做）。**先在 `dev` 上跑一次 `git rebase main`**——
+      2026-09-12 有一个 `SECURITY.md` 绕过 dev 直接推了 `main`（GitHub 只从**默认分支**读安全策略，
+      等下次发版才生效太晚），于是 `main` 上有了一个 `dev` 没有的提交，`--ff-only` 会直接失败。
+      rebase 会按 patch-id 认出那是同一个补丁、自动跳过，不用手解冲突。**以后凡是绕过 dev 单推 `main` 的，
+      都要在这一步先 rebase。**
 
 ## 四、打 tag 发布
 

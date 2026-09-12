@@ -49,18 +49,49 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     public static let shared = SpotifyPositionProbe()
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotify-probe")
 
-    /// 换歌后等多久再问。
-    public static let delayAfterTrackStart: TimeInterval = 2.5
+    /// 换歌后等多久再问。09-07 定 2.5s(太早 Spotify 的钟可能还没起步 / gapless 时先超前后停顿),
+    /// 2026-09-09 收到 2.0s:现在两次采样验钟在走、不过关还会重试一次(retryAfterFailedLiveness),
+    /// 早半秒的风险由它们兜;整条链(观察到换歌 → 探针 → 结果回调立刻 poll)约 3s,用户报过
+    /// 「开头那几秒歌词慢」,链越短越好,但 2.0 以下那段"钟先超前 0.9s 再停"的窗口还没过完。
+    public static let delayAfterTrackStart: TimeInterval = 2.0
+    /// 开播那次两采样没过活性(钟还没起步 / 正在停顿)时,隔多久再试一次(只试一次)。
+    public static let retryAfterFailedLiveness: TimeInterval = 1.5
     /// osascript 往返超时。正常 ~150ms;卡住就放弃,这首歌不纠。
     public static let appleScriptTimeout: TimeInterval = 3
     /// 探测结果最多用多久:超过就当过期(中间可能发生了别的事)。
     public static let maxCorrectionAge: TimeInterval = 6
+    /// 两次采样之间隔多久(2026-09-09,见 `clockIsRunning`)。比浏览器探针的 1.5s 短:这里两次往返
+    /// 都是 ~150ms 的本地 AppleScript,0.6s 已足够把"钟没在走"跟"走得正常"分开(阈值见下)。
+    public static let livenessGapSeconds: TimeInterval = 0.5
+
+    /// Spotify 的钟在两次采样之间**走得正常**才采信这一对读数。纯函数,selftest 直接覆盖。
+    ///
+    /// 2026-09-09 起探针量出的差会**折进整曲偏置**(见 LocalPlaybackSource.resolvePositionSeconds
+    /// 的地面真值分支),不再是"重锚一次、伺服几拍就纠回去"的一次性动作 —— 一次读错就是整首歌
+    /// 错到底(暂停 / 拖动才复位)。头注里"换歌 2.5s 后再问,太早钟可能还没起步(缓冲)"那种停着的
+    /// 钟会读出 ~0 而 MediaRemote 已外推到 ~3,折进去就是整曲慢 3 秒 —— 正是这道守卫要挡的。
+    /// 判据:第二次减第一次的前进量落在两次采样墙钟间隔的 [0.5, 1.5] 倍之内(rate 按 1 算;
+    /// 往返抖动 ~±0.1s,0.6s 间隔下比例区间给得宽);停着(0)、倒退(拖动)、跳跃(换歌)都不采。
+    public static func clockIsRunning(first: Double, second: Double, wallGap: TimeInterval) -> Bool {
+        guard wallGap > 0 else { return false }
+        let advance = second - first
+        return advance >= 0.5 * wallGap && advance <= 1.5 * wallGap
+    }
 
     private let lock = NSLock()
     private var scheduledKey: String?
     private var pending: (key: String, position: Double, at: Date)?
     /// 封面地址的去向(见类头注「顺带带回封面地址」)。由 LocalPlaybackSource 启动时挂上;没挂就丢掉。
     private var artworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
+    /// 探针结果落地(pending 已设)时的回调 —— LocalPlaybackSource 挂上"立刻 poll 一次",不等下一拍
+    /// 2s 轮询来消费(2026-09-09 真机量到从锚点到纠偏 ≈5.3s,其中 ~1s 是干等轮询)。
+    private var resultSink: (@Sendable (_ key: String) -> Void)?
+
+    public func setResultSink(_ sink: @escaping @Sendable (_ key: String) -> Void) {
+        lock.lock()
+        resultSink = sink
+        lock.unlock()
+    }
 
     public func setArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
         lock.lock()
@@ -85,37 +116,102 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
         lock.lock()
         pending = nil
         scheduledKey = isSpotifyNative ? key : nil
+        confirmationInFlight = false
         lock.unlock()
         guard isSpotifyNative else { return }
+        runProbe(key: key, delay: Self.delayAfterTrackStart, isConfirmation: false, retriesLeft: 1)
+    }
+
+    /// 同一首歌播放中 MediaRemote 锚点**变了**(seek 分支重锚、或偏置随重发的锚点作废)时调:再问一次
+    /// Spotify 的钟,确认新锚点是不是真的(2026-09-09)。真机两例:播到 60s / 110s 时 Spotify 把开播那份
+    /// now-playing 带着新时间戳晚发(elapsed 0.367 / 2.458),单看 MediaRemote 跟"用户拖回开头"一模一样,
+    /// seek 分支照单全收,歌词回到开头、暂停时差 60s。真拖动的话探针与新锚点一致(Δ<0.3s),什么都不改;
+    /// 假的就按探针重锚并把差折进偏置,这个假锚点之后每一笔读数都被加回去。
+    /// 同一首歌只允许一次在飞;换歌自动作废。delay 比开播那次短:拖动后 Spotify 的钟立刻就是新位置。
+    public func requestConfirmation(forKey key: String) {
+        lock.lock()
+        let allowed = scheduledKey == key && !confirmationInFlight
+        if allowed { confirmationInFlight = true }
+        lock.unlock()
+        guard allowed else { return }
+        runProbe(key: key, delay: Self.delayAfterAnchorChange, isConfirmation: true, retriesLeft: 0)
+    }
+
+    /// 锚点变化后等多久再问(拖动后 Spotify 的钟立刻就位,只需躲开 seek 那一拍的抖动)。
+    public static let delayAfterAnchorChange: TimeInterval = 0.4
+    private var confirmationInFlight = false
+
+    /// 开播那次(isConfirmation=false)顺带交封面地址;锚点变化的确认(true)只管位置,结束时放开在飞标记。
+    private func runProbe(key: String, delay: TimeInterval, isConfirmation: Bool, retriesLeft: Int) {
+        let reason = isConfirmation ? "anchor change" : "track start"
+        let deliverArtwork = !isConfirmation
         Task.detached(priority: .utility) { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.delayAfterTrackStart))
+            try? await Task.sleep(for: .seconds(delay))
             guard let self else { return }
+            defer {
+                if isConfirmation {
+                    self.lock.lock()
+                    self.confirmationInFlight = false
+                    self.lock.unlock()
+                }
+            }
             self.lock.lock()
             let stillCurrent = self.scheduledKey == key
             self.lock.unlock()
             guard stillCurrent else { return }
-            let t0 = Date()
-            guard let r = ProcessRunner.run("/usr/bin/osascript", ["-e", Self.script], timeout: Self.appleScriptTimeout),
-                  r.succeeded,
-                  let parsed = Self.parseProbeOutput(r.stdoutText)
-            else {
-                Self.logger.notice("spotify position probe: no answer for key=\(key, privacy: .public)")
+            // 两次采样(2026-09-09):第一次只用来证明钟在走,第二次才是交出去的读数(更新,
+            // capturedAt 也对得上 consumeCorrection 的 rate×age 补偿)。两次是两次独立的 osascript,
+            // 中间 Task.sleep 不占线程。
+            guard let first = Self.sample() else {
+                Self.logger.notice("spotify position probe (\(reason, privacy: .public)): no answer for key=\(key, privacy: .public)")
                 return
             }
-            let position = parsed.position
-            let t1 = Date()
-            let midpoint = t0.addingTimeInterval(t1.timeIntervalSince(t0) / 2)
+            try? await Task.sleep(for: .seconds(Self.livenessGapSeconds))
+            guard let second = Self.sample() else {
+                Self.logger.notice("spotify position probe (\(reason, privacy: .public)): second sample returned nothing, discarding \(first.position, format: .fixed(precision: 3))s for key=\(key, privacy: .public)")
+                return
+            }
+            let wallGap = second.midpoint.timeIntervalSince(first.midpoint)
+            guard Self.clockIsRunning(first: first.position, second: second.position, wallGap: wallGap) else {
+                Self.logger.notice("spotify position probe (\(reason, privacy: .public)): clock not advancing normally (\(first.position, format: .fixed(precision: 3)) -> \(second.position, format: .fixed(precision: 3)) over \(wallGap, format: .fixed(precision: 3))s), \(retriesLeft > 0 ? "retrying once" : "discarding", privacy: .public) for key=\(key, privacy: .public)")
+                if retriesLeft > 0 {
+                    self.runProbe(key: key, delay: Self.retryAfterFailedLiveness, isConfirmation: isConfirmation, retriesLeft: retriesLeft - 1)
+                }
+                return
+            }
+            let parsed = second.parsed
+            let position = second.position
             self.lock.lock()
             let stillScheduled = self.scheduledKey == key
-            if stillScheduled { self.pending = (key, position, midpoint) }
+            if stillScheduled { self.pending = (key, position, second.midpoint) }
             let sink = self.artworkSink
+            let resultSink = self.resultSink
             self.lock.unlock()
-            // 封面地址:还是这首、且是真曲目才交出去(广告物料图 / 本地文件的 missing value 都不要)。
-            if stillScheduled, let art = parsed.artworkURL, let uri = parsed.uri, SpotifyArtworkURL.isTrackURI(uri) {
+            if stillScheduled { resultSink?(key) }
+            // 封面地址:开播那次才交(还是这首、且是真曲目;广告物料图 / 本地文件的 missing value 都不要)。
+            if deliverArtwork, stillScheduled, let art = parsed.artworkURL, let uri = parsed.uri, SpotifyArtworkURL.isTrackURI(uri) {
                 sink?(key, art)
             }
-            Self.logger.notice("spotify position probe: key=\(key, privacy: .public) position=\(position, format: .fixed(precision: 3)) rtt=\(t1.timeIntervalSince(t0), format: .fixed(precision: 3))")
+            Self.logger.notice("spotify position probe (\(reason, privacy: .public)): key=\(key, privacy: .public) position=\(position, format: .fixed(precision: 3)) (first \(first.position, format: .fixed(precision: 3)) over \(wallGap, format: .fixed(precision: 3))s) rtt=\(second.rtt, format: .fixed(precision: 3))")
         }
+    }
+
+    private struct Sample {
+        let parsed: (position: Double, uri: String?, artworkURL: URL?)
+        let midpoint: Date
+        let rtt: TimeInterval
+        var position: Double { parsed.position }
+    }
+
+    /// 跑一次脚本;拿不到答案返回 nil。midpoint = 往返中点,当读数的时刻。
+    private static func sample() -> Sample? {
+        let t0 = Date()
+        guard let r = ProcessRunner.run("/usr/bin/osascript", ["-e", script], timeout: appleScriptTimeout),
+              r.succeeded,
+              let parsed = parseProbeOutput(r.stdoutText)
+        else { return nil }
+        let t1 = Date()
+        return Sample(parsed: parsed, midpoint: t0.addingTimeInterval(t1.timeIntervalSince(t0) / 2), rtt: t1.timeIntervalSince(t0))
     }
 
     /// 取这首歌**唯一一次**的真值,外推到 now。同一首歌只交出一次;不是这首 / 过期 → nil,

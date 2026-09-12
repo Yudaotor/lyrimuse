@@ -71,7 +71,10 @@ const (
 type lyricSourceBreakerState struct {
 	until       time.Time
 	consecutive int
-	reason      string
+	// trips:这个源**熔断过几轮**(不是失败过几个请求)。冷却档位按它取,见 observeWith
+	// 里那段 ⚠️。成功一次整条 state 被删掉,它跟着归零。
+	trips  int
+	reason string
 }
 
 type lyricSourceBreaker struct {
@@ -163,14 +166,34 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 		if st.consecutive < lyricSourceBreakerTripAfter {
 			return
 		}
-		idx := st.consecutive - lyricSourceBreakerTripAfter
+		// ⚠️ 已经在冷却里就到此为止:不升档、也不续期(2026-09-09 修)。
+		//
+		// 原来这里是 `idx := st.consecutive - lyricSourceBreakerTripAfter` —— 拿**失败请求
+		// 数**当档位。可 consecutive 是按请求数涨的,而一轮搜索里同一个源要发好几个请求
+		// (网易云 4 个歌手别名变体、QQ 的 smartbox + client_search 加起来更多),源整个挂掉
+		// 时它们在同一瞬间一起失败,于是一次抖动就能把阶梯从头走到尾。2026-09-09 实测日志:
+		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s→30s→1m→2m→5m 五档,网易云 0.8 秒内到顶
+		// 并一路涨到 consecutive=22;整份日志里冷却到顶 5 分钟发生过 331 次,可配对的 35 例
+		// 里有 14 例是"第一档 15 秒都还没过完就到顶"。用户看得见的后果:一次 2 秒的 DNS 抖动
+		// 换来 7 个源停摆 5 分钟,期间播到的歌被判"暂无歌词"(《One Last Kiss》那一例)。
+		//
+		// 阶梯本来的语义(见文件头「第 N 次达到触发阈值之后的冷却时长」)是**每熔断一轮升
+		// 一档** —— 冷却到期、放它再试一次、又挂了,才说明问题更严重。所以档位改用 trips,
+		// 并且冷却窗口内的余震一律直接返回:窗口内那些失败既不是新证据,也不该把冷却续期
+		// (续期会让"上限 5 分钟"变成"只要还在失败就永远冷却",跟文件头「误熔断的代价有界」
+		// 相悖)。consecutive 保留原样,它只管"连续两次才开"那道门槛。
+		if st.until.After(now) {
+			return
+		}
+		idx := st.trips
 		if idx >= len(lyricSourceBreakerSchedule) {
 			idx = len(lyricSourceBreakerSchedule) - 1
 		}
+		st.trips++
 		st.until = now.Add(lyricSourceBreakerSchedule[idx])
 		st.reason = reason
-		log.Printf("lyrics: source %s cooling down %s (reason=%s consecutive=%d host=%s)",
-			source, lyricSourceBreakerSchedule[idx], reason, st.consecutive, host)
+		log.Printf("lyrics: source %s cooling down %s (reason=%s trip=%d consecutive=%d host=%s)",
+			source, lyricSourceBreakerSchedule[idx], reason, st.trips, st.consecutive, host)
 	case status == http.StatusTooManyRequests:
 		if st == nil {
 			st = &lyricSourceBreakerState{}
@@ -238,6 +261,21 @@ func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bo
 		return nil
 	}
 	return plan
+}
+
+// anyLyricSourceCooling 回答"这些源里还有没有在冷却中的"。
+//
+// 给 needsLyricsFirstFill 用:上一轮因熔断被跳过的那些源要是都不冷却了,那条"补空歌词"
+// 就不必再干等满 10 分钟(见那边的注释)。写成包级变量而不是直接调
+// lyricSourceBreakerShared,是为了让 enrich 侧的单测能把它换掉——熔断状态在进程内存里,
+// 测试不该为了跑一条节流判定去伪造一个全局熔断器。
+var anyLyricSourceCooling = func(sources []string) bool {
+	for _, s := range sources {
+		if _, cooling := lyricSourceBreakerShared.coolingDown(s); cooling {
+			return true
+		}
+	}
+	return false
 }
 
 // coolingDown 只读地回答某个源现在是不是在冷却中(给诊断/测试用)。

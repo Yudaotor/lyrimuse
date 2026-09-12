@@ -29,7 +29,14 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkData: Data?
     @Published private(set) var artworkImage: NSImage?
+    /// 电台口白(2026-09-11):这一刻在放的不是歌,台里在说话;台名台标顶替曲目卡。
+    @Published private(set) var isRadioTalkBreak = false
+    @Published private(set) var radioStationName: String?
+    @Published private(set) var radioStationImage: NSImage?
     @Published private(set) var highResArtworkImage: NSImage?
+    /// 动态封面的本地文件(2026-09-09)。nil = 这张专辑没有 / 还没下好 / 被总闸拦了,
+    /// 三种情况在这张卡上都是"只铺静态图"。
+    @Published private(set) var motionCoverFile: URL?
     @Published private(set) var windowBackgroundLayers: WindowBackgroundLayers?
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
@@ -69,8 +76,14 @@ private final class WindowPlayback: ObservableObject {
             p.$artworkData.removeDuplicates().sink { [weak self] in self?.artworkData = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
+            p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
+            p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
+            p.$radioStationImage.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.radioStationImage = $0 },
             p.$highResArtworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.highResArtworkImage = $0 },
+            p.$motionCoverFile.removeDuplicates()
+                .sink { [weak self] in self?.motionCoverFile = $0 },
             p.$windowBackgroundLayers.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.windowBackgroundLayers = $0 },
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
@@ -1238,7 +1251,21 @@ struct LyricsWindowView: View {
 
     @ViewBuilder
     private func rightPane(leading: CGFloat, trailing: CGFloat) -> some View {
-        if playback.allLines.isEmpty {
+        if playback.isRadioTalkBreak {
+            // 口白期间不显示任何歌词(2026-09-11 用户报「电台曲和曲之间穿插口白的时候,歌词窗口
+            // 没有改过来,还是上一首歌的歌词」,附图:标题与封面都已经换成台名台标,只有这一栏还在
+            // 滚 Dolly Parton《Blue Smoke》)。
+            //
+            // ⚠️ 这道闸必须排在 `allLines.isEmpty` **之前**。09-11 第一轮只改了 emptyStateSpec,
+            // 那是「一行歌词都没有」时的占位 —— 而口白期间上一首的 allLines 原封不动地留着,
+            // 压根走不到空状态,所以那次改动在这个展示面上等于没做。灵动岛 / 悬浮窗只显示"当前这一行",
+            // 各自的 isRadioTalkBreak 分支天然盖住了;只有这里是整段列表,得单独挡。
+            //
+            // 复用 emptyState:它的文案与图标本来就由 emptyStateSpec 按同一个判据给出「口白」+
+            // `dot.radiowaves.left.and.right`,不另写一套。纯文本兜底(plainLyricsFallback)一并挡掉 ——
+            // 那同样是上一首的词。
+            emptyState
+        } else if playback.allLines.isEmpty {
             // 没有能同步显示的版本,但用户在「搜索候选歌词」里采纳过一条纯文本兜底
             // (见 currentTrackPlainLyrics 声明处注释)——「歌词窗口」是目前唯一认这个
             // 字段的展示面,当静态文字读;不跟播放位置联动,不高亮,不自动滚动。
@@ -1443,10 +1470,39 @@ struct LyricsWindowView: View {
                 // 给的封面可能只有 100×100(网易云客户端)或 300×300(QQ 音乐客户端),
                 // 分别是 9 倍和 2.7 倍放大,都明显糊。
                 // highResArtworkImage 只在系统那份确实太小时才有值,见它的注释。
-                if let nsImage = playback.highResArtworkImage ?? playback.artworkImage {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .scaledToFill()
+                if playback.isCurrentTrackAdBreak {
+                    // 广告期间整张卡换成广告标识(2026-09-09,用户:「只要识别到是广告的话,
+                    // 封面部分都用这个替代」)。播放器在广告时给的是广告物料的缩略图 ——
+                    // 把它当"正在听的这张专辑"摆在这张最大 460pt 的卡上最误导。底沿用下面
+                    // 那个"没有封面"占位的同一块(跟着 hasArtworkBackground 走),只把符号
+                    // 从 music.note 换成 megaphone.fill,跟灵动岛/菜单栏是同一枚。
+                    ZStack {
+                        Rectangle().fill(hasArtworkBackground ? Color.white.opacity(0.1) : Color.primary.opacity(0.06))
+                        Image(systemName: "megaphone.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(secondaryTextColor)
+                    }
+                } else if let nsImage = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
+                    ZStack {
+                        // 静态图**始终铺在底下**:动态封面还没下好(首次要几秒)、或者压根没有的
+                        // 专辑,这张卡就是它;下好了只是在它之上盖一层会动的画面,不是替换。
+                        // 这也让"动态封面加载完"表现成一次淡入,而不是从占位符跳到视频。
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .scaledToFill()
+                        // 动态封面(2026-09-09,Apple Music 的 motion artwork)。
+                        //
+                        // `isPlaying` 跟着 `isPlayingSmoothed`:暂停时封面就该停住(它描述的是
+                        // "这首歌在放"),而缓收版能吸掉切歌间隙那一下瞬时 false —— 否则每首歌
+                        // 之间动画都要停一下再起来。这跟下面 scaleEffect 用同一个量、同一个理由。
+                        //
+                        // `reduceMotion` 是这一面最后一道闸:总闸(用户开关 / 低电量)已经在
+                        // PlaybackCoordinator 拦过,那两个不是视图环境值。
+                        if !reduceMotion, let file = playback.motionCoverFile {
+                            MotionCoverView(file: file, isPlaying: playback.isPlayingSmoothed)
+                                .transition(.opacity)
+                        }
+                    }
                 } else {
                     ZStack {
                         Rectangle().fill(hasArtworkBackground ? Color.white.opacity(0.1) : Color.primary.opacity(0.06))
@@ -1467,6 +1523,8 @@ struct LyricsWindowView: View {
             // 高清替代到货/撤掉同样交叉淡入(指针比较在这里是对的:每次到货都是新解码的
             // NSImage 实例)。
             .animation(.easeInOut(duration: 0.5), value: playback.highResArtworkImage)
+            // 动态封面到货/撤掉也走同一条 0.5s 交叉淡入,跟静态高清替代一个观感。
+            .animation(.easeInOut(duration: 0.5), value: playback.motionCoverFile)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(hasArtworkBackground ? 0.45 : 0.2), radius: 26, y: 12)
             // 封面随播放状态缩放(2026-08-19 用户要求,仿 Apple Music 歌词页):播放满幅、
@@ -1627,8 +1685,9 @@ struct LyricsWindowView: View {
             }
             // ---- QQ 音乐 / 网易云的目录动作(2026-08-24)。AM 有自己那套(上面这块) ----
             //
-            // 只给**当前播放器**那一个平台,不把三个平台全铺进菜单 —— 全平台入口放在
-            // 「显示简介」面板里(那边一行放得下,而菜单每多一行都在变长)。
+            // 只给**当前播放器**那一个平台,不把三个平台全铺进菜单(菜单每多一行都在变长)。
+            // 「显示简介」面板那行「网页」原来是全平台铺开的,2026-09-10 起也收成只给当前播放器
+            // (用户定的规则),两处口径一致;区别只在菜单多给 QQ 的专辑页 / 歌手页。
             //
             // 文案统一写「…页」而不是「在 XX 中打开」:这些**全部落在浏览器**。QQ 音乐没有
             // associated-domains 授权(y.qq.com 不会被 App 接走),它注册的 qqmusicmac://
@@ -2155,6 +2214,7 @@ struct LyricsWindowView: View {
                 }
                 return parts.joined(separator: " · ")
             }
+            if playback.isRadioTalkBreak { return L10n.t("口白") }
             if playback.isCurrentTrackInstrumental { return L10n.t("纯音乐") }
             if !playback.currentTrackPlainLyrics.isEmpty { return L10n.t("纯文本(无时间戳)") }
             return L10n.t("无歌词")
@@ -2179,10 +2239,17 @@ struct LyricsWindowView: View {
             if let source = infoLyricsSource, !source.isEmpty {
                 InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source), onArtwork: hasArtworkBackground)
             }
-            // 「网页」行(2026-08-24):把 collector 早就存好的各平台链接摆出来。菜单里只给
-            // **当前播放器**那一个平台,这里给全部 —— 一行 chips 放得下,而菜单每多一行都在变长。
-            if let links = platformLinks, !links.isEmpty {
-                InfoPanelLinksRow(links: links, onArtwork: hasArtworkBackground)
+            // 「网页」行(2026-08-24 加,2026-09-10 改口径):**只显示当前播放器自己那个平台**的
+            // 歌曲页 —— 用户定的规则「这里只显示对应播放器的」。改之前是三个平台全铺(QQ / 网易云 /
+            // Apple Music),酷狗播放时面板上摆着 QQ 音乐和 Apple Music 两个别家的链接,用户看不出
+            // 这行想说什么。现在跟「⋯」菜单的平台入口同一口径;该平台没链接(酷狗 / YouTube Music
+            // 没存链接、网易云版权下架的周杰伦、QQ 只有搜索兜底)整行不出现,不拿别的平台顶上。
+            // 判定是纯函数 PlatformLinks.songLink(forPlayerBundleID:webPlatformID:),selftest 钉住。
+            if let links = platformLinks,
+               let link = links.songLink(forPlayerBundleID: PlaybackCoordinator.shared.resolvedPlayerBundleID,
+                                         webPlatformID: PlaybackCoordinator.shared.resolvedWebPlatformID) {
+                InfoPanelLinksRow(name: Self.platformDisplayName(link.platform), url: link.url,
+                                  onArtwork: hasArtworkBackground)
             }
             // 收听档案(2026-08-22,Last.fm 系列 #5):累计次数 + 首次/上次听。连着账号
             // 才有;首次/上次是面板打开那一刻才发的两个请求(user.getTrackScrobbles),
@@ -2199,6 +2266,17 @@ struct LyricsWindowView: View {
         )
         .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
+    }
+
+    /// 「网页」行上平台的人话名。三个中文键早就在 Localizable 里(菜单那几项也在用);Spotify 是
+    /// 品牌名,各语言写法一样,不过 L10n(跟 BrowserMusicPlatform.displayName 同一口径)。
+    private static func platformDisplayName(_ platform: PlatformLinks.Platform) -> String {
+        switch platform {
+        case .appleMusic: return L10n.t("Apple Music")
+        case .qqMusic: return L10n.t("QQ 音乐")
+        case .netease: return L10n.t("网易云音乐")
+        case .spotify: return "Spotify"
+        }
     }
 
     /// 音频输出面板(2026-08-21,AirPlay 键弹出):AM 同款版式——每行 设备类型图标 +
@@ -2277,7 +2355,16 @@ struct LyricsWindowView: View {
     /// 广告插播时歌名位显示的文案。判据 isCurrentTrackAdBreak 由 LocalPlaybackSource 给
     /// (字段启发式 + 同曲棘轮 + AppleScript `spotify url` 权威分类,见那边注释)。
     private var displayTitle: String {
-        playback.isCurrentTrackAdBreak ? L10n.t("广告中") : playback.title
+        if playback.isCurrentTrackAdBreak { return L10n.t("广告中") }
+        // 口白期间换成台名(2026-09-11)。抓不到台卡就还显示上一首 —— 判据见 RadioStationCard。
+        if let station = radioTalkStation { return station.name }
+        return playback.title
+    }
+
+    /// 口白期间顶替曲目卡的台名 / 台标。抓不到台卡就是 nil,一切照旧。跟灵动岛那份同名同义。
+    private var radioTalkStation: (name: String, image: NSImage?)? {
+        guard playback.isRadioTalkBreak, let name = playback.radioStationName, !name.isEmpty else { return nil }
+        return (name, playback.radioStationImage)
     }
 
     /// 广告插播时第二行**留空**,不展示广告物料的歌手/专辑名(用户 2026-08-19 拍板的口径,
@@ -2750,6 +2837,10 @@ struct LyricsWindowView: View {
         // 一并清掉(见 clearIfWasPlaying),播放中/暂停中它一定非空。
         if playback.title.isEmpty { return ("music.note", L10n.t("没有在播放"), false) }
         if playback.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中"), false) }
+        // 电台口白 / 台卡(2026-09-11 用户截图报的就是这一格):跟广告同一个位置、同一个理由 ——
+        // 那段没有可搜的对象,不拦就一路走到「搜索歌词中…」并且永远不会有下文。offersSearch 给 false:
+        // 手动搜也搜不出东西来。
+        if playback.isRadioTalkBreak { return ("dot.radiowaves.left.and.right", L10n.t("口白"), false) }
         if playback.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐"), false) }
         // 搜完确实没有 → 别再说"搜索中",理由见 playback.currentTrackHasNoLyrics。
         if playback.currentTrackHasNoLyrics { return ("text.badge.xmark", L10n.t("暂无歌词"), true) }
@@ -2935,8 +3026,14 @@ private struct LyricsLineRow: View, Equatable {
         }
     }
 
+    /// 这一行能不能把罗马音标到每个词底下:开着「显示罗马音」且引擎给这一行分出了词组
+    /// (日文靠分词器、中文/粤语靠字数对音节数,见 LyricsOverlayView 同名属性)。
+    /// **不看 isActive**(2026-09-10):非当前行同样逐词标。原来只给当前行逐词、其它行退回
+    /// 正文下方一整行罗马音,用户报「当前行的罗马音在对应的字底下没问题,滚到上面之后位置就
+    /// 重置了,对不上了」—— 同一句话唱完往上一滚读音就换一种排法,是把行与行之间的"景深"
+    /// 差异做成了"内容"差异。见 07 章决策 #21。
     private var usesPerWordRomanization: Bool {
-        isActive && showRomanization && item.line.wordGroups?.isEmpty == false
+        showRomanization && item.line.wordGroups?.isEmpty == false
             && item.line.words != nil
     }
 
@@ -2966,8 +3063,8 @@ private struct LyricsLineRow: View, Equatable {
     var body: some View {
         VStack(alignment: alignment.horizontal, spacing: 6) {
             mainText
-            // 罗马音在**下面**,跟 Apple Music 一致(原来在上面)。当前行如果分得出词组,
-            // 读音已经逐词标进 mainText 里了,这里就不再重复一整行。
+            // 罗马音在**下面**,跟 Apple Music 一致(原来在上面)。分得出词组的行(不论
+            // 活跃)读音已经逐词标进 mainText 里了,这里就不再重复一整行。
             if showRomanization, !usesPerWordRomanization, let roma = item.line.romanization {
                 Text(roma)
                     .font(.system(size: romaFontSize, weight: .medium))
@@ -3043,8 +3140,11 @@ private struct LyricsLineRow: View, Equatable {
         // 只有参数在变,无替换。非活跃行:词强制全填色(视觉=原来的全色 Text)、粗/细时钟
         // 全停、字不上浮 —— 静态成本只是"多几个 Text + 一次 WrapLayout 布局",没有逐帧
         // 失效(性能红线见 KaraokeLineText.body 的实测记录)。
-        // 例外:逐词读音(groups)仍只在活跃时挂 —— 读音出现本来就是内容变化,且非活跃行
-        // 渲染读音占位会撑高行高、改变整列行距。
+        // 逐词读音(groups)也**不论活跃与否**都挂(2026-09-10,决策 #21):2026-08-21 统一
+        // 结构时曾把它留作例外("非活跃行渲染读音占位会撑高行高"),但开着罗马音的非活跃
+        // 行本来就在下面另画一整行读音,占位早就在;留这个例外只换来"当前行逐词、一滚上去
+        // 就变回整行"的排法跳变(用户报"位置重置了、对不上了"),以及激活瞬间一次真正的
+        // 结构替换(WrapLayout+整行 Text ↔ 带读音的 WrapLayout)—— 正是统一结构想消灭的。
         if let words = item.line.words {
             KaraokeLineText(
                 words: words,
@@ -3073,7 +3173,7 @@ private struct LyricsLineRow: View, Equatable {
 //
 // 逐帧重算(TimelineView 叶子时钟)是**实测后的终点**,不是没试过更"先进"的:同日第三轮
 // 性能架构曾整体改成排程式(fillFraction 对时间线性 → 一次性排 .linear 显式动画交给
-// 渲染管线插值,LyricsX/AMLL 同架构),CPU 上确实是零逐帧代码 —— 但 SCK 逐帧探针实测
+// 渲染管线插值,这类歌词渲染的常规架构),CPU 上确实是零逐帧代码 —— 但 SCK 逐帧探针实测
 // **macOS 只以 ~20Hz 提交这些动画**(系统对长时程慢动画自动降档,无 API 干预;对照组
 // 悬浮歌词的 TimelineView 30Hz 准点投递),20Hz×14px 的边缘步进正是用户报的"卡顿感"。
 // TimelineView 的频率受控、实测准点,所以回到逐帧重算,档位开到面板满刷新率
@@ -3177,6 +3277,10 @@ private struct KaraokeLineText: View {
                                                 staticDate: coarseDate,
                                                 fontSize: fontSize, reduceMotion: reduceMotion,
                                                 displayScale: displayScale,
+                                                // 非活跃行定格全填色、不上浮,跟下面无词组
+                                                // 那条分支一致(2026-09-10 起非活跃行也走
+                                                // 这条分支,见 LyricsLineRow.mainText)。
+                                                forceFilled: !isActive,
                                                 lineSettled: fillSettled)
                             }
                         }
@@ -3194,6 +3298,7 @@ private struct KaraokeLineText: View {
                                 fontSize: romaFontSize, weight: .medium,
                                 reduceMotion: reduceMotion, displayScale: displayScale,
                                 rises: false, // 读音不跟着抬,只有正文的字会浮起来
+                                forceFilled: !isActive,
                                 lineSettled: fillSettled
                             )
                             .lineLimit(1)
@@ -3988,23 +4093,20 @@ private struct InfoPanelRow: View {
     }
 }
 
-/// 简介面板的「网页」行:把 collector 早就存好的各平台链接摆成一排可点的短标签。
+/// 简介面板的「网页」行:当前播放器自己那个平台上这首歌的歌曲页,一个可点的短标签。
+///
+/// 2026-08-24 首版是把 collector 存好的三个平台全铺成一排 chips(`links: PlatformLinks`),
+/// 2026-09-10 按用户「这里只显示对应播放器的」收成一项 —— 选哪一项在调用方
+/// (`PlatformLinks.songLink`),这里只管画。
 ///
 /// ⚠️ 标签写「网页」而不是「打开」:这里面只有 Apple Music 那个会**进 App**(music:// ),
-/// QQ 音乐和网易云都只能落到**浏览器**(理由见 PlatformLinks 头注)。所以 Apple Music 那一项
+/// QQ 音乐 / 网易云 / Spotify 都落到**浏览器**(理由见 PlatformLinks 头注)。所以 Apple Music 那一项
 /// 单独标了个 ↗ 之外的区别不做 —— 与其在一行里解释两种落点,不如统一说"网页"、把唯一的
 /// 例外(AM 进 App)当成惊喜。
 private struct InfoPanelLinksRow: View {
-    let links: PlatformLinks
+    let name: String
+    let url: URL
     var onArtwork: Bool = false
-
-    private var items: [(String, URL)] {
-        var out: [(String, URL)] = []
-        if let u = links.qqSong { out.append((L10n.t("QQ 音乐"), u)) }
-        if let u = links.neteaseSong { out.append((L10n.t("网易云音乐"), u)) }
-        if let u = links.appleMusic { out.append((L10n.t("Apple Music"), u)) }
-        return out
-    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -4013,18 +4115,14 @@ private struct InfoPanelLinksRow: View {
                 .foregroundStyle(onArtwork ? Color.white.opacity(0.75) : Color.secondary)
                 .shadow(color: onArtwork ? .black.opacity(0.5) : .clear, radius: 1.5)
                 .frame(width: 52, alignment: .leading)
-            HStack(spacing: 12) {
-                ForEach(items, id: \.0) { name, url in
-                    Button {
-                        NSWorkspace.shared.open(url)
-                    } label: {
-                        Text(name + " ↗")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
-                }
+            Button {
+                NSWorkspace.shared.open(url)
+            } label: {
+                Text(name + " ↗")
+                    .font(.system(size: 13, weight: .medium))
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
         }
     }
 }

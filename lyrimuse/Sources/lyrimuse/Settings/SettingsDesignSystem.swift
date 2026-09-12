@@ -56,6 +56,23 @@ extension View {
         }
     }
 
+    /// 设置侧栏搜索框的材质(2026-09-12,用户要求"像系统设置那样的液态玻璃"):macOS 26+ 用
+    /// `.glassEffect`,旧系统退回 quaternary 圆角底 —— 跟上面的卡片背景同一个取舍,不在旧系统上
+    /// 模拟玻璃。不用 `.interactive()`:那是按钮的悬停 / 按压回弹,输入框不需要。两档都补 0.5pt
+    /// 发丝描边:侧栏本身就是半透明材质,玻璃压在材质上边界很淡,描边保证框看得见。
+    /// 调用点在 Settings/SettingsSearch.swift 的 `SettingsSearchField`。
+    @ViewBuilder
+    func settingsSearchFieldBackground() -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
+        } else {
+            background(shape.fill(.quaternary.opacity(0.7)))
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        }
+    }
+
     /// 页面里那个唯一的强调按钮(「请作者喝杯咖啡」)。macOS 26 起用 .glassProminent,
     /// 更早的系统退回原来的 .borderedProminent —— 两者都吃 .tint。
     @ViewBuilder

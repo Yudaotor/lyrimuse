@@ -39,13 +39,22 @@ public struct MediaControlAnchorDigest {
     /// 这一行带着 `playing:false` —— 播放器在这一刻进入暂停(暂停分支要用这个时刻,见
     /// `MediaControlClient.pausedPositionSeconds(elapsedTime:anchorTimestamp:lastPlaying:pauseObservedAt:now:)`)。
     public let pausedAtArrival: Bool
+    /// 这一行把曲目换成了哪一首(`MediaControlSnapshot.trackKey` 那一套)。nil = 这一行没换曲目。
+    /// 电台那块曲内表要靠它起表,见 `RadioTrackClock` 头注「起表时刻」一节。
+    public let trackChangeKey: String?
+    /// 换曲目发生在哪一刻。锚点是**刚打好的**(tight)就用锚点时刻(带亚秒估计),否则只能用这一行的
+    /// 到达时刻 —— 陈旧锚点的时刻可能是几分钟前的,当成换歌时刻会把位置推走一大截。
+    public let trackChangeAt: Date?
 
-    public init(merged: [String: Any], anchorKey: String?, tight: Bool, anchorAge: Double?, pausedAtArrival: Bool = false) {
+    public init(merged: [String: Any], anchorKey: String?, tight: Bool, anchorAge: Double?,
+                pausedAtArrival: Bool = false, trackChangeKey: String? = nil, trackChangeAt: Date? = nil) {
         self.merged = merged
         self.anchorKey = anchorKey
         self.tight = tight
         self.anchorAge = anchorAge
         self.pausedAtArrival = pausedAtArrival
+        self.trackChangeKey = trackChangeKey
+        self.trackChangeAt = trackChangeAt
     }
 }
 
@@ -156,6 +165,9 @@ public final class MediaControlStreamWatcher {
             if digest.pausedAtArrival {
                 MediaControlClient.notePauseObserved(at: arrivedAt)
             }
+            if let changed = digest.trackChangeKey, let at = digest.trackChangeAt {
+                MediaControlClient.noteTrackChangeObserved(key: changed, at: at)
+            }
             if let key = digest.anchorKey {
                 MediaControlClient.noteStreamAnchorSighting(anchorKey: key, at: arrivedAt, tight: digest.tight)
                 // 每个新锚点一行(换歌/暂停/恢复才有),不是每拍都打。年龄是"到达时锚点整秒时间戳
@@ -201,13 +213,20 @@ public final class MediaControlStreamWatcher {
         // 只看这一行**带不带** playing:false —— 取的是"暂停发生在这一刻"这个时刻,不是状态值本身
         // (状态仍由轮询快照决定,见文件头"唯一的例外")。
         let paused = (payload["playing"] as? Bool) == false
+        // 曲目换没换,跟锚点判定完全无关:只带 title/artist 的 diff 行(实测电台换歌就有这种形态)会在
+        // 下面那道"没有 elapsedTime/timestamp 就早退"的闸之前返回,所以这一步必须在闸之前算。
+        let changed = changedTrackKey(before: merged, after: next)
         guard payload.keys.contains("elapsedTime") || payload.keys.contains("timestamp") else {
-            return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil, pausedAtArrival: paused)
+            return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
+                                            pausedAtArrival: paused,
+                                            trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let elapsed = (next["elapsedTime"] as? NSNumber)?.doubleValue
         let timestamp = next["timestamp"] as? String
         guard elapsed != nil || timestamp != nil else {
-            return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil, pausedAtArrival: paused)
+            return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
+                                            pausedAtArrival: paused,
+                                            trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let key = MediaControlClient.anchorKey(
             artist: next["artist"] as? String, title: next["title"] as? String,
@@ -215,7 +234,36 @@ public final class MediaControlStreamWatcher {
         let age = MediaControlClient.parseTimestamp(timestamp).map { arrivedAt.timeIntervalSince($0) }
         // 年龄略负(时钟毛刺)也放行;没有可解析的时间戳就没法判"刚打好",只能 loose。
         let tight = age.map { $0 >= -1 && $0 <= MediaControlClient.tightSightingMaxAge } ?? false
-        return MediaControlAnchorDigest(merged: next, anchorKey: key, tight: tight, anchorAge: age, pausedAtArrival: paused)
+        return MediaControlAnchorDigest(merged: next, anchorKey: key, tight: tight, anchorAge: age,
+                                        pausedAtArrival: paused, trackChangeKey: changed,
+                                        trackChangeAt: changed == nil ? nil
+                                            : trackChangeInstant(anchorTimestamp: MediaControlClient.parseTimestamp(timestamp),
+                                                                 tight: tight, arrivedAt: arrivedAt))
+    }
+
+    /// 合并状态里的曲目换了没有。纯函数,selftest 直接覆盖。
+    ///
+    /// 换到**空标题**不算换歌:电台切台/加载中实测会先吐几行 `title` 为空、只有 artist 的载荷
+    /// (2026-09-10 日志里 `|NCT 127|0.000` 那三行),把它当一首歌会白起一次表。
+    public nonisolated static func changedTrackKey(before: [String: Any], after: [String: Any]) -> String? {
+        let title = (after["title"] as? String) ?? ""
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let now = MediaControlSnapshot.trackKey(artist: after["artist"] as? String, title: title)
+        let was = MediaControlSnapshot.trackKey(artist: before["artist"] as? String, title: before["title"] as? String)
+        return now == was ? nil : now
+    }
+
+    /// 换歌发生在哪一刻。纯函数,selftest 直接覆盖。
+    ///
+    /// 锚点刚打好(tight)时它就是这次换歌的时刻,而且比"这一行到达"更早、更准 —— 整秒时间戳的亚秒
+    /// 部分交给 `estimatedAnchorInstant` 估(那套已经在用了)。锚点陈旧(电台换歌常见:系统压根没重打
+    /// 锚点,实测 age 236s / 487s)时只能退回到达时刻,绝不能拿几分钟前的锚点当换歌时刻。
+    public nonisolated static func trackChangeInstant(anchorTimestamp: Date?, tight: Bool, arrivedAt: Date) -> Date {
+        guard tight, let anchorTimestamp else { return arrivedAt }
+        let instant = MediaControlClient.estimatedAnchorInstant(
+            timestamp: anchorTimestamp,
+            sighting: MediaControlClient.AnchorSighting(at: arrivedAt, tight: true))
+        return min(instant, arrivedAt)
     }
 
     private func handleTermination() {

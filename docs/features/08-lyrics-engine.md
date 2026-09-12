@@ -206,7 +206,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - ⚠️ CRLF:`repair` 手动按字素扫、换行符原样保留——Swift 把 `\r\n` 当一个字素,`split("\n")` 切不开酷狗常见的 CRLF 歌词(探针第一版就栽在这里:整份歌词被当成一行,一处署名行的假名让整份的字都算"含假名"),`components(separatedBy: .newlines)` 再拼回去又会把 CRLF 抹成 LF。selftest 钉着换行符一个字节不变。
 - 地区词表那一半(台/港词汇级转换,如「網路」→「网络」)**不做**:歌词里几乎不出现地区词,词组级转换对歌词收益接近零、还会误伤人名地名;参照实现自己也只在转简体方向用它,转繁体照样是字级。
 
-### 时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调(LyricsOffsetStore)
+### 时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调 + 电台校正(LyricsOffsetStore)
 
 - **全局偏移**(`globalOffsetMs`):设备侧固定延迟(蓝牙耳机等),对所有歌生效,裸 Int 存 UserDefaults。设置页那一行选「全部播放器」时改的就是它(Stepper ±5s、步长固定 0.05s,刻意不复用快捷键页的「步长」)。存储层**没有**「全部」这个哨兵 —— 那个下拉框只是作用域选择器,在既有两层之间切,不是第三份存储。
 - **按播放器偏移**(`playerOffsets`,2026-08-21 按用户要求加):`bundleID → 毫秒` 字典,存 `np:lyricsOffsetsByPlayerJSON`。设置页那一行的下拉框选中具体播放器时改的是这层。它对症的是**播放器侧**的系统性偏差:浏览器(Arc/Chrome 这类)只在切歌时报一次播放位置、之后 `elapsedTime` 再也不刷新,只能按墙钟外推(`PositionSourceTier.cleanExtrapolated`),进度会系统性偏慢;而 Apple Music 那条路径精确、一点都不该补。这类偏差**换首歌照旧、换个播放器就没了**,正好落在播放器这个维度上。
@@ -218,7 +218,14 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **单曲微调**:按 `trackKey = "归一化歌手|归一化歌名|内容指纹"` 存(指纹 = lyrics+lyricsYRC 的 SHA256 前 12 hex;前两段走 `EnrichCacheKeys.cleanTag`/`normalizedTitle`,跟 enrich 缓存 key 同一套)——歌词内容换了(重新匹配/手动编辑/换源)key 自然变,旧校正值查不到而不是误用;旧记录不清理(量小)。值为 0 时从字典删除。菜单栏「歌词时间轴」提前/延后按 `lyricsOffsetStepMs`(默认 200ms,快捷键页可调)nudge,「重置」只清单曲不动全局;全局快捷键同一组动作。歌词管理窗口的输入框直接 `setOffset` 绝对值。
 - **唯一合成点** `effectiveOffset(forKey:bundleID:) = baseOffsetMs(forBundleID:) + track`,而 `baseOffsetMs` 是**二选一**:这个 bundleID 在 `playerOffsets` 里有值就用它,否则用 `globalOffsetMs`。**两档不相加**(2026-08-21 用户拍板:「不要和那个全部相加,只有要么全部,要么单个」)。零值不落盘,所以"配过"="非零",把某个播放器调回 0 就是撤掉它的单独设置、重新跟随「全部」。
   由 `LocalPlaybackSource.applyOffsets()` 灌进 `syncEngine.offsetMs`(入口:换歌词内容/nudge/reset/改基准/改播放器那档/换播放器,全走这一处,防「两处各加一次 = 双倍校正」)。正数 = 歌词整体提前显示。`bundleID` 省略或为 nil(relay 中继模式没有播放器身份、或还没拿到第一份快照)时用「全部」那档 —— 那是唯一有意义的兜底,**绝不猜一个播放器**(猜错的形态就是把浏览器的补偿套到 Apple Music 上)。selftest 有一条变异测试验证过的断言组钉住"不许退回相加"。
-- **两个对外属性**:`currentLyricsOffsetMs` = 实际生效总和(所有「歌词时间轴 ↔ 播放位置」换算用它,如歌词窗口点行 seek 时 `item.timeMs - currentLyricsOffsetMs` 反算);`trackLyricsOffsetMs` = **只属于这首歌那一层**(菜单标题「歌词时间轴(+0.6s)」和「重置」按钮认它——显示总和会出现「点了重置数字却不归零」)。全局与按播放器两层都只进 `currentLyricsOffsetMs`、不进 `trackLyricsOffsetMs`;代价是它们在菜单里完全不可见(跟全局那层的既有现状一致),只在设置页那一行看得到。
+- **电台校正**(`radioOffsets`,2026-09-11 按用户要求加):`台标哈希|歌手|歌名|指纹 → 毫秒`,存 `np:lyricsRadioOffsetsJSON`,**只在放电台时参与**(`effectiveOffset` 的 `radioKey` 参数为空就整层不算)。跟另外三层是**相加**,不是二选一。
+  - **对症的是什么**:电台上系统只在元数据切换那一刻说"换歌了",而那一刻晚于声音真正开始。App 侧的滞后已经压到几十毫秒(起表时刻改用事件到达时刻,见 02 章),剩下的 δ 全在苹果那一侧。实测(2026-09-10/11):**δ 每首歌不一样**(用户实测同一个台不同的歌也不同,所以钉常数没用),但**同一首歌可复现**(同一档节目重放两次,边界位置只差 0.50s / 0.71s),所以"这首歌在这个台上调一次、以后一直对"成立。
+  - **为什么系统里量不出来**:MediaRemote `NowPlayingInfo` 的全部 18 个字段(pyatv 从协议逆出来)里没有任何一个表示"当前曲目在这条流里的起点";media-control 读的 `startTime` 键 Music.app 在电台上不填(实测载荷里没有这个键)。ShazamKit 那条自动路要 `com.apple.developer.shazamkit` 授权,ad-hoc 签名拿不到(实测 `Code=202 Missing entitlements` + 401)。同类软件里也没有任何一个处理电台:`radioStationHash` 在 GitHub 上的全部命中都是协议定义/头文件转储,翻过的几个同类实现全部零处理,Apple Music 自己在电台上也不给逐行歌词。
+  - **key 里必须带台标哈希**:δ 是"这首歌在这档节目里的投递延迟",换个台未必一样。用户 2026-09-11 明确要求"仅适用于这个电台里播放的歌"。扣错一个偏移比不扣更糟——不扣只是照旧慢一点,扣错是往反方向错。
+  - **绝不能落进单曲那层**:用户实测同一首歌**正常播放是准的**,把电台上量出来的 δ 套到正常播放会把对的搞错。`nudgeLyricsOffset`/`resetLyricsOffset` 在电台时分流到这一层(源码守卫钉住);「歌词管理」那个输入框仍写单曲层——那是"编辑某首歌"的语境,不是"正在放电台"。
+  - **不碰 LyricsPinStore**:钉住的语义是"这份歌词内容是用户认过的",而这一层调的是钟不是内容,钉它会顺带让 collector 停止自动更新这首歌的歌词源。
+  - **清空入口单独一个**(「歌词管理」工具栏,只在 `radioOffsetCount > 0` 时出现):跟另外三层互不连带,理由同上面那条。
+- **两个对外属性**:`currentLyricsOffsetMs` = 实际生效总和(所有「歌词时间轴 ↔ 播放位置」换算用它,如歌词窗口点行 seek 时 `item.timeMs - currentLyricsOffsetMs` 反算);`trackLyricsOffsetMs` = **只属于这首歌那一层**(菜单标题「歌词时间轴(+0.6s)」和「重置」按钮认它——显示总和会出现「点了重置数字却不归零」)。**放电台时它报的是电台那一档**——用户此刻按加减键改的就是它,显示另一个数会让人以为没生效。全局与按播放器两层都只进 `currentLyricsOffsetMs`、不进 `trackLyricsOffsetMs`;代价是它们在菜单里完全不可见(跟全局那层的既有现状一致),只在设置页那一行看得到。
 - 存储:三份值都在 UserDefaults(`np:lyricsOffsetsByTrackJSON` 与 `np:lyricsOffsetsByPlayerJSON` 存 JSON 字符串方便 `defaults read` 调试;`np:lyricsGlobalOffsetMs` 是裸 Int),**故意不放进** EnrichCacheStore 的「清空全部缓存」波及范围——校正值是用户手动调出来的个人偏好。清它有**单独**的入口:歌词管理工具栏那个「占用」菜单里的「清空全部时间轴校正」(`clearAllTrackOffsets`),只清单曲那一份,「全部」基准和按播放器那份都不受连带(selftest 各有断言钉住)。
 
 ### key 前两段必须归一化(2026-08-20 修的真 bug)
@@ -245,7 +252,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **暂停不清行**:anchor 为 nil 但有冻结位置(`pausedPositionMs`)时按冻结位置解一次当前行(`resolveLinesForPausedPosition`,apply 和 fastTick 两个入口共用一处——曾经两处各写一份清空逻辑错开过:暂停下拖进度条行被清掉)。用户按暂停的典型场景正是「这句是什么,我看一下」。真没位置或没内容才清空。
 - **重读时机**:`apply()` 在「换歌 || 引擎无内容 || 缓存文件 mtime 变了」时 `reloadCurrentLyrics()`。mtime 那条是为了同一首歌中途 collector 补译文/换更好的歌词能立刻生效;**不要**加「已有译文就不盯」的闸门(译文会被顶替,不只从无到有)。**内容等值闸**(2026-08-20):mtime 是全库单文件的,collector 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)也会触发重读——闸在 lookup 之后比较「曲目身份+五个歌词字段+简繁偏好+卡拉OK开关+罗马音语言开关」的完整快照,逐字节没变就直接 return,跳过简繁转换×3/引擎 load/整曲 allLines+gapMarkers 重建(单次 10-50ms 主线程,正撞 30Hz 填色渲染)。⚠️ 三个不变量:快照必含曲目身份(两首都没歌词的歌五字段全空相等,不带身份会串偏移校正);`sawChineseLyrics` 粘性置位在闸前;`clearIfWasPlaying` 清发布状态时必须连带 `lastReloadSnapshot = nil`(否则停播后重播同一首歌 allLines 永远回不来)。「搜索中→暂无歌词」的翻转经 resolved/instrumental 进快照,必穿闸。`allLines` 只在 reload 时重新构造(同一首歌歌词不变),且 Equatable 比较后才赋值(「还没解析完、每轮重试」的分支会反复调 reload,结果都是同一个空)。
 - **停止播放清场**(`clearIfWasPlaying`):真停(nil 快照,非暂停)时清曲目/歌词/封面/各判定,**必须连 lastKey 一起清**——否则同一首歌恢复播放时 `trackChanged=false`,allLines/封面两条重建路径全跳过,歌词窗口和悬浮窗显示互相矛盾。
-- **UI 状态字段**:`hasLyricsContent`(引擎有无内容)、`isCurrentTrackInstrumental`(纯音乐确证)、`currentTrackHasNoLyrics`(resolved 且无内容且非纯音乐 =「搜过了确实没有」)、`collectorNetworkDown`(collector 报网络不通)、`isCurrentTrackAdBreak`(Spotify 广告:album 空 + bundle id 是 Spotify)。展示面的分支顺序要求:广告/纯音乐/暂无歌词都必须排在「搜索歌词中…」之前,否则永远卡在搜索中。
+- **UI 状态字段**:`hasLyricsContent`(引擎有无内容)、`isCurrentTrackInstrumental`(纯音乐确证)、`currentTrackHasNoLyrics`(resolved 且无内容且非纯音乐 且 **非 searchIncomplete** =「搜过了确实没有」;最后那一位 2026-09-09 加 —— 那一轮有源因熔断被整个跳过时,「跑完了」不等于「问过了」,collector 还欠一次快速补搜,见 09 章第 48 条)、`collectorNetworkDown`(collector 报网络不通)、`isCurrentTrackAdBreak`(Spotify 广告:album 空 + bundle id 是 Spotify)。展示面的分支顺序要求:广告/纯音乐/暂无歌词都必须排在「搜索歌词中…」之前,否则永远卡在搜索中。
 
 ### PlaybackCoordinator(转发层)
 

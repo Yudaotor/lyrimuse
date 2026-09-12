@@ -1,5 +1,34 @@
 import CoreGraphics
 
+/// 悬浮窗的位置模式(2026-09-11,GitHub issue #5「可否增加底部在 Dock 栏之上水平居中对齐选项」)。
+///
+/// 报告人的诉求不是"把窗口挪一下",是**程序算出来的精确对齐**——他明说「很难接受手动进行
+/// 调整」,拖过去凑居中对他不算解决。所以做成模式而不是一次性的"对齐到…"动作:预设模式下
+/// 位置由几何推导,屏幕 / Dock 变了自动跟,用户拖不动它(要挪就切回「自由」)。
+///
+/// 存储为字符串 rawValue(UserDefaults `np:overlayPlacementMode`);默认 `.free` = 改动前的
+/// 全部行为,老用户零迁移。
+public enum OverlayPlacementMode: String, Codable, Hashable, CaseIterable, Sendable {
+    /// 现状:位置只由用户拖动决定(见 `OverlayPlacement` 头注与 04 章「多屏」一节的不变量)。
+    case free
+    /// 所在屏可见区顶边下方 `OverlayPlacement.presetTopMargin`、水平居中 —— 跟没存过位置时的
+    /// 默认落点同一个数,只是从"一次性默认"变成"一直钉着"。
+    case topCenter
+    /// 所在屏可见区**底边**上方 `OverlayPlacement.presetBottomMargin`、水平居中。`visibleFrame`
+    /// 本来就扣掉了 Dock(Dock 在底部且未自动隐藏时),所以"Dock 之上"不用自己算 Dock 有多高;
+    /// Dock 放侧边 / 自动隐藏时退化成"屏幕底部居中",跟任何按 visibleFrame 摆的 App 一致。
+    case bottomCenter
+
+    /// 位置是不是由预设推导(而不是用户拖出来的)。
+    public var isPreset: Bool { self != .free }
+
+    /// 窗口高度变化时**守底边**、向上长(而不是守顶边向下长)。只有 `.bottomCenter`:贴着 Dock
+    /// 的窗口若照旧向下长,`updateHeight` 那条"底边不许越过可见区底边"的钳制会让它**一点都
+    /// 长不了**(顶边到 Dock 顶正好等于 120pt 地板),译文 / 罗马音 / 换行一出来直接被裁掉——
+    /// 这不是新功能的边角,是"手动拖到 Dock 上方"今天就有的坑。
+    public var anchorsBottom: Bool { self == .bottomCenter }
+}
+
 /// 悬浮窗落点的**纯几何判断**:它现在还看得见吗?看不见的话该挪到哪儿?
 ///
 /// 这套判断原本只以三行 clamp 的形式存在于 `restoredOrigin` 里,而那个函数只在
@@ -106,5 +135,58 @@ public enum OverlayPlacement {
             return nil
         }
         return target
+    }
+
+    // MARK: - 位置预设(OverlayPlacementMode,2026-09-11)
+
+    /// 「顶部居中」离可见区顶边(= 菜单栏底)的距离。第一版取 40(照搬没存过位置时那个默认落点),
+    /// 用户实机反馈「上面怎么还留了这么多空间」—— 预设的意图是"贴着菜单栏",跟"新装 App 随手
+    /// 丢一个好抓的位置"不是一回事,改成跟底部同一个 12(2026-09-11)。默认落点那个 40 不动。
+    public static let presetTopMargin: CGFloat = 12
+    /// 「底部居中」离可见区底边(= Dock 顶)的距离。这条边本身就是 Dock 图标的顶沿,贴得太远就
+    /// 不像"Dock 之上"了。
+    public static let presetBottomMargin: CGFloat = 12
+
+    /// 预设模式下窗口该在的 frame。`.free` 返回 nil(调用方:那就别动)。
+    ///
+    /// `visibleFrame` 是**窗口所在那块屏**的可见区域(调用方按 `hostVisibleFrame` 选,选不出来
+    /// 才退主屏)—— 预设是"在这块屏上居中",不是"搬去主屏居中"。
+    public static func presetFrame(mode: OverlayPlacementMode, size: CGSize, visibleFrame: CGRect) -> CGRect? {
+        let x = visibleFrame.midX - size.width / 2
+        switch mode {
+        case .free:
+            return nil
+        case .topCenter:
+            return CGRect(x: x, y: visibleFrame.maxY - presetTopMargin - size.height,
+                          width: size.width, height: size.height)
+        case .bottomCenter:
+            return CGRect(x: x, y: visibleFrame.minY + presetBottomMargin,
+                          width: size.width, height: size.height)
+        }
+    }
+
+    /// 内容高度变了之后窗口该长成什么样 —— `updateHeight` 的几何本体,抽成纯函数是为了把
+    /// "守顶边向下长"和"守底边向上长"两条路一起钉进 selftest。
+    ///
+    /// - 高度 = max(地板, ceil(内容高)),再夹到"锚边到可见区另一侧"—— 守顶边时不许底边越过
+    ///   可见区底边(2026-08-02 修的"撑到 Dock 后面"),守底边时对称地不许顶边越过可见区顶边。
+    ///   夹取仍保证不低于地板(内容真的需要空间时优先满足地板,同原逻辑)。
+    /// - `visibleFrame` 为 nil(窗口一块屏都不沾)时不夹 —— 没有可信的边界可用。
+    /// - 返回的 frame 高度可能跟 `current` 只差亚像素,调用方按自己的阈值决定要不要真的 setFrame。
+    public static func grownFrame(
+        current: CGRect, contentHeight: CGFloat, minHeight: CGFloat,
+        anchorsBottom: Bool, visibleFrame: CGRect?
+    ) -> CGRect {
+        let rawHeight = max(minHeight, ceil(contentHeight))
+        if anchorsBottom {
+            let bottom = current.minY
+            let maxHeight = visibleFrame.map { max(minHeight, $0.maxY - bottom) }
+            let newHeight = min(rawHeight, maxHeight ?? rawHeight)
+            return CGRect(x: current.minX, y: bottom, width: current.width, height: newHeight)
+        }
+        let top = current.minY + current.height
+        let maxHeight = visibleFrame.map { max(minHeight, top - $0.minY) }
+        let newHeight = min(rawHeight, maxHeight ?? rawHeight)
+        return CGRect(x: current.minX, y: top - newHeight, width: current.width, height: newHeight)
     }
 }

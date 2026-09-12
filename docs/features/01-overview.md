@@ -187,7 +187,7 @@ applemusic-nowplaying/
 ├── feishu-bot/               # 独立 Go 程序 + 示例 launchd plist
 ├── docs/                     # features/(本文档族)+ images/
 ├── bin/                      # 本地构建产物(未跟踪)
-└── README.md  AGENTS.md  CLAUDE.md  THIRD_PARTY_LICENSES
+└── README.md  THIRD_PARTY_LICENSES  llms.txt   # AGENTS.md / CLAUDE.md / .claude/ 只在作者本地(未跟踪)
 ```
 
 ## 代码锚点

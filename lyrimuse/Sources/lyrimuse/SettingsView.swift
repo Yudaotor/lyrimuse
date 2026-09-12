@@ -92,14 +92,19 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
     }
 }
 
-// 图标徽标——彩色圆角方块背景 + 白色 SF Symbol,侧边栏行(22pt/圆角6)和账号详情页头
+// 图标徽标——彩色圆角方块背景 + 白色 SF Symbol,侧边栏行(20pt/圆角5)和账号详情页头
 // (36pt/圆角8)共用同一份渲染逻辑,不各自重复手写一遍。
+//
+// 2026-09-12:默认尺寸从 22/6 改成 20/5,跟系统设置侧栏的图标一样大;方块用连续圆角
+// (continuous),并叠一层上亮下暗的竖向渐变 + 半透明白描边 —— 系统设置的图标就是这种
+// 略带体积感的画法,纯平色块摆在旁边一眼就能看出不是一家的。渐变只叠在色块上,白色符号
+// 不受影响;深色模式的亮度封顶(SettingsIconTint)照旧作用于底色。
 //
 // 2026-08-18:原来这里整个是个自由函数,理由写的是"只有两组固定的(size, cornerRadius)
 // 组合在用,不是一个需要 View 身份/状态的东西"。深色模式压暗色块要读
 // @Environment(\.colorScheme),自由函数拿不到 environment,所以真身改成了 View 类型;
 // 对外仍是同名自由函数,十几个调用点一个都不用改。
-func iconBadge(_ systemName: String, tint: Color, size: CGFloat = 22, cornerRadius: CGFloat = 6) -> some View {
+func iconBadge(_ systemName: String, tint: Color, size: CGFloat = 20, cornerRadius: CGFloat = 5) -> some View {
     IconBadge(systemName: systemName, tint: tint, size: size, cornerRadius: cornerRadius)
 }
 
@@ -136,14 +141,23 @@ private struct IconBadge: View {
         // 代价说清楚:resizable 会连描边粗细一起缩放,严格说破坏了 SF Symbol 跨图标的
         // 统一线重(Apple 因此不建议对 SF Symbol 用 resizable)。这里换来的是"每个彩色
         // 方块里的图形占位一致",对一组并排的徽标来说更重要。离线渲染逐档比对过。
+        let base = colorScheme == .dark ? SettingsIconTint.dimmedForDarkMode(tint) : tint
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         Image(systemName: systemName)
             .resizable()
             .scaledToFit()
             .frame(width: size * Self.glyphRatio, height: size * Self.glyphRatio)
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(colorScheme == .dark ? SettingsIconTint.dimmedForDarkMode(tint) : tint,
-                        in: RoundedRectangle(cornerRadius: cornerRadius))
+            .background {
+                shape.fill(base)
+                    // 上亮下暗:顶部掺一点白、底部压一点黑,幅度很小,只为让色块有一点体积感。
+                    .overlay(shape.fill(LinearGradient(
+                        colors: [.white.opacity(0.20), .white.opacity(0.02), .black.opacity(0.07)],
+                        startPoint: .top, endPoint: .bottom)))
+                    // 半透明白描边 = 系统图标那圈细高光;0.5pt 在 Retina 下正好一个像素。
+                    .overlay(shape.strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+            }
     }
 }
 
@@ -202,6 +216,10 @@ enum SettingsIconTint {
 enum SettingsSidebarItem: Hashable {
     case tab(SettingsTab)
     case account(AccountDestination)
+    /// 「软件更新」页(2026-09-12,仿系统设置那页,见 14 章决策 #25)。不是 SettingsTab:不进六分类、不记
+    /// 上次停留;侧栏只在有新版本时有一行(「有软件更新可用」)指向它,平时从「关于 › 更新 › 软件更新」进,
+    /// 任何「检查更新」动作也会把窗口翻到这一页。
+    case softwareUpdate
 }
 
 struct SettingsView: View {
@@ -216,6 +234,8 @@ struct SettingsView: View {
     @AppStorage(SettingsTab.lastTabStorageKey) private var lastTabRaw = SettingsTab.lyrics.rawValue
     /// 侧栏「播放器」项的警告徽标数据源(2026-09-03),随设置窗口出现/消失启停。
     @StateObject private var playerHealth = PlayerHealthMonitor()
+    /// 「有软件更新可用」那一行的数据源(2026-09-12):Sparkle 查到、还没装上的版本。
+    @ObservedObject private var updater = SparkleUpdaterManager.shared
     // 默认收起、点击 Section 头才展开,不持久化(每次打开设置窗口都从收起状态开始)。
     // 变量名保留 isAdditionalFeaturesExpanded,没有跟着 Section 标题改成"实验室
     // 功能"——纯内部实现细节,不是用户可见文案。
@@ -266,6 +286,8 @@ struct SettingsView: View {
         switch entry.destination {
         case .tab(let raw):
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
+        case .softwareUpdate:
+            selection = .softwareUpdate
         case .account(let name):
             if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
                 // ListenBrainz / 网页推送 / 推送提醒住在默认折叠的「实验室功能」区,不展开的话
@@ -284,9 +306,24 @@ struct SettingsView: View {
         settingsSearchFocused = false
     }
 
-    /// 平时(不在搜索)的侧栏内容:核心设置六类 + 账号 + 折叠的实验室功能。
+    /// 平时(不在搜索)的侧栏内容。2026-09-12 起按系统「设置」的侧栏重排(用户拍板,对照表见
+    /// Settings/SettingsSidebarChrome.swift 头注):
+    ///   ① 身份区(Last.fm 头像 + 用户名)+ 有新版本时的「有软件更新可用」行;
+    ///   ② 六个分类,分组之间只留空白 —— 原「核心设置」「账号」两个小标题撤掉,系统设置的侧栏没有这种标题;
+    ///   ③ 「实验室功能」改用原生 `Section(isExpanded:)` 折叠(Finder / 邮件侧栏那种悬停露出的 显示/隐藏),
+    ///      标题旁的「?」悬浮提示保留在自定义 header 里。
     @ViewBuilder private var sidebarSections: some View {
-        Section(L10n.t("核心设置")) {
+        Section {
+            LastfmIdentityRow()
+                .tag(SettingsSidebarItem.account(.lastfm))
+            if updater.shownItem != nil {
+                // 点了就是选中「软件更新」页(tag),跟系统设置一样这一行会亮起来。
+                SoftwareUpdateSidebarRow()
+                    .tag(SettingsSidebarItem.softwareUpdate)
+            }
+        }
+
+        Section {
             sidebarLabel(.lyrics)
             sidebarLabel(.player)
             sidebarLabel(.appearance)
@@ -295,53 +332,29 @@ struct SettingsView: View {
             sidebarLabel(.about)
         }
 
-        // 2026-07-29:Last.fm 从下面的折叠区里单独提出来,常驻可见——功能本身
-        // (双向同步收听记录 + 喂两个"听歌报告"推送的数据源)已经相当完整,继续
-        // 跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人低估它的成熟度、
-        // 也发现不了。ListenBrainz/网页推送/推送提醒这三个账号保留原样在下面的
-        // 折叠区,没有改动。
-        Section(L10n.t("账号")) {
-            AccountSidebarRow(destination: .lastfm)
-                .tag(SettingsSidebarItem.account(.lastfm))
-        }
-
-        // 手搭折叠(而不是原生 Section(isExpanded:))是因为那个初始化方法的
-        // Footer 类型定死成 EmptyView,没法在这里放"?"图标+悬浮提示。tooltip
-        // 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
-        // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响
-        // 整个 App 所有 .help() 提示,不是这一处独有的问题。
-        Section {
-            if isAdditionalFeaturesExpanded {
-                // .lastfm 不在这里——它已经单独提到上面常驻可见的"账号" Section,
-                // 这里排除掉避免同一个目的地在侧边栏出现两次。
-                ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
-                    AccountSidebarRow(destination: destination)
-                        .tag(SettingsSidebarItem.account(destination))
-                }
+        // 默认收起、点 header 才展开,不持久化(每次打开设置窗口都从收起状态开始)。
+        // 变量名保留 isAdditionalFeaturesExpanded,没有跟着 Section 标题改成"实验室
+        // 功能"——纯内部实现细节,不是用户可见文案。
+        //
+        // 2026-09-12 之前这里是手搭的折叠(Button + 手动转 chevron),理由写的是"原生
+        // Section(isExpanded:) 放不下 ? 图标"——那说的是 `Section(_ title:isExpanded:)`
+        // 那个便捷初始化;带 `header:` 尾闭包的这个重载 header 是任意 View,? 图标照放。
+        // Last.fm 不在这里:它是顶上的身份区。
+        Section(isExpanded: $isAdditionalFeaturesExpanded) {
+            ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
+                AccountSidebarRow(destination: destination)
+                    .tag(SettingsSidebarItem.account(destination))
             }
         } header: {
-            Button {
-                withAnimation { isAdditionalFeaturesExpanded.toggle() }
-            } label: {
-                // 箭头紧跟标题,不用 Spacer 顶到最右:侧边栏只有 220pt 宽,顶到最右
-                // 会离边缘只剩 3.5pt(比下面那些行的胶囊还往外突出一截)、中间空出
-                // 近 100pt,一个孤零零的箭头吊在那儿(2026-08-12 用户反馈)。跟
-                // Last.fm 那三张卡的折叠表头也是同一个样式:箭头就在标题旁边。
-                HStack(spacing: 4) {
-                    Text(L10n.t("实验室功能"))
-                    Image(systemName: "questionmark.circle")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isAdditionalFeaturesExpanded ? 90 : 0))
-                        .padding(.leading, 1)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
+            // tooltip 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
+            // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响整个 App
+            // 所有 .help() 提示,不是这一处独有的问题。
+            HStack(spacing: 4) {
+                Text(L10n.t("实验室功能"))
+                Image(systemName: "questionmark.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
             .help(L10n.t("实验性 Beta 功能"))
         }
     }
@@ -349,7 +362,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                // 搜索框里有字时整张侧栏换成结果列表(系统设置的做法,Sleeve 也是);清空就回来。
+                // 搜索框里有字时整张侧栏换成结果列表(系统设置就是这么做的);清空就回来。
                 // 分类内容本体在 sidebarSections。
                 if isSearchingSettings {
                     settingsSearchResultsSection
@@ -363,7 +376,8 @@ struct SettingsView: View {
                 SettingsSearchField(text: $settingsSearchText, focused: $settingsSearchFocused,
                                     onSubmit: openFirstSettingsSearchResult)
             }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
+            // 2026-09-12 跟着系统设置的侧栏(约 215~240pt)略放宽:顶上多了身份区,用户名要放得下。
+            .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 240)
             // 去掉 NavigationSplitView 自动塞进工具栏的那颗"隐藏边栏"按钮:这个窗口的
             // 侧边栏就是它唯一的导航方式,收起来之后整扇窗口只剩内容、没有任何切换分类的
             // 入口,是个只会把人卡住的开关。窗口本身也不可缩放(见 .frame 那一处),不存在
@@ -378,6 +392,7 @@ struct SettingsView: View {
                 case .tab(.shortcuts): ShortcutsSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
+                case .softwareUpdate: SoftwareUpdatePage()
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { target in
                         // 2026-08-02 补上——跳转目标如果落在"实验室功能"这个默认折叠的
@@ -442,8 +457,15 @@ struct SettingsView: View {
         // 「实验室功能」区里,记了它下次新建窗口就是上面 onJumpToAccount 注释说的那种"detail 切过去了、
         // 侧栏却高亮不到任何一行"的状态;而且账号页的落点本来就由引导页的信箱管。六个顶层分类都记,
         // 包括「关于」——上次停在低频页下次也落在那里,行为可预测,参考做法同样接受。
-        .onChange(of: selection) { _, item in
+        .onChange(of: selection) { previous, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
+            // 「有软件更新可用」那一行随更新装完 / 跳过 / 已是最新而消失时,List 会把选中清成 nil ——
+            // 页面本身还在,别退成「选择左侧的设置分类」,把选中放回去(此时侧栏没有行亮着,跟账号页
+            // 在折叠区里那种情形一样)。
+            if item == nil, previous == .softwareUpdate {
+                selection = .softwareUpdate
+                return
+            }
             // 选到别的分类了,搜索框的光标就别再闪(2026-09-09 用户实测提出)。
             settingsSearchFocused = false
         }
@@ -452,10 +474,15 @@ struct SettingsView: View {
         .onAppear {
             AuxiliaryWindowActivation.windowDidAppear()
             playerHealth.start()
+            // 侧栏身份区的头像(2026-09-12):行内 .task 在侧栏 List 的行上不触发,从这里拉一次,
+            // 之后由 LastfmAvatarStore 盯着配置变化。
+            LastfmAvatarStore.shared.refreshFromConfig()
         }
         .onDisappear {
             AuxiliaryWindowActivation.windowDidDisappear()
             playerHealth.stop()
+            // 「软件更新」页攥着的 Sparkle 回复(找到了 / 下完待装)随窗口一起放掉,见那边注释。
+            SparkleUpdaterManager.shared.settingsWindowClosed()
         }
     }
 
@@ -464,16 +491,16 @@ struct SettingsView: View {
     //
     // 2026-09-03 唯一的例外:「播放器」有真实的健康状态(自动化权限被拒 / 后台采集服务没在跑,
     // 两条都会让歌词直接停摆),此前只在播放器页可见时才刷新、停在别的页毫无感知。这里在
-    // 标题尾部加一枚橙色警告三角(不是小字,和菜单栏面板 Last.fm 出错的做法一致),悬停看原因;
-    // 判定规则见 Core `PlayerHealth`,平时不亮。用户拍板(借鉴清单 #54)。
+    // 标题尾部加一枚警告徽标(不是小字),悬停看原因;判定规则见 Core `PlayerHealth`,平时不亮。
+    // 用户拍板(借鉴清单 #54)。2026-09-12 起徽标从橙色三角改成系统设置那种红色计数
+    // (SidebarCountBadge,数字 = 警告条数),跟「有软件更新可用 ①」同一套视觉。
     private func sidebarLabel(_ tab: SettingsTab) -> some View {
         Label {
             HStack(spacing: 6) {
                 Text(tab.title)
                 if tab == .player, let warning = playerHealth.warningText {
                     Spacer(minLength: 4)
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                    SidebarCountBadge(count: max(1, playerHealth.warnings.count))
                         .help(warning)
                         .accessibilityLabel(warning)
                 }
@@ -488,6 +515,7 @@ struct SettingsView: View {
         switch selection {
         case .tab(let tab): return tab.title
         case .account(let destination): return destination.title
+        case .softwareUpdate: return L10n.t("软件更新")
         case nil: return L10n.t("设置")
         }
     }
@@ -3004,14 +3032,37 @@ private struct PlayerSettingsTab: View {
             SettingsRawRow {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                     ForEach(PlaybackPlayer.displayOrder) { player in
-                        PlayerChoiceCard(player: player, isSelected: stores.players.contains(player)) {
+                        PlayerChoiceCard(player: player,
+                                         isSelected: stores.players.contains(player),
+                                         isCoveredByAuto: isCoveredByAuto(player)) {
                             toggleSelectedPlayer(player)
                         }
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
+            // 勾着「自动识别」时把话说明白(2026-09-11,用户:「为什么我现在把 qq 音乐这里
+            // 取消勾选了,但是实际上还是可以识别到我现在 qq 音乐里面播放的歌?」)。卡片上
+            // 那圈虚线+角标只说得出"这颗由自动识别接管",说不出"该去取消哪个开关",所以
+            // 这一行是必须的;没勾自动识别时不出现 —— 那时单独勾选就是全部判据,这句话
+            // 反而是噪声。
+            // 2026-09-11 当天用户又说"文案有点复杂了",简化过一轮:砍掉"已开启"(这行本来
+            // 就只在开启时出现)、把重复三次的"识别"收成一次、"不再决定认哪几个"换成"暂不
+            // 生效"。62 字 → 48 字。**不能再砍的是最后半句**("取消勾选它") —— 卡片角标
+            // 已经说得出"这颗被接管了",说不出"该去动哪个开关",那正是这行存在的理由。
+            if stores.players.contains(.auto) {
+                SettingsNote {
+                    Text(L10n.t("「自动识别」开着时会认出所有已知和你信任过的播放器，上面的勾选暂不生效。想只认其中几个，取消勾选它。"))
+                }
+            }
         }
+    }
+
+    /// 这张卡此刻该不该显示成"由自动识别接管":勾着「自动识别」、又没单独勾上这一颗。
+    /// `.auto` 自己永远不算 —— 它就是那个接管者。语义出处见
+    /// `PlayerChoiceCard.isCoveredByAuto`(以及 docs 02「auto 按超集处理」)。
+    private func isCoveredByAuto(_ player: PlaybackPlayer) -> Bool {
+        player != .auto && stores.players.contains(.auto) && !stores.players.contains(player)
     }
 
     /// 2026-09-01 从单选换成多选:点一下切换这个播放器的选中状态,选中的会同时高亮。
@@ -4772,6 +4823,40 @@ private struct GeneralSettingsTab: View {
                 }
             }
 
+            // 封面(2026-09-09 动态封面落地时新起的一张卡)。
+            //
+            // **为什么在「通用」而不在「歌词显示」**:那一页严格按展示面分段(悬浮歌词 /
+            // 灵动岛 / 菜单栏),而这个开关同时管**歌词窗口**那张封面卡和灵动岛那枚小图 ——
+            // 歌词窗口按设计压根不在那一页配置(它是按需打开的窗口、不是常驻展示面)。
+            //
+            // ⚠️ **这张卡的位置在 2026-09-10 由用户拍板挪到了这一页的末尾**(原话:「在通用的
+            // 下面加吧,不分散了;就是把现在这个位置下移即可」)。落地那天它在**页首**,那是
+            // 错的:①「菜单栏与 Dock」是这一页唯一带画面的一张,页首本来是留给它的(理由见
+            // 页首那段注释),被这张卡挤到了第二位;②这一页的副标题「菜单栏图标、语言与启动,
+            // 以及备份搬家」压根没提封面,页首摆一张不在副标题里的卡,读者第一眼就对不上。
+            //
+            // 同一句「不分散了」还定了**将来**的落点:歌词窗口那批候选配置项(字号 / 字体 /
+            // 对齐 / 景深 / 当前行位置 / 动态背景 / 时间行显示…,清单见 07 章)也落这一页、
+            // 跟这张卡为邻 —— **不**给「歌词显示」加第四段(那一页按展示面分段,歌词窗口不是
+            // 常驻展示面)、**也不**在窗口内另开一个入口(设置搜索的目录只映射设置页,窗内
+            // 入口搜不到)。
+            //
+            // 压轴仍然是下面那张「清除所有设置」:本页唯一不可撤销的动作,别把它挤上去。
+            //
+            // 给卡名而不做成无名单行卡:"封面"这个话题以后还会长东西(高清替代的开关、
+            // 要不要采用 Apple 给的官方配色),留一张有名字的卡比以后再拆更省事。
+            SettingsCard {
+                SettingsCardHeader(title: L10n.t("封面"))
+                CardDivider()
+                SettingsRow(
+                    icon: "photo.badge.arrow.down",
+                    title: L10n.t("动态封面"),
+                    help: L10n.t("歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停")
+                ) {
+                    Toggle("", isOn: $settings.motionCoverEnabled)
+                }
+            }
+
             // 单独一张卡,不跟上面的备份/恢复挤在一起 —— 这是本页唯一不可撤销的动作,而它
             // 原来紧贴在「配置文件夹」下面、只隔一条分隔线。「歌词显示」页的「恢复默认文字与
             // 配色」就是这么单独放的,同类动作按同一套处理。
@@ -5295,67 +5380,25 @@ private struct AboutSettingsTab: View {
 
     // MARK: 卡片
 
+    /// 「更新」卡只剩一行入口(2026-09-12):检查 / 下载 / 安装的全部界面搬去了「软件更新」页
+    /// (Settings/SoftwareUpdatePage.swift,仿系统设置那页),这里像系统设置「通用 › 软件更新」那样只留一行
+    /// 带当前状态的入口;副标题仍说「有新版本 X / 上次检查」。
     private var updateCard: some View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("更新"))
             CardDivider()
-            updateControls
-        }
-    }
-
-    @ViewBuilder
-    private var updateControls: some View {
-            // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI 展示(SPUStandardUserDriver
-            // 的标准弹窗),不需要自己维护 loading 状态或者判断结果再手动弹 alert。副标题只补 Sparkle
-            // 弹窗之外的一件事:上次什么时候查过 / 已经查到了什么。
-            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("检查更新"), subtitle: updateSubtitle) {
-                Button(L10n.t("检查更新…")) {
-                    SparkleUpdaterManager.shared.checkForUpdates()
+            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"), subtitle: updateSubtitle) {
+                Button(L10n.t("打开")) {
+                    AppActions.shared.requestSettings(.softwareUpdate)
                 }
             }
-            SettingsSubRow(title: L10n.t("自动检查")) {
-                Toggle("", isOn: Binding(
-                    get: { updater.automaticallyChecksForUpdates },
-                    set: { updater.automaticallyChecksForUpdates = $0 }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-            }
-            SettingsSubRow(title: L10n.t("自动下载并安装")) {
-                Toggle("", isOn: Binding(
-                    get: { updater.automaticallyDownloadsUpdates },
-                    set: { updater.automaticallyDownloadsUpdates = $0 }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                // 关掉自动检查后这一项在 Sparkle 那边根本不会被读到,置灰而不是藏起来
-                // —— 藏起来会让人以为设置项没了。
-                .disabled(!updater.automaticallyChecksForUpdates)
-            }
-            CardDivider()
-            // 「接收测试版更新」(2026-09-05,用户拍板):开了之后 Sparkle 改读版本最高的那个 Release(含预发布)
-            // 自己 tag 目录下的 appcast,预发布 item 带 beta channel;关着的实例连 channel 都不放行。为什么不能
-            // 只靠 channel、为什么正式用户读的 latest 永远不含预发布,见 Core UpdateChannel 头注与 15 章决策 11。
-            // 是这台机器的偏好、不随配置搬家(machineLocalDefaultsKeys)。放成独立一行而不是「检查更新」的从属行:
-            // 它不依赖「自动检查」,手动检查同样受它影响。
-            SettingsRow(
-                icon: "flask",
-                title: L10n.t("测试版更新"),
-                subtitle: L10n.t("预发布版本，可能不稳定")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.receiveBetaUpdates },
-                    set: { settings.receiveBetaUpdates = $0 }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-            }
+        }
     }
 
     /// 「检查更新」那一行的副标题:已经查到新版本就说新版本(文案跟菜单栏面板底栏那一格同一套);
     /// 否则说上次什么时候查过;从没查过就直说。
     private var updateSubtitle: String {
-        if let update = updater.availableUpdate {
+        if let update = updater.shownItem {
             // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
             return String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
                           update.version)

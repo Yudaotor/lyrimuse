@@ -138,15 +138,97 @@ func TestPickMusixmatchTrackRow(t *testing.T) {
 		t.Error("歌手对不上的候选不该被采纳")
 	}
 
-	// 两个字段都是 0(既没时间轴也没词)→ 没有可取的东西,不要。
+	// 两个字段都是 0、而且**没有 instrumental 标记** → 没有可取的东西,不要。
+	// (2026-09-11 补的第三趟只认显式 Instrumental==1,这一条正是它不能放宽到的那一侧:
+	//  "这个源没收录"跟"这首本来就没有词"是两回事。)
 	neither := []musixmatchTrackRow{
 		{TrackID: 4, TrackName: "Storm Warning", ArtistName: artist, HasSubtitles: 0, HasLyrics: 0},
 	}
 	if _, ok := pickMusixmatchTrackRow(neither, artist, title); ok {
-		t.Error("既无时间轴也无词的候选不该被采纳")
+		t.Error("既无时间轴也无词、又没有纯音乐标记的候选不该被采纳")
 	}
 
 	if _, ok := pickMusixmatchTrackRow(nil, artist, title); ok {
 		t.Error("空结果不该返回命中")
+	}
+}
+
+// 第三趟:纯音乐断言(2026-09-11)。
+//
+// 形态取自 2026-09-11 的真实响应——纯音乐曲目在 Musixmatch 上是 has_subtitles=0 且
+// has_lyrics=0,前两趟的闸门按定义会把它们全部筛掉。没有第三趟,enrich.go 那边的
+// musixmatch instrumentalMarker 分支就是死代码。
+func TestPickMusixmatchTrackRowInstrumentalPass(t *testing.T) {
+	const artist, title = "Explosions In The Sky", "Your Hand In Mine"
+
+	// 实测形态:五行候选全是 sub=0 / lyr=0 / instrumental=1。
+	rows := []musixmatchTrackRow{
+		{TrackID: 11, TrackName: title, ArtistName: artist,
+			HasSubtitles: 0, HasLyrics: 0, Instrumental: 1, TrackLength: 497},
+	}
+	got, ok := pickMusixmatchTrackRow(rows, artist, title)
+	if !ok {
+		t.Fatal("源明确标了 instrumental 的行必须能被第三趟认下来")
+	}
+	if !got.instrumental {
+		t.Error("第三趟认下来的必须置 instrumental —— 调用方据此直接返回、不再发任何请求")
+	}
+	if got.hasSubtitles || got.hasRichsync {
+		t.Error("纯音乐行不该带 hasSubtitles / hasRichsync")
+	}
+	if got.durationSecs != 497 {
+		t.Errorf("时长仍要透传:%v", got.durationSecs)
+	}
+
+	// **排在最后不是随口说的**:同一首曲子不同行 instrumental 并不一致(实测
+	// Ludovico Einaudi《Nuvole Bianche》5 行里 3 行 instrumental=1,另有一行 sub=1/lyr=1
+	// 却 instrumental=0 —— 有人给这首钢琴曲传了"歌词")。有真正的正文时以正文为准。
+	mixed := []musixmatchTrackRow{
+		{TrackID: 21, TrackName: title, ArtistName: artist, HasSubtitles: 0, HasLyrics: 0, Instrumental: 1},
+		{TrackID: 22, TrackName: title, ArtistName: artist, HasSubtitles: 1, HasLyrics: 1, Instrumental: 0},
+	}
+	got, ok = pickMusixmatchTrackRow(mixed, artist, title)
+	if !ok || got.trackID != 22 {
+		t.Fatalf("有正文的行必须压过纯音乐标记,得到 ok=%v id=%d", ok, got.trackID)
+	}
+	if got.instrumental {
+		t.Error("被前两趟认下来的行不该置 instrumental —— 那会把一份真歌词报成纯音乐")
+	}
+
+	// 身份闸对第三趟同样有效:歌手对不上的纯音乐行也不要。
+	wrongArtist := []musixmatchTrackRow{
+		{TrackID: 31, TrackName: title, ArtistName: "Sigur Rós", HasSubtitles: 0, HasLyrics: 0, Instrumental: 1},
+	}
+	if _, ok := pickMusixmatchTrackRow(wrongArtist, artist, title); ok {
+		t.Error("第三趟不能绕过身份闸")
+	}
+}
+
+// hasRichsync 闸门(2026-09-11):has_richsync==0 时 track.richsync.get 必然 404,
+// 调用方据此跳过那一趟。跟 hasSubtitles 同一份契约,这里只钉"字段有没有被正确带出来"。
+//
+// 实测依据:2026-09-11 拿 16 首横跨欧美/日/韩/华语/纯音乐的曲目对打,has_richsync 对
+// track.richsync.get 的结果预测 16/16 全中,其中 4 首是 0(25%)。关键的一首是
+// 五月天《倔強》——has_subtitles=1 走主路径,但 has_richsync=0。
+func TestPickMusixmatchTrackRowCarriesHasRichsync(t *testing.T) {
+	const artist, title = "Mayday", "倔強"
+
+	withRich := []musixmatchTrackRow{
+		{TrackID: 41, TrackName: title, ArtistName: artist, HasSubtitles: 1, HasLyrics: 1, HasRichsync: 1},
+	}
+	if got, ok := pickMusixmatchTrackRow(withRich, artist, title); !ok || !got.hasRichsync {
+		t.Errorf("has_richsync=1 要带出来,得到 ok=%v hasRichsync=%v", ok, got.hasRichsync)
+	}
+
+	// 有字幕但没有逐字 —— 就是《倔強》那一档,主路径照走,只是不发 richsync 请求。
+	noRich := []musixmatchTrackRow{
+		{TrackID: 42, TrackName: title, ArtistName: artist, HasSubtitles: 1, HasLyrics: 1, HasRichsync: 0},
+	}
+	got, ok := pickMusixmatchTrackRow(noRich, artist, title)
+	if !ok || !got.hasSubtitles {
+		t.Fatalf("这一档仍要走主路径,得到 ok=%v hasSubtitles=%v", ok, got.hasSubtitles)
+	}
+	if got.hasRichsync {
+		t.Error("has_richsync=0 时不能置 hasRichsync,否则那道闸白加")
 	}
 }

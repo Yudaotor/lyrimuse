@@ -31,8 +31,11 @@ public final class LyricsOffsetStore: ObservableObject {
     // naturalAdvanceCorrection 按曲精确校正,于是 08-20 连值一起清掉了(见 init)。复用同一个
     // 键会把那些为已修好的 bug 调出来的旧值重新激活,反把歌词拖慢;换个新键从零开始。
     private static let playerDefaultsKey = "np:lyricsOffsetsByPlayerJSON"
+    /// 第四层「电台」那份(2026-09-11)。见 radioOffsets 的注释。
+    private static let radioDefaultsKey = "np:lyricsRadioOffsetsJSON"
 
     private var offsets: [String: Int]
+    private var radioOffsets: [String: Int]
 
     private init() {
         // 存量 key 归一化(见 migratedOffsetKeys):trackKey 的形态 2026-08-20 变过一次,
@@ -44,6 +47,8 @@ public final class LyricsOffsetStore: ObservableObject {
         // 没存过就是 0(integer(forKey:) 对缺失键返回 0),正好是"不偏移"。
         globalOffsetMs = UserDefaults.standard.integer(forKey: Self.globalDefaultsKey)
         playerOffsets = Self.loadPlayerOffsets()
+        radioOffsets = Self.loadRadioOffsets()
+        radioOffsetCount = radioOffsets.count
         // 2026-08-18 那一版「按播放器偏移」(np:lyricsPlayerOffsetsJSON)的存量值继续清掉。
         // 它是内部补偿、界面上看不见也重置不了,而它要补的偏差已经被根修(见
         // LocalPlaybackSource.naturalAdvanceCorrection);2026-08-21 重新引入的这一层是**用户
@@ -140,8 +145,105 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 唯一的合成点。调用方(LocalPlaybackSource.applyOffsets)只认它,不要在别处
     /// 自己写 `global + track` —— 多处各加一次就是双倍校正,而那种 bug 只在
     /// "两条路径都跑过"的特定顺序下才露出来。
-    public func effectiveOffset(forKey key: String, bundleID: String? = nil) -> Int {
-        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key)
+    /// - radioKey: 放电台时那首歌在这个台上的 key(见 radioOffsets);空串/nil = 不是电台,这一层按 0 算。
+    public func effectiveOffset(forKey key: String, bundleID: String? = nil, radioKey: String? = nil) -> Int {
+        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key) + radioOffset(forKey: radioKey ?? "")
+    }
+
+    // MARK: - 按「电台 + 曲目」偏移(2026-09-11)
+
+    /// `台标哈希|歌手|歌名|指纹` → 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
+    ///
+    /// # 为什么必须单独一层
+    ///
+    /// 电台上系统只在元数据切换那一刻告诉我们"换歌了",而那一刻**晚于声音真正开始**。实测
+    /// (2026-09-10/11)我们这一侧已经压到几十毫秒(起表时刻改用事件到达时刻,见 RadioTrackClock),
+    /// 剩下的滞后 δ 完全在苹果那一侧,而且:
+    ///
+    ///  - **每首歌不一样** —— 用户实测"同一个电台不同的歌也不太一样",所以钉一个常数没用;
+    ///  - **同一首歌可复现** —— 同一档节目重放两次,边界位置只差 0.50s / 0.71s(kiss me、Touch It),
+    ///    所以"这首歌在这个台上调一次、以后一直对"是成立的;
+    ///  - **系统里量不出来** —— MediaRemote 的 NowPlayingInfo 全部 18 个字段(pyatv 从协议逆出来的)
+    ///    里没有任何一个表示"当前曲目在这条流里的起点";media-control 读的那个 `startTime` 键
+    ///    Music.app 在电台上不填。ShazamKit 那条自动路要 `com.apple.developer.shazamkit` 授权,
+    ///    ad-hoc 签名拿不到(实测报 `Code=202 Missing entitlements` + 401)。
+    ///
+    /// 所以只能靠用户的耳朵校一次。而它**绝不能落进按曲目那一层**:用户实测同一首歌正常播放是准的,
+    /// 把电台上量出来的 δ 套到正常播放会反过来把对的搞错。
+    ///
+    /// # 为什么 key 里带台标哈希
+    ///
+    /// δ 是"这首歌在这档节目里的投递延迟",换个台未必一样。用户 2026-09-11 明确要求"仅适用于
+    /// 这个电台里播放的歌"。扣错一个偏移比不扣更糟(不扣只是照旧慢一点,扣错是往反方向错)。
+    ///
+    /// # 跟按曲目那层是**相加**,不是二选一
+    ///
+    /// 两者成因不同:按曲目那层修的是"这份歌词文件自己的时间轴不准"(换个播放器照样不准),
+    /// 这一层修的是"电台的元数据比声音晚"。同一首歌可能两样都占,所以相加(见 effectiveOffset)。
+    ///
+    /// 零值不落盘,跟另外两层同一个约定 —— 字典里留着的就是"用户真的调过的"。
+    @Published public private(set) var radioOffsetCount: Int
+
+    /// 拼 key。台标哈希或曲目 key 缺一就返回空串 = "这一层不适用",调用方据此跳过。
+    /// 台标哈希里不含 `|`(实测形如 `CgkIBRoF0aDTpxkQBA`),所以四段拼法无歧义。
+    public nonisolated static func radioKey(stationHash: String, trackKey: String) -> String {
+        let station = stationHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !station.isEmpty, !station.contains("|"),
+              !trackKey.replacingOccurrences(of: "|", with: "").isEmpty
+        else { return "" }
+        return "\(station)|\(trackKey)"
+    }
+
+    public func radioOffset(forKey key: String) -> Int {
+        guard !key.isEmpty else { return 0 }
+        return radioOffsets[key] ?? 0
+    }
+
+    /// 在现有值上累加。**不碰 LyricsPinStore** —— 钉住的语义是"这份歌词内容是用户认过的",
+    /// 而这一层调的是钟、不是歌词内容,钉它会让 collector 不再自动更新这首歌的歌词源,
+    /// 那是另一件事的副作用。
+    @discardableResult
+    public func nudgeRadio(by deltaMs: Int, forKey key: String) -> Int {
+        let newValue = radioOffset(forKey: key) + deltaMs
+        setRadioOffset(newValue, forKey: key)
+        return newValue
+    }
+
+    public func setRadioOffset(_ ms: Int, forKey key: String) {
+        guard !key.isEmpty else { return }
+        guard radioOffsets[key] ?? 0 != ms else { return }
+        if ms == 0 {
+            radioOffsets.removeValue(forKey: key)
+        } else {
+            radioOffsets[key] = ms
+        }
+        radioOffsetCount = radioOffsets.count
+        persistRadioOffsets()
+    }
+
+    /// 清掉**全部**电台校准。跟另外三层各自独立 —— 理由同 clearAllTrackOffsets 那段。
+    public func clearAllRadioOffsets() {
+        guard !radioOffsets.isEmpty else { return }
+        radioOffsets = [:]
+        radioOffsetCount = 0
+        persistRadioOffsets()
+    }
+
+    private func persistRadioOffsets() {
+        guard
+            let data = try? JSONEncoder().encode(radioOffsets),
+            let json = String(data: data, encoding: .utf8)
+        else { return }
+        UserDefaults.standard.set(json, forKey: Self.radioDefaultsKey)
+    }
+
+    private static func loadRadioOffsets() -> [String: Int] {
+        guard
+            let json = UserDefaults.standard.string(forKey: radioDefaultsKey),
+            let data = json.data(using: .utf8),
+            let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return [:] }
+        return decoded.filter { $0.value != 0 }
     }
 
     // 统一在这里拼 key,调用方(LocalPlaybackSource)不用各自实现一遍哈希

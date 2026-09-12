@@ -70,6 +70,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 迷你进度条这部分补充内容。稳态(false)本身已经是"歌名+控制+当前歌词"完整可用的
     // 一套,这个状态只影响"要不要在下面多展开一块",不影响稳态内容本身是否显示。
     @Published private(set) var isExpanded: Bool = false
+    /// `isExpanded` 的两个输入(2026-09-11 拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
+    /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
+    /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
+    /// 卡片也不会从光标底下塌回去。alertHold 同时进 updateActualVisibility 的判据:开着「暂停/无播放时隐藏」
+    /// 的机器上,提醒发生的那一刻窗口本来是隐藏的(没有曲目),得把它叫回来、到点再照常隐藏。
+    private var hoverExpanded = false
+    private var alertHold = false
     /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
     /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
     /// 旧值(本项目已实测踩过两次,见下面 isPlayingObserver 处的注释)。
@@ -312,6 +319,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var leftEarObserver: AnyCancellable?
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
+    private var unknownPlayerAlertObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
@@ -410,6 +418,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             PlaybackCoordinator.shared.$isCurrentTrackAdBreak
         ).sink { [weak self] title, artist, isAd in
             self?.hasTrack = !title.isEmpty || !artist.isEmpty || isAd
+        }
+
+        // 「发现新播放器」的主动提醒(2026-09-11,NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
+        // 窗口叫回来,到点收回。同一个 willSet 坑同一个修法:存 sink 参数值。每个实例(含「所有屏幕」的副本)
+        // 各自订阅同一个单例,所以每块屏的灵动岛同时提醒,不用经 NotchMirrorManager 转发。
+        // ⚠️ 是控制器订阅提示,不是提示引用控制器 —— 后者会碰 `.shared`,见文件头那条不变量。
+        unknownPlayerAlertObserver = NotchUnknownPlayerPrompt.shared.$isAlerting.removeDuplicates().sink { [weak self] alerting in
+            self?.setAlertHold(alerting)
         }
 
         // 展开区的两个"要不要留高度"标志(2026-08-21,修"没歌词时展开卡一大片空白")。
@@ -606,11 +622,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 而不是两个延迟各自到期、先展开再收起地闪一下。
         pendingHoverWork?.cancel()
         pendingHoverWork = nil
-        guard expanded != isExpanded else { return }
+        // 比的是 hover 自己那一路的值,不是 isExpanded(2026-09-11 起后者还有提醒这一个输入):提醒撑开
+        // 期间光标进来,这里照样把 hoverExpanded 记成 true —— 到点收提醒时卡片才不会从光标底下塌回去。
+        guard expanded != hoverExpanded else { return }
         let work = DispatchWorkItem { [weak self] in
-            guard let self, expanded != self.isExpanded else { return }
+            guard let self, expanded != self.hoverExpanded else { return }
             self.pendingHoverWork = nil
-            self.isExpanded = expanded
+            let wasExpanded = self.isExpanded
+            self.hoverExpanded = expanded
+            self.refreshExpanded()
             // 不再 recomputeGeometry:窗口尺寸跟展开与否无关了,展开这件事整个发生在
             // SwiftUI 那一侧(NotchWindowRoot 的弹簧动画)。
             // 触觉反馈跟着卡片**真正展开**的这一刻给,不再抢在意图延迟兑现之前
@@ -620,8 +640,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             // 一次反馈)。同时把反馈模式从 .alignment 换成 .generic:前者是给拖拽吸附
             // 设计的短促双击感,压在"只是把鼠标移过去"这种被动 hover 上偏硬(用户反馈
             // "震动太强/太突兀");.generic 是苹果给不涉及精确吸附场景用的中性单击感。
-            // 只在展开时给,收起不给——跟原来的行为一致。
-            if expanded {
+            // 只在展开时给,收起不给——跟原来的行为一致;卡片本来就被提醒撑开着(没有视觉
+            // 动作可对应)时也不给。
+            if expanded && !wasExpanded {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
         }
@@ -629,6 +650,28 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         DispatchQueue.main.asyncAfter(
             deadline: .now() + (expanded ? Self.hoverEnterDelay : Self.hoverExitDelay),
             execute: work)
+    }
+
+    /// `isExpanded` 的唯一写入点:hover 与提醒任一成立就展开。判等再写 —— 它是 @Published,白写一次就是
+    /// 整卡白重估一次。
+    private func refreshExpanded() {
+        let next = hoverExpanded || alertHold
+        if next != isExpanded { isExpanded = next }
+    }
+
+    /// 「发现新播放器」主动提醒的开 / 关(2026-09-11,来自 NotchUnknownPlayerPrompt.isAlerting 的 sink)。
+    /// 开:撑开卡片(hasTrack 为 false 时展开出来的正是空闲面板那一块,视图那侧换成信任提议的变体),窗口若因
+    /// 「暂停/无播放时隐藏」藏着就叫回来(走 updateActualVisibility 的常规出场路,含「从刘海撑开」动画)。
+    /// 关:hover 没停在上面就收回,再按当下播放态重新决定要不要隐藏窗口。
+    private func setAlertHold(_ hold: Bool) {
+        guard hold != alertHold else { return }
+        // 有曲目时不撑开:提议的变体只在"没有曲目"那块空闲面板上画(见 NotchIdlePanelHost),这时候撑开只会露出
+        // 上一首(暂停中)的曲目头部、看不到任何提议 —— 用户只会纳闷"它怎么自己展开了"。系统通知那条路不受影响。
+        // 正常情况下到不了这里:未信任的播放器抢到 Now Playing 焦点时,被采纳的那份快照已经没有曲目。
+        if hold, hasTrack { return }
+        alertHold = hold
+        refreshExpanded()
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 设置里"灵动岛宽度"滑块调用——跟经典悬浮窗的 setWidth(_:) 不是同一套实现:那个
@@ -654,7 +697,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var hideGeneration = 0
 
     private func updateActualVisibility(isPlayingNow: Bool) {
-        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+        // alertHold(2026-09-11):「发现新播放器」提醒期间窗口必须在屏上 —— 那一刻按定义没有曲目、也没在播,
+        // 开着「暂停/无播放时隐藏」的机器上窗口正藏着;下面延迟隐藏那条 stillShow 判据同款。
+        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow || alertHold)
         if shouldShow {
             // 中途又播放了:挂着的延迟隐藏作废;窗口若已在屏上就一次 WindowServer 事务都不发。
             cancelPendingHide()
@@ -707,7 +752,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 // 翻回去(shouldShow 分支 / 立刻隐藏分支),这里不动它。
                 guard generation == self.hideGeneration else { return }
                 let stillShow = self.isVisible
-                    && (!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed)
+                    && (!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed || self.alertHold)
                 if stillShow {
                     // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
                     if self.isVanished { self.isVanished = false }
@@ -930,6 +975,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedShowsQuickActionsObserver = nil
         trackPresenceObserver?.cancel()
         trackPresenceObserver = nil
+        unknownPlayerAlertObserver?.cancel()
+        unknownPlayerAlertObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil

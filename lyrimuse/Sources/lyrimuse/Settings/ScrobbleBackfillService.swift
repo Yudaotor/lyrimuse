@@ -49,12 +49,54 @@ final class ScrobbleBackfillService: ObservableObject {
         var skippedTooOld = 0
         var quarantined = 0
         var abortedReason: String?
+
+        // 手写 init(from:) —— **不能**靠上面那些属性默认值(2026-09-12 修的真 bug:界面报
+        // 「补提交没能完成，请稍后再试」,而 Last.fm 那边 26 条全补进去了、本地回执也写了)。
+        //
+        // Swift 自动合成的解码器对**非可选**属性一律走 decode(_:forKey:),缺 key 直接 throw,
+        // **属性默认值不参与解码**。而 Go 那边 `Items []backfillItem json:"items,omitempty"`
+        // 只在 dry-run 分支填(backfill.go runBackfill:真跑那条路径从来不设 Items),于是
+        // **每一次真跑**的输出都没有 items 键 → keyNotFound → run() 里那句 try? 吞成 nil →
+        // lastRunFailed。也就是说:回填子进程 exit 0、scrobble 发出去了、服务端确认了、
+        // markBackfilled 的回执行也落了盘,只有 App 读不懂结果。
+        //
+        // 它从 da7d5d2(功能上线那次)起就这样 —— Go 的 omitempty 和 Swift 的非可选属性两边
+        // 都一个字没改过。2026-09-12 之前 lastRunFailed 还不存在,nil 表现为一声不吭,所以
+        // 它悄悄活过了每一趟真跑(08-27 / 09-03 / 09-06 / 09-12),那天的「反馈」修复只是把
+        // 它从"静默"变成"报一句失败"。
+        //
+        // 同一个坑 2026-08-25 已经在 LyricsSearchService.Pick 上踩过一次并修过(那边注释写着
+        // 「实测验证过,不是猜的」)—— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
+        // **所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,但哪天谁给 eligible
+        // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
+        // 反推这条要求,两个结构一起守。
+        private enum CodingKeys: String, CodingKey {
+            case items, eligible, accepted, ignored, skippedTooOld, quarantined, abortedReason
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
+            eligible = try c.decodeIfPresent(Int.self, forKey: .eligible) ?? 0
+            accepted = try c.decodeIfPresent(Int.self, forKey: .accepted) ?? 0
+            ignored = try c.decodeIfPresent(Int.self, forKey: .ignored) ?? 0
+            skippedTooOld = try c.decodeIfPresent(Int.self, forKey: .skippedTooOld) ?? 0
+            quarantined = try c.decodeIfPresent(Int.self, forKey: .quarantined) ?? 0
+            abortedReason = try c.decodeIfPresent(String.self, forKey: .abortedReason)
+        }
     }
 
     /// 空跑得到的待补条数(nil = 还没查过)。
     @Published private(set) var pending: Outcome?
     /// 真跑之后的结果,用来显示"已补 N 条"。
     @Published private(set) var lastRun: Outcome?
+    /// 真跑那次**根本没跑成**(子进程起不来/非零退出/输出解不出来)。
+    ///
+    /// 跟 `lastRun == nil` 分开表示,是因为那个值在"还没跑过"和"跑了但失败了"两种情形下
+    /// 都是 nil,而这两种在界面上必须长得不一样:前者什么都不该显示,后者必须说一句 ——
+    /// 否则用户点完按钮只看到转圈停下、界面一切如常(2026-09-12 用户报的「没有反馈」里
+    /// 最糟的一种:失败得毫无声息)。
+    @Published private(set) var lastRunFailed = false
     @Published private(set) var busy = false
 
     private init() {}
@@ -91,9 +133,13 @@ final class ScrobbleBackfillService: ObservableObject {
     func runBackfill() {
         guard !busy else { return }
         busy = true
+        // 上一次的结果先清掉:跑的过程中还挂着"已补 3 条"会让人以为那是这一次的结果。
+        lastRun = nil
+        lastRunFailed = false
         Task { @MainActor in
             let out = await Self.run(dryRun: false)
             lastRun = out
+            lastRunFailed = (out == nil)
             pending = await Self.run(dryRun: true)
             busy = false
             logger.notice("""
@@ -109,13 +155,20 @@ final class ScrobbleBackfillService: ObservableObject {
             if let out, out.accepted > 0 {
                 LastfmStatsService.shared.refreshBaseline(force: true)
                 LastfmStatsService.shared.rewindDailySyncForBackfill()
-                // 2026-09-03 补。Last.fm 把刚收到的 scrobble 并进 recenttracks 要一两秒,紧接着上面
-                // 那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源是 collector 落盘的
-                // feed(每 15 s/60 s 一拉),那次强刷之后就没有别的"马上"了 —— 用户报「刚连上补提交
-                // 之后最近记录没有马上刷新」。collector 侧现在由回填子命令 touch 一个信号文件
-                // (lastfmFeedNudgePath),常驻进程下一拍(≤5 s)就重拉 feed,App 靠 5 s 一次的 mtime
-                // 轮询几秒内拿到;这里再补一发**延迟**强刷兜底,只在 feed 不新鲜(collector 不在、或
-                // 还没写过)时发 —— feed 活着的话新内容会自己到,不重复打 3 个请求。
+                // 2026-09-03 补,2026-09-12 更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
+                // 一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源
+                // 是 collector 落盘的 feed(每 15 s/60 s 一拉)—— 用户报「补提交之后最近记录没刷新」。
+                //
+                // 主路径在 collector 那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
+                // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取 —— **必须带这个
+                // 延迟**,当场拉回来的是旧内容。App 靠 5 s 一次的 mtime 轮询几秒内拿到。
+                //
+                // ⚠️ 下面这发延迟强刷**只兜 collector 不在的情况**,别把它当成主路径:判据
+                // `feedIsFresh` 看的是 feed 里的 fetchedAt 落没落在 180 s 窗口内,而 collector 只要
+                // 活着就每 feedHeartbeat(60 s)重写一次 feed —— 跟内容有没有变、有没有包含刚补
+                // 的那几条毫无关系。也就是说 collector 在跑时这一发**永远不会触发**。2026-09-12
+                // 之前它被当成"兜底 8 秒后会补刷"来依赖,而那时 collector 侧又是当场拉(拉到旧内容
+                // 却把 fetchedAt 刷新了),两头一叠就是用户第三次报同一个问题的成因。
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 8_000_000_000)
                     if !LastfmStatsService.shared.feedIsFresh {
@@ -124,6 +177,12 @@ final class ScrobbleBackfillService: ObservableObject {
                 }
             }
         }
+    }
+
+    /// 用户读完那句结果、把它关掉。下次点「补提交」也会自己清(见 runBackfill)。
+    func dismissLastRun() {
+        lastRun = nil
+        lastRunFailed = false
     }
 
     /// 从本地收听日志里删掉一条(按 uts)。删完顺手刷新清单。
@@ -199,7 +258,15 @@ final class ScrobbleBackfillService: ObservableObject {
                     logger.error("backfill exited \(process.terminationStatus, privacy: .public): \(err, privacy: .public)")
                     return nil
                 }
-                return try? JSONDecoder().decode(Outcome.self, from: data)
+                do {
+                    return try JSONDecoder().decode(Outcome.self, from: data)
+                } catch {
+                    // 不写成 try?:解码失败在此之前是**完全无声**的 —— 子进程 exit 0,上面两条
+                    // error 日志一条都不会出现,界面只报一句「没能完成」,查起来要把"哪三条路径
+                    // 会返回 nil"一条条排除掉才能落到这里。留一行痕,下次十秒钟定位。
+                    logger.error("backfill decode failed dryRun=\(dryRun, privacy: .public): \(String(describing: error), privacy: .public)")
+                    return nil
+                }
             } catch {
                 logger.error("backfill spawn failed: \(String(describing: error), privacy: .public)")
                 return nil

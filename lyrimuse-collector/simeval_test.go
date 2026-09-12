@@ -240,6 +240,78 @@ func linesTermPoints(terms []scoreTerm) int {
 	return 0
 }
 
+// ---------- 已入引擎维度的反向消融(2026-09-10) ----------
+//
+// 上面那些 delta 评的是「还没进引擎的维度值不值得加」。这一组反过来:把**已经在引擎里**
+// 的行数项拿掉、或换个算法,量化「它在多少首歌上决定了冠军、决定得对不对」。
+//
+// 起因是用户问「行数作为加分依据有必要吗」。三条线索:①09 章打分表里每一项都写了理由,
+// 只有行数那一格是空的;②全库 4002 首有决策留痕的歌里,去掉它有 7.1% 换冠军,而其中 87%
+// 的翻盘对手唯一更强的项是 duration(真覆盖度);③它量到的其实是断行约定和头部元信息的
+// 行数,不是完整度 —— Gabe《弹错》酷狗 108 行胜网易云 54 行,多出来的是 10 行
+// `[id:]/[hash:]/[sign:]` 之类的头,加上同一句被逐字断点切成两行(「轻轻敲着」/「黑键和
+// 白键」 vs 「轻轻敲着黑键和白键」),而 netease 在 duration 上是真的更好(243 vs 221)。
+//
+// 量尺照旧(contentMajority → durationVerdict),**不构成自证**:内容多数派是字符 3-gram
+// 集合的 Jaccard,`lyricGram3Set` 的头注就写着它"对各源的行切分差异鲁棒",跟行数项量的
+// 东西正交。
+
+// contentLineCount 数"真的在唱的行"。口径跟 lyricConsensusBody 逐条对齐(元信息标签行 /
+// 空行 / 只有演唱者标记的行 / 职员表行都不算),区别只是它数行、那边拼正文 —— 两边必须
+// 同口径,否则"按内容行数打分"这个反事实测的就不是内容行。
+func contentLineCount(lyrics string) int {
+	speakers := lyricSpeakerLabels(lyrics)
+	n := 0
+	for _, line := range splitLyricLines(lyrics) {
+		if isLRCMetaTagLine(line) {
+			continue
+		}
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
+		if text == "" {
+			continue
+		}
+		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
+			if rest == "" {
+				continue
+			}
+			n++
+			continue
+		}
+		if isCreditLine(text) {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+// deltaLinesCap:行数项改成 min(原始行数, cap)。cap 之上一律等分 = 该项退化成常数,
+// 只在"某个候选明显残缺"时才起作用。
+func deltaLinesCap(cap int) func(tr *evalTrack, i int) int {
+	return func(tr *evalTrack, i int) int {
+		n := linesTermPoints(tr.cands[i].v2Terms)
+		if n > cap {
+			return cap - n
+		}
+		return 0
+	}
+}
+
+// deltaLinesContentOnly:行数项改成只数正文行(可再叠一层 cap,cap<=0 表示不封顶)。
+func deltaLinesContentOnly(cap int) func(tr *evalTrack, i int) int {
+	return func(tr *evalTrack, i int) int {
+		n := linesTermPoints(tr.cands[i].v2Terms)
+		m := contentLineCount(tr.cands[i].c.lyrics)
+		if m > 200 {
+			m = 200 // 引擎同款封顶
+		}
+		if cap > 0 && m > cap {
+			m = cap
+		}
+		return m - n
+	}
+}
+
 // ---------- 报告结构 ----------
 
 type champSide struct {
@@ -274,10 +346,35 @@ type simevalReport struct {
 	BaselineMismatchExamples []string              `json:"baseline_mismatch_examples"`
 	PerDimension             map[string]*dimReport `json:"per_dimension"`
 	JointAblation            map[string]*dimReport `json:"joint_ablation"`
-	ManualTracksInSample     []string              `json:"manual_tracks_in_sample"`
-	Assumptions              []string              `json:"assumptions"`
-	NTracks                  int                   `json:"n_tracks"`
-	NCandidates              int                   `json:"n_candidates"`
+	InEngineAblation         map[string]*dimReport `json:"in_engine_ablation"`
+	// YardstickLiveness:三把量尺在**本轮样本**上的取值分布。存在的理由跟 Assumptions
+	// 那段同源——全维度 improve=0 regress=0 时有两种完全不同的解释:「维度确实不改变
+	// 对错」和「量尺在这批样本上根本判不出对错」,不把分布打出来就分不开这两件事,
+	// 而后者会让整份报告变成一句空话。2026-09-10 加(行数项消融时撞上全 neutral)。
+	YardstickLiveness map[string]int `json:"yardstick_liveness"`
+	// LinesFlipPairs:行数项消融翻盘时,那两条候选**到底差在哪**。三把量尺只有
+	// right/wrong/fit/mismatch 这种粗档,全 right→right 时答不出"是不是其实一份更完整"。
+	// 这里逐对量正文规模:原始行数 / 正文行数 / 归一化正文字符数 / 两份正文的 3-gram
+	// Jaccard。复用包内真 helper(lyricConsensusBody / lyricGram3Set / gramJaccard /
+	// contentLineCount),不另写一套归一化。2026-09-10 加。
+	LinesFlipPairs       []linesFlipPair `json:"lines_flip_pairs"`
+	ManualTracksInSample []string        `json:"manual_tracks_in_sample"`
+	Assumptions          []string        `json:"assumptions"`
+	NTracks              int             `json:"n_tracks"`
+	NCandidates          int             `json:"n_candidates"`
+}
+
+// linesFlipPair 见 simevalReport.LinesFlipPairs。A=行数项在场时的冠军,B=去掉它之后的冠军。
+type linesFlipPair struct {
+	Track         string  `json:"track"`
+	Pair          string  `json:"pair"`
+	ARawLines     int     `json:"a_raw_lines"`
+	BRawLines     int     `json:"b_raw_lines"`
+	AContentLines int     `json:"a_content_lines"`
+	BContentLines int     `json:"b_content_lines"`
+	ABodyRunes    int     `json:"a_body_runes"`
+	BBodyRunes    int     `json:"b_body_runes"`
+	Jaccard       float64 `json:"jaccard"`
 }
 
 // ---------- 主测试 ----------
@@ -408,7 +505,7 @@ func TestSimEval(t *testing.T) {
 		for i, rc := range run.Result.Candidates {
 			nCands++
 			ec := &evalCand{raw: rc, c: batch[i], corro: corro[rc.Source]}
-			ec.v2Score, ec.v2Terms = scoreLyricCandidateDetailed(tr.la, tr.lt, tr.lal, tr.dur, batch[i], ec.corro, peers[rc.Source])
+			ec.v2Score, ec.v2Terms = scoreLyricCandidateDetailed(tr.la, tr.lt, tr.lal, tr.dur, batch[i], ec.corro, len(peers[rc.Source]))
 			for _, tm := range ec.v2Terms {
 				ec.rawSum += tm.Points
 			}
@@ -584,6 +681,8 @@ func TestSimEval(t *testing.T) {
 		BaselineMismatchExamples: mismatchExamples,
 		PerDimension:             map[string]*dimReport{},
 		JointAblation:            map[string]*dimReport{},
+		InEngineAblation:         map[string]*dimReport{},
+		YardstickLiveness:        map[string]int{},
 		NTracks:                  len(tracks),
 		NCandidates:              nCands,
 		Assumptions: []string{
@@ -604,9 +703,90 @@ func TestSimEval(t *testing.T) {
 	}
 	sort.Strings(report.ManualTracksInSample)
 
+	// 量尺活性统计(见 YardstickLiveness 字段注释)
+	for _, tr := range tracks {
+		if tr.champIdx < 0 {
+			continue
+		}
+		report.YardstickLiveness["tracks"]++
+		anyWrong, anyNotFit := false, false
+		for _, i := range tr.valid {
+			ec := tr.cands[i]
+			report.YardstickLiveness["cand:content="+ec.contentV]++
+			report.YardstickLiveness["cand:dur="+ec.durV]++
+			if ec.contentV == "wrong" {
+				anyWrong = true
+			}
+			if ec.durV != "fit" {
+				anyNotFit = true
+			}
+		}
+		if anyWrong {
+			report.YardstickLiveness["tracks:有内容判错的候选"]++
+		}
+		if anyNotFit {
+			report.YardstickLiveness["tracks:有时长不吻合的候选"]++
+		}
+		if len(tr.valid) >= 2 {
+			report.YardstickLiveness["tracks:候选>=2"]++
+		}
+	}
+
 	for _, d := range dims {
 		rep := runAblation(tracks, d.name, d.fn)
 		report.PerDimension[d.name] = rep
+	}
+
+	// 4b. 已入引擎维度的反向消融(见上面「已入引擎维度的反向消融」那段)
+	inEngine := []struct {
+		name string
+		fn   func(tr *evalTrack, i int) int
+	}{
+		{"lines:remove", func(tr *evalTrack, i int) int { return -linesTermPoints(tr.cands[i].v2Terms) }},
+		{"lines:cap30", deltaLinesCap(30)},
+		{"lines:cap40", deltaLinesCap(40)},
+		{"lines:cap60", deltaLinesCap(60)},
+		{"lines:contentOnly", deltaLinesContentOnly(0)},
+		{"lines:contentOnly+cap60", deltaLinesContentOnly(60)},
+	}
+	for _, d := range inEngine {
+		report.InEngineAblation[d.name] = runAblation(tracks, d.name, d.fn)
+	}
+	// 逐对量"翻盘的那两条候选差在哪"(见 LinesFlipPairs 字段注释)
+	for _, tr := range tracks {
+		if tr.champIdx < 0 {
+			continue
+		}
+		nb, nbs := -1, 0
+		for _, i := range tr.valid {
+			v := tr.cands[i].rawSum - linesTermPoints(tr.cands[i].v2Terms)
+			if v < 1 {
+				v = 1
+			}
+			if nb < 0 || v > nbs {
+				nb, nbs = i, v
+			}
+		}
+		if nb < 0 || nb == tr.champIdx {
+			continue
+		}
+		a, b := tr.cands[tr.champIdx], tr.cands[nb]
+		ab, bb := []rune(lyricConsensusBody(a.c.lyrics)), []rune(lyricConsensusBody(b.c.lyrics))
+		j := 0.0
+		if a.grams != nil && b.grams != nil {
+			j = gramJaccard(a.grams, b.grams)
+		}
+		report.LinesFlipPairs = append(report.LinesFlipPairs, linesFlipPair{
+			Track:         tr.key,
+			Pair:          a.c.source + "→" + b.c.source,
+			ARawLines:     linesTermPoints(a.v2Terms),
+			BRawLines:     linesTermPoints(b.v2Terms),
+			AContentLines: contentLineCount(a.c.lyrics),
+			BContentLines: contentLineCount(b.c.lyrics),
+			ABodyRunes:    len(ab),
+			BBodyRunes:    len(bb),
+			Jaccard:       j,
+		})
 	}
 
 	// 5. rank1+rank5 联合消融(catalog methodology 要求:③档放宽由 h2 补枪,须联合验证)
@@ -625,8 +805,13 @@ func TestSimEval(t *testing.T) {
 		t.Fatalf("写报告 %s: %v", outPath, err)
 	}
 	t.Logf("报告已写入 %s", outPath)
+	t.Logf("量尺活性: %v", report.YardstickLiveness)
 	for _, d := range dims {
 		r := report.PerDimension[d.name]
+		t.Logf("%-32s flips=%d improve=%d regress=%d neutral=%d", d.name, r.NFlips, r.NImprove, r.NRegress, r.NNeutral)
+	}
+	for _, d := range inEngine {
+		r := report.InEngineAblation[d.name]
 		t.Logf("%-32s flips=%d improve=%d regress=%d neutral=%d", d.name, r.NFlips, r.NImprove, r.NRegress, r.NNeutral)
 	}
 	jr := report.JointAblation["durationAsymmetry+lrcStructureHealth"]

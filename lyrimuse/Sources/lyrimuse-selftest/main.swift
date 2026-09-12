@@ -53,6 +53,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "update-channel", summary: "更新频道:版本号 / 构建号(与 build-version.sh 交叉校验)/ Release 列表 / 测试版该读哪份 appcast", run: runUpdateChannelTests),
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)", run: runSettingsInteractionTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
+    TestGroup(name: "onboarding", summary: "首启引导:最后一页那阵撒花的几何(两头都落在画面外 / 同 seed 同一场雪)", run: runOnboardingTests),
     TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
 ]

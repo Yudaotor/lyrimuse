@@ -240,7 +240,8 @@ struct SettingsSearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField(L10n.t("搜索设置"), text: $text)
+            // 占位词 2026-09-12 从「搜索设置」缩成「搜索」,跟系统设置一致 —— 框就在设置窗口里,"设置"两字是废话。
+            TextField(L10n.t("搜索"), text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused(focused)
@@ -265,12 +266,13 @@ struct SettingsSearchField: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(height: 28)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.quaternary.opacity(0.7)))
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        // 尺寸跟系统设置的搜索框取齐(2026-09-12):26pt 高、圆角 8。
+        .frame(height: 26)
+        // 材质走设计系统的入口(液态玻璃 API 只准出现在 SettingsDesignSystem,contracts 组守着)。
+        .settingsSearchFieldBackground()
         .padding(.horizontal, 10)
         .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.bottom, 6)
         .background {
             // ⌘F 的落点。设置窗口是 accessory App 的 Settings scene,没有「编辑 → 查找」菜单可挂,
             // 用一个不可见的按钮接快捷键。

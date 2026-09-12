@@ -301,6 +301,120 @@ func runPlayerIdentityTests() {
         expectEqual(P.showsAdBadge(verdict: nil), false,
                     "广告标签: 判定**缺失**时不点亮 —— 探针超时不能让真歌被贴上「广告中」(与 gate 的 fail-closed 方向相反)")
 
+        // ⓪-b 再探间隔按判定分档(2026-09-08,用户报「有视频的歌识别错了,变成广告了」)。
+        //    MV 的前贴片广告跟正片共用同一份 MediaSession 元数据 —— 同一个 key 下判定会先 ad 后
+        //    song,"按曲目身份缓存 60 秒是安全的"这条前提对 MV 不成立(collector 日志三轮
+        //    rejected 之后整整 60 秒才 now playing)。歌仍 60 秒不动;广告 5 秒一探。
+        //    可读有效期(cachedReading)仍是 60 秒,窄窗里读到旧的 ad 判定而不是 nil ——
+        //    nil 会让 gate fail-closed 把快照整条丢掉,广告中途 UI 塌成"没有在播放"。
+        expectEqual(P.refreshInterval(for: .ad), P.adRefreshInterval, "再探间隔: 判定是广告 → 按广告档")
+        expectEqual(P.adRefreshInterval <= 5, true, "再探间隔: 广告档 ≤ 5 秒(广告只有 5～30 秒,前贴片一过要尽快翻回来)")
+        expectEqual(P.refreshInterval(for: .song), P.songRefreshInterval, "再探间隔: 判定是歌 → 按歌档")
+        expectEqual(P.refreshInterval(for: .ad) < P.refreshInterval(for: .song), true, "再探间隔: 广告档必须比歌档短")
+
+        // ⓪-b2 **核心不变量:每一档的再探间隔都必须严格小于可读有效期**(2026-09-11)。
+        //    相等就等于没有重叠窗 —— 判定过期那一拍必然同时满足「cachedReading 刚过期返回 nil」
+        //    +「这一拍才开始异步重探、结果拿不到」,于是 gate fail-closed 把快照整条丢掉,
+        //    三个展示面一起塌成"没有在播放"。上面那段注释("窄窗里读到旧判定而不是 nil")
+        //    2026-09-08 写下时对广告档成立、对歌档**根本没有窄窗**(歌档当时就是 verdictMaxAge
+        //    本身,两个 60),这条断言就是把那句话对**两档**都变成硬约束。
+        //    真机日志坐实(Safari 播 YT Music,音樂頑童 - teachme,全程正常播放):
+        //    snapshot failed 出现在 15:57:45 / 15:58:17 / 15:59:19 / 16:00:20 / 16:01:22 /
+        //    16:02:24 —— 间隔 60.2 / 62.1 / 62.2 / 62.2 秒 = 60s 可读期 + 一个 2s 轮询拍。
+        for verdict in [P.Verdict.ad, P.Verdict.song] {
+            expectEqual(P.refreshInterval(for: verdict) < P.verdictMaxAge, true,
+                        "再探间隔必须**严格**小于可读期,否则判定过期那一拍必然 fail-closed → UI 塌")
+        }
+        expectEqual(P.verdictMaxAge - P.songRefreshInterval >= 10, true,
+                    "歌档重叠窗 ≥ 10 秒:一次探测往返实测 ~187ms,留够时间让它落地续期")
+        //    同一天在 SpotifyWebAdProbe 上修了同构的一份(它此前直接拿 verdictMaxAge 当
+        //    kickIfNeeded 的跳过条件)。它不分档 —— 网页版广告是独立的 now-playing 条目,
+        //    判定翻转必然伴随 key 变化,没有 MV 前贴片那种同 key 翻转。
+        expectEqual(SpotifyWebAdProbe.refreshInterval < SpotifyWebAdProbe.verdictMaxAge, true,
+                    "Spotify 网页广告探针: 再探间隔同样必须严格小于可读期(同构缺陷,同日一起修)")
+
+        // ⓪-c 「广告中」标志的状态机(LocalPlaybackSource.nextAdBreakState,同日从 apply() 收出来)。
+        //    同曲棘轮原来只往 true 走(Spotify 广告字段会闪变),MV 前贴片放完页面判定翻成 song
+        //    却回不来 —— 整首 MV 挂着「广告中」。现在页面**明确**说是歌才回落;nil 不动。
+        typealias S = LocalPlaybackSource
+        expectEqual(S.nextAdBreakState(previous: false, isNewTrack: true, adByFields: true, pageVerdict: .ad), true,
+                    "广告状态机: 换曲那一拍按当下判定定初值(广告)")
+        expectEqual(S.nextAdBreakState(previous: true, isNewTrack: true, adByFields: false, pageVerdict: nil), false,
+                    "广告状态机: 换曲那一拍按当下判定定初值(歌),上一首的广告态不带过来")
+        expectEqual(S.nextAdBreakState(previous: false, isNewTrack: false, adByFields: true, pageVerdict: .ad), true,
+                    "广告状态机: 同曲期间判成广告 → 往 true 棘轮")
+        expectEqual(S.nextAdBreakState(previous: true, isNewTrack: false, adByFields: false, pageVerdict: .song), false,
+                    "广告状态机: MV 前贴片放完、页面明确说是歌 → 回落成 false(用户报的那个 bug)")
+        expectEqual(S.nextAdBreakState(previous: true, isNewTrack: false, adByFields: false, pageVerdict: nil), true,
+                    "广告状态机: 同曲期间判定缺失(探针超时)→ 保持,不许把已判定的广告抹掉")
+        expectEqual(S.nextAdBreakState(previous: false, isNewTrack: false, adByFields: false, pageVerdict: nil), false,
+                    "广告状态机: 同曲期间判定缺失 → 保持,也不许把歌变成广告")
+        expectEqual(S.nextAdBreakState(previous: true, isNewTrack: false, adByFields: false, pageVerdict: nil), true,
+                    "广告状态机: Spotify(pageVerdict 恒 nil)的 AppleScript 复核置的 true 不会被抹掉")
+
+        // ⓪-d "这条是不是广告"的字段/页面判据(LocalPlaybackSource.adBreakByFields,2026-09-08)。
+        //    真凶:Safari / Arc 同时配对了 spotifyWeb 和 youtubeMusic,原来 `isSpotify` 只看"配对过
+        //    Spotify 网页版"就把原生那套"album 空即广告"套到了 YT Music 上 —— MV 常常不报专辑名,
+        //    整首被标成「广告中」(王子《Why You Wanna Treat Me So Bad?》album 空 → 广告;同专辑带
+        //    专辑名的《Sexy Dancer》正常)。网页版现在只认 SpotifyWebAdProbe 的正向证据。
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "Why You Wanna Treat Me So Bad?", artist: "王子",
+                                      album: "", youTubeMusicVerdict: .song, spotifyWebVerdict: nil), false,
+                    "广告判据: 配对了 Spotify 网页版的浏览器里播 YT Music MV(album 空、探针判歌)→ 不是广告(用户报的 bug)")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "Why You Wanna Treat Me So Bad?", artist: "王子",
+                                      album: "", youTubeMusicVerdict: nil, spotifyWebVerdict: nil), false,
+                    "广告判据: 浏览器播放、两个探针都没判定 → 不是广告(拿不准不贴标签)")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "Liese 全新登場", artist: "KAO Hong Kong",
+                                      album: "", youTubeMusicVerdict: .ad, spotifyWebVerdict: nil), true,
+                    "广告判据: YT Music 探针判广告 → 广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "广告", artist: "", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: .ad), true,
+                    "广告判据: Spotify 网页版广告(artist 空 + 页面正向证据)→ 广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "广告", artist: "", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), false,
+                    "广告判据: Spotify 网页版形状像广告但页面还没判定 → 不贴标签(与 MediaControlClient 那道闸同口径)")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "三年二班", artist: "周杰伦", album: "葉惠美",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: .song), false,
+                    "广告判据: Spotify 网页版探针判歌 → 不是广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "—", artist: "", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), true,
+                    "广告判据: 原生 Spotify 的字段启发式原样保留(标题「—」)")
+        expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "Now Streaming on Hulu.", artist: "Spotify", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), true,
+                    "广告判据: 原生 Spotify album 空 → 广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "七里香", artist: "周杰伦", album: "七里香",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), false,
+                    "广告判据: 原生 Spotify 字段齐全 → 不是广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "某播客", artist: "某主播", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), false,
+                    "广告判据: 其它播放器 album 空不算广告")
+
+        // ⓪-e 界面口径(`badgeVerdict` / `cachedBadgeVerdict`,2026-09-08,用户报 Safari 播 YT Music 一首真歌
+        //    《It's Gonna Be Lonely》整首「广告中」、歌词却正常)。换歌那两三秒页面 document.title 是裸的
+        //    「YouTube Music」(18:07:19 抓到的边界样本:上一首刚结束、<video> 停在 0.0),而 YT Music 首次发布
+        //    元数据常常不带 album、会被 MediaControlClient 那道闸踢一次探针 —— 弱 ad 就缓存到了下一首的 key 下,
+        //    下一拍换曲按当下判定定初值。所以**贴标签**只认强信号(ad-showing / 徽章),裸标题单独命中 = 拿不准
+        //    (nil);gate 那一路不变(拿不准就不采纳这一轮,下一轮自愈,collector 同款)。
+        expectEqual(P.badgeVerdict(P.parse("1|1|1|")), .ad, "广告标签口径: 真广告(三条全中)→ 广告")
+        expectEqual(P.badgeVerdict(P.parse("1|0|0|")), .ad, "广告标签口径: 只有 ad-showing → 强信号,广告")
+        expectEqual(P.badgeVerdict(P.parse("0|1|0|")), .ad, "广告标签口径: 只有广告徽章 → 强信号,广告")
+        expectEqual(P.badgeVerdict(P.parse("0|0|1|")), nil,
+                    "广告标签口径: **只有裸标题** → 拿不准(nil),不点亮「广告中」(用户报的 bug:换歌边界的裸标题被缓存到下一首)")
+        expectEqual(P.badgeVerdict(P.parse("0|0|0||Prince")), .song, "广告标签口径: 歌 → 歌(能解开棘轮)")
+        expectEqual(P.badgeVerdict(nil), nil, "广告标签口径: 还没探到 → nil")
+        expectEqual(P.parse("0|0|1|")?.verdict, .ad, "广告闸口径: 裸标题单独命中仍是广告(gate / collector 同款,不变)")
+        expectEqual(P.parse("0|0|1|")?.strongAd, false, "读数强弱: 裸标题单独命中 → 弱")
+        expectEqual(P.parse("1|0|1|")?.strongAd, true, "读数强弱: ad-showing + 裸标题 → 强")
+        expectEqual(P.parse("0|1|1|")?.strongAd, true, "读数强弱: 徽章 + 裸标题 → 强")
+        expectEqual(P.parse("0|0|0|")?.strongAd, false, "读数强弱: 歌不谈强弱,恒 false")
+        expectEqual(P.Reading(verdict: .song, strongAd: true, album: "").strongAd, false,
+                    "读数强弱: 构造时歌 + strong 会被归一成 false,不存在\"强信号的歌\"这种状态")
+        // 状态机吃的是 badge 口径:换曲那一拍读到弱 ad(→ nil)不是广告;同曲期间弱 ad 也只是「保持」。
+        expectEqual(S.nextAdBreakState(previous: false, isNewTrack: true, adByFields: false, pageVerdict: nil), false,
+                    "广告状态机: 换曲那一拍只有裸标题(badge 口径 nil)→ 不是广告(用户报的 bug)")
+        expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "It's Gonna Be Lonely", artist: "Prince", album: "Prince",
+                                      youTubeMusicVerdict: P.badgeVerdict(P.parse("0|0|1|")), spotifyWebVerdict: nil), false,
+                    "广告判据: 用户那首的原样输入 + 边界弱 ad → 不是广告")
+
         // ① 判定表。2026-09-02 成对采样的真实读数:广告期间三个标志同时命中(22/22 连续样本、
         //    横跨两条不同广告),真歌期间三条全灭。
         expectEqual(P.parse("1|1|1")?.verdict, .ad, "广告判据: 真实广告样本(三条全中)判成广告")
@@ -325,24 +439,45 @@ func runPlayerIdentityTests() {
         // 起因是用户报「YouTube Music 播一张专辑时,第一首歌不上送专辑名」。实测坐实那是
         // YT Music 自己的疏漏(队列第一首的 MediaSession 里 album 恒空,页面 byline 上却有),
         // 详见 YouTubeMusicAdProbe.albumPatch 的注释和那张四行实测表。
-        expectEqual(P.parse("0|0|0|Already Gone")?.album, "Already Gone",
-                    "专辑补齐: 第四段就是页面上读到的专辑名")
-        expectEqual(P.parse("0|0|0|Already Gone")?.verdict, .song,
+        expectEqual(P.parse("0|0|0||Already Gone")?.album, "Already Gone",
+                    "专辑补齐: 最后一段就是页面上读到的专辑名")
+        expectEqual(P.parse("0|0|0||Already Gone")?.verdict, .song,
                     "专辑补齐: 带专辑名不影响前三段的判定")
-        expectEqual(P.parse("0|0|0|")?.album, "", "专辑补齐: 页面上没读到 → 空串,不是解析失败")
+        expectEqual(P.parse("0|0|0||")?.album, "", "专辑补齐: 页面上没读到 → 空串,不是解析失败")
         expectEqual(P.parse("0|0|0")?.album, "", "专辑补齐: 只有三段(旧形状)也照样解得出,专辑为空")
-        // ⚠️ 专辑名是**任意文本**,可以自带分隔符。`maxSplits: 3` 保证第四段原样保留 ——
+        // ⚠️ 专辑名是**任意文本**,可以自带分隔符。`maxSplits: 4` 保证最后一段原样保留 ——
         // 用普通 split 的话这条会退化成"形状不对"而整条读数被丢掉(连带丢掉广告判定)。
-        expectEqual(P.parse("0|0|0|A|B")?.album, "A|B", "专辑补齐: 专辑名里自带 | 时原样保留")
-        expectEqual(P.parse("1|0|0|0")?.album, "0",
-                    "专辑补齐: 第四段是文本不是标志位,\"0\" 是一个合法的专辑名")
-        expectEqual(P.parse("0|0|0|  Already Gone  ")?.album, "Already Gone",
+        // ⚠️ 这条同时是"为什么 parse 不给 4 段旧形状留兼容分支"的证据(2026-09-09):
+        // 旧形状 `0|0|0|A|B` 切出来也是 5 段、跟新形状逐字同形,兼容分支只会把 A 当成计数。
+        expectEqual(P.parse("0|0|0||A|B")?.album, "A|B", "专辑补齐: 专辑名里自带 | 时原样保留")
+        expectEqual(P.parse("1|0|0||0")?.album, "0",
+                    "专辑补齐: 最后一段是文本不是标志位,\"0\" 是一个合法的专辑名")
+        expectEqual(P.parse("0|0|0||  Already Gone  ")?.album, "Already Gone",
                     "专辑补齐: 两端空白削掉")
-        expectEqual(P.parse("0|0|0|Already\nGone")?.album, "Already Gone",
+        expectEqual(P.parse("0|0|0||Already\nGone")?.album, "Already Gone",
                     "专辑补齐: 中间的换行压成空格(osascript 输出按行读,混进换行会很难查)")
 
+        // 广告徽章上的「第几条 / 共几条」(2026-09-09,第四段)。
+        expectEqual(P.parse("1|1|0|1/2|")?.adSlot, .init(index: 1, total: 2), "广告计数: 1/2 解得出")
+        expectEqual(P.parse("1|1|0|2/2|")?.adSlot, .init(index: 2, total: 2), "广告计数: 翻页到 2/2")
+        expectEqual(P.parse("1|1|0||")?.adSlot, nil, "广告计数: 徽章没有计数(只播一条 / 还没渲染)→ 没有,不编")
+        expectEqual(P.parse("1|1|0|abc|")?.adSlot, nil, "广告计数: 形状不对 → 当没有")
+        // ⚠️ 计数形状不对**不能**把判定连坐掉 —— 前三段是判定(fail-closed),计数只是装饰。
+        expectEqual(P.parse("1|1|0|abc|")?.verdict, .ad, "广告计数: 计数坏了,广告判定照常成立")
+        expectEqual(P.parse("1|1|0|abc|某专辑")?.album, "某专辑", "广告计数: 计数坏了,专辑名照常解")
+        expectEqual(P.parse("1|1|0|0/2|")?.adSlot, nil, "广告计数: 序号从 1 起,0 不合法")
+        expectEqual(P.parse("1|1|0|3/2|")?.adSlot, nil, "广告计数: 序号不能大于总数")
+        expectEqual(P.parse("1|1|0|1/99|")?.adSlot, nil,
+                    "广告计数: 总数超上限当抓错了元素(一次插播不会连放 99 条)")
+        // JS 侧那两步(先剔时间、再抓「整数+非数字+整数」)是语言无关的,这里用**归一后**的
+        // 形状钉住三种真实徽章走完全程会得到什么 —— JS 归一本身在下面 probeJS 那组守卫里钉。
+        expectEqual(P.parse("1|1|0|1/2|")?.adSlot?.total, 2, "广告计数(中文「赞助商广告 1/2 ·」)")
+        expectEqual(P.parse("1|1|0|1/2|")?.adSlot?.index, 1, "广告计数(英文 \"Ad 1 of 2\" 归一后同形)")
+        expectEqual(P.parse("1|1|0|2/1|")?.adSlot, nil,
+                    "广告计数: 总数在前的写法(日韩「2件中1件目」)解成 2/1 → 被挡掉,宁缺毋错")
+
         // ①-c 补不补、补成什么(纯函数,三条同时成立才补)。
-        let song = P.Reading(verdict: .song, album: "Already Gone")
+        let song = P.Reading(verdict: .song, strongAd: false, album: "Already Gone")
         expectEqual(P.albumPatch(reported: "", reading: song), "Already Gone",
                     "专辑补齐: 上游报空 + 判定是歌 + 探针有值 → 补上")
         expectEqual(P.albumPatch(reported: nil, reading: song), "Already Gone",
@@ -355,10 +490,10 @@ func runPlayerIdentityTests() {
                     "专辑补齐: 上游已经有专辑名 → 一个字都不动")
         // ⚠️ 广告不补:广告没有专辑,而广告期间页面 byline 读到的多半是上一首歌的残留,
         // 补上去等于给广告安一个别人的专辑名。
-        expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .ad, album: "Already Gone")),
+        expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .ad, strongAd: true, album: "Already Gone")),
                     nil, "专辑补齐: 判定是广告 → 不补(byline 上那个多半是上一首的残留)")
         expectEqual(P.albumPatch(reported: "", reading: nil), nil, "专辑补齐: 还没探到 → 不补")
-        expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .song, album: "  ")), nil,
+        expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .song, strongAd: false, album: "  ")), nil,
                     "专辑补齐: 探针读到的是空白 → 不补,别把专辑名写成一串空格")
 
         // ② ⚠️ JS 源码里不许出现双引号。它整段要嵌进 AppleScript 的双引号字符串,而
@@ -367,9 +502,20 @@ func runPlayerIdentityTests() {
         //    BrowserPositionProbe.youtubeMusicScript 为此放弃 JSON.stringify 的同一个坑。
         expectEqual(P.probeJS.contains("\""), false,
                     "广告判据: JS 源码不含双引号(嵌进 AppleScript 会被二次转义打坏)")
+        // 反斜杠同理(Spotify 侧一直钉着这条,YT 侧 2026-09-09 补上):整段嵌在 AppleScript 的
+        // 双引号串里,反斜杠是那边的转义字符。这条守卫正是广告计数那个正则必须写成
+        // `new RegExp('[0-9]+ */ *[0-9]+')` 而不是正则字面量的原因。
+        expectEqual(P.probeJS.contains("\\"), false,
+                    "广告判据: JS 源码不含反斜杠(AppleScript 的转义字符)")
 
         // ③ 三个信号一个都不能少 —— 少一个就是悄悄削弱了判据,而且不会有任何报错。
-        for marker in ["ad-showing", "ytp-ad-badge", "YouTube Music", "NOTFOUND"] {
+        // `slotEl` / `new RegExp` 是 2026-09-09 加的广告计数那一段(第四段),少了它界面上
+        // 「广告中 · 1/2」的中间那截就永远不显示,而且不会有任何报错。
+        for marker in ["ad-showing", "ytp-ad-badge", "YouTube Music", "NOTFOUND",
+                       "slotEl", "new RegExp", "'|' + slot + '|'",
+                       // 语言无关那两步缺一不可:先剔时间样式(否则「0:20」里的数字会被
+                       // 当成一对),再抓「整数+非数字+整数」(否则只认得斜杠写法)。
+                       "[0-9]+:[0-9]+", "([0-9]+)[^0-9]{1,12}([0-9]+)"] {
             expectEqual(P.probeJS.contains(marker), true, "广告判据: JS 里必须有 \(marker)")
         }
 
@@ -682,6 +828,44 @@ func runPlayerIdentityTests() {
                     "通知: 别的 App 提醒满了不影响这个")
         // 已信任的一律不弹(第一层就挡住了)
         expectEqual(announce(accepted: ["com.google.Chrome"]), false, "通知: 已信任的不弹")
+
+        // ---- 灵动岛那一层(2026-09-11,用户:「那个通知里的逻辑,我是否可以把它加到灵动岛里?」)----
+        //
+        // 被动提示(左耳换图标 + 空闲面板变体)的判据是 qualifiesForAnnounce = ⑤⑥⑦、不看 ⑧;
+        // shouldAnnounce 必须恒等于 qualifies && ⑧ —— 两者同源是"通知里的逻辑加到灵动岛"这句话的字面要求。
+        func qualifies(bundle: String = "com.google.Chrome", accepted: Set<String> = [],
+                       hasName: Bool = true, stableFor: TimeInterval = 10, hits: Int = 5) -> Bool {
+            A.qualifiesForAnnounce(bundleID: bundle, artist: "华晨宇", album: "异类", observedAt: now,
+                                   isAutoDetect: true, now: now, isAccepted: { accepted.contains($0) },
+                                   hasDisplayName: hasName, stableFor: stableFor, stableHits: hits)
+        }
+        expectEqual(qualifies(), true, "灵动岛提示: 稳定 10 秒的新播放器该挂上")
+        expectEqual(qualifies(bundle: "com.apple.podcasts"), false,
+                    "灵动岛提示: 播客不挂(跟通知同一份静音名单,用户对播客定了「不处理」)")
+        expectEqual(qualifies(hasName: false), false, "灵动岛提示: 反查不到 App 名的不挂(标题只能摆 bundle id)")
+        expectEqual(qualifies(stableFor: 5.9), false, "灵动岛提示: 稳定不足 6 秒不挂(左耳图标不能为焦点抖动来回换)")
+        expectEqual(qualifies(hits: 2), false, "灵动岛提示: 观察不足 3 次不挂")
+        expectEqual(qualifies(accepted: ["com.google.Chrome"]), false, "灵动岛提示: 已信任的不挂")
+        // 不看 ⑧:提醒满 3 次、冷却期内,被动提示照样挂着 —— 它不打扰人
+        expectEqual(announce(log: ["com.google.Chrome": .init(count: 3, lastAt: now)]), false,
+                    "灵动岛提示: 对照组 —— 同一状态下通知已经不弹了")
+        expectEqual(qualifies(), true, "灵动岛提示: 提醒记录满了被动提示照样挂着(不受次数 / 冷却限制)")
+        // 同源不变量:shouldAnnounce == qualifies && ⑧,四种组合逐一对
+        for (logged, expectedAnnounce) in [(false, true), (true, false)] {
+            let log: [String: A.AnnounceLog] = logged ? ["com.google.Chrome": .init(count: 1, lastAt: now)] : [:]
+            expectEqual(announce(log: log), qualifies() && expectedAnnounce,
+                        "灵动岛提示: shouldAnnounce 恒等于 qualifies && 记录允许(logged=\(logged))")
+        }
+        expectEqual(announce(bundle: "com.apple.podcasts") || qualifies(bundle: "com.apple.podcasts"), false,
+                    "灵动岛提示: 静音名单两层一起挡")
+        // 主动提醒时长:读两行字 + 挪光标点一下的余量;跟横幅那 1.4s 不是一档
+        expectEqual(A.notchAlertDuration, 8, "灵动岛提示: 主动提醒撑开 8 秒")
+        // 「正在放:歌手 - 歌名」拼法,通知正文与灵动岛第二行共用
+        expectEqual(A.nowPlayingDescription(artist: "热可可", title: "28. 对话行烟烟"), "热可可 - 28. 对话行烟烟",
+                    "正在放: 歌手 - 歌名")
+        expectEqual(A.nowPlayingDescription(artist: "", title: "只有歌名"), "只有歌名", "正在放: 缺歌手只写歌名")
+        expectEqual(A.nowPlayingDescription(artist: "  ", title: " "), nil, "正在放: 两段都空给 nil(调用方退回 bundle id)")
+        expectEqual(A.nowPlayingDescription(artist: " 歌手 ", title: "歌名 "), "歌手 - 歌名", "正在放: 两端空白去掉")
     }
 
     // ---- 「默认展示名单」≠「支持名单」(2026-09-01) ----

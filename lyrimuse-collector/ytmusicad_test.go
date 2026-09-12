@@ -200,16 +200,20 @@ func TestParseYTMusicAdProbeAlbum(t *testing.T) {
 	cases := []struct {
 		name, raw, want string
 	}{
-		{"读到专辑名", "0|0|0|Already Gone", "Already Gone"},
-		{"页面上没读到 → 空串(不是解析失败)", "0|0|0|", ""},
+		{"读到专辑名", "0|0|0||Already Gone", "Already Gone"},
+		{"页面上没读到 → 空串(不是解析失败)", "0|0|0||", ""},
 		{"只有三段(旧形状)也解得出", "0|0|0", ""},
 		// ⚠️ 专辑名是任意文本、可以自带分隔符。SplitN 保证第四段原样保留 —— 用普通 Split
 		// 的话这条会退化成"形状不对",连带把广告判定一起丢掉。
-		{"专辑名里自带 | 原样保留", "0|0|0|A|B", "A|B"},
-		{"第四段是文本不是标志位", "1|0|0|0", "0"},
-		{"两端空白削掉", "0|0|0|  Already Gone  ", "Already Gone"},
+		{"专辑名里自带 | 原样保留", "0|0|0||A|B", "A|B"},
+		{"最后一段是文本不是标志位", "1|0|0||0", "0"},
+		// ⚠️ 2026-09-09 起第四段是广告徽章计数、专辑名挪到第五段;这一条钉住"计数段坏了
+		// 也不影响专辑名"(计数是装饰,不参与 fail-closed)。
+		{"计数段坏了不影响专辑名", "0|0|0|abc|Already Gone", "Already Gone"},
+		{"带计数时专辑名照常在最后一段", "1|1|0|1/2|Already Gone", "Already Gone"},
+		{"两端空白削掉", "0|0|0||  Already Gone  ", "Already Gone"},
 		// osascript 的输出按行读,专辑名里真混进换行会让下游日志/比较莫名其妙。
-		{"中间换行压成空格", "0|0|0|Already\nGone", "Already Gone"},
+		{"中间换行压成空格", "0|0|0||Already\nGone", "Already Gone"},
 		{"NOTFOUND 没有专辑名", "NOTFOUND", ""},
 		{"形状不对时不给专辑名", "1|x|0|某专辑", ""},
 	}
@@ -317,4 +321,27 @@ func resetYTMusicAdCacheForTest(t *testing.T) {
 	}
 	clear()
 	t.Cleanup(clear)
+}
+
+// 复用窗口按判定分档(2026-09-08,用户报「有视频的歌识别错了,变成广告了」)。MV 的前贴片广告
+// 跟正片共用同一份 MediaSession 元数据,同一个 key 下判定会先 ad 后 song —— 广告判定只能复用
+// 几秒,否则前贴片一过还要白丢一整个缓存期(本仓日志:三轮 rejected 之后整整 60 秒才 now playing)。
+// Swift 侧 YouTubeMusicAdProbe.refreshInterval(for:) 是同一套分档,两边同时改。
+func TestYTMusicAdReuseWindow(t *testing.T) {
+	if got := ytmusicAdReuseWindow(ytmusicAdIsAd); got != ytmusicAdRefreshWhenAd {
+		t.Errorf("广告判定的复用窗口 = %v, want %v", got, ytmusicAdRefreshWhenAd)
+	}
+	if ytmusicAdRefreshWhenAd > 5*time.Second {
+		t.Errorf("广告判定复用窗口 %v 太长:广告只有 5～30 秒,前贴片一过要尽快放行", ytmusicAdRefreshWhenAd)
+	}
+	if got := ytmusicAdReuseWindow(ytmusicAdIsSong); got != ytmusicAdMaxAge {
+		t.Errorf("歌曲判定的复用窗口 = %v, want %v(稳态播放期间不白烧 AppleScript)", got, ytmusicAdMaxAge)
+	}
+	if ytmusicAdReuseWindow(ytmusicAdIsAd) >= ytmusicAdReuseWindow(ytmusicAdIsSong) {
+		t.Error("广告档的复用窗口必须比歌档短")
+	}
+	// unknown 本来就不进缓存(见 ytmusicAdProbe),这里只钉它不会拿到比歌更长的窗口。
+	if ytmusicAdReuseWindow(ytmusicAdUnknown) > ytmusicAdMaxAge {
+		t.Error("unknown 的复用窗口不该超过歌档")
+	}
 }

@@ -882,63 +882,127 @@ func runMenuBarTests() {
                                  reservedIconWidth: 25.5, iconLeading: true) == nil, true,
                     "歌词格: 图标把整块吃光时算不出来")
     }
-    // ---- 菜单栏槽宽:短命行不缩槽(2026-09-03,用户报"自适应模式换行时抖动") ----
+    // ---- 菜单栏槽宽:短命行不改槽(2026-09-03 只管收缩;2026-09-11 起两个方向对称) ----
     //
     // 钉的是那条不变式:只有"活得比静默窗长"的行才有资格改几何 —— 于是下一行的换行时刻
     // 必然已经离上次重建 ≥ 静默窗,它的槽宽变化一定在换行那一刻当场落地,不会拖到句中。
-    // 实测抓到的现行与 37% 那组统计见 MenuBarSlotPolicy 的声明处。
+    //
+    // ⚠️ 这条不变式 2026-09-03~09-11 之间**是不成立的**:那时只有收缩过时长判据,加宽豁免,
+    // 于是短命行照样能靠加宽烧掉配额。复采 39 次重建里 14 次落在静默窗地板上(必然在句中),
+    // 其中 11 次是加宽。实测现行、两组统计和取舍理由都在 MenuBarSlotPolicy 的声明处。
     do {
         let P = MenuBarSlotPolicy.self
         let quiet: Double = 3
 
-        // 收缩 + 短命 → 跳过。这就是实测那一幕:121.19 的槽为一句只活 1.2s 的短句缩到 56.70,
-        // 结果下一句要 134.09 的加宽被推到句中才落地。
-        expectEqual(P.skipsShrink(currentLength: 121.19, targetLength: 56.70,
+        // 收缩 + 短命 → 跳过。这就是 2026-09-03 实测那一幕:121.19 的槽为一句只活 1.2s 的
+        // 短句缩到 56.70,结果下一句要 134.09 的加宽被推到句中才落地。
+        expectEqual(P.skipsResize(currentLength: 121.19, targetLength: 56.70,
                                   dwellSeconds: 1.24, quietSecs: quiet), true,
-                    "短命行不缩槽: 1.2s 的短句不值得为它收窄")
-        // 加宽**永远**不跳过 —— 装不下就是可读性问题,那一句正被迫当跑马灯滚。
-        expectEqual(P.skipsShrink(currentLength: 56.70, targetLength: 134.09,
-                                  dwellSeconds: 0.5, quietSecs: quiet), false,
-                    "短命行不缩槽: 加宽不受这条限制,再短也照改")
-        // 活得够久的行照旧收缩,自适应模式该省的空间还是省。
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 100,
+                    "短命行不改槽: 1.2s 的短句不值得为它收窄")
+        // ⚠️ 加宽 + 短命 → **也跳过**(2026-09-11 改的就是这一条,原来是 false)。那一句会在
+        // 偏窄的槽里滚完它那 ≤3 秒 —— 刻意的取舍:它滚 3 秒,换下一句(往往活十几秒)不跳。
+        expectEqual(P.skipsResize(currentLength: 56.70, targetLength: 134.09,
+                                  dwellSeconds: 0.5, quietSecs: quiet), true,
+                    "短命行不改槽: 加宽同样受时长判据管(这是原来那条不变式的漏洞)")
+        // 活得够久的行照旧改,自适应模式该省的空间还是省、该加宽的还是加。
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 100,
                                   dwellSeconds: 4.5, quietSecs: quiet), false,
-                    "短命行不缩槽: 活得比静默窗长的行照旧收窄")
-        // 边界:恰好等于静默窗算"够久"(它换到下一行时静默窗刚好走完,不拖累下一行)。
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 100,
+                    "短命行不改槽: 活得比静默窗长的行照旧收窄")
+        expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
+                                  dwellSeconds: 4.5, quietSecs: quiet), false,
+                    "短命行不改槽: 活得比静默窗长的行照旧加宽")
+        // 边界:恰好等于静默窗算"够久"(它换到下一行时静默窗刚好走完,不拖累下一行)。两个方向都钉。
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 100,
                                   dwellSeconds: quiet, quietSecs: quiet), false,
-                    "短命行不缩槽: 恰好等于静默窗的行不算短命")
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 100,
+                    "短命行不改槽: 恰好等于静默窗的行不算短命(收缩)")
+        expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
+                                  dwellSeconds: quiet, quietSecs: quiet), false,
+                    "短命行不改槽: 恰好等于静默窗的行不算短命(加宽)")
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 100,
                                   dwellSeconds: quiet - 0.001, quietSecs: quiet), true,
-                    "短命行不缩槽: 差一点点没到静默窗就算短命")
-        // 时长取不到(dwell 为 nil)时一律照旧 —— 判据不成立就不该改变既有行为。
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 100,
+                    "短命行不改槽: 差一点点没到静默窗就算短命(收缩)")
+        expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
+                                  dwellSeconds: quiet - 0.001, quietSecs: quiet), true,
+                    "短命行不改槽: 差一点点没到静默窗就算短命(加宽)")
+        // 时长取不到(dwell 为 nil)时一律照旧 —— 判据不成立就不该改变既有行为。两个方向都钉。
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 100,
                                   dwellSeconds: nil, quietSecs: quiet), false,
-                    "短命行不缩槽: 算不出这一句会显示多久时照旧收窄")
-        // 宽度没变不算收缩(present 那边本来就走 needsRebuild=false 的早退)。
-        expectEqual(P.skipsShrink(currentLength: 150, targetLength: 150,
+                    "短命行不改槽: 算不出这一句会显示多久时照旧收窄")
+        expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
+                                  dwellSeconds: nil, quietSecs: quiet), false,
+                    "短命行不改槽: 算不出这一句会显示多久时照旧加宽")
+        // ⚠️ 宽度**完全没变**必须返回 false 而不是 true:那是"形态翻转、槽宽不动"
+        // (text(223.5) ↔ fixed(223.5)),要交给 present 的 needsRebuild 走 `render` 把新形态
+        // 画对;返回 true 会改走 interim,丢掉逐字染色 / 进度图标 / 双排。
+        expectEqual(P.skipsResize(currentLength: 150, targetLength: 150,
                                   dwellSeconds: 0.2, quietSecs: quiet), false,
-                    "短命行不缩槽: 宽度没变不算收缩")
+                    "短命行不改槽: 宽度没变不算改槽(交给 needsRebuild 走 render)")
 
-        // ---- 收缩死区:太小的收缩一律不值一次重建(2026-09-03 复采日志时抓到的第二种浪费)
-        // 实测原样:text(250.749512) -> text(250.438477),0.31pt 的差也触发了整项重建。
-        expectEqual(P.skipsShrink(currentLength: 250.749512, targetLength: 250.438477,
+        // ---- 死区:太小的变化一律不值一次重建 ----
+        // 收缩侧实测原样(2026-09-03):text(250.749512) -> text(250.438477),0.31pt 也触发整项重建。
+        expectEqual(P.skipsResize(currentLength: 250.749512, targetLength: 250.438477,
                                   dwellSeconds: 12, quietSecs: quiet), true,
-                    "收缩死区: 0.31pt 的亚像素收缩跳过,哪怕这一句活得很久")
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 200 - P.minimumShrinkPoints + 0.01,
+                    "死区: 0.31pt 的亚像素收缩跳过,哪怕这一句活得很久")
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 200 - P.minimumShrinkPoints + 0.01,
                                   dwellSeconds: 12, quietSecs: quiet), true,
-                    "收缩死区: 差一点点没到死区门槛就跳过")
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 200 - P.minimumShrinkPoints,
+                    "死区: 收缩差一点点没到门槛就跳过")
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 200 - P.minimumShrinkPoints,
                                   dwellSeconds: 12, quietSecs: quiet), false,
-                    "收缩死区: 恰好等于门槛就照常收缩")
-        // ⚠️ 死区**只对收缩**:加宽差几 pt 也得给 —— 差一点点装不下,整句就退化成跑马灯滚。
-        expectEqual(P.skipsShrink(currentLength: 250.438477, targetLength: 250.749512,
-                                  dwellSeconds: 0.5, quietSecs: quiet), false,
-                    "收缩死区: 同样 0.31pt,加宽方向照改不误")
+                    "死区: 收缩恰好等于门槛就照常收缩")
+        // ⚠️ 加宽侧 2026-09-11 起**也有死区**(原来这条断言的期望是 false)。实测原样:
+        // text(222.909180) -> fixed(223.500000),0.59pt 的加宽也在重建。
+        expectEqual(P.skipsResize(currentLength: 222.909180, targetLength: 223.5,
+                                  dwellSeconds: 12, quietSecs: quiet), true,
+                    "死区: 0.59pt 的加宽跳过,哪怕这一句活得很久")
+        expectEqual(P.skipsResize(currentLength: 250.438477, targetLength: 250.749512,
+                                  dwellSeconds: 0.5, quietSecs: quiet), true,
+                    "死区: 同样 0.31pt,加宽方向现在也跳过")
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 200 + P.minimumWidenPoints - 0.01,
+                                  dwellSeconds: 12, quietSecs: quiet), true,
+                    "死区: 加宽差一点点没到门槛就跳过")
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 200 + P.minimumWidenPoints,
+                                  dwellSeconds: 12, quietSecs: quiet), false,
+                    "死区: 加宽恰好等于门槛就照常加宽")
+        // 两个方向取同一个数 —— "肉眼分辨不出来"的量级是同一个,没理由给两个值。
+        expectEqual(P.minimumWidenPoints == P.minimumShrinkPoints, true,
+                    "死区: 加宽与收缩共用同一个门槛")
         // 死区不累积:每次都跟**当前槽宽**比,连着几句各小一点,越过门槛就照常收缩。
-        expectEqual(P.skipsShrink(currentLength: 200, targetLength: 185,
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 185,
                                   dwellSeconds: 12, quietSecs: quiet), false,
-                    "收缩死区: 相对当前槽宽累到 15pt 就照常收缩,不会永远缩不回去")
+                    "死区: 相对当前槽宽累到 15pt 就照常收缩,不会永远缩不回去")
+    }
+
+    // ---- 占位槽按「即将到来的那一句」定宽(2026-09-11,用户报"同一行歌词会变化两次")----
+    //
+    // 占位文字的宽度跟即将到来的歌词无关,所以那一次槽宽必然要改;这条把它挪到歌词出现
+    // **之前**,歌词一出现几何已经对了。理由、代价与实测原样见 MenuBarSlotPolicy.slotWidth。
+    do {
+        let P = MenuBarSlotPolicy.self
+        let maxW: CGFloat = 205.5
+
+        // 实测那一幕:占位「♪ 歌名」自己只要 94.42,下一句要 205.5 → 现在就开到 205.5。
+        expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 205.5,
+                                isPlaceholder: true, maxWidth: maxW), 205.5,
+                    "占位定宽: 占位态按下一句撑宽")
+        // 下一句比占位还窄时不缩 —— 占位文字自己得装得下。
+        expectEqual(P.slotWidth(naturalWidth: 120, upcomingWidth: 60,
+                                isPlaceholder: true, maxWidth: maxW), 120,
+                    "占位定宽: 下一句更窄时保住占位文字自己的宽度")
+        // 下一句超上限 → 夹到上限,跟它到时候那个 .fixed 槽算出同一个数。
+        expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 400,
+                                isPlaceholder: true, maxWidth: maxW), maxW,
+                    "占位定宽: 下一句超上限就等于最大宽度(与 .fixed 槽同一个数)")
+        // 歌词还没解析出来(拿不到下一句,调用方传 0)→ 退化成占位文字自己的宽度。
+        expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 0,
+                                isPlaceholder: true, maxWidth: maxW), 94.42,
+                    "占位定宽: 取不到下一句时退化成占位文字自己的宽度")
+        // ⚠️ 非占位态**原样返回**,连上限都不夹 —— 正常歌词句的槽宽口径一个字不动。
+        expectEqual(P.slotWidth(naturalWidth: 187.03, upcomingWidth: 400,
+                                isPlaceholder: false, maxWidth: maxW), 187.03,
+                    "占位定宽: 非占位态不受这条影响(下一句再宽也不管)")
+        expectEqual(P.slotWidth(naturalWidth: 300, upcomingWidth: 0,
+                                isPlaceholder: false, maxWidth: maxW), 300,
+                    "占位定宽: 非占位态连上限都不夹(口径由调用方原样保留)")
     }
 
     // ---- 「♪ 歌名」占槽兜底(2026-09-04)----

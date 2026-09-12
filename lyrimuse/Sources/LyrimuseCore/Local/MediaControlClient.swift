@@ -42,13 +42,16 @@ public enum MediaControlClient {
     ///     fetchAutoDetectedSnapshot;
     ///   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
     ///     fetchAppleMusicSnapshot 的 AppleScript 路径(跟单选年代完全一样,不多背一次
-    ///     子进程往返);
+    ///     子进程往返)。⚠️ 2026-09-11 起这条路外面包了一层 radioAwareAppleMusicSnapshot:
+    ///     电台判据是 MediaRemote 独有的字段,AppleScript 拿不到,不补的话这一种配置下电台
+    ///     完全不生效。补法是**按曲目探一次**,不是每拍都问 —— 上面那句"不多背一次往返"仍然
+    ///     成立到换歌粒度,详见那个函数的头注;
     ///   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,没有 auto)→
     ///     fetchMultiSelectedSnapshot,核对 media-control 报的系统级 Now Playing 焦点是不是
     ///     落在选中的这个子集里。
     public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
         if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
-        if players == [.appleMusic] { return fetchAppleMusicSnapshot() }
+        if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
         return fetchMultiSelectedSnapshot(players)
     }
@@ -104,6 +107,96 @@ public enum MediaControlClient {
             r.succeeded
         else { return nil }
         return try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout)
+    }
+
+    // MARK: - 「只勾了 Apple Music」这条路上的电台判据(2026-09-11)
+
+    /// 纯 AppleScript 那份快照拿不到 `radioStationHash` —— 那是 MediaRemote 独有的键,
+    /// 问 Music.app 要不到。于是「设置里只勾了 Apple Music、没勾自动识别」这一种配置下,
+    /// 整套电台逻辑(单曲表 / 台卡 / 口白 / 按台校准)**恒不生效**:`isRadio` 永远是 nil,
+    /// 位置照旧是整档节目的口径,歌词整档对不上。
+    ///
+    /// 用户 2026-09-11 问「这个模式是不是仅限于 Apple Music」时查出来的 —— 讽刺的是判据本身
+    /// 一处 bundleID 都不认(谁报 `radioStationHash` 就算谁),**只勾 Apple Music 反而是唯一
+    /// 不生效的配置**;默认勾着「自动识别」,走 media-control,一直是好的。
+    ///
+    /// 补法跟 collector 侧 `refineAppleMusicState` 同义:AppleScript 那份快照整份留着(位置
+    /// 精度更高,实测 289.7659912109375 vs 目录 289.766),只把那**一个判据字段**补进来。
+    ///
+    /// # 为什么按曲目探一次,而不是每拍都问
+    ///
+    /// 这条路径当初跳过 media-control 就是为了"不多背一次子进程往返"(见 fetchSnapshot 头注),
+    /// 每拍都问等于把那条决策整个推翻。而"这一路是不是电台"在同一个曲目 key 内不会翻转:
+    /// 台卡、每首歌各自是不同的 key,口白期间系统一个字段都不变(2026-09-11 抓了整段 61 秒的
+    /// 口白坐实)、沿用上一首的 key,判据也确实还成立。所以按 key 探一次把结果记下来 ——
+    /// 换歌才多一次 fork(实测电台上 230~310 秒一次),而不是 2 秒一次。
+    private static func radioAwareAppleMusicSnapshot() -> MediaControlSnapshot? {
+        guard let snapshot = fetchAppleMusicSnapshot() else { return nil }
+        guard let hash = probedRadioStationHash(forTrack: snapshot.trackKey) else {
+            setRadioStationHash(nil)
+            return snapshot
+        }
+        setRadioStationHash(hash)
+        // 位置换成按曲目边界自己起的表 —— 跟 fetchRawMediaControlSnapshot 里那一段同一套口径,
+        // 理由(系统报的 duration/elapsedTime 都是整档节目的)见 RadioTrackClock 头注。起表时刻
+        // 同样取 stream watcher 观察到换歌的那一刻:那个订阅**不按 features.players 挂载**
+        // (见 LocalPlaybackSource.startObservingPlayerInfoNotification 上那段注释),所以这条
+        // 路上照样查得到,那 0.4~1.8 秒的恒定滞后不会因为换了条路又回来。
+        let position = advanceRadioClock(
+            trackKey: snapshot.trackKey, playing: snapshot.playing == true, now: Date(),
+            startedAt: lastTrackChangeObserved(forKey: snapshot.trackKey))
+        return snapshot.withRadio(position: position)
+    }
+
+    /// 这一拍要不要为电台判据多问一次 media-control。纯函数,selftest 直接覆盖。
+    /// 判据只有一条:曲目 key 变了 —— "是不是电台"在同一个 key 内不会翻转,理由见
+    /// `radioAwareAppleMusicSnapshot` 头注。
+    public static func radioProbeNeeded(cachedKey: String?, trackKey: String) -> Bool {
+        cachedKey != trackKey
+    }
+
+    private static let appleMusicRadioProbeLock = NSLock()
+    private static var appleMusicRadioProbedKey: String?
+    private static var appleMusicRadioProbedHash: String?
+
+    /// 这一首的电台标识(nil = 不是电台 / 问不出来)。结果按曲目 key 记一份,同一首歌只探一次。
+    ///
+    /// ⚠️ 探测失败(media-control 不在 / 超时 / 系统 Now Playing 焦点根本不是 Apple Music)
+    /// **也**记进缓存、按"不是电台"处理:这样最坏情况是这首歌整首退回改动前的行为(改动前这条
+    /// 路上电台本来就完全不生效,所以是退化不是回归),换歌时自愈,而每首歌最多只多 fork 一次。
+    /// 反过来"失败就不记、下一拍再试"会在 media-control 彻底坏掉时变成每 2 秒白 fork 一个子进程。
+    private static func probedRadioStationHash(forTrack trackKey: String) -> String? {
+        appleMusicRadioProbeLock.lock()
+        if !radioProbeNeeded(cachedKey: appleMusicRadioProbedKey, trackKey: trackKey) {
+            defer { appleMusicRadioProbeLock.unlock() }
+            return appleMusicRadioProbedHash
+        }
+        appleMusicRadioProbeLock.unlock()
+        let hash = probeRadioStationHash()
+        appleMusicRadioProbeLock.lock()
+        appleMusicRadioProbedKey = trackKey
+        appleMusicRadioProbedHash = hash
+        appleMusicRadioProbeLock.unlock()
+        return hash
+    }
+
+    /// 只问 media-control 要两个字段:此刻系统在报谁、以及电台标识。
+    ///
+    /// **不复用** `fetchRawMediaControlSnapshot`:那个函数还会记未知播放器(设置页那张卡片的
+    /// 数据源)、推进锚点目击表、动电台那块表 —— 在这条路上再跑一遍等于让两套位置逻辑同时写
+    /// 同一份状态,而这里要的只是一个判据字段。
+    private static func probeRadioStationHash() -> String? {
+        guard let binaryPath = binaryPath(),
+              let r = ProcessRunner.run(
+                  binaryPath, ["get", "--now", "--no-artwork"], timeout: snapshotTimeout),
+              r.succeeded,
+              let raw = try? JSONDecoder().decode(RawPayload.self, from: r.stdout)
+        else { return nil }
+        // 系统 Now Playing 焦点不是 Apple Music 时,这个 hash 属于**别人**(网页视频/另一个
+        // 播放器),不能扣到 Music.app 头上 —— 跟 matchMediaControlState 那道核对同一条理由。
+        guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
+        let hash = raw.radioStationHash ?? ""
+        return hash.isEmpty ? nil : hash
     }
 
     // media-control 的原始输出形状(只取用得到的字段)——跟 MediaControlSnapshot 不能
@@ -314,9 +407,11 @@ public enum MediaControlClient {
     /// 3. **页面自己说此刻在放广告**(正向证据)。拿不准一律不放行 —— fail-closed 的方向是
     ///    "维持改动前的样子(丢掉)",不是"在一首真歌上贴广告标签"。
     ///
-    /// 放行之后由谁标成广告:`LocalPlaybackSource` 里那套 `adByFields` 本来就认这个形状
-    /// (`isSpotify && !title.isEmpty && (album 空 || artist 空)`,而 `isSpotify` 早已包含
-    /// 网页版),所以这里**只要不丢**,「广告中」自然就亮了 —— 不需要再传一个标记下去。
+    /// 放行之后由谁标成广告:`LocalPlaybackSource.adBreakByFields` 读**同一份**探针缓存
+    /// (`SpotifyWebAdProbe.cachedVerdict == .ad`),两处口径一致。⚠️ 2026-09-08 之前那边是靠
+    /// "配对过 spotifyWeb 就套原生那套 album 空 / artist 空 启发式"来亮「广告中」的 —— 配对关系
+    /// 不等于此刻在放 Spotify(Safari / Arc 两个平台都配了),YT Music 里没有专辑名的 MV 因此整首
+    /// 被标成广告;现在网页版只认这里同一份正向证据,见 02 章决策 #25。
     private static func spotifyWebAdAccepted(
         bundleID: String, snapshot: MediaControlSnapshot
     ) -> Bool {
@@ -813,6 +908,26 @@ public enum MediaControlClient {
         return pauseObservedAt
     }
 
+    /// stream watcher 看到曲目变成了哪一首、发生在哪一刻。只有电台那块曲内表用它起表
+    /// (见 RadioTrackClock 头注「起表时刻」一节)。按曲目 key 记:轮询那一拍要核对
+    /// "这个时刻是不是这一首的",不然会拿上一首留下的时刻去播种。
+    nonisolated(unsafe) private static var trackChangeKey: String?
+    nonisolated(unsafe) private static var trackChangeAt: Date?
+
+    nonisolated static func noteTrackChangeObserved(key: String, at: Date) {
+        playingPositionLock.lock()
+        trackChangeKey = key
+        trackChangeAt = at
+        playingPositionLock.unlock()
+    }
+
+    private nonisolated static func lastTrackChangeObserved(forKey key: String) -> Date? {
+        playingPositionLock.lock()
+        defer { playingPositionLock.unlock() }
+        guard trackChangeKey == key else { return nil }
+        return trackChangeAt
+    }
+
     private nonisolated static func rememberedPlayingSampledAt(forTrack track: String) -> Date? {
         playingPositionLock.lock()
         defer { playingPositionLock.unlock() }
@@ -1055,17 +1170,29 @@ public enum MediaControlClient {
         // 固定滞后(~1.6s 量级、会话间漂移)只能靠平滑吸收,换来的是行为可预期、无子进程
         // 依赖。若要重走"问播放器拿真值"的路线,先读 git 历史里被删掉的
         // spotifyPlayerPosition/spotifyRebase 全套注释再动手。
-        // 电台:系统报的 duration / elapsedTime 都是**整档节目**的,不是这首歌的 —— duration 当未知,
-        // 位置换成按曲目边界自己起的表(机制、实测数据与未验证项见 RadioTrackClock 头注)。
-        // 换在这里而不是让下游各自判:这样 LocalPlaybackSource 的伺服 / 锚点 / 歌词引擎拿到的
-        // 就是一份正常的单曲快照,一处也不用改。
+        // 电台:系统报的 duration / elapsedTime 都是**整档节目**的,不是这首歌的。位置换成按曲目边界
+        // 自己起的表(机制、实测数据与未验证项见 RadioTrackClock 头注)。起表时刻取的是 **stream watcher
+        // 观察到换歌的那一刻**而不是这一拍轮询的时刻 —— 差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
+        // 用户 2026-09-10 报的「歌词进度偏慢」就是它。换在这里而不是让下游各自判:
+        // 这样 LocalPlaybackSource 的伺服 / 锚点 / 歌词引擎拿到的就是一份正常的单曲快照,一处也不用改。
+        //
+        // ⚠️ **duration 照旧原样传**(2026-09-10 当天第二轮,修一个我自己引入的回归)。第一版把电台的
+        // duration 置成 nil,想让它别被当成曲长用 —— 结果整档歌词停摆:`LocalPlaybackSource.apply` 里
+        // 建进度锚点那一整支的闸是 `if playing, let duration = snapshot.duration, duration > 0`,
+        // duration 一 nil 锚点就再也建不起来,歌词引擎没有钟可走,表现成"电台放到歌了却没有歌词"。
+        // 这一侧的 duration 只影响进度条分母(电台上本来就不准),**不会**写进歌词缓存(那是 collector 的
+        // 事,见 lyrimuse-collector/snapshot.go),所以留着它是纯粹的止损,没有副作用。
         let isRadio = !(raw.radioStationHash ?? "").isEmpty
-        let radioPosition: Double? = isRadio ? Self.advanceRadioClock(trackKey: trackKey, playing: raw.playing == true, now: sampledAt) : nil
+        Self.setRadioStationHash(isRadio ? raw.radioStationHash : nil)
+        let radioPosition: Double? = isRadio
+            ? Self.advanceRadioClock(trackKey: trackKey, playing: raw.playing == true, now: sampledAt,
+                                     startedAt: Self.lastTrackChangeObserved(forKey: trackKey))
+            : nil
         let snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
             album: raw.album,
-            duration: isRadio ? nil : raw.duration,
+            duration: raw.duration,
             elapsedTime: radioPosition ?? elapsed,
             playing: raw.playing,
             playbackRate: raw.playbackRate,
@@ -1087,14 +1214,63 @@ public enum MediaControlClient {
 
     private static let radioClockLock = NSLock()
     private static var radioClockState: RadioTrackClock.State?
+    /// 落盘副本的最近一次内容,决定"这一拍要不要写盘"(见 RadioClockFile.shouldWrite)。
+    private static var radioClockWritten: RadioClockRecord?
+    /// 冷启动只尝试恢复一次:文件读不出来 / 判据不过就当没有,别每一拍都去读盘。
+    private static var radioClockRestoreTried = false
+    /// 这一刻在放的电台是哪个台(载荷里的 `radioStationHash`,非电台为 nil)。
+    ///
+    /// 走静态旁路而不是加进 `MediaControlSnapshot`:那个结构体有十三处构造点、还是 Decodable
+    /// (加字段会顺带从 media-control 的 JSON 自动解),而这个值只有 `LocalPlaybackSource.apply`
+    /// 一处要用 —— 用它给台卡分台(见 `RadioStationCard`)。同一时刻系统只有一个 Now Playing
+    /// 会话,所以"当前那个台"是明确的;每次取快照都写一遍(非电台写 nil),不会留陈旧值。
+    nonisolated(unsafe) private static var radioStationHashValue: String?
+
+    public nonisolated static func currentRadioStationHash() -> String? {
+        radioClockLock.lock()
+        defer { radioClockLock.unlock() }
+        return radioStationHashValue
+    }
+
+    /// 两条取快照的路径共用这一个写入点(轮询的 fetchRawMediaControlSnapshot,以及只勾
+    /// Apple Music 时的 radioAwareAppleMusicSnapshot)—— 每次取快照都写一遍(非电台写 nil),
+    /// 不会留陈旧值。
+    private static func setRadioStationHash(_ hash: String?) {
+        radioClockLock.lock()
+        radioStationHashValue = hash
+        radioClockLock.unlock()
+    }
 
     /// 推进电台那块曲内表并取当前位置。状态只有一块(系统同一时刻只有一个 Now Playing 会话)。
     /// 纯算术在 `RadioTrackClock.advance`(selftest 钉住),这里只管加锁存取。
-    private static func advanceRadioClock(trackKey: String, playing: Bool, now: Date) -> Double {
+    private static func advanceRadioClock(trackKey: String, playing: Bool, now: Date, startedAt: Date?) -> Double {
         radioClockLock.lock()
         defer { radioClockLock.unlock() }
-        let next = RadioTrackClock.advance(radioClockState, trackKey: trackKey, playing: playing, now: now)
+        // 冷启动:内存里没有表,先看看上一个进程留下的账能不能接(判据见 RadioClockFile 头注)。
+        // 接不上就是 nil,后面照旧按 startedAt 播种 —— 跟没有这份文件时逐字相同。
+        if radioClockState == nil, !radioClockRestoreTried {
+            radioClockRestoreTried = true
+            if let restored = RadioClockFile.restorable(RadioClockFile.load(), trackKey: trackKey, now: now) {
+                radioClockState = restored
+                logger.notice("radio clock: restored key=\(trackKey, privacy: .public) position=\(restored.position, format: .fixed(precision: 3)) gap=\(now.timeIntervalSince(restored.tickedAt), format: .fixed(precision: 3))")
+            }
+        }
+        let next = RadioTrackClock.advance(radioClockState, trackKey: trackKey, playing: playing, now: now,
+                                           startedAt: startedAt)
+        // 只在起表那一拍打一行:换歌是低频事件,而"播种了多少"是这套机制唯一看得见的产物 —— 没有它,
+        // 链路断掉(startedAt 恒 nil、key 对不上)只会安静地退回从 0 起,表现成"整首歌恒慢一点"。
+        if radioClockState?.trackKey != trackKey {
+            logger.notice("radio clock: start key=\(trackKey, privacy: .public) seed=\(next.position, format: .fixed(precision: 3)) observed=\(startedAt == nil ? "no" : "yes", privacy: .public)")
+        }
         radioClockState = next
+        // 落盘,好让下一个进程接得上。写不写由 shouldWrite 定(换歌/播放翻转立刻写,平凡推进 15 秒一次)。
+        let record = RadioClockRecord(trackKey: next.trackKey, position: next.position,
+                                      tickedAtMs: Int64(next.tickedAt.timeIntervalSince1970 * 1000),
+                                      playing: next.playing)
+        if RadioClockFile.shouldWrite(previous: radioClockWritten, next: record, now: now) {
+            radioClockWritten = record
+            RadioClockFile.write(record)
+        }
         return next.position
     }
 }

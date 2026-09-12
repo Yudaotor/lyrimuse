@@ -261,7 +261,7 @@ func goldenComputeEvidence(q goldenQuery, ranked []scoredLyricCandidateResult) g
 	}
 	ev.VersionTagsOK = !wc.languageVersionMismatch &&
 		!versionTagsMismatchIgnoringLanguage(q.Title, q.Album, winner.Title, winner.Album, wc.languageVersionAgrees) &&
-		!liveAlbumIdentityConflict(q.Artist, q.Album, winner.Title, winner.Album)
+		!liveAlbumIdentityConflict(q.Artist, q.Title, q.Album, winner.Title, winner.Album)
 	if winner.SourceReportedDurationSecs > 0 && q.DurationSecs > 0 {
 		ev.SourceDurationDeltaPct = 100 * abs(winner.SourceReportedDurationSecs-q.DurationSecs) / q.DurationSecs
 	}

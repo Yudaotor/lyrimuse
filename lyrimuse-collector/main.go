@@ -250,8 +250,13 @@ func main() {
 	// Apple 目录曲目 ID → 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
 	// 条目,见 applecatalog.go。
 	loadAppleCatalogCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-catalog-cache.json"))
+	loadMotionCoverCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-motion-cover-cache.json"))
 	// "艺人|专辑" → Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
 	loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+	// "艺人|专辑|曲名" → 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
+	loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-title-cache.json"))
+	// 播放器没报专辑名时从 Apple 目录反查到的专辑(key = 署名|曲名|整秒时长),见 albumhint.go appleAlbumHint。
+	loadAppleAlbumHintCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-album-hint-cache.json"))
 	// 按歌手缓存的 QQ 音乐歌手搜索建议结果,见 qq.go 的 qqArtistCanonicalName。
 	loadQQArtistNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-qq-artist-name-cache.json"))
 	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
@@ -290,7 +295,16 @@ func main() {
 	// 绝大多数启动这个文件不存在,直接早退,零成本。
 	adoptEnrichRestore(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json"))
 	migrateEnrichKeys()
+	// 存量「借来的封面被盖上归属戳」清洗(2026-09-07,见 coverstampmigrate.go)。
+	// 位置只有两条约束:loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
+	// migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。跟歌词那条 import/export
+	// 链**没有**先后关系 —— 它一个歌词字段都不碰,只擦 cover_album。
+	migrateBorrowedCoverAlbums()
 	importLyricsFromFiles()
+	// 存量歌词正文里的 HTML / XML 字符实体(2026-09-09,酷狗 `they&apos;re`,见 lyricentities.go)。
+	// 紧跟 import:lyrics/ 文件夹赢完之后改的才是权威内容;后面 export 把干净正文写回文件。
+	// 也要排在 migrateManualPickMarks 之前(那一步按最终正文算指纹)。
+	migrateLyricEntities()
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	invalidateStaleTranslations()
@@ -328,6 +342,8 @@ func main() {
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
 	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
+	// App 量出的 Spotify 锚点偏置(见 positionbias.go)——跟 Swift 那边 PositionBiasFile.fileName 逐字节一致。
+	setPositionBiasPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-position-bias.json"))
 	// 「歌词管理」的「重试无歌词条目」请求文件 + 进度状态文件(见 lyricsfillsweep.go)。
 	setLyricsFillPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")

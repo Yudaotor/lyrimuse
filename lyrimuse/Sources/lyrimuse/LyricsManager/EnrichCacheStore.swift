@@ -91,6 +91,39 @@ public final class EnrichCacheStore: ObservableObject {
         /// 该修的,只能等。列表/详情据此把红色「无歌词」换成中性的「源里有歌、无词」——
         /// 判据是 collector 解析时确实定位到了那首歌(拿到了平台 id),不是猜的。
         public let knownOnSources: Bool
+        /// 最近一轮解析**一个源都没应答**(借鉴清单 V4,2026-09-12)。判据本体在
+        /// `LyrimuseCore.EnrichSourcePresence.lastRoundHadNoResponder`(selftest 覆盖),
+        /// 那里写清了为什么不能拿顶层 `lyrics_sources_responded` 是不是空来判。
+        ///
+        /// 消费方判定链里它要**排在 `knownOnSources` 之前**:两者常常同时为真(本机 142 条
+        /// 空条目里 69 条是「源里有歌·无词 + 最近一轮零应答」),而给用户的行动建议相反 ——
+        /// 前者说"词还不存在、只能等",后者说"那一刻网络全挂、重搜也许就有"。
+        public let lastRoundHadNoResponder: Bool
+        /// 这份歌词**当初是在几个源应答的情况下**定下来的(借鉴清单 V3,2026-09-12)。
+        /// 0 = 老条目没有 `lyrics_sources_responded` 这个字段(不是"零个源应答")——
+        /// 两者在界面上必须区分,所以消费方一律判 `> 0` 再显示。
+        ///
+        /// 为什么要摆到列表里(而不是只留在「解析决策」弹窗):缓存永久保留 + 20 秒总截止,
+        /// 首次解析本来就有运气成分(09 章决策 6)。实测本机 4248 条带该字段的有词条目里
+        /// **29.4%(1249 条)当初只有 <=3 个源应答**;而 `needsLyricsRetry` 有一道
+        /// 「已有逐字就不重试」的闸(enrich.go),本机 94.3% 的有词条目带逐字 —— 交集
+        /// **1088 条(25.6%)的升级重试永不触发**,旁证是全库 `lyrics_retry_count` 只出现在
+        /// 30 条上。这批"薄证据条目"此前在界面上完全不可见,用户无从挑出来重搜。
+        ///
+        /// ⚠️ 刻意**不改**重试策略本身:那道闸有它的理由(逐字是质量的直接证据),而改判据
+        /// 要 bump 打分版本、让全库走一遍 rescore —— 09 章决策 49 已经论证过这类代价。
+        /// 这里只做"可见 + 可筛",挑不挑由用户定。
+        public let sourcesRespondedCount: Int
+
+        /// 这份歌词是不是"在信息不全的情况下定的"(借鉴清单 V3)。
+        ///
+        /// 判据 `1...3`:九个源里只答上来三个或更少。**下界是 1 不是 0** —— 0 表示老条目
+        /// 压根没有 `lyrics_sources_responded` 这个字段(不知道),不是"零个源应答";
+        /// 把"不知道"标成可疑会凭空造出一批不存在的问题条目。上界 3 来自本机实测分布:
+        /// 1 源 2.4% / 2 源 7.0% / 3 源 20.0% / 4 源以上 70.6%,3 正好是那个断点。
+        ///
+        /// 只用来"提示 + 筛选",不驱动任何自动行为 —— 要不要重搜由用户点。
+        public var thinEvidence: Bool { (1...3).contains(sourcesRespondedCount) }
         /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、collector
         /// 还没写出任何结论"这段窗口期的占位行(见 `LyricsManagerView.refreshPlaceholder`)。
         /// 2026-08-27 用户反馈"歌一直在放、还在首次搜歌词的时候,歌词管理里完全看不到
@@ -517,6 +550,8 @@ public final class EnrichCacheStore: ObservableObject {
                 isInstrumental: entry["instrumental"] as? Bool ?? false,
                 hasPlainTextFallback: !((entry["plain_lyrics"] as? String ?? "").isEmpty),
                 knownOnSources: Self.knownOnSources(entry),
+                lastRoundHadNoResponder: Self.lastRoundHadNoResponder(entry),
+                sourcesRespondedCount: (entry["lyrics_sources_responded"] as? [Any])?.count ?? 0,
                 isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
                 // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(见 exportBaseName —— 到底
@@ -958,6 +993,19 @@ public final class EnrichCacheStore: ObservableObject {
         EnrichSourcePresence.knownOnSources(
             neteaseURL: entry["netease_url"] as? String,
             qqMusicURL: entry["qq_music_url"] as? String)
+    }
+
+    /// 见 Summary.lastRoundHadNoResponder;判据本体在 LyrimuseCore.EnrichSourcePresence。
+    ///
+    /// ⚠️ 这里**只做两次字典查找**,不走 `decodedDecision(for:)` 那条强类型解码路径 ——
+    /// `entry` 本身已经是 JSONSerialization 解出来的 `[String: Any]`,取一个子字典的一个键
+    /// 是 O(1);而那条路径要把子字典重新序列化成 Data 再 Decodable 解一遍(「JSON 双重编解码」),
+    /// 正是 2026-08-19 从 rebuild 里优化掉的东西,不能因为这个字段又请回来。
+    nonisolated static func lastRoundHadNoResponder(_ entry: [String: Any]) -> Bool {
+        let last = entry["lyrics_decision"] as? [String: Any]
+        return EnrichSourcePresence.lastRoundHadNoResponder(
+            hasDecisionRecord: last != nil,
+            respondedCount: (last?["sources_responded"] as? [Any])?.count ?? 0)
     }
 
     /// 「重新自动匹配」按钮命中 `LyricsRematchDecision.Outcome.unchanged`(可判、赢家跟现状
@@ -1475,6 +1523,32 @@ struct LyricsResolutionDecision: Decodable {
     let winner: String?
     let applied: Bool?
     let candidates: [Candidate]?
+    /// 这一轮走到过哪条**标题反查**(collector 的 retry_method:`title-from-album` /
+    /// `title-from-artist-search`),以及反查出来的曲名。两个字段成对出现,
+    /// **全库只有 13 份存档(0.3%)有它们** —— 罕见,但发生时它是关于这次解析最重要的
+    /// 一个事实:这份词是用**另一个曲名**找回来的,本地那个曲名压根搜不到。
+    /// 所以它在面板上是一条**条件横幅**,不是查询词摘要里一个平淡的组头
+    /// (跟「只有首轮一组时不显示查询词摘要」是同一个规矩:罕见 + 决定性 = 条件显示)。
+    let retryMethod: String?
+    let correctedTitle: String?
+    /// 这一轮**实际问出去的每一组查询词**(借鉴清单 V1,2026-09-12,collector 侧见 querylog.go)。
+    /// 上面 queryArtist/queryTitle/queryAlbum 记的只是**首轮**那一组;一轮解析最多会换五种
+    /// 问法(拆分重入 / 别名轮 / 首歌手变体轮 / 两种标题反查)。**老存档里没有这个字段**,
+    /// 恒为 nil —— 跟 coverUrl 同一个道理,存档是当时那一刻的固化,不能事后补。
+    let queriesTried: [TriedQuery]?
+
+    /// 一组真正发出去的查询词。字段名对着 collector 的 lyricQueryRecord;这个类型走
+    /// `.convertFromSnakeCase`,而这几个键都是单词、没有下划线,所以不用手写 CodingKeys。
+    struct TriedQuery: Decodable, Identifiable {
+        var id: String { "\(reason ?? "")|\(artist)|\(title ?? "")|\((sources ?? []).joined(separator: ","))" }
+        let artist: String
+        let title: String?
+        /// 这一组是哪一轮问的。空 / nil = 首轮。取值全集见 collector 的 lyricQueryReason*,
+        /// 中文译名在 LyricsDecisionSheet.queryReasonLabel(漏补就会在界面上印英文串)。
+        let reason: String?
+        /// 这一轮**只**问了这几个源(别名轮的定向重查)。空 = 没有限制。
+        let sources: [String]?
+    }
 
     struct Candidate: Decodable, Identifiable {
         var id: String { source }
@@ -1501,5 +1575,10 @@ struct LyricsResolutionDecision: Decodable {
         let sourceReportedDurationSecs: Double?
         let hasWordTiming: Bool?
         let instrumental: Bool?
+        /// 这条候选的正文跟**哪些**其它源高度一致(借鉴清单 V2,2026-09-12)。
+        /// 打分那一行 `consensus +250/+150` 只说了"有几家印证",答不出"跟谁"——而
+        /// "冠亚军这两份到底是不是同一份词"正是复盘微弱分差时唯一要问的问题。
+        /// **老存档里没有这个字段**,恒为 nil。
+        let consensusPeers: [String]?
     }
 }

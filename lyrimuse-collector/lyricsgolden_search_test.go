@@ -355,7 +355,7 @@ func goldenComputeSearchJudge(fx *searchGoldenFixture, e searchGoldenExpect) sea
 		j.SourceDurationDeltaPct = 100 * abs(it.DurationSecs-localDur) / localDur
 	}
 	j.VersionTagsOK = !versionTagsMismatch(q.Title, q.Album, it.Title, it.Album) &&
-		!liveAlbumIdentityConflict(q.Artist, q.Album, it.Title, it.Album)
+		!liveAlbumIdentityConflict(q.Artist, q.Title, q.Album, it.Title, it.Album)
 	localLive := recordingVersionTags(q.Title, q.Album)["live"] || albumHasLiveMarker(q.Album)
 	itemLive := recordingVersionTags(it.Title, it.Album)["live"] || albumHasLiveMarker(it.Album)
 	j.LiveMismatch = localLive != itemLive

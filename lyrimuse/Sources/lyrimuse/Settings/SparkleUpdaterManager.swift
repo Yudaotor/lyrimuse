@@ -10,12 +10,18 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 // ConfigStore.shared/AppSettings.shared 同样的单例访问风格——AppDelegate 启动时和
 // "关于"页手动点的"检查更新"按钮都从这一个实例访问,不需要额外的桥接层。
 //
-// startingUpdater: true 让这个 controller 一初始化就启动 Sparkle 自己的 updater
-// (按 Info.plist 里 SUEnableAutomaticChecks/SUFeedURL 的配置决定要不要做周期性
-// 后台检查)。userDriverDelegate 传 nil——用 Sparkle 开箱即用的标准模态弹窗体验
-// (SPUStandardUserDriver),**不做** "gentle reminders" 那种接管定时检查显示权的定制
-// (2026-09-03 用户拍板不做:接管之后若自家提示没亮,用户直到下一版都收不到提醒,而真实
-// 更新在本机又造不出来验)。
+// 2026-09-12 起 updater 由这里直接建(`SPUUpdater(hostBundle:applicationBundle:userDriver:delegate:)`),
+// 用户界面走自己的 `SoftwareUpdateDriver`:发现 / 下载 / 待装 / 安装中 / 失败全部画在设置窗口的
+// 「软件更新」页(Settings/SoftwareUpdatePage.swift),一个 Sparkle 弹窗都不弹 —— 用户拍板照系统设置那页做,
+// 见 14 章决策 #25。改版前是 `SPUStandardUpdaterController` + 标准模态窗(2026-09-03 当时决定不接管界面,
+// 理由是"接管之后若自家提示没亮用户就收不到提醒";现在的兜底是:周期检查发现更新会亮侧栏「有软件更新可用」
+// 与菜单栏面板底栏两处,Sparkle 自己的周期检查节拍一点没动)。Info.plist 里 SUEnableAutomaticChecks /
+// SUFeedURL 仍决定要不要做周期性后台检查、读哪份 appcast。
+//
+// 页面那半边的状态机(`flow` / `pendingItem` / 攥着的 reply 闭包)见下面「软件更新页」一节;要点是**谁在等**:
+//   - 周期检查(没人在页面上等)发现更新 → 记下来给侧栏 / 页面显示,立刻 dismiss 让 Sparkle 收工;
+//   - 页面上点「检查更新」→ 找到后攥着 reply,「立即更新」才答 install,窗口关掉答 dismiss;
+//   - 页面上点「立即更新 / 立即重启」而手里没有 reply(周期检查早就 dismiss 过)→ 再发一次检查,找到时自动答 install。
 //
 // updaterDelegate 自 2026-09-03 起接一个只**记状态**的桥(UpdaterDelegateBridge):Sparkle
 // 发现/下载完/用户跳过/开始安装时把结论写进 `availableUpdate`,给菜单栏面板底栏那一格
@@ -30,6 +36,73 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 //     <sparkle:channel>beta</sparkle:channel>,这是第二道保险。
 // 为什么必须自己挑 appcast、以及 Sparkle 版本比较器对 "-beta.N" 的实测行为,见 Core
 // `UpdateChannel` / `ReleaseVersion` 头注与 15 章决策 11。
+/// 「软件更新」页的进行态(2026-09-12)。只描述"正在发生什么";"有没有查到新版本"另看 `pendingItem`。
+enum SoftwareUpdateFlow: Equatable {
+    case idle
+    case checking
+    /// expected 为 nil = Sparkle 还没报总长度,画不定长进度条。
+    case downloading(received: UInt64, expected: UInt64?)
+    case extracting(progress: Double)
+    case readyToInstall
+    case installing(applicationTerminated: Bool)
+    case failed(message: String)
+
+    /// 窗口关掉也该继续跑的阶段(下载 / 解包 / 安装),关窗时不动它。
+    var isBusyInBackground: Bool {
+        switch self {
+        case .downloading, .extracting, .installing: return true
+        case .idle, .checking, .readyToInstall, .failed: return false
+        }
+    }
+}
+
+/// 「软件更新」页要显示的一次更新:从 Sparkle 的 `SUAppcastItem` 抄下页面要用的几项。
+struct SoftwareUpdateItem: Equatable {
+    let version: String
+    /// enclosure 的字节数;0 = appcast 没写。
+    let contentLength: UInt64
+    let date: Date?
+    /// 发版日志:appcast `<description>` 的 HTML(Sparkle 已按系统语言从两份 xml:lang 里挑好),或
+    /// releaseNotesLink 下载回来的正文。
+    var notesHTML: String?
+    /// 说明是纯文本(appcast 标了 plain-text,或外挂说明是 text/plain),不走 HTML 解析。
+    var notesArePlainText: Bool
+    /// ⓘ 打开的页面:appcast 的 fullReleaseNotesLink / link,都没有就按 tag 拼 GitHub Release 页。
+    let releaseURL: URL
+    /// Sparkle 已把包下完解好(自动下载开着时的周期检查,或用户点过「退出时安装」),下一步就是重启安装。
+    var downloaded: Bool
+
+    init(appcastItem item: SUAppcastItem, downloaded: Bool) {
+        version = item.displayVersionString
+        contentLength = item.contentLength
+        date = item.date
+        notesHTML = item.itemDescription
+        notesArePlainText = item.itemDescriptionFormat == "plain-text"
+        releaseURL = item.fullReleaseNotesURL ?? item.infoURL
+            ?? UpdateChannel.releasePageURL(displayVersion: item.displayVersionString)
+        self.downloaded = downloaded
+    }
+
+    init(version: String, contentLength: UInt64, date: Date?, notesHTML: String?, notesArePlainText: Bool,
+         releaseURL: URL, downloaded: Bool) {
+        self.version = version
+        self.contentLength = contentLength
+        self.date = date
+        self.notesHTML = notesHTML
+        self.notesArePlainText = notesArePlainText
+        self.releaseURL = releaseURL
+        self.downloaded = downloaded
+    }
+
+    /// 预览钩子用的假条目(见 SparkleUpdaterManager.previewUpdateVersionKey):说明正文明说是预览。
+    static func preview(version: String) -> SoftwareUpdateItem {
+        SoftwareUpdateItem(version: version, contentLength: 12_800_000, date: Date(),
+                           notesHTML: "<p>" + L10n.t("这是预览：真有新版本时这里显示发版日志") + "</p>",
+                           notesArePlainText: false,
+                           releaseURL: UpdateChannel.releasePageURL(displayVersion: version), downloaded: false)
+    }
+}
+
 @MainActor
 final class SparkleUpdaterManager: ObservableObject {
     static let shared = SparkleUpdaterManager()
@@ -41,6 +114,243 @@ final class SparkleUpdaterManager: ObservableObject {
         var downloaded: Bool
     }
     @Published private(set) var availableUpdate: AvailableUpdate?
+
+    // MARK: - 软件更新页(2026-09-12)
+
+    /// 页面上正在发生的事。`.idle` 时看 `pendingItem`:有 = 查到了新版本等用户动手,没有 = 已是最新 / 还没查过。
+    @Published private(set) var flow: SoftwareUpdateFlow = .idle
+    /// Sparkle 最近一次查到、还没装上的那个版本(给「软件更新」页显示标题 / 大小 / 日期 / 发版日志)。
+    /// 「已是最新」「跳过」「装好重启」都清掉。跟上面 `availableUpdate` 是同一件事的两个视角:那个给菜单栏
+    /// 面板底栏(只要版本号),这个给页面(要全部细节)。
+    @Published private(set) var pendingItem: SoftwareUpdateItem?
+    /// 用户在「下完待装」那一步选了「退出时安装」,或周期检查已经把包下好(自动下载开着)—— Sparkle 会在
+    /// App 退出时装,页面据此说明,并把按钮换成「立即重启」。
+    @Published private(set) var installOnQuit = false
+    /// 重启后 Sparkle 报「上一版装好了」时记下当前版本,页面说一句「已更新到 X」;只在这一次进程内有效。
+    @Published private(set) var updatedToVersion: String?
+
+    /// Sparkle 现在接不接受一次新检查(有会话在跑就不接受)。
+    var canCheckForUpdates: Bool { updater.canCheckForUpdates }
+
+    /// 预览钩子(2026-09-12,用户要「模拟一下看看效果」):这台机器上
+    /// `defaults write me.yudaotor.lyrimuse settings:previewUpdateVersion 1.7.0` 之后,设置窗口
+    /// (侧栏「有软件更新可用」那行、「软件更新」页、「关于」页的副标题)就当真查到了 1.7.0 一样显示;
+    /// `defaults delete … settings:previewUpdateVersion` 即恢复,重开设置窗口生效。只读 UserDefaults、
+    /// 不碰 Sparkle,页面上的「立即更新」仍是真检查(会如实显示「已是最新版本」)。菜单栏面板底栏不吃
+    /// 这个钩子,只认真值。用 `settings:` 前缀:机器状态,配置导出天然不带走(同 SettingsTab.lastTabStorageKey)。
+    static let previewUpdateVersionKey = "settings:previewUpdateVersion"
+
+    private var previewItem: SoftwareUpdateItem? {
+        guard let version = UserDefaults.standard.string(forKey: Self.previewUpdateVersionKey),
+              !version.isEmpty else { return nil }
+        return SoftwareUpdateItem.preview(version: version)
+    }
+
+    /// 设置窗口该显示的「有新版本」:预览钩子优先,否则是 Sparkle 的真值。
+    var shownItem: SoftwareUpdateItem? { previewItem ?? pendingItem }
+
+    /// 页面上最近一次动作的意图,决定 Sparkle 回「找到了」时怎么答(见文件头注)。
+    private enum PageIntent { case none, check, install }
+    private var pageIntent: PageIntent = .none
+    /// 攥着的 Sparkle 闭包。每个最多攥一份,答过 / 取消过就置 nil。
+    private var foundReply: ((SPUUserUpdateChoice) -> Void)?
+    private var readyReply: ((SPUUserUpdateChoice) -> Void)?
+    private var cancelCheck: (() -> Void)?
+    private var cancelDownload: (() -> Void)?
+    private var retryTerminating: (() -> Void)?
+
+    /// 「立即更新」/「立即重启」。手里有 Sparkle 在等的 reply 就直接答 install;没有(周期检查早就 dismiss 过了)
+    /// 就再发一次检查,found 里按 `.install` 意图自动答 —— 已经下好的包 Sparkle 会直接进安装。
+    func installPendingUpdate() {
+        if let reply = foundReply {
+            foundReply = nil
+            flow = pendingItem?.downloaded == true ? .readyToInstall : .downloading(received: 0, expected: nil)
+            reply(.install)
+            return
+        }
+        if let reply = readyReply {
+            readyReply = nil
+            reply(.install)
+            return
+        }
+        guard canCheckForUpdates else { return }
+        pageIntent = .install
+        flow = .checking
+        startCheck()
+    }
+
+    /// 「退出时安装」:包已经下好,Sparkle 在 App 退出时装(dismiss 在这一步的语义,见 SPUUserDriver.h)。
+    func installOnQuitInstead() {
+        guard let reply = readyReply else { return }
+        readyReply = nil
+        installOnQuit = true
+        flow = .idle
+        reply(.dismiss)
+    }
+
+    /// 「取消」:检查中 / 下载中可取消;其余阶段没有这颗按钮。
+    func cancel() {
+        switch flow {
+        case .checking:
+            cancelCheck?()
+            cancelCheck = nil
+            pageIntent = .none
+            flow = .idle
+        case .downloading:
+            cancelDownload?()
+            cancelDownload = nil
+            // Sparkle 随后回 dismissed,那边再收尾;这里先把进度条撤掉。
+            flow = .idle
+        default:
+            break
+        }
+    }
+
+    /// 安装时 App 没能退出(被什么拦住了),再试一次。
+    func retryTerminatingForInstall() {
+        retryTerminating?()
+    }
+
+    /// 设置窗口关掉了:攥着的「找到了」不能一直不答(Sparkle 的会话会一直挂着,周期检查也进不来)——答 dismiss,
+    /// 版本信息留着,下次打开页面照样显示;「下完待装」同理答 dismiss = 退出时安装。检查中的就取消。
+    func settingsWindowClosed() {
+        if let reply = foundReply {
+            foundReply = nil
+            reply(.dismiss)
+        }
+        if let reply = readyReply {
+            readyReply = nil
+            installOnQuit = true
+            reply(.dismiss)
+        }
+        if case .checking = flow {
+            cancelCheck?()
+            cancelCheck = nil
+            pageIntent = .none
+        }
+        if flow != .idle, !flow.isBusyInBackground { flow = .idle }
+    }
+
+    /// 把设置窗口翻到「软件更新」页并叫出来(信箱 + subject 两条路,见 AppActions.requestSettings)。
+    func showUpdatePage() {
+        AppActions.shared.requestSettings(.softwareUpdate)
+        AppActions.shared.openSettings?()
+    }
+
+    private func clearSessionClosures() {
+        foundReply = nil
+        readyReply = nil
+        cancelCheck = nil
+        cancelDownload = nil
+        retryTerminating = nil
+    }
+
+    private func handleDriver(_ event: SoftwareUpdateDriver.Event) {
+        switch event {
+        case .permissionRequest(let reply):
+            // 首次运行「要不要自动检查」的问询:不弹窗,按设置页那个开关的当前值答;不发系统档案。
+            reply(SUUpdatePermissionResponse(automaticUpdateChecks: automaticallyChecksForUpdates, sendSystemProfile: false))
+        case .userInitiatedCheck(let cancel):
+            cancelCheck = cancel
+            flow = .checking
+        case .found(let item, let state, let reply):
+            cancelCheck = nil
+            let downloaded = state.stage != .notDownloaded
+            var next = SoftwareUpdateItem(appcastItem: item, downloaded: downloaded)
+            // 同一版再次被找到时,上一次 releaseNotesLink 下回来的正文别丢。
+            if next.notesHTML == nil, let kept = pendingItem, kept.version == next.version {
+                next.notesHTML = kept.notesHTML
+                next.notesArePlainText = kept.notesArePlainText
+            }
+            pendingItem = next
+            updatedToVersion = nil
+            switch pageIntent {
+            case .install:
+                pageIntent = .none
+                flow = downloaded ? .readyToInstall : .downloading(received: 0, expected: nil)
+                reply(.install)
+            case .check:
+                pageIntent = .none
+                flow = .idle
+                // 攥着不答:页面上「立即更新」才答 install,窗口关掉答 dismiss。
+                foundReply = reply
+            case .none:
+                // 周期检查,没人在页面上等:记下来给侧栏 / 页面显示,立刻 dismiss 让 Sparkle 结束这一轮。
+                // 自动下载开着时 stage 已是 downloaded,dismiss 之后 Sparkle 会在退出时装,页面据 installOnQuit 说明。
+                flow = .idle
+                if downloaded { installOnQuit = true }
+                reply(.dismiss)
+            }
+        case .releaseNotes(let download):
+            guard var item = pendingItem else { return }
+            let encoding = Self.encoding(ianaName: download.textEncodingName)
+            item.notesHTML = String(data: download.data, encoding: encoding) ?? String(decoding: download.data, as: UTF8.self)
+            item.notesArePlainText = (download.mimeType ?? "").hasPrefix("text/plain")
+            pendingItem = item
+        case .releaseNotesFailed(let error):
+            logger.notice("release notes download failed: \(error.localizedDescription, privacy: .public)")
+        case .notFound(_, let acknowledge):
+            cancelCheck = nil
+            foundReply = nil
+            pageIntent = .none
+            pendingItem = nil
+            installOnQuit = false
+            flow = .idle
+            acknowledge()
+        case .failed(let error, let acknowledge):
+            clearSessionClosures()
+            pageIntent = .none
+            flow = .failed(message: error.localizedDescription)
+            acknowledge()
+        case .downloadStarted(let cancel):
+            cancelDownload = cancel
+            flow = .downloading(received: 0, expected: nil)
+        case .downloadExpectedLength(let expected):
+            if case .downloading(let received, _) = flow {
+                flow = .downloading(received: received, expected: expected)
+            } else {
+                flow = .downloading(received: 0, expected: expected)
+            }
+        case .downloadReceived(let length):
+            if case .downloading(let received, let expected) = flow {
+                flow = .downloading(received: received + length, expected: expected)
+            }
+        case .extractionStarted:
+            cancelDownload = nil
+            flow = .extracting(progress: 0)
+        case .extractionProgress(let progress):
+            flow = .extracting(progress: progress)
+        case .readyToInstall(let reply):
+            readyReply = reply
+            pendingItem?.downloaded = true
+            installOnQuit = false
+            flow = .readyToInstall
+        case .installing(let applicationTerminated, let retry):
+            retryTerminating = retry
+            isInstallingUpdate = true
+            flow = .installing(applicationTerminated: applicationTerminated)
+        case .installedAndRelaunched(_, let acknowledge):
+            // 重启后的第一个回调:上一版装好了。页面说一句「已更新到 X」;此时手里不该还有任何待装的版本。
+            updatedToVersion = Self.appVersionString
+            pendingItem = nil
+            installOnQuit = false
+            flow = .idle
+            acknowledge()
+        case .dismissed:
+            clearSessionClosures()
+            if case .installing = flow { return }
+            flow = .idle
+        case .focusRequested:
+            showUpdatePage()
+        }
+    }
+
+    private static func encoding(ianaName: String?) -> String.Encoding {
+        guard let name = ianaName else { return .utf8 }
+        let cf = CFStringConvertIANACharSetNameToEncoding(name as CFString)
+        guard cf != kCFStringEncodingInvalidId else { return .utf8 }
+        return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))
+    }
     /// Sparkle 已经开始安装更新(willInstallUpdate 回调过)—— 接下来那次进程终止是它发起的重启。
     /// 给 AppExit 在 applicationShouldTerminate 里把原因记成 sparkle_install 用。
     private(set) var isInstallingUpdate = false
@@ -60,7 +370,8 @@ final class SparkleUpdaterManager: ObservableObject {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
 
-    let controller: SPUStandardUpdaterController
+    let updater: SPUUpdater
+    private let driver: SoftwareUpdateDriver
     private let bridge: UpdaterDelegateBridge
 
     private init() {
@@ -79,13 +390,18 @@ final class SparkleUpdaterManager: ObservableObject {
         bridge.allowedChannelsProvider = {
             AppSettings.shared.receiveBetaUpdates ? [UpdateChannel.betaChannelName] : []
         }
-        controller = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: bridge,
-            userDriverDelegate: nil
-        )
-        // startingUpdater: true 的首次检查是异步排程的,不会在这一行之前回调,晚一步接线安全。
+        let driver = SoftwareUpdateDriver()
+        self.driver = driver
+        let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: bridge)
+        self.updater = updater
+        // start 排的首次周期检查是异步的,不会在下面两行之前回调,先建再接线安全。
         bridge.onEvent = { [weak self] event in self?.handle(event) }
+        driver.onEvent = { [weak self] event in self?.handleDriver(event) }
+        do {
+            try updater.start()
+        } catch {
+            logger.error("updater failed to start: \(error.localizedDescription, privacy: .public)")
+        }
         if AppSettings.shared.receiveBetaUpdates {
             Task { await refreshBetaFeed(force: false) }
         }
@@ -124,43 +440,51 @@ final class SparkleUpdaterManager: ObservableObject {
     // build.sh 写进 Info.plist 的 SUEnableAutomaticChecks 是**默认值**,用户改过之后
     // 以 UserDefaults 为准,两者不冲突。
     var automaticallyChecksForUpdates: Bool {
-        get { controller.updater.automaticallyChecksForUpdates }
+        get { updater.automaticallyChecksForUpdates }
         set {
             objectWillChange.send()
-            controller.updater.automaticallyChecksForUpdates = newValue
+            updater.automaticallyChecksForUpdates = newValue
         }
     }
 
     /// ⚠️ 只在 automaticallyChecksForUpdates 为 true 时才有意义(Sparkle 的语义:
     /// 先有周期检查,才谈得上自动下载),UI 上因此把它做成从属行并跟着置灰。
     var automaticallyDownloadsUpdates: Bool {
-        get { controller.updater.automaticallyDownloadsUpdates }
+        get { updater.automaticallyDownloadsUpdates }
         set {
             objectWillChange.send()
-            controller.updater.automaticallyDownloadsUpdates = newValue
+            updater.automaticallyDownloadsUpdates = newValue
         }
     }
 
     /// Sparkle 上次真正跑过一次检查(手动或周期)的时间;从没查过为 nil。给「关于」页「检查更新」
     /// 那一行的副标题用 —— 「自动检查」开着的人从这里能确认它真的在跑,而不是一个不知道生效没生效
     /// 的开关。Sparkle 自己把它存在 UserDefaults(SULastCheckTime),这里只是转发。
-    var lastUpdateCheckDate: Date? { controller.updater.lastUpdateCheckDate }
+    var lastUpdateCheckDate: Date? { updater.lastUpdateCheckDate }
 
-    // 给"关于"页的手动"检查更新"按钮用——sender 传 nil 时 Sparkle 自己处理"检查中/
-    // 已是最新/发现新版本"这几种状态的 UI 展示,不需要我们自己维护 loading 状态或者
-    // 判断结果再手动弹 alert(旧 UpdateChecker.swift 那套手写逻辑才需要自己管这些)。
-    //
-    // 开着「接收测试版」时先(按 TTL)把 Release 列表刷一遍再交给 Sparkle:地址是它开始检查那一刻
-    // 同步来问的,不先刷就可能拿着一小时前的答案去查。刷新最多等 10 秒(URLRequest 超时),
-    // 失败就用缓存 / 默认地址,不会卡死这颗按钮。
+    /// 用户发起的「检查更新」(「软件更新」页的按钮、菜单栏右键菜单、面板底栏)。先把设置窗口翻到
+    /// 「软件更新」页再查 —— 检查中 / 已是最新 / 发现新版本都显示在那一页上,跟系统设置从菜单点「检查更新」
+    /// 会落到软件更新面板一个意思;不再有 Sparkle 自己的弹窗。Sparkle 已有会话在跑(比如后台正在下载)时
+    /// 它不接受新检查,这里同样不动,页面照旧显示进行中的状态。
     func checkForUpdates() {
+        showUpdatePage()
+        guard canCheckForUpdates else { return }
+        pageIntent = .check
+        flow = .checking
+        startCheck()
+    }
+
+    /// 真正把检查交给 Sparkle。开着「接收测试版」时先(按 TTL)把 Release 列表刷一遍:地址是它开始检查那一刻
+    /// 同步来问的,不先刷就可能拿着一小时前的答案去查。刷新最多等 10 秒(URLRequest 超时),失败就用
+    /// 缓存 / 默认地址,不会卡死。
+    private func startCheck() {
         guard AppSettings.shared.receiveBetaUpdates else {
-            controller.checkForUpdates(nil)
+            updater.checkForUpdates()
             return
         }
         Task {
             await refreshBetaFeed(force: false)
-            controller.checkForUpdates(nil)
+            updater.checkForUpdates()
         }
     }
 
@@ -172,7 +496,7 @@ final class SparkleUpdaterManager: ObservableObject {
         if enabled {
             Task {
                 await refreshBetaFeed(force: true)
-                controller.updater.checkForUpdatesInBackground()
+                updater.checkForUpdatesInBackground()
             }
         } else {
             betaFeedURL = nil

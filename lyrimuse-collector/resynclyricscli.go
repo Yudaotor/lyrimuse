@@ -151,6 +151,13 @@ func runResyncLyrics(keys []string, apply bool) int {
 			fmt.Println("   写回时这条已不在缓存里,跳过")
 			continue
 		}
+		// 跟 rescoreLyrics 同一份口径:计数按打分版本归零(见 enrichEntry.LyricsRescoreVersion)。
+		// 这条 CLI 不过 needsLyricsRescore 那道上限闸,所以它推进的次数此前可以超过 3
+		// (本机有 2 条计到 4);按版本计之后这几次只影响本版剩余的自动尝试次数。
+		if cur.LyricsRescoreVersion != lyricsScoringVersion {
+			cur.LyricsRescoreCount = 0
+			cur.LyricsRescoreVersion = lyricsScoringVersion
+		}
 		cur.LyricsRescoreCount++
 		cur.LyricsRescoreTS = time.Now().Unix()
 		if len(seen) > 0 {

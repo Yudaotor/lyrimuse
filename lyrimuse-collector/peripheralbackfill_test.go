@@ -96,6 +96,18 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: true,
 		},
+		// 以下两条 2026-09-10 补:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
+		// 故意扣掉的,补多少轮都不会有 —— 以前照样算缺,本机 42 条只缺这一项的条目每条白补 5 轮。
+		{
+			name:   "周杰伦只缺网易云链接:不补(那个链接是故意不给的)",
+			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; return e }(),
+			artist: "周杰伦", want: false,
+		},
+		{
+			name:   "周杰伦缺网易云链接又缺主色:补(名单只免掉网易云这一项)",
+			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; e.AccentColor = ""; return e }(),
+			artist: "周杰伦", want: true,
+		},
 	}
 	for _, c := range cases {
 		if got := needsPeripheralBackfill(c.e, c.artist, ""); got != c.want {

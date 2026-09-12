@@ -73,6 +73,9 @@ type musixmatchResult struct {
 	// lrclibResult.plainOnly,见那边的头注——分数钉死 -1、绝不被自动路径选中,只有用户
 	// 在「搜索候选歌词」弹窗里明确采纳才生效。
 	plainOnly bool
+	// instrumental:源明确说这首是纯音乐(2026-09-11 加)。只由 pickMusixmatchTrackRow
+	// 的第三趟置位,含义见那边。跟 lrc 互斥——置位时 lrc 一定是空的。
+	instrumental bool
 }
 
 var (
@@ -169,6 +172,20 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	if !ok {
 		return musixmatchResult{}
 	}
+	// 第三趟认下来的纯音乐(2026-09-11):字幕/纯文本/逐字/译文四个接口按契约全是空手
+	// (那一行 has_subtitles=0 且 has_lyrics=0,见 pickMusixmatchTrackRow 第三趟的头注),
+	// 一个都不发,只把这个结论带出去。enrich.go 那边按 `mxLyr=="" && mx.instrumental`
+	// 的既有形状消费,跟 lrclib/qq/netease 三路同款。
+	if match.instrumental {
+		return musixmatchResult{
+			instrumental: true,
+			title:        match.title,
+			artist:       match.artist,
+			album:        match.album,
+			cover:        match.cover,
+			durationSecs: match.durationSecs,
+		}
+	}
 	// hasSubtitles==false 时**不发** track.subtitle.get:那一趟按契约必然 404(见
 	// pickMusixmatchTrackRow),白等一个网络往返。有 subtitles 却取回空仍照旧往下走纯文本
 	// 回退 —— 那是"说有却拿不到"的异常,不是"本来就没有"。
@@ -210,7 +227,12 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 		}
 		return musixmatchResult{lrc: plain, plainOnly: true, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 	}
-	yrc := musixmatchRichsync(ctx, match.trackID)
+	// hasRichsync==false 时**不发** track.richsync.get —— 跟上面 hasSubtitles 那道闸
+	// 同一个理由、同一份契约(2026-09-11)。实测 16 首里 4 首是 0(25%),全部 404。
+	var yrc string
+	if match.hasRichsync {
+		yrc = musixmatchRichsync(ctx, match.trackID)
+	}
 	tr := musixmatchTranslationLRC(ctx, match.trackID, lrc, trLang)
 	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 }
@@ -416,6 +438,17 @@ type musixmatchTrackMatch struct {
 	// hasSubtitles:这首歌在 Musixmatch 上有没有**做过时间轴**。2026-09-02 加。
 	// false 时 track.subtitle.get 必然 404,调用方直接跳过那一趟、去问纯文本接口。
 	hasSubtitles bool
+	// hasRichsync:有没有**逐字**(词级)时间轴。2026-09-11 加,跟 hasSubtitles 同一个理由
+	// 和同一份契约——false 时 track.richsync.get 必然 404。
+	//
+	// 实测坐实(2026-09-11,16 首横跨欧美/日/韩/华语/纯音乐):has_richsync 对
+	// track.richsync.get 的结果**预测 16/16 全中**(1→200、0→404),其中 4 首是 0(25%)。
+	// 关键的一首是五月天《倔強》——has_subtitles=1、has_lyrics=1,走的是主路径,
+	// 但 has_richsync=0;没有这道闸就每次都白打一趟往返。
+	hasRichsync bool
+	// instrumental:源明确说这首是纯音乐。**只由第三趟置位**,见 pickMusixmatchTrackRow。
+	// 置位即意味着前两趟都空手(既没字幕也没词),调用方据此直接返回、不再问任何接口。
+	instrumental bool
 }
 
 // musixmatchTrackRow 是 track.search 响应里的一条曲目。抽成命名类型是为了让挑选逻辑
@@ -440,6 +473,13 @@ type musixmatchTrackRow struct {
 	// 有有效候选"的缓存条目里,按 max() 口径偏差 >12% 的有 7 条(13.5%),
 	// 其余四源合计 4.3%。字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
 	TrackLength int `json:"track_length"`
+	// HasRichsync / Instrumental:2026-09-11 补上解析,同样是"字段本来就在响应里"——
+	// track.search 一行返回 38 个字段,这个结构原来只声明了 8 个。
+	//   · HasRichsync 给 resolveMusixmatchLyric 省掉必然 404 的那趟 track.richsync.get;
+	//   · Instrumental 是这个源对"这首没有词"的**明确断言**,喂给 enrich.go 的
+	//     instrumentalMarker 当第四个确证源(此前只有 lrclib / qq / netease 三个)。
+	HasRichsync  int `json:"has_richsync"`
+	Instrumental int `json:"instrumental"`
 }
 
 // pickMusixmatchTrackRow 从一批搜索结果里挑出这首歌。纯函数,给单测直接覆盖。
@@ -457,6 +497,28 @@ type musixmatchTrackRow struct {
 //
 // 两趟不能合成一趟按分排序:合起来的话,一条"有词无时间轴"的候选可能因为排在前面就顶掉
 // 后面那条有时间轴的,把一份能自动采纳的歌词降级成要用户手点的纯文本,是净损失。
+//
+// **第三趟**(2026-09-11):前两趟都空手时,再扫一遍找"身份对得上、而且源明确标了
+// instrumental==1"的行,认下来当纯音乐断言(不带任何歌词)。
+//
+// 为什么必须单独一趟:纯音乐曲目在 Musixmatch 上的形状是 **has_subtitles=0 且
+// has_lyrics=0**——前两趟的闸门按定义把它们全部筛掉,于是这个源对纯音乐曲目一直是
+// "什么都没返回",instrumental 这个字段就算解析了也永远走不到调用方手里。实测坐实
+// (2026-09-11,page_size=5 的真实响应):
+//
+//	久石譲《Merry-Go-Round of Life》 5 行全是 sub=0 lyr=0,行 1 instrumental=1
+//	Explosions In The Sky《Your Hand In Mine》 5 行全是 sub=0 lyr=0,**5 行全 instrumental=1**
+//
+// 两首都是现在的 picker 直接返回 false 的。
+//
+// ⚠️ 判据只认 `instrumental==1` 这个**显式字段**,不能放宽成"身份对得上但没有可用正文"——
+// 那是"这个源没收录/没做"，跟"这首本来就没有词"是两回事,混起来会把一堆查不到的歌
+// 误报成纯音乐。这跟 LyricsKind 那边"确证过的纯音乐跟没搜到是两回事"是同一条纪律。
+//
+// ⚠️ 第三趟排在最后、而不是按 instrumental 优先:同一首曲子不同行的 instrumental 并不
+// 一致(实测 Ludovico Einaudi《Nuvole Bianche》5 行里 3 行 instrumental=1,但另有一行
+// sub=1/lyr=1/instrumental=0 —— 有人给这首钢琴曲传了"歌词")。有真正的正文时以正文为准,
+// 别让一个标记把能用的候选顶掉。
 func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string) (musixmatchTrackMatch, bool) {
 	accept := func(r musixmatchTrackRow) bool {
 		return lyricTitleAccepted(r.TrackName, localTitle) && lyricSourceArtistMatches(r.ArtistName, artist)
@@ -470,6 +532,7 @@ func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string
 			cover:        r.AlbumCoverart500x500,
 			durationSecs: float64(r.TrackLength),
 			hasSubtitles: r.HasSubtitles == 1,
+			hasRichsync:  r.HasRichsync == 1,
 		}
 	}
 	for _, r := range rows {
@@ -480,6 +543,13 @@ func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string
 	for _, r := range rows {
 		if r.HasLyrics == 1 && accept(r) {
 			return build(r), true
+		}
+	}
+	for _, r := range rows {
+		if r.Instrumental == 1 && accept(r) {
+			m := build(r)
+			m.instrumental = true
+			return m, true
 		}
 	}
 	return musixmatchTrackMatch{}, false

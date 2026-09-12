@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// 按播放器决定要不要 scrobble 到 Last.fm(2026-09-10,借鉴清单 S10:Sleeve 的「选择哪些 App scrobble 到 Last.fm」)。
+// 按播放器决定要不要 scrobble 到 Last.fm(2026-09-10,借鉴清单 S10)。
 //
 // 设置 → 账号 → Last.fm → 设置 →「Scrobble 的播放器」取消勾选的写进 features.json 的 lastfm_excluded_bundles
 // (bundle id 列表;内置播放器用各自的 bundle id,信任列表里的 App / 浏览器用它们自己的)。缺失 / 空 = 全部上送,

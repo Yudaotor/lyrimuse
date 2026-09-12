@@ -14,6 +14,14 @@ public enum UpdateChannel {
     /// 匿名读公开仓库的 Release 列表,**不带凭据**;30 条足够覆盖最近若干正式版 + 预发布。跟 star 数同一个 host,
     /// 01 章「对外请求」那张表登记的是 host 级别。
     public static let releasesAPIURL = URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=30")!
+
+    /// 某一版的 GitHub Release 页。tag = "v" + 展示版本(build-version.sh 的映射:vX.Y.Z / vX.Y.Z-beta.N 去掉 v
+    /// 就是 CFBundleShortVersionString),所以从展示版本能反推回去。「软件更新」页那个 ⓘ 用它兜底
+    /// (appcast 自己带 link / fullReleaseNotesLink 时优先用那个)。
+    public static func releasePageURL(displayVersion: String) -> URL {
+        URL(string: "https://github.com/\(repository)/releases/tag/v\(displayVersion)")
+            ?? URL(string: "https://github.com/\(repository)/releases")!
+    }
     /// 多久重查一次 Release 列表。预发布不是分钟级的事,1 小时够;开关切换与手动「检查更新」会强制刷新。
     public static let refreshTTL: TimeInterval = 3600
     /// 失败 / 限流后多久才允许再试。

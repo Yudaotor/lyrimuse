@@ -298,6 +298,66 @@ func runPlaybackPositionTests() {
             expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(-1), rate: 1),
                         nil, "spotify 探针: 时钟倒退不用")
         }
+        // ---- Spotify 探针两次采样(2026-09-09):钟得在走才采信,读数从此折进整曲偏置,读错就是整首错 ----
+        do {
+            let gap = SpotifyPositionProbe.livenessGapSeconds
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 4.96 + gap, wallGap: gap), true,
+                        "spotify 探针活性: 前进量等于墙钟间隔 → 采信")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 4.96 + gap * 0.7, wallGap: gap), true,
+                        "spotify 探针活性: 往返抖动让前进量偏少三成 → 仍采信")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 0, second: 0, wallGap: gap), false,
+                        "spotify 探针活性: 钟停着(缓冲中读到 0/0)→ 不采,否则整曲慢 3 秒")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 4.96 + gap * 0.3, wallGap: gap), false,
+                        "spotify 探针活性: 只走了三成 → 不采")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 2.0, wallGap: gap), false,
+                        "spotify 探针活性: 倒退(拖动)→ 不采")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 30.0, wallGap: gap), false,
+                        "spotify 探针活性: 跳跃(换歌/拖动)→ 不采")
+            expectEqual(SpotifyPositionProbe.clockIsRunning(first: 1, second: 2, wallGap: 0), false,
+                        "spotify 探针活性: 墙钟间隔为 0 无法判定 → 不采")
+        }
+        // ---- Spotify 探针钟领先量的学习(2026-09-09 第三版,用户报「有一点点偏快」;同日晚订正:残差是增量) ----
+        // 真机:蓝牙 AirPods 先验 0.5 下第一次暂停量到残差 0.07 → 真值 0.57;内建输出 0.06~0.14。
+        do {
+            func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.5, residual: 0.07, hasPrior: false)), 0.57,
+                        "探针领先量: 没学过时 = 先验 + 残差(19:43 真机:0.5 + 0.07 = 0.57,不是 0.07)")
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.57, residual: 0.0, hasPrior: true)), 0.57,
+                        "探针领先量: 学准了之后残差≈0,值不动")
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.57, residual: -0.46, hasPrior: true)), 0.34,
+                        "探针领先量: 残差 −0.46(真值 0.11)时 α=0.5 往真值靠一半")
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.569, residual: 2.3, hasPrior: true)), 0.569,
+                        "探针领先量: 残差 >1.5s(暂停中拖了进度条)不学")
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.5, residual: -1.8, hasPrior: false)), 0.5,
+                        "探针领先量: 没先验时离谱残差同样不采")
+            expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.1, residual: -0.3, hasPrior: true)), -0.05,
+                        "探针领先量: 允许学到负值(探针钟落后的链路)")
+            expectEqual(LocalPlaybackSource.probeLeadPrior(for: .bluetooth), 0.5, "探针领先量先验: 蓝牙 0.5(真机 0.51~0.65)")
+            expectEqual(LocalPlaybackSource.probeLeadPrior(for: .builtIn), 0.1, "探针领先量先验: 内建 0.1(真机 0.06~0.14)")
+            expectEqual(LocalPlaybackSource.probeLeadPrior(for: .airPlay), 0, "探针领先量先验: 没量过的传输类型不假设")
+            expectEqual(LocalPlaybackSource.probeLeadPrior(for: .other), 0, "探针领先量先验: 未知设备不假设")
+        }
+        // ---- App → collector 的位置偏置文件(2026-09-09):JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
+        do {
+            let rec = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
+                                         anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 1_789_002_067_341)
+            let encoded = (try? PositionBiasFile.encode(rec)).flatMap { String(data: $0, encoding: .utf8) }
+            expectEqual(encoded,
+                        #"{"anchor_elapsed":0,"artist":"Olivia Rodrigo","bias_secs":-1.957,"bundle_id":"com.spotify.client","title":"vampire","written_at_ms":1789002067341}"#,
+                        "位置偏置文件: 编码结果必须逐字节等于 Go 测试里的 positionBiasFixture(键名 / 键序 / 数字格式)")
+            let cleared = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
+                                             anchorElapsed: nil, biasSecs: 0, writtenAtMs: 1)
+            let clearedJSON = (try? PositionBiasFile.encode(cleared)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            // 合成的 Codable 对 nil 可选项是**省略键**而不是写 null;Go 侧 *float64 两种都解成 nil → 不扣。
+            expectEqual(clearedJSON.contains(#""anchor_elapsed""#), false,
+                        "位置偏置文件: 清零记录不带 anchor_elapsed 键(Go 侧 *float64 解成 nil → 不扣)")
+            expectEqual(clearedJSON.contains(#""bias_secs":0"#), true, "位置偏置文件: 清零记录显式写 bias_secs: 0")
+            expectEqual(rec.sameContent(as: PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
+                                                                anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 9)), true,
+                        "位置偏置文件: 只有写入时刻不同不算内容变化(不重写)")
+            expectEqual(rec.sameContent(as: cleared), false, "位置偏置文件: 偏置变了要重写")
+            expectEqual(PositionBiasFile.fileName, "lyrimuse-position-bias.json", "位置偏置文件: 文件名与 Go 侧 main.go 逐字节一致")
+        }
 
         // ---- 暂停时刻外推(2026-09-07):MediaRemote 指令暂停时 Spotify 不发布冻结值 ----
         //
@@ -359,6 +419,19 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 152.673), false, "偏置归属: 暂停冻结锚点作废偏置")
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 50.844), false, "偏置归属: 恢复锚点作废偏置")
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: nil), true, "偏置归属: 没有锚点信息(AppleScript 路径)不动")
+        // 2026-09-09:偏置归属改成"量它时对着的那个锚点"。Spotify 开播半秒内会把 0@T 改发成 1.923@T
+        // (BIRDS OF A FEATHER 实测),按旧判据这首歌的偏置活不过下一拍;探针量出的负偏置也要能跟着
+        // 一个 elapsed>0 的锚点活下去。
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 1.923, measuredAgainst: 1.923), true,
+                    "偏置归属: 对着 1.923 量的偏置,锚点仍是 1.923 就保留")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 1.923, measuredAgainst: 0), false,
+                    "偏置归属: 对着 0 量的偏置,锚点改发成 1.923 就作废")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 0, measuredAgainst: 0), true,
+                    "偏置归属: 开播锚点重复出现(同 elapsed)保留")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 41.377, measuredAgainst: 0), false,
+                    "偏置归属: 暂停冻结锚点(41.377)作废对着开播锚点量的偏置")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: nil, measuredAgainst: 1.923), true,
+                    "偏置归属: 没有锚点信息时不动,与 measuredAgainst 无关")
 
         // ---- 锚点冻结的源:暂停时不能回退到那个恒为 0 的 elapsedTime(2026-08-21) ----
         //
@@ -914,18 +987,190 @@ func runPlaybackPositionTests() {
         // 换歌归零 —— 系统那块表恰恰不做这件事,这条就是整个改动的要害。
         let changed = R.advance(t10, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(11))
         expectEqual(changed.position, 0, "电台时钟: 换歌必须归零(系统的位置不复位,偏差就是从这来的)")
-        // 暂停冻结,恢复不补账。
+        // 暂停:上一拍还在播 → 那段算数(基本都在播);之后每一拍冻结。
         let played = R.advance(changed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(21))
         expectEqual(played.position, 10, "电台时钟: 暂停前走了 10 秒")
-        let paused = R.advance(played, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(120))
-        expectEqual(paused.position, 10, "电台时钟: 暂停时位置冻结")
+        let pausing = R.advance(played, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(23))
+        expectEqual(pausing.position, 12, "电台时钟: 以暂停收尾的那一段基本都在播,照算")
+        let paused = R.advance(pausing, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(120))
+        expectEqual(paused.position, 12, "电台时钟: 暂停期间位置冻结")
+        // ⚠️ 回归守卫(2026-09-10 用户报「暂停久一点再恢复,歌词进度就不正常」):恢复那一拍绝不能把整段
+        // 暂停间隔算成播放时间。按"这一拍在播"累加的老写法在这里会跳到 109 —— 日志实测前跳 3.5~5.8 秒。
         let resumed = R.advance(paused, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125))
-        expectEqual(resumed.position, 15, "电台时钟: 恢复后不把暂停那段补进来")
+        expectEqual(resumed.position, 12, "电台时钟: 恢复那一拍不把暂停那段算进来")
+        let afterResume = R.advance(resumed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(128))
+        expectEqual(afterResume.position, 15, "电台时钟: 恢复之后照常走")
         // 单拍上限:休眠 / 长卡顿后墙钟差不再等于"播了多久"。
-        let slept = R.advance(resumed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125 + 7200))
+        let slept = R.advance(afterResume, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(128 + 7200))
         expectEqual(slept.position, 15 + R.maxAdvancePerTick, "电台时钟: 超长间隔按上限截断,不凭空跳一大截")
         // 时钟倒退(NTP 校时)不减位置。
         expectEqual(R.advance(slept, trackKey: "Clairo|Juna", playing: true, now: t0).position, slept.position,
                     "电台时钟: 墙钟倒退时位置不后退")
+    }
+
+    // ---- 起表时刻:用观察到换歌的那一刻,不是轮询那一拍(2026-09-10,用户报「歌词进度偏慢」)----
+    // 实测同一晚开台那次:锚点说播放头 0.000 是 23:18:22,标题到达事件流 23:18:23.425,App 应用新曲目
+    // 23:18:23.816。老写法在应用那一拍归零 → 整首歌恒慢 1.8 秒。
+    do {
+        typealias R = RadioTrackClock
+        typealias W = MediaControlStreamWatcher
+        let t0 = Date(timeIntervalSince1970: 1_788_000_000)
+        // seedPosition 的三个边界。
+        expectEqual(R.seedPosition(startedAt: nil, now: t0), 0, "起表: 没有观察时刻就是 0(跟没这个参数时一样)")
+        expectEqual(R.seedPosition(startedAt: t0.addingTimeInterval(5), now: t0), 0, "起表: 观察时刻在未来 → 0,不要负位置")
+        expectEqual((R.seedPosition(startedAt: t0, now: t0.addingTimeInterval(1.43)) * 1000).rounded(), 1430,
+                    "起表: 正常情况就是这段间隔")
+        expectEqual(R.seedPosition(startedAt: t0, now: t0.addingTimeInterval(600)), R.maxStartSeed,
+                    "起表: 错配的陈旧时刻要夹住,不能把位置推走几十秒")
+        // 换歌那一拍按观察时刻播种;**同一首歌的后续拍不再重新播种**。
+        let seeded = R.advance(nil, trackKey: "NCT 127|英雄", playing: true, now: t0.addingTimeInterval(1.816),
+                               startedAt: t0.addingTimeInterval(0.999))
+        expectEqual((seeded.position * 1000).rounded(), 817, "起表: 开台那次实测应播种 0.817 秒(老写法是 0)")
+        let next = R.advance(seeded, trackKey: "NCT 127|英雄", playing: true, now: t0.addingTimeInterval(4.816),
+                             startedAt: t0.addingTimeInterval(0.999))
+        expectEqual((next.position * 1000).rounded(), 3817, "起表: 同一首歌后续拍只累加,不拿观察时刻再播种一次")
+        // 换歌判定:空标题(切台/加载中实测会先吐几行只有 artist 的载荷)不算换歌。
+        expectEqual(W.changedTrackKey(before: ["artist": "NCT 127", "title": "英雄"],
+                                      after: ["artist": "NCT 127", "title": "Fact Check (不可思议)"]),
+                    "NCT 127|Fact Check (不可思议)", "换歌判定: 标题变了就是换歌,给出新 key")
+        expectEqual(W.changedTrackKey(before: ["artist": "NCT 127", "title": "英雄"],
+                                      after: ["artist": "NCT 127", "title": "英雄"]),
+                    nil, "换歌判定: 没变就不是换歌")
+        expectEqual(W.changedTrackKey(before: ["artist": "周杰伦", "title": "说好的幸福呢"],
+                                      after: ["artist": "NCT 127", "title": "  "]),
+                    nil, "换歌判定: 空标题不算换歌(切台加载中的那几行)")
+        // 换歌时刻:锚点刚打好就用锚点(带亚秒估计),陈旧锚点只能退回到达时刻。
+        let ts = t0
+        expectEqual(W.trackChangeInstant(anchorTimestamp: ts, tight: true, arrivedAt: ts.addingTimeInterval(1.425)),
+                    ts.addingTimeInterval(0.999), "换歌时刻: 锚点新鲜就用锚点时刻(整秒的亚秒部分按既有估计法补)")
+        expectEqual(W.trackChangeInstant(anchorTimestamp: ts, tight: false, arrivedAt: ts.addingTimeInterval(236.8)),
+                    ts.addingTimeInterval(236.8),
+                    "换歌时刻: 陈旧锚点(电台换歌实测 age 236s/487s)绝不能当换歌时刻,退回到达时刻")
+        expectEqual(W.trackChangeInstant(anchorTimestamp: nil, tight: true, arrivedAt: ts.addingTimeInterval(3)),
+                    ts.addingTimeInterval(3), "换歌时刻: 没有可解析的时间戳就用到达时刻")
+    }
+
+    // ---- 主持人说话那一段:越过真曲长就把歌词收掉(2026-09-11)----
+    // 实测这个台两首歌之间多出 66~110 秒非歌曲内容,那段时间元数据还停在上一首。
+    do {
+        typealias R = RadioTrackClock
+        expectEqual(R.passedTrackEnd(position: 300, durationSecs: nil), false,
+                    "放完判定: 时长拿不到就一律 false —— 刚换曲时快照里还是整档节目那个大数")
+        expectEqual(R.passedTrackEnd(position: 300, durationSecs: 0), false, "放完判定: 时长为 0 也不判")
+        expectEqual(R.passedTrackEnd(position: 180, durationSecs: 184.653), false, "放完判定: 曲子还没放完")
+        expectEqual(R.passedTrackEnd(position: 184.653 + R.tailGraceSecs, durationSecs: 184.653), false,
+                    "放完判定: 余量之内不收(末句歌词通常结束得比曲长早)")
+        expectEqual(R.passedTrackEnd(position: 184.653 + R.tailGraceSecs + 0.001, durationSecs: 184.653), true,
+                    "放完判定: 越过曲长 + 余量才收")
+    }
+
+    // ---- 落盘副本:App 重启后把表接回去(2026-09-11)----
+    // 实测 2026-09-10 两次装机都把当时那首歌打回 0 起 —— 《Step Up》已播 12.6s,新进程从 0.284s 起。
+    do {
+        typealias F = RadioClockFile
+        let t0 = Date(timeIntervalSince1970: 1_788_000_000)
+        func rec(_ key: String, _ pos: Double, _ at: Date, _ playing: Bool) -> RadioClockRecord {
+            RadioClockRecord(trackKey: key, position: pos, tickedAtMs: Int64(at.timeIntervalSince1970 * 1000),
+                             playing: playing)
+        }
+        let saved = rec("NCT 127|Step Up", 12.6, t0, true)
+        // 编解码往返 + 键名(文件是给下一个进程读的,键名换了就是静默失效)。
+        let data = try! F.encode(saved)
+        expectEqual(String(data: data, encoding: .utf8),
+                    "{\"playing\":true,\"position\":12.6,\"ticked_at_ms\":1788000000000,\"track_key\":\"NCT 127|Step Up\"}",
+                    "落盘副本: 键名与顺序稳定(sortedKeys)")
+        expectEqual(F.decode(data), saved, "落盘副本: 往返相等")
+        expectEqual(F.decode(Data("not json".utf8)), nil, "落盘副本: 坏文件解不出来就当没有,不崩")
+        // 恢复判据三条。
+        expectEqual(F.restorable(nil, trackKey: "NCT 127|Step Up", now: t0.addingTimeInterval(8)), nil,
+                    "恢复: 没有记录就是没有")
+        expectEqual(F.restorable(saved, trackKey: "NCT 127|Piñata", now: t0.addingTimeInterval(8)), nil,
+                    "恢复: 曲目对不上不接(上一首的位置没有参考价值)")
+        expectEqual(F.restorable(rec("NCT 127|Step Up", 12.6, t0, false), trackKey: "NCT 127|Step Up",
+                                 now: t0.addingTimeInterval(8)), nil,
+                    "恢复: 落盘那一刻没在播就不接(停着的那段不能算成播放时间)")
+        expectEqual(F.restorable(saved, trackKey: "NCT 127|Step Up",
+                                 now: t0.addingTimeInterval(F.maxRestoreGap + 1)), nil,
+                    "恢复: 记录太老不接(多半已经不是这一次播放了)")
+        expectEqual(F.restorable(saved, trackKey: "NCT 127|Step Up", now: t0.addingTimeInterval(-5)), nil,
+                    "恢复: 记录来自未来(时钟毛刺)不接")
+        let restored = F.restorable(saved, trackKey: "NCT 127|Step Up", now: t0.addingTimeInterval(8))
+        expectEqual(restored?.position, 12.6, "恢复: 接回落盘时的位置")
+        expectEqual(restored?.playing, true, "恢复: 接回时按'上一拍在播'算,后面那段追得上")
+        // 接回去之后交给既有的 advance:8 秒装机时间照常补上,追赶量由 maxAdvancePerTick 夹住。
+        let after = RadioTrackClock.advance(restored, trackKey: "NCT 127|Step Up", playing: true,
+                                            now: t0.addingTimeInterval(8))
+        expectEqual((after.position * 1000).rounded(), 20600, "恢复: 接回来 12.6 + 停机 8 秒 = 20.6(老写法这里是 0)")
+        let longGap = RadioTrackClock.advance(
+            F.restorable(rec("NCT 127|Step Up", 12.6, t0, true), trackKey: "NCT 127|Step Up",
+                         now: t0.addingTimeInterval(50)),
+            trackKey: "NCT 127|Step Up", playing: true, now: t0.addingTimeInterval(50))
+        expectEqual(longGap.position, 12.6 + RadioTrackClock.maxAdvancePerTick,
+                    "恢复: 停机久一点时追赶量按单拍上限夹住,宁可少算")
+        // 什么时候写盘。
+        expectEqual(F.shouldWrite(previous: nil, next: saved, now: t0), true, "写盘: 第一次无条件写")
+        expectEqual(F.shouldWrite(previous: saved, next: rec("NCT 127|Piñata", 0, t0, true), now: t0), true,
+                    "写盘: 换歌立刻写")
+        expectEqual(F.shouldWrite(previous: saved, next: rec("NCT 127|Step Up", 14, t0, false), now: t0), true,
+                    "写盘: 播放状态翻转立刻写(漏了它,下次恢复会把停着的那段算成播放)")
+        expectEqual(F.shouldWrite(previous: saved, next: rec("NCT 127|Step Up", 14, t0, true),
+                                  now: t0.addingTimeInterval(2)), false,
+                    "写盘: 同一首歌平凡推进不必每拍刷盘")
+        expectEqual(F.shouldWrite(previous: saved, next: rec("NCT 127|Step Up", 30, t0, true),
+                                  now: t0.addingTimeInterval(F.minWriteInterval)), true,
+                    "写盘: 隔够了就刷一次,免得记录太老恢复时被判据 2 挡掉")
+    }
+
+    // ---- 台卡:开台那一刻是唯一能拿到台名台标的时机(2026-09-11)----
+    // 实测两次:2026-09-10 23:18:15 → title 空 / artist `NCT 127`;09-11 00:26:50 → title 空 /
+    // artist `petal radio`。09-10 早先还见过反过来的形态(title 是台名、artist 空)。
+    // 口白期间系统一个字段都不变(抓了整段 61 秒坐实),所以只能靠这一刻记下来。
+    do {
+        typealias C = RadioStationCardFile
+        let hash = "CgkIBRoF0aDTpxkQBA"
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "", artist: "petal radio"),
+                    "petal radio", "台卡: title 空 → artist 就是台名(实测形态)")
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "YEONJUN", artist: ""),
+                    "YEONJUN", "台卡: 反过来的形态同样认(2026-09-10 实测)")
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "   ", artist: "petal radio"),
+                    "petal radio", "台卡: 只有空白也算空")
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "big feelings", artist: "Ariana Grande"),
+                    nil, "台卡: 两个都在 = 真歌,不是台卡")
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "", artist: ""),
+                    nil, "台卡: 两个都空 = 加载中的空载荷,不是台卡")
+        expectEqual(C.stationName(isRadio: false, stationHash: hash, title: "", artist: "petal radio"),
+                    nil, "台卡: 不是电台就无所谓台卡")
+        expectEqual(C.stationName(isRadio: true, stationHash: nil, title: "", artist: "petal radio"),
+                    nil, "台卡: 没有台标哈希就分不了台,不认")
+        expectEqual(C.stationName(isRadio: true, stationHash: hash, title: "",
+                                  artist: String(repeating: "长", count: C.maxNameLength + 1)),
+                    nil, "台卡: 长得离谱的不是台名(多半把一整段口播文案当台名了)")
+        // 换台就作废。
+        let card = RadioStationCard(stationHash: hash, name: "petal radio", artwork: Data([1, 2, 3]))
+        expectEqual(C.card(card, forStation: hash)?.name, "petal radio", "台卡: 同一个台才拿得出来")
+        expectEqual(C.card(card, forStation: "别的台"), nil, "台卡: 换台作废(旧台的名字扣在新台头上更糟)")
+        expectEqual(C.card(card, forStation: nil), nil, "台卡: 已经不是电台了就别拿")
+        expectEqual(C.card(nil, forStation: hash), nil, "台卡: 没抓到就是没抓到,界面退回原样")
+    }
+
+    // ---- 「只勾了 Apple Music」这条路上的电台探针(2026-09-11)----
+    //
+    // 那条路走纯 JXA,AppleScript 问 Music.app 要不到 radioStationHash(MediaRemote 独有的键),
+    // 所以电台整层在这一种配置下曾经完全不生效 —— 判据本身一处 bundleID 都不认,这反而是唯一
+    // 不生效的配置。补法是按曲目探一次 media-control:判据在同一个曲目 key 内不会翻转
+    // (台卡、每首歌各是不同的 key;口白期间系统一个字段都不变、沿用上一首的 key,判据也确实
+    // 还成立),所以缓存到 key 这一粒度就够,换歌才多一次 fork,不必 2 秒一次。
+    do {
+        typealias M = MediaControlClient
+        expectEqual(M.radioProbeNeeded(cachedKey: nil, trackKey: "Clairo|Juna"), true,
+                    "探针: 冷启动没探过就得探(否则开台第一首整首不生效)")
+        expectEqual(M.radioProbeNeeded(cachedKey: "Clairo|Juna", trackKey: "Clairo|Juna"), false,
+                    "探针: 同一首歌不必每拍都问 —— 这条路当初跳过 media-control 就是为了省这次往返")
+        expectEqual(M.radioProbeNeeded(cachedKey: "Clairo|Juna", trackKey: "NCT 127|Step Up"), true,
+                    "探针: 换歌要重探")
+        expectEqual(M.radioProbeNeeded(cachedKey: "|petal radio", trackKey: "Clairo|Juna"), true,
+                    "探针: 台卡→第一首歌是两个 key,同样要重探")
+        expectEqual(M.radioProbeNeeded(cachedKey: "Clairo|Juna", trackKey: ""), true,
+                    "探针: 空 key(载荷还没齐)跟已缓存的不是一回事,别拿旧结果顶上")
     }
 }
