@@ -1,6 +1,6 @@
 # 12. 账号连接与收听记录
 
-> 最后核对：2026-09-12 · 基线：5fcf8e6+工作树
+> 最后核对：2026-09-13 · 基线：28d8036+工作树
 
 ## 定位
 
@@ -177,7 +177,11 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
     - 24 小时这个阈值的取舍:判据④的触发频率天然受"这首歌有没有重新出现在最近记录窗口里"这个前提约束(不是定时器主动扫全库),不会造成频繁的额外请求;太短会浪费限速额度,太长又会让老歌的次数长期显示不准——回到这次要修的问题本身。
 - **`nowPlayingCount`（「正在记录」实时行的次数）没有自愈机制，会跟 `trackPlayCounts` 越差越远**（2026-08-24 用户报「为什么正在记录 17 次、下面历史行 28 次」）：`nowPlayingCount` 只在换歌那一刻（`refreshNowPlayingCount`）取一次，取完之后**不会重取**——设计初衷是防止「取晚了这次播放被 scrobble 进去多算一」，但代价是它跟 `trackPlayCounts` 完全脱钩：后者有上面那三条作废判据持续纠正，前者没有。实测坐实：《Controversy》换歌那一刻取到 16（显示 17），同一时刻 `trackPlayCounts` 经 `resolvePlayCounts` 刷新已经追到 27（显示 28）——查过当天只新增了一次收听，不是"还没并计进去"那种几分钟延迟能解释的量级，根因没能确定到具体是哪一层（不排除 Last.fm 接口本身在那一刻返回了陈旧值），但现象很干脆：这一次取数就是拿到了一个明显偏低的数，取完之后再没人管过它。
   - 修法：`reconcileNowPlayingCount` 挂在 `resolvePlayCounts` 每次合并新 `counts` 的地方——只要 `trackPlayCounts` 学到的总数比当前显示的 `nowPlayingCount - 1` 还高就采纳，**只能涨、不能跌**（`PlayCountRecency.reconciledNowPlayingCount`）。`nowPlayingCountPlayCountKey` 记录当前 nowPlaying 身份的 `playCountKey` 形态，换歌时跟 `nowPlayingCountKey` 一起设、账号重置时一起清。
-  - ⚠️ 已知的窄边界（刻意接受，不是漏想）：如果追赶发生在**当前这次播放自己**已经越过 scrobble 门槛、且 Last.fm 已经把它计进 `userplaycount` 之后，追到的新总数会连这次播放也算进去，`+1` 之后偶发多算一。跟"完全冻结、整段会话数字长期错到离谱"（用户实测的 17 vs 28，差 11）相比，这个窗口窄得多、代价小得多——歌一换就会用全新的换歌取数覆盖掉，不会带到下一首歌头上。
+  - **那个 `+1` 2026-09-13 改成有条件的了**（用户报「这首歌第一次听，歌词窗口却写收听次数 2」）。上一版这里写着"已知的窄边界、偶发多算一"，实测两样都不成立：**第一次听的歌必然多算**——正是这次 scrobble 让它第一次出现在最近记录里，新 key 没有 `playCountVerifiedAt`，`resolvePlayCounts` 对它无条件取数，必定撞在"已入账、还在播"这个窗口上；老歌同样中招，只是 N→N+1 不显眼。本地快照坐实（《Cow-girl moderne》）：`trackPlayCounts` = 1、最近记录里这首只有 1 条，06:02:06 开播 → 约 06:03:30 越过门槛（曲长 169s，门槛 `min(时长/2, 240s)` = 84.5s）→ 06:03:45 取到 `userplaycount` = 1 → 徽标当场 1 跳 2。
+    - **口径**：显示值 = 已落库总数 + （这一次还没落库 ? 1 : 0）。三个写入点（换歌那一刻的乐观顶值、取回真实总数、`reconcileNowPlayingCount` 追赶）统一走 `LastfmStatsService.displayedNowPlayingCount`——散开写正是这次的病根，当时只有追赶那条路无条件 `+1`。
+    - **「这次落库没有」的判据**（`currentPlayIsScrobbled`，三道闸，缺一条就按没入账算、退回 `+1` 的老行为）：①本机正在播的就是这首（比 `playCountKey`，等价于实时行那条判据里的 `!live.remote`）；②有播放锚点，开播时刻由它倒推（`fetchedAt − progressMs`）；③这首歌最新一条**已落库**的 scrobble 跟开播时刻差在 120 秒内（纯判据 `PlayCountRecency.currentPlayIsScrobbled`，有 selftest）。跟实时行认"同一次播放冒出第二行"（`LiveScrobbleRow.absorbedRecent`）是同一把尺子、同一个容差——那边 2026-08-17 就用落库权威值顶替过这个数，只是没下沉到 service，于是歌词窗口的徽标一直吃裸值。③取"这首歌自己的最新一条"而不是"整个列表的最新一条"：中间插进来一条别的设备的 scrobble 会把它挤到第二行。
+    - **允许收回恰好多算的那一次**（`candidate == current - 1`）：否则"只能涨"会把本次会话里已经多算出来的数字永久焊住。再低的跌幅一律不接受——那只可能是 Last.fm 返回了陈旧值（实测过换歌取到 16 而真实 27 的形态），采纳会让数字来回闪。
+    - 顺带修对了两个场景：**连播同一首**（换歌取数被 key 守卫挡住、不重取，第二遍落库后追赶从 N 涨到 N+1，正确）；**App 在歌播过门槛之后才启动**（那时换歌取数拿到的总数已含这次，不再 `+1`）。
 - **Last.fm GET query 要双重编码 `+` 和 `%`**（2026-08-22 实测坐实）：`ws.audioscrobbler.com/2.0/` 的 **GET** 端点会对 query value **多解一次码**——先标准 percent-decode，再按 form-urlencoded 口径解一遍（那一遍把 `+` 当空格）。于是含加号的歌名走标准编码必然 404：`track=夜曲%2B窃爱 (Live)` → `error 6 Track not found`，`track=夜曲%252B窃爱 (Live)` → 命中 `userplaycount=2`。这是**端点级**行为，用真实存在的乐队 `+44`（733,475 听众）独立验证过（`%2B44` 同样 error 6）。入口是 `URLComponents.queryItems`——它按 `urlQueryAllowed` 编码，那套集合**放行 `+`**。修法：`LastfmQuery.escape` 先把 `%` 再把 `+` 各多编一层（顺序不能反），再按 RFC 3986 unreserved 严格转义；不含这两个字符的 value 编出来跟标准编码逐字节相同，对既有请求零影响。⚠️ **只有 GET 这样**：scrobble 走 POST form body（`lastfm.go` 的 `form.Encode()`）只解一遍，套上去反而会把字面 `%2B` 写进曲名——「记得对、却查不到」这个不对称正是本坑的表征。两侧各一份同规则实现（Swift `LyrimuseCore/Networking/LastfmQuery.swift`、Go `lastfmquery.go`），断言逐字节对齐，改一侧必须改另一侧。collector 那侧更要紧：智能档的 `probe`（lastfmcollapse.go）查不到就判「没收录 → 可能折叠歌手串」，是个**不可逆的写侧动作**，查错了就是把正规合体署名折坏（2026-08-22 修时现存 83 条判定缓存里没有含加号的，无既成损失；09-03 重做后 `TestCollapseRequestShape` 钉着双重编码）。
 - **第①级自带图的第二道纠正：本机「封面归属已核实」的图优先于 Last.fm 实体图**（2026-09-01，
   用户报「最近记录里这两首封面显示错了」——陈奕迅《孤独探戈 (live)》《不如这样 (Live)》，

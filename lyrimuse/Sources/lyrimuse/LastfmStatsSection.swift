@@ -1181,6 +1181,11 @@ private struct LiveScrobbleRow: View {
     /// count 是这一行已经落库的次数(含这一次)—— 顶替换歌时取的 nowPlayingCount:
     /// 那个数是 userplaycount+1,若取数发生在这次 scrobble 落库之后就会多算一
     /// (正是截图里 5 vs 4 的来源),而这一行的数永远是 scrobble 后的权威值。
+    ///
+    /// 2026-09-13 起 service 侧自己也认这件事了(`LastfmStatsService.currentPlayIsScrobbled`
+    /// 用的就是下面这个判据、同一个 120 秒容差),`nowPlayingCount` 本身不再多算 —— 这里
+    /// 的顶替因此退成兜底:判据漏判时(比如最近记录还没刷到这条 scrobble)仍由这一行的
+    /// 落库权威值兜住。两处刻意保留,不是忘了删。
     private var absorbedRecent: (id: String, count: Int?)? {
         guard let live, !live.remote, let anchor = PlaybackCoordinator.shared.anchor else { return nil }
         guard let row = stats.recent.first(where: { $0.date != nil }), let date = row.date,

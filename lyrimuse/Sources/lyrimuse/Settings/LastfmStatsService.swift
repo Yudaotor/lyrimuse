@@ -863,7 +863,8 @@ final class LastfmStatsService: ObservableObject {
         // 不再"先消失、等 1–9 秒再出现"(2026-09-03,本机链路实测 p50 1.2 s、p90 6 s);
         // 下面真取回来再覆盖(通常同一个数,或只差 ±1)。表里没有这首歌时保持 nil ——
         // 那是"从未有过",占位是对的。
-        nowPlayingCount = trackPlayCounts[nowPlayingCountPlayCountKey].map { $0 + 1 }
+        nowPlayingCount = trackPlayCounts[nowPlayingCountPlayCountKey]
+            .map { displayedNowPlayingCount(total: $0, playCountKey: nowPlayingCountPlayCountKey) }
         guard !title.isEmpty, let cred = credentials else { return }
         Task {
             // 写法孪生实体(括号风格/去副题/繁简,见 PlayCountVariants 注释)在 Last.fm
@@ -905,8 +906,11 @@ final class LastfmStatsService: ObservableObject {
             if let total {
                 // 顺手把这个**新鲜的合并总数**写回历史行用的那张表(见 adoptFreshTotal)。
                 adoptFreshTotal(total, artist: artist, title: title, siblings: sibs)
-                // userplaycount 是**过去**的次数,这一次还没被记进去 —— 所以 +1
-                nowPlayingCount = total + 1
+                // userplaycount 是**过去**的次数,这一次通常还没被记进去 —— 所以 +1。
+                // "通常"两个字是 2026-09-13 补的:App 在歌已经播过 scrobble 门槛之后才
+                // 启动/连上账号时,这一次早就落库了,那时候再 +1 就是同一次算两遍。
+                nowPlayingCount = displayedNowPlayingCount(
+                    total: total, playCountKey: nowPlayingCountPlayCountKey)
             }
         }
     }
@@ -926,9 +930,40 @@ final class LastfmStatsService: ObservableObject {
         guard !nowPlayingCountPlayCountKey.isEmpty,
               let fresh = freshCounts[nowPlayingCountPlayCountKey],
               let updated = PlayCountRecency.reconciledNowPlayingCount(
-                current: nowPlayingCount, freshTotal: fresh)
+                current: nowPlayingCount, freshTotal: fresh,
+                currentPlayCounted: currentPlayIsScrobbled(playCountKey: nowPlayingCountPlayCountKey))
         else { return }
         nowPlayingCount = updated
+    }
+
+    /// 「第 N 次听」的显示值 = 已落库的总数 +(这一次还没落库 ? 1 : 0)。三个写入点
+    /// (换歌那一刻的乐观顶值、取回真实总数、reconcile 追赶)必须同一个口径,散开写就是
+    /// 2026-09-13 那个多算一次的来源 —— 当时只有 reconcile 那条路无条件 +1。
+    private func displayedNowPlayingCount(total: Int, playCountKey key: String) -> Int {
+        total + (currentPlayIsScrobbled(playCountKey: key) ? 0 : 1)
+    }
+
+    /// 当前这次播放是否已经被 Last.fm 计进 userplaycount(2026-09-13)。
+    ///
+    /// 三道闸,缺一条就按"没入账"算(退回 +1 的老行为,宁可多算也不凭空少算):
+    ///  ① **本机正在播的就是这首**。比对 `playCountKey` 而不是只比标题:本机没在播它
+    ///     (在别的设备上播、或者刚换歌)时,下面那个开播时刻说的根本不是这首歌。这等价于
+    ///     设置页实时行那条判据里的 `!live.remote`。
+    ///  ② 有播放锚点 —— 开播时刻由它倒推(`fetchedAt − progressMs`),跟
+    ///     `LiveScrobbleRow.absorbedRecent` 同一个算法。
+    ///  ③ 这首歌最新一条**已落库**的 scrobble 跟开播时刻对得上(纯判据在 Core,有 selftest)。
+    ///     取"这首歌自己的最新一条"而不是"整个列表的最新一条":中间插进来一条别的设备的
+    ///     scrobble 时,后者会把这一条挤到第二行,而它明明就是这次播放。
+    private func currentPlayIsScrobbled(playCountKey key: String) -> Bool {
+        let pc = PlaybackCoordinator.shared
+        guard !key.isEmpty, Self.playCountKey(artist: pc.artist, title: pc.title) == key,
+              let anchor = pc.anchor else { return false }
+        let playStart = anchor.fetchedAt.addingTimeInterval(-Double(anchor.progressMs) / 1000)
+        let newest = recent.first {
+            !$0.nowPlaying && $0.date != nil
+                && Self.playCountKey(artist: $0.artist, title: $0.title) == key
+        }?.date
+        return PlayCountRecency.currentPlayIsScrobbled(newestScrobbleAt: newest, playStart: playStart)
     }
 
     /// 当前曲目的首次/上次听(user.getTrackScrobbles):limit=1 的第一页给最近一次 +

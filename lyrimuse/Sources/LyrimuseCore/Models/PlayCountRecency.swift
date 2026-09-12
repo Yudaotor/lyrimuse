@@ -90,14 +90,46 @@ public enum PlayCountRecency {
     /// userplaycount 是过去的次数、只会越查越大(删除历史记录是极端例外,不在这个自愈的
     /// 处理范围内),跌下去只可能是缓存态一时不一致,采纳了反而会闪烁。
     ///
-    /// ⚠️ 已知的窄边界(刻意接受,不是漏想):如果这次追赶发生在**当前这次播放自己**已经
-    /// 越过 scrobble 门槛、且 Last.fm 已经把它计进 userplaycount 之后,新总数会连这次
-    /// 播放也算进去,+1 之后偶发多算一。跟"完全冻结、整段会话数字长期错到离谱"（用户
-    /// 实测过的 17 vs 28,差 11）相比,这个窗口窄得多、代价小得多——歌一换就会用全新的
-    /// 换歌取数覆盖掉，不会带到下一首歌头上。两害相权取其轻，不是没考虑过就选的。
-    public static func reconciledNowPlayingCount(current: Int?, freshTotal: Int) -> Int? {
-        let candidate = freshTotal + 1
-        guard candidate > (current ?? 0) else { return nil }
-        return candidate
+    /// `currentPlayCounted` = 当前这次播放**自己**是否已经被 Last.fm 计进 `freshTotal`
+    /// (判据见 `currentPlayIsScrobbled`,调用方拿最近记录里这首歌那条的时刻跟本次开播
+    /// 时刻对)。它决定加不加那个 +1:
+    ///  - `false`(默认处境,换歌那一刻就是这样):总数是**过去**的次数,显示值 = 总数 + 1。
+    ///  - `true`:总数已经含这一次,再 +1 就是同一次收听算两遍。
+    ///
+    /// 2026-09-13 之前这里无条件 +1,代价是**第一次听的歌必然多算一次**:正是这次 scrobble
+    /// 让它第一次出现在最近记录里,新 key 没有 playCountVerifiedAt、`resolvePlayCounts` 对它
+    /// 无条件取数,于是必定撞在"已入账、还在播"这个窗口里 —— 用户 2026-09-13 实测
+    /// (《Cow-girl moderne》,第一次听):06:02:06 开播、约 06:03:30 越过 scrobble 门槛、
+    /// 06:03:45 取到 userplaycount=1,徽标当场从 1 跳到 2。老歌同理,只是 N→N+1 不显眼。
+    /// 当时那条注释把它估成"偶发、窗口很窄",实测下来两样都不成立。
+    ///
+    /// 已入账时**允许收回恰好多算的那一次**(`candidate == current - 1`),否则"只能涨"会
+    /// 把本次会话里已经多算出来的数字永久焊住;再低的跌幅一律不接受 —— 那只可能是 Last.fm
+    /// 自己返回了陈旧值(实测过换歌取到 16 而真实 27 的形态),采纳会让数字来回闪。
+    public static func reconciledNowPlayingCount(
+        current: Int?, freshTotal: Int, currentPlayCounted: Bool
+    ) -> Int? {
+        let candidate = freshTotal + (currentPlayCounted ? 0 : 1)
+        guard candidate > 0 else { return nil }
+        if candidate > (current ?? 0) { return candidate }
+        if currentPlayCounted, let current, candidate == current - 1 { return candidate }
+        return nil
+    }
+
+    /// 当前这次播放是不是**已经**被 Last.fm 记进 userplaycount 了(2026-09-13)。
+    ///
+    /// 判据只有一条:这首歌最新一条**已落库**的 scrobble,时刻跟本次开播时刻对得上。
+    /// Last.fm 的 scrobble 时间戳记的是开播时刻(不是提交时刻),所以两者本该几乎相等;
+    /// 容差留 120 秒,吸收锚点外推、暂停/拖动、以及两端时钟的偏差。这跟设置页实时行
+    /// 认"同一次播放在列表里冒出第二行"(`LiveScrobbleRow.absorbedRecent`)是同一把尺子、
+    /// 同一个容差 —— 那边 2026-08-17 就用它顶替过这个多算的数,只是没下沉到这里,于是
+    /// 歌词窗口的徽标一直吃着裸值。
+    ///
+    /// 两个 nil 都返回 false = "不知道,按没入账算":宁可退回 +1 的老行为,也不要凭空少算一次。
+    public static func currentPlayIsScrobbled(
+        newestScrobbleAt: Date?, playStart: Date?, tolerance: TimeInterval = 120
+    ) -> Bool {
+        guard let newestScrobbleAt, let playStart else { return false }
+        return abs(newestScrobbleAt.timeIntervalSince(playStart)) < tolerance
     }
 }

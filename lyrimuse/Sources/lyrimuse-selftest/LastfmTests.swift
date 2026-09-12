@@ -117,21 +117,76 @@ func runLastfmTests() {
     // 这组用例钉住"只能涨、不能跌"的取舍。
     do {
         typealias R = PlayCountRecency
+        // 这一组的 currentPlayCounted 全传 false = "这一次还没落库",也就是 2026-09-13
+        // 之前唯一存在的那条路径,行为必须逐字不变(下面第二组管已落库的情形)。
         // 正题:trackPlayCounts 学到了更高的总数 → 采纳,+1 换算成显示值
-        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 27), 28,
+        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 27, currentPlayCounted: false), 28,
                     "nowPlayingCount 追赶: 27+1=28,比当前 17 高 → 采纳")
         // 还没显示过(nil,理论上不该发生在这条路径,但当 0 处理不炸)
-        expectEqual(R.reconciledNowPlayingCount(current: nil, freshTotal: 5), 6,
+        expectEqual(R.reconciledNowPlayingCount(current: nil, freshTotal: 5, currentPlayCounted: false), 6,
                     "nowPlayingCount 追赶: current 为 nil 时按 0 比较")
         // ⚠️ 只能涨、不能跌 —— 新数字更低时必须按兵不动,不能让显示的数字倒退
-        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10), nil,
+        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10, currentPlayCounted: false), nil,
                     "nowPlayingCount 追赶: 新总数更低 → 不采纳,返回 nil")
         // 等于当前值:没有新信息,不该触发一次无意义的写入(SwiftUI 不必要的重渲染)
-        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 16), nil,
+        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 16, currentPlayCounted: false), nil,
                     "nowPlayingCount 追赶: 换算后与当前相等 → 不采纳")
         // 差 1 也要涨 —— 阈值判断用的是 > 不是 >=,别把等于的情况错判成"该涨"
-        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 17), 18,
+        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 17, currentPlayCounted: false), 18,
                     "nowPlayingCount 追赶: 新总数比换算前的 total 还高一点 → 仍要涨")
+    }
+
+    // ---- 当前这次播放已经落库时不再 +1(2026-09-13) ----
+    //
+    // 用户实测(《Cow-girl moderne》,第一次听):06:02:06 开播 → 约 06:03:30 越过 scrobble
+    // 门槛、Last.fm 记账 userplaycount 0→1 → 06:03:45 resolvePlayCounts 取到 1 → 追赶把
+    // 徽标从 1 抬到 2。同一次收听算了两遍。第一次听的歌**必然**中招:正是这次 scrobble 让
+    // 它第一次出现在最近记录里,新 key 无条件取数,必定撞在"已入账、还在播"的窗口上。
+    do {
+        typealias R = PlayCountRecency
+        // 正题:总数已经含这一次 → 不加那个 1,维持原数字
+        expectEqual(R.reconciledNowPlayingCount(current: 1, freshTotal: 1, currentPlayCounted: true), nil,
+                    "已落库: 1+0=1 与当前相等 → 不动(改之前这里会抬到 2)")
+        // 听过 5 次的老歌正在听第 6 次:换歌时取到 5 显示 6,过门槛后总数变 6 → 仍是 6
+        expectEqual(R.reconciledNowPlayingCount(current: 6, freshTotal: 6, currentPlayCounted: true), nil,
+                    "已落库: 老歌过门槛后总数追平显示值 → 不动")
+        // 收回本次会话里已经多算出来的那一次 —— 否则"只能涨"会把错数字永久焊住
+        expectEqual(R.reconciledNowPlayingCount(current: 2, freshTotal: 1, currentPlayCounted: true), 1,
+                    "已落库: 显示 2 而权威值是 1 → 收回多算的那一次")
+        // 但只收回**恰好一次**:再低的跌幅只可能是 Last.fm 返回了陈旧值,采纳会来回闪
+        expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10, currentPlayCounted: true), nil,
+                    "已落库: 跌幅超过一次 → 不采纳(陈旧值,实测过 16 vs 27 那种)")
+        // 连播同一首:第二遍落库后总数 2 → 直接涨到 2(换歌那一刻的取数被 key 守卫挡住了)
+        expectEqual(R.reconciledNowPlayingCount(current: 1, freshTotal: 2, currentPlayCounted: true), 2,
+                    "已落库: 连播第二遍 → 照常涨")
+        // freshTotal 0 且已落库:算出来是 0,不该显示"第 0 次听"
+        expectEqual(R.reconciledNowPlayingCount(current: nil, freshTotal: 0, currentPlayCounted: true), nil,
+                    "已落库: 换算成 0 → 不采纳,没有第 0 次听")
+    }
+
+    // ---- currentPlayIsScrobbled: 这次播放落库没有(2026-09-13) ----
+    do {
+        typealias R = PlayCountRecency
+        func at(_ e: Double) -> Date { Date(timeIntervalSince1970: e) }
+        let start = at(1_000_000)
+        // Last.fm 的 scrobble 时间戳记的是**开播时刻**,所以两者本该几乎相等
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: start, playStart: start), true,
+                    "落库判定: 时刻完全相等 → 就是这一次")
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: at(1_000_003), playStart: start), true,
+                    "落库判定: 差几秒(锚点外推/时钟偏差)仍算这一次")
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: at(1_000_119), playStart: start), true,
+                    "落库判定: 119 秒仍在 120 秒容差内")
+        // 几天前听过同一首歌那条记录,绝不能被当成这一次
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: at(1_000_000 - 3 * 24 * 60 * 60),
+                                             playStart: start), false,
+                    "落库判定: 几天前的旧记录不算这一次")
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: at(1_000_121), playStart: start), false,
+                    "落库判定: 超出容差 → 不算")
+        // 两个 nil 都按"不知道"处理 = 退回 +1 的老行为,宁可多算也不凭空少算
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: nil, playStart: start), false,
+                    "落库判定: 这首歌还没有任何已落库记录 → 按没入账算")
+        expectEqual(R.currentPlayIsScrobbled(newestScrobbleAt: start, playStart: nil), false,
+                    "落库判定: 没有播放锚点 → 按没入账算")
     }
 
     // ---- LastfmRecentTracksPage:合并历史扫描的分页解析(2026-08-25) ----
