@@ -1005,6 +1005,52 @@ func TestAlbumAffinityTerm(t *testing.T) {
 	}
 }
 
+// deezer 与 lyricfind **同属 LyricFind**(同一家供词、两条管道),跨源共识里不该算两次
+// 独立印证 —— 见 lyricSourceConsensusFamily 的头注。2026-09-13 接 deezer 时的真实缺口:
+// 共识那段只比 source 字符串,两条管道各自拿 +150、还会让第三方误拿 2 家的 +250。
+func TestContentConsensusFamilyDoesNotDoubleCount(t *testing.T) {
+	same := "[00:01.00]this is the same lyric line one\n[00:05.00]and the very same line two here\n[00:09.00]closing line of the song text"
+	cands := []lyricCandidate{
+		{source: "deezer", lyrics: same},
+		{source: "lyricfind", lyrics: same},
+		{source: "lrclib", lyrics: same},
+	}
+	peers := contentConsensusPeers("someone", "song", cands, 0)
+
+	// ① 两条管道互相不算 peer:各自只该看到 lrclib 这一个独立信源。
+	for _, src := range []string{"deezer", "lyricfind"} {
+		if len(peers[src]) != 1 || peers[src][0] != "lrclib" {
+			t.Errorf("%s 的独立互证对象应当只有 lrclib,实际 %v", src, peers[src])
+		}
+	}
+	// ② 第三方不能因为"两条管道都跟我一致"就拿到 2 家的 +250 —— 那只有 1 家独立印证。
+	if len(peers["lrclib"]) != 1 {
+		t.Errorf("lrclib 只该拿到 1 家独立印证(deezer/lyricfind 同属 LyricFind),实际 %v", peers["lrclib"])
+	}
+	// ③ 换成真正独立的第三个源,计数才该涨到 2。
+	cands = append(cands, lyricCandidate{source: "qq", lyrics: same})
+	peers = contentConsensusPeers("someone", "song", cands, 0)
+	if len(peers["lrclib"]) != 2 {
+		t.Errorf("加入真正独立的 qq 之后 lrclib 该有 2 家独立印证,实际 %v", peers["lrclib"])
+	}
+	if len(peers["deezer"]) != 2 {
+		t.Errorf("deezer 该看到 lrclib + qq 两家,实际 %v", peers["deezer"])
+	}
+}
+
+// 家族映射本身:默认每个源自成一家,只有 deezer/lyricfind 合并。
+func TestLyricSourceConsensusFamily(t *testing.T) {
+	if lyricSourceConsensusFamily(lyricSourceDeezer) != lyricSourceConsensusFamily(lyricSourceLyricFind) {
+		t.Error("deezer 与 lyricfind 必须归同一家 —— 两者的正文都由 LyricFind 供")
+	}
+	for _, s := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
+		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceKuwo, lyricSourceMigu} {
+		if lyricSourceConsensusFamily(s) != s {
+			t.Errorf("%s 应当自成一家,实际归到 %q", s, lyricSourceConsensusFamily(s))
+		}
+	}
+}
+
 func TestContentConsensusPeers(t *testing.T) {
 	same := "[00:01.00]this is the same lyric line one\n[00:05.00]and the very same line two here\n[00:09.00]closing line of the song text"
 	diff := "[00:01.00]completely different words entirely\n[00:05.00]nothing shared with the others\n[00:09.00]another unrelated closing line"

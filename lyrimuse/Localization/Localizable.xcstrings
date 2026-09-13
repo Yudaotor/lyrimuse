@@ -2350,6 +2350,29 @@
         }
       }
     },
+    "LyricFind（经由 YouTube Music 检索）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LyricFind (searched via YouTube Music)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LyricFind（经由 YouTube Music 检索）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LyricFind（經由 YouTube Music 檢索）"
+          }
+        }
+      }
+    },
     "Lyrimuse" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2753,6 +2776,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Webhook 網址"
+          }
+        }
+      }
+    },
+    "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deezer 換取匿名存取權杖失敗（不是這首歌沒有歌詞，稍後重試通常會恢復）"
           }
         }
       }
@@ -26843,30 +26889,30 @@
         }
       }
     },
-    "九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
+    "十个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "None of the nine sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
+            "value" : "None of the ten sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
+            "value" : "十个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "九個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
+            "value" : "十個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
           }
         }
       }
     },
-    "九个源都没找到可用的候选" : {
+    "十个源都没找到可用的候选" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -26878,13 +26924,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "九个源都没找到可用的候选"
+            "value" : "十个源都没找到可用的候选"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "九個來源都沒找到可用的候選"
+            "value" : "十個來源都沒找到可用的候選"
           }
         }
       }

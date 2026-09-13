@@ -48,6 +48,7 @@
 "Apple Music 自动化权限被拒，读不到播放状态" = "Apple Music automation permission denied; playback state cannot be read";
 "Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
 "Apple Music 自动化权限（推荐）" = "Apple Music Automation Permission (recommended)";
+"Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）" = "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Discussions" = "GitHub Discussions";
 "GitHub Issues" = "GitHub Issues";
@@ -60,6 +61,7 @@
 "Last.fm 账户" = "Last.fm Account";
 "Last.fm 返回错误: %@" = "Last.fm returned an error: %@";
 "Lyric × Muse——把你的歌词交给音乐女神吧" = "Lyric × Muse — hand your lyrics to the Muse";
+"LyricFind（经由 YouTube Music 检索）" = "LyricFind (searched via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
 "Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键" = "Lyrimuse lives in the menu bar at the top right — click it to open Settings, the lyrics manager and the lyrics window. Hold ⌘ and drag to move the icon somewhere else. You can also set global hotkeys under Shortcuts in Settings";
 "Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
@@ -169,8 +171,6 @@
 "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret" = "Already created one? Find it here — click the application name and the page shows its API Key and Shared Secret";
 "之前手动选定的 %@ 首已经都是锁定状态" = "All %@ songs you picked manually are already locked";
 "之前手动选定的 %@ 首，歌词后来都被自动更新过，已经不是你当初选的那一份，所以没有锁定" = "The %@ songs you picked earlier have since been updated automatically — they are no longer the versions you chose, so they were not locked";
-"九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the nine sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
-"九个源都没找到可用的候选" = "No Lyrics from Any Source";
 "五" = "F";
 "人工修正" = "Manually Edited";
 "人工修正 %@ 首" = "%@ manually edited";
@@ -310,6 +310,8 @@
 "勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open";
 "匹配算法" = "Matching Algorithm";
+"十个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the ten sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
+"十个源都没找到可用的候选" = "No Lyrics from Any Source";
 "升级重试" = "Upgrade retry";
 "单日最高 · %@" = "Busiest day · %@";
 "单曲循环" = "Repeat One";

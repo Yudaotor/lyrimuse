@@ -38,7 +38,7 @@ Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視�
 
 ### 歌詞，做到位
 - **逐字同步填色**，跟隨播放進度即時顯示
-- **自動查九個歌詞來源**——網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（經 YouTube Music）、AMLL（人工校對過的逐字歌詞庫）——自動挑出最合適的一份，不用自己動手搜尋
+- **自動查十個歌詞來源**——網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（經 YouTube Music）、Deezer、AMLL（人工校對過的逐字歌詞庫）——自動挑出最合適的一份，不用自己動手搜尋
 - **羅馬拼音 + 翻譯**，跟原文一起顯示——歌詞來源自帶社群翻譯時優先用它，沒有的話走裝置端機器翻譯（Apple 系統翻譯，歌詞不出本機），翻不了再退線上備用，譯文語言可選 18 種；羅馬拼音按行判斷，中日雙語歌只有日文行會標註讀音，不會連中文一起標上拼音；粵語歌自動標註粵拼（按詞消歧）
 - **對唱／多人合唱歌詞分開顯示**，只要來源（或 AMLL 詞條）標出了是誰在唱哪一句，就不會把兩個人的聲部糊成一團
 - **簡繁中文切換**，獨立於 App 介面語言，只管歌詞文字本身用哪種寫法
@@ -216,7 +216,7 @@ LyricsX（最後一版發布於 2022 年 4 月，支援 macOS 10.11+）涵蓋 Ap
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
 - **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、中國移動（咪咕音樂）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
-- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面八個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名。封面與閒置頁把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
+- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名。封面與閒置頁把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解
 

@@ -3198,6 +3198,32 @@ const (
 //
 // 参与比对的候选先过与打分同款的基本校验(时间戳密度/语言/纯署名),正文归一后不足
 // lyricConsensusMinBodyRunes 字符的不参与(既不领分也不为别人作证)。
+// lyricSourceConsensusFamily 回答"这两条候选算不算**两个独立信源**"——跨源共识
+// (contentConsensusPeers)按它归组,而不是按源名。默认每个源自成一家。
+//
+// 目前只有一组例外:**deezer 与 lyricfind 同属 LyricFind**。两者的歌词正文都由 LyricFind
+// 供,只是管道不同(Deezer 的网页客户端 / YouTube Music),正文高度相似却不是两次独立印证。
+// 这条纪律 ytmusic.go 顶部早就写下了("按来源数算独立印证……是虚假加分"),当时靠的是
+// "只接受 sourceMessage 标 LyricFind 的候选"把 Musixmatch 挡在 lyricfind 之外;2026-09-13
+// 接 deezer 时从**另一个方向**踩进同一个坑——不是"一个源里混进别家数据",而是"两个源来自
+// 同一家",而共识那段只比 source 字符串,拦不住。两处后果都要堵:① 它俩互相不算 peer;
+// ② 第三方(比如 lrclib)不能因为"deezer 和 lyricfind 都跟我一致"就拿到 2 家的 +250 ——
+// 那只有 1 家独立印证。所以 agree 列表按家族去重,列表长度直接就是"独立信源数",
+// len(consensusPeers[源]) 那两个消费点(enrich.go)不用各自再去重一遍。
+//
+// ⚠️ 留痕里因此只会看到同家族的**第一个**代表(名单进 lyricsDecision 的 consensus_peers)。
+// 这是有意的:那个字段回答的是"有几家独立信源跟它一致、分别是谁",不是"哪些源的正文长得像"。
+//
+// Deezer 的**时间轴**其实是它自己做的(LyricFind 只供词),所以严格说两条管道只有正文同源;
+// 但共识比的恰恰是剥掉时间戳之后的正文(lyricConsensusBody),撞的正是同源那部分。
+func lyricSourceConsensusFamily(source string) string {
+	switch source {
+	case lyricSourceDeezer, lyricSourceLyricFind:
+		return lyricSourceLyricFind
+	}
+	return source
+}
+
 func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCandidate, durationSecs float64) map[string][]string {
 	if len(candidates) < 2 {
 		return map[string][]string{} // 一条候选无从互证,省掉整批 3-gram 构建
@@ -3245,12 +3271,19 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 			continue
 		}
 		var agree []string
+		// 按**信源家族**去重,不是按源名 —— 见 lyricSourceConsensusFamily 的头注。
+		seenFamily := map[string]bool{lyricSourceConsensusFamily(members[i].source): true}
 		for j := range members {
-			if i == j || members[j].source == members[i].source || members[j].grams == nil {
+			if i == j || members[j].grams == nil {
 				continue
+			}
+			fam := lyricSourceConsensusFamily(members[j].source)
+			if seenFamily[fam] {
+				continue // 自己、或同一家供词方的第二条管道:不构成第二次独立印证
 			}
 			if gramJaccard(members[i].grams, members[j].grams) >= lyricConsensusSimThreshold {
 				agree = append(agree, members[j].source)
+				seenFamily[fam] = true
 			}
 		}
 		peers[members[i].source] = agree

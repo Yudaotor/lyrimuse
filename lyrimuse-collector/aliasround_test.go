@@ -17,11 +17,13 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	savedFeatures := features
 	savedBreaker := lyricSourceBreakerShared
 	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
+	savedDZ := deezerLastFailureReasonNow()
 	t.Cleanup(func() {
 		features = savedFeatures
 		lyricSourceBreakerShared = savedBreaker
 		ytmusicSetLastFailureReason(savedYT)
 		musixmatchSetLastFailureReason(savedMM)
+		deezerSetLastFailureReason(savedDZ)
 	})
 	features.LyricsSources = map[string]bool{}
 	for _, s := range lyricSourceNames {
@@ -32,9 +34,10 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	// 酷我:传输层连不上 —— 换名字也没用
 	dns := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Err: &net.DNSError{Err: "no such host", IsNotFound: true}}}
 	lyricSourceBreakerShared.observe("search.kuwo.cn", dns, 0, "")
-	// lyricfind 地区限制、musixmatch 直连被堵 —— 同理
+	// lyricfind 地区限制、musixmatch 直连被堵、deezer 换不到匿名 JWT —— 同理
 	ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
 	musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchDirectBlocked)
+	deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
 
 	results := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 579},               // 可用 → 不缺
@@ -55,12 +58,13 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	if got := lyricSourcesWorthAliasRetry(full); len(got) != 0 {
 		t.Fatalf("全部可用时应为空,得到 %v", got)
 	}
-	// 具体原因清掉后 lyricfind / musixmatch 重新算缺
+	// 具体原因清掉后 lyricfind / musixmatch / deezer 重新算缺
 	ytmusicSetLastFailureReason("")
 	musixmatchSetLastFailureReason("")
+	deezerSetLastFailureReason("")
 	got = lyricSourcesWorthAliasRetry(results)
-	if !containsString(got, "lyricfind") || !containsString(got, "musixmatch") {
-		t.Fatalf("没有具体失败原因时 lyricfind / musixmatch 应算缺,得到 %v", got)
+	if !containsString(got, "lyricfind") || !containsString(got, "musixmatch") || !containsString(got, "deezer") {
+		t.Fatalf("没有具体失败原因时 lyricfind / musixmatch / deezer 应算缺,得到 %v", got)
 	}
 }
 

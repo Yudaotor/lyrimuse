@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 九个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -21,11 +21,13 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // 排序依据(2026-09-07 按实测调整):前五个按真实采用率排 —— 用户本机 3744 条 enrich 缓存里
 // 最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/ QQ 732(19.6%)/
 // Musixmatch 176(4.7%)/ LRCLIB 74(2.0%),酷狗是第一主力却长期排在第三,这次提到首位。
-// ⚠️ 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**:它们分别是 2026-08-23 /
-// 08-31 / 08-31 / 09-04 才接入的,那 3744 条缓存绝大多数早于它们存在,采用数 0~16 是
+// ⚠️ 后五个(amll/lyricfind/kuwo/migu/deezer)**刻意不按采用率排**:它们分别是 2026-08-23 /
+// 08-31 / 08-31 / 09-04 / 09-13 才接入的,那 3744 条缓存绝大多数早于它们存在,采用数 0~16 是
 // 样本偏差、不是覆盖率结论。等各自跑满一段时间再拿数据说话,别用"没赶上考试"当"考砸了"。
+// deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
+// 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 collector/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -277,6 +279,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 同上一套迁移标记(2026-09-04 加 migu 时补)。缺失 ⇒ 老配置,加载时把 migu 补进启用集合
     /// (只补这一次)。与 collector 侧 featureFlagsFile.MiguLyrics 一一对应。
     var miguLyrics: Bool?
+    /// 同上一套迁移标记(2026-09-13 加 deezer 时补)。缺失 ⇒ 老配置,加载时把 deezer 补进
+    /// 启用集合(只补这一次)。与 collector 侧 featureFlagsFile.DeezerLyrics 一一对应。
+    var deezerLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -323,6 +328,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricFindLyrics = "lyricfind_lyrics"
         case kuwoLyrics = "kuwo_lyrics"
         case miguLyrics = "migu_lyrics"
+        case deezerLyrics = "deezer_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -489,6 +495,8 @@ public final class FeatureSettingsStore: ObservableObject {
             kuwoLyrics: lyricsSources.contains(.kuwo),
             // 同上,migu 的迁移标记独立生效一次(2026-09-04 加)。
             miguLyrics: lyricsSources.contains(.migu),
+            // 同上,deezer 的迁移标记独立生效一次(2026-09-13 加)。
+            deezerLyrics: lyricsSources.contains(.deezer),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -684,6 +692,10 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.miguLyrics == nil {
                 // 同上,见 FeatureFlagsFile.miguLyrics(2026-09-04 加)。
                 enabled.insert(.migu)
+            }
+            if f.deezerLyrics == nil {
+                // 同上,见 FeatureFlagsFile.deezerLyrics(2026-09-13 加)。
+                enabled.insert(.deezer)
             }
         }
         lyricsSources = enabled

@@ -24,6 +24,15 @@ const (
 	// 连不上)。跟 musixmatch_rate_limited 是完全不同的两回事:那个是服务器**正经回了**
 	// 401 hint=captcha,这个是一个字节都没拿到。
 	lyricFailureReasonMusixmatchDirectBlocked = "musixmatch_direct_blocked"
+	// deezer_auth_failed(2026-09-13):取词要先从 auth.deezer.com 换一张**匿名 JWT**,
+	// 这一步没换到(端点不答、非 200、或响应里没有 jwt 字段)。这是这一路目前**唯一**
+	// 实测见过的失败模式 —— "这首歌没有歌词"(GraphQL 的 LyricsNotFoundError)是正常
+	// 结果,不往这里记,报上去会让用户以为源坏了。见 deezer.go 头注。
+	// ⚠️ 这里曾经有过一个 deezer_region_restricted,是**误判**:当时走的 gw-light.php
+	// song.getLyrics 对任何歌都回 "No lyrics id ... and country XX",那句话里的国家极具
+	// 误导性;换出口到 US 照样是同一句,song.getData 更显示 LYRICS_ID 对所有歌恒为 0 ——
+	// 是那条旧接口废了,跟国家无关。整条取词路径已改走 pipe.deezer.com。
+	lyricFailureReasonDeezerAuthFailed = "deezer_auth_failed"
 )
 
 // 传输层通用代码(2026-09-06,用户报「为什么这首歌搜不到」:九个源里六个在 DNS 解析这一步

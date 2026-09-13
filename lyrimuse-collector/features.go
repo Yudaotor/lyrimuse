@@ -54,6 +54,14 @@ const (
 	// 只套身份闸淘汰、不重新打分;逐行 LRC + 外语歌的中文译文,没有逐字。华语曲库覆盖率预期
 	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 lyricsSourceDefaultOrder)。
 	lyricSourceMigu = "migu"
+	// Deezer(2026-09-13 加,见 deezer.go 头注)。跟 lyricfind **数据同源**:Deezer 的词
+	// 由 LyricFind 供、时间轴 Deezer 自己做。接它有两层意义:① 给 LyricFind 这家版权方补
+	// 第二条管道(那家原本只有 YouTube Music 一条路,YTM 一改版 / 一被地区限制,整家的数据
+	// 就都没了);② Deezer 是法国公司,法语曲库覆盖比现有九源都好——接入实测里三首"九源
+	// 只有 lrclib/netease 给得出低分候选"的法语小众歌,它都给出了逐行歌词。取词走
+	// pipe.deezer.com 的 GraphQL + 匿名 JWT(不需要账号)。只有逐行,没有逐字/译文。
+	// 默认顺序排在末尾的理由跟前四个新源一样:样本还不够,不是覆盖率结论。
+	lyricSourceDeezer = "deezer"
 )
 
 const (
@@ -102,7 +110,7 @@ const (
 // 跑满一段时间再拿数据重排。想让它们优先,用户可以自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
-	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu,
+	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
 }
 
 type featureFlagsFile struct {
@@ -180,6 +188,9 @@ type featureFlagsFile struct {
 	// MiguLyrics:同上一套迁移标记(2026-09-04 加 migu 时补)。缺失 ⇒ 老配置,把 migu 补进启用
 	// 集合(只补这一次)。与 Swift 侧 FeatureFlagsFile.miguLyrics 一一对应。
 	MiguLyrics *bool `json:"migu_lyrics,omitempty"`
+	// DeezerLyrics:同上一套迁移标记(2026-09-13 加 deezer 时补)。缺失 ⇒ 老配置,把 deezer
+	// 补进启用集合一次;写盘时总是带上,此后用户自己的开关说了算。
+	DeezerLyrics *bool `json:"deezer_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -368,7 +379,7 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
@@ -501,12 +512,13 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
 			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true, lyricSourceMigu: true,
+			lyricSourceDeezer: true,
 		}
 	}
 	m := make(map[string]bool, len(list)+1)
@@ -534,6 +546,9 @@ func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, ku
 	}
 	if miguSeen == nil {
 		m[lyricSourceMigu] = true
+	}
+	if deezerSeen == nil {
+		m[lyricSourceDeezer] = true
 	}
 	return m
 }

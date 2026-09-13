@@ -130,6 +130,13 @@ func runTestLyricSourcesCLI(args []string) {
 				reason = ytmusicLastFailureReasonNow()
 			case "musixmatch":
 				reason = musixmatchLastFailureReasonNow()
+			case "deezer":
+				// 2026-09-13,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
+				// ⚠️ 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的
+				// lyricSourceFailureReasons,这条路照样退回通用的 no_response —— 设置页那颗
+				// 「测试」按钮于是只会说「这个源没反应」,把"换票这一步失败"说成了"没反应"。
+				// 再接新源时记得这里和 searchcli.go 是**两处**,守卫没钉住它。
+				reason = deezerLastFailureReasonNow()
 			case "netease":
 				// 同 lyricSourceFailureReasons(2026-09-03):这一轮网易云只要成功答过
 				// 一次,就不把限流当成"这个源没给出候选"的原因 —— 吃过一次 405 跟"这个源

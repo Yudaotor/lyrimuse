@@ -2997,6 +2997,12 @@ func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
 			if musixmatchLastFailureReasonNow() != "" {
 				continue
 			}
+		case "deezer":
+			// 换不到匿名 JWT(deezer_auth_failed)时,换个歌手别名同样一个字都取不回来
+			// —— 跟 lyricfind 那条一个道理,见 deezer.go 头注。
+			if deezerLastFailureReasonNow() != "" {
+				continue
+			}
 		}
 		out = append(out, s)
 	}
@@ -3200,9 +3206,9 @@ func fetchScoredLyricCandidates(ctx context.Context, artist, title, album string
 //     如实反映"确实又查了九个源",不假装单调递增。
 type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateResult, done, total int)
 
-// lyricSourceNames 是九个歌词源的名字,顺序无关紧要,只用来数进度分母。
+// lyricSourceNames 是十个歌词源的名字,顺序无关紧要,只用来数进度分母。
 // applecover 不在里面 —— 它查的是封面。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer"}
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个。features.LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
@@ -3288,6 +3294,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	kuwoLyr, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
 	migu := raw["migu"]
 	miguLyr, miguTr, miguTitle, miguArtist, miguAlbum, miguCover := migu.lyr, migu.tr, migu.matchTitle, migu.matchArtist, migu.matchAlbum, migu.matchCover
+	dz := raw["deezer"]
+	dzLyr, dzTitle, dzArtist, dzAlbum, dzCover, dzDur, dzPlainOnly := dz.lyr, dz.matchTitle, dz.matchArtist, dz.matchAlbum, dz.matchCover, dz.srcDur, dz.plainOnly
 	amll := raw["amll"].amll
 	appleCover := raw["applecover"].matchCover
 	// coverOrFallback:候选自己的源有封面就用自己的——2026-08-31 起网易云/QQ/酷狗/
@@ -3362,6 +3370,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 没有时长字段,sourceReportedDurationSecs 留 0(= 该项不参与打分,同 amll)。
 		miguUsableTr, _ := usableValueAdd(miguLyr, miguTr, "zh", "", features.LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{source: "migu", lyrics: miguLyr, hasUsableTranslation: miguUsableTr, title: miguTitle, artist: miguArtist, album: miguAlbum, cover: coverOrFallback(miguCover)})
+	}
+	if dzLyr != "" {
+		// 只有逐行,没有逐字/译文/罗马音;封面用搜索结果自带的 album.cover_xl,时长用
+		// Deezer 自报的 duration(见 deezer.go 头注)。plainOnly 直通打分层那道恒 -1 的闸
+		// (match.go 的 scoreRejectPlainTextOnly),口径与 lrclib/musixmatch 的纯文本回退一致。
+		candidates = append(candidates, lyricCandidate{source: "deezer", lyrics: dzLyr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: coverOrFallback(dzCover), plainTextOnly: dzPlainOnly})
 	}
 	if !amll.empty() {
 		// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
@@ -3588,7 +3602,9 @@ func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSour
 }
 
 func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
-	resultsCh := make(chan lyricSourceResult, 9)
+	// 缓冲开到"每个 goroutine 都能不阻塞地放下自己那一份"= 源数 + applecover。同样不写
+	// 字面量:上面那个 collect 循环就是栽在字面量跟源数脱钩上的。
+	resultsCh := make(chan lyricSourceResult, len(lyricSourceNames)+1)
 
 	// 记下"这一组词真的问出去了"(借鉴清单 V1,见 querylog.go)。放在这里而不是五个重试轮
 	// 各写一遍:这里是所有轮次唯一的实际发起点,漏不掉也不会重复。来路与"只问这几个源"的
@@ -3766,6 +3782,16 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- lyricSourceResult{source: "migu", lyr: r.lyrics, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
 	}()
 	go func() {
+		if skipSource("deezer") {
+			resultsCh <- lyricSourceResult{source: "deezer"}
+			return
+		}
+		// 独立检索(不等任何其它源的 ID),同 kuwo/migu。搜索结果自带时长,srcDur 有值;
+		// 没有同步歌词、只有纯文本时 plainOnly=true(分数恒 -1,见 deezer.go 头注)。
+		r := deezerLyric(ctx, artist, title, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+	}()
+	go func() {
 		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份
 		// appleURLCache——谁先查到谁写缓存,这里不重复消耗一次网络请求。
 		resultsCh <- lyricSourceResult{source: "applecover", matchCover: appleMusicMatchCached(ctx, artist, title, album).cover}
@@ -3783,7 +3809,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	}
 
 	deadline := time.After(lyricSearchDeadline)
-	// 哪些歌词源已经回来了。按名字记而不是只数个数:九个 goroutine 里有一个是
+	// 哪些歌词源已经回来了。按名字记而不是只数个数:这些 goroutine 里有一个是
 	// applecover(封面兜底,不是歌词源),数个数会把它算进进度、让 (X/Y) 虚高一格。
 	doneSources := map[string]bool{}
 	totalSources := enabledLyricSourceCount()
@@ -3796,8 +3822,21 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		return n
 	}
+	// 收够**每一个** goroutine 各自的那一份:歌词源 + applecover。
+	//
+	// ⚠️ 这里曾经是硬编码的 `i < 9`,而 goroutine 数是"源数 + 1"——两个数从来没有绑在
+	// 一起过,于是每加一个源就多丢一个结果:循环先数满就退出,**最后到达的那个源的应答
+	// 被直接扔掉**(amll 最容易中招——它要等网易云/QQ 先把音乐 ID 搜出来,结构性地总是
+	// 最后回)。2026-09-13 接入第十个源时发现:那一刻 11 个 goroutine 只收 9 份,新接的
+	// deezer 明明取回了 2810 字节逐行歌词、却从没进过候选列表。`git log -S` 查下来这个
+	// 数字自引入起一次都没改过,也就是说 2026-08-31 接酷我、09-04 接咪咕时就已经在丢一份
+	// 了,只是丢的那份通常是 applecover 或最慢的源、没人察觉。
+	//
+	// 写成 len(lyricSourceNames)+1 而不是再钉一个字面量:源清单是加源时**必须**改的那一处
+	// (lyricSourceNames 有守卫钉着,见 lyricsourceregistry_test.go),让这里跟着它走,以后
+	// 加源就不会再漏。超时/取消两条分支照旧兜底,不会因为某个 goroutine 没发结果而卡死。
 collect:
-	for i := 0; i < 9; i++ {
+	for i := 0; i < len(lyricSourceNames)+1; i++ {
 		select {
 		case r := <-resultsCh:
 			doneSources[r.source] = true

@@ -1188,7 +1188,7 @@ private struct LyricsSettingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .help(name)
+        .help(sourceHelpText(id))
         .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
         .animation(.easeOut(duration: 0.12), value: hovered)
         .accessibilityAddTraits(on ? [.isSelected] : [])

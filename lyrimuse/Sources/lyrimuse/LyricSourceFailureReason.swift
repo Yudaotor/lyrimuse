@@ -20,6 +20,13 @@ enum LyricSourceFailureReason {
             return L10n.t("Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复")
         case "netease_rate_limited":
             return L10n.t("网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障")
+        case "deezer_auth_failed":
+            // Deezer 取词要先从 auth.deezer.com 换一张匿名 JWT(不需要账号),这一步没换到。
+            // 这是这一路目前**唯一**实测见过的失败模式——"这首歌没有歌词"是正常结果、
+            // 不会报到这里来。⚠️ 这个 case 曾经是 deezer_region_restricted,那是误判:
+            // 当时走的旧接口对任何歌都回 "No lyrics id ... and country XX",换出口到别的
+            // 国家照样如此,真因是那条接口废了,见 collector/deezer.go 头注。
+            return L10n.t("Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）")
         case "musixmatch_direct_blocked":
             // ⚠️ 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
             // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。2026-09-03 实测

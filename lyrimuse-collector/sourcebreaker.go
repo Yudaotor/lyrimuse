@@ -126,6 +126,8 @@ func lyricSourceForHost(host string) string {
 		return "kuwo"
 	case h == "migu.cn" || strings.HasSuffix(h, ".migu.cn"):
 		return "migu" // 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源
+	case h == "deezer.com" || strings.HasSuffix(h, ".deezer.com"):
+		return "deezer" // 搜索 api.deezer.com、取词 www.deezer.com 都归这一源
 	}
 	return ""
 }

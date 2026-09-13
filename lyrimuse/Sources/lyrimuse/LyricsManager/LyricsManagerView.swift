@@ -239,6 +239,9 @@ func sourceColor(_ source: String) -> Color {
     // 咪咕音乐(2026-09-04 加,见 collector/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
     // 选薄荷绿作为下一个未占用色。
     case "migu": return .mint
+    // Deezer(2026-09-13 加,见 collector/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
+    // 都被占了,选蓝绿(teal)作为下一个未占用色。
+    case "deezer": return .teal
     default: return .secondary
     }
 }
@@ -264,8 +267,33 @@ func sourceDisplayName(_ source: String) -> String {
     case "kuwo": return L10n.t("酷我音乐")
     // 咪咕音乐(2026-09-04 加)——同酷我,用国内用户认得出的中文写法。
     case "migu": return L10n.t("咪咕音乐")
+    // Deezer(2026-09-13 加)——国际品牌名,没有约定俗成的中文译名,同 LyricFind/Musixmatch
+    // 保留原名。它跟 lyricfind 数据同源(都是 LyricFind 供词),但**展示成两个源**是对的:
+    // 用户看到的是"哪条管道给出了这份候选",两条管道的接口与可用性都不一样(实测这台机器上
+    // lyricfind 整源不可用、deezer 正常出词),见 collector/deezer.go。
+    case "deezer": return "Deezer"
     case "": return L10n.t("无来源")
     default: return source
+    }
+}
+
+// 来源格子的悬停提示。绝大多数来源就是展示名本身——`.help` 在那里的本职是给固定 4 列网格
+// 里被截断的长译名兜底(见 SettingsView.sourceCheckbox 里的说明),名字没被截断时它只是把
+// 同一个词重复一遍、那个槽位是空着的。
+//
+// lyricfind 是唯一一个"展示名 ≠ 检索对象"的源:数据是 LyricFind 的(候选过滤只留真正的
+// LyricFind 数据,见 collector/ytmusic.go 头注),但取数走的是 YouTube Music 这条管道。
+// 界面上这两个名字此前是分开出现的——平时的展示名按**数据来源**叫 LyricFind,出事时的失败
+// 文案按**管道**叫 "YouTube Music 在这个网络所在地区不可用"(LyricSourceFailureReason.swift)——
+// 这个分工本身是对的(平时关心拿到谁的词,出事关心该动哪条链路),但两个名字之间的关系
+// 在界面上无处可看。2026-09-13 接完 Deezer(同样是 LyricFind 供词的另一条管道)之后用户
+// 直接问到"这里该写 LyricFind 还是 YouTube Music",说明这层关系确实需要在界面上讲一句,
+// 就借这个本来空着的槽位讲。展示名不动:改叫 YouTube Music 会 over-promise——实测 YTM
+// 命中的候选里 6/9 是 Musixmatch 转发、全部被闸门拒掉,不是"YouTube Music 有的都能拿到"。
+func sourceHelpText(_ source: String) -> String {
+    switch source {
+    case "lyricfind": return L10n.t("LyricFind（经由 YouTube Music 检索）")
+    default: return sourceDisplayName(source)
     }
 }
 
