@@ -715,7 +715,13 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 封面归属可以升级成"借同专辑一张实测证据图"时也算缺(2026-09-07,见
 	// coverCanUpgradeToVerifiedSibling):coverNeedsAlbumCheck 只查网易云那一档,
 	// 而这次要救的正是它刻意不查的 qq 档。
-	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
+	// 主色只在配了状态中继时才算缺:它是纯网页字段,没配中继时压根不会去算(见
+	// resolveTrackEnrichment 那处),不收窄的话恒判"缺"、每条记录白补满 5 轮、每轮把开着的
+	// 歌词源全部重查一遍 —— 跟上面 QQURL 兜底链接、NeteaseURL 仿冒号名单是同一个坑的第三次。
+	// 用户后来才配中继时,这条判据会自动把存量条目重新算成缺、走既有回填路径补上(自愈);
+	// 只有 PeripheralRetryCount 已经打满的条目补不回来,那批网页上无配色。
+	missingAccent := e.AccentColor == "" && webRelayConfigured()
+	missing := missingAccent || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
 		isQQSearchFallbackURL(e.QQURL) || missingQQMids ||
 		missingCanonical || coverNeedsAlbumCheck(e, album) ||
 		coverCanUpgradeToVerifiedSiblingLocked(e, artist, album)
@@ -1938,7 +1944,12 @@ func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bun
 	if deviceCoverURL == "" {
 		return
 	}
-	accent := dominantColor(ctx, deviceCoverURL)
+	// 取色只为网页,没配中继就不算,理由同 resolveTrackEnrichment 里那处。设备封面是
+	// 本地文件、不发 HTTP,但解码 + 逐像素扫描照样是白烧。
+	accent := ""
+	if webRelayConfigured() {
+		accent = dominantColor(ctx, deviceCoverURL)
+	}
 	// 先在锁外把"现有封面"读出来 —— 下面的清晰度判据要发 HTTP 取一次远程候选来比指纹,
 	// 那是几百毫秒的事,绝不能捏着 enrichMu 做(整份缓存的读写都在这把锁上)。
 	enrichMu.Lock()
@@ -2285,8 +2296,18 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		// 最后试 QQ 音乐自己的歌手搜索建议),见其头注。
 		e.CanonicalArtist = resolveGenericArtistCanonicalName(ctx, artist)
 	}
-	if e.CoverURL != "" {
+	if e.CoverURL != "" && webRelayConfigured() {
 		// 封面主色调,供网页按专辑动态配色(浏览器读跨域封面像素会被 CORS 挡,故服务端算)。
+		//
+		// 没配状态中继就整个不算:这个字段**只有网页读**(relay.go 的 "accent" 键 →
+		// web/index.html),App 侧一处都不读 —— 悬浮歌词/灵动岛那套主色是 App 自己从
+		// 本地封面像素算的,跟这个字段无关。算一次要发一趟 HTTP 取 64x64 缩图 + 解码 +
+		// 逐像素扫描,每首新歌一次(accentCache 只在进程内按 cover URL 去重),没有消费者
+		// 时全是白烧。
+		//
+		// ⚠️ 配套改动在 needsPeripheralBackfill 的 missing 判定——那里必须同步收窄,
+		// 否则没配中继时 AccentColor 恒空 → 恒判"缺" → 每条记录白补满 5 轮、每轮把开着的
+		// 歌词源全部重查一遍。理由与前两次同类事故见那里的注释。
 		e.AccentColor = dominantColor(ctx, e.CoverURL)
 	}
 	// 各平台单曲跳转链接。Apple Music 中国区优先(iTunes Search)、QQ 经 smartbox、Spotify 搜索链接。

@@ -14,6 +14,13 @@ import (
 //   - 以前只有 10 分钟节流、没有次数上限,真的补不上的字段会让这条记录只要还在被播放就
 //     每 10 分钟重发一轮网络请求,永远停不下来。
 func TestNeedsPeripheralBackfill(t *testing.T) {
+	// 主色是纯网页字段,"缺主色要不要补"整条判据都挂在中继有没有配上(见
+	// needsPeripheralBackfill 里 missingAccent 那段)。默认按"配了"跑,好让下面那批
+	// 既有用例保持原来的语义;没配的那一档单独在最后跑一遍。
+	savedRelay := webRelayURL
+	defer func() { webRelayURL = savedRelay }()
+	webRelayURL = "https://np.example.test"
+
 	long := time.Now().Unix() - int64(enrichPeripheralRetryInterval/time.Second) - 1
 	full := enrichEntry{
 		AccentColor: "#fff", AppleURL: "a", QQURL: "q", NeteaseURL: "n",
@@ -111,6 +118,25 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := needsPeripheralBackfill(c.e, c.artist, ""); got != c.want {
+			t.Errorf("%s: needsPeripheralBackfill = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// 没配状态中继:主色压根不会被算出来(resolveTrackEnrichment 那处直接跳过),所以它为空
+	// 是**正常态**、不能算缺 —— 否则每条记录都白补满 peripheralBackfillMaxAttempts 轮、每轮
+	// 把开着的歌词源全部重查一遍。跟 QQURL 兜底链接、NeteaseURL 仿冒号名单是同一个坑的第三次。
+	webRelayURL = ""
+	noRelay := []struct {
+		name string
+		e    enrichEntry
+		want bool
+	}{
+		{"没配中继,只缺主色:不补", func() enrichEntry { e := full; e.AccentColor = ""; return e }(), false},
+		{"没配中继,缺主色又缺别的:照补", func() enrichEntry { e := full; e.AccentColor = ""; e.AppleURL = ""; return e }(), true},
+		{"没配中继,什么都不缺:不补", full, false},
+	}
+	for _, c := range noRelay {
+		if got := needsPeripheralBackfill(c.e, "窦靖童", ""); got != c.want {
 			t.Errorf("%s: needsPeripheralBackfill = %v, want %v", c.name, got, c.want)
 		}
 	}

@@ -58,7 +58,7 @@ state-worker（/push 接收、/now 供网页与 feishu-bot、KV 缓存、LB 兜�
 
 | 位置 | 项 | 影响 |
 |---|---|---|
-| 账号→网页推送 | 中继地址/密钥 | pushRelayState 的目标；未配置则不推送（网页退化走 LB 兜底） |
+| 账号→网页推送 | 中继地址/密钥 | pushRelayState 的目标；未配置则不推送（网页退化走 LB 兜底），**且所有只为网页服务的前置计算整体跳过**（见决策 10） |
 
 ## 与其它功能的交互
 
@@ -109,3 +109,19 @@ state-worker（/push 接收、/now 供网页与 feishu-bot、KV 缓存、LB 兜�
     - **认不出的 `file://` 一律返回空串，绝不原样透传**。宁可让网页暂时退回 iTunes 兜底，也不能再把本地路径放出去。
 
 9. ⚠️ **ListenBrainz 里 2026-08-31~09-02 那两天的记录已经永久带着 `file://` 封面**，改不掉。所以 `fromLB` 那条兜底链路上必须长期留一道 `^https?://` 的守卫——网页（`index.html` + `demo/index.html`）和 state-worker 各有一份**同名同逻辑**的 `fromLB`，三处都要有，改一处记得改另外两处（这个「两份几乎逐字相同的 `fromLB`」本来就是 `index.html` 里写明的已知重复）。
+
+10. **没配中继就不做任何只为网页服务的前置计算（2026-09-14，用户拍板：「如果没有配这个东西，那么所有相关的前置计算，或者说数据获取，都不需要进行」）**。
+
+    审计四条这类路径，三条本来就在函数第一行挡住了——`pushRelayState`（`poller.go`）、`topArtistsDigest`（`topartists.go`）、封面上传三件套（`artworkrelay.go` 的 `webSafeCoverURL` / `ensureArtworkUploaded` / `sweepDeviceArtwork`）。漏的是**封面主色 `accent_color`**：它是纯网页字段（写入处 → `relayState` 的 `"accent"` 键 → `web/index.html`），**App 侧全量 grep 零命中**（悬浮歌词/灵动岛那套主色是 App 自己从本地封面像素算的，跟这个字段无关），但每首新歌都要发一趟 HTTP 取 64×64 缩图 + 解码 + 逐像素扫描（`accentCache` 只在进程内按 cover URL 去重）。
+
+    判据是 `relay.go` 的 `webRelayConfigured()`，闸在 `enrich.go` 两处调用（`resolveTrackEnrichment` / `applyDeviceCoverUpgrade`）。
+
+    ⚠️ **三个必须一起改的连带点，漏一个就是净亏**：
+
+    - **`needsPeripheralBackfill` 的 `missing` 判定**（`enrich.go`）里 `e.AccentColor == ""` 必须同步收窄成 `missingAccent`。不收窄的话：没配中继 → 主色恒空 → 恒判「缺」→ 每条记录白补满 `peripheralBackfillMaxAttempts`(5) 轮，**每轮把开着的歌词源全部重查一遍**，代价比原来那点取色大一个量级。这是同一个坑的**第三次**——前两次就在同一个函数里留着注释：QQURL 兜底链接（565 条里 40 条永远不再补）、NeteaseURL 仿冒号名单（周杰伦 218 条全空、5 条已白打满）。回归用例在 `peripheralbackfill_test.go`（配了/没配两档，做过变异验证：去掉 `&& webRelayConfigured()` 那半边，「没配中继，只缺主色：不补」当场变红）。
+    - **`webRelayURL` 刻意跟 `artworkRelayURL` 分成两个变量**，尽管两者都取自 `cfg.StateRelayURL`：后者管「设备封面要不要上传托管」（还要配套 token），前者只管「要不要算给网页看的东西」。共用一个会逼子命令为了拿到取色而连带打开封面上传。
+    - **`recheck-cover` 子命令要自己补一句赋值**（`covercli.go`）。它在 `main()` 的子命令分流阶段（`os.Args[1]` 那一串判断）就返回了，跑不到常驻路径那句 `webRelayURL = cfg.StateRelayURL`；不补的话，给网页配了中继的用户跑这条 CLI 会把 `accent_color` 写成空（`-apply` 是连着封面四件套一起写回的）。这个包里只有它走 `resolveTrackEnrichment`，`recheck-instrumental` 不需要。
+
+    **自愈与边界**：用户后来才配中继时，`missingAccent` 会自动把存量条目重新算成缺、走既有外围回填路径补上；只有 `PeripheralRetryCount` 已经打满 5 次的条目救不回来（`peripheralBackfillWindowOpen` 第一行就永久关窗），那批在网页上无配色。
+
+    **顺带一条反例，别误伤**：`spotify_url` 长得也像网页专属（`relayState` 的 `links.spotify`），但 **App 真的读它**（`EnrichCacheReader.swift` + `PlatformLinks.swift`，只认真曲目 ID、搜索兜底不进来）。51 个 enrich 字段对着 App / 网页两侧全量对账过，除 `accent_color` 外没有第二个纯网页字段。

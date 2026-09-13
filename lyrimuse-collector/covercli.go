@@ -49,6 +49,15 @@ func runRecheckCoverCLI(args []string) {
 	cfgDir := configDir()
 	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选),跟 dedupe-entries 同款。
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	// 封面主色只在配了状态中继时才算(见 relay.go 的 webRelayURL 头注)。这条子命令在
+	// main() 的子命令分流阶段就返回了,跑不到常驻路径那句赋值 —— 不补这一句,给网页配了
+	// 中继的用户在这里会把 accent_color 写成空(下面 -apply 那步是连着封面四件套一起写回的)。
+	// 只读 loadConfig,跟 topartistscli 同款;**只设 webRelayURL**,不碰 artworkRelayURL
+	// (那个管设备封面上传,这条 CLI 不该顺带打开)。这个包里只有 recheck-cover 走
+	// resolveTrackEnrichment,recheck-instrumental 不需要。
+	if ccfg, err := loadConfig(filepath.Join(cfgDir, "config.json")); err == nil {
+		webRelayURL = ccfg.StateRelayURL
+	}
 	// ⚠️ 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
 	// path 留空就是"只用内存不持久化"(见 musicbrainz.go),否则这个进程会拿一份空 map
 	// 把常驻实例攒下来的整份歌手身份缓存盖掉。

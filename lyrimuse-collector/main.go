@@ -285,6 +285,8 @@ func main() {
 	// 根本读不到的 file:// 本地路径(2026-09-02 用户报「网页上没有封面了」)。
 	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
 	artworkRelayURL, artworkRelayToken = cfg.StateRelayURL, cfg.StateRelayToken
+	// 只为网页算的东西(封面主色)据此整体跳过,见 relay.go 的 webRelayURL 头注。
+	webRelayURL = cfg.StateRelayURL
 	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
 	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
