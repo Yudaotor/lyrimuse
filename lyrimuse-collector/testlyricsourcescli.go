@@ -18,12 +18,20 @@ import (
 // ——跟 search-lyrics 那条"陆续出结果"是同一个体验诉求,复用它的流式底层
 // (scoredLyricCandidatesStreaming)而不是另起一套。
 //
-// ⚠️ 没有做"只等目标源自己回来就提前退出"这层优化:两首探测曲各自内部仍然会把全部启用的
-// 源一起并发打一遍(跟 healthcheck/search-lyrics 完全一样),即使 -source 只要一个源的
-// 结果,后台也要等这一轮里最慢的那个源。选择接受这个代价而不是给每个源单独写一套"只探测
-// 它自己"的调用——AMLL 需要先从网易云/QQ 拿到平台 ID 才能测,直接调用它自己的探测函数
-// 反而更复杂;而"单独测一个源"和"全部测"用户点下去的实际等待时间在这个仓库里从来就没有
-// 区分过(联网搜索候选歌词弹窗同样是等最慢的那个源),不是这次改动新引入的体验倒退。
+// ⚠️ **探测范围**没有按 -source 收窄:两首探测曲各自内部仍然会把全部启用的源一起
+// 并发打一遍(跟 healthcheck/search-lyrics 完全一样),不给每个源单独写一套"只探测它自己"
+// 的调用——AMLL 需要先从网易云/QQ 拿到平台 ID 才能测,拆出来反而更复杂。
+//
+// 但**要测的源全部有了结论之后就不再跑下去**(2026-09-13 修的 bug,下面 allReported/cancel)
+// ——这条 CLI 的全部产出就是那几行 NDJSON,最后一个目标源报完之后再跑不会多出
+// 任何输出,只会让调用方干等。原来两首探测曲雷打不动各跑到底,`-source deezer` 这种
+// "只要一行"的调用于是在 deezer 那行打完之后还要再跑一整首探测曲(实测 5.8s 出结果、
+// 12.0s 才退出),设置页那颗按钮因此在结果已经显示出来之后还持续显示"测试中…"六秒以上
+// (用户实机反馈"点了单个源的测试,结束之后右边的测试状态一直没有变更")——那颗按钮的
+// "测试中"是跟着子进程活着算的,见 SettingsView.isTestingLyricSources。现在最后一个目标源
+// 一报完就取消这一轮探测(fetchScoredLyricCandidatesStreaming 的收集循环认 ctx.Done,跟
+// "用户主动取消搜索"走的是同一条路),进程随即正常退出(退出码仍然是 0,Swift 侧
+// 不会当成失败)。
 //
 // 每个源的"边到边报"靠 scoredLyricCandidatesStreaming 返回的累积结果实现:probe1 跑完
 // 就检查里面有没有某个目标源的候选(不看分数是否有效——见下面 scanForPositives 的注释),
@@ -49,11 +57,29 @@ func runTestLyricSourcesCLI(args []string) {
 	if *only != "" {
 		targets = []string{*only}
 	}
+	if len(targets) == 0 {
+		// 一个源都没启用(界面不允许关掉最后一个,只可能来自手改配置):没有任何源要测,
+		// 两首探测曲跑完也不会有一行输出,直接收工。
+		return
+	}
 	wanted := make(map[string]bool, len(targets))
 	for _, t := range targets {
 		wanted[t] = true
 	}
 	reported := make(map[string]bool, len(targets))
+
+	// 取消闸:targets 里每个源都已经有结论之后,这一轮探测剩下的部分再跑也不会改变
+	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注那段 ⚠️。
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	allReported := func() bool {
+		for _, t := range targets {
+			if !reported[t] {
+				return false
+			}
+		}
+		return true
+	}
 
 	enc := json.NewEncoder(os.Stdout)
 	emitResult := func(source, status, reasonCode string) {
@@ -86,6 +112,9 @@ func runTestLyricSourcesCLI(args []string) {
 				emitResult(src, "ok", "")
 			}
 		}
+		if allReported() {
+			cancel()
+		}
 	}
 
 	runProbe := func(artist, title, album string) {
@@ -97,7 +126,7 @@ func runTestLyricSourcesCLI(args []string) {
 			scanForPositives(results)
 		}
 		_, results := scoredLyricCandidatesStreaming(
-			context.Background(), toSimplified(artist), toSimplified(title), toSimplified(album), 0, onUpdate)
+			ctx, toSimplified(artist), toSimplified(title), toSimplified(album), 0, onUpdate)
 		scanForPositives(results)
 	}
 
@@ -106,7 +135,11 @@ func runTestLyricSourcesCLI(args []string) {
 	// "库里确实没有这首"误判成"这个源坏了"。中文探测曲跟 healthcheckcli.go 保持同一首
 	// (2026-08-31 从《晴天》换成《少年》,理由同样见 healthcheckcli.go 那边的注释——不重复)。
 	runProbe("梦然", "少年", "")
-	runProbe("The Beatles", "Yesterday", "Help!")
+	// 第一首就把要测的源全问出结论了(单测一个源时最常见)就不跑第二首——两首取并集是为了
+	// 补"这个源的曲库里没有那一首"造成的漏判,已经有结论的源不需要补。
+	if !allReported() {
+		runProbe("The Beatles", "Yesterday", "Help!")
+	}
 
 	down := networkLooksDown()
 	for _, src := range targets {

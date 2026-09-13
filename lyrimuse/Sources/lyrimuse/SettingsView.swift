@@ -427,11 +427,19 @@ struct SettingsView: View {
         // 原来是给 TabView 焊死的 440pt 改出来的 minWidth/idealWidth——现在换成
         // NavigationSplitView,多了一列侧边栏,整体相应加宽;同样不设 maxWidth/固定
         // 高度,各分类继续按内容自动撑高。
-        // 高度这一档是跟着「歌词显示」页的固定头部定的:那一页顶上钉着分段选择器 + 实时预览,
-        // 实测占 205pt。窗口 460 高时滚动区只剩 255pt,一屏放不下两张卡,滚起来很碎;
-        // idealHeight 给到 640,滚动区就有 ~430pt。minHeight 同步抬到 520,避免有人拖到
-        // 极限后滚动区比头部还矮。
-        .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 640)
+        // 高度这一档是跟着「歌词显示」页定的 —— 六页里它最高,它放得下别的页就都放得下。
+        //
+        // 2026-09-13 从 520/640 抬到 690/720:那一页加回了页内大标题(+68pt,见 AppearanceSettingsTab
+        // 里 SettingsPage 那处注释)。实机量的那一段(900×652 的窗口截图、按 2x 采样):标题栏吃掉
+        // 32pt,「桌面悬浮歌词」总开关卡的底边落在 605pt、「全部设置」抽屉头的底边在 658pt,再加
+        // 28pt 下留白 = 686pt —— 690 是"悬浮歌词这一段整段不用滚"的下限,720 再多留一点余量。
+        //
+        // ⚠️ **minHeight 是这两个数里唯一真的能改到已有窗口的那一档。** 这扇窗是 SwiftUI 的
+        // `Settings` 场景,尺寸由 macOS 自动存档,idealHeight 只在没有存档时(首次打开 / 重置)
+        // 说了算 —— 用户手里那扇 652pt 高的窗口只会被 minHeight 顶上来。所以这一档不能按
+        // "别比头部还矮"那种下限来定:用户的要求是"把窗口高度搞大一点、确保桌面悬浮歌词的开关
+        // 能展示在页面上",要顶到那张卡整张露出来之上才算数。
+        .frame(minWidth: 760, idealWidth: 860, minHeight: 690, idealHeight: 720)
         // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
@@ -1957,10 +1965,13 @@ private struct AppearanceSettingsTab: View {
                 // 「三种」而不是原来的「四种」:这一页实际只有三个展示方式开关(桌面悬浮
                 // 歌词/灵动岛歌词/菜单栏歌词)。第四种是「歌词窗口」,它压根不在这一页配置
                 // —— 靠快捷键/菜单按需打开,没有开关。原文案让人数着三个开关去找第四个。
-                subtitle: L10n.t("三种展示方式可以同时开启"),
-                // 这一页顶着一块接近真实尺寸的编辑台,纵向空间格外紧;而窗口标题栏已经写着
-                // 「设置 – 歌词显示」,页内那块 22pt 大标题是同一句话说两遍(2026-08-30 用户要求移除)。
-                showsHeader: false
+                subtitle: L10n.t("三种展示方式可以同时开启")
+                // ⚠️ 这里**不要**再写 showsHeader: false。2026-08-30 曾经关掉过页内那块 22pt 大标题
+                // (理由:这一页顶着一块接近真实尺寸的编辑台、纵向格外紧,而标题栏已经写着「设置 – 歌词显示」)。
+                // 2026-09-13 用户把六个分类逐页截图并排看,指出只有这一页没有大标题、"会有点不一致",
+                // 要求加回来 —— 一致性在这里赢过省那 68pt。省下来的纵向空间改由窗口高度补(见 SettingsView
+                // 的 .frame:minHeight 520→690、idealHeight 640→720),用户同一句话里的第二个要求就是
+                // "把整个设置窗口的高度搞大一点、确保桌面悬浮歌词的开关能展示在页面上"。
             ) {
                 sectionPicker
                 currentSection
