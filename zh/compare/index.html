@@ -40,7 +40,7 @@
   <p>不活跃了：<a href="https://github.com/ddddxxx/LyricsX">LyricsX</a> 的最后一个发布版是 <strong>2022 年 4 月的 v1.6.3</strong>，仓库偶尔还有提交。搜「LyricsX 替代」的人多半带着这个问题来，所以这里给一份基于事实的、当下仍在活跃维护的开源选择对比：</p>
   <ul>
     <li><strong><a href="https://github.com/aviwad/LyricFever">Lyric Fever</a></strong>（MIT）——Spotify + Apple Music 的歌词体验，要求 macOS 15+，自称 "spiritual successor to LyricsX"。</li>
-    <li><strong><a href="https://github.com/Yudaotor/lyrimuse">Lyrimuse</a></strong>（GPL-3.0，即本项目）——逐字同步歌词，除 Apple Music、Spotify 外<strong>原生支持国内播放器（QQ 音乐、网易云音乐、酷狗）</strong>，还支持浏览器里的 YouTube Music / Spotify 网页版；9 个歌词源自动查证，<strong>全部候选统一打分、择优胜出</strong>；翻译、拼音/粤拼/注音假名；Last.fm 与 ListenBrainz 打卡加本地统计。macOS 14+，Apple Silicon 与 Intel。</li>
+    <li><strong><a href="https://github.com/Yudaotor/lyrimuse">Lyrimuse</a></strong>（GPL-3.0，即本项目）——逐字同步歌词，除 Apple Music、Spotify 外<strong>原生支持国内播放器（QQ 音乐、网易云音乐、酷狗）</strong>，还支持浏览器里的 YouTube Music / Spotify 网页版；10 个歌词源自动查证，<strong>全部候选统一打分、择优胜出</strong>；翻译、拼音/粤拼/注音假名；Last.fm 与 ListenBrainz 打卡加本地统计。macOS 14+，Apple Silicon 与 Intel。</li>
   </ul>
   <p><strong>OSD Lyrics 呢？</strong>那是 Linux 桌面歌词软件，不是 macOS 的——它常出现在「LyricsX 替代」清单里，但在 Mac 上跑不了。</p>
 </section>
@@ -51,11 +51,11 @@
   <table>
     <tr><th></th><th>Lyrimuse</th><th>LyricsX</th><th>Lyric Fever</th></tr>
     <tr><td><strong>许可证 · 价格</strong></td><td>GPL-3.0 · 免费</td><td>MPL-2.0 · 免费</td><td>MIT · 免费</td></tr>
-    <tr><td><strong>最新发布</strong></td><td>v1.6.0（2026-09）</td><td>v1.6.3（2022-04）</td><td>v3.3（2025-11）</td></tr>
+    <tr><td><strong>最新发布</strong></td><td>v1.7.0（2026-09）</td><td>v1.6.3（2022-04）</td><td>v3.3（2025-11）</td></tr>
     <tr><td><strong>最低 macOS</strong></td><td>14（Sonoma）</td><td>10.11</td><td>15（Sequoia）</td></tr>
-    <tr><td><strong>支持的播放器</strong></td><td>Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗——可任意组合</td><td>Apple Music、Spotify、Vox、Audirvana、Swinsian</td><td>Spotify、Apple Music</td></tr>
+    <tr><td><strong>支持的播放器</strong></td><td>Apple Music（含电台）、Spotify、QQ 音乐、网易云音乐、酷狗——可任意组合</td><td>Apple Music、Spotify、Vox、Audirvana、Swinsian</td><td>Spotify、Apple Music</td></tr>
     <tr><td><strong>浏览器网页播放器</strong></td><td>YouTube Music 与 Spotify 网页版，跟随页面自身进度同步</td><td>—</td><td>—</td></tr>
-    <tr><td><strong>歌词源</strong></td><td>9 个：网易云、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、AMLL</td><td>多个（经其 LyricsKit 组件）</td><td>3 个：Spotify、LRCLIB、网易云</td></tr>
+    <tr><td><strong>歌词源</strong></td><td>10 个：网易云、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL</td><td>多个（经其 LyricsKit 组件）</td><td>3 个：Spotify、LRCLIB、网易云</td></tr>
     <tr><td><strong>匹配选择</strong></td><td>所有源全部候选统一打分（歌名/歌手/专辑/时长吻合度 + 质量信号）；每首歌有决策面板；手动选定锁定</td><td>—</td><td>—</td></tr>
     <tr><td><strong>逐字同步</strong></td><td>是，跨源支持（含人工整理的 AMLL 逐字库）</td><td>经 LRCX 逐字时间标签，取决于源是否提供</td><td>—</td></tr>
     <tr><td><strong>翻译</strong></td><td>优先源自带社区翻译，否则设备端 Apple 翻译（18 种语言）+ 在线兜底</td><td>显示源自带的翻译</td><td>Apple 设备端翻译</td></tr>
