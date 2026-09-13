@@ -302,30 +302,7 @@ struct PanelQuickSettings: View {
                 .controlSize(.small)
                 .fixedSize()
             }
-            // ⚠️ 区间走 `NotchEditorStage.usableWidthRangeOnCurrentScreen`,别在这里另写一份
-            // 字面量。理由同悬浮歌词那根:一处能产生别处够不到的值,用户下次一动另一根滑杆就会
-            // 被弹回去,表现是"我调好的宽度自己变了"。
-            // 用 usable 而不是存储层的 `widthRange`:下界含这台机器的"耳朵下限",低于它的值
-            // 拖了卡片也不动(2026-08-31)。step 仍然是 10:这根是兜底通路、旁边没有实时预览,
-            // 粗一点反而好落值(编辑台那根是 2)。
-            // 写回走 `NotchEditorStage.commitWidths`(2026-09-06 起三个入口唯一的落盘路径):
-            // `notchOverlayEnabled` 守卫、相等守卫、「展开 ≥ 稳态」归一都在里面。
-            sliderRow(L10n.t("宽度"), value: Binding(
-                get: { settings.notchContentWidth },
-                set: { NotchEditorStage.commitWidths(steady: $0) }
-            ), range: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
-               displayValue: { NotchEditorStage.effectiveWidth(baseWidth: $0) })
-            // hover 展开后卡片撑到的宽度(2026-09-06)。区间下界 = 稳态真实宽(展开不许比稳态窄),
-            // 读数是真实展开宽 —— 跟编辑台双滑块读数「稳态–展开」的右半边、抽屉「展开宽度」行
-            // 同一个数。
-            sliderRow(L10n.t("展开宽度"), value: Binding(
-                get: { settings.notchExpandedContentWidth },
-                set: { NotchEditorStage.commitWidths(expanded: $0) }
-            ), range: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
-               displayValue: {
-                   NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
-                                                           expandedBase: $0)
-               })
+            notchWidthRow
             // 「显示歌词」(2026-09-06 用户要求搬进这块面板)。绑定直接写 AppSettings 就够,
             // 不用像宽度那样再喊一次控制器:`NotchLyricsWindowController` 自己订阅着
             // `$notchShowLyrics`(见那边的 showLyricsObserver),值一变卡片就重排。
@@ -343,6 +320,25 @@ struct PanelQuickSettings: View {
                 alignmentRow(selection: $settings.notchLyricsAlignment,
                              options: LyricsRestingAlignment.notchOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))
+                // 「副行」「字号」2026-09-14 补。两样都是这块面板 2026-08-19 建好**之后**才加进
+                // 设置页的(副行 09-06、字号 09-09),当时没回补到这里 —— 不是判过不该收:两者都
+                // 正好是头注那条判据说的"这个形态自己的、调了立刻看得见的旋钮"(切到「译文」当场
+                // 多一行字、字号拖一格主行当场变大)。
+                //
+                // 顺序跟设置页「歌词行」组一致(显示歌词 → 对齐方式 → 副行),字号来自「字体」组、
+                // 排在这一段最后 —— 上面的风格/宽度说的是整张卡,这四行是"歌词行自己的事"。
+                secondaryLineRow(selection: $settings.notchSecondaryLine)
+                // ⚠️ 灵动岛的字号跟「副行」**互不影响**,不要照搬菜单栏那边的「由副行决定」:
+                // 副行与展开预览固定 11pt、不随主行字号变,这正是 Core `NotchLyricRowMetrics`
+                // 刻意的取舍(那边注释:"不跟着放大是为了让主行的字号范围不依赖副行开没开")。
+                sliderRow(L10n.t("字号"), value: Binding(
+                    get: { settings.notchFontSize },
+                    set: { newValue in
+                        // 相等守卫同设置页那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
+                        guard newValue != settings.notchFontSize else { return }
+                        settings.notchFontSize = newValue
+                    }
+                ), range: Self.notchFontSizeRange)
             }
         case .menuBar:
             row(L10n.t("宽度模式")) {
@@ -374,14 +370,38 @@ struct PanelQuickSettings: View {
                              options: LyricsRestingAlignment.menuBarOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))
             }
-            // 这两项改的是菜单栏那一项占多宽,而这张面板正锚在那一项上 —— 面板开着期间
-            // 状态栏项不许重建(见 MenuBarStatusItem.present 里的 panelIsOpen 分支),
-            // 所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
+            // 「副行」「字号」2026-09-14 补,同灵动岛那两行 —— 都是这块面板建好之后才加进设置页的
+            // (副行 09-06、字号 09-03),漏回补。顺序跟设置页一致:「副行」属「布局」组(排几行是版面),
+            // 「字号」属「字体」组,排在它下面正好让下面那句「由副行决定」的原因就在上一行。
+            secondaryLineRow(selection: $settings.menuBarSecondaryLine)
+            menuBarFontSizeRow
+            // ⚠️ **这一整段四行**(宽度模式 / 最大宽度 / 副行 / 字号)改的都是菜单栏那一项占多宽,
+            // 而这张面板正锚在那一项上 —— 面板开着期间状态栏项不许重建(见 MenuBarStatusItem.present
+            // 里的 panelIsOpen 分支),所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
+            // (2026-09-14 从"这两项"扩到四项:新加的副行会把一行变两行、字号连行高一起改,
+            //  两者都要重建槽位,跟宽度那两项踩的是同一个分支。)
             Text(L10n.t("收起面板后生效"))
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: 滑杆区间
+
+    /// 灵动岛主行字号的可调区间。真源在 Core(`NotchLyricRowMetrics.mainFontSizeRange`,11…17,
+    /// 上限是"最大字号下两行 + 间距仍塞得进 44pt 行高"倒推出来的),跟设置页「字体」组那根读同一份,
+    /// 别在这里写字面量。提成计算属性是因为 Swift 的区间运算符必须跟左操作数同一行,行内写下来超长。
+    private static var notchFontSizeRange: ClosedRange<Double> {
+        Double(NotchLyricRowMetrics.mainFontSizeRange.lowerBound)
+            ... Double(NotchLyricRowMetrics.mainFontSizeRange.upperBound)
+    }
+
+    /// 菜单栏歌词字号的可调区间(10…16,上限由状态栏项 22pt 高推出)。同上,真源在
+    /// `MenuBarMarqueeRenderer.fontSizeRange`。
+    private static var menuBarFontSizeRange: ClosedRange<Double> {
+        Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)
+            ... Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound)
     }
 
     // MARK: 行组件(比设置页那套 SettingsRow 紧得多 —— 这里总宽只有 296pt)
@@ -427,6 +447,126 @@ struct PanelQuickSettings: View {
                            isOn: Binding<Bool>) -> some View {
         row(title, help: help) {
             Toggle("", isOn: isOn).labelsHidden().controlSize(.mini)
+        }
+    }
+
+    /// 灵动岛「宽度」—— **一行双滑块**:左边那只是稳态宽(没 hover 时多宽),右边那只是展开宽。
+    ///
+    /// 2026-09-06~09-14 之间这里是**两根单滑块**(「宽度」+「展开宽度」各占一行)。合并的由头是
+    /// 这块面板同日补进「副行」「字号」之后灵动岛那格要到 7 行、比上面的「正在播放」卡还高;但
+    /// 合并本身是**对的**而不只是省地方 —— 用户当初提这个功能时说的就是"设置一个上限和一个下限",
+    /// 编辑台那根 2026-09-06 起早已是 `RangeSlider`,只有这块面板一直拆着两根,同一件事在两个
+    /// 入口长成两副样子。合完之后形态一致,读数也跟编辑台同一个口径(两者相等时只报一个数)。
+    ///
+    /// ⚠️ 两只滑块**共用** `usableWidthRangeOnCurrentScreen`,不再碰
+    /// `usableExpandedWidthRangeOnCurrentScreen`(那个是给单滑块入口用的,下界 = 稳态真实宽)——
+    /// "展开不许比稳态窄"改由 `RangeSlider` 内部的 `NotchWidthRangeDrag` 管,跟编辑台同一条路。
+    ///
+    /// 落盘仍走 `NotchEditorStage.commitWidths`(三个写入口唯一的落盘路径),且跟合并前一样
+    /// **拖动中就落**:编辑台推迟到松手是因为它要在拖动期间切预览 chrome 的展开态,这块面板
+    /// 没有预览、不需要那套本地 @State。
+    private var notchWidthRow: some View {
+        row(L10n.t("宽度")) {
+            HStack(spacing: 6) {
+                RangeSlider(
+                    lower: settings.notchContentWidth,
+                    upper: settings.notchExpandedContentWidth,
+                    range: NotchEditorStage.usableWidthRangeOnCurrentScreen,
+                    // step 仍然是 10:这根是兜底通路、旁边没有实时预览,粗一点反而好落值
+                    // (编辑台那根是 2)。
+                    step: 10, tint: .accentColor,
+                    lowerLabel: L10n.t("灵动岛宽度"), upperLabel: L10n.t("灵动岛展开宽度"),
+                    valueText: { String(format: L10n.t("%@pt"), "\(Int($0))") },
+                    onChange: { steady, expanded in
+                        NotchEditorStage.commitWidths(steady: steady, expanded: expanded)
+                    },
+                    onEditingChanged: { _ in })
+                    // ⚠️ 高度不能省:`RangeSlider` 内部是 GeometryReader + `.frame(maxHeight: .infinity)`,
+                    // 不钉高度它会把这一行撑到父容器那么高。16pt 跟旁边几根 `.controlSize(.mini)`
+                    // 的 `SteppedSlider` 一边高。
+                    .frame(width: 128, height: 16)
+                Text(notchWidthValueText)
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 62, alignment: .trailing)
+                    // 读数是两只滑块的镜像、不是第三个可读元素:它们各自带着 accessibilityValue,
+                    // 都进无障碍树 VoiceOver 会把同一个值读两遍(同编辑台那根)。
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// 双滑块那一行的读数:口径跟编辑台 `widthValueText` 一致 —— 报的是**真实**宽度(过了
+    /// "两只耳朵放得下"那道下限,所以跟设定值可能不等),两者相等(展开不加宽)时只报一个数。
+    private var notchWidthValueText: String {
+        let steady = Int(NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth))
+        let expanded = Int(NotchEditorStage.effectiveExpandedWidth(
+            steadyBase: settings.notchContentWidth,
+            expandedBase: settings.notchExpandedContentWidth))
+        if expanded == steady {
+            return String(format: L10n.t("%@pt"), "\(steady)")
+        }
+        return String(format: L10n.t("%@–%@pt"), "\(steady)", "\(expanded)")
+    }
+
+    /// 「副行」行(2026-09-14)。灵动岛与菜单栏共用同一个四选一枚举(`LyricSecondaryLine`)和
+    /// 同一套显示名,只是各存各的键 —— 所以只传 Binding,不像 `alignmentRow` 那样泛型化。
+    /// 控件同「风格」「对齐方式」用 `.menu` 下拉,三条理由见 `alignmentRow` 头注(296pt 放不下
+    /// 四档分段、分段控件按选中项重量宽度、这个文件已有的宽选项行就是 `.menu`)。
+    private func secondaryLineRow(selection: Binding<LyricSecondaryLine>) -> some View {
+        row(L10n.t("副行")) {
+            Picker("", selection: selection) {
+                ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .fixedSize()
+        }
+    }
+
+    /// 菜单栏「字号」行(2026-09-14)。三件事跟设置页那行(`MenuBarFontSizeRow`)一字不差,别在
+    /// 这里简化:
+    ///   ① 读的是**生效字号**(`MenuBarMarqueeRenderer.font.pointSize`)而不是存储值 —— 存 0 表示
+    ///      "跟随系统",直接把 0 喂给滑杆滑块会跑到最左边;
+    ///   ② 拖回系统字号那一格时**存 0** 而不是那个数字,这样没有单独的「跟随系统」按钮也保住语义;
+    ///   ③ 相等守卫不能省:拖动中每个鼠标事件都调一次 set,量化后大量等值赋值照样广播
+    ///      objectWillChange,而菜单栏那边订阅着这个值、每次都会 refresh()。
+    ///
+    /// 副行开着时两行字号由行高推出(10 / 9pt)、滑杆翻了也没效果 —— 跟设置页一样**行留着、把滑杆
+    /// 换成一句灰字「由副行决定」**,不整行隐藏(那会变成"字号去哪了")。原因就在它正上方一行,
+    /// 符合这块面板"停用/隐藏一个旋钮的前提是把为什么摆在它上面"那条(见菜单栏「对齐方式」处)。
+    @ViewBuilder private var menuBarFontSizeRow: some View {
+        row(L10n.t("字号")) {
+            if settings.menuBarSecondaryLine.showsSecondaryRow {
+                Text(L10n.t("由副行决定"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            } else {
+                HStack(spacing: 6) {
+                    SteppedSlider(value: Binding(
+                        get: { Double(MenuBarMarqueeRenderer.font.pointSize) },
+                        set: { newValue in
+                            let range = MenuBarMarqueeRenderer.fontSizeRange
+                            let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound),
+                                                range.upperBound)
+                            let stored: CGFloat =
+                                quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
+                            guard stored != settings.menuBarLyricsFontSize else { return }
+                            settings.menuBarLyricsFontSize = stored
+                        }
+                    ), in: Self.menuBarFontSizeRange, step: 1)
+                        .controlSize(.mini)
+                        .frame(width: 128)
+                    Text(String(format: L10n.t("%@pt"),
+                                "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 38, alignment: .trailing)
+                }
+            }
         }
     }
 

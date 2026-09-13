@@ -929,6 +929,63 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 菜单栏面板「快捷设置」的旋钮清单(2026-09-14)----
+    //
+    // 这块面板(长按 / 右键圆钮块展开的那一小片)2026-08-19 建的,头注写死了收录判据:**这个形态
+    // 自己的、调了立刻看得见的旋钮**。问题不在判据,在**回补**:此后三个形态各自新增的旋钮里,
+    // 只有「对齐方式」(09-03)和灵动岛「显示歌词」(09-06)被补进来过,而同期加的
+    // 「副行」(09-06)和字号(菜单栏 09-03 / 灵动岛 09-09)一直漏在外面 —— 一漏就是静默的:
+    // 面板照常能用,只是少了两个本该在的旋钮,没有任何东西会红。这一组钉住 2026-09-14 补齐后的清单。
+    //
+    // 顺带钉住同日的两件事:①灵动岛宽度合成**一根双滑块**(跟编辑台形态取齐,也是腾出行数的前提);
+    // ②两个字号区间都读真源常量,不在面板里抄字面量(抄一份就会出现"别处够不到的值",
+    // 见 NotchEditorStage.widthRange 头注那条规矩)。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        if let panel = read("MenuBar/MenuBarPanelQuickSettings.swift") {
+            // ① 两个形态都要有「副行」。共用同一个枚举、各存各的键,所以是同一个行组件传两个 Binding。
+            expectEqual(panel.contains("secondaryLineRow(selection: $settings.notchSecondaryLine)"), true,
+                        "面板旋钮: 灵动岛那格要有「副行」(设置页 2026-09-06 就加了,别再漏回补)")
+            expectEqual(panel.contains("secondaryLineRow(selection: $settings.menuBarSecondaryLine)"), true,
+                        "面板旋钮: 菜单栏那格要有「副行」(设置页 2026-09-06 就加了,别再漏回补)")
+            // ② 两个形态都要有「字号」——三个形态里原先只有悬浮歌词有,那是漏补不是判过不收。
+            expectEqual(panel.contains("Self.notchFontSizeRange"), true,
+                        "面板旋钮: 灵动岛那格要有「字号」(设置页 2026-09-09 就加了)")
+            expectEqual(panel.contains("Self.menuBarFontSizeRange"), true,
+                        "面板旋钮: 菜单栏那格要有「字号」(设置页 2026-09-03 就加了)")
+            expectEqual(panel.contains("sliderRow(L10n.t(\"字号\")"), true, "面板旋钮: 悬浮歌词那根「字号」还在")
+            // ③ 区间读真源,不抄字面量。两个真源各自还带着"上限是倒推出来的"那套理由,抄一份就断了。
+            expectEqual(panel.contains("NotchLyricRowMetrics.mainFontSizeRange"), true,
+                        "面板旋钮: 灵动岛字号区间读 Core 真源(11…17 是按 44pt 行高倒推的,别写字面量)")
+            expectEqual(panel.contains("MenuBarMarqueeRenderer.fontSizeRange"), true,
+                        "面板旋钮: 菜单栏字号区间读 renderer 真源(10…16 由状态栏项 22pt 高推出)")
+            // ④ 菜单栏字号在副行开着时让位成一句灰字,跟设置页 MenuBarFontSizeRow 同进同出 ——
+            //    两行字号由行高推出,滑杆翻了没效果;整行隐藏会变成"字号去哪了",所以是让位不是隐藏。
+            expectEqual(panel.contains("settings.menuBarSecondaryLine.showsSecondaryRow"), true,
+                        "面板旋钮: 菜单栏「字号」要跟设置页一样在副行开着时让位")
+            expectEqual(panel.contains("由副行决定"), true,
+                        "面板旋钮: 让位时显示的是「由副行决定」,跟设置页同一句词条")
+            // ⑤ 灵动岛的字号**不跟**副行耦合:副行与展开预览固定 11pt、不随主行字号变(Core
+            //    NotchLyricRowMetrics 刻意的取舍)。照搬菜单栏那条会停掉一个其实有效的旋钮。
+            expectEqual(panel.contains("settings.notchSecondaryLine.showsSecondaryRow"), false,
+                        "面板旋钮: 灵动岛字号不许跟副行耦合(副行固定 11pt,主行字号照样生效)")
+            // ⑥ 灵动岛宽度是一根双滑块,不是两根单滑块。
+            expectEqual(panel.contains("RangeSlider("), true,
+                        "面板旋钮: 灵动岛宽度用 RangeSlider 一行双滑块(跟编辑台那根形态取齐)")
+            expectEqual(panel.contains("sliderRow(L10n.t(\"展开宽度\")"), false,
+                        "面板旋钮: 「展开宽度」不再单占一行(已并进双滑块的右边那只)")
+            expectEqual(panel.contains("range: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen"), false,
+                        "面板旋钮: 双滑块两只共用 usableWidthRange,「展开不许比稳态窄」由 NotchWidthRangeDrag 管")
+        } else {
+            expectEqual(true, false, "面板旋钮: 读不到 MenuBar/MenuBarPanelQuickSettings.swift(路径挪了?)")
+        }
+    }
+
     // ---- 日文汉字修回的接线(2026-09-06)----
     //
     // `JapaneseKanjiRepair` 的规则有 selftest 钉着(romanization 组),这里守的是它**接在哪**:正文和
