@@ -399,7 +399,14 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # QQ 音乐支持,所以下面的架构自检会把还是单架构的文件列出来。
   if [ "$UNIVERSAL" = 1 ]; then
     MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
-    MC_VER="$(brew list --versions media-control | awk '{print $2}')"
+    # 前缀由 LYRIMUSE_MEDIA_CONTROL_PREFIX 指定时(CI 直取 ghcr bottle、MacPorts 沙箱),
+    # 机器上可能压根没有 brew、或者 brew 里装着另一个版本,版本号只能从前缀自己读——
+    # bottle 解出来就是 media-control/<版本>/ 这层结构,末段即版本号。
+    if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
+      MC_VER="$(basename "$MEDIA_CONTROL_PREFIX")"
+    else
+      MC_VER="$(brew list --versions media-control | awk '{print $2}')"
+    fi
     # Intel 切片钉死在 0.7.6:media-control 0.7.7(2026-09-03,恰在 v1.5.0 发完三小时后)起
     # homebrew-core 不再产任何 Intel bottle(Homebrew 弃养 x86_64 macOS),原来这里查
     # formulae.brew.sh 实时 JSON 挑 Intel tag 的路子从此永远落空——v1.6.0 第一次打 tag 就是
