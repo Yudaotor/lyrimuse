@@ -72,6 +72,11 @@ New / 新功能
 Improved / 改进
 - The Settings sidebar was rebuilt to sit closer to System Settings
   设置侧栏重做，更接近系统「设置」的样子
+- Every Settings page opens with its own title and a line saying what it
+  is for, and the window is taller so the desktop-lyrics section fits
+  without scrolling
+  设置里每一页顶上都有页名和一句说明，窗口也加高了，「桌面悬浮歌词」那一整
+  段不用滚就看得全
 - The "Web" row in the lyrics window's info panel links to the current
   player's own page for the track instead of listing every platform
   歌词窗口「显示简介」里的「网页」只给当前播放器自己那个平台的歌曲页，不再
@@ -155,6 +160,9 @@ Fixed / 修复
 - Word-level romanization stays under the right characters on every
   line, not only the one being sung
   逐词罗马音在每一行都对齐到对应的字底下，不再只有正在唱的那一行是对的
+- Testing one lyrics source no longer keeps spinning after its result is
+  already on screen
+  单独测一个歌词源，那一格已经出结果了，右上角不会再继续转圈
 - Clicking the Dock icon reliably brings the window back
   点 Dock 图标一定会把窗口唤回来
 
