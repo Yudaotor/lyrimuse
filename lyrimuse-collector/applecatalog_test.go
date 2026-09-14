@@ -490,6 +490,11 @@ func TestAppleStorefrontsFor(t *testing.T) {
 		{"繁体汉字加 TW", []string{"陶喆", "今天沒回家", "Soul Power 現場原音"}, []string{"CN", "US", "TW"}},
 		{"西里尔 + 泰文各一个,最多加两个", []string{"Земфира", "ลูกทุ่ง", "アイドル"}, []string{"CN", "US", "RU", "TH"}},
 		{"空样本", nil, []string{"CN", "US"}},
+		// 德语(以及法/西/意/北欧等)全是拉丁字母,按文字系统无从跟英语区分 —— 这里**刻意**不扩展。
+		// 记这条是因为 jolle《danke für nichts》那个案子的根子就在这:那张专辑只在德区上架,
+		// CN/US 都查不到,而这套机制救不了它(挡住错配的是 apple.go 的 appleResultIdentityOK)。
+		// 谁要把德区独占的覆盖补上,得换一条不靠文字系统的判据,别指望改这里。
+		{"德语标签仍是拉丁字母,不扩展商店", []string{"jolle", "danke für nichts", "sunny side up/:down"}, []string{"CN", "US"}},
 	}
 	for _, c := range cases {
 		if got := appleStorefrontsFor(c.samples...); !reflect.DeepEqual(got, c.want) {

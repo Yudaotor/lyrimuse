@@ -650,6 +650,10 @@ func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itun
 // appleStorefrontsFor:按文字系统决定问哪些商店(2026-09-12,用户:「是否可以更通用一点,不仅限于 JP」)。
 // 基线 CN / US;样本(署名 / 曲名 / 专辑名 + 首轮歌词正文片段)里假名 → JP、谚文 → KR、西里尔 → RU、泰文 → TH、
 // 繁体汉字(toSimplified 会改动) → TW。最多再加两个商店:每多一个就多一次 Search(命中再一次 lookup),按专辑只算一次。
+// 2026-09-14 起这是**全仓唯一**的商店列表来源:apple.go 的两条匹配路径、albumhint.go 的候选查询、
+// appleTitleSearchIdentities 原本各自写死 CN/US,现已统一走这里(各调用点按自己手上的样本各算一次),
+// 免得"同一首歌在这条路径上问了 JP、在那条路径上没问"这种不一致。代价是非拉丁文字系统的歌请求数
+// 会从 2 个商店涨到最多 4 个 —— iTunes Search 限速不宽松,这几条路径都各自有缓存兜着。
 // 歌词正文也算样本,是因为标签常是罗马字 / 英文(back number《Happy End》三项标签全是拉丁字母),只有词是日文。
 func appleStorefrontsFor(samples ...string) []string {
 	out := []string{"CN", "US"}
@@ -757,9 +761,10 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title string, durat
 	appleTitleSearchIdentityMu.Unlock()
 
 	var out []string
+	storefronts := appleStorefrontsFor(artist, title)
 	for _, q := range []string{strings.TrimSpace(artist + " " + title), title} {
 		var results []itunesResult
-		for _, country := range []string{"CN", "US"} {
+		for _, country := range storefronts {
 			results = append(results, itunesSearch(ctx, neturl.QueryEscape(q), country)...)
 		}
 		if out = pickAppleTitleSearchIdentities(results, artist, title, durationSecs); len(out) > 0 {

@@ -31,7 +31,7 @@ import (
 //
 // 两段式:**取候选**一次、**挑**每拍。
 //
-//   - 取候选(fetchAppleAlbumHintCandidates,后台一次):「署名 曲名」和裸曲名两个查询 × CN / US 两个商店,
+//   - 取候选(fetchAppleAlbumHintCandidates,后台一次):「署名 曲名」和裸曲名两个查询 × appleStorefrontsFor 选出的商店,
 //     留下曲名归一后**完全相等**、iTunes 时长在 appleTitleSearchDurationTolerance(max(4s, 3%))内、专辑名非空
 //     的结果;再用**一次** lookup(id 可以逗号串起来)把这些专辑的**专辑级发行日期**补上 —— iTunes Search 给的
 //     `releaseDate` 是**歌**的首发日期(精选集里的老歌也标 1979),分不出原专辑和精选,专辑自己的日期才行
@@ -159,8 +159,9 @@ func appleAlbumHint(ctx context.Context, artist, title string, durationSecs floa
 	return ""
 }
 
-// appleAlbumHintSyncWait:后台解析路径等 poll 主循环刚发起的那次候选查询最多等这么久(两个查询 × 两个商店 +
-// 一次 lookup,实测 1~3 秒);超时就自己查一次。
+// appleAlbumHintSyncWait:后台解析路径等 poll 主循环刚发起的那次候选查询最多等这么久(两个查询 ×
+// appleStorefrontsFor 选出的商店数(基线 2,非拉丁文字系统最多 4)+ 一次 lookup,实测 1~3 秒);
+// 超时就自己查一次。
 const appleAlbumHintSyncWait = 8 * time.Second
 
 // appleAlbumHintSync 给**后台**解析路径用(resolveTrackEnrichment / backfillPeripheralFields / recheck-cover CLI,
@@ -291,11 +292,13 @@ func coverNeedsHintCheck(e enrichEntry, album, hint string) bool {
 	return albumScore(e.CoverAlbum, hint) == 0
 }
 
-// fetchAppleAlbumHintCandidates 打 iTunes Search(两个查询 × 两个商店,合并去重),再用一次 lookup 补专辑级发行日期。
+// fetchAppleAlbumHintCandidates 打 iTunes Search(两个查询 × appleStorefrontsFor 选出的商店,合并去重),
+// 再用一次 lookup 补专辑级发行日期。
 func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, durationSecs float64) []albumHintCandidate {
 	var results []itunesResult
+	storefronts := appleStorefrontsFor(artist, title)
 	for _, q := range []string{strings.TrimSpace(artist + " " + title), title} {
-		for _, country := range []string{"CN", "US"} {
+		for _, country := range storefronts {
 			results = append(results, itunesSearch(ctx, neturl.QueryEscape(q), country)...)
 		}
 	}
@@ -305,7 +308,8 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 		if titleArtist, song, ok := albumHintTitleSplit(title); ok {
 			var alt []itunesResult
 			q := neturl.QueryEscape(titleArtist + " " + song)
-			for _, country := range []string{"CN", "US"} {
+			// 样本用这一轮真正的署名/曲名(不是被搬运频道污染的那一对),见 appleStorefrontsFor。
+			for _, country := range appleStorefrontsFor(titleArtist, song) {
 				alt = append(alt, itunesSearch(ctx, q, country)...)
 			}
 			cands = albumHintCandidatesFromTitleSplit(alt, titleArtist, song, durationSecs)
@@ -352,7 +356,7 @@ func appleAlbumHintQueryConcluded(n int, attempts, failures int32) bool {
 }
 
 // albumHintCandidatesFromResults 是取候选那一步的过滤,纯函数、可单测:曲名归一相等 + 时长在容差内 + 专辑名 /
-// 署名非空;按「署名|专辑」去重(CN / US 两个商店会各回一份)。Order 记 Apple 返回顺序。
+// 署名非空;按「署名|专辑」去重(问到的每个商店都会各回一份)。Order 记 Apple 返回顺序。
 func albumHintCandidatesFromResults(results []itunesResult, title string, durationSecs float64) []albumHintCandidate {
 	want := normLoose(title)
 	if want == "" || durationSecs < appleTitleSearchMinDurationSecs {
