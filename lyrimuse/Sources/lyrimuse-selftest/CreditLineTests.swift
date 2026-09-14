@@ -703,6 +703,60 @@ func runCreditLineTests() {
         expectEqual(E.matchesNameListCreditShape("他说：庄有豪"), false,
                     "名字串形状: 单段(没有 / 、 & , 分隔)时,即使右边像人名也不豁免整句校验")
 
+        // ---- 第十七轮(2026-09-14,麦浚龙 & 陈蕾《不下床》开头那行括号人名单漏网) ----
+        // 那行既没角色词也没冒号,上面这条(第一句就 guard 冒号)和关键词表(要角色词)都够不着。
+        // 这条规则的**全部精度**来自"≥3 段",分界是拿本机全库 10,799 份 LRC / 543,555 行量的:
+        // 用 `/` 分隔的括号行,2 段共 12 行全是真歌词、≥3 段共 4 行全是署名。
+        expectEqual(E.matchesParenNameListCreditShape(
+            "(Natalia Cheung/Hung Man Ting/Edan Yau/Karim Har/Ng Wai Lok/Richard Hu"
+            + "/Chris Chau/Hei Lum Chan/Joe Cheung/Ray Siu/Hin Chan)"), true,
+            "括号名单: 《不下床》11 人参与者名单")
+        expectEqual(E.matchesParenNameListCreditShape("(Slow Rabbit/Misha/YEONJUN/PXPILLON)"),
+                    true, "括号名单: 4 段(语料实例)")
+        expectEqual(E.matchesParenNameListCreditShape(
+            "（Kanata Okajima/dyvahh/LUZY/JISOO/MOMOKA/Yuika）"), true,
+            "括号名单: 全角括号 6 段(语料实例)")
+        expectEqual(E.matchesParenNameListCreditShape("(周杰伦/方文山/林迈可)"), true,
+                    "括号名单: 中文名 3 段")
+        // ⚠️ 反面才是这条的安全边界。**2 段是真歌词的地盘** —— 全库那 12 行全长这样。
+        expectEqual(E.matchesParenNameListCreditShape("(U were dancing so hard/strong)"), false,
+                    "括号名单: 2 段不认(Prince《Girls & Boys》真歌词)")
+        expectEqual(E.matchesParenNameListCreditShape("(U won't resist it/to it)"), false,
+                    "括号名单: 2 段不认(同一首)")
+        expectEqual(E.matchesParenNameListCreditShape("（你在房间/大厅的另一端）"), false,
+                    "括号名单: 2 段不认(同一首的译文)")
+        // 同一份《不下床》里另有 16 行括号和声,没有 `/`,一条都不许被这条吃掉。
+        expectEqual(E.matchesParenNameListCreditShape("(躺着看天花那光影)"), false,
+                    "括号名单: 无 / 的和声行不认")
+        expectEqual(E.matchesParenNameListCreditShape("(睡在大床上 依偎你 车声也动听)"), false,
+                    "括号名单: 无 / 的和声行不认(长句)")
+        // ⚠️ 逗号**刻意不算分隔符**:收了会把这类和声整片吃掉(语料里带逗号的 ≥2 段括号行 453 行)。
+        expectEqual(E.matchesParenNameListCreditShape("(Straight up, straight up, straight up)"),
+                    false, "括号名单: 逗号不算分隔符")
+        expectEqual(E.matchesParenNameListCreditShape("(Let go, let go, let go)"), false,
+                    "括号名单: 逗号不算分隔符(2)")
+        expectEqual(E.matchesParenNameListCreditShape("(Ooh, yeah)"), false,
+                    "括号名单: 逗号不算分隔符(3)")
+        // 段里含虚词就不是人名,即使真有 `/`。
+        expectEqual(E.matchesParenNameListCreditShape("(我不走/你别来/他要走)"), false,
+                    "括号名单: 段里含 nonNameChars 不认")
+        // 括号这个强信号本身也是判据的一部分。
+        expectEqual(E.matchesParenNameListCreditShape("Natalia Cheung/Hung Man Ting/Edan Yau"),
+                    false, "括号名单: 裸名单(无括号)刻意不治")
+        expectEqual(E.matchesParenNameListCreditShape("(和声) 某某 (和声)"), false,
+                    "括号名单: 内部还有同种括号不认")
+
+        // 端到端:《不下床》真实片段 —— 名单行消失,同一份里的括号和声一行不动。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions([
+            "(Natalia Cheung/Hung Man Ting/Edan Yau/Karim Har/Ng Wai Lok/Richard Hu"
+            + "/Chris Chau/Hei Lum Chan/Joe Cheung/Ray Siu/Hin Chan)",
+            "捧着你 小粉脸 欣赏",
+            "(躺着看天花那光影)",
+            "(睡在大床上 依偎你 车声也动听)",
+            "(别理外间 打打杀杀)",
+        ]), [true, false, false, false, false],
+            "括号名单 端到端: 只删名单行,和声行全留")
+
         // 端到端:真实的《成都》头部(13 行职员表 + 真歌词),四行漏网的必须消失、真歌词必须留下
         let engine = LyricsSyncEngine()
         _ = engine.load(lyrics: """

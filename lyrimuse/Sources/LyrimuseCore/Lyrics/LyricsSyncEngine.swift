@@ -1111,6 +1111,58 @@ public final class LyricsSyncEngine {
         }
     }
 
+    /// 「整行被括号包住 + 内部用 `/` 分隔成 ≥3 段人名」这个形状 —— 演唱/和声/制作的参与者
+    /// 名单。第十七轮(2026-09-14,用户报麦浚龙 & 陈蕾《不下床》开头那行
+    /// `(Natalia Cheung/Hung Man Ting/Edan Yau/…/Hin Chan)` 没滤掉)。
+    ///
+    /// 为什么上面一整排规则一条都够不着:这行**既没有角色词、也没有冒号** ——
+    /// `matchesNameListCreditShape` 第一句就 `guard let colon` 退出;关键词表 / 双字角色词 /
+    /// `matchesEnglishCredit` 都要角色词;版权 / ISRC / 日期戳 / 宣传语各认各的标记;而结构化
+    /// 规则要"≥3 行命中且过半",这份里长成这样的行只有一行,闸门根本不开。
+    ///
+    /// 判据(拿本机全库 10,799 份 LRC、543,555 行歌词量出来的):
+    ///  1. 整行 trim 后被一对括号包住,且内部不再出现同种括号(排除 `(a) 某某 (b)` 这类);
+    ///  2. 内部按 `/` 切成 **≥3 段** —— 这是精度的全部来源,见下;
+    ///  3. 每段 2~30 字符、只由汉字/字母/数字/空格/`'’.-` 组成,且一个 `nonNameChars` 都不含。
+    ///
+    /// ⚠️ **2 段绝不能收**,这是实证不是保守:全库里用 `/` 分隔的括号行,2 段共 12 行、
+    /// **全是真歌词**(Prince《Girls & Boys》的 `(U were dancing so hard/strong)`
+    /// `(U won't resist it/to it)` 及其译文,两个版本各一份);而 ≥3 段共 4 行、**全是署名**
+    /// (本次这首 11 段、`(Slow Rabbit/Misha/YEONJUN/PXPILLON)` 4 段、
+    /// `(Kanata Okajima/dyvahh/LUZY/JISOO/MOMOKA/Yuika)` 6 段)。"歌词里写 A/B 表示两个词
+    /// 可替换"是真实写法,并列到三个以上就不是了。
+    ///
+    /// ⚠️ 分隔符**只认 `/`**,不收 `、&,，` —— 收了逗号会把 `(Straight up, straight up,
+    /// straight up)`、`(Let go, let go, let go)`、`(Ooh, yeah)` 这类和声整片吃掉(同一份语料
+    /// 里,按逗号也算分隔符时 ≥2 段的括号行有 453 行,绝大多数是真歌词)。
+    ///
+    /// ⚠️ **只治带括号的**:不带括号的裸名单(`A/B/C`)刻意没进这一条 —— 当前语料里一例都没有,
+    /// 而去掉括号这个强信号后误杀面要大得多。真遇到了再按语料加,别凭想象扩形状。
+    ///
+    /// 逐行生效(不受"整份主导"闸门管),理由同关键词表:这个形状在 543,555 行里只命中 4 行、
+    /// 无一误伤,误判空间已经被"≥3 段 + 每段都像人名"压到极小。
+    public static func matchesParenNameListCreditShape(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let pairs: [(Character, Character)] = [("(", ")"), ("（", "）")]
+        guard let pair = pairs.first(where: { trimmed.first == $0.0 && trimmed.last == $0.1 })
+        else { return false }
+        let inner = trimmed.dropFirst().dropLast()
+        // 内部不能再出现同种括号:`(和声) 某某 (和声)` 首尾也长这样,但它不是一整块名单。
+        guard !inner.contains(pair.0), !inner.contains(pair.1) else { return false }
+        let segments = inner.components(separatedBy: CharacterSet(charactersIn: "/／"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard segments.count >= 3 else { return false }
+        return segments.allSatisfy { seg in
+            (2...30).contains(seg.count)
+                && !seg.contains(where: { nonNameChars.contains($0) })
+                && seg.unicodeScalars.allSatisfy { u in
+                    u.properties.isIdeographic || CharacterSet.alphanumerics.contains(u)
+                        || " '’.-".unicodeScalars.contains(u)
+                }
+        }
+    }
+
     /// 测试接缝:把一整份行文本过一遍署名行过滤,返回"这一行删不删"。
     ///
     /// 存在的理由:整份闸门(≥2 行、过半…)是这套规则的一半,只测单行匹配函数测不到它;
@@ -1173,6 +1225,10 @@ public final class LyricsSyncEngine {
             // 国际标准录音码行(`ISRC TWB870211301`)——没有冒号、也不是角色词开头,
             // 上面所有以"角色+冒号"为形状的规则都够不着,见 isrcPattern。
             if matchesISRCLine(text) { return true }
+            // 括号包着的一串 `/` 分隔人名(`(A/B/C/…)`)——参与者名单,同样既没角色词也没冒号,
+            // 见 matchesParenNameListCreditShape(那里记着"2 段是真歌词、≥3 段才是署名"
+            // 这条分界是拿全库 543,555 行量出来的)。
+            if matchesParenNameListCreditShape(text) { return true }
             // 厂牌/平台的宣传出品语(「网易云音乐特别企划"星辰集"出品」)——同样没有冒号,
             // 见 matchesPromoCreditLine(那里记着平台词这道闸是拿 15 万行真实歌词量出来的,
             // 不加会误杀 6 条含「呈现」的真歌词)。

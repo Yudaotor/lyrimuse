@@ -82,6 +82,7 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 - `matchesEnglishCredit` 无冒号英文署名:整行以角色词开头 + 紧跟 by/at + 后面有内容(「Mixed by X at Y」)。
 - `matchesLatinCreditPattern` 拉丁标签:全角冒号(「Guitar:秋山浩徳」——英文歌词几乎不会出现全角冒号);半角冒号只在冒号后跟中日文时才认(不误杀 "Verse 1: ...")。
 - `looksLikeHeaderLine` 抬头行:「曲名 - 歌手」只在**第一行**认,要求同时含曲名和歌手名(归一化 + 剥括号段再比,应对 "(Remastered)" 后缀)。
+- `matchesParenNameListCreditShape` 括号人名单(2026-09-14 第十七轮加):整行被一对括号包住、内部不再有同种括号、按 `/` 切成 **≥3 段**、每段 2~30 字符且只含汉字/字母/数字/空格/`'’.-`、一个 `nonNameChars` 都不含 → 删。既没角色词也没冒号的参与者名单走这条;**2 段绝不收**(那是真歌词的地盘),分隔符**只认 `/`**(收逗号会整片吃掉和声),详见第十七轮。
 
 **整份闸门**(误杀一行 = 静默吞一句真歌词,不能逐行放开):
 - `matchesNameListCreditShape`「标签 + 冒号 + 名字串」形状(2026-08-20 第十轮加,整份 ≥2 行才启用):标签侧 1~10 纯汉字(允许分隔符,说话人标签豁免);右侧总长 ≤14、按 `/、&,` 切成 1~4 段、每段 2~8 个汉字/拉丁字母,且**一个 `nonNameChars` 都不含**(的了是不我你他她在也都就很没…这类"人名里不可能出现"的虚词)。
@@ -126,6 +127,13 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
   **全库前后回归**(3480 首 / 197236 行正文,逐行 diff `creditLineDropDecisions`):KEEP→DROP **1 行**(就是这条),DROP→KEEP **0 行**。另外三个词零翻转——语料里它们的实例都已被"整份 ≥2 行"的人名表闸兜住,收进表只为"整首只有一行这种署名"的场合(第十轮定下的理由)。selftest 补 6 条(1 端到端 + 4 角色词 + 1 反向哨兵钉住五条含这些词的真歌词),变异(去掉「指导」)当场 2 条红。
   这一轮走的是 `creditRoleWords`(下文「新增规则优先走形状 / 双字包含」里的**双字包含通道**),跟那条决策一致,不是回归到逐词枚举。⚠️ 这张表有**两个消费点**:`matchesRoleWordCredit`(标签含词 + 冒号)和 `englishCreditPattern`(整张表 join 进正则当可选中文前缀,第七轮),加词时两边都会放宽——所以零误杀必须用整份入口差分来证。
   ⚠️ 差分工具自身的坑:第一版用 `split(separator: "\n")` 切行,而酷狗源 **1439 首**歌词是 CRLF——Swift 里 `"\r\n"` 是一个 `Character`,整份变成一行,报出的"2671 首 / 153121 行"漏了近一半语料(App 自己的 `LRCParser` 早就为同一个坑先归一换行,见其注释「整个桌面都是歌词」)。全库回归工具必须按 `isNewline` 切。
+- **第十七轮(2026-09-14):`matchesParenNameListCreditShape` —— 括号包着的 `/` 分隔人名单**(用户报麦浚龙 & 陈蕾《不下床》开头那行 `(Natalia Cheung/Hung Man Ting/…/Hin Chan)` 没过滤)。
+  漏网原因是它**既没有角色词、也没有冒号**:`matchesNameListCreditShape` 第一句就 `guard let colon` 退出;关键词表 / 双字角色词 / `matchesEnglishCredit` 都要角色词;版权 / ISRC / 日期戳 / 宣传语各认各的标记;而结构化规则要"≥3 行命中且过半",这份里长成这样的只有一行,闸门根本不开。
+  **判据的全部精度来自「≥3 段」**,这条分界是拿本机全库(10,799 份 LRC / 543,555 行)量出来的:用 `/` 分隔的整行括号行,**2 段共 12 行、全是真歌词**(Prince《Girls & Boys》的 `(U were dancing so hard/strong)`、`(U won't resist it/to it)` 及其译文,两个版本各留了一份);**≥3 段共 4 行、全是署名**。"歌词里写 A/B 表示两个词可替换"是真实写法,并列到三个以上就不是了。
+  ⚠️ 分隔符**只认 `/`**,不收 `、&,，`:第一版把逗号也算进来,跑全库当场看到 `(Straight up, straight up, straight up)`、`(Let go, let go, let go)`、`(Ooh, yeah)` 这类和声会被整片吃掉(按逗号算分隔符时 ≥2 段的括号行有 453 行,绝大多数是真歌词),才收窄成现在这样。**形状规则的分隔符集合必须拿语料定、不能照搬** `matchesNameListCreditShape` 那条——那条右侧有"角色标签 + 冒号"当锚点,敢收 `、&,`;这条没有锚点,只能靠 `/` 自己扛。
+  ⚠️ **只治带括号的**:裸名单(`A/B/C`)刻意没进这一条——当前语料里一例都没有,而去掉括号这个强信号后误杀面要大得多。真遇到再按语料加,别凭想象扩形状。
+  这条**逐行生效**(不受整份闸门管),理由同关键词表:全库 543,555 行只命中 4 行、无一误伤,误判空间已被"≥3 段 + 每段都像人名"压到极小。
+  **全库回归**(10,799 份 LRC / 543,555 行):KEEP→DROP **4 行**、DROP→KEEP **0 行**。那 4 行是本次这首(主文件 + `.tr.lrc` 译文各一)、`(Slow Rabbit/Misha/YEONJUN/PXPILLON)`、`(Kanata Okajima/dyvahh/LUZY/JISOO/MOMOKA/Yuika)`,全部是真署名——顺带修好了另外两首。selftest 补 16 条(4 正 + 11 反 + 1 端到端),反例钉死三类:2 段的那三行真歌词、同一首《不下床》里的括号和声(16 行,一条都不许碰)、逗号分隔的和声。
 
 ### 歌词自带的 `[offset:]`(2026-08-22 加)
 
@@ -304,7 +312,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | 主题 | 文件 + 符号 |
 |---|---|
 | 引擎主体/查询接口 | `lyrimuse/Sources/LyrimuseCore/Lyrics/LyricsSyncEngine.swift` — `LyricsSyncEngine.load/activeLine/activeLineIndex/upcomingLineText/allLines`、`offsetMs` |
-| 署名行过滤规则族 | 同上 — `creditLinePattern`、`creditRoleWords`/`matchesRoleWordCredit`、`matchesEnglishCredit`、`matchesLatinCreditPattern`、`looksLikeHeaderLine`、`speakerLabels`、`shouldApplyStructuralCreditFilter`、`strippingCreditLines` |
+| 署名行过滤规则族 | 同上 — `creditLinePattern`、`creditRoleWords`/`matchesRoleWordCredit`、`matchesEnglishCredit`、`matchesLatinCreditPattern`、`matchesParenNameListCreditShape`、`looksLikeHeaderLine`、`speakerLabels`、`shouldApplyStructuralCreditFilter`、`strippingCreditLines` |
 | 行/词数据模型 | 同上 — `SyncedLyricWord`、`SyncedLyricWordGroup`、`SyncedLyricLine`、`LyricsWindowLine` |
 | LRC 解析(含 CRLF) | `LyrimuseCore/Lyrics/LRCParser.swift` — `LRCParser.parse` |
 | YRC 解析(含畸形元组) | `LyrimuseCore/Lyrics/YRCParser.swift` — `YRCParser.parse`、`wordRegex`、`malformedTupleRegex` |
@@ -329,7 +337,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 1. **逐字填色不预烤进 @Published**:曾经在 20Hz tick 里预算 fillFraction 再靠 `.animation(.linear)` 补间,SwiftUI 对不可合并曲线是新旧位移矢量相加而非接续,补间时长(60ms)>tick 间隔(50ms)时几乎总被打断——这是逐字卡顿的结构性根源。现在只发真实时间戳,View 按帧现算(`SyncedLyricWord` 顶部注释)。
 2. **CRLF 是一个扩展字形簇**:`split(separator:"\n")` 切不开 `\r\n`,酷狗社区上传约半数是 CRLF;LRC 侧后果是「整个桌面都是歌词」。Python 分析查不出,必须在 Swift 里验证(两个 Parser 的归一化注释)。
-3. **署名行过滤的爆炸半径**:同一条结构正则在 collector 侧误判一行无害、在展示侧误判一行就是静默吞真歌词——所以有「≥3 且过半」闸门、说话人豁免、永不删空三重护栏;枚举法收敛不了(至今补到第十六轮),新增规则优先走「形状/双字包含」而不是加关键词。
+3. **署名行过滤的爆炸半径**:同一条结构正则在 collector 侧误判一行无害、在展示侧误判一行就是静默吞真歌词——所以有「≥3 且过半」闸门、说话人豁免、永不删空三重护栏;枚举法收敛不了(至今补到第十七轮),新增规则优先走「形状/双字包含」而不是加关键词。
 4. **YRC 退化要看覆盖率不是非空**:「有 YRC 就用」曾让某歌整首卡在唯一幸存的一行上;判据是逐字行数 ≥ 整行的一半。
 5. **罗马音兜底必须按行缓存**:activeLine 每 tick 重新构造,不缓存时纯英文歌每秒 20 次 ICU 音译,表现为本地歌词进度可见地慢于网页端。
 6. **日文汉字不能走 Any-Latin**:假名出罗马字、汉字出拼音混一行;整首粒度判日文(局部纯汉字日文行会被误判中文),日文读音吃上下文所以整行分词再按 UTF-16 对回。
