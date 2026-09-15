@@ -16,6 +16,33 @@ import Foundation
 /// 跟 `NotchExpandedMetrics` 同一个理由下沉到 LyrimuseCore:selftest 只依赖这个 target,而"展开不会
 /// 比稳态窄"、"两只滑块不越过对方"是要被断言钉住的契约。
 public enum NotchWidthBounds {
+    /// 音浪**独占**一只耳朵时,把它从外缘往里推多少,才能落在**可视的那一段耳朵**正中。
+    ///
+    /// 2026-09-15,用户报「音浪在耳朵位置没有居中」。实测(截图逐列亮度,258pt 卡片 / 179pt 刘海):
+    /// 音浪落在 839.0~854.0(宽 15.0,与 `EqualizerBars.width` 逐位吻合),而耳朵在屏幕上可见的
+    /// 那一段是 824.5~864.0(刘海右沿 → 卡片右沿)、中心 844.25 —— 音浪中心 846.5,**偏外 2.25pt**;
+    /// 两侧留白 14.5 / 10.0。
+    ///
+    /// 成因不是 alignment 写错,是**布局容器比可视区窄**:耳朵的 `.frame(width: earWidth)` 到内容区
+    /// 边界就结束了,外面还有 `topRow` 那层 `cardHorizontalPadding` 才到卡片外沿。贴外缘 = 贴内容区
+    /// 边界,于是外侧看起来多留了那一截的一半。
+    ///
+    /// ⚠️ 所以**不能**图省事把 alignment 换成 `.center`:那是居中于 `earWidth`,会偏**内**
+    /// `cardPadding / 2`,比原来错得更多。要补的是两侧边距之差,不是重新选一个对齐方式。
+    ///
+    /// 推导(以耳朵容器左沿 = 刘海边沿为原点,E = earWidth,W = barsWidth,P = cardPadding):
+    /// 可视区 = `[0, E + P]`,居中时音浪左沿 = `(E + P − W) / 2`;贴外缘时是 `E − W`。两者之差
+    /// `(E − W − P) / 2` 就是要往里推的量。夹 0 是给窄卡片兜底 —— 耳朵窄到装不下音浪 + 那半截
+    /// 边距时宁可退回贴外缘,也不能变成负 padding 把音浪推出卡片。
+    ///
+    /// 只对"这只耳朵除了音浪什么都没有"的情形用。耳朵里还有模块时音浪跟模块是一组、一起贴外缘:
+    /// 文字跑马灯溢出时必须从外缘起排,居中会让开头几个字挂到容器外面。
+    public static func soloEqualizerInset(
+        earWidth: CGFloat, barsWidth: CGFloat, cardPadding: CGFloat
+    ) -> CGFloat {
+        max(0, (earWidth - barsWidth - cardPadding) / 2)
+    }
+
     /// 展开态卡片的**真实**宽度:展开设定值和稳态真实宽取大者。
     ///
     /// `steady` 传的是已经过耳朵下限的稳态真实宽(`NotchLyricsWindowController.contentWidth` 的结果),

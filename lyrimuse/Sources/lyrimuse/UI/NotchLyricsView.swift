@@ -1167,6 +1167,15 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar
         let equalizerOnLeft = !collapsed && showsEqualizer(on: .left, module: playback.leftEar)
         let equalizerOnRight = collapsed || showsEqualizer(on: .right, module: playback.rightEar)
+        // 音浪**独占**这只耳朵时,它不再贴外缘,而是居中于**可视的那一段耳朵**。
+        // 其余情况(耳朵里还有模块)照旧贴外缘 —— 那时音浪跟模块是一组,而文字跑马灯
+        // 溢出时必须从外缘起排,不能居中。
+        let soloEqualizerLeft = equalizerOnLeft && !isIdleNoTrack && !controller.isAdBreakNow
+            && leftModule == .none
+        let soloEqualizerRight = equalizerOnRight && rightModule == .none
+        let soloInset = NotchWidthBounds.soloEqualizerInset(
+            earWidth: earWidth, barsWidth: EqualizerBars.width,
+            cardPadding: NotchMetrics.cardHorizontalPadding)
         return HStack(spacing: 0) {
             // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配之后(2026-08-31,原来写死在右耳),
             // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
@@ -1206,6 +1215,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 音浪独占时把它从外缘往里推,让它居中于可视的耳朵(见 soloEqualizerInset)。
+            .padding(.leading, soloEqualizerLeft ? soloInset : 0)
             // 内缩必须在 .frame(width:) **之前** —— 之后加等于把耳朵整体变宽 6pt,
             // 三段就不再严丝合缝铺满,背景形状/刘海空当会跟着错位。
             .padding(.trailing, NotchMetrics.earNotchInset)
@@ -1229,6 +1240,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.trailing, soloEqualizerRight ? soloInset : 0) // 理由同左耳
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
             .frame(width: earWidth)
         }

@@ -570,4 +570,73 @@ func runNotchTests() {
         expectEqual(view.contains("if let slot = playback.currentAdSlot {"), true,
                     "广告态契约: 拿不到广告计数就整段不画,不编数字")
     }
+
+    // ---- 音浪独占一只耳朵时,居中于**可视的**耳朵(2026-09-15,用户报「音浪没有居中」) ----
+    //
+    // 实测那组几何(截图逐列亮度):卡片 258 / 刘海 179 → earWidth = (258 − 179 − 20) / 2 = 29.5。
+    // 改之前音浪贴内容区右沿 854、中心 846.5,而可视耳朵 824.5~864 的中心是 844.25 —— 偏外 2.25pt。
+    do {
+        typealias B = NotchWidthBounds
+        // ⚠️ 这两个数住在 app target(NotchMetrics / EqualizerBars),selftest 够不着,所以这里
+        // 抄一份**并在下面用源码契约钉住它们没被改** —— 只抄不钉的话,哪天常量动了这一组会
+        // 悄悄变成在测一组不存在的几何。
+        let barsWidth: CGFloat = 15      // EqualizerBars.width = 5×1.8 + 4×1.5
+        let cardPadding: CGFloat = 10    // NotchMetrics.cardHorizontalPadding
+        let earWidth: CGFloat = 29.5
+
+        let inset = B.soloEqualizerInset(
+            earWidth: earWidth, barsWidth: barsWidth, cardPadding: cardPadding)
+        expectEqual(inset, 2.25, "音浪居中: 实测那组几何要往里推 2.25pt")
+
+        // 这条才是目的:推完之后音浪中心必须落在「刘海边沿 → 卡片外沿」正中。
+        // 以耳朵容器左沿(= 刘海边沿)为原点。
+        let leadingAfter = earWidth - barsWidth - inset
+        let visibleCenter = (earWidth + cardPadding) / 2
+        expectEqual(leadingAfter + barsWidth / 2, visibleCenter,
+                    "音浪居中: 推完之后音浪中心 == 可视耳朵中心")
+
+        // ⚠️ 反例哨兵:不能图省事把 alignment 换成 .center —— 那是居中于 earWidth,会偏**内**
+        // cardPadding/2,比原来错得更多。这两条钉住"居中于容器"不是答案。
+        let centerInContainer = (earWidth - barsWidth) / 2 + barsWidth / 2
+        expectNotEqual(centerInContainer, visibleCenter,
+                       "音浪居中(反例): 居中于 earWidth 不等于居中于可视耳朵")
+        expectEqual(visibleCenter - centerInContainer, cardPadding / 2,
+                    "音浪居中(反例): 两者正好差半个 cardHorizontalPadding")
+
+        // 窄卡片兜底:装不下音浪 + 那半截边距时退回贴外缘,不许变成负 padding 把音浪推出卡片。
+        expectEqual(B.soloEqualizerInset(earWidth: barsWidth + cardPadding,
+                                         barsWidth: barsWidth, cardPadding: cardPadding), 0,
+                    "音浪居中: 刚好装下时不推")
+        expectEqual(B.soloEqualizerInset(earWidth: 20, barsWidth: barsWidth,
+                                         cardPadding: cardPadding), 0,
+                    "音浪居中: 窄耳朵夹 0")
+        expectEqual(B.soloEqualizerInset(earWidth: 60, barsWidth: barsWidth,
+                                         cardPadding: cardPadding) > inset, true,
+                    "音浪居中: 耳朵越宽推得越多(跟着 earWidth 算,不是写死的数)")
+
+        // 源码契约:上面抄的两个常量、以及"只在音浪独占时才推"这条边界。
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        let viewSrc = (try? String(contentsOf: ui.appendingPathComponent("NotchLyricsView.swift"),
+                                   encoding: .utf8)) ?? ""
+        let barsSrc = (try? String(contentsOf: ui.appendingPathComponent("EqualizerBars.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(viewSrc.isEmpty, false, "音浪居中(契约): 读到 NotchLyricsView.swift")
+        expectEqual(barsSrc.isEmpty, false, "音浪居中(契约): 读到 EqualizerBars.swift")
+        expectEqual(viewSrc.contains("static let cardHorizontalPadding: CGFloat = 10"), true,
+                    "音浪居中(契约): cardHorizontalPadding 仍是 10(上面抄的那份还成立)")
+        expectEqual(barsSrc.contains("static let barCount = 5")
+                    && barsSrc.contains("static let barWidth: CGFloat = 1.8")
+                    && barsSrc.contains("static let spacing: CGFloat = 1.5"), true,
+                    "音浪居中(契约): 音浪宽的三个因子仍是 5 / 1.8 / 1.5(合计 15)")
+        expectEqual(viewSrc.contains("NotchWidthBounds.soloEqualizerInset("), true,
+                    "音浪居中(契约): 顶行确实走 Core 里那个公式,没在视图里另写一份")
+        expectEqual(viewSrc.contains("soloEqualizerLeft ? soloInset : 0")
+                    && viewSrc.contains("soloEqualizerRight ? soloInset : 0"), true,
+                    "音浪居中(契约): 两只耳朵都接上了,且只在音浪独占时才推")
+        expectEqual(viewSrc.contains("&& leftModule == .none")
+                    && viewSrc.contains("equalizerOnRight && rightModule == .none"), true,
+                    "音浪居中(契约): 边界是「这只耳朵没有模块」——有模块时仍跟模块一起贴外缘")
+    }
 }
