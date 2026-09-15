@@ -37,10 +37,20 @@ public enum NotchWidthBounds {
     ///
     /// 只对"这只耳朵除了音浪什么都没有"的情形用。耳朵里还有模块时音浪跟模块是一组、一起贴外缘:
     /// 文字跑马灯溢出时必须从外缘起排,居中会让开头几个字挂到容器外面。
+    ///
+    /// - Parameter expanded: hover 展开态。**展开时一律返回 0(贴外缘)**。2026-09-15 当天
+    ///   用户看到展开卡上音浪飘在中间,当场否掉:「展开状态也变为居中了,这个不符合预期哈,
+    ///   展开要在最边上;之前只说缩小状态的位置不太美观而已,有点偏右」。居中修的是稳态那
+    ///   **2.25pt 的偏心**,而展开态耳朵一下子宽出一大截(默认稳态 252 / 展开 482 → 单耳
+    ///   26.5 → 141.5,同一个公式推出来是 58.25pt),那就不是"正正好"而是"飘在中间"了。
+    ///   换句话说:居中这条**只对窄耳朵成立** —— 耳朵宽到音浪在里面找不着北时,贴外缘才是
+    ///   那个"有位置感"的答案。判据用状态(展开没展开)而不是给宽度设一个阈值:阈值要挑一个
+    ///   挑不出理由的数,而"展开"本身就是用户心里那条线。
     public static func soloEqualizerInset(
-        earWidth: CGFloat, barsWidth: CGFloat, cardPadding: CGFloat
+        earWidth: CGFloat, barsWidth: CGFloat, cardPadding: CGFloat, expanded: Bool
     ) -> CGFloat {
-        max(0, (earWidth - barsWidth - cardPadding) / 2)
+        guard !expanded else { return 0 }
+        return max(0, (earWidth - barsWidth - cardPadding) / 2)
     }
 
     /// 展开态卡片的**真实**宽度:展开设定值和稳态真实宽取大者。

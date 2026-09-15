@@ -585,7 +585,7 @@ func runNotchTests() {
         let earWidth: CGFloat = 29.5
 
         let inset = B.soloEqualizerInset(
-            earWidth: earWidth, barsWidth: barsWidth, cardPadding: cardPadding)
+            earWidth: earWidth, barsWidth: barsWidth, cardPadding: cardPadding, expanded: false)
         expectEqual(inset, 2.25, "音浪居中: 实测那组几何要往里推 2.25pt")
 
         // 这条才是目的:推完之后音浪中心必须落在「刘海边沿 → 卡片外沿」正中。
@@ -604,15 +604,36 @@ func runNotchTests() {
                     "音浪居中(反例): 两者正好差半个 cardHorizontalPadding")
 
         // 窄卡片兜底:装不下音浪 + 那半截边距时退回贴外缘,不许变成负 padding 把音浪推出卡片。
-        expectEqual(B.soloEqualizerInset(earWidth: barsWidth + cardPadding,
-                                         barsWidth: barsWidth, cardPadding: cardPadding), 0,
+        expectEqual(B.soloEqualizerInset(earWidth: barsWidth + cardPadding, barsWidth: barsWidth,
+                                         cardPadding: cardPadding, expanded: false), 0,
                     "音浪居中: 刚好装下时不推")
         expectEqual(B.soloEqualizerInset(earWidth: 20, barsWidth: barsWidth,
-                                         cardPadding: cardPadding), 0,
+                                         cardPadding: cardPadding, expanded: false), 0,
                     "音浪居中: 窄耳朵夹 0")
         expectEqual(B.soloEqualizerInset(earWidth: 60, barsWidth: barsWidth,
-                                         cardPadding: cardPadding) > inset, true,
+                                         cardPadding: cardPadding, expanded: false) > inset, true,
                     "音浪居中: 耳朵越宽推得越多(跟着 earWidth 算,不是写死的数)")
+
+        // ---- hover 展开态贴外缘(2026-09-15 当天用户否掉「展开也居中」) ----
+        //
+        // 居中修的是稳态那 2.25pt 的偏心;展开态耳朵宽出一大截(默认稳态 252 / 展开 482,
+        // 单耳 26.5 → 141.5),同一个公式推出来是 58.25pt —— 那不是"正正好"是"飘在中间"。
+        // 用户原话:「展开状态也变为居中了,这个不符合预期哈,展开要在最边上」。
+        let expandedEarWidth = (482 - 179 - 20) / 2.0        // 展开默认宽 482,实测刘海 179
+        expectEqual(expandedEarWidth, 141.5, "音浪居中(展开): 展开态单耳 141.5pt")
+        expectEqual(B.soloEqualizerInset(earWidth: expandedEarWidth, barsWidth: barsWidth,
+                                         cardPadding: cardPadding, expanded: false), 58.25,
+                    "音浪居中(展开): 不看状态的话会往里推 58.25pt —— 这正是被否掉的那个样子")
+        expectEqual(B.soloEqualizerInset(earWidth: expandedEarWidth, barsWidth: barsWidth,
+                                         cardPadding: cardPadding, expanded: true), 0,
+                    "音浪居中(展开): 展开一律贴外缘")
+        // 判据是**状态**不是宽度阈值:同一个 earWidth,展开与否结果不同。挑阈值要挑一个
+        // 挑不出理由的数,而"展开"本身就是用户心里那条线。
+        expectNotEqual(B.soloEqualizerInset(earWidth: earWidth, barsWidth: barsWidth,
+                                            cardPadding: cardPadding, expanded: true),
+                       B.soloEqualizerInset(earWidth: earWidth, barsWidth: barsWidth,
+                                            cardPadding: cardPadding, expanded: false),
+                       "音浪居中(展开): 同一组几何,展开与否给出不同答案(判据是状态,不是宽度)")
 
         // 源码契约:上面抄的两个常量、以及"只在音浪独占时才推"这条边界。
         let ui = URL(fileURLWithPath: #filePath)
@@ -638,5 +659,7 @@ func runNotchTests() {
         expectEqual(viewSrc.contains("&& leftModule == .none")
                     && viewSrc.contains("equalizerOnRight && rightModule == .none"), true,
                     "音浪居中(契约): 边界是「这只耳朵没有模块」——有模块时仍跟模块一起贴外缘")
+        expectEqual(viewSrc.contains("expanded: controller.isExpanded"), true,
+                    "音浪居中(契约): 展开态那一档确实接上了 —— 漏传等于展开时又飘回中间")
     }
 }

@@ -1170,12 +1170,15 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 音浪**独占**这只耳朵时,它不再贴外缘,而是居中于**可视的那一段耳朵**。
         // 其余情况(耳朵里还有模块)照旧贴外缘 —— 那时音浪跟模块是一组,而文字跑马灯
         // 溢出时必须从外缘起排,不能居中。
+        // ⚠️ **hover 展开态不居中**(用户当场否掉:「展开要在最边上」):展开时耳朵宽出
+        // 一大截,居中就成了飘在中间 —— 判据与推导见 soloEqualizerInset 的 expanded 那段。
         let soloEqualizerLeft = equalizerOnLeft && !isIdleNoTrack && !controller.isAdBreakNow
             && leftModule == .none
         let soloEqualizerRight = equalizerOnRight && rightModule == .none
         let soloInset = NotchWidthBounds.soloEqualizerInset(
             earWidth: earWidth, barsWidth: EqualizerBars.width,
-            cardPadding: NotchMetrics.cardHorizontalPadding)
+            cardPadding: NotchMetrics.cardHorizontalPadding,
+            expanded: controller.isExpanded)
         return HStack(spacing: 0) {
             // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配之后(2026-08-31,原来写死在右耳),
             // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
