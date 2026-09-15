@@ -292,8 +292,8 @@ struct OnboardingView: View {
         // 等于"稍后再说",下次启动会再问一次;而已经走完的人可以从菜单栏的
         // "重新运行引导…"随时再来一遍。
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
-        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
-        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear("onboarding") }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear("onboarding") }
     }
 
     /// 进度指示。2026-09-03 补了三件事:

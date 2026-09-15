@@ -1697,7 +1697,7 @@ struct LyricsManagerView: View {
             Text(restoreSnapshotResult ?? "")
         }
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
-        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear("lyrics-manager") }
         // 切回 App 时重新读一次盘。
         //
         // 列表是**开窗那一刻的快照**,而 collector 在窗口开着期间会持续往同一个文件写:新歌
@@ -1715,7 +1715,7 @@ struct LyricsManagerView: View {
             Task { await store.reload(onlyIfChanged: true) }
         }
         .onDisappear {
-            AuxiliaryWindowActivation.windowDidDisappear()
+            AuxiliaryWindowActivation.windowDidDisappear("lyrics-manager")
             // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true

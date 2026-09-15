@@ -476,6 +476,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if r.foundNone {
                 // 计数器说有窗口开着、枚举却一扇都没找到:按"一扇都没开"处理,别卡在什么都不做上。
                 reopenLogger.notice("reopen: counter says open but no window found, falling through to lyrics window")
+                // 顺手把账对平——这一刻正是"计数器跟现实对不上"的现场。不对的话计数器会永久
+                // 停在 >0,.accessory 再也还原不回去(见 AuxiliaryWindowActivation.reconcile)。
+                AuxiliaryWindowActivation.reconcile(reason: "reopen found no auxiliary window")
             } else if r.alreadyFront && wasActive {
                 reopenLogger.notice("reopen: app already in front and nothing to bring forward, falling through to lyrics window")
             } else {

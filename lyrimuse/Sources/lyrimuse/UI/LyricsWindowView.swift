@@ -1139,8 +1139,8 @@ struct LyricsWindowView: View {
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
         // 方便 Cmd-Tab 切回这扇正经标题栏窗口(这个窗口本来就设计成"跟随播放持续显示",
         // 用户中途切去别的 App 很常见)。
-        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
-        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear("lyrics-window") }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") }
         // 音量跟"喜欢""播放模式"共用同一批刷新时机,理由见下面那段注释。
         // "喜欢"状态不跟着 2 秒轮询走(每读一次要起一个 osascript 子进程,为一个几乎不变
         // 的布尔值那么干不值当),换歌时由 PlaybackCoordinator 刷一次。悬浮窗还借"控制排

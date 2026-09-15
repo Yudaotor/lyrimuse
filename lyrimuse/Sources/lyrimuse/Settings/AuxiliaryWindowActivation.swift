@@ -1,4 +1,7 @@
 import AppKit
+import os
+
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "dockicon")
 
 // 2026-08-04 新增——"歌词窗口"/"歌词管理"/"设置"/"欢迎使用"这几个正经标题栏窗口默认
 // 在 .accessory 策略(没有 Dock 图标)下打开,关掉/切到别的 App 后只能重新点菜单栏
@@ -22,19 +25,62 @@ enum AuxiliaryWindowActivation {
     // 窗口枚举逻辑。
     static var hasAnyOpen: Bool { openCount > 0 }
 
-    // 挂在每个辅助窗口根视图的 .onAppear。
-    static func windowDidAppear() {
+    // 挂在每个辅助窗口根视图的 .onAppear。`who` 只进日志:2026-09-15 用户报"设置里关掉了
+    // 「在 Dock 中显示」,图标却还在",而当时手上只有 reopen 那条"计数器说有窗开着、枚举却一扇
+    // 都没找到"的日志,分不清是哪一扇窗加的这一笔 —— 加减两头都记名字,下次一眼能对上账。
+    static func windowDidAppear(_ who: String) {
         openCount += 1
+        logger.notice("aux window opened: \(who, privacy: .public) -> openCount=\(openCount, privacy: .public)")
         guard !AppSettings.shared.showInDock else { return }
         NSApp.setActivationPolicy(.regular)
     }
 
     // 挂在每个辅助窗口根视图的 .onDisappear——openCount 归零(所有辅助窗口都关了)才
     // 还原,且要在还原前再读一次 showInDock:用户可能在窗口开着期间自己把这个永久
-    // 偏好打开了,那种情况下不应该在这里把它又切回 .accessory。
-    static func windowDidDisappear() {
+    // 偏好打开了,那种情况下不应该在这里把它又切回 .accessory(见 restoreAccessoryIfWanted)。
+    static func windowDidDisappear(_ who: String) {
         openCount = max(0, openCount - 1)
+        logger.notice("aux window closed: \(who, privacy: .public) -> openCount=\(openCount, privacy: .public)")
+        if openCount == 0 {
+            restoreAccessoryIfWanted("last auxiliary window closed")
+            return
+        }
+        // 计数器还没归零,但它只是个代理值 —— 关窗这一刻跟真实窗口列表对一次账。
+        // ⚠️ 必须排到下一轮 runloop:2026-09-15 隔离探针实测,`.onDisappear` 触发的**同一拍**里,
+        // 正在关的那扇窗 `isVisible` 仍然是 true(下一轮才从列表里消失),当场核会永远认为
+        // "还有窗开着",这道对账就成了摆设。
+        DispatchQueue.main.async { MainActor.assumeIsolated { reconcile(reason: "after closing \(who)") } }
+    }
+
+    /// 计数器 ↔ 真实窗口列表对账:真实列表说一扇都没开着,就按"一扇都没开"处理(计数器清零、
+    /// 还原 .accessory)。
+    ///
+    /// 为什么需要它:openCount 是"有没有辅助窗口开着"的**代理值**,靠 SwiftUI 的
+    /// `.onAppear`/`.onDisappear` 一加一减维持。这两个回调的触发时机不完全由本仓控制,一旦
+    /// 哪条路径只加不减,计数器就永久停在 >0 —— 而还原 .accessory 这件事整个挂在"归零"上,
+    /// 于是 Dock 图标再也收不回去,用户明明关掉了「在 Dock 中显示」也没用,且**无法自愈**
+    /// (开一扇关一扇是 +1-1,回不到 0),只能重启 App。加这道对账之后,漏加的那一笔在下一次
+    /// 关窗 / 下一次点 Dock 图标时就被抹平。
+    ///
+    /// ⚠️ `NSApp.isHidden` 那道闸不能省:Cmd+H 把 App 整个隐藏时,窗口只是 orderOut、**没关**,
+    /// 但真实列表里它们 `isVisible=false`(2026-09-15 探针实测),不挡住就会把"隐藏着的开着的窗"
+    /// 误判成"一扇都没开"。
+    static func reconcile(reason: String) {
+        guard !NSApp.isHidden else { return }
+        guard openAuxiliaryWindows().isEmpty else { return }
+        if openCount > 0 {
+            logger.error("openCount=\(openCount, privacy: .public) but no auxiliary window is actually open (\(reason, privacy: .public)) -- treating as 0")
+            openCount = 0
+        }
+        restoreAccessoryIfWanted("reconcile: \(reason)")
+    }
+
+    /// 还原成"没有 Dock 图标"。三道前提:计数器归零、用户没打开那个永久偏好、当前确实不是
+    /// .accessory(最后一条只为免掉重复日志,setActivationPolicy 本身重复调用无害)。
+    private static func restoreAccessoryIfWanted(_ reason: String) {
         guard openCount == 0, !AppSettings.shared.showInDock else { return }
+        guard NSApp.activationPolicy() != .accessory else { return }
+        logger.notice("restoring .accessory (\(reason, privacy: .public))")
         NSApp.setActivationPolicy(.accessory)
     }
 
@@ -75,7 +121,7 @@ enum AuxiliaryWindowActivation {
     @discardableResult
     static func bringOpenWindowsForward() -> BringForwardResult {
         var result = BringForwardResult()
-        let open = NSApp.windows.filter { isAuxiliaryRegularWindow($0) && ($0.isVisible || $0.isMiniaturized) }
+        let open = openAuxiliaryWindows()
         guard !open.isEmpty else { return result }
 
         // orderedWindows 是前→后;最小化的窗口不一定在里面,所以可见那扇找不到时退回枚举顺序。
@@ -98,9 +144,24 @@ enum AuxiliaryWindowActivation {
         return result
     }
 
+    /// 真正开着(含最小化)的辅助窗口。bringOpenWindowsForward 与 reconcile 共用一处,
+    /// 免得两边的"开着"口径漂移。
+    private static func openAuxiliaryWindows() -> [NSWindow] {
+        NSApp.windows.filter { isAuxiliaryRegularWindow($0) && ($0.isVisible || $0.isMiniaturized) }
+    }
+
     /// 设置 / 歌词管理 / 歌词窗口 / 欢迎使用 / 搜索歌词… 这类"正经"窗口的形态判据。悬浮歌词和
     /// 灵动岛是 NSPanel,状态栏项、菜单栏面板、场景 action 的隐藏锚点都是无标题栏窗口,全部排除。
+    ///
+    /// ⚠️ `canBecomeMain` 不能单独用:**窗口一最小化它就变 false**(2026-09-15 隔离探针实测,
+    /// 同一扇窗 `isVisible=false isMiniaturized=true canBecomeMain=false`;AppKit 对这个属性的
+    /// 定义里本来就含"窗口可见"这一条)。原来只写 canBecomeMain,于是上面那句
+    /// `($0.isVisible || $0.isMiniaturized)` 的 isMiniaturized 分支是**死代码** ——
+    /// bringOpenWindowsForward 永远 restored=0(用户日志里每一次点击都是),2026-09-09 那版
+    /// "最小化的全部还原"根本没跑起来过;最小化的辅助窗口既点 Dock 叫不回来、又一直占着借来的
+    /// Dock 图标,而用户开着「最小化窗口到应用程序图标」时 Dock 上连个缩略图都看不见,
+    /// 表现就是"窗口明明都关了,图标赖着不走"。
     private static func isAuxiliaryRegularWindow(_ w: NSWindow) -> Bool {
-        !(w is NSPanel) && w.styleMask.contains(.titled) && w.canBecomeMain
+        !(w is NSPanel) && w.styleMask.contains(.titled) && (w.canBecomeMain || w.isMiniaturized)
     }
 }

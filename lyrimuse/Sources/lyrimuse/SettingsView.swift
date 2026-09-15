@@ -480,14 +480,14 @@ struct SettingsView: View {
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
         // 关掉后(没有别的辅助窗口还开着)还原,不跟"在 Dock 中显示"这个永久偏好打架。
         .onAppear {
-            AuxiliaryWindowActivation.windowDidAppear()
+            AuxiliaryWindowActivation.windowDidAppear("settings")
             playerHealth.start()
             // 侧栏身份区的头像(2026-09-12):行内 .task 在侧栏 List 的行上不触发,从这里拉一次,
             // 之后由 LastfmAvatarStore 盯着配置变化。
             LastfmAvatarStore.shared.refreshFromConfig()
         }
         .onDisappear {
-            AuxiliaryWindowActivation.windowDidDisappear()
+            AuxiliaryWindowActivation.windowDidDisappear("settings")
             playerHealth.stop()
             // 「软件更新」页攥着的 Sparkle 回复(找到了 / 下完待装)随窗口一起放掉,见那边注释。
             SparkleUpdaterManager.shared.settingsWindowClosed()
