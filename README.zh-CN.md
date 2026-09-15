@@ -262,7 +262,6 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
 - [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
-- [`docs/features/`](docs/features/README.md) —— 功能现状文档：15 章覆盖每个功能的当前行为、交互点与代码锚点（改任何功能前先读对应章）
 
 可选的网页体验拆在两个独立的兄弟仓库里，想 fork 哪个都不用碰 App：
 

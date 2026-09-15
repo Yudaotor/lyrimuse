@@ -28,3 +28,15 @@ __pycache__/
 /.aider*
 /.continue/
 /.github/copilot-instructions.md
+
+# 只留在本地、不进远端的内部文档(2026-09-15 用户拍板)。这些是过程性内容:功能现状
+# 文档带着每条决策的实测记录与走过的弯路、发布流程、hero 图的素材与提案草稿 ——
+# 对自己有用,但对着公开仓的读者既不友好也没必要。**文件仍然留在磁盘上**,只是不再
+# 跟踪;对外的那几份(README 的截图 docs/images/、scrobbling 说明、LyricsX 对比页)
+# 刻意不在此列。
+# ⚠️ 历史里的旧版本没有清除(仓是 public,翻旧 commit 仍读得到)——当时选的是"只管
+# 以后",不重写历史。
+/docs/features/
+/docs/proposals/
+/docs/heroes/
+/docs/releasing.md

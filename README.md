@@ -268,7 +268,6 @@ This repo is the app:
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
 - [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
-- [`docs/features/`](docs/features/README.md) — the as-built feature spec: 15 chapters covering every feature's current behavior, interactions, and code anchors (read the relevant chapter before changing anything)
 
 The optional web experience lives in two sibling repos, so you can fork either without touching the app:
 

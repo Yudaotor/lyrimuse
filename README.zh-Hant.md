@@ -260,7 +260,6 @@ me.yudaotor.lyrimuse`）。留著它會把重裝引向一條死路：LaunchAgent
 
 - [`lyrimuse/`](lyrimuse) —— App 本體（Swift，SwiftUI + AppKit）
 - [`lyrimuse-collector/`](lyrimuse-collector) —— 背景引擎，負責解析歌詞／封面並餵給 App（Go）；建置時自動打包進 App
-- [`docs/features/`](docs/features/README.md) —— 功能現況文件：15 章涵蓋每個功能的目前行為、互動點與程式碼錨點（改任何功能前先讀對應章）
 
 可選的網頁體驗拆在兩個獨立的兄弟儲存庫裡，想 fork 哪個都不用碰 App：
 

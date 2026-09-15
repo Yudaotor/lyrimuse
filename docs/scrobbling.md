@@ -194,5 +194,4 @@ Last.fm connected and working it stays empty.
 *Implementation: [`lyrimuse-collector/lastfm.go`](../lyrimuse-collector/lastfm.go)
 (`resolveScrobbleArtist`, `scrobble`, `updateNowPlaying`),
 [`lyrimuse-collector/poller.go`](../lyrimuse-collector/poller.go)
-(`listenThreshold`, `recordFailedMirror`).
-Maintainer-facing spec: [`docs/features/12-scrobble-accounts.md`](features/12-scrobble-accounts.md).*
+(`listenThreshold`, `recordFailedMirror`).*

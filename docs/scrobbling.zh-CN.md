@@ -174,5 +174,4 @@ Lyrimuse 不会把它们提交给 Last.fm，那些记录是经 Apple 自己的�
 *实现位置：[`lyrimuse-collector/lastfm.go`](../lyrimuse-collector/lastfm.go)
 （`resolveScrobbleArtist`、`scrobble`、`updateNowPlaying`）、
 [`lyrimuse-collector/poller.go`](../lyrimuse-collector/poller.go)
-（`listenThreshold`、`recordFailedMirror`）。
-面向维护者的完整规格：[`docs/features/12-scrobble-accounts.md`](features/12-scrobble-accounts.md)。*
+（`listenThreshold`、`recordFailedMirror`）。*
