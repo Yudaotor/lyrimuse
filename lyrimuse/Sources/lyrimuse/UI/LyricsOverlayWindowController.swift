@@ -114,6 +114,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内」),而是落在
     /// `chromeHoverZoneLocal` 里 —— 歌词文字矩形 ∪ 控制排,取包围盒。为什么必须把控制排也
     /// 并进来(只认歌词的话按钮从此点不到)见 `OverlayControlHitTest.chromeHoverZone`。
+    /// 2026-09-15 起这块包围盒只用于**退出**判定;还没露出来时的**进入**判定只认歌词文字
+    /// 矩形,见 `OverlayControlHitTest.chromeHoverHit`。
     @Published private(set) var isHoveringForControls: Bool = false
     /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 跟上面那个的区别是它**不**把
     /// 控制排并进来:让开是为了看清歌词底下那块桌面,指针停在按钮排上时歌词不该跟着淡掉。
@@ -840,11 +842,16 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         switch type {
         case .mouseMoved:
             let insideWindow = frame.contains(loc)
-            // 控制排的显示判据:窗口内 **且** 落在"歌词 ∪ 控制排"那块包围盒上(2026-09-13 从
-            // 整窗收紧,见 OverlayControlHitTest.chromeHoverZone)。区域还没合成出来时退回整窗
-            // 判定 —— 同 isHoveringLyrics 的兜底,宁可宽一点,也别让按钮整个叫不出来。
+            // 控制排的显示判据:窗口内 **且** 过了那道**滞后**闸 —— 还没露出来时只认歌词文字
+            // 矩形,已经露出来了才放宽到"歌词 ∪ 控制排"的包围盒(2026-09-15,见
+            // OverlayControlHitTest.chromeHoverHit;2026-09-13 只收到包围盒那一步,而槽位常驻、
+            // 矩形无条件上报,包围盒恒被那排按钮撑宽,短歌词下几乎等于没收)。
+            // 区域还没合成出来时退回整窗判定 —— 同 isHoveringLyrics 的兜底,宁可宽一点,也别让
+            // 按钮整个叫不出来。
             let insideChrome = insideWindow
-                && (chromeHoverZoneLocal.map { $0.contains(localPoint) } ?? true)
+                && (OverlayControlHitTest.chromeHoverHit(
+                        at: localPoint, lyrics: lyricsHotZoneLocal, chrome: chromeHoverZoneLocal,
+                        alreadyShowing: isHoveringForControls) ?? true)
             if isHoveringForControls != insideChrome {
                 isHoveringForControls = insideChrome
             }

@@ -132,6 +132,91 @@ func runOverlayTests() {
         expectEqual(repeated.allSatisfy { $0 == zone }, true, "控制排命中区: 结果不随字典遍历顺序变")
     }
 
+    // ---- OverlayControlHitTest.chromeHoverHit: 进入严、退出宽的滞后闸(2026-09-15) ----
+    //
+    // 上面那组用的歌词矩形宽 780、胶囊才 216 —— 歌词比按钮排宽,恰好把这个 bug 藏住了。
+    // 真实的「暂无歌词」是反过来的:四个字 ~96pt,按钮排 216pt,包围盒被按钮排撑到 216 还带
+    // 上下两截,于是文字左右一大片空白照样把整排按钮叫出来(用户 2026-09-15 报的正是这个)。
+    do {
+        let H = OverlayControlHitTest.self
+        // 「暂无歌词」这一屏:控制排在上(y 4..34),歌词卡在下,文字只有中间那一小截。
+        let pill = CGRect(x: 400, y: 4, width: 216, height: 30)
+        let buttons: [OverlayControlID: CGRect] = [
+            .previous: CGRect(x: 410, y: 8, width: 22, height: 22),
+            .playPause: CGRect(x: 440, y: 8, width: 22, height: 22),
+        ]
+        let lyrics = CGRect(x: 460, y: 52, width: 96, height: 40)   // 窄:只有四个字
+        let chrome = H.chromeHoverZone(lyrics: lyrics, controlsPill: pill, controlRects: buttons)
+
+        // ① 正题:还没露出来时,文字**左右两侧**的空白不许把按钮叫出来 —— 那两点都在包围盒里,
+        //    旧的单档判据在这里恒为 true,这两条就是这次的红/绿。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 410, y: 70), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: false), false,
+                    "滞后闸: 未显示时文字左侧空白不叫出控制排")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 600, y: 70), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: false), false,
+                    "滞后闸: 未显示时文字右侧空白不叫出控制排")
+        // 文字上照样要能叫出来,否则功能直接没了。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 500, y: 70), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: false), true,
+                    "滞后闸: 未显示时压在文字上要叫出控制排")
+
+        // ② 反面:已经露出来之后判据放宽到包围盒 —— 这几条守的是 chromeHoverZone 注释里那三条
+        //    (按钮在歌词外面、中间那道缝、锁定态的解锁出路)一条都没被这次收紧带走。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: true), true,
+                    "滞后闸: 已显示时按钮上命中(按钮在歌词外面)")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 44), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: true), true,
+                    "滞后闸: 已显示时歌词与按钮之间的缝里命中")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 410, y: 70), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: true), true,
+                    "滞后闸: 已显示时文字左侧空白仍命中(指针斜着挪向最左那颗按钮的必经之路)")
+        // 出了包围盒就该收 —— 滞后不是"进去就再也出不来"。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 900, y: 200), lyrics: lyrics, chrome: chrome,
+                                     alreadyShowing: true), false,
+                    "滞后闸: 已显示时离开包围盒要收回去")
+
+        // ③ 严格档 ⊆ 宽松档 —— 不存在"严格判 true 而宽松判 false"的点,否则状态会每帧翻转。
+        //   在这一屏上铺一张网穷举,比挑几个点更能守住这条不变式。
+        var monotone = true
+        for x in stride(from: 380.0, through: 660.0, by: 7.0) {
+            for y in stride(from: 0.0, through: 120.0, by: 4.0) {
+                let p = CGPoint(x: x, y: y)
+                let strict = H.chromeHoverHit(at: p, lyrics: lyrics, chrome: chrome, alreadyShowing: false)
+                let loose = H.chromeHoverHit(at: p, lyrics: lyrics, chrome: chrome, alreadyShowing: true)
+                if strict == true && loose != true { monotone = false }
+            }
+        }
+        expectEqual(monotone, true, "滞后闸: 严格档恒含于宽松档(不会在边界上抖)")
+
+        // ④ 歌词矩形这一轮没上报 → 严格档退回包围盒,别让按钮整个叫不出来。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: nil, chrome: chrome,
+                                     alreadyShowing: false), true,
+                    "滞后闸: 没有歌词矩形时进入判定退回包围盒")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: .zero, chrome: chrome,
+                                     alreadyShowing: false), true,
+                    "滞后闸: .zero 歌词矩形按缺席处理,同上")
+        // 谁都没上报 = nil,调用点退回整窗判定(旧行为)。
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: nil, chrome: nil,
+                                     alreadyShowing: false) == nil, true,
+                    "滞后闸: 什么都没上报时为 nil(调用点退回整窗)")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: nil, chrome: nil,
+                                     alreadyShowing: true) == nil, true,
+                    "滞后闸: 什么都没上报时为 nil(已显示这一档同样)")
+
+        // ⑤ 锁定态:没有胶囊热区,包围盒 = 歌词 ∪ 解锁键。进入仍只认文字,进去之后够得到解锁键
+        //    —— 不然锁定之后就再没有解锁出路了。
+        let unlock: [OverlayControlID: CGRect] = [.unlockPill: CGRect(x: 494, y: 8, width: 28, height: 22)]
+        let lockedChrome = H.chromeHoverZone(lyrics: lyrics, controlsPill: nil, controlRects: unlock)
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 500, y: 70), lyrics: lyrics, chrome: lockedChrome,
+                                     alreadyShowing: false), true,
+                    "滞后闸: 锁定态压在文字上要露出解锁键")
+        expectEqual(H.chromeHoverHit(at: CGPoint(x: 508, y: 18), lyrics: lyrics, chrome: lockedChrome,
+                                     alreadyShowing: true), true,
+                    "滞后闸: 锁定态露出后够得到解锁键")
+    }
+
     // ---- LyricDuetLayout: 对唱行的两侧内缩(2026-08-23) ----
     do {
         let L = LyricDuetLayout.self
