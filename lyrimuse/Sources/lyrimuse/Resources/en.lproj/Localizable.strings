@@ -28,6 +28,7 @@
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
 "%@ 次" = "×%@";
 "%@ 种写法" = "%@ spellings";
+"%@ 秒" = "%@s";
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 首" = "%@ plays";
 "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
@@ -568,6 +569,7 @@
 "常驻后台服务（必需）" = "Background Service (Required)";
 "广告中" = "Ad Break";
 "应用" = "Apply";
+"应答" = "Answered";
 "应答源最少" = "Fewest sources answered";
 "底部居中" = "Bottom Center";
 "延后" = "Delay";
@@ -778,6 +780,7 @@
 "暂时跳过" = "Skip for now";
 "曲名始终是「%@」" = "Title was always “%@”";
 "曲名对不上：本地叫「%1$@」，找到的是《%2$@》" = "Title mismatch: local title is “%1$@”, found under “%2$@”";
+"曲名未变" = "Title unchanged";
 "曲目信息" = "Track Info";
 "曲终" = "Track End";
 "更多" = "More";
@@ -817,6 +820,7 @@
 "未唱到的颜色" = "Unsung Color";
 "未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白" = "Color of the not-yet-sung text. Defaults to system: adapts to light/dark menu bars and inverts while the menu is open";
 "未完成" = "Not done";
+"未应答" = "No answer";
 "未开启" = "Disabled";
 "未授权" = "Not Requested";
 "未知错误" = "no reason given";

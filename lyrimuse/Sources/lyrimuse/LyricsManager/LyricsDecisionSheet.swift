@@ -15,7 +15,7 @@ import LyrimuseCore
 // 手工镜像 collector 常量的字段(crc32 表、归一化规则)是同一种做法:这个数字纯粹是
 // "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(2026-08-31 用户
 // 反馈"v4"这种裸编号没有对照、看不出新旧),只用来判断存档是不是用旧算法跑的。
-private let currentLyricsScoringVersion = 18
+private let currentLyricsScoringVersion = 19
 
 struct LyricsDecisionSheet: View {
     let summary: EnrichCacheStore.Summary
@@ -124,13 +124,23 @@ struct LyricsDecisionSheet: View {
     /// 一个歌手名,不知道这一轮的动作范围有多大。
     private func groupHeading(_ g: LyricQueryGroup) -> String {
         var head = queryReasonLabel(g.reason)
-        if !g.sources.isEmpty {
-            head += " · " + String(format: L10n.t("只问 %@"),
-                                   g.sources.map { sourceDisplayName($0) }.joined(separator: "、"))
-        } else if g.reason.hasPrefix("alias-") {
-            head += " · " + L10n.t("全部源重问")
-        }
+        if let scope = groupScopeText(g) { head += " · " + scope }
         return head
+    }
+
+    /// 一组问的**范围**:定向重查是「只问 X、Y」,别名轮的全源重查是「全部源重问」,
+    /// 首轮没有范围可言、返回 nil。
+    ///
+    /// 2026-09-15 从 groupHeading 里抽出来,因为**界面上这两半不再在同一行**:那串六七个
+    /// 源的名单跟来路挤在一行时会把组头顶到第二行,读的人分不出哪半句说的是"哪一轮"、
+    /// 哪半句说的是"问了谁"。「拷贝」出去的纯文本仍然合成一行(dumpLines 走 groupHeading)
+    /// —— 纯文本没有字重和缩进可用,拆成两行反而更难读。
+    private func groupScopeText(_ g: LyricQueryGroup) -> String? {
+        if !g.sources.isEmpty {
+            return String(format: L10n.t("只问 %@"),
+                          g.sources.map { sourceDisplayName($0) }.joined(separator: "、"))
+        }
+        return g.reason.hasPrefix("alias-") ? L10n.t("全部源重问") : nil
     }
 
     var body: some View {
@@ -335,6 +345,38 @@ struct LyricsDecisionSheet: View {
         return g.queries
             .map { labeledFields([(L10n.t("歌手"), $0.artist), (L10n.t("歌名"), $0.title)]) }
             .joined(separator: "  ")
+    }
+
+    /// 同一行的**富文本**版(界面用;上面那个纯文本版留给「拷贝」)。
+    ///
+    /// 内容逐字一致,只多了一层明暗:标签(「歌手」/「歌名」)压暗退到背景,名字用正常字色。
+    /// 标签和值同色正是这块被说"乱"的病根之一 —— 一行里哪几个字是结构、哪几个字是数据,
+    /// 全靠读的人自己分。「」仍然留着:它回答"到哪儿为止"(歌手名里本来就有顿号),
+    /// 跟明暗回答的"谁是谁"是两件事,2026-09-12 那轮的结论没被推翻。
+    /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注的 ⚠️。
+    private func groupQueriesLine(_ g: LyricQueryGroup) -> Text {
+        func dimmed(_ text: String) -> AttributedString {
+            var out = AttributedString(text)
+            out.foregroundColor = Color.secondary.opacity(0.7)
+            return out
+        }
+        func labeled(_ label: String, _ value: String) -> AttributedString {
+            dimmed(label) + AttributedString("「\(value)」")
+        }
+        // 全组都没带曲名(曲名全程没变、上面小标题已经交代过)时,「歌手」只说一次,
+        // 后面一串「」框住的名字 —— 八个别名时不会把「歌手」重复八遍。
+        if g.queries.allSatisfy({ $0.title.isEmpty }) {
+            var out = dimmed(L10n.t("歌手"))
+            for query in g.queries { out += AttributedString("「\(query.artist)」") }
+            return Text(out)
+        }
+        var out = AttributedString()
+        for (index, query) in g.queries.enumerated() {
+            if index > 0 { out += AttributedString("  ") }
+            if !query.artist.isEmpty { out += labeled(L10n.t("歌手"), query.artist) }
+            if !query.title.isEmpty { out += labeled(L10n.t("歌名"), query.title) }
+        }
+        return Text(out)
     }
 
     /// 打分项的中文名。跟候选明细里那段 explanation 用的是**同一份** label
@@ -658,11 +700,17 @@ struct LyricsDecisionSheet: View {
     /// "当前启用的"、不说"没露面"那种像是在陈述历史事实的话,并在 tooltip 里点明。
     /// 跟列表里那个「3/9」角标是同一个取舍(见 LyricsManagerView 里那段注释)。
     private func silentSourcesText(_ responded: [String]) -> String? {
-        let enabled = FeatureSettingsStore.shared.lyricsSources.map(\.rawValue)
-        let silent = enabled.filter { !responded.contains($0) }
+        let silent = silentSources(responded)
         guard !silent.isEmpty else { return nil }
         return String(format: L10n.t("当前启用的其余源没有应答：%@"),
                       silent.map { sourceDisplayName($0) }.joined(separator: "、"))
+    }
+
+    /// 当前启用、但这一轮没应答的源(顺序沿用用户配的源优先级)。
+    /// 界面上它是字段表里「未应答」那一行的值,纯文本那边仍然拼成上面那句话。
+    private func silentSources(_ responded: [String]) -> [String] {
+        FeatureSettingsStore.shared.lyricsSources.map(\.rawValue)
+            .filter { !responded.contains($0) }
     }
 
     /// 分项之和被夹过时的说明。
@@ -694,6 +742,107 @@ struct LyricsDecisionSheet: View {
             parts.append(String(format: L10n.t("按 %@ 秒校验"), String(format: "%.0f", secs)))
         }
         return parts.joined(separator: " · ")
+    }
+
+    private func trimmedOrNil(_ value: String?) -> String? {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// 字段表的标签列:压暗、右对齐、退到背景去。
+    ///
+    /// 2026-09-15 用户报「这部分 UI 非常垃圾,完全不能看出有效信息,非常乱」时的落点。
+    /// 这块此前已经为可读性改过两轮(都在 2026-09-12:先压缩查询词分组,再给异质字段加
+    /// 标签 +「」),两轮治的都是**内容**;这一轮的病在**版面**:
+    ///   - 八行清一色 `.caption2` + `.secondary`,结构和数据同色同字号,没有任何层级;
+    ///   - 「查询词：歌手「A」歌名「B」专辑「C」」这种整句在真实曲目上要折两行,而折下来
+    ///     那半行的左边缘跟**下一个字段的行首**完全重合 —— "续行"和"新字段"长得一模一样
+    ///     (用户那张截图里,专辑名 `Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)`
+    ///     正是这么断在两行上的)。
+    /// 拆成标签列 + 值列之后:标签压暗、值用正常字色(数据才是主角),而值列有了固定的
+    /// 左边缘,续行永远落在值列里,不再冒充新字段。
+    private func inputFieldLabel(_ label: String) -> some View {
+        Text(label)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .gridColumnAlignment(.trailing)
+    }
+
+    /// 字段表的值列。`Text` 而不是 String —— 源名那两行的值是**带色**的富文本。
+    private func inputFieldValue(_ text: Text) -> some View {
+        text
+            .font(.caption2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 一串源名,各自带自己的品牌色 —— 跟候选表里那些胶囊同一套 `sourceColor`,
+    /// 「应答」这一行的名字和下面表里的行肉眼一对就对得上。
+    ///
+    /// **没应答的那一串统一压暗**:它们本来就不在候选表里,给品牌色会显得也参赛了;
+    /// 而两行一亮一暗,不读标签也分得出谁是谁 —— 老写法两行同色,区别只藏在
+    /// 「本轮应答的源：」和「当前启用的其余源没有应答：」两句开头,得逐字读才发现。
+    ///
+    /// ⚠️ 逐段上色走 `AttributedString`,**不要**写成 `Text(a) + Text(b)`:那个 `+` 在
+    /// macOS 26 SDK 里已经标了 deprecated(本仓部署目标是 14,所以现在不报警告 —— 也就是说
+    /// 哪天把部署目标抬上去,它会突然冒出一片警告)。AttributedString 这条路同样能逐段上色,
+    /// 且没有这个到期日。
+    private func sourceNamesText(_ sources: [String], dimmed: Bool) -> Text {
+        var out = AttributedString()
+        for (index, source) in sources.enumerated() {
+            if index > 0 {
+                var separator = AttributedString("、")
+                separator.foregroundColor = Color.secondary.opacity(0.45)
+                out += separator
+            }
+            var name = AttributedString(sourceDisplayName(source))
+            name.foregroundColor = dimmed ? Color.secondary.opacity(0.6) : sourceColor(source)
+            out += name
+        }
+        return Text(out)
+    }
+
+    /// 「问过 N 组词」那句小标题,后面缀曲名的处置。
+    ///
+    /// 曲名跟字段表里那行「歌名」是同一个值时只说「曲名未变」—— 把一个动辄三四十字符的
+    /// 曲名在同一屏里原样印第二遍,正是这块被说"乱"的来源之一(截图那次两处都是
+    /// `Winnie (end of me) [Mixed]`)。曲名变过(标题反查轮改写过曲名)时跟首轮那个不等,
+    /// 才把它整句说出来 —— 那时候它是真信息,不是复读。
+    private func roundsCaption(_ digest: LyricQueryDigest, queryTitle: String?) -> String {
+        var caption = String(format: L10n.t("问过 %d 组词"), digest.total)
+        guard let shared = digest.sharedTitle else { return caption }
+        caption += " · " + (shared == trimmedOrNil(queryTitle)
+                            ? L10n.t("曲名未变")
+                            : String(format: L10n.t("曲名始终是「%@」"), shared))
+        return caption
+    }
+
+    /// 一组查询词:序号 + 来路在上,问出去的词与问的范围缩进在下。
+    ///
+    /// 序号不是装饰 —— 「先问什么、后问什么」本身就是要复盘的信息(首轮问的对不对、
+    /// 别名轮是被什么触发的),`LyricQueryDigestBuilder` 刻意**不给分组排序**正是为了保住
+    /// 这个顺序,界面这边得让它看得见。
+    /// 三行三个层次:来路中等字重(这一轮是什么)、查询词正常字色(问了什么)、
+    /// 范围最暗(问了谁)。老写法三者同色同字号平铺,连"哪一行属于哪一组"都得数缩进。
+    private func queryGroupBlock(index: Int, group: LyricQueryGroup) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("\(index + 1)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 10, alignment: .trailing)
+                Text(queryReasonLabel(group.reason))
+                    .font(.caption2.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                inputFieldValue(groupQueriesLine(group))
+                if let scope = groupScopeText(group) {
+                    inputFieldValue(Text(scope)).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.leading, 15)
+        }
     }
 
     @ViewBuilder
@@ -728,59 +877,60 @@ struct LyricsDecisionSheet: View {
             .help(String(format: L10n.t("源数分母是当前启用的 %d 个源；老条目当年可用的源可能更少"), total))
 
             if inputsOpen {
-                VStack(alignment: .leading, spacing: 4) {
-                    let query = queryText(decision)
-                    if !query.isEmpty {
-                        Text(String(format: L10n.t("查询词：%@"), query))
-                            .font(.caption2).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let secs = decision.durationSecs, secs > 0 {
-                        Text(String(format: L10n.t("按 %@ 秒的曲目时长校验"), String(format: "%.0f", secs)))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    if !responded.isEmpty {
-                        // "谁应答了"是排查的第一问 —— 没露面的源(超时/网络)根本不在候选表里,
-                        // 单看上面那张表会误以为它压根不存在。
-                        Text(String(format: L10n.t("本轮应答的源：%@"),
-                                    responded.map { sourceDisplayName($0) }.joined(separator: "、")))
-                            .font(.caption2).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let silent = silentSourcesText(responded) {
-                            Text(silent)
-                                .font(.caption2).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    // 字段表:标签列压暗右对齐,值列共用一条左边缘。见 inputFieldLabel 头注 ——
+                    // 这块"乱"的根子就在老写法把几个字段拼成一整句、折行之后认不出边界。
+                    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 3) {
+                        if let value = trimmedOrNil(decision.queryArtist) {
+                            GridRow { inputFieldLabel(L10n.t("歌手")); inputFieldValue(Text(value)) }
+                        }
+                        if let value = trimmedOrNil(decision.queryTitle) {
+                            GridRow { inputFieldLabel(L10n.t("歌名")); inputFieldValue(Text(value)) }
+                        }
+                        if let value = trimmedOrNil(decision.queryAlbum) {
+                            GridRow { inputFieldLabel(L10n.t("专辑")); inputFieldValue(Text(value)) }
+                        }
+                        if let secs = decision.durationSecs, secs > 0 {
+                            GridRow {
+                                inputFieldLabel(L10n.t("时长"))
+                                inputFieldValue(Text(String(format: L10n.t("%@ 秒"),
+                                                            String(format: "%.0f", secs))))
+                            }
+                        }
+                        if !responded.isEmpty {
+                            // "谁应答了"是排查的第一问 —— 没露面的源(超时/网络)根本不在候选表里,
+                            // 单看上面那张表会误以为它压根不存在。
+                            GridRow {
+                                inputFieldLabel(L10n.t("应答"))
+                                inputFieldValue(sourceNamesText(responded, dimmed: false))
+                            }
+                            let silent = silentSources(responded)
+                            if !silent.isEmpty {
+                                GridRow {
+                                    inputFieldLabel(L10n.t("未应答"))
+                                    inputFieldValue(sourceNamesText(silent, dimmed: true))
+                                }
+                            }
                         }
                     }
-                    // "我到底拿哪些词问的"(借鉴清单 V1)。上面那行查询词只是**首轮**那一组,而一轮
-                    // 解析最多换五种问法 —— 09 章里五条真实的"搜不到 / 配错了"根因全是问错了词。
+                    // "我到底拿哪些词问的"(借鉴清单 V1)。上面那张表里的查询词只是**首轮**那一组,
+                    // 而一轮解析最多换五种问法 —— 09 章里五条真实的"搜不到 / 配错了"根因全是问错了词。
                     if let digest {
-                        Text(String(format: L10n.t("这一轮实际问过 %d 组"), digest.total))
-                            .font(.caption2).foregroundStyle(.secondary)
-                            .padding(.top, 2)
-                        // 曲名全程没变时提到最上面说一次,组内就只剩歌手名 —— 这一条是把
-                        // 那 20 个视觉行压掉一半的主力。曲名变过(标题反查轮)时 sharedTitle
-                        // 为 nil,曲名并回每一条里,不丢信息。
-                        if let t = digest.sharedTitle {
-                            Text(String(format: L10n.t("曲名始终是「%@」"), t))
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(roundsCaption(digest, queryTitle: decision.queryTitle))
                                 .font(.caption2).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                        }
-                        ForEach(digest.groups) { g in
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(groupHeading(g))
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Text(groupQueriesText(g))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(.leading, 10)
+                            ForEach(Array(digest.groups.enumerated()), id: \.element.id) { item in
+                                queryGroupBlock(index: item.offset, group: item.element)
                             }
                         }
                     }
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.secondary.opacity(0.07)))
                 .padding(.leading, 16)
             }
         }

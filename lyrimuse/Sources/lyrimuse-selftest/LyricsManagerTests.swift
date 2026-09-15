@@ -1150,4 +1150,62 @@ func runLyricsManagerTests() {
             expectEqual(true, false, "不参赛的候选: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
         }
     }
+
+    // ---- 「这一轮的输入与经过」的版面(2026-09-15,用户报「非常垃圾…非常乱」那一轮) ----
+    //
+    // 这块已经为可读性改过三轮,前两轮治内容(压缩查询词分组、给异质字段加标签 +「」),
+    // 这一轮治版面。会**静默**退回去的就是下面这几条 —— 改回一整句话不会编译报错,
+    // 只会在某首专辑名长的歌上重新变成一团。
+    do {
+        let sheet = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsDecisionSheet.swift")
+        if let text = try? String(contentsOfFile: sheet.path, encoding: .utf8) {
+            // ① 查询词是**一行一个字段**的表,不是拼成一句话。老写法
+            // `查询词：歌手「A」歌名「B」专辑「C」` 在真实曲目上要折两行,而折下来那半行
+            // 的左边缘跟下一个字段的行首重合,读的人分不出是续行还是新字段。
+            let labels = text.components(separatedBy: "inputFieldLabel(").count - 1
+            expectEqual(labels >= 7, true,
+                        "输入与经过: 六个字段(歌手/歌名/专辑/时长/应答/未应答)各占一行 + 定义处,实际 \(labels) 处")
+            // 那句拼起来的「查询词：%@」只剩「拷贝」出去的纯文本在用 —— 纯文本没有列可对齐。
+            if let start = text.range(of: "private func inputsSection"),
+               let end = text.range(of: "// MARK: - 候选表") {
+                let section = String(text[start.lowerBound..<end.lowerBound])
+                expectEqual(section.contains("查询词：%@"), false,
+                            "输入与经过: 界面上不准再把几个字段拼成一句「查询词：…」(那是 dumpLines 专用)")
+                expectEqual(section.contains("sourceNamesText(responded, dimmed: false)"), true,
+                            "输入与经过: 应答那行的源名带各自品牌色,跟下面候选表里的胶囊对得上")
+                expectEqual(section.contains("dimmed: true"), true,
+                            "输入与经过: 没应答的那行统一压暗 —— 两行一亮一暗,不读标签也分得出")
+            } else {
+                expectEqual(true, false, "输入与经过: 找不到 inputsSection / 候选表分界(改名了?)")
+            }
+            // ② 逐段上色走 AttributedString,不准回到 `Text(a) + Text(b)` ——
+            // 那个 `+` 在 macOS 26 SDK 里已 deprecated(本仓部署目标 14,现在不报警告,
+            // 抬部署目标那天会突然冒一片)。
+            for fn in ["private func sourceNamesText", "private func groupQueriesLine"] {
+                guard let start = text.range(of: fn) else {
+                    expectEqual(true, false, "输入与经过: 找不到 \(fn)")
+                    continue
+                }
+                let body = String(text[start.lowerBound...].prefix(1400))
+                expectEqual(body.contains("AttributedString"), true,
+                            "输入与经过: \(fn) 逐段上色用 AttributedString,别退回 deprecated 的 Text + Text")
+            }
+            // ③ 界面把「哪一轮」和「问了谁」拆成了两行,但**拷贝出去的纯文本仍然合成一行**
+            // (纯文本没有字重和缩进可用,拆行反而更难读)——靠 groupHeading 复用 groupScopeText
+            // 兜住。少了这一步,拷出去的那份会静默丢掉「只问 X、Y」。
+            expectEqual(text.contains("private func groupScopeText"), true,
+                        "输入与经过: 问的范围抽成 groupScopeText,界面与拷贝共用一份")
+            if let start = text.range(of: "private func groupHeading") {
+                let heading = String(text[start.lowerBound...].prefix(400))
+                expectEqual(heading.contains("groupScopeText"), true,
+                            "输入与经过: groupHeading(拷贝那条路)必须走 groupScopeText,否则纯文本丢掉「只问 X、Y」")
+            }
+        } else {
+            expectEqual(true, false, "输入与经过: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
+        }
+    }
 }
