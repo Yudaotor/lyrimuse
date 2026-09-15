@@ -279,8 +279,13 @@ public enum Romanizer {
         return segs
     }
 
+    /// - Parameter songLooksJapanese: 整首歌是不是日文歌(`Romanizer.looksJapaneseSong`)。
+    ///   默认 `true`(= 不做下面这道行内覆盖,维持这个函数原有的"整段都当日文处理"的行为)——
+    ///   `Romanizer.romanize(japanese:true)` 这类没有"整首歌"概念的直接调用(主要是 selftest)
+    ///   靠这个默认值保持不变。只有真正按"整首歌 vs 一行"两级判定的调用方
+    ///   (`LyricsSyncEngine`/`LyricsRomanization`)会传入真实算出来的值。
     public static func japaneseSegments(
-        _ text: String, marks: [KanaAnnotation.Mark] = []
+        _ text: String, marks: [KanaAnnotation.Mark] = [], songLooksJapanese: Bool = true
     ) -> [JapaneseSegment] {
         let cf = text as CFString
         let range = CFRangeMake(0, CFStringGetLength(cf))
@@ -313,7 +318,109 @@ public enum Romanizer {
             out.append(JapaneseSegment(
                 utf16Start: r.location, utf16Length: r.length, latin: latin))
         }
-        return out
+        guard !songLooksJapanese else { return out }
+        return applyCodeSwitchFallback(to: out, in: text)
+    }
+
+    // MARK: - 行内中日无缝拼接(2026-09-15,陶喆《My Anata》实测坐实)
+    //
+    // 这首歌的梗是日文词直接焊进中文句子、中间往往连空格都没有("三更半夜 さびし的我"
+    // "只听见おじさん骑着单车卖着馒头")。整首歌 kanaLineRatio 只有 40.9%(< 50% 阈值,
+    // looksJapaneseSong 判 false,不是日文歌),但**一行只要出现一个假名字符,
+    // looksJapanese(line) 就确证这一行是日文**、把整行(含里面的中文部分)一起扔给日语
+    // 分词器 —— 于是"三更半夜""只听见""骑着单车卖着馒头"这些纯中文片段被读成了
+    // 音读/训读(sankou/han'ya/teki/ware),而不是拼音。
+    //
+    // 修法只在 songLooksJapanese 为 false 时生效(整首歌不像日文,纯汉字片段默认该是
+    // 中文):把分词器切出来的片段按"是不是完整落在一段独立的纯汉字区间里"筛一遍,独立的
+    // 纯汉字片段改用 ICU 音译(拼音)覆盖掉分词器给的日语读音。
+    //
+    // "独立"的判据是**这段纯汉字文字连续段至少一侧挨着空白/标点/行首行尾这种硬边界**——
+    // 两侧都紧贴着别的文字(假名/拉丁/数字)时,当成被焊进日语词里的字根,不拆开:
+    //   ·"さびし的我"里的"的我"右边是行尾 → 独立 → 改判中文(de wo)。
+    //   ·"4時半です"里的"時半"左边挨着数字"4"、右边挨着假名"です",两侧都不是硬边界
+    //     → 不独立,继续当日语处理(ji han)—— 这条时间表达本来就该保留日语读音,
+    //     不能被这次修法误伤。
+    // 局限:真正紧贴无硬边界的日语词根+假名(比如"愛してる"里孤零零的"愛")仍然分不出来、
+    // 继续当日语处理——这类词根跟假名之间从定义上就没有空白可用,是这个修法承认漏不掉的
+    // 残余风险,接受"宁可漏改,不错改"。
+    private enum ScriptRunKind { case kana, han, hardBoundary, other }
+
+    private static let kanaScalarSet: CharacterSet = {
+        var s = CharacterSet()
+        s.insert(charactersIn: Unicode.Scalar(0x3040)!...Unicode.Scalar(0x30FF)!)
+        return s
+    }()
+
+    private static let hanScalarSet: CharacterSet = {
+        var s = CharacterSet()
+        s.insert(charactersIn: Unicode.Scalar(0x4E00)!...Unicode.Scalar(0x9FFF)!)
+        s.insert(charactersIn: Unicode.Scalar(0x3400)!...Unicode.Scalar(0x4DBF)!)
+        return s
+    }()
+
+    private static func scriptRunKind(of c: Character) -> ScriptRunKind {
+        if c.unicodeScalars.contains(where: { kanaScalarSet.contains($0) }) { return .kana }
+        if c.unicodeScalars.contains(where: { hanScalarSet.contains($0) }) { return .han }
+        if c.isWhitespace
+            || c.unicodeScalars.allSatisfy({ CharacterSet.punctuationCharacters.contains($0) })
+        {
+            return .hardBoundary
+        }
+        return .other
+    }
+
+    /// 纯汉字连续段的 UTF16 区间,且至少一侧挨着硬边界——判据见上面的注释。
+    private static func independentHanUTF16Ranges(in text: String) -> [Range<Int>] {
+        struct Run { let kind: ScriptRunKind; let start: Int; let end: Int }
+        var runs: [Run] = []
+        var utf16Pos = 0
+        var runStart = 0
+        var currentKind: ScriptRunKind?
+        for ch in text {
+            let kind = scriptRunKind(of: ch)
+            if let ck = currentKind, ck != kind {
+                runs.append(Run(kind: ck, start: runStart, end: utf16Pos))
+                runStart = utf16Pos
+            }
+            currentKind = kind
+            utf16Pos += ch.utf16.count
+        }
+        if let ck = currentKind {
+            runs.append(Run(kind: ck, start: runStart, end: utf16Pos))
+        }
+        var result: [Range<Int>] = []
+        for (i, run) in runs.enumerated() where run.kind == .han {
+            let leftHard = i == 0 || runs[i - 1].kind == .hardBoundary
+            let rightHard = i == runs.count - 1 || runs[i + 1].kind == .hardBoundary
+            if leftHard || rightHard {
+                result.append(run.start..<run.end)
+            }
+        }
+        return result
+    }
+
+    /// 把完整落在"独立纯汉字区间"里的片段,读音从分词器给的日语读音改成 ICU 音译(拼音)。
+    /// 横跨区间边界、或只有部分落在区间里的片段(说明分词器认为它跟旁边的假名是同一个
+    /// 日语词,比如"取った"的"取っ")一律不动——那正是"两侧都紧贴别的文字"的日语词根,
+    /// 不该被拆开。
+    private static func applyCodeSwitchFallback(
+        to segments: [JapaneseSegment], in text: String
+    ) -> [JapaneseSegment] {
+        let ranges = independentHanUTF16Ranges(in: text)
+        guard !ranges.isEmpty else { return segments }
+        let units = Array(text.utf16)
+        return segments.map { seg in
+            guard ranges.contains(where: { $0.lowerBound <= seg.utf16Start && $0.upperBound >= seg.utf16End })
+            else { return seg }
+            guard seg.utf16End <= units.count else { return seg }
+            let piece = String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
+            guard let pinyin = piece.applyingTransform(.toLatin, reverse: false), pinyin != piece
+            else { return seg }
+            return JapaneseSegment(
+                utf16Start: seg.utf16Start, utf16Length: seg.utf16Length,
+                latin: pinyin.trimmingCharacters(in: .whitespaces))
+        }
     }
 
     private static func japaneseReading(

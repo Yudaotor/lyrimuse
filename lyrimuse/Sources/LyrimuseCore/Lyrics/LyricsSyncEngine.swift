@@ -1641,7 +1641,8 @@ public final class LyricsSyncEngine {
     private func cachedJapaneseSegments(for line: String) -> [Romanizer.JapaneseSegment] {
         if let cached = segmentsCache[line] { return cached }
         let segs = Romanizer.japaneseSegments(
-            line, marks: kanaAnnotation?.marks(forLine: line) ?? [])
+            line, marks: kanaAnnotation?.marks(forLine: line) ?? [],
+            songLooksJapanese: songLooksJapanese)
         segmentsCache[line] = segs
         return segs
     }
@@ -1695,7 +1696,8 @@ public final class LyricsSyncEngine {
         let result = Self.buildWordGroups(
             words: words, line: line, japanese: allowed,
             marks: kanaAnnotation?.marks(forLine: line) ?? [],
-            segments: segments, hanRomanization: hanRoma, koreanRomanization: koreanRoma)
+            segments: segments, hanRomanization: hanRoma, koreanRomanization: koreanRoma,
+            songLooksJapanese: songLooksJapanese)
         wordGroupCache[key] = result
         return result
     }
@@ -1719,11 +1721,13 @@ public final class LyricsSyncEngine {
         marks: [KanaAnnotation.Mark] = [],
         segments: [Romanizer.JapaneseSegment]? = nil,
         hanRomanization: String? = nil,
-        koreanRomanization: String? = nil
+        koreanRomanization: String? = nil,
+        songLooksJapanese: Bool = true
     ) -> [SyncedLyricWordGroup]? {
         if japanese, Romanizer.looksJapanese(line) {
             // segments 非 nil 时是调用方(引擎的 segmentsCache)预分好的同一行结果,别再分一遍。
-            let segs = segments ?? Romanizer.japaneseSegments(line, marks: marks)
+            let segs = segments ?? Romanizer.japaneseSegments(
+                line, marks: marks, songLooksJapanese: songLooksJapanese)
             return mergeSegmentsIntoWordGroups(words: words, segs: segs)
         }
         if let hanRomanization, !hanRomanization.isEmpty {

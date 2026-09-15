@@ -590,6 +590,57 @@ func runRomanizationTests() {
         expectEqual(Romanizer.looksJapaneseSong(jaSong), true, "整首: 日文歌行行有假名 → 是日文歌")
         expectEqual(Romanizer.songScript(of: jaSong), .japanese, "整首: 日文歌 → japanese")
 
+        // ---- 行内中日无缝拼接(2026-09-15,陶喆《My Anata》实测坐实) ----
+        //
+        // 上面那条只验了"整首歌不算日文歌",没验**这一行本身**读音对不对——而这正是漏洞
+        // 所在:"我的あなた"这一行本身含假名,looksJapanese(line) 会确证它是日文行,
+        // 于是不管 songLooksJapanese 是不是 false,整行(含"我的"两个纯汉字)都会被扔进
+        // 日语分词器。用户实报的真实歌词坐实了这个具体形状(《my-anata-...roma.lrc》缓存):
+        // "三更半夜 さびし的我" 被读成 "sankou han'ya sabishi teki ware"——"三更半夜"
+        // "的我"这两段纯中文被读出了音读/训读,而不是拼音。
+        do {
+            // 端到端:同一首歌里,纯汉字段(至少一侧挨空白/行首行尾)该出拼音,
+            // 假名段仍出日语读音——两段拼在同一行里各管各的。
+            func reading(_ line: String) -> String? {
+                Romanizer.lineReading(
+                    line, songLooksJapanese: false,
+                    segments: Romanizer.japaneseSegments(line, songLooksJapanese: false))
+            }
+            let r1 = reading("三更半夜 さびし的我") ?? ""
+            expectEqual(r1.contains("sabishi"), true, "行内拼接: 假名段仍出日语读音,实际 \(r1)")
+            expectEqual(r1.contains("sankou"), false, "行内拼接: 「三更半夜」不该再读成音读 sankou,实际 \(r1)")
+            expectEqual(r1.contains("teki"), false, "行内拼接: 「的」不该再读成音读 teki,实际 \(r1)")
+            expectEqual(r1.lowercased().contains("gèng") || r1.lowercased().contains("geng"), true,
+                        "行内拼接: 「更」该出拼音 geng,实际 \(r1)")
+
+            // 中间没有任何空格(用户实报的另一行,更严苛的形状):日文假名段前后的纯汉字段
+            // 也要能分别拆成拼音,不能因为"整行没有空格"就放弃。
+            let r2 = reading("只听见おじさん骑着单车卖着馒头") ?? ""
+            expectEqual(r2.contains("ojisan") || r2.contains("oji"), true,
+                        "行内拼接(无空格): 「おじさん」仍出日语读音,实际 \(r2)")
+            expectEqual(r2.contains("dān") || r2.contains("dan"), true,
+                        "行内拼接(无空格): 「单车」该出拼音,实际 \(r2)")
+
+            // 反例守卫:两侧都没有硬边界(不挨空白/标点/行首行尾)的纯汉字段——本例是
+            // 时间表达"時半"紧贴在数字"4"与假名"です"之间——不该被这次修法误伤,
+            // 必须继续保留日语读音 ji/han,不能被拆成拼音 shí/bàn。
+            let r3 = reading("4時半です") ?? ""
+            expectEqual(r3.contains("ji"), true, "行内拼接反例: 两侧都不挨硬边界的「時」仍应是日语读音 ji,实际 \(r3)")
+            expectEqual(r3.contains("han") && !r3.contains("hàn"), true,
+                        "行内拼接反例: 「半」仍应是日语读音 han,实际 \(r3)")
+            expectEqual(r3.contains("shí") || r3.contains("bàn"), false,
+                        "行内拼接反例: 不该被误判成拼音 shí/bàn,实际 \(r3)")
+
+            // songLooksJapanese 默认值(true)= 不做这层覆盖,保持这个函数原有行为 ——
+            // 直接调用 japaneseSegments(不传 songLooksJapanese)的旧调用点(selftest 里
+            // SyncEngineTests 那条等价断言、以及 romanize(japanese:true) 走的 japaneseReading)
+            // 不受这次改动影响。
+            let untouched = Romanizer.japaneseSegments("三更半夜 さびし的我")
+            let untouchedLatins = untouched.map(\.latin).joined(separator: " ")
+            expectEqual(untouchedLatins.contains("sankou"), true,
+                        "行内拼接: 不传 songLooksJapanese(默认 true)时保持原行为不变,实际 \(untouchedLatins)")
+        }
+
         // 按行判定:有假名/谚文的行按自己算,**纯汉字**行才退回整首歌。
         expectEqual(Romanizer.script(ofLine: "サヨナラ", song: .chinese), .japanese,
                     "按行: 中文歌里的假名行仍是日文")

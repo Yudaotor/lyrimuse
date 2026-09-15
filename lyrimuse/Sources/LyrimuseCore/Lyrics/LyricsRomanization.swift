@@ -58,7 +58,8 @@ public enum LyricsRomanization {
                 body,
                 songLooksJapanese: songLooksJapanese,
                 segments: Romanizer.japaneseSegments(
-                    body, marks: annotation?.marks(forLine: body) ?? [])),
+                    body, marks: annotation?.marks(forLine: body) ?? [],
+                    songLooksJapanese: songLooksJapanese)),
                 !reading.isEmpty, reading != body
             else { continue }
             out.append(tags + reading)
