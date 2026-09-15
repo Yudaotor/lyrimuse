@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ import (
 //
 // 返回值特意拼成跟旧版 `media-control get` 完全相同的 JSON 字段
 // (title/artist/album/duration/elapsedTime/playing/playbackRate/bundleIdentifier),
+// 外加一个 media-control 也有的 mediaKind(认 MV 用,见 notAudioMedia),
 // 下面 extract() 不用跟着改。isMusicApp 这里直接硬编码 true——这份 JSON 本来就只会
 // 在真的问到当前选定播放器自己的曲目时才产出,不是系统级 Now Playing 焦点判断。
 const getStateScript = `(() => {
@@ -56,6 +58,12 @@ const getStateScript = `(() => {
     } catch (e) {
         return JSON.stringify(null);
     }
+    // mediaKind:Music.app 自己对这条目的分类(scripting 字典枚举 eMdK:song /
+    // music video / movie / TV show / unknown)。认 MV 用,见 snapshot.go 的 notAudioMedia。
+    // **单独一个 try**:属性在某些曲目类上会抛(实测同一条目读 videoKind 就抛「描述符类型
+    // 不匹配」),混进下面那个 try 会让整份 state 读不到、退化成"没有正在播放"。
+    let mediaKind = "";
+    try { mediaKind = String(track.mediaKind()); } catch (e) { mediaKind = ""; }
     try {
         return JSON.stringify({
             title: track.name(),
@@ -66,6 +74,7 @@ const getStateScript = `(() => {
             playing: state === "playing",
             playbackRate: state === "playing" ? 1 : 0,
             isMusicApp: true,
+            mediaKind: mediaKind,
             bundleIdentifier: "com.apple.Music"
         });
     } catch (e) {
@@ -153,6 +162,10 @@ func getAppleMusicOnlyState(ctx context.Context) (map[string]any, bool) {
 //
 // 只在 hash 非空(= 确实是电台)时动 state:非电台时 AppleScript 自己的 duration 精度
 // 更高(实测 289.7659912109375 vs 目录 289.766),拿目录值去盖反而是降精度。
+//
+// ⚠️ 认 MV 那条判据(notAudioMedia)**不走这里**:它读的 mediaKind 是 AppleScript 那份
+// state 自己就有的(getStateScript 直接问 Music.app),不需要从 raw 补 —— 而 MediaRemote
+// 的 mediaType 2026-09-15 实测认不出 MV,压根没有可补的东西。见 notAudioMedia 头注。
 func mergeRadioKeys(state, raw map[string]any) {
 	hash, _ := raw["radioStationHash"].(string)
 	if hash == "" {
@@ -510,11 +523,44 @@ type mediaControlRawState struct {
 	// RadioStationHash:电台 / 直播流才有(2026-09-10 实测,值形如 "CgkIBRoFwOSKqxkQBA")。
 	// 只当"这是不是电台"的判据用,值本身不看。见 radioclock.go 头注。
 	RadioStationHash string `json:"radioStationHash"`
+	// MediaType:MediaRemote 的 kMRMediaRemoteNowPlayingInfoMediaType,media-control 原样透传
+	// 系统给的值(2026-09-15 实测 Apple Music 放普通曲目时是 "MRMediaRemoteMediaTypeMusic")。
+	// 用来认出 MV —— 视频时长不能当曲长,见 snapshot.go 的 notAudioMedia。
+	MediaType string `json:"mediaType"`
 	// ArtworkData/ArtworkMimeType:只有 fetchNowPlayingArtwork 那次不带 --no-artwork
 	// 的调用才会非空(见其头注,主 poll 路径的 fetchRawMediaControlState 一直带这个
 	// 参数,这两个字段在那条路径上恒为空)。base64 编码的封面原始字节。
 	ArtworkData     string `json:"artworkData"`
 	ArtworkMimeType string `json:"artworkMimeType"`
+}
+
+// seenMediaTypes 记已经报告过的 mediaType 取值,每个值只记一行 —— 这是个每 5 秒一拍的
+// 轮询路径,逐拍打日志会把别的信号淹掉(同 networkobs.go 那次按分钟聚合的教训)。
+var (
+	seenMediaTypesMu sync.Mutex
+	seenMediaTypes   = map[string]bool{}
+)
+
+// noteUnfamiliarMediaType 把"见到了一个不是音乐音频的 mediaType"记一行。**纯观测,不是判据**。
+//
+// 它守的是一条负面结论:2026-09-15 实测 Apple Music 放 MV 时 mediaType 仍是
+// `MRMediaRemoteMediaTypeMusic`,跟普通曲目逐字相同 —— **这个字段认不出 MV**
+// (认 MV 靠 Music.app 的 mediaKind,见 notAudioMedia 头注)。以后若有人想拿它当判据,
+// 先看这行日志有没有出现过、报的是什么:目前为止本机只见过 Music 一个取值,
+// 别的播放器(尤其 Safari 放 YouTube Music 这种视频站)报什么还没有样本。
+//
+// 零值 / 音乐一律不记,不制造噪音。
+func noteUnfamiliarMediaType(mediaType, title string) {
+	if mediaType == "" || mediaType == mediaTypeMusic {
+		return
+	}
+	seenMediaTypesMu.Lock()
+	first := !seenMediaTypes[mediaType]
+	seenMediaTypes[mediaType] = true
+	seenMediaTypesMu.Unlock()
+	if first {
+		log.Printf("media-control reported a non-music mediaType=%q (first time; title=%q) — observation only, this field does not gate anything (see notAudioMedia)", mediaType, title)
+	}
 }
 
 // getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
@@ -710,6 +756,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, "", false
 	}
+	noteUnfamiliarMediaType(raw.MediaType, raw.Title)
 	// elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
 	// elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实时钟外推
 	// (拿到过 1381 秒这种远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让

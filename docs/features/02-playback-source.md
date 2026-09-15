@@ -873,3 +873,43 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
     **没做的**:不改 `gate` 的 fail-closed 方向(拿不准仍当广告丢,那条"漏认一首歌只是这一轮没识别,认错一条广告是永久写进收听历史"的取舍不变);不给 nil 快照加"保持上一屏"的宽限(那会让广告结束后继续显示广告、或让真停播后 UI 赖着不走,而且上面三条已经把窗口压到探针往返量级);不动 `verdictMaxAge=60` 本身。
     **教训**:两个共同决定一个状态机是否有"空档"的时间常数,**必须显式写出它们之间的不等式并用守卫钉住**,不能让它们各自独立地"看起来都很合理"地取同一个值。selftest 现在对**每一档**断言 `refreshInterval(for:) < verdictMaxAge` 且歌档重叠窗 ≥10 秒。
     **验证**:selftest 新增 8 条(两档不变量各 1 + 歌档重叠窗 1 + Spotify 网页版 1 + 既有 4 条改为按新常量断言),`swift build` 通过、24 组 **4244 条 ALL PASS**;**反向验证**把 `songRefreshInterval` 改回 60,新守卫当场变红 2 条(确认它拦得住),再改回 45 复绿。**真机验证(同日装机后 6 分 39 秒,Safari 播 YT Music,pid 80765)**:① 稳态播放的 60 秒节律**消失** —— `takeyouthere` 连播 4 分多钟 `snapshot failed` **0 次**(改前同时长 4 次);② 进广告那一拍 `17:02:11.108 failed → 17:02:11.332 recovered` = **224 毫秒**(改前 2.3 秒),正是探针往返 ~187ms + 调度,result sink 生效的直接证据;③ **广告→歌的边界(用户报的那个)一次 `snapshot failed` 都没产生**(17:02:27.742 直接 `track changed: lullaby`),改前同一现场是 7.0 秒真空 + 菜单栏 `slot rebuild → icon(38.5)`。7.0s → 0.224s,31 倍。收尾核对:崩溃报告空、`messageType == error` 空。**顺带的对照**:同一次广告 App 17:02:27.742 接上下一首、collector 09:02:31.142Z 才 `now playing` —— App 现在比 collector 快 3.4 秒,因为 Go 侧虽无真空期但受 5 秒轮询限制,而 Swift 侧被探针结果直接唤醒。
+
+33. **Apple Music 放 MV 时,视频时长不能当曲长 —— 认出来之后按「未知」(0)处理;判据只能用 Music.app 的 `media kind`,MediaRemote 的 `mediaType` 认不出 MV(2026-09-15,用户报「applemusic 在播放音乐视频的时候,由于有些 mv 会有一些额外的内容,这就会导致和实际歌词对不上」)**。
+
+    **现场**:用户截图是 Apple Music 的 MV 区(陶喆《In the Morning》),随后当场放了这支 MV,实拉到载荷:
+
+    | 字段 | 值 |
+    |---|---|
+    | `duration` | **232.857**(MV) |
+    | iTunes `entity=song` 同曲 | **212.1**(US storefront;CN 当天对所有查询返回 0 条) |
+    | `mediaType` | `MRMediaRemoteMediaTypeMusic` ← **跟放普通曲目逐字相同** |
+    | `mediaKind`(Music.app) | `music video` ← 只有它说了实话 |
+    | `album` | 空(MV 不报专辑,同决策 27) |
+
+    **三处受害点,全在「时长」这一条证据上**(按这支 MV 的真实数字 +20.76s / 8.91% 算):
+    - `match.go` 的时长档:末句时间戳跟视频总长比。ratio 约 11.96%,**仍在 `durationFitTolerance`(0.25)内**,所以没吃 −500,但吻合加分从最高 300 掉到约 **204**。
+    - 紧跟着的「源自报曲长」那一项(`sourceDurationMismatchTolerance` = 0.12):8.91% **刚好不到线**,这支没扣。
+    - `enrich.go` 的 `durationMismatch` 12% 闸门:8.91% **不触发**。
+    也就是说**这一支的伤害是"加分缩水三分之一",不是灾难级**。但阈值都在 12% 附近、这支已经到 8.91%,前导再多十几秒就全部跨线:那时正确歌词会被**连扣两次**(时长档 −500 + 源自报曲长),而一个真的更长的版本(Live / 加长混音)反而更"吻合" → 选错版本;MV 与音频版之间每切一次还会触发一整轮十源重搜。**闸是按"这类内容"关的,不是按这一支的数字关的。**
+
+    **⚠️ 判据只能用 `mediaKind`,`mediaType` 是条死路 —— 别再试**。本条第一版拿 `mediaType` 做反判("不是 `MRMediaRemoteMediaTypeMusic` 就不信这个时长"),理由是当时手上只实测到 Music 一个取值、不敢赌 MV 的字面量。用户当场放 MV 直接证伪:**MediaRemote 这一层根本不区分 MV**,MV 照样报 Music。而且反判对**别的播放器**是净风险 —— Safari 放 YouTube Music 本来就是个视频站,它要是报 Video,一整个播放器的时长证据会被静默关掉,而对唯一确认的现场(Apple Music MV)收益为零。该字段因此只留观测(`noteUnfamiliarMediaType`,每个取值记一行),不做判据;`TestNotAudioMedia` 里有一档专门把这条负面结论钉住("mediaType=Video:仍不参与判据")。
+
+    **`mediaKind` 走白名单**(`music video` / `movie` / `TV show`),因为取值域是完整的:`sdef /System/Applications/Music.app` 里枚举 `eMdK` = `song / music video / movie / TV show / unknown`。**`unknown` 刻意按音频处理** —— 本地导入的文件报什么还没实测,宁可保持现状也不要误伤一整类曲目。字段缺失时恒为 false,行为跟改动前逐字相同。
+
+    **覆盖面**:Apple Music 的两条读取路径最终用的都是 JXA 那份 state —— auto / 多选走 `refineAppleMusicState`(拿 AppleScript 那份**整份顶替** raw),只勾 Apple Music 走 `getAppleMusicOnlyState`。所以 `getStateScript` 里加一行就够,`mergeRadioKeys` 一个字都不用动(第一版曾为了合 `mediaType` 把它改名 `mergeMediaRemoteKeys` 并把合并挪到电台早退之前,判据换掉之后这些全部回退了)。JXA 读不到时(没有「自动化」权限)退回 raw、判据不生效,是**降级不是错误**。
+
+    **为什么不照抄电台那条「换成目录的权威时长」**:实测走不通。① Apple 目录**根本不给 MV 时长** —— 按这支 MV 的 trackId(`1834309744`)反查 `lookup` 返回 `kind=music-video`、`wrapperType=track`、`trackTimeMillis` 缺失;② 改查"歌曲"那一条也不保险 —— `entity=song` 在 `country=CN` 当天整个返回空(周杰伦《稻香》也是 0 条)。所以置 0 不是退而求其次,是**唯一诚实的值**:下游全都按"未知"处理(打分整段挂在 `durationSecs > 0` 下,`durationMismatch` 任一方为 0 不触发)。**一个已知错误的证据比没有证据更糟** —— 这跟 `durationMismatch` 自己"任一方为 0 不触发"是同一个立场。
+
+    **JXA 那次属性读单独一个 try**:同一条目读 `videoKind` 实测会抛「描述符类型不匹配」(`mediaKind` 才是对的属性名),混进主 try 会让整份 state 读不到、退化成"没有正在播放"。
+
+    **到此为止,时间轴不修 —— 三条路当天全部实测排除,用户拍板停在止血这一步**。MV 上"歌词跟画面对不上"这件事**没有解**,以后不要再提这三条:
+
+    - **❌ 按 MV 记一个偏移**(本条第一版打算照抄电台那层,`LyricsOffsetStore` 已经是分层的、加第四层几乎是照抄)。用户当天一句话否掉:**「有些 MV 是在中间停一下放一些间奏的」** —— 视频时间轴与歌曲时间轴是**分段**的,不是平移。常数偏移在插了间奏的 MV 上必然错,而且错在后半段、比不校更难察觉。
+    - **❌ 去拿"MV 那一版"的歌词**(用户提的方向:「只能从获取到正确版本的歌词入手」)。实测证伪:`collector search-lyrics -artist 陶喆 -title "In the Morning" -duration 232.857`,**十个源全部应答(10/10)**,五个候选 kugou 209.0 / qq 209.0 / netease 209.9 / migu 209.1(lrclib 被拒),**全部聚在 209 秒、全是同一张专辑(STUPID POP SONGS)的同一个版本**。歌词源索引的是"歌"不是"MV",MV 压根不是一个可检索的歌词实体 —— 这个动作没有对象。
+    - **❌ 自动对齐**(靠音频定位"歌在视频里从第几秒开始")。唯一手段是音频指纹,ShazamKit 需要 `com.apple.developer.shazamkit` 授权,**ad-hoc 签名拿不到**(电台那层查过,实测报 `Code=202 Missing entitlements` + 401)。没有它,间奏插在哪、插多久一概不可知。
+
+    **反过来印证了置 0 是对的,不只是止损**:232.857 这个数字指向**任何源都没有的版本**(上面五个候选全在 209),留着它只会把分数往"末句更接近 232 秒的候选"上拉 —— 而那种候选只可能是 Live 版 / 加长混音这类**错版本**。这首歌恰好五个候选同版所以没翻车,机制上的风险是真的。**所以 MV 上的时长不是"不准的证据",是"指向错误方向的证据"**。
+
+    **当时摆上桌但没做的两个产品选项**(用户选了"就停在止血"):MV 时改走 `currentTrackPlainLyrics` 那条纯文本通道、只显示静态全文不滚动;或照常滚动但在歌词窗口标一句「MV,时间轴可能与音频版不同」。**参照**:Apple Music 自己在 MV 上根本不显示歌词。
+
+    **验证**:`go vet` / `go build` / `go test ./...` 全绿;新增 `notaudiomedia_test.go`(判据 9 档,含真实现场载荷逐字复刻 + 那条负面结论;`extract` 三条路径:MV / 普通曲目 / 电台不受影响)。变异验证三次都当场变红:去掉 `extract` 里的闸(MV 时长仍是 232.857)、白名单里去掉 `music video`、以及第一版那次把 `mediaType` 合并挪到电台早退之后。**端到端在真实 MV 上合拢过**(用户重放该 MV,同一次会话内):生产用的 `getStateScript` 原样抠出来跑,对这支 MV 输出 `{"title":"In the Morning","duration":232,"mediaKind":"music video",…}`;把**这份原始输出原样喂进生产 `extract()`**,得到 `NotAudio=true`、`Duration=0.000`(原始 232)、`Elapsed=28.043` 未受影响 —— 闸只碰时长。同一时刻第二次取 media-control 载荷,`mediaType` 仍是 `MRMediaRemoteMediaTypeMusic`(`duration` 232.857625),**两次独立观察都证实这个字段认不出 MV**。同一脚本在普通曲目上输出 `"mediaKind":"song"`、其余字段一字未变。

@@ -163,6 +163,14 @@ func TestMergeRadioKeys(t *testing.T) {
 	if len(state) != 2 || state["duration"] != 289.7659912109375 {
 		t.Errorf("非电台不该动 state,得到 %v", state)
 	}
+
+	// 认 MV 那条判据不经过这里:mediaKind 是 AppleScript 那份 state 自己就有的,
+	// 合并不该碰它(也不该从 raw 造一个出来)。见 notAudioMedia 头注。
+	state = map[string]any{"title": "In the Morning", "mediaKind": "music video", "duration": 232.857}
+	mergeRadioKeys(state, map[string]any{"radioStationHash": "", "mediaType": "MRMediaRemoteMediaTypeMusic"})
+	if state["mediaKind"] != "music video" || len(state) != 3 {
+		t.Errorf("非电台时一个字段都不该动(mediaKind 尤其),得到 %v", state)
+	}
 }
 
 // borrowAppleScriptPosition:电台一律不借 AppleScript 那份播放头。
