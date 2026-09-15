@@ -20,10 +20,19 @@ func TestStripStructuralTitlePrefix(t *testing.T) {
 		{"medley: lower case label", "lower case label"}, // 标签大小写不敏感
 		{"Medley:NoSpace", "NoSpace"},
 
+		// 2026-09-15 陶喆串烧案:中文写法「组曲」、繁体「組曲」、全角冒号三种形态都要认。
+		{"组曲: 火鸟功 / 我太傻 / Melody (Live)", "火鸟功 / 我太傻 / Melody (Live)"},
+		{"組曲: 望春風/ 夜來香 - Live", "望春風/ 夜來香 - Live"},      // 繁体标签过 toSimplified 才认得出;正文原样不动
+		{"组曲：流沙 / 天天 (Live)", "流沙 / 天天 (Live)"},         // 全角冒号
+		{"Medley：Full-width colon", "Full-width colon"}, // 全角冒号对拉丁标签同样生效
+
 		// ⚠️ 不在白名单里的一律原样返回 —— 否则 "Foo: Bar" 会被切成 "Bar"、
 		// 跟另一首真叫 "Bar" 的歌混为一谈。
 		{"Foo: Bar", "Foo: Bar"},
 		{"Medleys: X", "Medleys: X"}, // 要求整段相等，不是前缀
+		// 同一条判据的中文面:古典乐的 "X组曲: Y" 砍不掉(label 是"胡桃夹子组曲")。
+		{"胡桃夹子组曲: 花之圆舞曲", "胡桃夹子组曲: 花之圆舞曲"},
+		{"：全角冒号开头", "：全角冒号开头"}, // 冒号在最前面，前面没标签
 		{"Untitled (How Does It Feel)", "Untitled (How Does It Feel)"},
 		{"No colon here", "No colon here"},
 		{": leading colon", ": leading colon"}, // 冒号在最前面，前面没有标签
@@ -43,6 +52,15 @@ func TestSearchTitleVariantsStructuralPrefix(t *testing.T) {
 	}{
 		// 本次新增:裸曲名优先,原样标题留作兜底。
 		{medleyLocal, []string{"Greatdayndamornin' / Booty", medleyLocal}},
+
+		// 2026-09-15 陶喆串烧:带 (Live) 这个版本限定词 → 原样标题优先(见 searchTitleVariants
+		// 注释的①档),去前缀的裸名紧跟在后 —— 网易云曲库里就叫那个、时长 329.0s 对
+		// 本地 328.992s。没这个变体的话十个源全 0 条。
+		{"组曲: 火鸟功 / 我太傻 / Melody (Live)", []string{
+			"组曲: 火鸟功 / 我太傻 / Melody (Live)",
+			"火鸟功 / 我太傻 / Melody (Live)",
+			"组曲: 火鸟功 / 我太傻 / Melody",
+		}},
 
 		// ⚠️ 下面这些是改动前就有的行为,不能被改坏。
 		{"Automatic (Remastered 2014)", []string{"Automatic", "Automatic (Remastered 2014)"}},
@@ -76,6 +94,12 @@ func TestLyricTitleAcceptedStructuralPrefix(t *testing.T) {
 		{"Booty", medleyLocal, false, "串烧里的半首歌不算这首歌"},
 		{"Greatdayndamornin'", medleyLocal, false, "同上,另外半首"},
 		{"Bar", "Foo: Bar", false, "Foo 不在白名单,砍不掉"},
+
+		// 2026-09-15 陶喆串烧:正题两条 + 两条回归守卫。
+		{"火鸟功 / 我太傻 / Melody (Live)", "组曲: 火鸟功 / 我太傻 / Melody (Live)", true, "网易云曲库里的裸曲名"},
+		{"流沙 / 天天 (Live)", "组曲: 流沙 / 天天 (Live)", true, "同上,第二首"},
+		{"Run Away (Live)", "组曲: 火鸟功 / 我太傻 / Melody (Live)", false, "同专辑另一首歌 —— 正是这次报错的那一条,绝不能算"},
+		{"火鸟功", "组曲: 火鸟功 / 我太傻 / Melody (Live)", false, "串烧里的其中一首不算整条串烧"},
 
 		// 改动前就成立的三条退路,不能丢。
 		{"Automatic", "Automatic (Remastered 2014)", true, "各自去括号后相等"},

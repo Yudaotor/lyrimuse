@@ -2121,23 +2121,53 @@ func searchTitleVariants(title string) []string {
 // 白名单而不是"冒号前面一律砍掉":后者会把 "Foo: Bar" 这种本来就带冒号的正常曲名切掉半截,
 // 跟另一首叫 "Bar" 的歌混为一谈。跟这个仓库里 distinctRecordingVersionTags /
 // neteaseImpersonatorRiddenArtists 一个路子 —— 只收歧义极小的,新的按实际踩坑追加。
-var structuralTitlePrefixes = []string{"medley", "interlude"}
+// 2026-09-15 补中文写法「组曲」(用户报陶喆两首串烧「搜出来不对」/「一条都搜不到」):
+// Apple Music 中文区把同一种标签写成「组曲: 火鸟功 / 我太傻 / Melody (Live)」,而网易云曲库
+// 里就叫「火鸟功 / 我太傻 / Melody (Live)」、自报 329.0s 对本地 328.992s 分毫不差。词表原来全是
+// 拉丁词,于是带着前缀整串去搜十个源全 0 条 —— 跟上面 D'Angelo 那次逐字同型,只是换了语言。
+//
+// 召回落空还会往下踩一脚:首轮空触发标题反查,Apple 原产地商店那条路在同一张 31 首的现场
+// 专辑里按时长挑,挑中了另一首歌(见 appleStorefrontPickTrack 头注),把 Run Away 的词当成这首
+// 落了盘。两处各自都是真 bug、分开修 —— 这里是治本的那处:前缀剥掉就能首轮命中,压根走不到反查。
+//
+// ⚠️ 只认**整段**等于「组曲」的标签,所以「胡桃夹子组曲: 花之圆舞曲」这类 "X组曲: Y" 的古典乐
+// 写法砍不掉(label 是「胡桃夹子组曲」、不等于「组曲」),跟 "Medleys: X" 被挡在门外是同一条判据。
+var structuralTitlePrefixes = []string{"medley", "interlude", "组曲"}
 
 // stripStructuralTitlePrefix 去掉 "Medley: " 这类结构性前缀,不认识的前缀原样返回。
 // 要求冒号前面的那一段**整体**等于白名单里的词(所以 "Medleys: X" 不算),避免把正常
 // 曲名切掉。
+//
+// 标签比对前过一遍 toSimplified,理由跟 normLoose / artistCreditParts 里同一句一样:繁体区
+// 的写法是「組曲」(本机缓存里就有「組曲: 望春風/ 夜來香 - Live」这一条),不折算就得在词表里
+// 给每个词各登记一遍繁简两形。ASCII 标签过 toSimplified 是恒等,拉丁词一字不变。
+//
+// 冒号认半角 ':' 和全角 '：' 两种:中文标签用全角冒号是常态,而这个函数原来只扫 ASCII
+// 冒号 —— 收了中文前缀却不认中文冒号,等于白收。
 func stripStructuralTitlePrefix(title string) string {
-	i := strings.Index(title, ":")
+	i, w := structuralTitlePrefixColon(title)
 	if i <= 0 {
 		return title
 	}
-	label := strings.ToLower(strings.TrimSpace(title[:i]))
+	label := toSimplified(strings.ToLower(strings.TrimSpace(title[:i])))
 	for _, p := range structuralTitlePrefixes {
 		if label == p {
-			return strings.TrimSpace(title[i+1:])
+			return strings.TrimSpace(title[i+w:])
 		}
 	}
 	return title
+}
+
+// structuralTitlePrefixColon 返回第一个冒号(半角或全角)的字节下标和它的字节宽度;
+// 一个都没有时返回 (-1, 0)。调用方用 i <= 0 同时接住"没冒号"和"冒号在最前面
+// (前面没标签)"两种情况。
+func structuralTitlePrefixColon(title string) (int, int) {
+	for i, r := range title {
+		if r == ':' || r == '：' {
+			return i, utf8.RuneLen(r)
+		}
+	}
+	return -1, 0
 }
 
 // titleMatches reports whether a NetEase result name refers to the same song as
