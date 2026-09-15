@@ -477,6 +477,135 @@ func TestAppleStorefrontTrackMatches(t *testing.T) {
 	}
 }
 
+// liveAgainUSTracks:《Live Again: 陶喆 小人物狂想曲》在 US 商店的完整曲目表(2026-09-15 实抓,
+// collectionId=1246658516,顺序与时长原样保留)。顺序是这个夹具的要害 —— 旧的"扫到第一条
+// 过闸就 break"正是被排在第 1 位的《Run Away (Live)》坑死的。
+var liveAgainUSTracks = []itunesResult{
+	{TrackName: "Run Away (Live)", ArtistName: "David Tao", TrackTimeMillis: 321598},
+	{TrackName: "What's Love? (Live)", ArtistName: "David Tao", TrackTimeMillis: 290700},
+	{TrackName: "Rain (Live)", ArtistName: "David Tao", TrackTimeMillis: 348859},
+	{TrackName: "Chinese Lady (Live)", ArtistName: "David Tao", TrackTimeMillis: 269499},
+	{TrackName: "Let's Fall in Love (Live)", ArtistName: "David Tao", TrackTimeMillis: 209666},
+	{TrackName: "Angeline (Live)", ArtistName: "David Tao", TrackTimeMillis: 181014},
+	{TrackName: "Shanghaied (Live)", ArtistName: "David Tao", TrackTimeMillis: 442988},
+	{TrackName: "Blink of the Heart (Live)", ArtistName: "David Tao", TrackTimeMillis: 275632},
+	{TrackName: "Re: DT (Live)", ArtistName: "David Tao", TrackTimeMillis: 198758},
+	{TrackName: "22 (Live)", ArtistName: "David Tao", TrackTimeMillis: 161245},
+	{TrackName: "Yodeling (Live)", ArtistName: "David Tao", TrackTimeMillis: 152082},
+	{TrackName: "My Anata (Live)", ArtistName: "David Tao", TrackTimeMillis: 189965},
+	{TrackName: "Time to Say Goodbye (feat. Sharon Kwan) [Live]", ArtistName: "David Tao", TrackTimeMillis: 205787},
+	{TrackName: "Marry Me Today (feat. Sharon Kwan) [Live]", ArtistName: "David Tao", TrackTimeMillis: 173541},
+	{TrackName: "Season of Loneliness (Live)", ArtistName: "David Tao", TrackTimeMillis: 160787},
+	{TrackName: "Moon Over My Heart (Live)", ArtistName: "David Tao", TrackTimeMillis: 145771},
+	{TrackName: "Susan Said (Live)", ArtistName: "David Tao", TrackTimeMillis: 174271},
+	{TrackName: "Regular Friends (Live)", ArtistName: "David Tao", TrackTimeMillis: 294091},
+	{TrackName: "Ghost (Live)", ArtistName: "David Tao", TrackTimeMillis: 249781},
+	{TrackName: "Black Tangerine (Live)", ArtistName: "David Tao", TrackTimeMillis: 248376},
+	{TrackName: "Bastard (Live)", ArtistName: "David Tao", TrackTimeMillis: 187726},
+	{TrackName: "Small Town Girl (Live)", ArtistName: "David Tao", TrackTimeMillis: 263446},
+	{TrackName: "Airport In 10:30 (Live)", ArtistName: "David Tao", TrackTimeMillis: 336245},
+	{TrackName: "Who Do You Love? (Live)", ArtistName: "David Tao", TrackTimeMillis: 304241},
+	{TrackName: "Angel (Live)", ArtistName: "David Tao", TrackTimeMillis: 166752},
+	{TrackName: "Too Beautiful (Live)", ArtistName: "David Tao", TrackTimeMillis: 259086},
+	{TrackName: "I Love You (Live)", ArtistName: "David Tao", TrackTimeMillis: 404278},
+	{TrackName: "Medley: Zero to Hero / Summer Love Triangle / Melody (Live)", ArtistName: "David Tao", TrackTimeMillis: 328993},
+	{TrackName: "Blue Moon (Live)", ArtistName: "David Tao", TrackTimeMillis: 227454},
+	{TrackName: "Medley: Everything's Gone / Close to You (Live)", ArtistName: "David Tao", TrackTimeMillis: 267683},
+	{TrackName: "Love Can (Live)", ArtistName: "David Tao", TrackTimeMillis: 435404},
+}
+
+// TestAppleStorefrontPickTrackMedley 钉住 2026-09-15 那个真实 bug 的**确切形状**(用户报陶喆
+// 《组曲: 火鸟功 / 我太傻 / Melody (Live)》配了《Run Away (Live)》的歌词):本地标题带中文结构性
+// 前缀、首轮召回为空 → 触发标题反查 → Apple 原产地商店这条路在同一张 31 首的现场专辑里
+// 按时长认人。两首串烧的正确答案都在表里、时长几乎逐毫秒对得上,只是排在第 28 / 第 30 位。
+func TestAppleStorefrontPickTrackMedley(t *testing.T) {
+	cases := []struct {
+		localTitle string
+		dur        float64
+		want       string
+		why        string
+	}{
+		{
+			"组曲: 火鸟功 / 我太傻 / Melody (Live)", 328.992,
+			"Medley: Zero to Hero / Summer Love Triangle / Melody (Live)",
+			"正确答案差 0.001s 排第 28;旧写法选了排第 1、差 7.39s 的《Run Away (Live)》",
+		},
+		{
+			"组曲: 流沙 / 天天 (Live)", 267.683,
+			"Medley: Everything's Gone / Close to You (Live)",
+			"正确答案差 0.000s 排第 30;旧写法选了排第 4、差 1.82s 的《Chinese Lady (Live)》",
+		},
+	}
+	for _, c := range cases {
+		hit := appleStorefrontPickTrack(c.localTitle, c.dur, liveAgainUSTracks)
+		if hit == nil {
+			t.Errorf("appleStorefrontPickTrack(%q, %v) = nil, want %q —— %s", c.localTitle, c.dur, c.want, c.why)
+			continue
+		}
+		if hit.TrackName != c.want {
+			t.Errorf("appleStorefrontPickTrack(%q, %v) = %q, want %q —— %s", c.localTitle, c.dur, hit.TrackName, c.want, c.why)
+		}
+	}
+	// 旧写法的实际行为当回归基线释出来:排在前面那两条**仍然各自是合法的候选**
+	// (同一位歌手、同一张专辑、跨文字系统),只是不应该赢 —— 这条断言在提醒:修复靠的是
+	// "取最近"而不是"把它们挡掉",哪天有人把取最近改回扫到就算,这个测试会红。
+	if normLoose(liveAgainUSTracks[0].TrackName) == normLoose("组曲: 火鸟功 / 我太傻 / Melody (Live)") {
+		t.Fatal("夹具前提坡了:第一条不该跟本地曲名归一相等")
+	}
+}
+
+// TestAppleStorefrontPickTrackGuards:除了串烧那个正题,选优函数本身的四条边界。
+func TestAppleStorefrontPickTrackGuards(t *testing.T) {
+	// ① 曲名归一相等是铁证,排在多后面都赢 —— 时长只是除重用的。
+	sameTitleLast := []itunesResult{
+		{TrackName: "ハッピーエンド", TrackTimeMillis: 314100},
+		{TrackName: "Happy End", TrackTimeMillis: 314279},
+	}
+	if hit := appleStorefrontPickTrack("Happy End", 314.279, sameTitleLast); hit == nil || hit.TrackName != "Happy End" {
+		t.Errorf("曲名铁证应优先, got %v", hit)
+	}
+
+	// ② 只剩跨文字系统一档时:亚军咬得太紧 → 弃权(宁可不给也不猜)。
+	ambiguous := []itunesResult{
+		{TrackName: "Foo (Live)", TrackTimeMillis: 300000},
+		{TrackName: "Bar (Live)", TrackTimeMillis: 300200},
+	}
+	if hit := appleStorefrontPickTrack("某首中文歌 (Live)", 300, ambiguous); hit != nil {
+		t.Errorf("两条误差只差 0.2s、曲名又不同 → 应弃权, got %q", hit.TrackName)
+	}
+	// 拉开到 0.5s 以上就不再是歧义(跟 netease 那边同一个 margin)。
+	clear := []itunesResult{
+		{TrackName: "Foo (Live)", TrackTimeMillis: 300000},
+		{TrackName: "Bar (Live)", TrackTimeMillis: 301000},
+	}
+	if hit := appleStorefrontPickTrack("某首中文歌 (Live)", 300, clear); hit == nil || hit.TrackName != "Foo (Live)" {
+		t.Errorf("亚军差 1s、分得开 → 应取最近的, got %v", hit)
+	}
+
+	// ③ 跨文字系统那一档的容差是 4s。300s 的曲子差 6s:旧的 max(4s,3%)=9s 会放行,现在不。
+	farOff := []itunesResult{{TrackName: "Foo (Live)", TrackTimeMillis: 306000}}
+	if hit := appleStorefrontPickTrack("某首中文歌 (Live)", 300, farOff); hit != nil {
+		t.Errorf("没有曲名证据、时长又差 6s → 不该认, got %q", hit.TrackName)
+	}
+	// 同样差 6s,但曲名归一相等 → 走它自己那档更宽的容差,行为跟改动前一样。
+	sameFarOff := []itunesResult{{TrackName: "Foo (Live)", TrackTimeMillis: 306000}}
+	if hit := appleStorefrontPickTrack("Foo (Live)", 300, sameFarOff); hit == nil {
+		t.Error("曲名相等那一档的容差不该被改窄")
+	}
+
+	// ④ 退化情况。
+	if hit := appleStorefrontPickTrack("", 300, liveAgainUSTracks); hit != nil {
+		t.Error("本地曲名为空 → nil")
+	}
+	if hit := appleStorefrontPickTrack("Foo", 300, nil); hit != nil {
+		t.Error("空曲目表 → nil")
+	}
+	// 没有本地时长时只能认曲名相等(跟 appleStorefrontTrackMatches 一致)。
+	if hit := appleStorefrontPickTrack("某首中文歌", 0, []itunesResult{{TrackName: "Foo", TrackTimeMillis: 300000}}); hit != nil {
+		t.Error("无时长时跨文字系统不该放行")
+	}
+}
+
 func TestAppleStorefrontsFor(t *testing.T) {
 	cases := []struct {
 		name    string

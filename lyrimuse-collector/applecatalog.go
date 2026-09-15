@@ -581,15 +581,9 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		if bestID == 0 {
 			continue
 		}
-		var hit *itunesResult
 		tracks := itunesLookupTracks(ctx, bestID, country)
 		probed = true
-		for i := range tracks {
-			if appleStorefrontTrackMatches(title, durationSecs, tracks[i]) {
-				hit = &tracks[i]
-				break
-			}
-		}
+		hit := appleStorefrontPickTrack(title, durationSecs, tracks)
 		if hit == nil {
 			log.Printf("lyrics: storefront %s: album %q matched %q by name only, none of its %d tracks is %q (%.0fs) — treated as a different album", country, album, artist, len(tracks), title, durationSecs)
 			continue
@@ -632,6 +626,17 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 // appleStorefrontTrackMatches:挑中的那张专辑里,这一条曲目是不是本地正在放的这首歌。有时长就以时长为主
 // (同名不同歌很难恰好一样长:Rothy 那首 232s 对 back number 314s),曲名要么归一相等、要么跨文字系统(同一录音
 // 在 JP 商店叫「ハッピーエンド」、在 US 商店叫「情勝策略」这类本地化写法);没有时长时只能要求曲名归一相等。
+//
+// ⚠️ 两档的时长容差**故意不同**(2026-09-15):
+//   - 同名那一档手里有曲名证据,时长只是除重用的,继续用 appleTitleSearchDurationTolerance
+//     (max(4s, 3%)) —— 一字不改,绝大多数歌走的就是这一档。
+//   - 跨文字系统那一档**没有任何曲名证据**(artistScriptDiffers 对"中文本地标签 vs 英文商店标签"
+//     恒真),生死全掌在时长手里 —— 而它认的本就是"同一份母带在另一个商店的另一种写法",时长应当几乎
+//     逐秒相同。实测:本仓三个真实跨文字系统案例的误差分别是 0.00s(《情勝策略》)、0.05s
+//     (《クスシキ》)、0.18s(《ハッピーエンド》),此次陶喆串烧那条正确答案是 0.002s;
+//     另取本机库 41 个"同一录音、本地标签 vs 商店"样本量漂移,p50=0.026s、p95=0.75s、最大 3.16s。
+//     而 3% 那一档在 5 分半的曲子上是 ±9.87s —— 比真实漂移大一个数量级,多出来的那一大截容差
+//     不提供任何辨识力,只负责把同专辑里时长相近的别的歌放进来。故这一档单独用下面那个紧得多的常量。
 func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itunesResult) bool {
 	want := normLoose(localTitle)
 	if want == "" {
@@ -641,10 +646,89 @@ func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itun
 	if durationSecs <= 0 {
 		return sameTitle
 	}
-	if t.TrackTimeMillis <= 0 || math.Abs(t.TrackTimeMillis/1000-durationSecs) > appleTitleSearchDurationTolerance(durationSecs) {
+	if t.TrackTimeMillis <= 0 {
 		return false
 	}
-	return sameTitle || artistScriptDiffers(localTitle, t.TrackName)
+	diff := math.Abs(t.TrackTimeMillis/1000 - durationSecs)
+	if sameTitle {
+		return diff <= appleTitleSearchDurationTolerance(durationSecs)
+	}
+	return artistScriptDiffers(localTitle, t.TrackName) && diff <= appleStorefrontCrossScriptToleranceSecs
+}
+
+// appleStorefrontCrossScriptToleranceSecs:跨文字系统那一档(曲名对不上、只能靠时长认人)的时长容差。
+// 取值依据见 appleStorefrontTrackMatches 头注的实测:真实同一录音的跨商店漂移实测全部 ≤ 0.2s,
+// 全库 41 个样本 p95=0.75s、最大 3.16s。4s 是在实测上限上再留一截余地,同时也正好是
+// appleTitleSearchDurationTolerance 自己的下限 —— 换句话说:**短于 133s 的曲子行为逐字不变**,
+// 只有长曲子失去 3% 那一档放宽(而那正是同专辑内撞车风险最高的区间)。
+const appleStorefrontCrossScriptToleranceSecs = 4.0
+
+// appleStorefrontTrackAmbiguityMarginSecs:亚军(**曲名跟冠军不同**的那些候选里最接近的一个)
+// 跟冠军的误差差距小于这个值,就判"分不出是哪首"、整体弃权。跟 netease.go 的
+// bestAlbumTrackAmbiguityMarginSecs 同一个值、同一个理由:弃权只是"这轮兜底不出结果",
+// 上层还有别的反查路径和别的源兜着,代价远小于给出一首错歌。
+const appleStorefrontTrackAmbiguityMarginSecs = 0.5
+
+// appleStorefrontPickTrack:从这张专辑的曲目表里挑出"本地正在放的那一条录音"。挑不出返回 nil,
+// 调用方把这张专辑当成"同名的另一张"跳过。
+//
+// 2026-09-15 真实 bug(用户报陶喆《组曲: 火鸟功 / 我太傻 / Melody (Live)》配了《Run Away (Live)》的词):
+// 这里原来是**扫到第一条过闸的就 break**。在"同名"那一档下这没毛病(曲名已经把人认出来了),
+// 但跨文字系统那一档没有曲名证据、完全靠时长 —— "第一条落在容差内"跟"最像的那一条"是两回事,
+// 而专辑曲目表是按**曲序**排的、跟像不像毫无关系。实测:《Live Again: 陶喆 小人物狂想曲》31 首里,
+// 本地 328.99s 的串烧在 US 商店叫《Medley: Zero to Hero / Summer Love Triangle / Melody (Live)》、
+// 时长 **328.99s 分毫不差**,却排在第 28 位;排第 1 的《Run Away (Live)》321.60s 差 7.39s,落在当时
+// ±9.87s 的容差里,于是它先 break、正确答案永远轮不到。另一首《组曲: 流沙 / 天天 (Live)》同理。
+//
+// 改成两档,跟 netease.go 的 bestAlbumTrackByDurationDetailed 同一套判据(那边早就是"取最近 + 歧义
+// 弃权",同一件事两条路径不该一严一松):
+//
+//	① 曲名归一相等且过时长闸 → 铁证,直接取第一条。这一档行为跟改动前**逐字一致**。
+//	② 只剩跨文字系统一档 → 扫完全表取时长最近的;若有一条**曲名不同**的亚军咬得太紧
+//	  (差距 ≤ appleStorefrontTrackAmbiguityMarginSecs),就弃权。
+//
+// 同名重复(同一首歌在一张专辑里出现两次)不算歧义 —— 跟 netease 那边一样,它们给出的
+// 规范曲名本就是同一个,选哪条都一样。
+//
+// ⚠️ 只有**≥ 2 条曲目同时过闸**时这个函数的结论才可能跟旧的 break 写法不同;只有一条过闸时
+// 两者逐字相同。而"≥ 2 条过闸"下旧写法选的是**曲序靠前的那一条**,本来就是个任意值。
+func appleStorefrontPickTrack(localTitle string, durationSecs float64, tracks []itunesResult) *itunesResult {
+	want := normLoose(localTitle)
+	if want == "" {
+		return nil
+	}
+	// ① 曲名铁证优先。
+	for i := range tracks {
+		if normLoose(tracks[i].TrackName) == want && appleStorefrontTrackMatches(localTitle, durationSecs, tracks[i]) {
+			return &tracks[i]
+		}
+	}
+	// ② 只剩时长可信。best/runner 的维护方式跟 bestAlbumTrackByDurationDetailed 逐行对应:
+	// 冠军被换掉时旧冠军要**降级成亚军候选**,不然先出现的那条会被静默忘掉。
+	best := -1
+	bestDiff, runnerDiff := math.Inf(1), math.Inf(1)
+	for i := range tracks {
+		if !appleStorefrontTrackMatches(localTitle, durationSecs, tracks[i]) {
+			continue
+		}
+		d := math.Abs(tracks[i].TrackTimeMillis/1000 - durationSecs)
+		switch {
+		case d < bestDiff:
+			if best >= 0 && normLoose(tracks[best].TrackName) != normLoose(tracks[i].TrackName) && bestDiff < runnerDiff {
+				runnerDiff = bestDiff
+			}
+			best, bestDiff = i, d
+		// best >= 0 是显式守卫。实际上走不到(bestDiff 初值 +Inf、d 恒为有限,第一条过闸的
+		// 必定落进上一个 case),但不写的话这行的安全性要靠"想一想 Inf"才能证明 ——
+		// 哪天容差那几行改动就是一个越界 panic。
+		case best >= 0 && normLoose(tracks[i].TrackName) != normLoose(tracks[best].TrackName) && d < runnerDiff:
+			runnerDiff = d
+		}
+	}
+	if best < 0 || runnerDiff-bestDiff <= appleStorefrontTrackAmbiguityMarginSecs {
+		return nil
+	}
+	return &tracks[best]
 }
 
 // appleStorefrontsFor:按文字系统决定问哪些商店(2026-09-12,用户:「是否可以更通用一点,不仅限于 JP」)。
