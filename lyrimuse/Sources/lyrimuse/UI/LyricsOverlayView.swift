@@ -734,12 +734,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 主歌词那一支单独走:逐字行是 WrapLayout,它**撑满整宽**,直接拿 frame 会把左右两片
     /// 空白也算成歌词。用布局阶段写进 sink 的"文字实际矩形"(相对 WrapLayout 原点)去修正;
-    /// 行级歌词那一支是裸 Text、frame 本身就是文字范围,sink 为 .zero 时按整 frame 走。
+    /// 别的那几支(行级歌词、间奏的 ♪、「暂无歌词」这些状态文案)是裸 Text、frame 本身就是
+    /// 文字范围,按整 frame 走。
+    ///
+    /// ⚠️ 判"该不该用 sink"要认 **owner**,不能只判 `.zero`(2026-09-15 用户实测):那几支
+    /// 压根不经过 WrapLayout,没人写 sink,而一首逐字歌只要排过一行 sink 就再也不是 `.zero`
+    /// —— 于是间奏的 ♪ 会顶着上一句歌词的宽高上报,命中区往右糊出一大片。见 WrapContentRectSink。
     private func reportingMainLineRect<V: View>(_ v: V) -> some View {
         v.background(
             GeometryReader { proxy in
                 let f = proxy.frame(in: .named(overlayCoordSpaceName))
-                let local = wrapContentSink.rect
+                let local = wrapContentSink.owner == overlayLineLayoutKey ? wrapContentSink.rect : .zero
                 let rect = local == .zero
                     ? f
                     : CGRect(x: f.minX + local.minX, y: f.minY + local.minY,
@@ -1669,6 +1674,18 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 final class WrapContentRectSink {
     /// 相对 WrapLayout bounds 原点的矩形。`.zero` = 还没排过 / 没有内容。
     var rect: CGRect = .zero
+    /// 这块矩形是**哪一行**排出来的(WrapLayout 的 `contentKey`)。
+    ///
+    /// ⚠️ 没有它就会读到**上一行的残值**,2026-09-15 用户实测报的就是这个:间奏时主行换成
+    /// `Text("♪")`(以及行级歌词、「暂无歌词」这些状态文案),**整条分支压根不经过 WrapLayout**
+    /// —— 没人写 sink,而 `reportingMainLineRect` 照读不误,于是上报出"♪ 的位置 + 上一句歌词
+    /// 的宽高"那么一块矩形,往右糊出一大片。`.zero` 守卫拦不住:一首逐字歌只要排过一行,
+    /// sink 就再也回不到 `.zero` 了。
+    ///
+    /// 读取方比对 owner 而不是各自再判一次"这一行走不走 WrapLayout":那种写法要在两处保持
+    /// 同步,分支结构一改就会悄悄长歪 —— 让 sink 自己带身份,读取方问的是"这块矩形是不是
+    /// 我这一行的",一处判据,不会漂。
+    var owner: AnyHashable?
 }
 
 struct WrapLayout: Layout {
@@ -1764,6 +1781,8 @@ struct WrapLayout: Layout {
                 rows: rows, bounds: CGRect(origin: .zero, size: bounds.size),
                 verticalSpacing: verticalSpacing, rowAlignment: rowAlignment)
             sink.rect = local
+            // 跟矩形一起写,缺一不可 —— 只更新 rect 会让 owner 停在上一行,等于没有守卫。
+            sink.owner = contentKey
         }
         for p in WrapLayoutMath.placements(
             rows: rows,
