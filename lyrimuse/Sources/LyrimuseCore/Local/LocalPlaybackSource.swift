@@ -1612,12 +1612,21 @@ public final class LocalPlaybackSource: ObservableObject {
                     // `+` 拼运行时 String——先把可变的那半拼成局部变量,再一次性插值进去。
                     let streakSuffix = self.consecutiveNilSnapshots > 1
                         ? " streak=\(self.consecutiveNilSnapshots)" : ""
+                    // ⚠️ 2026-09-17 起说出**具体是哪一种**(issue #8)。原来这句把三种原因合成
+                    // 一句话、还漏掉了第四种(焦点被别的 App 占走 / 私有通道坏了),用户交上来的
+                    // 诊断日志里只有这一句,指不出任何方向。枚举见 MediaControlClient.SnapshotFailure。
+                    let reason = MediaControlClient.lastSnapshotFailure?.rawValue ?? "unknown"
                     // notice 而不是 error(2026-09-05):这多数时候是正常状态(Music 没开 / 没曲目在放),
                     // 落盘留线索就够,不该在 error 级别里跟真正的故障混在一起。后缀显式 .public ——
                     // 默认 private 会把它打成 <private>,24 小时日志里 36 条全是 <private> 尾巴。
-                    logger.notice("snapshot failed (no automation permission, Music.app not running, or nothing playing)\(streakSuffix, privacy: .public)")
+                    logger.notice("snapshot failed: \(reason, privacy: .public)\(streakSuffix, privacy: .public)")
                 }
-                clearIfWasPlaying()
+                // ⚠️ 单拍 nil 不清状态(2026-09-17,issue #8):判据与代价见
+                // MediaControlClient.nilSnapshotClearsState。
+                if MediaControlClient.nilSnapshotClearsState(
+                    consecutiveNilCount: self.consecutiveNilSnapshots) {
+                    clearIfWasPlaying()
+                }
                 self.adjustPollCadence()
                 return
             }

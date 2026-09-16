@@ -10,9 +10,16 @@ import OSLog
 // 而真正的原因在最底层且根本修不了(只能等上游适配)。`media-control test` 专门回答这一件事:
 // 它不看有没有歌在放,只验通道本身通不通,非零退出即"这台机器上用不了"。
 //
-// ⚠️ 只做**诊断**,不做降级:Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,
-// 不受影响;而 QQ 音乐/网易云没有任何替代路径可退,查出来也只能如实告诉用户。所以这里
-// 不设任何 fallback 逻辑,只置一个标志供 UI/诊断导出显示。
+// ⚠️ 这里原来写着「Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,不受影响」
+// —— **那句话是错的**(2026-09-17 查 issue #8 时发现,而且它正好会把排查带偏)。默认配置是
+// `[.auto]`,那条路上 **Apple Music 的快照基座也是 media-control**(AppleScript 只在
+// `refinedAppleMusicSnapshotIfNeeded` 里异步精化位置);只有「恰好只勾 Apple Music、没勾
+// 自动识别」才是纯 AppleScript。所以这条通道坏掉时 Apple Music 用户同样会受影响。
+//
+// 只做**诊断**、不做降级这一点仍然成立,但理由换了:Apple Music 的降级已经在
+// `MediaControlClient.appleMusicSnapshotAfterFocusLost` 里做了(通道坏 / 焦点被抢一视同仁,
+// 见那个函数的头注),不归这里管;而 QQ 音乐/网易云确实没有任何替代路径可退,查出来也只能
+// 如实告诉用户。所以这里不设 fallback,只置一个标志供 UI/诊断导出显示。
 @MainActor
 public final class MediaControlHealth: ObservableObject {
     public static let shared = MediaControlHealth()

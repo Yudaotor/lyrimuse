@@ -50,6 +50,8 @@ public enum MediaControlClient {
     ///     fetchMultiSelectedSnapshot,核对 media-control 报的系统级 Now Playing 焦点是不是
     ///     落在选中的这个子集里。
     public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
+        // 这一拍的归因从零开始记(只影响日志,不影响行为)。见 SnapshotFailure。
+        setSnapshotFailure(nil)
         if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
@@ -105,8 +107,16 @@ public enum MediaControlClient {
             "/usr/bin/osascript", ["-l", "JavaScript", "-e", script],
             timeout: MusicPlaybackController.appleScriptTimeout),
             r.succeeded
-        else { return nil }
-        return try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout)
+        else {
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        guard let decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout) else {
+            // 脚本自己 return 了 null(Music.app 没在跑 / stopped / 没有曲目在加载)。
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        return decoded
     }
 
     // MARK: - 「只勾了 Apple Music」这条路上的电台判据(2026-09-11)
@@ -146,6 +156,26 @@ public enum MediaControlClient {
             trackKey: snapshot.trackKey, playing: snapshot.playing == true, now: Date(),
             startedAt: lastTrackChangeObserved(forKey: snapshot.trackKey))
         return snapshot.withRadio(position: position)
+    }
+
+    /// 连续几次拿不到快照,才真的把播放状态清空(2026-09-17,issue #8)。纯函数,selftest 覆盖。
+    ///
+    /// 改动前是**一拍就清**:`LocalPlaybackSource.clearIfWasPlaying()` 会把 title / artist /
+    /// allLines / currentLine / 封面 / lastKey 一次全清掉。而单拍 nil 在实测里并不罕见
+    /// (本机 24 小时抓到 2 次,都是单次、下一拍就恢复)。菜单栏靠 2026-09-16 那层 hold
+    /// (内容 3s / 几何 8s)看不出来,但悬浮歌词窗和灵动岛是直接读这些发布状态的 ——
+    /// 那里会当场闪一下。
+    ///
+    /// ⚠️ 这个宽限**吃不到"暂停"**:暂停时快照仍然有效(playing=false),压根不走这条路。
+    /// 真正会变成 nil 的只有 stopped / 播放器退出 / 焦点被抢 / 通道坏 —— 前两种多留一拍无害,
+    /// 后两种正是要兜的。
+    ///
+    /// 取 2(播放档 2s 轮询 ≈ 4 秒):比 media-control 那条 5 秒超时还短一点,再大就会在
+    /// "播放列表放完"之后明显地多留一句歌词。
+    public static let nilSnapshotGrace = 2
+
+    public static func nilSnapshotClearsState(consecutiveNilCount: Int) -> Bool {
+        consecutiveNilCount >= nilSnapshotGrace
     }
 
     /// 这一拍要不要为电台判据多问一次 media-control。纯函数,selftest 直接覆盖。
@@ -265,18 +295,31 @@ public enum MediaControlClient {
     // 行为不变,fetchSnapshot() 本身不再直接调用它。
     private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
         let acceptedBundleIDs = Set(players.map(\.bundleIdentifier))
-        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else { return nil }
+        // ⚠️ 跟 fetchAutoDetectedSnapshot 同一条兜底(2026-09-17,issue #8):焦点被别的 App
+        // 占走时退回 AppleScript 直接问 Music.app —— 但只在用户**确实勾了** Apple Music 时。
+        // 开关与收敛性见 appleMusicSnapshotAfterFocusLost 的头注。
+        func fallback() -> MediaControlSnapshot? {
+            guard players.contains(.appleMusic) else { return nil }
+            return appleMusicSnapshotAfterFocusLost()
+        }
+        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else { return fallback() }
         if !acceptedBundleIDs.contains(bundleID) {
-            guard TrustedPlayers.isTrusted(bundleID) else { return nil }
+            guard TrustedPlayers.isTrusted(bundleID) else {
+                setSnapshotFailure(.playerNotSelected)
+                return fallback()
+            }
             // 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过
             // 一道"这是不是一首歌"的守卫——跟 fetchAutoDetectedSnapshot 的信任分支同一套
             // 语义,理由见 TrustedPlayers.notASong 的注释(浏览器视频/播客不能被当成一首歌)。
             guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
-                return nil
+                setSnapshotFailure(.notASong)
+                return fallback()
             }
+            noteAccepted(bundleID: bundleID)
             return refinedAppleMusicSnapshotIfNeeded(
                 bundleID: bundleID, snapshot: snapshotWithProbedAlbum(snapshot))
         }
+        noteAccepted(bundleID: bundleID)
         return refinedAppleMusicSnapshotIfNeeded(bundleID: bundleID, snapshot: snapshot)
     }
 
@@ -309,18 +352,162 @@ public enum MediaControlClient {
     private static var cachedAppleMusicSnapshotAt: Date?
     private static var isRefreshingAppleMusicSnapshot = false
 
+    // MARK: - 焦点被别的 App 抢走时退回 AppleScript(2026-09-17,issue #8)
+
+    /// 这一拍为什么没拿到快照。**只为归因日志,任何一条都不改变行为。**
+    ///
+    /// 原来 `LocalPlaybackSource.poll()` 那条 `snapshot failed (no automation permission,
+    /// Music.app not running, or nothing playing)` 把三种原因合成一句话,而且**漏掉了第四种**
+    /// (焦点被别的 App 占走 / 私有通道坏了)。用户交上来的诊断日志里只有这一句,指不出任何
+    /// 方向 —— issue #8 的排查正是卡在这里。
+    ///
+    /// ⚠️ rawValue 必须是英文:它会被原样插进 OSLog,而 selftest 的「日志规范」那条守卫
+    /// 不许日志字面量含 CJK。
+    public enum SnapshotFailure: String, Sendable {
+        case mediaControlMissing = "media-control binary is not bundled"
+        case mediaControlUnavailable = "media-control exited non-zero (the private MediaRemote channel may be broken)"
+        case nobodyReporting = "no app is reporting Now Playing"
+        case focusHeldByOtherApp = "Now Playing focus is held by an app we do not accept"
+        case notASong = "the reporting app is trusted but this is not a song"
+        case appleScriptUnavailable = "AppleScript could not reach Music.app (no automation permission, not running, or stopped)"
+        case playerNotSelected = "the reporting app is not among the players the user selected"
+    }
+
+    private static let failureLock = NSLock()
+    private static var lastFailure: SnapshotFailure?
+
+    static func setSnapshotFailure(_ reason: SnapshotFailure?) {
+        failureLock.lock()
+        lastFailure = reason
+        failureLock.unlock()
+    }
+
+    /// 最近一次 `fetchSnapshot` 返回 nil 的原因(每次 fetchSnapshot 入口清零)。
+    public static var lastSnapshotFailure: SnapshotFailure? {
+        failureLock.lock()
+        defer { failureLock.unlock() }
+        return lastFailure
+    }
+
+    /// 上一份**被接受**的快照是不是 Apple Music 报的 —— 回退的唯一开关。
+    private static let appleMusicFocusLock = NSLock()
+    private static var lastAcceptedWasAppleMusic = false
+    /// 此刻是不是正处在回退状态(只为让那条 notice 日志在**状态翻转**时打一次,不是每拍都打)。
+    private static var fallbackActive = false
+
+    /// 回退开关的状态转移。纯函数,selftest 覆盖 —— 这条把"它会不会一直白 fork 下去"
+    /// 写成了可验证的形式。
+    ///
+    /// - Parameter acceptedBundleID: 这一拍**被接受**的快照来自谁(nil = 这一拍没拿到)。
+    /// - Parameter fallbackSucceeded: 回退问 Music.app 有没有拿到东西(nil = 这一拍没走回退)。
+    public static func nextAppleMusicFocusFlag(
+        current: Bool, acceptedBundleID: String?, fallbackSucceeded: Bool?
+    ) -> Bool {
+        // 正常路径拿到了快照:它是谁说了算 —— 切到别的播放器就当场关掉开关。
+        if let acceptedBundleID {
+            return acceptedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+        }
+        // 走了回退:拿到了就保持(Music.app 还在放,焦点被占多久都兜得住),
+        // 拿不到就关掉(Music.app 退出 / stopped / 权限没了),此后不再为它 fork。
+        if let fallbackSucceeded { return fallbackSucceeded }
+        return current
+    }
+
+    private static func setAppleMusicFocusFlag(_ value: Bool) {
+        appleMusicFocusLock.lock()
+        lastAcceptedWasAppleMusic = value
+        appleMusicFocusLock.unlock()
+    }
+
+    /// 正常路径拿到了被接受的快照 —— 记下它是谁报的。
+    private static func noteAccepted(bundleID: String) {
+        appleMusicFocusLock.lock()
+        lastAcceptedWasAppleMusic = nextAppleMusicFocusFlag(
+            current: lastAcceptedWasAppleMusic, acceptedBundleID: bundleID, fallbackSucceeded: nil)
+        let wasFallingBack = fallbackActive
+        fallbackActive = false
+        appleMusicFocusLock.unlock()
+        if wasFallingBack {
+            logger.notice("now playing focus regained; back on media-control")
+        }
+    }
+
+    /// media-control 这一拍没给出可用快照(通道坏 / 没人在报 / 焦点在别的 App 上)时,
+    /// 退回 AppleScript 直接问 Music.app —— **前提是上一份被接受的快照就是 Apple Music**。
+    ///
+    /// ## 为什么需要它(issue #8)
+    ///
+    /// MediaRemote 的「正在播放」是**系统级的单一焦点**,任何注册了 MPNowPlayingInfoCenter
+    /// 的 App 都能占走 —— 网页里一个 video 元素就够。而默认配置(`[.auto]`)下 Apple Music 的
+    /// 快照基座**也是** media-control(AppleScript 只在 `refinedAppleMusicSnapshotIfNeeded`
+    /// 里异步精化位置)。焦点一被占,这条路直接 return nil → `LocalPlaybackSource` 把歌词 /
+    /// 标题 / 封面全清空,而 Music.app 一直在放、AppleScript 一问就知道。
+    ///
+    /// 实锤:本机 UserDefaults 的 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、
+    /// Arc 2 次 —— 而那份记录有 6 秒稳定门槛,短于 6 秒的抢夺根本不记,实际次数远不止。
+    ///
+    /// ## 为什么不是"每拍都并发问一次 AppleScript"
+    ///
+    /// 那个方案 2026-08-02 否过一次,理由今天依然成立:对从不用 Apple Music 的 .auto 用户
+    /// (只听 QQ 音乐 / 网易云 / Spotify)凭空每拍多 fork 一个 osascript,而且**首次**对
+    /// Music.app 发 Apple Event 会弹一次"自动化"权限对话框 —— 对完全不相关的用户弹这个框
+    /// 不可接受。上面那个开关把它挡死:只有**已经**通过 Apple Music 拿到过快照的用户才会
+    /// 走到这里,那意味着权限早就拿到了、Music.app 也确实在跑。
+    ///
+    /// ⚠️ **电台在回退期间退化成普通曲目**:台标识 `radioStationHash` 是 MediaRemote 独有的
+    /// 字段,而这条路正是 media-control 不可用时才走的。跟 `probedRadioStationHash` 探测失败
+    /// 时按"不是电台"处理是同一个取舍 —— 退化不是回归(改动前这一拍连歌都没有)。
+    ///
+    /// ⚠️ **已知边界,刻意不补**:进程刚起来时开关是 false。如果**启动那一刻**焦点正好被别的
+    /// App 占着,这一拍兜不住(跟改动前一样),要等焦点回到 Apple Music 一次把开关点亮。
+    /// 补法是把开关持久化进 UserDefaults,代价是"以前用过 Apple Music、现在改用 QQ 音乐"的人
+    /// 每次冷启动白 fork 一次 osascript —— 而冷启动恰好撞上焦点被占的概率很低(用户一般是
+    /// 听着歌才打开它)。不值当,所以留着。
+    private static func appleMusicSnapshotAfterFocusLost() -> MediaControlSnapshot? {
+        appleMusicFocusLock.lock()
+        let allowed = lastAcceptedWasAppleMusic
+        appleMusicFocusLock.unlock()
+        guard allowed else { return nil }
+        let snapshot = fetchAppleMusicSnapshot()
+        appleMusicFocusLock.lock()
+        lastAcceptedWasAppleMusic = nextAppleMusicFocusFlag(
+            current: allowed, acceptedBundleID: nil, fallbackSucceeded: snapshot != nil)
+        let firstTick = !fallbackActive
+        fallbackActive = snapshot != nil
+        appleMusicFocusLock.unlock()
+        guard snapshot != nil else {
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        // 只在**进入**回退那一拍记一条(落盘),焦点被占多久都不会刷屏。
+        if firstTick {
+            logger.notice("now playing focus lost to another app; falling back to AppleScript for Apple Music")
+        }
+        return snapshot
+    }
+
     private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
         // 闸门 = 内置五个播放器 + 用户显式信任的未知播放器(见 TrustedPlayers)。
         // 跟 collector 的 isAcceptedPlayerBundleID 是同一套语义,两侧必须同时改。
-        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot(),
-              TrustedPlayers.isAccepted(bundleID) else {
-            return nil
+        //
+        // ⚠️ 三条 nil 出口 2026-09-17 起都先过一次 `appleMusicSnapshotAfterFocusLost`:
+        // 「系统 Now Playing 焦点被别的 App 占走」跟「真的没人在放歌」在这里长得一模一样,
+        // 而前者下 Music.app 往往还在放。理由与收敛性见那个函数的头注(issue #8)。
+        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else {
+            // 失败原因已由 fetchRawMediaControlSnapshot 记下,别在这里覆盖掉。
+            return appleMusicSnapshotAfterFocusLost()
+        }
+        guard TrustedPlayers.isAccepted(bundleID) else {
+            setSnapshotFailure(.focusHeldByOtherApp)
+            return appleMusicSnapshotAfterFocusLost()
         }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
         // (浏览器视频/播客)。见 TrustedPlayers.notASong —— 跟 collector 侧同一套语义。
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
-            return nil
+            setSnapshotFailure(.notASong)
+            return appleMusicSnapshotAfterFocusLost()
         }
+        noteAccepted(bundleID: bundleID)
         return refinedAppleMusicSnapshotIfNeeded(
             bundleID: bundleID, snapshot: snapshotWithProbedAlbum(snapshot))
     }
@@ -1098,7 +1285,10 @@ public enum MediaControlClient {
     }
 
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
-        guard let binaryPath = binaryPath() else { return nil }
+        guard let binaryPath = binaryPath() else {
+            setSnapshotFailure(.mediaControlMissing)
+            return nil
+        }
         // --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow(见文件顶部
         // 注释);--no-artwork 省掉几百 KB 的 base64 封面数据,这里从不使用。
         //
@@ -1106,7 +1296,10 @@ public enum MediaControlClient {
         guard let r = ProcessRunner.run(
             binaryPath, ["get", "--now", "--no-artwork"], timeout: snapshotTimeout),
             r.succeeded
-        else { return nil }
+        else {
+            setSnapshotFailure(.mediaControlUnavailable)
+            return nil
+        }
         let data = r.stdout
         // 没有任何 App 在报告 Now Playing 时,media-control 输出字面量 "null",
         // 退出码仍是 0——JSONDecoder 对着 "null" 解码 RawPayload 会失败,走
@@ -1114,6 +1307,7 @@ public enum MediaControlClient {
         // 退出码已经由上面的 r.succeeded 判过。
         guard let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
               let bundleID = raw.bundleIdentifier else {
+            setSnapshotFailure(.nobodyReporting)
             return nil
         }
         // 把"此刻系统在报谁"原样记一笔 —— **在过闸之前**。设置页那张"检测到未知播放器"

@@ -1173,4 +1173,60 @@ func runPlaybackPositionTests() {
         expectEqual(M.radioProbeNeeded(cachedKey: "Clairo|Juna", trackKey: ""), true,
                     "探针: 空 key(载荷还没齐)跟已缓存的不是一回事,别拿旧结果顶上")
     }
+
+    // ---- 焦点被别的 App 抢走时退回 AppleScript(2026-09-17,issue #8)----
+    //
+    // MediaRemote 的「正在播放」是系统级的**单一焦点**,网页里一个 video 元素就能占走它。
+    // 默认配置(.auto)下 Apple Music 的快照基座也是 media-control,所以焦点一被占,整条路
+    // 原来直接 return nil、播放状态被全清 —— 而 Music.app 一直在放,AppleScript 一问就知道。
+    // 实锤:本机 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、Arc 2 次,而那份
+    // 记录有 6 秒稳定门槛,短于 6 秒的抢夺根本不记。
+    //
+    // 这一组钉的是**收敛性** —— 这条回退不会让"从不用 Apple Music 的人"白 fork osascript,
+    // 也不会在 Music.app 真的退出之后没完没了地试。
+    do {
+        typealias M = MediaControlClient
+        let am = PlaybackPlayer.appleMusic.bundleIdentifier
+
+        // 正常路径:被接受的快照是谁报的,开关就跟谁走。
+        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: am,
+                                             fallbackSucceeded: nil), true,
+                    "回退开关: 通过 Apple Music 拿到过快照才打开(权限与 Music.app 在跑都已被证明)")
+        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: "com.tencent.QQMusicMac",
+                                             fallbackSucceeded: nil), false,
+                    "回退开关: 切到别的播放器当场关掉 —— 否则会为一个没在用的 Music.app 一直 fork")
+        // ⚠️ 这一条是"不给不相关用户弹自动化权限框"的保证:只听 QQ 音乐的人开关恒假。
+        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: "com.netease.163music",
+                                             fallbackSucceeded: nil), false,
+                    "回退开关: 从没用过 Apple Music 就永远不打开(2026-08-02 否掉并发问法的理由)")
+
+        // 回退路径:拿到了就保持(焦点被占多久都兜得住),拿不到就关掉(收敛)。
+        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
+                                             fallbackSucceeded: true), true,
+                    "回退开关: 回退问到了就保持 —— 浏览器占着焦点期间每拍都得继续兜")
+        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
+                                             fallbackSucceeded: false), false,
+                    "回退开关: 回退也问不到(Music.app 退出/stopped/权限没了)就关掉,此后不再 fork")
+        // 这一拍既没拿到被接受的快照、也没走回退(开关本来就是关的)——维持原样。
+        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: nil,
+                                             fallbackSucceeded: nil), false,
+                    "回退开关: 这一拍什么都没发生就别动它")
+        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
+                                             fallbackSucceeded: nil), true,
+                    "回退开关: 同上,反向也钉一条")
+
+        // ---- 单拍 nil 不清状态 ----
+        //
+        // 改动前一拍 nil 就 clearIfWasPlaying(),把 title/allLines/封面/lastKey 全清掉。
+        // 菜单栏有 2026-09-16 那层 hold 看不出来,悬浮歌词窗和灵动岛会当场闪一下。
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 1), false,
+                    "nil 宽限: 单拍拿不到不清状态(实测 24 小时里 2 次都是单次、下一拍就恢复)")
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace), true,
+                    "nil 宽限: 连着到门槛就照清 —— 真停了不能一直挂着上一首")
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace + 5), true,
+                    "nil 宽限: 超过门槛当然也清")
+        // ⚠️ 门槛必须 ≥2,否则这条宽限等于没有;也不该大到让"播放列表放完"明显拖着。
+        expectEqual(M.nilSnapshotGrace >= 2 && M.nilSnapshotGrace <= 3, true,
+                    "nil 宽限: 门槛钉在 2~3 拍(播放档 2s 轮询 ≈ 4~6 秒)")
+    }
 }
