@@ -766,4 +766,45 @@ func runOpsDiagnosticsTests() {
             expectEqual(true, false, "装机校验: 读不到 build.sh(路径挪了?)")
         }
     }
+
+    // ---- 提交信息不许引用 issue(2026-09-17,用户定的规则)----
+    //
+    // 「以后提交都不允许引用任何 issue」。为什么是 git hook 而不是写进文档:这个仓的
+    // AGENTS.md / CLAUDE.md 都在 .gitignore 里、文件本身也不存在,而提醒类的约束实测拦不住
+    // —— 761df77 就这么把一条 "added a commit that references this issue" 永久留在了
+    // issue timeline 上,而 GitHub 那条事件记录**删不掉**(force push 也未必能让它消失)。
+    //
+    // 这一组盯的是 hook 本身别被删掉或掏空。⚠️ 只查文件,**不查 core.hooksPath** ——
+    // 那是本机 git config、不在仓里,CI 上必然没配,查了就是稳定红。新克隆要启用得自己跑
+    // 一次 `git config core.hooksPath .githooks`。
+    do {
+        let hook = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .deletingLastPathComponent()   // 仓库根
+            .appendingPathComponent(".githooks/commit-msg")
+        if let text = try? String(contentsOfFile: hook.path, encoding: .utf8) {
+            expectEqual(FileManager.default.isExecutableFile(atPath: hook.path), true,
+                        "提交闸: .githooks/commit-msg 必须是可执行的(丢了执行位 = hook 静默失效)")
+            // ⚠️ 剥注释行再扫 —— hook 自己的说明里就写着 `#123` / `GH-123` 这些样例,
+            // 整份 contains 会被自己的注释骗过去(build.sh 那条守卫踩过同一个坑)。
+            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+                .joined(separator: "\n")
+            expectEqual(code.contains("#[0-9]+"), true,
+                        "提交闸: 判据里必须还拦着行内的井号编号(#123)")
+            expectEqual(code.contains("GH-[0-9]+"), true,
+                        "提交闸: 判据里必须还拦着 GH-123 这种写法")
+            expectEqual(code.contains("(issues|pull)/[0-9]+"), true,
+                        "提交闸: 判据里必须还拦着贴完整 github URL 的写法")
+            expectEqual(code.contains("grep -v '^#'"), true,
+                        "提交闸: 必须先剔掉 git 自己的注释行,否则正常提交会被那几行误伤")
+            expectEqual(code.contains("exit 1"), true,
+                        "提交闸: 命中之后必须真的非零退出(只打印不拦 = 没有闸)")
+        } else {
+            expectEqual(true, false, "提交闸: 读不到 .githooks/commit-msg —— 被删了还是路径挪了?")
+        }
+    }
 }
