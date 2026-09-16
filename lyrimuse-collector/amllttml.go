@@ -513,14 +513,30 @@ var amllSkippedForMissingIDs atomic.Bool
 
 func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load() }
 
-// amllLyric 按网易云 / QQ 的音乐 ID 查 amll-ttml-db。两个 ID 都给时先试网易云
-// (实测它那份索引最全:命中的 26 首里 20 首有 ncm ID)。
-func amllLyric(ctx context.Context, neteaseID, qqID string) amllResult {
-	if neteaseID == "" && qqID == "" {
+// amllLyric 按各平台的曲目 ID 查 amll-ttml-db。挨个试,第一份解析得出来的就是结果。
+//
+// # 顺序按「这个 ID 有多可信」排,不按「哪份索引最全」排
+//
+// apple / spotify 两个 ID 是**系统在播放时直接给的**,就是用户耳朵里那一条录音本身
+// (来源与校验见 platformtrackid.go);ncm / qq 两个是**搜出来的**,可能搜到同名的
+// 另一版录音 —— 本文件头注记过这个坑:Live 版在 amll 里有自己的 songID。
+//
+// 所以哪怕 ncm 那份索引更全(2026-09-16 实测 3,116 / 3,281 条有 ncm ID,am 只有
+// 2,108),也要把两个精确 ID 排在前面:先拿到**对的那一份**,比先拿到**某一份**重要。
+// 这跟本仓「一个已知错误的证据比没有证据更糟」是同一条立场。
+//
+// ⚠️ 纯覆盖率上这两条几乎不多拿:实测 3,281 条里「ncm/qq 都没有、只有 apple 或
+// spotify」的仅 34 条(1%)。真正的收益是**解开一处耦合** —— 此前 amll 的 ID 全部
+// 来自网易云 / QQ 两个源,用户在「歌词来源」里把这两个一关,amll 就静默空手而归,
+// 哪怕库里有这首歌。
+func amllLyric(ctx context.Context, neteaseID, qqID, appleCatalogID, spotifyTrackID string) amllResult {
+	if neteaseID == "" && qqID == "" && appleCatalogID == "" && spotifyTrackID == "" {
 		amllSkippedForMissingIDs.Store(true)
 		return amllResult{}
 	}
 	for _, try := range []struct{ dir, id string }{
+		{"am-lyrics", appleCatalogID},
+		{"spotify-lyrics", spotifyTrackID},
 		{"ncm-lyrics", neteaseID},
 		{"qq-lyrics", qqID},
 	} {

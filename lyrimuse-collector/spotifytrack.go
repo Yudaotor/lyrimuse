@@ -86,6 +86,11 @@ func noteSpotifyTrackID(artist, title, album, id string) {
 		spotifyTrackIDHints = map[string]string{}
 	}
 	spotifyTrackIDHints[key] = id
+	// 同一个 ID 再给歌词侧留一份:amll 有一份按 Spotify 曲目 ID 组织的索引
+	// (spotify-lyrics/),而它此前只能靠网易云 / QQ 搜出来的 songID 去取。
+	// 两份存的原因见 platformtrackid.go 头注(生命周期不同:那份是内存提示,
+	// 这份要落进缓存条目给 relay / ListenBrainz 用)。
+	notePlayingSpotifyTrackID(artist, title, album, id)
 }
 
 // applySpotifyTrackIDHintLocked 把提示写进条目,返回是否真的改了(调用方据此决定要不要落盘)。

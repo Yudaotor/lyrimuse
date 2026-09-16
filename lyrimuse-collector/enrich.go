@@ -3852,7 +3852,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "amll"}
 			return
 		}
-		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID)}
+		// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
+		// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
+		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(artist, title, album)
+		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID, appleCatalogID, spotifyTrackID)}
 	}()
 	go func() {
 		if skipSource("kugou") {

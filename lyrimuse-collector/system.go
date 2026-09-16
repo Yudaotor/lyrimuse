@@ -825,13 +825,20 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// 电台要靠它:那条路上快照报的是整档节目时长,而目录知道单曲的真实长度(实测 3390.122 → 226.283)。
 	// 单独一个键而不是复用 duration:下面 refineAppleMusicState 整份顶替时,只有"权威"这一层信息值得带过去。
 	catalogDuration := 0.0
-	if anchor, ok := appleCatalogAnchor(raw.BundleID, raw.UniqueIdentifier, raw.TrackNumber, title, album); ok && anchor.DurationSecs > 0 {
-		if math.Abs(anchor.DurationSecs-duration) > appleCatalogDurationLogThreshold {
-			log.Printf("apple catalog anchor overrode duration for %q: media-control %.3fs -> catalog %.3fs (track id %d)",
-				title, duration, anchor.DurationSecs, raw.UniqueIdentifier)
+	if anchor, ok := appleCatalogAnchor(raw.BundleID, raw.UniqueIdentifier, raw.TrackNumber, title, album); ok {
+		// 锚点成立 = 这个 UniqueIdentifier 确实是 Apple 目录里的这一条(守卫见
+		// appleCatalogAnchor)。顺手记下来给 amll 按 am-lyrics/<id>.ttml 直取歌词用 ——
+		// 零请求的顺带品,理由与那条"必须先校验"的纪律见 platformtrackid.go 头注。
+		// ⚠️ 记在 DurationSecs 判断**之外**:目录知道这一条是谁,跟它报不报时长是两件事。
+		notePlayingAppleCatalogID(artistTag, title, album, raw.UniqueIdentifier)
+		if anchor.DurationSecs > 0 {
+			if math.Abs(anchor.DurationSecs-duration) > appleCatalogDurationLogThreshold {
+				log.Printf("apple catalog anchor overrode duration for %q: media-control %.3fs -> catalog %.3fs (track id %d)",
+					title, duration, anchor.DurationSecs, raw.UniqueIdentifier)
+			}
+			duration = anchor.DurationSecs
+			catalogDuration = anchor.DurationSecs
 		}
-		duration = anchor.DurationSecs
-		catalogDuration = anchor.DurationSecs
 	}
 	return map[string]any{
 		"title": title, "artist": artistTag, "album": album,
