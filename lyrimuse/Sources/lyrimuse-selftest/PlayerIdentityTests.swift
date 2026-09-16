@@ -265,6 +265,40 @@ func runPlayerIdentityTests() {
                     "多选.soleExplicitPlayer: 空集不该崩、也没有唯一答案(理论不该发生,但函数要安全)")
     }
 
+    // ---- 「Apple Music 自动化」这份权限对谁有意义(2026-09-17)----
+    //
+    // `Set<PlaybackPlayer>.needsAppleMusicAutomation` —— 引导页那一步要不要出现、设置页那张
+    // 权限卡要不要显示,都靠它。判据是"含 auto **或** 含 Apple Music",因为
+    // `refinedAppleMusicSnapshotIfNeeded` 的第一道 guard 只看在播的是不是 Music.app、
+    // **完全不看 features.players**,而 players 的默认值恰恰是 [.auto]。
+    //
+    // 这条判据 2026-09-03 在引导页就是对的,设置页却一直停在 `contains(.appleMusic)` ——
+    // 于是默认配置的人在引导里被问过这份权限、回设置里却找不到入口,更新/重签名导致 TCC
+    // 授权失效之后就再也没有地方能重新授权。两处 2026-09-17 合并到这一个属性上。
+    do {
+        expectEqual(Set<PlaybackPlayer>([.auto]).needsAppleMusicAutomation, true,
+                    "自动化权限判据: 纯 auto(默认值)也要 —— 漏掉它正是设置页那张卡藏了半个月的原因")
+        expectEqual(Set<PlaybackPlayer>([.appleMusic]).needsAppleMusicAutomation, true,
+                    "自动化权限判据: 只勾 Apple Music,整条读取都是 AppleScript")
+        expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic]).needsAppleMusicAutomation, true,
+                    "自动化权限判据: 多选里含 Apple Music,命中它那一拍照样走 AppleScript")
+        expectEqual(Set<PlaybackPlayer>([.qqMusic, .auto]).needsAppleMusicAutomation, true,
+                    "自动化权限判据: 含 auto 就算(auto 是超集,随时可能在播 Music.app)")
+        // ⚠️ 反例才是这条判据的边界:一个 Music.app 都碰不到的配置不该看到这张卡。
+        expectEqual(Set<PlaybackPlayer>([.qqMusic]).needsAppleMusicAutomation, false,
+                    "自动化权限判据: 只勾 QQ 音乐 —— 那条 AppleScript 路一次都走不到,别拿无关权限烦人")
+        expectEqual(Set<PlaybackPlayer>([.qqMusic, .netease, .spotify]).needsAppleMusicAutomation, false,
+                    "自动化权限判据: 多选但全是别家,同样不显示")
+        expectEqual(Set<PlaybackPlayer>([]).needsAppleMusicAutomation, false,
+                    "自动化权限判据: 空集不该崩(理论不该发生,但函数要安全)")
+        // 跟 isExclusivelyAppleMusic **不是**一回事 —— 混用会让多选/auto 下的播放控制
+        // 武断地直接打给 Music.app,绕开 media-control 的焦点仲裁。钉一条免得后人合并。
+        expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic]).needsAppleMusicAutomation
+                        != (Set<PlaybackPlayer>([.appleMusic, .qqMusic]) == [.appleMusic]),
+                    true,
+                    "自动化权限判据: 跟「排他只有 Apple Music」是两个判据,不能互相替代")
+    }
+
     // ---- YouTube Music 广告判据(2026-09-02)----
     //
     // 浏览器里播 YouTube Music 此前常常不被识别:它的 album 常常是空的,撞上 TrustedPlayers.notASong

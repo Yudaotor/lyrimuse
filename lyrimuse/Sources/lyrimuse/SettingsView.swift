@@ -4048,9 +4048,17 @@ private struct PlayerSettingsTab: View {
         // 2026-09-01 多选后从"== .appleMusic"(唯一选项)放宽到"包含 Apple Music"——
         // 同时选了 Apple Music 和别的播放器时,Apple Music 那条 AppleScript 路径照样会被
         // 走到(见 MediaControlClient.refinedAppleMusicSnapshotIfNeeded),用户仍然值得
-        // 在这里管理这份自动化权限,不该因为多选了别的播放器就把入口藏起来。纯 auto(不
-        // 显式包含 Apple Music)维持原有行为不显示——跟改动前一致,不在这次改动范围内。
-        if stores.players.contains(.appleMusic) {
+        // 在这里管理这份自动化权限,不该因为多选了别的播放器就把入口藏起来。
+        //
+        // ⚠️ 2026-09-17 再放宽到**含 auto**(判据统一进 `Set<PlaybackPlayer>
+        // .needsAppleMusicAutomation`)。原注释那句「纯 auto 维持原有行为不显示——跟改动前
+        // 一致,不在这次改动范围内」当时是对的,但它留下了一个真实的洞:`players` 的默认值
+        // 就是 `[.auto]`,而引导页 2026-09-03 已经按"含 auto 也要问"改过了(见
+        // OnboardingView.needsAppleMusicAutomation)—— 于是**默认配置的人在引导里被问过这份
+        // 权限,回头却在设置里找不到入口**;一旦当时点了拒绝、或者更新 / 重签名之后 TCC 授权
+        // 失效,就再没有任何地方能重新授权,而读取路径那边只往 OSLog 写一行 `snapshot failed`,
+        // 界面上一个字都没有。
+        if stores.players.needsAppleMusicAutomation {
             SettingsCard {
                 SettingsRow(
                     icon: automationStatusIconName,

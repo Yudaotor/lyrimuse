@@ -98,8 +98,10 @@ struct OnboardingView: View {
     ///    而 `features.players` 的默认值恰恰是 `[.auto]`(FeatureSettingsStore),于是"保持
     ///    默认、平时听 Apple Music"的人走完整个引导都不会被问过这个权限,然后一直用着一个
     ///    进度不准、播放控制全按不动的版本。
+    ///  - 2026-09-17 判据本身挪去 `Set<PlaybackPlayer>.needsAppleMusicAutomation`(LyrimuseCore),
+    ///    因为设置页那张权限卡漏了 `.auto`、跟这里不一致(见那个属性的头注)。这里只剩转发。
     private var needsAppleMusicAutomation: Bool {
-        features.players.contains(.appleMusic) || features.players.contains(.auto)
+        features.players.needsAppleMusicAutomation
     }
 
     // 这份列表本身不 @State,是纯粹从 features.players / wantsBrowserYouTubeMusic 派生出来

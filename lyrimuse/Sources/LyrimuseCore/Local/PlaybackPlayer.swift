@@ -67,6 +67,31 @@ extension Set where Element == PlaybackPlayer {
         let specific = subtracting([.auto])
         return specific.count == 1 ? specific.first : nil
     }
+
+    /// 这个配置下,**问 Music.app 的那条 AppleScript 路会不会被走到** —— 也就是
+    /// 「Apple Music 自动化」这份系统权限对这个用户有没有意义。
+    ///
+    /// 判据是"含 auto **或** 含 Apple Music",不是单纯的 `contains(.appleMusic)`。三种
+    /// 配置都会走到那条路:
+    ///   · 只勾 Apple Music → 读取整条就是 AppleScript(`radioAwareAppleMusicSnapshot`);
+    ///   · 多选里含 Apple Music → 命中它那一拍借 AppleScript 的精确位置;
+    ///   · **纯 auto(默认值)** → 同样会借 —— `refinedAppleMusicSnapshotIfNeeded` 的第一道
+    ///     guard 只看 `bundleID == com.apple.Music`、**完全不看 features.players**,在播的
+    ///     是 Music.app 就走;2026-09-17 起焦点被别的 App 抢走时还会同步退回它
+    ///     (`appleMusicSnapshotAfterFocusLost`)。
+    ///
+    /// ⚠️ **不是 `PlaybackPlayerPreference.isExclusivelyAppleMusic` 的替代品**。那一条问的是
+    /// 更强的"该不该绕开 media-control 的焦点仲裁、把指令直接导向 Music.app"(dispatch() /
+    /// checkForCurrentPlayer 用),两者不能互换 —— 混用会让多选 / auto 下的播放控制武断地
+    /// 打给 Music.app。这一条只回答"这份权限值不值得给这个用户看"。
+    ///
+    /// 引导页 2026-09-03 就是按这个判据做的(见 OnboardingView.needsAppleMusicAutomation
+    /// 上那段沿革),设置页那张权限卡当时漏了、一直停在 `contains(.appleMusic)` ——
+    /// 于是默认配置的人在引导里被问过这个权限,回头却在设置里**找不到它**。2026-09-17
+    /// 把两处合并到这里,省得再漂一次。
+    public var needsAppleMusicAutomation: Bool {
+        contains(.auto) || contains(.appleMusic)
+    }
 }
 
 // 独立、轻量地读一次共享 features 文件(~/.config/lyrimuse/lyrimuse-features.json)里的

@@ -1161,8 +1161,18 @@ func runSourceContractTests() {
             //    `refinedAppleMusicSnapshotIfNeeded` 只看在播的是不是 Music.app、完全不看
             //    features.players,而 players 的默认值恰恰是 [.auto] —— 漏掉 .auto 等于让
             //    "保持默认、平时听 Apple Music"的人永远不被问这个权限。
-            expectEqual(onboarding.contains("features.players.contains(.appleMusic) || features.players.contains(.auto)"), true,
-                        "引导页权限判据: needsAppleMusicAutomation 必须同时认 .appleMusic 和 .auto(默认就是 [.auto])")
+            //    ⚠️ 2026-09-17:判据本体挪进 `Set<PlaybackPlayer>.needsAppleMusicAutomation`
+            //    (行为断言在 players 组),这里改钉"两处都转发到它"。原来只钉了引导页这一处的
+            //    字面量,结果**设置页那张权限卡漏了 .auto 一直没人发现** —— 引导里问过的权限,
+            //    回设置里找不到入口。钉一处不够,两处都要钉。
+            expectEqual(onboarding.contains("features.players.needsAppleMusicAutomation"), true,
+                        "引导页权限判据: 必须转发到共享的 needsAppleMusicAutomation,别再自己写一份")
+            if let settingsSource = read("SettingsView.swift") {
+                expectEqual(settingsSource.contains("stores.players.needsAppleMusicAutomation"), true,
+                            "设置页权限卡: 显示条件必须用同一个判据(漏掉 .auto = 默认配置的人找不到重新授权的入口)")
+            } else {
+                expectEqual(true, false, "设置页权限卡: 读不到 SettingsView.swift(路径挪了?)")
+            }
 
             // ⑨ 「下一步」那道锁**不准再把 automation 关进去**。基础歌词来自 media-control
             //    通道,这个权限管的是进度精度和播放控制 —— 没有它歌词照样显示,多选之后更

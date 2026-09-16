@@ -452,7 +452,13 @@ public enum MediaControlClient {
     /// (只听 QQ 音乐 / 网易云 / Spotify)凭空每拍多 fork 一个 osascript,而且**首次**对
     /// Music.app 发 Apple Event 会弹一次"自动化"权限对话框 —— 对完全不相关的用户弹这个框
     /// 不可接受。上面那个开关把它挡死:只有**已经**通过 Apple Music 拿到过快照的用户才会
-    /// 走到这里,那意味着权限早就拿到了、Music.app 也确实在跑。
+    /// 走到这里。
+    ///
+    /// ⚠️ 更强的一条(2026-09-17 核实):对这些人,这条 osascript **本来就在跑** ——
+    /// `refinedAppleMusicSnapshotIfNeeded` 在 `playing == true` 时每拍都会后台 fork 同一个
+    /// `fetchAppleMusicSnapshot()` 去借精确位置。所以这条回退**一次额外的自动化权限对话框
+    /// 都不会多弹**,权限触发面跟改动前逐字相同;它只是把一个已经在后台跑的调用,在
+    /// media-control 失灵的那一拍**同步**用一次而已。
     ///
     /// ⚠️ **电台在回退期间退化成普通曲目**:台标识 `radioStationHash` 是 MediaRemote 独有的
     /// 字段,而这条路正是 media-control 不可用时才走的。跟 `probedRadioStationHash` 探测失败
