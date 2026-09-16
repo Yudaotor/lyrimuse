@@ -1,5 +1,16 @@
 // swift-tools-version:5.9
+import Foundation
 import PackageDescription
+
+// LYRIMUSE_NO_SPARKLE(2026-09-16,给 MacPorts 这类包管理器构建用):设成任意非空值时,Sparkle
+// 整个依赖不进来。App 侧靠 `#if canImport(Sparkle)` 自动换成一份同形态的空实现(见
+// Settings/SparkleUpdaterManager.swift 的 #else 分支),两个主动更新入口也跟着从界面上收掉。
+// 理由:包管理器装的应用不该自更新,`port upgrade` / `brew upgrade` 才是它的升级路径。
+//
+// 为什么做成这份清单里的开关,而不是让下游自己改源码:那是**构建配置**,不是需要修的缺陷。
+// 配置该由上游提供旋钮 —— 下游打补丁的话,每次上游发版补丁都要重打一遍,而补丁悄悄失效
+// 的后果是装出一个半成品。这条旋钮不改变默认行为:不设这个变量时,一切跟以前逐字相同。
+let sparkleEnabled = ProcessInfo.processInfo.environment["LYRIMUSE_NO_SPARKLE"] == nil
 
 // 这台机器只装了 Command Line Tools、没有完整 Xcode——XCTest/Testing 两个测试框架都
 // 用不了(swift test 会报 "no such module")。LyrimuseCore 拆成独立 library target
@@ -36,7 +47,7 @@ let package = Package(
     // 真正 clone 到本地、逐个 tag 实际 checkout 后 grep,这才是可信的核对方式。
     // 1.15.0(2023-09 发布,`swift-tools-version:5.7`)是两个宏都确认没用到的最新版,
     // `swift build` 在这台机器上跑通了整个 build 过程验证过(不只是 resolve 成功)。
-    dependencies: [
+    dependencies: sparkleEnabled ? [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
         // 检查更新用——这个包本身只是把官方预编译的 Sparkle.xcframework(一个纯
         // Objective-C/C 的二进制 target,不涉及任何 Swift Macro/plugin)包装成 SPM
@@ -44,6 +55,8 @@ let package = Package(
         // 解析不了"的坑。`swift build` 不会自动把这类二进制依赖嵌入 .app bundle,
         // 需要 build.sh 手动 ditto 拷贝+签名,见那边的改动。
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    ] : [
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
     ],
     targets: [
         .target(
@@ -52,7 +65,9 @@ let package = Package(
         ),
         .executableTarget(
             name: "lyrimuse",
-            dependencies: ["LyrimuseCore", "KeyboardShortcuts", "Sparkle"],
+            dependencies: sparkleEnabled
+                ? ["LyrimuseCore", "KeyboardShortcuts", "Sparkle"]
+                : ["LyrimuseCore", "KeyboardShortcuts"],
             path: "Sources/lyrimuse",
             resources: [.process("Resources")]
         ),

@@ -1,3 +1,6 @@
+// 整份文件只在带 Sparkle 的构建里存在(见 Package.swift 的 LYRIMUSE_NO_SPARKLE)——
+// 它从头到尾都是 Sparkle 的界面驱动协议实现,没有 Sparkle 时没有任何意义。
+#if canImport(Sparkle)
 import AppKit
 import Sparkle
 
@@ -117,3 +120,4 @@ final class SoftwareUpdateDriver: NSObject, SPUUserDriver {
         onEvent?(.focusRequested)
     }
 }
+#endif

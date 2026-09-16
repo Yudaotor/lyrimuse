@@ -126,8 +126,11 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 再一条分隔线,把上面"打开某个窗口做配置/管理"这几项,跟下面"检查更新/关于"
         // 这类"了解一下这个 App 本身"的入口分开(2026-07-30 用户反馈原来四项挤在一起看着乱)。
         menu.addItem(.separator())
+        // 同「关于」页那张卡片:无 Sparkle 构建里这一项点了没反应,不如不给。
+        #if canImport(Sparkle)
         menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",
                             selector: #selector(checkForUpdates)))
+        #endif
         // 引导可以重来:走完的人后来想重新配一遍(换了播放器、服务被自己关掉了、想重新
         // 给权限)也得有入口。
         menu.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
@@ -250,6 +253,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         AppActions.shared.openSettings?()
     }
 
+    #if canImport(Sparkle)
     @objc private func checkForUpdates() {
         // 跟"设置…"同一个坑:.accessory 策略下 Sparkle 弹出的检查更新 UI 也得先手动激活
         // App,不然点了没反应(这里没有活跃窗口打底,不像"关于"页那个按钮 —— 那边是在
@@ -257,6 +261,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         SparkleUpdaterManager.shared.checkForUpdates()
     }
+    #endif
 
     @objc private func quit() {
         // 经 AppExit 登记原因再终止(2026-09-03):所有主动退出都从那一个出口走,见 AppExit 头注。

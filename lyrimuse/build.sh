@@ -206,6 +206,11 @@ ROMANIZE_SLICES=()
 SPM_PATH_ARGS=()
 [ -n "${LYRIMUSE_SPM_CACHE_PATH:-}" ] && SPM_PATH_ARGS+=(--cache-path "$LYRIMUSE_SPM_CACHE_PATH")
 [ -n "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] && SPM_PATH_ARGS+=(--scratch-path "$LYRIMUSE_SPM_SCRATCH_PATH")
+# LYRIMUSE_NO_SPARKLE(2026-09-16,包管理器构建用):Package.swift 按这个变量决定 Sparkle
+# 依赖进不进来。SwiftPM 会**缓存清单的求值结果**,而缓存键不含环境变量 —— 同一棵工作树上
+# 切换这个变量,不失效缓存就可能仍按上一次的清单构建(依赖还在、却按无 Sparkle 编译,或者
+# 反过来)。只在设了这个变量时关掉清单缓存,默认路径的构建速度一点不受影响。
+[ -n "${LYRIMUSE_NO_SPARKLE:-}" ] && SPM_PATH_ARGS+=(--manifest-cache none)
 for arch in $ARCHES; do
   swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
@@ -490,9 +495,18 @@ fi
 # 就跟着走(包管理器构建会这么做)。
 SPM_SCRATCH="${LYRIMUSE_SPM_SCRATCH_PATH:-.build}"
 SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)"
-# Sparkle 不在依赖里就整段跳过:包管理器(MacPorts)装的应用不该自更新,那边的 Portfile
-# 会把这个依赖摘掉——此时没有 framework 可嵌,不是错误。
-if [ -z "$SPARKLE_FW_SRC" ] && ! grep -q 'sparkle-project/Sparkle' Package.swift; then
+# Sparkle 不在依赖里就整段跳过:包管理器(MacPorts / Homebrew)装的应用不该自更新,升级
+# 走它们自己的通道——此时没有 framework 可嵌,不是错误。
+#
+# 两条判据,顺序有讲究:
+#  ① LYRIMUSE_NO_SPARKLE —— 上游提供的正式开关(见 Package.swift),包管理器该用这条。
+#     它是**声明**,所以先看它:不依赖"构建产物里恰好没找到 framework"这种间接证据。
+#  ② 退路:清单里真的没有 Sparkle(下游自己改过 Package.swift)。保留它是为了不弄坏那些
+#     已经在这么做的端口 —— 它们升级到新版本时不该突然构建失败。
+if [ -n "${LYRIMUSE_NO_SPARKLE:-}" ]; then
+  echo "    LYRIMUSE_NO_SPARKLE set — skipping framework embed (no in-app updater)"
+  SPARKLE_SKIPPED=1
+elif [ -z "$SPARKLE_FW_SRC" ] && ! grep -q 'sparkle-project/Sparkle' Package.swift; then
   echo "    Sparkle not a dependency — skipping framework embed (no in-app updater)"
   SPARKLE_SKIPPED=1
 fi

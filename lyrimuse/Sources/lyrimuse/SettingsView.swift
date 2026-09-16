@@ -5251,7 +5251,10 @@ private struct AboutSettingsTab: View {
         SettingsPageCustomHeader {
             hero
         } content: {
+            // 无 Sparkle 构建里没有可用的更新动作,卡片整块不画(见 SparkleUpdaterManager 的 #else 分支)。
+            #if canImport(Sparkle)
             updateCard
+            #endif
             communityCard
             legalCard
             diagnosticsCard

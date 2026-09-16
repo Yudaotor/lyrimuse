@@ -1,7 +1,9 @@
 import AppKit
 import LyrimuseCore
 import OSLog
+#if canImport(Sparkle)
 import Sparkle
+#endif
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "updates")
 
@@ -72,6 +74,7 @@ struct SoftwareUpdateItem: Equatable {
     /// Sparkle 已把包下完解好(自动下载开着时的周期检查,或用户点过「退出时安装」),下一步就是重启安装。
     var downloaded: Bool
 
+    #if canImport(Sparkle)
     init(appcastItem item: SUAppcastItem, downloaded: Bool) {
         version = item.displayVersionString
         contentLength = item.contentLength
@@ -82,6 +85,7 @@ struct SoftwareUpdateItem: Equatable {
             ?? UpdateChannel.releasePageURL(displayVersion: item.displayVersionString)
         self.downloaded = downloaded
     }
+    #endif
 
     init(version: String, contentLength: UInt64, date: Date?, notesHTML: String?, notesArePlainText: Bool,
          releaseURL: URL, downloaded: Bool) {
@@ -103,9 +107,14 @@ struct SoftwareUpdateItem: Equatable {
     }
 }
 
+#if canImport(Sparkle)
+
 @MainActor
 final class SparkleUpdaterManager: ObservableObject {
     static let shared = SparkleUpdaterManager()
+
+    /// 这份构建带不带自更新能力。无 Sparkle 构建里为 false,诊断导出据此如实说明。
+    static let isSupported = true
 
     /// 已经查到、用户还没装上的那个新版本;nil = 没查到或已是最新。
     struct AvailableUpdate: Equatable {
@@ -138,7 +147,7 @@ final class SparkleUpdaterManager: ObservableObject {
     /// `defaults delete … settings:previewUpdateVersion` 即恢复,重开设置窗口生效。只读 UserDefaults、
     /// 不碰 Sparkle,页面上的「立即更新」仍是真检查(会如实显示「已是最新版本」)。菜单栏面板底栏不吃
     /// 这个钩子,只认真值。用 `settings:` 前缀:机器状态,配置导出天然不带走(同 SettingsTab.lastTabStorageKey)。
-    static let previewUpdateVersionKey = "settings:previewUpdateVersion"
+    // previewUpdateVersionKey 的定义搬到文件末尾两分支共用的 extension 里(它跟 Sparkle 无关)。
 
     private var previewItem: SoftwareUpdateItem? {
         guard let version = UserDefaults.standard.string(forKey: Self.previewUpdateVersionKey),
@@ -365,12 +374,11 @@ final class SparkleUpdaterManager: ObservableObject {
     private var betaInflight: Task<Void, Never>?
     private static let betaFeedURLKey = "betaFeedURL"
 
-    /// 当前 App 版本(Info.plist CFBundleShortVersionString,由 build.sh 写入)。
-    static var appVersionString: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
+    // appVersionString 的定义同样搬到文件末尾的共用 extension。
 
-    let updater: SPUUpdater
+    /// ⚠️ private:Sparkle 的类型一律不许漏出这个类,否则无 Sparkle 构建下每个用到它的
+    /// 调用点都得跟着加门。诊断导出原来直接够到这里,已改读下面那两个转发属性。
+    private let updater: SPUUpdater
     private let driver: SoftwareUpdateDriver
     private let bridge: UpdaterDelegateBridge
 
@@ -624,4 +632,86 @@ private final class UpdaterDelegateBridge: NSObject, SPUUpdaterDelegate {
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         MainActor.assumeIsolated { allowedChannelsProvider?() ?? [] }
     }
+}
+
+#else
+
+/// Sparkle 在构建时被摘掉了(`LYRIMUSE_NO_SPARKLE`,见 Package.swift)时的同形态空实现。
+///
+/// 存在的意义是让**全部调用点原样编译**,而不必由下游包管理器去打补丁或整份换掉这个文件 ——
+/// 补丁要跟着每次上游发版重打,悄悄失效就会装出一个半成品。
+///
+/// 语义统一成「永远查不到更新」:`flow` 恒 `.idle`、`pendingItem` / `availableUpdate` 恒 nil。
+/// 于是那些**只在查到更新时才画**的界面自然就不出现了 —— 设置侧栏「有软件更新可用」那一行
+/// (SettingsSidebarChrome)、菜单栏面板底栏的更新行(MenuBarPanel)都不用改。
+/// 需要单独收掉的只有两个**主动**入口:「关于」页的更新卡片、菜单栏右键的「检查更新…」,
+/// 它们在各自的位置上同样用 `#if canImport(Sparkle)` 挡住,否则会留下点了没反应的控件。
+@MainActor
+final class SparkleUpdaterManager: ObservableObject {
+    static let shared = SparkleUpdaterManager()
+
+    /// 这份构建带不带自更新能力。
+    static let isSupported = false
+
+    struct AvailableUpdate: Equatable {
+        let version: String
+        var downloaded: Bool
+    }
+
+    @Published private(set) var availableUpdate: AvailableUpdate?
+    @Published private(set) var flow: SoftwareUpdateFlow = .idle
+    @Published private(set) var pendingItem: SoftwareUpdateItem?
+    @Published private(set) var installOnQuit = false
+    @Published private(set) var updatedToVersion: String?
+    @Published private(set) var betaFeedURL: URL?
+
+    /// 没有 Sparkle 就没有它发起的重启,AppExit 那边恒按普通退出记。
+    private(set) var isInstallingUpdate = false
+
+    var canCheckForUpdates: Bool { false }
+
+    /// 预览钩子在这份构建里也不给 —— 画得出卡片却点不动,比不画更糟。
+    var shownItem: SoftwareUpdateItem? { nil }
+
+    var lastUpdateCheckDate: Date? { nil }
+
+    var automaticallyChecksForUpdates: Bool {
+        get { false }
+        set { _ = newValue }
+    }
+
+    var automaticallyDownloadsUpdates: Bool {
+        get { false }
+        set { _ = newValue }
+    }
+
+    private init() {}
+
+    func installPendingUpdate() {}
+    func installOnQuitInstead() {}
+    func cancel() {}
+    func retryTerminatingForInstall() {}
+    func settingsWindowClosed() {}
+    func showUpdatePage() {}
+    func checkForUpdates() {}
+    func betaChannelPreferenceChanged(enabled: Bool) { _ = enabled }
+}
+
+#endif
+
+// 下面两个跟 Sparkle 在不在都无关,放在条件编译之外,两种构建共用同一份定义 ——
+// 抄两份迟早会飘。
+extension SparkleUpdaterManager {
+    /// 当前 App 版本(Info.plist CFBundleShortVersionString,由 build.sh 写入)。
+    static var appVersionString: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    /// 预览钩子(2026-09-12,用户要「模拟一下看看效果」):这台机器上
+    /// `defaults write me.yudaotor.lyrimuse settings:previewUpdateVersion 1.7.0` 之后,设置窗口
+    /// (侧栏「有软件更新可用」那行、「软件更新」页、「关于」页的副标题)就当真查到了 1.7.0 一样显示;
+    /// `defaults delete … settings:previewUpdateVersion` 即恢复,重开设置窗口生效。只读 UserDefaults、
+    /// 不碰 Sparkle,页面上的「立即更新」仍是真检查(会如实显示「已是最新版本」)。菜单栏面板底栏不吃
+    /// 这个钩子,只认真值。用 `settings:` 前缀:机器状态,配置导出天然不带走(同 SettingsTab.lastTabStorageKey)。
+    static var previewUpdateVersionKey: String { "settings:previewUpdateVersion" }
 }

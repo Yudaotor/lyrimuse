@@ -179,10 +179,18 @@ enum DiagnosticsExporter {
         // Sparkle 自己的这两个字段(是否开着周期检查、上一次真的检查是什么时候)足够
         // 回答大半——不用再让用户去猜"是不是它压根没在检查"。lastUpdateCheckDate 是
         // Sparkle 自己维护的只读字段,读取本身零成本,不涉及联网。
-        let sparkle = SparkleUpdaterManager.shared.updater
-        lines.append("Auto-update checks: \(sparkle.automaticallyChecksForUpdates)"
-                     + (sparkle.lastUpdateCheckDate.map { " (last checked: \(ISO8601DateFormatter().string(from: $0)))" }
-                        ?? " (never checked this run)"))
+        // ⚠️ 读管理器自己的转发属性,不要够到 `SparkleUpdaterManager.shared.updater` ——
+        // 那是 Sparkle 的类型,无 Sparkle 构建(LYRIMUSE_NO_SPARKLE)下它根本不存在。
+        let updates = SparkleUpdaterManager.shared
+        if SparkleUpdaterManager.isSupported {
+            lines.append("Auto-update checks: \(updates.automaticallyChecksForUpdates)"
+                         + (updates.lastUpdateCheckDate.map { " (last checked: \(ISO8601DateFormatter().string(from: $0)))" }
+                            ?? " (never checked this run)"))
+        } else {
+            // 包管理器构建:自更新整个不在。如实说出来,否则「为什么没提示我更新」会查到一个
+            // 永远 false 的开关上,看不出是"关着"还是"压根没这功能"。
+            lines.append("Auto-update checks: unavailable (built without Sparkle; update via your package manager)")
+        }
         lines.append("")
 
         // ---- 窗口(2026-08-27 加)----
