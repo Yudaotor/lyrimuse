@@ -442,6 +442,32 @@ final class MenuBarStatusItem: NSObject {
     /// 两次重建之间的最小静默间隔,兼作歌词间隙的收缩观察窗(见 present 头注)。
     /// 卡死的那次实测两发相隔 1.1s,取 3s 留余量。
     private static let rebuildQuietSecs: TimeInterval = 3
+    /// 歌词消失之后,**槽宽**还替它留多久(2026-09-16)。
+    ///
+    /// ⚠️ 这跟下面那个「内容」的保持时长是**两件事**,2026-09-16 之前它们共用 3 秒,
+    /// 这正是 issue #8 修不干净的原因:
+    ///
+    /// 实测(12 小时日志)媒体层会**凭空报假暂停**——`pause transition` 之后几秒又
+    /// `resume transition`,而 `resume` 那行的 `delta` 显示**播放位置按墙钟照样前进了**,
+    /// 也就是音乐从头到尾没停过。12 小时里抓到 5 次,时长 1.88 / 1.92 / 4.11 / 6.46 / 6.53 秒。
+    /// 每一次都精确产生「歌词突然消失、过一会儿又回来」。3 秒的窗只盖得住最短那两次。
+    ///
+    /// 关键性质:**只要槽宽没缩,恢复那一刻目标宽度跟原来相同 → `needsRebuild` 为假 →
+    /// 整个假暂停期间零重建**,邻居一个像素都不动。所以把几何这一半单独拉长到 8 秒
+    /// (覆盖实测最长的 6.53 秒还有余量),而内容那一半仍按用户 2026-09-16 选的 3 秒 ——
+    /// 真暂停时他照样在 3 秒后看到图标,只是那枚图标画在还没缩的宽槽里。
+    ///
+    /// 代价:真暂停后这一项会多占 8 秒的宽度才缩回去。相比「每次假暂停都塌一次再弹回来」,
+    /// 这个代价小得多,而且它只在**真的停了**之后才付。
+    private static let slotReleaseSecs: TimeInterval = 8
+    /// 歌词消失之后,**内容**还留多久才换成图标。用户 2026-09-16 在三个方案里选的这一档。
+    private static let iconContentHoldSecs: TimeInterval = 3
+    /// 建槽之前先给「该显示哪一句 / 多宽」多少时间落定。
+    ///
+    /// 120ms ≈ 歌词引擎 `fastTick` 的两拍多(20Hz,50ms 一拍)。实测那两次抢跑分别只差
+    /// **17ms 和 46ms**,一拍就够;取两拍多是留余量,而它的代价只是首句最多晚 120ms 出现 ——
+    /// 肉眼无感,远小于"先按错的行建一次、正确宽度再等 3 秒才落地"。
+    private static let iconExitSettleSecs: TimeInterval = 0.12
     private var lastRebuildAt = Date.distantPast
     private var pendingRefresh: DispatchWorkItem?
 
@@ -465,6 +491,10 @@ final class MenuBarStatusItem: NSObject {
     /// 顺延 —— 暂停后槽永远缩不回去(实现当天差点带着这个 bug 部署)。
     /// 目标不再是收缩(歌词回来了 / 几何已一致 / 用户手动关开关)时清零。
     private var collapseObserveBegan: Date?
+    /// 「离开图标槽」的落定窗起点(2026-09-16)。见 present() 里那段。
+    private var iconExitSettleBegan: Date?
+    /// 自适应模式下「同一首歌内只涨不缩」的地板(2026-09-16)。判据与代价见 MenuBarSlotFloor。
+    private var slotFloor = MenuBarSlotFloor()
 
     /// 把"形态 cls、槽宽 length、内容 render"呈现到状态栏上。macOS 26 菜单栏的两条
     /// 实测铁律(2026-08-19,六轮排查 AX 全图 + 像素截图坐实):
@@ -482,14 +512,26 @@ final class MenuBarStatusItem: NSObject {
     /// 所以这里对几何变化做节流:距上次重建不足 rebuildQuietSecs 就先换内容、把几何
     /// 变化推迟到静默窗之后(推迟期间目标又变了就合并成最新目标);歌词间隙/暂停的
     /// 收缩额外恒等一个观察窗(collapseDelay)——间隙常在 1~2s 内结束,歌词回来时
-    /// 几何目标恢复原样,这对"缩了又扩"的重建就整个省掉了,期间图标居中画在还没缩
-    /// 的宽槽里顶着。
+    /// 几何目标恢复原样,这对"缩了又扩"的重建就整个省掉了。
+    ///
+    /// ⚠️ **2026-09-16 推翻了这段原来的最后半句「期间图标居中画在还没缩的宽槽里顶着」。**
+    /// 那个取舍只顾了几何、没顾画面:观察窗省下的是**重建**,而屏幕上用户照样看到歌词被
+    /// 图标顶掉、过一两秒又回来 —— 正是 issue #8 报的「Menu bar lyrics sometimes
+    /// disappear ... then reappear later」。观察窗本来就是按"间隙常在 1~2s 内结束"留的,
+    /// 那这段时间里**屏幕上也该保持是歌词**。现在观察窗内一笔都不画(见下面那条分支),
+    /// 窗口走完才落地成图标。代价说清楚:真按下暂停时,歌词会在原地冻约 3 秒才收回图标
+    /// (2026-08-19「暂停不占宽」的观感被推迟了那么久;宽度本来就已经占着这 3 秒,
+    /// 变的只是这期间画的是歌词还是图标)。广告插播开头同理会多挂 ≤3s 上一句。
     ///
     /// 重建/推迟各落一条 notice 级日志(info 不落盘,上次排查就是因此拿不到现场):
     /// 再出错位,`/usr/bin/log show --predicate 'subsystem == "me.yudaotor.lyrimuse"
     /// && category == "menubar-item"'` 能对出完整时间线。
+    /// - Parameter targetIsProvisional: 这一刻算出来的目标宽度**还不作数**(内容是占位:
+    ///   「♪ 歌名」或间奏的 ♪)。见下面落定窗那段 —— 占位那一刻新歌的第一句往往还没解析出来,
+    ///   22ms 后才知道,现在就建等于建错一次。
     private func present(class cls: String, length: CGFloat, collapseDelay: TimeInterval,
                          dwellSeconds: TimeInterval? = nil,
+                         targetIsProvisional: Bool = false,
                          interim: ((NSStatusBarButton) -> Void)? = nil,
                          render: (NSStatusBarButton) -> Void) {
         // 每次都从最新状态重算目标,历史挂起的目标一律作废。
@@ -584,11 +626,88 @@ final class MenuBarStatusItem: NSObject {
             // button 内容、零重建零碰锚点,面板开着时调用同样安全。原来 text/fixed 直接
             // return,自适应宽度模式下面板开着期间状态栏歌词会冻在旧句(当时注释里"歌词
             // 最多晚到面板收起"的取舍,在 interim 机制就绪后已无必要)。
+            //
+            // ⚠️ 这条**刻意不跟**下面推迟分支那道「观察窗内不画图标」(2026-09-16):那条要靠
+            // observeRemaining 倒计时,而这条路径在计时开始前就 return 了,没有"窗口走完"这回事
+            // —— 照搬过来就变成"面板开着期间歌词一直挂着",面板开多久挂多久,比闪一下更糟。
+            // 面板开着本身就是用户正在操作的几秒钟,不是那个要保护的间隙。
             if let button = statusItem?.button {
                 if cls == "icon" { render(button) } else { interim?(button) }
             }
             return
         }
+
+        // 放行之后、节流之前记一行**决策现场**(2026-09-16 排查「句中重建」时加)。
+        //
+        // 上面那条 `slot resize skipped` 只记**被挡下**的,而排查要看的恰恰是**被放行**的:
+        // 实测抓到一行只活了 1.05s、却照样拿到了几何配额(现行见 06 章「句中重建」那条),
+        // 到底是 dwell 预测偏大、还是它压根是 nil —— `skipsResize` 里 `guard let dwellSeconds
+        // else { return false }` 对 nil 是**直接放行**,不过时长判据 —— 光看 skipped 那条
+        // 永远分不出这两种。
+        //
+        // 跟本文件既有的取舍一致:debug 级(不落盘,要现场就 `log stream --level debug`),
+        // 只记长度和秒数、**不记歌词正文** —— 日志里不该出现用户在听什么。
+        if let item = statusItem {
+            logger.debug("""
+                slot decide: \(self.displayClass, privacy: .public)(\(item.length, privacy: .public)) \
+                -> \(cls, privacy: .public)(\(length, privacy: .public)) \
+                dwell=\(dwellSeconds ?? -1, privacy: .public) \
+                sinceRebuild=\(Date().timeIntervalSince(self.lastRebuildAt), privacy: .public)
+                """)
+        }
+
+        // ---- 从图标槽回到歌词槽:先让「该显示哪一句」落定,再建(2026-09-16)----
+        //
+        // 顺着 issue #8 摸出来的「句中重建」,实测现行:
+        //   20:09:05.314  rebuild: icon(38.5) -> text(195.22)      ← 按"这一瞬"的行建了
+        //   20:09:05.331  coordinator currentLine updated          ← 17ms 后真正的行才到
+        //   20:09:05.346  deferred 2.968s -> text(173.29)          ← 配额已烧完 → 落在句中
+        //
+        // 成因是**两条链路的节奏差**:播放状态一变 `refresh()` 立刻就跑(@Published 直通),
+        // 而"现在该显示第几句"要等歌词引擎 20Hz `fastTick` 的下一拍。于是边界上的第一次
+        // 重建经常是按**还没换过来的那一行**建的,几十毫秒后才发现建错 —— 而那时 3 秒配额
+        // 已经花掉,正确的宽度只能推迟落地,正好落在句中。它还会级联:推迟落地把节流起点
+        // 往后拖,连累后面本来合格的几次(实测抓到过一串三连)。
+        //
+        // 所以离开图标槽之前压一个落定窗:窗内什么都不建,到点了按**当时最新**的目标建一次。
+        // 期间保持图标不动 —— 38pt 的槽里塞歌词只会闪成一条缝(同 renderInterimLyrics 的判断)。
+        //
+        // **同一个病还有第二处,2026-09-16 终验时才抓到**:换歌那一下也在赛跑,只是两边都是
+        // 歌词槽,所以上面那个"离开图标槽"的条件盖不到 ——
+        //   21:49:01.273  rebuild: text(307.8) -> text(160.2)   ← 「♪ 歌名」占位,按它的宽建了
+        //   21:49:01.295  decide:  text(160.2) -> text(272.0)   ← **22ms** 后下一句的宽才知道
+        //   21:49:01.295  deferred 2.978s
+        //   21:49:04.325  rebuild: text(160.2) -> text(272.0)   ← 3 秒后才跳到位
+        // 「占位槽按下一句定宽」(2026-09-11)本来就是为这一幕做的,但换歌那一刻新歌的歌词
+        // 还没解析出来,`upcomingW` 拿不到值。所以判据从"离开图标槽"扩成**"目标还不作数"**:
+        // 占位内容(targetIsProvisional)同样等一个落定窗再建。
+        //
+        // ⚠️ 收进图标槽有它自己的收缩观察窗(collapseDelay),两者目的不同:那个是"别为一段
+        // 一两秒的间隙白收一次",这个是"别按还没落定的目标建"。
+        // ⚠️ 窗口**不因目标变化重新计时**:那样目标一直在变就永远建不出来。固定窗 + 到点取
+        // 最新值,既没有饿死的可能,也正好拿到落定后的那个值。
+        // ⚠️ 窗口**一旦开了就粘住**(`iconExitSettleBegan != nil`):开窗的那一拍目标是"不作数"的,
+        // 下一拍算出来的往往已经作数了 —— 若只看当拍的 provisional,窗口会在第二拍当场失效、
+        // 立刻建一次,等于没等。实测那一幕:14.980 建、14.996 开窗、15.132 就建了。
+        let settleOpen = iconExitSettleBegan != nil
+        if statusItem != nil, displayClass == "icon" || targetIsProvisional || settleOpen,
+           lyricSlotClasses.contains(cls) {
+            let now = Date()
+            let began = iconExitSettleBegan ?? now
+            iconExitSettleBegan = began
+            let remaining = Self.iconExitSettleSecs - now.timeIntervalSince(began)
+            if remaining > 0 {
+                logger.debug("""
+                    slot icon-exit settling \(remaining, privacy: .public)s: \
+                    -> \(cls, privacy: .public)(\(length, privacy: .public))
+                    """)
+                let work = DispatchWorkItem { [weak self] in self?.refresh() }
+                pendingRefresh = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + remaining + 0.01, execute: work)
+                return
+            }
+        }
+        iconExitSettleBegan = nil
 
         if statusItem != nil {
             let now = Date()
@@ -615,7 +734,21 @@ final class MenuBarStatusItem: NSObject {
                 // 会按目标重画。
                 if let button = statusItem?.button {
                     if cls == "icon" {
-                        render(button)
+                        // ⚠️ 歌词消失之后,**内容**和**几何**各有各的保持时长(2026-09-16,issue #8):
+                        //   · 内容:满 iconContentHoldSecs(3s,用户选的)才换成图标 —— 在那之前
+                        //     一笔都不画,上一句留在原地,一两秒的间隙/ 假暂停整个看不出来;
+                        //   · 几何:满 collapseDelay(slotReleaseSecs 8s)才缩窄 —— 中间这 5 秒里
+                        //     图标画在**还没缩的宽槽**里。
+                        // 拉开这两个数才是 issue #8 的正解:实测的假暂停 1.9~6.5 秒,只要槽宽没缩,
+                        // 恢复那一刻目标宽度跟原来相同 → needsRebuild 为假 → **零重建**,邻居一个
+                        // 像素都不动;而共用 3 秒时,4 秒的假暂停必然缩一次再弹回来。
+                        //
+                        // 判据只认 observeRemaining / 窗口已开多久,不认 delay:delay 还含重建静默
+                        // 节流那一半,跟"这到底是不是一段间隙"无关。调用方压根没给窗口时
+                        // (用户手动关掉「菜单栏歌词」,collapseDelay 传 0)两个条件同时为真,
+                        // 立刻画图标也立刻缩 —— 那不是间隙,是结论。
+                        let heldFor = collapseObserveBegan.map { now.timeIntervalSince($0) } ?? .infinity
+                        if heldFor >= Self.iconContentHoldSecs { render(button) }
                     } else {
                         interim?(button)
                     }
@@ -1021,7 +1154,7 @@ final class MenuBarStatusItem: NSObject {
         guard settings.showLyricsInMenuBar, lyricsActive else {
             let iconWidth = MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle).size.width
             present(class: "icon", length: iconWidth + Self.fixedSlotPadding,
-                    collapseDelay: settings.showLyricsInMenuBar ? Self.rebuildQuietSecs : 0) {
+                    collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0) {
                 showIcon($0)
             }
             return
@@ -1063,7 +1196,14 @@ final class MenuBarStatusItem: NSObject {
             let textW = MenuBarSlotPolicy.slotWidth(
                 naturalWidth: naturalW, upcomingWidth: upcomingW,
                 isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
-            let w = textW + reserved + Self.fixedSlotPadding
+            // 同一首歌内只涨不缩(2026-09-16,用户要「不能跳来跳去」)。判据、代价与
+            // "为什么是换歌而不是换行重置"都在 MenuBarSlotFloor 的声明处。
+            // ⚠️ 只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
+            let w = slotFloor.width(
+                target: textW + reserved + Self.fixedSlotPadding,
+                trackKey: coordinator.title + "\u{1F}" + coordinator.artist)
+            // 换歌重置那一刻的目标同样"还不作数" —— 理由见 MenuBarSlotFloor.didResetOnLastCall。
+            let provisional = placeholderNow || slotFloor.didResetOnLastCall
             let fillPath = visible == text ? karaokeFillPath(for: text) : nil
             if fillPath != nil || icon != nil || rowState.twoRows {
                 // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
@@ -1073,14 +1213,14 @@ final class MenuBarStatusItem: NSObject {
                 // 半染色的图标同样塞不进 button.title/image 那条 AppKit 自绘的路。
                 // ⚠️ 2026-09-06 起**双排也走**:button.title 只能画一行。
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell,
+                        dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showFixedWidth($0, text: text, windowWidth: textW,
                                    pacing: nil, fillPath: fillPath, icon: icon)
                 }
             } else {
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell,
+                        dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showStaticText($0, visible: visible, full: text)
                 }
