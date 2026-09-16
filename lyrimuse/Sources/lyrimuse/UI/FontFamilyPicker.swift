@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-// 字体选择器:系统装了什么就能选什么。
+// 字体选择器:系统装了什么就能选什么,外加用户自己导入的 .ttf / .otf。
 //
 // 2026-08-15 之前这里是一个只有 7 款的精选下拉(拉丁 4 + 中文 3)。精选当初是为了避开
 // "252 个字体族全塞进一个 Menu 根本没法用"这个问题,代价是想用别的字体就完全没有出路。
@@ -9,14 +10,25 @@ import SwiftUI
 // 它长什么样,光看名字选不出来。
 //
 // 列表本身缓存成 static:availableFontFamilies 这一趟要问系统要几百个族名,不该每次
-// 重绘都跑一遍。新装的字体要等下次启动才出现在列表里,对一个字体选择器来说可以接受。
+// 重绘都跑一遍。新装的系统字体要等下次启动才出现在列表里,对一个字体选择器来说可以接受。
+//
+// 2026-09-15 加「导入字体」(GitHub discussions#6):系统字体列表再全,也只能覆盖"已经装在
+// 这台 Mac 上"的字体——用户想用一款只有文件、没装进系统的字体,原来完全没有出路。落地和
+// 反注册都在 CustomFontStore,这里只多了一段「已导入」列表 + 底部常驻的「导入字体…」入口,
+// 挑选体验跟系统字体一致(同样能搜、同样自己渲染族名)。
 @MainActor
 struct FontFamilyPicker: View {
     /// 空字符串 = 跟随系统字体。
     @Binding var selection: String
 
+    /// 用户从本地文件导入的字体(见 CustomFontStore 头注)。跟系统字体列表并列展示在
+    /// 同一个选择器里——对选字体这件事来说,一款字体是系统自带的还是自己导入的不该是
+    /// 两套不同的操作路径。
+    @ObservedObject private var customFonts = CustomFontStore.shared
+
     @State private var showingList = false
     @State private var query = ""
+    @State private var importError: String?
 
     private static let families: [String] = NSFontManager.shared.availableFontFamilies
         // 点号开头的是系统内部字体(.AppleSystemUIFont 这类),不该出现在给人看的选单里。
@@ -44,6 +56,12 @@ struct FontFamilyPicker: View {
         }
     }
 
+    private var filteredCustomFonts: [CustomFontStore.ImportedFont] {
+        let keyword = query.trimmingCharacters(in: .whitespaces)
+        guard !keyword.isEmpty else { return customFonts.fonts }
+        return customFonts.fonts.filter { $0.familyName.localizedCaseInsensitiveContains(keyword) }
+    }
+
     /// 族名怎么显示给人看:空串是"跟随系统字体",其余直接用族名。
     ///
     /// static 而不是只留下面那个私有计算属性(2026-08-30):悬浮歌词编辑台的工具栏要在
@@ -59,6 +77,7 @@ struct FontFamilyPicker: View {
     var body: some View {
         Button {
             query = ""
+            importError = nil
             showingList = true
         } label: {
             HStack(spacing: 5) {
@@ -94,10 +113,31 @@ struct FontFamilyPicker: View {
                         row(family: "", label: L10n.t("系统字体"))
                         Divider().padding(.vertical, 2)
                     }
+                    if !filteredCustomFonts.isEmpty {
+                        ForEach(filteredCustomFonts) { font in
+                            ImportedFontRow(
+                                font: font,
+                                isSelected: font.familyName == selection,
+                                onSelect: {
+                                    selection = font.familyName
+                                    showingList = false
+                                },
+                                onDelete: {
+                                    // 删的这款正被这个选择器选中就退回系统字体——不退的话按钮上会
+                                    // 留着一个再也选不出来的族名(渲染路径 Font.overlayFont 本身
+                                    // 会显式落回系统字体、不会崩,但按钮标签是直接 .custom(selection)
+                                    // 渲染的,删完不退会显示成一款查无此字的幽灵字体)。
+                                    if selection == font.familyName { selection = "" }
+                                    customFonts.remove(font)
+                                }
+                            )
+                        }
+                        Divider().padding(.vertical, 2)
+                    }
                     ForEach(filtered, id: \.self) { family in
                         row(family: family, label: family)
                     }
-                    if filtered.isEmpty {
+                    if filtered.isEmpty && filteredCustomFonts.isEmpty {
                         Text(L10n.t("没有匹配的字体"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -106,8 +146,65 @@ struct FontFamilyPicker: View {
                     }
                 }
             }
+            Divider()
+            importRow
         }
-        .frame(width: 260, height: 320)
+        .frame(width: 260, height: 350)
+    }
+
+    /// 常驻在列表底部的「导入字体…」——不放进 ScrollView,免得字体一多就要滚到底才找得到。
+    private var importRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: importFont) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(L10n.t("导入字体…"))
+                        .font(.system(size: 12))
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            if let importError {
+                Text(importError)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+    }
+
+    /// 弹原生文件面板选 .ttf / .otf,可多选。跟设置页「从文件导入…」(SettingsView
+    /// .pickConfigFileToImport)同一套做法:先选、面板一关就地校验,不搞"确认后才发现选错"。
+    private func importFont() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "ttf"), UTType(filenameExtension: "otf"),
+        ].compactMap { $0 }
+        panel.prompt = L10n.t("导入")
+        panel.message = L10n.t("选择 .ttf 或 .otf 字体文件，可多选")
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+
+        importError = nil
+        var failureCount = 0
+        for url in panel.urls {
+            do {
+                _ = try customFonts.importFont(from: url)
+            } catch {
+                failureCount += 1
+            }
+        }
+        guard failureCount > 0 else { return }
+        importError = failureCount == panel.urls.count
+            ? L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
+            : String(format: L10n.t("%@ 个文件导入失败，其余已导入"), "\(failureCount)")
     }
 
     private func row(family: String, label: String) -> some View {
@@ -138,5 +235,48 @@ struct FontFamilyPicker: View {
             .padding(.vertical, 5)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// 「已导入」区的一行:跟系统字体那行(`FontFamilyPicker.row`)长得像,多一个 hover 才露出
+/// 的删除按钮。独立成 struct 才能让 hover 状态是这一行自己的 `@State`,不必每次 hover 进出
+/// 都让整个选择器重新求值——跟 `AccountLinkingTab.PendingListenRow` 同一个理由、同一套做法
+/// (删除按钮常驻槽位、只切 opacity,不然按钮一出现整行宽度会抖)。
+private struct ImportedFontRow: View {
+    let font: CustomFontStore.ImportedFont
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: onSelect) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .opacity(isSelected ? 1 : 0)
+                    Text(font.familyName)
+                        .font(.custom(font.familyName, size: 13))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .opacity(isHovered ? 1 : 0)
+            .allowsHitTesting(isHovered)
+            .help(L10n.t("删除这款导入的字体（不可恢复）"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .onHover { inside in isHovered = inside }
     }
 }

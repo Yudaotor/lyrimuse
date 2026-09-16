@@ -146,6 +146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
         if isUnregisterLoginItemRun { return }
+        // ⚠️ 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
+        // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行
+        // 就会第一次访问 AppSettings.shared,而它的 init() 末尾会用 fontFamilyName 算一遍
+        // mainFont(recomputeFonts()) —— 这时如果自定义字体还没注册,NSFontManager 找不到
+        // 那个族名,会静默落回系统字体,直到下一次设置变动才纠正过来。见 CustomFontStore 头注。
+        _ = CustomFontStore.shared
         // 「开机启动」默认是开的(见 AppSettings.init),但那处赋值不触发 didSet,系统层面
         // 并不会因此注册登录项。这里补一次,让默认值真的算数。SMAppService 的注册是幂等的,
         // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。

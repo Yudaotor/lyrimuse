@@ -62,6 +62,10 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
     @Published private(set) var textStrokeEnabled = false
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
+    /// 卡拉OK"未唱到"那一段实际显示用的颜色(2026-09-16)——跟 displayForegroundColor
+    /// 完全对称的一对:「跟随封面」开着且这首歌已算出动态高亮色时用它,否则退回用户手选的
+    /// 固定未唱色。两者是独立的颜色,不是同一个值的两种状态。
+    @Published private(set) var displayKaraokeUnsungColor: Color = .white.opacity(0.35)
     @Published private(set) var backgroundIsVisible = false
     @Published private(set) var backgroundColor: Color = .clear
     /// 悬浮歌词背景毛玻璃(2026-09-02),见 AppSettings.overlayBackgroundGlass。
@@ -120,6 +124,18 @@ private final class OverlayPlayback: ObservableObject {
             s.$previewFont.removeDuplicates().sink { [weak self] in self?.previewFont = $0 },
             s.$textStrokeEnabled.removeDuplicates().sink { [weak self] in self?.textStrokeEnabled = $0 },
             s.$textStrokeColor.removeDuplicates().sink { [weak self] in self?.textStrokeColor = $0 },
+            // ⚠️ 跟随封面时**不能**直接给 accent 本身(2026-09-16 用户当场纠正:"未唱颜色选择
+            // 跟随封面之后不应该和已唱颜色一模一样,要和之前的效果一样,一个深一点一个浅一点")——
+            // 已唱色(displayForegroundColor)在跟随封面时同样是这个 accent,原样传出去的话两段
+            // 会是完全相同的颜色,卡拉OK的进度效果直接消失。这里补一次 dimOpacity,复现"未唱是
+            // 已唱调暗"的老观感,只是源头从固定 fg 换成了动态 accent。固定色(fixed,用户没开
+            // 跟随封面时手选或迁移种下的那个)已经在存的时候就带着期望的深浅,不再额外调暗。
+            Publishers.CombineLatest3(p.$artworkAccentColor, s.$karaokeUnsungFollowsCoverArt, s.$karaokeUnsungColor)
+                .map { accent, follows, fixed in
+                    (follows ? accent?.opacity(WordKaraokeGradient.dimOpacity) : nil) ?? fixed
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.displayKaraokeUnsungColor = $0 },
             s.$backgroundIsVisible.removeDuplicates().sink { [weak self] in self?.backgroundIsVisible = $0 },
             s.$backgroundColor.removeDuplicates().sink { [weak self] in self?.backgroundColor = $0 },
             s.$overlayBackgroundGlass.removeDuplicates().sink { [weak self] in self?.backgroundGlass = $0 },
@@ -1317,10 +1333,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 渐变素材每帧每行只取一次(纯色词跨帧复用同一实例,见 WordKaraokeGradient.Palette
         // 注释;2026-08-20 性能审计:原来逐词现造 LinearGradient+AnyShapeStyle,~95% 纯色词
         // 每帧被迫重走样式失效)。currentMs == nil 是描边剪影副本,不需要素材。
+        // 已唱/未唱是独立的一对颜色(不再是"同一色调暗"的派生关系),原样传给两条渐变
+        // (主行 + 罗马音行)——未唱色不跟着 fg 的 0.75 罗马音折扣走一遍,那条折扣只对
+        // "同一色调暗"才有意义。
+        let unsungColor = playback.displayKaraokeUnsungColor
         let palette = currentMs != nil
-            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor) : nil
+            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor, unsungColor: unsungColor) : nil
         let romaPalette = (currentMs != nil && usesPerWordRomanization)
-            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor.opacity(0.75)) : nil
+            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor.opacity(0.75), unsungColor: unsungColor) : nil
         // 会自动换行的 WrapLayout——HStack(spacing: 0) 从不换行,一行装不下所有字时会把
         // 每个 Text 压缩到自己出省略号,长的逐字歌词行会直接"消失"变成一串"…"。
         // 见文件底部 WrapLayout 定义。contentKey:行身份+字体+罗马音开关 —— 都没变就跳过

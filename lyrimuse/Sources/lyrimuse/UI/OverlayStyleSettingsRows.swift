@@ -128,24 +128,48 @@ struct OverlayTextSettingsRows: View {
             ) {
                 Toggle("", isOn: $settings.overlayLyricsKaraoke)
             }
-            // ── 以下三行 2026-09-02 从原「配色」组并过来(「跟随封面」2026-09-07 又搬去了「主题」组)──
+            // ── 以下两行 2026-09-02 从原「配色」组并过来 ──
             //
-            // 「跟随封面」开着时文字颜色由封面主色接管(PlaybackCoordinator.displayForegroundColor),
-            // 这一行 2026-09-02~09-07 之间是整行收起的;现在开关不在这个浮层里了,整行藏掉会变成
-            // "文字颜色去哪了",所以行留着、尾部换成一句灰字「跟随封面」指向原因 —— 这是**值**的位置,
-            // 报的是"此刻文字色由谁决定",不是一个可点的控件。背景色和描边色不受接管,照常显示。
+            // 「跟随封面 / 自定义颜色」这两行共用的取色控件几次改版都没选对形状,记一下弯路
+            // 免得再绕回去:①「主题」浮层里一颗独立开关,要跨两个浮层才能切模式,用户反馈
+            // "体验割裂";② 挪进这一行、用 `Toggle(带文字标签, isOn:)` 内联——**macOS 上
+            // 这个标签实测不渲染**,行里只剩一颗光秃秃的开关,完全看不出是什么(用户截图报告
+            // "现在这样肯定有问题");③(现在)换成下拉菜单(`colorModeMenu`,照抄"配色主题"
+            // 那颗 `Menu` 的写法,这个仓库里唯一验证过好用的下拉形态,见 themeItem 上方注释里
+            // "为什么不继续试哪一样能用")——下拉本身就是**当前模式的文字**,不依赖 Toggle
+            // 的标签渲染,选"自定义颜色"才在旁边露出取色器。
+            //
+            // 两行共用 `colorModeMenu(follows:color:supportsOpacity:)`(定义在这个 struct
+            // 底部)——避免各写一遍、以后漏改一处。
             CardDivider()
             SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
-                if settings.followsCoverArt {
-                    Text(L10n.t("跟随封面"))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ColorPicker("", selection: Binding(
+                colorModeMenu(
+                    follows: $settings.followsCoverArt,
+                    color: Binding(
                         get: { settings.foregroundColor },
                         set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                               // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+                    ),
+                    supportsOpacity: false // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+                )
+            }
+            // 2026-09-16 加(GitHub discussions#6)。**跟「文字颜色」是平级的一对独立颜色**,
+            // 不是它的附属项——已唱色就是上面那行,这一行是未唱到那一段单独的颜色,两者各自
+            // 都能"跟随封面"或"选一个具体颜色",互不牵连。
+            //
+            // 整行仍然只在开着「卡拉OK效果」时出现:没有卡拉OK就没有"已唱/未唱"这回事,给一个
+            // 不会产生任何视觉效果的设置项没有意义。
+            if settings.overlayLyricsKaraoke {
+                CardDivider()
+                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱颜色")) {
+                    colorModeMenu(
+                        follows: $settings.karaokeUnsungFollowsCoverArt,
+                        color: Binding(
+                            get: { settings.karaokeUnsungColor },
+                            set: { settings.karaokeUnsungColorHex = $0.hexStringWithAlpha }
+                        ),
+                        supportsOpacity: true
+                    )
                 }
             }
             CardDivider()
@@ -169,6 +193,29 @@ struct OverlayTextSettingsRows: View {
         // (`followsCoverArt` 那条 2026-09-07 拿掉了:它在这一组里不再增删任何行,只换「文字颜色」
         //  尾部的内容,没有几何要过渡。)
         .animation(.default, value: settings.textStrokeEnabled)
+        .animation(.default, value: settings.overlayLyricsKaraoke)
+    }
+
+    /// 「文字颜色」「未唱颜色」共用的取色控件:下拉菜单选"跟随封面"还是"自定义颜色",
+    /// 选了自定义才在旁边露出取色器。下拉照抄这个文件里「配色主题」那颗 `Menu` 的写法
+    /// (`Menu(标题) { Button(...) }`,纯文字条目、不带图标/勾选)——这是本仓唯一验证过
+    /// 好用的下拉形态,`Menu` 条目里塞 `Toggle`/`Image` 会整个菜单画成空白(见 themeItem
+    /// 上方那段"为什么不继续试哪一样能用")。
+    ///
+    /// ⚠️ 这里**不用** `Toggle(带文字标签, isOn:)`:那是上一版的做法,macOS 上这个标签
+    /// 实测不渲染,行里只剩一颗光秃秃看不出含义的开关(用户截图报告的问题)。
+    @ViewBuilder
+    private func colorModeMenu(follows: Binding<Bool>, color: Binding<Color>, supportsOpacity: Bool) -> some View {
+        HStack(spacing: 8) {
+            Menu(follows.wrappedValue ? L10n.t("跟随封面") : L10n.t("自定义颜色")) {
+                Button(L10n.t("跟随封面")) { follows.wrappedValue = true }
+                Button(L10n.t("自定义颜色")) { follows.wrappedValue = false }
+            }
+            .fixedSize()
+            if !follows.wrappedValue {
+                ColorPicker("", selection: color, supportsOpacity: supportsOpacity)
+            }
+        }
     }
 }
 
@@ -401,18 +448,12 @@ struct OverlayThemeSettingsRows: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 标题「跟随封面」前面本来带着「文字」二字(2026-08-26 应用户要求去掉,嫌标题太长)。
-            // 它接管的只有**文字颜色**(PlaybackCoordinator.displayForegroundColor);背景色
-            // (LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)任何时候都
-            // 无条件生效。这个开关**只管桌面悬浮歌词**(灵动岛整卡前景取色 2026-08-31 并进了它自己的
-            // `notchCardStyle == .coverArt`,理由见 NotchPlayback.accent 的注释)。
-            SettingsRow(
-                icon: "photo.on.rectangle.angled",
-                title: L10n.t("跟随封面")
-            ) {
-                Toggle("", isOn: $settings.followsCoverArt)
-            }
-            CardDivider()
+            // 「跟随封面」(文字颜色/未唱颜色各一颗)2026-09-16 从这里挪进了「文字」浮层、
+            // 内联在各自的颜色行里(用户反馈"要跨两个浮层才能切换取色模式,体验割裂")。这张
+            // 卡现在只剩"选一套配色主题预设"这一件事,见 OverlayTextSettingsRows 里那两行的
+            // 头注——「配色主题」选中某个预设时仍然会调 ColorTheme.apply(to:) 把 followsCoverArt
+            // 关掉(互斥逻辑没变,只是操作它的开关搬了地方)。
+            //
             // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
             // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
             SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
@@ -702,6 +743,14 @@ enum OverlayStyleDefaults {
         settings.overlayBackgroundGlass = false
         settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
         settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
+        // 2026-09-16:「已唱/未唱」是文字组多出来的一对独立颜色(跟 foregroundColorHex/
+        // followsCoverArt 同一个形状),同一条头注警告过的坑——新加字段不进这个函数,点
+        // "恢复默认"时它会被漏掉。它不在 ColorTheme 里(见该属性头注),没有 defaultTheme
+        // 可读:颜色沿用 AppSettings.init() 里没存过时同一条派生(默认主题文字色调暗),
+        // 「跟随封面」**刻意**恢复成 false 而不是跟 followsCoverArt 一样的 true——两个都
+        // 跟随的话已唱/未唱会是完全同一个色,卡拉OK的进度效果直接失去可读性。
+        settings.karaokeUnsungFollowsCoverArt = false
+        settings.karaokeUnsungColorHex = AppSettings.dimmedForegroundHex(ColorTheme.defaultTheme.foregroundColorHex)
     }
 }
 

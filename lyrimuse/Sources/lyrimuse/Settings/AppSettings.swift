@@ -253,6 +253,8 @@ final class AppSettings: ObservableObject {
         static let manualPickLocksLyrics = "np:manualPickLocksLyrics"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
+        static let karaokeUnsungFollowsCoverArt = "np:karaokeUnsungFollowsCoverArt"
+        static let karaokeUnsungColorHex = "np:karaokeUnsungColorHex"
         static let fontFamilyName = "np:fontFamilyName"
         static let fontSize = "np:fontSize"
         static let overlayFontWeight = "np:overlayFontWeight"
@@ -780,6 +782,30 @@ final class AppSettings: ObservableObject {
             textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
         }
     }
+    // 卡拉OK"已唱/未唱"两段颜色(2026-09-16,GitHub discussions#6)。跟"文字颜色"是完全独立
+    // 的一对——已唱色 = 文字颜色,未唱色是这一对里单独的一半,不再是"文字颜色调暗"那种派生
+    // 关系。**形状照抄 followsCoverArt/foregroundColorHex 那一对**:这里只管持久化和固定色
+    // 值,"跟随封面"开着时的动态值由 OverlayPlayback 现算(见该文件 karaokeUnsungColor 的
+    // CombineLatest3),跟 foregroundColorHex 与 followsCoverArt 的分工完全对称。
+    //
+    // ⚠️ 用户 2026-09-16 明确否决过"要不要自定义未唱色"这种额外开关的设计(截图报告"配置很
+    // 混乱"):已唱/未唱该是两个独立的、平级的颜色,各自都能选"跟随封面"或"具体颜色",不该
+    // 有一个开关卡在"未唱色"前面决定"要不要有这个颜色"。
+    //
+    // ⚠️ 故意**不做成 ColorTheme 的字段**——跟 `followsCoverArt` 同一个 judgement(见那个
+    // 属性上方注释):内置预设/自存主题都不必因为多了这一项而跟着长一个新字段、多一轮迁移。
+    @Published var karaokeUnsungFollowsCoverArt: Bool {
+        didSet { defaults.set(karaokeUnsungFollowsCoverArt, forKey: Keys.karaokeUnsungFollowsCoverArt) }
+    }
+    // 没存过这个键时(全新装这个字段 / 老用户升级)取"当前文字色在 dimOpacity 下的样子"当
+    // 默认值(算法见 init() 里的 dimmedForegroundHex)——这正是加这一对独立颜色之前唯一的
+    // 行为,升级那一刻画面不跳变;从这之后它就是彻底独立的存储,不再跟着文字色联动。
+    @Published var karaokeUnsungColorHex: String {
+        didSet {
+            defaults.set(karaokeUnsungColorHex, forKey: Keys.karaokeUnsungColorHex)
+            karaokeUnsungColor = Color(hexWithAlpha: karaokeUnsungColorHex, fallback: .white.opacity(0.35))
+        }
+    }
     // 只负责持久化——不在这里连带调 LyricsOverlayWindowController.shared.setLocked(_:),
     // 那样会在 AppSettings 自己的 init() 里触发 didSet、顺带在其它单例还没构造完成时
     // 去访问它,有循环初始化风险。"生效"这一步挪到 SettingsView.swift 的 Toggle
@@ -1262,6 +1288,18 @@ final class AppSettings: ObservableObject {
     static func backgroundVisible(hex: String, glass: Bool) -> Bool {
         glass || (NSColor(hexStringWithAlpha: hex)?.alphaComponent ?? 0) > 0.02
     }
+    /// karaokeUnsungColorHex 首次没有存过时的默认值:把 `foregroundHex` 的 alpha 乘上
+    /// `WordKaraokeGradient.dimOpacity`,RGB 不变——数值上正好复现"加这个独立字段之前,
+    /// 未唱色 = 文字颜色在 dimOpacity 下的样子"这条老行为,不管用户的文字颜色实际是什么。
+    static func dimmedForegroundHex(_ foregroundHex: String) -> String {
+        guard let rgb = NSColor(hexStringWithAlpha: foregroundHex)?.usingColorSpace(.sRGB) else {
+            return "#FFFFFF59"
+        }
+        return NSColor(
+            srgbRed: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent,
+            alpha: rgb.alphaComponent * WordKaraokeGradient.dimOpacity
+        ).hexStringWithAlpha
+    }
     // 见 Keys.followsCoverArt 注释。纯持久化,不在这里连带计算任何缓存值——实际生效
     // 靠 PlaybackCoordinator.displayForegroundColor 读取这个开关+按曲目算出的动态色,
     // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex→didSet 里转 Color 缓存"的
@@ -1333,6 +1371,7 @@ final class AppSettings: ObservableObject {
     @Published private(set) var backgroundColor: Color = .clear
     @Published private(set) var backgroundIsVisible: Bool = false
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
+    @Published private(set) var karaokeUnsungColor: Color = .white.opacity(0.35)
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
@@ -1610,6 +1649,13 @@ final class AppSettings: ObservableObject {
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt
+        karaokeUnsungFollowsCoverArt = (defaults.object(forKey: Keys.karaokeUnsungFollowsCoverArt) as? Bool) ?? false
+        // ⚠️ 这里还不能读 foregroundColorHex 算真正的默认值——Swift 的类初始化规则是"所有
+        // 存储属性都赋过值之前不能读 self 的任何属性",哪怕那个属性在**这同一个 init() 里**
+        // 已经在上面赋过值了。真正的派生挪到 init() 末尾(那时所有属性都已就绪,`recomputeFonts()`
+        // 等其它派生值也是在那里算的)——这里先存一下"到底存没存过",用一个占位值顶着。
+        let storedKaraokeUnsungColorHex = defaults.string(forKey: Keys.karaokeUnsungColorHex)
+        karaokeUnsungColorHex = storedKaraokeUnsungColorHex ?? "#FFFFFF59"
         if let json = defaults.string(forKey: Keys.customColorThemesJSON),
            let data = json.data(using: .utf8),
            let themes = try? JSONDecoder().decode([ColorTheme].self, from: data) {
@@ -1647,6 +1693,15 @@ final class AppSettings: ObservableObject {
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = Self.backgroundVisible(hex: backgroundColorHex, glass: overlayBackgroundGlass)
         textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
+        // 没存过这个键(全新装这个字段 / 老用户升级)才在这里补上真正的默认值——现在所有
+        // 属性都已经赋过值,读 foregroundColorHex 是安全的(上面 storedKaraokeUnsungColorHex
+        // 那条注释解释了为什么不能在加载阶段就读)。这一次赋值是 init() 里的第二次赋值,
+        // didSet 会正常触发,顺带把下面这行要设的 karaokeUnsungColor 设好——但为了这里的
+        // 意图一目了然,仍然显式再设一遍,不依赖 didSet 的副作用。
+        if storedKaraokeUnsungColorHex == nil {
+            karaokeUnsungColorHex = AppSettings.dimmedForegroundHex(foregroundColorHex)
+        }
+        karaokeUnsungColor = Color(hexWithAlpha: karaokeUnsungColorHex, fallback: .white.opacity(0.35))
         // 顺手把功能改名/删除之后遗留下来的死键清掉(名单和理由见
         // ConfigPortability.obsoleteDefaultsKeys)。放在最后:上面那些读取全部完成之后再动
         // UserDefaults,不会影响本次启动读到的任何值。

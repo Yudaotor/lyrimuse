@@ -192,16 +192,16 @@ public enum SettingsSearchCatalog {
 
         // ---- 歌词显示 › 悬浮歌词 ----
         surface(.overlay, "桌面悬浮歌词", kw: ["开关", "悬浮窗", "总开关"], inDrawer: false),
-        surface(.overlay, "跟随封面", kw: ["封面色", "取色", "配色"], group: "主题"),
         surface(.overlay, "配色主题", kw: ["预设", "经典白字", "白字描边", "经典黑字", "黑字描边", "深色卡片", "浅色卡片"], group: "主题"),
         surface(.overlay, "我的配色主题", kw: ["自存", "保存主题"], group: "主题"),
         surface(.overlay, "字体", kw: ["字体族", "font"], group: "文字"),
         surface(.overlay, "粗细", kw: ["字重", "weight"], group: "文字"),
         surface(.overlay, "字号", kw: ["大小", "font size"], group: "文字"),
         surface(.overlay, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "文字"),
-        surface(.overlay, "文字颜色", kw: ["字色", "颜色"], group: "文字"),
+        surface(.overlay, "文字颜色", kw: ["字色", "颜色", "跟随封面"], group: "文字"),
         surface(.overlay, "文字描边", kw: ["描边", "outline"], group: "文字"),
         surface(.overlay, "描边颜色", kw: ["描边"], group: "文字"),
+        surface(.overlay, "未唱颜色", kw: ["卡拉OK", "未唱", "逐字", "karaoke", "跟随封面"], group: "文字"),
         surface(.overlay, "背景颜色", kw: ["背景", "透明"], group: "背景"),
         surface(.overlay, "毛玻璃背景", kw: ["模糊", "玻璃", "blur"], group: "背景"),
         surface(.overlay, "双行显示", kw: ["两行", "副行", "下一句"], group: "排版"),
