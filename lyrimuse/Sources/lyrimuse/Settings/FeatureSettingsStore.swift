@@ -411,11 +411,17 @@ public final class FeatureSettingsStore: ObservableObject {
     // 该由用户显式同意 —— 现有的九个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
     @Published public var lastfmMirrorScrobble = false
-    /// 默认 .all:原样发整串。**必须逐字等于 collector features.go 里 resolveScrobbleArtistMode
-    /// 的兜底值** —— 那条对齐是人工维持的,没有机制保证(见 load() 里的警告)。
-    /// 语义与取舍见 collector lastfm.go 的 resolveScrobbleArtist:ListenBrainz 文档要求
-    /// 合唱 credit "include them all";折叠会丢信息且不可逆,不折叠最坏只是 Last.fm 上
-    /// 多一个听众很少的合唱条目 —— 代价不对称。
+    /// 这里的初值 .all 是**给老机器的**,而且 **必须逐字等于 collector features.go 里
+    /// resolveScrobbleArtistMode 的兜底值** —— 那条对齐是人工维持的,没有机制保证
+    /// (见 load() 里的警告)。语义与取舍见 collector lastfm.go 的 resolveScrobbleArtist:
+    /// ListenBrainz 文档要求合唱 credit "include them all";折叠会丢信息且不可逆,不折叠
+    /// 最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。
+    ///
+    /// ⚠️ **全新装机默认 .smart**(2026-09-16 用户定:「把这个智能改为默认选项,但是之前已经
+    /// 在用全部的了就不要改了,只有新下载的才变为智能」)。抬档只发生在 load() 里"文件不存在"
+    /// 那一条路径上、且 `isFreshInstall` 成立时,并当场写实到盘上 —— 完整理由见那里。
+    /// 这个初值**不能**直接改成 .smart:它同时是 features.json 损坏时的兜底,那种情况下的
+    /// 机器几乎必然是老用户,改了就等于背着他折叠合唱串。
     @Published public var lastfmScrobbleArtistMode: LastfmScrobbleArtistMode = .all
     /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。**必须逐字等于 collector features.go 里
     /// boolOr 的默认值**(人工维持,见 load() 里的警告)。
@@ -468,6 +474,35 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public private(set) var loadFailure: String?
 
     static let fileURL = LyrimusePaths.configFile("lyrimuse-features.json")
+
+    /// 这台机器是不是**头一回**用 lyrimuse。只给"新装的默认值跟老用户不一样"的开关用
+    /// (2026-09-16 引入时只有 `lastfmScrobbleArtistMode` 一个,见它的声明)。
+    ///
+    /// 为什么非要这么一个东西:想给某个开关换默认值时,"从没设置过"和"显式选了旧默认值"
+    /// 在 features.json 里**长得一模一样** —— persistFile() 写的是全量快照,所以用户只要
+    /// 动过**任何**一个别的开关,这个键就已经带着旧默认值落了盘。光看键在不在分不出新老,
+    /// 只能另找"这台机器以前就在用"的信号。
+    ///
+    /// 三个信号任一成立就算老机器。取并集是因为它们各有盲区,单独用哪个都会漏:
+    ///  ① `np:hasCompletedOnboarding` 存在 —— 跟 `AppSettingsMirror.restoreIfPristine()` 用的是
+    ///     同一个键、同一个语义("这台机器有没有自己的偏好")。它被刻意排除在导出/镜像之外,
+    ///     所以在真·新机器上一定不存在。盲区:引导没走完就一直用下去的老用户。
+    ///  ② features.json 存在 —— 这台机器跑过旧版(这文件只有 Swift 侧会写)。
+    ///     盲区:从没动过任何开关的老用户 —— 那时文件压根还没被创建。
+    ///  ③ app-settings 镜像存在 —— 带着配置文件夹搬家过来的老用户。他的 ① 一定不成立
+    ///     (那个键不进镜像),② 也未必拷了,这一条专门兜他。
+    ///
+    /// ⚠️ 三条**全都往"老机器"那边倒**,这是刻意的:判错的代价不对称。判成老机器,最坏是
+    /// 新用户拿到旧默认值,他在设置里一眼看得见、随手能改;判成新机器却其实是老用户,等于
+    /// 背着他改了 scrobble 行为 —— 而 scrobble 落进 Last.fm 之后基本删不掉。同一条
+    /// "写侧不可逆、宁可不动"的取舍贯穿这个开关,见 lastfmScrobbleArtistMode 的声明。
+    static var isFreshInstall: Bool {
+        if UserDefaults.standard.object(forKey: "np:hasCompletedOnboarding") != nil { return false }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: fileURL.path) { return false }
+        if fm.fileExists(atPath: AppSettingsMirror.fileURL.path) { return false }
+        return true
+    }
 
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
@@ -630,6 +665,27 @@ public final class FeatureSettingsStore: ObservableObject {
             // ⚠️ 这条对齐是**人工维持**的,没有任何机制保证 —— 2026-08-30 就抓到 player
             // 一项脱节了(属性初值 .appleMusic vs collector 的 auto,已修)。改任一侧的
             // 默认值都要回头核对另一侧,别信这行注释说"一致"就跳过。
+            //
+            // 上面那条对齐有且只有一个例外:「合唱歌曲的歌手」在**全新装机**上默认「智能」
+            // (2026-09-16)。它只能在这里做,也只能在这一条路径上做 ——
+            //  · 走到 `decoded != nil` 就说明文件在、能解析,那这台机器必是老的,一律维持原样;
+            //  · 文件**损坏**时也会落到这个 guard 里,但那时 `isFreshInstall` 因信号②为 false,
+            //    照旧 .all —— 老用户文件坏了,更不该顺手改他的 scrobble 行为。
+            if Self.isFreshInstall {
+                lastfmScrobbleArtistMode = .smart
+                // 必须当场写实到盘上。collector 是另一个进程、读不到 UserDefaults,只认这份
+                // features.json,而它对"文件不存在"的兜底是 all(features.go
+                // resolveScrobbleArtistMode)—— 不写的话界面显示「智能」、实际一直在发整串,
+                // 而且这个不一致会一直挂到用户碰巧改了别的开关触发一次 save 为止。
+                // 反过来说,这一写也让 collector 那边"文件不存在"重新只剩一个含义:
+                // 老用户从没动过任何开关 → all。两边因此不需要各自判一次"新装没有"。
+                //
+                // 用 persistFile() 而不是 save():这里只要把默认值固化下来,不该顺带触发
+                // collector 重启/热读那一套(全新装机时它多半还没配置好)。写失败也不致命 ——
+                // 那时两边都还是 all(旧行为),下一次真正的 save 会把它带上,不会出现
+                // "界面与实际不一致"这种更坏的中间态。
+                try? persistFile()
+            }
             savedSnapshot = currentSnapshot
             return
         }

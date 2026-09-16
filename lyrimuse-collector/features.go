@@ -407,6 +407,17 @@ const (
 // 遗留的二态开关 lastfm_scrobble_first_artist_only 做一次迁移(true → first),两者都没有
 // 才兜底 all。非法值**不**当成 all 静默吞掉之外还会记一行日志 —— 拼错档位名的后果是
 // "设置里选了智能、collector 一直在发整串",不报出来查不到。
+//
+// ⚠️ 这里兜底 all **不能**跟着 App 改成 smart(2026-09-16 起「全新装机默认智能」)。
+// 两个进程能拿到的信息不一样:那个默认值是按"这台机器是不是头一回用 lyrimuse"抬的,
+// 判据里有 UserDefaults(`np:hasCompletedOnboarding`)—— collector 是独立进程,读不到,
+// 自己判不了新老。分工因此是:**App 负责判、并把结论写实进 features.json**
+// (FeatureSettingsStore.isFreshInstall + load() 里那段 persistFile),collector 只管读。
+//
+// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** → all。
+// 全新装机那一路在 App 首次 load() 时就已经把文件连同 "smart" 一起落了盘。
+// 反过来说,要是哪天把 App 那次写盘去掉,这里就会变成"新用户界面显示智能、collector 发整串"
+// —— 改那边之前先回来看这段。
 func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
 	switch raw {
 	case scrobbleArtistAll, scrobbleArtistFirst, scrobbleArtistSmart:
