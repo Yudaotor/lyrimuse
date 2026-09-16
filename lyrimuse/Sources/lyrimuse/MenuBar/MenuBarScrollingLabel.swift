@@ -545,17 +545,26 @@ final class MenuBarScrollingLabel: NSView {
             buttonWidth: bounds.width, contentWidth: plan.windowWidth + reserved,
             reservedIconWidth: reserved, iconLeading: plan.icon?.position == .leading)
         else { return nil }
-        let contentW = min(plan.windowWidth + reserved, bounds.width)
-        let left = max(0, ((bounds.width - contentW) / 2).rounded())
         let clipW = slot.width
         let y = rows?.mainY ?? ((bounds.height - height) / 2).rounded()
         let lyricsX = slot.x
+        // ⚠️ 图标的 x **也从 slot 推**,不许自己再算一遍(2026-09-16)。
+        //
+        // 这里原来有一份**重复的**居中算式(`let left = (bounds.width - contentW) / 2`),
+        // 歌词用 `slot.x`、图标用它自己那个 `left`。两份在当时恰好等价,所以一直没露馅 ——
+        // 直到 2026-09-16 把 `lyricsSlot` 改成贴前缘:歌词左移了 9pt,图标却按旧算式留在原地,
+        // 歌词当场压进图标那一块。这正是本函数头注警告过的「别在这儿再写一遍」,而那份重复
+        // 就藏在头注下面五行。
+        //
+        // 反解关系(跟 lyricsSlot 的定义互为逆运算):
+        //   · 图标在左:slot.x = 图标块左沿 + reserved  → 图标块左沿 = slot.x − reserved
+        //   · 图标在右:slot.x 就是歌词格左沿          → 图标块左沿 = slot.x + 歌词宽 + gap
         let iconX: CGFloat
         switch plan.icon?.position {
         case .leading:
-            iconX = left
+            iconX = max(0, lyricsX - reserved)
         case .trailing:
-            iconX = left + clipW + MenuBarProgressIcon.gap
+            iconX = lyricsX + clipW + MenuBarProgressIcon.gap
         default:
             iconX = 0
         }

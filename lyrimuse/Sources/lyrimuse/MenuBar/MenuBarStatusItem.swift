@@ -436,8 +436,28 @@ final class MenuBarStatusItem: NSObject {
     /// (见 present 头注),这里只是重建判定的缓存键之一。
     private var displayClass = ""
 
-    /// 歌词固定宽度态的槽宽:窗口宽 + 系统内边距(实测健康态 160 → 178)。
+    /// **图标态**的槽宽 = 图标宽 + 这个数。
+    ///
+    /// ⚠️ 2026-09-16 订正了这个常量的含义。原注释写的是「窗口宽 + 系统内边距(实测健康态
+    /// 160 → 178)」,读起来像 AppKit 会额外吃掉 18pt。**实测不是**:打日志对账
+    /// `requested` / `button.bounds.width` / `item.length` 三个数,按钮宽恒等于我们申请的
+    /// 槽宽(只做取整)—— AppKit 一点都没多要,这 18pt 全是我们自己留的。
+    ///
+    /// 图标态**需要**它:`showIcon` 走 `button.image`,AppKit 把图片在按钮里居中,18pt 给出
+    /// 左右各 9pt,正好跟别的状态栏图标观感一致(实测相邻系统图标之间 23pt)。
+    /// 歌词态**不需要**这么多,见 `lyricsSlotPadding`。
     private static let fixedSlotPadding: CGFloat = 18
+    /// **歌词态**的槽宽 = 内容宽 + 这个数。
+    ///
+    /// 2026-09-16 从 18 降到 4(用户圈图:「这右边的也帮我缩一下,现在太多空着了」)。
+    /// 同日早些时候把内容改成贴按钮前缘之后,那 18pt 不再左右平分、**整块落到尾部**,
+    /// 在高亮态(鼠标按住时那个圆角块)下一眼就能看到歌词右边空一大截。
+    ///
+    /// 歌词态不像图标态那样靠 AppKit 居中(我们自己摆图层),所以它只需要一点点防裁边的余量:
+    /// 4pt ≈ 文字宽度测量与实际绘制之间的取整误差量级。⚠️ 反推内容宽的地方
+    /// (`currentLyricsSlot` / `renderInterimLyrics`)必须用**同一个**常量,否则歌词格
+    /// 算出来的宽度跟真实槽宽差一截 —— 那正是 2026-09-03「点暂停生效上一首」的病根形状。
+    private static let lyricsSlotPadding: CGFloat = 4
 
     /// 两次重建之间的最小静默间隔,兼作歌词间隙的收缩观察窗(见 present 头注)。
     /// 卡死的那次实测两发相隔 1.1s,取 3s 留余量。
@@ -973,14 +993,14 @@ final class MenuBarStatusItem: NSObject {
     /// 用户报的"点了暂停,生效的是上一首")。槽宽是这一项的硬事实,只有重建才变,而重建
     /// 期间本来就不接管。算式与歌词层摆图层共用一份,在 `MenuBarHoverControls.lyricsSlot`。
     ///
-    /// `item.length - fixedSlotPadding` 这个反推口径跟 `renderInterimLyrics` 里那条一致
+    /// `item.length - lyricsSlotPadding` 这个反推口径跟 `renderInterimLyrics` 里那条一致
     /// (那边也是从当前槽宽反推歌词能用多宽)。
     private func currentLyricsSlot() -> CGRect? {
         guard let item = statusItem, let button = item.button else { return nil }
         let icon = lyricsIconBadge()
         guard let slot = MenuBarHoverControls.lyricsSlot(
             buttonWidth: button.bounds.width,
-            contentWidth: item.length - Self.fixedSlotPadding,
+            contentWidth: item.length - Self.lyricsSlotPadding,
             reservedIconWidth: MenuBarProgressIcon.reservedWidth(for: icon?.style),
             iconLeading: icon?.position == .leading)
         else { return nil }
@@ -1189,7 +1209,16 @@ final class MenuBarStatusItem: NSObject {
             let secondaryW = rowState.secondaryText.map {
                 MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
             } ?? 0
-            let naturalW = rowState.twoRows ? min(settings.menuBarLyricsWidth, max(mainW, secondaryW)) : mainW
+            // ⚠️ 副行是**「下一句」**时不许它撑宽槽位(2026-09-16,用户要求「宽不再被下一句撑大」)。
+            // 那一句马上就会变成主行、到时候自然把槽撑宽;现在就为它占地方,等于当前这一行短的
+            // 时候也按下一行的长度占着,菜单栏上白占一大块。装不下就走尾部渐隐,那条路本来就有。
+            // 译文 / 罗马音**不同**:它们是**这一句自己的**内容,不给宽度就永远只能看到半截,
+            // 所以那两档保持原来的 max(主行, 副行)(2026-09-06 定的「译文往往更长」)。
+            let secondaryWidensSlot = secondaryKind != .nextLine
+            let naturalW = rowState.twoRows
+                ? min(settings.menuBarLyricsWidth,
+                      secondaryWidensSlot ? max(mainW, secondaryW) : mainW)
+                : mainW
             // 占位态给槽宽兜个底:让它现在就有即将到来那一句要的宽度,那一句出现时几何
             // 已经到位、不必再改一次。判据是 Core 的纯函数(有 selftest),这里只喂数 ——
             // "下一句"怎么量在 `upcomingLineSlotWidth`,"该不该用它"在 `MenuBarSlotPolicy.slotWidth`。
@@ -1199,9 +1228,19 @@ final class MenuBarStatusItem: NSObject {
             // 同一首歌内只涨不缩(2026-09-16,用户要「不能跳来跳去」)。判据、代价与
             // "为什么是换歌而不是换行重置"都在 MenuBarSlotFloor 的声明处。
             // ⚠️ 只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
+            let naturalSlotW = textW + reserved + Self.lyricsSlotPadding
             let w = slotFloor.width(
-                target: textW + reserved + Self.fixedSlotPadding,
+                target: naturalSlotW,
                 trackKey: coordinator.title + "\u{1F}" + coordinator.artist)
+            // 地板到底有没有在撑着 —— 差值就是槽里多出来的那块空白(2026-09-16,用户圈图问
+            // 「这里那么大区域空着干什么?」)。只记宽度,不记歌词正文。
+            if w != naturalSlotW {
+                logger.debug("""
+                    slot floor holding: natural=\(naturalSlotW, privacy: .public) \
+                    floored=\(w, privacy: .public) main=\(mainW, privacy: .public) \
+                    secondary=\(secondaryW, privacy: .public)
+                    """)
+            }
             // 换歌重置那一刻的目标同样"还不作数" —— 理由见 MenuBarSlotFloor.didResetOnLastCall。
             let provisional = placeholderNow || slotFloor.didResetOnLastCall
             let fillPath = visible == text ? karaokeFillPath(for: text) : nil
@@ -1228,7 +1267,7 @@ final class MenuBarStatusItem: NSObject {
         case .fixed(let lineText, let windowWidth, let pacing):
             let icon = lyricsIconBadge()
             let slotWidth = windowWidth + MenuBarProgressIcon.reservedWidth(for: icon?.style)
-            present(class: "fixed", length: slotWidth + Self.fixedSlotPadding, collapseDelay: 0,
+            present(class: "fixed", length: slotWidth + Self.lyricsSlotPadding, collapseDelay: 0,
                     dwellSeconds: dwell,
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
@@ -1288,7 +1327,7 @@ final class MenuBarStatusItem: NSObject {
         // 剩下那截。扣错的方向是安全的那一侧 —— 用户刚打开这个开关时当前槽还没让出图标的
         // 位置,这里扣了之后歌词只是画窄一点点,总比画出格子外压到邻居头上强。
         let icon = lyricsIconBadge()
-        let usable = item.length - Self.fixedSlotPadding
+        let usable = item.length - Self.lyricsSlotPadding
             - MenuBarProgressIcon.reservedWidth(for: icon?.style)
         guard usable > 0 else { return }
         // widthMode 固定传 .fixed:过渡期间槽宽就是钉死的(它正是"还没让改"的那个宽),

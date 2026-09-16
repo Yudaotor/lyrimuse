@@ -84,12 +84,39 @@ public enum MenuBarSlotPolicy {
     /// 没有理由给两个数。
     public static let minimumWidenPoints: CGFloat = 6
 
+    /// 短命行"不值得为它改槽宽"的**偏差上限**(2026-09-17)。
+    ///
+    /// ⚠️ 这条**收窄了**下面 `skipsResize` 里那个无条件的时长判据。原来的判据假设
+    /// "短句是少数、下一句活得久" —— 一首句子**普遍**短于静默窗的歌里这个假设整首不成立,
+    /// 判据于是退化成**永不改槽宽**。实测(2026-09-17,英文快歌,逐句 dwell 0.9~2.5s):
+    ///
+    ///   01:01:15.919  rebuild  -> text(189.19)              ← 一句长句把槽撑到 189
+    ///   01:01:20.920  skipped (shrink, dwell 2.54s): 189.19 -> 154.57
+    ///   01:01:23.463  skipped (shrink, dwell 1.77s): 189.19 -> 113.21   ← 右边空 76pt
+    ///   01:01:26.776  skipped (shrink, dwell 1.60s): 189.19 -> 153.19
+    ///   01:01:31.920  skipped (shrink, dwell 0.94s): 189.19 -> 148.13
+    ///   01:01:34.419  rebuild  -> text(92.98)               ← 18.5s 后才终于缩
+    ///
+    /// 18.5 秒里 7 句都在一个不属于自己的槽里左对齐画,最短那句右边空 76pt —— 用户圈图问
+    /// 「为什么空出来那么多呀?」。另一轮实测更极端:129 秒不变,期间目标在 68~207pt 之间漂。
+    ///
+    /// **上限取 `MenuBarSlotFloor.shrinkTolerance`,不另给一个数。** 那条常量已经替
+    /// "槽比内容宽多少算浪费、用户一眼看不看得见"拍过板(30pt ≈ 两个汉字);这里再给第二个
+    /// 阈值,等于让执行层否决地板的判定 —— 地板判了该缩、这里却跳过,那个容差就形同虚设。
+    /// 两个数必须相等,selftest 有哨兵钉住。
+    ///
+    /// **代价**:句子普遍短的歌里重建会变密(上限仍是静默窗 3 秒一次,且只发生在换句那一刻,
+    /// 不会落进句中)。这是自适应宽度模式的本义 —— 不想让它跟着句子变的,该选固定宽度模式。
+    public static let shortLineDriftCeiling: CGFloat = MenuBarSlotFloor.shrinkTolerance
+
     /// 这次**改槽宽**该不该跳过(2026-09-11 起两个方向对称;原名 `skipsShrink`,只管收缩)。
     ///
     /// - 两个方向同样对待:变化量小于该方向的死区(`minimumShrinkPoints` /
     ///   `minimumWidenPoints`)一律跳过,跟这一句活多久无关(见那两个常量的注释)。
     /// - `dwellSeconds` 是这一句**总共会显示多久**(`PlaybackCoordinator.compactDwellSeconds`),
     ///   取不到(nil)时一律照旧改 —— 判据不成立就不该改变既有行为。
+    /// - ⚠️ 时长判据**有偏差上限**(2026-09-17 加):短命行只在偏差小于 `shortLineDriftCeiling`
+    ///   时才跳过。没有这条上限,句子普遍短于静默窗的歌整首都不改槽宽。
     /// - 时长判据用"小于"而不是"小于等于":恰好等于静默窗的行留给"照旧改"那一侧,因为它
     ///   换到下一行时静默窗刚好走完,不会拖累下一行。
     /// - ⚠️ **长度完全没变时返回 false**(不是 true)。那种情况是"形态翻转、槽宽不动"
@@ -105,7 +132,11 @@ public enum MenuBarSlotPolicy {
         let deadZone = delta > 0 ? minimumWidenPoints : minimumShrinkPoints
         if abs(delta) < deadZone { return true }
         guard let dwellSeconds else { return false }
-        return dwellSeconds < quietSecs
+        guard dwellSeconds < quietSecs else { return false }
+        // 短命行本身不值得改槽宽 —— 前提是"不改"之后屏幕上还说得过去。
+        // 偏差大到地板自己都判该缩(/该涨)的程度,就不是"省一次重建"而是"整首歌画在错的槽里"了。
+        // 理由与实测现行见 `shortLineDriftCeiling`。
+        return abs(delta) < shortLineDriftCeiling
     }
 
     /// 占位态的槽宽该给多少(2026-09-11)。
