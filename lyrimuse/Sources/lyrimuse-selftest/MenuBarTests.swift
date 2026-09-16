@@ -910,12 +910,19 @@ func runMenuBarTests() {
         // ⚠️ 2026-09-03 / 09-11 这两条实测样本的期望在 2026-09-17 **翻回 false**:偏差
         // (64.49pt / 77.39pt)双双越过 `shortLineDriftCeiling`。时长判据本身没变,只是
         // 不再无条件 —— 理由、实测时间线见 MenuBarSlotPolicy.shortLineDriftCeiling。
+        // ⚠️ 这两条的期望 2026-09-17 晚**又翻回 true** —— 上限从 30 提到 120 之后
+        // 64pt / 77pt 都落在上限之内了。翻转的依据是闪烁的实测代价(一次重建 = 250ms
+        // 内容空窗),完整数据见 shortLineDriftCeiling。
         expectEqual(P.skipsResize(currentLength: 121.19, targetLength: 56.70,
-                                  dwellSeconds: 1.24, quietSecs: quiet), false,
-                    "短命行不改槽: 短命但差 64pt —— 越过偏差上限,照缩")
+                                  dwellSeconds: 1.24, quietSecs: quiet), true,
+                    "上限 120: 短命 + 差 64pt 在上限内 —— 暂缓,等真正值得重建时一起落地")
         expectEqual(P.skipsResize(currentLength: 56.70, targetLength: 134.09,
-                                  dwellSeconds: 0.5, quietSecs: quiet), false,
-                    "短命行不改槽: 短命但差 77pt —— 越过偏差上限,照加宽")
+                                  dwellSeconds: 0.5, quietSecs: quiet), true,
+                    "上限 120: 短命 + 差 77pt 同样暂缓(加宽方向)")
+        // 越过 120 才照改 —— 上限本身仍然在起作用,不是把判据废掉了。
+        expectEqual(P.skipsResize(currentLength: 200, targetLength: 60,
+                                  dwellSeconds: 1.0, quietSecs: quiet), false,
+                    "上限 120: 差 140pt 越过上限,照缩(否则整首歌又会冻在一个宽度上)")
         // 上限之内才轮到时长判据:这才是"为一句马上消失的行省一次重建"真正成立的场合。
         expectEqual(P.skipsResize(currentLength: 121.19, targetLength: 121.19 - 20,
                                   dwellSeconds: 1.24, quietSecs: quiet), true,
@@ -972,14 +979,29 @@ func runMenuBarTests() {
                                   dwellSeconds: 0.5, quietSecs: quiet), false,
                     "偏差上限: 加宽方向同一个上限")
         // 现场回归(2026-09-17 01:01:23.463):189.19 的槽卡着不缩,这一句只要 113.21,
-        // 右边空 76pt。dwell 1.774s 仍然短命 —— 就是靠上限把它放行的。
+        // 右边空 76pt —— 用户当天圈图问过这一幕。
+        //
+        // ⚠️ **这条钉的期望当晚就翻了**,必须说清楚翻在哪:加上限那天它钉的是"必须放行"
+        // (76 > 30);上限提到 120 之后 76 < 120,**这一幕不再被立刻修正**,槽会保持到下一次
+        // 真正值得重建时。这是"闪烁 vs 留白"那笔交易里让出去的部分 —— 但让出去的是留白的
+        // **持续时长**,不是幅度:37 拍模拟里留白最大值反而从 124pt 降到 111pt、均值 58→62pt,
+        // 而重建从 17 次降到 6 次。用户 2026-09-17 晚报「每次重建都闪一下、时间有点长」,
+        // 拿这一档换的就是那个。要退回去只改 shortLineDriftCeiling 一个数。
         expectEqual(P.skipsResize(currentLength: 189.192383, targetLength: 113.209375,
-                                  dwellSeconds: 1.774, quietSecs: quiet), false,
-                    "偏差上限: 用户圈图那一幕(空 76pt)必须放行")
-        // 哨兵:上限跟地板的收缩容差是**同一个数**。地板判了"该缩",执行层不许否决它 ——
-        // 给两个数就等于让那条容差形同虚设。理由见两处声明。
-        expectEqual(P.shortLineDriftCeiling, MenuBarSlotFloor.shrinkTolerance,
-                    "偏差上限 = 地板收缩容差(两处必须同源)")
+                                  dwellSeconds: 1.774, quietSecs: quiet), true,
+                    "上限 120: 用户圈图那一幕现在暂缓 —— 换的是闪烁次数减 65%")
+        // ⚠️ 2026-09-17 晚**推翻**了这里原来那条哨兵(原文:「偏差上限 = 地板收缩容差,
+        // 两处必须同源」,理由是"地板判了该缩、执行层不许否决它")。推翻它的是闪烁的实测:
+        // 逐帧截图量到**一次重建 = 约 250ms 的内容空窗**,而其中我们自己只占 4~12ms
+        // (removeCreate + render),其余全是系统 MenuBarAgent 在重排 —— 少闪的唯一办法
+        // 是少重建。两个常量回答的根本不是同一个问题:地板容差管**留白**(目标宽度该不该缩),
+        // 这条上限管**闪烁**(这次改动值不值一次重建)。37 拍真实序列模拟:上限 30→120 时
+        // 重建从 17 次降到 6 次(闪烁占比 4.6%→1.6%),而留白只从均值 58 动到 62pt。
+        // 完整数据见 MenuBarSlotPolicy.shortLineDriftCeiling 的声明处。
+        expectEqual(P.shortLineDriftCeiling > MenuBarSlotFloor.shrinkTolerance, true,
+                    "偏差上限与地板容差**已解绑**:上限管闪烁(重建次数)、容差管留白,别再合并")
+        expectEqual(P.shortLineDriftCeiling, 120,
+                    "偏差上限钉在 120 —— 实测收益到顶的最小值(再大也不会更少重建)")
 
         // ---- 死区:太小的变化一律不值一次重建 ----
         // 收缩侧实测原样(2026-09-03):text(250.749512) -> text(250.438477),0.31pt 也触发整项重建。
