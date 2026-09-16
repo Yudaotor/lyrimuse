@@ -1012,8 +1012,9 @@ func coverCanUpgradeToVerifiedSiblingLocked(e enrichEntry, artist, album string)
 	return hasAlbumVerifiedSiblingCoverLocked(artist, album)
 }
 
-// lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"这类搭车
-// 标记,不算候选,见 scoredLyricCandidateResult.Instrumental)。
+// lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"/"曲库里有
+// 但没歌词"这类搭车标记,不算候选,见 scoredLyricCandidateResult.Instrumental 与
+// TrackFoundNoLyrics)。
 func lyricSourcesWithCandidates(scored []scoredLyricCandidateResult) []string {
 	return distinctLyricSources(scored, true)
 }
@@ -2547,6 +2548,19 @@ type scoredLyricCandidateResult struct {
 	// 这条标记过滤掉,不会当成一条空歌词的候选显示给用户,见 searchcli.go
 	// filterEnabledLyricSources 旁边的过滤。
 	Instrumental bool `json:"instrumental,omitempty"`
+	// TrackFoundNoLyrics 跟上面 Instrumental 同一个"搭车"套路(Score:-1 的伪候选,手动搜索
+	// 那边过滤掉不显示成候选),传的是另一个结论:**这个源的曲库里有这首歌,但平台上没有
+	// 歌词文本**。2026-09-15 加,来龙去脉见 neteaseInfo.TrackFoundNoLyrics 的头注。
+	//
+	// ⚠️ 与 Instrumental 的两点不同,改这里之前先读完:
+	// ① 语义不同(本来就没词 vs 暂时还没有词),所以**不能**合并成一个 bool;
+	// ② 这种标记**可以同时存在多条**(网易云和 QQ 都命中没词就是两条),而 instrumentalMarker
+	//    全局只留一条 —— 因为界面要如实列出"是哪几个源都找到了这首歌",不是只说一个。
+	//
+	// 这条标记会带上 Title/Artist/Album/SourceReportedDurationSecs(那个源实际匹配到的
+	// 曲目元数据),让弹窗能把"匹配到的就是这首歌"摆给用户看 —— 用户的原始疑问正是
+	// "是不是搜错了"。
+	TrackFoundNoLyrics bool `json:"track_found_no_lyrics,omitempty"`
 	// PlainTextOnly:2026-08-30 加,见 lyricCandidate.plainTextOnly 头注——true 时 Lyrics
 	// 装的是没有时间戳的纯文本。跟 Instrumental 不同,**不**在 filterEnabledLyricSources
 	// 里过滤掉:这是一条真实可用的候选(只是不能同步显示),"搜索候选歌词"弹窗要把它当成
@@ -3097,12 +3111,28 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	chosen := map[string]scoredLyricCandidateResult{}
 	var order []string
 	var instrumental *scoredLyricCandidateResult
-	for _, r := range base {
+	// "曲库里有、但没有歌词"的标记按**源**收着(不像 instrumental 那样全局只留一条,理由见
+	// noLyricsMarkers 头注的 ①)。跟 instrumental 同样的道理:它们不是候选,绝不能进 chosen
+	// —— 否则会占住那个源的位置,把变体轮真正搜到的候选顶掉。
+	noLyrics := map[string]scoredLyricCandidateResult{}
+	take := func(r scoredLyricCandidateResult) bool {
 		if r.Instrumental {
 			if instrumental == nil {
 				rr := r
 				instrumental = &rr
 			}
+			return true
+		}
+		if r.TrackFoundNoLyrics {
+			if _, ok := noLyrics[r.Source]; !ok {
+				noLyrics[r.Source] = r
+			}
+			return true
+		}
+		return false
+	}
+	for _, r := range base {
+		if take(r) {
 			continue
 		}
 		if _, ok := chosen[r.Source]; !ok {
@@ -3111,11 +3141,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 		}
 	}
 	for _, r := range extra {
-		if r.Instrumental {
-			if instrumental == nil {
-				rr := r
-				instrumental = &rr
-			}
+		if take(r) {
 			continue
 		}
 		cur, ok := chosen[r.Source]
@@ -3169,6 +3195,22 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	}
 	if instrumental != nil && !hasRealFromMarkerSource {
 		out = append(out, *instrumental)
+	}
+	// 同一个条件按**每个源**各判一次:某个源在原串轮说"有歌没词"、变体轮却真搜到了词,
+	// 那条标记就该消失(它已经不成立了),但别的源的标记不受影响 —— 这正是它不去重的意义。
+	// 纯音乐那条留下来时,同源的这条要让位(互斥,理由同 noLyricsMarkers 的 ③)。
+	for _, source := range lyricSourceNames {
+		m, ok := noLyrics[source]
+		if !ok {
+			continue
+		}
+		if _, hasReal := chosen[source]; hasReal {
+			continue
+		}
+		if instrumental != nil && instrumental.Source == source && !hasRealFromMarkerSource {
+			continue
+		}
+		out = append(out, m)
 	}
 	// v5(2026-08-27):同 scoreAndSort 里那一处——必须在排序之前跑,见 applyWordTimingTitleOverride
 	// 的注释。变体轮合并出来的这批候选一样要过这道闸,不然同一首歌走没走变体轮,判定标准会不一致。
@@ -3259,6 +3301,11 @@ type lyricSourceResult struct {
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
+	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
+	// (2026-09-15)。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
+	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注)。跟 instrumental 是并列
+	// 而非重叠的两个结论,互斥由各源自己的判据保证。
+	trackFoundNoLyrics bool
 	// instrumental:"这首歌是纯音乐"这个**明确结论**。四个源会给:lrclib 的结构化字段、
 	// 网易云的 pureMusic/占位正文、QQ 的占位正文(2026-08-22 加,见 qqLyricResult)、
 	// musixmatch 每行都带的 instrumental 字段(2026-09-11 加,见 pickMusixmatchTrackRow
@@ -3589,6 +3636,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	if instrumentalMarker != nil {
 		results = append(results, *instrumentalMarker)
 	}
+	results = append(results, noLyricsMarkers(raw, instrumentalMarker)...)
 	// v5(2026-08-27):必须在排序**之前**跑——它要看的是"排完序会是谁赢",然后据此
 	// 决定要不要撤销冠军的逐字加分,晚了就成了在排好的结果上事后改分,顺序会跟着乱。
 	// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
@@ -3612,6 +3660,58 @@ const (
 // lyricSourceSkipFor 决定一个源这一轮发不发请求(纯函数,给 fetchScoredLyricCandidatesStreaming
 // 的 skipSource 用,单测钉住"关掉的源不发请求、也不算冷却跳过")。关掉优先于冷却:一个既关掉
 // 又在冷却的源,按"关掉"处理——不该因为它在冷却就被记进 lyrics_sources_skipped 招来重搜。
+// noLyricsMarkers 把各源"曲库里有这首歌、但平台上没有歌词文本"这个结论,做成 Score:-1 的
+// 搭车标记带出 rankLyricSourceResults —— 套路与 instrumentalMarker 完全一致(见
+// scoredLyricCandidateResult.TrackFoundNoLyrics 的头注),不参与打分/排序、不会被
+// pickLyricCandidate 选中,手动搜索那边(searchcli.go filterEnabledLyricSources)过滤掉、
+// 不显示成一条空候选。
+//
+// 与 instrumentalMarker 的三点不同:
+// ① **不去重**,命中几个源就出几条 —— 界面要如实说"网易云音乐、QQ音乐 都找到了这首歌";
+// ② 带上那个源实际匹配到的曲目元数据(Title/Artist/Album/自报时长),让弹窗能把"匹配到的
+//
+//	就是这首歌"摆出来,当场消掉用户"是不是搜错了"的疑问;
+//
+// ③ 跟纯音乐**互斥**:某个源既被判纯音乐又说没词是自相矛盾,那时以纯音乐为准(更强的结论)
+//
+//	——各源自己的判据已经保证了互斥,这里再挡一道,免得日后哪个源的判据松了就冒出两条
+//	打架的结论。
+//
+// 源序按 lyricSourceNames 固定,跟别处一样确定且可复现,不跟到达顺序走。
+func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyricCandidateResult) []scoredLyricCandidateResult {
+	var out []scoredLyricCandidateResult
+	for _, source := range lyricSourceNames {
+		r, ok := raw[source]
+		if !ok {
+			continue
+		}
+		// 网易云这一路的结论挂在 ne 上(它整条信息走 neteaseInfo,不走 lyr 那几个字段),
+		// 其余源统一走 lyricSourceResult.trackFoundNoLyrics。
+		found := r.trackFoundNoLyrics
+		title, artist, album, dur := r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
+		if source == "netease" {
+			found = r.ne.TrackFoundNoLyrics
+			title, artist, album, dur = r.ne.Title, r.ne.Artist, r.ne.Album, r.ne.DurationSecs
+		}
+		if !found {
+			continue
+		}
+		if instrumental != nil && instrumental.Source == source {
+			continue // ③ 纯音乐优先
+		}
+		out = append(out, scoredLyricCandidateResult{
+			Source:                     source,
+			Score:                      -1,
+			TrackFoundNoLyrics:         true,
+			Title:                      title,
+			Artist:                     artist,
+			Album:                      album,
+			SourceReportedDurationSecs: dur,
+		})
+	}
+	return out
+}
+
 func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSourceRoundPlan) lyricSourceSkip {
 	if !enabled(source) {
 		return lyricSourceSkipDisabled
@@ -3704,10 +3804,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		qqMid := qqMidFromURL(match.url)
 		var lyr, yrc, tr, roma string
 		var qqDur float64
-		var qqInstrumental bool
+		var qqInstrumental, qqNoLyrics bool
 		if qqMid != "" {
 			qqLyr := qqLyric(ctx, qqMid)
-			lyr, qqInstrumental = qqLyr.lrc, qqLyr.instrumental
+			lyr, qqInstrumental, qqNoLyrics = qqLyr.lrc, qqLyr.instrumental, qqLyr.trackFoundNoLyrics
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
 			// 见 qq.go 顶部注释。同一份响应还带中文译文/罗马音两轨(2026-09-02 起接回,
 			// 见 qqQRCLyric 注释),时间戳与上面 qqLyric 的整行歌词逐行一致。
@@ -3738,7 +3838,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		if qqMid != "" {
 			qqCover, _ = qqSongCoverAndSinger(ctx, qqMid)
 		}
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental}
+		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
+		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
+		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == ""}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时

@@ -90,6 +90,8 @@ final class LyricsSearchService {
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见 collector match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
+            // 2026-09-15 加,见 collector match.go 的 scoreRejectContinuousMix 头注。
+            case "rejectContinuousMix": return L10n.t("这是连续混音版，跟原版不是同一次编排")
             default: return kind
             }
         }
@@ -125,6 +127,8 @@ final class LyricsSearchService {
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上，多半是另一个版本")
             case "rejectPlainTextOnly":
                 return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮")
+            case "rejectContinuousMix":
+                return L10n.t("你在放的是 DJ Mix 专辑里的一段（曲名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴")
             default: return ""
             }
         }
@@ -286,8 +290,54 @@ final class LyricsSearchService {
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。
         let instrumental: Bool
+        /// 这一轮里**曲库里有这首歌、但平台上没有歌词文本**的那几个源(2026-09-15,目前
+        /// netease/qq 会给)。空 = 没有任何源给出这个结论。
+        ///
+        /// 它把原来笼统的"十个源都没找到可用的候选"再切一刀:匹配其实是**对的**,只是平台
+        /// 还没收录歌词。这两种结局对用户意味着完全不同的下一步 —— 一个是"搜索词可能有问题,
+        /// 改改再搜",另一个是"等平台补词,或者自己往 lyrics/ 放一份"。
+        ///
+        /// ⚠️ 别跟 `sourceFailureReasonCodes` 混为一谈:那个是"源坏了",这个是**查成功了**
+        /// 的结论,所以 collector 侧特意走了独立字段(见 searchcli.go 的 TracksFoundNoLyrics)。
+        let tracksFoundNoLyrics: [TrackFoundNoLyrics]
         /// 只有 pickWinner: true 且只有最后那行才非 nil,见 Pick。
         let pick: Pick?
+    }
+
+    /// 一个源"我这儿有这首歌,但没有词"的完整说法。除了是哪个源,还带上它**实际匹配到的**
+    /// 曲目元数据 —— 用户看到"没搜到歌词"时的第一个疑问是"是不是搜错歌了",把匹配到的
+    /// 歌名/歌手/专辑/时长摆出来才答得上这个问题。各字段都可能为空/0(源没给),按有什么显示什么。
+    struct TrackFoundNoLyrics: Decodable, Equatable {
+        let source: String
+        let title: String
+        let artist: String
+        let album: String
+        let durationSecs: Double
+
+        // 手写 init(from:) 之后编译器不再合成 CodingKeys,得自己声明。字段名两边一致
+        // (collector 侧是 lowerCamelCase 的 json tag),不需要做名字转换。
+        private enum CodingKeys: String, CodingKey {
+            case source, title, artist, album, durationSecs
+        }
+
+        // collector 侧除 source 外都带 omitempty,缺字段是常态 —— 逐个 decodeIfPresent,
+        // 一个字段没给不该让整行解码失败、把这一批更新整批丢掉(跟 SearchUpdate 那边同一条纪律)。
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            source = try c.decodeIfPresent(String.self, forKey: .source) ?? ""
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+            artist = try c.decodeIfPresent(String.self, forKey: .artist) ?? ""
+            album = try c.decodeIfPresent(String.self, forKey: .album) ?? ""
+            durationSecs = try c.decodeIfPresent(Double.self, forKey: .durationSecs) ?? 0
+        }
+
+        init(source: String, title: String = "", artist: String = "", album: String = "", durationSecs: Double = 0) {
+            self.source = source
+            self.title = title
+            self.artist = artist
+            self.album = album
+            self.durationSecs = durationSecs
+        }
     }
 
     enum SearchError: LocalizedError {
@@ -440,6 +490,9 @@ final class LyricsSearchService {
                         // 优先新 key,缺失才退回旧 key —— 两个二进制各自独立部署,可能
                         // 出现「新 App + 旧 collector」(只重建了 App 没换 collector)。
                         instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
+                        // 旧 collector 不发这个字段(同上,两个二进制各自独立部署)——解码成空
+                        // 数组,界面退回原来那句笼统的"没找到候选",不会因此报错或崩。
+                        tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [],
                         pick: raw.pick)
                     Task { @MainActor in onUpdate(update) }
                 }
@@ -526,6 +579,9 @@ private struct RawSearchUpdate: Decodable {
     let instrumental: Bool?
     /// 旧名,只为兼容尚未重建的 collector。collector 那边的同值别名删掉之后,这个也可以删。
     let lrclibInstrumental: Bool?
+    /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源(2026-09-15)。旧 collector 不发,
+    /// 可选 + 解码方兜底成空数组,见 SearchUpdate.tracksFoundNoLyrics。
+    let tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics]?
     /// 只有 -pick 且只有最后那行才有。
     let pick: LyricsSearchService.Pick?
 }

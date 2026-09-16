@@ -1472,6 +1472,14 @@ var (
 type qqLyricResult struct {
 	lrc          string
 	instrumental bool
+	// trackFoundNoLyrics:QQ 曲库里有这首歌(mid 已经匹配上了,能走到这里就说明命中),
+	// 但取词接口**正经回了响应、正文却是空的** —— 平台上还没有歌词文本。2026-09-15 加,
+	// 语义与判据上的注意事项跟 neteaseInfo.TrackFoundNoLyrics 完全一致(尤其是"跟
+	// instrumental 是两个不同的结论"以及"请求失败不算"),见那边的头注。
+	//
+	// 实测形态(Iris / OLORUNNS):fcg_query_lyric_new.fcg 回 HTTP 200 + body
+	// {"retcode":-1901,"code":-1901,"subcode":-1901},lyric 字段压根不存在 → 空串。
+	trackFoundNoLyrics bool
 }
 
 func qqLyric(ctx context.Context, mid string) qqLyricResult {
@@ -1533,7 +1541,15 @@ func resolveQQLyric(ctx context.Context, mid string) qqLyricResult {
 	if l := out.Lyric; isTimedLRC(l) {
 		return qqLyricResult{lrc: l}
 	}
-	return qqLyricResult{}
+	// 走到这里只剩两种:没有真正的歌词正文(空串,或只有几行署名占位),或者有词但不带
+	// 时间戳。只有前者算 trackFoundNoLyrics —— 判据用 isCreditOnlyLRC 跟网易云那路
+	// 同一把尺子(为什么不是 `== ""`、也不是 `!isTimedLRC`,见 netease.go 里那条判据的
+	// 完整注释)。QQ 这边实测到的是 `{"retcode":-1901}` 不带 lyric 字段 → 空串这一支,
+	// 但署名占位那一支同样得认:两家平台的"没有词"长什么样不该由这里各猜一套。
+	//
+	// ⚠️ 上面每一条 return 都是**请求失败**路径(建请求/传输/非 200/读不出 body/不是
+	// JSON),那些一律不算,否则就是把网络问题报成"这首歌没词"。
+	return qqLyricResult{trackFoundNoLyrics: isCreditOnlyLRC(out.Lyric)}
 }
 
 // ---- QQ音乐逐字(QRC)歌词 ----

@@ -177,6 +177,7 @@ func runSearchLyricsCLI(args []string) {
 			AppleTitle:               appleTitle,
 			AppleAlbum:               appleAlbum,
 			SourceFailureReasonCodes: lyricSourceFailureReasons(results),
+			TracksFoundNoLyrics:      tracksFoundNoLyrics(results),
 			Pick:                     finalPick,
 		}
 		for _, r := range results {
@@ -340,8 +341,31 @@ type searchLyricsUpdate struct {
 	// 解码(LyricsSearchService.RawSearchUpdate)重新构建并安装之后,这个字段就可以删掉。
 	// 它是唯一的存在理由,别让它长住。
 	LegacyLrclibInstrumental bool `json:"lrclibInstrumental,omitempty"`
+	// TracksFoundNoLyrics:这一轮里"曲库里有这首歌、但平台上没有歌词文本"的那几个源
+	// (2026-09-15)。空 = 没有任何源给出这个结论。
+	//
+	// ⚠️ 为什么**不**塞进上面的 SourceFailureReasonCodes:那个 map 的语义是"这个源坏了"
+	// (限流 / DNS 不通 / 5xx / 换不到 token),Swift 侧会把它显示成橙色的故障说明。而这里
+	// 是**查成功了**的结论 —— 混进去等于告诉用户"源出问题了",跟事实相反。deezer.go 的头注
+	// 早就把这条边界写死过一次:「"这首歌没有歌词"是正常结果,不往这里记,报上去会让用户
+	// 以为源坏了」。所以走独立字段,跟 Instrumental 同构。
+	TracksFoundNoLyrics []trackFoundNoLyrics `json:"tracksFoundNoLyrics,omitempty"`
 	// 只有 -pick 且只有最后那行才有(见 searchLyricsPick)。
 	Pick *searchLyricsPick `json:"pick,omitempty"`
+}
+
+// trackFoundNoLyrics 是一个源"我这儿有这首歌,但没有词"的完整说法:除了是哪个源,还带上
+// 它**实际匹配到的**曲目元数据。带元数据不是锦上添花 —— 用户看到"没搜到歌词"时的第一个
+// 疑问是"是不是搜错歌了",把匹配到的歌名/歌手/专辑/时长摆出来才答得上这个问题(这正是
+// 2026-09-15 那次用户提问的起点:网易云和 QQ 明明四项全中,界面上却完全看不出来)。
+//
+// 各字段都可能为空/0(源没给),Swift 侧按有什么显示什么。
+type trackFoundNoLyrics struct {
+	Source       string  `json:"source"`
+	Title        string  `json:"title,omitempty"`
+	Artist       string  `json:"artist,omitempty"`
+	Album        string  `json:"album,omitempty"`
+	DurationSecs float64 `json:"durationSecs,omitempty"`
 }
 
 // searchLyricsPick 是 -pick 模式下"按自动解析规则重选一次"的结论,给「歌词管理」的
@@ -394,12 +418,40 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 		if r.Instrumental {
 			continue
 		}
+		// "曲库里有这首歌、但平台没有歌词"的搭车标记同理:它不是一条候选,不能显示成一条
+		// 空歌词的候选行,也不该让这个源在弹窗里被算成"已给出候选"(Swift 侧的
+		// respondedSources 正是从这份过滤后的列表反推的)。它走 update 里自己的字段。
+		if r.TrackFoundNoLyrics {
+			continue
+		}
 		if !lyricSourceEnabled(r.Source) {
 			continue
 		}
 		filtered = append(filtered, r)
 	}
 	return filtered
+}
+
+// tracksFoundNoLyrics 从这一轮的打分结果里摘出"曲库里有这首歌、但平台上没有歌词文本"
+// 的那几个源,连同它们各自匹配到的曲目元数据,给「搜索候选歌词」弹窗用(2026-09-15)。
+//
+// 只报**启用**的源:关掉的源这一轮不发请求(见 lyricSourceFailureReasons 里同款理由),
+// 表里出现它只可能是别处留下的。顺序跟 noLyricsMarkers 一样按固定源序,不跟到达序走。
+func tracksFoundNoLyrics(results []scoredLyricCandidateResult) []trackFoundNoLyrics {
+	var out []trackFoundNoLyrics
+	for _, r := range results {
+		if !r.TrackFoundNoLyrics || !lyricSourceEnabled(r.Source) {
+			continue
+		}
+		out = append(out, trackFoundNoLyrics{
+			Source:       r.Source,
+			Title:        r.Title,
+			Artist:       r.Artist,
+			Album:        r.Album,
+			DurationSecs: r.SourceReportedDurationSecs,
+		})
+	}
+	return out
 }
 
 // lyricSourceFailureReasons 给"搜索候选歌词"弹窗的"歌词源可用情况"明细用(2026-08-31,

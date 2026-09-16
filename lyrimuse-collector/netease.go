@@ -53,6 +53,19 @@ type neteaseInfo struct {
 	// 「纯音乐」)。这个字段就是把后者那个明确结论带出来,跟 lrclib 的 instrumental
 	// 标记汇到同一处(见 enrich.go 的 instrumentalMarker)。
 	PureMusic bool
+	// TrackFoundNoLyrics:网易云**曲库里有这首歌**(pick 选中了一条曲目),但歌词接口
+	// 回的正文是空的 —— 平台上还没有歌词文本。2026-09-15 加。
+	//
+	// ⚠️ 跟 PureMusic 是**两个不同的结论**,别合并:PureMusic 是"这首歌本来就没有词"
+	// (纯音乐,以后也不会有);这个是"这首歌有词,只是平台还没收录"(新歌很常见,过阵子
+	// 往往就补上了)。两者对用户意味着完全不同的下一步 —— 一个是别等了,一个是可以等、
+	// 或者自己往 lyrics/ 放一份。判据里因此写死了 `!PureMusic`,两者互斥。
+	//
+	// 起因是用户报「为什么这首歌搜不到歌词」(Iris / OLORUNNS,2026-07-17 发行的新歌):
+	// 网易云和 QQ **都精准命中了曲目**(歌名/歌手/专辑/时长四项全中),但两家都没有歌词
+	// 文本,而弹窗显示的是跟"十个源都没搜到这首歌"一模一样的那句话 —— 匹配明明是对的,
+	// 用户却完全看不出来,也无从判断该等还是该自己贴。见 enrich.go 的 noLyricsMarkers。
+	TrackFoundNoLyrics bool
 }
 
 // neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
@@ -909,7 +922,10 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 带时间轴的 LRC 歌词，网页跟实时进度条同步高亮滚动。一次老接口就能拿齐原文(lrc)+
 	// 中文翻译(tlyric)+罗马音(romalrc)，三者时间轴对齐；逐字(yrc，词级)走 v1 接口、只有
 	// 部分歌有。只在确有时间戳时带上；同一首歌各版本歌词相同，选中版本无词时退到其它同名版本。
-	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic bool) {
+	// ok=false 表示这次取词请求**根本没成功**(限流/超时/非 200)。必须跟"成功拿到响应、
+	// 但正文是空的"分开:后者才是 TrackFoundNoLyrics 说的"平台没有歌词",前者是源故障,
+	// 报成"这首歌没词"就是把网络问题栽赃给曲库(deezer.go 头注踩过同型的坑)。
+	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic, ok bool) {
 		var r struct {
 			Lrc struct {
 				Lyric string `json:"lyric"`
@@ -925,12 +941,12 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			PureMusic bool `json:"pureMusic"`
 		}
 		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err != nil {
-			return "", "", "", false
+			return "", "", "", false, false
 		}
 		return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
 			stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
 			stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
-			r.PureMusic
+			r.PureMusic, true
 	}
 	fetchYRC := func(songID int64) string {
 		var r struct {
@@ -947,10 +963,24 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		return ""
 	}
 	info.SongID = id
-	lrc, tr, roma, pureMusic := fetchBundle(id)
+	lrc, tr, roma, pureMusic, lyricFetchOK := fetchBundle(id)
 	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
 	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。
 	info.PureMusic = pureMusic || isInstrumentalPlaceholderLyric(lrc)
+	// "曲库里有这首歌,但平台上没有歌词文本"(见 neteaseInfo.TrackFoundNoLyrics)。
+	//
+	// 判据是 isCreditOnlyLRC 而**不是** `lrc == ""`:2026-09-15 实测(Iris / OLORUNNS)
+	// 网易云对没有词的歌回的不是空串,而是两行带时间戳的署名占位 ——
+	// `[00:00.00-1] 作曲 : John Rzeznik` + `[00:00.00-1] 制作人 : OLORUNNS`。按空串判的话
+	// 这个最典型的形态一条都认不出来(第一版就是这么写的,实跑才发现)。isCreditOnlyLRC
+	// 正是为这种"只有 credit、没有正文"的形态写的,空串也归它(nonCredit=0),一把尺子两种形态。
+	//
+	// 反过来也不能用 `!isTimedLRC(lrc)`:那会把"有真词但没时间戳"(纯文本歌词)也算进来,
+	// 那种情况平台**是有词的**,只是这条链路用不上它(自动兜底那路会按 plainTextFallback
+	// 采纳,见 enrich.go),报成"平台没有歌词"是错的。
+	//
+	// !info.PureMusic:纯音乐是另一个更强的结论,由 instrumentalMarker 那条路负责,两者互斥。
+	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic
 	if isTimedLRC(lrc) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {

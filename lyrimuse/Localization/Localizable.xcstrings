@@ -10001,29 +10001,6 @@
         }
       }
     },
-    "已给出候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Returned a candidate"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已给出候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已給出候選"
-          }
-        }
-      }
-    },
     "已补 %@ 条" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14894,29 +14871,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未知錯誤"
-          }
-        }
-      }
-    },
-    "未给出候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No candidate"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未给出候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未給出候選"
           }
         }
       }
@@ -28836,23 +28790,6 @@
         }
       }
     },
-    "其余 %@ 个源没有给出候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other %@ sources gave no candidates"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其餘 %@ 個來源沒有給出候選"
-          }
-        }
-      }
-    },
     "Scrobble 时机" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31739,6 +31676,397 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 秒"
+          }
+        }
+      }
+    },
+    "这是连续混音版，跟原版不是同一次编排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a continuous mix, not the same take as the original"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是连续混音版，跟原版不是同一次编排"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是連續混音版，跟原版不是同一次編排"
+          }
+        }
+      }
+    },
+    "你在放的是 DJ Mix 专辑里的一段（曲名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’re playing one segment of a DJ Mix album (the track is tagged [Mixed], the album (DJ Mix)) — it’s cut out of a full set, with transitions on either side and a length that doesn’t match the original, so the original lyrics’ timeline can’t line up. And no source carries a timeline for the mixed version."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在放的是 DJ Mix 专辑里的一段（曲名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在放的是 DJ Mix 專輯裡的一段（曲名帶 [Mixed]、專輯帶 (DJ Mix)）——它是從整場演出裡剪出來的，前後帶過渡、長度跟原版對不上，原版歌詞的時間軸套不準，而且沒有任何來源收錄了混音版的時間軸"
+          }
+        }
+      }
+    },
+    "导入字体…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Font…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入字体…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯入字型…"
+          }
+        }
+      }
+    },
+    "选择 .ttf 或 .otf 字体文件，可多选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a .ttf or .otf font file (you can select multiple)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择 .ttf 或 .otf 字体文件，可多选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇 .ttf 或 .otf 字型檔案，可多選"
+          }
+        }
+      }
+    },
+    "导入失败：不是有效的 .ttf / .otf 字体文件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import failed: not a valid .ttf / .otf font file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入失败：不是有效的 .ttf / .otf 字体文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯入失敗：不是有效的 .ttf / .otf 字型檔案"
+          }
+        }
+      }
+    },
+    "%@ 个文件导入失败，其余已导入" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ file(s) failed to import; the rest were imported"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 个文件导入失败，其余已导入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 個檔案匯入失敗，其餘已匯入"
+          }
+        }
+      }
+    },
+    "删除这款导入的字体（不可恢复）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove this imported font (cannot be undone)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这款导入的字体（不可恢复）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除這款匯入的字型（無法復原）"
+          }
+        }
+      }
+    },
+    "已匹配曲目 · 无歌词文本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track matched · no lyrics text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配曲目 · 无歌词文本"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配曲目 · 無歌詞文字"
+          }
+        }
+      }
+    },
+    "已匹配，无歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Matched, no lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配，无歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配，無歌詞"
+          }
+        }
+      }
+    },
+    "未返回候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No candidate returned"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未返回候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未返回候選"
+          }
+        }
+      }
+    },
+    "已返回候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Candidate returned"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已返回候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已返回候選"
+          }
+        }
+      }
+    },
+    "其余 %@ 个源" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ other sources"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其余 %@ 个源"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其餘 %@ 個來源"
+          }
+        }
+      }
+    },
+    "其余 %@ 个源未返回候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ other sources returned no candidates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其余 %@ 个源未返回候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其餘 %@ 個來源未返回候選"
+          }
+        }
+      }
+    },
+    "已匹配：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Matched: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已匹配：%@"
+          }
+        }
+      }
+    },
+    "%@ 已匹配到该曲目，无歌词文本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ matched this track; no lyrics text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已匹配到该曲目，无歌词文本"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已匹配到該曲目，無歌詞文字"
+          }
+        }
+      }
+    },
+    "未唱颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsung Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未唱颜色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未唱顏色"
+          }
+        }
+      }
+    },
+    "自定义颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义颜色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂顏色"
           }
         }
       }

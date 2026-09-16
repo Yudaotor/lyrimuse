@@ -564,7 +564,15 @@ const lyricOvershootToleranceSecs = 5.0
 // titleMatchTierPoints 的括号档回到精确 120 —— 三处方向一致,都是"这个后缀不该被当版本差异"。
 //
 // 全库决策存档回放见 09 章对应条目。
-const lyricsScoringVersion = 18
+//
+// v19(2026-09-15):认 Apple Music「DJ Mix」专辑那一套版本命名 —— 词表补 "dj mix"/
+// "continuous mix",曲名后缀「[Mixed]」另走 isContinuousMixSegment(整段精确),都折进
+// continuousMixVersionTag;本地是连播混音版而候选不是时直接判不可用(scoreRejectContinuousMix),
+// 不走"重扣仍可用"那条路 —— 理由见那个常量的头注。提版本号是因为**存量要重打一遍才会
+// 换成对的**:缓存里这类条目存着的是原版录音室歌词,不重打就一直用着错位的时间轴
+// (本机实测受影响 1 条,就是用户报的 Fred again..《Winnie (end of me) [Mixed]》)。
+// 金标集不含 DJ Mix 曲目,全库回放冠军 0 变化。
+const lyricsScoringVersion = 19
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -694,6 +702,20 @@ const (
 	// 弹窗能给出不一样的提示文案("仅纯文本,不能同步显示"而不是含糊的"没有时间戳")——
 	// 分数依旧是 -1,跟 scoreRejectNotTimed 一样绝不会被自动路径选中。
 	scoreRejectPlainTextOnly = "rejectPlainTextOnly"
+	// scoreRejectContinuousMix:2026-09-15 加。本地在放的是**连续混音**里的一段
+	// (Apple Music「DJ Mix」专辑:曲名后缀「[Mixed]」、专辑名带「(DJ Mix)」),而这条候选
+	// 不是 —— 判"不能用"而不是像别的版本不符那样重扣,是因为这一类跟 live/remix 有个
+	// 决定性的差别:**不存在**能用的时间轴。
+	//
+	// live/demo/remix 错配时,候选至少是一份完整覆盖整首歌的词,轴错了还能当静态文字看,
+	// 所以既有设计选择"重扣但仍可用"(见打分函数末尾把负分夹到 1 的那段)。连续混音不同:
+	// 每条曲目是从整场 set 里剪出来的一段,前后带上下首的过渡,长度跟原版对不上(用户案例
+	// 本地 410s、原版词末句 231s,只铺满前 56%),而且**没有任何歌词源存有 mix 版的轴**——
+	// 换哪一条候选都是同一份原版词。让它落到"分数 1 照样被选中"就是保证展示错位歌词。
+	//
+	// 只在**本地是混音版、候选不是**时触发(单向):将来真有源收录了 mix 版,那条候选自己
+	// 带同样的标记,两边都认出 continuousMixVersionTag,这道闸对它静默。
+	scoreRejectContinuousMix = "rejectContinuousMix"
 )
 
 // nativeLyricSources 是「**这一刻正在播的那个播放器**自家的歌词源」("qq"/"netease"/
@@ -844,6 +866,12 @@ func scoreLyricCandidateDetailed(
 	if isCreditOnlyLRC(c.lyrics) {
 		return reject(scoreRejectCreditOnly)
 	}
+	// 放在所有**内容级**闸(没时间戳/语言不符/只有署名)之后:那几种更根本,一份既没时间戳
+	// 又版本不对的候选该先告诉用户"没有时间戳"。见 scoreRejectContinuousMix 头注。
+	if recordingVersionTags(localTitle, localAlbum)[continuousMixVersionTag] &&
+		!recordingVersionTags(c.title, c.album)[continuousMixVersionTag] {
+		return reject(scoreRejectContinuousMix)
+	}
 	score := 0
 	var terms []scoreTerm
 	add := func(kind string, points int) {
@@ -875,6 +903,19 @@ func scoreLyricCandidateDetailed(
 		case corroborated:
 			// 时长差超阈值,但有别的独立源印证末尾时间点。⚠️ 只有在**没有任何一条候选
 			// 时长吻合**时才可能走到这里,见 corroboratedEndings 里那段注释。
+			//
+			// ⚠️ 2026-09-15 试过在这里加一道"欠覆盖比例上限"(印证只能证明这几份歌词
+			// **彼此**是同一份真实歌词,证明不了它对得上**本地这次录音**;本地是连播/
+			// 加长/混音版时全世界只存在原版那一份词,于是"没有任何候选吻合"这个前提必然
+			// 成立、豁免必然发放)——**被真实数据否掉了,别再试**:
+			//   方大同《好不容易》(金标 corroborated-haoburongyi,长尾奏,该豁免):
+			//     曲长 380s、末句 222.94s,欠覆盖 41.3%
+			//   Fred again..《Winnie (end of me) [Mixed]》(DJ Mix,该拒绝):
+			//     曲长 410s、末句 231s,欠覆盖 43.7%
+			// 两者只差 2.4 个百分点,欠覆盖这个维度**根本分不开**它们;阈值卡在 30% 会让
+			// 前者五个源一起从 +100 翻成 -500。连播混音版要靠**曲名/专辑名的版本声明**
+			// 这个确定信号认(见 continuousMixVersionTag / scoreRejectContinuousMix),
+			// 不能靠时长比例猜。
 			add(scoreTermCorroborated, 100)
 		default:
 			// 不再一票否决,见 durationMismatchPenalty 的注释。
@@ -2255,6 +2296,17 @@ var distinctRecordingVersionTags = []string{
 	// ⚠️ 这个词**只按词元匹配、不按子串**(见 wordOnlyVersionTags):子串匹配会把 "(Deluxe Edition)"
 	// "(Expanded Edition)" 里的 edition 当成 edit,整个 Deluxe 系专辑跟原版之间凭空多出 -600。
 	"edit",
+	// 2026-09-15 补 Apple Music「DJ Mix」专辑那一套命名(用户报 Fred again..《Winnie
+	// (end of me) [Mixed]》/ 专辑「Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)」
+	// 配了录音室原版《Winnie (end of me)》的词——本地 410s,那份词末句停在 3:51、源自报
+	// 242s,时间轴整段错位)。这类专辑是**一场演出的连续混音**:每条曲目都是从上一首淡入
+	// 淡出里剪出来的一段,前后带过渡、长度跟原版对不上,原版时间轴永远套不准,而且没有
+	// 任何歌词源存有这个版本的轴——正确结果是不配词,不是换一条候选。
+	//
+	// 词表原来只有 "club mix"/"radio mix"/"house mix"/"dub mix"/"dance mix"/"vocal mix"
+	// 这些**带前缀**的写法,Apple 用的裸 "(DJ Mix)" 一条都不认;曲名后缀「[Mixed]」另走
+	// isContinuousMixSegment(整段精确),见那边头注。
+	"dj mix", "continuous mix",
 }
 
 // wordOnlyVersionTags:distinctRecordingVersionTags 里只能按**整词**匹配、不能按子串匹配的那几个。
@@ -2289,6 +2341,10 @@ var versionTagAliases = map[string]string{
 	"混音":       "remix",
 	"加长版":      "extended",
 	"排练":       "rehearsal",
+	// DJ Mix / Continuous Mix /「[Mixed]」说的是同一件事(一场连续混音里的一段),折成同一个键。
+	// 刻意**不**跟 djRemixVersionTag("dj混音")合并:那个是单曲被某位 DJ 重新混音上传,
+	// 跟"整场演出连播剪出一段"不是同一种录音差异。
+	"continuous mix": continuousMixVersionTag,
 }
 
 // canonicalVersionTag 把词表里的一个限定词折成集合用的规范键;不在别名表里的原样返回。
@@ -2318,6 +2374,25 @@ var djRemixTagPattern = regexp.MustCompile(`(?i)dj[\p{L}0-9.]*版`)
 // 比较才能生效(本地没有 DJ 标记、候选有,两边集合大小不等,判定不匹配)。
 const djRemixVersionTag = "dj混音"
 
+// continuousMixVersionTag:连续混音版(DJ Mix / Continuous Mix / Apple 的「[Mixed]」后缀)
+// 的规范键。词表里的 "dj mix"/"continuous mix" 和 isContinuousMixSegment 认出的「[Mixed]」
+// 都折到这一个键上——本地与候选各自认出同一个 key,versionTagsMismatch 的集合比较才生效。
+const continuousMixVersionTag = "dj mix"
+
+// isContinuousMixSegment:这一段限定词是不是 Apple Music 的 DJ Mix 专辑给每条曲目加的
+// 「[Mixed]」后缀。
+//
+// 只认**整段精确等于** mixed,不进 distinctRecordingVersionTags 走子串或词元匹配:
+//   - 子串会命中 "remixed"(remix 本来就在词表里,再多出一个键反而让两边都写 remix 的
+//     正常场景集合大小不等、凭空冲突);
+//   - 词元会命中「(Mixed by Someone)」「(Mixed and Mastered)」这类**署名**括号,那说的是
+//     谁混的音,不是另一次录音。
+//
+// 入参是 normLoose / segmentVersionTags 归一化之后的串(小写、只剩字母数字)。
+func isContinuousMixSegment(normalized string) bool {
+	return normalized == "mixed"
+}
+
 // titleVersionTags 抽出歌名里的版本限定词。**只在"限定词该出现的位置"里找**——括号/方括号
 // 里的段落,以及最后一个 " - " 之后的段落。不能对整个歌名做子串匹配:那样 "Live and Let
 // Die" 会被当成 live 版、"Demolition" 会命中 demo,全是假阳性。
@@ -2346,6 +2421,9 @@ func titleVersionTags(title string) map[string]bool {
 		}
 		if djRemixTagPattern.MatchString(n) {
 			out[djRemixVersionTag] = true
+		}
+		if isContinuousMixSegment(n) {
+			out[continuousMixVersionTag] = true
 		}
 		if lang := languageVersionTagOfSegment(seg); lang != "" {
 			out[lang] = true
@@ -3434,6 +3512,9 @@ func segmentVersionTags(seg string) map[string]bool {
 	}
 	if djRemixTagPattern.MatchString(joined) {
 		out[djRemixVersionTag] = true
+	}
+	if isContinuousMixSegment(joined) {
+		out[continuousMixVersionTag] = true
 	}
 	// 语种标签走专门的规范化(繁简/中英/单字形态折成同一个键),不走上面两套匹配——
 	// 上面的中文子串路径不做 toSimplified,"(粵語)" 会漏;见 languageVersionTagOfSegment。
