@@ -2,7 +2,8 @@
 """把双语（英中对照）发布日志拆成单语言的、真正排版过的 HTML，喂给 Sparkle
 （appcast 的 <description xml:lang> 内嵌，或 <sparkle:releaseNotesLink> 资产）。
 
-输入格式就是本仓 RELEASE_NOTES_v*.md / tag 注释的既有约定：
+输入格式就是本仓 CHANGELOG.md 各节 / tag 注释的既有约定（2026-09-16 前是根目录的
+RELEASE_NOTES_v*.md，已合并进 CHANGELOG.md）：
   - 开头若干个空行分隔的段落：英文段和中文段各自成段；
   - 小节标题形如 "New / 新功能"（英文 / 中文，按**最后一个** " / " 切开——
     "Last.fm & scrobbling / Last.fm 与打卡" 这种左半边自带斜杠的也能对付）；

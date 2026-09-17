@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 发版 tag 构建前硬校验(2026-09-05)。release.yml 在 Checkout 之后、装任何工具链之前跑它;
 # 打 tag 的人 push 前在本地跑同一份(docs/releasing.md「四」)。判据只有这一份,别在 yaml 里另写。
-# 四条,任一不满足就非零退出、什么都不构建:
+# 五条,任一不满足就非零退出、什么都不构建:
 #   1. tag 名形态合法——委托 lyrimuse/scripts/build-version.sh(vX.Y.Z / vX.Y.Z-(alpha|beta|rc).N 的唯一定义);
 #   2. 必须是 annotated tag(git cat-file -t == tag)。轻量 tag 的 %(contents) 返回的是 commit message,
 #      CI 会把它当发布日志发出去;浅克隆把 annotated tag 剥成 commit 时也落在这条
@@ -10,6 +10,11 @@
 #   4. 正文能被 .github/scripts/split_release_notes.py 拆成中英两份——AGENTS.md「提交」的两种写法
 #      (<!-- lang:en --> / <!-- lang:zh-Hans --> 标记式,或逐条中英交错式)都认,判据是两边都有实质内容,
 #      不是查两行注释在不在。
+#   5. 正式版 tag 的正文与 CHANGELOG.md 对应节**逐字相同**(2026-09-16 起)。发版日志过去是根目录
+#      一版一个 RELEASE_NOTES_vX.Y.Z.md,只当 `git tag -F` 的输入,发完就没有任何东西再读它——
+#      于是 RELEASE_NOTES_v1.7.0.md 悄悄比 tag 正文多了一行「## Download / 下载」标题都没人发现。
+#      现在日志合进 CHANGELOG.md、由 changelog_section.sh 抽节喂给 -F,这一条负责保证两边不再分叉。
+#      预发布 tag(vX.Y.Z-(alpha|beta|rc).N)跳过:测试版不进 CHANGELOG。
 # 用法: check_release_tag.sh <tag> [--body-out FILE]
 #   --body-out 把正文原样写到 FILE(CI 用它喂 appcast 与 Release 正文,正文只读这一次)。
 # 报错文案用英文,跟 release.yml 其它 ::error:: 一致(CI 日志的读者不一定读中文)。
@@ -47,7 +52,7 @@ fi
 #    要跑 98 秒(实测 v1.5.0,按多字节字符逐个扫、二次方级),tr 是毫秒级。LC_ALL=C 让 [:space:] 按字节判,避开多字节 locale 的报错。
 BODY="$(git for-each-ref "refs/tags/$TAG" --format='%(contents)')"
 if [ -z "$(printf '%s' "$BODY" | LC_ALL=C tr -d '[:space:]')" ]; then
-  fail "tag '$TAG' has an empty annotation. Write the bilingual changelog into the tag: git tag -a $TAG <commit> -F RELEASE_NOTES_$TAG.md"
+  fail "tag '$TAG' has an empty annotation. Write the bilingual changelog into CHANGELOG.md, then: .github/scripts/changelog_section.sh $TAG > notes.md && git tag -a $TAG <commit> -F notes.md"
 fi
 
 # 4. 双语
@@ -58,7 +63,28 @@ if ! python3 "$SCRIPT_DIR/split_release_notes.py" "$TMP_DIR/notes.md" "$TMP_DIR/
   fail "tag '$TAG' annotation could not be split into English + Chinese release notes (see split_release_notes.py output above). Accepted formats (AGENTS.md, 提交): <!-- lang:en --> / <!-- lang:zh-Hans --> blocks, or the interleaved style (English line first, Chinese continuation indented). Each side needs real content."
 fi
 
+# 5. 与 CHANGELOG.md 对账。预发布 tag 不进 CHANGELOG,跳过。
+CHANGELOG_NOTE=""
+case "$TAG" in
+  *-*) CHANGELOG_NOTE=", pre-release (CHANGELOG check skipped)" ;;
+  *)
+    CHANGELOG="$REPO_ROOT/CHANGELOG.md"
+    [ -f "$CHANGELOG" ] || fail "CHANGELOG.md not found at $CHANGELOG -- release notes live there since 2026-09-16"
+    if ! SECTION="$("$SCRIPT_DIR/changelog_section.sh" "$TAG" "$CHANGELOG" 2>"$TMP_DIR/section.err")"; then
+      fail "tag '$TAG' has no '## $TAG' section in CHANGELOG.md ($(cat "$TMP_DIR/section.err")). Write the release notes there first, commit, then tag with: .github/scripts/changelog_section.sh $TAG > notes.md && git tag -a $TAG <commit> -F notes.md"
+    fi
+    printf '%s\n' "$SECTION" > "$TMP_DIR/section.md"
+    printf '%s\n' "$BODY" > "$TMP_DIR/body.md"
+    if ! diff -u "$TMP_DIR/section.md" "$TMP_DIR/body.md" > "$TMP_DIR/section.diff"; then
+      echo "check_release_tag: tag annotation and CHANGELOG.md section differ (--- CHANGELOG / +++ tag):" >&2
+      head -40 "$TMP_DIR/section.diff" >&2
+      fail "tag '$TAG' annotation does not match its CHANGELOG.md section. They must be identical -- tag with: .github/scripts/changelog_section.sh $TAG > notes.md && git tag -a $TAG <commit> -F notes.md (re-tag: git tag -d $TAG first)"
+    fi
+    CHANGELOG_NOTE=", matches CHANGELOG.md"
+    ;;
+esac
+
 if [ -n "$BODY_OUT" ]; then
   printf '%s\n' "$BODY" > "$BODY_OUT"
 fi
-echo "check_release_tag: $TAG ok (annotated, $(printf '%s' "$BODY" | wc -c | tr -d ' ') bytes, splits into en + zh-Hans)"
+echo "check_release_tag: $TAG ok (annotated, $(printf '%s' "$BODY" | wc -c | tr -d ' ') bytes, splits into en + zh-Hans$CHANGELOG_NOTE)"
