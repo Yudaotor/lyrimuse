@@ -25,9 +25,9 @@ long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
                     Last.fm / ListenBrainz scrobbling are built in.
 
 checksums           ${distname}${extract.suffix} \
-                        rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
-                        sha256  7273bd69d4283794c9f8680b8dd3cefe59efed0ea7d30d0aa821eb1cc75f3a74 \
-                        size    20109994
+                        rmd160  a5b0cc35709747284b811d0ed881174d2f68318b \
+                        sha256  731fb05d704b54053c9506b3ec67d27f3883b33348c790d6e22a8d00f5bffd9c \
+                        size    22798760
 
 # The app builds with Command Line Tools alone (no full Xcode needed), but the
 # source requires the macOS 26 SDK (upstream CI builds on macos-26).
