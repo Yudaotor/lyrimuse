@@ -127,6 +127,10 @@ struct MenuBarEditorStage: View {
     /// 工具栏第二行:只有「行为」一颗。另起一行而不是塞进第一行,理由跟另外两段
     /// 编辑台一样 —— 第一行的横向预算是量到上限的(见 `toolbar` 头注),第四颗必然把摘要压成「…」
     /// 甚至挤掉标题;一颗按钮独占一行看着松,但三段编辑台的结构因此一致(「行为」都在第二行末尾)。
+    ///
+    /// 这一行的两份隐藏占位(见 `toolbarGhostButton` 与 `EditorToolbarResetReserve`)让「行为」跟
+    /// 第一行的「布局」逐像素同宽 —— 按钮宽度是**一行之内平分**出来的,不把第一行那两颗和
+    /// 「重置 ▾」的位置补上,独苗的「行为」会吃掉整行余量、比上面那颗宽一大截。
     private var toolbarRow2: some View {
         HStack(spacing: 8) {
             toolbarButton(
@@ -135,7 +139,11 @@ struct MenuBarEditorStage: View {
                 summary: behaviorSummary,
                 target: .behavior
             )
+            // 占位复刻第一行第二、三颗(同一份标题与摘要),平分出来的宽度才跟它们一致。
+            toolbarGhostButton(icon: "circle.lefthalf.filled", title: L10n.t("配色"), summary: colorSummary)
+            toolbarGhostButton(icon: "textformat", title: L10n.t("字体"), summary: fontSummary)
             Spacer(minLength: 8)
+            EditorToolbarResetReserve()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -186,26 +194,42 @@ struct MenuBarEditorStage: View {
         Button {
             popover = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .environment(\.locale, Locale(identifier: "en"))
-                Text(title)
-                    .lineLimit(1)
-                Text("·")
-                    .foregroundStyle(.tertiary)
-                Text(summary)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 140, alignment: .leading)
-                    .layoutPriority(-1)
-            }
+            toolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
         .popover(isPresented: popoverBinding(target), arrowEdge: .bottom) {
             popoverContent(for: target)
+        }
+    }
+
+    /// 第二行的对齐占位:跟 `toolbarButton` 同一份 label、同一套按钮样式,因此同宽;但不挂
+    /// popover(同一份 `popover` 状态挂两处会让两个 NSPopover 抢同一个锚点)、不画、不进无障碍树。
+    private func toolbarGhostButton(icon: String, title: String, summary: String) -> some View {
+        Button {} label: {
+            toolbarButtonLabel(icon: icon, title: title, summary: summary)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .hidden()
+        .accessibilityHidden(true)
+    }
+
+    private func toolbarButtonLabel(icon: String, title: String, summary: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .environment(\.locale, Locale(identifier: "en"))
+            Text(title)
+                .lineLimit(1)
+            Text("·")
+                .foregroundStyle(.tertiary)
+            Text(summary)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 140, alignment: .leading)
+                .layoutPriority(-1)
         }
     }
 

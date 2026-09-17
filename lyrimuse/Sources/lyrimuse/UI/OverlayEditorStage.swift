@@ -629,6 +629,8 @@ struct OverlayEditorStage: View {
                 target: .placement
             )
             Spacer(minLength: 8)
+            // 跟第一行「重置 ▾」等宽的隐藏占位:两行的弹性预算一样,三颗入口才逐列对齐。
+            EditorToolbarResetReserve()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
