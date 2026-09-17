@@ -193,14 +193,17 @@ def render_html(lines: list[str], lang: str) -> str:
     def flush_li():
         nonlocal li
         if li:
-            body.append("<li>" + inline_md(join_wrapped(li)) + "</li>")
+            # ⚠️ 条目是 <p class="item">,**不是 <li>**。「软件更新」页不走 WebView,它用
+            # NSAttributedString(html:) 解析(SoftwareUpdatePage.render),那个解析器把 <ul><li>
+            # 转成 NSTextList —— 自带 • 标记和一大段固定缩进,而且不认 list-style 之类的 CSS,
+            # 改样式表是拦不住它的。换成段落,标记和缩进就从根上不存在。
+            body.append('<p class="item">' + inline_md(join_wrapped(li)) + "</p>")
             li = []
 
     def close_list():
         nonlocal in_list
         flush_li()
         if in_list:
-            body.append("</ul>")
             in_list = False
 
     def flush_table():
@@ -244,7 +247,6 @@ def render_html(lines: list[str], lang: str) -> str:
             flush_para()
             flush_li()
             if not in_list:
-                body.append("<ul>")
                 in_list = True
             li.append(line[2:])
             continue
@@ -265,7 +267,7 @@ def render_html(lines: list[str], lang: str) -> str:
         # ⚠️ 不要项目符号、也不要缩进:条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
         # 在 Sparkle 那扇窄弹窗里会把每条推进去一截,点和文字之间还空着一大段,而换行后的续行
         # 又顶回左边,一条条读起来是散的。
-        "ul{margin:6px 0;padding-left:0;list-style:none}li{margin:3px 0}\n"
+        "p.item{margin:3px 0}\n"
         "table{border-collapse:collapse;margin:8px 0}td{border:1px solid #8884;padding:4px 8px}\n"
         "</style></head><body>\n" + "\n".join(body) + "\n</body></html>\n"
     )
