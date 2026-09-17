@@ -175,7 +175,9 @@ private struct PlayerChip<Icon: View>: View {
     }
 }
 
-/// 芯片的流式排布:一行放不下就换行,每行**右对齐**(它住在 SettingsRow 的尾部槽位)。
+/// 芯片的流式排布:一行放不下就换行。整块经外层 `.frame(alignment: .trailing)` 贴 SettingsRow
+/// 尾部槽位的右缘,但**行内从左边开始摆**——右对齐会把换行后那零星几枚芯片顶到最右边单独悬空,
+/// 跟上一行对不上,看着像"漏了一截"(2026-09-16 用户反馈)。
 /// 用 `Layout` 而不是 `HStack` + `fixedSize`:候选个数由用户的信任列表决定,写死一行会在窄窗口下
 /// 把标题挤没或把芯片裁掉半个。
 private struct PlayerChipFlow: Layout {
@@ -193,8 +195,7 @@ private struct PlayerChipFlow: Layout {
         let rowHeight = sizes.map(\.height).max() ?? 0
         var y = bounds.minY
         for row in ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing, limit: bounds.width) {
-            // 每行右对齐:它住在 SettingsRow 的尾部槽位,跟旁边的开关 / 分段控件贴同一条右缘。
-            var x = bounds.maxX - row.width
+            var x = bounds.minX
             for index in row.indices {
                 subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
                                       proposal: ProposedViewSize(sizes[index]))
