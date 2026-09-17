@@ -23,9 +23,17 @@ public enum LyricsFillSweep {
         /// 可选而不是 `Bool`:collector 那边带 `omitempty`,补空那一轮压根不会写这个键 ——
         /// 声明成非可选会让**所有**补空进度解码失败(整个进度条哑掉),而不是读成 false。
         public let full: Bool?
+        /// 全量扫库时是**整场**的分母/分子/已更新数(跨进程重启、跨"停一下再点"累计,
+        /// 见 collector 的 lyricsFullScanProgressBase);补空那一轮就是这一轮自己的数。
         public let total: Int
         public let done: Int
         public let filled: Int
+        /// 这一轮(这次开工)跑完了多少条。
+        ///
+        /// ⚠️ 算速度只能用它,不能用 `done`:全量的 `done` 是累计值,而 `startedAt` 是**这一轮**
+        /// 开工的时刻,两者相除会得出"一开工就跑完了三千首"这种荒唐速度,「大约还要」当场变成
+        /// 「就快好了」。字段缺席(补空那一轮、以及旧版 collector)时退回 `done`,那时两者相等。
+        public let roundDone: Int?
         public let current: String?
         public let startedAt: Int64
         public let updatedAt: Int64
@@ -35,7 +43,11 @@ public enum LyricsFillSweep {
         /// 这一轮是不是全量扫库。字段缺席(补空那一轮)读成 false。
         public var isFullScan: Bool { full == true }
 
+        /// 这一轮跑完的条数,拿不到就退回 `done`(补空那一轮两者本来就相等)。
+        public var roundDoneOrDone: Int { roundDone ?? done }
+
         public init(running: Bool, manual: Bool, full: Bool? = nil, total: Int, done: Int, filled: Int,
+                    roundDone: Int? = nil,
                     current: String?, startedAt: Int64, updatedAt: Int64, finishedAt: Int64?,
                     cancelled: Bool?) {
             self.running = running
@@ -44,6 +56,7 @@ public enum LyricsFillSweep {
             self.total = total
             self.done = done
             self.filled = filled
+            self.roundDone = roundDone
             self.current = current
             self.startedAt = startedAt
             self.updatedAt = updatedAt

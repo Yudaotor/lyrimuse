@@ -225,3 +225,49 @@ func TestLyricsFillSweepPace(t *testing.T) {
 		t.Errorf("按 %d 首估算全库要 %v,超过一天了", libraryTracks, total)
 	}
 }
+
+// 全量扫库的累计分母/分子。这几条全是"选错完全不报错"的那类:扫描照跑、进度照涨,
+// 只是用户看到的数字对不上,而那要等第二次续跑才看得出来。
+func TestLyricsFullScanProgressBase(t *testing.T) {
+	cases := []struct {
+		name                string
+		stored              lyricsFullScanState
+		remaining           int
+		total, done, filled int
+	}{
+		{
+			name:      "新的一场:分母就是这一轮的候选数,分子归零",
+			stored:    lyricsFullScanState{},
+			remaining: 5122,
+			total:     5122, done: 0, filled: 0,
+		},
+		{
+			name:      "续跑:分母原样保留,分子接着累加",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 3922,
+			total:     5122, done: 1200, filled: 340,
+		},
+		{
+			name:      "候选比当初少了(被自然播放追平):分母不缩,仍是一开始那个数",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 100,
+			total:     5122, done: 1200, filled: 340,
+		},
+		{
+			name:      "库里新增了条目:已跑+还剩超过当初的总数,分母按真实值抬上去",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 4000,
+			total:     5200, done: 1200, filled: 340,
+		},
+	}
+	for _, c := range cases {
+		total, done, filled := lyricsFullScanProgressBase(c.stored, c.remaining)
+		if total != c.total || done != c.done || filled != c.filled {
+			t.Errorf("%s: got (%d,%d,%d), want (%d,%d,%d)",
+				c.name, total, done, filled, c.total, c.done, c.filled)
+		}
+		if done > total {
+			t.Errorf("%s: 分子 %d 超过分母 %d —— 界面会显示成倒着走", c.name, done, total)
+		}
+	}
+}

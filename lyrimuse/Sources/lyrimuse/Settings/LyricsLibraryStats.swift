@@ -531,13 +531,18 @@ struct LyricsLibraryStatsPanel: View {
 
     /// 「大约还要 N 小时」——用这一轮**已经跑出来的**速度外推,不用那个固定估计值。
     /// 还没跑完一首时没有速度可言,退回按常量估。
+    ///
+    /// ⚠️ 剩余条数按 `total - done`(整场的累计值),而速度按 `roundDoneOrDone / (now-startedAt)`
+    /// (这一轮自己的)—— 两个分子不是同一个口径,别图省事合成一个。`startedAt` 是这一轮开工的
+    /// 时刻,拿累计的 `done` 除它会得出"一开工就跑了三千首"的假速度。
     private static func remainingText(_ status: LyricsFillSweep.Info,
                                      fallbackSecondsPerTrack: Double) -> String {
         let left = max(status.total - status.done, 0)
         guard left > 0 else { return L10n.t("就快好了") }
         let elapsed = Double(Date().timeIntervalSince1970) - Double(status.startedAt)
-        let perTrack = status.done > 0 && elapsed > 0
-            ? elapsed / Double(status.done)
+        let thisRound = status.roundDoneOrDone
+        let perTrack = thisRound > 0 && elapsed > 0
+            ? elapsed / Double(thisRound)
             : fallbackSecondsPerTrack
         // 直接按实测速度算,不再绕"换算成等效首数"那一道:hoursText 现在收显式的每首秒数,
         // 把实测值原样传进去就行。

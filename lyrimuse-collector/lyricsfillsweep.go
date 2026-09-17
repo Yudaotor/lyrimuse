@@ -89,10 +89,14 @@ type lyricsFillStatus struct {
 	Manual  bool `json:"manual"`
 	// Full:这一轮是「全量重新扫库」而不是补空(见 lyricsfullscan.go)。界面靠它决定
 	// 措辞——两者的 Total 不是一个量级(百 vs 几千),说成同一件事会让人以为补空要跑两天。
-	Full       bool   `json:"full,omitempty"`
-	Total      int    `json:"total"`
-	Done       int    `json:"done"`
-	Filled     int    `json:"filled"`
+	Full   bool `json:"full,omitempty"`
+	Total  int  `json:"total"`
+	Done   int  `json:"done"`
+	Filled int  `json:"filled"`
+	// RoundDone:**这一轮**(这个进程这一次开工)跑完了多少条。Done 对全量来说是跨重启的
+	// 累计值,拿它配 StartedAt 反推速度会算出荒唐的结果(一开工就"已经跑了三千首"),所以
+	// 界面的「大约还要 N 小时」用这个数量速度、用 Total-Done 量剩余。补空那一轮两者相等。
+	RoundDone  int    `json:"roundDone,omitempty"`
 	Current    string `json:"current,omitempty"`
 	StartedAt  int64  `json:"startedAt"`
 	UpdatedAt  int64  `json:"updatedAt"`
@@ -308,6 +312,11 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 		Running: true, Manual: req.manual, Full: req.full,
 		Total: len(keys), StartedAt: time.Now().Unix(),
 	}
+	// 全量的分母/分子跨重启、跨"停一下再点"累计(见 lyricsFullScanProgressBase);补空那一轮
+	// 不走这条 —— 它一轮就是一轮,没有"续跑"这回事。
+	if req.full {
+		status.Total, status.Done, status.Filled = lyricsFullScanBaseline(len(keys))
+	}
 	writeLyricsFillStatus(status)
 	slog.Info("lyrics fill sweep: start", "manual", req.manual, "full", req.full, "candidates", len(keys))
 	if len(keys) == 0 {
@@ -317,6 +326,7 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 		// 一条候选都没有 = 全库已经追平,这一轮就此了结,别留着标记让下次启动再空跑一遍。
 		if req.full {
 			setLyricsFullScanActive(false)
+			resetLyricsFullScanProgress()
 		}
 		return
 	}
@@ -342,7 +352,13 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 			status.Filled++
 		}
 		status.Done++
+		status.RoundDone++
 		status.Current = ""
+		// 先落盘再写状态:进程在这两行之间被杀时,宁可界面少算一条,也不要续跑时把已经
+		// 跑过的那条重新算进"还剩"。
+		if req.full {
+			saveLyricsFullScanProgress(status.Done, status.Filled)
+		}
 		writeLyricsFillStatus(status)
 	}
 	status.Running = false
@@ -354,6 +370,9 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 	// 这两者(都只表现为 ctx 被取消),所以这个分支只认"没被取消"。见 lyricsfullscan.go 头注。
 	if req.full && !status.Cancelled {
 		setLyricsFullScanActive(false)
+		// 整份候选列表跑完 = 这一场全量结束,累计分母/分子就此清零,下次点「开始」是新的一场。
+		// 被取消的两种情形都不走这里,累计值留在盘上等着接着数。
+		resetLyricsFullScanProgress()
 	}
 	slog.Info("lyrics fill sweep: done", "manual", req.manual, "full", req.full, "total", status.Total, "done", status.Done, "filled", status.Filled, "cancelled", status.Cancelled)
 }

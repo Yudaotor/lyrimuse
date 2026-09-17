@@ -100,6 +100,66 @@ type lyricsFullScanState struct {
 	// lyricsFullScanGap(5 秒)之后那句话和那个数当场都成了错的 —— 没有任何东西会报错,
 	// 只是用户看到的预计时长凭空多出一倍。
 	SecondsPerTrack int `json:"secondsPerTrack,omitempty"`
+	// Total / Done / Filled:**整场**全量的累计进度,给界面当分母与分子。
+	// 一场 = 从点下「开始」到整份候选列表真的跑完,中间的进程重启、"停一下再点"都算同一场。
+	// 语义与取舍见 lyricsFullScanProgressBase 的头注。
+	Total  int `json:"total,omitempty"`
+	Done   int `json:"done,omitempty"`
+	Filled int `json:"filled,omitempty"`
+}
+
+// lyricsFullScanProgressBase 纯函数:给定盘上记着的那一场(可能是空的)和这一轮还剩多少条,
+// 算出界面该显示的分母/分子/已更新数。
+//
+// 为什么需要它:候选集合是**单调收缩**的(每条跑完 lyrics_scoring_version 就追平,下一轮
+// 重新挑候选时它自然不在列表里)。所以每一轮开工时的 len(keys) 都比上一轮小 —— 直接拿它
+// 当分母、分子从 0 起,用户看到的就是"每续跑一次分母就缩水、进度永远从 0 开始"。
+//
+// 规则:
+//   - 盘上没有一场在记(Total<=0)= 新的一场,分母就是这一轮的候选数,分子归零;
+//   - 已经有一场,分母原样保留、分子接着累加;
+//   - ⚠️ 分母**只涨不缩**:库里新增条目会让"已跑 + 还剩"超过当初定下的总数,那时候按真实值
+//     抬上去。截断分子会显示成 5122/5122 却还在跑,比分母变大更难懂。
+//
+// 清零只发生在两处:整份候选列表真的跑完(resetLyricsFullScanProgress),以及打分版本变了
+// (setLyricsFullScanStatePath —— 换了算法就是另一场,旧的分母没有意义)。用户按「停止」
+// **不清**:那正是"停一下再接着点"这个场景本身。
+func lyricsFullScanProgressBase(stored lyricsFullScanState, remaining int) (total, done, filled int) {
+	if stored.Total <= 0 {
+		return remaining, 0, 0
+	}
+	total, done, filled = stored.Total, stored.Done, stored.Filled
+	if done+remaining > total {
+		total = done + remaining
+	}
+	return total, done, filled
+}
+
+// lyricsFullScanBaseline 取出这一轮该从哪个分子/分母接着数,并把它落盘。
+func lyricsFullScanBaseline(remaining int) (total, done, filled int) {
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		total, done, filled = lyricsFullScanProgressBase(*state, remaining)
+		state.Total, state.Done, state.Filled = total, done, filled
+		return true
+	})
+	return total, done, filled
+}
+
+// saveLyricsFullScanProgress 每跑完一条落一次盘 —— 进程随时可能被杀,只有落了盘的数才续得上。
+// 一条约 13 秒,这点写入量可以忽略。
+func saveLyricsFullScanProgress(done, filled int) {
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		state.Done, state.Filled = done, filled
+		return true
+	})
+}
+
+// resetLyricsFullScanProgress 结束这一场。只有整份候选列表跑完才调它。
+func resetLyricsFullScanProgress() {
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		state.Total, state.Done, state.Filled = 0, 0, 0
+		return true
+	})
 }
 
 // lyricsFullScanSearchEstimate:一首歌那一轮全源搜索的粗略耗时。
@@ -129,16 +189,44 @@ func setLyricsFullScanStatePath(path string) {
 	lyricsFullScanMu.Lock()
 	lyricsFullScanStatePath = path
 	lyricsFullScanMu.Unlock()
-	state := readLyricsFullScanState()
-	state.ScoringVersion = lyricsScoringVersion
-	state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
-	writeLyricsFullScanState(state)
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		// 打分版本变了 = 换了算法,上一场全量的分母/分子不再描述同一件事,就地清掉。
+		// 这是唯一能察觉版本变化的时机:下面那行一写,盘上的版本号就跟当前的一样了。
+		if state.ScoringVersion != lyricsScoringVersion {
+			state.Total, state.Done, state.Filled = 0, 0, 0
+		}
+		state.ScoringVersion = lyricsScoringVersion
+		state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
+		return true
+	})
+}
+
+// updateLyricsFullScanState 把「读—改—写」整个握在同一把锁里;mutate 返回 false 表示什么都没变,
+// 那就连写都省掉(别无谓刷 UpdatedAt 和文件 mtime —— App 侧按 mtime 判要不要重读)。
+//
+// ⚠️ 改这份状态**一律**走这条,别再写 read → 改 → write 三步。扫描 goroutine 每跑完一条就要
+// 更新累计进度,而用户按「停止」是另一个 goroutine 在清 Active —— 两边各读一份旧快照、各写一次,
+// 后写的那次会把对方的改动整个盖掉。被盖掉的如果是 Active=false,下次启动就会自动续跑一轮
+// 用户明确停掉的全量扫描,而且没有任何东西会报错。
+func updateLyricsFullScanState(mutate func(*lyricsFullScanState) bool) {
+	lyricsFullScanMu.Lock()
+	defer lyricsFullScanMu.Unlock()
+	state := readLyricsFullScanStateLocked()
+	if !mutate(&state) {
+		return
+	}
+	writeLyricsFullScanStateLocked(state)
 }
 
 func readLyricsFullScanState() lyricsFullScanState {
 	lyricsFullScanMu.Lock()
+	defer lyricsFullScanMu.Unlock()
+	return readLyricsFullScanStateLocked()
+}
+
+// readLyricsFullScanStateLocked:调用方必须已经握着 lyricsFullScanMu。
+func readLyricsFullScanStateLocked() lyricsFullScanState {
 	path := lyricsFullScanStatePath
-	lyricsFullScanMu.Unlock()
 	if path == "" {
 		return lyricsFullScanState{}
 	}
@@ -157,8 +245,13 @@ func readLyricsFullScanState() lyricsFullScanState {
 
 func writeLyricsFullScanState(state lyricsFullScanState) {
 	lyricsFullScanMu.Lock()
+	defer lyricsFullScanMu.Unlock()
+	writeLyricsFullScanStateLocked(state)
+}
+
+// writeLyricsFullScanStateLocked:调用方必须已经握着 lyricsFullScanMu。
+func writeLyricsFullScanStateLocked(state lyricsFullScanState) {
 	path := lyricsFullScanStatePath
-	lyricsFullScanMu.Unlock()
 	if path == "" {
 		return
 	}
@@ -180,19 +273,20 @@ func lyricsFullScanActive() bool {
 // setLyricsFullScanActive 置/清"待续"标记。置上时顺带记下起始时刻(已经在跑的那一轮不刷新,
 // 续跑要显示的是最初点下去的时间)。
 func setLyricsFullScanActive(active bool) {
-	state := readLyricsFullScanState()
-	if state.Active == active {
-		return
-	}
-	state.Active = active
-	state.ScoringVersion = lyricsScoringVersion
-	state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
-	if active {
-		state.StartedAt = time.Now().Unix()
-	} else {
-		state.StartedAt = 0
-	}
-	writeLyricsFullScanState(state)
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		if state.Active == active {
+			return false
+		}
+		state.Active = active
+		state.ScoringVersion = lyricsScoringVersion
+		state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
+		if active {
+			state.StartedAt = time.Now().Unix()
+		} else {
+			state.StartedAt = 0
+		}
+		return true
+	})
 }
 
 // lyricsFullScanTier 给一条缓存分层,-1 = 这一轮不碰它。分层规则见文件头注。
