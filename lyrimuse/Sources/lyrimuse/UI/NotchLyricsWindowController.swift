@@ -800,18 +800,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
            rightArea.minX > leftArea.maxX {
             let centerX = (leftArea.maxX + rightArea.minX) / 2
             let notchWidth = rightArea.minX - leftArea.maxX
-            // ⚠️ 高度取 safeAreaInsets.top 和**菜单栏条高**里的大者。
+            // ⚠️ 2026-09-17 之前这里取的是 safeAreaInsets.top 和**菜单栏条高**里的大者
+            // (2026-08-19 实测这台内建屏:safeAreaInsets.top = 32,菜单栏条
+            // frame.maxY - visibleFrame.maxY = **33**,系统这两个数差 1pt),理由是"取 32
+            // 的话黑带底边比刘海/菜单栏底边高 1pt,看着像比刘海短了一截"。
             //
-            // 2026-08-19 实测这台内建屏:safeAreaInsets.top = 32,而菜单栏条
-            // (frame.maxY - visibleFrame.maxY)= **33** —— 系统这两个数差 1pt。收起态那条
-            // 黑带的高度就是这个值,取 32 的话它的底边比刘海/菜单栏的底边高 1pt(retina 上
-            // 是 2 个物理像素的一道发丝),看着就是"比刘海短了一截"。取大者之后底边跟菜单栏
-            // 齐平,黑带和刘海连成一片。
-            //
-            // 只会变大不会变小,所以不会反过来压住窗口内容;contentTopInset 跟着 +1,
-            // 歌词行相应往下 1pt,更稳妥(绝不会被刘海压到)。
-            return NotchGeometry(notchHeight: max(notchHeight, menuBarHeight(of: screen)),
-                                 centerX: centerX, notchWidth: notchWidth)
+            // 2026-09-17 用户实测截图坐实推翻:那 1pt 差额换来的代价比它治的问题更扎眼 ——
+            // 黑带(灵动岛稳态顶行)比真刘海多出的这 1pt(retina 上 2 个物理像素)恰好落在
+            // 刘海两侧"耳朵"里,那里正常显示系统状态图标 / 桌面内容,平白盖掉一条黑边,用户
+            // 描述为"灵动岛的高度比机械刘海的位置多一点"。而 32 这一档的"矮 1pt"落在菜单栏
+            // 自己的材质范围内(视觉上仍是菜单栏的一部分,不是裸露的桌面),不会露出明显缝隙。
+            // 两难只能二选一,现在改选"贴紧真刘海、不多不少",不再兼顾跟菜单栏条高严丝合缝。
+            return NotchGeometry(notchHeight: notchHeight, centerX: centerX, notchWidth: notchWidth)
         }
         // 无真刘海:黑条高度跟这块屏的菜单栏对齐,视觉上跟系统融为一体。
         return NotchGeometry(
@@ -826,7 +826,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 不加 private:设置页的灵动岛预览要用同一个公式算宽度,否则设成小宽度时预览
     // 显示的是设定值、真窗口却被耳朵下限顶宽,两边对不上。
     ///
-    /// contentTopInset:那块屏的菜单栏高度(= `geometry(for:).notchHeight`)。只有「封面」那一档
+    /// contentTopInset:那块屏的顶行高度(= `geometry(for:).notchHeight`,真刘海屏是刘海本身
+    /// 的高度、无刘海屏是菜单栏高度,2026-09-17 起两者不再强制取大者,见 geometry(for:) 头注)。
+    /// 只有「封面」那一档
     /// 用得到 —— 它的边长是这个值的函数。**不给估计值**是刻意的:上一版拿 28pt(高菜单栏机器的
     /// 上界)当常量,在这台机器(菜单栏 32 → 封面 22pt)上就白占 6pt/耳、卡片白宽 12pt。
     static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat,
