@@ -219,28 +219,32 @@ func motionCoverPreviewSizedURL(tmpl string) string {
 // 也就是说 3 ↔ 19 之间是空的,阈值 10 落在空隙正中。跨源那三行尤其关键:我们实际铺的封面
 // 多半来自网易云或 QQ,而它跟 Apple 的首帧仍然判为同一张。
 //
-// 取不到图(网络失败 / 模板不认 / 解码失败)一律返回 false —— 宁可这首没有动态封面,也不能
-// 在没核对过的情况下放行。
-func motionCoverMatchesCover(ctx context.Context, previewTmpl, coverURL string) bool {
+// 返回两位:matched 是比对结论,verified 是"这一轮到底有没有真的比成"。取不到图(网络失败 /
+// 模板不认 / 解码失败)时 matched 恒 false、**verified 也是 false**——调用方(fillMotionCover)
+// 靠 verified 区分"真的比过、两张图确实不是同一张"(该把结论钉死)和"网络抖了一下,这轮没
+// 比成"(不该钉死,得留给下次重试)。之前这两种情况共用同一个 false,取图失败
+// 被当成了"没通过"永久写进 MotionCoverChecked,一次 CDN 限流就能把一条本该动的记录永久
+// 判成"没有动态封面"——实测 Prince《Musicology》专辑坐实过这个缺口。
+func motionCoverMatchesCover(ctx context.Context, previewTmpl, coverURL string) (matched, verified bool) {
 	url := motionCoverPreviewSizedURL(previewTmpl)
 	if url == "" || coverURL == "" {
-		return false
+		return false, false
 	}
 	previewImg := loadCoverImage(ctx, url)
 	if previewImg == nil {
-		return false
+		return false, false
 	}
 	coverImg := loadCoverImage(ctx, coverURL)
 	if coverImg == nil {
-		return false
+		return false, false
 	}
 	d := coverFingerprintDistance(coverFingerprint(previewImg), coverFingerprint(coverImg))
 	if d > coverFingerprintMaxDistance {
 		log.Printf("motion-cover: preview/cover fingerprint distance %d > %d, skipping",
 			d, coverFingerprintMaxDistance)
-		return false
+		return false, true
 	}
-	return true
+	return true, true
 }
 
 // motionCoverAlbumIDFromAppleURL 从 enrich 记下的 apple_music_url 里抠出专辑 ID。

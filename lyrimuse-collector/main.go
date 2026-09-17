@@ -175,8 +175,15 @@ func main() {
 		runRecheckInstrumentalCLI(os.Args[2:])
 		return
 	}
+	// `collector recheck-motion-cover [-apply]`:扫描整份缓存,把"已查过动态封面、结论是
+	// 没有"的记录用当前 cover_url 重新校验一次(见 motionrecheckcli.go)。默认预演,
+	// -apply 才真改、且要求常驻实例已停。
+	if len(os.Args) > 1 && os.Args[1] == "recheck-motion-cover" {
+		runRecheckMotionCoverCLI(os.Args[2:])
+		return
+	}
 	// `collector retranslate-repeated [-apply]`:扫描整份缓存,把"歌词有重复行、可能被
-	// 2026-08-26 那个逐行独立翻译 bug 坑过"的存量译文重新机翻一遍(见 retranslatecli.go)。
+	// 那个逐行独立翻译 bug 坑过"的存量译文重新机翻一遍(见 retranslatecli.go)。
 	// 默认预演,-apply 才真改、且要求常驻实例已停。
 	if len(os.Args) > 1 && os.Args[1] == "retranslate-repeated" {
 		runRetranslateRepeatedCLI(os.Args[2:])
