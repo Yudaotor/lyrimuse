@@ -2949,6 +2949,14 @@ func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
 			if deezerLastFailureReasonNow() != "" {
 				continue
 			}
+		case "applemusic":
+			// 没连过账号 / 令牌过期 / 拿不到 developer token —— 三种都跟"歌手名写法"
+			// 毫无关系,换个别名重试一次只是白白多打一轮请求。见 applemusic.go 头注。
+			// 反过来说,连上了只是没搜到,这一路**值得**重试:它跟网易云/QQ 一样是拿
+			// 歌手名 + 歌名去搜的,别名确实会影响命中。
+			if applemusicLastFailureReasonNow() != "" {
+				continue
+			}
 		}
 		out = append(out, s)
 	}
@@ -3174,7 +3182,7 @@ type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateRe
 
 // lyricSourceNames 是十个歌词源的名字,顺序无关紧要,只用来数进度分母。
 // applecover 不在里面 —— 它查的是封面。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic"}
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个。features.LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
@@ -3266,11 +3274,13 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	miguLyr, miguTr, miguTitle, miguArtist, miguAlbum, miguCover := migu.lyr, migu.tr, migu.matchTitle, migu.matchArtist, migu.matchAlbum, migu.matchCover
 	dz := raw["deezer"]
 	dzLyr, dzTitle, dzArtist, dzAlbum, dzCover, dzDur, dzPlainOnly := dz.lyr, dz.matchTitle, dz.matchArtist, dz.matchAlbum, dz.matchCover, dz.srcDur, dz.plainOnly
+	am := raw["applemusic"]
+	amLyr, amYRC, amTr, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
 	amll := raw["amll"].amll
 	appleCover := raw["applecover"].matchCover
-	// coverOrFallback:候选自己的源有封面就用自己的——2026-08-31 起网易云/QQ/酷狗/
-	// Musixmatch/LyricFind/酷我/咪咕七个源都能给(QQ 复用 qqSongCoverAndSinger,酷狗多查
-	// 一次 album/info,酷我搜索结果自带 web_albumpic_short,见各自文件的注释),没有就用
+	// coverOrFallback:候选自己的源有封面就用自己的——网易云/QQ/酷狗/Musixmatch/
+	// LyricFind/酷我/咪咕七个源都能给(QQ 复用 qqSongCoverAndSinger,酷狗多查一次
+	// album/info,酷我搜索结果自带 web_albumpic_short,见各自文件的注释),没有就用
 	// Apple Music/iTunes 那路通用兜底(LRCLIB/AMLL 这两个是纯歌词库,格式本身不带封面,
 	// 结构性地只能走兜底)。即使 appleCover 这一刻还没到(还在并发查),先留空,后面
 	// applecover 到达触发的下一轮 onUpdate/最终返回会自然补上,不需要特殊处理"到达顺序"。
@@ -3346,6 +3356,22 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// Deezer 自报的 duration(见 deezer.go 头注)。plainOnly 直通打分层那道恒 -1 的闸
 		// (match.go 的 scoreRejectPlainTextOnly),口径与 lrclib/musixmatch 的纯文本回退一致。
 		candidates = append(candidates, lyricCandidate{source: "deezer", lyrics: dzLyr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: coverOrFallback(dzCover), plainTextOnly: dzPlainOnly})
+	}
+	if amLyr != "" {
+		// 全部源里唯一的**官方逐字**来源:逐行 LRC + 逐字 YRC(itunes:timing="Word")+
+		// 可选译文,封面用 artwork 模板替换出的 1000x1000,时长用 Apple 自报的
+		// durationInMillis(见 applemusic.go 头注)。逐字的可用性判定走跟 amll 完全一样的
+		// usableYRC/usableWordTiming —— 两边都是同一套 TTML 解析出来的,没理由用两套判据。
+		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
+		amUsableTr, _ := usableValueAdd(amLyr, amTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{
+			source: "applemusic", lyrics: amLyr,
+			wordTimingYRC: usableYRC(amLyr, amYRC), hasWordTiming: usableWordTiming(amLyr, amYRC),
+			hasUsableTranslation:       amUsableTr,
+			sourceReportedDurationSecs: amDur,
+			title:                      amTitle, artist: amArtist, album: amAlbum,
+			cover: coverOrFallback(amCover), plainTextOnly: amPlainOnly,
+		})
 	}
 	if !amll.empty() {
 		// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
@@ -3809,6 +3835,17 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 没有同步歌词、只有纯文本时 plainOnly=true(分数恒 -1,见 deezer.go 头注)。
 		r := deezerLyric(ctx, artist, title, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+	}()
+	go func() {
+		if skipSource("applemusic") {
+			resultsCh <- lyricSourceResult{source: "applemusic"}
+			return
+		}
+		// 独立检索(不等任何其它源的 ID),同 kuwo/migu/deezer。这一路是全部源里唯一能给出
+		// **逐字**时间轴的官方源,yrc 因此常有值;tr 来自 TTML 里的 <translations>,多数曲目为空。
+		// ⚠️ 用户没连过 Apple Music 时它安静返回空(applemusic_not_connected),不是故障。
+		r := applemusicLyric(ctx, artist, title, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份

@@ -18,7 +18,7 @@ func allLyricSourceConstants() []string {
 	return []string{
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
 		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
-		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
+		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
 	}
 }
 
@@ -51,7 +51,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ③ 全集兜底(lyrics_sources 缺失/为空 = 全开)。漏一个 = 那个源在全新安装上被禁用。
-	full := resolveLyricsSources(nil, nil, nil, nil, nil, nil)
+	full := resolveLyricsSources(nil, nil, nil, nil, nil, nil, nil)
 	for _, s := range all {
 		if !full[s] {
 			t.Errorf("源 %q 不在 resolveLyricsSources 的全集兜底里(全新安装会禁用它)", s)
@@ -59,11 +59,11 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ④ 老配置的一次性迁移:amll/lyricfind/kuwo 各自的迁移标记缺失时补进去,已表态时
-	// 尊重用户选择。这条不是补测——2026-08-25 实测坐实过:漏了迁移标记参数那版代码在真实
+	// 尊重用户选择。这条不是补测——实测坐实过:漏了迁移标记参数那版代码在真实
 	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
 	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
 	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
-	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil)
+	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
 		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
 	}
@@ -80,7 +80,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 		t.Error("老配置(deezer_lyrics 缺失)应当把 deezer 补进启用集合")
 	}
 	no := false
-	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil, nil)
+	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil, nil, nil)
 	if statedAMLL[lyricSourceAMLL] {
 		t.Error("用户已表态(amll_lyrics=false)时不该再把 amll 补回来")
 	}
@@ -90,7 +90,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedAMLL[lyricSourceKuwo] {
 		t.Error("amll 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil, nil)
+	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil, nil, nil)
 	if statedLF[lyricSourceLyricFind] {
 		t.Error("用户已表态(lyricfind_lyrics=false)时不该再把 lyricfind 补回来")
 	}
@@ -100,7 +100,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedLF[lyricSourceKuwo] {
 		t.Error("lyricfind 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil, nil)
+	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil, nil, nil)
 	if statedKuwo[lyricSourceKuwo] {
 		t.Error("用户已表态(kuwo_lyrics=false)时不该再把 kuwo 补回来")
 	}
@@ -113,7 +113,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedKuwo[lyricSourceMigu] {
 		t.Error("kuwo 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
 	}
-	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no, nil)
+	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no, nil, nil)
 	if statedMigu[lyricSourceMigu] {
 		t.Error("用户已表态(migu_lyrics=false)时不该再把 migu 补回来")
 	}
@@ -123,18 +123,26 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedMigu[lyricSourceDeezer] {
 		t.Error("migu 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
 	}
-	statedDeezer := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, &no)
+	statedDeezer := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, &no, nil)
 	if statedDeezer[lyricSourceDeezer] {
 		t.Error("用户已表态(deezer_lyrics=false)时不该再把 deezer 补回来")
 	}
 	if !statedDeezer[lyricSourceMigu] {
 		t.Error("deezer 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
 	}
+
+	statedAM := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, &no)
+	if statedAM[lyricSourceAppleMusic] {
+		t.Error("用户已表态(applemusic_lyrics=false)时不该再把 applemusic 补回来")
+	}
+	if !statedAM[lyricSourceDeezer] {
+		t.Error("applemusic 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
+	}
 }
 
 // 并发收集那个循环的次数、以及结果 channel 的缓冲,都必须**跟着源数走**,不许写字面量。
 //
-// 2026-09-13 接第十个源时实测坐实的坑:那行曾经是硬编码的 `for i := 0; i < 9`,而 goroutine
+// 接第十个源时实测坐实的坑:那行曾经是硬编码的 `for i:= 0; i < 9`,而 goroutine
 // 数是"源数 + 1"(多出来的是 applecover)。两个数从来没绑在一起,于是每加一个源就多丢一份
 // 结果——循环先数满就退出,**最后到达的那个源的应答被直接扔掉**。当时的现象是:新接的
 // deezer 明明取回了 2810 字节逐行歌词,却从没进过候选列表;`git log -S` 查下来这个字面量
@@ -195,6 +203,34 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	}
 }
 
+// 「歌词管理」窗口的**来源筛选下拉**必须从 LyricsSource.allCases 派生,不许手写字面量清单。
+//
+// 用户实机发现的漏网之鱼:那份清单原来是手写的
+// `[.all, .named("amll"), .named("netease"), …, .named("lyricfind"), .none]`,停在 lyricfind
+// 那个时代,此后接的酷我(08-31)/ 咪咕(09-04)/ Deezer(09-13)/ Apple Music(09-17)四个源
+// **在下拉里根本不存在** —— 列表里明明有这些源的歌词,按来源却永远筛不出来。
+//
+// 上面那几个 Test 全都没能拦住它:它们守的是"源常量有没有挂进某个清单",而这里是
+// 另一种形态——一份**平行维护的字面量副本**,每加一个源都要人肉同步一次。所以这条守卫
+// 换个守法:不检查"有没有 applemusic",而是检查"它到底是不是从枚举派生的"。只要还是
+// 派生的,以后加多少源都不可能漏;哪天有人改回手写清单,这条立刻红。
+func TestSwiftSourceFilterDerivesFromEnum(t *testing.T) {
+	const p = "../lyrimuse/Sources/lyrimuse/LyricsManager/LyricsManagerView.swift"
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Skipf("读不到 %s: %v", p, err)
+	}
+	body := string(raw)
+	if !strings.Contains(body, "LyricsSource.allCases.map { .named($0.rawValue) }") {
+		t.Errorf("%s 的来源筛选清单不是从 LyricsSource.allCases 派生的——手写清单每加一个源都要人肉同步,已经漏过一次(见本测试头注)", p)
+	}
+	// 反面:文件里不该再出现 `.named("<字面量>")`。`.named(` 本身在模式匹配里还会用到
+	// (case .named(let s)),所以只拦带引号的那种——那只可能是手写的源名。
+	if m := regexp.MustCompile(`\.named\("[a-z]+"\)`).FindString(body); m != "" {
+		t.Errorf("%s 里出现了手写的源名 %q —— 来源清单要从 LyricsSource.allCases 派生", p, m)
+	}
+}
+
 // 来源展示名和配色也得有,否则界面上直接印英文原名 / 一律灰色。
 func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 	const p = "../lyrimuse/Sources/lyrimuse/LyricsManager/LyricsManagerView.swift"
@@ -211,13 +247,13 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 }
 
 // 「搜索候选歌词」弹窗两句空状态文案里硬编码的中文数字("六个源都没找到可用的候选"/
-// "六个源的请求全部失败…")必须跟源的实际数量一致——2026-08-24 加 amll 之后这两句
+// "六个源的请求全部失败…")必须跟源的实际数量一致——加 amll 之后这两句
 // 曾经停在"五个源"没跟上,纯靠人肉截图发现,而上面几个 Test 都不会替它报警(它们守的是
 // "某个源漏挂在某个清单里",不是"某句文案里的数字过期了")。同一份文件里,零个/一个
 // 数字不用写死中文数字表——已知会用到的范围窄,给 5~9 手写映射即可,超出直接报错提醒
 // 去扩表,而不是默默算错。
 func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一"}
 	n := len(allLyricSourceConstants())
 	digit, ok := chineseDigits[n]
 	if !ok {
@@ -242,13 +278,13 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 	}
 }
 
-// 面向用户 / 面向维护者的几处"一共几个源"必须跟常量表对齐——2026-09-04 加咪咕时只改了上面
+// 面向用户 / 面向维护者的几处"一共几个源"必须跟常量表对齐——加咪咕时只改了上面
 // selftest 钉住的两句文案和 README 三处,漏了 01 章、09 章标题、14 章、collector 一条日志里写死的
-// "%d/8"(用户当天发现「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
+// 「%d/8」(表现是界面上「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
 // 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
 func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
-	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一"}
+	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven"}
 	n := len(allLyricSourceConstants())
 	zh, okZh := chineseDigits[n]
 	en, okEn := englishWords[n]

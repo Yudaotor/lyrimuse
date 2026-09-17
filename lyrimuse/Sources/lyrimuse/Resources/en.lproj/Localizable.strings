@@ -18,6 +18,7 @@
 "%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。" = "Only %2$d of %1$d candidates were corroborated, so they may not all be the same lyrics.";
 "%1$d/%2$d 个源应答" = "%1$d of %2$d sources answered";
 "%@ / %@ 首" = "%@ of %@";
+"%@ · 登录将在 %@ 过期，建议重新连接" = "%@ · Sign-in expires on %@; reconnecting is recommended";
 "%@ 个文件导入失败，其余已导入" = "%@ file(s) failed to import; the rest were imported";
 "%@ 分钟前更新" = "Updated %@ min ago";
 "%@ 天" = "%@ days";
@@ -48,11 +49,13 @@
 "%d 次" = "×%d";
 "/ %@ 页" = "of %@";
 "Apple Music" = "Apple Music";
+"Apple Music 的登录已过期或被吊销（登录有效期 6 个月，Apple 不提供自动续期）——在「歌词来源」卡片底部重新连接一次" = "The Apple Music sign-in has expired or been revoked (it lasts 6 months and Apple issues no renewable token) — reconnect at the bottom of the Lyrics Sources card";
 "Apple Music 自动化" = "Apple Music Automation";
 "Apple Music 自动化权限" = "Apple Music automation permission";
 "Apple Music 自动化权限被拒，读不到播放状态" = "Apple Music automation permission denied; playback state cannot be read";
 "Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
 "Apple Music 自动化权限（推荐）" = "Apple Music Automation Permission (recommended)";
+"Apple Music 账号连接" = "Apple Music Account Connection";
 "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）" = "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Discussions" = "GitHub Discussions";
@@ -327,8 +330,8 @@
 "勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open";
 "匹配算法" = "Matching Algorithm";
-"十个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the ten sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
-"十个源都没找到可用的候选" = "No Lyrics from Any Source";
+"十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the eleven sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
+"十一个源都没找到可用的候选" = "No Lyrics from Any Source";
 "升级重试" = "Upgrade retry";
 "单日最高 · %@" = "Busiest day · %@";
 "单曲循环" = "Repeat One";
@@ -349,6 +352,7 @@
 "反馈与社区" = "Feedback & Community";
 "反馈问题" = "Report an Issue";
 "发布于 %@" = "Released %@";
+"取不到 Apple Music 接口的公共访问令牌（music.apple.com 拉不通）——多半是网络问题，稍后重试通常会恢复" = "Could not obtain the public access token for the Apple Music API (music.apple.com is unreachable) — usually a network issue; retrying later normally works";
 "取不到最后一句的时间" = "No timestamp on the last line";
 "取消" = "Cancel";
 "取消喜欢" = "Remove Favorite";
@@ -569,6 +573,7 @@
 "已返回候选" = "Candidate returned";
 "已连接" = "Connected";
 "已连接 Last.fm 账号" = "Connected to Last.fm Account";
+"已连接 · %@ · 登录有效期至 %@" = "Connected · %@ · Sign-in valid until %@";
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
 "已选 %@ 首" = "%@ selected";
@@ -1057,6 +1062,8 @@
 "由副行决定" = "Set by Second Line";
 "申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret" = "The form only needs an application name; leave everything else blank. Your API Key and Shared Secret appear as soon as you submit it";
 "界面语言" = "Language";
+"登录中…" = "Signing In…";
+"登录已过期，需要重新连接" = "Sign-in has expired; reconnect to continue";
 "白字描边" = "White Text with Outline";
 "知道了" = "OK";
 "短于 30 秒的曲目" = "Tracks Under 30 Seconds";
@@ -1286,6 +1293,7 @@
 "还没有收听记录" = "No scrobbles yet";
 "还没有检查过更新" = "No update check yet";
 "还没有缓存任何歌词。放一首歌，Lyrimuse 会自动搜好存在这里" = "No lyrics cached yet. Play something and Lyrimuse will find them and keep them here";
+"还没有连接 Apple Music——在「歌词来源」卡片底部点「连接」登录一次即可（需要 Apple Music 订阅）" = "Apple Music is not connected yet — sign in once via Connect at the bottom of the Lyrics Sources card (an Apple Music subscription is required)";
 "还没有配对任何浏览器，点右上角「添加浏览器」选一个" = "No browsers paired yet — tap \"Add Browser\" above to pick one";
 "还没生效：浏览器回绝了执行 JavaScript 的请求，按上面那条路径再确认一下开关勾上了没有" = "Not working yet: the browser refused to run JavaScript. Follow the path above and make sure the switch is ticked";
 "还没生效：浏览器收下了请求却一直没回应，多半是那个开关还没勾上（有的浏览器不报错、直接不回）。按上面那条路径再确认一下" = "Not working yet: the browser took the request but never answered — most likely that switch still isn't ticked (some browsers stay silent instead of reporting an error). Follow the path above and check again";
@@ -1359,13 +1367,16 @@
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
 "连已经有歌词的也重新过一遍；人工修正过的、校准过时间轴的、纯音乐的不动" = "Re-picks songs that already have lyrics too. Manual fixes, calibrated timing and instrumentals are left alone";
 "连接" = "Connection";
+"连接 Apple Music" = "Connect Apple Music";
 "连接 Last.fm" = "Connect Last.fm";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "连接 Last.fm…" = "Connect Last.fm…";
 "连接信息" = "Connection Info";
+"连接后可获取 Apple Music 官方歌词，需要 Apple Music 订阅" = "Connect to get Apple Music's official lyrics. Requires an Apple Music subscription";
 "连接后这里会展示你的听歌档案" = "Once connected, your listening profile shows up here";
 "连接失败或超时，没有拿到任何响应" = "Connection failed or timed out with no response";
 "连接失败或超时：%@" = "Connection failed or timed out: %@";
+"连接账号" = "Connect";
 "连接账号…" = "Connect account…";
 "退出 Lyrimuse" = "Quit Lyrimuse";
 "退出全屏" = "Exit Full Screen";

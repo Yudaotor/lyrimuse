@@ -133,8 +133,23 @@ func runTestLyricSourcesCLI(args []string) {
 	// 两首探测曲,一首华语一首英文,取并集——理由见 healthcheckcli.go 顶部注释:
 	// NetEase/QQ/酷狗以中文库为主,LRCLIB/Musixmatch 以英文库为主,只用一首会把另一半源的
 	// "库里确实没有这首"误判成"这个源坏了"。中文探测曲跟 healthcheckcli.go 保持同一首
-	// (2026-08-31 从《晴天》换成《少年》,理由同样见 healthcheckcli.go 那边的注释——不重复)。
-	runProbe("梦然", "少年", "")
+	// (从《晴天》换成《少年》,理由同样见 healthcheckcli.go 那边的注释——不重复)。
+	// Apple Music 没连过账号时**不进探测**,当场给结论:它的取词端点只认
+	// media-user-token,没有凭据这一轮必然一无所获,让它跟着跑两首探测曲纯粹是让用户白等
+	// (单测它的时候更是一次网络请求都不必发)。
+	//
+	// ⚠️ 状态给 "warn" 不是 "fail" —— 这不是"源坏了",是"还没配置";Swift 侧据此提示
+	// 去连接账号,而不是报故障。设置页那颗测试按钮在未连接时本来就是禁用的(见
+	// SettingsView.sourceTestAccessory),所以这条路平时只有"全部测试"会走到。
+	if wanted[lyricSourceAppleMusic] && !applemusicConnected() {
+		emitResult(lyricSourceAppleMusic, "warn", lyricFailureReasonAppleMusicNotConnected)
+	}
+
+	// 上面那一步可能已经把唯一的目标源结论掉了(单测 Apple Music 且没连账号),这时一首
+	// 探测曲都不必跑。
+	if !allReported() {
+		runProbe("梦然", "少年", "")
+	}
 	// 第一首就把要测的源全问出结论了(单测一个源时最常见)就不跑第二首——两首取并集是为了
 	// 补"这个源的曲库里没有那一首"造成的漏判,已经有结论的源不需要补。
 	if !allReported() {

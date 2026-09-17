@@ -27,9 +27,18 @@ enum LyricSourceFailureReason {
             // 当时走的旧接口对任何歌都回 "No lyrics id ... and country XX",换出口到别的
             // 国家照样如此,真因是那条接口废了,见 collector/deezer.go 头注。
             return L10n.t("Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）")
+        case "applemusic_not_connected":
+            // ⚠️ 这一条不是故障:Apple Music 的歌词端点只认订阅用户的 media-user-token,
+            // 用户还没在设置里连过账号时就是这个码。文案要指路,不要像别的码那样报"失败"。
+            return L10n.t("还没有连接 Apple Music——在「歌词来源」卡片底部点「连接」登录一次即可（需要 Apple Music 订阅）")
+        case "applemusic_token_rejected":
+            // Apple 的令牌固定 6 个月且不发可续期令牌,到期只能重登一次。
+            return L10n.t("Apple Music 的登录已过期或被吊销（登录有效期 6 个月，Apple 不提供自动续期）——在「歌词来源」卡片底部重新连接一次")
+        case "applemusic_no_developer_token":
+            return L10n.t("取不到 Apple Music 接口的公共访问令牌（music.apple.com 拉不通）——多半是网络问题，稍后重试通常会恢复")
         case "musixmatch_direct_blocked":
             // ⚠️ 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
-            // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。2026-09-03 实测
+            // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。实测
             // 这台机器直连 apic-appmobile.musixmatch.com 那两个 AWS 地址 100% ICMP 丢包、
             // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
             // 这个是去开代理。

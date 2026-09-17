@@ -221,7 +221,27 @@ func parseTTMLTime(s string) int {
 	if s == "" {
 		return -1
 	}
+	// TTML 的时间有两种写法,两种都要认:
+	//   clock-time  "1:01.240" / "0:00:07.439"  —— amll-ttml-db 一律用这种
+	//   offset-time "7.439" / "7.439s"          —— Apple 官方歌词用这种
+	//
+	// ⚠️ 漏掉 offset-time 这一支的后果不是"解析失败"这么显眼,而是**静默丢行**:
+	// parseAMLLTTML 对 start<0 的行直接 continue,于是一首歌只剩时间戳恰好跨过 1 分钟
+	// (那才会被写成 "1:01.240")的那部分,前一分钟凭空消失、还一声不吭。接 Apple Music
+	// 源时实测复现过:ALOISIO《BESO DE ESOS》47 行的歌只解析出 1026 字节,第一行直接是
+	// [01:01.24] —— 开头一整段没了。
+	//
+	// 按 TTML 规范 offset-time 的默认单位就是秒,所以剥掉可选的 s 后缀按秒读。这一支
+	// 对 amll 是纯增量:带冒号的串走的还是原来那条路,行为一个字节都没变。
+	s = strings.TrimSuffix(s, "s")
 	parts := strings.Split(s, ":")
+	if len(parts) == 1 {
+		v, err := strconv.ParseFloat(parts[0], 64)
+		if err != nil || v < 0 {
+			return -1
+		}
+		return int(v*1000 + 0.5)
+	}
 	if len(parts) < 2 || len(parts) > 3 {
 		return -1
 	}

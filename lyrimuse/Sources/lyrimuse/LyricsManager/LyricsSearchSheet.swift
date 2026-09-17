@@ -550,18 +550,18 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if networkLooksDown {
-                // 2026-08-02 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
+                // 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
                 // 真没有网络歌词、白白灰心,其实只是网络本身有问题,重试大概率能查到。
                 ContentUnavailableView {
                     Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("十个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                    Text(L10n.t("十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !unreachableSourcesByCode.isEmpty {
-                // 2026-09-06 补上——排在「网络似乎不通」(全部请求都失败)之后、「纯音乐」之前:
+                // 补上——排在「网络似乎不通」(全部请求都失败)之后、「纯音乐」之前:
                 // 部分源在传输层就没打通(DNS 不答 / 连不上 / 只回 5xx / 上游死了没法查),这不是
                 // "查过了没有",是"根本没查到"。一组一行列出是哪些源、为什么;其余源只说「没有给出
                 // 候选」—— 评审时抓到过更强的措辞「查过了，没有这首歌」说过头:剩下的里面可能有带
@@ -670,7 +670,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L10n.t("十个源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("十一个源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {

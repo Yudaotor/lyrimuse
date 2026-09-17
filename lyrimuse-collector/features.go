@@ -54,7 +54,7 @@ const (
 	// 只套身份闸淘汰、不重新打分;逐行 LRC + 外语歌的中文译文,没有逐字。华语曲库覆盖率预期
 	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 lyricsSourceDefaultOrder)。
 	lyricSourceMigu = "migu"
-	// Deezer(2026-09-13 加,见 deezer.go 头注)。跟 lyricfind **数据同源**:Deezer 的词
+	// Deezer(加,见 deezer.go 头注)。跟 lyricfind **数据同源**:Deezer 的词
 	// 由 LyricFind 供、时间轴 Deezer 自己做。接它有两层意义:① 给 LyricFind 这家版权方补
 	// 第二条管道(那家原本只有 YouTube Music 一条路,YTM 一改版 / 一被地区限制,整家的数据
 	// 就都没了);② Deezer 是法国公司,法语曲库覆盖比现有九源都好——接入实测里三首"九源
@@ -62,6 +62,13 @@ const (
 	// pipe.deezer.com 的 GraphQL + 匿名 JWT(不需要账号)。只有逐行,没有逐字/译文。
 	// 默认顺序排在末尾的理由跟前四个新源一样:样本还不够,不是覆盖率结论。
 	lyricSourceDeezer = "deezer"
+	// Apple Music 官方歌词(加,见 applemusic.go 头注)。跟前十个源都不同:
+	// 它是**唯一**一家在现有十源之外、还给得出时间轴的信源,而且**往往**是逐字的
+	// (itunes:timing="Word")——但别当成保证:有的曲目只有逐行(timing="Line"),
+	// 甚至只有没时间戳的正文,取词那一步会依次退档,见 resolveApplemusicLyric。代价是需要用户在设置里连一次 Apple Music
+	// (media-user-token,6 个月过期、不可续期),所以没连的时候这一路会安静跳过。
+	// 覆盖率实测:用户本机 158 首"十源全空"的歌里,18 首 Apple 有时间轴、15 首有纯文本。
+	lyricSourceAppleMusic = "applemusic"
 )
 
 const (
@@ -105,16 +112,17 @@ const (
 // 这次提到首位,前五个自此按真实采用率排。
 //
 // ⚠️ 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**,维持"锦上添花"档排在末尾:
-// 它们分别是 2026-08-23 / 08-31 / 08-31 / 09-04 才接入的,上面那 3744 条缓存绝大多数早于
+// 它们分别是 / 08-31 / 08-31 / 09-04 才接入的,上面那 3744 条缓存绝大多数早于
 // 它们存在,采用数 0~16 是样本偏差、不是覆盖率结论 —— 别拿"没赶上考试"当"考砸了"。等各自
 // 跑满一段时间再拿数据重排。想让它们优先,用户可以自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
+	lyricSourceAppleMusic,
 }
 
 type featureFlagsFile struct {
-	// Player：**遗留字段**(2026-09-01 起被下面的 Players 取代,只留着给一次性迁移用)。
+	// Player：**遗留字段**(被下面的 Players 取代,只留着给一次性迁移用)。
 	// 旧版本只能选一个播放器时写的就是这个键;Players 缺失时 resolvePlayers 把它当成
 	// 迁移前的选择读一次,resolvePlayers 兜底成 playerAuto。这台机器往后只会写 Players,
 	// 不会再写这个键,但读老配置(iCloud 同步/降级）时不能让它凭空消失。
@@ -185,12 +193,16 @@ type featureFlagsFile struct {
 	// 缺失 ⇒ 老配置,把 kuwo 补进启用集合(只补这一次);一旦保存过,这个字段落盘,
 	// 从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.kuwoLyrics 一一对应。
 	KuwoLyrics *bool `json:"kuwo_lyrics,omitempty"`
-	// MiguLyrics:同上一套迁移标记(2026-09-04 加 migu 时补)。缺失 ⇒ 老配置,把 migu 补进启用
+	// MiguLyrics:同上一套迁移标记(加 migu 时补)。缺失 ⇒ 老配置,把 migu 补进启用
 	// 集合(只补这一次)。与 Swift 侧 FeatureFlagsFile.miguLyrics 一一对应。
 	MiguLyrics *bool `json:"migu_lyrics,omitempty"`
-	// DeezerLyrics:同上一套迁移标记(2026-09-13 加 deezer 时补)。缺失 ⇒ 老配置,把 deezer
+	// DeezerLyrics:同上一套迁移标记(加 deezer 时补)。缺失 ⇒ 老配置,把 deezer
 	// 补进启用集合一次;写盘时总是带上,此后用户自己的开关说了算。
 	DeezerLyrics *bool `json:"deezer_lyrics,omitempty"`
+	// AppleMusicLyrics:同上一套迁移标记(加 applemusic 时补)。缺失 ⇒ 老配置,
+	// 把 applemusic 补进去。⚠️ "开着"不等于"能用":这一路还要用户连过 Apple Music 才有
+	// 输出(见 applemusic.go 的 applemusic_not_connected),没连时它只是安静返回空。
+	AppleMusicLyrics *bool `json:"applemusic_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -379,7 +391,7 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
@@ -523,13 +535,13 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool, appleMusicSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
 			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true, lyricSourceMigu: true,
-			lyricSourceDeezer: true,
+			lyricSourceDeezer: true, lyricSourceAppleMusic: true,
 		}
 	}
 	m := make(map[string]bool, len(list)+1)
@@ -560,6 +572,9 @@ func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, ku
 	}
 	if deezerSeen == nil {
 		m[lyricSourceDeezer] = true
+	}
+	if appleMusicSeen == nil {
+		m[lyricSourceAppleMusic] = true
 	}
 	return m
 }

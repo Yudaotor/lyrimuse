@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// 2026-09-06 别名轮改口径(用户定的:「这个源没有候选就去跑别名(如果有的话)」)。
+// 别名轮的口径:某个源没有给出候选,就拿别名再去跑它(如果有别名的话)。
 // 纯函数部分在这里钉住;整条 scoredLyricCandidatesStreaming 要联网,不在单测里跑。
 
 func TestLyricSourcesWorthAliasRetry(t *testing.T) {
@@ -18,12 +18,14 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	savedBreaker := lyricSourceBreakerShared
 	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
 	savedDZ := deezerLastFailureReasonNow()
+	savedAM := applemusicLastFailureReasonNow()
 	t.Cleanup(func() {
 		features = savedFeatures
 		lyricSourceBreakerShared = savedBreaker
 		ytmusicSetLastFailureReason(savedYT)
 		musixmatchSetLastFailureReason(savedMM)
 		deezerSetLastFailureReason(savedDZ)
+		applemusicSetLastFailureReason(savedAM)
 	})
 	features.LyricsSources = map[string]bool{}
 	for _, s := range lyricSourceNames {
@@ -38,6 +40,8 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
 	musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchDirectBlocked)
 	deezerSetLastFailureReason(lyricFailureReasonDeezerAuthFailed)
+	// applemusic:用户没连过账号 —— 跟上面三个同理,换名字也变不出凭据来
+	applemusicSetLastFailureReason(lyricFailureReasonAppleMusicNotConnected)
 
 	results := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 579},               // 可用 → 不缺

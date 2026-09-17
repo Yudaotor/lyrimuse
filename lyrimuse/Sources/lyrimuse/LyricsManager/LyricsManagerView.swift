@@ -42,15 +42,25 @@ final class LyricsManagerNowPlayingObserver: ObservableObject {
     }
 }
 
-// 歌词来源筛选——collector 只会写入这七种(见 collector/enrich.go 的 lyricCandidate
-// source 取值),"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
+// 歌词来源筛选。"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
 // 条目永久没有这个值,除非重新解析)。
+//
+// ⚠️ 修:这份清单原来是**手写的字面量**,停在 lyricfind 那个时代(注释还写着
+// "collector 只会写入这七种"),此后接的酷我 / 咪咕 / Deezer / Apple Music 四个源在这个
+// 下拉里**根本不存在** —— 按来源筛选时永远筛不到它们,而列表里明明有这些源的歌词。
+// 用户实机发现的("这些地方是不是都没有适配后续加的歌词源")。
+//
+// 根治办法是**从 LyricsSource.allCases 派生**而不是再手写一遍:那个枚举已经是全项目
+// "歌词源有哪些"的唯一真源(设置页勾选框、顺序优先排序、搜索弹窗徽章都读它),
+// 派生之后以后加源这里自动跟上,不存在"忘了补"这种可能。顺序也跟着枚举走 —— 那个顺序
+// 本身有语义(按实测采用率排),两处保持一致比各排各的好。
+// 守卫见 collector 侧 lyricsourceregistry_test.go 的 TestSwiftSourceFilterDerivesFromEnum。
 private enum SourceFilter: Hashable, Identifiable {
     case all
     case named(String)
     case none
 
-    static let all_: [SourceFilter] = [.all, .named("amll"), .named("netease"), .named("qq"), .named("kugou"), .named("musixmatch"), .named("lrclib"), .named("lyricfind"), .none]
+    static let all_: [SourceFilter] = [.all] + LyricsSource.allCases.map { .named($0.rawValue) } + [.none]
 
     var id: String { label }
     var label: String {
@@ -236,12 +246,16 @@ func sourceColor(_ source: String) -> Color {
     // 酷我音乐(加,见 collector/kuwo.go 头注)。红/绿/蓝/紫/橙/粉都被占了,
     // 选棕色作为下一个未占用色。
     case "kuwo": return .brown
-    // 咪咕音乐(2026-09-04 加,见 collector/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
+    // 咪咕音乐(加,见 collector/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
     // 选薄荷绿作为下一个未占用色。
     case "migu": return .mint
-    // Deezer(2026-09-13 加,见 collector/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
+    // Deezer(加,见 collector/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
     // 都被占了,选蓝绿(teal)作为下一个未占用色。
     case "deezer": return .teal
+    // Apple Music(加,见 collector/applemusic.go 头注)。红/绿/青/靛/紫/橙/粉/
+    // 棕/薄荷/蓝绿都被占了,选蓝色作为下一个未占用色(品牌色那系的红/粉早被网易云和
+    // LyricFind 占了,不硬凑)。
+    case "applemusic": return .blue
     default: return .secondary
     }
 }
@@ -265,13 +279,16 @@ func sourceDisplayName(_ source: String) -> String {
     case "lyricfind": return "LyricFind"
     // 酷我音乐——国内用户认得出的中文写法,同网易云/QQ/酷狗。
     case "kuwo": return L10n.t("酷我音乐")
-    // 咪咕音乐(2026-09-04 加)——同酷我,用国内用户认得出的中文写法。
+    // 咪咕音乐——同酷我,用国内用户认得出的中文写法。
     case "migu": return L10n.t("咪咕音乐")
-    // Deezer(2026-09-13 加)——国际品牌名,没有约定俗成的中文译名,同 LyricFind/Musixmatch
+    // Deezer——国际品牌名,没有约定俗成的中文译名,同 LyricFind/Musixmatch
     // 保留原名。它跟 lyricfind 数据同源(都是 LyricFind 供词),但**展示成两个源**是对的:
     // 用户看到的是"哪条管道给出了这份候选",两条管道的接口与可用性都不一样(实测这台机器上
     // lyricfind 整源不可用、deezer 正常出词),见 collector/deezer.go。
     case "deezer": return "Deezer"
+    // Apple Music——官方中文名就是「Apple Music」,Apple 自己在简中界面里
+    // 也不译,保留原名。它是全部源里唯一给**官方逐字**时间轴的一家(见 collector/applemusic.go)。
+    case "applemusic": return "Apple Music"
     case "": return L10n.t("无来源")
     default: return source
     }

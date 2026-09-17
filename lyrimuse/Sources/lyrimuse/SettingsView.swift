@@ -548,13 +548,13 @@ private struct LyricsSettingsTab: View {
         .help(help)
     }
     @ObservedObject private var features = FeatureSettingsStore.shared
+    /// Apple Music 源要用户先连一次账号才有输出(见 AppleMusicConnection 的头注),
+    /// 「歌词来源」卡底下那一行连接状态读的就是它。
+    @ObservedObject private var appleMusic = AppleMusicConnection.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 这一页的四个分段。
-    ///
-    /// 2026-08-09 重排:原来 6 张卡片、14 个设置项平铺在一条长滚动里,没有层级也没有主次,
-    /// 一屏装不下、找一项要滚半天。四段各 2–4 项,一屏放得下,而且分法本身就是语义:
+    /// 这一页的四个分段。四段各 2–4 项,一屏放得下,而且分法本身就是语义:
     /// 「怎么找到这首歌的歌词」「译文怎么来」「歌词长什么样」「已经存下来的怎么管」。
     ///
     /// 不拆成两个侧边栏条目:那样侧边栏会从 6 项变 7 项,而这四段里真正常用的只有前两段,
@@ -784,32 +784,26 @@ private struct LyricsSettingsTab: View {
                     ForEach(LyricsSource.allCases) { source in
                         // 测试按钮/结果状态放在每一格尾部。
                         //
-                        // ⚠️ 2026-08-31 用户实机反馈"点这个 hover 按钮没有反应"——第一版
-                        // 用 `.overlay(alignment: .trailing)` 把测试小图标叠在
-                        // sourceCheckbox 那个铺满整格的开关 Button 上面,想靠
-                        // `.highPriorityGesture` 让点击优先分给小图标,实测**仍然没用**:
-                        // 悬停走 NSTrackingArea,两个叠在一起的区域各自独立、互不冲突,
-                        // 但点击是两个 Button 在抢同一次 mouseDown,这层竞争发生在
-                        // AppKit 的 hit-test 阶段,SwiftUI 手势优先级(`.highPriorityGesture`)
-                        // 根本没有机会介入——它只能调解 SwiftUI **自己**的手势系统内部的
-                        // 优先级,管不到"外层这个 Button 本身的 mouseDown 直接被 AppKit
-                        // 判给了它自己"。真正的修法是让两个控件在布局上就不重叠、变成平级
-                        // 兄弟节点(HStack + Spacer),而不是想办法在重叠状态下调解优先级——
-                        // sourceCheckbox 相应地不再自己占满整格宽度(见该函数改动),这里的
+                        // ⚠️ **别把它 `.overlay` 叠回 sourceCheckbox 上面**:两个 Button 叠在一起会抢
+                        // 同一次 mouseDown,这层竞争发生在 AppKit 的 hit-test 阶段,SwiftUI 手势优先级
+                        // (`.highPriorityGesture`)根本没有机会介入 —— 它只能调解 SwiftUI **自己**手势
+                        // 系统内部的优先级,管不到"外层这个 Button 的 mouseDown 被 AppKit 判给了它自己"。
+                        // (悬停不受影响:悬停走 NSTrackingArea,两个叠在一起的区域各自独立、互不冲突,
+                        // 所以这个坑只在点击上暴露。)正确做法是让两个控件在布局上就不重叠、变成平级
+                        // 兄弟节点(HStack + Spacer):sourceCheckbox 因此不自己占满整格宽度,这里的
                         // HStack 补上"占满整格"的职责,Spacer 把测试小图标推到真正的尾部。
                         HStack(spacing: 4) {
                             sourceCheckbox(source)
                             Spacer(minLength: 0)
+                            appleMusicConnectionAccessory(source)
                             sourceTestAccessory(source)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        // ⚠️ 2026-08-31 用户实机反馈"鼠标放在复选框上才显示测试按钮,移过去
-                        // 的路上就消失了"——sourceCheckbox 自己的悬停范围现在紧贴内容(不再
-                        // 占满整格,见上面那段改动注释),跟测试小图标之间隔着 Spacer 撑出来
-                        // 的一段空白,途中两边的悬停信号都不成立。这里在整行(复选框+空白+
-                        // 图标)上补一层独立的悬停追踪,专门喂给 hoveredRow——只用来决定
-                        // 测试图标要不要露出来,跟 sourceCheckbox 自己那层驱动高亮底色/
-                        // `.help` 的悬停信号(hoveredSource)是两件不同的事,不合并。
+                        // 在整行(复选框+空白+图标)上补一层独立的悬停追踪,专门喂给 hoveredRow:
+                        // sourceCheckbox 自己的悬停范围紧贴内容(不占满整格,见上面那段),跟测试小图标
+                        // 之间隔着 Spacer 撑出来的一段空白,指针走在那段空白里时两边的悬停信号都不成立。
+                        // 这一层只用来决定测试图标要不要露出来,跟 sourceCheckbox 那层驱动高亮底色/
+                        // `.help` 的 hoveredSource 是两件不同的事,不合并。
                         .contentShape(Rectangle())
                         .onHover { hovering in
                             hoveredRow = hovering ? source : (hoveredRow == source ? nil : hoveredRow)
@@ -819,13 +813,116 @@ private struct LyricsSettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .onAppear { appleMusic.refresh() }
+    }
+
+    /// Apple Music 那一格右侧的连接入口。
+    ///
+    /// 挂在格子上,不在卡片底部单独占一行:连接状态是**这一个源自己的属性**,跟它同格才
+    /// 说得通;单独一行会让这张卡凭空多出一条只服务于十一分之一内容的横栏,视觉上还像是
+    /// 整卡的设置项。
+    ///
+    /// 显隐规则跟旁边那个测试图标(sourceTestAccessory)刻意不同:那个"没测过"时要悬停才
+    /// 出现,因为不测也不影响用;而**没连接**是这一路"勾了也没有输出"的唯一原因,必须常显
+    /// —— 所以未连接 / 快到期时常亮橙色,只有一切正常时才退回悬停可见。
+    @ViewBuilder
+    private func appleMusicConnectionAccessory(_ source: LyricsSource) -> some View {
+        if source == .applemusic {
+            let needsAttention = !appleMusic.isConnected || appleMusic.needsRenewal
+            let isVisible = needsAttention || hoveredRow == source || showAppleMusicConnection
+            Group {
+                if isVisible {
+                    Button { showAppleMusicConnection = true } label: {
+                        Image(systemName: needsAttention ? "exclamationmark.circle.fill" : "person.crop.circle")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(needsAttention ? Color.orange : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.t("Apple Music 账号连接"))
+                }
+            }
+            // 固定命中区,理由同 sourceTestAccessory:图标还没出现的那一帧也要能接住悬停。
+            .frame(width: 16, height: 16)
+            .popover(isPresented: $showAppleMusicConnection, arrowEdge: .bottom) {
+                appleMusicConnectionPopover
+            }
+        }
+    }
+
+    /// 连接管理弹窗:状态一句话 + 一到两个动作。
+    ///
+    /// 三种形态:未连接(说明它能带来什么 + 「连接账号」)、已连接(区域 + 到期日 + 「断开」)、
+    /// 快到期/已过期(橙色提醒 + 「重新连接」)。到期日是按 Apple 的 6 个月硬上限推算的,
+    /// 不是令牌自己声明的——它不是 JWT,读不出 exp。
+    private var appleMusicConnectionPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(appleMusic.isConnected ? (appleMusic.needsRenewal ? Color.orange : Color.green) : Color.secondary.opacity(0.4))
+                    .frame(width: 7, height: 7)
+                Text(verbatim: "Apple Music")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            // ⚠️ `.frame(width:)` 钉死宽度 + `.fixedSize(horizontal: false, vertical: true)`
+            // 才会真的按这个宽度换行,单用 maxWidth 会被按理想单行宽度撑开——同 sourceTestAccessory
+            // 那个 tooltip 踩过的坑。
+            Text(appleMusicConnectionSubtitle)
+                .font(.system(size: 11))
+                .foregroundStyle(appleMusic.isConnected && appleMusic.needsRenewal ? Color.orange : Color.secondary)
+                .multilineTextAlignment(.leading)
+                .frame(width: 240, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                if appleMusic.isConnected {
+                    if appleMusic.needsRenewal {
+                        Button(L10n.t("重新连接")) {
+                            showAppleMusicConnection = false
+                            appleMusic.connect()
+                        }
+                        .disabled(appleMusic.isConnecting)
+                    }
+                    Button(L10n.t("断开")) { appleMusic.disconnect() }
+                } else {
+                    Button(appleMusic.isConnecting ? L10n.t("登录中…") : L10n.t("连接账号")) {
+                        // 先收起弹窗再开登录窗:登录窗是独立 NSWindow,会盖在设置窗前面,
+                        // 留着这个 popover 只会在它背后半悬着。
+                        showAppleMusicConnection = false
+                        appleMusic.connect()
+                    }
+                    .disabled(appleMusic.isConnecting)
+                }
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+    }
+
+    @State private var showAppleMusicConnection = false
+
+    private var appleMusicConnectionSubtitle: String {
+        guard case let .connected(_, storefront) = appleMusic.state, let expiresAt = appleMusic.expiresAt else {
+            return L10n.t("连接后可获取 Apple Music 官方歌词，需要 Apple Music 订阅")
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        let date = formatter.string(from: expiresAt)
+        if expiresAt.timeIntervalSinceNow <= 0 {
+            return L10n.t("登录已过期，需要重新连接")
+        }
+        // storefront 可能还是空的(登录时没等到 itua cookie),collector 首次取词时会问
+        // Apple 补上。这里显示成「—」而不是猜一个区,免得用户看到一个错的区域码。
+        let region = storefront.isEmpty ? "—" : storefront.uppercased()
+        if appleMusic.needsRenewal {
+            return String(format: L10n.t("%@ · 登录将在 %@ 过期，建议重新连接"), region, date)
+        }
+        return String(format: L10n.t("已连接 · %@ · 登录有效期至 %@"), region, date)
     }
 
     /// 「匹配算法」这一行的副标题:只说**当前选中**那一档是怎么取的,换档就换一句。
     ///
-    /// 原来两档的解释合写在一个「?」气泡里(两行,用「智能算法：」「顺序优先：」打头)。
-    /// 拆成随选中项变化的副标题之后气泡整个不需要了:常显的一句比藏在悬停里的两句更容易被
-    /// 读到,而且每句都可以省掉那个"这是在说哪一档"的前缀 —— 右边 radio 已经标明了。
+    /// 不用「?」气泡把两档合写在一起:常显的一句比藏在悬停里的两句更容易被读到,而且每句都
+    /// 可以省掉那个"这是在说哪一档"的前缀 —— 右边 radio 已经标明了。
     private var matchingModeSubtitle: String {
         switch features.lyricsSourceMode {
         case .smart: return L10n.t("给每个来源打分，取分最高的")
@@ -1197,7 +1294,17 @@ private struct LyricsSettingsTab: View {
         let isRowHovered = hoveredRow == source
         let isAccessoryHovered = accessoryHoverSource == source
         let tooltip = sourceAccessoryTooltip(state)
+        // Apple Music 是唯一一个"没配置账号就测不出任何东西"的源(见 AppleMusicConnection),
+        // 未连接时整个测试入口**不出现**,不做成灰色禁用图标 —— 禁用态的灰图标(还带 hover
+        // 底色)只是一个点不动的干扰物,该做的引导旁边那颗橙色感叹号已经在做了。
+        //
+        // ⚠️ 连**已有测试结果**那颗图标一起藏:它兼任"重测"按钮,断开账号后若留着,上一轮的
+        // 旧结果仍然可点,又绕回那条必然失败的路;而那个结果本身也已经过期了。
+        let testBlockedForConnection = source == .applemusic && !appleMusic.isConnected
         Group {
+            if testBlockedForConnection {
+                EmptyView()
+            } else {
             switch state {
             case .testing:
                 ProgressView().controlSize(.mini)
@@ -1218,18 +1325,20 @@ private struct LyricsSettingsTab: View {
                     .buttonStyle(.plain)
                 }
             }
+            }
         }
         // 固定尺寸的命中区,不随内容是否可见变化——悬停判定(下面的 .onHover)要在图标
         // 还没出现(比如"还没测过、鼠标刚移进这一格"那一帧)时也能立刻生效,不依赖内容
         // 本身有没有渲染出东西来提供可命中的几何。
         .frame(width: 16, height: 16)
-        // 鼠标真压在这个控件上时给一圈圆形底色——单靠图标本身的颜色变化不够明显,
-        // 这一层才是"这是可点的东西"最直接的信号(跟设置页其它按钮 hover 时的反馈同一个
-        // 语言:有底色变化 = 能点)。
-        .background(Circle().fill(isAccessoryHovered ? Color.secondary.opacity(0.18) : Color.clear))
+        // 鼠标真压在这个控件上时给一圈圆形底色——单靠图标本身的颜色变化不够明显,这一层才是
+        // "这是可点的东西"最直接的信号(跟设置页其它按钮 hover 时的反馈同一个语言:有底色变化
+        // = 能点)。没连账号时连 hover 底色一起跳过,否则那一格会冒出一个空的灰色圆底。
+        .background(Circle().fill(isAccessoryHovered && !testBlockedForConnection ? Color.secondary.opacity(0.18) : Color.clear))
         .contentShape(Rectangle())
-        .disabled(isTestingLyricSources)
+        .disabled(isTestingLyricSources || testBlockedForConnection)
         .onHover { hovering in
+            guard !testBlockedForConnection else { return }
             accessoryHoverSource = hovering ? source : (accessoryHoverSource == source ? nil : accessoryHoverSource)
         }
         .popover(isPresented: Binding(

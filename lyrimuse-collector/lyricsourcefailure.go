@@ -33,9 +33,21 @@ const (
 	// 误导性;换出口到 US 照样是同一句,song.getData 更显示 LYRICS_ID 对所有歌恒为 0 ——
 	// 是那条旧接口废了,跟国家无关。整条取词路径已改走 pipe.deezer.com。
 	lyricFailureReasonDeezerAuthFailed = "deezer_auth_failed"
+	// Apple Music 这一路的三种(见 applemusic.go 头注)。
+	//
+	// ⚠️ applemusic_not_connected 跟其余所有代码**不是一类**:它不代表"源坏了",而是
+	// "用户还没在设置里连过 Apple Music"——这一路的取词端点只认订阅用户的
+	// media-user-token,没连过就是没凭据可用。UI 侧据此该引导用户去连接,不是报故障。
+	lyricFailureReasonAppleMusicNotConnected = "applemusic_not_connected"
+	// 令牌被拒:Apple 的 media-user-token 固定 6 个月、**不发可续期令牌**,到期只能重登。
+	// 表现是带着令牌打取词端点仍回 401/403(不带令牌时是 404,两者要分开看)。
+	lyricFailureReasonAppleMusicTokenRejected = "applemusic_token_rejected"
+	// 连 developer token 都没拿到(music.apple.com 的 JS bundle 拿不下来 / 里面的 JWT 全被拒)。
+	// 这个跟用户的账号无关,是那条公开的白嫖通路本身出了问题。
+	lyricFailureReasonAppleMusicNoDevToken = "applemusic_no_developer_token"
 )
 
-// 传输层通用代码(2026-09-06,用户报「为什么这首歌搜不到」:九个源里六个在 DNS 解析这一步
+// 传输层通用代码(现象是「为什么这首歌搜不到」:九个源里六个在 DNS 解析这一步
 // 就死了,弹窗却说「九个源都没找到可用的候选」,把"连不上"报成了"没收录")。由 sourcebreaker.go
 // 的 classifyLyricSourceTransportFailure 按 http.Client.Do 的错误 / 状态码分类、按请求主机归源
 // (lyricSourceForHost),「搜索候选歌词」弹窗对**这一轮一个 HTTP 响应都没拿到**的源报出来
