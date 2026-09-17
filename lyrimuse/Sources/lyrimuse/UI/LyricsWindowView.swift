@@ -3284,27 +3284,33 @@ private struct KaraokeLineText: View {
                                                 lineSettled: fillSettled)
                             }
                         }
-                        if let roma = g.romanization {
-                            // 读音按**整组**的进度填,不跟着组里单个字跳:拿整组的起止时间
-                            // 造一个"伪字",复用同一套填色。
-                            let romaWord = SyncedLyricWord(
-                                text: roma, startMs: g.startMs,
-                                durationMs: max(1, g.endMs - g.startMs))
-                            KaraokeWordText(
-                                word: romaWord,
-                                base: base.opacity(0.75), isPlaying: isPlaying,
-                                isLive: isLive(romaWord, atMs: coarseMs),
-                                staticDate: coarseDate,
-                                fontSize: romaFontSize, weight: .medium,
-                                reduceMotion: reduceMotion, displayScale: displayScale,
-                                rises: false, // 读音不跟着抬,只有正文的字会浮起来
-                                forceFilled: !isActive,
-                                lineSettled: fillSettled
-                            )
-                            .lineLimit(1)
-                            .fixedSize()
-                            .padding(.horizontal, 2)
-                        }
+                        // 这一行已经在走逐词罗马音(外层 groups 非空),每一组都要占住这一
+                        // 行读音的高度,哪怕这一组没有读音(2026-09-16 修复:混合语言行里
+                        // 英文词的 romanization 是 nil——如果直接不摆这个子视图,这一组的
+                        // VStack 矮一截,WrapLayout 按行高把矮的往下居中,英文词就跟韩文词
+                        // 的读音撞到同一条水平线上,看着像"分成了两行")。用占位撑住同样的
+                        // 字体行高,组跟组才能对齐,空位置真的只是空、不是消失。
+                        // ⚠️ 占位不能用空字符串 ""——第一版这么写,Text 在这个上下文里
+                        // 量出来的高度直接塌成 0(没有字形可排),等于没修,用户复测原样
+                        // "分两行"。换成一个空格 " " 才有真实行高,这是标准规避写法。
+                        let romaWord = SyncedLyricWord(
+                            text: g.romanization ?? " ", startMs: g.startMs,
+                            durationMs: max(1, g.endMs - g.startMs))
+                        KaraokeWordText(
+                            word: romaWord,
+                            base: base.opacity(0.75), isPlaying: isPlaying,
+                            isLive: isLive(romaWord, atMs: coarseMs),
+                            staticDate: coarseDate,
+                            fontSize: romaFontSize, weight: .medium,
+                            reduceMotion: reduceMotion, displayScale: displayScale,
+                            rises: false, // 读音不跟着抬,只有正文的字会浮起来
+                            forceFilled: !isActive,
+                            lineSettled: fillSettled
+                        )
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 2)
+                        .opacity(g.romanization == nil ? 0 : 1)
                     }
                 }
             } else {

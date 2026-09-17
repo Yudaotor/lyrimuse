@@ -1387,8 +1387,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                 wordText(g.words[i], atMs: currentMs, palette: palette)
                             }
                         }
-                        if let roma = g.romanization {
-                            romaText(roma, group: g, atMs: currentMs, palette: romaPalette)
+                        // 这一行开了逐词罗马音就每组都占住罗马音那一行的高度,哪怕这一组
+                        // 没有读音(2026-09-16 修复:混合语言行里英文词的 romanization 是
+                        // nil,如果直接不摆这个子视图,VStack 矮一截,WrapLayoutMath.placements
+                        // 按行高居中会把矮的这一组网下压——韩文词上面还顶着字、英文词却
+                        // 悬在行中间,视觉上就成了"分两行"。用透明占位撑住同样的高度,
+                        // 组跟组之间才能在同一行对齐,空位置真的只是空,不是消失。
+                        // ⚠️ 占位内容不能是空字符串 ""——第一版这么写过,SwiftUI 的
+                        // Text("").fixedSize() 在这个上下文里量出来的高度**塌成了 0**
+                        // (没有字形可排,intrinsic size 直接归零),结果跟完全不摆这个子
+                        // 视图是同一个 bug、白修了一轮(用户复测仍然"分两行"坐实)。换成
+                        // 一个空格 " "——任何字体都会给空格一个真实的行高占位,这是这个坑
+                        // 的标准规避写法。
+                        if usesPerWordRomanization {
+                            romaText(g.romanization ?? " ", group: g, atMs: currentMs, palette: romaPalette)
+                                .opacity(g.romanization == nil ? 0 : 1)
                         }
                     }
                 }

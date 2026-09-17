@@ -1710,7 +1710,8 @@ public final class LyricsSyncEngine {
     //   常常一字一词。
     // - 中文/粤语(hanRomanization,2026-08-29 加):汉字没有"一个字对应半个词"的歧义,
     //   collector 生成拼音/粤拼时就是**严格一字一音节、空格分隔**(见 jyutping.go
-    //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对;字数与音节数对不上
+    //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对(空白词不算字、
+    //   不占音节,见下面那段);字数与音节数对不上
     //   (标点/多字词等边界情形)时保守放弃,让视图退回整行罗马音,不猜、不硬凑。
     // - 韩语(koreanRomanization,2026-08-29 加):跟日语一样可能有"一个词横跨好几个
     //   逐字词"的情况(酷狗式逐字切分一个谚文字一个词很常见),但韩语原文本来就按
@@ -1732,9 +1733,24 @@ public final class LyricsSyncEngine {
         }
         if let hanRomanization, !hanRomanization.isEmpty {
             let tokens = hanRomanization.split(separator: " ", omittingEmptySubsequences: true)
-            guard tokens.count == words.count, !words.isEmpty else { return nil }
-            return zip(words, tokens).enumerated().map { i, pair in
-                SyncedLyricWordGroup(id: i, words: [pair.0], romanization: String(pair.1))
+            // 空白词不参与配对(2026-09-16)。酷狗一类的逐字数据会把句中的空格切成一个
+            // **独立的零时长词**,而粤拼/拼音行里空格只是音节分隔符、不产出任何音节:
+            //   [149664,8560](149664,768,0)随…(151192,1496,0)荡(152688,0,0) (152688,792,0)多…
+            //   ceoi4 cyu3 dong6 do1 bing1 laang5 Wooh
+            // 前者 9 个词(两个是纯空格)、后者 7 个音节,按 words.count 直接比永远差这几个,
+            // 整行退回整行罗马音——《喜欢你 (G.E.M.重生版)》36 行正文里 12 行栽在这上面
+            // (2026-09-16 全库扫描: 199 首粤拼歌 8395 行中 28 行)。空格不是字,本来就不该
+            // 占一个音节的位置。⚠️ 空白词只是不配音节,**不能从 groups 里丢掉**:它们得
+            // 原样留着占位,否则画出来的词与词之间就没了那个空格(退回整行的那条路同样
+            // 把空格当一个词画)。
+            let sungIndices = words.indices.filter {
+                !words[$0].text.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            guard tokens.count == sungIndices.count, !sungIndices.isEmpty else { return nil }
+            var romaByIndex: [Int: String] = [:]
+            for (i, token) in zip(sungIndices, tokens) { romaByIndex[i] = String(token) }
+            return words.indices.map { i in
+                SyncedLyricWordGroup(id: i, words: [words[i]], romanization: romaByIndex[i])
             }
         }
         if let koreanRomanization, !koreanRomanization.isEmpty,
@@ -1783,10 +1799,18 @@ public final class LyricsSyncEngine {
             }
             let start = starts[i]
             let latins = segs.filter { $0.utf16Start < end && $0.utf16End > start }.map(\.latin)
+            let joined = latins.isEmpty ? nil : Romanizer.joinLatin(latins)
+            // 组里混进的纯拉丁词(中日韩歌词夹的英文单词)读音就是它自己 —— 跟原文一模一样
+            // 没有信息增量,不该占一行重复自己(2026-09-16,用户反馈截图:韩文行夹的英文单词
+            // 逐词罗马音下面又完整抄了一遍)。这条判据在整行罗马音那一层本来就有
+            // (Romanizer.readingFromSegments 的 `joined != text`),这里是把它下沉到逐词这一级 ——
+            // 混合语言行整行判据不会触发(韩文部分读音确实不同),必须逐组各自比对。
+            let groupText = words[i...j].map(\.text).joined().trimmingCharacters(in: .whitespaces)
+            let romanization = (joined == groupText) ? nil : joined
             groups.append(SyncedLyricWordGroup(
                 id: groups.count,
                 words: Array(words[i...j]),
-                romanization: latins.isEmpty ? nil : Romanizer.joinLatin(latins)))
+                romanization: romanization))
             i = j + 1
         }
         // 一组罗马音都配不上(整行都是拉丁字母之类)时当作没有,让视图退回原来的整行罗马音。

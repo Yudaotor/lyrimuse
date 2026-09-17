@@ -228,6 +228,19 @@ func runRomanizationTests() {
                 words: [w("나", 0, 150), w("는", 150, 150)],
                 line: "나는", japanese: false, koreanRomanization: "naneun neoleul") == nil,
             true, "韩语: 词数(1)与罗马字词数(2)对不上时放弃分组")
+
+        // 韩英混行(2026-09-16,用户反馈截图):英文单词的"读音"就是它自己,不该重复显示。
+        let koEnWords = [w("피어오른", 0, 300), w(" ", 300, 0), w("Flame", 300, 300),
+                          w(" ", 600, 0), w("yeah", 600, 300)]
+        let koEnGroups = LyricsSyncEngine.buildWordGroups(
+            words: koEnWords, line: "피어오른 Flame yeah", japanese: false,
+            koreanRomanization: "pieooleun Flame yeah")
+        expectEqual(koEnGroups?.first { $0.words.first?.text == "피어오른" }?.romanization,
+                    "pieooleun", "韩英混行: 韩文词照常标读音")
+        expectEqual(koEnGroups?.first { $0.words.first?.text == "Flame" }?.romanization, nil,
+                    "韩英混行: 英文词读音跟原文一样,不该重复标出来")
+        expectEqual(koEnGroups?.first { $0.words.first?.text == "yeah" }?.romanization, nil,
+                    "韩英混行: 英文词读音跟原文一样,不该重复标出来(小写同样适用)")
     }
 
     // 助词 は/へ/を 读 wa/e/o,不是字面的 ha/he/wo —— Apple Music 标的是实际念法。
@@ -733,6 +746,32 @@ func runRomanizationTests() {
                            romanizationScripts: [.chinese], songIsCantonese: true)
             expectEqual(engineOff.activeLine(atMs: 200)?.wordGroups, nil,
                         "端到端: 关掉粤拼开关后逐字歌词不再对齐出词组")
+        }
+
+        // ---- 逐字数据把句中空格切成独立的零时长词时,仍要逐字对齐(2026-09-16) ----
+        //
+        // 真实数据:《喜欢你 (G.E.M.重生版)》的酷狗逐字,"随处荡 多冰冷 Wooh" 这一行里两个
+        // 空格各自是一个**零时长的词**(共 9 个词),而粤拼行只有 7 个音节(空格在那边只是
+        // 音节分隔符)。旧版按 words.count 直接比 → 9 != 7 → 整行退回整行罗马音,用户
+        // 2026-09-16 截图坐实"粤拼堆成一行、没落在字底下";这首歌 36 行正文里 12 行如此,
+        // 全库 199 首粤拼歌 8395 行里 28 行如此。
+        do {
+            let yrc = "[149664,8560](149664,768,0)随(150432,760,0)处(151192,1496,0)荡"
+                + "(152688,0,0) (152688,792,0)多(153480,736,0)冰(154216,2289,0)冷"
+                + "(156505,0,0) (156505,1719,0)Wooh\n"
+            let roma = "[02:29.66]ceoi4 cyu3 dong6 do1 bing1 laang5 Wooh\n"
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "", lyricsTr: "", lyricsRoma: roma, lyricsYRC: yrc,
+                        romanizationScripts: [.cantonese], songIsCantonese: true)
+            let line = engine.activeLine(atMs: 150_000)
+            expectEqual(line?.wordGroups?.count, 9,
+                        "空格词: 9 个逐字词照样出 9 组,不因为空格对不上而整行放弃")
+            expectEqual(line?.wordGroups?.map(\.romanization),
+                        ["ceoi4", "cyu3", "dong6", nil, "do1", "bing1", "laang5", nil, "Wooh"],
+                        "空格词: 音节只发给非空白的词,两个空格组不标音节")
+            expectEqual(line?.wordGroups?.map { $0.words.map(\.text).joined() },
+                        ["随", "处", "荡", " ", "多", "冰", "冷", " ", "Wooh"],
+                        "空格词: 空格原样留在组里占位,词与词之间那个空格不能被吞掉")
         }
 
         // ---- 逐字歌词的韩语对齐(2026-08-29):酷狗式一个谚文字一个逐字词,要合并成"词"再对齐 ----
