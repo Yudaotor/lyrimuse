@@ -42,7 +42,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest — and Cantonese songs get word-aware Jyutping readings
 - **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
 - **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
-- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, per-track timing offset if the sync ever drifts, and a one-click retry that re-searches every track still missing lyrics
+- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, per-track timing offset if the sync ever drifts, a one-click retry that re-searches every track still missing lyrics, and a full rescan that re-picks the whole library under today's matching rules while leaving your hand-corrected lyrics alone
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Your listening profile
@@ -61,7 +61,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Drag the progress bar to seek** — the bars in the Lyrics Window and the notch are controls, not just indicators
 - **Jump straight to the current song's page** from the "⋯" menu or the info panel — Apple Music opens in-app, Spotify jumps to the track that's playing, and QQ Music and NetEase Cloud Music open their web page for the song, album, or artist — no searching required, since Lyrimuse already resolved the link while fetching lyrics
 - **When nothing's playing, the Lyrics Window shows a listening overview instead of an empty screen** — today/this-week totals, an on-this-day card, and a full recently-played list with covers, each one jumping straight to its Apple Music album/artist page
-- **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes or a color pulled from the current album art, overlay width
+- **Fully customizable look**: font (follow the system, or import your own .ttf / .otf files), size, text/background/shadow colors with savable custom themes or a color pulled from the current album art, overlay width
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
 - **Auto-hide when paused** so it never sits on your desktop doing nothing
 
