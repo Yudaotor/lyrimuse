@@ -228,10 +228,14 @@ def render_html(lines: list[str], lang: str) -> str:
             flush_table()
             continue
         if stripped.startswith("|"):
+            # ⚠️ 表格是「正文」与「网页页脚」的分界,到这里就收尾,后面的整段都不渲染。
+            # 每节末尾那张按芯片分的下载表、「不确定该下哪个」、提交数、Full Changelog
+            # 链接都是给 GitHub Release 页看的:应用内的更新说明里点一下就装了,不需要
+            # 自己挑包下载。而且 NSAttributedString 不渲染 HTML 表格,它会把表格摊成
+            # 「Chip / 芯片」「dmg」「zip」这样一行一格的散行,比没有还糟。
             flush_para()
             close_list()
-            table.append(stripped)
-            continue
+            break
         flush_table()
         if first and re.fullmatch(r"v\d+\.\d+\.\d+", stripped):
             body.append("<h2>" + html.escape(stripped) + "</h2>")
