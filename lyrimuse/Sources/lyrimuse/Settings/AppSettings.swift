@@ -266,6 +266,9 @@ final class AppSettings: ObservableObject {
         static let backgroundColorHex = "np:backgroundColorHex"
         // 悬浮歌词背景毛玻璃(2026-09-02)。np: 前缀 = 随配置导出/搬家走(这是偏好,不是机器状态)。
         static let overlayBackgroundGlass = "np:overlayBackgroundGlass"
+        // 毛玻璃「浓淡」档位(2026-09-17,GitHub discussions#6)。只在上面那颗开着时才生效,
+        // 但键本身独立存——关着玻璃再打开,浓淡该停在用户上次选的档,不因为玻璃关过一次就丢。
+        static let overlayGlassIntensity = "np:overlayGlassIntensity"
         // "跟随封面"——桌面悬浮歌词的前景色改用当前曲目封面算出的动态高亮色,见
         // PlaybackCoordinator.displayForegroundColor。跟 foregroundColorHex 是独立的
         // 两个字段:开着这个模式时 foregroundColorHex 仍然保留、当"没有封面数据时的
@@ -1303,6 +1306,15 @@ final class AppSettings: ObservableObject {
             backgroundIsVisible = Self.backgroundVisible(hex: backgroundColorHex, glass: overlayBackgroundGlass)
         }
     }
+    // 毛玻璃「浓淡」(2026-09-17,GitHub discussions#6:用户要求给毛玻璃也加透明度/强度调节,
+    // 而不是只有开关)。SwiftUI 的 Material 做不成连续滑杆——真要连续调得包一层
+    // NSVisualEffectView 自己控制,代价明显更大,详见 OverlayGlassIntensity 声明处。开的是
+    // Material 全部五档(超薄/薄/常规/厚/特厚),复用「粗细」那颗下拉验证过的写法。默认
+    // `.regular`,跟这颗设置加之前 LyricsOverlayView 硬编码的 `.regularMaterial` 完全一致,
+    // 没碰过这颗设置的人升级后毛玻璃观感逐像素不变。
+    @Published var overlayGlassIntensity: OverlayGlassIntensity {
+        didSet { defaults.set(overlayGlassIntensity.rawValue, forKey: Keys.overlayGlassIntensity) }
+    }
     /// 「背景可见」= 背景色 alpha > 0.02 **或**毛玻璃开着。三处联动都读它:窗口阴影
     /// (LyricsOverlayWindowController)、拖拽捕获层(LyricsOverlayView.overlayBackground)、
     /// 编辑台的虚线边界(OverlayEditorStage)。玻璃是一块实打实的卡片,阴影和边界的语义跟纯色一致。
@@ -1539,6 +1551,8 @@ final class AppSettings: ObservableObject {
         manualPickLocksLyrics = (defaults.object(forKey: Keys.manualPickLocksLyrics) as? Bool) ?? false
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         overlayBackgroundGlass = (defaults.object(forKey: Keys.overlayBackgroundGlass) as? Bool) ?? false
+        overlayGlassIntensity = defaults.string(forKey: Keys.overlayGlassIntensity)
+            .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false

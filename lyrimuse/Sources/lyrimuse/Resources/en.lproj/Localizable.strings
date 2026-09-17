@@ -337,6 +337,7 @@
 "卡拉OK" = "Karaoke";
 "卡拉OK效果" = "Karaoke Effect";
 "即将导入：%@" = "About to import: %@";
+"厚" = "Thick";
 "去处理" = "Fix it";
 "去年今天听了 %@ 次，最常循环的是这几首" = "A year ago today: %@ plays, most on repeat";
 "去年的这一周听了 %@ 次，最常循环的是这几首" = "Last year, this week you listened %@ times — these looped the most";
@@ -986,6 +987,7 @@
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
 "毛玻璃" = "Frosted Glass";
+"毛玻璃浓淡" = "Frosted Glass Intensity";
 "毛玻璃背景" = "Frosted Glass Background";
 "没在显示歌词时，菜单栏上的那个图标" = "The icon shown in the menu bar when no lyrics are displayed";
 "没拉到最近记录" = "Couldn't load recent scrobbles";
@@ -1041,6 +1043,7 @@
 "版本尾缀写法" = "Version suffix style";
 "版本限定词不符" = "Version tag mismatch";
 "版权说明" = "Copyright Notice";
+"特厚" = "Ultra Thick";
 "特粗" = "Heavy";
 "状态未知" = "Status unknown";
 "状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行" = "The menu bar is narrow so the line may be truncated; hovering always shows it in full";
@@ -1177,6 +1180,7 @@
 "菜单栏歌词的笔画粗细。字体族继续跟随系统菜单栏，「常规」就是系统菜单栏本来的粗细；中文只变粗不变宽，英文越粗越宽一点" = "How heavy the menu bar lyrics are drawn. The font family keeps following the system menu bar; Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider.";
 "菜单栏里的一行字" = "A single line in the menu bar";
 "落后 %d 分" = "Behind by %d";
+"薄" = "Thin";
 "行上按 %1$@ 次计，明细合计 %2$@ 次" = "The row counts %1$@, the breakdown totals %2$@";
 "行为" = "Behavior";
 "行数" = "Lines";
@@ -1240,6 +1244,7 @@
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
 "超宽时横向滚动" = "Scroll When Too Long";
+"超薄" = "Ultra Thin";
 "超过就截断" = "Truncate If Too Long";
 "足迹" = "Footprint";
 "跟 %@ 是同一份词" = "Same lyrics as %@";

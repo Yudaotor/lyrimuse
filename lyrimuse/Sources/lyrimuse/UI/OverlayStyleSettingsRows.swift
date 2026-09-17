@@ -410,7 +410,26 @@ struct OverlayBackgroundSettingsRows: View {
             SettingsSubRow(title: L10n.t("毛玻璃背景")) {
                 Toggle("", isOn: $settings.overlayBackgroundGlass)
             }
+            // 毛玻璃「浓淡」(2026-09-17,GitHub discussions#6)。只在毛玻璃开着时才有意义——
+            // 关着时背景要么纯色要么全透明,没有"材质浓淡"这回事。SwiftUI 的 Material 做不成
+            // 连续滑杆(见 OverlayGlassIntensity 声明处注释),这里开的是 Material 全部五档,
+            // 复用「文字」组「粗细」那一行验证过的同一种下拉写法。
+            if settings.overlayBackgroundGlass {
+                CardDivider()
+                SettingsSubRow(title: L10n.t("毛玻璃浓淡")) {
+                    Picker("", selection: $settings.overlayGlassIntensity) {
+                        ForEach(OverlayGlassIntensity.allCases, id: \.self) { intensity in
+                            Text(intensity.displayName).tag(intensity)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+            }
         }
+        // 条件行长出/收起时别硬跳,同「文字」组那一句同一个理由(见 OverlayTextSettingsRows)。
+        .animation(.default, value: settings.overlayBackgroundGlass)
     }
 }
 
@@ -747,6 +766,10 @@ enum OverlayStyleDefaults {
         settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
         // 2026-09-02:毛玻璃是背景那一组的第八个字段,"恢复默认文字与配色"一起带回默认的关。
         settings.overlayBackgroundGlass = false
+        // 2026-09-17:毛玻璃浓淡跟毛玻璃开关同组,一起恢复到默认档——不然点"恢复默认"之后
+        // 毛玻璃虽然关了,浓淡却停在用户上次选的档,下次重新打开毛玻璃时又不是默认观感
+        // (同上面那条注释警告的坑,新加字段不进这个函数就会被漏掉)。
+        settings.overlayGlassIntensity = .default
         settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
         settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
         // 2026-09-16:「已唱/未唱」是文字组多出来的一对独立颜色(跟 foregroundColorHex/

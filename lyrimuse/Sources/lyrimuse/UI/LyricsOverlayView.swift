@@ -74,6 +74,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var backgroundColor: Color = .clear
     /// 悬浮歌词背景毛玻璃(2026-09-02),见 AppSettings.overlayBackgroundGlass。
     @Published private(set) var backgroundGlass = false
+    /// 毛玻璃「浓淡」(2026-09-17),见 AppSettings.overlayGlassIntensity / OverlayGlassIntensity。
+    @Published private(set) var backgroundGlassIntensity: OverlayGlassIntensity = .regular
     /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。窗宽和字号都会影响它,所以在这里
     /// 预组合成一个去重值 —— 免得视图为了算这一个数字去订阅两个高频设置。
     @Published private(set) var duetInsetUnit: CGFloat = 0
@@ -144,6 +146,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$backgroundIsVisible.removeDuplicates().sink { [weak self] in self?.backgroundIsVisible = $0 },
             s.$backgroundColor.removeDuplicates().sink { [weak self] in self?.backgroundColor = $0 },
             s.$overlayBackgroundGlass.removeDuplicates().sink { [weak self] in self?.backgroundGlass = $0 },
+            s.$overlayGlassIntensity.removeDuplicates().sink { [weak self] in self?.backgroundGlassIntensity = $0 },
             // 内缩基准:可用宽度 = 窗宽 − 两侧 20pt 内边距(见 lyricsCard 的 padding)。
             s.$overlayWidth.combineLatest(s.$fontSize)
                 .map { width, font in
@@ -1154,15 +1157,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var overlayBackground: some View {
         if playback.backgroundGlass {
             // 毛玻璃(2026-09-02):系统材质垫底,用户的背景色叠在上面当着色——背景色全透明
-            // 就是纯玻璃,alpha 越高越接近下面那档纯色卡片。材质用 .regularMaterial 而不是
-            // .thickMaterial(灵动岛那档):悬浮歌词压在壁纸/别的窗口上,厚材质几乎把底下盖成
-            // 一块灰板,失去"透出壁纸"的意义;也不用 .ultraThin,浅色壁纸上白字会不够清楚。
+            // 就是纯玻璃,alpha 越高越接近下面那档纯色卡片。材质默认档 .regular 而不是
+            // .thick(灵动岛那档):悬浮歌词压在壁纸/别的窗口上,厚材质几乎把底下盖成
+            // 一块灰板,失去"透出壁纸"的意义;默认也不是 .ultraThin,浅色壁纸上白字会不够清楚。
+            // Material 全部五档都能选(2026-09-17,见 OverlayGlassIntensity)——上面这条
+            // 默认档取舍的理由仍然成立,只是从"写死"变成了"没碰过这颗设置时落在哪一档"。
             // 材质在这扇 isOpaque=false、backgroundColor=.clear 的 NSPanel 里能直接渲染,
             // NotchLyricsWindow 用 .thickMaterial 是同一条路。系统「减少透明度」开着时材质
             // 自动退成近乎不透明的底色,不用特判。
             ZStack {
                 RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(playback.backgroundGlassIntensity.material)
                 RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                     .fill(playback.backgroundColor)
             }
