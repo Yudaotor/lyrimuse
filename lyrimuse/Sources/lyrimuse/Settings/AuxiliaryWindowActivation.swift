@@ -3,18 +3,28 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "dockicon")
 
-// 2026-08-04 新增——"歌词窗口"/"歌词管理"/"设置"/"欢迎使用"这几个正经标题栏窗口默认
-// 在 .accessory 策略(没有 Dock 图标)下打开,关掉/切到别的 App 后只能重新点菜单栏
-// 图标才能找回来,Cmd-Tab 完全看不到——MenuBarMenu.swift 里到处撒的
-// NSApp.activate(ignoringOtherApps:) 本身就是这个摩擦的旁证(不这么做,openWindow
-// 调了也没反应)。这几个窗口打开期间临时借一个 Dock 图标,关掉后(且没有别的辅助
-// 窗口还开着)还原,不持久化——跟"在 Dock 中显示"这个永久偏好(AppSettings.showInDock)
-// 是两回事,那个开着时这里全程不用管,不会跟永久偏好打架。
+// "歌词窗口"/"歌词管理"/"设置"/"欢迎使用"这几扇正经标题栏窗口开着期间的记账。
 //
-// openCount 而不是"最后一个关的窗口负责还原"这种简单逻辑:多个辅助窗口可能同时开着
-// (比如"设置"和"歌词管理"),关掉其中一个时不该把 Dock 图标也收走,得等全部都关了
-// 才还原——跟"先检查 fullscreen 是不是还开着、再决定要不要切回 .accessory"是同一个
-// 道理(同类实现里常见的写法),这里把它泛化成"还有没有任意一个辅助窗口开着"的计数器。
+// ## 不再借 Dock 图标
+//
+// 这几扇窗打开时会把 activationPolicy 临时切成 .regular 借一个 Dock
+// 图标、全部关掉再还原。起因是 .accessory 下切到别的 App 后窗口就找不回来了,Cmd-Tab
+// 里完全看不到 lyrimuse。这个折中被否掉了:「在 Dock 中显示」关掉就该
+// 一个图标都不出现,**开关说了算**,不接受"窗口一开它自己冒出来"。
+//
+// 于是 windowDidAppear 不再碰 activationPolicy。换来的代价是用户知情并接受的:
+// showInDock 关着时,切到别的 App 后这几扇窗会被压在后面、Cmd-Tab 里叫不出来,要点
+// 菜单栏图标重新叫回来。**打开窗口本身不受影响** —— 每条开窗路径各自带着
+// NSApp.activate(ignoringOtherApps:)(MenuBarStatusMenu.swift:261 等),`.accessory`
+// 下唤起窗口全靠它,跟 policy 切不切无关。
+//
+// ## openCount 为什么还留着
+//
+// 它已经不为"什么时候还 Dock 图标"服务了,但另外两件事还在用:AppDelegate 的
+// applicationShouldHandleReopen 拿 hasAnyOpen 判断"该不该顺便开歌词窗口",
+// bringOpenWindowsForward 靠它决定点 Dock 图标时要不要把窗口捞回来(showInDock 开着
+// 时 Dock 里确实有图标可点)。多扇辅助窗口可能同时开着(比如"设置"和"歌词管理"),
+// 所以是计数器而不是布尔值。
 @MainActor
 enum AuxiliaryWindowActivation {
     private static var openCount = 0
@@ -25,19 +35,22 @@ enum AuxiliaryWindowActivation {
     // 窗口枚举逻辑。
     static var hasAnyOpen: Bool { openCount > 0 }
 
-    // 挂在每个辅助窗口根视图的 .onAppear。`who` 只进日志:2026-09-15 用户报"设置里关掉了
+    // 挂在每个辅助窗口根视图的 .onAppear。`who` 只进日志:现象是"设置里关掉了
     // 「在 Dock 中显示」,图标却还在",而当时手上只有 reopen 那条"计数器说有窗开着、枚举却一扇
     // 都没找到"的日志,分不清是哪一扇窗加的这一笔 —— 加减两头都记名字,下次一眼能对上账。
+    //
+    // ⚠️ 这里**不许**碰 activationPolicy(理由见文件头)。加回一句
+    // `setActivationPolicy(.regular)` 就等于让「在 Dock 中显示」这个开关重新失灵,
+    // 而它失灵的样子恰好是"关了图标还在" —— 用户为此报过两次。
     static func windowDidAppear(_ who: String) {
         openCount += 1
         logger.notice("aux window opened: \(who, privacy: .public) -> openCount=\(openCount, privacy: .public)")
-        guard !AppSettings.shared.showInDock else { return }
-        NSApp.setActivationPolicy(.regular)
     }
 
-    // 挂在每个辅助窗口根视图的 .onDisappear——openCount 归零(所有辅助窗口都关了)才
-    // 还原,且要在还原前再读一次 showInDock:用户可能在窗口开着期间自己把这个永久
-    // 偏好打开了,那种情况下不应该在这里把它又切回 .accessory(见 restoreAccessoryIfWanted)。
+    // 挂在每个辅助窗口根视图的 .onDisappear。归零时仍调一次 restoreAccessoryIfWanted ——
+    // 撤掉借用之后那是纯兜底(正常路径上 policy 根本没被动过,它那道
+    // `activationPolicy() != .accessory` 的闸会直接挡掉),留着是因为"policy 漂成 .regular
+    // 却没人还原"这个故障历史上真出过,而这里是最自然的复位点。
     static func windowDidDisappear(_ who: String) {
         openCount = max(0, openCount - 1)
         logger.notice("aux window closed: \(who, privacy: .public) -> openCount=\(openCount, privacy: .public)")
@@ -46,7 +59,7 @@ enum AuxiliaryWindowActivation {
             return
         }
         // 计数器还没归零,但它只是个代理值 —— 关窗这一刻跟真实窗口列表对一次账。
-        // ⚠️ 必须排到下一轮 runloop:2026-09-15 隔离探针实测,`.onDisappear` 触发的**同一拍**里,
+        // ⚠️ 必须排到下一轮 runloop:隔离探针实测,`.onDisappear` 触发的**同一拍**里,
         // 正在关的那扇窗 `isVisible` 仍然是 true(下一轮才从列表里消失),当场核会永远认为
         // "还有窗开着",这道对账就成了摆设。
         DispatchQueue.main.async { MainActor.assumeIsolated { reconcile(reason: "after closing \(who)") } }
@@ -57,13 +70,14 @@ enum AuxiliaryWindowActivation {
     ///
     /// 为什么需要它:openCount 是"有没有辅助窗口开着"的**代理值**,靠 SwiftUI 的
     /// `.onAppear`/`.onDisappear` 一加一减维持。这两个回调的触发时机不完全由本仓控制,一旦
-    /// 哪条路径只加不减,计数器就永久停在 >0 —— 而还原 .accessory 这件事整个挂在"归零"上,
-    /// 于是 Dock 图标再也收不回去,用户明明关掉了「在 Dock 中显示」也没用,且**无法自愈**
-    /// (开一扇关一扇是 +1-1,回不到 0),只能重启 App。加这道对账之后,漏加的那一笔在下一次
-    /// 关窗 / 下一次点 Dock 图标时就被抹平。
+    /// 哪条路径只加不减,计数器就永久停在 >0,且**无法自愈**(开一扇关一扇是 +1-1,回不到 0)。
+    /// 撤掉 Dock 图标借用之前,这个卡死直接表现成"关掉了「在 Dock 中显示」、图标
+    /// 却收不回去",只能重启 App;现在它影响的是 reopen 那条路(hasAnyOpen 恒为真,点 Dock
+    /// 图标时去捞一扇根本不存在的窗)。加这道对账之后,漏加的那一笔在下一次关窗 / 下一次点
+    /// Dock 图标时就被抹平。
     ///
     /// ⚠️ `NSApp.isHidden` 那道闸不能省:Cmd+H 把 App 整个隐藏时,窗口只是 orderOut、**没关**,
-    /// 但真实列表里它们 `isVisible=false`(2026-09-15 探针实测),不挡住就会把"隐藏着的开着的窗"
+    /// 但真实列表里它们 `isVisible=false`(探针实测),不挡住就会把"隐藏着的开着的窗"
     /// 误判成"一扇都没开"。
     static func reconcile(reason: String) {
         guard !NSApp.isHidden else { return }
@@ -75,8 +89,10 @@ enum AuxiliaryWindowActivation {
         restoreAccessoryIfWanted("reconcile: \(reason)")
     }
 
-    /// 还原成"没有 Dock 图标"。三道前提:计数器归零、用户没打开那个永久偏好、当前确实不是
-    /// .accessory(最后一条只为免掉重复日志,setActivationPolicy 本身重复调用无害)。
+    /// 兜底复位成"没有 Dock 图标"。三道前提:计数器归零、用户没打开那个永久偏好、当前确实
+    /// 不是 .accessory。撤掉借用之后,正常路径上第三道闸就把它挡住了(没人再把
+    /// policy 切成 .regular);它只在 policy 不知被谁弄成 .regular、而用户偏好是"不显示"时
+    /// 才真的动手。
     private static func restoreAccessoryIfWanted(_ reason: String) {
         guard openCount == 0, !AppSettings.shared.showInDock else { return }
         guard NSApp.activationPolicy() != .accessory else { return }
@@ -98,7 +114,7 @@ enum AuxiliaryWindowActivation {
         var foundNone: Bool { restored == 0 && fronted == 0 }
     }
 
-    /// 点 Dock 图标时把开着的辅助窗口**真正**带回来(2026-09-09)。
+    /// 点 Dock 图标时把开着的辅助窗口**真正**带回来。
     ///
     /// 此前 AppDelegate 在 `hasAnyOpen` 时 `return true` 交给 AppKit 默认 reopen,注释里写的
     /// 预期是"还原被最小化的窗口、把已有窗口带到前台"。隔离探针(自建 .app,只动自己的窗口)
@@ -153,11 +169,11 @@ enum AuxiliaryWindowActivation {
     /// 设置 / 歌词管理 / 歌词窗口 / 欢迎使用 / 搜索歌词… 这类"正经"窗口的形态判据。悬浮歌词和
     /// 灵动岛是 NSPanel,状态栏项、菜单栏面板、场景 action 的隐藏锚点都是无标题栏窗口,全部排除。
     ///
-    /// ⚠️ `canBecomeMain` 不能单独用:**窗口一最小化它就变 false**(2026-09-15 隔离探针实测,
+    /// ⚠️ `canBecomeMain` 不能单独用:**窗口一最小化它就变 false**(隔离探针实测,
     /// 同一扇窗 `isVisible=false isMiniaturized=true canBecomeMain=false`;AppKit 对这个属性的
     /// 定义里本来就含"窗口可见"这一条)。原来只写 canBecomeMain,于是上面那句
     /// `($0.isVisible || $0.isMiniaturized)` 的 isMiniaturized 分支是**死代码** ——
-    /// bringOpenWindowsForward 永远 restored=0(用户日志里每一次点击都是),2026-09-09 那版
+    /// bringOpenWindowsForward 永远 restored=0(用户日志里每一次点击都是),那版
     /// "最小化的全部还原"根本没跑起来过;最小化的辅助窗口既点 Dock 叫不回来、又一直占着借来的
     /// Dock 图标,而用户开着「最小化窗口到应用程序图标」时 Dock 上连个缩略图都看不见,
     /// 表现就是"窗口明明都关了,图标赖着不走"。
