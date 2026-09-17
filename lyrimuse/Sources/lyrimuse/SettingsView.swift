@@ -234,6 +234,82 @@ struct SettingsView: View {
     /// 抽屉(Settings/SettingsSearch.swift)。
     @ObservedObject private var searchRouter = SettingsSearchRouter.shared
 
+    // MARK: - 前进 / 后退
+
+    /// 走过的面板序列 + 当前停在第几个。语义跟系统「系统设置」逐条对齐:
+    ///   · 后退回到上一个面板、前进再走回来;
+    ///   · **从历史中间跳去一个新面板时,前面那一截被截断**(同浏览器);
+    ///   · 重复选中当前这一页不产生新记录(点侧栏里已经亮着的那一行);
+    ///   · 两颗键常驻、不可用时置灰 —— 不做"没历史就隐藏",位置忽有忽无比置灰更难用,
+    ///     系统设置也是常驻置灰。
+    ///
+    /// ⚠️ 只记 `SettingsSidebarItem`(顶层面板),**不记页内的二级分段**。二级分段各有
+    /// 自己的 @AppStorage 键、由那一页自己管;把它们也塞进这条历史,后退键就会变成
+    /// "有时换页、有时只在页内换个分段"——同一颗键两种行为。系统设置同样只记到面板这一层。
+    /// 序列与游标那套逻辑整块在 Core(`NavigationHistory`,纯值语义、selftest 覆盖):
+    /// 截断、去重、封顶、起点这几件都有边界,写在 View 里就只能靠肉眼守。
+    @State private var history = NavigationHistory<SettingsSidebarItem>()
+    /// 这一次 `selection` 变化是前进/后退自己造成的,不该再写回历史 —— 否则后退一步立刻
+    /// 被记成一次新跳转、前进那半截当场被截断,两颗键就只剩后退能用。
+    /// ⚠️ 这个开关留在 View 这边(而不是塞进 Core):它描述的是"谁触发了这次 selection 变化",
+    /// 是 SwiftUI 那条单向数据流的性质,跟历史本身无关。
+    @State private var isNavigatingHistory = false
+
+    /// 窗口刚出现时种下起点。此刻这一页是"打开就在这儿",不是一次跳转,所以它只当历史的
+    /// 第 0 项 —— 不这么种的话,刚打开设置窗就有一颗能点的后退键,退回一个从没露过面的页面。
+    private func seedHistory() { history.seed(selection) }
+
+    private func goBack() {
+        guard let target = history.goBack() else { return }
+        isNavigatingHistory = true
+        selection = target
+    }
+
+    private func goForward() {
+        guard let target = history.goForward() else { return }
+        isNavigatingHistory = true
+        selection = target
+    }
+
+    /// 记一次跳转。改 `selection` 的入口有四个(侧栏点选、搜索命中、账号页内跳转、
+    /// AppActions 的信箱与 subject),全部经 `.onChange(of: selection)` 汇到这里 —— 让各
+    /// 入口自己记迟早漏一个,而漏掉的那条在界面上表现为"后退键跳过了一页"。
+    private func recordHistory(_ item: SettingsSidebarItem?) {
+        // nil 是"什么都没选中"(比如「有软件更新可用」那一行消失时 List 清掉选中),
+        // 不是一个能回去的页面。
+        guard let item else { return }
+        if isNavigatingHistory {
+            isNavigatingHistory = false
+            return
+        }
+        history.record(item)
+    }
+
+    /// 后退键。跟前进键分开两个 `ToolbarItem` 摆在同一个 placement 里 —— macOS 26 会把
+    /// 相邻的工具栏项自动拼成一枚胶囊(中间一道分隔线),正是系统设置那对键的样子。
+    ///
+    /// ⚠️ **不要包 `ControlGroup`**:那样工具栏里只渲染得出第一颗键、前进那颗整个消失,
+    /// 而且整组被挤到标题下面居中(实测截图)。`ControlGroup` 是给内容区用的,放进
+    /// `ToolbarItem` 会跟工具栏自己的分组逻辑打架。
+    @ViewBuilder private var historyBackButton: some View {
+        Button(action: goBack) {
+            Label(L10n.t("后退"), systemImage: "chevron.backward")
+        }
+        .disabled(!history.canGoBack)
+        .help(L10n.t("后退"))
+        // ⌘[ / ⌘] 跟 Safari、访达、系统设置同一套;本仓没有别处占这两个组合。
+        .keyboardShortcut("[", modifiers: .command)
+    }
+
+    @ViewBuilder private var historyForwardButton: some View {
+        Button(action: goForward) {
+            Label(L10n.t("前进"), systemImage: "chevron.forward")
+        }
+        .disabled(!history.canGoForward)
+        .help(L10n.t("前进"))
+        .keyboardShortcut("]", modifiers: .command)
+    }
+
     private var isSearchingSettings: Bool {
         !settingsSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -403,6 +479,16 @@ struct SettingsView: View {
             // 菜单/Dock 右键列表,分类上下文照样留得住,只是不再顶替窗口的身份。
             .navigationTitle(L10n.t("设置"))
             .navigationSubtitle(selectedCategoryTitle)
+            // 挂在 detail 这一侧(不是 NavigationSplitView 整体),`.navigation` 才会落到
+            // 侧栏右边那一段工具栏的最左端 —— 跟系统设置里那对键同一个位置。侧栏那边用
+            // `.toolbar(removing: .sidebarToggle)` 腾空了这一格。
+            .toolbar {
+                ToolbarItem(placement: .navigation) { historyBackButton }
+                ToolbarItem(placement: .navigation) { historyForwardButton }
+                // ⚠️ 这里**不需要**尾部弹性间隔。曾经加过一个 `ToolbarSpacer`,以为是
+                // macOS 26 把 `.navigation` 这一组居中了 —— 装机截图证明加了没有任何变化,
+                // 真正的原因是窗口的 `toolbarStyle`(见 SettingsWindowConfigurator)。
+            }
         }
         // 宽度:NavigationSplitView 比原来的 TabView 多一列侧边栏,整体相应加宽;同样不设
         // maxWidth/固定高度,各分类继续按内容自动撑高。
@@ -428,6 +514,9 @@ struct SettingsView: View {
                 selection = pending
                 AppActions.shared.pendingSettingsSelection = nil
             }
+            // 必须排在信箱之后:那一句才决定了用户真正看到的第一页,种早了会把一个
+            // 没露过面的页面留在后退键底下。见 seedHistory。
+            seedHistory()
         }
         // 窗口**已经开着**时走这条:上面那个 .onAppear 只在窗口新建那一次跑,不会再有第二次
         // (见 AppActions.requestSettings)。两条都要,因为反过来也成立 —— 窗口还没建时
@@ -443,6 +532,8 @@ struct SettingsView: View {
         // 六个顶层分类都记,包括「关于」——上次停在低频页下次也落在那里,行为可预测。
         .onChange(of: selection) { previous, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
+            // 四个改 selection 的入口都汇到这里记一笔,见 recordHistory 头注。
+            recordHistory(item)
             // 「有软件更新可用」那一行随更新装完 / 跳过 / 已是最新而消失时,List 会把选中清成 nil ——
             // 页面本身还在,别退成「选择左侧的设置分类」,把选中放回去(此时侧栏没有行亮着,跟账号页
             // 在折叠区里那种情形一样)。
@@ -5373,7 +5464,19 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         let view = NSView()
         // 视图刚建好时还没挂进窗口,拿不到 window,推迟到下一个 runloop。
         DispatchQueue.main.async {
-            view.window?.styleMask.insert([.resizable, .miniaturizable])
+            guard let window = view.window else { return }
+            window.styleMask.insert([.resizable, .miniaturizable])
+            // `Settings` 场景默认给窗口的是 `.preference` 样式 —— AppKit 对它的定义就是
+            // 「标题独占一行、工具栏项整体居中」,于是详情列最左那对前进/后退键被顶到了
+            // 正中(实测截图)。`.unified` 让标题回到侧栏右边、跟工具栏项同一行,
+            // `.navigation` 那一组才落在详情列的最左端,也就是系统「系统设置」那对键的位置。
+            //
+            // ⚠️ 为什么必须写 NSWindow、不能用 SwiftUI 的 `.windowToolbarStyle(.unified)`:
+            // 那个 Scene 修饰符对 `Settings` 场景**无效**(加上之后版面一点没变,实测过一轮
+            // 装机截图)。也不是 placement 判错了 —— 同一套 NavigationSplitView + 同一个
+            // `.navigation`,放进 `WindowGroup`(默认样式与 `.expanded` 都试过)本来就落在最左;
+            // 离线探针窗口把五种 placement 并排摆过一遍,`.navigation` 确实是最左那一档。
+            window.toolbarStyle = .unified
         }
         return view
     }

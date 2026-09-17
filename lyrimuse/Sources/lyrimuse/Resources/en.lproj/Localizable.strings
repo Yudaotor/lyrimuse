@@ -319,6 +319,7 @@
 "前往专辑" = "Go to Album";
 "前往申请" = "Get One";
 "前往艺人" = "Go to Artist";
+"前进" = "Forward";
 "剩余时长" = "Remaining";
 "副行" = "Second Line";
 "加入信任列表" = "Trust This App";
@@ -407,6 +408,7 @@
 "后台采集服务重启失败" = "Could not restart the background service";
 "后台采集服务：未运行（必需）" = "Background service: not running (required)";
 "后台采集服务：运行中" = "Background service: running";
+"后退" = "Back";
 "含明文凭证；导入会覆盖全部设置并重启" = "Contains credentials in plain text; importing overwrites every setting and restarts";
 "含账号凭据，不要发给别人；要连外观、快捷键一起搬走，用「备份与迁移」" = "Contains account credentials — don't share it. To bring appearance and shortcuts along, use Backup & Migrate.";
 "听不懂的语言可以并排显示中文译文；日文、韩文、粤语还能标上罗马音跟着唱" = "Lyrics in a language you don't read can show a translation alongside; Japanese, Korean and Cantonese can also be annotated with romanization so you can sing along";

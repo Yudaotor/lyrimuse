@@ -20,6 +20,10 @@ struct LyrimuseApp: App {
         Settings {
             SettingsView()
         }
+        // ⚠️ 工具栏样式**不在这里改**:`Settings` 场景把 NSWindow 的 toolbarStyle 钉成了
+        // `.preference`(标题独占一行、整体居中),SwiftUI 的 `.windowToolbarStyle(.unified)`
+        // 盖不住它(实测加了没有任何变化)。真正生效的那一处在 SettingsWindowConfigurator,
+        // 直接写 NSWindow —— 理由与实测都在那边。
         Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }

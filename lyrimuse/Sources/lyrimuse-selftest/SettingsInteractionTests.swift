@@ -191,4 +191,78 @@ func runSettingsInteractionTests() {
         expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "v"]]), [], "键差分: 内容相同的字典不算变")
         expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "w"]]), ["m"], "键差分: 字典里的值变了")
     }
+
+    // ---- NavigationHistory: 设置窗那对前进 / 后退键 ----
+    //
+    // 语义对着 macOS「系统设置」抄,而它的坑全在边界上(截断、去重、起点、封顶),所以整块
+    // 逻辑放在 Core 的纯值类型里、这里钉死;界面那半只剩两颗按钮的 disabled 与 action。
+    do {
+        typealias H = NavigationHistory<String>
+
+        // 起点:窗口刚打开那一页是"打开就在这儿",不是一次跳转 —— 后退键此刻必须是灰的。
+        // 种早了(或者把它当成一次 record)就会变成"刚打开就能后退,退回一个没露过面的页面"。
+        var h = H()
+        expectEqual(h.canGoBack, false, "历史: 空历史退不动")
+        expectEqual(h.canGoForward, false, "历史: 空历史进不动")
+        expectEqual(h.current, nil, "历史: 空历史没有当前项")
+        h.seed("歌词")
+        expectEqual(h.current, "歌词", "历史: 种下的起点就是当前项")
+        expectEqual(h.canGoBack, false, "历史: 只有起点时后退键是灰的")
+        expectEqual(h.canGoForward, false, "历史: 只有起点时前进键也是灰的")
+
+        // 走两步再退两步、前进两步 —— 前后必须能原路来回。
+        h.record("播放器")
+        h.record("快捷键")
+        expectEqual(h.canGoBack, true, "历史: 走过两步之后可以后退")
+        expectEqual(h.goBack(), "播放器", "历史: 后退一格回到上一个面板")
+        expectEqual(h.goBack(), "歌词", "历史: 再退一格回到起点")
+        expectEqual(h.canGoBack, false, "历史: 退到起点就退不动了")
+        expectEqual(h.goBack(), nil, "历史: 退不动时返回 nil(调用方据此不动 selection)")
+        expectEqual(h.goForward(), "播放器", "历史: 前进走回来")
+        expectEqual(h.goForward(), "快捷键", "历史: 再进一格回到最新")
+        expectEqual(h.canGoForward, false, "历史: 到头就进不动了")
+        expectEqual(h.goForward(), nil, "历史: 进不动时返回 nil")
+
+        // **从历史中间跳去一个新面板 → 前面那一截被截断**(同浏览器,也是系统设置的行为)。
+        // 少了这一条,后退两步再点侧栏另一页,前进键会把你送回一条早就作废的路线。
+        var t = H()
+        t.seed("歌词")
+        t.record("播放器")
+        t.record("快捷键")
+        _ = t.goBack()                      // 停在「播放器」
+        expectEqual(t.canGoForward, true, "历史: 退一格之后前进键是亮的")
+        t.record("通用")                      // 从中间跳去新面板
+        expectEqual(t.canGoForward, false, "历史: 从中间跳去新面板,前面那一截被截断")
+        expectEqual(t.items, ["歌词", "播放器", "通用"], "历史: 被截断的是「快捷键」那一截")
+        expectEqual(t.goBack(), "播放器", "历史: 截断之后仍能正常后退")
+
+        // 重复进入当前这一页不记 —— 点侧栏里已经亮着的那一行不该产生一条后退记录。
+        var d = H()
+        d.seed("歌词")
+        expectEqual(d.record("歌词"), false, "历史: 重复选中当前页不记")
+        expectEqual(d.canGoBack, false, "历史: 重复选中之后后退键仍是灰的")
+        expectEqual(d.record("播放器"), true, "历史: 换了一页才记")
+        // ⚠️ 只去重「当前这一项」,不去重整条历史:A → B → A 是真的走了三步,
+        // 后退应该回到 B 而不是直接跳过去。
+        expectEqual(d.record("歌词"), true, "历史: A→B→A 的第二次 A 照记(不是全局去重)")
+        expectEqual(d.goBack(), "播放器", "历史: A→B→A 后退回到 B")
+
+        // 封顶:砍掉队头之后游标要跟着往前挪,不能指到别人身上。
+        var c = H(capacity: 3)
+        c.seed("1")
+        c.record("2")
+        c.record("3")
+        c.record("4")
+        expectEqual(c.items, ["2", "3", "4"], "历史: 超出上限时从队头砍")
+        expectEqual(c.current, "4", "历史: 砍完之后当前项还是最新那个")
+        expectEqual(c.goBack(), "3", "历史: 砍完之后后退一格不会指错")
+
+        // 种一次起点等于把历史整个重置(窗口重开是一次新会话,不该继承上次的路线)。
+        var r = H()
+        r.seed("歌词")
+        r.record("播放器")
+        r.seed("通用")
+        expectEqual(r.items, ["通用"], "历史: 重新种起点会清掉旧路线")
+        expectEqual(r.canGoBack, false, "历史: 重新种起点之后退不动")
+    }
 }
