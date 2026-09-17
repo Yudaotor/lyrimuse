@@ -250,9 +250,22 @@ for arch in $ARCHES; do
   # ⚠️ 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
   BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
   stamp_sdk_version "$BIN_PATH/lyrimuse" "$BIN_PATH/lyrics-translate" "$BIN_PATH/lyrics-romanize"
-  SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
-  TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
-  ROMANIZE_SLICES+=("$BIN_PATH/lyrics-romanize")
+  # ⚠️ **把这一轮的切片拷走再编下一个架构**,别把 $BIN_PATH 直接攒进 *_SLICES。
+  #
+  # SwiftPM 从 Swift 6.4 起默认走 swiftbuild 构建系统,它对**不同 --arch 返回同一个**
+  # --show-bin-path(.build/out/Products/Release),于是后一个架构原地覆盖前一个,两个
+  # 切片路径指向同一个文件。表现是 universal 构建在 lipo 那步失败:
+  #   lipo: same architectures (x86_64) found in '…/Release/lyrimuse' and '…/Release/lyrimuse'
+  # 旧的 native 构建系统给的是 .build/<arch>-apple-macosx/release,两者天然分开,所以这段
+  # 以前不拷也对。拷一份对两种构建系统都成立,不去赌 --show-bin-path 分不分架构。
+  #
+  # 拷贝排在 stamp_sdk_version 之后:戳的是 Mach-O 自身的 LC_BUILD_VERSION,拷贝会带上。
+  SLICE_DIR="$FAT_DIR/slices/$arch"
+  mkdir -p "$SLICE_DIR"
+  cp "$BIN_PATH/lyrimuse" "$BIN_PATH/lyrics-translate" "$BIN_PATH/lyrics-romanize" "$SLICE_DIR/"
+  SWIFT_SLICES+=("$SLICE_DIR/lyrimuse")
+  TRANSLATE_SLICES+=("$SLICE_DIR/lyrics-translate")
+  ROMANIZE_SLICES+=("$SLICE_DIR/lyrics-romanize")
 done
 merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
