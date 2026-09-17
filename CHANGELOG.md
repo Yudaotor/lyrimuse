@@ -20,6 +20,113 @@ each version's git tag annotation and on its
   完整流程见 docs/releasing.md。
 -->
 
+## v1.8.0
+
+New / 新功能
+- Added Apple Music as an eleventh lyrics source — the only one carrying
+  Apple's own word-by-word timing, and the only one that asks you to
+  connect the account in Settings, once every six months
+  新增第十一个歌词源 Apple Music——唯一带官方逐字歌词的源，也是唯一需要在设置里
+  连账号的源，六个月连一次
+- Added a full rescan that re-picks every lyric in the library under
+  today's matching rules
+  新增「全库重新挑选」，用现在的匹配规则把整个曲库的歌词重挑一遍
+- A full rescan skips hand-corrected lyrics, confirmed instrumentals and
+  tracks whose timeline you tuned
+  全库重挑会跳过手动改过的歌词、确认过的纯音乐和自己校过时间轴的歌
+- You can now import your own .ttf and .otf fonts for the lyrics
+  现在可以导入自己的 .ttf / .otf 字体给歌词用
+- Split the karaoke fill into two independent colours, one sung and one
+  unsung
+  卡拉OK的已唱和未唱拆成了两个独立颜色
+- Added a thickness setting for the frosted background behind the desktop
+  lyrics
+  悬浮歌词的毛玻璃背景可以调厚薄了
+- Added a switch for the playback buttons that appear when you hover the
+  desktop lyrics
+  鼠标移到悬浮歌词上会出现的那排播放键，可以关掉了
+- You can now pick a font family for the menu bar lyrics
+  菜单栏歌词可以自己选字体了
+- Added the second line and font size to the menu bar quick settings panel
+  菜单栏快捷设置面板补上了「副行」和「字号」
+- The menu bar panel now offers one button that starts the music again when
+  nothing is playing
+  什么都没在放的时候，菜单栏面板给一颗能把歌放起来的键
+- Added back and forward keys to the Settings window
+  设置窗口加了「后退 / 前进」两颗键
+- Replaced the system colour panel with a smaller picker of our own
+  选颜色改用自己的小面板，不再打开系统取色器
+- The menu bar preview now draws the max-width limit
+  菜单栏预览里画出了最大宽度那条线
+- AMLL now looks a track up by the ID the system provides, instead of
+  relying on NetEase and QQ being switched on
+  AMLL 改用系统给出的曲目 ID 直接查，不再依赖网易云和 QQ 开着
+- New installs now scrobble collaborations with smart credit; existing
+  installs keep their setting
+  新安装的打卡默认走「智能合作署名」，老用户的设置不变
+
+Improved / 改进
+- Moved the score breakdown into the expanded row in the lyrics manager
+  歌词管理的评分明细移进了展开行
+- Opening the lyrics manager is faster on a large library
+  曲库很大时，歌词管理打开得更快
+- Reworked the selected state of the player cards: the card lifts off the
+  page, and the accent colour stays on the border and the checkmark
+  重做了播放器卡片的选中样式：卡片提亮浮起，蓝色只留在描边和对号上
+- Lined up both toolbar rows in the editor stages, column by column
+  编辑台的两行工具栏改成逐列对齐
+- The background service no longer does work nothing asked for: no web
+  accent colour without a relay, no ListenBrainz without a token
+  后台服务不再做白工：没配网页中继就不算配色，没填 ListenBrainz 令牌就完全不跑
+- Removed the "N/9" badge and the "thin evidence only" filter; the full
+  count is on the track's decision sheet
+  移除了「N/9」徽章和「仅证据薄」筛选，完整数字在这首歌的「解析决策」里看
+
+Fixed / 修复
+- Fixed Apple Music lyrics stopping when another app took over the
+  system's now-playing slot
+  修复别的 App 抢走系统「正在播放」后，Apple Music 歌词停住的问题
+- Fixed the menu bar lyrics flickering, disappearing, and rebuilding in the
+  middle of a line
+  修复菜单栏歌词闪烁、消失、唱到一半重建的问题
+- Fixed three ways per-word romanisation came out wrong, including a blank
+  word eating a syllable
+  修复逐字罗马音的三处错误，包括空白词吃掉一个音节
+- Fixed Chinese being read as Japanese in lines that splice kana into a
+  Chinese clause
+  修复中日混排的行里，中文被按日语读音标注的问题
+- Fixed DJ mix segments borrowing the studio version's lyrics
+  修复 DJ Mix 片段套用录音室版本歌词的问题
+- The search sheet now says why a track has no usable lyrics
+  搜索弹窗现在会说明这首歌为什么没有可用歌词
+- Fixed a music video's length being taken as the song's length
+  修复把音乐视频的时长当成歌曲时长的问题
+- Fixed catalog matching ignoring the artist, crossing storefronts, and
+  settling for the first album track within tolerance
+  修复目录匹配不核对歌手、跨地区、以及在容差内直接取第一个专辑版本的问题
+- Fixed parenthesised name lists and the 组曲 prefix derailing the search
+  修复括号里用斜杠分隔的名字串、以及「组曲」前缀把搜索带偏的问题
+- Fixed the Dynamic Island's black bar not matching the real notch height
+  修复灵动岛黑条高度跟真实刘海对不上的问题
+- Fixed the equalizer's position when it has an ear to itself and when the
+  island is expanded
+  修复均衡器独占一只耳朵时、以及灵动岛展开时的位置
+- Fixed the desktop lyrics control bar opening from outside the lyrics text
+  修复悬浮歌词的控制条从歌词文字之外也会打开的问题
+- Fixed a Dock icon staying around for minimized and auxiliary windows
+  修复最小化窗口和辅助窗口占着 Dock 图标不放的问题
+- Fixed follow-the-cover blanking out the colour theme row
+  修复打开「跟随封面」后「配色主题」那一行变空的问题
+- Fixed the Apple Music automation card not showing on the default player
+  setting
+  修复播放器保持默认设置时，「Apple Music 自动化」卡片不出现的问题
+- Fixed a motion cover that could not be checked being reported as a
+  mismatch
+  修复动态封面「没查成」被当成「对不上」的问题
+- Fixed player chips not starting from the left on every row, a stray rule
+  in front of sub-rows, and the decision sheet's inputs not lining up
+  修复播放器芯片换行后不左对齐、子行前多一条竖线、「解析决策」输入区不对齐的问题
+
 ## v1.7.0
 
 New / 新功能
