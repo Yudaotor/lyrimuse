@@ -81,11 +81,13 @@ func loadArtworkConfirmed() {
 	}
 	var f artworkConfirmFile
 	if err := json.Unmarshal(b, &f); err != nil {
-		log.Printf("artwork relay: 确认记录解析失败(当作没有,这次照旧全量确认): %v", err)
+		log.Printf("artwork relay: confirmation record unreadable, treating it as empty "+
+			"and confirming every cover by HEAD this time: %v", err)
 		return
 	}
 	if f.Relay != artworkRelayKey() {
-		log.Printf("artwork relay: 中继地址变了(%q → %q),旧的确认记录整份作废", f.Relay, artworkRelayKey())
+		log.Printf("artwork relay: relay address changed (%q -> %q), dropping the whole confirmation record",
+			f.Relay, artworkRelayKey())
 		return
 	}
 	cutoff := time.Now().Add(-artworkConfirmTTL).Unix()
@@ -104,7 +106,8 @@ func loadArtworkConfirmed() {
 	artworkMu.Unlock()
 	artworkConfirmMu.Unlock()
 	if fresh > 0 || stale > 0 {
-		log.Printf("artwork relay: 读回确认记录 有效=%d 过期=%d(过期的这次会重新 HEAD 确认)", fresh, stale)
+		log.Printf("artwork relay: confirmation record loaded fresh=%d stale=%d (stale ones are re-confirmed by HEAD)",
+			fresh, stale)
 	}
 }
 
