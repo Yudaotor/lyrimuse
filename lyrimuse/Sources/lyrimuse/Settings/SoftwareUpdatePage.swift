@@ -310,8 +310,9 @@ struct SoftwareUpdatePage: View {
 /// appcast `<description>` 的 HTML(release.yml 用 split_release_notes.py 把 markdown 渲染成标题 / 列表 / 加粗 /
 /// 链接的真 HTML,按 xml:lang 放两份,Sparkle 已按系统语言挑好一份)→ SwiftUI `Text`。
 ///
-/// 走 `NSAttributedString(html:)` 解析,再把字体统一压成 13pt 系统字(标题与加粗 = semibold)、颜色换成
-/// labelColor(HTML 默认黑字在深色模式下看不见)、链接保留。段落样式(列表缩进 / 段距)SwiftUI Text 不认,
+/// 走 `NSAttributedString(html:)` 解析,再把字体统一压成 13pt 系统字(标题与加粗 = semibold)、正文用
+/// secondaryLabelColor、标题与加粗用 labelColor(系统「设置 → 软件更新」那块说明就是这个层次:说明文字
+/// 比标题浅一档;HTML 默认的黑字则在深色模式下直接看不见)、链接保留。段落样式(列表缩进 / 段距)SwiftUI Text 不认,
 /// 列表项靠转换时生成的「•⇥」字符仍能看出层次。转换只能在主线程做,结果按原文缓存,同一份说明只解一次。
 private struct ReleaseNotesView: View {
     let source: String
@@ -361,8 +362,12 @@ enum ReleaseNotesRenderer {
                 font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
             }
             parsed.addAttribute(.font, value: font, range: range)
+            // 颜色跟字重一起定:正文次要色、标题与加粗主色。⚠️ 别再在这之后统一刷一遍 labelColor,
+            // 那会把这层层次抹平。
+            parsed.addAttribute(.foregroundColor,
+                                value: emphasized ? NSColor.labelColor : NSColor.secondaryLabelColor,
+                                range: range)
         }
-        parsed.addAttribute(.foregroundColor, value: NSColor.labelColor, range: full)
         parsed.enumerateAttribute(.link, in: full) { value, range, _ in
             if value != nil { parsed.addAttribute(.foregroundColor, value: NSColor.linkColor, range: range) }
         }
