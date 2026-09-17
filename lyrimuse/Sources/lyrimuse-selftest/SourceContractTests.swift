@@ -2412,7 +2412,12 @@ func runSourceContractTests() {
         expectEqual(yml.contains("steps.changelog."), false, "tag 校验: 旧的 Extract tag changelog 步已并入校验步")
         expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
                     "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
-        expectEqual(read("docs/releasing.md").contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
+        // ⚠️ docs/releasing.md 跟 AGENTS.md 一样**不进版本库**(理由同下一段),别人的 clone 和 CI 上
+        // `read` 返回空串 —— 有就查,没有就跳过,别改回无条件 expectEqual。
+        let releasingDoc = read("docs/releasing.md")
+        if !releasingDoc.isEmpty {
+            expectEqual(releasingDoc.contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
+        }
         // ⚠️ **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
         // 和贡献者没有意义。⚠️ 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
