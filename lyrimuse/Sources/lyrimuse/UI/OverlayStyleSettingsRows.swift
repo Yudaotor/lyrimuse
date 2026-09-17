@@ -593,7 +593,9 @@ struct OverlayThemeSettingsRows: View {
 /// 只给按钮加 `.fixedSize()` 同样不行 —— 亏空会原样转嫁给说明文字,那句话被压成一列单字。
 /// 所以说明单独占一行、控件另起一行,谁都不用跟谁抢宽度,浮层再窄也不会把按钮挤没。
 ///
-/// 视觉沿用 `SettingsSubRow`:同一条 2pt 淡竖线、同样的左右内边距,标题落在主行标题那一列。
+/// 视觉沿用 `SettingsSubRow`:同样的左右内边距,标题落在主行标题那一列。
+/// (2026-09-17 起两边都不再画那条 2pt 淡竖线,理由见 `SettingsSubRow` 的头注 —— 改的时候
+///  **两处要一起改**,否则配色浮层里的命名/删除确认行会是全 App 唯一还带着竖线的行。)
 private struct OverlayInlineConfirmRow<Content: View>: View {
     var title: String?
     var message: String?
@@ -601,10 +603,6 @@ private struct OverlayInlineConfirmRow<Content: View>: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Rectangle()
-                .fill(Color.secondary.opacity(0.25))
-                .frame(width: 2)
-                .padding(.vertical, 1)
             VStack(alignment: .leading, spacing: 6) {
                 if let title, !title.isEmpty {
                     Text(title).font(.system(size: 13))
@@ -623,7 +621,8 @@ private struct OverlayInlineConfirmRow<Content: View>: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, SettingsRowMetrics.textLeadingInset - 12)
+        // 跟 `SettingsSubRow` 同一个值,理由见那边:那 12 是竖线 + 间距的补偿,线删了就还回来。
+        .padding(.leading, SettingsRowMetrics.textLeadingInset)
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
     }

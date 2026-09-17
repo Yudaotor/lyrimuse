@@ -595,18 +595,21 @@ struct SettingsSubRow<Trailing: View>: View {
 
     // 2026-08-15 重排。原来这一行是"Spacer + 标题 + 控件"整体右对齐、左边什么都没有,
     // 跟主行长得几乎一样,读起来像是并列的另一项 —— 用户报的就是"看不出附属关系"。
-    // 现在靠两样东西表达从属:
-    //   1. 一条淡竖线,画在标题左边;
-    //   2. 标题缩进到**跟主行标题同一列**。主行那一列的左边是图标,子行没有图标,
-    //      这个空位本身就是层级信号(macOS 系统设置里的子项也是这么排的)。
-    // 顺带把标题从右对齐改回左对齐:主行是"标题在左、控件在右",子行跟着同一套结构,
-    // 眼睛才好顺着同一条竖线往下扫。
+    // 当时靠两样东西表达从属:一条画在标题左边的淡竖线,加上"标题缩进到跟主行标题同一列"。
+    //
+    // ⚠️ **2026-09-17 把那条竖线删了**(用户:「用这个来做前缀符号…非常丑」)。它的本意是
+    // "**一条**线串起整组子项",但实现上是每行**各画一遍**、一条整行高的 2pt 实心矩形,
+    // 而行与行之间还夹着 `CardDivider()` —— 屏幕上根本连不成一条线,只是一截截断开的短竖条,
+    // 越是连着好几个子行越明显。想当连续线却做成了断裂条,这是它难看的根因;把线画连续要么
+    // 得让容器统一绘制(子行就不能再独立成行)、要么去掉分隔线,两个代价都比它带来的信息量大。
+    //
+    // 现在只靠缩进:标题落在**主行标题那一列**,而主行那一列左边是图标、子行是空的 ——
+    // 这个空位本身就是层级信号,macOS 系统设置里的子项正是这么排的。文字位置跟删线之前
+    // **逐点相同**(见下面 leading padding 那条注释),所以这次纯粹是减掉一个装饰件。
+    // 顺带一提,标题从右对齐改回左对齐是 2026-08-15 一起做的:主行"标题在左、控件在右",
+    // 子行跟着同一套结构,眼睛才好顺着同一条左边界往下扫。
     var body: some View {
         HStack(spacing: 10) {
-            Rectangle()
-                .fill(Color.secondary.opacity(0.25))
-                .frame(width: 2)
-                .padding(.vertical, 1)
             VStack(alignment: .leading, spacing: 2) {
                 if let title, !title.isEmpty {
                     HStack(spacing: 4) {
@@ -644,9 +647,12 @@ struct SettingsSubRow<Trailing: View>: View {
                 .settingsGlassButtons()
                 .frame(maxWidth: trailingWidth)
         }
-        // 竖线本身 2pt、后面还有 10pt 间距,左内边距取"主行文字左起点 - 12",标题正好
-        // 落回主行标题那一列。
-        .padding(.leading, SettingsRowMetrics.textLeadingInset - 12)
+        // 直接取主行文字左起点 —— 标题落在主行标题那一列。
+        // ⚠️ 2026-09-17 删竖线时从 `textLeadingInset - 12` 改成 `textLeadingInset`:那 12
+        // 是"竖线 2pt + 它后面 10pt 间距"的补偿值,竖线没了就得还回来,否则整列子行标题
+        // 会**左移 12pt**、跟主行标题错开一档。删装饰件顺手把补偿值一起删,是这类改动最
+        // 常见的回归。
+        .padding(.leading, SettingsRowMetrics.textLeadingInset)
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
         .settingsSearchHighlight(title: title)
