@@ -103,6 +103,25 @@ for v in "${VARIANTS[@]}"; do
     for f in $bad; do echo "     $f" >&2; done
     exit 1
   fi
+  # 发布闸门:主执行文件 LC_BUILD_VERSION 里的 sdk 必须 >= 26。macOS 26 起系统按这个字段
+  # 决定给不给 App 上液态玻璃,写小了整个 App 被按改版前的外观渲染,**而且不报任何错** ——
+  # `#available(macOS 26.0, *)` 照样为真、`.glassEffect` 照样调用,只是系统不给画。
+  #
+  # ⚠️ 它跟部署目标是两回事:minos 仍然是 14.0,所以 macOS 14/15 上 #available 为假、自然
+  # 退回改版前的外观。这道闸管的是"新系统上该有玻璃",不会把旧系统挡在门外。
+  #
+  # 为什么需要闸:SwiftPM 的新构建系统往这个字段写的是部署目标而不是真实 SDK 版本
+  # (见 build.sh 的 stamp_sdk_version),一次工具链升级就能让它悄悄变回去 —— 而发布不可
+  # 撤回,跟上面那条架构闸是同一个道理。
+  sdk_field="$(vtool -show-build "$app/Contents/MacOS/lyrimuse" | awk '/^ *sdk /{print $2; exit}')"
+  sdk_major="${sdk_field%%.*}"
+  case "$sdk_major" in
+    ''|*[!0-9]*) echo "!! $label 读不出 sdk 字段(拿到「$sdk_field」),拒绝打包" >&2; exit 1 ;;
+  esac
+  if [ "$sdk_major" -lt 26 ]; then
+    echo "!! $label 的 sdk 字段是 $sdk_field(<26)——这样发出去在 macOS 26+ 上没有液态玻璃,拒绝打包" >&2
+    exit 1
+  fi
   # 签名也验一遍 —— 签名一坏,用户那边表现成"打开就闪退",发出去才发现代价太大。
   codesign -v --deep --strict "$app"
   echo "    架构与签名校验通过"

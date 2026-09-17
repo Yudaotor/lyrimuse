@@ -93,6 +93,39 @@ fi
 # --dest 是给打包用的:组装到别处就不该去碰用户正在跑的那个实例。
 [ -n "$DEST" ] && NO_RESTART=1
 # 单架构时直接拷,不套一层只含一个架构的 fat 文件(那种文件能跑,但没必要)。
+# LC_BUILD_VERSION 的 sdk 字段必须是**真实的 SDK 版本**,不是部署目标。
+#
+# ⚠️ 这一步不能省,漏了不会报错,只会让整个 App 变回改版前的外观:macOS 26 起系统按这个
+# 字段决定给不给 App 上液态玻璃,写成部署目标(14.0)就等于声明"我是按 macOS 14 SDK 编的",
+# 于是设置页的玻璃卡片、玻璃按钮、GlassEffectContainer 全部按兼容模式渲染成普通控件 ——
+# 代码里的 `#available(macOS 26.0, *)` 仍然为真、`.glassEffect` 照样调用,只是画不出来。
+#
+# 成因:SwiftPM 从 Swift 6.4 起默认换成 swiftbuild 构建系统,它往 sdk 字段写的是部署目标
+# (旧的 native 构建系统写的是真实 SDK 版本)。最小复现:同一个 platforms: [.macOS(.v14)]
+# 的包,swiftbuild 产出 `sdk 14.0`、native 产出 `sdk 27.0`。链接器的 -sdk_version 被新
+# 构建系统忽略,所以只能构建后改写。
+#
+# 排在 codesign 之前:改写 Mach-O 会让已有签名失效。
+stamp_sdk_version() {
+  local sdkv minos tmp
+  sdkv="$(xcrun --show-sdk-version)"
+  for bin in "$@"; do
+    [ -f "$bin" ] || continue
+    minos="$(vtool -show-build "$bin" | awk '/minos/{print $2; exit}')"
+    tmp="$(mktemp)"
+    vtool -set-build-version macos "$minos" "$sdkv" -replace -output "$tmp" "$bin" >/dev/null
+    chmod +x "$tmp"
+    mv "$tmp" "$bin"
+    # 写进去没有必须当场验:vtool 换了行为、或者 awk 取错字段,这里静默跳过的后果是
+    # 发出去的包在新系统上一点玻璃都没有,而构建日志一片绿。
+    got="$(vtool -show-build "$bin" | awk '/^ *sdk /{print $2; exit}')"
+    [ "$got" = "$sdkv" ] || {
+      echo "!! sdk 版本改写失败:$bin 现在是 ${got:-读不出},期望 $sdkv" >&2
+      return 1
+    }
+  done
+}
+
 merge_slices() {
   local out="$1"; shift
   if [ "$#" -eq 1 ]; then cp "$1" "$out"; else lipo -create "$@" -output "$out"; fi
@@ -216,6 +249,7 @@ for arch in $ARCHES; do
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
   # ⚠️ 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
   BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
+  stamp_sdk_version "$BIN_PATH/lyrimuse" "$BIN_PATH/lyrics-translate" "$BIN_PATH/lyrics-romanize"
   SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
   TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
   ROMANIZE_SLICES+=("$BIN_PATH/lyrics-romanize")

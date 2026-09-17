@@ -45,7 +45,7 @@ let package = Package(
     // 用不了)。用 GitHub API 逐版本核对源码树第一次判断错了(`gh api .../contents`
     // 对个别文件静默返回空内容,被 `2>/dev/null` 吞掉、误判成"没用到")——改成把仓库
     // 真正 clone 到本地、逐个 tag 实际 checkout 后 grep,这才是可信的核对方式。
-    // 1.15.0(发布,`swift-tools-version:5.7`)是两个宏都确认没用到的最新版,
+    // 1.15.0(`swift-tools-version:5.7`)是两个宏都确认没用到的最新版,
     // `swift build` 在这台机器上跑通了整个 build 过程验证过(不只是 resolve 成功)。
     dependencies: sparkleEnabled ? [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
