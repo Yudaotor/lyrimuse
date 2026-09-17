@@ -807,4 +807,35 @@ func runOpsDiagnosticsTests() {
             expectEqual(true, false, "提交闸: 读不到 .githooks/commit-msg —— 被删了还是路径挪了?")
         }
     }
+
+    // 注释卫生闸(.githooks/pre-commit → scripts/check-comment-hygiene.py):注释只写现状与
+    // 约束,过程性内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
+    // ⚠️ 失效是静默的:丢了执行位、或者检查器被挪走,hook 直接放行,谁都看不出来。
+    do {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .deletingLastPathComponent()   // 仓库根
+        let hook = root.appendingPathComponent(".githooks/pre-commit")
+        let checker = root.appendingPathComponent("scripts/check-comment-hygiene.py")
+        expectEqual(FileManager.default.isExecutableFile(atPath: hook.path), true,
+                    "注释卫生闸: .githooks/pre-commit 必须是可执行的(丢了执行位 = hook 静默失效)")
+        expectEqual(FileManager.default.fileExists(atPath: checker.path), true,
+                    "注释卫生闸: 检查器得在 scripts/check-comment-hygiene.py —— hook 找不到它就直接放行")
+        if let text = try? String(contentsOfFile: hook.path, encoding: .utf8) {
+            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+                .joined(separator: "\n")
+            expectEqual(code.contains("check-comment-hygiene.py"), true,
+                        "注释卫生闸: hook 必须真的调那个检查器")
+            expectEqual(code.contains("--cached"), true,
+                        "注释卫生闸: 只查本次暂存的文件 —— 扫全仓会让每次提交都变慢")
+            expectEqual(code.contains("exit 1"), true,
+                        "注释卫生闸: 命中之后必须真的非零退出(只打印不拦 = 没有闸)")
+        } else {
+            expectEqual(true, false, "注释卫生闸: 读不到 .githooks/pre-commit —— 被删了还是路径挪了?")
+        }
+    }
 }

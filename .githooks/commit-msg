@@ -30,7 +30,7 @@ if [ -n "$hits" ]; then
     echo "" >&2
     printf '%s\n' "$hits" | sed 's/^/    /' >&2
     echo "" >&2
-    echo "  规则(2026-09-17 用户定):提交一律不引用任何 issue。" >&2
+    echo "  规则:提交一律不引用任何 issue。" >&2
     echo "  改法:去掉井号,写成「issue 8」这样 —— 人看得懂,GitHub 不会建引用。" >&2
     echo "  一旦推上去,那条 timeline 记录就删不掉了。" >&2
     echo "" >&2

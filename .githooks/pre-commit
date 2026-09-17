@@ -1,0 +1,30 @@
+#!/bin/sh
+# 注释卫生闸:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
+# 工单引用、排查叙述、临时状态标记)。规则全文在 scripts/check-comment-hygiene.py 的
+# 文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
+#
+# 为什么是 hook 而不是只写进文档:这个仓的 AGENTS.md / CLAUDE.md 都在 .gitignore 里,
+# 约定只对读过它的人生效,而注释是最容易顺手写脏的地方 —— 一次全仓清理要动 500+ 个文件,
+# 复发一次就得再来一遍。只查**本次暂存的文件**,不扫全仓,所以基本无感。
+#
+# 确实需要放行时用 git commit --no-verify(别拿它当常规手段)。
+
+root=$(git rev-parse --show-toplevel) || exit 0
+checker="$root/scripts/check-comment-hygiene.py"
+[ -f "$checker" ] || exit 0
+
+# 只看本次新增/改动的、检查器认得的源码文件(删除的不算)。
+files=$(git diff --cached --name-only --diff-filter=ACMR \
+        | grep -E '\.(swift|go|js|mjs|ts|py|sh)$')
+[ -n "$files" ] || exit 0
+
+# shellcheck disable=SC2086
+printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 python3 "$checker" || {
+    echo "" >&2
+    echo "  ↑ 注释里出现了过程性内容。注释只写现状与约束,过程归 git 和 docs/。" >&2
+    echo "  规则与改法见 scripts/check-comment-hygiene.py 开头。" >&2
+    echo "  确实要放行:git commit --no-verify" >&2
+    echo "" >&2
+    exit 1
+}
+exit 0
