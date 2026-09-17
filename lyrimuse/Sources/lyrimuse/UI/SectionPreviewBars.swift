@@ -81,7 +81,7 @@ extension MenuBarPreviewBar where Lane == EmptyView {
 ///     同一张长图、同一条 CAKeyframeAnimation,**真的会滚**;
 ///   * 装得下的句子用 NSFont.menuBarFont(系统菜单栏字体本体),不是 13pt 系统字。
 ///
-/// 逐字染色(2026-08-22 补齐):正在播放且当前句有逐字(YRC)数据时,染色跟真菜单栏一样
+/// 逐字染色:正在播放且当前句有逐字(YRC)数据时,染色跟真菜单栏一样
 /// 走 MenuBarScrollingLabel 的填色图层,时钟公式也是 MenuBarStatusItem.syncKaraokeClock
 /// 那一条(anchor 外推/暂停位置 + 时间轴偏移)——不是另开一套。没在播放时的示例句刻意
 /// 不染:那是编不出真实时间轴的场景,跟 OverlayPreviewBar 不为示例句假装播放进度是同一个
@@ -118,7 +118,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 舞台整块按**真实菜单栏**的明暗渲染(见 stage 末尾那段);菜单栏由亮转暗时要重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
     @State private var line: SyncedLyricLine?
-    // 逐字染色对表用的播放时钟快照(2026-08-22 加)。这几个跟 line 一样是
+    // 逐字染色对表用的播放时钟快照。这几个跟 line 一样是
     // PlaybackCoordinator 的镜像,靠各自的 onReceive 保持新鲜 —— 不新开一份状态管理,
     // 只是把 MenuBarStatusItem.syncKaraokeClock 那套对表逻辑搬到宿主 body 里重算一遍。
     @State private var anchor: ProgressAnchor?
@@ -178,7 +178,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return path.isEmpty ? nil : path
     }
 
-    /// 跟唱滚动的阅读位置路径(2026-09-04)。跟 `MenuBarStatusItem.followReadingPath` 同一份
+    /// 跟唱滚动的阅读位置路径。跟 `MenuBarStatusItem.followReadingPath` 同一份
     /// 判定:有逐字数据、没跟标签文本代际错位;**不看**卡拉OK开关(不染色也要跟着唱到的位置
     /// 滚)。示例句同样不编 —— 没在放歌时它是 nil,预览按时间配速滚,跟真机一致。
     private var followReadingPath: [MenuBarMarquee.KaraokeFillPoint]? {
@@ -361,7 +361,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // "顶直角 + 底圆角",与其再抄一份同样的 path 数学不如共用(它在
             // `NotchLyricsView.swift`,改那边记得两处一起看)。
             .clipShape(NotchHangingShape(bottomCornerRadius: 8))
-            // ⚠️ 整块舞台按**真实菜单栏**的明暗渲染,不跟设置窗口走(2026-09-03)。
+            // ⚠️ 整块舞台按**真实菜单栏**的明暗渲染,不跟设置窗口走。
             //
             // 起因是歌词颜色:「跟随系统」= `labelColor` 这个动态色,在浅色的设置窗口里解析
             // 成黑、在深色菜单栏上是白,于是用户看到"菜单栏上白字、预览里黑字"。歌词那一层
@@ -453,12 +453,17 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 // (真实数值在编辑台「最大宽度」滑杆那边,见 previewCaption 的注释),几个点的
                 // 松量换来不贴脸的观感,划得来。
                 .padding(.horizontal, 3)
-                // ⚠️ 虚线只框**歌词那一格**,不含旁边那枚进度图标(2026-09-03)。这一圈的
+                // ⚠️ 虚线只框**歌词那一格**,不含旁边那枚进度图标。这一圈的
                 // 职责是回答"这一格有多宽"=用户设的「最大宽度」(见 slotEdgeOutline 头注),
                 // 把图标一起框进去,这个数就对不上滑杆上的读数了。做法:按歌词自身的宽度画、
                 // 贴在图标的**对侧**;没开图标时它就等于整块宽度,跟改动前逐点相同。
                 .overlay(alignment: previewIconBadge?.position == .leading ? .trailing : .leading) {
-                    slotEdgeOutline.frame(width: lyricsSlotWidth(p) + 6)
+                    slotEdgeOutline
+                        .frame(width: lyricsSlotWidth(p) + 6)
+                        // 上限标记从这一格的左缘往外画(菜单栏项由右往左长),见 widthHeadroomMarker。
+                        .overlay(alignment: .leading) {
+                            widthHeadroomMarker(slotWidth: lyricsSlotWidth(p))
+                        }
                 }
             // 右边这几个只是参照物,让"歌词占了菜单栏多宽"看得出来。用真实时钟而不是
             // 写死一个时间 —— 假数据会让人下意识觉得这块预览"不是真的"。
@@ -514,6 +519,48 @@ struct MenuBarPreviewBar<Lane: View>: View {
             .shadow(color: .black.opacity(0.55), radius: 1)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+
+    /// 自适应模式下「最大宽度」那条上限,画在歌词格左缘之外。
+    ///
+    /// 用户原话:「这个页面的宽度调整在自适应模式下预览里面其实看不出来效果啊」。判据确实
+    /// 如此 —— 自适应下这一格的宽度是 `min(最大宽度, 句宽)`(见 `adaptiveWindowWidth`),
+    /// 所以**只有这一句比设定值还宽时,拖滑杆才会改变画面**。实测预览那句示例主行 137.6pt、
+    /// 副行 127.2pt,临界点约 138pt,而滑杆区间是 80…600 —— **138 以上那 77% 的行程,预览里
+    /// 一个像素都不动**;中文示例句「这里是一句歌词示例」才 98.4pt,死区 84%。
+    ///
+    /// 补的就是这一段:把上限本身画出来。虚线框仍然只回答"这一句现在占多宽",这条线回答
+    /// "还能长到哪儿、再长就开始滚",两者之间那块淡底是余量。**整条滑杆因此全程都有反馈**。
+    ///
+    /// 往**左**画:菜单栏状态项是从右往左长的(`lyricsSlot` 前面那个 Spacer 把这一格顶到右边
+    /// 就是在还原这件事),余量只可能在左侧。
+    ///
+    /// ⚠️ 顶到上限时什么都不画。那一刻走的是 `.fixed` 分支、这一格恒等于最大宽度,余量为 0,
+    /// 再画一条就是两条重叠的线。固定宽度模式同理,而且那一档本来就没有"上限"这个概念可言 ——
+    /// 判据里显式挡一道,不靠 `headroom > 1` 顺带挡住。
+    ///
+    /// ⚠️ 上限比预览条还宽时(600pt 的极端值撞上窄设置窗),这条线会被卡片的 `clipShape` 裁掉。
+    /// 没有为它做"贴边显示":那等于在"你设的宽度比整条菜单栏还宽"这个取值上撒谎,裁掉才是
+    /// 实话。真实歌词句在 100~320pt 之间,常用区间里它一直看得见。
+    ///
+    /// 配色跟 `slotEdgeOutline` 同一条老规矩(固定白色 + 黑投影,不跟深浅色模式走,理由见那边)。
+    /// 线比虚线框淡一档、而且是实线:它不是另一个框的边,读者不该把两者看成同一种东西。
+    /// 起点跟着虚线框的左缘走,所以它跟框一样带着那 3pt 呼吸松量 —— 两条线的口径一致。
+    @ViewBuilder
+    private func widthHeadroomMarker(slotWidth: CGFloat) -> some View {
+        let headroom = settings.menuBarLyricsWidth - slotWidth
+        if settings.menuBarLyricsWidthMode == .adaptive, headroom > 1 {
+            ZStack(alignment: .leading) {
+                // 余量区:淡到只够读出"这里还能长",不跟虚线框抢注意力。
+                Rectangle().fill(Color.white.opacity(0.10))
+                Rectangle().fill(Color.white.opacity(0.45)).frame(width: 1)
+            }
+            .frame(width: headroom)
+            .offset(x: -headroom)
+            .shadow(color: .black.opacity(0.55), radius: 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     /// 歌词那一格。宽度恒等于设置里的「显示宽度」,跟真状态栏项一致(那边靠一张固定尺寸的
