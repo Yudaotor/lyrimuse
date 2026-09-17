@@ -2521,12 +2521,20 @@ func runSourceContractTests() {
         expectEqual(rowsCode.contains("Toggle(isOn: Binding("), false,
                     "主题色条: 下拉项里不许再出现 Toggle 条目 —— 实测会让整份菜单一个条目都画不出来")
         // 下拉里已经没有勾了(见上),原来钉"勾的判据"那条随之删除。选中反馈只剩 Menu 自己的
-        // 标题(currentThemeLabel),它跟快捷菜单共用同一条「跟随封面开着就不算任何主题在生效」:
-        expectEqual(rows.contains("guard !settings.followsCoverArt else { return noThemeInEffectPlaceholder }"), true,
-                    "主题色条: 跟随封面开着时「配色主题」这一格显示占位符(与快捷菜单一个勾都不打对齐)")
+        // 标题(currentThemeLabel)。**2026-09-17 起它不再被「跟随封面」短路成占位符「—」**——
+        // 跟随封面 2026-09-16 变成「文字颜色」那一行的一个取值,跟"哪套配色在生效"解耦了,
+        // 理由见 OverlayThemeSettingsRows 头注。判据扫的是剥掉注释的源码:那段头注本身反复
+        // 提到被删掉的那个短路,整份 contains 会被自己的注释骗过去。
+        expectEqual(rowsCode.contains("guard !settings.followsCoverArt"), false,
+                    "配色主题: 这一格不许再被「跟随封面」短路 —— 存了新主题却仍显示「—」就是这么来的")
+        expectEqual(rowsCode.contains("noThemeInEffectPlaceholder"), false,
+                    "配色主题: 占位符「—」删干净了,没有剩下的调用点")
         let quick = code("UI/OverlayQuickSettingsMenu.swift")
+        // 快捷菜单**刻意**不跟着改:那份菜单里「跟随封面」跟主题列表同处一级,跟随开着时再给
+        // 某个主题打勾就是两个互相矛盾的"正在生效"(用户 2026-08-31 报过)。设置页那一组里根本
+        // 没有跟随封面这个选项,所以两边现在合理地不一样 —— 别看到"不一致"就去对齐。
         expectEqual(quick.contains("let showsCheckmarks = !settings.followsCoverArt"), true,
-                    "主题色条: 快捷菜单那条「跟随封面开着不打勾」的规则还在(两入口对齐的另一半)")
+                    "主题色条: 快捷菜单那条「跟随封面开着不打勾」的规则还在(那份菜单里两个选项挨着,打勾会自相矛盾)")
     }
 
     // ---- 诊断导出的崩溃报告段(2026-09-06,借鉴清单 #31)----
