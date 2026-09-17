@@ -87,12 +87,17 @@ public enum OverlayControlHitTest {
     ///  ② 锁定态只认 `unlockPill`。那一格此刻只画得出解锁这一颗(见 `LyricsOverlayView`
     ///     的 `unlockPill` / `playbackControls` 两个分支),别的矩形要么压根没上报、要么是上
     ///     一轮布局的残留 —— 残留矩形亮起来就是"高亮浮在一颗看不见的按钮上"。
+    ///  ③ 锁定态下 `unlockPill` 自己还要再过 `hoverControlsEnabled` 这一闸(2026-09-17,
+    ///     见 `unlockPillShown`)——「悬停控制条」关掉时那一格压根不画,矩形却仍会无条件
+    ///     上报(同 ② 的道理),不补这一闸就是同一种"高亮一颗没画出来的按钮"。
     public static func hoveredControl(
         at point: CGPoint, in rects: [OverlayControlID: CGRect],
-        insideWindow: Bool, positionLocked: Bool
+        insideWindow: Bool, positionLocked: Bool, hoverControlsEnabled: Bool
     ) -> OverlayControlID? {
         guard insideWindow, let id = control(at: point, in: rects) else { return nil }
-        if positionLocked && id != .unlockPill { return nil }
+        if positionLocked {
+            return id == .unlockPill && hoverControlsEnabled ? id : nil
+        }
         return id
     }
 
@@ -163,5 +168,42 @@ public enum OverlayControlHitTest {
         let strict = lyrics.flatMap { $0.isEmpty ? nil : $0 }
         guard let zone = alreadyShowing ? chrome : (strict ?? chrome) else { return nil }
         return zone.contains(point)
+    }
+
+    /// 播放控制排此刻该不该露出来(2026-09-16 抽出来)。
+    ///
+    /// 抽成纯函数是因为这条判据本来就有**两份实现**,分别决定两件必须一致的事:
+    ///   - `LyricsOverlayView.controlsVisible` —— opacity / allowsHitTesting;
+    ///   - `LyricsOverlayWindowController.handleMouseEvent` 里的 `controlsShown` ——
+    ///     收不收回点击穿透(`insideHotZone`)、要不要把 `.leftMouseDown` 分发到按钮。
+    /// 两处一旦长歪,表现就是「看不见却挡手」或「看得见点不动」——这个文件的调用点注释里
+    /// 记过前者。加「悬停控制条」开关时两处都要加同一个条件,正好合并成一处。
+    ///
+    /// ⚠️ **解锁提示(`unlockPill`)不走这条判据**,它有自己的 `unlockPillShown`(见下)——
+    /// 两者的条件互斥(`positionLocked` 取反),合并成一个分支容易写反。
+    public static func controlsShown(
+        hovering: Bool, positionLocked: Bool, hoverControlsEnabled: Bool
+    ) -> Bool {
+        hoverControlsEnabled && hovering && !positionLocked
+    }
+
+    /// 锁定态 hover 时"解锁"提示该不该露出来(2026-09-17)。
+    ///
+    /// 2026-08-29 引入这颗提示时,`hoverControlsEnabled` 还不存在;「悬停控制条」开关
+    /// 2026-09-16 加进来后,这里一度**刻意**不接那个开关——理由是"锁定态下它是悬浮窗上
+    /// 唯一的解锁出路,开关关掉时若把它也关掉,用户就变成位置锁死、窗口上无路可解,只能去
+    /// 设置页翻"(旧版注释,和当时的 selftest 断言都是照这条写的)。
+    ///
+    /// 2026-09-17 用户实测反馈推翻了这条:「悬停控制条」关着时,锁定态在窗口上冒出这一颗
+    /// 图标本身就是那个开关"关了却还在生效"的表现,不该以"怕用户被困住"为由留着。而且
+    /// 用户并不会被真的困住——解锁在悬浮窗**之外**还有三条路:菜单栏「控制中心风」面板
+    /// (`MenuBarPanelQuickSettings`)、菜单栏右键完整菜单(`MenuBarStatusMenu`)、以及全局
+    /// 热键(`GlobalHotkeys`),三处都直接读写 `AppSettings.lockPosition`,一个都不经过
+    /// `hoverControlsEnabled`。所以现在跟 `controlsShown` 一样接这个开关:开关关掉时,
+    /// 锁定态在悬浮窗上什么控制类 UI 都不露,解锁交给上面那三条路。
+    public static func unlockPillShown(
+        hovering: Bool, positionLocked: Bool, hoverControlsEnabled: Bool
+    ) -> Bool {
+        hoverControlsEnabled && hovering && positionLocked
     }
 }

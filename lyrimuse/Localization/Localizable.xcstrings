@@ -32360,6 +32360,29 @@
         }
       }
     },
+    "悬停控制条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controls on hover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停控制条"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指向時顯示控制列"
+          }
+        }
+      }
+    },
     "停止扫库" : {
       "extractionState" : "manual",
       "localizations" : {

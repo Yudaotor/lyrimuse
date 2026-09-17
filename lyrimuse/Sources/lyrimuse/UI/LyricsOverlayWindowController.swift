@@ -797,13 +797,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // ① .mouseMoved——「划过让开」需要它维护 isHoveringForControls,而那件事跟"能不能
         //    拖动窗口"无关,控制排不会因此露出来(下面 controlsShown 那行有
         //    `&& !lockPosition` 守着);
-        // ② .leftMouseDown 命中"解锁"提示——否则锁定后悬浮窗就没有任何解锁出路了
-        //    (2026-08-29 参考 QQ 音乐补的解锁提示,见 LyricsOverlayView.unlockPill 声明处
-        //    注释)。命中判定要用 controlRectsLocal + 窗口本地坐标,跟下面 .leftMouseDown
-        //    分支同一套换算,这里单独抽出最小的一段判断,不改动锁定分支之外任何代码的
-        //    计算顺序。
+        // ② .leftMouseDown 命中"解锁"提示(2026-08-29 参考 QQ 音乐补的,见
+        //    LyricsOverlayView.unlockPill 声明处注释)。**2026-09-17 起再加一道
+        //    `overlayShowHoverControls` 闸**——那颗图标是否画出来由 `unlockPillShown` 同一条
+        //    判据决定(见 LyricsOverlayView.unlockPillVisible),这里的点击分发必须跟它一致,
+        //    否则「悬停控制条」关掉后图标虽然不画了,点那块区域却仍会悄悄解锁,是经典的
+        //    "看不见却挡手"。开关关掉时这条路径不再是唯一解锁出路——菜单栏面板/菜单/全局
+        //    热键都能直接解锁,不会把用户困住,理由见 `unlockPillShown` 声明处。命中判定要用
+        //    controlRectsLocal + 窗口本地坐标,跟下面 .leftMouseDown 分支同一套换算,这里
+        //    单独抽出最小的一段判断,不改动锁定分支之外任何代码的计算顺序。
         if isPositionLocked {
             if type == .leftMouseDown, isHoveringForControls, window.isVisible,
+               AppSettings.shared.overlayShowHoverControls,
                OverlayControlHitTest.control(
                    at: window.convertPoint(fromScreen: NSEvent.mouseLocation), in: controlRectsLocal
                ) == .unlockPill {
@@ -836,7 +841,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 热区矩形现在是**无条件**上报的(见 LyricsOverlayView 里那段注释:让它兼表可见性会
         // 被 preference 归约冲掉),所以"按钮到底显示着没有"这一层判断放在这里。槽位是常驻的,
         // 不加这层的话没显示时那块区域也会挡住点击穿透 —— 变成"看不见却挡手"。
-        let controlsShown = isHoveringForControls && !AppSettings.shared.lockPosition
+        // 判据本体在 Core,跟 `LyricsOverlayView.controlsVisible` **共用同一个函数** ——
+        // 那边管 opacity / allowsHitTesting,这边管点击穿透与按钮分发,两边长歪就是
+        // "看不见却挡手"或"看得见点不动"(2026-09-16 加「悬停控制条」开关时合并)。
+        let controlsShown = OverlayControlHitTest.controlsShown(
+            hovering: isHoveringForControls,
+            positionLocked: AppSettings.shared.lockPosition,
+            hoverControlsEnabled: AppSettings.shared.overlayShowHoverControls)
         let insideHotZone = controlsShown && (controlsHotZoneLocal?.contains(localPoint) ?? false)
 
         switch type {
@@ -872,7 +883,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 悬浮窗按鼠标移动的频率重算 body(移动事件一秒几十上百个)。
             let nowHovered = OverlayControlHitTest.hoveredControl(
                 at: localPoint, in: controlRectsLocal,
-                insideWindow: insideWindow, positionLocked: isPositionLocked)
+                insideWindow: insideWindow, positionLocked: isPositionLocked,
+                hoverControlsEnabled: AppSettings.shared.overlayShowHoverControls)
             if hoveredControl != nowHovered {
                 hoveredControl = nowHovered
             }

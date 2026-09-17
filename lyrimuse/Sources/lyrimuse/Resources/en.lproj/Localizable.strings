@@ -633,6 +633,7 @@
 "恢复默认宽度模式与配色" = "Reset Width Mode and Colors";
 "恢复默认布局、配色与字体" = "Reset Layout, Color and Font";
 "恢复默认文字与配色" = "Reset Text and Color";
+"悬停控制条" = "Controls on hover";
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
 "悬浮歌词宽度" = "Overlay lyrics width";

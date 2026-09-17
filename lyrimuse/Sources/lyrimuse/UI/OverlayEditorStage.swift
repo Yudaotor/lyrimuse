@@ -634,9 +634,9 @@ struct OverlayEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 「行为」按钮上那句摘要。**跨两个枚举**:`OverlayBehaviorItem` 三项(锁定位置 / 长按
-    /// 拖动 / 悬浮淡化)+ `AutoHideItem` 两项(截屏隐藏 / 暂停隐藏,2026-09-02 从撤掉的独立
-    /// 「自动隐藏」卡并进「行为」的)。
+    /// 「行为」按钮上那句摘要。**跨两个枚举**:`OverlayBehaviorItem`(锁定位置 / 长按拖动 /
+    /// 悬浮淡化 / 悬停控制条)+ `AutoHideItem` 两项(截屏隐藏 / 暂停隐藏,2026-09-02 从撤掉的
+    /// 独立「自动隐藏」卡并进「行为」的)。项数跟着 `allCases` 走,这里不写死。
     ///
     /// ⚠️ **两个来源必须都算,而且要跟 `OverlayBehaviorPopover` /
     /// `OverlayAllSettingsDrawer.behaviorGroup`(2026-09-07 起两处调同一份 `OverlayBehaviorSettingsRows`)

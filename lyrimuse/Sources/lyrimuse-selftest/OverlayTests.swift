@@ -66,24 +66,35 @@ func runOverlayTests() {
         let onUnlock = CGPoint(x: 251, y: 209)
         let H = OverlayControlHitTest.self
 
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: false),
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: false,
+                                     hoverControlsEnabled: true),
                     .playPause, "悬停高亮: 压在播放键上就亮播放键")
         // 窗口常年点击穿透、监听器是全局的:指针早跑到别的 App 上去了照样有事件进来。
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: false, positionLocked: false) == nil,
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: false, positionLocked: false,
+                                     hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 指针不在窗口里就不亮(全局监听器照样会送事件进来)")
         // 锁定态那一格只画得出解锁一颗,别的矩形是上一轮布局的残留。
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: true) == nil,
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: true,
+                                     hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 锁定态不认播放键(那颗此刻根本没画出来)")
-        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true),
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
+                                     hoverControlsEnabled: true),
                     .unlockPill, "悬停高亮: 锁定态只认解锁键")
-        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: false),
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: false,
+                                     hoverControlsEnabled: true),
                     .unlockPill, "悬停高亮: 未锁定时解锁键自己也照常(显示与否由上报矩形决定)")
         // 缝里/胶囊外/没上报矩形三种"没压着"都该是 nil,不能留着上一颗亮着。
         expectEqual(H.hoveredControl(at: CGPoint(x: 200, y: 213), in: rects,
-                                     insideWindow: true, positionLocked: false) == nil,
+                                     insideWindow: true, positionLocked: false, hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 两颗之间的缝里不亮")
-        expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false) == nil,
+        expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false,
+                                     hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 没有上报矩形时一颗都不亮")
+        // 2026-09-17:锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停控制条」
+        // 关掉时那一格压根不画,矩形却仍会无条件上报,不拦住就是"高亮一颗没画出来的按钮"。
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
+                                     hoverControlsEnabled: false) == nil,
+                    true, "悬停高亮: 锁定 + 悬停控制条关掉 → 解锁键也不亮")
     }
 
     // ---- OverlayControlHitTest.chromeHoverZone: 控制排该不该露出来的命中区域(2026-09-13) ----
@@ -913,5 +924,57 @@ func runOverlayTests() {
             }
         }
         expectEqual(negatives, 0, "移出量在 8×8 组容器宽/进度组合上恒非负")
+    }
+
+    // ---- OverlayControlHitTest.controlsShown / unlockPillShown: 控制排 / 解锁提示
+    //      该不该露出来(2026-09-16 加开关,2026-09-17 让解锁提示也接上开关) ----
+    //
+    // 这条判据以前散在两处(View 的 controlsVisible、控制器的 controlsShown),加「悬停控制条」
+    // 开关时合并进 Core。这一组守的是合并后**两处等价**,以及两支(播放控制排 / 解锁提示)
+    // 在「悬停控制条」开关下的表现。
+    do {
+        let H = OverlayControlHitTest.self
+
+        // ① 基线:开关开着时行为跟改动前逐字一致 —— 悬停且未锁定才显示。
+        expectEqual(H.controlsShown(hovering: true, positionLocked: false, hoverControlsEnabled: true),
+                    true, "控制排: 开关开 + 悬停 + 未锁定 → 显示")
+        expectEqual(H.controlsShown(hovering: false, positionLocked: false, hoverControlsEnabled: true),
+                    false, "控制排: 没悬停不显示")
+        expectEqual(H.controlsShown(hovering: true, positionLocked: true, hoverControlsEnabled: true),
+                    false, "控制排: 锁定位置时不显示(那一格换成解锁提示)")
+        expectEqual(H.unlockPillShown(hovering: true, positionLocked: true, hoverControlsEnabled: true),
+                    true, "解锁提示: 开关开 + 悬停 + 锁定 → 显示")
+
+        // ② 正题:开关关掉后,播放控制排 / 解锁提示都不显示——2026-09-17 用户反馈「悬停控制条」
+        //    关掉时锁定态也不该在悬浮窗上冒出解锁图标,那本身就是开关没生效的表现;窗口之外还有
+        //    菜单栏面板/菜单/全局热键三条解锁出路,不会把用户困住(见 unlockPillShown 声明处)。
+        var shownWhileOff = 0
+        for hovering in [false, true] {
+            for locked in [false, true] {
+                if H.controlsShown(hovering: hovering, positionLocked: locked, hoverControlsEnabled: false) {
+                    shownWhileOff += 1
+                }
+                if H.unlockPillShown(hovering: hovering, positionLocked: locked, hoverControlsEnabled: false) {
+                    shownWhileOff += 1
+                }
+            }
+        }
+        expectEqual(shownWhileOff, 0, "控制排/解锁提示: 开关关掉后 4 种悬停/锁定组合一律不显示")
+
+        // ③ 两支恒不同时为真 —— 它们共用同一个槽位,同时为真就是两颗胶囊叠画。互斥性只系于
+        //    positionLocked(controlsShown 要求 !locked、unlockPillShown 要求 locked),
+        //    因此在 enabled 的所有组合下都该成立,不止 enabled=true 这一种。
+        var bothTrue = 0
+        for hovering in [false, true] {
+            for locked in [false, true] {
+                for enabled in [false, true] {
+                    if H.controlsShown(hovering: hovering, positionLocked: locked, hoverControlsEnabled: enabled),
+                       H.unlockPillShown(hovering: hovering, positionLocked: locked, hoverControlsEnabled: enabled) {
+                        bothTrue += 1
+                    }
+                }
+            }
+        }
+        expectEqual(bothTrue, 0, "控制排与解锁提示在 8 种组合下互斥(同一个槽位)")
     }
 }

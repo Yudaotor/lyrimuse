@@ -1,8 +1,10 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」那三个**行为**项(锁定位置 / 拖动前先长按 / 划过让开)的唯一一份
-// 实现,2026-08-30(编辑台第三步)从 SettingsView 的「窗口」卡里抽出来。
+// 「歌词显示 → 悬浮歌词」那几个**行为**项(锁定位置 / 拖动前先长按 / 划过让开 / 悬停控制条)
+// 的唯一一份实现,2026-08-30(编辑台第三步)从 SettingsView 的「窗口」卡里抽出来。
+// (2026-09-16 加第四项「悬停控制条」;在那之前这里一直是三项,下面几处注释里的"三项"
+//  已随之改口 —— `allCases` 的项数不是不变量,"自动隐藏那两行不进这个枚举"才是。)
 //
 // 为什么抽:跟 OverlayStyleSettingsRows 同一个理由 —— 这三项现在有**两个**宿主:
 //   ① 编辑台工具栏第二行「行为 ▾」点开的浮层(OverlayBehaviorPopover);
@@ -37,9 +39,9 @@ import SwiftUI
 // ⚠️ **2026-09-02 起这一组末尾多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
 // 时隐藏」和「暂停/无播放时隐藏」原来是设置页上一张独立的「自动隐藏」卡,用户要求"不要单独
 // 放在外面,要遵循设计理念,放到行为卡片里面去",于是并进了「行为」这一组。
-// 它们的真源在 `UI/AutoHideSettingsRows.swift`(`AutoHideItem`),`OverlayBehaviorItem.allCases`
-// **仍然恒为三项**;`OverlayBehaviorSettingsRows` 只是把 `AutoHideSettingsRows(surface: .desktopOverlay)`
-// 接在三项后面。
+// 它们的真源在 `UI/AutoHideSettingsRows.swift`(`AutoHideItem`),**不在** `OverlayBehaviorItem.allCases`
+// 里;`OverlayBehaviorSettingsRows` 只是把 `AutoHideSettingsRows(surface: .desktopOverlay)`
+// 接在这个枚举的各项后面。
 // 别为了"都是行为项"把它们并进下面这个枚举:那两项要同时服务灵动岛(靠 `AutoHideSurface`
 // 分流到 `notchHide*` 和另一个控制器),而 `OverlayBehaviorItem` 的 Binding 写死打的是悬浮窗
 // 控制器。它们落在这一组里的判据跟这三项是同一条(在编辑台上看不出变化),这是那条判据的
@@ -61,6 +63,9 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     case lockPosition
     case dragNeedsLongPress
     case fadeOnHover
+    /// 悬停时露不露出那排播放控制按钮(2026-09-16)。排在 `fadeOnHover` 后面:两项都是
+    /// "指针悬到歌词上会发生什么",放一起读者好对照(一个让歌词淡开、一个叫出按钮排)。
+    case showHoverControls
 
     var id: String { rawValue }
 
@@ -69,6 +74,9 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         case .lockPosition: return "lock"
         case .dragNeedsLongPress: return "hand.tap"
         case .fadeOnHover: return "cursorarrow.motionlines"
+        // 这一项管的就是那排播放按钮本身,用播放/暂停符号最直白;不再用 cursorarrow 一族,
+        // 免得跟上一行的「悬浮淡化」在图标上也撞成一对。
+        case .showHoverControls: return "playpause.circle"
         }
     }
 
@@ -77,6 +85,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         case .lockPosition: return L10n.t("锁定位置")
         case .dragNeedsLongPress: return L10n.t("长按拖动")
         case .fadeOnHover: return L10n.t("悬浮淡化")
+        case .showHoverControls: return L10n.t("悬停控制条")
         }
     }
 
@@ -132,6 +141,14 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
             return Binding(
                 get: { settings.overlayDragNeedsLongPress },
                 set: { settings.overlayDragNeedsLongPress = $0 })
+        case .showHoverControls:
+            // 纯持久化项,没有 WindowController 那一句 —— 两侧都是现读(View 侧经
+            // OverlayPlayback 订阅、控制器侧每次鼠标事件直读),同 dragNeedsLongPress。
+            // 也因此不需要 classicOverlayEnabled 守卫:这里根本不碰 `.shared`,
+            // 不会把关着的悬浮窗凭空建出来。
+            return Binding(
+                get: { settings.overlayShowHoverControls },
+                set: { settings.overlayShowHoverControls = $0 })
         case .fadeOnHover:
             return Binding(
                 get: { settings.overlayFadeOnHover },
@@ -164,7 +181,8 @@ struct OverlayBehaviorSettingsRows: View {
         VStack(spacing: 0) {
             // 「位置」三选一(issue #5)**不在这一组**:2026-09-11 上午先塞进这里当第一行,同日用户看过
             // 之后要求「这个位置的配置项也给上面放一个」—— 工具栏第二行单开一颗「位置」入口,抽屉
-            // 跟着单开一组,见 `OverlayPlacementSettingsRows.swift`。这一组回到三个开关 + 两行自动隐藏。
+            // 跟着单开一组,见 `OverlayPlacementSettingsRows.swift`。这一组是 `OverlayBehaviorItem`
+            // 的各项开关 + 两行自动隐藏。
             ForEach(Array(OverlayBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { CardDivider() }
                 SettingsRow(icon: item.icon, title: item.title) {

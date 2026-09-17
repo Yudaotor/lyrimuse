@@ -211,6 +211,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "锁定位置", kw: ["锁定", "拖动"], group: "行为"),
         surface(.overlay, "长按拖动", kw: ["拖动", "长按"], group: "行为"),
         surface(.overlay, "悬浮淡化", kw: ["鼠标", "指针", "淡出", "让开"], group: "行为"),
+        surface(.overlay, "悬停控制条", kw: ["鼠标", "指针", "悬停", "控制", "按钮", "菜单", "工具栏"], group: "行为"),
         surface(.overlay, "截屏/录屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕"], group: "行为"),
         surface(.overlay, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。

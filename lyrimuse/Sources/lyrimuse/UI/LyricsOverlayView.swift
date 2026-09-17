@@ -49,6 +49,10 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var lockPosition = false
     /// 指针划过时让开(见 AppSettings.overlayFadeOnHover)。
     @Published private(set) var fadeOnHover = false
+    /// 悬停时露不露出那排播放控制按钮(见 AppSettings.overlayShowHoverControls)。
+    /// 默认 true —— 跟 AppSettings 那边的默认一致,别写成 false:这个初值在第一次 sink
+    /// 送达之前就会被 body 读到,写反会让控制排在窗口刚出现的那一拍闪一下。
+    @Published private(set) var showHoverControls = true
     /// 位置模式(2026-09-11,见 AppSettings.overlayPlacementMode)。视图只关心一件事:内容块在窗口里
     /// 贴顶还是贴底(`.bottomCenter` 贴底,其余贴顶),见 body 末尾那条 `.frame(alignment:)`。
     @Published private(set) var placementMode: OverlayPlacementMode = .free
@@ -113,6 +117,7 @@ private final class OverlayPlayback: ObservableObject {
                 .sink { [weak self] in self?.displayForegroundColor = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
             s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.fadeOnHover = $0 },
+            s.$overlayShowHoverControls.removeDuplicates().sink { [weak self] in self?.showHoverControls = $0 },
             s.$overlayPlacementMode.removeDuplicates().sink { [weak self] in self?.placementMode = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
@@ -337,10 +342,18 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 控制排横向落点的"冻结"状态,见 `OverlayControlsSidePin`。
     @State private var controlsSidePin: OverlayControlsSidePin = .free
 
-    // 播放控制排该不该显示:悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用同一个
-    // 判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
+    // 播放控制排该不该显示:开关开着、悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用
+    // 同一个判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
+    //
+    // ⚠️ 判据本体在 Core(`OverlayControlHitTest.controlsShown`,有 selftest),不要在这里
+    // 就地展开:控制器侧 `handleMouseEvent` 的 `controlsShown` 要跟这里**逐字同一条** ——
+    // 它决定收不收回点击穿透、点击分发到哪颗按钮。两边长歪就是"看不见却挡手"或
+    // "看得见点不动"。2026-09-16 加「悬停控制条」开关时合并的。
     private var controlsVisible: Bool {
-        overlayController.isHoveringForControls && !playback.lockPosition
+        OverlayControlHitTest.controlsShown(
+            hovering: overlayController.isHoveringForControls,
+            positionLocked: playback.lockPosition,
+            hoverControlsEnabled: playback.showHoverControls)
     }
 
     /// 「指针划过时让开」的当前不透明度。
@@ -939,10 +952,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .multilineTextAlignment(duetTextAlignment)
     }
 
-    /// 锁定态 hover 时是否露出"解锁"提示——跟 `controlsVisible`(未锁定时播放控制排的
-    /// 显示条件)完全对称,只是把 `!lockPosition` 换成 `lockPosition`。
+    /// 锁定态 hover 时是否露出"解锁"提示。判据本体在 Core(`OverlayControlHitTest
+    /// .unlockPillShown`,有 selftest),跟 `controlsVisible` 一样不要在这里就地展开——
+    /// 控制器侧 `handleMouseEvent`/`hoveredControl` 要用**同一条**,长歪就是"看不见却挡手"
+    /// 或"看得见点不动"。2026-09-17 起接了 `showHoverControls`:「悬停控制条」关掉时,
+    /// 锁定态也不再露出这颗图标(此前刻意不接,后来发现这本身就是开关没生效的表现——解锁
+    /// 还有菜单栏面板/菜单/全局热键三条路,不会把用户困住,理由见 `unlockPillShown` 声明处)。
     private var unlockPillVisible: Bool {
-        overlayController.isHoveringForControls && playback.lockPosition
+        OverlayControlHitTest.unlockPillShown(
+            hovering: overlayController.isHoveringForControls,
+            positionLocked: playback.lockPosition,
+            hoverControlsEnabled: playback.showHoverControls)
     }
 
     /// 锁定态 hover 时露出的解锁提示——跟播放控制排共用**同一个槙位**(body 里的

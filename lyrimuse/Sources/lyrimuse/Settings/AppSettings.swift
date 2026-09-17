@@ -289,6 +289,8 @@ final class AppSettings: ObservableObject {
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
+        // 悬停时露不露出那排播放控制按钮(2026-09-16)。默认 true = 改动前的行为。
+        static let overlayShowHoverControls = "np:overlayShowHoverControls"
         // 悬浮歌词位置预设(2026-09-11,issue #5),取值见 OverlayPlacementMode。
         static let overlayPlacementMode = "np:overlayPlacementMode"
         static let debugHUDEnabled = "np:debugHUD"
@@ -879,6 +881,25 @@ final class AppSettings: ObservableObject {
     /// 穿不到下层 —— 想保留"点哪儿都能穿透、只有长按才拖"的旧行为就打开它。
     @Published var overlayDragNeedsLongPress: Bool {
         didSet { defaults.set(overlayDragNeedsLongPress, forKey: Keys.overlayDragNeedsLongPress) }
+    }
+    /// 指针悬停到歌词上时,要不要露出上方那排播放控制按钮(2026-09-16)。
+    ///
+    /// 这排按钮**什么时候**该出来,2026-09-13 / 09-15 连着收紧过两次(整窗 → 包围盒 → 带滞后
+    /// 的文字矩形,见 `OverlayControlHitTest.chromeHoverHit`)。这个开关回答的是另一个问题:
+    /// 有人压根就不想要它出来 —— 再怎么调触发区域也解决不了。
+    ///
+    /// 只负责持久化,"生效"两处都是现读(View 侧经 `OverlayPlayback` 订阅这个 @Published,
+    /// 控制器侧每次鼠标事件直读 `AppSettings.shared`),所以 set 里不需要那句控制器调用,
+    /// 同 `overlayDragNeedsLongPress`。关掉的那一刻若控制排正显示着也会自愈:两侧判据
+    /// 下一拍就算出 false,热区随之不再拦截点击。
+    ///
+    /// ⚠️ 关掉**不影响**锁定态的解锁提示 —— 判据合并在 `OverlayControlHitTest.controlsShown`,
+    /// 那一支走的是互斥的 `hovering && lockPosition`。否则"锁定位置 + 关掉这个开关"的用户
+    /// 在悬浮窗上就再没有解锁出路了。
+    ///
+    /// 默认 true:保留改动前的行为。
+    @Published var overlayShowHoverControls: Bool {
+        didSet { defaults.set(overlayShowHoverControls, forKey: Keys.overlayShowHoverControls) }
     }
     /// 悬浮歌词的位置模式(2026-09-11,GitHub issue #5):自由拖动 / 顶部居中 / 底部居中(Dock 之上)。
     ///
@@ -1523,6 +1544,8 @@ final class AppSettings: ObservableObject {
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
         overlayDragNeedsLongPress =
             (defaults.object(forKey: Keys.overlayDragNeedsLongPress) as? Bool) ?? false
+        overlayShowHoverControls =
+            (defaults.object(forKey: Keys.overlayShowHoverControls) as? Bool) ?? true
         // 默认自由拖动:这是改动前唯一的行为,老用户的窗口不能因为升级自己跑去居中。
         overlayPlacementMode = defaults.string(forKey: Keys.overlayPlacementMode)
             .flatMap(OverlayPlacementMode.init(rawValue:)) ?? .free
