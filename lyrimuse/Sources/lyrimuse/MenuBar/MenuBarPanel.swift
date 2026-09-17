@@ -511,42 +511,98 @@ private struct MenuBarPanelView: View {
 
     private var nowPlayingCard: some View {
         VStack(spacing: 8) {
-            // 什么都没在放时,这上半张卡整块不渲染("那个无意义的音符
-            // 不要占位置")。
-            //
-            // 只藏掉音符占位图不够:藏了之后原地还剩两行**空文本**(歌名/歌手,见
-            // displayTitle 的注释——那两行是刻意留白的)和 VStack 给它们的间距,以及一条
-            // 同样空着的定高歌词行(lyricContent 的 .idle 分支画的是 Text(""))。
-            // 所以整块一起收,留下的是真有用的那部分:进度条(没时长时自己不渲染)+ 三键
-            // (可以按播放键把上一首接着放)。
+            // 压根没有曲目时整张卡换成 idleRow —— 上半截(封面/歌名/歌手/歌词行)全是空的,
+            // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
+            // 队列是静默 no-op。
             //
             // ⚠️ 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图
-            // 失败)照旧要显示那个渐变占位图 —— 那时候占位图是有意义的(它代表一首真的歌),
-            // 而卡片右边还有歌名/歌手撑着。广告插播也照旧显示(标题是「广告中」,有东西在放)。
-            if !isIdleNoTrack {
+            // 失败)照旧走下面这条 —— 那时候渐变占位图是有意义的(它代表一首真的歌),而卡片
+            // 右边还有歌名/歌手撑着。广告插播同理(标题是「广告中」,有东西在放)。
+            if isIdleNoTrack {
+                idleRow
+            } else {
                 trackHeader
                 lyricLine
-            }
-            // 进度条独立成 PanelProgressSection 子视图:拖动/悬停
-            // 状态自持,拖一次 seek 不再整面板逐指针事件重估。
-            PanelProgressSection(
-                anchor: playback.anchor,
-                pausedPositionMs: playback.pausedPositionMs,
-                durationMs: playback.currentDurationMs,
-                trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
-                lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
-            HStack(spacing: 28) {
-                controlButton("backward.fill", size: 13) { MusicPlaybackController.previousTrack() }
-                controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill", size: 18) {
-                    // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-                    PlaybackCoordinator.shared.userTogglePlayPause()
+                // 进度条独立成 PanelProgressSection 子视图:拖动/悬停
+                // 状态自持,拖一次 seek 不再整面板逐指针事件重估。
+                PanelProgressSection(
+                    anchor: playback.anchor,
+                    pausedPositionMs: playback.pausedPositionMs,
+                    durationMs: playback.currentDurationMs,
+                    trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
+                    lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
+                HStack(spacing: 28) {
+                    controlButton("backward.fill", size: 13) { MusicPlaybackController.previousTrack() }
+                    controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill", size: 18) {
+                        // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                        PlaybackCoordinator.shared.userTogglePlayPause()
+                    }
+                    controlButton("forward.fill", size: 13) { MusicPlaybackController.nextTrack() }
                 }
-                controlButton("forward.fill", size: 13) { MusicPlaybackController.nextTrack() }
             }
         }
         .padding(10)
         .background(Color(nsColor: .quaternarySystemFill),
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
+    ///
+    /// 文案与动作跟歌词窗口停播页(`IdleStandbyView`)、灵动岛 hover 展开
+    /// (`NotchLyricsView.idleExpandedPanel`)同一套 —— 同一个 `IdlePlaybackActions` 决定
+    /// 指哪家播放器、能不能真的「继续播放」(AM / Spotify 有 AppleScript,其余只能「打开 X」)。
+    /// 三个展示面对"没在放"说同样的话,不是各写一份。
+    ///
+    /// ⚠️ 这里不留走带三键:没有曲目时上一首/下一首对空队列是**静默 no-op**,裸 play 同样
+    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play → 上次那首 → 都不行就把
+    /// 播放器带到前台)。一颗点下去必有可见反应的键,比三颗按不出东西的键有用。
+    ///
+    /// 点完**不收面板**:放起来之后这张卡当场变成正在播放卡,那是最好的反馈;真走到"把播放器
+    /// 带到前台"那条兜底时,失焦监视器会自己把面板收掉。
+    private var idleRow: some View {
+        let player = IdlePlaybackActions.player
+        let canResume = IdlePlaybackActions.canResume(player)
+        let name = player.displayName
+        let act: () -> Void = {
+            if canResume {
+                IdlePlaybackActions.resume(player: player)
+            } else {
+                IdlePlaybackActions.openPlayerApp(player)
+            }
+        }
+        return HStack(spacing: 9) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("没有在播放"))
+                    .font(.system(size: 12, weight: .semibold))
+                // 点名播放器,跟右边那颗键指的是同一家 —— 同歌词窗口停播页的口径。灵动岛那句
+                // 刻意泛指,因为它旁边那颗键只有 tooltip 承接得住具体名字。
+                Text(String(format: L10n.t("在 %@ 播放任意歌曲，歌词会自动出现"), name))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // 静息态就带底色(baseLevel):面板里其它 Chip 都是次要入口,不悬停看不出是键没关系;
+            // 这一颗是这个状态下唯一能做的事,必须一眼认得出来。色相跟圆钮块"开"的那圈同一个
+            // Color.accentColor。
+            ChipButton(cornerRadius: 8, tint: .accentColor, baseLevel: 0.16, action: act) {
+                HStack(spacing: 5) {
+                    Image(systemName: canResume ? "play.fill" : "arrow.up.forward.app")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Text(canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+            }
+            .fixedSize()
+        }
+        // 有曲目时卡片靠 44pt 的封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
+        // "没放"之间切换时顶部这一块不会突然塌掉一截。
+        .frame(minHeight: 44)
     }
 
     // MARK: 当前歌词(带逐字高亮)
@@ -960,6 +1016,11 @@ private struct MenuBarPanelView: View {
 private struct ChipButton<Label: View>: View {
     var cornerRadius: CGFloat = 7
     var pressScale: CGFloat = 0.92
+    /// 底色的色相。默认 .primary = 中性灰,深浅色模式下自动反过来。
+    var tint: Color = .primary
+    /// 静息态就带的底色浓度。默认 0 = 只有悬停/按下才现形,次要入口(走带三键、底栏、
+    /// 时间轴微调)全走这一档;主动作键给个非 0 值,不悬停也看得出是一颗键。
+    var baseLevel: Double = 0
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
@@ -968,7 +1029,7 @@ private struct ChipButton<Label: View>: View {
     var body: some View {
         Button(action: action) { label().contentShape(Rectangle()) }
             .buttonStyle(ChipStyle(cornerRadius: cornerRadius, hovering: hovering,
-                                   pressScale: pressScale))
+                                   pressScale: pressScale, tint: tint, baseLevel: baseLevel))
             // SwiftUI 的 .onHover 在这个 App 里**非活跃状态下也收得到**(灵动岛悬停展开
             // 就是靠它,而那个窗口同样从不激活 App),所以不必像圆钮块那样自己铺一层
             // activeAlways 的 NSTrackingArea。
@@ -980,16 +1041,19 @@ private struct ChipStyle: ButtonStyle {
     let cornerRadius: CGFloat
     let hovering: Bool
     let pressScale: CGFloat
+    var tint: Color = .primary
+    var baseLevel: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
-        // 用 .primary 的低透明度而不是写死的灰:深浅色模式下自动反过来,不用维护两套值。
-        let level: Double = pressed ? 0.14 : (hovering ? 0.07 : 0)
+        // 默认色相是 .primary 的低透明度而不是写死的灰:深浅色模式下自动反过来,不用维护
+        // 两套值。悬停/按下的增量在两种色相下是同一份,浓度差因此保持一致。
+        let level: Double = baseLevel + (pressed ? 0.14 : (hovering ? 0.07 : 0))
         return configuration.label
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.primary.opacity(level))
+                    .fill(tint.opacity(level))
             )
             // 按下缩一点 —— 悬停给的是"这里可按",按下要给"按到了"。
             .scaleEffect(pressed ? pressScale : 1)
