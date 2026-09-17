@@ -176,6 +176,7 @@ public enum SettingsSearchCatalog {
         lyrics("display", "全局时间轴偏移", kw: ["歌词偏移", "提前", "延后", "校准", "同步"]),
         // ---- 歌词 › 管理 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
+        lyrics("manage", "全量重新扫库", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
         lyrics("manage", "歌词文件夹", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
         // ---- 播放器 ----

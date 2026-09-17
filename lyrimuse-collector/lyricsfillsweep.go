@@ -21,7 +21,8 @@ import (
 //
 // 两条触发:
 //   - 自动:进程起来 10 分钟后扫一次,之后每 24 小时一次。每轮只处理 needsLyricsFirstFill 为真
-//     的(退避到期的)条目、上限 lyricsFillSweepDailyCap 条、两首之间隔 lyricsFillSweepGap ——
+//     的(退避到期的)条目、上限 lyricsFillSweepDailyCap 条、两首之间隔 lyricsFillSweepGap
+//     (全量扫库那一轮走更短的 lyricsFullScanGap,见 lyricsFillSweepPace)——
 //     补空本身是"每条最多每天一次、指数退避"的节奏,这里只是把"要不要问"的时机从"被播到"
 //     改成"到点了",不改每条的退避账。
 //   - 手动:App 侧(「歌词管理」的「重试无歌词条目」按钮)往 lyricsFillRequestPath 写一个
@@ -37,9 +38,36 @@ import (
 // 这个文件只负责"挑哪些、什么时候、报进度"。
 
 const (
-	lyricsFillSweepInitialDelay    = 10 * time.Minute
-	lyricsFillSweepInterval        = 24 * time.Hour
-	lyricsFillSweepGap             = 15 * time.Second
+	lyricsFillSweepInitialDelay = 10 * time.Minute
+	// 续跑用一个**短得多**的延迟,不复用上面那 10 分钟。
+	//
+	// 那 10 分钟是给**自动**补空扫描的礼貌窗口:没人要求过它,进程刚起来又有一堆缓存要
+	// 加载、歌可能正在播,让它靠后是对的。续跑不是那回事 —— 那是用户点过「开始」、被
+	// 一次重启打断的那一轮,他已经说过要了。2026-09-16 实测:用户点开始跑了 5 分钟,
+	// 装新版重启 collector 之后界面上顶着一句「稍后会自动接着跑」却十分钟一动不动,
+	// 当场问「怎么没有自动呢」—— 机制是对的,延迟选错了,表现出来就跟坏了一样。
+	//
+	// 1 分钟够:startLyricsFillSweeper 跑在 run() 里、loadEnrichCache 之后,缓存已经在
+	// 内存里了,这一分钟只是给启动那阵子的其它初始化让个路。
+	lyricsFullScanResumeDelay = time.Minute
+	lyricsFillSweepInterval   = 24 * time.Hour
+	lyricsFillSweepGap        = 15 * time.Second
+	// 全量扫库单独一档,比补空那 15 秒短(2026-09-17,用户:「15 秒一首太慢了」)。
+	//
+	// 两者的账完全不同:补空一轮最多 lyricsFillSweepDailyCap(40)条、一天一次,15 秒×40
+	// 才 10 分钟,快不快无所谓;全量是 5300+ 首连着跑,15 秒 gap 让总时长变成 **26.6 小时**
+	// (实测 18 秒/首,其中 15 秒是纯等待)。5 秒 → 约 8 秒/首 → 约 12 小时。
+	//
+	// 5 秒这个值的依据是实测各源的真实速率,不是拍脑袋(2026-09-17 从 api call summary 读的,
+	// 80 秒窗口约 4~5 首):网易云 71 次 ≈ 0.89 req/s、iTunes 68 次 ≈ 0.85、QQ smartbox 60 次
+	// ≈ 0.75,**这三个源当时一次 503 都没有**。gap 15→5 让平均速率涨到约 2.3 倍(网易云约
+	// 2 req/s),对这种量级的平台仍在安全区。
+	//
+	// ⚠️ 别把它当"越小越好"的旋钮往下调:一首歌会打出 100+ 个请求、散到十几个主机,gap 是
+	// 这些**突发之间**唯一的喘息,而整个采集器没有任何 per-host 限流器(2026-09-17 查过,
+	// 一个 rate.Limiter 都没有)。真要再往下压,先补限流再说。
+	// (musicbrainz 不在此列:它自己有 1.1 秒全局最小间隔 + 结果永久缓存,见 musicbrainz.go。)
+	lyricsFullScanGap              = 5 * time.Second
 	lyricsFillSweepDailyCap        = 40
 	lyricsFillRequestCheckInterval = 2 * time.Second
 )
@@ -57,8 +85,11 @@ var (
 // 已经不需要(被删/被手改/已有词)而跳过"的;Filled 是这一轮真的补出了结论(拿到歌词、或纯音乐
 // 标记、或纯文本兜底)的条数。
 type lyricsFillStatus struct {
-	Running    bool   `json:"running"`
-	Manual     bool   `json:"manual"`
+	Running bool `json:"running"`
+	Manual  bool `json:"manual"`
+	// Full:这一轮是「全量重新扫库」而不是补空(见 lyricsfullscan.go)。界面靠它决定
+	// 措辞——两者的 Total 不是一个量级(百 vs 几千),说成同一件事会让人以为补空要跑两天。
+	Full       bool   `json:"full,omitempty"`
 	Total      int    `json:"total"`
 	Done       int    `json:"done"`
 	Filled     int    `json:"filled"`
@@ -76,6 +107,9 @@ func setLyricsFillPaths() {
 	lyricsFillStatusPath = configFilePath(clientName + "-lyrics-fill-status.json")
 	_ = os.Remove(lyricsFillRequestPath)
 	_ = os.Remove(lyricsFillStatusPath)
+	// ⚠️ 全量扫库那份状态文件**不在**上面的清理范围里 —— 它记的正是"上一个进程没跑完的
+	// 那一轮",删掉就等于每次重启都放弃续跑。见 lyricsfullscan.go 头注。
+	setLyricsFullScanStatePath(configFilePath(clientName + "-lyrics-fullscan.json"))
 }
 
 // startLyricsFillSweeper 由 run() 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),
@@ -83,11 +117,33 @@ func setLyricsFillPaths() {
 // 每一轮扫描都另起 goroutine 跑——这个循环必须一直转着读请求文件,否则一轮几十分钟的
 // 手动扫描期间用户写下的 "cancel" 要等扫完才被看到,等于没有取消。一次只允许一轮在跑,
 // 期间再来的请求由 runLyricsFillSweep 开头那道闸拒掉(并记日志),不排队——用户点两下不该跑两遍。
+// lyricsFillSweepFirstDelay 决定第一发定时器等多久。抽成纯函数是因为这里**选错常量完全
+// 不报错**:扫描照跑、日志照写,只是晚十分钟 —— 2026-09-16 就是这么错的一次(见
+// lyricsFullScanResumeDelay 头注)。单测把这两档钉死。
+// lyricsFillSweepPace 决定两首之间隔多久。抽成纯函数的理由跟下面 lyricsFillSweepFirstDelay
+// 一模一样:**选错常量完全不报错**——扫描照跑、进度照涨,只是全库多花十几个小时,而那要等
+// 一天之后才看得出来。单测把两档钉死。
+func lyricsFillSweepPace(full bool) time.Duration {
+	if full {
+		return lyricsFullScanGap
+	}
+	return lyricsFillSweepGap
+}
+
+func lyricsFillSweepFirstDelay(resumingFullScan bool) time.Duration {
+	if resumingFullScan {
+		return lyricsFullScanResumeDelay
+	}
+	return lyricsFillSweepInitialDelay
+}
+
 func startLyricsFillSweeper(ctx context.Context) {
 	if lyricsFillRequestPath == "" {
 		return
 	}
-	next := time.NewTimer(lyricsFillSweepInitialDelay)
+	// 上一个进程有一轮全量扫库没跑完的话,第一发定时器提前到 lyricsFullScanResumeDelay ——
+	// 那一轮是用户点出来的,不该陪着自动补空一起等 10 分钟。见 lyricsfullscan.go「跨重启续跑」。
+	next := time.NewTimer(lyricsFillSweepFirstDelay(lyricsFullScanActive()))
 	defer next.Stop()
 	poll := time.NewTicker(lyricsFillRequestCheckInterval)
 	defer poll.Stop()
@@ -96,7 +152,17 @@ func startLyricsFillSweeper(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-next.C:
-			go runLyricsFillSweep(ctx, lyricsFillRequest{})
+			req := lyricsFillRequest{}
+			// **每一发**都重新看盘上那个标记,而不是启动时读一次就消费掉:这一发万一正好
+			// 撞上别的一轮在跑(runLyricsFillSweep 开头那道闸会把它拒掉、且不碰标记),
+			// 一次性的标志位就把续跑意图永久丢了,界面会一直顶着「稍后会自动接着跑」。
+			// 重新读一次,下一发还能接着试。
+			if lyricsFullScanActive() {
+				// manual:续跑仍然是用户点出来的那一轮,照样忽略退避、不设条数上限。
+				req = lyricsFillRequest{manual: true, full: true}
+				slog.Info("lyrics full scan: resuming the round left over from a previous process")
+			}
+			go runLyricsFillSweep(ctx, req)
 			next.Reset(lyricsFillSweepInterval)
 		case <-poll.C:
 			req, ok := readLyricsFillRequest()
@@ -114,12 +180,17 @@ func startLyricsFillSweeper(ctx context.Context) {
 
 // lyricsFillRequest 是请求文件解出来的内容。文件格式(纯文本,App 侧 LyricsManagerView 写):
 //   - 一行 "all":全部符合条件的空条目;
+//   - 一行 "full":全量重新扫库(见 lyricsfullscan.go),范围比 "all" 大得多;
 //   - 一行 "cancel":停掉正在跑的这一轮;
 //   - 否则每行一个缓存 key("artist|title|album",跟 EnrichCacheKeys 同一个 key 空间)。
+//
+// 旧版 collector 碰上 "full" 会把它当成一个普通的 key —— 缓存里没有叫 "full" 的条目,
+// 于是挑出 0 条候选、这一轮空跑结束。降级成"什么都不做",不会误伤任何数据。
 type lyricsFillRequest struct {
 	manual bool
 	cancel bool
 	all    bool
+	full   bool
 	keys   map[string]bool
 }
 
@@ -131,6 +202,8 @@ func parseLyricsFillRequest(text string) lyricsFillRequest {
 		case line == "":
 		case line == "all":
 			req.all = true
+		case line == "full":
+			req.full = true
 		case line == "cancel":
 			req.cancel = true
 		default:
@@ -151,7 +224,7 @@ func readLyricsFillRequest() (lyricsFillRequest, bool) {
 	}
 	_ = os.Remove(lyricsFillRequestPath)
 	req := parseLyricsFillRequest(string(data))
-	if !req.all && !req.cancel && len(req.keys) == 0 {
+	if !req.all && !req.full && !req.cancel && len(req.keys) == 0 {
 		return lyricsFillRequest{}, false
 	}
 	return req, true
@@ -162,6 +235,10 @@ func readLyricsFillRequest() (lyricsFillRequest, bool) {
 // needsLyricsFirstFill 的前三行同一口径。退避只对自动扫描生效;手动请求是用户明确要现在搜。
 // 正在飞的(enrichInflight)跳过:那条此刻已经有人在查。
 func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
+	// 全量扫库的口径完全不同(三层、多一道 pin 闸、按收益排序),整个交给那边。
+	if req.full {
+		return lyricsFullScanCandidates()
+	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	var keys []string
@@ -184,7 +261,16 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 	return keys
 }
 
+// cancelLyricsFillSweep 停掉正在跑的这一轮。
+//
+// ⚠️ 顺带清掉全量扫库的"待续"标记,而且**只能**在这里清 —— 扫描循环的出口分不清"用户
+// 按了停止"和"进程正在关机"(两者都是 ctx 被取消),放在那里会让每次重启都把该续的一轮
+// 擦掉。这里是用户按停止的唯一入口,语义明确:他不想要了。见 lyricsfullscan.go 头注。
+//
+// 无条件清,不看此刻有没有一轮在跑:请求文件的轮询和扫描是两个 goroutine,用户完全可能在
+// 进程刚起来、续跑还没被触发的那 10 分钟里按下停止,那时 lyricsFillSweepRunning 还是 false。
 func cancelLyricsFillSweep() {
+	setLyricsFullScanActive(false)
 	lyricsFillSweepMu.Lock()
 	defer lyricsFillSweepMu.Unlock()
 	if lyricsFillSweepRunning && lyricsFillSweepCancel != nil {
@@ -212,21 +298,34 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 		lyricsFillSweepMu.Unlock()
 	}()
 
+	// 挑候选**之前**就把"待续"标记置上:候选列表几千条、一轮要跑一两天,进程在这中间
+	// 任何一刻被杀都得能续上。置在后面的话,刚起步那几十秒被杀就白点了。
+	if req.full {
+		setLyricsFullScanActive(true)
+	}
 	keys := lyricsFillSweepCandidates(req)
-	status := lyricsFillStatus{Running: true, Manual: req.manual, Total: len(keys), StartedAt: time.Now().Unix()}
+	status := lyricsFillStatus{
+		Running: true, Manual: req.manual, Full: req.full,
+		Total: len(keys), StartedAt: time.Now().Unix(),
+	}
 	writeLyricsFillStatus(status)
-	slog.Info("lyrics fill sweep: start", "manual", req.manual, "candidates", len(keys))
+	slog.Info("lyrics fill sweep: start", "manual", req.manual, "full", req.full, "candidates", len(keys))
 	if len(keys) == 0 {
 		status.Running = false
 		status.FinishedAt = time.Now().Unix()
 		writeLyricsFillStatus(status)
+		// 一条候选都没有 = 全库已经追平,这一轮就此了结,别留着标记让下次启动再空跑一遍。
+		if req.full {
+			setLyricsFullScanActive(false)
+		}
 		return
 	}
+	gap := lyricsFillSweepPace(req.full)
 	for i, key := range keys {
 		if i > 0 {
 			select {
 			case <-ctx.Done():
-			case <-time.After(lyricsFillSweepGap):
+			case <-time.After(gap):
 			}
 		}
 		if ctx.Err() != nil {
@@ -235,7 +334,11 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 		}
 		status.Current = key
 		writeLyricsFillStatus(status)
-		if lyricsFillSweepOne(key) {
+		done := lyricsFillSweepOne
+		if req.full {
+			done = lyricsFullScanOne
+		}
+		if done(key) {
 			status.Filled++
 		}
 		status.Done++
@@ -246,7 +349,13 @@ func runLyricsFillSweep(parent context.Context, req lyricsFillRequest) {
 	status.Current = ""
 	status.FinishedAt = time.Now().Unix()
 	writeLyricsFillStatus(status)
-	slog.Info("lyrics fill sweep: done", "manual", req.manual, "total", status.Total, "done", status.Done, "filled", status.Filled, "cancelled", status.Cancelled)
+	// 整份候选列表跑完了才清"待续"。被取消的两种情形都不在这里清:用户按停止由
+	// cancelLyricsFillSweep 负责,进程关机则**必须**留着标记等下次续跑 —— 这里分不清
+	// 这两者(都只表现为 ctx 被取消),所以这个分支只认"没被取消"。见 lyricsfullscan.go 头注。
+	if req.full && !status.Cancelled {
+		setLyricsFullScanActive(false)
+	}
+	slog.Info("lyrics fill sweep: done", "manual", req.manual, "full", req.full, "total", status.Total, "done", status.Done, "filled", status.Filled, "cancelled", status.Cancelled)
 }
 
 // lyricsFillSweepOne 对一条走一次补空,返回这一轮有没有补出结论。进门再核一遍资格:挑候选到

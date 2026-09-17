@@ -61,19 +61,49 @@ func lyricsPinned(key string) bool {
 	}
 	lyricsPinsMu.Lock()
 	defer lyricsPinsMu.Unlock()
+	refreshLyricsPinsLocked()
+	return lyricsPins[key]
+}
+
+// lyricsPinnedKeys 返回当前这份 pin 集合的快照。
+//
+// 存在的理由是**批量**判定:全量重新扫库要对全库每一条问一次"被校准过吗",逐条走
+// lyricsPinned 等于几千次 os.Stat,而且那个循环是攥着 enrichMu 跑的(见
+// lyricsFullScanCandidates)——把锁按在几千个系统调用上,正在播放的那首歌的解析会跟着卡。
+// 这里一次 Stat、一次拷贝,之后全是内存查表。
+//
+// 拷贝而不是把 lyricsPins 直接递出去:那张表下一次 mtime 变化会被整体替换,调用方拿着
+// 旧引用遍历时正好撞上就是 data race。快照只有几十个键,拷贝的代价可以忽略。
+func lyricsPinnedKeys() map[string]bool {
+	if lyricsPinsPath == "" {
+		return nil
+	}
+	lyricsPinsMu.Lock()
+	defer lyricsPinsMu.Unlock()
+	refreshLyricsPinsLocked()
+	snapshot := make(map[string]bool, len(lyricsPins))
+	for key, pinned := range lyricsPins {
+		if pinned {
+			snapshot[key] = true
+		}
+	}
+	return snapshot
+}
+
+// refreshLyricsPinsLocked 按 mtime+大小决定要不要重读整份文件。调用方必须已持有 lyricsPinsMu。
+func refreshLyricsPinsLocked() {
 	st, err := os.Stat(lyricsPinsPath)
 	if err != nil {
 		// 文件还不存在(从没校准过任何一首歌)是正常状态、不是错误:清掉内存态,一律不 pin。
 		// 也覆盖了"用户刚点了『清空全部时间轴校正』把文件删掉"这一步。
 		lyricsPins, lyricsPinsRead = nil, true
 		lyricsPinsMTime, lyricsPinsSize = time.Time{}, 0
-		return false
+		return
 	}
 	if !lyricsPinsRead || !st.ModTime().Equal(lyricsPinsMTime) || st.Size() != lyricsPinsSize {
 		lyricsPins = readLyricsPins(lyricsPinsPath)
 		lyricsPinsMTime, lyricsPinsSize, lyricsPinsRead = st.ModTime(), st.Size(), true
 	}
-	return lyricsPins[key]
 }
 
 // readLyricsPins 读整份 pin 文件。解析失败一律当"没有任何 pin",而不是 panic 或沿用上

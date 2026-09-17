@@ -114,6 +114,14 @@ public final class EnrichCacheStore: ObservableObject {
         /// 要 bump 打分版本、让全库走一遍 rescore —— 09 章决策 49 已经论证过这类代价。
         /// 这里只做"可见 + 可筛",挑不挑由用户定。
         public let sourcesRespondedCount: Int
+        /// 这份歌词是按**哪一版**打分规则选出来的(collector 侧 `lyrics_scoring_version`)。
+        /// 0 = 老条目从来没写过这个字段 —— 那也是"落后于当前版本"的一种,不是"未知"。
+        ///
+        /// 2026-09-16 接到界面上来,给「全量重新扫库」算「N 首待跟进」用(见
+        /// `LyricsFullScan.tier`)。本机实测 5514 条里 5472 条(99.2%)落后于当前的 v19,
+        /// 版本从 v0 一直摊到 v18 —— 收编它们的 `rescoreLyrics` 跟补空一样只在这首歌又被
+        /// 播到时触发,几千首的库靠自然播放追平算法版本要走好几年。
+        public let lyricsScoringVersion: Int
 
         /// 这份歌词是不是"在信息不全的情况下定的"(借鉴清单 V3)。
         ///
@@ -552,6 +560,7 @@ public final class EnrichCacheStore: ObservableObject {
                 knownOnSources: Self.knownOnSources(entry),
                 lastRoundHadNoResponder: Self.lastRoundHadNoResponder(entry),
                 sourcesRespondedCount: (entry["lyrics_sources_responded"] as? [Any])?.count ?? 0,
+                lyricsScoringVersion: (entry["lyrics_scoring_version"] as? Int) ?? 0,
                 isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
                 // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(见 exportBaseName —— 到底
@@ -985,6 +994,31 @@ public final class EnrichCacheStore: ObservableObject {
     /// 「歌词库」面板三处按钮上的数字都从这里来,按钮上的数就是真会被搜的条数。
     nonisolated static func isFillSweepRetryable(_ s: Summary) -> Bool {
         !s.hasLyrics && !s.isInstrumental && !s.isManual && !s.isSearching
+    }
+
+    /// 一条记录会不会被 collector 的「全量重新扫库」真的拿去重跑(2026-09-16)。判据本体在
+    /// `LyrimuseCore.LyricsFullScan.tier`(selftest 覆盖,它是 collector 侧 `lyricsFullScanTier`
+    /// 的镜像);这里只负责把 Summary 的字段和外部状态喂进去。
+    ///
+    /// - `currentScoringVersion` 来自 collector 写的状态文件(`LyricsFullScan.current`),
+    ///   **不是**硬编码 —— 那个常量住在 Go 那边,抄一份到 Swift 迟早会在某次 bump 之后
+    ///   悄悄算出一个假数字。
+    /// - `pinnedKeys` 是 `LyricsPinStore` 的快照。这道闸补空扫描没有(它只碰没词的条目),
+    ///   全量扫库必须有:换一份歌词会让用户手工听出来的时间轴校正值当场失联。
+    ///
+    /// 占位行(isSearching)不算:它此刻正在被搜,压根还不是缓存里的条目。
+    nonisolated static func fullScanTier(
+        _ s: Summary, currentScoringVersion: Int, pinnedKeys: Set<String>
+    ) -> LyricsFullScan.Tier? {
+        guard !s.isSearching else { return nil }
+        return LyricsFullScan.tier(
+            hasLyrics: s.hasLyrics,
+            hasWordTiming: s.hasWordTiming,
+            scoringVersion: s.lyricsScoringVersion,
+            currentScoringVersion: currentScoringVersion,
+            isManual: s.isManual,
+            isInstrumental: s.isInstrumental,
+            isPinned: pinnedKeys.contains(s.key))
     }
 
     /// 见 Summary.knownOnSources;判据本体在 LyrimuseCore.EnrichSourcePresence(selftest 覆盖)。

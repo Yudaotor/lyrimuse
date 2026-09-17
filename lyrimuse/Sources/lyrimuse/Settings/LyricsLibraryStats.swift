@@ -160,6 +160,13 @@ struct LyricsLibraryStatsPanel: View {
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
+    // collector 公布的「全量重新扫库」状态(当前打分版本号 + 有没有一轮没跑完),同一个
+    // .task 一起轮询。nil = collector 还没起来过、或版本老到不写这份文件 —— 那种情况下
+    // 「N 首待跟进」算不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
+    // 不显示"的规矩,摆一个猜出来的数字比不摆更糟)。
+    @State private var fullScanState: LyricsFullScan.State?
+    @State private var confirmFullScan = false
+    @ObservedObject private var pins = LyricsPinStore.shared
 
     private static let numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -198,6 +205,9 @@ struct LyricsLibraryStatsPanel: View {
                 SettingsRawRow(insetToText: true, icon: "music.note.list") {
                     statsBlock(counts)
                 }
+                // 分隔线画在这一族的里面 —— 整行在 collector 还没公布过打分版本号时会整个
+                // 消失,分隔线留在外面就会变成两条紧挨着的线。
+                fullScanRow()
                 CardDivider()
                 // 译文 / 罗马音是叠在歌词之上的第二层数据,不参与上面那条比例条(它们跟五个桶不是
                 // 互斥的划分),所以用从属行的语法挂在统计块下面:标签在左、裸值在右,跟系统设置一样直读。
@@ -237,13 +247,31 @@ struct LyricsLibraryStatsPanel: View {
         // 一次 stat 的开销。视图消失即取消,没有常驻计时器。
         .task {
             await store.reload(onlyIfChanged: true)
+            fullScanState = LyricsFullScan.current
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(fillSweepStatus?.running == true ? 2 : 5))
                 guard !Task.isCancelled else { break }
                 let sweep = LyricsFillSweep.current
                 if sweep != fillSweepStatus { fillSweepStatus = sweep }
+                // 这份文件一轮里只在开头/结尾各写一次(外加 collector 每次启动),按 mtime
+                // 读的开销就是一次 stat,跟着同一个节拍走即可。
+                let full = LyricsFullScan.current
+                if full != fullScanState { fullScanState = full }
                 if sweep?.running == true { await store.reload(onlyIfChanged: true) }
             }
+        }
+        // 确认框而不是直接开跑:这一轮要联网重搜几千首、跑一两天,而且**会改写已经有词的
+        // 条目** —— 前两点用户点之前有权知道,第三点是这个功能跟隔壁「重新扫描」的本质区别
+        // (那颗只碰空条目,点错了最坏也就是白费点网络)。
+        .confirmationDialog(
+            L10n.t("全量重新扫库？"),
+            isPresented: $confirmFullScan,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("开始扫描")) { LyricsFillSweep.requestFullScan() }
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            Text(fullScanConfirmMessage)
         }
     }
 
@@ -313,8 +341,19 @@ struct LyricsLibraryStatsPanel: View {
     /// 除外 —— 所以它跟左边「暂无」那个数**就是**对不上的(本机 65 vs 74),ⓘ 一句话说清范围;
     /// 按钮说的是"真会被搜的条数",这一点是 2026-09-05 定下的,别为了让两个数一致去改它。
     /// 跑着的时候按钮原位换成圆环进度 + 「扫描中 12/74」+ 「停止」;上一轮结果在按钮左边留一句收据。
+    ///
+    /// ⚠️ **进度和收据都必须先判 `isFullScan`**(2026-09-17 修):「全量重新扫库」为了跨重启续跑
+    /// 复用了补空这条通道(见 collector/lyricsfullscan.go 头注),两轮共用**同一份**
+    /// `lyrimuse-lyrics-fill-status.json`。不判的话,全量在跑时这一行会照着那份状态画出一模一样的
+    /// 「扫描中 42/5318 + 停止」,跟下面「全量重新扫库」那行**逐字重复**(用户 2026-09-17 截图报的
+    /// 就是这个;当时两行连数字格式都不一样 —— 这里没走 `Self.format`、那边走了,一眼能看出是
+    /// 两段代码在画同一份数据)。收据同理:全量跑完那句「过了 N 首」不该落在补空这一行。
     private func noneRow(_ counts: LyricsLibraryStats.Counts) -> some View {
         let status = fillSweepStatus
+        // running = 任意一轮(collector 一次只准跑一轮);sweepRunning = 跑的是补空这一轮。
+        // 两个量分开,正是因为这一行只该画补空那一轮,而按钮要对**任意**一轮置灰。
+        let running = status?.running == true
+        let sweepRunning = running && status?.isFullScan != true
         let retryable = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).count
         return HStack(spacing: 10) {
             HStack(spacing: 4) {
@@ -322,7 +361,7 @@ struct LyricsLibraryStatsPanel: View {
                 HelpButton(text: L10n.t("重新扫描的范围：没有歌词的，加上只有纯文本的；人工修正过的不动"))
             }
             Spacer(minLength: 12)
-            if let status, status.running {
+            if sweepRunning, let status {
                 ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
                     .progressViewStyle(.circular)
                     .controlSize(.small)
@@ -335,7 +374,7 @@ struct LyricsLibraryStatsPanel: View {
                     .controlSize(.small)
                     .fixedSize()
             } else {
-                if let status, status.finishedAt != nil {
+                if let status, status.isFullScan != true, status.finishedAt != nil {
                     Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
@@ -346,6 +385,10 @@ struct LyricsLibraryStatsPanel: View {
                 Button(String(format: L10n.t("重新扫描（%@ 首）"), Self.format(retryable))) {
                     LyricsFillSweep.request(keys: [])
                 }
+                // 全量那一轮跑着的时候也置灰,跟「全量重新扫库」那颗「开始」对称:collector
+                // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
+                .disabled(running)
+                .help(running ? L10n.t("另一轮扫描正在进行，等它结束再来") : "")
                 // 跟卡名行的「打开歌词管理」同一档 .small:这一行别的内容都是 11pt,常规尺寸的按钮
                 // 在这里显得笨重(真机截图对比过);主行「歌词文件夹」尾部那两颗仍是常规尺寸,它们配的是 13pt 标题。
                 .controlSize(.small)
@@ -357,5 +400,147 @@ struct LyricsLibraryStatsPanel: View {
         // 这一行的按钮跟主行尾部的按钮是同一族控件,套同一套玻璃样式(它不在 SettingsRow 的
         // trailing 插槽里,那层修饰符够不着这里)。
         .settingsGlassButtons()
+    }
+
+    // MARK: 全量重新扫库
+
+    /// 每首的平均耗时**由 collector 发布**(`LyricsFullScan.State.secondsPerTrack`,
+    /// = lyricsFullScanGap + 一轮全源搜索的估计)。这里只留一个兜底值,给老 collector
+    /// 或状态文件还没写出来的那一拍用。
+    ///
+    /// ⚠️ 别把它改回写死一份:2026-09-17 之前这里是 `25.0`、注释还写着「15 秒固定间隔
+    /// (lyricsFillSweepGap)」,而那天 collector 把全量那一档换成 lyricsFullScanGap(5 秒),
+    /// 这个数和那句话当场都成了错的 —— 界面凭空多报一倍时长,没有任何东西会报错。
+    /// 这跟 `scoringVersion` 不能硬编码是同一条理由,走的也是同一份状态文件。
+    ///
+    /// 只用来在确认框和 tooltip 里说一句"大概多久",不参与任何判断。
+    private static let fallbackSecondsPerTrack = 10.0
+
+    /// collector 发布的值;没有(老版本 / 文件还没写出来)就退回兜底。
+    private var secondsPerTrack: Double {
+        let published = fullScanState?.secondsPerTrack ?? 0
+        return published > 0 ? Double(published) : Self.fallbackSecondsPerTrack
+    }
+
+    private static func hoursText(_ tracks: Int, secondsPerTrack: Double) -> String {
+        let hours = Int((Double(tracks) * secondsPerTrack / 3600).rounded())
+        if hours < 1 { return L10n.t("不到 1 小时") }
+        return String(format: L10n.t("约 %@ 小时"), format(hours))
+    }
+
+    /// 真会被这一轮扫到的条数。口径与 collector 侧 `lyricsFullScanCandidates` 同源
+    /// (`LyricsFullScan.tier`,selftest 覆盖),所以按钮上的数就是真会被扫的条数 ——
+    /// 跟隔壁「重新扫描（N 首）」那个数是**包含**关系:那 N 首正是这里的第 0 层。
+    private func fullScanPending(_ currentVersion: Int) -> Int {
+        let pinnedKeys = Set(pins.pins.keys)
+        return store.summaries.reduce(into: 0) { total, summary in
+            if EnrichCacheStore.fullScanTier(
+                summary, currentScoringVersion: currentVersion, pinnedKeys: pinnedKeys) != nil {
+                total += 1
+            }
+        }
+    }
+
+    private var fullScanConfirmMessage: String {
+        let pending = fullScanState.map { fullScanPending($0.scoringVersion) } ?? 0
+        return String(
+            format: L10n.t("%1$@ 首，预计%2$@。已经有歌词的也会重新选一次；人工修正过的、校准过时间轴的、纯音乐的不动。随时可以停，关掉也不用重来"),
+            Self.format(pending), Self.hoursText(pending, secondsPerTrack: secondsPerTrack))
+    }
+
+    /// 「全量重新扫库」这一行。collector 没公布过打分版本号(还没起来过 / 版本太老)时整行
+    /// 不出现 —— 那种情况下「N 首待跟进」是算不出来的,而摆一个猜出来的数字比不摆更糟。
+    ///
+    /// 为什么另起一行、不跟「重新扫描（N 首）」挤在「暂无」那一行:那颗按钮是**钉在橙色
+    /// 「暂无」数字旁边**的(2026-09-05 用户要求"开在盯着橙色数字的地方"),而全量扫库跟
+    /// 「暂无」没有从属关系 —— 它的对象是整个库,其中"没词的"只是第一层。跟「译文」「已缓存
+    /// 罗马音」并列成一条"标签在左、值在右"的从属行,读法才对得上它真正的范围。
+    @ViewBuilder
+    private func fullScanRow() -> some View {
+        if let state = fullScanState {
+            CardDivider()
+            let status = fillSweepStatus
+            let running = status?.running == true
+            let fullRunning = running && status?.isFullScan == true
+            let pending = fullScanPending(state.scoringVersion)
+            SettingsSubRow(
+                title: L10n.t("全量重新扫库"),
+                help: L10n.t("连已经有歌词的也重新过一遍；人工修正过的、校准过时间轴的、纯音乐的不动")
+            ) {
+                HStack(spacing: 10) {
+                    if fullRunning, let status {
+                        ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
+                            .progressViewStyle(.circular)
+                            .controlSize(.small)
+                        Text(String(format: L10n.t("扫描中 %1$@/%2$@"),
+                                    Self.format(status.done), Self.format(status.total)))
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            // 剩余时间按**这一轮的实测速度**算,不用上面那个估计常量:真实
+                            // 速度受源的响应快慢影响很大,而这一轮自己跑出来的数是自校正的。
+                            // 放 tooltip 不放正文:这一行 11pt 的空间塞不下第三段文字。
+                            .help(Self.remainingText(status, fallbackSecondsPerTrack: secondsPerTrack))
+                        Button(L10n.t("停止")) { LyricsFillSweep.requestCancel() }
+                            .controlSize(.small)
+                            .fixedSize()
+                    } else {
+                        Text(pending > 0
+                             ? String(format: L10n.t("%@ 首待跟进"), Self.format(pending))
+                             : L10n.t("已全部跟进"))
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Button(L10n.t("开始")) { confirmFullScan = true }
+                            .controlSize(.small)
+                            .fixedSize()
+                            // 补空那一轮跑着的时候也置灰:collector 一次只允许一轮在跑
+                            // (runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
+                            .disabled(pending == 0 || running)
+                            .help(running
+                                  ? L10n.t("另一轮扫描正在进行，等它结束再来")
+                                  : String(format: L10n.t("预计%@，随时可以停"),
+                                             Self.hoursText(pending, secondsPerTrack: secondsPerTrack)))
+                    }
+                }
+                .settingsGlassButtons()
+            }
+            // collector 记着有一轮没跑完、但此刻并没有在跑 —— 它还在启动后的那 10 分钟等待
+            // 期里(或者刚被 launchd 拉起来)。不说一句的话,界面看起来就是"我明明点过了,
+            // 怎么什么都没发生"。
+            if state.active && !fullRunning {
+                SettingsSubRow(title: nil, subtitle: L10n.t("上一轮还没跑完，稍后会自动接着跑")) {
+                    EmptyView()
+                }
+            } else if let status, status.isFullScan, status.finishedAt != nil, !fullRunning {
+                SettingsSubRow(
+                    title: nil,
+                    subtitle: status.cancelled == true
+                        ? String(format: L10n.t("上次：过了 %1$@ 首就被停下，更新 %2$@ 首"),
+                                 Self.format(status.done), Self.format(status.filled))
+                        : String(format: L10n.t("上次：过了 %1$@ 首，更新 %2$@ 首"),
+                                 Self.format(status.done), Self.format(status.filled))
+                ) {
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    /// 「大约还要 N 小时」——用这一轮**已经跑出来的**速度外推,不用那个固定估计值。
+    /// 还没跑完一首时没有速度可言,退回按常量估。
+    private static func remainingText(_ status: LyricsFillSweep.Info,
+                                     fallbackSecondsPerTrack: Double) -> String {
+        let left = max(status.total - status.done, 0)
+        guard left > 0 else { return L10n.t("就快好了") }
+        let elapsed = Double(Date().timeIntervalSince1970) - Double(status.startedAt)
+        let perTrack = status.done > 0 && elapsed > 0
+            ? elapsed / Double(status.done)
+            : fallbackSecondsPerTrack
+        // 直接按实测速度算,不再绕"换算成等效首数"那一道:hoursText 现在收显式的每首秒数,
+        // 把实测值原样传进去就行。
+        return String(format: L10n.t("大约还要%@"), hoursText(left, secondsPerTrack: perTrack))
     }
 }

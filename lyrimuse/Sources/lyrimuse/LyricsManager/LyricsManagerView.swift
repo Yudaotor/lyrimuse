@@ -1874,17 +1874,26 @@ struct LyricsManagerView: View {
         let retryableVisible = sortedFiltered.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
         return Menu {
             if let status, running {
+                // ⚠️ 这一轮**不一定**是补空重试:「全量重新扫库」复用同一条通道(状态文件、
+                // 单轮互斥、取消都共用,见 collector/lyricsfullscan.go 头注),所以两句文案都得
+                // 按 isFullScan 分流。不分流的话,全量跑着的时候这里会说「停止重试」「正在重试
+                // 无歌词条目」,而实际在跑的是全量扫库 —— 说的跟做的不是一回事(2026-09-17 修,
+                // 同批修掉的还有设置页那处把两行进度画重复的)。
+                let isFull = status.isFullScan
                 Section {
                     Button(role: .destructive) {
                         LyricsFillSweep.requestCancel()
                     } label: {
-                        Label(L10n.t("停止重试"), systemImage: "stop.circle")
+                        Label(isFull ? L10n.t("停止扫库") : L10n.t("停止重试"),
+                              systemImage: "stop.circle")
                     }
                 } header: {
                     // 菜单里只放"正在搜哪一首":总进度已经在按钮标题上。key 是
                     // "歌手|歌名|专辑",直接显示够认。
+                    // 兜底那一句(还没开始搜第一首时)全量走现成的「全量重新扫库」,不另起一句
+                    // 「正在全量重新扫库…」—— 少一个只在一瞬间露脸的翻译串。
                     Text(status.current.map { String(format: L10n.t("正在搜：%@"), $0) }
-                         ?? L10n.t("正在重试无歌词条目…"))
+                         ?? (isFull ? L10n.t("全量重新扫库") : L10n.t("正在重试无歌词条目…")))
                 }
             } else {
                 Section {
@@ -1932,14 +1941,20 @@ struct LyricsManagerView: View {
                         .font(.caption)
                         .monospacedDigit()
                 }
-                .accessibilityLabel(String(format: L10n.t("重试中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
+                // 全量扫库复用这条通道,说「重试中」就不对了 —— 那一档用中性的「扫描中」
+                // (跟设置页「歌词库」那两行同一个串,不另起翻译)。同 .help 那句。
+                .accessibilityLabel(String(
+                    format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("重试中 %1$@/%2$@"),
+                    "\(status.done)", "\(status.total)"))
             } else {
                 Label(L10n.t("重试无歌词"), systemImage: "arrow.triangle.2.circlepath")
                     .labelStyle(.titleAndIcon)
             }
         }
         .help(running
-              ? String(format: L10n.t("重试中 %1$@/%2$@"), "\(status?.done ?? 0)", "\(status?.total ?? 0)")
+              ? String(format: status?.isFullScan == true
+                       ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("重试中 %1$@/%2$@"),
+                       "\(status?.done ?? 0)", "\(status?.total ?? 0)")
               : L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
     }
 
@@ -2018,6 +2033,8 @@ struct LyricsManagerView: View {
             // (它正在搜,isSearching 那一档会先接住它)。
             lastRoundHadNoResponder: false,
             sourcesRespondedCount: 0,
+            // 还没有任何一轮打分,更谈不上"按哪一版规则选的"。
+            lyricsScoringVersion: 0,
             isSearching: true,
             hasDecision: false,
             // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件,

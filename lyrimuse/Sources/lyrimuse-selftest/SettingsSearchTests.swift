@@ -123,6 +123,10 @@ func runSettingsSearchTests() {
         "自动更新", "已安装",                                         // 软件更新页:卡头与只读状态行
         "已改用自定义位置",                                           // 歌词文件夹的状态子行
         "译文", "已缓存罗马音",                                       // 歌词库统计的只读行
+        // 全量扫库那条"下次启动接着跑"的状态子行。它是 subtitle 不是 title —— 上面那条
+        // 正则里 `title:` 会顺带匹配到 `subtitle:` 的尾巴,所以状态子行一律走白名单
+        // (同「已改用自定义位置」)。
+        "上一轮还没跑完，稍后会自动接着跑",
     ]
     let scannedFiles = [
         "SettingsView.swift", "AccountLinkingTab.swift",

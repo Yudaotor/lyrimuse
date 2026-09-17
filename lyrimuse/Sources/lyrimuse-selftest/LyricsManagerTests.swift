@@ -1090,6 +1090,84 @@ func runLyricsManagerTests() {
         expectEqual(done?.finishedAt, 3, "补空进度: finishedAt 解出来")
     }
 
+    // ---- 全量重新扫库(LyricsFullScan,2026-09-16)----
+    //
+    // 分层规则是这个功能唯一"改错了完全不报错、只是数字悄悄变形"的地方 —— 层分错了扫描照样
+    // 跑完,只是把该修的歌漏掉、或者把不该碰的歌重搜一遍。这份镜像跟 collector 侧
+    // lyricsFullScanTier 必须逐条对得上(那边有一份同构的 Go 单测),否则界面上「N 首待跟进」
+    // 说的就不是"真会被扫的条数"。
+    do {
+        typealias F = LyricsFullScan
+        func tier(
+            _ hasLyrics: Bool, _ hasWordTiming: Bool, _ version: Int,
+            manual: Bool = false, instrumental: Bool = false, pinned: Bool = false
+        ) -> F.Tier? {
+            F.tier(hasLyrics: hasLyrics, hasWordTiming: hasWordTiming, scoringVersion: version,
+                   currentScoringVersion: 19, isManual: manual, isInstrumental: instrumental,
+                   isPinned: pinned)
+        }
+        expectEqual(tier(false, false, 0), .empty, "全量分层: 一条歌词都没有 → 第 0 层")
+        expectEqual(tier(true, false, 19), .lineOnly,
+                    "全量分层: 有词没逐字 → 第 1 层(版本追平了也要,这是唯一可能升一档成色的一批)")
+        expectEqual(tier(true, true, 18), .staleVersion, "全量分层: 有逐字但版本落后 → 第 2 层")
+        expectEqual(tier(true, true, 0), .staleVersion,
+                    "全量分层: 老条目没写过版本号(读成 0)也是落后,不是「未知」")
+        expectEqual(tier(true, true, 19), nil,
+                    "全量分层: 逐字 + 版本追平 → 不碰。同一套规则重跑必然同一个结论,纯白烧网络")
+        expectEqual(tier(true, true, 20), nil, "全量分层: 版本比当前还高(降过级)也不碰")
+        expectEqual(tier(false, false, 0, manual: true), nil,
+                    "全量分层: 人工修正过 → 一票否决,连空条目也不碰")
+        expectEqual(tier(false, false, 0, instrumental: true), nil, "全量分层: 确证纯音乐 → 一票否决")
+        expectEqual(tier(true, true, 0, pinned: true), nil,
+                    "全量分层: 校准过时间轴 → 一票否决。这道闸补空扫描没有(它只碰没词的条目),"
+                    + "缺了它一轮扫描会把用户一句句听出来的几百毫秒集体作废")
+        // 层的序号就是扫描顺序,中途停掉时留下的必须是收益最高的那部分 —— 所以它是契约,不是实现细节。
+        expectEqual(F.Tier.empty.rawValue < F.Tier.lineOnly.rawValue, true, "全量分层: 没词的排最前")
+        expectEqual(F.Tier.lineOnly.rawValue < F.Tier.staleVersion.rawValue, true,
+                    "全量分层: 升逐字排在跟进旧版本之前")
+
+        // 状态文件:collector 用 omitempty,没有待续的一轮时 active/startedAt 整个键都不出现。
+        // 声明成非可选会让这份文件整个解不开,连打分版本号也一起读不到 —— 那才是真正的故障。
+        let idle = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":19,"updatedAt":1789500000}
+        """.utf8))
+        expectEqual(idle?.scoringVersion, 19, "全量状态: 版本号解出来")
+        expectEqual(idle?.active, false, "全量状态: active 缺席 = 没有待续的一轮,不是解码失败")
+        let resuming = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":19,"active":true,"startedAt":1789500000,"updatedAt":1789600000}
+        """.utf8))
+        expectEqual(resuming?.active, true, "全量状态: 待续标记解出来")
+        expectEqual(resuming?.startedAt, 1789500000, "全量状态: 起始时刻解出来")
+
+        // 每首耗时估计由 collector 发布(2026-09-17)。界面此前写死 25 秒,collector 把全量
+        // 那一档 gap 从 15 秒改成 5 秒时那个数当场就错了、还没有任何东西会报错 —— 跟
+        // scoringVersion 不能硬编码同一条理由,所以走同一份状态文件。
+        let paced = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":19,"updatedAt":1789500000,"secondsPerTrack":10}
+        """.utf8))
+        expectEqual(paced?.secondsPerTrack, 10, "全量状态: 每首耗时估计解出来")
+        // 老 collector 的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
+        // 而不是让整份文件解不开 —— 那会连版本号一起丢掉,整行界面消失。
+        expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老 collector 没这个键时读成 0,不是解码失败")
+
+        // 请求动词。collector 侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
+        // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。
+        expectEqual(LyricsFillSweep.requestBody(keys: ["full"]), "full\n",
+                    "全量请求: 动词就是 full,跟 collector 的 parseLyricsFillRequest 对齐")
+        // 进度文件多一个 full 字段,而补空那一轮不写它(omitempty)——两边都要解得动。
+        let fullRunning = try? JSONDecoder().decode(LyricsFillSweep.Info.self, from: Data("""
+        {"running":true,"manual":true,"full":true,"total":5472,"done":12,"filled":3,"startedAt":1,"updatedAt":2}
+        """.utf8))
+        expectEqual(fullRunning?.isFullScan, true, "全量进度: full 字段解出来")
+        expectEqual(fullRunning?.total, 5472, "全量进度: total 是全量的量级")
+        let fillRunning = try? JSONDecoder().decode(LyricsFillSweep.Info.self, from: Data("""
+        {"running":true,"manual":true,"total":104,"done":3,"filled":1,"startedAt":1,"updatedAt":2}
+        """.utf8))
+        expectEqual(fillRunning?.total, 104, "全量进度: 补空那一轮照常解得动")
+        expectEqual(fillRunning?.isFullScan, false,
+                    "全量进度: 补空那一轮不写 full 字段,必须读成 false 而不是解码失败")
+    }
+
     // ---- 「解析决策」面板里的纯音乐标记(2026-09-12)----
     //
     // 用户截图问「它怎么是空的,并且是 -1?」:面板最后一行只有一个 LRCLIB 徽章和一个红色

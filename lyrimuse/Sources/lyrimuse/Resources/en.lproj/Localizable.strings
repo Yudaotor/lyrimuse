@@ -13,6 +13,7 @@
 "%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首" = "%1$@ years ago today: %2$@ plays, most on repeat";
 "%1$@ 年前的这一周听了 %2$@ 次，最常循环的是这几首" = "%1$@ years ago, this week you listened %2$@ times — these looped the most";
 "%1$@ 首源自带 · %2$@ 首机翻" = "%1$@ from source · %2$@ machine-translated";
+"%1$@ 首，预计%2$@。已经有歌词的也会重新选一次；人工修正过的、校准过时间轴的、纯音乐的不动。随时可以停，关掉也不用重来" = "%1$@ songs, roughly %2$@. Songs that already have lyrics get re-picked too. Manual fixes, calibrated timing and instrumentals are left alone. You can stop any time, and quitting won't lose progress";
 "%1$d 条候选在这些项上完全相同：%2$@" = "All %1$d candidates scored identically on: %2$@";
 "%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。" = "Only %2$d of %1$d candidates were corroborated, so they may not all be the same lyrics.";
 "%1$d/%2$d 个源应答" = "%1$d of %2$d sources answered";
@@ -34,6 +35,7 @@
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 首" = "%@ plays";
 "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
+"%@ 首待跟进" = "%@ to catch up";
 "%@ 首歌" = "%@ songs";
 "%@pt" = "%@pt";
 "%@–%@pt" = "%@–%@pt";
@@ -122,6 +124,7 @@
 "上" = "Top";
 "上一步" = "Back";
 "上一轮" = "Last Run";
+"上一轮还没跑完，稍后会自动接着跑" = "The previous run hasn't finished; it resumes automatically";
 "上一页" = "Previous";
 "上一首" = "Previous Track";
 "上次保存：%@ · 采集器已重启" = "Last saved: %@ · Collector restarted";
@@ -132,6 +135,8 @@
 "上次检测通过（%@）" = "Verified working (%@)";
 "上次被手动停止" = "Last run was stopped manually";
 "上次：搜了 %1$@ 首，补出 %2$@ 首" = "Last run: searched %1$@, filled %2$@";
+"上次：过了 %1$@ 首就被停下，更新 %2$@ 首" = "Last run: stopped after %1$@, updated %2$@";
+"上次：过了 %1$@ 首，更新 %2$@ 首" = "Last run: went through %1$@, updated %2$@";
 "上游源没连上、没法查：%@" = "Upstream unreachable, could not search: %@";
 "上移" = "Move Up";
 "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用" = "“Scrobble to Last.fm” above is off, so these settings have no effect right now";
@@ -145,6 +150,7 @@
 "下载中…" = "Downloading…";
 "下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "Connecting below needs this key pair. Create a Last.fm application first to get an API Key and Secret";
 "不 scrobble：%@" = "Not scrobbled: %@";
+"不到 1 小时" = "under an hour";
 "不可用：%@" = "Unusable: %@";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含宽度和锁定位置" = "Width and locked position are left alone";
@@ -221,6 +227,7 @@
 "修好文件后重新打开 Lyrimuse；或放弃这份文件，用当前界面上的值重建（原文件会改名保留，不会删除）。" = "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted).";
 "偏移" = "Offset";
 "停止" = "Stop";
+"停止扫库" = "Stop Rescan";
 "停止搜索" = "Stop Searching";
 "停止重试" = "Stop Retrying";
 "光盘" = "Disc";
@@ -239,6 +246,8 @@
 "全部源重问" = "re-asked every source";
 "全部设置" = "All Settings";
 "全部设置…" = "All Settings…";
+"全量重新扫库" = "Full library rescan";
+"全量重新扫库？" = "Rescan the whole library?";
 "共 %@ 次" = "%@ plays total";
 "共 %@ 首" = "%@ songs";
 "共 %d 条，占用 %@" = "Cached: %d · %@ on disk";
@@ -345,6 +354,7 @@
 "取消选择" = "Deselect All";
 "取消静音" = "Unmute";
 "口白" = "Talk";
+"另一轮扫描正在进行，等它结束再来" = "Another scan is already running — wait for it to finish";
 "另有 %@ 条太旧、Last.fm 不再接受" = "%@ more are too old for Last.fm to accept";
 "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。" = "Applies to the row shown while playing, or while hovering to expand. When nothing is playing the notch shrinks to the cutout itself, showing artwork on the left and the playback indicator on the right — unaffected by these settings.\n\nThe playback indicator is pinned to the outer edge of the right ear and does not take a module slot.";
 "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条（音浪）贴哪只耳朵在上面单独配，跟下面的模块选择不互斥，可以同时选中。" = "Applies only to the row shown while playing, or while expanded on hover. When nothing is playing the notch collapses to its physical size, showing artwork on the left and the playback indicator on the right — unaffected by this setting.\n\nWhich ear the playback indicator (waveform) sits on is configured above; it is independent of the module choice below, so both can be set at once.";
@@ -441,6 +451,7 @@
 "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存" = "The lyrics files in the backup are written back into the lyrics folder: same-named files are overwritten, missing ones are added. Songs resolved after the backup was made are not removed. The collector restarts once afterwards to read them back into the cache.";
 "多" = "More";
 "大小写/空格" = "Case/spacing";
+"大约还要%@" = "about %@ to go";
 "套用" = "Apply";
 "好" = "OK";
 "好的" = "OK";
@@ -483,6 +494,7 @@
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
 "将当前配色存为新主题…" = "Save Current Colors as New Theme…";
 "少" = "Less";
+"就快好了" = "almost done";
 "居中" = "Center";
 "屏幕" = "Display";
 "展开" = "Expand";
@@ -504,6 +516,7 @@
 "已保存" = "Saved";
 "已保存，但后台采集服务重启失败，改动要等下次重启才生效" = "Saved, but the background service could not be restarted. The change takes effect the next time it restarts.";
 "已信任的播放器" = "Trusted Players";
+"已全部跟进" = "All caught up";
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
 "已刷新" = "Refreshed";
@@ -583,7 +596,9 @@
 "应答源最少" = "Fewest sources answered";
 "底部居中" = "Bottom Center";
 "延后" = "Delay";
+"开始" = "Start";
 "开始使用" = "Get Started";
+"开始扫描" = "Start Scanning";
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
 "开源免费，你的 ⭐ 是最大的鼓励，谢谢支持" = "Free and open source. A ⭐ means a lot — thank you!";
@@ -1089,6 +1104,7 @@
 "繁简" = "Traditional/Simplified";
 "繁简转换" = "Chinese Script";
 "繁體中文" = "Traditional Chinese";
+"约 %@ 小时" = "about %@ hours";
 "纯文本" = "Plain text";
 "纯文本(无时间戳)" = "Plain text (no timing)";
 "纯色" = "Solid";
@@ -1333,6 +1349,7 @@
 "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm" = "Once connected, every track you play is scrobbled to Last.fm automatically";
 "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案" = "Once connected, every track you play is scrobbled to Last.fm automatically, and you'll get your own listening profile here too";
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
+"连已经有歌词的也重新过一遍；人工修正过的、校准过时间轴的、纯音乐的不动" = "Re-picks songs that already have lyrics too. Manual fixes, calibrated timing and instrumentals are left alone";
 "连接" = "Connection";
 "连接 Last.fm" = "Connect Last.fm";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
@@ -1441,6 +1458,7 @@
 "预览 · 固定宽度 %@pt，本句会横向滚动" = "Preview · fixed %@pt — this line scrolls";
 "预览 · 本句会横向滚动" = "Preview · this line scrolls";
 "预览已缩小至 %@" = "Preview scaled down to %@";
+"预计%@，随时可以停" = "Roughly %@, and you can stop any time";
 "风格" = "Style";
 "飞书" = "Feishu";
 "首次同步历史中（%1$@/%2$@ 页）" = "First-time history sync (page %1$@ of %2$@)";
