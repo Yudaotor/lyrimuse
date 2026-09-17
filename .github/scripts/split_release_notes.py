@@ -262,7 +262,10 @@ def render_html(lines: list[str], lang: str) -> str:
         "body{font:13px -apple-system,'PingFang SC',sans-serif;line-height:1.55;margin:14px;color:#333}\n"
         "@media(prefers-color-scheme:dark){body{color:#ddd;background:#1e1e1e}a{color:#6cf}}\n"
         "h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:16px 0 6px}\n"
-        "ul{margin:6px 0;padding-left:20px}li{margin:3px 0}\n"
+        # ⚠️ 不要项目符号、也不要缩进:条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
+        # 在 Sparkle 那扇窄弹窗里会把每条推进去一截,点和文字之间还空着一大段,而换行后的续行
+        # 又顶回左边,一条条读起来是散的。
+        "ul{margin:6px 0;padding-left:0;list-style:none}li{margin:3px 0}\n"
         "table{border-collapse:collapse;margin:8px 0}td{border:1px solid #8884;padding:4px 8px}\n"
         "</style></head><body>\n" + "\n".join(body) + "\n</body></html>\n"
     )
