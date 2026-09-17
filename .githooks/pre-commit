@@ -1,7 +1,11 @@
 #!/bin/sh
-# 注释卫生闸:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
-# 工单引用、排查叙述、临时状态标记)。规则全文在 scripts/check-comment-hygiene.py 的
-# 文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
+# 提交前的两道闸,顺序跟 CI 一致 —— 格式最先,它最快也最容易一眼看出:
+#
+#   1. gofmt:暂存的 .go 文件必须已格式化。CI 的第一步就是 `gofmt -l lyrimuse-collector`,
+#      本地不拦一道就得推上去才知道,而且一路红下去很容易没人注意。
+#   2. 注释卫生:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
+#      工单引用、排查叙述、临时状态标记)。规则全文在 scripts/check-comment-hygiene.py 的
+#      文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
 #
 # 为什么是 hook 而不是只写进文档:这个仓的 AGENTS.md / CLAUDE.md 都在 .gitignore 里,
 # 约定只对读过它的人生效,而注释是最容易顺手写脏的地方 —— 一次全仓清理要动 500+ 个文件,
@@ -10,13 +14,35 @@
 # 确实需要放行时用 git commit --no-verify(别拿它当常规手段)。
 
 root=$(git rev-parse --show-toplevel) || exit 0
-checker="$root/scripts/check-comment-hygiene.py"
-[ -f "$checker" ] || exit 0
 
 # 只看本次新增/改动的、检查器认得的源码文件(删除的不算)。
 files=$(git diff --cached --name-only --diff-filter=ACMR \
         | grep -E '\.(swift|go|js|mjs|ts|py|sh)$')
 [ -n "$files" ] || exit 0
+
+# ---- 闸 1:gofmt ----
+#
+# ⚠️ gofmt 读的是**工作区**那份、不是暂存那份(注释检查器同口径)。只暂存了一个文件的
+# 一部分时,它报的是磁盘上的内容,不是将要提交的内容。
+# ⚠️ 机器上没有 gofmt 就直接放行 —— 这道闸不该把没装 Go 工具链的人挡在提交外面;
+# CI 那边照样会拦,漏报的代价有兜底,误拦没有。
+gofiles=$(printf '%s\n' "$files" | grep '\.go$')
+if [ -n "$gofiles" ] && command -v gofmt >/dev/null 2>&1; then
+    unformatted=$(printf '%s\n' "$gofiles" | tr '\n' '\0' | xargs -0 gofmt -l)
+    if [ -n "$unformatted" ]; then
+        echo "" >&2
+        echo "  这些 Go 文件没格式化,CI 的 gofmt 那步会挂:" >&2
+        printf '%s\n' "$unformatted" | sed 's/^/    /' >&2
+        echo "  跑 gofmt -w 修一下再提交。" >&2
+        echo "  确实要放行:git commit --no-verify" >&2
+        echo "" >&2
+        exit 1
+    fi
+fi
+
+# ---- 闸 2:注释卫生 ----
+checker="$root/scripts/check-comment-hygiene.py"
+[ -f "$checker" ] || exit 0
 
 # shellcheck disable=SC2086
 printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 python3 "$checker" || {

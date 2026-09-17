@@ -808,9 +808,11 @@ func runOpsDiagnosticsTests() {
         }
     }
 
-    // 注释卫生闸(.githooks/pre-commit → scripts/check-comment-hygiene.py):注释只写现状与
-    // 约束,过程性内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
-    // ⚠️ 失效是静默的:丢了执行位、或者检查器被挪走,hook 直接放行,谁都看不出来。
+    // 提交前的两道闸(.githooks/pre-commit):gofmt 保证暂存的 .go 文件已格式化(CI 第一步
+    // 就是它),注释卫生(→ scripts/check-comment-hygiene.py)保证注释只写现状与约束、过程性
+    // 内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
+    // ⚠️ 失效是静默的:丢了执行位、检查器被挪走、或者哪一道闸被删掉,hook 直接放行,
+    // 谁都看不出来 —— 所以这里逐条钉住每道闸的存在。
     do {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // lyrimuse-selftest
@@ -834,6 +836,10 @@ func runOpsDiagnosticsTests() {
                         "注释卫生闸: 只查本次暂存的文件 —— 扫全仓会让每次提交都变慢")
             expectEqual(code.contains("exit 1"), true,
                         "注释卫生闸: 命中之后必须真的非零退出(只打印不拦 = 没有闸)")
+            expectEqual(code.contains("gofmt -l"), true,
+                        "格式闸: hook 必须跑 gofmt -l —— CI 第一步就是它,本地不拦就得推上去才知道")
+            expectEqual(code.contains("command -v gofmt"), true,
+                        "格式闸: 没装 gofmt 的机器必须放行 —— 误拦没有兜底,漏报有(CI 那边照样拦)")
         } else {
             expectEqual(true, false, "注释卫生闸: 读不到 .githooks/pre-commit —— 被删了还是路径挪了?")
         }

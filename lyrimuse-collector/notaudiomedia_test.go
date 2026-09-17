@@ -55,7 +55,7 @@ func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
 	mv := map[string]any{
 		"title": "In the Morning", "artist": "陶喆", "album": "",
 		"bundleIdentifier": "com.apple.Music",
-		"duration": 232.857, "elapsedTime": 12.0, "playing": true,
+		"duration":         232.857, "elapsedTime": 12.0, "playing": true,
 		"mediaType": mediaTypeMusic, "mediaKind": "music video",
 	}
 	s := extract(mv)

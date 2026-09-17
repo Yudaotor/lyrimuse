@@ -3,7 +3,7 @@ package main
 import "testing"
 
 // lyricSourceArtistMatches:歌词源采纳闸的段集交集档。核心案例来自「wherever u r」
-//:本地标签 "UMI & 金泰亨",酷狗署名 "UMI、V"、QQ 署名 "UMI/V",原
+// :本地标签 "UMI & 金泰亨",酷狗署名 "UMI、V"、QQ 署名 "UMI/V",原
 // artistMatches 全拒——服务端明明召回成功,正主死在客户端闸门上。
 func TestLyricSourceArtistMatches(t *testing.T) {
 	cases := []struct {
