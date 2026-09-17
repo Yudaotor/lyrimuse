@@ -148,11 +148,15 @@ enum PlayerChipMetrics {
 
 /// 一枚可勾选的播放器芯片:未勾选去饱和 + 半透明,勾选带强调色描边与浅底。两个行组件共用,
 /// 免得调样式时漏改一处。
+///
+/// ⚠️ 底色/描边走 `ChoiceHighlight`,跟同一页「播放器」网格里那些卡同一份 —— 芯片和卡片表达的
+/// 是同一件事("这一颗勾上了"),两处各调各的就会在同一页里出现两种深浅的蓝。
 private struct PlayerChip<Icon: View>: View {
     let selected: Bool
     let label: String
     let toggle: () -> Void
     @ViewBuilder let icon: () -> Icon
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: toggle) {
@@ -162,10 +166,11 @@ private struct PlayerChip<Icon: View>: View {
                 .padding(3)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05)))
+                        .fill(ChoiceHighlight.fill(isSelected: selected, scheme: colorScheme)))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(selected ? Color.accentColor : Color.clear, lineWidth: 1.5))
+                        .strokeBorder(ChoiceHighlight.stroke(isSelected: selected, scheme: colorScheme),
+                                      lineWidth: ChoiceHighlight.lineWidth(isSelected: selected)))
         }
         .buttonStyle(.plain)
         .help(label)

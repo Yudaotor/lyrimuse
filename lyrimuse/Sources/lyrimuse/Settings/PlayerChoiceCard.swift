@@ -104,6 +104,46 @@ struct PlayerIconView: View {
     }
 }
 
+/// 「可勾选的图标块」共用的一套配色 —— 播放器卡、网页平台卡、「播放器联动」那排芯片全走这里。
+///
+/// ⚠️ 选中态**不拿强调色铺底**。这些网格都是多选,而设置页默认就是"全勾"的形状:强调色底 +
+/// 强调色描边 + 强调色对号三层同色一叠,六张卡一起亮起来整页就糊成一块蓝(实机采样过,卡片底
+/// #DBE2ED、比周围底色暗 17 阶,整片网格读起来是一块色块而不是六个选项)。
+///
+/// 口径改成**用明度表达选中、用强调色点缀**:选中的块比周围**亮**(像抬起来的一张纸),
+/// 强调色只留在 1pt 描边和右上角那枚角标这两处小面积上。这样"勾了哪几个"比原来更好读——
+/// 亮/暗的对比不依赖色相,「增强对比度」和色觉障碍下都还在(这正是这个网格当初补对号要解决的
+/// 同一件事,见 `PlayerChoiceCard` 头注)。
+///
+/// ⚠️ 深浅外观两档分开,不要合并成一个 opacity:深色外观下"提亮"要靠白色叠加,浅色外观下同一个
+/// 数值会直接烧成纯白。
+enum ChoiceHighlight {
+    static func fill(isSelected: Bool, isHovering: Bool = false, scheme: ColorScheme) -> Color {
+        if isSelected { return Color.white.opacity(scheme == .dark ? 0.13 : 0.9) }
+        let base: Double = scheme == .dark ? 0.07 : 0.04
+        return Color.primary.opacity(isHovering ? base + 0.04 : base)
+    }
+
+    /// 没选中的块也有一条极淡的描边 —— 它背后那张玻璃卡跟它的明度差只有几格(见
+    /// `settingsCardBackground` 里量出来的 1~5/255),不描边的话浅色外观下这些"格子"的边界
+    /// 基本看不见,网格读起来是一团浮着的图标而不是一排可勾选的卡。
+    static func stroke(isSelected: Bool, scheme: ColorScheme) -> Color {
+        if isSelected { return Color.accentColor.opacity(scheme == .dark ? 0.75 : 0.6) }
+        return Color.primary.opacity(scheme == .dark ? 0.12 : 0.08)
+    }
+
+    static func lineWidth(isSelected: Bool) -> CGFloat { isSelected ? 1 : 0.5 }
+
+    /// 选中块底下那层很轻的投影,"抬起来"这件事的另一半。
+    ///
+    /// ⚠️ 深色外观返回 `.clear`:深色底上的黑色投影只会把卡片周围糊脏一圈,提亮本身已经把层次
+    /// 表达完了。
+    static func selectedShadow(isSelected: Bool, scheme: ColorScheme) -> Color {
+        guard isSelected, scheme != .dark else { return .clear }
+        return Color.black.opacity(0.07)
+    }
+}
+
 /// 选项卡片的外壳(圆角底 + 选中态的强调色描边/浅底)。从 `PlayerChoiceCard`
 /// 的 body 里提出来 —— 引导页那张「YouTube Music」网页平台卡要跟播放器卡**逐像素同款**
 /// (它们并排在同一个网格里),两处各写一遍圆角/透明度就是下次调样式漏一处。
@@ -112,19 +152,28 @@ private struct ChoiceCardChrome: ViewModifier {
     /// 见 `PlayerChoiceCard.isCoveredByAuto`。只有播放器卡会传 true —— 网页平台卡
     /// (YouTube Music)走的是"配对哪个浏览器"那套状态,跟 `features.players` 无关。
     var isCoveredByAuto: Bool = false
+    /// 整张卡是不是一个可点的按钮。设置页「网页播放器」那张卡不是(卡面上只有头像和「+」
+    /// 各自可点),给它加悬停高亮等于骗用户"整块都能点"。
+    var highlightsOnHover: Bool = true
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 11, style: .continuous) }
 
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
+                shape.fill(ChoiceHighlight.fill(isSelected: isSelected,
+                                                isHovering: isHovering,
+                                                scheme: colorScheme))
+                    .shadow(color: ChoiceHighlight.selectedShadow(isSelected: isSelected, scheme: colorScheme),
+                            radius: 2, y: 1)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
-            )
+            .overlay(shape.strokeBorder(ChoiceHighlight.stroke(isSelected: isSelected, scheme: colorScheme),
+                                        lineWidth: ChoiceHighlight.lineWidth(isSelected: isSelected)))
             // 「由自动识别接管」= **虚线**强调色描边。虚线在这个网格里已经有
             // 既定含义:`MorePlayersComingCard` 那张占位卡就是虚线,读作"不是一个你勾上的
             // 选项"。所以虚线+强调色正好表达"它在生效,但不是你勾的"。
@@ -135,9 +184,8 @@ private struct ChoiceCardChrome: ViewModifier {
             // 透明度去区分两种状态等于把那次的教训原地推翻。
             .overlay {
                 if isCoveredByAuto, !isSelected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.45),
-                                      style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    shape.strokeBorder(Color.accentColor.opacity(colorScheme == .dark ? 0.5 : 0.4),
+                                       style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 }
             }
             // 右上角的对号 —— 见 `PlayerChoiceCard` 头注那条的推翻说明:多选之后
@@ -146,29 +194,43 @@ private struct ChoiceCardChrome: ViewModifier {
             .overlay(alignment: .topTrailing) {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Color.accentColor)
                         // 垫一层窗口底色,免得对号压在卡片描边上糊成一团。
                         .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
-                        .padding(4)
+                        .padding(5)
                 } else if isCoveredByAuto {
                     // 对号的位置换成"自动"那味儿的角标。用 `sparkles` 而不是「自动识别」卡
                     // 自己那个 `wand.and.stars`:后者的字形明显扁,`Circle()` 背景会按短边
                     // 内切成一个小圆躲在魔杖中间,看着像画坏了;`sparkles` 近似正方,跟上面
                     // 那枚对号共用同一套尺寸/垫底/内边距,两种角标位对位。
                     Image(systemName: "sparkles")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.accentColor.opacity(0.65))
                         .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
-                        .padding(4)
+                        .padding(5)
                 }
             }
+            // 悬停只改底色不改描边:描边是"选没选中"的载体,让它跟着鼠标变会把两件事混在一起。
+            .onHover { hovering in
+                guard highlightsOnHover else { return }
+                isHovering = hovering
+            }
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.18), value: isSelected)
     }
 }
 
 extension View {
-    fileprivate func choiceCardChrome(isSelected: Bool, isCoveredByAuto: Bool = false) -> some View {
-        modifier(ChoiceCardChrome(isSelected: isSelected, isCoveredByAuto: isCoveredByAuto))
+    /// ⚠️ 凡是摆进"选播放器"这类图标网格的卡片都走这里,别在调用点另写一份圆角/底色/描边 ——
+    /// 设置页「网页播放器」卡和这边的播放器卡并排在同一页,样式各写一份下次调色就会漏一处
+    /// (它们曾经就是两份)。
+    func choiceCardChrome(isSelected: Bool,
+                          isCoveredByAuto: Bool = false,
+                          highlightsOnHover: Bool = true) -> some View {
+        modifier(ChoiceCardChrome(isSelected: isSelected,
+                                  isCoveredByAuto: isCoveredByAuto,
+                                  highlightsOnHover: highlightsOnHover))
     }
 }
 
@@ -239,7 +301,7 @@ struct MorePlayersComingCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         )
         .accessibilityElement(children: .combine)

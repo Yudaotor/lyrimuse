@@ -3574,20 +3574,17 @@ private struct PlayerSettingsTab: View {
                             .font(.system(size: 15))
                     }
                     .menuStyle(.borderlessButton)
+                    // 「+」自己就长得像"点开有东西",再挂一个下拉小箭头只是噪声——这一行卡片上
+                    // 排着一串浏览器头像,多出来的箭头会被当成其中一个图标的角标。
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(pairedBundleIDs.isEmpty ? Color.primary.opacity(0.05) : Color.accentColor.opacity(0.14))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(pairedBundleIDs.isEmpty ? Color.clear : Color.accentColor, lineWidth: 1.5)
-        )
+        // ⚠️ 外壳走 `choiceCardChrome`,别在这里另写一份圆角/底色/描边:这张卡跟上面「播放器」
+        // 卡在同一页里并排,样式各写一份下次调色就会漏一处。整卡不可点(只有头像和「+」各自
+        // 可点),所以关掉悬停高亮。
+        .choiceCardChrome(isSelected: !pairedBundleIDs.isEmpty, highlightsOnHover: false)
     }
 
     private func browserAvatarButton(bundleID: String, platformID: String) -> some View {
