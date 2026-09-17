@@ -127,6 +127,18 @@ Fixed / 修复
   in front of sub-rows, and the decision sheet's inputs not lining up
   修复播放器芯片换行后不左对齐、子行前多一条竖线、「解析决策」输入区不对齐的问题
 
+| Chip / 芯片 | dmg | zip |
+|---|---|---|
+| **Apple Silicon** (M1 and later, recommended) / **Apple M 系列**（推荐） | [Lyrimuse-v1.8.0-macos.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.8.0/Lyrimuse-v1.8.0-macos.dmg) | [Lyrimuse-v1.8.0-macos.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.8.0/Lyrimuse-v1.8.0-macos.zip) |
+| **Intel** / **Intel 芯片**（也能在 Apple Silicon 上跑，但体积更大、没必要） | [Lyrimuse-v1.8.0-macos-intel.dmg](https://github.com/Yudaotor/lyrimuse/releases/download/v1.8.0/Lyrimuse-v1.8.0-macos-intel.dmg) | [Lyrimuse-v1.8.0-macos-intel.zip](https://github.com/Yudaotor/lyrimuse/releases/download/v1.8.0/Lyrimuse-v1.8.0-macos-intel.zip) |
+
+Not sure which one? Check your chip under **About This Mac**.
+不确定该下哪个？打开「关于本机」看芯片是 Apple M… 还是 Intel Core…
+
+67 commits since v1.7.0.
+
+**Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.7.0...v1.8.0
+
 ## v1.7.0
 
 New / 新功能
