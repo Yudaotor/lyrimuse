@@ -1286,4 +1286,73 @@ func runLyricsManagerTests() {
             expectEqual(true, false, "输入与经过: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
         }
     }
+
+    // ---- 候选行:折叠态一个字都不印,「差在哪」住在展开态 ----
+    //
+    // 两步改法的落点。第一步治**措辞**:冠军行摊绝对分、落选行摊差值,两行却是同一个格式
+    // (`名字 ±数字`)、同字号同颜色,而这批项名多是「有没有」型判断 ——「与当前播放器同源
+    // -250」字面意思是"因为跟播放器同源而被扣 250 分",这句话压根不成立。第二步治**重复**:
+    // 白话化之后七条候选就是七行几乎一样的「比胜者少 逐字时间轴 400 · …」,于是折叠态干脆
+    // 一个字不印,差值整块搬进展开态。
+    // 下面这几条退回去都不会编译报错,只会让面板重新变成一屏读不动的字。
+    do {
+        let sheet = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsDecisionSheet.swift")
+        if let text = try? String(contentsOfFile: sheet.path, encoding: .utf8) {
+            // ① 差值的方向写成话、分值取绝对值 —— 界面和「拷贝」出去的纯文本共用同一句
+            //    (定义 1 处 + 展开态 1 处 + dumpLines 1 处)。少了拷贝那处就是两份口径,
+            //    而这个面板存在的意义就是贴进 issue 复盘。
+            let summary = text.components(separatedBy: "deltaSummary(").count - 1
+            expectEqual(summary >= 3, true,
+                        "候选行: deltaSummary 要被展开态和 dumpLines 都调到(含定义 ≥3 处),实际 \(summary) 处")
+            expectEqual(text.contains("差在：%@"), false,
+                        "候选行: 拷贝那条路不准再走「差在：X -250」,跟界面同走 deltaSummary")
+            expectEqual(text.contains("private func magnitudeTerms"), true,
+                        "候选行: 差值两组取绝对值(方向由「比胜者少 / 多」那句话交代)")
+            // ② `if isOpen` 那一块**只有展开分支** —— 这是"外面不印文字"的机械判据。
+            //    ⚠️ 不能笼统查 `} else {`:同一个函数里 `.onHover` 那行就是
+            //    `if inside { push() } else { pop() }`,会误伤。所以钉的是这三行的形状,
+            //    多一个 else 分支就是把那七行几乎一样的摘要请回来了。
+            if let start = text.range(of: "private func candidateRow"),
+               let end = text.range(of: "private func expandedDetail") {
+                let row = String(text[start.lowerBound..<end.lowerBound])
+                // 判据跟缩进无关:剥掉空白之后,`if isOpen {` 后面必须紧跟展开调用和收尾
+                // 花括号,中间不许塞别的。
+                let after = (row.components(separatedBy: "if isOpen {").last ?? "")
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                    .prefix(2).joined(separator: " | ")
+                expectEqual(after, "expandedDetail(row, delta: delta) | }",
+                            "候选行: 折叠态不准再印任何文字(if isOpen 那块只能有展开分支),实际「\(after)」")
+                expectEqual(row.contains("compactTerms("), false,
+                            "候选行: candidateRow 不准用带「+」的 compactTerms(那是共有项那一行专用)")
+                expectEqual(row.contains("deltaSummary("), false,
+                            "候选行: 差值属于展开态,不该在 candidateRow 里")
+            } else {
+                expectEqual(true, false, "候选行: 找不到 candidateRow / expandedDetail(改名了?)")
+            }
+            // ③ 差值必须真的在展开态 —— 少了这一处,「差在哪」就只剩「拷贝」出去的纯文本
+            //    还留着,界面上彻底消失,等于把整个差值分解废掉。
+            if let start = text.range(of: "private func expandedDetail"),
+               let end = text.range(of: "private func sidelinedRow") {
+                let detail = String(text[start.lowerBound..<end.lowerBound])
+                expectEqual(detail.contains("deltaSummary("), true,
+                            "候选行: 展开态必须印差值,否则「差在哪」在界面上没有任何入口")
+            } else {
+                expectEqual(true, false, "候选行: 找不到 expandedDetail / sidelinedRow(改名了?)")
+            }
+            // ④ 折叠态那两个专用函数已经删了,别让它们随手长回来(长回来就意味着折叠态
+            //    又开始印分项了)。
+            expectEqual(text.contains("private func plainTerms"), false,
+                        "候选行: plainTerms 是折叠态冠军行的遗物,已随折叠态一起删除")
+            expectEqual(text.contains("private func championTerms"), false,
+                        "候选行: championTerms 同上")
+        } else {
+            expectEqual(true, false, "候选行: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
+        }
+    }
 }

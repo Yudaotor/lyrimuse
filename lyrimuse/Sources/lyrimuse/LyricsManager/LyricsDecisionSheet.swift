@@ -394,10 +394,31 @@ struct LyricsDecisionSheet: View {
         terms.map { "\(termLabel($0.kind)) \(signedText($0.points))" }.joined(separator: " · ")
     }
 
-    /// 冠军那行的绝对分项,按绝对值从大到小 —— 跟 explanation 的排序规则一致
-    /// (用户真正在问的是"它凭什么排第一",答案该第一项就出现)。
-    private func championTerms(_ row: Row) -> [LyricsScoreTermValue] {
-        row.core.terms.sorted { abs($0.points) > abs($1.points) }
+    /// 差值分解那两组:一律取**绝对值**,方向由外面那句「比胜者少 / 多」交代。
+    private func magnitudeTerms(_ terms: [LyricsScoreTermValue]) -> String {
+        terms.map { "\(termLabel($0.kind)) \(abs($0.points))" }.joined(separator: " · ")
+    }
+
+    /// 落选候选那行的白话差值:「比胜者少 逐字时间轴 400;多 行数 4」。
+    ///
+    /// 起因(对拍问「这个展示好奇怪,怎么下面全是扣分的?」):这行原来跟
+    /// 冠军行**同一个格式**(`名字 ±数字`),而两者的单位根本不是一回事 —— 冠军摊的是
+    /// 绝对分,落选摊的是差值。三件事叠在一起让人读不出来:① 界面上没有一个字说这是
+    /// 差值(唯一线索是最右边那列 `-246`,还被分数条挤着);② 两种单位同字号同颜色同
+    /// 格式;③ 最要命的是这批项名本身是「有没有」型的判断 ——「与当前播放器同源 -250」
+    /// 字面意思是"因为跟播放器同源而被扣了 250 分",这句话压根不成立,它真正想说的是
+    /// "冠军就是你正在用的播放器,这条不是"。
+    ///
+    /// 所以把方向写成话、分值去掉正负号。措辞跟「拷贝」出去的纯文本共用这一份
+    /// (dumpLines 也调它)—— 两边各写一份,措辞和口径迟早漂开。
+    private func deltaSummary(_ delta: LyricsScoreDelta) -> String {
+        let behind = delta.terms.filter { $0.points < 0 }
+        let ahead = delta.terms.filter { $0.points > 0 }
+        if behind.isEmpty && ahead.isEmpty { return "" }
+        if ahead.isEmpty { return String(format: L10n.t("比胜者少 %@"), magnitudeTerms(behind)) }
+        if behind.isEmpty { return String(format: L10n.t("比胜者多 %@"), magnitudeTerms(ahead)) }
+        return String(format: L10n.t("比胜者少 %1$@；多 %2$@"),
+                      magnitudeTerms(behind), magnitudeTerms(ahead))
     }
 
     /// 「曲名是反查出来的」——(本地曲名, 反查出来的曲名)。两者相同或缺一就是 nil。
@@ -588,7 +609,9 @@ struct LyricsDecisionSheet: View {
             if let d = a.deltas[row.core.source] {
                 lines.append(String(format: L10n.t("落后 %d 分"), abs(d.scoreGap)))
                 if !d.terms.isEmpty {
-                    lines.append(String(format: L10n.t("差在：%@"), compactTerms(d.terms)))
+                    // 跟界面同一句措辞:这个面板存在的意义就是贴进 issue 复盘,
+                    // 屏幕上说「比胜者少 X」、拷出去说「差在：X -250」等于两份口径。
+                    lines.append(deltaSummary(d))
                 }
                 if let raw = d.clampedRawSum {
                     lines.append("  " + clampNote(rawSum: raw, score: c.score))
@@ -1028,29 +1051,21 @@ struct LyricsDecisionSheet: View {
             }
             .buttonStyle(.plain)
             // 可点时换手型光标 —— 没有它,「能点」这件事在 macOS 上没有任何视觉线索
-            // (列表里那个「3/9」角标第一版就是这么丢的,用户报「我点击也没有反应」)。
+            // (列表里那个「3/9」角标就是这么丢的,现象是「我点击也没有反应」)。
             .onHover { inside in
                 if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
             }
 
+            // **折叠态一个字都不印**:改法第一步把差值改成白话之后,七条候选就是七行几乎
+            // 一样的「比胜者少 逐字时间轴 400 · 自带译文 50 · 行数 4 · 时长吻合 1」——措辞
+            // 治好了,**重复没治**。折叠态该回答的是"谁赢了、差多少、有没有逐字",这几件上面
+            // 那一行(徽章 + 皇冠 + 逐字标签 + 分数 + 差值 + 分数条)已经全答了;"差在哪"是
+            // 第二个问题,点开再答。
+            // ⚠️ 差值分解**没被删掉,是搬进了展开态** —— 展开态原来只印绝对明细,这行一撤,
+            // 「差在哪」就会在界面上彻底消失(只剩「拷贝」出去的纯文本还有),那等于把整个
+            // 差值分解废掉。
             if isOpen {
                 expandedDetail(row, delta: delta)
-            } else {
-                // 折叠态那一行紧凑摘要:冠军摊绝对分项,落选的摊相对冠军的差值。
-                let terms = delta?.terms ?? championTerms(row)
-                if !terms.isEmpty {
-                    Text(compactTerms(terms))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, showsCover ? 39 : 17)
-                }
-                if let raw = delta?.clampedRawSum {
-                    Text(clampNote(rawSum: raw, score: c.score))
-                        .font(.caption2).foregroundStyle(.secondary)
-                        .padding(.leading, showsCover ? 39 : 17)
-                }
             }
         }
         .padding(.vertical, 6)
@@ -1071,10 +1086,23 @@ struct LyricsDecisionSheet: View {
                 Text(matched).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // 「差在哪」排在全量明细**前面**:落选的候选,先问的就是这个,绝对明细是回答
+            // "那它到底得了多少"的第二层(决策 24 的主张没变,变的只是它住在折叠态还是
+            // 展开态)。冠军没有 delta,这一行自然不出现。
+            if let delta {
+                let summary = deltaSummary(delta)
+                if !summary.isEmpty {
+                    Text(summary)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
             if let terms = c.scoreTerms, !terms.isEmpty {
                 // 直接摊开,不做悬停 —— 这是复盘界面,把证据全亮出来正是它存在的目的。
                 //
-                // ⚠️ 这里**刻意不用** .textSelection(.enabled)。2026-08-17 用户报"点了哪个框,
+                // ⚠️ 这里**刻意不用** .textSelection(.enabled)。现象是"点了哪个框,
                 // 哪个框的文字就被挤到下面一个位置":那个修饰符会让 SwiftUI 在点击时把这段
                 // 文字从静态 Text 切到可选中的渲染路径,而两条路径的竖向度量(基线/内边距)
                 // 不一致,于是整段往下跳一截。先试过给它配 .frame(maxWidth:.infinity) —— 那

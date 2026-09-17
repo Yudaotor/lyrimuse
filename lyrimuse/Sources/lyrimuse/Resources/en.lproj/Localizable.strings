@@ -991,6 +991,9 @@
 "比下面的宽度更长时就截断，末尾加省略号，不滚动" = "Longer than the width below gets cut off with an ellipsis, no scrolling";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
+"比胜者多 %@" = "Ahead of the winner by %@";
+"比胜者少 %1$@；多 %2$@" = "Behind the winner by %1$@; ahead by %2$@";
+"比胜者少 %@" = "Behind the winner by %@";
 "毛玻璃" = "Frosted Glass";
 "毛玻璃浓淡" = "Frosted Glass Intensity";
 "毛玻璃背景" = "Frosted Glass Background";

@@ -31193,6 +31193,57 @@
         }
       }
     },
+    "比胜者少 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behind the winner by %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比勝者少 %@"
+          }
+        }
+      }
+    },
+    "比胜者多 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahead of the winner by %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比勝者多 %@"
+          }
+        }
+      }
+    },
+    "比胜者少 %1$@；多 %2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behind the winner by %1$@; ahead by %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比勝者少 %1$@；多 %2$@"
+          }
+        }
+      }
+    },
     "这一轮的输入与经过" : {
       "extractionState" : "manual",
       "localizations" : {
