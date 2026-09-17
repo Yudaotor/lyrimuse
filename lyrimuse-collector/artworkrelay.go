@@ -82,8 +82,11 @@ var (
 
 var (
 	artworkMu sync.Mutex
-	// artworkUploaded 是"这个 sha 在中继上已经确认存在"。进程内存,重启后为空 ——
-	// 重启后靠 HEAD 重新确认(便宜),不靠落盘的标记文件(那玩意会跟中继真实状态漂开)。
+	// artworkUploaded 是"这个 sha 在中继上已经确认存在"。进程内存;启动时由
+	// loadArtworkConfirmed 用落盘记录预热(2026-09-17 加,见 artworkconfirmed.go 头注)。
+	// 这里原来写的是"不靠落盘的标记文件(那玩意会跟中继真实状态漂开)"—— 漂开这条顾虑
+	// 仍然成立,所以落盘那份给每条确认记了时间戳、过期就重新 HEAD、换中继整份作废,
+	// 把漂移关在有界窗口里;不是无条件信任磁盘。
 	artworkUploaded = map[string]bool{}
 	artworkInflight = map[string]bool{}
 	// artworkNextRetry 是失败后的冷却期,见 artworkUploadRetryAfter。
@@ -188,6 +191,13 @@ func scheduleArtworkUpload(sha, path string) {
 			artworkNextRetry[sha] = time.Now().Add(artworkUploadRetryAfter)
 		}
 		artworkMu.Unlock()
+		// ⚠️ 必须在 artworkMu 之外调:markArtworkConfirmed 要拿 artworkConfirmMu,而
+		// loadArtworkConfirmed 是先 artworkConfirmMu 再 artworkMu —— 两处反着拿就是死锁。
+		// 现在靠"load 在 run() 之前跑完、那时还没有上传 goroutine"侥幸不撞上,但那是调用
+		// 顺序撑着的,不是锁本身保证的。统一成"这两把锁不嵌套"。
+		if err == nil {
+			markArtworkConfirmed(sha)
+		}
 		if err != nil {
 			log.Printf("artwork relay: upload failed sha=%s, not retrying for %v: %v", sha, artworkUploadRetryAfter, err)
 		}
@@ -254,6 +264,11 @@ func sweepDeviceArtwork(ctx context.Context) {
 	if artworkRelayURL == "" || deviceArtworkDir == "" {
 		return
 	}
+	// 收尾落盘。用 defer 而不是写在函数末尾:扫一遍 700 张 × artworkSweepGap ≈ 3.5 分钟,
+	// 而 collector 重启很频繁(2026-09-16 实测 17 次/天),下面那两条 ctx 取消的 return 才是
+	// 最常走到的出口 —— 只在末尾 flush 的话,已经确认过的那批最容易一条都存不下来。
+	// markArtworkConfirmed 每 artworkConfirmFlushEvery 张已经落一次盘,这里兜住尾巴上不足一批的。
+	defer flushArtworkConfirmed()
 	entries, err := os.ReadDir(deviceArtworkDir)
 	if err != nil {
 		return // 目录不存在 = 还没有任何设备封面,不是错误
@@ -285,6 +300,7 @@ func sweepDeviceArtwork(ctx context.Context) {
 			artworkMu.Lock()
 			artworkUploaded[sha] = true
 			artworkMu.Unlock()
+			markArtworkConfirmed(sha)
 			uploaded++
 		}
 		select {

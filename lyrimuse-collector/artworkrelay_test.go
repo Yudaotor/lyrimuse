@@ -28,6 +28,14 @@ func resetArtworkRelayState(t *testing.T) {
 	artworkInflight = map[string]bool{}
 	artworkNextRetry = map[string]time.Time{}
 	artworkMu.Unlock()
+	// 落盘确认记录(artworkconfirmed.go)也是这套状态的一部分:忘了清的话上一个用例
+	// 写下的确认会让下一个用例的补传扫描凭空跳过几张,表现成"断言时好时坏"。
+	oldConfirmPath := artworkConfirmPath
+	artworkConfirmMu.Lock()
+	artworkConfirmPath = "" // 默认不落盘,要落盘的用例自己设一个临时路径
+	artworkConfirmAt = map[string]int64{}
+	artworkConfirmDirty, artworkConfirmPend = false, 0
+	artworkConfirmMu.Unlock()
 	t.Cleanup(func() {
 		waitArtworkIdle(t)
 		artworkMu.Lock()
@@ -36,6 +44,11 @@ func resetArtworkRelayState(t *testing.T) {
 		artworkInflight = map[string]bool{}
 		artworkNextRetry = map[string]time.Time{}
 		artworkMu.Unlock()
+		artworkConfirmMu.Lock()
+		artworkConfirmPath = oldConfirmPath
+		artworkConfirmAt = map[string]int64{}
+		artworkConfirmDirty, artworkConfirmPend = false, 0
+		artworkConfirmMu.Unlock()
 	})
 }
 

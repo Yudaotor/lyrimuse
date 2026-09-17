@@ -327,6 +327,9 @@ func main() {
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
 	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。
 	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
+	// 「哪些设备封面已确认在中继上」的落盘记录(artworkconfirmed.go)。没有它的话每次
+	// 重启都要把 artwork/ 整个 HEAD 一遍 —— 实测一次约 700 次 KV 读。
+	artworkConfirmPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-artwork-confirmed.json")
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
@@ -359,7 +362,10 @@ func main() {
 	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
 		clientName, clientVersion, cfg.BundleIDs, *dryRun)
 	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
-	// 绝大多数启动里每张都会在 HEAD 那步命中,整个扫描就是几十次廉价的读(见头注)。
+	// 先读回上次的确认记录 —— 记录里还没过期的那些这一轮直接跳过,不再重复 HEAD
+	// (见 artworkconfirmed.go 头注:这是把「每次重启约 700 次 KV 读」降到 0 的那一步)。
+	// 必须在 sweepDeviceArtwork 之前,也必须在 artworkRelayURL 定下来之后(换中继要作废旧记录)。
+	loadArtworkConfirmed()
 	go sweepDeviceArtwork(ctx)
 	err = run(ctx, cfg, lb)
 	if err != nil && ctx.Err() == nil {
