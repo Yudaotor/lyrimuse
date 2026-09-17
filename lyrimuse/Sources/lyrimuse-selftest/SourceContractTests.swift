@@ -2781,4 +2781,35 @@ func runSourceContractTests() {
         expectEqual(offenders, [], "日志规范: 以下位置违反(日志字面量含 CJK / NSLog / 裸 print),规则见 AGENTS.md「日志」")
         expectEqual(subsystems, ["me.yudaotor.lyrimuse"], "日志规范: Logger 的 subsystem 只允许 me.yudaotor.lyrimuse(诊断导出按它查 OSLogStore)")
     }
+
+    // ---- reload 合并:清 in-flight 必须条件置空----
+    //
+    // EnrichCacheStore.reload 靠「在飞的 Task」做合并 —— 设置页「歌词库统计」和「歌词管理」
+    // 各有一条 2 秒轮询,扫库跑着的时候它们会在同一拍上各调一次 reload,同一份 86MB 文件
+    // 解析两遍还互相抢内存带宽。
+    //
+    // 无条件 `inFlightReload = nil` 会抹掉**别人**在飞的 Task,下一个调用者又并发跑一遍,
+    // 合并当场失效 —— 而且不报错、不崩溃,只表现为"怎么又慢了",查起来极贵。
+    // 这一行就是这么埋过坑的(那次的合并判据还错在看"上次跑完时间戳"、挡不住同时起跑的
+    // 两次)。所以把这一行钉死在这里。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let path = packageDir
+            .appendingPathComponent("Sources/lyrimuse/LyricsManager/EnrichCacheStore.swift").path
+        let text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        expectEqual(text.isEmpty, false, "reload 合并: 读不到 EnrichCacheStore.swift,这道守卫成了摆设")
+        var bare: [Int] = []
+        var guarded = 0
+        for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let t = String(raw).trimmingCharacters(in: .whitespaces)
+            // 注释里会引用这段代码讲为什么,不算数。
+            guard !t.hasPrefix("//"), t.contains("inFlightReload = nil") else { continue }
+            if t.contains("if inFlightReload == task") { guarded += 1 } else { bare.append(n + 1) }
+        }
+        expectEqual(bare, [],
+                    "reload 合并: 这些行是无条件的 inFlightReload = nil,会抹掉别人在飞的 Task(见 2026-09-04 教训)")
+        expectEqual(guarded, 1,
+                    "reload 合并: 期望恰好一处 `if inFlightReload == task { inFlightReload = nil }`")
+    }
 }

@@ -299,11 +299,42 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做
-    ///   (2026-08-19 性能审计:App 每次激活都触发一次 reload,而绝大多数激活时文件根本
+    ///   (性能审计:App 每次激活都触发一次 reload,而绝大多数激活时文件根本
     ///   没变,整份 9.4MB 重读+解析+重建+summaries 重发布 → List 全量 diff 全是白跑;
     ///   同仓 EnrichCacheReader 早有同款 mtime 门控)。开窗 onAppear 和工具栏「刷新」
     ///   保持默认 false(显式刷新语义)。
+    /// 在飞的那次 reload。两个窗口(设置页「歌词库统计」、歌词管理)各有一条 2 秒轮询,
+    /// 扫库跑着的时候它们会在同一拍上各调一次 reload —— 同一份 86MB 文件解析两遍,还
+    /// 互相抢内存带宽。的基线日志里 12:21:36.227 与 .461、12:21:45.024 与
+    /// .297 这两对,就是它俩各跑一遍同一份数据;更实测到并发的第二次从 211ms
+    /// 劣化到 1397ms。
+    private var inFlightReload: Task<Void, Never>?
+
+    /// ⚠️ 合并判据必须看「**正在跑**」,不能看「上次跑完的时间戳」。按
+    /// `lastReloadFinishedAt` 那种写法挡不住同时起跑的两次 —— 两边进判据时它都还是旧值、
+    /// 双双放行,合并窗一次都不生效(日志坐实,当时 30s 的窗口形同虚设)。
+    ///
+    /// 两种调用者语义不同,不能一视同仁地搭车:
+    ///   - `onlyIfChanged == true`(轮询/App 激活这类**被动**触发):搭在飞的那次的车,
+    ///     拿到的快照够用。
+    ///   - `onlyIfChanged == false`(用户点「刷新」、clearAll 重试这类**显式**触发):要的是
+    ///     "现在这一刻的盘上内容",搭车可能拿到它发起**之前**的快照,所以先等在飞的跑完
+    ///     (串行化,不并发抢带宽)再自己完整跑一遍。
     public func reload(onlyIfChanged: Bool = false) async {
+        if onlyIfChanged, let inFlight = inFlightReload {
+            await inFlight.value
+            return
+        }
+        if let inFlight = inFlightReload { await inFlight.value }
+        let task = Task { await self.performReload(onlyIfChanged: onlyIfChanged) }
+        inFlightReload = task
+        await task.value
+        // ⚠️ 必须**条件**置空。无条件 `inFlightReload = nil` 会抹掉别人在飞的 Task,
+        // 下一个调用者又并发跑一遍,等于把这个 bug 原样放回来。selftest 钉着这一行。
+        if inFlightReload == task { inFlightReload = nil }
+    }
+
+    private func performReload(onlyIfChanged: Bool) async {
         let cacheURL = Self.cacheURL
         if onlyIfChanged,
            let fp = Self.fileFingerprint(cacheURL),
@@ -323,8 +354,15 @@ public final class EnrichCacheStore: ObservableObject {
             var bundle: SummariesBundle?
             var fingerprint: FileFingerprint?
             var errorMessage: String?
+            // 基线埋点(临时,见 LyricsManagerBaseline)——分段耗时在 detached 闭包里量,
+            // 借这个盒子捎回 MainActor 一起打一条日志。
+            var bytes = 0
+            var readMS = 0.0
+            var parseMS = 0.0
+            var buildMS = 0.0
         }
         let box = ResultBox()
+        let reloadStart = CFAbsoluteTimeGetCurrent()
         // 在进 Task.detached 之前取快照:LyricsOffsetStore 是 @MainActor 单例,detached
         // 闭包跑在后台线程,不能在里面同步访问它——纯字典拷贝,提前拿一份传进去即可。
         let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
@@ -333,18 +371,25 @@ public final class EnrichCacheStore: ObservableObject {
         let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
             box.fingerprint = Self.fileFingerprint(cacheURL)
+            let tRead = CFAbsoluteTimeGetCurrent()
             guard let data = try? Data(contentsOf: cacheURL) else {
                 box.errorMessage = L10n.t("读取本地记录文件失败")
                 return
             }
+            box.readMS = LyricsManagerBaseline.ms(since: tRead)
+            box.bytes = data.count
+            let tParse = CFAbsoluteTimeGetCurrent()
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
                 box.errorMessage = L10n.t("解析本地记录文件失败")
                 return
             }
+            box.parseMS = LyricsManagerBaseline.ms(since: tParse)
             box.obj = obj
-            // summaries 的构建+排序也在后台做掉(2026-08-19:原来回 MainActor 同步跑,
+            let tBuild = CFAbsoluteTimeGetCurrent()
+            // summaries 的构建+排序也在后台做掉(原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
             box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
+            box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
         }.value
         if let obj = box.obj, let bundle = box.bundle {
             raw = obj
@@ -357,6 +402,10 @@ public final class EnrichCacheStore: ObservableObject {
             locallyDeletedKeys.removeAll()
             lastError = nil
             applySummaries(bundle)
+            LyricsManagerBaseline.logReload(
+                bytes: box.bytes, count: obj.count,
+                readMS: box.readMS, parseMS: box.parseMS, buildMS: box.buildMS,
+                totalMS: LyricsManagerBaseline.ms(since: reloadStart))
         } else {
             raw = [:]
             lastLoadedFingerprint = nil
@@ -654,18 +703,26 @@ public final class EnrichCacheStore: ObservableObject {
     // 用同一份内容(lyrics+lyricsYRC)算出来的指纹去查/存 LyricsOffsetStore,不然算出来
     // 的 key 对不上真正播放时用的那个 key。
     public func detail(for key: String) -> (lyrics: String, tr: String, roma: String, yrc: String) {
+        let t0 = CFAbsoluteTimeGetCurrent()
         let entry = raw[key] ?? [:]
-        return (
+        let result = (
             entry["lyrics"] as? String ?? "",
             entry["lyrics_tr"] as? String ?? "",
             entry["lyrics_roma"] as? String ?? "",
             entry["lyrics_yrc"] as? String ?? ""
         )
+        // 基线埋点(临时,见 LyricsManagerBaseline):改造后这里要改成读 lyrics/ 文件,
+        // 这条数就是"改之前直接从内存里拿要多久"的对照。
+        LyricsManagerBaseline.logDetail(
+            key: key,
+            totalChars: result.0.count + result.1.count + result.2.count + result.3.count,
+            elapsedMS: LyricsManagerBaseline.ms(since: t0))
+        return result
     }
 
     // yrc 默认 nil:纯手改文本框的普通保存路径不传它,完全不碰 lyrics_yrc 字段——这是
     // 有意的("歌词管理"从不提供逐字时间轴的自由文本编辑,格式是嵌套时间戳,手改错了代价
-    // 大,「移除逐字时间轴」入口 2026-08-18 已删)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
+    // 大,「移除逐字时间轴」入口已删)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
     // 采纳意味着连同逐字时间轴一起换成这个候选的版本(有就设、没有就清空)——否则旧
     // lyrics_yrc 会继续绑定已经被替换掉的旧文本,播放时逐字时间戳和新歌词对不上。
     //

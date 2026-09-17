@@ -709,6 +709,9 @@ struct LyricsManagerView: View {
         if filteredCache.token == token, filteredCache.generation == generation {
             return filteredCache.result
         }
+        // 基线埋点(临时,见 LyricsManagerBaseline)。只量这条"真重算"的路 —— 命中缓存
+        // 那条一次 body 求值要走好几遍,记了只会把日志刷爆、也没有信息量。
+        let recomputeStart = CFAbsoluteTimeGetCurrent()
         // 循环不变量提到过滤循环外算一次(原来写在逐行闭包里,每行各付一遍);逐行侧
         // 全部用 Summary 的预计算归一化键,谓词只剩字符串比较。
         let q = committedSearchText.lowercased()
@@ -764,6 +767,9 @@ struct LyricsManagerView: View {
         filteredCache.token = token
         filteredCache.generation = generation
         filteredCache.result = result
+        LyricsManagerBaseline.logFilter(
+            inCount: base.count, outCount: result.count,
+            elapsedMS: LyricsManagerBaseline.ms(since: recomputeStart))
         return result
     }
 
