@@ -197,6 +197,16 @@ var errListenRejected = errors.New("listen rejected by server (4xx, non-retryabl
 // it is never retried. LB is only the worker's fallback source now, so submit
 // no longer drives alerts — the relay /push does (see run).
 func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int64, meta lbTrackMeta) error {
+	// 没配 token = 这条路整条不存在,一步准备工作都不做(2026-09-17 前移:这道门原来开在
+	// 下面 marshal 之后,于是没配 token 的用户每次 playing_now(播放中每几秒一拍)和每条
+	// 完成收听,都会先剥一遍歌词字段、再 marshal 一份最大 10KB 的 JSON 然后原地丢掉)。
+	// 纯本地 CPU/分配,不产生请求,但对"用不到这个功能的人应当完全无感"这条来说仍是多余的。
+	//
+	// dry-run 是例外:`-dry-run` 的全部用途就是"让我看看会发出去什么",没 token 也得照印。
+	if c.token == "" && !c.dryRun {
+		// main.go 启动时已经打过一次提示,这里静默跳过,不逐条打日志刷屏。
+		return nil
+	}
 	if listenType == "single" {
 		// 歌词只用于“正在播放”的同步显示；历史/完成收听不展示，剥掉全部歌词字段——既省
 		// listens?count=100 历史请求体积，也避免逐字 yrc 让单条超 LB 10KB 上限被 400 拒。
@@ -217,10 +227,6 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 	}
 	if c.dryRun {
 		log.Printf("[dry-run] would POST %s: %s", listenType, body)
-		return nil
-	}
-	if c.token == "" {
-		// 没配置 token——main.go 启动时已经打过一次提示,这里静默跳过,不逐条打日志刷屏。
 		return nil
 	}
 	if c.coolingDown() {
