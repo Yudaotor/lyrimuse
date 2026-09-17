@@ -17,18 +17,26 @@ import LyrimuseCore
 // 菜单打开时 selectedMenuItemTextColor,都在按钮当前的 effectiveAppearance 下解析)。
 @MainActor
 enum MenuBarMarqueeRenderer {
-    /// 跟系统菜单栏项同一套字体族;**粗细**(`menuBarLyricsFontWeight`)和**字号**
-    /// (`menuBarLyricsFontSize`,同日追加,0 = 跟随系统)听用户的。跟随系统时字号取
-    /// `menuBarFont(ofSize: 0)` 的 pointSize,不要写死数字,否则系统字号变了这行歌词会跟旁边的
-    /// 菜单项不齐。
+    /// **字体族**(`menuBarLyricsFontFamily`,空串 = 跟随系统菜单栏)、**粗细**
+    /// (`menuBarLyricsFontWeight`)和**字号**(`menuBarLyricsFontSize`,0 = 跟随系统)都听用户的。
+    /// 跟随系统时字号取 `menuBarFont(ofSize: 0)` 的 pointSize,不要写死数字,否则系统字号变了
+    /// 这行歌词会跟旁边的菜单项不齐。
     ///
-    /// 实测(本机 SF 13pt):六档字重的 ascender/descender 完全相同 → `lineHeight` 不随
-    /// 字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),拉丁字随字重变宽
-    /// (medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下换档那一刻槽宽变一次。
-    /// 默认档 `.regular` 与 `menuBarFont(ofSize: 0)` 逐点同宽同高,直接返回后者,老用户零变化。
+    /// ⚠️ 字体族原先(06 章)是刻意不放开的一维,理由是"跟隔壁时钟/电量等系统菜单项字体不搭";
+    /// 用户显式要求放开后才加的这一项,选自定义字体就是接受这份不一致,不做任何"提醒会不搭"的
+    /// UI——那属于产品判断,不是这里该拦的事。
+    ///
+    /// 实测(本机 SF 13pt,字体族仍是系统默认时):六档字重的 ascender/descender 完全相同 →
+    /// `lineHeight` 不随字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),
+    /// 拉丁字随字重变宽(medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下
+    /// 换档那一刻槽宽变一次。默认档(系统字体 / `.regular`)与 `menuBarFont(ofSize: 0)` 逐点同宽
+    /// 同高,直接返回后者,老用户零变化。换成自定义字体族后这套"六档行高不变"的实测数据不再
+    /// 保证成立(不同字体族的字重梯度各不相同)——这是选了自定义字体后自然要接受的代价,跟悬浮
+    /// 歌词/灵动岛换字体族时的取舍一致,不单为菜单栏另铺一套"字体族感知的行高表"。
     static var font: NSFont {
         let settings = AppSettings.shared
-        return font(weight: settings.menuBarLyricsFontWeight, size: settings.menuBarLyricsFontSize)
+        return font(family: settings.menuBarLyricsFontFamily,
+                    weight: settings.menuBarLyricsFontWeight, size: settings.menuBarLyricsFontSize)
     }
 
     /// 字号可选的合法区间(加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
@@ -41,15 +49,26 @@ enum MenuBarMarqueeRenderer {
     static var systemPointSize: CGFloat { NSFont.menuBarFont(ofSize: 0).pointSize }
 
     /// - Parameter size: 0 = 跟随系统字号;其余按点数,越界夹回 `fontSizeRange`。
-    static func font(weight: OverlayFontWeight, size: CGFloat) -> NSFont {
+    static func font(family: String, weight: OverlayFontWeight, size: CGFloat) -> NSFont {
         let pointSize = size > 0
             ? min(max(size, fontSizeRange.lowerBound), fontSizeRange.upperBound)
             : systemPointSize
-        return font(weight: weight, pointSize: pointSize)
+        return font(family: family, weight: weight, pointSize: pointSize)
     }
 
     /// 不夹区间的底层版本:双排(副行)那两行的 10 / 9pt 低于单行滑杆的下限 10,走不了上面那个。
-    static func font(weight: OverlayFontWeight, pointSize: CGFloat) -> NSFont {
+    ///
+    /// family 非空时走 `NSFontManager`(跟 `Font.overlayFont` 同一条"空串/装不上就落回系统字体"
+    /// 哨兵规则,那边给 SwiftUI `Font`,这里画位图要的是 `NSFont`,两条路各自成立、不能共用一份
+    /// 实现)。粗细走 `appKitWeight`(0…15 的 AppKit 刻度),不是下面系统字体分支用的
+    /// `NSFont.Weight`(-1…1 的浮点刻度)——两套刻度不通用,混用会拿到错的字重。
+    static func font(family: String, weight: OverlayFontWeight, pointSize: CGFloat) -> NSFont {
+        if !family.isEmpty,
+           let custom = NSFontManager.shared.font(
+               withFamily: family, traits: [], weight: weight.appKitWeight, size: pointSize
+           ) {
+            return custom
+        }
         // regular 走 menuBarFont(ofSize:) 而不是 systemFont:两者实测逐点同宽同高,但前者才是
         // "菜单栏那套字体"这个语义本身,系统将来换菜单栏字体时它跟得上。
         guard weight != .regular else { return NSFont.menuBarFont(ofSize: pointSize) }
@@ -58,15 +77,19 @@ enum MenuBarMarqueeRenderer {
 
     // MARK: - 双排(副行)
 
-    /// 双排时主行的字体:10pt(`MenuBarLyricRows.mainPointSize`),粗细听用户的,字号滑杆不生效(为什么见
-    /// MenuBarLyricRows 头注)。
+    /// 双排时主行的字体:10pt(`MenuBarLyricRows.mainPointSize`),字体族/粗细听用户的,字号滑杆
+    /// 不生效(为什么见 MenuBarLyricRows 头注)。
     static var doubleRowMainFont: NSFont {
-        font(weight: AppSettings.shared.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.mainPointSize)
+        let settings = AppSettings.shared
+        return font(family: settings.menuBarLyricsFontFamily,
+                    weight: settings.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.mainPointSize)
     }
 
-    /// 双排时副行的字体:9pt,粗细跟主行同一档。
+    /// 双排时副行的字体:9pt,字体族/粗细跟主行同一档。
     static var doubleRowSecondaryFont: NSFont {
-        font(weight: AppSettings.shared.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.secondaryPointSize)
+        let settings = AppSettings.shared
+        return font(family: settings.menuBarLyricsFontFamily,
+                    weight: settings.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.secondaryPointSize)
     }
 
     /// 画主行**这段文字**用的字体,单行 / 双排两种口径的唯一入口。占位符 ♪ 恒默认字重的规则(见 `font(for:)`)

@@ -168,15 +168,20 @@ struct MenuBarEditorStage: View {
         settings.menuBarLyricsKaraoke ? L10n.t("卡拉OK效果") : L10n.t("跟随系统")
     }
 
-    /// 「字体」按钮摘要:粗细档位显示名(跟下拉里的选项同一份文案);**只有用户改过字号、且字号在生效**
-    /// 才追加 " Npt" —— 跟随系统时字号不是用户的决定;副行开着时字号由行高推出、滑杆让位(见
-    /// `MenuBarFontSizeRow`),报出来都是占预算(toolbar 头注那笔账按这个口径算)。副行本身
-    /// 归「布局」,在那颗按钮的摘要里报。
+    /// 「字体」按钮摘要:粗细档位显示名(跟下拉里的选项同一份文案)恒报;**只有偏离默认才追加**
+    /// 字体族(跟随系统时不是用户的决定,报出来是恒定噪声,跟「布局」按钮摘要里副行那条同一个
+    /// 判据)和字号(" Npt",副行开着时字号由行高推出、滑杆让位,见 `MenuBarFontSizeRow`,报出来
+    /// 也是占预算)。副行本身归「布局」,在那颗按钮的摘要里报。
     private var fontSummary: String {
-        let weight = settings.menuBarLyricsFontWeight.displayName
-        guard !settings.menuBarSecondaryLine.showsSecondaryRow, settings.menuBarLyricsFontSize > 0 else { return weight }
-        let size = String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))")
-        return "\(weight) \(size)"
+        var parts: [String] = []
+        if !settings.menuBarLyricsFontFamily.isEmpty {
+            parts.append(FontFamilyPicker.displayName(for: settings.menuBarLyricsFontFamily))
+        }
+        parts.append(settings.menuBarLyricsFontWeight.displayName)
+        if !settings.menuBarSecondaryLine.showsSecondaryRow, settings.menuBarLyricsFontSize > 0 {
+            parts.append(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
+        }
+        return parts.joined(separator: " ")
     }
 
     /// 「行为」按钮摘要:两个开关里开着的那几个,全开 / 全关给一句概括(`SettingsToggleSummary`,跟另外
@@ -479,6 +484,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
         settings.menuBarLyricsFillColorHex = AppSettings.defaultMenuBarLyricsFillColorHex
         // 「字体」浮层
+        settings.menuBarLyricsFontFamily = AppSettings.defaultMenuBarLyricsFontFamily
         settings.menuBarLyricsFontWeight = AppSettings.defaultMenuBarLyricsFontWeight
         settings.menuBarLyricsFontSize = AppSettings.defaultMenuBarLyricsFontSize
         // 「行为」浮层(从「布局」拆出来)
@@ -641,15 +647,37 @@ struct MenuBarColorPopover: View {
     }
 }
 
-/// 「字体」组的行(浮层与抽屉同一份):「粗细」+「字号」,跟悬浮歌词「文字」浮层里那两行同款
-/// 控件。「副行」曾放在这一组第三行(它让字号失效,当时想让因果同屏),搬去「布局」
-/// —— 它首先是"排几行"的版面问题;因果同屏改由「字号」那一行自己交代(副行开着时尾部写「由副行决定」)。
+/// 「字体」组的行(浮层与抽屉同一份):「字体」(字体族)+「粗细」+「字号」,跟灵动岛
+/// `NotchFontSettingsRows` 同一个三件套、同一个顺序。「副行」曾放在这一组第三行(它让字号失效,
+/// 当时想让因果同屏),搬去「布局」—— 它首先是"排几行"的版面问题;因果同屏改由「字号」那一行
+/// 自己交代(副行开着时尾部写「由副行决定」)。
+///
+/// 字体族这一行**可选自定义字体**,不再只跟随系统菜单栏(06 章里"字体族继续跟随系统菜单栏"
+/// 那条已不成立;代价是跟隔壁时钟/电量等系统菜单项的字体不一定搭,选了就是接受这份不一致)。
+/// 控件直接复用 `FontFamilyPicker`(跟悬浮歌词「文字」浮层、灵动岛「字体」浮层同一个组件、
+/// 同一条"空串 = 跟随系统"规则),渲染侧的接线在 `MenuBarMarqueeRenderer`(见其头注)。
 struct MenuBarFontRows: View {
     var body: some View {
         VStack(spacing: 0) {
+            MenuBarFontFamilyRow()
+            CardDivider()
             MenuBarFontWeightRow()
             CardDivider()
             MenuBarFontSizeRow()
+        }
+    }
+}
+
+/// 「字体」行(字体族):跟悬浮歌词/灵动岛那两行完全一致的控件与语义,只是各存各的键
+/// (`menuBarLyricsFontFamily`)。标题同样叫「字体」——这个词在这里指"字体族"这一件具体的事,
+/// 跟外层浮层/抽屉分组标题也叫「字体」(指"字体这一整组样式")不是同一层级的重名,灵动岛那边
+/// (`NotchFontSettingsRows`)已经是这个先例。
+struct MenuBarFontFamilyRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRow(icon: "character", title: L10n.t("字体")) {
+            FontFamilyPicker(selection: $settings.menuBarLyricsFontFamily)
         }
     }
 }

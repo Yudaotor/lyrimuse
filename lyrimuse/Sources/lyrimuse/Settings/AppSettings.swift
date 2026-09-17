@@ -207,6 +207,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsTextColorHex = "np:menuBarLyricsTextColorHex"
         static let menuBarLyricsFillColorHex = "np:menuBarLyricsFillColorHex"
         static let menuBarLyricsIconPosition = "np:menuBarLyricsIconPosition"
+        static let menuBarLyricsFontFamily = "np:menuBarLyricsFontFamily"
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
         static let menuBarSecondaryLine = "np:menuBarSecondaryLine"
@@ -451,6 +452,11 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarShowsTitleWhenNoLyrics = true
     static let defaultMenuBarLyricsTextColorHex = ""
     static let defaultMenuBarLyricsFillColorHex = ""
+    /// 菜单栏歌词的字体族。空串 = 跟随系统菜单栏(`FontFamilyPicker` 那套"空串 = 跟随系统"哨兵,
+    /// 跟悬浮歌词 `fontFamilyName` / 灵动岛 `notchFontFamilyName` 同一条规则,别为这一面另起一套)。
+    /// 06 章原先记的"字体族继续跟随系统菜单栏"是加这项之前的决定(理由是跟隔壁时钟/电量等
+    /// 系统菜单项字体不搭);用户显式要求放开,在「重置」范围内。
+    static let defaultMenuBarLyricsFontFamily = ""
     /// 菜单栏歌词的粗细。类型直接复用 `OverlayFontWeight`(LyrimuseCore 里那条六档阶梯):
     /// 名字带 Overlay,但跟 `LyricsRestingAlignment` 一样是跨展示面共用的纯枚举,六档、显示名、
     /// Font.Weight 映射三处都是现成的;真要统一命名时连 04 章一起改。默认 `.regular` ——
@@ -656,8 +662,13 @@ final class AppSettings: ObservableObject {
             defaults.set(menuBarLyricsIconPosition.rawValue, forKey: Keys.menuBarLyricsIconPosition)
         }
     }
-    /// 菜单栏歌词的粗细,见 `defaultMenuBarLyricsFontWeight`;字体族/字号不在这里 —— 那两样
-    /// 继续跟系统菜单栏(MenuBarMarqueeRenderer.font)。
+    /// 菜单栏歌词的字体族,见 `defaultMenuBarLyricsFontFamily`。跟 `fontFamilyName` /
+    /// `notchFontFamilyName` 同一条"空串 = 跟随系统"规则,消费方是 `MenuBarMarqueeRenderer`。
+    @Published var menuBarLyricsFontFamily: String {
+        didSet { defaults.set(menuBarLyricsFontFamily, forKey: Keys.menuBarLyricsFontFamily) }
+    }
+    /// 菜单栏歌词的粗细,见 `defaultMenuBarLyricsFontWeight`;字号不在这里 —— 见
+    /// `menuBarLyricsFontSize`(MenuBarMarqueeRenderer.font)。
     @Published var menuBarLyricsFontWeight: OverlayFontWeight {
         didSet { defaults.set(menuBarLyricsFontWeight.rawValue, forKey: Keys.menuBarLyricsFontWeight) }
     }
@@ -1442,6 +1453,7 @@ final class AppSettings: ObservableObject {
         menuBarLyricsFillColorHex = defaults.string(forKey: Keys.menuBarLyricsFillColorHex) ?? Self.defaultMenuBarLyricsFillColorHex
         menuBarLyricsIconPosition = defaults.string(forKey: Keys.menuBarLyricsIconPosition)
             .flatMap(MenuBarLyricsIconPosition.init(rawValue:)) ?? Self.defaultMenuBarLyricsIconPosition
+        menuBarLyricsFontFamily = defaults.string(forKey: Keys.menuBarLyricsFontFamily) ?? Self.defaultMenuBarLyricsFontFamily
         menuBarLyricsFontWeight = defaults.string(forKey: Keys.menuBarLyricsFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultMenuBarLyricsFontWeight
         menuBarLyricsFontSize = CGFloat(

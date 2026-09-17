@@ -256,6 +256,7 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "配色"),
         surface(.menuBar, "文字颜色", alt: ["未唱到的颜色"], kw: ["字色", "颜色", "跟随系统"], group: "配色"),
         surface(.menuBar, "已唱到的颜色", kw: ["染色", "高亮色"], group: "配色"),
+        surface(.menuBar, "字体", kw: ["字体族", "font"], group: "字体"),
         surface(.menuBar, "粗细", kw: ["字重", "weight"], group: "字体"),
         surface(.menuBar, "字号", kw: ["大小", "font size"], group: "字体"),
         surface(.menuBar, "最大宽度", kw: ["宽度", "pt"]),
