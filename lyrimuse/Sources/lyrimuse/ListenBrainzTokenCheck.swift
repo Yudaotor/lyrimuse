@@ -30,7 +30,7 @@ final class ListenBrainzTokenCheck: ObservableObject {
     ///
     /// knownUser 传已经持久化下来的用户名(ConfigStore.listenbrainzUser)。有它的话**首次**
     /// 调用直接认,不转圈也不发请求 —— 这个对象是页面上的 @StateObject,离开设置页再回来
-    /// 就是个新实例、state 退回 .empty,而 Token 一个字都没变。2026-08-16 用户报的正是这个:
+    /// 就是个新实例、state 退回 .empty,而 Token 一个字都没变。现象是的正是这个:
     /// "这个 yudaotor 没有持久化吗,为什么我刚才切进去看的时候还在转圈"。
     func tokenChanged(_ token: String, knownUser: String = "", onResolvedUser: @escaping (String) -> Void) {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -89,7 +89,7 @@ final class ListenBrainzTokenCheck: ObservableObject {
             let status = (response as? HTTPURLResponse)?.statusCode
             NetworkAuditLog.record(service: "listenbrainz", operation: "validate-token", host: url.host ?? "api.listenbrainz.org",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-            // ⚠️ 实测(2026-08-15 直接打这个接口核对过):Token 不对时服务端回的是
+            // ⚠️ 实测(直接打这个接口核对过):Token 不对时服务端回的是
             // **HTTP 200 + {"valid":false}**,不是 401。所以真正的判据是下面那个 valid 字段,
             // 这一行只是兜底 —— 万一哪天它改成标准的鉴权失败,也别把 401 当成"网络没问到"。
             if status == 401 { return .invalid }

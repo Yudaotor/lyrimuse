@@ -6,8 +6,8 @@ import SwiftUI
 ///
 /// URLCache 只缓存**字节**:命中它省掉的是下载,省不掉"异步取出 + 解码"这一段,而
 /// AsyncImage 无论如何都要先画一帧占位符再异步加载。于是每次视图重建(切换歌手/专辑/
-/// 歌曲分段、卡片展开、列表翻页)都要闪一下默认头像 —— 图其实早在本地了(2026-08-12
-/// 用户反馈"每次点到歌手 tab 都会先出默认头像")。
+/// 歌曲分段、卡片展开、列表翻页)都要闪一下默认头像 —— 图其实早在本地了(
+/// 现象是"每次点到歌手 tab 都会先出默认头像")。
 ///
 /// 这里存的是 NSImage,配合 CachedImage 在**构造时**同步取,命中就直接画,第一帧就是
 /// 真图,一次占位符都不闪。
@@ -15,7 +15,7 @@ import SwiftUI
 final class ImageMemoryCache {
     static let shared = ImageMemoryCache()
 
-    /// 按用途分档(2026-08-20 性能审计):列表里 26~40pt 的小图和歌词窗口的高清封面
+    /// 按用途分档:列表里 26~40pt 的小图和歌词窗口的高清封面
     /// 原来共用同一个"按原图存"的缓存 —— 一张网易云原生大图(3000² ≈ 36MB 解码后)
     /// 就能吃掉 48MB 预算的大半,把几百张列表缩略图挤出去,表现成列表滚动时缩略图
     /// 反复换入换出闪占位符。缩略档在解码时就降采样到 ≤256px(Retina 下 40pt 行高
@@ -37,7 +37,7 @@ final class ImageMemoryCache {
         return c
     }()
 
-    /// 失败负缓存(2026-08-20):失效/缺图的 URL 原来在每次视图重建时都重发一次真实
+    /// 失败负缓存:失效/缺图的 URL 原来在每次视图重建时都重发一次真实
     /// 网络请求(URLCache 不缓存失败)。记一个短 TTL 的失败时刻,窗口内不再重试 ——
     /// 图源偶发抖动过后仍能自愈。
     private var failedAt: [URL: Date] = [:]
@@ -60,7 +60,7 @@ final class ImageMemoryCache {
     func store(_ image: NSImage, for url: URL, variant: Variant = .thumbnail) {
         // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰。⚠️ 按**像素**算,不是
         // NSImage.size 的点数:带 DPI 标签的 JPEG(Spotify 图床原图是 797 dpi)2000² 像素的图 size 只有
-        // 181 点,按点算会把一张 16MB 的解码图记成 131KB,整个 48MB 预算形同虚设(2026-09-09)。
+        // 181 点,按点算会把一张 16MB 的解码图记成 131KB,整个 48MB 预算形同虚设。
         let cost = max(1, image.pixelWidth * image.pixelHeight * 4)
         cache.setObject(image, forKey: Self.key(url, variant), cost: cost)
         failedAt[url] = nil
@@ -91,7 +91,7 @@ final class ImageMemoryCache {
 
     /// 预热:把一批 URL 提前解码进内存(缩略档 —— 预热的对象就是列表)。给"启动后不久、
     /// 页面还没打开"这个空窗用 —— 冷启动时 URLCache 里有字节但内存里没有解码结果,首屏
-    /// 第一帧仍会闪一下占位符(2026-08-12 用户反馈的另一半:"首次打开时会有一段时间默认")。
+    /// 第一帧仍会闪一下占位符(现象是的另一半:"首次打开时会有一段时间默认")。
     /// 提前热好,页面打开时就是同步命中。
     ///
     /// 并发压到 4:这些都是本地磁盘缓存命中,不该跟别的启动工作抢带宽/CPU;真要有几张
@@ -157,7 +157,7 @@ struct CachedImage<Placeholder: View>: View {
             }
             // init 已经用缓存值做过初值:命中时这里再赋一次同样的对象,只会白白多触发
             // 一次 body 求值(@State 的 setter 不比较引用),所以先看有没有必要。
-            // ⚠️ 早退前必须把缓存值写回 @State(2026-08-20 对抗核实抓出的既有 bug):同一
+            // ⚠️ 早退前必须把缓存值写回 @State(对抗核实抓出的既有 bug):同一
             // 视图身份下 url 变化且新 url 恰好已在缓存时,image 里还是旧 url 的图——直接
             // return 会把错图一直挂到视图身份重建。同引用赋值的那次多余 body 求值靠下面
             // 的 !== 判断挡住。
@@ -217,8 +217,8 @@ extension NSImage {
     /// 像素宽 / 高,取自第一个 representation 的图头(`pixelsWide` / `pixelsHigh`),拿不到再退回 size 的点数。
     ///
     /// 凡是拿一张图的"大小"做判断 —— 比分辨率、算缓存 cost、判形状 —— 都用这两个,不要用 `size`:那是
-    /// **点**,会跟着文件里的 DPI 元数据走。2026-09-09 实测 Spotify 图床的 JPEG 带 797 dpi,2000×2000 的原图
-    /// `size.width` 只有 181,高清替代那条路第一版就是在这里把原图当成小图丢掉的。网易云 / QQ / Apple 的图
+    /// **点**,会跟着文件里的 DPI 元数据走。实测 Spotify 图床的 JPEG 带 797 dpi,2000×2000 的原图
+    /// `size.width` 只有 181,用点数就会在高清替代那条路上把原图当成小图丢掉。网易云 / QQ / Apple 的图
     /// 没有 DPI 标签、点数恰好等于像素,所以老代码一直没出事,但那是巧合不是保证。
     /// `NSImage(cgImage:size:)` 构造出来的缩略档 representation 与 size 一致,两条路结果相同。
     var pixelWidth: Int { representations.first.map(\.pixelsWide) ?? Int(size.width.rounded()) }

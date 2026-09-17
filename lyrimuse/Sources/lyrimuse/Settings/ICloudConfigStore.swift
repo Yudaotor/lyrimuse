@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "icloud
 /// (专为"同步少量设置"设计)都需要 `com.apple.developer.ubiquity-container-identifiers`
 /// 这类 entitlement,而 entitlement 要真实 Team ID + 描述文件才会被系统认。Lyrimuse 是
 /// **ad-hoc 签名**(`Signature=adhoc`、`TeamIdentifier=not set`、entitlements 为空,
-/// 2026-08-10 对 /Applications/Lyrimuse.app 实测),两套都用不了。
+/// 对 /Applications/Lyrimuse.app 实测),两套都用不了。
 ///
 /// 剩下能走的只有第三条:**非沙盒 App 把 iCloud Drive 当普通路径读写**——
 /// `~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/`。很多非 App Store 的
@@ -22,7 +22,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "icloud
 ///
 /// ## 只做"搬家",不做"持续同步"
 ///
-/// 2026-08-10 跟用户确认过的范围:导出时默认落到 iCloud、新机器首次启动时探测到就问一句
+/// 跟用户确认过的范围:导出时默认落到 iCloud、新机器首次启动时探测到就问一句
 /// 要不要导入。**没有**两台机器实时保持一致那套东西 —— 那需要处理"两边同时改了同一项",
 /// 而 iCloud Drive 遇到冲突可能自己挑一个版本还不通知(Apple 官方文档承认这点),在一份
 /// 带账号 token 的配置上静默丢数据是不可接受的。Alfred 官方也明确不推荐用 iCloud 同步
@@ -39,7 +39,7 @@ enum ICloudConfigStore {
 
     /// 用户自选的备份文件夹。为 nil 表示用默认的 iCloud Drive 那个。
     ///
-    /// 2026-08-13 加。这一整套原来写死在 iCloud —— 但它压根没用 iCloud 的任何 API
+    /// 这一整套原来写死在 iCloud —— 但它压根没用 iCloud 的任何 API
     /// (没有 CloudKit、没有 NSUbiquitousKeyValueStore,那些都需要这个 ad-hoc 签名的 App
     /// 拿不到的 entitlement),只是往 `~/Library/Mobile Documents/com~apple~CloudDocs/`
     /// 底下写普通 JSON 文件而已。同步能力全部来自那个文件夹本身。
@@ -147,7 +147,7 @@ enum ICloudConfigStore {
     /// "备份在哪"这个信息本身存在旧机器的偏好里,新机器恰恰没有**。如果只按 folderURL 找,
     /// 一个把备份放在 Dropbox 的用户在新机器上首启时会什么都找不到 —— 因为新机器的
     /// UserDefaults 是空的,customFolderPath 必然是 nil,folderURL 于是回退到 iCloud。
-    /// 这就是 2026-08-13 用户问出来的那个洞。
+    /// 这就是这条路上的那个洞。
     static func searchFolders() -> [URL] {
         var out: [URL] = [folderURL]
         let cloudDefault = cloudDocsURL.appendingPathComponent("Lyrimuse")
@@ -241,7 +241,7 @@ enum ICloudConfigStore {
         guard var found = best else { return nil }
         // 只在文件**已经下载到本机**时才读内容补充自报信息。
         //
-        // 不能无条件 `Data(contentsOf:)`:2026-08-10 实测(brctl evict 造出真占位符)——
+        // 不能无条件 `Data(contentsOf)`:实测(brctl evict 造出真占位符)——
         // 读一个未下载的文件会触发**透明物化**,也就是当场去 iCloud 下载并**阻塞调用线程**
         // 直到下完(那次小文件用了 1.06s,网络差时可以是几十秒)。而这个方法是在设置页
         // .onAppear、以及启动探测里同步调的,一卡就是整个界面卡住。
@@ -270,7 +270,7 @@ enum ICloudConfigStore {
 
     /// 这个文件现在能不能直接读,而**不会**触发下载。
     ///
-    /// 判据本身(尤其"拿不到状态时怎么算"那一档,2026-08-24 修的就是它)是纯逻辑,抽在
+    /// 判据本身(尤其"拿不到状态时怎么算"那一档,修的就是它)是纯逻辑,抽在
     /// `ICloudFileReadiness` 里由自测覆盖 —— 这里只负责把两个事实查出来喂给它。
     static func isMaterialized(_ url: URL) -> Bool {
         var probe = url
@@ -289,7 +289,7 @@ enum ICloudConfigStore {
     ///
     /// 这是"直接把 iCloud Drive 当普通路径用"必须自己承担的一步,而且实测下来跟直觉相反:
     /// 对未下载的文件 `Data(contentsOf:)` **不会失败**,它会触发透明物化 —— 当场去下载并
-    /// 把调用线程按在那儿直到下完(2026-08-10 用 brctl evict 造出真占位符实测:151 字节的
+    /// 把调用线程按在那儿直到下完(用 brctl evict 造出真占位符实测:151 字节的
     /// 小文件也要 1.06s)。所以不能"读读看,失败再说",那等于把超时控制交了出去。
     ///
     /// 正确顺序是:先查状态(查状态本身不触发下载),没下载就
@@ -305,7 +305,7 @@ enum ICloudConfigStore {
     /// `read` 的完整结果。分出 `.downloading` 这一档是为了让界面能说实话:
     /// "已经在下了,等它下完"和"根本没能开始下"对用户是两件完全不同的事,而原来这两种
     /// 都返回 nil、界面一律提示"等一会儿再试" —— 后一种等到天荒地老也不会好
-    /// (2026-08-24 用户在另一台机器上报的正是这个,病根见 `ICloudFileReadiness`)。
+    /// (用户在另一台机器上报的正是这个,病根见 `ICloudFileReadiness`)。
     enum ReadOutcome {
         case data(Data)
         /// 本机还没有这份文件,下载**已经发起**,但超时之前没下完。再点一次就行。
@@ -369,8 +369,8 @@ enum ICloudConfigStore {
         }
     }
 
-    // 这里原来有 `existingBackupNames()` 和 `pruneBackups(keeping:)`。2026-09-01 一并删掉:
-    // 用户明确定了「不需要这个清理逻辑,想塞几份就几份」——备份本来就该按他的意思攒着,
+    // 这里原来有 `existingBackupNames` 和 `pruneBackups(keeping)`。一并删掉:
+    // 明确不做清理逻辑,想塞几份就几份 —— 备份本来就该按用户自己的意思攒着,
     // 而这两个方法**只**为那套清理服务(数份数喂菜单项 / 真正去删)。`latestSnapshot()`
     // 走的是完全独立的 `BackupDiscovery.latest(in:)`,不依赖它们。
     //

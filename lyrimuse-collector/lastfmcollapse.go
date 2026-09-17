@@ -37,7 +37,7 @@ import (
 //  2. 没收录,再查一次「第一位歌手 + 歌名」。**折叠目标已被收录** → collapse,发第一位,
 //     永久;目标也没收录 → defer,维持原样,lastfmCollapseDeferRecheck 之后允许重查。
 //
-// 第 2 步是 2026-09-03 重做时新加的:原实现(2026-08-07 ~ 08-31)只做第 1 步,"查不到就折"
+// 第 2 步是重做时新加的:原实现(~ 08-31)只做第 1 步,"查不到就折"
 // —— 折进一个 Last.fm 也不认识的名字,等于把影子从合体页挪到单人页,收益不确定;更要紧的是
 // 它是 firstCreditedArtist 之外的第二道防线:切错头(K/DA → K 那次真实事故)时,「K」名下
 // 不会有这首歌被正规收录,第 2 步查不到,不折。
@@ -69,7 +69,7 @@ import (
 // mirrorAsync 在智能档下把总窗口加大同样的量(mirrorTimeout),写入那 8 秒不被挤占。
 // 结论永久缓存,同一首歌反复播放不再打网络。
 const (
-	// 无 mbid 时,听众数 ≥ 这个值视为编目里的正规条目。2026-08-07 实测:影子条目的听众数是
+	// 无 mbid 时,听众数 ≥ 这个值视为编目里的正规条目。实测:影子条目的听众数是
 	// 1~180,编目里最冷门的正规合体条目(《Scream Louder (Flyte Tyme Remix)》)是 597 且带 mbid。
 	lastfmCatalogListenersMin = 500
 	// defer(两边都没收录)多久之后允许重查。keep / collapse 永不重查(见头注)。
@@ -229,7 +229,7 @@ func (c *lastfmArtistCollapser) probe(ctx context.Context, artist, track string)
 	defer cancel()
 	// ⚠️ 不用 q.Encode():Last.fm 的 GET 端点会对 query value 多解一次码,含加号的歌名走标准
 	// 编码必然 error 6 —— 而这里 error 6 的语义正是"没收录 → 可能折叠",查错了就是把正规合体
-	// 署名折坏(2026-08-22 真实事故,见 lastfmGetQuery)。
+	// 署名折坏(真实事故,见 lastfmGetQuery)。
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+lastfmGetQuery(q), nil)
 	if err != nil {
 		return lastfmCatalogProbe{}, fmt.Errorf("build request: %w", err)
@@ -329,7 +329,7 @@ func (c *lastfmArtistCollapser) load() {
 		log.Printf("lastfm smart artist: cache unreadable, starting empty: %v", err)
 		return
 	}
-	// 2026-08 的老格式条目没有 verdict(那版按 30 天 TTL 重查),不认、丢掉重判 —— 那批判定
+	// 的老格式条目没有 verdict(那版按 30 天 TTL 重查),不认、丢掉重判 —— 那批判定
 	// 只做了第 1 步,没有目标核查,不能直接升格成永久结论。
 	for k, d := range m {
 		switch d.Verdict {

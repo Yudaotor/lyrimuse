@@ -4,7 +4,7 @@ package main
 
 import "strings"
 
-// Spotify 原生客户端这一次播放的**真曲目 ID**(2026-09-09)。
+// Spotify 原生客户端这一次播放的**真曲目 ID**。
 //
 // 来路:换曲那一拍 detectAdAtSessionStart 本来就要 fork 一次 osascript 问 `spotify url` 判广告,
 // 拿到的 `spotify:track:<22 位 ID>` 以前判完前缀就丢了。现在留下来,做两件事:

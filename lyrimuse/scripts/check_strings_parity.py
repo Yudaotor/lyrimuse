@@ -106,7 +106,7 @@ def main():
         print(f"\n\u2717 只在 en 有、zh-hans 缺失({len(only_en)} 条):")
         for k in only_en[:20]:
             print(f"    {k}")
-    # 第 0 道(2026-09-03):catalog 里每个键都必须有 en 和 zh-Hant —— 用户定的规则是新加文案必须把当前
+    # 第 0 道:catalog 里每个键都必须有 en 和 zh-Hant —— 规则是新加文案必须把当前
     # 支持的语言都写全。生成物对拍看不出这个(缺译时生成脚本已经拒绝生成),这里直接查真源。
     import json
     catalog = json.loads((ROOT / "Localization/Localizable.xcstrings").read_text(encoding="utf-8"))

@@ -3,8 +3,8 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
 
-/// 「替用户按下 YouTube Music 里**平台已经放出来**的那颗『跳过广告』键」(2026-09-08,灵动岛广告态改版的一部分,
-/// 用户拍板「选用可以跳过广告的方案」)。
+/// 「替用户按下 YouTube Music 里**平台已经放出来**的那颗『跳过广告』键」(灵动岛广告态改版的一部分,
+/// 「选用可以跳过广告的方案」)。
 ///
 /// ## 分工:门槛在 JS,动作在辅助功能
 ///
@@ -16,17 +16,17 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///   要用户给 App 授「辅助功能」权限;没授时回 `.needsAccessibility`,由 UI 弹系统对话框 + 横幅说明。
 /// * **复核**(`verifyJS`):按完等 `verifyDelay` 再探一次,广告真走了才回 `.skipped`。
 ///
-/// ## JS 这一侧能做的都试过了(2026-09-08 一天五版,真机日志 `ytmusic-skip` 类别)
+/// ## JS 这一侧能做的都试过了(一天五版,真机日志 `ytmusic-skip` 类别)
 ///
-/// 首版裸 `.click()`;第二版完整指针事件序列;第三版四种 DOM 点法(mousemove 唤出控件 + `pointerType: mouse`
-/// 序列 / 发给文字节点 / `focus()+click()` / 键盘 Enter)逐个试逐个复核;第四版调播放器自己的 API
+/// ⚠️ 这些点法**全部无效**,别再试:裸 `.click()`;完整指针事件序列;四种 DOM 点法(mousemove 唤出控件 +
+/// `pointerType: mouse` 序列 / 发给文字节点 / `focus()+click()` / 键盘 Enter);播放器自己的 API
 /// `onAdUxClicked('skip-button', <id>)` —— **全部** `verify=STILL`,广告视频时间逐秒照走(20:07、20:15、20:25
-/// 三条广告)。结论:这个播放器的跳过键只认真实用户输入(`isTrusted` 那一类检查)。第五版按用户拍板改成
+/// 三条广告)。结论:这个播放器的跳过键只认真实用户输入(`isTrusted` 那一类检查)。另一条死路是
 /// 「跳过键有尺寸时把 `<video>.currentTime` 拨到 `duration`」—— 真机(21:59,八次)**广告从头重放**:seek 一落,
 /// 视频时间归 0、徽章仍是 1/2,等于把 20 秒广告再看一遍,比不动更糟,当场撤掉;顺带暴露 `adAdvanced` 那条
 /// "视频时间倒回 = 跳到下一条了"的判据是错的(重放也倒回),已删,只认徽章翻页 / 离开广告态。
 /// **JS 注入这条路到此为止**:DOM 事件、播放器 API、seek 三类都不认。所以 JS 只留"看门"(有没有放出跳过键、
-/// 还剩几秒、广告徽章 / 视频时间供复核),按键交给 `AccessibilitySkipPress`(第六版,见那个文件头注)。
+/// 还剩几秒、广告徽章 / 视频时间供复核),按键交给 `AccessibilitySkipPress`。
 ///
 /// ## 跑在哪、怎么跑
 ///
@@ -42,7 +42,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 /// 对"有播放器但此刻不在广告态"的标签页也回 `NOTFOUND`,让搜索继续到真正在放广告的那一页 ——
 /// 代价是分不清"广告刚结束"和"没有标签页",两种情况对用户的反馈是同一句(见 `Outcome.notFound`)。
 ///
-/// ## 真机抓到的页面长什么样(2026-09-08,Safari,只读 DOM 监控)
+/// ## 真机抓到的页面长什么样(Safari,只读 DOM 监控)
 ///
 /// 广告开始后 5 秒内:`#preskip-component.ytp-ad-preview-slot` 里 `.ytp-ad-preview-text-modern` 写着
 /// 「你可以在 N 秒后 跳转到视频」,跳过键 `BUTTON.ytp-ad-skip-button-modern.ytp-button` 在 DOM 里但 0×0。
@@ -169,7 +169,7 @@ public enum YouTubeMusicAdSkipper {
     }
 
     /// 「按了之后广告走了没」的判据(纯函数,selftest 钉着):播放器离开广告态算走了;仍在广告态但**徽章文字变了**
-    /// (「1/2」→「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。⚠️ **视频时间倒回不算**:第五版 seek 那次
+    /// (「1/2」→「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。⚠️ **视频时间倒回不算**:
     /// 真机坐实,YouTube 对被 seek 的广告是从头重放(时间归 0、徽章不变),按"倒回 = 下一条了"会把重放误报成跳过。
     /// 徽章为空时只认离开广告态。`videoTime` 仍带着,只为日志。
     public static func adAdvanced(afterClick click: ClickResult, verify: VerifyResult) -> Bool {
@@ -260,7 +260,7 @@ public enum YouTubeMusicAdSkipper {
         }
     }
 
-    // MARK: - 「那颗键该不该出现」(2026-09-11,用户:「如果当前广告不支持跳过的话就不要显示那个跳过的按钮」)
+    // MARK: - 「那颗键该不该出现」
 
     /// 这条广告此刻能不能跳。
     ///
@@ -281,7 +281,7 @@ public enum YouTubeMusicAdSkipper {
     /// 门槛脚本的返回 → `Skippability`。纯映射,selftest 钉着。
     ///
     /// ⚠️ `notYet(nil)` 才是「不给跳」:页面上那句「你可以在 N 秒后 跳转到视频」是**可跳过广告独有**的,
-    /// 不可跳过的广告压根没有这个元素(真机 2026-09-08 抓过 DOM,见头注)。所以"读不到秒数"不是"读失败",
+    /// 不可跳过的广告压根没有这个元素(真机抓过 DOM,见头注)。所以"读不到秒数"不是"读失败",
     /// 是"这条广告没有跳过这回事"。
     public static func skippability(from click: ClickResult) -> Skippability {
         switch click {
@@ -303,12 +303,12 @@ public enum YouTubeMusicAdSkipper {
         return state == .ready
     }
 
-    /// 广告刚开头**先快探几拍**的轮数与间隔(2026-09-11)。
+    /// 广告刚开头**先快探几拍**的轮数与间隔。
     ///
     /// 真机时间线(只读抓的,用户没碰鼠标):`t+0.2 never` → `t+5.4 after(1)` → `t+8.4 ready`。
     /// 第一拍的 `never` 不是"这条广告不给跳",是**页面那一刻还没渲染出**跳过键 / 「N 秒后可跳过」
     /// 那个预览元素;而按 5 秒心跳等下一拍,白白把提示推迟到第 8 秒之后 —— YouTube 通常第 5 秒就把
-    /// 键放出来,用户在前 8 秒看到的是"没反应"(2026-09-11 用户原话:「还没有展开时,它并没有实时更新
+    /// 键放出来,用户在前 8 秒看到的是"没反应"(「还没有展开时,它并没有实时更新
     /// 这个图标」,当时我先怀疑视图失效,探针证明 body 在模型翻转后 20ms 就画上了,晚的是模型本身)。
     ///
     /// 所以头几拍按 1.2s 探:`t+0.2 / 1.4 / 2.6 / 3.8` 里总有一拍读到倒计时,读到之后就精确等到点
@@ -339,7 +339,7 @@ public enum YouTubeMusicAdSkipper {
     /// 比任何一条插播都长。
     public static let gateMaxRounds = 12
 
-    /// 门槛探测的**短缓存**(2026-09-11)。
+    /// 门槛探测的**短缓存**。
     ///
     /// 灵动岛是**每块屏一份**(`NotchMirrorManager` 给每块屏建一个完整的 `NotchLyricsWindowController`,
     /// 各自一份 `NotchPlayback`),于是同一条广告会有 N 份轮询按同一个节奏起跳 —— 真机日志里每行都出现
@@ -378,7 +378,7 @@ public enum YouTubeMusicAdSkipper {
             return nil
         }
         let state = skippability(from: click)
-        // 这条路以前一行日志都没有,于是"按钮该出现却没出现"根本无从排查(2026-09-11 用户报"展开态下
+        // 这条路以前一行日志都没有,于是"按钮该出现却没出现"根本无从排查(现象是"展开态下
         // 按钮不会自己刷出来"时坐实:日志里一片空白,只能靠猜)。每次探一次记一行,够看清时间线。
         logger.info("gate: \(String(describing: state), privacy: .public) (host \(host, privacy: .public))")
         gateCacheLock.lock()

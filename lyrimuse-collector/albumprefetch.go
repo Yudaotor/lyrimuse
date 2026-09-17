@@ -18,7 +18,7 @@ import (
 // 首歌时,大概率已经在后台解析完了,不用现等。跟正常路径复用同一套 enrichCache/
 // enrichInflight 去重,不会跟真播放到那首歌时的解析撞车重复跑。
 //
-// 曲目表从哪来,2026-08-14 起按**歌词来源**分流,而不是按播放器:
+// 曲目表从哪来,按**歌词来源**分流,而不是按播放器:
 //
 //   Apple Music → AppleScript 问 Music.app 的本地资料库。最准,因为曲目字符串跟播放器
 //                 上报的逐字节一致,算出来的 enrich key 必然对得上。
@@ -29,20 +29,20 @@ import (
 // 有哪些歌"(那需要 Spotify Web API 的 OAuth 凭据,仓库里没有也不该硬编码),而是"这张
 // 专辑有哪些歌" —— 后者网易云就能答,且对 Spotify / QQ 音乐 / 网易云三个播放器通用。
 //
-// 2026-08-14 之前这里**只有** Music.app 那一条,而调用点没有任何播放器判断:用别的播放器
+// 之前这里**只有** Music.app 那一条,而调用点没有任何播放器判断:用别的播放器
 // 听歌时,它拿着别家的专辑名去查 Apple Music 资料库,必然查不到,每换一张专辑白跑一次
 // osascript;更糟的是那段脚本没有 running 守卫,会把没开的 Music.app 拉起来。
 
 // albumPrefetchMaxTracks 是安全阀——防止专辑名字段被打上"整个作品集"这类离谱大合集
 // (几十上百首)时,一次性炸出上百个并发解析请求。正常专辑几首到二十来首都远低于这个数,
 // 不会被这个上限影响。
-// 2026-08-14 从 60 收到 30:闸门从"专辑名必须完全相等"放宽到"宽松包含"之后,这个上限
+// 从 60 收到 30:闸门从"专辑名必须完全相等"放宽到"宽松包含"之后,这个上限
 // 才真正开始起兜底作用 —— 放进来的可能是同一张专辑的加长版(Bad 25th Anniversary 24 首
 // vs 原版 11 首)。正常专辑几首到二十来首,30 够用;超过的多半是合集,不值得为它一次性
 // 炸出几十个解析请求。
 const albumPrefetchMaxTracks = 30
 
-// albumPrefetchStagger:2026-08-31 加——预取这条路径本身就是"自己把自己打限流"最大的
+// albumPrefetchStagger:加——预取这条路径本身就是"自己把自己打限流"最大的
 // 放大器。neteaseThrottle(netease.go)那道 250ms 全局节流只挡住了"单个请求发得太快",
 // 挡不住"这一批请求总量太大":换到一张全新专辑时,原来的写法是给最多 30 首曲目**各自**
 // 立即起一个 goroutine 解析,越难匹配的歌触发的重试轮越多(实测《Can We Dance》一首在
@@ -88,7 +88,7 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 		queued := 0
 		// 当前正在播的这首的宽松键 —— 用来把它从预取名单里剔掉。
 		//
-		// 2026-08-20 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
+		// 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
 		// 系统性不同(专辑名括号、中英文空格、繁简,以及多歌手串的分隔符 `A/B` vs
 		// `A & B`),逐字节比几乎必然漏 —— 于是正在播的这首被当成"另一首"又预取一遍,
 		// 在缓存里留下一条只差写法的重复条目(实测 Ticking Away 就是这么来的:那张专辑
@@ -105,7 +105,7 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			enrichMu.Lock()
 			_, exists := enrichCache[key]
 			if !exists {
-				// 2026-08-16 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
+				// 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
 				// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
 				// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
 				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
@@ -173,7 +173,7 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	}
 	// 专辑名至少要"宽松包含"(albumScore >= 100)才预取。
 	//
-	// 2026-08-14 修正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
+	// 修正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
 	// 精选集。把三档分数真的量出来之后,那个担心站不住:
 	//
 	//   albumScore("神经志",                "神經志 The Journal")   = 100  ← 想要的
@@ -182,7 +182,7 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	//
 	// 真正灾难性的那种(76 首的合集、上百首的作品集)名字跟本地专辑毫不沾边,天然是 0 分,
 	// 不需要 200 这道闸去挡。而 200 挡掉的全是"同一张专辑、写法不同"——繁简(normLoose
-	// 已经归一)、带英文副标题、带 (Remastered) 后缀,这些在中文曲库里极其常见。用户实测:
+	// 已经归一)、带英文副标题、带 (Remastered) 后缀,这些在中文曲库里极其常见。实测:
 	// 用 Spotify 放《神經志 The Journal》,每首歌都被这一行拦下,功能等于没上线。
 	//
 	// 100 这档剩下的风险只是"同一张专辑的另一个版本"(25 周年版 24 首 vs 原版 11 首),
@@ -208,7 +208,7 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	// Music。本仓其它几段 Music/Spotify 脚本(getStateScript、spotifyPositionScript)
 	// 开头都有同样的守卫,同一个理由。
 	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
-	// 纪录片)挡在 AppleScript 这一层——2026-08-26 实测坐实:Michael Jackson《XSCAPE
+	// 纪录片)挡在 AppleScript 这一层——实测坐实:Michael Jackson《XSCAPE
 	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
 	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
 	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部歌词源,注定全军覆没,

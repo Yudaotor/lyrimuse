@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 为什么放在 LyrimuseCore 而不是留在 `LyricsManagerView.swift`:比较器原来是那个文件里
 /// 一个 `private enum` 的方法,`lyrimuse-selftest` 只依赖 LyrimuseCore、够不到它,于是这套
-/// 规则(哪一档优先、平局怎么断、缺失值排哪儿)一直没有任何自动化覆盖 —— 2026-09-02 用户
+/// 规则(哪一档优先、平局怎么断、缺失值排哪儿)一直没有任何自动化覆盖 —— 用户
 /// 报「排序有时候选了不生效」,查下来正是这类"逻辑对但在某些数据形状下退化成静默无操作"
 /// 的问题,靠肉眼看列表发现不了。搬到 Core 之后跟 `EnrichCacheKeys` 同一个待遇:视图层只
 /// 负责把 Summary 映射成 `LyricsSortKey`,规则本身可被 selftest 逐档钉住。
@@ -36,7 +36,7 @@ public struct LyricsSortKey: Sendable, Equatable {
     /// 这条记录上次被解析出来的时刻(缓存里的 `ts`)。**只作次级键**,见
     /// `LyricsSortOrder` 里 updated/source 两档的注释。
     public let resolvedAt: Date?
-    /// 这份歌词当初是在**几个源应答**的情况下定下来的(借鉴清单 V3)。
+    /// 这份歌词当初是在**几个源应答**的情况下定下来的。
     /// **0 = 不知道**(老条目没有 `lyrics_sources_responded` 字段),不是"零个源应答" ——
     /// 所以 `.evidence` 那一档把 0 当"未知"收进尾块,跟 `hasSource` / `lyricsUpdatedAt`
     /// 两档对缺失值的处置同一个取舍。详见 `EnrichCacheStore.Summary.sourcesRespondedCount`。
@@ -75,7 +75,7 @@ public enum LyricsSortOrder: Sendable, Equatable {
     case album(ascending: Bool)
     case source(ascending: Bool)
     case updated(ascending: Bool)
-    /// 按"当初有几个源应答"排(借鉴清单 V3)。升序 = 证据最薄的排最前 —— 这一档存在的
+    /// 按"当初有几个源应答"排。升序 = 证据最薄的排最前 —— 这一档存在的
     /// 理由就是把那批"20 秒截止里只等到两三个源就定了案"的条目捞出来重搜。
     case evidence(ascending: Bool)
 
@@ -123,7 +123,7 @@ public enum LyricsSortOrder: Sendable, Equatable {
             case (false, false):
                 // 都没有来源 → 同一个尾块。块内改按"上次被解析的时刻"排,而不是退回歌手
                 // 字母序 —— 否则一旦当前视图里全是无来源的行(「仅无歌词」筛选就是这种
-                // 形状:2026-09-02 实测本机 14 条命中,`lyrics_source` 全为空),这一档
+                // 形状:实测本机 14 条命中,`lyrics_source` 全为空),这一档
                 // 排序会**整体退化成默认排序**,用户看到的就是"选了没反应"。
                 if let r = Self.compareOptional(a.resolvedAt, b.resolvedAt, ascending: ascending) {
                     return r

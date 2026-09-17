@@ -14,7 +14,7 @@ import (
 // ## 为什么补空扫描不够
 //
 // lyricsfillsweep.go 那一轮只收「一条歌词都没有」的条目(本机 104 首)。库里真正的大头是
-// **已经有词、但那份词是按早就作废的打分规则选出来的**:2026-09-16 实测本机 5514 条里
+// **已经有词、但那份词是按早就作废的打分规则选出来的**:实测本机 5514 条里
 // 5472 条(99.2%)的 lyrics_scoring_version 落后于当前的 v19,版本分布从 v0 一直摊到 v18
 // (v6 1266 条、v15 1476 条……)。收编它们的是 rescoreLyrics,而它的触发点
 // (needsLyricsRescore)跟补空一样挂在"这首歌又被播到"那一刻——一个几千首的库靠自然播放
@@ -92,11 +92,11 @@ type lyricsFullScanState struct {
 	StartedAt int64 `json:"startedAt,omitempty"`
 	UpdatedAt int64 `json:"updatedAt"`
 	// SecondsPerTrack:每首歌的粗略耗时估计,给界面说一句「预计约 N 小时」用
-	// (2026-09-17)。
+	//。
 	//
 	// 跟 ScoringVersion 同一个理由:这个数由 collector 侧的常量决定
 	// (lyricsFullScanGap + 一轮全源搜索),**App 不能自己写死一份**。此前界面里就硬编码着
-	// 25 秒、注释写着「15 秒固定间隔(lyricsFillSweepGap)」,而 2026-09-17 全量改用
+	// 25 秒、注释写着「15 秒固定间隔(lyricsFillSweepGap)」,而全量改用
 	// lyricsFullScanGap(5 秒)之后那句话和那个数当场都成了错的 —— 没有任何东西会报错,
 	// 只是用户看到的预计时长凭空多出一倍。
 	SecondsPerTrack int `json:"secondsPerTrack,omitempty"`
@@ -104,10 +104,10 @@ type lyricsFullScanState struct {
 
 // lyricsFullScanSearchEstimate:一首歌那一轮全源搜索的粗略耗时。
 //
-// 8 秒是 2026-09-17 换 gap 之后**实测修正过**的值,别按"搜索很快"的直觉往回调。
+// 8 秒是换 gap 之后**实测修正过**的值,别按"搜索很快"的直觉往回调。
 //
-// 第一版写 5 秒,依据是"gap 15 秒时每首 18 秒 → 搜索 3 秒"。那批样本太小、而且恰好是简单的歌;
-// 同日 gap 换成 5 秒后实测 **15.9 秒/首**,反推搜索约 11 秒 —— 差了三倍多。差距来自扫描的
+// ⚠️ 别按 5 秒估("gap 15 秒时每首 18 秒 → 搜索 3 秒"那种小样本、又恰好是简单的歌);
+// gap 换成 5 秒后实测 **15.9 秒/首**,反推搜索约 11 秒 —— 差了三倍多。差距来自扫描的
 // 分层顺序:最先跑的 tier 0 是"一条歌词都没有"的那批,要把所有源加别名轮全遍历一遍,最慢;
 // 后面 tier 2(本机 4900+ 首,只是打分版本旧)会快得多。取 8 秒是这两端之间的一档。
 //

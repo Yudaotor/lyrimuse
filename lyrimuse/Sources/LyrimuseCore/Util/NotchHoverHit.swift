@@ -1,10 +1,10 @@
 import CoreGraphics
 
-/// 灵动岛 hover 命中判定(2026-09-07)。
+/// 灵动岛 hover 命中判定。
 ///
 /// # 为什么不能只靠 `.contentShape(Rectangle())`
 ///
-/// 用户报「鼠标还没移到灵动岛上、只是移到它下面,卡片就展开了」。真机探针实测(在
+/// 现象是「鼠标还没移到灵动岛上、只是移到它下面,卡片就展开了」。真机探针实测(在
 /// `NotchWindowRoot.updateHover` 打进入/退出边沿的坐标,一次操作四条记录,每条都跟
 /// `NSEvent.mouseLocation` + 窗口 frame 交叉核对过、误差 ≤1pt):
 ///
@@ -21,7 +21,7 @@ import CoreGraphics
 /// 纵向的命中区仍是整扇窗(191pt)。窗口为了容纳展开态常驻最大尺寸,卡片下面那一百多
 /// pt 全是透明区、压着用户自己的窗口,于是"光标划过那片空白"就把灵动岛捅开了。
 ///
-/// 这不是新问题的新形态:2026-08-16 就为**同一个现象**把命中判定从 `NotchLyricsView`
+/// 这不是新问题的新形态:就为**同一个现象**把命中判定从 `NotchLyricsView`
 /// 自带的 `.onHover` 挪到宿主层(见 `NotchLyricsWindowController.setExpanded` 的头注,
 /// 当时实测「光标停在卡片下方 24pt 的透明处,卡片照样展开」)。那次的修法是加
 /// `contentShape`,而这次的实测说明那道措施只挡住了一半。

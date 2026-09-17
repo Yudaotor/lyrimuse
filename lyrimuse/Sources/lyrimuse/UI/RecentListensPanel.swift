@@ -4,13 +4,13 @@ import SwiftUI
 
 // 「最近听过」:按天分组、每行带封面与「第 N 次听」、底部翻页。
 //
-// 2026-08-27 从 IdleStandbyView.swift 的 private IdleRecentPanel 搬出来、去掉 Idle 前缀、
+// 从 IdleStandbyView.swift 的 private IdleRecentPanel 搬出来、去掉 Idle 前缀、
 // 改 internal —— 停播页(IdleStandbyView)和歌词窗口的「播放记录」面板(LyricsWindowView,
 // 取代原来那个 AppleScript 拿不到目录内容时就失效的「待播清单」)现在共用同一份实现,
 // 不是各写一份:「第 N 次听」那两把尺子(playCountKey vs PlayCountFold.familyKey)抄错
-// 一处就是 2026-08-21 那个「第 15 次听下面紧跟第 21 次听」的成因,只该有一份能改。
+// 一处就是那个「第 15 次听下面紧跟第 21 次听」的成因,只该有一份能改。
 //
-// 同一天(2026-08-27)又加了 showsCard/onArtwork 两个外观参数:歌词窗口那边用户反馈
+// 同一天又加了 showsCard/onArtwork 两个外观参数:歌词窗口那边现象是
 // "这个列表带了一张卡片背景,感觉像盖了一层东西,不是歌词真的被换掉了"——歌词文字本身
 // 从来没有卡片背景,直接铺在封面模糊背景上;这个列表现在也能选择用同一种"裸铺"外观,
 // 详见 showsCard/onArtwork 声明处的注释。停播页(IdleStandbyView)不传这两个参数、
@@ -20,7 +20,7 @@ import SwiftUI
 ///
 /// 两处必须知道的既有约束:
 /// - **「第 N 次听」的换算走 Core 里那份共享实现**(`RecentPlayOrdinal`),不是在这里再抄一遍
-///   减法 —— 那段有两把不同的尺子,抄错一处就是用户 2026-08-21 报的「第 15 次听下面紧跟
+///   减法 —— 那段有两把不同的尺子,抄错一处的表现就是「第 15 次听下面紧跟
 ///   第 21 次听」。
 /// - **`recentPage` 是服务层的共享状态**:设置页那张「最近记录」卡、停播页、歌词窗口的
 ///   「播放记录」面板看的都是同一个页码。所以这里退场时把它拨回第 1 页 —— 不然翻到第 7 页
@@ -31,7 +31,7 @@ struct RecentListensPanel: View {
     /// 卡片外观(圆角磨砂底 + 描边)要不要画。默认 true,匹配停播页"多张卡片摆在一起"的
     /// 仪表盘式布局;歌词窗口的「播放记录」传 false —— 那边是**直接替换歌词文字本身**,
     /// 歌词从来没有卡片背景,这个列表也不该有,不然观感像"盖了一层"而不是"歌词真的
-    /// 换了"(2026-08-27 用户反馈)。
+    /// 换了"(现象是)。
     var showsCard = true
     /// 文字/图标颜色要不要走"有封面背景就固定白色系"那套(跟整扇歌词窗口同一个判据
     /// `hasArtworkBackground`)。默认 false——停播页背景是统一柔光,不是铺满的封面模糊图,
@@ -96,7 +96,7 @@ struct RecentListensPanel: View {
             Spacer(minLength: 0)
             if let updated = stats.recentUpdatedAt {
                 // 上一轮刷新失败但列表还在:只把这行时间变暗 + 小叹号,不换成失败态
-                // (跟设置页最近记录卡头同一套观感,2026-09-03)。
+                // (跟设置页最近记录卡头同一套观感)。
                 HStack(spacing: 3) {
                     if stats.baselineFailed {
                         Image(systemName: "exclamationmark.circle").font(.system(size: 9))
@@ -148,7 +148,7 @@ struct RecentListensPanel: View {
                 }
             }
             .scrollIndicators(.never)
-            // 下拉刷新手势(2026-08-26 用户要求):跟表头那颗刷新按钮完全同一个动作
+            // 下拉刷新手势:跟表头那颗刷新按钮完全同一个动作
             // (refreshBaselineAndWait 只是那个动作的可 await 版本,见其声明处注释)——
             // 刷新的是当前正在看的这一页,不强制跳回第 1 页,跟按钮的既有行为保持一致。
             .refreshable { await stats.refreshBaselineAndWait(force: true) }
@@ -307,7 +307,7 @@ enum RelativeDayFormat {
 /// "多久算太旧"的规则,不在这里另起一份判定;比那边多了一段 5 秒 mtime 轮询——那边
 /// 挂在整张设置卡上跟着卡的生命周期走,这里没有更外层的卡可挂,自己管自己的。
 ///
-/// 2026-08-27 起两处消费:歌词窗口的「播放记录」按钮(LyricsWindowView.ListenHistoryPane)
+/// 两处消费:歌词窗口的「播放记录」按钮(LyricsWindowView.ListenHistoryPane)
 /// 和停播页右列(IdleStandbyView),跟 RecentListensPanel 同一个道理放在同一个文件——
 /// 「连了 Last.fm 用哪份数据、没连用哪份数据」这套判断只该有一处。`showsCard`/`onArtwork`
 /// 两个外观参数跟 RecentListensPanel 同一套,理由见那边的声明处注释。
@@ -318,7 +318,7 @@ enum RelativeDayFormat {
 struct PendingListensPanel: View {
     /// 点一行 = 在 Apple Music 里打开这首歌——跟 RecentListensPanel 的 onOpenTrack 同一个
     /// 语义、同一份实现(两处调用点本来就把同一个闭包传给了两个面板,见其声明处注释)。
-    /// 2026-08-27 补上:之前这个面板是纯只读展示,没有点击跳转,跟"已连接"那份体验不一致。
+    /// 补上:之前这个面板是纯只读展示,没有点击跳转,跟"已连接"那份体验不一致。
     var onOpenTrack: (String, String) -> Void
     var showsCard = true
     var onArtwork = false

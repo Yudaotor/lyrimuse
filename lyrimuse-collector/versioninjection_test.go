@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 真实bug(用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 ·
+// 真实故障(用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 ·
 // 采集服务 1.4.0」):collector 的版本号长期是 main.go 里一个手写字面量,而 App 侧版本
 // 一直从 git tag 自动派生——两个本该同源的值,一个自动一个手动,靠人在发版时记得改那
 // 一行来同步。实测记录:v1.1.0 补同步、v1.2.0 补同步、**v1.3.0 漏**、v1.4.0 补上、
@@ -22,7 +22,7 @@ func TestClientVersionInjectionWiring(t *testing.T) {
 
 	t.Run("clientVersion 必须是 var,不能是 const", func(t *testing.T) {
 		// 这条是整组里最要紧的:Go 的 `-ldflags -X` 只能写 var,对 const **静默失败**
-		// ——构建照样 exit 0、不报错不警告,而值原封不动(2026-09-02 实测坐实)。
+		// ——构建照样 exit 0、不报错不警告,而值原封不动。
 		// 谁要是哪天顺手把它改回 const,两个 build.sh 里的注入会无声无息地失效,
 		// 直接回到这次事故本身。
 		if !regexp.MustCompile(`(?m)^var clientVersion\s*=`).MatchString(src) {

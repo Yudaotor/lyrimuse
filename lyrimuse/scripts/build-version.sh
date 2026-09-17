@@ -8,7 +8,7 @@
 #   X.Y.Z-rc.N       → X.Y.Z.(500+N)  (1 ≤ N ≤ 499)
 #   其它形态          → 退出码 1,什么都不打印(前导 v 可有可无;数字不许带前导零)
 #
-# 为什么要有第四段(2026-09-05):Sparkle 比较版本用的是 sparkle:version / CFBundleVersion,而它的
+# 为什么要有第四段:Sparkle 比较版本用的是 sparkle:version / CFBundleVersion,而它的
 # SUStandardVersionComparator 实测把 "-" 之后的全部忽略 —— "1.6.0-beta.1" 与 "1.6.0"、"beta.2" 与
 # "beta.1" 都判相等。预发布若直接拿 tag 当构建号,beta 用户永远收不到 beta.2、也收不到同号正式版。
 # 所以展示版本(CFBundleShortVersionString)保留 tag 原文,构建号另算:正式版 1000 压在所有预发布之上,

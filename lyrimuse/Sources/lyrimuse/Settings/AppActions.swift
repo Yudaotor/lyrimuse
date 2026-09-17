@@ -14,8 +14,8 @@ final class AppActions {
     var openLyricsManager: (() -> Void)?
     var openLyricsWindow: (() -> Void)?
     var openOnboarding: (() -> Void)?
-    /// 唤出「搜索歌词…」独立小窗(2026-08-30,悬浮窗 ⚙ 快捷菜单用)——**不是**歌词窗口
-    /// 那个 `.sheet(item:)`(那个要求歌词窗口先开着,用户明确要求"只弹搜索页面,不用
+    /// 唤出「搜索歌词…」独立小窗(悬浮窗 ⚙ 快捷菜单用)——**不是**歌词窗口
+    /// 那个 `.sheet(item)`(那个要求歌词窗口先开着,"只弹搜索页面,不用
     /// 拉起歌词窗口")。这是它自己独立的一扇 `Window(id: "lyrics-quick-search")`(见
     /// App.swift),`LyricsQuickSearchWindow` 是根内容,自己在 `.task` 里现查一次当前
     /// 曲目——跟上面三个 open* 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里
@@ -23,7 +23,7 @@ final class AppActions {
     var openLyricsQuickSearch: (() -> Void)?
 
     /// 「搜索歌词…」小窗**已经开着**(没被真的关掉,只是被别的窗口挡住/切到后台)时的
-    /// 那一半信号——跟上面 `selectionRequests` 是同一个坑的同一个修法(2026-08-31 用户报
+    /// 那一半信号——跟上面 `selectionRequests` 是同一个坑的同一个修法(现象是
     /// "已经切歌了,点开搜索页面看到的还是上一首"):`LyricsQuickSearchWindow` 的
     /// `.task { loadContext() }` 只在这扇 `Window(id:)` 场景**新建**那一次跑一遍,窗口没被
     /// 真关掉时再点一次「搜索歌词…」只是把已经存在的那个视图实例带到前台,`.task` 不会
@@ -34,7 +34,7 @@ final class AppActions {
     /// 看到当前这首歌"。
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
 
-    // 2026-07-29 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm
+    // 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm
     // 详情页,而不是打开设置后还要用户自己再点一次侧边栏。SettingsView 自己管理
     // `selection` 这份 @State,外部没有别的办法在它已经存在的情况下改写这份状态——
     // 借这个字段当一次性信箱:调用方先写入目标,再调 openSettings(),SettingsView 的
@@ -42,12 +42,12 @@ final class AppActions {
     // 顶掉用户当前正打算看的分类。
     var pendingSettingsSelection: SettingsSidebarItem?
 
-    /// 「设置窗口已经开着」时的那一半(2026-08-19 加)。
+    /// 「设置窗口已经开着」时的那一半。
     ///
     /// 上面那个信箱只被 SettingsView 的 `.onAppear` 消费,而 .onAppear **只在窗口新建那一次
     /// 跑** —— 窗口已经开着(或视图还活着只是窗口被关过)时点"去 Last.fm 那一页",信箱里的
     /// 值没人读,表现就是"设置打开了,但页没跳"。而且那份没被消费的残留还会在下一次真正
-    /// 新建窗口时冒出来,把用户当时想看的分类顶掉。用户报的「有时候没定向到 Last.fm 页面」
+    /// 新建窗口时冒出来,把用户当时想看的分类顶掉。现象是「有时候没定向到 Last.fm 页面」
     /// 就是这一对症状。
     let selectionRequests = PassthroughSubject<SettingsSidebarItem, Never>()
 
@@ -63,8 +63,8 @@ final class AppActions {
 
     /// 「这段时间内的 reopen 别开歌词窗口」—— 点系统通知时用。
     ///
-    /// 2026-08-22:点通知会连带弹出歌词窗口(applicationShouldHandleReopen 是为「点 Dock
-    /// 图标开歌词窗口」写的,系统激活 App 时也会走到它)。第一版试过在通知回调里
+    /// 点通知会连带弹出歌词窗口(applicationShouldHandleReopen 是为「点 Dock
+    /// 图标开歌词窗口」写的,系统激活 App 时也会走到它)。⚠️ 别在通知回调里写
     /// `(NSApp.delegate as? AppDelegate)?.cancel...` —— **实测无声失败**,那是全仓唯一一处
     /// NSApp.delegate 用法,SwiftUI 的 @NSApplicationDelegateAdaptor 下这个转型拿不到我们的
     /// AppDelegate(日志里那行 suppressed 从来没出现过就是证据)。所以状态放这里 ——

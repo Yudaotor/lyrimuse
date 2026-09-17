@@ -102,8 +102,8 @@ func TestAliasRoundTargetingIsWired(t *testing.T) {
 	for _, needle := range []string{
 		"only := lyricSourceOnlyFrom(ctx)",
 		"if only != nil && !only[source] {",
-		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 2026-09-12 起外面还包了
-		// 一层 withLyricQueryReason(借鉴清单 V1 的查询词留痕),所以只钉内层这一段。
+		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 外面还包了
+		// 一层 withLyricQueryReason,所以只钉内层这一段。
 		"withLyricSourceOnly(ctx, only)",
 		"fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)",
 		"missing := lyricSourcesWorthAliasRetry(results)",

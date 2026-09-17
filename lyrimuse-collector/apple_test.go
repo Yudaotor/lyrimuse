@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// TestAppleResultIdentityOK 锁住 apple.go 那道身份闸的分档。数据取自 2026-09-14 的实测:
+// TestAppleResultIdentityOK 锁住 apple.go 那道身份闸的分档。数据取自的实测:
 // jolle《danke für nichts》只在德区商店上架,CN/US 搜到的是另一个歌手 Pie Kei 的同名单曲。
 func TestAppleResultIdentityOK(t *testing.T) {
 	cases := []struct {
@@ -69,7 +69,7 @@ func TestAppleResultIdentityOK(t *testing.T) {
 	}
 }
 
-// pieKeiResult / jolleResult 是 2026-09-14 从 iTunes Search 实测 dump 出来的两条真实结果
+// pieKeiResult / jolleResult 是从 iTunes Search 实测 dump 出来的两条真实结果
 // (前者 country=US,后者 country=DE),不是构造的。
 var pieKeiResult = itunesResult{
 	TrackName: "Danke für Nichts", ArtistName: "Pie Kei",
@@ -120,7 +120,7 @@ func TestPickAppleMusicMatchKeepsCorrectArtist(t *testing.T) {
 	}
 }
 
-// TestAppleResultIdentityOKKnownBoundary 钉住这道闸的**已知边界**(2026-09-14 实测),
+// TestAppleResultIdentityOKKnownBoundary 钉住这道闸的**已知边界**,
 // 别让后人以为它能认出所有同一个人。
 //
 // 合作署名不用担心:lyricSourceArtistMatches 的段集交集档只要有一段对上就放行,所以
@@ -160,7 +160,7 @@ func TestAppleResultIdentityOKKnownBoundary(t *testing.T) {
 	}
 }
 
-// TestPickAppleMusicMatchRejectsKaraokeImpersonator 是 2026-09-14 那轮 43 首真实样本
+// TestPickAppleMusicMatchRejectsKaraokeImpersonator 是那轮 43 首真实样本
 // 回归对比里**实际被这道闸拦掉**的三条之一(另两条同型):日文歌在 CN/US 商店搜不到原版时,
 // iTunes 回的常常是卡拉OK伴奏带 —— 它的曲名里带「(オリジナルアーティスト:back number)」
 // (原唱:back number),署名却是伴奏带厂商,时长 319.33s 也跟原曲对不上。修复前这条会被

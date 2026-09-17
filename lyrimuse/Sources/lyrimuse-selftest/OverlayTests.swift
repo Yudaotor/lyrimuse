@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 func runOverlayTests() {
     // ---- OverlayControlHitTest: 悬浮窗按钮的命中测试 ----
-    // (2026-08-18 结构性改动:悬浮窗改成常年 ignoresMouseEvents=true,胶囊上五个按钮的点击
+    // (结构性改动:悬浮窗改成常年 ignoresMouseEvents=true,胶囊上五个按钮的点击
     // 由控制器拿全局鼠标监听的屏幕坐标比对矩形自己分发。这段判定是整条链路上唯一能脱离
     // 窗口/事件系统单独验证的部分。)
 
@@ -53,7 +53,7 @@ func runOverlayTests() {
         expectEqual(results.first ?? nil, .next, "命中测试: 重叠时命中面积更小的那个")
     }
 
-    // ---- OverlayControlHitTest.hoveredControl: 该把哪一颗按钮画亮(2026-09-11) ----
+    // ---- OverlayControlHitTest.hoveredControl: 该把哪一颗按钮画亮 ----
     //
     // 跟上面"点击派给谁"是两个问题:点击本来就只在按钮显示时才分发,而这个每次鼠标移动都要
     // 求值,可见性得它自己兜住 —— 画亮一颗其实没显示的按钮是"看得见的 bug"。
@@ -90,14 +90,14 @@ func runOverlayTests() {
         expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false,
                                      hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 没有上报矩形时一颗都不亮")
-        // 2026-09-17:锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停控制条」
+        // 锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停控制条」
         // 关掉时那一格压根不画,矩形却仍会无条件上报,不拦住就是"高亮一颗没画出来的按钮"。
         expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
                                      hoverControlsEnabled: false) == nil,
                     true, "悬停高亮: 锁定 + 悬停控制条关掉 → 解锁键也不亮")
     }
 
-    // ---- OverlayControlHitTest.chromeHoverZone: 控制排该不该露出来的命中区域(2026-09-13) ----
+    // ---- OverlayControlHitTest.chromeHoverZone: 控制排该不该露出来的命中区域 ----
     //
     // 从"整扇窗"收紧成"歌词 ∪ 控制排"。这一组守的是收紧之后**按钮还点不点得到**:按钮在歌词
     // 外面(卡片内边距 + 槽位 4+4pt),区域漏掉按钮或漏掉中间那道缝,整排按钮就会在指针挪过去
@@ -143,11 +143,11 @@ func runOverlayTests() {
         expectEqual(repeated.allSatisfy { $0 == zone }, true, "控制排命中区: 结果不随字典遍历顺序变")
     }
 
-    // ---- OverlayControlHitTest.chromeHoverHit: 进入严、退出宽的滞后闸(2026-09-15) ----
+    // ---- OverlayControlHitTest.chromeHoverHit: 进入严、退出宽的滞后闸 ----
     //
     // 上面那组用的歌词矩形宽 780、胶囊才 216 —— 歌词比按钮排宽,恰好把这个 bug 藏住了。
     // 真实的「暂无歌词」是反过来的:四个字 ~96pt,按钮排 216pt,包围盒被按钮排撑到 216 还带
-    // 上下两截,于是文字左右一大片空白照样把整排按钮叫出来(用户 2026-09-15 报的正是这个)。
+    // 上下两截,于是文字左右一大片空白照样把整排按钮叫出来。
     do {
         let H = OverlayControlHitTest.self
         // 「暂无歌词」这一屏:控制排在上(y 4..34),歌词卡在下,文字只有中间那一小截。
@@ -228,7 +228,7 @@ func runOverlayTests() {
                     "滞后闸: 锁定态露出后够得到解锁键")
     }
 
-    // ---- LyricDuetLayout: 对唱行的两侧内缩(2026-08-23) ----
+    // ---- LyricDuetLayout: 对唱行的两侧内缩 ----
     do {
         let L = LyricDuetLayout.self
         // 没有对唱信息的行一律 0 —— 普通歌的排版必须逐像素不变,这是回归护栏
@@ -238,7 +238,7 @@ func runOverlayTests() {
             expectEqual(i.trailing, 0, "对唱内缩: 无声部信息不留白(trailing)")
         }
         // 左声部远侧(右边)留得比近侧(左边)多,右声部反过来——近侧非零是
-        // 2026-08-26 加的:不让字贴着卡片真边缘,近侧永远是远侧的一半。
+        // 加的:不让字贴着卡片真边缘,近侧永远是远侧的一半。
         do {
             let i = L.insets(for: .leading, availableWidth: 400, fontSize: 200)
             expectEqual(i.leading, 30, "对唱内缩: 左声部近侧(左边)也留,是远侧的一半")
@@ -284,7 +284,7 @@ func runOverlayTests() {
         }
     }
 
-    // ---- OverlayDuetAlignmentOverride: 悬浮歌词「对齐方式」覆盖(2026-08-29,GitHub issue #2) ----
+    // ---- OverlayDuetAlignmentOverride: 悬浮歌词「对齐方式」覆盖 ----
     do {
         typealias O = OverlayDuetAlignmentOverride
         let D = LyricDuet.Side.self
@@ -315,7 +315,7 @@ func runOverlayTests() {
         }
     }
 
-    // ---- OverlayCardGeometry: 卡片内容块与它上方那排控制按钮的横向落点(2026-09-03) ----
+    // ---- OverlayCardGeometry: 卡片内容块与它上方那排控制按钮的横向落点 ----
     //
     // 用户实机反馈:「在对唱模式下,这个悬浮菜单不是显示对应歌词上面的,看起来是在整个窗口的
     // 居中位置」。控制排原来吃外层 VStack 默认的 .center,而卡片按声部靠边 —— 对唱歌一把歌词
@@ -343,7 +343,7 @@ func runOverlayTests() {
 
         // ⚠️ 核心不变式:控制排的两侧留白 = 卡片内缩 + 卡片水平内边距。两者再按同一个方向
         // 靠边,按钮排的近侧边缘就跟歌词块的近侧边缘严格重合 —— 这条一破,控制排立刻又不在
-        // "对应歌词上面"了,而这种偏移只有对唱歌才看得见,极易漏到用户截图里才发现。
+        // "对应歌词上面"了,而这种偏移只有对唱歌才看得见,极易漏到对拍里才发现。
         for side: LyricDuet.Side? in [nil, D.leading, D.trailing, D.center] {
             let card = G.cardInsets(for: side, unit: unit)
             let ctrl = G.controlsInsets(for: side, unit: unit, cardHorizontalPadding: pad)
@@ -353,7 +353,7 @@ func runOverlayTests() {
         }
 
         // 回归护栏:没有对唱信息(绝大多数歌)和真正的合唱,两侧留白必须**对称** —— 这两种
-        // 情况对齐方向都是 .center,对称才能保证控制排的位置跟"这次改动之前"逐像素相同。
+        // 情况对齐方向都是 .center,对称才能保证控制排的位置逐像素稳定。
         for side: LyricDuet.Side? in [nil, D.center] {
             let ctrl = G.controlsInsets(for: side, unit: unit, cardHorizontalPadding: pad)
             expectEqual(ctrl.leading, ctrl.trailing,
@@ -374,9 +374,9 @@ func runOverlayTests() {
         }
     }
 
-    // ---- OverlayCardGeometry.duetStageInset: 对唱舞台(2026-09-10) ----
+    // ---- OverlayCardGeometry.duetStageInset: 对唱舞台 ----
     //
-    // 用户:「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开……哪怕宽度拉得
+    // 「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开……哪怕宽度拉得
     // 很宽,也尽量还是居中显示;剩余的宽度留给很长的歌词做冗余」。左右声部只在卡片正中一条
     // 固定宽度的带(舞台)里分栏:近侧多缩进"舞台两侧各让出的量",远侧照旧;带外的宽度是
     // 长句的冗余,换行点跟改动前一样。
@@ -463,10 +463,10 @@ func runOverlayTests() {
 
     // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
     //
-    // 2026-08-23 抽出来的:这套换算原先在控制器里抄了三遍(按钮矩形/控制热区/歌词热区),
+    // 抽出来的:这套换算原先在控制器里抄了三遍(按钮矩形/控制热区/歌词热区),
     // 而且三处都把结果**直接转成屏幕坐标存起来** —— 窗口一移动,SwiftUI 布局没变、
     // PreferenceKey 不重发,存的屏幕坐标就还停在旧位置,按钮和热区当场失效
-    // (用户报的「移动之后按钮会失效」)。现在只存窗口本地坐标,判定时把鼠标点转进来。
+    // (现象是「移动之后按钮会失效」)。现在只存窗口本地坐标,判定时把鼠标点转进来。
     do {
         let H = OverlayControlHitTest.self
         // y 翻转:SwiftUI 的 y 从顶部往下,AppKit 从底部往上
@@ -585,7 +585,7 @@ func runOverlayTests() {
         //
         // 跟 totalSize 是两回事:那个恒返回 maxWidth(撑满是刻意的,对唱左右对齐要靠它),
         // 这个返回内容自己的包围盒。原来 hover 判据是整个窗口矩形,指针在歌词**附近**的
-        // 空白处就触发淡出(2026-08-23 用户报的)。
+        // 空白处就触发淡出(现象是的)。
         do {
             let bounds = CGRect(x: 0, y: 0, width: 200, height: 40)
             // 单行、宽 60:三种对齐分别贴左 / 居中 / 贴右
@@ -686,7 +686,7 @@ func runOverlayTests() {
                     "OverlayPlacement: 已经在合法位置时不发多余的移动")
     }
 
-    // ---- OverlayPlacement:启动还原不许跨屏搬家(2026-08-21) ----
+    // ---- OverlayPlacement:启动还原不许跨屏搬家 ----
     //
     // 用户主诉"悬浮歌词经常在我主屏幕和副屏幕之间切换位置"的那条根因。几何全部取自这台机器的
     // 真实读数,不是编的:
@@ -732,7 +732,7 @@ func runOverlayTests() {
                     "OverlayPlacement: 不沾任何屏时没有可信边界")
     }
 
-    // ---- 位置预设:自由 / 顶部居中 / 底部居中(2026-09-11,GitHub issue #5) ----
+    // ---- 位置预设:自由 / 顶部居中 / 底部居中 ----
     //
     // 几何取这台机器内置屏的真实 visibleFrame (0, 70, 1470, 853):Dock 在底部占掉 70pt,菜单栏在
     // 顶上扣掉之后可见区顶边在 923。窗口 488×120(默认宽 / 地板高)。
@@ -755,7 +755,7 @@ func runOverlayTests() {
         expectEqual(OverlayPlacement.presetFrame(mode: .free, size: size, visibleFrame: screen) == nil, true,
                     "位置预设: free 不给落点")
 
-        // 顶部居中 = x 居中、顶边贴着可见区顶(菜单栏底)下方 12 —— 跟底部同一个数(2026-09-11 从 40 收紧)。
+        // 顶部居中 = x 居中、顶边贴着可见区顶(菜单栏底)下方 12 —— 跟底部同一个数(从 40 收紧)。
         let top = OverlayPlacement.presetFrame(mode: .topCenter, size: size, visibleFrame: screen)
         expectEqual(top?.midX, 735, "位置预设: 顶部居中 x 居中 (1470/2)")
         expectEqual(top?.maxY, 923 - OverlayPlacement.presetTopMargin, "位置预设: 顶部居中顶边距可见区顶 = 顶部边距")
@@ -792,7 +792,7 @@ func runOverlayTests() {
         expectEqual(tallDown.minY, 70, "增高: 守顶边时底边夹到可见区底边")
         expectEqual(tallDown.height, topFrame.maxY - 70, "增高: 守顶边时上限 = 顶边 − 可见区底边")
 
-        // 增高:守底边向上长(底部居中)。这就是 issue #5 的坑:手动拖到底边贴着 Dock 顶的窗口
+        // 增高:守底边向上长(底部居中)。⚠️ 手动拖到底边贴着 Dock 顶的窗口
         // 照旧向下长的话,上限 = 顶边 − 可见区底边 = 120 = 地板,一点都长不了,译文直接被裁;
         // 预设留的 12pt 边距也只多给 12pt,150 的内容仍被裁掉一截。
         let flush = CGRect(x: 491, y: 70, width: 488, height: 120)
@@ -838,7 +838,7 @@ func runOverlayTests() {
                     "热区: 不传 inset 等于贴顶")
     }
 
-    // ---- 圆钮块的短按 / 长按 / 右键判定(2026-08-19) ----
+    // ---- 圆钮块的短按 / 长按 / 右键判定 ----
     //
     // 菜单栏面板里那三个「歌词展示形态」的格子:短按 = 开关,长按或右键 = 展开它自己的快捷
     // 设置。真正容易写错的只有一点 —— **长按已经触发过之后,松手不能再当短按用一次**
@@ -882,7 +882,7 @@ func runOverlayTests() {
 
     // MARK: - ProgressFillGeometry:歌词窗口进度条"已播段"的移出量
     //
-    // 2026-08-22 新增。用户报「进度条有时候会变成方的,不是弧形」——根因是上一版用
+    // 现象是「进度条有时候会变成方的,不是弧形」——根因是拿
     // scaleEffect(x: f) 横向压缩满宽胶囊,把两端圆头一起压扁,f 越小越方。现在改成满宽 +
     // offset 移出 + 固定胶囊裁剪,圆头形状与 f 无关。这里钉住那个移出量,尤其是两头的夹值。
     do {
@@ -899,7 +899,7 @@ func runOverlayTests() {
         expectEqual(G.visibleWidth(containerWidth: w, fraction: 0), G.minimumVisibleWidth,
                     "f=0 留下限那一小截")
         expectEqual(G.leadingOffset(containerWidth: w, fraction: 0), 296, "f=0 的移出量 = w - 4")
-        // 用户截图那一档(3 分钟的歌播到 0:04,f≈0.022):真实可见宽 6.6pt,已超过下限
+        // 对拍那一档(3 分钟的歌播到 0:04,f≈0.022):真实可见宽 6.6pt,已超过下限
         expectEqual(G.visibleWidth(containerWidth: w, fraction: 0.022) > G.minimumVisibleWidth, true,
                     "f≈0.022 时用真实宽度而不是下限")
 
@@ -927,7 +927,7 @@ func runOverlayTests() {
     }
 
     // ---- OverlayControlHitTest.controlsShown / unlockPillShown: 控制排 / 解锁提示
-    //      该不该露出来(2026-09-16 加开关,2026-09-17 让解锁提示也接上开关) ----
+    //      该不该露出来(加开关,让解锁提示也接上开关) ----
     //
     // 这条判据以前散在两处(View 的 controlsVisible、控制器的 controlsShown),加「悬停控制条」
     // 开关时合并进 Core。这一组守的是合并后**两处等价**,以及两支(播放控制排 / 解锁提示)
@@ -945,7 +945,7 @@ func runOverlayTests() {
         expectEqual(H.unlockPillShown(hovering: true, positionLocked: true, hoverControlsEnabled: true),
                     true, "解锁提示: 开关开 + 悬停 + 锁定 → 显示")
 
-        // ② 正题:开关关掉后,播放控制排 / 解锁提示都不显示——2026-09-17 用户反馈「悬停控制条」
+        // ② 正题:开关关掉后,播放控制排 / 解锁提示都不显示——现象是「悬停控制条」
         //    关掉时锁定态也不该在悬浮窗上冒出解锁图标,那本身就是开关没生效的表现;窗口之外还有
         //    菜单栏面板/菜单/全局热键三条解锁出路,不会把用户困住(见 unlockPillShown 声明处)。
         var shownWhileOff = 0

@@ -11,7 +11,7 @@
 // 出帧;每帧算区域灰度均值 + 与上一帧差异 >24 的像素占比,占比 >8% 或均值跳 >6 记为 SPIKE,连同
 // 前一帧、后一帧一起存 PNG。跑完打印所有 diff>2% 的帧。需要「屏幕录制」权限(跟 screencapture 同一份)。
 //
-// 2026-09-07 首次使用:设置页菜单栏预览"重建时闪一下",抓到每次换句那一帧起区域均值 +44、
+// 首次使用:设置页菜单栏预览"重建时闪一下",抓到每次换句那一帧起区域均值 +44、
 // 2~3 帧后 −44,亮的那几帧里歌词是黑字、材质是浅色 —— 由此锁定是 `.environment(\.colorScheme)`
 // 跟着 `MenuBarAppearanceStore.isDark` 翻了两次,见 MenuBar/MenuBarAppearance.swift 头注。
 import AppKit

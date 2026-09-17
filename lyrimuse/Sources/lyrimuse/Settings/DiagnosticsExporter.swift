@@ -16,16 +16,15 @@ import Darwin
 //     这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
 //  2. 附在报告末尾的日志正文统一过 redacted() → LogRedactor 脱敏。
 //
-// 第 2 条是 2026-08-13 补的,补之前这条约束实际上是**破的**:第 1 条只管结构化字段,而
+// 第 2 条是补的,补之前这条约束实际上是**破的**:第 1 条只管结构化字段,而
 // 报告末尾把 ~/Library/Logs/lyrimuse.log 的最后 200 行原样附上,凭据从日志正文里漏出去。
 // 实测当时本机那 200 行内就有 3 处 Last.fm API Key 原文 —— 来源是 collector 打印 Go
 // *url.Error 的原文,而它的 Error() 会带出完整 URL,api_key 就在 query string 里。
 // 详见 LogRedactor 的注释。往这份报告里加任何新的日志段落,都必须一并套上 redacted()。
 //
-// 2026-08-27 这一轮的目标从"至少别泄密"扩成"真的能靠这一份文件排查问题"——用户明确
-// 要求把这份导出做成"遇到 bug/想反馈问题时发我一份,我就能查"的入口,覆盖网络/逻辑/UI/
-// 交互/系统兼容性几个层面。这轮之前用一份真实导出(3254 行)回头核对过,暴露出几个
-// 实打实的问题,这轮改动的依据都在下面各自的注释里,不是凭空猜的:
+// 这份导出要能真的靠它排查问题,不只是"至少别泄密":它是用户遇到 bug 时发过来的唯一
+// 入口,要覆盖网络/逻辑/UI/交互/系统兼容几个层面。下面几条是拿一份真实导出(3254 行)
+// 核对出来的具体缺陷与对应处理:
 //   - App Log 里"snapshot failed"一条重复了 921 次(占 24 小时窗口的 30%)——已经在
 //     LocalPlaybackSource.poll() 里改成只在状态变化时打,这份文件里的 collapseRepeatedLines
 //     是给"改不到源头"的重复日志(比如例行的网络审计成功调用)兜底用的第二道防线。
@@ -50,7 +49,7 @@ enum DiagnosticsExporter {
     /// **顺序是刻意的**:面板先弹,内容后生成。以前是反过来的(先 buildReport 再弹面板),
     /// 而 buildReport 里的 OSLogStore 查询实测要 **4.4 秒**(扫 24 小时、拉回一万多行),
     /// 又整个跑在主线程上 —— 于是点下"导出…"之后界面冻四秒多才看到保存面板,像是卡死。
-    /// 现在面板立刻出现,重活在用户挑完位置之后于后台线程跑。2026-08-27 新加的 collector
+    /// 现在面板立刻出现,重活在用户挑完位置之后于后台线程跑。新加的 collector
     /// healthcheck 子进程(带真实网络探测)和收听记录解析也都挂在这同一段后台任务里——
     /// 导出整体可能因此再多等几秒,但用户此时已经看不到主界面被卡住,跟原有取舍一致。
     ///
@@ -111,7 +110,7 @@ enum DiagnosticsExporter {
         lines.append("== System ==")
         lines.append("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
         lines.append("App version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
-        // 架构 + 是否在 Rosetta 下跑(2026-08-27 加)。这个项目发布流程真的出过事故——
+        // 架构 + 是否在 Rosetta 下跑。这个项目发布流程真的出过事故——
         // build.sh 头部注释记着 v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了
         // arm64-only,一台 Intel Mac 或者装了 Rosetta 的 Apple Silicon Mac 上排查
         // "打不开/崩溃"级别的问题,这一行往往是第一个该确认的东西。
@@ -145,7 +144,7 @@ enum DiagnosticsExporter {
         // 「当前认哪个播放器」是排查"检测不到播放/歌词出不来"时第一个要问的问题,而它有两层:
         // 用户在设置里选的(可能是"自动识别"),和这一刻实际被认下来的那个 bundle id。两层
         // 都要报——只报设置值的话,"自动识别"这一档等于什么都没说。
-        // 2026-09-01 多选后:可能不止一个,按 rawValue 逗号拼接全部报出来。
+        // 多选后:可能不止一个,按 rawValue 逗号拼接全部报出来。
         lines.append("Player (setting): \(PlaybackPlayerPreference.selected.map(\.rawValue).sorted().joined(separator: ", "))")
         // 标签写 "last detected" 而不是 "now":这个值来自最近一次成功的快照,而快照在停播/
         // 检测失效时不会被清掉,所以停播之后它仍然报最后一次识别到的播放器。读报告的人得
@@ -155,7 +154,7 @@ enum DiagnosticsExporter {
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
         // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
         lines.append("Collector service state: \(CollectorServiceManager.state)")
-        // 两份共享配置文件的三态(2026-09-05):损坏时所有保存被拒,「设置保存不上 / 账号全空」第一个该看的原因。
+        // 两份共享配置文件的三态:损坏时所有保存被拒,「设置保存不上 / 账号全空」第一个该看的原因。
         // reason 只含解析位置、键名与期望类型,不含文件内容(config.json 是凭据)。
         lines.append("config.json: \(describe(config.fileState))")
         lines.append("lyrimuse-features.json: \(describe(FeatureSettingsStore.shared.fileState))")
@@ -166,16 +165,16 @@ enum DiagnosticsExporter {
         // 分开报:只有 token 时"能提交"为真而"能读统计"为假,周报/日报/桥接会静默不跑,
         // 而这正是最难自己看出来的一种配置状态。
         lines.append("ListenBrainz readable (digests/bridge): \(config.isListenBrainzReadable)")
-        // 2026-07-29 起没有独立开关了,两边凭据都配好就自动生效,这里直接报告"是否真的
+        // 没有独立开关了,两边凭据都配好就自动生效,这里直接报告"是否真的
         // 在跑"而不是"Last.fm 侧凭据填了没"(后者单独看意义不大,还得对照上一行才知道
         // 有没有真的启用)。
         lines.append("Last.fm bridge active: \(config.lastfmBridgeMissingHint() == nil && config.isListenBrainzReadable)")
-        // lastfmMirrorMissingHint 2026-08-11 已删(开关自己就是配置入口,不再需要前置
+        // lastfmMirrorMissingHint 已删(开关自己就是配置入口,不再需要前置
         // 校验函数),它检查的三个字段里 sessionKey 是最后一步产物,单看它就等价。
         lines.append("Last.fm mirror configured: \(!config.lastfmScrobbleSessionKey.isEmpty)")
         lines.append("State relay configured: \(config.stateRelayMissingHint() == nil)")
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
-        // 自动更新状态(2026-08-27 加)。「为什么没提示我更新」是另一类常见反馈,而
+        // 自动更新状态。「为什么没提示我更新」是另一类常见反馈,而
         // Sparkle 自己的这两个字段(是否开着周期检查、上一次真的检查是什么时候)足够
         // 回答大半——不用再让用户去猜"是不是它压根没在检查"。lastUpdateCheckDate 是
         // Sparkle 自己维护的只读字段,读取本身零成本,不涉及联网。
@@ -193,7 +192,7 @@ enum DiagnosticsExporter {
         }
         lines.append("")
 
-        // ---- 窗口(2026-08-27 加)----
+        // ---- 窗口----
         //
         // 「悬浮窗不见了/跑到看不见的地方」「设置窗打不开」这类 UI 层面的反馈,光靠上面
         // 那些布尔开关看不出实际现状——「灵动岛 enabled: true」不代表它这一刻真的可见
@@ -223,7 +222,7 @@ enum DiagnosticsExporter {
         lines.append("Screens: \(NSScreen.screens.count) — \(screenSummaries.joined(separator: ", "))")
         lines.append("")
 
-        // ---- 播放时钟(2026-08-22 加)----
+        // ---- 播放时钟----
         //
         // 「歌词慢半拍」是最常被报、也最难复现的一类问题,而它至少有四种成因、修法完全不同:
         // 帧率掉了 / positionSourceTier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前这一段
@@ -248,7 +247,7 @@ enum DiagnosticsExporter {
             lines.append("Anchor: none (paused or no track)")
         }
         // 两层分开报:总偏移里有多少是用户自己调的、有多少是歌词文件自带的 [offset:]。
-        // 用户报"歌词偏了"时,这两个数直接指向该去改哪一个。
+        // 现象是"歌词偏了"时,这两个数直接指向该去改哪一个。
         lines.append("Lyrics offset (effective): \(clock.effectiveLyricsOffsetMs)ms"
                      + "  |  from LRC [offset:]: \(clock.lrcOffsetMs)ms")
         // 当前行填色是否已定格 —— 四个展示面 TimelineView 的停表条件,恒为 false 意味着
@@ -272,7 +271,7 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: collapseRepeatedLines(
             recentAppLogLines().map { LogRedactor.redactAll($0, secrets: secrets) }))
         lines.append("")
-        // 2026-08-27 从固定"最后 200 行"改成按时间窗口取——collector 那边接入网络审计
+        // 从固定"最后 200 行"改成按时间窗口取——collector 那边接入网络审计
         // 日志(第 15 章)之后,例行轮询把这 200 行迅速填满,实测一份导出里这 200 行只
         // 覆盖了 45 分钟,稍早一点发生的事在导出这一刻已经被冲出窗口。改成取最近 4 小时,
         // 配合下面的 collapseRepeatedLines 把例行重复调用折叠掉,总行数不会比以前离谱地
@@ -282,10 +281,10 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: collapseRepeatedLines(
             recentCollectorLogLines().map { LogRedactor.redactAll($0, secrets: secrets) }))
         lines.append("")
-        // ---- App 进程的 stderr(2026-09-05 加)----
+        // ---- App 进程的 stderr----
         //
         // App 进程的 stdout / stderr 由 StandardStreamRedirect 在启动第一步就重定向到 LogFiles.appStderr
-        // (2026-09-06 起进程内自己做;此前靠 LaunchAgent plist 的 StandardErrorPath,再往前跟 collector
+        // (进程内自己做;此前靠 LaunchAgent plist 的 StandardErrorPath,再往前跟 collector
         // 共用 lyrimuse.log)。正常情况下这份文件几乎是空的 —— App 的日志走
         // os.Logger;能落进来的只有 Swift 运行时的 fatal 信息、子进程漏出的 stderr 这类"本不该有"
         // 的东西,正因为如此排查崩溃时它最有用。只取最后 100 行,同样过一遍脱敏。
@@ -293,7 +292,7 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: recentAppStderrLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
-        // ---- 最近崩溃报告(2026-09-06,借鉴清单 #31)----
+        // ---- 最近崩溃报告----
         //
         // App 崩了 os.Logger 留不下现场;collector 走 KeepAlive 崩溃循环时 lyrimuse.log 里只见反复 starting;
         // Intel / Rosetta「打不开」、缺库、Launch Constraint 这类启动期事故日志里一行都没有 —— 而 macOS 早把
@@ -304,7 +303,7 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: recentCrashReportLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
-        // ---- collector healthcheck(2026-08-27 加)----
+        // ---- collector healthcheck----
         //
         // collector 早就有一个专门回答"歌词为什么不出来"的一次性子命令(healthcheckcli.go):
         // 配置文件能不能解析、歌词来源开关、缓存文件是否可解析、歌词导出目录能不能写、
@@ -323,7 +322,7 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: collectorHealthCheckLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
-        // ---- 当前播放曲目的歌词解析状态(2026-08-27 加)----
+        // ---- 当前播放曲目的歌词解析状态----
         //
         // 「这首歌没歌词/歌词不对/用错源了」是最常见的一类反馈,而排查的第一步永远是
         // "这首歌在缓存里到底是什么状态"——以前只能让用户在对话里报歌名歌手,再手动去
@@ -363,7 +362,7 @@ enum DiagnosticsExporter {
     }
 
     /// 最近 `days` 天内本 App 家族(App 本体 + 包内 collector)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份
-    /// (2026-09-06,借鉴清单 #31)。文件名前缀粗筛(`<可执行名>-*.ips` / `collector-*.ips`),正文再按 bundle id /
+    ///。文件名前缀粗筛(`<可执行名>-*.ips` / `collector-*.ips`),正文再按 bundle id /
     /// 包路径确认是本变体的(别的 App 也可能有叫 collector 的进程;Dev 与正式版互不混入)。目录列不出、单个文件
     /// 读不到或解不开都只留一行,不抛、不让整份导出失败;「没有匹配」也写出来。家目录改写成 ~。
     private static func recentCrashReportLines(days: Int = 7, perProcessLimit: Int = 3) -> [String] {
@@ -433,7 +432,7 @@ enum DiagnosticsExporter {
         guard !allLines.isEmpty else { return ["(empty log file)"] }
 
         let cutoff = Date().addingTimeInterval(-hours * 3600)
-        // 时间戳两种格式都认(2026-09-05 起 collector 走 log/slog,行首是 `time=…Z`;之前是 Go log
+        // 时间戳两种格式都认(collector 走 log/slog,行首是 `time=…Z`;之前是 Go log
         // 的 `yyyy/MM/dd HH:mm:ss`,.old 归档与迁移前的行仍是它),解析在 Core 的 CollectorLogLine,
         // selftest 钉着两种都按 UTC 解。
         // 默认包含整份文件——找不到任何可解析的时间戳时,宁可多给一点也不要因为解析

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// 手动停止"正在搜索"占位行(2026-08-28,用户反馈这段等待没有任何上限——歌词那一步有
+// 手动停止"正在搜索"占位行(现象是这段等待没有任何上限——歌词那一步有
 // lyricSearchDeadline 兜底,但 resolveTrackEnrichment 整体(还跟着 MusicBrainz/Apple
 // Music/QQ 兜底封面这几步顺序网络请求)没有总超时,某一步卡住时占位行会一直挂着,此前
 // 用户没有任何退出方式)。

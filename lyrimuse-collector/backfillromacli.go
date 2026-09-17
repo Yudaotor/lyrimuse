@@ -150,7 +150,7 @@ func runBackfillRoma(apply bool, limit int) int {
 	}
 	// ⚠️ **必须置脏**:saveEnrichCache() 开头有一道 `if !enrichDirty { return }`,不置就是
 	// 静默不落盘 —— 而 exportLyricsFiles() 照常把文件写出去,于是"文件有、缓存没有",
-	// 只有下次启动 importLyricsFromFiles() 把文件读回来才碰巧变正常。2026-09-03 实测踩到
+	// 只有下次启动 importLyricsFromFiles 把文件读回来才碰巧变正常。实测踩到
 	// (20 条试跑:.roma.lrc 写了 20 个,cache 的 mtime 纹丝不动)。
 	enrichDirty = true
 	enrichMu.Unlock()

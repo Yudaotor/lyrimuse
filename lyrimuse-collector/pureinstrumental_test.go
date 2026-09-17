@@ -2,9 +2,9 @@ package main
 
 import "testing"
 
-// 网易云的纯音乐信号(2026-08-20)。
+// 网易云的纯音乐信号。
 //
-// 用户报「歌词管理里一堆条目显示无歌词,其实都是纯音乐」——LoL 原声带
+// 现象是「歌词管理里一堆条目显示无歌词,其实都是纯音乐」——LoL 原声带
 // 《The Music of League of Legends Vol. 1》十几首。查下来:lrclib 压根没有这批曲目
 // (五源全空、lyrics_sources_responded 是空的),而网易云**匹配上了歌**(封面、单曲链接
 // 都给了)、歌词接口顶层也明确回了 pureMusic=true、正文是「作曲 : X」+「纯音乐,请欣赏」
@@ -87,7 +87,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 	}
 }
 
-// TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter 是 2026-08-22 那个 bug 的回归测试:
+// TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter 是那个 bug 的回归测试:
 // QQ 对纯音乐曲目回的占位文案只有**一行**带时间戳,过不了 isTimedLRC 的「≥3 行且过半」,
 // 而 resolveQQLyric 原来是先过 isTimedLRC 再返回 —— 于是这个**明确结论**在那一步就被当成
 // 「没歌词」扔掉,曲目落在「无歌词」而不是「纯音乐」,界面上像失败,还要每 24 小时
@@ -97,7 +97,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 // 网易云只有一行署名 `[00:00.00-1] 作曲 : 蛋堡`(没有 pureMusic 字段)、酷狗找到 hash 但
 // KRC 候选 0 条、LRCLIB 404、**只有 QQ 明确说了这句话**。
 func TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter(t *testing.T) {
-	// QQ 真实返回(2026-08-22 实测 mid=001v88Gp1qx5yM)
+	// QQ 真实返回(实测 mid=001v88Gp1qx5yM)
 	const qqPlaceholder = "[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏"
 
 	// ① 前提:它确实过不了 isTimedLRC —— 所以先过那道闸就必然丢掉结论

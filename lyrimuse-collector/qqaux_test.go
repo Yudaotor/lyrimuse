@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 接回 QQ GetPlayLyricInfo 的 trans/roma 两轨。下面的样本按当天直连接口看到的
+// 接回 QQ GetPlayLyricInfo 的 trans/roma 两轨。下面的样本按当天直连接口看到的
 // 真实形态仿写(米津玄師 Lemon / Taylor Swift Cruel Summer 的结构,正文换成占位文字),
 // 钉住的是清洗规则,不是某首歌的内容。
 

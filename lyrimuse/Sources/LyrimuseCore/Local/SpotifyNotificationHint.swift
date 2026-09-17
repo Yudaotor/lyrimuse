@@ -1,7 +1,7 @@
 import Foundation
 
 /// Spotify 原生客户端广播的 `com.spotify.client.PlaybackStateChanged` 通知里,能拿来给**这一条曲目分类**
-/// 的那几个键(2026-09-09)。键名从 Spotify.app 二进制的字符串表核实过:Player State / Track ID / Name /
+/// 的那几个键。键名从 Spotify.app 二进制的字符串表核实过:Player State / Track ID / Name /
 /// Artist / Album / Album Artist / Duration / Playback Position / Has Artwork / Popularity / Play Count /
 /// Track Number / Disc Number;**没有** Artwork URL。
 ///

@@ -20,7 +20,7 @@ TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
 # 注入版本号,让这份 collector 自报的版本跟它将要替换掉的那份保持一致。
 #
-# 2026-09-02 加(同 lyrimuse/build.sh 那处,理由见 main.go 的 clientVersion 注释):
+# 加(同 lyrimuse/build.sh 那处,理由见 main.go 的 clientVersion 注释):
 # collector 版本号以前是 main.go 里的手写字面量,发版时靠人记得改,v1.3.0 和 v1.5.0
 # 各漏过一次。现在两个构建脚本统一用 -ldflags 注入。
 #
@@ -46,7 +46,7 @@ echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature), version $
 GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-X main.clientVersion=$COLLECTOR_VERSION" -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
 
-# 2026-07-21 起 collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的
+# collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的
 # Contents/Resources/collector(见 CollectorServiceManager.swift)，不再是仓库自己的
 # bin/collector——这里额外拷贝一份进已安装的 .app 包，这样改 collector 代码不用重新
 # swift build 整个 App 就能验证到"真正在跑的那份"。bin/collector 这份继续保留，纯粹

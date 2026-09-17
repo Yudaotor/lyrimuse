@@ -15,9 +15,9 @@ import (
 
 // ---- 歌词源级熔断 / 退避 ----
 //
-// 2026-09-02 加。全部歌词源并发、20 秒总截止(lyricSearchDeadline),
+// 全部歌词源并发、20 秒总截止(lyricSearchDeadline),
 // 某个源整个哑掉(DNS 污染、TLS 挂死、5xx)时,之前每首歌都要把它等到自己的超时——AGENTS.md
-// 里 2026-08-15 Musixmatch DNS 事故的原话就是「每首歌都要把 DNS/TLS 超时白等一遍」。已有的
+// 里 Musixmatch DNS 事故的原话就是「每首歌都要把 DNS/TLS 超时白等一遍」。已有的
 // 退避都是点状的(网易云端点桶 30s 拒绝冷却、lb.go 的 429 阶梯、Musixmatch 自己换 token),
 // 没有「某个源连续失败就在接下来一段时间跳过它」的通用层。
 //
@@ -46,7 +46,7 @@ import (
 // 全部状态在进程内存里,collector 重启归零;search-lyrics 这类一次性 CLI 进程永远不会有
 // 冷却态,冷却本身不需要给 Swift 侧加失败原因代码 —— 但同一个 observe 入口顺手记下的
 // **传输层失败分类**(本文件最后一节)会以 dns_failed / connect_failed / server_error 三个
-// 代码报给弹窗,那三个是 2026-09-06 加的,见 lyricsourcefailure.go。
+// 代码报给弹窗,那三个是加的,见 lyricsourcefailure.go。
 
 // lyricSourceBreakerSchedule:第 N 次达到触发阈值之后的冷却时长(N 从 0 起),超出表长封顶
 // 在最后一档——上限 5 分钟,成功即清,误熔断的代价有界。
@@ -99,7 +99,7 @@ var lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
 
 // lyricSourceForHost 把请求主机归到歌词源名(lyricSourceNames 里的写法);不是歌词源的主机
 // (Last.fm / ListenBrainz / MusicBrainz / iTunes / DoH …)返回空串。主机名单来自各源文件里
-// 实际请求的域名(2026-09-02 grep 核对);raw.githubusercontent.com 全仓只有 amll 在用。
+// 实际请求的域名(grep 核对);raw.githubusercontent.com 全仓只有 amll 在用。
 func lyricSourceForHost(host string) string {
 	h := strings.ToLower(strings.TrimSpace(host))
 	if strings.Contains(h, ":") {
@@ -168,12 +168,12 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 		if st.consecutive < lyricSourceBreakerTripAfter {
 			return
 		}
-		// ⚠️ 已经在冷却里就到此为止:不升档、也不续期(2026-09-09 修)。
+		// ⚠️ 已经在冷却里就到此为止:不升档、也不续期(修)。
 		//
 		// 原来这里是 `idx := st.consecutive - lyricSourceBreakerTripAfter` —— 拿**失败请求
 		// 数**当档位。可 consecutive 是按请求数涨的,而一轮搜索里同一个源要发好几个请求
 		// (网易云 4 个歌手别名变体、QQ 的 smartbox + client_search 加起来更多),源整个挂掉
-		// 时它们在同一瞬间一起失败,于是一次抖动就能把阶梯从头走到尾。2026-09-09 实测日志:
+		// 时它们在同一瞬间一起失败,于是一次抖动就能把阶梯从头走到尾。实测日志:
 		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s→30s→1m→2m→5m 五档,网易云 0.8 秒内到顶
 		// 并一路涨到 consecutive=22;整份日志里冷却到顶 5 分钟发生过 331 次,可配对的 35 例
 		// 里有 14 例是"第一档 15 秒都还没过完就到顶"。用户看得见的后果:一次 2 秒的 DNS 抖动
@@ -234,7 +234,7 @@ func parseLyricSourceRetryAfter(v string) time.Duration {
 type lyricSourceRoundPlan map[string]time.Duration
 
 // planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
-// (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——2026-09-06 起
+// (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——
 // fetchScoredLyricCandidatesStreaming 对关掉的源直接跳过、根本不起请求(enrich.go
 // lyricSourceSkipFor),这里只管冷却。
 func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bool) lyricSourceRoundPlan {
@@ -318,7 +318,7 @@ func lyricSourceRoundFrom(ctx context.Context) *lyricSourceRound {
 	return r
 }
 
-// ---- 「这一轮只查这些源」(2026-09-06,给别名轮用) ----
+// ---- 「这一轮只查这些源」(给别名轮用) ----
 //
 // 跟上面 lyricSourceRound 同一个理由走 ctx:fetchScoredLyricCandidatesStreaming 的签名不动。
 // nil 名单 = 不限制(所有调用方的默认);非 nil 时名单外的源在 skipSource 里静默跳过。
@@ -375,7 +375,7 @@ func (r *lyricSourceRound) skippedSources() []string {
 
 // ---- 传输层失败分类:给「歌词源可用情况」按源报"为什么连不上" ----
 //
-// 2026-09-06 加,用户报「派对后派对(黄妍)搜不到」。真相:这台机器连着公司 OpenVPN,它下发的
+// 加,现象是「派对后派对(黄妍)搜不到」。真相:这台机器连着公司 OpenVPN,它下发的
 // DNS(10.255.0.1)对 music.163.com / c.y.qq.com / mobilecdn.kugou.com / lrclib.net / search.kuwo.cn /
 // pd.musicapp.migu.cn 一律不答(dig 实测:多数超时、偶尔空答),六个源的请求 2ms 内就以
 // `lookup xxx: no such host` 死在解析这一步、一个字节都没发出去;而 itunes.apple.com /

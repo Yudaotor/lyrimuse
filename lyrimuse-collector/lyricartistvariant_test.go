@@ -3,7 +3,7 @@ package main
 import "testing"
 
 // lyricSourceArtistMatches:歌词源采纳闸的段集交集档。核心案例来自「wherever u r」
-// (2026-08-20):本地标签 "UMI & 金泰亨",酷狗署名 "UMI、V"、QQ 署名 "UMI/V",原
+//:本地标签 "UMI & 金泰亨",酷狗署名 "UMI、V"、QQ 署名 "UMI/V",原
 // artistMatches 全拒——服务端明明召回成功,正主死在客户端闸门上。
 func TestLyricSourceArtistMatches(t *testing.T) {
 	cases := []struct {
@@ -26,13 +26,13 @@ func TestLyricSourceArtistMatches(t *testing.T) {
 		{"周杰伦、", "周杰伦", false},
 		// 加符号仿冒:段级字节相等,不做 normLoose/子串,老洞不重开。
 		{"周杰伦-", "周杰伦 & 王力宏", false},
-		// 2026-08-25 实测坐实的真实 bug:LyricFind(经 YouTube Music 检索)给的艺人字段是
+		// 实测坐实的真实 bug:LyricFind(经 YouTube Music 检索)给的艺人字段是
 		// 繁体"周杰倫",本地查询是简体"周杰伦"——不折算就整条候选被拒收(见「彩虹」案例,
 		// match.go artistCreditParts/artistMatches 注释)。
 		{"周杰倫", "周杰伦", true},
 		// 繁简 + 仿冒同时出现,仿冒防线仍然要挡住。
 		{"周杰倫-", "周杰伦", false},
-		// 2026-08-26 实测坐实的真实 bug:候选艺人带括号外文别名"丁世光(Dean Ting)",
+		// 实测坐实的真实 bug:候选艺人带括号外文别名"丁世光(Dean Ting)",
 		// 本地标签只有中文名,靠 artistMatches 新加的去括号兜底才能过(见 match.go 注释)。
 		{"丁世光(Dean Ting)", "丁世光", true},
 		// 两侧多credit但没有任何一段相等。
@@ -75,11 +75,11 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"Softest Hard", ""},
 		// 整串被 feat 词砍空(F.T. Island 这类):宁可不试也不发错词。
 		{"FT Island", ""},
-		// 人名自含分隔符(K/DA 案的形态)。2026-08-23 起不再产出 "K":那是 Last.fm 上
+		// 人名自含分隔符(K/DA 案的形态)。不再产出 "K":那是 Last.fm 上
 		// 一个**真实存在的无关歌手**,拿它当检索词本来就搜不到 K/DA 的歌,正撞上上面
 		// "宁可不试也不发一个错的检索词"那条。见 firstCreditedArtist 的斜杠守卫。
 		{"K/DA", ""},
-		// 反过来,真的是合唱串时现在能产出正确的首歌手 —— 2026-08-17 用户实测过:
+		// 反过来,真的是合唱串时现在能产出正确的首歌手 —— 实测过:
 		// 用完整串只搜到两条候选,手工截短成 "K/DA" 才搜到三条(多一条带逐字轴、
 		// 分数最高的 Musixmatch)。那次只能手工截,现在这一步自己就给出 K/DA。
 		{"K/DA/Madison Beer/(G)I-DLE/Jaira Burns", "K/DA"},

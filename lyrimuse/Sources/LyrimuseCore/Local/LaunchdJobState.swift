@@ -3,7 +3,7 @@ import Foundation
 /// 一个 launchd job 的真实状态。
 ///
 /// 存在的理由:`launchctl print` 的**退出码只说明这个 job 注册过没有**,跟进程有没有真的
-/// 在跑毫无关系。2026-08-15 用一个一次性 job(跑 /usr/bin/true 立刻退出)实测:
+/// 在跑毫无关系。用一个一次性 job(跑 /usr/bin/true 立刻退出)实测:
 ///
 ///   | 场景                 | print 退出码 | state 字段        |
 ///   |----------------------|-------------|-------------------|
@@ -94,7 +94,7 @@ public enum LaunchdPrintParser {
         }
     }
 
-    /// `last exit code` 的值有三种真实形态,实测(2026-08-15,用一个 `sleep 1; exit 78` 的
+    /// `last exit code` 的值有三种真实形态,实测(用一个 `sleep 1; exit 78` 的
     /// 一次性 job)全部见过:
     ///
     ///     last exit code = 0

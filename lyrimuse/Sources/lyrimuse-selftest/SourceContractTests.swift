@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runSourceContractTests() {
-    // ---- 「歌词显示」页分段的跨文件契约(2026-08-19) ----
+    // ---- 「歌词显示」页分段的跨文件契约 ----
     //
     // 菜单栏面板的「全部设置…」靠往一个 UserDefaults 键写这几个字符串,把设置窗口直接翻到
     // 对应那一段。键名和取值必须跟 SettingsView 里 AppearanceSettingsTab.Section 的 rawValue
@@ -24,7 +24,7 @@ func runSourceContractTests() {
 
     // ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
     //
-    // 2026-08-17 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
+    // 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
     // Localization/Localizable.xcstrings 里维护,两份 .lproj/Localizable.strings 是
     // generate-strings.py 的生成物、随仓库一起提交 —— 终端用户 `swift build`/build.sh
     // 完全不需要 Xcode(xcstringstool 只在完整 Xcode 里,CLT 没有)。
@@ -65,7 +65,7 @@ func runSourceContractTests() {
 
         struct CatalogPairs {
             var zh: [String: String] = [:]; var en: [String: String] = [:]; var hant: [String: String] = [:]
-            /// 缺 zh-Hant 译文的键。2026-09-03 用户定:新加文案必须把当前支持的语言都写全,所以这里
+            /// 缺 zh-Hant 译文的键。新加文案必须把当前支持的语言都写全,所以这里
             /// 不再回退简体后放行,而是记下来让下面那条断言红(生成脚本对同一情况也是直接失败)。
             var missingHant: [String] = []
         }
@@ -116,7 +116,7 @@ func runSourceContractTests() {
             diff(catalog.hant, hantGen, "zh-hant")
             diff(catalog.en, enGen, "en")
 
-            // ---- 语言协商(2026-09-03 加繁体):系统语言标签 → 语言包目录名,规则见 UILanguage ----
+            // ---- 语言协商(加繁体):系统语言标签 → 语言包目录名,规则见 UILanguage ----
             expectEqual(UILanguage.resolve(preferred: "zh-Hans-CN"), "zh-hans", "本地化: zh-Hans-CN → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh"), "zh-hans", "本地化: 裸 zh → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh-SG"), "zh-hans", "本地化: zh-SG → 简体包")
@@ -137,7 +137,7 @@ func runSourceContractTests() {
             // 补词条"这类漏网全绿。而 L10n.t 的兜底是 `bundle.localizedString(forKey:value:key)`
             // —— 找不到就**静默返回键本身**(也就是原始中文),不崩、不空白。表现是英文界面下同一行
             // 中英混排(隔壁「来源」已经是 "Source"、这一格「偏移」还是汉字),极不显眼。
-            // 2026-08-31 一次性核出 31 个这样的键,分布在歌词管理/歌词窗口/Last.fm 面板/关于页
+            // 一次性核出 31 个这样的键,分布在歌词管理/歌词窗口/Last.fm 面板/关于页
             // —— 全都是"写代码时顺手 L10n.t 了一下"留下的,没有任何守卫拦得住,故补这一条。
             //
             // ⚠️ 只认**字面量**入参。`L10n.t(someVariable)` 这种拿不到键,自然扫不到,那是接受的
@@ -183,8 +183,8 @@ func runSourceContractTests() {
     // (没有对应修饰符,底层也不是 NSSlider 包出来的,拿不到 numberOfTickMarks 清零 ——
     // 详见 SettingsDesignSystem.swift 里 SteppedSlider 的注释)。
     //
-    // 为什么要上一条守卫而不是"注意点":用户为这排点报过两次。2026-08-31 第一次报的是悬浮
-    // 歌词那一根,当时就地改掉了;2026-09-02 又报了设置页其余**全部**滑杆 —— 因为"每个调用点
+    // 为什么要上一条守卫而不是"注意点":用户为这排点报过两次。第一次报的是悬浮
+    // 歌词那一根,当时就地改掉了;又报了设置页其余**全部**滑杆 —— 因为"每个调用点
     // 自己记得别传"根本挡不住后来新写的滑杆,五处里有四处是那之后新加的。所以改成:量化一律
     // 走 SteppedSlider(它内部那次调用本身不带步长入参,天然不会被算进来),这里盯着别复发。
     //
@@ -257,13 +257,13 @@ func runSourceContractTests() {
                     "滑杆刻度: 这些文件里的 Slider 还带着步长入参 —— 会在轨道下面画一排刻度点,换成 SteppedSlider")
     }
 
-    // ---- 封面消费面必须用高清替代优先的口径(2026-09-02)----
+    // ---- 封面消费面必须用高清替代优先的口径----
     //
     // `PlaybackCoordinator.highResArtworkImage` 的契约是"系统那份太小/不像封面时才有值,
     // 否则 nil、消费方退回 artworkImage" —— 也就是说**每个消费面都有义务**写
     // `highResArtworkImage ?? artworkImage`。
     //
-    // 为什么要上机械闸:这条口径靠"记得写"维护了三个月,漏了三处才被用户发现 —— 用户报
+    // 为什么要上机械闸:这条口径靠"记得写"维护了三个月,漏了三处才被发现 —— 现象是
     // 「为什么这两个地方的封面不一样」(方大同《白发》,Chrome 里放 YouTube Music),菜单栏
     // 快捷面板显示的是系统给的**一帧 150×84 的 MV 截帧**,而歌词窗口显示的是缓存里正确的
     // 专辑封面。同一天连带查出灵动岛收起态左耳、Last.fm「正在播放」行也漏了同一个 `?? `。
@@ -315,7 +315,7 @@ func runSourceContractTests() {
                     "封面口径: 这些地方裸读 artworkImage、没走高清替代优先 —— 会跟别处显示成两张不同的图(写 `highResArtworkImage ?? artworkImage`,或用 displayArtworkImage)")
     }
 
-    // ---- Spotify 原生客户端:通知广告分类 + 位置探针顺带取封面地址的接线(2026-09-09)----
+    // ---- Spotify 原生客户端:通知广告分类 + 位置探针顺带取封面地址的接线----
     //
     // 三处接线漏一处都不报错:LocalPlaybackSource 换曲那一拍要先问通知提示再退 AppleScript(否则每首歌照旧白
     // fork 一次 osascript);SpotifyPositionProbe 的脚本要顺带带回 `spotify url` 与 `artwork url`(否则
@@ -360,7 +360,7 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/SpotifyPositionProbe.swift(路径挪了?)")
         }
-        // 「在 Spotify 中显示」深链 + 随机键按 `shuffling enabled` 闸控(2026-09-09):三个文件各自的接线漏一处
+        // 「在 Spotify 中显示」深链 + 随机键按 `shuffling enabled` 闸控:三个文件各自的接线漏一处
         // 都不会编译失败 —— 菜单那行退回只激活 App、随机键退回无条件显示、两条回读路径对同一状态答案分家。
         if let mpc = code(core.appendingPathComponent("MusicPlaybackController.swift")) {
             expectEqual(count(mpc, "shuffling enabled") >= 2, true,
@@ -393,7 +393,7 @@ func runSourceContractTests() {
             expectEqual(count(pc, "refreshSpotifyOriginalCover(") >= 2, true,
                         "Spotify 封面: refreshSpotifyOriginalCover 要有声明 + 订阅点那次调用")
             // 封面尺寸一律按像素比(NSImage.pixelWidth,CachedImage.swift 里的 extension),不能用 NSImage.size 的点数:
-            // Spotify 图床原图带 797 dpi,2000px 的图 size.width 只有 181,第一版装机就是在这里把原图当小图丢掉的。
+            // Spotify 图床原图带 797 dpi,2000px 的图 size.width 只有 181,用点数就会把原图当小图丢掉。
             expectEqual(count(pc, "image.size.width"), 0,
                         "封面尺寸: PlaybackCoordinator 里不该再用 image.size.width 比大小(现 \(count(pc, "image.size.width")) 处)")
             expectEqual(count(pc, ".pixelWidth") >= 3, true,
@@ -410,11 +410,11 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- Last.fm 按播放器排除的接线(2026-09-10,借鉴清单 S10;用户原话「只控制 lastfm 的上送」)----
+    // ---- Last.fm 按播放器排除的接线(「只控制 lastfm 的上送」)----
     //
     // 一份 features.json 键、两侧各一套读写、collector 两处 Last.fm 出口:任何一处漏接都不会编译失败 —— App 存了、
     // collector 不读,或读了却只挡一处,表现都是"设置里关了、Last.fm 照记"。反向守卫:这项只属于 Last.fm 页,
-    // 播放器页与 ListenBrainz 那条漏斗不该再出现它(第一版曾做成全局「收听历史」,同日按用户要求收窄)。
+    // 播放器页与 ListenBrainz 那条漏斗不该出现它(它不是全局「收听历史」)。
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let repo = sourcesRoot.deletingLastPathComponent().deletingLastPathComponent()
@@ -449,13 +449,13 @@ func runSourceContractTests() {
         if let tab = code(sourcesRoot.appendingPathComponent("lyrimuse/AccountLinkingTab.swift")) {
             expectEqual(tab.contains("PlayerBundleChipsRow("), true, "Last.fm 播放器排除: Last.fm 设置卡要有那排播放器芯片")
             expectEqual(count(tab, "updateLastfmExclusion(") >= 1, true, "Last.fm 播放器排除: 勾选要经 updateLastfmExclusion 落盘")
-            // 内置播放器与信任列表里的浏览器必须摆进**同一排**芯片(2026-09-10 用户「收拢到一起」):
+            // 内置播放器与信任列表里的浏览器必须摆进**同一排**芯片(「收拢到一起」):
             // 候选拼装在 lastfmPlayerChoices 里,信任项若又退回一人一行的 SettingsRow 就等于回到旧形态。
             expectEqual(tab.contains("builtIn + trusted"), true, "Last.fm 播放器排除: 内置播放器与信任的浏览器要拼成同一排候选")
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/AccountLinkingTab.swift(路径挪了?)")
         }
-        // ---- 电台:两条链路都要把"整档节目"的值换成单曲口径(2026-09-10)----
+        // ---- 电台:两条链路都要把"整档节目"的值换成单曲口径----
         //
         // 判据是载荷里的 radioStationHash;换值必须发生在**构造快照那一处**,好让下游(伺服 / 锚点 /
         // 歌词引擎 / 打卡阈值 / 歌词缓存的 resolved_duration)一行都不用改。漏任一处的表现都是
@@ -469,7 +469,7 @@ func runSourceContractTests() {
             if let mcc = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc.contains("radioStationHash"), true, "电台: RawPayload 要解 radioStationHash 这个判据字段")
                 expectEqual(mcc.contains("RadioTrackClock.advance("), true, "电台: 位置要走 RadioTrackClock(纯算术在 Core,selftest 钉住)")
-                // ⚠️ 反向守卫(2026-09-10 当天第二轮):电台的 duration **必须原样传**。第一版把它置成 nil,
+                // ⚠️ 反向守卫:电台的 duration **必须原样传**,置成 nil 的话,
                 // 结果 LocalPlaybackSource 建进度锚点那一支的闸 `duration > 0` 不成立、锚点建不起来,
                 // 电台放到歌也没有歌词。这一侧的 duration 只影响进度条分母,不写歌词缓存。
                 expectEqual(mcc.contains("duration: isRadio ? nil"), false,
@@ -478,16 +478,16 @@ func runSourceContractTests() {
                             "电台: 位置要用自己那块单曲表,取不到再退回原读数")
                 expectEqual(mcc.contains("guard snapshot.isRadio != true else { return snapshot }"), true,
                             "电台: 不能借 AppleScript 那份位置(它同样是整档节目的)")
-                // 起表时刻(2026-09-10 第三轮,用户报「歌词进度偏慢」):必须用 stream watcher 观察到
+                // 起表时刻(现象是「歌词进度偏慢」):必须用 stream watcher 观察到
                 // 换歌的那一刻,不是这一拍轮询的时刻。差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
                 // 而这条链路断了不会编译失败 —— 只是位置又从 0 起,表现成"整首歌恒慢一点"。
                 expectEqual(mcc.contains("startedAt: Self.lastTrackChangeObserved(forKey: trackKey)"), true,
                             "电台: 起表要用观察到换歌的那一刻,不是轮询那一拍")
-                // 落盘副本(2026-09-11):重启后接得回去。这两处任一断掉都不会编译失败 ——
-                // 只是又变回"一重启就从 0 起",而那正是用户报过的现象。
+                // 落盘副本:重启后接得回去。这两处任一断掉都不会编译失败 ——
+                // 只是又变回"一重启就从 0 起",而那正是现象是过的现象。
                 expectEqual(mcc.contains("RadioClockFile.restorable("), true, "电台: 冷启动要尝试接上一个进程的表")
                 expectEqual(mcc.contains("RadioClockFile.write(record)"), true, "电台: 推进时要落盘,否则下次没得接")
-                // 「只勾了 Apple Music」这条路(2026-09-11):它走纯 JXA,AppleScript 拿不到
+                // 「只勾了 Apple Music」这条路:它走纯 JXA,AppleScript 拿不到
                 // radioStationHash,于是电台整层在这一种配置下曾经完全不生效 —— 而判据本身一处
                 // bundleID 都不认,所以这是唯一不生效的配置。退回去直接调 fetchAppleMusicSnapshot
                 // 不会编译失败,只会让电台在那种配置下再次"安静地没有"。
@@ -500,7 +500,7 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlClient.swift(路径挪了?)")
             }
-            // withRadio 的形状(2026-09-11):MediaControlSnapshot 的 memberwise init 是 internal,
+            // withRadio 的形状:MediaControlSnapshot 的 memberwise init 是 internal,
             // selftest 够不着,只能在源文本上钉住这三件事。三件都不会编译失败,错了只会安静地错。
             if let mcs = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlSnapshot.swift") {
                 expectEqual(mcs.contains("elapsedTime: position, playing: playing"), true,
@@ -515,23 +515,23 @@ func runSourceContractTests() {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlSnapshot.swift(路径挪了?)")
             }
             if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
-                // 主持人说话那一段收歌词(2026-09-11)。判定必须用**快照里没被夹过的**位置:
+                // 主持人说话那一段收歌词。判定必须用**快照里没被夹过的**位置:
                 // 进度锚点会把位置夹在 [0, duration],从那边永远看不到"越过曲长"。
                 expectEqual(lps.contains("RadioTrackClock.passedTrackEnd("), true,
                             "电台: 越过真曲长要把歌词收掉(主持人说话那一两分钟)")
                 expectEqual(lps.contains("if radioTrackFinished {"), true,
                             "电台: 收歌词的闸要挂在 20Hz 那条 tick 上,不然只有 2 秒轮询那一拍生效")
-                // 台卡(2026-09-11):开台那一刻是唯一能拿到台名台标的时机,漏抓就永远没有。
+                // 台卡:开台那一刻是唯一能拿到台名台标的时机,漏抓就永远没有。
                 expectEqual(lps.contains("RadioStationCardFile.stationName("), true,
                             "电台: 开台那一刻要把台名记下来(口白期间系统什么都不给)")
-                // 台卡也算「不是歌」(2026-09-11):不收的话开台那几十秒会走到「搜索歌词中…」再到
-                // 「暂无歌词」——用户报过一次。判据要跟 collector 那侧的 radioStationCard 同义。
+                // 台卡也算「不是歌」:不收的话开台那几十秒会走到「搜索歌词中…」再到
+                // 「暂无歌词」——现象是过一次。判据要跟 collector 那侧的 radioStationCard 同义。
                 expectEqual(lps.contains("let finished = stationCardName != nil || RadioTrackClock.passedTrackEnd("), true,
                             "电台: 台卡期间要跟口白一样收歌词,不能当成一首歌去搜")
                 expectEqual(lps.contains("noteRadioStationArtwork(data, forKey: expectedKey)"), true,
                             "电台: 台标要在取图落地那一刻补进台卡(台卡那一拍常常还没有图)")
-                // 时间轴校正分流(2026-09-11):电台上调的必须落进电台那一档。写错桶不会报错,
-                // 表现是"正常播放这首歌反而不准了"——用户实测正常播放本来是对的,这是整个需求的要害。
+                // 时间轴校正分流:电台上调的必须落进电台那一档。写错桶不会报错,
+                // 表现是"正常播放这首歌反而不准了"——实测正常播放本来是对的,这是整个需求的要害。
                 expectEqual(lps.contains("LyricsOffsetStore.shared.nudgeRadio(by: deltaMs, forKey: radioKey)"), true,
                             "电台: 微调要落进电台那一档,不能写进按曲目那层")
                 expectEqual(lps.contains("radioKey: radioKey"), true,
@@ -541,7 +541,7 @@ func runSourceContractTests() {
             }
             // 三个展示面在口白期间都要把歌词那一格换成「口白」。少一个不会编译失败,只会那一面
             // 继续显示「搜索歌词中…」——元数据在口白期间还停在上一首,拦不住就是这个后果。
-            // ⚠️ 四个面,不是三个(2026-09-11 用户截图报的就是漏掉的那一个:歌词窗口的**空状态**
+            // ⚠️ 四个面,不是三个(对拍报的就是漏掉的那一个:歌词窗口的**空状态**
             // 那一格,跟它的元数据行是两条独立分支)。菜单栏面板走的是共用判定链 LyricsLineDisplay。
             for (rel, face) in [("lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift", "灵动岛"),
                                 ("lyrimuse/Sources/lyrimuse/UI/LyricsOverlayView.swift", "桌面悬浮歌词"),
@@ -550,10 +550,10 @@ func runSourceContractTests() {
                 if let face_text = text(rel) {
                     expectEqual(face_text.contains("L10n.t(\"口白\")"), true, "电台: \(face)要显示「口白」")
                     // 歌词窗口有**三条**独立分支:元数据行(lyricsKind)、空状态(emptyStateSpec),
-                    // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次用户报障:
-                    // 只补元数据行 → 标题对了、中间那格还在转圈搜(2026-09-11 第一次截图);
+                    // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次现象是障:
+                    // 只补元数据行 → 标题对了、中间那格还在转圈搜(第一次截图);
                     // 再补空状态仍不够 → 口白期间上一首的 allLines 原样留着,走不到空状态,
-                    // 那一栏继续滚上一首的词(2026-09-11 第二次截图)。灵动岛 / 悬浮窗只显示
+                    // 那一栏继续滚上一首的词(第二次截图)。灵动岛 / 悬浮窗只显示
                     // "当前这一行",各自的 isRadioTalkBreak 分支天然盖住,唯独这里是整段列表。
                     if rel.hasSuffix("LyricsWindowView.swift") {
                         expectEqual(face_text.contains("if playback.isRadioTalkBreak { return (\"dot.radiowaves.left.and.right\""), true,
@@ -604,7 +604,7 @@ func runSourceContractTests() {
                             "电台台标: 没有歌手不宣布正在播放(两个平台都把 artist 当必填,发过去只会 400)")
                 expectEqual(poller.contains("if lm.ArtistName == \"\" {"), true, "电台台标: 没有歌手不提交收听")
                 expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
-                // 电台不借 AppleScript 那份播放头(2026-09-11)。App 侧同义的闸 2026-09-10 就有了
+                // 电台不借 AppleScript 那份播放头。App 侧同义的闸就有了
                 // (上面那条 `guard snapshot.isRadio != true`),collector 漏了整整一天 —— 后果不是
                 // "位置不准"这么轻:整档节目的位置写进 trackPos → 每拍都命中单曲循环判定 → 会话每
                 // 5 秒重建、playedSecs 归零 → 电台上一条收听都提交不了(实测 4.5 小时 2397 次
@@ -615,7 +615,7 @@ func runSourceContractTests() {
                             "电台: collector 一律不借 AppleScript 播放头 —— 那是整档节目的位置,借了会让会话每拍重建")
                 expectEqual(poller.contains("p.cur.Playing, p.isTracked(), p.cur.Radio)"), true,
                             "电台: 那道闸要真的把 p.cur.Radio 传进去,不然纯函数写对了也没接上")
-                // 第二道闸(2026-09-11,修完上面那道之后实测仍然一条都不打卡):电台真曲长由 Apple
+                // 第二道闸(修完上面那道之后实测仍然一条都不打卡):电台真曲长由 Apple
                 // 目录**异步**给出,实测比会话起点晚 4.7 秒,而 sess.meta 是会话创建那一刻的快照 ——
                 // 不回填的话 listenThreshold 拿到 0、退回 240s 上限,2~4 分钟的电台曲目永远够不着。
                 expectEqual(poller.contains("needsRadioDurationBackfill("), true,
@@ -640,7 +640,7 @@ func runSourceContractTests() {
             }
         }
 
-        // ---- 配置热重读:白名单两侧都要真的接上(2026-09-10)----
+        // ---- 配置热重读:白名单两侧都要真的接上----
         //
         // `CollectorRestartPolicy.hotReloadedKeys` 里每一个键,都必须 ① 真是 features.json 的键(App 侧
         // FeatureFlagsFile 的 CodingKey),② collector 侧真有按 mtime 的热重读。少任一边,用户看到的都是
@@ -693,7 +693,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 灵动岛「字体」组的接线(2026-09-09)----
+    // ---- 灵动岛「字体」组的接线----
     //
     // 三个字体设置只影响渲染,漏接任何一处都不报错,只表现成"改了字体、某处没跟着变"。要吃字体的五处歌词
     // 文字(主行 / 副行 / 展开态「下一句」预览 / 广告态那一格的「广告中」与倒计时)和一处随字号走的主行高度,
@@ -708,7 +708,7 @@ func runSourceContractTests() {
             let code = notch.split(separator: "\n", omittingEmptySubsequences: false)
                 .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
             func count(_ needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
-            // 广告态那一格(`adStatusColumn`,2026-09-08 起)也要跟字体走 —— 但它跟字体设置是两条并行推进的改动,
+            // 广告态那一格(`adStatusColumn`)也要跟字体走 —— 但它跟字体设置是两条并行推进的改动,
             // 按"这一格在不在"决定要不要数它,别让两边谁先入库都把对方的闸打红。
             let hasAdRow = code.contains("adCountdown")
             expectEqual(count("playback.mainFont)") >= (hasAdRow ? 2 : 1), true,
@@ -728,7 +728,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 灵动岛「对齐方式」的三条接线必须都在(2026-09-03)----
+    // ---- 灵动岛「对齐方式」的三条接线必须都在----
     //
     // 这一项是纯 App target 的(枚举 `LyricsRestingAlignment` 和两个消费点都在
     // Sources/lyrimuse 里),selftest 只链 LyrimuseCore、拿不到类型,所以只能做**源码文本扫描**
@@ -737,7 +737,7 @@ func runSourceContractTests() {
     // 为什么值得上闸:三条接线漏任何一条**都不会编译报错**,只表现成"设置改了但某处没跟着变"。
     // 而这个仓库为同一类漏改付过两次代价 —— ①悬浮歌词的「对齐方式」当年在预览条上静默失效,
     // 根因是补对齐时只改了静态文本那一条路径、逐字填色那条漏了(见 OverlayStyleSettingsRows
-    // 顶部注释);②封面口径那条(上面那个 do 块)漏了三处才被用户发现。
+    // 顶部注释);②封面口径那条(上面那个 do 块)漏了三处才被发现。
     do {
         let appSources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -749,7 +749,7 @@ func runSourceContractTests() {
         // ① 灵动岛的**三处**歌词文本都要吃这个设置:收起态主歌词行(MarqueeText 的
         //    restingAlignment)、副行、展开态「下一句」预览(那两行自己的 .frame(alignment:))。
         //    只接一处的表现正是"选了居中之后主行居中、预览还贴左",看起来就是没做完。
-        //    2026-09-07 加「自动」后三处各读一个**解析过声部**的值(`NotchPlayback.mainLyricAlignment` /
+        //    加「自动」后三处各读一个**解析过声部**的值(`NotchPlayback.mainLyricAlignment` /
         //    `secondaryLyricAlignment` / `nextLineAlignment`),不许再直接读 `lyricsAlignment.swiftUIAlignment`
         //    ——直接读的话「自动」会退化成左对齐、且不报错。
         if let notch = read("UI/NotchLyricsView.swift") {
@@ -779,7 +779,7 @@ func runSourceContractTests() {
 
         // ③ 手搓的分段控件**只允许存在两份**:`LyricsAlignmentSegmentedControl`(菜单栏 +
         //    灵动岛共用,3 选项)和 `OverlayAlignmentSegmentedControl`(悬浮歌词那个 4 选项的
-        //    对唱覆盖,语义不同、刻意分开)。2026-09-03 给灵动岛加这一项时**没有**复制第三份,
+        //    对唱覆盖,语义不同、刻意分开)。给灵动岛加这一项时**没有**复制第三份,
         //    而是把菜单栏那份改名搬去 UI/LyricsAlignmentSegmentedControl.swift —— 这两个控件
         //    的头注里记着"不用系统 segmented picker"和 `.fixedSize()` 两条实测踩出来的尺寸坑,
         //    再多一份就等于下次改尺寸要记得改三处。
@@ -799,7 +799,7 @@ func runSourceContractTests() {
                     ["UI/LyricsAlignmentSegmentedControl.swift", "UI/OverlayStyleSettingsRows.swift"],
                     "灵动岛对齐: 手搓对齐分段控件只该有这两份(多出来的是复制的第三份,见上面注释)")
 
-        // ④ 「自动」只有灵动岛提供(2026-09-07):共用的枚举多了 `.automatic`,两个宿主必须**显式**传
+        // ④ 「自动」只有灵动岛提供:共用的枚举多了 `.automatic`,两个宿主必须**显式**传
         //    选项列表 —— 控件和面板里再出现 `allCases` 就会把「自动」漏给菜单栏(那一格没有声部可跟,
         //    选了没效果)。菜单栏渲染侧的两个 switch 也得把 `.automatic` 跟 `.leading` 归在一起兜底。
         if let control = read("UI/LyricsAlignmentSegmentedControl.swift") {
@@ -827,7 +827,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 灵动岛歌词行「副行」(2026-09-06,用户拍板方案二)----
+    // ---- 灵动岛歌词行「副行」----
     //
     // 四条接线各有一处漏了就静默失效的坑:①视图里主行必须读合成后的 `displayLine`,不能再直接读
     // `compactLine` —— 否则副行开着时主行仍"唱完就切",跟下面那行下一句撞成两行同一句;②展开区「下一句
@@ -865,7 +865,7 @@ func runSourceContractTests() {
                         "副行: NotchStyleDefaults.restoreDefaults() 要覆盖这一项、且读默认值常量")
         }
         if let settingsView = read("SettingsView.swift") {
-            // 2026-09-07 起那颗开关住在「歌词行」组、紧跟「副行」(NotchLyricRowSettingsRows),显隐判据不变。
+            // 那颗开关住在「歌词行」组、紧跟「副行」(NotchLyricRowSettingsRows),显隐判据不变。
             expectEqual(settingsView.contains("!settings.notchSecondaryLine.hidesExpandedNextLinePreview"), true,
                         "副行: 副行选「下一句」时「展开时预览下一句」开关要隐藏(翻了也没效果的开关不显示)")
         }
@@ -875,7 +875,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 菜单栏双排(副行)的接线(2026-09-06)----
+    // ---- 菜单栏双排(副行)的接线----
     //
     // 几何与取值规则在 Core 有 selftest,这里守接线:①本体按副行档位在 currentLine / compactLine 之间切、
     // 主行字体只从 mainFont(for:twoRows:) 一个入口取;②自适应装得下的句子在双排时也要走图层(button.title
@@ -916,7 +916,7 @@ func runSourceContractTests() {
         if let stage = read("UI/MenuBarEditorStage.swift") {
             expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine"), true,
                         "菜单栏双排: 「重置」要覆盖副行、且读默认值常量")
-            // 2026-09-07 起「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
+            // 「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
             // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。
             expectEqual(stage.components(separatedBy: "if settings.menuBarSecondaryLine.showsSecondaryRow {").count - 1, 1,
                         "菜单栏双排: 「字号」滑杆在副行开着时让位(判据只在 MenuBarFontSizeRow 一处)")
@@ -929,13 +929,13 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 菜单栏面板「快捷设置」的旋钮清单(2026-09-14)----
+    // ---- 菜单栏面板「快捷设置」的旋钮清单----
     //
-    // 这块面板(长按 / 右键圆钮块展开的那一小片)2026-08-19 建的,头注写死了收录判据:**这个形态
+    // 这块面板(长按 / 右键圆钮块展开的那一小片)建的,头注写死了收录判据:**这个形态
     // 自己的、调了立刻看得见的旋钮**。问题不在判据,在**回补**:此后三个形态各自新增的旋钮里,
     // 只有「对齐方式」(09-03)和灵动岛「显示歌词」(09-06)被补进来过,而同期加的
     // 「副行」(09-06)和字号(菜单栏 09-03 / 灵动岛 09-09)一直漏在外面 —— 一漏就是静默的:
-    // 面板照常能用,只是少了两个本该在的旋钮,没有任何东西会红。这一组钉住 2026-09-14 补齐后的清单。
+    // 面板照常能用,只是少了两个本该在的旋钮,没有任何东西会红。这一组钉住补齐后的清单。
     //
     // 顺带钉住同日的两件事:①灵动岛宽度合成**一根双滑块**(跟编辑台形态取齐,也是腾出行数的前提);
     // ②两个字号区间都读真源常量,不在面板里抄字面量(抄一份就会出现"别处够不到的值",
@@ -986,7 +986,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 日文汉字修回的接线(2026-09-06)----
+    // ---- 日文汉字修回的接线----
     //
     // `JapaneseKanjiRepair` 的规则有 selftest 钉着(romanization 组),这里守的是它**接在哪**:正文和
     // 逐字数据都要过它、译文不能过(译文是中文,过了会被"修"成繁体)、整首判定要用正文。三条里任何一条
@@ -1009,7 +1009,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 引导页与设置页的"同一件事只有一份实现"(2026-09-03)----
+    // ---- 引导页与设置页的"同一件事只有一份实现"----
     //
     // 这一轮做了三件事:引导页播放器从单选改多选、加一格 YouTube Music、后面新增「配对浏览器」
     // 一步。三件事都天然诱使人在引导页**照抄**一份设置页已有的逻辑,而那三份逻辑里都带着
@@ -1048,7 +1048,7 @@ func runSourceContractTests() {
                         "引导页一份实现: 「配对浏览器」那一步要走 BrowserPairing.trustAndPair(那个函数体里的顺序是实测结论)")
             // 引导页不该自己碰 browserPlatformPairs —— 那是 BrowserPairing 的地盘。
             //
-            // ⚠️ 必须**过滤注释行**。第一版写的是整份 `contains`,当场自己红了:引导页的注释里
+            // ⚠️ 必须**过滤注释行**。整份 `contains` 会被自己打红:引导页的注释里
             // 两处提到这个符号名(讲"探针按它跑""真正落盘的是它"),而那正是应该写在注释里的
             // 说明。这个文件里另外几条源码扫描守卫本来就都跳 `//`/`///`,这条漏了。
             let offenders = onboarding.split(separator: "\n", omittingEmptySubsequences: false)
@@ -1079,11 +1079,11 @@ func runSourceContractTests() {
             expectEqual(true, false, "引导页一份实现: 读不到 SettingsView.swift(路径挪了?)")
         }
 
-        // ④ **平台 → 图标那张查表**只允许一份(2026-09-03 从 SettingsView 的 private 类型里
+        // ④ **平台 → 图标那张查表**只允许一份(从 SettingsView 的 private 类型里
         //    搬出来的原因就是引导页够不着)。
         //
-        // ⚠️ 判据翻过一次,记下来别再写错:第一版断言的是"`YouTubeMusicIcon`/`SpotifyIcon`
-        // 这两个资源名只该出现在 WebPlatformIcon.swift 里",当场红了 —— 而且是**前提本身错**,
+        // ⚠️ 判据容易写错,记下来:别断言"`YouTubeMusicIcon`/`SpotifyIcon`
+        // 这两个资源名只该出现在 WebPlatformIcon.swift 里" —— 那个**前提本身就是错的**,
         // 不是漏改:`FeatureSettingsStore.swift` 里 `case .spotify: return "SpotifyIcon"` 是真
         // 代码且完全合理(Spotify **桌面版**那张播放器卡复用同一张 PNG,`AppIconResolver` 的
         // 注释写着"不用再拷一份")。真正该守的不是"资源名只出现一次",而是"把 platformID 翻成
@@ -1103,9 +1103,9 @@ func runSourceContractTests() {
         expectEqual(platformTables.sorted(), ["Settings/WebPlatformIcon.swift"],
                     "引导页一份实现: platformID → 图标那张查表只该有一份(在 WebPlatformIcon.swift)")
 
-        // ⑤ **引导页只允许"一次点击取消一个配对",不准批量删**(2026-09-03 第二轮,真出过事)。
+        // ⑤ **引导页只允许"一次点击取消一个配对",不准批量删**(真出过事)。
         //
-        // 第一版的 `toggleYouTubeMusic` 在取消勾选时 `for bundleID in pairedBrowsers { unpair }`
+        // `toggleYouTubeMusic` 一旦在取消勾选时 `for bundleID in pairedBrowsers { unpair }`
         // —— 一个播放器网格里的格子,顺手把设置页里配好的一整份浏览器配对删空,没有二次确认、
         // 没有撤销。实测把用户 youtubeMusic 的四个配对删到 `{}`(配对值靠会话记录恢复)。
         // 这条闸钉住:整个引导页 `BrowserPairing.unpair(` 只允许出现**一次**(每张卡自己那次)。
@@ -1119,7 +1119,7 @@ func runSourceContractTests() {
                         "引导页只删一个: BrowserPairing.unpair( 在引导页只该有一处调用(每张卡自己那次);批量删配对属于设置页那种能逐个确认的粒度")
 
             // ⑥ 浏览器候选必须**一份稳定列表**渲染,不准再按"已配对/未配对"分两组 —— 分组时
-            //    点一下会让那张卡从一组跳到另一组、在网格里换位置(用户原话「点了以后图标会
+            //    点一下会让那张卡从一组跳到另一组、在网格里换位置(「点了以后图标会
             //    切换位置」),而"位置变了 + 边框变了"混在一起读不出"我刚取消了它"。
             expectEqual(onboarding.contains("BrowserPairing.candidateBrowsers("), true,
                         "引导页不换位: 浏览器网格要铺 candidateBrowsers(一份稳定列表),不按已配对/未配对分两组")
@@ -1134,7 +1134,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "引导页不换位: 读不到 OnboardingView.swift(路径挪了?)")
         }
 
-        // ⑦ **不准再写 `steps[step]`** —— 那是一处真的会崩的越界(2026-09-03 修)。
+        // ⑦ **不准再写 `steps[step]`** —— 那是一处真的会崩的越界(修)。
         //
         // 原来的论证是"能让 steps 变短的控件全都在 index 1,所以安全",而它默认"引导页是
         // 唯一宿主":`features.players` 是 @Published,设置窗口能同时开着改它,引导页自己的
@@ -1161,7 +1161,7 @@ func runSourceContractTests() {
             //    `refinedAppleMusicSnapshotIfNeeded` 只看在播的是不是 Music.app、完全不看
             //    features.players,而 players 的默认值恰恰是 [.auto] —— 漏掉 .auto 等于让
             //    "保持默认、平时听 Apple Music"的人永远不被问这个权限。
-            //    ⚠️ 2026-09-17:判据本体挪进 `Set<PlaybackPlayer>.needsAppleMusicAutomation`
+            //    ⚠️ 判据本体挪进 `Set<PlaybackPlayer>.needsAppleMusicAutomation`
             //    (行为断言在 players 组),这里改钉"两处都转发到它"。原来只钉了引导页这一处的
             //    字面量,结果**设置页那张权限卡漏了 .auto 一直没人发现** —— 引导里问过的权限,
             //    回设置里找不到入口。钉一处不够,两处都要钉。
@@ -1217,7 +1217,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "菜单栏位置提示不抢引导: 读不到 MenuBarStatusItem.swift(路径挪了?)")
         }
 
-        // ⑭ **`lyrics_tr_source` 的哨兵字符串必须跟 collector 逐字节一致**(2026-09-03)。
+        // ⑭ **`lyrics_tr_source` 的哨兵字符串必须跟 collector 逐字节一致**。
         //
         // Swift 侧 `LyricsTranslationSource.machineSentinel` 和 Go 侧 translate.go 的
         // `lyricsTrSourceMachine` 之间**没有任何编译期耦合**。哪天 Go 那边把它改成
@@ -1247,7 +1247,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
         }
 
-        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**(2026-09-09)。
+        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
         // Swift 侧 PositionBiasFile 写、Go 侧 positionbias.go 读;改了一边不改另一边,collector 会安静地
         // 读不到 / 解不出,网页那边 Spotify 歌词就悄悄回到慢 2 秒。
         let biasGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/positionbias.go").path
@@ -1264,7 +1264,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "位置偏置文件: 读不到 lyrimuse-collector/positionbias.go 或 main.go(路径挪了?)")
         }
 
-        // ⑮ **整行罗马音的判定阶梯只允许有一份**(2026-09-03)。
+        // ⑮ **整行罗马音的判定阶梯只允许有一份**。
         //
         // 播放引擎的客户端兜底和 collector 的 `lyrics-romanize` 预生成都要决定"这一行走
         // 日语形态分析还是 ICU 音译",两边必须**同一个函数**(`Romanizer.lineReading`)。
@@ -1309,11 +1309,11 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 署名过滤的「轮次计数」必须跟条目对齐(2026-09-03)----
+    // ---- 署名过滤的「轮次计数」必须跟条目对齐----
     //
     // docs/features/08-lyrics-engine.md 里有两处**各自手工维护**的同一个数:一条条
     // 「第 N 轮」的条目,和「设计决策」那节「枚举法收敛不了(至今补到第 N 轮)」里的计数。
-    // 加规则的人常常只补条目、忘了抬计数 —— 2026-09-03 实测:第十五轮记得抬,紧接着另一个
+    // 加规则的人常常只补条目、忘了抬计数 —— 实测:第十五轮记得抬,紧接着另一个
     // session 加第十六轮时就漏了。漏了什么都不报,只是让下一个读文档的人拿到一个偏小的数,
     // 从而低估这套规则的枚举成本 —— 而"枚举法收敛不了"正是这一节要传达的结论本身。
     //
@@ -1385,7 +1385,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 使用与版权说明 / 第三方许可(2026-09-03)----
+    // ---- 使用与版权说明 / 第三方许可----
     //
     // 说明正文只在 README 维护(中英各一节),App 里两处入口(设置「关于」页两行、引导欢迎页一句)都只是
     // 链接;THIRD_PARTY_LICENSES 随包分发,「第三方许可」那一行打开的是包里那份。钉四件事:
@@ -1461,9 +1461,9 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 设置页:跨进程调用不许出现在 view body 里(2026-09-03) ----
+    // ---- 设置页:跨进程调用不许出现在 view body 里 ----
     //
-    // 真机 `sample` 抓栈坐实的卡顿(用户报「设置页切分页有延迟、不跟手」):「播放器」页的
+    // 真机 `sample` 抓栈坐实的卡顿(现象是「设置页切分页有延迟、不跟手」):「播放器」页的
     // body 里直接调了 `MusicAutomationPermission.check`(底下是 AEDeterminePermissionToAutomateTarget
     // → semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
     // .status`(读 Chromium Preferences 文件)、`CollectorServiceManager.state`(起 launchctl 子进程
@@ -1523,9 +1523,9 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 「重置」必须覆盖它那个形态的每一个默认值常量(2026-09-03) ----
+    // ---- 「重置」必须覆盖它那个形态的每一个默认值常量 ----
     //
-    // 2026-09-03 一天之内在同一类疏漏上栽了三次:菜单栏「重置」漏了「歌词旁的图标」和
+    // 一天之内在同一类疏漏上栽了三次:菜单栏「重置」漏了「歌词旁的图标」和
     // 「悬停显示播放控制」、灵动岛「重置」漏了两个自动隐藏开关(都是设置项加进浮层时没同步
     // restoreDefaults())、灵动岛和菜单栏的「全部设置」抽屉各漏了一行「重置」兜底入口。
     // 这类漏**不会报错**,表现只是"点了重置有一项没变",用户很难判断是漏了还是本来就不该变。
@@ -1581,15 +1581,15 @@ func runSourceContractTests() {
             expectEqual(notchConsts.isEmpty || menuBarConsts.isEmpty, false,
                         "重置覆盖闸: 扫到了两族默认值常量(灵动岛 \(notchConsts.count) 个 / 菜单栏 \(menuBarConsts.count) 个)")
 
-            // 明确豁免名单(2026-09-03 实测 30 个常量 0 例外;2026-09-06 起一项)。
+            // 明确豁免名单(实测 30 个常量 0 例外;一项)。
             // 真有一项"有常量但故意不进重置"才加到这里,并在旁边写清楚理由 ——
             // 名单短比写一条含糊的例外更有价值,它逼着下一个人去想清楚。
             //
-            //  - `defaultNotchContentWidth`:灵动岛稳态宽 / 展开宽共用的默认值(2026-09-06 宽度变成一对时
+            //  - `defaultNotchContentWidth`:灵动岛稳态宽 / 展开宽共用的默认值(宽度变成一对时
             //    抽出来的,为了两个键"没存过"时一定相等)。宽度是**结构性尺寸**设置,「重置」按既定取舍
             //    不碰它(见 AppSettings 那段注释与 05 章「重置」节:不含总开关和宽度),抽屉里那一行的
             //    副标题也写着「不含宽度和总开关」—— 把它塞进 restoreDefaults() 才是违背文案。
-            //  - `defaultNotchExpandedContentWidth`:同上,展开态那一半(2026-09-07 从共用稳态常量拆出来,
+            //  - `defaultNotchExpandedContentWidth`:同上,展开态那一半(从共用稳态常量拆出来,
             //    用户把自己在用的 252 / 482 定为默认时两个数不再相等)。同样是宽度,同样不进「重置」。
             let exempt: Set<String> = ["defaultNotchContentWidth", "defaultNotchExpandedContentWidth"]
 
@@ -1603,7 +1603,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 悬浮歌词默认字重闸(2026-09-07) ----
+    // ---- 悬浮歌词默认字重闸 ----
     //
     // `PlayerIdentityTests` 里「当前默认档」那组断言硬编码了 `.semibold`,因为 selftest 只依赖
     // LyrimuseCore(见 Package.swift),读不到 App 层的 `AppSettings.defaultOverlayFontWeight`。
@@ -1623,10 +1623,10 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 三个形态的「全部设置」抽屉都必须有「重置」兜底入口(2026-09-03) ----
+    // ---- 三个形态的「全部设置」抽屉都必须有「重置」兜底入口 ----
     //
     // 抽屉的定位是**键盘 / VoiceOver 的全量兜底通路**,而工具栏那颗「重置 ▾」是 SwiftUI `Menu`。
-    // 悬浮歌词一直在抽屉里放着一行 `resetRow`,灵动岛和菜单栏都漏了(2026-09-03 三形态设置审计
+    // 悬浮歌词一直在抽屉里放着一行 `resetRow`,灵动岛和菜单栏都漏了(三形态设置审计
     // 发现,当天补齐)。这条闸钉住三个都在。
     do {
         let sourcesDir = URL(fileURLWithPath: #filePath)
@@ -1657,7 +1657,7 @@ func runSourceContractTests() {
                     "抽屉重置闸: 三个形态的「全部设置」抽屉都要有 resetRow —— 抽屉是键盘/VoiceOver 的全量兜底通路,工具栏那颗 Menu 不能算数")
     }
 
-    // ---- 液态玻璃门控(2026-09-03,AGENTS.md「分层边界」成文的那条)----
+    // ---- 液态玻璃门控(AGENTS.md「分层边界」成文的那条)----
     //
     // 部署目标 macOS 14、CI 跑 macos-26:没 #available 门控的 .glassEffect / .glass / GlassEffectContainer
     // 在 CI 编得过、在用户机器上启动即崩,编译器不会替你拦。规则是玻璃只经 SettingsDesignSystem 的入口
@@ -1710,7 +1710,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "玻璃门控: 读不到 SettingsDesignSystem.swift(路径挪了?)")
         }
 
-        // ⑯ **「开机启动」这个开关不准碰 launchctl、不准起任何进程**(2026-09-03,同一个
+        // ⑯ **「开机启动」这个开关不准碰 launchctl、不准起任何进程**(同一个
         //    「点一下就闪退」修了三次才收口)。
         //
         // 两个方向各有一个坑,而且**都不产生 crash report**,极难查:
@@ -1721,7 +1721,7 @@ func runSourceContractTests() {
         //     lyrimuse,老进程让位退出(日志里是 `Process exited: voluntary`,新进程在
         //     **同一秒**启动)。
         //
-        // 2026-09-06 起「开机启动」改成系统登录项(SMAppService.mainApp,进程内 API,只改注册
+        // 「开机启动」改成系统登录项(SMAppService.mainApp,进程内 API,只改注册
         // 状态、不起不杀进程),旧 plist 只剩"启动时删掉"这一件事 —— 这条闸的形状不变:这个
         // 文件里不准出现 launchctl,也不准起子进程。
         if let loginItem = try? String(
@@ -1742,7 +1742,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 退出原因日志(2026-09-03,AGENTS.md「容易踩的具体坑 → 退出路径」)----
+    // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 → 退出路径」)----
     //
     // 两侧的退出路径都要打 `exiting reason=<code>`:App 侧所有主动 terminate 只准经 AppExit.request
     // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),collector 常驻路径(main.go)不准再出现裸
@@ -1806,7 +1806,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- features.json 键两侧镜像(2026-09-03)----
+    // ---- features.json 键两侧镜像----
     //
     // Swift `FeatureFlagsFile.CodingKeys` 里的每个键,collector features.go 都得有同名 json tag —— App 写了、
     // collector 不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
@@ -1843,9 +1843,9 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 「这一轮没跑完整」两侧同一套判据(2026-09-09)----
+    // ---- 「这一轮没跑完整」两侧同一套判据----
     //
-    // 起因是用户报《One Last Kiss》"这里可以搜到,但是首次播放的时候显示无歌词":那 36 秒
+    // 起因是《One Last Kiss》"这里可以搜到,但是首次播放的时候显示无歌词":那 36 秒
     // 直连 DNS 全挂,九个源里七个因熔断被整轮跳过、一条候选都没有,而封面/Apple 链接从别处
     // 照常拿到了 —— 于是条目照常落盘带上 ts,而 App 侧判"搜完了没有"的唯一依据就是 ts,
     // 一次网络事故就这样被读成了这首歌的属性。
@@ -1908,12 +1908,12 @@ func runSourceContractTests() {
                     "没跑完整: 快速补搜跑过一次就落定,不许无限转圈")
     }
 
-    // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份(2026-09-06)----
+    // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份----
     //
     // 名单在 collector 侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
     // App 侧是 `LyricsSource.allCases`(FeatureSettingsStore.swift,设置页「歌词源」列表)。「搜索
     // 候选歌词」弹窗原来还手抄了第三份,给头部「x/y」徽标的分母和「歌词源可用情况」列表用,注释
-    // 写着"手工保持一致"——2026-09-04 加咪咕时前两份都改了、第三份漏了,弹窗头部「0/8」、空状态
+    // 写着"手工保持一致"——加咪咕时前两份都改了、第三份漏了,弹窗头部「0/8」、空状态
     // 却写着「九个源都没找到」,用户当场看出来。现在弹窗直接读 LyricsSource.allCases;这里钉三件事:
     // ① Go/Swift 两份名单逐个相等;② 弹窗文件里不再出现手抄名单;③ 空状态那句「N个源都没找到
     // 可用的候选」的中文数字等于源数——它是本地化键的一部分,加源时得连 xcstrings 的键一起改
@@ -1983,16 +1983,16 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 「采纳候选」的三个入口必须同进同出(2026-09-04)----
+    // ---- 「采纳候选」的三个入口必须同进同出----
     //
     // `LyricsSearchSheet` 有三个调用点(歌词管理 / 歌词窗口的 sheet / 悬浮窗 ⚙ 的独立小窗),
     // 每一处的 onApply 都要有同一套分流与参数:纯文本候选走 `savePlainTextEdit`(否则把没有
     // 时间戳的纯文本当 LRC 喂进 saveEdit,这首歌在别的展示面上从"至少有静态文字"退化成"看
     // 起来完全没有歌词"),带时间戳的走 `saveEdit` 且 `markManual` 读 `manualPickLocksLyrics`、
-    // `fromManualPick: true`。这个仓库为"改了两处漏第三处"付过两次代价:2026-09-01 补
-    // markManual 时漏了歌词窗口那处;2026-09-04 发现小窗那处从 08-30 加纯文本候选起就没有
+    // `fromManualPick: true`。这个仓库为"改了两处漏第三处"付过两次代价:补
+    // markManual 时漏了歌词窗口那处;发现小窗那处从 08-30 加纯文本候选起就没有
     // 分流。守卫先数清楚调用点(多一处也要红 —— 新入口必须来这里登记,顺便读一遍上面的规矩),
-    // 再逐处查五个记号(2026-09-04 加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
+    // 再逐处查五个记号(加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
     do {
         let appSources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -2023,7 +2023,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 设置页顶层分类记忆(2026-09-04)----
+    // ---- 设置页顶层分类记忆----
     //
     // 顶层分类的落盘键必须是 `settings:` 前缀:ConfigPortability 只导出 `np:` / `KeyboardShortcuts_`,
     // 界面停留位置是机器状态、不该随备份走 —— 这个前缀正好自然排除。守卫两头:键名前缀没被改掉、
@@ -2056,7 +2056,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 菜单栏跟唱滚动(2026-09-04)----
+    // ---- 菜单栏跟唱滚动----
     //
     // 有逐字时间轴的句子滚动跟着正在唱的字走(MenuBarMarquee.followReadingPath / followScrollPath)。
     // 三件容易被"顺手统一"掉的事只能扫源码守:① 阅读位置路径**不看**卡拉OK开关 —— 不染色也要跟着唱到的
@@ -2104,7 +2104,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 菜单栏自绘位图的栅格化比例(2026-09-05)----
+    // ---- 菜单栏自绘位图的栅格化比例----
     //
     // 三样自绘位图(歌词长图 / 进度图标 / 活体图标)都要按**按钮所在窗口**的 backingScaleFactor 栅格化
     // (NSView.menuBarBitmapScale),不许再拿 NSScreen.main(有键盘焦点的屏)猜、也不许写死 2 ——
@@ -2136,7 +2136,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 菜单栏明暗观察点:只登记 / 报信,不当场读(2026-09-07,预览"重建时闪一下")----
+    // ---- 菜单栏明暗观察点:只登记 / 报信,不当场读(预览"重建时闪一下")----
     //
     // MenuBarAppearanceStore 记着"真菜单栏此刻是深是浅",设置页的色块、预览整块舞台都按它解析。
     // 状态栏项每次重建(自适应模式逐句都可能)新建的按钮 appearance 先是错的(App 自己那一档),
@@ -2170,7 +2170,7 @@ func runSourceContractTests() {
                     "菜单栏明暗: 悬停层自己不解析明暗写进 store")
     }
 
-    // ---- 共享配置文件的读写口径(2026-09-05,借鉴清单 #46)----
+    // ---- 共享配置文件的读写口径----
     //
     // ConfigStore / FeatureSettingsStore 两份共享 JSON 文件的读盘、合并、写盘必须走 Core 的 JSONConfigDocument
     // (三态:missing / loaded / corrupt,corrupt 拒绝保存;写盘成功后才更新内存)。不许再各自
@@ -2208,7 +2208,7 @@ func runSourceContractTests() {
         expectEqual(banner.contains("activateFileViewerSelecting"), true, "配置读写口径: 横幅给「在访达中显示」让用户自己修")
     }
 
-    // ---- 后台服务应用状态可见(2026-09-05,借鉴清单 #51)----
+    // ---- 后台服务应用状态可见----
     //
     // 功能开关 / 账号凭据保存后的 collector 重启结果,原来只写进两个 Store 的 lastError、全仓没人读。现在由设置窗口
     // 底部一条状态条统一显示。钉住:状态条挂上了并读三种态;协调器暴露进行中态;两个 Store 在重启失败后先看服务
@@ -2241,7 +2241,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 项目级 skill(2026-09-05,借鉴清单 #49)----
+    // ---- 项目级 skill----
     //
     // `.claude/skills/<名>/SKILL.md` 是 AGENTS.md 里三段操作型流程(真机验证 / 歌词排查 / 发版)的「步骤版」:
     // 只写步骤与判据,理由回链 AGENTS.md 与 docs。它最常见的死法是锚点腐烂(脚本改名、文档挪位、链接失效)和
@@ -2253,7 +2253,7 @@ func runSourceContractTests() {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let skillsDir = repoRoot.appendingPathComponent(".claude/skills")
-        // ⚠️ **这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(2026-09-11 用户定:AI 协作文件只留
+        // ⚠️ **这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(AI 协作文件只留
         // 作者本地)。所以在别人的 clone 和 CI 上它们**根本不存在** —— 那时整段跳过,不是失败。
         // 本地有就照旧全查(锚点腐烂、超长、发版 skill 漏 disable-model-invocation 都还是红)。
         // 别把这个 guard 改成 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
@@ -2317,7 +2317,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 预发布闸与测试版频道的发布链路(2026-09-05,借鉴清单 #32 + 用户拍板「接收测试版」开关)----
+    // ---- 预发布闸与测试版频道的发布链路(「接收测试版」开关)----
     //
     // 这条链路只在真打 tag 时跑得到,出错全是静默的(全体用户被推到测试版 / beta 用户收不到 beta.2)。能在本机
     // 钉住的只有形状:release.yml 对含 - 的 tag 标 prerelease、enclosure 指 tag 自己的目录而不是 latest、预发布
@@ -2353,7 +2353,7 @@ func runSourceContractTests() {
         expectEqual(sparkle.contains("func allowedChannels(for updater: SPUUpdater) -> Set<String>"), true, "发布链路: Sparkle 委托接了 allowedChannels")
         expectEqual(sparkle.contains("UpdateChannel.betaChannelName"), true, "发布链路: channel 名从 Core 常量来,跟 release.yml 那个字符串一处对齐")
 
-        // tag 构建前硬校验(2026-09-05,借鉴清单 #45):annotated / 正文非空 / 能拆成中英两份,判据只在
+        // tag 构建前硬校验:annotated / 正文非空 / 能拆成中英两份,判据只在
         // check_release_tag.sh 一份;校验步排在装任何工具链之前;正文只读一次,appcast 与 Release 引用同一个输出。
         let checkTag = read(".github/scripts/check_release_tag.sh")
         expectEqual(checkTag.isEmpty, false, "tag 校验: 读得到 check_release_tag.sh")
@@ -2373,10 +2373,10 @@ func runSourceContractTests() {
         expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
                     "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
         expectEqual(read("docs/releasing.md").contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
-        // ⚠️ **AGENTS.md 不进版本库**(2026-09-11,理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
+        // ⚠️ **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
         // 和贡献者没有意义。⚠️ 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
-        // (2026-09-11 实测:第一次只给 .claude/skills 那段加了跳过、漏了这一条,在模拟 clone 里当场红。
+        // (实测:第一次只给 .claude/skills 那段加了跳过、漏了这一条,在模拟 clone 里当场红。
         //  同类读点共 6 处,其余 5 处都在上面那个 skillGuard 块里、已被整段跳过覆盖。)
         let agentsDoc = read("AGENTS.md")
         if !agentsDoc.isEmpty {
@@ -2384,7 +2384,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 身份与路径收口(2026-09-05,借鉴清单 #33 第一步)----
+    // ---- 身份与路径收口----
     //
     // 配置目录 `~/.config/lyrimuse`、两个 launchd label、两份日志文件名,在 Swift 侧只许出现在 Core
     // LyrimuseIdentity.swift 一处(App / Core 其余文件一律经 LyrimusePaths / LogFiles / LyrimuseIdentity 取);
@@ -2450,11 +2450,11 @@ func runSourceContractTests() {
             let src = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
             guard src.contains("Contents/Resources/collector") else { continue }
             // spawn 有两种形状:自己 new Process 设 executableURL,以及走 ProcessRunner.run
-            // (2026-09-06 补上后一种 —— 「待补提交」清单的删除叉就是漏在那条路上:它是唯一
+            // (补上后一种 —— 「待补提交」清单的删除叉就是漏在那条路上:它是唯一
             // 一个用 ProcessRunner 的 collector 子命令,而那个函数当时连环境参数都没有,于是
             // 这道守卫按 executableURL 数根本数不到它。配置目录一旦不是默认值,App 读的是一处、
             // delete-listen 删的却是默认目录,deleted:0,界面上就是"点了没反应")。
-            // ⚠️ 两处都在 2026-09-06 收紧,起因是这道守卫**两次**都靠巧合成立:
+            // ⚠️ 两处都在收紧,起因是这道守卫**两次**都靠巧合成立:
             //
             // 一、匹配**不带**变量名前缀。原来数的是 `process.executableURL = …`,于是
             //    `CollectorServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
@@ -2480,7 +2480,7 @@ func runSourceContractTests() {
         expectEqual(csm.contains("\"EnvironmentVariables\": LyrimusePaths.collectorEnvironment"), true, "身份收口: collector 的 launchd plist 带 EnvironmentVariables")
     }
 
-    // ---- 「配色主题」下拉的色条与勾(2026-09-06,借鉴清单 #55)----
+    // ---- 「配色主题」下拉的色条与勾----
     //
     // 下拉项 = 三段色条(文字 / 背景 / 描边)+ 名字 + 当前项打勾,勾的判据与悬浮窗快捷菜单同一条(精确匹配四字段、
     // 跟随封面开着一个都不打)。钉住:色条只有 ThemeSwatch 一份画法、用 drawingHandler;菜单项走 Toggle(原生勾)而
@@ -2499,14 +2499,14 @@ func runSourceContractTests() {
         expectEqual(swatch.contains("if strokeEnabled {"), true, "主题色条: 描边开关决定第三段是颜色还是斜线(经典白字 vs 白字描边靠它区分)")
         expectEqual(code("Settings/ColorTheme.swift").contains("func swatchImage() -> NSImage"), true, "主题色条: ColorTheme.swatchImage() 转发到 ThemeSwatch")
         let rows = code("UI/OverlayStyleSettingsRows.swift")
-        // ⚠️ 2026-09-06 当天改口径:色条**只在「我的配色主题」子行**出现,下拉项里不能有。
+        // ⚠️ 改口径:色条**只在「我的配色主题」子行**出现,下拉项里不能有。
         // 原断言要求"下拉项与子行都带色条",而为了给下拉项加色条把条目写成
         // `Toggle { Label { Text } icon: { Image(nsImage:) } }` 之后,整份菜单**一个条目都画不出来**
         // (实测,连主题名都没有 —— 失败在条目这一层,不是图标那一层)。理由、实测现象与
         // 「真要加就走 AppKit」的替代方案,全在 OverlayStyleSettingsRows.themeItem 的注释里。
         // ⚠️ 扫源码的守卫必须**先剥掉注释行**:`themeItem` 的文档注释里**故意**贴着那段写坏了的
         // 代码(`Toggle { Label { Text } icon: { Image(nsImage:) } }`)当反面教材,不剥的话下面
-        // 每一条"不许出现 X"的断言都会被这段反面教材自己打红(2026-09-06 实测踩到:数
+        // 每一条"不许出现 X"的断言都会被这段反面教材自己打红(实测踩到:数
         // `theme.swatchImage()` 的出现次数,被注释里的示例多算了一次)。
         func stripComments(_ src: String) -> String {
             src.split(separator: "\n", omittingEmptySubsequences: false)
@@ -2521,8 +2521,8 @@ func runSourceContractTests() {
         expectEqual(rowsCode.contains("Toggle(isOn: Binding("), false,
                     "主题色条: 下拉项里不许再出现 Toggle 条目 —— 实测会让整份菜单一个条目都画不出来")
         // 下拉里已经没有勾了(见上),原来钉"勾的判据"那条随之删除。选中反馈只剩 Menu 自己的
-        // 标题(currentThemeLabel)。**2026-09-17 起它不再被「跟随封面」短路成占位符「—」**——
-        // 跟随封面 2026-09-16 变成「文字颜色」那一行的一个取值,跟"哪套配色在生效"解耦了,
+        // 标题(currentThemeLabel)。**它不再被「跟随封面」短路成占位符「—」**——
+        // 跟随封面变成「文字颜色」那一行的一个取值,跟"哪套配色在生效"解耦了,
         // 理由见 OverlayThemeSettingsRows 头注。判据扫的是剥掉注释的源码:那段头注本身反复
         // 提到被删掉的那个短路,整份 contains 会被自己的注释骗过去。
         expectEqual(rowsCode.contains("guard !settings.followsCoverArt"), false,
@@ -2531,13 +2531,13 @@ func runSourceContractTests() {
                     "配色主题: 占位符「—」删干净了,没有剩下的调用点")
         let quick = code("UI/OverlayQuickSettingsMenu.swift")
         // 快捷菜单**刻意**不跟着改:那份菜单里「跟随封面」跟主题列表同处一级,跟随开着时再给
-        // 某个主题打勾就是两个互相矛盾的"正在生效"(用户 2026-08-31 报过)。设置页那一组里根本
+        // 某个主题打勾就是两个互相矛盾的"正在生效"。设置页那一组里根本
         // 没有跟随封面这个选项,所以两边现在合理地不一样 —— 别看到"不一致"就去对齐。
         expectEqual(quick.contains("let showsCheckmarks = !settings.followsCoverArt"), true,
                     "主题色条: 快捷菜单那条「跟随封面开着不打勾」的规则还在(那份菜单里两个选项挨着,打勾会自相矛盾)")
     }
 
-    // ---- 诊断导出的崩溃报告段(2026-09-06,借鉴清单 #31)----
+    // ---- 诊断导出的崩溃报告段----
     //
     // 解析在 Core(纯 Foundation、不碰文件系统,好测),App 侧只做目录扫描;这一段跟其它日志段一样必须过脱敏
     // (DiagnosticsExporter 头注的硬约束);归属靠正文的 bundle id / 包路径,不只看文件名。
@@ -2563,9 +2563,9 @@ func runSourceContractTests() {
                     "崩溃报告段: selftest 覆盖解析")
     }
 
-    // ---- 补提交的反馈不许长在会消失的容器里(2026-09-12)----
+    // ---- 补提交的反馈不许长在会消失的容器里----
     //
-    // 用户报「补提交之后没有反馈」。根因不是忘了写文案,而是那句「已补 N 条」长在
+    // 现象是「补提交之后没有反馈」。根因不是忘了写文案,而是那句「已补 N 条」长在
     // pendingListensRow 的副标题里,而那一行的出现条件是 `eligible > 0`(lastfmProfileCard
     // 里的 if)—— 补得越干净 eligible 越接近 0,整行连同结果一起从界面上消失。
     // **补全成功 = 零反馈**,最该庆祝的那一次最安静。
@@ -2576,7 +2576,7 @@ func runSourceContractTests() {
     // ② lastRunFailed 还在:它是「跑了但失败」跟「还没跑过」的唯一区分(两者的 lastRun 都是 nil),
     //    没它失败就是静默的;
     // ③ abortedReason 在界面层有消费点 —— 限流(29)/凭据失效/服务端拒收整批**只**经由它出声,
-    //    而它从加进 Outcome 那天起到 2026-09-12 一直只被解码、从没有过任何显示面。
+    //    而它从加进 Outcome 那天起到一直只被解码、从没有过任何显示面。
     do {
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -2585,7 +2585,7 @@ func runSourceContractTests() {
             (try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
         }
         // 只数代码行:这两个文件的注释比代码长,注释里提到符号名不算数(同「身份与路径收口」
-        // 那道守卫 2026-09-06 收紧时踩过的坑)。
+        // 那道守卫收紧时踩过的坑)。
         func codeHits(_ src: String, _ needle: String) -> Int {
             src.split(separator: "\n", omittingEmptySubsequences: false).reduce(0) { acc, line in
                 if line.trimmingCharacters(in: .whitespaces).hasPrefix("//") { return acc }
@@ -2610,7 +2610,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- Go 的 omitempty 撞 Swift 的合成解码器(2026-09-12,同一个坑第二次)----
+    // ---- Go 的 omitempty 撞 Swift 的合成解码器(同一个坑第二次)----
     //
     // Swift 自动合成的 init(from:) 对**非可选**属性一律走 decode(_:forKey:),缺 key 直接
     // throw ——「属性写了默认值、缺 key 就退回默认值」是错的(两次都是这么以为才写成那样)。
@@ -2618,10 +2618,10 @@ func runSourceContractTests() {
     // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
     //
     // 两次事故,同一条 Go→Swift 边界:
-    //  ① 2026-08-25 searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
+    //  ① searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
     //     正常的分支里 collector 不写 decisionJSON,于是那一行解码失败、pick 恒为 nil,好几种
     //     该有专属文案的正常结局被吞成兜底那一句;
-    //  ② 2026-09-12 backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
+    //  ② backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
     //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
     //     功能上线那天起就这样(两侧一个字没改过),只是 lastRunFailed 那天才把它从"一声不吭"
     //     变成"界面报一句失败" —— 用户那趟 26 条全补进了 Last.fm、markBackfilled 的回执也落了
@@ -2702,7 +2702,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 日志规范(2026-09-04)----
+    // ---- 日志规范----
     //
     // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
     // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
@@ -2763,7 +2763,7 @@ func runSourceContractTests() {
                 }
             }
         }
-        // 2026-09-05 起 collector 新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
+        // collector 新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
         let goLogCall = try? NSRegularExpression(pattern: #"\b(?:log|slog)\.(Printf|Println|Print|Fatalf|Fatal|Debug|Info|Warn|Error)\(""#)
         for (rel, text) in files(under: repoRoot.appendingPathComponent("lyrimuse-collector"), suffix: ".go")
         where !rel.hasSuffix("_test.go") && !rel.contains("/") {

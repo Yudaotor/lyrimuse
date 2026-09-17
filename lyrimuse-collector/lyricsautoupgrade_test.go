@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 「自动跟进算法升级」这个开关(2026-09-03 用户要求:「控制是否会有自动按照最新版本的算法
+// 「自动跟进算法升级」这个开关(「控制是否会有自动按照最新版本的算法
 // 优化调整歌词的能力;开了就是现状,不开就是一开始选了什么就不会后台自动给换了」)。
 //
 // 闸门只加在**换掉已有歌词**的两条路径上,这组断言把"该挡的挡住、不该挡的一个都别挡"钉死:
@@ -42,7 +42,7 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 		t.Error("空歌词条目应该照常走首次填充(跟这个开关无关)")
 	}
 
-	// 手改过 / 钉过时间轴的,不管开关怎么设都不动(既有保护不能被这次改动削弱)
+	// 手改过 / 钉过时间轴的,不管开关怎么设都不动(既有保护不能被削弱)
 	manual := enrichEntry{Lyrics: "[00:01.00]x", ManualLyrics: true,
 		LyricsScoringVersion: lyricsScoringVersion - 1}
 	for _, auto := range []bool{true, false} {

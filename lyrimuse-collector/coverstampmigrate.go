@@ -2,7 +2,7 @@ package main
 
 import "log"
 
-// 存量「借来的封面被盖上归属戳」清洗(2026-09-07)。
+// 存量「借来的封面被盖上归属戳」清洗。
 //
 // # 修的是什么
 //
@@ -12,9 +12,9 @@ import "log"
 // 判"这张封面要不要复查"的凭据。
 //
 // QQ 那一档**从不回传专辑名**,所以 `qqCoverFallback` 选中的封面刻意把 `cover_album`
-// 清空 —— 图有用,但不认领归属。可 2026-09-07 之前,`siblingAlbumCover` 把这样一张图借给
+// 清空 —— 图有用,但不认领归属。可之前,`siblingAlbumCover` 把这样一张图借给
 // 同专辑其它曲目时,调用方会盖上 `cover_album = album`:一次借用把"未认领归属"升级成了
-// "逐字对上专辑"。两层后果:App 侧错图顶掉 Last.fm 那张对的图(用户报的
+// "逐字对上专辑"。两层后果:App 侧错图顶掉 Last.fm 那张对的图(现象是的
 // 《Michael》/「Hold My Hand (with Akon)」就是这么显示成 QQ 的《The Ultimate Collection》
 // 白底金色剪影的),collector 侧撞上 200 分从此不再复查、错误被永久冻住。
 //

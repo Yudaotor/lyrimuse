@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 酷狗音乐作为**播放器**接入(2026-08-21)。这一串是 Go 侧的身份契约:features.json 里的
+// 酷狗音乐作为**播放器**接入。这一串是 Go 侧的身份契约:features.json 里的
 // "player" 值、bundle id、以及 ListenBrainz 的 media_player 标签。跟 Swift 侧
 // lyrimuse-selftest 那个「播放器契约」块守的是同一件事 —— 任一侧改了名而另一侧没跟上,
 // 表现都是**静默失效**:用户选了酷狗,collector 认不出这个值就默默兜底成「自动识别」,
@@ -56,7 +56,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 	}
 }
 
-// 「自动识别」放开到任意 App(2026-08-21):口径是"用户显式信任",不是"一律接受"。
+// 「自动识别」放开到任意 App:口径是"用户显式信任",不是"一律接受"。
 // 白名单同时挡着显示和打卡(isTracked),一律接受等于让视频/播客写进永久收听历史。
 func TestTrustedPlayersWiring(t *testing.T) {
 	saved := features
@@ -108,7 +108,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 	}
 
 	// ListenBrainz 的 media_player 标签:用 App 自己的名字,反查不到退回 bundle id ——
-	// 绝不能谎报成 Apple Music(那会让来源统计彻底失真)。2026-09-01 起 mediaPlayerLabel
+	// 绝不能谎报成 Apple Music(那会让来源统计彻底失真)。mediaPlayerLabel
 	// 只看传入的 bundleID + TrustedPlayers,不再看 features.Players,这里不需要设置
 	// 它,保留旧断言只是确认这条不变量继续成立。
 	if got := mediaPlayerLabel("com.foobar.mac"); got != "Foobar2000 (macOS)" {
@@ -122,7 +122,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 	}
 }
 
-// 「这不是一首歌」守卫(2026-08-21):信任的未知播放器上报空歌手名**或空专辑名** → 整条丢掉。
+// 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** → 整条丢掉。
 // 判据跟 isAdBreak 完全一致,区别只在作用域。四份真实样本见 trustedPlaybackNotASong 的注释。
 func TestTrustedPlaybackNotASong(t *testing.T) {
 	saved := features
@@ -131,7 +131,7 @@ func TestTrustedPlaybackNotASong(t *testing.T) {
 	features.TrustedPlayers = map[string]string{arc: "Arc"}
 
 	// —— 真实样本:Arc 放视频 ——
-	// ① 第一份(2026-08-21 17:57):artist 和 album 都空
+	// ① 第一份(17:57):artist 和 album 都空
 	if !trustedPlaybackNotASong(arc, "", "") {
 		t.Error("artist/album 都空,该判成不是一首歌")
 	}

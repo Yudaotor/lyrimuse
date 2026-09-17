@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// 2026-08-31 真实bug:陶喆和盧廣仲《那個女孩》这首本地匹配不到的歌,"换个身份再搜"+
+// 真实故障:陶喆和盧廣仲《那個女孩》这首本地匹配不到的歌,"换个身份再搜"+
 // "按标题反查"两轮兜底加起来在 13 秒内连发了 16 次网易云请求,把自己先撞成限流(见
 // neteaseMinIntervalBetweenCalls 头注)。这组测试锁定 neteaseThrottle 本身的行为,跟
 // musicbrainzThrottle 同一个模式、同一批判据。
@@ -64,9 +64,9 @@ func TestNeteaseThrottle(t *testing.T) {
 		}
 	})
 
-	// 2026-09-02 新增:探测到网易云 body 拒绝之后的退避行为(neteaseReportBlocked)。
+	// 新增:探测到网易云 body 拒绝之后的退避行为(neteaseReportBlocked)。
 	// 见 neteaseBlockCooldownBase 头注 —— 为什么退避必须按端点桶,不能是全局的。
-	// ⚠️ 这一条 2026-09-02 当天改过语义。**原来断言的是「被标记退避的端点应该等到退避期满」**
+	// ⚠️ 这一条改过语义。**原来断言的是「被标记退避的端点应该等到退避期满」**
 	// (返回 nil、耗时 >= 退避期),现在断言的是「立刻返回 errNeteaseBucketCooling、一点都不等」。
 	//
 	// 改的理由是实测,不是口味:「搜索候选歌词」搜 DAOKO×米津玄師《打上花火》,逐条打时间戳量到
@@ -127,7 +127,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		neteaseReportBlocked("https://music.163.com/api/search/get/web?type=1&s=a", time.Second)
 
 		// 同路径、不同 query(type=10,专辑搜索用的那种)——应该被同一个桶挡住。
-		// 「挡住」的表现 2026-09-02 起是**立刻拒绝**而不是等满,见上面那条的说明。
+		// 「挡住」的表现是**立刻拒绝**而不是等满,见上面那条的说明。
 		err := neteaseThrottle(context.Background(), "https://music.163.com/api/search/get/web?type=10&s=b")
 		if !errors.Is(err, errNeteaseBucketCooling) {
 			t.Fatalf("同路径不同 query 应该共享退避,got %v", err)
@@ -166,7 +166,7 @@ func TestNeteaseEndpointBucket(t *testing.T) {
 	}
 }
 
-// 2026-09-03 新增:指数退避 + 成功清零 + "成功过就不报限流"那道判据。
+// 新增:指数退避 + 成功清零 + "成功过就不报限流"那道判据。
 //
 // 起因是 25 小时真实日志里的分布(见 neteaseBlockCooldownBase 头注):171 次拒绝有 89 次
 // 跟上一次间隔 ≤35 秒,最长连撞 21 次 —— 固定 30 秒的退避等于自己把服务端的惩罚窗口一直
@@ -286,7 +286,7 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 	})
 }
 
-// 2026-09-03:主备端点对调之后,钉住"首选是那个从没被拒过的桶"。
+// 主备端点对调之后,钉住"首选是那个从没被拒过的桶"。
 // 依据(同一份 25 小时日志):/api/search/get/web 打了 10029 次被拒 171 次,
 // /api/search/get 打了 8537 次**零拒绝** —— 量级相当而结果差一个数量级。
 // ⚠️ 这条断言存在的意义是防"顺手改回去":两个常量必须是不同的桶(否则兜底形同虚设),

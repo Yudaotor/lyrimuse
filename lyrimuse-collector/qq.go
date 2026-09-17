@@ -174,13 +174,13 @@ const qqAlbumLookupBudget = 4
 
 // qqClientSearch 打 QQ 音乐的**正式搜索接口** client_search_cp。
 //
-// ⚠️ 这里的历史结论翻过案,别照着旧注释理解。2026-09-02 之前本文件断言
+// ⚠️ 这里的历史结论翻过案,别照着旧注释理解。之前本文件断言
 // "client_search_cp returns zero bytes under anti-scrape",于是歌名维度整条链路只走
 // smartbox_new.fcg。但 smartbox 是**搜索框自动补全**、不是搜索:它有很高的热度门槛,
 // 冷门曲目一条都不回,而"回 0 条"跟"QQ 根本没收录这首歌"长得一模一样,从外面完全
 // 看不出来——表现就是欧美独立/长尾曲目上 QQ 这一源常年静默失效。
 //
-// 2026-09-02 逐条实测(起因是 Have Gun, Will Travel《Gravity Blues》八个源 0 候选
+// 逐条实测(起因是 Have Gun, Will Travel《Gravity Blues》八个源 0 候选
 // 那次排查):
 //
 //	查询词                                smartbox   client_search_cp
@@ -224,7 +224,7 @@ func qqClientSearch(ctx context.Context, query string) ([]qqSearchItem, error) {
 	return qqClientSearchItems(out), nil
 }
 
-// qqSmartbox queries QQ Music's suggest endpoint. 2026-09-02 起它不再是歌名维度的
+// qqSmartbox queries QQ Music's suggest endpoint. 它不再是歌名维度的
 // 主路线,而是 qqClientSearch 的兜底——理由和实测对比见 qqClientSearch 的头注。
 // Returns nil on error.
 func qqSmartbox(ctx context.Context, query string) []qqSmartboxItem {
@@ -277,7 +277,7 @@ func qqSmartboxRaw(ctx context.Context, query string) (qqSmartboxData, error) {
 }
 
 // qqSearchQueries 是 smartbox 的"歌手+歌名"查询尝试序列。QQ 这一源对括号**格外**敏感:
-// 2026-08-09 逐源实测,smartbox 的 key 里只要出现括号就返回 0 条(不是少几条,是一条不
+// 逐源实测,smartbox 的 key 里只要出现括号就返回 0 条(不是少几条,是一条不
 // 回),而去掉括号立刻有结果——也就是说改之前,凡是本地标题带 "(Remastered 2014)"/
 // "(Single Version)"/"(Taylor's Version)" 这类后缀的歌,QQ 音乐整个源都是废的,而且因为
 // 返回空跟"QQ 没收录这首歌"长得一模一样,从外面完全看不出来。
@@ -292,7 +292,7 @@ func qqSearchQueries(artist, title string) []string {
 // qqSearchSongs 是歌名维度找候选的唯一入口:把正式搜索接口(qqClientSearch)对**每个**
 // 标题变体的结果按 mid 去重合并,必要时再补一次 smartbox。
 //
-// ⚠️ 两处都不是随手定的,各自对应一个 2026-09-02 回放里实测到的坑:
+// ⚠️ 两处都不是随手定的,各自对应一个回放里实测到的坑:
 //
 // ① **跨变体合并,不是"第一个非空就返回"。** 改造前那个"first non-empty"策略,暗中
 // 依赖的是"smartbox 对带括号的查询词恒返回 0 条"——所以带括号那版必然落空、必然轮到
@@ -311,7 +311,7 @@ func qqSearchQueries(artist, title string) []string {
 // 补 smartbox 的条件收在"正式搜索没给出任何标题精确同名的候选"上:smartbox 的价值就是
 // 补那条最规范的版本,正式搜索已经有精确同名候选时它给不出新信息,这一次请求可以省掉。
 // 这也顺带保住了原来的降级路径——正式接口哪天再被反爬打死(旧注释就是上一次留下的),
-// 结果为空 → 一定不含精确同名 → 必然补 smartbox,行为退回 2026-09-02 之前的样子。
+// 结果为空 → 一定不含精确同名 → 必然补 smartbox,行为退回之前的样子。
 func qqSearchSongs(ctx context.Context, queries []string, title string) []qqSearchItem {
 	var out []qqSearchItem
 	seen := map[string]bool{}
@@ -381,7 +381,7 @@ func qqSearchItemsFromSmartbox(items []qqSmartboxItem) []qqSearchItem {
 // 返回 (头像 URL, definitive)。definitive 区分两种"没有":true = 服务端正常应答且
 // 确定查无此人(可以放心负缓存);false = 网络/非 200/解码失败这类**暂时故障**,不能
 // 当"查无"记下来 —— avatarcli 曾把两者都缓存 14 天,离线打开一次页面就让一批歌手
-// 14 天只显示首字母(2026-08-11 审阅确认)。
+// 14 天只显示首字母。
 // qqSingerSuggestion 是 smartbox_new.fcg "singer" 分类返回的一条建议——qqSingerAvatar
 // (取头像)和 qqArtistCanonicalName(取歌手名换算,见其头注)共用同一次网络请求/同一份
 // 解码,避免两个调用点各自发一遍请求。
@@ -461,7 +461,7 @@ func qqSingerAvatar(name string) (string, bool) {
 // qqArtistCanonicalName 用 QQ 音乐自己的歌手搜索建议,把一个罗马化/英文歌手名换成 QQ
 // 曲库认得的写法(通常是中文名)。
 //
-// 2026-08-31 加,起因是通用链路 canonicalArtistViaMusicBrainz/musicBrainzArtistAliases
+// 加,起因是通用链路 canonicalArtistViaMusicBrainz/musicBrainzArtistAliases
 // 在"罗马化姓名 → 中文艺人"这个场景上有两类实测坐实的真实缺口:
 //  1. 查不到——李荣浩/窦靖童/陈柏宇/曲婉婷等十余位,MusicBrainz 索引或别名登记不覆盖。
 //  2. 查错人——同名撞车:MusicBrainz 对 "David Tao" 排第一的是一位无关的德国音乐人
@@ -471,7 +471,7 @@ func qqSingerAvatar(name string) (string, bool) {
 // QQ 音乐作为中文平台,它自己的搜索建议本来就是为"用户拿英文/罗马化名字搜华语歌手"这个
 // 场景服务的,实测同一批人绝大多数都能直接查对,包括两个 MusicBrainz 查错人的案例。
 //
-// ⚠️ 只看**第一条**建议,不扫描整份列表——2026-08-31 实测坐实两个反例,分别对应"扫描
+// ⚠️ 只看**第一条**建议,不扫描整份列表——实测坐实两个反例,分别对应"扫描
 // 整份列表"和"只看第一条"这两种做法各自的坑,必须两条都躲开:
 //   - "Prince":第一条建议就是"Prince"自己(没有汉字,他本来就不需要中文名),但第二条
 //     建议是"戴爱玲"——一个毫不相关的歌手。早期实现"扫描全部建议取第一个含汉字的"会把
@@ -633,11 +633,11 @@ func qqSongAlbum(ctx context.Context, mid string) string {
 }
 
 // QQ 音乐图床的尺寸档写在**路径**里(`T002R300x300M000<mid>.jpg`),换个数字就换一档。
-// 800 是天花板:2026-08-24 对两个不同的 album mid 各测一轮,300/500/800 都 200,
+// 800 是天花板:对两个不同的 album mid 各测一轮,300/500/800 都 200,
 // 1000 与 2000 都 404。不带 Referer 也照给(实测 200)。
 //
 // 原来这里写死 300x300,而歌词窗口那张封面卡满幅是 820px(0.279×1470pt 窗宽 ×2),
-// 300px 顶上去是 2.73 倍放大 —— 用户报的"QQ 音乐这个封面很模糊"。
+// 300px 顶上去是 2.73 倍放大 —— 现象是"QQ 音乐这个封面很模糊"。
 const qqCoverMaxEdge = "800"
 
 // qqCoverSizeRe 匹配 QQ 图床路径里的那一段尺寸档。T001 是歌手头像、T002 是专辑封面,
@@ -770,7 +770,7 @@ func qqSongCatalogMids(ctx context.Context, mid string) (albumMid, singerMid str
 // 第二个返回值是 QQ 音乐核实过的官方歌手名(见下方 artistMatches 校验)，用于统一同一
 // 歌手在历史记录里时而中文时而英文、时而全大写的写法(如 PRINCE/Prince)。
 //
-// 2026-08-03 实测排查坐实(Michael Jackson《Morphine》——本地专辑标签是
+// 实测排查坐实(Michael Jackson《Morphine》——本地专辑标签是
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix",网页黑胶封面却显示成完全不相关的
 // 精选集《The Indispensable Collection》):这里原来"smartbox 结果里第一条双重校验
 // 通过的就是最终结果",跟同一文件里 resolveQQMusicMatch(给"QQ音乐链接"用)不是同一套
@@ -862,7 +862,7 @@ func qqArtistOK(strict bool, singer, artist string) bool {
 		return true
 	}
 	if strict {
-		// strict 档从 artistMatches 换成 lyricSourceArtistMatches(2026-08-20):QQ 的
+		// strict 档从 artistMatches 换成 lyricSourceArtistMatches:QQ 的
 		// 合唱署名用斜杠("UMI/V"),本地标签 "UMI & 金泰亨" 在原闸下两档全拒——loose 的
 		// looseContains("umiv","umi金泰亨") 同样不含。段集交集档正好补这个洞,防仿冒
 		// 守卫见 lyricSourceArtistMatches 注释。
@@ -896,7 +896,7 @@ func resolveQQMusicURL(ctx context.Context, artist, title, album string, duratio
 // qqCand 是歌名维度的一条候选。提到包级(原来是 resolveQQMusicMatch 里的局部类型)只为
 // 一件事:让 qqCollectCandidates 能被单测直接调。身份闸怎么放行、以及"搜索结果自带的
 // 专辑名/时长有没有一路透传到候选上",以前都内联在一个必须联网的函数里,单测根本够不到
-// ——2026-09-02 变异测试在 pickQQAlbumTrack 上暴露过同型盲区(改了调用点单测全绿),
+// ——变异测试在 pickQQAlbumTrack 上暴露过同型盲区(改了调用点单测全绿),
 // 这里照同样的处置先拆出来再测。
 type qqCand struct {
 	mid, title, artist string
@@ -926,7 +926,7 @@ func qqCollectCandidates(items []qqSearchItem, artist, title string, strict bool
 // qqCandAlbumName 决定拿哪个专辑名去 albumScore:搜索结果自带就用自带的
 // (client_search_cp 路线本来就返回专辑名),没有才回落到单曲详情多打一次请求。
 //
-// 单独拆成一个函数不是洁癖:2026-09-02 变异测试确认,这段逻辑内联在
+// 单独拆成一个函数不是洁癖:变异测试确认,这段逻辑内联在
 // resolveQQMusicMatch/qqCoverFallback 这两个**必须联网**的函数里时,把它整段改回
 // "永远重新查",单测全绿——也就是"自带专辑名到底有没有被用上"根本没人守。
 func qqCandAlbumName(inline string, fetch func() string) string {
@@ -941,7 +941,7 @@ func qqCandAlbumName(inline string, fetch func() string) string {
 // 宽一点才不会把跨平台写法差异挡在门外;这个只用作**最后一档 tiebreak**,专门区分
 // "同名同专辑、但一条是独唱一条是合唱"。
 //
-// 2026-09-02 回放实测的那一条:陶喆《逗阵兄弟 (独唱版)》,QQ 上独唱(陶喆,335s)与合唱
+// 回放实测的那一条:陶喆《逗阵兄弟 (独唱版)》,QQ 上独唱(陶喆,335s)与合唱
 // (陶喆/卢广仲,306s)同名同专辑《再见你好吗》,albumScore 都是 200、都不是标题精确同名
 // ——改造前靠 smartbox 只回独唱那条侥幸选对,合并召回之后两条同时在池子里,胜负就只由
 // 谁排在前面决定了。而排序恰恰是 searchTitleVariants 的既有约定(标题里的装饰不在已知
@@ -985,7 +985,7 @@ func qqMatchFromCand(c qqCand, unreliable bool) qqMusicMatch {
 //	② 署名恰好是同一组人 —— 只作同档内的 tiebreak,区分独唱/合唱,见 qqCreditSetEqual。
 //
 // qqPickCandidateWithAlbum 是 resolveQQMusicMatch 里"有本地专辑名"那一档的挑选:按 albumScore
-// 去重、标题精确同名 > 专辑分 > 署名同组人。原是那个函数里的内联循环,2026-09-04 原样提成纯函数
+// 去重、标题精确同名 > 专辑分 > 署名同组人。原是那个函数里的内联循环,原样提成纯函数
 // (lookupAlbum 是"候选没自带专辑名时去查一次"的注入点,生产传 qqSongAlbum,检索层金标传恒空),
 // 理由同 enrich.go 的 rankLyricSourceResults:测试跑生产同一份代码。返回 haveBest=false 表示
 // 没有任何候选够格(专辑对不上且标题也非精确同名)。
@@ -1015,7 +1015,7 @@ func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, durationSecs
 		// 起作用,专门区分同名同专辑的独唱/合唱两条,见 qqCreditSetEqual。
 		creditEq := qqCreditSetEqual(c.artist, artist)
 		// 自报曲长对不上(>12%)的排到所有对得上的后面,精确同名/专辑分/署名只在同一组内部再比
-		// ——2026-09-05 加,理由见 match.go sourceDurationFits(PRINCE《319》X-cerpt 案)。
+		// ——加,理由见 match.go sourceDurationFits(PRINCE《319》X-cerpt 案)。
 		fits := sourceDurationFits(durationSecs, c.interval)
 		better := !haveBest ||
 			(fits && !bestFits) ||
@@ -1085,7 +1085,7 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 		if haveBest && bestScore > 0 {
 			return qqMatchFromCand(best, false)
 		}
-		// 歌名维度找到了条目但**专辑证据为零**(smartbox 只回热门录音室版是常态——2026-09-01
+		// 歌名维度找到了条目但**专辑证据为零**(smartbox 只回热门录音室版是常态——
 		// 周杰伦《龙拳 (Live)》案:它对 "周杰伦 龙拳" 恒只回八度空间那一条,The One 演唱会的
 		// Live 版根本不在联想结果里)→ 先试专辑维度,能以专辑为锚找到对版就用它。
 		var viaAlbum qqMusicMatch
@@ -1113,9 +1113,9 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 	return qqMatchFromCand(c, viaAlbumDegraded)
 }
 
-// ---- 专辑维度检索路线(2026-09-01) ----
+// ---- 专辑维度检索路线 ----
 //
-// 起因(用户报"QQ 搜出来的是录音室版"):smartbox 是**前缀联想**不是搜索——对
+// 起因(现象是"QQ 搜出来的是录音室版"):smartbox 是**前缀联想**不是搜索——对
 // "周杰伦 龙拳" 恒只回八度空间录音室版那一条,加词("周杰伦 龙拳 Live")、带括号都直接
 // 0 条;而 QQ 给现场专辑曲目起名**不带 (Live)**(The One 演唱会里就叫"龙拳"),live 身份
 // 只在专辑名上。也就是说歌名维度**永远**够不到现场专辑曲目,必须以专辑为锚:
@@ -1192,7 +1192,7 @@ func qqAlbumSongs(ctx context.Context, albumMid string) ([]qqAlbumSong, error) {
 }
 
 // qqAlbumIdentityQuery:本地专辑名剥掉括号段、歌手名和 live 类通用词之后的"身份串",
-// 给 smartbox 的 album 分类当查询词。实测(2026-09-01):本地标签"The One 周杰伦演唱会",
+// 给 smartbox 的 album 分类当查询词。实测:本地标签"The One 周杰伦演唱会",
 // 查 "周杰伦 The One 周杰伦演唱会"/"The One 演唱会" 都是 0 条,查 "周杰伦 The One" 命中
 // ——smartbox 对多余的词零容忍,必须把非身份成分全剥掉。统一转小写+简体:查询对大小写
 // 不敏感,而 ToLower 后再做子串定位不会有字节错位。
@@ -1216,7 +1216,7 @@ func qqAlbumIdentityQuery(artist, album string) string {
 
 // pickQQAlbumTrack 从一张专辑的曲目单里挑出"就是本地这首歌"的那一条。抽成纯函数是为了
 // 让单测能直接拿真实专辑数据钉住整段判定 —— 这段逻辑此前只在 resolveQQMatchViaAlbum
-// 内联,而它需要联网,于是"并列一律放弃"那条规则改回去也没有任何测试会红(2026-09-02
+// 内联,而它需要联网,于是"并列一律放弃"那条规则改回去也没有任何测试会红(
 // 变异测试当场抓出这个盲点)。
 //
 // 第二个返回值 false = 没挑出来,调用方照旧放弃整条专辑路线。
@@ -1408,7 +1408,7 @@ func resolveQQMatchViaAlbum(ctx context.Context, artist, title, album string) (m
 	// 曲目自带 singer 时再核一遍歌手(合辑/拼盘专辑里同名曲可能是别人唱的);为空不拦
 	// (元数据缺失不是反面证据)。
 	//
-	// 最优档位里并列多条时**不再一律放弃**(2026-09-02 放宽,裘德《寻找一片青草地》案)。
+	// 最优档位里并列多条时**不再一律放弃**(放宽,裘德《寻找一片青草地》案)。
 	// 原规则是"出现两条同档就交回旧行为",防的是"同名不同版本挑错版"。但实测撞到一种它
 	// 判错性质的形态:**同一张专辑在 QQ 上被整个上架了两遍**——裘德《离开银色荒原》的
 	// GetAlbumSongList 回 20 条 = 同样 10 首各一条(两个母带,部分曲目时长差 1~7 秒),
@@ -1461,7 +1461,7 @@ var (
 // successes cached. Empty unless the response has real timestamps.
 // qqLyricResult 把"整行歌词"和"这首歌是纯音乐"分开带出来。
 //
-// 为什么要多这个 bool(2026-08-22,用户报「蛋堡《收敛水》的「关键字: Intro」搜出来没歌词」):
+// 为什么要多这个 bool(现象是「蛋堡《收敛水》的「关键字: Intro」搜出来没歌词」):
 // QQ 对纯音乐曲目回的是单行占位 `[00:00:00]此歌曲为没有填词的纯音乐,请您欣赏`,而
 // resolveQQLyric 末尾那道 isTimedLRC(要求 ≥3 行带戳)会把它判成"不是歌词"直接返回空串 ——
 // **信号在那一步就被扔了**,后面谁都读不到。于是这类曲目落在「无歌词」而不是「纯音乐」,
@@ -1473,7 +1473,7 @@ type qqLyricResult struct {
 	lrc          string
 	instrumental bool
 	// trackFoundNoLyrics:QQ 曲库里有这首歌(mid 已经匹配上了,能走到这里就说明命中),
-	// 但取词接口**正经回了响应、正文却是空的** —— 平台上还没有歌词文本。2026-09-15 加,
+	// 但取词接口**正经回了响应、正文却是空的** —— 平台上还没有歌词文本。加,
 	// 语义与判据上的注意事项跟 neteaseInfo.TrackFoundNoLyrics 完全一致(尤其是"跟
 	// instrumental 是两个不同的结论"以及"请求失败不算"),见那边的头注。
 	//
@@ -1794,7 +1794,7 @@ func decryptQRC(hexStr string) string {
 // (?s) 让 . 匹配换行——LyricContent 属性值本身是多行文本(内嵌真实的 \n),Go 的 RE2
 // 默认 . 不跨行,不加这个前缀只会匹配到第一行就提前收尾,后面整段内容会被截断丢失。
 //
-// ⚠️ `(.*)` 必须是**贪婪**的,并且以 `"/>` 收尾,不能像 2026-08-16 之前那样写成
+// ⚠️ `(.*)` 必须是**贪婪**的,并且以 `"/>` 收尾,不能像之前那样写成
 // 非贪婪的 `(.*?)"`。原来那版的依据是"XML 属性值里的字面 \" 按规范必须转义成 &quot;,
 // 所以匹配到下一个引号是安全的"—— 这个假设对 QQ 的真实返回**不成立**:实测
 // PRINCE - Little Red Corvette 的正文里有 5 个**字面**双引号、0 个 &quot;
@@ -1845,7 +1845,7 @@ func qrcToYRC(qrc string) string {
 // LRC 里的 `[kana:]` 标签同一个格式(`<单个数字><读音假名>` 序列,读音里夹 `(起始,时长)`),
 // App 侧 KanaAnnotation 只从**整行歌词**(lyrics 字段)里找这一行,所以 enrich.go 把它拼到
 // QQ 候选的整行歌词开头,而不是留在逐字数据里(留在 YRC 里 App 读不到,还会被 qrcToYRC
-// 的词级重排搅乱)。实测(2026-09-02,直连接口 8 首):日文歌 6/6 带这一行,且条目覆盖数与
+// 的词级重排搅乱)。实测(直连接口 8 首):日文歌 6/6 带这一行,且条目覆盖数与
 // 旧接口整行歌词里的汉字数(含 々)逐首相等——正好是 KanaAnnotation 的对齐前提;中文歌
 // (晴天)与韩文歌(Ditto)没有这一行,不会误标。
 type qqQRCResult struct {
@@ -1857,7 +1857,7 @@ type qqQRCResult struct {
 // 现有的整行歌词路径;哪一步失败都直接返回零值,不重试(下次 enrich 短 TTL 到期或
 // 进程重启自然再试)。
 //
-// 2026-09-02 起把同一份响应里的 trans(中文译文)/roma(罗马音)两轨也接了回来:请求体
+// 把同一份响应里的 trans(中文译文)/roma(罗马音)两轨也接了回来:请求体
 // 从一开始就带着 roma=1/trans=1,响应却一直只解 lyric——那是接 QRC 那次刻意搁置的项
 // (见 enrich.go 候选装配处的注释)。实测四首(米津玄師 Lemon / NewJeans Ditto /
 // Taylor Swift Cruel Summer / 周杰伦 晴天):日/韩/英三首都带译文,日/韩带罗马音,中文歌
@@ -1964,7 +1964,7 @@ func attachKanaLine(lrc, kana string) string {
 // ---- QQ音乐译文 / 罗马音(GetPlayLyricInfo 的 trans / roma 轨) ----
 //
 // 两轨跟 lyric 一样是 3DES+zlib 的 hex 密文(同一把 qrcDESKey),解出来的形态实测有两种
-// (2026-09-02,四首歌直连接口看的):
+// (四首歌直连接口看的):
 //   - trans:解出来直接是普通逐行 LRC(**不带** QrcInfos XML 包装),时间戳与旧接口
 //     fcg_query_lyric_new 的整行歌词逐行一致([00:01.54]夢ならば ↔ [00:01.54]如果只是一场梦),
 //     所以能靶到候选的 lyrics 上(App 侧 LyricsSyncEngine 按 700ms 最近邻贴行)。里面夹着

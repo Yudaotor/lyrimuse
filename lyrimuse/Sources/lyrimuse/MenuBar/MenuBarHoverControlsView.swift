@@ -4,7 +4,7 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menubar-hover")
 
-// 菜单栏歌词的「悬停三键」那一层(2026-09-03,见 `MenuBarHoverControls` 头注的用户原话)。
+// 菜单栏歌词的「悬停三键」那一层(语义见 `MenuBarHoverControls` 头注)。
 // 这个文件只管两件事:**收 hover 事件**、**把三个键画出来**。排在哪、点中哪一个是纯几何,
 // 在 LyrimuseCore 的 `MenuBarHoverControls` 里(selftest 覆盖);何时接管、点击怎么分派、
 // 接管期间怎么把槽宽冻住,在 `MenuBarStatusItem` 里。
@@ -40,7 +40,7 @@ final class MenuBarHoverControlsView: NSView {
     private var hoveredControl: MenuBarTransportControl?
     /// 三个键落在哪一块里。nil = 整个按钮(没开「歌词旁的图标」时就是这样)。
     /// 开着图标时由 MenuBarStatusItem 把**歌词那一格**传进来 —— 图标那一块要原样留着,
-    /// 点它也照旧弹面板(2026-09-03 用户要求)。
+    /// 点它也照旧弹面板。
     private var slot: CGRect?
 
     private weak var trackingHost: NSView?
@@ -76,7 +76,7 @@ final class MenuBarHoverControlsView: NSView {
         // (预览里没有),是这个 App 里唯一能可靠回答这个问题的地方。设置页的色块和预览都按它
         // 解析「跟随系统」,见 MenuBarAppearanceStore 头注。
         // ⚠️ 只**登记**、不当场读:刚建出来的按钮 appearance 是错的(App 自己那一档),要等状态栏
-        // 给它排完版才可信 —— 什么时候读由 store 决定(2026-09-07,预览"重建时闪一下"的根因)。
+        // 给它排完版才可信 —— 什么时候读由 store 决定(预览"重建时闪一下"的根因)。
         MenuBarAppearanceStore.shared.observe(host)
     }
 
@@ -218,7 +218,7 @@ final class MenuBarHoverControlsView: NSView {
     /// ---- 为什么要额外记墨迹,不能直接按画布居中 ----
     ///
     /// SF Symbol 出的画布**不是**围着墨迹对称的,而且 `backward.fill` / `forward.fill` 这对
-    /// 镜像字形的留白也不镜像。11.5pt / medium 下离屏实测(2026-09-03,逐像素扫非透明):
+    /// 镜像字形的留白也不镜像。11.5pt / medium 下离屏实测(逐像素扫非透明):
     ///
     /// | 符号 | 画布 | 墨迹 x | 墨迹中心 − 画布中心 |
     /// |---|---|---|---|

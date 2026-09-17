@@ -10,9 +10,9 @@ import (
 
 // LRC↔YRC 时间轴自洽修复。
 //
-// 起因(2026-08-27,用户报《Rumour Has It》"明显进度对不上"):Musixmatch 在同一个
+// 起因(现象是《Rumour Has It》"明显进度对不上"):Musixmatch 在同一个
 // track_id 下挂着两份**不同年份做的、互不兼容**的资产 —— track.subtitle.get 那份
-// 行级 LRC(2023-01-29 制,自报 215s)与 track.richsync.get 那份逐字(2026-06-21 制,
+// 行级 LRC(制,自报 215s)与 track.richsync.get 那份逐字(制,
 // 自报 232s),曲长实际 223.3s。实调把两边原始 body 拉回来比 sha256,证实都是上游原样
 // 落库、我们零清洗 —— 坏的是上游数据本身。
 //
@@ -231,13 +231,13 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	return newLRC, remap, true
 }
 
-// ---- 逐字轴与行级轴自相矛盾时弃用逐字轴(2026-09-01,陈奕迅《2001太空漫游 (Live)》案) ----
+// ---- 逐字轴与行级轴自相矛盾时弃用逐字轴(陈奕迅《2001太空漫游 (Live)》案) ----
 //
 // rehangLRCOnYRC 只能修"两边逐行文本严格一一对应"的打架(musixmatch 的病正是那个形态)。
 // netease 的两套轴是**两条独立产线**(行级 /api/song/lyric 老接口 vs 逐字 /api/song/lyric/v1
 // 新接口),同一首歌可能**断行方式都不一样**(LRC 拆两行的,YRC 合成一行)、还夹着对方没有的
 // 署名行/纯音乐占位行 —— 行结构对不上,重挂在前提检查那一步就放弃,打架原样留给播放。
-// 用户报的《2001太空漫游 (Live)》:LRC 首句 32.3s、YRC 同一句 74.3s,差 42 秒,配对行
+// 现象是的《2001太空漫游 (Live)》:LRC 首句 32.3s、YRC 同一句 74.3s,差 42 秒,配对行
 // 中位偏差 55.5s;播放走 YRC,「歌词管理」显示的是 LRC —— 用户看着 32 秒该有词,播放到
 // 32 秒(人已开唱)什么都不出。
 //
@@ -249,7 +249,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 // 等于让播放跟系统其余全部判断对着干。代价是这几首歌没有逐字卡拉OK效果 —— 正确的逐行
 // 显示胜过错 42 秒的逐字显示。
 //
-// 阈值 10s 从全库分布量出来(2026-09-01,2915 条可分析双轴条目):99.3%(2894 条)中位
+// 阈值 10s 从全库分布量出来(2915 条可分析双轴条目):99.3%(2894 条)中位
 // 偏差 <3s(其中 92% <0.5s —— qq/kugou/amll 的 LRC 本来就是从逐字轴转出来的,天生自洽),
 // ≥10s 的只有 10 条、逐条核对全部是无可争辩的坏数据(含已知旧案 Rock With You 19.4s ——
 // 那条当年确认坏的是 YRC 侧,rehang 的时长闸拦下了"修",但没有"弃",坏 YRC 一直在驱动
@@ -449,7 +449,7 @@ func migrateLyricTimelines() {
 	if fixed > 0 || dropped > 0 {
 		// ⚠️ 必须显式置脏:saveEnrichCache 只在 enrichDirty 时才真的写盘。这里不置的话,
 		// 迁移结果能不能落盘取决于同一次启动里**别的路径**有没有恰好把标志置过 true ——
-		// 2026-09-01 实测坐实这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
+		// 实测坐实这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
 		// entries"、JSON 的 mtime 却纹丝不动,每次开机白干一遍;而 08-28 那次 1010 条
 		// 重挂能落盘纯属搭了别的脏标志的顺风车。
 		enrichDirty = true

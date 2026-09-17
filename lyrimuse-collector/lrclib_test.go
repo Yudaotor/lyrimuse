@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-05 加:LRCLIB 原来只打 /api/get 带 album_name 那一次,而 album_name 是参与匹配
+// 加:LRCLIB 原来只打 /api/get 带 album_name 那一次,而 album_name 是参与匹配
 // 的——传一个 LRCLIB 那边没有的专辑名会直接 404,整源判"没收录"。降级链见
 // resolveLRCLIBLyric 的注释。这里覆盖第三级 /api/search 的挑选逻辑:它必须挑,而且绝不能
 // 盲取第一条(实测真实响应里第一条 duration=4.0 是脏数据)。
@@ -80,7 +80,7 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 
 // 审查确认的 BLOCKER 的回归测试:第三级曲名门原来用 looseContains(双向子串包含),而第三级
 // 只在前两级精确 get 都 404 后才跑,正是"search 返回同歌手近似曲名"的场合,双向包含会把
-// 另一首歌的歌词当成本曲。当时收紧成 lrclib 专用的 lrclibStrictTitleMatch;2026-08-09 起
+// 另一首歌的歌词当成本曲。当时收紧成 lrclib 专用的 lrclibStrictTitleMatch;
 // 这条规则推广到全部五个源、合并成 lyricTitleAccepted,这里改为直接钉它。
 func TestLRCLIBTitleGate(t *testing.T) {
 	cases := []struct {

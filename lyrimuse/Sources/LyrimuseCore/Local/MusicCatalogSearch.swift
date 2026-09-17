@@ -1,6 +1,6 @@
 import Foundation
 
-/// iTunes Search API 解析当前曲目的目录页链接(2026-08-22,歌词窗口「前往专辑/前往
+/// iTunes Search API 解析当前曲目的目录页链接(歌词窗口「前往专辑/前往
 /// 艺人/分享」一族的地基)。为什么走这条路:AppleScript 拿不到流媒体曲目的任何目录
 /// ID/链接(实机验证:URL track 连 `address` 属性都没有),iTunes Search API 是唯一
 /// 免密钥的解析途径 —— 按 歌名+歌手+店面 搜 song 实体,响应里直接带 trackViewUrl /
@@ -8,7 +8,7 @@ import Foundation
 ///
 /// ⚠️ 拿到链接后**必须**经 LaunchServices 打开(music:// scheme 或 NSWorkspace 指定
 /// Music.app):AppleScript 的 `open location` 会把 URL 当**音频流**加载、清掉整个
-/// 播放队列(2026-08-22 实机踩雷验证,sdef 里它的语义就是 "audio stream URL")。
+/// 播放队列(实机踩雷验证,sdef 里它的语义就是 "audio stream URL")。
 ///
 /// 纯函数部分(URL 构造/结果挑选/scheme 改写)被 lyrimuse-selftest 钉住。
 public enum MusicCatalogSearch {
@@ -19,7 +19,7 @@ public enum MusicCatalogSearch {
         public let trackViewUrl: String?
         public let artistViewUrl: String?
         public let collectionViewUrl: String?
-        /// 100pt 的专辑封面。响应里本来就带,2026-08-22 才开始解码它 —— 最近记录的
+        /// 100pt 的专辑封面。响应里本来就带,才开始解码它 —— 最近记录的
         /// 封面第⑤级兜底用(见 pickArtwork)。
         public let artworkUrl100: String?
 
@@ -68,7 +68,7 @@ public enum MusicCatalogSearch {
         if let hit = items.first(where: {
             looseContains(norm($0.trackName), t) && looseContains(norm($0.artistName), a)
         }) { return hit }
-        // 歌手精确匹配优先于歌手松匹配(2026-08-23 用户实测坐实):「你的常听·歌手」
+        // 歌手精确匹配优先于歌手松匹配(实测):「你的常听·歌手」
         // 跳转时 title 传空串,只有这条"只歌手"分支在起作用,而互相包含对艺人名是危险的
         // 松匹配——单人艺人名常常正好是另一个合作/乐队艺人名的前缀(点"Prince"却跳到
         // "Prince & The Revolution",点"陈奕迅"可能跳到某场合唱的联合署名艺人页),
@@ -80,7 +80,7 @@ public enum MusicCatalogSearch {
         return items.first
     }
 
-    // MARK: - 封面兜底(2026-08-22)
+    // MARK: - 封面兜底
 
     /// 封面匹配的把握程度。调用方按它决定要不要用、以及排在哪一级。
     public enum ArtworkConfidence: String, Sendable {
@@ -116,7 +116,7 @@ public enum MusicCatalogSearch {
     /// `POP/STARS (feat. …)`),这些折叠正好都是封面匹配需要的;而它**刻意不折** `(Live)`
     /// 这类版本副题 —— Live 版和录音室版本来就该是两张封面。
     ///
-    /// 专辑对得上的优先(2026-08-22 实测这一步很值:只取第一条时《NOW YOU SEE ME (Live)》
+    /// 专辑对得上的优先(实测这一步很值:只取第一条时《NOW YOU SEE ME (Live)》
     /// 会拿到录音室版《周杰伦的床边故事》、《青花瓷 (Live)》会拿到魔天伦演唱会,30 首里有
     /// 5 首被这一步纠正回正确的那张)。专辑名走 `foldTitle` 归一,跟歌名同一套。
     public static func pickArtwork(_ items: [Item], title: String, artist: String,

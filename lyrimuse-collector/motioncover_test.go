@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// fixture 按 2026-09-09 实测的真实结构精简:videoArtwork 挂在
+// fixture 按实测的真实结构精简:videoArtwork 挂在
 // data/0/data/sections/0/items/0 下,同一个 item 里带着
 // containerContentDescriptor.identifiers.storeAdamID = 这张专辑的 ID。
 func motionCoverPage(adamID string) string {
@@ -108,7 +108,7 @@ func TestMotionCoverCacheHitForCheckedEmpty(t *testing.T) {
 	}
 }
 
-// motionCoverWorthBackfill 的三态判据(2026-09-09)。存量条目要靠它才进得了 backfill,
+// motionCoverWorthBackfill 的三态判据。存量条目要靠它才进得了 backfill,
 // 而"这张专辑就是没有"必须**不**算缺 —— 否则七成条目会白重试 5 轮(覆盖率只有三成上下)。
 func TestMotionCoverWorthBackfill(t *testing.T) {
 	const (
@@ -173,7 +173,7 @@ func TestMotionCoverWorthBackfill(t *testing.T) {
 	}
 }
 
-// previewFrame 的模板替换(2026-09-10)。
+// previewFrame 的模板替换。
 func TestMotionCoverPreviewSizedURL(t *testing.T) {
 	got := motionCoverPreviewSizedURL("https://is1-ssl.mzstatic.com/image/thumb/x/y.png/{w}x{h}bb.{f}")
 	if want := "https://is1-ssl.mzstatic.com/image/thumb/x/y.png/600x600bb.jpg"; got != want {
@@ -188,7 +188,7 @@ func TestMotionCoverPreviewSizedURL(t *testing.T) {
 	}
 }
 
-// 从 apple_music_url 抠专辑 ID(2026-09-10)。样本取自本机 enrich 缓存的真实形态。
+// 从 apple_music_url 抠专辑 ID。样本取自本机 enrich 缓存的真实形态。
 func TestMotionCoverAlbumIDFromAppleURL(t *testing.T) {
 	cases := []struct {
 		url  string
@@ -211,7 +211,7 @@ func TestMotionCoverAlbumIDFromAppleURL(t *testing.T) {
 	}
 }
 
-// 判据的两条新增分支(2026-09-10):已核对过就不再算缺;非 Apple Music 播的条目靠
+// 判据的两条新增分支:已核对过就不再算缺;非 Apple Music 播的条目靠
 // apple_music_url 也能进 backfill。
 func TestMotionCoverWorthBackfillCheckedAndAppleURL(t *testing.T) {
 	const albumID = "1474635060"

@@ -105,7 +105,7 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 // 这件事可测 —— lastfmDigestStats 自己要打网络,测不了;内联的话把归并那一行删掉,
 // 单测(只测 mergeAliasedArtists 本身)照样全绿,等于没守住。
 //
-// 归并跟歌手榜(topartists.go)走**同一套**,别自己再造一份 —— 2026-08-30 通盘梳理时
+// 归并跟歌手榜(topartists.go)走**同一套**,别自己再造一份 —— 通盘梳理时
 // 发现 digest 原来完全不归并,于是同一个二进制里同一个人在推送里是两个、在榜单里是
 // 一个(实测这台机器 389 个歌手写法里有 1 例:"张震岳"/"张震嶽")。
 //
@@ -116,7 +116,7 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 // ⚠️ 顺序依赖:取前 N 之前必须已经按次数降序排好。mergeAliasedArtists 结尾有
 // sort.SliceStable 保证了这一点(合并会让次数相加、名次变动,不重排就会取错)。
 //
-// 已知取舍(2026-08-30 用户拍板):合并之后名次和次数会跟**历史推送**对不上。接受 ——
+// 已知取舍:合并之后名次和次数会跟**历史推送**对不上。接受 ——
 // 那是口径修正带来的一次性台阶,比"两处口径永久不一致"好。
 func digestTopArtists(artists []lastfmChartEntry) []digestTally {
 	merged := mergeAliasedArtists(artists)
@@ -229,7 +229,7 @@ func listenbrainzDigestStats(ctx context.Context, root, user string, from, to in
 			trackTallies = append(trackTallies, digestTally{Name: l.Title, Sub: l.Artist, Count: 1})
 		}
 		// 按归并键计数,不按原串 —— 跟上面 Last.fm 那条路径和歌手榜同一个口径
-		// (2026-08-30 一并统一,否则用户换个数据源"同一个人被算成两个"这个坑还在)。
+		// (一并统一,否则用户换个数据源"同一个人被算成两个"这个坑还在)。
 		// 这里只能用 artistMergeNameKey 这个纯函数版本,不能套 mergeAliasedArtists:
 		// 那个吃的是 lastfmChartEntry(带 mbid),而 LB 的收听记录里没有 mbid,并查集
 		// 的第二个信号本来就用不上,按名字键分桶已经是这条路径能做到的全部。

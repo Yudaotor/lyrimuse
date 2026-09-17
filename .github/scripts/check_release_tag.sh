@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 发版 tag 构建前硬校验(2026-09-05)。release.yml 在 Checkout 之后、装任何工具链之前跑它;
+# 发版 tag 构建前硬校验。release.yml 在 Checkout 之后、装任何工具链之前跑它;
 # 打 tag 的人 push 前在本地跑同一份(docs/releasing.md「四」)。判据只有这一份,别在 yaml 里另写。
 # 五条,任一不满足就非零退出、什么都不构建:
 #   1. tag 名形态合法——委托 lyrimuse/scripts/build-version.sh(vX.Y.Z / vX.Y.Z-(alpha|beta|rc).N 的唯一定义);
@@ -10,7 +10,7 @@
 #   4. 正文能被 .github/scripts/split_release_notes.py 拆成中英两份——AGENTS.md「提交」的两种写法
 #      (<!-- lang:en --> / <!-- lang:zh-Hans --> 标记式,或逐条中英交错式)都认,判据是两边都有实质内容,
 #      不是查两行注释在不在。
-#   5. 正式版 tag 的正文与 CHANGELOG.md 对应节**逐字相同**(2026-09-16 起)。发版日志过去是根目录
+#   5. 正式版 tag 的正文与 CHANGELOG.md 对应节**逐字相同**。发版日志过去是根目录
 #      一版一个 RELEASE_NOTES_vX.Y.Z.md,只当 `git tag -F` 的输入,发完就没有任何东西再读它——
 #      于是 RELEASE_NOTES_v1.7.0.md 悄悄比 tag 正文多了一行「## Download / 下载」标题都没人发现。
 #      现在日志合进 CHANGELOG.md、由 changelog_section.sh 抽节喂给 -F,这一条负责保证两边不再分叉。

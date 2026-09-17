@@ -3,7 +3,7 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-// 设置搜索(2026-09-09,借鉴清单 S8):侧栏顶部一个搜索框,按 Core `SettingsSearchCatalog` 出结果,
+// 设置搜索:侧栏顶部一个搜索框,按 Core `SettingsSearchCatalog` 出结果,
 // 命中后翻到那一页、切到那一段、展开那个抽屉、把那一行高亮一下并滚进视野。
 //
 // 三块拼起来:
@@ -227,7 +227,7 @@ private struct SettingsRevealInScrollView: NSViewRepresentable {
 /// 侧栏顶部的搜索框。⌘F 聚焦;Esc 先清空、再按一次让出焦点;回车打开第一条结果。
 ///
 /// 焦点状态由 SettingsView 持有再传进来(`FocusState<Bool>.Binding`),因为让出焦点的时机在它那边:
-/// 用户点了侧栏别的分类、或打开了一条结果,光标就不该继续在这里闪(2026-09-09 用户实测提出)。
+/// 用户点了侧栏别的分类、或打开了一条结果,光标就不该继续在这里闪(实测提出)。
 /// 窗口刚打开时它是键视图环里第一个文本框,AppKit 会默认把第一响应者给它——`onAppear` 里下一个
 /// 运行环让掉,跟系统设置一致:搜索框没人碰就不闪光标。
 struct SettingsSearchField: View {
@@ -240,7 +240,7 @@ struct SettingsSearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            // 占位词 2026-09-12 从「搜索设置」缩成「搜索」,跟系统设置一致 —— 框就在设置窗口里,"设置"两字是废话。
+            // 占位词从「搜索设置」缩成「搜索」,跟系统设置一致 —— 框就在设置窗口里,"设置"两字是废话。
             TextField(L10n.t("搜索"), text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
@@ -266,7 +266,7 @@ struct SettingsSearchField: View {
             }
         }
         .padding(.horizontal, 8)
-        // 尺寸跟系统设置的搜索框取齐(2026-09-12):26pt 高、圆角 8。
+        // 尺寸跟系统设置的搜索框取齐:26pt 高、圆角 8。
         .frame(height: 26)
         // 材质走设计系统的入口(液态玻璃 API 只准出现在 SettingsDesignSystem,contracts 组守着)。
         .settingsSearchFieldBackground()

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// 2026-08-17 用户报「这首歌找不到歌词」:D'Angelo《Voodoo》里那首,Apple Music 报的标题是
+// 现象是「这首歌找不到歌词」:D'Angelo《Voodoo》里那首,Apple Music 报的标题是
 // "Medley: Greatdayndamornin' / Booty",而五个歌词源的曲库里都叫
 // "Greatdayndamornin'/Booty"。实测带前缀搜 **五源全 0 条**,去掉前缀(歌手/专辑不动)
 // **五源全命中**、最高 1270 分。
@@ -20,7 +20,7 @@ func TestStripStructuralTitlePrefix(t *testing.T) {
 		{"medley: lower case label", "lower case label"}, // 标签大小写不敏感
 		{"Medley:NoSpace", "NoSpace"},
 
-		// 2026-09-15 陶喆串烧案:中文写法「组曲」、繁体「組曲」、全角冒号三种形态都要认。
+		// 陶喆串烧案:中文写法「组曲」、繁体「組曲」、全角冒号三种形态都要认。
 		{"组曲: 火鸟功 / 我太傻 / Melody (Live)", "火鸟功 / 我太傻 / Melody (Live)"},
 		{"組曲: 望春風/ 夜來香 - Live", "望春風/ 夜來香 - Live"},      // 繁体标签过 toSimplified 才认得出;正文原样不动
 		{"组曲：流沙 / 天天 (Live)", "流沙 / 天天 (Live)"},         // 全角冒号
@@ -53,7 +53,7 @@ func TestSearchTitleVariantsStructuralPrefix(t *testing.T) {
 		// 本次新增:裸曲名优先,原样标题留作兜底。
 		{medleyLocal, []string{"Greatdayndamornin' / Booty", medleyLocal}},
 
-		// 2026-09-15 陶喆串烧:带 (Live) 这个版本限定词 → 原样标题优先(见 searchTitleVariants
+		// 陶喆串烧:带 (Live) 这个版本限定词 → 原样标题优先(见 searchTitleVariants
 		// 注释的①档),去前缀的裸名紧跟在后 —— 网易云曲库里就叫那个、时长 329.0s 对
 		// 本地 328.992s。没这个变体的话十个源全 0 条。
 		{"组曲: 火鸟功 / 我太傻 / Melody (Live)", []string{
@@ -95,7 +95,7 @@ func TestLyricTitleAcceptedStructuralPrefix(t *testing.T) {
 		{"Greatdayndamornin'", medleyLocal, false, "同上,另外半首"},
 		{"Bar", "Foo: Bar", false, "Foo 不在白名单,砍不掉"},
 
-		// 2026-09-15 陶喆串烧:正题两条 + 两条回归守卫。
+		// 陶喆串烧:正题两条 + 两条回归守卫。
 		{"火鸟功 / 我太傻 / Melody (Live)", "组曲: 火鸟功 / 我太傻 / Melody (Live)", true, "网易云曲库里的裸曲名"},
 		{"流沙 / 天天 (Live)", "组曲: 流沙 / 天天 (Live)", true, "同上,第二首"},
 		{"Run Away (Live)", "组曲: 火鸟功 / 我太傻 / Melody (Live)", false, "同专辑另一首歌 —— 正是这次报错的那一条,绝不能算"},

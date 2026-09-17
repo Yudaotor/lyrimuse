@@ -1,14 +1,14 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「自动隐藏」两项(截屏/录屏时隐藏 / 暂停·无播放时隐藏)的唯一一份实现,2026-09-02。
+// 「自动隐藏」两项(截屏/录屏时隐藏 / 暂停·无播放时隐藏)的唯一一份实现,。
 //
 // **搬家史**(两次,一天之隔,方向不同,别把后一次读成前一次的回退):
-//   ① 2026-09-01:原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
-//      用户要求"把这两个配置全都塞到对应的页面里面去,悬浮歌词和灵动岛都塞一个进去",
+//   ① 原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
+//      "把这两个配置全都塞到对应的页面里面去,悬浮歌词和灵动岛都塞一个进去",
 //      于是「其它」段整个撤掉、值也拆成两份(`hideDuringScreenCapture`/`hideWhenNotPlaying`
 //      归悬浮歌词,`notchHide*` 归灵动岛),两个形态各得一张独立的「自动隐藏」卡。
-//   ② 2026-09-02(本文件):用户要求"不要单独放在外面,要遵循设计理念,放到行为卡片里面去"
+//   ② (本文件):"不要单独放在外面,要遵循设计理念,放到行为卡片里面去"
 //      —— 那两张独立卡整个删掉(连带 `SettingsView.autoHideCard(...)` 这个函数),两行并进
 //      各形态**已经存在**的「行为」入口。
 //
@@ -20,25 +20,25 @@ import SwiftUI
 //
 // **⚠️ 拆成两份值这一步没有回退,而且不能回退。** 一旦按形态分栏展示,用户就会**按形态去
 // 理解**这两个开关(「我在灵动岛页面关掉的,当然只关灵动岛」)。本文件里 `AutoHideSurface`
-// 这个新抽象最大的诱惑正是"共用一份值、按 surface 只换文案" —— 那是 2026-09-01 刚被推翻
+// 这个新抽象最大的诱惑正是"共用一份值、按 surface 只换文案" —— 那是刚被推翻
 // 的方案。**共用的是渲染与文案,不是值**:改文案两个形态一起变是预期的;Binding 必须按
 // surface 分流到各自的 AppSettings 键和各自的 WindowController。
 //
 // ⚠️ 同理**别把 AutoHideItem 并进 `OverlayBehaviorItem` 或 `NotchBehaviorItem`**:那两个
 // 枚举都是单形态的(Binding 里写死了自己那一个控制器),合并会立刻需要一个 surface 参数。
-// (2026-09-02 之前这里还有第二条理由:`OverlayBehaviorItem` 当时的宿主之一是三列小格,
+// (之前这里还有第二条理由:`OverlayBehaviorItem` 当时的宿主之一是三列小格,
 //  格子版式不画副标题和 ⓘ 气泡,并进 `allCases` 会静默丢掉文案。那张卡当天就被换成浮层了,
 //  这条不再成立;**上面那条按形态分流的理由没变**。)
 //
 // ⚠️ **宿主有两处(每个形态一份分组视图),增删内容必须一起对**(漏一处不会编译报错,只会表现成
 // "在这个入口改了有用、在那个入口找不到"):
-//   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)—— 2026-09-07 起
+//   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)——
 //      工具栏「行为」浮层和「全部设置」抽屉「行为」组(此前叫「窗口」组)调的是这同一份视图
 //   ② 灵动岛:`NotchBehaviorSettingsRows`(SettingsView.swift)—— 同日同一条改法,工具栏「行为」浮层
 //      和「全部设置」抽屉「行为」组调同一份
-// (2026-09-07 之前是四处:两个形态各自的浮层和抽屉组分别拼一次,靠注释警告别漏。)
-// (① 2026-09-02 当天又搬过一次:并进来时它还是编辑台下面那张常驻卡 `OverlayBehaviorBar`
-//  的末尾两行,同日用户要求"和灵动岛设置页一样…放到上面的小按钮里面,点了出现下拉框",
+// (之前是四处:两个形态各自的浮层和抽屉组分别拼一次,靠注释警告别漏。)
+// (① 又搬过一次:并进来时它还是编辑台下面那张常驻卡 `OverlayBehaviorBar`
+//  的末尾两行,同日"和灵动岛设置页一样…放到上面的小按钮里面,点了出现下拉框",
 //  那张卡整个删掉、五项进了浮层。**值仍然是两份**,这次搬家不影响那条禁令。)
 // 同一形态的两处 item 内容按既有约定必须**逐字相同**;此外两个编辑台工具栏按钮上那句摘要
 // (`OverlayEditorStage.behaviorSummary` / `NotchEditorStage.behaviorSummary`)也要把这两项
@@ -84,7 +84,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
 
     /// ⚠️ 只有截屏那一项有副标题,`.whenNotPlaying` 恒为 nil —— 这是**原样保留**改版前的
     /// 文案组合,不是漏写。别顺手给另一项补一句:那会是一个新的 L10n 键(得同步进
-    /// Localizable.xcstrings 再跑 generate-strings.py),而这次改动刻意做到零新增键。
+    /// Localizable.xcstrings 再跑 generate-strings.py),而这里刻意做到零新增键。
     var subtitle: String? {
         switch self {
         case .duringScreenCapture: return L10n.t("别人看不到，你仍看得见")

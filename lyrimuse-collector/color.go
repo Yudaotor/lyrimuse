@@ -59,7 +59,7 @@ func resolveDominantColor(ctx context.Context, coverURL string) string {
 
 // loadCoverImage 把一个封面 URL(本地 file:// 或远程 CDN)取回来解成 image.Image。
 //
-// 2026-09-02 从 resolveDominantColor 里抽出来 —— 设备封面的清晰度判据
+// 从 resolveDominantColor 里抽出来 —— 设备封面的清晰度判据
 // (coverquality.go)也要取远程候选来比一次,而"哪个 CDN 该怎么降采样、要不要带
 // Referer"这套知识只该有一份。抽的时候行为一字未改。
 //
@@ -67,8 +67,7 @@ func resolveDominantColor(ctx context.Context, coverURL string) string {
 // 所以**绝不能拿它的解码尺寸去判"这个候选有多清晰"** —— 那会把一张 800×800 的候选读成
 // 64px。清晰度判据(coverquality.go)因此改成从 URL 里读目标尺寸
 // (`coverURLIntendedEdge`),只把这里返回的小图用于 8×8 感知指纹(那个尺度上降采样
-// 无所谓)。2026-09-02 实现时真的先踩了这一脚:第一版用 `minEdge(解码结果)` 比大小,
-// 判据恒成立、修复一次都不会触发。
+// 无所谓)。⚠️ 别用 `minEdge(解码结果)` 比大小:那样判据恒成立、修复一次都不会触发。
 func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	if strings.HasPrefix(coverURL, deviceArtworkURLPrefix) {
 		data, err := os.ReadFile(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))
@@ -90,7 +89,7 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		small += "?param=64y64" // 网易云 CDN 支持按需缩图,省流量
 	} else if strings.Contains(coverURL, "qq.com") {
 		// 网易云那套 ?param=WxH 对 QQ 域名无效(会被原样忽略),QQ 的尺寸档在**路径**里 ——
-		// 所以降采样要改路径,见 qqCoverAtEdge。2026-08-24 起存下来的 QQ 封面是 800x800
+		// 所以降采样要改路径,见 qqCoverAtEdge。存下来的 QQ 封面是 800x800
 		// (歌词窗口那张大卡要的),而取一个主色用不着 800:降回 300 少下 150KB。
 		// Referer 一并给上:QQ 音乐图床按 Referer 防盗链,给错了才可能被拒。
 		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。

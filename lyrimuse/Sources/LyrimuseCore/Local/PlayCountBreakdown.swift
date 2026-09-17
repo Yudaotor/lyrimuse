@@ -1,6 +1,6 @@
 import Foundation
 
-/// 「第 N 次听」点开后的合并明细(2026-09-04):这一族由哪几种写法(= 几个 Last.fm 条目)凑成、
+/// 「第 N 次听」点开后的合并明细:这一族由哪几种写法(= 几个 Last.fm 条目)凑成、
 /// 各自几次、合并后逐次的时刻。纯数据 + 纯函数,网络取数在 App 侧(PlayCountBreakdownLoader,
 /// 每种写法各查 `user.getTrackScrobbles`——那个接口按精确写法匹配,天然一桶一种写法)。
 ///
@@ -68,8 +68,8 @@ public struct PlayCountBreakdown: Equatable {
     public var canLoadOlder: Bool { variants.contains { !$0.failed && !$0.exhausted } }
     public var hasFailure: Bool { variants.contains { $0.failed } }
 
-    /// 同一种写法(= 同一个 Last.fm 条目)下,已拉到的记录按**专辑名**分组(2026-09-04 用户指出:
-    /// 《晴天》23 次里一半挂「葉惠美」一半挂「叶惠美」,这也是一种"写法不同",清单里得看得见)。
+    /// 同一种写法(= 同一个 Last.fm 条目)下,已拉到的记录按**专辑名**分组
+    /// (《晴天》23 次里一半挂「葉惠美」一半挂「叶惠美」,这也是一种"写法不同",清单里得看得见)。
     /// 专辑不进 Last.fm 的曲目身份、也不进我们的折叠键,所以它只能从逐条记录里数出来 —— 数的是
     /// **已拉到的**那些:写法拉完时就是真实分布,没拉完时是下界(界面据 `exhausted` 决定标不标
     /// "至少")。按条数降序、同数按专辑名,结果确定。没有专辑名的记录归成 `album == nil` 一组。
@@ -139,7 +139,7 @@ public enum PlayCountBreakdownMath {
 
     /// 把各写法的分页结果合成一份明细。
     ///
-    /// **每条 scrobble 都原样保留,不做跨写法"同一时刻去重"**(2026-09-05 撤掉)。第一版假设"同一秒同一
+    /// **每条 scrobble 都原样保留,不做跨写法"同一时刻去重"**。⚠️ 别假设"同一秒同一
     /// 个账号只可能有一条 scrobble",把后一种写法里与前一种写法同秒的条当作 Last.fm 大小写不敏感返回的
     /// 同一条剔掉——用户点开卢广仲《Boring》后对账那行报「行上按 18 次计,明细合计 16 次」,查 Last.fm
     /// 网页坐实那个假设不成立:`卢广仲|Boring` 13 条、`Crowd Lu|Boring` 5 条,其中 4 对**同一分钟**——

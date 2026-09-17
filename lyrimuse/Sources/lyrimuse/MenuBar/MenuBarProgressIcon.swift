@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-// 菜单栏歌词旁边那枚**带播放进度**的图标(2026-09-03)。用户原话:"帮我菜单栏歌词仿照
+// 菜单栏歌词旁边那枚**带播放进度**的图标。"帮我菜单栏歌词仿照
 // 这个加一个功能配置项,就是可以选择是否在最左侧或者是最右侧展示软件图标,图标上会逐渐
 // 染色代表当前歌曲进度条"(附酷狗菜单栏歌词的截图)。
 //
@@ -16,7 +16,7 @@ import LyrimuseCore
 //
 // ---- 为什么用 MenuBarIconStyle 而不是 App 的彩色图标 ----
 //
-// 2026-09-03 用户在两个方案里挑的这个。它本来就是这个软件在菜单栏上的脸(12 款里用户
+// 用户在两个方案里挑的这个。它本来就是这个软件在菜单栏上的脸(12 款里用户
 // 自己挑过一款),而且是**模板图** —— 单色字形,染成任意颜色都干净,能直接复用歌词那套
 // 「基础色/强调色两张同字形图做互补裁剪」的管线,还天然跟旁边的歌词共用同两个颜色设置
 // (未唱到的颜色 / 已唱到的颜色)、跟着浅深色菜单栏和菜单反白一起走。彩色 App 图标要另做
@@ -67,7 +67,7 @@ enum MenuBarProgressIcon {
     /// ⚠️ 调用方负责在正确的 appearance 下解析动态颜色(labelColor / controlAccentColor
     /// 都是动态色,深色菜单栏上解析错就是画出一枚几乎看不见的图标)。做法见
     /// `MenuBarScrollingLabel.rebuildImage` 外面那层 `performAsCurrentDrawingAppearance`。
-    /// - Parameter scale: 栅格化比例,调用方传图层所在窗口的 `menuBarBitmapScale`(2026-09-05 起不在这里猜屏)。
+    /// - Parameter scale: 栅格化比例,调用方传图层所在窗口的 `menuBarBitmapScale`(不在这里猜屏)。
     static func tinted(style: MenuBarIconStyle, color: NSColor, scale: CGFloat) -> Prepared? {
         let image = MenuBarIconStyle.cachedImage(for: style)
         let size = image.size

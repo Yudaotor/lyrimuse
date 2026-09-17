@@ -10,7 +10,7 @@ func TestNormEnrichTitle(t *testing.T) {
 		name, in, want string
 	}{
 		// 真正要修的那一类:中文歌名 + 括号里的英文译名。三条都是本机缓存里实际存在过的
-		// 重复条目(2026-08-14),播放器报带译名的写法,网易云/专辑预取报不带的。
+		// 重复条目,播放器报带译名的写法,网易云/专辑预取报不带的。
 		{"全角括号译名", "不散的筵席（I Miss You）", "不散的筵席"},
 		{"全角括号译名2", "神探（The Detective）", "神探"},
 		{"半角括号译名", "小師妹 (Love Triangle)", "小師妹"},
@@ -26,7 +26,7 @@ func TestNormEnrichTitle(t *testing.T) {
 		// `The Girl In Red`,而那可能是另一首完整曲目。
 		{"interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"},
 		{"中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"},
-		// 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带):"慢板"版是电影原声带里
+		// 真实故障(周杰伦《不能说的秘密》电影原声带):"慢板"版是电影原声带里
 		// 单独收录的钢琴慢版重奏,时长只有 68 秒,跟正式完整版《Secret》是两个不同的录音,
 		// 剥掉会跟正式版撞成同一个 key。
 		{"慢板保留", "Secret (慢板)", "Secret (慢板)"},
@@ -103,7 +103,7 @@ func TestPlanEnrichKeyMigrationGroups(t *testing.T) {
 
 func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 两个译名括号(都不等于归一化后的 nk 本身)时长差太多,不该被合并 —— 模拟
-	// "慢板/快板"那次真实bug的下一次翻版:关键词清单没漏词(两个都是译名,理应剥括号),
+	// "慢板/快板"那次真实故障的下一次翻版:关键词清单没漏词(两个都是译名,理应剥括号),
 	// 但时长说明这其实是两个不同的录音。时长兼容的那条仍按原逻辑重命名到 nk,
 	// 只有真正冲突的那条被排除、保留在自己原来的 key 下。
 	t.Run("时长差太多不合并", func(t *testing.T) {
@@ -182,7 +182,7 @@ func TestEnrichKeyDurationVariant(t *testing.T) {
 	}
 }
 
-// resolveEnrichKeyForDuration 是"慢板/快板"真实bug的第二道兜底(splitByDuration 挡的是
+// resolveEnrichKeyForDuration 是"慢板/快板"真实故障的第二道兜底(splitByDuration 挡的是
 // 启动迁移合并,这个挡的是实时首次撞车)——见其声明处头注。
 func TestResolveEnrichKeyForDuration(t *testing.T) {
 	key := "周杰倫|Secret|不能說的秘密 電影原聲帶"
@@ -315,8 +315,8 @@ func TestStaleExportKeysAlwaysDropsLosers(t *testing.T) {
 	subtitled := "丁世光|不散的筵席（I Miss You）|神經志 The Journal" // 胜出的那条(kugou 分更高)
 	olds := []string{plain, subtitled}
 
-	// 2026-08-14 实测的回归:带译名的那条胜出,而落选的 plain 恰好**就叫**归一化后的名字。
-	// 第一版判据("k != newKey 才删")会把它的 .lrc 留在盘上,import 再按头部标签把落选正文
+	// 实测的回归:带译名的那条胜出,而落选的 plain 恰好**就叫**归一化后的名字。
+	// 判据写成 "k != newKey 才删" 会把它的 .lrc 留在盘上,import 再按头部标签把落选正文
 	// 盖回胜出条目 —— 记录变成"分数是胜者的、正文是败者的"。落选者必须无条件删。
 	got := staleExportKeys(plain, subtitled, olds)
 	want := map[string]bool{plain: true, subtitled: true}
@@ -349,7 +349,7 @@ func TestStaleExportKeysAlwaysDropsLosers(t *testing.T) {
 
 func TestEnrichExportedFileNamesCoversBothForms(t *testing.T) {
 	// 普通名 4 个 + 带消歧哈希后缀 4 个。漏了带后缀那半,迁移删不掉落选条目的文件,
-	// importLyricsFromFiles 会把它又导回来 —— 2026-08-05 的"删了又自己回来"就是这个坑。
+	// importLyricsFromFiles 会把它又导回来 —— 的"删了又自己回来"就是这个坑。
 	names := enrichExportedFileNames("丁世光|不散的筵席|神經志 The Journal")
 	if len(names) != 8 {
 		t.Fatalf("want 8 candidate names, got %d: %v", len(names), names)

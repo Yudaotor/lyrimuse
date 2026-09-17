@@ -7,11 +7,11 @@ import (
 )
 
 // 打分项 kind 与 App 侧中文译名的**成对**守卫,跟 TestLyricsDecisionPathsHaveChineseLabels
-// 是同一个路子、同一个教训 —— 而且这个教训 2026-08 已经翻过**两次**车:
+// 是同一个路子、同一个教训 —— 而且这个教训已经翻过**两次**车:
 //
-//	① 2026-08-21 加决策 path "manual-rematch",忘了补 Swift 译名,弹窗直接印英文串给用户看,
-//	   用户截图问「这里的文案是否没做好中文的」→ 于是有了 lyricsdecisionpath_test.go;
-//	② 2026-08-22 加打分项 "sourceDurationOff",**照样又漏了一次** —— score_terms 这条当时
+//	① 加决策 path "manual-rematch",忘了补 Swift 译名,弹窗直接印英文串给用户看,
+//	   对拍问「这里的文案是否没做好中文的」→ 于是有了 lyricsdecisionpath_test.go;
+//	② 加打分项 "sourceDurationOff",**照样又漏了一次** —— score_terms 这条当时
 //	   没有任何守卫,而 LyricsSearchService.ScoreTerm.label 的 default 是 `return kind`,
 //	   -400 这么大的扣分基本会排在解释文案第一行,用户第一眼看到的就是 `-400 sourceDurationOff`。
 //

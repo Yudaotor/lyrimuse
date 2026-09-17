@@ -1,12 +1,12 @@
 import Foundation
 
-/// Apple Music「动态封面」(motion artwork)的 HLS 清单解析(2026-09-09,用户:「帮我看看怎么把我们的
+/// Apple Music「动态封面」(motion artwork)的 HLS 清单解析(「帮我看看怎么把我们的
 /// 封面搞成 applemusic 里面的那种会动的效果」)。
 ///
 /// 这一层只做**纯字符串 → 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
 /// 发现资源在 collector(`motioncover.go`),下载与播放在 App(`MotionCoverStore` / `MotionCoverLayer`)。
 ///
-/// 全部结论都是 2026-09-09 在 Prince《Timeless》(collectionId 6773830957)上实测出来的:
+/// 全部结论都是在 Prince《Timeless》(collectionId 6773830957)上实测出来的:
 ///
 ///   * **资源是公开的**。专辑页 `music.apple.com/{sf}/album/x/{id}` 的 HTML 里
 ///     `videoArtwork.dictionary.motionDetailSquare.video` 就是一条 master m3u8,直接 curl 得到
@@ -27,7 +27,7 @@ import Foundation
 ///
 /// ⚠️ 这是在解析**公开网页里的非公开字段**:Apple 改一次结构这条路就断。所以每一层都必须
 /// "解析不出来就当这张专辑没有动态封面",绝不能把失败往上抛成用户可见的错误 —— 覆盖率本来就低
-/// (2026-09-09 抽 10 张专辑只有 3 张有:Prince《Timeless》、Taylor Swift《1989 (Taylor's Version)》、
+/// (抽 10 张专辑只有 3 张有:Prince《Timeless》、Taylor Swift《1989 (Taylor's Version)》、
 /// Michael Jackson《Thriller》;测到的华语专辑一张都没有),用户对"这首没有"是无感的。
 public enum MotionCoverManifest {
 
@@ -97,7 +97,7 @@ public enum MotionCoverManifest {
     ///
     /// - 先只看宽度 ≥ `minimumWidth` 的,取其中最小的一档 —— 再大只是白下字节,动态封面不做放大用途。
     ///   一档都不够宽(小专辑可能只放到 486²)就退回最大的那档,宁可放大也别不动。
-    /// - 同尺寸时**优先 H.264**。理由是实测:2026-09-09 取 HEVC 那档的 variant m3u8 连不上
+    /// - 同尺寸时**优先 H.264**。理由是实测:取 HEVC 那档的 variant m3u8 连不上
     ///   (`http=000`,同一时刻同一个 base 下的 H.264 档正常 200),H.264 那条是从头到尾走通过的。
     ///   HEVC 省 ~25% 字节,但这条路的可靠性没核实过,不拿它当默认。
     public static func pick(_ variants: [Variant], minimumWidth: Int) -> Variant? {

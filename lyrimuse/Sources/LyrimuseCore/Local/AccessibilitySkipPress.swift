@@ -5,14 +5,14 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
 
-/// 用 macOS **辅助功能 API** 按下浏览器网页里 YouTube 播放器的「跳过广告」键(2026-09-08)。
+/// 用 macOS **辅助功能 API** 按下浏览器网页里 YouTube 播放器的「跳过广告」键。
 ///
 /// ## 为什么是它
 ///
 /// `YouTubeMusicAdSkipper` 从 JS 里试遍了"按那颗键"的办法(裸 `click()`、完整指针事件序列、四种 DOM 点法、
 /// 播放器 API `onAdUxClicked`、seek 到结尾)—— 真机全部无效,YouTube 的跳过键只认**真实用户输入**。WebKit 对
 /// 辅助功能的 `AXPress` 是按真实用户动作处理的(派出来的点击 `isTrusted == true`),这是不装浏览器扩展、不把
-/// Safari 拉到前台的前提下唯一走得通的路。2026-09-08 22:17 真机试验(终端进程持辅助功能权限,对 Safari 里那颗
+/// Safari 拉到前台的前提下唯一走得通的路。22:17 真机试验(终端进程持辅助功能权限,对 Safari 里那颗
 /// `AXButton title=[跳过]` 执行 AXPress):`success`,1.5s 后播放器离开 `ad-showing`、视频切到正片 1.2/230s。
 ///
 /// ## 找哪颗键
@@ -42,7 +42,7 @@ public enum AccessibilitySkipPress {
         /// 不把网页挂进 AX 树(Chromium 系要先设 `AXManualAccessibility`,见 press 头注)。
         case webAreaNotFound
         /// 那个浏览器此刻没在跑 —— 跟"树里找不到"是两件事,提示给用户的话也不一样
-        /// (2026-09-11 拆开:此前两者同归 `.webAreaNotFound`,于是浏览器没在跑时也提示"把标签页切到前面",
+        /// (拆开:此前两者同归 `.webAreaNotFound`,于是浏览器没在跑时也提示"把标签页切到前面",
         /// 而真正的排查线索一个字都没留下)。
         case browserNotRunning
         /// web area 找到了,但里面没有跳过键(广告刚结束 / 页面结构变了)。
@@ -83,10 +83,10 @@ public enum AccessibilitySkipPress {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
-    /// 找不到网页区域时**隔多久再试一次**(2026-09-11)。
+    /// 找不到网页区域时**隔多久再试一次**。
     ///
     /// WebKit 的网页 AX 树是**按需建**的:进程里没有辅助功能客户端时压根不建,来了客户端才开始建、而且是
-    /// 异步的。表现就是"刚给完授权那一下第一次按,树里什么都没有;隔一会儿再按就好了" —— 真机 2026-09-11
+    /// 异步的。表现就是"刚给完授权那一下第一次按,树里什么都没有;隔一会儿再按就好了" —— 真机
     /// 撞上:App 报 no web area 的同一时刻,另一个早就持有权限的进程用**逐字相同的遍历**能在 depth=6 找到
     /// 那块 `AXWebArea`。查询本身也会偶发 `kAXErrorCannotComplete`(浏览器忙、AX 消息超时)。
     /// 一次 250ms 的重试把这两种瞬态都盖住,代价是失败路径多等 0.25s(成功路径一分不多)。

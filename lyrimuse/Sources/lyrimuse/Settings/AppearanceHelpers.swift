@@ -53,7 +53,7 @@ extension Color {
 // 是否真的装了这个字体族。
 //
 // ⚠️ `OverlayFontWeight` **本体在 LyrimuseCore**(`Util/OverlayFontWeight.swift`),不在这里。
-// 2026-09-02 加「字重」设置时搬过去的:四行字重从"各自硬编码"变成"用户选主行、其余三行按固定
+// 加「字重」设置时搬过去的:四行字重从"各自硬编码"变成"用户选主行、其余三行按固定
 // 档位差推导",推导规则是纯逻辑而且带一条必须钉住的兼容性不变量(默认档位要逐个复现改动前那
 // 四个权重),selftest 只依赖 LyrimuseCore,判据不下沉就覆盖不到。留在这里的只有三件真正需要
 // SwiftUI / AppKit / L10n 的事:`Font.Weight` / `NSFont.Weight` 两份映射和本地化显示名。
@@ -69,7 +69,7 @@ extension OverlayFontWeight {
         }
     }
 
-    /// AppKit 侧的 `NSFont.Weight`(菜单栏歌词用,2026-09-03):菜单栏那条路画的是 NSString + NSFont
+    /// AppKit 侧的 `NSFont.Weight`(菜单栏歌词用):菜单栏那条路画的是 NSString + NSFont
     /// 的位图,不经 SwiftUI,所以要有一份跟 `swiftUIWeight` 平行的映射。两份都是逐名对应的枚举
     /// 翻译、不含数值,不会各自漂。
     var nsWeight: NSFont.Weight {
@@ -91,7 +91,7 @@ extension OverlayFontWeight {
     ///
     /// 中文取的是一条**单调的强度阶梯**:细 → 常规 → 稍粗 → 较粗 → 加粗 → 特粗,稍 / 较 / 加 /
     /// 特 四个程度副词自己就把顺序说清楚了,不用读者去记"semibold 比 medium 粗"。
-    /// (2026-09-02 第一版写的是「中等 / 半粗」—— 前者读不出方向、后者是 semibold 直译,
+    /// (写的是「中等 / 半粗」—— 前者读不出方向、后者是 semibold 直译,
     ///  跟这一行原来叫「字重」是同一类毛病,同一次一起改掉。英文保持行业术语不动:那边
     ///  Light/Regular/Medium/Semibold/Bold/Heavy 就是用户在任何字体选择器里看惯的说法。)
     var displayName: String {

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// ytmusicLyric 是歌词第七个候选来源(2026-08-25 加,当天追问后收窄成只认 LyricFind)。
+// ytmusicLyric 是歌词第七个候选来源(加,当天追问后收窄成只认 LyricFind)。
 // YouTube Music 的歌词后端同时接了 Musixmatch 和 LyricFind 两家供应商——LyricFind 是
 // 独立于现有六源(含 Musixmatch 本身)的另一家歌词版权方,接这一路的价值就在于它,不是
 // "YouTube Music"这个平台本身。所以这份代码只在 timedLyricsData 的 sourceMessage 标注
@@ -35,14 +35,14 @@ import (
 // 走的是 InnerTube——YouTube 内部用的私有协议,没有公开文档,`search`/`next`/`browse`
 // 三个端点(见下面 resolveYTMusicLyric)全部**不需要登录/cookie**。参考实现是
 // github.com/sigma67/ytmusicapi(Python,2959★,这个领域事实标准),但没有照抄它的库,
-// 是逐字段读它的源码 + 自己发裸 HTTP 请求实测核实过一遍(2026-08-25)才落的这份实现,
+// 是逐字段读它的源码 + 自己发裸 HTTP 请求实测核实过一遍才落的这份实现,
 // 下面每个端点/字段路径都是核实过的真实结构,不是照抄文档假设。
 //
 // ⚠️ 跟 amll-ttml-db/musixmatch 同一类风险:未公开协议,随时可能改结构或限流,没有 SLA。
 // 这个仓库已经接过两个这一类的源(见 musixmatch.go/amllttml.go 头注),不是新引入一种
 // 风险类别,是这类风险的第三个实例。
 //
-// 实测覆盖率(2026-08-25,用户曲库 9 首中/日/英抽样,过滤生效**之前**测的原始命中):
+// 实测覆盖率(用户曲库 9 首中/日/英抽样,过滤生效**之前**测的原始命中):
 // 8/9 在 YTM 上有歌词,其中 2/9 是 LyricFind、6/9 是 Musixmatch(过滤生效后这 6/9 会
 // 变成"这一源没查到",不再产出候选)。另外拿现有六源全部落空的曲目里最像"真的有歌词
 // 只是没搜到"的 3 首去测,YTM 一首都没能补上(1 首 YTM 上确实标注"歌词不可用",2 首
@@ -50,7 +50,7 @@ import (
 // 就是那 2/9 的 LyricFind 命中,不要指望它填补现有六源找不到的空白——那部分命中率是 0。
 //
 // 格式:只有**逐行**歌词(下面 ytmusicLyricLine 的 startMs/endMs,毫秒精度),没有逐字/
-// 逐音节证据(2026-08-25 读 sigma67/ytmusicapi 的 LyricLine 模型 + 实测多首歌词证实,
+// 逐音节证据(读 sigma67/ytmusicapi 的 LyricLine 模型 + 实测多首歌词证实,
 // 一行就是一个整句字符串)。所以候选构造时不带 wordTimingYRC,跟 lrclib 同一个形状。
 type ytmusicResult struct {
 	lyrics, title, artist, album, cover string
@@ -70,7 +70,7 @@ const (
 	ytmusicUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0"
 	// filter=songs 的 search params——照抄 ytmusicapi get_search_params("songs", nil, false)
 	// 的算法手算出这一个常量(filtered_param1"EgWKAQ" + filter_params["songs"]"II" +
-	// "AWoMEA4QChADEAQQCRAF")。⚠️ **不能不传这个参数**:2026-08-25 实测坐实,不带过滤器
+	// "AWoMEA4QChADEAQQCRAF")。⚠️ **不能不传这个参数**:实测坐实,不带过滤器
 	// 的默认搜索"Top result"经常命中的是演唱会直拍/翻唱视频而不是录音室曲目(Taylor Swift
 	// "Anti-Hero" 命中过一条 Eras Tour 现场版),那条视频往往没有歌词、或者歌词挂在错的
 	// 版本上。加上这个过滤器之后同一批查询 20 条结果全部是 MUSIC_VIDEO_TYPE_ATV
@@ -80,7 +80,7 @@ const (
 	// 不需要手动跟着 YouTube Music 网页版更新——这是 ytmusicapi 的做法,日期串永远"够新"。
 	ytmusicWebClientName = "WEB_REMIX"
 	// **带时间戳**的歌词只有切成 Android 客户端身份才拿得到(ytmusicapi 原话"mobile
-	// only",2026-08-25 实测坐实:同一个 browseId,WEB_REMIX 身份下 browse 只会返回
+	// only",实测坐实:同一个 browseId,WEB_REMIX 身份下 browse 只会返回
 	// "Lyrics not available" 那条静态文案,换成 ANDROID_MUSIC 才会带 timedLyricsData)。
 	// ⚠️ 已知的过期风险,跟 web 客户端不一样:这个版本号是**硬编码**的,不会随时间自动
 	// "看起来永远最新"——真实 Android 客户端版本升级到足够新之后,这个值迟早会被服务端
@@ -102,13 +102,13 @@ var (
 	// (GET 首页 + 正则抠 JS 里的 VISITOR_DATA)。这个值理论上没有过期时间(ytmusicapi
 	// 拿到一次就一直复用到进程退出,不会主动刷新),但抓取本身仍然是一次网络请求——批量
 	// 解析(相册预取一次触发十几首歌并发)时如果每个 goroutine 各自判定"还没有就自己抓
-	// 一次",会同时打十几个请求到 YouTube 首页。这个坑 2026-08-24 刚在 musixmatch 的
+	// 一次",会同时打十几个请求到 YouTube 首页。这个坑刚在 musixmatch 的
 	// token 获取上踩过一次(见 musixmatch.go 的 musixmatchTokenFetchMu),这里从一开始
 	// 就按同一个模式写,不重蹈一遍。
 	ytmusicVisitorFetchMu sync.Mutex
 
 	// ytmusicLastFailureMu/ytmusicLastFailureReason:诊断用的只读旁路
-	// (2026-08-31,设置页"测试这个源"功能想知道 lyricfind 到底为什么没查到,不只是
+	// (设置页"测试这个源"功能想知道 lyricfind 到底为什么没查到,不只是
 	// "没查到"这个事实),跟 networkobs.go 的 networkLooksDown() 同一个思路——不改
 	// ytmusicLyric 的返回值形状(自动解析路径从来不需要"为什么没查到"这个原因),只在
 	// 抓 visitor id 这一步识别出具体原因时顺手记一句,给需要更具体诊断信息的调用方
@@ -170,7 +170,7 @@ func ytmusicEnsureVisitorID(ctx context.Context) string {
 
 // ytmusicVisitorDataRe 抠 YouTube Music 首页内联的 `ytcfg.set({...})`,里面的
 // VISITOR_DATA 字段就是后续所有请求都要带的 X-Goog-Visitor-Id。跟 ytmusicapi
-// get_visitor_id 同一个正则,2026-08-25 实测核实过真的能从首页 HTML 里抠出来。
+// get_visitor_id 同一个正则,实测核实过真的能从首页 HTML 里抠出来。
 var ytmusicVisitorDataRe = regexp.MustCompile(`ytcfg\.set\s*\(\s*(\{.+?\})\s*\)\s*;`)
 
 func ytmusicFetchVisitorID(ctx context.Context) string {
@@ -194,7 +194,7 @@ func ytmusicFetchVisitorID(ctx context.Context) string {
 	html := string(body)
 	v := ytmusicExtractVisitorID(html)
 	if v == "" {
-		// 2026-08-31 实测坐实的一种具体失败原因:YouTube Music 按 IP 地理位置限定可用
+		// 实测坐实的一种具体失败原因:YouTube Music 按 IP 地理位置限定可用
 		// 区域,拿不到 VISITOR_DATA 时,首页返回的不是真正的首页,而是一个几 KB 的
 		// 静态提示页("YouTube Music is not available in your area")——跟 youtube.com/
 		// google.com 同时能正常访问对照过,不是整体网络问题,是这一个服务本身的地区限制。
@@ -243,7 +243,7 @@ func ytmusicWebClientVersion() string {
 
 // ytmusicPost 是三个端点共用的请求执行。⚠️ 故意不设 Accept-Encoding:Go 的
 // http.Transport 只在**自己**加上 `Accept-Encoding: gzip` 时才会透明解压响应体,
-// 调用方一旦显式设置这个头就必须自己手动解压——2026-08-25 用真实裸 HTTP 请求测过,
+// 调用方一旦显式设置这个头就必须自己手动解压——用真实裸 HTTP 请求测过,
 // 不设这个头、让标准库全权处理,响应体拿到的就是解压好的干净 JSON,没有理由为了
 // "看起来更像浏览器"去踩这个 Go 特有的坑。
 func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visitorID string) ([]byte, error) {
@@ -276,7 +276,7 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 
 // ytmusicSearchItem 只挑了 search 响应里这一路真正用得上的字段(flexColumns 的两段
 // 文字 = 歌名 / "歌手 • 专辑 • 时长"、封面缩略图、以及能确认"这是不是真录音室曲目"的
-// musicVideoType + videoId)。2026-08-25 拿真实响应核实过这些字段路径,不是猜的。
+// musicVideoType + videoId)。拿真实响应核实过这些字段路径,不是猜的。
 type ytmusicSearchItem struct {
 	MusicResponsiveListItemRenderer struct {
 		FlexColumns []struct {
@@ -330,7 +330,7 @@ type ytmusicParsedSearchItem struct {
 
 // ytmusicParseSearchItem 是纯函数:把一条 search 结果解析成挑选逻辑要用的字段。
 // flexColumns 第二段是 "歌手 • 专辑 • 时长" 用 " • "(U+2022)连起来的一行文字
-// (2026-08-25 拿中/英/日三种语言的真实查询核实过这个分隔符和顺序一致),最后一段
+// (拿中/英/日三种语言的真实查询核实过这个分隔符和顺序一致),最后一段
 // 是时长、去掉最后一段之后剩下的整体是专辑名、第一段是歌手 —— 多歌手合作时歌手名
 // 本身也不含" • ",这个切法不会误切。
 func ytmusicParseSearchItem(item ytmusicSearchItem) (ytmusicParsedSearchItem, bool) {
@@ -480,7 +480,7 @@ func ytmusicSearchSong(ctx context.Context, artist, title, album string, duratio
 
 // ytmusicExtractSearchItems 从整份 search 响应里摘出 musicResponsiveListItemRenderer
 // 数组。用通用递归查找而不是硬编码 tabs[0].tabRenderer.content... 这条深路径——
-// InnerTube 是没有文档的私有协议,这条路径 2026-08-25 实测是这个形状,但 amll/musixmatch
+// InnerTube 是没有文档的私有协议,这条路径实测是这个形状,但 amll/musixmatch
 // 的头注都记录过同类接口"结构说变就变"的先例(见 amllttml.go/musixmatch.go),按key名
 // 找比按精确路径导航更能扛住这类结构调整。
 func ytmusicExtractSearchItems(raw []byte) []ytmusicSearchItem {
@@ -580,7 +580,7 @@ func ytmusicFetchLyricsBrowseID(ctx context.Context, videoID, visitorID string) 
 // ---- ③ browse:browseId → 带时间戳的逐行歌词 ----
 
 // ytmusicLyricLine 是一行歌词(毫秒精度),字段来自 timedLyricsData 数组元素的
-// lyricLine/cueRange.{start,end}TimeMilliseconds(2026-08-25 拿真实响应核实过,
+// lyricLine/cueRange.{start,end}TimeMilliseconds(拿真实响应核实过,
 // 两个时间戳在原始 JSON 里是**字符串**,不是数字)。
 type ytmusicLyricLine struct {
 	text           string
@@ -715,7 +715,7 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 	if !isTimedLRC(lrc) {
 		return ytmusicResult{}
 	}
-	// ⚠️ 2026-08-25 用户追问坐实:只在真是 LyricFind 时才接受这份候选,是 Musixmatch
+	// ⚠️ 用户追问坐实:只在真是 LyricFind 时才接受这份候选,是 Musixmatch
 	// 换个管道重发的一律当"这一源没查到"。理由是两件事的叠加:
 	//   ① 打分层的"跨源正文共识"(contentConsensusPeers)按**来源数**算独立印证——
 	//      如果这份其实是 Musixmatch 的内容,而现有 musixmatch 源也查到了同一首歌,

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Spotify 原生客户端的一次性「地面真值」探针(2026-09-07)。
+/// Spotify 原生客户端的一次性「地面真值」探针。
 ///
 /// ## 要解决的现象
 ///
@@ -28,7 +28,7 @@ import os
 /// `naturalAdvanceCorrection` 的偏置在管;探针读数进伺服前同样扣偏置(raw 域),所以锚点没打歪
 /// 的歌 |Δ|≈0,不会被它推快。
 ///
-/// ## 顺带带回封面地址(2026-09-09)
+/// ## 顺带带回封面地址
 ///
 /// 这次脚本本来就要 fork 一个 osascript,顺带把 `spotify url` 与 `artwork url` 一起带回来(一次脚本三个值,
 /// 不多一个子进程)。`artwork url` 是 Spotify 图床 640 档的地址(形状与换档见 `SpotifyArtworkURL`),经
@@ -50,8 +50,8 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotify-probe")
 
     /// 换歌后等多久再问。09-07 定 2.5s(太早 Spotify 的钟可能还没起步 / gapless 时先超前后停顿),
-    /// 2026-09-09 收到 2.0s:现在两次采样验钟在走、不过关还会重试一次(retryAfterFailedLiveness),
-    /// 早半秒的风险由它们兜;整条链(观察到换歌 → 探针 → 结果回调立刻 poll)约 3s,用户报过
+    /// 收到 2.0s:现在两次采样验钟在走、不过关还会重试一次(retryAfterFailedLiveness),
+    /// 早半秒的风险由它们兜;整条链(观察到换歌 → 探针 → 结果回调立刻 poll)约 3s,现象是过
     /// 「开头那几秒歌词慢」,链越短越好,但 2.0 以下那段"钟先超前 0.9s 再停"的窗口还没过完。
     public static let delayAfterTrackStart: TimeInterval = 2.0
     /// 开播那次两采样没过活性(钟还没起步 / 正在停顿)时,隔多久再试一次(只试一次)。
@@ -60,13 +60,13 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     public static let appleScriptTimeout: TimeInterval = 3
     /// 探测结果最多用多久:超过就当过期(中间可能发生了别的事)。
     public static let maxCorrectionAge: TimeInterval = 6
-    /// 两次采样之间隔多久(2026-09-09,见 `clockIsRunning`)。比浏览器探针的 1.5s 短:这里两次往返
+    /// 两次采样之间隔多久(见 `clockIsRunning`)。比浏览器探针的 1.5s 短:这里两次往返
     /// 都是 ~150ms 的本地 AppleScript,0.6s 已足够把"钟没在走"跟"走得正常"分开(阈值见下)。
     public static let livenessGapSeconds: TimeInterval = 0.5
 
     /// Spotify 的钟在两次采样之间**走得正常**才采信这一对读数。纯函数,selftest 直接覆盖。
     ///
-    /// 2026-09-09 起探针量出的差会**折进整曲偏置**(见 LocalPlaybackSource.resolvePositionSeconds
+    /// 探针量出的差会**折进整曲偏置**(见 LocalPlaybackSource.resolvePositionSeconds
     /// 的地面真值分支),不再是"重锚一次、伺服几拍就纠回去"的一次性动作 —— 一次读错就是整首歌
     /// 错到底(暂停 / 拖动才复位)。头注里"换歌 2.5s 后再问,太早钟可能还没起步(缓冲)"那种停着的
     /// 钟会读出 ~0 而 MediaRemote 已外推到 ~3,折进去就是整曲慢 3 秒 —— 正是这道守卫要挡的。
@@ -84,7 +84,7 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     /// 封面地址的去向(见类头注「顺带带回封面地址」)。由 LocalPlaybackSource 启动时挂上;没挂就丢掉。
     private var artworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
     /// 探针结果落地(pending 已设)时的回调 —— LocalPlaybackSource 挂上"立刻 poll 一次",不等下一拍
-    /// 2s 轮询来消费(2026-09-09 真机量到从锚点到纠偏 ≈5.3s,其中 ~1s 是干等轮询)。
+    /// 2s 轮询来消费(真机量到从锚点到纠偏 ≈5.3s,其中 ~1s 是干等轮询)。
     private var resultSink: (@Sendable (_ key: String) -> Void)?
 
     public func setResultSink(_ sink: @escaping @Sendable (_ key: String) -> Void) {
@@ -123,7 +123,7 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     }
 
     /// 同一首歌播放中 MediaRemote 锚点**变了**(seek 分支重锚、或偏置随重发的锚点作废)时调:再问一次
-    /// Spotify 的钟,确认新锚点是不是真的(2026-09-09)。真机两例:播到 60s / 110s 时 Spotify 把开播那份
+    /// Spotify 的钟,确认新锚点是不是真的。真机两例:播到 60s / 110s 时 Spotify 把开播那份
     /// now-playing 带着新时间戳晚发(elapsed 0.367 / 2.458),单看 MediaRemote 跟"用户拖回开头"一模一样,
     /// seek 分支照单全收,歌词回到开头、暂停时差 60s。真拖动的话探针与新锚点一致(Δ<0.3s),什么都不改;
     /// 假的就按探针重锚并把差折进偏置,这个假锚点之后每一笔读数都被加回去。
@@ -159,7 +159,7 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
             let stillCurrent = self.scheduledKey == key
             self.lock.unlock()
             guard stillCurrent else { return }
-            // 两次采样(2026-09-09):第一次只用来证明钟在走,第二次才是交出去的读数(更新,
+            // 两次采样:第一次只用来证明钟在走,第二次才是交出去的读数(更新,
             // capturedAt 也对得上 consumeCorrection 的 rate×age 补偿)。两次是两次独立的 osascript,
             // 中间 Task.sleep 不占线程。
             guard let first = Self.sample() else {

@@ -14,7 +14,7 @@ func TestParseYTMusicAdVerdict(t *testing.T) {
 		name, raw string
 		want      ytmusicAdVerdict
 	}{
-		// 2026-09-02 实测:广告期间三个标志同时命中(22/22 连续样本,横跨两条不同广告)。
+		// 实测:广告期间三个标志同时命中(22/22 连续样本,横跨两条不同广告)。
 		{"真实广告样本(三条全中)", "1|1|1", ytmusicAdIsAd},
 		// 真歌期间三条全灭。
 		{"真实歌曲样本(三条全灭)", "0|0|0", ytmusicAdIsSong},
@@ -29,7 +29,7 @@ func TestParseYTMusicAdVerdict(t *testing.T) {
 		{"只有空白", "   \n", ytmusicAdUnknown},
 		// 形状不认识一律不猜。
 		{"字段数不对(2 个)", "1|0", ytmusicAdUnknown},
-		// ⚠️ 2026-09-03 起第四段是**专辑名**(任意文本),所以 4 段是合法形状,不再 unknown。
+		// ⚠️ 第四段是**专辑名**(任意文本),所以 4 段是合法形状,不再 unknown。
 		// 专辑名那一半单独在 TestParseYTMusicAdProbeAlbum 里钉。
 		{"4 段:第四段是专辑名,不影响判定", "1|0|0|某专辑", ytmusicAdIsAd},
 		{"非 0/1", "1|x|0", ytmusicAdUnknown},
@@ -88,7 +88,7 @@ func TestBuildYTMusicAdAppleScript(t *testing.T) {
 		if n := strings.Count(s, "end timeout"); n != 2 {
 			t.Errorf("%s: `end timeout` 出现 %d 次, want 2", family, n)
 		}
-		// 超时秒数必须来自那个常量,不能是另写的字面量(这一条 2026-09-02 真的写错过一次:
+		// 超时秒数必须来自那个常量,不能是另写的字面量(这一条真的写错过一次:
 		// 常量之外又硬编码了一个 "4",两处会漂)。
 		if !strings.Contains(s, "with timeout of 4 seconds") {
 			t.Errorf("%s: 超时秒数没有跟常量对齐", family)
@@ -131,7 +131,7 @@ func TestYTMusicAdProbeJSHasNoDoubleQuotes(t *testing.T) {
 		t.Error("JS 源码里出现了双引号 —— 嵌进 AppleScript 会被打坏(见 ytmusicad.go 头注)")
 	}
 	// 三个信号都得在,少一个就是悄悄削弱了判据。
-	// 后两个是 2026-09-03 加的专辑名读取(Swift 侧 selftest 有同款守卫,两边同时改)。
+	// 后两个是加的专辑名读取(Swift 侧 selftest 有同款守卫,两边同时改)。
 	for _, marker := range []string{"ad-showing", "ytp-ad-badge", "YouTube Music", "NOTFOUND",
 		"browse/MPREb", "ytmusic-player-bar"} {
 		if !strings.Contains(ytmusicAdProbeJS, marker) {
@@ -191,9 +191,9 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 	}
 }
 
-// 第四段:页面上读到的专辑名(2026-09-03)。
+// 第四段:页面上读到的专辑名。
 //
-// 起因是用户报「YouTube Music 播一张专辑时,第一首歌不上送专辑名」——实测坐实那是 YT Music
+// 起因是现象是「YouTube Music 播一张专辑时,第一首歌不上送专辑名」——实测坐实那是 YT Music
 // 自己的疏漏(队列第一首的 MediaSession 里 album 恒空,页面 byline 上却有),见
 // ytmusicAlbumPatch 的注释。⚠️ 跟 Swift 侧 selftest 那一组是同一批用例,两边同时改。
 func TestParseYTMusicAdProbeAlbum(t *testing.T) {
@@ -207,7 +207,7 @@ func TestParseYTMusicAdProbeAlbum(t *testing.T) {
 		// 的话这条会退化成"形状不对",连带把广告判定一起丢掉。
 		{"专辑名里自带 | 原样保留", "0|0|0||A|B", "A|B"},
 		{"最后一段是文本不是标志位", "1|0|0||0", "0"},
-		// ⚠️ 2026-09-09 起第四段是广告徽章计数、专辑名挪到第五段;这一条钉住"计数段坏了
+		// ⚠️ 第四段是广告徽章计数、专辑名挪到第五段;这一条钉住"计数段坏了
 		// 也不影响专辑名"(计数是装饰,不参与 fail-closed)。
 		{"计数段坏了不影响专辑名", "0|0|0|abc|Already Gone", "Already Gone"},
 		{"带计数时专辑名照常在最后一段", "1|1|0|1/2|Already Gone", "Already Gone"},
@@ -323,7 +323,7 @@ func resetYTMusicAdCacheForTest(t *testing.T) {
 	t.Cleanup(clear)
 }
 
-// 复用窗口按判定分档(2026-09-08,用户报「有视频的歌识别错了,变成广告了」)。MV 的前贴片广告
+// 复用窗口按判定分档(现象是「有视频的歌识别错了,变成广告了」)。MV 的前贴片广告
 // 跟正片共用同一份 MediaSession 元数据,同一个 key 下判定会先 ad 后 song —— 广告判定只能复用
 // 几秒,否则前贴片一过还要白丢一整个缓存期(本仓日志:三轮 rejected 之后整整 60 秒才 now playing)。
 // Swift 侧 YouTubeMusicAdProbe.refreshInterval(for:) 是同一套分档,两边同时改。

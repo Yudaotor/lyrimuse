@@ -5,13 +5,13 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "motion-cover")
 
-/// Apple Music 动态封面的**下载与落盘**(2026-09-09)。
+/// Apple Music 动态封面的**下载与落盘**。
 ///
 /// 分工:发现在 collector(`motioncover.go`,把 master m3u8 记进 enrich 缓存)、清单推导在 Core
 /// (`MotionCoverManifest`,纯函数、selftest 钉着)、播放在 `MotionCoverLayer`,这一层只干三件事:
 /// 拼出该下哪个文件、把它下下来、按 LRU 管住磁盘。
 ///
-/// **为什么是"下整个文件"而不是流式播 HLS**:用户 2026-09-09 选的就是"先下载再本地循环"。而它
+/// **为什么是"下整个文件"而不是流式播 HLS**:用户选的就是"先下载再本地循环"。而它
 /// 之所以做得到,是因为实测发现每一档 variant 的分片全是**同一个 `.mp4` 的 byte range**
 /// (`#EXT-X-MAP` + `#EXT-X-BYTERANGE`)—— 底层就是一个完整 fMP4,整份拿下来直接就能播,不必拼
 /// 分片、也不必上 `AVAssetDownloadURLSession` 那套 `.movpkg`。代价是首次要等几秒(实测 960²

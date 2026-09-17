@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// 合唱串上送的三档(2026-09-03 起:all / first / smart)。
+// 合唱串上送的三档(all / first / smart)。
 //
 // 这一组钉的是:
 //  1. **默认原样发整串** —— 依据是 ListenBrainz 文档要求合唱 credit "include them all",
@@ -49,7 +49,7 @@ func TestResolveScrobbleArtist(t *testing.T) {
 // features.json 的键名是两侧(Go / Swift)通过同一份文件交换的字符串,写错一个字母就是
 // "设置里改了、collector 永远读不到",而且**不报错**。这里把 Go 侧的 json tag 和三个档位值
 // 钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和 LastfmScrobbleArtistMode 的
-// rawValue(那边最容易漏)。同时钉住遗留二态开关的迁移:2026-08-31 ~ 09-03 之间写下的
+// rawValue(那边最容易漏)。同时钉住遗留二态开关的迁移:~ 09-03 之间写下的
 // lastfm_scrobble_first_artist_only=true 必须读成 first,不能因为换了键就回到默认档。
 func TestScrobbleArtistModeFlagRoundTrip(t *testing.T) {
 	const key = "lastfm_scrobble_artist_mode"
@@ -108,7 +108,7 @@ func loadFeatureFlagsFromJSON(t *testing.T, body string) featureFlags {
 	return loadFeatureFlags(path)
 }
 
-// 2026-08-31:Apple Music 那条路径(getAppleMusicState,JXA 直接 unmarshal)原来绕过了
+// Apple Music 那条路径(getAppleMusicState,JXA 直接 unmarshal)原来绕过了
 // cleanMediaTag —— 标签里的 NBSP/零宽字符会原样进 Last.fm,在那边建出一个跟正常写法
 // 肉眼完全一样、实际却是另一个实体的条目;而 enrichKey 那边又洗过,两边口径不一致。
 //
@@ -140,7 +140,7 @@ func TestCleanMediaTagScope(t *testing.T) {
 	}
 }
 
-// 短曲目闸(2026-09-03):Last.fm 官方规则 "longer than 30 seconds" 默认照做,用户显式打开
+// 短曲目闸:Last.fm 官方规则 "longer than 30 seconds" 默认照做,用户显式打开
 // features.ScrobbleShortTracks 才放行。三条不变量:曲长未知不拦;放行不影响半程规则(那在
 // listenThreshold);恰好 30 秒按既有口径放行(跟官方 "> 30" 差这一秒,历史行为,别顺手改)。
 func TestTooShortToScrobble(t *testing.T) {

@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// pickQQArtistCanonicalName 的判据——见 qqArtistCanonicalName 头注(2026-08-31,
+// pickQQArtistCanonicalName 的判据——见 qqArtistCanonicalName 头注(
 // David Tao/Lexie Liu 通用命中案例 + Prince/Wanting 两个反例)。
 func TestPickQQArtistCanonicalName(t *testing.T) {
 	cases := []struct {

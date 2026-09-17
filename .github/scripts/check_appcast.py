@@ -33,7 +33,7 @@ Tests/SUAppcastTest.swift testARM64Requirement。"版本相同取先出现的那
 bestItemFromAppcastItems: 的注释 "if two items are equal, we must select the first
 matching one" —— 这就是顺序必须 arm64 在前的原因。
 
-# 2026-09-05 加的四个可选参数(release.yml 全部传;本地只传文件名也能跑基础形状检查)
+# 加的四个可选参数(release.yml 全部传;本地只传文件名也能跑基础形状检查)
 
   --tag             enclosure 必须落在 releases/download/<tag>/ 目录下,**不许**再指 releases/latest/:
                     预发布不是 latest,latest 链接在它的 appcast 里会解析到最新正式版的目录、404。

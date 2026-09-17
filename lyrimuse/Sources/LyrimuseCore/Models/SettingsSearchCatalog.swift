@@ -1,6 +1,6 @@
 import Foundation
 
-// 设置搜索的目录(2026-09-09,借鉴清单 S8)。
+// 设置搜索的目录。
 //
 // 设置页的每一行(以及一张卡)在这里登记一条:它在哪个分类、哪个分段、哪个「全部设置」抽屉的
 // 哪一组,标题是哪个 L10n 键。侧栏顶部的搜索框按它出结果,命中后按它翻页、展开抽屉、高亮那一行。
@@ -33,7 +33,7 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         /// 账号页之一,值是 App 侧 `AccountDestination` 的 case 名(那个枚举没有 rawValue,
         /// App 侧用 `String(describing:)` 对回去)。
         case account(String)
-        /// 「软件更新」页(2026-09-12):不属于六分类,App 侧是 `SettingsSidebarItem.softwareUpdate`。
+        /// 「软件更新」页:不属于六分类,App 侧是 `SettingsSidebarItem.softwareUpdate`。
         case softwareUpdate
     }
 
@@ -294,7 +294,7 @@ public enum SettingsSearchCatalog {
         general("清除所有设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除"]),
 
         // ---- 关于 ----
-        // 「软件更新」页(2026-09-12;此前这四条住在「关于 › 更新」卡里)。「软件更新」同时也是「关于 › 更新」
+        // 「软件更新」页(此前这四条住在「关于 › 更新」卡里)。「软件更新」同时也是「关于 › 更新」
         // 卡里那一行入口的标题,目的地都是这一页。
         softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
         softwareUpdate("自动检查", kw: ["更新", "自动"], group: "自动更新"),

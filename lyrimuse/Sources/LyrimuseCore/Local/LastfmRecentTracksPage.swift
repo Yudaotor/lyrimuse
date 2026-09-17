@@ -5,7 +5,7 @@ import Foundation
 /// 这段解析(包括"只有一条时 track 是对象不是数组"这个 Last.fm 怪癖)原来在
 /// LastfmStatsService 里被写了两遍——ensureTitleFormsIndex(写法索引首次建索引)和
 /// refreshDailyCounts(热力图全量同步)各自独立分页扫**同一个接口**,互不知道对方
-/// 存在,新账号首次连接时两条同时跑,请求量翻倍还容易撞 Last.fm 限速(2026-08-25)。
+/// 存在,新账号首次连接时两条同时跑,请求量翻倍还容易撞 Last.fm 限速。
 /// 合并成一次扫描后,两个消费者(写法索引收割 / 按天计数)喂的是同一份解析结果,
 /// 这里收成一份、可被 lyrimuse-selftest 单测覆盖。
 public enum LastfmRecentTracksPage {

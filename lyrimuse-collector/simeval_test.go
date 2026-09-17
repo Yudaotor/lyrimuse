@@ -2,11 +2,11 @@
 // 逐维度消融**尚未入引擎**的候选打分维度,量化「若加上该维度,冠军会怎么翻盘」。离线
 // 运行,不发任何网络请求;用 SIMEVAL_DATA 环境变量门控,不设置时整个测试跳过。
 //
-// v3(2026-08-12)已把四个维度+overshoot 收进引擎(见 lyricsScoringVersion 注释),它们的
+// v3已把四个维度+overshoot 收进引擎(见 lyricsScoringVersion 注释),它们的
 // delta 函数已从这里移除;基线即 v3 引擎本身,并与 golden_shipped.json(v2 时代按"发货
 // 集合"算出的每首冠军黄金参照)逐首比对——引擎实现若与被评测背书的口径漂移,测试直接红。
 //
-// 量尺纪律(与 2026-08-09 消融实验同款方法学,量尺独立于被测维度):
+// 量尺纪律(与消融实验同款方法学,量尺独立于被测维度):
 //   - contentMajority: 候选间归一化正文的字符 3-gram Jaccard,sim>=0.5 建边聚类,
 //     最大且成员>=2 的簇为多数派;
 //   - durationVerdict: 真实 duration vs 候选末句时间戳,按 durationFits 同款规则;
@@ -240,12 +240,12 @@ func linesTermPoints(terms []scoreTerm) int {
 	return 0
 }
 
-// ---------- 已入引擎维度的反向消融(2026-09-10) ----------
+// ---------- 已入引擎维度的反向消融 ----------
 //
 // 上面那些 delta 评的是「还没进引擎的维度值不值得加」。这一组反过来:把**已经在引擎里**
 // 的行数项拿掉、或换个算法,量化「它在多少首歌上决定了冠军、决定得对不对」。
 //
-// 起因是用户问「行数作为加分依据有必要吗」。三条线索:①09 章打分表里每一项都写了理由,
+// 起因是「行数作为加分依据有必要吗」这个疑问。三条线索:①09 章打分表里每一项都写了理由,
 // 只有行数那一格是空的;②全库 4002 首有决策留痕的歌里,去掉它有 7.1% 换冠军,而其中 87%
 // 的翻盘对手唯一更强的项是 duration(真覆盖度);③它量到的其实是断行约定和头部元信息的
 // 行数,不是完整度 —— Gabe《弹错》酷狗 108 行胜网易云 54 行,多出来的是 10 行
@@ -350,13 +350,13 @@ type simevalReport struct {
 	// YardstickLiveness:三把量尺在**本轮样本**上的取值分布。存在的理由跟 Assumptions
 	// 那段同源——全维度 improve=0 regress=0 时有两种完全不同的解释:「维度确实不改变
 	// 对错」和「量尺在这批样本上根本判不出对错」,不把分布打出来就分不开这两件事,
-	// 而后者会让整份报告变成一句空话。2026-09-10 加(行数项消融时撞上全 neutral)。
+	// 而后者会让整份报告变成一句空话。加(行数项消融时撞上全 neutral)。
 	YardstickLiveness map[string]int `json:"yardstick_liveness"`
 	// LinesFlipPairs:行数项消融翻盘时,那两条候选**到底差在哪**。三把量尺只有
 	// right/wrong/fit/mismatch 这种粗档,全 right→right 时答不出"是不是其实一份更完整"。
 	// 这里逐对量正文规模:原始行数 / 正文行数 / 归一化正文字符数 / 两份正文的 3-gram
 	// Jaccard。复用包内真 helper(lyricConsensusBody / lyricGram3Set / gramJaccard /
-	// contentLineCount),不另写一套归一化。2026-09-10 加。
+	// contentLineCount),不另写一套归一化。
 	LinesFlipPairs       []linesFlipPair `json:"lines_flip_pairs"`
 	ManualTracksInSample []string        `json:"manual_tracks_in_sample"`
 	Assumptions          []string        `json:"assumptions"`
@@ -392,7 +392,7 @@ func TestSimEval(t *testing.T) {
 	}
 	sort.Strings(files)
 
-	// v3 的增值内容维度读目标语言;评测样本采集时(2026-08-12)用户设置即 zh,黄金参照
+	// v3 的增值内容维度读目标语言;评测样本采集时用户设置即 zh,黄金参照
 	// 也按 zh 生成——这里显式钉住,不依赖测试进程恰好没加载 features 的零值。
 	features.LyricsTranslationLanguage = "zh"
 
@@ -590,7 +590,7 @@ func TestSimEval(t *testing.T) {
 	}
 	fingerprint := fmt.Sprintf("%d/%d/%x", len(tracks), nCands, h.Sum(nil)[:8])
 
-	// 各源候选数按样本实算,不写死。2026-08-12 那轮把"无 musixmatch 候选"手写进
+	// 各源候选数按样本实算,不写死。那轮把"无 musixmatch 候选"手写进
 	// Assumptions,之后样本重采带上了 musixmatch 也没人改这行字——直接后果是
 	// wordTimingCoverage 那道自洽闸"从没在它要治的源上消融过"这件事一直没被发现
 	// (《Rumour Has It》案)。假设要么可执行,要么迟早撒谎。
@@ -659,7 +659,7 @@ func TestSimEval(t *testing.T) {
 		{"effLineDensity", deltaEffLineDensity},
 		{"creditRatioPenalty", deltaCreditRatioPenalty},
 		{"independentAlbumCorroboration", deltaIndependentAlbumCorroboration},
-		// 2026-08-27 追加(《Rumour Has It》案,实现与来龙去脉见 simevaltimeline_test.go):
+		// 追加(《Rumour Has It》案,实现与来龙去脉见 simevaltimeline_test.go):
 		// LRC↔YRC 双向自洽闸。两种判据分开消融、各自扫阈值——endpointGate 是
 		// deltaWordTimingCoverage 自洽闸(b)拆出来的单独版本(原维度是组合体,混着测
 		// 答不出"单独接这道闸值不值"),skewGate 是逐行中位偏差的更准判据。
@@ -1006,7 +1006,7 @@ func runAblation(tracks []*evalTrack, name string, fn func(tr *evalTrack, i int)
 
 // rank1 durationAsymmetry 的**剩余**部分(欠覆盖档细分)。overshoot −700 已随 v3 入引擎,
 // 这里只评还没上的③/④档:0.25<r<=0.45 → corroborated?+50:−200;r>0.45 → corroborated?−100:−500。
-// ⚠️ 2026-08-12 轮结论:③档减罚对温和截断货过仁慈(In My Room 案),等收窄参数后再评。
+// ⚠️ 轮结论:③档减罚对温和截断货过仁慈(In My Room 案),等收窄参数后再评。
 // delta = 新时长项 − v3 时长项。
 func deltaDurationAsymmetry(tr *evalTrack, i int) int {
 	ec := tr.cands[i]

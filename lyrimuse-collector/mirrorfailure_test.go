@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// 这一组守的是 2026-08-30 修的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
+// 这一组守的是修的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
 // 同时不留痕(lfmMirrored 已标记 → 幂等守卫永久挡死;mirrorAsync 只打日志不重试;
 // p.lfm != nil 时 appendListen 被跳过),一次网络抖动就永久少一条 scrobble。
 // 用户真实日志:2618 次成功收听里有 13 条这样丢掉的。
@@ -151,8 +151,8 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		}
 	})
 
-	// ⚠️ 这一组守的是 2026-08-30 当天抓出来的回归:首版把**全部** lastfmAPIError 都当成
-	// "拒收"直接 return,于是一次限流/凭据失效就让这首歌在 Last.fm 和 listens.jsonl 两边
+	// ⚠️ 这一组守的是一条回归:把**全部** lastfmAPIError 都当成
+	// "拒收"直接 return 的话,一次限流/凭据失效就让这首歌在 Last.fm 和 listens.jsonl 两边
 	// 同时没有 —— 正是这个函数本身要修的那个洞,换个门又开了一遍。
 	t.Run("应用层错误按 mayHaveStored 分档,绝不一律丢弃", func(t *testing.T) {
 		cases := []struct {

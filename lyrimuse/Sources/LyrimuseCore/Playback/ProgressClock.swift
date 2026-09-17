@@ -22,7 +22,7 @@ public struct ProgressAnchor {
         self.fresh = fresh
     }
 
-    // from(_ state: NowPlayingState, fetchedAt:) 工厂方法已删(2026-08-20):它与
+    // from(_ state: NowPlayingState, fetchedAt:) 工厂方法已删:它与
     // NowPlayingState/NowPlayingClient 是远程模式的遗留,全仓零调用方,一起清掉。
     // 本地模式的锚点由 LocalPlaybackSource 直接用 memberwise init 构造。
 

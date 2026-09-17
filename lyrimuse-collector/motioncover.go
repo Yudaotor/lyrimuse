@@ -17,12 +17,12 @@ import (
 
 // ---- Apple Music 动态封面(motion artwork)----
 //
-// 2026-09-09 用户:「帮我看看怎么把我们的封面搞成 applemusic 里面的那种会动的效果」。Apple Music
+// 。Apple Music
 // 从 iOS 16 / macOS 13 起给**一部分**专辑配了循环动态封面,资源是公开的,这个文件负责把它找出来
 // 记进 enrich 缓存;选档、下载、播放在 App 侧(LyrimuseCore/MotionCoverManifest.swift +
 // lyrimuse/MotionCoverStore.swift)。
 //
-// **发现路径**(全部 2026-09-09 在 Prince《Timeless》= collectionId 6773830957 上实测):
+// **发现路径**(全部在 Prince《Timeless》= collectionId 6773830957 上实测):
 //
 //	GET https://music.apple.com/{storefront}/album/x/{collectionID}
 //	  → <script type="application/json" id="serialized-server-data"> 里是一份标准 JSON(实测 109 KB)
@@ -40,10 +40,10 @@ import (
 //     03 章反复踩过的"同名不同版本"坑,而这里猜错的后果是**给这首歌配上另一张专辑的动态封面**,
 //     比没有动态封面糟得多。代价是覆盖面收在"Apple Music 播放目录曲目"这一档,这是刻意的。
 //  2. **拿到的节点要属于目标专辑**。`parseMotionCover` 找到 `videoArtwork` 之后,还要在它父节点
-//     的子树里找到 `storeAdamID == 目标 ID` 才认。2026-09-09 实测这一页只有 1 个 videoArtwork
+//     的子树里找到 `storeAdamID == 目标 ID` 才认。实测这一页只有 1 个 videoArtwork
 //     节点(路径 `data/0/data/sections/0/items/0/videoArtwork`,相关推荐位不带动态封面),这道
 //     校验是防将来页面结构变化把邻居专辑的资源喂进来。
-//  3. **"查过了但没有"必须落盘**。覆盖率很低(2026-09-09 抽 10 张专辑只 3 张有),不记住"这张
+//  3. **"查过了但没有"必须落盘**。覆盖率很低(抽 10 张专辑只 3 张有),不记住"这张
 //     没有"的话同一专辑的每首歌都会重抓一次 330 KB 的页面。所以缓存条目用 `Checked` 标记而
 //     不是"有值才存"——跟 `appleCatalogMisses` 那条"刻意不落盘"相反,理由也不同:那边查空可能
 //     只是网络抖动,而"这张专辑没做动态封面"是个稳定事实。Apple 后来补做了怎么办?删掉缓存
@@ -200,7 +200,7 @@ func motionCoverPreviewSizedURL(tmpl string) string {
 	return r.Replace(tmpl)
 }
 
-// motionCoverMatchesCover:**这段动画画的就是这张封面吗**(2026-09-10,用户提的判据:
+// motionCoverMatchesCover:**这段动画画的就是这张封面吗**(用户提的判据:
 // 「可以确保动态的封面就是原本那个匹配到的封面,只是给它扩展成动态吗」)。
 //
 // 这是整条链路的**安全底座**,也是它敢把专辑 ID 的来路放宽的唯一原因。之前的做法是"只认
@@ -209,7 +209,7 @@ func motionCoverPreviewSizedURL(tmpl string) string {
 // 直接比图像就把这件事从"身份对不对"(靠文字匹配,会错)变成"是不是同一张图"(客观可验)。
 //
 // 判据复用 `coverquality.go` 那套 8×8 均值哈希 + `coverFingerprintMaxDistance`(10)——
-// 它的阈值本来就是拿真实封面校准出来的(正例 0、反例 17～39)。2026-09-10 用 5 张真有动态
+// 它的阈值本来就是拿真实封面校准出来的(正例 0、反例 17～39)。用 5 张真有动态
 // 封面的专辑又量了一遍,数据比校准时更宽松:
 //
 //	首帧 vs Apple 标准封面        距离 1 / 2 / 2 / 1
@@ -268,12 +268,12 @@ func motionCoverAlbumIDFromAppleURL(appleURL string) int64 {
 
 var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 
-// motionCoverWorthBackfill:这条**已存在**的记录值不值得为了动态封面再补一次(2026-09-09)。
+// motionCoverWorthBackfill:这条**已存在**的记录值不值得为了动态封面再补一次。
 //
 // 为什么需要它:`fillMotionCover` 挂在 `resolveTrackEnrichment` 尾巴上,而那个函数对已存在的
 // 条目只由 `backfillPeripheralFields` 一条路调用 —— 也就是说存量条目要想拿到 motion 字段,
 // 必须先有人**判定它值得补**。不加这一条的话,缓存里已有的条目(本机实测 4820 条,motion 字段
-// 一条都没有)永远等不到动态封面,除非删缓存重解析。这是 ls-Alex 2026-09-09 交叉核对时点出来的。
+// 一条都没有)永远等不到动态封面,除非删缓存重解析。这是 ls-Alex 交叉核对时点出来的。
 //
 // **只读缓存、绝不发请求**:它跑在判断"值不值得补"的那一刻、还攥着 enrichMu,联网会把整条
 // 播放路径拖住。锁顺序因此是单向的 enrichMu → {appleCatalogMu, motionCoverMu} —— 这两个包

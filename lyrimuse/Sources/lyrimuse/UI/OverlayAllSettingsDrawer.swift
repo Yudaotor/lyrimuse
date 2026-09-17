@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」那一段底部的**全部设置**抽屉,2026-08-30(编辑台第三步)。
+// 「歌词显示 → 悬浮歌词」那一段底部的**全部设置**抽屉,(编辑台第三步)。
 //
 // 它替掉的是原来铺在编辑台下面的六张卡(总开关 / 配色 / 我的配色主题 / 文字 / 窗口 /
 // 恢复)。那六张卡在 552pt 高的设置窗口里要滚两屏,而编辑台+工具栏浮层已经把高频项
@@ -13,18 +13,17 @@ import SwiftUI
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
 // ⚠️ 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏五个入口一一
-// 对应**(2026-09-07 起:主题 → 文字 → 背景 → 排版 → 宽度 → 行为 → 恢复默认;此前最后一组叫
-// 「窗口」、装着宽度 + 行为 + 自动隐藏,跟工具栏的「行为」对不上名——用户按工具栏的记忆到抽屉里
-// 找会落空,是用户说的"这一个那一个"):
+// 对应**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为 → 恢复默认)。别给抽屉另起一套分组名:
+// 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
 //   - 主题 / 文字 / 背景 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
-//     ⚠️ 2026-09-02 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
+//     ⚠️ 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
 //     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注;
-//     2026-09-07「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
+//     「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
 //   - 行为 → OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
 //     同一份视图,不再各自拼)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
 // 「宽度」那根滑杆写在本文件里、不属于任何一组(跟灵动岛抽屉里的两根宽度滑杆同一个摆法)——
-// 它跟编辑台里那条宽度调整条(2026-08-30 第六步替掉了原来的拖拽握柄)是同一个值的两个入口:
+// 它跟编辑台里那条宽度调整条(第六步替掉了原来的拖拽握柄)是同一个值的两个入口:
 // 那边 step 2、紧挨着窗口、看得见效果;这边 step 10、跟其它设置行同列,是键盘/VoiceOver 和
 // "我想输个准数"的兜底通路。两处的落点约束一模一样(相等守卫 + classicOverlayEnabled 守卫 +
 // 同一个 widthRange),改一处记得对一下另一处。
@@ -44,7 +43,7 @@ struct OverlayAllSettingsDrawer: View {
             disclosureHeader
             if isExpanded {
                 CardDivider()
-                // 2026-09-02 重新分组:原来是「配色」(七行混着文字色和背景色)+ 一组无标题的
+                // 重新分组:原来是「配色」(七行混着文字色和背景色)+ 一组无标题的
                 // 「我的配色主题」,现在按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
                 // (拆分判据见 OverlayStyleSettingsRows.swift 里 OverlayBackgroundSettingsRows
                 // 的头注)。顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的
@@ -69,7 +68,7 @@ struct OverlayAllSettingsDrawer: View {
                 resetRow
             }
         }
-        // 设置搜索命中抽屉里的行时自动展开(2026-09-09,借鉴清单 S8):抽屉默认折叠、状态是 @State,
+        // 设置搜索命中抽屉里的行时自动展开:抽屉默认折叠、状态是 @State,
         // 不展开的话被高亮的那一行根本不在屏幕上。onAppear 管"分段刚切过来、抽屉刚建出来",
         // onChange 管"抽屉已经在屏、信号后到"。展开动画跟点标题那一处同一条。
         .onAppear { expandForSearchIfNeeded() }
@@ -103,7 +102,7 @@ struct OverlayAllSettingsDrawer: View {
         Button {
             withAnimation(.settingsCardReveal) { isExpanded.toggle() }
         } label: {
-            // (2026-08-30 按用户要求,标题右边那两句都删了:展开时的「键盘 / VoiceOver 的
+            // (按标题右边那两句都删了:展开时的「键盘 / VoiceOver 的
             //  全量兜底通路…」和折起来时那串当前值摘要「系统字体 31pt · 跟随封面 · 486pt」。
             //  这一行现在就是一个三角形加两个字。)
             HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
@@ -126,7 +125,7 @@ struct OverlayAllSettingsDrawer: View {
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.t("全部设置"))
         // VoiceOver 里这一行是"展开/收起"而不是普通按钮 —— 抽屉是键盘用户到达那 18 项的
-        // 唯一入口(2026-08-30 的 16 项 + 2026-09-02 并进「行为」组的两行自动隐藏),读不出
+        // 唯一入口(的 16 项 + 并进「行为」组的两行自动隐藏),读不出
         // "已折叠"的话,这一整段听上去就只有一个孤零零的按钮。
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
@@ -158,7 +157,7 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// 2026-08-31 从「文字」里拆出来的第二组(用户判断:双行显示和对齐方式是排版、不是字形,
+    /// 从「文字」里拆出来的第二组(用户判断:双行显示和对齐方式是排版、不是字形,
     /// 拆的判据见 OverlayLayoutSettingsRows)。抽屉这边跟着拆,是因为抽屉的职责是"工具栏那
     /// 几个浮层的全量兜底通路" —— 浮层分了三组、抽屉还并成两组的话,同一批设置在两个宿主里
     /// 分组不一样,用户按浮层的记忆到抽屉里找会落空。
@@ -170,7 +169,7 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// 跟工具栏「行为」浮层同名、同一份视图(2026-09-07;此前这一组叫「窗口」、还带着「宽度」滑杆,
+    /// 跟工具栏「行为」浮层同名、同一份视图(此前这一组叫「窗口」、还带着「宽度」滑杆,
     /// 组名的不对称当时被记成"有意接受",这次按"抽屉分组跟工具栏一一对应"取齐,「宽度」升成组外
     /// 独立一行)。
     private var behaviorGroup: some View {
@@ -181,7 +180,7 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// 跟工具栏「位置」浮层同名、同一份视图(2026-09-11,issue #5)。排在「行为」之后 = 工具栏第二行
+    /// 跟工具栏「位置」浮层同名、同一份视图。排在「行为」之后 = 工具栏第二行
     /// 的顺序(排版 / 行为 / 位置),用户按浮层的记忆到抽屉里找不会落空。
     private var placementGroup: some View {
         Group {
@@ -201,7 +200,7 @@ struct OverlayAllSettingsDrawer: View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
             HStack(spacing: 8) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
-                // (2026-09-02 用户点名「没有意义,不好看」),量化语义一模一样。
+                // (「没有意义,不好看」),量化语义一模一样。
                 SteppedSlider(value: Binding(
                     get: { settings.overlayWidth },
                     set: { newValue in
@@ -211,7 +210,7 @@ struct OverlayAllSettingsDrawer: View {
                         // 还会同步写一次 UserDefaults。
                         guard newValue != settings.overlayWidth else { return }
                         settings.overlayWidth = newValue
-                        // ⚠️ 2026-08-30 补上的守卫(原来这一句是裸调的)。
+                        // ⚠️ 补上的守卫(原来这一句是裸调的)。
                         // `LyricsOverlayWindowController.shared` 是 `static let`,光是读一下
                         // 就会执行 init() 把窗口建出来 —— 悬浮歌词关着的用户,只要碰一下这根
                         // 滑杆就会凭空多出一扇(不可见但已经装好监听器和观察者的)窗。宽度的
@@ -239,7 +238,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 其中一处补上,表现为"从菜单点恢复和从抽屉点恢复,恢复出来的样子不一样"。
     ///
     /// ⚠️ 标题和副标题合起来是这颗按钮的**作用范围声明**,两个入口都要带,不是装饰。
-    /// 2026-09-03 两句都改过,因为老那两句合起来在说谎:标题「恢复默认文字与配色」+ 副标题
+    /// 两句都改过,因为老那两句合起来在说谎:标题「恢复默认文字与配色」+ 副标题
     /// 「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而实际上它只写 9 个字段,
     /// 「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 /
     /// 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。

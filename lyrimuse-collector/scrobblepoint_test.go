@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// Last.fm scrobble 时点(features.LastfmScrobblePoint,2026-09-06)。这些测试钉的是三件事:
+// Last.fm scrobble 时点(features.LastfmScrobblePoint)。这些测试钉的是三件事:
 //   - 默认档(官方规则)下行为跟加这个设置之前一字不差:官方阈值一到,Last.fm 那一路当场发;
 //   - 更严的档只推迟 Last.fm(镜像 + 给它兜底的本地收听日志),ListenBrainz 那一路(listenSent /
-//     会话收尾)不受影响 —— 用户原话「只考虑 lastfm 的」;
+//     会话收尾)不受影响 —— 「只考虑 lastfm 的」;
 //   - 「曲终」档的判据 sessionEndedNaturally 对自然切歌 / crossfade / 中途切歌 / 播放器退出 /
 //     歌单末尾停播这几种真实形态各判成什么。
 

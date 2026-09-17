@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// App → collector 的「位置偏置」文件(2026-09-09,用户拍板「collector 复用 App 量出的偏置」)。
+/// App → collector 的「位置偏置」文件(「collector 复用 App 量出的偏置」)。
 ///
 /// `LocalPlaybackSource` 给 Spotify 量出的锚点偏置(`posReportedBiasSecs`,见那边 resolvePositionSeconds
 /// 的地面真值分支)只修了本机这几扇窗口;collector 推给状态中继(网页 / 飞书预览)的 progress 走的是

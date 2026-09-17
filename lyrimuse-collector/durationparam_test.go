@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-30:活路径(scrobble / updateNowPlaying)此前**不发** duration,而 backfill.go
+// 活路径(scrobble / updateNowPlaying)此前**不发** duration,而 backfill.go
 // 一直在发 —— 同一首歌当场提交反而比事后回填少一个字段。这一组钉的是补上之后的口径:
 // 只发正数、整数秒、拿不到就整个键不发(发 0 比不发更糟,那是在断言"这首歌长度为零")。
 func TestDurationParam(t *testing.T) {

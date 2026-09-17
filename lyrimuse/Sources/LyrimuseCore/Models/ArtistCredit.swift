@@ -7,13 +7,13 @@ import Foundation
 /// - Mac 这边照抄 Apple Music 的逐曲 credit(`Daniel Caesar & Mustafa`);
 /// - 手机那边(iPhone → Last.fm,再桥接回来)报的是主歌手(`Daniel Caesar`)。
 ///
-/// 2026-08-20 实测坐实:同一首《Toronto 2014》08:58 从手机进来记在 `Daniel Caesar` 名下、
+/// 实测坐实:同一首《Toronto 2014》08:58 从手机进来记在 `Daniel Caesar` 名下、
 /// 11:11 从 Mac 进来记在 `Daniel Caesar & Mustafa` 名下 —— Last.fm 上是**两个实体**,于是
 /// ①次数各记一本(两边都显示「第 1 次听」),②封面各挂一张(合唱实体挂的是「Toronto 2014」
 /// 单曲封面,同专辑其它行挂的是专辑封面)。
 ///
 /// ⚠️ 这里的"取第一位"**只用于列表口径的归并**,绝不能回写展示名/canonical_artist ——
-/// 把 "A & B" 缩窄成 "A" 正是 2026-07-10 那次回归的形态。
+/// 把 "A & B" 缩窄成 "A" 正是那次回归的形态。
 public enum ArtistCredit {
     /// 合 credit 的分隔符。跟 collector 侧 `isArtistCreditSep`(match.go)同一份,
     /// **但 `/` 单独处理**(见 slashHeadIsPlausible)。
@@ -36,7 +36,7 @@ public enum ArtistCredit {
             while let r = trimmed.range(of: marker, options: [.caseInsensitive],
                                         range: from..<trimmed.endIndex) {
                 from = r.upperBound
-                // 左词边界(2026-08-22 补):marker 必须是**独立的词**,前面得是空白或开括号。
+                // 左词边界:marker 必须是**独立的词**,前面得是空白或开括号。
                 // 少了这道守卫,`ft ` 会在词中命中 —— 实测蛋堡的罗马字名 `Soft Lipa` 被切成
                 // `So`(「So|ft |Lipa」),于是它的歌手段落成 `so`、跟 `蛋堡` 永远合不上。
                 // 同类还有 Daft Punk / Left Boy / Craft Spells。这跟
@@ -55,7 +55,7 @@ public enum ArtistCredit {
             .trimmingCharacters(in: .whitespaces)
         // 再按分隔符切。`/` 不在这一档里,只当兜底 —— 顺序本身就有意义:
         // 「K/DA, Madison Beer & (G)I-DLE」先撞上逗号,切出来的是完整的「K/DA」,
-        // 而不是被 `/` 劈成「K」(2026-08-20 从真实历史里发现的这一例)。
+        // 而不是被 `/` 劈成「K」(从真实历史里发现的这一例)。
         if let idx = head.firstIndex(where: { separators.contains($0) }) {
             head = String(head[head.startIndex..<idx]).trimmingCharacters(in: .whitespaces)
         } else if let idx = head.firstIndex(of: "/") {

@@ -14,13 +14,13 @@ import (
 
 // ---- 歌词源的拨号:系统 DNS 优先,不答 / 查不到才退到 DoH ----
 //
-// 2026-09-06 加,接着「六个源死在 DNS」那条(sourcebreaker.go 最后一节、docs/09)往下修:
+// 加,接着「六个源死在 DNS」那条(sourcebreaker.go 最后一节、docs/09)往下修:
 // 用户连着公司 OpenVPN,它下发的 DNS 对 music.163.com / c.y.qq.com / mobilecdn.kugou.com /
 // lrclib.net / search.kuwo.cn / pd.musicapp.migu.cn 一律不答,而隧道里**按 IP 直连是通的**
 // (`curl --resolve` 实测 200)。所以只要绕开系统 DNS 拿到 IP,歌词就能搜到。
 //
-// 顺序是用户定的:**先正常走系统 DNS,它失败了才问 DoH**。这跟 musixmatch 那套(doh.go
-// dohDialContext:DoH 优先、退回系统解析)正好相反,因为两次的病不同 —— 2026-08-15 那次系统
+// 顺序:**先正常走系统 DNS,它失败了才问 DoH**。这跟 musixmatch 那套(doh.go
+// dohDialContext:DoH 优先、退回系统解析)正好相反,因为两次的病不同 —— 那次系统
 // DNS 是**答错**(把 musixmatch 解析到 Facebook 的地址段),先问它没有意义;这次是**不答**,
 // 系统 DNS 正常时就不该多打一次 1.1.1.1。于是:系统 DNS 正常 → 一个包都不多发、行为跟以前
 // 逐位一致;系统 DNS 报错(NXDOMAIN / SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号

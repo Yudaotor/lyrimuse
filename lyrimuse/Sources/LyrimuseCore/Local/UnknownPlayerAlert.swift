@@ -2,7 +2,7 @@ import Foundation
 
 /// 「发现新播放器」的判据 —— 纯函数,这件事唯一的真相来源。
 ///
-/// 2026-08-22 用户报:「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」。
+/// 现象是:「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」。
 /// 在这之前唯一的发现路径是设置页那张卡,而它**只在那个播放器此刻正在报 Now Playing 时**
 /// 才出现 —— 不主动打开设置页就永远看不到。
 ///
@@ -107,11 +107,11 @@ public enum UnknownPlayerAlert {
         return now.timeIntervalSince(seen.lastAt) >= announceCooldown
     }
 
-    /// 第二层里**不看提醒记录**的那部分(⑤ 静音名单 / ⑥ 反查得到 App 名 / ⑦ 稳定性),2026-09-11 从
+    /// 第二层里**不看提醒记录**的那部分(⑤ 静音名单 / ⑥ 反查得到 App 名 / ⑦ 稳定性),从
     /// `shouldAnnounce` 拆出来给灵动岛的**被动**提示用(收起态左耳换成那个 App 的图标 + 小圆点、hover 展开
     /// 的空闲面板变成信任提议,见 App 层 `NotchUnknownPlayerPrompt`):它不打扰人 —— 没 hover 就是一枚换了
     /// 图的图标 —— 所以不受 ⑧ 次数 / 冷却限制,播放器一直放着就一直挂着;但 ⑤⑥⑦ 一条不少:播客这类 App
-    /// 不该在灵动岛上天天挂一枚带红点的图标(跟通知同一个理由,用户 2026-09-11 对播客也定了「不处理」),
+    /// 不该在灵动岛上天天挂一枚带红点的图标(跟通知同一个理由,用户对播客也定了「不处理」),
     /// 反查不到名字的标题只能摆 bundle id,稳定性门槛则是左耳图标不能为两秒的焦点抖动来回换。
     /// `shouldAnnounce` = 这个 && ⑧,两者永远同源。
     public static func qualifiesForAnnounce(
@@ -128,7 +128,7 @@ public enum UnknownPlayerAlert {
         return stableFor >= stableWindow && stableHits >= stableHitsNeeded
     }
 
-    /// 「正在放:歌手 - 歌名」那一截,通知正文与灵动岛提示共用(2026-09-11 从 UnknownPlayerNotifier 里抽出来,
+    /// 「正在放:歌手 - 歌名」那一截,通知正文与灵动岛提示共用(从 UnknownPlayerNotifier 里抽出来,
     /// 两处别各拼一份);两段都空给 nil,调用方退回 bundle id。
     public static func nowPlayingDescription(artist: String, title: String) -> String? {
         let parts = [artist, title].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }

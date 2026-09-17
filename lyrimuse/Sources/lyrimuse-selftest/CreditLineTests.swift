@@ -27,7 +27,7 @@ func runCreditLineTests() {
     }
 
     // ---- 歌词噪声过滤:日文标注 / 繁体自动识别 / 纯符号行 ----
-    // 2026-08-18 调研同类工具的默认过滤表之后补的。那类表把繁简两种写法都手工列进去(有「作詞」
+    // 调研同类工具的默认过滤表之后补的。那类表把繁简两种写法都手工列进去(有「作詞」
     // 也有「作词」,但「録音」就只列了简体),我们改成转孪生写法再比一次,表不必双写。
     // 日文汉字标注(収録/主題歌/片頭曲)本地缓存里一条样本都没有,是照那份真实数据提前补的坑。
 
@@ -71,7 +71,7 @@ func runCreditLineTests() {
     }
 
     // ---- 歌词噪声过滤:抬头 / 版权声明 / 新补角色词 ----
-    // 用例全部取自 2026-08-18 对用户真实缓存(490 首、29390 行)的全量扫描:改之前首/末行有
+    // 用例全部取自对用户真实缓存(490 首、29390 行)的全量扫描:改之前首/末行有
     // 45 条抬头、10 条版权声明、5 条短标签冒号漏网,改之后分别剩 3 / 0 / 0,且 29390 行里零误伤。
 
     do {
@@ -137,7 +137,7 @@ func runCreditLineTests() {
     }
 
     do {
-        // 带版权标记的著作权行(2026-09-02,方大同《白发》)。跟上面那条"成句法务声明"分工:
+        // 带版权标记的著作权行(方大同《白发》)。跟上面那条"成句法务声明"分工:
         // 那条认法务词,这条认版权标记 + 年份 —— 见 matchesCopyrightMarkLine 的注释,那里记着
         // 四条现有规则分别差在哪一步。
         expectEqual(LyricsSyncEngine.matchesCopyrightMarkLine("著作权人：+© 2019、赋音乐"),
@@ -153,10 +153,10 @@ func runCreditLineTests() {
         expectEqual(LyricsSyncEngine.matchesCopyrightMarkLine("那是 2019 年的夏天"), false,
                     "版权标记(反向): 只有年份的真歌词不算")
 
-        // ---- 第十五轮(2026-09-03,陈绮贞《我亲爱的偏执狂》结尾没过滤干净) ----
+        // ---- 第十五轮(陈绮贞《我亲爱的偏执狂》结尾没过滤干净) ----
         //
         // 那一份结尾 20 行署名里只漏了 2 行,两条新规则各修一行。
-        // ⚠️ 定位过程本身值得记:第一版探针逐条调**单行**匹配函数,报出 7 行漏网;换成真实
+        // ⚠️ 定位方法本身值得记:逐条调**单行**匹配函数的探针会报出 7 行漏网;换成真实
         // 入口 `creditLineDropDecisions` 之后只剩 2 行 —— 差的是整份闸门(两条形状规则要
         // ≥2 行才认、结构性过滤要"过半")。**改这类规则前必须用整份入口验**,否则会去修 5 处
         // 其实已经拦得住的地方。
@@ -193,7 +193,7 @@ func runCreditLineTests() {
                     [false, false, false, false],
                     "拉丁角色名(反向): 段落标记(Chorus/Verse/Bridge/Rap)后面跟的是真歌词,一条都不许删")
 
-        // ---- 第十六轮(2026-09-03,李佳薇《甲乙丙丁》头部「艺术指导」漏网) ----
+        // ---- 第十六轮(李佳薇《甲乙丙丁》头部「艺术指导」漏网) ----
         //
         // 用 App 同一条路径(LRC+YRC → load → allLines)复现:64 行里 16 行署名删了 15 行,只剩
         // 「艺术指导：程楚楚(廊坊师范学院）」。标签「艺术指导」不含 creditRoleWords 任何词;右边
@@ -203,13 +203,13 @@ func runCreditLineTests() {
         // **before/after 全库差分(3480 首 / 197236 行正文,逐行 diff creditLineDropDecisions)**:
         // KEEP→DROP **1 行**(就是这条),DROP→KEEP **0 行**。另外三个词在语料里零翻转——它们现有
         // 的实例都已经被 matchesNameListCreditShape 的"整份 ≥2 行"闸兜住了,收进表只为
-        // "整首只有一行这种署名"的场合(第十轮定下的理由)。差分用的是整份入口,所以也覆盖了
+        // "整首只有一行这种署名"的场合。差分用的是整份入口,所以也覆盖了
         // 这张表的第二个消费点 englishCreditPattern(它把整张表当可选中文前缀 join 进正则)。
         // ⚠️ 差分工具切行必须按 isNewline:酷狗源 1439 首歌词是 CRLF,Swift 的 "\r\n" 是一个
-        // Character,`split(separator: "\n")` 切不开、整份变一行——第一版工具漏掉了这 1439 首,
+        // Character,`split(separator: "\n")` 切不开、整份变一行——这样会漏掉这 1439 首,
         // 报出的"2671 首 / 153121 行"是错的。App 自己的 LRCParser 早就为此先归一了换行。
         //
-        // ⚠️ 用例里掺真歌词,理由同第十五轮:只给署名行会触发「永不删空」兜底闸把它们原样放回。
+        // ⚠️ 用例里掺真歌词:只给署名行会触发「永不删空」兜底闸把它们原样放回。
         expectEqual(LyricsSyncEngine.creditLineDropDecisions(
             ["还没来得及习惯", "独自入睡的不安", "艺术指导：程楚楚(廊坊师范学院）", "你外套味道还没散"],
             trackTitle: "甲乙丙丁Strangers", trackArtist: "李佳薇"),
@@ -232,7 +232,7 @@ func runCreditLineTests() {
                     [false, false, false, false, false],
                     "第十六轮(反向): 周杰伦/陶喆/张敬轩歌词里的 指导/顾问/导演 是真歌词,没有冒号,一条都不许删")
 
-        // 「著作」「推广」进 creditRoleWords(第十四轮)。两条都必须**靠冒号那道门**生效。
+        // 「著作」「推广」进 creditRoleWords。两条都必须**靠冒号那道门**生效。
         expectEqual(LyricsSyncEngine.matchesRoleWordCredit("著作权人：赋音乐"), true,
                     "角色词: 「著作权人」不带版权标记时也认")
         expectEqual(LyricsSyncEngine.matchesRoleWordCredit("营销推广：戴欣怡 (DDStudio)X深声不息"),
@@ -258,10 +258,10 @@ func runCreditLineTests() {
         expectEqual(drops.suffix(4).allSatisfy { !$0 }, true, "《白发》: 四行真歌词一行不少")
     }
 
-    // ---- 署名行过滤第七轮(2026-08-16):带分隔符的中文标签 + 纯英文无冒号 ----
+    // ---- 署名行过滤:带分隔符的中文标签 + 纯英文无冒号 ----
     do {
         typealias E = LyricsSyncEngine
-        // 用户报的两行,都出现在歌曲**末尾**
+        // 现象是的两行,都出现在歌曲**末尾**
         expectEqual(E.matchesRoleWordCredit("录音师/录音室：王力宏/Homeboy Studios, Taipei, Taiwan"), true,
                     "署名行: 标签含斜杠(录音师/录音室)")
         expectEqual(E.matchesEnglishCredit("Mixed by Wang Leehom at Homeboy Music Studios"), true,
@@ -279,9 +279,9 @@ func runCreditLineTests() {
         expectEqual(E.matchesRoleWordCredit("曲婉婷："), false, "对唱标签: 冒号后没内容")
     }
 
-    // ---- 署名行过滤(2026-08-27):中间点「·」当分隔符(QQ 音乐"krc转qrc工具"转出来的形态) ----
+    // ---- 署名行过滤:中间点「·」当分隔符(QQ 音乐"krc转qrc工具"转出来的形态) ----
     //
-    // 用户报丁世光《背面是我》专辑两首 Interlude(《Presentness》《Bygone》)漏网的
+    // 现象是丁世光《背面是我》专辑两首 Interlude(《Presentness》《Bygone》)漏网的
     // 「和声 Backing Vocal·Dean Ting」「录音室 Studio·Retro Records Studio」——上面所有规则
     // 都要求半角/全角冒号,这份 KRC 转出来的格式用的是「·」(U+00B7)。只放宽 matchesRoleWordCredit
     // 一条(冒号后面还要过角色词表这道关,误杀面跟冒号版本同一个量级),没有放宽
@@ -301,9 +301,9 @@ func runCreditLineTests() {
                     "真歌词: 中间点分隔符但左边不是角色词")
     }
 
-    // ---- 署名行过滤(2026-08-27):中文角色词前缀 + 英文署名(无冒号) ----
+    // ---- 署名行过滤:中文角色词前缀 + 英文署名(无冒号) ----
     //
-    // 用户报丁世光《起源》开头「编曲 Arrangement by 丁世光 Dean Ting, 程振兴 Nathan
+    // 现象是丁世光《起源》开头「编曲 Arrangement by 丁世光 Dean Ting, 程振兴 Nathan
     // Cheng」没被滤掉:matchesEnglishCredit 要求整行以**英文**角色词开头,前面缀了中文
     // 角色词就直接卡在锚点上。同一首歌后面还有「制作人 Produced by …」,而 creditRoleWords
     // 只收了词根「制作」、没收复合词「制作人」,补前缀支持时还得连带兜住"词根之后还有
@@ -324,9 +324,9 @@ func runCreditLineTests() {
                     "真歌词: 以角色词「制作」+ 尾字「人」开头,但后面没有 by")
     }
 
-    // ---- 署名行过滤(2026-08-27):纯日期戳注解行(没有冒号,不是角色词开头) ----
+    // ---- 署名行过滤:纯日期戳注解行(没有冒号,不是角色词开头) ----
     //
-    // 用户报丁世光《瘦子》结尾职员表最前面混进一行创作日期戳「July 18, 2012 at 5:25 PM」,
+    // 现象是丁世光《瘦子》结尾职员表最前面混进一行创作日期戳「July 18, 2012 at 5:25 PM」,
     // 上面所有规则都够不着它——没有冒号,不是角色词开头,也不像版权声明。
     do {
         typealias E = LyricsSyncEngine
@@ -346,7 +346,7 @@ func runCreditLineTests() {
                     "真歌词: 中文日期,不在这条判据的形状里(其它规则也够不着,预期漏治)")
     }
 
-    // ---- LyricsSyncEngine: 署名行的结构化判定(2026-08-05) ----
+    // ---- LyricsSyncEngine: 署名行的结构化判定 ----
     //
     // 上面那张关键词表已经补过至少两轮(两字全称 → 单字缩写 → "Arranged by:" 这种夹 by 的
     // 写法),每次都是被漏判的真实数据打回来才加的,说明枚举法在这件事上收敛不了。补一条认
@@ -417,7 +417,7 @@ func runCreditLineTests() {
         """
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.allLines(idPrefix: "t").count, 5, "署名行(结构): 对唱标签(男/女/合)整份豁免,5 句一句不删")
-        // 2026-08-14 起前缀不再画在界面上:它被剥进 side 字段用来做左右分栏(见 LyricDuet)。
+        // 前缀不再画在界面上:它被剥进 side 字段用来做左右分栏(见 LyricDuet)。
         // 这条断言原来钉的是 "男：第一句" —— 那正是改动之前的行为(标记直接显示成歌词的一部分,
         // 当前行的逐字填色还会从"男："开始扫)。它保护的"对唱句不能被署名过滤器删掉"这层意思
         // 没变(上面那条 count == 5 才是),这里只是把展示形态更新到新行为。
@@ -439,7 +439,7 @@ func runCreditLineTests() {
 
     // ---- 署名行:关键词连写 ----
     do {
-        // 2026-08-15 用户实测漏网的形状：「词曲：蔡徐坤 KUN/Marco Bernardis/…」被当歌词
+        // 实测漏网的形状：「词曲：蔡徐坤 KUN/Marco Bernardis/…」被当歌词
         // 显示在悬浮窗上。旧正则要求关键词紧跟冒号，而"词曲"是两个关键词连着写。
         let engine = LyricsSyncEngine()
         engine.load(
@@ -471,7 +471,7 @@ func runCreditLineTests() {
 
     // ---- 署名行:连接词形态 ----
     do {
-        // 2026-08-16 用户实测漏网：「制作和编曲：方大同」「所有乐器和编程：Soulboy」显示在
+        // 实测漏网：「制作和编曲：方大同」「所有乐器和编程：Soulboy」显示在
         // 悬浮窗上。角色词之间夹着"和"，旧规则要求角色词紧挨连写就断了。
         // 只放两行署名 + 四行真歌词：结构化规则(要求命中主导整份)在这个比例下不启用，
         // 这里单独考的是关键词规则。
@@ -517,9 +517,9 @@ func runCreditLineTests() {
                     "角色词: 拉丁标签不归这条管(有 latin 规则)")
     }
 
-    // ---- 署名行:双语标签「汉字角色词 + 英文对照」(2026-08-19) ----
+    // ---- 署名行:双语标签「汉字角色词 + 英文对照」 ----
     //
-    // 用户报陶喆《Stupid Pop Song》开头 13 行职员表一条都没滤掉。原因:label 取的是冒号前的
+    // 现象是陶喆《Stupid Pop Song》开头 13 行职员表一条都没滤掉。原因:label 取的是冒号前的
     // 整段("制作人 Producer"),而原规则要求剔掉分隔符后**全是汉字**,拉丁字母一进来整条就
     // 失败;而结构化那道闸(只在"整份被职员表主导"时才开)对这首也不成立 —— 13 行职员表
     // 配三十多行真歌词,占不到半数。下面这批用的就是酷狗那份的原文。
@@ -546,7 +546,7 @@ func runCreditLineTests() {
         }
 
         // 单字汉字头(「曲」「词」「鼓」)只有在**旁边有英文角色名**时才算 —— 把它们加进
-        // creditRoleWords 会把真歌词里的对白吃掉(2026-08-16 踩过并回滚)。
+        // creditRoleWords 会把真歌词里的对白吃掉(踩过并回滚)。
         let notCredits = [
             "他：我不走",                       // 对白,单字说话人
             "妈妈 Mom：吃饭了",                  // 双语但英文不是角色名
@@ -559,7 +559,7 @@ func runCreditLineTests() {
                         "双语署名(不该命中): \(line.prefix(10))…")
         }
 
-        // ---- 免词表的双语形状(第二轮:用户报「西塔琴 Coral sitar: Jamie Wilson」)----
+        // ---- 免词表的双语形状(现象是「西塔琴 Coral sitar: Jamie Wilson」)----
         //
         // 乐器/职能名是开放集合,词表打不完。改成认形状,但要求整份 ≥2 行才生效。
         let shapeOnly = [
@@ -614,9 +614,9 @@ func runCreditLineTests() {
                     "双语署名: 端到端只剩两句真歌词(抬头 + 13 行职员表全滤掉)")
     }
 
-    // MARK: - 中文歌不该因为署名行里的日文人名被判成日文(2026-08-20)
+    // MARK: - 中文歌不该因为署名行里的日文人名被判成日文
     //
-    // 用户报「为什么中文歌也给我出罗马音,我没有开中文的,而且有些字有有些字没有」。
+    // 现象是「为什么中文歌也给我出罗马音,我没有开中文的,而且有些字有有些字没有」。
     // 实测那首是泠鸢yousa《神的随波逐流》(中文翻唱),整首歌唯一的假名是这两行署名:
     //   [00:07.69]词：れるりり
     //   [00:15.38]曲：れるりり
@@ -653,7 +653,7 @@ func runCreditLineTests() {
         expectEqual(engineZh.activeLine(atMs: 31_500)?.romanization != nil, true,
                     "中文翻唱: 用户主动打开中文罗马音时照样给")
 
-        // 真正的日文歌不能被这次改动误伤:正文里有假名,照旧判成日文、照旧给读音。
+        // 真正的日文歌不能被误伤:正文里有假名,照旧判成日文、照旧给读音。
         let jpLyrics = """
         [00:00.00]作词：れるりり
         [00:05.00]火曜日の朝は
@@ -667,9 +667,9 @@ func runCreditLineTests() {
                     "日文歌: 正文有假名,照旧判成日文并给读音")
     }
 
-    // MARK: - 署名行第十轮:「标签 + 冒号 + 名字串」形状(2026-08-20)
+    // MARK: - 署名行:「标签 + 冒号 + 名字串」形状
     //
-    // 用户报赵雷《成都》头部 13 行职员表里有 4 行漏到展示面上:
+    // 现象是赵雷《成都》头部 13 行职员表里有 4 行漏到展示面上:
     //   [00:09.28]钢琴：柳森    [00:10.60]箱琴：赵雷/喜子
     //   [00:11.93]笛子：祝子    [00:17.23]童声：朵朵/天天
     // 这几个乐器词不在 creditRoleWords 里,而结构化规则被"整份过半"那道闸拦着(13 行署名 vs
@@ -677,7 +677,7 @@ func runCreditLineTests() {
     // 而不是像已撤销的那次那样放宽位置 —— 那次正是被下面这些对白反例打回来的。
     do {
         typealias E = LyricsSyncEngine
-        // 正面:这四行就是用户截图里漏网的
+        // 正面:这四行就是对拍里漏网的
         expectEqual(E.matchesNameListCreditShape("钢琴：柳森"), true, "名字串形状: 钢琴：柳森")
         expectEqual(E.matchesNameListCreditShape("箱琴：赵雷/喜子"), true, "名字串形状: 一个角色两个人")
         expectEqual(E.matchesNameListCreditShape("笛子：祝子"), true, "名字串形状: 笛子：祝子")
@@ -694,7 +694,7 @@ func runCreditLineTests() {
         expectEqual(E.matchesNameListCreditShape("Verse 1: hello"), false, "名字串形状: 拉丁标签不认")
         expectEqual(E.matchesNameListCreditShape("1、2、3：走"), false, "名字串形状: 数字标签不认")
 
-        // 2026-08-27:丁世光《瘦子》漏网的「项目总监：闫曼嘉/蔡雨燕/庄有豪」——"庄有豪"是
+        // 丁世光《瘦子》漏网的「项目总监：闫曼嘉/蔡雨燕/庄有豪」——"庄有豪"是
         // 真人名,却含着"看着像句子"那道闸认的停用词"有",单靠整句扫会把整条名单误判成
         // 对白放过。多段(≥2,有 / 、& , 分隔)时改成不再看整句像不像话,只靠逐段的形状校验。
         expectEqual(E.matchesNameListCreditShape("项目总监：闫曼嘉/蔡雨燕/庄有豪"), true,
@@ -703,7 +703,7 @@ func runCreditLineTests() {
         expectEqual(E.matchesNameListCreditShape("他说：庄有豪"), false,
                     "名字串形状: 单段(没有 / 、 & , 分隔)时,即使右边像人名也不豁免整句校验")
 
-        // ---- 第十七轮(2026-09-14,麦浚龙 & 陈蕾《不下床》开头那行括号人名单漏网) ----
+        // ---- 第十七轮(麦浚龙 & 陈蕾《不下床》开头那行括号人名单漏网) ----
         // 那行既没角色词也没冒号,上面这条(第一句就 guard 冒号)和关键词表(要角色词)都够不着。
         // 这条规则的**全部精度**来自"≥3 段",分界是拿本机全库 10,799 份 LRC / 543,555 行量的:
         // 用 `/` 分隔的括号行,2 段共 12 行全是真歌词、≥3 段共 4 行全是署名。
@@ -788,7 +788,7 @@ func runCreditLineTests() {
                     "成都: 四行漏网的乐器署名已经过滤掉")
     }
 
-    // MARK: - 署名行过滤:全库语料回归(2026-08-20)
+    // MARK: - 署名行过滤:全库语料回归
     //
     // 语料 = 用户本机 enrich 缓存里的 **935 首 / 47626 行正文**,用 creditLineDropDecisions 全量
     // 跑过一遍,再按"家族"抽样固化成下面两张表。
@@ -907,7 +907,7 @@ func runCreditLineTests() {
             ("Guitar：秋山浩徳", "拉丁角色名 + 日文人名"),
             ("未经著作权人许可不得翻录翻唱或使用", "版权声明(无冒号)"),
             ("版权声明：未经著作权人书面许可，任何人不得以任何方式使用（包括翻唱、翻录等）", "版权声明(带冒号)"),
-            // ↓ 2026-08-20 第十一轮:上一轮拿全库语料统计出来的**仍然漏网**的 56 行,按家族收干净
+            // ↓ 拿全库语料统计出来的**仍然漏网**的 56 行,按家族收干净
             ("P - Line: 2016 北京享耳音乐文化有限公司Sure Recordings Culture Co., Ltd", "℗/© 版权行"),
             ("C - Line: 2016 北京享耳音乐文化有限公司Sure Recordings Culture Co., Ltd", "℗/© 版权行"),
             ("Protools编辑：Derrick Sepnio/Edward Chan/Kelvin Au/King Kong/Tsam Chan/Nick Wong", "标签混拉丁字母"),
@@ -939,7 +939,7 @@ func runCreditLineTests() {
                     "语料回归: 整份都是署名时一行都不删(兜底闸门)")
     }
 
-    // ==== MusicCatalogSearch:目录链接解析的纯函数(2026-08-22 歌词窗口菜单一族) ====
+    // ==== MusicCatalogSearch:目录链接解析的纯函数(歌词窗口菜单一族) ====
     do {
         typealias S = MusicCatalogSearch
         // ① 请求 URL:参数齐全、term 是 歌手+歌名
@@ -966,7 +966,7 @@ func runCreditLineTests() {
         expectEqual(S.pickBest([item("A", "B")], title: "轨迹", artist: "周杰伦")?.trackName, "A",
                     "pickBest: 再退第一条")
         expectEqual(S.pickBest([], title: "x", artist: "y") == nil, true, "pickBest: 空结果为 nil")
-        // 「你的常听·歌手」跳转 title 传空串,只有"只歌手"分支在起作用——2026-08-23 用户
+        // 「你的常听·歌手」跳转 title 传空串,只有"只歌手"分支在起作用——用户
         // 实测点"Prince"跳到了"Prince & The Revolution",根因是旧版对艺人名也用互相包含
         // 的松匹配,单人艺人名恰好是合作艺人名的前缀。精确匹配必须优先于松匹配命中。
         let princeItems = [item("Purple Rain", "Prince & The Revolution"), item("Kiss", "Prince")]

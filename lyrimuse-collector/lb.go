@@ -25,7 +25,7 @@ type lbClient struct {
 	dryRun  bool
 	alerter *alerter
 
-	// 429 的跨调用退避(2026-08-25 实测坐实的缺口)。submit() 内部的 tries/退避(见下)
+	// 429 的跨调用退避(实测坐实的缺口)。submit 内部的 tries/退避(见下)
 	// 只管**一次调用内**的几次重试,治不了"LB 持续 429 几个小时"这种情况——poller.go
 	// 有 4 个调用点(Mac 原生 single/playing_now、桥接 iPhone single/playing_now)各自
 	// 独立按自己的节奏(桥接 15s 一轮、Mac 侧每次 poll tick ~5s 只要歌还在放就重试)发起
@@ -118,7 +118,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 		if k == "cover_url" {
 			// ⚠️ 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,
 			// 以及 relay.go relayState 推给网页的 artwork —— 它读的就是这里的 ai)。
-			// 而 2026-08-31 起 cover_url 可能是设备直送封面的 file:// 本地路径,别的
+			// 而 cover_url 可能是设备直送封面的 file:// 本地路径,别的
 			// 机器根本读不到,发出去只会得到一张加载失败的图 + 把本机用户名公开出去。
 			// webSafeCoverURL 把它换成中继上的 https 地址(或者干脆留空,让网页走它
 			// 自己的兜底)。缓存里存的仍然是 file://——本机 App 要的就是那一份。
@@ -131,7 +131,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// Spotify 原生播放:按 ListenBrainz 的标准字段上送这次播放的曲目 —— spotify_id(官方定义就是这条录音的
 	// Spotify 曲目 URL,LB 拿它做匹配与元数据补全)、origin_url、music_service=spotify.com,形状跟 LB 自家的
-	// Spotify 导入一致(2026-09-09,见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
+	// Spotify 导入一致(见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
 	// 按当次播放的 bundle 算,所以只有 Spotify 原生播放才写这三个键;上面那个非标准的 spotify_url 照旧发,网页
 	// 中继读的是它(现在也是真链接了)。
 	for k, v := range spotifyListenFields(s.Bundle, enr["spotify_track_id"]) {
@@ -148,7 +148,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// 歌手/歌名/专辑一律**原样上送播放器报的标签**,不做任何替换。
 	//
-	// ⚠️ 2026-08-31 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
+	// ⚠️ 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
 	// "官方写法")**替换掉**播放器的标签,理由是"避免同一个人时而中文时而英文"。撤销
 	// 它的依据有三条:
 	//
@@ -181,7 +181,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	return lbTrackMeta{
 		ArtistName: s.Artist,
 		TrackName:  s.Title,
-		// 播放器没报专辑名时用 Apple 目录回填的(snapshot.albumForUpload,2026-09-08);报了就原样。
+		// 播放器没报专辑名时用 Apple 目录回填的(snapshot.albumForUpload);报了就原样。
 		ReleaseName:    s.albumForUpload(),
 		AdditionalInfo: info,
 	}
@@ -197,7 +197,7 @@ var errListenRejected = errors.New("listen rejected by server (4xx, non-retryabl
 // it is never retried. LB is only the worker's fallback source now, so submit
 // no longer drives alerts — the relay /push does (see run).
 func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int64, meta lbTrackMeta) error {
-	// 没配 token = 这条路整条不存在,一步准备工作都不做(2026-09-17 前移:这道门原来开在
+	// 没配 token = 这条路整条不存在,一步准备工作都不做(前移:这道门原来开在
 	// 下面 marshal 之后,于是没配 token 的用户每次 playing_now(播放中每几秒一拍)和每条
 	// 完成收听,都会先剥一遍歌词字段、再 marshal 一份最大 10KB 的 JSON 然后原地丢掉)。
 	// 纯本地 CPU/分配,不产生请求,但对"用不到这个功能的人应当完全无感"这条来说仍是多余的。

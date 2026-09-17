@@ -4,7 +4,7 @@ import "testing"
 
 // buildLyricsDecision 必须把候选的展示字段**逐个**抄进存档 —— 漏一个的表现是「解析决策」
 // 面板上那一栏永远空着,而缓存里看上去一切正常(字段带 omitempty,压根不会出现在 JSON 里),
-// 极难发现。2026-09-01 加 CoverURL 时立的这道闸:以后再往
+// 极难发现。加 CoverURL 时立的这道闸:以后再往
 // scoredLyricCandidateResult 加展示字段,同时在这里补一条断言。
 //
 // 只盯"展示用"的那几个,不盯 Lyrics —— 存档刻意不存歌词正文(见 lyricsDecisionCandidate

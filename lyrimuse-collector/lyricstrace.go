@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// 歌词解析决策 trace(2026-08-17 加,吸收自对比审阅 C1)。
+// 歌词解析决策 trace(加,吸收自对比审阅 C1)。
 //
 // 跟 decision.go 的缓存内决策记录是同一份数据的两个去处:缓存里只留**最近一次**评估
 // 和**当前歌词出处**两槽(lyrics_decision / lyrics_decision_applied,后一次同类写入

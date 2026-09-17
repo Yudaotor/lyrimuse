@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 回归测试:2026-08-06 之前这里是"按 lyricsFileSuffixes 顺序首次命中就 break",而 ".lrc"
+// 回归测试:之前这里是"按 lyricsFileSuffixes 顺序首次命中就 break",而 ".lrc"
 // 是 ".tr.lrc"/".roma.lrc" 的真后缀 —— "X.tr.lrc" 被判成主歌词、base 截成 "X.tr",
 // 生成一个幻影分组;分组的缓存 key 又是按文件头标签重建的,幻影组的标签跟本尊一样,
 // 于是译文覆盖了原文。实测在用户磁盘上真的毁掉过条目,所以这条规则必须钉死。

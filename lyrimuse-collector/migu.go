@@ -19,7 +19,7 @@ import (
 
 // miguLyric 是歌词第九个候选来源(咪咕音乐,非官方接口:搜索→按元数据校验重排→并发拉
 // 前几条歌词→挑第一份真同步的;选中的那条带 trcUrl 就再拉一份中文译文)。接口契约
-// 2026-09-04 用 curl 实测过两个端点:`pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do`
+// 用 curl 实测过两个端点:`pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do`
 // 搜歌(带 `User-Agent` + `Referer: https://m.music.migu.cn/` 即可,不需要签名/登录),
 // 结果里每条直接给 `lyricUrl`(逐行 LRC 文件)和可选的 `trcUrl`(同一时间轴的中文译文
 // LRC,外语歌才有)——取词不用再多打一次接口,比酷我少一跳。
@@ -32,7 +32,7 @@ import (
 // 实测坐实:搜《稻香》第 4 条是 "周杰伦 - 稻香 / 稳重的牧牛铃"(用户上传的翻唱),歌手
 // 字段就不是周杰伦,身份闸能直接挡掉。
 //
-// LRC 文件本身有两处咪咕特有的形状(2026-09-04 实测):① 前四行是挂着 00:01～00:04
+// LRC 文件本身有两处咪咕特有的形状:① 前四行是挂着 00:01～00:04
 // 真时间戳的元数据行——"歌曲名 稻香 / 歌手名 周杰伦 / 作词：… / 作曲：…",不剥掉的话
 // 开头几秒会显示成歌词;前两行没有冒号,现有 creditLineRe / genericHanCreditLineRe
 // 都认不出来,所以在 miguStripMetaLines 里专门剥(作词/作曲那两行跟别的源一样留给
@@ -78,7 +78,7 @@ func miguLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	return r
 }
 
-// miguSearchItem 只挑了搜索响应 songResultData.result[] 里用得上的字段(2026-09-04 实测
+// miguSearchItem 只挑了搜索响应 songResultData.result[] 里用得上的字段(实测
 // 响应结构核实过)。
 type miguSearchItem struct {
 	Name        string `json:"name"`

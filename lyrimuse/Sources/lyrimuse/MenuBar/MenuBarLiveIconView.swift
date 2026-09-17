@@ -1,12 +1,12 @@
 import AppKit
 import QuartzCore
 
-// 菜单栏图标的"活体"渲染层(2026-08-17):播放时所有款式都能动(设置里有总开关
+// 菜单栏图标的"活体"渲染层:播放时所有款式都能动(设置里有总开关
 // menuBarIconAnimates),暂停/无播放/显示歌词文字时这一层整个退场,由静态模板图接管。
 //
 // ---- 为什么是 Core Animation,不是 Timer 换帧 ----
 //
-// 第一版「跳动音条」是 10fps 的主线程 Timer 换帧(RunCat 的做法),用户当场反馈
+// 「跳动音条」不能做成 10fps 的主线程 Timer 换帧(RunCat 的做法),观感是
 // "卡卡的":正弦起伏这种**连续**运动,10fps 的台阶肉眼可见;而且主线程上还有 20Hz
 // 逐字高亮在跑,Timer 间隔一被挤就一顿一顿。RunCat 的卡通跑步帧吃得消低帧率,
 // 平滑形变吃不消 —— 跟 MenuBarScrollingLabel 头注里记录的滚动歌词是同一课。
@@ -35,7 +35,7 @@ final class MenuBarLiveIconView: NSView {
     private var equalizerBars: [CALayer] = []
     /// "动件"层(黑胶唱盘/光盘旋转、节拍器摆针):**裸 CALayer,几何完全归这里管**。
     /// 结构动画绝不能挂在 imageView 的视图背板层上 —— AppKit 拥有那个层的几何,布局
-    /// 随时改写,变换叠上去实测就是"画圈不自转"(2026-08-17 用户连报三轮,换了三版字形
+    /// 随时改写,变换叠上去实测就是"画圈不自转"(用户连报三轮,换了三版字形
     /// 都没救,根因在机制:黑胶走裸层没事、光盘走视图层不行,对照坐实)。图层 contents
     /// 享受不到系统模板着色,颜色由 applyColor 里的 tintedContents 现染。
     private let movingPart = CALayer()
@@ -43,7 +43,7 @@ final class MenuBarLiveIconView: NSView {
     private let staticPart = CALayer()
     /// 钢琴键的四个按压高亮(纯色圆角块,轮流点亮 —— "有人在弹")。
     private var pressKeys: [CALayer] = []
-    /// 「经典」的三道歌词线:右锚点、宽度动画向左伸缩(动效 E,用户 2026-08-17 从
+    /// 「经典」的三道歌词线:右锚点、宽度动画向左伸缩(动效 E,用户从
     /// 六版候选里选定)。装在容器里统一戴"压层缝"蒙版 —— 线伸到音符跟前被抠掉,
     /// 跟静态帧的缝一致;音符本体是 staticPart,纹丝不动。
     private let classicLinesHost = CALayer()
@@ -91,7 +91,7 @@ final class MenuBarLiveIconView: NSView {
         // 层序 = 加入顺序:动件在下、静件在上 —— 黑胶的唱臂要压住盘沿、节拍器的机身
         // 轮廓要压住摆针、经典款的音符要压住歌词线;按压高亮再往上。
         // contentsScale 不在这里定:位图灌进去时由 setTinted 跟 contents 一起按所在窗口的比例设
-        // (2026-09-05,此前写死 2);纯色层(pressKeys / 均衡器条)不需要它。
+        // (此前写死 2);纯色层(pressKeys / 均衡器条)不需要它。
         for l in [movingPart, classicLinesHost, staticPart] + pressKeys {
             l.isHidden = true
             layer?.addSublayer(l)
@@ -163,7 +163,7 @@ final class MenuBarLiveIconView: NSView {
     /// 上一次给图层灌位图时用的比例(0 = 还没灌过);换屏后跟 menuBarBitmapScale 对不上就重灌。
     private var lastBitmapScale: CGFloat = 0
 
-    /// contents 与 contentsScale 必须是同一个比例,所以永远一起设(2026-09-05,见 NSView.menuBarBitmapScale)。
+    /// contents 与 contentsScale 必须是同一个比例,所以永远一起设(见 NSView.menuBarBitmapScale)。
     private func setTinted(_ target: CALayer, _ image: NSImage) {
         let scale = menuBarBitmapScale
         target.contentsScale = scale
@@ -229,7 +229,7 @@ final class MenuBarLiveIconView: NSView {
         applyColor()
         // SF 原生的 variable-color 流动。⚠️ 必须显式给 repeat 选项:variableColor 同时
         // 是 Discrete/Indefinite 两种效果,addSymbolEffect 默认按"播一轮就停"处理 ——
-        // 2026-08-17 用户实测:不带选项时流动一轮之后就冻住了。
+        // 实测:不带选项时流动一轮之后就冻住了。
         if #available(macOS 15.0, *) {
             imageView.addSymbolEffect(.variableColor.iterative, options: .repeat(.continuous))
         } else {
@@ -250,7 +250,7 @@ final class MenuBarLiveIconView: NSView {
     }
 
     /// 节拍器 v2:机身(静件)纹丝不动,只有摆针(动件)绕支点摆 —— "正常运作中"。
-    /// v1 整图摇摆被用户点名不对(2026-08-17)。anchorPoint 设在针图里的支点位置,
+    /// v1 整图摇摆被不对。anchorPoint 设在针图里的支点位置,
     /// 摆动就是一条绕支点的旋转动画;teardown 时 anchor 会归位。
     private func buildMetronome() {
         staticPart.isHidden = false
@@ -268,7 +268,7 @@ final class MenuBarLiveIconView: NSView {
     }
 
     /// 钢琴键 v2:键盘(静件)不动,四个白键的按压高亮轮流点亮 —— "有人在弹"。
-    /// v1 整图摇摆被用户点名不对(2026-08-17)。顺序 1-3-2-4,比顺序扫过更像旋律。
+    /// v1 整图摇摆被不对。顺序 1-3-2-4,比顺序扫过更像旋律。
     private func buildPianoKeys() {
         staticPart.isHidden = false
         staticPart.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.pianoCanvas)
@@ -473,7 +473,7 @@ final class MenuBarLiveIconView: NSView {
     }
 
     /// 把模板图按当前 tint 染成位图,给自绘图层当 contents。比例由调用方(setTinted)按所在窗口给,
-    /// 跟图层的 contentsScale 同一个值 —— 2026-09-05 之前这里写死 2x。
+    /// 跟图层的 contentsScale 同一个值 —— 之前这里写死 2x。
     private func tintedContents(_ image: NSImage, scale: CGFloat) -> CGImage? {
         let w = Int(image.size.width * scale), h = Int(image.size.height * scale)
         guard w > 0, h > 0,

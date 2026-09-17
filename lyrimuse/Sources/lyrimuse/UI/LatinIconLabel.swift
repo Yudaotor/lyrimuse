@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 跟 `Label(_:systemImage:)` 用法一致,但**强制图标用拉丁字母变体**渲染。
 ///
-/// SF Symbols 里 `textformat.abc` 这类"字母表"符号会跟着 locale 变形。2026-08-09 用
+/// SF Symbols 里 `textformat.abc` 这类"字母表"符号会跟着 locale 变形。用
 /// ImageRenderer 逐个 locale 实测:
 ///
 ///     en → Abc      zh → 甲乙丙      ja → あいう      ko → 가나다

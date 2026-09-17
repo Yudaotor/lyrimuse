@@ -4,8 +4,8 @@ import Foundation
 /// label、两份日志文件名、默认安装位置、URL scheme。所有随之变化的路径都从这里派生,别处不许再写字面量(selftest
 /// contracts 组「身份与路径收口」守着;Go 侧的对应口径是 paths.go,经环境变量拿到同一套值)。
 ///
-/// 2026-09-05 加(借鉴清单 #33 第一步:纯重构,行为一个字节不变)。同日第二步曾按 Info.plist 的 `LyrimuseVariant` 派生出
-/// 一套并排安装的「Lyrimuse Dev」;**2026-09-06 用户拍板整体回退**——没有收益,反而带来问题:在 Dev 里恢复一份配置备份就把
+/// 加(纯重构,行为一个字节不变)。同日第二步曾按 Info.plist 的 `LyrimuseVariant` 派生出
+/// 一套并排安装的「Lyrimuse Dev」;**整体回退**——没有收益,反而带来问题:在 Dev 里恢复一份配置备份就把
 /// 账号带了进去,两个 collector 各 scrobble 一次;同事会话仍在装正式版;用户分不清手里是哪个二进制。现在只剩这一套固定
 /// 名字,`Resolved` 保留是为了让 selftest 能整体断言、别处按字段取。整个来回见 15 章决策 12。
 public enum LyrimuseIdentity {
@@ -97,7 +97,7 @@ public enum LogFiles {
     /// collector 常驻进程的日志(launchd 的 StandardErrorPath,也是 collector 自己打开并按大小轮转的那份)。
     public static var collector: URL { logsDir.appendingPathComponent(LyrimuseIdentity.current.logFileName) }
 
-    /// App 进程由 launchd 拉起时的 stdout / stderr(2026-09-05 起单独一份;此前跟 collector 共用
+    /// App 进程由 launchd 拉起时的 stdout / stderr(单独一份;此前跟 collector 共用
     /// `lyrimuse.log`,两个进程两种格式两种时区混在一个文件里,launchctl 子进程漏出来的报错也
     /// 分不清是谁的)。正常情况下几乎是空的 —— App 的日志走 os.Logger;能落进来的只有 Swift
     /// 运行时的 fatal 信息、被子进程漏出的 stderr 这类"本不该有"的东西,正因为如此它排查崩溃时最有用。

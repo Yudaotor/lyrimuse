@@ -79,7 +79,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // 文本字段不走 Toggle 那种"改了立刻存盘+重启"的即时保存——不能每敲一个字符就重启一次
 // collector,所以持久化是一个显式调用点。
 //
-// ⚠️ 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了,2026-08-30 核实):现在是
+// ⚠️ 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了):现在是
 // AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` → `save()`),
 // 界面上只剩一个只读的 `autosaveStatusBar` 显示保存状态。
 //
@@ -87,7 +87,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // 用户刚敲进去几个字符、还没点保存,状态就会被误判成"已配置/生效中",这里刻意避开
 // 这个坑。
 //
-// 读写字节这一层(2026-09-05 起)走 Core 的 `JSONConfigDocument`:读盘分**三态**(不存在 / 正常 / 损坏),
+// 读写字节这一层走 Core 的 `JSONConfigDocument`:读盘分**三态**(不存在 / 正常 / 损坏),
 // 损坏时 `persistFile()` 拒绝保存、`loadFailure` 亮起(设置窗口顶部横幅给出口);写盘成功后镜像才更新。
 // 为什么必须分三态、原来那版会怎么把 14 个空串覆盖上去,见 `JSONConfigDocument` 头注。这里只剩字段映射。
 @MainActor
@@ -99,7 +99,7 @@ public final class ConfigStore: ObservableObject {
     @Published public var stateRelayURL = ""
     @Published public var stateRelayToken = ""
     @Published public var lastfmUser = ""
-    // 2026-07-29 合并之前独立存在的只读 API Key——UI 上已经不再单独收这个字段(桥接
+    // 合并之前独立存在的只读 API Key——UI 上已经不再单独收这个字段(桥接
     // 现在复用下面的 lastfmScrobbleAPIKey),这里保留只是为了老用户已经存盘的值不会
     // 在读写这份 JSON 时被悄悄丢掉,见 lastfmBridgeMissingHint() 的兜底判断。
     @Published public var lastfmAPIKey = ""
@@ -119,7 +119,7 @@ public final class ConfigStore: ObservableObject {
     @Published public var feishuSignSecret = ""
 
     @Published public private(set) var lastError: String?
-    /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启(2026-09-05)。
+    /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启。
     @Published public private(set) var pendingUntilServiceEnabled = false
     /// 启动时 config.json 判定为**损坏**(文件在、但读不懂)的原因;nil = 正常或文件不存在。非 nil 期间
     /// `persistFile()` 一律拒绝,设置窗口顶部的 `ConfigFileDamageBanner` 据此显示告示与出口。
@@ -207,7 +207,7 @@ public final class ConfigStore: ObservableObject {
     /// `listenbrainzDigestStats(…, p.cfg.User, …)` 的,没有用户名根本无从查起。所以它跟
     /// "能提交"是两个不同的条件,不能共用 isListenBrainzConfigured。
     ///
-    /// 2026-08-13 补。在此之前 Swift 全程只看 token,而 Go 三处(weekly.go:200 /
+    /// 在此之前 Swift 全程只看 token,而 Go 三处(weekly.go:200 /
     /// daily.go:82 / poller.go:711)都要求 user 和 token 同时非空 —— 于是一个只填了 token
     /// 的用户(UI 上用户名那栏当时还写着"选填"),在设置页看到开关能开、数据源显示
     /// ListenBrainz,而 daemon 侧周报、日报、桥接三件事全部静默跳过,没有任何提示。
@@ -230,7 +230,7 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
-    // 2026-07-29 合并之前,桥接单独要求一把只读 API Key(lastfmAPIKey);合并之后桥接
+    // 合并之前,桥接单独要求一把只读 API Key(lastfmAPIKey);合并之后桥接
     // 复用"账号信息"里那一套 API Key(lastfmScrobbleAPIKey——Last.fm 的只读接口不需要
     // 签名,同一对凭据够用),这里两个字段任一非空都算满足,老用户已经填过的 lastfmAPIKey
     // 继续有效,不强制重新操作。
@@ -242,7 +242,7 @@ public final class ConfigStore: ObservableObject {
     // 场景完全不需要 ListenBrainz。两个用途混进同一个判断会互相伤害,所以这里保持
     // 语义狭窄,"要不要额外查 ListenBrainz"交给各自调用点自己决定。
     public func lastfmBridgeMissingHint() -> String? {
-        // 2026-08-11:用户名输入框已删(见 AccountLinkingTab.lastfmFields 注释)——用户名
+        // 用户名输入框已删(见 AccountLinkingTab.lastfmFields 注释)——用户名
         // 和 API Key 现在都来自"连接 Last.fm"向导(授权成功自动回填),所以两种缺失对
         // 用户是同一个动作:去连接。原来还有一个 lastfmMirrorMissingHint 给写入开关做
         // 前置校验,新设计里开关自己就是配置入口,那个函数一并删了。
@@ -272,7 +272,7 @@ public final class ConfigStore: ObservableObject {
         case .corrupt(let reason):
             // 文件在但读不懂。字段照样留空只是为了界面不崩;**保存被拒**(见 persistFile),直到用户修好
             // 文件或在横幅上放弃它。原来这里把它跟「不存在」混成一回事、注释还写着「理论上不会发生」——
-            // 后果是之后任何一次保存都用 14 个空串覆盖原文件(借鉴清单 #46,2026-09-05)。
+            // 后果是之后任何一次保存都用 14 个空串覆盖原文件。
             loadFailure = reason
             logger.error("config.json is unusable, saves refused until it is fixed or discarded: \(reason, privacy: .public)")
         }
@@ -303,7 +303,7 @@ public final class ConfigStore: ObservableObject {
     //
     // ⚠️ 原注释说"底部保存栏会先把两个 store 都写完盘、再统一重启一次" —— **那个保存栏
     // 已经不存在了**,而且全仓 grep 确认本方法**只被自己的 save() 调用**,没有任何外部
-    // 协调者(2026-08-30 核实)。"只重启一次"这件事现在由 CollectorRestartCoordinator
+    // 协调者。"只重启一次"这件事现在由 CollectorRestartCoordinator
     // 负责——两个 store 的 save() 都走它,它去抖合并。
     public func persistFile() throws {
         let fields: [String: Any] = [
@@ -365,9 +365,9 @@ public final class ConfigStore: ObservableObject {
     // 保存入口:持久化 + 重启 collector + 提交快照,一步到位。
     //
     // ⚠️ 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
-    // 两句都已过时(2026-08-30 核实)。保存栏没了,本方法现在是**唯一**的保存路径,
-    // 四个调用点:AccountLinkingTab 的输入自动保存(:1480)与账号切换兜底(:1062)、
-    // LastfmAuthFlow 授权成功那一刻(:220)、以及 AppDelegate 退出前的兜底存盘(:377,
+    // 两句都已过时。保存栏没了,本方法现在是**唯一**的保存路径,
+    // 四个调用点:AccountLinkingTab 的输入自动保存(1480)与账号切换兜底(1062)、
+    // LastfmAuthFlow 授权成功那一刻(220)、以及 AppDelegate 退出前的兜底存盘(377,
     // 走 .terminateLater 等这里返回才放行,所以重启去抖不会被进程退出打断)。
     @discardableResult
     public func save() async -> Bool {

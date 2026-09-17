@@ -1,13 +1,13 @@
 import LyrimuseCore
 import Foundation
 
-// Spotify 原生客户端本机数据面(2026-09-09):图床地址识别与换档、通知里的广告分类提示、位置探针输出解析。
+// Spotify 原生客户端本机数据面:图床地址识别与换档、通知里的广告分类提示、位置探针输出解析。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计数不中断)。
 
 @MainActor
 func runSpotifyNativeTests() {
     // ---- SpotifyArtworkURL:识别 / 换档 / 下载顺序 / URI 分类 ----
-    // 地址与 hash 都是 2026-09-09 真机上 AppleScript 与 oEmbed 给出的真实值。
+    // 地址与 hash 都是真机上 AppleScript 与 oEmbed 给出的真实值。
     do {
         let raw = "https://i.scdn.co/image/ab67616d0000b273bb54dde68cd23e2a268ae0f5"
         let url = SpotifyArtworkURL.parse(raw)
@@ -42,7 +42,7 @@ func runSpotifyNativeTests() {
     }
 
     // ---- SpotifyNotificationHint:构造 / 分类 / 与快照核对 ----
-    // 键名与样例值来自 Spotify.app 二进制字符串表 + 2026-09-09 真机通知(Taylor Swift《Lavender Haze》)。
+    // 键名与样例值来自 Spotify.app 二进制字符串表 + 真机通知(Taylor Swift《Lavender Haze》)。
     do {
         let info: [AnyHashable: Any] = [
             "Track ID": "spotify:track:5jQI2r1RdgtuT8S3iG8zFC", "Name": "Lavender Haze", "Artist": "Taylor Swift",
@@ -89,8 +89,8 @@ func runSpotifyNativeTests() {
         expectEqual(P.parseProbeOutput("1500|spotify:track:x|https://evil.example/x")?.artworkURL, nil, "探针输出: 别家主机的地址不收")
     }
 
-    // ---- SpotifyURI.deepLink:「在 Spotify 中显示」的深链(2026-09-09)----
-    // 曲目 ID 是 2026-09-09 真机缓存里的真实值(spotify_track_id);节目 ID 只是形状对的样例。
+    // ---- SpotifyURI.deepLink:「在 Spotify 中显示」的深链----
+    // 曲目 ID 是真机缓存里的真实值(spotify_track_id);节目 ID 只是形状对的样例。
     do {
         expectEqual(SpotifyURI.deepLink("spotify:track:0WbMK4wrZ1wFSty9F7FCgu")?.absoluteString,
                     "spotify:track:0WbMK4wrZ1wFSty9F7FCgu", "深链: 曲目 URI 原样成链")
@@ -108,7 +108,7 @@ func runSpotifyNativeTests() {
         expectEqual(SpotifyURI.deepLink(""), nil, "深链: 空串 → nil")
     }
 
-    // ---- MusicPlaybackController.spotifyPlaybackMode(fromModePart:):随机键的可用性闸(2026-09-09)----
+    // ---- MusicPlaybackController.spotifyPlaybackMode(fromModePart:):随机键的可用性闸----
     do {
         typealias M = MusicPlaybackController
         expectEqual(M.spotifyPlaybackMode(fromModePart: "true;true"), .shuffle, "随机闸: 开着且允许 → 随机")
@@ -123,7 +123,7 @@ func runSpotifyNativeTests() {
     }
 }
 
-// ---- 网页版 Spotify:浏览器位置探针输出的第三段是封面地址(2026-09-09)----
+// ---- 网页版 Spotify:浏览器位置探针输出的第三段是封面地址----
 // 地址是 Safari 里 open.spotify.com 播放时 `img[data-testid=cover-art-image]` 的真实 src(300 档 webp)。
 @MainActor
 func runSpotifyWebProbeReadingTests() {

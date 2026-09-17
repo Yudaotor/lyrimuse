@@ -5,7 +5,7 @@ import "testing"
 // Safari 的媒体进程按宿主算 —— 跟 Swift 侧 TrustedPlayers 的同名断言一一对应。
 //
 // 背景:Safari 播网页音视频时上报的是 com.apple.WebKit.GPU 而不是 com.apple.Safari
-// (Chromium 系报的是自己的 bundle id,只有 Safari 这样)。2026-09-01 用户实测撞上:
+// (Chromium 系报的是自己的 bundle id,只有 Safari 这样)。实测撞上:
 // 配对了 Safari 却整条播放不被采纳,同时还被要求再信任一个看不懂的 bundle id。
 //
 // ⚠️ 这份判据跟 Swift 侧 LyrimuseCore/Local/TrustedPlayers.swift 的 mediaProxyOwners

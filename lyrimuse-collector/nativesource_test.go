@@ -34,7 +34,7 @@ func TestNativeSourceBonus(t *testing.T) {
 
 	// ⚠️ 最要紧的一条：同源加权**压不过**逐字时间轴。
 	// 250 < 400 是故意的 —— 同源只说明轴大概率更准，不说明这份歌词完整正确。给到能压过
-	// 质量项的量级，就会重演 2026-08-09 那次"按来源加分"的翻车（0 次变对、6 次变错）。
+	// 质量项的量级，就会重演那次"按来源加分"的翻车（0 次变对、6 次变错）。
 	if score("qq", false) >= score("kugou", true) {
 		t.Errorf("同源无逐字不该赢过跨源有逐字: qq=%d kugou+yrc=%d",
 			score("qq", false), score("kugou", true))
@@ -59,9 +59,9 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 	}
 }
 
-// 2026-09-02:同源加权的判据从「用户勾了哪些播放器」换成「**这一刻在放的是哪个**」。
+// 同源加权的判据从「用户勾了哪些播放器」换成「**这一刻在放的是哪个**」。
 //
-// (这里原来是 TestResolveNativeLyricSources,钉的是 2026-09-01 多选那次的行为:
+// (这里原来是 TestResolveNativeLyricSources,钉的是多选那次的行为:
 //
 //	「选中集合里每个成员各自的原生源都收进来」。那个函数连同它的判据一起删了 —— 它对
 //	别的按播放器分叉的功能成立,对**这一项**不成立,理由见 match.go 里 nativeLyricSources
@@ -90,7 +90,7 @@ func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
 	saved := nativeLyricSources
 	t.Cleanup(func() { nativeLyricSources = saved })
 
-	// ⚠️ 用户报的那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
+	// ⚠️ 那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
 	// 旧判据(按 features.Players)会得出 {kugou, netease, qq} —— 三个源同时 +250,
 	// 而「解析决策」面板上那句"这个源就是你正在用的播放器"对三个都是假话。
 	// 新判据只看在放的那个:Apple Music 没有原生歌词源 → 空集,谁都不加。
@@ -176,9 +176,9 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 }
 
 // 预取用了另一个版本的时长做校验 → 真播放时长对不上就重选一次。
-// 实锤案例：网易云《梦想家》Tango 2:44，Spotify 版 ~4:06，预取按 164s 选了短版歌词。
+// 坐实案例：网易云《梦想家》Tango 2:44，Spotify 版 ~4:06，预取按 164s 选了短版歌词。
 //
-// 签名 2026-08-22 改:mismatch 由调用方(trackEnrichment)用 durationMismatch 算好、
+// 签名改:mismatch 由调用方(trackEnrichment)用 durationMismatch 算好、
 // 再过 observeWrongDuration 去抖后以 bool 传入。这里按同样方式组合两个函数,保住
 // "从时长差到重试判定"这条链路的覆盖(去抖本身另有 TestObserveWrongDuration)。
 func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {

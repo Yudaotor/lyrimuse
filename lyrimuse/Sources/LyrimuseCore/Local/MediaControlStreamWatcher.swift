@@ -9,7 +9,7 @@ import OSLog
 // "提前触发一次 poll()"的信号**,一个字段的**数值**都不从 payload 里取来直接喂状态。这个类
 // 因此只暴露一个"有动静了"的回调,payload 不往外传。
 //
-// 唯一的例外(2026-09-07,刻意划得很窄):payload 会被解析,但只为回答"**哪个**锚点、**什么
+// 唯一的例外(刻意划得很窄):payload 会被解析,但只为回答"**哪个**锚点、**什么
 // 时候**到的"—— 把 artist/title/elapsedTime/timestamp 拼成锚点身份(MediaControlClient.
 // anchorKey,跟轮询路径同一个构造),连同这一行**到达的时刻**记进 MediaControlClient 的锚点
 // 目击表。之后轮询路径查表拿到"这个锚点几十毫秒前刚打好",据此把整秒时间戳抹掉的小数补回来。
@@ -19,11 +19,11 @@ import OSLog
 // 部分整段偏快的量;stream 事件在锚点打好后 17~26ms 就到,是这台机器上唯一能把那个小数量出来
 // 的东西(通知里 Spotify 自带的位置更直接,但那就真是"从 payload 取数值喂状态"了)。
 //
-// 为什么值得常驻一个子进程:实测(2026-08-16,稳定播放 20 秒)stream 只在**状态变化**时
+// 为什么值得常驻一个子进程:实测(稳定播放 20 秒)stream 只在**状态变化**时
 // 输出,稳定播放期间一行都不推 —— 也就是说它平时不消耗 CPU,却把 QQ 音乐/网易云的换歌
 // 感知从最坏 2 秒降到亚秒。⚠️ 它**没有**省掉轮询那边的 fork:事件只用来"提前触发一次
 // poll()",轮询 Timer 每一拍照样 fork(这行注释原来声称"稳定播放期 fork 开销也省掉了",
-// 2026-08-20 性能审计核实与实现不符,已订正)——轮询的降频靠的是 LocalPlaybackSource
+// 性能审计核实与实现不符,已订正)——轮询的降频靠的是 LocalPlaybackSource
 // 的按播放态分档(见 PollInterval),事件唤醒是分档敢降下去的安全网。
 //
 // 为什么不去掉 2 秒轮询:这个子进程可能因为任何原因死掉(私有框架被系统更新改动、被
@@ -244,7 +244,7 @@ public final class MediaControlStreamWatcher {
     /// 合并状态里的曲目换了没有。纯函数,selftest 直接覆盖。
     ///
     /// 换到**空标题**不算换歌:电台切台/加载中实测会先吐几行 `title` 为空、只有 artist 的载荷
-    /// (2026-09-10 日志里 `|NCT 127|0.000` 那三行),把它当一首歌会白起一次表。
+    /// (日志里 `|NCT 127|0.000` 那三行),把它当一首歌会白起一次表。
     public nonisolated static func changedTrackKey(before: [String: Any], after: [String: Any]) -> String? {
         let title = (after["title"] as? String) ?? ""
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }

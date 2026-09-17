@@ -8,7 +8,7 @@ import (
 )
 
 // 打分算法版本号在两边各存一份(Go 的 lyricsScoringVersion / App 的 currentLyricsScoringVersion),
-// 靠"改一处记得改另一处"维持 —— 而实测它已经漂了很久:2026-09-12 发现 Go 早就到 17、Swift 还停在
+// 靠"改一处记得改另一处"维持 —— 而实测它已经漂了很久:发现 Go 早就到 17、Swift 还停在
 // 6。后果**完全静默**:App 那句 `version < currentLyricsScoringVersion` 是用来给旧存档打「旧打分
 // 算法」标记的,镜像值落后时库里所有存档都 >= 它,于是这个标记从某一版起就再没出现过,既不编译
 // 报错也不会有人察觉。

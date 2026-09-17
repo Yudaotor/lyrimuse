@@ -4,7 +4,7 @@ import KeyboardShortcuts
 
 // 录制全局快捷键时的冲突检查。
 //
-// ⚠️ 2026-08-31 加。在这之前 `ShortcutRecorderButton.handle(_:)` 只校验了"必须含
+// ⚠️ 加。在这之前 `ShortcutRecorderButton.handle(_)` 只校验了"必须含
 // ⌘/⌥/⌃ 之一",校验完直接 `setShortcut` 写入,于是有两个静默失败:
 //
 //  1. **录一个被 macOS 占用的组合(⌘Space、⌃↑ 这类)会"成功"**,按钮上正常显示出那个

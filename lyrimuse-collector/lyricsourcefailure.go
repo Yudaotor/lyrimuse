@@ -1,11 +1,11 @@
 package main
 
-// 三个歌词源(netease/musixmatch/lyricfind)已经接了具体失败原因诊断(2026-08-31,
+// 三个歌词源(netease/musixmatch/lyricfind)已经接了具体失败原因诊断(
 // 分别见 ytmusic.go/musixmatch.go/netease.go 头注——每一条都是实测复现过、不是猜的),
 // 两处消费:设置页"歌词来源"卡片的测试按钮(testlyricsourcescli.go)、"联网搜索候选歌词"
 // 弹窗的"歌词源可用情况"明细(searchcli.go 的 lyricSourceFailureReasons)。
 //
-// ⚠️ 2026-09-01 从**自然语言文案**改成**稳定代码**(用户报"英文界面下这段提示还是中文"
+// ⚠️ 从**自然语言文案**改成**稳定代码**(现象是"英文界面下这段提示还是中文"
 // 才发现的:xxxSetLastFailureReason 写的是硬编码中文句子,经共享 JSON 原样传到 Swift 侧
 // 直接显示,完全绕开了这个仓库其它地方统一走的 L10n.t() 本地化机制——不是漏翻译一个
 // 字符串,是这一整条数据通路从设计上就没有本地化的概念)。collector 只负责识别"是哪一种
@@ -18,13 +18,13 @@ const (
 	lyricFailureReasonLyricFindRegionRestricted = "lyricfind_region_restricted"
 	lyricFailureReasonMusixmatchRateLimited     = "musixmatch_rate_limited"
 	lyricFailureReasonNeteaseRateLimited        = "netease_rate_limited"
-	// musixmatch_direct_blocked(2026-09-03):apic-appmobile.musixmatch.com 那两个 AWS
+	// musixmatch_direct_blocked:apic-appmobile.musixmatch.com 那两个 AWS
 	// 地址在当前网络下直连不通(实测 100% ICMP 丢包、TCP 16 次只成功 3 次、TLS 16 次
 	// 0 次成功),而 proxyfallback.go 的系统代理兜底也没能救回来(没配代理,或者配了但
 	// 连不上)。跟 musixmatch_rate_limited 是完全不同的两回事:那个是服务器**正经回了**
 	// 401 hint=captcha,这个是一个字节都没拿到。
 	lyricFailureReasonMusixmatchDirectBlocked = "musixmatch_direct_blocked"
-	// deezer_auth_failed(2026-09-13):取词要先从 auth.deezer.com 换一张**匿名 JWT**,
+	// deezer_auth_failed:取词要先从 auth.deezer.com 换一张**匿名 JWT**,
 	// 这一步没换到(端点不答、非 200、或响应里没有 jwt 字段)。这是这一路目前**唯一**
 	// 实测见过的失败模式 —— "这首歌没有歌词"(GraphQL 的 LyricsNotFoundError)是正常
 	// 结果,不往这里记,报上去会让用户以为源坏了。见 deezer.go 头注。

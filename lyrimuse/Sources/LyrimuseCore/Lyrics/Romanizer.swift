@@ -14,7 +14,7 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
     /// 后来→後來 都对,「只有你」也没被误转成「隻」;日文/拉丁字符完全不动。
     ///
     /// ⚠️ 但 ICU(以及 OpenCC)只管**繁简**,不管**异体字**,转简体时必须再补一层
-    /// `HanVariants` —— 2026-08-22 用户报「开了简体还是看到繁体」,实例是《开不了口 (Live)》:
+    /// `HanVariants` —— 现象是「开了简体还是看到繁体」,实例是《开不了口 (Live)》:
     /// ICU 把那首歌 37 种字符全转对了,只剩「妳」没动而它出现 21 次,整屏都是。「妳」不是
     /// 「你」的繁体,是大陆已淘汰、港台仍在用的异体字,所以两边的繁简表里都没有它。
     /// 完整判据和收录标准见 HanVariants。
@@ -23,7 +23,7 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
     /// 还是「妳」,那要猜被称呼者的性别。
     /// `converted(_:)` 会不会真的改动这段文字 —— 也就是"简繁转换对它有没有用"。
     ///
-    /// 抽成单独一个判据(2026-08-31),是为了让**所有**依赖"这段文字算不算中文"的地方共用
+    /// 抽成单独一个判据,是为了让**所有**依赖"这段文字算不算中文"的地方共用
     /// 同一份逻辑,不可能各自漂开:
     ///   - `converted(_:)` 自己的早退(下面);
     ///   - `LocalPlaybackSource.sawChineseLyrics`(粘性,设置页据它决定露不露出开关)——
@@ -60,20 +60,20 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
 
 // 罗马音兜底——LyricsSyncEngine 现有的罗马音字段完全依赖网易云服务端"恰好给这首歌算好了
 // lyrics_roma"(见 enrich.go/collector 那边),源没给就是空,中文歌曲的拼音、日文歌曲的
-// 罗马字完全没有客户端兜底。2026-08-04 补上:用系统自带的音译在服务端没给这个字段时现算
+// 罗马字完全没有客户端兜底。补上:用系统自带的音译在服务端没给这个字段时现算
 // 一份兜底——真正的专业标注仍然优先用服务端字段(见调用点)。
 public enum Romanizer {
     /// 现算一份罗马音。`japanese` 由调用方按**整首歌**判定后传进来(见 looksJapanese)。
     ///
     /// ⚠️ 日文**必须**走形态分析,不能用 ICU 的 Any-Latin。汉字是中日共用的文字系统,而
-    /// Any-Latin 对汉字一律按普通话读——2026-08-09 用户报的正是这个:
+    /// Any-Latin 对汉字一律按普通话读——现象是的正是这个:
     ///
     ///     火曜日の朝は   → Any-Latin: "huǒ yào rìno cháoha"   ← 拼音,完全不对
     ///                    → 形态分析: "kayou hi no asa ha"
     ///     受話器を取った君 → Any-Latin: "shòu huà qìwo qǔtta jūn"
     ///                    → 形态分析: "juwa ki wo totta kimi"
     ///
-    /// 2026-08-04 那次只解决了"别给纯中文歌加拼音"(靠 songLooksJapanese 整首拦掉),
+    /// 那次只解决了"别给纯中文歌加拼音"(靠 songLooksJapanese 整首拦掉),
     /// 但日文行里夹着的汉字照样走 Any-Latin,于是假名出罗马字、汉字出拼音,混在一行里。
     ///
     /// 非日文(韩文谚文/泰文/西里尔字母等)跟汉字毫无交集,Any-Latin 对它们本来就是正确、
@@ -106,7 +106,7 @@ public enum Romanizer {
     /// 助词读音修正。は/へ/を 作助词时读 wa/e/o,而分词器给的是**字面**读音 ha/he/wo ——
     /// Apple Music 标的是前者,这也是日语实际的念法。
     ///
-    /// 判据是「这个 token 恰好就是这一个假名」。2026-08-10 实测 CFStringTokenizer 对日文
+    /// 判据是「这个 token 恰好就是这一个假名」。实测 CFStringTokenizer 对日文
     /// 的切分:助词总是被单独切成一个 token(「今/は/まだ/悲しい」「本/を/読む」
     /// 「海/へ/行く」),而词内部的同一个假名不会单独成词(「あなた」是一整个 token,不会
     /// 切出中间的「な」)。所以只改单独成词的那些,词里的假名一概不碰。
@@ -147,7 +147,7 @@ public enum Romanizer {
     /// 留着 → あしたの,再整体音译成罗马字。纯假名走 ICU 的 toLatin 是确定的、无歧义的
     /// (汉字才有拼音那个坑,见 romanize 的注释),所以这一步安全。
     /// `unitsHint`:调用方已物化好的整行 UTF-16 数组。japaneseSegments 对一行的每个 token
-    /// 都要调进来,原来每个 token 各自 `Array(text.utf16)` 重新物化整行(2026-08-20 性能
+    /// 都要调进来,原来每个 token 各自 `Array(text.utf16)` 重新物化整行(性能
     /// 审计,只在带假名标注的酷狗日文歌上生效)。不传时自己物化,行为不变。
     static func annotatedReading(
         in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark],
@@ -191,18 +191,18 @@ public enum Romanizer {
     /// 从一份已分好词的片段直接派生整行读音 —— 语义等价于 `japaneseReading(text)`
     /// (两条管线的片段级优先级一致:particleLatin > 假名标注 > 分词器转写 > 原文,
     /// 尾部同走 mergeSokuon+join),给 LyricsSyncEngine 复用 segmentsCache 用:同一行
-    /// 的整行读音和逐词分组共用**同一次** CFStringTokenizer,不再各分一遍(2026-08-20
+    /// 的整行读音和逐词分组共用**同一次** CFStringTokenizer,不再各分一遍(
     /// 性能审计)。返回 nil 的口径也对齐 romanize:片段为空(=分不出词)或读音跟原文
     /// 一模一样(没有信息增量)都算"没有读音",调用方照 romanize 的原语义退 ICU 音译。
     /// **整行罗马音的判定阶梯** —— 播放引擎的客户端兜底和 `lyrics-romanize` helper
     /// (collector 预生成那条路)**共用这一份**。
     ///
-    /// 2026-09-03 从 `LyricsSyncEngine.romanizationText` 里提出来。提的理由不是"整理代码":
+    /// 从 `LyricsSyncEngine.romanizationText` 里提出来。提的理由不是"整理代码":
     /// 预生成写进 `lyrics_roma` 之后,那份产物必须跟播放时现算的结果**逐字一致** ——
     /// 否则同一首歌"这次装了缓存"和"上次现算"读音不一样,而且这种不一致**不会报错**,
     /// 只会表现成用户偶尔觉得"某句罗马音怎么变了"。照抄一份阶梯就是给这件事开第二个漂移点。
     ///
-    /// ⚠️ 两个条件是**或**的关系,不是"整首歌像日文"再判行(2026-08-24 定):
+    /// ⚠️ 两个条件是**或**的关系,不是"整首歌像日文"再判行:
     ///   · 行内有假名 → 这一行确证是日文,不管整首歌是什么(中文歌里引用的日文行);
     ///   · 纯汉字行 → 中日读音歧义,只有这种行才看整首歌的标记。
     /// 写成 `songLooksJapanese && (looksJapanese || containsHan)` 的话,中文歌一旦被整首
@@ -322,7 +322,7 @@ public enum Romanizer {
         return applyCodeSwitchFallback(to: out, in: text)
     }
 
-    // MARK: - 行内中日无缝拼接(2026-09-15,陶喆《My Anata》实测坐实)
+    // MARK: - 行内中日无缝拼接(陶喆《My Anata》实测坐实)
     //
     // 这首歌的梗是日文词直接焊进中文句子、中间往往连空格都没有("三更半夜 さびし的我"
     // "只听见おじさん骑着单车卖着馒头")。整首歌 kanaLineRatio 只有 40.9%(< 50% 阈值,
@@ -480,7 +480,7 @@ public enum Romanizer {
         return out
     }
 
-    // 2026-08-04 实测排查坐实的真实 bug:汉字本身是中文/日文共用的文字系统,
+    // 实测排查坐实的真实 bug:汉字本身是中文/日文共用的文字系统,
     // .toLatin 对纯中文歌词(比如"你对我笑一次")一样能音译出一份"看起来正常"的拼音,
     // 上面的 romanize() 单靠"输出是否等于输入"判断不出这首歌到底是不是真的需要罗马音——
     // 结果中文歌曲(NetEase 本来就不给它算 lyrics_roma,这本身就是"不需要罗马音"的正确
@@ -517,7 +517,7 @@ public enum LyricScript: String, Sendable, CaseIterable {
     /// 粤语歌的汉字行。文字本身(汉字)跟 .chinese 没有任何差异,分不出普通话还是
     /// 粤语——这一档只能靠外部信号(collector 判定的 SongLanguage 真值,见
     /// EnrichCacheLyrics.isCantonese)分派,不能像日语假名/韩语谚文那样靠文字本身
-    /// 判定。2026-08-29 加,拼音/粤拼两个开关分开之后才需要区分。
+    /// 判定。加,拼音/粤拼两个开关分开之后才需要区分。
     case cantonese
     /// 拉丁字母、泰文、西里尔字母等等。这些跟汉字没有交集,音译无歧义,历来是无条件
     /// 允许的,不纳入按语言开关的管辖 —— 用户提的是"汉语/韩语/日语"三选。
@@ -537,7 +537,7 @@ public enum LyricScript: String, Sendable, CaseIterable {
 /// 哪几种文字需要标罗马音。用户可以按语言分别开关。
 ///
 /// 为什么要分语言:同一个人对不同语言的需求是相反的 —— 听日文歌想要罗马字才跟得上,
-/// 听中文歌却完全不需要拼音(对中文读者是纯噪声,2026-08-04 就是因为这个才把中文歌的
+/// 听中文歌却完全不需要拼音(对中文读者是纯噪声,就是因为这个才把中文歌的
 /// 客户端兜底整个关掉的)。原来只有一个总开关,表达不了这件事。
 public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public let rawValue: Int
@@ -549,14 +549,14 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     /// 只是没必要为了改名字连带迁移已经落盘的用户设置(OptionSet 按 rawValue 持久化,
     /// 位不变就不用管旧设置怎么迁移)。
     public static let chinese = RomanizationScripts(rawValue: 1 << 2)
-    /// 粤语(粤拼/Jyutping)。2026-08-29 加——此前粤拼罗马音只在服务端无条件生成,
+    /// 粤语(粤拼/Jyutping)。加——此前粤拼罗马音只在服务端无条件生成,
     /// 客户端完全没有开关能控制显不显示。
     public static let cantonese = RomanizationScripts(rawValue: 1 << 3)
 
-    /// 2026-08-29 改:四项默认全开——"显示罗马音"总开关一旦打开,不该还要用户再去
+    /// 改:四项默认全开——"显示罗马音"总开关一旦打开,不该还要用户再去
     /// 逐项勾选才看得到东西。此前中文(拼音)单独默认关是因为普通话读者本来就认字、
     /// 拼音是纯噪声;但那次决定早于粤拼的出现,不该被直接套用到全部四项上(用户
-    /// 2026-08-29 拍板:统一默认开)。
+    /// 拍板:统一默认开)。
     public static let `default`: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
 }
 
@@ -574,7 +574,7 @@ extension Romanizer {
     ///
     /// 顺序有讲究,不能重排:
     /// - 假名是日文独有的,一出现就确证日文 —— 必须排在汉字之前,否则日文歌里的汉字会
-    ///   把它判成中文(这正是 2026-08-04 那个 bug 的形状)。
+    ///   把它判成中文(这正是那个 bug 的形状)。
     /// - 谚文同样是韩文独有的。韩文歌词里夹汉字很少见但存在(人名/成语),所以也排在
     ///   汉字之前。
     /// - 剩下含汉字的才是中文。
@@ -585,9 +585,9 @@ extension Romanizer {
         return .other
     }
 
-    // MARK: - 整首歌 vs 一行:两个不同粒度的判断(2026-08-24 重做)
+    // MARK: - 整首歌 vs 一行:两个不同粒度的判断
     //
-    // 2026-08-24 用户报「怎么中文也注音了」:《这样吧》(群星/动力火车翻唱)是一首中文歌,
+    // 现象是「怎么中文也注音了」:《这样吧》(群星/动力火车翻唱)是一首中文歌,
     // 但它引用了三次「サヨナラ」。原来的判据是**「整首歌出现过一个假名字符就算日文」**,
     // 于是整首歌被判成日文,每一行汉字都去走日语形态分析 ——「就从明天开始吧」的罗马音
     // 出成了「就从 mei ten 开始 吧」(mei ten 是「明天」的日文音读)。

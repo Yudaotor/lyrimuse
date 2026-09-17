@@ -2,13 +2,13 @@ package main
 
 import "testing"
 
-// 「标题反查泛搜」那条兜底的两处判据缺陷,2026-09-02 修(用户报「打上花火」整屏显示的是
+// 「标题反查泛搜」那条兜底的两处判据缺陷,修(现象是「打上花火」整屏显示的是
 // 《春雷》的歌词)。
 //
-// 下面三组曲目表是**真查网易云量回来的**(2026-09-02,`/api/search/get?type=1&limit=30`),
+// 下面三组曲目表是**真查网易云量回来的**(`/api/search/get?type=1&limit=30`),
 // 不是编的:名次就是搜索结果里的名次,时长是接口给的毫秒 / 1000。三组分别对应
 //   ① 这次的错例(打上花火 → 春雷),
-//   ② 2026-08-30 修好、这次不能打死的正例(方大同 Love Love Love → 爱爱爱),
+//   ② 修好、这次不能打死的正例(方大同 Love Love Love → 爱爱爱),
 //   ③ 这条兜底当初存在的理由(陶喆 Airport in 10:30 → 飞机场的10:30)。
 // 只保留每组前 30 名里跟判定有关的那几条 + 足够的填充,好让名次对得上。
 
@@ -57,7 +57,7 @@ func loveLoveLoveSearchResults() []albumTrack {
 		tracks = append(tracks, albumTrack{
 			title: "填充" + string(rune('A'+len(tracks))), artist: "方大同", duration: 240.0})
 	}
-	// 13:同一首歌被合辑重复收录 —— 2026-08-30 那次专门保住的形态,不构成歧义。
+	// 13:同一首歌被合辑重复收录 —— 那次专门保住的形态,不构成歧义。
 	tracks = append(tracks, albumTrack{title: "爱爱爱", artist: "方大同", duration: 213.266})
 	for len(tracks) < 18 {
 		tracks = append(tracks, albumTrack{
@@ -126,7 +126,7 @@ func TestTopSearchRanked(t *testing.T) {
 	}
 }
 
-// 排歧义守卫:2026-09-02 之前写的是 `d == bestDiff`(浮点精确相等),两首不同的歌时长差要
+// 排歧义守卫:之前写的是 `d == bestDiff`(浮点精确相等),两首不同的歌时长差要
 // bit 级完全一样才会触发 —— 等于这道守卫从来没生效过。
 func TestAmbiguityGuardUsesRealMargin(t *testing.T) {
 	const local = 200.0
@@ -157,7 +157,7 @@ func TestAmbiguityGuardUsesRealMargin(t *testing.T) {
 		t.Fatalf("差 1.2s 不该算歧义:got=%q ok=%v", got, ok)
 	}
 
-	// ⚠️ 2026-08-30 那条不变量:**同一个标题**被不同专辑/合辑重复收录不构成歧义。
+	// ⚠️ 那条不变量:**同一个标题**被不同专辑/合辑重复收录不构成歧义。
 	// 破了它,《爱爱爱》那个案例会重新回到"本该毫无疑问的正确答案被判成分不清"。
 	dupes := []albumTrack{
 		{title: "爱爱爱", artist: "方大同", duration: 213.266},

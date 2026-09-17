@@ -5,7 +5,7 @@ import OSLog
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "backfill")
 
 /// 「待补提交的历史收听」那一行的状态机 —— 驱动 collector 的 `backfill-lastfm` 子命令。
-/// (2026-08-18 之前界面上确实有个标题叫「补提交历史收听」的独立行,已合并掉,见下。)
+/// (之前界面上确实有个标题叫「补提交历史收听」的独立行,已合并掉,见下。)
 ///
 /// ## 界面上只有一行
 ///
@@ -14,7 +14,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "backfi
 /// 那时它退化成纯粹的"本地攒了些什么"清单。光说"会记在本地"是空头承诺 —— 列出来用户
 /// 才能核对到底记了什么。
 ///
-/// 两次演化都记一下,免得被拆回去:2026-08-18 之前清单的出现条件写的是"没连账号",漏掉了
+/// 两次演化都记一下,免得被拆回去:之前清单的出现条件写的是"没连账号",漏掉了
 /// "已连接、但 Scrobble 开关关着"这条同样在攒歌的路径(数据层看的是
 /// features.LastfmMirrorScrobble,不是连没连);放宽之后它一度跟「补提交历史收听」并列成
 /// 两行、说的是同一个数字,当天合并成一行。
@@ -50,7 +50,7 @@ final class ScrobbleBackfillService: ObservableObject {
         var quarantined = 0
         var abortedReason: String?
 
-        // 手写 init(from:) —— **不能**靠上面那些属性默认值(2026-09-12 修的真 bug:界面报
+        // 手写 init(from) —— **不能**靠上面那些属性默认值(修的真 bug:界面报
         // 「补提交没能完成，请稍后再试」,而 Last.fm 那边 26 条全补进去了、本地回执也写了)。
         //
         // Swift 自动合成的解码器对**非可选**属性一律走 decode(_:forKey:),缺 key 直接 throw,
@@ -61,11 +61,11 @@ final class ScrobbleBackfillService: ObservableObject {
         // markBackfilled 的回执行也落了盘,只有 App 读不懂结果。
         //
         // 它从 da7d5d2(功能上线那次)起就这样 —— Go 的 omitempty 和 Swift 的非可选属性两边
-        // 都一个字没改过。2026-09-12 之前 lastRunFailed 还不存在,nil 表现为一声不吭,所以
+        // 都一个字没改过。之前 lastRunFailed 还不存在,nil 表现为一声不吭,所以
         // 它悄悄活过了每一趟真跑(08-27 / 09-03 / 09-06 / 09-12),那天的「反馈」修复只是把
         // 它从"静默"变成"报一句失败"。
         //
-        // 同一个坑 2026-08-25 已经在 LyricsSearchService.Pick 上踩过一次并修过(那边注释写着
+        // 同一个坑已经在 LyricsSearchService.Pick 上踩过一次并修过(那边注释写着
         // 「实测验证过,不是猜的」)—— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
         // **所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,但哪天谁给 eligible
         // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
@@ -94,7 +94,7 @@ final class ScrobbleBackfillService: ObservableObject {
     ///
     /// 跟 `lastRun == nil` 分开表示,是因为那个值在"还没跑过"和"跑了但失败了"两种情形下
     /// 都是 nil,而这两种在界面上必须长得不一样:前者什么都不该显示,后者必须说一句 ——
-    /// 否则用户点完按钮只看到转圈停下、界面一切如常(2026-09-12 用户报的「没有反馈」里
+    /// 否则用户点完按钮只看到转圈停下、界面一切如常(现象是「没有反馈」里
     /// 最糟的一种:失败得毫无声息)。
     @Published private(set) var lastRunFailed = false
     @Published private(set) var busy = false
@@ -147,7 +147,7 @@ final class ScrobbleBackfillService: ObservableObject {
                 ignored=\(out?.ignored ?? -1, privacy: .public) \
                 quarantined=\(out?.quarantined ?? -1, privacy: .public)
                 """)
-            // 真的有条目补进了 Last.fm → 统计页手里的缓存全过时了(2026-08-18 用户报
+            // 真的有条目补进了 Last.fm → 统计页手里的缓存全过时了(现象是
             // "补提交后最近记录没刷新"):最近记录/今天/近7天立刻强刷,不等 2 分钟 TTL
             // 或下次换歌;热力图的增量水位拨回回填窗口起点,不拨的话补进历史那些天会被
             // 增量同步永远漏掉(见 rewindDailySyncForBackfill 注释)。accepted == 0
@@ -155,9 +155,9 @@ final class ScrobbleBackfillService: ObservableObject {
             if let out, out.accepted > 0 {
                 LastfmStatsService.shared.refreshBaseline(force: true)
                 LastfmStatsService.shared.rewindDailySyncForBackfill()
-                // 2026-09-03 补,2026-09-12 更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
+                // 补,更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
                 // 一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源
-                // 是 collector 落盘的 feed(每 15 s/60 s 一拉)—— 用户报「补提交之后最近记录没刷新」。
+                // 是 collector 落盘的 feed(每 15 s/60 s 一拉)—— 现象是「补提交之后最近记录没刷新」。
                 //
                 // 主路径在 collector 那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
                 // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取 —— **必须带这个
@@ -166,9 +166,9 @@ final class ScrobbleBackfillService: ObservableObject {
                 // ⚠️ 下面这发延迟强刷**只兜 collector 不在的情况**,别把它当成主路径:判据
                 // `feedIsFresh` 看的是 feed 里的 fetchedAt 落没落在 180 s 窗口内,而 collector 只要
                 // 活着就每 feedHeartbeat(60 s)重写一次 feed —— 跟内容有没有变、有没有包含刚补
-                // 的那几条毫无关系。也就是说 collector 在跑时这一发**永远不会触发**。2026-09-12
+                // 的那几条毫无关系。也就是说 collector 在跑时这一发**永远不会触发**。
                 // 之前它被当成"兜底 8 秒后会补刷"来依赖,而那时 collector 侧又是当场拉(拉到旧内容
-                // 却把 fetchedAt 刷新了),两头一叠就是用户第三次报同一个问题的成因。
+                // 却把 fetchedAt 刷新了),两头一叠就是同一个问题反复出现的成因。
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 8_000_000_000)
                     if !LastfmStatsService.shared.feedIsFresh {
@@ -208,7 +208,7 @@ final class ScrobbleBackfillService: ObservableObject {
         return await Task.detached(priority: .userInitiated) { () -> Bool in
             // 用 ProcessRunner:带超时,而且 stdout 会被先读空再等退出(见它的注释)。
             //
-            // ⚠️ **environment 必须显式传**(2026-09-06 修的真 bug:点删除没反应)。这条是
+            // ⚠️ **environment 必须显式传**(修的真 bug:点删除没反应)。这条是
             // 唯一一个漏了它的 collector 子命令调用点 —— 因为它走 ProcessRunner,而那个函数
             // 当时压根没有环境参数,另外五处(search-lyrics / 源自检 / Last.fm 统计 ×2 /
             // 诊断导出)都是自己 new Process、顺手就把 collectorProcessEnvironment 设上了。

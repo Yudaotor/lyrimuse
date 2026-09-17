@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// cjkSpaceStripped:CJK 姓名之间的空格。2026-09-12 的真实案例 —— 伊藤 美奈子
+// cjkSpaceStripped:CJK 姓名之间的空格。的真实案例 —— 伊藤美奈子
 // 《雨のメヌエット》(专辑 TENDERLY)**九个源零候选**,把歌手名的空格去掉再搜,网易云
 // 立刻给出完整候选(日文原词 + 中文译文 + 逐行罗马音,score 379)。判据与理由见其头注。
 func TestCJKSpaceStripped(t *testing.T) {
@@ -53,7 +53,7 @@ func TestLyricPrimaryQueryArtistCJKSpace(t *testing.T) {
 }
 
 // isCJKScriptRune 是 containsCJKScript 的单字符版,两者必须同一份判据
-// (2026-09-12 抽取,applecatalog.go 那边改成复用它)。
+// (抽取,applecatalog.go 那边改成复用它)。
 func TestIsCJKScriptRuneMatchesContains(t *testing.T) {
 	in := []rune{'汉', 'ひ', 'カ', '한'}
 	for _, r := range in {

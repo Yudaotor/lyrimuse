@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// 2026-07-30:canonical_artist 原来完全靠 resolveTrackEnrichment 里"按这一首曲目去
+// canonical_artist 原来完全靠 resolveTrackEnrichment 里"按这一首曲目去
 // 网易云/QQ 搜、用搜索结果自带的歌手名"这条路径——问题是这是按曲目独立匹配的,同一个
 // 歌手的不同曲目可能各自匹配成功或失败(实测坐实:卢广仲《100種生活》专辑 6 首歌,
 // 5 首通过网易云匹配成功统一成了"卢广仲",唯独"无敌铁金刚"这一首匹配失败,原始标签
@@ -30,7 +30,7 @@ import (
 // 成功查一次 MusicBrainz 就够了。空字符串是内存里的合法值,代表"这次查了,没有可用的
 // 中文别名",避免同一进程内对同一个歌手反复重新查询。
 //
-// ⚠️ 2026-08-30 订正:空字符串**不再落盘持久化**。原设计(查一次永久生效,查空也当成
+// ⚠️ 订正:空字符串**不再落盘持久化**。原设计(查一次永久生效,查空也当成
 // "确认没有"写进文件)在 mbPrimaryNameCache 加的时候就已经指出过风险(见那边的头注),
 // 当时没有回头改这份更老的缓存——这次真的撞上了:那英《微笑着离去》本地标签罗马化成
 // "Na Ying",查询当口 MusicBrainz 恰好限速返回 503,lookupMusicBrainzChineseAlias 拿到
@@ -130,7 +130,7 @@ func musicbrainzThrottle(ctx context.Context) error {
 // 写法"这个问题需要解决,不必白白消耗 MusicBrainz 的请求额度。
 // artistCanonicalCacheOnly:为真时 canonicalArtistViaMusicBrainz / cachedQQArtistCanonicalName
 // 只读缓存、绝不联网(查不到就当没有,也不往缓存写空值)。给 `collector top-artists`(App 统计页
-// 背后那条 CLI)的默认档用——2026-09-03 实测:artistMergeNameKey 2026-08-31 起走
+// 背后那条 CLI)的默认档用——实测:artistMergeNameKey 走
 // resolveGenericArtistCanonicalName,而 CLI 进程既没加载别名缓存、又对 4 个时段 × 30 条里每个
 // 非中文歌手名都真查 MusicBrainz(全局 1.1 s 限速)+ QQ,一次跑 1 分 49 秒,App 侧 25 s 看门狗必然
 // 把它杀掉 → 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
@@ -180,7 +180,7 @@ func containsHan(s string) bool {
 // 跟上面 artistAliasCache(只存中文别名字符串,给 canonical_artist 链路)是两份缓存:
 // 归并需要的是**身份**(mbid)——"Leah Dou"和"窦靖童"名字键完全不同、Last.fm 又只给
 // 其中一条 mbid,只有把两个名字各自解析到同一个 MusicBrainz 艺人,并查集才连得上
-// (2026-08-18 用户核对 Top100 导出,坐实 8 对这类漏合并)。中文名(Zh)顺手一起存:
+// (用户核对 Top100 导出,坐实 8 对这类漏合并)。中文名(Zh)顺手一起存:
 // 榜单里只有罗马名的中文歌手("Ronghao Li")靠它显示成中文。
 //
 // 缓存语义与 artistAliasCache 一致:查一次永久生效,零值也是合法缓存("查过,没结果"),
@@ -247,7 +247,7 @@ func cachedArtistIdentity(name string) (mbArtistIdentity, bool) {
 // 每次调用最多 2 个 MusicBrainz 请求,受 musicbrainzThrottle 全局限速。
 //
 // ⚠️ 这个函数由 topartists.go(Top 歌手榜的一次性归并脚本)调用,不在 enrich.go 那条
-// "可手动取消的 searching 占位"解析链路上——本次改动的 ctx 只从 canonicalArtistViaMusicBrainz/
+// "可手动取消的 searching 占位"解析链路上——那条链路的 ctx 只从 canonicalArtistViaMusicBrainz/
 // musicBrainzPrimaryArtistName 两个入口往下穿,topartists.go 那边没有、也不需要 ctx 可传,
 // 所以这里的签名不变,内部对 musicbrainzThrottle/mbGetJSON 的调用用 context.Background()
 // (不可取消,但行为跟改动前完全一致)。
@@ -297,7 +297,7 @@ type mbSearchResponse struct {
 type mbAlias struct {
 	Name   string `json:"name"`
 	Locale string `json:"locale"`
-	// Type 用来挡"不是艺名"的别名(2026-08-18):MusicBrainz 给艺名歌手也登记
+	// Type 用来挡"不是艺名"的别名:MusicBrainz 给艺名歌手也登记
 	// 中文**法定名**(实测 ØZI 有一条 type="Legal name" 的「陳奕凡」),拿它当显示名
 	// 等于把艺人改叫回身份证名。只拒绝确定不该用的类型(Legal name/Search hint),
 	// 不做"只收 Artist name"的白名单——真实数据里 type 可能缺失(卢广仲那条连 locale
@@ -306,9 +306,9 @@ type mbAlias struct {
 }
 
 type mbArtistWithAliases struct {
-	// Country 是这次收紧判定的关键字段(2026-08-05 加,见 pickChineseAlias 注释)。
+	// Country 是这次收紧判定的关键字段(加,见 pickChineseAlias 注释)。
 	Country string `json:"country"`
-	// Name 是这位歌手在 MusicBrainz 上的**主名**(艺人页标题那个)。2026-08-20 加,
+	// Name 是这位歌手在 MusicBrainz 上的**主名**(艺人页标题那个)。加,
 	// 给 musicBrainzPrimaryArtistName 用 —— 本名/艺名互换那一类问题要的正是它。
 	Name    string    `json:"name"`
 	Aliases []mbAlias `json:"aliases"`
@@ -322,7 +322,7 @@ var chineseSpeakingCountries = map[string]bool{
 
 // pickChineseAlias 从别名列表里挑出该采用的中文名,挑不到返回空串。纯函数,有单测。
 //
-// ⚠️ 2026-08-05 修的真实 bug:原来这里只要"含汉字且 locale 不是 ja"就直接采纳第一条,
+// ⚠️ 修的真实 bug:原来这里只要"含汉字且 locale 不是 ja"就直接采纳第一条,
 // 结果把欧美艺人的中文译名也当成了规范名——实测 Michael Jackson 在 MusicBrainz 上就有
 // 一条 `迈克尔·杰克逊`(locale=yue_Hans_CN、type=Artist name、primary=true),于是所有
 // 新解析的 MJ 曲目历史里都显示成"迈克尔·杰克逊",跟同一批老缓存里的英文名不一致。
@@ -353,17 +353,17 @@ func pickChineseAlias(aliases []mbAlias, country string) string {
 	return ""
 }
 
-// musicbrainzMinScore 是"认为搜索命中的确实是这个歌手"的置信度门槛——2026-07-30 实测
+// musicbrainzMinScore 是"认为搜索命中的确实是这个歌手"的置信度门槛——实测
 // 坐实:精确/近似命中(比如"Crowd Lu"搜到盧廣仲本人)是 100 分,不相关的宽泛匹配(比如
 // 按姓氏"Lu"单字搜到一堆不相关艺人)只有 50~56 分左右,90 留了一点余量但仍然足够严格,
 // 避免把搜索词的宽泛匹配误认成确切命中。
 const musicbrainzMinScore = 90
 
 // lookupMusicBrainzChineseAlias 查一次 MusicBrainz 的 artist 搜索(按原始标签整体做
-// 全文搜索,不加 artist:"..." 这种字段限定语法——2026-07-30 实测坐实全文搜索比字段
+// 全文搜索,不加 artist:"..." 这种字段限定语法——实测坐实全文搜索比字段
 // 限定搜索召回率更高,后者对夹杂罗马化拼音/英文艺名的搜索词经常一个都搜不到),命中且
 // 置信度够高时再取一次这个艺人的别名列表,从别名里挑一个中文名(优先跳过明确标了日文
-// locale 的别名,防止把日文汉字别名误当中文——2026-07-30 实测这份别名列表里"卢广仲"
+// locale 的别名,防止把日文汉字别名误当中文——实测这份别名列表里"卢广仲"
 // 这条本身没有标 locale,不能简单按 locale==zh 过滤,只能反过来排除确定不是中文的)。
 // 任何一步失败/没有结果都返回空字符串,不重试、不报错——这条路径只是 canonical_artist
 // 解析链路的第一层,查不到时 resolveTrackEnrichment 现有的网易云/QQ 逻辑会接手。
@@ -413,9 +413,9 @@ var (
 // 删缓存文件里的 key"),一次偶发限速会把这位歌手**永久**钉死在"没有别名"上,而这条兜底
 // 恰恰是"所有源一条候选都没有"时最后的救命绳。
 //
-// 2026-08-20 实测反馈坐实了这个形态:同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条。
+// 实测反馈坐实了这个形态:同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条。
 //
-// ⚠️ 2026-08-30:值的类型从单个 string 改成 []string(见 musicBrainzArtistAliases 头注,
+// ⚠️ 值的类型从单个 string 改成 []string(见 musicBrainzArtistAliases 头注,
 // 一个歌手现在可能有不止一个候选写法)。磁盘上已有的旧格式文件(值是裸字符串,比如
 // `{"Khalil Fong":"方大同"}`)解码成新类型会直接失败——不能让用户已经攒下的缓存
 // 因为一次格式升级就整份作废,加一段兜底:新格式解码失败时退回旧格式尝试一次,查到的
@@ -481,7 +481,7 @@ func saveMBPrimaryNameCache() {
 // musicBrainzArtistAliases 给出"MusicBrainz 上这位歌手的其它已登记写法",仅当本地
 // 这个标签确实是同一位歌手登记过的写法才给;够不到条件返回 nil。
 //
-// 2026-08-20 加(当时叫 musicBrainzPrimaryArtistName,只给单个"主名")。修的是这个
+// 加(当时叫 musicBrainzPrimaryArtistName,只给单个"主名")。修的是这个
 // 实测案例:Apple Music 把《Hurry Up Tomorrow》整张专辑的歌手标成 **Abel Tesfaye**
 // (他 2025 年起用本名发行),而五个歌词源全部按 **The Weeknd** 索引 —— 原样查 0 条
 // 候选,换成 The Weeknd 五个源全有(最高 1162 分)。
@@ -492,7 +492,7 @@ func saveMBPrimaryNameCache() {
 // 写法"准备的,跟"本名 ↔ 艺名"是两件事。而那次查询本来就已经把主名拿回来了(搜索首条
 // name="The Weeknd"、score=100),只是被丢掉没用。
 //
-// ⚠️ 2026-08-30 订正:原来"搜到的主名跟本地标签相同就直接返回空、省掉第二次请求"这条
+// ⚠️ 订正:原来"搜到的主名跟本地标签相同就直接返回空、省掉第二次请求"这条
 // 优化本身问错了问题。实测案例:方大同《Lovers Policy》(专辑《15》,五源真实标题是
 // 《情胜策略》)。MusicBrainz 上这位歌手的**主名本身登记的就是"方大同"**(不是
 // "Khalil Fong")——本地标签恰好已经是"方大同"时,旧逻辑一看"主名==本地标签"就地
@@ -593,22 +593,22 @@ func resolvedArtistCJKHint(rawArtist string) string {
 // 的写法:
 //
 //  1. canonicalArtistViaMusicBrainz:MusicBrainz 的中文别名(country 门槛收紧过,
-//     不会把欧美艺人的中文译名误当规范名——2026-08-05 那个 Michael Jackson 展示成
-//     "迈克尔·杰克逊"的真实bug就是这道门槛修的,见 pickChineseAlias 头注)。
+//     不会把欧美艺人的中文译名误当规范名——那个 Michael Jackson 展示成
+//     "迈克尔·杰克逊"的真实故障就是这道门槛修的,见 pickChineseAlias 头注)。
 //  2. cachedQQArtistCanonicalName:QQ 音乐自己的歌手搜索建议——覆盖 MusicBrainz 查不到、
 //     或者查错成另一个同名艺人的场景(实测坐实:david tao 被 MB 排到一个无关的德国
 //     音乐人头上,lexie liu 被 MB 认成"刘昱妤",QQ 两个都查对)。
 //
 // ⚠️ 刻意不用 musicBrainzArtistAliases(retryArtistIdentities 用的那条通用查询)—— 那份
 // 返回值没有 country/locale 信息,没法在这一层补 pickChineseAlias 那道门槛,直接拿来当
-// 展示名会把 Michael Jackson 那个 2026-08-05 的真实bug重新引入(她的 MusicBrainz 别名
+// 展示名会把 Michael Jackson 那个的真实故障重新引入(她的 MusicBrainz 别名
 // 列表里确实登记着"迈克尔·杰克逊",type="Artist name",不区分 country 的话会被当成
 // 规范名)。retryArtistIdentities 场景下这种误差可以接受(只是多打一轮不会命中的搜索,
 // 后面 mergeLyricCandidateRounds 的打分会把不对版的候选筛掉),但这里是**直接写进展示
 // 字段**,标准必须更严。像"utada"(不带 Hikaru 的短写法)这类因此查不到的案例,留在
 // artistAliasTable 手工登记,见其头注。
 //
-// artistAliasTable(match.go)那几条手工登记**放在最前面查**,不是最后兜底——2026-08-31
+// artistAliasTable(match.go)那几条手工登记**放在最前面查**,不是最后兜底——
 // 把原来 23 条手工表逐条核对之后,剩下的残留案例不只是"两边都查不到",还有"QQ 音乐会
 // 查到,但查到的是另一个人"这种更危险的情况(实测:"Wanting"第一条建议是无关歌手
 // "婉婷",真正的曲婉婷反而是第二条——见 qqArtistCanonicalName 头注)。这种案例如果表

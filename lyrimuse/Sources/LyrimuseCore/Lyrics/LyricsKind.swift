@@ -19,7 +19,7 @@ public enum LyricsKind: String, CaseIterable, Sendable {
     /// collector 联网确证过"这首本来就没有词"(lrclib 的 instrumental / 网易云的 pureMusic)。
     ///
     /// ⚠️ 它排在 `.none` **前面**是有意的:确证过的纯音乐跟"没搜到"是两回事,混为一谈正是
-    /// 2026-08-20 在歌词管理列表里修过的那个错(一整批 LoL 原声带被显示成刺眼的红色
+    /// 在歌词管理列表里修过的那个错(一整批 LoL 原声带被显示成刺眼的红色
     /// 「无歌词」)。统计面板不该把那个错重新犯一遍。
     case instrumental
     /// 什么都还没有 —— 没搜到,或者还没轮到它。

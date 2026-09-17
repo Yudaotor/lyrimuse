@@ -113,7 +113,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 //  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
 //     不单独占一个歌手名额;
 //  2. resolveGenericArtistCanonicalName(musicbrainz.go):已知的英文/罗马化艺名换成
-//     本库常用中文名(比如"Dean Ting"→"丁世光")——2026-08-31 起从只查
+//     本库常用中文名(比如"Dean Ting"→"丁世光")——从只查
 //     knownArtistAlias(match.go 的 artistAliasTable)改成先试 MusicBrainz/QQ 音乐
 //     两条通用机制,只有两条都查不到才落到手工表那两条真实残留案例,见其头注;
 //  3. toSimplified:繁体折成简体(比如"周杰倫"和"周杰伦"折成同一个键);
@@ -136,10 +136,10 @@ func artistMergeNameKey(name string) string {
 // toSimplified/大小写折叠:那两步只是"判断是否同一个人"内部用的归一化,不代表要悄悄篡改
 // 这个人在库里原本的书写(繁体来源就展示繁体,不强制转简体)。
 //
-// ⚠️ 2026-08-17 去掉了原来第一步的 firstCreditedArtist(从合credit 串里猜第一个歌手)。
+// ⚠️ 去掉了原来第一步的 firstCreditedArtist(从合credit 串里猜第一个歌手)。
 // 那一步会**凭空造出一个数据里根本没出现过的名字**:`firstCreditedArtist` 按分隔符切段,
 // 而 `/` 既是常见分隔符、又可能是人名自身的一部分,于是 "K/DA" 被切成 ["K","DA"]、
-// 显示成 **"K"** —— 一个不存在的歌手。实测(用户报):Top 榜里 "K/DA" 和
+// 显示成 **"K"** —— 一个不存在的歌手。实测:Top 榜里 "K/DA" 和
 // "K/DA/Madison Beer/(G)I-DLE/Jaira Burns" 的**合并本身是对的**(两者的 nameKey 都塌缩
 // 成 "k",次数正确相加),错的只有这个显示名。
 //
@@ -319,11 +319,11 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 			b.name, b.nameParts = display, parts
 		}
 		// 中文成员名单独一条挑选轨:这个库的主体是华语音乐,同一个人有中文写法时
-		// 中文就是"本库常用名"(2026-08-18 用户核对 Top100 的直接反馈——"窦靖童"和
+		// 中文就是"本库常用名"(用户核对 Top100 的直接反馈——"窦靖童"和
 		// "Leah Dou"合并后该显示前者)。⚠️ 只认**单人**写法(credit 段数 1):不加这个
 		// 限制,"Michael Jackson"会被桶里一条 2 次播放的"Michael Jackson & 克里夫兰
 		// 管弦乐团"顶掉——含汉字的合唱串说明不了这个人常用中文名,只说明某张发行的
-		// 合作方是中文写法(首版实测翻车)。平手先到者(=播放多的写法)优先。
+		// 合作方是中文写法(实测翻车过)。平手先到者(=播放多的写法)优先。
 		if parts == 1 && containsHan(display) && b.hanName == "" {
 			b.hanName = display
 		}
@@ -347,7 +347,7 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 		out = append(out, lastfmChartEntry{Name: name, PlayCount: b.playCount})
 	}
 	// SliceStable:平分的歌手保持合并前的相对次序(合并前列表来自 Last.fm,本身有序),
-	// sort.Slice 的不稳定性会让平分名次每次刷新随机跳(审阅指出)。
+	// sort.Slice 的不稳定性会让平分名次每次刷新随机跳。
 	sort.SliceStable(out, func(i, j int) bool { return out[i].PlayCount > out[j].PlayCount })
 	return out
 }

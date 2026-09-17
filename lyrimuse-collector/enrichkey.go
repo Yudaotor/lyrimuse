@@ -25,7 +25,7 @@ import (
 //
 // 后果不只是"歌词管理里多一行"。两份歌词的**断行和时间轴根本不是一份东西**(43 行 vs
 // 83 行,后者把每个短句单独成行),于是用哪个播放器听,歌词推进的节奏就不一样 ——
-// 2026-08-14 用户报的"Spotify 的进度比 Apple Music 快"就是这么来的:位置读数两边都准到
+// 现象是"Spotify 的进度比 Apple Music 快"就是这么来的:位置读数两边都准到
 // 40 毫秒以内(实测),真正不同的是**读到了两份不同的歌词**。而且选中哪一份纯看播放器怎么
 // 拼歌名,跟 collector 自己算出来的 lyrics_score 谁高谁低毫无关系 —— 这条更要命,等于把
 // 已经算好的质量判断丢掉了。
@@ -52,7 +52,7 @@ var enrichKeyVersionWords = []string{
 	"reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
 	"unplugged", "acappella", "a cappella",
 	"interlude", "intro", "outro", "skit", "prelude", "overture",
-	// 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
+	// 真实故障(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
 	// 这张表里,归一化把整段括号连着"慢板"一起剥掉,存进缓存的 key 变成"Secret"——跟
 	// 正式完整版的《Secret》撞成同一个 key,而"(慢板)"这版实际时长只有 68 秒,是电影原声带
 	// 里单独收录的钢琴慢版重奏,跟正式版是**两个不同的录音**(理由跟"版"字那条一致:剥掉
@@ -182,7 +182,7 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 // 名字、而且正是胜出的那条"能留着自己的文件;其余(改了名的胜者、以及所有落选者)一律删,
 // 由紧随其后的 exportLyricsFiles 用胜出条目重新写一份。
 //
-// ⚠️ 2026-08-14 实测踩到的坑,这个函数存在的全部理由:第一版的判据是"k != newKey 才删",
+// ⚠️ 这个函数存在的全部理由:判据**不能**写成"k != newKey 才删",
 // 于是**落选**条目只要它的 key 恰好等于归一化后的 key(带译名的那条胜出时必然如此),它的
 // .lrc 就被留在盘上;紧接着 importLyricsFromFiles 按文件头部标签算出同一个 key,把落选那份
 // 正文又盖回胜出条目上 —— 得到一条 lyrics_score/lyrics_source 记着胜者、正文却是败者的
@@ -228,7 +228,7 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 	return groups
 }
 
-// splitByDuration 是"慢板/快板"那次真实bug之后加的硬兜底。enrichKeyVersionWords
+// splitByDuration 是"慢板/快板"那次真实故障之后加的硬兜底。enrichKeyVersionWords
 // 是个关键词清单,永远会漏词(下一次可能是"钢琴版"/"acoustic"/随便什么词,清单只能
 // 越补越长),但两个不同录音的时长几乎不可能碰巧一样 —— 拿时长再兜一道,清单漏词时
 // 也不至于把两首不同的歌合并成一条。
@@ -287,7 +287,7 @@ func enrichKeyDurationVariant(key string, n int) string {
 	return artist + "|" + fmt.Sprintf("%s~dur%d", title, n) + "|" + album
 }
 
-// resolveEnrichKeyForDuration 是"慢板/快板"那次真实bug的第二道兜底 —— splitByDuration
+// resolveEnrichKeyForDuration 是"慢板/快板"那次真实故障的第二道兜底 —— splitByDuration
 // 挡的是"启动时合并存量 key",这里挡的是**实时**场景:第一次遇到某首歌时,它的标题
 // 就直接被(清单没收录的)版本词坑剥成了跟另一首歌相同的 key,而那首歌是 trackEnrichment
 // **首次**建条目,压根没有"合并"这一步可拦——单纯是 map 里已经有人占了这个 key。

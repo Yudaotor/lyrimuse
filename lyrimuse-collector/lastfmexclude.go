@@ -9,19 +9,19 @@ import (
 	"time"
 )
 
-// 按播放器决定要不要 scrobble 到 Last.fm(2026-09-10,借鉴清单 S10)。
+// 按播放器决定要不要 scrobble 到 Last.fm。
 //
 // 设置 → 账号 → Last.fm → 设置 →「Scrobble 的播放器」取消勾选的写进 features.json 的 lastfm_excluded_bundles
 // (bundle id 列表;内置播放器用各自的 bundle id,信任列表里的 App / 浏览器用它们自己的)。缺失 / 空 = 全部上送,
 // 跟其余"缺字段 = 沿用现有行为"的键同一口径,新装机与老配置都不会突然少记。
 //
-// **只管 Last.fm**(用户 2026-09-10 原话「只控制 lastfm 的上送」,与短曲目 / scrobble 时点 / 合唱歌手三项同一口径,
+// **只管 Last.fm**(与短曲目 / scrobble 时点 / 合唱歌手三项同一口径,
 // 见 12 章决策 9):挡的是 track.scrobble 的镜像(recordLastfmListen → settleLastfmPending)、给它兜底的本地收听日志与
 // 回填、以及 track.updateNowPlaying(announce)。ListenBrainz 的 single / playing_now、网页中继、歌词、iPhone 桥接
 // 一律不受影响。判定在开会话那一拍算一次存进 playSession.lastfmExcluded(跟 isAd 同一个位置):一首歌中途改设置
 // 不该把同一次收听切成两半;何况 collector 只在启动时读一次这份文件,改设置本来就伴随一次重启。
 //
-// **改这一项不重启 collector**(2026-09-10 第二轮,用户「1 吧」拍板):这份名单按 features.json 的 mtime 热重读,
+// **改这一项不重启 collector**(「1 吧」拍板):这份名单按 features.json 的 mtime 热重读,
 // 写法照搬 lyricspins.go 的 lyricsPinned —— 每次调用只 Stat 一下,mtime 或大小任一变了才重新解析。
 // 起因是量出「点一下芯片」的真实代价:App 写盘后走 launchctl kickstart -k 重启 collector,而 collector 每次启动
 // 要在 74MB 歌词缓存之上跑九道迁移 + 全量导入导出 14307 个歌词文件,当天四次重启从收到 SIGTERM 到打出启动横幅
@@ -65,7 +65,7 @@ func lastfmExcluded(bundleID string) bool {
 	return false
 }
 
-// ---- features.json 里这一个键的热重读(2026-09-10)----
+// ---- features.json 里这一个键的热重读----
 
 var (
 	// 由 main() 跟其余路径一起设定。为空(一次性 CLI 子命令那些提前返回的分支)时退回启动时解析好的

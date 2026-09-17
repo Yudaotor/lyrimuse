@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 封面选源的专辑感知(2026-08-20)。
+// 封面选源的专辑感知。
 //
 // 起因是一次真实反馈:"最近记录"里蔡徐坤《KUN》连播 11 首,其中 Deadman / Jasmine /
 // What a Day 三首的封面跟其它 8 首不是同一张。查下来是**网易云上没有 KUN 这张专辑、
@@ -53,7 +53,7 @@ func TestPreferAppleCoverOverNetease(t *testing.T) {
 	}
 }
 
-// 存量条目怎么被重新解析一次:cover_album 是 2026-08-20 才加的字段,老条目一律为空,
+// 存量条目怎么被重新解析一次:cover_album 是才加的字段,老条目一律为空,
 // 只能靠补一次重解析来判定 + 写上。
 func TestCoverNeedsAlbumCheck(t *testing.T) {
 	cases := []struct {
@@ -78,7 +78,7 @@ func TestCoverNeedsAlbumCheck(t *testing.T) {
 			album: "KUN", want: false,
 		},
 		{
-			// 2026-08-26 收严:albumScore 的 100 分档("宽松包含"——本地专辑名的基础部分
+			// 收严:albumScore 的 100 分档("宽松包含"——本地专辑名的基础部分
 			// 是候选专辑名的超集,比如带了"(Gold) [Explicit]"这类版本后缀)不等于真的对上
 			// 版,得补查。方大同「很不低调」实测坐实:网易云那张《JTW西游记》是本地
 			// 《JTW 西游记 (Gold) [Explicit]》的子串、算 100 分,但两版封面完全不同。
@@ -193,7 +193,7 @@ func TestCoverSwapAllowed(t *testing.T) {
 			album: "KUN", want: false,
 		},
 		{
-			// 2026-08-26:方大同「很不低调」/「烦」——网易云、Apple 都只收录了旧版
+			// 方大同「很不低调」/「烦」——网易云、Apple 都只收录了旧版
 			// 《JTW西游记》,新版《JTW 西游记 (Gold) [Explicit]》只有 QQ 音乐有。QQ 那档
 			// 从不回传 CoverAlbum,不能套"网易云应答过 + albumScore > 0"那条正面证据,
 			// 得单独放行,否则永远换不进去。
@@ -203,14 +203,14 @@ func TestCoverSwapAllowed(t *testing.T) {
 			album: "JTW 西游记 (Gold) [Explicit]", want: true,
 		},
 		{
-			// 2026-08-31 真实bug(Michael Jackson《Workin' Day and Night (Immortal
+			// 真实故障(Michael Jackson《Workin' Day and Night (Immortal
 			// Version)》):device 一旦定案就不该再被 backfillPeripheralFields 的外围自愈
 			// 换掉——即使 fresh 命中的是上面那条"QQ 无条件放行"。这类不需要中文别名的
 			// 外国歌手,canonical_artist 永远解不出来,needsPeripheralBackfill 因此每隔
 			// enrichPeripheralRetryInterval 就重新判"缺",反复触发这条外围自愈,每次都会把
 			// 刚定案的正确设备封面换成网易云/Apple/QQ 这次又猜错的某个结果——原封面来源
 			// 一直换,表现为封面在几次重试之间来回变。
-			// ⚠️ 2026-09-02 起这两条的语义变了:device 分支改成"问一次能不能升级"
+			// ⚠️ 这两条的语义变了:device 分支改成"问一次能不能升级"
 			// (见 coverquality.go)。它们现在验的是**判据说不能升级时,一律不换** ——
 			// 上面那段《Immortal》的保护正是靠这一档(那张 QQ 高清图不是同一张图,
 			// 判据会拒绝升级)。下面用桩把判据固定成"不能升级",不发真实网络请求。
@@ -226,7 +226,7 @@ func TestCoverSwapAllowed(t *testing.T) {
 			album: "Immortal", want: false,
 		},
 		{
-			// 2026-09-02 新增:判据说"可以升级"(低分辨率设备封面 + 同一张图的高清远程版,
+			// 新增:判据说"可以升级"(低分辨率设备封面 + 同一张图的高清远程版,
 			// 《24K Magic》那一档)时必须放行 —— 否则那 21 条存量低分辨率封面永远糊着。
 			name:  "旧封面来自device但可升级:换",
 			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "24K Magic"},
@@ -248,7 +248,7 @@ func TestCoverSwapAllowed(t *testing.T) {
 	}
 }
 
-// 2026-08-27:方大同「Once」——QQ 搜索对这首歌唯一收录的记录专辑名文本上对得上,挂的
+// 方大同「Once」——QQ 搜索对这首歌唯一收录的记录专辑名文本上对得上,挂的
 // 封面却是另一款合集版,跟同专辑其它曲目实际的单张封面是两张图。siblingAlbumCover 是
 // 兜底的最后一道:同专辑邻居里已经有 qq 定案的封面就借来用。
 func TestSiblingAlbumCover(t *testing.T) {
@@ -270,7 +270,7 @@ func TestSiblingAlbumCover(t *testing.T) {
 	if url != "https://qq/right.jpg" || source != "qq" {
 		t.Errorf("siblingAlbumCover = (%q, %q), want (https://qq/right.jpg, qq)", url, source)
 	}
-	// 2026-09-07:借到的 qq 图**不认领专辑归属** —— QQ 从不回传专辑名,这一档的
+	// 借到的 qq 图**不认领专辑归属** —— QQ 从不回传专辑名,这一档的
 	// cover_album 本来就是空的,借用不该把它升级成"已核实"。见 siblingAlbumCover 头注。
 	if verified {
 		t.Error("借来的 qq 封面不该报 albumVerified —— 那会让调用方盖上 cover_album,凭空造出一条归属证据")
@@ -285,7 +285,7 @@ func TestSiblingAlbumCover(t *testing.T) {
 	}
 }
 
-// 2026-09-07 用户报《Michael》/「Hold My Hand (with Akon)」封面不对:显示的是 QQ 的
+// 现象是《Michael》/「Hold My Hand (with Akon)」封面不对:显示的是 QQ 的
 // 《The Ultimate Collection》,而同一张专辑另外三首在本机播过、拿到的是设备直送的正确
 // 封面。第一档就是为这种形态加的 —— 归属由播放时刻本身保证的那张图,可以连归属一起借走。
 func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
@@ -351,7 +351,7 @@ func TestSiblingAlbumCoverIsDeterministic(t *testing.T) {
 	}
 }
 
-// 自愈触发判据(2026-09-07)。刻意收得很窄:只有"同专辑真有一张归属可外借的邻居"才算缺,
+// 自愈触发判据。刻意收得很窄:只有"同专辑真有一张归属可外借的邻居"才算缺,
 // 否则 QQ 正常给对图的那一大类(cover_album 恒空、补不上)会每条白重试满 5 次。
 func TestCoverCanUpgradeToVerifiedSibling(t *testing.T) {
 	savedCache := enrichCache
@@ -391,7 +391,7 @@ func TestCoverCanUpgradeToVerifiedSibling(t *testing.T) {
 	}
 }
 
-// 借来的 device 封面要过得了外围自愈那道换封面闸(2026-09-07)。这条路径上 fresh 只可能靠
+// 借来的 device 封面要过得了外围自愈那道换封面闸。这条路径上 fresh 只可能靠
 // 借拿到 device 来源,而它的归属是实测证据,不该再被"网易云这一轮应答过没有"那条代理证据拦住。
 func TestCoverSwapAllowedAcceptsBorrowedDeviceCover(t *testing.T) {
 	const album = "Michael"
@@ -403,7 +403,7 @@ func TestCoverSwapAllowedAcceptsBorrowedDeviceCover(t *testing.T) {
 		t.Error("借来的 device 封面该被接受 —— 它不带 NeteaseURL,旧判据会把它永远拦在缓存外")
 	}
 	// old 本身是 device 时仍然只走"是不是同一张图的高清版"那条判据,新档不许绕过它
-	// (2026-08-31《Immortal》那次真实 bug 就是被这条守住的)。
+	// (《Immortal》那次真实 bug 就是被这条守住的)。
 	saved := deviceCoverUpgradable
 	defer func() { deviceCoverUpgradable = saved }()
 	deviceCoverUpgradable = func(string, string) bool { return false }
@@ -413,7 +413,7 @@ func TestCoverSwapAllowedAcceptsBorrowedDeviceCover(t *testing.T) {
 	}
 }
 
-// 存量清洗:擦掉借用时盖上的假归属戳(2026-09-07,本机实测 386 条)。
+// 存量清洗:擦掉借用时盖上的假归属戳(本机实测 386 条)。
 func TestMigrateBorrowedCoverAlbums(t *testing.T) {
 	savedCache := enrichCache
 	defer func() { enrichCache = savedCache }()

@@ -139,17 +139,17 @@ final class LastfmConnectController: ObservableObject {
 
     // 本次流程用的密钥,start() 时**钉死**在这里 —— confirm/reopen/回调一律用这份,
     // 不再读输入框的现值。原来 confirm 用的是调用那一刻输入框里的 Key/Secret:授权页
-    // 开着的时候改一下密钥再点"继续",换 session 必败还查不出为什么(审阅指出)。
+    // 开着的时候改一下密钥再点"继续",换 session 必败还查不出为什么。
     private var pendingAPIKey = ""
     private var pendingSecret = ""
 
     // 代际计数器:reset()/新一轮 start() 都会自增。所有 async 收尾在写状态/开浏览器/
     // 写配置之前核对代际 —— 原来"取消"只是把 state 扳回 idle,在途的 requestToken
-    // 完成后照样开浏览器+把状态改成 waitingForBrowserAuth,整个流程被复活(审阅确认)。
+    // 完成后照样开浏览器+把状态改成 waitingForBrowserAuth,整个流程被复活。
     private var gen = 0
 
     func start(apiKey: String, secret: String) {
-        // 2026-07-29 起"账号信息"只有一套 API Key/Secret(合并了原来单独存在的只读
+        // "账号信息"只有一套 API Key/Secret(合并了原来单独存在的只读
         // Key),这里不再需要用"Scrobble API Key"这个名字跟另一个字段区分,直接叫
         // "API Key"就够。
         guard !apiKey.isEmpty else {
@@ -158,7 +158,7 @@ final class LastfmConnectController: ObservableObject {
             return
         }
         // Secret 到 exchange 那步才真正用到,但现在就校验 —— 空着走完浏览器授权才失败,
-        // 一次性 token 白白作废,用户还得重走一遍(审阅指出)。
+        // 一次性 token 白白作废,用户还得重走一遍。
         guard !secret.isEmpty else {
             logger.error("start: blocked — Secret is empty")
             state = .failed(L10n.t("请先填写 Secret"))
@@ -208,9 +208,9 @@ final class LastfmConnectController: ObservableObject {
                 // 不等 collector 下一次成功提交再删,界面反馈要即时。
                 LastfmMirrorStatus.clear()
                 // 可能连的是另一个账号:上一个账号的统计/头像/榜单全部作废,让信息页
-                // 按新身份重拉(审阅指出旧账号数据会一直挂着)。
+                // 按新身份重拉(否则旧账号数据会一直挂着)。
                 LastfmStatsService.shared.resetAll()
-                // 首次连接就开始后台引导同步(2026-08-25),不等用户点进某个 tab ——
+                // 首次连接就开始后台引导同步,不等用户点进某个 tab ——
                 // 见 LastfmStatsService.ensureFirstSyncBootstrap 的注释。
                 LastfmStatsService.shared.ensureFirstSyncBootstrap()
                 // 桥接用的"用户名"字段自动回填——只在还没手动填过时才带过去,不覆盖用户
@@ -244,7 +244,7 @@ final class LastfmConnectController: ObservableObject {
         state = .idle
     }
 
-    // 2026-07-29 新增:浏览器授权页(见 authorizeURL 的 cb= 参数)完成授权后会自动
+    // 新增:浏览器授权页(见 authorizeURL 的 cb= 参数)完成授权后会自动
     // 跳转回 lyrimuse://lastfm-auth-callback,AppDelegate 收到这个 URL 事件后调这里,
     // 免去用户手动点"我已完成授权,继续"这一步。回调 URL 本身不带任何凭据,只是"用户
     // 已经点了 Yes, allow access"的信号——真正换 session key 仍然是重新调一次

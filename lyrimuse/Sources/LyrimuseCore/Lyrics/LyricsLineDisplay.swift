@@ -13,7 +13,7 @@ import Foundation
 /// 顺序错了不编译报错、不崩、不报警,只会长期显示一句**似是而非**的状态(比如一首纯音乐
 /// 永远停在"搜索歌词中…")。所以它值得被 selftest 钉住,而不是靠每个 View 各自誊一遍。
 ///
-/// 2026-08-19 加菜单栏面板那一行歌词时抽的:那是第四个要走同一条链的地方,再誊一遍就是
+/// 加菜单栏面板那一行歌词时抽的:那是第四个要走同一条链的地方,再誊一遍就是
 /// 四份。另外三处暂时还是各自的内联版本(它们各有描边/阴影/配色的包装),要收敛得另开一刀。
 public enum LyricsLineDisplay: Equatable, Sendable {
     /// 有逐字时间轴 —— 调用方按 words 做卡拉OK填色。
@@ -21,7 +21,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
     /// 只有整行文本(行级 LRC,没有逐字数据)。
     case plain
     case adBreak
-    /// 电台口白 / 台卡(2026-09-11):这一刻在放的不是歌。语义与 adBreak 平行,顺序也挨着它。
+    /// 电台口白 / 台卡:这一刻在放的不是歌。语义与 adBreak 平行,顺序也挨着它。
     case radioTalk
     case instrumental
     case noLyrics
@@ -47,7 +47,7 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         if isAdBreak { return .adBreak }
         // 电台口白 / 台卡:跟广告同一个理由必须排在 searching 之前 —— 那段元数据还停在上一首(口白)
         // 或者压根不是歌(台卡),歌词永远不会有下文,不拦就一直显示「搜索歌词中…」。
-        // 用户 2026-09-11 在歌词窗口上报过这个(截图里正是开台那几十秒还在转圈搜)。
+        // 用户在歌词窗口上报过这个(截图里正是开台那几十秒还在转圈搜)。
         if isRadioTalk { return .radioTalk }
         if isInstrumental { return .instrumental }
         if hasNoLyrics { return .noLyrics }

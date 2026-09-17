@@ -1,7 +1,7 @@
 import SwiftUI
 import LyrimuseCore
 
-/// 设置窗口顶部的「配置文件损坏」告示(2026-09-05,借鉴清单 #46)。平时不渲染、不占高度。
+/// 设置窗口顶部的「配置文件损坏」告示。平时不渲染、不占高度。
 ///
 /// 两份共享配置文件(config.json / lyrimuse-features.json)任一在启动时判定为损坏(见 Core
 /// `JSONConfigDocument` 三态),对应 Store 的 `loadFailure` 非空、所有保存都被拒。这里说清三件事:哪份

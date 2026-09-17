@@ -17,7 +17,7 @@ const (
 )
 
 // TestLyricRecordingTriangleOnRealKugouRows 用**酷狗搜索接口的真实返回行**锁住
-// "只放行正主那一条"。这 6 行是 2026-08-22 实测 keyword="南拳妈妈弹头 枫+退后+搁浅"
+// "只放行正主那一条"。这 6 行是实测 keyword="南拳妈妈弹头枫+退后+搁浅"
 // (searchTitleVariants 的第二条变体,酷狗一定会跑到它——kugouLookup 只在 chosen!=nil
 // 时才 break)返回的前 6 条,逐字抄下来。
 //

@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// 退出原因日志(2026-09-03)。常驻 collector 的每一条退出路径在退出前都打一行
+// 退出原因日志。常驻 collector 的每一条退出路径在退出前都打一行
 //
 //	exiting reason=<code> [detail]
 //

@@ -1,6 +1,6 @@
 import Foundation
 
-/// "歌词源的曲库里有这首歌"的判据(2026-09-05,见 EnrichCacheStore.Summary.knownOnSources)。
+/// "歌词源的曲库里有这首歌"的判据(见 EnrichCacheStore.Summary.knownOnSources)。
 ///
 /// 两个字段的形状来自 collector:
 ///   - `netease_url` 只在网易云真的匹配到曲目时才写(`https://music.163.com/song?id=<id>`),
@@ -16,7 +16,7 @@ public enum EnrichSourcePresence {
         return false
     }
 
-    /// 「最近一轮一个源都没应答」(2026-09-12,借鉴清单 V4)。
+    /// 「最近一轮一个源都没应答」。
     ///
     /// 上面 `knownOnSources` 判的是**历史事实**——某一轮确实在网易云 / QQ 曲库里定位到了这首歌;
     /// 而这条判的是**最近这一轮的状态**。两者可以同时成立,而它们给用户的行动建议相反:

@@ -1,7 +1,7 @@
 import LyrimuseCore
 import Foundation
 
-// 设置搜索(2026-09-09,借鉴清单 S8):Core 目录 ↔ 源码调用点 ↔ 本地化 catalog 三方对账,加匹配器纯函数。
+// 设置搜索:Core 目录 ↔ 源码调用点 ↔ 本地化 catalog 三方对账,加匹配器纯函数。
 //
 // 目录是静态表,会漂;这一组守的就是"漂了要红":
 //   1. 目录自身:id 不重复、面包屑非空、目的地 / 分段取值跟 SettingsView / AccountLinkingTab 里的枚举

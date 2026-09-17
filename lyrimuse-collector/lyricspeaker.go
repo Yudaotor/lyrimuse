@@ -95,7 +95,7 @@ var lyricInstrumentRoots = []string{
 }
 
 // 整个标签正好是这些词之一才算署名 —— 只能等值比,不能包含比:「曲」是姓(曲婉婷)。
-// 非补不可的理由(2026-08-23 实测):串烧 Live 里署名行会重复出现,《夜曲+窃爱 (Live)》
+// 非补不可的理由:串烧 Live 里署名行会重复出现,《夜曲+窃爱 (Live)》
 // 「词」x2「曲」x2、《大笨钟+暗号+彩虹+龙卷风 (Live)》各 x4,整份判据拦不住。
 // 与 Swift 侧 LyricDuet.exactCreditLabels 同一份表,改一边必须改另一边。
 var lyricExactCreditLabels = func() map[string]bool {

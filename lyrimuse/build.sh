@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 重建桌面歌词悬浮窗 App，打包成正经的 .app 装进 bin/ 里(2026-07-18 起——之前是裸
-# 可执行文件靠 NSApp.setActivationPolicy(.accessory) 表现成菜单栏应用，用户反馈想要
+# 重建桌面歌词悬浮窗 App，打包成正经的 .app 装进 bin/ 里(——之前是裸
+# 可执行文件靠 NSApp.setActivationPolicy(.accessory) 表现成菜单栏应用，现象是想要
 # 能从 Dock/Finder 双击启动，改成打包成真正的 .app bundle；LSUIElement 仍然让它运行期间
 # 不占 Dock/Cmd-Tab，只是现在多了一个可以拖进 Dock 当启动器用的图标)。这是用户随时可能
 # 主动 Cmd-Q 退出的前台 GUI 工具，不是 KeepAlive 常驻服务——"重启"这一步只是"如果当前有
@@ -14,7 +14,7 @@
 #   ./build.sh --dest <路径>  组装到指定路径而不是 /Applications(隐含 --no-restart),
 #                             供 package.sh 一次跑出两种架构的包
 #
-# 2026-08-06 这里改过两轮,最终定成"分开发两份",过程值得记下来免得又绕回去:
+# 这里改过两轮,最终定成"分开发两份",过程值得记下来免得又绕回去:
 #
 # 起因是发现 v1.0.0~v1.2.0 发出去的全是 arm64-only —— 发布包在本机手动打,而这里当时默认
 # 只编本机架构,cask 只写 `depends_on macos: :sonoma`、appcast 只写 minimumSystemVersion,
@@ -59,12 +59,12 @@ else
   ARCHES="$(uname -m)"
 fi
 
-# 拿什么身份签(2026-09-11)。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
+# 拿什么身份签。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
 #
 # 为什么要这个:ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash
 # (`codesign -d -r-` → `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
 # 二进制一重编 cdhash 就变,存的那条再也对不上 —— 用户看到的是「设置里的勾还亮着,App 却说没授权」,
-# 每次 build.sh 之后都要手动把勾取消再勾上一遍(2026-09-11 用户第 N 次撞上:「为什么我明明已经有授权了,
+# 每次 build.sh 之后都要手动把勾取消再勾上一遍(用户第 N 次撞上:「为什么我明明已经有授权了,
 # 每次点击跳过广告还是会说让我去授权?」)。换成一张固定的自签名证书之后,要求变成
 # `identifier "..." and certificate root = H"<证书>"` —— **跟二进制内容无关**,重编多少次授权都还在。
 #
@@ -109,7 +109,7 @@ LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # scripts/build-version.sh 另算成四段纯数字(原因见那个脚本头注)。CI(release.yml)在真正打 tag 触发时会
 # 传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量。
 #
-# ⚠️ 2026-08-27 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
+# ⚠️ 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
 # 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
 # 就是本地 `./build.sh`(见 repo CLAUDE.md),诊断导出的「App version」这一行因此
 # 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里 collector
@@ -127,13 +127,13 @@ BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
   echo "!! 版本号形态不合法: $APP_VERSION(要 X.Y.Z 或 X.Y.Z-alpha|beta|rc.N,见 scripts/build-version.sh)" >&2
   exit 1
 }
-# 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
+# 装到 /Applications/ 而不是仓库自己的 bin/ 里(改的——一开始装在 bin/
 # 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
 # 发现。/Applications/ 才是这个 App 实际使用的位置,以后 build.sh 直接装到这里，不再
 # 留一份 bin/ 下的拷贝，避免"到底哪份是真的在跑"这种混乱再发生一次)。
 # 默认装到 /Applications;--dest 让 package.sh 把包组装到暂存目录,好一次产出多种架构。
-# ⚠️ 2026-08-31:不再**就地**组装 /Applications 里那个包。
+# ⚠️ 不再**就地**组装 /Applications 里那个包。
 #
 # 起因是多会话协作时反复撞车:两个会话同时跑 build.sh,一个正往 /Applications/Lyrimuse.app
 # 里增删改签、另一个同时在改同一个包,实测撞出过两种表现——
@@ -170,21 +170,21 @@ else
   APP_DIR="$STAGE"
 fi
 BIN="$APP_DIR/Contents/MacOS/lyrimuse"
-# 2026-07-20:App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
+# App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
 # Label,TCC 自动化权限按这个认)和 Info.plist 的 CFBundleIdentifier(UserDefaults
-# 偏好域按这个认)一起统一改成同一个反向域名式字符串——早先(2026-07-18 打包成 .app
+# 偏好域按这个认)一起统一改成同一个反向域名式字符串——早先(打包成 .app
 # 那次)特意把这两者分开,是因为那次只是"裸可执行文件→.app 包"的格式迁移,需要
 # CFBundleIdentifier 继续等于旧的裸可执行文件隐式落的偏好域名"desktop-lyrics"、才能
 # 无缝接上已有设置;这次是主动做一次完整改名+一次性数据迁移(见下方 UserDefaults
 # 迁移步骤),不再需要保留那个历史包袱,直接统一成标准写法更清爽。副作用:改这两个
 # 字符串意味着 TCC 会认成一个新 App,自动化权限(控制 Music.app 播放)会重新弹一次
-# 系统授权对话框——这是这次改名一次性的代价,同意一次之后往后都不会再弹。
+# 系统授权对话框——这是改名一次性的代价,同意一次之后往后都不会再弹。
 # LABEL 在上面跟 APP_NAME 一起定义。
 # 合并后的二进制放这里。**不要**用 .build/release —— 那是个指向"最后一次构建的那个
-# 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(2026-08-06 实测:
+# 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(实测:
 # 跑完一次 `swift build --arch x86_64` 之后 .build/release 就指向
 # x86_64-apple-macosx/release 了)。
-# ⚠️ 2026-08-31 从固定的 ".build/fat" 改成 per-run 临时目录。原来是所有会话共用同一个
+# ⚠️ 从固定的 ".build/fat" 改成 per-run 临时目录。原来是所有会话共用同一个
 # 路径,而下面这句 `rm -rf` 会把**另一个会话刚 lipo 出来的切片**一起删掉,那边随后 cp 到
 # 空气(或者拷到一个只写了一半的文件)。SwiftPM 的 .build/.lock 只锁 `swift build` 本身,
 # 管不到这里。跟上面的暂存包是同一族问题(共享可写路径),顺手一并修掉。
@@ -195,18 +195,18 @@ echo "==> building (release) [$ARCHES]"
 # 出 universal —— 后者要走 xcbuild
 # (/Library/Developer/SharedFrameworks/XCBuild.framework/.../xcbuild),那是**完整 Xcode**
 # 才有的组件,只装 Command Line Tools 的机器上直接报 "xcbuild executable ... does not
-# exist or is not executable"(2026-08-06 实测)。单 --arch 交叉编译不经过 xcbuild,可用。
+# exist or is not executable"。单 --arch 交叉编译不经过 xcbuild,可用。
 SWIFT_SLICES=()
 TRANSLATE_SLICES=()
 ROMANIZE_SLICES=()
-# LYRIMUSE_SPM_CACHE_PATH / LYRIMUSE_SPM_SCRATCH_PATH(2026-09-07,包管理器构建用):
+# LYRIMUSE_SPM_CACHE_PATH / LYRIMUSE_SPM_SCRATCH_PATH(包管理器构建用):
 # 把 SwiftPM 的下载缓存与构建产物重定向出默认的 ~/Library/Caches 和 ./.build——包管理器
 # 的构建沙箱只允许写它自己那棵工作树。两个变量各自独立(而不是一个「附加参数」字符串),
 # 因为 MacPorts 的 build.env 传不了带空格的值。默认为空,对现有路径零影响。
 SPM_PATH_ARGS=()
 [ -n "${LYRIMUSE_SPM_CACHE_PATH:-}" ] && SPM_PATH_ARGS+=(--cache-path "$LYRIMUSE_SPM_CACHE_PATH")
 [ -n "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] && SPM_PATH_ARGS+=(--scratch-path "$LYRIMUSE_SPM_SCRATCH_PATH")
-# LYRIMUSE_NO_SPARKLE(2026-09-16,包管理器构建用):Package.swift 按这个变量决定 Sparkle
+# LYRIMUSE_NO_SPARKLE(包管理器构建用):Package.swift 按这个变量决定 Sparkle
 # 依赖进不进来。SwiftPM 会**缓存清单的求值结果**,而缓存键不含环境变量 —— 同一棵工作树上
 # 切换这个变量,不失效缓存就可能仍按上一次的清单构建(依赖还在、却按无 Sparkle 编译,或者
 # 反过来)。只在设了这个变量时关掉清单缓存,默认路径的构建速度一点不受影响。
@@ -224,13 +224,13 @@ merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
-# 2026-07-21:collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
+# collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
 # 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
 # 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-collector/build.sh 同款
 # GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
 echo "==> building collector [$ARCHES]"
-# collector 是纯 Go(没有 import "C",2026-08-06 核实过),所以 GOARCH 交叉编译不需要交叉
+# collector 是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
 # 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
 # 叫 amd64。
 COLLECTOR_SLICES=()
@@ -242,7 +242,7 @@ for arch in $ARCHES; do
   esac
   # ⚠️ 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-collector`),
   # 所以 -o 的落点必须是绝对路径 —— 当 FAT_DIR 还是相对的 ".build/fat" 时,靠 "$PWD/"
-  # 补齐正是必需的。2026-08-31 把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
+  # 补齐正是必需的。把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
   # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
   # `lyrimuse/var/folders/…/collector-arm64`,每次构建往仓库里丢一份产物 —— 提交前
   # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
@@ -250,7 +250,7 @@ for arch in $ARCHES; do
   # -ldflags -X:把版本号注入 collector,让它跟 App 的 CFBundleShortVersionString
   # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值)。
   #
-  # 2026-09-02 加。在此之前 collector 的版本号是 main.go 里一个手写字面量,靠人在
+  # 在此之前 collector 的版本号是 main.go 里一个手写字面量,靠人在
   # 发版时记得改那一行来跟 App 对齐——v1.3.0 漏过一次,v1.5.0 又漏一次(用户装了
   # 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。注入之后这两个版本号
   # 由构造保证一致,不再依赖任何人的记性。
@@ -259,7 +259,7 @@ for arch in $ARCHES; do
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
   # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
   # 之后那道 collector/App 版本一致性校验。
-  # LYRIMUSE_GOTOOLCHAIN(2026-09-07,包管理器构建用):MacPorts 沙箱禁网,钉住的
+  # LYRIMUSE_GOTOOLCHAIN(包管理器构建用):MacPorts 沙箱禁网,钉住的
   # go1.24.4 若非本机版本会触发工具链下载而失败——port 传 local 用它自带的 go
   # (依赖声明保证 ≥1.24)。默认仍是 go1.24.4(系统 1.21 产物缺 LC_UUID,AMFI 拒签)。
   (cd ../lyrimuse-collector && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
@@ -269,8 +269,8 @@ done
 merge_slices "$FAT_DIR/collector" "${COLLECTOR_SLICES[@]}"
 
 echo "==> assembling .app bundle"
-# CFBundleIdentifier 这次(2026-07-20 改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
-# 字符串——早先(2026-07-18 打包成 .app 那次)故意让两者不同,是因为 CFBundleIdentifier
+# CFBundleIdentifier 这次(改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
+# 字符串——早先(打包成 .app 那次)故意让两者不同,是因为 CFBundleIdentifier
 # 需要继续等于裸可执行文件时代 UserDefaults.standard 隐式落的偏好域名"desktop-lyrics"、
 # 才能让新打包的 .app 无缝接上旧设置。这次是主动做一次完整改名,旧的 UserDefaults 数据
 # 已经用一次性脚本从"desktop-lyrics"域迁移到新域,不再需要靠"保持 CFBundleIdentifier
@@ -281,7 +281,7 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
 #
-# 2026-07-24 实测坐实一个严重问题：反复在同一路径上 `cp`(不删旧文件、复用同一个
+# 实测坐实一个严重问题：反复在同一路径上 `cp`(不删旧文件、复用同一个
 # inode)覆盖这个可执行文件很多次之后，内核的代码签名信任判定会失效——表现是这个
 # 二进制不管谁来起(不只是 launchd 管的常驻服务，"歌词管理"窗口"搜索候选歌词"那种
 # 一次性子进程调用同样中招)全部被 SIGKILL，诊断报告(~/Library/Logs/
@@ -295,7 +295,7 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # 同一类修法，那边最初是为了绕开只读权限，这里主要是为了这个签名信任缓存问题)。
 rm -f "$APP_DIR/Contents/Resources/collector"
 cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
-# 2026-08-06:collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
+# collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
 # 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
@@ -309,13 +309,13 @@ rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
 cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-translate"
 
-# 罗马音预生成小助手(2026-09-03)。同上:collector 算不了 CFStringTokenizer/ICU 那一步。
+# 罗马音预生成小助手。同上:collector 算不了 CFStringTokenizer/ICU 那一步。
 # 三步(先删再拷再补签)与上面逐字对称,理由见 collector 那段注释。
 rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
 cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
 
-# 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
+# QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
 # (BSD-3-Clause 开源,https://github.com/ungive/media-control)读。这个工具不是单个
 # 独立二进制——`media-control` 可执行文件靠相对路径(`../lib/media-control/
@@ -334,7 +334,7 @@ codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
 # 安装对 CI 是无操作的冗余检查,不影响什么)。`brew install` 失败(网络问题/没装 Homebrew
 # 本身等)不阻断整个构建,跳过这一步、打个警告——QQ 音乐支持是可选功能,不该让完全不需要
 # 它的人连 Apple Music 都构建不出来。
-# LYRIMUSE_MEDIA_CONTROL_PREFIX(2026-09-07,给 MacPorts 这类包管理器构建用):从指定
+# LYRIMUSE_MEDIA_CONTROL_PREFIX(给 MacPorts 这类包管理器构建用):从指定
 # 前缀取 media-control、并且**不再**尝试 brew 自动安装——port 的构建沙箱里既没有 brew 也
 # 没有网。设了但路径下没有可执行文件时,按下面既有的"没装"警告路径走,不回落到 brew。
 if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
@@ -378,7 +378,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 已经带着 Homebrew 自己的 ad-hoc 签名,不需要(也不应该)重复处理;
   # mediaremote-adapter.pl 是纯文本 Perl 脚本,同样不需要签名。
   codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/media-control/bin/media-control"
-  # 2026-08-06:universal 构建时把 x86_64 那半也 lipo 进来。
+  # universal 构建时把 x86_64 那半也 lipo 进来。
   #
   # Homebrew 在 Apple Silicon 上只会装 arm64 那份,而且不让你拉异架构 bottle
   # (`brew fetch --bottle-tag=sonoma media-control` 直接回 "Bottle for tag :sonoma is
@@ -412,7 +412,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
     else
       MC_VER="$(brew list --versions media-control | awk '{print $2}')"
     fi
-    # Intel 切片钉死在 0.7.6:media-control 0.7.7(2026-09-03,恰在 v1.5.0 发完三小时后)起
+    # Intel 切片钉死在 0.7.6:media-control 0.7.7(恰在 v1.5.0 发完三小时后)起
     # homebrew-core 不再产任何 Intel bottle(Homebrew 弃养 x86_64 macOS),原来这里查
     # formulae.brew.sh 实时 JSON 挑 Intel tag 的路子从此永远落空——v1.6.0 第一次打 tag 就是
     # 这样被打包闸拒掉的。0.7.6 的 sonoma bottle blob 在 ghcr 按内容寻址、老版本长期可取,
@@ -460,7 +460,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   fi
   echo "    media-control bundled (QQ 音乐支持)"
 else
-  # ⚠️ 2026-08-31 暂存化连带出来的一个坑,不补会**静默降级用户已经装好的包**:
+  # ⚠️ 暂存化连带出来的一个坑,不补会**静默降级用户已经装好的包**:
   # 就地组装的年代,brew 里找不到 media-control 时上面那句 `rm -rf` 在 if 内、不会执行,
   # 旧的 media-control 原样留在包里,这次构建等于"没动它"。换成暂存包之后,整个
   # Contents/Resources/media-control 子树压根不存在,swap 就会拿一个**丢了 QQ 音乐支持的
@@ -474,7 +474,7 @@ else
   echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
 fi
 
-# 2026-07-23:检查更新改接 Sparkle(见 UpdateChecker.swift 的替代——那份手写的
+# 检查更新改接 Sparkle(见 UpdateChecker.swift 的替代——那份手写的
 # "查 GitHub API+弹 Alert"逻辑已删,改用这个 macOS 生态里事实标准的自动更新框架)。
 # `swift build` 不会自动把这个 SPM 二进制依赖(binaryTarget,一个预编译的
 # Sparkle.xcframework)嵌入 .app bundle,要手动完成三件事,踩坑记录见几个真实项目的
@@ -542,11 +542,11 @@ find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 echo "    Sparkle.framework embedded + signed"
 fi  # SPARKLE_SKIPPED
-# 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
+# 本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
 # SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
 # 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。
 #
-# 2026-07-21 当天另一次实测坐实的坑:`cp -R src dst` 在 dst 已经存在时会把 src 整个
+# 另一次实测坐实的坑:`cp -R src dst` 在 dst 已经存在时会把 src 整个
 # 拷成 dst 下面的一个子目录(dst/src),而不是拿 src 的内容去覆盖 dst 本身——第一次
 # build.sh 跑的时候 en.lproj/zh-hans.lproj 还不存在,拷贝行为正常;从第二次往后,
 # Contents/Resources/{en,zh-hans}.lproj 已经是已存在的目录,每次重新构建都会在它
@@ -558,7 +558,7 @@ rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-hant.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
-# ⚠️ **遍历,不要再逐个文件写 cp**(2026-09-01 改)。这里原来是一行一个图标的 cp 清单,
+# ⚠️ **遍历,不要再逐个文件写 cp**。这里原来是一行一个图标的 cp 清单,
 # 而 `Bundle.main.path(forResource:)` 找不到资源时各调用点都有 SF Symbol 兜底 —— 于是
 # "加了一张图 → 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
 # 不崩溃,极难发现(当天新增 Spotify 平台图标时当场踩到)。遍历之后这类漏拷不可能再发生。
@@ -649,7 +649,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# 2026-07-18 曾经实测坐实过：SwiftPM 给每个声明了 resources 的 target 生成的
+# 曾经实测坐实过：SwiftPM 给每个声明了 resources 的 target 生成的
 # Bundle.module 访问器，查找资源包时走的是
 # Bundle.main.bundleURL.appendingPathComponent("<target>_<target>.bundle")——对一个
 # 真正的 .app 来说 Bundle.main.bundleURL 是这个 .app 包本身的根目录(跟 Contents/ 同
@@ -659,7 +659,7 @@ PLIST
 # (不管是自己 clone 源码构建，还是以后下载预编译包)几乎必然在第一次访问 Bundle.module
 # 时 fatalError 崩溃(fatalError 不可捕获，这个坑当时被记录下来但没有真的解决)。
 #
-# 2026-07-21 起正确修复：Contents/Resources/ 才是 codesign 认可的标准资源位置(跟
+# 正确修复：Contents/Resources/ 才是 codesign 认可的标准资源位置(跟
 # AppIcon.icns 用的是同一个目录，从来没出过问题)，不是 bundle 根目录——上面几行已经
 # 把 .lproj/图标直接拷到这里，L10n.swift/MenuBarMenu.swift 也已经改成用 Bundle.main
 # 查找，不再触碰 Bundle.module，从根源上消除了这个崩溃风险。
@@ -667,22 +667,22 @@ PLIST
 # 主动 ad-hoc 签名(而不是只验证):Apple Silicon 上 AMFI 强制签名，工具链链接时已经
 # 自动盖过章，这一步是幂等的空操作；Intel Mac 上没有这层强制，工具链历史上不会自动
 # 签，若只做 `codesign -v` 验证会在这里直接报"未签名"、被 set -e 拦腰打断整个脚本
-# (2026-07-17 审计发现。这台机器没有物理 Intel Mac，但 2026-07-18 交叉编译了一份
+# (审计发现。这台机器没有物理 Intel Mac，但交叉编译了一份
 # `swift build --arch x86_64` 产物直接验证过：codesign -v 确实报
 # "code object is not signed at all"，补签 `codesign -s - --force` 后签名有效，
 # 用 Rosetta 也能正常跑起来——不是纯理论推测，不管哪种架构都能过关)。
 #
 # --identifier 固定成这个 launchd label 同款字符串，不让 codesign 自己按内容生成
-# identifier——2026-07-18 加自动化权限(Automation)功能时实测坐实：不传 --identifier，
+# identifier——加自动化权限(Automation)功能时实测坐实：不传 --identifier，
 # codesign 会按二进制编译出的内容自动生成一串"desktop-lyrics-<hash>"式 identifier，
 # 内容真的变了(哪怕只是加一行代码)hash 就跟着变，而 TCC 的自动化权限授权记录是按
 # 这个 identifier 认的——意味着不固定的话，每次有实质代码改动的正式发布都会让系统
 # 认成一个"新 App"，之前用户点过的"允许"授权会失效、下次用到时又要重新弹一次系统
 # 授权对话框。显式传 --identifier 之后实测验证过：哪怕改代码重新构建，identifier 也
-# 保持不变(只跟这个参数本身有关，不再按内容重算)。这次改成对整个 .app 包签名(而不是
-# 只签裸可执行文件)——TCC 认的是这份签名，2026-07-18 真机实测坐实：即使 identifier
+# 保持不变(只跟这个参数本身有关，不再按内容重算)。签的是整个 .app 包(而不是
+# 只签裸可执行文件)——TCC 认的是这份签名，真机实测坐实：即使 identifier
 # 字符串不变，从裸可执行文件迁移到 .app 包这次代码结构本身发生了变化，系统确实没有认成
-# 同一个 App，自动化权限(控制 Music.app 播放)重新弹了一次系统授权对话框——这是这次
+# 同一个 App，自动化权限(控制 Music.app 播放)重新弹了一次系统授权对话框——那是那次
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
 codesign -s "$SIGN_ID" --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
@@ -718,7 +718,7 @@ if [ -n "$ARCH_BAD" ]; then
   echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
 fi
 
-# ==> collector / App 版本一致性(2026-09-02 加)。
+# ==> collector / App 版本一致性。
 #
 # 这道闸验的是**真实产物**,不是源码推断:直接运行刚打进包里的那个 collector 问它
 # `version`,跟写进 Info.plist 的 $APP_VERSION 比。放在 swap **之前** —— 不一致就
@@ -750,7 +750,7 @@ else
   echo "    版本一致 App=$APP_VERSION collector=$BUNDLED_VER"
 fi
 
-# ==> 把暂存包一次性换进 /Applications(2026-08-31,见文件上方 FINAL_APP_DIR 那段注释)。
+# ==> 把暂存包一次性换进 /Applications(见文件上方 FINAL_APP_DIR 那段注释)。
 #
 # 用 APFS 的 renamex_np(RENAME_SWAP) 而不是 `mv`,两个原因:
 #   1. **`mv 新 旧` 在旧目录已存在时不是覆盖、是塞进去**,而且退出码 0、没有任何输出 ——
@@ -791,9 +791,9 @@ if [ "$NO_RESTART" = 1 ]; then
   exit 0
 fi
 
-# 重启方式(2026-09-06 起):**一律 kill 旧实例 + `open -g` 经 LaunchServices 起**。
+# 重启方式:**一律 kill 旧实例 + `open -g` 经 LaunchServices 起**。
 #
-# 2026-09-06 之前这里分两支:「开机启动」开着时 job 归 launchd 管、用 `launchctl kickstart -k`
+# 之前这里分两支:「开机启动」开着时 job 归 launchd 管、用 `launchctl kickstart -k`
 # 重启受管进程(再加一套 LWCR 陈旧签名约束失败时 bootout+bootstrap 的自愈)。那条路的代价当天
 # 才量出来 —— launchd 直接 exec 二进制拉起的 App 是 `spawn type = daemon`,launchd 对没写
 # ProcessType 的 job "apply light resource limits":主线程 97% 的时间跑在调度优先级 20(utility
@@ -826,7 +826,7 @@ fi
 echo "==> launching via LaunchServices (open -g)"
 open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
-# 2 秒经常不够 —— 2026-09-05 实测被误判成「没起来」(进程其实起了)。
+# 2 秒经常不够 —— 实测被误判成「没起来」(进程其实起了)。
 pid=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   pid="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
@@ -842,7 +842,7 @@ fi
 # 于是这种情况照样打印 "running, pid N" 并 EXIT=0:**假成功**,而后面一切"真机验证"都在验
 # 旧代码,查起来极难(看起来一切正常,只是改动"没生效")。
 #
-# 2026-09-12 实测踩到。当时 App 拒绝退出,系统日志三行写得很直白:
+# 实测踩到。当时 App 拒绝退出,系统日志三行写得很直白:
 #   [AppKit:Application] terminate:
 #   [AppKit:Application] App termination blocked by modal sheet
 #   [AppKit:Application] Termination aborted
@@ -869,7 +869,7 @@ echo "==> $APP_NAME running, pid ${pid% }"
 #      崩溃报告里写得很明白:CODESIGNING / "Launch Constraint Violation" +
 #      SIGKILL (Code Signature Invalid)，launchctl 那边则是 exit 78 EX_CONFIG、
 #      job state = spawn failed;
-#   3. KeepAlive 会一直重试一直失败(2026-08-10 实测抓到时 runs 已经 127 次)，
+#   3. KeepAlive 会一直重试一直失败(实测抓到时 runs 已经 127 次)，
 #      collector 就此永久躺平 —— 歌词解析、scrobble、relay 全停，而 App 本身活得好好的，
 #      表现成"这首歌一直没歌词、歌词管理也没条目"，极难联想到是构建脚本干的。
 #

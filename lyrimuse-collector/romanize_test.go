@@ -77,7 +77,7 @@ func TestMaybeGenerateRomaPrefersJyutping(t *testing.T) {
 // "文件有、缓存没有"—— 下次启动 importLyricsFromFiles() 又把文件读回缓存,一切看起来正常。
 // 也就是说这个 bug 在正常使用下**几乎观测不到**,只有盯着 cache 文件的 mtime 才发现。
 //
-// 2026-09-03 实测:新写的 backfill-roma 踩了一次,而 regenerate-jyutping **一直**带着这个
+// 实测:新写的 backfill-roma 踩了一次,而 regenerate-jyutping **一直**带着这个
 // bug(靠上面那条 import 侥幸兜住)。两个都修了,这条闸负责不让第三个出现。
 func TestApplyCLIsMarkEnrichDirty(t *testing.T) {
 	entries, err := os.ReadDir(".")

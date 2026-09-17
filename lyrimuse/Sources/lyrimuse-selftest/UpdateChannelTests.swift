@@ -6,7 +6,7 @@ import Foundation
 
 @MainActor
 func runUpdateChannelTests() {
-    // ---- ReleaseVersion(2026-09-05,借鉴清单 #32 + 用户拍板「接收测试版」开关)----
+    // ---- ReleaseVersion(「接收测试版」开关)----
     //
     // 为什么正式版是 X.Y.Z.1000、预发布是分区第四段:Sparkle 的 SUStandardVersionComparator 实测把 "-" 之后全部
     // 忽略("1.6.0-beta.1" == "1.6.0","beta.2" == "beta.1"),构建号必须是纯数字四段。这一组钉的是 Swift 镜像;

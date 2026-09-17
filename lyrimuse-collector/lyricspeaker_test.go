@@ -69,7 +69,7 @@ func TestLyricSpeakerLabels(t *testing.T) {
 	}
 }
 
-// 这条是这次改动的**目的**:带对唱标注的候选不该在跨源共识比对里被摘成残缺正文。
+// 这条钉的是:带对唱标注的候选不该在跨源共识比对里被摘成残缺正文。
 func TestLyricConsensusBodyKeepsDuetLyrics(t *testing.T) {
 	// 同一首歌两个源:一份每句带「男：/女：」行内前缀,一份没有标记。
 	tagged := "[00:01.00]男：我爱过你笑的脸庞\n[00:02.00]女：时间留不住一句话\n" +

@@ -1,7 +1,7 @@
 import SwiftUI
 import LyrimuseCore
 
-// 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立宿主(2026-08-30)——用户明确要求"点击只弹出搜索
+// 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立宿主——"点击只弹出搜索
 // 歌词页面,不需要把歌词窗口也拉起"。所以这**不是**复用 LyricsWindowView 那条
 // `.sheet(item:)`(那条必须先有一扇开着的歌词窗口才挂得上去),而是自己单独一扇
 // `Window(id: "lyrics-quick-search")`(见 App.swift),`LyricsSearchSheet` 直接是这扇窗口
@@ -10,7 +10,7 @@ import LyrimuseCore
 // (SwiftUI 对场景根内容的 dismiss() 就是"关闭这扇窗",不是只对 sheet/popover 有效),不需要
 // 额外接一层判断。
 //
-// 2026-09-04:这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传)。
+// 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传)。
 // 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗→重开→再等九个源重搜一遍
 // (最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条
 // "已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、歌词窗口的 sheet)维持关窗:
@@ -24,7 +24,7 @@ import LyrimuseCore
 // 开着期间盯着看不跟着换歌重算",两处生命周期不一样,硬凑一个共享类型只会让"谁负责什么"
 // 变得含糊。
 //
-// ⚠️ 2026-08-31 真实bug(用户报"已经切歌了,点开搜索页面看到的还是上一首"):上一句里
+// ⚠️ 真实故障(现象是"已经切歌了,点开搜索页面看到的还是上一首"):上一句里
 // "每次新建都现查一次"这半句本身就是错的——`Window(id:)` 这扇窗口只要没被真的关掉(只是
 // 切到后台/被别的窗口挡住),再点一次「搜索歌词…」只是把已经存在的视图实例带到前台,
 // `.task` 只在这个视图**首次挂载**时跑一遍,不会跟着"又点了一次按钮"重跑,`context` 停留
@@ -32,7 +32,7 @@ import LyrimuseCore
 // `openLyricsQuickSearch` 都往那个 subject send 一下,这里额外 `.onReceive` 它、收到就
 // 重新 `loadContext()`,跟 `.task` 各管一段("窗口还没建出来"用 `.task`,"窗口已经开着"用
 // `.onReceive`),合起来才是真正的"每次点这个按钮都现查一次"。
-// ⚠️ 2026-09-02 第二个真实bug(由上一条修法引出):`.onReceive` 只替换了 `context`,而 SwiftUI 里
+// ⚠️ 第二个真实故障(由上一条修法引出):`.onReceive` 只替换了 `context`,而 SwiftUI 里
 // `if let context { LyricsSearchSheet(...) }` 从 Optional(A) 换成 Optional(B) 保持**同一个视图
 // 身份**——面板里的查询词 @State 与首次挂载才跑的 `.task` 都不会重置,屏幕上还是上一首的查询词
 // 和候选,而下面 onApply 闭包捕获的已是新 `context.key`:采纳会把上一首的歌词写进当前这首的
@@ -52,7 +52,7 @@ struct LyricsQuickSearchWindow: View {
         /// 写回用的缓存条目 key(实际命中优先,新建退 normalizedKey)。
         let key: String
         let currentSource: String?
-        /// 当前正文的只取词指纹(「当前使用」双判据,2026-09-04);没有正文时 nil。
+        /// 当前正文的只取词指纹(「当前使用」双判据);没有正文时 nil。
         let currentFingerprint: String?
         let durationSecs: Double
     }
@@ -68,11 +68,11 @@ struct LyricsQuickSearchWindow: View {
                     // 同 LyricsWindowView 的 onApply 三步:reload 兜"store 还没加载过"
                     // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)→
                     // saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
-                    // 2026-09-04 起不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
+                    // 不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
                     await EnrichCacheStore.shared.reload(onlyIfChanged: true)
                     let saved: Bool
                     if candidate.isPlainTextOnly {
-                        // ⚠️ 2026-09-04 真实bug修复:这条分流从 08-30 加纯文本候选起就一直缺 ——
+                        // ⚠️ 真实故障修复:这条分流从 08-30 加纯文本候选起就一直缺 ——
                         // 歌词管理与歌词窗口两处都按 isPlainTextOnly 走 savePlainTextEdit,这里
                         // 却把没有时间戳的纯文本直接当 LRC 喂进 saveEdit,后果正是 savePlainTextEdit
                         // 头注写的:这首歌在别的展示面上从"至少有静态文字"退化成"看起来完全没有
@@ -81,10 +81,10 @@ struct LyricsQuickSearchWindow: View {
                         saved = await EnrichCacheStore.shared.savePlainTextEdit(
                             key: context.key, plainLyrics: candidate.lyrics, source: candidate.source)
                     } else {
-                        // ⚠️ 2026-09-01 真实bug修复:这里原来一直没传 markManual/sourceChoice,
+                        // ⚠️ 真实故障修复:这里原来一直没传 markManual/sourceChoice,
                         // 落进 saveEdit 的默认值 markManual: true——跟 LyricsManagerView.swift
                         // 那条「采纳候选」路径不是同一套行为,等于这扇小窗每次采纳都在悄悄
-                        // 永久冻结这首歌,跟 2026-08-22 那次"采纳候选不该冻结"的设计决定
+                        // 永久冻结这首歌,跟那次"采纳候选不该冻结"的设计决定
                         // 不一致——补齐,让两个入口保持同一套逻辑。
                         //
                         // sourceChoice 恒传空串(= 显式清掉):关态不留任何源约束,开态靠
@@ -120,7 +120,7 @@ struct LyricsQuickSearchWindow: View {
         let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
             ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-        // 「当前使用」双判据要的正文指纹(2026-09-04)。lookup 走同一份内存缓存,再读一次不贵。
+        // 「当前使用」双判据要的正文指纹。lookup 走同一份内存缓存,再读一次不贵。
         let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
         let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
         // title 传归一化后的,理由跟 LyricsWindowView.openLyricsSearch 同一处注释——两处

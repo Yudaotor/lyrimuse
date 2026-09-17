@@ -4,7 +4,7 @@ import Foundation
 /// 合并、序列化、写盘。App 侧两个 Store(ConfigStore / FeatureSettingsStore)只剩 `@MainActor` 外壳、
 /// 字段映射和文案。
 ///
-/// 2026-09-05 加。此前两个 Store 各自 `try? Data(contentsOf:)` + `try? JSONSerialization`,把「文件不存在」
+/// 此前两个 Store 各自 `try? Data(contentsOf)` + `try? JSONSerialization`,把「文件不存在」
 /// 和「文件在、但解析不出」当同一件事:都落成空字典 + 字段初值,下一次保存把 14 个字段(或一份默认开关)
 /// **整个写回去**。config.json 只要被手改 / 搬家 / 导入弄出一个 JSON 语法错误,启动后各账号显示为空,
 /// 用户随手在任意一栏输入、点一次「断开 Last.fm」、或 Last.fm 授权成功,就用一整套空串覆盖原文件 ——
@@ -114,7 +114,7 @@ public struct JSONConfigDocument {
     // MARK: 写
 
     /// 已知键以 `fields` 为准 —— `fields` 里没有的已知键从文件里**删掉**(遗留迁移字段「这台机器往后不再写它」
-    /// 的语义靠这条),其余键原样保留(这个版本不认识的字段写一次就没了,是 2026-08-13 修过的老 bug)。
+    /// 的语义靠这条),其余键原样保留(这个版本不认识的字段写一次就没了,是修过的老 bug)。
     /// `knownKeys` 不给就取 `fields.keys`,即「给了什么就覆盖什么、别的都留着」。
     public func merging(fields: [String: Any], knownKeys: Set<String>? = nil) -> [String: Any] {
         let known = knownKeys ?? Set(fields.keys)

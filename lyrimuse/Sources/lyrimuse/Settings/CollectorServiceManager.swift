@@ -110,7 +110,7 @@ public enum CollectorServiceManager {
     // 服务的真实状态——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
     // Settings 页面和引导页面的状态展示都靠这个。
     //
-    // ⚠️ 2026-08-15 修:这里原来是 `run("/bin/launchctl", ["print", …]) == 0`,而那个退出码
+    // ⚠️ 修:这里原来是 `run("/bin/launchctl", ["print", …]) == 0`,而那个退出码
     // 表示的是"**这个 job 注册过**",不是"进程在跑"——实测三态见 LaunchdJobState 的注释。
     // 后果是 collector 在 KeepAlive 下崩溃重启循环时,设置页一直显示绿勾"运行中"。更糟的
     // 是下面 install() 的自愈重试也用它当判据(`if !isRunning`),bootstrap 一成功就认为大功
@@ -123,7 +123,7 @@ public enum CollectorServiceManager {
     public static var isRunning: Bool { state.isRunning }
 
     /// 打包进这份 App 里的 collector 二进制,自己报出来的版本号(`collector version`,
-    /// 对应 Go 侧 main.go 的 clientVersion)——2026-08-31 加,给设置页"后台采集服务"卡片
+    /// 对应 Go 侧 main.go 的 clientVersion)——加,给设置页"后台采集服务"卡片
     /// 检测"App 本体版本"跟"这份 App 实际打包的 collector 版本"是否一致用。
     ///
     /// 起因是 clientVersion 那个字面量一直是手动同步的,发布时忘记同步过至少一次
@@ -150,7 +150,7 @@ public enum CollectorServiceManager {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    // install()/uninstall() 必须互斥——2026-08-02 实测排查坐实:早先 setEnabled(_:)/
+    // install/uninstall 必须互斥——实测排查坐实:早先 setEnabled(_)/
     // setEnabledAndWait(_:) 各自派发一个独立的 Task.detached,互相之间完全没有互斥。
     // AppSettings.collectorServiceEnabled 的 didSet 对"赋同一个值"依然会触发(Swift 不
     // 做 old==new 短路),而 SettingsView.toggleCollectorService/OnboardingView.
@@ -227,7 +227,7 @@ public enum CollectorServiceManager {
         // plist 里 RunAtLoad=true,所以 bootstrap 本身就会把进程拉起来 —— 实测 78~102ms
         // 就是 running。**不要**在这里跟一句 `kickstart -k`。
         //
-        // 2026-08-15 实测:那句 kickstart 让整个安装从 ~100ms 变成 ~10.1 秒,三次测量
+        // 实测:那句 kickstart 让整个安装从 ~100ms 变成 ~10.1 秒,三次测量
         // 稳定复现(10114 / 10121 / 10087ms)。`-k` 的意思是"先杀掉正在跑的再启动",而它
         // 杀的正是 bootstrap 刚刚拉起来的那个新进程;那 10 秒是 launchd 等进程响应 SIGTERM
         // 的固定宽限期。用户在引导页点"启用"之后盯着转圈,就是在等这个。
@@ -288,7 +288,7 @@ public enum CollectorServiceManager {
     ///
     /// `environment` 传 nil = 继承本进程(launchctl 那些调用点就该如此);spawn **collector**
     /// 的调用点必须显式传 `LyrimusePaths.collectorProcessEnvironment()`,否则子命令会落回默认
-    /// 配置目录、跟本 App 不是同一份数据(Dev 变体下就是两个目录)。2026-09-06 补:此前这里
+    /// 配置目录、跟本 App 不是同一份数据(Dev 变体下就是两个目录)。补:此前这里
     /// 压根没有这个参数,`bundledCollectorVersion()` 是**真的不带环境在 spawn collector**,
     /// 而 selftest 那道"每处 spawn 都要带环境"的守卫按 `process.executableURL` 字面量数,
     /// 这个函数的变量叫 `p`、字面量对不上,于是 execs=0/envs=0 恰好"配平"、漏数了它 ——

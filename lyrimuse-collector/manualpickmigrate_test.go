@@ -26,7 +26,7 @@ func TestManualPickFingerprintMatchesSwift(t *testing.T) {
 	if got := manualPickFingerprint(goldenPickA); got != goldenPickSHA {
 		t.Errorf("A: got %q, want %q —— 跟 Swift 侧的口径漂开了", got, goldenPickSHA)
 	}
-	// 这一条是这次改版的**核心不变量**:2026-09-01 第一版对原始字节取指纹,collector 启动
+	// 这一条是**核心不变量**:指纹**不能**对原始字节取,collector 启动
 	// 时的规范化(YRC 空白词条合并、行时间轴重挂)在采纳后几秒内就把它打失配,开关一首都
 	// 锁不上且完全静默。规范化不是替换 —— 词没动就该算"还是他选的那份"。
 	if got := manualPickFingerprint(goldenPickB); got != goldenPickSHA {

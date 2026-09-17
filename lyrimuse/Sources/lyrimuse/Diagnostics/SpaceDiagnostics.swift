@@ -1,7 +1,7 @@
 import AppKit
 import os
 
-/// 「切到别的 App 的全屏 Space 就被弹回桌面」这个用户报告的临时诊断探针(2026-09-03)。
+/// 「切到别的 App 的全屏 Space 就被弹回桌面」这个问题的临时诊断探针。
 ///
 /// ## 为什么需要它
 ///
@@ -61,7 +61,7 @@ enum SpaceDiagnostics {
             nc.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated {
                     report(label)
-                    // ⚠️ **调用栈是这一轮的核心证据**(2026-09-03 第二版):真机日志坐实
+                    // ⚠️ **调用栈是这一轮的核心证据**:真机日志坐实
                     // 「切到飞书全屏 → 1.8 秒后 Lyrimuse 自己被激活 → Space 被拽回」,
                     // 而那一刻既没有 reopen、也没有点击。先 App 激活、再窗口成 key,是
                     // `NSApp.activate(ignoringOtherApps:)` 的签名动作 —— 但全仓十几个调用点

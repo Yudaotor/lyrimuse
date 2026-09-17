@@ -3,18 +3,18 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotifyad")
 
-// 「浏览器里的 Spotify 网页版此刻在放广告还是歌」——问页面本身(2026-09-03)。
+// 「浏览器里的 Spotify 网页版此刻在放广告还是歌」——问页面本身。
 //
 // ---- 为什么需要它:原生 Spotify 好好的,网页版的广告却让整个 UI 消失 30 秒 ----
 //
-// Spotify 网页版广告的字段形状(2026-09-03 现场抓的真实样本,同一批广告 6 次采样一致):
+// Spotify 网页版广告的字段形状(现场抓的真实样本,同一批广告 6 次采样一致):
 //
 //     title="广告"   artist=""   album=""   duration≈30s
 //
 // **artist 是空的**,而 `MediaControlClient.trustedPlaybackRejected` 里那道
 // `guard !artist.isEmpty else { return true }` 短路会在任何页面复核之前把它整条丢掉。
 // 后果是广告那 30 秒 App 手上一条播放数据都没有:菜单栏塌回小图标、灵动岛/悬浮窗一起消失,
-// 广告完了再弹回来(2026-09-03 03:23 的日志里 `slot rebuild: icon(38.5) -> fixed(...)` 就是
+// 广告完了再弹回来(03:23 的日志里 `slot rebuild: icon(38.5) -> fixed(...)` 就是
 // 这一幕)。原生 Spotify 客户端不受那道闸约束(内置播放器直接豁免),所以它一直是好的 ——
 // **只有浏览器里的 Spotify 掉在这个洞里**。
 //
@@ -27,7 +27,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 //
 // ---- 判据:四个 data-testid,任一命中即广告 ----
 //
-// 2026-09-03 现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
+// 现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
 //
 //     4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調)  → 0|0|0|0
 //     6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」)  → 1|1|1|1
@@ -127,7 +127,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
 
     /// 距上次探测多久之后才**再探一次**(`kickIfNeeded` 的跳过条件)。
     ///
-    /// ⚠️ **必须严格小于 `verdictMaxAge`**,selftest 钉着。2026-09-11 之前 `kickIfNeeded`
+    /// ⚠️ **必须严格小于 `verdictMaxAge`**,selftest 钉着。之前 `kickIfNeeded`
     /// 直接拿 `verdictMaxAge` 当跳过条件(两个 60),跟 `YouTubeMusicAdProbe` 当时是同一个洞:
     /// 可读期与再探间隔同时到点,age 跨过 60 的那一拍必然「刚过期读到 nil + 这一拍才开始异步
     /// 重探」,`gate` fail-closed 把快照整条丢掉,三个展示面一起塌成"没有在播放"。
@@ -145,7 +145,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     private var cachedVerdictValue: Verdict?
     private var cachedAt: Date?
     private var inFlightKey: String?
-    /// 探针结果落地时的回调,语义与 `YouTubeMusicAdProbe.resultSink` 逐字相同(2026-09-11) ——
+    /// 探针结果落地时的回调,语义与 `YouTubeMusicAdProbe.resultSink` 逐字相同 ——
     /// 换曲那一拍新 key 下必然没有缓存,挂上它把"干等一整个 2s 轮询周期"压成探针往返本身。
     private var resultSink: (@Sendable (_ key: String) -> Void)?
 

@@ -22,7 +22,7 @@ public enum ManualPickLock {
         // ⚠️ 必须按 **Unicode 标量** 切,不能用 `lyrics.split(separator: "\n")`。Swift 的
         // Character 是字素簇,而 **`\r\n` 是单个字素簇**,跟 `"\n"` 不相等 —— 按 Character
         // 切的话 CRLF 歌词整段不分行,Go 侧(按字节 0x0A 切)却分得好好的,两边指纹当场漂开。
-        // 2026-09-01 金标准断言当场逮住的就是这个;而这类源里 CRLF 一点都不罕见(见
+        // 金标准断言当场逮住的就是这个;而这类源里 CRLF 一点都不罕见(见
         // selftest 里 YRC/CRLF 那几条既有回归)。按标量切等价于 Go 的 strings.Split(s, "\n"):
         // UTF-8 里字节 0x0A 只可能是 U+000A,残留的 \r 交给下面的 trim。
         for rawScalars in lyrics.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -43,7 +43,7 @@ public enum ManualPickLock {
     ///
     /// # 只对"词"取指纹,不含时间戳、不含 YRC
     ///
-    /// 第一版是 `SHA256(lyrics + "\x01" + yrc)` —— 对整份原始字节取指纹。2026-09-01 用真实
+    /// ⚠️ 指纹**不能**取 `SHA256(lyrics + "\x01" + yrc)` 这种整份原始字节 —— 用真实
     /// 使用数据抓到它**根本不成立**:采纳完 saveEdit 会立刻重启 collector,而 collector 启动
     /// 时那几道规范化会重写内容 ——
     ///   - `migrateYRCWhitespaceTokens` 重排逐字词条,**没有 ManualLyrics 闸**,锁没锁都跑;
@@ -83,7 +83,7 @@ public enum ManualPickLock {
     /// 分三态而不是一个 Bool,是为了让界面能说清**「什么都没发生」到底是哪一种**:
     /// "你还没手动选过歌"和"你选过、但那几首的歌词后来被自动换掉了"对用户是完全不同的
     /// 两件事,前者要告诉他从现在起会记下来,后者要告诉他为什么这些歌不算数。两种都压成
-    /// "0 首"再静默返回,就是这个开关第一版最劝退的地方(2026-09-01 用户反馈「交互有点差」)。
+    /// "0 首"再静默返回是最劝退的形态(观感就是「交互有点差」)。
     public enum PickState: Equatable {
         /// 没有留痕 —— 从没手动采纳过,或者之后手改/重新自动匹配把留痕清掉了。
         case neverPicked

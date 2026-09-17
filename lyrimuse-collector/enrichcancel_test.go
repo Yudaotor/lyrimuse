@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// 2026-08-28 用户报「点击停止搜索之后，不是直接删除记录，而是保留记录，标记为无
+// 现象是「点击停止搜索之后，不是直接删除记录，而是保留记录，标记为无
 // 歌词；并且灵动岛和桌面悬浮歌词都不再继续提示搜索歌词中」——之前 resolveEnrichAsync
 // 的 ctx.Err() != nil 分支是纯粹的 return,什么都不写。这条测试直接验证取消场景确实会
 // 落一条 ts>0、lyrics=="" 的记录进 enrichCache(EnrichCacheReader.lookup 靠 ts>0 判定

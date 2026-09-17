@@ -20,7 +20,7 @@ extension KeyboardShortcuts.Name {
     static let previousTrackHotkey = Self("previousTrackHotkey")
     static let lyricsAdvanceHotkey = Self("lyricsAdvanceHotkey")
     static let lyricsDelayHotkey = Self("lyricsDelayHotkey")
-    // 2026-08-31 加的六个。挑选判据是「别的 App 占着焦点时你还想按」—— 只在某扇窗已经
+    // 加的六个。挑选判据是「别的 App 占着焦点时你还想按」—— 只在某扇窗已经
     // 在前台时才有意义的动作(随机/循环、置顶、全屏)刻意不给全局键,那是本地键该管的。
     static let lyricsQuickSearchHotkey = Self("lyricsQuickSearchHotkey")
     static let toggleTranslationHotkey = Self("toggleTranslationHotkey")
@@ -82,7 +82,7 @@ extension KeyboardShortcuts.Name {
 enum GlobalHotkeys {
     static func registerAll() {
         // ⚠️ 必须先判断 settings.classicOverlayEnabled 再碰 LyricsOverlayWindowController
-        // .shared——2026-08-02 实测排查坐实:这里早先漏掉了这层判断,是
+        // .shared——实测排查坐实:这里早先漏掉了这层判断,是
         // NotchLyricsWindowController.swift 顶部注释点名的"三处外部路由代码"(AppDelegate/
         // SettingsView/MenuBarMenu)之外被漏判的第 4 处。真正引用到 `.shared` 才会执行
         // init() 建窗口,而 init() 订阅 PlaybackCoordinator 的 Combine sink 在订阅瞬间
@@ -90,7 +90,7 @@ enum GlobalHotkeys {
         // 判断 classicOverlayEnabled:用户只开了"灵动岛歌词"、关掉"桌面悬浮歌词"时,那个
         // 快捷键仍然可以被录制,按下后会把从未构造过的经典悬浮窗凭空建出来并常驻显示。
         //
-        // 但"显示/隐藏悬浮歌词"这个快捷键**不能**加同一个判断:2026-08-05 把"这个模式开
+        // 但"显示/隐藏悬浮歌词"这个快捷键**不能**加同一个判断:把"这个模式开
         // 没开"合并成单一开关之后,它切换的就是 classicOverlayEnabled 本身,再 guard 一次
         // 就变成"只能关、不能开"(关掉之后 guard 直接 return,这个快捷键就再也按不动了)。
         // 这里碰 .shared 是用户主动按键要求打开/关闭它,不是被动误触构造。
@@ -100,7 +100,7 @@ enum GlobalHotkeys {
         KeyboardShortcuts.onKeyUp(for: .toggleLockPosition) {
             // ⚠️ 这个键只对桌面悬浮歌词有意义(灵动岛贴着刘海,没有"位置"可锁)。原来
             // 这里是**静默** return —— 只开灵动岛的用户按下去什么都不发生,分不清是没
-            // 按中还是不适用。2026-08-31 补一条说明,理由跟下面偏移那两个键一样:全局
+            // 按中还是不适用。补一条说明,理由跟下面偏移那两个键一样:全局
             // 快捷键最忌讳"按了没动静"。
             guard AppSettings.shared.classicOverlayEnabled else {
                 flashHint(icon: "lock.slash", text: L10n.t("锁定位置只对桌面悬浮歌词有效"))
@@ -130,12 +130,12 @@ enum GlobalHotkeys {
         // 播放控制三个动作:先校验自动化权限——没问过就顺手弹一次系统授权对话框,
         // 已经拒绝过就不弹窗、只用 NSSound.beep() 给一个"没有生效"的听觉反馈(跟
         // ShortcutRecorder.swift 录制失败时用的是同一个既有信号,不新引入一套提示
-        // 机制)——2026-08-02 补上:早先这里权限不够时是完全静默的,用户按了没反应,
+        // 机制)——补上:早先这里权限不够时是完全静默的,用户按了没反应,
         // 分不清是没按中快捷键还是权限问题。只有选了 Apple Music 才真的会走到这个
         // 权限检查,见 MusicAutomationPermission.checkForCurrentPlayer 注释。
         //
         // ⚠️ 必须用 checkForCurrentPlayerSafely(异步)而不是 checkForCurrentPlayer
-        // (同步)——2026-08-02 实测排查坐实:同步版本在还没问过时会直接触达
+        // (同步)——实测排查坐实:同步版本在还没问过时会直接触达
         // AEDeterminePermissionToAutomateTarget,这个 API 在主线程调用有据可查地
         // 可能永久挂起,详见 checkForCurrentPlayerSafely 定义处的注释。KeyboardShortcuts
         // 的 onKeyUp 回调本身是同步闭包,用 Task { ... } 包一层去调用异步版本。
@@ -201,7 +201,7 @@ enum GlobalHotkeys {
                       text: on ? L10n.t("已显示译文") : L10n.t("已隐藏译文"))
         }
         // ⚠️ 绑的是**总开关** `showRomanization`,不是在 拼音/粤拼/日文/韩文 之间轮换
-        // (2026-08-31 用户明确要求:「应该改为开关罗马音的功能而不是切换」)。
+        // (「应该改为开关罗马音的功能而不是切换」)。
         // 分语言那四个勾选留在设置页,它们是"配置",不是随手按的东西。
         KeyboardShortcuts.onKeyUp(for: .toggleRomanizationHotkey) {
             let on = !AppSettings.shared.showRomanization
@@ -250,7 +250,7 @@ enum GlobalHotkeys {
 
     /// 把一条操作回声送到**用户实际开着的那个展示形态**上。
     ///
-    /// ⚠️ 2026-08-31 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
+    /// ⚠️ 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
     /// 渲染(`NotchLyricsView` 里的 `NotchTransientHost` 是它全仓唯一的消费者)——于是
     /// **只开桌面悬浮歌词的用户按快捷键是完全没有反馈的**,偏移调到哪了只能靠盯着歌词
     /// 猜。两边都发、各自按自己开没开决定显不显示,不需要在这里判断"该给谁"。

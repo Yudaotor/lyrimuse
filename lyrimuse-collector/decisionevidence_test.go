@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 借鉴清单 V2 端到端:两两 Jaccard 算出来的**互证名单**要一路走到序列化后的 JSON 里。
+// 端到端:两两 Jaccard 算出来的**互证名单**要一路走到序列化后的 JSON 里。
 // 不联网、不碰用户缓存 —— 用真实的 rankLyricSourceResults 跑一轮本地候选。
 func TestConsensusPeersReachDecisionJSON(t *testing.T) {
 	// 两份内容一致(netease/qq)、一份完全不同(kugou)。三份都过 isTimedLRC 的三行门槛,
@@ -66,7 +66,7 @@ func TestConsensusPeersReachDecisionJSON(t *testing.T) {
 	}
 }
 
-// 借鉴清单 V1 端到端:查询词记录 → 存档 → JSON,键名与嵌套结构都要对得上 App 侧解码。
+// 端到端:查询词记录 → 存档 → JSON,键名与嵌套结构都要对得上 App 侧解码。
 func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	ctx, log := withLyricQueryLog(context.Background())
 

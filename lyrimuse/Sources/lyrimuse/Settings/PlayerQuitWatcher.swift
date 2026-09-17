@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-/// 「跟随播放器退出」(2026-09-03 新增,用户拍板逐播放器多选):勾选的播放器**全部**退出后,等一个宽限期再退出
+/// 「跟随播放器退出」:勾选的播放器**全部**退出后,等一个宽限期再退出
 /// Lyrimuse。判定与宽限常数在 LyrimuseCore.PlayerLinkage(selftest 钉着),这里只管 NSWorkspace 通知和计时。
 ///
 /// - 退出经 `AppExit.request(.followedPlayerQuit)`:走正常终止流程,未保存的账号配置有机会落盘,日志

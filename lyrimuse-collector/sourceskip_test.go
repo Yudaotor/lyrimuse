@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 关掉的源这一轮不发请求(2026-09-06,用户定的「没启用肯定就不查」),而且不算冷却跳过——
+// 关掉的源这一轮不发请求(口径是「没启用肯定就不查」),而且不算冷却跳过——
 // 冷却跳过会被记进 lyrics_sources_skipped 招来 needsLyricsRetry 的补搜,关掉的源不该被补搜。
 func TestLyricSourceSkipForDisabledBeatsCooling(t *testing.T) {
 	enabled := func(s string) bool { return s != "netease" }

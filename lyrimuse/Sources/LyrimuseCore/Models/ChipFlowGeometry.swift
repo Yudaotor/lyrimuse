@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// 一排图标芯片在限定宽度内怎么换行(2026-09-10,设置页 Last.fm 卡「Scrobble 的播放器」那一行)。
+/// 一排图标芯片在限定宽度内怎么换行(设置页 Last.fm 卡「Scrobble 的播放器」那一行)。
 ///
 /// 为什么把这几行算术从 SwiftUI 的 `Layout` 里抽出来:`Layout` 的 `Subviews` 在 selftest 里造不出来,
 /// 而"放不放得下、往哪一行落"正是这一行**唯一**会出错的地方 —— 候选个数由用户的信任列表决定(内置

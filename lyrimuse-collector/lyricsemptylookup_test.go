@@ -9,7 +9,7 @@ import (
 // TestLyricsEmptyInCacheFile 钉住「手动重匹配到底该不该放行」那个事实是**读出来的**、
 // 不是从 `-current-source == ""` 推断出来的。
 //
-// 2026-08-22 对抗性复核抓到的反例:EnrichCacheStore.saveEdit 的 source 默认 nil,而
+// 对抗性复核抓到的反例:EnrichCacheStore.saveEdit 的 source 默认 nil,而
 // 「歌词管理」的「保存修改」正是不传 source 的那个重载 —— 它 removeValue("lyrics_source"),
 // 导出的 .lrc 也不带 [source:]。于是**每一条用户手改过的条目**都是「有歌词 + 来源为空」。
 // 靠空串推断的话,这道闸会对手改条目一律放行,让冠军覆盖掉人工修正过的正文。

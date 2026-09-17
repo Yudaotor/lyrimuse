@@ -2,7 +2,7 @@ import Foundation
 
 /// 诊断包里日志正文的脱敏。
 ///
-/// 背景(2026-08-13 实测坐实):`DiagnosticsExporter` 开头写着一条硬约束——绝不能把任何
+/// 背景:`DiagnosticsExporter` 开头写着一条硬约束——绝不能把任何
 /// token/secret 的原文写进诊断文件,因为它就是设计给用户贴进**公开** GitHub issue 的。
 /// 结构化那一段确实守住了(只写 `isXConfigured` 这类只读布尔),但报告末尾直接把
 /// `~/Library/Logs/lyrimuse.log` 的最后 200 行原样附上,整个绕开了这条约束。

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// mbAliasCandidatesForRetry 的判据(2026-08-20 加,当时叫 mbPrimaryNameForRetry、只给
-// 一个"主名"字符串;2026-08-30 改成给全部已登记写法,见其声明处头注)。
+// mbAliasCandidatesForRetry 的判据(加,当时叫 mbPrimaryNameForRetry、只给
+// 一个"主名"字符串;改成给全部已登记写法,见其声明处头注)。
 //
 // 起因是真实反馈:《Hurry Up Tomorrow》里的「Cry For Me」搜不到歌词。实测原因是 Apple
 // Music 把歌手标成 Abel Tesfaye(本名),而五个歌词源全按 The Weeknd 索引 —— 原样查
@@ -15,8 +15,8 @@ import (
 // name="The Weeknd",数据一直在手上,只是没被用。
 //
 // 下面这份别名列表是从 MusicBrainz 真实抓下来的(artist c8b03190-306c-4120-bb0b-
-// 6f2ebfc06ea9,2026-08-30 重新核对过 primary 字段的真实值——"The Weeknd"这条本身
-// primary=false,反而是从没用过的日文别名 primary=true,这正是 2026-08-30 那次改动
+// 6f2ebfc06ea9,重新核对过 primary 字段的真实值——"The Weeknd"这条本身
+// primary=false,反而是从没用过的日文别名 primary=true,这正是那次改动
 // 不能按 alias.Primary 过滤的实测依据),不是编的。
 func TestMBAliasCandidatesForRetry(t *testing.T) {
 	weeknd := []mbAlias{
@@ -112,13 +112,13 @@ func TestMBAliasCandidatesForRetryPrimaryEqualsRawStillReturnsOtherAliases(t *te
 	}
 }
 
-// 查空**不落盘**、查到才落盘(2026-08-20)。
+// 查空**不落盘**、查到才落盘。
 //
 // 这条不是洁癖:MusicBrainz 限速按 IP、1 req/s,而 musicbrainzThrottle 是进程内节流 ——
 // 常驻 collector、手动搜索那个一次性 CLI、跑测试的进程各自计时,互相不知道。撞上 503
 // 就返回空;要是把空也永久写进文件,一次偶发限速会把这位歌手永久钉死在"没有别名"上,
 // 而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。⚠️ artistAliasCache 当初就是
-// 这么做的(空值永久落盘),2026-08-30 那英《微笑着离去》真撞上了(MusicBrainz 503 →
+// 这么做的(空值永久落盘),那英《微笑着离去》真撞上了(MusicBrainz 503 →
 // 语言闸误杀真候选),已改成跟这里一致的"只存非空"规则,见 musicbrainz.go 里
 // saveArtistAliasCache 的注释。
 func TestMBPrimaryNameCachePersistsOnlyHits(t *testing.T) {
@@ -153,7 +153,7 @@ func TestMBPrimaryNameCachePersistsOnlyHits(t *testing.T) {
 	saveMBPrimaryNameCache()
 }
 
-// 磁盘上已有的旧格式缓存(值是裸字符串,2026-08-30 之前的产物)不能因为这次格式升级就
+// 磁盘上已有的旧格式缓存(值是裸字符串,之前的产物)不能因为这次格式升级就
 // 整份作废——见 loadMBPrimaryNameCache 头注。
 func TestMBPrimaryNameCacheLoadsLegacyFormat(t *testing.T) {
 	dir := t.TempDir()

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import LyrimuseCore
 
-// 菜单栏面板里「长按 / 右键某个圆钮块 → 原地展开它自己的设置」这一套(2026-08-19 用户提议)。
+// 菜单栏面板里「长按 / 右键某个圆钮块 → 原地展开它自己的设置」这一套(用户提议)。
 // 分三块:格子的鼠标路由(TileMouseRouter)、展开后那一小片设置(PanelQuickSettings)、
 // 以及三种形态的界面元数据(LyricsSurface 扩展)。面板本体在 MenuBarPanel.swift。
 //
@@ -27,7 +27,7 @@ extension LyricsSurface {
     var panelTitle: String {
         switch self {
         case .overlay: return L10n.t("悬浮歌词")
-        // 「灵动岛歌词」而不是「灵动岛」(2026-08-19 用户要求):跟旁边两格
+        // 「灵动岛歌词」而不是「灵动岛」:跟旁边两格
         // (悬浮歌词/菜单栏歌词)统一成"载体 + 歌词",三兄弟读起来才是同一层的东西;
         // 而且"灵动岛"单独出现像在说那块硬件,不像在说一个可开关的展示形态。
         // 设置页那张总开关卡用的也是这个词条,现在两处一致。
@@ -105,7 +105,7 @@ struct TileMouseRouter: NSViewRepresentable {
 
         /// ⚠️ tooltip 的热区必须在**知道自己多大之后**重装一次。
         ///
-        /// 2026-08-19 用户连着两次报"悬停没提示",离屏跑出来的第二个原因(第一个见
+        /// 用户连着两次报"悬停没提示",离屏跑出来的第二个原因(第一个见
         /// updateTrackingAreas):`NSView.toolTip` 的 setter 会按**当时的 bounds**装一个
         /// tracking rect,而 SwiftUI 的 NSViewRepresentable 是 `makeNSView()` 先给一个
         /// **frame 为 .zero** 的视图、真实尺寸等布局完才设 —— 于是热区被钉死成 0×0,
@@ -123,7 +123,7 @@ struct TileMouseRouter: NSViewRepresentable {
             super.updateTrackingAreas()
             // ⚠️ 只拆**自己**装的那一个,绝不 `trackingAreas.forEach(removeTrackingArea)`。
             //
-            // 2026-08-19 用户报"悬停没有 tooltip",离屏跑了一遍坐实:`NSView.toolTip` 不是
+            // 现象是"悬停没有 tooltip",离屏跑了一遍坐实:`NSView.toolTip` 不是
             // 一个纯属性,setter 会往这个视图上装一个 **owner = NSToolTipManager** 的
             // tracking area(实测 options=4225 = mouseEnteredAndExited|activeAlways|一个
             // 内部位)。那句"全拆"把系统这一个也拆掉了,tooltip 从此再不出现;而且**补设一次
@@ -275,7 +275,7 @@ struct PanelQuickSettings: View {
                     }
                 }
             ), range: OverlayEditorStage.widthRange, step: 10)
-            // 「对齐方式」摆在宽度之后、锁定位置之前(2026-09-03 补):它跟字号/宽度同属
+            // 「对齐方式」摆在宽度之后、锁定位置之前:它跟字号/宽度同属
             // "看一眼再决定"的排版旋钮,而锁定位置是窗口行为,归到最后。
             alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
                          options: Array(OverlayDuetAlignmentOverride.allCases),
@@ -303,14 +303,14 @@ struct PanelQuickSettings: View {
                 .fixedSize()
             }
             notchWidthRow
-            // 「显示歌词」(2026-09-06 用户要求搬进这块面板)。绑定直接写 AppSettings 就够,
+            // 「显示歌词」(搬进这块面板)。绑定直接写 AppSettings 就够,
             // 不用像宽度那样再喊一次控制器:`NotchLyricsWindowController` 自己订阅着
             // `$notchShowLyrics`(见那边的 showLyricsObserver),值一变卡片就重排。
             //
             // 位置刻意紧挨着下面的「对齐方式」,跟设置页同序:那两项都是"歌词行自己的事",
             // 而上面的风格/宽度说的是整张卡。
             toggleRow(L10n.t("显示歌词"), isOn: $settings.notchShowLyrics)
-            // ⚠️ 2026-09-06 起**跟着 `notchShowLyrics` 一起显隐**,跟设置页那一行拉齐了。
+            // ⚠️ **跟着 `notchShowLyrics` 一起显隐**,跟设置页那一行拉齐了。
             // 在此之前这里是故意不藏的,理由是"这块面板里没有「显示歌词」这一项,跟着藏就成了
             // 凭空少一行、看不出为什么"——那条理由随着上面这个开关搬进来已经不成立:关掉的
             // 原因现在就在它正上方一行,看得见,再留一个当下无效的排版旋钮反而是噪音。
@@ -320,7 +320,7 @@ struct PanelQuickSettings: View {
                 alignmentRow(selection: $settings.notchLyricsAlignment,
                              options: LyricsRestingAlignment.notchOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))
-                // 「副行」「字号」2026-09-14 补。两样都是这块面板 2026-08-19 建好**之后**才加进
+                // 「副行」「字号」补。两样都是这块面板建好**之后**才加进
                 // 设置页的(副行 09-06、字号 09-09),当时没回补到这里 —— 不是判过不该收:两者都
                 // 正好是头注那条判据说的"这个形态自己的、调了立刻看得见的旋钮"(切到「译文」当场
                 // 多一行字、字号拖一格主行当场变大)。
@@ -345,7 +345,7 @@ struct PanelQuickSettings: View {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {
                     Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
                     // 跟设置页同一个标签 —— 两处必须同进同出,否则就成了"一条带警告、
-                    // 一条不带"的两个入口。2026-09-01 设置页那边按用户要求去掉了 Beta
+                    // 一条不带"的两个入口。设置页那边按去掉了 Beta
                     // 字样,这里跟着去掉(那次是 selftest 的"源码用了但 catalog 里没有的键"
                     // 守卫把这处漏改逮出来的 —— 光改设置页会让这里指向一个已删的词条)。
                     Text(L10n.t("自适应")).tag(MenuBarLyricsWidthMode.adaptive)
@@ -359,18 +359,18 @@ struct PanelQuickSettings: View {
                 get: { Double(settings.menuBarLyricsWidth) },
                 set: { settings.menuBarLyricsWidth = CGFloat(($0 / 10).rounded() * 10) }
             ), range: 80...600, step: 10)
-            // 2026-09-03 补。⚠️ **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
+            // ⚠️ **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
             // (`MenuBarLayoutRows` 里那个 `if`)——自适应模式下那一格的宽度就等于文字宽度,
             // 没有多余空间,三个选项画出来一模一样(完整理由见 `LyricsRestingAlignment` 头注)。
             // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 灵动岛那条
-            // 现在也是同一个道理(2026-09-06「显示歌词」搬进面板后,它的对齐方式也跟着藏了),
+            // 现在也是同一个道理(「显示歌词」搬进面板后,它的对齐方式也跟着藏了),
             // 三个形态在这件事上口径一致:**藏一个旋钮的前提是把"为什么"摆在它上面**。
             if settings.menuBarLyricsWidthMode == .fixed {
                 alignmentRow(selection: $settings.menuBarLyricsAlignment,
                              options: LyricsRestingAlignment.menuBarOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))
             }
-            // 「副行」「字号」2026-09-14 补,同灵动岛那两行 —— 都是这块面板建好之后才加进设置页的
+            // 「副行」「字号」补,同灵动岛那两行 —— 都是这块面板建好之后才加进设置页的
             // (副行 09-06、字号 09-03),漏回补。顺序跟设置页一致:「副行」属「布局」组(排几行是版面),
             // 「字号」属「字体」组,排在它下面正好让下面那句「由副行决定」的原因就在上一行。
             secondaryLineRow(selection: $settings.menuBarSecondaryLine)
@@ -378,7 +378,7 @@ struct PanelQuickSettings: View {
             // ⚠️ **这一整段四行**(宽度模式 / 最大宽度 / 副行 / 字号)改的都是菜单栏那一项占多宽,
             // 而这张面板正锚在那一项上 —— 面板开着期间状态栏项不许重建(见 MenuBarStatusItem.present
             // 里的 panelIsOpen 分支),所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
-            // (2026-09-14 从"这两项"扩到四项:新加的副行会把一行变两行、字号连行高一起改,
+            // (从"这两项"扩到四项:新加的副行会把一行变两行、字号连行高一起改,
             //  两者都要重建槽位,跟宽度那两项踩的是同一个分支。)
             Text(L10n.t("收起面板后生效"))
                 .font(.system(size: 9.5))
@@ -429,7 +429,7 @@ struct PanelQuickSettings: View {
         row(title) {
             HStack(spacing: 6) {
                 // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
-                // (2026-09-02 用户点名「没有意义,不好看」)。这一根尤其明显 —— 面板总宽
+                // (「没有意义,不好看」)。这一根尤其明显 —— 面板总宽
                 // 只有 296pt、滑杆 128pt,宽度那两根的刻度密到直接连成一条实线。
                 SteppedSlider(value: value, in: range, step: step)
                     .controlSize(.mini)
@@ -452,10 +452,10 @@ struct PanelQuickSettings: View {
 
     /// 灵动岛「宽度」—— **一行双滑块**:左边那只是稳态宽(没 hover 时多宽),右边那只是展开宽。
     ///
-    /// 2026-09-06~09-14 之间这里是**两根单滑块**(「宽度」+「展开宽度」各占一行)。合并的由头是
+    /// ~09-14 之间这里是**两根单滑块**(「宽度」+「展开宽度」各占一行)。合并的由头是
     /// 这块面板同日补进「副行」「字号」之后灵动岛那格要到 7 行、比上面的「正在播放」卡还高;但
     /// 合并本身是**对的**而不只是省地方 —— 用户当初提这个功能时说的就是"设置一个上限和一个下限",
-    /// 编辑台那根 2026-09-06 起早已是 `RangeSlider`,只有这块面板一直拆着两根,同一件事在两个
+    /// 编辑台那根早已是 `RangeSlider`,只有这块面板一直拆着两根,同一件事在两个
     /// 入口长成两副样子。合完之后形态一致,读数也跟编辑台同一个口径(两者相等时只报一个数)。
     ///
     /// ⚠️ 两只滑块**共用** `usableWidthRangeOnCurrentScreen`,不再碰
@@ -509,7 +509,7 @@ struct PanelQuickSettings: View {
         return String(format: L10n.t("%@–%@pt"), "\(steady)", "\(expanded)")
     }
 
-    /// 「副行」行(2026-09-14)。灵动岛与菜单栏共用同一个四选一枚举(`LyricSecondaryLine`)和
+    /// 「副行」行。灵动岛与菜单栏共用同一个四选一枚举(`LyricSecondaryLine`)和
     /// 同一套显示名,只是各存各的键 —— 所以只传 Binding,不像 `alignmentRow` 那样泛型化。
     /// 控件同「风格」「对齐方式」用 `.menu` 下拉,三条理由见 `alignmentRow` 头注(296pt 放不下
     /// 四档分段、分段控件按选中项重量宽度、这个文件已有的宽选项行就是 `.menu`)。
@@ -527,7 +527,7 @@ struct PanelQuickSettings: View {
         }
     }
 
-    /// 菜单栏「字号」行(2026-09-14)。三件事跟设置页那行(`MenuBarFontSizeRow`)一字不差,别在
+    /// 菜单栏「字号」行。三件事跟设置页那行(`MenuBarFontSizeRow`)一字不差,别在
     /// 这里简化:
     ///   ① 读的是**生效字号**(`MenuBarMarqueeRenderer.font.pointSize`)而不是存储值 —— 存 0 表示
     ///      "跟随系统",直接把 0 喂给滑杆滑块会跑到最左边;
@@ -570,8 +570,8 @@ struct PanelQuickSettings: View {
         }
     }
 
-    /// 「对齐方式」行(2026-09-03)。三个形态各一行,枚举不同(悬浮歌词是四档的
-    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏共用 `LyricsRestingAlignment`——2026-09-07 起
+    /// 「对齐方式」行。三个形态各一行,枚举不同(悬浮歌词是四档的
+    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏共用 `LyricsRestingAlignment`——
     /// 它也有了「自动」,但只有灵动岛提供,所以选项列表由调用方**显式**传(`notchOptions` /
     /// `menuBarOptions`),不再在这里 `allCases`),所以泛型化 + 标签用闭包传 —— 标签本身**一定要用
     /// 各自设置页那份 `label(for:)`**,不在这里另写:控件里叫「左对齐」而这儿叫「左」就是同一个值的

@@ -12,10 +12,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 // ConfigStore.shared/AppSettings.shared 同样的单例访问风格——AppDelegate 启动时和
 // "关于"页手动点的"检查更新"按钮都从这一个实例访问,不需要额外的桥接层。
 //
-// 2026-09-12 起 updater 由这里直接建(`SPUUpdater(hostBundle:applicationBundle:userDriver:delegate:)`),
+// updater 由这里直接建(`SPUUpdater(hostBundle:applicationBundle:userDriver:delegate)`),
 // 用户界面走自己的 `SoftwareUpdateDriver`:发现 / 下载 / 待装 / 安装中 / 失败全部画在设置窗口的
-// 「软件更新」页(Settings/SoftwareUpdatePage.swift),一个 Sparkle 弹窗都不弹 —— 用户拍板照系统设置那页做,
-// 见 14 章决策 #25。改版前是 `SPUStandardUpdaterController` + 标准模态窗(2026-09-03 当时决定不接管界面,
+// 「软件更新」页(Settings/SoftwareUpdatePage.swift),一个 Sparkle 弹窗都不弹 —— 照系统设置那页做,
+// 见 14 章决策 #25。改版前是 `SPUStandardUpdaterController` + 标准模态窗(当时决定不接管界面,
 // 理由是"接管之后若自家提示没亮用户就收不到提醒";现在的兜底是:周期检查发现更新会亮侧栏「有软件更新可用」
 // 与菜单栏面板底栏两处,Sparkle 自己的周期检查节拍一点没动)。Info.plist 里 SUEnableAutomaticChecks /
 // SUFeedURL 仍决定要不要做周期性后台检查、读哪份 appcast。
@@ -25,12 +25,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 //   - 页面上点「检查更新」→ 找到后攥着 reply,「立即更新」才答 install,窗口关掉答 dismiss;
 //   - 页面上点「立即更新 / 立即重启」而手里没有 reply(周期检查早就 dismiss 过)→ 再发一次检查,找到时自动答 install。
 //
-// updaterDelegate 自 2026-09-03 起接一个只**记状态**的桥(UpdaterDelegateBridge):Sparkle
+// updaterDelegate 自接一个只**记状态**的桥(UpdaterDelegateBridge):Sparkle
 // 发现/下载完/用户跳过/开始安装时把结论写进 `availableUpdate`,给菜单栏面板底栏那一格
 // 显示「有新版本 vX.Y.Z」并一键拉起标准更新窗口用。它不改变 Sparkle 任何弹窗行为。
 //
-// 2026-09-05 起这个桥多接两个**会改 Sparkle 决策**的委托,只为「接收测试版更新」这一个开关
-// (AppSettings.receiveBetaUpdates,用户拍板):
+// 这个桥多接两个**会改 Sparkle 决策**的委托,只为「接收测试版更新」这一个开关
+// (AppSettings.receiveBetaUpdates):
 //   - feedURLString(for:):开关开着 → 返回版本最高的那个 Release(含预发布)自己 tag 目录下的
 //     appcast;关着 → nil,Sparkle 退回 Info.plist 的 `releases/latest/download/appcast.xml`
 //     (GitHub 的 latest 不含 prerelease,所以正式用户永远看不到测试版)。
@@ -38,7 +38,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 //     <sparkle:channel>beta</sparkle:channel>,这是第二道保险。
 // 为什么必须自己挑 appcast、以及 Sparkle 版本比较器对 "-beta.N" 的实测行为,见 Core
 // `UpdateChannel` / `ReleaseVersion` 头注与 15 章决策 11。
-/// 「软件更新」页的进行态(2026-09-12)。只描述"正在发生什么";"有没有查到新版本"另看 `pendingItem`。
+/// 「软件更新」页的进行态。只描述"正在发生什么";"有没有查到新版本"另看 `pendingItem`。
 enum SoftwareUpdateFlow: Equatable {
     case idle
     case checking
@@ -124,7 +124,7 @@ final class SparkleUpdaterManager: ObservableObject {
     }
     @Published private(set) var availableUpdate: AvailableUpdate?
 
-    // MARK: - 软件更新页(2026-09-12)
+    // MARK: - 软件更新页
 
     /// 页面上正在发生的事。`.idle` 时看 `pendingItem`:有 = 查到了新版本等用户动手,没有 = 已是最新 / 还没查过。
     @Published private(set) var flow: SoftwareUpdateFlow = .idle
@@ -135,13 +135,13 @@ final class SparkleUpdaterManager: ObservableObject {
     /// 用户在「下完待装」那一步选了「退出时安装」,或周期检查已经把包下好(自动下载开着)—— Sparkle 会在
     /// App 退出时装,页面据此说明,并把按钮换成「立即重启」。
     @Published private(set) var installOnQuit = false
-    /// 重启后 Sparkle 报「上一版装好了」时记下当前版本,页面说一句「已更新到 X」;只在这一次进程内有效。
+    /// 重启后 Sparkle 报「刚才那一版装好了」时记下当前版本,页面说一句「已更新到 X」;只在这一次进程内有效。
     @Published private(set) var updatedToVersion: String?
 
     /// Sparkle 现在接不接受一次新检查(有会话在跑就不接受)。
     var canCheckForUpdates: Bool { updater.canCheckForUpdates }
 
-    /// 预览钩子(2026-09-12,用户要「模拟一下看看效果」):这台机器上
+    /// 预览钩子(用户要「模拟一下看看效果」):这台机器上
     /// `defaults write me.yudaotor.lyrimuse settings:previewUpdateVersion 1.7.0` 之后,设置窗口
     /// (侧栏「有软件更新可用」那行、「软件更新」页、「关于」页的副标题)就当真查到了 1.7.0 一样显示;
     /// `defaults delete … settings:previewUpdateVersion` 即恢复,重开设置窗口生效。只读 UserDefaults、
@@ -339,7 +339,7 @@ final class SparkleUpdaterManager: ObservableObject {
             isInstallingUpdate = true
             flow = .installing(applicationTerminated: applicationTerminated)
         case .installedAndRelaunched(_, let acknowledge):
-            // 重启后的第一个回调:上一版装好了。页面说一句「已更新到 X」;此时手里不该还有任何待装的版本。
+            // 重启后的第一个回调:刚才那一版装好了。页面说一句「已更新到 X」;此时手里不该还有任何待装的版本。
             updatedToVersion = Self.appVersionString
             pendingItem = nil
             installOnQuit = false
@@ -707,7 +707,7 @@ extension SparkleUpdaterManager {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
 
-    /// 预览钩子(2026-09-12,用户要「模拟一下看看效果」):这台机器上
+    /// 预览钩子(用户要「模拟一下看看效果」):这台机器上
     /// `defaults write me.yudaotor.lyrimuse settings:previewUpdateVersion 1.7.0` 之后,设置窗口
     /// (侧栏「有软件更新可用」那行、「软件更新」页、「关于」页的副标题)就当真查到了 1.7.0 一样显示;
     /// `defaults delete … settings:previewUpdateVersion` 即恢复,重开设置窗口生效。只读 UserDefaults、

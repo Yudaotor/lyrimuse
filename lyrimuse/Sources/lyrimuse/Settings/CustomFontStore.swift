@@ -6,8 +6,8 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "custom-font")
 
-/// 用户导入的自定义字体(.ttf / .otf),对应 GitHub discussions#6 的诉求:字体选择器过去
-/// 只能选系统已装字体,这里加一条"从本地文件导入"的路子。
+/// 用户导入的自定义字体(.ttf / .otf):字体选择器除了系统已装字体,
+/// 还能从本地文件导入。
 ///
 /// 落盘 + 注册两件事分开:文件长期存在 `~/.config/lyrimuse/fonts/` 下(config 目录本来就是
 /// 这个 App 所有持久数据的唯一落点,见 `LyrimuseIdentity` 头注),但 Core Text 的注册是

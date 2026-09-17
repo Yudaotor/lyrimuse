@@ -29,11 +29,11 @@ var (
 // 单独多发一轮请求。
 type appleMusicMatch struct {
 	url, cover string
-	// title/album:iTunes 曲库里实际匹配到的歌名/专辑名。2026-08-12 起透传——它是不与
+	// title/album:iTunes 曲库里实际匹配到的歌名/专辑名。透传——它是不与
 	// 各歌词源共享曲库和搜歪模式之外的**独立**元数据,给下一轮"独立专辑互证"维度评测
 	// 攒数据(search-lyrics CLI 的输出会带上),不参与本文件内的任何挑选逻辑。
 	title, album string
-	// durationSecs:2026-08-30 加,给 searchcli.go 的"本地没有可信时长时,问 Apple 目录
+	// durationSecs:加,给 searchcli.go 的"本地没有可信时长时,问 Apple 目录
 	// 要一个"兜底用——见 runSearchLyricsCLI 里那段调用处的完整说明。
 	durationSecs float64
 }
@@ -43,9 +43,9 @@ type appleMusicMatch struct {
 // 实测验证换尺寸后能正常访问。查不到"100x100"这个子串(理论上不会发生,防御性
 // 处理)就原样返回,好歹还有张小图,不是没有。
 //
-// 2026-08-28 从 600 提到 1200:悬浮歌词窗口那张满幅封面卡是 820px(@2x,QQ 那次
-// 2026-08-24 修复时量出来的),600px 拉到 820px 是 1.37 倍放大,跟 QQ 音乐当初被
-// 用户报"很模糊"那次同一个问题——只是没人在 Apple 这条上报过。实测过 mzstatic
+// 从 600 提到 1200:悬浮歌词窗口那张满幅封面卡是 820px(@2x,QQ 那次
+// 修复时量出来的),600px 拉到 820px 是 1.37 倍放大,跟 QQ 音乐当初被
+// 现象是"很模糊"那次同一个问题——只是没人在 Apple 这条上报过。实测过 mzstatic
 // 这个 CDN 对同一张封面 600/1000/1200/2000/3000 全部原样给图(文件大小随分辨率
 // 同步涨,不是被裁剪成同一张),天花板至少到 3000,选 1200 是留出黑胶模式/背景
 // 模糊这类会把封面放得更大的场景的余量,不是这个 CDN 的实际上限。
@@ -61,7 +61,7 @@ func hiResArtwork(url string) string {
 // 兜底)用,不管哪个调用方先查到,其它调用方都直接命中缓存,不会重复发两遍 iTunes 请求。
 // appleMusicMatchCachedOnly 只读缓存、绝不发请求。appleMusicMatchCached 只在查到
 // (url 非空)时写缓存,所以"iTunes 没这首歌"的情形每次调用都会完整重跑一轮多商店搜索;
-// 用在"有就带上"的纯透传字段上会把 search-lyrics 的收尾白白挂住几秒(2026-08-12 审阅)。
+// 用在"有就带上"的纯透传字段上会把 search-lyrics 的收尾白白挂住几秒(审阅)。
 func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
 	if title == "" {
 		return appleMusicMatch{}
@@ -108,7 +108,7 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) ap
 	// 可信:全文搜索排序会把这首歌在别的发行版(合辑/精选)上的版本排到前面,写词标题
 	// (如 Prince "Partyup")也会被同名热门曲目挤出排名靠前的结果。
 	//
-	// 2026-08-28 实测坐实:方大同「Three Tour」全文搜索命中的是完全不相关的另一张合辑
+	// 实测坐实:方大同「Three Tour」全文搜索命中的是完全不相关的另一张合辑
 	// 《EMO Market 心碎雜貨店》/《00s & 10s C-Pop》,而按专辑名能精确定位到真正的原专辑
 	// 《橙月》——resolveAppleMusicMatchViaAlbum 内部还有一层"专辑对上但曲名对不上就退到
 	// 专辑封面"的兜底(那张专辑自己把这首歌收录成繁体曲名「三人遊」,跟本地报的英文
@@ -122,7 +122,7 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) ap
 
 // appleResultIdentityOK 判定一条 iTunes 结果能不能被当成**本曲**的匹配。
 //
-// 为什么必须有这道闸(2026-09-14,jolle《danke für nichts》案):iTunes Search 对
+// 为什么必须有这道闸(jolle《danke für nichts》案):iTunes Search 对
 // **本商店没有的歌**不会老实回空,而是回一批模糊命中的同名曲目。这首歌只在德区商店
 // 上架,基线的 CN/US 两个商店都查不到(德语是拉丁字母,appleStorefrontsFor 那套按文字系统
 // 扩展商店的机制对它不触发,所以这道闸才是本案唯一的防线),于是搜索回的是另一个歌手
@@ -248,7 +248,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 			}
 		}
 		// 专辑名已经精确对上(>=200,同 coverNeedsAlbumCheck 的"确信"门槛),但曲目表里
-		// 找不到匹配的曲名——常见于这张专辑自己把这首歌收录成另一种文字的曲名(2026-08-28
+		// 找不到匹配的曲名——常见于这张专辑自己把这首歌收录成另一种文字的曲名(
 		// 实测:方大同《橙月》专辑本身用繁体「三人遊」,本地报的是英文「Three Tour」,
 		// 逐字比对天然对不上,而且不值得为了这类跨文字曲名比对引入翻译)。专辑名既然已经
 		// 精确对上,这张专辑的封面就是可信的——同一张专辑的所有曲目共用同一张封面,不需要
@@ -300,11 +300,11 @@ func itunesLookupTracks(ctx context.Context, collectionID int64, country string)
 		if r.WrapperType != "track" {
 			continue
 		}
-		// CollectionName 2026-08-20 补上:少了它,resolveAppleMusicMatchViaAlbum 返回的
+		// CollectionName 补上:少了它,resolveAppleMusicMatchViaAlbum 返回的
 		// appleMusicMatch.album 恒为空,而封面选源现在要拿它算 albumScore
 		// (见 enrich.go 的 preferAppleCoverOverNetease)—— 空的话这条路径给出的封面
 		// 会被当成"专辑不详"、白白错过一次本该顶替的机会。ArtistName/TrackTimeMillis
-		// 同理(2026-08-30 补,分别给 appleStorefrontArtistIdentities 和
+		// 同理(补,分别给 appleStorefrontArtistIdentities 和
 		// appleMusicMatch.durationSecs 用)。
 		tracks = append(tracks, itunesResult{
 			TrackName: r.TrackName, CollectionName: r.CollectionName,
@@ -321,13 +321,13 @@ type itunesResult struct {
 	CollectionID   int64  `json:"collectionId"`
 	TrackViewURL   string `json:"trackViewUrl"`
 	ArtworkURL100  string `json:"artworkUrl100"`
-	// ArtistName:2026-08-30 加,给 appleStorefrontArtistIdentities 用——iTunes Search
+	// ArtistName:加,给 appleStorefrontArtistIdentities 用——iTunes Search
 	// 一直在回这个字段,这里之前一直没解码。见该函数头注。
 	ArtistName string `json:"artistName"`
-	// TrackTimeMillis:2026-08-30 加,给 appleMusicMatch.durationSecs 用——同样是
+	// TrackTimeMillis:加,给 appleMusicMatch.durationSecs 用——同样是
 	// iTunes Search 一直在回、之前没解码的字段。
 	TrackTimeMillis float64 `json:"trackTimeMillis"`
-	// ReleaseDate / CollectionArtistName:2026-09-08 加,给 pickAppleAlbumHint 用 —— 挑"这首歌出自哪张
+	// ReleaseDate / CollectionArtistName:加,给 pickAppleAlbumHint 用 —— 挑"这首歌出自哪张
 	// 专辑"时按发行日期取最早那张、并把群星合辑(collectionArtistName 是 Various Artists 之类、跟曲目
 	// 署名不是一个人)排到后面。同样是 iTunes Search 一直在回、之前没解码的字段。
 	ReleaseDate          string `json:"releaseDate"`

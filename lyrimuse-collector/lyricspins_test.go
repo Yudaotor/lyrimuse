@@ -45,7 +45,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		LyricsSource: "kugou", ResolvedDurationSecs: 300,
 	}
 	// wrongDuration 标志由 trackEnrichment 用 durationMismatch + observeWrongDuration
-	// 算好传入(签名 2026-08-22 改),这里沿用 durationMismatch 保住它的直接覆盖。
+	// 算好传入(签名改),这里沿用 durationMismatch 保住它的直接覆盖。
 	confirmedMismatch := durationMismatch(wrongDur.ResolvedDurationSecs, 200)
 	if !confirmedMismatch {
 		t.Fatal("前提不成立：时长差 33% 该判为 mismatch，测试用例失效")

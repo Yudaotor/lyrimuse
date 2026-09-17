@@ -53,7 +53,7 @@ const (
 //
 // ⚠️ 必须是惰性的(sync.Once),不能写成包级 var 的初始化表达式:t2sCharMap 等词典是在 t2s.go 的
 // init() 里填的,而包级 var 初始化跑在所有 init() 之前——那时三张表还是 nil,"剔除词典字"会静默
-// 变成什么都不剔(第一版就是这么写的,TestGoldenHanPoolIsSimplifiedStable 当场抓到 U+346E)。
+// 变成什么都不剔(TestGoldenHanPoolIsSimplifiedStable 抓到过 U+346E)。
 var goldenHanPoolOnce sync.Once
 var goldenHanPoolCache []rune
 
@@ -196,7 +196,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 	//     标签原样;这类行几乎都是署名行,整行会被共识比对丢掉,正文置不置乱都不影响特征,置乱只为少漏
 	//     人名;
 	//   - 其它标签(人名、普通英文词)——分类只看形状(汉字数、有没有字母/标点),置乱保形,**整行连标签
-	//     一起置乱**。这里不能像第一版那样"标签一律原样":原样标签与置乱正文的接缝会造出原文里没有的
+	//     一起置乱**。⚠️ 标签**不能**一律原样:原样标签与置乱正文的接缝会造出原文里没有的
 	//     3-gram(或反过来抹掉重复),3-gram 集合基数一变 Jaccard 就漂——实测《躺在你的衣柜》netease
 	//     0.559→0.544 跨过 0.55 阈值丢了 100 分共识,采集闸 3 当场拦下。
 	if label, _, ok := lyricSplitLabel(trimmed); ok {

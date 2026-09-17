@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// 2026-09-02 歌词源级熔断(sourcebreaker.go)。假时钟驱动,不碰真实时间。
+// 歌词源级熔断(sourcebreaker.go)。假时钟驱动,不碰真实时间。
 
 type fakeClock struct{ t time.Time }
 
@@ -54,7 +54,7 @@ func TestLyricSourceForHost(t *testing.T) {
 }
 
 // 连续两次网络失败才开;之后**每熔断一轮**按 15/30/60/120/300 秒升一档;一次成功整体清零。
-// "每熔断一轮"是 2026-09-09 修正过的口径(原来是每失败一个请求升一档),所以这里每升一档
+// "每熔断一轮"是修正过的口径(原来是每失败一个请求升一档),所以这里每升一档
 // 之前都得先把上一档的冷却等过去 —— 冷却窗口里的失败不升档,那一条由下面那个测试单独钉。
 func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	b, clk := newTestBreaker()
@@ -98,7 +98,7 @@ func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 // ⚠️ 回归钉:一轮搜索里同一个源要发好几个请求(网易云 4 个歌手别名变体、QQ 的 smartbox +
 // client_search),源整个挂掉时它们在同一瞬间一起失败 —— 这**一波**故障只能升一档。
 //
-// 2026-09-09 之前档位是 `st.consecutive - lyricSourceBreakerTripAfter`,拿失败请求数当档位,
+// 之前档位是 `st.consecutive - lyricSourceBreakerTripAfter`,拿失败请求数当档位,
 // 于是一次抖动就把阶梯走到头。实测日志:QQ 在 14:38:19.804 这同一毫秒里连跳 15s→30s→1m→2m
 // →5m 五档,网易云 0.8 秒内到顶、consecutive 一路涨到 22;整份日志冷却到顶 5 分钟 331 次,
 // 可配对的 35 例里 14 例是"第一档 15 秒都没过完就到顶"。用户看得见的后果是一次 2 秒的 DNS
@@ -171,7 +171,7 @@ func TestLyricSourceBreakerIgnoresCanceledAnd4xx(t *testing.T) {
 	}
 }
 
-// 2026-09-06 传输层失败分类(sourcebreaker.go 最后一节)。错误链按 http.Client.Do 真实返回的
+// 传输层失败分类(sourcebreaker.go 最后一节)。错误链按 http.Client.Do 真实返回的
 // 形状来造:*url.Error → *net.OpError → *net.DNSError,分类必须能逐层解开;另一半靠 httptrace
 // 的 DNS 轨迹 —— 那是评审抓到的坑:各源 client 都设了 Client.Timeout,DNS **挂住**时 Go 会把
 // 错误整体换成 *http.timeoutError(纯字符串、无 Unwrap),错误链里再也没有 DNSError,只看链

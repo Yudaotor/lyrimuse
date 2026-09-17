@@ -17,7 +17,7 @@ import os
 application = os.environ["LYRIMUSE_DMG_APP"]
 _app_name = os.path.basename(application)
 
-# 卷图标(2026-09-02):挂载后 Finder 侧边栏/桌面上那个"盘"该长 Lyrimuse 的样子,而不是
+# 卷图标:挂载后 Finder 侧边栏/桌面上那个"盘"该长 Lyrimuse 的样子,而不是
 # 系统通用的白盘子图标。直接从**已经打包进这个 App 的那份** AppIcon.icns 取,不新开一个
 # env var 单独传路径——图标只有一份来源(build.sh 里 `cp AppIcon.icns
 # "$APP_DIR/Contents/Resources/AppIcon.icns"`),这样图标以后换了也不会出现"App 里换了、

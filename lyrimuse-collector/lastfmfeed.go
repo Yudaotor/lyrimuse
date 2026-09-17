@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// collector → App 的 Last.fm「最近记录」feed(2026-09-03)。
+// collector → App 的 Last.fm「最近记录」feed。
 //
 // 背景:App 的 Last.fm 统计页此前自己每 110 秒直连 `user.getrecenttracks` 拉一次最近记录
 // (外加两个只为取 @attr.total 的计数请求),而这个 collector 为了 iPhone 桥接**本来就每
@@ -34,7 +34,7 @@ var lastfmFeedPath string
 // 判 feed 健康的阈值(LastfmRecentFeed.freshWindow)必须**大于**这个值 + 最慢拉取周期。
 const feedHeartbeat = 60 * time.Second
 
-// feed 拉取节奏(2026-09-03 起自适应,替代原来固定的 lastfmPollInterval=15s):
+// feed 拉取节奏(自适应,替代原来固定的 lastfmPollInterval=15s):
 //   - 有人在听(本机在放、或 feed 里最近 feedActivityWindow 内有 now-playing / 新 scrobble)
 //     → feedIntervalActive(15 s),跟原桥接一样快,红点/新行 ≤15 s 到位;
 //   - 完全空闲 → feedIntervalIdle(60 s):这时 Last.fm 上不会有任何新东西,拉得再快也只是
@@ -109,10 +109,10 @@ func lastfmFeedNudgeDue(now time.Time) bool {
 	return lastfmFeedNudgeAt.CompareAndSwap(t, 0)
 }
 
-// lastfmFeedNudgePath:**跨进程**的"提前拉一次"信号文件(2026-09-03)。上面的 atomic 只在
+// lastfmFeedNudgePath:**跨进程**的"提前拉一次"信号文件。上面的 atomic 只在
 // 常驻 collector 进程内有效;回填(`collector backfill-lastfm`,由 App 起的独立进程)刚往
 // Last.fm 补进一批 scrobble 之后也需要让常驻进程马上重拉 feed——否则 App 那边要等下一个
-// 15 s/60 s 周期才看到补进去的记录(用户 2026-09-03:「刚连上补提交之后马上刷新一次最近
+// 15 s/60 s 周期才看到补进去的记录(「刚连上补提交之后马上刷新一次最近
 // 记录」)。协议极简:写方 touch 这个文件(内容是 unix 秒,纯供人看),常驻进程在 bridge()
 // 里每拍 stat 一次,文件在就消费掉(删除)并立刻拉一次。由 main.go / backfillcli.go 跟
 // 其它落盘路径一起设置;空 = 不启用(单测)。

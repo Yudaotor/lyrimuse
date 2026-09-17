@@ -1,12 +1,12 @@
 package main
 
-// 日志出口(2026-09-05)。collector 侧的日志从 stdlib `log` 的无等级文本换成标准库 `log/slog`
+// 日志出口。collector 侧的日志从 stdlib `log` 的无等级文本换成标准库 `log/slog`
 // 的结构化分级日志,同时把三件以前各自为政(或根本没有)的事收进这一条出口链:
 //
 //	slog.TextHandler ──▶ repeatSquelcher ──▶ secretScrubber ──▶ rotatingLogFile(常驻)/ stderr(子命令)
 //	(等级 / 时间戳)   (连续重复行折叠)    (凭据脱敏,logscrub.go)  (运行期按大小轮转,logrotate.go)
 //
-// 为什么现在动它(2026-09-05 拿两天 40k 行真实日志数的):63% 是 `api call` 审计行、其中
+// 为什么现在动它(拿两天 40k 行真实日志数的):63% 是 `api call` 审计行、其中
 // Last.fm 每 5 秒一次的 `user.getrecenttracks` 一项就 4219 行;同一首歌的 "reusing existing
 // entry" 打了 1158 遍;ListenBrainz 超时重试串上千行;没有等级只能靠前缀 grep;时间戳是 UTC
 // 却不带时区标记,极易被当成本地时间读错。
@@ -16,13 +16,13 @@ package main
 //     每一行以 Info 级进 handler(log 包自己的时间前缀被 slog 关掉,不会双时间戳)。新写的
 //     日志用 `slog.Debug/Info/Warn/Error` + `key=value` 属性;老调用点按需逐处升级,不做一次性
 //     大改(那种改法只会制造一个巨大的、没人敢细看的 diff)。
-//   - **时间统一 UTC、RFC 3339 毫秒、带 Z**(`time=2026-09-05T00:00:00.000Z`)。App 侧 os.Logger
+//   - **时间统一 UTC、RFC 3339 毫秒、带 Z**(`time=T00:00:00.000Z`)。App 侧 os.Logger
 //     的记录是 `+0000`,两段日志对表不再靠脑补时区。诊断导出解析这个前缀,见
 //     `CollectorLogLine.timestamp(of:)`(同时兼容老格式,.old 归档和迁移前的行仍是老格式)。
 //   - **等级默认 info**,`config.json` 的 `log_level`(debug/info/warn/error)调,环境变量
 //     `LYRIMUSE_LOG_LEVEL` 优先(手动在终端跑子命令排查时不用改配置文件)。审计日志的逐次
 //     成功行在 Debug —— 默认不落盘,但**不是丢了**:同一目标一分钟一行汇总(见 networkobs.go
-//     `recordAPICall`),失败行仍逐条 Warn。用户 2026-08-26 的要求是"所有对外请求全部记录",
+//     `recordAPICall`),失败行仍逐条 Warn。用户的要求是"所有对外请求全部记录",
 //     汇总里的 count 就是那份记录,只是不再一行一次。
 //   - **连续重复行折叠**(`repeatSquelcher`)走 syslog / journald 那套"last message repeated N
 //     times":只折**连续**且模板相同的行(去掉 time= 与数字后一致),第一条原样立即写出、

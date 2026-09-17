@@ -1,28 +1,28 @@
 import AppKit
 import LyrimuseCore
 
-// 菜单栏歌词跑马灯的渲染侧(2026-08-15 加)——把一行歌词画成一整条长图,交给
+// 菜单栏歌词跑马灯的渲染侧——把一行歌词画成一整条长图,交给
 // MenuBarScrollingLabel 里的 CALayer 当内容,由 Core Animation 平移。
 //
 // 为什么要画成图片,而不是发布一个字符串让文本控件去渲染:
 // 平滑滚动的最小单位必须是**像素**,而文本能表达的最小单位是**一个字**。按字取窗那版
-// (2026-08-15 前)每 0.25 秒整体平移一个字,本质上是 4fps 的动画,肉眼看就是一跳一跳;
+// (前)每 0.25 秒整体平移一个字,本质上是 4fps 的动画,肉眼看就是一跳一跳;
 // 而且一个窗口固定 N 个字符、字符宽度却不相等(英文 'i' 和 'm' 差一倍,中文又比拉丁宽得多),
 // 每跳一次这段文字的像素宽度也在变,菜单栏项跟着伸缩,把右边其它 App 的图标一起顶得左右晃。
 // 图片这条路两个问题一起解决:宽度由我们钉死,偏移可以是任意小数。
 //
-// ⚠️ 2026-08-16 之前这里画的是**模板图**(isTemplate = true),靠系统按浅色/深色/反白
+// ⚠️ 之前这里画的是**模板图**(isTemplate = true),靠系统按浅色/深色/反白
 // 自动上色。改成自建 NSStatusItem 之后我们自己拿着图层,没有系统的模板处理这一层了,
 // 所以颜色改由调用方显式传进来(见 MenuBarScrollingLabel.tintColor:平时 labelColor、
 // 菜单打开时 selectedMenuItemTextColor,都在按钮当前的 effectiveAppearance 下解析)。
 @MainActor
 enum MenuBarMarqueeRenderer {
-    /// 跟系统菜单栏项同一套字体族;**粗细**(`menuBarLyricsFontWeight`,2026-09-03 加)和**字号**
-    /// (`menuBarLyricsFontSize`,同日用户要求追加,0 = 跟随系统)听用户的。跟随系统时字号取
+    /// 跟系统菜单栏项同一套字体族;**粗细**(`menuBarLyricsFontWeight`)和**字号**
+    /// (`menuBarLyricsFontSize`,同日追加,0 = 跟随系统)听用户的。跟随系统时字号取
     /// `menuBarFont(ofSize: 0)` 的 pointSize,不要写死数字,否则系统字号变了这行歌词会跟旁边的
     /// 菜单项不齐。
     ///
-    /// 实测(2026-09-03,本机 SF 13pt):六档字重的 ascender/descender 完全相同 → `lineHeight` 不随
+    /// 实测(本机 SF 13pt):六档字重的 ascender/descender 完全相同 → `lineHeight` 不随
     /// 字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),拉丁字随字重变宽
     /// (medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下换档那一刻槽宽变一次。
     /// 默认档 `.regular` 与 `menuBarFont(ofSize: 0)` 逐点同宽同高,直接返回后者,老用户零变化。
@@ -31,7 +31,7 @@ enum MenuBarMarqueeRenderer {
         return font(weight: settings.menuBarLyricsFontWeight, size: settings.menuBarLyricsFontSize)
     }
 
-    /// 字号可选的合法区间(2026-09-03 加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
+    /// 字号可选的合法区间(加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
     /// .thickness` 恒 22pt(带刘海的机器菜单栏本身 33pt 高,按钮仍是 22),而 `lineHeight` 逐字号实测
     /// 13→18 / 14→19 / 15→20 / 16→21 / 17→23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
     /// 缩小、槽宽跟着失真。下限 10pt 之下在菜单栏里已经读不清。存量配置越界时夹回区间,不崩不留空白。
@@ -56,7 +56,7 @@ enum MenuBarMarqueeRenderer {
         return NSFont.systemFont(ofSize: pointSize, weight: weight.nsWeight)
     }
 
-    // MARK: - 双排(副行,2026-09-06)
+    // MARK: - 双排(副行)
 
     /// 双排时主行的字体:10pt(`MenuBarLyricRows.mainPointSize`),粗细听用户的,字号滑杆不生效(为什么见
     /// MenuBarLyricRows 头注)。
@@ -138,7 +138,7 @@ enum MenuBarMarqueeRenderer {
         let ellipsis = "…"
         let ellipsisWidth = width(of: ellipsis)
         // 按前缀长度二分,每个探针整段测一次宽(kerning/连字与最终显示完全一致)——原来是
-        // 逐字符累加、每次全量重测前缀,O(n²) 文本排版(2026-08-20 性能审计;此函数目前只在
+        // 逐字符累加、每次全量重测前缀,O(n²) 文本排版(性能审计;此函数目前只在
         // windowWidth<=0 的退化路径被调、上面第一行 guard 就挡掉了,这是防御性收口:将来
         // 谁把它用在正常宽度上,一句长歌词就不再是几毫秒级主线程排版)。
         let chars = Array(text)
@@ -161,8 +161,8 @@ enum MenuBarMarqueeRenderer {
     /// 一行歌词在菜单栏上的两种形态。
     ///
     /// ⚠️ 这个判定**必须**只有一份:菜单栏本体(MenuBarStatusItem)和设置页里那条预览
-    /// (MenuBarPreviewBar)都走它。2026-08-16 之前预览是自己另写的一套(自己判断截断、
-    /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 用户报的"预览里要真实模拟
+    /// (MenuBarPreviewBar)都走它。之前预览是自己另写的一套(自己判断截断、
+    /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 现象是"预览里要真实模拟
     /// 实际的菜单栏"就是这个。两份实现必然漂,唯一的解法是让它们共用同一个函数。
     enum Presentation: Equatable {
         /// 让按钮自己画这段文字 —— 这一项的宽度跟着文字走。两种来源:
@@ -184,7 +184,7 @@ enum MenuBarMarqueeRenderer {
     ///   都得自己交代"这一句到底开唱了没有",漏掉一个就又是"还没染色却已经在滚"。
     /// - Parameter widthMode: 装得下的句子占多宽,见 MenuBarLyricsWidthMode。
     ///
-    /// ⚠️ 2026-08-17 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
+    /// ⚠️ 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
     /// 宽度占位,长短句来回切时菜单栏项一直伸缩,右边其它 App 的图标跟着左右晃 —— 用户
     /// 反馈"动来动去,观感不太好"),当天又把它改成**可选**:有人更在意"别占用不需要的
     /// 空间",那正是被固定宽度换掉的东西。
@@ -224,7 +224,7 @@ enum MenuBarMarqueeRenderer {
     /// 一句歌词排好版的整条长图。**一句只画一次**,之后每一帧都是 Core Animation 在
     /// 渲染层平移这一张图,主线程完全不参与。
     ///
-    /// 2026-08-16 之前这里还有一个 frame(_:offset:)(从长图上按偏移裁一个窗口出来)和
+    /// 之前这里还有一个 frame(_:offset)(从长图上按偏移裁一个窗口出来)和
     /// 一个 image(text:width:offset:)(每帧重排整段文本)。两个都随 MenuBarExtra 一起
     /// 删掉了:现在没有任何一方需要"某一帧长什么样"这个概念 —— 那正是逐帧驱动才需要的东西。
     struct PreparedLine {
@@ -242,7 +242,7 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter color: 文字颜色。调用方负责在正确的 appearance 下解析动态颜色
     ///   (见 MenuBarScrollingLabel.rebuildImage)。
     /// - Parameter scale: 栅格化比例 = 图层最终所在窗口的 backingScaleFactor(调用方传
-    ///   `menuBarBitmapScale`,2026-09-05 起不在这里猜屏)。返回值的 `scale` 原样带回给图层的
+    ///   `menuBarBitmapScale`,不在这里猜屏)。返回值的 `scale` 原样带回给图层的
     ///   contentsScale 用。
     /// - Parameter font: 用哪个字体画;nil = 单行那套 `font(for:)`。
     /// - Parameter exactBox: 双排用 —— 位图高 = 字面高取整、文字底边贴 0,不留单行那上下各 1pt 的富余
@@ -279,7 +279,7 @@ enum MenuBarMarqueeRenderer {
 }
 
 extension NSView {
-    /// 自绘位图该按哪个比例栅格化(2026-09-05):**这个视图所在窗口**的 backingScaleFactor。
+    /// 自绘位图该按哪个比例栅格化:**这个视图所在窗口**的 backingScaleFactor。
     ///
     /// 此前三处各取各的:长图和进度图标拿 `NSScreen.main`(有键盘焦点的窗口所在屏),活体图标
     /// 写死 2。状态栏按钮真正被画在哪块屏它们都不知道 —— 混接不同 DPI 的显示器时,在外接 1x 屏

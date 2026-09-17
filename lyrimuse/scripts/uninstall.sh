@@ -34,7 +34,7 @@ COLLECTOR_PLIST="$PREFIX/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
 APP_PLIST="$PREFIX/Library/LaunchAgents/$APP_LABEL.plist"
 CONFIG_DIR="$PREFIX/.config/lyrimuse"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
-# App 进程的 launchd stdout/stderr(2026-09-05 起单独一份,见 LyrimuseCore LogFiles.appStderr)。
+# App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
 APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
 
 MODE="report"
@@ -57,7 +57,7 @@ human_size() {
 
 # 这个 domain 里还有没有东西。
 #
-# ⚠️ 不能用 `defaults read "$1" >/dev/null 2>&1` 的退出码当判据 —— 2026-08-22 实测：
+# ⚠️ 不能用 `defaults read "$1" >/dev/null 2>&1` 的退出码当判据 —— 实测：
 # `defaults delete <domain>` 成功之后，`defaults read <domain>` **仍然退出 0**，只是打印
 # 一个空字典 `{}`（cfprefsd 里那个 domain 的空壳还挂着）。拿退出码判等于恒为真，表现是
 # 删干净了却报"❌ 仍然存在"。判据只能看读出来有没有内容。
@@ -97,7 +97,7 @@ if [[ "$MODE" == "report" ]]; then
   exit 0
 fi
 
-# 「开机启动」自 2026-09-06 起是系统登录项(SMAppService.mainApp,不再是 LaunchAgent plist),
+# 「开机启动」自是系统登录项(SMAppService.mainApp,不再是 LaunchAgent plist),
 # shell 里没有对应的注销命令,只能请 App 自己来:`lyrimuse --unregister-login-item` 只注销
 # 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 → 登录项」里留一条指向不存在
 # 路径的死项,所以要在用户把 App 拖进废纸篓**之前**做。测试(uninstall_test.sh)用 PREFIX
@@ -195,11 +195,11 @@ done
 
 # 偏好设置项必须一起删，不能像以前那样只打一行"需要的话手动执行"。
 #
-# 2026-08-22 补。留着它会把重装引向一条**不可自愈的死路**：purge 删掉了 LaunchAgent
+# 留着它会把重装引向一条**不可自愈的死路**：purge 删掉了 LaunchAgent
 # (collector 没装)，而 np:hasCompletedOnboarding 还是 true —— 重装之后首启引导永不出现，
 # 而那扇引导页是把 collector 服务装回去的主要入口。用户看到的是桌面永久停在
 # 「搜索歌词中…」，界面上没有任何线索指向"后台服务没装"。OnboardingView 顶部注释记的
-# 就是这条死路(2026-08-13 为此改过 onDisappear 的置位时机)，只是这次从卸载路径绕了回来。
+# 就是这条死路(为此改过 onDisappear 的置位时机)，只是这次从卸载路径绕了回来。
 #
 # 整个 domain 一起删而不是挑几个 key：purge 的语义就是"这台机器上当它没装过"，挑 key
 # 删既不完整(np:* 之外还有 KeyboardShortcuts_*)，又要跟着代码里的 key 表走样。
@@ -220,7 +220,7 @@ if [[ "$HAS_DEFAULTS" == "yes" ]]; then
   #   - 跑卸载脚本的人多半 App 还开着（他刚决定不要它了），做成前置闸等于永远不删；
   #   - 这个判据看的是全局有没有 lyrimuse 进程，跟 $APP_LABEL 这个 domain 没有对应关系
   #     （uninstall_test.sh 把 label 覆盖成 probe 域，却会被真实 App 的运行状态挡住 ——
-  #     2026-08-22 加这段时被那条测试当场抓出来）。
+  #     加这段时被那条测试当场抓出来）。
   # 先删、再核实、最后如实提醒，三件事各归各的。
   if /usr/bin/pgrep -x "lyrimuse" >/dev/null 2>&1; then
     echo "  ⚠️ Lyrimuse 还在运行，它退出时 cfprefsd 可能把内存里那份设置写回来。"

@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// 2026-08-02 回归测试:doHTTPTracked/networkLooksDown 是"联网搜索候选歌词"判断
+// 回归测试:doHTTPTracked/networkLooksDown 是"联网搜索候选歌词"判断
 // "所有源都没找到"到底是真没有还是网络不通的核心逻辑,读增量(测试前后的差值)而不是
 // 绝对值——networkAttemptCount/networkFailureCount 是包级变量,同一个测试二进制里
 // 别的测试(或将来新增的测试)也可能调用到 doHTTPTracked,不能假设进测试时一定是
@@ -85,14 +85,14 @@ func TestDoHTTPTracked_TransportErrorCountsAsFailure(t *testing.T) {
 	}
 }
 
-// 2026-08-26 用户要求"所有软件发出的对外请求全部都给我记录下日志",doHTTPTracked
+// "所有软件发出的对外请求全部都给我记录下日志",doHTTPTracked
 // 从这时起是全局的审计日志出口,不只是网络计数器。这两个测试钉住这一层:①正常/失败
 // 两条路径都真的写了一行日志;②日志行**不带 query string**——凭据(比如这里模拟的
 // api_key)不应该出现在里面,这是这条功能的核心安全承诺,比单纯"格式对不对"更重要。
 // 用 log.SetOutput 换成内存 buffer 是 Go 测试里安全捕获 log 包输出的标准做法——
 // installLogSink() 只在真实运行时的 main() 里调用,go test 不会跑到它;此时 slog 的默认
 // handler 正是经 log 包写出的,所以 slog.Warn / slog.Debug 也落进这个 buffer。逐次成功行
-// 在 Debug(2026-09-05 起,落盘的是按分钟的汇总),测试里把桥接等级放到 Debug 才看得到。
+// 在 Debug(落盘的是按分钟的汇总),测试里把桥接等级放到 Debug 才看得到。
 // defer 全部换回去,不影响其它测试。
 func TestDoHTTPTracked_LogsSuccessWithoutQueryString(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func TestNetworkLooksDown_RequiresMinimumAttemptsAndAllFailed(t *testing.T) {
 	}
 }
 
-// 审计汇总(2026-09-05):同一 target 一分钟一行,count / failed / p50 / max 齐全;窗口没满且
+// 审计汇总:同一 target 一分钟一行,count / failed / p50 / max 齐全;窗口没满且
 // 不 force 时什么都不写;结算后窗口清空。
 func TestAPICallSummary_AggregatesPerTargetPerMinute(t *testing.T) {
 	apiCallAgg.mu.Lock()
@@ -255,7 +255,7 @@ func TestNormalizeAuditPath(t *testing.T) {
 	}
 }
 
-// 2026-09-06 传输层失败分类的端到端形状:真 http.Client(带 Client.Timeout)+ 挂住不答的解析器。
+// 传输层失败分类的端到端形状:真 http.Client(带 Client.Timeout)+ 挂住不答的解析器。
 // 这正是评审抓到的坑 —— Client.Timeout 会把错误换成 *http.timeoutError(纯字符串),错误链里
 // 没有 *net.DNSError;只有 doHTTPTracked 挂的 httptrace 轨迹能证明"死在 DNS 阶段"。
 // 用 lyricSourceForHost 认得的主机名(music.163.com),但解析器根本不发包,不碰真实网络。

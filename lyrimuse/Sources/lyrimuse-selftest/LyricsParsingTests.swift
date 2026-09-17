@@ -33,7 +33,7 @@ func runLyricsParsingTests() {
         "LRC: 一行多个时间戳(副歌重复)各生成一条"
     )
 
-    // --- FrameRateProbe (2026-08-22) ---
+    // --- FrameRateProbe  ---
     //
     // 拆成纯值类型放 Core 就是为了能无屏测它(同 KaraokeFill/MarqueeMath)。
     do {
@@ -64,7 +64,7 @@ func runLyricsParsingTests() {
         expectEqual(probe2.fps == nil, true, "帧率探针: 负间隔被丢弃")
     }
 
-    // --- LRC 自带的 [offset:] (2026-08-22) ---
+    // --- LRC 自带的 [offset:]  ---
     //
     // 这个字段此前全链路无人消费:parse() 把它当元信息行整个跳过,于是"歌词源明确告诉了我们
     // 要偏多少"这件事被静默丢掉。本机 114 条缓存实测:酷狗 50 条里 30 条带这个标签(2 条非零,
@@ -168,7 +168,7 @@ func runLyricsParsingTests() {
     expectEqual(YRCParser.parse("no header here (1,2,0)x"), [], "YRC: 没有行头的行忽略")
 
     do {
-        // 2026-08-02 修复:词文字本身含字面括号(和声/口白标注常见,比如"(oh)")时,不能被
+        // 修复:词文字本身含字面括号(和声/口白标注常见,比如"(oh)")时,不能被
         // 误判成"下一个时间戳元组开始了"而截断丢字,详见 wordRegex 定义处的注释。
         let text = "[0,3000](0,500,0)Hello(1600,400,0)(oh)(2100,300,0)world"
         let lines = YRCParser.parse(text)
@@ -180,7 +180,7 @@ func runLyricsParsingTests() {
     }
 
     do {
-        // 2026-08-03 修复:2026-08-02 那条修复的负向前瞻只认"紧跟着的是完整三段式
+        // 修复:那条修复的负向前瞻只认"紧跟着的是完整三段式
         // (数字,数字,数字)"才算真时间戳——真实缓存数据(Michael Jackson《Morphine》标题行
         // 括号注音部分)里给标点配的元组缺了第三段 flag,变成畸形两段式 (18040,2255),
         // 既不满足三段式、又不是真的该保留的字面文字(纯数字,不是人写的歌词内容),会被
@@ -214,7 +214,7 @@ func runLyricsParsingTests() {
         "YRC: CRLF换行正确切成两条独立行,而非整份解析失败"
     )
 
-    // MARK: - LyricTimelineNormalizer:逐字时间轴合法性归一化(2026-09-02)
+    // MARK: - LyricTimelineNormalizer:逐字时间轴合法性归一化
     //
     // 规则与阈值的依据见 LyricTimelineNormalizer 头注(全库 3071 首实测)。这里钉住每条规则的
     // 数值行为:夹到哪、终点动不动、什么情况退化、退化成什么形状、边界(最后一行 / 同时间戳 / 空)。
@@ -301,7 +301,7 @@ func runLyricsParsingTests() {
         expectEqual(LyricTimelineNormalizer.normalize([]).lines, [], "时间轴归一化: 空输入")
     }
 
-    // ---- LyricsPreviewText(2026-09-04) ----
+    // ---- LyricsPreviewText ----
     //
     // 「搜索候选歌词」右侧预览框摘掉"永远不会显示的那几行"。判据必须跟播放路径同源,
     // 所以这里钉的是**边界**:该摘的摘干净、不该摘的一行都不能少。
@@ -360,7 +360,7 @@ func runLyricsParsingTests() {
         expectEqual(LyricsPreviewText.forPreview("[ti:]\n[ar:]\n"), "", "预览: 整份只有元信息 → 空")
     }
 
-    // ---- LyricsBodyEdit(2026-09-12) ----
+    // ---- LyricsBodyEdit ----
     //
     // 「歌词管理」详情页「歌词(LRC)」编辑框只显示正文,但保存时被摘掉的行一行都不能丢(`[offset:]` 有人消费)。
     // 用户圈图那首(宇多田光《One Last Kiss》,QQ 源)的真实形状:十行元信息标签 + 「曲名 - 歌手」+「词:」「曲:」三行署名。
@@ -395,7 +395,7 @@ func runLyricsParsingTests() {
         expectEqual(metaOnly.reassembled(body: ""), "[ti:]\n[ar:]\n", "正文编辑: 整份只有元信息 → 拼回原文")
     }
 
-    // ---- LyricsQueryFieldLayout(2026-09-04) ----
+    // ---- LyricsQueryFieldLayout ----
     //
     // 「搜索候选歌词」那排查询词输入框按内容长度分宽。三条规则各钉边界。
     do {

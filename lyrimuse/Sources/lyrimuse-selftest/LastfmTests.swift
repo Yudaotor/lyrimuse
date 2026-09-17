@@ -7,9 +7,9 @@ import Foundation
 
 @MainActor
 func runLastfmTests() {
-    // ---- 「第 N 次听」的作废判据:按最新一条收听的时刻,而不是页内出现次数(2026-08-21) ----
+    // ---- 「第 N 次听」的作废判据:按最新一条收听的时刻,而不是页内出现次数 ----
     //
-    // 用户报「第 15 次听下面紧跟着第 21 次听」。根因:原来只按页内出现次数判作废,而连播同一
+    // 现象是「第 15 次听下面紧跟着第 21 次听」。根因:原来只按页内出现次数判作废,而连播同一
     // 首歌时这一页很快被它占满 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,缓存总数于是
     // 永久冻结(实测冻在 15,真实合计 22 = 园游会 10 + 園遊會 12 两个 Last.fm 实体),而实时行
     // 是每次换歌现取的、显示 21。完整推导见 PlayCountRecency 的注释。
@@ -38,10 +38,10 @@ func runLastfmTests() {
                     "次数作废: 两个写法各自一条")
     }
 
-    // ---- 「第 N 次听」判据③:页内自相矛盾(2026-08-22) ----
+    // ---- 「第 N 次听」判据③:页内自相矛盾 ----
     //
     // 判据①②都要跟上一轮比,而基线只在内存、次数表却持久化 —— App 重启后基线被重设成
-    // 「当下」,那首歌不再被播一次就永远等不到作废。用户实测:缓存冻在 3、真实 12,那一页有
+    // 「当下」,那首歌不再被播一次就永远等不到作废。实测:缓存冻在 3、真实 12,那一页有
     // 11 行《开不了口 (live)》,视图侧减法把后 8 行全算成 ≤0,整片空白且不自愈。
     // 这一条只看当下这一页站不站得住,无状态,重启后第一轮就生效。
     do {
@@ -76,7 +76,7 @@ func runLastfmTests() {
                     "判据③: 无矛盾时,再久没问过也不作废")
     }
 
-    // ---- 「第 N 次听」判据④:距离上次验证太久,不看页内次数(2026-08-29) ----
+    // ---- 「第 N 次听」判据④:距离上次验证太久,不看页内次数 ----
     //
     // 真实案例:方大同《ORANGe MOON》缓存冻结在 1,直接查 Last.fm track.getInfo 核实
     // 真实 userplaycount = 31。根因是判据③的第一道闸 `onPage > cachedTotal`:这首歌很久
@@ -110,14 +110,14 @@ func runLastfmTests() {
                     "判据④: 同样的场景,只看时间就能判过期,不受 onPage/cachedTotal 影响")
     }
 
-    // ---- nowPlayingCount 追赶 trackPlayCounts(2026-08-24) ----
+    // ---- nowPlayingCount 追赶 trackPlayCounts ----
     //
-    // 用户实测(《Controversy》):换歌那一刻 nowPlayingCount 取到 16(显示 17),trackPlayCounts
+    // 实测(《Controversy》):换歌那一刻 nowPlayingCount 取到 16(显示 17),trackPlayCounts
     // 随后追到 27(显示 28)——nowPlayingCount 没有任何自愈机制,永远停在 17,直到下一次换歌。
     // 这组用例钉住"只能涨、不能跌"的取舍。
     do {
         typealias R = PlayCountRecency
-        // 这一组的 currentPlayCounted 全传 false = "这一次还没落库",也就是 2026-09-13
+        // 这一组的 currentPlayCounted 全传 false = "这一次还没落库",也就是
         // 之前唯一存在的那条路径,行为必须逐字不变(下面第二组管已落库的情形)。
         // 正题:trackPlayCounts 学到了更高的总数 → 采纳,+1 换算成显示值
         expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 27, currentPlayCounted: false), 28,
@@ -136,9 +136,9 @@ func runLastfmTests() {
                     "nowPlayingCount 追赶: 新总数比换算前的 total 还高一点 → 仍要涨")
     }
 
-    // ---- 当前这次播放已经落库时不再 +1(2026-09-13) ----
+    // ---- 当前这次播放已经落库时不再 +1 ----
     //
-    // 用户实测(《Cow-girl moderne》,第一次听):06:02:06 开播 → 约 06:03:30 越过 scrobble
+    // 实测(《Cow-girl moderne》,第一次听):06:02:06 开播 → 约 06:03:30 越过 scrobble
     // 门槛、Last.fm 记账 userplaycount 0→1 → 06:03:45 resolvePlayCounts 取到 1 → 追赶把
     // 徽标从 1 抬到 2。同一次收听算了两遍。第一次听的歌**必然**中招:正是这次 scrobble 让
     // 它第一次出现在最近记录里,新 key 无条件取数,必定撞在"已入账、还在播"的窗口上。
@@ -164,7 +164,7 @@ func runLastfmTests() {
                     "已落库: 换算成 0 → 不采纳,没有第 0 次听")
     }
 
-    // ---- currentPlayIsScrobbled: 这次播放落库没有(2026-09-13) ----
+    // ---- currentPlayIsScrobbled: 这次播放落库没有 ----
     do {
         typealias R = PlayCountRecency
         func at(_ e: Double) -> Date { Date(timeIntervalSince1970: e) }
@@ -189,7 +189,7 @@ func runLastfmTests() {
                     "落库判定: 没有播放锚点 → 按没入账算")
     }
 
-    // ---- LastfmRecentTracksPage:合并历史扫描的分页解析(2026-08-25) ----
+    // ---- LastfmRecentTracksPage:合并历史扫描的分页解析 ----
     //
     // ensureTitleFormsIndex(写法索引)和 refreshDailyCounts(热力图)原来各自写了一遍这段
     // 解析,合并成一次扫描后收成一份纯函数。这组用例钉住合并前两处分别覆盖到的行为:
@@ -256,7 +256,7 @@ func runLastfmTests() {
         expectEqual(missingField?.rows.count, 0, "历史扫描解析: 缺 name 的行整条丢弃")
     }
 
-    // ---- Last.fm GET query 的双重编码(2026-08-22) ----
+    // ---- Last.fm GET query 的双重编码 ----
     //
     // 端点会对 query value 多解一次码(第二遍是 form-urlencoded 口径,`+` 当空格),所以
     // `+` 和 `%` 必须各多编一层。实测:track=…%2B… → error 6 Track not found;
@@ -283,7 +283,7 @@ func runLastfmTests() {
                     "method=track.getinfo&track=%252B44", "lastfm query: 拼串按传入顺序")
     }
 
-    // ---- PlayCountVariants:「第 N 次听」的写法孪生族(2026-08-18,括号风格分裂实测) ----
+    // ---- PlayCountVariants:「第 N 次听」的写法孪生族(括号风格分裂实测) ----
     //
     // 丁世光《神经志》实测:`一口（The Day You Left Me）`全角 2 次/`一口(The Day You Left
     // Me)`半角无空格 25 次/`一口`1 次——Last.fm 按写法各记各的账,合并要把整族都问到。
@@ -302,7 +302,7 @@ func runLastfmTests() {
         expectEqual(V.siblings(artist: "丁世光", title: "E.T.").isEmpty, true, "写法族: 纯 ASCII 零候选")
         expectEqual(V.siblings(artist: "丁世光", title: "Simon").isEmpty, true, "写法族: Simon 零候选")
         // 纯英文 feat 副题:只补一个「去副题」候选,不生成全角/半角括号族(那套只为
-        // 含汉字歌名)。(2026-08-19 第二波推翻了此前"各来源写法一致、零候选"的假设 ——
+        // 含汉字歌名)。(第二波推翻了此前"各来源写法一致、零候选"的假设 ——
         // 实测同一首歌带/不带 feat 后缀两本账,见 isCatalogNoiseSubtitle。)
         let featSibs = V.siblings(artist: "MJ", title: "Scream (feat. Janet Jackson)")
         expectEqual(featSibs.map(\.title), ["Scream"], "写法族: 纯英文 feat 副题只给去副题候选")
@@ -314,7 +314,7 @@ func runLastfmTests() {
         expectEqual(mixed.count, 4, "写法族: 小師妹给 4 个候选")
         expectEqual(mixed.map(\.title).contains("小師妹(Love Triangle)"), true, "写法族: 半角无空格优先在列")
         expectEqual(mixed.map(\.title).contains("小师妹（Love Triangle）"), true, "写法族: 繁简孪生也在列")
-        // 字形变体(麼 U+9EBC/麽 U+9EBD,2026-08-18 实测:70 条 scrobble 记在麽形下,
+        // 字形变体(麼 U+9EBC/麽 U+9EBD,实测:70 条 scrobble 记在麽形下,
         // 括号/繁简候选全扑空——ICU t2s 两个都折到「么」,s2t 永远只生成「麼」,必须显式列表)
         let mo = V.siblings(artist: "丁世光", title: "愛在什麼地方都有（Love Is Everywhere）").map(\.title)
         expectEqual(mo.contains("愛在什麽地方都有(Love Is Everywhere)"), true,
@@ -324,7 +324,7 @@ func runLastfmTests() {
                     true, "写法族: 无副题歌名也给字形变体(為/爲)")
     }
 
-    // ---- PlayCountFold:写法索引的折叠键(2026-08-19,数据驱动合并的地基) ----
+    // ---- PlayCountFold:写法索引的折叠键(数据驱动合并的地基) ----
     //
     // 把历史上真实出现过的写法按这个键归族,查次数时按族查——取代猜枚举。断言覆盖实测
     // 见过的全部分裂维度;「括号副题不折」是刻意取舍(括号常携带 Live/Remaster 版本信息)。
@@ -355,7 +355,7 @@ func runLastfmTests() {
         expectNotEqual(F.foldTitle("月食 The 月食 Woman"), F.foldTitle("月食"),
                        "折叠键: CJK/拉丁交错不折")
 
-        // 再版噪音副题折叠(2026-08-19 用户实测:宇多田ヒカル Automatic 两本账)——
+        // 再版噪音副题折叠(实测:宇多田ヒカル Automatic 两本账)——
         // remaster 家族是同一份录音的目录学差异,折;真版本(Live/Remix)照旧分开。
         expectEqual(F.key(artist: "宇多田ヒカル", title: "Automatic (Remastered 2014)"),
                     F.key(artist: "宇多田ヒカル", title: "Automatic"),
@@ -376,7 +376,7 @@ func runLastfmTests() {
         expectEqual(autoSibs.contains { $0.title == "Automatic" }, true,
                     "写法族: 纯拉丁 + 再版噪音副题给出去副题候选")
 
-        // feat 客串署名家族(2026-08-19 第二波用户实测:王力宏《盖世英雄 (feat. 欧阳靖 &
+        // feat 客串署名家族(第二波实测:王力宏《盖世英雄 (feat. 欧阳靖 &
         // 李岩)》第 2 次 vs《蓋世英雄》几十次)—— 署名是歌手信息不是版本,并入本尊。
         expectEqual(F.key(artist: "王力宏", title: "盖世英雄 (feat. 欧阳靖 & 李岩)"),
                     F.key(artist: "王力宏", title: "蓋世英雄"),
@@ -392,10 +392,10 @@ func runLastfmTests() {
         expectNotEqual(F.foldTitle("Song (feat.)"), F.foldTitle("Song"),
                        "折叠键: 空署名不并")
 
-        // 补齐到参考实现 export-lastfm-tracks.py 的口径(2026-08-22)。三族都在那份
-        // 2026-08-18 与用户逐对核定的规则里,Swift 侧此前漏搬 —— 不是新发明的规则。
+        // 补齐到参考实现 export-lastfm-tracks.py 的口径。三族都在那份
+        // 与用户逐对核定的规则里,Swift 侧此前漏搬 —— 不是新发明的规则。
         //
-        // ① bonus track:用户报的原案。实测 Last.fm 两个实体「一路向北」14 次、
+        // ① bonus track:原案。实测 Last.fm 两个实体「一路向北」14 次、
         //    「一路向北 (bonus track)」2 次,界面只显示 2。
         expectEqual(F.key(artist: "周杰倫", title: "一路向北 (bonus track)"),
                     F.key(artist: "周杰伦", title: "一路向北"),
@@ -444,7 +444,7 @@ func runLastfmTests() {
         expectEqual(bonusSibs.contains { $0.title == "一路向北" }, true,
                     "写法族: (bonus track) 给出去副题候选")
 
-        // 剥掉目录学噪音之后不能让 R1 再把版本标记当译名吃掉(2026-08-22,补 bonus track
+        // 剥掉目录学噪音之后不能让 R1 再把版本标记当译名吃掉(补 bonus track
         // 那一族时用真索引实测出来的**回归**:方大同《悟空 2003 demo (bonus track)》
         // 剥完成 "悟空 2003 demo",R1 取 CJK 段 -> 并进《悟空》,Demo 是另一份录音)。
         expectNotEqual(F.key(artist: "方大同", title: "悟空 2003 demo (bonus track)"),
@@ -456,14 +456,14 @@ func runLastfmTests() {
         expectEqual(F.key(artist: "丁世光", title: "低潮期 Tough Days (feat.葉喜兒)"),
                     F.key(artist: "丁世光", title: "低潮期"),
                     "折叠键: 剥掉 feat 后双语拼接名照旧收敛(实测正例)")
-        // ---- 第三批(2026-08-22,用户拍板改口径)----
+        // ---- 第三批----
         // ⑥ R1 守卫**套到原串**:中文歌名的 Live/Demo 版不再被当译名收进录音室版。
-        //    这一条此前反过来钉着「现状」(expectEqual),用户拍板后翻面 —— 见 foldTitle 注释。
+        //    这一条此前反过来钉着「现状」(expectEqual),后翻面 —— 见 foldTitle 注释。
         expectNotEqual(F.key(artist: "陶喆", title: "流沙 - Live"),
                        F.key(artist: "陶喆", title: "流沙"),
                        "折叠键: 中文歌名的 - Live 不再并进本尊")
 
-        // ---- 第二批(2026-08-22,并行核实回来之后)----
+        // ---- 第二批(并行核实回来之后)----
         // ④ 破折号版本尾缀:参考实现 T2 的另一半(`Bad - 2012 Remaster = Bad`)。
         //    索引里 216 条 ` - ` 尾缀,只有 6 条能过 isCatalogNoiseSubtitle,4 例真并。
         expectEqual(F.key(artist: "Michael Jackson", title: "Bad - 2012 Remaster"),
@@ -523,7 +523,7 @@ func runLastfmTests() {
                        F.foldTitle("薛凱琪"),
                        "折叠键: 方括号不在结尾时也不许退化成尾部人名")
         // ⑦ 版本尾缀分隔符归一:分隔符不携带信息,副题内容才携带
-        // ⚠️ 裸场次标记**不**归一(2026-08-22 并行核实推翻了原设计):album.getinfo 实测
+        // ⚠️ 裸场次标记**不**归一(并行核实推翻了原设计):album.getinfo 实测
         //    方大同 21 条 `X - Live` 与《This Love Live 2007》21 首曲目完全双射,而 30 条
         //    `X (Live)` 只有 2 首在那张里 —— 两种写法是**两场不同的演唱会**,归一会错并。
         expectNotEqual(F.foldTitle("流沙 - Live"), F.foldTitle("流沙 (Live)"),
@@ -570,7 +570,7 @@ func runLastfmTests() {
         // `Live版` 是一个词,词表接不住 —— 靠「以 版 收尾」这条判据挡住 R1 的退化
         expectNotEqual(F.foldTitle("All Night - Live版"), F.foldTitle("Live版"),
                        "折叠键: Live版 靠「以 版 收尾」判据挡住 R1 退化")
-        // ⑧ 歌手写法归并只作用在查族用的 familyKey 上,且**没有手写表**(2026-09-04 起):表由
+        // ⑧ 歌手写法归并只作用在查族用的 familyKey 上,且**没有手写表**:表由
         // LocalArtistAliases.derive 从本机数据推出来再灌进来。这里用一份最小的 MusicBrainz 缓存夹具
         // 复现旧静态表覆盖过的形态,证明"去掉手工表之后能力没丢"。
         typealias LA = LocalArtistAliases
@@ -613,7 +613,7 @@ func runLastfmTests() {
                        "查族键: Fantasia 也不许被 asi 命中(索引里真有这个艺人)")
         expectEqual(F.familyKey(artist: "A Si", title: "X"), F.familyKey(artist: "阿肆", title: "X"),
                     "查族键: A Si(去空格后 asi,3 字符,刚够)与 阿肆 同族")
-        // familyKey 仍要做合唱归首位(2026-08-20 那条能力不能丢)
+        // familyKey 仍要做合唱归首位(那条能力不能丢)
         expectEqual(F.familyKey(artist: "Daniel Caesar & Mustafa", title: "Toronto 2014"),
                     F.familyKey(artist: "Daniel Caesar", title: "Toronto 2014"),
                     "查族键: 合唱 credit 仍归首位")
@@ -625,7 +625,7 @@ func runLastfmTests() {
                        F.key(artist: "David Tao", title: "找自己"),
                        "查族键: 在表里的歌手必须真被改写")
 
-        // ⑨ 歌名维度的罗马字/译名别名(2026-08-29 起有,2026-09-04 起同样没有手写表):由
+        // ⑨ 歌名维度的罗马字/译名别名(有,同样没有手写表):由
         // EnrichTitleAliases.derive 从本机缓存推出来再灌进来。这里直接灌一份结果,只测 familyKey 的
         // 接线与安全约束;推断本身在下面「第三层歌名别名」那组测。
         F.setLocalTitleAliases(["方大同": ["lovelovelove": "爱爱爱", "nanyin": "南音", "blackhole": "黑洞里"]])
@@ -694,7 +694,7 @@ func runLastfmTests() {
         expectEqual(ScrobbleRule.thresholdFraction(durationMs: 480_000), 0.5, "计次: 480s 处两规则相等")
     }
 
-    // MARK: - LastfmRecentFeed(collector 落盘的最近记录 feed,2026-09-03)
+    // MARK: - LastfmRecentFeed(collector 落盘的最近记录 feed)
     //
     // 字段名是跟 Go 侧 lastfmfeed.go 的契约;样本 JSON 照 Go 那边 TestWriteLastfmRecentFeedShape
     // 写出来的形状手抄(歌名合成)。
@@ -750,7 +750,7 @@ func runLastfmTests() {
         expectEqual(r4.exact, true, "today: 空窗口但今天同步过 → 精确 0")
     }
 
-    // MARK: - LastfmPageComposer(按绝对位置拼页,2026-09-03)
+    // MARK: - LastfmPageComposer(按绝对位置拼页)
     //
     // 行用整数模拟(值 = 这条记录的身份),身份闭包直接 String(值)。
     do {
@@ -797,7 +797,7 @@ func runLastfmTests() {
                     Array(0 ..< 20), "拼页: 负起点来源被跳过")
     }
 
-    // MARK: - OnThisDayPlanner / ListeningMilestones(那年今日计划 + 收听足迹,2026-09-03)
+    // MARK: - OnThisDayPlanner / ListeningMilestones(那年今日计划 + 收听足迹)
     do {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
@@ -821,7 +821,7 @@ func runLastfmTests() {
         expectEqual(OnThisDayPlanner.plan(today: today, years: 3, dailyCounts: [:], synced: true, dayKey: key).isEmpty,
                     true, "那年今日计划: 日桶同步过且全空 → 零请求")
 
-        // 足迹:2026-08-30 ~ 09-02 连续四天,09-03(今天)还没记录 → 当前连续 4;最长 5(08-10~08-14)。
+        // 足迹:~ 09-02 连续四天,09-03(今天)还没记录 → 当前连续 4;最长 5(08-10~08-14)。
         var days: [String: Int] = [:]
         for d in ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"] { days[d] = 10 }
         for d in ["2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"] { days[d] = 20 }
@@ -857,7 +857,7 @@ func runLastfmTests() {
         expectEqual(ListeningMilestones.nextMilestone(total: 42).target, 100, "里程碑: 百以内按 100")
     }
 
-    // ---- 「那边没有次数」结论的退避重探(2026-09-03) ----
+    // ---- 「那边没有次数」结论的退避重探 ----
     //
     // 陳綺貞《慢歌 3》16:36 落库,五次查 userplaycount 都是 0,过了 15 分钟宽限那一轮把它永久钉进
     // playCountUnavailable、随快照落盘,重启也不重问 —— 而 Last.fm 网页那边已经显示 1 次。
@@ -888,12 +888,12 @@ func runLastfmTests() {
                     "次数退避: 时钟倒退(now 早于记录时刻)不算到期")
     }
 
-    // ---- 次数记账三态:字段缺失 ≠ 那边是 0(2026-09-10) ----
+    // ---- 次数记账三态:字段缺失 ≠ 那边是 0 ----
     //
-    // 用户报「为什么这三个 lastfm 里面没有播放次数」。现场:10:56:00 那一批 20 首里 17 首正常,
+    // 现象是「为什么这三个 lastfm 里面没有播放次数」。现场:10:56:00 那一批 20 首里 17 首正常,
     // prince|1999 / prince|little red corvette / prince & the revolution|kiss (extended) 三首
     // 同时"没有次数",日志里那一批**全是 200、一条 api error 都没有**;5 分钟后拿同样的参数
-    // 直接问,分别是 18 / 20 / 1 次,user.getTrackScrobbles 显示这些收听最早可追到 2026-07-07。
+    // 直接问,分别是 18 / 20 / 1 次,user.getTrackScrobbles 显示这些收听最早可追到。
     // 根因是判据把 `userplaycount` **字段缺失**(Last.fm 的按用户计数是另一次后端查询,高并发下
     // 会静默缺字段)当成了"那边回答 0 次",于是一次抖动被写成定论、还随快照落盘 —— 而进了
     // 「那边没有」名单的行连 `···` 占位都不画,看起来就是"这行天生没有次数"。
@@ -919,16 +919,16 @@ func runLastfmTests() {
         expectEqual(c(false, 0, true), .unanswered, "次数三态: 请求失败时的 0 不算定论")
         expectEqual(c(false, 5, true), .unanswered, "次数三态: 请求失败时的正数也不采信")
         // ⑥ error 6 那条路:调用方传 reportedCount: 0 —— "压根没这个实体"跟"0 次"是同一个答案,
-        //    必须仍是定论,否则本机那 7 首有声书章节会每轮重问、永不收敛(2026-09-03 的原始动机)
+        //    必须仍是定论,否则本机那 7 首有声书章节会每轮重问、永不收敛(的原始动机)
         expectEqual(c(true, 0, true), .definitivelyNone,
                     "次数三态: error 6(按 0 传入)仍是定论,不能退化成每轮重问")
     }
 
-    // ---- 「第 N 次听」合并明细:为什么并进来 + 跨写法合并/编号(2026-09-04) ----
+    // ---- 「第 N 次听」合并明细:为什么并进来 + 跨写法合并/编号 ----
     //
     // 弹框上半段每种写法旁边挂的原因标签,由 PlayCountFoldExplainer 沿 PlayCountFold 的真实折叠
     // 步骤逐级比对得出 —— 标签跟规则对不上会比没有标签更误导,所以每一档各钉一条真实分裂形态
-    // (全部取自 12 章 §7 记录过的用户实测案例)。
+    // (全部取自 12 章 §7 记录过的实测案例)。
     do {
         typealias E = PlayCountFoldExplainer
         func r(_ a: (String, String), _ b: (String, String)) -> [PlayCountFoldReason] {
@@ -981,7 +981,7 @@ func runLastfmTests() {
         expectEqual(E.albumReason(base: "八度空间", variant: "八度空间"), nil, "专辑名原因: 相同 → nil")
         expectEqual(E.albumReason(base: nil, variant: "八度空间"), nil, "专辑名原因: 一方没有专辑名 → 不判")
         // 对不上任何一档 = 就是两张不同的专辑(原专辑 vs 精选集 / 另一语言的专辑名),不是写法差异,
-        // 不挂标签 —— 跟写法族那层的 .other 语义刻意不同(2026-09-04 用户问「其他折叠规则这里指的是什么」)
+        // 不挂标签 —— 跟写法族那层的 .other 语义刻意不同(挂上去会让人以为是折叠规则并的)
         expectEqual(E.albumReason(base: "葉惠美", variant: "范特西"), nil, "专辑名原因: 两张不同的专辑 → nil,不挂标签")
         expectEqual(E.albumReason(base: "心中的日月", variant: "Shangri-la"), nil,
                     "专辑名原因: 同一张专辑的另一语言名 → 也判不出来,nil(没有专辑别名表,接受)")
@@ -1010,7 +1010,7 @@ func runLastfmTests() {
         expectEqual(two.canLoadOlder, false, "合并明细: 全部拉完 → 不给「加载更早的」")
         expectEqual(two.variants.map(\.reasons), [[], [.hanScript]], "合并明细: 本尊无原因,孪生带原因")
 
-        // 跨写法同一时刻**不去重**(2026-09-05 撤掉第一版的去重):卢广仲《Boring》实测 `卢广仲` 13 条 +
+        // 跨写法同一时刻**不去重**:卢广仲《Boring》实测 `卢广仲` 13 条 +
         // `Crowd Lu` 5 条里 4 对同一分钟——是同一次收听被两台设备各 scrobble 一次,Last.fm 上 18 条都真实
         // 计数,行上的 18 也是这么加的;去重会制造假的"两边不一致"。同一写法内部同一时刻的多条用 dup 区分。
         let dup = M.build([
@@ -1057,7 +1057,7 @@ func runLastfmTests() {
         expectEqual(empty.ordinals, [], "合并明细: 没有条目就没有编号")
 
         // 专辑名分组:同一写法下按专辑名数条数,条数降序、同数按名字;空/纯空白专辑名归成 nil 一组;
-        // 只数这一写法自己的记录(2026-09-04 用户指出《晴天》葉惠美/叶惠美 两种专辑名要看得见)
+        // 只数这一写法自己的记录(《晴天》葉惠美/叶惠美两种专辑名要看得见)
         let albums = M.build([
             .init(artist: "周杰倫", title: "晴天", total: 6, isSelf: true, reasons: [], plays: [
                 (date: at(6000), album: "葉惠美"), (date: at(5000), album: "叶惠美"),
@@ -1076,7 +1076,7 @@ func runLastfmTests() {
                     "专辑分组: 全部没有专辑名 → 只有 nil 一组(界面据此不画子行)")
     }
 
-    // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 → 中文歌名」(2026-09-04) ----
+    // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 → 中文歌名」 ----
     //
     // 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」。本机缓存里
     // `Khalil Fong|Oasis|梦想家 The Dreamer` 与 `方大同|那沙漠里的水|梦想家 The Dreamer` 各自独立解析,
@@ -1144,7 +1144,7 @@ func runLastfmTests() {
         expectEqual(A.isHanTitled("刻在我心底的名字 (Your Name Engraved Herein) - 電影<刻在你心底的名字>主題曲"), true,
                     "本机别名: 两层副题剥完主标题是中文 → 中文名")
         expectEqual(A.isHanTitled("Ru Guo Ai"), false, "本机别名: 拼音是英文侧")
-        // 实测抓到的两个坑(2026-09-04 用真实缓存预演):
+        // 实测抓到的两个坑(用真实缓存预演):
         let qqA = "https://y.qq.com/n/ryqq/songDetail/003CDIpG2rBZbT"
         expectEqual(A.derive([e("方大同", "Ten Reasons", qq: qqA), e("方大同", "Ten Reasons (Live版)", qq: qqA)]), [:],
                     "本机别名: 录音室版与 Live 版落到同一个 QQ mid 不构成别名(歌词源分不清版本)")
@@ -1170,7 +1170,7 @@ func runLastfmTests() {
                     ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 合唱首位 + 罗马字别名之后同一桶")
     }
 
-    // ---- 歌名别名 E2:时长 + 歌词都对得上(2026-09-04 下午,取代手写表 titleAliasesByArtist 的最后一步) ----
+    // ---- 歌名别名 E2:时长 + 歌词都对得上(下午,取代手写表 titleAliasesByArtist 的最后一步) ----
     //
     // 旧静态表那 7 条(Black Hole / Small Insects / Black & White / Write A Song For You / Twenty Three /
     // Love Love Love / Nanyin)的英文条目在本机缓存里**都没有**平台 id(早期解析没落链接),E1 够不着;
@@ -1291,7 +1291,7 @@ func runLastfmTests() {
                     "E2: 时长相同但歌词是两首歌 → 不采纳(实测 Keep the Faith / Thriller 都是 5:57)")
     }
 
-    // ---- 歌手写法归并的通用推断(LocalArtistAliases,2026-09-04,取代手写表 romanizedArtistAliases) ----
+    // ---- 歌手写法归并的通用推断(LocalArtistAliases，取代手写表 romanizedArtistAliases) ----
     do {
         typealias LA = LocalArtistAliases
         typealias A = EnrichTitleAliases

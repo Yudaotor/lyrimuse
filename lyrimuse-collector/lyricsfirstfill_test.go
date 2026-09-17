@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 2026-08-17 补上的"补空歌词"重试路径。
+// 补上的"补空歌词"重试路径。
 //
 // 背景:resolveTrackEnrichment 里缓存命中之后只可能触发四种后台任务,而 needsLyricsRescore
 // 和 needsLyricsRetry **两个的第一行都是 `if e.Lyrics == "" 就 return false`**,另两个只管

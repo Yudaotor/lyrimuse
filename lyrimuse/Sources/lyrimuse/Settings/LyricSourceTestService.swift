@@ -4,7 +4,7 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-source-test")
 
-// "歌词来源可用性测试"(2026-08-30,设置页「歌词来源」卡片的每行测试按钮 + 右上角
+// "歌词来源可用性测试"(设置页「歌词来源」卡片的每行测试按钮 + 右上角
 // 「全部测试」用)。子进程调用 collector 侧新增的 `test-lyric-sources`
 // (lyrimuse-collector/testlyricsourcescli.go)——跟诊断导出用的 `healthcheck` 同一套
 // 探测思路(两首固定探测曲,一首华语一首英文,取并集,理由见该文件顶部注释),但输出
@@ -42,7 +42,7 @@ final class LyricSourceTestService {
     struct Result {
         let source: String
         let status: Status
-        /// 稳定代码,不是文案(2026-09-01 从 detail 改名——见 `LyricSourceFailureReason` 的
+        /// 稳定代码,不是文案(从 detail 改名——见 `LyricSourceFailureReason` 的
         /// 头注)。ok 状态下恒为空串。调用方要显示给用户时经
         /// `LyricSourceFailureReason.text(forCode:)` 翻成当前 App 界面语言的人话,不要
         /// 直接显示这个原始值。
@@ -69,7 +69,7 @@ final class LyricSourceTestService {
     ///   底层探测仍然会把全部已启用的源一起并发打一遍(collector 侧 scoredLyricCandidates
     ///   本来就是这么设计的——AMLL 需要先从网易云/QQ 拿到平台 ID,拆开单独测反而更复杂),
     ///   所以"测一个"和"测全部"的实际等待时间没有区别,只是显示上只关心那一行——跟这个
-    ///   仓库里"联网搜索候选歌词"弹窗同样是等最慢的那个源,不是这次改动新引入的体验取舍。
+    ///   仓库里"联网搜索候选歌词"弹窗同样是等最慢的那个源,是这一类交互共同的取舍。
     /// onUpdate 每收到一行 stdout 就调用一次,回调固定在 MainActor 上执行,调用方可以
     /// 直接改 @State。
     func test(

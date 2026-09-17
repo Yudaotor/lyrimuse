@@ -3,7 +3,7 @@ import Foundation
 /// 「接收测试版更新」的纯逻辑:Release 列表接口地址、响应解析、该读哪份 appcast、刷新判据。发请求与 Sparkle 接线在
 /// App 侧 `SparkleUpdaterManager`,被 selftest update-channel 组钉住的是这里。
 ///
-/// 为什么开关打开后要**自己挑 appcast**,而不是只靠 Sparkle 的 channel 过滤(2026-09-05):appcast 是每个 Release 自带
+/// 为什么开关打开后要**自己挑 appcast**,而不是只靠 Sparkle 的 channel 过滤:appcast 是每个 Release 自带
 /// 一份、只列它自己;正式用户读的 `releases/latest/download/appcast.xml` 经 GitHub 的 latest 重定向永远落在最新**正式版**
 /// 上(GitHub 的 latest 不含 prerelease),预发布的 appcast 只在它自己的 tag 目录下、没有稳定地址。所以 beta 用户得先问
 /// 一遍 Release 列表,把版本最高的那一份(可能是预发布,也可能是已把它盖过的正式版)的 tag 目录 appcast 交给 Sparkle。

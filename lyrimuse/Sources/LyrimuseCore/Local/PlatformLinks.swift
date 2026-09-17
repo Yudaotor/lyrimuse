@@ -1,14 +1,14 @@
 import Foundation
 
-/// 一首歌在各平台的跳转目标(2026-08-24)。
+/// 一首歌在各平台的跳转目标。
 ///
 /// 数据**全部早就在本机**:collector 解析歌词那一轮顺手把 `apple_music_url` / `qq_music_url` /
 /// `netease_url` 落进了 enrich 缓存(本机实测覆盖率 95% / 100% / 85%),QQ 的专辑/歌手 mid
-/// 2026-08-24 一起补上 —— 而 Swift 侧此前**一个都没解码**(`EnrichCacheEntry.CodingKeys` 只有
+/// 一起补上 —— 而 Swift 侧此前**一个都没解码**(`EnrichCacheEntry.CodingKeys` 只有
 /// 歌词和封面那几个)。所以这一族入口是**零网络**的,不像「前往专辑」老那条要先打一次
 /// iTunes Search。
 ///
-/// 2026-09-10 加 Spotify 曲目页(`spotify_track_id`,见 `spotifySong`),同时简介面板那行改成只显示
+/// 加 Spotify 曲目页(`spotify_track_id`,见 `spotifySong`),同时简介面板那行改成只显示
 /// **当前播放器自己那个平台**的歌曲页(`songLink(forPlayerBundleID:webPlatformID:)`),不再全铺。
 ///
 /// ⚠️ 落地位置不一样,文案必须分开写:
@@ -17,7 +17,7 @@ import Foundation
 ///   `SpotifyReveal`),这里不抢它的活;
 /// - QQ 音乐 / 网易云只能落到**浏览器**。QQ 音乐没有 `associated-domains` 授权(实测
 ///   entitlements 里没有),`y.qq.com` 不会被 App 接走;而它注册的 `qqmusicmac://` 命令表
-///   只有 `playsong` / `downloadsong`(2026-08-24 二进制取证),没有任何"打开这一页"的语义 ——
+///   只有 `playsong` / `downloadsong`(二进制取证),没有任何"打开这一页"的语义 ——
 ///   而且 `playsong` 会把正在放的这首从头重播,不是我们要的。所以别把它写成「在 QQ 音乐中打开」。
 public struct PlatformLinks: Sendable, Equatable {
     /// Apple Music 曲目页(已是 `music://`,进 App)。
@@ -29,7 +29,7 @@ public struct PlatformLinks: Sendable, Equatable {
     public let qqArtist: URL?
     /// 网易云音乐歌曲页(浏览器)。
     public let neteaseSong: URL?
-    /// Spotify 曲目页 `open.spotify.com/track/<id>`(浏览器;2026-09-10 起解码)。**只认真曲目 ID**
+    /// Spotify 曲目页 `open.spotify.com/track/<id>`(浏览器;解码)。**只认真曲目 ID**
     /// (collector 的 `spotify_track_id`,Spotify 原生播放换曲那一拍从 `spotify url` 留下的),
     /// 缓存里另一个 `spotify_url` 是本地拼的**搜索页**兜底,跟 QQ 的搜索兜底同一个理由不当歌曲页给出去。
     public let spotifySong: URL?
@@ -52,7 +52,7 @@ public struct PlatformLinks: Sendable, Equatable {
         case appleMusic, qqMusic, netease, spotify
     }
 
-    /// **当前播放器自己那个平台**上这首歌的歌曲页(2026-09-10,用户定的规则:简介面板的「网页」行
+    /// **当前播放器自己那个平台**上这首歌的歌曲页(规则:简介面板的「网页」行
     /// 只显示对应播放器的,不再把三个平台全铺开)。
     ///
     /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →

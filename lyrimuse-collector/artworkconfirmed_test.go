@@ -25,7 +25,7 @@ func writeConfirmFile(t *testing.T, path, relay string, entries map[string]int64
 }
 
 // 确认记录要能落盘再读回来,并把没过期的那些灌进 artworkUploaded ——
-// 补传扫描据此跳过它们,这正是这次改动省下来的那几百次 KV 读。
+// 补传扫描据此跳过它们,省下的正是那几百次 KV 读。
 func TestArtworkConfirmedRoundTrip(t *testing.T) {
 	resetArtworkRelayState(t)
 	artworkRelayURL = "https://relay.invalid"
@@ -86,8 +86,8 @@ func TestArtworkConfirmedInvalidatedOnRelayChange(t *testing.T) {
 	}
 }
 
-// 本次改动的正题:有新鲜确认记录时,启动补传扫描一次网络请求都不该发。
-// 改动前这里会是每张一次 HEAD(本机 713 张 × 每天十几次重启 ≈ 每天上万次 KV 读)。
+// 正题:有新鲜确认记录时,启动补传扫描一次网络请求都不该发。
+// 没有这道跳过的话,这里会是每张一次 HEAD(本机 713 张 × 每天十几次重启 ≈ 每天上万次 KV 读)。
 func TestSweepSkipsConfirmedFromDisk(t *testing.T) {
 	resetArtworkRelayState(t)
 	var mu sync.Mutex

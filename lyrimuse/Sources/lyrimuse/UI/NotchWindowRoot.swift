@@ -3,7 +3,7 @@ import SwiftUI
 
 // 真窗口里装 NotchLyricsView 的那一层壳。
 //
-// 2026-08-16 之前没有这一层:窗口本身随收起/稳态/展开三种形态反复 setFrame,卡片永远
+// 之前没有这一层:窗口本身随收起/稳态/展开三种形态反复 setFrame,卡片永远
 // 等于窗口。改成"窗口常驻最大尺寸,卡片在里面自己变大变小"之后,多出来的这一层负责
 // 两件事:把卡片钉成当前该有的尺寸、贴顶居中摆好,以及给尺寸变化配一条弹簧动画。
 //
@@ -17,14 +17,14 @@ import SwiftUI
 //    补丁,见 NotchLyricsWindowController.hostingView 上的注释)。
 //
 // ⚠️ 这一层多出来的那片透明区域**绝对不能**加任何 background/contentShape:窗口 level 是
-// .screenSaver(在系统菜单栏之上),透明区正压着菜单栏那一条。实测(2026-08-16,拿同样
+// .screenSaver(在系统菜单栏之上),透明区正压着菜单栏那一条。实测(拿同样
 // flag 的探针窗口盖住一个普通窗口再投一次点击)确认:纯透明区域的点击会穿透到下面的窗口;
 // 但只要给它加一层哪怕完全透明的 Color.clear.contentShape(Rectangle()),点击就会被这个
 // 窗口吞掉 —— 那意味着用户点不动被盖住的那一段菜单栏。这是这次重构唯一的真风险点。
 struct NotchWindowRoot: View {
-    /// 「暂停/无播放时隐藏」的退场动画(2026-09-02):整卡以刘海中心为锚 scale→0 并透明,
-    /// 缩进刘海里。首版是"先播收起弹簧再走",用户目验后否掉——不要经过暂停收起态,直接从
-    /// 正常大小缩到无;时长按用户"半秒太久、砍一半"的口径取 0.2s,ease-in(加速冲进刘海)。
+    /// 「暂停/无播放时隐藏」的退场动画:整卡以刘海中心为锚 scale→0 并透明,
+    /// 缩进刘海里。⚠️ 别做成"先播收起弹簧再走"——不要经过暂停收起态,直接从
+    /// 正常大小缩到无;时长按"半秒太久、砍一半"的口径取 0.2s,ease-in(加速冲进刘海)。
     static let vanishDuration: TimeInterval = 0.2
     /// 控制器等这么久再 orderOut——比 vanishDuration 略长,让最后一帧真的落到 0。改动画时长
     /// 要连着改这里。
@@ -42,10 +42,10 @@ struct NotchWindowRoot: View {
     ///  - **hover 移开**(收回稳态):`0.38 / 0.9`,不下探,理由见下。
     ///  - **其余**(开始播放弹出):`0.42 / 0.8`,留一点点过冲。
     ///
-    /// **hover 移开**(2026-09-06 起单独一档):`.animation(_:value:)` 是在值**变化后**用新状态
+    /// **hover 移开**(单独一档):`.animation(_:value)` 是在值**变化后**用新状态
     /// 求值,所以这一档跑到这里时 isExpanded 已经是 false,单看当前状态区分不出"刚从收起弹出"
     /// 和"hover 移开" —— 视图里那份 `wasExpanded`(上一次 body 见到的 isExpanded,由 onChange
-    /// 在 body 之后回写)就是为了区分这两种情况。2026-09-06 之前没这份状态,hover 移开落在
+    /// 在 body 之后回写)就是为了区分这两种情况。之前没这份状态,hover 移开落在
     /// 下面那条 0.42 / 0.8 上;SCK 逐帧探针实测(hover 移开 20 余次)收起弹簧每次都**下探**
     /// 到稳态尺寸以下 2px 再爬回来,尾巴上是 3～4 帧 1px 的亚像素蠕动、跨 150～200ms,肉眼是
     /// 「快收完了又抖一下」。跟「收起」那档同一个理由(收回去的东西不该回弹),改成不下探的
@@ -80,15 +80,15 @@ struct NotchWindowRoot: View {
 
     /// 卡片宽度:收起态(没在播放)缩到「刘海 + 左右各一小段耳朵」。
     ///
-    /// 此前恒定不缩,理由是"耳朵里有三个控制按钮,宽度一缩没地方放"。2026-08-19 设计
+    /// 此前恒定不缩,理由是"耳朵里有三个控制按钮,宽度一缩没地方放"。设计
     /// 评审把三键挪进展开卡、右耳只剩一枚播放键之后,这条理由不复存在 —— 收起态那条
-    /// 全宽黑带的宽度全是死空间(用户:"左右各自保留一点空间即可")。耳宽取
+    /// 全宽黑带的宽度全是死空间("左右各自保留一点空间即可")。耳宽取
     /// NotchMetrics.collapsedEarWidth(左耳只放音浪,右耳只放小封面 —— 同日再收窄成
     /// iPhone 灵动岛式极简,见 NotchLyricsView.topRow 的收起分支),
     /// +20 对应 topRow 的水平 padding;min 兜底"刘海比用户设的内容宽度还宽"的怪配置。
     /// 稳态是全宽(`steadyCardWidth`):歌词行需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
     ///
-    /// **展开态自 2026-09-06 起可以比稳态更宽**(`expandedCardWidth`,用户:「把展开状态变为可以
+    /// **展开态自可以比稳态更宽**(`expandedCardWidth`,「把展开状态变为可以
     /// 更宽 …… 下限就是正常状态的宽度,上限就是悬浮展开时候的宽度」):hover 时卡片横向也撑开,
     /// 两只耳朵和歌词行都跟着宽(`NotchLyricsView` 按 `proxy.size.width` 反推耳宽,不用改)。
     /// 命中形状(下面的 `contentShape`)跟着卡片矩形走,所以**触发**展开的区域仍是稳态卡片,而
@@ -106,7 +106,7 @@ struct NotchWindowRoot: View {
     /// 展开再多一块。
     ///
     /// ⚠️ 公式本体在 `NotchChromeSource` 的协议扩展里 —— 设置页编辑台读的是同一份。
-    /// 2026-08-31 之前这里和那边各写了一遍,而入参已经涨到四个;本章设计决策里那条
+    /// 之前这里和那边各写了一遍,而入参已经涨到四个;本章设计决策里那条
     /// "两处各自判断必然漂"说的就是这种地方。
     private var cardHeight: CGFloat { controller.cardHeight }
 
@@ -114,18 +114,18 @@ struct NotchWindowRoot: View {
     /// `.animation(_:value:)` 用变化后的新值求值,所以 isVanished 刚翻 true 走前者、
     /// 刚翻 false 走后者。reduceMotion 下一律 nil(控制器那边也不会进这条路)。
     ///
-    /// ⚠️ **回场那一档 2026-09-03 从 `.spring(0.42, 0.8)` 改成 nil**,用户报「从广告变成歌
+    /// ⚠️ **回场那一档从 `.spring(0.42, 0.8)` 改成 nil**,现象是「从广告变成歌
     /// 的时候灵动岛的封面是平移过来的,不是直接就切换了外观」。抓帧坐实(按窗口 ID 连拍
     /// 灵动岛那扇窗,24 帧/次):空档期卡片整个消失(连续 13 帧字节数完全相同),新歌开始时
     /// 只跨 1 帧就长回终态,中间那一帧卡片明显比终态窄、内容整体偏移 —— 那是
     /// `scaleEffect(0.001 → 1, anchor: .top)` 的中间态。卡片背景在 `.coverArt` 风格下就是
     /// 封面模糊图,整卡放大时封面跟着一起被重新缩放/裁切,观感就是"封面平移过来"。
     ///
-    /// ⚠️ **退场那一档不动**:2026-09-02 用户明确要过「直接从正常大小缩小到无」,那是他点过
+    /// ⚠️ **退场那一档不动**:用户明确要过「直接从正常大小缩小到无」,那是他点过
     /// 头的。回场这条弹簧是当时对称加上去的、没有单独的用户依据 —— 两个方向本来就不必对称:
     /// 退场是"东西要走了",给一点动画是交代;回场是"新歌来了",用户要的是立刻看到新外观。
     ///
-    /// 2026-09-03 下午起回场由出场动画(下面 body 里的 keyframeAnimator,裁剪撑开、不缩放)负责,这里的
+    /// 下午起回场由出场动画(下面 body 里的 keyframeAnimator,裁剪撑开、不缩放)负责,这里的
     /// nil 仍然正确、而且必须是 nil:scale 要瞬时回 1,渐显交给裁剪去做,两者叠加就又回到"封面被缩放"。
     private var vanishAnimation: Animation? {
         if reduceMotion { return nil }
@@ -142,20 +142,20 @@ struct NotchWindowRoot: View {
     }
 
     var body: some View {
-        // prompt 只有真窗口传 `.shared`(2026-09-11,「发现新播放器」提示);编辑台预览拿默认的惰性替身。
+        // prompt 只有真窗口传 `.shared`(「发现新播放器」提示);编辑台预览拿默认的惰性替身。
         NotchLyricsView(controller: controller, prompt: .shared)
             // 卡片外形的裁剪由下面 keyframeAnimator 里那道 NotchRevealShape 统一负责(终态与
             // NotchHangingShape(20) 重合,见 NotchRevealShape 头注),NotchLyricsView 自己那道
             // 就不再裁了 —— 两道 clipShape 是两层 mask,尺寸动画期间每帧都要各重设一次路径
-            // (2026-09-06 Time Profiler:mask/clip 更新约占动画期间主线程忙时的 10%)。
+            // (Time Profiler:mask/clip 更新约占动画期间主线程忙时的 10%)。
             // 设置页编辑台没有这层壳,那边照旧由 NotchLyricsView 自己裁。
             .environment(\.notchHostClipsCard, true)
             .frame(width: cardWidth, height: cardHeight)
-            // 出场动画「从刘海撑开」(2026-09-03,用户拍板):卡片「从无到有」露面时(冷启动 / 手动打开 /
+            // 出场动画「从刘海撑开」:卡片「从无到有」露面时(冷启动 / 手动打开 /
             // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向
             // 0.20s 撑到全宽,纵向按住 0.06s 后 0.24s 长到全高,内容 0.10s 后 0.16s 淡入,总 0.30s。
             //
-            // ⚠️ 只裁剪、不缩放:同日上午用户报「封面平移过来」,根因是回场 scaleEffect(0.001 → 1) 让
+            // ⚠️ 只裁剪、不缩放:同日上午现象是「封面平移过来」,根因是回场 scaleEffect(0.001 → 1) 让
             // 封面模糊底一起被重新缩放裁切;裁剪路线内容始终在终态位置,封面一个像素都不动。
             // ⚠️ initialValue 是终态:keyframeAnimator 首次出现时停在 initialValue、trigger 变了才动,
             // 若 initialValue 写成起始态,视图第一次出现会永远卡在一条细缝上。每条轨用 MoveKeyframe
@@ -198,13 +198,13 @@ struct NotchWindowRoot: View {
             //    卡片大一圈(预览那边早记录过同一现象)。窗口没改之前这无害,现在卡片下面是
             //    一大片透明区,大一圈就等于"鼠标还在用户自己的窗口上,灵动岛自己展开了"。
             // contentShape 不碰透明区,所以不影响那片区域的点击穿透。
-            // ⚠️ 但它**只管住了横向** —— 2026-09-07 真机探针实测:纵向的命中区仍是整扇窗
+            // ⚠️ 但它**只管住了横向** —— 真机探针实测:纵向的命中区仍是整扇窗
             //    (卡片 77pt 高,hover 的进入事件 y 给到 177),所以下面那个 .active 分支必须
             //    自己再拿坐标比一次,不能把"收到 .active"当成"在卡片上"。
             .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
-                // ⚠️ **不能**把 .active 直接当"在卡片上"(2026-09-07 修,用户报「鼠标只是移到
+                // ⚠️ **不能**把 .active 直接当"在卡片上"(修,现象是「鼠标只是移到
                 // 它下面就展开了」)。真机探针实测:local 的原点确实是卡片左上角、x 也确实被
                 // 约束在卡片宽内,但 **y 一路给到 177,而当时卡片只有 77pt 高** —— 上面那道
                 // contentShape 只管住了横向,纵向的命中区仍是整扇窗(191pt,为容纳展开态常驻
@@ -229,12 +229,12 @@ struct NotchWindowRoot: View {
     }
 
     private func updateHover(inside: Bool) {
-        // 触觉反馈(2026-08-23 挪走):不再在这里"一进卡片边界就发",改到
+        // 触觉反馈(挪走):不再在这里"一进卡片边界就发",改到
         // NotchLyricsWindowController.setExpandedFromWindow 里卡片**真正展开**的那一刻
-        // 才给——原来提前 hoverEnterDelay(0.12s)发,用户反馈"震动跟展开动作脱节、
+        // 才给——原来提前 hoverEnterDelay(0.12s)发,现象是"震动跟展开动作脱节、
         // 时机不对、还太强太突兀";现在跟视觉展开同步,反馈模式也换成更柔和的 .generic。
         //
-        // setExpandedFromWindow 只在**边沿**上叫(2026-08-19):onContinuousHover 的
+        // setExpandedFromWindow 只在**边沿**上叫:onContinuousHover 的
         // .active 对卡片内每次指针移动都回调,原来每个事件都调过去,而那边第一行无条件
         // cancel 掉还没兑现的 0.12s 展开意图再重排 —— 于是"进入延迟"实际从「指针停下」
         // 起算而不是「进入」起算(hoverEnterDelay 的调校注释按后者理解),指针在卡片上

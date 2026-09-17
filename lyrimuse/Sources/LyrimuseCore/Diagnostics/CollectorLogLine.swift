@@ -1,11 +1,11 @@
 import Foundation
 
-// LogFiles(两侧日志文件的落点)2026-09-05 挪到 Util/LyrimuseIdentity.swift,跟配置目录、launchd label 一起按变体派生。
+// LogFiles(两侧日志文件的落点)挪到 Util/LyrimuseIdentity.swift,跟配置目录、launchd label 一起按变体派生。
 
-/// collector 日志行的时间戳解析(2026-09-05)。
+/// collector 日志行的时间戳解析。
 ///
-/// collector 侧 2026-09-05 从 stdlib `log` 换成 `log/slog` 之后,每行以 `time=2026-09-05T00:00:00.000Z `
-/// 开头(UTC、RFC 3339 毫秒、显式 Z);之前的行是 Go `log.LstdFlags | log.LUTC` 的 `2026/09/04 15:49:15 `
+/// collector 侧从 stdlib `log` 换成 `log/slog` 之后,每行以 `time=T00:00:00.000Z `
+/// 开头(UTC、RFC 3339 毫秒、显式 Z);之前的行是 Go `log.LstdFlags | log.LUTC` 的 `15:49:15 `
 /// (UTC 但不带任何标记 —— 极易被当成本地时间读错,换格式的动机之一)。归档的 `.old` 文件和迁移前
 /// 写下的行仍是老格式,所以两种都认。诊断导出按时间窗口取 collector 日志
 /// (`DiagnosticsExporter.recentCollectorLogLines`)靠它找窗口起点;放进 Core 是为了让 selftest 能钉住

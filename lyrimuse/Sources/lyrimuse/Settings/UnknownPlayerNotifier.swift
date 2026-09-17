@@ -5,14 +5,14 @@ import UserNotifications
 
 /// 「发现新播放器」的 macOS 系统通知。
 ///
-/// 2026-08-22 用户报:「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」。
+/// 现象是:「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」。
 /// 在这之前唯一的发现路径是设置页那张卡,而它只在那个播放器**此刻正在报 Now Playing**
 /// 时才出现 —— 不主动打开设置页就永远看不到。用户明确选了「只做系统通知,不要菜单栏那部分」。
 ///
 /// ## 分层
 ///
 /// 判据全部在 `LyrimuseCore.UnknownPlayerAlert`(纯函数,selftest 覆盖),这里只负责管道:
-/// 轮询取观察值、稳定性计数、授权、投递、处理按钮、落盘去重。2026-09-11 起同一条管道多喂一个出口:
+/// 轮询取观察值、稳定性计数、授权、投递、处理按钮、落盘去重。同一条管道多喂一个出口:
 /// 灵动岛(`NotchUnknownPlayerPrompt`,被动提示每拍喂、主动提醒跟通知同一拍出发,只在灵动岛开着时
 /// 有内容)—— 用户要的是"通知里的逻辑加到灵动岛里,更明显一点",所以两条路**同一份判据、同一份
 /// 提醒记录**,不是灵动岛另起一套。UserNotifications 的调用
@@ -20,7 +20,7 @@ import UserNotifications
 /// 崩的可能(`UNUserNotificationCenter.current()` 在没有 bundle 的进程里会抛
 /// `bundleProxyForCurrentProcess is nil`)。
 ///
-/// ## 这个 bundle 到底能不能发通知(2026-08-22 实测取证)
+/// ## 这个 bundle 到底能不能发通知(实测取证)
 ///
 /// 三个看着可疑的条件叠在一起 —— ad-hoc 签名(`codesign -dv`: `Signature=adhoc`、
 /// `TeamIdentifier=not set`)、launchd **直接 exec** `Contents/MacOS/lyrimuse`(不经 `open`)、
@@ -74,7 +74,7 @@ final class UnknownPlayerNotifier: NSObject {
     func registerCategory() {
         // ⚠️ **只放一个 action**。macOS 的规则:1 个 action 直接渲染成一个可见按钮,
         // 2 个及以上就折叠成「选项 ∨」下拉、要多点一下才看得到
-        // (2026-08-22 用户报「这里可以直接把按钮选项放在外面吗,不要在选项里面点进去了」)。
+        // (现象是「这里可以直接把按钮选项放在外面吗,不要在选项里面点进去了」)。
         // 原来那个「忽略」按钮的处理逻辑本来就是空的(纯 dismiss),而划掉/点通知上的 ×
         // 一样能关掉 —— 去掉它零功能损失,换来按钮直接可见。
         // 想再加第二个动作之前先想清楚:那会把这个按钮重新折进「选项」里。
@@ -126,8 +126,8 @@ final class UnknownPlayerNotifier: NSObject {
         let stableFor = pendingSince.map { Date().timeIntervalSince($0) } ?? 0
         let displayName = FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID)
 
-        // 灵动岛的被动提示(2026-09-11):过了 ⑤⑥⑦(静音名单 / 反查得到 App 名 / 稳定性)就挂上,不看 ⑧ 次数
-        // 与冷却 —— 它不打扰人。只在灵动岛开着时喂(用户定的边界);关着或不够格就喂 nil,让挂着的撤掉。
+        // 灵动岛的被动提示:过了 ⑤⑥⑦(静音名单 / 反查得到 App 名 / 稳定性)就挂上,不看 ⑧ 次数
+        // 与冷却 —— 它不打扰人。只在灵动岛开着时喂(这是刻意划的边界);关着或不够格就喂 nil,让挂着的撤掉。
         let qualifies = UnknownPlayerAlert.qualifiesForAnnounce(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: true, now: Date(),
@@ -295,7 +295,7 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
         // ⚠️ 第一件事:告诉 AppDelegate「这次激活是点通知来的」。
         // 系统点通知时会先激活 App,那会触发 applicationShouldHandleReopen —— 它是为
         // 「点 Dock 图标开歌词窗口」写的,不拦住就会连带弹出歌词窗口
-        // (2026-08-22 用户报「点击通知怎么还打开了歌词窗口」)。那边把开窗延后了 0.3 秒
+        // (现象是「点击通知怎么还打开了歌词窗口」)。那边把开窗延后了 0.3 秒
         // 专等这一下取消。
         // 只管设标记 —— AppDelegate 那边会查两次(进 reopen 时 + 真要开窗前)。
         // ⚠️ 别改回 `(NSApp.delegate as? AppDelegate)?.…`:那个转型在

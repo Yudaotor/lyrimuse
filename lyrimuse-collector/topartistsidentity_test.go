@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-18 用户逐条核对 Top100 导出,坐实 8 对"同一个人两个写法"漏合并(窦靖童/Leah Dou
+// 用户逐条核对 Top100 导出,坐实 8 对"同一个人两个写法"漏合并(窦靖童/Leah Dou
 // 等)。这批用例覆盖为此新增的第三合并信号:MusicBrainz 身份解析(mbid+中文名),经
 // artistIdentityFn 注入假函数测,不碰网络。
 func TestMergeAliasedArtistsIdentity(t *testing.T) {
@@ -70,7 +70,7 @@ func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	})
 
 	t.Run("含汉字的合唱串不抢夺显示名", func(t *testing.T) {
-		// 首版实测翻车:"Michael Jackson & 克里夫兰管弦乐团"(2 次播放)把
+		// 实测翻车过:"Michael Jackson & 克里夫兰管弦乐团"(2 次播放)把
 		// "Michael Jackson"(1084 次)顶掉了。中文优先只认单人写法。
 		got := mergeAliasedArtistsResolved([]lastfmChartEntry{
 			{Name: "Michael Jackson", PlayCount: 1084},

@@ -16,11 +16,11 @@ import (
 	"time"
 )
 
-// 把「设备直送封面」托管到状态中继上,让这台机器**外面**的消费者也能加载它(2026-09-02)。
+// 把「设备直送封面」托管到状态中继上,让这台机器**外面**的消费者也能加载它。
 //
 // ## 要修的是什么
 //
-// 2026-08-31 起 deviceartwork.go 会把 media-control 直送的封面落到本机
+// deviceartwork.go 会把 media-control 直送的封面落到本机
 // `~/.config/lyrimuse/artwork/<sha>.jpg`,并把 `cover_url` 写成
 // `file:///Users/<用户名>/.config/lyrimuse/artwork/<sha>.jpg`。对本机 App 这是纯升级
 // (封面身份由"读取时刻"保证,比按文字去网易云/Apple/QQ 猜准得多,见 deviceartwork.go 头注)。
@@ -28,7 +28,7 @@ import (
 // 问题在于这个值被**原样带出了这台机器**:
 //
 //   - relay.go 的 relayState 把它当 artwork 推给网页。浏览器不可能读别人机器上的本地
-//     文件,表现是网页封面整个空白(2026-09-02 用户报「为什么我的网页上没有封面了」)。
+//     文件,表现是网页封面整个空白(现象是「为什么我的网页上没有封面了」)。
 //     更隐蔽的是网页那条 iTunes 兜底的闸写的是 `if (!art)` —— `file://…` 是个**非空**
 //     字符串,顺利绕过这道闸,于是兜底根本不触发,直接把 file:// 塞进 <img src>。
 //   - lb.go 把它写进提交给 ListenBrainz 的 `additional_info.cover_url`。既是彻头彻尾的
@@ -83,7 +83,7 @@ var (
 var (
 	artworkMu sync.Mutex
 	// artworkUploaded 是"这个 sha 在中继上已经确认存在"。进程内存;启动时由
-	// loadArtworkConfirmed 用落盘记录预热(2026-09-17 加,见 artworkconfirmed.go 头注)。
+	// loadArtworkConfirmed 用落盘记录预热(加,见 artworkconfirmed.go 头注)。
 	// 这里原来写的是"不靠落盘的标记文件(那玩意会跟中继真实状态漂开)"—— 漂开这条顾虑
 	// 仍然成立,所以落盘那份给每条确认记了时间戳、过期就重新 HEAD、换中继整份作废,
 	// 把漂移关在有界窗口里;不是无条件信任磁盘。
@@ -265,7 +265,7 @@ func sweepDeviceArtwork(ctx context.Context) {
 		return
 	}
 	// 收尾落盘。用 defer 而不是写在函数末尾:扫一遍 700 张 × artworkSweepGap ≈ 3.5 分钟,
-	// 而 collector 重启很频繁(2026-09-16 实测 17 次/天),下面那两条 ctx 取消的 return 才是
+	// 而 collector 重启很频繁(实测 17 次/天),下面那两条 ctx 取消的 return 才是
 	// 最常走到的出口 —— 只在末尾 flush 的话,已经确认过的那批最容易一条都存不下来。
 	// markArtworkConfirmed 每 artworkConfirmFlushEvery 张已经落一次盘,这里兜住尾巴上不足一批的。
 	defer flushArtworkConfirmed()

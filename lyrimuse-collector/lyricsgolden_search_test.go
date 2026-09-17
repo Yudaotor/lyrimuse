@@ -6,7 +6,7 @@
 // ——打上花火→春雷、The One 演唱会→录音室版、孤独探戈落在错场次——都是死在这一步)。
 //
 // 四个源有自己的挑选逻辑,四个纯函数各接一份样本:
-//   - netease:neteasePickSong(2026-09-04 从 resolveNeteaseInfo 的 pick 闭包提出)
+//   - netease:neteasePickSong(从 resolveNeteaseInfo 的 pick 闭包提出)
 //   - qq:qqCollectCandidates(strict / loose 两档)→ qqPickCandidateWithAlbum(有本地专辑名)/ qqPickCandidate
 //   - kugou:pickKugouSearchCandidate(含 lyricRecordingTriangleMatches 第三档)
 //   - lrclib:pickLRCLIBSearchResultDetailed(先带时间戳、再纯文本兜底)

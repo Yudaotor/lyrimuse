@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 )
 
-// 日志脱敏(2026-08-17 加)。
+// 日志脱敏。
 //
 // 起因:HTTP 失败几乎都是 `log.Printf("...: %v", err)` 打出来的,而 Go 的 *url.Error
 // 在 Error() 里**带上完整请求 URL**。Last.fm 的只读接口把 api_key 放在 query string
@@ -140,5 +140,5 @@ func (s secretScrubber) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// 日志出口的装配(接管 log 包输出、轮转、折叠)2026-09-05 起在 logsink.go 的 installLogSink;
+// 日志出口的装配(接管 log 包输出、轮转、折叠)在 logsink.go 的 installLogSink;
 // 这个文件只负责脱敏那一层(secretScrubber 挂在那条链的倒数第二节)。

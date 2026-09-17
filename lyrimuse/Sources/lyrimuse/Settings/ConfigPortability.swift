@@ -85,23 +85,23 @@ enum ConfigPortability {
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
         "np:notchScreenID",
-        // 歌词窗口的位置/尺寸与它所在的那块屏幕(2026-08-22 加)。判据跟上面
+        // 歌词窗口的位置/尺寸与它所在的那块屏幕。判据跟上面
         // np:overlayPosition* 一字不差:存的是绝对屏幕坐标 + 一块具体显示器的 UUID,
         // 新机器的显示器尺寸/排布/UUID 全不一样,搬过去只会把窗口摆到看不见的地方。
         "np:lyricsWindowFrame",
         "np:lyricsWindowScreenID",
         "np:launchAtLoginEnabled",
-        // launchAtLoginEnabled 的同类,2026-08-13 补上 —— 判据(见本组注释末尾"装没装
+        // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
         // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector
         // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
         // 显示"已启用",用户找不到那个能把它真正装上的开关。
         "np:collectorServiceEnabled",
-        // Spotify 探针钟相对耳朵的领先量,按输出设备 UID 记的一张表(2026-09-09,LocalPlaybackSource.
+        // Spotify 探针钟相对耳朵的领先量,按输出设备 UID 记的一张表(LocalPlaybackSource.
         // probeLeadByDevice):设备 UID 是这台机器上的身份,搬到别的机器一个都对不上,让它重新学。
         // 同日早几小时的单值键 np:spotifyProbeLeadSecs 已迁移进表并删除,这里一并排除掉旧备份里的它。
         "np:spotifyProbeLeadByDevice",
         "np:spotifyProbeLeadSecs",
-        // 「接收测试版更新」(2026-09-05)。测试版本来就是「只给自己另一台机器试」的东西,跟着备份搬去新机器等于
+        // 「接收测试版更新」。测试版本来就是「只给自己另一台机器试」的东西,跟着备份搬去新机器等于
         // 让那台机器默认收测试版,正好把这道闸绕开;而且它开着时 Sparkle 会多查一次 GitHub Release 列表,
         // 新机器上的人未必知道自己在收什么。宁可在新机器上自己再开一次。
         "np:receiveBetaUpdates",
@@ -117,7 +117,7 @@ enum ConfigPortability {
 
     /// 已经没有任何代码在读的旧键 —— 功能改名或删掉之后,值还留在 UserDefaults 里。
     ///
-    /// 2026-08-10 对本机全部 44 个 `np:` 键做了一次全仓扫描(源码里既搜 `"np:xxx"` 字面量、
+    /// 对本机全部 44 个 `np:` 键做了一次全仓扫描(源码里既搜 `"np:xxx"` 字面量、
     /// 又搜短名标识符),这五个在 **lyrimuse / LyrimuseCore / collector / desktop-lyrics /
     /// web 全部代码里零命中**,并逐个确认过去向:
     ///
@@ -134,11 +134,11 @@ enum ConfigPortability {
     /// 但 AppSettings.init() 每次启动都还在读它们做一次性迁移,删了会让从老版本升上来的
     /// 用户丢掉迁移结果。
     static let obsoleteDefaultsKeys: Set<String> = [
-        // 2026-08-17 这两个开关整个撤掉了(用户要求),两项功能改成固定开启:音量提示
+        // 这两个开关整个撤掉了,两项功能改成固定开启:音量提示
         // 跟着灵动岛开关走,播放指示条常驻。留着这两个键只会被导出到新机器再导回来。
         "np:notchVolumeBanner",
         "np:notchShowEqualizer",
-        // 2026-09-03「打开 Lyrimuse 时启动」从布尔改成逐播放器集合(np:launchPlayersOnLyrimuseOpen),
+        // 「打开 Lyrimuse 时启动」从布尔改成逐播放器集合(np:launchPlayersOnLyrimuseOpen),
         // 旧布尔键只在 AppSettings.init() 里读一次做迁移(init 末尾才清,读在前),之后不该再随备份走。
         "np:launchMusicOnLyrimuseOpen",
         "np:dataSourceMode",
@@ -146,12 +146,12 @@ enum ConfigPortability {
         "np:textShadowColorHex",
         "np:textShadowEnabled",
         "np:useSystemTranslationFallback",
-        // 2026-08-22:「别的 App 全屏时隐藏」当天加、当天整个撤掉(用户拍板)。判据在刘海屏上
+        // 「别的 App 全屏时隐藏」当天加、当天整个撤掉。判据在刘海屏上
         // 反复出问题——原生全屏时菜单栏被系统收起,窗口顶边落在刘海下沿而不是屏幕顶;而
         // 「伪全屏」(App 自己的全屏按钮)又一个系统通知都不发,只能靠轮询兜。收益抵不过
         // 这些复杂度。留着这个键只会被导出到新机器再导回来。
         "np:hideWhenFullscreenApp",
-        // 2026-09-06:全局「卡拉OK效果」拆成三个展示面各自的开关(np:overlayLyricsKaraoke /
+        // 全局「卡拉OK效果」拆成三个展示面各自的开关(np:overlayLyricsKaraoke /
         // np:notchLyricsKaraoke / 既有的 np:menuBarLyricsKaraoke),旧键只在 AppSettings.init() 里
         // 读一次做迁移(读在前、init 末尾才清)。
         "np:preferWordLevelKaraoke",
@@ -181,7 +181,7 @@ enum ConfigPortability {
 
     /// 导出包的格式版本。
     ///
-    /// 2026-08-13 之前这个数字是个**死字段**:只在 buildExportData 里写出去,importData
+    /// 之前这个数字是个**死字段**:只在 buildExportData 里写出去,importData
     /// 从头到尾没读过(全仓 grep 只有一处命中)。现在导入时至少会看它一眼 —— 不是为了做
     /// 版本迁移(格式一直是向后兼容的:未知字段本来就会被忽略,缺失字段各有默认值),而是
     /// 为了让"从新版本的机器导过来、有些设置没跟过来"这类问题在日志里留下痕迹,而不是
@@ -257,7 +257,7 @@ enum ConfigPortability {
     // 触发一次,行为跟"刚装完/换了台新机器"完全一致,不用为导入这一件事单独维护一套
     // "热重载"逻辑。
     //
-    // ⚠️ 2026-08-13 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
+    // ⚠️ 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
     // collector —— 它是独立的 launchd 进程,重启 App 完全不碰它,而它的配置是**启动时读
     // 进内存的那一份**(main.go 里没有任何文件监听)。所以在一台已经装过 collector 的
     // Mac 上导入(= 第二台机器保持同步、或本机从 iCloud 恢复),盘上和界面都换成新配置了,
@@ -353,7 +353,7 @@ enum ConfigPortability {
     //
     // ⚠️ 这里原本写着一段推理:"collectorServiceEnabled 清空后读回来是 false,它的 didSet
     // 会调 setEnabled(false)→uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
-    // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。2026-08-13 用 swiftc
+    // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。用 swiftc
     // 实测,这段推理的前提是**错的**:
     //
     //     声明时无默认值 + init 里首次赋值 → didSet 不触发
@@ -416,7 +416,7 @@ enum ConfigPortability {
         // 镜像也要删。留着它下次启动就会被 restoreIfPristine 原样恢复回来 —— 用户点的
         // 那个"恢复到刚装完时的样子"等于白点。
         AppSettingsMirror.remove()
-        // 「已校准」名单跟着一起清(2026-08-21 补)。上面那轮把三个偏移键(全局/按播放器/
+        // 「已校准」名单跟着一起清。上面那轮把三个偏移键(全局/按播放器/
         // 单曲)都清了,而这份名单是**独立文件**、不在 np: 前缀里 —— 不一起清就会留下一份
         // 孤儿名单:collector 继续拒绝给这些歌自动升级歌词,而它保护的校正值早已不存在,
         // 用户在界面上完全看不到原因。它跟校正值是成对的东西(LyricsOffsetStore
@@ -437,7 +437,7 @@ enum ConfigPortability {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in }
-        // 经 AppExit 登记原因再终止(2026-09-03),见 AppExit 头注。
+        // 经 AppExit 登记原因再终止,见 AppExit 头注。
         AppExit.request(.restartAfterConfigChange)
     }
 }

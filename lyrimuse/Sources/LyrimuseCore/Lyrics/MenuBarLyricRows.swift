@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// 菜单栏歌词双排(副行开着)时两行的几何(2026-09-06,借鉴清单 #57,用户在五档 HTML 对比里选了 B 方案)。
+/// 菜单栏歌词双排(副行开着)时两行的几何(用户在五档 HTML 对比里选了 B 方案)。
 ///
 /// 硬约束:状态栏项的按钮**恒 22pt 高**(`NSStatusBar.system.thickness`;带刘海的机器菜单栏本身 33pt、
 /// 外接屏 24pt,按钮都是 22),两行只能塞进这 22pt。本机实测 SF 字面高(ascender − descender):

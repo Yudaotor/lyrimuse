@@ -60,7 +60,7 @@ public enum EnrichCacheKeys {
         "reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
         "unplugged", "acappella", "a cappella",
         "interlude", "intro", "outro", "skit", "prelude", "overture",
-        // 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"),见
+        // 真实故障(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"),见
         // enrichkey.go 的 enrichKeyVersionWords 头注。
         "慢板", "快板",
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
@@ -167,7 +167,7 @@ public enum EnrichCacheKeys {
     // crc32(key),是这个 key 独有的,删它绝不可能误删碰撞组里别人的文件(要误删得同时满足
     // sanitize 结果相同、crc32 低 24 位也相同)。删一个本来就不存在的路径是无害的空操作。
     //
-    // ⚠️ 2026-08-05 实测排查坐实的真实 bug 就出在这里:改动之前只拼普通名那 4 个,而本机
+    // ⚠️ 实测排查坐实的真实 bug 就出在这里:改动之前只拼普通名那 4 个,而本机
     // 852 条缓存里有 219 条(25.7%)的导出文件带消歧后缀,删除时漏删 → collector 重启
     // (删除本身就会触发一次重启)跑 importLyricsFromFiles 时又从这些残留文件把条目
     // 原样导回来,表现是"删了一条,过一会儿它自己回来了"。collector 是按文件**头部标签**
@@ -201,10 +201,10 @@ public enum EnrichCacheKeys {
     /// 没词」(lookup 是纯精确命中)。而繁简这一档两侧**本来就做不到一致** —— collector 用
     /// 内嵌的 OpenCC 词典,这边用 CFStringTransform(ICU),对部分字的取舍不同。
     ///
-    /// 放在兜底这一层,不一致的后果就温和得多:某个字没折对,这次兜不到,退化成 2026-08-16
+    /// 放在兜底这一层,不一致的后果就温和得多:某个字没折对,这次兜不到,退化成
     /// 之前的行为(多一条重复条目),而不是查不到歌词。
     /// 合 credit 的分隔符,跟 collector 的 `isArtistCreditSep`(match.go)同一份。
-    /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 2026-08-20 实测:
+    /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 实测:
     /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。
     private static let creditSeparators: Set<Character> = ["/", "、", "&", ",", "，"]
 

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// 浏览器"允许来自 Apple 事件的 JavaScript"开关的**检测**(2026-08-31;2026-09-01 去掉了
+/// 浏览器"允许来自 Apple 事件的 JavaScript"开关的**检测**(去掉了
 /// 一键开启)。
 ///
 /// ⚠️ **只检测,不代改**。曾经有过一条"一键开启":读浏览器 profile 里的 `Preferences`(JSON)、
@@ -10,7 +10,7 @@ import Foundation
 /// `NSFileReadNoPermissionError`,第一步就断。而且那个失败**没有系统弹窗、也不进 tccd 的
 /// 拒绝日志**,在终端里手动复刻同一段代码却能跑通(终端通常已有该权限),排查时极具误导性。
 ///
-/// 2026-09-01 用户拍板整条移除、统一让用户自己去浏览器菜单里开:为一个布尔开关要求完全
+/// 整条移除、统一让用户自己去浏览器菜单里开:为一个布尔开关要求完全
 /// 磁盘访问权限不划算,而且这个 App 是 ad-hoc 签名、**每次构建 cdhash 都变,TCC 授权会被
 /// 下一次构建作废** —— 就算给了权限也留不住。别再把这条路加回来。
 ///
@@ -19,7 +19,7 @@ import Foundation
 /// 的那个,有系统弹窗)完全独立,是各浏览器自己加的第二道闸,默认关闭。这里只管"检测现在
 /// 开没开 + 能不能自动打开",不碰 TCC、不碰系统弹窗。
 ///
-/// 两套完全不同的机制(2026-08-31 逐个实测坐实,没有相信直觉/记忆里的猜测——Arc 那次已经
+/// 两套完全不同的机制(逐个实测坐实,没有相信直觉/记忆里的猜测——Arc 那次已经
 /// 猜错过一次存储位置,这次全部靠 `strings` 翻二进制 + 实际读文件验证):
 ///
 /// - **Chromium 系**(Arc / Chrome / Edge,同源于 Chromium 本体——三家的真实引擎二进制里都
@@ -57,15 +57,15 @@ public enum BrowserAutomationPermission {
     private static let chromiumPrefKey = "allow_javascript_apple_events"
 
     /// 设置页「+」菜单里**默认列出来**的那几个浏览器,固定展示顺序(不是字典的无序 keys)。
-    /// 按这份列表过滤"这台机器上装了哪些"再展示,不要求"必须先被信任过"(2026-08-31 用户
+    /// 按这份列表过滤"这台机器上装了哪些"再展示,不要求"必须先被信任过"(用户
     /// 要求:选一个没信任过的已安装浏览器,应该一步自动信任+配对,而不是先逼用户去那个
     /// 浏览器里放首歌被动等检测)。
     ///
-    /// ⚠️ **这是一份"默认展示"名单,不是"支持"名单 —— 两件事别混**(2026-09-01)。这里没有
+    /// ⚠️ **这是一份"默认展示"名单,不是"支持"名单 —— 两件事别混**。这里没有
     /// 的浏览器照样驱得动:能不能驱动由 `family(forBundleID:)` 说了算,而它认的是
     /// `chromiumPrefsPaths` / Safari / 用户手动加过的那批,跟这份展示名单是两套东西。
     ///
-    /// ⚠️ **Arc 就是这么被拿掉的**(2026-09-01 用户拍板:「arc 不要留着,但是我们代码里对他的
+    /// ⚠️ **Arc 就是这么被拿掉的**(「arc 不要留着,但是我们代码里对他的
     /// 适配都留着,只是不在这里显示,如果用户自己选了 arc,那就依旧按我们适配好的来走」)。
     /// Arc 在 `chromiumPrefsPaths` 里**原样留着**,`family(...)` 照样返回 `.chromium`、
     /// 那道 JS 开关的状态照样读得出来、`browserManualEnableHint` 里那条 Arc 专属菜单路径
@@ -91,8 +91,8 @@ public enum BrowserAutomationPermission {
     /// 上面那两张表只登记实测验证过的浏览器(理由见 `chromiumPrefsPaths` 那段),所以设置页
     /// 「添加浏览器」菜单原本只列得出四个,而 Brave / Vivaldi / Opera / Chromium / 各种 Beta
     /// 通道其实都是 Chrome 的分支、连脚本字典一起继承了(同一个四字码 `CrSuExJa`),本来就
-    /// 驱得动。2026-08-31 用户问「这里点+号出来的是否可以加
-    /// 一个选项是自己在本机的应用程序里面选」——这份字典就是那条路的落点。
+    /// 驱得动。所以「+」菜单里保留一条「从应用程序中选择…」,让人自己从本机挑
+    /// 一个浏览器 —— 这份字典就是那条路的落点。
     ///
     /// ⚠️ 它只影响 `family(...)`(= "这个 App 驱不驱得动"),**不影响 `chromiumPrefsPaths`**
     /// (= "那个 JS 开关存在哪")。手动加进来的 Chromium 浏览器没有登记过 Preferences 路径,
@@ -100,7 +100,7 @@ public enum BrowserAutomationPermission {
     /// 降级,不是漏做**:那个路径每个浏览器一个样(Arc→`Arc/`、Chrome→`Google/Chrome/`、
     /// Edge→`Microsoft Edge/`,没有公式能从 bundleID 推出来),而 `enableChromium` 是会
     /// **覆盖写**那个文件的 —— 猜错路径就是拿用户别的浏览器的配置文件去赌。宁可让 UI 告诉
-    /// 用户"这个浏览器请你自己去它的菜单里开那一项"。
+    /// "这个浏览器请你自己去它的菜单里开那一项"。
     ///
     /// 启动时由 `AppDelegate` 从 `AppSettings` 灌进来,跟
     /// `BrowserPositionProbe.platformBrowserPairs` 同一个"持久化在 AppSettings、运行期同步进
@@ -110,7 +110,7 @@ public enum BrowserAutomationPermission {
     /// Chromium 系 `execute javascript` 与 Safari `do JavaScript` 的 AppleScript **四字码**。
     ///
     /// ⚠️ 认码不认名字:命令的显示名会随浏览器本地化/改版变,四字码是 AppleScript 的 ABI,
-    /// 改了等于破坏所有既有脚本,没人会动。2026-08-31 在这台机器上逐个实测:
+    /// 改了等于破坏所有既有脚本,没人会动。在这台机器上逐个实测:
     /// Chrome / Edge / Arc 的 sdef 里都是 `<command name="execute" code="CrSuExJa">`,
     /// Safari 是 `<command name="do JavaScript" code="sfridojs">`;而 The Unarchiver /
     /// 音乐 / QQ音乐 这类非浏览器**一处都匹配不到** —— 正是要靠这一点把选错的 App 挡回去。
@@ -146,7 +146,7 @@ public enum BrowserAutomationPermission {
     /// **这个 bundle id 到底驱不驱得动** —— `family(...)` 的加强版:登记表里查不到时,
     /// 再去这个 App 自己的 bundle 里现场读一次脚本定义(`detectedFamily`)。
     ///
-    /// ⚠️ 为什么需要它(2026-09-01,用户原话:「已经被信任了,就应该出现在这个列表里面」):
+    /// ⚠️ 为什么需要它(「已经被信任了,就应该出现在这个列表里面」):
     /// 设置页「+」菜单现在也把**已信任的播放器**当候选来源,而信任列表里只有 bundle id 和
     /// 显示名 —— 那些"用户在'发现未知播放器'卡里点了信任"的浏览器从来没被登记过引擎族,
     /// `family(...)` 对它们返回 nil,不现场判一次就永远进不了候选。
@@ -189,7 +189,7 @@ public enum BrowserAutomationPermission {
         /// 是权限问题)。跟"确定关着"的 `disabled` 区分开,UI 上给不同的提示,别把"不确定"
         /// 说成"确定没开"。
         ///
-        /// ⚠️ 2026-09-02 之前 Safari 分支把 nil 判成 `disabled`(那时这里还写着"Chromium 系
+        /// ⚠️ 之前 Safari 分支把 nil 判成 `disabled`(那时这里还写着"Chromium 系
         /// 专属"),导致开关明明勾着却被告警"已经被关掉了"——详见 `status` 里 Safari 分支的
         /// 那段注释。
         case unknown
@@ -216,7 +216,7 @@ public enum BrowserAutomationPermission {
     /// 完整案情见下面 `case nil` 那段。
     public static func safariStatus(fromPrefValue value: CFPropertyList?) -> Status {
         guard let value else {
-                // ⚠️ **读不到 ≠ 关着**(2026-09-02 修)。原来这里 `return .disabled`,理由写的是
+                // ⚠️ **读不到 ≠ 关着**(修)。原来这里 `return .disabled`,理由写的是
                 // "Safari 这个开关默认就是关的,读不到值等价于从没开过" —— 这个假设是错的,
                 // 而且跟隔壁 Chromium 分支的处置**自相矛盾**:那边读不到明确返回 `.unknown`,
                 // 头注还专门写了"那不是坏了,是查不到,文案要如实说,别显示成未开启"。
@@ -225,14 +225,14 @@ public enum BrowserAutomationPermission {
                 // 是 TCC 保护域,别的 App 读它要「完全磁盘访问权限」,这个 App 默认没有,
                 // 于是 nil 才是常态。
                 //
-                // 真实后果(2026-09-02 用户报「可以现在就是勾着的啊」):用户 Safari 里那个开关
+                // 真实后果(现象是「可以现在就是勾着的啊」):用户 Safari 里那个开关
                 // **确实勾着**、自检也实测通过(绿字「现在可以被驱动了」),界面却橙字告警
                 // 「这个开关已经被关掉了——重启后就会失效」,并把菜单路径指引整块摆出来让他
                 // 再去勾一遍——而它本来就勾着,照做无事发生。误报之外还有连带伤害:
                 // `browserJSLikelyWorking` 对 `.disabled` 是**一票否决**,于是这张卡永远收敛
                 // 不到"已配好"那一档,角标也一直挂着。
                 //
-                // 实测(2026-09-02,本机 Safari 开关为开):外层
+                // 实测(本机 Safari 开关为开):外层
                 // `~/Library/Preferences/com.apple.Safari.plist`(105 字节的 stub,只有两个键)
                 // 和容器内 `~/Library/Containers/com.apple.Safari/.../com.apple.Safari.plist`
                 // **都是 true**;终端身份(有完全磁盘访问权限)`CFPreferencesCopyAppValue` 读到

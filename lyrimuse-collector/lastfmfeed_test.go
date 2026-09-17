@@ -198,7 +198,7 @@ func TestLastfmFeedNudge(t *testing.T) {
 	}
 }
 
-// 跨进程信号文件(2026-09-03):回填子命令 touch、常驻进程消费。钉三件事:没文件不触发;
+// 跨进程信号文件:回填子命令 touch、常驻进程消费。钉三件事:没文件不触发;
 // touch 之后恰好触发一次并把文件删掉;路径为空(单测/未配置)整个通道关闭、touch 也不写。
 func TestLastfmFeedNudgeFile(t *testing.T) {
 	saved := lastfmFeedNudgePath
@@ -229,7 +229,7 @@ func TestLastfmFeedNudgeFile(t *testing.T) {
 	}
 }
 
-// 回填的跨进程信号必须走**延迟**拉取,不能当场拉(2026-09-12)。
+// 回填的跨进程信号必须走**延迟**拉取,不能当场拉。
 //
 // 这是「补提交之后下面的列表没刷新」第三次被报出来的根因。bridge() 原来把
 // lastfmFeedNudgeFileDue() 直接摆进"要不要现在拉"的或条件里,信号一到就立刻拉一次 ——

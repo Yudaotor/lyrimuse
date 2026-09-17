@@ -17,7 +17,7 @@ import LyrimuseCore
 // `Bundle.main` 后,`.lproj` 目录直接放在 `Contents/Resources/` 下(build.sh 里的拷贝
 // 步骤)——这是 Apple 原生支持、不依赖任何机器的标准位置。
 //
-// 三档:简体 / 繁体 / 英文(繁体 2026-09-03 加,借鉴清单 #10)。preferredLanguages 第一项以 "zh"
+// 三档:简体 / 繁体 / 英文(繁体加)。preferredLanguages 第一项以 "zh"
 // 开头就是中文,其中带 hant / -tw / -hk / -mo 任一标记的走繁体包(判据跟
 // AppSettings.userReadsSimplifiedChinese 同一套,别各写一份),其余中文走简体;以 "en" 开头走
 // 英文;都不是就退回简体(这是开发语言,至少是能读懂的原文)。繁体包缺译的键由
@@ -64,7 +64,7 @@ enum L10n {
     /// 界面语言对应的 `Locale` —— 给那些**不走 .strings 表、但仍该跟着界面语言变**的系统
     /// API 用,典型是 `Locale.localizedString(forIdentifier:)` 生成的语言名/地区名。
     ///
-    /// 直接用 `Locale.current` 是个真实踩过的坑(2026-08-13 用户报):「翻译语言包」下拉里
+    /// 直接用 `Locale.current` 是个真实踩过的坑(现象是):「翻译语言包」下拉里
     /// 语言名走 `Locale.current`、状态文案走 `L10n.t()`,于是把界面切成英文之后,同一行里
     /// 左边是「英语」右边是 "Downloaded",中英混排。
     ///

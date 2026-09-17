@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// 2026-08-25 实测坐实:ListenBrainz 持续 429(收听记录已经过了 2.5 小时都是同一个错)
+// 实测坐实:ListenBrainz 持续 429(收听记录已经过了 2.5 小时都是同一个错)
 // 时,submit() 原来的 tries/退避只管一次调用内的几次重试——poller.go 四个调用点(Mac
 // 原生 single/playing_now、桥接 iPhone single/playing_now)各自独立按自己的节奏发起
 // 新一轮 submit,互相不知道对方也在被拒,合起来对一个持续故障的服务器反而在加压,

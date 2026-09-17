@@ -8,7 +8,7 @@ import (
 
 // Last.fm 2.0 端点的 GET query 编码。
 //
-// 为什么不能直接 url.Values.Encode()(2026-08-22 实测坐实):**这个端点会对 query value
+// 为什么不能直接 url.Values.Encode():**这个端点会对 query value
 // 多解一次码**。它先做一遍标准 percent-decode,再对结果做一遍 form-urlencoded 解码 ——
 // 后面那一遍把 `+` 当成空格。于是含加号的歌名/歌手名走标准编码必然查不到:
 //

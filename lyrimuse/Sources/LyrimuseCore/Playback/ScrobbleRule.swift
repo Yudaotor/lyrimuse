@@ -2,7 +2,7 @@ import Foundation
 
 /// 「这次播放什么时候算一次收听」的判定规则 —— **复刻 collector 的 listenThreshold /
 /// minTrackSecs**(collector/main.go + poller.go),给 UI 画计次刻度用(歌词窗口进度条,
-/// 2026-08-22)。两边必须保持一致:collector 是真正做记录的一方,这里只是把同一条规则
+/// )。两边必须保持一致:collector 是真正做记录的一方,这里只是把同一条规则
 /// 画出来;规则演进时两处一起改。
 ///
 /// ⚠️ UI 侧按「播放位置过线」近似判定,而 collector 数的是**实际播放秒数**(playedSecs)——
@@ -16,7 +16,7 @@ public enum ScrobbleRule {
 
     /// 计次点在整首歌里的比例位置(0~1)。nil = 画不出刻度:太短的曲目 collector 真的
     /// 不计(<30s);时长未知(0)时 collector **仍会**在播满 240s 时计,只是比例无从换算,
-    /// UI 侧不画 —— 这一档是"画不出",不是"不计"(2026-08-22 审阅纠偏)。
+    /// UI 侧不画 —— 这一档是"画不出",不是"不计"(审阅纠偏)。
     public static func thresholdFraction(durationMs: Int) -> Double? {
         let duration = Double(durationMs) / 1000
         guard duration >= minTrackSecs else { return nil }

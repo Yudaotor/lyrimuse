@@ -1,7 +1,7 @@
 import CoreAudio
 import Foundation
 
-/// 音频输出设备的枚举/切换(2026-08-21,歌词窗口音量胶囊左侧的 AirPlay/输出键,对照
+/// 音频输出设备的枚举/切换(歌词窗口音量胶囊左侧的 AirPlay/输出键,对照
 /// AM 的同位按钮)。全部走公开 CoreAudio HAL API,不需要额外权限(SoundSource 一类
 /// 输出切换工具同款做法)。切的是**系统默认输出设备** —— AM 那颗键的语义也是选播放
 /// 目标,AirPlay 扬声器在 HAL 里同样以输出设备形式出现,能被这里枚举/选中。
@@ -77,7 +77,7 @@ enum AudioOutputDeviceManager {
 
     /// 当前默认输出是不是**非内建**设备(蓝牙耳机/AirPlay/显示器…)——AM 把键染红的
     /// 条件实测是这个,不只 AirPlay:用户输出到蓝牙 AirPods 时 AM 的键也是红的
-    /// (2026-08-21 截图对照订正,第一版只判 AirPlay 结果"没有变红")。
+    /// (只判 AirPlay 的话,蓝牙输出时不会变红)。
     static func isExternalOutputActive() -> Bool {
         guard let id = defaultOutputDeviceID() else { return false }
         return kind(forTransport: transportType(id)) != .builtIn

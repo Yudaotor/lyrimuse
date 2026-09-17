@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// 用户那首的真实形状(2026-09-08 iTunes Search 实测):YT Music MV「王子 - Why You Wanna Treat Me So Bad?」230.1s、
+// 用户那首的真实形状(iTunes Search 实测):YT Music MV「王子 - Why You Wanna Treat Me So Bad?」230.1s、
 // album 空;US 商店回 Prince「Prince」「The Hits/The B-Sides」(曲目级 releaseDate 都是 1979-10-19,只有专辑级日期
 // 分得开)、Tuesday Knight 的翻唱、几条时长差很多的翻唱;CN 商店对一切查询回空。
 func princeResults() []itunesResult {
@@ -223,7 +223,7 @@ func TestAppleAlbumHintHelpers(t *testing.T) {
 	}
 }
 
-// ---- 2026-09-08 晚:封面解析按回填专辑名打分(03 章决策 16) ----
+// ---- 封面解析按回填专辑名打分(03 章决策 16) ----
 
 func TestCoverNeedsHintCheck(t *testing.T) {
 	apple := enrichEntry{CoverURL: "https://is1-ssl.mzstatic.com/x.jpg", CoverSource: "apple", CoverAlbum: "The Hits/The B-Sides"}
@@ -441,7 +441,7 @@ func TestAlbumHintTitleSplit(t *testing.T) {
 	}
 }
 
-// buddyResults 是 2026-09-11 对「Musiq Soulchild Buddy」的 US 商店实测形状(录音室版都是 223.8s)。
+// buddyResults 是对「Musiq Soulchild Buddy」的 US 商店实测形状(录音室版都是 223.8s)。
 func buddyResults() []itunesResult {
 	return []itunesResult{
 		{TrackName: "B.U.D.D.Y.", ArtistName: "Musiq Soulchild", CollectionName: "Luvanmusiq", CollectionID: 1, TrackTimeMillis: 223800, ReleaseDate: "2007-03-13T07:00:00Z"},

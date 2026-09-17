@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// 浏览器播放位置的地面真值探针(2026-08-30 加)。
+/// 浏览器播放位置的地面真值探针。
 ///
 /// ## 背景:为什么需要绕开 MediaRemote
 ///
@@ -12,18 +12,18 @@ import os
 /// 因页面加载/JS 初始化耗时而异,不是常数,那次调研已经明确否掉了"自动学一个偏移"这条路
 /// (MediaRemote 不给站点信息、偏差连正负号都不固定)。
 ///
-/// 2026-08-29 用户反馈"YouTube Music 换歌之后进度偏慢,1 秒误差都不能接受"——现有的
+/// 现象是"YouTube Music 换歌之后进度偏慢,1 秒误差都不能接受"——现有的
 /// 手动按播放器配置时间轴偏移那套治标不治本(每首歌真实偏差都不一样)。这个类换一个思路:
 /// 不猜偏移,直接问网页 DOM 要这首歌真实播放到第几秒,用 AppleScript 执行 JavaScript 读
 /// 页面自己渲染的播放进度文字(不是 `<video>.currentTime`——YouTube Music 的"电台/续播"
-/// 模式下那个字段是整个会话的累计时间、跨歌不清零,2026-08-29 实测坐实,不能当真值用)。
+/// 模式下那个字段是整个会话的累计时间、跨歌不清零,实测坐实,不能当真值用)。
 ///
 /// ## 覆盖范围与已知局限
 ///
 /// - 目前做了 YouTube Music(`music.youtube.com`)一个站点。要支持别的网站往 `siteRules`
 ///   加一条规则即可——选择器/解析方式因站而异,没有通用方案,新增前得先像 YouTube Music
 ///   这样实测过该站点自己的 DOM 结构。
-/// - 2026-08-31 从"只支持 Arc"扩到 Chromium 系全家(Arc/Chrome/Edge,见
+/// - 从"只支持 Arc"扩到 Chromium 系全家(Arc/Chrome/Edge,见
 ///   `BrowserAutomationPermission.Family.chromium`——三家实测坐实同源于 Chromium 本体,
 ///   AppleScript 词典里的 `execute` 命令完全一致)+ Safari(WebKit,命令名不同,见
 ///   `buildAppleScript` 的 family 分支)。Bundle id 一律不写死成 App 名字,统一用
@@ -31,12 +31,12 @@ import os
 ///   不受"App 被改名/装了变体版本"影响)。
 /// - 硬依赖每个浏览器自己那道"允许来自 Apple 事件的 JavaScript"开关(默认关闭,Chromium
 ///   系和 Safari 是两套完全独立的实现,检测/开启逻辑见 `BrowserAutomationPermission`)。
-///   开关关着时的失败方式**因浏览器而异,2026-08-31 逐个实测坐实,两者都已兜住**:Arc
+///   开关关着时的失败方式**因浏览器而异,逐个实测坐实,两者都已兜住**:Arc
 ///   是 `execute … javascript` **挂起不返回**(必须靠 `probeTimeout` 硬超时杀掉);Chrome
 ///   则是**立刻**抛一个清晰的 AppleScript 错误("通过 AppleScript 执行 JavaScript 的
 ///   功能已关闭…"),根本不会挂——同源于 Chromium 不代表这类运行时行为细节也一致,Arc
 ///   作为重度魔改的分支可能少做了 Chrome 那层错误提示。两种失败方式在 `buildAppleScript`
-///   里都被 `with timeout of N seconds`(把"挂起"变成一个抓得住的 -1712 错误,2026-09-01
+///   里都被 `with timeout of N seconds`(把"挂起"变成一个抓得住的 -1712 错误,
 ///   补 —— 裸 `try` **抓不住挂起**,只有它能)+ 裸 `try…end try`(吞掉错误,继续找下一个
 ///   标签页)+ `ProcessRunner` 的超时(最后杀掉子进程)一起兜住,最终对调用方表现一致:
 ///   探测失败、静默退回原有的
@@ -50,10 +50,10 @@ import os
 /// - 只在**单曲目、非跳曲**场景下有意义:换歌时缓存立刻作废(见 `trackChanged()`),
 ///   新曲目要等下一轮探测成功才有地面真值,这之前退回既有逻辑,不强求"换歌瞬间"也精确。
 ///
-/// ## 2026-08-31 从"信任了就自动探测"改成"平台↔浏览器配对即开关"
+/// ## 从"信任了就自动探测"改成"平台↔浏览器配对即开关"
 ///
 /// 早期版本只要浏览器受支持(engine 有对应 family)、又在「已信任的其它播放器」名单里,
-/// 就会对它自动探测——用户没有主动"打开这个功能"的动作,是隐式生效的。用户明确要求改成
+/// 就会对它自动探测——用户没有主动"打开这个功能"的动作,是隐式生效的。改成
 /// 显式配对:设置里新增"浏览器歌词同步"卡片,按 `supportedPlatforms` 逐个平台列出已经
 /// 配对的浏览器(可以给同一个平台配多个浏览器,比如平时用 Chrome、偶尔用 Arc),支持添加/
 /// 移除配对。**没配对过的浏览器——哪怕已经信任、哪怕真的开着这个网站——完全不会触发
@@ -63,11 +63,11 @@ import os
 /// 直接写这个类的公开属性,跟 `LocalPlaybackSource.romanizationScripts` 同一个"UI 推值进
 /// LyrimuseCore 单例"的模式,不经过任何跨层依赖。
 ///
-/// ## 2026-08-30 用户反馈"改完反而更差,有时候歌词进度会回退"——一次性纠偏,不持续覆盖
+/// ## 现象是"改完反而更差,有时候歌词进度会回退"——一次性纠偏,不持续覆盖
 ///
-/// 最初版本(见 git 历史)一旦探测命中,`positionSeconds` 直接等于探针值、且强制
-/// `didReanchor=true`,彻底跳过 `resolvePositionSeconds` 整套伺服/棘轮/EMA 逻辑,后续每一轮
-/// (~0.9s 一次探测往返)都重复这个动作。背靠背实测(2026-08-30)坐实两件事:①往返耗时
+/// ⚠️ 探测命中时**不能**让 `positionSeconds` 直接等于探针值、也不能强制
+/// `didReanchor=true` 跳过 `resolvePositionSeconds` 整套伺服/棘轮/EMA 逻辑、每一轮
+/// (~0.9s 一次探测往返)都重复这个动作。背靠背实测坐实两件事:①往返耗时
 /// 稳定 ~0.9s、不随连续调用堆积(不是队列积压);②探针读数来自页面渲染的"M:SS"文字,
 /// 只有**整秒精度**——而 Arc 走 media-control 的 `elapsedTimeNow` 本身早就是连续、无量化、
 /// ±0.05s 精度的干净外推(`positionSourceTier` 把 Arc 归在 `.cleanExtrapolated`,画像见该
@@ -77,7 +77,7 @@ import os
 /// `noisyFloored` 档(QQ音乐/网易云同款整秒地板量化源)那套前向棘轮 + EMA 门槛专门用来
 /// 防的现象,但旧版实现完全绕开了那套保护。
 ///
-/// ## 2026-09-02 补:光"只用一次"还不够 —— 那一次还得**真的被采信**
+/// ## 补:光"只用一次"还不够 —— 那一次还得**真的被采信**
 ///
 /// 上面那套"一次性纠偏"落地之后,用真机日志坐实它**几乎从不生效**:连着三首歌
 /// `neteaseDiag steady … ema=-0.197 / -0.206 / -0.226, snap=false`,而同期离屏逐帧量到的
@@ -88,7 +88,7 @@ import os
 /// 才可能触发,而实测这档偏差只有 0.7~0.9 秒。修法见 `LocalPlaybackSource` 里
 /// `groundTruthSnapToleranceSecs` 那条专门的重锚路径(门槛 0.30s,不走 EMA)。
 ///
-/// 同一批还修掉了读数本身的系统性偏置:页面显示的是 `floor(真实位置)`(2026-09-02 用
+/// 同一批还修掉了读数本身的系统性偏置:页面显示的是 `floor(真实位置)`(用
 /// media-control 暂停实测坐实:`elapsedTime=165.627` 而页面是 `165`),所以直接采信 `n`
 /// 恒偏后、均值 −0.5 秒。现在补 `flooredMidpointBiasSecs = 0.5` 取区间中点,变成无偏估计。
 ///
@@ -101,7 +101,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     public static let shared = BrowserPositionProbe()
     private init() {}
 
-    /// ⚠️ 这个类**长期一行日志都没有**(2026-09-02 补)。代价是真实的:那道退化守卫把整首歌
+    /// ⚠️ 这个类**长期一行日志都没有**。代价是真实的:那道退化守卫把整首歌
     /// 的纠偏全废掉了,而日志里查不到任何探针活动 —— 这**不能**当"它没跑"的证据,只能靠读
     /// 代码 + 量 media-control 反推。所以采信和弃用**两边都记**,弃用要带原因。
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "browserprobe")
@@ -111,7 +111,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 去掉"整秒下取整"的系统性偏置:页面显示的是 `floor(真实位置)`,所以真实位置均匀分布
     /// 在 `[n, n+1)`,取**中点**才是无偏估计;直接用 `n` 恒偏后、均值 −0.5 秒。
     ///
-    /// ⚠️ "页面是 floor 不是 round" 是 **2026-09-02 实测坐实**的,不是假设:用 media-control
+    /// ⚠️ "页面是 floor 不是 round" 是 **实测坐实**的,不是假设:用 media-control
     /// 暂停(暂停那一刻 MediaRemote 会记下精确位置)抓到一个小数 ≥0.5 的样本 ——
     /// `elapsedTime=165.627` 而页面文字是 `165`(round 会是 166)。两个站点同源,YouTube Music
     /// 的 "M:SS" 同理。
@@ -121,7 +121,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 探针那一支必须排在棘轮**之前**、自成一条路径,不能落进棘轮。
     public static let flooredMidpointBiasSecs: Double = 0.5
 
-    // MARK: - 探针值的可信度判据(2026-09-02 重写)
+    // MARK: - 探针值的可信度判据(重写)
 
     /// ⚠️ **这里原来是一道拿 `snapshot.elapsedTime` 当参照物的"位置差"守卫。它是错的,已删。**
     ///
@@ -130,7 +130,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 恒等于 0"(见类头注开头)。两者一凑,守卫就退化成 `probed <= 8` —— **只有页面真放在前
     /// 8 秒内的修正才会被采纳,过了第 8 秒一律弃用**;又因为消费是每首歌一次性的,整首歌都
     /// 跑在错的外推锚点上。现场:Chrome + music.youtube.com,`elapsedTime` 三次采样恒 0、
-    /// `timestamp` 恒定不动,用户报「歌词进度不准」。加进去和被抓出来是**同一天**。
+    /// `timestamp` 恒定不动,现象是「歌词进度不准」。加进去和被抓出来是**同一天**。
     ///
     /// ⚠️ 教训不是"参照物选错了",而是**任何拿 MediaRemote 位置当参照物的判据在这里都不成立**。
     /// 换成外推值也救不回来:探针最该出手的场合恰恰是"锚点本身就是错的"(冷启动时歌已经放到
@@ -140,7 +140,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 现在的判据不再问"这个值离某个参照物多远",改问两件**探针自己拿得出材料**的事:
     ///   ① 这个标签页放的是不是同一首歌(`pageDurationToleranceSecs`,在 JS 里比);
     ///   ② 这个标签页的钟有没有在走(`pageClockIsRunning`,两次采样)。
-    /// 陈旧镜像标签页的特征恰恰是**它不动**(2026-09-02 实测:15 次采样一直读 7 秒),
+    /// 陈旧镜像标签页的特征恰恰是**它不动**(实测:15 次采样一直读 7 秒),
     /// 这比"它离 MediaRemote 多远"直接得多,也不依赖任何一个我们不信任的数。
 
     /// 两次采样之间隔多久。
@@ -189,7 +189,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 同一首歌最多探测几次。
     ///
-    /// ⚠️ 为什么需要它(2026-09-02):判"钟没在走"可能是**瞬时**的 —— 页面在缓冲、标签页刚被
+    /// ⚠️ 为什么需要它:判"钟没在走"可能是**瞬时**的 —— 页面在缓冲、标签页刚被
     /// 切到后台还没跑满一个计时周期。这类失败**不消费**那次一次性额度(判据在探针内部,拿不到
     /// 值就不写缓存,`consumeCorrection` 自然不会置 `consumedKey`),所以重试是自动的;但自动
     /// 重试没有上界就变成"整首歌每一轮都去 tell 一遍浏览器"。三次 + 退避是两头的折中:瞬时
@@ -213,9 +213,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 「这个窗口此刻真正显示着的那个标签页」的 AppleScript 说明符 —— Chromium 系叫
     /// `active tab`(四字码 `acTa`,Arc/Chrome/Edge 三家一致),Safari 叫 `current tab`
-    /// (`cTab`),**不同名**,2026-09-01 逐个从各自 bundle 里的 sdef 核对过。
+    /// (`cTab`),**不同名**,逐个从各自 bundle 里的 sdef 核对过。
     ///
-    /// ⚠️ 为什么非它不可(2026-09-01 实测坐实,这是「检测没通过:no output」那个 bug 的根因):
+    /// ⚠️ 为什么非它不可(实测坐实,这是「检测没通过:no output」那个 bug 的根因):
     /// **Arc 会把非当前标签页休眠掉,对休眠标签页执行 JavaScript 会一直不返回**。同一时刻
     /// 同一台机器上实测:`execute (tab 1 of window 1) javascript "1+1"` 挂死(5 秒被杀,
     /// 零输出),`execute (active tab of window 1) javascript "1+1"` 123 毫秒返回 2;
@@ -279,10 +279,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// YouTube Music 的播放进度取自页面自己渲染的".time-info"文字(形如"0:57 / 4:04"),
     /// 不取 <video>.currentTime——"电台/续播"模式下那个字段是整个会话的累计时间,
-    /// 2026-08-29 实测坐实(同一时刻 currentTime=516s 而这首歌本身时长只有 243s)。
+    /// 实测坐实(同一时刻 currentTime=516s 而这首歌本身时长只有 243s)。
     /// 顺带把 <video>.paused 也带出来,调用方用它排除"标签页开着但暂停/静音后台"的干扰。
     ///
-    /// ⚠️ 返回值刻意**不用** JSON.stringify——2026-08-30 实测坐实一个大坑:`execute …
+    /// ⚠️ 返回值刻意**不用** JSON.stringify——实测坐实一个大坑:`execute …
     /// javascript` 把 JS 返回的字符串再包一层 AppleScript 字符串时,会把字符串里已有的
     /// 双引号**真的**转义成反斜杠(不是打印时的显示转义,是字符串本身多了真实的 `\` 字符,
     /// 用 `r contains "\\"` 实测坐实),等于整段 JSON 被二次转义。拿这种结果去跟手写的
@@ -318,7 +318,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     })()
     """
 
-    /// Spotify 网页版(`open.spotify.com`)的播放进度。2026-09-01 在这台机器上对着真实播放
+    /// Spotify 网页版(`open.spotify.com`)的播放进度。在这台机器上对着真实播放
     /// 逐项实测,**没有一条是从 YouTube Music 那条规则推出来的** —— 两个站点差异比想象中大。
     ///
     /// ## 进度取自 `[data-testid=playback-position]` 的**文字**
@@ -361,7 +361,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 播客/长音频会走到三段式,YouTube Music 那条规则只认两段(它自己的元素也只会是两段)。
     /// 这里多认一种,成本一行、收益是播客不会静默失效。
-    /// **第三段:封面地址**(2026-09-09)。`now-playing-widget` 里 `img[data-testid=cover-art-image]` 的 src 是
+    /// **第三段:封面地址**。`now-playing-widget` 里 `img[data-testid=cover-art-image]` 的 src 是
     /// Spotify 图床 300 档(实测 `ab67616d0000e1a3…`,webp),同一 hash 换成 `82c1` 就是 2000×2000 的原图 ——
     /// 页面上唯一一份**身份精确**的封面来源(Safari 经 MediaSession 交给系统的那份是 640×640、同一张图,
     /// 但没有地址)。地址随读数一起回传,`parseReading` 解析、`setArtworkSink` 交出去,跟原生客户端
@@ -430,16 +430,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     private var inFlightKey: String?
     private var consumedKey: String?
     private var generation = 0
-    // 有界重试的记账(2026-09-02,见 maxProbeAttempts):按曲目 key 计次,换歌清零。
+    // 有界重试的记账(见 maxProbeAttempts):按曲目 key 计次,换歌清零。
     private var attemptKey: String?
     private var attemptCount = 0
     private var lastAttemptEndedAt: Date?
     private var platformBrowserPairsStorage: [String: Set<String>] = [:]
-    /// 最近一次**探测成功**是在哪个浏览器上、命中了哪个平台的站点规则(2026-09-03)。
+    /// 最近一次**探测成功**是在哪个浏览器上、命中了哪个平台的站点规则。
     /// 这是"这个浏览器此刻在放哪个网页音乐平台"最硬的证据 —— 它意味着我们刚从那个站点
     /// 自己的 DOM 里读到了一个**在走**的进度。给来源角标用,见 `playingPlatformID`。
     private var lastMatch: (bundleID: String, platformID: String, at: Date)?
-    /// 页面顺带交出的封面地址的去向(2026-09-09,见 spotifyWebScript 头注)。由 LocalPlaybackSource 启动时挂上;
+    /// 页面顺带交出的封面地址的去向(见 spotifyWebScript 头注)。由 LocalPlaybackSource 启动时挂上;
     /// 没挂就丢掉。同一把锁下读写。
     private var artworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
 
@@ -471,7 +471,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     }
 
     /// 这个(已解析代理进程之后的)bundle id 有没有被用户配对给指定平台——给
-    /// `LocalPlaybackSource` 判断"网页版 Spotify 广告"用(2026-09-02):调用方需要传已经过
+    /// `LocalPlaybackSource` 判断"网页版 Spotify 广告"用:调用方需要传已经过
     /// `probeTargetBundleID` 解析的 host bundle id,跟 `kickIfNeeded`/`pairedPlatformIDs`
     /// 是同一份配对数据、同一把锁,不是另起一份判断逻辑。
     public func isPaired(bundleID: String?, platformID: String) -> Bool {
@@ -489,7 +489,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 这个浏览器此刻在放哪个网页音乐平台(nil = 不知道 / 不是网页播放器)。
     ///
-    /// 2026-09-03 加,给菜单栏面板右上角那枚**来源角标**用:用户要求"确实是 YouTube Music
+    /// 加,给菜单栏面板右上角那枚**来源角标**用:"确实是 YouTube Music
     /// 就别再显示浏览器图标了,浏览器里放 Spotify 就显示 Spotify,其余照旧显示浏览器"。
     ///
     /// ⚠️ 调用方传 media-control 报的原始 bundle id 就行,这里自己做代理别名解析
@@ -540,7 +540,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 往返的固有滞后,靠 `rate * age` 补上)。命中(非 nil)后立即标记这个 key 为已消费——
     /// 同一首歌之后再调用一律返回 nil,换下一首歌(`trackChanged()`)才会重新开放。
     ///
-    /// 一次性是刻意的(2026-08-30,见类头注"一次性纠偏,不持续覆盖"):这个值只有整秒
+    /// 一次性是刻意的(见类头注"一次性纠偏,不持续覆盖"):这个值只有整秒
     /// 精度,只适合当"换歌后立刻给个准种子"用,不适合当稳态下持续覆盖的真值——
     /// `resolvePositionSeconds` 自己的连续外推(`.cleanExtrapolated`)比它更准。
     ///
@@ -556,7 +556,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         guard age >= 0, age <= maxAge else { return nil }
         consumedKey = key
         let corrected = snapshot.seconds + Self.flooredMidpointBiasSecs + rate * age
-        // ⚠️ **这一行跟 `probeAdvancing` 里那句"采信"不是一回事,两行都要有**(2026-09-03
+        // ⚠️ **这一行跟 `probeAdvancing` 里那句"采信"不是一回事,两行都要有**(
         // 复量时暴露的日志盲区):"采信"打在**探针内部**(拿到一个可信读数、写进缓存),
         // 而这里才是**真的交给伺服逻辑用了**。同一首歌可能出现好几行"采信"却只有一行
         // "交出" —— 一次性额度(`consumedKey`)把后面几次挡在门外。只看"采信"会读成
@@ -568,7 +568,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 换歌时清掉缓存——上一首歌的探测结果绝不能被当成这一首歌的位置用,也重新开放
     /// 这首新歌的一次性消费额度。也会让"正在飞的探测"的结果作废(generation 递增),
     /// 防止一份晚到的旧曲目探测结果污染新曲目。
-    /// `from`/`to` 只用于日志(2026-09-03 加):`from` 为空说明**不是真换歌**,是快照变
+    /// `from`/`to` 只用于日志:`from` 为空说明**不是真换歌**,是快照变
     /// nil(播放器退出 / stopped / 系统 Now Playing 焦点被抢)把 `lastKey` 清成了 "" 之后
     /// 重新接上 —— 这两种情况在旧日志里长得一模一样,而它们该不该算 bug 完全不同。
     public func trackChanged(from previousKey: String = "-", to newKey: String = "-") {
@@ -582,7 +582,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         attemptCount = 0
         lastAttemptEndedAt = nil
         lock.unlock()
-        // ⚠️ 这一行是"同一首歌为什么又探了一次"的唯一线索(2026-09-03 加)。调用方是
+        // ⚠️ 这一行是"同一首歌为什么又探了一次"的唯一线索。调用方是
         // `LocalPlaybackSource` 的 `if trackChanged`(`key != lastKey`),而 `lastKey`
         // **不只在真换歌时变** —— 快照变成 nil(播放器退出/stopped/系统 Now Playing 焦点
         // 被别的 App 抢走一次)那条路径会把它清成 "",下一拍就重新算一次"换歌"。所以
@@ -597,13 +597,13 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 往返开销。不等这次探测的结果,是刻意的:调用方(轮询循环)本身就是同步、高频跑的,
     /// 不能被一次上百毫秒的 AppleScript 往返卡住。
     public func kickIfNeeded(bundleIdentifier: String?, key: String, expectedDuration: Double) {
-        // ⚠️ **先把「媒体代理进程」解析成宿主 App**(2026-09-02 修的真 bug)。Safari 播网页
+        // ⚠️ **先把「媒体代理进程」解析成宿主 App**(修的真 bug)。Safari 播网页
         // 音频时 MediaRemote 报的是 `com.apple.WebKit.GPU`(解码跑在独立的 WebKit GPU 进程
         // 里,见 `TrustedPlayers.mediaProxyOwners`),而**配对表里存的、AppleScript 要 tell 的
         // 都是 `com.apple.Safari`**。不解析的话 `family(...)` 当场返回 nil、探测一次都不会
         // 发起 —— 表现是"配对了 Safari、卡片也在、却永远不同步",而且不报任何错。
         //
-        // 准入那一侧(`TrustedPlayers.isAccepted`)2026-09-01 就补了这步别名解析,探针这侧
+        // 准入那一侧(`TrustedPlayers.isAccepted`)就补了这步别名解析,探针这侧
         // 一直漏着。⚠️ 两处都要解析:`family(...)` 和 `pairedPlatformIDs(...)` 都按宿主查,
         // 下面 `probeOnce` 拿去 `tell application id` 的也必须是宿主 —— 对
         // `com.apple.WebKit.GPU` 根本 tell 不动。
@@ -617,7 +617,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         guard !platformIDs.isEmpty else { return }
         lock.lock()
         guard inFlightKey != key, consumedKey != key else { lock.unlock(); return }
-        // 有界重试(2026-09-02,见 `maxProbeAttempts`):探测失败**不消费**那次一次性额度,
+        // 有界重试(见 `maxProbeAttempts`):探测失败**不消费**那次一次性额度,
         // 所以重试是自动发生的 —— 这里只给它一个上界和退避,别让一个读不到的标签页被整首歌
         // 每一轮都 tell 一遍。
         if attemptKey != key {
@@ -673,12 +673,12 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 只试用户为这个浏览器配对过的平台对应的站点规则——哪怕另一个平台的站点规则也能
     /// 匹配上当前打开的标签页,没配对过就不试,尊重用户的显式选择(见类头注)。
-    /// 「这个浏览器现在到底能不能被驱动」的**功能性**自检(2026-09-01)。
+    /// 「这个浏览器现在到底能不能被驱动」的**功能性**自检。
     ///
     /// ⚠️ 存在的理由:Chromium 系那道 JS 开关的状态**读不出来** —— 它存在浏览器 profile 的
     /// `Preferences` 里,而别的 App 读那个目录要「完全磁盘访问权限」,这个 App 没有。于是
     /// 用户按指引手动开完之后,界面上永远显示「无法确认状态」,他没法确认自己做对没有
-    /// (用户原话:「我现在已经手动去打开了,这个页面怎么回显?」)。
+    /// (「我现在已经手动去打开了,这个页面怎么回显?」)。
     ///
     /// 这里换一条不依赖那个权限的判据:**直接试着执行一小段 JavaScript**。成不成功就是
     /// 用户真正关心的那件事本身,比读配置文件更贴近事实 —— 配置文件写着"开"但浏览器没重启
@@ -708,7 +708,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 最小可行脚本:在第一个窗口**此刻显示着的那个标签页**里算 1+1。刻意不带任何 URL
         // 过滤 —— 自检要回答的是"驱不驱得动",跟用户此刻开着什么页面无关。
         //
-        // ⚠️ 取的是 `active tab` 而**不是** `tab 1`(2026-09-01,这就是用户报的
+        // ⚠️ 取的是 `active tab` 而**不是** `tab 1`(这就是现象是的
         // 「检测没通过:no output」的根因,理由见 `activeTabExpression` 头注):Arc 把非当前
         // 标签页休眠掉,对休眠标签页执行 JavaScript 会**一直不返回**,于是一切正常的 Arc
         // 也会被这个自检判成失败。当前标签页是唯一能保证是活的那个。
@@ -772,7 +772,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         //   - Chrome/Edge(取自自己的 locale.pak):英文 "Executing JavaScript through
         //     AppleScript is turned off…",中文「通过 AppleScript 执行 JavaScript 的功能已关闭…」
         //     → 稳定锚点是 "AppleScript" + ("turned off" / 「已关闭」)。
-        //   - Safari(2026-09-01 在这台机器上实测原样抄回来的):"You must enable 'Allow
+        //   - Safari(在这台机器上实测原样抄回来的):"You must enable 'Allow
         //     JavaScript from Apple Events' in the Developer section of Safari Settings to use
         //     'do JavaScript'."(错误号 8)—— 注意它说的是 **Apple Events** 而不是 AppleScript,
         //     上面那组锚点一个都对不上,所以必须单列一条。那句话本身在 dyld 共享缓存里,
@@ -801,7 +801,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// ⚠️ `flooredMidpointBiasSecs` 的 +0.5 由 `consumeCorrection` 统一补,**这里一次都不补**
     /// —— 它补的是"页面显示 floor"这个系统性偏置,跟采样几次无关,补两次就偏了半秒。
     /// 一次成功探测的产物:读到的秒数 + **是哪个平台的站点规则读到的**。
-    /// 后者 2026-09-03 加,给来源角标用(见 `playingPlatformID`);位置那条链路只用前者。
+    /// 后者加,给来源角标用(见 `playingPlatformID`);位置那条链路只用前者。
     private struct ProbeHit {
         let seconds: Double
         let platformID: String
@@ -825,7 +825,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             logger.info("probe #\(attempt, privacy: .public): second sample returned nothing, discarding \(first.seconds, privacy: .public)s")
             return nil
         }
-        // ⚠️ 两拍必须落在**同一个平台**上(2026-09-03 补)。同时开着 YouTube Music 和
+        // ⚠️ 两拍必须落在**同一个平台**上。同时开着 YouTube Music 和
         // Spotify 网页版、而两边规则的优先级判定在两拍之间翻了个个儿时,拿 A 站的读数减
         // B 站的读数去判"进度在不在走"是没有意义的 —— 那个差值既可能碰巧为正(误采信一个
         // 属于另一首歌的位置),也可能碰巧为负(白白弃用一次真读数)。不同平台直接弃用。
@@ -861,23 +861,23 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     }
 
     /// 一次 AppleScript 里做完"找标签页 + 执行脚本"两件事(不能分两次调用:标签页引用
-    /// 存成变量再传进另一次 `tell` 会报 specifier 转换错误,2026-08-29 实测坐实——
+    /// 存成变量再传进另一次 `tell` 会报 specifier 转换错误,实测坐实——
     /// `execute`/`do JavaScript` 要的是**内联**说明符,只有 `tab i of window w` 这种当场
     /// 求值的写法能用)。遇到第一个"确实在播放"(非 `NOTFOUND` 且非暂停)的就直接返回,
     /// 避免用户同时开着好几个同源标签页(比如两个 YouTube Music 页面)时读错。
     ///
-    /// ⚠️ **先扫一遍各窗口的当前标签页,再扫其余标签页**(2026-09-01 加的第一遍循环)。
+    /// ⚠️ **先扫一遍各窗口的当前标签页,再扫其余标签页**(加的第一遍循环)。
     /// 理由见 `activeTabExpression` 头注:Arc 会休眠非当前标签页,对休眠标签页执行
     /// JavaScript 会一直不返回、只能等 `with timeout` 把它踢掉,每踢一个就吃掉一秒预算。
     /// 用户开着几十个标签页是常态(实测这台机器 50 个),其中只要有两三个匹配得上 URL
     /// 又恰好是休眠的,整次探测的 3 秒就没了、真正在播放的那个根本轮不到。当前标签页是
     /// 唯一保证活着的,先试它 —— 而"正在放歌的那个标签页"很多时候就是当前标签页。
     ///
-    /// `tell application id "<bundleID>"`(而不是写死 App 显示名字符串)——2026-08-31 对
+    /// `tell application id "<bundleID>"`(而不是写死 App 显示名字符串)——对
     /// Arc/Chrome/Edge/Safari 逐个实测坐实这个语法对四家都有效,不受"App 被改名/装了
     /// 变体版本(比如 Chrome Canary)"影响,比 `tell application "Google Chrome"` 更稳。
     ///
-    /// Chromium 系和 Safari 的 JS 注入命令**不同名**(2026-08-31 实测坐实,不是同一个词
+    /// Chromium 系和 Safari 的 JS 注入命令**不同名**(实测坐实,不是同一个词
     /// 的两种写法):Chromium 系是 `execute (tab) javascript "…"`,Safari 是
     /// `do JavaScript "…" in tab`。两边窗口/标签枚举语法(`count of windows`/
     /// `tabs of window`/`URL of tab`)是一致的,只有这一行命令要按 family 分支。
@@ -956,7 +956,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// public 是为了给 lyrimuse-selftest 单测这段纯解析逻辑——真正调 AppleScript 的部分
     /// 依赖真实 Arc + 已打开的网页,没法在 CI/无 GUI 环境里稳定跑,只能靠这段解析逻辑的
-    /// 单测兜底覆盖率,真实端到端行为已经在 2026-08-30 手动验证过。
+    /// 单测兜底覆盖率,真实端到端行为已经在手动验证过。
     public static func parseSeconds(fromOsascriptOutput raw: String) -> Double? {
         parseReading(fromOsascriptOutput: raw)?.seconds
     }
@@ -971,7 +971,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         }
     }
 
-    /// 解析规则(2026-09-09 从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>]`。第二段非 "0"
+    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>]`。第二段非 "0"
     /// (暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址(`SpotifyArtworkURL.parse`),
     /// 别的一律 nil —— YouTube Music 的脚本没有第三段,老输出原样成立。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {

@@ -10,8 +10,8 @@ import OSLog
 // 而真正的原因在最底层且根本修不了(只能等上游适配)。`media-control test` 专门回答这一件事:
 // 它不看有没有歌在放,只验通道本身通不通,非零退出即"这台机器上用不了"。
 //
-// ⚠️ 这里原来写着「Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,不受影响」
-// —— **那句话是错的**(2026-09-17 查 issue #8 时发现,而且它正好会把排查带偏)。默认配置是
+// ⚠️ 别以为「Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,不受影响」
+// —— **那是错的**,而且它正好会把排查带偏。默认配置是
 // `[.auto]`,那条路上 **Apple Music 的快照基座也是 media-control**(AppleScript 只在
 // `refinedAppleMusicSnapshotIfNeeded` 里异步精化位置);只有「恰好只勾 Apple Music、没勾
 // 自动识别」才是纯 AppleScript。所以这条通道坏掉时 Apple Music 用户同样会受影响。

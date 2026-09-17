@@ -1,6 +1,6 @@
 import Foundation
 
-/// collector 落盘的 Last.fm「最近记录」feed(`lyrimuse-lastfm-recent-feed.json`,2026-09-03)。
+/// collector 落盘的 Last.fm「最近记录」feed(`lyrimuse-lastfm-recent-feed.json`)。
 ///
 /// 写入方是 collector 的桥接拉取(lyrimuse-collector/lastfmfeed.go):它本来就每 15 s
 /// (空闲 60 s)拉一次 `user.getrecenttracks limit=50`,现在把结果原样落盘。App 侧读它代替

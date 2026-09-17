@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// 「短于 30 秒的曲目」开关**只管 Last.fm**(2026-09-03 用户原话:"这个配置项是 lastfm 的,和
+// 「短于 30 秒的曲目」开关**只管 Last.fm**("这个配置项是 lastfm 的,和
 // listenbrainz 没有一点关系")。这里钉的是活路径的分流:开关开着、短曲目走进提交漏斗之后,
 //   - ListenBrainz **一个请求都不发**;
 //   - 会话照常收尾(listenSent=true,免得每轮 poll 重判)、本地收听日志照常记(它是给 Last.fm

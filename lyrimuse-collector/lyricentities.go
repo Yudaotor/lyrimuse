@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// 歌词正文里的 HTML / XML 字符实体(2026-09-09 用户报 Prince《Free》的灵动岛歌词里满屏
+// 歌词正文里的 HTML / XML 字符实体(现象是 Prince《Free》的灵动岛歌词里满屏
 // `they&apos;re` 这种"乱码")。
 //
 // 这是歌词源自己数据库里的脏数据,不是我们转义链路的 bug(json 解码早就正常完成了)。全库
@@ -111,7 +111,7 @@ func decodeLyricSourceEntities(raw map[string]lyricSourceResult) map[string]lyri
 // 不跳过 manual_lyrics:跟 migrateYRCWhitespaceTokens 同一口径——这是无损的格式规范化(词一个
 // 不变,只是把编码还原),不是自愈路径换内容;用户锁住的正是那份词,`they&apos;re` 显示成
 // `they're` 是他要的。手动选定留痕 manual_pick_sha 同理:改前跟正文对得上的,改后按新正文重算,
-// 否则这一步会把用户「选过、还是他选的那份」的歌无声改判成「已被换掉」(ManualPickLock.state)。
+// 否则这一步会把「选过、还是他选的那份」的歌无声改判成「已被换掉」(ManualPickLock.state)。
 //
 // 已知代价(接受,08 章早有结论):App 侧单曲时间轴校正值的 key 含 lyrics+yrc 的内容指纹,正文
 // 一变旧值就查不到——跟 rescore / 重挂时间轴 / 空白词条清洗改正文时一样,受影响的歌要重调一次。
@@ -136,7 +136,7 @@ func migrateLyricEntities() {
 	}
 	if fixed > 0 {
 		// 必须显式置脏,否则 saveEnrichCache 是空操作——同 migrateLyricTimelines 里那条
-		// 2026-09-01 实测坐实的潜伏 bug。
+		// 实测坐实的潜伏 bug。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

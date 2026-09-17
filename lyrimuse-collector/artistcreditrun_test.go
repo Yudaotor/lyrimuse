@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-17 用户报:「联网搜索候选歌词」用播放器给的完整歌手串
+// 现象是:「联网搜索候选歌词」用播放器给的完整歌手串
 // "K/DA/Madison Beer/(G)I-DLE/Jaira Burns" 只搜到两条候选,把歌手手工截短成 "K/DA"
 // 之后变三条(还多出一条带逐字时间轴、分数最高的 Musixmatch)。
 //
@@ -36,12 +36,12 @@ func TestArtistMatchesNameContainingSeparator(t *testing.T) {
 		{"The Revolution", "Prince & The Revolution", true, "整段相等(多词)"},
 		{"陶喆", "陶喆、卢广仲", true, "顿号分隔"},
 
-		// 2026-08-25 实测坐实:YouTube Music/LyricFind 给的艺人字段是繁体,本地查询是
+		// 实测坐实:YouTube Music/LyricFind 给的艺人字段是繁体,本地查询是
 		// 简体,不折算就判成两个不同的人(见 artistCreditParts/artistMatches 注释)。
 		{"周杰伦", "周杰倫", true, "繁简同一个人,整串直接相等分支"},
 		{"周杰倫", "周杰伦 & 王力宏", true, "繁简同一个人,段匹配分支"},
 
-		// 2026-08-26 实测坐实(「聪明不聪明」真实bug):YouTube Music 给的艺人字段带括号
+		// 实测坐实(「聪明不聪明」真实故障):YouTube Music 给的艺人字段带括号
 		// 外文别名,本地标签只有中文名,这串压根没有 artistCreditParts 认的分隔符,逐段比较
 		// 两档都够不着,靠去括号兜底才行。
 		{"丁世光", "丁世光(Dean Ting)", true, "去括号别名兜底,真实bug案例"},

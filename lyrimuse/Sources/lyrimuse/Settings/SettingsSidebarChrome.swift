@@ -3,7 +3,7 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-// 设置侧栏的"chrome"组件(2026-09-12,整张侧栏按系统「设置」的侧栏重排,用户拍板):
+// 设置侧栏的"chrome"组件(整张侧栏按系统「设置」的侧栏重排):
 // 顶部身份区、有更新时的提示行、红色计数徽标,以及身份区头像的取图。分类行本身仍在
 // SettingsView.sidebarLabel,账号行仍是 AccountSidebarRow —— 这里只放系统设置侧栏有、
 // 我们原来没有的那几样东西。
@@ -24,8 +24,8 @@ import SwiftUI
 ///  - 已连接、拿到头像:圆形头像 + 用户名 + 「Last.fm 账户」;
 ///  - 已连接、没头像(Last.fm 默认头像是占位星,过滤成 nil):Last.fm 品牌图裁成圆 + 用户名;
 ///  - 未连接:灰底白人像的占位圆 + 「连接 Last.fm」+ 「同步收听记录」。副标题必须够短:这一列只有
-///    130pt 左右给文字,首版用的是 Last.fm 页头那句「把你播放的歌记录到 Last.fm」,尾巴截成省略号,
-///    用户 2026-09-12 看了说丑;系统设置未登录时那行也是一句极短的话(「设置 iCloud、App Store 等」)。
+///    130pt 左右给文字:Last.fm 页头那句「把你播放的歌记录到 Last.fm」在这里尾巴会被截成省略号、
+///    很难看;系统设置未登录时那行也是一句极短的话(「设置 iCloud、App Store 等」)。
 /// 授权失效 / 连接失败时头像右上角挂一枚红色「!」小徽标(系统设置在账户出问题时就是把红点
 /// 挂在头像上),悬停看原因;这一档判定沿用 destinationStatus,跟 Last.fm 页头同一份逻辑。
 struct LastfmIdentityRow: View {
@@ -72,7 +72,7 @@ struct LastfmIdentityRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        // 取头像**不**挂在这一行的 .task 上:2026-09-12 装机实测,侧栏 List 行上的 .task(id:) 一次都
+        // 取头像**不**挂在这一行的 .task 上:装机实测,侧栏 List 行上的 .task(id) 一次都
         // 没跑(设置窗口开着、行画出来了,日志里却没有 user.getinfo)。改由 LastfmAvatarStore 自己驱动:
         // SettingsView.onAppear 拉一次,之后盯 ConfigStore 的变化(连上 / 断开 / 换账号),见 refreshFromConfig。
         .accessibilityElement(children: .combine)
@@ -121,7 +121,7 @@ private struct SidebarAlertDot: View {
 // MARK: - 「有软件更新可用」
 
 /// Sparkle 查到新版本时在身份区下面多出的一行,右侧红色「1」。它是 List 里 tag 为 `.softwareUpdate` 的
-/// 可选行(2026-09-12 起;此前是一颗按钮,点了去「关于」弹 Sparkle 的对话框),点了进「软件更新」页,跟系统
+/// 可选行(此前是一颗按钮,点了去「关于」弹 Sparkle 的对话框),点了进「软件更新」页,跟系统
 /// 设置一样这一行会亮起来。没有新版本时整行不存在,不占位;页面本身仍可从「关于 › 更新 › 软件更新」进。
 struct SoftwareUpdateSidebarRow: View {
     @ObservedObject private var languageSettings = AppSettings.shared

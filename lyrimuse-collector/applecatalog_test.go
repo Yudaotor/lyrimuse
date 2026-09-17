@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// 真实数据(2026-08-22 实测 iTunes lookup):
+// 真实数据(实测 iTunes lookup):
 //
 //	id=1485220321 → 「枫+退后+搁浅 (Live)」/ artistName=「南拳妈妈弹头」/
 //	                collectionArtistName=「周杰伦」/ 专辑「周杰伦地表最强世界巡回演唱会 (Live)」/ 119.213s
@@ -145,7 +145,7 @@ func TestAppleCatalogSearchIdentities(t *testing.T) {
 	}
 }
 
-// TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(2026-08-30 加,方大同
+// TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(加,方大同
 // 《Lovers Policy》案,见 appleStorefrontArtistIdentities 头注)——直接打真实 iTunes
 // Search API,不 mock。跟同包内 TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection
 // 同一个前提:这类"通用查询是否真的通用"的验证,意义就在于打真实的第三方服务,mock 掉
@@ -169,7 +169,7 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 	}
 }
 
-// TestAppleStorefrontCanonicalTitleLive 钉住 2026-09-12 那个病根的**确切形状**(用户报
+// TestAppleStorefrontCanonicalTitleLive 钉住那个病根的**确切形状**(现象是
 // 「为什么这首歌只搜出这一个结果」,Mrs. GREEN APPLE《クスシキ》):Apple Music 国际区把
 // 这首日文歌的标签写成罗马字「KUSUSHIKI」,而 JP 商店里它叫「クスシキ」——三家中文源收录的
 // 都是后者,拿罗马字问九个源只有 LRCLIB 答得上来。
@@ -288,7 +288,7 @@ func TestDedupeArtistIdentities(t *testing.T) {
 }
 
 // TestMediaControlRawStateParsesUniqueIdentifier 用**真实的 media-control 输出**
-// (2026-08-22 抓的,只去掉了体积巨大的 artworkData/artworkMimeType)钉住这个字段真的解出来了。
+// (抓的,只去掉了体积巨大的 artworkData/artworkMimeType)钉住这个字段真的解出来了。
 //
 // 为什么值得有这个测试:JSON tag 拼错是**静默**失败——字段恒为零值,
 // appleCatalogPlausibleID(0) 直接 false,整条 Apple 目录锚点会安静地永不生效,
@@ -328,7 +328,7 @@ func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
 	}
 }
 
-// TestAppleCatalogAnchorRejectsSiblingTracks 是 2026-08-22 对抗性复核抓到的洞的回归测试。
+// TestAppleCatalogAnchorRejectsSiblingTracks 是对抗性复核抓到的洞的回归测试。
 //
 // 原来的自校验用 lyricTitleAccepted,而它的**第二档**是「双方各自 stripParens 之后判相等」——
 // 于是同一张专辑上的括号兄弟轨互相判等,专辑名又必然相同,锚点照样"成立",把差 40~47% 的
@@ -375,7 +375,7 @@ func TestAppleCatalogAnchorRejectsSiblingTracks(t *testing.T) {
 	}
 }
 
-// 按曲名 + 时长从 iTunes 全文搜索结果里挑署名(2026-09-08,王子《Why You Wanna Treat Me So Bad?》案:
+// 按曲名 + 时长从 iTunes 全文搜索结果里挑署名(王子《Why You Wanna Treat Me So Bad?》案:
 // YT Music zh-HK 界面把 Prince 本地化成「王子」,九个源全空;iTunes 用「王子 Why You…」照样能搜到
 // Prince 那条)。这条没有专辑证据,所以三道门都要钉住:曲名归一全等、时长 3%/4s 内、最多两个。
 func TestPickAppleTitleSearchIdentities(t *testing.T) {
@@ -447,7 +447,7 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 	}
 }
 
-// 2026-09-12:back number《Happy End - EP》在 US 商店对上了韩国歌手 Rothy 的同名 EP —— 专辑名相等、曲名也相等
+// back number《Happy End - EP》在 US 商店对上了韩国歌手 Rothy 的同名 EP —— 专辑名相等、曲名也相等
 // (都叫 Happy End),只有时长(232s vs 314s)能分开;JP 商店里同一录音叫「ハッピーエンド」,曲名跨文字系统 + 时长相等才放行。
 func TestAppleStorefrontTrackMatches(t *testing.T) {
 	rothy := itunesResult{TrackName: "Happy End", ArtistName: "Rothy", TrackTimeMillis: 232400}
@@ -477,7 +477,7 @@ func TestAppleStorefrontTrackMatches(t *testing.T) {
 	}
 }
 
-// liveAgainUSTracks:《Live Again: 陶喆 小人物狂想曲》在 US 商店的完整曲目表(2026-09-15 实抓,
+// liveAgainUSTracks:《Live Again: 陶喆小人物狂想曲》在 US 商店的完整曲目表(实抓,
 // collectionId=1246658516,顺序与时长原样保留)。顺序是这个夹具的要害 —— 旧的"扫到第一条
 // 过闸就 break"正是被排在第 1 位的《Run Away (Live)》坑死的。
 var liveAgainUSTracks = []itunesResult{
@@ -514,7 +514,7 @@ var liveAgainUSTracks = []itunesResult{
 	{TrackName: "Love Can (Live)", ArtistName: "David Tao", TrackTimeMillis: 435404},
 }
 
-// TestAppleStorefrontPickTrackMedley 钉住 2026-09-15 那个真实 bug 的**确切形状**(用户报陶喆
+// TestAppleStorefrontPickTrackMedley 钉住那个真实 bug 的**确切形状**(现象是陶喆
 // 《组曲: 火鸟功 / 我太傻 / Melody (Live)》配了《Run Away (Live)》的歌词):本地标题带中文结构性
 // 前缀、首轮召回为空 → 触发标题反查 → Apple 原产地商店这条路在同一张 31 首的现场专辑里
 // 按时长认人。两首串烧的正确答案都在表里、时长几乎逐毫秒对得上,只是排在第 28 / 第 30 位。

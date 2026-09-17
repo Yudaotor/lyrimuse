@@ -15,7 +15,7 @@ import (
 
 // ---- 读 macOS 系统代理设置 ----
 //
-// 2026-09-03 加。起因:用户在设置页点 Musixmatch 那颗「测试」,报「两首探测曲都没有响应,
+// 起因:用户在设置页点 Musixmatch 那颗「测试」,报「两首探测曲都没有响应,
 // 这个源目前可能不可用」。逐层量下来根因既不在代码,也不在 Musixmatch:
 //
 //	ping 52.22.193.26 / 54.144.176.235(apic-appmobile 的两个 A 记录)  100% 丢包
@@ -121,7 +121,7 @@ func envProxyURL() *neturl.URL {
 // parseSCUtilProxy 从 `scutil --proxy` 的输出里挑出代理地址。单独拆成纯函数是为了能用固定
 // 样本做单测 —— 这台机器的代理开关状态随时会变,拿它当测试前提用例就不可复现了。
 //
-// 输出形状(2026-09-03 实测样本,ExceptionsList 已裁剪):
+// 输出形状(实测样本,ExceptionsList 已裁剪):
 //
 //	<dictionary> {
 //	  ExceptionsList : <array> {

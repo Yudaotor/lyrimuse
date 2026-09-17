@@ -29,17 +29,17 @@ type playSession struct {
 	// 返回时(LB 慢时 single 类型最长可达约 24s)被下一轮 5s poll 重复触发一次提交。
 	submitting bool
 	announcing bool
-	// 会话级广告标记(2026-08-19):开播时判一次(字段启发式 + Spotify AppleScript 权威,
+	// 会话级广告标记:开播时判一次(字段启发式 + Spotify AppleScript 权威,
 	// 见 detectAdAtSessionStart),同曲期间字段任一拍判中就往 true 棘轮、绝不回落。
-	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 实锤漏成
+	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 坐实漏成
 	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
 	isAd bool
-	// 会话级「不 scrobble 到 Last.fm」标记(2026-09-10,借鉴清单 S10):开播时按 features.LastfmExcludedBundles
+	// 会话级「不 scrobble 到 Last.fm」标记:开播时按 features.LastfmExcludedBundles
 	// 算一次(lastfmExcluded,见 lastfmexclude.go 头注)。**只管 Last.fm**:recordLastfmListen 不挂起也不镜像、
 	// 不记给它兜底的本地收听日志,announce 不发 track.updateNowPlaying;ListenBrainz / 网页中继照旧。
 	// 同曲期间不重算 —— 改设置伴随 collector 重启,新会话自然拿到新值。
 	lastfmExcluded bool
-	// lastfmPending / lastfmSettled(2026-09-06,Last.fm scrobble 时点):这次收听过了官方阈值
+	// lastfmPending / lastfmSettled(Last.fm scrobble 时点):这次收听过了官方阈值
 	// (ListenBrainz / 网页中继那一刻已经提交)之后,Last.fm 那一路按用户选的更严时点
 	// (features.LastfmScrobblePoint)挂起、到点再发。pending 非 nil = 挂着;settled = 已经发过
 	// (或已记进本地收听日志),LB 重试成功再次走到 applySubmitOutcome 时不再重来。
@@ -76,13 +76,13 @@ func listenThreshold(duration float64) float64 {
 // tooShortToScrobble 判"这首歌短到不该记一次收听"。Last.fm 官方规则(api/scrobbling)写的是
 // "The track must be longer than 30 seconds",是给客户端的规则——服务端不拒收、ignoredMessage
 // 也没有"太短"这一码;主流 scrobbler 都在客户端照做。这里默认照做(minTrackSecs),用户显式
-// 打开 features.ScrobbleShortTracks 才放行(2026-09-03 加,设置里「短于 30 秒的曲目」,默认关)。
+// 打开 features.ScrobbleShortTracks 才放行(加,设置里「短于 30 秒的曲目」,默认关)。
 //
 // 三点不变:①曲长拿不到(≤0)时不拦,跟原来一样;②放行之后半程规则(listenThreshold)照旧,
 // 20 秒的歌得听满 10 秒;③这条闸在提交漏斗**入口**(到点提交/切歌收尾/退出兜底)和回填复核
 // 四处共用。放行的短曲目**只发 Last.fm**(含本地收听日志和回填——它们本来就是给 Last.fm 兜底
 // 的),ListenBrainz 那一路由 shortTrackLastfmOnly 单独挡住、维持原状:这是 Last.fm 页的设置,
-// 用户明确要求它跟 ListenBrainz 无关(2026-09-03)。
+// 它跟 ListenBrainz 无关。
 func tooShortToScrobble(durationSecs float64) bool {
 	if durationSecs <= 0 || durationSecs >= minTrackSecs {
 		return false
@@ -115,7 +115,7 @@ const (
 // lastfmScrobblePointReached 判"Last.fm 那一路现在该发了没"。调用前提是这次收听**已经过了官方
 // 阈值**(listenThreshold)——那是 ListenBrainz / 网页中继提交的时刻,也是 Last.fm 官方规则的下限,
 // 所以默认档(scrobblePointHalf)在这里恒为 true、行为跟加这个设置之前一字不差。更严的档只管
-// Last.fm(2026-09-06 用户定「只考虑 lastfm 的」),ListenBrainz 不受影响。
+// Last.fm(这个设置按设计只作用于 Last.fm 这一路),ListenBrainz 不受影响。
 //
 // 曲长拿不到(≤0)时百分比无从算起、曲终也判不了,一律退回官方规则(当场发)——不把「没有时长」
 // 变成「永远不发」。百分比档纯按已播时长(playedSecs,墙钟累加、暂停不计、拖进度不灌水)算,
@@ -173,7 +173,7 @@ func (p *poller) recordLastfmListen(s *playSession, artistName string, meta snap
 	if s.lastfmSettled || s.lastfmPending != nil {
 		return
 	}
-	// 没有歌手就别上送(2026-09-10):Last.fm 的 track.updateNowPlaying / track.scrobble 与
+	// 没有歌手就别上送:Last.fm 的 track.updateNowPlaying / track.scrobble 与
 	// ListenBrainz 的 submit-listens **都把 artist 当必填**,少了一律 400。实测电台的台标 / 口播
 	// 正是这个形状(标题 "YEONJUN"、歌手与专辑全空),那 80 秒里每 5 秒往两边各打一次 400、
 	// 没有退避也没有上限,当天累计 30 次。这道闸跟电台无关、对所有播放器成立 —— 发一个必然
@@ -183,7 +183,7 @@ func (p *poller) recordLastfmListen(s *playSession, artistName string, meta snap
 		log.Printf("lastfm: skipping scrobble without an artist: %q - %q", meta.Artist, meta.Title)
 		return
 	}
-	// 用户在 Last.fm 设置里把这个播放器排除(lastfmexclude.go,2026-09-10):不镜像、也不记给它兜底的
+	// 用户在 Last.fm 设置里把这个播放器排除(lastfmexclude.go):不镜像、也不记给它兜底的
 	// 本地收听日志,标成 settled 让后续到点判断全部跳过。ListenBrainz 那一路早在 submitSingleAsync 发过了,
 	// 不受影响 —— 与短曲目 / scrobble 时点同一口径,「Last.fm 页的设置跟 ListenBrainz 无关」。
 	if s.lastfmExcluded {
@@ -211,8 +211,8 @@ func (p *poller) settleLastfmPending(s *playSession) bool {
 	// 本地收听日志:**只在没有在往 Last.fm 提交时**才记(见 appendListen 的注释)。
 	//
 	// ⚠️ 这一段原来的注释写的是"**无条件**记一笔,不看任何账号配没配",而紧跟着的就是
-	// 下面这个 `if p.lfm == nil` —— 2026-08-13 收窄之后旧结论留在了最显眼的位置,新结论
-	// 被塞在末尾当补充。2026-08-30 通盘梳理时坐实这确实误导过判断(照字面读会以为镜像
+	// 下面这个 `if p.lfm == nil` —— 收窄之后旧结论留在了最显眼的位置,新结论
+	// 被塞在末尾当补充。通盘梳理时坐实这确实误导过判断(照字面读会以为镜像
 	// 失败时本地还有一份兜底,实际没有,那正是那次数据丢失能瞒住这么久的原因之一)。
 	if p.lfm == nil {
 		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
@@ -288,7 +288,7 @@ type poller struct {
 	trackKey   string
 	prevElapse float64
 	prevWall   time.Time
-	// Spotify gapless 自然切歌锚点超前校正(2026-08-20,与 App 侧 LocalPlaybackSource
+	// Spotify gapless 自然切歌锚点超前校正(与 App 侧 LocalPlaybackSource
 	// 同批改——两侧位置逻辑必须一致,只改一边就是"采集器和悬浮窗各说各话"的老坑)。
 	// 实测:自然切歌时 Spotify 在旧曲真声还剩 ~0.84s 时就打好新曲锚点,此后整首歌
 	// elapsedTimeNow 恒定超前真声(+0.888s±0.009,锚点从不重打)——稳定播放期间我们
@@ -467,7 +467,7 @@ func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 // (with slightly different combinations of the cur.Playing check) at each of
 // pushRelayState/handle/bridge/poll.
 //
-// 也接受当前选定播放器集合(features.Players,2026-09-01 起可多选)里任意一个自己期望
+// 也接受当前选定播放器集合(features.Players,可多选)里任意一个自己期望
 // 的 bundle id,不只是 cfg.BundleIDs 里配置的那份——getState() 的各条路径只会在 bundle
 // id 确实对得上选中集合里的某一个时才产出非空快照,所以这里理应无条件认它,不能因为
 // 用户没有额外手动去 config.json 里加一条 bundle_ids 就把 QQ 音乐的播放判定成"不是我
@@ -491,7 +491,7 @@ func (p *poller) isTracked() bool {
 			return true
 		}
 	}
-	// 信任列表(2026-09-01 补)——最典型场景是「网页播放器」卡配对的浏览器,那个动作跟
+	// 信任列表——最典型场景是「网页播放器」卡配对的浏览器,那个动作跟
 	// "选没选自动识别"是两件独立的事,见 isTrustedPlayerBundleID 的注释。getMultiSelectedState
 	// 已经把这类播放当"能采纳"处理并过了 trustedPlaybackNotASong 那道守卫,这里必须同样认它,
 	// 否则播放数据进得来、却在打卡这一步被判"不是我关心的来源"丢掉。
@@ -501,11 +501,11 @@ func (p *poller) isTracked() bool {
 // mirrorScrobbleTracked 先同步记入"已镜像"集合并落盘,再异步镜像写入 Last.fm——见
 // lfmMirroredTTL 处注释:写入必须先于发起请求完成,防 bridge 抢在标记前误转发。
 //
-// 幂等:同一个 timestamp 只提交一次。2026-08-11 起 Last.fm 镜像与 ListenBrainz 的
+// 幂等:同一个 timestamp 只提交一次。Last.fm 镜像与 ListenBrainz 的
 // 提交结果解耦(见 applySubmitOutcome),LB 失败重试成功后会再次走到调用点 —— 没有
 // 这个守卫就会对 Last.fm 重复提交同一次收听。
 // rawArtist/durationSecs 只在失败留痕时用(见 recordFailedMirror):写进本地收听日志的
-// 必须是**播放器报的原始艺人名** —— 2026-08-31 起上送本身也是原样发原始标签,
+// 必须是**播放器报的原始艺人名** —— 上送本身也是原样发原始标签,
 // 见 listenLogLine.AR 的注释,回填会拿它重新跑一遍同样的归一化,喂折叠后的值进去等于
 // 折叠两次。
 func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64, rawArtist string, durationSecs float64) {
@@ -532,7 +532,7 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 
 // recordFailedMirror 给一次**没写进 Last.fm** 的收听留痕,让它还有被救回来的机会。
 //
-// 为什么不是"撤销 lfmMirrored 标记、下一拍重发"(2026-08-30 评估后否掉的方案):
+// 为什么不是"撤销 lfmMirrored 标记、下一拍重发"(评估后否掉的方案):
 //   - 那要从 mirrorAsync 的 goroutine 里写 p.lfmMirrored,而主循环会经
 //     persistedTTLSet.save 整个 range 它 —— 并发写 = 不可 recover 的 fatal error。
 //   - 收益也几乎没有:实测 10 次 DNS 故障里只有 1 次在同一首歌还没放完时等到网络恢复,
@@ -553,8 +553,8 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 //     "l" 则保住艺人/曲名,将来要人工对账才有依据 —— 原来这种情况连曲目是什么都查不
 //     出来。
 //
-// ⚠️ 应用层错误(lastfmAPIError)**不能**一律当成"拒收"。2026-08-30 首版就是这么写的,
-// 当天复查抓出来:限流(29)和凭据失效(4/9/10/26)下服务端**确定没落库**,那恰恰是最该
+// ⚠️ 应用层错误(lastfmAPIError)**不能**一律当成"拒收":
+// 限流(29)和凭据失效(4/9/10/26)下服务端**确定没落库**,那恰恰是最该
 // 留痕待补的情形,一律 return 等于把这个函数要修的洞换个门又开一个 —— 一次限流就让这
 // 首歌在 Last.fm、listens.jsonl 两边同时没有。分档判据用 mayHaveStored(),口径跟
 // runBackfill 头注释里已经定过的一致,不另立一套。
@@ -579,7 +579,7 @@ func recordFailedMirror(err error, rawArtist, title, album string, timestamp int
 }
 
 // mirrorScrobbleSync 是 mirrorScrobbleTracked 的**同步**变体,只给进程退出前的最后
-// 一次 flush 用:mirrorAsync 起的 goroutine 活不过紧接着的进程退出(2026-08-11 审阅
+// 一次 flush 用:mirrorAsync 起的 goroutine 活不过紧接着的进程退出(审阅
 // 确认的竞态 —— 标记已落盘、请求没发出去,这首歌对 Last.fm 永久丢失),退出路径必须
 // 拿 flush 的 ctx 同步把请求发完。
 func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album string, timestamp int64, rawArtist string, durationSecs float64) {
@@ -675,7 +675,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	reanchor = true
 	// 切歌/加载瞬间会短暂报 rate=0(playing 仍 true),按 1 计(与 lb.go 的 reconcile
 	// 规则、seedPosition 内部一致)。不归一的话 predicted 停走,下一拍正常前进的读数会
-	// 被误判成 seek 跳变,顺手清掉自然切歌偏置(2026-08-20 对抗审查抓出)。
+	// 被误判成 seek 跳变,顺手清掉自然切歌偏置。
 	rate := p.cur.Rate
 	if p.cur.Playing && rate <= 0 {
 		rate = 1
@@ -685,8 +685,8 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		p.posBias = 0
 	}
 	if sameTrackAsBefore && !p.snapshotStale && p.posBias != 0 && p.cur.AnchorElapsed > 0.001 {
-		// 偏置只属于**开播那个** MediaRemote 锚点(2026-09-07 实测推翻了 08-20 的"暂停⇄恢复继承
-		// 偏置":gapless 切歌后 Spotify 自己的钟会停一下等新音频,稳态就是音频位置;它后来重新发布
+		// 偏置只属于**开播那个** MediaRemote 锚点(⚠️ 别让它在"暂停⇄恢复"之间继承
+		// :gapless 切歌后 Spotify 自己的钟会停一下等新音频,稳态就是音频位置;它后来重新发布
 		// 的任何锚点 —— 暂停冻结值、恢复、拖动 —— 都对齐它的钟,原始 elapsedTime 必然 >0)。这时
 		// 再扣偏置就是把准的值往回拖一个偏置量(App 侧实测暂停瞬间 −1.097s)。开播锚点没重发的
 		// 暂停(MediaRemote 指令暂停)AnchorElapsed 仍是 0,偏置照旧扣在我们自己外推的值上。
@@ -695,7 +695,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	seedFromMC := func() float64 { return seedPosition(p.cur.Elapsed, p.cur.Rate, p.cur.Playing, p.cur.McTS, now) }
 	// 单曲循环(repeat-one)的 gapless 回绕:key 不变、走不到换歌分支,但与跨曲自然切歌
 	// 是同一机制(引擎驱动的自然过渡,新锚点先于真声打好)——不识别的话会落进 seek 分支
-	// 把量准的偏置清掉,循环第 2 遍起整曲回到偏快(2026-08-20 对抗审查抓出)。签名=外推
+	// 把量准的偏置清掉,循环第 2 遍起整曲回到偏快。签名=外推
 	// 已过曲尾窗口且按"回绕真值=越界量"估出的偏置可信(稳定播放到曲尾时原始读数是大值,
 	// 估出的偏置≈整曲时长,天然不命中)。命中后下方 loopRestart 连续性判定照常触发,
 	// 收听计数不受影响。
@@ -721,7 +721,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	switch {
 	case p.snapshotStale && sameTrackAsBefore:
 		// 这一轮没拿到新快照(读取失败/瞬时 null),p.cur 还是上一轮的陈旧值——绝不能让
-		// 陈旧的 Elapsed 走 seek 分支"重锚回过去"、顺手清掉自然切歌偏置(2026-08-20
+		// 陈旧的 Elapsed 走 seek 分支"重锚回过去"、顺手清掉自然切歌偏置(
 		// 对抗审查抓出)。播放中按墙钟推进、暂停维持冻结,等下一轮新鲜快照。
 		if p.cur.Playing {
 			p.trackPos += gap * rate
@@ -751,7 +751,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	case !p.cur.Playing: // paused → media-control's frozen elapsed is the true position
 		// (扣掉自然切歌偏置:冻结值带着同一个超前锚点的值)
 		// 暂停中用户在播放器里拖了进度条:冻结值跳变 = Spotify 已重打对齐真声的锚点,
-		// 旧偏置作废——不清的话恢复播放后整曲反向偏慢一个旧偏置(2026-08-20 对抗审查抓出)。
+		// 旧偏置作废——不清的话恢复播放后整曲反向偏慢一个旧偏置。
 		if !p.prevPlaying && p.posBias != 0 &&
 			math.Abs(p.cur.Elapsed-p.prevElapse) > seekJumpToleranceSecs {
 			p.posBias = 0
@@ -764,7 +764,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		reanchor = false
 	case !p.prevPlaying: // 暂停→恢复(同曲):偏置继承,冻结值扣偏置就是恢复点
 		// 不能落进下面的 seek 分支——那会把仍然有效的偏置清掉、位置前跳一个偏置量,
-		// 且与 App 侧"暂停⇄恢复继承偏置"的语义相反(2026-08-20 对抗审查抓出,high)。
+		// 且与 App 侧"暂停⇄恢复继承偏置"的语义相反(对抗审查抓出,high)。
 		// 恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,偏置继续成立。
 		p.trackPos = p.cur.Elapsed - p.posBias
 	case wrapOK: // repeat-one gapless 回绕(见上方 wrapOK 注释)
@@ -813,7 +813,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		// 发布"位置 0 @ 未来 |trackPos| 秒"而不是"位置 0 @ 现在":网页外推是
 		// pos = progress + age×rate 且 age>0 才加(web frame()/ProgressClock 同一套
 		// 钳位),未来锚点让进度自然停在曲首等真声;锚在"现在"的话,relay 写入按变化
-		// 去重、最长 4 分钟不重写,网页会整段超前 |播种值|(2026-08-20 对抗审查抓出)。
+		// 去重、最长 4 分钟不重写,网页会整段超前 |播种值|。
 		pubAt = now.Add(time.Duration(-pub * float64(time.Second)))
 		pub = 0
 	}
@@ -837,7 +837,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	//
 	// 这条推送路径跟上送(submitSingleAsync)和 now-playing(announce)完全独立 —— 它只看
 	// p.cur 是什么就往中继推什么,所以前两处挡住之后,网页顶部那张卡照样会显示
-	// "他正在播放 We're Here / Instacart"(0:14、暂无同步歌词)。2026-08-14 用户实测反馈。
+	// "他正在播放 We're Here / Instacart"(0:14、暂无同步歌词)。现象是。
 	//
 	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
 	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
@@ -911,7 +911,7 @@ func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
 	p.lastListen, p.lastListenAt, p.lastListenDev = s, listenedAt, device
 }
 
-// albumHintFor:这条快照要不要、能不能补一个 Apple 目录反查的专辑名(2026-09-08,见 albumhint.go 头注)。
+// albumHintFor:这条快照要不要、能不能补一个 Apple 目录反查的专辑名(见 albumhint.go 头注)。
 // 已经有专辑名的不动;广告不查 —— Spotify 原生广告的形状恰好就是 album 为空,拿广告标题去 iTunes 搜只会白烧
 // 请求。appleAlbumHint 只读缓存、没命中就后台补取,这一拍先按现状走;旁证(lyricResolvedArtists)每拍重读,
 // 歌词晚几秒解析出来、回填就晚几秒出现。
@@ -938,7 +938,7 @@ type submitOutcome struct {
 	meta snapshot
 	// artistName 是 lbMeta(meta).ArtistName,顺带给 Last.fm 镜像复用(见
 	// applySubmitOutcome),两条路取同一份、不各算一遍。
-	// 2026-08-31 起 lbMeta 不再做任何替换,所以它就等于**播放器报的原始标签**;
+	// lbMeta 不再做任何替换,所以它就等于**播放器报的原始标签**;
 	// 保留这个字段是为了两条路径永远同源,而不是因为它还需要被加工。
 	artistName string
 	startedAt  int64
@@ -998,18 +998,18 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 // 收听记录都只作用于结果自带的 sess/meta，不依赖 p.sess 当前值，所以时序上没有问题。
 func (p *poller) applySubmitOutcome(r submitOutcome) {
 	r.sess.submitting = false
-	// Last.fm 镜像与 ListenBrainz 的提交结果解耦(2026-08-11,批4):这次收听够不够格
+	// Last.fm 镜像与 ListenBrainz 的提交结果解耦(批4):这次收听够不够格
 	// 在发起提交前就已经判定过了,LB 服务抽风不该殃及 Last.fm 那份记录 —— 原来镜像躲
-	// 在下面的成功分支里,LB 挂则两边一起停摆(审阅确认)。LB 失败重试成功后会再次走到
+	// 在下面的成功分支里,LB 挂则两边一起停摆。LB 失败重试成功后会再次走到
 	// 这里,mirrorScrobbleTracked 的幂等守卫保证不重复提交。
 	//
-	// 2026-09-06 起经 recordLastfmListen:Last.fm 镜像 + 本地收听日志这两个动作搬进了
+	// 经 recordLastfmListen:Last.fm 镜像 + 本地收听日志这两个动作搬进了
 	// settleLastfmPending,默认档(scrobblePointHalf)当场就发、跟原来一字不差;用户选了更严的
 	// scrobble 时点时先挂在会话上,到点再发(见 recordLastfmListen 的注释)。
 	//
 	// 位置必须在下面那句 `if r.err != nil { return }` **之前**:LB token 填错或 LB 挂掉
 	// 时 Last.fm 这一路同样要走 —— 这个理由至今成立,收窄针对的是"连没连 Last.fm",不是"LB 成没
-	// 成功"。跟紧上方 2026-08-11 把 Last.fm 镜像从 LB 成功分支里挪出来是同一个道理。
+	// 成功"。跟紧上方把 Last.fm 镜像从 LB 成功分支里挪出来是同一个道理。
 	p.recordLastfmListen(r.sess, r.artistName, r.meta, r.startedAt)
 	if r.err != nil {
 		log.Printf("submit listen failed: %v", r.err)
@@ -1079,7 +1079,7 @@ func (p *poller) detectAdAtSessionStart() bool {
 		if !ok {
 			return false
 		}
-		// 同一次脚本顺带留下真曲目 ID(2026-09-09):缓存里的 spotify_url 由它换成真链接,LB 上送带
+		// 同一次脚本顺带留下真曲目 ID:缓存里的 spotify_url 由它换成真链接,LB 上送带
 		// spotify_id,见 spotifytrack.go。广告 / 本地文件 / 播客不是 spotify:track:,取不出 ID,什么都不记。
 		if id := spotifyTrackIDFromURI(uri); id != "" {
 			noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, id)
@@ -1111,11 +1111,11 @@ func (p *poller) announce(now time.Time, why string) {
 	// artist 给 Last.fm 用:跟 m.ArtistName(给 LB 用)取同一份,保证 now-playing 与
 	// 落库不会各说各话。
 	//
-	// ⚠️ 2026-08-31 起 lbMeta **不再做 canonical_artist 替换**,两者都等于播放器原始
+	// ⚠️ lbMeta **不再做 canonical_artist 替换**,两者都等于播放器原始
 	// 标签。原注释描述的是那次替换(为了解决"方大同/Khalil Fong 在 Last.fm 分裂"),
 	// 现在那个问题改由**显示/统计层**归并解决,上送层只如实记录 —— 完整依据见 lb.go
 	// 里 lbMeta 那段(Last.fm 官方反对自动套用纠正 / 业界无一默认这么做 / 实测有真错)。
-	// album 走 albumForUpload:播放器没报专辑名时用 Apple 目录回填的那个(2026-09-08),报了就原样。
+	// album 走 albumForUpload:播放器没报专辑名时用 Apple 目录回填的那个,报了就原样。
 	artist, title, album := m.ArtistName, p.cur.Title, p.cur.albumForUpload()
 	// 跟 artist/title/album 一样在**闭包外**取值:下面那个 goroutine 直接读 p.cur 就是
 	// 跨 goroutine 读 poller 状态,违反"所有状态只在 poll 主循环里碰"那条不变量。
@@ -1125,13 +1125,13 @@ func (p *poller) announce(now time.Time, why string) {
 	// 同样在闭包外取值,理由同上。
 	lastfmSkip := p.sess.lastfmExcluded
 	go func() {
-		// now-playing 镜像与 LB 解耦(2026-08-11,批4):"正在播放"反映的是本机播放器
+		// now-playing 镜像与 LB 解耦(批4):"正在播放"反映的是本机播放器
 		// 的真实状态,不是 LB 提交的成败。放在 LB 请求之前发起 —— 两者本就各自异步。
 		//
 		// ⚠️ 只在**真的在放**时镜像给 Last.fm:track.updateNowPlaying 没有"暂停"这个
 		// 概念,暂停时发过去等于宣布"我正在听这首"。announce 有三个调用点会在非播放态
 		// 触发:进程启动时当前曲目本就暂停(走"换曲"分支开 session)、播放↔暂停的状态
-		// 切换、挂起首条到点补发。2026-08-12 实测坐实危害:collector 一重启就把一首
+		// 切换、挂起首条到点补发。实测坐实危害:collector 一重启就把一首
 		// 暂停的歌 announce 上去,直接顶掉了用户手机上正在放的那首的 nowplaying。
 		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
 		if playing && !lastfmSkip {
@@ -1158,7 +1158,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if p.sess != nil && p.sess.key == key && p.sess.meta.AlbumHint == "" && p.cur.AlbumHint != "" {
 		p.sess.meta.AlbumHint = p.cur.AlbumHint
 	}
-	// 电台真曲长同样比会话起点晚到,补同一份 meta(2026-09-11,修 borrowAppleScriptPosition
+	// 电台真曲长同样比会话起点晚到,补同一份 meta(修 borrowAppleScriptPosition
 	// 那道闸之后剩下的第二道)。电台的 duration 只有 Apple 目录知道(快照自己报的是整档节目,
 	// 实测 7074.538s),而目录锚点是**异步**的:实测 Dolly Parton《Dumb Blonde》会话 20:15:45.030
 	// 建立、目录 20:15:49.740 才给出 150.447s,晚 4.7 秒。sess.meta 是会话创建那一刻的快照,
@@ -1317,10 +1317,10 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
 // 结果送回主循环后才跑。
 //
-// 2026-07-29:不再看一个独立的 features.LastfmBridge 开关——Last.fm 桥接凭据 +
+// 不再看一个独立的 features.LastfmBridge 开关——Last.fm 桥接凭据 +
 // ListenBrainz 账号都配好,就默认跑;独立开关只是多一次点击,没有实际区分度。
 //
-// ⚠️ 2026-08-13 更正:这段原来还断言"这两项本来就是 Swift 侧 UI 上打开那个开关的前置
+// ⚠️ 更正:这段原来还断言"这两项本来就是 Swift 侧 UI 上打开那个开关的前置
 // 条件(lastfmBridgeMissingHint()==nil 且 isListenBrainzConfigured 都满足才让点)"——
 // 那句话是**错的**。下面这个门要求 cfg.User(ListenBrainz 用户名)非空,而 Swift 侧的
 // isListenBrainzConfigured 只看 token,当时 UI 上用户名那栏还标着"选填"。于是只填
@@ -1328,7 +1328,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // Swift 侧现已补上 isListenBrainzReadable(token+用户名)专门表示"能读统计",跟这个门
 // 对齐;用户名输入框的提示也改成了"听歌报告需要"。改这里的条件时记得同步那一侧。
 //
-// 2026-09-03:拉取这一步的门槛**只看 Last.fm 凭据**,不再要求 ListenBrainz 也配好——同一份
+// 拉取这一步的门槛**只看 Last.fm 凭据**,不再要求 ListenBrainz 也配好——同一份
 // 响应现在还要落成 App 读的 recent feed(lastfmfeed.go),那跟 LB 毫无关系。LB 桥接
 // (转发 iPhone 收听、镜像远端 now-playing)的门槛原样保留,搬到了 applyBridgeResult 里
 // (bridgeForwardingEnabled)。节奏也从固定 15 s 改成自适应(lastfmFeedInterval:有人在听
@@ -1346,7 +1346,7 @@ func (p *poller) bridge(now time.Time) {
 	// 改成排一个延迟拉取。理由跟 requestLastfmFeedRefresh 头注是同一条 —— Last.fm 把刚收到的
 	// scrobble 并进 recenttracks 要一两秒,立刻拉多半还看不到。
 	//
-	// ⚠️ 当场拉的代价不止"这一次白拉"(2026-09-12 用户**第三次**报「补提交之后下面的列表没
+	// ⚠️ 当场拉的代价不止"这一次白拉"(用户**第三次**报「补提交之后下面的列表没
 	// 刷新」的根因,前两次修在别处):拉回来的是旧内容,却照样把 feed 的 fetchedAt 刷成此刻,
 	// 于是 App 侧那道兜底强刷(ScrobbleBackfillService 在 accepted > 0 之后 8 秒发、判据是
 	// LastfmStatsService.feedIsFresh → LastfmRecentFeed.isFresh,fetchedAt 在 180 s 窗口内)
@@ -1373,7 +1373,7 @@ func (p *poller) bridge(now time.Time) {
 }
 
 // bridgeForwardingEnabled:iPhone→ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
-// 的既有门槛。2026-09-03 之前它跟"要不要拉 Last.fm"是同一个判断,现在拉取只看 Last.fm
+// 的既有门槛。之前它跟"要不要拉 Last.fm"是同一个判断,现在拉取只看 Last.fm
 // 凭据(见 bridge()),这里单独保住 LB 那半边的条件不变。
 func (p *poller) bridgeForwardingEnabled() bool {
 	return p.cfg.User != "" && p.cfg.Token != ""
@@ -1531,14 +1531,14 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // only declare playback stopped after a few consecutive nulls.
 // borrowAppleScriptPosition 判「这一拍要不要再问一次 Music.app 要精确播放头」(纯函数,单测钉住)。
 //
-// ⚠️ **电台一律不借**(2026-09-11 修,用户报「电台听的歌都没记到 Last.fm」)。Swift 侧
-// `MediaControlClient.refinedAppleMusicSnapshotIfNeeded` 2026-09-10 就加了同义的一道闸
+// ⚠️ **电台一律不借**(修,现象是「电台听的歌都没记到 Last.fm」)。Swift 侧
+// `MediaControlClient.refinedAppleMusicSnapshotIfNeeded` 就加了同义的一道闸
 // (`guard snapshot.isRadio != true else { return snapshot }`),collector 是独立实现,那次**没跟过来** ——
 // 正是 02 章 537 行警告过的「改一边只修一半」,只是上次方向相反(只改了采集器、悬浮窗还是慢)。
 //
 // 电台上 `player position` 报的是**整档节目**走了多少(实测同一档 4005.696s),不是这首歌的位置。
 // 借过来会把 poll() 上面 applyRadioClock 刚换好的那块单曲表整个覆盖回去,而覆盖是直接写
-// `p.trackPos` 的(为了让下一拍从校准值续算,见下面那段 2026-08-04 的注释)。后果是一条完整的链:
+// `p.trackPos` 的(为了让下一拍从校准值续算,见下面那段的注释)。后果是一条完整的链:
 //
 //	整档位置写进 trackPos → 下一拍 prevTrackPos 是几千秒、曲长却是一百多秒
 //	→「上一拍已过 90%、这一拍越过曲尾」的单曲循环判定必然成立(loopRestart)
@@ -1546,7 +1546,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 //	→ 每一拍都这样,已播时长永远涨不过一拍
 //	→ 到不了 listenThreshold(曲长的一半),**一条收听都提交不了**
 //
-// 实测(2026-09-10 那 4.5 小时电台):`loop restart` 2397 次,单曲最高 145 次、每 5 秒一次贯穿整首;
+// 实测(那 4.5 小时电台):`loop restart` 2397 次,单曲最高 145 次、每 5 秒一次贯穿整首;
 // 同期 `listen recorded` 只有 4 条。副作用还有 relay 每拍都当 reanchor 写一次(日志里 30 秒涨 8 个),
 // 按 5 秒一拍约 3200 次写 —— 正是 pushRelayState 注释里担心的「烧穿 1000 写/天」。
 //
@@ -1565,7 +1565,7 @@ func needsRadioDurationBackfill(sameTrack, radio bool, sessionDuration, currentD
 func (p *poller) poll() {
 	// snapshotStale:这一轮 p.cur 是否还是上一轮的陈旧残留——getState 直接失败,或
 	// 瞬时 null 未达 3 连清空门槛时,p.cur 原样保留,但它的 Elapsed 已经落后墙钟一整拍,
-	// updatePosition 不能把它当新鲜读数用(会误判 seek、清掉自然切歌偏置,2026-08-20
+	// updatePosition 不能把它当新鲜读数用(会误判 seek、清掉自然切歌偏置,
 	// 对抗审查抓出)。真空态(3 连 null 清空)是新信息,不算陈旧。
 	p.snapshotStale = true
 	if state, ok := getState(p.ctx); ok {
@@ -1601,14 +1601,14 @@ func (p *poller) poll() {
 	// updatePosition 的结果。
 	// 锚点时间必须在 osascript 真正返回之后重新取——它要 fork 一个进程走 AppleEvents,
 	// 实测能有几百 ms 到 ~1s 的延迟;如果沿用调用前的 now,相当于把"稍晚采到的位置"报成
-	// "更早时刻就已经在那",网页据此外推会一直快出这段延迟(实锤:网页比实际快1秒左右)。
+	// "更早时刻就已经在那",网页据此外推会一直快出这段延迟(坐实:网页比实际快1秒左右)。
 	// appleMusicPosition 只对 Apple Music 有意义(它是专门再问一次 Music.app 要更精确
 	// 播放头的第二次调用)——QQ 音乐没有这条路径,getQQMusicState 用的 elapsedTimeNow
 	// 已经是每一轮都新鲜的读数,不需要、也不应该再叠加这一步(不加这个判断的话,即使
 	// 选的是 QQ 音乐,这里仍会照样问一次 Music.app,如果它碰巧也开着在放别的东西,会
 	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。
 	//
-	// 2026-09-01 多选后简化成一个条件:features.Players 没有勾 Apple Music 时,这个
+	// 多选后简化成一个条件:features.Players 没有勾 Apple Music 时,这个
 	// && 短路,后面 p.cur.Bundle 是否恰好是陈旧的 "com.apple.Music" 完全不重要——跟
 	// 改动前"手动选择的非 Apple Music 播放器行为完全不变"这条不变量等价,只是原来的
 	// 三路 OR 拆开写才需要单独强调。**勾了** Apple Music 时(不管是不是同时也勾了别的、
@@ -1620,7 +1620,7 @@ func (p *poller) poll() {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			correctedAt := time.Now()
 			p.cur.Position, p.cur.AnchorTS = pos, correctedAt
-			// 2026-08-04 实测排查坐实的一个真实 bug(不是这次网页/本地进度差的全部
+			// 实测排查坐实的一个真实 bug(不是这次网页/本地进度差的全部
 			// 根因,但独立成立、值得修):光纠正 p.cur.Position/AnchorTS(这一轮推给
 			// 网页的值)不够——下一轮 updatePosition() 的"稳定播放:按真实经过时间
 			// 累加"分支(p.trackPos += gap*rate,见该函数)是从 p.trackPos 这个内部
@@ -1694,7 +1694,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
 				//
-				// 艺人名跟 LB 提交取同一份(lm.ArtistName)。2026-08-31 起 lbMeta 不再做
+				// 艺人名跟 LB 提交取同一份(lm.ArtistName)。lbMeta 不再做
 				// canonical_artist 替换,所以 lm.ArtistName 就是**播放器原始标签** ——
 				// 这里保持取同一份,是为了万一以后 lbMeta 又加了什么处理,两条路不会分叉。
 				// 本地收听日志也在 settleLastfmPendingSync 里:退出前这最后一首也是一次算数的收听,

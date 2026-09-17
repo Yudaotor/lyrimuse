@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// 停播页的「三区版」(2026-08-24 用户按选型册定的排布):
+/// 停播页的「三区版」(用户按选型册定的排布):
 ///
 /// ```
 /// ┌───────────────┬───────────────┐
@@ -16,7 +16,7 @@ import SwiftUI
 /// 只在**窗口够宽**时用(判据在 LyricsWindowView.body,跟播放态那条 640pt 断点同一个思路 ——
 /// 窄窗硬塞两列会挤成一团);窄窗仍走原来的居中 `idleWelcomeView`。
 ///
-/// 2026-08-27 用户要求把右列的"连没连 Last.fm 二选一"也接到这里(歌词窗口那颗「播放
+/// 把右列的"连没连 Last.fm 二选一"也接到这里(歌词窗口那颗「播放
 /// 记录」按钮已经是这个逻辑,见 `docs/features/07-lyrics-window.md`「播放记录取代播放
 /// 队列」一节):未连 Last.fm 时左上「收听总览」仍然没有数据可画(没有本地替代来源,
 /// 那张卡的三个数字全靠 Last.fm 的每日归档),继续省略;但右列不再跟着一起消失——改成
@@ -48,7 +48,7 @@ struct IdleStandbyView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 右列连没连 Last.fm 二选一(2026-08-27,与歌词窗口「播放记录」按钮同一套
+            // 右列连没连 Last.fm 二选一(与歌词窗口「播放记录」按钮同一套
             // 逻辑):已连接=`RecentListensPanel`(最近听过);未连接=`PendingListensPanel`
             // (本地静默记的、还没提交的收听)。跟原来"未连接时右列跟着整段消失"不同——
             // 右列现在恒有内容,两列布局不再随连接状态整体切换结构。
@@ -62,7 +62,7 @@ struct IdleStandbyView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 右上角那颗音量/AirPlay 胶囊是**窗级 overlay**、浮在内容之上,现在有
             // `!isIdle` 守卫了(停播页不会再冒出来,见 07-lyrics-window.md 那条
-            // 2026-08-25 的坑)。这 18pt 顶部间距原本是留出来躲它的,但停播页跟播放态
+            // 的坑)。这 18pt 顶部间距原本是留出来躲它的,但停播页跟播放态
             // 用的是**同一个**右上角锚点区域,窗口顶边到内容之间那段留白本身作为视觉
             // 呼吸感也说得通,不为了这一条不再成立就去掉。
             .padding(.top, 18)
@@ -91,7 +91,7 @@ struct IdleStandbyView: View {
 
 // MARK: - 背景
 
-/// 停播页背景(2026-08-24,用户从七版简约方案里选的 V2「中心柔光」)。
+/// 停播页背景(用户从七版简约方案里选的 V2「中心柔光」)。
 ///
 /// 三层:深底 + 一团锚在唱片后面的柔光 + 四周压暗。它是那七版里**唯一参与版面层级**的一版 ——
 /// 这一页有三块内容(数字 / 唱片 / 列表),谁是主角本来没有交代;柔光把重心定在唱片上、四角退开。
@@ -100,8 +100,8 @@ struct IdleStandbyView: View {
 /// **不用切固定白字**(系统语义色继续可用,省掉一次全窗配色重构)。
 ///
 /// ⚠️ 深浅两套**显式钉死**,刻意不用 `Color.primary.opacity()` 那种「自动适配」的写法:
-/// 它在深色下会把压暗层变成**提亮**层、方向正好相反。原型第一版就是这么错的 —— 实测深色下
-/// 四角 0.232、中心 0.071,角比中心亮三倍多,跟「四周压暗」的意图完全反了。压暗层一律用黑色。
+/// 它在深色下会把压暗层变成**提亮**层、方向正好相反(深色下四角 0.232、中心 0.071,
+/// 角比中心亮三倍多,跟「四周压暗」的意图完全反了)。压暗层一律用黑色。
 ///
 /// 半径按窗口尺寸取**比例**、不写死点值:原型是在 1470×858 上调的,而这扇窗最小能拖到 520 宽,
 /// 写死的 620/380/980 在窄窗上会糊成一片。系数就是原型那几个值除以 1470。
@@ -146,12 +146,12 @@ private struct IdleOverviewCard: View {
 
     private static let sparkDays = 30
     /// 走势图高度。同步中的占位骨架要跟它**严格一致**,分开写两个 52 迟早对不上、
-    /// 抖动就又回来了(2026-08-29)。
+    /// 抖动就又回来了。
     private static let sparkHeight: CGFloat = 52
     /// 悬停在走势图第几天上(nil = 没悬停)。读数换到图下面那行说明里,不叠浮层。
     @State private var hoverIndex: Int?
-    // 悬停读数跟着游标走所需的三个量(2026-08-29)。原来读数固定在左下角:鼠标在图右侧
-    // 时视线要横跨整条图去找那行小灰字,加上样式悬停前后完全一样,用户反馈"以为移上去
+    // 悬停读数跟着游标走所需的三个量。原来读数固定在左下角:鼠标在图右侧
+    // 时视线要横跨整条图去找那行小灰字,加上样式悬停前后完全一样,现象是"以为移上去
     // 没反应"。hoverX 存的是**吸附后那一天的点位**(不是鼠标裸坐标),读数才会跟竖线对齐。
     @State private var hoverX: CGFloat?
     @State private var chartWidth: CGFloat = 0
@@ -164,11 +164,11 @@ private struct IdleOverviewCard: View {
                 bigStat(value: weekValue, label: weekLabel)
                 bigStat(value: stats.overview?.total, label: totalLabel)
             }
-            // 首次同步(bootstrapState)跟日常 top-up(dailySyncing)分开措辞(2026-08-25)
+            // 首次同步(bootstrapState)跟日常 top-up(dailySyncing)分开措辞
             // ——前者是"这个账号第一次连接",用户需要知道这是一次性的、会自己好;后者
             // 通常一闪而过,不用强调"首次"。
             //
-            // ⚠️ 2026-08-25 顺手修复:这里原来是
+            // ⚠️ 顺手修复:这里原来是
             // `String(format: "正在同步历史（%@）", stats.dailySyncProgress)`,而
             // dailySyncProgress 自己已经是 LastfmStatsService 格式化好的完整句子
             // "正在同步历史（N/M 页）"——两层格式化叠在一起会显示成"正在同步历史（正在
@@ -178,7 +178,7 @@ private struct IdleOverviewCard: View {
             // 调用处),也就是说进到这里就意味着"迟早会有数据",所以没数据/还在同步都
             // 该先把图的位置占住,而不是等数据到了再撑开。
             if let note = syncNote {
-                // ⚠️ 这里必须**把走势图的位置预留出来**(2026-08-29,用户报"首次进入这个页面
+                // ⚠️ 这里必须**把走势图的位置预留出来**(现象是"首次进入这个页面
                 // 时上面折线图区域会加载一下,加载完窗口会抖动一下")。同步中原来只渲染一行
                 // 11pt 文字(≈13pt 高),数据一到就换成 52pt 图 + 13 spacing + 13 说明
                 // (≈78pt),整个窗口当场往下弹一格。占位骨架跟数据态用同一套结构:
@@ -306,7 +306,7 @@ private struct IdleOverviewCard: View {
 
     /// 近 30 天走势。
     ///
-    /// 2026-08-24 从「30 根柱子」改成**面积 + 折线**(用户实测反馈「可读性不好以及不好看」)。
+    /// 从「30 根柱子」改成**面积 + 折线**(现象是「可读性不好以及不好看」)。
     /// 柱子在这个尺寸下必然难看:左栏约 660pt 宽、30 个点,每根摊到 22pt 却只有 40pt 高 ——
     /// 宽高相当,读出来是一排色块而不是趋势。按「数据的职责挑图形」:这里的职责是
     /// **时间上的走势**,单序列的默认形式就是面积图;柱子适合的是「比大小」。
@@ -439,7 +439,7 @@ private struct IdleOverviewCard: View {
         }
         if stats.dailySyncing {
             // ⚠️ dailySyncProgress 自己已经是格式化好的完整句子("正在同步历史（N/M 页）"),
-            // 再包一层 format 会显示成"正在同步历史（正在同步历史（N/M 页））"(2026-08-25 修过)。
+            // 再包一层 format 会显示成"正在同步历史（正在同步历史（N/M 页））"(修过)。
             return stats.dailySyncProgress ?? L10n.t("正在同步历史")
         }
         return nil
@@ -479,14 +479,14 @@ private struct IdleLastTrackHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverURL: URL?
     /// 候选乐句。每条是 1~3 行原文 —— **不是单行**:LRC 的行是打轴单位不是句子单位,
-    /// 一句话常被拆到两三行上,只摆一行就是半句(2026-08-24 用户实测反馈)。
+    /// 一句话常被拆到两三行上,只摆一行就是半句(现象是)。
     @State private var quotes: [[String]] = []
     @State private var quoteIndex = 0
     @State private var breath = false
 
     private var lastTitle: String { UserDefaults.standard.string(forKey: "np:lastTrackTitle") ?? "" }
     private var lastArtist: String { UserDefaults.standard.string(forKey: "np:lastTrackArtist") ?? "" }
-    /// 2026-08-24 新加的键。此前只存了 曲名/歌手/播放器 三个,所以**旧安装第一次看到这一页时
+    /// 新加的键。此前只存了曲名/歌手/播放器三个,所以**旧安装第一次看到这一页时
     /// 它是空的**(要等下一次停播才写上)——空就只显示歌手,不显示「· 专辑」,不影响封面
     /// (coverURL 第三级本来就忽略专辑)。
     private var lastAlbum: String { UserDefaults.standard.string(forKey: "np:lastTrackAlbum") ?? "" }
@@ -550,7 +550,7 @@ private struct IdleLastTrackHero: View {
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                 }
-                // 「设置」(2026-09-05 用户要求"在红框这里加一个按钮打开设置")。停播页把这扇
+                // 「设置」("在红框这里加一个按钮打开设置")。停播页把这扇
                 // 窗口平时常驻的那排圆钮(星形 / 「…」 / 齿轮,见 LyricsWindowView)整个藏掉了,
                 // 于是**恰恰是最容易停在这一页的时候**(没在放歌)反而够不着设置,只能去菜单栏
                 // 图标右键。放这一排的最后一个:前面两颗是"对这首歌做什么",它是"对 App 做什么"。
@@ -700,7 +700,7 @@ private struct IdleLastTrackHero: View {
     }
 }
 
-/// 待机屏趋势图那行读数的宽度上报(2026-08-29)。读数要水平跟到游标下方并钳进图宽,
+/// 待机屏趋势图那行读数的宽度上报。读数要水平跟到游标下方并钳进图宽,
 /// 必须知道它自己多宽 —— 拿固定值估会在中英文/位数变化时钳错边。
 private struct TrendCaptionWidthKey: PreferenceKey {
     static let defaultValue: CGFloat = 0

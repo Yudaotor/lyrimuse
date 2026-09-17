@@ -7,7 +7,7 @@ import (
 
 // needsPeripheralBackfill 的回归测试。
 //
-// 两条都是 2026-08-07 补上的:
+// 两条都是补上的:
 //   - canonical_artist 之前不在触发条件里,而它在 backfillPeripheralFields 里本来就有补全
 //     分支 —— 于是那四个字段一旦齐了,缺 canonical 的记录就再也没机会补。实测撞到过:同一张
 //     专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者其中两条 canonical 是空的。
@@ -61,7 +61,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: false,
 		},
-		// 以下三条 2026-08-24 补:QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
+		// 以下三条补:QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
 		// 以前压根不算缺(判据只有 QQURL == "")—— 本机实测 565 条里 40 条卡在那一档、
 		// 永远不会再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
 		{
@@ -103,7 +103,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: true,
 		},
-		// 以下两条 2026-09-10 补:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
+		// 以下两条补:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
 		// 故意扣掉的,补多少轮都不会有 —— 以前照样算缺,本机 42 条只缺这一项的条目每条白补 5 轮。
 		{
 			name:   "周杰伦只缺网易云链接:不补(那个链接是故意不给的)",
@@ -144,7 +144,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 
 // 外围补全的节流时间戳必须**跟条目的解析时刻分开**。
 //
-// 2026-08-09 拆分之前两者共用 e.TS:backfillPeripheralFields 每跑一次就把它推到当下
+// 拆分之前两者共用 e.TS:backfillPeripheralFields 每跑一次就把它推到当下
 // (最多 5 次、每次隔 10 分钟),而 needsLyricsRetry 的 6 小时起算点正是 e.TS —— 于是
 // 补个封面主色就能把"去别的源再搜一遍歌词"整体往后拖近一小时。两件事本来毫无关系。
 func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {

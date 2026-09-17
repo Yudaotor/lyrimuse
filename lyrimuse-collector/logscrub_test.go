@@ -15,7 +15,7 @@ func resetSecretsForTest(t *testing.T) {
 	secretReplace.Store(nil)
 }
 
-// 这一行是真实泄露形态(2026-08-17 在 ~/Library/Logs/lyrimuse.log 里逮到的),
+// 这一行是真实泄露形态(在 ~/Library/Logs/lyrimuse.log 里逮到的),
 // key 换成了假的。它同时覆盖两件事:api_key 必须消失,而失败原因和其余 query
 // 参数必须留下 —— 脱敏不能把日志脱成看不出问题在哪。
 const lastfmErrLine = `2026/08/17 01:50:05 lastfmRecent: request failed: Get ` +

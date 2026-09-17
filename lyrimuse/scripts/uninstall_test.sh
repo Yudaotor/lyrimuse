@@ -34,7 +34,7 @@ fail() { echo "  FAIL - $1"; FAILURES=$((FAILURES + 1)) }
 # 真实的东西在测试前后都必须原样不动。
 REAL_CONFIG_BEFORE=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
 REAL_COLLECTOR_BEFORE=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
-# 2026-08-22 加：--purge 开始真的 `defaults delete` 之后，这条对账就不再是形式主义 ——
+# 加：--purge 开始真的 `defaults delete` 之后，这条对账就不再是形式主义 ——
 # 脚本删的 domain 取自 $APP_LABEL，测试把它覆盖成一次性 probe label；万一哪天有人把
 # domain 写死成真实 bundle id，这一行会当场把"测试把我自己的全部设置删了"抓出来。
 # 数 key 的条数而不是只看 domain 在不在：真实域几乎必然存在，条数才对得出差异。

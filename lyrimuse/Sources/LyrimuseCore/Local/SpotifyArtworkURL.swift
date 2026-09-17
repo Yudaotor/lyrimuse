@@ -1,10 +1,10 @@
 import Foundation
 
-/// Spotify 图床地址的识别与换档(2026-09-09)。
+/// Spotify 图床地址的识别与换档。
 ///
 /// 原生客户端的 AppleScript `artwork url of current track` 返回
 /// `https://i.scdn.co/image/ab67616d0000b273<24 位十六进制>`:固定前缀 `ab67616d0000` 之后那 4 个字符是
-/// **尺寸档**,同一张图换档位就是换尺寸。2026-09-09 拿真实 hash 对着两个 CDN 域名
+/// **尺寸档**,同一张图换档位就是换尺寸。拿真实 hash 对着两个 CDN 域名
 /// (`i.scdn.co` / `image-cdn-fa.spotifycdn.com`)实测,两边结果一致:
 ///
 /// | 档位 | 实测尺寸 |
@@ -91,7 +91,7 @@ public enum SpotifyArtworkURL {
     }
 }
 
-/// Spotify URI → 能交给 LaunchServices 打开的深链(2026-09-09,「在 Spotify 中显示」)。
+/// Spotify URI → 能交给 LaunchServices 打开的深链(「在 Spotify 中显示」)。
 ///
 /// `spotify url of current track` 回来的是 `spotify:track:<22 位 base62>`;Spotify.app 注册了 `spotify` URL scheme
 /// (lsregister 实测 /Applications/Spotify.app 的 bindings 里有 `spotify:`),Spotify 的 URI 语义就是**定位到那个

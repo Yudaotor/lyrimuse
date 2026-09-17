@@ -10,7 +10,7 @@ import Foundation
 /// `interval` 放行一个请求,跟现有代码里 `Task.sleep(150ms)` 是同一种节流思路,
 /// 只是收进一个统一的地方管,不再各写各的、互不知道对方存在。
 ///
-/// 2026-08-25 起因:新账号首次连接 Last.fm 后所有界面都卡、常听加载失败要反复刷新——
+/// 因:新账号首次连接 Last.fm 后所有界面都卡、常听加载失败要反复刷新——
 /// 根因是 ensureTitleFormsIndex(写法索引全量建索引)和 refreshDailyCounts(热力图全量
 /// 同步)各自独立分页扫**同一段历史**,互不协调,同时跑时叠加的请求量轻松顶到甚至超过
 /// Last.fm 实测约 5 req/s 的限速。
@@ -61,7 +61,7 @@ actor LastfmRateLimiter {
     private var lastInteractiveAcquire: Date = .distantPast
 
     /// 过去 `seconds` 秒内没有任何前台请求排过队 → true。别名自动发现这类一轮几十个请求的
-    /// 后台批任务先问一句再动手(2026-09-03):它们虽然排在后台队列、放行让前台优先,但
+    /// 后台批任务先问一句再动手:它们虽然排在后台队列、放行让前台优先,但
     /// 4 路并发的 getinfo 一旦发出去,就在同一条(本机实测很慢的)链路上跟前台请求排队,
     /// 用户正在等的那几个次数/封面会被拖慢——不如等前台歇下来再扫。
     func interactiveIdle(for seconds: TimeInterval) -> Bool {

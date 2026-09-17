@@ -2,7 +2,7 @@ import LyrimuseCore
 import Foundation
 
 // 身份与落盘路径:LyrimuseIdentity 的那一套名字、LyrimusePaths / LogFiles 的派生、传给 collector 的环境变量。
-// 2026-09-05 加(借鉴清单 #33 第一步);同日第二步的「Lyrimuse Dev」变体 2026-09-06 用户拍板整体回退,这里随之只剩
+// 加;同日第二步的「Lyrimuse Dev」变体整体回退,这里随之只剩
 // 一套名字(15 章决策 12)。由 main.swift 的注册表按组调用。
 
 @MainActor

@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// pickLyricCandidate 的回归测试 —— 2026-08-21 补,因为「歌词管理」新加的「重新自动匹配」
+// pickLyricCandidate 的回归测试 —— 补,因为「歌词管理」新加的「重新自动匹配」
 // 按钮开始依赖它了:那颗按钮的冠军**必须**由 Go 这边算(search-lyrics -pick),而不是让
 // Swift 侧自己取最高分。
 //
@@ -82,7 +82,7 @@ func TestPickLyricCandidateModes(t *testing.T) {
 	}
 }
 
-// pickLyricCandidatePreferring 的回归测试 —— 2026-08-22 加,跟着「用户选定的歌词源」
+// pickLyricCandidatePreferring 的回归测试 —— 加,跟着「用户选定的歌词源」
 // (enrichEntry.LyricsSourceChoice)一起上线。
 //
 // 这条机制存在的理由:在此之前「在联网搜索里采纳一条候选」走的是 markManual: true,而那个

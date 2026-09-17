@@ -4,11 +4,11 @@ import Foundation
 /// 形态分析器在多个合法读音里挑。
 ///
 /// 为什么需要:CFStringTokenizer 只能给一个"词典里的某个读音",遇到多音词就未必是这首歌
-/// 里唱的那个。2026-08-10 用户实测对比 Apple Music:「明日」我们读 asu、Apple 读
+/// 里唱的那个。实测对比 Apple Music:「明日」我们读 asu、Apple 读
 /// ashita —— 两个都是这个词的合法读音,分词器无从判断。而酷狗的 LRC 里**明明白白写着**
 /// 这里念 あした,只是这个标签一直没人读。
 ///
-/// ## 格式(2026-08-10 逆向 + 全曲对齐校验坐实)
+/// ## 格式(逆向 + 全曲对齐校验坐实)
 ///
 /// LRC 里有一行 `[kana:...]`,内容是一串 `<单个数字><读音假名>` 条目:
 ///
@@ -118,7 +118,7 @@ public struct KanaAnnotation {
     // MARK: - 解析细节
 
     /// 一个 Character 占几个 UTF-16 码元 —— 原来写 `String(ch).utf16.count`,每个字符都
-    /// 白造一个临时 String(2026-08-20 性能审计,只在带 [kana:] 标注的酷狗日文歌上生效)。
+    /// 白造一个临时 String(性能审计,只在带 [kana:] 标注的酷狗日文歌上生效)。
     private static func utf16Width(_ c: Character) -> Int {
         var w = 0
         for scalar in c.unicodeScalars { w += scalar.value > 0xFFFF ? 2 : 1 }

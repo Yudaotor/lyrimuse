@@ -4,7 +4,7 @@
 import AppKit
 import Sparkle
 
-/// Sparkle 的自定义用户界面驱动(2026-09-12,用户拍板把更新做成系统「软件更新」那种页面,见 14 章决策 #25)。
+/// Sparkle 的自定义用户界面驱动(把更新做成系统「软件更新」那种页面,见 14 章决策 #25)。
 ///
 /// Sparkle 2 允许用 `SPUUpdater(hostBundle:applicationBundle:userDriver:delegate:)` 接管**全部**更新界面:
 /// 发现更新、下载进度、下完待装、安装中、失败,每一步都回调到这里,由我们在设置窗口的「软件更新」页里画,
@@ -40,7 +40,7 @@ final class SoftwareUpdateDriver: NSObject, SPUUserDriver {
         case readyToInstall(reply: (SPUUserUpdateChoice) -> Void)
         /// 正在装;applicationTerminated=false 表示 App 还没退(被什么拦住了),retry 再试一次退出。
         case installing(applicationTerminated: Bool, retryTerminating: () -> Void)
-        /// 重启后 Sparkle 报「上一版装好了」。
+        /// 重启后 Sparkle 报「刚才那一版装好了」。
         case installedAndRelaunched(Bool, acknowledge: () -> Void)
         /// 这一轮会话结束,把进度 / 弹窗收掉。
         case dismissed

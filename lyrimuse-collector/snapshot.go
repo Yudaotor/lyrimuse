@@ -14,7 +14,7 @@ type snapshot struct {
 	Artist string
 	Album  string
 	// AlbumHint:播放器**没报**专辑名时,由 Apple 目录按「署名 + 曲名 + 时长」反查出来的专辑名(albumhint.go
-	// appleAlbumHint,2026-09-08)。只给**呈现 / 上送**用(见 albumForUpload),**绝不**进 enrich 缓存 key:App 侧
+	// appleAlbumHint)。只给**呈现 / 上送**用(见 albumForUpload),**绝不**进 enrich 缓存 key:App 侧
 	// EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,这边 key 若带上它,两边就对不上了。Album 非空时恒为空。
 	AlbumHint string
 	Bundle    string
@@ -30,14 +30,14 @@ type snapshot struct {
 	McTS    time.Time
 	// media-control 原始的锚点 elapsedTime(未经任何派生)。只用来判"这个锚点是不是开播那个"
 	// (0 = 开播锚点;>0 = 播放器后来重新发布的锚点:暂停冻结 / 恢复 / 拖动)—— Spotify 自然切歌
-	// 偏置只属于开播锚点,见 updatePosition 里清零那一处(2026-09-07)。
+	// 偏置只属于开播锚点,见 updatePosition 里清零那一处。
 	AnchorElapsed float64
 	// Collector-tracked live position (seconds) at AnchorTS (= submit time). This
 	// is what we publish; the web extrapolates Position + (now-AnchorTS)*Rate over
 	// a short, always-fresh window rather than from media-control's stale McTS.
 	Position float64
 	AnchorTS time.Time
-	// Radio:这是电台 / 直播流(判据 = media-control 载荷里的 radioStationHash 非空,2026-09-10)。
+	// Radio:这是电台 / 直播流(判据 = media-control 载荷里的 radioStationHash 非空)。
 	// 为真时 Duration 已在 extract() 里按"未知"处理、Elapsed/AnchorElapsed/McTS 由 applyRadioClock
 	// 换成单曲口径 —— 系统那几个值报的都是整档节目,见 radioclock.go 头注。
 	Radio bool
@@ -65,12 +65,12 @@ func (s snapshot) albumForUpload() string {
 	return s.AlbumHint
 }
 
-// mediaTypeMusic 是 MediaRemote 对"音乐音频"的分类。2026-09-15 在本机实拉 media-control
+// mediaTypeMusic 是 MediaRemote 对"音乐音频"的分类。在本机实拉 media-control
 // 载荷确认:Apple Music 放普通曲目时 `mediaType` 就是这个值。
 const mediaTypeMusic = "MRMediaRemoteMediaTypeMusic"
 
 // notAudioMedia:这个载荷报的不是"音乐音频"。最常见的是 Apple Music 的 MV ——
-// 用户 2026-09-15 报「MV 有额外内容,导致和实际歌词对不上」。
+// 现象:「MV 有额外内容,导致和实际歌词对不上」。
 //
 // # 为什么要认出它
 //
@@ -99,9 +99,9 @@ const mediaTypeMusic = "MRMediaRemoteMediaTypeMusic"
 //
 // # ⚠️ MediaRemote 的 mediaType 认不出 MV,别再试
 //
-// 2026-09-15 实测(用户当场放了陶喆《In the Morning》的 MV):media-control 载荷里
+// 实测(用户当场放了陶喆《In the Morning》的 MV):media-control 载荷里
 // `mediaType` 仍是 `MRMediaRemoteMediaTypeMusic`,**跟放普通曲目时逐字相同** ——
-// MediaRemote 这一层根本不区分 MV。本条第一版拿它做反判("不是 Music 就不信这个时长"),
+// MediaRemote 这一层根本不区分 MV。⚠️ 别拿它做反判("不是 Music 就不信这个时长") ——
 // 对这个场景永远不会触发。
 //
 // 而且反判对**别的播放器**是净风险:Safari 放 YouTube Music 本来就是个视频站,它要是报
@@ -132,7 +132,7 @@ func extract(state map[string]any) snapshot {
 	// 每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
 	radio := str("radioStationHash") != ""
 	// MV / 视频:时长里带着歌外内容,当"未知"比当曲长诚实。理由与三处受害点见 notAudioMedia。
-	// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录 —— 实测(2026-09-15)目录根本不给 MV 时长:
+	// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录 —— 实测目录根本不给 MV 时长:
 	// 按 MV 的 trackId 反查 lookup 返回 kind=music-video、wrapperType=track、trackTimeMillis 缺失。
 	// 想改查"歌曲"那一条来拿真实曲长也不保险(entity=song 在有的 storefront 上整个返回空)。
 	notAudio := notAudioMedia(state)

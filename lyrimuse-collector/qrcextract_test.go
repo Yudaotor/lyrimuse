@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-16 实测回归:QQ 的 QRC 正文里**有字面双引号、且不转义成 &quot;**。
+// 实测回归:QQ 的 QRC 正文里**有字面双引号、且不转义成 &quot;**。
 // 原来的非贪婪正则 `LyricContent="(.*?)"` 会在第一个引号处收尾,PRINCE - Little Red
 // Corvette 的 8508 字节正文只截出 1604 字节(丢 81%)。表现是"标着有逐字,前半段有效果、
 // 后面没了"——截断后的 YRC 仍然非空,hasWordTiming 照样为真、打分照拿逐字加权。

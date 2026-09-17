@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runSyncEngineTests() {
-    // ---- 间奏点(2026-08-19,歌词窗口的 Apple Music 式「•••」) ----
+    // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) ----
     do {
         let engine = LyricsSyncEngine()
         // 逐字:前奏 8s(≥5s → 标);第一句唱到 9s、第二句 25s 开始(静默 16s ≥ 6s → 标);
@@ -29,7 +29,7 @@ func runSyncEngineTests() {
         expectEqual(engine2.gapMarkers().map(\.index), [1], "间奏点(LRC): 只有 ≥15s 的起点差才标")
     }
 
-    // ---- 滚动先于染色(2026-08-22,歌词窗口 AM 式提前滚动,tickQuery.scrollIndex) ----
+    // ---- 滚动先于染色(歌词窗口 AM 式提前滚动,tickQuery.scrollIndex) ----
     do {
         // 同上面间奏点块的时间轴:前奏 8s(标 -1、窗口熄于 7200);第一句 8~9s 唱完,
         // 第二句 25s 开始(长间奏,标 0、窗口 10200~24200);第二句 25~26s 唱完,
@@ -81,7 +81,7 @@ func runSyncEngineTests() {
         expectEqual(lines.map(\.id), ["test#0", "test#1", "test#2"], "SyncEngine.allLines: id 按 idPrefix#下标 拼接")
     }
 
-    // ---- LyricsSyncEngine: 热路径记忆化(2026-08-19 性能审计落地) ----
+    // ---- LyricsSyncEngine: 热路径记忆化(性能审计落地) ----
     // activeLine/upcomingLineText 按行下标缓存构建结果(20Hz 的 fastTick 约 99% 的调用命中
     // 同一行)。这里钉住两条不变量:①记忆化不改变语义 —— 行内反复查询、跨行、倒回都跟
     // 无缓存时逐字一致;②load() 换歌词内容后缓存必须失效 —— 新歌同一个下标是完全不同的
@@ -130,7 +130,7 @@ func runSyncEngineTests() {
                     "lineFillSettledMs: 整组伪词(跨度 1000)的阈值 2080 盖过词级最大值 2040")
     }
 
-    // ---- LyricDuet: 对唱歌词的左右分栏(2026-08-14) ----
+    // ---- LyricDuet: 对唱歌词的左右分栏 ----
     //
     // 用例全部照真实数据写:演唱者信息是**塞在正文里的前缀**(男：/女：/合：),而且只有部分行
     // 带标记(《真爱等一下 (feat. 蔡健雅)》65 行里 22 行),其余按"一个标记管到下一个标记"延续。
@@ -188,7 +188,7 @@ func runSyncEngineTests() {
         do {
             // 串烧 Live 的真实形态(《大笨钟+暗号+彩虹+龙卷风 (Live)》):每首各带一份署名,
             // 于是「词」x4「曲」x4 —— 计数三条全过,只能靠 exactCreditLabels 在形状这层拦。
-            // 这条是回归护栏:2026-08-23 第一版漏了单字署名词,全库扫描当场抓到两首串烧被误判。
+            // 这条是回归护栏:漏掉单字署名词的话,全库扫描能抓到两首串烧被误判。
             let s = D.speakers(in: [
                 "词：方文山", "曲：周杰伦", "歌词一",
                 "词：方文山", "曲：周杰伦", "歌词二",
@@ -205,7 +205,7 @@ func runSyncEngineTests() {
         do {
             // 整份闸是全份一起过的:真演唱者把门槛顶开之后,同一份里的署名残余不能跟着被收编。
             // 收编 = 拿到署名过滤豁免 = 那行既不被删、又被剥掉前缀,变成一行假歌词「某某」。
-            // 2026-08-23 审查发现的活回归,回归护栏。
+            // 审查发现的活回归,回归护栏。
             let s = D.speakers(in: [
                 "周杰伦：", "一", "阿信：", "二", "周杰伦：", "三",
                 "和声：陈某某", "监制：李某某", "母带处理：王某某",
@@ -434,9 +434,9 @@ func runSyncEngineTests() {
         expectEqual(intensityDesc, true, "KaraokeFill: 强度沿位置单调不增")
     }
 
-    // ---- 末字填色必须在换行前填满(2026-08-19) ----
+    // ---- 末字填色必须在换行前填满 ----
     //
-    // 用户报「主动调过某首歌的歌词延迟之后,每句歌词最后一点不走完就下一句」。查下来跟偏移
+    // 现象是「主动调过某首歌的歌词延迟之后,每句歌词最后一点不走完就下一句」。查下来跟偏移
     // 无关(引擎判行和四处填色加的是同一个 offsetMs),是歌词数据本身:"填满"的时刻是
     // 字.start+字.duration,"换行"的时刻是下一行的 timeMs,两个独立的数字。全库实测
     // 667 首/37610 行:25.9% 正好相等、3.0% 真越过、12.2% 余量不足 120ms —— 合计约四成。
@@ -485,7 +485,7 @@ func runSyncEngineTests() {
                     "末字: 再早 60ms 时还没填满(不是提前一大截就满)")
     }
 
-    // ---- 歌词行状态的判定顺序(2026-08-19) ----
+    // ---- 歌词行状态的判定顺序 ----
     //
     // 这条链的三处硬约束原本只写在三个 View 的注释里,誊了三遍还各自内联了一份实现。
     // 顺序错了不编译报错、不崩,只会长期显示一句似是而非的状态(纯音乐永远"搜索歌词中…"),
@@ -511,7 +511,7 @@ func runSyncEngineTests() {
         // 三条"必须排在谁前面"的硬约束
         expectEqual(d(inst: true), .instrumental, "歌词行: 纯音乐排在「搜索中」前(否则永远转圈)")
         expectEqual(d(ad: true), .adBreak, "歌词行: 广告排在「搜索中」前")
-        // 电台口白 / 台卡(2026-09-11 用户在歌词窗口上报的:开台那几十秒一直转圈搜)。
+        // 电台口白 / 台卡(用户在歌词窗口上报的:开台那几十秒一直转圈搜)。
         expectEqual(d(talk: true), .radioTalk, "歌词行: 电台口白排在「搜索中」前(否则永远转圈)")
         expectEqual(d(talk: true, noLyrics: true), .radioTalk,
                     "歌词行: 口白排在「暂无歌词」前 —— 那段本来就不是歌,说「没有歌词」是答非所问")
@@ -530,7 +530,7 @@ func runSyncEngineTests() {
                     "歌词行: 歌词已在手时网络断了不影响显示")
     }
 
-    // ---- 2026-08-20 歌词引擎性能审计落地的行为守卫 ----
+    // ---- 歌词引擎性能审计落地的行为守卫 ----
     do {
         // ① load() 入参指纹早退:同参第二次装载返回 false(整段跳过、缓存保住),任一参数
         //    变化恢复 true。
@@ -593,7 +593,7 @@ func runSyncEngineTests() {
         expectEqual(engine5.allLines(idPrefix: "t").first?.line.translation, nil,
                     "nearestText 容差: 超过 700ms 不贴")
 
-        // ③.5 说话人标签空行不抢近邻译文/罗马音(2026-08-23 用户截图坐实的真 bug):
+        // ③.5 说话人标签空行不抢近邻译文/罗马音(对拍坐实的真 bug):
         // 陶喆《All for Joy》原始数据实拍——「合：」独立成行(逐字里是「合」+「：」两个词,
         // 共享同一时间戳)、178ms 后紧跟真歌词行,译文只有一条、几乎贴着真歌词的时间戳
         // (6ms)但同样落在标签行的 700ms 容差内(174ms)。旧行为:两行各自"就近"命中同一条
@@ -606,7 +606,7 @@ func runSyncEngineTests() {
             lyrics: "", lyricsTr: "[02:01.93]人群的咆哮充满了气氛\n[02:05.85]提醒我，游戏不仅仅是规则",
             lyricsRoma: "", lyricsYRC: tagYRC)
         let tagLines = engineTag.allLines(idPrefix: "t")
-        // 2026-08-23 晚些时候改:这一行现在**根本不进歌词流**。
+        // 改:这一行现在**根本不进歌词流**。
         //
         // 上面那段注释描述的是同一个 bug 的下游症状(标签行抢走了近邻译文),当时的修法是
         // isBareSpeakerTag —— 让它别抢,但那一行照样显示。真正的问题是它压根不是一句歌词:
@@ -639,7 +639,7 @@ func runSyncEngineTests() {
         expectEqual(engineTaggedContent.allLines(idPrefix: "t").first?.line.translation, "真实的翻译",
                     "说话人标签反例: 冒号后有真内容的行不受影响,照常匹配译文")
 
-        // ③.6 内容匹配优先于时间最近邻(2026-08-27,真实坐实:Prince《Christopher Tracy's
+        // ③.6 内容匹配优先于时间最近邻(真实坐实:Prince《Christopher Tracy's
         // Parade》网易云的逐字(YRC)和整行(LRC)时间戳系统性漂移 0.7~3.2 秒——机器翻译
         // (lyrics_tr)忠实继承的是整行 LRC 的时间戳,播放时却拿逐字算出来的(漂移过的)
         // 时间去查译文,超过 nearestText 700ms 容差,大部分句子查不到译文。这里用等价的
@@ -659,7 +659,7 @@ func runSyncEngineTests() {
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.romanization, "piao yi hang de yi wen",
                     "内容匹配: 罗马音同理,按内容匹配不受时间漂移影响")
 
-        // ③.6b 内容匹配要对"空白差异"免疫,不能只对逐字一致才生效(2026-09-01,真实坐实:
+        // ③.6b 内容匹配要对"空白差异"免疫,不能只对逐字一致才生效(真实坐实:
         // 陈奕迅《冲口而出 (Live)》"若你 想欣赏 有没有 金曲奖"这一行——真实缓存里主 LRC 用
         // NBSP(U+00A0)标换气停顿,YRC 逐字数据在同样的词组边界嵌的是普通空格,两边可读内容
         // 完全一样、只是空白字符种类不同;旧版 contentMatchKey 只用 trimmingCharacters 削两端,
@@ -683,7 +683,7 @@ func runSyncEngineTests() {
         expectEqual(nbspLine?.wordGroups?.count, 11,
                     "内容匹配: 命中之后逐字对齐应正常生效(11字11音节严格一一对应,不退回整行)")
 
-        // ③.6c 内容匹配还要对"标点差异"免疫(2026-09-04,用户报 Prince《Cream (Without Rap
+        // ③.6c 内容匹配还要对"标点差异"免疫(现象是 Prince《Cream (Without Rap
         // Monologue)》里带括号和声的句子全都没有译文)。真实缓存坐实:网易云整行 LRC 写
         // "U're so fine (U're so fine)"(ASCII 括号),YRC 逐字数据同一句写 "U're so fine （U're so
         // fine）"(全角括号),两边可读内容一样;而这首歌 YRC 行起点比 LRC 系统性早 1.4~1.6 秒
@@ -760,7 +760,7 @@ func runSyncEngineTests() {
             "WrapLayoutMath: placements(rows:) 与原入口一致")
 
         // ⑥b wordGroupCache 按"首词时间戳+行文本"做 key:副歌重复句(同文本、不同时间)各自
-        //    拿到自己的时间轴,不再共享第一次出现的词组(2026-08-20 对抗审查抓出的预存在 bug)。
+        //    拿到自己的时间轴,不再共享第一次出现的词组(对抗审查抓出的预存在 bug)。
         let engineDup = LyricsSyncEngine()
         engineDup.load(
             lyrics: "",
@@ -774,7 +774,7 @@ func runSyncEngineTests() {
         expectEqual(dupLines.last?.line.wordGroups?.first?.startMs, 30000,
                     "重复句词组: 第二次出现不再借用第一次的时间轴")
 
-        // ⑥c parseTimestamp(2026-08-20 播放核心审计):formatter 静态化+顺序换成先试无小数秒
+        // ⑥c parseTimestamp(播放核心审计):formatter 静态化+顺序换成先试无小数秒
         //    (实测 media-control 恒无小数秒)后,两种形态都仍解析正确、垃圾串仍返回 nil。
         expectEqual(MediaControlClient.parseTimestamp("2026-08-20T10:00:00Z") != nil, true,
                     "parseTimestamp: 无小数秒(常态)解析成功")
@@ -798,10 +798,10 @@ func runSyncEngineTests() {
                     "KaraokeFill: 裸起止版 fillFraction 与词版一致(含短词下限)")
     }
 
-    // ---- tickQuery.nextSide 独立于当前行分栏(2026-08-26,《All Night》悬浮窗"下一句预览"
+    // ---- tickQuery.nextSide 独立于当前行分栏(《All Night》悬浮窗"下一句预览"
     // 案)----
     //
-    // 用户报:方大同/王诗安《All Night》副歌逐句男女交替,悬浮窗"下一句预览"却总是显示在
+    // 现象是:方大同/王诗安《All Night》副歌逐句男女交替,悬浮窗"下一句预览"却总是显示在
     // 当前这句的同一边,像是同一个人接着唱。根因是 nextLineText 的引擎本体 nextTextAt(现
     // nextAt)以前只取文字、不取 side——LyricsOverlayView 拿不到下一句自己的 side,只能借用
     // 当前行的 duetSide。这里钉住 tickQuery(...).nextSide 必须取**下一行自己的**标记,不能
@@ -846,7 +846,7 @@ func runSyncEngineTests() {
                     "nextSide 案: 最后一句之后没有下一行,nextSide 如实为 nil")
 
         // upcomingLineText(独立公开 API,PlaybackCoordinator 之外没人直接用 tickQuery 时的
-        // 退路)必须跟 tickQuery.nextText 逐位一致——这条本来就在跑(见上面 2026-08-20 那个
+        // 退路)必须跟 tickQuery.nextText 逐位一致——这条本来就在跑(见上面那个
         // do 块的②),这里只是确认重写 nextTextAt→nextAt 之后没有破坏它。
         expectEqual(engine.upcomingLineText(afterMs: 2_500), onFirstMale.nextText,
                     "nextSide 案: upcomingLineText 与 tickQuery.nextText 仍然一致")
@@ -854,7 +854,7 @@ func runSyncEngineTests() {
 
     // MARK: - CompactLyricLead:单行展示面「唱完就切到下一句」
     //
-    // 2026-08-23 用户要求:灵动岛/菜单栏原来是"下一句开始才换行",想改成"这句唱完就切走",
+    // 灵动岛/菜单栏原来是"下一句开始才换行",想改成"这句唱完就切走",
     // 好提前看到下一句跟唱。这套规则跟歌词窗口的 scrollLeadIndex **不是同一套**(那个服务
     // 多行列表、间奏里有「•••」可停靠),两者的差别正是这些断言要钉住的东西。
     do {
@@ -927,8 +927,8 @@ func runSyncEngineTests() {
                                         lineEndMs: 13_000, nextStartMs: nil, fallbackEndMs: 30_000),
                     21_000, "最后一句:给了曲末兜底就用它")
 
-        // ⑧ leadInMs(2026-08-24):这一行**出现之后、开唱之前**那段"已显示但还没染色"的提前量。
-        //    菜单栏跑马灯拿它当"起步前至少等多久" —— 用户报的「还没开始染色的时候不需要滚动,
+        // ⑧ leadInMs:这一行**出现之后、开唱之前**那段"已显示但还没染色"的提前量。
+        //    菜单栏跑马灯拿它当"起步前至少等多久" —— 现象是「还没开始染色的时候不需要滚动,
         //    现在是会滚」就是这段时间里滚了。用例跟上面 ⑦ 一一对应,因为两者**必须**用同一个
         //    "出现"(appearMs):一个算窗口有多长、一个算窗口前半段有多长,漂了就是"提前量比
         //    整个窗口还长"。
@@ -953,7 +953,7 @@ func runSyncEngineTests() {
         }
     }
 
-    // MARK: - 提前量经引擎出到 TickResolution(2026-08-24)
+    // MARK: - 提前量经引擎出到 TickResolution
     //
     // 上面那组只测了 CompactLyricLead 这个纯函数,测不到引擎**喂给它什么**。而 tickQuery 里
     // 那句 `prevLineEndMs: gapLineEndMs(at: i - 1)` 的 `i - 1` 正是最容易写错的地方 ——
@@ -996,7 +996,7 @@ func runSyncEngineTests() {
         expectEqual(capped.compactLeadInMs, CompactLyricLead.revealMs,
                     "引擎提前量: 长间奏在前时被 revealMs 夹住")
 
-        // ---- 最后一句:曲长喂进来之后窗口也是**行常量**(2026-08-24) ----
+        // ---- 最后一句:曲长喂进来之后窗口也是**行常量** ----
         //
         // 不喂曲长时最后一句的 compactDwellMs 恒为 nil,上层退回 currentLineDwellSeconds ——
         // 那个值按 currentLineIndex 取行,提前量窗口里指的是**已唱完的上一句**(错基数),
@@ -1027,9 +1027,9 @@ func runSyncEngineTests() {
         expectEqual(lrcTick.compactLeadInMs, 0, "引擎提前量: 行级 LRC 提前量恒为 0")
     }
 
-    // ---- SyncedLyricLine.lineLevel(2026-09-06,按展示面各自关「卡拉OK效果」时把行压成整行) ----
+    // ---- SyncedLyricLine.lineLevel(按展示面各自关「卡拉OK效果」时把行压成整行) ----
     //
-    // 引擎 09-06 起始终解析逐字数据(全局开关已撤),"关了卡拉OK"这件事全靠展示面在消费点做这一步
+    // 引擎始终解析逐字数据(没有全局开关),"关了卡拉OK"这件事全靠展示面在消费点做这一步
     // 压平。压错了不报错:少清一个字段(尤其 wordGroups)填色就从另一条路漏回来,多清一个字段
     // 译文/罗马音/声部就凭空丢了。
     do {

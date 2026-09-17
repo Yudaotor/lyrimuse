@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-// 两块补给「没有系统标题栏的面板」的窗口能力,`.sheet` 弹出的那几张都缺(2026-09-05 从
-// LyricsSearchSheet.swift 搬出来共用 —— 决策弹窗也要这两样,用户原话「决策解析这个窗口也要
+// 两块补给「没有系统标题栏的面板」的窗口能力,`.sheet` 弹出的那几张都缺(从
+// LyricsSearchSheet.swift 搬出来共用 —— 决策弹窗也要这两样,「决策解析这个窗口也要
 // 支持可拖拽可调整大小」)。两块都只做一件很小的事,但都必须落到底层 `NSWindow` 上:
 // SwiftUI 层没有对应的表达。
 
@@ -31,7 +31,7 @@ struct WindowDragHandle: NSViewRepresentable {
 /// 插两次(`viewDidMoveToWindow` 里同步一次 + 下一拍再一次):sheet 真正落到 `NSWindow`
 /// 上的样式由 AppKit 在依附动画那一刻定,同步这次可能被它随后覆盖掉。
 ///
-/// # 最小尺寸必须自己设(2026-09-05 用户报「应该有一个最小大小才对,现在都没有限制」)
+/// # 最小尺寸必须自己设(现象是「应该有一个最小大小才对,现在都没有限制」)
 ///
 /// 内容侧 `.frame(minWidth:minHeight:)` 声明的下限**管不住窗口**:它约束的是 SwiftUI 的
 /// 布局,而窗口能被拖到多小由 `NSWindow.contentMinSize` 说了算 —— 那个值默认是零。加
@@ -41,7 +41,7 @@ struct WindowDragHandle: NSViewRepresentable {
 ///
 /// ⚠️ 光有下限还不够,**挂它的视图根部要留出长大的余地**:根 frame 只写 min 的话,窗口
 /// 拖大了内容仍停在原尺寸,得配 `maxWidth/maxHeight: .infinity`。
-/// 2026-09-04 离屏探针实测(父窗口摆屏幕外、跑完即退):sheet 依附动画结束后 `.resizable`
+/// 离屏探针实测(父窗口摆屏幕外、跑完即退):sheet 依附动画结束后 `.resizable`
 /// 仍在、`setContentSize` 到 980×700 生效、内部 `NSHostingView` 跟着变宽——这条路才敢用。
 struct WindowResizeEnabler: NSViewRepresentable {
     /// 窗口能被拖到的最小内容尺寸。传挂它那个视图 frame 里声明的同一对下限。

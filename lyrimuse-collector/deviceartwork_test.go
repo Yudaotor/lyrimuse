@@ -53,7 +53,7 @@ func TestDecodeDeviceArtworkQuality(t *testing.T) {
 	})
 
 	t.Run("Web端常见小尺寸封面_通过", func(t *testing.T) {
-		// 2026-08-31 真实案例:Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession
+		// 真实案例:Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession
 		// API 实际上送的就是这个尺寸——不是占位图,是真封面,必须放行(这条用例就是当初
 		// deviceArtworkMinEdge 从 200 订正到 64 的直接依据,别再改回去)。
 		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 120, 120)); !ok {

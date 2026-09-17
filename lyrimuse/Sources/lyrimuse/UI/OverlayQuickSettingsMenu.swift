@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-// 悬浮歌词 ⚙ 按钮弹出的快捷设置菜单(2026-08-29,参考 QQ 音乐悬浮歌词的设置菜单)。
+// 悬浮歌词 ⚙ 按钮弹出的快捷设置菜单(参考 QQ 音乐悬浮歌词的设置菜单)。
 //
 // 为什么是真正的 NSMenu,不是 SwiftUI 自绘的圆角气泡:悬浮窗常年 `ignoresMouseEvents = true`、
 // 点击靠 LyricsOverlayWindowController 自己按坐标分发(见该文件「点击穿透 + 悬停热区」那节),
@@ -49,7 +49,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let settings = AppSettings.shared
 
-        // 「简繁转换」只在**这首歌的歌词真的会被转换**时才给(2026-08-31 用户要求"只有中文歌
+        // 「简繁转换」只在**这首歌的歌词真的会被转换**时才给("只有中文歌
         // 时才出现这个选项")。跟下面「搜索歌词…」按当前曲目决定显隐是同一个模式 —— 右键菜单
         // 本来就是上下文菜单,每次弹出都重建(见 menuNeedsUpdate)。
         //
@@ -67,7 +67,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
                             action: #selector(toggleNextLinePreview)))
         menu.addItem(submenu(L10n.t("更改配色"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
         menu.addItem(submenu(offsetMenuTitle, symbol: "timer", menu: lyricsOffsetMenu()))
-        // 「位置」(2026-09-11,issue #5):自由 / 顶部居中 / 底部居中。放在这里是因为预设模式下
+        // 「位置」:自由 / 顶部居中 / 底部居中。放在这里是因为预设模式下
         // 想拖窗口只会得到一条「🔒 已固定为…，在 ⚙ 菜单里可改」+ 抖一下,用户下一步最可能就是想切模式 —— 就近给出口,
         // 不必去设置页翻「行为」浮层。写的是同一个 AppSettings 值,控制器订阅它自己落位。
         menu.addItem(submenu(L10n.t("位置"), symbol: "dock.rectangle", menu: placementMenu(settings)))
@@ -115,16 +115,16 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
 
     /// 「更改配色」子菜单:跟随封面 → 6 个内置主题 → 用户自存主题。
     ///
-    /// ⚠️ **跟随封面开着时,主题照常列出,但一个都不打勾**(2026-09-02,跟设置页取齐)。
+    /// ⚠️ **跟随封面开着时,主题照常列出,但一个都不打勾**(跟设置页取齐)。
     ///
     /// 这一档来回改过三次,三次的取舍都记在这里,免得下一个人把它转回去:
-    ///  1. 最初:主题照常列出、按颜色字段打勾。**用户报的 bug**——跟随封面开着时四个颜色字段
+    ///  1. 最初:主题照常列出、按颜色字段打勾。**现象是的 bug**——跟随封面开着时四个颜色字段
     ///     仍然等于某个主题,于是「跟随封面 ✓」和「黑字描边 ✓」**同时打勾**,读起来是两个
     ///     互相矛盾的"正在生效"。
-    ///  2. 2026-08-31:整段主题列表干脆不展示(用户拍板;中间试过第三态 `.mixed` 渲染成短横
+    ///  2. 整段主题列表干脆不展示(中间试过第三态 `.mixed` 渲染成短横
     ///     表示"这是备用色、没在生效",被否掉了)。这修掉了矛盾,但代价是从跟随封面切到某个
     ///     固定主题要**两步**(先取消跟随封面、再打开菜单选)。
-    ///  3. 2026-09-02(现在):用户要求「勾选了跟随封面之后依然可以选择主题,但是你去选了主题
+    ///  3. (现在):「勾选了跟随封面之后依然可以选择主题,但是你去选了主题
     ///     之后跟随封面就自动取消勾选」。于是列表回来了,**而第 1 条那个矛盾靠"不打勾"消除**——
     ///     矛盾的来源是给一个"没在生效"的主题**打勾**,不是把它**列出来**。跟随封面开着时
     ///     整段列表无勾选 = "现在生效的只有跟随封面",点任意一个主题会
@@ -164,10 +164,10 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     private func colorThemeItem(_ theme: ColorTheme, checked: Bool) -> NSMenuItem {
         let item = makeItem(theme.name, symbol: "", selector: #selector(applyColorTheme(_:)))
         item.representedObject = theme
-        // 两态就够。2026-09-02 之前的理由是"跟随封面开着时这些条目压根不会被建出来";
+        // 两态就够。之前的理由是"跟随封面开着时这些条目压根不会被建出来";
         // 现在它们会被建出来了,但调用方在那种状态下一律传 checked=false(见 colorThemeMenu
         // 里的 showsCheckmarks),所以仍然不存在"打着勾但其实没生效"那种状态 —— 依旧不需要
-        // 第三态(用户 2026-08-31 明确否掉过 `.mixed` 那个短横)。
+        // 第三态(`.mixed` 那个短横是明确不要的)。
         item.state = checked ? .on : .off
         return item
     }
@@ -274,7 +274,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         PlaybackCoordinator.shared.resetLyricsOffset()
     }
 
-    /// 「搜索歌词…」——**不**跟 ⤢ 共用「展开到歌词窗口」那个入口:用户明确要求点了只弹
+    /// 「搜索歌词…」——**不**跟 ⤢ 共用「展开到歌词窗口」那个入口:点了只弹
     /// 搜索页面本身,不需要连带拉起完整的歌词窗口。走它自己独立的一扇
     /// `Window(id: "lyrics-quick-search")`(`LyricsQuickSearchWindow`,App.swift),
     /// 曲目快照/写回逻辑全在那扇窗口自己的 `.task` 里,这里只管把窗口叫出来。

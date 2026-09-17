@@ -15,16 +15,16 @@ import (
 
 // ---- 直连优先、直连被打掉就改走系统代理 ----
 //
-// 2026-09-03 加,配套 systemproxy.go(那边记着完整的实测数据和"为什么不全局走代理")。
+// 加,配套 systemproxy.go(那边记着完整的实测数据和"为什么不全局走代理")。
 // 一句话:代理在这台机器上是**更差**的通道(Last.fm 实测 p50 0.4s→1.2s、失败率 1%→16%,
 // 见 docs/features/12 章),所以它只能是兜底 —— 直连正常时一个包都不该经过它。
 //
 // 生效范围严格等于 doh.go 的 dohHostSuffixes(当前只有 .musixmatch.com):dohHTTPClient
 // 是全仓唯一用这套 Transport 的地方。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
-// lyricfind)2026-09-06 起走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
+// lyricfind)走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
 // DoH,**没有**代理兜底),Last.fm / ListenBrainz / iTunes 等仍是 http.DefaultTransport。
 const (
-	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 2026-09-03 量
+	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。
 	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。
 	proxyFallbackDirectBudget = 3 * time.Second
@@ -33,7 +33,7 @@ const (
 	proxyFallbackProxyBudget = 10 * time.Second
 	// proxyFallbackSticky:代理救回来之后,接下来多久直接走代理、不再重新探直连。
 	//
-	// ⚠️ 粘性不是优化,是必需项。AGENTS.md 里 2026-08-15 Musixmatch DNS 事故的原话是
+	// ⚠️ 粘性不是优化,是必需项。AGENTS.md 里 Musixmatch DNS 事故的原话是
 	// 「每首歌都要把 DNS/TLS 超时白等一遍」,healthcheck 探两首歌从 7s 涨到 29s。没有粘性
 	// 的话这里会原样重演:每个请求先白等 3s 直连再走代理。10 分钟之后重新探一次直连,
 	// 网络恢复了就自动回到直连,不需要重启。
@@ -99,7 +99,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		t.reportBlocked()
 		// ⚠️ 这一行不能省。返回值里只会带**直连**那次的错(上层真正关心的是我们本来想走
 		// 的那条路怎么了),代理那次的错在返回值里是拿不到的 —— 不在这里记一行,"兜底为什么
-		// 也没兜住"就彻底不可观测。2026-09-03 装机验证时正是缺了它,才没法一眼看出第一首
+		// 也没兜住"就彻底不可观测。装机验证时正是缺了它,才没法一眼看出第一首
 		// 探测曲的代理那半边是超时还是被代理拒了。
 		log.Printf("proxy: %s direct failed (%v, %s), then failed via system proxy %s too (%v, %s)",
 			host, directErr, directElapsed.Round(time.Millisecond),
@@ -240,7 +240,7 @@ func saveProxyFallbackHint(host string, useProxy bool) {
 	}
 	// 目录一般早就有了(config.json 就在里面),但不能假定 —— 全新机器上第一次跑到这里
 	// 时它还不存在,os.WriteFile 不会自己建,于是提示**静默**写不下去、跨进程粘性形同虚设
-	// (2026-09-03 由 TestProxyFallbackUsesProxyWhenDirectFails 当场抓到)。
+	// (由 TestProxyFallbackUsesProxyWhenDirectFails 当场抓到)。
 	if os.MkdirAll(filepath.Dir(path), 0o700) != nil {
 		return
 	}

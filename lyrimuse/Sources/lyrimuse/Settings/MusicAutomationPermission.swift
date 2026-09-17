@@ -37,11 +37,11 @@ enum MusicAutomationPermission {
         check(bundleID: musicBundleID, askIfNeeded: askIfNeeded)
     }
 
-    /// 同上,但目标可以是任意 App(2026-08-31 加:浏览器歌词同步也要问同一份权限 ——
+    /// 同上,但目标可以是任意 App(加:浏览器歌词同步也要问同一份权限 ——
     /// `BrowserPositionProbe` 靠 Apple Event 让浏览器执行 JS,跟读 Music.app 播放头是
     /// **同一个** TCC 类别,只是目标换成了 Chrome/Edge/Arc/Safari)。
     ///
-    /// ⚠️ **目标 App 没在运行时问不出来** —— 见 `requestWithTimeout` 上那段 2026-07-24 的
+    /// ⚠️ **目标 App 没在运行时问不出来** —— 见 `requestWithTimeout` 上那段的
     /// 实测记录:那时 `AECreateDesc` 按 bundle id 解析不到进程,落进下面的 `procNotFound`
     /// 分支被当成"还没问过"静默返回,**系统弹窗压根不出现**。所以 `.notDetermined` 有两种
     /// 完全不同的含义(真没问过 / 目标没跑),调用方要自己用 `isRunning` 区分,别把后者
@@ -89,7 +89,7 @@ enum MusicAutomationPermission {
     // LyricsOverlayView/GlobalHotkeys 两处"播放控制按钮/快捷键点了才校验权限"逻辑
     // 共用这一个入口——只有选了 Apple Music 才需要真的查这个权限(MusicPlaybackController
     // 也只在这个分支发 AppleScript);QQ 音乐/网易云音乐走 media-control(系统级
-    // MediaRemote),完全不需要"自动化"权限。2026-07-29 之前这两处都直接调
+    // MediaRemote),完全不需要"自动化"权限。之前这两处都直接调
     // check(askIfNeeded:),QQ 音乐/网易云音乐用户从没被问过、也永远不会被问这个权限
     // (他们的播放器压根不需要),check() 对他们只会返回 .notDetermined/.denied——
     // 导致播放控制按钮/快捷键在选了这两个播放器时永远进不了下面这一步,是接入这两个
@@ -100,7 +100,7 @@ enum MusicAutomationPermission {
     }
 
     // GlobalHotkeys(播放/暂停/上一首/下一首)+ LyricsOverlayView/NotchLyricsView 的
-    // 播放控制按钮,一共 5 个调用点专用的安全版本——2026-08-02 实测排查坐实:这几处
+    // 播放控制按钮,一共 5 个调用点专用的安全版本——实测排查坐实:这几处
     // 以前直接同步调用上面的 checkForCurrentPlayer(askIfNeeded: true),而这个函数在
     // 还没问过、真的需要询问系统时会触达 AEDeterminePermissionToAutomateTarget,正是
     // requestWithTimeout() 那段注释里点名"在主线程调用有据可查地可能永久挂起"的同一个
@@ -131,7 +131,7 @@ enum MusicAutomationPermission {
         return result?.isAuthorized ?? false
     }
 
-    // 2026-07-23 实测坐实:全新安装(TCC 对这个 App 完全没有历史记录)的机器上,
+    // 实测坐实:全新安装(TCC 对这个 App 完全没有历史记录)的机器上,
     // OnboardingView/SettingsView 直接在按钮点击回调里同步调 check(askIfNeeded: true)
     // 会把整个 App UI 冻结、表现成"点了没反应"——这不是这个 App 自己写错了什么,是
     // AEDeterminePermissionToAutomateTarget 本身有据可查的系统级已知问题:在主线程
@@ -158,7 +158,7 @@ enum MusicAutomationPermission {
     /// 同上,目标任意。浏览器那条路(设置页「网页播放器」卡)走这个。
     static func requestWithTimeout(bundleID: String, seconds: Double = 8,
                                    launchIfNeeded: Bool = true) async -> MusicAutomationPermissionStatus? {
-        // 2026-07-24 实测坐实(用户报告+复现):Music.app 没在运行时点"请求权限",
+        // 实测坐实:Music.app 没在运行时点"请求权限",
         // 系统授权对话框根本不弹——不是超时/挂起,是压根没问。AECreateDesc 按
         // bundle ID 解析目标时,如果找不到对应的运行中进程,大概率直接落到下面
         // procNotFound(-600)分支,被当成"还没问过"静默返回,从来没有真正触发过
@@ -181,11 +181,11 @@ enum MusicAutomationPermission {
         }
     }
 
-    /// 不再是 private(2026-08-23):「前往专辑/艺人」「你的常听」那两条 music:// 深链
+    /// 不再是 private:「前往专辑/艺人」「你的常听」那两条 music:// 深链
     /// 跳转也需要同一件事——Music.app 没在跑时直接 `NSWorkspace.shared.open(music://…)`
     /// 会被吞:LaunchServices 把"启动 App"和"打开这个 URL"两件事一起扔过去,冷启动流程
     /// 走到能接 Apple Event 那一步之前 URL 就丢了,用户看到的是"App 打开了,但停在上次
-    /// 退出时的页面"而不是跳到链接指的那一页(2026-08-23 用户实测反馈)。跟这里已经解决
+    /// 退出时的页面"而不是跳到链接指的那一页(现象是)。跟这里已经解决
     /// 过的"TCC 查权限前必须先让 Music.app 存在"是同一个根因,直接复用。
     static func ensureMusicAppRunning() async {
         await ensureAppRunning(bundleID: musicBundleID)

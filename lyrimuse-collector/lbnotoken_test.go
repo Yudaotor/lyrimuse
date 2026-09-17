@@ -39,7 +39,7 @@ func TestSubmitInertWithoutToken(t *testing.T) {
 		t.Errorf("没 token 时不该发任何请求, 实发 %d 次", hits)
 	}
 	// 连"剥歌词字段"这步准备工作都不该做 —— 它是 marshal 前的活,门开在它之后就等于
-	// 每一拍都白干一遍(这正是 2026-09-17 把门前移要消掉的东西)。meta 原样没动即为证据。
+	// 每一拍都白干一遍(这正是把门前移要消掉的东西)。meta 原样没动即为证据。
 	if _, ok := info["lyrics"]; !ok {
 		t.Error("没 token 时连准备工作都不该做,AdditionalInfo 不该被改动")
 	}

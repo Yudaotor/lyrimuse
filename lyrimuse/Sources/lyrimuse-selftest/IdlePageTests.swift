@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runIdlePageTests() {
-    // MARK: - 停播页:最近记录「第 N 次听」的换算(RecentPlayOrdinal,2026-08-24 从 UI 下沉)
+    // MARK: - 停播页:最近记录「第 N 次听」的换算(RecentPlayOrdinal,从 UI 下沉)
     do {
         // 站位的 playCountKey:跟真实那个(LastfmStatsService.playCountKey)同口径 —— 只
         // trim + 小写,**不折叠任何写法变体**。这正是测试的重点:表是按这把「不折叠」的尺子
@@ -26,7 +26,7 @@ func runIdlePageTests() {
                                                playCountKey: key),
                     [10, 9, 8], "第 N 次听:同一首连听三次逐次递减")
 
-        // 回归用户 2026-08-21 报的「第 15 次听下面紧跟第 21 次听」:同一首歌的两种写法在
+        // 回归「第 15 次听下面紧跟第 21 次听」那个缺陷:同一首歌的两种写法在
         // 表里是两个不同的 playCountKey(各自存着**整族合并后**的同一个总数),但它们属于同
         // 一个折叠族 —— 按 playCountKey 去数「更新的同曲收听」会一次都减不掉,两行显示同一
         // 个 N。必须按 familyKey 数,后面那行才会 −1。
@@ -50,7 +50,7 @@ func runIdlePageTests() {
                     [2, 1, nil], "第 N 次听:算出 ≤0 时留空,不显示错的")
     }
 
-    // MARK: - 停播页:收听总览的派生算术(IdleListeningStats,2026-08-24)
+    // MARK: - 停播页:收听总览的派生算术(IdleListeningStats)
     do {
         let cal = Calendar.current
         let fmt = DateFormatter()
@@ -73,7 +73,7 @@ func runIdlePageTests() {
             dailyCounts: [off(-2): 5], today: today, calendar: cal, dayKey: dayKey) == nil,
                     true, "环比:上一个 7 天为 0 时不给百分比(不显示 ∞/0%)")
 
-        // TitleAliasEvidence(2026-08-30 加):跨语言歌名别名自动发现的证据门槛。
+        // TitleAliasEvidence:跨语言歌名别名自动发现的证据门槛。
         // 用例全部取自真实产出的错误,不编数据 —— 判据原来只有"同歌手 + duration 精确相等
         // + 候选唯一",而 Last.fm 的 duration 是整秒,实测 40% 的歌与同歌手另一首同时长。
         expectEqual(TitleAliasEvidence.agrees(
@@ -97,7 +97,7 @@ func runIdlePageTests() {
             mbidA: "", albumA: "太平盛世", mbidB: "", albumB: "太平盛世 "), true,
             "别名证据:专辑名按 foldTitle 折叠后比较(空白差异不算不同)")
 
-        // lastSevenDays(2026-08-30 加):界面上「近 7 天」的数值从 API 的滚动 168 小时改成
+        // lastSevenDays:界面上「近 7 天」的数值从 API 的滚动 168 小时改成
         // 这个自然日对齐口径,为的是跟紧挨着的环比百分比同源(两处显示同一个名字的数字,
         // 口径必须一致)。
         expectEqual(IdleListeningStats.lastSevenDays(
@@ -113,7 +113,7 @@ func runIdlePageTests() {
             calendar: cal, dayKey: dayKey),
                     23, "近7天:今天以实时值为准,不跟桶里的值相加")
 
-        // todayCount(2026-08-30 加):桶同步到昨天为止,今天那一格通常不存在。不补的话今天
+        // todayCount:桶同步到昨天为止,今天那一格通常不存在。不补的话今天
         // 被当成 0 计进最近 7 天,把环比系统性拉低——走势图早就在补这一格,这里以前没补。
         expectEqual(IdleListeningStats.weekOverWeekDelta(
             dailyCounts: [off(-13): 100, off(-6): 100], today: today,
@@ -144,7 +144,7 @@ func runIdlePageTests() {
 
     }
 
-    // MARK: - 停播页:选句(LyricQuotePicker,2026-08-24 用户报「经常只显示半句」后重做)
+    // MARK: - 停播页:选句(LyricQuotePicker,现象是「经常只显示半句」后重做)
     do {
         func L(_ ms: Int, _ t: String) -> LyricQuotePicker.Line {
             LyricQuotePicker.Line(timeMs: ms, text: t)
@@ -152,7 +152,7 @@ func runIdlePageTests() {
         typealias Q = LyricQuotePicker
 
         // 核心回归:一句话被拆到两行上时必须并回来。单摆「我们」没有任何意义,
-        // 这正是用户报的形状(LRC 的行是打轴单位、不是句子单位)。
+        // 这正是现象是的形状(LRC 的行是打轴单位、不是句子单位)。
         expectEqual(Q.phrases([L(20_000, "我们"), L(20_800, "都有难忘的回忆"),
                                L(28_000, "这一句自己就能站住不必再并")]),
                     [["我们", "都有难忘的回忆"], ["这一句自己就能站住不必再并"]],
@@ -198,7 +198,7 @@ func runIdlePageTests() {
                     [["重复出现的同一句歌词"]], "选句:同文本去重")
     }
 
-    // MARK: - 各平台跳转链接的纯判据(PlatformLinks,2026-08-24)
+    // MARK: - 各平台跳转链接的纯判据(PlatformLinks)
     do {
         typealias P = PlatformLinks
         // 搜索兜底 vs 真·歌曲页。判据与 collector 的 isQQSearchFallbackURL 同源(qq.go:49-54)——
@@ -238,7 +238,7 @@ func runIdlePageTests() {
         expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05P") == nil, true, "Spotify ID:21 位挡掉")
         expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05P/") == nil, true, "Spotify ID:带斜杠挡掉")
 
-        // 「网页」行只给当前播放器自己那个平台的歌曲页(2026-09-10,用户定的规则)。
+        // 「网页」行只给当前播放器自己那个平台的歌曲页。
         let am = URL(string: "music://music.apple.com/cn/album/x/1?i=2")!
         let qq = URL(string: "https://y.qq.com/n/ryqq/songDetail/004Yi5BD3ksoAN")!
         let ne = URL(string: "https://music.163.com/song?id=277787")!

@@ -5,7 +5,7 @@
 // 跨源正文共识 → 逐条打分 → 纯音乐标记 → 逐字加分撤销 → 稳定排序 → 挑选),跑的是生产同一份
 // 代码 rankLyricSourceResults / pickLyricCandidate,不在测试里另抄一份骨架。
 //
-// 为什么需要它(2026-09-04):116 个测试文件里全是按函数钉的规则,历次"全库回放"都是一次性脚本、
+// 为什么需要它:116 个测试文件里全是按函数钉的规则,历次"全库回放"都是一次性脚本、
 // 跑完就丢,simeval 又依赖本机数据默认跳过——改一档权重之后"哪几类歌会换冠军"在仓库里没有任何
 // 常驻证据。金标集把每一类已确认正确的真实决策固化成样本,以后任何打分/守卫改动都必须先过它。
 //
@@ -178,7 +178,7 @@ type goldenRankedCandidate struct {
 // 的数据重算出来(标题/专辑/时长是原样元数据,正文置乱不改时间戳与 3-gram 关系),不依赖采集时
 // 的缓存内容。
 //
-// 为什么不能只信缓存(用户 2026-09-04 的要求「不能纯信目前的缓存」):缓存里那份是**上一版规则**
+// 为什么不能只信缓存:缓存里那份可能是**旧版规则**
 // 选出来的,采集时就撞到两条错的——《低潮期》缓存是 30 秒 5 行的残片(那轮拿 0 时长打分),
 // 《公园 (Live版)》缓存是另一场演唱会的版本(用户当初报过的错配)。拿它当金标等于把旧错误钉成
 // 新标准。
@@ -356,14 +356,14 @@ var goldenRequiredCategories = map[string]string{
 	"reject-credit-only":    "整份只有署名行的候选被否决",
 	"reject-plain-text":     "无时间戳纯文本候选被否决",
 	"reject-wrong-language": "语言跟这首歌对不上的候选被否决",
-	// ⚠️ 没有 "word-timing-override"(applyWordTimingTitleOverride)这一类:2026-09-04 采集时把库里
+	// ⚠️ 没有 "word-timing-override"(applyWordTimingTitleOverride)这一类:采集时把库里
 	// 全部 20 条真实触发案例过了一遍,没有一条站得住——原始案例(方大同《公园/南音 (Live版)》,酷狗是
 	// 另一场演唱会)如今被 v7 的 liveAlbumConflict 先行接住、逐字加分不再是决胜项,这条规则根本不触发;
 	// 仍会触发的 11 条(林家谦 White Summer Live 系列、《Catch a Dream (Live版)》《爱不来 (Live版)》
 	// 《大风吹 (和声伴奏)》)里被撤销的酷狗候选跟冠军**是同一张专辑、同一自报时长的同一次录音**,只是
 	// 括号写法不同(「(with 宣萱)(White Summer Live)」vs「(White Summer Live) [with 宣萱]」),撤销之后
 	// 用户丢的是逐字、换来的不是版本正确——这更像规则误伤而不是"已确认正确"。有争议的不进金标
-	// (用户 2026-09-04 定),这条规则由 match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住。
+	// 这条规则由 match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住。
 	"duration-overshoot":        "末句超曲长 5s 的候选吃 -700",
 	"duration-corroborated":     "时长不吻合但跨源末尾印证救回",
 	"line-only-winner":          "没有逐字的冠军赢过带逐字的候选",

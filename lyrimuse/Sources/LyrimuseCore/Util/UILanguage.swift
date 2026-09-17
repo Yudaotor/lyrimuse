@@ -2,7 +2,7 @@ import Foundation
 
 /// 界面语言协商:系统首选语言标签 → 语言包目录名("zh-hans" / "zh-hant" / "en")。
 ///
-/// 2026-09-03 加繁体界面时从 App 层的 `L10n.current` 下沉到这里,两个理由:① selftest 只依赖
+/// 加繁体界面时从 App 层的 `L10n.current` 下沉到这里,两个理由:① selftest 只依赖
 /// LyrimuseCore,判定不下沉就钉不住 zh-Hant-TW / zh-HK / zh-Hans-HK / 裸 zh 这些标签的分流;
 /// ② `AppSettings.userReadsSimplifiedChinese`(引导页播放器排序用)原来自己写了一份同样的
 /// 港台标记判断,两份规则各写一遍迟早漂。

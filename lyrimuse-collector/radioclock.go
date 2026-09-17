@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// 电台(Apple Music Radio / 直播流)的**曲内**播放时钟(2026-09-10)。Swift 侧同款实现见
+// 电台(Apple Music Radio / 直播流)的**曲内**播放时钟。Swift 侧同款实现见
 // LyrimuseCore/Local/RadioTrackClock.swift —— 两边判据、上限、语义必须一致,改一边就要改另一边。
 //
-// 实测事实(2026-09-10,用户在放 Apple Music 电台时连续采样 30 次):
+// 实测事实(用户在放 Apple Music 电台时连续采样 30 次):
 //   - `duration` 报的是**整档节目**(3390.122s = 56 分半),不是当前这首歌;
 //   - `elapsedTime` / `player position` 同样是整档节目的位置,**换歌不复位** —— 锚点 07:15:35 归零,
 //     07:20:39 换到 Clairo《Juna》,07:23:22 读到 467s,正好等于 07:23:22 − 07:15:35;
@@ -39,9 +39,9 @@ type radioClockState struct {
 //   - 换歌(key 变了)或第一次见 → 归零重新起表,位置 0;
 //   - 否则按**上一拍**的播放状态决定要不要累加 [上一拍, 现在] 这段(单拍夹在 [0, radioMaxAdvancePerTick])。
 //
-// ⚠️ 判据是**上一拍**在不在播,不是这一拍(2026-09-10 当天第二轮,修一个真实回归)。按"这一拍在播"累加的话,
+// ⚠️ 判据是**上一拍**在不在播,不是这一拍(修一个真实回归)。按"这一拍在播"累加的话,
 // 「上一拍暂停、这一拍恢复」会把整段暂停间隔当成播放时间加进去,停得越久跳得越多(App 侧暂停时轮询降到 6s、
-// 空闲 10s;collector 是 5s)。用户报「暂停久一点再恢复,歌词进度就不正常」,App 日志里的 resume transition
+// 空闲 10s;collector 是 5s)。现象是「暂停久一点再恢复,歌词进度就不正常」,App 日志里的 resume transition
 // 逐条坐实跳了 3.5~5.8 秒。反过来「上一拍在播、这一拍暂停」照旧累加:那一段确实基本都在播。
 // Swift 侧 RadioTrackClock.advance 必须同规则,改一边就要改另一边。
 func advanceRadioClock(prev radioClockState, key string, playing bool, now time.Time) radioClockState {

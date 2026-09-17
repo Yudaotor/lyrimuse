@@ -12,7 +12,7 @@ func TestLoosenEnrichKey(t *testing.T) {
 		a, b string
 		same bool
 	}{
-		// 用户 2026-08-16 实际报的那两组
+		// 用户实际报的那两组
 		{"半角空格", "陶喆|Susan 说|太平盛世", "陶喆|Susan说|太平盛世", true},
 		{"中英之间空格", "陶喆|Sula 与 Lampa 的寓言|太平盛世", "陶喆|Sula 与 Lampa的寓言|太平盛世", true},
 		// 繁简(12 组里的代表),歌名和歌手名两处都要能折

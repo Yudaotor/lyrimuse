@@ -180,8 +180,7 @@ func TestLyricsFullScanActiveMarker(t *testing.T) {
 }
 
 // 第一发定时器的档位。续跑是用户点出来的那一轮被重启打断,不该陪自动补空一起等 10 分钟 ——
-// 选错常量完全不报错(扫描照跑、日志照写,只是晚十分钟),2026-09-16 实测用户当场问
-// 「怎么没有自动呢」。
+// 选错常量完全不报错(扫描照跑、日志照写,只是晚十分钟),表现成「续跑怎么没自动开始」。
 func TestLyricsFillSweepFirstDelay(t *testing.T) {
 	if got := lyricsFillSweepFirstDelay(false); got != lyricsFillSweepInitialDelay {
 		t.Errorf("没有待续的一轮时应当用自动扫描那档: got %v, want %v", got, lyricsFillSweepInitialDelay)

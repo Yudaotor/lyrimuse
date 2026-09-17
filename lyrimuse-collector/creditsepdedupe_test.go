@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 合 credit 分隔符必须参与宽松比对(2026-08-20)。
+// 合 credit 分隔符必须参与宽松比对。
 //
 // 实测形态:同一次播放里两条路径对多歌手串的写法系统性不同 —— 播放器(media-control)
 // 报 `VALORANT/Grabbitz/bbno$`,专辑预取从 Apple Music 自己的曲目表(AppleScript
@@ -25,7 +25,7 @@ func TestLoosenEnrichKeyFoldsCreditSeparators(t *testing.T) {
 			"陶喆/卢广仲|某首歌|某专辑",
 		},
 		{
-			// 顺带确认原有两档(空格、繁简)没被这次改动破坏
+			// 顺带确认原有两档(空格、繁简)仍然成立
 			"丁世光|無名花香|背面是我",
 			"丁世光|无名花香|背面是我",
 		},

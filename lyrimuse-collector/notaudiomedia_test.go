@@ -4,7 +4,7 @@ import "testing"
 
 // notAudioMedia / extract:Apple Music 放 MV 时不能拿视频时长当曲长。
 //
-// 用户 2026-09-15 报「MV 有一些额外的内容,导致和实际歌词对不上」。视频时长 = 歌 +
+// 现象:「MV 有一些额外的内容,导致和实际歌词对不上」。视频时长 = 歌 +
 // 前导对白 + 尾字幕,当曲长用会同时打坏三处(见 notAudioMedia 头注)。实测陶喆
 // 《In the Morning》歌曲 212.1s(iTunes entity=song),MV 只要多 30s 就跨过
 // durationMismatch 那道 12% 线。
@@ -14,7 +14,7 @@ func TestNotAudioMedia(t *testing.T) {
 		state map[string]any
 		want  bool
 	}{
-		// —— mediaType 一律不参与判据(2026-09-15 实测:MV 也报 Music,这个字段认不出 MV)——
+		// —— mediaType 一律不参与判据(实测:MV 也报 Music,这个字段认不出 MV)——
 		{"mediaType=Music:不参与判据", map[string]any{"mediaType": mediaTypeMusic}, false},
 		// ⚠️ 这一条钉的是**负面结论**:哪怕真有播放器报 Video,也不能据此关掉时长打分。
 		// Safari 放 YouTube Music 本来就是视频站,反判会把一整个播放器的时长证据静默关掉,
@@ -31,7 +31,7 @@ func TestNotAudioMedia(t *testing.T) {
 		// 宁可保持现状也不要误伤一整类曲目。这是白名单而不是反判的全部理由。
 		{"mediaKind=unknown:按音频处理,不误伤本地文件", map[string]any{"mediaKind": "unknown"}, false},
 
-		// —— 真实现场逐字复刻(2026-09-15,用户放陶喆《In the Morning》的 MV)——
+		// —— 真实现场逐字复刻(用户放陶喆《In the Morning》的 MV)——
 		// media-control 报 Music、Music.app 报 music video:**只有后者说了实话**。
 		{"真实 MV 现场:mediaType 说 Music 也拦得住", map[string]any{"mediaType": mediaTypeMusic, "mediaKind": "music video"}, true},
 		{"真实音频现场(PRINCE):两个都说是歌", map[string]any{"mediaType": mediaTypeMusic, "mediaKind": "song"}, false},
@@ -45,12 +45,12 @@ func TestNotAudioMedia(t *testing.T) {
 
 // extract:认出 MV 之后时长必须变成"未知"(0),而不是换成别的数。
 //
-// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录:实测(2026-09-15)目录根本不给 MV 时长
+// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录:实测目录根本不给 MV 时长
 // (按 MV 的 trackId 反查 lookup 返回 kind=music-video、trackTimeMillis 缺失)。
 // 0 之所以是对的,是因为下游全都按"未知"处理:match.go 的时长打分整段挂在
 // `durationSecs > 0` 下,enrich.go 的 durationMismatch 任一方为 0 也不触发。
 func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
-	// 载荷逐字来自 2026-09-15 的真实现场(用户当场放的 MV)。注意 mediaType 是 Music ——
+	// 载荷逐字来自的真实现场(用户当场放的 MV)。注意 mediaType 是 Music ——
 	// 拦住它的是 mediaKind。
 	mv := map[string]any{
 		"title": "In the Morning", "artist": "陶喆", "album": "",

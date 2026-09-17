@@ -1,9 +1,9 @@
 import Foundation
 
-/// 从本机 enrich 缓存推「英文/罗马字歌名 → 中文歌名」别名(2026-09-04)。纯函数;读缓存、灌进
+/// 从本机 enrich 缓存推「英文/罗马字歌名 → 中文歌名」别名。纯函数;读缓存、灌进
 /// PlayCountFold 的那两步在 EnrichCacheReader / LastfmStatsService。背景见
 /// `PlayCountFold.setLocalTitleAliases` 的注释。同日下午起它是歌名维度**唯一**的推断来源之一
-/// (手写的 `titleAliasesByArtist` 静态表已删,用户要求「一切由通用逻辑覆盖,不要特殊化」),所以
+/// (手写的 `titleAliasesByArtist` 静态表已删,「一切由通用逻辑覆盖,不要特殊化」),所以
 /// 证据要够宽、闸要够严。
 ///
 /// 两条证据路径,任一条成立即产出(结果再过共同的冲突闸):

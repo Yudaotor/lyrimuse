@@ -1,8 +1,8 @@
 import Foundation
 
-/// 一次 `track.getinfo` 之后,「第 N 次听」这一格该怎么记账(2026-09-10)。
+/// 一次 `track.getinfo` 之后,「第 N 次听」这一格该怎么记账。
 ///
-/// **为什么要有这个三态、而不是原来那个 if/else**(用户报「为什么这三个 lastfm 里面没有播放次数」,
+/// **为什么要有这个三态、而不是原来那个 if/else**(现象是「为什么这三个 lastfm 里面没有播放次数」,
 /// 现场坐实):原来的判据是
 ///
 ///     if let n, n > 0 { 记数 } else if 请求成功, 行够老 { 记进"那边没有"名单 }
@@ -13,11 +13,11 @@ import Foundation
 ///   - 那边明确回答"0 次"(响应里 `userplaycount: "0"`)—— 这是一个**答案**;
 ///   - 响应 200、track 对象正常、但**压根没带 `userplaycount` 这个字段** —— 这是"这次没答上来"。
 ///
-/// 后者被当成前者,于是 Last.fm 的一次抖动会被写成定论。2026-09-10 实测的现场:10:56:00 那一批
+/// 后者被当成前者,于是 Last.fm 的一次抖动会被写成定论。实测的现场:10:56:00 那一批
 /// 20 首里 17 首正常,`prince|1999` / `prince|little red corvette` /
 /// `prince & the revolution|kiss (extended)` 三首同时"没有次数",日志里那一批**全是 200、
 /// 一条 api error 都没有**;5 分钟后拿同样的参数直接问,三首分别是 18 / 20 / 1 次,而
-/// `user.getTrackScrobbles` 显示这些收听最早可追到 2026-07-07 —— 既不是"那边真没有",也不是
+/// `user.getTrackScrobbles` 显示这些收听最早可追到 —— 既不是"那边真没有",也不是
 /// 已知的"刚 scrobble 完还没并账"(那个由 `rowIsOldEnough` 挡)。Last.fm 的按用户计数是另一次
 /// 后端查询,高并发下会静默缺字段,而 App 刚重启时一口气打二十几个 getinfo 正好撞上。
 ///
@@ -27,7 +27,7 @@ import Foundation
 ///
 /// ⚠️ **error 6(Track not found)仍然是定论**。调用方在那条路上传 `reportedCount: 0`:
 /// Last.fm 说"压根没有这个实体"跟它说"0 次"是同一个答案,不能跟"没答上来"混在一起 ——
-/// 否则本机那 7 首有声书章节(Last.fm 确实没有)会每轮重问、永不收敛,那正是 2026-09-03
+/// 否则本机那 7 首有声书章节(Last.fm 确实没有)会每轮重问、永不收敛,那正是
 /// 引入 `notFound` 要解决的问题。
 ///
 /// 纯函数,selftest 覆盖(`LastfmTests.swift`「次数记账三态」)。

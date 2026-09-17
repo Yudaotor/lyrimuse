@@ -1,7 +1,7 @@
 import SwiftUI
 import LyrimuseCore
 
-// 「解析决策」只读弹窗(2026-08-17,吸收自对比审阅 C2)——把 collector 在
+// 「解析决策」只读弹窗(吸收自对比审阅 C2)——把 collector 在
 // **真正做决定那一刻**固化下来的候选表摊开:哪些源应答了、各自得了多少分、为什么被拒、
 // 最后为什么是它赢。跟「联网搜索候选歌词」的本质区别:那个是**现在**重新抽一轮签
 // (候选集受 20 秒期限影响,跟当初不一定一样),这个是当初那一轮的**存档**,离线、
@@ -13,7 +13,7 @@ import LyrimuseCore
 // collector 当前的打分算法版本(match.go 的 lyricsScoringVersion 常量)——两边手工保持
 // 一致,collector 每次改动打分公式就同步改一次这里。跟 EnrichCacheKeys.swift 里那些
 // 手工镜像 collector 常量的字段(crc32 表、归一化规则)是同一种做法:这个数字纯粹是
-// "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(2026-08-31 用户
+// "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(用户
 // 反馈"v4"这种裸编号没有对照、看不出新旧),只用来判断存档是不是用旧算法跑的。
 private let currentLyricsScoringVersion = 19
 
@@ -31,7 +31,7 @@ struct LyricsDecisionSheet: View {
 
     /// - latest: lyrics_decision(最近一次评估 —— 可能维持原状,甚至输入本身是脏的,比如
     ///   换曲窗口串扰进来的错误时长那轮);
-    /// - applied: lyrics_decision_applied(当前歌词的出处)。collector 2026-08-22 起分槽,
+    /// - applied: lyrics_decision_applied(当前歌词的出处)。collector 分槽,
     ///   老条目没有后者:退回"最近评估恰好 applied"那份 —— 单槽时代它就是出处。
     /// 两份是同一轮(decidedAt+path 一致)就只展示一份,免得多出一个内容相同的页签。
     init(summary: EnrichCacheStore.Summary,
@@ -67,13 +67,13 @@ struct LyricsDecisionSheet: View {
         case "manual-rematch": return L10n.t("手动重新匹配")
         // 兜底显示原始值:collector 那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
         // (而不是空白)。但那就是漏了 —— 这张表跟 collector 里 buildLyricsDecision 的 path
-        // 取值必须成对改,2026-08-21 的 manual-rematch 就是这么漏出来一个英文串的。
+        // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。
         default: return decision.path
         }
     }
 
 
-    /// 查询词那一组是哪一轮问的(借鉴清单 V1)。取值全集在 collector 的 querylog.go
+    /// 查询词那一组是哪一轮问的。取值全集在 collector 的 querylog.go
     /// `lyricQueryReason*`,那边的 lyricQueryReasons() 与本 switch 由
     /// `TestLyricQueryReasonsHaveChineseLabels` 双向对账 —— 跟 pathLabel 同一套约定:
     /// **default 是"原样显示原始值"**,漏补译名就是界面上直接印一个英文串给用户看。
@@ -82,7 +82,7 @@ struct LyricsDecisionSheet: View {
         case "": return L10n.t("首轮")
         case "title-split": return L10n.t("按「署名 - 曲名」拆分")
         case "alias-rescue": return L10n.t("别名轮：一个候选都没有")
-        // 「缺罗马音」三个字 2026-09-12 被用户问「这里说的缺罗马音是什么意思？」——
+        // 「缺罗马音」三个字有歧义(「这里说的缺罗马音是什么意思？」)——
         // 它像在描述一个结果状态,其实说的是**触发原因**,而且省掉了主语(谁缺)。
         // 真实判据在 collector `enrich.go` 的 needsRomanizationRetry:这一轮拿回来的歌词
         // 是中日韩文字(dominantScript 判 Han/Kana/Hangul),而**没有任何一个源**给出
@@ -97,7 +97,7 @@ struct LyricsDecisionSheet: View {
         }
     }
 
-    /// 把存档里的查询词记录压成分组摘要(2026-09-12,用户报「这部分可读性很差」)。
+    /// 把存档里的查询词记录压成分组摘要(现象是「这部分可读性很差」)。
     ///
     /// 逐条平铺的老写法在真实案例上彻底失效:宇多田光《Beautiful World (Da Capo Version)
     /// [Instrumental]》一轮问了 9 组词,屏幕上 20 多个视觉行,而其中曲名重复 9 遍、
@@ -131,7 +131,7 @@ struct LyricsDecisionSheet: View {
     /// 一组问的**范围**:定向重查是「只问 X、Y」,别名轮的全源重查是「全部源重问」,
     /// 首轮没有范围可言、返回 nil。
     ///
-    /// 2026-09-15 从 groupHeading 里抽出来,因为**界面上这两半不再在同一行**:那串六七个
+    /// 从 groupHeading 里抽出来,因为**界面上这两半不再在同一行**:那串六七个
     /// 源的名单跟来路挤在一行时会把组头顶到第二行,读的人分不出哪半句说的是"哪一轮"、
     /// 哪半句说的是"问了谁"。「拷贝」出去的纯文本仍然合成一行(dumpLines 走 groupHeading)
     /// —— 纯文本没有字重和缩进可用,拆成两行反而更难读。
@@ -152,7 +152,7 @@ struct LyricsDecisionSheet: View {
                     if records.count > 1 {
                         // 「出处」解释现状,「最近一次评估」解释后来又评过什么、为什么没换
                         // (比如一轮维持原状的升级重试)。正是这两份对不上号让用户困惑
-                        // (2026-08-22:一轮被换曲窗口串扰时长的重试盖掉了首解存档,记录
+                        // (一轮被换曲窗口串扰时长的重试盖掉了首解存档,记录
                         // 跟生效歌词说不到一块去),所以两份并排都给看,不再只剩最后一轮。
                         Picker("", selection: $selectedRecord) {
                             ForEach(records.indices, id: \.self) { i in
@@ -176,7 +176,7 @@ struct LyricsDecisionSheet: View {
                 .padding(16)
             }
         }
-        // 2026-09-05 用户要求这扇也「可拖拽可调整大小」(搜索候选那张 09-04 先做的)。
+        // 这扇也「可拖拽可调整大小」(搜索候选那张 09-04 先做的)。
         // 两块能力都在 SheetWindowAffordances.swift,理由与实测在那边:sheet 既不可拖也
         // 不可缩放,都得落到底层 NSWindow 上补。maxWidth/maxHeight 必须一起放开——只留
         // 下限的话窗口拖大了内容仍停在 520×560,四周留白。
@@ -195,7 +195,7 @@ struct LyricsDecisionSheet: View {
                 Text(L10n.t("解析决策")).font(.headline)
                 // 手动改过歌词的条目,这份存档描述的是人工覆盖**之前**那次自动评估。
                 //
-                // 2026-08-17 文案里原来直接写着 "collector"(用户报"这英文一点都不可读")。
+                // 文案里原来直接写着 "collector"(现象是"这英文一点都不可读")。
                 // 那是内部组件名 —— 它在界面上的正式称呼是「后台采集服务」(见设置页
                 // 「播放器」那一栏)。但这句话压根不需要点名是谁干的:用户要知道的是
                 // "这是当初自动挑歌词那一刻的快照,不是现在重新搜的结果",主语换成动作本身
@@ -308,7 +308,7 @@ struct LyricsDecisionSheet: View {
 
     /// 把「歌手 / 歌名 / 专辑」这类**异质**字段拼成一行:每个值带标签、用「」框住。
     ///
-    /// 2026-09-12 用户截图报「需要能看出来分别是歌名、歌手、专辑」。原来是拿 `" / "` 或
+    /// 对拍报「需要能看出来分别是歌名、歌手、专辑」。原来是拿 `" / "` 或
     /// `" · "` 把几个值直接拼起来,读的人只能靠位置猜是谁 —— 而这几个值经常长得几乎一样
     /// (截图那次:歌名 `JANE DOE`、专辑 `JANE DOE - Single`),更要命的是**值里本来就有
     /// 分隔符**(`米津玄師、宇多田ヒカル` 里的顿号、`JANE DOE - Single` 里的连字符),
@@ -352,7 +352,7 @@ struct LyricsDecisionSheet: View {
     /// 内容逐字一致,只多了一层明暗:标签(「歌手」/「歌名」)压暗退到背景,名字用正常字色。
     /// 标签和值同色正是这块被说"乱"的病根之一 —— 一行里哪几个字是结构、哪几个字是数据,
     /// 全靠读的人自己分。「」仍然留着:它回答"到哪儿为止"(歌手名里本来就有顿号),
-    /// 跟明暗回答的"谁是谁"是两件事,2026-09-12 那轮的结论没被推翻。
+    /// 跟明暗回答的"谁是谁"是两件事,那轮的结论没被推翻。
     /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注的 ⚠️。
     private func groupQueriesLine(_ g: LyricQueryGroup) -> Text {
         func dimmed(_ text: String) -> AttributedString {
@@ -518,8 +518,8 @@ struct LyricsDecisionSheet: View {
             head.append(L10n.t("旧打分算法"))
         }
         if let ts = decision.decidedAt, ts > 0 {
-            // ⚠️ 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(2026-09-02
-            // 用户报:界面语言切成英文之后,这里的日期还是"2026年8月22日"中文格式)——
+            // ⚠️ 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(
+            // 现象是:界面语言切成英文之后,这里的日期还是"2026年8月22日"中文格式)——
             // Date.formatted(date:time:) 不传 locale 时默认走系统区域设置,跟不走 .strings
             // 表的其它系统 API 是同一类坑,见 L10n.locale 头注那次"语言名中英混排"案例。
             head.append(Date(timeIntervalSince1970: TimeInterval(ts))
@@ -538,7 +538,7 @@ struct LyricsDecisionSheet: View {
         }
         let query = queryText(decision)
         if !query.isEmpty { lines.append(String(format: L10n.t("查询词：%@"), query)) }
-        // 首轮那一组之外还问过什么(借鉴清单 V1)。只有一组、且就是首轮时不重复印。
+        // 首轮那一组之外还问过什么。只有一组、且就是首轮时不重复印。
         // 跟界面用同一份 digest,拷出去的文本和屏幕上看到的是同一个形状。
         if let digest = queryDigest(decision) {
             lines.append(String(format: L10n.t("这一轮实际问过 %d 组"), digest.total))
@@ -751,8 +751,8 @@ struct LyricsDecisionSheet: View {
 
     /// 字段表的标签列:压暗、右对齐、退到背景去。
     ///
-    /// 2026-09-15 用户报「这部分 UI 非常垃圾,完全不能看出有效信息,非常乱」时的落点。
-    /// 这块此前已经为可读性改过两轮(都在 2026-09-12:先压缩查询词分组,再给异质字段加
+    /// 现象是「这部分 UI 非常垃圾,完全不能看出有效信息,非常乱」时的落点。
+    /// 这块此前已经为可读性改过两轮(都在先压缩查询词分组,再给异质字段加
     /// 标签 +「」),两轮治的都是**内容**;这一轮的病在**版面**:
     ///   - 八行清一色 `.caption2` + `.secondary`,结构和数据同色同字号,没有任何层级;
     ///   - 「查询词：歌手「A」歌名「B」专辑「C」」这种整句在真实曲目上要折两行,而折下来
@@ -913,7 +913,7 @@ struct LyricsDecisionSheet: View {
                             }
                         }
                     }
-                    // "我到底拿哪些词问的"(借鉴清单 V1)。上面那张表里的查询词只是**首轮**那一组,
+                    // "我到底拿哪些词问的"。上面那张表里的查询词只是**首轮**那一组,
                     // 而一轮解析最多换五种问法 —— 09 章里五条真实的"搜不到 / 配错了"根因全是问错了词。
                     if let digest {
                         Divider()
@@ -949,13 +949,17 @@ struct LyricsDecisionSheet: View {
         } else {
             // 只要**这一轮里有任何一条**候选带封面,就给所有行都留出封面位;一条都没有
             // 就整轮不留 —— 这样:
-            //   - 老存档(2026-09-01 之前固化的,压根没有 cover_url 字段)不会变成一列
+            //   - 老存档(之前固化的,压根没有 cover_url 字段)不会变成一列
             //     灰色音符占位符,那看着像坏了;
             //   - 新存档里 LRCLIB/QQ 这种本来就不给封面的源留一个占位符,行左边缘仍然
             //     对齐,不会参差。
             let showsCover = (decision.candidates ?? []).contains { !($0.coverUrl ?? "").isEmpty }
             let top = a.rows.first?.core.score ?? 0
             VStack(alignment: .leading, spacing: 4) {
+                // ⚠️ 这里**刻意没有**一句「胜者行是绝对分、其余各行是差值」的表头说明。
+                // 第一轮加过、同一轮改法的第二步连同折叠态那行文字一起撤掉 —— 折叠态不印
+                // 分项之后,屏幕上就只剩分数和右边那列差值**一种**单位,那句话没有要澄清的
+                // 对象了(它当初存在的唯一理由就是两种单位长得一模一样)。
                 ForEach(a.rows) { row in
                     candidateRow(row,
                                  delta: a.deltas[row.core.source],
@@ -1088,7 +1092,7 @@ struct LyricsDecisionSheet: View {
                 Text(clampNote(rawSum: raw, score: c.score))
                     .font(.caption2).foregroundStyle(.secondary)
             }
-            // 「内容获印证 +250」只说了有几家,这一行说**跟谁**(借鉴清单 V2)。
+            // 「内容获印证 +250」只说了有几家,这一行说**跟谁**。
             // 冠亚军分差中位只有 24 分,而分差小的时候真正要问的是"这两份是不是同一份
             // 词"——是的话选谁都行,不是的话这 24 分就是在两份不同的歌词之间抛硬币。
             if let peers = c.consensusPeers, !peers.isEmpty {
@@ -1108,7 +1112,7 @@ struct LyricsDecisionSheet: View {
     ///
     /// 两类**都刻意不显示分数**。存档里它们的 score 恒为 -1,那个 -1 是 collector 用来让
     /// 选词函数跳过这条的**手段**,不是对这份"歌词"的评价 —— 印给用户看只会让人以为
-    /// 某个源给了份很烂的词。2026-09-12 用户截图问过「它怎么是空的,并且是 -1?」,当时
+    /// 某个源给了份很烂的词。对拍问过「它怎么是空的,并且是 -1?」,当时
     /// 只把纯音乐标记那一支改掉了;被拒这一支还印着红色 -1,而它**常见 4 倍**
     /// (全库 604 行 / 301 个条目,对 148 行纯音乐标记)。
     ///

@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// 一轮歌词解析**实际问出去的查询词**的记录(借鉴清单 V1,2026-09-12)。
+// 一轮歌词解析**实际问出去的查询词**的记录。
 //
 // 背景:决策存档 lyricsDecision 里原本只有**一组** query_artist/query_title/query_album ——
 // 就是首轮那一组。而 scoredLyricCandidatesStreaming 一轮下来最多会换五种问法:
@@ -35,7 +35,7 @@ import (
 // lyricQueryReason* 是一条查询记录的来路。空字符串 = 首轮(按本地标签直接问)。
 // ⚠️ 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.queryReasonLabel 那个 switch 里补
 // 中文译名 —— 那边 default 是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看
-// (2026-08-21 决策路径译名就这么漏过一次)。lyricQueryReasons 那个测试守着这份清单。
+// (决策路径译名就这么漏过一次)。lyricQueryReasons 那个测试守着这份清单。
 const (
 	lyricQueryReasonPrimary      = ""                         // 首轮:本地标签原样
 	lyricQueryReasonTitleSplit   = "title-split"              // 「署名 - 曲名」拆分重入
@@ -45,7 +45,7 @@ const (
 	lyricQueryReasonPrimaryVar   = "primary-artist-variant"   // 合credit 截首位歌手
 	lyricQueryReasonTitleAlbum   = "title-from-album"         // 标题反查:浏览专辑曲目表
 	lyricQueryReasonTitleSearch  = "title-from-artist-search" // 标题反查:歌手泛搜
-	// 标题反查:Apple 原产地商店的规范曲名(2026-09-12)。前两条都拿**本地标题**当输入,
+	// 标题反查:Apple 原产地商店的规范曲名。前两条都拿**本地标题**当输入,
 	// 本地标题本身是罗马字/被本地化过的时候它们结构上就够不到,见 appleStorefrontCanonicalTitle。
 	lyricQueryReasonTitleStorefront = "title-from-apple-storefront"
 )

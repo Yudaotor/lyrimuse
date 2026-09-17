@@ -3,9 +3,9 @@ import LyrimuseCore
 
 /// 网页播放器平台(YouTube Music / Spotify 网页版)的图标。
 ///
-/// 2026-09-03 从 `SettingsView.swift` 的 `PlayerSettingsTab` 里整块搬出来 —— 它当时是那个
+/// 从 `SettingsView.swift` 的 `PlayerSettingsTab` 里整块搬出来 —— 它当时是那个
 /// **private** 结构体上的一组 static,而引导页「选择播放器」那一格 YouTube Music 要用同一张图
-/// (用户要求"这里也给我加上 youtube music 的选项"),private 类型外面够不着。
+/// ("这里也给我加上 youtube music 的选项"),private 类型外面够不着。
 ///
 /// 一度想只把查表函数放开成 internal 了事,行不通:`youtubeMusicIcon` 依赖同文件里的
 /// `whiteFilledCutouts`(垫白那一步,理由见它的头注),拆开放会把"这张图该长什么样"这件事
@@ -13,7 +13,7 @@ import LyrimuseCore
 @MainActor
 enum WebPlatformIcon {
     /// 平台图标——YouTube Music 是个网站,没有 `.app` 可以像浏览器那样用 AppIconResolver
-    /// 取真图标。2026-08-31 用户要求用真实图标,跟 lastfmBadgeImage/listenBrainzBadgeImage
+    /// 取真图标。用真实图标,跟 lastfmBadgeImage/listenBrainzBadgeImage
     /// 同一个既有先例:素材取自 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌
     /// 图标合集,矢量描摹自官方标志,不是截图抠像素),PNG 由 build.sh 拷进
     /// Contents/Resources/,用 Bundle.main(不是 Bundle.module)加载——理由见 L10n.swift
@@ -29,7 +29,7 @@ enum WebPlatformIcon {
         }
     }
 
-    /// ⚠️ 图片取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(2026-09-01 用 sips 转成
+    /// ⚠️ 图片取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(用 sips 转成
     /// 1024×1024 PNG),跟 `YouTubeMusicIcon.png` 同规格同来路 —— 不去网上抓品牌资源。
     private static let spotifyIcon: NSImage = {
         guard let path = Bundle.main.path(forResource: "SpotifyIcon", ofType: "png"),
@@ -53,13 +53,13 @@ enum WebPlatformIcon {
         return whiteFilledCutouts(image: image)
     }()
 
-    /// 把 Simple Icons 那份 YouTube Music 素材里**镂空**的部分垫成白色(2026-09-02 用户要求:
+    /// 把 Simple Icons 那份 YouTube Music 素材里**镂空**的部分垫成白色(
     /// 「不要是这种会随外观是白天模式还是黑色模式变里面的颜色…固定为白色」)。
     ///
     /// 病根不在代码而在素材:Simple Icons 是**单色**图标集,整张图只有一个红色实心圆是
     /// 不透明的,中间那圈细白环和播放三角**是抠掉的透明像素**(实测 alpha 恒为 0),所以显示成
     /// 什么颜色完全取决于背后是什么——浅色外观下卡片底是浅的,看着就是白的;深色外观下卡片底
-    /// 是深的,那两处就跟着变深(用户截图里那个"深色三角"就是这么来的)。跟 SwiftUI 的着色、
+    /// 是深的,那两处就跟着变深(对拍里那个"深色三角"就是这么来的)。跟 SwiftUI 的着色、
     /// 模板图(`isTemplate`)、`.foregroundStyle` 都无关,**改视图那一侧改不掉**。
     ///
     /// 做法:在图标下面垫一个纯白圆,红圆自己会把多余的白盖住,只剩镂空处透出白色。

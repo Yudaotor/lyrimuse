@@ -23,7 +23,7 @@ public struct EnrichCacheEntry: Decodable {
     /// 一张按专辑 ID 精确定位的高清静态图(实测 3840²),比按歌名匹配来的更权威。
     let motionPreviewURL: String?
     // 这张封面在**来源平台上属于哪张专辑**(collector/enrich.go 的 e.CoverAlbum,
-    // 2026-08-20 起落盘)。2026-09-01 起 Swift 侧解码——「最近记录」需要区分"缓存里有图"
+    // 落盘)。Swift 侧解码——「最近记录」需要区分"缓存里有图"
     // 和"缓存里这张图确实属于这行的专辑":后者才有资格纠正 Last.fm 自带图,见
     // albumVerifiedCoverURL。
     let coverAlbum: String?
@@ -33,14 +33,14 @@ public struct EnrichCacheEntry: Decodable {
     let instrumental: Bool?
     // 这条记录的**解析时刻**(Unix 秒)。>0 就代表"联网解析已经完整跑完一轮"——
     // collector 一轮搜索结束时才写它,而且找不到歌词时**同样会写**一条只有 ts、
-    // 没有 lyrics 的记录(2026-08-11 在真实缓存里核实过确有这种条目)。
+    // 没有 lyrics 的记录(在真实缓存里核实过确有这种条目)。
     //
     // 为什么不能用"查得到这个 key"当判据:外围字段补全那条路径(封面/各平台链接)也会
     // 写这个 key,但它刻意不动 ts(见 collector/enrich.go 里 e.PeripheralTS 那段注释),
     // 于是"条目存在"可能只代表封面补好了、歌词还在查 —— 拿它当"搜完了"会让 UI 提前
     // 认输。ts 是那一轮搜索真正结束的凭据。
     let ts: Int64?
-    // 各平台跳转目标(2026-08-24)。collector 早就把这几个落进缓存了,Swift 侧此前一个
+    // 各平台跳转目标。collector 早就把这几个落进缓存了,Swift 侧此前一个
     // 都没解码 —— 见 PlatformLinks 的头注。
     let appleMusicURL: String?
     let qqMusicURL: String?
@@ -48,27 +48,27 @@ public struct EnrichCacheEntry: Decodable {
     let qqAlbumMid: String?
     let qqSingerMid: String?
     // Spotify 真曲目 ID(collector/spotifytrack.go,Spotify 原生播放换曲那一拍从 `spotify url` 留下的
-    // 22 位 base62)。2026-09-10 起解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
+    // 22 位 base62)。解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
     // 本地拼的搜索页兜底,刻意不读。
     let spotifyTrackID: String?
     // 这首歌的语种真值(collector/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
-    // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。2026-08-29 起
+    // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。
     // 才第一次被 Swift 侧读取,此前完全没人解码它。
     let songLanguage: String?
-    // plainLyrics:2026-08-30 起才被读取——"搜索候选歌词"弹窗采纳一条"仅纯文本"候选时
+    // plainLyrics:才被读取——"搜索候选歌词"弹窗采纳一条"仅纯文本"候选时
     // (见 lyrimuse target 的 EnrichCacheStore.savePlainTextEdit)写的独立字段,跟 lyrics
     // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。collector 侧
     // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
     let plainLyrics: String?
-    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。2026-09-04 起解码,给「英文歌名 →
+    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。解码,给「英文歌名 →
     // 中文歌名」的本机别名推断当第二道闸(见 EnrichTitleAliases),此前 Swift 侧没人读它。
     let durationSecs: Double?
     // 所配歌词候选在来源上的时长(秒,collector 的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
     // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
     let resolvedDurationSecs: Double?
     // 这一轮解析里因为源级熔断被跳过的歌词源(collector 的 LyricsSourcesSkipped),以及
-    // "一条歌词都没有"这条自愈路径已经补搜过几次(LyricsFillCount)。2026-09-09 起解码,
+    // "一条歌词都没有"这条自愈路径已经补搜过几次(LyricsFillCount)。解码,
     // 只服务 EnrichCacheLyrics.searchIncomplete 一件事,见那个字段的头注。
     let lyricsSourcesSkipped: [String]?
     let lyricsFillCount: Int?
@@ -101,7 +101,7 @@ public struct EnrichCacheEntry: Decodable {
     }
 }
 
-/// EnrichCacheLyrics.searchIncomplete 的判据本体(2026-09-09)。
+/// EnrichCacheLyrics.searchIncomplete 的判据本体。
 ///
 /// 抽成自由函数只为可测:EnrichCacheReader 整体是 @MainActor、而且读的是固定路径上的那份
 /// 真缓存文件,selftest 没法喂输入进去跑真值表。判据本身要跟 collector 侧
@@ -134,13 +134,13 @@ public struct EnrichCacheLyrics {
     /// 这一轮搜索**没跑完整**:一条歌词都没搜到,而且有源是因为熔断冷却被整个跳过的
     /// (collector 的 lyrics_sources_skipped),collector 那边还欠这条一次快速补搜。
     ///
-    /// 为什么要单独有它(2026-09-09,用户报《One Last Kiss》"这里可以搜到,但是首次播放的
+    /// 为什么要单独有它(现象是《One Last Kiss》"这里可以搜到,但是首次播放的
     /// 时候显示无歌词"):resolved 回答的是"这一轮跑完了吗",而那一轮确实跑完了 —— 只是
     /// 九个源里七个压根没被问过(那 36 秒直连 DNS 全挂,见 collector 的 sourcebreaker.go)。
     /// 拿 resolved 直接当"查过了,这首歌没有"就是把一次网络事故说成了结论。所以这里如实
     /// 多传一位:currentTrackHasNoLyrics 见到它就不下"暂无歌词"这个结论。
     ///
-    /// 它**不会**让界面无限转圈——这正是 2026-09-09 早些时候《1999 (Edit)》那一版要避免的
+    /// 它**不会**让界面无限转圈——这正是 《1999 (Edit)》那一版要避免的
     /// 事情。判据里的 lyrics_fill_count == 0 就是"快速补搜还没跑过";补搜一跑(collector 侧
     /// needsLyricsFirstFill,跳过的源不冷却了 30 秒后就跑)这个字段立刻变成 false,不管补
     /// 搜有没有找到歌词,界面都会落定。
@@ -162,7 +162,7 @@ public enum EnrichCacheReader {
     // 忽略专辑的封面索引,跟 cachedEntries 同寿命 —— 见 coverByArtistTitle()。
     private static var cachedCoverIndex: [String: String]?
     // 宽松匹配索引(looseKey → 组内字典序最小的原 key),跟 cachedEntries 同寿命、惰性
-    // 构建 —— 见 looseMatch(2026-08-20 性能审计:原来每次精确 miss 都对全部 ~900 个 key
+    // 构建 —— 见 looseMatch(性能审计:原来每次精确 miss 都对全部 ~900 个 key
     // 逐个现算 ICU 繁简 transform,~7ms 主线程,新歌未解析窗口内每 2s 重复一遍)。
     private static var cachedLooseIndex: [String: String]?
     // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadNow 的同步解码
@@ -176,7 +176,7 @@ public enum EnrichCacheReader {
     /// 给调用方判断"collector 是不是又写过了"。同一首歌播放中途补出来的译文/换上来的更好
     /// 的歌词,在这一侧唯一的外部体现就是这个文件被重写 —— collector 那边的重推通知只走
     /// relay,本地模式压根不看。一次 stat,比重新解析几 MB 的 JSON 便宜得多。
-    /// 当前曲目的歌词/封面来源(2026-08-22,歌词窗口「显示简介」面板)。entry 里这两个
+    /// 当前曲目的歌词/封面来源(歌词窗口「显示简介」面板)。entry 里这两个
     /// 字段一直解码着但没往外传,这里补一个只读口;沿用 lookup 同款的 精确 key → 宽松
     /// key 两级匹配。首次调用要解析整份缓存 JSON,别在主线程调。
     public struct SourceInfo: Sendable {
@@ -191,7 +191,7 @@ public enum EnrichCacheReader {
         return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
     }
 
-    /// 当前曲目在缓存里的**实际条目 key**(2026-08-22,歌词窗口「搜索歌词」写回用):
+    /// 当前曲目在缓存里的**实际条目 key**(歌词窗口「搜索歌词」写回用):
     /// 精确命中用精确 key;宽松命中返回缓存里真实存在的那条 key —— 播放器报法与缓存
     /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
     /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
@@ -222,12 +222,12 @@ public enum EnrichCacheReader {
     /// 这首歌的**真实曲长**(秒),来自 collector 写进缓存的那份。零网络,沿用 lookup/sourceInfo
     /// 同款的 精确 key → 宽松 key 两级匹配;查不到或值非正返回 nil。
     ///
-    /// 唯一的用处是电台(2026-09-10):Apple Music 电台的系统快照里 `duration` 报的是**整档节目**
+    /// 唯一的用处是电台:Apple Music 电台的系统快照里 `duration` 报的是**整档节目**
     /// (实测 3390.122s = 56 分半),拿它当分母,进度条和时间读数就永远是「2:29 / 56:30」这种自相
     /// 矛盾的样子。collector 那边能从 Apple 目录查到这首歌的权威时长(实测把 3390.122 纠成
     /// 226.283)并写进这份缓存,App 在电台下改读它。缓存里还没有这首歌时(刚换曲、歌词还在解析)
     /// 返回 nil,调用方退回快照自己那份 —— **绝不能因此让时长变成 0**:进度锚点按 durationMs
-    /// 夹位置(ProgressClock),0 会把位置钉死在开头,表现成整档没有歌词(2026-09-10 真踩过)。
+    /// 夹位置(ProgressClock),0 会把位置钉死在开头,表现成整档没有歌词(真踩过)。
     public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -288,7 +288,7 @@ public enum EnrichCacheReader {
     ///
     /// 成本:只在精确 miss 时才扫,而 miss 只发生在合并过的那些歌上,量级是几百条字符串。
     private static func looseMatch(_ key: String, in all: [String: EnrichCacheEntry]) -> EnrichCacheEntry? {
-        // 经 cachedLooseIndex 查表(2026-08-20):原来每次 miss 对全表逐 key 现算 looseKey
+        // 经 cachedLooseIndex 查表:原来每次 miss 对全表逐 key 现算 looseKey
         // (每 key 一次 CFStringTransform 繁简转换),索引把它塌缩成一次 looseKey + 一次
         // 字典查找。索引**惰性**构建(首次 miss 时,~8ms 一次)——不急切挂在解码后:精确
         // 命中的曲目今天零成本,collector 预取连环写盘时急切重建反而是新增回归(对抗核实
@@ -317,8 +317,8 @@ public enum EnrichCacheReader {
     /// 只走**认专辑**的两级查找,不退到忽略专辑的兜底。
     ///
     /// 给"当前正在播的这首歌"用(PlaybackCoordinator.refreshHighResCover):同一首歌在
-    /// 不同专辑版本下封面经常是真的不一样(2026-08-26 用户报的「方大同 - 放不过自己」
-    /// 就是实锤 —— `JTW 西游记 (Gold) [Explicit]` 是金底半脸特写,更早听过的
+    /// 不同专辑版本下封面经常是真的不一样(现象是「方大同 - 放不过自己」
+    /// 就是坐实 —— `JTW 西游记 (Gold) [Explicit]` 是金底半脸特写,更早听过的
     /// `JTW西游记` 是黑底站姿,两张图完全不同)。这个调用点手里的专辑名来自系统 Now
     /// Playing、跟当前真正在播的这一版**必然对得上**,不像「最近播放」列表那边的 scrobble
     /// 专辑名可能跟本机播放器不一致——换句话说,这里没有"忽略专辑退一步"的必要性,
@@ -329,10 +329,10 @@ public enum EnrichCacheReader {
     ///
     /// ⚠️ 不要在这里加回 coverByArtistTitle() 那级兜底:换新专辑名的歌,collector 解析
     /// 完精确条目前的那几秒查空是**预期行为**,交给 refreshHighResCover 的
-    /// enrichContentVersion 补查路(2026-08-24)在解析完后自动纠正 —— 那条路径的
+    /// enrichContentVersion 补查路在解析完后自动纠正 —— 那条路径的
     /// `onlyIfMissing: true` 只在"已经拿到精确匹配的图"时才安全跳过;一旦这里退到
     /// 忽略专辑的兜底给出一张**可能是别的版本**的图,onlyIfMissing 会把这张错图焊死到
-    /// 换歌之前,后面精确条目写好了也不会被拿去纠正(这正是 2026-08-26 那次误封面的
+    /// 换歌之前,后面精确条目写好了也不会被拿去纠正(这正是那次误封面的
     /// 根因)。
     public static func albumMatchedCoverURL(artist: String, title: String, album: String) -> URL? {
         guard let all = loadEntries() else { return nil }
@@ -342,7 +342,7 @@ public enum EnrichCacheReader {
         return nil
     }
 
-    /// 这一行的**动态封面**(2026-09-09):master m3u8 + 静态首帧模板,两个都可能为空。
+    /// 这一行的**动态封面**:master m3u8 + 静态首帧模板,两个都可能为空。
     ///
     /// 查法跟 `albumMatchedCoverURL` 逐字一致(精确 key → 仍然认专辑的 looseMatch),连
     /// "不要退到忽略专辑那一级"这条也一样,而且在这里更严重:退一步拿到的会是**另一张专辑的
@@ -387,7 +387,7 @@ public enum EnrichCacheReader {
     ///
     /// 给「最近播放」列表当 Last.fm 之外的兜底用:那个列表的封面本来**全部**来自 Last.fm
     /// (scrobble 自带图 → track.getInfo → 同专辑兄弟),而 Last.fm 对中文曲库缺图非常
-    /// 常见 —— 2026-08-14 用户报的「陶喆 - 聖誕之吻」就是三级全空(Last.fm 只给它那张所有
+    /// 常见 —— 现象是「陶喆 - 聖誕之吻」就是三级全空(Last.fm 只给它那张所有
     /// 缺图实体共用的白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云是有图的。
     ///
     /// 三级查找(比 albumMatchedCoverURL 多退一步):
@@ -417,7 +417,7 @@ public enum EnrichCacheReader {
     /// 在"忽略专辑"的封面索引里查一行:先精确歌手写法,再退到**合唱 credit 归并**写法。
     /// 纯函数,selftest 直接覆盖。
     ///
-    /// 为什么要退这一步(2026-08-20 用户报「最近记录里这几首没封面」):同一次收听会以两种
+    /// 为什么要退这一步(现象是「最近记录里这几首没封面」):同一次收听会以两种
     /// 歌手写法存在 —— 本机缓存 key 用的是播放器逐曲 credit(`英雄联盟/Sara Skinner`、
     /// `Edouard Brenneisen & 英雄联盟`),而 Last.fm 那一行记的是主歌手(`英雄联盟`、
     /// `Edouard Brenneisen`)。前两级(归一化 key 精确 / looseKey)都救不了:looseKey 只把
@@ -436,21 +436,21 @@ public enum EnrichCacheReader {
     /// 三个图源三套机制,都是实测量出来的,不是照文档猜的:
     ///
     /// ① **网易云**:collector 存进缓存的 URL 尾巴上带着 `?param=600y600`(给列表里 26pt
-    /// 的小图用,省流量)。那个 param **只降不升** —— 2026-08-17 实测:一张原生 800×800
+    /// 的小图用,省流量)。那个 param **只降不升** —— 实测:一张原生 800×800
     /// 的封面带 `param=600y600` 拿回来就是 600×600(`param=1200y1200` 也还是 800,它不
     /// 上采样);另一张原生 495×495 的,带不带 param 都是 495。所以对"要大图"的消费方,
     /// 那个 param 是在白扔分辨率,去掉才拿得到原图。
     ///
     /// ② **QQ 音乐**:尺寸档写在**路径**里(`T002R300x300M000<mid>.jpg`),换个数字就换
-    /// 一档。2026-08-24 实测两个不同的 album mid:300/500/800 都 200,1000 与 2000 都
+    /// 一档。实测两个不同的 album mid:300/500/800 都 200,1000 与 2000 都
     /// **404** —— 所以 `qqCoverMaxEdge = 800` 是这个图床的天花板,不是随手挑的数。不带
     /// Referer 也照给(实测 200),而 App 这边发图片请求没有 Referer,所以能直接用。
     ///
-    /// ③ **Apple**:thumb 管线要多大给多大(2026-08-24 实测同一张图 600/1000/1200/2000/
+    /// ③ **Apple**:thumb 管线要多大给多大(实测同一张图 600/1000/1200/2000/
     /// 3000 全 200,999999 才 400)。取 1200 而不是更大:歌词窗口那张卡最大 460pt =
     /// 920px,1200 够用还有余量,2000 那一档一张就 1MB。
     ///
-    /// 为什么 2026-08-24 开始要动 QQ/Apple(原来这两个源写的是"一个字都不许改"):用户
+    /// 为什么开始要动 QQ/Apple(原来这两个源写的是"一个字都不许改"):用户
     /// 报 QQ 音乐的封面很模糊。QQ 音乐客户端往系统 Now Playing 报的封面就是 **300×300**
     /// (实测,见 PlaybackCoordinator.lowResArtworkThreshold),而缓存里那张高清替代图
     /// 当时也只有 300(QQ 源)/600(Apple 源)—— 顶到 820px 的封面卡上分别是 2.73× 和
@@ -512,7 +512,7 @@ public enum EnrichCacheReader {
               host == "mzstatic.com" || host.hasSuffix(".mzstatic.com")
         else { return nil }
         // 只认 `<W>x<H>bb.<jpg|png>` 这一种末段 —— 本机缓存里 82 条 Apple 封面清一色是
-        // `600x600bb.jpg`(2026-08-24 清点)。别的变体(`-999`、`sr`、裁切后缀)没实测过,
+        // `600x600bb.jpg`(清点)。别的变体(`-999`、`sr`、裁切后缀)没实测过,
         // 一律不动:改错了是直接 404、整张封面消失,比"稍微软一点"糟得多。
         let last = url.lastPathComponent
         guard last.range(of: "^[0-9]+x[0-9]+bb\\.(jpg|png)$", options: .regularExpression) != nil
@@ -576,7 +576,7 @@ public enum EnrichCacheReader {
         return index
     }
 
-    /// 本机推断的两张别名表(2026-09-04):歌手写法归并(LocalArtistAliases.derive,证据 = collector 的
+    /// 本机推断的两张别名表:歌手写法归并(LocalArtistAliases.derive,证据 = collector 的
     /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 → 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
     /// id / 时长 + 歌词)。歌手表先推、歌名表按新歌手表分桶 —— 两张表之间有依赖,必须一起算。
     public struct LocalAliasTables: Equatable {
@@ -629,7 +629,7 @@ public enum EnrichCacheReader {
         (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate] as? Date
     }
 
-    // ---- 解码调度(2026-08-20 性能审计重构) --------------------------------------
+    // ---- 解码调度(性能审计重构) --------------------------------------
     //
     // 问题形状:缓存是全库单文件(现 ~11.6MB/900+ 条,设计上永不清理、单调增长),collector
     // 给**任何一首歌**写盘(新歌解析/译文回填/重打分/专辑预取最多 30 首逐个落盘)都 bump

@@ -15,7 +15,7 @@ import (
 //
 // 为什么不能直接等自动路径自愈:rescoreLyrics 只在 `picked.Lyrics != e.Lyrics` 时才更新
 // LyricsTr/LyricsRoma/LyricsYRC(见 enrich.go 那段注释——避免正文没变时白白重写、白白导出
-// 一遍文件)。2026-08-26 真实bug复现(ROSÉ & Bruno Mars《APT.》):amll 候选构造那一步早就
+// 一遍文件)。真实故障复现(ROSÉ & Bruno Mars《APT.》):amll 候选构造那一步早就
 // 在读 amll.tr,但转成最终结果那个 switch 一直没有 case "amll",分数算对了、译文内容却从来
 // 没被抄进去。修好那个 switch 之后,这首歌"歌词正文"这次不会再变(上一轮自动 rescore 已经
 // 拿到修过间距的版本),但"译文"从空变成有内容——`picked.Lyrics == e.Lyrics` 恒成立,等
@@ -48,7 +48,7 @@ func runResyncLyricsCLI(args []string) {
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// 跟 searchcli.go 同一个理由(那边有详细注释):这条 CLI 每次都是新进程,不读这几份
 	// 持久化缓存的话,scoredLyricCandidates 内部的 retryArtistIdentities/艺人别名重试/
-	// 标题反查轮每次都要现查一遍 MusicBrainz——2026-08-28 实测坐实:这个缺口导致
+	// 标题反查轮每次都要现查一遍 MusicBrainz——实测坐实:这个缺口导致
 	// resync-lyrics 对同一批歌手反复触发 12 秒的 MusicBrainz 超时(两次查询、每次 6 秒),
 	// 白白拖慢重新匹配,且拿不到已经缓存过的别名结果。
 	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
@@ -94,7 +94,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		if duration <= 0 {
 			duration = e.DurationSecs
 		}
-		// 2026-08-30 真实bug(温岚《夏日の風》,本地标签是繁体"溫嵐 (Landy Wen)"/"溫式效應"):
+		// 真实故障(温岚《夏日の風》,本地标签是繁体"溫嵐 (Landy Wen)"/"溫式效應"):
 		// resolveTrackEnrichment(自动路径)和 search-lyrics(searchcli.go)在发起搜索前都会
 		// 先转一遍简体——网易云/QQ/酷狗/LRCLIB 的搜索索引是简体中文,繁体原文直接发search
 		// 请求经常直接查不到候选(不是匹配质量差,是搜索接口本身没命中)。这条 CLI 一直漏了
@@ -107,7 +107,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 		_, scored := scoredLyricCandidates(context.Background(), artist, title, album, duration)
 		picked := pickLyricCandidatePreferring(scored, e.LyricsSourceChoice)
-		// 2026-08-29 实测坐实(陶喆《Airport in 10:30》):这条 CLI 手上就攥着 enrichCache
+		// 实测坐实(陶喆《Airport in 10:30》):这条 CLI 手上就攥着 enrichCache
 		// 里的 e,不像 searchcli.go 那样要另开一次文件读来猜"现在有没有歌词" —— 之前这里
 		// 图省事硬编码 false,等于永远按"手上有一份好歌词"那套更严格的闸走(rescoreDecidable
 		// 见其头注:要求全部启用的源都应答)。这首歌当时 0 条候选、Musixmatch/YTMusic 这类

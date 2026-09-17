@@ -1,11 +1,11 @@
 import LyrimuseCore
 import SwiftUI
 
-/// 「对齐方式」用的分段控件 —— **菜单栏歌词和灵动岛歌词行共用这一份**(2026-09-07 起灵动岛多一档
+/// 「对齐方式」用的分段控件 —— **菜单栏歌词和灵动岛歌词行共用这一份**(灵动岛多一档
 /// 「自动」,靠 `options` 参数区分,控件本身仍是一份)。
 ///
-/// 2026-09-03 从 `MenuBarEditorStage.swift` 搬到这里(原名
-/// `MenuBarAlignmentSegmentedControl`),因为用户要求把这一项也加到灵动岛,而两边的选项、
+/// 从 `MenuBarEditorStage.swift` 搬到这里(原名
+/// `MenuBarAlignmentSegmentedControl`),因为把这一项也加到灵动岛,而两边的选项、
 /// 语义、标签文案逐字相同(见 `LyricsRestingAlignment`)。搬家而不是复制第三份:下面那两条
 /// ⚠️ 记的都是**实测踩出来的**尺寸坑,复制一份就等于以后改尺寸要记得改三处。同"两个展示面
 /// 共用一份视图"的既有先例 `AutoHideSettingsRows.swift`。
@@ -21,7 +21,7 @@ import SwiftUI
 /// Right-Aligned 差得更多),是那个 bug 的正射场景,所以直接用手搭的:每个选项固定
 /// `minWidth`,尺寸只取决于这里写的数字。
 ///
-/// ⚠️ `.fixedSize()` 是必需的、不是保险(同样抄自那边 2026-08-31 离屏渲染查出来的结论):
+/// ⚠️ `.fixedSize` 是必需的、不是保险(同样抄自那边离屏渲染查出来的结论):
 /// 这个控件在 `SettingsRow` 尾部插槽里,那一行有三个可伸缩成员(标题列/Spacer/本控件),
 /// SwiftUI **均分**剩余宽度而不是"先按理想宽度发";均分份额小于理想宽度时控件被压到下限,
 /// 英文标签("Left-Aligned" 长于 56pt)就会在**行里还剩一大截空白**的情况下被截成
@@ -30,7 +30,7 @@ import SwiftUI
 struct LyricsAlignmentSegmentedControl: View {
     @Binding var selection: LyricsRestingAlignment
     /// 画哪几档、按什么顺序。两个宿主各传各的:灵动岛 `LyricsRestingAlignment.notchOptions`(含「自动」),
-    /// 菜单栏 `.menuBarOptions`(三档)。⚠️ 别在这里用 `allCases`:2026-09-07 起枚举多了 `.automatic`,
+    /// 菜单栏 `.menuBarOptions`(三档)。⚠️ 别在这里用 `allCases`:枚举多了 `.automatic`,
     /// 而菜单栏那一格没有对唱声部可跟,列出来就是一个选了没效果的选项。
     let options: [LyricsRestingAlignment]
 

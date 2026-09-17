@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// 两侧同步的**源码级**守卫(2026-09-03 加)。
+// 两侧同步的**源码级**守卫。
 //
 // lyricsourcefailure.go 和 LyricSourceFailureReason.swift 的头注都在喊「两侧必须同步维护,
 // 漏了的后果是界面显示一串谁都看不懂的代码本身」—— 可这件事此前**一条自动检查都没有**,
@@ -79,7 +79,7 @@ func TestMusixmatchDirectBlockedCodeIsWiredOnBothSides(t *testing.T) {
 	}
 }
 
-// 2026-09-06 的三个传输层代码同理:常量、分类函数、searchcli 的消费点三处都得在,少一处就是
+// 的三个传输层代码同理:常量、分类函数、searchcli 的消费点三处都得在,少一处就是
 // "看起来做了"——分类函数没人调,弹窗永远不会看到 dns_failed。
 func TestTransportFailureCodesAreWired(t *testing.T) {
 	for _, c := range []struct{ got, want string }{
@@ -128,7 +128,7 @@ func TestTransportFailureCodesAreWired(t *testing.T) {
 	}
 }
 
-// lyricSourceFailureReasonsWith 的合成规则(2026-09-06 评审补的行为测试,之前只有字符串 grep):
+// lyricSourceFailureReasonsWith 的合成规则(评审补的行为测试,之前只有字符串 grep):
 // 给过候选的不报;未启用的不报;具体代码优先、传输层只填空;amll 只在"缺 ID 跳过 + 网易云和 QQ
 // 都带传输层代码"时派生 upstream_unreachable。lyricfind 的具体代码走进程级旁路
 // (ytmusicSetLastFailureReason),测试里设一次、结束时清掉。

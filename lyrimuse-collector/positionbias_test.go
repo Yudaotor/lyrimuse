@@ -25,7 +25,7 @@ func TestPositionBiasRecordDecodesSwiftShape(t *testing.T) {
 }
 
 func TestPositionBiasApplies(t *testing.T) {
-	// 真机案例(vampire,2026-09-09 15:01):锚点 0@07:01:02Z,App 15:01:07.341(本地)量到 −1.957。
+	// 真机案例(vampire,15:01):锚点 0@07:01:02Z,App 15:01:07.341(本地)量到 −1.957。
 	anchorTS := time.Date(2026, 9, 9, 7, 1, 2, 0, time.UTC)
 	written := anchorTS.Add(5341 * time.Millisecond)
 	now := written.Add(30 * time.Second)

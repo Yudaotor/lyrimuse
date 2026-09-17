@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// 2026-08-25 加:歌词第七个候选来源。这些测试的 JSON 片段字段名/嵌套结构全部来自
-// 2026-08-25 对真实 InnerTube 端点发裸 HTTP 请求实测抓到的响应(不是照抄文档/库源码
+// 加:歌词第七个候选来源。这些测试的 JSON 片段字段名/嵌套结构全部来自
+// 对真实 InnerTube 端点发裸 HTTP 请求实测抓到的响应(不是照抄文档/库源码
 // 假设的形状)——手写成最小片段而不是整段塞真实响应,是为了让每条测试一眼看出在验
 // 哪一层结构,跟 amllttml_test.go 手写 TTML 样本同一个理由。
 
@@ -32,7 +32,7 @@ func TestYtmusicParseDurationText(t *testing.T) {
 	}
 }
 
-// 真实 search 响应一条 item 的最小结构(2026-08-25 对 "Taylor Swift Anti-Hero" 实测
+// 真实 search 响应一条 item 的最小结构(对 "Taylor Swift Anti-Hero" 实测
 // 核实过这几段字段路径:flexColumns[0]=歌名、flexColumns[1]="歌手 • 专辑 • 时长"
 // 用 U+2022 连接、overlay 里的 watchEndpoint 带 videoId + musicVideoType)。
 func ytmusicSearchItemJSON(title, meta, videoID, musicVideoType string) string {
@@ -92,7 +92,7 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 	}
 }
 
-// 2026-08-25 实测坐实:不带 songs 过滤器的默认搜索"Top result"经常命中演唱会直拍/
+// 实测坐实:不带 songs 过滤器的默认搜索"Top result"经常命中演唱会直拍/
 // 翻唱视频而不是录音室曲目(Taylor Swift "Anti-Hero" 命中过 Eras Tour 现场版)。
 // 这组测试钉住挑选逻辑本身:曲名/歌手门 + 版本限定词门 + ATV 优先 + 时长最接近。
 func TestYtmusicPickSearchItem(t *testing.T) {
@@ -144,7 +144,7 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 
 func TestYtmusicExtractSearchItems(t *testing.T) {
 	// 真实响应把候选包在 tabbedSearchResultsRenderer 深处的 musicShelfRenderer.contents
-	// 数组里(2026-08-25 实测核实的路径,见 ytmusic.go 头注)。ytmusicExtractSearchItems
+	// 数组里(实测核实的路径,见 ytmusic.go 头注)。ytmusicExtractSearchItems
 	// 故意不按这条精确路径导航、而是通用递归找 key——这条测试把它包在一个*不同*的外壳
 	// 里(用一个虚构的容器名),确认这个函数真的是按 key 名找,不依赖外层路径。
 	raw := `{"someWeirdContainer":{"nested":[` +
@@ -159,7 +159,7 @@ func TestYtmusicExtractSearchItems(t *testing.T) {
 
 func TestYtmusicLyricsBrowseID(t *testing.T) {
 	// 真实 "next" 响应里 tabs 数组混着好几个 tab(Up next/Lyrics/Comments/Related),
-	// 只有 pageType 是 MUSIC_PAGE_TYPE_TRACK_LYRICS 的那个才是歌词 —— 2026-08-25 实测
+	// 只有 pageType 是 MUSIC_PAGE_TYPE_TRACK_LYRICS 的那个才是歌词 —— 实测
 	// 核实过这个数组的真实位置和其它三个 tab 的存在,这条测试确认判定不会误认别的 tab。
 	raw := `{
 		"contents": {"singleColumnMusicWatchNextResultsRenderer": {"tabbedRenderer": {
@@ -194,7 +194,7 @@ func TestYtmusicLyricsBrowseID(t *testing.T) {
 	}
 }
 
-// 2026-08-25 用户追问坐实:只在真是 LyricFind 时才接受候选,Musixmatch 换个管道重发的
+// 用户追问坐实:只在真是 LyricFind 时才接受候选,Musixmatch 换个管道重发的
 // 一律当"这一源没查到"——理由见 ytmusicLyric 文件头注(跨源共识会被虚假印证 + 6/9 的
 // 命中在已有 musixmatch 源上零增量)。这条钉住判定本身,真实的两种 sourceMessage 取值
 // 都覆盖到。
@@ -215,7 +215,7 @@ func TestYtmusicIsLyricFindSource(t *testing.T) {
 }
 
 func TestYtmusicParseTimedLyrics(t *testing.T) {
-	// 真实结构(2026-08-25 对 "Anti-Hero" 实测核实):timedLyricsData 和 sourceMessage
+	// 真实结构(对 "Anti-Hero" 实测核实):timedLyricsData 和 sourceMessage
 	// 是同一个 lyricsData 对象的兄弟字段,startTimeMilliseconds/endTimeMilliseconds
 	// 在原始 JSON 里是**字符串**、不是数字。
 	raw := `{"contents": {"elementRenderer": {"newElement": {"type": {"componentType": {"model": {
@@ -284,7 +284,7 @@ func TestYtmusicBuildLRC(t *testing.T) {
 
 func TestYtmusicExtractVisitorID(t *testing.T) {
 	// 真实首页 HTML 里内联的 ytcfg.set({...}),VISITOR_DATA 就在这个 JSON 里
-	// (2026-08-25 实测核实过这个形状能从真实响应里抠出来)。
+	// (实测核实过这个形状能从真实响应里抠出来)。
 	html := `<html><script>ytcfg.set({"VISITOR_DATA":"abc123==","INNERTUBE_CONTEXT":{}});</script></html>`
 	if got := ytmusicExtractVisitorID(html); got != "abc123==" {
 		t.Errorf("应该抠出 abc123==,实际 %q", got)
@@ -297,7 +297,7 @@ func TestYtmusicExtractVisitorID(t *testing.T) {
 	}
 }
 
-// 2026-08-25 用户报"批量解析时 musixmatch 交出候选的比例远低于单首查询"——根因是并发
+// 现象是"批量解析时 musixmatch 交出候选的比例远低于单首查询"——根因是并发
 // goroutine 各自判定"没有可用凭据"就都去发一次网络请求,YouTube 首页有同样的隐患
 // (抓 visitor id 也是一次网络请求)。这里从一开始就按单飞锁写,这条测试直接照抄
 // musixmatch_test.go 的 TestMusixmatchEnsureTokenSingleFlight,验证同一个机制。

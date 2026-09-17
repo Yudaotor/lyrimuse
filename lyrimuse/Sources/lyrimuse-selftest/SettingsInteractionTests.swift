@@ -6,7 +6,7 @@ import Foundation
 
 @MainActor
 func runSettingsInteractionTests() {
-    // ---- ReorderDrag(2026-09-05,借鉴清单 #53)----
+    // ---- ReorderDrag----
     //
     // 数值都按真实的设置行来:行高约 35 + 分隔线 1 = 槛距 36;五行的静止中线 17.5 / 53.5 / 89.5 / 125.5 / 161.5。
     do {
@@ -50,7 +50,7 @@ func runSettingsInteractionTests() {
         expectEqual(R.displacement(row: 1, source: 0, target: 2, rowMidYs: uneven), CGFloat(-40), "让位: 非均匀槛距按真实中线差(第一格)")
         expectEqual(R.displacement(row: 2, source: 0, target: 2, rowMidYs: uneven), CGFloat(-20), "让位: 非均匀槛距按真实中线差(第二格)")
 
-        // 夹住 + 滞回叠加(2026-09-05 用户真机发现「拖不到第一个前面」就是这里漏测):位移夹在首尾中线之间后,
+        // 夹住 + 滞回叠加(漏测的表现是「拖不到第一个前面」):位移夹在首尾中线之间后,
         // 首 / 末位必须仍然到得了。
         let toTop = R.clampedTranslation(-1000, source: 3, rowMidYs: mids)
         expectEqual(R.targetIndex(rowMidYs: mids, source: 3, current: 3, draggedMidY: mids[3] + toTop), 0,
@@ -95,7 +95,7 @@ func runSettingsInteractionTests() {
         expectEqual(stepwise, R.moved(order, isVisible: vis, from: 3, to: 0), "写回: 三次相邻 swap 与一次拖拽结果一致(箭头与把手不打架)")
     }
 
-    // ---- ProportionBar(2026-09-06,「歌词 → 管理」歌词库统计的分段比例条)----
+    // ---- ProportionBar(「歌词 → 管理」歌词库统计的分段比例条)----
     //
     // 数据用本机真实分布:3,325 / 232 / 9 / 38 / 65(逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无),可用宽 540、缝 1.5、下限 3。
     // 这个算法改错了完全不报错 —— 只是某一段消失或整条长出几 pt 被裁掉尾巴,肉眼未必看得出,所以钉在这里。
@@ -126,7 +126,7 @@ func runSettingsInteractionTests() {
         expectEqual(abs(cascade.reduce(0, +) - 73) < 0.001, true, "比例条: 亏空跨段扣回后总宽仍守恒")
     }
 
-    // ---- 芯片换行(ChipFlowGeometry,2026-09-10)----
+    // ---- 芯片换行(ChipFlowGeometry)----
     // Last.fm 卡「Scrobble 的播放器」那一排:内置播放器 + 信任列表里的浏览器摆同一排,个数由用户决定。
     // 真机尺寸:芯片 22pt 图标 + 左右各 3pt 内衬 = 28,间距 6,尾部槽位上限 320(见 PlayerChipMetrics)。
     do {
@@ -135,7 +135,7 @@ func runSettingsInteractionTests() {
         func widths(_ n: Int) -> [CGFloat] { Array(repeating: chip, count: n) }
 
         // 用户当天的真实候选:五个内置 + Safari / Chrome / Edge / Arc = 9 枚,必须仍是一行
-        // (9×28 + 8×6 = 300 ≤ 320)—— 这正是"把四行开关收拢成一排"这次改动要保住的东西。
+        // (9×28 + 8×6 = 300 ≤ 320)—— 这正是"把四行开关收拢成一排"要保住的东西。
         let nine = G.rows(widths: widths(9), spacing: gap, limit: limit)
         expectEqual(nine.count, 1, "芯片换行: 9 枚(5 内置 + 4 浏览器)仍排成一行")
         expectEqual(nine.first?.width, 300, "芯片换行: 9 枚一行宽 300pt")
@@ -163,7 +163,7 @@ func runSettingsInteractionTests() {
         expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero, "芯片换行: 没有候选时不占高")
     }
 
-    // ---- 改配置要不要重启 collector(CollectorRestartPolicy,2026-09-10)----
+    // ---- 改配置要不要重启 collector(CollectorRestartPolicy)----
     // 背景:重启一次 collector,从 SIGTERM 到重新开始服务实测 37~68 秒(启动要在 74MB 缓存之上跑九道迁移 +
     // 全量导入导出 14307 个歌词文件)。能被 collector 按 mtime 热读的键就别为它付这笔钱。
     do {

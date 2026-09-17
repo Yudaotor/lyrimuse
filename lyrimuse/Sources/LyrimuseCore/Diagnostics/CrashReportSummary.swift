@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一份 macOS 崩溃报告(`~/Library/Logs/DiagnosticReports/*.ips`)的摘要,诊断导出的「Recent Crash Reports」段用
-/// (2026-09-06,借鉴清单 #31)。
+///。
 ///
 /// .ips 是两段 JSON 拼在一个文件里:第一行是摘要(app_name / app_version / bug_type / timestamp / bundleID …),
 /// 换行之后是完整正文(procName / procPath / bundleInfo / exception / termination / faultingThread / threads /

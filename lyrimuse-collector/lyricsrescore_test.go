@@ -8,7 +8,7 @@ import (
 // needsLyricsRescore 的回归测试。
 //
 // 背景:打分规则(scoreLyricCandidate)改了之后,已经缓存下来的条目仍挂着按旧规则选出来的
-// 那份歌词——缓存是"解析一次永久保留"。2026-08-07 把时长档从 +1000 压到 +300、并把"歌词
+// 那份歌词——缓存是"解析一次永久保留"。把时长档从 +1000 压到 +300、并把"歌词
 // 结尾超出曲目时长"判成无效之后,用户那首《我们的时光》缓存里还是按旧规则胜出的
 // Musixmatch。lyricsScoringVersion + 这个判定就是让存量条目跟上新规则的那条路径。
 func TestNeedsLyricsRescore(t *testing.T) {
@@ -62,7 +62,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			want: true,
 		},
 		{
-			// 2026-09-13:此前 LyricsRescoreCount 是终身上限,打分版本 6 天连升三次(15→17→18)后
+			// 此前 LyricsRescoreCount 是终身上限,打分版本 6 天连升三次(15→17→18)后
 			// 本机 37 条已被永久冻结、112 条只剩一次。上限改成按版本计:旧版本下用掉的次数不算。
 			name: "次数是旧版本下用掉的:版本再升就解冻(上限按版本计,不是终身)",
 			e: func() enrichEntry {
@@ -166,7 +166,7 @@ func TestAllEnabledLyricSourcesResponded(t *testing.T) {
 
 // rescoreDecidable 是这个功能能不能真正生效的关键闸。
 //
-// 2026-08-07 上线当天真机日志坐实:五源搜索 20 秒上限下**有源超时是常态**,原来那条
+// 上线当天真机日志坐实:五源搜索 20 秒上限下**有源超时是常态**,原来那条
 // "所有启用的源都回来了才算数"让同一首歌连着两次都 deferred,次数烧光、永远轮不到重选。
 // 换成"当前这份歌词的来源这一轮回来了"就够 —— 它自己参与了新规则下的比较。
 func TestRescoreDecidable(t *testing.T) {
@@ -200,7 +200,7 @@ func TestRescoreDecidable(t *testing.T) {
 	}
 }
 
-// TestRescoreDecidableNoCurrentLyrics 锁住 2026-08-22 加的那一支:手上压根没有歌词时,
+// TestRescoreDecidableNoCurrentLyrics 锁住加的那一支:手上压根没有歌词时,
 // 这道闸没有东西可保护,直接放行。
 //
 // 用户可见的 bug 是「手动搜索能搜到,点『重新自动匹配』却搜不到」——「枫+退后+搁浅 (Live)」

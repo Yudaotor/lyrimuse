@@ -2,12 +2,12 @@ package main
 
 import "time"
 
-// 歌词解析的**决策记录**(2026-08-17 加,吸收自对比审阅 C2/C3)。
+// 歌词解析的**决策记录**(加,吸收自对比审阅 C2/C3)。
 //
 // 背景:歌词缓存"解析一次永久保留",而选中哪个源有相当大的运气成分(20 秒总上限内哪些源
 // 赶上了这一轮,见 enrichEntry.LyricsScore 的注释)。此前缓存里只存胜者的总分,事后想知道
 // "为什么是这个源"只能靠「歌词管理」重新联网搜一遍 —— 而重搜是**另一轮抽签**,合法地
-// 给出另一组候选(2026-08-07 实锤:popup 显示 qq 482 赢,实际当时是 Musixmatch 962 赢,
+// 给出另一组候选(坐实:popup 显示 qq 482 赢,实际当时是 Musixmatch 962 赢,
 // 差别在决策时手里有时长、重搜时没有)。当时的修补是把 duration_secs 存下来,堵了一个
 // 输入差异;这里把**决策本身**存下来,堵掉整类问题:哪些源应答了、各自得了多少分、
 // 为什么被拒,几个月后离线也能一字不差地复盘。
@@ -20,7 +20,7 @@ import "time"
 //  3. 手动改过的条目(ManualLyrics)不更新 —— 三个写入站点本来就对 ManualLyrics 早退,
 //     人工覆盖之前那份自动决策的记录就地保留,说明"自动选出来的曾经是什么"。
 //
-// 缓存里存**两槽**(2026-08-22 分槽,三条铁律对两槽同样生效):
+// 缓存里存**两槽**(分槽,三条铁律对两槽同样生效):
 //   - lyrics_decision:最近一次评估 —— 可能维持原状,甚至输入本身是脏的(换曲窗口的
 //     串扰时长,见 observeWrongDuration);
 //   - lyrics_decision_applied:当前歌词的出处 —— 最近一次"胜者内容成为(或确认仍是)
@@ -58,7 +58,7 @@ type lyricsDecision struct {
 	// RetryMethod/CorrectedTitle:**胜者**是不是"标题反查改写标题之后"那一轮搜出来的,
 	// 以及改写成了什么。两者都空 = 胜者来自按本地标题的正常那一轮(绝大多数情况)。
 	//
-	// 2026-09-02 加。起因是一次事后无法审计的错配(打上花火被反查成《春雷》):存档里
+	// 起因是一次事后无法审计的错配(打上花火被反查成《春雷》):存档里
 	// 只有 winner/candidates 时,想知道"库里还有多少条是走这条高风险路径来的"完全无从
 	// 下手——光看标题分不出对错,Uchiagehanabi→春雷(错)和 Black Hole→黑洞里(对)在
 	// 标题层面是同一个形状。这两个字段把"走没走那条路径"变成可 grep 的事实。
@@ -67,7 +67,7 @@ type lyricsDecision struct {
 	RetryMethod    string `json:"retry_method,omitempty"`
 	CorrectedTitle string `json:"corrected_title,omitempty"`
 	// QueriesTried:这一轮**实际问出去的每一组查询词**,以及那一组只问了哪几个源
-	// (借鉴清单 V1,2026-09-12,机制与实测依据见 querylog.go 头注)。
+	// (机制与实测依据见 querylog.go 头注)。
 	//
 	// 上面 QueryArtist/QueryTitle/QueryAlbum 记的只是**首轮**那一组;而一轮解析最多会换
 	// 五种问法(拆分重入 / 别名轮 / 首歌手变体轮 / 两种标题反查)。RetryMethod 只在胜者恰好
@@ -90,11 +90,11 @@ type lyricsDecisionCandidate struct {
 	Title  string `json:"title,omitempty"`
 	Artist string `json:"artist,omitempty"`
 	Album  string `json:"album,omitempty"`
-	// CoverURL:这个源当时给出的封面(2026-09-01 加,用户要求决策面板把封面也显示出来)。
+	// CoverURL:这个源当时给出的封面(加,决策面板把封面也显示出来)。
 	// 跟 Title/Artist/Album 同一个用途 —— 判断"这个源匹配到的是不是同一个版本",而封面
 	// 往往比专辑名更一眼看得出来(现场版/精选集/单曲封面差别很直观)。
 	//
-	// 2026-09-01 实测(search-lyrics 真查一次《Shall We Dance (Live)》):网易云/酷狗/QQ/
+	// 实测(search-lyrics 真查一次《Shall We Dance (Live)》):网易云/酷狗/QQ/
 	// LRCLIB **四个源都给得出**封面(LRCLIB 那条是 iTunes 的 mzstatic 图),连被判 -1 的
 	// 候选也有。不过仍然当"可能为空"处理 —— 某个源某次没查到是正常的。
 	// 存档里的 URL 还可能随时间失效 —— App 侧按"取不到就当没有"处理。
@@ -105,9 +105,9 @@ type lyricsDecisionCandidate struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	HasWordTiming              bool    `json:"has_word_timing,omitempty"`
 	Instrumental               bool    `json:"instrumental,omitempty"`
-	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段(2026-09-04)。
+	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段。
 	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
-	// ConsensusPeers:这条候选的正文跟**哪些**其它源高度一致(借鉴清单 V2,2026-09-12)。
+	// ConsensusPeers:这条候选的正文跟**哪些**其它源高度一致。
 	// 存档里原来只有 score_terms 里那一行 consensus +250/+150 的**分数**,答不出"跟谁"——
 	// 而"冠亚军是不是同一份词"正是复盘微弱分差时唯一要问的问题(全库 4110 场竞争,分差
 	// 中位 23 分、55.9% 是"分差<=40 且双方都有共识分")。名单由 contentConsensusPeers
@@ -120,8 +120,8 @@ type lyricsDecisionCandidate struct {
 // 决策存档的 path 取值全集。
 //
 // ⚠️ 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.pathLabel 那个 switch 里补中文译名 ——
-// 那边 default 分支是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看。2026-08-21
-// 加 manual-rematch 时就这么漏过一次(用户截图反馈「这里的文案是否没做好中文的」)。
+// 那边 default 分支是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看。
+// 加 manual-rematch 时就这么漏过一次(对拍反馈「这里的文案是否没做好中文的」)。
 // lyricsDecisionPaths 那个测试守着这份清单,改了要一起改。
 const (
 	lyricsDecisionPathFirstResolve  = "first-resolve"  // 首次解析

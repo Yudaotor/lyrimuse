@@ -1,6 +1,6 @@
 import Foundation
 
-/// App ⇄ collector 的「全量重新扫库」状态通道(2026-09-16,见 collector/lyricsfullscan.go 头注)。
+/// App ⇄ collector 的「全量重新扫库」状态通道(见 collector/lyricsfullscan.go 头注)。
 ///
 /// ## 这件事跟「补空扫描」的关系
 ///
@@ -30,7 +30,7 @@ public enum LyricsFullScan {
         ///
         /// 跟 `scoringVersion` 同一个理由:这个数由 collector 侧的常量决定
         /// (`lyricsFullScanGap` + 一轮全源搜索的估计),**App 不该自己写死一份**。
-        /// 2026-09-17 之前界面里就硬编码着 25 秒、注释还写着「15 秒固定间隔」,collector 把
+        /// 之前界面里就硬编码着 25 秒、注释还写着「15 秒固定间隔」,collector 把
         /// 全量那一档改成 5 秒之后,那个数和那句话当场都成了错的,而没有任何东西会报错。
         ///
         /// 0 = 这份文件是老 collector 写的(Go 那边带 omitempty),调用方退回自己的兜底值。

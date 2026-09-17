@@ -28,7 +28,7 @@ final class LyricsColumnWidthsStore: ObservableObject {
     }
 
     /// 拖动列宽期间为 true:@Published 照常发布(可见行要实时按新宽重画),但不再逐个
-    /// 鼠标事件往 UserDefaults 写三笔中间态(2026-08-19 性能审计),松手时 endDragging()
+    /// 鼠标事件往 UserDefaults 写三笔中间态,松手时 endDragging()
     /// 一次性落盘。reset() 等非拖拽路径不受影响(isDragging 恒为 false 时 didSet 照写)。
     private var isDragging = false
 

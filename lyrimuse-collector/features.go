@@ -36,7 +36,7 @@ const (
 	// 演唱者归属(TTML 的 ttm:agent),命中即拿到真·结构化对唱,不用靠行首前缀的启发式。
 	// 覆盖率有限(实测约 6%),所以是"锦上添花"的一档,不是主力源。
 	lyricSourceAMLL = "amll"
-	// LyricFind(检索机制见 ytmusic.go,2026-08-25 加)。YouTube Music 的歌词后端同时
+	// LyricFind(检索机制见 ytmusic.go)。YouTube Music 的歌词后端同时
 	// 接了 Musixmatch 和 LyricFind 两家供应商,只有 LyricFind 是六源之外的真实增量
 	// 数据——ytmusic.go 按 timedLyricsData 的 sourceMessage 过滤,查到的是 Musixmatch
 	// 换个管道重发时一律当"没查到"处理,所以这个源名副其实:只要叫这个名字的候选,
@@ -45,12 +45,12 @@ const (
 	// 只有逐行,没有逐字。实测(用户曲库 9 首抽样,过滤前的原始命中)8/9 在 YTM 上有
 	// 歌词,但只有 2/9 是 LyricFind,覆盖率不算高,归在"锦上添花",不是主力源。
 	lyricSourceLyricFind = "lyricfind"
-	// 酷我音乐(2026-08-31 加,见 kuwo.go 头注)。接口契约从公开的第三方开源实现
+	// 酷我音乐(加,见 kuwo.go 头注)。接口契约从公开的第三方开源实现
 	// 逆向出来,实测搜索排序完全不可信(原版录音室版本常年不进 top10),接入时已经补了
 	// 自己的重新打分排序,不是简单照搬。只有逐行,没有逐字/译文,覆盖率同 amll/lyricfind
 	// 一档,是"锦上添花"的兜底,不是主力源。
 	lyricSourceKuwo = "kuwo"
-	// 咪咕音乐(2026-09-04 加,见 migu.go 头注)。跟酷我相反,搜索排序基本可信(原版排第一),
+	// 咪咕音乐(加,见 migu.go 头注)。跟酷我相反,搜索排序基本可信(原版排第一),
 	// 只套身份闸淘汰、不重新打分;逐行 LRC + 外语歌的中文译文,没有逐字。华语曲库覆盖率预期
 	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 lyricsSourceDefaultOrder)。
 	lyricSourceMigu = "migu"
@@ -75,7 +75,7 @@ const (
 // sdef/PlistBuddy 核实过,两者都没有 .sdef、也没开 NSAppleScriptEnabled),共用同一条
 // 系统级 MediaRemote(media-control)读取路径,只是 bundle id 不同——见 system.go 的
 // getState()/appleMusicPosition() 注释。Spotify 自己虽然有 AppleScript 支持,但
-// 2026-07-29 实测坐实它同样会把播放状态发布进系统级 MediaRemote(`media-control get`/
+// 实测坐实它同样会把播放状态发布进系统级 MediaRemote(`media-control get`/
 // 控制指令都正常),没必要单独写一套 AppleScript 集成,归到跟 QQ/网易云一样的路径。
 // playerAuto("自动识别")不对应固定的某个 App——问 media-control 当前系统级 Now
 // Playing 焦点是谁,核对是不是这四个已知播放器之一,见 system.go 的 getSpotifyState
@@ -85,11 +85,11 @@ const (
 	playerQQMusic    = "qq_music"
 	playerNetease    = "netease_music"
 	playerSpotify    = "spotify"
-	// 酷狗音乐(2026-08-21 接入)。它是个 Mac Catalyst 应用(主二进制链的是
+	// 酷狗音乐(接入)。它是个 Mac Catalyst 应用(主二进制链的是
 	// /System/iOSSupport/.../MediaPlayer.framework),自己把播放状态发布进系统级
 	// MediaRemote,所以跟 QQ/网易云/Spotify 走同一条 media-control 路径,不需要新代码路径。
 	// 跟 QQ/网易云一样没有 AppleScript 字典(`Info.plist` 里没有 NSAppleScriptEnabled、
-	// Resources 下也没有 .sdef,2026-08-21 核实),所以扩展控件(喜欢/音量/播放模式)一律没有。
+	// Resources 下也没有 .sdef),所以扩展控件(喜欢/音量/播放模式)一律没有。
 	playerKugou = "kugou_music"
 	playerAuto  = "auto"
 )
@@ -99,7 +99,7 @@ const (
 // lyricsSourceOrder 默认值就是 allCases,两边对不上会让"顺序优先"模式在首次写盘前后
 // 表现不同。改这里就要同步改那里,反之亦然(那边注释也钉着这条)。
 //
-// 排序依据(2026-09-07 起按实测采用率,此前是照抄 enrich.go candidates 的 append 顺序):
+// 排序依据(按实测采用率,此前是照抄 enrich.go candidates 的 append 顺序):
 // 用户本机 3744 条 enrich 缓存里最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/
 // QQ 732(19.6%)/ Musixmatch 176(4.7%)/ LRCLIB 74(2.0%) —— 酷狗是第一主力却长期排第三,
 // 这次提到首位,前五个自此按真实采用率排。
@@ -119,33 +119,33 @@ type featureFlagsFile struct {
 	// 迁移前的选择读一次,resolvePlayers 兜底成 playerAuto。这台机器往后只会写 Players,
 	// 不会再写这个键,但读老配置(iCloud 同步/降级）时不能让它凭空消失。
 	Player string `json:"player,omitempty"`
-	// Players：可多选的播放器集合(2026-09-01 起支持多选,取代上面的 Player)——跟
+	// Players：可多选的播放器集合(支持多选,取代上面的 Player)——跟
 	// lyrimuse 侧 FeatureSettingsStore.players(Set<PlaybackPlayer>)对应,rawValue 逐字
 	// 相同。resolvePlayers 负责校验/迁移/兜底,任何时候 features.Players 都保证非空。
 	Players       []string `json:"players,omitempty"`
 	AlbumPrefetch *bool    `json:"album_prefetch,omitempty"`
 	// LyricsAutoUpgrade:歌词定下来之后,还要不要跟着"匹配算法/打分规则升级"在后台自动
-	// 换掉(2026-09-03 用户要求把这个能力交出来:「控制是否会有自动按照最新版本的算法优化
+	// 换掉(把这个能力交出来:「控制是否会有自动按照最新版本的算法优化
 	// 调整歌词的能力;开了就是现状,不开就是一开始选了什么就不会后台自动给换了」)。
 	// 缺失=true=现状。闸门只加在**换掉已有歌词**的那两条路径上(enrich.go 的
 	// needsLyricsRescore / needsLyricsRetry),首次填充、封面/译文回填、用户手动重搜都不受它管。
 	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
 	// LastfmScrobbleArtistMode：合唱串("A & B")上送时发哪个名字,三档
-	// scrobbleArtistAll / scrobbleArtistFirst / scrobbleArtistSmart(2026-09-03 起)。
+	// scrobbleArtistAll / scrobbleArtistFirst / scrobbleArtistSmart。
 	// 缺失/非法值时退回下面的遗留布尔做一次迁移,见 resolveScrobbleArtistMode。
 	// 语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
 	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
-	// LastfmScrobbleFirstArtistOnly：**遗留字段**(2026-08-31 ~ 2026-09-03 之间的二态开关,
+	// LastfmScrobbleFirstArtistOnly：**遗留字段**(~ 之间的二态开关,
 	// 被上面的 LastfmScrobbleArtistMode 取代,只留着给一次性迁移用)。true ↔ scrobbleArtistFirst,
 	// false/缺失 ↔ scrobbleArtistAll。这台机器往后只写 LastfmScrobbleArtistMode,不再写它。
 	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
-	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(2026-09-03 加,
+	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(加,
 	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
 	// 30 秒,主流 scrobbler 都在客户端照做。**只管 Last.fm**(含给 Last.fm 兜底的本地收听日志和
 	// 回填),ListenBrainz 不受影响 —— 见 poller.go tooShortToScrobble / shortTrackLastfmOnly。
 	ScrobbleShortTracks *bool `json:"scrobble_short_tracks,omitempty"`
-	// LastfmScrobblePoint:一次收听**记到 Last.fm** 的时点(2026-09-06 加,设置里 Last.fm →
+	// LastfmScrobblePoint:一次收听**记到 Last.fm** 的时点(加,设置里 Last.fm →
 	// 「Scrobble 时机」),四档 scrobblePointHalf / scrobblePoint75 / scrobblePoint90 / scrobblePointEnd。
 	// 默认 scrobblePointHalf = 现状(官方规则:曲长一半或 4 分钟,先到为准)。**只管 Last.fm**:
 	// ListenBrainz、网页中继照旧在官方阈值那一刻提交,Last.fm 那一路(含给它兜底的本地收听日志)
@@ -173,14 +173,14 @@ type featureFlagsFile struct {
 	// 这个字段就落盘,从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.amllLyrics
 	// 一一对应,改一边必须改另一边。
 	AMLLLyrics *bool `json:"amll_lyrics,omitempty"`
-	// LyricFindLyrics：跟 AMLLLyrics 同一个套路的迁移标记(2026-08-25 加 lyricfind 时补)。
+	// LyricFindLyrics：跟 AMLLLyrics 同一个套路的迁移标记(加 lyricfind 时补)。
 	// lyricfind 没有 amll 那样"曾经有过独立开关"的历史——它从一开始就直接进
 	// LyricsSources 白名单——但这个字段要解决的是**同一个**问题:老配置(写的时候
 	// lyricfind 这个源还不存在)按白名单办会被静默关掉。缺失 ⇒ 老配置,把 lyricfind 补进
 	// 启用集合(只补这一次);一旦保存过,这个字段落盘,从此完全以 LyricsSources 为准。
 	// 与 Swift 侧 FeatureFlagsFile.lyricFindLyrics 一一对应。
 	LyricFindLyrics *bool `json:"lyricfind_lyrics,omitempty"`
-	// KuwoLyrics:跟 AMLLLyrics/LyricFindLyrics 同一个套路的迁移标记(2026-08-31 加
+	// KuwoLyrics:跟 AMLLLyrics/LyricFindLyrics 同一个套路的迁移标记(加
 	// kuwo 时补)。老配置(写的时候 kuwo 这个源还不存在)按白名单办会被静默关掉。
 	// 缺失 ⇒ 老配置,把 kuwo 补进启用集合(只补这一次);一旦保存过,这个字段落盘,
 	// 从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.kuwoLyrics 一一对应。
@@ -215,7 +215,7 @@ type featureFlagsFile struct {
 	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
 	// 知道。
 	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
-	// LaunchLyrimuseOnPlayers:「跟随播放器启动」逐播放器勾选(2026-09-03,Swift 侧 FeatureSettingsStore
+	// LaunchLyrimuseOnPlayers:「跟随播放器启动」逐播放器勾选(Swift 侧 FeatureSettingsStore
 	// 的 launchLyrimuseOnPlayers)。键在就严格按它来(空列表 = 关),键缺失是布尔年代的老配置,退回
 	// 「盯整个选中集合 / auto 全量」。上面那个布尔 App 仍然写(= 列表非空),两者同时在时布尔只当总开关。
 	LaunchLyrimuseOnPlayers []string `json:"launch_lyrimuse_on_players,omitempty"`
@@ -232,7 +232,7 @@ type featureFlagsFile struct {
 	// 它跟五个内置播放器完全同权(显示 + 打卡)。这样任何 App 都能接(包括这个项目从没
 	// 听说过的),而默认状态下一条垃圾都进不来。
 	TrustedPlayers map[string]string `json:"trusted_players,omitempty"`
-	// LastfmExcludedBundles:**不** scrobble 到 Last.fm 的播放器(bundle id 列表,2026-09-10,借鉴清单 S10)。
+	// LastfmExcludedBundles:**不** scrobble 到 Last.fm 的播放器(bundle id 列表)。
 	// 设置 → 账号 → Last.fm → 设置 →「Scrobble 的播放器」取消勾选的那几个;缺失 / 空 = 全部上送(现状)。
 	// **只管 Last.fm**(含给它兜底的本地收听日志 / 回填与 now-playing),ListenBrainz 不受影响 —— 与
 	// ScrobbleShortTracks / LastfmScrobblePoint 同一口径。与 Swift 侧 FeatureFlagsFile.lastfmExcludedBundles
@@ -249,14 +249,14 @@ type featureFlagsFile struct {
 // 推送类模块(网页展示子开关、TopArtistsDigest、故障告警)不在这里出现:前两者已
 // 改成"配置齐了就默认全跑"(pushRelayState 只看 cfg.StateRelayURL 是否非空,见
 // config.go;TopArtistsDigest 见 topArtistsDigest()),不需要单独开关;故障告警
-// 已整个下线,见 alerter.go。2026-07-29:Last.fm 桥接(读 Last.fm 转发进 LB + 喂
+// 已整个下线,见 alerter.go。Last.fm 桥接(读 Last.fm 转发进 LB + 喂
 // 网页"正在播放")加入这个"不需要单独开关"的阵营——之前独立的 LastfmBridge 开关
 // 在 UI 上本来就要求"Last.fm 桥接凭据 + ListenBrainz 都配好"才能打开,跟自动判定
 // 的条件完全一样,单独留一个开关只是多一次点击,没有实际区分度,见 poller.go 的
 // bridge() 判断条件。
 type featureFlags struct {
 	// Players 是已经解析/校验过的播放器集合(键是 playerAppleMusic/playerQQMusic 等
-	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——2026-09-01 从单选的 Player
+	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——从单选的 Player
 	// 改成可多选。system.go 的 getState()/mediaPlayerLabel()、poller.go 的 isTracked()、
 	// companionlaunch.go、match.go 的同源加权都读它。
 	Players       map[string]bool
@@ -278,7 +278,7 @@ type featureFlags struct {
 	DailyDigestSource   string
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
-	// ⚠️ 2026-08-21 订正:原注释说 `collector search-lyrics` 子命令"从不调用
+	// ⚠️ 订正:原注释说 `collector search-lyrics` 子命令"从不调用
 	// loadFeatureFlags、这三个字段在那条路径上永远是零值",**这是错的** —— searchcli.go
 	// 一直自己加载一遍(不然 LyricsSources 是 nil map,过滤时全部源被误判成"没启用"、
 	// 直接返回空列表)。LyricsSources 早就被 filterEnabledLyricSources 实际读取着;
@@ -408,7 +408,7 @@ const (
 // 才兜底 all。非法值**不**当成 all 静默吞掉之外还会记一行日志 —— 拼错档位名的后果是
 // "设置里选了智能、collector 一直在发整串",不报出来查不到。
 //
-// ⚠️ 这里兜底 all **不能**跟着 App 改成 smart(2026-09-16 起「全新装机默认智能」)。
+// ⚠️ 这里兜底 all **不能**跟着 App 改成 smart(「全新装机默认智能」)。
 // 两个进程能拿到的信息不一样:那个默认值是按"这台机器是不是头一回用 lyrimuse"抬的,
 // 判据里有 UserDefaults(`np:hasCompletedOnboarding`)—— collector 是独立进程,读不到,
 // 自己判不了新老。分工因此是:**App 负责判、并把结论写实进 features.json**
@@ -432,7 +432,7 @@ func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
 	return scrobbleArtistAll
 }
 
-// Last.fm scrobble 时点(features.LastfmScrobblePoint,2026-09-06)。字符串值跟 Swift 侧
+// Last.fm scrobble 时点(features.LastfmScrobblePoint)。字符串值跟 Swift 侧
 // LastfmScrobblePoint 的 rawValue 逐字相同 —— 两侧通过同一份 features.json 交换。
 const (
 	// 官方规则:播满曲长一半、或满 4 分钟,先到为准(默认)。这也是 ListenBrainz 那一路提交的时刻,
@@ -469,14 +469,14 @@ func isValidPlayerValue(p string) bool {
 	}
 }
 
-// resolvePlayers 是 2026-09-01 从单选 resolvePlayer 改成多选后的替代——list 是新字段
+// resolvePlayers 是从单选 resolvePlayer 改成多选后的替代——list 是新字段
 // featureFlagsFile.Players(可能为 nil,老配置/全新安装都会是这样),legacy 是旧字段
 // Player(单选年代写的值)。
 //
 // 优先级:list 里任何认得出的值都收进结果集,认不出的静默丢弃(比如未来某个版本删掉的
 // 播放器,不该让整份解析失败)；list 过滤后一个能收的都没有(nil/空/全认不出),才退回
 // legacy 做**一次性迁移**——老配置只选过一个,迁移后的结果集就是那一个;legacy 也认不出
-// 或本身是空值,才最终兜底成 playerAuto(2026-08-13 定的默认,理由见 PlaybackPlayer.swift
+// 或本身是空值,才最终兜底成 playerAuto(定的默认,理由见 PlaybackPlayer.swift
 // 顶部注释:写死 Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的
 // 界面)。返回值保证非空、且键全部是六个已知值之一,调用方可以放心用 `m[playerXxx]` 判断
 // 成员,不需要再校验一遍。
@@ -541,7 +541,7 @@ func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, ku
 	// 非空、lyricFindSeen 为空),这种配置只该补 lyricfind,不该把 amll 也重新补一遍(用户
 	// 可能已经手动关掉了它)。
 	//
-	// ⚠️ 2026-08-25 实测坐实过一次:这里漏了迁移标记参数的那版代码,在这台机器真实的
+	// ⚠️ 实测坐实过一次:这里漏了迁移标记参数的那版代码,在这台机器真实的
 	// lyrimuse-features.json(lyrics_sources 只有旧的六个、没有对应迁移字段)上跑
 	// search-lyrics,sourcesTotal 停在 6、候选列表里一条新源都没有——「代码接好了但
 	// 静默对现有用户不生效」不是假设的风险,是真的在这台机器上复现过的 bug,加上这几个

@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// Spotify 真曲目 ID(2026-09-09):URI 解析、真链接派生、提示表消费、LB 标准字段。
+// Spotify 真曲目 ID:URI 解析、真链接派生、提示表消费、LB 标准字段。
 // 全是纯函数 / 内存表,不碰网络与磁盘。
 
 func TestSpotifyTrackIDFromURI(t *testing.T) {

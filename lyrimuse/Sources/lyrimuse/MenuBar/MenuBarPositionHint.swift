@@ -3,7 +3,7 @@ import SwiftUI
 
 // 首次启动的一次性提示:「按住 ⌘ 拖拽这个图标,可以挪到菜单栏里想要的位置」。
 //
-// 背景(2026-09-01 用户要求"把图标挪到贴近系统图标的位置"):调研发现 macOS 没有公开
+// 背景("把图标挪到贴近系统图标的位置"):调研发现 macOS 没有公开
 // API 能保证第三方状态栏图标的位置,苹果 HIG 原文明确说这该由用户决定、不该由 App
 // 决定;历史上唯一的私有优先级接口在 10.6.3(2010)就已失效。唯一真正可靠、且是苹果
 // 官方认可的手段就是引导用户自己 ⌘+拖拽——这个控制器就是那条引导,调用点见
@@ -40,7 +40,7 @@ final class MenuBarPositionHintController {
             Task { @MainActor in self?.teardown() }
         }
         pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        // 跟 MenuBarPanelController 同一处修法(2026-08-31 那次"别的 App 全屏时面板打不开"):
+        // 跟 MenuBarPanelController 同一处修法(那次"别的 App 全屏时面板打不开"):
         // NSPopover 自建窗口默认进不了别的 App 的全屏 Space,只能落在桌面 Space 上——
         // 一次性提示碰不上就直接看不见,补上这两位让它至少能出现在当前 Space。只能放在
         // show 之后:那个窗口是 show 内部现建的。

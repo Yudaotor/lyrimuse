@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-17 用户报的第二个现象:Top 歌手榜里 K/DA 显示成 **"K"**。
+// 现象是的第二个现象:Top 歌手榜里 K/DA 显示成 **"K"**。
 //
 // 根因跟歌词搜索那个是同一个:`/` 既在 isArtistCreditSep 里、又是 "K/DA" 这个名字自身的
 // 一部分。原来 artistMergeDisplayName 第一步用 firstCreditedArtist 从串里"猜第一个歌手",
@@ -25,7 +25,7 @@ func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	})
 	withCachedQQArtistNames(t, map[string]string{
 		"K/DA": "", "Madison Beer": "", "Prince": "", "IU": "", "Sigur Rós": "", "Sigur Ros": "",
-		// "Dean Ting" 从 artistAliasTable 退休了(2026-08-31,见其头注),现在靠 QQ
+		// "Dean Ting" 从 artistAliasTable 退休了(见其头注),现在靠 QQ
 		// 音乐的歌手搜索建议查到"丁世光"——实测真实结果,这里直接预置同一个值。
 		"Dean Ting": "丁世光",
 	})
@@ -68,7 +68,7 @@ func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	})
 
 	t.Run("已知别名仍然换成中文名", func(t *testing.T) {
-		// artistAliasTable 里登记了 "dean ting" → "丁世光"。这一步不能被这次改动弄丢。
+		// artistAliasTable 里登记了 "dean ting" → "丁世光"。这一步不能弄丢。
 		got := mergeAliasedArtists([]lastfmChartEntry{
 			{Name: "Dean Ting", PlayCount: 11},
 			{Name: "丁世光", PlayCount: 4},

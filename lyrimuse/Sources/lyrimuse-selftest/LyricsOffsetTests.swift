@@ -17,7 +17,7 @@ func runLyricsOffsetTests() {
         expectEqual(keyA == keyBDifferentLyrics, false, "LyricsOffsetStore.trackKey: 同一首歌换了一份不同的歌词内容,key 应该不同")
     }
 
-    // ---- LyricsOffsetStore.trackKey:歌手/歌名必须归一化(2026-08-20 修的真 bug) ----
+    // ---- LyricsOffsetStore.trackKey:歌手/歌名必须归一化(修的真 bug) ----
     //
     // 播放侧传播放器报的**原始**歌手/歌名,「歌词管理」传缓存 key 拆出来的(已归一化)那两段。
     // trackKey 不自己归一化的话,同一首歌就有两个身份:在管理页敲的偏移播放时查不到、菜单栏
@@ -74,9 +74,9 @@ func runLyricsOffsetTests() {
 
     // MARK: - 歌词时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调
     //
-    // 2026-08-17 加全局偏移时补的,2026-08-21 补上「按播放器」那层。
+    // 加全局偏移时补的,补上「按播放器」那层。
     //
-    // ⚠️ 播放器那层跟「全部」是**二选一、不相加**(2026-08-21 用户拍板改的语义:「不要和那个全部
+    // ⚠️ 播放器那层跟「全部」是**二选一、不相加**(改的语义:「不要和那个全部
     // 相加,只有要么全部,要么单个」)。零值不落盘,所以"配过"="非零",调回 0 就是撤掉单独设置、
     // 重新跟随「全部」。
     //
@@ -119,9 +119,9 @@ func runLyricsOffsetTests() {
         expectEqual(store.offset(forKey: "||"), 0, "偏移: 空 key 不记账")
         expectEqual(store.effectiveOffset(forKey: "||"), 120, "偏移: 空 key 下全局基准仍然生效")
 
-        // ---- 「按播放器」那一层(2026-08-21)----
+        // ---- 「按播放器」那一层----
         //
-        // 2026-08-18 那版同名层的断言不适用:那是代码内部替 Spotify 猜的补偿(界面上看不见、
+        // 那版同名层的断言不适用:那是代码内部替 Spotify 猜的补偿(界面上看不见、
         // 重置不了,后来查明它补的偏差是自然切歌锚点超前、已由 naturalAdvanceCorrection 按曲
         // 根修,于是 08-20 连值一起删了),而这版是用户在设置页自己选播放器、自己调的值,连
         // UserDefaults 键都换了。旧断言也 revert 不回来 —— 那一层从头到尾只活在工作树里、
@@ -167,7 +167,7 @@ func runLyricsOffsetTests() {
                     "按播放器: 单独那档为负时也不叠加全部(-200 - 50)")
 
         // 零值不落盘 —— 设置页那个下拉框靠"字典里有谁"来列"配过的播放器",留一个 0 进去就会
-        // 多列一项;归零也是用户"我不要这档了"的唯一表达方式。
+        // 多列一项;归零也是"我不要这档了"的唯一表达方式。
         store.setPlayerOffset(0, forBundleID: arc)
         expectEqual(store.playerOffsets[arc] == nil, true, "按播放器: 归零即从字典里删掉")
 
@@ -187,13 +187,13 @@ func runLyricsOffsetTests() {
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
 
-    // ---- 下拉框「作用于哪个播放器」的候选集(LyricsOffsetScope,2026-08-21)----
+    // ---- 下拉框「作用于哪个播放器」的候选集(LyricsOffsetScope)----
     //
     // 三条不变量各自只在特定用户状态下才暴露,所以必须钉:
     //  ① 「自动识别」绝不能出现 —— 它的 bundleIdentifier 是空串,存进去会被 setPlayerOffset
     //     静默丢掉(用户调了没反应、也没报错);
     //  ② **配过偏移但已经不在信任名单里**的 App 仍然要列出来 —— 否则那个非零偏移就成了看不见、
-    //     改不动的隐形值(2026-08-18 那版按播放器偏移正是这么翻的车);
+    //     改不动的隐形值(那版按播放器偏移正是这么翻的车);
     //  ③ 顺序稳定、无重复 —— 每组内部排序,不然字典遍历顺序会让下拉框每次启动乱跳。
     do {
         let arc = "company.thebrowser.Browser"
@@ -233,7 +233,7 @@ func runLyricsOffsetTests() {
         let blank = LyricsOffsetScope.options(trusted: [:], configured: [], nowPlaying: "")
         expectEqual(blank.count, builtinCount, "偏移作用域: nowPlaying 为空串时不入列")
 
-        // builtInOrder 参数(2026-08-25 加,给设置页传 PlaybackPlayer.displayOrder 用——
+        // builtInOrder 参数(加,给设置页传 PlaybackPlayer.displayOrder 用——
         // 跟"选择播放器"图标网格同一套按系统语言排的顺序,同一批播放器在这个下拉框里不该是
         // 另一个顺序)。这里不依赖 displayOrder 本身(那是 App target 里读 AppSettings 的属性,
         // selftest 只链 LyrimuseCore,够不到),只验证参数**确实生效**:传一个跟 allCases
@@ -245,7 +245,7 @@ func runLyricsOffsetTests() {
         expectEqual(customOrder.count, builtinCount, "偏移作用域: 换个顺序不影响内置那组的数量(.auto 仍被排除)")
     }
 
-    // ---- 「已校准」名单:调过时间轴的歌不再被后台换歌词源(2026-08-20) ----
+    // ---- 「已校准」名单:调过时间轴的歌不再被后台换歌词源 ----
     //
     // 这个名单是 collector 侧 needsLyricsRescore/needsLyricsRetry 的第一道闸(见
     // collector/lyricspins.go)。要守三件事:
@@ -299,7 +299,7 @@ func runLyricsOffsetTests() {
         store.syncPinToOffset(forKey: keyA, pinKey: pinKey)
         expectEqual(pins.count, 0, "同步: 校正值为 0 不补钉")
 
-        // 2026-08-26 真实bug复现:pin 曾经只会钉、不会解钉(原名 backfillPinIfNeeded),导致
+        // 真实故障复现:pin 曾经只会钉、不会解钉(原名 backfillPinIfNeeded),导致
         // "校正值飘回 0、pin 却一直挂着"这种状态一旦出现就永远修不好——只有靠这个函数下次
         // 播放到时主动纠正。这里绕开 set()/reset() 直接摆出那个不一致状态(模拟"内容指纹变了、
         // 旧 key 下的非零值查不到了"那种真实成因,不用关心具体怎么飘出来的,只钉死"飘出来之后
@@ -338,7 +338,7 @@ func runLyricsOffsetTests() {
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
 
-    // ---- 第四层:电台校正(2026-09-11)----
+    // ---- 第四层:电台校正----
     // 只在放电台时生效,按「台标哈希 + 曲目」记。成因见 LyricsOffsetStore.radioOffsets 头注:
     // 电台元数据比声音晚,δ 每首不同但同一首可复现,系统里量不出来,只能靠耳朵校一次。
     do {
@@ -363,7 +363,7 @@ func runLyricsOffsetTests() {
         store.clearAllRadioOffsets()
         expectEqual(store.radioOffsetCount, 0, "电台校正: 起点是空的")
 
-        // 同一首歌、两个台,互不相干 —— 用户 2026-09-11 明确要求"仅适用于这个电台里播放的歌"。
+        // 同一首歌、两个台,互不相干 —— 校正只适用于这个电台里播放的歌。
         store.nudgeRadio(by: 1500, forKey: keyA)
         expectEqual(store.radioOffset(forKey: keyA), 1500, "电台校正: 调进去了")
         expectEqual(store.radioOffset(forKey: keyB), 0, "电台校正: 同一首歌换个台不套用(δ 未必一样,扣错比不扣更糟)")

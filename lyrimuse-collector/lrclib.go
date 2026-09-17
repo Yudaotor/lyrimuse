@@ -23,7 +23,7 @@ import (
 // 响应本身(本来就已经查到,只是原来只挑了 syncedLyrics 就把其余字段丢了)。LRCLIB 的
 // API 没有封面图字段,这个来源永远给不出封面,不是没查、是压根不存在。
 //
-// instrumental 是 LRCLIB 自己标注的"这首歌是纯音乐"——2026-08-03 补上:这个字段
+// instrumental 是 LRCLIB 自己标注的"这首歌是纯音乐"——补上:这个字段
 // 原来读出来就直接丢了(instrumental==true 时跟"这个源压根没查到"返回同一个空结构体
 // 处理),下游"啥都没有"的空状态因此永远只有一种,用户分不清"是真没找到歌词"还是
 // "这首歌本来就没有歌词"。见 fetchScoredLyricCandidatesStreaming 里怎么把这个信号
@@ -33,7 +33,7 @@ type lrclibResult struct {
 	// durationSecs:LRCLIB 自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
 	instrumental bool
-	// plainOnly:2026-08-30 加,"只有纯文本歌词,没有带时间戳的版本"这个明确结论——真实案例
+	// plainOnly:加,"只有纯文本歌词,没有带时间戳的版本"这个明确结论——真实案例
 	// 海龟先生《Porn Star》,网易云/QQ 的搜索接口把标题里的敏感词整体过滤掉(HTTP 200 但
 	// body 是空结果,不是真的没收录),LRCLIB 却精确命中、内容和时长都对得上,只是这首歌
 	// 在 LRCLIB 自己库里就只有 plainLyrics、没有 syncedLyrics。以前遇到这种情况直接判定
@@ -78,7 +78,7 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 // resolveLRCLIBLyric 三级降级,越往后越宽松。改动之前只有第一级,一失败就整源判"没收录"。
 //
 // ① /api/get 带 album_name(原有行为,最严)
-// ② /api/get 去掉 album_name —— **2026-08-05 实测坐实的真实盲区**:album_name 是参与
+// ② /api/get 去掉 album_name —— **实测坐实的真实盲区**:album_name 是参与
 //
 //	匹配的,传一个 LRCLIB 那边没有的专辑名会直接 404,哪怕这首歌其实收录了。实测同一首
 //	Michael Jackson - Blue Gangsta:album_name=XSCAPE → 200、=XSCAPE (Deluxe) → 200
@@ -163,7 +163,7 @@ type lrclibSearchItem struct {
 	Duration     float64 `json:"duration"`
 	Instrumental bool    `json:"instrumental"`
 	SyncedLyrics string  `json:"syncedLyrics"`
-	// PlainLyrics:2026-08-30 起才读——见 lrclibResult.plainOnly 头注,只在没有 syncedLyrics
+	// PlainLyrics:才读——见 lrclibResult.plainOnly 头注,只在没有 syncedLyrics
 	// 时当兜底用,不参与任何"这条候选算不算数"的正常判定。
 	PlainLyrics string `json:"plainLyrics"`
 }
@@ -235,7 +235,7 @@ func lrclibSearch(ctx context.Context, artist, title, album string, durationSecs
 // 走的是 looseContains(双向子串包含),而这一级**只在前两级精确 get 都 404 之后才跑**,
 // 恰好落在"这首歌 LRCLIB 大概没收录、search 返回的全是同歌手近似曲名"这个场合,双向包含
 // 在那儿是灾难:查 "Real Love" 会命中 "Real Love Baby",时长又都在容差内,于是把另一首歌
-// 的歌词当成这一首返回。2026-08-09 起 lyricTitleAccepted 对**所有源**都收紧成了同一条
+// 的歌词当成这一首返回。lyricTitleAccepted 对**所有源**都收紧成了同一条
 // 规则(相等 或 各自去括号后相等,不认子串),这个专用函数就没有存在的理由了。
 
 // lrclibSearchDurationTolerance 跟 scoreLyricCandidate 的时长闸门(match.go 里那个
@@ -268,7 +268,7 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album strin
 	return best
 }
 
-// pickLRCLIBSearchResultDetailed 是 pickLRCLIBSearchResult 的完整版本——2026-08-30 加
+// pickLRCLIBSearchResultDetailed 是 pickLRCLIBSearchResult 的完整版本——加
 // allowPlainOnly 这道口子(见 lrclibResult.plainOnly 头注):false 时跟旧版逐字节一致
 // (只认 isTimedLRC),true 时"没有带时间戳的版本"不再直接判废,退一步认"至少有纯文本"。
 // 第二个返回值标出选中的这条究竟是不是靠纯文本兜底选出来的,调用方据此决定要不要给

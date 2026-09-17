@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runCacheKeyTests() {
-    // ---- EnrichCacheStore.buildSummaries 的"先查前缀再算指纹"这层优化(2026-08-26)----
+    // ---- EnrichCacheStore.buildSummaries 的"先查前缀再算指纹"这层优化----
     //
     // trackKey 里那段内容指纹是对整首歌词+YRC 正文取 SHA256,实测对全库 1760 条无条件都算
     // 一遍要 250ms+(比读盘解析整份 JSON 还贵),而 offsetsSnapshot 常年只有个位数条目、
@@ -60,9 +60,9 @@ func runCacheKeyTests() {
                     "前缀优化: 跳过指纹计算给的 0,要跟老逻辑无条件查表查不到的结果一致")
     }
 
-    // ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名(2026-08-05) ----
+    // ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名 ----
     //
-    // 2026-08-05 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
+    // 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
     // 大小写"的碰撞组成员改用带 crc32 后缀的文件名(lyricsexport.go:105-141),而 Swift 侧原来
     // 一律只认普通名——删除时漏删 → collector 重启后 importLyricsFromFiles 从残留文件把条目
     // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 → 同一个 key 对应两组
@@ -129,7 +129,7 @@ func runCacheKeyTests() {
         )
     }
 
-    // ---- EnrichCacheKeys: 缓存 key 归一化,必须跟 collector 逐字节一致(2026-08-14) ----
+    // ---- EnrichCacheKeys: 缓存 key 归一化,必须跟 collector 逐字节一致 ----
     //
     // 这组用例跟 collector/enrichkey_test.go 的 TestNormEnrichTitle 是**同一张表**。两边只要
     // 有一处对不上,collector 按归一化 key 写盘、悬浮窗按另一种拼法查,结果不是"显示了旧歌词"
@@ -149,7 +149,7 @@ func runCacheKeyTests() {
             ("instrumental 保留", "Song (Instrumental)", "Song (Instrumental)"),
             ("interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"),
             ("中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"),
-            // 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带),见 collector 侧
+            // 真实故障(周杰伦《不能说的秘密》电影原声带),见 collector 侧
             // enrichkey.go 的 enrichKeyVersionWords 头注。
             ("慢板保留", "Secret (慢板)", "Secret (慢板)"),
             ("快板保留", "第二圆舞曲 (快板)", "第二圆舞曲 (快板)"),
@@ -179,7 +179,7 @@ func runCacheKeyTests() {
         expectEqual(once, "丁世光|不散的筵席|神經志 The Journal", "缓存key: 三段拼接")
         expectEqual(K.normalizedTitle("不散的筵席"), "不散的筵席", "缓存key: 归一化过的再算一次不变")
 
-        // ---- looseKey:只用于查询兜底的宽松形态(2026-08-16) ----
+        // ---- looseKey:只用于查询兜底的宽松形态 ----
         //
         // collector 把"其实是同一首歌"的重复条目合并成一条后,缓存里只剩最适合显示的那个写法;
         // 播放器报的可能是另一个写法,靠这一层才查得到。⚠️ 它**只能**用于兜底,绝不能拿去构造
@@ -212,7 +212,7 @@ func runCacheKeyTests() {
         )
     }
 
-    // ---- EnrichCacheReader.artistTitleKey:「最近播放」封面的本机兜底键(2026-08-14) ----
+    // ---- EnrichCacheReader.artistTitleKey:「最近播放」封面的本机兜底键 ----
     //
     // 这个键两头用:建索引时喂的是**缓存 key 里已经归一化过**的歌名,查询时喂的是 Last.fm
     // scrobble 里**播放器原样上报**的歌名。两头必须落到同一个字符串,带译名的那类歌名才能
@@ -238,9 +238,9 @@ func runCacheKeyTests() {
         )
     }
 
-    // ---- 按日历天定义的缓存:跨零点必须作废(2026-08-17) ----
+    // ---- 按日历天定义的缓存:跨零点必须作废 ----
     //
-    // 用户报「那年今日」昨天和今天显示同一份。根因是那张卡用 6 小时 TTL 判缓存,而 TTL 只
+    // 现象是「那年今日」昨天和今天显示同一份。根因是那张卡用 6 小时 TTL 判缓存,而 TTL 只
     // 知道过了多少秒、不知道跨没跨过零点 —— 22:00 取到 8/16 那份,次日 02:00 再看 TTL 还没
     // 到期,昨天那份就被挂在"今天"上。App 是常驻服务、跨天不重启,缓存时间戳又只在内存里,
     // 所以这条一定会发生。这里盯住的就是"跨天优先于 TTL"这一点。
@@ -285,7 +285,7 @@ func runCacheKeyTests() {
                     "跨天缓存: 缺 lastFetchedAt 当作没缓存")
     }
 
-    // MARK: - 合唱 credit 归并(ArtistCredit,2026-08-20)
+    // MARK: - 合唱 credit 归并(ArtistCredit)
     //
     // 起因:同一首《Toronto 2014》两次收听在 Last.fm 上成了两个实体 —— Mac 照抄 Apple Music
     // 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone→Last.fm→桥接)报的是主歌手
@@ -302,7 +302,7 @@ func runCacheKeyTests() {
         expectEqual(ArtistCredit.primary("Doja Cat (feat. SZA)"), "Doja Cat",
                     "合唱 credit: 括号里的 feat. 一并切掉")
         expectEqual(ArtistCredit.primary("Daniel Caesar"), nil, "单人 credit: 返回 nil")
-        // feat 家族要有**左词边界**(2026-08-22 实测出来的真 bug):`ft ` 会在词中命中,
+        // feat 家族要有**左词边界**(实测出来的真 bug):`ft ` 会在词中命中,
         // 蛋堡的罗马字名 `Soft Lipa` 被切成 `So`,于是它跟 `蛋堡` 在查族键上永远合不上。
         expectEqual(ArtistCredit.primary("Soft Lipa"), nil,
                     "合唱 credit: Soft Lipa 里的 ft 不是客串标记(实测真 bug)")
@@ -370,9 +370,9 @@ func runCacheKeyTests() {
         expectEqual(withNil.count, 1, "共识封面: 没有图的行不参与投票")
     }
 
-    // MARK: - 缓存 key:结尾副题必须被剥掉(2026-08-20「歌词管理不自动定位」的根因)
+    // MARK: - 缓存 key:结尾副题必须被剥掉(「歌词管理不自动定位」的根因)
     //
-    // 用户报「进歌词管理不会自动定位到正在播的曲目」。实测:Apple Music 把这首报成
+    // 现象是「进歌词管理不会自动定位到正在播的曲目」。实测:Apple Music 把这首报成
     // 「Dynasties and Dystopia (from the series Arcane League of Legends)」,而缓存里那条 key
     // 是剥掉副题的「Dynasties and Dystopia」(collector 的 enrichKey 剥的)。定位函数当时手拼
     // "artist|title|album",精确匹配落空;而 looseKey 只折大小写/空格/繁简,**折不掉**这段副题,
@@ -398,7 +398,7 @@ func runCacheKeyTests() {
 
     // MARK: - looseKey 必须折平合 credit 分隔符(跟 collector 的 loosenEnrichKey 同步)
     //
-    // 2026-08-20 用户报「歌词管理里同一首歌有两条」。根因:同一次播放里两条路径对多歌手串的
+    // 现象是「歌词管理里同一首歌有两条」。根因:同一次播放里两条路径对多歌手串的
     // 写法系统性不同 —— 播放器报 `A/B/C`,专辑预取从 Apple Music 曲目表拿到 `A & B & C`。
     // 两侧的宽松键都得折平这一档,否则 collector 那边不再长重复条目,而这边(EnrichCacheReader
     // 的兜底、歌词管理的定位)仍然对不上存量里的另一种写法。
@@ -411,7 +411,7 @@ func runCacheKeyTests() {
             EnrichCacheKeys.looseKey("陶喆、卢广仲|某首歌|某专辑"),
             EnrichCacheKeys.looseKey("陶喆/卢广仲|某首歌|某专辑"),
             "looseKey: 顿号与斜杠同折")
-        // 原有两档(空格 / 繁简)不能被这次改动破坏
+        // 原有两档(空格 / 繁简)仍然成立
         expectEqual(
             EnrichCacheKeys.looseKey("丁世光|無名花香|背面是我"),
             EnrichCacheKeys.looseKey("丁世光|无名花香|背面是我"),

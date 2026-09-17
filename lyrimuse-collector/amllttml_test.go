@@ -123,7 +123,7 @@ func TestParseAMLLTTMLGarbage(t *testing.T) {
 
 // 词间空白:amll-ttml-db 里两种写法并存,两种都必须出对的结果。
 //
-// 2026-08-24 回归测试。原来 ttmlLine/ttmlSpan 用 `Spans []ttmlSpan` + `,chardata`
+// 回归测试。原来 ttmlLine/ttmlSpan 用 `Spans []ttmlSpan` + `,chardata`
 // 声明式解析,Go 会把一个元素的全部直接文本合并成一个字符串、顺序全丢,于是
 // `<span>What</span> <span>a</span> <span>ride</span>` 拼成了 "Whataride"。
 // 用户看到的症状是**没有翻译**:粘住的假词翻译器原样返回,translate.go 那道

@@ -13,12 +13,12 @@ import (
 	"path/filepath"
 )
 
-// 2026-08-31 加:media-control 能直接给出正在播放这首歌的封面(playing app 自己经
+// 加:media-control 能直接给出正在播放这首歌的封面(playing app 自己经
 // MediaRemote 上送的,浏览器网页播放器也会给——实测坐实过 Arc 播 Apple Music 网页版时
 // media-control 能读到跟这首歌逐字节对应的封面)。这份数据本来就在,只是
 // fetchRawMediaControlState 一直传 --no-artwork 把它丢在门外(省几百 KB 的轮询开销)。
 //
-// 真实bug(Michael Jackson《Workin' Day and Night (Immortal Version)》,专辑《Immortal
+// 真实故障(Michael Jackson《Workin' Day and Night (Immortal Version)》,专辑《Immortal
 // (Deluxe Edition) [Original Motion Picture Soundtrack]》):网易云自己搜到的封面本来是
 // 对的(albumScore=100,"Immortal"是本地专辑名的前缀),但这个分数没到 200 那道"精确对版"
 // 的门槛,代码因此又去问了一次 QQ 兜底——而 QQ 自己这张专辑的记录本身就挂错了封面(挂成
@@ -29,11 +29,11 @@ import (
 //
 // 设备直送的这份不一样:它就是"正在播的这首歌,这一刻,这个 App 自己吐出来的封面",不需要
 // 靠任何文字匹配去猜是不是同一张专辑/同一次发行——身份从"什么时候读到的"直接保证,不是
-// 靠内容比对出来的。所以按用户要求,只要这份数据本身质量过关,就直接用,不再跟网易云/
+// 靠内容比对出来的。所以按只要这份数据本身质量过关,就直接用,不再跟网易云/
 // Apple/QQ 三个源的猜测结果比较。
 
 const (
-	// deviceArtworkMinEdge:2026-08-31 实测订正过一次——最初拍脑袋定的 200(觉得"真实专辑
+	// deviceArtworkMinEdge:实测订正过一次——最初拍脑袋定的 200(觉得"真实专辑
 	// 封面哪怕最小档位也有几百像素"),结果直接把这个功能真正要修的那个案例挡在外面:
 	// Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession API 实际上送的封面就是
 	// 120x120(Web 端 MediaSession artwork 常见的按需小尺寸档位之一,不是浏览器随便拿了个

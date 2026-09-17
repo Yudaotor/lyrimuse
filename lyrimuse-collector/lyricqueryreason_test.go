@@ -9,7 +9,7 @@ import (
 // 查询词来路(querylog.go 的 lyricQueryReason*)与 App 侧中文译名的**成对**守卫。
 // 跟 TestLyricsDecisionPathsHaveChineseLabels / TestScoreTermKindsHaveChineseLabels 同一个
 // 路子、同一个教训:那两处的 Swift switch default 都是"原样显示原始值",漏补译名不会编译
-// 报错、selftest 也不报错,只会在用户界面上印一个英文串出来 —— 2026-08 已经为此翻过两次车
+// 报错、selftest 也不报错,只会在用户界面上印一个英文串出来 —— 已经为此翻过两次车
 // (决策 path "manual-rematch"、打分项 "sourceDurationOff")。
 //
 // queryReasonLabel 的 default 同样是 `return reason ?? ""`,所以这一类从加进来的第一天就钉死。

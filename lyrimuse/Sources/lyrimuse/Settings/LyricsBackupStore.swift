@@ -22,7 +22,7 @@ enum LyricsBackupStore {
     /// (`lyrimuse-collector/enrichrestore.go` 的 `adoptEnrichRestore`,采纳成功后自己删掉)。
     ///
     /// 为什么不在这里直接盖 `lyrimuse-enrich-cache.json`:collector 内存里握着整份缓存、
-    /// 有七处会整份写回磁盘,盖了大概率被它盖回去(2026-08-14「清空了又回来」)。交给
+    /// 有七处会整份写回磁盘,盖了大概率被它盖回去(「清空了又回来」)。交给
     /// collector 自己在启动时合并,跟 `lyrics/` 文件族被 `importLyricsFromFiles` 采纳
     /// 是同一个时机、同一把 `enrichMu` 锁,天然没有竞态。
     private static let enrichRestoreURL = LyrimusePaths.configFile("lyrimuse-enrich-restore.json")
@@ -68,7 +68,7 @@ enum LyricsBackupStore {
                 files[name] = text
             }
             guard !files.isEmpty else { return nil }
-            // enrich 缓存剥掉六个歌词字段之后的那一份(2026-09-02,见 LyricsBackupArchive
+            // enrich 缓存剥掉六个歌词字段之后的那一份(见 LyricsBackupArchive
             // 头注:决策存档/纯文本采纳/手动选定凭据/打分版本这几类**不是**可重新解析的
             // 派生数据)。读+解析 42 MB JSON 也在这条 detached 路径上,不碰主线程。
             //
@@ -213,7 +213,7 @@ enum LyricsBackupStore {
     }
 
     /// 在破坏性操作**之前**打一份快照。返回落点;没有歌词文件(没什么可备份的)或写盘失败
-    /// 时返回 nil —— 调用方据此决定要不要如实告诉用户"这次没有备份"。
+    /// 时返回 nil —— 调用方据此决定要不要如实告诉"这次没有备份"。
     ///
     /// 为什么必须有它:`EnrichCacheStore.clearAll()` 走的是 `removeItem`(不是废纸篓)+
     /// 整份替换落盘,一旦执行没有任何可恢复层。docs/features/11 已知坑 7 记的那次

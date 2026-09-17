@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 func runPlaybackPositionTests() {
     // ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
-    // 快照前的年龄补偿+合理性核对(2026-08-04 实测排查坐实的回归:缓存值不补偿年龄直接
+    // 快照前的年龄补偿+合理性核对(实测排查坐实的回归:缓存值不补偿年龄直接
     // 当"当前位置"用,本地整条展示链慢 ~1.8s,详见该函数注释)。
 
     do {
@@ -42,7 +42,7 @@ func runPlaybackPositionTests() {
     }
 
     // ---- MediaControlClient.livePositionSeconds: rate 缺失时别信 elapsedTimeNow ----
-    // (2026-08-18 实测坐实:Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
+    // (实测坐实:Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
     // media-control 的 --now 外推是 elapsed + (now-ts)*rate —— rate 缺失时增量为 0,
     // elapsedTimeNow 15 秒纹丝不动。那个恒定值喂进伺服会把位置一路拽回去、歌词冻在一行。)
 
@@ -79,7 +79,7 @@ func runPlaybackPositionTests() {
             playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(30))
         expectEqual(paused, 104.948, "livePositionSeconds: 暂停时用冻结的 elapsedTime,不外推")
 
-        // ---- 整秒时间戳的相位订正(2026-08-21) ----
+        // ---- 整秒时间戳的相位订正 ----
         //
         // 实测:media-control 的 timestamp 恒无小数秒,`ts = floor(真实时刻)`,于是
         // `位置 + (now − ts)` 恒偏快 frac 秒。用 Apple Music 的 AppleScript 播放头当独立真值
@@ -132,7 +132,7 @@ func runPlaybackPositionTests() {
             expectEqual(legacy, 130.0, "相位订正: 不传首见时刻时行为跟改动前逐字相同")
         }
 
-        // ---- stream 事件到达时刻钉锚点(2026-09-07) ----
+        // ---- stream 事件到达时刻钉锚点 ----
         //
         // 实测(Spotify 暂停后恢复播放,3 次):恢复那一刻 Spotify 重打锚点且 playbackRate 变 null,
         // media-control 的 elapsedTimeNow 从此不再外推(2 分 14 秒纹丝不动),App 只能自己按
@@ -229,7 +229,7 @@ func runPlaybackPositionTests() {
                         "digest: 非 JSON 行无目击")
         }
 
-        // ---- Spotify 陈旧锚点重发(2026-09-07) ----
+        // ---- Spotify 陈旧锚点重发 ----
         //
         // 实测(忘了美麗):01:40:09 恢复播放 elapsed=10.477 @ :09;01:40:43 Spotify 重发了一次
         // now-playing,elapsed 仍是 10.477、时间戳换成 :43。media-control 据此外推,位置退回 34 秒
@@ -285,7 +285,7 @@ func runPlaybackPositionTests() {
             expectEqual(pausedKept, 44.0, "陈旧重发: 暂停态照旧用冻结值")
         }
 
-        // ---- Spotify 一次性地面真值探针(2026-09-07):外推与过期 ----
+        // ---- Spotify 一次性地面真值探针:外推与过期 ----
         do {
             let t = Date(timeIntervalSince1970: 1_000_000)
             func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
@@ -298,7 +298,7 @@ func runPlaybackPositionTests() {
             expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(-1), rate: 1),
                         nil, "spotify 探针: 时钟倒退不用")
         }
-        // ---- Spotify 探针两次采样(2026-09-09):钟得在走才采信,读数从此折进整曲偏置,读错就是整首错 ----
+        // ---- Spotify 探针两次采样:钟得在走才采信,读数从此折进整曲偏置,读错就是整首错 ----
         do {
             let gap = SpotifyPositionProbe.livenessGapSeconds
             expectEqual(SpotifyPositionProbe.clockIsRunning(first: 4.96, second: 4.96 + gap, wallGap: gap), true,
@@ -316,7 +316,7 @@ func runPlaybackPositionTests() {
             expectEqual(SpotifyPositionProbe.clockIsRunning(first: 1, second: 2, wallGap: 0), false,
                         "spotify 探针活性: 墙钟间隔为 0 无法判定 → 不采")
         }
-        // ---- Spotify 探针钟领先量的学习(2026-09-09 第三版,用户报「有一点点偏快」;同日晚订正:残差是增量) ----
+        // ---- Spotify 探针钟领先量的学习(现象是「有一点点偏快」;同日晚订正:残差是增量) ----
         // 真机:蓝牙 AirPods 先验 0.5 下第一次暂停量到残差 0.07 → 真值 0.57;内建输出 0.06~0.14。
         do {
             func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
@@ -337,7 +337,7 @@ func runPlaybackPositionTests() {
             expectEqual(LocalPlaybackSource.probeLeadPrior(for: .airPlay), 0, "探针领先量先验: 没量过的传输类型不假设")
             expectEqual(LocalPlaybackSource.probeLeadPrior(for: .other), 0, "探针领先量先验: 未知设备不假设")
         }
-        // ---- App → collector 的位置偏置文件(2026-09-09):JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
+        // ---- App → collector 的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
         do {
             let rec = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
                                          anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 1_789_002_067_341)
@@ -359,7 +359,7 @@ func runPlaybackPositionTests() {
             expectEqual(PositionBiasFile.fileName, "lyrimuse-position-bias.json", "位置偏置文件: 文件名与 Go 侧 main.go 逐字节一致")
         }
 
-        // ---- 暂停时刻外推(2026-09-07):MediaRemote 指令暂停时 Spotify 不发布冻结值 ----
+        // ---- 暂停时刻外推:MediaRemote 指令暂停时 Spotify 不发布冻结值 ----
         //
         // 实测(蘇麗珍,media-control pause):事件流只有 playing:false,原始 elapsedTime 仍是开播锚点
         // 0@:44;旧规则退回上一拍记住的 5.225(旧了 ~1.9s),屏上 6.961 一下退到 5.225;Spotify 自己
@@ -411,7 +411,7 @@ func runPlaybackPositionTests() {
                         "digest: playing:true 行不标记")
         }
 
-        // ---- 自然切歌偏置只属于开播锚点(2026-09-07) ----
+        // ---- 自然切歌偏置只属于开播锚点 ----
         // 实测:偏置 1.080 在位时按暂停,Spotify 发布的冻结值 152.673 与 App 已扣偏置的显示 152.689
         // 只差 16ms,再扣一遍就退 1.097s。播放器重新发布的锚点(原始 elapsedTime>0)对齐它自己的钟,偏置作废。
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 0), true, "偏置归属: 开播锚点(0)保留偏置")
@@ -419,7 +419,7 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 152.673), false, "偏置归属: 暂停冻结锚点作废偏置")
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 50.844), false, "偏置归属: 恢复锚点作废偏置")
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: nil), true, "偏置归属: 没有锚点信息(AppleScript 路径)不动")
-        // 2026-09-09:偏置归属改成"量它时对着的那个锚点"。Spotify 开播半秒内会把 0@T 改发成 1.923@T
+        // 偏置归属改成"量它时对着的那个锚点"。Spotify 开播半秒内会把 0@T 改发成 1.923@T
         // (BIRDS OF A FEATHER 实测),按旧判据这首歌的偏置活不过下一拍;探针量出的负偏置也要能跟着
         // 一个 elapsed>0 的锚点活下去。
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 1.923, measuredAgainst: 1.923), true,
@@ -433,9 +433,9 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: nil, measuredAgainst: 1.923), true,
                     "偏置归属: 没有锚点信息时不动,与 measuredAgainst 无关")
 
-        // ---- 锚点冻结的源:暂停时不能回退到那个恒为 0 的 elapsedTime(2026-08-21) ----
+        // ---- 锚点冻结的源:暂停时不能回退到那个恒为 0 的 elapsedTime ----
         //
-        // 2026-08-21 用户报「用 Arc 播放音乐歌词进度慢」时查出来的连带 bug。Arc 这类网页播放器
+        // 现象是「用 Arc 播放音乐歌词进度慢」时查出来的连带 bug。Arc 这类网页播放器
         // (页面没调 mediaSession.setPositionState)实测 elapsedTime 恒 0、timestamp 恒为开播
         // 那一刻,于是"暂停时用原始 elapsedTime"这条既有规则会让位置**直接归零** —— 用户视角
         // 是"在浏览器里一按暂停,歌词跳回第一句"。
@@ -491,7 +491,7 @@ func runPlaybackPositionTests() {
     }
 
     // ---- LocalPlaybackSource.servoDecision: 播放位置外推的"锁死偏差"伺服校正 ----
-    // (2026-08-04 实测排查坐实:稳定播放分支只按墙钟外推、不回看真实读数,播种偏差/漏观察
+    // (实测排查坐实:稳定播放分支只按墙钟外推、不回看真实读数,播种偏差/漏观察
     // 的短暂停会造成小于 seek 容差的永久锁死,详见该函数注释。)
 
     do {
@@ -560,7 +560,7 @@ func runPlaybackPositionTests() {
         expectEqual(snapped, true, "servoDecision(噪声源): 持续 1.5s 锁死偏差应最终被校正")
     }
 
-    // ---- servoDecision 第三档:Spotify(cleanExtrapolated,2026-08-18 拆档) ----
+    // ---- servoDecision 第三档:Spotify(cleanExtrapolated,拆档) ----
     //
     // 背景(实测 140+ 样本):Spotify 的 elapsedTimeNow 稳态偏差 ±0.05s、比 QQ 音乐干净
     // 一个量级,但换歌头几秒 MediaRemote 报数是脏的(最高 +1.32s)。播种进 <1.0s 的超前值
@@ -602,7 +602,7 @@ func runPlaybackPositionTests() {
         expectEqual(falseSnap, false, "servoDecision(Spotify): ±0.05s 稳态抖动不误触发")
     }
 
-    // ---- 自然切歌锚点超前校正(2026-08-20):Spotify gapless 整曲偏快的根修 ----
+    // ---- 自然切歌锚点超前校正:Spotify gapless 整曲偏快的根修 ----
     //
     // 实测(Forever Love→在那遙遠的地方,0.25s 采样):自然切歌时元数据/新锚点先于真声
     // 0.837s 打好,整曲 elapsedTimeNow 恒定超前 +0.888s±0.009 且锚点从不重打——伺服对
@@ -639,10 +639,10 @@ func runPlaybackPositionTests() {
         expectEqual(corr == nil, true, "naturalAdvance: 超过 \(LocalPlaybackSource.naturalAdvanceMaxBiasSecs)s 的偏置不采信")
     }
 
-    // ---- 冻结守卫(2026-08-18):曲目/广告结尾 Spotify 锚点冻住 ----
+    // ---- 冻结守卫:曲目/广告结尾 Spotify 锚点冻住 ----
     //
     // 实测(边界探针):广告结尾 elapsedTimeNow 卡死 6 秒,真声一路走到落后 8 秒。不拦的话
-    // 冻结值几秒后超过 2s seek 容差,位置被"重锚"回冻结值,歌尾歌词整段倒回去 —— 用户报
+    // 冻结值几秒后超过 2s seek 容差,位置被"重锚"回冻结值,歌尾歌词整段倒回去 —— 现象是
     // "自动切歌之后变慢"的主要成分。
     do {
         typealias L = LocalPlaybackSource
@@ -664,7 +664,7 @@ func runPlaybackPositionTests() {
         expectEqual(snap, false, "冻结守卫: 第一拍大负偏差被限幅拦住,不回拖")
     }
 
-    // ---- LocalPlaybackSource: seek 之后丢弃陈旧位置读数(2026-08-05) ----
+    // ---- LocalPlaybackSource: seek 之后丢弃陈旧位置读数 ----
     //
     // 审查确认的 IMPORTANT:seek 发出去之后,在飞的那次 poll(子进程往返几十到几百毫秒)拿到的
     // 是 seek **之前**的位置,落地后会被当成"真实 seek 跳变"硬重锚回旧位置——松手跳过去、一瞬间
@@ -689,7 +689,7 @@ func runPlaybackPositionTests() {
         expectEqual(f(30, 120, 30, -1), false, "seek 静默窗: 时间差为负时不拦")
     }
 
-    // ---- MusicPlaybackController.seek: 参数格式化与夹值(2026-08-05) ----
+    // ---- MusicPlaybackController.seek: 参数格式化与夹值 ----
     //
     // seek 的 I/O(发 AppleScript / 跑 media-control)没法在 selftest 里跑,但"传进去的数值
     // 长什么样"是纯计算、而且是最容易出错的地方:直接插值 Double 可能吐出
@@ -712,7 +712,7 @@ func runPlaybackPositionTests() {
         expectEqual(arg(2.2).contains(","), false, "seek: 小数点固定用点(拼进 AppleScript 不能是逗号)")
     }
 
-    // ── 逐字数据退化时必须退回整行模式(2026-08-06) ──
+    // ── 逐字数据退化时必须退回整行模式 ──
     // 实测过的真实形态:某些源给的 YRC 只包含开头的署名行,正文一行都没有;署名行被过滤后
     // wordLines 只剩极少几行,而 activeLine 取的是"时间戳 <= 当前位置的最后一行",于是整首歌
     // 从头到尾都停在那一行上。判据是覆盖率,不是"YRC 是否为空"。
@@ -756,13 +756,13 @@ func runPlaybackPositionTests() {
         // 精确源(Apple Music)的读数本来就是真值，不适用"reported ≤ 真实位置"这条
         // 不等式，走原有 EMA。
         expectEqual(ratchet(23.1, 22.1, tier: .precise), false, "棘轮: 精确源不适用")
-        // Spotify(cleanExtrapolated)的读数恒略**超前**真值(2026-08-18 实测),棘轮前提
-        // 正好反着——只往前吸附会把位置锁在抖动上包络,2026-08-18 拆档时明确排除。
+        // Spotify(cleanExtrapolated)的读数恒略**超前**真值,棘轮前提
+        // 正好反着——只往前吸附会把位置锁在抖动上包络,拆档时明确排除。
         expectEqual(ratchet(23.1, 22.1, tier: .cleanExtrapolated), false,
                     "棘轮: Spotify 干净外推源不适用")
     }
 
-    // ---- BrowserPositionProbe:解析逻辑(2026-08-30) ----
+    // ---- BrowserPositionProbe:解析逻辑 ----
     // 只测这段纯解析——真正发 AppleScript 的部分依赖真实 Arc + 已打开的网页,没法在
     // CI/无 GUI 环境里稳定跑,端到端行为已手动验证过(见该文件头注)。
     do {
@@ -777,7 +777,7 @@ func runPlaybackPositionTests() {
                     "浏览器探针解析: 脚本自己判定找不到播放进度元素")
         expectEqual(P.parseSeconds(fromOsascriptOutput: "\"\""), nil, "浏览器探针解析: 空字符串")
         expectEqual(P.parseSeconds(fromOsascriptOutput: ""), nil, "浏览器探针解析: 真空输入")
-        // ⚠️ 2026-08-30 实测坐实的真实回归:早期版本让 JS 直接 return JSON.stringify(...),
+        // ⚠️ 实测坐实的真实回归:早期版本让 JS 直接 return JSON.stringify(...),
         // 而 `execute … javascript` 会把返回字符串里已有的双引号**真的**转义成反斜杠字符
         // (不是打印时的显示转义),等于整段 JSON 被二次转义——旧的"脱一层引号再反转义"解析
         // 逻辑在这种输入下会静默解析出错误结果,而不是干脆地失败。这里固定住新格式(裸文本
@@ -787,7 +787,7 @@ func runPlaybackPositionTests() {
                     nil, "浏览器探针解析: 万一混进 JSON 残留也不能误判成合法数据(2026-08-30 回归)")
     }
 
-    // ---- BrowserPositionProbe:平台↔浏览器配对门禁(2026-08-31) ----
+    // ---- BrowserPositionProbe:平台↔浏览器配对门禁 ----
     // 只测"没配对就不探测"这道门禁本身——它在 kickIfNeeded 内部、发起任何 AppleScript
     // 调用之前就短路返回,不依赖真实 Arc,能在 CI/无 GUI 环境里稳定跑。真正的探测行为
     // (配对过之后)依赖真实浏览器,已手动验证过(见该文件头注)。
@@ -796,7 +796,7 @@ func runPlaybackPositionTests() {
                     "浏览器歌词同步: YouTube Music 在受支持平台列表里")
         expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == "spotifyWeb" }, true,
                     "浏览器歌词同步: Spotify 网页版在受支持平台列表里")
-        // ⚠️ **滚轮兜底转发的判定必须能被同一次手势复用**(2026-09-02,真机 sample 抓栈坐实)。
+        // ⚠️ **滚轮兜底转发的判定必须能被同一次手势复用**(真机 sample 抓栈坐实)。
         // 那个判定里有一次全窗口递归命中测试,装在全局滚轮监视器里 = 每秒几十上百次压主线程;
         // 抓到的栈里它占了主线程 74/1439 个采样。下面四条钉住复用条件,少一条都会退回逐事件重算。
         do {
@@ -823,7 +823,7 @@ func runPlaybackPositionTests() {
         // 那道守卫当天就被真机抓出来删了(原委见 `BrowserPositionProbe.pageClockIsRunning`
         // 头注):它拿 `snapshot.elapsedTime` 当参照,而网页播放器的这个字段**恒为 0**,守卫
         // 直接退化成"只有页面放在前 8 秒内的修正才采纳";消费又是每首歌一次性的,于是整首歌
-        // 都跑在错锚点上,用户报「歌词进度不准」。
+        // 都跑在错锚点上,现象是「歌词进度不准」。
         //
         // ⚠️ **这张表当初不但没抓到那次退化,还把它固化成了断言** —— 三行放行用例写的是
         // `(0.23, 0.0, true)` / `(1.60, 0.0, true)` / `(8.0, 0.0, true)`,reference 一律填 0,
@@ -858,7 +858,7 @@ func runPlaybackPositionTests() {
         expectEqual(BrowserPositionProbe.pageDurationToleranceSecs >= 1
                     && BrowserPositionProbe.pageDurationToleranceSecs <= 5, true,
                     "探针同曲判据: 时长容差要够吃下 floor 偏置又不至于放过广告")
-        // ⚠️ **一次性地面真值不能走周期性噪声源那套 EMA 闸门**(2026-09-02 真机日志坐实的 bug)。
+        // ⚠️ **一次性地面真值不能走周期性噪声源那套 EMA 闸门**(真机日志坐实的 bug)。
         // 探针每首歌只给一个样本,而 servoDecision 对 noisyFloored 是 alpha 0.3 / 门槛 1.0 ——
         // 单样本最多把 EMA 推到 0.3×误差,要误差 >3.33s 才可能触发。实测这档偏差是 0.7~0.9s,
         // 于是纠偏连着三首歌全部 snap=false。这两条断言把"为什么必须另开一条路径"钉住。
@@ -895,7 +895,7 @@ func runPlaybackPositionTests() {
         // 而是 nil,也会因为跑完了拿到真实值而非 nil,两种情况这条断言都盖不住;门禁生效
         // 时唯一保证的是"从头到尾都不会有值"——所以额外拉长等待,给"万一门禁失效"的探测
         // 留够时间跑完,这样"仍是 nil"才是门禁生效的可靠证据)。
-        // ⚠️ 2026-09-02 探测改成"两次采样 + 中间等 `livenessGapSeconds`"之后这 2 秒仍然够:
+        // ⚠️ 探测改成"两次采样 + 中间等 `livenessGapSeconds`"之后这 2 秒仍然够:
         // 这个用例把配对表清空了,门禁**万一**失效,`probeOnce` 也会因为没有任何规则匹配得上
         // 而立刻返回 nil、根本走不到那次等待。盖不住的只有"门禁失效**且**真有配对"的组合,
         // 而那不是这条用例要证明的东西。
@@ -904,7 +904,7 @@ func runPlaybackPositionTests() {
                     "浏览器歌词同步: 没配对任何平台时 kickIfNeeded 不应该发起探测")
         probe.trackChanged()
         probe.platformBrowserPairs = [:]
-        // ⚠️ Spotify 网页版广告识别(2026-09-02,用户实测截图坐实):LocalPlaybackSource
+        // ⚠️ Spotify 网页版广告识别:LocalPlaybackSource
         // 判断"这是不是 Spotify"时,除了原生客户端的 bundleIdentifier,还要认"这个浏览器
         // 有没有被用户配对给 spotifyWeb 平台"——`isPaired` 就是那道判断,复用同一份
         // `platformBrowserPairs`,不是另起一份状态。
@@ -920,9 +920,9 @@ func runPlaybackPositionTests() {
         probe.platformBrowserPairs = [:]
     }
 
-    // ---- 来源角标:浏览器在放哪个网页音乐平台(2026-09-03) ----
+    // ---- 来源角标:浏览器在放哪个网页音乐平台 ----
     //
-    // 用户原话:"这里显示 youtubemusic,如果确实是 youtube music 的情况下,不再显示浏览器;
+    // "这里显示 youtubemusic,如果确实是 youtube music 的情况下,不再显示浏览器;
     // 如果是浏览器里面播放 spotify 就显示 spotify;其他的不是这两个的话就正常显示浏览器图标"。
     // 判据是**证据优先、配对推断兜底**两档,收在这个纯函数里(消费点
     // `PlaybackCoordinator.resolvedPlayerIcon` / `resolvedPlayerDisplayName`)。
@@ -940,7 +940,7 @@ func runPlaybackPositionTests() {
                     "spotifyWeb", "来源角标: 探测命中 Spotify 网页版 → 认它")
 
         // ② 只配对了一个平台 → 推断成它,**不用等探测成功**。这一档覆盖绝大多数人的实际
-        //    配置(一个浏览器只配一个平台),也是这台机器上 Edge/Chrome 的形状 —— 用户截图
+        //    配置(一个浏览器只配一个平台),也是这台机器上 Edge/Chrome 的形状 —— 对拍
         //    里那枚 Edge 角标就是靠这一档立刻变成 YouTube Music 的。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: ["youtubeMusic"], recentMatch: nil),
                     "youtubeMusic", "来源角标: 只配了一个平台 → 直接推断成它,不必等探测")
@@ -969,7 +969,7 @@ func runPlaybackPositionTests() {
                     "来源角标: 支持的平台就是这两个(新增时这条红,提醒补站点规则与图标)")
     }
 
-    // ---- 电台曲内时钟(RadioTrackClock,2026-09-10)----
+    // ---- 电台曲内时钟(RadioTrackClock)----
     // 实测:电台的 duration 与 elapsedTime 都是**整档节目**的,换歌不复位 —— 07:15:35 锚点归零,
     // 07:20:39 换到《Juna》,07:23:22 读到 467s(= 墙钟差),而曲内真值是 163s,偏 304 秒。
     // 系统没有单曲级位置可取,只能按"元数据换了"这一刻自己起表。
@@ -994,7 +994,7 @@ func runPlaybackPositionTests() {
         expectEqual(pausing.position, 12, "电台时钟: 以暂停收尾的那一段基本都在播,照算")
         let paused = R.advance(pausing, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(120))
         expectEqual(paused.position, 12, "电台时钟: 暂停期间位置冻结")
-        // ⚠️ 回归守卫(2026-09-10 用户报「暂停久一点再恢复,歌词进度就不正常」):恢复那一拍绝不能把整段
+        // ⚠️ 回归守卫(现象是「暂停久一点再恢复,歌词进度就不正常」):恢复那一拍绝不能把整段
         // 暂停间隔算成播放时间。按"这一拍在播"累加的老写法在这里会跳到 109 —— 日志实测前跳 3.5~5.8 秒。
         let resumed = R.advance(paused, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125))
         expectEqual(resumed.position, 12, "电台时钟: 恢复那一拍不把暂停那段算进来")
@@ -1008,7 +1008,7 @@ func runPlaybackPositionTests() {
                     "电台时钟: 墙钟倒退时位置不后退")
     }
 
-    // ---- 起表时刻:用观察到换歌的那一刻,不是轮询那一拍(2026-09-10,用户报「歌词进度偏慢」)----
+    // ---- 起表时刻:用观察到换歌的那一刻,不是轮询那一拍(现象是「歌词进度偏慢」)----
     // 实测同一晚开台那次:锚点说播放头 0.000 是 23:18:22,标题到达事件流 23:18:23.425,App 应用新曲目
     // 23:18:23.816。老写法在应用那一拍归零 → 整首歌恒慢 1.8 秒。
     do {
@@ -1050,7 +1050,7 @@ func runPlaybackPositionTests() {
                     ts.addingTimeInterval(3), "换歌时刻: 没有可解析的时间戳就用到达时刻")
     }
 
-    // ---- 主持人说话那一段:越过真曲长就把歌词收掉(2026-09-11)----
+    // ---- 主持人说话那一段:越过真曲长就把歌词收掉----
     // 实测这个台两首歌之间多出 66~110 秒非歌曲内容,那段时间元数据还停在上一首。
     do {
         typealias R = RadioTrackClock
@@ -1064,8 +1064,8 @@ func runPlaybackPositionTests() {
                     "放完判定: 越过曲长 + 余量才收")
     }
 
-    // ---- 落盘副本:App 重启后把表接回去(2026-09-11)----
-    // 实测 2026-09-10 两次装机都把当时那首歌打回 0 起 —— 《Step Up》已播 12.6s,新进程从 0.284s 起。
+    // ---- 落盘副本:App 重启后把表接回去----
+    // 实测两次装机都把当时那首歌打回 0 起 —— 《Step Up》已播 12.6s,新进程从 0.284s 起。
     do {
         typealias F = RadioClockFile
         let t0 = Date(timeIntervalSince1970: 1_788_000_000)
@@ -1121,8 +1121,8 @@ func runPlaybackPositionTests() {
                     "写盘: 隔够了就刷一次,免得记录太老恢复时被判据 2 挡掉")
     }
 
-    // ---- 台卡:开台那一刻是唯一能拿到台名台标的时机(2026-09-11)----
-    // 实测两次:2026-09-10 23:18:15 → title 空 / artist `NCT 127`;09-11 00:26:50 → title 空 /
+    // ---- 台卡:开台那一刻是唯一能拿到台名台标的时机----
+    // 实测两次:23:18:15 → title 空 / artist `NCT 127`;09-11 00:26:50 → title 空 /
     // artist `petal radio`。09-10 早先还见过反过来的形态(title 是台名、artist 空)。
     // 口白期间系统一个字段都不变(抓了整段 61 秒坐实),所以只能靠这一刻记下来。
     do {
@@ -1153,7 +1153,7 @@ func runPlaybackPositionTests() {
         expectEqual(C.card(nil, forStation: hash), nil, "台卡: 没抓到就是没抓到,界面退回原样")
     }
 
-    // ---- 「只勾了 Apple Music」这条路上的电台探针(2026-09-11)----
+    // ---- 「只勾了 Apple Music」这条路上的电台探针----
     //
     // 那条路走纯 JXA,AppleScript 问 Music.app 要不到 radioStationHash(MediaRemote 独有的键),
     // 所以电台整层在这一种配置下曾经完全不生效 —— 判据本身一处 bundleID 都不认,这反而是唯一
@@ -1174,12 +1174,12 @@ func runPlaybackPositionTests() {
                     "探针: 空 key(载荷还没齐)跟已缓存的不是一回事,别拿旧结果顶上")
     }
 
-    // ---- 焦点被别的 App 抢走时退回 AppleScript(2026-09-17,issue #8)----
+    // ---- 焦点被别的 App 抢走时退回 AppleScript----
     //
     // MediaRemote 的「正在播放」是系统级的**单一焦点**,网页里一个 video 元素就能占走它。
     // 默认配置(.auto)下 Apple Music 的快照基座也是 media-control,所以焦点一被占,整条路
     // 原来直接 return nil、播放状态被全清 —— 而 Music.app 一直在放,AppleScript 一问就知道。
-    // 实锤:本机 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、Arc 2 次,而那份
+    // 坐实:本机 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、Arc 2 次,而那份
     // 记录有 6 秒稳定门槛,短于 6 秒的抢夺根本不记。
     //
     // 这一组钉的是**收敛性** —— 这条回退不会让"从不用 Apple Music 的人"白 fork osascript,
@@ -1218,7 +1218,7 @@ func runPlaybackPositionTests() {
         // ---- 单拍 nil 不清状态 ----
         //
         // 改动前一拍 nil 就 clearIfWasPlaying(),把 title/allLines/封面/lastKey 全清掉。
-        // 菜单栏有 2026-09-16 那层 hold 看不出来,悬浮歌词窗和灵动岛会当场闪一下。
+        // 菜单栏有那层 hold 看不出来,悬浮歌词窗和灵动岛会当场闪一下。
         expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 1), false,
                     "nil 宽限: 单拍拿不到不清状态(实测 24 小时里 2 次都是单次、下一拍就恢复)")
         expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace), true,

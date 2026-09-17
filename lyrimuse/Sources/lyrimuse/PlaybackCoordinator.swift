@@ -25,7 +25,7 @@ final class WindowBackgroundLayers: Equatable {
         let scale: CGFloat         // scaledToFill 之上的额外放大
     }
     let poses: [GlowPose]
-    /// 背景均色的色相/饱和度(2026-08-21):左栏次级元素(副行/时间/进度已播段)要做
+    /// 背景均色的色相/饱和度:左栏次级元素(副行/时间/进度已播段)要做
     /// AM 式 vibrancy 染色 —— 从太阳之子截图逐通道反解,AM 的次级文字不是半透明白
     /// (那样三通道等效 α 应相等,实测 r0.74/g0.58/b0.49),而是**背景色相的亮化低饱和
     /// 版**。这里存烘焙后 base 的 CIAreaAverage(再乘 0.15 遮罩)转 HSB 的 h/s,亮度
@@ -33,7 +33,7 @@ final class WindowBackgroundLayers: Equatable {
     let tintHue: Double
     let tintSaturation: Double
     /// 背景均色的**亮度**(已含视图层 0.15 黑遮罩的 ×0.85,即屏幕见到的亮度)。
-    /// 2026-08-22 从"没人用的 v"转正:固定亮度档的 vibrancy 染色在亮封面(金色 bgV≈0.7)
+    /// 从"没人用的 v"转正:固定亮度档的 vibrancy 染色在亮封面(金色 bgV≈0.7)
     /// 上会撞上背景亮度直接隐形,文字类调用要靠它做最小对比度自适应(见 amVibrantColor)。
     /// 0 = 未知(取色失败),调用方按旧行为处理。
     let tintBrightness: Double
@@ -70,14 +70,14 @@ final class PlaybackCoordinator: ObservableObject {
     //
     // 只延后"停",不延后"起":恢复播放必须立刻有反应,那是用户刚刚按下的操作。
     //
-    // ⚠️ 2026-08-16 实测的一个约束:当前 media-control 路径是 2 秒轮询,而"恢复播放"要
+    // ⚠️ 实测的一个约束:当前 media-control 路径是 2 秒轮询,而"恢复播放"要
     // 等下一次轮询才被感知(实测 pause 被感知于 T,grace 于 T+2.0 到期,resume 直到 T+4.0
     // 才感知到),所以"宽限期内恢复→取消收起"这条路**目前几乎走不到**。真正在起作用的是
     // 另一半:切歌间隙/seek 这类 isPlayingNow 压根不掉 false 的抖动。等事件驱动
     // (media-control stream / Spotify 分布式通知)把感知延迟降到亚秒,取消路径才会真正生效
     // —— 到那时不必调这里的 2 秒,它本来就是按"用户感知得到的一口气"定的。
     @Published private(set) var isPlayingSmoothed: Bool = false
-    // 0.5 秒。2026-08-17 从 2 秒压到这里(用户反馈"暂停后缩回去太慢,一暂停就该缩")。
+    // 0.5 秒。从 2 秒压到这里(现象是"暂停后缩回去太慢,一暂停就该缩")。
     //
     // 2 秒当初是按"盖住换歌间隙和常见的 seek/缓冲"取的,但收起动画本身还有 0.45 秒,
     // 加起来接近 2.5 秒 —— 用户按下暂停之后要盯着一个没在动的灵动岛等两秒多,明显像
@@ -88,7 +88,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 换歌、seek、缓冲时就会看到灵动岛缩回去再弹出来。真要再快,先确认那些抖动在你的
     // 播放器上不存在。
     //
-    // 2026-09-02 再从 0.5 压到 0.25:用户目验「暂停即隐藏」(先收起再 orderOut)后说
+    // 再从 0.5 压到 0.25:用户目验「暂停即隐藏」(先收起再 orderOut)后说
     // "一秒太久"——那一秒 = 这里的 0.5 + 收起再隐藏的 0.5,要求各砍一半。0.25s 仍吸收
     // 亚 1/4 秒的瞬时 false;若之后换歌/seek 时看到灵动岛缩一下又弹开,就是播放器的
     // 空档超过了这个窗口,回 0.5 即可(只此一个常量)。
@@ -111,14 +111,14 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var collectorNetworkDown: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
-    /// 电台口白(2026-09-11):当前这首歌已经放完、台里在说话。语义与 `isCurrentTrackAdBreak`
+    /// 电台口白:当前这首歌已经放完、台里在说话。语义与 `isCurrentTrackAdBreak`
     /// 平行 —— 都是"这一刻在放的不是歌",三个展示面据此把歌词那一格换成「口白」。
     @Published private(set) var isRadioTalkBreak: Bool = false
     /// 口白期间顶上去的台名与台标。抓不到台卡时是 nil,界面退回原样(还显示上一首),
     /// 判据与实测见 `RadioStationCard`。
     @Published private(set) var radioStationName: String?
     @Published private(set) var radioStationImage: NSImage?
-    /// 这条广告是插播里的第几条 / 一共几条(2026-09-09)。只有 YT Music 网页广告给得出,
+    /// 这条广告是插播里的第几条 / 一共几条。只有 YT Music 网页广告给得出,
     /// 拿不到是 nil、界面上那一段不画。语义与生命周期见 `LocalPlaybackSource.currentAdSlot`。
     @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
     @Published private(set) var anchor: ProgressAnchor?
@@ -143,7 +143,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var artworkData: Data?
     // 上面那份原始字节解码出来的位图,只在封面数据真的变了的时候解一次。
     //
-    // 2026-08-05 加"灵动岛顶行显示专辑封面"时补上的:灵动岛那一个 body 里会有两处读封面
+    // 加"灵动岛顶行显示专辑封面"时补上的:灵动岛那一个 body 里会有两处读封面
     // (顶行那枚清晰小图 + "跟随封面"风格的模糊背景),各自现调 `NSImage(data:)` 的话,
     // 每次 body 重算都要把同一张几百 KB 的 JPEG 重解两遍——而 body 重算在换歌词行、换歌、
     // 重锚进度时都会发生(逐字高亮那一块是 TimelineView 自己的闭包,不牵动整个 body,
@@ -156,10 +156,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// artworkImage)。给歌词窗口那张最大 460pt(Retina 下 920px)的封面卡用。
     ///
     /// 为什么需要:系统 Now Playing 的封面分辨率由播放器决定,而网易云 macOS 客户端只给
-    /// **100×100**(2026-08-17 实测:7.3KB 的 JPEG,`get` 和 `get --now`、自带和 homebrew
+    /// **100×100**(实测:7.3KB 的 JPEG,`get` 和 `get --now`、自带和 homebrew
     /// 两份 media-control 四种组合全都是这个尺寸,media-control 也没有"要大图"的参数)。
-    /// 放到 920px 去显示等于放大 9 倍,就是用户报的"封面非常模糊"。
-    /// **QQ 音乐客户端给 300×300**(2026-08-24 实测:27202 字节的 JPEG)—— 同一个毛病的
+    /// 放到 920px 去显示等于放大 9 倍,就是现象是"封面非常模糊"。
+    /// **QQ 音乐客户端给 300×300**(实测:27202 字节的 JPEG)—— 同一个毛病的
     /// 另一档,恰好卡在阈值边界上,见 lowResArtworkThreshold 里那条 ⚠️。
     ///
     /// 替代图来自 collector 已经存在缓存里的 `cover_url`(网易云/Apple/QQ 解析歌词时顺手
@@ -172,13 +172,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
     ///
-    /// **第二个触发条件的来历**(2026-09-08,用户报 YouTube Music 的 MV 条目「封面是视频的第一帧」):
+    /// **第二个触发条件的来历**(现象是 YouTube Music 的 MV 条目「封面是视频的第一帧」):
     /// Safari 经 MediaSession 上报的 artwork 是 **320×180 的视频缩略图**,宽 320 刚越过 300 的
     /// 门槛被当成"够大的正经封面"原样显示,再被展示面的 scaledToFill 裁成方块。collector 那头
     /// (deviceartwork.go)一直有 15% 的长宽比容差把这张图拒收了,所以网页显示的是真封面、只有
     /// 本机 App 显示视频帧 —— 两端口径不一致才是根因,这里把形状判据补齐。
     @Published private(set) var highResArtworkImage: NSImage?
-    /// 上面那张高清替代的**预缩小图**(≤256px,2026-09-03 加),给菜单栏面板 44pt 那格小封面
+    /// 上面那张高清替代的**预缩小图**(≤256px),给菜单栏面板 44pt 那格小封面
     /// 用。`highResArtworkImage` 是 `NSImage(data:)` 懒解码的**原图档**(给歌词窗口 920pt@2x
     /// 的封面卡),面板每次打开都是全新建树、首帧直接画它 = 在主线程把一张 1400~3000px 的
     /// 图整张解码再缩到 88px,离线量过一次要 ~30ms(300px 的只要 5ms);面板收起即整树释放,
@@ -186,14 +186,14 @@ final class PlaybackCoordinator: ObservableObject {
     /// 面板拿到就是画起来只要 1~2ms 的小图。跟 `blurredArtworkImage` 同一个"到货时离线烘
     /// 一次、视图只铺静态图"的纪律。nil 的含义跟 highResArtworkImage 一致,同进退。
     @Published private(set) var highResArtworkThumbnail: NSImage?
-    /// 灵动岛 coverArt 背景用的**预烘焙模糊图**(2026-08-19 性能审计落地)。视图层原来
+    /// 灵动岛 coverArt 背景用的**预烘焙模糊图**(性能审计落地)。视图层原来
     /// 直接挂 `.blur(radius: 20)` —— 那是合成期实时滤镜,而灵动岛窗口播放期间因逐字填色/
     /// 音浪/跑马灯几乎永动,GPU 每次重合成都对同一张封面重算同一个模糊结果,封面每首歌
     /// 才换一次。改成封面到货时离线烘焙一次(见 rebakeBlurredArtwork),视图直接铺静态图。
     /// 源取 highResArtworkImage ?? artworkImage,跟视图层原来的取图口径一致;nil = 还没
     /// 烘出来/没有封面,视图回落深色渐变。
     @Published private(set) var blurredArtworkImage: NSImage?
-    /// 「歌词窗口」AM 式动画背景的一套预烘焙图层(2026-08-20 第四轮重做,按反向工程的
+    /// 「歌词窗口」AM 式动画背景的一套预烘焙图层(重做,按反向工程的
     /// AM 真实架构替换此前的单张静态合成图,依据 Priva28 gist + AMLL,详见
     /// docs/features/07):暗底 + 3 份封面**不同区域**取色的羽化光斑,视图层 lighten
     /// (变亮)混合 + 慢速 GPU 旋转——lighten 让封面亮色区变成浮在暗底上的光斑(普通
@@ -206,7 +206,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 高清替代,强调色回落到系统那份的均值(见下面两条管线的 highResHex ?? systemHex)。
     @Published private(set) var highResAverageHex: String?
 
-    /// 当前这首歌的**动态封面**本地文件(2026-09-09,Apple Music 的 motion artwork)。
+    /// 当前这首歌的**动态封面**本地文件(Apple Music 的 motion artwork)。
     /// nil = 这张专辑没有 / 还没下好 / 用户关了开关 —— 三种情况在界面上都是"铺静态封面",
     /// 消费面不需要区分。整条链路见 `MotionCoverStore` 与 `MotionCoverManifest` 的头注。
     ///
@@ -230,7 +230,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 它的三种风格底色全是暗的,越亮越好;桌面那一侧正好相反,见上面。
     @Published private(set) var notchAccentColor: Color?
     // 当前曲目已生效的歌词时间轴校正值,见 LocalPlaybackSource 同名属性的注释——直接
-    // 转发权威值,不在这一层另外拼 key 重新查一遍(2026-08-03 之前这里是一个计算属性,
+    // 转发权威值,不在这一层另外拼 key 重新查一遍(之前这里是一个计算属性,
     // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
     // key(LyricsOffsetStore.trackKey,多一段内容指纹)对不上,查出来的永远是 0)。
     @Published private(set) var currentLyricsOffsetMs: Int = 0
@@ -254,7 +254,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 而那边有(用曲目时长兜底,尾奏通常还有几秒够滚完)。
     var compactDwellSeconds: Double? {
         if let ms = compactDwellMs, ms > 50 { return Double(ms) / 1000 }
-        // 这条退路 2026-08-24 起**几乎不可达**:曲长已经喂进引擎(见 tickQuery 的
+        // 这条退路 **几乎不可达**:曲长已经喂进引擎(见 tickQuery 的
         // trackEndMs),最后一句的窗口也算得出来了,只剩"连曲长都不知道"这一种。
         //
         // ⚠️ 刻意**不**在它上面叠 compactLeadInSeconds:它按 currentLineIndex 取行,而
@@ -316,7 +316,7 @@ final class PlaybackCoordinator: ObservableObject {
         return "unknown (\(id))"
     }
 
-    // 菜单栏面板「正在播放」卡右上角的来源角标(2026-08-19):此刻实际被认下来的播放器
+    // 菜单栏面板「正在播放」卡右上角的来源角标:此刻实际被认下来的播放器
     // 的人话名。认不出来/还没有任何快照给 nil,角标整个不显示 —— 别摆一个「未知」。
     // 不用单独发布:播放器切换必然伴随曲目/播放态变化,面板反正会跟着那些 @Published 重渲染。
     var resolvedPlayerDisplayName: String? {
@@ -330,24 +330,23 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 浏览器在放的是哪个**网页音乐平台**(nil = 不是网页播放器 / 认不出来)。
     ///
-    /// 2026-09-03 加。用户原话:"这里显示 youtubemusic,如果确实是 youtube music 的情况下,
+    /// "这里显示 youtubemusic,如果确实是 youtube music 的情况下,
     /// 不再显示浏览器;如果是浏览器里面播放 spotify 就显示 spotify;其他的不是这两个的话
     /// 就正常显示浏览器图标"。判据全在 `BrowserPositionProbe.playingPlatformID`(证据优先、
     /// 配对推断兜底,那边有完整取舍),这里只负责把它接上当前这条播放。
-    /// 2026-09-10 放开给歌词窗口简介面板的「网页」行用(Spotify 网页版要认成 Spotify 那个平台)。
+    /// 放开给歌词窗口简介面板的「网页」行用(Spotify 网页版要认成 Spotify 那个平台)。
     var resolvedWebPlatformID: String? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
         return BrowserPositionProbe.shared.playingPlatformID(forBundleID: id)
     }
 
-    /// 上面那个的图标版(2026-08-19 用户拍板改图标):取**已安装播放器的真实 App 图标**。
-    /// 查找/缓存逻辑收在 `AppIconResolver`(2026-08-25,跟另外两处消费点共用一份缓存,
+    /// 上面那个的图标版(改图标):取**已安装播放器的真实 App 图标**。
+    /// 查找/缓存逻辑收在 `AppIconResolver`(跟另外两处消费点共用一份缓存,
     /// 见那个类型的类头注)。没装(理论上不可能:它正在放)/认不出来给 nil,角标不显示。
     ///
-    /// ⚠️ 2026-09-03 起浏览器多一层:认得出在放哪个网页音乐平台时,画**平台**图标而不是
+    /// ⚠️ 浏览器多一层:认得出在放哪个网页音乐平台时,画**平台**图标而不是
     /// 浏览器图标(YouTube Music / Spotify 网页版)。认不出来(没配对、配了两个又还没探到、
-    /// 或者放的压根不是这两个站)照旧画浏览器 —— 那正是用户说的"其他的不是这两个的话就
-    /// 正常显示浏览器图标"。
+    /// 或者放的压根不是这两个站)照旧画浏览器图标,不做猜测。
     ///
     /// ⚠️ **点击行为一个字没改**:`openResolvedPlayerApp()` 仍然按 bundle id 唤那个**浏览器**。
     /// 角标换了张脸,点下去要去的地方没变(YouTube Music 是个网站,没有 App 可唤)。
@@ -359,10 +358,10 @@ final class PlaybackCoordinator: ObservableObject {
         return AppIconResolver.icon(forBundleID: id)
     }
 
-    /// 点面板右上角的来源角标(2026-08-19 用户要求):把正在播放的那个播放器唤到前台。
+    /// 点面板右上角的来源角标:把正在播放的那个播放器唤到前台。
     ///
-    /// ⚠️ 第一版用 NSRunningApplication.activate()(在跑就激活、没在跑才 openApplication),
-    /// 用户实测点了毫无反应:macOS 14 起的**协作式激活**会把「后台 accessory App 请求
+    /// ⚠️ 别用 NSRunningApplication.activate()(在跑就激活、没在跑才 openApplication):
+    /// 实测点了毫无反应:macOS 14 起的**协作式激活**会把「后台 accessory App 请求
     /// 激活别的 App」静默拒绝 —— 不报错、不打日志、就是不动。NSWorkspace.openApplication
     /// 是系统认可的路径:对已在跑的 App 等价于"带到前台"(open -b 同款行为),没在跑就
     /// 顺便启动,一条路两件事。
@@ -416,7 +415,7 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.setGlobalLyricsOffset(ms)
     }
 
-    // 「按播放器」那一层(2026-08-21 加)—— 同一个控件上的下拉框选中具体播放器时,改的是这层。
+    // 「按播放器」那一层—— 同一个控件上的下拉框选中具体播放器时,改的是这层。
     // 读写各走哪边的理由跟上面全局那层完全一致。
     func playerLyricsOffsetMs(forBundleID bundleID: String) -> Int {
         LyricsOffsetStore.shared.playerOffset(forBundleID: bundleID)
@@ -465,7 +464,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 音量写入的合流状态:同一时刻只允许一次 osascript 在飞,拖动期间新来的值只更新
     /// pendingVolumeTarget,等在飞的那次回来再补写最后一个值。
     ///
-    /// ⚠️ 2026-08-14 用户反馈"拖音量条有卡顿感"。根因是滑杆的 DragGesture.onChanged 每来一个
+    /// ⚠️ 现象是"拖音量条有卡顿感"。根因是滑杆的 DragGesture.onChanged 每来一个
     /// 鼠标移动事件就调一次 setVolume,而每次 setVolume 都 `Task.detached` 起一个
     /// **osascript 子进程**(实测单次往返 Music 90ms / Spotify 101ms)。拖一秒钟就是六十到
     /// 一百多个进程同时在飞,互相抢 CPU,主线程跟着被拖垮 —— 滑块自然跟不上手指。
@@ -478,7 +477,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 静音之前的音量,用来再点一次时还原。
     ///
-    /// 2026-08-09 用户反馈"静音键再点一次没反应" —— 原来那个按钮是无条件 setVolume(0),
+    /// 现象是"静音键再点一次没反应" —— 原来那个按钮是无条件 setVolume(0),
     /// 已经是 0 的时候再点等于把 0 写成 0,什么都不会发生。静音本来就该是个**开关**。
     private var volumeBeforeMute: Int?
 
@@ -502,7 +501,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 能接受「播放模式 / 音量」这两组扩展控制的当前播放器,不能就是 nil(按钮据此不显示)。
     ///
-    /// 2026-08-14 从"只认 Apple Music"放开到"Apple Music + Spotify":Spotify 的 AppleScript
+    /// 从"只认 Apple Music"放开到"Apple Music + Spotify":Spotify 的 AppleScript
     /// 字典里 `sound volume` 和 `shuffling` 都是可写属性,能力是有的,只是当初接 Spotify 时
     /// 没有把这两处一并接上。QQ 音乐/网易云音乐仍然不行 —— 它们的 .app 里根本没有 .sdef。
     private var extendedControlPlayer: PlaybackPlayer? {
@@ -522,7 +521,7 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     /// 换歌时的三项后台回读(喜欢/播放模式/音量)——合并成**一次** osascript 子进程
-    /// (2026-08-20 性能审计:原来三个独立 fork + 三次 TCC 检查,喜欢那项的属性候选循环
+    /// (性能审计:原来三个独立 fork + 三次 TCC 检查,喜欢那项的属性候选循环
     /// 最坏还要两趟)。三个 seq 守卫原样保留:期间用户点了喜欢/切了模式/拖了音量,对应
     /// 项的回读结果单独作废,不牵连另两项。
     func refreshExtendedControls() {
@@ -696,7 +695,7 @@ final class PlaybackCoordinator: ObservableObject {
         return MusicPlaybackController.supportsRepeatOne(player)
     }
 
-    /// 直接设到某一档(2026-08-19 歌词窗口按 Apple Music 排布把三态拆成「随机/循环」两颗
+    /// 直接设到某一档(歌词窗口按 Apple Music 排布把三态拆成「随机/循环」两颗
     /// 互斥按钮,要的是"点谁设谁"而不是循环下一档)。乐观更新/权限检查/写成功不回读,
     /// 跟 cyclePlaybackMode 完全同一套取舍。
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
@@ -761,7 +760,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .map { "\($0)|\($1)" }
                 .removeDuplicates()
                 .sink { [weak self] _ in
-                    // 三项合并成一次 osascript 回读(2026-08-20 性能审计),见
+                    // 三项合并成一次 osascript 回读,见
                     // refreshExtendedControls;单项 refresh 保留给写后回读/视图 onAppear。
                     self?.refreshExtendedControls()
                 },
@@ -822,13 +821,13 @@ final class PlaybackCoordinator: ObservableObject {
                     // 不另起一条 debounce。
                     self?.refreshMotionCover()
                 },
-            // 第二个触发点(2026-08-24):**缓存里多了东西**也要补查一次。
+            // 第二个触发点:**缓存里多了东西**也要补查一次。
             //
             // 上面那条只在 曲目/封面字节 变化时跑,而 collector 解析一首没听过的歌要好几秒
             // (实测「七月上」13:52:52 开播、13:53:00 才写进 cover_url,晚 8 秒)—— 换歌后
             // 300ms 那一次必然查空,然后**永不重试**,整首歌都停在系统那张 100×100 上。
-            // 这就是用户 2026-08-24 报「网易云这个封面依然很糊」的真根因(那之前修的是 QQ
-            // 恰好卡在 300px 阈值边界那个**另一个**问题,两者独立)。对照组:同一张专辑里
+            // 表现就是「网易云这个封面依然很糊」(跟 QQ 恰好卡在 300px 阈值边界那个
+            // **另一个**问题独立)。对照组:同一张专辑里
             // 被"同专辑预取"提前解析好的曲目,换歌后 1 秒就抓到了 640px 那张、是清晰的。
             //
             // ⚠️ 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
@@ -851,7 +850,7 @@ final class PlaybackCoordinator: ObservableObject {
             NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
                 .receive(on: RunLoop.main)
                 .sink { [weak self] _ in self?.refreshMotionCover() },
-            // 第三个触发点(2026-09-09):Spotify 原生客户端的图床地址到了(开播 2.5s 后的位置探针顺带带回,
+            // 第三个触发点:Spotify 原生客户端的图床地址到了(开播 2.5s 后的位置探针顺带带回,
             // 见 LocalPlaybackSource.spotifyArtworkURL),或者系统封面字节变了(上面那条路会顺手清掉高清图,
             // 这里按同一地址放回去)。跟 artworkData 合在一起订阅、比上面多等 50ms,保证跑在
             // refreshHighResCover 的 clearHighRes() **之后**,不然刚换上的原图会被它撤掉。
@@ -879,7 +878,7 @@ final class PlaybackCoordinator: ObservableObject {
                 // 不需要再过一次 usingColorSpace。
                 let (r, g, b) = (ns.redComponent, ns.greenComponent, ns.blueComponent)
                 // 描边关着(或者淡到基本不存在)时字直接压在未知背景上,没有"跟谁对比"
-                // 可言 —— 退回那条保证够亮的老规则,这也是这个场景 2026-08-17 之前的行为。
+                // 可言 —— 退回那条保证够亮的老规则,这也是这个场景之前的行为。
                 // 0.5 这个门槛是取舍不是测量:半透明描边的实际观感取决于它背后是什么,
                 // 而那正是这一层不知道的东西。
                 guard strokeOn,
@@ -896,7 +895,7 @@ final class PlaybackCoordinator: ObservableObject {
                     strokeB: stroke.blueComponent)
                 return Color(.sRGB, red: fitted.r, green: fitted.g, blue: fitted.b)
             }
-            // 输出去重(2026-08-20):四个输入里任何一个抖动(高清 hex 的 nil 重赋值是
+            // 输出去重:四个输入里任何一个抖动(高清 hex 的 nil 重赋值是
             // 常客)都会重发,而算出来的颜色多数时候没变——Color? 是 Equatable,挡在
             // assign 前面,别让 coordinator 的全部观察面白挨一轮 objectWillChange。
             .removeDuplicates()
@@ -904,7 +903,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 灵动岛:背景永远深色,判据是"够亮"——先过 HSB 亮度地板,再补一道感知亮度
             // 下限(饱和冷色 HSB 地板拦不住,见 accentForDarkBackdrop)。
             //
-            // ⚠️ 2026-08-27 补 notchCardStyle 进来:上面两步假设背景永远接近纯黑,对纯黑/
+            // ⚠️ 补 notchCardStyle 进来:上面两步假设背景永远接近纯黑,对纯黑/
             // 深色渐变两种风格成立,但 coverArt 风格的背景亮度正比于封面本身的亮度——亮
             // 封面（比如实测坐实的一张黄底专辑封面）叠 45% 黑之后依然不暗,固定的文字亮度
             // 地板量不出这种情况,文字会跟背景撞色(实测 WCAG 对比度只有 2.78,灵动岛字号
@@ -936,7 +935,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 见 blurredArtworkImage 声明处的注释。sink 用参数值,不回读属性(willSet 时机)。
             Publishers.CombineLatest($artworkImage, $highResArtworkImage)
                 .map { system, high in high ?? system }
-                // 恒等去重(2026-08-20 性能审计):高清封面刷新路径会对 highResArtworkImage
+                // 恒等去重:高清封面刷新路径会对 highResArtworkImage
                 // 反复赋 nil(每次换歌 1-2 次),CombineLatest 每次都发——源图引用没变时
                 // 重烘两份 720px 高斯模糊纯属白做,还白触发下游 0.5s 交叉淡入。
                 .removeDuplicates(by: { $0 === $1 })
@@ -982,7 +981,7 @@ final class PlaybackCoordinator: ObservableObject {
         return h
     }
 
-    /// 「歌词窗口」AM 式动画背景的图层烘焙(2026-08-21 第六轮:同封面同屏对拍定稿)。
+    /// 「歌词窗口」AM 式动画背景的图层烘焙(同封面同屏对拍定稿)。
     /// 机理(五轮真机对照+一次同屏定量对拍逐步坐实):**AM 的背景 ≈ 封面的宏观色彩布局,
     /// 但明度布局被抹平** —— 同一封面(破气球/100种生活)同屏对拍量出 AM 四采样区 V50 全在
     /// 0.22~0.31(封面本身左暗右亮),色相却逐区各异;我们此前保留明度布局,表现为"左缘
@@ -992,7 +991,7 @@ final class PlaybackCoordinator: ObservableObject {
     ///   部分归一,系数夹 [0.4, 3.5] 防近黑格爆噪)再放大,σ35 高斯只融格边。乘法保
     ///   色相/饱和 —— 加法提黑会灰掉(AM 暗区 S 仍有 0.62);纯高斯的老两难照旧:σ 大
     ///   混泥、σ 小见人形,所以仍是"降采样出场、高斯只融边"。
-    /// - 逐格**饱和度**归一 + 少数派**色相**收拢(2026-08-22 Addison 亮封面五轮对拍,
+    /// - 逐格**饱和度**归一 + 少数派**色相**收拢(Addison 亮封面五轮对拍,
     ///   详见各段落内注释):S 抬到 p75×1.5(cap 0.95)防白纱/留白灰化;偏主色相(S²
     ///   加权圆均值)>60° 的格子夹回 ±60°(青 logo 格→橄榄,AM 的场=一个主色系+近亲
     ///   点缀);灰阶封面两步都自动 no-op。
@@ -1041,7 +1040,7 @@ final class PlaybackCoordinator: ObservableObject {
             }
             px[i * 4 + 3] = 255
         }
-        // 逐格**饱和度**归一化(2026-08-22,Addison 亮封面同帧对拍):AM 的背景饱和度
+        // 逐格**饱和度**归一化(Addison 亮封面同帧对拍):AM 的背景饱和度
         // 跟随封面的**鲜艳端**而不是面积均值 —— 白纱/留白参与 6×6 平均会把格子灰化
         // (实测 AM 各区 S50 0.63~0.97,我们 0.13~0.65,左上区整个发灰)。与上面的亮度
         // 归一化对称:各格 S 向全场 p75 鲜艳端部分归一(satHomog 0.6),保 H/V
@@ -1054,13 +1053,13 @@ final class PlaybackCoordinator: ObservableObject {
             let mn = Double(min(px[o], min(px[o + 1], px[o + 2])))
             cellSat[i] = mx > 0 ? (mx - mn) / mx : 0
         }
-        // 少数派色相向主色相收拢(2026-08-22 五轮实拍):封面小块青色 logo 的格子被下面
+        // 少数派色相向主色相收拢(五轮实拍):封面小块青色 logo 的格子被下面
         // 的饱和归一放大成刺眼纯绿斑 —— AM 的场是"一个主色系 + 近亲色点缀",同帧对拍
         // 它同区是暖橄榄绿。主色相 = S² 加权圆均值;偏离 >60° 的格子夹回主色相 ±60°
         // (青→橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
         // S≈0 被跳过,自动 no-op。
         //
-        // ⚠️ 2026-08-22 用户实测反例推翻了当时"真双色封面被拉向均值,AM 的场本来就读作
+        // ⚠️ 实测反例推翻了当时"真双色封面被拉向均值,AM 的场本来就读作
         // 一个色系"这条假设:圣米歇尔山封面(蓝天+暖色古堡+倒影,两大色系面积相当)被
         // 拉成一片脏绿,AM 参考图是天空蓝到暖棕的自然过渡,并没有被拉成同一色系。离屏
         // 复现实测坐实——hDom≈185°(蓝天,S² 权重占优),暖色城堡格(H22~41°)全部被夹到
@@ -1093,7 +1092,7 @@ final class PlaybackCoordinator: ObservableObject {
             default: return (v, p, q)
             }
         }
-        // 近黑格的饱和度读数不可信(2026-08-27 第十一轮,Random Access Memories 等
+        // 近黑格的饱和度读数不可信(Random Access Memories 等
         // "大面积纯黑+一小块铬合金反光"封面坐实):肉眼看着纯黑的一大片背景,原始 RGB
         // 往往不是正好 (0,0,0),而是带一丝几乎不可见的偏色(摄影黑位/JPEG 压缩常见)。
         // 这个偏色的**比值**(HSV 饱和度)在近黑处可以量出跟中高亮度区域一样高的数字,
@@ -1120,7 +1119,7 @@ final class PlaybackCoordinator: ObservableObject {
         var hueCoherenceScale = 1.0
         if hueSin != 0 || hueCos != 0 {
             let hDom = atan2(hueSin, hueCos) * 180 / .pi
-            // 色相一致度(2026-08-22,窦靖童《春游》灰阶反例坐实):S² 加权圆均值向量的
+            // 色相一致度(窦靖童《春游》灰阶反例坐实):S² 加权圆均值向量的
             // 合成模长 / 总权重——多格色相互相印证(同一色系)时接近 1,多格色相彼此
             // 抵消(蓝天一点、暖灰一点,方向各异)时接近 0。上面这套 hDom/offHueFraction
             // 只管"要不要把离群格子夹回来",没管"这个 hDom 本身有多可信"——一张几乎
@@ -1156,7 +1155,7 @@ final class PlaybackCoordinator: ObservableObject {
                     var d = h - hDom
                     while d > 180 { d -= 360 }
                     while d < -180 { d += 360 }
-                    // 上限 120°(2026-08-23 用户截图坐实的第二个反例):《你瞒我瞒》雪山蓝天
+                    // 上限 120°(对拍坐实的第二个反例):《你瞒我瞒》雪山蓝天
                     // (离主色相约 150~156°,offHueFraction 算出 19.8%——刚好卡在 20% 那条
                     // 线内侧一点点,仍然触发了collapse)被 ±60 硬夹成刺眼的桃红/紫红——
                     // "偏离 60°就等距拉近 60°"这套位移量本来是照着"小块 logo 杂色"标定的
@@ -1186,9 +1185,9 @@ final class PlaybackCoordinator: ObservableObject {
         } else {
             satP75 = cellSat.sorted()[26]
         }
-        // ⚠️⚠️ 2026-08-23 推翻重标:上面这些"×1.5"系的注释、以及为了压住它反复打的三个
+        // ⚠️⚠️ 推翻重标:上面这些"×1.5"系的注释、以及为了压住它反复打的三个
         // 补丁(少数派色相收拢/角度上限/hueCoherenceScale)全都是在给一个**方向错了**的
-        // 基础倍率止血。真根因直到这天才找到——用户要求"自己去多播几首歌,把 Apple
+        // 基础倍率止血。真根因直到这天才找到——"自己去多播几首歌,把 Apple
         // Music 原生「播放中」窗口的背景跟我们的取色结果对比着截图",于是这轮直接控制
         // 真机 Music.app(菜单「窗口→播放中」能调出跟 AM 一模一样的原生沉浸态)播了 5 首
         // 色彩特征完全不同的歌(你瞒我瞒/黑夜/Get on the Boat/Earth Song/The Beautiful
@@ -1222,7 +1221,7 @@ final class PlaybackCoordinator: ObservableObject {
         // (structural 问题,不是这个系数能治的)仍偏高一截。灰阶封面 satP75≈0 → 目标
         // 仍≈0,这条 no-op 性质不变。
         //
-        // ⚠️⚠️⚠️ 2026-08-23 第九轮,固定倍率 0.35 本身又被推翻——用户这轮批量拉了
+        // ⚠️⚠️⚠️ 第九轮,固定倍率 0.35 本身又被推翻——用户这轮批量拉了
         // 23 组真机 AM×我们 的同封面对拍截图并逐组给"差别大/还好/可以接受"判断,
         // 对每组用同一条左侧背景取样带(避开封面卡片与歌词文字)做网格 p75 定量,
         // 结果坐实:被判"差别大"的 7 组里有 5 组(P. Control/Babygirl/谁稀罕/Sign O'
@@ -1243,7 +1242,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 饱和度量级),这条幂函数**修不了它们**,留给下一轮专门查色相。0.94/1.45
         // 两个数字是 23 组回归系数,不是拍脑袋——想再收紧就该在这批数据上重新拟合,
         // 不要凭感觉调。
-        // 2026-08-27 第十轮:系数从 0.94/1.45 refit 到 1.029/1.433——用户又批量甩来 14
+        // 系数从 0.94/1.45 refit 到 1.029/1.433——用户又批量甩来 14
         // 组新的真机对拍(方大同/The Weeknd/Janet Jackson/Weezer/NEXZ/薛凯琪等,横跨
         // 暖色人像/金属质感/高对比封面),样本从第九轮的 23 组涨到 36 组。同时验证并
         // **推翻**了一个中途冒出来的假说:批量样本里连续几张暖色调(爱我吧/20 Y.O./
@@ -1294,14 +1293,14 @@ final class PlaybackCoordinator: ObservableObject {
         // 磨掉一截饱和度,按融合后场的实测均值闭环拉回 satTarget —— 场内部再怎么互混,
         // 出场饱和度都贴住目标;鲜艳均匀封面 fieldS 超标时乘子自动 <1 回落。
         //
-        // ⚠️ "AM S50 0.63~0.97"这条 2026-08-21/22 写下的校准基准是错的,2026-08-23
+        // ⚠️ "AM S50 0.63~0.97"这条 /22 写下的校准基准是错的,
         // 拿真机 Apple Music 原生「播放中」窗口实测 5 张不同封面推翻——AM 真实背景
         // 网格采样的 S 中位数普遍落在 0.08~0.42,p75 也就 0.14~0.51,从没到过 0.6+;
         // 当时"S50 0.63~0.97"的样本来源已不可考,大概率是拿了个位数张偏鲜艳的封面就
         // 定了基准,没跟真机对照过更大范围的封面。satTarget 的具体倍率与来源见上面
         // satTarget 声明处的注释。
         //
-        // ⚠️ 2026-08-23 第九轮:satTarget 换成幂函数后数值整体变大,但**这里的上下限
+        // ⚠️ satTarget 换成幂函数后数值整体变大,但**这里的上下限
         // 刻意没跟着抬**——23 组真机回归数据里只有 1 组(I Wanna Be Your Lover,蓝底
         // +人像肤色两大色系反差大)顶到过 1.6 那个上限,而且顶到上限也治不好它:这张
         // 封面 σ35 模糊后 fieldS 崩得极狠(0.56→0.15),就算把上限抬到 2.2/3.5,网格
@@ -1318,7 +1317,7 @@ final class PlaybackCoordinator: ObservableObject {
             let mx = Double(max(d[0], max(d[1], d[2])))
             let mn = Double(min(d[0], min(d[1], d[2])))
             let fieldS = mx > 0 ? (mx - mn) / mx : 0
-            // 上下限 0.35~1.6(2026-08-23 随 satTarget 基数一起收窄,原先 0.6~2.2 是
+            // 上下限 0.35~1.6(随 satTarget 基数一起收窄,原先 0.6~2.2 是
             // 照着 ×1.5 那版基线定的——基数缩小了三分之一还留着旧上下限,等于只压住了
             // "目标"没压住"最终能打多高/压多低",一部分封面(尤其源图本身饱和度就很
             // 高、fieldS 天然大的)会被旧上限重新顶回高饱和)。上限也按 hueCoherenceScale
@@ -1397,7 +1396,7 @@ final class PlaybackCoordinator: ObservableObject {
                                       tintBrightness: tintBright)
     }
 
-    /// 背景模糊的离线烘焙(2026-08-19 性能审计:替代视图层的合成期活滤镜)——灵动岛用,
+    /// 背景模糊的离线烘焙(性能审计:替代视图层的合成期活滤镜)——灵动岛用,
     /// 歌词窗口那份走上面的 bakeWindowBackground(多副本合成)。先把源图缩到 targetWidth
     /// (模糊本来就抹掉细节,更高分辨率纯属浪费);可选先拉饱和度;clampedToExtent 让边缘
     /// 像素外延再裁回原框 —— 视图层的 .blur 会把边缘羽化成半透明,烘焙版边缘实心。
@@ -1424,18 +1423,18 @@ final class PlaybackCoordinator: ObservableObject {
     /// 那张封面卡最大 460pt,Retina 下 920px —— 300px 已经是 3 倍放大、肉眼能看出软,再小
     /// 就明显糊了;而正常给图的播放器(Apple Music)都远在这条线之上,一次都不会触发。
     ///
-    /// ⚠️ 判据是"≤ 300"而不是"< 300"(2026-08-24 修)。原来写的是严格小于,而 **QQ 音乐
+    /// ⚠️ 判据是"≤ 300"而不是"< 300"(修)。原来写的是严格小于,而 **QQ 音乐
     /// 客户端往系统 Now Playing 报的封面恰好就是 300×300**(实测:27202 字节的 JPEG,
     /// 300×300),于是这条自愈路径对 QQ 音乐**一次都没触发过** —— 300px 顶到 820px 的封面
-    /// 卡上是 2.73 倍放大,正是用户报的"QQ 音乐这个封面很模糊"。恰好落在边界上的那一档
+    /// 卡上是 2.73 倍放大,正是现象是"QQ 音乐这个封面很模糊"。恰好落在边界上的那一档
     /// 本来就是这个阈值的注释自己在说"3 倍放大、肉眼能看出软"的那一档,该替。
     ///
-    /// 2026-09-08 起这不是唯一的触发条件:系统那份**不是方形**(长宽比偏离正方形超过 15%)时
+    /// 这不是唯一的触发条件:系统那份**不是方形**(长宽比偏离正方形超过 15%)时
     /// 也替,判定收在 `CoverArtReplacementGate`,来历见 highResArtworkImage 的注释。
     private static let lowResArtworkThreshold = 300
 
     private var highResCoverTask: Task<Void, Never>?
-    /// Spotify 原生客户端「同一张图的原图档」那条替代路(2026-09-09,见 refreshSpotifyOriginalCover)。
+    /// Spotify 原生客户端「同一张图的原图档」那条替代路(见 refreshSpotifyOriginalCover)。
     private var spotifyCoverTask: Task<Void, Never>?
     /// 上一次成功换上去的那个图床地址 —— 同一地址不重复下载、不闪:refreshHighResCover 因 artworkData
     /// 重发而清空高清图之后,那条路会按同一地址从内存缓存原样放回去。换歌(地址变 nil)时清。
@@ -1456,7 +1455,7 @@ final class PlaybackCoordinator: ObservableObject {
         let (title, artist, album) = (s.title, s.artist, s.album)
         // @Published 是 willSet 语义,给已是 nil 的属性再赋 nil 照样广播——四条清空路径
         // 每次换歌至少走一条,不加闸就是每换歌 1-2 轮白广播,还会穿透下游按 === 去重的
-        // 订阅(2026-08-20 性能审计)。撤掉旧图的语义不变,只是已经空了就别再赋。
+        // 订阅。撤掉旧图的语义不变,只是已经空了就别再赋。
         func clearHighRes() {
             if highResArtworkImage != nil { highResArtworkImage = nil }
             if highResArtworkThumbnail != nil { highResArtworkThumbnail = nil }
@@ -1480,8 +1479,8 @@ final class PlaybackCoordinator: ObservableObject {
         // ⚠️ 用 albumMatchedCoverURL,不是 coverURL:后者会退到"忽略专辑"的兜底,同一首歌
         // 换了个专辑版本(比如这次报的是「JTW 西游记 (Gold) [Explicit]」,缓存里还留着更早
         // 一版「JTW西游记」的旧记录)时可能凑出一张**别的版本**的封面。系统这份的专辑名来自
-        // Now Playing、就是当前真正在播的这一版,没有必要也不应该退这一步——2026-08-26
-        // 用户报的「方大同 - 放不过自己」封面对不上就是这个兜底级别选错版本导致的,而且错的
+        // Now Playing、就是当前真正在播的这一版,没有必要也不应该退这一步——
+        // 现象是「方大同 - 放不过自己」封面对不上就是这个兜底级别选错版本导致的,而且错的
         // 图会被下面 enrichContentVersion 补查路的 onlyIfMissing 焊死到换歌之前,详见
         // albumMatchedCoverURL 的注释。
         guard let cached = EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album) else {
@@ -1506,7 +1505,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 形状那条:替代图自己得是张方形封面,不再拿"比系统那份宽"当门槛 —— 换的是形状
             // 不是分辨率,否则 1280×720 的视频帧会把 600×600 的真封面挡在外面。
             // 尺寸按像素比(NSImage.pixelWidth / pixelHeight),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,
-            // 出处见 CachedImage.swift 里那个 extension 的注释(2026-09-09)。
+            // 出处见 CachedImage.swift 里那个 extension 的注释。
             guard CoverArtReplacementGate.accepts(candidateWidth: image.pixelWidth,
                                                   candidateHeight: image.pixelHeight,
                                                   systemWidth: systemPixels, reason: reason) else { return }
@@ -1530,7 +1529,7 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// 动态封面:查这张专辑有没有,有就把本地文件备好(2026-09-09)。
+    /// 动态封面:查这张专辑有没有,有就把本地文件备好。
     ///
     /// 纪律逐条照 `refreshHighResCover`,理由也一样:
     ///   * **重新从数据源读快照**,不用订阅回调的参数(那几个值来自 willSet 时机,彼此可能不是
@@ -1585,7 +1584,7 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// Spotify 原生客户端:把高清替代换成**同一张图的原图档**(2026-09-09)。
+    /// Spotify 原生客户端:把高清替代换成**同一张图的原图档**。
     ///
     /// 跟 refreshHighResCover 那条路的分工:那条只在系统那份太小 / 不是方形时才去缓存里按文字匹配找替代;
     /// 而 Spotify 交给系统的封面实测是 600×600(与 Spotify 图床 640 档同一张图,8×8 均值哈希距离 0),又方
@@ -1630,7 +1629,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
             guard LocalPlaybackSource.shared.title == title, LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
             // ⚠️ 比大小用像素(NSImage.pixelWidth),不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 ——
-            // Spotify 图床的原图带 797 dpi,2000×2000 的图 size.width 只有 181(2026-09-09 装机实测,第一版就是在
+            // Spotify 图床的原图带 797 dpi,2000×2000 的图 size.width 只有 181(装机实测;用点数就会在
             // 这里把原图当成小图丢掉的)。理由与出处见 NSImage.pixelWidth 的注释(CachedImage.swift)。
             let width = image.pixelWidth
             guard width > systemWidth else {
@@ -1678,7 +1677,7 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     /// 只读图头取系统封面的像素宽高(CGImageSource,不解码整图);没有图 / 读不出来返回 (0, 0)。
-    /// 2026-09-08 起连高一起取:高清替代的触发判据多了「不是方形」这一条(CoverArtReplacementGate),
+    /// 连高一起取:高清替代的触发判据多了「不是方形」这一条(CoverArtReplacementGate),
     /// 光有宽分不出 320×180 的视频缩略图和 320×320 的小封面。
     private static func pixelSize(of data: Data?) -> (width: Int, height: Int) {
         guard let data,
@@ -1707,7 +1706,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 不直接调 MusicPlaybackController.playPause():发命令的同时**乐观翻转**观感层
     /// isPlayingSmoothed,封面缩放/播放图标点击即动。真实链路(命令→播放器切状态→分布式
     /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
-    /// 反馈明显迟钝(2026-08-21 用户反馈"扩大延迟太久")。
+    /// 反馈明显迟钝(现象是"扩大延迟太久")。
     ///
     /// 只翻观感层、不碰 isPlayingNow 真值:进度时钟/歌词填色仍由 poll 链路驱动,状态机
     /// 不引入第二条写路径。万一命令没落地(播放器没开/权限没给),真值不会来"纠正"它

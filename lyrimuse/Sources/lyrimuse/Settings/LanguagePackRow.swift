@@ -5,13 +5,13 @@ import os
     import Translation
 #endif
 
-/// 走统一 subsystem 的 Logger 不走 NSLog(2026-09-04,日志规范):诊断导出按 subsystem 查 OSLogStore,
+/// 走统一 subsystem 的 Logger 不走 NSLog(日志规范):诊断导出按 subsystem 查 OSLogStore,
 /// NSLog 打出来的两行此前永远进不了导出——而这两行正是排"语言包读数全零"要看的。
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "language-packs")
 
 /// 语言包清单 + 可用性的共享缓存。
 ///
-/// **为什么不能放在视图的 @State 里**:2026-08-08 用户反馈"点完打勾、退出去再进来又变回
+/// **为什么不能放在视图的 @State 里**:现象是"点完打勾、退出去再进来又变回
 /// 没装"。装没装这件事本来就不需要 App 自己持久化 —— `LanguageAvailability` 读的就是系统
 /// 里的真实状态,而且实测连查五轮结果完全一致、不存在抖动。真正的原因是**读取有可见的
 /// 延迟**:一次要串行问十几种语言,期间 @State 还是空的,于是每一种都渲染成"没装";视图
@@ -35,7 +35,7 @@ final class LanguagePackStatusStore: ObservableObject {
 
     /// 归一成菜单里用的语言代码。
     ///
-    /// 中文**保留 script**:简繁是两个独立的语言包,状态确实会不同(2026-08-09 实测
+    /// 中文**保留 script**:简繁是两个独立的语言包,状态确实会不同(实测
     /// zh-Hans→en 已装、zh-Hant→en 只是"支持未装")。其余语言的 script 没有区分意义,
     /// `en-Latn-US` 和 `en-Latn-GB` 是同一种英语,合成一条,否则菜单里会并排两个"英语"。
     private static func canonical(_ lang: Locale.Language) -> String? {
@@ -47,7 +47,7 @@ final class LanguagePackStatusStore: ObservableObject {
     /// 用 `L10n.locale` 而不是 `Locale.current`:这里出来的是**界面文本**(下拉里那一列
     /// 语言名),必须跟同一行右边走 `L10n.t()` 的状态文案用同一种语言。用系统 locale 的话,
     /// 界面切成英文、系统仍是中文的机器上会渲染成「英语 · Downloaded」这种中英混排
-    /// (2026-08-13 用户报)。译文的**目标**语言(target)是另一回事,那个照旧跟随系统。
+    /// (现象是)。译文的**目标**语言(target)是另一回事,那个照旧跟随系统。
     static func displayName(_ code: String) -> String {
         L10n.locale.localizedString(forIdentifier: code) ?? code
     }
@@ -66,7 +66,7 @@ final class LanguagePackStatusStore: ObservableObject {
             for lang in await availability.supportedLanguages {
                 guard let code = Self.canonical(lang) else { continue }
                 // 源语言就是目标语言时这一对没有意义,系统给的状态是 unsupported。留在菜单
-                // 里只会让人点了之后卡在"下载中…"永远不动 —— 2026-08-09 用户就这么撞上了:
+                // 里只会让人点了之后卡在"下载中…"永远不动 —— 用户就这么撞上了:
                 // 译文语言设成英语,菜单里还列着"英语"。
                 guard code != targetCode else { continue }
                 guard seen.insert(code).inserted else { continue }
@@ -89,7 +89,7 @@ final class LanguagePackStatusStore: ObservableObject {
                 next[code] = await availability.status(
                     from: Locale.Language(identifier: code), to: target)
             }
-            // 全零复查:2026-08-11 第三次复发终于抓到现行 —— 同一进程 19:46:25 查到
+            // 全零复查:第三次复发终于抓到现行 —— 同一进程 19:46:25 查到
             // installed=0、19:46:32(7 秒后)就是 4,进程外同刻探针也是 4。也就是说
             // LanguageAvailability 在 translationd 冷启动/闲置退出后的第一轮查询会把
             // "已安装"整体误报成"未安装",几秒内自愈。所以:一轮查下来一个已装的都没有
@@ -110,8 +110,8 @@ final class LanguagePackStatusStore: ObservableObject {
             }
             // 系统说这一对压根不支持的,直接不列 —— 列出来也点不动,只会让人以为坏了。
             //
-            // 上面按"规范代码相等"排除目标语言只挡住了 en→en 这种同码的情况。2026-08-10
-            // 用户报「繁体中文 · 不支持」,查下来是**系统把中文当作一种语言**:简体和繁体
+            // 上面按"规范代码相等"排除目标语言只挡住了 en→en 这种同码的情况。
+            // 现象是「繁体中文 · 不支持」,查下来是**系统把中文当作一种语言**:简体和繁体
             // 之间不构成翻译对,所以目标是中文时 zh-Hant 和 zh-Hans 都会报 unsupported
             // (实测表:zh-Hant→zh-Hans / zh-Hant→zh-Hant / zh-Hans→zh 全是 unsupported,
             // 而 zh-Hant→en、zh-Hant→ja 都是已下载)。目标写成 zh-Hans 时 zh-Hans 被排除、
@@ -122,7 +122,7 @@ final class LanguagePackStatusStore: ObservableObject {
             list.removeAll { next[$0] == .unsupported }
             next = next.filter { $0.value != .unsupported }
             guard !Task.isCancelled else { return }
-            // 2026-08-10:用户第二次报"语言包全变成未下载"。同一时刻用独立进程跑**同一套
+            // 表现是"语言包全变成未下载"。同一时刻用独立进程跑**同一套
             // 查询**(同样的 canonical 代码往返、同样的 target "en")拿到的是 5 个已安装
             // (ja/ko/ru/zh-Hans/zh-Hant),全程 0.07s —— 也就是说 App 外复现不出来,输入也
             // 完全一致。差别只剩"进程"本身,那就只能让 App 自己把它读到的东西说出来,
@@ -145,7 +145,7 @@ final class LanguagePackStatusStore: ObservableObject {
 /// (`canRequestDownloads`)。采集器调的那个 `lyrics-translate` 是无界面子进程,自己触发
 /// 下载会弹出没头没尾的窗口,所以它只负责如实回报"语言包没装",引导落在这里。
 ///
-/// **2026-09-05 从下拉菜单改成展开网格**(用户:「点进去下载的交互很奇怪」)。下拉那版的
+/// **从下拉菜单改成展开网格**。下拉那版的
 /// 问题不在样子而在隐喻:下拉是"从几个值里选一个",而这里点一项的后果是**触发一次下载**
 /// (系统会弹一张确认下载的 sheet),动词跟控件对不上——菜单项写的是「法语 · 未下载」,
 /// 看不出"点它就会下载";已装的那些点了什么都不发生;下载期间整个菜单的项全部置灰、却没
@@ -160,7 +160,7 @@ final class LanguagePackStatusStore: ObservableObject {
 ///
 /// ⚠️ 读数「已下载 6 / 18」按**当前译文语言**统计"能翻成它的语言对",不是系统设置里
 /// "下载了几种语言"——译文语言自己(简体中文)和同语系的繁体中文在这一对里是 unsupported,
-/// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(2026-09-05 用户觉得
+/// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(用户觉得
 /// "感觉有 bug",进程外探针对过:系统真值就是这 6 个)。help 气泡里把这条写明了。
 @available(macOS 26.0, *)
 struct LanguagePackRow: View {
@@ -250,7 +250,7 @@ struct LanguagePackRow: View {
             }
         }
         // 出现时刷新一次;目标语言改了要按新目标重算 —— 可用性是**按语言对**算的,换了目标
-        // 整张表的含义都变了(2026-08-09 实测同一台机器:目标中文时 en/ja/ko/ru 四种已装,
+        // 整张表的含义都变了(实测同一台机器:目标中文时 en/ja/ko/ru 四种已装,
         // 目标英语时只剩 ja/ko/ru 三种,英语那一格变成 unsupported)。缓存在单例里,所以
         // 这两次刷新都不会让界面先空一下。
         .task(id: target.maximalIdentifier) {
@@ -262,7 +262,7 @@ struct LanguagePackRow: View {
         }
         // 每次窗口重新变成前台再查一次。这一行的内容不是 App 自己的状态,而是**系统当下**
         // 的语言包情况 —— 用户完全可能刚去"系统设置 → 翻译"里装了或删了一个包,回来时
-        // 这里该是新的。顺带也给一次坏读数一条自愈的路:2026-08-09 用户截到过一次
+        // 这里该是新的。顺带也给一次坏读数一条自愈的路:用户截到过一次
         // "已下载 0 / 19",而同一份代码事后连查四轮(含三次冷启动)都是正确的 5 / 19 ——
         // 原因没能复现,但至少点开别处再回来就能纠正,而不是一直卡着。
         //

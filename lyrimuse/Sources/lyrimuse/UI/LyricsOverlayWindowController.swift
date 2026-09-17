@@ -6,7 +6,7 @@ import os
 
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
-// 2026-08-07:位置改成存**顶边**("x,顶边y" 字符串),不再存 AppKit 的左下角 origin。
+// 位置改成存**顶边**("x,顶边y" 字符串),不再存 AppKit 的左下角 origin。
 //
 // 旧写法(overlayPositionLegacyOriginKey)存 frame.origin,而 updateHeight 是"顶边固定、
 // 向下增高"的:内容一变高,origin.y 就跟着变小,didMoveNotification 又把这个新 origin.y 存
@@ -20,16 +20,16 @@ import os
 private let overlayPositionKey = "np:overlayPositionTop" // "x,顶边y" 字符串
 // 旧键只读不写,给一次性迁移用(见 savedAnchor)。
 private let overlayPositionLegacyOriginKey = "np:overlayPositionOrigin" // 旧:"x,左下角y"
-// isVisible 的持久化在 2026-08-05 并进了 AppSettings.classicOverlayEnabled(原来这里有
+// isVisible 的持久化在并进了 AppSettings.classicOverlayEnabled(原来这里有
 // 一个私有的 np:overlayVisible,跟设置页那个开关是同一件事的两个真值,详见 setVisible(_:)
 // 和 AppSettings.init() 里的迁移注释),所以这里不再有自己的 visible key。
-// 2026-08-02 补上——"解锁「锁定位置」后长按才能拖动"这条手势提示之前只写在设置页
+// 补上——"解锁「锁定位置」后长按才能拖动"这条手势提示之前只写在设置页
 // footer,用户真正需要它的时刻(已经解锁、站在悬浮窗前面想拖却拖不动)完全看不到。
 // 只在解锁这一刻、且这台机器从没显示过一次时,才在悬浮窗本身短暂弹一条提示——只需要
 // 提醒一次,不是每次解锁都刷一遍存在感。
 private let hasShownDragHintKey = "np:hasShownOverlayDragHint"
 // 高度是初始/最小值,换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。宽度
-// 在 AppSettings.overlayWidth 里(可在设置里调,默认 488;2026-09-07 前是 640),真正装不下的极端长行交给
+// 在 AppSettings.overlayWidth 里(可在设置里调,默认 488;前是 640),真正装不下的极端长行交给
 // WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。
 private let overlayDefaultHeight: CGFloat = 120
 
@@ -89,7 +89,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var isPlayingObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
     private var placementModeObserver: AnyCancellable?
-    /// 位置模式(2026-09-11,issue #5)。真值在 `AppSettings.overlayPlacementMode`,这里是订阅
+    /// 位置模式。真值在 `AppSettings.overlayPlacementMode`,这里是订阅
     /// 来的镜像 —— 高度增长方向 / 热区换算 / 拖动闸 / 插拔屏对账每次都要读,不能每次去碰单例。
     /// 预设模式下位置由 `OverlayPlacement.presetFrame` 按**窗口所在那块屏**推导:切模式、宽度变、
     /// 屏幕或 Dock 变都重算;用户拖不动它(见 `armDragIfStillPressed`),要挪就切回「自由」。
@@ -110,11 +110,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 移出热区"。播放控制按钮胶囊的真实屏幕矩形由 LyricsOverlayView 通过 GeometryReader
     // 汇报上来(controlsHotZoneLocal)。
     ///
-    /// 判据不是"指针在窗口里"(2026-09-13 收紧,用户:「只有当鼠标悬浮到歌词实际范围内,才会
+    /// 判据不是"指针在窗口里"(收紧,「只有当鼠标悬浮到歌词实际范围内,才会
     /// 出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内」),而是落在
     /// `chromeHoverZoneLocal` 里 —— 歌词文字矩形 ∪ 控制排,取包围盒。为什么必须把控制排也
     /// 并进来(只认歌词的话按钮从此点不到)见 `OverlayControlHitTest.chromeHoverZone`。
-    /// 2026-09-15 起这块包围盒只用于**退出**判定;还没露出来时的**进入**判定只认歌词文字
+    /// 这块包围盒只用于**退出**判定;还没露出来时的**进入**判定只认歌词文字
     /// 矩形,见 `OverlayControlHitTest.chromeHoverHit`。
     @Published private(set) var isHoveringForControls: Bool = false
     /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 跟上面那个的区别是它**不**把
@@ -141,8 +141,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     @Published private(set) var showDragHint: Bool = false
     /// 通用瞬态提示(全局快捷键的操作回声)。见 flashTransientHint。
     @Published private(set) var transientHint: String?
-    /// 预设模式下想拖窗口被拒(2026-09-11)。第一版只在卡片里闪一行 caption 小字(`transientHint`
-    /// 那条路),用户实机反馈「太不醒目了」—— 31pt 的歌词旁边一行 12pt 的字确实等于没有。改成
+    /// 预设模式下想拖窗口被拒。只在卡片里闪一行 caption 小字(`transientHint`
+    /// 那条路)太不醒目 —— 31pt 的歌词旁边一行 12pt 的字等于没有。改成
     /// 两件事一起做:控制排槽位换成一条「🔒 已固定为「底部居中」…」胶囊(跟播放控制排同底、
     /// 等高、多一整句话),同时歌词卡左右抖一下(计数 +1,视图挂 `OverlayRejectShake`)。
     @Published private(set) var placementLockNotice: String?
@@ -156,11 +156,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     }
 
     /// 控制排相关的悬停态清零。四处"这套手势整个用不上了"的收尾(锁定/窗口隐藏/卸监听器/
-    /// 关掉划过让开)共用同一份口径 —— 2026-09-03 加第三个悬停量(isHoveringControlPill)时
+    /// 关掉划过让开)共用同一份口径 —— 加第三个悬停量(isHoveringControlPill)时
     /// 就得挨个改四处,漏一处就会留下一份陈旧的 true。`isHoveringLyrics` 不并进来:那四处
     /// 对它的处理本来就各不相同(setLocked 压根不碰它)。
     ///
-    /// 2026-09-11 加第四个(`hoveredControl`,按钮悬停高亮)—— 它更需要这条收口:留一份陈旧
+    /// 加第四个(`hoveredControl`,按钮悬停高亮)—— 它更需要这条收口:留一份陈旧
     /// 的 id 就是"控制排都藏起来了,某颗按钮底下还亮着一圈高亮"。
     private func clearControlsHoverState() {
         if isHoveringForControls { isHoveringForControls = false }
@@ -180,7 +180,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 这排按钮(锁定中,或还没悬停出来)。
     // ⚠️ 这三个存的都是**窗口本地坐标**(左下原点),不是屏幕坐标 —— 窗口一移动屏幕坐标
     // 就过期了,而 SwiftUI 布局没变、PreferenceKey 不会重发,于是按钮和热区当场失效
-    // (2026-08-23 用户报的「移动之后按钮会失效」)。判定时把鼠标点转成窗口本地再比。
+    // (现象是「移动之后按钮会失效」)。判定时把鼠标点转成窗口本地再比。
     private var controlsHotZoneLocal: CGRect?
     /// 歌词文字矩形(窗口本地),「指针划过时让开」的命中判据(见 updateLyricsHotZone)。
     private var lyricsHotZoneLocal: CGRect?
@@ -189,7 +189,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var chromeHoverZoneLocal: CGRect?
 
     // 上面三个 Local 是**换算结果**(已经用某次的窗口高度做过 y 轴翻转)。这三个是换算前的
-    // **原始 SwiftUI 坐标**(左上原点,还没翻转)——2026-08-29 用户报"点按钮正下方才生效,
+    // **原始 SwiftUI 坐标**(左上原点,还没翻转)——现象是"点按钮正下方才生效,
     // 点按钮本身不生效"排查坐实的根因:播放控制排是顶边对齐、内容固定不变的,它在 SwiftUI
     // 坐标系里的位置跟窗口高度无关,所以 updateHeight 把窗口从默认 120pt 撑到实际内容需要的
     // 高度(比如两行歌词要 138pt)之后,只要按钮本身的 SwiftUI 坐标没变,.onPreferenceChange
@@ -207,7 +207,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 穿透到下层 App 的普通手势",取消长按判定,不武装拖动。
     private let dragMoveTolerance: CGFloat = 4
     /// 预设模式下"明确在拖"的判据:按在歌词上、并且拖出这么远,才给「已固定」那条反馈
-    /// (2026-09-11 用户:「不要一点击就触发拒绝拖动的提示,要明确感受到有在拖动才触发」)。
+    /// 。
     /// 比上面那 4pt 大得多 —— 4pt 是"手抖也算动"的取消容差,这里要的是"人在拉"。
     private let presetDragIntentDistance: CGFloat = 12
     /// 这一次按住有没有已经给过反馈。同一次按住只给一次,松手清零(cancelPendingPress)。
@@ -268,7 +268,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             self?.window?.hasShadow = visible
         }
 
-        // 位置模式(2026-09-11)。初始值上面建窗口时已经用过(presetOrigin),这里只接**之后的**
+        // 位置模式。初始值上面建窗口时已经用过(presetOrigin),这里只接**之后的**
         // 变化:用户在设置里切模式 → 当场按新预设落位。sink 里只用收到的参数值(willSet 时机,
         // 回读 AppSettings 拿到的是旧值 —— 本文件 isPlayingObserver 那段注释里的坑)。
         placementModeObserver = AppSettings.shared.$overlayPlacementMode
@@ -336,7 +336,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 打开/关闭"桌面悬浮歌词"的**唯一**入口——设置页那个 Toggle、菜单栏"显示桌面悬浮歌词"、
     // 全局快捷键三处都必须走这里。
     //
-    // 2026-08-05:不再往私有的 np:overlayVisible 写一份,统一写回
+    // 不再往私有的 np:overlayVisible 写一份,统一写回
     // AppSettings.classicOverlayEnabled(由它的 didSet 负责持久化)。合并之前这两份是各自
     // 独立持久化的,同一件事有两个真值,后果见 AppSettings.init() 里那段迁移注释。真值必须
     // 落在 AppSettings 那一侧:AppDelegate/MenuBarMenu/GlobalHotkeys 都需要在**不构造这个
@@ -356,8 +356,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 那两个隐藏偏好)。补进来之后,不管从设置页、菜单栏还是全局快捷键打开,窗口的
             // 锁定状态都跟持久化值一致。
             setLocked(AppSettings.shared.lockPosition)
-            // ⚠️ 2026-08-31 补:**宽度**同样是"已经配置好、打开时要一并应用"的偏好,而它一直
-            // 漏在外面(上一行 lockPosition 是 2026-08-30 按同一条理由补的,当时也没顺手带上它)。
+            // ⚠️ 补:**宽度**同样是"已经配置好、打开时要一并应用"的偏好,而它一直
+            // 漏在外面(上一行 lockPosition 是按同一条理由补的,当时也没顺手带上它)。
             // 编辑台/抽屉/菜单栏面板三个宽度入口都带 `if settings.classicOverlayEnabled` 守卫
             // (那条守卫必须留 —— `.shared` 是 `static let`,读一下就把窗口 init 出来),于是
             // "关着改宽度、再打开"这条路上没有任何人把新值应用到窗口几何上:关这个动作本身就走
@@ -433,7 +433,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     /// 在悬浮窗上闪一条瞬态提示(全局快捷键的操作回声)。
     ///
-    /// 2026-08-31 加。在这之前「歌词提前/延后」「锁定位置」这几个快捷键的反馈只有灵动岛
+    /// 在这之前「歌词提前/延后」「锁定位置」这几个快捷键的反馈只有灵动岛
     /// 那条 `NotchTransientCenter` 横幅 —— **只开桌面悬浮歌词的用户按下去零反馈**,而
     /// 偏移那两个键正是最需要看见累计值的(连按几下根本数不清调到了多少)。
     ///
@@ -466,7 +466,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 这个高度——跟位置不是一回事,每次内容变化重新算,窗口重启后从默认高度开始正常
     // 动态调整。
     //
-    // 「底部居中」(2026-09-11)是唯一的例外:底边固定、向上增高 —— 贴着 Dock 的窗口照旧向下长
+    // 「底部居中」是唯一的例外:底边固定、向上增高 —— 贴着 Dock 的窗口照旧向下长
     // 会撞上下面那条"底边不许越过可见区底边"的夹取、一点都长不了,译文一出来直接被裁掉。
     // 几何本体在 OverlayPlacement.grownFrame(两个方向都有 selftest)。
     private func updateHeight(_ contentHeight: CGFloat) {
@@ -474,7 +474,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let contentChanged = abs(contentHeight - lastContentHeight) >= 0.5
         lastContentHeight = contentHeight
         let current = baseFrame(of: window)
-        // 增高的同时,不能让另一侧的边超出当前屏幕可见区域——2026-08-02 实测排查坐实:
+        // 增高的同时,不能让另一侧的边超出当前屏幕可见区域——实测排查坐实:
         // 早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+下一句预览都
         // 开着、又遇上长歌词多行换行)可能把窗口下半部分撑到 Dock 后面甚至屏幕外,用户看不到、
         // 也没有任何自我纠正机制。跟 restoredPlacement() 里"存的位置在一块屏上都看不见就救
@@ -557,7 +557,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard let window else { return }
         let current = baseFrame(of: window)
         let centerX = current.origin.x + current.width / 2
-        // 按中心点算出的新左右边界同样需要夹回屏幕可见区域——2026-08-02 实测排查坐实:
+        // 按中心点算出的新左右边界同样需要夹回屏幕可见区域——实测排查坐实:
         // 早先这里没做这层钳制,宽度滑块调到接近上限(1000pt)且窗口当前位置偏向屏幕
         // 一侧时,新边界可能超出屏幕,跟上面 updateHeight 是同一类"极端设置下窗口跑出
         // 可见区域、且没有自我纠正"的问题,同一个思路一起修。
@@ -571,7 +571,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         setFrameAnimated(window, to: newFrame)
     }
 
-    /// 监听器生命周期 = "窗口实际在屏 且 未锁定位置"(2026-08-19 性能审计落地)。
+    /// 监听器生命周期 = "窗口实际在屏且未锁定位置"(性能审计落地)。
     ///
     /// 原来是 init 装一次、只在 deinit 卸载 —— 而这是个 @MainActor 单例,deinit 永不执行,
     /// 等于本次运行只要开过一次悬浮歌词,global monitor 就永远挂着:WindowServer 把全系统
@@ -593,7 +593,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     }
 
     private func syncMouseMonitors() {
-        // ⚠️ 2026-08-29 之前这里按 `!isPositionLocked || overlayFadeOnHover` 决定要不要装,
+        // ⚠️ 之前这里按 `!isPositionLocked || overlayFadeOnHover` 决定要不要装,
         // 理由是"锁定时这套手势整个用不上"——但那个前提现在不成立了:锁定态 hover 要露出
         // "解锁"提示(见 LyricsOverlayView.unlockPill),这件事跟"划过让开"开关无关,是
         // 常驻功能。原来的判据会让**没开"划过让开"的锁定用户**监听器整体卸掉,
@@ -645,7 +645,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 胶囊里每个按钮的**屏幕**矩形。空 = 当前没显示控制排。
     private var controlRectsLocal: [OverlayControlID: CGRect] = [:]
 
-    /// ⚙ 按钮弹出的快捷设置菜单(2026-08-29)。常驻一份而不是每次点击现造——跟
+    /// ⚙ 按钮弹出的快捷设置菜单。常驻一份而不是每次点击现造——跟
     /// MenuBarStatusMenu/DockMenuController 同一个理由:菜单控制器本身很轻,常驻一份省得
     /// 每次点击都重新接线 target/action。菜单**内容**仍然每次弹出前重建(见
     /// OverlayQuickSettingsMenu 的 NSMenuDelegate),不是内容也常驻。
@@ -671,7 +671,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         case .lock:
             AppSettings.shared.lockPosition = true
             setLocked(true)
-        // 2026-08-29 参考 QQ 音乐悬浮歌词补的四个,见 OverlayControlID 声明处注释。
+        // 参考 QQ 音乐悬浮歌词补的四个,见 OverlayControlID 声明处注释。
         // 锁定态 hover 出的"解锁"提示,点了就是 lock 的反操作。
         case .unlockPill:
             AppSettings.shared.lockPosition = false
@@ -708,7 +708,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     /// 把每个按钮的内容坐标矩形转成屏幕矩形。转换口径跟 updateControlsHotZone 完全一致。
     ///
-    /// ⚠️ windowHeight **不能**直接读 `window.frame.height`(2026-08-25 用户报"没锁定时
+    /// ⚠️ windowHeight **不能**直接读 `window.frame.height`(现象是"没锁定时
     /// 悬浮歌词那四个按钮点了不生效,往下移一段距离才生效,不是每次都能重现")。
     /// 根因:`updateHeight()` 把窗口 resize 换成了 `window.animator().setFrame(...)`
     /// 异步动画(见那段注释"动画途中读 window.frame 拿到的是中间帧")——只要这里跟
@@ -738,7 +738,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     ///
     /// 为什么单独一套而不复用窗口 frame:窗口比文字大得多 —— 上下有卡片内边距和播放控制
     /// 槽位、左右是 WrapLayout 撑满留下的空白。原来「划过让开」用 window.frame.contains,
-    /// 指针在歌词**附近**(上下左右的空白处)就会触发淡出,2026-08-23 用户报的正是这个。
+    /// 指针在歌词**附近**(上下左右的空白处)就会触发淡出,现象是的正是这个。
     private func updateLyricsHotZone(_ rect: CGRect) {
         lyricsHotZoneRaw = rect == .zero ? nil : rect
         recomputeHitRegions()
@@ -782,7 +782,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         lyricsHotZoneLocal = lyricsHotZoneRaw.map {
             OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight, contentTopInset: inset)
         }
-        // 控制排的显示判据(2026-09-13)。在这里合成、而不是每次 .mouseMoved 现算:三份输入
+        // 控制排的显示判据。在这里合成、而不是每次 .mouseMoved 现算:三份输入
         // 全在这个函数里换算完,鼠标移动一秒几十上百次,没必要每次重走一遍字典。
         chromeHoverZoneLocal = OverlayControlHitTest.chromeHoverZone(
             lyrics: lyricsHotZoneLocal, controlsPill: controlsHotZoneLocal, controlRects: controlRectsLocal)
@@ -797,8 +797,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // ① .mouseMoved——「划过让开」需要它维护 isHoveringForControls,而那件事跟"能不能
         //    拖动窗口"无关,控制排不会因此露出来(下面 controlsShown 那行有
         //    `&& !lockPosition` 守着);
-        // ② .leftMouseDown 命中"解锁"提示(2026-08-29 参考 QQ 音乐补的,见
-        //    LyricsOverlayView.unlockPill 声明处注释)。**2026-09-17 起再加一道
+        // ② .leftMouseDown 命中"解锁"提示(参考 QQ 音乐补的,见
+        //    LyricsOverlayView.unlockPill 声明处注释)。**再加一道
         //    `overlayShowHoverControls` 闸**——那颗图标是否画出来由 `unlockPillShown` 同一条
         //    判据决定(见 LyricsOverlayView.unlockPillVisible),这里的点击分发必须跟它一致,
         //    否则「悬停控制条」关掉后图标虽然不画了,点那块区域却仍会悄悄解锁,是经典的
@@ -843,7 +843,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 不加这层的话没显示时那块区域也会挡住点击穿透 —— 变成"看不见却挡手"。
         // 判据本体在 Core,跟 `LyricsOverlayView.controlsVisible` **共用同一个函数** ——
         // 那边管 opacity / allowsHitTesting,这边管点击穿透与按钮分发,两边长歪就是
-        // "看不见却挡手"或"看得见点不动"(2026-09-16 加「悬停控制条」开关时合并)。
+        // "看不见却挡手"或"看得见点不动"(加「悬停控制条」开关时合并)。
         let controlsShown = OverlayControlHitTest.controlsShown(
             hovering: isHoveringForControls,
             positionLocked: AppSettings.shared.lockPosition,
@@ -854,8 +854,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         case .mouseMoved:
             let insideWindow = frame.contains(loc)
             // 控制排的显示判据:窗口内 **且** 过了那道**滞后**闸 —— 还没露出来时只认歌词文字
-            // 矩形,已经露出来了才放宽到"歌词 ∪ 控制排"的包围盒(2026-09-15,见
-            // OverlayControlHitTest.chromeHoverHit;2026-09-13 只收到包围盒那一步,而槽位常驻、
+            // 矩形,已经露出来了才放宽到"歌词 ∪ 控制排"的包围盒(见
+            // OverlayControlHitTest.chromeHoverHit;只收到包围盒那一步,而槽位常驻、
             // 矩形无条件上报,包围盒恒被那排按钮撑宽,短歌词下几乎等于没收)。
             // 区域还没合成出来时退回整窗判定 —— 同 isHoveringLyrics 的兜底,宁可宽一点,也别让
             // 按钮整个叫不出来。
@@ -878,7 +878,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             if isHoveringControlPill != onControlPill {
                 isHoveringControlPill = onControlPill
             }
-            // 按钮悬停高亮(2026-09-11)。可见性两道闸在 Core 那边,见 hoveredControl 声明处。
+            // 按钮悬停高亮。可见性两道闸在 Core 那边,见 hoveredControl 声明处。
             // ⚠️ 只在**真的变了**时候赋值:这是 @Published,每次鼠标移动都写一遍会让整个
             // 悬浮窗按鼠标移动的频率重算 body(移动事件一秒几十上百个)。
             let nowHovered = OverlayControlHitTest.hoveredControl(
@@ -897,13 +897,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
             // 这里**不再**碰 ignoresMouseEvents。它恒为 true,唯一例外是长按拖动武装期间
             // (armDragIfStillPressed 为 performDrag 临时收回 false)。胶囊上的点击改由下面
-            // .leftMouseDown 分支按各按钮矩形自己分发 —— 理由见本节顶部 2026-08-18 那段:
+            // .leftMouseDown 分支按各按钮矩形自己分发 —— 理由见本节顶部那段:
             // ignoresMouseEvents 是整窗 × 所有事件的一个布尔量,点击要它 false、滚轮要它
             // true,同一时刻只能满足一个,按位置翻转必然让其中一方受害。
 
         case .leftMouseDown:
-            // (2026-08-29 排查"点击按钮正下方生效"时这里挂过一条逐次点击的 .error 级探针日志,
-            // 2026-09-05 删掉:一天 2152 行、占 App 侧落盘量一半,且 error 级别里混着例行事件。
+            // (排查"点击按钮正下方生效"时这里挂过一条逐次点击的 .error 级探针日志,
+            // 删掉:一天 2152 行、占 App 侧落盘量一半,且 error 级别里混着例行事件。
             // 再要看点击几何,临时加回来跑 log stream 即可,别再留常驻的。)
             // 胶囊上的点击由我们自己分发:窗口常年点击穿透,SwiftUI 收不到任何事件。
             // 必须排在下面那条 guard 之前 —— 那条会因为 insideHotZone 直接 return。
@@ -914,7 +914,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             guard frame.contains(loc), !insideHotZone else { return }
             // 预设模式(顶部 / 底部居中):不武装也不起长按计时,只记下按在**歌词文字**上的这一下,
             // 等 .leftMouseDragged 看它有没有真的拖出 presetDragIntentDistance —— 拖了才给「已固定」
-            // 反馈。第一版在这里(长按拖动关着时)直接给反馈,用户反馈「一点击就触发」;单击本该
+            // 反馈。⚠️ 别在这里(长按拖动关着时)直接给反馈,那会变成「一点击就触发」;单击本该
             // 原样穿透到桌面,什么都不说。按在四周透明区域的按下不记(拖桌面图标路过窗口不该抖)。
             if placementMode.isPreset {
                 if let zone = lyricsHotZoneLocal, zone.contains(localPoint) {
@@ -1026,7 +1026,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         ) else { return }
 
         window.performDrag(with: syntheticDown)
-        // 用户亲手把窗口拖到了哪儿,那就是新的锚点 —— 哪怕这次是在借来的屏上拖的,也从此
+        // 实测把窗口拖到了哪儿,那就是新的锚点 —— 哪怕这次是在借来的屏上拖的,也从此
         // 以它为准(清掉标记,下面这次写盘才生效)。
         isBorrowingScreen = false
         // performDrag 返回 = 这次拖动已经结束(正常松手,或者被系统提前打断),把
@@ -1077,7 +1077,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard let window else { return }
         let screens = Self.allVisibleFrames()
 
-        // 预设模式(2026-09-11):位置由几何推导,对账 = 在该在的那块屏上按预设重算。Dock 改大小 /
+        // 预设模式:位置由几何推导,对账 = 在该在的那块屏上按预设重算。Dock 改大小 /
         // 换边 / 开关自动隐藏也走这条通知(visibleFrame 变了),所以"Dock 之上"能跟着 Dock 走。
         if placementMode.isPreset {
             reconcilePresetPlacement(window: window, screens: screens)
@@ -1108,7 +1108,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 自己拖出来的那个锚点,那块屏回来时上面 ① 那一支照它把窗口送回去。
     }
 
-    // MARK: - 位置预设(OverlayPlacementMode,2026-09-11,GitHub issue #5)
+    // MARK: - 位置预设(OverlayPlacementMode)
     //
     // 三个入口,几何全在 OverlayPlacement.presetFrame(selftest 覆盖),这里只回答"在哪块屏上算":
     //   · 启动(presetOrigin):锚点还原出的落点在哪块屏,就在那块屏上按预设算 —— 锚点在预设模式下
@@ -1242,7 +1242,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     /// 启动时把窗口摆在哪儿。
     ///
-    /// 2026-08-21:这里**不再**把存下来的位置无条件夹进 NSScreen.main.visibleFrame —— 那是
+    /// 这里**不再**把存下来的位置无条件夹进 NSScreen.main.visibleFrame —— 那是
     /// "悬浮歌词经常在主屏和副屏之间切换位置"的根因。实测这台机器:外接屏 LS27B61x 的
     /// visibleFrame 是 (-526,956,2560,1440),窗口 900×120 的锚点存的是 x=849/顶边=1202(好端端
     /// 在外接屏上),而内置屏的 visibleFrame 是 (0,70,1470,853) —— 旧代码那两行 clamp 把它算成

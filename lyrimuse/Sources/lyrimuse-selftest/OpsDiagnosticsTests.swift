@@ -9,7 +9,7 @@ import Foundation
 func runOpsDiagnosticsTests() {
     // ---- LogRedactor(诊断包脱敏) ----
     //
-    // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:2026-08-13 实测坐实,诊断报告
+    // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:实测坐实,诊断报告
     // 末尾附的 collector 日志里带着 Last.fm API Key 原文。用例全部是合成的假密钥。
     do {
         print("\n== 诊断日志脱敏 ==")
@@ -63,7 +63,7 @@ func runOpsDiagnosticsTests() {
     // ---- BackupDiscovery(跨目录找最新备份) ----
     //
     // 这是"换新 Mac 能不能一键恢复"的唯一入口,而它只在换机器时走一次、出错时没有现场可看,
-    // 所以用真实的临时目录做一次端到端。2026-08-13 用户问出的洞就在这条路上:备份放在
+    // 所以用真实的临时目录做一次端到端。这条路上有个洞:备份放在
     // Dropbox 的人,新机器上 UserDefaults 是空的、当前设置必然指向 iCloud,只按当前设置找
     // 就什么都找不到。
     do {
@@ -159,7 +159,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(rewritten, 0o600, "覆盖写之后权限仍须是 0600(.atomic 会换掉 inode)")
     }
 
-    // ---- JSONConfigDocument(共享配置文件三态读写,2026-09-05,借鉴清单 #46)----
+    // ---- JSONConfigDocument(共享配置文件三态读写)----
     //
     // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)→ 加载判 corrupt、保存
     // **拒绝**、文件字节一字不动;② 写盘失败 → 内存里的字典和状态**不变**。都拿真实的临时目录跑。
@@ -337,7 +337,7 @@ func runOpsDiagnosticsTests() {
 
     // ---- LaunchdPrintParser ----
     //
-    // 样本取自 2026-08-15 在真机上抓的 `launchctl print gui/<uid>/<label>` 实际输出(见
+    // 样本取自在真机上抓的 `launchctl print gui/<uid>/<label>` 实际输出(见
     // LaunchdJobState 里那张三态表),只保留跟解析有关的行。
     do {
         // 真实输出里同时有这三种行,后两种都是**陷阱**:
@@ -423,7 +423,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(hello?.succeeded, true, "ProcessRunner: succeeded")
 
         // 非零退出：跑了但失败，跟"没跑起来"是两回事。
-        // environment(2026-09-06 加):不传 = 继承本进程;传了 = 子进程只有这一份。
+        // environment:不传 = 继承本进程;传了 = 子进程只有这一份。
         // 这个参数是「待补提交删除按钮点了没反应」那个 bug 的修法,值得有行为断言而不是
         // 只靠调用点的注释。
         let inherited = ProcessRunner.run("/bin/sh", ["-c", "echo \"[$LYRIMUSE_SELFTEST_ENV]\""], timeout: 5)
@@ -474,7 +474,7 @@ func runOpsDiagnosticsTests() {
     //
     // 守的是两件会静默坏掉的事:①解析出一个"看起来很确定"的错数字(Last.fm 那边 API key
     // 失效返回 200 + error、不识别就显示 0 scrobble 的翻版);②缓存新鲜度判据被时钟异常
-    // 骗住——2026-09-03 同一天 Last.fm 统计那边真栽过:`fresh()` 只算 now - fetchedAt < ttl,
+    // 骗住——同一天 Last.fm 统计那边真栽过:`fresh` 只算 now - fetchedAt < ttl,
     // fetchedAt 落在未来时差值恒为负、恒判新鲜,数字就永远冻在十几个小时前。
     do {
         print("\n== GitHub star 数 ==")
@@ -521,7 +521,7 @@ func runOpsDiagnosticsTests() {
 
     // ---- CollectorLogLine / LogFiles(collector 日志时间戳的两种格式)----
     //
-    // 2026-09-05 collector 换 log/slog 之后每行以 `time=…Z` 开头;.old 归档与迁移前的行仍是 Go log
+    // collector 换 log/slog 之后每行以 `time=…Z` 开头;.old 归档与迁移前的行仍是 Go log
     // 的 `yyyy/MM/dd HH:mm:ss`(UTC 无标记)。诊断导出按时间窗口取日志靠它找起点,两种都要认、
     // 都按 UTC 解 —— 老格式按本地时间解会把 4 小时窗口整体错开 8 小时,导出里就是一片空。
     do {
@@ -547,7 +547,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(LogFiles.collector.lastPathComponent, "lyrimuse.log", "日志文件: collector 日志路径不变")
     }
 
-    // ---- CrashReportSummary(诊断导出的崩溃报告段,2026-09-06,借鉴清单 #31)----
+    // ---- CrashReportSummary(诊断导出的崩溃报告段)----
     //
     // .ips = 摘要行 JSON + 正文 JSON。三种样本照本机真实报告的形状写:启动期 DYLD 缺库(零帧,信息全在
     // termination)、另一个同名包里 collector 的签名约束、带 20 帧的 EXC_BAD_ACCESS(截成 15)。再钉宽容解析、归属判定
@@ -686,11 +686,11 @@ func runOpsDiagnosticsTests() {
         }
     }
 
-    // ---- build.sh 用什么身份签(2026-09-11)----
+    // ---- build.sh 用什么身份签----
     //
     // ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash,而 TCC(辅助功能 / 自动化授权)存的正是这条要求:
     // 二进制一重编 cdhash 就变,存的那条再也对不上 —— 界面上勾还亮着、App 却说没授权,每次 build.sh 之后
-    // 都要手动取消再勾一遍(用户 2026-09-11 撞上第 N 次:「为什么我明明已经有授权了,每次点击跳过广告
+    // 都要手动取消再勾一遍(用户撞上第 N 次:「为什么我明明已经有授权了,每次点击跳过广告
     // 还是会说让我去授权?」)。改成本机一张固定的自签名证书之后,要求变成
     // `identifier "..." and certificate root = H"<证书>"`,跟二进制内容无关。
     //
@@ -705,7 +705,7 @@ func runOpsDiagnosticsTests() {
             .appendingPathComponent("build.sh")
         if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
             // 注释里有好几处在讲"当年那行 `codesign -s - --force`",扫的时候得先把注释行剥掉 ——
-            // 同 contracts 组那几条源码守卫踩过的坑(第一版整份 contains,被自己的注释打红)。
+            // 同 contracts 组那几条源码守卫踩过的坑(整份 contains 会被自己的注释打红)。
             let codeLines = text.split(separator: "\n", omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.hasPrefix("#") }
@@ -726,7 +726,7 @@ func runOpsDiagnosticsTests() {
         }
     }
 
-    // ---- build.sh 装完必须确认进程真换了(2026-09-12)----
+    // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本
     // 最后那句 `pgrep` 会把同一个旧 pid 当成"新起来的",照样打印 running 并 EXIT=0 ——
@@ -767,7 +767,7 @@ func runOpsDiagnosticsTests() {
         }
     }
 
-    // ---- 提交信息不许引用 issue(2026-09-17,用户定的规则)----
+    // ---- 提交信息不许引用 issue ----
     //
     // 「以后提交都不允许引用任何 issue」。为什么是 git hook 而不是写进文档:这个仓的
     // AGENTS.md / CLAUDE.md 都在 .gitignore 里、文件本身也不存在,而提醒类的约束实测拦不住

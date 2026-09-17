@@ -26,7 +26,7 @@ func TestFoldDiacritics(t *testing.T) {
 		"2Pac":         "2Pac",
 		"AC/DC":        "AC/DC",
 		"":             "",
-		// 大写形式：第一版漏了整组大写，靠这几条守住
+		// 大写形式:整组大写容易漏,靠这几条守住
 		"Æther":     "AEther",
 		"ÅKERFELDT": "AKERFELDT",
 		"ÑOÑO":      "NONO",

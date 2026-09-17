@@ -24,7 +24,7 @@ public struct LyricLineWords: Equatable {
 // 若干 (词始ms,词长ms,0)文字;跳过没有任何非空词的行(NetEase 会吐一些零宽标记行)。
 public enum YRCParser {
     private static let headRegex = try! NSRegularExpression(pattern: #"^\[(\d+),\d+\]"#)
-    // 词文字捕获组(第 3 组)不能简单写 [^(]*——2026-08-02 实测排查坐实:如果某个词的
+    // 词文字捕获组(第 3 组)不能简单写 [^(]*——实测排查坐实:如果某个词的
     // 原文本身含字面 "("(和声/口白标注常见,比如 "(oh)"),[^(]* 会在遇到这个字面 "("
     // 时就把这个词截断成空(空词在下面 wordText.isEmpty 判断里被整个丢弃),而剩下的
     // "(oh)" 因为不满足 \(\d+,\d+,\d+\) 这个真正的时间戳元组格式,正则引擎会继续往后扫,
@@ -33,7 +33,7 @@ public enum YRCParser {
     // 新词的开始;否则这个 ( 就是词文字本身的一部分,继续吃进当前词"——用负向前瞻
     // (?!\d+,\d+,\d+\)) 实现,不影响原有三个捕获组的编号(内层 (?:...) 都是非捕获组)。
     private static let wordRegex = try! NSRegularExpression(pattern: #"\((\d+),(\d+),\d+\)((?:[^(]|\((?!\d+,\d+,\d+\)))*)"#)
-    // 2026-08-03 实测排查坐实(周杰伦……不是,是 Michael Jackson《Morphine》的真实缓存
+    // 实测排查坐实(周杰伦……不是,是 Michael Jackson《Morphine》的真实缓存
     // 数据,标题行 "********(0,2255,0) - Michael Jackson (迈克尔·杰克逊)" 的括号注音部分):
     // 上面那条 wordRegex 的负向前瞻只认"紧跟着的是完整 (数字,数字,数字) 三段式元组"才
     // 算真时间戳,这份真实数据里给"(""）"这两个标点各自配的元组却缺了第三段 flag——

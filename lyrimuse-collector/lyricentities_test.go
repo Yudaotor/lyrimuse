@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-09-09 真实 bug:Prince《Free》(酷狗)的灵动岛歌词里满屏 `they&apos;re` / `Don&apos;t`。
+// 真实 bug:Prince《Free》(酷狗)的灵动岛歌词里满屏 `they&apos;re` / `Don&apos;t`。
 // 全库核实酷狗 11 条 + 网易云 1 条带字符实体(`&apos;` / `&quot;` / `&amp;` / `&nbsp;`),整行与
 // 逐字两轨同样带着,见 lyricentities.go 头注。下面的歌词行都是自编的形状样本,不是真实歌词。
 func TestDecodeLyricEntities(t *testing.T) {

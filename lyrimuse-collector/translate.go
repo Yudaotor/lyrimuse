@@ -97,7 +97,7 @@ func chunkForTranslation(texts []string) [][]string {
 	return chunks
 }
 
-// 【已删除】looksLikeTargetLanguage(2026-08-23)
+// 【已删除】looksLikeTargetLanguage
 //
 // 它做的是"整首歌是不是已经就是目标语言,是的话整个跳过"。判据是 looksChinese ——
 // 汉字占多数就算中文,而且注释明确写着"中英混排的华语歌也应该判成中文"。
@@ -107,7 +107,7 @@ func chunkForTranslation(texts []string) [][]string {
 // 但用它来判"正文要不要翻"就错了 —— 华语歌里整行英文的副歌很常见,
 // 《方大同 - 月亮代表我的心》44 行里 35 行中文、8 行 "It represent my heart!",
 // 汉字占多数 ⇒ 判成"已经是中文" ⇒ 整首跳过,那 8 行英文永远等不到译文
-// (2026-08-23 用户报的就是这个)。
+// (现象是的就是这个)。
 //
 // 两处调用都删了,改由**逐行**判定接管:
 //   - needsTranslationBackfill 靠 anyLineNeedsTranslation(有任何一行需要翻才起 goroutine,
@@ -137,7 +137,7 @@ func looksChinese(text string) bool {
 
 // translationUsable 判断一条已有的译文对**当前**的目标语言还算不算数。
 //
-// 这是这次改动的核心。原来的判断是"有译文就跳过",于是一首网易云歌词一旦带上它那份
+// ⚠️ 判据**不能**是"有译文就跳过":一首网易云歌词一旦带上它那份
 // 固定中文的社区译文,把设置改成日语的用户就永远只能看到中文 —— 机翻根本没机会跑。
 // 而降低网易云/QQ 的打分并不能解决这件事:打分里压根没有"有译文"这一项(见
 // scoreLyricCandidate),译文不参与选源;降分只会把原文歌词的质量一起赔进去。
@@ -147,7 +147,7 @@ func translationUsable(e enrichEntry, target string) bool {
 	}
 	// ⚠️ 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
 	//
-	// 2026-08-09 实测抓到:App 侧"采纳候选/手改译文"那条路(EnrichCacheStore.saveEdit)
+	// 实测抓到:App 侧"采纳候选/手改译文"那条路(EnrichCacheStore.saveEdit)
 	// 只写 lyrics_tr,不动 lyrics_tr_lang / lyrics_tr_source。于是采纳一份网易云的中文
 	// 社区译文之后,语言标签还留着上一轮机翻写的 "en",这道门一看"语言 en、目标 en"就放行,
 	// 机翻永远不会再接手 —— 用户把译文语言选成英文,却永远只看到中文。那条写入路径已经
@@ -187,7 +187,7 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target st
 
 // ── 逐行按文字系统分流 ───────────────────────────────────────────────────────
 //
-// 2026-08-10 实测坐实的真 bug:宇多田ヒカル 的 First Love 是**日英混排**(主歌日文、
+// 实测坐实的真 bug:宇多田ヒカル 的 First Love 是**日英混排**(主歌日文、
 // 副歌整段英文),译文目标选英文时,两个后端对**整批文本**做语种识别都判成"英文",于是
 //
 //	on-device helper: {"ok":false,"source":"en","reason":"same-language"}
@@ -314,7 +314,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	}
 	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
 	//
-	// 署名行先剔掉(2026-08-23):`[00:02.000] 编曲 : Edward Chan/方大同` 这种行拉丁字母
+	// 署名行先剔掉:`[00:02.000] 编曲: Edward Chan/方大同` 这种行拉丁字母
 	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
 	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
 	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
@@ -324,7 +324,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
 	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
 	//
-	// 按原文**去重**再送翻(2026-08-26,Michael Jackson《Beat It》实测坐实):副歌反复的歌
+	// 按原文**去重**再送翻(Michael Jackson《Beat It》实测坐实):副歌反复的歌
 	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
 	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
 	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
@@ -410,7 +410,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 // assembleTranslationLRC 把逐行译文拼回一份跟主歌词同时间戳的 LRC。两条翻译路径(端上
 // helper / MyMemory)共用,保证它们产出的形状完全一致。
 // attempted 是这次**真正送去翻**的行数(不是整首歌的行数)。下面那道"翻出来太少就当没成"
-// 的闸门必须拿它当分母 —— 2026-08-10 起只翻"跟目标语言不同文字"的行,像 First Love 这种
+// 的闸门必须拿它当分母 —— 只翻"跟目标语言不同文字"的行,像 First Love 这种
 // 日英混排的歌,一半行本来就不需要译文,用总行数当分母会把一份完全正常的译文判成失败。
 func assembleTranslationLRC(lines []lrcLine, translated []string, attempted int) translationResult {
 	var b strings.Builder
@@ -519,8 +519,8 @@ const (
 //
 // 为什么需要:needsTranslationBackfill 本来就能判出"记录的语言 != 当前目标"并触发重翻,
 // 但那道判断只在**播放到这首歌时**才跑(见 enrich.go 主循环里那串 else if)。于是用户把
-// 译文语言从英文改回中文之后,以前听过的歌仍然显示英文译文,直到碰巧再放一次 —— 2026-08-13
-// 用户报的就是这个。当时实测本机缓存:12 条语言不匹配,其中 11 条"会在下次播放时重翻",
+// 译文语言从英文改回中文之后,以前听过的歌仍然显示英文译文,直到碰巧再放一次 ——
+// 现象是的就是这个。当时实测本机缓存:12 条语言不匹配,其中 11 条"会在下次播放时重翻",
 // 也就是机制在、只是没有触发的机会。
 //
 // 放在启动时扫一遍正好覆盖这个场景:Swift 侧改完译文语言会重启 collector
@@ -651,7 +651,7 @@ func backfillTranslation(key string) {
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
 	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
-	// 界面永远看不到。2026-08-08 用户报"译文语言切成英文了还是没有翻译",日志里译文明明
+	// 界面永远看不到。现象是"译文语言切成英文了还是没有翻译",日志里译文明明
 	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
 	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
 	//
@@ -668,9 +668,8 @@ func backfillTranslation(key string) {
 			return
 		}
 		exportLyricsFiles()
-		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,原来只有 resolveEnrichAsync /
-		// backfillPeripheralFields 做了这一步,这三条补全路径全漏了 —— 于是同一首歌播到
-		// 中途才补出来的译文,要等下一次换歌才会被推出去(2026-08-09 用户问"为什么当前这
+		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
+		// 的话,同一首歌播到中途才补出来的译文,要等下一次换歌才会被推出去(表现是"为什么当前这
 		// 歌没有英文译文",译文其实早就翻好、也落盘了,只是没人通知)。
 		if enrichNotify != nil {
 			select {

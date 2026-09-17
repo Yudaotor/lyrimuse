@@ -38,6 +38,6 @@ final class LyricsOverlayWindow: NSPanel {
     //
     // 原来这里有一个 scrollWheel 覆写(丢掉事件 + 把穿透设回 true)和配套的
     // isDragArmedProvider / onScrollWheelSwallowed 两条接线,都是为了缓解「胶囊热区吞滚轮」;
-    // 病根(按指针位置翻转穿透)2026-08-18 删掉之后它们一并没有存在意义了。详见
+    // 病根(按指针位置翻转穿透)删掉之后它们一并没有存在意义了。详见
     // LyricsOverlayWindowController 里「点击穿透 + 悬停热区 + 长按拖动」那一节。
 }

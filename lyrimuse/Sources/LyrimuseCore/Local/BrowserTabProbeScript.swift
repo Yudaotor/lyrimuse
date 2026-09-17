@@ -1,7 +1,7 @@
 import Foundation
 
 // 「在某个浏览器里,找到匹配某个域名的标签页,在它上面跑一段 JS,把返回值拿回来」——
-// 这件事的**唯一一份**实现(2026-09-03 抽出来)。
+// 这件事的**唯一一份**实现(抽出来)。
 //
 // 抽出来的直接原因:`SpotifyWebAdProbe` 要跟 `YouTubeMusicAdProbe` 做一模一样的事,只是
 // 域名和 JS 不同。而这段 AppleScript 模板里每一行都是踩出来的(下面逐条记着),复制第二份
@@ -14,7 +14,7 @@ import Foundation
 //
 // ---- 这段模板里每一行的来历(别顺手简化掉任何一条) ----
 //
-//  * `tell application id "<bundleID>"` 而不是写死 App 显示名:2026-08-31 对
+//  * `tell application id "<bundleID>"` 而不是写死 App 显示名:对
 //    Arc/Chrome/Edge/Safari 逐个实测坐实,不受"App 被改名 / 装了 Canary 之类的变体"影响。
 //  * **先扫各窗口的当前标签页,再扫其余标签页**:Arc 会休眠非当前标签页,对休眠标签页执行
 //    JavaScript 会一直不返回、只能等 `with timeout` 踢掉,每踢一个吃掉一秒预算。用户开几十个
@@ -23,7 +23,7 @@ import Foundation
 //  * `with timeout of N seconds` **不能省**:没有它时"浏览器不回"表现为 osascript 挂死到被
 //    进程级超时杀掉,裸 `try` 抓不住挂起。
 //  * 裸 `try … end try`:吞掉单个标签页的错误继续找下一个。
-//  * Chromium 系和 Safari 的 JS 注入命令**不同名**(2026-08-31 实测坐实,不是同一个词的两种
+//  * Chromium 系和 Safari 的 JS 注入命令**不同名**(实测坐实,不是同一个词的两种
 //    写法):Chromium 是 `execute (tab) javascript "…"`,Safari 是 `do JavaScript "…" in tab`。
 //    窗口/标签枚举语法(`count of windows`/`tabs of window`/`URL of tab`)两边一致。
 //  * 脚本**写进临时文件**再执行,不用 `osascript -e`:里面嵌着一整段 JS、JS 里又有单引号和

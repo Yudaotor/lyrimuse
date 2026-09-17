@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 播放器多选(2026-09-01)——设置页"播放器"卡从单选改成多选,用户可以同时勾
+// 播放器多选——设置页"播放器"卡从单选改成多选,用户可以同时勾
 // 好几个具体播放器(高亮显示),也可以额外勾"自动识别"。这一串盯的是共享 JSON 的
 // 迁移路径 + isTracked() 的多选/自动识别组合判定,跟 Swift 侧 lyrimuse-selftest
 // 的「播放器多选」块守的是同一份契约。
@@ -85,7 +85,7 @@ func TestIsTrackedMultiSelect(t *testing.T) {
 	}
 }
 
-// 2026-09-01 补:信任列表(最典型场景是「网页播放器」卡配对的浏览器)必须在**没有勾
+// 补:信任列表(最典型场景是「网页播放器」卡配对的浏览器)必须在**没有勾
 // 自动识别**时也生效——配对浏览器这个动作跟"选没选自动识别"是两件独立的事,用户没有
 // 理由因为只选了具体播放器就让配对形同虚设。
 func TestIsTrackedMultiSelectHonorsTrustedPlayersWithoutAuto(t *testing.T) {

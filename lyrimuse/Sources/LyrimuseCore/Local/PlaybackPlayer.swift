@@ -8,13 +8,13 @@ import Foundation
 // NSAppleScriptEnabled),共用同一条系统级 MediaRemote 路径(经内置的 media-control
 // 二进制读,不需要用户单独安装任何东西),只是各自的 bundleIdentifier 不同。Spotify
 // 虽然自己有完整的 AppleScript 支持(跟 QQ/网易云不一样),但它同样会把播放状态发布进
-// 系统级 MediaRemote(2026-07-29 实测坐实:`media-control get`/控制指令对 Spotify 都
+// 系统级 MediaRemote(实测坐实:`media-control get`/控制指令对 Spotify 都
 // 正常工作,读到的字段形状跟 Apple Music/QQ音乐/网易云音乐完全一致),没有必要为它单独
 // 写一套 AppleScript 集成、多背一份"自动化"权限依赖——归到跟 QQ/网易云同一条路径。
 //
 // 具体选好某一个 App 是一个用户显式选择、持久化的设置,不是运行时按"当前谁在前台/谁
 // 最近更新过"自动判定——多个播放器同时开着时自动判定天然有歧义,显式选择完全绕开这个
-// 问题。2026-07-29 新增的 .auto 是这条原则的例外:它不是"不自动判定",而是主动把"系统
+// 问题。新增的 .auto 是这条原则的例外:它不是"不自动判定",而是主动把"系统
 // 当前认定的唯一 Now Playing 来源是谁"这件事直接交给系统本身仲裁——媒体系统(macOS 的
 // MediaRemote/Control Center)本来就只会有一个"当前正在播放"焦点,不是这个 App 自己在
 // 猜。.auto 因此不对应任何单一固定的 bundle id(bundleIdentifier 返回空字符串,调用方
@@ -27,10 +27,10 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case appleMusic = "apple_music"
     case qqMusic = "qq_music"
     case netease = "netease_music"
-    // 酷狗音乐(2026-08-21 接入)。跟 QQ/网易云同一条路径,不需要新代码分支:它是个 Mac
+    // 酷狗音乐(接入)。跟 QQ/网易云同一条路径,不需要新代码分支:它是个 Mac
     // Catalyst 应用(主二进制链的是 /System/iOSSupport/.../MediaPlayer.framework),自己把
     // 播放状态发布进系统级 MediaRemote;同样没有 AppleScript 字典(Info.plist 里没有
-    // NSAppleScriptEnabled、Resources 下也没有 .sdef,2026-08-21 核实),所以扩展控件
+    // NSAppleScriptEnabled、Resources 下也没有 .sdef),所以扩展控件
     // (喜欢/音量/播放模式)一律没有。顺带白捡一项:酷狗本来就是这个项目的歌词源之一,
     // 接入播放器等于把「同源加权」也接上了(见 collector 的 playerNativeLyricSource)。
     case kugou = "kugou_music"
@@ -77,7 +77,7 @@ extension Set where Element == PlaybackPlayer {
     ///   · 多选里含 Apple Music → 命中它那一拍借 AppleScript 的精确位置;
     ///   · **纯 auto(默认值)** → 同样会借 —— `refinedAppleMusicSnapshotIfNeeded` 的第一道
     ///     guard 只看 `bundleID == com.apple.Music`、**完全不看 features.players**,在播的
-    ///     是 Music.app 就走;2026-09-17 起焦点被别的 App 抢走时还会同步退回它
+    ///     是 Music.app 就走;焦点被别的 App 抢走时还会同步退回它
     ///     (`appleMusicSnapshotAfterFocusLost`)。
     ///
     /// ⚠️ **不是 `PlaybackPlayerPreference.isExclusivelyAppleMusic` 的替代品**。那一条问的是
@@ -85,9 +85,9 @@ extension Set where Element == PlaybackPlayer {
     /// checkForCurrentPlayer 用),两者不能互换 —— 混用会让多选 / auto 下的播放控制武断地
     /// 打给 Music.app。这一条只回答"这份权限值不值得给这个用户看"。
     ///
-    /// 引导页 2026-09-03 就是按这个判据做的(见 OnboardingView.needsAppleMusicAutomation
+    /// 引导页就是按这个判据做的(见 OnboardingView.needsAppleMusicAutomation
     /// 上那段沿革),设置页那张权限卡当时漏了、一直停在 `contains(.appleMusic)` ——
-    /// 于是默认配置的人在引导里被问过这个权限,回头却在设置里**找不到它**。2026-09-17
+    /// 于是默认配置的人在引导里被问过这个权限,回头却在设置里**找不到它**。
     /// 把两处合并到这里,省得再漂一次。
     public var needsAppleMusicAutomation: Bool {
         contains(.auto) || contains(.appleMusic)
@@ -103,7 +103,7 @@ extension Set where Element == PlaybackPlayer {
 // 每次 2 秒轮询都会读一次,文件很小,不值得像 EnrichCacheReader 那样加 mtime 缓存。
 public enum PlaybackPlayerPreference {
     private struct MinimalFeatureFlags: Decodable {
-        // player 是遗留单选字段(2026-09-01 前),players 缺失时当一次性迁移源读——
+        // player 是遗留单选字段(前),players 缺失时当一次性迁移源读——
         // 跟 collector 侧 featureFlagsFile.Player/resolvePlayers 是同一份迁移逻辑,
         // 两侧必须同步维护。
         let player: String?
@@ -112,9 +112,9 @@ public enum PlaybackPlayerPreference {
 
     private static let featuresURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
-    /// 当前选中的播放器集合(2026-09-01 起可多选,取代原来单值的 `current`)。文件不
+    /// 当前选中的播放器集合(可多选,取代原来单值的 `current`)。文件不
     /// 存在/解析失败/两个字段都缺失或认不出,一律兜底**{自动识别}**——理由跟改动前
-    /// `current` 的兜底一致(2026-08-13 从 appleMusic 改成 auto):只用 Spotify / QQ 音乐 /
+    /// `current` 的兜底一致(从 appleMusic 改成 auto):只用 Spotify / QQ 音乐 /
     /// 网易云的人如果跳过引导里选播放器那一步,App 不该一直去问 Music.app 换来一个永远
     /// 空白的界面。
     ///

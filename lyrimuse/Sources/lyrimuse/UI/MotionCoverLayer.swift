@@ -2,7 +2,7 @@ import AVFoundation
 import AppKit
 import SwiftUI
 
-/// Apple Music 动态封面的**播放层**(2026-09-09)。
+/// Apple Music 动态封面的**播放层**。
 ///
 /// 分工见 `MotionCoverStore` 头注;这一层只负责"把一个本地 mp4 无声地循环画在一块方形区域里",
 /// 以及**该不该在放**。它是这个项目里第一次引入 AVFoundation。
@@ -46,7 +46,7 @@ final class MotionCoverNSView: NSView {
     /// SwiftUI 要求播的那份(离屏期间也记着)。
     private var desiredFile: URL?
     /// 播放器**实际**加载的那份。离屏时连播放器一起放掉,所以它会回到 nil,而 `desiredFile` 不会 ——
-    /// 重新入窗时靠后者恢复。第一版把两者合成一个字段,离屏再入窗就恢复不出来、画面空着。
+    /// 重新入窗时靠后者恢复。⚠️ 两者**不能**合成一个字段:那样离屏再入窗就恢复不出来、画面空着。
     private var loadedFile: URL?
     private var wantsPlaying = false
 

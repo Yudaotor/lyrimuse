@@ -4,7 +4,7 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "github-stars")
 
-/// 「关于」页 GitHub 仓库那一行右边那个 star 数(2026-09-03 用户要求:「帮我在这里加一个
+/// 「关于」页 GitHub 仓库那一行右边那个 star 数(「帮我在这里加一个
 /// star 数,代表我这个仓库目前实际的 star 数」)。
 ///
 /// 只做三件事:读缓存、按需取一次数、把结果发布给那一行。判据(要不要取、怎么解析、限流
@@ -81,7 +81,7 @@ final class GitHubStarsService: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             let http = response as? HTTPURLResponse
             let status = http?.statusCode
-            // 每一次真的发出去的请求都记一笔——见 NetworkAuditLog 头注(用户要求"所有对外
+            // 每一次真的发出去的请求都记一笔——见 NetworkAuditLog 头注("所有对外
             // 请求都要记日志")。只给 host 和一个语义标签,不给完整 URL。
             NetworkAuditLog.record(service: "github", operation: "repo-stars", host: url.host ?? "api.github.com",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)

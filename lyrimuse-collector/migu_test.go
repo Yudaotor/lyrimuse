@@ -14,7 +14,7 @@ func miguItemFromJSON(t *testing.T, raw string) miguSearchItem {
 	return it
 }
 
-// 咪咕 LRC 顶部四行元数据(2026-09-04 实测形状):前两行没有冒号,只有这里能剥;作词/作曲
+// 咪咕 LRC 顶部四行元数据(实测形状):前两行没有冒号,只有这里能剥;作词/作曲
 // 两行跟别的源一样留给下游署名处理。CRLF 归一化、空正文行剥掉、正文不受影响。
 func TestMiguStripMetaLines(t *testing.T) {
 	in := "[00:01.00]歌曲名 稻香\r\n[00:02.00]歌手名 周杰伦\r\n[00:03.00]作词：周杰伦\r\n[00:04.00]作曲：周杰伦\r\n" +

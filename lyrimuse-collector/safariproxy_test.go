@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 真实bug(王力宏《你不知道的事》Safari 网页播放,「歌词管理」占位行永远停在
+// 真实故障(王力宏《你不知道的事》Safari 网页播放,「歌词管理」占位行永远停在
 // "搜索歌词中…"):Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,
 // 信任表里存的是宿主 com.apple.Safari——system.go 里三处**裸查** features.TrustedPlayers[
 // bundleID] 的地方对 Safari 全部落空(getAutoDetectedState 把播放整条丢掉、

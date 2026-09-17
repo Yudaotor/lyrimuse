@@ -4,7 +4,7 @@ import SwiftUI
 // `openSettings()` / `openWindow(id:)` 这两个"打开某扇 SwiftUI 窗口"的能力,只能从一个
 // **挂载着的 SwiftUI 视图**里拿到(它们是 @Environment action)。
 //
-// 2026-08-16 之前这个挂载点是 MenuBarExtra 的 label(MenuBarLabel.onAppear)——它是整个
+// 之前这个挂载点是 MenuBarExtra 的 label(MenuBarLabel.onAppear)——它是整个
 // App 生命周期里唯一确定"只挂载一次且一直在"的视图。换成自建 NSStatusItem 之后 label
 // 没了,而设置/歌词管理/歌词窗口/引导这四扇窗仍然是 SwiftUI 的 Settings/Window(id:) 场景
 // (**故意不改**:Settings 场景顺带给了"Lyrimuse ▸ 设置… ⌘,"那个主菜单项,自己用
@@ -14,7 +14,7 @@ import SwiftUI
 // SwiftUI 视图,专门用来把这几个环境 action 捕获进 AppActions。
 //
 // ⚠️ "场景树之外的 NSHostingView 里,openWindow 还灵不灵" 这件事是**实测**过的,不是
-// 想当然(2026-08-16 探针):窗口从头到尾没有 orderFront、isVisible 一直是 false,
+// 想当然(探针):窗口从头到尾没有 orderFront、isVisible 一直是 false,
 // 视图的 onAppear 照常触发,openWindow(id:) 也确实把目标窗口开了出来。
 //
 // 窗口不显示这一点很要紧:它一旦算"可见",AppDelegate.applicationShouldHandleReopen 收到的
@@ -26,7 +26,7 @@ enum MenuBarSceneActions {
     /// 主菜单「Lyrimuse ▸ 设置…」那一条(SwiftUI 见到 Settings 场景自动装上去的)。
     ///
     /// ⚠️ 为什么打开设置窗口非得绕这一圈,不能跟另外三扇窗一样直接用环境 action:
-    /// 2026-08-16 实测坐实,`openWindow(id:)` 从场景树外的锚点视图里调**有效**,而
+    /// 实测坐实,`openWindow(id)` 从场景树外的锚点视图里调**有效**,而
     /// `openSettings()` 在同样的位置是个**静默空操作** —— 而且它的失败方式很有欺骗性:
     /// 设置窗口**已经开着**时它能把窗口带到前台(看起来一切正常),只有窗口被关掉之后
     /// 才暴露"再也开不回来"。当时差点因此误判成"没问题"。

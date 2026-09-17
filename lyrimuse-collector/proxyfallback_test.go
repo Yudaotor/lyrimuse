@@ -68,7 +68,7 @@ func makeRaceDialer(logRef *raceDialLog, blackHoles map[string]bool, delay map[s
 	return dial, cleanup
 }
 
-// 这是 2026-09-03 那个真 bug 的回归测试:**黑洞排在第一个**。
+// 这是那个真 bug 的回归测试:**黑洞排在第一个**。
 // 串行版本(修复前)会把整个预算耗在第一个地址上,永远轮不到第二个;并发版本必须立刻拿到
 // 第二个。断言"很快返回"而不只是"返回了" —— 串行版本最终也会返回,只是要等到超时,那正是
 // 用户看到的"这个源整整半小时不可用"。

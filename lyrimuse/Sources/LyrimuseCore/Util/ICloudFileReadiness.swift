@@ -12,7 +12,7 @@ public enum ICloudFileReadiness {
     ///     拿不到(查询抛错)就传 nil。查这个属性本身**不会**触发下载。
     ///   - realPathExists: 真名路径上现在有没有东西(`FileManager.fileExists`)。
     ///
-    /// 2026-08-24 修的就是 `downloadingStatus == nil` 这一档。原来它无条件当"能读",而
+    /// 修的就是 `downloadingStatus == nil` 这一档。原来它无条件当"能读",而
     /// 拿不到状态其实是**两种完全相反**的情况:
     ///
     /// * 路径上有个普通文件 —— 用户手动拷进来的、或者备份文件夹压根不是 iCloud 管的
@@ -21,7 +21,7 @@ public enum ICloudFileReadiness {
     ///   不存在(见 `ConfigSnapshotName.realName(ofDirectoryEntry:)`;新机器上几乎必然
     ///   是这个形态)。这种恰恰是**最需要先去下载**的情况。
     ///
-    /// 混成一档的代价是用户报上来的这个 bug:设置页点「导入」→ 判定成"能读"→ 跳过
+    /// 混成一档的代价是现象是上来的这个 bug:设置页点「导入」→ 判定成"能读"→ 跳过
     /// `startDownloadingUbiquitousItem` → 直接读一个不存在的路径失败 → 界面提示
     /// "这份备份还没从 iCloud 下载下来,等一会儿再试"。而下载**从头到尾没有被发起过**,
     /// 等多久都没用,除非用户自己去 Finder 里把那个文件夹点下来。

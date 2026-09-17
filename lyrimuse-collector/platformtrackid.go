@@ -6,12 +6,12 @@ import (
 )
 
 // 「这次播放的这首歌,在 Apple / Spotify 上的曲目 ID 是多少」——给 amll 按 ID 直取歌词用
-// (2026-09-16)。
+//。
 //
 // # 为什么要有这份提示
 //
 // amll-ttml-db 除了 ncm / qq 两份索引,还按 **Apple Music 目录 ID** 和 **Spotify 曲目 ID**
-// 各组织了一份(`am-lyrics/` 与 `spotify-lyrics/`;2026-09-16 实测 2,641 / 2,477 首)。而
+// 各组织了一份(`am-lyrics/` 与 `spotify-lyrics/`;实测 2,641 / 2,477 首)。而
 // amll 这个源不做搜索、只按 ID 直取(见 amllttml.go 头注),此前它**唯一**的 ID 来源是网易云
 // 和 QQ 两个歌词源搜出来的 songID。两个后果:
 //

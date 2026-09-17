@@ -8,7 +8,7 @@ struct LyrimuseApp: App {
     @ObservedObject private var languageSettings = AppSettings.shared
 
     var body: some Scene {
-        // ⚠️ 这里**没有** MenuBarExtra。状态栏那一项 2026-08-16 改成自建 NSStatusItem 了
+        // ⚠️ 这里**没有** MenuBarExtra。状态栏那一项改成自建 NSStatusItem 了
         // (MenuBar/MenuBarStatusItem.swift,由 AppDelegate 启动),因为 MenuBarExtra 是把
         // label 快照成一张图塞进状态栏按钮的,视图侧没有活的图层可以挂动画,滚动歌词只能
         // 每帧换图、顺滑度受主线程调度摆布 —— 详见 MenuBarScrollingLabel 顶部那段实测。
@@ -23,8 +23,8 @@ struct LyrimuseApp: App {
         Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }
-        // 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立小窗(2026-08-30)——故意跟"歌词窗口"
-        // 分开开:用户明确要求点了只弹这一个搜索页面,不需要连带拉起完整的歌词窗口。
+        // 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立小窗——故意跟"歌词窗口"
+        // 分开开:点了只弹这一个搜索页面,不需要连带拉起完整的歌词窗口。
         Window(L10n.t("搜索歌词…"), id: "lyrics-quick-search") {
             LyricsQuickSearchWindow()
         }
@@ -34,7 +34,7 @@ struct LyrimuseApp: App {
         // .automatic 走,开关/位置/尺寸全部交给 SwiftUI+macOS 的窗口自动存档机制,
         // 不需要额外持久化代码。
         Window(L10n.t("歌词窗口"), id: "lyrics-window") {
-            // 原生全屏「坏着」的真根因(2026-08-21 探针实验坐实):**SwiftUI Window
+            // 原生全屏「坏着」的真根因(探针实验坐实):**SwiftUI Window
             // 默认禁了全屏** —— 同一进程里纯 AppKit 探针窗绿键是 AXFullScreenButton、
             // 能真进全屏 Space,这扇 SwiftUI 窗却是 AXZoomButton。当年证伪的四个假设
             // (collectionBehavior/activationPolicy/LSUIElement/MenuBarExtra)都没碰到
@@ -50,7 +50,7 @@ struct LyrimuseApp: App {
                 LyricsWindowView()
             }
         }
-        // AM 式顶部(2026-08-21 用户对照 AM 要求):无标题白条,背景一直通到窗顶、
+        // AM 式顶部(用户对照 AM 要求):无标题白条,背景一直通到窗顶、
         // 红绿灯悬浮在背景上。hiddenTitleBar = 标题栏透明 + 隐藏标题 + 内容全尺寸,
         // 一个修饰符抵三行 NSWindow 配置,而且在窗口显示前就生效(不闪白条)。
         // 伪全屏的进出逻辑相应简化:标题栏状态成了常驻,它只管红绿灯显隐和窗口帧

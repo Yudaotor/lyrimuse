@@ -2,7 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 
-// 「菜单栏此刻是深的还是浅的」——以及由它决定的两个歌词颜色(2026-09-03)。
+// 「菜单栏此刻是深的还是浅的」——以及由它决定的两个歌词颜色。
 //
 // ---- 为什么需要这么一个东西 ----
 //
@@ -10,7 +10,7 @@ import SwiftUI
 // (深色菜单栏上再向白提亮四成)。`labelColor` 是**动态色** —— 同一个 `NSColor` 在深色
 // appearance 下解析成白、浅色下解析成黑,取值时"当前是哪个 appearance"决定一切。
 //
-// 于是同一个「跟随系统」在三个宿主里给出了三个答案(2026-09-03 用户截图报的):
+// 于是同一个「跟随系统」在三个宿主里给出了三个答案(对拍报的):
 //   * **真实菜单栏**:状态栏按钮的 appearance 是菜单栏那一档(用户机器上是深的)→ **白字**,对;
 //   * **设置页的色块**:`Color(nsColor: .labelColor)` 在**设置窗口**(浅色)里求值 → **黑块**;
 //   * **设置页的预览**:那条预览用的是真的 `MenuBarScrollingLabel`,但它嵌在设置窗口里,
@@ -22,7 +22,7 @@ import SwiftUI
 // 真实按钮上的那一层(`MenuBarHoverControlsView`,它只存在于真菜单栏,预览里没有)在
 // `viewDidChangeEffectiveAppearance` 时报信,设置页订阅它自动重画。
 //
-// ---- 为什么报信之后不能**当场读**,要等它坐稳(2026-09-07,预览"重建时闪一下") ----
+// ---- 为什么报信之后不能**当场读**,要等它坐稳(预览"重建时闪一下") ----
 //
 // 状态栏项每次重建(`MenuBarStatusItem.rebuildStatusItem`,自适应模式下**逐句**都可能)都是
 // `NSStatusBar.system.statusItem(withLength:)` 新建一个按钮。离屏探针(`scripts/statusitem-appearance-probe.swift`,

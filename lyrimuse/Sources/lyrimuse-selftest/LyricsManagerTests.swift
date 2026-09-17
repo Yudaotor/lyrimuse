@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runLyricsManagerTests() {
-    // ---- LyricsColumnWidths: 「歌词管理」可拖拽列宽的夹值逻辑(2026-08-05) ----
+    // ---- LyricsColumnWidths: 「歌词管理」可拖拽列宽的夹值逻辑 ----
     //
     // 三条分隔条语义不对称:第 0 条(歌名|歌手)左边是弹性的歌名列,只能改「歌手」、由歌名被动
     // 吸收;第 1/2 条是标准的"此消彼长、总宽不变"。夹值要同时守住三件事:每列不低于自己的下限、
@@ -108,7 +108,7 @@ func runLyricsManagerTests() {
         }
     }
 
-    // 「列宽拖不动」的回归(2026-08-14)。
+    // 「列宽拖不动」的回归。
     //
     // 现场:侧栏实际渲染宽度约 725pt、行内容占 [11.5, 725],UserDefaults 里存的是
     // 56 / 137.66796875 / 70,而截图逐像素量出来专辑列只有 56 —— 三列被恒定钳在各自下限,
@@ -146,7 +146,7 @@ func runLyricsManagerTests() {
         expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults, "列宽: 来源列低于专属下限整组退回默认")
     }
 
-    // ---- EnrichCacheMerge: 「歌词管理」写回缓存的合并规则(2026-08-14) ----
+    // ---- EnrichCacheMerge: 「歌词管理」写回缓存的合并规则 ----
     //
     // 守的是一条**静默丢数据**的路径。「歌词管理」可以一直开着边听边整理,而 collector 在这期间
     // 会往同一个文件写:新歌是新增 key,给已有歌补机翻译文/逐字/封面则是原地更新。窗口里的内存
@@ -197,7 +197,7 @@ func runLyricsManagerTests() {
                     "EnrichCacheMerge: 编辑后又删除,结果是删除")
     }
 
-    // ---- 歌词库备份归档(LyricsBackupArchive,2026-08-21)----
+    // ---- 歌词库备份归档(LyricsBackupArchive)----
     //
     // 这一组里最要紧的是**文件名安全**:归档是一份外来文件(别人的机器、或被人手改过),而恢复
     // 就是拿里面的名字去拼路径写文件。不挡住的话 "../../../.ssh/authorized_keys" 这种名字会把
@@ -223,7 +223,7 @@ func runLyricsManagerTests() {
         expectEqual(A.sanitizedFileName("../../.ssh/authorized_keys.lrc"), nil,
                     "歌词备份: 带 ../ 的名字一律拒收")
         expectEqual(A.sanitizedFileName("sub/dir/x.lrc"), nil, "歌词备份: 带路径分隔符的拒收")
-        // 名字里含 `..` **不再**拒收 —— 2026-08-21 实测:专辑名以句点结尾(陶喆《I'm O.K.》、
+        // 名字里含 `..` **不再**拒收 —— 实测:专辑名以句点结尾(陶喆《I'm O.K.》、
         // Wale《everything is a lot.》)导出的文件名天然长这样,那一版规则把它们**静默**踢出
         // 备份,一次漏掉 23 个文件而界面上什么都看不到。`..` 只有作为完整路径分量才危险,而带
         // 分隔符的名字上面那条已经拒了。
@@ -285,9 +285,9 @@ func runLyricsManagerTests() {
         // 完全不是归档的数据不能崩,返回 nil。
         expectEqual(A.decode(Data("not an archive".utf8)) == nil, true, "歌词备份: 垃圾数据返回 nil")
 
-        // ---- enrich 缓存的非歌词字段(meta,2026-09-02)----
+        // ---- enrich 缓存的非歌词字段(meta)----
         //
-        // 用户实测撞上的那个 bug:「在另外电脑导入了配置,但是并没有把歌曲的决策解析给带过来」。
+        // 实测撞上的那个 bug:「在另外电脑导入了配置,但是并没有把歌曲的决策解析给带过来」。
         // 根因是这份 sidecar 此前只带 `lyrics/` 文件族(六个歌词字段),而决策存档
         // (lyrics_decision)、手点「采纳为静态文本」(plain_lyrics)、手动选定凭据
         // (manual_pick_sha)、打分版本(lyrics_scoring_version)全在 enrich 缓存里、不在任何备份里。
@@ -364,7 +364,7 @@ func runLyricsManagerTests() {
         expectEqual(v1Decoded?.meta == nil, true, "歌词备份 meta: v1 老包解出来 meta 为空")
     }
 
-    // ---- 「重新自动匹配」的采纳判定(LyricsRematchDecision,2026-08-21)----
+    // ---- 「重新自动匹配」的采纳判定(LyricsRematchDecision)----
     //
     // 五条分支里有两条是**不该动**的:当前源这一轮没应答(可能只是超时,换过去等于降级)、
     // 这一轮的冠军没有逐字而现有的有(逐字是打分里最值钱的 +400,但取决于这一轮那个源有没有
@@ -426,7 +426,7 @@ func runLyricsManagerTests() {
 
     // ---- 「手动选定歌词后锁定」开关的追溯判据(ManualPickLock) ----
     //
-    // 2026-09-01 加。这个开关打开时要把"之前手动选过的歌"一并锁成 manual_lyrics,判对判错的
+    // 这个开关打开时要把"之前手动选过的歌"一并锁成 manual_lyrics,判对判错的
     // 后果不对称:判宽了会锁住一份用户**从没选过**的内容(而且锁上之后所有自动改进都不再碰
     // 它,用户很难发现),判窄了只是开关看起来没生效。整个功能的正确性就压在 shouldFlip 上,
     // 所以它被特意从 EnrichCacheStore(App target,selftest 链不到)挪进 LyrimuseCore。
@@ -447,7 +447,7 @@ func runLyricsManagerTests() {
         // (Python hashlib)算出。
         expectEqual(sha, "13ec24ce7207", "手动选定锁: 指纹与 Go 侧金标准一致")
 
-        // ⚠️ 这条是 2026-09-01 那次改版的**核心不变量**。第一版对 lyrics+YRC 的原始字节取指纹,
+        // ⚠️ 这条是**核心不变量**。指纹**不能**对 lyrics+YRC 的原始字节取,
         // 而 collector 启动时的规范化(migrateYRCWhitespaceTokens 重排逐字词条、
         // migrateLyricTimelines 重挂行时间轴)会在采纳后**几秒内**改写内容 —— 指纹当场失配,
         // 开关一首都锁不上,而且完全静默。实测抓到的那条:阿肆《浮光掠影》,lyrics 一字节没变、
@@ -495,7 +495,7 @@ func runLyricsManagerTests() {
 
         // ---- 三态分类:界面靠它把"一首都没动"说成人话 ----
         //
-        // 2026-09-01 用户反馈「交互有点差」之后加的。三种"0 首"对用户是完全不同的三件事,
+        // 现象是「交互有点差」之后加的。三种"0 首"对用户是完全不同的三件事,
         // 压成一个 Bool 再静默返回,就是那次反馈里最主要的一条。
         expectEqual(ManualPickLock.state(sha: nil, lyrics: lyricsA), .neverPicked,
                     "手动选定锁三态: 没留痕 = 从没手动选过")
@@ -519,7 +519,7 @@ func runLyricsManagerTests() {
     }
 
     // ---- LyricsSortOrder(「歌词管理」列表排序) ----
-    // 2026-09-02 用户报「排序有时候选了不生效」:开着「仅无歌词」筛选时选「更新时间 新→旧」,
+    // 现象是「排序有时候选了不生效」:开着「仅无歌词」筛选时选「更新时间新→旧」,
     // 列表纹丝不动、看着还是默认的歌手字母序。根因不是比较器写错,是**这批数据让排序无从下手**
     // ——没歌词的条目按定义没有导出歌词文件,`lyricsUpdatedAt` 全是 nil,于是整屏落进同一个
     // "无时间戳"桶、全部由 (歌手,专辑,歌名) 这个平局键决定顺序,而那恰好就是默认排序。
@@ -604,7 +604,7 @@ func runLyricsManagerTests() {
         expectEqual(order(noTS, .updated(ascending: false)), ["hasTS", "noTS"], "排序: 尾块内连 ts 都没有的再排最后(新→旧)")
         expectEqual(order(noTS, .updated(ascending: true)), ["hasTS", "noTS"], "排序: 尾块内连 ts 都没有的再排最后(旧→新)")
 
-        // —— 应答源数(借鉴清单 V3):证据最薄的排最前,"不知道"(0)两个方向都最后 ——
+        // —— 应答源数:证据最薄的排最前,"不知道"(0)两个方向都最后 ——
         let byEvidence = [
             k("thick", artist: "a", responded: 6),
             k("thin", artist: "z", responded: 2),
@@ -616,7 +616,7 @@ func runLyricsManagerTests() {
         )
         // 0 = **老条目没有 lyrics_sources_responded 字段**(不知道),不是"零个源应答"。
         // 跟 hasSource / lyricsUpdatedAt 两档对缺失值的处置逐字同构:两个方向都收进尾块,
-        // 不能让一屏"不知道"占住开头 —— 那正是 2026-09-02 那个"选了没反应"的形状。
+        // 不能让一屏"不知道"占住开头 —— 那正是那个"选了没反应"的形状。
         let withUnknown = [
             k("unknown", artist: "a", resolved: 9999, responded: 0),
             k("known", artist: "z", responded: 2),
@@ -627,7 +627,7 @@ func runLyricsManagerTests() {
         )
         // 尾块内部按 ts 排,而不是退回歌手字母序 —— 否则老库(整屏都没有这个字段)选这一档
         // 会整体退化成默认排序。⚠️ ts 顺序与歌手字母序**相反**,否则这条断言等于没测
-        // (同上面「来源」那组 2026-09-02 变异测试逮到过的写法)。
+        // (同上面「来源」那组变异测试逮到过的写法)。
         let allUnknown = [
             k("A", artist: "a", resolved: 100),
             k("B", artist: "b", resolved: 300),
@@ -655,7 +655,7 @@ func runLyricsManagerTests() {
         )
         // 同一来源内部保持 (歌手,专辑,歌名),不动 —— 「来源」这一档表达的是分组,不是组内次序。
         // ⚠️ ts 必须与歌手字母序**相反**,否则两种规则给出同一个顺序、这条断言等于没测
-        // (2026-09-02 变异测试逮到过一版就是这么写的:把组内改成按 ts 排,断言照样通过)。
+        // (变异测试逮到过一版就是这么写的:把组内改成按 ts 排,断言照样通过)。
         let sameSource = [
             k("y", artist: "b", source: "QQ音乐", resolved: 100),
             k("x", artist: "a", source: "QQ音乐", resolved: 900),
@@ -685,7 +685,7 @@ func runLyricsManagerTests() {
         )
     }
 
-    // ---- 歌词库统计:成色分类的优先级阶梯(2026-09-03,设置页那块统计面板) ----
+    // ---- 歌词库统计:成色分类的优先级阶梯(设置页那块统计面板) ----
     //
     // 为什么值得钉:这是一次**有优先级的判定**,不是四个独立布尔。一条条目常常同时满足
     // 好几个条件(`lyrics_yrc` 是在 `lyrics` 之上补的,所以"有逐字"的几乎一定也"有逐行"),
@@ -728,7 +728,7 @@ func runLyricsManagerTests() {
         // 桶必须正好五个:统计面板按 allCases 铺格子,少一个就有一批条目算进了总数却没有
         // 任何一格显示它们(各项之和 < 总数),多一个则是排版被挤。
         expectEqual(LyricsKind.allCases.count, 5, "歌词库统计: 成色桶应为 5 个")
-        // 确证过的纯音乐**不能**跟"没搜到"混为一谈 —— 2026-08-20 在歌词管理列表里修过
+        // 确证过的纯音乐**不能**跟"没搜到"混为一谈 —— 在歌词管理列表里修过
         // 一次(一整批 LoL 原声带被显示成刺眼的红色「无歌词」),统计面板不该重犯。
         expectNotEqual(
             classify(false, false, false, true), LyricsKind.none,
@@ -752,7 +752,7 @@ func runLyricsManagerTests() {
         expectEqual(source(true, "mt"), .community, "译文来源: 不认识的值退回社区,不当机翻")
     }
 
-    // ---- 跨源同词标注 + 「当前使用」双判据(2026-09-04)----
+    // ---- 跨源同词标注 + 「当前使用」双判据----
     //
     // 「搜索候选歌词」列表:不同源常给出逐字相同的词,后到的那几条标「歌词文字与 X 相同」(只标注不隐藏);
     // 「当前使用」从只比来源改成来源 + 词双判据。分组与判据都在 LyricsCandidateDuplicates(Core),面板只是消费。
@@ -788,14 +788,14 @@ func runLyricsManagerTests() {
     }
 
 
-    // ---- 查询词分组摘要(LyricQueryDigest,2026-09-12,借鉴清单 V1 续篇)----
+    // ---- 查询词分组摘要(LyricQueryDigest)----
     //
-    // 起因:V1 落地当天用户报「这部分可读性很差」并截图 —— 逐条平铺时曲名重复 9 遍、
+    // 起因:V1 落地当天现象是「这部分可读性很差」并截图 —— 逐条平铺时曲名重复 9 遍、
     // 同一串七个源的名单重复 8 遍,20 多个视觉行里真正的信息只有「曲名没变,换了 9 个歌手名」。
     do {
         let SRC = ["netease", "qq", "lrclib", "musixmatch", "amll", "kuwo", "migu"]
         let TITLE = "Beautiful World (Da Capo Version) [Instrumental]"
-        // 用户截图里那一轮的真实形状:首轮 1 组 + 别名轮 8 组,曲名与源名单全同。
+        // 对拍里那一轮的真实形状:首轮 1 组 + 别名轮 8 组,曲名与源名单全同。
         let rounds = [LyricQueryRound(artist: "Utada", title: TITLE, reason: "", sources: [])]
             + ["Hikaru Utada", "宇多田ヒカル", "Cubic U", "Hikki",
                "Utada Hikaru", "ヒッキー", "宇多田光", "うただひかる"].map {
@@ -819,7 +819,7 @@ func runLyricsManagerTests() {
         ]
         let dm = LyricQueryDigestBuilder.build(mixed)
         expectEqual(dm.sharedTitle, nil, "查询摘要: 曲名变过就不提取(标题反查轮改写过标题)")
-        // ⚠️ **刻意不在 Core 里拼成「歌手 - 曲名」**:那是展示决定。2026-09-12 用户截图报
+        // ⚠️ **刻意不在 Core 里拼成「歌手 - 曲名」**:那是展示决定。对拍报
         // 「需要能看出来分别是歌名、歌手、专辑」——拼起来之后连"这是几个值"都读不出来
         // (值里本来就有顿号/连字符)。Core 只给字段,View 自己加标签和「」。
         expectEqual(dm.groups[0].queries,
@@ -869,7 +869,7 @@ func runLyricsManagerTests() {
     }
 
 
-    // ---- 解析决策:判词 / 差值分解 / 共有项(LyricsDecisionAnalysis,2026-09-12)----
+    // ---- 解析决策:判词 / 差值分解 / 共有项(LyricsDecisionAnalysis)----
     //
     // 起因:同一天第三次改「解析决策」面板。前两次压的是查询词,这次是候选表本身 ——
     // 全库 5200 条缓存的只读统计:打分明细中位 27 行、32% 的行在每条候选上一模一样、
@@ -1038,7 +1038,7 @@ func runLyricsManagerTests() {
                     "判词: 冠军也吃了同一项负分 → 它解释不了分差,不算胜负手")
     }
 
-    // ---- 「源里有歌、无词」判据(EnrichSourcePresence,2026-09-05)----
+    // ---- 「源里有歌、无词」判据(EnrichSourcePresence)----
     //
     // 网易云 url 只在真的匹配到曲目时才写;QQ 那条有"搜索页兜底"这一档,不需要网络就能拼出来,
     // 不构成"平台上有这首歌"的证据(跟 collector 侧 isQQSearchFallbackURL 同一个理由)。
@@ -1052,7 +1052,7 @@ func runLyricsManagerTests() {
                     "源里有歌: QQ 搜索页兜底不算(本地拼的,不是证据)")
         expectEqual(P.knownOnSources(neteaseURL: nil, qqMusicURL: nil), false, "源里有歌: 两个都没有就是没有")
 
-        // 「最近一轮没有源应答」(借鉴清单 V4,2026-09-12)。
+        // 「最近一轮没有源应答」。
         // ⚠️ 判据是「决策存档在不在」而不是「顶层 lyrics_sources_responded 空不空」——
         // 那个字段带 omitempty,空数组根本不会序列化出来,「老条目没这个字段」和「真的零应答」
         // 在顶层字段上完全不可区分。下面两条把这个区分本身钉住。
@@ -1066,7 +1066,7 @@ func runLyricsManagerTests() {
                     "零应答: 九源全应答自然不算")
     }
 
-    // ---- 补空扫描通道(LyricsFillSweep,2026-09-05)----
+    // ---- 补空扫描通道(LyricsFillSweep)----
     //
     // 请求文件的形状是 collector 侧 parseLyricsFillRequest 的契约:一行 "all" 或每行一个 key;
     // 进度文件是 collector 的 lyricsFillStatus 逐字段 JSON。两侧各自有测试,这里钉 Swift 这半。
@@ -1090,7 +1090,7 @@ func runLyricsManagerTests() {
         expectEqual(done?.finishedAt, 3, "补空进度: finishedAt 解出来")
     }
 
-    // ---- 全量重新扫库(LyricsFullScan,2026-09-16)----
+    // ---- 全量重新扫库(LyricsFullScan)----
     //
     // 分层规则是这个功能唯一"改错了完全不报错、只是数字悄悄变形"的地方 —— 层分错了扫描照样
     // 跑完,只是把该修的歌漏掉、或者把不该碰的歌重搜一遍。这份镜像跟 collector 侧
@@ -1139,7 +1139,7 @@ func runLyricsManagerTests() {
         expectEqual(resuming?.active, true, "全量状态: 待续标记解出来")
         expectEqual(resuming?.startedAt, 1789500000, "全量状态: 起始时刻解出来")
 
-        // 每首耗时估计由 collector 发布(2026-09-17)。界面此前写死 25 秒,collector 把全量
+        // 每首耗时估计由 collector 发布。界面此前写死 25 秒,collector 把全量
         // 那一档 gap 从 15 秒改成 5 秒时那个数当场就错了、还没有任何东西会报错 —— 跟
         // scoringVersion 不能硬编码同一条理由,所以走同一份状态文件。
         let paced = try? JSONDecoder().decode(F.State.self, from: Data("""
@@ -1168,9 +1168,9 @@ func runLyricsManagerTests() {
                     "全量进度: 补空那一轮不写 full 字段,必须读成 false 而不是解码失败")
     }
 
-    // ---- 「解析决策」面板里的纯音乐标记(2026-09-12)----
+    // ---- 「解析决策」面板里的纯音乐标记----
     //
-    // 用户截图问「它怎么是空的,并且是 -1?」:面板最后一行只有一个 LRCLIB 徽章和一个红色
+    // 对拍问「它怎么是空的,并且是 -1?」:面板最后一行只有一个 LRCLIB 徽章和一个红色
     // -1,标题/歌手/专辑/打分明细全空。那不是候选,是 collector 借候选列表搭车传出来的
     // 「这首是纯音乐」信号(见 LyricsDecisionRow 头注)。
     do {
@@ -1192,8 +1192,8 @@ func runLyricsManagerTests() {
     // 面板与「拷贝」出去的纯文本必须**用同一个判据**分流 —— 界面上改好了、拷出去还是
     // 一行看不懂的 "LRCLIB · -1",等于没修(这个面板存在的意义就是贴进 issue 复盘)。
     //
-    // 2026-09-12 重设计时口径**扩了一类**:不参赛的其实有两种,纯音乐标记(148 行)和
-    // 被判不可用的候选(604 行 / 301 个条目,rejectPlainTextOnly 占大头)。当初用户截图问
+    // 重设计时口径**扩了一类**:不参赛的其实有两种,纯音乐标记(148 行)和
+    // 被判不可用的候选(604 行 / 301 个条目,rejectPlainTextOnly 占大头)。当初对拍问
     // 「它怎么是空的,并且是 -1?」时只修了前者,后者还印着红色 -1 —— 而它**常见 4 倍**。
     // 两类现在共用 sidelinedRow,守卫也一起盯。
     do {
@@ -1229,7 +1229,7 @@ func runLyricsManagerTests() {
         }
     }
 
-    // ---- 「这一轮的输入与经过」的版面(2026-09-15,用户报「非常垃圾…非常乱」那一轮) ----
+    // ---- 「这一轮的输入与经过」的版面(现象是「非常垃圾…非常乱」那一轮) ----
     //
     // 这块已经为可读性改过三轮,前两轮治内容(压缩查询词分组、给异质字段加标签 +「」),
     // 这一轮治版面。会**静默**退回去的就是下面这几条 —— 改回一整句话不会编译报错,

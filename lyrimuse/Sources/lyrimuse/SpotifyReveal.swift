@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import os
 
-/// 「在 Spotify 中显示」(2026-09-09):让 Spotify 客户端跳到当前曲目的页面。
+/// 「在 Spotify 中显示」:让 Spotify 客户端跳到当前曲目的页面。
 ///
 /// Apple Music 那边是一句 AppleScript `reveal current track`;Spotify 的脚本字典没有同类命令(只有会从头重播的
 /// `play track`),能定位的路只有它注册的 `spotify` URL scheme:后台读一次 `spotify url of current track`
@@ -13,7 +13,7 @@ import os
 /// 不走歌词窗口的 `runAppleMusicMenuAction` 外壳:那个外壳的权限确认是 Music.app 专用的;Spotify 这边本仓没有
 /// 权限探测,脚本失败即 nil、退回激活 App —— 与扩展控制(随机 / 音量)的读取走同一条降级路。
 ///
-/// 网页版 Spotify 不进这里:它的播放器 bundle 是浏览器,页面 DOM 里也没有曲目链接(2026-09-09 实测只有专辑 /
+/// 网页版 Spotify 不进这里:它的播放器 bundle 是浏览器,页面 DOM 里也没有曲目链接(实测只有专辑 /
 /// 歌手链接),「在 Safari 中显示」照旧只激活浏览器。
 enum SpotifyReveal {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotify-reveal")

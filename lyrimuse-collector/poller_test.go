@@ -56,7 +56,7 @@ func TestUpdatePosition_RealSeekReanchors(t *testing.T) {
 	}
 }
 
-// 回归测试:2026-08-04 实测排查坐实的 bug——poll() 里 appleMusicPosition() 校准
+// 回归测试:实测排查坐实的 bug——poll 里 appleMusicPosition 校准
 // p.cur.Position/AnchorTS(这一轮推给网页的值)之后,如果不回写 p.trackPos/p.prevWall,
 // 下一轮 updatePosition() 的"稳定播放"分支(p.trackPos += gap*rate)会从校准前那个
 // 旧值继续累加,校准效果只在当轮昙花一现。这里直接模拟 poll() 里那次回写,验证下一轮
@@ -108,7 +108,7 @@ func TestUpdatePosition_PauseDoesNotReanchor(t *testing.T) {
 	}
 }
 
-// ---- Spotify 自然切歌锚点超前校正(2026-08-20,机制见 poller.posBias 注释) ----------
+// ---- Spotify 自然切歌锚点超前校正(机制见 poller.posBias 注释) ----------
 
 func TestNaturalAdvanceCorrection(t *testing.T) {
 	cases := []struct {
@@ -237,7 +237,7 @@ func TestUpdatePosition_PauseSubtractsNaturalAdvanceBias(t *testing.T) {
 }
 
 // 暂停→恢复(同曲)必须继承偏置:恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,
-// 走 seek 分支清偏置会让恢复后整段重新偏快、且与 App 侧语义相反(2026-08-20 对抗审查 high)。
+// 走 seek 分支清偏置会让恢复后整段重新偏快、且与 App 侧语义相反(对抗审查 high)。
 func TestUpdatePosition_ResumeKeepsNaturalAdvanceBias(t *testing.T) {
 	p := &poller{}
 	p.cur = snapshot{Title: "Old", Artist: "A", Album: "Alb", Duration: 293, Playing: true, Elapsed: 290, Rate: 1, Bundle: spotifyBundleID}

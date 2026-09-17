@@ -20,17 +20,17 @@ struct LyricsSearchSheet: View {
     let originalTitle: String
     let originalAlbum: String
     // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
-    // 默认选中它,而不是"搜索结果里谁先到就选谁":2026-07-30 用户实测反馈,默认选中的
+    // 默认选中它,而不是"搜索结果里谁先到就选谁":现象是,默认选中的
     // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
     // 打开这个弹窗却默认高亮着完全不相关的 kugou,容易误导成"当前用的就是这个"。
     let currentSource: String?
     /// 这首歌当前正文的「只取词」指纹(ManualPickLock.fingerprint),nil = 调用方拿不到正文。
-    /// 「当前使用」徽标 2026-09-04 起是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
+    /// 「当前使用」徽标是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
     /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。三个入口都得传(contracts 组守卫钉着)。
     let currentFingerprint: String?
     // 曲目真实时长(秒),0 表示未知。必须传 —— 打分里时长匹配那一档权重很重,传 0 会
     // 让整档对所有候选一律跳过,弹窗里显示的排名就跟当初自动决策用的那组分数对不上。
-    // 2026-08-07 实测:同一首歌传 0 时 qq 482 排第一,传真实时长(270.8s)时 qq 是 582、
+    // 实测:同一首歌传 0 时 qq 482 排第一,传真实时长(270.8s)时 qq 是 582、
     // 而当初胜出的 Musixmatch 拿的是 962 —— 用户看着"分最高的没被选",其实看的是另一套数。
     let durationSecs: Double
     /// 采纳后面板留着不关。三个入口里只有悬浮窗 ⚙ 的独立小窗传 true —— 那是"边听边换词"的
@@ -60,7 +60,7 @@ struct LyricsSearchSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由 ——
-    // 经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings(2026-08-19,那样设置页
+    // 经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings(那样设置页
     // 拖任何滑杆/色轮都会打醒这个 sheet 的整个 body,含候选列表和预览面板)。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     // candidates/isSearching 分开存,而不是揉进一个"loading/loaded/failed"三态 enum——
@@ -71,9 +71,9 @@ struct LyricsSearchSheet: View {
     @State private var candidates: [LyricsSearchService.Candidate] = []
     /// 给"还在搜索"那两处提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
     ///
-    /// 轮次标识(2026-09-02,用户反馈):collector 的兜底轮(首歌手变体/标题反查,见
+    /// 轮次标识:collector 的兜底轮(首歌手变体/标题反查,见
     /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
-    /// 读起来像出了错。第 2 轮起在进度后面缀"［2］"标出轮次(放后面是用户定的位置);
+    /// 读起来像出了错。第 2 轮起在进度后面缀"［2］"标出轮次(放后面是刻意的);
     /// 第 1 轮不缀——绝大多数搜索只有一轮,常驻一个"［1］"是噪音,而标识恰好在数字
     /// 回跳那一刻出现,自己解释自己。
     private var searchProgressSuffix: String {
@@ -83,14 +83,14 @@ struct LyricsSearchSheet: View {
     }
 
     // 歌词源的完整名单——直接读 LyricsSource.allCases(FeatureSettingsStore.swift),App 侧只有这一份。
-    // 2026-09-06 前这里是手抄的第三份名单(另两份:collector 侧 enrich.go 的 lyricSourceNames、
-    // App 侧的 LyricsSource),注释写着"跟那两份手工保持一致";2026-09-04 加咪咕时那两份都改了、
+    // 前这里是手抄的第三份名单(另两份:collector 侧 enrich.go 的 lyricSourceNames、
+    // App 侧的 LyricsSource),注释写着"跟那两份手工保持一致";加咪咕时那两份都改了、
     // 这份漏了,头部徽标写「0/8」、底下空状态却说「九个源都没找到」,用户当场看出来。
     // Go/Swift 两份名单逐个相等、这个文件里不再出现手抄名单、空状态那句的数字等于源数,三件事
     // 都由 selftest contracts 组「歌词源名单」守卫钉住。顺序跟设置页「歌词源」列表一致(同一个 enum)。
     private static let allLyricSourceNames = LyricsSource.allCases.map(\.rawValue)
 
-    // 2026-08-31 用户要求:这一轮里哪些源真的给出过候选(哪怕候选被判-1分),哪些一条
+    // 这一轮里哪些源真的给出过候选(哪怕候选被判-1分),哪些一条
     // 候选都没给——直接从已经收到的 candidates 里反推,跟 collector 侧
     // lyricSourcesResponded(enrich.go)同一个判据("给没给"不看分数),不需要额外的
     // 网络请求或后端改动:candidates 本来就包含被拒绝的候选(比如"无时间戳"那些),
@@ -99,10 +99,10 @@ struct LyricsSearchSheet: View {
         Set(candidates.map(\.source))
     }
 
-    // 传输层就没打通的源(2026-09-06):collector 对"这一轮一个 HTTP 响应都没拿到"的源报
+    // 传输层就没打通的源:collector 对"这一轮一个 HTTP 响应都没拿到"的源报
     // dns_failed / connect_failed / server_error(sourcebreaker.go 最后一节的传输层分类),对"上游
     // 死了、根本没法查"的 AMLL 报 upstream_unreachable(searchcli.go 派生),经 sourceFailureReasonCodes
-    // 传到这里。空状态据此把「连不上」和「未返回候选」分开说 —— 起因是用户报「派对后派对 搜不到」:
+    // 传到这里。空状态据此把「连不上」和「未返回候选」分开说 —— 起因是现象是「派对后派对搜不到」:
     // 公司 VPN 下发的 DNS 对六个源的域名一律不答,而 networkLooksDown 却是 false(它要求进程内
     // **所有**请求全失败,Apple / YouTube 的域名同一台 DNS 能答),弹窗照实显示「九个源都没找到
     // 可用的候选」,把"连不上"报成了"没收录"。
@@ -123,7 +123,7 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 空状态里一行一组:「**原因**：源 A、源 B」—— **理由加粗**、源名保持常规(2026-09-06 用户
+    /// 空状态里一行一组:「**原因**：源 A、源 B」—— **理由加粗**、源名保持常规(用户
     /// 要求:「理由和失败的歌词源区分度不高」)。跟 LyricSourceFailureReason 那边给「歌词源可用
     /// 情况」明细用的整句解释是两个场合,这里只要一个名词短语。源名用「、」拼,跟
     /// LyricsDecisionSheet「本轮应答的源：%@」那处同一写法。
@@ -158,12 +158,12 @@ struct LyricsSearchSheet: View {
     /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——collector 子进程
     /// 起跑时读的是同一份 features.json,所以这份集合就是它这一轮**采用结果**的那几个;搜索中途在
     /// 设置里开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
-    /// 也就是 collector 这一轮**真正发了请求**的那几个:2026-09-06 起 fetchScoredLyricCandidatesStreaming
-    /// 的 skipSource 对关掉的源直接回空结果、不发请求(enrich.go,用户定的「没启用肯定就不查」)。
-    /// 同一天早些时候 collector 还是九路全发、只丢结果,这条注释和 .help 因此在「没有查它」和
+    /// 也就是 collector 这一轮**真正发了请求**的那几个:fetchScoredLyricCandidatesStreaming
+    /// 的 skipSource 对关掉的源直接回空结果、不发请求(enrich.go,口径是「没启用肯定就不查」)。
+    /// ⚠️ 改 collector 那边的行为时,这条注释和 .help 的措辞要跟着走 —— 「没有查它」和
     /// 「不采用它的结果」之间来回改过一次——以后再改 collector 那边的行为,记得这里的措辞跟着走。
-    /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未返回候选」(2026-09-06,
-    /// 用户拍板"加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
+    /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未返回候选」(
+    /// "加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
     /// 空集 = 还没开搜(徽标那时也不显示);行列表把空集当"全开"处理,别把九行全标成未启用。
     @State private var enabledSources: Set<String> = []
 
@@ -171,7 +171,7 @@ struct LyricsSearchSheet: View {
     // 显示——那不是"零个可用",是"还没开始",跟 searchProgressSuffix 同一条准则。
     //
     // 分母是 collector 报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
-    // 的注释),跟进度那对「(x/y)」同一个数——2026-09-06 前这里写的是全部源数,用户关掉一个源
+    // 的注释),跟进度那对「(x/y)」同一个数——前这里写的是全部源数,用户关掉一个源
     // 就会出现进度「x/8」、徽标「y/9」两个分母对不上。分子照旧数"给过候选的源":collector 的
     // filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
     @ViewBuilder
@@ -222,7 +222,7 @@ struct LyricsSearchSheet: View {
     }
 
     private func sourceAvailabilityRow(_ source: String) -> some View {
-        // "曲库里有这首歌、但平台没有歌词"是第四档(2026-09-15),排在最前面判:它比下面
+        // "曲库里有这首歌、但平台没有歌词"是第四档,排在最前面判:它比下面
         // 「已返回候选 / 未返回候选」那对二分**更确定**——那两档只说了"给没给候选",而这一档
         // 说的是"为什么没给"。这个源不会同时出现在 respondedSources 里(collector 侧的搭车
         // 标记被 filterEnabledLyricSources 过滤掉了,不算候选),所以两者不会打架。
@@ -261,7 +261,7 @@ struct LyricsSearchSheet: View {
     /// "已匹配：歌名 · 歌手 · 2:47"——冒号后只列**拿得到**的那几项(各字段都可能为空,见
     /// TrackFoundNoLyrics),一项都没有时整行不显示(返回空串,调用方据此跳过)。
     ///
-    /// 2026-09-16 从整句陈述("收录了这首歌（…），但平台上没有歌词文本")改成字段式:右侧
+    /// 从整句陈述("收录了这首歌（…），但平台上没有歌词文本")改成字段式:右侧
     /// 状态列已经写着「已匹配，无歌词」,这一行再复述一遍结论纯属啰嗦,它真正要交代的只有
     /// **匹配到的是哪一条**。一项都没有时原来还退回一句没有任何信息的话,现在直接不占那一行。
     static func noLyricsMatchDescription(_ found: LyricsSearchService.TrackFoundNoLyrics) -> String {
@@ -281,7 +281,7 @@ struct LyricsSearchSheet: View {
         // 失败原因分两层(见 searchcli.go 的 lyricSourceFailureReasons 头注):三个源
         // (netease/musixmatch/lyricfind)特有的具体原因(限流、token 失效这类),加上任何源
         // 都可能报的传输层通用原因(dns_failed / connect_failed / server_error,分类在
-        // sourcebreaker.go 的传输层失败分类,2026-09-06 起)。两层都没命中才是 nil,如实只显示
+        // sourcebreaker.go 的传输层失败分类)。两层都没命中才是 nil,如实只显示
         // "未返回候选",不编一个没核实过的理由。sourceFailureReasonCodes 里存的是稳定代码,经
         // LyricSourceFailureReason 翻成当前 App 界面语言的人话再显示,见该类型的头注。
         let reason = responded ? nil : sourceFailureReasonCodes[source]
@@ -306,7 +306,7 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 用户在设置里关掉的源(2026-09-06):collector 这一轮根本没查它(enrich.go skipSource,见
+    /// 用户在设置里关掉的源:collector 这一轮根本没查它(enrich.go skipSource,见
     /// enabledSources 的注释),既不是「已返回候选」也不是「未返回候选」——之前它跟真没应答的源
     /// 一样显示「未返回候选」,是把"没参与"报成了"没结果"。
     /// 空心减号 + 第三级灰,比「未返回候选」的叉再退一级:它不是结果。不给失败原因(collector 的
@@ -325,7 +325,7 @@ struct LyricsSearchSheet: View {
         .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"))
     }
 
-    // 未返回候选的源,查得到具体原因的那几个(2026-08-31)——给 sourceAvailabilityList
+    // 未返回候选的源,查得到具体原因的那几个——给 sourceAvailabilityList
     // 那颗弹出面板用,见 LyricsSearchService.SearchUpdate.sourceFailureReasonCodes 的注释。
     @State private var sourceFailureReasonCodes: [String: String] = [:]
 
@@ -346,21 +346,21 @@ struct LyricsSearchSheet: View {
     // 让它自己跑完、结果丢掉即可,搜索本身没有副作用)。
     @State private var searchGeneration = 0
     @State private var loadError: String?
-    // 2026-08-02 补上——所有源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
+    // 补上——所有源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
     // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
     // 失败"算出这个信号,见 LyricsSearchService.SearchUpdate 的注释。
     @State private var networkLooksDown = false
-    // 2026-08-30 补上——SearchUpdate.instrumental 这个信号早就算出来、也早就传到这里了
+    // 补上——SearchUpdate.instrumental 这个信号早就算出来、也早就传到这里了
     // (见其声明处注释:"用来把'一个候选都没有'这个结局分成'这首歌本来就没词'和'真的
     // 谁都没搜到'"),但下面 content 的空状态分支只认 isSearching/networkLooksDown 两种,
     // 从没读过它——实测案例(蛋堡《收敛水》第 1 轨「关键字: Intro」,QQ 明确回过"此歌曲
     // 为没有填词的纯音乐"占位)真的搜出了 instrumental=true,弹窗却仍然显示笼统的
     // "七个源都没找到可用的候选",跟真没搜到的情况没有任何区别,等于白算了这个信号。
     @State private var instrumental = false
-    // 2026-09-15 加——"曲库里有这首歌、但平台上没有歌词文本"的那几个源(语义见
-    // LyricsSearchService.SearchUpdate.tracksFoundNoLyrics)。起因是用户报「为什么这首歌
+    // 加——"曲库里有这首歌、但平台上没有歌词文本"的那几个源(语义见
+    // LyricsSearchService.SearchUpdate.tracksFoundNoLyrics)。起因是现象是「为什么这首歌
     // 搜不到歌词」(Iris / OLORUNNS):网易云和 QQ 都精准命中了曲目(歌名/歌手/专辑/时长
-    // 四项全中)、只是平台没有词,而弹窗显示的跟"十个源都没搜到这首歌"是同一句话——
+    // 四项全中)、只是平台没有词,而弹窗显示的跟"十一个源都没搜到这首歌"是同一句话——
     // 匹配明明是对的,用户完全看不出来,也无从判断该等还是该自己贴一份。
     @State private var tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics] = []
     @State private var selectedSource: String?
@@ -368,7 +368,7 @@ struct LyricsSearchSheet: View {
     // 第一批就到——这个 flag 标记"selectedSource 现在的值是自动选出来的,还是用户自己
     // 点的",只要还是自动选的,每来一批新候选就重新评估一次能不能换成 currentSource;
     // 用户一旦手动点过任意一行就永远置为 true,此后不管后面来什么候选都不再自动改选中项
-    // (原有设计的"不抢用户已经手动点开看的那个候选"这条原则不能因为这次改动而失效)。
+    // (原有设计的"不抢用户已经手动点开看的那个候选"这条原则不能失效)。
     @State private var userPickedSource = false
 
     // List(selection:) 直接绑 $selectedSource 拿不到"这次赋值是用户点的还是代码自己设的"
@@ -428,7 +428,7 @@ struct LyricsSearchSheet: View {
                     .keyboardShortcut(.cancelAction)
             }
             .padding(16)
-            // 2026-08-31 用户要求:这个面板(sheet 弹出,没有系统标题栏)能拖动。sheet 默认
+            // 这个面板(sheet 弹出,没有系统标题栏)能拖动。sheet 默认
             // 不可拖——AppKit 故意把它钉死在依附点,不是漏配了 isMovableByWindowBackground
             // 能补的(那个修饰符对 sheet 样式的窗口不生效)。WindowDragHandle 垫在标题栏这行
             // 背后,直接对底层 NSWindow 发起编程式拖动(performDrag),不问它是不是 sheet;
@@ -445,14 +445,14 @@ struct LyricsSearchSheet: View {
             content
         }
         .frame(minWidth: 720, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)
-        // 2026-09-04 用户要求"这个页面要支持扩大边框"。独立小窗那条路径本来就能拖,
+        // "这个页面要支持扩大边框"。独立小窗那条路径本来就能拖,
         // 从歌词管理/歌词窗口弹出的这张是 **sheet** —— AppKit 给 sheet 的默认 styleMask
         // 里没有 .resizable,窗口边缘对拖拽完全没反应。补一颗探针把这个标志插回去
         // (同 WindowDragHandle 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 同时
         // 从"只有下限"改成"下限 + 可无限撑大",不然窗口拖大了内容仍停在 720×480。
         .background(WindowResizeEnabler(minWidth: 720, minHeight: 480))
-        // ⚠️ 2026-09-02 真实bug修复(悬浮窗 ⚙「搜索歌词…」小窗切歌后串 key):那扇窗口是
-        // `if let context { LyricsSearchSheet(...) }`,2026-08-31 让它再点一次就重查曲目、把新
+        // ⚠️ 真实故障修复(悬浮窗 ⚙「搜索歌词…」小窗切歌后串 key):那扇窗口是
+        // `if let context { LyricsSearchSheet(...) }`,让它再点一次就重查曲目、把新
         // context 喂进来——但 SwiftUI 里 Optional 从 A 换成 B 是**同一个视图身份**:上面三个
         // 查询词 @State 只在首次创建时取 initialValue,`.task {}` 也只跑首次挂载那一遍,于是
         // 面板还显示上一首的查询词与候选(顺带让「恢复原信息」凭空出现,因为 @State 与新的
@@ -477,7 +477,7 @@ struct LyricsSearchSheet: View {
         .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
         // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
-        // (2026-08-19 性能审计;search() 内的 withTaskCancellationHandler 是第二层,
+        // (性能审计;search 内的 withTaskCancellationHandler 是第二层,
         // cancelRunning 幂等,两层谁先到都行)。
         .onDisappear { LyricsSearchService.shared.cancelRunning() }
     }
@@ -487,7 +487,7 @@ struct LyricsSearchSheet: View {
     // 才会真的重新发起查询,不会敲一个字就发一次网络请求。
     private var queryFieldsBar: some View {
         HStack(spacing: 10) {
-            // 三栏**按内容长度分宽**,不等分(2026-09-04 用户反馈"输入框放不下内容")。
+            // 三栏**按内容长度分宽**,不等分(现象是"输入框放不下内容")。
             // 等分那版最常见的一幕:歌手栏「PRINCE」六个字母后面空着大半格,旁边歌名
             // 「Around the World in a Day (2025 Remaster)」和专辑双双被截断——三栏的
             // 内容长度天然不对等,均分等于把宽度分给了最不需要的那栏。分法(含放不下时
@@ -593,7 +593,7 @@ struct LyricsSearchSheet: View {
                             // 到不了)。复用纯音乐分支那句 key。
                             Text(L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
                         } else if !tracksFoundNoLyrics.isEmpty {
-                            // 同上那个顺序问题,2026-09-15 新增的"有歌没词"分支一模一样地中招:
+                            // 同上那个顺序问题,新增的"有歌没词"分支一模一样地中招:
                             // 网易云命中了曲目没词、同时 Musixmatch 因为限流没连上,用户看到的会是
                             // 「有 1 个歌词源没连上」,而那个**更确定**的结论被整个盖掉。所以这里
                             // 也要补一行,跟纯音乐那档一样处理。
@@ -623,7 +623,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !tracksFoundNoLyrics.isEmpty {
-                // 2026-09-15 补上——排在"纯音乐"之后、笼统兜底之前:有源**匹配到了这首歌**、
+                // 补上——排在"纯音乐"之后、笼统兜底之前:有源**匹配到了这首歌**、
                 // 只是平台上没有歌词文本(见 tracksFoundNoLyrics 声明处)。这比笼统的"都没找到"
                 // 确定得多:它同时回答了用户的两个问题——"是不是搜错了"(没有,匹配是对的)、
                 // "接下来该干嘛"(等平台补词,或者自己放一份)。
@@ -633,7 +633,7 @@ struct LyricsSearchSheet: View {
                 // 可能有超时的、403 的、被 20 秒截止砍掉的,跟「歌词源可用情况」那里的
                 // 「未返回候选」同一口径(评审时抓到过更强的措辞说过头)。
                 //
-                // 2026-09-16 改文案(用户:"太啰嗦,也不太符合专业软件应有的文案水平,需要更严谨、
+                // 改文案("太啰嗦,也不太符合专业软件应有的文案水平,需要更严谨、
                 // 有格式的话术,而不是像正常人说出来的话")。原来是三句陈述句 + 一句
                 // 「新发行的歌常要过一阵才补上词」的建议 —— 那句建议整个删掉:它是聊天不是产品
                 // 文案,而且"过一阵"这种话我们根本无从保证。改成标题给结论、正文给**标签-值对**:
@@ -690,7 +690,7 @@ struct LyricsSearchSheet: View {
                     List(candidates, selection: selectedSourceBinding) { c in
                         candidateRow(c)
                     }
-                    // 2026-09-04 把理想/上限各放宽一档(280→300、320→380):这一列要放
+                    // 把理想/上限各放宽一档(280→300、320→380):这一列要放
                     // 歌名/歌手/专辑三行,长专辑名在 280pt 下必换行甚至截断;右侧预览
                     // 有 minWidth 380 兜着,拖不塌。
                     .frame(minWidth: 250, idealWidth: 300, maxWidth: 380)
@@ -704,7 +704,7 @@ struct LyricsSearchSheet: View {
     }
 
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
-        // 2026-08-26 用户要求把标签排挪到封面下面、统一一个位置:原来它跟在标题/歌手·
+        // 把标签排挪到封面下面、统一一个位置:原来它跟在标题/歌手·
         // 专辑/分数后面,起点 x 跟着**文字列**走,而每一行的标题/歌手·专辑长短不一
         // (有的一行占满、有的很短),标签排看起来就没个准地方。改成外层 VStack 包一层,
         // 标签排放在"封面+文字"这一整条 HStack **下面**、贴着整行的左缘(也就是封面的
@@ -720,7 +720,7 @@ struct LyricsSearchSheet: View {
                     scoreLine(c, font: .caption2)
                 }
                 Spacer(minLength: 0)
-                // 2026-09-08 用户要求把来源标挪到这里(每行**右上角**),不再混在下面那排
+                // 把来源标挪到这里(每行**右上角**),不再混在下面那排
                 // 标签里。跟上面 08-26 那条是同一个诉求的延伸而不是推翻它:那次要的是
                 // "标签排别跟着文字长短漂移",而来源标在标签排**内部**仍然在漂——它前面
                 // 站着无时间戳/逐字/译文/罗马音四个可有可无的标签,有几个全看这条候选的
@@ -761,12 +761,12 @@ struct LyricsSearchSheet: View {
 
     private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
         if applyingSource == c.source { return L10n.t("正在采用…") }
-        // 按钮文案跟着"这条候选到底能干什么"走——2026-08-30 加:纯文本那条采纳后不会像别的
+        // 按钮文案跟着"这条候选到底能干什么"走——加:纯文本那条采纳后不会像别的
         // 候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一回事。
         return c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")
     }
 
-    /// 「采用此候选」的整条流程(2026-09-04 起等调用方写完再收尾,原来是 `onApply(c); dismiss()`
+    /// 「采用此候选」的整条流程(等调用方写完再收尾,原来是 `onApply(c); dismiss`
     /// 一把关掉、写盘在背后跑、面板上什么反馈都没有):
     /// ① 防重入 —— 写盘 + 排 collector 重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
     /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
@@ -831,7 +831,7 @@ struct LyricsSearchSheet: View {
                     scoreLine(c, font: .caption)
                 }
                 Spacer()
-                // 按钮文案跟着"这条候选到底能干什么"走——2026-08-30 加:纯文本那条采纳后
+                // 按钮文案跟着"这条候选到底能干什么"走——加:纯文本那条采纳后
                 // 不会像别的候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一
                 // 回事,得在真正点下去之前再确认一次,不能只靠上面那个警示标签。
                 Button(applyButtonTitle(for: c)) {
@@ -840,7 +840,7 @@ struct LyricsSearchSheet: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(applyingSource != nil)
             }
-            // showsSource: true —— 右侧详情**不跟着**挪去右上角(2026-09-08):挪的收益是
+            // showsSource: true —— 右侧详情**不跟着**挪去右上角:挪的收益是
             // "多行之间对齐、好扫",而这里永远只有一条候选,没有可对齐的对象;这一行的
             // 右上角又被「采用此候选」这颗主按钮占着,塞个胶囊进去只会跟它抢视线。
             characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
@@ -855,7 +855,7 @@ struct LyricsSearchSheet: View {
             ScrollView {
                 // 摘掉 [ti:]/[by:]/[offset:] 这类元信息标签行和署名行再显示——它们播放时
                 // 一个字都不会出现,却占满预览框顶部,把用户真正要判断的"第一句词对不对、
-                // 轴准不准"挤到看不见的地方(2026-09-04 用户提)。只影响预览,采纳落盘的
+                // 轴准不准"挤到看不见的地方(用户提)。只影响预览,采纳落盘的
                 // 仍是候选原始文本;判据与理由见 LyricsPreviewText。
                 Text(LyricsPreviewText.forPreview(c.lyrics, title: c.title, artist: c.artist))
                     .font(.system(.callout, design: .monospaced))
@@ -882,13 +882,13 @@ struct LyricsSearchSheet: View {
     // 是空的就不显示那一行,不留空白占位;title 单独一行是因为它通常跟搜索关键词的歌名
     // 差不多、但偶尔不同(比如带 Live/Remix 后缀),值得单独看清楚。
     //
-    // 2026-09-04 歌手和专辑从"合并一行、用「·」分隔"拆成两行(用户要求)。合并那版在
+    // 歌手和专辑从"合并一行、用「·」分隔"拆成两行。合并那版在
     // 左侧列表里几乎必然被截断:列宽只有 250–320pt,而歌手本身就可能长到
     // 「Prince/The New Power Generation」这种,后面跟着的专辑名往往只剩「Diamond…」
     // 几个字——恰恰是同名候选之间唯一能分辨"这条是哪个版本"的信息。拆开后两行各自
     // 有整行宽度,截断概率大降;代价是每条候选高一行,九条也就多九行,这一列本来就
     // 是纵向滚动的。
-    // 2026-09-04 再补:拆成三行之后仍然会有单项撑不下的(实测「Diamonds and Pearls
+    // 再补:拆成三行之后仍然会有单项撑不下的(实测「Diamonds and Pearls
     // (Super Deluxe Edition)」在 300pt 的列里还差几个字),所以三行都放开到**最多两行**
     // 并挂 `help` 兜底。三个取舍:
     //  · **宁可换行不肯截断**——这三项被截掉的永远是尾巴,而尾巴恰恰是版本信息
@@ -956,7 +956,7 @@ struct LyricsSearchSheet: View {
     // 跟 LyricsManagerView 详情页三个编辑区(歌词/译文/罗马音)用同一组图标,方便用户
     // 把候选列表里的图标和保存后详情页里的字段对上号。
     ///
-    /// `showsSource`:来源标算不算这一排里的一员。左侧列表传 false —— 那边 2026-09-08 起
+    /// `showsSource`:来源标算不算这一排里的一员。左侧列表传 false —— 那边
     /// 把来源单独钉在行的右上角(理由见 `candidateRow`);右侧详情仍是 true。
     @ViewBuilder
     private func characteristicBadges(
@@ -971,7 +971,7 @@ struct LyricsSearchSheet: View {
             // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/文字相同/当前使用),
             // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
             WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
-                // 2026-08-30 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
+                // 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
                 // 开——那几个都是"越多越好"的加分项,这一个反过来是"用之前必须知道的限制"。
                 // 放在最前面,不用等用户扫完整排标签才注意到。
                 if c.isPlainTextOnly {
@@ -991,7 +991,7 @@ struct LyricsSearchSheet: View {
                     sourceBadge(source)
                 }
                 if let duplicateOf {
-                    // 2026-09-04:跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
+                    // 跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
                     // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学;所以文案写「文字相同」
                     // 不写「完全相同」,悬停说明把口径讲清。灰色:它是"这条跟别人重复"的提示,不是加分项。
                     characteristicBadge(
@@ -1047,7 +1047,7 @@ struct LyricsSearchSheet: View {
                 label
             } else {
                 // 悬停(短延迟)或点问号都能弹出明细。原来这里是 .help(),系统 tooltip 要
-                // 悬停约两秒才出、且点击完全没反应 —— 用户报的就是这个(2026-08-17)。
+                // 悬停约两秒才出、且点击完全没反应 —— 现象是的就是这个。
                 QuickHelpLabel(text: scoreExplanation(c)) { label }
             }
         }
@@ -1056,7 +1056,7 @@ struct LyricsSearchSheet: View {
     }
 
     /// 分数说明文案本体抽到了 ScoreTerm.explanation(跟"解析决策"弹窗共用),这里只是转发。
-    /// (原来这里还给 "source" 那一项拼来源名 —— 来源先验分 2026-08-09 已从引擎移除,
+    /// (原来这里还给 "source" 那一项拼来源名 —— 来源先验分已从引擎移除,
     /// 那段是死代码,抽取时一并删了。)
     private func scoreExplanation(_ c: LyricsSearchService.Candidate) -> String {
         LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: c.scoreTerms)

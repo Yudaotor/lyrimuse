@@ -41,7 +41,7 @@ import (
 // 桌面网页版/iOS App 客户端,接口形状完全一致,只是反爬策略不同,选哪组纯粹是"哪个
 // 实测不被拦"的问题。
 //
-// ⚠️ 2026-08-15:这个源又哑了一次,但**跟上面那种反爬是两回事**,别按同一个思路去查。
+// ⚠️ 这个源又哑了一次,但**跟上面那种反爬是两回事**,别按同一个思路去查。
 // 这次是系统 DNS 把 apic-*.musixmatch.com 解析到了不属于 Musixmatch 的地址
 // (apic-appmobile → 31.13.91.6,Facebook 的段;DoH 查到的真实地址是 44.212.146.46 /
 // 52.5.55.223),TLS 握手直接失败("no alternative certificate subject name matches"),
@@ -69,11 +69,11 @@ type musixmatchResult struct {
 	// lyricCandidate.sourceReportedDurationSecs 参与打分,见 match.go 的
 	// sourceDurationMismatchPenalty。
 	durationSecs float64
-	// plainOnly:lrc 装的是**没有时间戳**的纯文本(2026-09-02 加)。语义与取舍完全等同
+	// plainOnly:lrc 装的是**没有时间戳**的纯文本。语义与取舍完全等同
 	// lrclibResult.plainOnly,见那边的头注——分数钉死 -1、绝不被自动路径选中,只有用户
 	// 在「搜索候选歌词」弹窗里明确采纳才生效。
 	plainOnly bool
-	// instrumental:源明确说这首是纯音乐(2026-09-11 加)。只由 pickMusixmatchTrackRow
+	// instrumental:源明确说这首是纯音乐。只由 pickMusixmatchTrackRow
 	// 的第三趟置位,含义见那边。跟 lrc 互斥——置位时 lrc 一定是空的。
 	instrumental bool
 }
@@ -87,7 +87,7 @@ var (
 	musixmatchTokenExpiry time.Time
 
 	// musixmatchTokenFetchMu 是单飞锁:同一时刻只允许一个 goroutine 真的去换 token
-	// (读磁盘 + 必要时发网络请求),其余排队等它做完再复查缓存。2026-08-24 用户报"批量
+	// (读磁盘 + 必要时发网络请求),其余排队等它做完再复查缓存。现象是"批量
 	// 解析时 musixmatch 交出候选的比例只有 20% 上下,而单首/大规模扫描能到 65%~90%"——
 	// 量出来的根因:相册预取/批量导入触发很多首歌同时解析时,原来每个 goroutine 独立
 	// 判定"没有可用 token"就各自发一次 token.get,而 apic 那台机器实测把除第一个之外的
@@ -98,9 +98,9 @@ var (
 	musixmatchTokenFetchMu sync.Mutex
 
 	// musixmatchLastFailureMu/musixmatchLastFailureReason:诊断用的只读旁路
-	// (2026-08-31,跟 ytmusic.go 的 ytmusicLastFailureReason 同一个思路,同一个理由——
+	// (跟 ytmusic.go 的 ytmusicLastFailureReason 同一个思路,同一个理由——
 	// 不改 musixmatchLyric 的返回值形状,自动解析路径从来不需要"为什么没查到"这个原因,
-	// 只给设置页"测试这个源"功能多开一条只读旁路)。2026-08-31 实测坐实:反爬对连续
+	// 只给设置页"测试这个源"功能多开一条只读旁路)。实测坐实:反爬对连续
 	// token.get 请求会限流,第一次成功之后几秒内的请求原样返回 HTTP 200,但 body 是
 	// `status_code:401, hint:"captcha"`——上面 musixmatchFetchToken 早就在检测这个信号
 	// 并退避重试,只是重试失败之后什么原因都没往外传。
@@ -172,7 +172,7 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	if !ok {
 		return musixmatchResult{}
 	}
-	// 第三趟认下来的纯音乐(2026-09-11):字幕/纯文本/逐字/译文四个接口按契约全是空手
+	// 第三趟认下来的纯音乐:字幕/纯文本/逐字/译文四个接口按契约全是空手
 	// (那一行 has_subtitles=0 且 has_lyrics=0,见 pickMusixmatchTrackRow 第三趟的头注),
 	// 一个都不发,只把这个结论带出去。enrich.go 那边按 `mxLyr=="" && mx.instrumental`
 	// 的既有形状消费,跟 lrclib/qq/netease 三路同款。
@@ -194,7 +194,7 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 		lrc = musixmatchSubtitleLRC(ctx, match.trackID)
 	}
 	if lrc == "" {
-		// ⚠️ **纯文本回退**(2026-09-02,Charlie Musselwhite《Storm Warning》案)。
+		// ⚠️ **纯文本回退**(Charlie Musselwhite《Storm Warning》案)。
 		//
 		// 在此之前这里直接 `return musixmatchResult{}` —— 只要 track.subtitle.get(带时间戳
 		// 的字幕)拿不到,整个 Musixmatch 源就当没有。可 Musixmatch 的曲目元数据本来就分
@@ -203,12 +203,12 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 		// 不问那个接口。
 		//
 		// 实测坐实的那一首:Charlie Musselwhite《Storm Warning》(专辑 Look Out Highway,
-		// 2025-05-16 发行)。track.subtitle.get 回 404,track.lyrics.get 回 200 + 616 字
+		// 发行)。track.subtitle.get 回 404,track.lyrics.get 回 200 + 616 字
 		// 完整歌词。八个源全查一遍的结果是"都没找到",而其实词一直在。这类"新专辑,平台
 		// 收了音频但没人做时间轴"的情况,Musixmatch 往往是唯一有词的那个源 —— 它是西方
 		// 曲库覆盖最好的一个,这个洞的影响面不止一首歌。
 		//
-		// 走的是既有的 plainOnly 通道(lrclib 2026-08-30 起就在喂),不是新造一条路:分数
+		// 走的是既有的 plainOnly 通道(lrclib 就在喂),不是新造一条路:分数
 		// 钉死 -1、绝不被自动解析选中,只在「搜索候选歌词」弹窗里带「无时间戳」标签出现,
 		// 由用户决定采不采纳。
 		plain := musixmatchPlainLyrics(ctx, match.trackID)
@@ -228,7 +228,7 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 		return musixmatchResult{lrc: plain, plainOnly: true, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 	}
 	// hasRichsync==false 时**不发** track.richsync.get —— 跟上面 hasSubtitles 那道闸
-	// 同一个理由、同一份契约(2026-09-11)。实测 16 首里 4 首是 0(25%),全部 404。
+	// 同一个理由、同一份契约。实测 16 首里 4 首是 0(25%),全部 404。
 	var yrc string
 	if match.hasRichsync {
 		yrc = musixmatchRichsync(ctx, match.trackID)
@@ -265,7 +265,7 @@ func musixmatchEnsureToken(ctx context.Context) string {
 
 // musixmatchTokenPath 是 token 的磁盘缓存位置。
 //
-// 2026-08-09 实测:250 首抽样里 Musixmatch 只在 5% 出现过,连 Billie Jean、Hello 这种它
+// 实测:250 首抽样里 Musixmatch 只在 5% 出现过,连 Billie Jean、Hello 这种它
 // 必然收录的歌都拿不到。原因不在匹配,在鉴权 —— 匿名 usertoken 只缓存在**进程内存**里、
 // 官方有效期 10 分钟,而"搜索候选歌词"走的是一次性子进程:每调一次都要重新 token.get,
 // 一密集就撞 401(官方样例的做法是退避 10 秒重试一次,再失败就放弃),于是这个源整个失效。
@@ -353,7 +353,7 @@ func musixmatchFetchToken(ctx context.Context, retry int) string {
 		return ""
 	}
 	if out.Message.Header.StatusCode == 401 {
-		// 2026-08-31 实测坐实的具体原因,见 musixmatchLastFailureReason 声明处注释——
+		// 实测坐实的具体原因,见 musixmatchLastFailureReason 声明处注释——
 		// 先记下来再退避重试,不管重试成不成功,这一拍"是反爬拒的"这个事实已经发生过。
 		// 存的是稳定代码不是文案,见 lyricsourcefailure.go 头注,两侧必须同步维护。
 		musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchRateLimited)
@@ -435,13 +435,13 @@ type musixmatchTrackMatch struct {
 	trackID                     int64
 	title, artist, album, cover string
 	durationSecs                float64 // musixmatch 自报的曲长,0=没给
-	// hasSubtitles:这首歌在 Musixmatch 上有没有**做过时间轴**。2026-09-02 加。
+	// hasSubtitles:这首歌在 Musixmatch 上有没有**做过时间轴**。
 	// false 时 track.subtitle.get 必然 404,调用方直接跳过那一趟、去问纯文本接口。
 	hasSubtitles bool
-	// hasRichsync:有没有**逐字**(词级)时间轴。2026-09-11 加,跟 hasSubtitles 同一个理由
+	// hasRichsync:有没有**逐字**(词级)时间轴。加,跟 hasSubtitles 同一个理由
 	// 和同一份契约——false 时 track.richsync.get 必然 404。
 	//
-	// 实测坐实(2026-09-11,16 首横跨欧美/日/韩/华语/纯音乐):has_richsync 对
+	// 实测坐实(16 首横跨欧美/日/韩/华语/纯音乐):has_richsync 对
 	// track.richsync.get 的结果**预测 16/16 全中**(1→200、0→404),其中 4 首是 0(25%)。
 	// 关键的一首是五月天《倔強》——has_subtitles=1、has_lyrics=1,走的是主路径,
 	// 但 has_richsync=0;没有这道闸就每次都白打一趟往返。
@@ -452,7 +452,7 @@ type musixmatchTrackMatch struct {
 }
 
 // musixmatchTrackRow 是 track.search 响应里的一条曲目。抽成命名类型是为了让挑选逻辑
-// (pickMusixmatchTrackRow)能脱离网络单测——那道 has_subtitles 闸门 2026-09-02 放宽过
+// (pickMusixmatchTrackRow)能脱离网络单测——那道 has_subtitles 闸门放宽过
 // 一次,而它原来内联在只能联网跑的函数里,改错了没有任何测试会红。
 type musixmatchTrackRow struct {
 	TrackID              int64  `json:"track_id"`
@@ -461,11 +461,11 @@ type musixmatchTrackRow struct {
 	AlbumName            string `json:"album_name"`
 	AlbumCoverart500x500 string `json:"album_coverart_500x500"`
 	HasSubtitles         int    `json:"has_subtitles"`
-	// HasLyrics:有没有词(跟 HasSubtitles 是**两个独立字段**)。2026-09-02 才开始读——
+	// HasLyrics:有没有词(跟 HasSubtitles 是**两个独立字段**)。才开始读——
 	// 在此之前只认 HasSubtitles==1,于是"有词但没做时间轴"的歌在搜索这一步就被跳过,
 	// 整个 Musixmatch 源对它们等于不存在。见 pickMusixmatchTrackRow。
 	HasLyrics int `json:"has_lyrics"`
-	// TrackLength:musixmatch 自报的曲长(秒)。2026-08-22 补上解析。
+	// TrackLength:musixmatch 自报的曲长(秒)。补上解析。
 	// 在此之前五个源里只有它的候选永远没有 sourceReportedDurationSecs,
 	// 于是新增的 sourceDurationOff(-400)对它**系统性免罚** —— 而它恰恰
 	// 是各源里匹配最松的一个(既不看专辑也不看时长,resolveMusixmatchLyric
@@ -473,7 +473,7 @@ type musixmatchTrackRow struct {
 	// 有有效候选"的缓存条目里,按 max() 口径偏差 >12% 的有 7 条(13.5%),
 	// 其余四源合计 4.3%。字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
 	TrackLength int `json:"track_length"`
-	// HasRichsync / Instrumental:2026-09-11 补上解析,同样是"字段本来就在响应里"——
+	// HasRichsync / Instrumental:补上解析,同样是"字段本来就在响应里"——
 	// track.search 一行返回 38 个字段,这个结构原来只声明了 8 个。
 	//   · HasRichsync 给 resolveMusixmatchLyric 省掉必然 404 的那趟 track.richsync.get;
 	//   · Instrumental 是这个源对"这首没有词"的**明确断言**,喂给 enrich.go 的
@@ -484,7 +484,7 @@ type musixmatchTrackRow struct {
 
 // pickMusixmatchTrackRow 从一批搜索结果里挑出这首歌。纯函数,给单测直接覆盖。
 //
-// **两趟**,顺序不能反(2026-09-02):
+// **两趟**,顺序不能反:
 //   - 第一趟只认 has_subtitles==1 —— 跟放宽之前逐字节一致,有时间轴的永远优先;
 //   - 第一趟空手时才走第二趟,认 has_lyrics==1 的"只有纯文本"候选。
 //
@@ -492,19 +492,19 @@ type musixmatchTrackRow struct {
 // 只认前者(注释写的理由是"没有逐行歌词的候选后面 track.subtitle.get 必然 404,不必跑
 // 这一趟"),推理没错但**结论过头**了 —— 那些候选确实拿不到字幕,可它们的词就在
 // track.lyrics.get 里。实测 Charlie Musselwhite《Storm Watch…》(Storm Warning,专辑
-// Look Out Highway,2025-05-16):has_lyrics=1 / has_subtitles=0,subtitle 回 404、
+// Look Out Highway):has_lyrics=1 / has_subtitles=0,subtitle 回 404、
 // lyrics 回 616 字完整歌词,而八源搜索的结果是"都没找到"。
 //
 // 两趟不能合成一趟按分排序:合起来的话,一条"有词无时间轴"的候选可能因为排在前面就顶掉
 // 后面那条有时间轴的,把一份能自动采纳的歌词降级成要用户手点的纯文本,是净损失。
 //
-// **第三趟**(2026-09-11):前两趟都空手时,再扫一遍找"身份对得上、而且源明确标了
+// **第三趟**:前两趟都空手时,再扫一遍找"身份对得上、而且源明确标了
 // instrumental==1"的行,认下来当纯音乐断言(不带任何歌词)。
 //
 // 为什么必须单独一趟:纯音乐曲目在 Musixmatch 上的形状是 **has_subtitles=0 且
 // has_lyrics=0**——前两趟的闸门按定义把它们全部筛掉,于是这个源对纯音乐曲目一直是
 // "什么都没返回",instrumental 这个字段就算解析了也永远走不到调用方手里。实测坐实
-// (2026-09-11,page_size=5 的真实响应):
+// (page_size=5 的真实响应):
 //
 //	久石譲《Merry-Go-Round of Life》 5 行全是 sub=0 lyr=0,行 1 instrumental=1
 //	Explosions In The Sky《Your Hand In Mine》 5 行全是 sub=0 lyr=0,**5 行全 instrumental=1**
@@ -563,7 +563,7 @@ func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string
 // 404,不必跑这一趟)的结果。
 // 搜索词按 searchTitleVariants 逐个试,先命中先返回(顺序跟设置走,见那边注释)。
 // Musixmatch 在这一点上是各源里最温和的:带括号仍能回 1~2 条、而且往往就是对的那条,
-// 不像 QQ 直接 0 条、酷狗回一堆热门歌。但实测(2026-08-09)差距确实存在——
+// 不像 QQ 直接 0 条、酷狗回一堆热门歌。但实测差距确实存在——
 // "Billie Jean (Single Version)" 带括号回 1 条、去括号回 5 条(page_size 上限),
 // 候选池小一截就更容易被 has_subtitles/歌手名这两道门全部筛光。多打的这一次请求只在
 // 第一次一无所获时才发生,命中时零额外开销。
@@ -655,7 +655,7 @@ func musixmatchPlainLyrics(ctx context.Context, trackID int64) string {
 // sanitizeMusixmatchPlainLyrics 清洗 track.lyrics.get 的正文。纯函数,给单测直接覆盖。
 //
 // ⚠️ **本项目用的这组身份(apic-appmobile + mac-ios-v2.0)实测不带商用免责水印**
-// (2026-09-02 抓 Charlie Musselwhite《Storm Warning》核实:24 行 616 字,末行就是最后
+// (抓 Charlie Musselwhite《Storm Warning》核实:24 行 616 字,末行就是最后
 // 一句歌词,没有 `*******` 围栏、没有 `(1409...)` 追踪号)。网上大多数参考实现描述的那个
 // 水印是 `web-desktop-app-v1.0` 那组才有的,**不要**照那个说法当成既成事实。
 //
@@ -809,7 +809,7 @@ func richsyncToYRC(lines []musixmatchRichsyncLine) string {
 		if lineEndMs < lineStartMs {
 			lineEndMs = lineStartMs
 		}
-		// 纯空白词条不独立成词(2026-08-19 用户报"有些单词没有读条直接填满"):
+		// 纯空白词条不独立成词(现象是"有些单词没有读条直接填满"):
 		// richsync 把空格作为**独立计时条目**,而空格占走了前一个词的绝大部分演唱时长
 		// (实测《Ocho Rios》"In" 23ms + 空格 165ms)——词长按"到下一个条目"反推时,
 		// 短词全被空格掏空,悬浮窗 20~50ms 填完一个词,观感就是"瞬间填满"。归并规则:

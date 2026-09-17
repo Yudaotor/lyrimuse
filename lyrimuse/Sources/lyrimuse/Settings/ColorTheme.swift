@@ -40,7 +40,7 @@ public struct ColorTheme: Codable, Identifiable, Hashable {
     // 一条的新数组整体编码回写,旧 JSON 被覆盖 —— 那才是真的不可恢复。所以这不只是显示
     // 问题,是一条数据丢失路径。
     //
-    // 2026-08-14 实测复现(用户机器上真实存着的那串 JSON):
+    // 实测复现(用户机器上真实存着的那串 JSON):
     //   DecodingError.keyNotFound: Key 'textStrokeEnabled' not found …
     //
     // 只写 init(from:) 不写 encode(to:):编码继续用合成的那份,也就是**只写新名字**,旧名
@@ -84,7 +84,7 @@ extension ColorTheme {
     // 新实例,固定 id 才能让"当前配色是不是正好等于某个内置预设"这类比较(如果以后需要)
     // 有意义;用户自己存的自定义主题才用随机 UUID(见 SettingsView 里"存为新主题"那处)。
     // "经典黑字"跟"经典白字"对称;"白字描边"/"黑字描边"是它们各自打开描边开关的变体
-    // (2026-08-26 加)。defaultTheme 现在指向 `classicBlackStroke`(见下方)。
+    //。defaultTheme 现在指向 `classicBlackStroke`(见下方)。
     /// 白字 + 七成不透明黑底。被定为 `defaultTheme`(见下方)—— 全新安装长这个样子。
     ///
     /// 跟 classicBlack 一样单独命名而不是只躺在 builtInPresets 里:defaultTheme 要引用它,
@@ -101,7 +101,7 @@ extension ColorTheme {
         ColorTheme(
             id: "builtin-classic-black", name: L10n.t("经典黑字"),
             foregroundColorHex: "#000000FF", backgroundColorHex: "#00000000",
-            // 描边色 2026-08-17 从 65% 黑改成**不透明白**(用户要求)——这一款的文字本来
+            // 描边色从 65% 黑改成**不透明白**——这一款的文字本来
             // 就是黑的,黑字配黑边等于没有描边,配白边才真的能在深色壁纸上把字托出来。
             // 描边开关依旧关着,这个颜色只是用户手动打开它时的起点。
             textStrokeEnabled: false, textStrokeColorHex: "#FFFFFFFF"
@@ -113,7 +113,7 @@ extension ColorTheme {
     /// `darkCard` 单独命名的理由一样:"默认配色"和"预设列表里第 N 项"是两件事,不该靠
     /// 数组下标耦合。
     ///
-    /// 2026-08-26 定为 `defaultTheme`(用户要求把自己手动调好的这套——跟随封面 + 描边——
+    /// 定为 `defaultTheme`(把自己手动调好的这套——跟随封面 + 描边——
     /// 定为新的默认初始化配色):前景/背景直接复用 `classicBlack` 的字段,只把描边打开,
     /// 两者的前景/背景色天然保持同步。
     public static var classicBlackStroke: ColorTheme {
@@ -132,8 +132,8 @@ extension ColorTheme {
     // 重启 App 才恢复。L10n.swift 顶部对 current/bundle 定的是同一条规则:"每次读都重新
     // 解析,不用 static let 一次性缓存"。
     //
-    // 2026-08-06 订正:上一版把它从 `static let` 改成带初始值的 `static var builtInPresets
-    // = [...]` 并注释成"每次读都重新求值",那是错的——Swift 里带初始值的 `static var` 是
+    // ⚠️ 别把它从 `static let` 改成带初始值的 `static var builtInPresets
+    // = [...]` 并注释成"每次读都重新求值" —— 那是错的:Swift 里带初始值的 `static var` 是
     // **惰性初始化的存储属性**,只在第一次访问时求值一次(swift_once),跟 `static let`
     // 一样会冻结,改动等于没生效,还白搭了一个可变全局状态。只有计算属性才真的重新求值。
     //
@@ -146,7 +146,7 @@ extension ColorTheme {
             foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#00000000",
             textStrokeEnabled: false, textStrokeColorHex: "#000000A6"
         ),
-        // "经典白字"加描边(2026-08-26 用户要求,去掉"暖黄"/"赛博青"换成这两款)——
+        // "经典白字"加描边(去掉"暖黄"/"赛博青"换成这两款)——
         // 前景/背景跟"经典白字"完全一样,只是把描边开关打开;描边色沿用"经典白字"
         // 本来就带的那个"手动打开描边时的默认色"(#000000A6),两款不是巧合重复,
         // 是同一份配色的"描边关/描边开"两个变体。
@@ -172,8 +172,8 @@ extension ColorTheme {
     // 不影响现在的行为;但它是 classicBlackStroke 的别名,让两者求值语义一致,免得以后
     // 有人读 defaultTheme.name 又踩一次上面那个语言冻结。
     //
-    // 2026-08-13 从 classicBlack 换成 card,2026-08-15 从 darkCard 换回 classicBlack,
-    // 2026-08-26 从 classicBlack 换成 classicBlackStroke(用户要求把自己实际在用的那套——
+    // 从 classicBlack 换成 card,从 darkCard 换回 classicBlack,
+    // 从 classicBlack 换成 classicBlackStroke(把自己实际在用的那套——
     // 跟随封面 + 打开文字描边——定为新的默认初始化配色;`followsCoverArt` 不是 `ColorTheme`
     // 的字段,默认值改在 `AppSettings.defaultFollowsCoverArt`,两处各自改各自的字段,理由
     // 见那边注释)。
@@ -187,7 +187,7 @@ extension ColorTheme {
     ///                       壁纸上靠描边托字,比 classicBlack 更能兜底,但仍不如 darkCard
     ///                       那种自带底衬的卡片可靠
     /// 配色随时能在「外观」里改,描边也能单独打开,所以这是个偏好问题而非缺陷;
-    /// 但如果以后有新用户反馈"装上看不见歌词",先想到这里。
+    /// 但如果以后有新现象是"装上看不见歌词",先想到这里。
     public static var defaultTheme: ColorTheme { classicBlackStroke }
 
     // 跟"是不是同一个主题"(id/name)无关,只比较四个真正影响观感的字段——用来判断
@@ -202,7 +202,7 @@ extension ColorTheme {
     }
 
     /// 套用这个主题——原来是 `SettingsView.AppearanceSettingsTab` 的私有方法
-    /// `applyColorTheme(_:)`,2026-08-29 悬浮窗新增的快捷设置菜单(`OverlayQuickSettingsMenu`)
+    /// `applyColorTheme(_)`,悬浮窗新增的快捷设置菜单(`OverlayQuickSettingsMenu`)
     /// 要套用同一批内置/自定义主题,提到这里当唯一实现,两处调用点都改成调这个方法,行为不变。
     @MainActor
     func apply(to settings: AppSettings) {

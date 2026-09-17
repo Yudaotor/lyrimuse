@@ -99,7 +99,7 @@ func runArtistAvatarsCLI(args []string) {
 				dirty = true
 			case hasOld && old.URL != "":
 				// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
-				// 过期的真图永远好过一个空位;2026-08-11 审阅确认原先会抹掉好头像)。
+				// 过期的真图永远好过一个空位;不这么做会抹掉好头像)。
 				out[name] = old.URL
 			default:
 				// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。

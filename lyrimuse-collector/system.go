@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// 两条读取路径,按 features.Players(2026-09-01 起可多选)选择——跟 lyrimuse 侧
+// 两条读取路径,按 features.Players(可多选)选择——跟 lyrimuse 侧
 // MediaControlClient.swift 是同一套设计,注释详见那边:
 //
 //   - Apple Music:AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部
@@ -83,7 +83,7 @@ const getStateScript = `(() => {
 })()`
 
 // getState reads the current now-playing state once, dispatching to whichever
-// player(s) the user selected (features.Players, 2026-09-01 起可多选). It is
+// player(s) the user selected (features.Players, 可多选). It is
 // the authoritative fallback: the stream subscription can go silent for
 // play/pause/seek notifications (observed on this macOS beta), so the ticker
 // re-reads ground truth here to catch state changes the stream missed.
@@ -93,7 +93,7 @@ const getStateScript = `(() => {
 //     playerAuto 完全一样)→ getAutoDetectedState;
 //   - 恰好只选了 Apple Music 一个、没有 auto → getAppleMusicOnlyState:主体仍是
 //     getAppleMusicState 的 AppleScript 路径(跟单选年代的 playerAppleMusic 一样),
-//     再补两个 MediaRemote 独有的键。⚠️ 2026-09-11 之前这里直接 return
+//     再补两个 MediaRemote 独有的键。⚠️ 之前这里直接 return
 //     getAppleMusicState(ctx)、一次 media-control 都不问,于是电台那一整层在这一种
 //     配置下完全不生效 —— 理由见 getAppleMusicOnlyState 头注;
 //   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,同样没有
@@ -118,7 +118,7 @@ func getState(ctx context.Context) (map[string]any, bool) {
 // 相反(那边从 raw 出发合 AppleScript,这边从 AppleScript state 出发合 raw),合并动作
 // 共用 mergeRadioKeys 一份实现。
 //
-// 2026-09-11 加。在这之前这条路直接 `return getAppleMusicState(ctx)`,一次
+// 在这之前这条路直接 `return getAppleMusicState(ctx)`,一次
 // media-control 都不问,于是:
 //   - `radioStationHash` 拿不到 → 电台判据恒假 → radioclock.go 那套单曲口径、
 //     radiostationcard.go 那道"别把台名当一首歌写进歌词缓存"的守卫,全都不生效;
@@ -127,7 +127,7 @@ func getState(ctx context.Context) (map[string]any, bool) {
 //
 // 讽刺的是判据本身一处 bundle id 都不认(谁报 radioStationHash 就算谁),**只勾
 // Apple Music 反而是唯一不生效的配置**;默认勾着「自动识别」走 getAutoDetectedState,
-// 一直是好的。用户 2026-09-11 问「这个模式是不是仅限于 Apple Music」时查出来的。
+// 一直是好的。查「这个模式是不是仅限于 Apple Music」时发现的。
 //
 // # 为什么每拍都问,而 Swift 侧是按曲目探一次
 //
@@ -165,7 +165,7 @@ func getAppleMusicOnlyState(ctx context.Context) (map[string]any, bool) {
 //
 // ⚠️ 认 MV 那条判据(notAudioMedia)**不走这里**:它读的 mediaKind 是 AppleScript 那份
 // state 自己就有的(getStateScript 直接问 Music.app),不需要从 raw 补 —— 而 MediaRemote
-// 的 mediaType 2026-09-15 实测认不出 MV,压根没有可补的东西。见 notAudioMedia 头注。
+// 的 mediaType 实测认不出 MV,压根没有可补的东西。见 notAudioMedia 头注。
 func mergeRadioKeys(state, raw map[string]any) {
 	hash, _ := raw["radioStationHash"].(string)
 	if hash == "" {
@@ -203,7 +203,7 @@ func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
 	if err := json.Unmarshal(out, &state); err != nil {
 		return nil, false
 	}
-	// ⚠️ 三个标签必须先洗一遍不可见空白(2026-08-31 补)。这里是 **Apple Music 这条路径
+	// ⚠️ 三个标签必须先洗一遍不可见空白。这里是 **Apple Music 这条路径
 	// 唯一的元数据入口** —— media-control 那条早就在 fetchRawMediaControlState 里洗了,
 	// 而 Apple Music 走 JXA 直接 unmarshal、绕过那里,于是标签里的 NBSP / 零宽字符会
 	// **原样进 Last.fm**,在那边建出一个跟正常写法肉眼完全一样、实际却是另一个实体的
@@ -256,7 +256,7 @@ const (
 
 // playerBundleID 把一个具体播放器常量(playerQQMusic 等,不接受 playerAuto——它没有
 // 唯一固定的目标,调用方必须先排除这个 case,见 isTracked()/getMultiSelectedState 的
-// 注释)映射成它自己会报告的 bundle id。2026-09-01 从单选年代的 expectedPlayerBundleID
+// 注释)映射成它自己会报告的 bundle id。从单选年代的 expectedPlayerBundleID
 // (读包级 features.Player)改成纯函数——多选之后"当前选定播放器"不再是唯一一个值,
 // 调用方需要对 features.Players 里的每一个成员分别求 bundle id,不能再读一个包级单值。
 func playerBundleID(player string) string {
@@ -279,7 +279,7 @@ func playerBundleID(player string) string {
 // 判据是"Spotify + 专辑名为空":media-control 自己的文档确认广告播放时 album 恒为空
 // 字符串(系统级 MediaRemote 就是这么报告的,不是我们没读到),见它 README 的
 // "Skip Spotify ads" 一节。这个信号原来只用在 enrich.go 里挡住"别拿广告标题去搜歌词",
-// 2026-08-14 抽出来复用 —— 用户在网页「最近播放」和 App「最近记录」里看到了
+// 抽出来复用 —— 用户在网页「最近播放」和 App「最近记录」里看到了
 // "Now Streaming on Hulu." / "BLIZZARD® Double Flip Deal BOGO for 99¢" 这种条目:
 // 广告没被搜歌词,但**照样当成一次收听上送**给了 ListenBrainz / Last.fm,还写进了本地
 // 收听日志,污染听歌历史和统计。
@@ -289,12 +289,12 @@ func playerBundleID(player string) string {
 // scrobble,落进 Last.fm 之后基本删不掉(只能上网页一条条手删)。这个判据不影响
 // Apple Music / QQ 音乐 / 网易云:那三家的正常曲目本来就带专辑名。
 //
-// 2026-08-19 加宽:实测出现了 album **非空**的广告形态漏网 —— 标题「—」的占位广告
+// 加宽:实测出现了 album **非空**的广告形态漏网 —— 标题「—」的占位广告
 // (collector 日志 `now playing:  - —`)artist 为空、album 非空,熬过了 8 秒 pnPending
-// 缓冲仍被 announce 成 Last.fm 的 nowplaying(用户截图,「最近记录」出现"—"正在播放行)。
+// 缓冲仍被 announce 成 Last.fm 的 nowplaying(对拍,「最近记录」出现"—"正在播放行)。
 // 补两条只对 Spotify 生效的信号:artist 为空(真实曲目必有歌手)、标题恰为占位符"—"。
 // spotifyCurrentTrackURI 问 Spotify 本尊拿当前曲目的 URI:AppleScript 的 `spotify url` 对广告返回
-// "spotify:ad:…"、正常曲目返回 "spotify:track:…"(权威广告判据,见 spotifyURIIsAd;2026-09-09 起同一次脚本的
+// "spotify:ad:…"、正常曲目返回 "spotify:track:…"(权威广告判据,见 spotifyURIIsAd;同一次脚本的
 // 返回值也是真曲目 ID 的唯一来源,见 spotifytrack.go)。只在换曲时被 detectAdAtSessionStart 调一次;
 // 超时 / 权限被收回 / Spotify 没在跑都返回 ok=false,调用方退回 isAdBreak 的字段启发式。
 // 脚本前垫 running 守卫(02 章决策 9):`tell application "Spotify"` 发任何命令都会把没开的 Spotify 拉起来。
@@ -333,13 +333,13 @@ func isKnownPlayerBundleID(bundleID string) bool {
 // —— 判成"这不是一首歌",整条丢掉(既不解析歌词、也不打卡)。
 //
 // 判据是 isAdBreak 的**前两条**(`album == "" || artist == ""`),⚠️ **不含**它的第三条
-// `title == "—"` —— 原注释写的是"完全一致",不对(2026-08-30 核实)。后果:标题是占位
+// `title == "—"` —— 原注释写的是"完全一致",不对。后果:标题是占位
 // 破折号、但歌手/专辑都非空的形态,在信任播放器上没有守卫。
 // 区别还在作用域:isAdBreak 只服务 Spotify 广告(第一行就
 // `if bundleID != spotifyBundleID { return false }`),这个服务信任列表。信任列表的意义
 // 因此从"靠用户选对"变成"选错了也有兜底"。
 //
-// 2026-08-21 全靠真实样本定的,四份实测:
+// 全靠真实样本定的,四份实测:
 //   - 酷狗音乐   artist=周杰伦          album=七里香            → 是歌
 //   - Apple Music artist=方大同         album=Soulboy/100种生活 → 是歌
 //   - Spotify     artist=方大同         album=Soulboy           → 是歌
@@ -348,7 +348,7 @@ func isKnownPlayerBundleID(bundleID string) bool {
 // **album 是这四份样本里唯一 100% 分对的字段**。artist 单独不够:YouTube 会把**频道名**
 // 塞进 artist(实测 `Dream in reality` / `VEILLE + JOUR J de la rentrée 2024`,时长 925 秒
 // 的法语 vlog),从数据形状上跟"歌手 - 歌名"无法区分;而它的 album 两次都是空的。
-// 代价:电台/单曲场景下真音乐 App 若不报专辑名会被误挡 —— 2026-08-21 用户拍板接受这个
+// 代价:电台/单曲场景下真音乐 App 若不报专辑名会被误挡 —— 接受这个
 // 取舍(宁可漏认,不要把视频写进永久收听历史)。
 //
 // mediaType 这条路走不通,顺手记下别再试:酷狗压根不报这个字段,Arc 也不报(不是报 Video,
@@ -361,7 +361,7 @@ func trustedPlaybackNotASong(bundleID, artist, album string) bool {
 	}
 	// isTrustedPlayerBundleID 而不是裸查 features.TrustedPlayers[bundleID]:Safari 的
 	// 播放报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,
-	// 裸查永远落空 → 这道守卫对 Safari 恒不生效(2026-09-02 修,王力宏《你不知道的事》
+	// 裸查永远落空 → 这道守卫对 Safari 恒不生效(修,王力宏《你不知道的事》
 	// Safari 网页播放案连带查出来的三处同型裸查之一,见 getAutoDetectedState 那处的注释)。
 	if !isTrustedPlayerBundleID(bundleID) {
 		return false
@@ -382,7 +382,7 @@ func isAcceptedPlayerBundleID(bundleID string) bool {
 
 // isTrustedPlayerBundleID 只回答"信任"这一半(不含五个内置播放器,跟 Swift 侧
 // TrustedPlayers.isTrusted 对应——两者都要处理 Safari 的媒体代理进程别名,见
-// mediaProxyOwners 的注释),从 isAcceptedPlayerBundleID 里抽出来单独用:2026-09-01
+// mediaProxyOwners 的注释),从 isAcceptedPlayerBundleID 里抽出来单独用:
 // 播放器多选之后,"具体选中了哪几个播放器"(非 auto)那条路径也要认信任列表——最常见的
 // 场景是「网页播放器」卡的"配对浏览器"动作(一步自动信任+配对,见
 // SettingsView.trustAndPairBrowser),用户没有理由因为没勾"自动识别"就让这份配对失效,
@@ -421,12 +421,12 @@ var mediaProxyOwners = map[string]string{
 const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 
 // mediaPlayerLabel 是 lbMeta()(Mac 本地这条路径)提交给 ListenBrainz 的 media_player
-// 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐/网易云
+// 字段——之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐/网易云
 // 音乐接入后如果继续写死会导致 ListenBrainz 上明明是别的播放器放的歌却显示"通过
 // Apple Music 播放",按这条具体 listen 真实的 bundleID(调用方直接传 snapshot.Bundle)
 // 如实报告。
 //
-// 2026-09-01 起不再区分"自动识别"和"手动选定"两套分支、也不看 features.Players——
+// 不再区分"自动识别"和"手动选定"两套分支、也不看 features.Players——
 // 单选年代那道 features.Player 分支背后的假设是"手动选定时 bundleID 只可能是选中的那
 // 一个",多选之后这个假设不成立(bundleID 可能是选中集合里的任意一个),干脆统一按
 // bundleID 直接判断,跟自动识别分支原本的逻辑合并成一份、不再重复——两个分支本来就是
@@ -448,7 +448,7 @@ func mediaPlayerLabel(bundleID string) string {
 		// ListenBrainz 上的来源统计彻底失真。
 		// Safari 的播放报的是媒体代理进程(com.apple.WebKit.GPU),名字要按宿主查,
 		// 否则 Safari 播的歌全部落到下面的兜底、被谎报成"Apple Music (macOS)"
-		// (2026-09-02 修,同日三处同型裸查之一,见 getAutoDetectedState 那处注释)。
+		// (修,同日三处同型裸查之一,见 getAutoDetectedState 那处注释)。
 		lookupID := bundleID
 		if owner, ok := mediaProxyOwners[bundleID]; ok {
 			lookupID = owner
@@ -465,7 +465,7 @@ func mediaPlayerLabel(bundleID string) string {
 
 // cleanMediaTag 洗掉播放器报上来的标签里的不可见空白。
 //
-// 2026-08-14 实测抓到的真实故障:「歌词管理」里出现成对的重复歌,肉眼完全看不出差别 ——
+// 实测抓到的真实故障:「歌词管理」里出现成对的重复歌,肉眼完全看不出差别 ——
 // 因为差的是一个 U+00A0(不换行空格)。媒体标签里带 NBSP 并不罕见(有些发行版的官方元数据
 // 就是这么打的),而这个字符会一路原样传下去:
 //
@@ -520,11 +520,11 @@ type mediaControlRawState struct {
 	// 换到权威元数据;本地导入的文件放的是任意 64 位持久 ID(可以是负数)。所有消费方
 	// 都必须先过 appleCatalogAnchor 的守卫+自校验,别直接信这个数——见 applecatalog.go。
 	UniqueIdentifier int64 `json:"uniqueIdentifier"`
-	// RadioStationHash:电台 / 直播流才有(2026-09-10 实测,值形如 "CgkIBRoFwOSKqxkQBA")。
+	// RadioStationHash:电台 / 直播流才有(实测,值形如 "CgkIBRoFwOSKqxkQBA")。
 	// 只当"这是不是电台"的判据用,值本身不看。见 radioclock.go 头注。
 	RadioStationHash string `json:"radioStationHash"`
 	// MediaType:MediaRemote 的 kMRMediaRemoteNowPlayingInfoMediaType,media-control 原样透传
-	// 系统给的值(2026-09-15 实测 Apple Music 放普通曲目时是 "MRMediaRemoteMediaTypeMusic")。
+	// 系统给的值(实测 Apple Music 放普通曲目时是 "MRMediaRemoteMediaTypeMusic")。
 	// 用来认出 MV —— 视频时长不能当曲长,见 snapshot.go 的 notAudioMedia。
 	MediaType string `json:"mediaType"`
 	// ArtworkData/ArtworkMimeType:只有 fetchNowPlayingArtwork 那次不带 --no-artwork
@@ -543,7 +543,7 @@ var (
 
 // noteUnfamiliarMediaType 把"见到了一个不是音乐音频的 mediaType"记一行。**纯观测,不是判据**。
 //
-// 它守的是一条负面结论:2026-09-15 实测 Apple Music 放 MV 时 mediaType 仍是
+// 它守的是一条负面结论:实测 Apple Music 放 MV 时 mediaType 仍是
 // `MRMediaRemoteMediaTypeMusic`,跟普通曲目逐字相同 —— **这个字段认不出 MV**
 // (认 MV 靠 Music.app 的 mediaKind,见 notAudioMedia 头注)。以后若有人想拿它当判据,
 // 先看这行日志有没有出现过、报的是什么:目前为止本机只见过 Music 一个取值,
@@ -564,7 +564,7 @@ func noteUnfamiliarMediaType(mediaType, title string) {
 }
 
 // getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
-// 薄封装——QQ 音乐/网易云音乐都没有 AppleScript 支持,Spotify 虽然有但 2026-07-29 实测
+// 薄封装——QQ 音乐/网易云音乐都没有 AppleScript 支持,Spotify 虽然有但实测
 // 坐实它同样把播放状态发布进系统级 MediaRemote,三者读取路径完全一样,只是各自要核对
 // 的 bundle id 不同,不需要把整个函数体抄三遍。
 func getQQMusicState(ctx context.Context) (map[string]any, bool) {
@@ -624,7 +624,7 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		// 但要多过一道"这是不是一首歌"的守卫 —— 见 trustedPlaybackNotASong。
 		//
 		// ⚠️ 必须走 isTrustedPlayerBundleID,不能裸查 features.TrustedPlayers[bundleID]
-		// (2026-09-02 修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
+		// (修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
 		// MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
 		// com.apple.Safari,裸查永远落空 → Safari 的播放在这条 auto 路径被整条当成
 		// "不相关 App"丢掉。Swift 侧(MediaControlClient)走 TrustedPlayers.isTrusted
@@ -659,7 +659,7 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 }
 
 // refineAppleMusicState 是 getAutoDetectedState/getMultiSelectedState 共用的尾段
-// (2026-09-01 从 getAutoDetectedState 内联的分支抽出来,给多选新增的
+// (从 getAutoDetectedState 内联的分支抽出来,给多选新增的
 // getMultiSelectedState 复用,不重复这段逻辑):bundleID 已经确认是 Apple Music 时,
 // 尝试再走一次 getAppleMusicState 的 AppleScript 路径拿更精确的播放位置——跟手动选
 // Apple Music 时同等精度;拿不到(没有"自动化"权限/其它原因)就退回 media-control 本身
@@ -669,7 +669,7 @@ func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]a
 		// ⚠️ AppleScript 那份 state 是**整份顶替**上来的(位置更精确),但它拿不到
 		// `radioStationHash` —— 那是 MediaRemote 独有的字段。不带过去的话,Apple Music 放电台时
 		// 判据恒为假,radioclock.go 那套单曲口径在"自动识别 / 多选"这个最常见的配置下完全不生效
-		// (2026-09-10 当天就是这么漏的:改完发现缓存里照旧写进整档节目的时长)。
+		// (就是这么漏的:改完发现缓存里照旧写进整档节目的时长)。
 		// 只带这两个键,其余一律以 AppleScript 那份为准。合并动作跟
 		// getAppleMusicOnlyState(只勾 Apple Music 那条路)共用 mergeRadioKeys 一份实现。
 		mergeRadioKeys(state, raw)
@@ -681,7 +681,7 @@ func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]a
 // getMultiSelectedState 是"显式多选了若干个具体播放器、没有勾自动识别"的读取路径——
 // 跟 getAutoDetectedState 同一套"系统级 Now Playing 只有一个焦点,问 media-control 一次
 // 就知道是谁"的机制,区别只在准入名单:这里认的是 features.Players 里用户这次选中的
-// 那几个,**加上**信任列表(2026-09-01 补,见 isTrustedPlayerBundleID 的注释——最典型
+// 那几个,**加上**信任列表(补,见 isTrustedPlayerBundleID 的注释——最典型
 // 场景是「网页播放器」卡配对的浏览器,那个动作跟"选没选自动识别"是两件独立的事,不该
 // 因为没勾自动识别就让配对形同虚设)。单选且未配对任何浏览器时,这条路径跟旧版
 // matchMediaControlState(expectedBundleID) 行为等价,QQ音乐/网易云/Spotify/酷狗四个旧
@@ -794,7 +794,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		last, hasLast := rememberedPlayingPosition(trackKey)
 		elapsed = pausedPositionSecs(raw.ElapsedTime, age, hasAge, last, hasLast)
 	}
-	// ⚠️ 不再对 Spotify 做 JXA 直查覆盖(2026-08-18 与 App 侧同批移除,决策注释见
+	// ⚠️ 不再对 Spotify 做 JXA 直查覆盖(与 App 侧同批移除,决策注释见
 	// lyrimuse MediaControlClient.fetchRawMediaControlSnapshot):三轮修补仍"经常进度
 	// 不准",回归与 QQ 音乐/网易云一致的 media-control 外推。两侧必须同批改——只改
 	// 一边就是"采集器和悬浮窗各说各话"的老坑。
@@ -803,7 +803,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	title, artistTag, album := cleanMediaTag(raw.Title), cleanMediaTag(raw.Artist), cleanMediaTag(raw.Album)
 	// Apple 目录锚点:拿得到已校验的锚点时,时长用 Apple 目录的权威值,不用这份快照报的。
 	//
-	// ⚠️ **适用范围比字面看起来窄**(2026-08-22 对抗性复核订正,原注释夸大了):这个覆盖只
+	// ⚠️ **适用范围比字面看起来窄**(对抗性复核订正,原注释夸大了):这个覆盖只
 	// 作用在 media-control 这份快照上,而 Apple Music 在 `player=auto` 下走的是
 	// getAutoDetectedState —— 它拿到 AppleScript 的 state 就 `return state`,把这里改过的
 	// raw 整份丢掉;`player` 手动选成 Apple Music 时更是连 fetchRawMediaControlState 都不调。
@@ -849,7 +849,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
 		// 电台判据透传(见 radioclock.go)。⚠️ Apple Music 在 auto / 多选下最终走的是
 		// refineAppleMusicState 里那份 **AppleScript** state,它没有这个字段 —— 那边会把这里的值
-		// 带过去,否则电台判据在最常见的配置下形同虚设(2026-09-10 当天就是这么漏的)。
+		// 带过去,否则电台判据在最常见的配置下形同虚设(就是这么漏的)。
 		"radioStationHash": raw.RadioStationHash,
 		// 目录查到的权威曲长(0 = 没查到 / 自校验没过)。电台的时长以它为准,见 extract()。
 		"catalogDurationSecs": catalogDuration,

@@ -11,7 +11,7 @@ import (
 //
 // "暂停时用原始 elapsedTime" 这条既有规则**只对会刷新锚点的源成立**(QQ/网易云/Apple
 // Music:暂停本身是一次事件,它们会带着新时间戳重新发布一次 elapsedTime,那个值就是暂停
-// 位置)。锚点冻结的源不成立 —— 2026-08-21 实测 Arc(网页播放器,页面没调
+// 位置)。锚点冻结的源不成立 —— 实测 Arc(网页播放器,页面没调
 // mediaSession.setPositionState):elapsedTime 恒等于 0、timestamp 恒等于开播那一刻,
 // 位置全靠 media-control 按墙钟外推的 elapsedTimeNow。于是一按暂停,位置直接变成 0。
 //
@@ -87,9 +87,9 @@ func rememberPlayingPosition(track string, pos float64) {
 // 同一套规则,两侧必须同时改。
 //
 // rate 正常(>0)用 media-control 自己外推的 elapsedTimeNow:它内部用的是全精度锚点时刻,
-// 2026-09-07 实测对 Spotify 准到毫秒级(换歌后首拍读数 0.33~0.37s,正好是通知+去抖的延迟)。
-// rate 缺失/为 0 时 elapsedTimeNow **不再外推**(2026-08-18 实测:Spotify 暂停后恢复播放
-// playbackRate 变 null;2026-09-07 复测 elapsedTimeNow 2 分 14 秒纹丝不动),只能自己按
+// 实测对 Spotify 准到毫秒级(换歌后首拍读数 0.33~0.37s,正好是通知+去抖的延迟)。
+// rate 缺失/为 0 时 elapsedTimeNow **不再外推**(实测:Spotify 暂停后恢复播放
+// playbackRate 变 null;复测 elapsedTimeNow 2 分 14 秒纹丝不动),只能自己按
 // elapsedTime + (now − 锚点时刻) 补算。而 timestamp 恒无小数,直接拿它当锚点时刻会恒偏快
 // frac ∈ [0,1)(实测 .914/.724/.560),暂停一下就退回去,还把下一首自然切歌的偏置估计带歪。
 // 采集器没有事件流、5s 轮询首见必然晚于 1s,按 Swift 侧 estimatedAnchorInstant 的退化形态
@@ -113,7 +113,7 @@ func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, n
 	return elapsedTime + aged
 }
 
-// ---- Spotify 陈旧锚点重发(2026-09-07)—— 跟 Swift 侧 MediaControlClient.isStaleAnchorRepublish
+// ---- Spotify 陈旧锚点重发—— 跟 Swift 侧 MediaControlClient.isStaleAnchorRepublish
 // 同一套判据,两侧必须同时改。完整实测记录见那边的注释与 docs/features/02。要点:
 // Spotify 会在播放中把 now-playing 信息重发一遍,elapsedTime **逐 ms 不变**、时间戳却换成
 // 当下(实测 10.477@:09 → 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回

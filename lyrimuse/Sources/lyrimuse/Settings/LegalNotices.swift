@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import LyrimuseCore
 
-/// 「使用与版权说明」与「第三方许可」两个入口的打开动作(2026-09-03 加)。链接怎么拼见
+/// 「使用与版权说明」与「第三方许可」两个入口的打开动作。链接怎么拼见
 /// `LegalNoticeLinks`(LyrimuseCore,纯判断);这里只负责 NSWorkspace 那一步。
 ///
 /// 第三方许可证全文随包分发:build.sh 把仓库根的 THIRD_PARTY_LICENSES 拷进 Contents/Resources/

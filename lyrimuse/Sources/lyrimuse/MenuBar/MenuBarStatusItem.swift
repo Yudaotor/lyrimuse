@@ -12,8 +12,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 //
 // ---- 为什么是"SF Symbol 的音符 + 自己画的三条线",而不是一张 PNG ----
 //
-// 2026-08-17 用户报"图标怎么变成这个鬼样子了,这么小"。量下来是两次缩小**乘在了一起**:
-//   * 2026-07-20 那次(commit 579f8b3)为了让图标别比旁边的系统图标大,做了两件事 ——
+// 现象是"图标怎么变成这个鬼样子了,这么小"。量下来是两次缩小**乘在了一起**:
+//   * 那次(commit 579f8b3)为了让图标别比旁边的系统图标大,做了两件事 ——
 //     重新生成一张四周带内边距的 PNG,**并且**把显示尺寸从 16 缩到 14;
 //   * 而那张 PNG 里字形只占画布的 61% 宽 / **42% 高**(实测:36×36 的画布,字形只有
 //     22×15,上下各留了 10 px 空白)。
@@ -33,7 +33,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 // 菜单栏那个图标(没在显示歌词时才出现)长什么样、有哪几款可选、以及选型标准,
 // 全在 MenuBarIconStyle 里。
 
-// 菜单栏那一项的总控(2026-08-16 加,取代 MenuBarExtra + MenuBarLabel + MenuBarMarqueeTicker)。
+// 菜单栏那一项的总控(加,取代 MenuBarExtra + MenuBarLabel + MenuBarMarqueeTicker)。
 //
 // 为什么不再用 MenuBarExtra:它把 label **快照成一张图**塞进状态栏按钮(探针读出来的
 // 实况),视图侧没有活的图层,滚动只能靠"每帧换一张图"驱动,顺滑度受主线程调度摆布。
@@ -63,12 +63,12 @@ final class MenuBarStatusItem: NSObject {
     /// 何时动/停由这里的展示状态决定,怎么动全在视图里 —— 全部 CA 驱动,
     /// 这个类保住了"没有计时器"的承诺。
     private let liveIconView = MenuBarLiveIconView()
-    /// 左键面板(2026-08-19,「控制中心风」,见 MenuBarPanel.swift)。右键仍是完整菜单。
+    /// 左键面板(「控制中心风」,见 MenuBarPanel.swift)。右键仍是完整菜单。
     private let panelController = MenuBarPanelController()
-    /// 首次启动的一次性「⌘+拖拽可以挪位置」提示(2026-09-01,见 MenuBarPositionHint.swift
+    /// 首次启动的一次性「⌘+拖拽可以挪位置」提示(见 MenuBarPositionHint.swift
     /// 头注的调研背景)。
     private let positionHintController = MenuBarPositionHintController()
-    /// 悬停三键那一层(2026-09-03,见 MenuBarHoverControlsView 头注)。默认隐藏,
+    /// 悬停三键那一层(见 MenuBarHoverControlsView 头注)。默认隐藏,
     /// 只在接管时露出来;它同时是 hover 事件的收口(tracking area 的 owner)。
     private let hoverControls = MenuBarHoverControlsView()
 
@@ -106,7 +106,7 @@ final class MenuBarStatusItem: NSObject {
         coordinator.$compactLine
             // 同一句内部会因为逐字之外的原因被重新赋值(译文/罗马音中途补上),去重掉 ——
             // 不去重的话滚动会被反复打回开头。⚠️ 去重键是「首词时间戳#纯文本」,不能只看
-            // 纯文本(2026-08-22 审阅抓出):副歌里相邻两行**同词不同时**,只看文本第二行
+            // 纯文本:副歌里相邻两行**同词不同时**,只看文本第二行
             // 的换行事件会被吞掉,菜单栏挂着第一行的填色路径 —— 第一行唱完动画停在全填,
             // 第二行一出场就整句强调色。同理「先无逐字、解析中途补上」(words nil→非 nil)
             // 也必须算换句,否则这句到换行前都不会开始染色。
@@ -121,7 +121,7 @@ final class MenuBarStatusItem: NSObject {
         // 见上面那段:开唱那一刻要重画一次,好把逐字填色路径挂上。只关心"有没有词可染",
         // 所以去重键只取首词时间戳。
         coordinator.$currentLine
-            // 2026-09-06 起键里多了纯文本和译文 / 罗马音:副行开着时菜单栏显示的就是 currentLine(见
+            // 键里多了纯文本和译文 / 罗马音:副行开着时菜单栏显示的就是 currentLine(见
             // refresh 头那段),换句、译文中途补上都要重画;单行模式下这些多出来的事件到 present() 都是
             // 同参数空操作,滚动不会被打回开头(scrollUnchanged 不看副行文字)。
             .map { line -> String in
@@ -136,7 +136,7 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来)。
         //
-        // ⚠️ 订阅的必须是**现在真正在用的那个**设置。2026-08-15 把宽度从字数改成点时
+        // ⚠️ 订阅的必须是**现在真正在用的那个**设置。把宽度从字数改成点时
         // 这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效。
         //
         // debounce 而不是 receive(on:):宽度变化现在会触发状态栏项**重建**(macOS 26
@@ -150,7 +150,7 @@ final class MenuBarStatusItem: NSObject {
         // 才生效 —— 那样用户在设置里点一下,菜单栏上看着像没反应。
         settings.$menuBarLyricsWidthMode.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「对齐模式」跟宽度模式同一条路(2026-09-01)。⚠️ 必须走 refresh() 而不是
+        // 「对齐模式」跟宽度模式同一条路。⚠️ 必须走 refresh() 而不是
         // refreshColors():后者只重排位图 + 重放填色,**不碰 position** —— 而对齐改的正是
         // position。refresh 会一路走到 present(),Plan 里带着 alignment、比出不同,静止分支
         // 就会按新对齐重新落位(见 MenuBarScrollingLabel.restartAnimation)。
@@ -171,7 +171,7 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「♪ 歌名」兜底(2026-09-04):连续两首都没歌词时 compactLine 一直是 nil,不订歌名就换不了字;
+        // 「♪ 歌名」兜底:连续两首都没歌词时 compactLine 一直是 nil,不订歌名就换不了字;
         // 广告开始 / 结束也要重算(广告态不显示广告标题);开关本身切换立刻生效。
         coordinator.$title.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
@@ -179,7 +179,7 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         settings.$menuBarShowsTitleWhenNoLyrics.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 悬停三键(2026-09-03)。两条订阅:
+        // 悬停三键。两条订阅:
         //
         // ① 开关本身 —— 拨掉的时候如果正接管着,要立刻把歌词放回来(用户就是盯着菜单栏拨的)。
         settings.$menuBarHoverShowsControls.dropFirst().receive(on: RunLoop.main)
@@ -195,17 +195,17 @@ final class MenuBarStatusItem: NSObject {
         // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
         settings.$menuBarLyricsKaraoke.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 粗细(2026-09-03):字重一变文字宽度就变(拉丁字 heavy 比 regular 宽约 9%),自适应模式下
+        // 粗细:字重一变文字宽度就变(拉丁字 heavy 比 regular 宽约 9%),自适应模式下
         // 槽宽跟着变 —— 所以必须走 refresh()(重排、必要时重建槽位),不能像颜色那样只
         // refreshColors。图层那条路的位图与滚动距离由 Plan.fontWeight 参与 present 判定来保证重排。
         settings.$menuBarLyricsFontWeight.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 字号(2026-09-03):除了宽度,行高也变 —— 固定宽度模式下槽宽不变、present(class:length:) 不重建,
+        // 字号:除了宽度,行高也变 —— 固定宽度模式下槽宽不变、present(class:length:) 不重建,
         // 但 render 闭包照样跑,showFixedWidth 里那张占位图会按新的 lineHeight 重画;图层那条路由
         // Plan.fontSize 保证重排。
         settings.$menuBarLyricsFontSize.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 副行(2026-09-06 双排):档位一变,主行字体、显示哪一句(currentLine / compactLine)、槽宽都变 ——
+        // 副行(双排):档位一变,主行字体、显示哪一句(currentLine / compactLine)、槽宽都变 ——
         // 必须走 refresh()。下一句文本只在副行选「下一句」时有用,其余档位到 present() 是同参数空操作。
         settings.$menuBarSecondaryLine.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
@@ -248,7 +248,7 @@ final class MenuBarStatusItem: NSObject {
 
         refresh()
 
-        // 首次启动的一次性拖拽引导提示(2026-09-01,见 MenuBarPositionHint.swift 头注)。
+        // 首次启动的一次性拖拽引导提示(见 MenuBarPositionHint.swift 头注)。
         // 上面这次 refresh() 是同步的(见 present() 的"没有旧项就无条件重建"分支),此刻
         // statusItem?.button 已经是真的按钮了。延迟 1.5s 只是让图标先在视觉上落定,不在
         // 启动的第一帧就糊用户一脸提示。标记提前到"决定要展示"这一刻就置真,而不是等用户
@@ -256,7 +256,7 @@ final class MenuBarStatusItem: NSObject {
         // 一遍(跟 hasSeenChineseLyrics 类那种"条件成立就一直显示"刻意反过来,这个是
         // "展示过一次就永远不再显示")。
         //
-        // ⚠️ **引导还没走完时整个不弹**(2026-09-03)。首启的时间线是:T+0.5s 弹引导窗口
+        // ⚠️ **引导还没走完时整个不弹**。首启的时间线是:T+0.5s 弹引导窗口
         // (MenuBarSceneActions,过 iCloud 导入询问那一道之后)、T+1.5s 弹这个气泡、T+9.5s
         // 它自动消失(MenuBarPositionHint.autoDismissSeconds = 8)。也就是说这个"一辈子只
         // 出现一次"的提示,恰好在用户正盯着引导向导读第一屏的时候在旁边闪 8 秒然后**永久
@@ -344,7 +344,7 @@ final class MenuBarStatusItem: NSObject {
         return path.isEmpty ? nil : path
     }
 
-    /// 跟唱滚动用的阅读位置路径(2026-09-04)。守卫跟 karaokeFillPath 同一组(有逐字数据、
+    /// 跟唱滚动用的阅读位置路径。守卫跟 karaokeFillPath 同一组(有逐字数据、
     /// 文本没跟逐字数据代际错位),但**不看**卡拉OK开关:染色是"画什么",跟唱是"滚到哪",
     /// 不染色也要跟着唱到的位置滚。两条路径的差别见 MenuBarMarquee.followReadingPath 头注。
     private func followReadingPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
@@ -372,7 +372,7 @@ final class MenuBarStatusItem: NSObject {
     }
 
     /// macOS 27 以前(本 App 支持的 14 / 15 / 26 全在内)AppKit 记这一项位置用的 UserDefaults
-    /// 键(值 = 项右边缘到屏幕右缘的距离,pt;2026-09-02 在 26.5.1 真机上核对过:拖到
+    /// 键(值 = 项右边缘到屏幕右缘的距离,pt;在 26.5.1 真机上核对过:拖到
     /// origin.x=1146、宽 55、屏宽 1512 → 存值 313 ≈ 1512 − 1201)。macOS 27 起位置改由系统
     /// MenuBarAgent 集中管理(`com.apple.MenuBarAgent` → `TrailingItemPreferredPositions`),
     /// 这个键不再出现。
@@ -418,12 +418,12 @@ final class MenuBarStatusItem: NSObject {
         // MenuBarHoverControlsView 头注),所以必须在这里跟着重装:按钮每次重建都是新的,
         // 旧按钮身上的区域跟它一起没了 —— 漏了这一行的症状是"重建过一次之后悬停再没反应"。
         hoverControls.installTracking(on: button)
-        // 2026-08-19 起不再把菜单常挂在 item.menu 上(挂着=任何点击都弹菜单):
+        // 不再把菜单常挂在 item.menu 上(挂着=任何点击都弹菜单):
         // 左键弹「控制中心风」面板,右键(或 ⌃左键)才弹完整菜单 —— 弹菜单时临时挂上、
         // 弹完摘掉(见 popUpFullMenu)。
         button.target = self
         button.action = #selector(statusButtonClicked)
-        // 左键**按下**就弹面板(2026-09-03 用户要求「点了马上弹出」):原来只在松开时触发,
+        // 左键**按下**就弹面板(「点了马上弹出」):原来只在松开时触发,
         // 一次点击按下到松开本身就有 ~100ms,再叠上弹出动画和首帧大图解码就是可感知的
         // 一拍。系统控制中心/原生状态栏菜单也都是按下即出。右键和 ⌃左键仍走松开:那条是
         // popUpFullMenu 用 performClick 借原生菜单弹出,在真实按下的追踪循环里再合成一次
@@ -438,7 +438,7 @@ final class MenuBarStatusItem: NSObject {
 
     /// **图标态**的槽宽 = 图标宽 + 这个数。
     ///
-    /// ⚠️ 2026-09-16 订正了这个常量的含义。原注释写的是「窗口宽 + 系统内边距(实测健康态
+    /// ⚠️ 订正了这个常量的含义。原注释写的是「窗口宽 + 系统内边距(实测健康态
     /// 160 → 178)」,读起来像 AppKit 会额外吃掉 18pt。**实测不是**:打日志对账
     /// `requested` / `button.bounds.width` / `item.length` 三个数,按钮宽恒等于我们申请的
     /// 槽宽(只做取整)—— AppKit 一点都没多要,这 18pt 全是我们自己留的。
@@ -449,23 +449,22 @@ final class MenuBarStatusItem: NSObject {
     private static let fixedSlotPadding: CGFloat = 18
     /// **歌词态**的槽宽 = 内容宽 + 这个数。
     ///
-    /// 2026-09-16 从 18 降到 4(用户圈图:「这右边的也帮我缩一下,现在太多空着了」)。
+    /// 从 18 降到 4(用户圈图:「这右边的也帮我缩一下,现在太多空着了」)。
     /// 同日早些时候把内容改成贴按钮前缘之后,那 18pt 不再左右平分、**整块落到尾部**,
     /// 在高亮态(鼠标按住时那个圆角块)下一眼就能看到歌词右边空一大截。
     ///
     /// 歌词态不像图标态那样靠 AppKit 居中(我们自己摆图层),所以它只需要一点点防裁边的余量:
     /// 4pt ≈ 文字宽度测量与实际绘制之间的取整误差量级。⚠️ 反推内容宽的地方
     /// (`currentLyricsSlot` / `renderInterimLyrics`)必须用**同一个**常量,否则歌词格
-    /// 算出来的宽度跟真实槽宽差一截 —— 那正是 2026-09-03「点暂停生效上一首」的病根形状。
+    /// 算出来的宽度跟真实槽宽差一截 —— 那正是 「点暂停生效上一首」的病根形状。
     private static let lyricsSlotPadding: CGFloat = 4
 
     /// 两次重建之间的最小静默间隔,兼作歌词间隙的收缩观察窗(见 present 头注)。
     /// 卡死的那次实测两发相隔 1.1s,取 3s 留余量。
     private static let rebuildQuietSecs: TimeInterval = 3
-    /// 歌词消失之后,**槽宽**还替它留多久(2026-09-16)。
+    /// 歌词消失之后,**槽宽**还替它留多久。
     ///
-    /// ⚠️ 这跟下面那个「内容」的保持时长是**两件事**,2026-09-16 之前它们共用 3 秒,
-    /// 这正是 issue #8 修不干净的原因:
+    /// ⚠️ 这跟下面那个「内容」的保持时长是**两件事**,别让它们共用同一个数:
     ///
     /// 实测(12 小时日志)媒体层会**凭空报假暂停**——`pause transition` 之后几秒又
     /// `resume transition`,而 `resume` 那行的 `delta` 显示**播放位置按墙钟照样前进了**,
@@ -474,13 +473,13 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// 关键性质:**只要槽宽没缩,恢复那一刻目标宽度跟原来相同 → `needsRebuild` 为假 →
     /// 整个假暂停期间零重建**,邻居一个像素都不动。所以把几何这一半单独拉长到 8 秒
-    /// (覆盖实测最长的 6.53 秒还有余量),而内容那一半仍按用户 2026-09-16 选的 3 秒 ——
+    /// (覆盖实测最长的 6.53 秒还有余量),而内容那一半仍按用户选的 3 秒 ——
     /// 真暂停时他照样在 3 秒后看到图标,只是那枚图标画在还没缩的宽槽里。
     ///
     /// 代价:真暂停后这一项会多占 8 秒的宽度才缩回去。相比「每次假暂停都塌一次再弹回来」,
     /// 这个代价小得多,而且它只在**真的停了**之后才付。
     private static let slotReleaseSecs: TimeInterval = 8
-    /// 歌词消失之后,**内容**还留多久才换成图标。用户 2026-09-16 在三个方案里选的这一档。
+    /// 歌词消失之后,**内容**还留多久才换成图标。用户在三个方案里选的这一档。
     private static let iconContentHoldSecs: TimeInterval = 3
     /// 建槽之前先给「该显示哪一句 / 多宽」多少时间落定。
     ///
@@ -511,18 +510,18 @@ final class MenuBarStatusItem: NSObject {
     /// 顺延 —— 暂停后槽永远缩不回去(实现当天差点带着这个 bug 部署)。
     /// 目标不再是收缩(歌词回来了 / 几何已一致 / 用户手动关开关)时清零。
     private var collapseObserveBegan: Date?
-    /// 「离开图标槽」的落定窗起点(2026-09-16)。见 present() 里那段。
+    /// 「离开图标槽」的落定窗起点。见 present() 里那段。
     private var iconExitSettleBegan: Date?
-    /// 自适应模式下「同一首歌内只涨不缩」的地板(2026-09-16)。判据与代价见 MenuBarSlotFloor。
+    /// 自适应模式下「同一首歌内只涨不缩」的地板。判据与代价见 MenuBarSlotFloor。
     private var slotFloor = MenuBarSlotFloor()
 
     /// 把"形态 cls、槽宽 length、内容 render"呈现到状态栏上。macOS 26 菜单栏的两条
-    /// 实测铁律(2026-08-19,六轮排查 AX 全图 + 像素截图坐实):
+    /// 实测铁律(六轮排查 AX 全图 + 像素截图坐实):
     ///
     /// 1. **只在项出生那一刻**按当时的宽度给邻居排位 —— 事后换 image、原地改 length、
     ///    重踢 length,邻居一概不让位(加宽=歌词压到别家图标头上,收窄=留个空椭圆)。
     ///    所以形态或槽宽的**任何**变化都整项重建,且出生就带显式 length,绝不留直赋
-    ///    捷径(第六轮用户"只是把菜单设置重改了一下就不正常"=命中当时仅剩的宽度直赋)。
+    ///    捷径(第六轮"只是把菜单设置重改了一下就不正常"=命中当时仅剩的宽度直赋)。
     /// 2. **重建不能连发**:单次重建从未观察到排坏,但两次重建相隔 ~1s(实测 1.1s 的
     ///    歌词间隙收放、或用户连着改几项设置)会把**邻居的像素**晾在旧位置上不动 ——
     ///    此时 AX 账面已是新位置(AX 全图看着完全健康!),屏幕像素却是旧布局,歌词
@@ -534,13 +533,13 @@ final class MenuBarStatusItem: NSObject {
     /// 收缩额外恒等一个观察窗(collapseDelay)——间隙常在 1~2s 内结束,歌词回来时
     /// 几何目标恢复原样,这对"缩了又扩"的重建就整个省掉了。
     ///
-    /// ⚠️ **2026-09-16 推翻了这段原来的最后半句「期间图标居中画在还没缩的宽槽里顶着」。**
-    /// 那个取舍只顾了几何、没顾画面:观察窗省下的是**重建**,而屏幕上用户照样看到歌词被
-    /// 图标顶掉、过一两秒又回来 —— 正是 issue #8 报的「Menu bar lyrics sometimes
-    /// disappear ... then reappear later」。观察窗本来就是按"间隙常在 1~2s 内结束"留的,
+    /// ⚠️ **别在观察窗期间把图标居中画在还没缩的宽槽里顶着。** 那样只顾了几何、没顾画面:
+    /// 观察窗省下的是**重建**,而屏幕上照样看到歌词被图标顶掉、过一两秒又回来
+    /// (「Menu bar lyrics sometimes disappear ... then reappear later」)。观察窗本来就是按
+    /// "间隙常在 1~2s 内结束"留的,
     /// 那这段时间里**屏幕上也该保持是歌词**。现在观察窗内一笔都不画(见下面那条分支),
     /// 窗口走完才落地成图标。代价说清楚:真按下暂停时,歌词会在原地冻约 3 秒才收回图标
-    /// (2026-08-19「暂停不占宽」的观感被推迟了那么久;宽度本来就已经占着这 3 秒,
+    /// (「暂停不占宽」的观感被推迟了那么久;宽度本来就已经占着这 3 秒,
     /// 变的只是这期间画的是歌词还是图标)。广告插播开头同理会多挂 ≤3s 上一句。
     ///
     /// 重建/推迟各落一条 notice 级日志(info 不落盘,上次排查就是因此拿不到现场):
@@ -558,7 +557,7 @@ final class MenuBarStatusItem: NSObject {
         pendingRefresh?.cancel()
         pendingRefresh = nil
 
-        // 短命行不改槽宽(2026-09-03 起只管收缩;**2026-09-11 起两个方向都管**,用户报
+        // 短命行不改槽宽(只管收缩;**两个方向都管**,现象是
         // "换行时先按上一句的长度渲染,然后同一行又变一次")。为一句活不过静默窗的短句改槽宽,
         // 花掉的是一次重建配额 —— 下一句(往往活得久得多)的几何因此撞进静默窗,被推迟到
         // **句中**才落地,槽宽当着用户的面跳一下。
@@ -598,11 +597,11 @@ final class MenuBarStatusItem: NSObject {
             return
         }
 
-        // 只看**长度**,不看形态(2026-09-11)。上面铁律 1 说的是"只在项出生那一刻按当时的
+        // 只看**长度**,不看形态。上面铁律 1 说的是"只在项出生那一刻按当时的
         // 宽度给邻居排位" —— 邻居关心的只有 length。长度一模一样时重建一次,邻居前后位置
         // 完全相同,那次重建对布局零收益,却实打实花掉一次重建配额、把下一句的几何推进静默窗。
         //
-        // 实测(2026-09-11,40 分钟 39 次重建):**5 次是 `text(223.5) ↔ fixed(223.5)` 这种
+        // 实测(40 分钟 39 次重建):**5 次是 `text(223.5) ↔ fixed(223.5)` 这种
         // 长度一字不差的纯形态翻转**,而且成簇出现(37 秒里连着 5 次全是 223.5)。成因是自适应
         // 下 `.text` 的槽宽 = 文字宽、`.fixed` 的槽宽 = 最大宽度,一句文字宽顶到上限的句子
         // 两边算出来就是同一个数(分界只差 `MenuBarMarqueeRenderer.presentation` 的 0.5pt 容差)。
@@ -632,7 +631,7 @@ final class MenuBarStatusItem: NSObject {
         // ⚠️ 面板开着时把几何变化整个挡下来。状态栏这一项的按钮**就是那张 popover 的锚点
         // 视图**,而重建 = removeStatusItem + 新建一项,等于把锚连根拔掉:轻则面板当场自己
         // 消失(用户手还在上面),重则内容按新槽宽画出去、槽却还是旧宽度,歌词压到左边邻居
-        // 的图标上(2026-08-19 用户报过这一幕,当时只当成"面板开着切开关"的个例,用调用侧
+        // 的图标上(现象是过这一幕,当时只当成"面板开着切开关"的个例,用调用侧
         // 先收面板绕过去了 —— 触发源其实不止那一个:自适应宽度模式下**每换一句**都改槽宽,
         // 歌词间隙/暂停的收缩也改,面板开着时这些都会踩到)。
         //
@@ -641,13 +640,13 @@ final class MenuBarStatusItem: NSObject {
         // 那条推迟分支),歌词最多晚到面板收起。
         if panelIsOpen, statusItem != nil {
             logger.notice("slot rebuild suppressed (panel open): \(self.displayClass, privacy: .public) -> \(cls, privacy: .public)(\(length, privacy: .public))")
-            // 内容不等几何(2026-08-19 补,与下面推迟分支对齐):目标是图标就地画;目标是
+            // 内容不等几何(补,与下面推迟分支对齐):目标是图标就地画;目标是
             // 歌词就按当前(被锚住不许动的)槽宽画一版过渡 —— renderInterimLyrics 只改
             // button 内容、零重建零碰锚点,面板开着时调用同样安全。原来 text/fixed 直接
             // return,自适应宽度模式下面板开着期间状态栏歌词会冻在旧句(当时注释里"歌词
             // 最多晚到面板收起"的取舍,在 interim 机制就绪后已无必要)。
             //
-            // ⚠️ 这条**刻意不跟**下面推迟分支那道「观察窗内不画图标」(2026-09-16):那条要靠
+            // ⚠️ 这条**刻意不跟**下面推迟分支那道「观察窗内不画图标」:那条要靠
             // observeRemaining 倒计时,而这条路径在计时开始前就 return 了,没有"窗口走完"这回事
             // —— 照搬过来就变成"面板开着期间歌词一直挂着",面板开多久挂多久,比闪一下更糟。
             // 面板开着本身就是用户正在操作的几秒钟,不是那个要保护的间隙。
@@ -657,7 +656,7 @@ final class MenuBarStatusItem: NSObject {
             return
         }
 
-        // 放行之后、节流之前记一行**决策现场**(2026-09-16 排查「句中重建」时加)。
+        // 放行之后、节流之前记一行**决策现场**(排查「句中重建」时加)。
         //
         // 上面那条 `slot resize skipped` 只记**被挡下**的,而排查要看的恰恰是**被放行**的:
         // 实测抓到一行只活了 1.05s、却照样拿到了几何配额(现行见 06 章「句中重建」那条),
@@ -676,9 +675,9 @@ final class MenuBarStatusItem: NSObject {
                 """)
         }
 
-        // ---- 从图标槽回到歌词槽:先让「该显示哪一句」落定,再建(2026-09-16)----
+        // ---- 从图标槽回到歌词槽:先让「该显示哪一句」落定,再建----
         //
-        // 顺着 issue #8 摸出来的「句中重建」,实测现行:
+        // 「句中重建」实测长这样:
         //   20:09:05.314  rebuild: icon(38.5) -> text(195.22)      ← 按"这一瞬"的行建了
         //   20:09:05.331  coordinator currentLine updated          ← 17ms 后真正的行才到
         //   20:09:05.346  deferred 2.968s -> text(173.29)          ← 配额已烧完 → 落在句中
@@ -692,13 +691,13 @@ final class MenuBarStatusItem: NSObject {
         // 所以离开图标槽之前压一个落定窗:窗内什么都不建,到点了按**当时最新**的目标建一次。
         // 期间保持图标不动 —— 38pt 的槽里塞歌词只会闪成一条缝(同 renderInterimLyrics 的判断)。
         //
-        // **同一个病还有第二处,2026-09-16 终验时才抓到**:换歌那一下也在赛跑,只是两边都是
+        // **同一个病还有第二处,终验时才抓到**:换歌那一下也在赛跑,只是两边都是
         // 歌词槽,所以上面那个"离开图标槽"的条件盖不到 ——
         //   21:49:01.273  rebuild: text(307.8) -> text(160.2)   ← 「♪ 歌名」占位,按它的宽建了
         //   21:49:01.295  decide:  text(160.2) -> text(272.0)   ← **22ms** 后下一句的宽才知道
         //   21:49:01.295  deferred 2.978s
         //   21:49:04.325  rebuild: text(160.2) -> text(272.0)   ← 3 秒后才跳到位
-        // 「占位槽按下一句定宽」(2026-09-11)本来就是为这一幕做的,但换歌那一刻新歌的歌词
+        // 「占位槽按下一句定宽」本来就是为这一幕做的,但换歌那一刻新歌的歌词
         // 还没解析出来,`upcomingW` 拿不到值。所以判据从"离开图标槽"扩成**"目标还不作数"**:
         // 占位内容(targetIsProvisional)同样等一个落定窗再建。
         //
@@ -742,11 +741,11 @@ final class MenuBarStatusItem: NSObject {
             }
             let delay = max(observeRemaining, Self.rebuildQuietSecs - now.timeIntervalSince(lastRebuildAt))
             if delay > 0 {
-                // debug 级(2026-08-19 降噪):推迟是自适应模式的**常态**节流路径,每换一句
+                // debug 级(降噪):推迟是自适应模式的**常态**节流路径,每换一句
                 // 都走到,notice 级会让它逐句落盘。错位排查真正要对时间线的是"重建何时
                 // 执行"(下面那条,3s 至多一次,保持 notice);推迟细节要看时开 debug 采集。
                 logger.debug("slot rebuild deferred \(delay, privacy: .public)s: \(self.displayClass, privacy: .public) -> \(cls, privacy: .public)(\(length, privacy: .public))")
-                // 推迟的只是**几何**,内容不等(2026-08-19 用户反馈"3s 延迟之后歌词
+                // 推迟的只是**几何**,内容不等(现象是"3s 延迟之后歌词
                 // 有时不及时更新"——自适应模式逐句都是几何变化,内容跟着几何一起等
                 // 就是逐句都可能晚 3s):目标是图标就把图标画进还没变的槽里(图标在
                 // 任意槽宽下都居中,见 showIcon);目标是歌词就按**当前槽宽**先画一版
@@ -754,12 +753,12 @@ final class MenuBarStatusItem: NSObject {
                 // 会按目标重画。
                 if let button = statusItem?.button {
                     if cls == "icon" {
-                        // ⚠️ 歌词消失之后,**内容**和**几何**各有各的保持时长(2026-09-16,issue #8):
+                        // ⚠️ 歌词消失之后,**内容**和**几何**各有各的保持时长:
                         //   · 内容:满 iconContentHoldSecs(3s,用户选的)才换成图标 —— 在那之前
                         //     一笔都不画,上一句留在原地,一两秒的间隙/ 假暂停整个看不出来;
                         //   · 几何:满 collapseDelay(slotReleaseSecs 8s)才缩窄 —— 中间这 5 秒里
                         //     图标画在**还没缩的宽槽**里。
-                        // 拉开这两个数才是 issue #8 的正解:实测的假暂停 1.9~6.5 秒,只要槽宽没缩,
+                        // 拉开这两个数才对:实测的假暂停 1.9~6.5 秒,只要槽宽没缩,
                         // 恢复那一刻目标宽度跟原来相同 → needsRebuild 为假 → **零重建**,邻居一个
                         // 像素都不动;而共用 3 秒时,4 秒的假暂停必然缩一次再弹回来。
                         //
@@ -790,9 +789,9 @@ final class MenuBarStatusItem: NSObject {
 
     /// 整项销毁重建(为什么必须重建而不能原地改宽度,见 present() 头注)。
     ///
-    /// ## macOS 27 以前(14 / 15 / 26):重建会把这一项"记住的位置"抹掉,必须自己保住(2026-09-02)
+    /// ## macOS 27 以前(14 / 15 / 26):重建会把这一项"记住的位置"抹掉,必须自己保住
     ///
-    /// 用户报"另一台 macOS 26.5.1 的机器上,状态栏项每次重建都跳到菜单栏最左侧,⌘拖回去
+    /// 现象是"另一台 macOS 26.5.1 的机器上,状态栏项每次重建都跳到菜单栏最左侧,⌘拖回去
     /// 下次重建又跳",这台 27 的开发机复现不出来。往两台机器各部署了七轮文件日志(系统日志
     /// 在那台机器上已损坏、走不通)才钉死,证据链:
     ///
@@ -817,7 +816,7 @@ final class MenuBarStatusItem: NSObject {
     /// 登记垃圾、App 自己清不掉,而且 27 上本来就没这个 bug。老机制下键还不存在(装完还没
     /// 拖过)时没什么可带,也不换代,等用户拖过一次就有了。
     ///
-    /// 2026-09-02 在 26.5.1 真机上验证通过:重建前右边缘 1115,重建后 1s 起稳定在 1115
+    /// 在 26.5.1 真机上验证通过:重建前右边缘 1115,重建后 1s 起稳定在 1115
     /// (存值 399 ≈ 1512−1115),图标留在用户拖的位置。
     ///
     /// ⚠️ 排查期间走过几条岔路,记一笔免得重走:①"下一个 runloop 就读 window.frame"两台
@@ -875,10 +874,10 @@ final class MenuBarStatusItem: NSObject {
             // 槽比三个键宽,两侧那块空地本来就是"点开面板"的语义,让它变成死区只会让人
             // 以为点坏了。**开着「歌词旁的图标」时点那枚图标同样落在这条兜底上** —— 三个键
             // 只占歌词那一格(见 evaluateHoverEngagement 里 setSlot 那一行),图标那一块不在
-            // 任何一个键的矩形里,不用为它单开分支(2026-09-03 用户要求"点击图标范围之后
+            // 任何一个键的矩形里,不用为它单开分支("点击图标范围之后
             // 依旧是唤起面板")。
             // ⚠️ 点击位置**必须**从屏幕坐标换算,**不能**用 `event.locationInWindow`
-            // (2026-09-03 实测坐实,用户报"点了暂停,实际是上一首")。同一次点击两条路的结果:
+            // (实测坐实,现象是"点了暂停,实际是上一首")。同一次点击两条路的结果:
             //   viaEvent  = (72, 11)      —— 而且**连点两次恒为同一个值**,真实点击不可能
             //                                像素级相同,说明这个坐标根本不在 button.window
             //                                这个坐标系里(macOS 26 起菜单栏由 MenuBarAgent 托管)
@@ -917,7 +916,7 @@ final class MenuBarStatusItem: NSObject {
         item.menu = nil
     }
 
-    // MARK: - 悬停三键(2026-09-03)
+    // MARK: - 悬停三键
 
     /// 指针在不在这一项上(由 MenuBarHoverControlsView 的 tracking area 上报)。
     private var hoverInside = false
@@ -926,9 +925,9 @@ final class MenuBarStatusItem: NSObject {
 
     /// 进出都**不等**:指针一进来当场换成三个键,一离开当场变回歌词。
     ///
-    /// ⚠️ 2026-09-03 第一版在进入这一侧压了 0.2s 的延时(照灵动岛 hover 展开那档
-    /// `hoverEnterDelay` 0.12s 取的),理由是"菜单栏上路过比停下常见,指针横穿去点右边别的
-    /// App 图标时会扫过这一项,不等一下就是歌词闪一下变三个键再闪回来"。用户实测后要求
+    /// ⚠️ 进入这一侧**不要**压延时(照灵动岛 hover 展开那档 `hoverEnterDelay` 0.12s 取
+    /// 0.2s 那种)。那个理由听着成立——"菜单栏上路过比停下常见,指针横穿去点右边别的
+    /// App 图标时会扫过这一项,不等一下就是歌词闪一下变三个键再闪回来"。实测后要求
     /// **去掉延迟**("我们这个悬浮上去目前有个延迟在变成控制键,帮我去掉延迟")——手感上
     /// "点得到才算数",慢半拍比偶尔闪一下更难受。所以这里不再有等待队列;横穿时会闪一下,
     /// 那是这条取舍换来的,别当 bug 修回去。
@@ -985,12 +984,12 @@ final class MenuBarStatusItem: NSObject {
 
     /// 歌词那一格在按钮里的位置(纵向给满)。三个键就排在这一格里。
     ///
-    /// ⚠️ **从槽宽 `item.length` 反推,绝不问歌词层要**(2026-09-03 修 bug 时改的)。
+    /// ⚠️ **从槽宽 `item.length` 反推,绝不问歌词层要**(修 bug 时改的)。
     /// 歌词层那份几何按 `plan` 算,而 `plan` 是易失的:悬停接管时被清一次(只留图标)、
     /// 暂停收成图标那条路又清一次;偏偏 `displayClass` 因为重建节流还停在陈旧的 `"fixed"`,
     /// 于是"该不该接管"说是、"歌词格在哪"却答不上来,退回整个按钮居中 —— 三个键的位置
     /// 就在两套之间跳(实测 `48.5/72.5/96.5` ↔ `36/60/84`,差 12.5pt 正好够点到隔壁键,
-    /// 用户报的"点了暂停,生效的是上一首")。槽宽是这一项的硬事实,只有重建才变,而重建
+    /// 现象是"点了暂停,生效的是上一首")。槽宽是这一项的硬事实,只有重建才变,而重建
     /// 期间本来就不接管。算式与歌词层摆图层共用一份,在 `MenuBarHoverControls.lyricsSlot`。
     ///
     /// `item.length - lyricsSlotPadding` 这个反推口径跟 `renderInterimLyrics` 里那条一致
@@ -1013,7 +1012,7 @@ final class MenuBarStatusItem: NSObject {
     /// 撑宽度的透明占位图都原样留着 —— 否则 hover 一进一出就是连发两次状态栏项重建,正撞
     /// present 头注第 2 条铁律(两次重建相隔 ~1s 会把邻居的**像素**晾在旧位置且不自愈)。
     private func hideLyricsForHoverControls() {
-        // ⚠️ 开着「歌词旁的图标」时只收歌词、**把图标留在原地**(2026-09-03 用户要求:"如果有
+        // ⚠️ 开着「歌词旁的图标」时只收歌词、**把图标留在原地**("如果有
         // 开启左右侧图标的话,悬浮之后图标依旧保留,只是歌词部分变为控制键")。那枚图标就画在
         // scrollingLabel 自己的图层上,`clear()` 会连它一起抹掉 —— 这也正是刚接上时它会跟着
         // 歌词一起消失的原因。判据读**这一层的实际状态**而不是设置值:设置刚改完、还没走到
@@ -1052,7 +1051,7 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// ⚠️ 这已经是这段守卫的第四份(另三份在 LyricsOverlayWindowController.withMusicPermission、
     /// NotchLyricsView.controlButton、GlobalHotkeys)。抽成公共函数要同时动那三个文件、且它们
-    /// 各自的 Task 隔离标注不同,不在这次改动的范围里 —— 记一笔,下次碰到这三处之一时一起收。
+    /// 各自的 Task 隔离标注不同 —— 记一笔,下次碰到这三处之一时一起收。
     private func withMusicPermission(_ action: @escaping @MainActor () -> Void) {
         Task { @MainActor in
             guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
@@ -1065,7 +1064,7 @@ final class MenuBarStatusItem: NSObject {
 
     // MARK: - 决定现在该显示什么
 
-    /// 这一刻的双排状态(2026-09-06):`refresh()` 算一次,`showFixedWidth` / `renderInterimLyrics` / 两条
+    /// 这一刻的双排状态:`refresh()` 算一次,`showFixedWidth` / `renderInterimLyrics` / 两条
     /// 填色路径都读它 —— 主行字体、副行文字、副行档位三样必须出自同一次判定,各处现读设置会在
     /// 「♪ 歌名」兜底(按单行画)与歌词句(按双排画)之间对不上号。
     private struct RowState {
@@ -1082,7 +1081,7 @@ final class MenuBarStatusItem: NSObject {
     /// 据此不按歌词时长算(dwellSeconds 传 nil 走固定速度那条退路)。
     private var titleFallbackActive = false
 
-    /// 同一个 runloop 回合里被订阅打醒多次时只跑一次(2026-09-11)。
+    /// 同一个 runloop 回合里被订阅打醒多次时只跑一次。
     ///
     /// 一次换行会同时惊动好几条订阅(compactLine、currentLine、rowState 相关的那几条…),
     /// 实测日志里同一个事件的 `slot resize skipped` / `slot rebuild deferred` **一行会连着
@@ -1127,7 +1126,7 @@ final class MenuBarStatusItem: NSObject {
         // 而长间奏动辄十几秒 —— 表现就是菜单栏歌词塌掉、过一会儿又弹回来。给 ♪ 则槽位留着,
         // 视觉上也跟灵动岛那边的占位一致。
         //
-        // 副行(2026-09-06 双排):开着时主行改取 **currentLine**(唱到哪句显示哪句,悬浮歌词语义),不再
+        // 副行(双排):开着时主行改取 **currentLine**(唱到哪句显示哪句,悬浮歌词语义),不再
         // 按提前量抢先切到下一句 —— 跟灵动岛副行同一条决策(05 章决策 24 / 06 章决策 27):副行要显示的
         // 译文 / 罗马音是"这一句"的、下一句是"这一句的下一句",主行若还抢跑,提前量窗口里主行已经是下一句、
         // 副行「下一句」却还是同一句。配速(currentLineDwellSeconds)与提前量(恒 0)随之切成 currentLine
@@ -1136,7 +1135,7 @@ final class MenuBarStatusItem: NSObject {
         let line = secondaryKind.showsSecondaryRow ? coordinator.currentLine : coordinator.compactLine
         let lyricText = line?.plainText
             ?? (coordinator.compactShowsPlaceholder ? MenuBarMarqueeRenderer.placeholderGlyph : "")
-        // 2026-09-04:压根没有可显示的行(整首没歌词 / 还在搜)时按开关用「♪ 歌名」占槽,不塌回图标 ——
+        // 压根没有可显示的行(整首没歌词 / 还在搜)时按开关用「♪ 歌名」占槽,不塌回图标 ——
         // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
         // 这里只消费。nil = 照旧收回图标。
         let display = MenuBarSlotPolicy.displayText(
@@ -1152,7 +1151,7 @@ final class MenuBarStatusItem: NSObject {
         let dwell: Double? = titleFallbackActive ? nil
             : (twoRows ? coordinator.currentLineDwellSeconds : coordinator.compactDwellSeconds)
         // 提前量窗口里这一句已经显示、但还没开唱(所以也还没染色)——滚动得等它走完才准起步,
-        // 否则就是用户 2026-08-24 报的"还没染色就已经在滚"。双排取的是正在唱的那一句,出现即开唱,恒 0。
+        // 否则表现就是"还没染色就已经在滚"。双排取的是正在唱的那一句,出现即开唱,恒 0。
         let leadIn = twoRows ? 0 : coordinator.compactLeadInSeconds
         rowState = RowState(
             kind: twoRows ? secondaryKind : .off,
@@ -1160,13 +1159,13 @@ final class MenuBarStatusItem: NSObject {
                 ? secondaryKind.secondaryText(currentLine: line, nextLineText: coordinator.nextLineText) : nil,
             mainFont: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows))
         let lyricsActive = display != nil
-        // 占位态(「♪ 歌名」兜底 / 间奏 ♪)按**即将到来的那一句**定宽(2026-09-11)。
+        // 占位态(「♪ 歌名」兜底 / 间奏 ♪)按**即将到来的那一句**定宽。
         // 判据见 `upcomingLineSlotWidth`;非占位态恒 0,对正常歌词句零影响。
         let placeholderNow = titleFallbackActive || text == MenuBarMarqueeRenderer.placeholderGlyph
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
-        // 图宽 + 系统内边距,跟歌词态同一套"出生就带显式宽度"规则(2026-08-19 第五轮:
+        // 图宽 + 系统内边距,跟歌词态同一套"出生就带显式宽度"规则(
         // variableLength + 图片事后设 = 踩"出生后不重排",收不回去留大缺口)。
         //
         // 收缩观察窗只给"开关开着但此刻没词"(歌词间隙/暂停/广告,常在 1~2s 内结束);
@@ -1209,11 +1208,11 @@ final class MenuBarStatusItem: NSObject {
             let secondaryW = rowState.secondaryText.map {
                 MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
             } ?? 0
-            // ⚠️ 副行是**「下一句」**时不许它撑宽槽位(2026-09-16,用户要求「宽不再被下一句撑大」)。
+            // ⚠️ 副行是**「下一句」**时不许它撑宽槽位(「宽不再被下一句撑大」)。
             // 那一句马上就会变成主行、到时候自然把槽撑宽;现在就为它占地方,等于当前这一行短的
             // 时候也按下一行的长度占着,菜单栏上白占一大块。装不下就走尾部渐隐,那条路本来就有。
             // 译文 / 罗马音**不同**:它们是**这一句自己的**内容,不给宽度就永远只能看到半截,
-            // 所以那两档保持原来的 max(主行, 副行)(2026-09-06 定的「译文往往更长」)。
+            // 所以那两档保持原来的 max(主行, 副行)(定的「译文往往更长」)。
             let secondaryWidensSlot = secondaryKind != .nextLine
             let naturalW = rowState.twoRows
                 ? min(settings.menuBarLyricsWidth,
@@ -1225,14 +1224,14 @@ final class MenuBarStatusItem: NSObject {
             let textW = MenuBarSlotPolicy.slotWidth(
                 naturalWidth: naturalW, upcomingWidth: upcomingW,
                 isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
-            // 同一首歌内只涨不缩(2026-09-16,用户要「不能跳来跳去」)。判据、代价与
+            // 同一首歌内只涨不缩(用户要「不能跳来跳去」)。判据、代价与
             // "为什么是换歌而不是换行重置"都在 MenuBarSlotFloor 的声明处。
             // ⚠️ 只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
             let naturalSlotW = textW + reserved + Self.lyricsSlotPadding
             let w = slotFloor.width(
                 target: naturalSlotW,
                 trackKey: coordinator.title + "\u{1F}" + coordinator.artist)
-            // 地板到底有没有在撑着 —— 差值就是槽里多出来的那块空白(2026-09-16,用户圈图问
+            // 地板到底有没有在撑着 —— 差值就是槽里多出来的那块空白(用户圈图问
             // 「这里那么大区域空着干什么?」)。只记宽度,不记歌词正文。
             if w != naturalSlotW {
                 logger.debug("""
@@ -1248,9 +1247,9 @@ final class MenuBarStatusItem: NSObject {
                 // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
                 // 可以叠强调色) —— 改走图层渲染,窗口宽就取文字自身宽:槽宽公式跟上面
                 // 完全一致,footprint 逐像素不变,只是画的人从按钮换成了 scrollingLabel。
-                // ⚠️ 2026-09-03 起**进度图标也走这条岔路**,理由一模一样:一枚要按进度
+                // ⚠️ **进度图标也走这条岔路**,理由一模一样:一枚要按进度
                 // 半染色的图标同样塞不进 button.title/image 那条 AppKit 自绘的路。
-                // ⚠️ 2026-09-06 起**双排也走**:button.title 只能画一行。
+                // ⚠️ **双排也走**:button.title 只能画一行。
                 present(class: "text", length: w, collapseDelay: 0,
                         dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
@@ -1282,7 +1281,7 @@ final class MenuBarStatusItem: NSObject {
     /// 只在当前已是歌词槽(text/fixed)时有意义 —— 当前是图标槽(38pt)时不硬塞:
     /// 20pt 的窗里滚歌词只会闪成一条缝,保持图标到重建(首句最多晚一个静默窗,只发生
     /// 在"收缩后 3s 内歌词又回来"的边缘场景)。
-    /// 占位态时,**即将到来的那一句**需要多宽(非占位态恒 0)。2026-09-11 加。
+    /// 占位态时,**即将到来的那一句**需要多宽(非占位态恒 0)。
     ///
     /// 治的是这一幕(实测原样,菜单栏日志):
     ///
@@ -1293,7 +1292,7 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// 占位文字(「♪ 歌名」或间奏的 ♪)的宽度跟**即将到来的歌词**毫无关系,所以那一次槽宽
     /// 必然要改。改在哪里是唯一的选择:改在歌词出现**之后**(现状 —— 那一句先按占位槽画一版、
-    /// 槽宽跟上再画一版,用户看到同一句变两次,正是 2026-09-11 报的问题),还是改在歌词出现
+    /// 槽宽跟上再画一版,用户看到同一句变两次,正是报的问题),还是改在歌词出现
     /// **之前**(这里 —— 占位期间就把槽撑到位,歌词一出现几何已经对了,只渲染一次)。
     ///
     /// 这是 `MenuBarSlotPolicy` 那条不变式管不到的一半:它只在两个**歌词槽**之间生效,
@@ -1301,7 +1300,7 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// ⚠️ **代价**:占位期间这一项比它自己需要的宽 —— 「♪ 歌名」会居中浮在一个按下一句
     /// 尺寸开出来的槽里。这跟自适应模式"省空间"的初衷有点冲突,但换来的是**邻居少挪一次**
-    /// (icon → 宽槽,而不是 icon → 窄槽 → 宽槽)和歌词只渲染一次。用户 2026-09-11 拍板要
+    /// (icon → 宽槽,而不是 icon → 窄槽 → 宽槽)和歌词只渲染一次,这是刻意选的
     /// 后者。真要回退,把这个函数恒返回 0 即可,其余代码不用动。
     ///
     /// ⚠️ 上限仍是「最大宽度」(调用点 `min(settings.menuBarLyricsWidth, ...)`):下一句超出上限时
@@ -1392,7 +1391,7 @@ final class MenuBarStatusItem: NSObject {
         // 一张透明占位图撑宽度、文字画在图层上),这里显式改回来,让"这一模式只有文字"
         // 这件事写在代码里,而不是靠别处的残留值。
         //
-        // ⚠️ 老实说一句:实测(2026-08-16 离线位图探针,逐像素数非透明占比)**不改也能画出
+        // ⚠️ 老实说一句:实测(离线位图探针,逐像素数非透明占比)**不改也能画出
         // 文字** —— image 为 nil 时 AppKit 会无视 .imageOnly 照样画 title,两种写法的
         // 渲染结果和按钮宽度完全一样。所以这一行不是在修一个看得见的 bug,是不想把
         // "两个模式之间靠遗留状态碰巧对上"这件事留在代码里。
@@ -1423,7 +1422,7 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// ⚠️ 装得下的句子**也**走这里,不走 button.title —— 这正是"固定宽度"的实现点。
     /// button.title 那条路的宽度跟着文字走(实测同一首歌连着三句是 231/145/207pt),
-    /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃(2026-08-17 用户反馈)。
+    /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃(现象是)。
     private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,

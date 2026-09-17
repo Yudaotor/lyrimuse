@@ -58,7 +58,7 @@ public struct SyncedLyricLine: Equatable {
 
     // 不关心逐字填色进度、只要这一行的纯文本时用(比如状态栏显示)——mainText/words
     // 两种形态只会有一个非空,按判断顺序(有逐字数据优先逐字)取值。
-    // 2026-08-20 从计算属性改成存储属性:引擎构造行时本来就为 romanizationText 拼过同一份
+    // 从计算属性改成存储属性:引擎构造行时本来就为 romanizationText 拼过同一份
     // words.map(\.text).joined(),而消费方(菜单栏 refresh/各 body 重估)每次访问都重新
     // map+join 同一句纯属分配 churn —— 构造时存一次,访问变 O(1)。
     public let plainText: String?
@@ -76,7 +76,7 @@ public struct SyncedLyricLine: Equatable {
         self.side = side
         // 显式传入的空串退回推导链:引擎对 words==[] 的行(对唱标记单独成词被整个删掉)
         // 预拼出来是 "",而旧计算属性对这种行返回 nil —— 灵动岛的 `plainText ?? "♪"`
-        // 靠 nil 才能显示占位音符(2026-08-20 对抗审查抓出的口径差)。
+        // 靠 nil 才能显示占位音符(对抗审查抓出的口径差)。
         if let plainText, !plainText.isEmpty {
             self.plainText = plainText
         } else if let mainText {
@@ -90,7 +90,7 @@ public struct SyncedLyricLine: Equatable {
 
     /// 这一行的**整行**形态:逐字数据抹掉、正文落到 `mainText`,译文 / 罗马音 / 声部原样保留。
     ///
-    /// 给"这个展示面关了卡拉OK效果"用(2026-09-06 起悬浮歌词 / 灵动岛 / 菜单栏各有一颗开关):
+    /// 给"这个展示面关了卡拉OK效果"用(悬浮歌词 / 灵动岛 / 菜单栏各有一颗开关):
     /// 展示面在自己的消费点把行压成这个形态,后面的渲染就自然走它本来就有的"这首歌没有逐字
     /// 数据"那条路 —— 不用在每个渲染分支里再判一次开关。
     ///
@@ -133,7 +133,7 @@ public struct LyricsWindowLine: Identifiable, Equatable {
     public let line: SyncedLyricLine
 }
 
-/// 歌词间奏点(2026-08-19,歌词窗口的 Apple Music 式「•••」呼吸圆点)。
+/// 歌词间奏点(歌词窗口的 Apple Music 式「•••」呼吸圆点)。
 /// index == -1 表示前奏(第一句之前),其余表示"这一行唱完之后"。start/end 是这段间奏
 /// 的活跃窗口,**歌词原始时间轴**(offsetMs 校正前)—— 视图侧比较时要用
 /// 外推位置 + currentLyricsOffsetMs,跟逐字填色同一套时间基准。
@@ -157,7 +157,7 @@ public final class LyricsSyncEngine {
     private var trLines: [LyricLine] = []
     private var usingWords = false
 
-    /// 内容匹配用的"歌词原文 → 译文/罗马音"字典(2026-08-27 加)。见 load() 里构建它
+    /// 内容匹配用的"歌词原文 → 译文/罗马音"字典。见 load() 里构建它
     /// 那一段的注释——解决的是逐字(YRC)算出来的行时间戳跟服务端整行 LRC(译文/罗马音
     /// 就是照这份 LRC 的时间戳生成的)对同一句词标的时间不一致、超出 nearestText 700ms
     /// 容差导致查不到译文的问题。查找时按内容优先,查不到才退回 nearestText 时间最近邻。
@@ -165,7 +165,7 @@ public final class LyricsSyncEngine {
     private var romaTextByPlainText: [String: String] = [:]
 
     /// 内容匹配 key:去掉**全部**空白(不止两端),含 NBSP(U+00A0)等 Unicode 空白变体——
-    /// 不是只用 `.trimmingCharacters(in: .whitespaces)`。2026-09-01 用户报陈奕迅《冲口而出
+    /// 不是只用 `.trimmingCharacters(in: .whitespaces)`。现象是陈奕迅《冲口而出
     /// (Live)》"若你想欣赏有没有金曲奖"这一行粤拼整行消失,查到真实缓存数据坐实:这份
     /// live 歌词的主 LRC 用 NBSP 标记换气停顿("若你\u{A0}想欣赏\u{A0}有没有\u{A0}金曲奖"),
     /// 而 YRC 逐字数据在词组边界嵌的是普通空格("若你 想欣赏 有没有 金曲奖")——两边字面
@@ -176,7 +176,7 @@ public final class LyricsSyncEngine {
     /// 一点点)。归一化时把空白整段拿掉而不是换成统一分隔符:这里比较的是"是不是同一句唱词
     /// 的内容",字词之间要不要留白纯粹是各家源的排版习惯,不是内容的一部分。
     ///
-    /// 2026-09-04 再放宽到**只留字母和数字、统一小写**(用户报 Prince《Cream (Without Rap
+    /// 再放宽到**只留字母和数字、统一小写**(现象是 Prince《Cream (Without Rap
     /// Monologue)》带括号和声的句子全都没有译文:"U're so fine (U're so fine)")。真实缓存坐实:
     /// 网易云整行 LRC 写的是 ASCII 括号 `(U're so fine)`,YRC 逐字数据同一句写的是全角括号
     /// `（U're so fine）`,两边可读内容完全一样、只差括号是哪一种;而这首歌 YRC 行起点比 LRC
@@ -223,14 +223,14 @@ public final class LyricsSyncEngine {
     // 漏判,导致整行十几个人名被当成一整行歌词展示,词数远超真实歌词,把悬浮窗的动态高度
     // ——见 LyricsOverlayWindowController.updateHeight——撑到远超正常高度)。
     //
-    // ⚠️ 关键词可以**连写**(那个 `+`),这是 2026-08-15 补的第四轮:「词曲：蔡徐坤 KUN/…」
+    // ⚠️ 关键词可以**连写**(那个 `+`):「词曲：蔡徐坤 KUN/…」
     // 一路漏到悬浮窗上。原来的写法要求关键词紧跟冒号,而"词曲"是两个关键词连在一起,
     // "词"后面是"曲"不是冒号,于是整条不匹配。同形状的还有「作词作曲：」「词 曲 编：」。
     // 下面那条结构化规则本可以兜住它,但那条只在整份被职员表主导时才启用(见
     // shouldApplyStructuralCreditFilter),单独几行署名的歌就漏了。
     // 连写不会扩大误杀面:表里全是明确的角色名,连着出现只会更像署名行,不会更像歌词。
     //
-    // 2026-08-16 第五轮:角色词之间允许夹**连接词**(和/与/及/、// /&),并允许"所有/全部"
+    // 角色词之间允许夹**连接词**(和/与/及/、// /&),并允许"所有/全部"
     // 这类前缀量词 —— 「制作和编曲：方大同」「所有乐器和编程：Soulboy」整行漏到悬浮窗上。
     // 旧写法只允许角色词紧挨着连写("词曲"),中间一个"和"字就断了;"制作""编程""乐器"
     // 也一并补进表(此前只有"制作人")。结构分两段:第一个角色词打底,后面每一节是
@@ -257,11 +257,11 @@ public final class LyricsSyncEngine {
     //
     // ⚠️ 不要照抄别人那种 `^.{1,20}\s*[:：]\s*.+` 的宽松写法:`.` 能匹配任何字符,会把
     // "他说:我不走"这类正常带冒号的歌词整行吃掉。
-    // 第六轮(2026-08-16):「数字编辑：Jeff Li」「母带处理：Randy Merrill@Sterling Sound」
+    // 「数字编辑：Jeff Li」「母带处理：Randy Merrill@Sterling Sound」
     // 出现在歌曲**末尾**,角色词又是表外的。逐词追注定追不完(见上面"枚举法收敛不了"),
     // 这条改成**双字角色词包含判定**:标签侧(冒号前)是 1~8 个纯汉字、且包含任何一个
     // 双字角色词,就是职员表行 —— "数字编辑"包含"编辑"、"母带处理"包含"母带"和"处理",
-    // 以后"XX编辑/XX制作/XX工程"这类组合词全都自动覆盖,不用再等用户报一个补一个。
+    // 以后"XX编辑/XX制作/XX工程"这类组合词全都自动覆盖,不用再等现象是一个补一个。
     //
     // 跟上面关键词表的分工:那张表管**精确形态**(单字缩写"词曲编"、拉丁"composed by"、
     // 连接词串),这条管**组合词**。只收双字词、不收单字,是精度的关键:对唱标签是歌手名
@@ -272,11 +272,11 @@ public final class LyricsSyncEngine {
         "录音", "录制", "和声", "吉他", "贝斯", "键盘", "弦乐", "乐器", "工程", "企划",
         "统筹", "发行", "出品", "演奏", "指挥", "后期", "音效", "版权", "鸣谢", "摄影",
         "设计", "封面",
-        // 第八轮(2026-08-17):用户报「演唱：Jeremy McKinnon (A Day To Remember)、MAX、
+        // 现象是「演唱：Jeremy McKinnon (A Day To Remember)、MAX、
         // henry 刘宪华」漏网。⚠️ 刻意**不收**「合唱」——对唱歌词里「合唱：」是分声部
         // 标记,后面跟的是真歌词,收了就是误杀(同「曲婉婷：好久不见」那条反例的道理)。
         "演唱", "原唱", "翻唱",
-        // 第九轮(2026-08-18):日文源的头部标注。调研同类工具的默认过滤表时发现有
+        // 日文源的头部标注。调研同类工具的默认过滤表时发现有
         // 一整类我们完全没覆盖的词(収録/主題歌/片頭曲/片尾曲/挿入歌/アニメ),那是拿真实
         // 日文歌词数据攒出来的。本地缓存里目前一条都没有(几乎全是华语),所以这是**提前**
         // 填坑而不是修实测漏判 —— 收进来几乎零风险:这些词做不了歌词句子,而且这条规则
@@ -291,7 +291,7 @@ public final class LyricsSyncEngine {
         "收录", "主题", "片头", "插入",
         // 同类工具的过滤表也收了这几个,同样是"带冒号才算"的安全形态。
         "歌手", "歌曲", "歌词",
-        // 第十轮(2026-08-20):用户报赵雷《成都》头部 13 行职员表里有 4 行漏到展示面上 ——
+        // 现象是赵雷《成都》头部 13 行职员表里有 4 行漏到展示面上 ——
         // 「钢琴：柳森」「箱琴：赵雷/喜子」「笛子：祝子」「童声：朵朵/天天」。表里本来有
         // 吉他/贝斯/键盘/弦乐/和声,偏偏没有这几样乐器。补的同时也别只补这四个(那就是
         // 这个文件自己写明「收敛不了」的老路),真正的通用解法是下面那条
@@ -299,11 +299,11 @@ public final class LyricsSyncEngine {
         // (那条规则要求整份 ≥2 行才启用)。
         "钢琴", "箱琴", "笛子", "童声", "口琴", "二胡", "琵琶", "古筝", "长笛", "提琴",
         "唢呐", "手鼓", "打击", "合成", "采样", "编写", "小号", "萨克",
-        // 第十一轮(2026-08-20,全库语料统计):这几个也是表外乐器/角色。刻意**不收**
+        // 第十一轮(全库语料统计):这几个也是表外乐器/角色。刻意**不收**
         // 「主唱」「合作」:它们更可能被用作对唱/口白的说话人标签,而那两类署名在真实
         // 数据里总是成片出现,交给 matchesNameListCreditShape 的整份闸去收更安全。
         "竖琴", "长号", "副唱", "和音", "三和",
-        // 第十四轮(2026-09-02):用户报方大同《白发》头部「著作权人：+© 2019、赋音乐」
+        // 现象是方大同《白发》头部「著作权人：+© 2019、赋音乐」
         // 漏到悬浮窗上。同一首歌的「推广公司：东亚星光」当时只是**侥幸**没漏 —— 它靠的是
         // matchesNameListCreditShape 那条"整份 ≥2 行"的闸(这首刚好凑到 2 行),整首只有
         // 一行推广署名的歌就会漏;郑润泽《彻夜》的「营销推广：戴欣怡 (DDStudio)X深声不息」
@@ -317,7 +317,7 @@ public final class LyricsSyncEngine {
         //    这条真歌词已经进 selftest 当反向哨兵钉着。
         //  - 「推广」命中 6 行,漏 2 行,两条都是署名,0 条真歌词。
         "著作", "推广",
-        // 第十六轮(2026-09-03):用户报李佳薇《甲乙丙丁》头部「艺术指导：程楚楚(廊坊师范学院）」
+        // 现象是李佳薇《甲乙丙丁》头部「艺术指导：程楚楚(廊坊师范学院）」
         // 漏到展示面 —— 用 App 同一条路径(LRC+YRC → load → allLines)复现:64 行里 16 行署名
         // 删了 15 行,**只剩它**。标签「艺术指导」不含表内任何词;右边带括注机构、括号还
         // 半全角混用,不是干净的人名表,matchesNameListCreditShape 也接不住。
@@ -331,15 +331,15 @@ public final class LyricsSyncEngine {
         //    也进不了门,但表里不该躺着一个只在真歌词里出现过的词。
         // ⚠️ 这张表有**两个**消费点,加词时两边都要想:除了下面 matchesRoleWordCredit 的"标签含
         // 词 + 冒号"之外,englishCreditPattern 也把整张表 join 进正则当**可选中文前缀**
-        // (「编曲 Arrangement by …」那条,第七轮)——加「导演」同时也让「导演 Directed by X」这类
+        // (「编曲 Arrangement by …」那条)——加「导演」同时也让「导演 Directed by X」这类
         // 走英文规则。所以"零误杀"必须用整份入口 creditLineDropDecisions 差分来证,不能只看冒号规则。
         // before/after 全库差分(3480 首 / 197236 行正文,按 isNewline 切行——酷狗源 1439 首是
-        // CRLF,`split(separator: "\n")` 会把整份当一行,第一版工具就是这么错的):
+        // CRLF,`split(separator: "\n")` 会把整份当一行,别用它切行):
         // KEEP→DROP 1 行(就是这条),DROP→KEEP 0 行。
         "指导", "总监", "策划", "导演",
     ]
 
-    /// 标签里允许出现的分隔符。第七轮(2026-08-16)加的:用户报「录音师/录音室：王力宏/
+    /// 标签里允许出现的分隔符。第七轮加的:现象是「录音师/录音室：王力宏/
     /// Homeboy Studios, Taipei, Taiwan」没被滤掉 —— 一个人身兼两职时标签会写成
     /// "录音师/录音室"、"作词/作曲"、"混音&母带",中间那个符号让"标签全是汉字"这条判定
     /// 直接失败。把它们剔掉再判,而不是放宽成"允许任意非汉字"(那会把英文场景标签也放进来)。
@@ -349,7 +349,7 @@ public final class LyricsSyncEngine {
     ///
     /// 只在"汉字头 + 拉丁尾"的双语标签里当第二判据用(见 matchesRoleWordCredit):汉字头是
     /// 「曲」「词」「鼓」这种单字时,表里那些双字词一个都够不着,而把单字加进 creditRoleWords
-    /// 会把真歌词里的对白吃掉(「他：我不走」那一类,2026-08-16 已经踩过一次并回滚)。
+    /// 会把真歌词里的对白吃掉(「他：我不走」那一类,已经踩过一次并回滚)。
     /// 有英文对照在旁边,歧义就没了 —— 「曲 Composer：」不可能是对白。
     private static let englishRoleNounPattern = try! NSRegularExpression(
         pattern: #"\b(producers?|composers?|lyricists?|lyrics|arrang(?:er|ement|ed)|"#
@@ -379,7 +379,7 @@ public final class LyricsSyncEngine {
         }
         let tail = label[idx...].trimmingCharacters(in: .whitespaces)
         guard !han.isEmpty, !tail.isEmpty, tail.count <= 40 else { return (label, "") }
-        // ⚠️ 两道守卫,都是拿真实歌词库量出来的(2026-08-19,42880 行):
+        // ⚠️ 两道守卫,都是拿真实歌词库量出来的(42880 行):
         //
         // 1. 标签里不许有括号。命中的反例是真歌词行「我们让彼此难过(SL:那些到底算是谁的错)
         //    都别争了」—— 第一个冒号落在行内注解 `(SL:` 里面,于是"冒号前"被当成标签,
@@ -400,7 +400,7 @@ public final class LyricsSyncEngine {
 
     /// 双语标签的**免词表**形状:汉字头 + 拉丁尾 + 冒号 + 值,不要求命中任何角色词表。
     ///
-    /// 为什么需要它:靠词表永远在打地鼠。2026-08-19 用户先报「制作人 Producer」那一批,补了
+    /// 为什么需要它:靠词表永远在打地鼠。用户先报「制作人 Producer」那一批,补了
     /// 词表;紧接着又报「西塔琴 Coral sitar: Jamie Wilson」—— 西塔琴不在汉字表里、sitar 也
     /// 不在英文表里。全库扫下来这类"两边词表都不认"的双语署名有 51 行,涉及中提琴/竖琴/长号/
     /// 富鲁格号/电钢琴/管风琴/说唱/画/词OP/合成器/小号/萨克斯风/钢片琴/特雷门/大键琴/西塔琴/
@@ -425,7 +425,7 @@ public final class LyricsSyncEngine {
     }
 
     public static func matchesRoleWordCredit(_ text: String) -> Bool {
-        // 2026-08-27:分隔符加了「·」(U+00B7 中间点)——用户报丁世光《背面是我》专辑里
+        // 分隔符加了「·」(U+00B7 中间点)——现象是丁世光《背面是我》专辑里
         // 几首 Interlude(Presentness/Bygone)的「和声 Backing Vocal·Dean Ting」「录音室
         // Studio·Retro Records Studio」漏网,来源是 `[by:krc转qrc工具]` 转出来的 QQ 音乐
         // KRC——这个转换工具不用冒号分隔标签和值,用的是「·」。只加在这条规则(冒号后面
@@ -440,14 +440,14 @@ public final class LyricsSyncEngine {
         // 「汉字角色词 + 英文对照」的双语标签(酷狗/QQ 的中文曲库很常见):
         // 「制作人 Producer：陶喆」「鼓 Drums：Ash Soan」。
         //
-        // 2026-08-19 用户报陶喆《Stupid Pop Song》开头 13 行职员表全都漏过去 —— 原因就在
+        // 现象是陶喆《Stupid Pop Song》开头 13 行职员表全都漏过去 —— 原因就在
         // 这儿:label 取的是冒号前的整段("制作人 Producer"),而下面那条判定要求**剔掉
         // 分隔符后全是汉字**,拉丁字母一进来整条就失败了。而结构化规则(那个只在"整份被
         // 职员表主导"时才开的闸)也救不了这首:14 行职员表 + 三十多行真歌词,占不到半数。
         let (hanLabel, latinLabel) = splitBilingualLabel(String(label))
         // 长度按**剔掉分隔符之后**算:"录音师/录音室"有 7 个字符,但真正的标签内容是 6 个汉字。
         var core = hanLabel.components(separatedBy: creditLabelSeparators).joined()
-        // 标签里混着拉丁字母/型号/括号时,只看**汉字那一部分**(2026-08-20 第十一轮)。
+        // 标签里混着拉丁字母/型号/括号时,只看**汉字那一部分**。
         // 语料里的漏网形态:「Protools编辑：…」(拉丁在前、汉字在后,splitBilingualLabel 只认
         // 汉字头+拉丁尾)、「键盘乐器 DX7 and synths：…」、「键盘乐器 Keyboards (Piano and
         // synth) by：…」。判据仍然落在汉字角色词上,只是不再要求"标签必须全是汉字"。
@@ -472,7 +472,7 @@ public final class LyricsSyncEngine {
               core.unicodeScalars.allSatisfy({ $0.properties.isIdeographic })
         else { return false }
         // 繁体标签(「作詞」「編曲」「主題歌」)不再需要在表里双写一份 —— 转成孪生写法再比
-        // 一次就行。2026-08-18 加:调研同类工具时看到的做法是把繁简两种写法都手工列进默认表,
+        // 一次就行。加:调研同类工具时看到的做法是把繁简两种写法都手工列进默认表,
         // 那份表因此长了一倍还容易漏(有「作詞」也有「作词」,但「録音」就只有「录音」)。
         let forms = [core, HanScript.sibling(core)].compactMap { $0 }
         if creditRoleWords.contains(where: { word in forms.contains { $0.contains(word) } }) {
@@ -486,7 +486,7 @@ public final class LyricsSyncEngine {
 
     /// 纯英文的职员表行,**没有冒号**那一类。
     ///
-    /// 第七轮(2026-08-16)加的:用户报歌曲末尾的「Mixed by Wang Leehom at Homeboy Music
+    /// 现象是歌曲末尾的「Mixed by Wang Leehom at Homeboy Music
     /// Studios」没被滤掉。上面两条规则都要求有冒号,而英文署名的习惯写法是
     /// "Mixed by X" / "Produced by X" / "Recorded at Y",一个冒号都没有。
     ///
@@ -494,8 +494,8 @@ public final class LyricsSyncEngine {
     /// by 或 at,再后面必须还有内容。英文歌词里"written by"之类出现在行首、且后面跟人名的
     /// 概率极低;而真出现在句中的("a song written by fate")不会被这条吃掉。
     ///
-    /// 2026-08-27 加了个**可选的**中文角色词前缀(复用 creditRoleWords,不新开一张表):
-    /// 用户报丁世光《起源》开头「编曲 Arrangement by 丁世光 Dean Ting, 程振兴 Nathan
+    /// 加了个**可选的**中文角色词前缀(复用 creditRoleWords,不新开一张表):
+    /// 现象是丁世光《起源》开头「编曲 Arrangement by 丁世光 Dean Ting, 程振兴 Nathan
     /// Cheng」没被滤掉——这行前面缀着中文角色词"编曲",不是纯英文起句,原来的 `^\s*`
     /// 之后直接要求英文角色词,汉字字符先把锚点卡死了。同一首歌后面还有「制作人
     /// Produced by …」,是同一个形状。加上可选前缀后两行都能命中;真歌词不可能以这些
@@ -527,7 +527,7 @@ public final class LyricsSyncEngine {
 
     // 拉丁字母标签的职员表行。上面那张关键词表只收了中文角色名和少数几个英文词,于是
     // 「Guitar：秋山浩徳」「Keyboards Programming：河野圭」「Strings Arrange：河野圭」
-    // 这些整排漏网 —— 2026-08-10 用户报的正是这个:一首歌开头一堆制作人信息照样显示。
+    // 这些整排漏网 —— 现象是的正是这个:一首歌开头一堆制作人信息照样显示。
     //
     // 判据不是"英文角色名"的枚举(枚举收敛不了,见 genericHanCreditLinePattern 那段),
     // 而是**全角冒号**这个形状:这类署名块来自中日文歌词源,标签用拉丁字母、冒号却是全角
@@ -537,7 +537,7 @@ public final class LyricsSyncEngine {
     // 半角冒号只在**冒号后面跟着中日文**时才认 —— 同样是"中日文源的署名块"这个信号,
     // 而英文歌词里的冒号("I said: let's go")后面不会跟汉字/假名。单靠半角冒号 + 拉丁
     // 标签是不敢删的:"Verse 1: ..." 这类真会出现在歌词里。
-    // 标签上限 2026-08-20 从 28 放到 40:语料里「Additional Vocal Production by：Oscar Free」
+    // 标签上限从 28 放到 40:语料里「Additional Vocal Production by：Oscar Free」
     // 标签本身就 30 个字符,原来那条长度上限直接把它挡在门外。
     private static let latinCreditFullWidthPattern = try! NSRegularExpression(
         pattern: #"^[A-Za-z][A-Za-z0-9 .&/'’()\-]{0,40}：\s*\S"#
@@ -550,7 +550,7 @@ public final class LyricsSyncEngine {
 
     /// 冒号右边像不像"一句话"(而不是一串名字)。给拉丁标签那条规则当否决闸。
     ///
-    /// 2026-08-20 加,修的是一整类**真歌词被误杀**:拉丁字母的**说话人标签**长得跟拉丁
+    /// 加,修的是一整类**真歌词被误杀**:拉丁字母的**说话人标签**长得跟拉丁
     /// 角色名一模一样,而这条规则原来只看"拉丁标签 + 冒号"这个形状、完全不看右边。
     /// 拿全库 935 首(47626 行正文)跑回归语料挖出来的实例:
     ///
@@ -566,12 +566,12 @@ public final class LyricsSyncEngine {
     /// 判据(命中任一即认为是句子、放它过去):
     ///  - 含中文虚词(nonNameChars:的了是不我你他她…)—— 人名里不会有;
     ///  - 含谚文且至少两个空格 —— 韩文人名是 2~4 个字连写,不会带两个空格;
-    ///  - 以句末标点收尾(，。！？…)。
+    ///  - 以句末标点收尾(。！？…)。
     /// 反过来,「Guitar：秋山浩徳」「Written by：Prince」「Choir：The Hong Kong Children's
     /// Choir」「P/C：2020 Riot Games」这些右边全是干净的人名/团体名,照旧判成署名。
     /// 英文里"人名/团体名不会是"的词。跟 nonNameChars 是同一个思路的拉丁版。
     ///
-    /// 2026-08-20 第十一轮补。上一轮的句子否决只看中文虚词,于是**英文对白**照样被当署名删掉
+    /// 上一轮的句子否决只看中文虚词,于是**英文对白**照样被当署名删掉
     /// —— 加语料哨兵时当场抓到:`Rain：Baby I love you so much` 是真歌词,却因为
     /// 「拉丁标签 + 全角冒号」这个形状被整行吃掉。
     ///
@@ -593,7 +593,7 @@ public final class LyricsSyncEngine {
         // 英文句子:按**空白**切词,再剥掉词首尾的标点,比整词。
         //
         // ⚠️ 不能按"所有非字母数字"切:「(G)I-DLE/Bea Miller/Wolftyla」那样会切出一个孤立的
-        // "i",而 "i" 是停用词 —— 于是真署名被当成句子放过去(2026-08-20 语料里
+        // "i",而 "i" 是停用词 —— 于是真署名被当成句子放过去(语料里
         // 「合作艺人：(G)I-DLE/…」「主唱：SOYEON of (G)I-DLE/…」正是这么漏的)。
         let punct = CharacterSet(charactersIn: "()[]{}'’\"“”,.!?;:/&-_~…")
         let words = rest.lowercased()
@@ -607,7 +607,7 @@ public final class LyricsSyncEngine {
         return false
     }
 
-    /// 国际标准录音码(ISRC)那一行。第十五轮(2026-09-03,用户报陈绮贞《我亲爱的偏执狂》
+    /// 国际标准录音码(ISRC)那一行。第十五轮(现象是陈绮贞《我亲爱的偏执狂》
     /// 结尾没过滤干净)。
     ///
     /// 形如 `ISRC TWB870211301` / `ISRC: TW-B87-02-11301`。它**没有冒号也没有角色词**,
@@ -620,7 +620,7 @@ public final class LyricsSyncEngine {
     )
 
     /// 「英文角色名 : 拉丁人名」——半角冒号、而且冒号右边**没有**中日文的那一档署名行。
-    /// 第十五轮(2026-09-03)。实测漏例:`Publisher : Sam Duann`。
+    /// 第十五轮。实测漏例:`Publisher: Sam Duann`。
     ///
     /// 为什么现有两条拉丁规则都够不着:全角那条要求冒号是「：」;半角那条要求冒号右边出现
     /// 中日文(`latinCreditHalfWidthPattern`)——那个要求是**故意**的,它的注释写着"单靠
@@ -650,7 +650,7 @@ public final class LyricsSyncEngine {
         let r = NSRange(text.startIndex..., in: text)
         let shapeHit = latinCreditFullWidthPattern.firstMatch(in: text, range: r) != nil
             || latinCreditHalfWidthPattern.firstMatch(in: text, range: r) != nil
-            // 第十五轮:白名单角色名 + 半角冒号 + 拉丁人名(见 latinRoleColonPattern)。
+            // 白名单角色名 + 半角冒号 + 拉丁人名(见 latinRoleColonPattern)。
             // 它跟上面两条共用下面那道"右边像不像一句话"的否决闸。
             || latinRoleColonPattern.firstMatch(in: text, range: r) != nil
         guard shapeHit else { return false }
@@ -672,7 +672,7 @@ public final class LyricsSyncEngine {
             s.lowercased().filter { $0.isLetter || $0.isNumber }
         }
         // 抬头写的常是**裸曲名**,而本地标签带着 "(Remastered 2014)" 这类后缀 —— 两边直接
-        // 比会对不上(2026-08-10 第一版就栽在这儿,抬头一行没删掉)。去掉括号段再比一次。
+        // 比会对不上(就栽在这儿,抬头一行没删掉)。去掉括号段再比一次。
         func stripBrackets(_ s: String) -> String {
             var out = "", depth = 0
             for c in s {
@@ -685,7 +685,7 @@ public final class LyricsSyncEngine {
         // 判据是**形状 + 等值**,不是"歌名出现在行内":整行必须能切成两段,一段(去掉括号
         // 后)正好等于歌名、另一段含歌手名。
         //
-        // 2026-08-18 两轮才定成这样。第一版写的是"任一个歌名段出现在行内即可",全库扫描
+        // ⚠️ 判据**不能**写成"任一个歌名段出现在行内即可"。全库扫描
         // 看着漂亮(45 条抬头抓到 34、首末行零误伤),但 selftest 的反向用例当场抓到
         // 「新的经典 蛋堡 x Jabberloop」——那是蛋堡《经典!》的**真歌词**,歌名「经典」和歌手
         // 「蛋堡」都在行里,于是整句被判成抬头。它恰好不在首行才没出事(抬头只在首行判),
@@ -698,7 +698,7 @@ public final class LyricsSyncEngine {
             // 歌名侧要**去括号后等值**(抬头写裸歌名,本地标签常带 "(Remastered)" 后缀);
             // 歌手侧只做 contains,而且**用原文不去括号** —— 抬头里歌手名经常就写在括号里
             // (「First Love - 宇多田光 (宇多田ヒカル)」,本地标签记的是括号里那个写法)。
-            // 2026-08-18 一度对两侧都去括号,当场被这条原有 selftest 用例打回来。
+            // 一度对两侧都去括号,当场被这条原有 selftest 用例打回来。
             let leftTitle = norm(stripBracketsForHeaderMatch(lhs))
             let rightTitle = norm(stripBracketsForHeaderMatch(rhs))
             let leftRaw = norm(lhs), rightRaw = norm(rhs)
@@ -815,7 +815,7 @@ public final class LyricsSyncEngine {
     // 版权/免责声明行。跟职员表不是一回事:它**没有冒号**,上面所有以"角色+冒号"为形状的
     // 规则全都够不着,所以要单独一条。
     //
-    // 2026-08-18 全库扫描实测:郭顶《飞行器的执行周期》整张专辑(10 首)的末行都是
+    // 全库扫描实测:郭顶《飞行器的执行周期》整张专辑(10 首)的末行都是
     // 「未经著作权人许可不得翻录翻唱或使用」,一条都没被滤掉。
     //
     // 判据用"关键短语必须成对出现"而不是单个词:光有「未经」可能是真歌词(「未经允许的
@@ -855,7 +855,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 厂牌/平台的**宣传出品语**,没有冒号 —— 「网易云音乐特别企划“星辰集”出品」
-    /// (2026-08-31 用户在歌曲末尾看到它被当成一句歌词)。
+    /// (用户在歌曲末尾看到它被当成一句歌词)。
     ///
     /// 为什么现有规则一条都够不着:上面那两条主力(creditLinePattern 的关键词表、
     /// genericHanCreditLinePattern 的结构化"短标签+冒号")**都要求冒号**,而这种宣传语是一句
@@ -912,7 +912,7 @@ public final class LyricsSyncEngine {
         copyrightNoticePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
-    /// 带**版权标记**的著作权行 —— 「著作权人：+© 2019、赋音乐」(2026-09-02,用户在
+    /// 带**版权标记**的著作权行 —— 「著作权人：+© 2019、赋音乐」(用户在
     /// 方大同《白发》的悬浮窗上看到它;那首歌 12 行职员表里只有这一行漏网)。
     ///
     /// 为什么现有规则一条都够不着,而且是**四条各差一点**,这才值得单开一条:
@@ -954,7 +954,7 @@ public final class LyricsSyncEngine {
 
     /// 纯日期戳注解行,没有冒号也没有角色词("July 18, 2012 at 5:25 PM")。
     ///
-    /// 2026-08-27 加的:用户报丁世光《瘦子》结尾职员表最前面混进一行创作日期戳,上面所有
+    /// 加的:现象是丁世光《瘦子》结尾职员表最前面混进一行创作日期戳,上面所有
     /// 规则都够不着它——没有冒号,不是角色词开头,也不像版权声明。这类日期戳常见于早年
     /// 手工整理的 LRC/KRC:词曲作者在职员表最前面顺手记一句"写于哪年哪天几点"。
     ///
@@ -1017,7 +1017,7 @@ public final class LyricsSyncEngine {
     /// ⚠️ 这道整份判定是必须的,不是保险起见。collector 侧同一条结构正则(match.go 的
     /// genericHanCreditLineRe)用在"整份候选要不要拒收"的**计数**上,误判一行无害;这边用在
     /// "这一行删不删"的**展示过滤**上,误判一行就是静默吞掉一句真歌词——同一条规则,爆炸
-    /// 半径完全不同,不能原样搬。2026-08-05 补这条规则时,selftest 的反向用例当场抓到
+    /// 半径完全不同,不能原样搬。补这条规则时,selftest 的反向用例当场抓到
     /// "他说：我不走"被误杀("他说"= 2 个汉字 + 冒号 + 内容,形状完全命中)。
     ///
     /// 判据:真正要治的病是"网易云给纯音乐/配乐类曲目返回一整份职员表当歌词",特征是**整份
@@ -1052,7 +1052,7 @@ public final class LyricsSyncEngine {
 
     /// 「汉字标签 + 冒号 + 一串名字」这个形状 —— 职员表里最常见、也最难用词表堵完的那种。
     ///
-    /// 2026-08-20 第十轮加。实测赵雷《成都》:头部 13 行职员表里 4 行漏网(钢琴/箱琴/笛子/
+    /// 实测赵雷《成都》:头部 13 行职员表里 4 行漏网(钢琴/箱琴/笛子/
     /// 童声不在 creditRoleWords 里),而结构化规则被"整份过半"那道闸拦着(13 行署名 vs
     /// 三十多行正文,占不到半数)。往词表里继续加词是这个文件自己判定过"收敛不了"的路。
     ///
@@ -1068,14 +1068,14 @@ public final class LyricsSyncEngine {
         let label = text[text.startIndex..<colon].trimmingCharacters(in: .whitespaces)
         let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         guard !label.isEmpty, !rest.isEmpty, !speakerLabels.contains(String(label)) else { return false }
-        // 标签:剔掉分隔符后必须全是汉字。上限 20(2026-08-20 第十一轮从 10 放宽 ——
+        // 标签:剔掉分隔符后必须全是汉字。上限 20(从 10 放宽 ——
         // 语料里「中音萨克斯/次中音萨克斯/上低音萨克斯：孟庆泽」剔掉分隔符是 16 个汉字)。
         let labelCore = String(label).components(separatedBy: creditLabelSeparators).joined()
-        // 标签至少**两个**汉字(2026-08-11 轮补的护栏):单字标签正是说话人标签的地盘 ——
+        // 标签至少**两个**汉字(轮补的护栏):单字标签正是说话人标签的地盘 ——
         // 「王：」「靖：」「钧：」「宏：」「男/女/合：」后面跟的是真歌词。而单字的角色词
         // (词/曲/编/唱/录/混/监/鼓)早就在关键词表里逐行生效,不靠这条免词表规则。
         //
-        // 这条护栏是拿全库语料抓出来的:上一版放宽"英文名段最长 30 字"之后,
+        // 这条护栏是拿全库语料抓出来的:一旦放宽"英文名段最长 30 字",
         // 「王：Hey hey ho ho」「靖：All yours baby」被当成署名删掉(英文短句里没有停用词,
         // 句子否决拦不住),而它们跟已在 must-keep 里的「合：Hey hey ho ho」是同一首歌的同一类行。
         guard (2...20).contains(labelCore.count),
@@ -1087,7 +1087,7 @@ public final class LyricsSyncEngine {
         // 右侧:不能像一句话。中文虚词/英文停用词/句末标点三条都在这一个函数里
         // (第十一轮起跟拉丁标签那条规则共用同一道否决,别再各写一份)。
         //
-        // 2026-08-27:这道闸只在**单段**(标签后面只有一个名字,没有 `/、&,` 这类名单
+        // 这道闸只在**单段**(标签后面只有一个名字,没有 `/、&,` 这类名单
         // 分隔符)时才生效。起因是丁世光《瘦子》漏网的「项目总监：闫曼嘉/蔡雨燕/庄有豪」——
         // `latinCreditRestLooksLikeSentence` 按单字扫 `nonNameChars`,而"庄有豪"这个真人名
         // 恰好含着停用词"有",于是三段名单只因为其中一段撞上一个字,整行被判成"像句子"
@@ -1096,7 +1096,7 @@ public final class LyricsSyncEngine {
         // 防的是「他说：我不走」这类真对白——单个短句混进来,没有"多人并列"这个结构信号
         // 能兜底,必须继续拦。
         guard segments.count >= 2 || !latinCreditRestLooksLikeSentence(rest) else { return false }
-        // 段数/长度上限按书写系统分档(第十一轮):中文名 2~8 字,英文名/团体名长得多
+        // 段数/长度上限按书写系统分档:中文名 2~8 字,英文名/团体名长得多
         // (`Michael Maganuco` 16、`SOYEON of (G)I-DLE` 18),原来一刀切 8 字 + 总长 14
         // 把整批英文署名挡在门外(语料里 56 行漏网大半是这个原因)。
         guard rest.count <= 60, (1...6).contains(segments.count) else { return false }
@@ -1112,7 +1112,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 「整行被括号包住 + 内部用 `/` 分隔成 ≥3 段人名」这个形状 —— 演唱/和声/制作的参与者
-    /// 名单。第十七轮(2026-09-14,用户报麦浚龙 & 陈蕾《不下床》开头那行
+    /// 名单。第十七轮(现象是麦浚龙 & 陈蕾《不下床》开头那行
     /// `(Natalia Cheung/Hung Man Ting/Edan Yau/…/Hin Chan)` 没滤掉)。
     ///
     /// 为什么上面一整排规则一条都够不着:这行**既没有角色词、也没有冒号** ——
@@ -1168,7 +1168,7 @@ public final class LyricsSyncEngine {
     /// 存在的理由:整份闸门(≥2 行、过半…)是这套规则的一半,只测单行匹配函数测不到它;
     /// 而从 `allLines()` 的输出反推"哪行被删了"会被另外两件事污染 —— 对唱标记会被
     /// LyricDuet 从正文里剥掉、一行多时间戳会被展开成多行,两者都让"文本对不上"却不是
-    /// 过滤造成的(2026-08-20 拿全库 925 首做回归语料时踩到,误判出上百条"被误杀的真歌词")。
+    /// 过滤造成的(拿全库 925 首做回归语料时踩到,误判出上百条"被误杀的真歌词")。
     /// 直接曝光这一层,语料统计和单测都拿它当唯一判据。
     public static func creditLineDropDecisions(
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
@@ -1193,7 +1193,7 @@ public final class LyricsSyncEngine {
         let nameListHits = texts.filter(matchesNameListCreditShape).count
         let useNameListShape = nameListHits >= 2
         let drop = texts.enumerated().map { i, text -> Bool in
-            // 演唱者标签行一律放行(2026-08-23)。放在所有规则**最前面**,而不是只补进
+            // 演唱者标签行一律放行。放在所有规则**最前面**,而不是只补进
             // 结构化那一条:人名标签同时够得着好几条规则,逐条打补丁迟早漏。
             //
             // 独占一行的标记(`周杰伦：` 后面什么都没有)也走这里保留下来 —— 它确实不该
@@ -1247,7 +1247,7 @@ public final class LyricsSyncEngine {
         // isCreditOnlyLRC 的"整份拒收"是两回事:那边拒收之后还有别的源可以顶上,这边删空了
         // 就真的什么都没有了。
         //
-        // ⚠️ 2026-08-27 考虑过收窄成"只在结构化规则参与时才触发",被 selftest 里那条
+        // ⚠️ 考虑过收窄成"只在结构化规则参与时才触发",被 selftest 里那条
         // "作词：甲/作曲：乙/编曲：丙"(纯关键词表命中、跟结构化规则完全无关)的既有回归
         // 测试原样打回来——这道闸就是设计成"不管靠哪条规则,100% 就是不删",不是结构化
         // 规则的专属保险。丁世光《背面是我》专辑的纯配乐 Interlude(《Presentness》
@@ -1261,7 +1261,7 @@ public final class LyricsSyncEngine {
         return drop
     }
 
-    // 【已撤销】"从头尾向内扩展署名块"(照搬 YRC 解析那一套)2026-08-18 写过又删掉。
+    // 【已撤销】"从头尾向内扩展署名块"(照搬 YRC 解析那一套)写过又删掉。
     //
     // 想法本身没错:噪声天然聚在头尾两段连续区。但在 YRC 上敢这么做是因为 **YRC 格式自带
     // credit 块标记**,那是在读标记、不是在猜;LRC 没有这个标记,只能拿"结构化形状"顶替,
@@ -1288,7 +1288,7 @@ public final class LyricsSyncEngine {
 
     /// 返回值:内容真的变了吗(false = 入参与上次完全一致,整段跳过)。
     ///
-    /// 早退闸(2026-08-20 性能审计):enrich 缓存是全库单文件,collector 给**别的歌**写盘
+    /// 早退闸:enrich 缓存是全库单文件,collector 给**别的歌**写盘
     /// (专辑预取/译文回填/重打分)也会 bump mtime,调用方(reloadCurrentLyrics)按 mtime
     /// 失效就会带着一字未变的入参反复调进来 —— 原来每次都全量重跑解析+署名过滤,还把
     /// romanizer/wordGroup/segments 三个按行缓存无条件清空,让 20Hz 路径和 allLines 再
@@ -1308,10 +1308,10 @@ public final class LyricsSyncEngine {
         if fingerprint == loadedFingerprint { return false }
         loadedFingerprint = fingerprint
         self.romanizationScripts = romanizationScripts
-        // 逐字时间轴先过一遍合法性归一化(LyricTimelineNormalizer,2026-09-02):字起点早于行首 /
+        // 逐字时间轴先过一遍合法性归一化(LyricTimelineNormalizer):字起点早于行首 /
         // 落在下一行开始之后的小偏差夹回来,乱序或偏差太大的行退化成均匀扫过。放在署名过滤之前——
         // 归一化要看相邻行的时间戳,得在完整的行列表上做。每次加载只记一行汇总日志。
-        // 逐字数据**始终**解析(2026-09-06 起)。之前有个入参对应设置页那颗全局「卡拉OK效果」,
+        // 逐字数据**始终**解析。之前有个入参对应设置页那颗全局「卡拉OK效果」,
         // 关掉就在这里丢弃 YRC、四个展示面一起退成整行;现在"要不要逐字填色"是悬浮歌词 / 灵动岛 /
         // 菜单栏各自的开关,由各展示面在消费点把行压成整行(`SyncedLyricLine.lineLevel`),
         // 引擎不再替任何一个面做这个决定。
@@ -1322,7 +1322,7 @@ public final class LyricsSyncEngine {
         // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
         //
         // 两种来源都先各自解析+过滤出来,再决定用哪个 —— 原来是"有 YRC 就一定用 YRC",
-        // 而有些源给的逐字数据是**退化**的:2026-08-06 在用户缓存里实测到「方大同 - 特别的人」
+        // 而有些源给的逐字数据是**退化**的:在用户缓存里实测到「方大同 - 特别的人」
         // 的 YRC 只有 10 行,其中 9 行被判成署名行(编曲/混音师/录制…),而同一首的 LRC 有
         // 105 行。**不是 10 行全是** —— strippingCreditLines 特意留了"整份都被判成署名就一行
         // 都不删"的兜底(见那个函数结尾),真要 10 行全中,反而一行都不会被过滤掉。
@@ -1388,7 +1388,7 @@ public final class LyricsSyncEngine {
         }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
-        // 内容匹配字典(2026-08-27,查找细节见类头 trTextByPlainText 的注释)。用
+        // 内容匹配字典(查找细节见类头 trTextByPlainText 的注释)。用
         // filteredBase 而不是上面的 baseLines 属性——usingWords 为真时 baseLines 会被
         // 清空(供非逐字模式展示用,这里只是借它的"整行 LRC 解析结果"这份数据,跟
         // usingWords 无关,两者刻意不共用同一个数组)。
@@ -1422,7 +1422,7 @@ public final class LyricsSyncEngine {
         //
         // ⚠️ 判定样本是**过滤掉署名行之后的正文**,不是原始的 lyrics/lyricsYRC 字段。
         //
-        // 2026-08-20 改。原来刻意扫原始字段、把署名行一并算进去,理由写的是"一整首歌只要
+        // 改。原来刻意扫原始字段、把署名行一并算进去,理由写的是"一整首歌只要
         // 出现过假名就足以确证是日文"。这条在**中文翻唱**上翻车得很彻底:中文歌的署名行里
         // 带日文原作者名是常态。实测泠鸢yousa《神的随波逐流》——整首歌唯一的假名就是
         // 「词：れるりり」「曲：れるりり」两行署名,正文全中文,于是 songScript 被判成日文、
@@ -1430,7 +1430,7 @@ public final class LyricsSyncEngine {
         // 标了东西:日语分词器给得出读音的行出日文读音(「化作无穷的力量」→
         // 「ka saku 无穷 teki rikiryou」,词典外的「无穷」原样留着),给不出的退到 ICU 音译
         // 出拼音(「但我听说这是我最为珍贵的一个」→「dàn wǒ tīngshuō…」)—— 同一首歌里
-        // 两种形态混着出,正是用户报的"有些字有有些字没有"。
+        // 两种形态混着出,正是现象是"有些字有有些字没有"。
         //
         // 用正文判还有一层好处:署名行本来就不是"这首歌唱的是什么语言"的证据,它说的是
         // "谁写的"。真正的日文歌正文里假名遍地,判定结果不变。
@@ -1444,7 +1444,7 @@ public final class LyricsSyncEngine {
             if !contentWordSample.isEmpty { return contentWordSample }
             return lyrics.isEmpty ? lyricsYRC : lyrics
         }()
-        // ⚠️ 判据是**含假名的行占比**,不是"出现过假名没有"(2026-08-24 改,理由见
+        // ⚠️ 判据是**含假名的行占比**,不是"出现过假名没有"(改,理由见
         // Romanizer 里「整首歌 vs 一行」那段:中文歌引用一个日文词就会被整首判成日文,
         // 于是每行汉字都出日文音读)。这个整首歌级别的标记**只**给纯汉字行兜底用。
         songLooksJapanese = Romanizer.looksJapaneseSong(contentSample)
@@ -1490,10 +1490,10 @@ public final class LyricsSyncEngine {
     /// **这一行**该不该标罗马音 —— 由它的文字种类和用户开关共同决定。
     /// `.other`(拉丁/泰文/西里尔…)不受管辖,始终允许,保持历来的行为。
     ///
-    /// ⚠️ 2026-08-24 从"按整首歌"改成"按行":一首中文歌里引用的日文行(《这样吧》里的
+    /// ⚠️ 从"按整首歌"改成"按行":一首中文歌里引用的日文行(《这样吧》里的
     /// 「サヨナラ」)该按**日文**开关走、出罗马字,而同一首歌的中文行该按**中文**开关走
     /// (默认关 → 不显示)。按整首歌判做不到这件事,只能二选一:要么中文行被塞注音
-    /// (用户报的就是这个),要么中日混唱歌(陶喆《My Anata》,41% 的行是日文)的日文行
+    ///,要么中日混唱歌(陶喆《My Anata》,41% 的行是日文)的日文行
     /// 一起丢掉罗马音。判定本身在 Romanizer.script(ofLine:song:)。
     private func romanizationAllowed(for line: String) -> Bool {
         guard let option = Romanizer.script(ofLine: line, song: songScript).option else {
@@ -1506,8 +1506,8 @@ public final class LyricsSyncEngine {
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
 
     /// 说话人标签独立成行、冒号后没有真内容(如「合：」,YRC 里逐字数据把标签拆成
-    /// 「合」+「：」两个字、共享同一个时间戳,见 usingWords 分支的注释)——2026-08-23
-    /// 用户截图坐实的真 bug:这类标签行往往只有一百多毫秒,紧挨着后面那句真歌词(同一次
+    /// 「合」+「：」两个字、共享同一个时间戳,见 usingWords 分支的注释)——
+    /// 对拍坐实的真 bug:这类标签行往往只有一百多毫秒,紧挨着后面那句真歌词(同一次
     /// "合唱开始"标注),`nearestText` 的 700ms 容差下两行都会独立地就近认领同一条翻译/
     /// 罗马音,视觉上连续两行显示同一句中文——真正拥有这条词条的是后面那句真歌词
     /// (时间戳几乎重合,天然更近),标签行本身在译文/罗马音源文件里根本没有对应词条。
@@ -1523,7 +1523,7 @@ public final class LyricsSyncEngine {
     /// nearestText(trLines,...) 的统一入口——四处直接调用点全部改走这里,理由见
     /// isBareSpeakerTag 的注释。
     ///
-    /// 2026-08-27 加内容匹配优先:先按这一行的原文精确查 trTextByPlainText(不依赖
+    /// 加内容匹配优先:先按这一行的原文精确查 trTextByPlainText(不依赖
     /// 任何时间戳,天然不受 YRC/LRC 时间基准不一致影响),查不到(对唱歌被剥过说话人
     /// 标记的行、或这行内容跟服务端 LRC 字面对不上)才退回原来的 nearestText 时间
     /// 最近邻——两条路都保留,内容匹配只是优先级更高的一条更准的路径。
@@ -1537,7 +1537,7 @@ public final class LyricsSyncEngine {
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {
         // 数组按 timeMs 升序(LRCParser.parse 尾部 sorted),二分找插入点、只比较左右邻居 ——
-        // 原来是全量线性扫,allLines 构建时被每行调两次,O(n×m)(2026-08-20 性能审计)。
+        // 原来是全量线性扫,allLines 构建时被每行调两次,O(n×m)。
         // 语义与旧线性扫逐位一致(selftest 对拍):旧写法 `d <= bestDiff` 是后见者胜 ——
         // 同距并列取时间戳更晚的那条,同时间戳重复取排在最后的那条。
         guard !arr.isEmpty else { return nil }
@@ -1572,7 +1572,7 @@ public final class LyricsSyncEngine {
     // 那种情况混着展示"服务端标注的几行"+"现算兜底的几行"观感会不一致,不如保持现状
     // (那一行没有罗马音)交给下面 700ms 容差本身已经算合理的判断。
     //
-    // ⚠️ 2026-08-04 实测排查坐实的真实性能回归:activeLine(atMs:) 由
+    // ⚠️ 实测排查坐实的真实性能回归:activeLine(atMs) 由
     // LocalPlaybackSource.fastTick() 以 20Hz 调用,每次都会重新算一遍这一行的
     // romanization——没有服务端罗马音的歌(比如纯英文歌词)会在每一次 tick 都重新跑一遍
     // Romanizer.romanize() 的 ICU 音译,而不是只在真的换到新的一行时才算一次,导致主线程
@@ -1598,10 +1598,10 @@ public final class LyricsSyncEngine {
         if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
         guard romaLines.isEmpty else { return nil }
         // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
-        // 它解决的是 2026-08-04 那个真实 bug —— 中文歌被 ICU 音译成拼音展示,对中文读者
+        // 它解决的是那个真实 bug —— 中文歌被 ICU 音译成拼音展示,对中文读者
         // 是纯噪声(NetEase 本来就不给中文歌算 lyrics_roma,那本身就是"不需要"的信号)。
         //
-        // 2026-08-15 删掉:那道闸表达的是"我们替用户决定中文不要拼音",而现在这件事由
+        // 删掉:那道闸表达的是"我们替用户决定中文不要拼音",而现在这件事由
         // 用户自己的开关表达(上面的 romanizationAllowed,中文默认关 —— 默认行为跟以前
         // 一模一样)。留着它的话,用户明明打开了中文罗马音却什么都不会发生:绝大多数中文歌
         // 没有服务端 lyrics_roma,能出拼音的唯一途径正是这里的客户端兜底。
@@ -1609,14 +1609,14 @@ public final class LyricsSyncEngine {
         // songLooksJapanese 仍然要传给 romanize() —— 它决定走日语形态分析还是 ICU 音译,
         // 那是另一回事(汉字在两种语言里读音完全不同,见 Romanizer.romanize 的注释)。
         if let cached = romanizerFallbackCache[plainText] { return cached }
-        // 日文行的整行读音从 segmentsCache 派生,与 wordGroups 共用同一次分词(2026-08-20
+        // 日文行的整行读音从 segmentsCache 派生,与 wordGroups 共用同一次分词(
         // 性能审计:原来这里走 Romanizer.romanize→japaneseReading 自建一个 CFStringTokenizer,
         // 与 buildWordGroups 的 japaneseSegments 对同一行各分一遍词,日文歌 allLines 构建的
         // 分词次数直接翻倍)。两条路径的读音优先级完全一致(particleLatin > 假名标注 > 分词器
         // 转写 > 原文,尾部同走 mergeSokuon,见 Romanizer.readingFromSegments),selftest 有
         // 两者一致的断言。派生不出读音(整行拉丁/读音等于原文)时照 romanize 的原语义退到
         // ICU 音译。
-        // ⚠️ 判定阶梯本体在 `Romanizer.lineReading`(2026-09-03 从这里提出去),**不准在这里
+        // ⚠️ 判定阶梯本体在 `Romanizer.lineReading`(从这里提出去),**不准在这里
         // 再写一份**:collector 侧的 `lyrics-romanize` helper 预生成 `lyrics_roma` 时走的
         // 是同一个函数,两份实现一旦漂开,同一首歌"装了缓存"和"现算"的读音就会不一样,而且
         // 不报错、只表现成用户偶尔觉得"某句罗马音怎么变了"。selftest 有闸。
@@ -1666,7 +1666,7 @@ public final class LyricsSyncEngine {
         guard !words.isEmpty else { return nil }
         // 缓存 key 必须带上时间身份(首词 startMs),不能只按行文本:词组里内嵌**绝对**
         // 时间戳,副歌重复句(同文本、不同时间)只按文本缓存会让第二次出现拿到第一次的
-        // 时间轴 —— 逐词罗马音那一组从一开始就显示成已唱满(2026-08-20 对抗审查抓出的
+        // 时间轴 —— 逐词罗马音那一组从一开始就显示成已唱满(对抗审查抓出的
         // 预存在 bug,非本轮引入;segmentsCache/romanizerFallbackCache 只存文本派生物、
         // 与时间无关,仍按纯文本共享)。
         let key = "\(words[0].startMs)|\(line)"
@@ -1678,7 +1678,7 @@ public final class LyricsSyncEngine {
         // 分词结果与 romanizationText 共用 segmentsCache;门先于分词,门不开就不白分。
         let segments: [Romanizer.JapaneseSegment]? =
             (allowed && Romanizer.looksJapanese(line)) ? cachedJapaneseSegments(for: line) : nil
-        // 中文/粤语/韩语的逐字(逐词)对齐(2026-08-29 加):只在这一行确证不是日文行时
+        // 中文/粤语/韩语的逐字(逐词)对齐:只在这一行确证不是日文行时
         // (segments 为 nil,日文优先)才取整行罗马音——直接复用 romanizationText 那套
         // "内容匹配优先 + 时间兜底 + ICU 现算兜底"完整优先级链,不能自己另起一份简化版,
         // 否则两处一旦命中不一致,画面上会出现"整行罗马音"跟"逐字/逐词罗马音"文字对不上
@@ -1708,12 +1708,12 @@ public final class LyricsSyncEngine {
     // - 日文:分词器切出变长片段,片段跟逐字词的边界不对齐时把几个词并成一组
     //   (见 mergeSegmentsIntoWordGroups)——「いつか」分词器眼里是一个词,逐字数据却
     //   常常一字一词。
-    // - 中文/粤语(hanRomanization,2026-08-29 加):汉字没有"一个字对应半个词"的歧义,
+    // - 中文/粤语(hanRomanization):汉字没有"一个字对应半个词"的歧义,
     //   collector 生成拼音/粤拼时就是**严格一字一音节、空格分隔**(见 jyutping.go
     //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对(空白词不算字、
     //   不占音节,见下面那段);字数与音节数对不上
     //   (标点/多字词等边界情形)时保守放弃,让视图退回整行罗马音,不猜、不硬凑。
-    // - 韩语(koreanRomanization,2026-08-29 加):跟日语一样可能有"一个词横跨好几个
+    // - 韩语(koreanRomanization):跟日语一样可能有"一个词横跨好几个
     //   逐字词"的情况(酷狗式逐字切分一个谚文字一个词很常见),但韩语原文本来就按
     //   空格分词、罗马字转写保留同样的空格(见 Romanizer.koreanSegments 的实测注释),
     //   不需要跟日语一样现分词,片段直接从空格切出来,复用同一套合并算法。
@@ -1733,13 +1733,13 @@ public final class LyricsSyncEngine {
         }
         if let hanRomanization, !hanRomanization.isEmpty {
             let tokens = hanRomanization.split(separator: " ", omittingEmptySubsequences: true)
-            // 空白词不参与配对(2026-09-16)。酷狗一类的逐字数据会把句中的空格切成一个
+            // 空白词不参与配对。酷狗一类的逐字数据会把句中的空格切成一个
             // **独立的零时长词**,而粤拼/拼音行里空格只是音节分隔符、不产出任何音节:
             //   [149664,8560](149664,768,0)随…(151192,1496,0)荡(152688,0,0) (152688,792,0)多…
             //   ceoi4 cyu3 dong6 do1 bing1 laang5 Wooh
             // 前者 9 个词(两个是纯空格)、后者 7 个音节,按 words.count 直接比永远差这几个,
             // 整行退回整行罗马音——《喜欢你 (G.E.M.重生版)》36 行正文里 12 行栽在这上面
-            // (2026-09-16 全库扫描: 199 首粤拼歌 8395 行中 28 行)。空格不是字,本来就不该
+            // (全库扫描: 199 首粤拼歌 8395 行中 28 行)。空格不是字,本来就不该
             // 占一个音节的位置。⚠️ 空白词只是不配音节,**不能从 groups 里丢掉**:它们得
             // 原样留着占位,否则画出来的词与词之间就没了那个空格(退回整行的那条路同样
             // 把空格当一个词画)。
@@ -1801,7 +1801,7 @@ public final class LyricsSyncEngine {
             let latins = segs.filter { $0.utf16Start < end && $0.utf16End > start }.map(\.latin)
             let joined = latins.isEmpty ? nil : Romanizer.joinLatin(latins)
             // 组里混进的纯拉丁词(中日韩歌词夹的英文单词)读音就是它自己 —— 跟原文一模一样
-            // 没有信息增量,不该占一行重复自己(2026-09-16,用户反馈截图:韩文行夹的英文单词
+            // 没有信息增量,不该占一行重复自己(现象是截图:韩文行夹的英文单词
             // 逐词罗马音下面又完整抄了一遍)。这条判据在整行罗马音那一层本来就有
             // (Romanizer.readingFromSegments 的 `joined != text`),这里是把它下沉到逐词这一级 ——
             // 混合语言行整行判据不会触发(韩文部分读音确实不同),必须逐组各自比对。
@@ -1817,7 +1817,7 @@ public final class LyricsSyncEngine {
         return groups.contains { $0.romanization != nil } ? groups : nil
     }
 
-    // ---- 20Hz 热路径的两级省功(2026-08-19 性能审计落地) --------------------------
+    // ---- 20Hz 热路径的两级省功(性能审计落地) --------------------------
     //
     // ① 定位扫描提前 break:baseLines/wordLines 都按 timeMs 升序(LRCParser/YRCParser
     //    解析时排序),越过 posMs 之后剩余迭代必然无效,原来的 `for … where` 写法会把
@@ -1834,7 +1834,7 @@ public final class LyricsSyncEngine {
     private var cachedNextIdx = Int.min
     private var cachedNextText: String?
     private var cachedNextSide: LyricDuet.Side?
-    // 单行展示面的「领先行」独立占一个槽(2026-08-23):它跟 activeIdx 只在提前量窗口里
+    // 单行展示面的「领先行」独立占一个槽:它跟 activeIdx 只在提前量窗口里
     // 不同(下标差 1),共用一个槽的话那段时间里两个下标每 tick 互相踢缓存,上面那段注释
     // 描述的塌缩("约 99% 的 tick 构建完即被丢弃")就整个失效 —— 而 lineAt 的构建正是
     // tailClamped + wordGroups + 两次最近邻扫描,20Hz 跑两遍是这个仓库栽过的那类
@@ -1852,7 +1852,7 @@ public final class LyricsSyncEngine {
         return idx
     }
 
-    // ③(2026-08-20 审计追加)定位扫描的单调窗口记忆化:播放位置单调推进,~99% 的 tick
+    // ③(审计追加)定位扫描的单调窗口记忆化:播放位置单调推进,~99% 的 tick
     //   落在上次命中行的 [timeMs[idx], timeMs[idx+1]) 窗口内,O(1) 验证即返回,不必每次
     //   从下标 0 重扫。验证失败(seek/换行/offset 变化)回退全量扫,语义不变。Int.min =
     //   无效(load() 时与 cachedActiveIdx 同点失效)。
@@ -1940,11 +1940,11 @@ public final class LyricsSyncEngine {
     }
 
     /// fastTick(20Hz)的打包查询:当前行/下一句预览/行下标/间奏下标要的是同一个 posMs 的
-    /// 同一次定位,原来四个入口各自独立调 activeIndexCorrected 从头扫一遍(2026-08-20
+    /// 同一次定位,原来四个入口各自独立调 activeIndexCorrected 从头扫一遍(
     /// 审计:同一 tick 内 3/4 是纯重复)。这里下标只算一次,几个值一起返回。
     public struct TickResolution {
         public let index: Int?
-        /// 歌词窗口的**滚动锚**下标 —— AM 的滚动先于染色(2026-08-22 用户对拍):一句
+        /// 歌词窗口的**滚动锚**下标 —— AM 的滚动先于染色(对拍):一句
         /// 唱完、下一句还没开始的空档里,页面已经滚到下一句的位置,只是还没给它染色。
         /// 染色/加粗/虚化仍看 index,滚动看这个;非空档时刻两者相等。语义见
         /// scrollLeadIndex(activeIdx:posMs:)。
@@ -1978,7 +1978,7 @@ public final class LyricsSyncEngine {
 
     /// - Parameter trackEndMs: 这首歌有多长(毫秒)。**只**给最后一句的显示窗口兜底 ——
     ///   引擎自己不知道曲长,不给的话最后一句的 compactDwellMs 恒为 nil,得由上层退回
-    ///   `currentLineDwellSeconds`。那条退路有两个毛病(2026-08-24 审出):① 它按
+    ///   `currentLineDwellSeconds`。那条退路有两个毛病(审出):① 它按
     ///   `currentLineIndex` 取行,而提前量窗口里那是**已经唱完的上一句** —— 拿错基数;
     ///   ② 它的值在开唱那一刻(currentLineIndex 前进)会**突变**,于是 pacing 变、
     ///   plan 变、滚动被重装 —— 而首停含提前量,重装等于把提前量再等一遍,最后一句可能
@@ -2072,7 +2072,7 @@ public final class LyricsSyncEngine {
 
     /// upcomingLineText 的按下标本体(记忆化缓存所在)。tickQuery 与 upcomingLineText 共用。
     ///
-    /// 连同 side 一起返回(2026-08-26 加):下一句预览要能独立于当前行分栏——对唱歌交替
+    /// 连同 side 一起返回:下一句预览要能独立于当前行分栏——对唱歌交替
     /// 演唱时,下一句的演唱者常常跟当前句不是同一位,悬浮窗此前把预览文字摆在跟当前句
     /// 同一边,视觉上像是同一个人接着唱下一句。side 取自跟 text 同一份 wordSides/baseSides
     /// (跟 wordLines/baseLines 逐下标对齐,见 LyricDuet.planWords/plan 的产出),不是猜的。
@@ -2147,7 +2147,7 @@ public final class LyricsSyncEngine {
         return idx >= 0 ? idx : nil
     }
 
-    // ---- 间奏点(2026-08-19,歌词窗口的 Apple Music 式「•••」) --------------------
+    // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) --------------------
 
     /// 间奏判定参数。逐字歌词知道每一行唱到几点(最后一个词的结束),真实静默 ≥ minGapMs
     /// 才算间奏;行级 LRC 不知道一行唱多久,只能保守地要求两句**起点**差 ≥

@@ -20,13 +20,13 @@ struct MarqueeText<Content: View>: View {
     /// **没溢出时**内容靠容器哪一边。溢出时一律 .leading,不受这个参数影响 —— 滚动是
     /// "从头开始往左推",内容比容器宽时靠右摆等于一上来就把开头几个字挂在容器外面。
     ///
-    /// 2026-08-20 加。灵动岛右耳的歌手名原来是 `Spacer() + Text`(靠右贴着音浪),换成
+    /// 灵动岛右耳的歌手名原来是 `Spacer + Text`(靠右贴着音浪),换成
     /// 跑马灯之后 GeometryReader 会占满可用宽度,短名字(绝大多数情况)就从右边跳到了
     /// 左边、跟音浪之间空出一大段。默认值保持 .leading,已有调用点行为不变。
     var restingAlignment: Alignment = .leading
     /// 内容溢出、而且此刻**停在开头**时,右端渐隐带的宽度(0 = 不渐隐,默认)。
     ///
-    /// 2026-08-22 加。为什么需要它、为什么只在"停在开头"时给、为什么传宽度而不是
+    /// 为什么需要它、为什么只在"停在开头"时给、为什么传宽度而不是
     /// gradient 的 stop —— 三条理由都写在 `MarqueeMath.trailingFadeWidth` 上,不重复。
     /// 目前只有灵动岛的**歌词行**传非 0:那一行右边紧挨一枚 32pt 封面,只隔 10pt,硬切口
     /// 落在那里肉眼分不清"被裁掉"和"被封面盖住"。顶行的歌名/歌手同样是硬切,但它们旁边
@@ -47,7 +47,7 @@ struct MarqueeText<Content: View>: View {
             content()
                 .fixedSize(horizontal: true, vertical: false)
                 // ⚠️ 这里**不能**用 PreferenceKey 把宽度传上去,尽管那是最常见的写法(本文件
-                // 2026-08-16 之前正是那么写的,而且是个静默失效的真 bug)。
+                // 之前正是那么写的,而且是个静默失效的真 bug)。
                 //
                 // 实测:GeometryReader 自己测得完全正确(打印 innerProxy.size.width = 428.5),
                 // 但外面 .onPreferenceChange 收到的是 PreferenceKey 的 defaultValue 0,
@@ -146,7 +146,7 @@ struct MarqueeText<Content: View>: View {
         contentWidth = content
         containerWidth = container
         // ⚠️ 只有容器宽度在变、内容没换、溢出与否也没翻转、而且此刻停在开头时,**不**重启
-        // (2026-09-06 灵动岛动画性能专项)。容器宽度在 hover 展开/收起、拖宽度滑块期间是
+        // (灵动岛动画性能专项)。容器宽度在 hover 展开/收起、拖宽度滑块期间是
         // **每帧**变一次的(灵动岛 257→482pt 一次展开约 16 帧、收起约 24 帧),原来每帧都
         // 走一遍 restart:cancel 掉旧 Task、新分配一个、再在事务里写两次 @State —— 对没溢出
         // 的短句(绝大多数歌词行 / 耳朵里的歌名)这全是白做,对正溢出、还在 1.1s 起步等待里
@@ -165,7 +165,7 @@ struct MarqueeText<Content: View>: View {
         scrollTask = nil
         // ⚠️ 归零必须在**关掉动画的事务**里做,而且要保证这次赋值真的是一次状态变化。
         //
-        // 2026-08-17 用户报的两个症状("换句时文字从右边滑回开头"、"有时候慢慢滚回到
+        // 现象是的两个症状("换句时文字从右边滑回开头"、"有时候慢慢滚回到
         // 对应的位置")是同一个根因:`Task.cancel()` 停得掉下面那个 while 循环,却停不掉
         // **已经发出去的那条 SwiftUI 动画**。
         //
@@ -188,7 +188,7 @@ struct MarqueeText<Content: View>: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
                 if Task.isCancelled { return }
-                // 距离在**起步这一刻**读,不在 restart 时捕获(2026-09-06):apply 对"等待期间
+                // 距离在**起步这一刻**读,不在 restart 时捕获:apply 对"等待期间
                 // 容器宽度在变"的情况不再重启,这里读到的才是当下真实的溢出量。@State 是引用
                 // 存储,struct 副本里读到的就是最新值。等待期间若已经装得下(overflow ≤ 0),
                 // apply 那边会因溢出翻转而重启并取消本 Task,不会走到这里。
@@ -200,14 +200,14 @@ struct MarqueeText<Content: View>: View {
                 if Task.isCancelled { return }
                 // ⚠️ 回程是**瞬时**的,不是滑回去 —— 这一条不是审美选择,是正确性要求。
                 //
-                // 2026-08-17 实测(灵动岛换句瞬间连拍):老写法这里是
+                // 实测(灵动岛换句瞬间连拍):老写法这里是
                 // `withAnimation(.linear(duration: travelDuration)) { offset = 0 }`,
                 // 动画一发出,**模型值当场就是 0**,而屏幕上的文字还要滑好几秒才回到位。
                 // 若在这段时间里换句,restart() 里那次归零就是"赋同一个值" —— `.offset`
                 // 的可动画数据没有变化,SwiftUI 没有任何理由去重新定向那条已经在跑的动画,
                 // 于是它继续把**新一句**的文字从半路慢慢挪回来。抓到的帧里,新一句在换句
                 // 后 0.17 秒仍缺着开头几个字,再过 0.4 秒才右移约 9.6pt(正好是
-                // marqueePixelsPerSecond × 0.4)。第一版只在归零时关掉动画,治不了它 ——
+                // marqueePixelsPerSecond × 0.4)。只在归零时关掉动画治不了它 ——
                 // 因为压根没触发那次更新。
                 //
                 // 改成瞬时归位之后,模型值只可能是两种:有动画在跑时是 distance、静止时是 0。

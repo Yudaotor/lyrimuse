@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-// 状态栏那个下拉菜单(2026-08-16 从 SwiftUI 搬到 AppKit)。
+// 状态栏那个下拉菜单(从 SwiftUI 搬到 AppKit)。
 //
 // 为什么手写 NSMenu 而不是把原来的 SwiftUI 菜单原样端过来:
 //   * NSHostingMenu(能把 SwiftUI 视图树变成 NSMenu 的那个 API)要 **macOS 14.4**,
@@ -36,7 +36,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 自己控制启用状态,不走 AppKit 那套"按 target 能不能响应 action"的自动判定 ——
         // 这里每一项都是常驻可点的,没有需要变灰的场景。
         menu.autoenablesItems = false
-        // 这里**不**先 rebuild 一遍(2026-08-19):弹出前 AppKit 必然回调 menuNeedsUpdate,
+        // 这里**不**先 rebuild 一遍:弹出前 AppKit 必然回调 menuNeedsUpdate,
         // 那里会构建 —— 原来这行让整棵菜单每次弹出都构建两遍,第一遍是白做的。
         return menu
     }
@@ -59,7 +59,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         let coordinator = PlaybackCoordinator.shared
 
         // ---- 「快速开关」子菜单 ----
-        // 2026-08-06 把四个状态开关收进二级子菜单,顶层只留"点一下就发生一件事"的动作
+        // 把四个状态开关收进二级子菜单,顶层只留"点一下就发生一件事"的动作
         // 入口。原来开关和动作混在顶层、靠两条分隔线分区,菜单一共十一项、相当长。
         let quick = NSMenu()
         quick.autoenablesItems = false
@@ -124,7 +124,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(action(L10n.t("歌词窗口…"), symbol: "text.quote",
                             selector: #selector(openLyricsWindow)))
         // 再一条分隔线,把上面"打开某个窗口做配置/管理"这几项,跟下面"检查更新/关于"
-        // 这类"了解一下这个 App 本身"的入口分开(2026-07-30 用户反馈原来四项挤在一起看着乱)。
+        // 这类"了解一下这个 App 本身"的入口分开(现象是原来四项挤在一起看着乱)。
         menu.addItem(.separator())
         // 同「关于」页那张卡片:无 Sparkle 构建里这一项点了没反应,不如不给。
         #if canImport(Sparkle)
@@ -183,8 +183,8 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     // 菜单标题里直接带上当前校准值(比如"歌词时间轴(+0.6s)"),不用另开一个 HUD 或者
     // 禁用态文字行专门显示这个数字。
     private var offsetMenuTitle: String {
-        // 只显示**这首歌**那部分,不含全局基准(2026-08-17 加全局偏移时改)。显示总和的
-        // 话,用户看到"歌词时间轴(+0.8s)"、点了下面的「重置」却只回到 +0.5s(全局基准
+        // 只显示**这首歌**那部分,不含全局基准(加全局偏移时改)。显示总和的
+        // 话,用户看到"歌词时间轴(0.8s)"、点了下面的「重置」却只回到 +0.5s(全局基准
         // 还在),数字跟操作对不上。全局基准在设置里调,也在那里显示。
         let ms = PlaybackCoordinator.shared.trackLyricsOffsetMs
         guard ms != 0 else { return L10n.t("歌词时间轴") }
@@ -264,7 +264,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     #endif
 
     @objc private func quit() {
-        // 经 AppExit 登记原因再终止(2026-09-03):所有主动退出都从那一个出口走,见 AppExit 头注。
+        // 经 AppExit 登记原因再终止:所有主动退出都从那一个出口走,见 AppExit 头注。
         AppExit.request(.menuQuit)
     }
 }

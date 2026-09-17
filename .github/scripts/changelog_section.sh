@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 从 CHANGELOG.md 抽出某个版本那一节的正文,原样打到 stdout(2026-09-16)。
+# 从 CHANGELOG.md 抽出某个版本那一节的正文,原样打到 stdout。
 #
 # 用途有两个,而且**必须是同一份逻辑**:
 #   1. 打 tag 的输入——docs/releasing.md「四」:

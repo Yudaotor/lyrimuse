@@ -1,6 +1,6 @@
 // simevaltimeline_test.go — simeval 的追加维度:LRC↔YRC 时间轴自洽。
 //
-// 起因(2026-08-27《Rumour Has It》案)与完整机理见生产实现 lyricstimeline.go 的文件头。
+// 起因(《Rumour Has It》案)与完整机理见生产实现 lyricstimeline.go 的文件头。
 // 这里只放**消融维度**,判据实现一律复用包内真实函数,不重抄(README 三条纪律之一:
 // 维度实现与生产代码零漂移,才是这套评测区别于"另写一份打分"的全部价值)。
 //

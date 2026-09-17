@@ -4,7 +4,7 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm-breakdown")
 
-/// 「第 N 次听」合并明细的取数(2026-09-04)。一个弹框一个实例,弹出时建、关掉即弃,不缓存 ——
+/// 「第 N 次听」合并明细的取数。一个弹框一个实例,弹出时建、关掉即弃,不缓存 ——
 /// 这是用户主动点开的一次性核对,每次都该看到 Last.fm 此刻的账,而不是上次点开时的快照。
 ///
 /// 取法:`LastfmStatsService.playCountFamily` 给出本尊 + 查次数时真正问过的那批孪生写法,每种

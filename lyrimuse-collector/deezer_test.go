@@ -15,7 +15,7 @@ func deezerTrackFromJSON(t *testing.T, raw string) deezerTrack {
 	return tr
 }
 
-// synchronizedLines → 逐行 LRC。形状是 2026-09-13 从 pipe.deezer.com 真实响应里 dump 出来的
+// synchronizedLines → 逐行 LRC。形状是从 pipe.deezer.com 真实响应里 dump 出来的
 // (Joseph Kamel《Crash》64 行):只认 lrcTimestamp + line 同时非空的行。Deezer 用空 line
 // 表示间奏,原样拼进去会变成一堆空行——那会拉低 lines 这一项的分,还会在歌词面上留白。
 func TestDeezerBuildLRC(t *testing.T) {
@@ -72,7 +72,7 @@ func TestDeezerCandidateScore(t *testing.T) {
 	if got := deezerCandidateScore(live, "Joseph Kamel", "Crash", "Crash - Single", 164); got >= 0 {
 		t.Fatalf("版本限定词对不上应当淘汰,得到 %d", got)
 	}
-	// ⚠️ 反过来钉住一个**既有缺口**(不是这个源引入的,也不在这次改动的范围里):
+	// ⚠️ 反过来钉住一个**既有缺口**(不是这个源引入的):
 	// distinctRecordingVersionTags 只收英文 + 中文版本词,法语的「(Version acoustique)」
 	// 认不出来 —— 而 Deezer 的法语曲库恰恰常年把 acoustic 版这么标。它今天能过闸,
 	// 靠的不是 acoustic 家族那条豁免(sameRecordingExtraTagWhitelist),而是根本没被
@@ -90,7 +90,7 @@ func TestDeezerCandidateScore(t *testing.T) {
 }
 
 // 「这首歌没有歌词」的识别 —— 这是**正常结果**不是失败,认出来才不会往失败原因里记、
-// 不会惊动熔断。2026-09-13 实测原文(Jungeli《Juste un peu》、Suzane《SLT》)。
+// 不会惊动熔断。实测原文(Jungeli《Juste un peu》、Suzane《SLT》)。
 func TestDeezerIsLyricsNotFound(t *testing.T) {
 	real := `[{"message":"Lyrics does not exists","type":"LyricsNotFoundError","path":["track","lyrics"]}]`
 	if !deezerIsLyricsNotFound(real) {

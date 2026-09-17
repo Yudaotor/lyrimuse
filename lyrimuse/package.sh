@@ -30,7 +30,7 @@
 # 最新",而不会被推一个 arm64-only、装上就打不开的包。漏了它,Intel 用户会被自动更新推坏
 # —— 这是这套双资产方案里唯一一处"漏了就出事"的地方。
 #
-# 它是 <item> 的**子元素**,不是 <enclosure> 上的属性。这行注释 2026-08-07 之前写的就是
+# 它是 <item> 的**子元素**,不是 <enclosure> 上的属性。这行注释之前写的就是
 # 属性写法(sparkle:hardwareRequirements="arm64"),错的:Sparkle 用
 # SUAppcastElementHardwareRequirements = "sparkle:hardwareRequirements" 从 item 的元素字典里
 # 取值,它自己的测试样例(Tests/Resources/testappcast_arm64HardwareRequirement.xml)也是写成
@@ -133,7 +133,7 @@ for v in "${VARIANTS[@]}"; do
   # dmg:优先用 dmgbuild 出"带背景图、图标摆好位置"的窗口,拿不到 dmgbuild 就退回
   # 纯 hdiutil。
   #
-  # 2026-08-16 之前这里写的是"美化窗口需要挂可写镜像再用 AppleScript 让 Finder 设窗口
+  # 之前这里写的是"美化窗口需要挂可写镜像再用 AppleScript 让 Finder 设窗口
   # bounds 和图标坐标,那是有副作用的 GUI 自动化,故意不做"。这个前提对 dmgbuild 不成立:
   # 它自己实现了 .DS_Store 的格式、直接写进镜像,全程不启动 Finder。所以"不驱动 Finder"
   # 这条底线保住了,美化也能做。

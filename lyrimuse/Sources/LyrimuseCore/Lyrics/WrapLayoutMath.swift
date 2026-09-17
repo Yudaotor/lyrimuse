@@ -7,8 +7,8 @@ import CoreGraphics
 /// 省略号"消失"),但它长在 View 文件里,除了盯着屏幕看没有别的办法验证。现在
 /// `lyrimuse-selftest` 可以直接问它:给这些尺寸和这个宽度,你打算怎么排。
 public enum WrapLayoutMath {
-    /// 行内的水平对齐——悬浮歌词/灵动岛是居中排版;"歌词窗口"2026-08-04 改成 Apple Music
-    /// 歌词页同款的左对齐后用 leading。trailing 是 2026-08-14 为对唱歌词右侧那位加的
+    /// 行内的水平对齐——悬浮歌词/灵动岛是居中排版;"歌词窗口"改成 Apple Music
+    /// 歌词页同款的左对齐后用 leading。trailing 是为对唱歌词右侧那位加的
     /// (见 LyricDuet)。
     public enum RowAlignment: Sendable {
         case center, leading, trailing
@@ -70,7 +70,7 @@ public enum WrapLayoutMath {
     }
 
     /// 带 rows 的版本:调用方(WrapLayout 的 Layout 壳)把换行分组缓存住之后直接喂进来,
-    /// sizeThatFits/placeSubviews 不再各自重算一遍 rows(2026-08-20 性能审计)。
+    /// sizeThatFits/placeSubviews 不再各自重算一遍 rows。
     public static func totalSize(
         rows: [Row], maxWidth: CGFloat, verticalSpacing: CGFloat
     ) -> CGSize {
@@ -85,7 +85,7 @@ public enum WrapLayoutMath {
     /// (撑满是刻意的 —— 对唱左右对齐要靠它才有地方可对)。这个返回的是内容自己的
     /// 包围盒,宽度 = 最宽那一行的宽度。
     ///
-    /// 给"鼠标划过歌词才让开"用(2026-08-23):原来的判据是整个窗口矩形
+    /// 给"鼠标划过歌词才让开"用:原来的判据是整个窗口矩形
     /// `window.frame.contains(鼠标)`,而窗口比文字大得多 —— 上下有卡片内边距和播放
     /// 控制槽位、左右是 WrapLayout 撑满留下的空白,于是指针在歌词**附近**就触发了淡出。
     ///

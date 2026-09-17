@@ -25,7 +25,7 @@ final class ShortcutRecorderButton: NSButton {
         didSet { refreshTitle() }
     }
     // 清除按钮(见下面 ShortcutRecorderContainerView)的显隐跟这个按钮的标题在
-    // refreshTitle() 里同一时刻一起刷新——2026-07-30 曾经改成用 SwiftUI
+    // refreshTitle 里同一时刻一起刷新——曾经改成用 SwiftUI
     // @State + NotificationCenter 广播驱动清除按钮的显隐,结果在这个 Form
     // (.formStyle(.grouped) 在 macOS 上是拿 List 实现的,行会被复用)里触发
     // 了行视图被错误复用:实测坐实"打开歌词管理"往后几行的 NSButton 全部
@@ -133,7 +133,7 @@ final class ShortcutRecorderButton: NSButton {
             return nil
         }
 
-        // 冲突检查(2026-08-31 加,见 ShortcutConflict)。在这之前录一个被系统占用的组合
+        // 冲突检查(加,见 ShortcutConflict)。在这之前录一个被系统占用的组合
         // 会"录制成功"但永远不触发,两个动作绑同一组合也不会被拦。
         //
         // ⚠️ 顺序:先 stopRecording()(把本地事件监听摘掉)再弹窗。反过来的话是在事件
@@ -171,8 +171,8 @@ final class ShortcutRecorderButton: NSButton {
 
 // 库自带的 Recorder 已经录进一个快捷键后,右侧会带一个可点的"×"用来清除;这里的替代
 // 实现(ShortcutRecorderButton)原来只在"点击进入录制状态后按 Delete/Backspace"这一步
-// 隐藏手势里做了清除(见上面 handle(_:) 里那个分支),没有任何可见控件——2026-07-30
-// 用户实测反馈"没有清空这种按钮，现在没办法移除",补一个同样位置的"×"按钮。跟录制
+// 隐藏手势里做了清除(见上面 handle(_) 里那个分支),没有任何可见控件——
+// 现象是"没有清空这种按钮，现在没办法移除",补一个同样位置的"×"按钮。跟录制
 // 按钮放进同一个 NSStackView,由 refreshTitle() 统一决定显隐,不用 SwiftUI
 // @State/NotificationCenter 驱动(见 ShortcutRecorderButton.clearButton 注释,这条
 // 路线已经在这个 Form 里踩过"行被错误复用"的坑)。
@@ -196,7 +196,7 @@ private final class ShortcutRecorderContainerView: NSView {
 
         super.init(frame: .zero)
 
-        // 录制按钮必须拒绝被拉伸——2026-07-30 用户实测反馈"点击录制"那颗胶囊被拉成了
+        // 录制按钮必须拒绝被拉伸——现象是"点击录制"那颗胶囊被拉成了
         // 铺满整行的长条:这个容器在 Form(.formStyle(.grouped))的 LabeledContent
         // 尾部内容位里,SwiftUI 会为它提出一个远比按钮实际需要的宽度,而下面这层
         // NSStackView 原来把 leading/trailing 都钉死在容器边缘,容器多宽、stack 就被
@@ -210,7 +210,7 @@ private final class ShortcutRecorderContainerView: NSView {
 
         // "×"排在录制按钮**前面**。放在后面(库自带 Recorder 的做法)时,只有已录过快捷键
         // 的那几行才多出这颗按钮,而 stack 的 trailing 钉在行右缘 —— 于是那几行的录制
-        // 胶囊被"×"往左顶,跟没录过的行对不齐,一列胶囊左右参差(2026-08-13 用户实测反馈)。
+        // 胶囊被"×"往左顶,跟没录过的行对不齐,一列胶囊左右参差(现象是)。
         // 挪到前面之后,胶囊右缘永远贴着同一条线,"×"出现或消失只影响它自己左边那点空隙。
         let stack = NSStackView(views: [clearButton, recordButton])
         stack.orientation = .horizontal

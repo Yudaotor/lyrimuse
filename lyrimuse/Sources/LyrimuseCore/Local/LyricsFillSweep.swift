@@ -1,6 +1,6 @@
 import Foundation
 
-/// App ⇄ collector 的「补空扫描」通道(2026-09-05,见 collector/lyricsfillsweep.go 头注)。
+/// App ⇄ collector 的「补空扫描」通道(见 collector/lyricsfillsweep.go 头注)。
 ///
 /// 背景:collector 给空歌词条目再搜一轮的补空路径,设计上只在这首歌**再次被播放**时触发;
 /// 「歌词管理」里躺着的存量空条目用户不重播就永远不会动。这条通道让用户在窗口里主动要一轮:

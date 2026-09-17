@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 歌词文件族改原子写(writeLyricsFileAtomic)。
+// 歌词文件族改原子写(writeLyricsFileAtomic)。
 // 靶的是一条性质:磁盘上的文件要么是旧的完整内容、要么是新的完整内容,写入过程里没有
 // 第三种状态;临时文件不能泄漏、不能被导入/扫描误认。
 

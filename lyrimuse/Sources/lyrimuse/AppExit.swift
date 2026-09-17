@@ -1,7 +1,7 @@
 import AppKit
 import OSLog
 
-/// App 进程的退出出口(2026-09-03):每一条退出路径在真正终止前都打一行
+/// App 进程的退出出口:每一条退出路径在真正终止前都打一行
 ///
 ///     exiting reason=<code>
 ///

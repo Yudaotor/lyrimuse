@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-30 review 坐实的真实 bug:jyut6ping3.words.dict.yaml 里混了 696 条带逗号/
+// review 坐实的真实 bug:jyut6ping3.words.dict.yaml 里混了 696 条带逗号/
 // 顿号/句号的完整谚语("笑左，笑埋右"这类),toJyutpingLine 按 rune 窗口整段命中、整段
 // 输出读音,标点没有对应音节,会被读音字符串顶替、从输出里凭空消失(修前
 // toJyutpingLine("笑左，笑埋右") 吐出 "siu3 zo2 siu3 maai4 jau6",逗号没了)。
@@ -40,7 +40,7 @@ func TestJyutpingWordMapHasNoPunctuationKeys(t *testing.T) {
 	}
 }
 
-// 2026-08-27 粤语歌兼容支持③:粤拼罗马音生成。断言用的读音都是从真实字典
+// 粤语歌兼容支持③:粤拼罗马音生成。断言用的读音都是从真实字典
 // (dictionary/JyutpingChars.txt,来自 rime-cantonese)反查出来的已知值,而不是编造的——
 // 这里测的是"代码有没有正确应用词典+间距规则",词典本身的语言学准确性由上游项目负责。
 func TestToJyutpingLine(t *testing.T) {
@@ -54,19 +54,19 @@ func TestToJyutpingLine(t *testing.T) {
 		{"粤语虚词(HanVariants 里明确保留的那几个)", "唔該你", "m4 goi1 nei5"},
 		{"拉丁词不该被拆开", "Baby 我爱你", "Baby ngo5 oi3 nei5"},
 		{"标点前后都要有分隔", "你好，世界", "nei5 hou2 ， sai3 gaai3"},
-		// 2026-08-30 加:"這個"在 JyutpingWords.txt 里单独收了 ze3 go3,跟"這"单字表的
+		// 加:"這個"在 JyutpingWords.txt 里单独收了 ze3 go3,跟"這"单字表的
 		// ze2、以及"這般/這兒/這樣/這裏/這麼/這些"这些其它"這X"复合词的 ze2 都不一样——
 		// 这正是词级消歧要解决的问题,不是巧合或者笔误。
 		{"简体字走 s2t 兜底 + 命中词级消歧(這個≠這单字)", "这个世界", "ze3 go3 sai3 gaai3"},
 		{"查不到读音的字符原样穿透", "我😀你", "ngo5 😀 nei5"},
 		{"空串", "", ""},
-		// 2026-08-30 加:词级多音字消歧(JyutpingWords.txt,同一个 rime-cantonese 项目)。
+		// 加:词级多音字消歧(JyutpingWords.txt,同一个 rime-cantonese 项目)。
 		// "重"单字表只给得出一个固定读音,"重要"该读 zung6 jiu3、"重量"该读
-		// cung5 loeng6——这是这次改动要修的真实案例,以前两个词会被拼成同一个错的。
+		// cung5 loeng6——这是多音字消歧要处理的真实案例,不消歧两个词会被拼成同一个错的。
 		{"多音字消歧: 重要", "重要", "zung6 jiu3"},
 		{"多音字消歧: 重量(同一个字,不同词,不同读音)", "重量", "cung5 loeng6"},
 		{"多音字消歧在整句里也生效", "呢件事好重要", "nei1 gin6 si6 hou2 zung6 jiu3"},
-		// 2026-08-30 加:碰撞覆盖表(JyutpingCollisionOverrides.txt)。"离"这个简体字
+		// 加:碰撞覆盖表(JyutpingCollisionOverrides.txt)。"离"这个简体字
 		// 本身在字表里还有一个独立的生僻字身份(读 ci1),不覆盖的话单独一个"离"字永远
 		// 查到那个无关读音、轮不到"当簡體用時該讀 lei4"这层——即便词表命中"离开"这类
 		// 词没问题,单独一个字仍会读错,这条专门测"单独一个字"这个词表管不到的场景。
@@ -76,7 +76,7 @@ func TestToJyutpingLine(t *testing.T) {
 		// "唔該"(2 字,m4 goi1)和"唔該晒"(3 字,m4 goi1 saai3)都在词典里——贪心要选
 		// 最长的那个,不能因为先找到 2 字的"唔該"就提前停手、把"晒"漏成单字。
 		{"最长匹配优先: 唔該晒不能被短词唔該截断", "唔該晒", "m4 goi1 saai3"},
-		// 2026-08-31 修的真 bug:拉丁/数字**紧接**汉字(中间没有空格)时,读音会被粘在
+		// 修的真 bug:拉丁/数字**紧接**汉字(中间没有空格)时,读音会被粘在
 		// 拉丁串尾巴上。上面那条 "Baby 我爱你" 因为输入自带空格,恰好绕开了这个洞。
 		// 真实缓存里的原样输出:《从何唱起》"Do re mi当中找我道理" → "Do re midong1 …"。
 		{"拉丁紧接汉字要分隔(修前粘成 babyngo5)", "baby我爱你", "baby ngo5 oi3 nei5"},

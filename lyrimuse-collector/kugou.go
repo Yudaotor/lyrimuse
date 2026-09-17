@@ -30,7 +30,7 @@ type kugouResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
 	// tr/roma:KRC 里 `[language:<base64>]` 内嵌的中文译文 / 罗马音两轨,已按 KRC 行始
-	// 时间戳拼成逐行 LRC(2026-09-02 加,见 krcLanguageTracks);没有则空串。
+	// 时间戳拼成逐行 LRC(加,见 krcLanguageTracks);没有则空串。
 	tr, roma string
 	// durationSecs:酷狗曲库自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
@@ -38,7 +38,7 @@ type kugouResult struct {
 	// 候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自搜索结果本身(本来就已经查到,
 	// 只是原来没往外传)。
 	title, artist, album string
-	// cover:2026-08-31 加。搜索接口本身没有可靠的封面图字段(AlbumImage 实测经常是空
+	// cover:加。搜索接口本身没有可靠的封面图字段(AlbumImage 实测经常是空
 	// 字符串,这一点没变),但搜索结果带的 album_id 能换一次 album/info 接口拿到
 	// imgurl——多一次请求,只在拿到候选(chosen != nil)之后才发,查不到/请求失败就留空,
 	// 交给 enrich.go 的 coverOrFallback 退到 Apple 封面,不影响歌词本身的可用性。
@@ -160,7 +160,7 @@ func krcToYRC(krc string) string {
 //	            {"type":0,"language":0,"lyricContent":[["yu ","me ","na ","ra ","ba"],…]}],"version":1}
 //
 // type 1 是中文译文、type 0 是音译;lyricContent 每一项对应 KRC 的一条计时行
-// (`[行始,行长]<…>`),**按行序号对齐**,行数相等是格式契约(2026-09-02 直连实测 5 首:
+// (`[行始,行长]<…>`),**按行序号对齐**,行数相等是格式契约(直连实测 5 首:
 // Lemon 57/57、Ditto 73/73、Cruel Summer 73/73、Pretender 78/78、夜に駆ける 88/88;晴天
 // 这类中文歌没有这一行)。片段拼接后就是这一行的文字,片段自带空格;空片段对应署名行。
 // 行始时间戳取 KRC 那一行的行始——App 侧把译文贴到酷狗 fmt=lrc 那份整行歌词上用的是
@@ -409,7 +409,7 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 
 // pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。
 //
-// 2026-09-01 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
+// 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
 // 不看专辑和时长,于是排序靠前的杂项能把同页靠后的正主顶掉。真实案例(周杰伦《简单爱
 // (Live)》/《The One 周杰伦演唱会》,本地 273.227s):酷狗对"周杰伦 简单爱 (Live)"返回的
 // 第 1 条是「简单爱 (无与伦比演唱会 m 56s)」——一个 56 秒的片段、专辑名为空,剥括号后
@@ -503,7 +503,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 	return best
 }
 
-// kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面(2026-08-31 加)。响应的
+// kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面。响应的
 // imgurl 字段是个带 "{size}" 占位符的模板(如
 // "http://imge.kugou.com/stdmusic/{size}/…/….jpg"),换成具体像素数才是能直接访问的
 // URL——400/480/800 实测都能 200,这里用 480,跟 qqCoverMaxEdge 取的档位量级一致。
@@ -523,7 +523,7 @@ func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
 		return ""
 	}
 	cover := strings.ReplaceAll(out.Data.ImgURL, "{size}", "480")
-	// ⚠️ 2026-08-31 真实bug(用户报"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
+	// ⚠️ 真实故障(现象是"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
 	// netease 那条却有缩略图):酷我/acg 的这个接口原样返回的是 "http://" 前缀,collector
 	// 这边发请求不受影响(没有 ATS 限制),但这个 URL 之后会原样进 lyricCandidate.cover、
 	// 一路传到 Swift 侧的 AsyncImage——macOS App Transport Security 默认拒绝纯 HTTP 的

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 抽成纯函数放进 Core 的理由跟这个仓库其它几处一样(AGENTS.md 的分层约定):这段逻辑
 /// 里有三条**只在特定用户状态下才暴露**的不变量,混在 View 里除了肉眼盯着下拉框以外
-/// 没有别的验证办法 —— 而其中一条(配过偏移但已不在信任名单)恰恰就是 2026-08-18 那版
+/// 没有别的验证办法 —— 而其中一条(配过偏移但已不在信任名单)恰恰就是那版
 /// 按播放器偏移翻车的原因。
 public enum LyricsOffsetScope {
     /// 「全部播放器」那一项的 tag。空串不可能是任何 App 的 bundle id,拿它当哨兵是安全的;
@@ -14,9 +14,9 @@ public enum LyricsOffsetScope {
     /// 候选 bundle id,顺序即展示顺序。
     ///
     /// - `builtInOrder`: 第 1 组内置播放器要按哪个顺序摆——默认是 `PlaybackPlayer.allCases`
-    ///   的枚举声明顺序(纯 LyrimuseCore 类型,这个默认值不越层)。2026-08-25 起,设置页
+    ///   的枚举声明顺序(纯 LyrimuseCore 类型,这个默认值不越层)。设置页
     ///   "全局时间轴偏移"那一行的下拉调用点改传 `PlaybackPlayer.displayOrder`(按系统语言排,
-    ///   跟"选择播放器"图标网格用同一套顺序,用户要求两处一致)——那个属性定义在 App 主
+    ///   跟"选择播放器"图标网格用同一套顺序)——那个属性定义在 App 主
     ///   target 的 `FeatureSettingsStore.swift`(依赖 `AppSettings`/`L10n`),LyrimuseCore
     ///   不能反向依赖它,所以顺序作为参数从外面传进来,而不是这个函数自己在内部读。
     /// - `trusted`: 用户信任的未知播放器(`TrustedPlayers.current`,bundleID → 显示名)。

@@ -2,19 +2,19 @@ package main
 
 import "testing"
 
-// 2026-08-23 用户报「播放记录里 K/DA 的歌手怎么是 K」。
+// 现象是「播放记录里 K/DA 的歌手怎么是 K」。
 //
 // 根因:lastfmcollapse 在 scrobble **之前**把查不到编目的合credit 串折成第一位艺人,而
 // firstCreditedArtist 当时把 `/` 跟逗号平级、无条件取第一段 ——
 // `K/DA/Madison Beer/i-dle/Jaira Burns` 于是被劈成 `K`。日志逐字记着:
 //
-//	2026/08/17 17:21:14 lastfm collapse: "K/DA/Madison Beer/i-dle/Jaira Burns" -> "K"
-//	2026/08/22 11:03:35 lastfm collapse: "K/DA / Madison Beer / i-dle / Jaira Burns" -> "K"
+//	17:21:14 lastfm collapse: "K/DA/Madison Beer/i-dle/Jaira Burns" -> "K"
+//	11:03:35 lastfm collapse: "K/DA / Madison Beer / i-dle / Jaira Burns" -> "K"
 //
 // 后果不可逆:`K` 在 Last.fm 上是一个**真实存在的无关歌手**(10.8 万听众),4 次播放全记
 // 到了人家名下,而 K/DA(84.8 万听众)名下 0 次;Last.fm 的纠错库已冻结,全局补不回来。
 //
-// 更值得记住的是它为什么拖了三天:同一道守卫 2026-08-20 就加过了,但只加在 Swift 侧的
+// 更值得记住的是它为什么拖了三天:同一道守卫就加过了,但只加在 Swift 侧的
 // ArtistCredit.primary(那边只管显示),**没回头修这条写侧路径**。所以这一组用例同时是
 // 跨语言契约:期望值要跟 lyrimuse-selftest 里 ArtistCredit 那组逐条对得上。
 func TestFirstCreditedArtistSlashInName(t *testing.T) {
@@ -50,7 +50,7 @@ func TestFirstCreditedArtistSlashInName(t *testing.T) {
 		// 免得以后有人以为这是没想到的漏网,顺手"修"成一律不切、把 K/DA 又搭进去。
 		{"M/A/R/R/S", "M/A", "已知退化:全单字母段,吃两段后长度达标"},
 
-		// 2026-08-30 真实bug(方大同 & Fiona Sit《Four Tour》案,见
+		// 真实故障(方大同 & Fiona Sit《Four Tour》案,见
 		// normalizeArtistCreditHanAnd 头注):中文"和"夹在两个拉丁字母段之间时当合唱
 		// 连接词处理。
 		{"Khalil Fong和Fiona Sit", "Khalil Fong", "中文'和'连接两个拉丁艺名,应能拆开"},
@@ -59,7 +59,7 @@ func TestFirstCreditedArtistSlashInName(t *testing.T) {
 		// 不能被切碎。
 		{"李和平", "李和平", "纯中文人名本身含'和',两侧中文段各只有1字,不该被切开"},
 		{"和平", "和平", "'和'在开头,左侧没有字符,不该被当分隔符"},
-		// 2026-08-31 真实bug(陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"案,见
+		// 真实故障(陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"案,见
 		// normalizeArtistCreditHanAnd 头注):两侧都是中文、且各自≥2字时也当合唱连接词——
 		// "陶喆和盧廣仲"之前恒取不出首歌手,七个源全部搜不到;单独查"陶喆"四个源立刻命中。
 		{"陶喆和盧廣仲", "陶喆", "两侧都是≥2字的中文段,应能拆开"},

@@ -35,12 +35,12 @@ type lastfmScrobbler struct {
 	// dead:session key / API key 已被 Last.fm 判死(error 9/10/26 一击、error 4 两击,
 	// 见 shouldDisable)。置位后停止一切后续提交 —— 原来这种情况下每首歌照样白打 2 个
 	// 注定失败的请求,且除了日志刷屏没有任何机制让用户知道 scrobble 早就全停了
-	// (2026-08-11 审阅确认)。进程重启(保存配置/重连账号都会 kickstart collector)
+	// 。进程重启(保存配置/重连账号都会 kickstart collector)
 	// 自然复位。
 	dead atomic.Bool
 	// suspect4:第一次撞上 error 4(Authentication Failed)的时刻(UnixNano,0=无嫌疑)。
 	// error 4 跟 9/10/26 不同:真撤销授权时它确实会出现,但 Last.fm 服务端不稳时也会
-	// **误报**(2026-08-17 实测:一上午 500/超时/DNS 失败之后来了一发 error 4,授权
+	// **误报**(实测:一上午 500/超时/DNS 失败之后来了一发 error 4,授权
 	// 其实完好,进程重启后第一次提交就成功了——不重启的话镜像就永久停在一次误报上)。
 	// 所以单发 error 4 只记嫌疑、不熔断;30s~30min 内再次撞上才坐实。真撤销时每次
 	// 调用都失败,第二击最多半分钟就到,多打的请求屈指可数;换来的是孤立误报不再
@@ -123,7 +123,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	// Last.fm 的错误经常以 HTTP 200 + {"error":N,"message":...} 返回(读路径
-	// LastfmAuthFlow.swift 早有同样的注释,写路径一直没做,2026-08-11 审阅确认)——
+	// LastfmAuthFlow.swift 早有同样的注释,写路径一直没做)——
 	// 所以 200 和非 200 的 body 都要解析,先认 error 字段再看状态码。
 	var out struct {
 		Error     int    `json:"error"`
@@ -135,7 +135,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 			} `json:"@attr"`
 			// 单条 <scrobble> 里带着 ignoredMessage(code + 人话原因)。回填路径一直在
 			// 解析它(backfill.go 的 scrobbleEntry/parseScrobbleEntries),活路径原来
-			// 整个丢掉,只报一句笼统的 accepted=0 —— 2026-08-30 排查那 5 条真实失败时
+			// 整个丢掉,只报一句笼统的 accepted=0 —— 排查那 5 条真实失败时
 			// 只能靠翻日志上下文猜是哪首歌、为什么被拒,故补上,复用同一个解析器。
 			Scrobble json.RawMessage `json:"scrobble"`
 		} `json:"scrobbles"`
@@ -150,7 +150,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 	// track.scrobble 的"被忽略"也是 200:accepted=0,原来会被当成功。不算致命错误,
 	// 但必须如实报出去让日志可见。
 	//
-	// 2026-08-30:带上服务端给的真实原因。原来这句只报 accepted=0,排查时无从判断是
+	// 带上服务端给的真实原因。原来这句只报 accepted=0,排查时无从判断是
 	// 哪一类拒收 —— 实测那 5 条里 3 条是空艺人名(彼时守卫还没加)、2 条是艺人名
 	// "群星"(Various Artists,Last.fm 当非艺人拒收),两种成因的处置完全不同,却报同
 	// 一句话。旧注释里"时间戳超两周"这条对活路径不成立(当场提交不可能超窗),那是从
@@ -313,8 +313,8 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 //
 // ## 历史
 //
-// 2026-08-07 ~ 08-31 只有一套"联网条件式"(查不到就折,30 天 TTL),08-31 因"结果不可复现"
-// 被整个删掉、换成二态静态开关;2026-09-03 把它修好后作为第三档加回来 —— 修了什么、为什么
+// ~ 08-31 只有一套"联网条件式"(查不到就折,30 天 TTL),08-31 因"结果不可复现"
+// 被整个删掉、换成二态静态开关;把它修好后作为第三档加回来 —— 修了什么、为什么
 // 现在自洽,见 lastfmcollapse.go 头注(每首歌只判一次永久沿用、折叠前核查目标已收录、
 // 失败不缓存)和 docs/features/12 §4。
 //
@@ -364,7 +364,7 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 	if album != "" {
 		p["album"] = album
 	}
-	// 2026-08-30 补:这条**活路径**原来不发 duration,而 backfill.go:200 一直在发 ——
+	// 补:这条**活路径**原来不发 duration,而 backfill.go:200 一直在发 ——
 	// 同一首歌当场 scrobble 反而比事后回填少一个字段,编目匹配的输入不如回填全。两条
 	// 路径本该给 Last.fm 同样的信息,没有任何理由分叉。
 	//
@@ -380,7 +380,7 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 // 跳过,call 不会被执行。
 //
 // onFail(可为 nil)在**除熔断以外**的失败分支上被调用,让调用方决定这一条要不要留痕。
-// 加它的理由(2026-08-30 实测排查):
+// 加它的理由(实测排查):
 //
 //	原来失败只打一行日志就完事,注释写的是"下一次 poll/scrobble 自然会覆盖"——那句话
 //	对 now-playing 成立(瞬时状态,下一拍就盖掉),对 **scrobble 不成立**:一次收听只提交
@@ -470,7 +470,7 @@ func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
 // lastfmTrack is a track from Last.fm. UTS is the scrobble time in unix seconds
 // (0 for the currently-playing entry, which has no timestamp).
 //
-// Image(2026-09-03 加)是响应里 `image` 数组的 large 档 URL(拿不到退 extralarge、再退
+// Image是响应里 `image` 数组的 large 档 URL(拿不到退 extralarge、再退
 // 最后一档),原样透传、不判占位星——App 侧 `imageURL()` 一直在做那道过滤(按固定 hash 认
 // Last.fm 的"万能白星"),两边各判一次没有意义。只给 recent feed 用,桥接/去重逻辑不看它。
 type lastfmTrack struct {
@@ -481,7 +481,7 @@ type lastfmTrack struct {
 
 // lastfmRecentPage 是一次 `user.getrecenttracks limit=50` 的完整解析结果。
 //
-// 2026-09-03 之前 lastfmRecent 只返回 (nowPlaying, done):桥接只关心这两样。现在这次
+// 之前 lastfmRecent 只返回 (nowPlaying, done):桥接只关心这两样。现在这次
 // 拉取还要落成 App 读的 recent feed(见 lastfmfeed.go),feed 要把 `@attr.total`(账号
 // 总 scrobble 数——App 那三个数字里的"总量"原来单独靠一次 page=1 请求的同一个字段)一并
 // 带走,所以把响应里用得上的东西收成一个结构体整体返回。
@@ -495,7 +495,7 @@ type lastfmRecentPage struct {
 // (if any) and completed scrobbles with timestamps (newest first). Bridges iPhone
 // playback (FastScrobbler→Last.fm) into ListenBrainz — now-playing mirrors the
 // live track, completed scrobbles are forwarded as listens so "last played" and
-// history reflect the phone on any device. 2026-09-03 起同一份响应也落成 App 读的
+// history reflect the phone on any device. 同一份响应也落成 App 读的
 // recent feed(lastfmfeed.go),所以顺手多解 image / @attr.total。
 func lastfmRecent(ctx context.Context, user, apiKey string) (page lastfmRecentPage, ok bool) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)

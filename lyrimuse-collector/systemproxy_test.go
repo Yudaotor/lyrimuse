@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// scutilProxySample 是 2026-09-03 在这台机器上 `scutil --proxy` 的真实输出(Clash Verge
+// scutilProxySample 是在这台机器上 `scutil --proxy` 的真实输出(Clash Verge
 // 开着系统代理时),原样留档 —— 解析器的每一条断言都对着这份真样本,不是照着我以为的格式写的。
 const scutilProxySample = `<dictionary> {
   ExceptionsList : <array> {

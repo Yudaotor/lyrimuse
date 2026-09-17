@@ -26,19 +26,19 @@ public final class LyricsOffsetStore: ObservableObject {
 
     private static let defaultsKey = "np:lyricsOffsetsByTrackJSON"
     private static let globalDefaultsKey = "np:lyricsGlobalOffsetMs"
-    // 「按播放器」那层的键。**故意不复用** 2026-08-18 那个 np:lyricsPlayerOffsetsJSON:
+    // 「按播放器」那层的键。**故意不复用** 那个 np:lyricsPlayerOffsetsJSON:
     // 那一版是为了补"Spotify 时钟恒偏快",而那个偏差后来查明是自然切歌锚点超前、已由
     // naturalAdvanceCorrection 按曲精确校正,于是 08-20 连值一起清掉了(见 init)。复用同一个
     // 键会把那些为已修好的 bug 调出来的旧值重新激活,反把歌词拖慢;换个新键从零开始。
     private static let playerDefaultsKey = "np:lyricsOffsetsByPlayerJSON"
-    /// 第四层「电台」那份(2026-09-11)。见 radioOffsets 的注释。
+    /// 第四层「电台」那份。见 radioOffsets 的注释。
     private static let radioDefaultsKey = "np:lyricsRadioOffsetsJSON"
 
     private var offsets: [String: Int]
     private var radioOffsets: [String: Int]
 
     private init() {
-        // 存量 key 归一化(见 migratedOffsetKeys):trackKey 的形态 2026-08-20 变过一次,
+        // 存量 key 归一化(见 migratedOffsetKeys):trackKey 的形态变过一次,
         // 老记录留在旧形态下会永久查不到。搬完立刻落盘,不留"内存已修、磁盘还旧"的中间态。
         let loaded = Self.load()
         offsets = Self.migratedOffsetKeys(loaded)
@@ -49,9 +49,9 @@ public final class LyricsOffsetStore: ObservableObject {
         playerOffsets = Self.loadPlayerOffsets()
         radioOffsets = Self.loadRadioOffsets()
         radioOffsetCount = radioOffsets.count
-        // 2026-08-18 那一版「按播放器偏移」(np:lyricsPlayerOffsetsJSON)的存量值继续清掉。
+        // 那一版「按播放器偏移」(np:lyricsPlayerOffsetsJSON)的存量值继续清掉。
         // 它是内部补偿、界面上看不见也重置不了,而它要补的偏差已经被根修(见
-        // LocalPlaybackSource.naturalAdvanceCorrection);2026-08-21 重新引入的这一层是**用户
+        // LocalPlaybackSource.naturalAdvanceCorrection);重新引入的这一层是**用户
         // 显式配置**、在设置页看得见改得动,换了新键,跟那些旧值互不相干。
         UserDefaults.standard.removeObject(forKey: "np:lyricsPlayerOffsetsJSON")
         // persist() 是实例方法,得等所有存储属性都初始化完才能调 —— 所以搬迁结果在这里
@@ -84,11 +84,11 @@ public final class LyricsOffsetStore: ObservableObject {
 
     // MARK: - 按播放器偏移
 
-    /// bundle id → 偏移(毫秒)。第三层,2026-08-21 按用户要求加回来 —— 但语义跟 08-18 那版
+    /// bundle id → 偏移(毫秒)。第三层,按加回来 —— 但语义跟 08-18 那版
     /// **不是一回事**:那版是代码内部为 Spotify 写死的补偿(用户看不见、重置不了,后来被根修
     /// 取代),这版是设置页那个下拉框里用户自己选播放器、自己调的值。
     ///
-    /// **语义是「要么全部、要么单个」,不是相加**(2026-08-21 用户拍板):某个播放器单独配过,
+    /// **语义是「要么全部、要么单个」,不是相加**:某个播放器单独配过,
     /// 那它就**只用**自己这一档,「全部播放器」那档对它完全不生效;没单独配过才用「全部」。
     /// 零值不落盘,所以"配过"和"非零"是同一件事 —— 把某个播放器调回 0(或点「重置」)就是
     /// 撤掉它的单独设置、重新跟随「全部」。
@@ -129,7 +129,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     /// 这一刻该用的**基准**偏移:这个播放器单独配过就用它那档,否则用「全部播放器」那档。
     ///
-    /// 二选一、**不相加**(2026-08-21 用户拍板的语义)。零值不落盘,所以"字典里没有这个 key"
+    /// 二选一、**不相加**(语义)。零值不落盘,所以"字典里没有这个 key"
     /// 就是"没单独配过",退回「全部」。
     ///
     /// `bundleID` 为 nil / 空串(relay 中继模式没有播放器身份、或者还没拿到第一份快照)时用
@@ -150,17 +150,17 @@ public final class LyricsOffsetStore: ObservableObject {
         baseOffsetMs(forBundleID: bundleID) + offset(forKey: key) + radioOffset(forKey: radioKey ?? "")
     }
 
-    // MARK: - 按「电台 + 曲目」偏移(2026-09-11)
+    // MARK: - 按「电台 + 曲目」偏移
 
     /// `台标哈希|歌手|歌名|指纹` → 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
     ///
     /// # 为什么必须单独一层
     ///
     /// 电台上系统只在元数据切换那一刻告诉我们"换歌了",而那一刻**晚于声音真正开始**。实测
-    /// (2026-09-10/11)我们这一侧已经压到几十毫秒(起表时刻改用事件到达时刻,见 RadioTrackClock),
+    /// (/11)我们这一侧已经压到几十毫秒(起表时刻改用事件到达时刻,见 RadioTrackClock),
     /// 剩下的滞后 δ 完全在苹果那一侧,而且:
     ///
-    ///  - **每首歌不一样** —— 用户实测"同一个电台不同的歌也不太一样",所以钉一个常数没用;
+    ///  - **每首歌不一样** —— 实测"同一个电台不同的歌也不太一样",所以钉一个常数没用;
     ///  - **同一首歌可复现** —— 同一档节目重放两次,边界位置只差 0.50s / 0.71s(kiss me、Touch It),
     ///    所以"这首歌在这个台上调一次、以后一直对"是成立的;
     ///  - **系统里量不出来** —— MediaRemote 的 NowPlayingInfo 全部 18 个字段(pyatv 从协议逆出来的)
@@ -168,13 +168,13 @@ public final class LyricsOffsetStore: ObservableObject {
     ///    Music.app 在电台上不填。ShazamKit 那条自动路要 `com.apple.developer.shazamkit` 授权,
     ///    ad-hoc 签名拿不到(实测报 `Code=202 Missing entitlements` + 401)。
     ///
-    /// 所以只能靠用户的耳朵校一次。而它**绝不能落进按曲目那一层**:用户实测同一首歌正常播放是准的,
+    /// 所以只能靠用户的耳朵校一次。而它**绝不能落进按曲目那一层**:实测同一首歌正常播放是准的,
     /// 把电台上量出来的 δ 套到正常播放会反过来把对的搞错。
     ///
     /// # 为什么 key 里带台标哈希
     ///
-    /// δ 是"这首歌在这档节目里的投递延迟",换个台未必一样。用户 2026-09-11 明确要求"仅适用于
-    /// 这个电台里播放的歌"。扣错一个偏移比不扣更糟(不扣只是照旧慢一点,扣错是往反方向错)。
+    /// δ 是"这首歌在这档节目里的投递延迟",换个台未必一样,所以**只适用于这个电台里播放的歌**。
+    /// 扣错一个偏移比不扣更糟(不扣只是照旧慢一点,扣错是往反方向错)。
     ///
     /// # 跟按曲目那层是**相加**,不是二选一
     ///
@@ -255,7 +255,7 @@ public final class LyricsOffsetStore: ObservableObject {
         // ⚠️ 前两段必须走 EnrichCacheKeys 那套归一化(跟 enrich 缓存 key 同一套),不能原样
         // 拼播放器报的字符串。
         //
-        // 2026-08-20 修的真 bug:播放侧传进来的是**播放器原始**歌手/歌名,而「歌词管理」传
+        // 修的真 bug:播放侧传进来的是**播放器原始**歌手/歌名,而「歌词管理」传
         // 进来的是缓存 key 拆出来的(已归一化)那两段 —— 同一首歌于是有两个身份。实测这台
         // 机器 2483 首里 111 首(4.5%)落在这个差异上(歌名结尾带译名括号、`(with X)` 之类):
         // 在管理页敲的偏移播放时查不到,菜单栏调的值在管理页也看不见、「重置」还清不掉。
@@ -353,12 +353,12 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 播放到这首歌时,把它的"已校准"钉住状态跟当前校正值重新对一遍——维护的是 set() 里
     /// 那条同一个不变式(非零校正值⇄钉住),不是只补不清的单向操作。
     ///
-    /// 为什么必须双向(2026-08-26 实测坐实):这里原来叫 backfillPinIfNeeded、只会钉不会
+    /// 为什么必须双向:这里原来叫 backfillPinIfNeeded、只会钉不会
     /// 解钉——pin 只有在 set() 被调用的那一刻才会跟着改,可 set() 不是校正值变回 0 的
     /// 唯一路径(key 含歌词内容指纹,内容一换,旧 key 下的非零校正值就查不到了、新 key
     /// 默认是 0,而这个函数一旦在内容变化前用旧值钉过一次,之后再也没人告诉它去解钉)。
     /// 实测这台机器 16 条已校准记录里 9 条就是这么飘出来的:校正值早就是 0,pin 却一直
-    /// 挂着,「仅人工修正」筛选把它们当成"用户亲手弄对过",而这首歌现在其实跟没调过没有
+    /// 挂着,「仅人工修正」筛选把它们当成"实测弄对过",而这首歌现在其实跟没调过没有
     /// 任何区别。改成无条件同步(该钉就钉、该解就解)之后,这类飘移会在下次播放到时自愈,
     /// 不需要用户手动发现再去解钉。
     ///

@@ -15,10 +15,10 @@ import (
 // `collector retranslate-repeated [-apply]` —— 扫描整份 enrich 缓存,把"歌词有重复行、
 // 当前译文疑似被那批重复坑过"的条目重新机翻一遍。
 //
-// 为什么需要它:2026-08-26 修的那个 bug(machineTranslateLRCWithBase 现在按原文去重再
+// 为什么需要它:修的那个 bug(machineTranslateLRCWithBase 现在按原文去重再
 // 送翻,见 translate.go 头注释)只改了"以后新翻译的行为"——已经缓存的译文不会自己刷新。
 // `needsTranslationBackfill` 只要 `lyrics_tr` 非空、语言对得上就直接跳过(见
-// `translationUsable`),不会因为内容"看起来不太全"就主动重翻。用户报的 Michael
+// `translationUsable`),不会因为内容"看起来不太全"就主动重翻。现象是的 Michael
 // Jackson《Beat It》就是这么一条:53 行歌词只翻出 3 行,而且会一直停在那里,直到有人
 // 手动清一次——这条命令就是那个"手动清"的批量版本。
 //
@@ -56,7 +56,7 @@ func runRetranslateRepeatedCLI(args []string) {
 }
 
 // hasRepeatedTranslatableLine 判断"需要翻译的那批行"里有没有原文完全相同的两行——只有
-// 这种情况才会撞上 2026-08-26 修的那个 bug(逐行独立发请求,同一句话的结果不保证一致)。
+// 这种情况才会撞上修的那个 bug(逐行独立发请求,同一句话的结果不保证一致)。
 func hasRepeatedTranslatableLine(lyrics, target string) bool {
 	lines := parseLRCLines(lyrics)
 	speakers := lyricSpeakerLabels(lyrics)

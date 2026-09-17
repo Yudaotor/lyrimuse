@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// 「暂停时该报哪个位置」(2026-08-21)。样本全是真抓的:
+// 「暂停时该报哪个位置」。样本全是真抓的:
 //   - Arc(网页播放器,页面没调 setPositionState):elapsedTime 恒 0、timestamp 恒为开播
 //     那一刻 → 一按暂停位置就归零,这是要修的那个 bug。
 //   - QQ/网易云/Apple Music:暂停时会带新鲜时间戳重发一次 elapsedTime,那个值就是暂停位置

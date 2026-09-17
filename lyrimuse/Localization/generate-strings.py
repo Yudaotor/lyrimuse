@@ -32,7 +32,7 @@ TARGETS = {
     "en": "en.lproj",
     "zh-Hant": "zh-hant.lproj",
 }
-# 缺翻译时允许回退到源语言(简体)的语言。**当前为空**:2026-09-03 用户定的规则是「新加文案必须把
+# 缺翻译时允许回退到源语言(简体)的语言。**当前为空**:规则是「新加文案必须把
 # 当前支持的语言都写全」(见 AGENTS.md「容易踩的具体坑 → 本地化」),所以 zh-Hant 跟 en 一样缺译就
 # 失败并列出缺的键。加繁体那天曾短暂开过回退,让 1196 条译文写入前树不红;译文齐了就关掉。
 FALLBACK_TO_SOURCE = set()
@@ -213,7 +213,7 @@ def main() -> int:
         suffix = f"(其中 {fallback_count} 条暂回退简体)" if fallback_count else ""
         # 打完整相对路径,不要只打 `zh-hans.lproj` —— 产物不在 Localization/ 下面,而在
         # Sources/lyrimuse/Resources/ 下,只报 lproj 名会让人以为它跟 catalog 同目录。
-        # 2026-09-12 实测两个会话**各自独立**把路径记成 Localization/*.lproj/,都是被这行误导的。
+        # 实测两个会话**各自独立**把路径记成 Localization/*.lproj/,都是被这行误导的。
         print(f"{os.path.relpath(out, os.path.join(ROOT, '..'))}: {len(strings)} 键{suffix}")
     return 0
 

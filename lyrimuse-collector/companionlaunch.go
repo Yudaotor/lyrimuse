@@ -101,13 +101,13 @@ const lyrimuseAppProcessName = "lyrimuse"
 // lyrimuseRunning 传的是函数而不是 bool,为的是保住短路:前两个条件绝大多数轮次就已经
 // 否决了,而查 Lyrimuse 在不在跑要 fork 一次 pgrep,没必要每秒都白跑一次。
 //
-// ⚠️ 第三个条件(已在运行就跳过)是 2026-08-05 补的,之前这里和 launchLyrimuseApp 的注释
+// ⚠️ 第三个条件(已在运行就跳过)是补的,之前这里和 launchLyrimuseApp 的注释
 // 都断言"已经在运行时 open 是空操作、不需要提前判断",这个前提是错的,当天日志里有两种
 // 反例:
 //
 //	① `open` 会给已运行的实例投递 reopen 事件,而 AppDelegate.applicationShouldHandleReopen
 //	   在没有可见窗口时(菜单栏常驻 App 的常态)会把设置窗口当"主窗口"打开——表现成
-//	   "打开 Music 之后 Lyrimuse 的设置窗口自己弹出来了"(用户反馈)。
+//	   "打开 Music 之后 Lyrimuse 的设置窗口自己弹出来了"。
 //	② 更糟的一种:launchd 直接拉起的 App 进程没有以 GUI 实例身份注册进 LaunchServices,
 //	   `open` 当它不存在、又起了第二个实例(当天 launchctl list 里同时出现
 //	   me.yudaotor.lyrimuse 和 application.me.yudaotor.lyrimuse.* 两条,两个进程跑同一个
@@ -131,7 +131,7 @@ func isProcessRunning(name string) bool {
 }
 
 // companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定播放器时盯
-// features.Players 里的每一个(2026-09-01 起可多选;单选年代只有一个 key,行为跟合并
+// features.Players 里的每一个(可多选;单选年代只有一个 key,行为跟合并
 // 前完全一致,不会因为多了 playerAuto 而误报别的播放器启动);「自动识别」在选中集合里
 // (不管是否同时还勾了别的具体播放器,都按超集处理)时没有唯一确定的目标,同时盯着
 // 全部五个已知播放器,任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的
@@ -146,7 +146,7 @@ func companionLaunchProcessNames() []string {
 			candidates = append(candidates, playerProcessNameFor(player))
 		}
 	}
-	// 2026-09-03 起「跟随播放器启动」按播放器逐个勾选(features.LaunchLyrimuseOnPlayers,用户拍板):键在就
+	// 「跟随播放器启动」按播放器逐个勾选(features.LaunchLyrimuseOnPlayers):键在就
 	// 只盯勾了的、且仍在候选(选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧
 	// PlayerLinkage.effective 同一条规则;键缺失是布尔年代的老配置,退回盯整个候选集合。
 	if features.LaunchLyrimuseOnPlayers == nil {
@@ -171,7 +171,7 @@ func companionLaunchProcessNames() []string {
 // Music。playerProcessNameFor() 给 features.Players 里手动选定的每个成员各查一个出来;
 // playerAuto 在选中集合里时直接用整份列表。
 //
-// ⚠️ 酷狗那一项是非 ASCII 的,2026-08-22 实测确认两件事都成立才敢这么写:
+// ⚠️ 酷狗那一项是非 ASCII 的,实测确认两件事都成立才敢这么写:
 //  1. `pgrep -x 酷狗音乐` 能匹配到 comm 为中文的进程(拿一个中文名符号链接起进程验过);
 //  2. UTF-8 下「酷狗音乐」是 12 字节,没超过内核 p_comm 的 16 字节上限(pgrep 比的就是
 //     这个被截断过的名字)——再长两个汉字就会被截断、`-x` 精确匹配当场失效。往这份列表
@@ -179,7 +179,7 @@ func companionLaunchProcessNames() []string {
 var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify", "酷狗音乐"}
 
 // playerProcessNameFor 是某个具体播放器常量的可执行文件名,给手动选定的场景用,见
-// knownPlayerProcessNames 注释。2026-09-01 从读包级 features.Player 的 playerProcessName
+// knownPlayerProcessNames 注释。从读包级 features.Player 的 playerProcessName
 // 改成纯函数——多选之后 companionLaunchProcessNames 要对 features.Players 里的每个
 // 成员分别求进程名,不能再读一个包级单值。
 func playerProcessNameFor(player string) string {

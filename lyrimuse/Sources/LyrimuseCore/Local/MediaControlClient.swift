@@ -3,7 +3,7 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-control")
 
-// 两条完全独立的读取路径,按 PlaybackPlayerPreference.selected(2026-09-01 起可多选)
+// 两条完全独立的读取路径,按 PlaybackPlayerPreference.selected(可多选)
 // 分派:
 //
 // - Apple Music:用 AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部
@@ -35,14 +35,14 @@ public enum MediaControlClient {
     static let artworkTimeout: TimeInterval = 10
 
 
-    /// players 是当前选中的播放器集合(2026-09-01 起可多选,取代原来的单值 `player:`
+    /// players 是当前选中的播放器集合(可多选,取代原来的单值 `player:`
     /// 参数)。三条路径,按优先级(跟 collector 侧 system.go 的 getState() 是同一套设计,
     /// 两侧必须同步维护):
     ///   - 选了「自动识别」(不管是否同时还勾了别的具体播放器,auto 是超集)→
     ///     fetchAutoDetectedSnapshot;
     ///   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
     ///     fetchAppleMusicSnapshot 的 AppleScript 路径(跟单选年代完全一样,不多背一次
-    ///     子进程往返)。⚠️ 2026-09-11 起这条路外面包了一层 radioAwareAppleMusicSnapshot:
+    ///     子进程往返)。⚠️ 这条路外面包了一层 radioAwareAppleMusicSnapshot:
     ///     电台判据是 MediaRemote 独有的字段,AppleScript 拿不到,不补的话这一种配置下电台
     ///     完全不生效。补法是**按曲目探一次**,不是每拍都问 —— 上面那句"不多背一次往返"仍然
     ///     成立到换歌粒度,详见那个函数的头注;
@@ -119,14 +119,14 @@ public enum MediaControlClient {
         return decoded
     }
 
-    // MARK: - 「只勾了 Apple Music」这条路上的电台判据(2026-09-11)
+    // MARK: - 「只勾了 Apple Music」这条路上的电台判据
 
     /// 纯 AppleScript 那份快照拿不到 `radioStationHash` —— 那是 MediaRemote 独有的键,
     /// 问 Music.app 要不到。于是「设置里只勾了 Apple Music、没勾自动识别」这一种配置下,
     /// 整套电台逻辑(单曲表 / 台卡 / 口白 / 按台校准)**恒不生效**:`isRadio` 永远是 nil,
     /// 位置照旧是整档节目的口径,歌词整档对不上。
     ///
-    /// 用户 2026-09-11 问「这个模式是不是仅限于 Apple Music」时查出来的 —— 讽刺的是判据本身
+    /// 是查「这个模式是不是仅限于 Apple Music」时发现的 —— 讽刺的是判据本身
     /// 一处 bundleID 都不认(谁报 `radioStationHash` 就算谁),**只勾 Apple Music 反而是唯一
     /// 不生效的配置**;默认勾着「自动识别」,走 media-control,一直是好的。
     ///
@@ -137,7 +137,7 @@ public enum MediaControlClient {
     ///
     /// 这条路径当初跳过 media-control 就是为了"不多背一次子进程往返"(见 fetchSnapshot 头注),
     /// 每拍都问等于把那条决策整个推翻。而"这一路是不是电台"在同一个曲目 key 内不会翻转:
-    /// 台卡、每首歌各自是不同的 key,口白期间系统一个字段都不变(2026-09-11 抓了整段 61 秒的
+    /// 台卡、每首歌各自是不同的 key,口白期间系统一个字段都不变(抓了整段 61 秒的
     /// 口白坐实)、沿用上一首的 key,判据也确实还成立。所以按 key 探一次把结果记下来 ——
     /// 换歌才多一次 fork(实测电台上 230~310 秒一次),而不是 2 秒一次。
     private static func radioAwareAppleMusicSnapshot() -> MediaControlSnapshot? {
@@ -158,11 +158,11 @@ public enum MediaControlClient {
         return snapshot.withRadio(position: position)
     }
 
-    /// 连续几次拿不到快照,才真的把播放状态清空(2026-09-17,issue #8)。纯函数,selftest 覆盖。
+    /// 连续几次拿不到快照,才真的把播放状态清空。纯函数,selftest 覆盖。
     ///
     /// 改动前是**一拍就清**:`LocalPlaybackSource.clearIfWasPlaying()` 会把 title / artist /
     /// allLines / currentLine / 封面 / lastKey 一次全清掉。而单拍 nil 在实测里并不罕见
-    /// (本机 24 小时抓到 2 次,都是单次、下一拍就恢复)。菜单栏靠 2026-09-16 那层 hold
+    /// (本机 24 小时抓到 2 次,都是单次、下一拍就恢复)。菜单栏靠那层 hold
     /// (内容 3s / 几何 8s)看不出来,但悬浮歌词窗和灵动岛是直接读这些发布状态的 ——
     /// 那里会当场闪一下。
     ///
@@ -246,7 +246,7 @@ public enum MediaControlClient {
         /// elapsedTime 是"在这一刻"的位置。ISO8601(带 Z),用来在 elapsedTimeNow 不可信时
         /// 自己补算 —— 见 livePositionSeconds。
         let timestamp: String?
-        /// 电台 / 直播流才有的电台标识(2026-09-10 实测:Apple Music Radio 播放时非空,
+        /// 电台 / 直播流才有的电台标识(实测:Apple Music Radio 播放时非空,
         /// 值形如 "CgkIBRoFwOSKqxkQBA")。只当"这是不是电台"的判据用,值本身不看。
         let radioStationHash: String?
     }
@@ -285,9 +285,9 @@ public enum MediaControlClient {
     }
 
     // fetchMultiSelectedSnapshot 是"显式多选了若干个具体播放器、没有勾自动识别"的读取
-    // 路径(2026-09-01 加)——跟 fetchAutoDetectedSnapshot 同一套"系统级 Now Playing 只有
+    // 路径——跟 fetchAutoDetectedSnapshot 同一套"系统级 Now Playing 只有
     // 一个焦点,问 media-control 一次就知道是谁"的机制,区别只在准入名单:这里认的是
-    // players 里用户这次选中的那几个,**加上**信任列表(2026-09-01 补,见
+    // players 里用户这次选中的那几个,**加上**信任列表(补,见
     // TrustedPlayers.isTrusted 的注释——最典型场景是「网页播放器」卡"配对浏览器"这个
     // 动作,一步自动信任+配对,跟"选没选自动识别"是两件独立的事,不该因为没勾自动识别
     // 就让配对形同虚设)。单选且未配对任何浏览器时,这条路径跟旧版
@@ -295,7 +295,7 @@ public enum MediaControlClient {
     // 行为不变,fetchSnapshot() 本身不再直接调用它。
     private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
         let acceptedBundleIDs = Set(players.map(\.bundleIdentifier))
-        // ⚠️ 跟 fetchAutoDetectedSnapshot 同一条兜底(2026-09-17,issue #8):焦点被别的 App
+        // ⚠️ 跟 fetchAutoDetectedSnapshot 同一条兜底:焦点被别的 App
         // 占走时退回 AppleScript 直接问 Music.app —— 但只在用户**确实勾了** Apple Music 时。
         // 开关与收敛性见 appleMusicSnapshotAfterFocusLost 的头注。
         func fallback() -> MediaControlSnapshot? {
@@ -329,7 +329,7 @@ public enum MediaControlClient {
     // 恰好是 Apple Music 时,用 fetchAppleMusicSnapshot() 的 AppleScript 路径拿更精确的
     // 播放位置——跟手动选 Apple Music 时同等精度。
     //
-    // ⚠️ 不在这次调用里同步等 AppleScript 跑完——2026-08-02 实测排查坐实:早先这里是
+    // ⚠️ 不在这次调用里同步等 AppleScript 跑完——实测排查坐实:早先这里是
     // "先跑 media-control、判断出 bundleID 是 Apple Music 之后,顺序再跑一次
     // fetchAppleMusicSnapshot()",两次子进程调用纯顺序阻塞,让 .auto+Apple Music 用户
     // 单次轮询耗时翻倍(每次都要背两次子进程往返),加大了 LocalPlaybackSource.poll()
@@ -352,14 +352,13 @@ public enum MediaControlClient {
     private static var cachedAppleMusicSnapshotAt: Date?
     private static var isRefreshingAppleMusicSnapshot = false
 
-    // MARK: - 焦点被别的 App 抢走时退回 AppleScript(2026-09-17,issue #8)
+    // MARK: - 焦点被别的 App 抢走时退回 AppleScript
 
     /// 这一拍为什么没拿到快照。**只为归因日志,任何一条都不改变行为。**
     ///
-    /// 原来 `LocalPlaybackSource.poll()` 那条 `snapshot failed (no automation permission,
-    /// Music.app not running, or nothing playing)` 把三种原因合成一句话,而且**漏掉了第四种**
-    /// (焦点被别的 App 占走 / 私有通道坏了)。用户交上来的诊断日志里只有这一句,指不出任何
-    /// 方向 —— issue #8 的排查正是卡在这里。
+    /// ⚠️ 失败原因必须分得开:合成一句 `snapshot failed (no automation permission,
+    /// Music.app not running, or nothing playing)` 既混了三种原因、又**漏掉第四种**
+    /// (焦点被别的 App 占走 / 私有通道坏了)。诊断日志里只有这一句时,排查指不出任何方向。
     ///
     /// ⚠️ rawValue 必须是英文:它会被原样插进 OSLog,而 selftest 的「日志规范」那条守卫
     /// 不许日志字面量含 CJK。
@@ -435,7 +434,7 @@ public enum MediaControlClient {
     /// media-control 这一拍没给出可用快照(通道坏 / 没人在报 / 焦点在别的 App 上)时,
     /// 退回 AppleScript 直接问 Music.app —— **前提是上一份被接受的快照就是 Apple Music**。
     ///
-    /// ## 为什么需要它(issue #8)
+    /// ## 为什么需要它
     ///
     /// MediaRemote 的「正在播放」是**系统级的单一焦点**,任何注册了 MPNowPlayingInfoCenter
     /// 的 App 都能占走 —— 网页里一个 video 元素就够。而默认配置(`[.auto]`)下 Apple Music 的
@@ -443,18 +442,18 @@ public enum MediaControlClient {
     /// 里异步精化位置)。焦点一被占,这条路直接 return nil → `LocalPlaybackSource` 把歌词 /
     /// 标题 / 封面全清空,而 Music.app 一直在放、AppleScript 一问就知道。
     ///
-    /// 实锤:本机 UserDefaults 的 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、
+    /// 坐实:本机 UserDefaults 的 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、
     /// Arc 2 次 —— 而那份记录有 6 秒稳定门槛,短于 6 秒的抢夺根本不记,实际次数远不止。
     ///
     /// ## 为什么不是"每拍都并发问一次 AppleScript"
     ///
-    /// 那个方案 2026-08-02 否过一次,理由今天依然成立:对从不用 Apple Music 的 .auto 用户
+    /// 那个方案否过一次,理由今天依然成立:对从不用 Apple Music 的 .auto 用户
     /// (只听 QQ 音乐 / 网易云 / Spotify)凭空每拍多 fork 一个 osascript,而且**首次**对
     /// Music.app 发 Apple Event 会弹一次"自动化"权限对话框 —— 对完全不相关的用户弹这个框
     /// 不可接受。上面那个开关把它挡死:只有**已经**通过 Apple Music 拿到过快照的用户才会
     /// 走到这里。
     ///
-    /// ⚠️ 更强的一条(2026-09-17 核实):对这些人,这条 osascript **本来就在跑** ——
+    /// ⚠️ 更强的一条:对这些人,这条 osascript **本来就在跑** ——
     /// `refinedAppleMusicSnapshotIfNeeded` 在 `playing == true` 时每拍都会后台 fork 同一个
     /// `fetchAppleMusicSnapshot()` 去借精确位置。所以这条回退**一次额外的自动化权限对话框
     /// 都不会多弹**,权限触发面跟改动前逐字相同;它只是把一个已经在后台跑的调用,在
@@ -496,9 +495,9 @@ public enum MediaControlClient {
         // 闸门 = 内置五个播放器 + 用户显式信任的未知播放器(见 TrustedPlayers)。
         // 跟 collector 的 isAcceptedPlayerBundleID 是同一套语义,两侧必须同时改。
         //
-        // ⚠️ 三条 nil 出口 2026-09-17 起都先过一次 `appleMusicSnapshotAfterFocusLost`:
+        // ⚠️ 三条 nil 出口都先过一次 `appleMusicSnapshotAfterFocusLost`:
         // 「系统 Now Playing 焦点被别的 App 占走」跟「真的没人在放歌」在这里长得一模一样,
-        // 而前者下 Music.app 往往还在放。理由与收敛性见那个函数的头注(issue #8)。
+        // 而前者下 Music.app 往往还在放。理由与收敛性见那个函数的头注。
         guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else {
             // 失败原因已由 fetchRawMediaControlSnapshot 记下,别在这里覆盖掉。
             return appleMusicSnapshotAfterFocusLost()
@@ -518,8 +517,8 @@ public enum MediaControlClient {
             bundleID: bundleID, snapshot: snapshotWithProbedAlbum(snapshot))
     }
 
-    /// 上游报的专辑名为空时,用 YouTube Music 探针**刚刚那次**读到的那个补上(2026-09-03,
-    /// 用户报「YT Music 播一张专辑时第一首不上送专辑名」)。判据是纯函数
+    /// 上游报的专辑名为空时,用 YouTube Music 探针**刚刚那次**读到的那个补上(
+    /// 现象是「YT Music 播一张专辑时第一首不上送专辑名」)。判据是纯函数
     /// `YouTubeMusicAdProbe.albumPatch`(selftest 覆盖),这里只负责把它接上真实的探针缓存。
     ///
     /// ⚠️ **必须在 `trustedPlaybackRejected` 之后**调用,不能提前把专辑名补进去再过守卫:
@@ -540,7 +539,7 @@ public enum MediaControlClient {
     }
 
     /// `TrustedPlayers.notASong` 的"带 YouTube Music 广告复核"版本,也是这两条取快照的
-    /// 路径该用的那一个(2026-09-02)。
+    /// 路径该用的那一个。
     ///
     /// 基础判据(artist 或 album 为空就丢)原样不动 —— 它跟 collector 侧
     /// `trustedPlaybackNotASong` 是逐字对应的一套语义。复核作为**外面一层**加上去,
@@ -548,15 +547,15 @@ public enum MediaControlClient {
     ///
     /// 这一层是为了让 YouTube Music 能被识别 —— 它的 album **常常**是空的(不是总是,
     /// 见 `YouTubeMusicAdProbe` 头注那条订正),空的那些不复核就永远进不来
-    /// (用户 2026-09-02 报的就是这个)。而不能简单免检 album,因为那一条同时也在挡广告:
+    /// (表现就是这个)。而不能简单免检 album,因为那一条同时也在挡广告:
     /// 实测广告的 artist 是广告主频道名、**非空**(见 `YouTubeMusicAdProbe` 头注的两条
     /// 真实样本)。
     ///
     /// 三条出口在 `YouTubeMusicAdProbe.gate` 里(纯函数、selftest 覆盖),这里只负责
     /// 把它接上真实的探针缓存。
     ///
-    /// ⚠️ 2026-09-02 起「判定是广告」**不再拒**,而是放行、由
-    /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI(用户要求 YT Music 的
+    /// ⚠️ 「判定是广告」**不再拒**,而是放行、由
+    /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI(YT Music 的
     /// 广告也像 Spotify 那样显示「广告中」)。放行不会让广告被记录 —— 完整理由见
     /// `YouTubeMusicAdProbe.Gate.acceptAsAd` 的注释,那里也写明了 Swift 与 Go 在这一层
     /// 故意不对称。
@@ -567,7 +566,7 @@ public enum MediaControlClient {
             bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
             return false
         }
-        // ⚠️ **Spotify 网页版广告必须在下面那道短路之前处理**(2026-09-03)。它的字段形状是
+        // ⚠️ **Spotify 网页版广告必须在下面那道短路之前处理**。它的字段形状是
         // `title="广告" artist="" album="" duration≈30s`(现场抓的真实样本,见
         // `SpotifyWebAdProbe` 头注那张对照表)—— **artist 是空的**,而下面那行 guard 会把
         // 歌手名为空的一律丢掉,页面复核根本轮不到。后果是广告那 30 秒 App 手上一条播放数据
@@ -586,7 +585,7 @@ public enum MediaControlClient {
         return YouTubeMusicAdProbe.gate(artist: snapshot.artist, verdict: verdict) == .reject
     }
 
-    /// 「这条是不是一段 Spotify 网页版广告,该放行并标成广告?」(2026-09-03)
+    /// 「这条是不是一段 Spotify 网页版广告,该放行并标成广告?」
     ///
     /// 三道门,全过才放行 —— 判据本体是两个纯函数(`fieldShapeNeedsProbe` / `gate`,
     /// selftest 覆盖),这里只负责把它们接上真实的配对表和探针缓存:
@@ -601,7 +600,7 @@ public enum MediaControlClient {
     ///    "维持改动前的样子(丢掉)",不是"在一首真歌上贴广告标签"。
     ///
     /// 放行之后由谁标成广告:`LocalPlaybackSource.adBreakByFields` 读**同一份**探针缓存
-    /// (`SpotifyWebAdProbe.cachedVerdict == .ad`),两处口径一致。⚠️ 2026-09-08 之前那边是靠
+    /// (`SpotifyWebAdProbe.cachedVerdict == .ad`),两处口径一致。⚠️ 之前那边是靠
     /// "配对过 spotifyWeb 就套原生那套 album 空 / artist 空 启发式"来亮「广告中」的 —— 配对关系
     /// 不等于此刻在放 Spotify(Safari / Arc 两个平台都配了),YT Music 里没有专辑名的 MV 因此整首
     /// 被标成广告;现在网页版只认这里同一份正向证据,见 02 章决策 #25。
@@ -621,7 +620,7 @@ public enum MediaControlClient {
     }
 
     // refinedAppleMusicSnapshotIfNeeded 是 fetchAutoDetectedSnapshot/
-    // fetchMultiSelectedSnapshot 共用的尾段(2026-09-01 从 fetchAutoDetectedSnapshot 内联
+    // fetchMultiSelectedSnapshot 共用的尾段(从 fetchAutoDetectedSnapshot 内联
     // 的分支抽出来,给多选新增的 fetchMultiSelectedSnapshot 复用,不重复这段带缓存/补偿
     // 逻辑的代码):bundleID 不是 Apple Music 时原样返回 snapshot;是的话尝试借用后台
     // AppleScript 缓存的精确播放位置,见下面原有的详细注释。
@@ -629,7 +628,7 @@ public enum MediaControlClient {
         bundleID: String, snapshot: MediaControlSnapshot
     ) -> MediaControlSnapshot {
         guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
-        // 电台不借 AppleScript 那份位置(2026-09-10):`player position` 在电台上报的同样是**整档
+        // 电台不借 AppleScript 那份位置:`player position` 在电台上报的同样是**整档
         // 节目**的位置(实测与 media-control 的锚点外推逐秒吻合,两者都不是曲内位置),借过来会把
         // fetchRawMediaControlSnapshot 刚换好的那块单曲表又覆盖回错的值。见 RadioTrackClock 头注。
         guard snapshot.isRadio != true else { return snapshot }
@@ -682,7 +681,7 @@ public enum MediaControlClient {
     }
 
     // 借用后台 AppleScript 缓存快照的 elapsedTime 之前必经的补偿+核对,纯函数,
-    // selftest 直接覆盖。2026-08-04 实测排查坐实的真实回归(这一层 2026-08-02 引入
+    // selftest 直接覆盖。实测排查坐实的真实回归(这一层引入
     // 异步缓存时埋下):缓存里存的是"抓取那一刻"的播放位置,轮询借用它时读数已经老了
     // 一整个后台刷新周期(实测恒定 ~1.8s),不补偿就直接当"当前位置"用,等于把整条本地
     // 展示链(悬浮窗/灵动岛/歌词窗口)的时间基准整体拖慢 ~1.8s——超过歌词引擎 700ms 的
@@ -717,7 +716,7 @@ public enum MediaControlClient {
     // 越来越多同时运行的 AppleScript 子进程。isRefreshingAppleMusicSnapshot 和
     // cachedAppleMusicSnapshot 都可能被轮询线程(读)和这个后台线程(写)同时访问,用同
     // 一把 NSLock 保护;这里没有用 actor/async——MediaControlClient 整个类型是同步、
-    // 无状态的静态方法集合(在这次改动前完全没有可变状态),用 Thread 而不是
+    // 无状态的静态方法集合,用 Thread 而不是
     // Task.detached 是因为这层文件里其它子进程调用都是纯 Foundation 同步阻塞风格,不
     // 引入 Swift Concurrency 到这个原本纯同步的类型里,保持风格一致。
     private static func refreshAppleMusicSnapshotCacheInBackground() {
@@ -756,7 +755,7 @@ public enum MediaControlClient {
     // 同一套推导)。切歌瞬间系统侧 Now Playing 可能还没更新完,这一把抓到的会是**上一首**的
     // 完整条目(旧标题+旧封面)——载荷自己的 artist/title 是识别这种情况的唯一依据,调用方
     // 拿它跟当前曲目比对,不匹配就当"还没更新好"重试,而不是把上一首的封面错挂到新歌上
-    // (2026-08-17 用户报网易云云盘歌"沿用上一首的封面"后补上)。
+    // (现象是网易云云盘歌"沿用上一首的封面"后补上)。
     public static func fetchArtwork(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> (data: Data, mimeType: String, trackKey: String)? {
         guard let binaryPath = binaryPath() else { return nil }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
@@ -792,13 +791,13 @@ public enum MediaControlClient {
     // fetchAutoDetectedSnapshot 一致:只要是内置播放器之一或信任列表成员就认。否则要求
     // bundleID 精确落在 players 这个子集里——系统级 Now Playing 焦点可能被别的 App
     // (网页视频/Safari 等)抢走,不能把那份图错当成选中播放器的封面,理由跟
-    // fetchMultiSelectedSnapshot 一样(2026-09-01 从单个 player 参数改成 Set)。
+    // fetchMultiSelectedSnapshot 一样(从单个 player 参数改成 Set)。
     private static func artworkBundleIDMatches(_ bundleID: String, players: Set<PlaybackPlayer>) -> Bool {
         if players.contains(.auto) {
             return TrustedPlayers.isAccepted(bundleID)
         }
         if players.contains(where: { $0.bundleIdentifier == bundleID }) { return true }
-        // 2026-09-01 补:信任列表(网页播放器配对)在没有勾自动识别时也该被认,跟
+        // 补:信任列表(网页播放器配对)在没有勾自动识别时也该被认,跟
         // fetchMultiSelectedSnapshot 是同一份判断,理由见那边的注释。
         return TrustedPlayers.isTrusted(bundleID)
     }
@@ -812,7 +811,7 @@ public enum MediaControlClient {
     /// 外推出来的。**rate 缺失(或为 0)时这个增量就是 0**,elapsedTimeNow 退化成
     /// elapsedTime 本身、一动不动。
     ///
-    /// 2026-08-18 实测坐实这不是理论风险:Spotify **暂停后恢复播放**,上报里的
+    /// 实测坐实这不是理论风险:Spotify **暂停后恢复播放**,上报里的
     /// playbackRate 变成 null 且再也不回来,于是
     ///
     /// ```
@@ -829,7 +828,7 @@ public enum MediaControlClient {
     ///
     /// rate 缺失时按 1 补,自己套同一个公式算。08-18 那次实测这条路径是 **+0.35s 的恒定偏移**
     /// (自算 179.07/182.23/…/194.99 对 Spotify 178.72/181.88/…/194.64),当时以为"常量偏移正是
-    /// 伺服和 lyricsOffset 本来就能吸收的东西"。⚠️ 2026-09-07 复测推翻了后半句:那个 0.35 只是
+    /// 伺服和 lyricsOffset 本来就能吸收的东西"。⚠️ 复测推翻了后半句:那个 0.35 只是
     /// 那一次锚点整秒时间戳抹掉的小数,实际每次恢复播放重新掷骰、均匀落在 [0, 1),而且伺服对它
     /// **结构性失明**(reported 与 predicted 共享同一个基准,差恒为 0)—— 用户看到的就是"恢复播放
     /// 后偏快、一暂停退回去",下一首自然切歌的偏置估计也被带歪同样的量。现在这条分支的基准
@@ -847,11 +846,11 @@ public enum MediaControlClient {
 
     /// 从**被截成整秒**的锚点时间戳,恢复一个更接近真实锚点时刻的估计。
     ///
-    /// 2026-08-21 实测坐实的问题(用 Apple Music 的 AppleScript 播放头当独立真值,12 个样本):
+    /// 实测坐实的问题(用 Apple Music 的 AppleScript 播放头当独立真值,12 个样本):
     /// media-control 的 `timestamp` 恒无小数秒,而它就是 `elapsedTimeNow` 的外推基准 ——
     /// `ts = floor(真实时刻)`,于是 `位置 + (now − ts)` **恒偏快 frac 秒**(那一轮实测
     /// +0.824s,极差只有 0.042s:同一个锚点上稳如磐石)。锚点每刷新一次这个 frac 重新掷骰;
-    /// **锚点冻结的源(网页播放器/酷狗)一次掷骰锁死一整首歌**,正是用户报的"歌词进度偏慢"
+    /// **锚点冻结的源(网页播放器/酷狗)一次掷骰锁死一整首歌**,正是现象是"歌词进度偏慢"
     /// 的镜像现象(那边是偏慢,这边是偏快,取决于源自己的位置量化,见 noisyFloored 那段)。
     ///
     /// 恢复办法是夹逼 —— 真实时刻 τ 有三个界:
@@ -881,7 +880,7 @@ public enum MediaControlClient {
         }
     }
 
-    /// stream 事件在锚点打好之后到达的典型延迟。2026-09-07 实测:Spotify 的
+    /// stream 事件在锚点打好之后到达的典型延迟。实测:Spotify 的
     /// `com.spotify.client.PlaybackStateChanged` 通知带着它自己那一刻的位置,能反推锚点真实
     /// 时刻;stream 事件比通知晚到 17/17/20/26ms(4 次)。
     public nonisolated static let streamAnchorLatency: TimeInterval = 0.025
@@ -892,7 +891,7 @@ public enum MediaControlClient {
     /// 带目击类型的锚点时刻估计。tight → 到达时刻回退一个典型延迟,再夹进 [ts, ts+1)(floor
     /// 语义 + frac<1,两条界跟上面一样);loose → 退回上面的中点法。
     ///
-    /// 为什么值得多这一档(2026-09-07 实测,Spotify 暂停后恢复播放):恢复那一刻 Spotify 重打
+    /// 为什么值得多这一档(实测,Spotify 暂停后恢复播放):恢复那一刻 Spotify 重打
     /// 锚点且 playbackRate 变 null,media-control 的 elapsedTimeNow 从此不再外推,App 只能自己
     /// 按整秒时间戳补算,抹掉的小数(实测 .914/.724/.560)就是那首歌余下部分偏快的量;一按暂停
     /// (冻结值是准的)显示就退回去 0.95/0.73s。中点法把它压到 ±0.5,tight 目击压到 ±20ms。
@@ -905,7 +904,7 @@ public enum MediaControlClient {
 
     /// 暂停时该报哪个位置。纯函数,selftest 直接覆盖。
     ///
-    /// 2026-08-21 用户报「用 Arc 播放音乐时歌词进度比较慢」时查出来的连带 bug。Arc 这类
+    /// 现象是「用 Arc 播放音乐时歌词进度比较慢」时查出来的连带 bug。Arc 这类
     /// 网页播放器(页面没调 `mediaSession.setPositionState()`)的锚点是**冻结**的:实测
     /// `elapsedTime` 恒等于 0、`timestamp` 恒等于开播那一刻,位置全靠 media-control 按墙钟
     /// 外推的 `elapsedTimeNow`。于是"暂停时用原始 elapsedTime"这条既有规则会让位置**直接
@@ -931,7 +930,7 @@ public enum MediaControlClient {
     /// 事件到达的几十毫秒,1.5s 足够宽,又远小于一个 2s 轮询周期。
     public nonisolated static let pauseAnchorMaxSkew: TimeInterval = 1.5
 
-    /// 暂停时该报哪个位置 —— 带暂停事件时刻的版本(2026-09-07)。纯函数,selftest 直接覆盖。
+    /// 暂停时该报哪个位置 —— 带暂停事件时刻的版本。纯函数,selftest 直接覆盖。
     ///
     /// 实测坐实的坑:通过 MediaRemote 指令暂停(App 自己的暂停键 / media-control pause / 媒体键)时,
     /// Spotify **不重新发布** elapsedTime,事件流里只有 `playing:false`,原始 elapsedTime 仍是开播
@@ -975,7 +974,7 @@ public enum MediaControlClient {
         lastPlayingSampledAt: Date? = nil,
         pauseObservedAt: Date? = nil
     ) -> Double? {
-        // firstSeenAt 是 2026-08-21 的旧入参(只有轮询首见时,loose 语义),sighting 是 09-07 带目击
+        // firstSeenAt 是的旧入参(只有轮询首见时,loose 语义),sighting 是 09-07 带目击
         // 类型的新入参;同传时以 sighting 为准。既有调用方/测试只传 firstSeenAt,行为不变。
         let effectiveSighting = sighting ?? firstSeenAt.map { AnchorSighting(at: $0, tight: false) }
         // 暂停态不外推:elapsedTimeNow 在暂停期间**照样**按暂停前的 rate 继续涨(拿到过
@@ -985,7 +984,7 @@ public enum MediaControlClient {
         // Apple Music:它们暂停时会重新发布一次 elapsedTime,那个值就是暂停位置)。
         // 锚点冻结的源不成立 —— 见 pausedPositionSeconds。
         guard playing == true else {
-            // 有"上一拍是哪一刻算的"就走能外推到暂停时刻的那版(2026-09-07);既有调用方 / 测试
+            // 有"上一拍是哪一刻算的"就走能外推到暂停时刻的那版;既有调用方 / 测试
             // 不传,走 08-21 的旧规则,逐字不变。
             if let lastPlayingPosition, let lastPlayingSampledAt {
                 return pausedPositionSeconds(
@@ -1022,7 +1021,7 @@ public enum MediaControlClient {
         if let rate = playbackRate, rate > 0, let now = elapsedTimeNow { return now }
         // rate 缺失/为 0:elapsedTimeNow 已经退化成 elapsedTime,自己按 rate=1 补算。
         //
-        // ⚠️ 基准不能直接用整秒的 timestamp(2026-09-07 实测坐实,见 estimatedAnchorInstant(
+        // ⚠️ 基准不能直接用整秒的 timestamp(实测坐实,见 estimatedAnchorInstant(
         // timestamp:sighting:) 注释):Spotify 暂停后恢复播放走的就是这条分支,且锚点一首歌内
         // 不再刷新,整秒抹掉的小数会让那首歌余下部分**恒偏快 0~1s**、一按暂停就退回去,还会把
         // 下一首自然切歌的偏置估计带歪同样的量。有目击就按目击订正锚点时刻;没有(watcher 挂了、
@@ -1040,9 +1039,9 @@ public enum MediaControlClient {
         return f
     }()
 
-    /// media-control 的 timestamp 实测形如 "2026-08-18T08:51:46Z"(可能带小数秒),
+    /// media-control 的 timestamp 实测形如 "T08:51:46Z"(可能带小数秒),
     /// 两种都要能解 —— 带小数秒的 formatOptions 解不了不带的,所以退一次。
-    /// 无小数秒的兜底 formatter。static 一份(2026-08-20 性能审计:原来每次 fallback 都
+    /// 无小数秒的兜底 formatter。static 一份(性能审计:原来每次 fallback 都
     /// 现建一个 ISO8601DateFormatter,而实测 media-control 的时间戳**恒无小数秒**——带
     /// 小数秒的那份 static 永远解不中,等于每 2s 轮询各白建一个 formatter)。顺序也换成
     /// 先试无小数秒(实测的常态),miss 再试带小数秒的,别让常态路径恒走两次解析。
@@ -1061,7 +1060,7 @@ public enum MediaControlClient {
     /// 此刻系统级 Now Playing 是谁在报 —— **没过任何闸**的原始观察。
     ///
     /// 存在的唯一用途是设置页那张「检测到未知播放器」的卡片:过了闸的播放器本来就能在
-    /// 界面上看见,被闸挡掉的那些才需要提示用户"要不要信任它"。
+    /// 界面上看见,被闸挡掉的那些才需要提示"要不要信任它"。
     public struct UngatedNowPlaying: Sendable, Equatable {
         public let bundleID: String
         public let artist: String
@@ -1132,7 +1131,7 @@ public enum MediaControlClient {
     // 锚点身份 = 曲目 + elapsedTime + timestamp 三者拼起来(anchorKey(...);轮询路径与
     // MediaControlStreamWatcher 必须用同一个构造,否则两边记的是两把不同的 key,永远对不上)。
     //
-    // 两种目击(AnchorSighting,2026-09-07 拆开):
+    // 两种目击(AnchorSighting,拆开):
     //  - tight:来自 stream 事件的到达时刻。锚点打好后 ~15-40ms 事件就到(实测见
     //    streamAnchorLatency),真实锚点时刻能夹到 ±20ms;
     //  - loose:来自轮询首见。轮询可能晚到 2s(通知触发也要 ~0.4s),只能取 [ts, 首见] 中点。
@@ -1186,7 +1185,7 @@ public enum MediaControlClient {
         return "\(MediaControlSnapshot.trackKey(artist: artist, title: title))|\(elapsed)|\(timestamp ?? "-")"
     }
 
-    // ---- Spotify 陈旧锚点重发(2026-09-07) ----
+    // ---- Spotify 陈旧锚点重发 ----
     //
     // 实测形态(忘了美麗):01:40:09 恢复播放,锚点 elapsed=10.477 @ :09;01:40:43 Spotify 又发布
     // 了一次 now-playing 信息,elapsed **仍是 10.477**、时间戳却是 :43(playbackRate 顺带从 null
@@ -1361,7 +1360,7 @@ public enum MediaControlClient {
         if raw.playing == true, let elapsed {
             Self.rememberPlayingPosition(elapsed, forTrack: trackKey, at: sampledAt)
         }
-        // ⚠️ 这里**不再**对 Spotify 做 JXA 直查真值的覆盖(2026-08-18 用户拍板移除)。
+        // ⚠️ 这里**不再**对 Spotify 做 JXA 直查真值的覆盖(移除)。
         // 那条路 08-14 上线、连修三轮(1.64s 恒定偏移、gapless 预载回扣、真值缓存外推)
         // 仍"经常进度不准"——osascript 往返本身有抖动,Spotify 的 playerPosition 在
         // gapless/预载场景又有自己的时钟分叉,两个噪声源叠着调,不如放弃。现在 Spotify
@@ -1373,10 +1372,10 @@ public enum MediaControlClient {
         // 电台:系统报的 duration / elapsedTime 都是**整档节目**的,不是这首歌的。位置换成按曲目边界
         // 自己起的表(机制、实测数据与未验证项见 RadioTrackClock 头注)。起表时刻取的是 **stream watcher
         // 观察到换歌的那一刻**而不是这一拍轮询的时刻 —— 差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
-        // 用户 2026-09-10 报的「歌词进度偏慢」就是它。换在这里而不是让下游各自判:
+        // 「歌词进度偏慢」这个现象就是它。换在这里而不是让下游各自判:
         // 这样 LocalPlaybackSource 的伺服 / 锚点 / 歌词引擎拿到的就是一份正常的单曲快照,一处也不用改。
         //
-        // ⚠️ **duration 照旧原样传**(2026-09-10 当天第二轮,修一个我自己引入的回归)。第一版把电台的
+        // ⚠️ **duration 照旧原样传**,电台的 duration **不能**置成 nil:
         // duration 置成 nil,想让它别被当成曲长用 —— 结果整档歌词停摆:`LocalPlaybackSource.apply` 里
         // 建进度锚点那一整支的闸是 `if playing, let duration = snapshot.duration, duration > 0`,
         // duration 一 nil 锚点就再也建不起来,歌词引擎没有钟可走,表现成"电台放到歌了却没有歌词"。
@@ -1410,7 +1409,7 @@ public enum MediaControlClient {
         return (snapshot, bundleID)
     }
 
-    // MARK: - 电台曲内时钟(2026-09-10)
+    // MARK: - 电台曲内时钟
 
     private static let radioClockLock = NSLock()
     private static var radioClockState: RadioTrackClock.State?

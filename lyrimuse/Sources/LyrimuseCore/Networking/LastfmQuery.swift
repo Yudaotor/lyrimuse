@@ -2,7 +2,7 @@ import Foundation
 
 /// Last.fm 2.0 端点的 GET query 编码。
 ///
-/// 为什么不能直接用 `URLComponents.queryItems`(2026-08-22 实测坐实):**这个端点会对
+/// 为什么不能直接用 `URLComponents.queryItems`:**这个端点会对
 /// query value 多解一次码**。它先做一遍标准 percent-decode,再对结果做一遍
 /// form-urlencoded 解码——后面那一遍会把 `+` 当成空格。于是含加号的歌名/歌手名走标准
 /// 编码必然查不到:
@@ -15,7 +15,7 @@ import Foundation
 ///
 /// ⚠️ 只有 GET query 这样。scrobble 那条走 POST form body(collector 的 lastfm.go),
 /// 只解一遍,**不能**套这里的规则——套了会把字面 `%2B` 写进 Last.fm 的曲名。
-/// 「记得对、却查不到」这个不对称正是本坑的表征:用户 2026-08-22 报的《夜曲+窃爱 (Live)》
+/// 「记得对、却查不到」这个不对称正是本坑的表征:《夜曲+窃爱 (Live)》
 /// 在最近记录里永远不显示「第 N 次听」,而它的 scrobble 本身记得好好的。
 ///
 /// 做法:先把 value 里的 `%` 和 `+` 各多编一层,再按 RFC 3986 unreserved 做严格

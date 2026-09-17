@@ -52,7 +52,7 @@ func TestLastfmExcluded(t *testing.T) {
 	}
 }
 
-// features.json 改了之后不重启也要生效(2026-09-10):按 mtime 热重读这一个键。
+// features.json 改了之后不重启也要生效:按 mtime 热重读这一个键。
 func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 	savedPath, savedFeatures := lastfmExcludePath, features
 	defer func() {

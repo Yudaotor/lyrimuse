@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// 2026-09-06 歌词源拨号:系统 DNS 优先、不答才退 DoH(lyricsourcedial.go)。真实网络里没有
+// 歌词源拨号:系统 DNS 优先、不答才退 DoH(lyricsourcedial.go)。真实网络里没有
 // 可复现的"系统 DNS 不答",三个注入点全换成假的,连接用 net.Pipe 造。
 
 type dialProbe struct {

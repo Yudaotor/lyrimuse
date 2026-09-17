@@ -50,14 +50,14 @@ struct HelpButton: View {
 ///
 /// `.help()` 落到 NSView.toolTip,延迟由 NSToolTipManager **全局**控制,没有按控件调整的
 /// API(唯一的调节点 NSInitialToolTipDelay 是 app 级的,会把整个 App 的所有 tooltip 一起
-/// 改掉);而且它只认悬停,点击对它没有任何意义。用户报的两件事(出得太慢、想点一下就出)
+/// 改掉);而且它只认悬停,点击对它没有任何意义。现象是的两件事(出得太慢、想点一下就出)
 /// 在 .help() 上一个都做不到,只能自己拿 onHover + popover 做。
 struct QuickHelpLabel<Content: View>: View {
     let text: String
     @ViewBuilder let content: () -> Content
 
     /// 悬停多久才弹。系统 tooltip 没设过 NSInitialToolTipDelay 时实际观感约 2 秒,
-    /// 这里取它的 1/4(2026-08-17 用户要求)。
+    /// 这里取它的 1/4。
     private static var hoverDelay: Duration { .milliseconds(500) }
     /// 鼠标移出后延这么久才收。不是手感修饰,是防抖:popover 弹出的一瞬间如果它盖住了
     /// 锚点,底下这个视图会立刻收到 onHover(false) —— 不缓冲一下就会"弹出即消失",

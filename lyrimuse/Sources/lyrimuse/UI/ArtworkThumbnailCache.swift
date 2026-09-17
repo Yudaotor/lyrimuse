@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-/// 小封面的**位图缓存**(2026-09-09):把 `PlaybackCoordinator` 解好的封面 NSImage 按目标像素边长预先
+/// 小封面的**位图缓存**:把 `PlaybackCoordinator` 解好的封面 NSImage 按目标像素边长预先
 /// 重采样成 CGImage(算法与理由见 `ArtworkThumbnail`),视图层用 `Image(decorative:scale:)` 逐像素贴。
 /// 消费点:灵动岛 `artworkThumbnail`(左耳 / 歌词行末尾 / 展开头部三枚)、菜单栏面板 `coverView`
 /// 44pt、Last.fm「正在播放」行 26pt 的本机位图兜底。歌词窗口 460pt 那张接近原生尺寸,不走这里。

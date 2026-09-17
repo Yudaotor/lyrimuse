@@ -4,10 +4,10 @@ import SwiftUI
 
 // 「外观」页里**菜单栏**那一段钉在页顶的预览。
 //
-// (2026-08-31 之前这个文件里还有灵动岛那一段的预览 `NotchPreviewBar` 和它的替身 chrome
+// (之前这个文件里还有灵动岛那一段的预览 `NotchPreviewBar` 和它的替身 chrome
 //  `NotchPreviewChrome`。灵动岛改成编辑台范式之后,预览从页顶钉条挪进了可滚动内容区并且
 //  变得可交互,两样一起搬去 NotchEditorStage.swift —— 钉条那一层收不到点击事件,凡是
-//  "能动手改"的预览都只能待在内容区,理由见 SettingsView 里那段 2026-08-16 的复现记录。
+//  "能动手改"的预览都只能待在内容区,理由见 SettingsView 里那段的复现记录。
 //  三段预览栏共用的 `SectionPreviewMetrics` 留在这里:菜单栏那条还在用,悬浮歌词/灵动岛
 //  两块编辑台也拿它的 caption 度量对齐疏密。)
 //
@@ -29,15 +29,15 @@ import SwiftUI
 // 假数据会让预览在"没放歌"这个大多数场景里显得像在骗人,而预览存在的全部意义就是所见即所得。
 // 真的在放歌、这一句确实有逐字数据时,给的是**完全真实**的数据,不是演示。
 //
-// (这条原来记在悬浮歌词那条钉条 `OverlayPreviewBar` 的头注里。钉条 2026-08-31 随死代码
+// (这条原来记在悬浮歌词那条钉条 `OverlayPreviewBar` 的头注里。钉条随死代码
 //  一起删了 —— 悬浮歌词/灵动岛两段都改成了编辑台,它没有任何实例化点 —— 原则本身对这个文件
 //  里的菜单栏预览、以及两块编辑台仍然成立,所以搬到这里。别处引用这条时指这里。)
 
 // 三段预览栏共用的外层度量。
 //
-// 高度按**当前段自己的卡**算,不再三段统一取最大(2026-08-19 改回)。统一高度是
-// 2026-08-15 为"点来点去整个框架一直在动"定的,但它的代价是矮预览的段常驻一大块留白,
-// 同日灵动岛展开区加高(40→76)后留白涨到几十 pt,用户报"这块太空了,下方内容空间大点"。
+// 高度按**当前段自己的卡**算,不再三段统一取最大(改回)。统一高度是
+// 为"点来点去整个框架一直在动"定的,但它的代价是矮预览的段常驻一大块留白,
+// 同日灵动岛展开区加高(40→76)后留白涨到几十 pt,现象是"这块太空了,下方内容空间大点"。
 // 两个诉求的调和:高度跟段走 + 换段的高度变化交给动画滑过去(见 SettingsView 挂在
 // 预览 switch 上的 .animation(value: sectionRaw)),不再是硬跳。
 @MainActor
@@ -47,13 +47,13 @@ enum SectionPreviewMetrics {
     /// caption 那一行(.font(.caption))的行高经验值。
     static let captionHeight: CGFloat = 15
 
-    // (2026-09-02 删掉了 `barHeight(cardHeight:)` 和它的私有 `chromeHeight`:那两个是给
+    // (删掉了 `barHeight(cardHeight)` 和它的私有 `chromeHeight`:那两个是给
     //  "三条预览栏共用一个总高"这条契约用的,而另外两条钉条(OverlayPreviewBar /
-    //  NotchPreviewBar)在 2026-08-31 改编辑台时就删完了,只剩菜单栏这一条;它这次又把
+    //  NotchPreviewBar)在改编辑台时就删完了,只剩菜单栏这一条;它这次又把
     //  caption 挪到舞台外面自己算高度(见 MenuBarPreviewBar.stageHeight),这两个符号从此
     //  零调用点。剩下的常量仍然是共用的 —— 三块编辑台的 caption 疏密靠它们保持一致。)
-    // (2026-09-03 又删掉了 `topPadding`(14):仿菜单栏那一条从此**贴死舞台上沿**,它上面
-    //  不该有桌面(用户原话「这里菜单栏没有贴合顶部」,见 MenuBarPreviewBar.stage)。删了
+    // (又删掉了 `topPadding`(14):仿菜单栏那一条从此**贴死舞台上沿**,它上面
+    //  不该有桌面(「这里菜单栏没有贴合顶部」,见 MenuBarPreviewBar.stage)。删了
     //  之后同样零调用点 —— 另外两块编辑台的舞台里,那个形态本体各有自己的摆法(悬浮歌词
     //  居中于 cardArea、灵动岛顶对齐贴刘海),从来没用过这个常量。)
 }
@@ -70,9 +70,9 @@ extension MenuBarPreviewBar where Lane == EmptyView {
 
 /// 菜单栏那一段的预览。
 ///
-/// 2026-08-16 重做:以前这里是"仿"一条菜单栏 —— 圆角条 + 一个现实里根本不存在的音符
+/// 重做:以前这里是"仿"一条菜单栏 —— 圆角条 + 一个现实里根本不存在的音符
 /// 图标 + `.system(size: 13)` 的文字,而且滚动只演开头那一帧(静止的)。跟用户真正看到的
-/// 东西差得远(用户原话:预览里要真实模拟实际的菜单栏)。
+/// 东西差得远(预览里要真实模拟实际的菜单栏)。
 ///
 /// 现在这条预览**就是菜单栏本体那套代码**:
 ///   * 要不要滚、滚多快、首尾停多久 —— 走 MenuBarMarqueeRenderer.presentation,跟
@@ -93,8 +93,8 @@ extension MenuBarPreviewBar where Lane == EmptyView {
 // 长短句来回切都不伸缩,自适应模式下短句跟着文字缩短(见 MenuBarLyricsWidthMode)。
 @MainActor
 struct MenuBarPreviewBar<Lane: View>: View {
-    /// 在仿菜单栏那条下面**预留一条通道**给宽度调整条(2026-09-01,用户第三次点名要
-    /// "和之前两个页面一样加到这个预览框里面去")。默认 false —— 这个开关只为编辑台那个
+    /// 在仿菜单栏那条下面**预留一条通道**给宽度调整条(跟另外两个编辑台页面一致,
+    /// 调整条加在预览框里面)。默认 false —— 这个开关只为编辑台那个
     /// 宿主存在,别的地方拿这条预览去用时形状不变。
     ///
     /// 做法照 `OverlayEditorStage`:那块舞台在卡片下面留一条 `widthBarLaneHeight`(44pt)
@@ -104,8 +104,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
 
     /// 浮在那条通道里的东西(编辑台的宽度调整条)。
     ///
-    /// ⚠️ 2026-09-02 从"宿主在外面套一层 `.overlay(alignment: .bottom)`"改成由这里注入。
-    /// 起因是用户要求「把预览背景部分扩展到这下面,把下面的滑条包在里面,和灵动岛和悬浮歌词
+    /// ⚠️ 从"宿主在外面套一层 `.overlay(alignment: .bottom)`"改成由这里注入。
+    /// 起因是「把预览背景部分扩展到这下面,把下面的滑条包在里面,和灵动岛和悬浮歌词
     /// 设置一样」——舞台的壁纸底一旦要包住调整条,**谁画背景、谁定高度、谁裁圆角就必须是
     /// 同一个人**;宿主在外面 overlay 的话,那一层落在"舞台 + caption"整块上,胶囊会掉到
     /// caption 下面去。插槽在这里,`stage` 自己 overlay 它,几何只有一处。
@@ -131,7 +131,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return L10n.t("这里是一句歌词示例")
     }
 
-    /// 副行档位(2026-09-06 双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置。
+    /// 副行档位(双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置。
     private var secondaryKind: LyricSecondaryLine { settings.menuBarSecondaryLine }
     private var twoRows: Bool { secondaryKind.showsSecondaryRow }
     /// 主行字体:双排 10pt / 单行跟设置 —— 跟本体同一个入口(`mainFont(for:twoRows:)`),测宽、排版、
@@ -258,24 +258,23 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return false
     }
 
-    /// 预览下面那行说明。⚠️ 2026-09-02 起它在**舞台外面**(壁纸底之下、卡片背景上),
+    /// 预览下面那行说明。⚠️ 它在**舞台外面**(壁纸底之下、卡片背景上),
     /// 跟 `OverlayEditorStage` / `NotchEditorStage` 那两块编辑台的 caption 同一个排法
     /// (`VStack(spacing: captionSpacing) { stage; caption }`)。之前它夹在壁纸条和通道
     /// 之间、靠一个 `Spacer` 顶着,壁纸一扩展下来这行灰字就会压在壁纸上读不清 —— 挪出去
     /// 同时解决了这件事,不需要给它另配一套白字加投影的配色。
     ///
-    /// ⚠️ 2026-09-01 砍掉了宽度和模式(原来是「预览 · 固定宽度 150pt」/「预览 · 自适应,
+    /// ⚠️ 砍掉了宽度和模式(原来是「预览 · 固定宽度 150pt」/「预览 · 自适应,
     /// 最宽 150pt」)。同一件事这时候已经被说了**三遍**:虚线边界直接把那一格画出来了
     /// (见 slotEdgeOutline —— 固定宽度时右边空一块、自适应时贴着文字收紧,模式也在里面),
-    /// 具体数值在编辑台「最大宽度」那条滑杆右侧,这行字是第三遍。用户原话是把那半句框起来
-    /// 「去掉红框文案」。
+    /// 具体数值在编辑台「最大宽度」那条滑杆右侧,这行字是第三遍,所以砍掉。
     ///
     /// **留着的是滚动那一句** —— 它是这行字唯一说得出、而画面说不出的事:那一格的宽度看得见,
     /// "这句放不下、会横向滚动"看不见。别把"会滚动"说成"已截断",超宽时到底是滚还是截由
     /// 宽度决定,说反了正是让人觉得这个功能"怪怪的"的原因之一。
     ///
     /// presentation 由调用方(body)求值一次传进来 —— 它看着像存量属性,实际每次访问都做
-    /// 一趟 NSString 测宽(2026-08-20 性能审计,原来 body 一轮里被求值 2-3 次)。
+    /// 一趟 NSString 测宽(性能审计,原来 body 一轮里被求值 2-3 次)。
     private func previewCaption(_ p: MenuBarMarqueeRenderer.Presentation) -> String {
         Self.willScroll(p) ? L10n.t("预览 · 本句会横向滚动") : L10n.t("预览")
     }
@@ -289,13 +288,13 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// (仿菜单栏条 + 条与通道之间的呼吸 + 宽度调整条那条通道),加舞台外面那 6 + 15 的
     /// caption 一共 83。
     ///
-    /// ⚠️ **2026-09-03 从 76 降到 62**:删掉的是原来垫在仿菜单栏条**上面**的 14pt
-    /// (`SectionPreviewMetrics.topPadding`)—— 用户原话「这里菜单栏没有贴合顶部」,理由和
+    /// ⚠️ **从 76 降到 62**:删掉的是原来垫在仿菜单栏条**上面**的 14pt
+    /// (`SectionPreviewMetrics.topPadding`)—— 「这里菜单栏没有贴合顶部」,理由和
     /// 那 14pt 为什么不该存在见 `stage`。这一页因此整体上移 14pt。
     /// (改版前那条"总高必须凑成 97,一动下面所有卡片就跟着跳"的说法只对了一半:要守的是
     ///  **高度是个常量、不随内容变**(caption 一行/两行、歌词滚不滚都不许改它),不是"必须
     ///  等于 97"这个具体数字 —— 那个数只是当年三条钉条共用总高留下的遗产,而另外两条钉条
-    ///  2026-08-31 就删完了。改这个常量只会让页面重排**一次**,不会抖。)
+    ///  就删完了。改这个常量只会让页面重排**一次**,不会抖。)
     private var stageHeight: CGFloat {
         Self.cardHeight + SectionPreviewMetrics.bottomPadding
             + (reservesWidthLane ? Self.widthLaneHeight : 0)
@@ -331,8 +330,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 舞台:一小片**屏幕顶端**——壁纸铺满整块,仿菜单栏那一条贴在它的上边缘,底下那条
     /// 通道里浮着宽度调整条。
     ///
-    /// 2026-09-02 从"只有仿菜单栏那一条有壁纸底、caption 和胶囊掉在卡片白底上"改成这样
-    /// (用户原话:「这里帮我把预览背景部分扩展到这下面,把下面的滑条包在里面,和灵动岛和
+    /// 从"只有仿菜单栏那一条有壁纸底、caption 和胶囊掉在卡片白底上"改成这样
+    /// (「这里帮我把预览背景部分扩展到这下面,把下面的滑条包在里面,和灵动岛和
     /// 悬浮歌词设置一样」)。改完之后三块编辑台的舞台是同一个模型:一片桌面 + 贴在上面的
     /// 那个形态本体 + 舞台内的宽度调整条,caption 一律在舞台外面。
     ///
@@ -344,8 +343,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 顶对齐、**上面不留任何边距**:菜单栏就在屏幕最上面,它上面不可能有桌面;
             // 下面剩下的才是桌面。
             //
-            // ⚠️ 2026-09-03 删掉了这里原有的 `.padding(.top, SectionPreviewMetrics.topPadding)`
-            // (14pt)。用户原话:「这里菜单栏没有贴合顶部」。那 14pt 是 2026-09-02 把壁纸
+            // ⚠️ 删掉了这里原有的 `.padding(.top, SectionPreviewMetrics.topPadding)`
+            // (14pt)。「这里菜单栏没有贴合顶部」。那 14pt 是把壁纸
             // 从"只垫菜单栏那一条"扩展成"铺满整块舞台"时留下的:在那之前条子上方是卡片白底,
             // 14pt 只是块留白;壁纸铺满之后同样的 14pt 变成了**从菜单栏上方透出来的桌面**,
             // 于是仿菜单栏条看着像一张浮在桌面上的卡片 —— 而它演的恰恰是"贴死屏幕上沿"的
@@ -407,10 +406,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// `NotchEditorStage.menuBarStrip` 到此同构。
     private func menuBarStrip(_ p: MenuBarMarqueeRenderer.Presentation) -> some View {
         HStack(spacing: 0) {
-            // 最左边那颗苹果(2026-09-02 用户要求"在这个位置加一个经典的苹果图标,和系统的
+            // 最左边那颗苹果("在这个位置加一个经典的苹果图标,和系统的
             // 一样")。它跟右边那几个的职责**不是一回事**:右簇是"占多宽"的参照物,这一枚不参与
             // 任何度量,只负责让这一条一眼被认成菜单栏 —— 所以理由单独写在这儿,别并进下面
-            // 右簇那句。灵动岛编辑台那条仿菜单栏 2026-08-31 就有这一枚了,这次是补齐菜单栏
+            // 右簇那句。灵动岛编辑台那条仿菜单栏就有这一枚了,这次是补齐菜单栏
             // 这一条。
             //
             // ⚠️ **必须自带 `.font` 和 `.foregroundStyle`**:这一条的那两个修饰符挂在下面
@@ -419,7 +418,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 明显比右边那几个更大更黑。
             //
             // ⚠️ 字号 16 **不跟 `MenuBarMarqueeRenderer.font` 走**,这是这一条里唯一一处刻意
-            // 脱钩,锚的是**真菜单栏实测墨迹**而不是字体:2026-09-02 抓这台机器真菜单栏量到
+            // 脱钩,锚的是**真菜单栏实测墨迹**而不是字体:抓这台机器真菜单栏量到
             // 那颗苹果的墨迹是 12.50 × 15.50pt,而 `apple.logo` 配 `.system(size: 16)` 在这条
             // 24pt 的仿条里量出来也是 12.50 × 15.50pt(端到端复核:真开窗 + `screencapture -l`,
             // 因为 `.ultraThinMaterial` 必须由 window server 合成、离屏抓不到)。跟着
@@ -447,7 +446,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 这里的 12 剩下的作用是"苹果和歌词格之间至少留这么多"。
             Spacer(minLength: 12)
             lyricsSlot(p)
-                // 2026-09-02 用户反馈虚线贴着文字("完全贴着，观感不是很好")。左右各加 3pt
+                // 现象是虚线贴着文字("完全贴着，观感不是很好")。左右各加 3pt
                 // 让虚线离文字有点呼吸空间——虚线因此比 windowWidth 本身宽了 6pt,跟"这一格
                 // 恒等于真实宽度"这条不变量有一点点出入,但这一圈线本来就是给人看的示意
                 // (真实数值在编辑台「最大宽度」滑杆那边,见 previewCaption 的注释),几个点的
@@ -480,21 +479,21 @@ struct MenuBarPreviewBar<Lane: View>: View {
         .frame(height: Self.cardHeight)
         .frame(maxWidth: .infinity)
         // ⚠️ 只铺 .bar 材质是不够的:那层材质压在设置窗自己的背景上几乎同色,整条读起来
-        // 就是"悬空的文字",完全不像菜单栏(2026-08-16 第一版实拍确认)。真菜单栏之所以
+        // 就是"悬空的文字",完全不像菜单栏(实拍确认)。真菜单栏之所以
         // 一眼认得出来,是因为它半透明地压在**桌面壁纸**上。
         //
-        // ⚠️ 2026-09-02 起壁纸**不在这一层**:它由 `desktopSurface` 铺满整块舞台,这一条只
+        // ⚠️ 壁纸**不在这一层**:它由 `desktopSurface` 铺满整块舞台,这一条只
         // 负责把材质压上去。壁纸从这里搬走的理由见 `stage` 头注(两份各按各的高度做
         // scaledToFill,缩放比对不上,菜单栏条的下边缘会露出一道接缝)。
         //
         // 材质用 `.ultraThinMaterial` 而不是 `.bar`:`.bar` 在浅色外观下几乎不透明,压上去
-        // 直接把壁纸糊成一块灰(2026-08-16 实拍确认),而真菜单栏的透明度高得多 ——
+        // 直接把壁纸糊成一块灰(实拍确认),而真菜单栏的透明度高得多 ——
         // 深色壁纸下整条菜单栏是深的、文字自动转白,那正是它一眼认得出来的原因。
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
-    /// 歌词那一格的虚线边界(2026-09-01,用户要求"跟悬浮歌词一样把清晰的边界用虚线画出来")。
+    /// 歌词那一格的虚线边界("跟悬浮歌词一样把清晰的边界用虚线画出来")。
     ///
     /// 套在 `lyricsSlot` 上,所以**不用自己算宽度** —— 那一格的 frame 本来就恒等于
     /// 「最大宽度」(`.fixed` 分支)或文字自然宽度(`.text` 分支),虚线贴着它画出来的就是
@@ -523,7 +522,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
 
     /// 自适应模式下「最大宽度」那条上限,画在歌词格左缘之外。
     ///
-    /// 用户原话:「这个页面的宽度调整在自适应模式下预览里面其实看不出来效果啊」。判据确实
+    /// 「这个页面的宽度调整在自适应模式下预览里面其实看不出来效果啊」。判据确实
     /// 如此 —— 自适应下这一格的宽度是 `min(最大宽度, 句宽)`(见 `adaptiveWindowWidth`),
     /// 所以**只有这一句比设定值还宽时,拖滑杆才会改变画面**。实测预览那句示例主行 137.6pt、
     /// 副行 127.2pt,临界点约 138pt,而滑杆区间是 80…600 —— **138 以上那 77% 的行程,预览里
@@ -569,7 +568,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 短句右边空出一块是**正常的**,真菜单栏上就是这样 —— 那正是固定宽度换来的稳定:
     /// 长短句来回切,这一项和右边的图标都不会动。
     ///
-    /// (这一段 2026-08-17 反复过两次:先是两条分支都钉成上限宽 → 那时语义还是"上限",
+    /// (这一段反复过两次:先是两条分支都钉成上限宽 → 那时语义还是"上限",
     /// 于是预览空一大片而真机不空,是真偏差;改成按文字自然宽度之后语义对上了,但用户
     /// 随即指出真机上那种伸缩本身就难看,于是把设置改成固定宽度,两边又都钉死了。)
     @ViewBuilder
@@ -583,10 +582,10 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 真有逐字数据要染时,button.title 画不出叠色,改走跟 .fixed 一样的图层渲染,
             // 窗口宽就取文字自身宽 —— footprint 跟 Text(visible).fixedSize() 逐像素一致。
             // visible != fullText 只发生在宽度设成 0 的截断退化路径,那里不染(跟真机一致)。
-            // ⚠️ 2026-09-03 起判据多了一个 `previewIconBadge != nil`,跟真机同步:一枚要按
+            // ⚠️ 判据多了一个 `previewIconBadge != nil`,跟真机同步:一枚要按
             // 进度半染色的图标同样塞不进按钮自绘那条路,所以开着图标时装得下的句子也改走
             // 图层渲染(见 MenuBarStatusItem.refresh 的 .text 分支)。
-            // ⚠️ 2026-09-06 起判据再多一个 `twoRows`,同样跟真机同步:button.title 只能画一行。
+            // ⚠️ 判据再多一个 `twoRows`,同样跟真机同步:button.title 只能画一行。
             if visible == fullText, karaokeFillPath != nil || previewIconBadge != nil || twoRows {
                 let w = adaptiveWindowWidth(for: visible)
                 MenuBarScrollingLabel.Representable(

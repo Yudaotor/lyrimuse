@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 2026-08-05 实测排查坐实的真实 bug 的回归测试:欧美艺人在 MusicBrainz 上的中文别名
-// 只是面向中文市场的译名,不该被当成 canonical_artist —— 用户反馈"历史里 Michael
+// 实测排查坐实的真实 bug 的回归测试:欧美艺人在 MusicBrainz 上的中文别名
+// 只是面向中文市场的译名,不该被当成 canonical_artist —— 现象是"历史里 Michael
 // Jackson 显示成迈克尔·杰克逊,跟之前的英文名不一致"。详见 pickChineseAlias 的注释。
 func TestPickChineseAlias(t *testing.T) {
 	// 下面每组别名/地区都是照真实 MusicBrainz API 返回抄的(实测查过这三个艺人)。
@@ -43,13 +43,13 @@ func TestPickChineseAlias(t *testing.T) {
 		// 大小写/空白不该影响判定。
 		{"country 小写也认", chanAliases, "hk", "陈柏宇"},
 		{"country 带空白也认", chanAliases, " HK ", "陈柏宇"},
-		// 繁体别名会被转成简体(既有行为,不能因为这次改动丢掉)。
+		// 繁体别名会被转成简体(既有行为,不能丢)。
 		{"繁体别名转简体", []mbAlias{{Name: "陳柏宇", Locale: "zh_Hant"}}, "HK", "陈柏宇"},
 		// 日文 locale 的汉字别名仍要跳过(既有行为)。
 		{"日文 locale 别名跳过", []mbAlias{{Name: "日本語名", Locale: "ja"}}, "HK", ""},
 		{"没有任何含汉字别名", []mbAlias{{Name: "Some Latin Name", Locale: "en"}}, "HK", ""},
 		{"空别名列表", nil, "HK", ""},
-		// 2026-08-18 实测翻车:ØZI(TW)在 MusicBrainz 有一条 type="Legal name" 的
+		// 实测翻车:ØZI(TW)在 MusicBrainz 有一条 type="Legal name" 的
 		// 「陳奕凡」,拿它当显示名等于把艺人改叫回身份证名。法定名/搜索提示要跳过,
 		// 但后面正经的艺名别名照常采纳。
 		{"法定名别名跳过", []mbAlias{{Name: "陳奕凡", Locale: "zh_Hant", Type: "Legal name"}}, "TW", ""},
@@ -66,7 +66,7 @@ func TestPickChineseAlias(t *testing.T) {
 	}
 }
 
-// 查空**不落盘**、查到才落盘(2026-08-30)——跟 mbPrimaryNameCache 那条同一条规则、同一个
+// 查空**不落盘**、查到才落盘——跟 mbPrimaryNameCache 那条同一条规则、同一个
 // 理由(见 TestMBPrimaryNameCachePersistsOnlyHits 的注释)。这份缓存原来是"查一次永久
 // 生效,空值也当确定结果落盘",那英《微笑着离去》真撞上了:MusicBrainz 恰好限速 503,
 // 空结果被永久钉在 "Na Ying" 名下,之后不管 MusicBrainz 是否恢复都不会再重查。
@@ -123,7 +123,7 @@ func TestCanonicalArtistViaMusicBrainzCacheHitSkipsNetwork(t *testing.T) {
 }
 
 // resolveGenericArtistCanonicalName 必须先查 artistAliasTable 再试通用机制,不能反过来
-// ——2026-08-31 真实bug:"Wanting"的 QQ 歌手搜索建议第一条是"婉婷"(查证过是另一个人,
+// ——真实故障:"Wanting"的 QQ 歌手搜索建议第一条是"婉婷"(查证过是另一个人,
 // 见 qqArtistCanonicalName 头注),如果通用机制排在手工表前面,会先给出这个错误答案、
 // 手工表里登记的"曲婉婷"根本没有机会生效。这里用缓存直接模拟"QQ 查到了(错误的)结果"
 // 这个状态,断言手工表登记过的名字仍然赢。

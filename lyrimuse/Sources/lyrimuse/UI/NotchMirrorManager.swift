@@ -45,12 +45,12 @@ enum NotchMirrorManager {
         //
         // ⚠️ 四个参数值都必须显式传下去,不能 `.sink { _, _, _, _ in syncAll() }` 让下游回读
         // AppSettings —— 顶上那段 willSet 注释警告的坑,这个 sink 原来就原样踩着
-        // (2026-08-19 核实):@Published 在 willSet 时机同步派发,sink 执行时存储属性还是
+        //:@Published 在 willSet 时机同步派发,sink 执行时存储属性还是
         // 旧值,于是镜像的宽度恒滞后一档、隐藏开关同步到翻转前的状态,直到下一次任一设置
         // 再变才追上。
-        // ⚠️ 订的是 `notchHide*` —— 2026-09-01 起灵动岛有自己独立的一份「自动隐藏」设置,
+        // ⚠️ 订的是 `notchHide*` —— 灵动岛有自己独立的一份「自动隐藏」设置,
         // 订到悬浮歌词那一份上,表现会是"在悬浮歌词页面拨开关,副屏的灵动岛镜像跟着变"。
-        // 2026-09-06 起宽度是一对(稳态 / 展开),两个键都订;任一个变都是同一次 syncAll。
+        // 宽度是一对(稳态 / 展开),两个键都订;任一个变都是同一次 syncAll。
         settings.$notchHideWhenNotPlaying
             .combineLatest(settings.$notchHideDuringScreenCapture, settings.$notchContentWidth,
                            settings.$notchExpandedContentWidth)

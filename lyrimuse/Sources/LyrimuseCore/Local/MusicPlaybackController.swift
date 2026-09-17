@@ -1,9 +1,9 @@
 import Foundation
 
 // 跟 AppleMusicPositionClient(同目录,"读"精确播放进度)对称的"写"操作——发指令
-// 控制当前选定播放器(PlaybackPlayerPreference.selected,2026-09-01 起可多选)的播放。
+// 控制当前选定播放器(PlaybackPlayerPreference.selected,可多选)的播放。
 //
-// 2026-07-29 之前这里无条件发 AppleScript 给"Music"这一个应用,不管当前选的是哪个
+// 之前这里无条件发 AppleScript 给"Music"这一个应用,不管当前选的是哪个
 // 播放器——QQ 音乐/网易云音乐接入时都没有同步修这一处,导致选了它们之后悬浮窗/全局
 // 快捷键的播放/暂停/上一首/下一首按钮全部不生效(AppleScript 发给了根本没在播的
 // Music.app),是遗留下来一直没修的坑,这次一起补上。
@@ -38,7 +38,7 @@ public enum MusicPlaybackController {
     /// ⚠️ 属性名在不同 macOS 上不一样。这台 macOS 27 的 Music.app 脚本字典里已经没有
     /// `loved` 了,同一个属性(四字符码都是 `pLov`)改名成了 `favorited`;而更早的系统上
     /// 只有 `loved`。
-    /// 订正(2026-08-20 真机实测):这段注释原来断言"字典里不存在的属性会让整段编译失败、
+    /// 订正(真机实测):这段注释原来断言"字典里不存在的属性会让整段编译失败、
     /// on error 轮不到执行"——那只对 `shuffle enabled` 这类**多词术语**成立;`favorited`/
     /// `loved` 这种单字标识符编译期会被当变量放行,错误留到**运行期**(-2753),`try` 接得住。
     /// 所以 extendedControlsState 的合并脚本能用 try 嵌套一趟搞定双候选;这里的两段式
@@ -81,10 +81,10 @@ public enum MusicPlaybackController {
 
     /// 把当前曲目加进资料库。Apple Music 专属(调用方约定同 setFavorited:先确认播放器
     /// 是 Apple Music、权限已拿到)。流媒体曲目唯一可行的路 = `duplicate current track
-    /// to source 1`(2026-08-22 实机验证:对正在播的订阅曲目成功入库;命令不返回新副本
+    /// to source 1`(实机验证:对正在播的订阅曲目成功入库;命令不返回新副本
     /// 的引用,这里也不需要)。个别内容类型在部分系统上要退到 library playlist(用类引用
     /// `library playlist 1`,不能用名字 "Library"——中文系统叫「资料库」),try 兜底一趟。
-    /// 2026-08-22 补充实测:来自共享播放列表源的 `shared track` 走 source 1 会报
+    /// 补充实测:来自共享播放列表源的 `shared track` 走 source 1 会报
     /// -10006,由 library playlist 1 兜底接住;曲目已在资料库时整个 duplicate 是
     /// **静默 no-op**(不报错、不产生重复条目)。所以返回 true ≠ 真的新增了 ——
     /// 要确认"点完之后确实在库",用 currentTrackIsInLibrary() 读回。
@@ -108,7 +108,7 @@ public enum MusicPlaybackController {
     /// "是否在库"的直连属性,按元数据在 library playlist 1 里数匹配是唯一可行路:
     /// 歌名+歌手+专辑(专辑空则退成 歌名+歌手)。专辑参与匹配是为了不把"同曲不同专辑
     /// 版本"误判成已在库 —— AM 自己把它们当两条曲目。whose 子句只认字符串变量,
-    /// 不能内联 `name of t`(2026-08-22 实测报 -1728)。
+    /// 不能内联 `name of t`(实测报 -1728)。
     /// nil = 查不出来(无曲目/权限被拒/超时)。Apple Music 专属;不要在主线程调用。
     public static func currentTrackIsInLibrary() -> Bool? {
         guard let out = runAppleScriptCapturing(#"""
@@ -155,7 +155,7 @@ public enum MusicPlaybackController {
     }
 
     /// 恢复播放(歌词窗口欢迎态「继续播放」,Apple Music)。⚠️ 裸 `play` 对空队列是
-    /// **静默 no-op**(2026-08-22 实测:stopped 态发 play,state 仍 stopped——Music 停播/
+    /// **静默 no-op**(实测:stopped 态发 play,state 仍 stopped——Music 停播/
     /// 重启后队列是空的,没有"上次上下文"可恢复)。三段式:①裸 play(接住"有队列只是
     /// 停了");②读回仍没在播 → 在资料库找上次播的那首(调用方从 UserDefaults 记录里给)
     /// 直接播,资料库上下文会自然续播后面的歌;③都不行返回 false,调用方兜底激活 App。
@@ -191,7 +191,7 @@ public enum MusicPlaybackController {
     }
 
     /// 「减少推荐」。UI 里的 Suggest Less 就是老的 Dislike,AppleScript 属性一直叫
-    /// `disliked`(iTunes 12.5 起,2026-08-22 实机验证可写)。Apple Music 专属,
+    /// `disliked`(iTunes 12.5 起,实机验证可写)。Apple Music 专属,
     /// 调用方约定同上;不要在主线程调用。
     @discardableResult
     public static func setDisliked(_ value: Bool) -> Bool {
@@ -212,7 +212,7 @@ public enum MusicPlaybackController {
     }
 
     /// 在 Music.app 里定位并选中当前曲目(reveal),顺带把 Music 带到前台 —— 「在 Music
-    /// 中显示」。流媒体曲目实测可用(2026-08-22)。Apple Music 专属;不要在主线程调用。
+    /// 中显示」。流媒体曲目实测可用。Apple Music 专属;不要在主线程调用。
     @discardableResult
     public static func revealCurrentTrack() -> Bool {
         runAppleScriptCapturing(#"""
@@ -223,7 +223,7 @@ public enum MusicPlaybackController {
         """#) != nil
     }
 
-    /// 「在 Spotify 中显示」的取数半步(2026-09-09):当前曲目的 `spotify url`(`spotify:track:<id>` /
+    /// 「在 Spotify 中显示」的取数半步:当前曲目的 `spotify url`(`spotify:track:<id>` /
     /// `spotify:ad:…` / `spotify:local:…`)。Spotify 的脚本字典没有 AM 那样的 `reveal`(只有会从头重播的
     /// `play track`),定位靠它注册的 `spotify` URL scheme:App 侧拿这个 URI 经 `SpotifyURI.deepLink` 转成
     /// 深链交给 LaunchServices 打开,客户端跳到曲目页(见 lyrimuse/SpotifyReveal.swift)。
@@ -245,7 +245,7 @@ public enum MusicPlaybackController {
         case list
         case shuffle
         case repeatOne
-        /// 列表循环(Music.app `song repeat = all`)。2026-08-21 补上:AM 的循环键是三态
+        /// 列表循环(Music.app `song repeat = all`)。补上:AM 的循环键是三态
         /// 关→全部→单曲,此前这一档被解析塌缩成 list —— 用户在 Music.app 开着整张循环,
         /// 我们的循环键却是灰的,还没法从 UI 点出这一档。
         case repeatAll
@@ -293,7 +293,7 @@ public enum MusicPlaybackController {
 
         """#
 
-    /// Spotify 的模式段脚本:`shuffling;shuffling enabled` 两截(2026-09-09)。后者是"这个账号 / 播放上下文
+    /// Spotify 的模式段脚本:`shuffling;shuffling enabled` 两截。后者是"这个账号 / 播放上下文
     /// 允不允许随机",解析见 spotifyPlaybackMode(fromModePart:)。两截各自包 try,`shuffling enabled` 读不出来
     /// 时默认 "true" —— 只在它**明确**说不允许时才隐藏随机键。extendedControlsState 的合并脚本里嵌的是同一段。
     private static let spotifyModePartScript = #"""
@@ -318,7 +318,7 @@ public enum MusicPlaybackController {
         public static let empty = ExtendedControlsState(favorited: nil, mode: nil, volume: nil)
     }
 
-    /// 三项一次脚本读回来(2026-08-20 性能审计):原来换歌要起三个独立的 osascript 子进程
+    /// 三项一次脚本读回来:原来换歌要起三个独立的 osascript 子进程
     /// (喜欢那项的属性候选循环最坏还要两趟)+ 三次 TCC 权限检查,合并后一趟搞定。三段
     /// 各自包 try:任何一段读不出来(无曲目/属性名不认/老版本)只是那一段为 "nil",不把
     /// 整个脚本拖垮 —— 语义与三个单项函数各自的失败路径一致。favorited 的
@@ -353,7 +353,7 @@ public enum MusicPlaybackController {
                 end tell
                 """#
         case .spotify:
-            // 模式段两截 `shuffling;shuffling enabled`(2026-09-09,与 spotifyModePartScript 同一段逻辑):
+            // 模式段两截 `shuffling;shuffling enabled`(与 spotifyModePartScript 同一段逻辑):
             // 后者为 false 时随机键整颗不显示,解析见 spotifyPlaybackMode(fromModePart:)。
             script = spotifyRunningGuard + #"""
                 tell application "Spotify"
@@ -410,7 +410,7 @@ public enum MusicPlaybackController {
 
     /// Spotify 的模式段 `shuffling;shuffling enabled` → 档位。纯函数,selftest 直接覆盖。
     ///
-    /// `shuffling enabled` 为 false = 这个账号 / 播放上下文不允许随机(2026-09-09 用户的 Free 账号真机实测:
+    /// `shuffling enabled` 为 false = 这个账号 / 播放上下文不允许随机(用户的 Free 账号真机实测:
     /// `set shuffling to true` 被接受、退出码 0,读回仍是 false,Spotify 自己界面上的随机键同样点不动)——
     /// 我们那颗随机键点了没反应还乐观地亮起来,是摆了一个落不了地的开关。这时返回 nil,调用方按"读不到模式"
     /// 处理、整颗不显示:Spotify 上模式组只有随机这一颗(循环键本来就不显示,supportsRepeatOne=false),
@@ -467,7 +467,7 @@ public enum MusicPlaybackController {
     /// 只有从单曲循环切出来时才必须动它,否则读回来还是单曲循环。
     /// 返回值 = 指令有没有被接受。
     ///
-    /// ⚠️ **写完不要马上回读**。2026-08-08 实测坐实:`set shuffle enabled to true` 这段脚本
+    /// ⚠️ **写完不要马上回读**。实测坐实:`set shuffle enabled to true` 这段脚本
     /// 正常退出、值也确实写进去了,但另起一个进程去 `get shuffle enabled`,250ms 之后读回来
     /// 的仍是旧值(再等一会儿才变)。原来的 cyclePlaybackMode 正是写完就回读,于是那个旧值
     /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
@@ -500,7 +500,7 @@ public enum MusicPlaybackController {
                     end tell
                     """#
             case .repeatAll:
-                // 列表循环(2026-08-21 补档):跟 repeatOne 同一个互斥约定 —— 点亮循环就
+                // 列表循环(补档):跟 repeatOne 同一个互斥约定 —— 点亮循环就
                 // 关掉随机。
                 script = #"""
                     tell application "Music"
@@ -602,7 +602,7 @@ public enum MusicPlaybackController {
     /// 三件事:
     /// ① 固定 3 位小数。直接插值 Double 可能吐出 "2.2000000000000002" 这种长尾表示,
     ///    拼进 AppleScript 源码里不保险。
-    /// ② locale 显式固定成 en_US_POSIX。2026-08-05 实测核实过:`String(format:)` **不带**
+    /// ② locale 显式固定成 en_US_POSIX。实测核实过:`String(format)` **不带**
     ///    locale 参数时本来就不做本地化(输出 "2.200"),只有显式传一个逗号小数点的区域
     ///    (如 de_DE)才会吐 "2,200"。所以这里不是在修一个现存 bug,而是把"必须是点"这个
     ///    要求写死在代码里——这个字符串要拼进 AppleScript 源码,一旦变成逗号就是语法错误,

@@ -8,11 +8,11 @@ import CoreGraphics
 
 @MainActor
 func runCoverArtTests() {
-    // ---- 最近记录的封面兜底:合唱 credit 要能对上主歌手写法(2026-08-20) ----
+    // ---- 最近记录的封面兜底:合唱 credit 要能对上主歌手写法 ----
     //
     // 同一次收听以两种歌手写法存在:本机缓存 key 用播放器的逐曲 credit(`英雄联盟/Sara Skinner`),
     // Last.fm 那一行记主歌手(`英雄联盟`)。前两级查找(归一化 key 精确 / looseKey)都救不了 ——
-    // looseKey 只把分隔符变体折成 `&`,不会把合唱者去掉。下面这批是用户 2026-08-20 报的那一屏
+    // looseKey 只把分隔符变体折成 `&`,不会把合唱者去掉。下面这批是出过问题的那一屏
     // (英雄联盟原声带)里真实的 key 与真实的行,逐条从缓存里抄出来的。
     do {
         typealias R = EnrichCacheReader
@@ -59,7 +59,7 @@ func runCoverArtTests() {
         expectEqual(R.coverURLString(in: kda, artist: "K/DA", title: "POP/STARS"), "https://cover/kda",
                     "封面兜底: K/DA 不会被斜杠劈成 K")
 
-        // ---- coverAlbumVerified:「最近记录」第①级纠错的资格判定(2026-09-01) ----
+        // ---- coverAlbumVerified:「最近记录」第①级纠错的资格判定 ----
         // 真实案例:陈奕迅《不如这样 (Live)》,Last.fm 行侧专辑写法与缓存 cover_album 在
         // 繁简/空格上系统性不一致,必须按 looseKey 口径比;而 cover_album 是错场次
         // (Get A Life)时绝不能给资格 —— 那正是这道闸要挡的东西。
@@ -80,7 +80,7 @@ func runCoverArtTests() {
                     "封面归属核实: 行侧没有专辑名时无从核实")
     }
 
-    // ---- 封面第⑤级:Apple Music 目录匹配守卫(2026-08-22) ----
+    // ---- 封面第⑤级:Apple Music 目录匹配守卫 ----
     //
     // 前四级封面兜底里只有「本机 enrich 缓存」覆盖得了 Last.fm 对中文曲库缺图,而那一级只有
     // 本机播过才有数据 —— iPhone 听的歌、翻历史页看到的老歌天生在盲区里(实测抽样 205 首里
@@ -226,7 +226,7 @@ func runCoverArtTests() {
         expectEqual(blue.b > blue.r && abs(blue.r - blue.g) < 0.001, true,
                     "深背景取色: 混白提亮,蓝仍是蓝且不偏色")
 
-        // 已经够亮的原样放行——暖色/浅色封面(luma 本来就高)完全不受这次改动影响。
+        // 已经够亮的原样放行——暖色/浅色封面(luma 本来就高)一动不动。
         let warm = lift(0.9, 0.7, 0.4)
         expectEqual(warm == (r: 0.9, g: 0.7, b: 0.4), true, "深背景取色: luma 够高就一动不动")
         expectEqual(lift(1, 1, 1) == (r: 1.0, g: 1.0, b: 1.0), true, "深背景取色: 纯白不动(不除零)")
@@ -245,9 +245,9 @@ func runCoverArtTests() {
         expectEqual(bad, 0, "深背景取色: 全区间扫描输出合法且 luma 达标")
     }
 
-    // ---- 封面取图:载荷曲目标识比对(2026-08-17) ----
+    // ---- 封面取图:载荷曲目标识比对 ----
     //
-    // 用户报网易云云盘歌"沿用上一首的封面":切歌瞬间 get --now 可能整条还是上一首(旧标题+
+    // 现象是网易云云盘歌"沿用上一首的封面":切歌瞬间 get --now 可能整条还是上一首(旧标题+
     // 旧封面),原实现拿到非 nil 就定案,把上一首的封面错挂到新歌上。修法是封面载荷带上自己的
     // artist/title 算 trackKey,跟当前曲目对不上就按"系统侧还没更新完"重试。
     do {
@@ -268,7 +268,7 @@ func runCoverArtTests() {
                     true, "封面标识: 大小写偏差算同一首")
     }
 
-    // ---- 封面取色:桌面悬浮歌词按"跟描边够对比"调(2026-08-17) ----
+    // ---- 封面取色:桌面悬浮歌词按"跟描边够对比"调 ----
     //
     // 这一组是为一次真实回归补的:08-16 把近黑封面兜底成 0.72 浅灰(为灵动岛的深色背景调的),
     // 桌面悬浮歌词一起吃了这条规则,用户又开着不透明白描边 —— 浅灰字被白描边吃掉,压在浅色
@@ -324,7 +324,7 @@ func runCoverArtTests() {
         //
         // ⚠️ 默认的 3.0 **触发不到**这条分支:要两侧都够不到得同时满足 sl < 0.05(mc−1) 和
         // sl > 1.05/mc − 0.05,有解的条件是 mc > √21 ≈ 4.58。所以这里显式传 7.0 去测那条
-        // 分支,别改回默认值——改回去这个断言会退化成在测另一条路径(第一版就是这么写错的)。
+        // 分支,别改回默认值——改回去这个断言会退化成在测另一条路径。
         let midStroke = (0.5, 0.5, 0.5)
         let onMid = fit((0.55, 0.52, 0.50), stroke: midStroke, minContrast: 7.0)
         let bestEndpoint = max(contrastWith((r: 0, g: 0, b: 0), midStroke),
@@ -333,7 +333,7 @@ func runCoverArtTests() {
                     "描边取色: 够不到目标时取对比更好的端点")
 
         // 优先方向"差一点点"够不到边界时,贴边界收下这个近似值,不要为了凑够数值目标
-        // 翻到对面走极端(2026-08-31,灵动岛「封面偏白、歌词却是全黑,太突兀」)。这是
+        // 翻到对面走极端(灵动岛「封面偏白、歌词却是全黑,太突兀」)。这是
         // `accentAgainstStroke` 这一层用手算数字验证的最小单元测试——完整链路(带真实
         // 封面均值色、走 accentForCoverArtBackground)的回归见下面"红豆"那组,那组数字
         // 才是从真实播放场景量出来的,这里只是同一条判据在更干净的数字上再验一遍。
@@ -372,9 +372,9 @@ func runCoverArtTests() {
         expectEqual(unreachable, 0, "描边取色: 全区间扫描只要够得到就一定达标")
     }
 
-    // ---- 封面取色:灵动岛 coverArt 卡片风格按"跟背景够对比"调(2026-08-27) ----
+    // ---- 封面取色:灵动岛 coverArt 卡片风格按"跟背景够对比"调 ----
     //
-    // 这一组是为一次真实回归补的:用户报灵动岛歌词跟背景对比度太低看不清——方大同
+    // 这一组是为一次真实回归补的:现象是灵动岛歌词跟背景对比度太低看不清——方大同
     // 《Run From Your Love》专辑《JTW 西游记 (Gold)》那张黄底封面,均值色 #BBA45E
     // (下面这组数字直接从真实封面文件量出来,不是编的)。accentForDarkBackdrop 只保证
     // 文字**绝对**亮度地板(luma≥0.62),这张封面的均值原本就已经在地板之上、不会被再提亮;
@@ -430,12 +430,12 @@ func runCoverArtTests() {
                     "coverArt 取色: 已经对着真暗背景够对比时原样放行,不擅自改色")
 
         // 常量对齐:背景渲染(NotchLyricsView 的黑叠加)跟这里估算背景用的必须是同一个数,
-        // 防止两处以后各自改动、悄悄脱节(2026-08-27 修复本身就是在补这道"各写各的"的漏洞)。
+        // 防止两处以后各自改动、悄悄脱节(修复本身就是在补这道"各写各的"的漏洞)。
         expectEqual(LocalPlaybackSource.notchCoverArtOverlayOpacity, 0.45,
                     "coverArt 取色: 背景黑叠加不透明度常量的当前值——改这个数记得同时想清楚对比度估算要不要跟着变")
     }
 
-    // ---- 封面取色:coverArt 风格下"贴边界够接近就别翻方向"(2026-08-31) ----
+    // ---- 封面取色:coverArt 风格下"贴边界够接近就别翻方向" ----
     //
     // 08-27 那版修复本身留了一个反方向的洞:偏白的封面均值本来就很亮,往亮的方向贴纯白
     // 差一点点够不到 4.5 门槛时,`accentAgainstStroke` 会整体判定"这个方向不行"、翻去
@@ -470,14 +470,14 @@ func runCoverArtTests() {
                     "coverArt 取色(红豆): 贴边界收下的结果本身仍然接近达标(90.7%),不是随手一个数")
     }
 
-    // ---- 封面 URL:三个图源各自顶到最大那一档(2026-08-17 网易云 / 2026-08-24 QQ+Apple) ----
+    // ---- 封面 URL:三个图源各自顶到最大那一档(网易云 / QQ+Apple) ----
     //
-    // 2026-08-17:用户报「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有
+    // 现象是「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有
     // 100×100(网易云客户端的限制),而那张卡最大 920px。替代图取自 collector 缓存的
     // cover_url,但那个 URL 尾巴上带着给小图用的 `?param=600y600` —— 网易云那个参数
     // **只降不升**,实测原生 800×800 的封面带上它就变 600×600。所以要原图必须把它摘掉。
     //
-    // 2026-08-24:用户报「QQ 音乐这个封面很模糊」。QQ 音乐客户端报的系统封面是 300×300,
+    // 现象是「QQ 音乐这个封面很模糊」。QQ 音乐客户端报的系统封面是 300×300,
     // 缓存里那张替代图当时也只有 300(QQ 源)/600(Apple 源)—— 顶到 820px 的卡上是 2.73×
     // 和 1.37× 放大。这两个图源的尺寸档不在查询串里而在**路径**里,所以改路径:QQ 提到 800
     // (实测天花板,1000/2000 都 404),Apple 提到 1200(实测要多大给多大)。
@@ -511,7 +511,7 @@ func runCoverArtTests() {
             "https://p1.music.126.net/abc==/1099.jpg?x=1",
             "封面URL: 只摘 param，别的查询参数留着")
 
-        // ---- QQ 音乐:路径里的尺寸档提到 800(2026-08-24) ----
+        // ---- QQ 音乐:路径里的尺寸档提到 800 ----
         expectEqual(
             native("https://y.qq.com/music/photo_new/T002R300x300M0000017AN4b0vdUG1.jpg"),
             "https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg",
@@ -551,7 +551,7 @@ func runCoverArtTests() {
             "https://y.qq.com/music/photo_new/mystery.jpg",
             "封面URL: QQ 图床但没有尺寸段就不动")
 
-        // ---- Apple:末段 600x600bb.jpg 提到 1200(2026-08-24) ----
+        // ---- Apple:末段 600x600bb.jpg 提到 1200 ----
         expectEqual(
             native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg"),
             "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/1200x1200bb.jpg",
@@ -591,9 +591,9 @@ func runCoverArtTests() {
             "封面URL: 拼在一起的同后缀域名不算网易云")
     }
 
-    // ---- 高清替代的触发判定:太小 / 不是封面形状(2026-09-08) ----
+    // ---- 高清替代的触发判定:太小 / 不是封面形状 ----
     //
-    // 用户报 YouTube Music 的 MV「封面是视频的第一帧」:media-control 给的是 320×180 的视频缩略图
+    // 现象是 YouTube Music 的 MV「封面是视频的第一帧」:media-control 给的是 320×180 的视频缩略图
     // (实测,TIFF),宽 320 越过 300 的门槛被当成够大的封面原样显示。collector 那头的
     // deviceartwork.go 一直有 15% 的长宽比容差把它拒收,App 侧没有 —— 这里把两端口径对齐。
     do {
@@ -609,7 +609,7 @@ func runCoverArtTests() {
                     "高清替代: 竖屏缩略图按形状触发")
         expectEqual(G.reason(width: 1280, height: 720, lowResThreshold: t), .notCoverShaped,
                     "高清替代: 大视频帧仍按形状触发")
-        // 原有的"太小"那条不变:网易云 100×100、QQ 300×300(边界含等号,2026-08-24 修)。
+        // 原有的"太小"那条不变:网易云 100×100、QQ 300×300(边界含等号,修)。
         expectEqual(G.reason(width: 100, height: 100, lowResThreshold: t), .lowRes,
                     "高清替代: 100×100 按太小触发")
         expectEqual(G.reason(width: 300, height: 300, lowResThreshold: t), .lowRes,
@@ -638,7 +638,7 @@ func runCoverArtTests() {
                     "高清替代: 形状→替代图自己也不是方形不换")
     }
 
-    // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑(2026-09-09) ----
+    // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑 ----
     //
     // 用户圈图报灵动岛左耳那枚封面「和大图长得不一样,上面有黑斑,展开的时候黑斑还会动」——陶喆
     // 《I'm O.K.》是黄底黑点的半调网点封面,600px 线性缩到 46px 没有面积平均就拍出摩尔纹。这里拿
@@ -731,9 +731,9 @@ func runCoverArtTests() {
         }
     }
 
-    // ---- 动态封面(motion artwork)的 HLS 清单解析(2026-09-09)----
+    // ---- 动态封面(motion artwork)的 HLS 清单解析----
     //
-    // fixture 是 2026-09-09 从 Prince《Timeless》(collectionId 6773830957)那条真 master m3u8
+    // fixture 是从 Prince《Timeless》(collectionId 6773830957)那条真 master m3u8
     // 上原样抄下来的片段:同时含 trick-play 的 I 帧轨(必须被排掉)、同尺寸多码率(486² 有三条)、
     // H.264 与 HEVC 并存,以及 `AVERAGE-BANDWIDTH` / `_AVG-BANDWIDTH` / `BANDWIDTH` 三个名字
     // 都以 `BANDWIDTH` 结尾这个真实的属性名陷阱。

@@ -10,10 +10,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collec
 ///
 /// `CollectorControl.restartAndWaitAsync()` 走 `launchctl kickstart -k`,而 **launchd 对
 /// 间隔太近的两次 kickstart 会节流到约 10 秒才返回**;每重启一次,"正在播放"推送就中断
-/// 一次。FeatureSettingsStore 2026-08-02 为此加过一个去抖 —— 但那份去抖是它**私有**的,
+/// 一次。FeatureSettingsStore 为此加过一个去抖 —— 但那份去抖是它**私有**的,
 /// 只能合并它自己的连续 save(),完全看不见 ConfigStore 也在重启。
 ///
-/// 后果(2026-08-30 通盘梳理时坐实):在"推送账号"tab 里同时改一个凭据和一个开关 ——
+/// 后果(通盘梳理时坐实):在"推送账号"tab 里同时改一个凭据和一个开关 ——
 /// 这是最常见的操作,连一次账号就会发生 —— 会触发**两次独立重启**:
 ///
 ///   - ConfigStore.save() 由 AccountLinkingTab 的 1.2s 输入去抖触发,然后**立刻**重启;
@@ -25,7 +25,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collec
 /// ⚠️ 历史包袱:两个 store 里都还留着"'推送账号'tab 底部的保存栏会把两处 persistFile()
 /// 一起调用、之后统一重启一次"这类注释。**那个保存栏已经不存在了**(现在是
 /// AccountLinkingTab 的只读 `autosaveStatusBar` + 1.2s 防抖自动保存),它描述的正是本类
-/// 现在负责的这件事 —— 那些注释已随本次改动订正,别再照着它们推断行为。
+/// 现在负责的这件事 —— 那些注释已经订正过,别再照着更早的版本推断行为。
 ///
 /// ## 语义
 ///
@@ -38,13 +38,13 @@ public final class CollectorRestartCoordinator: ObservableObject {
     public static let shared = CollectorRestartCoordinator()
 
     /// 有一次重启在排队(去抖等待中)或正在执行。设置窗口底部的状态条(CollectorApplyStatusBar)据此显示
-    /// 「正在应用到后台服务…」(2026-09-05,借鉴清单 #51)。只是可见性信号,不参与去抖逻辑。
+    /// 「正在应用到后台服务…」。只是可见性信号,不参与去抖逻辑。
     @Published public private(set) var isRestarting = false
 
     private init() {}
 
     /// 0.5s:够把"连着改好几项"合并成一次,又短到用户不会觉得保存卡住。沿用
-    /// FeatureSettingsStore 原来的取值,不趁这次改动顺手调参 —— 那是另一件事。
+    /// FeatureSettingsStore 原来的取值,不顺手调参 —— 那是另一件事。
     private static let debounceNanoseconds: UInt64 = 500_000_000
 
     private var pendingTask: Task<Void, Never>?

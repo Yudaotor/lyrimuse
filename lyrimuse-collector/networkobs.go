@@ -16,7 +16,7 @@ import (
 
 // networkAttemptCount/networkFailureCount 给"联网搜索候选歌词"(searchcli.go)判断
 // "所有源都没找到候选"到底是这首歌真的没有网络歌词,还是网络整体不通导致请求全部
-// 发不出去用——2026-08-02 补上(当时还只有五个源,netease/qq/kugou/lrclib/musixmatch,
+// 发不出去用——补上(当时还只有五个源,netease/qq/kugou/lrclib/musixmatch,
 // amll/ytmusic 后来才接入,一并算进这个统计),之前每个源各自内部把 http 请求失败和
 // "服务器正常响应、只是没查到"统统当空结果处理,两种情况在 UI 上完全分不清。
 // collector search-lyrics 是一次性子命令(一个独立进程执行一次就退出,不是常驻服务里
@@ -36,8 +36,8 @@ var (
 // 错误处理逻辑,调用方该怎么处理 resp/err 还怎么处理,行为不变。现在承担两件事:
 //
 //  1. 原有的:给 networkLooksDown() 那套"网络是不是整体不通"的判断累计原子计数器
-//     (2026-08-02 起,原来只覆盖七个歌词源)。
-//  2. 2026-08-26 新加:**这是整个采集器所有对外请求的统一审计日志出口**——用户
+//     (原来只覆盖七个歌词源)。
+//  2. 新加:**这是整个采集器所有对外请求的统一审计日志出口**——用户
 //     明确要求"所有软件发出的对外请求全部都给我记录下日志"。采集器里几乎所有发
 //     真实网络请求的地方(Last.fm/ListenBrainz/歌词各源/推送/状态中继/翻译/取色/
 //     MusicBrainz/iTunes)都已经改成调这个函数,不再各自直接 cli.Do(req)。
@@ -53,7 +53,7 @@ var (
 // 是 Swift 侧的事,而且请求整个发生在框架内部,拿不到这个函数需要的 method/URL/状态
 // 码/耗时)。
 func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) {
-	// DNS 阶段轨迹(2026-09-06),只给歌词源的传输层失败分类用(sourcebreaker.go 最后一节的
+	// DNS 阶段轨迹,只给歌词源的传输层失败分类用(sourcebreaker.go 最后一节的
 	// ⚠️ 段说明了为什么不能只看错误链)。钩子在拨号 goroutine 上跑、跟这里不同步,所以用
 	// 锁读写;请求结束后再读一次快照交给 observeTraced。非歌词源主机也会挂,开销是一个
 	// 闭包结构体加一次 WithContext 的浅拷贝,可忽略。
@@ -115,7 +115,7 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	} else {
 		// 成功的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是下面按分钟
-		// 的汇总 —— 2026-08-26"所有对外请求全部记录"这条要求由汇总里的 count 兑现,不再
+		// 的汇总 —— "所有对外请求全部记录"这条要求由汇总里的 count 兑现,不再
 		// 一行一次(Last.fm 每 5 秒一次轮询,两天日志里这一项就 4219 行)。
 		slog.Debug("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	}
@@ -123,7 +123,7 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 	return resp, err
 }
 
-// ---- 审计汇总(2026-09-05)----
+// ---- 审计汇总----
 //
 // 同一 target 在一分钟窗口内的调用合成一行 Info:
 //
@@ -136,7 +136,7 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 const apiCallSummaryWindow = time.Minute
 
 // normalizeAuditPath:把路径里像资源标识符的段抹成占位,让汇总按"接口"而不是按"某一个资源"
-// 分组。2026-09-05 首次装机实测不抹的话:启动期给几十张封面各发一次 HEAD
+// 分组。首次装机实测不抹的话:启动期给几十张封面各发一次 HEAD
 // (np.yudaotor.me/artwork/<hash>.jpg)、每个艺人查一次 MusicBrainz(/ws/2/artist/<uuid>),
 // 一个资源一行汇总,比逐次记还长。四类占位:<uuid> / <hex>(≥8 位十六进制)/ <n>(≥3 位纯数字)/
 // <id>(≥24 字符且含数字的长 token);扩展名保留(能看出是 .jpg 还是 .ttml)。版本段(v8、2.0、1)
@@ -287,7 +287,7 @@ func roundLooksNetworkDown(attempts, failures int32) bool {
 }
 
 // lyricsRoundConfirmsNoResult 判断这一轮"什么都没查到"是不是一个**可以下结论**的结果
-// (2026-09-09,给 resolveEnrichAsync 那道全空守卫用,理由见那边的长注释)。
+// (给 resolveEnrichAsync 那道全空守卫用,理由见那边的长注释)。
 //
 // 判据是"至少有一个请求真的成功了" —— 网络通、源确实回了话、就是没有这首歌。
 //

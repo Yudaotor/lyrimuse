@@ -4,7 +4,7 @@ import Foundation
 /// 语言 —— 那份 shell 是**构建时的真源**(build.sh 写 Info.plist、release.yml 生成 appcast 都调它),这里是 App 运行时
 /// (「接收测试版更新」挑最高版本)用的镜像;selftest update-channel 组拿一张表交叉校验两边逐字一致。
 ///
-/// 为什么构建号要和展示版本分开、为什么正式版是 1000(2026-09-05):Sparkle 的 SUStandardVersionComparator 实测把
+/// 为什么构建号要和展示版本分开、为什么正式版是 1000:Sparkle 的 SUStandardVersionComparator 实测把
 /// "-" 之后的全部忽略 —— "1.6.0-beta.1" 与 "1.6.0"、"beta.2" 与 "beta.1" 都判相等。所以 CFBundleShortVersionString
 /// 保留 tag 原文给人看,CFBundleVersion / sparkle:version 用四段纯数字给 Sparkle 比:alpha N、beta 100+N、rc 500+N、
 /// 正式 1000,三档预发布分区互不重叠且都压在正式版之下。老用户机上的三段 "1.5.0" 跟四段新号比到第二段就分出大小。

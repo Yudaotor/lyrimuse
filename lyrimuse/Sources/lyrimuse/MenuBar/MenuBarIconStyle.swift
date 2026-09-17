@@ -1,6 +1,6 @@
 import AppKit
 
-// 菜单栏图标的可选样式(2026-08-17 加)。这个图标出现在**没在显示歌词**的时候 ——
+// 菜单栏图标的可选样式。这个图标出现在**没在显示歌词**的时候 ——
 // 没在放歌、还没解析出这一句、或者菜单栏歌词整个关掉。
 //
 // ---- 选型标准 ----
@@ -11,27 +11,27 @@ import AppKit
 //
 // ---- 为什么全是矢量,没有一张 PNG ----
 //
-// 位图这条路在 2026-08-17 已经走死过一次:老图标是一张 36×36 的 PNG,字形只占 22×15,
+// 位图这条路在已经走死过一次:老图标是一张 36×36 的 PNG,字形只占 22×15,
 // 想放大到正常大小必糊(详见 MenuBarStatusItem.menuBarIconImage 那段注释)。SF Symbol
 // 是矢量的,而且跟系统自带图标共用同一套视觉重量,天然"合群";自制的那两个组合款也是
 // 现画的,任意尺寸都清晰。
 enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
-    // 2026-08-17 用户圈掉了五款:音符与歌词/音符与双行(组合款,跟 App 图标同构图但
+    // 用户圈掉了五款:音符与歌词/音符与双行(组合款,跟 App 图标同构图但
     // 用户不喜欢)、卡拉OK(三线扫色)、引号、耳机。存储侧对已删 rawValue 有兜底
     // (AppSettings 解不出来回落 default),随删随安全。
-    /// 老手绘线稿的矢量重制(经数轮打磨,见 classicArtwork)。2026-08-17 用户钦点:
+    /// 老手绘线稿的矢量重制(经数轮打磨,见 classicArtwork)。用户钦点:
     /// 默认款 + 网格第一位(CaseIterable 顺序就是设置网格的展示顺序)。
     case classic
     case note
     case noteList
     case quarternotes
     case waveform
-    /// 自制:三根竖直音条。放歌时循环跳动、暂停/无播放时定格到静置帧 —— 2026-08-17 起
+    /// 自制:三根竖直音条。放歌时循环跳动、暂停/无播放时定格到静置帧 ——
     /// **所有款式**播放时都会动(设置里有总开关),动效全在 MenuBarLiveIconView;这里只出
     /// 静态帧(设置网格 + 暂停态),音条的几何参数两边要保持一致。
     case equalizer
     case mic
-    // ---- 2026-08-17 用户从候选页(9 选 5)拍板补进来的五款 ----
+    // ---- 用户从候选页(9 选 5)拍板补进来的五款 ----
     /// 节拍器。动效是真·钟摆:绕靠近底部的支点摆,见 MenuBarLiveIconView.buildPendulum。
     case metronome
     /// 钢琴键。动效走通用摇摆。
@@ -65,7 +65,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
     }
 
     /// 菜单栏上字形的点大小。15pt 是 SF Symbol 在菜单栏的常见档位 —— 画出来的字形高度
-    /// 15pt 上下,跟旁边的 wifi/电池齐平(2026-08-17 真机截图比对过)。
+    /// 15pt 上下,跟旁边的 wifi/电池齐平(真机截图比对过)。
     private static let pointSize: CGFloat = 15
 
     /// 按样式取模板图,带进程内缓存。
@@ -108,13 +108,13 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
         return result
     }
 
-    /// 「经典」= 老手绘线稿的矢量重制(2026-08-17 v3)。
+    /// 「经典」= 老手绘线稿的矢量重制(v3)。
     ///
     /// v1 直接用 Resources/MenuBarIconTemplate.png 裁剪放大 —— 源字形只有 22×15 像素,
     /// 显示在 14pt(Retina 28px 高)要放大近一倍,静态就糊,摆动动画的旋转插值再糊一层,
-    /// 用户实测点名"很糊、动起来也不清晰",位图无解只能矢量化。
+    /// 实测点名"很糊、动起来也不清晰",位图无解只能矢量化。
     /// v2 忠实拟合了原图"符尾和顶线连成一体"的结构、v3 改成分离对齐,用户都不满意;
-    /// v4(现行)按用户点名的 **App 图标同款构图**来:音符左上居前,三道线在右下、
+    /// v4(现行)按**App 图标同款构图**来:音符左上居前,三道线在右下、
     /// 顶线明显低于符尾("放在它下面"),线从音符身后穿过 —— 单色模板图没法靠颜色分
     /// 前后,层次感靠"加粗一圈的音符剪影在线上抠缝"表达("被压着"的那道缝)。
     /// 那张 PNG 留在 Resources 里当历史资料,不再参与渲染。
@@ -129,7 +129,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
     static let classicLineRightEdge: CGFloat = 18.3
 
     /// 音符三件(符头/符干/符尾)画进当前上下文。expand = 0 画本体;> 0 画加粗剪影
-    /// (抠缝/蒙版用)。尺寸 2026-08-17 按用户逐轮调过:音符放大、符头 6.0×4.3。
+    /// (抠缝/蒙版用)。尺寸按用户逐轮调过:音符放大、符头 6.0×4.3。
     private static func classicNote(expand: CGFloat) {
         guard let ctx = NSGraphicsContext.current else { return }
         // 符头:斜置实心椭圆
@@ -207,7 +207,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
             .withSymbolConfiguration(config)
     }
 
-    // ---- 节拍器(2026-08-17 v2:用户点名"只有针在摆、机身不动才像在运作",SF 那张
+    // ---- 节拍器(v2:"只有针在摆、机身不动才像在运作",SF 那张
     // 整图摆是错的隐喻;针和机身拆成两张,live 视图只转针,静态帧合成一张斜针的) ----
     static let metronomeCanvas = NSSize(width: 14, height: 15)
     /// 摆针支点在整图画布里的位置。
@@ -282,7 +282,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
         return image
     }
 
-    // ---- 钢琴键(2026-08-17 v2:用户点名"键位被按压变色"而不是整图摇晃;静态图只画
+    // ---- 钢琴键(v2:"键位被按压变色"而不是整图摇晃;静态图只画
     // 键盘,四个白键的按压高亮由 live 视图按 pianoPressRects 摆四个填充层轮流点亮) ----
     static let pianoCanvas = NSSize(width: 16, height: 12.5)
     /// 四个白键的按压高亮矩形(键面下半段,避开上方的黑键)。
@@ -319,12 +319,12 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
         return image
     }
 
-    /// 自绘:光盘(2026-08-17 v2)。v1 用 SF 的 opticaldisc,用户实测两条都不行:高光
+    /// 自绘:光盘(v2)。v1 用 SF 的 opticaldisc,实测两条都不行:高光
     /// 刻痕在 15pt 下小到看不见 —— 转了也等于没转;造型也读不出"CD"。这版为 15pt 现画:
     /// 大中孔(CD 区别于黑胶的标志特征)+ 两道对置的粗高光楔当不对称特征,旋转一眼可见。
     /// 方形画布、圆心=中心,绕层中心转不晃(buildSpin 的包围盒纠偏对它算出来≈0)。
     static func discArtwork() -> NSImage {
-        // 15.5:第一版 13.2 被用户嫌小(2026-08-17)。菜单栏可用高度 ~22pt,SF 款在
+        // 15.5:13.2 太小。菜单栏可用高度 ~22pt,SF 款在
         // pointSize 15 档的字形也在 14~16pt 这个量级,对齐着来。
         let s: CGFloat = 15.5
         let image = NSImage(size: NSSize(width: s, height: s), flipped: false) { rect in
@@ -351,13 +351,13 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
         return image
     }
 
-    // ---- 黑胶三件套(2026-08-17 v2:用户指出 v1 纯同心圆"转起来看不清、也认不出是唱片"
+    // ---- 黑胶三件套(纯同心圆"转起来看不清、也认不出是唱片"
     // —— 旋转对称的图形转起来本来就不可见,必须有不对称特征 + 一个静止参照物) ----
     // 唱盘单独一张(旋转的就是它:方形画布、圆心=画布中心,绕层中心转不晃,盘面带一颗
     // 偏心标记点,旋转的可见性全靠它)+ 静止的唱臂(右上支点伸到盘面,一眼读出"唱机")。
     // 静态帧 = 两者合成;活体在 MenuBarLiveIconView.buildVinyl 里分两层,只转唱盘。
-    // 尺寸 2026-08-17 放大过两轮(15×13.5 → 16.6×15 整体,再单独把盘从 12.6 → 14.4:
-    // 用户点名"盘再大点、唱臂保持")。盘沿会探到唱臂线下面穿过,层序上臂在上,视觉正确。
+    // 尺寸放大过两轮(15×13.5 → 16.6×15 整体,再单独把盘从 12.6 → 14.4:
+    // "盘再大点、唱臂保持")。盘沿会探到唱臂线下面穿过,层序上臂在上,视觉正确。
     static let vinylCanvas = NSSize(width: 16.6, height: 15)
     static let vinylDiscSide: CGFloat = 14.4
     /// 唱盘中心在整图画布里的位置 —— 唱臂从右上伸过来,盘往左下让一点。

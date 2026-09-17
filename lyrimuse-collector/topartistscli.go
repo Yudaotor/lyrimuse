@@ -28,7 +28,7 @@ func runTopArtistsCLI(args []string) {
 	limit := fs.Int("limit", 10, "merged entries to output")
 	// -all-periods:一次进程拿全 App 用的四个时段,输出 {"7day":[...],...}。
 	// App 的歌手榜切时段原来每档各起一个 collector 进程(spawn + 磁盘加载 + 网络往返),
-	// 四档并发取数在 Go 里只是四个 goroutine —— 一次 spawn,切时段零等待(2026-08-11
+	// 四档并发取数在 Go 里只是四个 goroutine —— 一次 spawn,切时段零等待(
 	// 发散采纳)。
 	allPeriods := fs.Bool("all-periods", false, "fetch 7day/1month/12month/overall in one run")
 	mbBudget := fs.Int("mb-budget", 0, "resolve up to N uncached artist identities via MusicBrainz (0 = cache only)")
@@ -36,7 +36,7 @@ func runTopArtistsCLI(args []string) {
 		log.Fatalf("top-artists: %v", err)
 	}
 	// -limit 0/负数会让下面的切片截断 panic;period 打错的话 Last.fm 会静默按默认处理,
-	// 返回一份跟请求对不上的数据 —— 都在本地挡掉(审阅指出)。
+	// 返回一份跟请求对不上的数据 —— 都在本地挡掉。
 	if *limit < 1 {
 		*limit = 10
 	}
@@ -60,9 +60,9 @@ func runTopArtistsCLI(args []string) {
 	// App 统计页那条调用路径保持毫秒级。手动导出想现场解析就传 -mb-budget(每个未缓存
 	// 名字 ≤2 次 MusicBrainz 请求、全局 1.1s 限速,预算大时耐心等)。
 	loadArtistIdentityCache(filepath.Join(configDir(), clientName+"-artist-identity-cache.json"))
-	// 归并的名字键(artistMergeNameKey)2026-08-31 起还会经 resolveGenericArtistCanonicalName 查
+	// 归并的名字键(artistMergeNameKey)还会经 resolveGenericArtistCanonicalName 查
 	// "英文标签 → 中文常用名"——那条链有自己的两份缓存(MusicBrainz 中文别名 / QQ 歌手名),
-	// 跟常驻进程共用同一份文件,这里也得加载,否则每个名字都当"没查过"(2026-09-03 实测 CLI
+	// 跟常驻进程共用同一份文件,这里也得加载,否则每个名字都当"没查过"(实测 CLI
 	// 因此跑 1 分 49 秒被 App 看门狗杀掉)。预算为 0 时那条链同样只读缓存不联网,见
 	// artistCanonicalCacheOnly。
 	loadArtistAliasCache(filepath.Join(configDir(), clientName+"-artist-alias-cache.json"))

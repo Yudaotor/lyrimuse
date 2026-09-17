@@ -12,10 +12,10 @@ import (
 
 // 「这张封面已经确认在中继上」的落盘记录。
 //
-// ## 为什么加(2026-09-17)
+// ## 为什么加
 //
 // artworkUploaded 原本只活在进程内存里、重启即空,于是 sweepDeviceArtwork 每次启动都把
-// artwork/ 目录整个 HEAD 一遍。实测:本机 713 张图、2026-09-16 重启 17 次 ≈ 1.2 万次 KV 读,
+// artwork/ 目录整个 HEAD 一遍。实测:本机 713 张图、重启 17 次 ≈ 1.2 万次 KV 读,
 // 全是在重问同一批早就确认过的图(日志里那一串 `startup backfill done confirmed=703`)。
 // 读额度 100k/天虽然撑得住,但这是纯浪费;而且 HEAD 之后跟着的 POST 会真的吃写额度,
 // 写只有 1000/天。
@@ -36,7 +36,7 @@ const artworkConfirmTTL = 7 * 24 * time.Hour
 
 // artworkConfirmFlushEvery:补传扫描里每确认这么多张就落一次盘。不等扫完再写的理由是
 // 扫一遍 713 张 × artworkSweepGap(300ms) ≈ 3.5 分钟,而开发期 collector 一天重启十几次
-// (2026-09-16 实测 17 次),只在结尾落盘的话扫描常常还没跑完就被打断、一条都存不下来,
+// (实测 17 次),只在结尾落盘的话扫描常常还没跑完就被打断、一条都存不下来,
 // 这个修复等于不存在。25 张一落盘 = 整轮 29 次本地写,可以忽略。
 const artworkConfirmFlushEvery = 25
 

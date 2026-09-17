@@ -30,7 +30,7 @@ func TestUsableWordTiming(t *testing.T) {
 		yrc  string
 		want bool
 	}{
-		// 2026-08-16 真实数据:被截断那条覆盖 19.1%
+		// 真实数据:被截断那条覆盖 19.1%
 		{"截断到 19%", yrcTo(50_000), false},
 		// 正常条目里最低的一条(netease,差在 LRC 末尾空行)是 85.4%
 		{"正常 85%", yrcTo(222_000), true},

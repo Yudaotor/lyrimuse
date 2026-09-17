@@ -1,7 +1,7 @@
 import CoreAudio
 import Foundation
 
-/// 系统默认音频输出设备的身份与传输类型,外加"默认输出换了"的监听(2026-09-09)。
+/// 系统默认音频输出设备的身份与传输类型,外加"默认输出换了"的监听。
 ///
 /// 给 `LocalPlaybackSource` 的 Spotify 探针领先量用:那个领先量(AppleScript `player position` 比
 /// 出声位置领先多少)是**输出链路**的属性 —— 内建约 0.1s、蓝牙约 0.55s —— 所以按设备分别记、

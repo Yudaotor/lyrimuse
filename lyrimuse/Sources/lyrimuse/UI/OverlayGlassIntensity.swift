@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 悬浮歌词毛玻璃背景的「浓淡」档位(2026-09-17,GitHub discussions#6)。
+/// 悬浮歌词毛玻璃背景的「浓淡」档位。
 ///
 /// discussion 原话要的是"给背景/毛玻璃加一根 alpha/opacity 滑杆,而不是只有一个二元开关"。
 /// 背景颜色那半已经有(`backgroundColorHex` 的 `ColorPicker(supportsOpacity: true)`,玻璃开着时
@@ -13,8 +13,8 @@ import SwiftUI
 /// `LyricsOverlayView.overlayBackground` 里已经在吃的系统兜底,换成手搭的 NSVisualEffectView
 /// 未必还能白得)。这里退而求其次,把 SwiftUI `Material` 本身**全部五档**离散预设
 /// (`.ultraThin` / `.thin` / `.regular` / `.thick` / `.ultraThick`)都开出来给用户选——
-/// 2026-09-17 当天最初只开了三档(薄/常规/厚),用户当场要求"既然系统本来就有 5 档,就不要
-/// 缩成 3 档":系统给了多少粒度,就该原样透给用户,没有理由替用户多做一次取舍。
+/// 不做成三档(薄/常规/厚):既然系统本来就有 5 档,就不该
+/// 缩成 3 档 —— 系统给了多少粒度,就该原样透给用户,没有理由替用户多做一次取舍。
 ///
 /// 默认 `.regular`:跟这颗设置加之前 `LyricsOverlayView` 硬编码的 `.regularMaterial` 完全
 /// 一致,没碰过这颗设置的人升级后毛玻璃观感逐像素不变。

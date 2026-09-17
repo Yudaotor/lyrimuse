@@ -1,4 +1,4 @@
-/// 经典桌面悬浮歌词的「对齐方式」覆盖(2026-08-29,GitHub issue #2)。
+/// 经典桌面悬浮歌词的「对齐方式」覆盖。
 ///
 /// 默认(`automatic`)是既有行为:歌词按对唱声部标记(`LyricDuet.Side`)自动在左/右/居中
 /// 之间切换,配合两侧内缩(`LyricDuetLayout.insets`)和声部指示圆点(见
@@ -14,7 +14,7 @@
 /// 同样生效(issue 原文"所有歌词强制左对齐",不是"仅对唱歌"),等价于把"永远居中"的旧
 /// 兜底换成"永远靠用户选的那一边"。
 ///
-/// 只影响悬浮窗(`LyricsOverlayView`),不影响歌词窗口(第 07 章)——按用户反馈的原话
+/// 只影响悬浮窗(`LyricsOverlayView`),不影响歌词窗口(第 07 章)——按现象是的原话
 /// 范围来实现;歌词窗口对没有声部信息的兜底本来就是靠左(悬浮窗是居中),两边默认已经
 /// 不一致,这次不动它。
 public enum OverlayDuetAlignmentOverride: String, Codable, Hashable, CaseIterable, Sendable {

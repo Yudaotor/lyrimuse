@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 本案例的真实数据(2026-08-22,用户报「Stranger in Moscow (Tee's In-House Club Mix)
+// 本案例的真实数据(现象是「Stranger in Moscow (Tee's In-House Club Mix)
 // 配了正常版歌词」):
 //
 //	本地 Apple 标签:Michael Jackson | Stranger in Moscow (Tee's In-House Club Mix)

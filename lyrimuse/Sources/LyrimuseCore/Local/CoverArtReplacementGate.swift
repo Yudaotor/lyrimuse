@@ -2,8 +2,8 @@ import Foundation
 
 /// 「系统 Now Playing 那份封面要不要换成 collector 缓存里的高清替代」的纯判定。
 ///
-/// 2026-09-08 从 `PlaybackCoordinator.refreshHighResCover` 里拆出来:原来那里只有一个判据
-/// (宽 ≤ 300px 就找替代),用户报 YouTube Music 的 MV 条目「封面是视频的第一帧」——Safari 经
+/// 从 `PlaybackCoordinator.refreshHighResCover` 里拆出来:原来那里只有一个判据
+/// (宽 ≤ 300px 就找替代),现象是 YouTube Music 的 MV 条目「封面是视频的第一帧」——Safari 经
 /// MediaSession 上报的 artwork 就是 **320×180 的视频缩略图**,宽 320 刚好越过 300 的门槛,
 /// 被当成「够大的正经封面」原样显示,再被展示面的 scaledToFill 裁成方块。collector 那头
 /// (`deviceartwork.go`)一直有 15% 的长宽比容差、把这张图拒收了,所以网页显示的是真封面,

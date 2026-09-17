@@ -4,7 +4,7 @@ import Foundation
 /// 测试按钮(`LyricSourceTestService`/`SettingsView.sourceAccessoryTooltip`)、"联网搜索
 /// 候选歌词"弹窗的"歌词源可用情况"明细(`LyricsSearchService`/`LyricsSearchSheet`)。
 ///
-/// 2026-09-01 从**自然语言文案**改成**稳定代码**(用户报"英文界面下这段提示还是中文"
+/// 从**自然语言文案**改成**稳定代码**(现象是"英文界面下这段提示还是中文"
 /// 才发现的:collector 那几个 `xxxSetLastFailureReason` 原来写的是硬编码中文句子,经
 /// 共享 JSON 原样传到这里直接显示,完全绕开了这个仓库统一走的 `L10n.t()` 本地化机制)。
 /// collector 只负责识别"是哪一种已知失败模式"、吐出一个稳定代码(见 collector 侧
@@ -34,9 +34,9 @@ enum LyricSourceFailureReason {
             // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
             // 这个是去开代理。
             return L10n.t("Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复")
-        // 下面四个是传输层通用代码(2026-09-06,collector 侧 sourcebreaker.go 最后一节的
+        // 下面四个是传输层通用代码(collector 侧 sourcebreaker.go 最后一节的
         // classifyLyricSourceTransportFailure + searchcli.go 派生的 upstream_unreachable),任何源都
-        // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"。起因是用户报「派对后派对
+        // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"。起因是现象是「派对后派对
         // 搜不到」:公司 VPN 下发的 DNS 对六个歌词源的域名一律不答、请求 2ms 内就死在解析这一步,
         // 弹窗却说「九个源都没找到可用的候选」。这四个只在具体代码(上面四个)都没命中时才会出现,
         // 见 searchcli.go 的 lyricSourceFailureReasons。

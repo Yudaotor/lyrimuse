@@ -8,7 +8,7 @@ import LyrimuseCore
 /// writeLastfmMirrorStatus),之后第一次提交成功会把它删掉。App 侧读到它就把账号卡
 /// 渲染成"授权已失效"红标 —— 没有这条通道的话,scrobble 全停时界面照样一片绿
 /// ("已连接"只看本地 session key 非空,信息页走只读 API 照常出数据),用户从任何
-/// 地方都发现不了(2026-08-11 审阅确认)。
+/// 地方都发现不了。
 enum LastfmMirrorStatus {
     struct Info: Decodable, Equatable {
         let error: Int
@@ -50,7 +50,7 @@ enum LastfmMirrorStatus {
 
 /// 让"授权已失效"红标能**自愈**的观察器。collector 恢复后(重启进程 + 首次提交成功)
 /// 会把状态文件删掉,但"文件被删"不在 SwiftUI 的观察体系里 —— 徽标所在的行没有任何
-/// 被观察对象变化就不重渲染,红标滞留(2026-08-17 实测:Last.fm 误报 error 4 → 熔断
+/// 被观察对象变化就不重渲染,红标滞留(实测:Last.fm 误报 error 4 → 熔断
 /// 落文件 → collector 重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
 /// 开着设置页时 collector 熔断落了文件,红标也该自己冒出来,不用重开窗口。
 ///

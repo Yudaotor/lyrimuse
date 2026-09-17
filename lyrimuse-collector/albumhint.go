@@ -15,12 +15,12 @@ import (
 	"time"
 )
 
-// ---- 专辑名回填:播放器没报专辑名时问 Apple 目录这首歌出自哪张专辑(2026-09-08)----
+// ---- 专辑名回填:播放器没报专辑名时问 Apple 目录这首歌出自哪张专辑----
 //
 // 起因:用户在 YouTube Music 里放王子(Prince)《Why You Wanna Treat Me So Bad?》的 **MV**,网页和上送都
 // 没有专辑。两个来源都是空的:MediaSession 报的 album 就是空串;页面 byline 是「王子 • 501万次观看 • 5万 人赞」,
 // 只有频道链接、没有 `browse/MPREb` 专辑链接(ytmusicAlbumPatch 无从补起)—— MV 在 YT Music 里是独立的
-// 「视频」实体,不挂专辑,同专辑的音频版都带 album「Prince」。用户拍板作为**通用逻辑**加上:任何播放器,只要
+// 「视频」实体,不挂专辑,同专辑的音频版都带 album「Prince」。作为**通用逻辑**加上:任何播放器,只要
 // 报上来的专辑名为空,就按「署名 + 曲名 + 时长」去 Apple 目录反查(iTunes Search 公开接口,纯 HTTPS,不依赖
 // 本机装 iTunes / Apple Music)。
 //
@@ -165,7 +165,7 @@ func appleAlbumHint(ctx context.Context, artist, title string, durationSecs floa
 const appleAlbumHintSyncWait = 8 * time.Second
 
 // appleAlbumHintSync 给**后台**解析路径用(resolveTrackEnrichment / backfillPeripheralFields / recheck-cover CLI,
-// 2026-09-08 晚加,给封面解析当专辑名,见 03 章决策 16):候选没缓存就当场查、查完再挑,不像 appleAlbumHint 那样
+// 加,给封面解析当专辑名,见 03 章决策 16):候选没缓存就当场查、查完再挑,不像 appleAlbumHint 那样
 // 丢给后台"本轮先按现状走" —— 这些调用方本来就在 goroutine 里等九个歌词源,多等 Apple 一两秒没人看见;而封面
 // 选源这一步一旦过去就不会再来(王子那首 MV 首次解析时没有专辑名可用,Apple 第一条合集封面就此冻结了一天)。
 // 后台那次还在飞就等它,不重复发同一份请求。
@@ -248,7 +248,7 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 	return album
 }
 
-// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(2026-09-08 晚,用户报王子那首 MV「用的是合集封面,不应该是
+// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(现象是王子那首 MV「用的是合集封面,不应该是
 // 另外一个吗」,见 03 章决策 16)—— 播放器报了专辑就是它;没报就用 Apple 目录回填的那个(只读缓存、不等网络,没命中
 // 就后台补一次、这一轮按空处理)。回填名只进**挑选过程**(Apple 匹配打分 / 网易云 vs Apple 对版 / QQ、同专辑邻居两道
 // guard / coverSwapAllowed / coverNeedsHintCheck),**绝不落盘成 cover_album**:那个字段是"归属已核实"的凭据(App 侧
@@ -334,7 +334,7 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 }
 
 // fetchAppleAlbumHintCandidatesTracked 在 fetchAppleAlbumHintCandidates 外面包一轮网络观察(networkobs.go 的
-// beginNetworkRound),多回答一个问题:这次的空结果算不算数(2026-09-09,Rocky 查《One Last Kiss》首播无词时发现直连
+// beginNetworkRound),多回答一个问题:这次的空结果算不算数(Rocky 查《One Last Kiss》首播无词时发现直连
 // DNS 挂过 36 秒,顺带暴露这里的同款问题)。itunesSearch 把 DNS 失败 / 超时 / ctx 取消统统吞成空切片,原来一律记
 // miss,appleAlbumHintMaxMisses=2 之后这首歌的专辑回填就在进程生命周期内永久关闭 —— 网络抖两下,王子那首 MV 的
 // 封面又会退回「Apple 第一条合集」那个 03 章决策 16 刚修掉的形态。
@@ -389,7 +389,7 @@ func albumHintCandidatesFromResults(results []itunesResult, title string, durati
 	return out
 }
 
-// albumHintTitleSplit:搬运频道形态的身份兜底(2026-09-11,用户问「为什么当前这首 YT Music 的歌没有专辑上送」)。
+// albumHintTitleSplit:搬运频道形态的身份兜底 —— 这类曲目上送不到专辑。
 //
 // 现场:Safari 播 YT Music 里「音樂頑童」频道上传的《Musiq Soulchild - Buddy (Official Video)》,media-control 的 artist
 // 位是频道名、真正的歌手写在曲名破折号前面。主查询按「署名 曲名」和裸曲名问 Apple,候选又要求曲名归一**完全相等**,

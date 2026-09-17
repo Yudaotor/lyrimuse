@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 固定样本回归测试——覆盖 2026-08-04 实测坐实的网易云"纯音乐曲目返回一份看着正常的
+// 固定样本回归测试——覆盖实测坐实的网易云"纯音乐曲目返回一份看着正常的
 // 完整制作人员名单、每行都带真实时间戳"这个坑:isTimedLRC 会认为它是可用的逐行 LRC
 // (行数够、时间戳密度够),旧版 creditLineRe 只手工枚举了"作词/作曲/编曲/制作人/演唱/
 // 混音/录音"几个词,指挥/贝斯/中提琴/吉他/大提琴/母带工程师这类角色名统统漏判,导致
@@ -81,7 +81,7 @@ func TestScoreLyricCandidateRejectsCreditOnlyLyrics(t *testing.T) {
 	}
 }
 
-// 2026-08-05 实测排查坐实的真实 bug 的回归测试:同一首歌的不同录音(demo/original
+// 实测排查坐实的真实 bug 的回归测试:同一首歌的不同录音(demo/original
 // version/live)时长接近、歌词字面还一样,而 scoreLyricCandidate 改动前完全不看候选自报的
 // 歌名 —— 于是 Michael Jackson 的 "Blue Gangsta" 被匹配成酷狗的
 // "Blue Gangsta (Original Version)",播放时第一句就展示成
@@ -114,9 +114,9 @@ func TestTitleVersionTags(t *testing.T) {
 		{"", nil},
 		// 括号没闭合(标签写得不规范)也要认出来
 		{"Blue Gangsta (Demo", []string{"demo"}},
-		// 2026-08-26 补中文版本限定词(真实bug案例:「蜗牛 (伴奏)」查 lyricfind,词表原来
+		// 补中文版本限定词(真实故障案例:「蜗牛 (伴奏)」查 lyricfind,词表原来
 		// 只认拉丁词,伴奏版被当成正常版收了)。
-		// 2026-09-11 起中文词折成英文规范键进集合(见 versionTagAliases):「(现场)」跟「(Live)」
+		// 中文词折成英文规范键进集合(见 versionTagAliases):「(现场)」跟「(Live)」
 		// 是同一个版本声明,不能是两个键。
 		{"蜗牛 (伴奏)", []string{"instrumental"}},
 		{"起风了 (Live)", []string{"live"}},
@@ -128,7 +128,7 @@ func TestTitleVersionTags(t *testing.T) {
 		{"晴天 (混音)", []string{"remix"}},
 		// 假阳性陷阱同样适用于中文:词只在括号/破折号段里找。
 		{"不插电的夏天", nil},
-		// 2026-09-04 补裸 "edit"(PRINCE《Diamonds and Pearls (2023 Remaster)》配了《… (Edit)》的词,
+		// 补裸 "edit"(PRINCE《Diamonds and Pearls (2023 Remaster)》配了《… (Edit)》的词,
 		// 见 distinctRecordingVersionTags 处注释)。"(Radio Edit)" 现在同时命中 "radio edit" 和 "edit"。
 		{"Diamonds And Pearls (Edit)", []string{"edit"}},
 		{"Man In the Mirror (2003 Edit)", []string{"edit"}},
@@ -152,7 +152,7 @@ func TestTitleVersionTags(t *testing.T) {
 	}
 }
 
-// ---- v16(2026-09-11):中英同义的版本限定词折成同一个键 ----
+// ---- v16:中英同义的版本限定词折成同一个键 ----
 //
 // 字符串取自真实案例:陶喆《今天没回家 (Live)》,本地专辑「Soul Power (现场原音专辑)」,酷狗候选
 // 「今天没回家 (Live)」/「Soul Power (Live Concert)」——同一场演唱会的现场版,却因为本地集合是
@@ -212,7 +212,7 @@ func TestVersionTagsMismatchFoldsBilingualSynonyms(t *testing.T) {
 	}
 }
 
-// ---- v12(2026-09-04):裸 "edit" 是另一次录音 ----
+// ---- v12:裸 "edit" 是另一次录音 ----
 //
 // 字符串与时长全部取自真实决策记录(PRINCE|Diamonds and Pearls (2023 Remaster)|Diamonds and Pearls
 // (Remaster),本地 283.016s):酷狗《Diamonds And Pearls (Edit)》/ The Very Best Of Prince 自报 260s,
@@ -250,7 +250,7 @@ func TestScoreLyricCandidatePenalizesSingleEdit(t *testing.T) {
 	}
 }
 
-// ---- v17(2026-09-11):album version 出词表 / single version 的命名不对称可豁免 ----
+// ---- v17:album version 出词表 / single version 的命名不对称可豁免 ----
 //
 // 起因是一次面向数据的普查(见 09 章第 51 条):全库 632 条现存 versionTags 罚分按"差在哪个键"
 // 聚合、拿候选自报时长当地面真相。album version 一侧独有的 49 条里时长差 >12% 的 0 条(对照组
@@ -347,7 +347,7 @@ func TestDefaultVersionTagSemantics(t *testing.T) {
 	}
 }
 
-// ---- v16(2026-09-11):限定段的中心词是中文现场标记 → 视同声明 live ----
+// ---- v16:限定段的中心词是中文现场标记 → 视同声明 live ----
 //
 // 词表里只有「现场」没有「演唱会」,同一形态只差一个用词就待遇不同。真实数据:酷我
 // 「Will You Be There (1992罗马尼亚布加勒斯特危险之旅演唱会)」(专辑空)对本地
@@ -411,7 +411,7 @@ func TestQualifierDeclaresCJKLive(t *testing.T) {
 	}
 }
 
-// ---- v7(2026-09-01):liveAlbumIdentityConflict(「两场不同演唱会」判据) ----
+// ---- v7:liveAlbumIdentityConflict(「两场不同演唱会」判据) ----
 //
 // 全部字符串取自真实曲库的 lyrics_decision 记录(2339 条全库回放的命中/放行样本),不是编的。
 // 起因:陈奕迅《Shall We Dance (Live)》/《活着多好 (Live)》,本地专辑《The Easy Ride 演唱会
@@ -452,7 +452,7 @@ func TestLiveAlbumIdentityConflict(t *testing.T) {
 		// 候选专辑为空、曲名只写「(Live)」→ 放行:剔掉通用词后没有身份词,构不成矛盾(四道门之③)
 		{"候选专辑为空且曲名只有 (Live)", "陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)",
 			"活着多好 (Live)", "", false},
-		// ---- v16(2026-09-11):身份词也看曲名里自带现场标记的限定段(liveIdentityTokens) ----
+		// ---- v16:身份词也看曲名里自带现场标记的限定段(liveIdentityTokens) ----
 		// 真实数据:酷狗对现场版常不给专辑、把场次写进曲名括号。本地是地表最强巡演的现场专辑,
 		// 候选是 2018 年 CCTV 音乐频道节目现场 —— 另一场演出,v16 前因候选专辑为空直接放行。
 		{"v16 候选专辑空、场次在曲名括号里 → 冲突", "周杰伦", "稻香 (Live)", "周杰伦地表最强世界巡回演唱会 (Live)",
@@ -499,7 +499,7 @@ func TestScoreLyricCandidatePenalizesOtherConcert(t *testing.T) {
 	}
 }
 
-// ---- v8(2026-09-01):sameRecordingDespiteVersionTags(时长锚定的限定词豁免) ----
+// ---- v8:sameRecordingDespiteVersionTags(时长锚定的限定词豁免) ----
 //
 // 核心案例字符串/时长全部取自真实数据(陈奕迅《孤独探戈 (Live)》,网易云 id=67184,
 // 见 docs/features/09 第 33 条):本地时长 215.373s,候选自报 215.4s(逐位吻合),
@@ -586,14 +586,14 @@ func TestVersionTagsMismatch(t *testing.T) {
 		// 假阳性陷阱不能触发不匹配
 		{"Live and Let Die 不是 live 版", "Live and Let Die", "", "Live and Let Die", "", false},
 
-		// 2026-08-26 真实bug复现:本地「蜗牛 (伴奏)」,lyricfind 召回的是正常演唱版
+		// 真实故障复现:本地「蜗牛 (伴奏)」,lyricfind 召回的是正常演唱版
 		// 「蜗牛」——中文限定词补进词表前,这里判两边都是空集、-600 不触发,伴奏版被当成
 		// 正常版收了(候选内容对,但时间轴/歌词其实是另一版本的伴奏)。
 		{"正式版 vs 伴奏", "蜗牛 (伴奏)", "", "蜗牛", "", true},
 		{"两边都是伴奏", "蜗牛 (伴奏)", "", "蜗牛 (伴奏)", "", false},
 		{"不插电的夏天 不是不插电版", "不插电的夏天", "", "不插电的夏天", "", false},
 
-		// ↓↓↓ 2026-08-10 新增:限定词写在**专辑名**里的那一类 ↓↓↓
+		// ↓↓↓ 新增:限定词写在**专辑名**里的那一类 ↓↓↓
 
 		// 真实事故复现:PRINCE 的 "1999"。候选歌名干干净净就叫 "1999",Live 只出现在
 		// 专辑名里,只看歌名的话这道闸门完全不响,那条现场版拿 768 分排第一。
@@ -666,7 +666,7 @@ func TestScoreLyricCandidatePenalizesWrongVersion(t *testing.T) {
 	}
 }
 
-// lyricTitleAccepted 是五个源共用的、**唯一**一条曲名判定(2026-08-09 由三个函数合并
+// lyricTitleAccepted 是五个源共用的、**唯一**一条曲名判定(由三个函数合并
 // 而来:netease 的 titleMatches、lrclib 的 lrclibStrictTitleMatch、以及这个)。
 //
 // 只认「归一化后相等」或「双方各自去括号后相等」,**绝不认任意子串包含**。
@@ -692,7 +692,7 @@ func TestLyricTitleAccepted(t *testing.T) {
 		{"子串:短词命中长曲名,不认", "Love", "Real Love", false},
 		{"空串两侧都不认", "", "In My Room", false},
 
-		// ↓↓↓ 2026-08-11 新增:双语标题(中文名 + 英文别名后缀) ↓↓↓
+		// ↓↓↓ 新增:双语标题(中文名 + 英文别名后缀) ↓↓↓
 
 		// 真实事故复现:丁世光《起源》,QQ/酷狗都叫「起源 Origin」,原规则五源只剩两条候选
 		{"双语后缀:候选带英文别名,认", "起源 Origin", "起源", true},
@@ -714,7 +714,7 @@ func TestLyricTitleAccepted(t *testing.T) {
 	}
 }
 
-// 2026-08-09 打分体系评估后的三处改动，逐条钉住。
+// 打分体系评估后的三处改动，逐条钉住。
 func TestScoringAfter20260809Review(t *testing.T) {
 	const dur = 200.0
 	// 一份时长吻合、49 行的普通歌词
@@ -777,7 +777,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 	})
 }
 
-// 「搜索词也要去一次括号」——2026-08-09 用户报的场景:各源拿去搜的一直是带
+// 「搜索词也要去一次括号」——现象是的场景:各源拿去搜的一直是带
 // "(Remastered 2014)" 的原样标题。当时只有 netease 在搜索词那一层调了 stripParens。
 //
 // 逐源实测(见 searchTitleVariants 注释)坐实这不是洁癖问题:QQ 的 smartbox 只要 key 里
@@ -886,13 +886,13 @@ func lrcEndingAt(lastSecs int, lines int) string {
 			t = lastSecs
 		}
 		// 正文用英文:本地标题是英文时,中文正文会被 isProbablyWrongLanguageLyrics 判为
-		// 文不对题直接拒掉(第一版就栽在这儿,两条候选都得 -1 分)。
+		// 文不对题直接拒掉(用中文正文会让两条候选都得 -1 分)。
 		fmt.Fprintf(&b, "[%02d:%02d.00]this is lyric line number %d\n", t/60, t%60, i)
 	}
 	return b.String()
 }
 
-// 「两个源一起抓错版本、互相印证」——2026-08-09 实测抓到的真实翻车。
+// 「两个源一起抓错版本、互相印证」——实测抓到的真实翻车。
 //
 // Valentina (feat. Rick Ross) [Bonus] 是 237s,QQ 和酷狗都抓到了普通版(都停在 143s),
 // 于是互相印证、各拿 +100 豁免掉时长惩罚;真正抓到 bonus 版、末句 226s 的 LRCLIB 反倒
@@ -947,7 +947,7 @@ func hasTerm(terms []scoreTerm, kind string) bool {
 	return false
 }
 
-// ---- v3 维度(2026-08-12)的单测。分值背书见 lyricsScoringVersion 注释的消融数据 ----
+// ---- v3 维度的单测。分值背书见 lyricsScoringVersion 注释的消融数据 ----
 
 func TestTitleMatchTierPoints(t *testing.T) {
 	cases := []struct {
@@ -962,7 +962,7 @@ func TestTitleMatchTierPoints(t *testing.T) {
 		{"中英双语同名", "起源 Origin", "起源", 30},
 		{"完全不同的歌名", "Another Tune", "Song", 0},
 		{"候选没报标题", "", "Song", 0},
-		// 2026-08-26 补:中文限定词在 segmentVersionTags 里没有空格分词,"伴奏版"整段
+		// 补:中文限定词在 segmentVersionTags 里没有空格分词,"伴奏版"整段
 		// 会被当成一个词元、跟裸词"伴奏"逐词比对不上——不补 isASCIITag 分流的话这里会
 		// 误判成"纯噪音括号"给回 120,而不是限定词该给的 60。
 		{"中文版本括号只到括号档(伴奏)", "蜗牛 (伴奏)", "蜗牛", 60},
@@ -1006,7 +1006,7 @@ func TestAlbumAffinityTerm(t *testing.T) {
 }
 
 // deezer 与 lyricfind **同属 LyricFind**(同一家供词、两条管道),跨源共识里不该算两次
-// 独立印证 —— 见 lyricSourceConsensusFamily 的头注。2026-09-13 接 deezer 时的真实缺口:
+// 独立印证 —— 见 lyricSourceConsensusFamily 的头注。接 deezer 时的真实缺口:
 // 共识那段只比 source 字符串,两条管道各自拿 +150、还会让第三方误拿 2 家的 +250。
 func TestContentConsensusFamilyDoesNotDoubleCount(t *testing.T) {
 	same := "[00:01.00]this is the same lyric line one\n[00:05.00]and the very same line two here\n[00:09.00]closing line of the song text"
@@ -1063,7 +1063,7 @@ func TestContentConsensusPeers(t *testing.T) {
 	if len(peers["netease"]) != 1 || len(peers["qq"]) != 1 {
 		t.Errorf("内容一致的两源应互为 peer(各 1),实际 netease=%v qq=%v", peers["netease"], peers["qq"])
 	}
-	// 借鉴清单 V2:名单不只是计数,得**指名道姓**指向对方 —— 决策留痕要靠它回答
+	// 名单不只是计数,得**指名道姓**指向对方 —— 决策留痕要靠它回答
 	// "冠亚军这两份是不是同一份词",只有个数答不了。
 	if len(peers["netease"]) != 1 || peers["netease"][0] != "qq" {
 		t.Errorf("netease 的互证对象应当是 qq,实际 %v", peers["netease"])
@@ -1147,7 +1147,7 @@ func TestOvershootPenalty(t *testing.T) {
 	}
 }
 
-// ---- 2026-08-12 审阅修复的回归断言 ----
+// ---- 审阅修复的回归断言 ----
 
 func TestParenVersionTagsWordBoundary(t *testing.T) {
 	// feat. 名单里的人名不该被当成版本词:normLoose 挤掉空格后 "featolivertree" 含
@@ -1230,7 +1230,7 @@ func TestLyricsUpgradeBaselineAcrossScoringVersions(t *testing.T) {
 	}
 }
 
-// ---- v5(2026-08-27):applyWordTimingTitleOverride ----
+// ---- v5:applyWordTimingTitleOverride ----
 //
 // 数字全部来自真实曲库的 lyrics_decision 记录(方大同《公园 (Live版)》,收在专辑「大事发声·
 // 录音棚现场:方大同专场」),不是编的——见 lyricsScoringVersion 注释里的消融数据出处。
@@ -1403,7 +1403,7 @@ func TestApplyWordTimingTitleOverride_SkipsRejectedCandidates(t *testing.T) {
 	}
 }
 
-// 2026-08-28 用户报「搜索候选歌词」把方大同《南音》的正确候选判成"语言跟这首歌对不上"
+// 现象是「搜索候选歌词」把方大同《南音》的正确候选判成"语言跟这首歌对不上"
 // 而拒绝采用——本地标签(Apple Music)罗马化写成 artist="Khalil Fong" title="Nanyin",
 // 两者都不含汉字,candidateArtist 补上之前测不出来的这一层信息(候选源自己确认匹配到的
 // 歌手,已经过前置的歌手身份闸,不是瞎猜):它含汉字就说明这首歌本来就该有中文候选,不是
@@ -1424,7 +1424,7 @@ func TestIsProbablyWrongLanguageLyrics(t *testing.T) {
 		},
 		{
 			// "Pei-yu Hung" 真实存在于 artistAliasTable(→"洪佩瑜")——这条测的是
-			// knownArtistAlias 那道豁免本身,不是"候选源给没给中文名"那道。2026-08-31
+			// knownArtistAlias 那道豁免本身,不是"候选源给没给中文名"那道。
 			// 手工表缩到只剩两条通用机制(MusicBrainz+QQ)都覆盖不了的真实残留案例,
 			// 用例跟着换成现存的那条(原来的"方大同/Khalil Fong"已经被通用机制覆盖、
 			// 从表里删掉了,不能再用来测手工表本身)。
@@ -1466,7 +1466,7 @@ func TestIsProbablyWrongLanguageLyrics(t *testing.T) {
 	}
 }
 
-// 2026-08-30 真实bug:那英《微笑着离去》本地标签罗马化成 artist="Na Ying" title=
+// 真实故障:那英《微笑着离去》本地标签罗马化成 artist="Na Ying" title=
 // "Smiled Then Passed",LRCLIB 报的 candidateArtist 同样是罗马化写法(它自己也没有这位
 // 歌手的中文数据),手工表(artistAliasTable)也没登记——不是每个知名歌手都恰好被人工
 // 录入过,真实的中文歌词被误判成"传错语言的翻译"拒收。

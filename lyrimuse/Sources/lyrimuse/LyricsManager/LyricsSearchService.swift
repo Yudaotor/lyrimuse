@@ -6,7 +6,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 
 /// `search-lyrics` 子进程 stderr 里那几类**源健康信号**的匹配标记。
 ///
-/// 2026-09-03 加。此前 stderr 只在**退出码非 0** 时才被打进日志(见 terminationHandler
+/// 此前 stderr 只在**退出码非 0** 时才被打进日志(见 terminationHandler
 /// 里那句 `logger.error`),正常退出时整段丢掉 —— 而手动搜索这条路径上所有的"网易云被限流
 /// 了/某个源在退避"都只写在那段 stderr 里,于是 `~/Library/Logs/lyrimuse.log`(常驻
 /// collector 那半边)里**一条都查不到**:实测 `grep -c "code 405"` = 0,而同一时刻界面上
@@ -29,7 +29,7 @@ private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooli
 final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
-    /// 上一次还在跑的搜索子进程。2026-08-09 把「重新搜索」按钮在搜索途中也放开之后需要它:
+    /// 上一次还在跑的搜索子进程。把「重新搜索」按钮在搜索途中也放开之后需要它:
     /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占九个源的网络请求 —— 结果
     /// 反正会被调用方的 searchGeneration 判定作废、一行都不会显示。
     /// 用锁而不是 @MainActor:search() 的进程收尾在后台队列上,两边都要碰这个引用。
@@ -56,24 +56,24 @@ final class LyricsSearchService {
             case "duration": return L10n.t("时长吻合")
             case "corroborated": return L10n.t("结束点获印证")
             case "wordTiming": return L10n.t("逐字时间轴")
-            // 2026-08-22 补:这一项自 2026-08-15 就在打分里,却一直没有译名 ——
+            // 补:这一项自就在打分里,却一直没有译名 ——
             // 是新加的 scoretermlabel_test.go 守卫测试当场逮出来的既有漏网。
             case "nativeSource": return L10n.t("与当前播放器同源")
             case "lines": return L10n.t("行数")
             case "versionTags": return L10n.t("版本不符")
             case "durationOff": return L10n.t("时长不符")
-            // v4(2026-08-22):跟 durationOff 量的不是同一样东西,文案必须分得开 ——
+            // v4:跟 durationOff 量的不是同一样东西,文案必须分得开 ——
             // 那个是「歌词铺到哪儿 vs 曲长」,这个是「源自己说这首歌多长 vs 本地多长」。
             case "sourceDurationOff": return L10n.t("源自报曲长不符")
-            // v5(2026-08-27):这是全批候选打完分之后才补的一项负分,只在"逐字加分是唯一
+            // v5:这是全批候选打完分之后才补的一项负分,只在"逐字加分是唯一
             // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见 collector 侧
             // applyWordTimingTitleOverride 的注释。
             case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
-            // v7(2026-09-01):「两场不同演唱会」判据,见 collector 侧
+            // v7:「两场不同演唱会」判据,见 collector 侧
             // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
             case "liveAlbumConflict": return L10n.t("是另一场演出的现场版")
-            // v3(2026-08-12)新维度,与 collector match.go 的 scoreTerm kind 一一对应。
-            // 旧 "source" case 已删:来源先验分 2026-08-09 从引擎移除后,score_terms 只来自
+            // v3新维度,与 collector match.go 的 scoreTerm kind 一一对应。
+            // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
             case "durationOvershoot": return L10n.t("歌词超出曲长")
             case "album": return L10n.t("专辑吻合")
@@ -86,11 +86,11 @@ final class LyricsSearchService {
             case "rejectCreditOnly": return L10n.t("整份只有署名行，没有正文")
             case "rejectNoLastTimestamp": return L10n.t("取不到最后一句的时间")
             case "rejectDurationMismatch": return L10n.t("时长明显对不上，也没有别的源印证")
-            // 2026-08-30 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
+            // 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见 collector match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
-            // 2026-09-15 加,见 collector match.go 的 scoreRejectContinuousMix 头注。
+            // 加,见 collector match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("这是连续混音版，跟原版不是同一次编排")
             default: return kind
             }
@@ -99,7 +99,7 @@ final class LyricsSearchService {
         /// 一句话解释这一项**是什么**、以及它的量程。
         ///
         /// 只给名字不够:用户看到「其它源印证了结束点 +100」完全不知道那是什么意思,也
-        /// 不知道 +100 算多还是算少 —— 2026-08-09 用户就是这么问过来的。名字回答"这是
+        /// 不知道 +100 算多还是算少 —— 用户就是这么问过来的。名字回答"这是
         /// 哪一项",这句回答"它凭什么给分、满分多少"。
         var detail: String {
             switch kind {
@@ -137,7 +137,7 @@ final class LyricsSearchService {
 
         /// 分数说明整段文案。一项一行、按贡献绝对值从大到小排 —— 用户真正在问的是
         /// "它凭什么排第一",答案该第一行就出现。原来是 LyricsSearchSheet 的私有方法,
-        /// 2026-08-17 抽到这里跟"解析决策"弹窗共用:两处要是各写一份,措辞和排序规则
+        /// 抽到这里跟"解析决策"弹窗共用:两处要是各写一份,措辞和排序规则
         /// 迟早漂开。
         static func explanation(score: Int, terms: [ScoreTerm]) -> String {
             guard let first = terms.first else { return "" }
@@ -177,7 +177,7 @@ final class LyricsSearchService {
         let artist: String
         let album: String
         let coverURL: URL?
-        // 2026-08-30 加——true 时 lyrics 装的是没有时间戳的纯文本(见 collector
+        // 加——true 时 lyrics 装的是没有时间戳的纯文本(见 collector
         // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**
         // 用来做逐字/逐行同步展示,只能当静态文字读——「搜索候选歌词」弹窗要用它决定
         // 要不要挂"无时间戳"警示标签,「歌词窗口」采纳后要用它决定走哪条渲染路径。
@@ -191,13 +191,13 @@ final class LyricsSearchService {
         // 文本当一整行切不开——见 YRCParser/LRCParser.parse 同一处注释,这里先归一化成
         // 纯 "\n" 再切,否则这类候选会显示成"1 行"这种明显错误的行数。
         //
-        // 存储属性、构造时算一次(2026-08-19 性能审计):原来是计算属性,每次行渲染/
+        // 存储属性、构造时算一次:原来是计算属性,每次行渲染/
         // 预览重算都对整首歌词(2-10KB)完整跑两遍 replacingOccurrences + 一遍 split,
         // 而 lyrics 自构造起不可变,纯属重复计算(sheet 的 body 重算入口很多:三个查询
         // 输入框每敲一键、每批 NDJSON 到达都整数组替换)。
         let lineCount: Int
         /// 「只取词」的内容指纹(ManualPickLock.fingerprint:不含时间戳/YRC/译文),构造时算一次
-        /// (2026-09-04,理由同 lineCount)。跨源同词标注与「当前使用」双判据都读它;空串 = 没有词。
+        /// (理由同 lineCount)。跨源同词标注与「当前使用」双判据都读它;空串 = 没有词。
         let fingerprint: String
 
         static func countLines(of lyrics: String) -> Int {
@@ -207,7 +207,7 @@ final class LyricsSearchService {
         }
     }
 
-    // 2026-08-02 补上——之前 onUpdate 只传候选数组,九个源都没查到候选时,弹窗只能显示
+    // 补上——之前 onUpdate 只传候选数组,九个源都没查到候选时,弹窗只能显示
     // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致九个源
     // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
     // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
@@ -235,7 +235,7 @@ final class LyricsSearchService {
         /// 为了不在 Swift 侧再镜像一遍那个结构(镜像就会漂)。
         var decisionJSON: String = ""
 
-        // 2026-08-25 改成手写 init(from:)——原来的合成 Decodable 表面上给每个属性都设了
+        // 改成手写 init(from)——原来的合成 Decodable 表面上给每个属性都设了
         // 默认值,但 Swift 的自动合成解码器**不会**在 key 缺失时退回属性默认值,缺 key 会
         // 直接 throw(实测验证过,不是猜的)。而 searchLyricsPick 在 Go 那边几乎每个字段都
         // 带 `omitempty`——winner 在"没有可用候选"时是空串会被省略、sourcesSeen/
@@ -272,17 +272,17 @@ final class LyricsSearchService {
         /// applecover 不算)见 collector/enrich.go 的 lyricSearchUpdateFunc 注释。
         let sourcesDone: Int
         let sourcesTotal: Int
-        /// 第几轮全源检索,从 1 开始(2026-09-02)。兜底轮(首歌手变体/标题反查等,见
+        /// 第几轮全源检索,从 1 开始。兜底轮(首歌手变体/标题反查等,见
         /// collector/enrich.go)每轮都重新扫全部源,sourcesDone 每轮从 0 重数——没有这个
         /// 字段时进度显示成"8/8 之后又回到 1/8",读起来像出了错。旧 collector 不发这个
         /// 字段时解码成 1(单轮语义,跟没有兜底轮的观感一致)。
         let round: Int
-        /// 这一轮里没给出候选的源,查得到原因的那几个(2026-08-31)——collector 侧
+        /// 这一轮里没给出候选的源,查得到原因的那几个——collector 侧
         /// lyricSourceFailureReasons(searchcli.go)算出来,分两层:源特有的具体原因只覆盖
-        /// netease/musixmatch/lyricfind 三个已经接了诊断旁路的源;传输层通用原因(2026-09-06,
+        /// netease/musixmatch/lyricfind 三个已经接了诊断旁路的源;传输层通用原因(
         /// dns_failed / connect_failed / server_error,以及 AMLL 的 upstream_unreachable)任何
         /// 启用的源都可能带。给"歌词源可用情况"明细面板和空状态的「没连上」分组用。key 是源名,
-        /// value 是**稳定代码**,不是文案(2026-09-01 从 sourceFailureReasons 改名——见
+        /// value 是**稳定代码**,不是文案(从 sourceFailureReasons 改名——见
         /// `LyricSourceFailureReason` 的头注,显示给用户前要先经
         /// `LyricSourceFailureReason.text(forCode:)` 翻译);两层都没命中的源不会出现在这个
         /// 字典里(比如拿到了 200 / 404 但没这首歌),不编一个没核实过的理由。
@@ -290,7 +290,7 @@ final class LyricsSearchService {
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。
         let instrumental: Bool
-        /// 这一轮里**曲库里有这首歌、但平台上没有歌词文本**的那几个源(2026-09-15,目前
+        /// 这一轮里**曲库里有这首歌、但平台上没有歌词文本**的那几个源(目前
         /// netease/qq 会给)。空 = 没有任何源给出这个结论。
         ///
         /// 它把原来笼统的"十个源都没找到可用的候选"再切一刀:匹配其实是**对的**,只是平台
@@ -350,7 +350,7 @@ final class LyricsSearchService {
         }
     }
 
-    // 2026-07-23 修正:原来硬编码的是 ~/applemusic-nowplaying/bin/collector——这是
+    // 修正:原来硬编码的是 ~/applemusic-nowplaying/bin/collector——这是
     // 项目改名前遗留的路径,压根不是 build.sh 实际维护的产物(build.sh 只往
     // Lyrimuse.app/Contents/Resources/collector 里装新构建),这个路径下的二进制早就
     // 没人更新过,"联网搜索候选歌词"用的实际上是一份过时的旧构建。改用
@@ -386,7 +386,7 @@ final class LyricsSearchService {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
         // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
         // 采纳候选后 collector 子进程照跑满(九个源、20 秒兜底),NDJSON 还在往已消失的
-        // 视图里灌,全是无人消费的废工(2026-08-19 性能审计;sheet 侧另有 onDisappear
+        // 视图里灌,全是无人消费的废工(性能审计;sheet 侧另有 onDisappear
         // 兜底,两层都在,谁先到谁生效——cancelRunning 幂等)。
         try await withTaskCancellationHandler {
             try await performSearch(artist: artist, title: title, album: album,
@@ -418,7 +418,7 @@ final class LyricsSearchService {
             // 播放器** —— 它的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的
             // 属性。这条 CLI 是独立进程,拿不到播放状态,只能由这边传。
             //
-            // 2026-09-02 加。在此之前 collector 那边是按 `features.Players`(**设置里勾了
+            // 在此之前 collector 那边是按 `features.Players`(**设置里勾了
             // 哪些播放器**)算的,六个全勾的用户会让酷狗/网易云/QQ 三个源同时拿到 +250 ——
             // 「解析决策」面板上"这个源就是你正在用的播放器"对三个都是假话,而且这一项的
             // 区分力被自己抵消掉了。详见 collector 侧 match.go 里 nativeLyricSources 的注释。
@@ -509,7 +509,7 @@ final class LyricsSearchService {
                 }
                 readGroup.leave()
             }
-            // stderr 必须在**独立**队列上读(2026-08-19):readQueue 是串行的,原来这条
+            // stderr 必须在**独立**队列上读:readQueue 是串行的,原来这条
             // 任务排在 stdout 的 EOF 循环后面,等于把上面那段注释自防的 64KB 管道死锁在
             // stderr 侧原样引回 —— 当前 search-lyrics 路径的 stderr 写入量 <2KB 触发不了,
             // 但将来任何人给搜索路径加 verbose 日志就会无声引爆。两条管道并行排空,
@@ -541,7 +541,7 @@ final class LyricsSearchService {
             } catch {
                 // process.run() 失败(collector 二进制不存在/不可执行——比如没跑过
                 // build.sh 就直接 swift run/.build/debug 调试,或者 Contents/Resources/
-                // collector 被误删/损坏)——2026-08-02 实测排查坐实:早先这里只
+                // collector 被误删/损坏)——实测排查坐实:早先这里只
                 // resume 了 continuation,完全没有清理上面已经派发到 readQueue 的两个
                 // 读取闭包。这两个闭包在 process.run() 之前就已经提交(为了不错过子
                 // 进程刚起来就开始写的早期输出),它们各自阻塞在 fileHandleForReading
@@ -569,17 +569,17 @@ private struct RawSearchUpdate: Decodable {
     /// 第几轮全源检索,旧 collector 不发(解码方兜底成 1),见 SearchUpdate.round。
     let round: Int?
     let sourceFailureReasonCodes: [String: String]?
-    /// collector 一直在输出这个信号,Swift 侧 2026-08-21 才开始接:它把"一个候选都没有"
+    /// collector 一直在输出这个信号,Swift 侧才开始接:它把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种,「重新自动匹配」的结果文案要区分。
     ///
-    /// 2026-08-22 起 collector 输出的正名是 `instrumental` —— 这个信号的来源早就不只 lrclib
+    /// collector 输出的正名是 `instrumental` —— 这个信号的来源早就不只 lrclib
     /// (网易云的 pureMusic、QQ 的占位断言),旧名字名不副实。两个 key 都读:
     /// 新 App + 旧 collector 时只有旧 key,旧 App + 新 collector 时靠 collector 那边的
     /// 同值别名兜住(见 searchcli.go 的 LegacyLrclibInstrumental,含删除条件)。
     let instrumental: Bool?
     /// 旧名,只为兼容尚未重建的 collector。collector 那边的同值别名删掉之后,这个也可以删。
     let lrclibInstrumental: Bool?
-    /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源(2026-09-15)。旧 collector 不发,
+    /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源。旧 collector 不发,
     /// 可选 + 解码方兜底成空数组,见 SearchUpdate.tracksFoundNoLyrics。
     let tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics]?
     /// 只有 -pick 且只有最后那行才有。
@@ -638,7 +638,7 @@ private extension LyricsSearchService.Candidate {
 // MARK: - 子进程 stderr 里的源健康信号
 
 extension LyricsSearchService {
-    /// 把 `search-lyrics` 的 stderr 里"某个源被拒/在退避"那几行收进 App 日志(2026-09-03)。
+    /// 把 `search-lyrics` 的 stderr 里"某个源被拒/在退避"那几行收进 App 日志。
     ///
     /// 用 `.notice` 而不是 `.debug`:`.debug` 在 os_log 里默认**不落盘**(内存环形缓冲、随时
     /// 被丢),而 `DiagnosticsExporter.recentAppLogLines()` 是按 subsystem 事后查询的 ——

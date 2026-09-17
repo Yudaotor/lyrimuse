@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-/// 「顺序优先」歌词源列表把手拖拽排序的纯逻辑(2026-09-05):目标位滞回判定、让位位移、松手后写回完整
+/// 「顺序优先」歌词源列表把手拖拽排序的纯逻辑:目标位滞回判定、让位位移、松手后写回完整
 /// 排列。视图层(SettingsView 的 LyricsSettingsTab)只做手势与渲染。
 ///
 /// 三件事都是纯函数,放 Core 是为了 selftest 能钉住(settings-ui 组):
@@ -31,7 +31,7 @@ public enum ReorderDrag {
                                    hysteresis: CGFloat = defaultHysteresis) -> Int {
         let n = rowMidYs.count
         guard n > 1, rowMidYs.indices.contains(source) else { return current }
-        // 首尾特判(2026-09-05 用户真机发现「拖不到第一个前面」):被拖行的位移被 clampedTranslation 夹在首尾
+        // 首尾特判(漏了它的表现是「拖不到第一个前面」):被拖行的位移被 clampedTranslation 夹在首尾
         // 中线之间,永远到不了「越过首行中线再多 h」,首位 / 末位就成了死角 —— 夹住和滞回各自都对,叠在一起
         // 就错了。到达边界直接落到首 / 末位:边界处指针再也推不动,不存在来回换位,滞回在这里没有意义。
         // 留半点容差,frame 不是整数时浮点加减不一定精确回到边界值。

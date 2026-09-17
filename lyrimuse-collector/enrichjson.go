@@ -11,7 +11,7 @@ import (
 
 // enrichEntry 的 JSON 编解码:**保留这个二进制不认识的键**。
 //
-// 为什么需要(2026-09-05,真实事故):enrich 缓存是一份 map[string]enrichEntry 整体
+// 为什么需要(真实事故):enrich 缓存是一份 map[string]enrichEntry 整体
 // json.Marshal/Unmarshal 的文件,而写它的不止常驻 collector 一个——search-lyrics -pick /
 // resync-lyrics / backfill-roma / recheck-cover 这些一次性子命令,以及 Swift 侧的"歌词管理",
 // 都会整份读进来、改几条、整份写回。Go 这一侧只要跑的二进制比文件里的字段老(结构体里还

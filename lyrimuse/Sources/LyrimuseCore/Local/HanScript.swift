@@ -7,7 +7,7 @@ import Foundation
 ///
 /// 目前唯一的消费方是 Last.fm 统计页的「第 N 次听」:scrobble 是把本机播放**原样**镜像
 /// 上去的,同一首歌从不同播放器放,报的歌名写法一繁一简,Last.fm 就记成两个曲目实体、
-/// 两本分开的账(实测《我不是农人》11 次/《我不是農人》3 次,2026-08-18 用户截图)。
+/// 两本分开的账(实测《我不是农人》11 次/《我不是農人》3 次,对拍)。
 /// autocorrect=1 帮不上忙 —— 它只在「查询的实体不存在」时才改写,这两个实体都真实存在。
 /// 所以显示端取次数时要把孪生写法也查一遍、求和。
 ///
@@ -44,9 +44,9 @@ public enum HanScript {
     }
 }
 
-/// 「第 N 次听」的写法孪生候选(2026-08-18 从纯繁简扩成写法族)。
+/// 「第 N 次听」的写法孪生候选(从纯繁简扩成写法族)。
 ///
-/// 实测坐实的分裂形态(丁世光《神经志》,用户截图"专辑各首次数极不均匀"):同一首歌在
+/// 实测坐实的分裂形态(丁世光《神经志》,现象是"专辑各首次数极不均匀"):同一首歌在
 /// Last.fm 被**括号风格**拆成多本账 —— `一口（The Day You Left Me）`(全角,Spotify
 /// 现在报的)2 次、`一口(The Day You Left Me)`(半角无空格,历史来源报的)25 次、
 /// `一口` 1 次;全专辑只有 E.T./Simon 这种纯 ASCII 歌名从没分裂过(31/29 次),反而
@@ -55,7 +55,7 @@ public enum HanScript {
 /// 括号变体只对**含汉字**的歌名生成 —— 纯英文的 `(feat. …)` 副题各来源写法一致,
 /// 生成变体只会白烧限速额度。
 public enum PlayCountVariants {
-    /// 繁体内部的字形变体对(2026-08-18 实测坐实):历史来源写《愛在什麽地方都有》用的
+    /// 繁体内部的字形变体对:历史来源写《愛在什麽地方都有》用的
     /// 是「麽」(U+9EBD),Spotify 现在报「麼」(U+9EBC),肉眼几乎相同却是两个实体
     /// (70 条 scrobble 全记在麽形下,括号/繁简变体全部扑空)。这一族的共同点是 ICU
     /// **两个方向都到不了**:t2s 时两个都折到同一个简体,s2t 却永远只生成其中一个 ——
@@ -84,7 +84,7 @@ public enum PlayCountVariants {
             out.append((a, trimmed))
         }
         // 目录学噪音副题(remaster/feat 家族):不论是否含汉字都补一个「去副题」候选
-        // (2026-08-19 用户实测 Automatic (Remastered 2014) vs Automatic 两本账 ——
+        // (实测 Automatic (Remastered 2014) vs Automatic 两本账 ——
         // 纯拉丁歌名此前完全不生成任何括号候选)。真版本((Live)/(Remix))不在此列,
         // 见 isCatalogNoiseSubtitle。
         if let (base, sub) = subtitleSplit(title), isCatalogNoiseSubtitle(sub) {
@@ -108,17 +108,17 @@ public enum PlayCountVariants {
 
     /// 目录学噪音副题:同一份录音在不同曲库间的写法差异,不是真版本。
     ///
-    /// 口径的**权威来源**是 `scripts/export-lastfm-tracks.py`(2026-08-18 与用户逐对核定,
+    /// 口径的**权威来源**是 `scripts/export-lastfm-tracks.py`(与用户逐对核定,
     /// 见那份 docstring 的 T1/T2 与「刻意不做」清单)。Swift 侧此前只搬了它的两族,
-    /// 2026-08-22 补齐剩下的 —— 用户报周杰倫《一路向北 (bonus track)》显示「第 2 次听」,
+    /// 补齐剩下的 —— 现象是周杰倫《一路向北 (bonus track)》显示「第 2 次听」,
     /// 实测 Last.fm 两个实体:「一路向北」14 次、「一路向北 (bonus track)」2 次,真实合计 16。
     /// 改动前后的差距就是「Swift 落后于自己的参考实现」这一条,不是新发明的规则。
     ///
     /// 两大类:
     ///  - **客串署名家族**(署名是歌手信息、不是版本):`(feat. X)` / `(feat X)` /
-    ///    `(featuring X)` / `(ft. X)`(2026-08-19 用户实测:王力宏「盖世英雄
+    ///    `(featuring X)` / `(ft. X)`(实测:王力宏「盖世英雄
     ///    (feat. 欧阳靖 & 李岩)」第 2 次 vs「蓋世英雄」几十次),以及 **`(with X)`**
-    ///    (2026-08-22 补;参考实现的 T1 一直把 with 与 feat 并列。用户索引里 19 条,
+    ///    (补;参考实现的 T1 一直把 with 与 feat 并列。用户索引里 19 条,
     ///    实测 7 例真碰撞:周杰倫《不該 (with aMEI)》、Daniel Caesar《Toronto 2014
     ///    (with Mustafa)》、MJ《The Girl Is Mine (with Paul McCartney)》…)。
     ///    ⚠️ 残余风险已知并接受:`(With or Without You)` 这种以 with 开头的**词组**副题
@@ -126,9 +126,9 @@ public enum PlayCountVariants {
     ///    别去动「前缀后必须跟点/空格」那道守卫 —— 那道是挡 "(Feathers)" 用的。
     ///  - **再版/发行标签家族**(同一份录音在不同版本专辑、不同分级下的收录标记):
     ///    `(Remastered 2014)` / `(2014 Remaster)` / `(Remastered Version)`
-    ///    (2026-08-19 实测:宇多田ヒカル「Automatic (Remastered 2014)」与「Automatic」
-    ///    两本账);`(Bonus Track)`(2026-08-22,用户报的那首);`(Explicit)`
-    ///    (2026-08-22,索引里 5 条、2 例真碰撞:方大同《无所谓 (Explicit)》《烦 (Explicit)》)。
+    ///    (实测:宇多田ヒカル「Automatic (Remastered 2014)」与「Automatic」
+    ///    两本账);`(Bonus Track)`;`(Explicit)`
+    ///    (索引里 5 条、2 例真碰撞:方大同《无所谓 (Explicit)》《烦 (Explicit)》)。
     ///
     /// 只认**完整**命中 —— `(Live)` / `(Remix)` / `(Acoustic)` 是真的不同录音,照旧分开;
     /// 混着别的词的副题(`(Live 2014 Remaster)`)也不动,宁可漏合。bonus 前面只允许挂
@@ -137,7 +137,7 @@ public enum PlayCountVariants {
     /// 这里没跟 —— 完整命中是 Swift 侧一贯的取舍,子串会让上面那条挡不住。
     ///
     /// ⚠️ 刻意**不**收的(与参考实现的「刻意不做」清单一致,别顺手加):
-    ///  - `(Clean)`:消音版是另一份音频。⚠️ 2026-08-22 订正:这里原来写的理由是
+    ///  - `(Clean)`:消音版是另一份音频。⚠️ 订正:这里原来写的理由是
     ///    「索引里有《Simple and Clean》,子串匹配会误伤它」—— **那条理由是错的**,
     ///    裸标题《Simple and Clean》末尾没有右括号,subtitleSplit 恒返回 nil,判定
     ///    根本摸不到它。真正会被误伤的是**副题**形态 `X (Simple and Clean)`,
@@ -228,7 +228,7 @@ public enum PlayCountVariants {
 
     /// **裸场次标记** —— 这类尾缀说明"是个现场版",但**不说明是哪一场**。
     ///
-    /// 2026-08-22 用 album.getinfo 实测坐实(推翻了原来的归一设计):方大同索引里 21 条
+    /// 用 album.getinfo 实测坐实(推翻了原来的归一设计):方大同索引里 21 条
     /// `X - Live` 与《This Love Live 2007》的 21 首曲目**完全双射**,而 30 条 `X (Live)`
     /// 只有 2 首落在那张里 —— 两种写法指的是**两场不同的演唱会**(重叠曲目时长也不同:
     /// 手拖手 2007=233s / 2011=236s,而索引里 `手拖手 (Live)` 报的正是 236000)。
@@ -244,7 +244,7 @@ public enum PlayCountVariants {
 
     /// 方括号尾缀:`南音 [Live 08]` → ("南音", "Live 08")。
     /// ⚠️ **只给分隔符归一用**,刻意不接进 stripCatalogNoise —— 「方括号里的目录学噪音要不要剥」
-    /// 是另一个还没拍板的口径(2026-08-22 的 E 项),混进来会顺手改掉它。
+    /// 是另一个还没拍板的口径(的 E 项),混进来会顺手改掉它。
     static func bracketSuffixSplit(_ title: String) -> (base: String, sub: String)? {
         let t = title.trimmingCharacters(in: .whitespaces)
         guard let last = t.last, last == "]" || last == "】" else { return nil }
@@ -265,7 +265,7 @@ public enum PlayCountVariants {
         let t = title.trimmingCharacters(in: .whitespaces)
         // 取**最后**一个分隔符。⚠️ 不能写 `options: [.regularExpression, .backwards]` ——
         // Foundation 里这两个 option 同用时 .backwards **不生效**,返回的是第一个匹配
-        // (2026-08-22 实测:`苏州河 - 慕容雪 - Mandarin Version` 被切成 base=`苏州河`,
+        // (实测:`苏州河 - 慕容雪 - Mandarin Version` 被切成 base=`苏州河`,
         // 于是它跟 `蘇州河 - 慕容雪 (Mandarin Version)` 落进两个族 —— 正是归一要消除的碎片)。
         var lastRange: Range<String.Index>?
         var from = t.startIndex
@@ -304,18 +304,18 @@ public enum PlayCountVariants {
     }
 }
 
-/// 「第 N 次听」写法索引的折叠键(2026-08-19,数据驱动合并的地基)。
+/// 「第 N 次听」写法索引的折叠键(数据驱动合并的地基)。
 ///
 /// 与 PlayCountVariants(猜枚举)相反的思路:不猜写法,而是把用户**自己历史上真实出现过**
 /// 的写法按这个键归到同一族,查次数时按族查。这个键要把实测见过的全部分裂维度都折掉:
 ///  - 全角/半角括号与全角空格(NFKC);
-///  - 繁简 + 同折简体的字形变体(ICU Hant-Hans:麼/麽 都折到 么,验证于 2026-08-18);
+///  - 繁简 + 同折简体的字形变体(ICU Hant-Hans:麼/麽都折到么,验证于 );
 ///  - 空格有无(全部剥除)、大小写;
 ///  - 「CJK 段 + 空格 + 拉丁段」的双语拼接名(实测《月食 The Weeping Woman》30 次 vs
 ///    《月食》6 次)—— 恰好两段时取 CJK 段,对应导出脚本的 R1 规则。
 /// 刻意**不**折一般括号副题:`一口(The Day You Left Me)` 与 `一口` 不同键 ——括号常携带
 /// 版本信息((Live)/(Remix)),折掉会把不同录音并成一首(沿用导出脚本的取舍)。
-/// **唯一例外是目录学噪音**(2026-08-19):`(remastered 2014)` 这类 remaster 家族、
+/// **唯一例外是目录学噪音**:`(remastered 2014)` 这类 remaster 家族、
 /// `(feat. X)` 这类客串署名家族,都是同一份录音的目录学差异,折掉 —— 判定见
 /// PlayCountVariants.isCatalogNoiseSubtitle。
 /// ⚠️ 只用于索引查询,绝不用于显示、绝不用于构造别处的 key。
@@ -324,10 +324,10 @@ public enum PlayCountVariants {
 public enum PlayCountFold {
     /// 折叠规则版本。**凡改动 key/foldTitle 的语义必须 +1**:写法索引文件把这个数
     /// 存在身上,加载时版本一致就直接采用盘上的键(零计算),不一致才做一次性重折迁移
-    /// (见 LastfmStatsService.loadTitleForms)。1=初版;2=remaster 噪音折叠;3=feat 噪音;
+    /// (见 LastfmStatsService.loadTitleForms)。1=最初口径;2=remaster 噪音折叠;3=feat 噪音;
     /// 4=补齐到参考实现口径(with 客串 + bonus track + explicit)+ 派生串 R1 版本标记
-    /// 守卫(2026-08-22);5=同日第二批:破折号版本尾缀(`Bad - 2012 Remaster`)+ with
-    /// 头词黑名单;6=同日第三批(**用户拍板**):R1 守卫套到原串(中文歌名的 Live 版不再
+    /// 守卫;5=同日第二批:破折号版本尾缀(`Bad - 2012 Remaster`)+ with
+    /// 头词黑名单;6=同日第三批(****):R1 守卫套到原串(中文歌名的 Live 版不再
     /// 并进录音室版)+ 版本尾缀分隔符归一;7=第三批的修正(并行核实推翻了归一的一半):
     /// 裸场次标记不归一 + dashSuffixSplit 真取最后一个分隔符 + 归一后补剥一次目录学噪音 +
     /// 别名表剔掉 jasonchan/kun。⚠️ 前几版都装过机、盘上可能已被盖成那个号,
@@ -336,12 +336,12 @@ public enum PlayCountFold {
     /// ⚠️ **`familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1**:
     /// 这个版本号只管 `key()`/`foldTitle()` 落进 `titleForms` 索引的键要不要重折——
     /// `familyKey` 是**派生**索引 `primaryCreditFamilies` 的键,`loadTitleForms` 两条分支
-    /// (版本相等/不等)**都无条件**调用 `rebuildPrimaryCreditFamilies()`(2026-08-29 读代码
+    /// (版本相等/不等)**都无条件**调用 `rebuildPrimaryCreditFamilies`(读代码
     /// 确认),也就是每次启动都会用当前 `familyKey` 重新分组,不需要靠这个版本号触发迁移。
-    /// 2026-08-29 新增歌名别名表时特意验证过这一点,没有 +1。
+    /// 新增歌名别名表时特意验证过这一点,没有 +1。
     public static let foldVersion = 7
 
-    /// key 的 memo(2026-08-19 性能审计):单次 key 要走 2 次 NFKC + 2 次 ICU 繁简
+    /// key 的 memo:单次 key 要走 2 次 NFKC + 2 次 ICU 繁简
     /// transform(各自新建 CFMutableString),几十 µs 量级;而每次刷新最近记录都对同一批
     /// 行反复算。输入是有限集合(用户听过的写法),按原始串缓存。上锁而不是挂 @MainActor:
     /// 现有调用方都在主线程,但这个类型在 LyrimuseCore,不该替它锁死并发前提。
@@ -362,19 +362,19 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 查「写法族」用的键(2026-08-22 第三批):歌手先归**合唱首位**(mergeArtist),
+    /// 查「写法族」用的键(第三批):歌手先归**合唱首位**(mergeArtist),
     /// 再把**罗马字写法折到中文本名**(canonicalArtist,本机推断的歌手别名表);歌名走 foldTitle,
-    /// 另外查歌名别名(本机推断表 → 自动发现表,2026-09-04 起没有手写表)把歌名维度的罗马字/译名
+    /// 另外查歌名别名(本机推断表 → 自动发现表,没有手写表)把歌名维度的罗马字/译名
     /// 也折到中文本名。
     ///
     /// 三个调用点必须**完全**用这一个函数(LastfmStatsService 的 insertForm /
     /// playCountSiblings、LastfmStatsSection 的 recentRows)—— 之前是三处各自拼
     /// `key(artist: mergeArtist(...), title:)`,任一处漏改就会出现「取数用的是合并总数、
-    /// 减法用的是另一套键」这种自相矛盾(2026-08-21 用户报的「第 15 次听下面紧跟第 21 次听」
+    /// 减法用的是另一套键」这种自相矛盾(现象是「第 15 次听下面紧跟第 21 次听」
     /// 就是那个形状)。
     ///
     /// 只作用在**派生索引** primaryCreditFamilies 的键上,不改 PlayCountFold.key 本身的
-    /// 歌手口径 —— 沿用 2026-08-20 合唱 credit 归并的既有做法:那个键是整本统计账的身份,
+    /// 歌手口径 —— 沿用合唱 credit 归并的既有做法:那个键是整本统计账的身份,
     /// 而这里要的只是「查族时多看一眼隔壁桶」。
     public static func familyKey(artist: String, title: String) -> String {
         let canonArtist = canonicalArtist(artist)
@@ -406,8 +406,8 @@ public enum PlayCountFold {
     /// 合唱归首位 + 歌手写法归并(罗马字艺名 / 乐队别名 → 本机数据里的代表写法)。查不到就原样返回
     /// (交给 key() 去做常规归一)。
     ///
-    /// 2026-09-04 起**没有手写表**:此前这里查的是编译进二进制的 `romanizedArtistAliases`(28 条,
-    /// `davidtao → 陶喆` 这种),用户要求「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
+    /// **没有手写表**:此前这里查的是编译进二进制的 `romanizedArtistAliases`(28 条,
+    /// `davidtao → 陶喆` 这种),「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
     /// 查的是 App 启动/enrich 缓存变化时由 `LocalArtistAliases.derive` 从本机数据推出来、经
     /// `setLocalArtistAliases` 灌进来的表(证据:collector 的 MusicBrainz 缓存 + 两种写法名下曲目共享
     /// ≥ 2 个歌曲 id,详见那个文件的头注)。实测这台机器上历史里真有两种写法并存的歌手
@@ -439,17 +439,17 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 歌名维度(2026-08-29 起)的别名分三层查(见 familyKey):本机推断表 → 自动发现表。手写的
-    /// `titleAliasesByArtist`(方大同 7 条,三步法人工核过)2026-09-04 删除——同样是用户要求去掉手工表:
+    /// 歌名维度的别名分三层查(见 familyKey):本机推断表 → 自动发现表。手写的
+    /// `titleAliasesByArtist`(方大同 7 条,三步法人工核过)删除——同样是去掉手工表:
     /// 那 7 条现在由 `EnrichTitleAliases.derive` 的 E1(同歌曲 id)/E2(时长 + 歌词都对得上)两条证据
     /// 路径自动推出来(selftest 用它们当回归样本钉住)。当年那张表的三步核实法留下的两条经验仍然有效、
     /// 已经变成代码里的闸:①"平台官方标题是不是中文"跟"用户历史里用什么字写"是两件事,别拿前者
     /// 当后者;②时长比对不是可选项(`Weather Report` 61 s 过场曲 vs 《天氣先生》271 s,光看歌名/专辑
     /// 序号会误判)。
 
-    /// 自动发现表(2026-08-29):当时用户问「只能这样一个一个加白名单吗,不能搞个通用逻辑」,拍板要
+    /// 自动发现表:为了不再"一个一个加白名单",这里做的是
     /// 一套自动发现的机制——运行时可增长、持久化在本机的第二张表(算法用 Last.fm 整秒时长比对自动
-    /// 确认,理论上有假阳性 —— 见 discoverTitleAliasesIfNeeded 的注释;2026-09-04 实测这台机器上它
+    /// 确认,理论上有假阳性 —— 见 discoverTitleAliasesIfNeeded 的注释;实测这台机器上它
     /// 既没在产出、产出时质量也不可信,所以 familyKey 里它排在本机推断表之后当兜底)。
     ///
     /// 存/取都由 App 侧的 LastfmStatsService 负责(它才有网络请求 + 本机文件读写的能力,
@@ -473,11 +473,11 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 第三层歌名别名(2026-09-04):从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
+    /// 第三层歌名别名:从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
     ///
     /// 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」——历史里
     /// 《那沙漠里的水》是同一首录音。两张既有表都够不着它:静态表要人工核实+改代码装机;
-    /// 发现表靠 Last.fm 整秒 duration 撞相等,实测假阳性极高(2026-09-02 那台机器上 14 条采纳里
+    /// 发现表靠 Last.fm 整秒 duration 撞相等,实测假阳性极高(那台机器上 14 条采纳里
     /// 11 条是错的——「Mojito→红模仿」「Melody→中國姑娘」这种),而且它的扫描门(前台安静 60 s
     /// + 40 个请求的预算)在这台机器上从没让它跑完过一轮。
     ///
@@ -505,7 +505,7 @@ public enum PlayCountFold {
     public static func foldTitle(_ title: String) -> String {
         let n = normalized(title)
         let stripped = stripCatalogNoise(n)
-        // 2026-08-22 第三批(用户拍板):中文歌名的 Live/Demo 版此前被 R1 当译名收进录音室版
+        // 第三批:中文歌名的 Live/Demo 版此前被 R1 当译名收进录音室版
         // (`流沙 - Live` → 《流沙》),而英文歌名的 `Melody - Live` 因为不含 CJK 段根本进不了
         // R1 —— 中英待遇不一致,也跟 isCatalogNoiseSubtitle 注释里「Live/Remix/Acoustic
         // 照旧分开」自相矛盾。实测拆开 54 族(方大同/陶喆居多),那些「本尊」行的数字合计小 200
@@ -566,7 +566,7 @@ public enum PlayCountFold {
 
     /// 单个词是不是版本标记。除了词表,还认「以 版 / 版本 收尾」——
     /// 中文没有空格,`Live版` / `现场版` / `国语版` 是**一个词**,词表接不住
-    /// (2026-08-22:裸场次标记改成不归一之后,`All Night - Live版` 就从归一那条路
+    /// (裸场次标记改成不归一之后,`All Night - Live版` 就从归一那条路
     /// 掉回 R1,而 R1 的「CJK 全在后缀」分支会把整首歌折成 `live版` ——
     /// 三首不同的歌焊成一族。这道判据是那个重度退化键的唯一防线)。
     static func isVersionToken(_ w: String) -> Bool {
@@ -607,7 +607,7 @@ public enum PlayCountFold {
     }
 
     /// NFKC(全角→半角) → 繁简(ICU) → 小写。
-    /// 模块内可见(2026-09-04):PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
+    /// 模块内可见:PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
     /// 必须用同一个函数而不是再写一遍归一。
     static func normalized(_ s: String) -> String {
         let nfkc = s.precomposedStringWithCompatibilityMapping

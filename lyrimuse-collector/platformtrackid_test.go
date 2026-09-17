@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 播放侧记下的 Apple / Spotify 曲目 ID,要能按 enrichKey 原样读回来(2026-09-16)。
+// 播放侧记下的 Apple / Spotify 曲目 ID,要能按 enrichKey 原样读回来。
 func TestPlaybackTrackIDHintRoundTrip(t *testing.T) {
 	resetPlaybackTrackIDHints()
 

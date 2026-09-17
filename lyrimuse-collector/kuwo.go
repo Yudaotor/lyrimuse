@@ -18,7 +18,7 @@ import (
 
 // kuwoLyric 是歌词第八个候选来源(酷我音乐,非官方接口:搜索→按元数据重新打分排序→
 // 并发拉前几条歌词→挑第一份真同步的)。接口契约从一份公开的第三方开源实现
-// 逆向出来,2026-08-31 用 curl 实测两个端点全部验证过——
+// 逆向出来,用 curl 实测两个端点全部验证过——
 // 不是照抄一份没验证过的第三方代码,是照抄一份**验证过真能用**的接口契约。
 //
 // ⚠️ 这个源的搜索排序完全不可信,这是接入前实测坐实的,不是猜测:兰亭序/周杰伦、
@@ -37,7 +37,7 @@ import (
 // lineLyric},没有别的字段可挖。定位跟 amll/lyricfind 一样,是覆盖率有限的"锦上添花"
 // 兜底档,不是主力源,建议排在 lyricsSourceDefaultOrder 末尾(见 features.go)。
 //
-// 合规提醒(2026-08-31):`search.kuwo.cn/r.s` 和 `kuwo.cn/openapi/...` 都是网页端
+// 合规提醒:`search.kuwo.cn/r.s` 和 `kuwo.cn/openapi/...` 都是网页端
 // 接口、非公开 API 文档,这类接口"可能随时失效、
 // 要求验证码或发生变更"——跟 musixmatch.go/amllttml.go 是同一类风险,不是新引入
 // 一种风险类别。healthcheck 走的是 enabledLyricSourceNames()(见 enrich.go
@@ -47,7 +47,7 @@ type kuwoResult struct {
 	// durationSecs:酷我搜索结果自报的这首歌时长(秒),0=没给/解析不动。透传用,
 	// 见 lyricCandidate.sourceReportedDurationSecs。
 	durationSecs float64
-	// cover:2026-08-31 加。搜索结果自带 web_albumpic_short,不用像 kugou 那样再多发
+	// cover:加。搜索结果自带 web_albumpic_short,不用像 kugou 那样再多发
 	// 一次请求——见 kuwoCoverURL。拿不到就留空,交给 enrich.go 的 coverOrFallback
 	// 退到 Apple 封面。
 	cover string
@@ -79,21 +79,21 @@ func kuwoLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	return r
 }
 
-// kuwoSearchItem 只挑了搜索响应里用得上的字段(2026-08-31 实测响应结构核实过)。
+// kuwoSearchItem 只挑了搜索响应里用得上的字段(实测响应结构核实过)。
 type kuwoSearchItem struct {
 	MusicRID string `json:"MUSICRID"` // 形如 "MUSIC_150350148",取 '_' 之后作 musicId
 	SongName string `json:"SONGNAME"`
 	Artist   string `json:"ARTIST"`
 	Album    string `json:"ALBUM"`    // 经常为空串
 	Duration string `json:"DURATION"` // 字符串秒数,偶尔是 "m:ss"(见 kuwoDurationSecs)
-	// WebAlbumPicShort:2026-08-31 实测坐实的封面字段,形如 "120/38/70/3416909732.jpg"——
+	// WebAlbumPicShort:实测坐实的封面字段,形如 "120/38/70/3416909732.jpg"——
 	// 首段是尺寸,见 kuwoCoverURL。
 	WebAlbumPicShort string `json:"web_albumpic_short"`
 }
 
 // kuwoCoverURL 把搜索结果自带的 web_albumpic_short(形如
 // "120/38/70/3416909732.jpg",首段是像素尺寸)拼成能直接访问的封面 URL,顺手把首段
-// 换成 500 拿大图(2026-08-31 实测 200/500 都能 200)。拿不到就返回空串,不是错误。
+// 换成 500 拿大图(实测 200/500 都能 200)。拿不到就返回空串,不是错误。
 func kuwoCoverURL(short string) string {
 	short = strings.TrimSpace(short)
 	if short == "" {
@@ -106,7 +106,7 @@ func kuwoCoverURL(short string) string {
 }
 
 // kuwoSearch 请求搜索端点(Referer 必须是 www.kuwo.cn,跟歌词端点的 Referer 不同,
-// 见 kuwoFetchLyric 那边——2026-08-31 实测坐实,写错会被拒)。
+// 见 kuwoFetchLyric 那边——实测坐实,写错会被拒)。
 func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, error) {
 	q := strings.TrimSpace(title + " " + artist)
 	u := "https://search.kuwo.cn/r.s?all=" + neturl.QueryEscape(q) +
@@ -145,7 +145,7 @@ func kuwoMusicID(rid string) string {
 }
 
 // kuwoDurationSecs 解析酷我搜索结果的 DURATION 字段——绝大多数是纯秒数字符串,
-// 2026-08-31 交接文档提到偶尔可能是 "m:ss",两种都兼容,解析不动返回 0
+// 交接文档提到偶尔可能是 "m:ss",两种都兼容,解析不动返回 0
 // (0 = 该项不参与打分,跟别的源自报时长的约定一致)。纯函数,便于单测。
 func kuwoDurationSecs(s string) float64 {
 	s = strings.TrimSpace(s)
@@ -174,7 +174,7 @@ type kuwoLyricLine struct {
 }
 
 // kuwoFetchLyric 请求歌词端点(Referer 必须是 kuwo.cn,不是 www.kuwo.cn——两个端点
-// 各自要求不同的 Referer,写死同一个会被其中一个拒掉,2026-08-31 实测坐实)。
+// 各自要求不同的 Referer,写死同一个会被其中一个拒掉)。
 // lrclist 可能是空数组(纯音乐/伴奏/无歌词),这种情况 HTTP 状态码仍是 200、`code`
 // 字段仍是 200,不是错误,调用方按"空列表"处理即可,不需要单独判 code。
 func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error) {

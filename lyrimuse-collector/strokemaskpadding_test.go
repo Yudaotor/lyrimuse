@@ -9,7 +9,7 @@ import (
 
 // 描边剪影必须跟被描边的内容吃同一道 padding —— 源码守卫。
 //
-// 2026-08-23 的真 bug:`OptionalTextStroke` 把 content 先 `.padding(width*2)` 再用
+// 的真 bug:`OptionalTextStroke` 把 content 先 `.padding(width*2)` 再用
 // Canvas 画剪影,而 Canvas 是**居中**绘制剪影的,只有"剪影与 content 在 canvas 里占同一块
 // 矩形"时才逐点对齐。原来 symbols 里的剪影没有那道 padding:
 //

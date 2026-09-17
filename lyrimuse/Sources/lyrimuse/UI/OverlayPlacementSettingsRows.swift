@@ -1,14 +1,11 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」的「位置」一项(2026-09-11,GitHub issue #5「可否增加底部在 Dock 栏之上
-// 水平居中对齐选项」):自由 / 顶部居中 / 底部居中 三选一。
+// 「歌词显示 → 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
 //
 // 跟「排版」「行为」同一个模子:一份行组件(`OverlayPlacementSettingsRows`)给两个宿主 ——
 //   ① 编辑台工具栏第二行那颗「位置 ▾」点开的浮层(`OverlayPlacementPopover`);
 //   ② 「全部设置」抽屉里的「位置」组(`OverlayAllSettingsDrawer.placementGroup`)。
-// 当天上午它先是「行为」浮层里的第一行,用户看过之后要求「这个位置的配置项也给上面放一个」——
-// 抽屉分组跟工具栏一一对应是 2026-09-07 定下的规矩,于是从「行为」里整个搬出来单开。
 //
 // 生效路径跟「行为」那三个开关不同:控制器**订阅** `AppSettings.overlayPlacementMode` 自己落位
 // (屏幕 / Dock 变化时要反复重算,不能靠设置行"顺手调一下"),这里只写值,一个 `.shared` 都不碰。
