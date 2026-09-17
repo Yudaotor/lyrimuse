@@ -103,12 +103,6 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
 /// 歌词根本不动它),但**不需要扩缓存格式** —— 导出的歌词文件 mtime 就是这个信号,而且
 /// 覆盖率 3169/3210。见 `Summary.lyricsUpdatedAt` 的头注(含"为什么它不会被 collector
 /// 每次启动重写冲掉"这个关键前提)。
-/// 列表行「N/9」徽章点开决策弹窗的目标。`.sheet(item:)` 要 Identifiable,
-/// 而缓存 key 是 String —— 包一层最省事,也顺带让"哪一条"这件事在类型上显式。
-private struct DecisionSheetTarget: Identifiable {
-    let id: String
-}
-
 private enum LyricsSortOption: String, CaseIterable, Identifiable {
     case defaultOrder = "默认排序"
     case titleAscending = "歌名 A→Z"
@@ -615,10 +609,6 @@ struct LyricsManagerView: View {
         }
     }
     @State private var showDecisionSheet = false
-    // 列表行里那个「N/9」徽章点开的决策弹窗(现象是「点击也没有反应」)。
-    // 详情页那颗 ActionTile 用的 showDecisionSheet 挂在**详情视图**上,列表行够不到 ——
-    // 所以列表层自己挂一个。String 不是 Identifiable,包一层。
-    @State private var decisionTarget: DecisionSheetTarget?
     // 补上——"保存修改"点了之前完全没有任何肉眼可见的反馈,跟上面
     // showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个修法:短暂切换成
     // "已保存"+对勾图标,1秒后自动变回去。
@@ -632,9 +622,6 @@ struct LyricsManagerView: View {
     @State private var manualOnly = false
     @State private var missingLyricsOnly = false
     @State private var instrumentalOnly = false
-    // 「仅证据薄」:当初只有 1~3 个源应答就定下来的那批。判据在
-    // EnrichCacheStore.Summary.thinEvidence(下界是 1 不是 0,理由见那里)。
-    @State private var thinEvidenceOnly = false
     // collector 侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
     // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「重试无歌词」按钮和
     // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
@@ -680,7 +667,7 @@ struct LyricsManagerView: View {
 
     private var hasActiveFilters: Bool {
         sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
-            || instrumentalOnly || thinEvidenceOnly || artistFilter != nil || albumFilter != nil
+            || instrumentalOnly || artistFilter != nil || albumFilter != nil
     }
 
     // 归并字典(歌手/专辑展示名、筛选下拉候选)全部下沉进 EnrichCacheStore,
@@ -756,12 +743,6 @@ struct LyricsManagerView: View {
             // 一个是"该修的"(缺歌词又不是纯音乐),一个是"不用修、只是想看看有哪些"
             // (确证过的纯音乐列表,比如核对专辑预取抓了哪些纯乐器曲目)。
             if instrumentalOnly && !s.isInstrumental { return false }
-            // 「仅证据薄」跟上面两条都不一样:这批**有歌词、看起来一切正常**,可疑的是
-            // "当初做这个决定时手上只有两三个源的候选"。缓存永久保留 + 20 秒总截止,
-            // 首次解析本来就有运气成分(09 章决策 6);而 needsLyricsRetry 有一道
-            // 「已有逐字就不重试」的闸,本机 94.3% 的有词条目带逐字 —— 也就是说这批里
-            // 绝大多数**后台永远不会再碰它们**,不主动筛出来就没人再问。
-            if thinEvidenceOnly && !s.thinEvidence { return false }
             return true
         }
         filteredCache.token = token
@@ -803,7 +784,6 @@ struct LyricsManagerView: View {
         return [
             committedSearchText, sourceFilter.id, timingFilter.rawValue,
             String(manualOnly), String(missingLyricsOnly), String(instrumentalOnly),
-            String(thinEvidenceOnly),
             artistFilter ?? "", albumFilter ?? "",
             // 占位行的 key 也要算进去——它的出现/消失/换成另一首歌不会让
             // store.summariesGeneration 变(那条代数只跟 raw/真实条目有关),漏了这一项
@@ -857,7 +837,6 @@ struct LyricsManagerView: View {
         manualOnly = false
         missingLyricsOnly = false
         instrumentalOnly = false
-        thinEvidenceOnly = false
         artistFilter = nil
         albumFilter = nil
     }
@@ -1072,8 +1051,6 @@ struct LyricsManagerView: View {
         Toggle(L10n.t("仅人工修正"), isOn: $manualOnly)
         Toggle(L10n.t("仅无歌词"), isOn: $missingLyricsOnly)
         Toggle(L10n.t("仅纯音乐"), isOn: $instrumentalOnly)
-        Toggle(L10n.t("仅证据薄"), isOn: $thinEvidenceOnly)
-            .help(L10n.t("当初只有 1~3 个歌词源应答就定下了这份歌词。想换一份就逐条点「重新自动匹配」"))
     }
 
     /// 选择状态 + 清除筛选。**内容随状态变,宽度不变** —— 固定宽度的槽位是这次修复的核心,
@@ -1295,22 +1272,9 @@ struct LyricsManagerView: View {
                         // 的注释:筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
                         // 自己的原始歌手名,好让"同一首歌因原始标签不同被拆成两条记录"这种
                         // 情况在列表里能被用户一眼看出区别,而不是显示成一模一样。
-                        LyricsManagerRow(summary: summary, artistDisplayName: summary.artist, albumDisplayName: albumDisplay(summary.album), widths: shownWidths, offsetColumnWidth: Self.offsetColumnWidth,
-                                         onShowDecision: summary.hasDecision ? { decisionTarget = DecisionSheetTarget(id: summary.key) } : nil)
+                        LyricsManagerRow(summary: summary, artistDisplayName: summary.artist, albumDisplayName: albumDisplay(summary.album), widths: shownWidths, offsetColumnWidth: Self.offsetColumnWidth)
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
-                    // 行内「N/9」徽章点开的决策弹窗。跟详情页那颗 ActionTile 打开的是同一个
-                    // LyricsDecisionSheet、同一套懒解码(只在打开这一刻按 key 解两槽),
-                    // 只是入口在列表行上 —— 那个数字的完整展开正是弹窗第一行「本轮应答的源」。
-                    .sheet(item: $decisionTarget) { target in
-                        let latest = store.decodedDecision(for: target.id)
-                        let applied = store.decodedAppliedDecision(for: target.id)
-                        // summaries 是数组,这里 O(n) 查一次 —— 只在打开弹窗时跑,不在 body 热路径上。
-                        if let s = store.summaries.first(where: { $0.key == target.id }),
-                           latest != nil || applied != nil {
-                            LyricsDecisionSheet(summary: s, latest: latest, applied: applied)
-                        }
-                    }
                     // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List
                     // 看着像一片白屏(现象是"打开歌词管理页面列表会白一会")。
                     // 用 .overlay 而不是拿 if/else 把 List 整个换掉:那样要把下面 .onAppear
@@ -3017,10 +2981,6 @@ private struct LyricsManagerRow: View {
     // 「偏移」列固定宽度、不进 LyricsColumnWidths(见 LyricsManagerView.offsetColumnWidth
     // 的注释),但表头和行仍然要用同一个值才对得齐,所以照样由调用方传入。
     let offsetColumnWidth: CGFloat
-    /// 点「N/9」徽章要做的事;nil = 这条没有决策存档,徽章退回纯展示(不可点、不换光标)。
-    /// 由调用方按 `summary.hasDecision` 决定传不传 —— 判断留在外面,行视图只管渲染。
-    var onShowDecision: (() -> Void)?
-
     // 每个标记一个固定宽度的槽位,没有对应状态时放**透明占位**而不是整个不渲染 ——
     // 槽位数和宽度对每一行都一样,配合下面把整组推到歌名列尾,所有行的标记就落在同一条
     // 竖线上。
@@ -3150,46 +3110,11 @@ private struct LyricsManagerRow: View {
                 Color.clear.frame(width: widths.source, alignment: .leading)
                 Color.clear.frame(width: offsetColumnWidth, alignment: .leading)
             } else {
-                HStack(spacing: 4) {
-                    SourceBadge(source: summary.lyricsSource)
-                    // 「这份当初是在几个源应答的情况下定的」。
-                    //
-                    // **只在证据薄的时候出现**,不常驻:本机 4248 条带该字段的有词条目里
-                    // 70.6% 有 >=4 个源应答,给它们每行挂一个"5"是纯噪音 —— 跟搜索弹窗
-                    // 那个轮次前缀「［2］」只从第 2 轮起才显示是同一个取舍,标识恰在
-                    // "有话要说"的那一刻出现、自己解释自己。
-                    //
-                    // 0 不显示:那是**老条目没有这个字段**(2026 年该字段出现之前解析的),
-                    // 不是"零个源应答",两者混为一谈会凭空造出一批不存在的可疑条目。
-                    if summary.thinEvidence {
-                        // 写成「3/9」而不是孤零零一个「3」(现象是「你这里标的数字
-                        // 是什么含义？我点击也没有反应」)——只给 hover tooltip 不够,一个
-                        // 突出颜色的孤立数字天然像可点角标,发现性太差。分母取
-                        // LyricsSource.allCases.count,不写死 9:selftest 的 SourceContractTests
-                        // 对账 Go/Swift 两侧源清单,以后加源这里自动跟着变。
-                        // ⚠️ 分母是**当前**源数,老条目当年可能没这么多源 —— tooltip 里说明。
-                        let total = LyricsSource.allCases.count
-                        Text("\(summary.sourcesRespondedCount)/\(total)")
-                            .font(.caption2.weight(.medium).monospacedDigit())
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .foregroundStyle(.orange)
-                            .background(Color.orange.opacity(0.12), in: Capsule())
-                            .contentShape(Capsule())
-                            .onTapGesture { onShowDecision?() }
-                            // 可点时换手型光标 —— 没有它,「能点」这件事在 macOS 上没有任何
-                            // 视觉线索。不可点(没有决策存档)时不换。
-                            .onHover { inside in
-                                guard onShowDecision != nil else { return }
-                                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                            }
-                            .help(onShowDecision == nil
-                                  ? String(format: L10n.t("这份歌词定下来时，%1$d 个歌词源里只有 %2$d 个给出了候选（老条目当年的源数可能少于 %1$d）"),
-                                           total, summary.sourcesRespondedCount)
-                                  : String(format: L10n.t("这份歌词定下来时，%1$d 个歌词源里只有 %2$d 个给出了候选（老条目当年的源数可能少于 %1$d）。点击查看是哪几个"),
-                                           total, summary.sourcesRespondedCount))
-                    }
-                }
-                .frame(width: widths.source, alignment: .leading)
+                // 只画来源徽章。"这份当初有几个源应答"不在列表里露出:那个数完整展开的
+                // 地方是详情页「解析决策」弹窗第一行「本轮应答的源」,列表这一列再挂一个
+                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 → 应答源最少」。
+                SourceBadge(source: summary.lyricsSource)
+                    .frame(width: widths.source, alignment: .leading)
 
                 // 时间轴校正值,正数=提前显示、负数=延后显示(跟详情页「歌词时间轴偏移」
                 // 输入框旁边那句说明同一个语义)。没调过/没歌词都会算成 0,展示上不特殊区分——

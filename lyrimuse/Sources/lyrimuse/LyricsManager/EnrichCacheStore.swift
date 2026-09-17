@@ -123,15 +123,6 @@ public final class EnrichCacheStore: ObservableObject {
         /// 播到时触发,几千首的库靠自然播放追平算法版本要走好几年。
         public let lyricsScoringVersion: Int
 
-        /// 这份歌词是不是"在信息不全的情况下定的"。
-        ///
-        /// 判据 `1...3`:九个源里只答上来三个或更少。**下界是 1 不是 0** —— 0 表示老条目
-        /// 压根没有 `lyrics_sources_responded` 这个字段(不知道),不是"零个源应答";
-        /// 把"不知道"标成可疑会凭空造出一批不存在的问题条目。上界 3 来自本机实测分布:
-        /// 1 源 2.4% / 2 源 7.0% / 3 源 20.0% / 4 源以上 70.6%,3 正好是那个断点。
-        ///
-        /// 只用来"提示 + 筛选",不驱动任何自动行为 —— 要不要重搜由用户点。
-        public var thinEvidence: Bool { (1...3).contains(sourcesRespondedCount) }
         /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、collector
         /// 还没写出任何结论"这段窗口期的占位行(见 `LyricsManagerView.refreshPlaceholder`)。
         /// 现象是"歌一直在放、还在首次搜歌词的时候,歌词管理里完全看不到
