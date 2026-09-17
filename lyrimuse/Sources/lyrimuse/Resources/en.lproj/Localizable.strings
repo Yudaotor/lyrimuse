@@ -160,6 +160,7 @@
 "不是带时间戳的歌词" = "Not timestamped lyrics";
 "不显示" = "Nothing";
 "不转换" = "As-is";
+"不透明度" = "Opacity";
 "与当前播放器同源" = "Platform match";
 "专辑" = "Album";
 "专辑 A→Z" = "Album A→Z";
@@ -200,6 +201,7 @@
 "今年至今 · %1$@ 年同期 %2$@ 首" = "This year so far · %2$@ in the same span of %1$@";
 "从「%@」导出的备份" = "Backup exported from “%@”";
 "从备份恢复" = "Restore";
+"从屏幕取色" = "Pick Color from Screen";
 "从应用程序中选择…" = "Choose from Applications…";
 "从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "从文件导入…" = "Import from File…";

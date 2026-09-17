@@ -799,7 +799,7 @@ struct MenuBarColorRows: View {
                     // 是动态色,在浅色的设置窗口里求值就是黑 —— 所以取值走
                     // `MenuBarScrollingLabel.textColor`(跟真正渲染同一份口径)再
                     // `resolved(in: 菜单栏的 appearance)` 定型。详见 MenuBarAppearanceStore。
-                    ColorPicker("", selection: Binding(
+                    AppColorPicker(selection: Binding(
                         get: {
                             Color(nsColor: MenuBarScrollingLabel
                                 .textColor(hex: settings.menuBarLyricsTextColorHex,
@@ -830,7 +830,7 @@ struct MenuBarColorRows: View {
                         // 同上一行:走渲染那份口径 + 按菜单栏的明暗定型。这一个还多一层
                         // ——「跟随系统」时深色菜单栏上要向白提亮四成,不这么取的话色块画的是
                         // 未提亮的原始强调色,跟菜单栏上看到的差一截。
-                        ColorPicker("", selection: Binding(
+                        AppColorPicker(selection: Binding(
                             get: {
                                 Color(nsColor: MenuBarScrollingLabel
                                     .fillColor(hex: settings.menuBarLyricsFillColorHex,

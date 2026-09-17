@@ -149,8 +149,14 @@ struct OverlayTextSettingsRows: View {
                         get: { settings.foregroundColor },
                         set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
                     ),
-                    supportsOpacity: false // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+                    // 2026-09-17 起打开(GitHub discussions#6)。之前故意关着,理由是"拖到
+                    // alpha 0 悬浮窗会整个消失、没有任何视觉提示能定位问题"——但工具栏
+                    // 「重置 ▾」菜单和设置页都有一颗「恢复默认文字与配色」
+                    // (OverlayStyleDefaults.restoreTextAndColors),走的是菜单栏,不依赖看得见
+                    // 悬浮窗本身,跟这次会话刚给「锁定态解锁提示」补的逃生路径是同一个道理:
+                    // 原来的顾虑已经有退路兜底,不必为了防一个可恢复的状态阉割掉透明度这个
+                    // 真实诉求。
+                    supportsOpacity: true
                 )
             }
             // 2026-09-16 加(GitHub discussions#6)。**跟「文字颜色」是平级的一对独立颜色**,
@@ -179,7 +185,7 @@ struct OverlayTextSettingsRows: View {
             if settings.textStrokeEnabled {
                 CardDivider()
                 SettingsSubRow(title: L10n.t("描边颜色")) {
-                    ColorPicker("", selection: Binding(
+                    AppColorPicker(selection: Binding(
                         get: { settings.textStrokeColor },
                         set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
                     ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
@@ -213,7 +219,7 @@ struct OverlayTextSettingsRows: View {
             }
             .fixedSize()
             if !follows.wrappedValue {
-                ColorPicker("", selection: color, supportsOpacity: supportsOpacity)
+                AppColorPicker(selection: color, supportsOpacity: supportsOpacity)
             }
         }
     }
@@ -387,7 +393,7 @@ struct OverlayBackgroundSettingsRows: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
-                ColorPicker("", selection: Binding(
+                AppColorPicker(selection: Binding(
                     get: { settings.backgroundColor },
                     set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
                 ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
