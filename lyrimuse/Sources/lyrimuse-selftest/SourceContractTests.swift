@@ -1380,9 +1380,12 @@ func runSourceContractTests() {
             let expectedRun = Array(stride(from: entryRounds.min() ?? 0, through: entryRounds.max() ?? 0, by: 1))
             expectEqual(entryRounds, expectedRun,
                         "署名轮次: 条目编号要连续不重复 —— 重号 = 两个 session 各加了一轮却互不知道")
-        } else {
+        } else if FileManager.default.fileExists(
+            atPath: repoRoot.appendingPathComponent("docs/features").path) {
+            // 目录在却读不到这一份 = 真的被挪走/改名了。
             expectEqual(true, false, "署名轮次: 读不到 docs/features/08-lyrics-engine.md(路径挪了?)")
         }
+        // docs/features 整个目录不在 = 本地-only 的文档没被检出(CI 上就是这样),这一项跳过。
     }
 
     // ---- 使用与版权说明 / 第三方许可----

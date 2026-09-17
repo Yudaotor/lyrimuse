@@ -304,7 +304,16 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		{"../docs/features/README.md", zh + "源检索、守卫"},
 		{"../lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift", "// " + zh + "个歌词源——rawValue"},
 	}
+	// docs/features 只留本地、不进版本控制,所以 CI 检出的树里根本没有这一整个目录。
+	// ⚠️ 判据是**目录在不在**,不是逐个文件容错:目录在却少一份 = 真的被挪走/改名了,那仍然要报。
+	docsCheckedOut := true
+	if _, err := os.Stat("../docs/features"); err != nil {
+		docsCheckedOut = false
+	}
 	for _, c := range checks {
+		if !docsCheckedOut && strings.HasPrefix(c.path, "../docs/features/") {
+			continue
+		}
 		raw, err := os.ReadFile(c.path)
 		if err != nil {
 			t.Errorf("读不到 %s: %v", c.path, err)
