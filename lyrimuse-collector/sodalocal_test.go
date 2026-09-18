@@ -11,23 +11,26 @@ import (
 )
 
 // 全部用合成的 QueueCache,不读本机真实的汽水缓存(TestMain 已经把 override 指到不存在
-// 的路径,这里各用例再自己指到临时文件)。
-//
-// ⚠️ fixture 里的曲目取自本机真实 QueueCache 的字段值(曲名/歌手/专辑/毫秒时长都是
-// 原样),但 vocal==2 那条是**构造**的 —— 真实队列那 24 首 vocal 全是 1,一条纯音乐
-// 样本都没有。见 sodalocal.go 头注里"未实测验证"那段。
+// 的路径,这里各用例再自己指到临时文件)。fixture 的曲目与字段形状照抄真实文件。
 
 // sodaTestTrack 按 QueueCache 里真实的写法造一条曲目。artist 用 "|" 分隔多个署名。
-func sodaTestTrack(name, artist, album string, durationMS int64, vocal int) map[string]any {
+//
+// firstVocalStart < 0 表示**不带 first_vocal 字段**,这是纯音乐条目的形状;
+// 有人声的条目一定带。这个区分是 sodaLocalContradictsInstrumental 的判据。
+func sodaTestTrack(name, artist, album string, durationMS int64, vocal int, firstVocalStart int64) map[string]any {
 	artists := []map[string]any{}
 	for _, a := range splitNonEmpty(artist, "|") {
 		artists = append(artists, map[string]any{"id": "1", "name": a})
 	}
-	return map[string]any{
+	m := map[string]any{
 		"name": name, "duration": durationMS, "vocal": vocal,
 		"artists": artists,
 		"album":   map[string]any{"id": "9", "name": album},
 	}
+	if firstVocalStart >= 0 {
+		m["first_vocal"] = map[string]any{"start": firstVocalStart, "duration": 1000}
+	}
+	return m
 }
 
 func splitNonEmpty(s, sep string) []string {
@@ -97,11 +100,9 @@ func resetSodaLocalIndex(t *testing.T, path string) {
 // 时长对不上不算,歌手名缺失不算。
 func TestSodaLocalInstrumental(t *testing.T) {
 	path := writeTestSodaQueue(t, []map[string]any{
-		// 真实队列里的三首(vocal 原样 = 1)。
-		sodaTestTrack("Rosy (15 Khalil Live in HK 2011)", "方大同", "15 Khalil Fong Live in Hong Kong 2011", 259947, 1),
-		sodaTestTrack("味道（Feat. Zion.T/Crush）", "Zion.T|Crush|方大同", "JTW西游记", 250099, 1),
-		// 构造的纯音乐条目(真实样本里没有 vocal==2 的)。
-		sodaTestTrack("某支纯音乐", "某乐手", "某专辑", 180000, 2),
+		sodaTestTrack("Rosy (15 Khalil Live in HK 2011)", "方大同", "15 Khalil Fong Live in Hong Kong 2011", 259947, 1, 16704),
+		sodaTestTrack("味道（Feat. Zion.T/Crush）", "Zion.T|Crush|方大同", "JTW西游记", 250099, 1, 19200),
+		sodaTestTrack("Lujon", "Henry Mancini", "Mr. Lucky Goes Latin", 158400, 2, -1),
 	})
 	resetSodaLocalIndex(t, path)
 
@@ -111,14 +112,14 @@ func TestSodaLocalInstrumental(t *testing.T) {
 		durationSecs         float64
 		want                 bool
 	}{
-		{"vocal==2 判为纯音乐", "某乐手", "某支纯音乐", "某专辑", 180, true},
+		{"vocal==2 判为纯音乐", "Henry Mancini", "Lujon", "Mr. Lucky Goes Latin", 158.4, true},
 		{"vocal==1 不判为纯音乐", "方大同", "Rosy (15 Khalil Live in HK 2011)", "15 Khalil Fong Live in Hong Kong 2011", 259.947, false},
 		{"队列里没有这首歌", "查无此人", "查无此曲", "", 200, false},
-		{"时长对不上就不认(纯音乐结论宁可不给)", "某乐手", "某支纯音乐", "某专辑", 300, false},
-		{"歌手名缺失不做只按歌名的兜底", "", "某支纯音乐", "某专辑", 180, false},
-		{"歌名缺失同样不兜底", "某乐手", "", "某专辑", 180, false},
-		{"专辑对不上但时长对得上,仍然认", "某乐手", "某支纯音乐", "另一张专辑", 180, true},
-		{"本地时长未知(0)时不卡时长闸", "某乐手", "某支纯音乐", "某专辑", 0, true},
+		{"时长对不上就不认(纯音乐结论宁可不给)", "Henry Mancini", "Lujon", "Mr. Lucky Goes Latin", 300, false},
+		{"歌手名缺失不做只按歌名的兜底", "", "Lujon", "Mr. Lucky Goes Latin", 158.4, false},
+		{"歌名缺失同样不兜底", "Henry Mancini", "", "Mr. Lucky Goes Latin", 158.4, false},
+		{"专辑对不上但时长对得上,仍然认", "Henry Mancini", "Lujon", "另一张专辑", 158.4, true},
+		{"本地时长未知(0)时不卡时长闸", "Henry Mancini", "Lujon", "Mr. Lucky Goes Latin", 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -131,16 +132,17 @@ func TestSodaLocalInstrumental(t *testing.T) {
 	}
 }
 
-// TestSodaLocalMultiArtistIndexed 多歌手曲目每个署名都要能查到 —— 本地标签常只写其中
-// 一位。真实队列里《味道（Feat. Zion.T/Crush）》就是三人合唱。
+// TestSodaLocalMultiArtistIndexed 多歌手曲目每个署名都要能查到 —— 本地标签常只写
+// 其中一位。
 func TestSodaLocalMultiArtistIndexed(t *testing.T) {
 	path := writeTestSodaQueue(t, []map[string]any{
-		sodaTestTrack("三人合唱的纯音乐", "Zion.T|Crush|方大同", "JTW西游记", 250099, 2),
+		sodaTestTrack("I'm Not The Only One", "Piano Fruits Music|Benjamin Cambridge", "Ambient Fruits Music Vol. 1 Relaxing Piano", 136411, 2, -1),
 	})
 	resetSodaLocalIndex(t, path)
 
-	for _, artist := range []string{"Zion.T", "Crush", "方大同"} {
-		if !sodaLocalInstrumental(artist, "三人合唱的纯音乐", "JTW西游记", 250.099) {
+	for _, artist := range []string{"Piano Fruits Music", "Benjamin Cambridge"} {
+		if !sodaLocalInstrumental(artist, "I'm Not The Only One",
+			"Ambient Fruits Music Vol. 1 Relaxing Piano", 136.411) {
 			t.Fatalf("署名 %q 应该也能查到这条多歌手曲目", artist)
 		}
 	}
@@ -224,20 +226,20 @@ func TestSodaLocalDecodeRealFormat(t *testing.T) {
 // 覆盖面窄且未经真实样本验证的本地信号抢在四个联网源前面。
 func TestInstrumentalFromScoredOrder(t *testing.T) {
 	path := writeTestSodaQueue(t, []map[string]any{
-		sodaTestTrack("某支纯音乐", "某乐手", "某专辑", 180000, 2),
+		sodaTestTrack("Lujon", "Henry Mancini", "Mr. Lucky Goes Latin", 158400, 2, -1),
 	})
 	resetSodaLocalIndex(t, path)
 
 	t.Run("联网源给了就用联网源的来源标签", func(t *testing.T) {
 		scored := []scoredLyricCandidateResult{{Source: "lrclib", Instrumental: true}}
-		ok, src := instrumentalFromScored(scored, "某乐手", "某支纯音乐", "某专辑", 180)
+		ok, src := instrumentalFromScored(scored, "Henry Mancini", "Lujon", "Mr. Lucky Goes Latin", 158.4)
 		if !ok || src != "lrclib" {
 			t.Fatalf("ok=%v src=%q, 期望 true/\"lrclib\"", ok, src)
 		}
 	})
 
 	t.Run("联网源都沉默时才用本地兜底", func(t *testing.T) {
-		ok, src := instrumentalFromScored(nil, "某乐手", "某支纯音乐", "某专辑", 180)
+		ok, src := instrumentalFromScored(nil, "Henry Mancini", "Lujon", "Mr. Lucky Goes Latin", 158.4)
 		if !ok || src != "soda local" {
 			t.Fatalf("ok=%v src=%q, 期望 true/\"soda local\"", ok, src)
 		}
@@ -250,4 +252,23 @@ func TestInstrumentalFromScoredOrder(t *testing.T) {
 			t.Fatalf("ok=%v src=%q, 期望 false/\"\"", ok, src)
 		}
 	})
+}
+
+// TestSodaLocalContradiction vocal==2 但带着明确的人声起始位置 = 客户端数据自相矛盾,
+// 此时不认这条纯音乐结论(宁可漏判不可误判)。
+func TestSodaLocalContradiction(t *testing.T) {
+	path := writeTestSodaQueue(t, []map[string]any{
+		// vocal==2 却报了 12000ms 处有人声。
+		sodaTestTrack("自相矛盾", "某乐手", "某专辑", 180000, 2, 12000),
+		// vocal==2 且 first_vocal.start==0 —— 0 是"位置未知",不算矛盾。
+		sodaTestTrack("起始为零", "某乐手", "某专辑", 180000, 2, 0),
+	})
+	resetSodaLocalIndex(t, path)
+
+	if sodaLocalInstrumental("某乐手", "自相矛盾", "某专辑", 180) {
+		t.Fatal("vocal==2 但有明确人声起始,不该认这条纯音乐结论")
+	}
+	if !sodaLocalInstrumental("某乐手", "起始为零", "某专辑", 180) {
+		t.Fatal("first_vocal.start==0 是位置未知,不该当成矛盾")
+	}
 }

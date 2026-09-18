@@ -1546,10 +1546,9 @@ func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, s
 //  1. scored 里搭车带来的联网信号(lrclib / 网易云 / QQ / Musixmatch),这是主力。
 //  2. 都没有时,才问汽水客户端的本地队列缓存(sodalocal.go)。
 //
-// 第 2 级放在最后是刻意的:它只覆盖汽水 feed 队列缓存里的歌、且没有真实 vocal==2
-// 样本验证过,不该抢在四个联网源前面。反过来,它命中时那四个源已经全都沉默了 ——
-// 此时"标成纯音乐"比继续显示笼统的「无歌词」更接近事实,而且能让
-// needsLyricsFirstFill 别再每隔 24 小时白搜一轮。
+// 第 2 级在最后是因为它只覆盖汽水队列缓存里的歌,比四个联网源窄得多。反过来,它命中时
+// 那四个源已经全都沉默了 —— 此时标「纯音乐」比继续显示笼统的「无歌词」更接近事实,
+// 而且能让 needsLyricsFirstFill 别再每隔 24 小时白搜一轮。
 //
 // 第二个返回值是来源标签,只用于日志。
 func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, album string, durationSecs float64) (bool, string) {
