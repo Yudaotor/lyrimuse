@@ -265,4 +265,30 @@ func runSettingsInteractionTests() {
         expectEqual(r.items, ["通用"], "历史: 重新种起点会清掉旧路线")
         expectEqual(r.canGoBack, false, "历史: 重新种起点之后退不动")
     }
+
+    // ---- 位置 = 顶层面板 + 页内二级分段 ----
+    //
+    // 设置窗记到"分段"这一层(SettingsView 的 `SettingsLocation` / `section(of:)` / `applySection`),
+    // 因为页内换段在用户眼里跟换页是同一件事。这里钉的是带分段的位置在同一套历史语义下的行为:
+    // 同一页换段算一次跳转、后退要把分段一起带回去、没有分段的面板(section = nil)照旧去重。
+    do {
+        struct Loc: Hashable {
+            let panel: String
+            let section: String?
+        }
+        var h = NavigationHistory<Loc>()
+        h.seed(Loc(panel: "歌词", section: "fetch"))
+        expectEqual(h.canGoBack, false, "历史(分段): 起点仍然退不动")
+        expectEqual(h.record(Loc(panel: "歌词", section: "translation")), true, "历史(分段): 同一页换分段算一次跳转")
+        expectEqual(h.canGoBack, true, "历史(分段): 换过分段之后后退键是亮的")
+        expectEqual(h.record(Loc(panel: "歌词", section: "translation")), false, "历史(分段): 点已经选中的那一段不记")
+
+        // 换页之后再后退,回到的是"那一页 + 它当时停的那一段",不是那一页的默认段 —— 只记面板的话
+        // 这一条就退成了"回到歌词页的获取段",用户在页内走过的那一步凭空消失。
+        expectEqual(h.record(Loc(panel: "播放器", section: nil)), true, "历史(分段): 换去没有分段的面板照记")
+        expectEqual(h.record(Loc(panel: "播放器", section: nil)), false, "历史(分段): 没有分段的面板重复进入不记")
+        expectEqual(h.goBack(), Loc(panel: "歌词", section: "translation"), "历史(分段): 后退把分段一起带回去")
+        expectEqual(h.goBack(), Loc(panel: "歌词", section: "fetch"), "历史(分段): 再退一格回到起点那一段")
+        expectEqual(h.goForward(), Loc(panel: "歌词", section: "translation"), "历史(分段): 前进走回去")
+    }
 }

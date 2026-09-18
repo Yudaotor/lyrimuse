@@ -80,9 +80,15 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
 public enum SettingsSearchCatalog {
     /// 「歌词」页分段的 @AppStorage 键(SettingsView.swift `LyricsSettingsTab`)。
     public static let lyricsSectionKey = "settings:lyricsSection"
+    /// 这个键还没写过时,那一页停在哪一段(= `LyricsSettingsTab.Section` 的第一个 case)。
+    /// 设置窗的前进 / 后退拿它还原「还没换过分段」那个位置 —— 跟那边对不上,表现是后退之后
+    /// 停在另一个分段。selftest 按源码里的枚举首个 case 钉着它。
+    public static let lyricsSectionDefault = "fetch"
     /// Last.fm 账号页分段的 @AppStorage 键(AccountLinkingTab.swift)。它带 `np:` 前缀是历史原因,
     /// 这里只写不新建。
     public static let lastfmSectionKey = "np:lastfmDetailSection"
+    /// 同 `lyricsSectionDefault`,对应 `LastfmSection` 的第一个 case。
+    public static let lastfmSectionDefault = "stats"
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这两个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。

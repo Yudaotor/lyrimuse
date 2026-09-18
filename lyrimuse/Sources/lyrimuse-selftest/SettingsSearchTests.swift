@@ -70,6 +70,41 @@ func runSettingsSearchTests() {
     expectEqual(accountTab.contains("@AppStorage(\"\(SettingsSearchCatalog.lastfmSectionKey)\")"), true,
                 "设置搜索: Last.fm 页分段键名与源码一致")
 
+    // ---- 分段的默认值:设置窗前进 / 后退要拿它还原「这一页还没换过分段」那个位置 ----
+    //
+    // 顶层(SettingsView 的 `section(of:)`)读的是同一批键的**第二份** @AppStorage,默认值跟那一页
+    // 自己的对不上就会把"一次都没换过"记成另一段,后退回去换错段 —— 而两边都编译得过。各页的默认
+    // 段就是分段枚举的第一个 case,这里按源码钉死。
+    let appearanceSectionCases: [String] = {
+        guard let structRange = settingsView.range(of: "struct AppearanceSettingsTab") else { return [] }
+        return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
+    }()
+    expectEqual(appearanceSectionCases, LyricsSurface.allCases.map(\.appearanceSectionRawValue),
+                "设置搜索: 「歌词显示」页三个分段跟 LyricsSurface 一一对应")
+    expectEqual(SettingsSearchCatalog.lyricsSectionDefault, lyricsSectionCases.first,
+                "设置搜索: 「歌词」页默认分段 = 枚举第一个 case")
+    expectEqual(SettingsSearchCatalog.lastfmSectionDefault, lastfmSectionCases.first,
+                "设置搜索: Last.fm 页默认分段 = 枚举第一个 case")
+    expectEqual(LyricsSurface.overlay.appearanceSectionRawValue, appearanceSectionCases.first,
+                "设置搜索: 「歌词显示」页默认分段 = 枚举第一个 case")
+
+    // 有页内分段的面板一共三处。新加第四处时这条会红 —— 提醒除了往目录里登记,还要接上设置窗的
+    // 前进 / 后退(SettingsView 的 `section(of:)` / `applySection`),漏了不报错、只表现成后退键
+    // 把那几步整个跳过。
+    let catalogSectionKeys = Set(entries.compactMap(\.sectionKey))
+    expectEqual(catalogSectionKeys, [SettingsSearchCatalog.lyricsSectionKey,
+                                     LyricsSurface.appearanceSectionStorageKey,
+                                     SettingsSearchCatalog.lastfmSectionKey],
+                "设置搜索: 页内分段只有这三处(新加一处要一并接上前进/后退)")
+    for key in catalogSectionKeys {
+        let token = key == LyricsSurface.appearanceSectionStorageKey
+            ? "LyricsSurface.appearanceSectionStorageKey"
+            : (key == SettingsSearchCatalog.lyricsSectionKey
+               ? "SettingsSearchCatalog.lyricsSectionKey" : "SettingsSearchCatalog.lastfmSectionKey")
+        expectEqual(settingsView.contains("@AppStorage(\(token))"), true,
+                    "设置搜索: 前进/后退读得到分段键 \(key)")
+    }
+
     var badDestinations: [String] = []
     var badSections: [String] = []
     var badDrawers: [String] = []

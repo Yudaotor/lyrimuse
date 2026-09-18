@@ -208,6 +208,22 @@ enum SettingsSidebarItem: Hashable {
     case softwareUpdate
 }
 
+/// 设置窗里的"一个位置" = 顶层面板 + 这一页当前停在哪个二级分段(没有分段的页是 nil)。
+///
+/// 前进 / 后退按这个粒度记账。**页内那几个分段在用户眼里跟换页是同一件事**(「歌词」的
+/// 获取/译文/效果/管理、「歌词显示」的悬浮歌词/灵动岛/菜单栏、Last.fm 账号页的统计/榜单/
+/// 足迹/设置),只记到面板这一层的话,后退键会把用户在页内走过的那几步整个跳过。
+///
+/// ⚠️ `section` 存的是分段的 **rawValue 字符串**,不是某个枚举:三个分段枚举各自私有在自己
+/// 那一页里、类型互不相通,而它们本来就有一份对外契约 —— 各自那个 @AppStorage 键里的字符串
+/// (`SettingsSearchCatalog.lyricsSectionKey` / `LyricsSurface.appearanceSectionStorageKey` /
+/// `SettingsSearchCatalog.lastfmSectionKey`),设置搜索跳转、菜单栏快捷入口走的也是这份契约。
+struct SettingsLocation: Hashable {
+    let panel: SettingsSidebarItem
+    /// 没有二级分段的面板(播放器 / 快捷键 / 通用 / 关于 / 软件更新 / 其余账号页)是 nil。
+    let section: String?
+}
+
 struct SettingsView: View {
     // 只用来在语言手动切换时让侧边栏/详情页的整棵子树重新渲染(sidebarLabel/
     // selectedCategoryTitle 这些顶层 chrome 文字不属于任何一个具体 tab,需要这一处
@@ -236,53 +252,113 @@ struct SettingsView: View {
 
     // MARK: - 前进 / 后退
 
-    /// 走过的面板序列 + 当前停在第几个。语义跟系统「系统设置」逐条对齐:
-    ///   · 后退回到上一个面板、前进再走回来;
-    ///   · **从历史中间跳去一个新面板时,前面那一截被截断**(同浏览器);
-    ///   · 重复选中当前这一页不产生新记录(点侧栏里已经亮着的那一行);
+    /// 三处页内二级分段的当前值:「歌词」(获取/译文/效果/管理)、「歌词显示」(悬浮歌词/灵动岛/
+    /// 菜单栏)、Last.fm 账号页(统计/榜单/足迹/设置)。
+    ///
+    /// 这里是同一批 UserDefaults 键的**第二个**观察者 —— 真正画分段选择器的是各自那一页,
+    /// 顶层读它们只为把「当前停在哪一段」并进前进 / 后退的位置里。
+    ///
+    /// ⚠️ 默认值必须跟那一页自己的 @AppStorage 一字不差:对不上的话,「一次都没换过分段」这个
+    /// 位置会被记成另一段,后退回去就换错段。三个默认值都取共用常量,selftest 拿各页枚举的
+    /// 首个 case 钉着。
+    @AppStorage(SettingsSearchCatalog.lyricsSectionKey)
+    private var lyricsSectionRaw = SettingsSearchCatalog.lyricsSectionDefault
+    @AppStorage(LyricsSurface.appearanceSectionStorageKey)
+    private var appearanceSectionRaw = LyricsSurface.overlay.appearanceSectionRawValue
+    @AppStorage(SettingsSearchCatalog.lastfmSectionKey)
+    private var lastfmSectionRaw = SettingsSearchCatalog.lastfmSectionDefault
+
+    /// 走过的位置序列 + 当前停在第几个。语义跟系统「系统设置」逐条对齐:
+    ///   · 后退回到上一个位置、前进再走回来;
+    ///   · **从历史中间跳去一个新位置时,前面那一截被截断**(同浏览器);
+    ///   · 重复进入当前这一个位置不产生新记录(点侧栏里已经亮着的那一行、点已经选中的那一段);
     ///   · 两颗键常驻、不可用时置灰 —— 不做"没历史就隐藏",位置忽有忽无比置灰更难用,
     ///     系统设置也是常驻置灰。
     ///
-    /// ⚠️ 只记 `SettingsSidebarItem`(顶层面板),**不记页内的二级分段**。二级分段各有
-    /// 自己的 @AppStorage 键、由那一页自己管;把它们也塞进这条历史,后退键就会变成
-    /// "有时换页、有时只在页内换个分段"——同一颗键两种行为。系统设置同样只记到面板这一层。
+    /// 记账粒度是 `SettingsLocation`(顶层面板 + 页内二级分段),理由见那个类型的头注。
     /// 序列与游标那套逻辑整块在 Core(`NavigationHistory`,纯值语义、selftest 覆盖):
     /// 截断、去重、封顶、起点这几件都有边界,写在 View 里就只能靠肉眼守。
-    @State private var history = NavigationHistory<SettingsSidebarItem>()
-    /// 这一次 `selection` 变化是前进/后退自己造成的,不该再写回历史 —— 否则后退一步立刻
-    /// 被记成一次新跳转、前进那半截当场被截断,两颗键就只剩后退能用。
-    /// ⚠️ 这个开关留在 View 这边(而不是塞进 Core):它描述的是"谁触发了这次 selection 变化",
-    /// 是 SwiftUI 那条单向数据流的性质,跟历史本身无关。
-    @State private var isNavigatingHistory = false
+    @State private var history = NavigationHistory<SettingsLocation>()
 
-    /// 窗口刚出现时种下起点。此刻这一页是"打开就在这儿",不是一次跳转,所以它只当历史的
+    /// 前进 / 后退自己造成的那次位置变化不该再写回历史 —— 否则后退一步立刻被记成一次新跳转、
+    /// 前进那半截当场被截断,两颗键就只剩后退能用。
+    ///
+    /// ⚠️ 存的是**目标位置**,不是一个"正在导航"的布尔开关:一次跳转要同时改 `selection` 和分段键
+    /// 两处状态,SwiftUI 不保证它们并成同一帧。布尔开关会被中间那一帧(新面板 + 它原来停的分段)
+    /// 吃掉,那一帧随即被当成一次真跳转记下来;比对目标位置是"到了才放行",中间几帧都不怕。
+    /// 这个字段留在 View 这边(而不是塞进 Core):它描述的是 SwiftUI 那条单向数据流的性质,
+    /// 跟历史本身无关。
+    @State private var historyNavigationTarget: SettingsLocation?
+
+    /// 这一页当前停在哪个二级分段;没有分段的面板是 nil。
+    ///
+    /// ⚠️ 新加一处页内分段时,这里和 `applySection` 要一起接上 —— 漏了不会编译报错,表现是
+    /// 后退键把那几步整个跳过。设置搜索目录里也要有对应的 `sectionKey`(selftest 按两边的
+    /// 键数量对账)。
+    private func section(of panel: SettingsSidebarItem) -> String? {
+        switch panel {
+        case .tab(.lyrics): return lyricsSectionRaw
+        case .tab(.appearance): return appearanceSectionRaw
+        case .account(.lastfm): return lastfmSectionRaw
+        default: return nil
+        }
+    }
+
+    /// 当前位置 = 选中的面板 + 那一页此刻停的分段。`selection` 为 nil(什么都没选中)时没有位置。
+    private var currentLocation: SettingsLocation? {
+        selection.map { SettingsLocation(panel: $0, section: section(of: $0)) }
+    }
+
+    /// 把位置里的分段写回那一页的键。没有分段的位置什么都不做。
+    private func applySection(_ location: SettingsLocation) {
+        guard let section = location.section else { return }
+        switch location.panel {
+        case .tab(.lyrics): lyricsSectionRaw = section
+        case .tab(.appearance): appearanceSectionRaw = section
+        case .account(.lastfm): lastfmSectionRaw = section
+        default: break
+        }
+    }
+
+    /// 窗口刚出现时种下起点。此刻这个位置是"打开就在这儿",不是一次跳转,所以它只当历史的
     /// 第 0 项 —— 不这么种的话,刚打开设置窗就有一颗能点的后退键,退回一个从没露过面的页面。
-    private func seedHistory() { history.seed(selection) }
+    private func seedHistory() { history.seed(currentLocation) }
+
+    /// 跳到历史里的某个位置。**先写分段、再换面板**:反过来会先画一帧"新面板 + 它上次停的分段",
+    /// 再跳到目标分段,肉眼看得见闪一下。
+    private func navigate(to target: SettingsLocation) {
+        historyNavigationTarget = target
+        applySection(target)
+        selection = target.panel
+    }
 
     private func goBack() {
         guard let target = history.goBack() else { return }
-        isNavigatingHistory = true
-        selection = target
+        navigate(to: target)
     }
 
     private func goForward() {
         guard let target = history.goForward() else { return }
-        isNavigatingHistory = true
-        selection = target
+        navigate(to: target)
     }
 
-    /// 记一次跳转。改 `selection` 的入口有四个(侧栏点选、搜索命中、账号页内跳转、
-    /// AppActions 的信箱与 subject),全部经 `.onChange(of: selection)` 汇到这里 —— 让各
-    /// 入口自己记迟早漏一个,而漏掉的那条在界面上表现为"后退键跳过了一页"。
-    private func recordHistory(_ item: SettingsSidebarItem?) {
-        // nil 是"什么都没选中"(比如「有软件更新可用」那一行消失时 List 清掉选中),
-        // 不是一个能回去的页面。
-        guard let item else { return }
-        if isNavigatingHistory {
-            isNavigatingHistory = false
+    /// 记一次跳转。改位置的入口有五路(侧栏点选、搜索命中、账号页内跳转、AppActions 的信箱与
+    /// subject、三处页内分段选择器 —— 最后这路还包括悬浮歌词 / 灵动岛 / 菜单栏那几个"去设置里改"
+    /// 的快捷入口,它们是直接写分段键的),全部经 `.onChange(of: currentLocation)` 汇到这里 ——
+    /// 让各入口自己记迟早漏一个,而漏掉的那条在界面上表现为"后退键跳过了一页"。
+    private func recordHistory(_ location: SettingsLocation?) {
+        // nil 是"什么都没选中"(比如「有软件更新可用」那一行消失时 List 清掉选中),不是一个能
+        // 回去的位置。抑制也一并解除:目标位置若永远等不到,两颗键会从此不再记账。
+        guard let location else {
+            historyNavigationTarget = nil
             return
         }
-        history.record(item)
+        if let target = historyNavigationTarget {
+            // 到达目标才解除抑制;在那之前的中间帧同样不记。
+            if location == target { historyNavigationTarget = nil }
+            return
+        }
+        history.record(location)
     }
 
     /// 后退键。跟前进键分开两个 `ToolbarItem` 摆在同一个 placement 里 —— macOS 26 会把
@@ -344,6 +420,11 @@ struct SettingsView: View {
     /// 清空搜索框。目录条目怎么写见 Core `SettingsSearchCatalog` 头注。
     private func openSettingsSearchHit(_ hit: SettingsSearchHit) {
         let entry = hit.entry
+        // 先写分段、再换面板(同 navigate(to:)):反过来"新面板 + 它上次停的分段"会自成一个位置,
+        // 既闪一下,也会在前进 / 后退的历史里多出一条用户从没停过的记录。
+        if let key = entry.sectionKey, let value = entry.sectionValue {
+            UserDefaults.standard.set(value, forKey: key)
+        }
         switch entry.destination {
         case .tab(let raw):
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
@@ -358,9 +439,6 @@ struct SettingsView: View {
                 }
                 selection = .account(destination)
             }
-        }
-        if let key = entry.sectionKey, let value = entry.sectionValue {
-            UserDefaults.standard.set(value, forKey: key)
         }
         searchRouter.reveal(hit)
         settingsSearchText = ""
@@ -532,8 +610,6 @@ struct SettingsView: View {
         // 六个顶层分类都记,包括「关于」——上次停在低频页下次也落在那里,行为可预测。
         .onChange(of: selection) { previous, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
-            // 四个改 selection 的入口都汇到这里记一笔,见 recordHistory 头注。
-            recordHistory(item)
             // 「有软件更新可用」那一行随更新装完 / 跳过 / 已是最新而消失时,List 会把选中清成 nil ——
             // 页面本身还在,别退成「选择左侧的设置分类」,把选中放回去(此时侧栏没有行亮着,跟账号页
             // 在折叠区里那种情形一样)。
@@ -543,6 +619,11 @@ struct SettingsView: View {
             }
             // 选到别的分类了,搜索框的光标就别再闪。
             settingsSearchFocused = false
+        }
+        // 前进 / 后退的唯一记账口。盯的是**位置**(面板 + 页内分段)而不是 `selection`:页内换个
+        // 分段跟换页是同一件事,只盯 selection 会让后退键跳过那一步。见 recordHistory 头注。
+        .onChange(of: currentLocation) { _, location in
+            recordHistory(location)
         }
         // 见 AuxiliaryWindowActivation 注释——只记账,不碰 Dock 图标,
         // "在 Dock 中显示"这个永久偏好是唯一的决定者。
