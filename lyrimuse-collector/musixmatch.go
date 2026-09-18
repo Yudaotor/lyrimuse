@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -145,11 +146,14 @@ func musixmatchCachedToken() string {
 	return ""
 }
 
-func musixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang string) musixmatchResult {
+// isrc:这次播放的这条录音的 ISRC(spotifyisrc.go),空串 = 照原样走名称搜索。
+func musixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
 	if title == "" {
 		return musixmatchResult{}
 	}
-	key := artist + "|" + title + "|" + trLang
+	// isrc 进缓存键,理由同 deezerLyric:首播那一拍索引常还没建好,不区分的话那次
+	// "按名字搜"的结果会把后面每一次都挡住。
+	key := artist + "|" + title + "|" + trLang + "|" + isrc
 	musixmatchMu.Lock()
 	if v, ok := musixmatchCache[key]; ok {
 		musixmatchMu.Unlock()
@@ -157,7 +161,7 @@ func musixmatchLyric(ctx context.Context, artist, title string, durationSecs flo
 	}
 	musixmatchMu.Unlock()
 
-	r := resolveMusixmatchLyric(ctx, artist, title, durationSecs, trLang)
+	r := resolveMusixmatchLyric(ctx, artist, title, durationSecs, trLang, isrc)
 	if r.lrc != "" {
 		musixmatchMu.Lock()
 		musixmatchCache[key] = r
@@ -166,9 +170,28 @@ func musixmatchLyric(ctx context.Context, artist, title string, durationSecs flo
 	return r
 }
 
-func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang string) musixmatchResult {
-	_ = durationSecs // 时长匹配交给 enrich.go 统一的 scoreLyricCandidate,这里不用
-	match, ok := musixmatchSearchTrack(ctx, artist, title)
+func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+	// durationSecs 只用在 ISRC 那条的时长闸上(见下);名称搜索那条的时长匹配照旧
+	// 交给 enrich.go 统一的 scoreLyricCandidate。
+	// ISRC 直取优先:那是录音级身份,不经过 q_artist/q_track 那套名称搜索,也就绕开了
+	// 这个源"各源里匹配最松"的老问题(见 musixmatchTrackRow.TrackLength 注释)。
+	// 查不到就照常走搜索。
+	var match musixmatchTrackMatch
+	var ok bool
+	if isrc != "" {
+		match, ok = musixmatchTrackByISRC(ctx, isrc)
+		// 时长闸,同 deezer.go 里那段:ISRC 也可能是垃圾值("ZZZZZ9999999" 实测在两个源上
+		// 都查得到一首不相干的歌)。⚠️ 这道闸在这个源上目前基本不生效 —— track.get 回的
+		// track_length 实测是 0,而 sourceDurationFits 对"任一边不知道时长"一律放行。
+		// 留着是因为它零成本、且那天字段有值了就自动生效;真正兜底的是上层统一的
+		// scoreLyricCandidate(歌词正文对不上自然被比下去)。
+		if ok && !sourceDurationFits(durationSecs, match.durationSecs) {
+			ok = false
+		}
+	}
+	if !ok {
+		match, ok = musixmatchSearchTrack(ctx, artist, title)
+	}
 	if !ok {
 		return musixmatchResult{}
 	}
@@ -519,40 +542,86 @@ type musixmatchTrackRow struct {
 // 一致(实测 Ludovico Einaudi《Nuvole Bianche》5 行里 3 行 instrumental=1,但另有一行
 // sub=1/lyr=1/instrumental=0 —— 有人给这首钢琴曲传了"歌词")。有真正的正文时以正文为准,
 // 别让一个标记把能用的候选顶掉。
+// musixmatchMatchFromRow 把一行搜索结果映射成 match。原是 pickMusixmatchTrackRow 里的
+// build 闭包,提成包级是为了让 ISRC 直取那条路(musixmatchTrackByISRC)复用**同一份**映射 ——
+// 两条路进下游的字段形状必须一致,否则 hasSubtitles/hasRichsync 这类"省掉必然 404 那趟"
+// 的契约会在其中一条路上悄悄失效。
+func musixmatchMatchFromRow(r musixmatchTrackRow) musixmatchTrackMatch {
+	return musixmatchTrackMatch{
+		trackID:      r.TrackID,
+		title:        r.TrackName,
+		artist:       r.ArtistName,
+		album:        r.AlbumName,
+		cover:        r.AlbumCoverart500x500,
+		durationSecs: float64(r.TrackLength),
+		hasSubtitles: r.HasSubtitles == 1,
+		hasRichsync:  r.HasRichsync == 1,
+	}
+}
+
 func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string) (musixmatchTrackMatch, bool) {
 	accept := func(r musixmatchTrackRow) bool {
 		return lyricTitleAccepted(r.TrackName, localTitle) && lyricSourceArtistMatches(r.ArtistName, artist)
 	}
-	build := func(r musixmatchTrackRow) musixmatchTrackMatch {
-		return musixmatchTrackMatch{
-			trackID:      r.TrackID,
-			title:        r.TrackName,
-			artist:       r.ArtistName,
-			album:        r.AlbumName,
-			cover:        r.AlbumCoverart500x500,
-			durationSecs: float64(r.TrackLength),
-			hasSubtitles: r.HasSubtitles == 1,
-			hasRichsync:  r.HasRichsync == 1,
-		}
-	}
 	for _, r := range rows {
 		if r.HasSubtitles == 1 && accept(r) {
-			return build(r), true
+			return musixmatchMatchFromRow(r), true
 		}
 	}
 	for _, r := range rows {
 		if r.HasLyrics == 1 && accept(r) {
-			return build(r), true
+			return musixmatchMatchFromRow(r), true
 		}
 	}
 	for _, r := range rows {
 		if r.Instrumental == 1 && accept(r) {
-			m := build(r)
+			m := musixmatchMatchFromRow(r)
 			m.instrumental = true
 			return m, true
 		}
 	}
 	return musixmatchTrackMatch{}, false
+}
+
+// musixmatchTrackByISRC 按 ISRC 直取一条录音(track.get?track_isrc=)。
+//
+// 跟搜索那条的关键差别:**不过任何名称闸**。ISRC 已经确定了是哪一条录音,而这个接口
+// 回的 track_name/artist_name 可能是本地化写法,拿去比对本地标签只会把正确答案否掉。
+//
+// instrumental 的判据跟 pickMusixmatchTrackRow 第三趟保持一致——有正文(subtitles 或
+// lyrics)时以正文为准,两者都没有且源明确标了 instrumental=1 才把这个结论带出去。
+// 那边靠"第三趟排最后"实现这个优先级,这里只有一条记录,所以写成显式条件。
+func musixmatchTrackByISRC(ctx context.Context, isrc string) (musixmatchTrackMatch, bool) {
+	if isrc == "" {
+		return musixmatchTrackMatch{}, false
+	}
+	body, err := musixmatchDo(ctx, "track.get", neturl.Values{"track_isrc": {isrc}})
+	if err != nil {
+		return musixmatchTrackMatch{}, false
+	}
+	var out struct {
+		Message struct {
+			Header struct {
+				StatusCode int `json:"status_code"`
+			} `json:"header"`
+			Body struct {
+				Track musixmatchTrackRow `json:"track"`
+			} `json:"body"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(body, &out) != nil || out.Message.Header.StatusCode != 200 {
+		return musixmatchTrackMatch{}, false
+	}
+	row := out.Message.Body.Track
+	if row.TrackID == 0 {
+		return musixmatchTrackMatch{}, false
+	}
+	m := musixmatchMatchFromRow(row)
+	if !m.hasSubtitles && row.HasLyrics != 1 && row.Instrumental == 1 {
+		m.instrumental = true
+	}
+	log.Printf("musixmatch: isrc %s -> track %d %q", isrc, row.TrackID, row.TrackName)
+	return m, true
 }
 
 // musixmatchSearchTrack 按歌手+歌名分字段搜索(q_artist/q_track,不是拼成一个字符串的

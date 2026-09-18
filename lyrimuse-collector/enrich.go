@@ -3890,7 +3890,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "musixmatch"}
 			return
 		}
-		r := musixmatchLyric(ctx, artist, title, durationSecs, features.LyricsTranslationLanguage)
+		// isrc 同 deezer 那路:有值时走 track.get?track_isrc= 直取,绕开这个源最松的那套
+		// 名称搜索(见 musixmatch.go)。
+		r := musixmatchLyric(ctx, artist, title, durationSecs, features.LyricsTranslationLanguage, playbackISRC(artist, title, album))
 		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental}
 	}()
 	go func() {
@@ -3927,7 +3929,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// 独立检索(不等任何其它源的 ID),同 kuwo/migu。搜索结果自带时长,srcDur 有值;
 		// 没有同步歌词、只有纯文本时 plainOnly=true(分数恒 -1,见 deezer.go 头注)。
-		r := deezerLyric(ctx, artist, title, album, durationSecs)
+		//
+		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
+		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
+		r := deezerLyric(ctx, artist, title, album, durationSecs, playbackISRC(artist, title, album))
 		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {

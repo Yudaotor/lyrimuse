@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -82,8 +83,10 @@ func (r deezerResult) empty() bool { return r.lyrics == "" }
 
 const (
 	deezerSearchAPI = "https://api.deezer.com/search"
-	deezerAuthAPI   = "https://auth.deezer.com/login/anonymous?jo=p&rto=c&i=c"
-	deezerPipeAPI   = "https://pipe.deezer.com/api"
+	// deezerTrackAPI:曲目端点。这里只用它的 /isrc:<ISRC> 形式(按录音直取,见 deezerTrackByISRC)。
+	deezerTrackAPI = "https://api.deezer.com/track"
+	deezerAuthAPI  = "https://auth.deezer.com/login/anonymous?jo=p&rto=c&i=c"
+	deezerPipeAPI  = "https://pipe.deezer.com/api"
 	// deezerScoreDurationTolerance 跟别的源的时长闸门(match.go 的 0.25)取同一个值。
 	deezerScoreDurationTolerance = 0.25
 	// deezerMaxCandidatesToFetch:通过身份闸后最多拉几条歌词。Deezer 排序可信、原版通常
@@ -146,11 +149,16 @@ func deezerLastFailureReasonNow() string {
 	return deezerLastFailure
 }
 
-func deezerLyric(ctx context.Context, artist, title, album string, durationSecs float64) deezerResult {
+// isrc:这次播放的这条录音的 ISRC(spotifyisrc.go;只有 Spotify 原生客户端在播、且它的
+// 缓存里记了才有)。空串 = 照原样走名称搜索。
+func deezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 	if title == "" {
 		return deezerResult{}
 	}
-	key := artist + "|" + title + "|" + album
+	// ⚠️ isrc 必须进缓存键。首播那一拍 ISRC 索引往往还没建好(它是后台异步建的),
+	// 那次拿到的是"按名字搜"的结果;不区分的话这条缓存会把后面所有次都挡住,
+	// ISRC 这条路永远轮不到。
+	key := artist + "|" + title + "|" + album + "|" + isrc
 	deezerMu.Lock()
 	if v, ok := deezerCache[key]; ok {
 		deezerMu.Unlock()
@@ -158,7 +166,7 @@ func deezerLyric(ctx context.Context, artist, title, album string, durationSecs 
 	}
 	deezerMu.Unlock()
 
-	r := resolveDeezerLyric(ctx, artist, title, album, durationSecs)
+	r := resolveDeezerLyric(ctx, artist, title, album, durationSecs, isrc)
 	if !r.empty() {
 		deezerMu.Lock()
 		deezerCache[key] = r
@@ -219,6 +227,47 @@ func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, err
 		return nil, fmt.Errorf("api error %s", strings.TrimSpace(string(out.Error)))
 	}
 	return out.Data, nil
+}
+
+// deezerISRCDirectScore:ISRC 直取那条候选的排序分。只有它一条时排序本来就无意义,
+// 给个明确的高值只为读代码时一眼看出"这条不是打分打出来的"。
+const deezerISRCDirectScore = 1 << 20
+
+// deezerTrackByISRC 按 ISRC 直取一条录音。Deezer 有官方端点 /track/isrc:<ISRC>
+// (实测:HKA351401008 → Special Person / Khalil Fong / 259s)。
+//
+// 查不到时 Deezer 回 200 + {"error":{...}}(不是 4xx),所以跟 deezerSearch 一样要过
+// deezerHasError,不能只看状态码。
+func deezerTrackByISRC(ctx context.Context, isrc string) (deezerTrack, bool) {
+	if isrc == "" {
+		return deezerTrack{}, false
+	}
+	u := deezerTrackAPI + "/isrc:" + neturl.PathEscape(isrc)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return deezerTrack{}, false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := doHTTPTracked(lyricHTTPClient(deezerHTTPTimeout), req)
+	if err != nil {
+		return deezerTrack{}, false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return deezerTrack{}, false
+	}
+	var out struct {
+		deezerTrack
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return deezerTrack{}, false
+	}
+	if deezerHasError(out.Error) || out.ID == 0 {
+		return deezerTrack{}, false
+	}
+	log.Printf("deezer: isrc %s -> track %d %q", isrc, out.ID, out.Title)
+	return out.deezerTrack, true
 }
 
 // deezerHasError:gw/公开 API 成功时 error 字段是空数组或空对象,失败时才是内容。
@@ -458,20 +507,41 @@ func deezerFetchLyrics(ctx context.Context, trackID string) (string, string, err
 // ③取前几条**并发**取词;④按名次(不是"谁先拉完")挑第一份真同步的;⑤一份同步的都没有
 // 时,退而求其次挑第一份纯文本(plainOnly,分数恒 -1,只有用户手点才会采用)——理由同
 // lrclib/musixmatch 那两路的纯文本回退:有词可看胜过没有,但绝不让它自动顶掉别的源。
-func resolveDeezerLyric(ctx context.Context, artist, title, album string, durationSecs float64) deezerResult {
-	tracks, err := deezerSearch(ctx, artist, title)
-	if err != nil || len(tracks) == 0 {
-		return deezerResult{}
-	}
-
+func resolveDeezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 	type scoredTrack struct {
 		track deezerTrack
 		score int
 	}
 	var candidates []scoredTrack
-	for _, t := range tracks {
-		if s := deezerCandidateScore(t, artist, title, album, durationSecs); s >= 0 {
-			candidates = append(candidates, scoredTrack{t, s})
+
+	// ISRC 直取:拿到的是**这条录音本身**,不是搜出来最像的那条。
+	//
+	// ⚠️ 这条候选**故意不过 deezerCandidateScore**。Deezer 对同一条录音给的常是本地化
+	// 标题——实测 USCA20801738(Katy Perry《I Kissed A Girl》原版)回的是日文
+	// 「キス・ア・ガール」,拿去过名称闸会被自己淘汰掉。而名称闸要防的事(串到同名的
+	// 另一首/另一版录音)在这里根本不成立:ISRC 就是录音级身份。
+	//
+	// 对照实测:同一首歌按名字搜,第一条是 251 秒的 Live 日文版;按 ISRC 直取是 180 秒的原版。
+	//
+	// ⚠️ 但**时长闸仍然要过**。ISRC 理论上是录音身份,现实里却存在垃圾值:实测
+	// "ZZZZZ9999999"(一眼占位符)在 Deezer 和 Musixmatch 上**都查得到歌**,各自是一首
+	// 完全不相干的曲子。名称对不上可能只是本地化写法,时长差一大截就说明拿到的根本不是
+	// 这首 —— 这是唯一一道对"ISRC 本身是脏数据"还有效的防线。
+	if isrc != "" {
+		if t, ok := deezerTrackByISRC(ctx, isrc); ok && sourceDurationFits(durationSecs, float64(t.Duration)) {
+			candidates = append(candidates, scoredTrack{t, deezerISRCDirectScore})
+		}
+	}
+
+	if len(candidates) == 0 {
+		tracks, err := deezerSearch(ctx, artist, title)
+		if err != nil || len(tracks) == 0 {
+			return deezerResult{}
+		}
+		for _, t := range tracks {
+			if s := deezerCandidateScore(t, artist, title, album, durationSecs); s >= 0 {
+				candidates = append(candidates, scoredTrack{t, s})
+			}
 		}
 	}
 	if len(candidates) == 0 {
