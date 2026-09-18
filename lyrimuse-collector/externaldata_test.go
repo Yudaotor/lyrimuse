@@ -23,5 +23,6 @@ func TestMain(m *testing.M) {
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")
 	kugouLocalDirOverride = missing
 	qqLocalDBOverride = filepath.Join(missing, "qqmusic.sqlite")
+	neteaseLocalDBOverride = filepath.Join(missing, "sqlite_storage.sqlite3")
 	os.Exit(m.Run())
 }

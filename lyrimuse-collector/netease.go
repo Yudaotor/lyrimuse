@@ -808,6 +808,15 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 后续查询词的结果照常生效(见下面 chosen 只在 albumScore 更高时才覆盖的逻辑)。
 	var chosen *neSong
 	var nameOnlyArtist string
+	// 先问网易云客户端自己的本地曲库要 songID(neteaselocal.go)——命中就直接当作 pick()
+	// 选中的那条,下面整个搜索循环都不跑。省掉的不只是一跳网络:那段搜索是这条源最脆的
+	// 地方(按端点分桶的应用层限流、限流时照样回 HTTP 200,见上面 get() 里那段长注释),
+	// 而本地给的是客户端为这首歌记下的 songID,不是搜索排序猜出来的最像的那条。
+	if local, ok := neteaseLocalSong(ctx, artist, title, album, durationSecs); ok {
+		chosen = &local
+		// 置空查询词让下面的循环整个跳过 —— queries 在该循环之后不再被使用。
+		queries = nil
+	}
 	for _, q := range queries {
 		var r struct {
 			Result struct {
