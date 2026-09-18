@@ -807,18 +807,10 @@ func playerForBundleID(bundleID string) string {
 // Apple Music / Spotify 不在此列 —— 它们**不是**这套里的歌词源(我们从没从它们那儿抓过
 // 歌词),没有"同源"可言。auto 同理:识别不出用户在用哪个播放器,就不该瞎猜。
 func playerNativeLyricSource(player string) string {
-	switch player {
-	case playerQQMusic:
-		return "qq"
-	case playerNetease:
-		return "netease"
-	case playerKugou:
-		// 酷狗**本来就是**这个项目的歌词源之一(kugou.go),所以接入播放器顺带把同源
-		// 加权也接上了:用酷狗听歌时优先选酷狗自己的歌词,时间轴跟它的音频母版对得上。
-		return "kugou"
-	default:
-		return ""
-	}
+	// 表在 players_generated.go(生成自 shared/players.json 的 nativeLyricSource 字段)。
+	// 一个播放器只要本身也是这个项目的歌词源(酷狗就是这么白捡到的),在那份 JSON 里填上
+	// 这个字段,同源加权就一起接上了:用它听歌时优先选它自己的歌词,时间轴跟音频母版对得上。
+	return playerNativeLyricSources[player]
 }
 
 func scoreLyricCandidate(

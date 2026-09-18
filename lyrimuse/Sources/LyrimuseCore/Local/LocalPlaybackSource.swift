@@ -347,7 +347,6 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// bundleID → 数据源画像。纯函数,selftest 直接覆盖。
     public nonisolated static func positionSourceTier(forBundleID bundleID: String?) -> PositionSourceTier {
-        if bundleID == PlaybackPlayer.appleMusic.bundleIdentifier { return .precise }
         // 把默认档从 noisyFloored 翻成 cleanExtrapolated,并把真正"整秒下取整 +
         // 大抖动"的那两个显式列出来。
         //
@@ -360,11 +359,15 @@ public final class LocalPlaybackSource: ObservableObject {
         //
         // bundleID 为 nil(压根没有来源信息)也走这一档:所谓"保守"应该是"别用前提不成立的
         // 棘轮",而不是"选那个门槛最大的"。
-        if bundleID == PlaybackPlayer.qqMusic.bundleIdentifier
-            || bundleID == PlaybackPlayer.netease.bundleIdentifier {
-            return .noisyFloored
+        //
+        // 哪个播放器归哪一档,在 shared/players.json 的 positionTier 字段(生成成
+        // `PlaybackPlayer.positionTierID`)。这里只做两件本地的事:映射成这个类型,以及定
+        // "认不出来源"时的默认档 —— 后者是判断,不是每播放器一行的数据,所以留在这里。
+        switch PlaybackPlayer.builtin(forBundleID: bundleID)?.positionTierID {
+        case "precise": return .precise
+        case "noisyFloored": return .noisyFloored
+        default: return .cleanExtrapolated
         }
-        return .cleanExtrapolated
     }
 
     /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。

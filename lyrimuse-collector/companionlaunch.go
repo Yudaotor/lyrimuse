@@ -176,25 +176,20 @@ func companionLaunchProcessNames() []string {
 //  2. UTF-8 下「酷狗音乐」是 12 字节,没超过内核 p_comm 的 16 字节上限(pgrep 比的就是
 //     这个被截断过的名字)——再长两个汉字就会被截断、`-x` 精确匹配当场失效。往这份列表
 //     里加新播放器时这条限制要一起核。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify", "酷狗音乐"}
+// ⚠️ knownPlayerProcessNames 与逐播放器的进程名都在 players_generated.go
+// (生成自 shared/players.json)——上面那两条限制(p_comm 16 字节、-x 精确匹配)在那份
+// JSON 的 processName 字段旁边也记着一份。
 
 // playerProcessNameFor 是某个具体播放器常量的可执行文件名,给手动选定的场景用,见
 // knownPlayerProcessNames 注释。从读包级 features.Player 的 playerProcessName
 // 改成纯函数——多选之后 companionLaunchProcessNames 要对 features.Players 里的每个
 // 成员分别求进程名,不能再读一个包级单值。
 func playerProcessNameFor(player string) string {
-	switch player {
-	case playerQQMusic:
-		return "QQMusic"
-	case playerNetease:
-		return "NeteaseMusic"
-	case playerSpotify:
-		return "Spotify"
-	case playerKugou:
-		return "酷狗音乐"
-	default:
-		return "Music"
+	// 查不到(auto / 认不出来)退回 Music,跟 playerBundleID 的兜底方向一致。
+	if name, ok := playerProcessNames[player]; ok {
+		return name
 	}
+	return "Music"
 }
 
 // launchLyrimuseApp 用 bundle id(不是路径)启动 Lyrimuse.app——不依赖它具体装在哪个

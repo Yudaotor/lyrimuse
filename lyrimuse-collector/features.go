@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -87,19 +88,9 @@ const (
 // playerAuto("自动识别")不对应固定的某个 App——问 media-control 当前系统级 Now
 // Playing 焦点是谁,核对是不是这四个已知播放器之一,见 system.go 的 getSpotifyState
 // 附近 getAutoDetectedState 的注释。
-const (
-	playerAppleMusic = "apple_music"
-	playerQQMusic    = "qq_music"
-	playerNetease    = "netease_music"
-	playerSpotify    = "spotify"
-	// 酷狗音乐(接入)。它是个 Mac Catalyst 应用(主二进制链的是
-	// /System/iOSSupport/.../MediaPlayer.framework),自己把播放状态发布进系统级
-	// MediaRemote,所以跟 QQ/网易云/Spotify 走同一条 media-control 路径,不需要新代码路径。
-	// 跟 QQ/网易云一样没有 AppleScript 字典(`Info.plist` 里没有 NSAppleScriptEnabled、
-	// Resources 下也没有 .sdef),所以扩展控件(喜欢/音量/播放模式)一律没有。
-	playerKugou = "kugou_music"
-	playerAuto  = "auto"
-)
+// ⚠️ playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
+// players_generated.go —— 接一个新播放器改那份 JSON,Swift 侧的 rawValue 跟着同一份走,
+// 两边不可能再漂。上面这段讲的是读取路径差异,不随播放器清单变动,留在这里。
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序。
 // ⚠️ 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
@@ -473,12 +464,9 @@ func resolveScrobblePoint(raw string) string {
 // isValidPlayerValue 核对一个字符串是不是六个已知播放器 rawValue 之一——resolvePlayers
 // 校验列表条目、以及迁移路径校验 legacy 字段共用同一份判据。
 func isValidPlayerValue(p string) bool {
-	switch p {
-	case playerAppleMusic, playerQQMusic, playerNetease, playerSpotify, playerKugou, playerAuto:
-		return true
-	default:
-		return false
-	}
+	// 合法取值来自 allPlayerIDs(生成自 shared/players.json)——接一个播放器时
+	// 这里不用改,漏改也不可能发生。
+	return slices.Contains(allPlayerIDs, p)
 }
 
 // resolvePlayers 是从单选 resolvePlayer 改成多选后的替代——list 是新字段
@@ -517,10 +505,7 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	if len(m) == 0 {
 		return nil
 	}
-	builtin := map[string]bool{
-		"com.apple.Music": true, qqMusicBundleID: true,
-		neteaseMusicBundleID: true, spotifyBundleID: true, kugouMusicBundleID: true,
-	}
+	builtin := builtinPlayerBundleIDs
 	out := make(map[string]string, len(m))
 	for bundleID, name := range m {
 		id := strings.TrimSpace(bundleID)

@@ -47,7 +47,12 @@ jobs:
           # 到的东西也是空的 —— 保留它是为了跟 release.yml 一致，将来真加了依赖不用再想起来补。
           cache-dependency-path: lyrimuse-collector/go.sum
 
-      # 顺序按"最快、最容易暴露问题的先跑"排：格式 → 静态检查 → 单测 → 编译。
+      # 顺序按"最快、最容易暴露问题的先跑"排：生成物对账 → 格式 → 静态检查 → 单测 → 编译。
+      - name: 内置播放器表与 shared/players.json 一致
+        # 两侧十几张"每播放器一行"的表现在都由 shared/players.json 生成。生成物过期或被
+        # 手改时**编译照样过**（它本身是合法代码），只有这一步能发现 —— 所以排在最前面。
+        run: python3 scripts/gen-players.py --check
+
       - name: gofmt
         run: |
           cd lyrimuse-collector

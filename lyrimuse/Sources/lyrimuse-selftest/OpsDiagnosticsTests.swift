@@ -840,6 +840,19 @@ func runOpsDiagnosticsTests() {
                         "格式闸: hook 必须跑 gofmt -l —— CI 第一步就是它,本地不拦就得推上去才知道")
             expectEqual(code.contains("command -v gofmt"), true,
                         "格式闸: 没装 gofmt 的机器必须放行 —— 误拦没有兜底,漏报有(CI 那边照样拦)")
+            expectEqual(code.contains("gen-players.py") && code.contains("--check"), true,
+                        "播放器生成物闸: hook 必须真的调生成器的 --check")
+            // 只改 shared/players.json 的提交里一个源码文件都没有,那道 early exit 会先返回 0。
+            // 闸排在它后面 = 恰好对最需要它的那种提交失效。
+            if let gate = code.range(of: "gen-players.py"),
+               // ⚠️ 要找的是 files 那道 early exit,不能只搜 "|| exit 0" —— 开头
+               // `root=$(git rev-parse …) || exit 0` 会先命中,判据当场失真(实测 FAIL 过)。
+               let earlyExit = code.range(of: #"[ -n "$files" ] || exit 0"#) {
+                expectEqual(gate.lowerBound < earlyExit.lowerBound, true,
+                            "播放器生成物闸: 必须排在「没有源码文件就 exit 0」前面")
+            } else {
+                expectEqual(true, false, "播放器生成物闸: 在 hook 里找不到它")
+            }
         } else {
             expectEqual(true, false, "注释卫生闸: 读不到 .githooks/pre-commit —— 被删了还是路径挪了?")
         }

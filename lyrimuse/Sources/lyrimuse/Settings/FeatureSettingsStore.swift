@@ -74,59 +74,16 @@ public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, C
     }
 }
 
-// PlaybackPlayer 定义在 LyrimuseCore(见 Local/PlaybackPlayer.swift)——MediaControlClient/
-// LocalPlaybackSource 也需要认这个类型,而它们在 LyrimuseCore、不能反向依赖这个
-// (lyrimuse 主 App target)文件,所以类型本身放在被依赖的下层,这里只是引用。
+// PlaybackPlayer 定义在 LyrimuseCore(见 Local/PlaybackPlayer.swift 与生成的
+// Local/PlaybackPlayer+Generated.swift)——MediaControlClient/LocalPlaybackSource 也需要
+// 认这个类型,而它们在 LyrimuseCore、不能反向依赖这个(lyrimuse 主 App target)文件,所以
+// 类型本身放在被依赖的下层,这里只是引用。
+//
+// ⚠️ displayName / tintColor / fallbackSymbolName / bundledIconResourceName 和两份顺序
+// 清单,现在由 scripts/gen-players.py 从 shared/players.json 生成,在同目录的
+// PlaybackPlayerMeta+Generated.swift —— 接一个新播放器改那份 JSON,不改这里。
+// 留在这里的只有"按系统语言二选一"这条判断:它是逻辑,不是每播放器一行的数据。
 extension PlaybackPlayer {
-    public var displayName: String {
-        switch self {
-        case .appleMusic: return "Apple Music"
-        case .qqMusic: return L10n.t("QQ 音乐")
-        case .netease: return L10n.t("网易云音乐")
-        case .kugou: return L10n.t("酷狗音乐")
-        case .spotify: return "Spotify"
-        case .auto: return L10n.t("自动识别")
-        }
-    }
-
-    // 引导页"选择播放器"那一步的图标卡片用。真图标优先——已安装就用
-    // NSWorkspace 按 bundleIdentifier 查到的真实 App 图标去画,这两个只是**没装时**的
-    // 占位:引导阶段大概率大部分播放器都还没装,不能什么都不画。品牌色跟"歌词来源"
-    // 那套复用同一份(sourceColor,LyricsManagerView.swift)——QQ音乐/网易云音乐/酷狗音乐
-    // 本来就是同一批 App,没理由维护第二份配色映射;Apple Music/Spotify/自动识别这三个
-    // 不在歌词来源清单里,单独给。
-    public var tintColor: Color {
-        switch self {
-        case .appleMusic: return Color(red: 0.98, green: 0.20, blue: 0.35)
-        case .qqMusic: return sourceColor("qq")
-        case .netease: return sourceColor("netease")
-        case .kugou: return sourceColor("kugou")
-        case .spotify: return Color(red: 0.11, green: 0.73, blue: 0.33)
-        case .auto: return .secondary
-        }
-    }
-
-    public var fallbackSymbolName: String {
-        switch self {
-        case .auto: return "wand.and.stars"
-        default: return "music.note"
-        }
-    }
-
-    /// 这台机器没装对应 App 时,`AppIconResolver.icon(bundledResourceName:)` 该去找哪个
-    /// 随包打包的静态品牌图(见该函数头注的完整背景)。nil = 没有这一层兜底,
-    /// 直接落到 `tintColor`+`fallbackSymbolName` 那套纯色占位——Apple Music 是系统自带,
-    /// 几乎不存在"没装"这种情况;`.auto` 本来就不对应任何具体 App。
-    public var bundledIconResourceName: String? {
-        switch self {
-        case .qqMusic: return "QQMusicIcon"
-        case .netease: return "NeteaseIcon"
-        case .kugou: return "KugouIcon"
-        case .spotify: return "SpotifyIcon"
-        case .appleMusic, .auto: return nil
-        }
-    }
-
     /// 图标网格(引导页"选择播放器" + 设置页"播放器"卡)的摆放顺序,按
     /// 系统语言排——只影响这两处图标网格,不改 `allCases` 本身:这个类型别的消费点
     /// (`PlaybackCoordinator.allCases.first(where:)` 这类按 bundle id 查找)不关心顺序,
@@ -135,11 +92,9 @@ extension PlaybackPlayer {
     /// Apple Music 两种语境下都排第一(系统自带、认知成本最低),「自动识别」恒定垫底
     /// (它不是一个具体播放器,当兜底选项摆最后符合直觉)。中间四个按这批用户的实际
     /// 使用习惯排:简体中文语境下国内三家排在 Spotify 前面;非简体中文(含繁体中文/
-    /// 英文等)语境反过来,Spotify 排到国内三家前面。
+    /// 英文等)语境反过来,Spotify 排到国内三家前面。两份清单本身在生成文件里。
     public static var displayOrder: [PlaybackPlayer] {
-        AppSettings.userReadsSimplifiedChinese
-            ? [.appleMusic, .qqMusic, .netease, .kugou, .spotify, .auto]
-            : [.appleMusic, .spotify, .qqMusic, .netease, .kugou, .auto]
+        AppSettings.userReadsSimplifiedChinese ? displayOrderForSimplifiedChinese : displayOrderDefault
     }
 }
 

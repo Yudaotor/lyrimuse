@@ -1,5 +1,9 @@
 #!/bin/sh
-# 提交前的两道闸,顺序跟 CI 一致 —— 格式最先,它最快也最容易一眼看出:
+# 提交前的三道闸,顺序跟 CI 一致:
+#
+#   0. 内置播放器生成物对账:碰了 shared/players.json 或它的生成物时,两侧生成物必须是
+#      重新生成过的。只有这道闸查得出"改了 JSON 忘了跑生成器"——生成物本身是合法代码,
+#      编译不会红。
 #
 #   1. gofmt:暂存的 .go 文件必须已格式化。CI 的第一步就是 `gofmt -l lyrimuse-collector`,
 #      本地不拦一道就得推上去才知道,而且一路红下去很容易没人注意。
@@ -15,9 +19,29 @@
 
 root=$(git rev-parse --show-toplevel) || exit 0
 
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# ---- 闸 0:内置播放器生成物对账 ----
+#
+# 两侧十几张"每播放器一行"的表由 shared/players.json 生成。生成物过期(改了 JSON 忘了跑
+# 生成器)或被手改时**编译照样过** —— 它本身是合法代码,只有对账查得出来。
+# ⚠️ 必须排在下面那个 early exit 前面:只改 JSON 的提交里一个源码文件都没有,放到后面就漏了。
+# 只在这次提交真碰了这几个文件时才跑,别的提交不受影响。
+case "$staged" in
+    *shared/players.json*|*players_generated.go*|*PlaybackPlayer+Generated.swift*|*PlaybackPlayerMeta+Generated.swift*)
+        python3 "$root/scripts/gen-players.py" --check >/dev/null 2>&1 || {
+            echo "" >&2
+            echo "  内置播放器的生成物跟 shared/players.json 对不上。" >&2
+            echo "  跑 python3 scripts/gen-players.py 重新生成,把结果一起提交。" >&2
+            echo "  确实要放行:git commit --no-verify" >&2
+            echo "" >&2
+            exit 1
+        }
+        ;;
+esac
+
 # 只看本次新增/改动的、检查器认得的源码文件(删除的不算)。
-files=$(git diff --cached --name-only --diff-filter=ACMR \
-        | grep -E '\.(swift|go|js|mjs|ts|py|sh)$')
+files=$(printf '%s\n' "$staged" | grep -E '\.(swift|go|js|mjs|ts|py|sh)$')
 [ -n "$files" ] || exit 0
 
 # ---- 闸 1:gofmt ----

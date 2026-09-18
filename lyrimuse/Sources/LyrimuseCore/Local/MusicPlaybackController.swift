@@ -372,7 +372,12 @@ public enum MusicPlaybackController {
                     return "nil|" & modePart & ";" & gatePart & "|" & volPart
                 end tell
                 """#
-        case .qqMusic, .netease, .kugou, .auto:
+        // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
+        // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
+        // ⚠️ 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
+        // shared/players.json:新播放器默认落到这里,跟 supportsExtendedControls 的口径
+        // 一致(`== .appleMusic || == .spotify`)。真要给某个新播放器支持,在上面显式加一个 case。
+        default:
             return .empty
         }
         guard let out = runAppleScriptCapturing(script) else { return .empty }
@@ -454,7 +459,7 @@ public enum MusicPlaybackController {
             // 不能对同一状态给出不同答案。空串(Spotify 没在跑)第一截是 "" → nil。
             guard let out = runAppleScriptCapturing(spotifyRunningGuard + spotifyModePartScript) else { return nil }
             return spotifyPlaybackMode(fromModePart: out.trimmingCharacters(in: .whitespacesAndNewlines))
-        case .qqMusic, .netease, .kugou, .auto:
+        default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
     }
@@ -525,7 +530,7 @@ public enum MusicPlaybackController {
                     + #"tell application "Spotify" to set shuffling to "#
                     + (mode == .shuffle ? "true" : "false")
             ) != nil
-        case .qqMusic, .netease, .kugou, .auto:
+        default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
     }
@@ -546,7 +551,7 @@ public enum MusicPlaybackController {
             // Spotify 的 `sound volume` 也是 0~100 的整数,跟 Music.app 同一个量纲,
             // 上层的滑杆不需要换算。
             script = spotifyRunningGuard + #"tell application "Spotify" to get sound volume"#
-        case .qqMusic, .netease, .kugou, .auto:
+        default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
         guard let out = runAppleScriptCapturing(script) else { return nil }
@@ -565,7 +570,7 @@ public enum MusicPlaybackController {
         case .spotify:
             return runAppleScriptCapturing(
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
-        case .qqMusic, .netease, .kugou, .auto:
+        default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
     }

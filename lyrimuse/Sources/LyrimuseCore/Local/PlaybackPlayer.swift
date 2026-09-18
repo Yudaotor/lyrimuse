@@ -1,7 +1,8 @@
 import Foundation
 
-// Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 必须跟 collector/features.go 的
-// playerXxx 常量逐字对应,这是两侧通过共享 json 文件("player" 字段)交换的字符串。四个
+// Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 跟 collector 侧的 playerXxx 常量
+// 逐字对应(两侧现在都由 shared/players.json 生成,不再靠人守),这是两侧通过共享 json
+// 文件("player" 字段)交换的字符串。四个
 // 具体 App 对应两条完全不同的读取路径(见 MediaControlClient.swift/collector/system.go
 // 的注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐/网易云音乐/酷狗音乐都没有
 // AppleScript 支持(用 `sdef`/PlistBuddy 核实过,两者都压根没有 .sdef、也没开
@@ -23,39 +24,12 @@ import Foundation
 // collector 的 getState() 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
 // 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
 // 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
-public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashable {
-    case appleMusic = "apple_music"
-    case qqMusic = "qq_music"
-    case netease = "netease_music"
-    // 酷狗音乐(接入)。跟 QQ/网易云同一条路径,不需要新代码分支:它是个 Mac
-    // Catalyst 应用(主二进制链的是 /System/iOSSupport/.../MediaPlayer.framework),自己把
-    // 播放状态发布进系统级 MediaRemote;同样没有 AppleScript 字典(Info.plist 里没有
-    // NSAppleScriptEnabled、Resources 下也没有 .sdef),所以扩展控件
-    // (喜欢/音量/播放模式)一律没有。顺带白捡一项:酷狗本来就是这个项目的歌词源之一,
-    // 接入播放器等于把「同源加权」也接上了(见 collector 的 playerNativeLyricSource)。
-    case kugou = "kugou_music"
-    case spotify = "spotify"
-    case auto = "auto"
+//
+// ⚠️ 枚举本体(case、bundleIdentifier、nativeLyricSource、positionTierID、
+// builtin(forBundleID:))现在由 scripts/gen-players.py 从 shared/players.json 生成,
+// 在同目录的 PlaybackPlayer+Generated.swift —— 接一个新播放器改那份 JSON,不改这里。
+// 上面这段设计背景留在手写文件里:它讲的是"为什么这么设计",不随播放器清单变动。
 
-    public var id: Self { self }
-
-    // 各自对应的 App bundle id——AppDelegate.swift("App 联动"打开对应播放器)、
-    // MediaControlClient.swift(核对 media-control 报的 bundleIdentifier 是不是它)
-    // 两处共用同一份映射,不重复各写一份魔法字符串。.auto 没有唯一固定的目标,返回空
-    // 字符串——AppDelegate.swift 用它去查 NSWorkspace.urlForApplication(withBundleIdentifier:),
-    // 空字符串查不到任何 App,自然、安全地no-op掉"打开 Lyrimuse 时唤起播放器"这个方向,
-    // 不需要在调用点额外加判断。
-    public var bundleIdentifier: String {
-        switch self {
-        case .appleMusic: return "com.apple.Music"
-        case .qqMusic: return "com.tencent.QQMusicMac"
-        case .netease: return "com.netease.163music"
-        case .kugou: return "com.kugou.mac.Music"
-        case .spotify: return "com.spotify.client"
-        case .auto: return ""
-        }
-    }
-}
 
 extension Set where Element == PlaybackPlayer {
     /// 排除掉"自动识别"之后,集合里唯一剩下的那个具体播放器——没有具体播放器(纯 auto)

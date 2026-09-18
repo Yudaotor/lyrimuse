@@ -247,11 +247,7 @@ end tell`
 // lyrimuse 侧 MediaControlClient.swift 同名常量/结构体的注释——同一套设计,两边
 // 分别用 Swift/Go 实现一遍。
 const (
-	appleMusicBundleID   = "com.apple.Music"
-	qqMusicBundleID      = "com.tencent.QQMusicMac"
-	neteaseMusicBundleID = "com.netease.163music"
-	spotifyBundleID      = "com.spotify.client"
-	kugouMusicBundleID   = "com.kugou.mac.Music"
+// bundle id 常量在 players_generated.go(生成自 shared/players.json)。
 )
 
 // playerBundleID 把一个具体播放器常量(playerQQMusic 等,不接受 playerAuto——它没有
@@ -260,18 +256,12 @@ const (
 // (读包级 features.Player)改成纯函数——多选之后"当前选定播放器"不再是唯一一个值,
 // 调用方需要对 features.Players 里的每一个成员分别求 bundle id,不能再读一个包级单值。
 func playerBundleID(player string) string {
-	switch player {
-	case playerQQMusic:
-		return qqMusicBundleID
-	case playerNetease:
-		return neteaseMusicBundleID
-	case playerSpotify:
-		return spotifyBundleID
-	case playerKugou:
-		return kugouMusicBundleID
-	default:
-		return appleMusicBundleID
+	// 表在 players_generated.go(生成自 shared/players.json)。查不到一律退回 Apple Music:
+	// 调用方在"选了 auto / 认不出来"时要的就是这个既有兜底,不是空字符串。
+	if id, ok := playerBundleIDs[player]; ok {
+		return id
 	}
+	return appleMusicBundleID
 }
 
 // isAdBreak 判断这条播放是不是 Spotify 的插播广告。
@@ -321,12 +311,7 @@ func isAdBreak(bundleID, artist, title, album string) bool {
 // 用它替代 expectedPlayerBundleID() 那种"只认一个固定 bundle id"的判断,因为自动识别
 // 模式下 p.cur.Bundle 可能是这五个已知播放器里的任意一个。
 func isKnownPlayerBundleID(bundleID string) bool {
-	switch bundleID {
-	case "com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID:
-		return true
-	default:
-		return false
-	}
+	return builtinPlayerBundleIDs[bundleID]
 }
 
 // trustedPlaybackNotASong:一条来自**用户信任的未知播放器**的播放,歌手名或专辑名是空的
@@ -433,34 +418,27 @@ const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 // 同一份映射抄了两遍,不是两种不同的语义。bundleID 的来源是**五个内置播放器之一、或
 // 用户显式信任的未知播放器**(不是只有内置那几个,default 分支不是死代码)。
 func mediaPlayerLabel(bundleID string) string {
-	switch bundleID {
-	case qqMusicBundleID:
-		return "QQ Music (macOS)"
-	case neteaseMusicBundleID:
-		return "NetEase Cloud Music (macOS)"
-	case spotifyBundleID:
-		return "Spotify (macOS)"
-	case kugouMusicBundleID:
-		return "KuGou Music (macOS)"
-	default:
-		// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
-		// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
-		// ListenBrainz 上的来源统计彻底失真。
-		// Safari 的播放报的是媒体代理进程(com.apple.WebKit.GPU),名字要按宿主查,
-		// 否则 Safari 播的歌全部落到下面的兜底、被谎报成"Apple Music (macOS)"
-		// (修,同日三处同型裸查之一,见 getAutoDetectedState 那处注释)。
-		lookupID := bundleID
-		if owner, ok := mediaProxyOwners[bundleID]; ok {
-			lookupID = owner
-		}
-		if name, trusted := features.TrustedPlayers[lookupID]; trusted {
-			if name != "" {
-				return name + " (macOS)"
-			}
-			return lookupID + " (macOS)"
-		}
-		return "Apple Music (macOS)"
+	// 内置播放器的标签表在 players_generated.go(生成自 shared/players.json)。
+	if label, ok := playerScrobbleLabels[bundleID]; ok {
+		return label
 	}
+	// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
+	// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
+	// ListenBrainz 上的来源统计彻底失真。
+	// Safari 的播放报的是媒体代理进程(com.apple.WebKit.GPU),名字要按宿主查,
+	// 否则 Safari 播的歌全部落到下面的兜底、被谎报成"Apple Music (macOS)"
+	// (修,同日三处同型裸查之一,见 getAutoDetectedState 那处注释)。
+	lookupID := bundleID
+	if owner, ok := mediaProxyOwners[bundleID]; ok {
+		lookupID = owner
+	}
+	if name, trusted := features.TrustedPlayers[lookupID]; trusted {
+		if name != "" {
+			return name + " (macOS)"
+		}
+		return lookupID + " (macOS)"
+	}
+	return defaultScrobbleLabel
 }
 
 // cleanMediaTag 洗掉播放器报上来的标签里的不可见空白。
