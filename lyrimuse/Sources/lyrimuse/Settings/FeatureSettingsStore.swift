@@ -116,19 +116,24 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // features.go 的 scrobbleArtistAll/First/Smart 常量逐字相同——两侧通过同一份 features.json
 // 交换,collector 只认这三个串,拼错就静默退回 all。
 //
-// - all:原样发整串(默认)。
-// - first:纯字符串取第一位(collector firstCreditedArtist),不联网。
 // - smart:按 Last.fm 编目判定(collector lastfmcollapse.go):合唱串已被收录就原样发;没收录、
 //   而第一位歌手名下这首歌已被收录才只发第一位;两边都查不到或查询失败维持原样。每首歌只判
-//   一次、结论永久沿用。
+//   一次、结论永久沿用。全新装机的默认档。
+// - all:原样发整串;老装机(features.json 已存在)的默认档,两条默认值的分野见
+//   `FeatureSettingsStore` 里 `isFreshInstall` 那段。
+// - first:纯字符串取第一位(collector firstCreditedArtist),不联网。
+//
+// ⚠️ **case 的声明顺序就是分段控件上从左到右的顺序** —— 唯一的消费点是
+// `AccountLinkingTab.lastfmScrobbleSettingsCard` 里那个 `ForEach(allCases)`,所以「智能」写在最前。
+// rawValue 才是跟 collector 的契约,与顺序无关:重排不动已存的值,也不动两侧的默认档。
 public enum LastfmScrobbleArtistMode: String, CaseIterable, Identifiable, Codable {
-    case all, first, smart
+    case smart, all, first
     public var id: Self { self }
     public var displayName: String {
         switch self {
+        case .smart: return L10n.t("智能")
         case .all: return L10n.t("全部")
         case .first: return L10n.t("只发第一位")
-        case .smart: return L10n.t("智能")
         }
     }
 }

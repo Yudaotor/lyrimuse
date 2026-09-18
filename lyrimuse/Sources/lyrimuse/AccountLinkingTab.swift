@@ -1022,10 +1022,10 @@ struct AccountLinkingTab: View {
                     // all、折叠不可逆且会丢人、Navidrome 同名开关默认也是关),以及
                     // docs/features/12 §4 和公开文档 docs/scrobbling.md。
                     //
-                    // 加第三档「智能」:同样只写效果 —— 它按 Last.fm 上有没有这个合唱条目
+                    // 「智能」那一档同样只写效果 —— 它按 Last.fm 上有没有这个合唱条目
                     // 决定发哪个名字,机制(编目判定、每首歌只判一次、失败维持原样)在 collector
                     // lastfmcollapse.go 头注和 docs/features/12 §4,不在这行字里展开。
-                    help: L10n.t("合唱时上送给 Last.fm 的歌手名。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。")
+                    help: L10n.t("合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。")
                 ) {
                     Picker("", selection: Binding(
                         get: { features.lastfmScrobbleArtistMode },

@@ -99,13 +99,16 @@ Settings → Accounts → Last.fm → *Scrobble* → **Artists on collaborations
 
 | Mode | Value | Effect on `Khalil Fong & Fiona Sit` |
 |---|---|---|
-| **All** (default) | `all` | Submitted as-is |
+| **Smart** (default on fresh installs) | `smart` | Looks the track up on Last.fm once and decides per track (below) |
+| **All** (default on existing installs) | `all` | Submitted as-is |
 | First only | `first` | Submitted as `Khalil Fong` — pure string handling, no network call |
-| Smart | `smart` | Looks the track up on Last.fm once and decides per track (below) |
 
-*All* is the default because collapsing is irreversible — it removes Fiona Sit from your history,
-while leaving the credit intact costs at most one lightly-listened collaboration entry. Navidrome's
-option of the same name (`Lastfm.ScrobbleFirstArtistOnly`) also defaults to off.
+*All* stays the default wherever a `lyrimuse-features.json` already exists, because collapsing is
+irreversible — it removes Fiona Sit from your history, while leaving the credit intact costs at most
+one lightly-listened collaboration entry. Navidrome's option of the same name
+(`Lastfm.ScrobbleFirstArtistOnly`) also defaults to off. Fresh installs start on *Smart* instead: it
+only drops the second artist when Last.fm's own catalogue has no entry for the collaboration and
+does have the track under the first artist.
 
 Splitting (used by *First only* and *Smart*) is conservative: `/` is handled separately from `,`
 and `&`, so `K/DA` and `AC/DC` are not split into `K` and `AC`.

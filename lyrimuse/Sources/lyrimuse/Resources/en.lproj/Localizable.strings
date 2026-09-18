@@ -397,7 +397,7 @@
 "右" = "Right";
 "右对齐" = "Right-Aligned";
 "右耳" = "Right Ear";
-"合唱时上送给 Last.fm 的歌手名。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。" = "Which artist name is sent to Last.fm for a duet.\nAll: the full credit as-is.\nFirst only: the other artist won't appear in your history.\nSmart: full credit if Last.fm already has the duet entry; first artist only if just they have the track; full credit if neither. Decided once per track.";
+"合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。" = "Which artist name is sent to Last.fm for a duet.\nSmart: full credit if Last.fm already has the duet entry; first artist only if just they have the track; full credit if neither. Decided once per track.\nAll: the full credit as-is.\nFirst only: the other artist won't appear in your history.";
 "合唱歌曲的歌手" = "Artist for Collaborations";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
