@@ -243,6 +243,10 @@ func qqLocalMatch(ctx context.Context, artist, title, album string, durationSecs
 	if !ok {
 		return qqMusicMatch{}, false
 	}
+	// 每首歌最多一行:上游 qqMusicMatchCached 按 artist|title|album|duration 缓存,不会重复问。
+	// 这行是"这首歌的 mid 来自客户端曲库、没走 smartbox 搜索"的唯一凭据 —— 跟 kugou local
+	// 那行同一用途,决策面板只记得到源名、记不到 mid 是怎么来的。
+	log.Printf("qq local: hit %q - %q (album %q) → %s", artist, title, e.album, e.mid)
 	// 复用 qqMatchFromCand:url 得是 qqSongURL 那个形状,下游 qqMidFromURL 才解得回 mid。
 	return qqMatchFromCand(qqCand{
 		mid: e.mid, title: e.title, artist: e.artist,
