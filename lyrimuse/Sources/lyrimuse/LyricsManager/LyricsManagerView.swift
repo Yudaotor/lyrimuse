@@ -544,7 +544,15 @@ struct LyricsManagerView: View {
     @State private var editedLyricsBody = ""
     @State private var lyricsBodyEdit = LyricsBodyEdit(lyrics: "")
     @State private var editedTr = ""
+    // 「译文」「罗马音」编辑框同样只显示正文(元信息标签行 / 署名行摘掉),跟「歌词(LRC)」
+    // 那对 editedLyrics/editedLyricsBody 是同一套 LyricsBodyEdit 互拼,理由见其头注 ——
+    // 之前只给主歌词接了这层过滤,译文/罗马音编辑框还在摊开原始文本,`[by:xxx]` 这类
+    // 只有标签没时间戳的行(播放时 LRCParser.parse 本就整行跳过)会在编辑框里露出来。
+    @State private var editedTrBody = ""
+    @State private var trBodyEdit = LyricsBodyEdit(lyrics: "")
     @State private var editedRoma = ""
+    @State private var editedRomaBody = ""
+    @State private var romaBodyEdit = LyricsBodyEdit(lyrics: "")
     // 单曲歌词时间轴偏移——输入框显示/编辑的秒数字符串。跟下面两个"persisted"字段
     // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
     // 用 editedLyrics(用户可能正在编辑框里改还没点"保存修改",这时候的文本还没生效到
@@ -2211,8 +2219,26 @@ struct LyricsManagerView: View {
                         let full = lyricsBodyEdit.reassembled(body: newBody)
                         if full != editedLyrics { editedLyrics = full }
                     }
-                editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTr, minHeight: 70, monospaced: false)
-                editorSection(title: L10n.t("罗马音"), icon: "textformat.abc", text: $editedRoma, minHeight: 70, monospaced: false, latinIcon: true)
+                editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTrBody, minHeight: 70, monospaced: false)
+                    .onChange(of: editedTr, initial: true) { _, raw in
+                        if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
+                        trBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                        editedTrBody = trBodyEdit.body
+                    }
+                    .onChange(of: editedTrBody) { _, newBody in
+                        let full = trBodyEdit.reassembled(body: newBody)
+                        if full != editedTr { editedTr = full }
+                    }
+                editorSection(title: L10n.t("罗马音"), icon: "textformat.abc", text: $editedRomaBody, minHeight: 70, monospaced: false, latinIcon: true)
+                    .onChange(of: editedRoma, initial: true) { _, raw in
+                        if raw == romaBodyEdit.reassembled(body: editedRomaBody) { return }
+                        romaBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                        editedRomaBody = romaBodyEdit.body
+                    }
+                    .onChange(of: editedRomaBody) { _, newBody in
+                        let full = romaBodyEdit.reassembled(body: newBody)
+                        if full != editedRoma { editedRoma = full }
+                    }
 
                 if let error = store.lastError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
