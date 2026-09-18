@@ -162,6 +162,14 @@ func kugouLocalLyric(artist, title, album string) (kugouResult, bool) {
 	kugouLocalMu.Lock()
 	refreshKugouLocalIndexLocked()
 	entries := append([]kugouLocalEntry(nil), kugouLocalIndex[key]...)
+	if len(entries) == 0 {
+		// 精确键对不上就退到宽松匹配 —— 缺了这一步,本地明明有这首歌也命中不了:酷狗
+		// 的 [ti:] 常常**带着一长串副标题**(「我知道(电视剧《比赛开始》片尾曲 / LG冰淇淋
+		// 手机代言曲)」「大梦(《归兰香故》电视剧主题曲)」),而播放器报的是干净歌名,
+		// normLoose 之后两串仍然不相等。实测:干净歌名一首都命中不了,拿 KRC 里那串完整
+		// 标题才命中。跟网易云 pick() 那次"打不平手就放弃、漏判候选"是同一个形态。
+		entries = looseKugouLocalMatchesLocked(artist, title)
+	}
 	kugouLocalMu.Unlock()
 	if len(entries) == 0 {
 		return kugouResult{}, false
@@ -187,6 +195,79 @@ func kugouLocalLyric(artist, title, album string) (kugouResult, bool) {
 		// durationSecs 留 0:KRC 的 [total:] 实测恒为 0,没有可信时长。打分那边把 0 当
 		// "该源没给"处理(见 sourceReportedDurationSecs),不会因此扣分。
 	}, true
+}
+
+// kugouLocalTitleMatches:宽松标题判据 —— **只认"多出来的是副标题"这一种差异**,不是裸的
+// 互相包含。
+//
+// ⚠️ 用 looseContains 会误配,实测撞上:拿「周深 - 大梦」去查,命中的是缓存里的
+// 「大梦归 (《兰香如故》电视剧主题曲)」—— 那是另一首歌,只是名字前两个字一样。判据因此改成
+// "长的那个以短的那个开头,**而且紧接着必须是分隔符**":「我知道(电视剧…)」多出来的是
+// `(`,是副标题;「大梦归」多出来的是`归`,是另一个词。
+//
+// 这同时顺手挡住了 Live / Remix 那类:「Song Name Live」多出来的是字母,不算副标题 ——
+// 那本来就是另一个录音,不该拿它的歌词顶上。
+//
+// ⚠️ 这一层的误配比别处更难被下游发现:本地候选的 sourceReportedDurationSecs 是 0
+// (KRC 的 [total:] 实测恒为 0),打分里最硬的那个"源报时长对不对得上"信号缺席,所以判据
+// 必须在这里就收紧,不能指望打分兜底。
+func kugouLocalTitleMatches(cached, want string) bool {
+	fold := func(s string) string { return strings.ToLower(toSimplified(strings.TrimSpace(s))) }
+	a, b := fold(cached), fold(want)
+	if a == "" || b == "" {
+		return false
+	}
+	if normLoose(a) == normLoose(b) {
+		return true
+	}
+	long, short := a, b
+	if len(long) < len(short) {
+		long, short = short, long
+	}
+	if !strings.HasPrefix(long, short) {
+		return false
+	}
+	rest := strings.TrimSpace(long[len(short):])
+	if rest == "" {
+		return true
+	}
+	return strings.ContainsRune("([{（【《<-–—/|·:：~", []rune(rest)[0])
+}
+
+// looseKugouLocalMatchesLocked:精确键落空时的兜底 —— **歌手仍然要精确相等**(normLoose 后),
+// 只放宽歌名:两边互相包含就算数(looseContains,跟这个仓库跨源比标题用的是同一把尺子)。
+//
+// ⚠️ 只放宽歌名、不放宽歌手,是刻意的:歌名带副标题是酷狗的常态,而歌手名放宽会让
+// 「周杰伦」匹配到「周杰伦、杨瑞代」这类合唱条目,那是**另一个录音**。
+//
+// 多个候选时挑 normLoose 长度跟查询最接近的那个 —— 查「我知道」时,「我知道(电视剧…)」
+// 比「我知道你很难过」更可能是同一首。挑完照样进 scoreLyricCandidate,不在这里定生死。
+//
+// 调用方必须持有 kugouLocalMu。
+func looseKugouLocalMatchesLocked(artist, title string) []kugouLocalEntry {
+	na, nt := normLoose(artist), normLoose(title)
+	if na == "" || nt == "" {
+		return nil
+	}
+	best := []kugouLocalEntry(nil)
+	bestGap := -1
+	for _, entries := range kugouLocalIndex {
+		for _, e := range entries {
+			if normLoose(e.artist) != na || !kugouLocalTitleMatches(e.title, title) {
+				continue
+			}
+			gap := len(normLoose(e.title)) - len(nt)
+			if gap < 0 {
+				gap = -gap
+			}
+			if bestGap < 0 || gap < bestGap {
+				best, bestGap = []kugouLocalEntry{e}, gap
+			} else if gap == bestGap {
+				best = append(best, e)
+			}
+		}
+	}
+	return best
 }
 
 // pickKugouLocalEntry:同一个 (歌手,歌名) 在缓存里有多份时(同名不同专辑/不同版本),

@@ -204,3 +204,72 @@ func TestKugouSourceResultCarriesEveryField(t *testing.T) {
 		}
 	}
 }
+
+// 酷狗的 [ti:] 常带一长串副标题,而播放器报的是干净歌名 —— 没有宽松兜底的话,本地明明
+// 有这首歌也命中不了(实测三首真实曲目的干净歌名全 miss,拿 KRC 那串完整标题才命中)。
+func TestKugouLocalLyricLooseTitle(t *testing.T) {
+	dir := t.TempDir()
+	long := strings.NewReplacer(
+		"[ti:搁浅]", "[ti:我知道(电视剧《比赛开始》片尾曲 / LG冰淇淋手机代言曲)]",
+		"[ar:周杰伦]", "[ar:BY2]",
+		"[al:七里香]", "[al:Twins]",
+	).Replace(testKRCGeLian)
+	writeTestKRC(t, dir, "by2.krc", long)
+	resetKugouLocalIndex(t, dir)
+
+	r, ok := kugouLocalLyric("BY2", "我知道", "")
+	if !ok {
+		t.Fatal("干净歌名应该能命中带副标题的那份")
+	}
+	if !strings.HasPrefix(r.title, "我知道") {
+		t.Errorf("返回的应该是缓存里那首,得到 %q", r.title)
+	}
+	// 反方向:播放器报的带后缀、缓存里是干净的,同样要命中。
+	dir2 := t.TempDir()
+	writeTestKRC(t, dir2, "clean.krc", strings.NewReplacer("[ti:搁浅]", "[ti:大梦]", "[ar:周杰伦]", "[ar:周深]").Replace(testKRCGeLian))
+	resetKugouLocalIndex(t, dir2)
+	if _, ok := kugouLocalLyric("周深", "大梦 (《归兰香故》电视剧主题曲)", ""); !ok {
+		t.Error("播放器报的标题带后缀时也该命中干净的那份")
+	}
+
+	// ⚠️ 歌手**不放宽**:合唱版是另一个录音,不能拿单人版的歌词顶上。
+	dir3 := t.TempDir()
+	writeTestKRC(t, dir3, "duet.krc", strings.NewReplacer("[ar:周杰伦]", "[ar:周杰伦、杨瑞代]").Replace(testKRCGeLian))
+	resetKugouLocalIndex(t, dir3)
+	if _, ok := kugouLocalLyric("周杰伦", "搁浅", ""); ok {
+		t.Error("歌手对不上(合唱 vs 单人)不该命中")
+	}
+
+	// 不相干的歌名不该被宽松匹配拽进来。
+	resetKugouLocalIndex(t, dir)
+	if _, ok := kugouLocalLyric("BY2", "完全不相干", ""); ok {
+		t.Error("歌名毫无包含关系时不该命中")
+	}
+}
+
+// 宽松标题判据的边界。真实误配案例在表里标着 —— 它是这条判据存在的理由。
+func TestKugouLocalTitleMatches(t *testing.T) {
+	for _, c := range []struct {
+		cached, want string
+		ok           bool
+		why          string
+	}{
+		{"搁浅", "搁浅", true, "完全相同"},
+		{"擱淺", "搁浅", true, "繁简差异折掉"},
+		{"Always Online", "always online", true, "大小写折掉"},
+		{"我知道(电视剧《比赛开始》片尾曲 / LG冰淇淋手机代言曲)", "我知道", true, "括号副标题"},
+		{"她 (《早春晴朗》电视剧栾念人物曲 and 片头曲)", "她", true, "空格+括号副标题"},
+		{"大梦", "大梦 (《兰香如故》电视剧主题曲)", true, "反方向:播放器报的带后缀"},
+		{"晴天 - Live", "晴天", true, "破折号分隔的版本标记仍算副标题(交给打分去比)"},
+		{"大梦归 (《兰香如故》电视剧主题曲)", "大梦", false, "⚠️ 真实误配:多出来的是「归」,那是另一首歌"},
+		{"我知道你很难过", "我知道", false, "多出来的是词,不是副标题"},
+		{"Song Name Live", "Song Name", false, "Live 是另一个录音,多出来的是字母"},
+		{"完全不相干", "搁浅", false, "毫无关系"},
+		{"", "搁浅", false, "空标题"},
+		{"搁浅", "", false, "空查询"},
+	} {
+		if got := kugouLocalTitleMatches(c.cached, c.want); got != c.ok {
+			t.Errorf("kugouLocalTitleMatches(%q, %q) = %v,期望 %v —— %s", c.cached, c.want, got, c.ok, c.why)
+		}
+	}
+}
