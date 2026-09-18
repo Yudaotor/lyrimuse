@@ -183,6 +183,8 @@ public enum SettingsSearchCatalog {
         player("播放器", kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
         player("网页播放器", kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc"]),
         player("已信任的播放器", kw: ["信任列表", "其它播放器"]),
+        player("添加播放器…", sub: "从「应用程序」里挑一个——不用等它正在播放",
+               kw: ["信任列表", "手动添加", "第三方播放器", "应用程序"], group: "已信任的播放器"),
         player("新播放器提醒", sub: "系统通知已关闭", kw: ["通知", "未知播放器"]),
         player("Apple Music 自动化", kw: ["权限", "AppleScript", "自动化"]),
         player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),

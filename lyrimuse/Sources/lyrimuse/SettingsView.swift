@@ -3169,45 +3169,119 @@ private struct PlayerSettingsTab: View {
     }
 
     @ViewBuilder
+    /// ⚠️ **这张卡总是显示,哪怕一条信任项都没有** —— 它是「添加播放器…」唯一的入口。
+    /// 原来的写法是"有信任项才显示",那在主动添加这个功能上就是一个**鸡生蛋**:没信任过
+    /// 任何 App → 卡片不显示 → 没有地方点「添加」→ 只能回去被动等「自动识别」撞见。
+    /// (同一个坑「网页播放器」卡踩过一次,见 `addablePlatformBrowsers` 头注。)
     private var trustedPlayersCard: some View {
-        if !stores.trustedPlayers.isEmpty {
-            SettingsCard {
-                // 补一个标题:playerCard 有自己的 SettingsCardHeader,紧跟着一张没有标题的卡在
-                // 视觉上不成对,补上让两张卡看起来是同一套设计语言里的姐妹卡。
-                SettingsCardHeader(title: L10n.t("已信任的播放器"))
-                // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
-                ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
-                    if bundleID != stores.trustedPlayers.keys.sorted().first { CardDivider() }
-                    // 图标用这个 App 自己的真图标(跟 playerCard 那套图标网格同一份取图标逻辑,
-                    // AppIconResolver):一张卡里六个内置播放器都亮出真图标,紧接着这张卡却清一色一个
-                    // 通用印章图标会显得不搭。查不到才退回印章图标,不留空白。
-                    SettingsRow(
-                        icon: "checkmark.seal",
-                        iconImage: AppIconResolver.icon(forBundleID: bundleID),
-                        title: displayNameForTrusted(bundleID),
-                        subtitle: bundleID
-                    ) {
-                        Button(L10n.t("移除")) {
-                            Task {
-                                await FeatureSettingsStore.shared.untrust(bundleID: bundleID)
-                                // ⚠️ **取消信任必须连带解除它的所有平台配对**。
-                                //
-                                // 「信任」和「配对」是两个存储(features.json 的 trusted_players /
-                                // AppSettings 的 browserPlatformPairs)。只动前者会漂出一个**看着在工作、
-                                // 其实全程被丢弃**的状态:浏览器还挂在「网页播放器」卡里、探针照常跑,
-                                // 但它的播放因为不在信任列表里被整条丢掉,"发现未知播放器"那张卡还会
-                                // 重新冒出来。
-                                //
-                                // 方向是**单向**的:取消信任 → 一并解除配对(不信任它,配对就没有
-                                // 任何意义);而「移除配对」**不**取消信任 —— 信任的语义比配对宽
-                                // (它还管"这个 App 的播放算不算数"),而且一个浏览器可能配了多个
-                                // 平台,退出其中一个不代表不要它了。
-                                unpairBrowserEverywhere(bundleID)
-                            }
+        SettingsCard {
+            // 补一个标题:playerCard 有自己的 SettingsCardHeader,紧跟着一张没有标题的卡在
+            // 视觉上不成对,补上让两张卡看起来是同一套设计语言里的姐妹卡。
+            SettingsCardHeader(title: L10n.t("已信任的播放器"))
+            // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
+            ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                if bundleID != stores.trustedPlayers.keys.sorted().first { CardDivider() }
+                // 图标用这个 App 自己的真图标(跟 playerCard 那套图标网格同一份取图标逻辑,
+                // AppIconResolver):一张卡里六个内置播放器都亮出真图标,紧接着这张卡却清一色一个
+                // 通用印章图标会显得不搭。查不到才退回印章图标,不留空白。
+                SettingsRow(
+                    icon: "checkmark.seal",
+                    iconImage: AppIconResolver.icon(forBundleID: bundleID),
+                    title: displayNameForTrusted(bundleID),
+                    subtitle: bundleID
+                ) {
+                    Button(L10n.t("移除")) {
+                        Task {
+                            await FeatureSettingsStore.shared.untrust(bundleID: bundleID)
+                            // ⚠️ **取消信任必须连带解除它的所有平台配对**。
+                            //
+                            // 「信任」和「配对」是两个存储(features.json 的 trusted_players /
+                            // AppSettings 的 browserPlatformPairs)。只动前者会漂出一个**看着在工作、
+                            // 其实全程被丢弃**的状态:浏览器还挂在「网页播放器」卡里、探针照常跑,
+                            // 但它的播放因为不在信任列表里被整条丢掉,"发现未知播放器"那张卡还会
+                            // 重新冒出来。
+                            //
+                            // 方向是**单向**的:取消信任 → 一并解除配对(不信任它,配对就没有
+                            // 任何意义);而「移除配对」**不**取消信任 —— 信任的语义比配对宽
+                            // (它还管"这个 App 的播放算不算数"),而且一个浏览器可能配了多个
+                            // 平台,退出其中一个不代表不要它了。
+                            unpairBrowserEverywhere(bundleID)
                         }
                     }
                 }
             }
+            if !stores.trustedPlayers.isEmpty { CardDivider() }
+            SettingsRow(
+                icon: "plus.circle",
+                title: L10n.t("添加播放器…"),
+                subtitle: L10n.t("从「应用程序」里挑一个——不用等它正在播放")
+            ) {
+                Button(L10n.t("选择…")) { chooseTrustedPlayerFromApplications() }
+            }
+            // 空列表时这张卡只剩标题和一个按钮,得有一句话交代"加进来会怎样",
+            // 否则它看起来像一个用途不明的入口。有信任项时那几行本身就说明了一切,不再重复。
+            if stores.trustedPlayers.isEmpty {
+                SettingsNote {
+                    Text(L10n.t("加进来的应用跟内置播放器同权：它在播什么就显示什么，也计入收听记录。加错了随时移除。"))
+                }
+            }
+        }
+        .alert(
+            L10n.t("没能添加"),
+            isPresented: Binding(
+                get: { trustedPlayerPickerError != nil },
+                set: { if !$0 { trustedPlayerPickerError = nil } })
+        ) {
+            Button(L10n.t("知道了"), role: .cancel) { trustedPlayerPickerError = nil }
+        } message: {
+            Text(trustedPlayerPickerError ?? "")
+        }
+    }
+
+    /// 「添加播放器…」那条路要说的话。nil = 没有待展示的失败。
+    @State private var trustedPlayerPickerError: String?
+
+    /// 从「应用程序」里挑一个 App,直接加进信任列表。
+    ///
+    /// 为什么要有这个主动入口:在此之前唯一的入口是**被动**的 —— 只有「自动识别」恰好撞见
+    /// 某个未知 App **正在报 Now Playing**(还带 15 秒陈旧过滤)时,设置页才冒出一张发现卡。
+    /// 错过那一刻就得回那个 App 里再放一首歌、再切回设置页等它出现;而用户决定"我要用它听歌"
+    /// 的那一刻,往往恰恰是还没开始播的时候。
+    ///
+    /// 选完之后跟被动信任**完全同权**(显示 + 打卡),走的也是同一个 `trust` —— 这里只是多
+    /// 一条到达它的路,没有第二套语义。
+    private func chooseTrustedPlayerFromApplications() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = L10n.t("选择")
+        panel.message = L10n.t("挑一个你想让 Lyrimuse 当作播放器的应用")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
+            trustedPlayerPickerError = L10n.t("读不出这个应用的标识，换一个试试。")
+            return
+        }
+        // 用 Finder 显示的那个名字(本地化过、跟用户在「应用程序」里看到的一致),
+        // 而不是 bundle id 或者文件名 —— 跟 BrowserPairing.chooseFromApplications 同一个理由。
+        let name = FileManager.default.displayName(atPath: url.path)
+        switch TrustedPlayers.manualTrustOutcome(
+            bundleID: bundleID,
+            trusted: stores.trustedPlayers,
+            selfBundleID: Bundle.main.bundleIdentifier
+        ) {
+        case .itself:
+            trustedPlayerPickerError = L10n.t("这就是 Lyrimuse 自己。")
+        case .builtin(let player):
+            trustedPlayerPickerError = String(
+                format: L10n.t("「%@」已经是内置播放器了，在上面那张「播放器」卡里勾选它就行。"),
+                player.displayName)
+        case .alreadyTrusted:
+            trustedPlayerPickerError = String(format: L10n.t("「%@」已经在这个列表里了。"), name)
+        case .addable:
+            Task { await FeatureSettingsStore.shared.trust(bundleID: bundleID) }
         }
     }
 

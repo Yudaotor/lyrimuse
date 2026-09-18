@@ -1054,5 +1054,35 @@ func runPlayerIdentityTests() {
                     "联动迁移: 布尔年代「跟随播放器启动」true + 自动识别 → 全部五个(collector 当年盯的范围)")
         expectEqual(PL.migratedLaunchSet(legacyEnabled: false, selectedPlayers: [.auto], requiresSole: false), [],
                     "联动迁移: 布尔 false → 空")
+
+        // 「添加播放器…」——用户自己从「应用程序」里挑一个加进信任列表。每一种结果都必须
+        // 能说出话来:`FeatureSettingsStore.trust` 对"已在列表"和"是内置播放器"都是静默
+        // return,主动挑选时静默 = 一个点了没反应的按钮。
+        let trusted = ["company.thebrowser.Browser": "Arc", "com.example.blank": ""]
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.example.newplayer",
+                                                      trusted: trusted, selfBundleID: "me.yudaotor.lyrimuse"),
+                    .addable, "主动信任: 没见过的 App → 可以加")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "company.thebrowser.Browser",
+                                                      trusted: trusted, selfBundleID: "me.yudaotor.lyrimuse"),
+                    .alreadyTrusted(name: "Arc"), "主动信任: 已在列表 → 带出当初存的显示名")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.example.blank",
+                                                      trusted: trusted, selfBundleID: nil),
+                    .alreadyTrusted(name: ""), "主动信任: 已在列表但当初没反查到名字 → 仍是「已在列表」,不是可以加")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.tencent.QQMusicMac",
+                                                      trusted: trusted, selfBundleID: "me.yudaotor.lyrimuse"),
+                    .builtin(.qqMusic), "主动信任: 内置播放器 → 指回「播放器」卡,别往信任列表里塞")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.tencent.QQMusicMac",
+                                                      trusted: ["com.tencent.QQMusicMac": "QQ音乐"], selfBundleID: nil),
+                    .builtin(.qqMusic),
+                    "主动信任: 内置的判定排在「已在列表」前面 —— 手改过共享文件时该说的是「它是内置的」")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "me.yudaotor.lyrimuse",
+                                                      trusted: trusted, selfBundleID: "me.yudaotor.lyrimuse"),
+                    .itself, "主动信任: 挑中 Lyrimuse 自己 → 说清楚,别真的加进去")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "  com.example.newplayer  ",
+                                                      trusted: trusted, selfBundleID: nil),
+                    .addable, "主动信任: bundle id 前后空白要 trim 掉再判")
+        expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.apple.Music",
+                                                      trusted: [:], selfBundleID: ""),
+                    .builtin(.appleMusic), "主动信任: selfBundleID 空串不当成「挑中了自己」")
     }
 }

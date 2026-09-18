@@ -110,6 +110,8 @@
 "✓ 此刻驱动得动——但这是重启前的暂时状态：上面那个开关已经被关掉，重启后就会失效" = "Works right now — but only until this browser restarts: the switch above has been turned off, so it will stop working after a restart.";
 "「%@」不能用来同步歌词进度。这项功能要靠浏览器执行一小段 JavaScript 来读播放进度，而这个应用没有提供对应的脚本命令。Firefox 至今没有提供，非浏览器的应用也一样。" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox has never added one, and non-browser apps don’t have one either.";
 "「%@」删除后无法恢复" = "%@ can't be recovered once deleted";
+"「%@」已经在这个列表里了。" = "“%@” is already in this list.";
+"「%@」已经是内置播放器了，在上面那张「播放器」卡里勾选它就行。" = "“%@” is already a built-in player — just tick it in the Players card above.";
 "「%@」是胜负手" = "“%@” decided it";
 "「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻" = "\"Play #N\" merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play";
 "「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」" = "“Automatic” picks the display with the notch; “All Displays” shows one on every display; if the chosen display is unplugged it falls back to Automatic";
@@ -203,6 +205,7 @@
 "今年至今" = "This year so far";
 "今年至今 · %1$@ 年同期 %2$@ 首" = "This year so far · %2$@ in the same span of %1$@";
 "从「%@」导出的备份" = "Backup exported from “%@”";
+"从「应用程序」里挑一个——不用等它正在播放" = "Pick one from Applications — no need to wait until it’s playing";
 "从备份恢复" = "Restore";
 "从屏幕取色" = "Pick Color from Screen";
 "从应用程序中选择…" = "Choose from Applications…";
@@ -327,6 +330,7 @@
 "加粗" = "Bold";
 "加载失败" = "Couldn't load";
 "加载更早的" = "Load older";
+"加进来的应用跟内置播放器同权：它在播什么就显示什么，也计入收听记录。加错了随时移除。" = "An app you add here counts the same as a built-in player: whatever it plays is shown, and it goes into your listening history. Remove it any time.";
 "动态封面" = "Animated Artwork";
 "勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open";
@@ -695,6 +699,7 @@
 "按「署名 - 曲名」拆分" = "Split as “artist - title”";
 "按住 ⌘ 拖拽这个图标，可以把它移动到菜单栏里你喜欢的位置。" = "Hold ⌘ and drag this icon to move it anywhere in the menu bar.";
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
+"挑一个你想让 Lyrimuse 当作播放器的应用" = "Pick an app you want Lyrimuse to treat as a player";
 "挑一个用来播放这个网站的浏览器" = "Pick the browser you use for this site";
 "换一个组合——否则 Lyrimuse 在前台时，按下它会同时触发菜单里的那一项。" = "Pick a different combination — otherwise, while Lyrimuse is frontmost, pressing it also triggers that menu item.";
 "换一个组合。系统占用的组合注册不上，录进去也不会生效；要用它得先到「系统设置 → 键盘 → 键盘快捷键」里把系统那一项关掉。" = "Pick a different combination. Combinations reserved by the system cannot be registered, so recording one has no effect; to use it, first turn off the system shortcut in System Settings → Keyboard → Keyboard Shortcuts.";
@@ -1010,6 +1015,7 @@
 "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）" = "No timed version found — automatically adopted a plain-text fallback (viewable in the Lyrics Window)";
 "没能取到那年今日——Last.fm 没有响应" = "Couldn't load this day in past years — Last.fm didn't respond";
 "没能启动（%@）。可以先「暂时跳过」，之后到设置的「通用 → 后台采集服务」里重试，那一页会给出更细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → General → Background service, which reports a more detailed status.";
+"没能添加" = "Couldn’t add it";
 "没能跳过这条广告" = "Couldn't skip this ad";
 "浅色卡片" = "Light Card";
 "测试" = "Test";
@@ -1023,6 +1029,7 @@
 "添加中…" = "Adding…";
 "添加到资料库" = "Add to Library";
 "添加失败" = "Couldn't Add";
+"添加播放器…" = "Add a player…";
 "添加浏览器" = "Add Browser";
 "清空全部时间轴校正" = "Clear All Timing Calibrations";
 "清空全部电台校正" = "Clear All Radio Calibrations";
@@ -1350,6 +1357,7 @@
 "这台 Mac 没有刘海，会显示在屏幕顶部正中" = "No notch on this Mac, so it sits at the top center";
 "这台电脑上没有找到 Lyrimuse 能读取的浏览器（Safari、Chrome、Edge、Arc 这类）。装好之后可以在设置的「网页播放器」里再配对" = "No browser Lyrimuse can read was found on this Mac (Safari, Chrome, Edge, Arc and the like). Once you install one, you can pair it under Web Players in Settings";
 "这台电脑上没有找到默认列出的浏览器（Safari、Chrome、Edge）。别的浏览器可以用下面的「从应用程序中选择…」自己挑一个" = "None of the browsers listed by default (Safari, Chrome, Edge) were found on this Mac. For any other browser, use “Choose from Applications…” below to pick it yourself";
+"这就是 Lyrimuse 自己。" = "That’s Lyrimuse itself.";
 "这是连续混音版，跟原版不是同一次编排" = "This is a continuous mix, not the same take as the original";
 "这是预览：真有新版本时这里显示发版日志" = "Preview: the release notes appear here when an update is available";
 "这条广告可以跳过" = "This ad can be skipped";
@@ -1390,6 +1398,7 @@
 "选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
 "选择" = "Choose";
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
+"选择…" = "Choose…";
 "选择左侧一首歌" = "Select a Song on the Left";
 "选择左侧的设置分类" = "Select a Settings Category on the Left";
 "选择播放器" = "Choose a Player";

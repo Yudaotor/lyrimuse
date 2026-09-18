@@ -154,4 +154,40 @@ public enum TrustedPlayers {
         }
         return blank(artist) || blank(album)
     }
+
+    // MARK: - 主动添加
+
+    /// 用户自己从「应用程序」里挑一个 App 加进信任列表时,这一下的结果。
+    ///
+    /// 为什么需要它:`FeatureSettingsStore.trust` 对"已经在列表里"和"本来就是内置播放器"
+    /// 都是**静默 return**。对被动发现那张卡没问题 —— 它压根不会对这两种 App 显示;但主动
+    /// 挑选是用户自己走进文件选择器挑出来的,静默不动 = 一个"点了没反应"的按钮,正是这个
+    /// 项目反复要避开的那种形态(见 `unknownPlayerCard` 的"点了必定没反应的卡片")。
+    /// 所以判据独立成纯函数,由调用方把每一种结果都说出来。
+    public enum ManualTrustOutcome: Equatable, Sendable {
+        /// 可以加 —— 调用方接着走 `FeatureSettingsStore.trust`。
+        case addable
+        /// 已经在信任列表里。带的是当初存下来的显示名(可能是空串:当时反查不到)。
+        case alreadyTrusted(name: String)
+        /// 它本来就是内置播放器 —— 该去「播放器」卡里勾选,不是加进信任列表。
+        case builtin(PlaybackPlayer)
+        /// 挑中的就是 Lyrimuse 自己。
+        case itself
+    }
+
+    /// 纯函数(信任名单和自己的 bundle id 都由调用方传入,不读这台机器上的真实配置),
+    /// selftest 直接覆盖。
+    ///
+    /// 顺序有讲究:`builtin` 排在 `alreadyTrusted` 前面 —— 内置播放器本来就不该出现在信任
+    /// 列表里(`trust` 挡着、collector 的 `resolveTrustedPlayers` 也会剔掉),真撞上了(手改过
+    /// 共享文件)该说的是"它是内置的",而不是"它已经在列表里了"。
+    public static func manualTrustOutcome(
+        bundleID: String, trusted: [String: String], selfBundleID: String?
+    ) -> ManualTrustOutcome {
+        let id = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let selfBundleID, !selfBundleID.isEmpty, id == selfBundleID { return .itself }
+        if let builtin = PlaybackPlayer.builtin(forBundleID: id) { return .builtin(builtin) }
+        if let name = trusted[id] { return .alreadyTrusted(name: name) }
+        return .addable
+    }
 }
