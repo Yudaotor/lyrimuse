@@ -297,8 +297,9 @@ type enrichEntry struct {
 	// 内容:App 侧「采纳候选」时写下的正文指纹,用来回答"这首歌是用户手动选的、而且当前
 	// 这份内容还就是他选的那一份吗"。语义见 Swift 侧 LyrimuseCore/ManualPickLock.swift。
 	ManualPickSHA string `json:"manual_pick_sha,omitempty"`
-	// Instrumental 标记"联网查过了,至少一个源(lrclib 的 instrumental,或网易云的
-	// pureMusic / 纯音乐占位正文)明确说这首歌是纯音乐"——
+	// Instrumental 标记"查过了,至少一个来源(lrclib 的 instrumental、网易云的
+	// pureMusic / 纯音乐占位正文,或汽水客户端本地队列缓存里的 vocal==2 兜底 ——
+	// 见 instrumentalFromScored)明确说这首歌是纯音乐"——
 	// 跟"Lyrics 为空"要分开看:后者也可能是"所有源都没查到、真的没搜到"这种更含糊的
 	// 情况(用户可能想手动重新搜索候选歌词试试),前者是有明确依据的结论,UI 上应该
 	// 显示成"纯音乐"而不是笼统的"无歌词"。信号来源见 lrclibResult 定义处的注释。
@@ -1493,12 +1494,9 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64, 
 	// 只在**没选出歌词**时看:选出了歌词还标纯音乐是自相矛盾(合并轮的
 	// hasRealFromMarkerSource 已经挡住同源那种,这里再挡跨源那种)。
 	if picked == nil && !e.Instrumental {
-		for _, c := range scored {
-			if c.Instrumental {
-				e.Instrumental = true
-				log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, c.Source)
-				break
-			}
+		if ok, src := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
+			e.Instrumental = true
+			log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, src)
 		}
 	}
 	// 纯文本(无时间戳)兜底自动采纳:自动解析流程试遍所有源、真的找不到任何带时间戳版本
@@ -1537,6 +1535,33 @@ func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, s
 		}
 	}
 	return "", ""
+}
+
+// instrumentalFromScored 回答"这一轮有没有依据说这首歌是纯音乐",给 retryLyricsUpgrade
+// 和 resolveTrackEnrichment 两个写入点共用(同 plainTextFallbackFromScored 那条的模式:
+// 共享挑选逻辑,各自决定何时调用)。调用方已经确认了"没选出歌词"这个前提 —— 选出了
+// 歌词还标纯音乐是自相矛盾。
+//
+// 两级,顺序不能反:
+//  1. scored 里搭车带来的联网信号(lrclib / 网易云 / QQ / Musixmatch),这是主力。
+//  2. 都没有时,才问汽水客户端的本地队列缓存(sodalocal.go)。
+//
+// 第 2 级放在最后是刻意的:它只覆盖汽水 feed 队列缓存里的歌、且没有真实 vocal==2
+// 样本验证过,不该抢在四个联网源前面。反过来,它命中时那四个源已经全都沉默了 ——
+// 此时"标成纯音乐"比继续显示笼统的「无歌词」更接近事实,而且能让
+// needsLyricsFirstFill 别再每隔 24 小时白搜一轮。
+//
+// 第二个返回值是来源标签,只用于日志。
+func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, album string, durationSecs float64) (bool, string) {
+	for _, c := range scored {
+		if c.Instrumental {
+			return true, c.Source
+		}
+	}
+	if sodaLocalInstrumental(artist, title, album, durationSecs) {
+		return true, "soda local"
+	}
+	return false, ""
 }
 
 // lyricsRescoreMaxAttempts / lyricsRescoreDeferInterval 给"按新打分规则重选"设的上限和节流。
@@ -2335,14 +2360,12 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 	} else {
-		// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
-		// 纯音乐"这条标记(见 Instrumental 字段定义处的注释),命中就记下来,UI 侧
-		// 才能把这种情况跟"真的谁都没搜到"区分开显示。
-		for _, c := range scored {
-			if c.Instrumental {
-				e.Instrumental = true
-				break
-			}
+		// 没有任何源给出可用歌词——查一下有没有依据说这是纯音乐(scored 里搭车带着的
+		// 联网标记,或汽水客户端的本地队列缓存;见 instrumentalFromScored 与
+		// Instrumental 字段定义处的注释),命中就记下来,UI 侧才能把这种情况跟
+		// "真的谁都没搜到"区分开显示。
+		if ok, _ := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
+			e.Instrumental = true
 		}
 		// 纯文本(无时间戳)兜底自动采纳——跟 rescoreLyrics 里那段同一个理由/同一条
 		// "只在为空时写、绝不覆盖"规矩(见 PlainLyrics 字段定义处的完整说明和
