@@ -77,7 +77,13 @@ func qqMusicMatchCached(ctx context.Context, artist, title, album string, durati
 	}
 	qqURLMu.Unlock()
 
-	m := resolveQQMusicMatch(ctx, artist, title, album, durationSecs)
+	// 先问 QQ 客户端自己的本地曲库要 songmid(qqlocal.go)——命中就省掉整个 smartbox
+	// 搜索 + 候选打分,而且拿到的是客户端为这首歌记下的那个 mid,不是搜出来最像的那个。
+	// 没命中(没装 QQ / 库里没有 / 时长闸没过)照常走网络那条,行为与接这层之前一致。
+	m, viaLocal := qqLocalMatch(ctx, artist, title, album, durationSecs)
+	if !viaLocal {
+		m = resolveQQMusicMatch(ctx, artist, title, album, durationSecs)
+	}
 	// unreliable(专辑路线网络失败、这是回落结果)不进缓存:见 qqMusicMatch.unreliable 注释。
 	if m.url != "" && !m.unreliable {
 		qqURLMu.Lock()
