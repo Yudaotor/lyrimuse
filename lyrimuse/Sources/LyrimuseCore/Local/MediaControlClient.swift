@@ -1197,8 +1197,13 @@ public enum MediaControlClient {
     //
     // 签名 = **同一首歌、elapsedTime 逐 ms 相等、时间戳变了**:真实的 seek / 暂停 / 恢复必然改
     // elapsed(恢复还会 +0.25 左右),只有"没重算 elapsed 就重发"才会一模一样。两条排除:
-    //  - elapsed == 0 不判:同一首歌被「上一曲」按钮重头播放也是 0 @ 新时间戳,分不开,宁可信
-    //    重发是真的(= 改动前的行为,只在广告头 1 秒和"开播后从没暂停过又被重发"时吃亏);
+    //  - elapsed == 0 的重发,只在原锚点还很新时才判为重发(`zeroAnchorRepublishWindowSecs`):
+    //    同一首歌被「上一曲」按钮重头播放也是 0 @ 新时间戳,签名上跟重发一模一样,只能按**时间**
+    //    分。12 小时真机日志里这两簇隔得极开:开播双发(汽水音乐 21 首里 7 首、网易云 13 首里 1 首)
+    //    全挤在原锚点后 2 秒内(0.5 / 0.6 / 1.1 / 1.15 / 1.5 / 1.68 / 1.76 / 1.9 / 1.99s;连发三次
+    //    时累计 3.4s),而真的"回到 0"(曲末归零、隔了很久重播)最近的一次也在 175 秒之后。
+    //    ⚠️ 两个方向的代价不对称:错当重发,最多多走窗口那么长、下一个真锚点就纠回来;错当真锚点,
+    //    是**整首歌**恒定落后重发间隔 —— 汽水音乐上表现为"歌词慢 0.5~2 秒、一暂停就补上"。
     //  - 按旧锚点外推已经越过曲长不判:旧锚点已死(单曲循环回绕 / 曲末),新锚点是真的。
     // 命中时调用方按**原锚点时刻**自己外推,既不信新时间戳,也不信按新时间戳外推的 elapsedTimeNow。
 
@@ -1216,17 +1221,35 @@ public enum MediaControlClient {
         }
     }
 
+    /// elapsed == 0 的重发,离原锚点多久之内还算"重发"。取值见 isStaleAnchorRepublish 上面那段:
+    /// 观测到的开播双发最远 1.99s、连发累计 3.4s,而最近的一次真"回到 0"在 175s 之后 —— 5 秒落在
+    /// 两簇中间很宽的空档里,不是一个需要精调的数。
+    public static let zeroAnchorRepublishWindowSecs: TimeInterval = 5
+
     /// 这次读到的播放锚点是不是上一个播放锚点的陈旧重发。纯函数,selftest 直接覆盖。
     public nonisolated static func isStaleAnchorRepublish(
         last: PlayingAnchor?, track: String, elapsed: Double?, timestamp: String?, duration: Double?, now: Date
     ) -> Bool {
         guard let last, let elapsed, let timestamp,
-              last.track == track, last.elapsed == elapsed, elapsed > 0, last.timestamp != timestamp
+              last.track == track, last.elapsed == elapsed, last.timestamp != timestamp
         else { return false }
+        if elapsed <= 0,
+           republishGapSeconds(last: last, timestamp: timestamp, now: now) > zeroAnchorRepublishWindowSecs {
+            return false
+        }
         if let duration, duration > 0, last.elapsed + now.timeIntervalSince(last.instant) > duration + 1 {
             return false
         }
         return true
+    }
+
+    /// 这次重发离**原**锚点多久。两个时间戳都解得出就按它们算(整秒,而要分开的两簇差着两个
+    /// 数量级,够用);解不出才退回墙钟 —— 后者把轮询延迟也算进来,只当兜底。
+    private nonisolated static func republishGapSeconds(last: PlayingAnchor, timestamp: String, now: Date) -> TimeInterval {
+        if let newTS = parseTimestamp(timestamp), let oldTS = parseTimestamp(last.timestamp) {
+            return newTS.timeIntervalSince(oldTS)
+        }
+        return now.timeIntervalSince(last.instant)
     }
 
     private static let playingAnchorLock = NSLock()

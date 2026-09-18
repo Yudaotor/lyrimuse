@@ -112,6 +112,8 @@ func TestIsStaleAnchorRepublish(t *testing.T) {
 	ts := time.Date(2026, 9, 6, 16, 40, 9, 0, time.UTC)
 	last := &playingAnchor{track: "方大同|忘了美麗", elapsed: 10.477, ts: "T09", at: ts.Add(500 * time.Millisecond)}
 	later := ts.Add(34500 * time.Millisecond)
+	zeroAt, _ := time.Parse(time.RFC3339, "2026-09-18T10:19:58Z")
+	zeroAnchor := &playingAnchor{track: "陶喆|讨厌红楼梦", elapsed: 0, ts: "2026-09-18T10:19:58Z", at: zeroAt}
 	cases := []struct {
 		name     string
 		last     *playingAnchor
@@ -126,7 +128,12 @@ func TestIsStaleAnchorRepublish(t *testing.T) {
 		{"elapsed 变了是真锚点", last, "方大同|忘了美麗", 44.2, "T43", 268.92, later, false},
 		{"同一个锚点不算重发", last, "方大同|忘了美麗", 10.477, "T09", 268.92, later, false},
 		{"换歌不算", last, "方大同|南音", 10.477, "T43", 268.92, later, false},
-		{"elapsed=0 不判(重头播放歧义)", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T44", 268.92, ts.Add(44 * time.Second), false},
+		{"elapsed=0 隔得太久不算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T44", 268.92, ts.Add(44 * time.Second), false},
+		{"elapsed=0 开播 2 秒内算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, ts.Add(2 * time.Second), true},
+		// 实测样本(讨厌红楼梦):0.000@10:19:58 → 0.000@10:20:00,不判重发就整首歌慢 1.93s
+		{"开播双发的 0 锚点(真时间戳)", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:00Z", 268.92, zeroAt.Add(2400 * time.Millisecond), true},
+		{"连发三次时第二次仍在窗口内", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:02Z", 268.92, zeroAt.Add(4 * time.Second), true},
+		{"隔 175 秒的 0 锚点是真的回到 0", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:22:53Z", 268.92, zeroAt.Add(175 * time.Second), false},
 		{"旧锚点越过曲长就信新锚点", last, "方大同|忘了美麗", 10.477, "T99", 268.92, ts.Add(270 * time.Second), false},
 		{"无时长只看签名", last, "方大同|忘了美麗", 10.477, "T43", 0, later, true},
 		{"没有上一个锚点不判", nil, "方大同|忘了美麗", 10.477, "T43", 268.92, later, false},

@@ -117,9 +117,10 @@ func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, n
 // 同一套判据,两侧必须同时改。完整实测记录见那边的注释与 docs/features/02。要点:
 // Spotify 会在播放中把 now-playing 信息重发一遍,elapsedTime **逐 ms 不变**、时间戳却换成
 // 当下(实测 10.477@:09 → 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
-// 几十秒。签名 = 同一首歌 + elapsed 相等且 >0 + 时间戳变了 + 按旧锚点外推还没越过曲长
-// (elapsed==0 不判:「上一曲」重头播放分不开;越过曲长的旧锚点已死)。命中时沿用**原**锚点
-// 的时间戳自己外推,不信 elapsedTimeNow。
+// 几十秒。签名 = 同一首歌 + elapsed 相等 + 时间戳变了 + 按旧锚点外推还没越过曲长
+// (越过曲长的旧锚点已死)。elapsed==0 的重发跟「上一曲」重头播放签名相同,只按时间分:离原锚点
+// zeroAnchorRepublishWindowSecs 之内才算重发(两簇的实测分布见 Swift 侧那段注释)。命中时沿用
+// **原**锚点的时间戳自己外推,不信 elapsedTimeNow。
 type playingAnchor struct {
 	track   string
 	elapsed float64
@@ -133,14 +134,30 @@ var (
 	lastIgnoredRepublishTS string
 )
 
+// elapsed == 0 的重发离原锚点多久之内还算"重发"。跟 Swift 侧 zeroAnchorRepublishWindowSecs 同值。
+const zeroAnchorRepublishWindowSecs = 5.0
+
 func isStaleAnchorRepublish(last *playingAnchor, track string, elapsed float64, ts string, duration float64, now time.Time) bool {
-	if last == nil || ts == "" || last.track != track || last.elapsed != elapsed || elapsed <= 0 || last.ts == ts {
+	if last == nil || ts == "" || last.track != track || last.elapsed != elapsed || last.ts == ts {
+		return false
+	}
+	if elapsed <= 0 && republishGapSeconds(last, ts, now) > zeroAnchorRepublishWindowSecs {
 		return false
 	}
 	if duration > 0 && last.elapsed+now.Sub(last.at).Seconds() > duration+1 {
 		return false
 	}
 	return true
+}
+
+// republishGapSeconds 这次重发离**原**锚点多久:两个时间戳都解得出就按它们算,解不出退回墙钟。
+func republishGapSeconds(last *playingAnchor, ts string, now time.Time) float64 {
+	newTS, errNew := time.Parse(time.RFC3339, ts)
+	oldTS, errOld := time.Parse(time.RFC3339, last.ts)
+	if errNew == nil && errOld == nil {
+		return newTS.Sub(oldTS).Seconds()
+	}
+	return now.Sub(last.at).Seconds()
 }
 
 // resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 → 原锚点的

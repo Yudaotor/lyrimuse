@@ -251,10 +251,31 @@ func runPlaybackPositionTests() {
             // 换歌 → 不是
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
                         false, "陈旧重发: 换歌不算")
-            // elapsed == 0:「上一曲」重头播放分不开,宁可信重发是真的
+            // elapsed == 0:跟「上一曲」重头播放签名相同,只按**时间**分(zeroAnchorRepublishWindowSecs)。
+            // 实测两簇:开播双发挤在 2 秒内(汽水音乐 0.5~1.99s、连发累计 3.4s),真的回到 0 最近也在 175s 后。
             let atStart = MC.PlayingAnchor(track: "x|y", elapsed: 0, timestamp: "T00", instant: ts)
             expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T44", duration: 268.92, now: ts.addingTimeInterval(44)),
-                        false, "陈旧重发: elapsed=0 不判(重头播放的歧义)")
+                        false, "陈旧重发: elapsed=0 隔得太久(44s)不算重发")
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92, now: ts.addingTimeInterval(2)),
+                        true, "陈旧重发: elapsed=0 开播 2 秒内重发算重发(时间戳解不出时按墙钟)")
+            // 带真时间戳的实测样本(讨厌红楼梦:0.000@10:19:58 → 0.000@10:20:00,整首歌因此慢 1.93s)
+            let zeroTS = "2026-09-18T10:19:58Z"
+            let zeroInstant = MC.parseTimestamp(zeroTS) ?? ts
+            let zeroAnchor = MC.PlayingAnchor(track: "陶喆|讨厌红楼梦", elapsed: 0, timestamp: zeroTS, instant: zeroInstant)
+            expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
+                                                  timestamp: "2026-09-18T10:20:00Z", duration: 268.92,
+                                                  now: zeroInstant.addingTimeInterval(2.4)),
+                        true, "陈旧重发: 开播双发的 0 锚点判为重发(实测样本)")
+            // 连发三次时累计 3.4s,仍在窗口内(第二次重发也是跟**原**锚点比)
+            expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
+                                                  timestamp: "2026-09-18T10:20:02Z", duration: 268.92,
+                                                  now: zeroInstant.addingTimeInterval(4)),
+                        true, "陈旧重发: 连发三次时第二次仍在窗口内")
+            // 曲末归零 / 隔很久重播:实测最近的一次在 175s 之后,必须当真锚点
+            expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
+                                                  timestamp: "2026-09-18T10:22:53Z", duration: 268.92,
+                                                  now: zeroInstant.addingTimeInterval(175)),
+                        false, "陈旧重发: 隔 175 秒的 0 锚点是真的回到 0")
             // 旧锚点外推已越过曲长(单曲循环回绕 / 曲末)→ 旧锚点已死,新的是真的
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T99", duration: 268.92, now: ts.addingTimeInterval(270)),
                         false, "陈旧重发: 旧锚点外推越过曲长就信新锚点")
