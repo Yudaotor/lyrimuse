@@ -69,7 +69,12 @@ func kugouLyric(ctx context.Context, artist, title, album string, durationSecs f
 	}
 	kugouMu.Unlock()
 
-	r := resolveKugouLyric(ctx, artist, title, album, durationSecs)
+	// 先问酷狗客户端自己的本地缓存 —— 命中就省掉整条网络链路,而且拿到的是它为用户
+	// 正在听的那一版下的那一份歌词(见 kugoulocal.go)。没命中照常走网络。
+	r, ok := kugouLocalLyric(artist, title, album)
+	if !ok {
+		r = resolveKugouLyric(ctx, artist, title, album, durationSecs)
+	}
 	if r.lrc != "" {
 		kugouMu.Lock()
 		kugouCache[key] = r
@@ -86,7 +91,16 @@ var krcXORKey = []byte{0x40, 0x47, 0x61, 0x77, 0x5E, 0x32, 0x74, 0x47, 0x51, 0x3
 // 异或 krcXORKey(下标循环)、zlib 解压。任何一步失败都返回空串,不 panic。
 func decryptKRC(b64 string) string {
 	raw, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil || len(raw) <= 4 {
+	if err != nil {
+		return ""
+	}
+	return decryptKRCBytes(raw)
+}
+
+// decryptKRCBytes 是 decryptKRC 去掉 base64 那层的本体 —— 酷狗客户端落在本地的 .krc
+// 文件就是这个形态(没有外层 base64),两条路共用同一段异或+解压,见 kugoulocal.go。
+func decryptKRCBytes(raw []byte) string {
+	if len(raw) <= 4 {
 		return ""
 	}
 	body := raw[4:]
