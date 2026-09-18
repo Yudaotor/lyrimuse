@@ -171,3 +171,36 @@ func TestKugouLocalLyricMissingDir(t *testing.T) {
 		t.Error("目录不存在时必须安静地当作没命中(没装酷狗的人是多数)")
 	}
 }
+
+// kugou 有两个产出点(正常轮、熔断冷却时的本地兜底),都经 kugouSourceResult 摊平。
+// 这条盯的是**别漏字段**:漏一个的后果是"歌词出来了,但逐字/译文/专辑名莫名其妙没了",
+// 而且只在冷却那条路上出现,极难撞见。
+func TestKugouSourceResultCarriesEveryField(t *testing.T) {
+	src := kugouResult{
+		lrc: "[00:01.00]词", yrc: "[1000,500](1000,500,0)词", tr: "[00:01.00]translated",
+		roma: "[00:01.00]ci", durationSecs: 233.5,
+		title: "搁浅", artist: "周杰伦", album: "七里香", cover: "http://x/y.jpg",
+		language: songLanguageMandarin,
+	}
+	got := kugouSourceResult(src)
+	for _, c := range []struct {
+		name      string
+		got, want any
+	}{
+		{"source", got.source, "kugou"},
+		{"lyr", got.lyr, src.lrc},
+		{"yrc", got.yrc, src.yrc},
+		{"tr", got.tr, src.tr},
+		{"roma", got.roma, src.roma},
+		{"matchTitle", got.matchTitle, src.title},
+		{"matchArtist", got.matchArtist, src.artist},
+		{"matchAlbum", got.matchAlbum, src.album},
+		{"matchCover", got.matchCover, src.cover},
+		{"srcDur", got.srcDur, src.durationSecs},
+		{"language", got.language, src.language},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s: 得到 %v,期望 %v", c.name, c.got, c.want)
+		}
+	}
+}

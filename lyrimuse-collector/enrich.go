@@ -3694,6 +3694,16 @@ func noLyricsMarkers(raw map[string]lyricSourceResult, instrumental *scoredLyric
 	return out
 }
 
+// kugouSourceResult 把 kugouLyric / kugouLocalLyric 的产物摊成这一路的结果。抽出来是因为
+// 酷狗有两个产出点(正常轮、熔断冷却时的本地兜底),字段散着写两遍迟早漏一个。
+func kugouSourceResult(r kugouResult) lyricSourceResult {
+	return lyricSourceResult{
+		source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma,
+		matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover,
+		srcDur: r.durationSecs, language: r.language,
+	}
+}
+
 func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSourceRoundPlan) lyricSourceSkip {
 	if !enabled(source) {
 		return lyricSourceSkipDisabled
@@ -3838,12 +3848,34 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID, appleCatalogID, spotifyTrackID)}
 	}()
 	go func() {
-		if skipSource("kugou") {
+		// ⚠️ 酷狗这一路**不能直接用 skipSource**:它比别的源多一条完全不经网络的路 ——
+		// 客户端自己下在本地的 KRC(kugoulocal.go)。熔断冷却挡的是"别再打那台服务器了",
+		// 而读本地文件跟服务器挂没挂毫无关系;恰恰是网络不通那阵子,本地那份最该顶上。
+		// 所以冷却期间仍然问一次本地,只是不发请求。
+		//
+		// 三档区别:①别名轮的 only 名单外 —— 静默跳过(它上一轮已经答过);②用户在设置里
+		// **关掉**了酷狗源 —— 那是"我不要酷狗的歌词",本地那份同样不要;③熔断冷却 ——
+		// 只放弃网络那一半。本地命中时**不记 lyrics_sources_skipped**:这一轮它确实答了,
+		// 记成跳过会让 needsLyricsRetry 以为缺了它、白重搜一轮。
+		if only != nil && !only["kugou"] {
 			resultsCh <- lyricSourceResult{source: "kugou"}
 			return
 		}
-		r := kugouLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, language: r.language}
+		switch lyricSourceSkipFor("kugou", lyricSourceEnabled, breakerPlan) {
+		case lyricSourceSkipDisabled:
+			resultsCh <- lyricSourceResult{source: "kugou"}
+			return
+		case lyricSourceSkipCooling:
+			if r, ok := kugouLocalLyric(artist, title, album); ok {
+				resultsCh <- kugouSourceResult(r)
+				return
+			}
+			round.markSkipped("kugou")
+			log.Printf("lyrics: source kugou skipped this round, cooling down for another %s", breakerPlan["kugou"].Round(time.Second))
+			resultsCh <- lyricSourceResult{source: "kugou"}
+			return
+		}
+		resultsCh <- kugouSourceResult(kugouLyric(ctx, artist, title, album, durationSecs))
 	}()
 	go func() {
 		if skipSource("lrclib") {
