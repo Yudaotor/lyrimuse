@@ -120,11 +120,40 @@ public enum EnrichCacheKeys {
     // "|" 换成 " - ",再把文件系统不安全的字符转成下划线。两边各自维护而不是让 Swift 调
     // Go 子进程,是因为这纯粹是确定性的字符替换,没有会随时间演进的业务判断。
     public static func sanitizeFilename(_ key: String) -> String {
+        truncateFilenameBase(sanitizeFilenameUntruncated(key))
+    }
+
+    /// 上面那个函数不加长度上限的版本,只用来算出"这个 key 在长度上限生效前会落到的
+    /// 文件名",好在删除时把那份存量残留一起删掉。别拿它去拼新文件名。
+    public static func sanitizeFilenameUntruncated(_ key: String) -> String {
         var name = key.replacingOccurrences(of: "|", with: " - ")
         for c in ["/", ":", "*", "?", "\"", "<", ">", "\\"] {
             name = name.replacingOccurrences(of: c, with: "_")
         }
         return name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 文件名 base(不含 .lrc 等后缀)的字节上限。
+    ///
+    /// ⚠️ 必须跟 collector/lyricsexport.go 的 `lyricsFilenameMaxBytes` 同值,两边同时改。
+    /// 推导在 Go 那边的注释里(255 字节硬上限,减去原子写临时文件的 14 字节和最长后缀
+    /// .roma.lrc 的 9 字节,再减去碰撞消歧的 7 字节,取余量到 200)。算不一致的后果是
+    /// 删除条目时漏删导出文件,collector 重启跑 importLyricsFromFiles 会按文件头部标签
+    /// 把它重新导回缓存,表现为"删掉的条目自己回来了"。
+    public static let filenameMaxBytes = 200
+
+    /// 按字节上限截断,只在 UTF-8 字符边界上切。跟 Go 侧 truncateFilenameBase 逐字对应。
+    ///
+    /// Swift 的 String 按字符计数,这里必须显式走 UTF-8 视图 —— 一个汉字 3 字节,按字符
+    /// 截会漏判。`String(decoding:as:)` 在边界正确时不会产生替换字符。
+    public static func truncateFilenameBase(_ name: String) -> String {
+        let bytes = Array(name.utf8)
+        if bytes.count <= filenameMaxBytes { return name }
+        var cut = filenameMaxBytes
+        // UTF-8 续字节形如 10xxxxxx,往前退到字符首字节。
+        while cut > 0, bytes[cut] & 0xC0 == 0x80 { cut -= 1 }
+        let head = String(decoding: bytes[0..<cut], as: UTF8.self)
+        return head.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // CRC-32(IEEE 802.3,反射多项式 0xEDB88320)——必须跟 Go 的 hash/crc32.ChecksumIEEE
@@ -176,7 +205,15 @@ public enum EnrichCacheKeys {
     public static func exportedFileNames(forKey key: String) -> [String] {
         let plain = sanitizeFilename(key)
         let hashed = disambiguatedName(forKey: key)
-        return lyricsFileSuffixes.map { plain + $0 } + lyricsFileSuffixes.map { hashed + $0 }
+        var names = lyricsFileSuffixes.map { plain + $0 } + lyricsFileSuffixes.map { hashed + $0 }
+        // 长度上限生效之前导出的那份存量文件名也要列进来。它只在 key 长到会被截断时才
+        // 跟 plain 不同,所以正常条目这里一个名字都不会多出来。漏掉它的后果跟漏掉消歧名
+        // 一样:collector 重启会按文件头部标签把条目导回来。
+        let untruncated = sanitizeFilenameUntruncated(key)
+        if untruncated != plain {
+            names += lyricsFileSuffixes.map { untruncated + $0 }
+        }
+        return names
     }
 
     // 批量删除真正要落地的 key 清单:选中集合跟"当前缓存里确实存在的 key"求交集。

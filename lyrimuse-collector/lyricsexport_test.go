@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 // 歌词文件族改原子写(writeLyricsFileAtomic)。
@@ -161,5 +163,215 @@ func TestExportLyricsFilesConcurrentWritesStayWhole(t *testing.T) {
 		if isLyricsTempFile(e.Name()) {
 			t.Fatalf("并发导出不该留下临时文件: %s", e.Name())
 		}
+	}
+}
+
+// TestTruncateFilenameBase 长度上限只在超限时生效,且绝不切出半个 UTF-8 字符。
+func TestTruncateFilenameBase(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want func(string) error
+	}{
+		{"短名原样返回", "陈绮贞 - 灵感 - 还是会寂寞", func(got string) error {
+			if got != "陈绮贞 - 灵感 - 还是会寂寞" {
+				return fmt.Errorf("被改动了: %q", got)
+			}
+			return nil
+		}},
+		{"正好等于上限不截", strings.Repeat("a", lyricsFilenameMaxBytes), func(got string) error {
+			if len(got) != lyricsFilenameMaxBytes {
+				return fmt.Errorf("长度 %d", len(got))
+			}
+			return nil
+		}},
+		{"ASCII 超限截到上限", strings.Repeat("a", lyricsFilenameMaxBytes+50), func(got string) error {
+			if len(got) != lyricsFilenameMaxBytes {
+				return fmt.Errorf("长度 %d,期望 %d", len(got), lyricsFilenameMaxBytes)
+			}
+			return nil
+		}},
+		// 汉字 3 字节:200 不是 3 的倍数,截断点必然落在字符中间,是这个函数最要紧的用例。
+		{"汉字不被切成半个", strings.Repeat("歌", 100), func(got string) error {
+			if !utf8.ValidString(got) {
+				return fmt.Errorf("切出了非法 UTF-8: %q", got)
+			}
+			if strings.ContainsRune(got, utf8.RuneError) {
+				return fmt.Errorf("出现了替换字符: %q", got)
+			}
+			if len(got) > lyricsFilenameMaxBytes {
+				return fmt.Errorf("超限 %d", len(got))
+			}
+			// 200/3 = 66 个整字 = 198 字节,第 67 个字会越界。
+			if n := utf8.RuneCountInString(got); n != 66 {
+				return fmt.Errorf("留下 %d 个字,期望 66", n)
+			}
+			return nil
+		}},
+		{"emoji(4 字节)不被切开", strings.Repeat("🎵", 60), func(got string) error {
+			if strings.ContainsRune(got, utf8.RuneError) {
+				return fmt.Errorf("出现了替换字符: %q", got)
+			}
+			if len(got) > lyricsFilenameMaxBytes {
+				return fmt.Errorf("超限 %d", len(got))
+			}
+			return nil
+		}},
+		// "abc " 是 4 字节一组,200 % 4 == 0 → 第 200 个字节(下标 199)正好是空格,
+		// 截断点必然落在空格上。⚠️ 别改成 3 字节的组:那样切在字母上,这条用例就废了
+		// (变异测试实测:改回 "ab " 后"不 trim"的变异能存活)。
+		{"截断点落在空格上要 trim 掉", strings.Repeat("abc ", 60), func(got string) error {
+			if strings.HasSuffix(got, " ") {
+				return fmt.Errorf("留下了尾部空格: %q", got)
+			}
+			return nil
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if err := c.want(truncateFilenameBase(c.in)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// TestSanitizeLyricsFilenameFitsAtomicWrite 这条是整个修复的要害:base 加上最长的后缀、
+// 再加上 writeLyricsFileAtomic 的临时文件后缀,必须仍然落在文件系统的 255 字节之内 ——
+// 否则导出会一直 ENAMETOOLONG 失败并反复重试,正是这次要修的 bug。
+func TestSanitizeLyricsFilenameFitsAtomicWrite(t *testing.T) {
+	// 照抄真实数据里那条最长的:20 多位参与者的合唱署名。
+	key := strings.Repeat("Michael Jackson & Elmer Bernstein & Jeremy Lubbock & ", 8) +
+		"|Earth Song (Radio Edit)|Number Ones"
+	base := sanitizeLyricsFilename(key)
+
+	longestSuffix := ""
+	for _, s := range lyricsFileSuffixes {
+		if len(s) > len(longestSuffix) {
+			longestSuffix = s
+		}
+	}
+	// 消歧后缀 `~xxxxxx` 也要能接上去。
+	withHash := fmt.Sprintf("%s~%06x", base, uint32(0xFFFFFF))
+	const tmpOverhead = 14 // 实测 `.tmp.` + 随机数
+
+	for _, n := range []struct {
+		what string
+		s    string
+	}{
+		{"base+后缀", base + longestSuffix},
+		{"base+后缀+临时后缀", base + longestSuffix + strings.Repeat("x", tmpOverhead)},
+		{"消歧名+后缀+临时后缀", withHash + longestSuffix + strings.Repeat("x", tmpOverhead)},
+	} {
+		if len(n.s) > 255 {
+			t.Errorf("%s 长 %d 字节,超过文件系统 255 上限", n.what, len(n.s))
+		}
+	}
+
+	// 真的写一遍,确认不再 ENAMETOOLONG。
+	dir := t.TempDir()
+	if err := writeLyricsFileAtomic(filepath.Join(dir, base+longestSuffix), []byte("x")); err != nil {
+		t.Fatalf("按截断后的文件名写入仍然失败: %v", err)
+	}
+}
+
+// TestExportLyricsFilesRemovesUntruncatedLeftover 长度上限是后加的,之前 os.WriteFile
+// 能把 255 字节以内的长文件名写成功。那批存量文件必须删掉 —— importLyricsFromFiles 按
+// 文件**头部标签**重建 key、不看文件名,留着它下次启动就会把旧内容导回来顶掉新的。
+func TestExportLyricsFilesRemovesUntruncatedLeftover(t *testing.T) {
+	dir := t.TempDir()
+	oldDir := lyricsDir
+	lyricsDir = dir
+	t.Cleanup(func() { lyricsDir = oldDir })
+
+	// 构造一个会被截断、但截断前仍在 255 以内的 key。
+	// 拼出来 212 字节:超过 200 的上限,但加上 ".lrc" 仍在 255 以内 —— 正是那批
+	// "当初写得进去、现在再也更新不了"的存量文件的形状。
+	artist := strings.Repeat("A", 140)
+	title := strings.Repeat("B", 60)
+	key := artist + "|" + title + "|专辑"
+	untruncated := sanitizeLyricsFilenameUntruncated(key)
+	truncated := sanitizeLyricsFilename(key)
+	if untruncated == truncated {
+		t.Fatalf("这个 key 没被截断,用例前提不成立(len=%d)", len(untruncated))
+	}
+	if len(untruncated+".lrc") > 255 {
+		t.Fatalf("用例前提不成立:旧名 %d 字节,当初也写不进去", len(untruncated+".lrc"))
+	}
+
+	leftover := filepath.Join(dir, untruncated+".lrc")
+	if err := os.WriteFile(leftover, []byte("[ar:旧]\n[ti:旧]\n\n[00:01.00]旧内容\n"), 0o644); err != nil {
+		t.Fatalf("造存量文件失败: %v", err)
+	}
+
+	enrichMu.Lock()
+	oldCache := enrichCache
+	enrichCache = map[string]enrichEntry{key: {Lyrics: "[00:01.00]新内容\n"}}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichCache = oldCache
+		enrichMu.Unlock()
+	})
+
+	exportLyricsFiles()
+
+	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+		t.Fatalf("截断前的存量文件没被清掉: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, truncated+".lrc")); err != nil {
+		t.Fatalf("截断后的新文件没写出来: %v", err)
+	}
+}
+
+// TestSanitizeLyricsFilenameTruncationStillDisambiguates 截断会把两个原本不同的长 key
+// 压成同一个名字,必须由已有的碰撞消歧接住,各写各的文件。
+func TestSanitizeLyricsFilenameTruncationStillDisambiguates(t *testing.T) {
+	dir := t.TempDir()
+	oldDir := lyricsDir
+	lyricsDir = dir
+	t.Cleanup(func() { lyricsDir = oldDir })
+
+	prefix := strings.Repeat("同", 80) // 240 字节,远超上限
+	k1 := prefix + "甲|歌名|专辑"
+	k2 := prefix + "乙|歌名|专辑"
+	if sanitizeLyricsFilename(k1) != sanitizeLyricsFilename(k2) {
+		t.Fatalf("用例前提不成立:两个 key 截断后没撞名")
+	}
+
+	enrichMu.Lock()
+	oldCache := enrichCache
+	enrichCache = map[string]enrichEntry{
+		k1: {Lyrics: "[00:01.00]甲的歌词\n"},
+		k2: {Lyrics: "[00:01.00]乙的歌词\n"},
+	}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		enrichCache = oldCache
+		enrichMu.Unlock()
+	})
+
+	exportLyricsFiles()
+
+	found := map[string]bool{}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range ents {
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(b), "甲的歌词") {
+			found["甲"] = true
+		}
+		if strings.Contains(string(b), "乙的歌词") {
+			found["乙"] = true
+		}
+	}
+	if !found["甲"] || !found["乙"] {
+		t.Fatalf("截断撞名后有内容丢失,磁盘上只找到 %v(共 %d 个文件)", found, len(ents))
 	}
 }

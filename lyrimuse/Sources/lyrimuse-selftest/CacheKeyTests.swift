@@ -110,6 +110,47 @@ func runCacheKeyTests() {
     }
 
     do {
+        // 文件名字节上限。⚠️ 必须跟 collector/lyricsexport.go 的 lyricsFilenameMaxBytes
+        // 同值、同截断规则,否则删除时算出的文件名对不上 → 漏删 → 条目复活。
+        expectEqual(EnrichCacheKeys.filenameMaxBytes, 200, "EnrichCacheKeys: 文件名字节上限跟 Go 侧同值")
+
+        // 没超限的名字一个字节都不该动。
+        expectEqual(
+            EnrichCacheKeys.truncateFilenameBase("陈绮贞 - 灵感 - 还是会寂寞"),
+            "陈绮贞 - 灵感 - 还是会寂寞",
+            "EnrichCacheKeys: 未超限的文件名原样返回"
+        )
+
+        // 汉字 3 字节,200 不是 3 的倍数 —— 截断点必然落在字符中间,这是最要紧的一条:
+        // 按字符数截会漏判,切在字节中间会产生 U+FFFD。
+        let longCJK = String(repeating: "歌", count: 100)
+        let cut = EnrichCacheKeys.truncateFilenameBase(longCJK)
+        expectEqual(cut.utf8.count <= EnrichCacheKeys.filenameMaxBytes, true, "EnrichCacheKeys: 截断后不超过字节上限")
+        expectEqual(cut.count, 66, "EnrichCacheKeys: 200 字节容得下 66 个汉字(198 字节)")
+        expectEqual(cut.contains("\u{FFFD}"), false, "EnrichCacheKeys: 截断不产生替换字符")
+
+        // 4 字节字符同理。
+        let longEmoji = String(repeating: "🎵", count: 60)
+        let cutEmoji = EnrichCacheKeys.truncateFilenameBase(longEmoji)
+        expectEqual(cutEmoji.utf8.count <= EnrichCacheKeys.filenameMaxBytes, true, "EnrichCacheKeys: emoji 截断后不超上限")
+        expectEqual(cutEmoji.contains("\u{FFFD}"), false, "EnrichCacheKeys: emoji 截断不产生替换字符")
+
+        // 超长 key 的待删清单要多出"截断前那个更长的名字"那 4 个 —— 那批存量文件漏删
+        // 同样会让条目复活。没超限的 key 则一个都不该多。
+        let longKey = String(repeating: "A", count: 140) + "|" + String(repeating: "B", count: 60) + "|专辑"
+        let longNames = EnrichCacheKeys.exportedFileNames(forKey: longKey)
+        expectEqual(longNames.count, 12, "EnrichCacheKeys: 超长 key 的待删清单 = 截断名4 + 消歧名4 + 截断前的名字4")
+        expectEqual(
+            longNames.contains(EnrichCacheKeys.sanitizeFilenameUntruncated(longKey) + ".lrc"), true,
+            "EnrichCacheKeys: 待删清单含截断前的文件名"
+        )
+        expectEqual(
+            EnrichCacheKeys.exportedFileNames(forKey: "Artist|Song|Album").count, 8,
+            "EnrichCacheKeys: 未超限的 key 不多出截断前的名字"
+        )
+    }
+
+    do {
         // 选中集合 → 实际删除计划:交集 + 排序。
         let existing: Set<String> = ["B|b|al2", "A|a|al1", "C|c|al3"]
         expectEqual(

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // lyricsDir is set once in main.go alongside enrichPath. Empty means exports
@@ -140,6 +141,18 @@ func exportLyricsFiles() {
 				_ = os.Remove(filepath.Join(lyricsDir, plainBase+suffix))
 			}
 		}
+		// 同理清掉"加长度上限之前那个更长的文件名"下的残留。这类文件是存量:长度上限
+		// 是后加的,而在它之前、原子写(writeLyricsFileAtomic)之前,os.WriteFile 能把
+		// 255 字节以内的长文件名直接写成功。留着它们不只是占地方——importLyricsFromFiles
+		// 是按**文件头部标签**重建 key 的、不看文件名,所以这份旧内容下次启动会被当成
+		// 用户文件读回来,把新写的那份顶掉。
+		if untruncated := sanitizeLyricsFilenameUntruncated(j.key); untruncated != sanitizeLyricsFilename(j.key) {
+			for _, suffix := range lyricsFileSuffixes {
+				// 名字本身超过 255 字节时 Remove 会返回 ENAMETOOLONG,那正说明它不可能
+				// 存在过,和"文件不存在"一样忽略掉。
+				_ = os.Remove(filepath.Join(lyricsDir, untruncated+suffix))
+			}
+		}
 		header := lyricsFileHeader(j.artist, j.title, j.album, j.source, j.manual)
 		for k, suffix := range lyricsFileSuffixes {
 			path := filepath.Join(lyricsDir, base+suffix)
@@ -222,9 +235,48 @@ func isLyricsTempFile(name string) bool {
 // exportLyricsFiles 里(按转小写后的文件名分组,组内 ≥2 个不同 key 都加确定性哈希
 // 后缀),这个函数本身只负责"字符转义",不负责"保证全局唯一"。
 func sanitizeLyricsFilename(key string) string {
+	return truncateFilenameBase(sanitizeLyricsFilenameUntruncated(key))
+}
+
+// sanitizeLyricsFilenameUntruncated 是上面那个函数不加长度上限的版本。只有一个用途:
+// 让 exportLyricsFiles 知道这个 key 在**加上长度上限之前**会落到哪个文件名,好把那份
+// 残留删掉。别拿它去拼新文件名。
+func sanitizeLyricsFilenameUntruncated(key string) string {
 	name := strings.ReplaceAll(key, "|", " - ")
 	for _, c := range []string{"/", ":", "*", "?", "\"", "<", ">", "\\"} {
 		name = strings.ReplaceAll(name, c, "_")
 	}
 	return strings.TrimSpace(name)
+}
+
+// lyricsFilenameMaxBytes 是文件名 base(不含 .lrc 等后缀)的字节上限。
+//
+// 单个文件名在 APFS / HFS+ 上限是 **255 字节**(不是字符 —— 一个汉字 3 字节,所以中文
+// 名义上只有 85 字),超了 open 直接 ENAMETOOLONG。真正吃紧的不是最终文件名,而是
+// writeLyricsFileAtomic 的临时文件 `<base><suffix>.tmp.<随机>`:实测 `.tmp.` 加随机数
+// 占 14 字节,最长的后缀 .roma.lrc 占 9 字节,所以 base 的硬上限是 255-14-9 = 232;
+// 碰撞消歧还要再接 `~xxxxxx` 7 字节,于是 225。取 200 是留余量。
+//
+// ⚠️ 这个常量在 Swift 侧 EnrichCacheKeys.filenameMaxBytes 有一份对应值,两边必须同时改:
+// Swift 按同样的规则算出文件名去删除条目的导出文件,算不一致就会漏删,而 collector 重启
+// 时 importLyricsFromFiles 会按**文件头部标签**把残留文件重新导回缓存 —— 表现是"删掉的
+// 条目过一会儿自己回来了"。
+const lyricsFilenameMaxBytes = 200
+
+// truncateFilenameBase 把文件名 base 截到字节上限,只在 UTF-8 字符边界上切,绝不切出
+// 半个字符(那会让文件名带上 U+FFFD,在 Finder 里显示成乱码)。
+//
+// 截断当然会让两个原本不同的长 key 撞到同一个名字 —— 那正好由 exportLyricsFiles 已有的
+// 碰撞消歧接住:它按最终文件名分组,组内 ≥2 个 key 的每一个都接上 crc32(**原始 key**)
+// 后缀,所以截断后同名的 key 仍然各写各的文件。
+func truncateFilenameBase(name string) string {
+	if len(name) <= lyricsFilenameMaxBytes {
+		return name
+	}
+	cut := lyricsFilenameMaxBytes
+	for cut > 0 && !utf8.RuneStart(name[cut]) {
+		cut--
+	}
+	// 再 trim 一次:截断点很可能落在空格上,留下尾部空格的文件名在 Finder 里是个坑。
+	return strings.TrimSpace(name[:cut])
 }
