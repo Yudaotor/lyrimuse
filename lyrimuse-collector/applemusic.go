@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"math"
 	"net/http"
@@ -525,6 +526,12 @@ func (s applemusicSong) cover() string {
 	u = strings.ReplaceAll(u, "{w}", "1000")
 	u = strings.ReplaceAll(u, "{h}", "1000")
 	u = strings.ReplaceAll(u, "{f}", "jpg")
+	// ⚠️ {c} 是裁切/填充代码,Apple 的模板是 `{w}x{h}{c}.{f}` —— 漏掉它,URL 里会留下一个
+	// 花括号占位符,整条链接直接 400(实测:同一张图 .../1000x1000{c}.jpg 回 400、
+	// .../1000x1000bb.jpg 回 200)。这一路的封面因此从来没成功加载过一次
+	// (本机 enrich 缓存里 mzstatic 封面 0 条)。bb = black background padding,
+	// 就是 Apple 自家网页在用的那个值。
+	u = strings.ReplaceAll(u, "{c}", "bb")
 	return u
 }
 
@@ -695,7 +702,88 @@ func applemusicParseTTML(ttml string) (lrc, yrc, tr string, ok bool) {
 	if !ok {
 		return "", "", "", false
 	}
-	return r.lrc, r.yrc, r.tr, true
+	tr = r.tr
+	if tr == "" {
+		// Apple 把译文放在 <iTunesMetadata><translations> 里,parseAMLLTTML 认的是 AMLL 那套
+		// ttm:role="x-translation" 形状,看不到它。见 applemusicSubtitleTranslation。
+		tr = applemusicSubtitleTranslation(ttml)
+	}
+	return r.lrc, r.yrc, tr, true
+}
+
+var (
+	// <translation type="subtitle" xml:lang="zh-Hans">…</translation>
+	amSubtitleBlockRe = regexp.MustCompile(`(?s)<translation\b[^>]*\btype="subtitle"[^>]*>(.*?)</translation>`)
+	// <text for="L12">…</text>
+	amTextForRe = regexp.MustCompile(`(?s)<text\b[^>]*\bfor="([^"]+)"[^>]*>(.*?)</text>`)
+	// 主体的 <p begin="13.429" … itunes:key="L1" …>
+	amPTagRe      = regexp.MustCompile(`<p\b([^>]*)>`)
+	amAttrBeginRe = regexp.MustCompile(`\bbegin="([^"]+)"`)
+	amAttrKeyRe   = regexp.MustCompile(`\bitunes:key="([^"]+)"`)
+	amAnyTagRe    = regexp.MustCompile(`<[^>]*>`)
+)
+
+// applemusicSubtitleTranslation 从 Apple 的 TTML 里取译文,拼成一份跟正文同轴的 LRC。
+//
+// ⚠️ **只认 type="subtitle"**。Apple 的 <translations> 里有两种,实测分布是:
+//   - type="replacement":全是 `zh-Hant -> zh-Hans`,即**同一语言的字形替换**(繁转简)。
+//     那不是译文;而且这个仓库早有 toSimplified 在主链路上处理繁简,再把它当译文塞进来
+//     只会让"译文"这一栏名不副实,还会盖掉别处真正的翻译。
+//   - type="subtitle":`en -> zh-Hans` 这类**真正的外语翻译**,是官方人工版本,比
+//     translate.go 的机器翻译好得多 —— 这条路存在的理由就是它。
+//
+// 时间轴不从译文自己身上取:译文的 <text for="Lxxx"> 用 key 指回正文的
+// <p itunes:key="Lxxx">,所以时间戳一律以正文那边为准,两轨天然对齐。
+//
+// ⚠️ **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:实测 6 首
+// 带真翻译的歌里 5 首 key 完全对齐(69/69、54/54、102/102、65/65、89/89),剩下一首
+// (Michael Jackson《Butterflies》)译文用的是 L83274 起的一套编号、正文是 L1 起,交集为
+// 零,而且行数也不等(42 对 38)。那种情况下按顺序对齐必然错位 —— 错位的译文比没有译文糟,
+// 所以宁可整首不给。
+func applemusicSubtitleTranslation(ttml string) string {
+	block := amSubtitleBlockRe.FindStringSubmatch(ttml)
+	if block == nil {
+		return ""
+	}
+	// key -> 行首毫秒
+	at := map[string]int{}
+	for _, m := range amPTagRe.FindAllStringSubmatch(ttml, -1) {
+		attrs := m[1]
+		k := amAttrKeyRe.FindStringSubmatch(attrs)
+		b := amAttrBeginRe.FindStringSubmatch(attrs)
+		if k == nil || b == nil {
+			continue
+		}
+		at[k[1]] = parseTTMLTime(b[1])
+	}
+	type line struct {
+		ms   int
+		text string
+	}
+	var lines []line
+	for _, m := range amTextForRe.FindAllStringSubmatch(block[1], -1) {
+		ms, ok := at[m[1]]
+		if !ok {
+			continue // 对不上正文的行直接丢,不猜时间
+		}
+		// 译文本身也可能是逐字的(一串 <span>),去掉标签取纯文本。
+		txt := strings.TrimSpace(html.UnescapeString(amAnyTagRe.ReplaceAllString(m[2], "")))
+		if txt == "" {
+			continue
+		}
+		lines = append(lines, line{ms, txt})
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].ms < lines[j].ms })
+	var b strings.Builder
+	for _, l := range lines {
+		b.WriteString(formatLRCTime(l.ms))
+		b.WriteString(l.text)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // resolveApplemusicLyric:①确认用户令牌在手(没有就直接判 applemusic_not_connected,
@@ -747,15 +835,6 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 		candidates = candidates[:applemusicMaxCandidatesToFetch]
 	}
 
-	build := func(s applemusicSong, lrc, yrc, tr string, plainOnly bool) applemusicResult {
-		return applemusicResult{
-			lyrics: lrc, yrc: yrc, tr: tr,
-			title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
-			cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-			plainOnly: plainOnly,
-		}
-	}
-
 	for _, c := range candidates {
 		id := c.song.ID
 		// 逐字优先:它同时给得出逐行,拿到就不用再打 /lyrics。
@@ -763,12 +842,12 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 			if ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken); err != nil {
 				return applemusicResult{} // 令牌被拒之类,继续试别的候选也是白试
 			} else if lrc, yrc, tr, ok := applemusicParseTTML(ttml); ok && lrc != "" {
-				return build(c.song, lrc, yrc, tr, false)
+				return applemusicResultFrom(c.song, lrc, yrc, tr, false)
 			}
 			if ttml, err := applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
 				return applemusicResult{}
 			} else if lrc, yrc, tr, ok := applemusicParseTTML(ttml); ok && lrc != "" {
-				return build(c.song, lrc, yrc, tr, !isTimedLRC(lrc))
+				return applemusicResultFrom(c.song, lrc, yrc, tr, !isTimedLRC(lrc))
 			}
 			continue
 		}
@@ -778,24 +857,51 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 			return applemusicResult{}
 		}
 		if lrc, yrc, tr, ok := applemusicParseTTML(ttml); ok && lrc != "" {
-			return build(c.song, lrc, yrc, tr, !isTimedLRC(lrc))
+			return applemusicResultFrom(c.song, lrc, yrc, tr, !isTimedLRC(lrc))
 		}
 	}
 	return applemusicResult{}
 }
 
+// applemusicResultFrom 把一条 song + 解析好的歌词拼成结果。原是 resolveApplemusicLyric
+// 里的 build 闭包,提成包级是为了让本地缓存那条路(applemusiclocal.go)复用**同一份**构造 ——
+// 两条路进下游的字段形状必须一致(尤其 cover 的 {w}x{h} 替换和 durationSecs 的毫秒换算),
+// 否则其中一条会悄悄少给打分层证据。
+func applemusicResultFrom(s applemusicSong, lrc, yrc, tr string, plainOnly bool) applemusicResult {
+	return applemusicResult{
+		lyrics: lrc, yrc: yrc, tr: tr,
+		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
+		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
+		plainOnly: plainOnly,
+	}
+}
+
 // applemusicLyric 是这一路的入口,带进程内缓存(同 deezer/musixmatch)。
-func applemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64) applemusicResult {
+// catalogID:正在播的这首歌在 Apple 目录里的 id(platformtrackid.go 记的,已过
+// appleCatalogAnchor 校验)。非空时先问 Music.app 自己的缓存要官方歌词 —— 那份带
+// 词级时间轴和官方译文,是搜索那条拿不到的,见 applemusiclocal.go 头注。
+func applemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, catalogID string) applemusicResult {
 	if title == "" {
 		return applemusicResult{}
 	}
-	key := artist + "|" + title + "|" + album
+	// catalogID 进缓存键:首播那一拍 Music.app 可能还没写完缓存(实测延迟 0.5~1 秒),
+	// 那次只拿得到搜索的结果;不区分的话这条缓存会把后面每一次都挡住。
+	key := artist + "|" + title + "|" + album + "|" + catalogID
 	applemusicMu.Lock()
 	if v, ok := applemusicCache[key]; ok {
 		applemusicMu.Unlock()
 		return v
 	}
 	applemusicMu.Unlock()
+
+	// 本地命中就直接用:那是 Music.app 为**正在播的这一条**取回的官方歌词,比搜索出来的
+	// 候选更权威,也不必再花一轮网络。
+	if r, ok := applemusicLocalLyric(catalogID, artist, title, album, durationSecs); ok {
+		applemusicMu.Lock()
+		applemusicCache[key] = r
+		applemusicMu.Unlock()
+		return r
+	}
 
 	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs)
 	if !r.empty() {

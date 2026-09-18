@@ -245,3 +245,20 @@ func TestApplemusicResolveFailsClosedWithoutStorefront(t *testing.T) {
 		t.Fatalf("storefront should stay empty, got %q", sf)
 	}
 }
+
+func TestApplemusicCoverReplacesAllPlaceholders(t *testing.T) {
+	var s applemusicSong
+	// Apple 的真实模板形状(取自 Music.app 的本地缓存):四个占位符,{c} 最容易被漏。
+	s.Attributes.Artwork.URL = "https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/x/y.jpg/{w}x{h}{c}.{f}"
+	got := s.cover()
+	if strings.ContainsAny(got, "{}") {
+		// 留一个花括号在 URL 里,整条链接直接 400,封面永远加载不出来。
+		t.Fatalf("占位符没替换干净: %s", got)
+	}
+	if got != "https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/x/y.jpg/1000x1000bb.jpg" {
+		t.Fatalf("替换结果不对: %s", got)
+	}
+	if (applemusicSong{}).cover() != "" {
+		t.Fatal("空 URL 应当返回空串")
+	}
+}

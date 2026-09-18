@@ -3943,7 +3943,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 独立检索(不等任何其它源的 ID),同 kuwo/migu/deezer。这一路是全部源里唯一能给出
 		// **逐字**时间轴的官方源,yrc 因此常有值;tr 来自 TTML 里的 <translations>,多数曲目为空。
 		// ⚠️ 用户没连过 Apple Music 时它安静返回空(applemusic_not_connected),不是故障。
-		r := applemusicLyric(ctx, artist, title, album, durationSecs)
+		// Apple 目录 id 由播放侧顺带记下(platformtrackid.go,同 amll 那路);有它就能先问
+		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
+		appleID, _ := playbackTrackIDsFor(artist, title, album)
+		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID)
 		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
