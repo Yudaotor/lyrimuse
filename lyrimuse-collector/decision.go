@@ -1,6 +1,12 @@
 package main
 
-import "time"
+import (
+	"fmt"
+	"log/slog"
+	"sort"
+	"strings"
+	"time"
+)
 
 // 歌词解析的**决策记录**(加,吸收自对比审阅 C2/C3)。
 //
@@ -181,5 +187,67 @@ func buildLyricsDecision(
 			ConsensusPeers:             c.ConsensusPeers,
 		})
 	}
+	logLyricsDecision(d, picked)
 	return d
+}
+
+// lyricsDecisionLogMaxCandidates:一行日志里最多列几个候选,多出来的折成 "+N"。
+// 源本身有十一个,别名轮还会给同一个源带回好几条,不封顶单行能冲到几百字节。
+const lyricsDecisionLogMaxCandidates = 12
+
+// logLyricsDecision 把一份决策压成一行日志。
+//
+// 为什么要有这一行:缓存里的 lyrics_decision 只留最近一次、下一轮就被覆盖,而
+// lyrics_decision_trace 那份流水账默认是关的 —— 于是"这首歌的歌词为什么是这一份"
+// 在 lyrimuse.log 里根本查不到,偏偏这是用户报障里最常见的一类。首次解析尤其要紧:
+// 缓存永久保留,那一刻的运气就是这首歌以后一直显示的东西。
+//
+// 打在这里而不是五个调用点各写一遍 —— 这是它们唯一的汇聚点,各写一遍迟早漏掉一条路径。
+// 这不违反文件头铁律 2「只写不读」:那条说的是解析逻辑不许拿决策当输入反过来影响行为,
+// 写进日志不参与任何判断。
+func logLyricsDecision(d *lyricsDecision, picked *scoredLyricCandidateResult) {
+	// 按分数降序列候选,好回答"为什么没选第二名"。排的是索引,d.Candidates 本身的顺序
+	// 要原样进缓存,不能在这里被重排。
+	order := make([]int, len(d.Candidates))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		return d.Candidates[order[a]].Score > d.Candidates[order[b]].Score
+	})
+	var sb strings.Builder
+	for n, i := range order {
+		if n == lyricsDecisionLogMaxCandidates {
+			fmt.Fprintf(&sb, " +%d", len(order)-n)
+			break
+		}
+		if n > 0 {
+			sb.WriteByte(' ')
+		}
+		fmt.Fprintf(&sb, "%s:%d", d.Candidates[i].Source, d.Candidates[i].Score)
+	}
+
+	winner, score := "(none)", 0
+	if picked != nil {
+		winner, score = picked.Source, picked.Score
+	}
+	attrs := []any{
+		"path", d.Path,
+		"artist", d.QueryArtist,
+		"title", d.QueryTitle,
+		"album", d.QueryAlbum,
+		"winner", winner,
+		"score", score,
+		// applied=false 意味着"评估过但没换" —— 光看 winner 会以为歌词换成了它。
+		"applied", d.Applied,
+		"responded", strings.Join(d.SourcesResponded, ","),
+	}
+	// 胜者是绕道搜出来的时候把来路带上:歌词张冠李戴多半就出在这儿。
+	if d.RetryMethod != "" {
+		attrs = append(attrs, "retry_method", d.RetryMethod)
+	}
+	if d.CorrectedTitle != "" {
+		attrs = append(attrs, "corrected_title", d.CorrectedTitle)
+	}
+	slog.Info("lyrics decision", append(attrs, "candidates", sb.String())...)
 }
