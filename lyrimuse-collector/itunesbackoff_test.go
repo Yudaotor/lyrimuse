@@ -139,9 +139,13 @@ func TestITunesSearchSkipsRequestWhileCoolingDown(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 没退避时该真的发出去。
-	if got := itunesSearch(ctx, "q", "cn"); len(got) != 1 {
+	// 没退避时该真的发出去,并报告 reached。
+	got, reached := itunesSearch(ctx, "q", "cn")
+	if len(got) != 1 {
 		t.Fatalf("正常情况下该拿到 1 条结果,得到 %d 条", len(got))
+	}
+	if !reached {
+		t.Fatal("拿到 200 该报 reached=true")
 	}
 	if n := atomic.LoadInt32(&hits); n != 1 {
 		t.Fatalf("该发出 1 次请求,实际 %d 次", n)
@@ -150,8 +154,14 @@ func TestITunesSearchSkipsRequestWhileCoolingDown(t *testing.T) {
 	// 进入退避后,再调多少次都不该碰网络。
 	noteITunesSearchStatus(429, "300", time.Now())
 	for i := 0; i < 5; i++ {
-		if got := itunesSearch(ctx, "q", "cn"); got != nil {
+		got, reached := itunesSearch(ctx, "q", "cn")
+		if got != nil {
 			t.Errorf("退避中该返回空,得到 %d 条", len(got))
+		}
+		// ⚠️ 退避中的空结果**不是**"Apple 没有这首歌" —— reached 必须为 false,
+		// 否则 appleMusicMatchCached 会把限流期间的每首歌都错记进负缓存。
+		if reached {
+			t.Error("退避中该报 reached=false,空结果不代表 Apple 没有")
 		}
 	}
 	if n := atomic.LoadInt32(&hits); n != 1 {
@@ -160,10 +170,35 @@ func TestITunesSearchSkipsRequestWhileCoolingDown(t *testing.T) {
 
 	// 窗口清掉之后恢复。
 	noteITunesSearchStatus(200, "", time.Now())
-	if got := itunesSearch(ctx, "q", "cn"); len(got) != 1 {
-		t.Error("退出退避后该恢复正常请求")
+	if got, reached := itunesSearch(ctx, "q", "cn"); len(got) != 1 || !reached {
+		t.Errorf("退出退避后该恢复正常请求(得到 %d 条, reached=%v)", len(got), reached)
 	}
 	if n := atomic.LoadInt32(&hits); n != 2 {
 		t.Fatalf("恢复后该再发 1 次(共 2 次),实际 %d 次", n)
+	}
+}
+
+// 限流的响应必须**当场**报 reached=false。
+//
+// 这条看着跟上面重复,其实不是:多商店循环里第一个商店 429 之后会开启退避窗口,后续商店
+// 因退避返回 false,于是整体 reached 仍是 false —— 变异测试实测,把这里改成谎报 true
+// 时那些用例照样全绿(靠退避侥幸兜住了)。只有一个商店、或退避窗口恰好没生效时就会翻车,
+// 所以在这一层直接钉死。
+func TestITunesSearchReportsUnreachedOnRateLimit(t *testing.T) {
+	resetITunesSearchBackoff(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(srv.Close)
+	old := itunesSearchBaseURL
+	itunesSearchBaseURL = srv.URL
+	t.Cleanup(func() { itunesSearchBaseURL = old })
+
+	got, reached := itunesSearch(context.Background(), "q", "cn")
+	if got != nil {
+		t.Errorf("限流时该返回空,得到 %d 条", len(got))
+	}
+	if reached {
+		t.Error("429 必须报 reached=false —— 空结果不代表 Apple 没有这首歌")
 	}
 }

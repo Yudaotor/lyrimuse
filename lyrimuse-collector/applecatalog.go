@@ -573,7 +573,8 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	probed := false // 至少有一个商店真的定位到了专辑、取过它的曲目表
 	for _, country := range appleStorefrontsFor(append([]string{artist, title, album}, lyricSamples...)...) {
 		bestID, bestScore := int64(0), 0
-		for _, r := range itunesSearch(ctx, q, country) {
+		rs, _ := itunesSearch(ctx, q, country) // 这条路径有自己的缓存,不看 reached
+		for _, r := range rs {
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
 				bestScore, bestID = sc, r.CollectionID
 			}
@@ -849,7 +850,8 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title string, durat
 	for _, q := range []string{strings.TrimSpace(artist + " " + title), title} {
 		var results []itunesResult
 		for _, country := range storefronts {
-			results = append(results, itunesSearch(ctx, neturl.QueryEscape(q), country)...)
+			rs, _ := itunesSearch(ctx, neturl.QueryEscape(q), country)
+			results = append(results, rs...)
 		}
 		if out = pickAppleTitleSearchIdentities(results, artist, title, durationSecs); len(out) > 0 {
 			break

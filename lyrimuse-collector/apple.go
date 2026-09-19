@@ -19,7 +19,46 @@ import (
 var (
 	appleURLMu    sync.Mutex
 	appleURLCache = map[string]appleMusicMatch{}
+	// appleURLMissUntil:"这首歌 iTunes 确实没有"的负缓存,key 同 appleURLCache,
+	// 值是重新开放查询的时刻。跟正缓存共用 appleURLMu。
+	appleURLMissUntil = map[string]time.Time{}
 )
+
+// appleMatchMissTTL 是查空之后停查多久。
+//
+// 为什么需要它:appleMusicMatchCached 原来只在**查到**时写缓存,于是 iTunes 里没有的歌
+// 每次调用都完整重跑一轮多商店搜索(appleStorefrontsFor 一次 2~4 个商店,加上按专辑名
+// 精确定位那一轮)。实测本机 enrich 缓存 6123 条里有 2574 条(42%)没有 apple_music_url,
+// 而 enrich 主链路上就有两个调用点、专辑预取一次还要再带 11~30 首 —— iTunes Search 因此
+// 成了整个采集器打得最狠的端点(165169 次请求,98.4% 的失败是 403/429 限流)。
+//
+// 这是所有 Apple 相关路径里唯一一个查空后连内存都不记的:appleStorefrontArtistCache
+// 记内存不落盘、appleStorefrontTitleCache 连盘一起记、appleCatalogCache 有自己的缓存。
+//
+// 取 30 分钟而不是永久:同 mbPrimaryNameCache / appleStorefrontArtistCache 的口径 ——
+// 只留在内存、不落盘,重启就重试;窗口内也只是少一张封面和一条跳转链接,不影响歌词。
+const appleMatchMissTTL = 30 * time.Minute
+
+// appleMatchInMissWindow 报告这首歌是不是还在"iTunes 确实没有"的窗口里。
+func appleMatchInMissWindow(key string, now time.Time) bool {
+	appleURLMu.Lock()
+	defer appleURLMu.Unlock()
+	return now.Before(appleURLMissUntil[key])
+}
+
+// noteAppleMatchMiss 记下一次"问成了、但 Apple 确实没有这首歌"。
+//
+// ⚠️ reached 为假时**什么都不记**:那只是这次没问成(退避中/限流/超时),不是结论。
+// iTunes Search 的失败有 98.4% 是限流,不做这道区分的话,一次限流就会把那段时间里
+// 解析过的每一首歌都错记成"Apple 没有"。同一道区分见 musicbrainz.go 的 noteMBLookupFailure。
+func noteAppleMatchMiss(key string, reached bool, now time.Time) {
+	if !reached {
+		return
+	}
+	appleURLMu.Lock()
+	appleURLMissUntil[key] = now.Add(appleMatchMissTTL)
+	appleURLMu.Unlock()
+}
 
 // appleMusicMatch 是这首歌在 iTunes/Apple Music 曲库里匹配到的信息——url 给"App
 // 联动跳转链接"用,cover 是 Apple 官方封面,当作"搜索候选歌词"弹窗的通用封面兜底
@@ -84,12 +123,20 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string) app
 	}
 	appleURLMu.Unlock()
 
-	m := resolveAppleMusicMatch(ctx, artist, title, album)
+	// 刚问过、Apple 确实没有 —— 窗口内不再重跑那一轮多商店搜索(见 appleMatchMissTTL)。
+	if appleMatchInMissWindow(key, time.Now()) {
+		return appleMusicMatch{}
+	}
+
+	m, reached := resolveAppleMusicMatch(ctx, artist, title, album)
 	if m.url != "" {
 		appleURLMu.Lock()
 		appleURLCache[key] = m
+		delete(appleURLMissUntil, key) // 查到了就把负缓存清掉
 		appleURLMu.Unlock()
+		return m
 	}
+	noteAppleMatchMiss(key, reached, time.Now())
 	return m
 }
 
@@ -99,10 +146,13 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string) app
 // match, then title match, then first result. Which storefronts get asked
 // comes from appleStorefrontsFor — CN first (user preference), then US, plus
 // the script's home store when the tags are not Latin.
-func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) appleMusicMatch {
-	m, albumMatched := searchAppleMusicMatch(ctx, artist, title, album)
+// 第二个返回值 reached 汇总两条路径("真的问到了 Apple 吗",见 itunesSearch 头注)。
+// 只要有一步没问成就是 false —— appleMusicMatchCached 靠它区分"Apple 确实没有这首歌"
+// 和"这次没问成",只有前者才配写进负缓存。
+func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (appleMusicMatch, bool) {
+	m, albumMatched, reached := searchAppleMusicMatch(ctx, artist, title, album)
 	if albumMatched {
-		return m
+		return m, reached
 	}
 	// 走到这里说明全文搜索要么完全没查到,要么只查到一个**没有专辑证据**的标题匹配
 	// (titleFallback)——先按专辑名精确定位试一次,比"没有专辑证据的第一个标题匹配"更
@@ -114,11 +164,13 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) ap
 	// 《橙月》——resolveAppleMusicMatchViaAlbum 内部还有一层"专辑对上但曲名对不上就退到
 	// 专辑封面"的兜底(那张专辑自己把这首歌收录成繁体曲名「三人遊」,跟本地报的英文
 	// 「Three Tour」对不上文字)。
-	if viaAlbum := resolveAppleMusicMatchViaAlbum(ctx, artist, title, album); viaAlbum.cover != "" || viaAlbum.url != "" {
-		return viaAlbum
+	viaAlbum, viaReached := resolveAppleMusicMatchViaAlbum(ctx, artist, title, album)
+	reached = reached && viaReached
+	if viaAlbum.cover != "" || viaAlbum.url != "" {
+		return viaAlbum, reached
 	}
 	// 按专辑定位也没查到任何东西——titleFallback 好歹是张图,好过没有(哪怕专辑可能不对)。
-	return m
+	return m, reached
 }
 
 // appleResultIdentityOK 判定一条 iTunes 结果能不能被当成**本曲**的匹配。
@@ -177,13 +229,23 @@ func appleResultIdentityOK(candidateArtist, candidateAlbum, localArtist, localAl
 // **有专辑证据**支撑的(albumScore>0)——调用方(resolveAppleMusicMatch)靠它判断要不要
 // 再去按专辑名精确定位试一次:titleFallback 那种"完全没有专辑证据、只是标题对上的第一条"
 // 太弱,专辑名一旦跟本地对不上就可能是完全不相关的另一个发行版,不该被当成终局结果。
-func searchAppleMusicMatch(ctx context.Context, artist, title, album string) (appleMusicMatch, bool) {
+//
+// 第三个返回值 reached 透传 itunesSearch 那道"真的问到了 Apple 吗"(见它的头注)。
+func searchAppleMusicMatch(ctx context.Context, artist, title, album string) (appleMusicMatch, bool, bool) {
 	q := neturl.QueryEscape(artist + " " + title)
 	var results []itunesResult
+	// reached 要求**每一个**商店都问成了。只要有一个没问成,"Apple 没有这首歌"就不成立
+	// —— 那首歌可能恰好只在没问成的那个商店上架。宁可多查一次,也不要记错负缓存。
+	reached := true
 	for _, country := range appleStorefrontsFor(artist, title, album) {
-		results = append(results, itunesSearch(ctx, q, country)...)
+		rs, ok := itunesSearch(ctx, q, country)
+		if !ok {
+			reached = false
+		}
+		results = append(results, rs...)
 	}
-	return pickAppleMusicMatch(results, artist, title, album)
+	m, albumMatched := pickAppleMusicMatch(results, artist, title, album)
+	return m, albumMatched, reached
 }
 
 // pickAppleMusicMatch 是 searchAppleMusicMatch 的挑选逻辑,拆成纯函数好让上面那道身份闸
@@ -222,15 +284,22 @@ func pickAppleMusicMatch(results []itunesResult, artist, title, album string) (a
 // that album's full tracklist via iTunes lookup, and matches the title locally.
 // A lookup by numeric collection ID isn't ranked/filtered, so it can't miss a
 // track that genuinely exists in the catalog the way full-text search can.
-func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album string) appleMusicMatch {
+// 第二个返回值 reached 同 searchAppleMusicMatch:每个商店都问成了才是 true。
+// album 为空时直接返回 true —— 那不是"没问成",是压根没有可问的。
+func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album string) (appleMusicMatch, bool) {
 	if album == "" {
-		return appleMusicMatch{}
+		return appleMusicMatch{}, true
 	}
 	q := neturl.QueryEscape(artist + " " + album)
+	reached := true
 	for _, country := range appleStorefrontsFor(artist, title, album) {
 		bestID, bestScore := int64(0), 0
 		var bestAlbumCover appleMusicMatch
-		for _, r := range itunesSearch(ctx, q, country) {
+		rs, ok := itunesSearch(ctx, q, country)
+		if !ok {
+			reached = false
+		}
+		for _, r := range rs {
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
 				bestScore, bestID = sc, r.CollectionID
 				bestAlbumCover = appleMusicMatch{cover: hiResArtwork(r.ArtworkURL100), album: r.CollectionName}
@@ -245,7 +314,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// 它的曲目表就是权威的,不该被署名写法的跨商店差异挡住。
 		for _, t := range itunesLookupTracks(ctx, bestID, country) {
 			if t.TrackViewURL != "" && looseContains(t.TrackName, title) && appleResultIdentityOK(t.ArtistName, t.CollectionName, artist, album) {
-				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100), title: t.TrackName, album: t.CollectionName, durationSecs: t.TrackTimeMillis / 1000}
+				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100), title: t.TrackName, album: t.CollectionName, durationSecs: t.TrackTimeMillis / 1000}, reached
 			}
 		}
 		// 专辑名已经精确对上(>=200,同 coverNeedsAlbumCheck 的"确信"门槛),但曲目表里
@@ -258,10 +327,10 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// ⚠️ 只给 cover/album,不给 url:没找到这首歌具体的曲目页,不能假装有一个能跳转
 		// 过去的链接。
 		if bestScore >= 200 && bestAlbumCover.cover != "" {
-			return bestAlbumCover
+			return bestAlbumCover, reached
 		}
 	}
-	return appleMusicMatch{}
+	return appleMusicMatch{}, reached
 }
 
 // itunesLookupTracks returns the full tracklist of an album via the lookup
@@ -405,30 +474,40 @@ func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
 // (纯函数测不到这一步,变异测试实测:去掉 itunesSearch 开头那道检查,只测纯函数的用例照样全绿)。
 var itunesSearchBaseURL = "https://itunes.apple.com/search"
 
-func itunesSearch(ctx context.Context, q, country string) []itunesResult {
+// itunesSearch 的第二个返回值 reached 报告**这次真的问到了 Apple**(拿到 2xx 并解出了
+// 响应体)。false 表示退避中 / 限流 / 超时 / DNS 失败 —— 此时空结果只说明"没问成",
+// 绝不能读成"Apple 没有这首歌"。
+//
+// ⚠️ 这个区分是 appleMusicMatchCached 那条查空负缓存的前提:iTunes Search 的失败有
+// 98.4% 是限流(403+429),不区分的话,一次限流会把那段时间里解析过的每一首歌都错记成
+// "Apple 没有",在 TTL 内连封面和跳转链接一起丢掉。同一道区分在 MusicBrainz 那边也有
+// (musicbrainz.go:err != nil 与 resolved 为空分开处置)。
+//
+// 不关心这个信号的调用方照旧忽略第二个返回值 —— 它们本来就按"查不到就算了"处理。
+func itunesSearch(ctx context.Context, q, country string) ([]itunesResult, bool) {
 	if itunesSearchCoolingDown(time.Now()) {
-		return nil
+		return nil, false
 	}
 	cli := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		itunesSearchBaseURL+"?media=music&entity=song&limit=25&country="+country+"&term="+q, nil)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer resp.Body.Close()
 	noteITunesSearchStatus(resp.StatusCode, resp.Header.Get("Retry-After"), time.Now())
 	if resp.StatusCode != http.StatusOK {
-		return nil
+		return nil, false
 	}
 	var out struct {
 		Results []itunesResult `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil
+		return nil, false
 	}
-	return out.Results
+	return out.Results, true
 }

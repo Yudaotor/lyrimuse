@@ -299,7 +299,8 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 	storefronts := appleStorefrontsFor(artist, title)
 	for _, q := range []string{strings.TrimSpace(artist + " " + title), title} {
 		for _, country := range storefronts {
-			results = append(results, itunesSearch(ctx, neturl.QueryEscape(q), country)...)
+			rs, _ := itunesSearch(ctx, neturl.QueryEscape(q), country) // 专辑提示不关心是否问成
+			results = append(results, rs...)
 		}
 	}
 	cands := albumHintCandidatesFromResults(results, title, durationSecs)
@@ -310,7 +311,8 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 			q := neturl.QueryEscape(titleArtist + " " + song)
 			// 样本用这一轮真正的署名/曲名(不是被搬运频道污染的那一对),见 appleStorefrontsFor。
 			for _, country := range appleStorefrontsFor(titleArtist, song) {
-				alt = append(alt, itunesSearch(ctx, q, country)...)
+				ars, _ := itunesSearch(ctx, q, country)
+				alt = append(alt, ars...)
 			}
 			cands = albumHintCandidatesFromTitleSplit(alt, titleArtist, song, durationSecs)
 		}
