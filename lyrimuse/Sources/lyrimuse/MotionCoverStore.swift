@@ -81,29 +81,29 @@ final class MotionCoverStore {
             let variants = MotionCoverManifest.parseVariants(master: masterText)
             guard let picked = MotionCoverManifest.pick(variants, minimumWidth: Self.targetPixelWidth),
                   let variantURL = MotionCoverManifest.absolute(picked.uri, relativeTo: master) else {
-                logger.info("motion cover: no usable variant in master playlist")
+                logger.notice("motion cover: no usable variant in master playlist")
                 return nil
             }
             // ② variant → 那个承载全部分片的单文件。
             let variantText = try await text(from: variantURL)
             guard let name = MotionCoverManifest.mediaFileName(fromVariant: variantText),
                   let mediaURL = MotionCoverManifest.absolute(name, relativeTo: variantURL) else {
-                logger.info("motion cover: variant has no EXT-X-MAP single file")
+                logger.notice("motion cover: variant has no EXT-X-MAP single file")
                 return nil
             }
             // ③ 整份下下来。
             let (data, response) = try await URLSession.shared.data(from: mediaURL)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                logger.info("motion cover: media http \(http.statusCode, privacy: .public)")
+                logger.notice("motion cover: media http \(http.statusCode, privacy: .public)")
                 return nil
             }
             guard Self.looksLikeMP4(data) else {
-                logger.info("motion cover: payload is not an mp4 (\(data.count, privacy: .public) bytes)")
+                logger.notice("motion cover: payload is not an mp4 (\(data.count, privacy: .public) bytes)")
                 return nil
             }
             return try await MainActor.run { try self.store(data, master: master, width: picked.width) }
         } catch {
-            logger.info("motion cover: fetch failed — \(error.localizedDescription, privacy: .public)")
+            logger.notice("motion cover: fetch failed — \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

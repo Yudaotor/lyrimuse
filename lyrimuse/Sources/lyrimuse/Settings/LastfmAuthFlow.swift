@@ -168,13 +168,13 @@ final class LastfmConnectController: ObservableObject {
         pendingSecret = secret
         gen += 1
         let myGen = gen
-        logger.info("start: requesting token")
+        logger.notice("start: requesting token")
         state = .requestingToken
         Task {
             do {
                 let token = try await LastfmAuthFlow.requestToken(apiKey: apiKey)
                 guard myGen == self.gen else { return } // 已被取消/重开,别复活流程
-                logger.info("start: got token, opening browser auth page")
+                logger.notice("start: got token, opening browser auth page")
                 NSWorkspace.shared.open(LastfmAuthFlow.authorizeURL(apiKey: apiKey, token: token))
                 state = .waitingForBrowserAuth(token: token)
             } catch {
@@ -195,13 +195,13 @@ final class LastfmConnectController: ObservableObject {
         let apiKey = pendingAPIKey
         let secret = pendingSecret
         let myGen = gen
-        logger.info("confirmBrowserAuth: exchanging session")
+        logger.notice("confirmBrowserAuth: exchanging session")
         state = .exchanging
         Task {
             do {
                 let result = try await LastfmAuthFlow.exchangeSession(apiKey: apiKey, secret: secret, token: token)
                 guard myGen == self.gen else { return } // 已被取消,不写任何东西
-                logger.info("confirmBrowserAuth: connected successfully")
+                logger.notice("confirmBrowserAuth: connected successfully")
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
                 // 换到了新 session key,上一把钥匙的"授权失效"红标(如果有)立刻作废 ——
@@ -258,7 +258,7 @@ final class LastfmConnectController: ObservableObject {
             logger.notice("handleAuthCallback: ignored — not currently waiting for browser auth (state=\(String(describing: self.state), privacy: .public))")
             return
         }
-        logger.info("handleAuthCallback: browser redirected back automatically, confirming without user click")
+        logger.notice("handleAuthCallback: browser redirected back automatically, confirming without user click")
         confirmBrowserAuth()
     }
 }

@@ -190,7 +190,7 @@ enum ICloudConfigStore {
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
         guard let icon = NSImage(named: NSImage.applicationIconName) else { return }
         let ok = NSWorkspace.shared.setIcon(icon, forFile: folder.path, options: [])
-        logger.info("folder icon applied to \(folder.lastPathComponent, privacy: .public): \(ok, privacy: .public)")
+        logger.notice("folder icon applied to \(folder.lastPathComponent, privacy: .public): \(ok, privacy: .public)")
     }
 
     /// 启动时调:文件夹**已经存在**才补图标,不为了贴个图标去创建一个用户还没用过的目录。
@@ -231,7 +231,7 @@ enum ICloudConfigStore {
         let hit = BackupDiscovery.latest(in: folders)
         // 记一笔"翻了几个目录、最后选中哪个"——这条链路(尤其是从 iCloud 之外的目录命中)
         // 只在换机器时走一次,出问题时没有现场可看,日志是唯一线索。目录名不敏感。
-        logger.info("""
+        logger.notice("""
             snapshot scan: \(folders.count, privacy: .public) folder(s), \
             picked \(hit?.folder.lastPathComponent ?? "none", privacy: .public)
             """)

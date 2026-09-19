@@ -108,7 +108,7 @@ final class VolumeMonitor {
         guard volumeAddr != nil || muteAddr != nil else {
             // 有些输出设备(HDMI、某些 USB DAC)音量归下游硬件管,系统这边根本没有可读的
             // 音量属性。这不是错误,只是这台设备上没法做这个提示。
-            Self.logger.info("output device has no readable volume property; volume banner disabled for it")
+            Self.logger.notice("output device has no readable volume property; volume banner disabled for it")
             return
         }
 

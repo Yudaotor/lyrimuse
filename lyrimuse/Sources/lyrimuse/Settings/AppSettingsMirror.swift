@@ -119,7 +119,7 @@ enum AppSettingsMirror {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
             try FileManager.default.removeItem(at: fileURL)
-            logger.info("removed the app-settings mirror")
+            logger.notice("removed the app-settings mirror")
         } catch {
             logger.error("removing the mirror failed — \(String(describing: error), privacy: .public)")
         }

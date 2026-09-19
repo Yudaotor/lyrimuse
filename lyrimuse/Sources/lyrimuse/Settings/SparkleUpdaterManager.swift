@@ -565,7 +565,7 @@ final class SparkleUpdaterManager: ObservableObject {
                     UserDefaults.standard.removeObject(forKey: Self.betaFeedURLKey)
                 }
             }
-            logger.info("releases: newest=\(UpdateChannel.newestRelease(releases)?.tag ?? "-", privacy: .public) feed=\(chosen?.lastPathComponent ?? "default", privacy: .public)")
+            logger.notice("releases: newest=\(UpdateChannel.newestRelease(releases)?.tag ?? "-", privacy: .public) feed=\(chosen?.lastPathComponent ?? "default", privacy: .public)")
         } catch {
             NetworkAuditLog.record(service: "github", operation: "releases", host: url.host ?? "api.github.com",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)

@@ -46,7 +46,7 @@ public final class MediaControlHealth: ObservableObject {
         guard let binary = MediaControlClient.binaryPath() else {
             // 没走 build.sh 打包时(直接 swift build)拿不到二进制。这不是"通道坏了",
             // 别报成不可用去吓用户。
-            Self.logger.info("media-control binary unavailable; skipping health check")
+            Self.logger.notice("media-control binary unavailable; skipping health check")
             return
         }
         Task.detached(priority: .utility) {

@@ -110,7 +110,7 @@ public final class MediaControlStreamWatcher {
         guard let binary = MediaControlClient.binaryPath() else {
             // 没走 build.sh 打包时(直接 swift build 跑)拿不到二进制。这不是错误,
             // 轮询兜底照常工作,只是没有事件加速。
-            Self.logger.info("media-control binary unavailable; staying on the 2s poll only")
+            Self.logger.notice("media-control binary unavailable; staying on the 2s poll only")
             return
         }
         let proc = Process()
@@ -137,7 +137,7 @@ public final class MediaControlStreamWatcher {
         do {
             try proc.run()
             process = proc
-            Self.logger.info("media-control stream started (pid \(proc.processIdentifier))")
+            Self.logger.notice("media-control stream started (pid \(proc.processIdentifier))")
         } catch {
             Self.logger.error("failed to start media-control stream: \(error.localizedDescription)")
             scheduleRestart()
@@ -268,7 +268,7 @@ public final class MediaControlStreamWatcher {
 
     private func handleTermination() {
         guard !stopped else { return }
-        Self.logger.info("media-control stream exited; restarting in \(self.restartDelay, format: .fixed(precision: 1))s")
+        Self.logger.notice("media-control stream exited; restarting in \(self.restartDelay, format: .fixed(precision: 1))s")
         process = nil
         buffer.removeAll()
         scheduleRestart()

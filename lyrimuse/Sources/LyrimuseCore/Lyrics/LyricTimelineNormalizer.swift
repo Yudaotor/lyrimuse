@@ -130,6 +130,6 @@ public enum LyricTimelineNormalizer {
             .map { "\($0.key.rawValue)=\($0.value)" }
             .sorted()
             .joined(separator: ",")
-        logger.info("word timeline normalized track=\(track, privacy: .public) clamped_to_line_start=\(report.clampedToLineStart) clamped_before_next_line=\(report.clampedBeforeNextLine) degraded_lines=\(report.degradedLineCount) reasons=\(reasons, privacy: .public)")
+        logger.notice("word timeline normalized track=\(track, privacy: .public) clamped_to_line_start=\(report.clampedToLineStart) clamped_before_next_line=\(report.clampedBeforeNextLine) degraded_lines=\(report.degradedLineCount) reasons=\(reasons, privacy: .public)")
     }
 }

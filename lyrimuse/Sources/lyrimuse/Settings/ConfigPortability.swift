@@ -322,7 +322,7 @@ enum ConfigPortability {
         }
         if let appSettings = bundle["appSettings"] as? [String: Any] {
             let applied = applyAppSettings(appSettings)
-            logger.info("importData: applied \(applied) of \(appSettings.count) appSettings keys")
+            logger.notice("importData: applied \(applied) of \(appSettings.count) appSettings keys")
             // 顺手把配置文件夹里那份镜像也刷成刚导入的内容。不刷的话它会一直是覆盖前的
             // 旧值,直到用户下次改动某个设置 —— 中间这段时间里"把配置文件夹拷去别的机器"
             // 带走的是旧偏好,而用户以为自己刚导入的就是全部。
@@ -338,7 +338,7 @@ enum ConfigPortability {
         // 失败不算导入失败:全新机器上 collector 还没装,kickstart 必然失败,而那条路径
         // 随后的引导流程本来就会把服务装上、届时自然读的是新配置。
         let reloaded = await CollectorControl.restartAndWaitAsync()
-        logger.info("importData: collector reload after import — ok=\(reloaded)")
+        logger.notice("importData: collector reload after import — ok=\(reloaded)")
         return true
     }
 
@@ -422,12 +422,12 @@ enum ConfigPortability {
         // 用户在界面上完全看不到原因。它跟校正值是成对的东西(LyricsOffsetStore
         // .clearAllTrackOffsets 也是这么配对的)。
         await LyricsPinStore.shared.removeAll()
-        logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
+        logger.notice("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
 
         // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl
         // 操作,不回写偏好,顺序上不会把刚清掉的键又写回来。
         let state = await CollectorServiceManager.setEnabledAndWait(false)
-        logger.info("clearAllConfig: collector service stopped — stillRunning=\(state.isRunning)")
+        logger.notice("clearAllConfig: collector service stopped — stillRunning=\(state.isRunning)")
         return ok
     }
 

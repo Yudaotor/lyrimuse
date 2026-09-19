@@ -62,7 +62,7 @@ public enum CollectorControl {
             if case .running(let pid) = state {
                 // pid 没变说明 `-k` 还没把旧进程杀掉,继续等。
                 if let previousPid, pid == previousPid { continue }
-                logger.info("collector restarted and confirmed running (pid \(pid))")
+                logger.notice("collector restarted and confirmed running (pid \(pid))")
                 return true
             }
         }

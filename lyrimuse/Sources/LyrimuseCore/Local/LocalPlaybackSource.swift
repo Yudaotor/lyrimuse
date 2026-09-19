@@ -1423,7 +1423,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func setScreenLocked(_ locked: Bool) {
         guard screenLocked != locked else { return }
         screenLocked = locked
-        logger.info("screen \(locked ? "locked" : "unlocked", privacy: .public); word-level tick \(locked ? "paused" : "resumed", privacy: .public)")
+        logger.notice("screen \(locked ? "locked" : "unlocked", privacy: .public); word-level tick \(locked ? "paused" : "resumed", privacy: .public)")
         if locked {
             stopFastTimer()
         } else if anchor != nil {
@@ -1760,7 +1760,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 return
             }
             if self.consecutiveNilSnapshots > 0 {
-                logger.info("snapshot recovered after \(self.consecutiveNilSnapshots) consecutive failures")
+                logger.notice("snapshot recovered after \(self.consecutiveNilSnapshots) consecutive failures")
                 self.consecutiveNilSnapshots = 0
                 self.nilStreakStartedAt = nil
             }
@@ -2022,7 +2022,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if enrichContentVersion != enrichMTime { enrichContentVersion = enrichMTime }
         if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {
-                logger.info("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
+                logger.notice("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
             }
@@ -2800,7 +2800,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 重试打满仍是别的歌的封面:宁可占位也不挂错图。留一条 info 日志——万一
                 // 两条路径的元数据出现系统性偏差(同一首歌两个 key 恒不相等),这里会对
                 // 每首歌都触发,靠日志能一眼定位。
-                logger.info("artwork payload key mismatch after retries: payload=\(payloadKey, privacy: .public) expected=\(expectedKey, privacy: .public), dropping")
+                logger.notice("artwork payload key mismatch after retries: payload=\(payloadKey, privacy: .public) expected=\(expectedKey, privacy: .public), dropping")
                 data = nil
             }
             // 结果定案了(data 仍为 nil = 重试完还是没有,判定这首歌确实没有封面),
