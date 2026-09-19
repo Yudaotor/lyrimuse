@@ -8,6 +8,7 @@ import (
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	"log"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -334,10 +335,82 @@ type itunesResult struct {
 	CollectionArtistName string `json:"collectionArtistName"`
 }
 
+// ---- iTunes Search 的限流退避 ----
+//
+// 这个端点被打得最狠:实测一份日志里 155346 次请求、52.6% 失败,最近那段里 429 有 655 次、
+// 403 有 546 次,远超其它任何源。而它**不受歌词源熔断管辖** —— lyricSourceForHost 的映射表
+// 里没有 itunes.apple.com(返回 ""),observe 见到空源名直接 return,于是限流了也不退避,
+// 继续猛打、越打越被限。
+//
+// ⚠️ 为什么不干脆把 itunes.apple.com 加进那张表:表里的 "applemusic" 指的是 amp-api 那条
+// **歌词源**(要 media-user-token)。itunes.apple.com/search 是公开的目录检索,给专辑提示 /
+// 封面 / storefront 标题反查 / 目录 id 用,跟歌词正文无关。归到一起的话,目录检索被限流会
+// 把真正的 Apple Music 歌词源一起跳过 —— 拿外围补全的故障去停掉一个能出歌词的源,不划算。
+//
+// ⚠️ 也不能按**主机**退避:同一个 host 上的 /lookup 端点实测 64 次请求 0 失败,健康得很,
+// 不该被 /search 的限流连累。所以退避只挂在 /search 这一个端点上。
+//
+// 403 跟 429 一起算:实测这两个状态码交错出现(429 之后紧跟一串 403,同一波限流的两种表现),
+// 不是 sourcebreaker 头注里说的那种"没有凭据的源被反爬 403"。但 403 不带 Retry-After,
+// 所以用固定档,比 429 那条保守。
+//
+// 退避期间直接返回空切片 —— 这正是这个函数既有的失败语义(DNS 失败 / 超时 / ctx 取消统统
+// 吞成空切片,见 albumhint.go 里那段注释),调用方本来就按"这次没查到"处理。代价也只落在
+// 外围字段上:专辑提示、封面、标题反查,不会让哪首歌因此没有歌词。
+var (
+	itunesSearchMu             sync.Mutex
+	itunesSearchCooldownUntil  time.Time
+	itunesSearchCooldownLogged bool
+)
+
+// itunesSearchForbiddenCooldown 是 403 用的固定退避。403 不带 Retry-After,而 429 那条
+// (parseLyricSourceRetryAfter)没给头时默认 1 分钟、封顶 5 分钟 —— 这里取更短的一档:
+// 403 的证据比 429 弱,退避过头会让封面/专辑信息白白缺席。
+const itunesSearchForbiddenCooldown = 30 * time.Second
+
+// itunesSearchCoolingDown 报告现在是否还在退避窗口里。
+func itunesSearchCoolingDown(now time.Time) bool {
+	itunesSearchMu.Lock()
+	defer itunesSearchMu.Unlock()
+	return now.Before(itunesSearchCooldownUntil)
+}
+
+// noteITunesSearchStatus 按一次响应的状态码更新退避窗口。非限流状态码立即清掉窗口 ——
+// 跟 lyricSourceBreaker 的 default 分支同一条规矩:拿到一次正常响应就说明限流过去了。
+func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
+	itunesSearchMu.Lock()
+	defer itunesSearchMu.Unlock()
+	switch status {
+	case http.StatusTooManyRequests:
+		itunesSearchCooldownUntil = now.Add(parseLyricSourceRetryAfter(retryAfter))
+	case http.StatusForbidden:
+		// 已经在更长的窗口里就别缩短它(429 给的 Retry-After 比这条固定档权威)。
+		if until := now.Add(itunesSearchForbiddenCooldown); until.After(itunesSearchCooldownUntil) {
+			itunesSearchCooldownUntil = until
+		}
+	default:
+		itunesSearchCooldownUntil = time.Time{}
+		itunesSearchCooldownLogged = false
+		return
+	}
+	if !itunesSearchCooldownLogged {
+		itunesSearchCooldownLogged = true
+		log.Printf("apple: iTunes Search rate-limited (status=%d), backing off %s",
+			status, time.Until(itunesSearchCooldownUntil).Round(time.Second))
+	}
+}
+
+// itunesSearchBaseURL 只为单测可改 —— 让退避那条"在冷却窗口里根本不发请求"能被真的数出来
+// (纯函数测不到这一步,变异测试实测:去掉 itunesSearch 开头那道检查,只测纯函数的用例照样全绿)。
+var itunesSearchBaseURL = "https://itunes.apple.com/search"
+
 func itunesSearch(ctx context.Context, q, country string) []itunesResult {
+	if itunesSearchCoolingDown(time.Now()) {
+		return nil
+	}
 	cli := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://itunes.apple.com/search?media=music&entity=song&limit=25&country="+country+"&term="+q, nil)
+		itunesSearchBaseURL+"?media=music&entity=song&limit=25&country="+country+"&term="+q, nil)
 	if err != nil {
 		return nil
 	}
@@ -346,6 +419,7 @@ func itunesSearch(ctx context.Context, q, country string) []itunesResult {
 		return nil
 	}
 	defer resp.Body.Close()
+	noteITunesSearchStatus(resp.StatusCode, resp.Header.Get("Retry-After"), time.Now())
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
