@@ -37,7 +37,7 @@ enum DiagnosticsExporter {
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return "Lyrimuse-Diagnostics-\(formatter.string(from: Date())).txt"
+        return "Lyrimuse-Diagnostics-\(formatter.string(from: Date())).zip"
     }
 
     // 只生成内容,不碰任何文件系统写入——存哪、怎么存交给调用方(SettingsView 用
@@ -70,12 +70,14 @@ enum DiagnosticsExporter {
         // @MainActor(只有少数纯换算函数显式 nonisolated),`sourceInfo`/`lookup`/
         // `resolvedKey` 都不在那份白名单里,不能挪到下面的 Task.detached 里调。
         let currentTrackLines = currentTrackLyricsLines()
+        // zip 里的顶层目录跟着用户在保存面板里敲的名字走,解压出来是一个文件夹,
+        // 不是三个散文件落进下载目录。
+        let bundleName = url.deletingPathExtension().lastPathComponent
         Task { @MainActor in
-            let logs = await Task.detached(priority: .userInitiated) {
-                logLines(secrets: secrets, currentTrackLines: currentTrackLines)
+            await Task.detached(priority: .userInitiated) {
+                writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head,
+                                       secrets: secrets, currentTrackLines: currentTrackLines)
             }.value
-            let report = (head + logs).joined(separator: "\n")
-            try? report.write(to: url, atomically: true, encoding: .utf8)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
@@ -267,19 +269,12 @@ enum DiagnosticsExporter {
     /// 都不能在这个后台上下文里现读/现调。
     private static func logLines(secrets: [String: String], currentTrackLines: [String]?) -> [String] {
         var lines: [String] = []
-        lines.append("== App Log (last 24h, UTC, subsystem me.yudaotor.lyrimuse) ==")
-        lines.append(contentsOf: collapseRepeatedLines(
-            recentAppLogLines().map { LogRedactor.redactAll($0, secrets: secrets) }))
-        lines.append("")
-        // 从固定"最后 200 行"改成按时间窗口取——collector 那边接入网络审计
-        // 日志(第 15 章)之后,例行轮询把这 200 行迅速填满,实测一份导出里这 200 行只
-        // 覆盖了 45 分钟,稍早一点发生的事在导出这一刻已经被冲出窗口。改成取最近 4 小时,
-        // 配合下面的 collapseRepeatedLines 把例行重复调用折叠掉,总行数不会比以前离谱地
-        // 多,但覆盖的时间跨度更接近 App Log 那边的 24 小时。collector 侧同步加了
-        // log.LUTC(main.go),这里显式在标题里写 UTC,两段日志才真的能对得上表。
-        lines.append("== Collector Log (last 4h, UTC) ==")
-        lines.append(contentsOf: collapseRepeatedLines(
-            recentCollectorLogLines().map { LogRedactor.redactAll($0, secrets: secrets) }))
+        // 两段日志正文搬进了压缩包里各自的文件(见 writeDiagnosticsBundle),这里只留一句
+        // 指路。报告因此保持在十几 KB —— 还能直接贴进 issue,而那正是它的用途。
+        lines.append("== Logs ==")
+        lines.append("完整日志在同一个压缩包里,都已脱敏:")
+        lines.append("  lyrimuse.log  — collector,整份,不按时间截断、不折叠重复行")
+        lines.append("  app-log.txt   — App 侧 os.Logger,最近 24 小时(OSLogStore 只留得住这么多)")
         lines.append("")
         // ---- App 进程的 stderr----
         //
@@ -416,40 +411,72 @@ enum DiagnosticsExporter {
         return all.isEmpty ? ["(empty)"] : Array(all.suffix(maxLines))
     }
 
-    /// collector 日志按**时间窗口**取,不是固定行数(见上面 logLines 里的说明)。文件本身
-    /// 没有轮转(lyricstrace.go 的注释也提过这一点),整份读进内存一次性 split 仍然可接受
-    /// (一次性的后台操作,不是热路径);hardLineCap 只是防一个已经异常暴涨的日志文件把
-    /// 导出拖到不合理的大小/耗时。
+    /// 把报告和两份完整日志打成一个 zip。
     ///
-    /// 用**倒着扫**找窗口起点,而不是从头正着过滤——文件可能有几十 MB,没必要为了找"最后
-    /// 4 小时从哪开始"把每一行都解析一遍时间戳,倒着扫找到第一条早于 cutoff 的行就能停。
-    private static func recentCollectorLogLines(hours: Double = 4, hardLineCap: Int = 5000) -> [String] {
-        let path = LogFiles.collector
-        guard let content = try? String(contentsOf: path, encoding: .utf8) else {
-            return ["(could not read \(path.path))"]
-        }
-        let allLines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard !allLines.isEmpty else { return ["(empty log file)"] }
+    /// 为什么日志不再截断塞进报告:原来 collector 那段取"最近 4 小时"、还压着 5000 行硬
+    /// 上限,而这台机器 4 小时就有 9476 行 —— 实际连 4 小时都给不全。更要紧的是"窗口"这个
+    /// 抽象本身就不对症:一首歌的歌词是哪一次解析定下来的,可能是几周前的事,而缓存永久
+    /// 保留、日志会轮转。实测本机 first-resolve 决策的年龄 p90 是 7.2 天。
+    ///
+    /// 为什么是脱敏后的完整日志,而不是让用户直接把 ~/Library/Logs/lyrimuse.log 发出来:
+    /// LogRedactor 只作用在这条导出路径上,原始文件一点脱敏都没过(本文件头注记着实测——
+    /// 当时最后 200 行里就有 3 处 Last.fm API Key 原文)。
+    ///
+    /// 为什么是 zip 而不是一个大 txt:3MB 文本压完约 270KB,解压出来 report.txt 照样直接读、
+    /// 日志照样直接 grep,而 3MB 的 txt 两头都不讨好。
+    private static func writeDiagnosticsBundle(
+        to destination: URL, bundleName: String, head: [String],
+        secrets: [String: String], currentTrackLines: [String]?
+    ) {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("lyrimuse-diag-\(UUID().uuidString)")
+        let staging = root.appendingPathComponent(bundleName, isDirectory: true)
+        guard (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil else { return }
+        defer { try? fm.removeItem(at: root) }
 
-        let cutoff = Date().addingTimeInterval(-hours * 3600)
-        // 时间戳两种格式都认(collector 走 log/slog,行首是 `time=…Z`;之前是 Go log
-        // 的 `yyyy/MM/dd HH:mm:ss`,.old 归档与迁移前的行仍是它),解析在 Core 的 CollectorLogLine,
-        // selftest 钉着两种都按 UTC 解。
-        // 默认包含整份文件——找不到任何可解析的时间戳时,宁可多给一点也不要因为解析
-        // 失败就悄悄给出一份空/近乎空的日志段(诊断报告的原则是宁可啰嗦,不能装作没事)。
-        var startIndex = 0
-        for i in stride(from: allLines.count - 1, through: 0, by: -1) {
-            guard let date = CollectorLogLine.timestamp(of: allLines[i]) else { continue }
-            if date < cutoff {
-                startIndex = i + 1
-                break
-            }
-            startIndex = i
+        let report = (head + logLines(secrets: secrets, currentTrackLines: currentTrackLines))
+            .joined(separator: "\n")
+        let files: [(String, String)] = [
+            ("report.txt", report),
+            (LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)),
+            ("app-log.txt", fullAppLogText(secrets: secrets)),
+        ]
+        for (name, text) in files {
+            try? text.write(to: staging.appendingPathComponent(name), atomically: true, encoding: .utf8)
         }
-        let windowed = Array(allLines[startIndex...])
-        return windowed.count > hardLineCap ? Array(windowed.suffix(hardLineCap)) : windowed
+        zipDirectory(staging, to: destination)
     }
 
+    /// 整份 collector 日志,脱敏后原样保留 —— 不按时间截、不压行数上限、不折叠重复行。
+    /// 折叠那套留给 report.txt 里几段小的;这一份是拿来 grep 的,少一行都可能正是那一行。
+    ///
+    /// 整块脱敏而不是逐行:实测 3MB / 18594 行,整块 258ms、逐行 754ms,产出一模一样。
+    private static func fullCollectorLogText(secrets: [String: String]) -> String {
+        guard let content = try? String(contentsOf: LogFiles.collector, encoding: .utf8) else {
+            return "(could not read \(LogFiles.collector.path))"
+        }
+        return LogRedactor.redactAll(content, secrets: secrets)
+    }
+
+    /// App 侧 24 小时的 os.Logger 记录,同样整份脱敏、不折叠。24 小时不是我们选的 ——
+    /// OSLogStore 手里就只有这么多。
+    private static func fullAppLogText(secrets: [String: String]) -> String {
+        LogRedactor.redactAll(recentAppLogLines().joined(separator: "\n"), secrets: secrets)
+    }
+
+    /// 用 NSFileCoordinator 的 `.forUploading` 压包:系统自带,不依赖 /usr/bin/zip、不 spawn
+    /// 子进程。它把目录压成一个**临时** zip 交给 block,那个文件在 block 返回后就没了,
+    /// 所以必须在 block 里面就挪到目标位置。
+    private static func zipDirectory(_ directory: URL, to destination: URL) {
+        var coordinatorError: NSError?
+        NSFileCoordinator().coordinate(
+            readingItemAt: directory, options: [.forUploading], error: &coordinatorError
+        ) { zipped in
+            let fm = FileManager.default
+            try? fm.removeItem(at: destination)
+            try? fm.moveItem(at: zipped, to: destination)
+        }
+    }
     /// 把"内容几乎相同、只有时间戳/耗时/计数这类可变部分不同"的连续大量重复行折叠成一条
     /// 摘要。网络审计的例行成功调用(比如同一个 host 被反复访问)、轮询失败这类天生噪音
     /// 典型都长这样——实测一份真实导出里,这类重复行能占到 App Log 的六七成,把真正

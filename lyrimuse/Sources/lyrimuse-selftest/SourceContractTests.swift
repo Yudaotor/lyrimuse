@@ -2713,6 +2713,28 @@ func runSourceContractTests() {
             }
             return out.joined(separator: "\n")
         }
+
+        // ---- 产物形态:报告 + 两份**完整**日志,打成 zip ----
+        //
+        // 钉的是"完整"和"脱敏"必须同时成立。少了完整,要查的那一刻常落在窗口外(实测
+        // first-resolve 决策年龄 p90 是 7.2 天,而原来的导出窗口只有 4 小时、还压着 5000 行
+        // 上限,实测连 4 小时都给不全);少了脱敏,就等于让用户把未经处理的原始日志发出去,
+        // 那正是 LogRedactor 当初要堵的事。
+        expectEqual(exporter.contains(").zip\""), true, "诊断包: 产物是 zip,不是单个 txt")
+        expectEqual(exporter.contains("writeDiagnosticsBundle("), true, "诊断包: 有打包入口")
+        expectEqual(exporter.contains("(\"report.txt\", report)"), true, "诊断包: 报告单独成文件")
+        expectEqual(exporter.contains("LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)"),
+                    true, "诊断包: collector 完整日志单独成文件")
+        expectEqual(exporter.contains("(\"app-log.txt\", fullAppLogText(secrets: secrets))"),
+                    true, "诊断包: App 完整日志单独成文件")
+        // 这两个函数各自是完整日志的唯一出口,漏掉任何一处 redactAll 就是把原始日志发出去。
+        expectEqual(exporter.contains("return LogRedactor.redactAll(content, secrets: secrets)"),
+                    true, "诊断包: collector 完整日志过脱敏")
+        expectEqual(exporter.contains("LogRedactor.redactAll(recentAppLogLines()"),
+                    true, "诊断包: App 完整日志过脱敏")
+        // 按时间窗口 / 行数上限截 collector 日志那条路已经废掉,别让它复活。
+        expectEqual(exporter.contains("recentCollectorLogLines"), false, "诊断包: 不再按时间窗口截断")
+        expectEqual(exporter.contains("hardLineCap"), false, "诊断包: 不再有行数硬上限")
         /// 这个键缺了会不会炸:用 decodeIfPresent 解的、或者属性本身可选的,都不会。
         func tolerant(_ body: String, _ key: String) -> Bool {
             for raw in body.split(separator: "\n", omittingEmptySubsequences: false) {

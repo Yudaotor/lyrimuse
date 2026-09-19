@@ -312,9 +312,10 @@ func runOpsDiagnosticsTests() {
             exit(1)
         }
 
-        // DiagnosticsExporter.recentCollectorLogLines(limit: 200) 复制的就是这个窗口。
-        let window = logText.split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init).suffix(200).joined(separator: "\n")
+        // 导出的是**整份**日志(DiagnosticsExporter.fullCollectorLogText),所以这里也拿整份验。
+        // 原来只验最后 200 行 —— 那是当年那个导出窗口的形状,而凭据可能出现在任何一行:
+        // 泄漏过的那几处 Last.fm API Key 来自 Go *url.Error 打印完整 URL,随便哪次请求失败都会写一行。
+        let window = logText
 
         // 只挑真正是凭据的字段,跟 ConfigStore.secretsForRedaction 的取舍保持一致。
         let credentialFields = ["listenbrainz_token", "state_relay_token", "lastfm_api_key",
@@ -333,6 +334,19 @@ func runOpsDiagnosticsTests() {
         print("  真实凭据字段数: \(secrets.count)")
         print("  脱敏前出现在导出窗口里的: \(before.count) 项 -> \(before.keys.sorted())")
         expectEqual(after.count, 0, "脱敏后不得有任何真实凭据残留(残留项: \(after.keys.sorted()))")
+
+        // ⚠️ 上面那条如今多半是**空转**的:collector 侧的 logscrub 已经把凭据挡在日志之外,
+        // 实测整份 3MB 日志里 0 项真实凭据。输入里本来就没有,它答不了"脱敏到底生没生效"。
+        //
+        // 所以再注入一次。LogRedactor 是纵深的第二道(见它的头注),不能因为第一道目前有效
+        // 就不验它 —— 真出问题的那天恰恰是第一道漏了的那天,而那正是这一道存在的理由。
+        if !secrets.isEmpty {
+            let injected = window + "\n" + secrets
+                .map { "time=2026-01-01T00:00:00.000Z level=WARN msg=\"probe \($0.key)=\($0.value)\"" }
+                .joined(separator: "\n")
+            let leaked = secrets.filter { LogRedactor.redactAll(injected, secrets: secrets).contains($0.value) }
+            expectEqual(leaked.count, 0, "注入的真实凭据必须被出口这一层打掉(残留项: \(leaked.keys.sorted()))")
+        }
     }
 
     // ---- LaunchdPrintParser ----
