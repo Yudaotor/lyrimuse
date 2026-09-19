@@ -665,6 +665,9 @@ public final class LocalPlaybackSource: ObservableObject {
         let next = Self.learnedAnchorLag(current: prior ?? 0, residual: residual, hasPrior: prior != nil)
         logger.notice("anchor lag learned: player=\(bundleID, privacy: .public) residual=\(residual, format: .fixed(precision: 3)) lag \(prior ?? 0, format: .fixed(precision: 3)) -> \(next, format: .fixed(precision: 3))")
         guard prior != next else { return }
+        // ⚠️ "没学过 + 这次也没学出东西"不要建条目:建了之后 hasPrior 就成立,下一次真量到
+        // 滞后时会走 α 而不是直接采信(酷狗的换歌残差全被限幅夹成 0,正好踩这个)。
+        guard next > 0 || prior != nil else { return }
         anchorLagByPlayer[bundleID] = next
         Self.persistAnchorLagTable(anchorLagByPlayer)
     }
@@ -2110,7 +2113,10 @@ public final class LocalPlaybackSource: ObservableObject {
            Self.positionSourceTier(forBundleID: snapshot.bundleIdentifier) == .cleanExtrapolated,
            let republished = snapshot.anchorElapsedTime, republished > 0,
            let previousAnchor = posPrevAnchorElapsed, abs(republished - previousAnchor) > 0.001 {
-            let oursMs = playing ? anchor?.extrapolatedPositionMs(now: now) : pausedPositionMs
+            // ⚠️ 播放翻暂停的**那一拍**要用被冻住的锚点外推值,不能用 pausedPositionMs —— 后者
+            // 这一拍才算出来,此刻还是上一拍播放态留下的 nil,于是一次都学不成(酷狗只在暂停时
+            // 报真值,整个漏光)。锚点要到下面的暂停分支才被清掉,这里还在。
+            let oursMs = anchor == nil ? pausedPositionMs : anchor?.extrapolatedPositionMs(now: now)
             if let oursMs {
                 learnAnchorLag(bundleID: snapshot.bundleIdentifier,
                                residual: republished - Double(oursMs) / 1000)
