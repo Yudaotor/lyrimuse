@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -199,7 +200,7 @@ func scheduleArtworkUpload(sha, path string) {
 			markArtworkConfirmed(sha)
 		}
 		if err != nil {
-			log.Printf("artwork relay: upload failed sha=%s, not retrying for %v: %v", sha, artworkUploadRetryAfter, err)
+			slog.Warn("artwork relay: upload failed, not retrying", "sha", sha, "retry_after", artworkUploadRetryAfter, "err", err)
 		}
 	}()
 }
@@ -295,7 +296,7 @@ func sweepDeviceArtwork(ctx context.Context) {
 		}
 		if err := ensureArtworkUploaded(ctx, sha, path); err != nil {
 			failed++
-			log.Printf("artwork relay: backfill upload failed sha=%s: %v", sha, err)
+			slog.Warn("artwork relay: backfill upload failed", "sha", sha, "err", err)
 		} else {
 			artworkMu.Lock()
 			artworkUploaded[sha] = true

@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -117,7 +118,7 @@ func adoptEnrichRestore(path string) {
 		// 改名失败的后果是下次启动会再采纳一遍。重复采纳本身是幂等的(同样的字段盖成
 		// 同样的值),唯一的偏差是"这台机器在两次启动之间新解析出来的字段会被备份里的
 		// 旧值再盖一次" —— 所以要吵一声,别让它无声地长期存在。
-		log.Printf("enrich restore: adopted but rename failed (will re-adopt on next start): %v", err)
+		slog.Warn("enrich restore: adopted but rename failed (will re-adopt on next start)", "err", err)
 	}
 	log.Printf("enrich restore: adopted entries=%d created=%d merged=%d skipped=%d, renamed to %s",
 		created+mergedInto, created, mergedInto, skipped, filepath.Base(applied))

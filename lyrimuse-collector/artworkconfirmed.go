@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,6 +164,6 @@ func flushArtworkConfirmed() {
 		return
 	}
 	if err := os.Rename(tmp, artworkConfirmPath); err != nil {
-		log.Printf("save %s: %v", filepath.Base(artworkConfirmPath), err)
+		slog.Error("save artwork-confirmed cache", "file", filepath.Base(artworkConfirmPath), "err", err)
 	}
 }

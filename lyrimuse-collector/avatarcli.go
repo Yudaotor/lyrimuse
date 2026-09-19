@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -117,9 +118,9 @@ func runArtistAvatarsCLI(args []string) {
 			// 触发两批解析),半写状态被另一个进程读到会整份解析失败、缓存全丢。
 			tmp := cachePath + ".tmp"
 			if err := os.WriteFile(tmp, data, 0o644); err != nil {
-				log.Printf("artist-avatars: write cache failed: %v", err)
+				slog.Error("artist-avatars: write cache failed", "err", err)
 			} else if err := os.Rename(tmp, cachePath); err != nil {
-				log.Printf("artist-avatars: rename cache failed: %v", err)
+				slog.Error("artist-avatars: rename cache failed", "err", err)
 			}
 		}
 	}

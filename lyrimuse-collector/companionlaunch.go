@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os/exec"
 	"time"
 )
@@ -205,6 +206,6 @@ func launchLyrimuseApp() {
 	}
 	// bundle id 来自 paths.go appBundleID()(环境变量可覆盖,缺省正式 id),上面按可执行名 `lyrimuse` 查"在不在跑"。
 	if err := exec.Command("open", "--background", "-b", appBundleID()).Start(); err != nil {
-		log.Printf("companion launch: failed to open Lyrimuse.app: %v", err)
+		slog.Warn("companion launch: failed to open Lyrimuse.app", "err", err)
 	}
 }

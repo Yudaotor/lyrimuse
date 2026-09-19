@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -356,11 +357,11 @@ func (c *lastfmArtistCollapser) save(snapshot map[string]lastfmCollapseDecision)
 	// 临时名带 pid,免得常驻 collector 和 backfill 子命令互相覆盖。
 	tmp := fmt.Sprintf("%s.tmp.%d", lastfmCollapsePath, os.Getpid())
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		log.Printf("lastfm smart artist: write cache: %v", err)
+		slog.Error("lastfm smart artist: write cache failed", "err", err)
 		return
 	}
 	if err := os.Rename(tmp, lastfmCollapsePath); err != nil {
-		log.Printf("lastfm smart artist: rename cache: %v", err)
+		slog.Error("lastfm smart artist: rename cache failed", "err", err)
 		_ = os.Remove(tmp)
 	}
 }

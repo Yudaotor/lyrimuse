@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -125,7 +126,7 @@ func touchLastfmFeedNudgeFile() {
 		return
 	}
 	if err := os.WriteFile(lastfmFeedNudgePath, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644); err != nil {
-		log.Printf("lastfm feed nudge: write %s: %v", lastfmFeedNudgePath, err)
+		slog.Error("lastfm feed nudge: write failed", "file", lastfmFeedNudgePath, "err", err)
 	}
 }
 
@@ -227,11 +228,11 @@ func writeLastfmRecentFeed(user string, page lastfmRecentPage, fetchedAt time.Ti
 	// 临时文件 + rename:App 可能正在读。临时文件放同目录,rename 才是同一文件系统内的原子操作。
 	tmp := filepath.Join(filepath.Dir(lastfmFeedPath), "."+filepath.Base(lastfmFeedPath)+".tmp")
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		log.Printf("lastfm feed: write temp failed: %v", err)
+		slog.Error("lastfm feed: write temp failed", "err", err)
 		return
 	}
 	if err := os.Rename(tmp, lastfmFeedPath); err != nil {
-		log.Printf("lastfm feed: rename failed: %v", err)
+		slog.Error("lastfm feed: rename failed", "err", err)
 		os.Remove(tmp)
 		return
 	}

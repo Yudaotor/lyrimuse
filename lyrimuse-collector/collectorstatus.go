@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -57,7 +58,7 @@ func markCollectorNetworkDown() {
 		return
 	}
 	if err := os.WriteFile(collectorStatusPath, data, 0o644); err != nil {
-		log.Printf("collector status: write failed: %v", err)
+		slog.Error("collector status: write failed", "err", err)
 		return
 	}
 	collectorStatusNetworkDown = true

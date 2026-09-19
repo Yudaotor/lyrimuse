@@ -13,6 +13,7 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	neturl "net/url"
@@ -463,7 +464,7 @@ func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
 		return
 	}
 	if err := os.WriteFile(lastfmStatusPath, data, 0o644); err != nil {
-		log.Printf("lastfm mirror: write status file failed: %v", err)
+		slog.Error("lastfm mirror: write status file failed", "err", err)
 	}
 }
 

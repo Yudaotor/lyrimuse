@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -322,7 +323,7 @@ func runDedupeEntriesCLI(args []string) {
 func ensureExclusiveForDedupe(dir string) bool {
 	f, err := os.OpenFile(filepath.Join(dir, "collector.lock"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		log.Printf("dedupe: cannot open lock file: %v", err)
+		slog.Warn("dedupe: cannot open lock file", "err", err)
 		return false
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {

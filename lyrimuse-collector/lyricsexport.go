@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 	"hash/crc32"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,7 +166,7 @@ func exportLyricsFiles() {
 				continue
 			}
 			if err := writeLyricsFileAtomic(path, []byte(full)); err != nil {
-				log.Printf("lyrics export: write %s: %v", filepath.Base(path), err)
+				slog.Error("lyrics export: write failed", "file", filepath.Base(path), "err", err)
 			}
 		}
 	}

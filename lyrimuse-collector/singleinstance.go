@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -19,7 +19,7 @@ func acquireSingleInstanceLock(dir string) bool {
 	path := filepath.Join(dir, "collector.lock")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		log.Printf("single-instance lock unavailable (%v), continuing without it", err)
+		slog.Warn("single-instance lock unavailable, continuing without it", "err", err)
 		return true
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {

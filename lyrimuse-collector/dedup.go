@@ -4,7 +4,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -60,7 +60,7 @@ func (s persistedTTLSet) save(m map[int64]bool) {
 		return
 	}
 	if err := os.Rename(tmp, s.path); err != nil {
-		log.Printf("save %s: %v", filepath.Base(s.path), err)
+		slog.Error("save dedup state", "file", filepath.Base(s.path), "err", err)
 	}
 }
 

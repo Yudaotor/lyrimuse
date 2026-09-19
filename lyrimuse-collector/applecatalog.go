@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -420,7 +421,7 @@ func saveAppleStorefrontArtistCache() {
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		log.Printf("save apple storefront artist cache: %v", err)
+		slog.Error("save apple storefront artist cache", "err", err)
 	}
 }
 
@@ -487,7 +488,7 @@ func saveAppleStorefrontTitleCache() {
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		log.Printf("save apple storefront title cache: %v", err)
+		slog.Error("save apple storefront title cache", "err", err)
 	}
 }
 

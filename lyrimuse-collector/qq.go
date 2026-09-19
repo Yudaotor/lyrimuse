@@ -15,6 +15,7 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -568,7 +569,7 @@ func saveQQArtistNameCache() {
 		return
 	}
 	if err := os.Rename(tmp, qqArtistNamePath); err != nil {
-		log.Printf("save QQ artist name cache: %v", err)
+		slog.Error("save QQ artist name cache", "err", err)
 	}
 }
 

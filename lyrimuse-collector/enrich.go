@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
+	"log/slog"
 	"math"
 	neturl "net/url"
 	"os"
@@ -4047,7 +4048,7 @@ func loadEnrichCache(path string) {
 		// 第一次保存就会把用户攒的整个缓存盖成几条新数据(坐实:204 条被磨到 10 条,
 		// 用户手工修过的歌词也在里面)。
 		if !os.IsNotExist(err) {
-			log.Printf("load enrich cache: %v — starting empty, existing file left untouched", err)
+			slog.Error("load enrich cache failed — starting empty, existing file left untouched", "err", err)
 		}
 		return
 	}
@@ -4058,7 +4059,7 @@ func loadEnrichCache(path string) {
 		if renameErr := os.Rename(path, side); renameErr == nil {
 			log.Printf("enrich cache unreadable (%v) — moved aside to %s, starting empty", err, side)
 		} else {
-			log.Printf("enrich cache unreadable (%v) and could not move aside (%v)", err, renameErr)
+			slog.Error("enrich cache unreadable and could not move aside", "err", err, "rename_err", renameErr)
 		}
 		return
 	}
@@ -4093,22 +4094,22 @@ func saveEnrichCache() {
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(enrichPath), filepath.Base(enrichPath)+".tmp.*")
 	if err != nil {
-		log.Printf("save enrich cache: %v", err)
+		slog.Error("save enrich cache", "err", err)
 		return
 	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
-		log.Printf("save enrich cache: %v", err)
+		slog.Error("save enrich cache", "err", err)
 		return
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmp.Name())
-		log.Printf("save enrich cache: %v", err)
+		slog.Error("save enrich cache", "err", err)
 		return
 	}
 	if err := os.Rename(tmp.Name(), enrichPath); err != nil {
 		os.Remove(tmp.Name())
-		log.Printf("save enrich cache: %v", err)
+		slog.Error("save enrich cache", "err", err)
 	}
 }

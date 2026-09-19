@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -91,7 +92,7 @@ func saveArtistAliasCache() {
 		return
 	}
 	if err := os.Rename(tmp, artistAliasPath); err != nil {
-		log.Printf("save artist alias cache: %v", err)
+		slog.Error("save artist alias cache", "err", err)
 	}
 }
 
@@ -230,7 +231,7 @@ func saveArtistIdentityCache() {
 		return
 	}
 	if err := os.Rename(tmp, artistIdentityPath); err != nil {
-		log.Printf("save artist identity cache: %v", err)
+		slog.Error("save artist identity cache", "err", err)
 	}
 }
 
@@ -478,7 +479,7 @@ func saveMBPrimaryNameCache() {
 		return
 	}
 	if err := os.Rename(tmp, mbPrimaryNamePath); err != nil {
-		log.Printf("save musicbrainz primary name cache: %v", err)
+		slog.Error("save musicbrainz primary name cache", "err", err)
 	}
 }
 

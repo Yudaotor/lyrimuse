@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -161,18 +162,18 @@ func appendListenLogLine(line listenLogLine) {
 	// collector 全仓库只有 lyricsexport.go 建过目录,而 loadConfig 容忍 config.json
 	// 不存在 —— 也就是说这个目录不一定已经在了,自己建一次。
 	if err := os.MkdirAll(filepath.Dir(listenLogPath), 0o755); err != nil {
-		log.Printf("listen log: mkdir failed: %v", err)
+		slog.Error("listen log: mkdir failed", "err", err)
 		return
 	}
 	// 0600:里面没有凭据,但一整份听歌历史本身就是隐私。
 	f, err := os.OpenFile(listenLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		log.Printf("listen log: open failed: %v", err)
+		slog.Error("listen log: open failed", "err", err)
 		return
 	}
 	defer f.Close()
 	if _, err := f.Write(append(data, '\n')); err != nil {
-		log.Printf("listen log: write failed: %v", err)
+		slog.Error("listen log: write failed", "err", err)
 	}
 }
 
@@ -229,7 +230,7 @@ func compactListenLog() {
 	tmp := listenLogPath + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
-		log.Printf("listen log: compact open failed: %v", err)
+		slog.Error("listen log: compact open failed", "err", err)
 		return
 	}
 	w := bufio.NewWriter(f)
@@ -243,14 +244,14 @@ func compactListenLog() {
 	if err := w.Flush(); err != nil {
 		f.Close()
 		os.Remove(tmp)
-		log.Printf("listen log: compact flush failed: %v", err)
+		slog.Error("listen log: compact flush failed", "err", err)
 		return
 	}
 	f.Close()
 	// tmp+rename:跟 persistedTTLSet.save 同一个套路,中途崩溃不会留下半份日志。
 	if err := os.Rename(tmp, listenLogPath); err != nil {
 		os.Remove(tmp)
-		log.Printf("listen log: compact rename failed: %v", err)
+		slog.Error("listen log: compact rename failed", "err", err)
 		return
 	}
 	log.Printf("listen log: compacted %d lines -> %d", len(lines), len(keep))
