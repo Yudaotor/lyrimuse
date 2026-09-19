@@ -175,8 +175,14 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 /// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组行为设置",
 /// 不该知道它内部有几行(同 OverlayTextSettingsRows 的做法)。`AutoHideSettingsRows` 自己只在
 /// 它两行之间插一条,"本组之前"那一条在这里插(见那个文件头的约定)。
+///
+/// ⚠️ `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
+/// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图一个存储属性都没有 —— 宿主刷新时 SwiftUI 判等
+/// 相等就跳过它的 body,开关会画着陈旧值(表现与 `NotchBehaviorToggleRow` 那条一字不差)。
 @MainActor
 struct OverlayBehaviorSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
     var body: some View {
         VStack(spacing: 0) {
             // 「位置」三选一**不在这一组**:它一度是这里的第一行,后来

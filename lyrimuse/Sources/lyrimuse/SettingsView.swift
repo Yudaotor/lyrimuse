@@ -2442,9 +2442,17 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
 
 /// 一个 `NotchBehaviorItem` 的标准渲染:图标 + 标题(+ ⓘ)+ 开关。三个分组视图都用它,不各抄一份
 /// `SettingsRow` + `Toggle` 的样板。
+///
+/// ⚠️ `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
+/// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图的存储属性只有一个 POD 的 `item` —— 宿主刷新
+/// 时 SwiftUI 判等相等,就跳过它的 body 不再求值,开关于是画着陈旧值:点一次真值确实翻了、圆钮却
+/// 不动;再点真值照样翻、圆钮还是不动,要切页把这个视图整个重建才会刷回真值。没有子项联动的那几项
+/// (卡拉OK效果 / 显示封面)因此点下去一点反馈都没有,用户读到的就是"点不动"。
+/// 同 `AutoHideSettingsRows`。
 @MainActor
 private struct NotchBehaviorToggleRow: View {
     let item: NotchBehaviorItem
+    @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         SettingsRow(icon: item.icon, title: item.title, help: item.help) {
@@ -2455,9 +2463,11 @@ private struct NotchBehaviorToggleRow: View {
 
 /// 同上,但画成**从属子行**(`SettingsSubRow`:左边一条淡竖线、标题缩进到主行标题那一列)——
 /// 「曲目信息」下面的四项和「副行」下面的「展开时预览下一句」用它。
+/// ⚠️ `@ObservedObject` 同样必需,理由见 `NotchBehaviorToggleRow`。
 @MainActor
 private struct NotchBehaviorToggleSubRow: View {
     let item: NotchBehaviorItem
+    @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         SettingsSubRow(title: item.title, help: item.help) {
