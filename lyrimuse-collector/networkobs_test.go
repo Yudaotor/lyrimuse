@@ -202,10 +202,11 @@ func TestAPICallSummary_AggregatesPerTargetPerMinute(t *testing.T) {
 	defer log.SetOutput(prev)
 
 	t0 := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
-	recordAPICall("GET example.com/a", 100*time.Millisecond, false, t0)
-	recordAPICall("GET example.com/a", 300*time.Millisecond, false, t0.Add(20*time.Second))
-	recordAPICall("GET example.com/a", 900*time.Millisecond, true, t0.Add(40*time.Second))
-	recordAPICall("POST example.com/b", 50*time.Millisecond, false, t0.Add(10*time.Second))
+	recordAPICall("GET example.com/a", 100*time.Millisecond, false, false, t0)
+	recordAPICall("GET example.com/a", 300*time.Millisecond, false, false, t0.Add(20*time.Second))
+	recordAPICall("GET example.com/a", 900*time.Millisecond, true, false, t0.Add(40*time.Second))
+	// b 那一次是 404:它既不进 failed,也要在汇总里单独现一列 notfound。
+	recordAPICall("POST example.com/b", 50*time.Millisecond, false, true, t0.Add(10*time.Second))
 
 	flushAPICallSummaries(t0.Add(30*time.Second), false)
 	if buf.Len() != 0 {
@@ -223,10 +224,23 @@ func TestAPICallSummary_AggregatesPerTargetPerMinute(t *testing.T) {
 	if strings.Contains(out, "example.com/b") {
 		t.Fatalf("target b opened at +10s must not be summarized at +61s, got: %q", out)
 	}
+	// 一个 404 都没有的窗口不该挂 notfound= —— 汇总行占日志四成,给每行加一个恒为 0
+	// 的字段纯属浪费体积。
+	if strings.Contains(out, "notfound") {
+		t.Fatalf("窗口里没有 404,汇总行不该出现 notfound=,got: %q", out)
+	}
 	buf.Reset()
 	flushAPICallSummaries(t0.Add(61*time.Second), true)
 	if !strings.Contains(buf.String(), `target="POST example.com/b"`) || !strings.Contains(buf.String(), "count=1") {
 		t.Fatalf("force flush must summarize the remaining window, got: %q", buf.String())
+	}
+	// 404 既要单独现列,又不能混进 failed —— 混进去的话 lrclib 那类源的失败率会常年虚高
+	// 到 60%+,真故障(503)反而看不出来。
+	if !strings.Contains(buf.String(), "notfound=1") {
+		t.Fatalf("404 应在汇总里单独记成 notfound=1,got: %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "failed=0") {
+		t.Fatalf("404 不该计进 failed,got: %q", buf.String())
 	}
 	buf.Reset()
 	flushAPICallSummaries(t0.Add(time.Hour), true)
@@ -329,5 +343,75 @@ func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) 
 	got := lyricSourceBreakerShared.transportFailureCodes()
 	if got["qq"] != lyricFailureReasonConnectFailed {
 		t.Fatalf("qq 应为 connect_failed,实际 %q", got["qq"])
+	}
+}
+
+// 状态码 →(failed, notfound)的映射只存在于 doHTTPTracked 里。上面那条用例是直接调
+// recordAPICall 传参的,绕过了这一步 —— 变异测试实测:把 `failed := ... && !notFound`
+// 改回 `>= 400`,那条照样全绿。这里走真实 HTTP,把这一步单独钉死。
+func TestDoHTTPTracked404IsNotAFailure(t *testing.T) {
+	apiCallAgg.mu.Lock()
+	apiCallAgg.windows = map[string]*apiCallWindow{}
+	apiCallAgg.mu.Unlock()
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/gone" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	for _, path := range []string{"/gone", "/broken"} {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := doHTTPTracked(srv.Client(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+
+	// 逐条行:404 不该有(amll 三天那 18530 行 WARN 就是这么来的),500 仍要有。
+	out := buf.String()
+	if strings.Contains(out, "/gone") {
+		t.Errorf("404 是正常应答,不该逐条记 WARN,got: %q", out)
+	}
+	if !strings.Contains(out, "/broken") {
+		t.Errorf("500 是真故障,仍该逐条记 WARN,got: %q", out)
+	}
+
+	buf.Reset()
+	flushAPICallSummaries(time.Now(), true)
+	var gone, broken string
+	for _, line := range strings.Split(buf.String(), "\n") {
+		switch {
+		case strings.Contains(line, "/gone"):
+			gone = line
+		case strings.Contains(line, "/broken"):
+			broken = line
+		}
+	}
+	if gone == "" || broken == "" {
+		t.Fatalf("两个目标都该有汇总行,got: %q", buf.String())
+	}
+	// 汇总口径:404 进 notfound、不进 failed。混进去的话 lrclib 那类源的失败率会常年
+	// 虚高到 60%+,真故障(503)反而挑不出来。
+	if !strings.Contains(gone, "failed=0") || !strings.Contains(gone, "notfound=1") {
+		t.Errorf("404 该记成 failed=0 notfound=1,got: %q", gone)
+	}
+	if !strings.Contains(broken, "failed=1") {
+		t.Errorf("500 该记成 failed=1,got: %q", broken)
+	}
+	if strings.Contains(broken, "notfound") {
+		t.Errorf("500 不是 404,不该出现 notfound=,got: %q", broken)
 	}
 }

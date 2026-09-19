@@ -103,23 +103,34 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		}
 		// 失败逐条记、Warn 级:这是要看的信号,不进汇总里被平均掉(汇总仍计一次 failed)。
 		slog.Warn("api call: "+target+" FAILED", "elapsed_ms", elapsed.Milliseconds(), "err", safeErr)
-		recordAPICall(summaryKey, elapsed, true, time.Now())
+		recordAPICall(summaryKey, elapsed, true, false, time.Now())
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
 		lyricSourceBreakerShared.observeTraced(req.URL.Host, err, 0, "", tr)
 		return resp, err
 	}
 	lyricSourceBreakerShared.observeTraced(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
-	failed := resp.StatusCode >= 400
+	// 404 跟别的 4xx/5xx 分开(修)。对歌词源来说 404 是**正常应答**——"这个库里没有这首歌",
+	// 跟"这个源坏了"是两回事,原来 `>= 400` 一刀切同时污染了两头:
+	//   - WARN 被淹:amll 走 GitHub 裸文件,查不到就是 404,三天 18530 行 WARN、占日志体积
+	//     15.6%,而它实际只贡献 34/6283 条歌词;自家 np.yudaotor.me 的封面 HEAD 探测同理,
+	//     "还没上传"也被记成 WARN。真正的故障淹在里面挑不出来。
+	//   - 汇总失真:lrclib 的 failed 率显示 62.5%,其中 1068 次是 404,真故障只有 503 那 399 次。
+	// 现在 notfound 单独一列、逐次记录降到 Debug,failed 只留真故障。
+	//
+	// 只影响日志与汇总口径:熔断器那边 404 走哪条分支由它自己判(上面 observeTraced 已经
+	// 把原始状态码给它了),不受这里影响。
+	notFound := resp.StatusCode == http.StatusNotFound
+	failed := resp.StatusCode >= 400 && !notFound
 	if failed {
 		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	} else {
-		// 成功的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是下面按分钟
-		// 的汇总 —— "所有对外请求全部记录"这条要求由汇总里的 count 兑现,不再
+		// 成功(以及 404)的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是
+		// 下面按分钟的汇总 —— "所有对外请求全部记录"这条要求由汇总里的 count 兑现,不再
 		// 一行一次(Last.fm 每 5 秒一次轮询,两天日志里这一项就 4219 行)。
 		slog.Debug("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	}
-	recordAPICall(summaryKey, elapsed, failed, time.Now())
+	recordAPICall(summaryKey, elapsed, failed, notFound, time.Now())
 	return resp, err
 }
 
@@ -195,7 +206,9 @@ type apiCallWindow struct {
 	first, last time.Time
 	count       int
 	failed      int
-	durations   []time.Duration
+	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked 里那段 ⚠️。
+	notfound  int
+	durations []time.Duration
 }
 
 var apiCallAgg = struct {
@@ -203,7 +216,7 @@ var apiCallAgg = struct {
 	windows map[string]*apiCallWindow
 }{windows: map[string]*apiCallWindow{}}
 
-func recordAPICall(target string, elapsed time.Duration, failed bool, now time.Time) {
+func recordAPICall(target string, elapsed time.Duration, failed, notFound bool, now time.Time) {
 	apiCallAgg.mu.Lock()
 	defer apiCallAgg.mu.Unlock()
 	w := apiCallAgg.windows[target]
@@ -215,6 +228,9 @@ func recordAPICall(target string, elapsed time.Duration, failed bool, now time.T
 	w.count++
 	if failed {
 		w.failed++
+	}
+	if notFound {
+		w.notfound++
 	}
 	w.durations = append(w.durations, elapsed)
 }
@@ -241,13 +257,17 @@ func flushAPICallSummaries(now time.Time, force bool) {
 		sort.Slice(d.w.durations, func(i, j int) bool { return d.w.durations[i] < d.w.durations[j] })
 		p50 := d.w.durations[len(d.w.durations)/2]
 		max := d.w.durations[len(d.w.durations)-1]
-		slog.Info("api call summary",
-			"target", d.target,
-			"count", d.w.count,
-			"failed", d.w.failed,
+		// notfound 只在非零时出现 —— 绝大多数目标一个 404 都没有,给每行都挂一个
+		// notfound=0 是纯粹的体积浪费(汇总行本身就占日志四成)。
+		attrs := []any{"target", d.target, "count", d.w.count, "failed", d.w.failed}
+		if d.w.notfound > 0 {
+			attrs = append(attrs, "notfound", d.w.notfound)
+		}
+		attrs = append(attrs,
 			"p50_ms", p50.Milliseconds(),
 			"max_ms", max.Milliseconds(),
 			"span_s", int(d.w.last.Sub(d.w.first).Round(time.Second).Seconds()))
+		slog.Info("api call summary", attrs...)
 	}
 }
 

@@ -28,7 +28,7 @@ import (
 //
 // 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时——请求根本没发出去或
 // 没拿到响应)和 5xx;429 单独按 Retry-After 处理。任何拿到响应且状态码 < 500 的请求都算
-// 一次成功、立即清零——4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、
+// 一次成功,**当场解除冷却**(冷却档位另算,见下一段)——4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、
 // Musixmatch 的 401 hint=captcha 都已各自处理),也刻意**不**把
 // 401/402/403 当成长期粘性冷却的理由——对没有凭据的源来说,反爬 403 那样处理会让该源永久缺席、界面还不提示。
 //
@@ -49,7 +49,11 @@ import (
 // 代码报给弹窗,那三个是加的,见 lyricsourcefailure.go。
 
 // lyricSourceBreakerSchedule:第 N 次达到触发阈值之后的冷却时长(N 从 0 起),超出表长封顶
-// 在最后一档——上限 5 分钟,成功即清,误熔断的代价有界。
+// 在最后一档——上限 5 分钟,误熔断的代价有界。
+//
+// 档位(trips)走到第几档由「离上一次跳闸多久」决定,不由「中间有没有成功过」决定:
+// 成功一次当场解除冷却,但档位要连着 lyricSourceBreakerTripsDecay 没再跳闸才归零。
+// 理由见 observeWith 的 default 分支(lrclib 那个实测例子)。
 var lyricSourceBreakerSchedule = []time.Duration{
 	15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute,
 }
@@ -60,6 +64,9 @@ const (
 	// 429 的 Retry-After:没给或解析不出用默认值,给了也封顶,别被一个离谱的头把源关掉一天。
 	lyricSourceBreakerRetryAfterDefault = time.Minute
 	lyricSourceBreakerRetryAfterMax     = 5 * time.Minute
+	// lyricSourceBreakerTripsDecay:离上一次跳闸多久没再跳,才把档位(trips)清零。
+	// 档位由时间清零而不是由"拿到一次正常响应"清零,理由见 observeWith 的 default 分支。
+	lyricSourceBreakerTripsDecay = 10 * time.Minute
 )
 
 const (
@@ -72,9 +79,11 @@ type lyricSourceBreakerState struct {
 	until       time.Time
 	consecutive int
 	// trips:这个源**熔断过几轮**(不是失败过几个请求)。冷却档位按它取,见 observeWith
-	// 里那段 ⚠️。成功一次整条 state 被删掉,它跟着归零。
-	trips  int
-	reason string
+	// 里那段 ⚠️。归零看的是离 lastTrip 多久,不是"中间有没有拿到过一次正常响应"。
+	trips int
+	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(default 分支那段 ⚠️)。
+	lastTrip time.Time
+	reason   string
 }
 
 type lyricSourceBreaker struct {
@@ -209,6 +218,7 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 			idx = len(lyricSourceBreakerSchedule) - 1
 		}
 		st.trips++
+		st.lastTrip = now
 		st.until = now.Add(lyricSourceBreakerSchedule[idx])
 		st.reason = reason
 		log.Printf("lyrics: source %s cooling down %s (reason=%s trip=%d consecutive=%d host=%s)",
@@ -226,10 +236,27 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 		if st == nil {
 			return
 		}
+		st.consecutive = 0
 		if st.until.After(now) {
 			log.Printf("lyrics: source %s recovered, cooldown cleared (reason=%s)", source, st.reason)
+			st.until = time.Time{}
+			st.reason = ""
 		}
-		delete(b.state, source)
+		// ⚠️ 档位(trips)**不跟着这一次正常响应归零**,改由离上次跳闸的时间归零(修)。
+		//
+		// 原来这里是 `delete(b.state, source)` —— 整条 state 抹掉,trips 跟着没了。对
+		// "正常响应里本来就混着失败"的源,那等于阶梯永远升不上去:lrclib 用 503 做限流,
+		// 而它的 404("这首歌没有")和 200 又是最常见的应答,三者交错,每一次 200/404 都把
+		// 档位打回 0。实测 12 小时 103 次跳闸里 98 次停在 trip=1 的 15 秒档 —— 冷却一过
+		// 就再撞一次限流,等于每 15 秒骚扰它一轮,12 小时打了 3072 个请求、吃 399 个 503。
+		// 对照组 lyricfind/deezer 从不返 404,阶梯才爬得上去(实测 trip=137,钉在 5 分钟档)。
+		//
+		// 一次正常响应只证明"这会儿能通",不证明"限流已经过去";证明后者的是**一段时间
+		// 内都没再跳闸**。封顶仍是 5 分钟,所以文件头「误熔断的代价有界」没变:一次 DNS
+		// 抖动的代价还是 15 秒,只有在衰减窗口内反复跳闸才会往上爬。
+		if st.lastTrip.IsZero() || now.Sub(st.lastTrip) >= lyricSourceBreakerTripsDecay {
+			delete(b.state, source)
+		}
 	}
 }
 

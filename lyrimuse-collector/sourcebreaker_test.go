@@ -127,12 +127,55 @@ func TestLyricSourceBreakerDoesNotEscalateWithinOneCooldown(t *testing.T) {
 	if got, _ := b.coolingDown("qq"); got != 30*time.Second {
 		t.Fatalf("冷却过期后的新一轮失败应升到 30s,实际 %s", got)
 	}
-	// 成功一次把档位也清零:再来一波失败要从 15s 重新数起。
+	// 成功一次**当场解除冷却,但不重置档位**(修)。
+	//
+	// ⚠️ 这里原来断言的是"成功后回到第一档 15s" —— 那条断言钉住的正是后来要修的缺陷:
+	// 200/404 只证明"这会儿能通",不证明"限流已经过去"。对 lrclib 那种用 503 限流、
+	// 同时又常态返 404("这首歌没有")的源,两者交错之下档位永远停在第一档,实测 12 小时
+	// 103 次跳闸里 98 次是 trip=1,冷却一过就再撞一次限流,等于每 15 秒骚扰它一轮。
+	b.observe("c.y.qq.com", nil, 200, "")
+	if _, cooling := b.coolingDown("qq"); cooling {
+		t.Fatal("成功一次应当场解除冷却")
+	}
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	b.observe("c.y.qq.com", errProbeDial, 0, "")
+	if got, _ := b.coolingDown("qq"); got != time.Minute {
+		t.Fatalf("成功只解除冷却、不重置档位,这是第三轮熔断应升到 1m,实际 %s", got)
+	}
+	// 档位改由**时间**归零:连着 lyricSourceBreakerTripsDecay 没再跳闸,下一轮从 15s 重新数起。
+	// 这条是文件头「误熔断的代价有界」的回归钉——没有它,档位就只涨不跌了。
+	clk.advance(lyricSourceBreakerTripsDecay)
 	b.observe("c.y.qq.com", nil, 200, "")
 	b.observe("c.y.qq.com", errProbeDial, 0, "")
 	b.observe("c.y.qq.com", errProbeDial, 0, "")
 	if got, _ := b.coolingDown("qq"); got != 15*time.Second {
-		t.Fatalf("成功清零后应从第一档 15s 重新开始,实际 %s", got)
+		t.Fatalf("静默满 %s 后档位应归零、回到第一档 15s,实际 %s", lyricSourceBreakerTripsDecay, got)
+	}
+}
+
+// lrclib 的真实形态:503 限流与 404("这个库里没有这首歌")交错出现。
+//
+// 这是整条改动的靶子 —— 旧实现里每个 404 都会把 state 连 trips 一起 delete 掉,于是
+// 阶梯永远爬不上第一档。实测日志:12 小时 103 次跳闸,98 次停在 trip=1 的 15 秒档,
+// 期间对 lrclib 打了 3072 个请求、吃了 399 个 503。
+func TestLyricSourceBreakerLadderSurvivesInterleaved404(t *testing.T) {
+	b, clk := newTestBreaker()
+	// 每一轮:两个 503 把它熔断,冷却过后来一个 404(正常应答,解除冷却),再进下一轮。
+	for _, want := range []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute} {
+		b.observe("lrclib.net", nil, 503, "")
+		b.observe("lrclib.net", nil, 503, "")
+		got, cooling := b.coolingDown("lrclib")
+		if !cooling {
+			t.Fatalf("两个 503 之后该进冷却(期望 %s)", want)
+		}
+		if got != want {
+			t.Fatalf("交错的 404 把档位打回去了:期望 %s,实际 %s", want, got)
+		}
+		clk.advance(want)
+		b.observe("lrclib.net", nil, 404, "") // 「这首歌没有」——正常应答,不是故障
+		if _, cooling := b.coolingDown("lrclib"); cooling {
+			t.Fatal("404 是正常应答,该解除冷却")
+		}
 	}
 }
 
