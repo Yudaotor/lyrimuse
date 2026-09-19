@@ -358,6 +358,26 @@ func runPlaybackPositionTests() {
             expectEqual(LocalPlaybackSource.probeLeadPrior(for: .airPlay), 0, "探针领先量先验: 没量过的传输类型不假设")
             expectEqual(LocalPlaybackSource.probeLeadPrior(for: .other), 0, "探针领先量先验: 未知设备不假设")
         }
+        // ---- 锚点滞后的学习(现象是「汽水音乐歌词滞后」) ----
+        // 真机(09-19 汽水音乐,com.soda.music):三次假暂停量到 0.443 / 0.443 / 0.444,
+        // 四首歌用「开播锚点 → 歌尾真实上报」独立反推 0.435 / 0.430 / 0.405 / 0.399。
+        do {
+            func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0, residual: 0.443, hasPrior: false)), 0.443,
+                        "锚点滞后: 没学过时第一份直接采信(真机汽水音乐 0.443)")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0.443, residual: 0, hasPrior: true)), 0.443,
+                        "锚点滞后: 学准了之后残差≈0,值不动 —— 这正是补偿生效的形态")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0.443, residual: -0.043, hasPrior: true)), 0.426,
+                        "锚点滞后: 学过之后按 α=0.4 往新样本靠,不被单次样本整份顶掉")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0.43, residual: 2.4, hasPrior: true)), 0.43,
+                        "锚点滞后: 残差 >1.5s(seek / 换歌错位)不学")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0, residual: -1.9, hasPrior: false)), 0,
+                        "锚点滞后: 没先验时离谱残差同样不采")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0.1, residual: -0.5, hasPrior: false)), 0,
+                        "锚点滞后: 夹到 0 以下 —— 锚点反而超前真声不归这条路管(那是自然切歌偏置)")
+            expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 1.4, residual: 0.9, hasPrior: false)), 1.5,
+                        "锚点滞后: 夹在上限,别把别的毛病当滞后补成偏快")
+        }
         // ---- App → collector 的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
         do {
             let rec = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
