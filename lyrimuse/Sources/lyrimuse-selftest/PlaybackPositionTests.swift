@@ -1209,31 +1209,53 @@ func runPlaybackPositionTests() {
         typealias M = MediaControlClient
         let am = PlaybackPlayer.appleMusic.bundleIdentifier
 
+        let sp = PlaybackPlayer.spotify.bundleIdentifier
+
+        // 哪些播放器有"绕开 media-control 直接问它自己"的通路。
+        expectEqual(M.directQueryPlayer(forBundleID: am), .appleMusic, "直查名单: Apple Music 有 JXA 通路")
+        expectEqual(M.directQueryPlayer(forBundleID: sp), .spotify, "直查名单: Spotify 有 JXA 通路")
+        expectEqual(M.directQueryPlayer(forBundleID: "com.tencent.QQMusicMac"), nil,
+                    "直查名单: QQ 音乐没有 AppleScript 字典,问不出来 —— 不能为它 fork osascript")
+        expectEqual(M.directQueryPlayer(forBundleID: "com.netease.163music"), nil, "直查名单: 网易云同上")
+        expectEqual(M.directQueryPlayer(forBundleID: nil), nil, "直查名单: 没有 bundle id 就没有通路")
+
         // 正常路径:被接受的快照是谁报的,开关就跟谁走。
-        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: am,
-                                             fallbackSucceeded: nil), true,
+        expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: am,
+                                              fallbackSucceeded: nil), .appleMusic,
                     "回退开关: 通过 Apple Music 拿到过快照才打开(权限与 Music.app 在跑都已被证明)")
-        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: "com.tencent.QQMusicMac",
-                                             fallbackSucceeded: nil), false,
-                    "回退开关: 切到别的播放器当场关掉 —— 否则会为一个没在用的 Music.app 一直 fork")
-        // ⚠️ 这一条是"不给不相关用户弹自动化权限框"的保证:只听 QQ 音乐的人开关恒假。
-        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: "com.netease.163music",
-                                             fallbackSucceeded: nil), false,
-                    "回退开关: 从没用过 Apple Music 就永远不打开(2026-08-02 否掉并发问法的理由)")
+        expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: sp,
+                                              fallbackSucceeded: nil), .spotify,
+                    "回退开关: Spotify 同理 —— 它也有自己的 JXA 通路")
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: sp,
+                                              fallbackSucceeded: nil), .spotify,
+                    "回退开关: 换成另一个能直查的播放器,开关跟着换 —— 别拿旧那家的通路去问")
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: "com.tencent.QQMusicMac",
+                                              fallbackSucceeded: nil), nil,
+                    "回退开关: 切到没有通路的播放器当场关掉 —— 否则会为一个没在用的 Music.app 一直 fork")
+        // ⚠️ 这一条是"不给不相关用户弹自动化权限框"的保证:只听 QQ 音乐的人开关恒 nil。
+        expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: "com.netease.163music",
+                                              fallbackSucceeded: nil), nil,
+                    "回退开关: 从没用过有通路的播放器就永远不打开(2026-08-02 否掉并发问法的理由)")
 
         // 回退路径:拿到了就保持(焦点被占多久都兜得住),拿不到就关掉(收敛)。
-        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
-                                             fallbackSucceeded: true), true,
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: true), .appleMusic,
                     "回退开关: 回退问到了就保持 —— 浏览器占着焦点期间每拍都得继续兜")
-        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
-                                             fallbackSucceeded: false), false,
-                    "回退开关: 回退也问不到(Music.app 退出/stopped/权限没了)就关掉,此后不再 fork")
+        expectEqual(M.nextFocusFallbackPlayer(current: .spotify, acceptedBundleID: nil,
+                                              fallbackSucceeded: true), .spotify,
+                    "回退开关: Spotify 的回退同样保持,而且保持的必须还是它自己")
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: false), nil,
+                    "回退开关: 回退也问不到(播放器退出/stopped/权限没了)就关掉,此后不再 fork")
+        expectEqual(M.nextFocusFallbackPlayer(current: .spotify, acceptedBundleID: nil,
+                                              fallbackSucceeded: false), nil,
+                    "回退开关: Spotify 的收敛方向一致")
         // 这一拍既没拿到被接受的快照、也没走回退(开关本来就是关的)——维持原样。
-        expectEqual(M.nextAppleMusicFocusFlag(current: false, acceptedBundleID: nil,
-                                             fallbackSucceeded: nil), false,
+        expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: nil,
+                                              fallbackSucceeded: nil), nil,
                     "回退开关: 这一拍什么都没发生就别动它")
-        expectEqual(M.nextAppleMusicFocusFlag(current: true, acceptedBundleID: nil,
-                                             fallbackSucceeded: nil), true,
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: nil), .appleMusic,
                     "回退开关: 同上,反向也钉一条")
 
         // ---- 单拍 nil 不清状态 ----

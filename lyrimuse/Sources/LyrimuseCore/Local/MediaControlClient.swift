@@ -119,6 +119,70 @@ public enum MediaControlClient {
         return decoded
     }
 
+    /// Spotify 自己的 JXA 快照 —— **只在焦点被别的 App 占走、media-control 这一拍什么都拿不到时**用。
+    ///
+    /// ⚠️ 这不是那条"每拍拿 `player position` 覆盖 media-control 位置"的路线(已撤,见
+    /// `LocalPlaybackSource` 里那段与 02 章)。那条的问题全部来自**两个位置源叠在一起**:osascript
+    /// 往返抖动 + gapless 预载时钟分叉,都是在 media-control 明明有读数时还要去纠它。这里的前提
+    /// 正相反 —— media-control 这一拍**一个字节都没有**,不存在两源分叉,问到什么都是净增量。
+    ///
+    /// ⚠️ **已知限制,刻意不补**:`player position` 比真实出声位置**领先**一段(内建 ~0.1s、蓝牙
+    /// ~0.5s,见 02 章决策 30),而扣这段领先量要用 `LocalPlaybackSource.probeLeadSecs` —— 那是按
+    /// 输出设备学出来的、在 App 层。gapless 自动切歌时这个钟还会整首超前 ~1s,同理不补。焦点被占
+    /// 期间差这半秒远好过整段没有歌词,焦点一回来就按 media-control 的锚点纠回去。
+    ///
+    /// ⚠️ **duration 是毫秒**(实测 296533 = 4:56),Music.app 那份是秒 —— 这里除 1000,别照抄上面。
+    private static let spotifyScript = """
+    (() => {
+        const S = Application("Spotify");
+        try {
+            if (!S.running()) return JSON.stringify(null);
+        } catch (e) {
+            return JSON.stringify(null);
+        }
+        let state;
+        try {
+            state = S.playerState();
+        } catch (e) {
+            return JSON.stringify(null);
+        }
+        if (state === "stopped") return JSON.stringify(null);
+        try {
+            const t = S.currentTrack;
+            return JSON.stringify({
+                title: t.name(),
+                artist: t.artist(),
+                album: t.album(),
+                duration: t.duration() / 1000,
+                elapsedTime: S.playerPosition(),
+                playing: state === "playing",
+                playbackRate: state === "playing" ? 1 : 0,
+                isMusicApp: true,
+                bundleIdentifier: "com.spotify.client"
+            });
+        } catch (e) {
+            return JSON.stringify(null);
+        }
+    })()
+    """
+
+    private static func fetchSpotifySnapshot() -> MediaControlSnapshot? {
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", spotifyScript],
+            timeout: MusicPlaybackController.appleScriptTimeout),
+            r.succeeded
+        else {
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        guard let decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout) else {
+            // 脚本自己 return 了 null(Spotify 没在跑 / stopped / 没有曲目)。
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        return decoded
+    }
+
     // MARK: - 「只勾了 Apple Music」这条路上的电台判据
 
     /// 纯 AppleScript 那份快照拿不到 `radioStationHash` —— 那是 MediaRemote 独有的键,
@@ -327,8 +391,12 @@ public enum MediaControlClient {
         // 占走时退回 AppleScript 直接问 Music.app —— 但只在用户**确实勾了** Apple Music 时。
         // 开关与收敛性见 appleMusicSnapshotAfterFocusLost 的头注。
         func fallback() -> MediaControlSnapshot? {
-            guard players.contains(.appleMusic) else { return nil }
-            return appleMusicSnapshotAfterFocusLost()
+            appleMusicFocusLock.lock()
+            let candidate = lastAcceptedDirectQueryPlayer
+            appleMusicFocusLock.unlock()
+            // ⚠️ 仍要核一次"用户这次确实勾了它" —— 开关只说明上一份快照来自谁,不代表它还在名单里。
+            guard let candidate, players.contains(candidate) else { return nil }
+            return snapshotAfterFocusLost()
         }
         guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else { return fallback() }
         if !acceptedBundleIDs.contains(bundleID) {
@@ -416,9 +484,21 @@ public enum MediaControlClient {
         return lastFailure
     }
 
-    /// 上一份**被接受**的快照是不是 Apple Music 报的 —— 回退的唯一开关。
+    /// 上一份**被接受**的快照来自哪个"能直接问它自己"的播放器(nil = 没有 / 那个播放器没有直查通路)
+    /// —— 回退的唯一开关。
     private static let appleMusicFocusLock = NSLock()
-    private static var lastAcceptedWasAppleMusic = false
+    private static var lastAcceptedDirectQueryPlayer: PlaybackPlayer?
+
+    /// 这个 bundle id 对应的播放器有没有"绕开 media-control 直接问它自己"的通路。
+    /// 目前两家:Apple Music(JXA 问 Music.app)、Spotify(JXA 问 Spotify.app)。
+    /// QQ 音乐 / 网易云 / 酷狗 / 汽水音乐**没有** AppleScript 字典(见 02 章),它们只有 media-control
+    /// 这一条路,焦点被占时只能靠 `nilSnapshotClearsState` 的焦点档维持,问不出真相。
+    public static func directQueryPlayer(forBundleID bundleID: String?) -> PlaybackPlayer? {
+        guard let bundleID else { return nil }
+        if bundleID == PlaybackPlayer.appleMusic.bundleIdentifier { return .appleMusic }
+        if bundleID == PlaybackPlayer.spotify.bundleIdentifier { return .spotify }
+        return nil
+    }
     /// 此刻是不是正处在回退状态(只为让那条 notice 日志在**状态翻转**时打一次,不是每拍都打)。
     private static var fallbackActive = false
 
@@ -427,30 +507,28 @@ public enum MediaControlClient {
     ///
     /// - Parameter acceptedBundleID: 这一拍**被接受**的快照来自谁(nil = 这一拍没拿到)。
     /// - Parameter fallbackSucceeded: 回退问 Music.app 有没有拿到东西(nil = 这一拍没走回退)。
-    public static func nextAppleMusicFocusFlag(
-        current: Bool, acceptedBundleID: String?, fallbackSucceeded: Bool?
-    ) -> Bool {
-        // 正常路径拿到了快照:它是谁说了算 —— 切到别的播放器就当场关掉开关。
-        if let acceptedBundleID {
-            return acceptedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
-        }
-        // 走了回退:拿到了就保持(Music.app 还在放,焦点被占多久都兜得住),
-        // 拿不到就关掉(Music.app 退出 / stopped / 权限没了),此后不再为它 fork。
-        if let fallbackSucceeded { return fallbackSucceeded }
+    public static func nextFocusFallbackPlayer(
+        current: PlaybackPlayer?, acceptedBundleID: String?, fallbackSucceeded: Bool?
+    ) -> PlaybackPlayer? {
+        // 正常路径拿到了快照:它是谁说了算 —— 切到没有直查通路的播放器就当场关掉开关。
+        if let acceptedBundleID { return directQueryPlayer(forBundleID: acceptedBundleID) }
+        // 走了回退:拿到了就保持(它还在放,焦点被占多久都兜得住),
+        // 拿不到就关掉(播放器退出 / stopped / 权限没了),此后不再为它 fork。
+        if let fallbackSucceeded { return fallbackSucceeded ? current : nil }
         return current
     }
 
-    private static func setAppleMusicFocusFlag(_ value: Bool) {
+    private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {
         appleMusicFocusLock.lock()
-        lastAcceptedWasAppleMusic = value
+        lastAcceptedDirectQueryPlayer = value
         appleMusicFocusLock.unlock()
     }
 
     /// 正常路径拿到了被接受的快照 —— 记下它是谁报的。
     private static func noteAccepted(bundleID: String) {
         appleMusicFocusLock.lock()
-        lastAcceptedWasAppleMusic = nextAppleMusicFocusFlag(
-            current: lastAcceptedWasAppleMusic, acceptedBundleID: bundleID, fallbackSucceeded: nil)
+        lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer(
+            current: lastAcceptedDirectQueryPlayer, acceptedBundleID: bundleID, fallbackSucceeded: nil)
         let wasFallingBack = fallbackActive
         fallbackActive = false
         appleMusicFocusLock.unlock()
@@ -496,14 +574,19 @@ public enum MediaControlClient {
     /// 补法是把开关持久化进 UserDefaults,代价是"以前用过 Apple Music、现在改用 QQ 音乐"的人
     /// 每次冷启动白 fork 一次 osascript —— 而冷启动恰好撞上焦点被占的概率很低(用户一般是
     /// 听着歌才打开它)。不值当,所以留着。
-    private static func appleMusicSnapshotAfterFocusLost() -> MediaControlSnapshot? {
+    private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {
         appleMusicFocusLock.lock()
-        let allowed = lastAcceptedWasAppleMusic
+        let allowed = lastAcceptedDirectQueryPlayer
         appleMusicFocusLock.unlock()
-        guard allowed else { return nil }
-        let snapshot = fetchAppleMusicSnapshot()
+        guard let player = allowed else { return nil }
+        let snapshot: MediaControlSnapshot?
+        switch player {
+        case .appleMusic: snapshot = fetchAppleMusicSnapshot()
+        case .spotify: snapshot = fetchSpotifySnapshot()
+        default: snapshot = nil
+        }
         appleMusicFocusLock.lock()
-        lastAcceptedWasAppleMusic = nextAppleMusicFocusFlag(
+        lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer(
             current: allowed, acceptedBundleID: nil, fallbackSucceeded: snapshot != nil)
         let firstTick = !fallbackActive
         fallbackActive = snapshot != nil
@@ -514,7 +597,8 @@ public enum MediaControlClient {
         }
         // 只在**进入**回退那一拍记一条(落盘),焦点被占多久都不会刷屏。
         if firstTick {
-            logger.notice("now playing focus lost to another app; falling back to AppleScript for Apple Music")
+            let name = player.bundleIdentifier
+            logger.notice("now playing focus lost to another app; falling back to AppleScript for \(name, privacy: .public)")
         }
         return snapshot
     }
@@ -528,17 +612,17 @@ public enum MediaControlClient {
         // 而前者下 Music.app 往往还在放。理由与收敛性见那个函数的头注。
         guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else {
             // 失败原因已由 fetchRawMediaControlSnapshot 记下,别在这里覆盖掉。
-            return appleMusicSnapshotAfterFocusLost()
+            return snapshotAfterFocusLost()
         }
         guard TrustedPlayers.isAccepted(bundleID) else {
             setSnapshotFailure(.focusHeldByOtherApp)
-            return appleMusicSnapshotAfterFocusLost()
+            return snapshotAfterFocusLost()
         }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
         // (浏览器视频/播客)。见 TrustedPlayers.notASong —— 跟 collector 侧同一套语义。
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
             setSnapshotFailure(.notASong)
-            return appleMusicSnapshotAfterFocusLost()
+            return snapshotAfterFocusLost()
         }
         noteAccepted(bundleID: bundleID)
         return refinedAppleMusicSnapshotIfNeeded(
