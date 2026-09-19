@@ -174,8 +174,36 @@ public enum MediaControlClient {
     /// "播放列表放完"之后明显地多留一句歌词。
     public static let nilSnapshotGrace = 2
 
-    public static func nilSnapshotClearsState(consecutiveNilCount: Int) -> Bool {
-        consecutiveNilCount >= nilSnapshotGrace
+    /// 「焦点被别的 App 占走」这一档的宽限,单位是**秒**而不是拍数:nil 期间的轮询档位不是固定的
+    /// (见 `LocalPlaybackSource.desiredPollInterval`),同样的拍数对应的真实时间能差好几倍,拍数
+    /// 在这一档里不是一个稳定的量。
+    ///
+    /// 这一档跟其余几种失败有本质区别:那些说的是"没人在报",而这一档说的是**有别人在报,只是不是
+    /// 我们要的那个** —— 系统级 Now Playing 是单焦点,浏览器里一个 video 元素就能把它占走,而目标
+    /// 播放器多半还在放。实测:占用者释放焦点的那一拍,读回来的位置正是一路走过来的,期间它没停过。
+    /// 所以这一档该维持而不是清空。
+    ///
+    /// 取 300 秒:比典型单曲长,覆盖绝大多数"看个视频再回来";再长就会在"看视频期间顺手把音乐停了"
+    /// 这种情况下,把一份早已不成立的状态挂在屏幕上。⚠️ 焦点一回来就立刻按真实状态纠正(实测无
+    /// 延迟),所以这个上限只影响"焦点一直被占着"那段时间里的显示。
+    public static let focusHeldGraceSeconds: Double = 300
+
+    /// 这次失败是不是「有别人在放,只是不是我们要的那个」。纯函数,selftest 覆盖。
+    ///
+    /// ⚠️ `nobodyReporting` **不在**这一档:那是真的没有任何 App 在报,目标播放器自己也没在报,
+    /// 说明它确实停了,该按原来的短宽限清掉。
+    public static func isFocusHeldElsewhere(_ failure: SnapshotFailure?) -> Bool {
+        switch failure {
+        case .focusHeldByOtherApp, .playerNotSelected, .notASong: return true
+        default: return false
+        }
+    }
+
+    public static func nilSnapshotClearsState(
+        consecutiveNilCount: Int, failure: SnapshotFailure?, nilStreakSeconds: Double
+    ) -> Bool {
+        if isFocusHeldElsewhere(failure) { return nilStreakSeconds >= focusHeldGraceSeconds }
+        return consecutiveNilCount >= nilSnapshotGrace
     }
 
     /// 这一拍要不要为电台判据多问一次 media-control。纯函数,selftest 直接覆盖。

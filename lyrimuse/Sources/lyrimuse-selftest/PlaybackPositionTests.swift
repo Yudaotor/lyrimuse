@@ -1240,14 +1240,43 @@ func runPlaybackPositionTests() {
         //
         // 改动前一拍 nil 就 clearIfWasPlaying(),把 title/allLines/封面/lastKey 全清掉。
         // 菜单栏有那层 hold 看不出来,悬浮歌词窗和灵动岛会当场闪一下。
-        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 1), false,
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 1, failure: nil, nilStreakSeconds: 2), false,
                     "nil 宽限: 单拍拿不到不清状态(实测 24 小时里 2 次都是单次、下一拍就恢复)")
-        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace), true,
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace, failure: nil,
+                                             nilStreakSeconds: 4), true,
                     "nil 宽限: 连着到门槛就照清 —— 真停了不能一直挂着上一首")
-        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace + 5), true,
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace + 5, failure: nil,
+                                             nilStreakSeconds: 20), true,
                     "nil 宽限: 超过门槛当然也清")
         // ⚠️ 门槛必须 ≥2,否则这条宽限等于没有;也不该大到让"播放列表放完"明显拖着。
         expectEqual(M.nilSnapshotGrace >= 2 && M.nilSnapshotGrace <= 3, true,
                     "nil 宽限: 门槛钉在 2~3 拍(播放档 2s 轮询 ≈ 4~6 秒)")
+
+        // ---- 焦点被别的 App 占走:这一档按秒宽限,跟拍数无关 ----
+        //
+        // 系统级 Now Playing 是单焦点,浏览器里一个 video 元素就能占走它;目标播放器这时多半还在放,
+        // 拿到的是**别人**的快照而不是"没人在放"。两件事在这里必须分开。
+        expectEqual(M.isFocusHeldElsewhere(.focusHeldByOtherApp), true,
+                    "焦点档: 焦点在不接受的 App 手里 —— 有别人在放")
+        expectEqual(M.isFocusHeldElsewhere(.playerNotSelected), true,
+                    "焦点档: 在报的 App 不在用户选中的名单里 —— 同样是有别人在放")
+        expectEqual(M.isFocusHeldElsewhere(.notASong), true,
+                    "焦点档: 信任的 App 在报但这不是歌(浏览器视频)—— 正是要兜的场景")
+        expectEqual(M.isFocusHeldElsewhere(.nobodyReporting), false,
+                    "焦点档: 真的没有任何 App 在报 ≠ 焦点被占,目标播放器自己也停了,不延长")
+        expectEqual(M.isFocusHeldElsewhere(.mediaControlUnavailable), false,
+                    "焦点档: 通道坏了是故障,不走这一档")
+        expectEqual(M.isFocusHeldElsewhere(nil), false,
+                    "焦点档: 没有失败原因时不延长")
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 999,
+                                             failure: .focusHeldByOtherApp, nilStreakSeconds: 10), false,
+                    "焦点档: 拍数再多也不清 —— 判据是秒,不是拍(nil 期间轮询档位会变)")
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 1,
+                                             failure: .focusHeldByOtherApp,
+                                             nilStreakSeconds: M.focusHeldGraceSeconds), true,
+                    "焦点档: 到了秒门槛就收手 —— 不能无限期挂着一份可能早就不成立的状态")
+        // ⚠️ 这一档必须明显长于普通 nil 宽限,否则"看个视频回来歌词还是断的",等于没改。
+        expectEqual(M.focusHeldGraceSeconds >= 60, true,
+                    "焦点档: 宽限要够长,至少覆盖一段短视频")
     }
 }

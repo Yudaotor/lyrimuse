@@ -1588,6 +1588,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 真的被收回了),每隔一段时间(约 5 分钟,`% 30` × 10s 空闲档)再打一次,不完全
     /// 沉默——不然真出问题时诊断导出里反而一条线索都没有。
     private var consecutiveNilSnapshots = 0
+    /// 这一串连续拿不到快照是从哪一刻开始的。焦点那一档的宽限按秒算,见
+    /// `MediaControlClient.focusHeldGraceSeconds`。
+    private var nilStreakStartedAt: Date?
 
     private func poll() {
         pollGeneration += 1
@@ -1610,6 +1613,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 悬浮窗会卡在停播前那一刻不会自己恢复;title/artist/album 不清空,跟
                 // "暂停"时保留最近播放信息的既有行为保持一致。
                 self.consecutiveNilSnapshots += 1
+                if self.nilStreakStartedAt == nil { self.nilStreakStartedAt = Date() }
                 if self.consecutiveNilSnapshots == 1 || self.consecutiveNilSnapshots % 30 == 0 {
                     // logger.error(_:) 吃的是 OSLogMessage,只认编译期字符串插值,不能用
                     // `+` 拼运行时 String——先把可变的那半拼成局部变量,再一次性插值进去。
@@ -1626,9 +1630,17 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
                 // ⚠️ 单拍 nil 不清状态:判据与代价见
                 // MediaControlClient.nilSnapshotClearsState。
+                let failure = MediaControlClient.lastSnapshotFailure
+                let nilStreakSeconds = Date().timeIntervalSince(self.nilStreakStartedAt ?? Date())
                 if MediaControlClient.nilSnapshotClearsState(
-                    consecutiveNilCount: self.consecutiveNilSnapshots) {
+                    consecutiveNilCount: self.consecutiveNilSnapshots,
+                    failure: failure, nilStreakSeconds: nilStreakSeconds) {
                     clearIfWasPlaying()
+                } else if MediaControlClient.isFocusHeldElsewhere(failure),
+                          self.consecutiveNilSnapshots == 1 {
+                    // 进入这一档时打一次(不是每拍),口径同 MediaControlClient 那条 fallback notice。
+                    let grace = Int(MediaControlClient.focusHeldGraceSeconds)
+                    logger.notice("focus held by another app; holding playback state (grace \(grace, privacy: .public)s)")
                 }
                 self.adjustPollCadence()
                 return
@@ -1636,6 +1648,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if self.consecutiveNilSnapshots > 0 {
                 logger.info("snapshot recovered after \(self.consecutiveNilSnapshots) consecutive failures")
                 self.consecutiveNilSnapshots = 0
+                self.nilStreakStartedAt = nil
             }
             // isMusicApp 现在直接由 MediaControlClient 硬编码为 true(只在真的问到
             // Music.app 自己的当前曲目时才会返回非 nil 快照,不再是系统级 Now Playing
