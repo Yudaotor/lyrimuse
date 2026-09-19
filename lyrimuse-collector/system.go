@@ -586,54 +586,96 @@ func matchMediaControlState(ctx context.Context, expectedBundleID string) (map[s
 // 时同等精度;拿不到(没有"自动化"权限/其它原因)就退回 media-control 本身已经读到的
 // 这份基础数据,不整个放弃,让没单独开自动化权限的用户在自动识别模式下依然至少能看到
 // Apple Music 的歌词,只是播放位置精度稍低一点。
+// autoDetectClass 是「自动识别」模式下对一个 bundle id 的准入结论。抽成独立的纯函数
+// 只为一件事:让准入规则能被单测直接遍历,不必 fork media-control 子进程。
+type autoDetectClass int
+
+const (
+	// autoDetectReject:既不是内置播放器、也没被用户信任过 —— 当成没有播放。
+	autoDetectReject autoDetectClass = iota
+	// autoDetectAppleMusic:raw 还要再合一次 AppleScript 的读数(精度更高)。
+	autoDetectAppleMusic
+	// autoDetectBuiltin:其余内置播放器,raw 直接采纳。
+	autoDetectBuiltin
+	// autoDetectTrusted:用户信任过的未知播放器,采纳前还要过"这是不是一首歌"的守卫。
+	autoDetectTrusted
+)
+
+// classifyAutoDetected 判断「自动识别」下这个 bundle id 该怎么处理。
+//
+// ⚠️ 内置播放器这一档必须问 isKnownPlayerBundleID —— 它读 players.json 生成的
+// builtinPlayerBundleIDs,那张表的注释里写明自己就是"自动识别的准入名单"。
+// **别在这里手抄一份 bundle id 列表。**
+//
+// 手抄那版是真实故障:写死了 QQ / 网易云 / Spotify / 酷狗四个,players.json 后来加进来的
+// 汽水音乐没人记得同步过来,于是汽水的播放落进"不相关 App"被整条丢掉 —— collector 认为
+// 什么都没在放、永远不去解析,而 App 侧照常显示曲目并挂着「搜索歌词中…」,那句占位就永远
+// 停在那。跟 isTrustedPlayerBundleID 注释里记的 Safari 代理进程那桩是同一种断层
+// (App 认了、collector 没认),只是这次漏在准入名单上。
+//
+// 多选那条路(getMultiSelectedState)结构上没有这个风险:它的 accepted 是从
+// features.Players 动态建的,加播放器自动生效。
+func classifyAutoDetected(bundleID string) autoDetectClass {
+	if bundleID == appleMusicBundleID {
+		return autoDetectAppleMusic
+	}
+	if isKnownPlayerBundleID(bundleID) {
+		return autoDetectBuiltin
+	}
+	if isTrustedPlayerBundleID(bundleID) {
+		return autoDetectTrusted
+	}
+	return autoDetectReject
+}
+
 func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 	raw, bundleID, ok := fetchRawMediaControlState(ctx)
 	if !ok {
 		return nil, false
 	}
-	if bundleID == appleMusicBundleID {
+	switch classifyAutoDetected(bundleID) {
+	case autoDetectAppleMusic:
 		return refineAppleMusicState(ctx, raw), true
-	}
-	switch bundleID {
-	case qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID:
+	case autoDetectBuiltin:
 		return raw, true
-	default:
-		// 用户显式信任过的未知播放器跟内置的完全同权(见 features.TrustedPlayers),
-		// 但要多过一道"这是不是一首歌"的守卫 —— 见 trustedPlaybackNotASong。
-		//
-		// ⚠️ 必须走 isTrustedPlayerBundleID,不能裸查 features.TrustedPlayers[bundleID]
-		// (修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
-		// MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
-		// com.apple.Safari,裸查永远落空 → Safari 的播放在这条 auto 路径被整条当成
-		// "不相关 App"丢掉。Swift 侧(MediaControlClient)走 TrustedPlayers.isTrusted
-		// 做了代理解析、认了这首歌,于是 App 显示曲目并挂出"搜索歌词中…"占位,而 collector
-		// 这边认为什么都没在放、永远不会去解析——占位行就永远停在那。Chrome/Arc 报的是
-		// 浏览器自己的 bundle id、直接在表里,所以一直正常;只有 Safari 走代理别名,恰好
-		// 只有这条路漏了解析。同型裸查同日一起修的还有 trustedPlaybackNotASong 和
-		// mediaPlayerLabel(getMultiSelectedState 从新写就用对了,不在其列)。
-		if isTrustedPlayerBundleID(bundleID) {
-			artist, _ := raw["artist"].(string)
-			album, _ := raw["album"].(string)
-			title, _ := raw["title"].(string)
-			// trustedPlaybackRejected 而不是裸的 trustedPlaybackNotASong:后者只看字段,
-			// 会把 YouTube Music 里"没报专辑名"的那些歌挡在门外(它的 album 常常是空的)。前者在"仅因 album 空
-			// 被拒"时去问一次页面本身是广告还是歌,读不到就退回原判据。见 ytmusicad.go 头注。
-			rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
-			if rejected {
-				return map[string]any{}, true
-			}
-			// YouTube Music 每条队列的**第一首**在 MediaSession 里没有专辑名(YT Music
-			// 自己的疏漏,页面上其实有),复核那一趟顺路读回来了就补上 —— 补的是空缺,
-			// 上游报了就一个字不动。见 ytmusicAlbumPatch。
-			if patchAlbum != "" {
-				raw["album"] = patchAlbum
-			}
-			return raw, true
-		}
+	case autoDetectReject:
 		// 空字符串(没有任何 App 在报告 Now Playing)或者别的不相关 App(网页视频/
 		// 还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
 		return map[string]any{}, true
 	}
+	// 用户显式信任过的未知播放器跟内置的完全同权(见 features.TrustedPlayers),
+	// 但要多过一道"这是不是一首歌"的守卫 —— 见 trustedPlaybackNotASong。
+	//
+	// ⚠️ 必须走 isTrustedPlayerBundleID,不能裸查 features.TrustedPlayers[bundleID]
+	// (修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
+	// MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
+	// com.apple.Safari,裸查永远落空 → Safari 的播放在这条 auto 路径被整条当成
+	// "不相关 App"丢掉。Swift 侧(MediaControlClient)走 TrustedPlayers.isTrusted
+	// 做了代理解析、认了这首歌,于是 App 显示曲目并挂出"搜索歌词中…"占位,而 collector
+	// 这边认为什么都没在放、永远不会去解析——占位行就永远停在那。Chrome/Arc 报的是
+	// 浏览器自己的 bundle id、直接在表里,所以一直正常;只有 Safari 走代理别名,恰好
+	// 只有这条路漏了解析。同型裸查同日一起修的还有 trustedPlaybackNotASong 和
+	// mediaPlayerLabel(getMultiSelectedState 从新写就用对了,不在其列)。
+	if isTrustedPlayerBundleID(bundleID) {
+		artist, _ := raw["artist"].(string)
+		album, _ := raw["album"].(string)
+		title, _ := raw["title"].(string)
+		// trustedPlaybackRejected 而不是裸的 trustedPlaybackNotASong:后者只看字段,
+		// 会把 YouTube Music 里"没报专辑名"的那些歌挡在门外(它的 album 常常是空的)。前者在"仅因 album 空
+		// 被拒"时去问一次页面本身是广告还是歌,读不到就退回原判据。见 ytmusicad.go 头注。
+		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
+		if rejected {
+			return map[string]any{}, true
+		}
+		// YouTube Music 每条队列的**第一首**在 MediaSession 里没有专辑名(YT Music
+		// 自己的疏漏,页面上其实有),复核那一趟顺路读回来了就补上 —— 补的是空缺,
+		// 上游报了就一个字不动。见 ytmusicAlbumPatch。
+		if patchAlbum != "" {
+			raw["album"] = patchAlbum
+		}
+		return raw, true
+	}
+	return map[string]any{}, true
 }
 
 // refineAppleMusicState 是 getAutoDetectedState/getMultiSelectedState 共用的尾段
