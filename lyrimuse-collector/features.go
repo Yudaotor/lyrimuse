@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -619,4 +621,85 @@ func systemLanguageCode() string {
 		return ""
 	}
 	return strings.ToLower(s)
+}
+
+// ---- 启动时的开关快照 ----
+
+// logFeatureSnapshot 把当前生效的功能开关整体打一行。
+//
+// 为什么要有:启动行原来只有版本号和 bundle 列表,同一份日志里看不出这台机器究竟开了
+// 什么。"为什么我这儿不补译文 / 不跟着启动 / 少一个源"这类问题,不先把"配置不同"这个
+// 变量排除掉就没法往下查,而这些开关是用户自己在设置里改的,问他往往问不明白。
+//
+// 全量打而不是只挑"跟默认不一样的":默认值散在各个 resolve* 函数里,挑出来容易挑错,
+// 而这一行一次启动只出现一次,全打也就几百字节。
+//
+// 这里全是布尔 / 枚举 / 名单,不含任何凭据。LyricsDir 只记"有没有自定义过",不记路径
+// 本身 —— 那是用户的目录结构,跟排查无关。
+func logFeatureSnapshot() {
+	lyricsDirMode := "default"
+	if features.LyricsDir != "" {
+		lyricsDirMode = "custom"
+	}
+	// nil 和空集合含义不同:nil = 配置文件里压根没这个键(布尔年代的老配置,
+	// companionLaunchProcessNames 会退回旧语义),空集合 = 用户明确一个都不选。
+	launchOnPlayers := "legacy"
+	if features.LaunchLyrimuseOnPlayers != nil {
+		launchOnPlayers = sortedEnabledKeys(features.LaunchLyrimuseOnPlayers)
+	}
+	slog.Info("feature flags",
+		"players", sortedEnabledKeys(features.Players),
+		"album_prefetch", features.AlbumPrefetch,
+		"lyrics_auto_upgrade", features.LyricsAutoUpgrade,
+		"lyrics_sources", sortedEnabledKeys(features.LyricsSources),
+		"lyrics_source_mode", orDash(features.LyricsSourceMode),
+		"lyrics_source_order", orDash(strings.Join(features.LyricsSourceOrder, ",")),
+		"lyrics_dir", lyricsDirMode,
+		"lyrics_translation_language", orDash(features.LyricsTranslationLanguage),
+		"lyrics_machine_translation", features.LyricsMachineTranslation,
+		"lyrics_decision_trace", features.LyricsDecisionTrace,
+		"lastfm_mirror_scrobble", features.LastfmMirrorScrobble,
+		"lastfm_scrobble_artist_mode", orDash(features.LastfmScrobbleArtistMode),
+		"lastfm_scrobble_point", orDash(features.LastfmScrobblePoint),
+		"scrobble_short_tracks", features.ScrobbleShortTracks,
+		"lastfm_excluded_bundles", len(features.LastfmExcludedBundles),
+		"weekly_digest", features.WeeklyDigest,
+		"weekly_digest_source", orDash(features.WeeklyDigestSource),
+		"daily_digest", features.DailyDigest,
+		"daily_digest_source", orDash(features.DailyDigestSource),
+		"launch_on_music_open", features.LaunchLyrimuseOnMusicOpen,
+		"launch_on_players", launchOnPlayers,
+		"trusted_players", orDash(sortedMapKeys(features.TrustedPlayers)),
+	)
+}
+
+// orDash 把空串换成 "-":key=value 里一个空值读起来像是字段丢了,而"这一项是空的"
+// 本身就是诊断信息,不能让人分不清。
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+// sortedEnabledKeys 把开关集合里**为真**的键压成稳定顺序的逗号串。
+func sortedEnabledKeys(m map[string]bool) string {
+	ks := make([]string, 0, len(m))
+	for k, on := range m {
+		if on {
+			ks = append(ks, k)
+		}
+	}
+	sort.Strings(ks)
+	return orDash(strings.Join(ks, ","))
+}
+
+// sortedMapKeys 只取键(值可能是反查不到的空 App 名,对排查没用)。
+func sortedMapKeys(m map[string]string) string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return strings.Join(ks, ",")
 }

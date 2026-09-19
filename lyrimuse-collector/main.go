@@ -368,6 +368,8 @@ func main() {
 
 	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
 		clientName, clientVersion, cfg.BundleIDs, *dryRun)
+	// 紧跟在版本行后面:排查任何行为差异之前,先把"配置不一样"这个变量排除掉。
+	logFeatureSnapshot()
 	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
 	// 先读回上次的确认记录 —— 记录里还没过期的那些这一轮直接跳过,不再重复 HEAD
 	// (见 artworkconfirmed.go 头注:这是把「每次重启约 700 次 KV 读」降到 0 的那一步)。
