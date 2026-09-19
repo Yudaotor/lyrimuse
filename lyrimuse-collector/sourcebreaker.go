@@ -128,6 +128,23 @@ func lyricSourceForHost(host string) string {
 		return "migu" // 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源
 	case h == "deezer.com" || strings.HasSuffix(h, ".deezer.com"):
 		return "deezer" // 搜索 api.deezer.com、取词 www.deezer.com 都归这一源
+	case h == "amp-api.music.apple.com":
+		// Apple Music 的 catalog API —— applemusic 这个歌词源真正发请求的地方。
+		//
+		// ⚠️ 只认这**一个**主机,别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
+		// 卷进来、让它们的故障去停掉一个能出歌词的源:
+		//   - itunes.apple.com:公开的目录检索(专辑提示/封面/标题反查/目录 id),跟歌词
+		//     正文无关,而且被限流得最狠(实测 49.8% 失败)。它有自己的端点级退避,
+		//     见 apple.go 的 itunesSearchCoolingDown。
+		//   - music.apple.com:抓 developer token 的 web origin。它失败意味着"没凭据"
+		//     (applemusic_not_connected),不是"源坏了" —— 那种情况 resolveApplemusicLyric
+		//     在发请求之前就安静返回空了,本来也轮不到熔断。
+		//
+		// 加这条之前 applemusic 是**唯一一个从未被熔断过的歌词源**(实测另外十个源累计
+		// 触发 1000+ 次,它 0 次)—— 不是它稳,是这张表里没有它的主机,observe 拿到空源名
+		// 直接 return,失败一次都没记过。源整个哑掉时每首歌都要把它等到超时,正是本文件
+		// 头注里 Musixmatch DNS 事故那个形态。
+		return "applemusic"
 	}
 	return ""
 }

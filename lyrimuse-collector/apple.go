@@ -342,10 +342,11 @@ type itunesResult struct {
 // 里没有 itunes.apple.com(返回 ""),observe 见到空源名直接 return,于是限流了也不退避,
 // 继续猛打、越打越被限。
 //
-// ⚠️ 为什么不干脆把 itunes.apple.com 加进那张表:表里的 "applemusic" 指的是 amp-api 那条
-// **歌词源**(要 media-user-token)。itunes.apple.com/search 是公开的目录检索,给专辑提示 /
-// 封面 / storefront 标题反查 / 目录 id 用,跟歌词正文无关。归到一起的话,目录检索被限流会
-// 把真正的 Apple Music 歌词源一起跳过 —— 拿外围补全的故障去停掉一个能出歌词的源,不划算。
+// ⚠️ 为什么不干脆把 itunes.apple.com 加进那张表:表里的 "applemusic" 是
+// amp-api.music.apple.com 那条**歌词源**(要 media-user-token)。itunes.apple.com/search
+// 是公开的目录检索,给专辑提示 / 封面 / storefront 标题反查 / 目录 id 用,跟歌词正文无关。
+// 归到一起的话,目录检索被限流会把真正的 Apple Music 歌词源一起跳过 —— 拿外围补全的故障
+// 去停掉一个能出歌词的源,不划算。
 //
 // ⚠️ 也不能按**主机**退避:同一个 host 上的 /lookup 端点实测 64 次请求 0 失败,健康得很,
 // 不该被 /search 的限流连累。所以退避只挂在 /search 这一个端点上。

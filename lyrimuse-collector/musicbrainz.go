@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -397,8 +398,11 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) string
 var (
 	mbPrimaryNameMu    sync.Mutex
 	mbPrimaryNameCache = map[string][]string{}
-	mbPrimaryNamePath  string // 空 = 只用内存不持久化(单测/一次性子命令)
-	mbPrimaryNameDirty bool
+	// mbLookupFailedUntil:"这位歌手刚刚没查成"的负缓存,歌手原始标签 → 退避到期时刻。
+	// 跟 mbPrimaryNameCache 共用 mbPrimaryNameMu,不另开一把锁。
+	mbLookupFailedUntil = map[string]time.Time{}
+	mbPrimaryNamePath   string // 空 = 只用内存不持久化(单测/一次性子命令)
+	mbPrimaryNameDirty  bool
 )
 
 // loadMBPrimaryNameCache/saveMBPrimaryNameCache 跟 loadArtistAliasCache 同一套持久化
@@ -514,6 +518,39 @@ func saveMBPrimaryNameCache() {
 // 而"这次根本没查成"(限速/5xx/超时/ctx 取消)连内存都不写,见下面函数体里的 ⚠️。
 // 为什么这么分,见 loadMBPrimaryNameCache 上面那段 ⚠️ —— 一次偶发的 MusicBrainz 限速
 // 不该把一位歌手永久钉死在"没有别名"上。
+// mbLookupFailureTTL 是"刚刚没查成"的退避时长。
+//
+// 取 10 分钟是在两个方向之间折中:短了收不住(别名轮一轮接一轮,几秒内就会再撞上来),
+// 长了又违背这条路径的原则 —— 一次偶发的 MusicBrainz 限速不该把一位歌手长时间钉死在
+// "没有别名"上,而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。
+//
+// ⚠️ 跟"查空"要分开看,两者处置不同:
+//   - 查成了、但 MB 确实没登记别名(err == nil、resolved 为空)→ 写进内存缓存,
+//     本进程内不再查;不落盘,换个进程还能再试(见 saveMBPrimaryNameCache 头注)。
+//   - 根本没查成(限速/5xx/超时)→ 内存缓存一个字都不写,只记这里的退避到期时刻。
+const mbLookupFailureTTL = 10 * time.Minute
+
+// mbLookupInFailureBackoff 报告这位歌手是不是还在"刚刚没查成"的退避窗口里。
+func mbLookupInFailureBackoff(raw string, now time.Time) bool {
+	mbPrimaryNameMu.Lock()
+	defer mbPrimaryNameMu.Unlock()
+	return now.Before(mbLookupFailedUntil[raw])
+}
+
+// noteMBLookupFailure 记下一次"没查成"。
+//
+// ⚠️ ctx 取消不算:那是用户主动取消了这次解析(enrichcancel.go),不是 MusicBrainz 的
+// 毛病 —— 跟 lyricSourceBreaker.observeWith 里对 context.Canceled 的处理同一条理由。
+// 记了的话,用户取消一次就让这位歌手白白退避 10 分钟。
+func noteMBLookupFailure(raw string, err error, now time.Time) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	mbPrimaryNameMu.Lock()
+	mbLookupFailedUntil[raw] = now.Add(mbLookupFailureTTL)
+	mbPrimaryNameMu.Unlock()
+}
+
 func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	raw := strings.TrimSpace(rawArtist)
 	if raw == "" {
@@ -526,6 +563,16 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	}
 	mbPrimaryNameMu.Unlock()
 
+	// 刚刚没查成的,一段时间内直接放弃 —— 不发请求,也不去排 musicbrainzThrottle 那把
+	// 1.1 秒的全局锁。下面 ⚠️ 里"由全局限速兜住,打不成风暴"那句只说对了一半:它确实
+	// 不会并发轰炸,但会变成**持续的串行拖累** —— 实测 9531 次调用只攒下 311 条缓存、
+	// 其中 1743 次是限速 503,而且均匀铺在每个小时(每小时 250~300 次)。这条路径又挂在
+	// 别名轮的构造阶段(enrich.go 的 retryArtistIdentities),于是每一轮别名都可能卡在
+	// 那把锁上,直接计进用户等歌词的时间里。
+	if mbLookupInFailureBackoff(raw, time.Now()) {
+		return nil
+	}
+
 	resolved, err := lookupMusicBrainzArtistAliases(ctx, raw)
 	if err != nil {
 		// ⚠️ 对方没答(限速/5xx/超时/ctx 取消)时**连内存缓存都不写**:那只说明"这一刻没
@@ -534,10 +581,17 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 		// loadMBPrimaryNameCache 头注里"空值不落盘"想避免的是同一件事,只是作用域从跨
 		// 进程缩到进程内。代价是 MB 挂着的时候同一位歌手下一轮还会再查一次,由全局 1.1s
 		// 限速(musicbrainzThrottle)兜住,打不成风暴。
+		//
+		// ⚠️ 上面这段是改动前的原注释,末句"打不成风暴"经实测要打个折扣(见上面入口处
+		// 那段)。现在"下一轮还会再查一次"被 mbLookupFailureTTL 的负缓存收敛成"最多每
+		// TTL 再查一次",内存缓存仍然不写 —— 原意(一次偶发 503 不该把歌手钉死成"无别名")
+		// 完全保留,只是重试的节奏从"每一轮别名"降到"每 TTL 一次"。
+		noteMBLookupFailure(raw, err, time.Now())
 		return nil
 	}
 
 	mbPrimaryNameMu.Lock()
+	delete(mbLookupFailedUntil, raw) // 查成了就把退避记录清掉
 	mbPrimaryNameCache[raw] = resolved
 	// 查空不算脏 —— 空值不落盘,下一个进程还能再试一次(见 saveMBPrimaryNameCache)。
 	if len(resolved) > 0 {

@@ -111,17 +111,13 @@ func TestITunesSearchBackoff(t *testing.T) {
 	})
 }
 
-// 退避只挂在 /search 这一个端点上,不是整个 itunes.apple.com 主机 —— 同 host 的
-// /lookup 实测 64 次请求 0 失败,不该被 /search 的限流连累。这条锁住"没有把退避
-// 做成主机级"这个设计选择:itunes.apple.com 不能出现在歌词源映射表里,否则
-// observe 会把它归进某个歌词源、连带停掉那个源。
-func TestITunesHostStaysOutOfLyricSourceBreaker(t *testing.T) {
-	for _, host := range []string{"itunes.apple.com", "amp-api.music.apple.com"} {
-		if s := lyricSourceForHost(host); s != "" {
-			t.Errorf("%s 被归进了歌词源 %q —— 目录检索/令牌路的故障会连带停掉 Apple Music 歌词源", host, s)
-		}
-	}
-}
+// "itunes.apple.com 不该进歌词源熔断表"这条断言搬去了 sourcecoverage_test.go 的
+// TestNonLyricAppleHostsStayUnmapped —— 那边一并覆盖 music.apple.com / mvod / mzstatic,
+// 是这里原有那条的超集。
+//
+// ⚠️ 原来那条还顺手断言了 amp-api.music.apple.com 也不在表里,那是**写错的**:当时它
+// 确实不在,但那是个缺口(applemusic 因此成了唯一从未被熔断过的歌词源),不是该锁住的
+// 正确状态。现在它已经归进 applemusic,由 TestEveryLyricSourceHasAHostMapping 守着。
 
 // 退避真正要管用的那一步:在冷却窗口里 itunesSearch **一个请求都不发**。
 // 上面那些用例只覆盖两个纯函数,漏掉这一步的话整套退避就是摆设 —— 变异测试实测:
