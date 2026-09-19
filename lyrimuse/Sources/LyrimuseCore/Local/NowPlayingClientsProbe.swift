@@ -40,6 +40,39 @@ public enum NowPlayingClientsProbe {
         return (script, library)
     }
 
+    /// 问某个 bundle id 此刻的封面。拿不到一律 nil。
+    ///
+    /// ⚠️ 单独一条路、**不跟状态查询合并**:带封面那一趟要把一张 JPEG 走 base64 过 JSON,明显更贵,
+    /// 而状态是每拍都要问的。封面只在换歌时取一次(调用方按 trackKey 缓存)。
+    ///
+    /// ⚠️ **给不给取决于这一刻在放什么**:实测五家都给(汽水音乐 9KB、QQ音乐 113KB、Spotify 107KB、
+    /// Apple Music 113KB),但 Spotify **放广告时不给**,浏览器里的视频也不给。拿不到就是拿不到,
+    /// 调用方照旧退回既有来源(目录高清图等)。
+    public static func artwork(forBundleID bundleID: String) -> (data: Data, mimeType: String, trackKey: String)? {
+        guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
+        guard let r = ProcessRunner.run(
+            "/usr/bin/perl", [paths.script, paths.library, bundleID, "artwork"], timeout: artworkTimeout),
+            r.succeeded,
+            let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
+            let base64 = decoded.artworkData,
+            let data = Data(base64Encoded: base64), !data.isEmpty
+        else { return nil }
+        return (data, decoded.artworkMimeType ?? "image/jpeg",
+                MediaControlSnapshot.trackKey(artist: decoded.artist, title: decoded.title))
+    }
+
+    /// 带封面那一趟的超时:比状态查询宽,一张图要过 base64。
+    public static let artworkTimeout: TimeInterval = 4.0
+
+    /// 只镜像封面这几个字段 —— 与 `MediaControlClient.ArtworkPayload` 同样的取舍:各自只解自己要的那部分。
+    /// title / artist 不是多余的:它们标识这份封面属于哪首歌(返回值里的 trackKey)。
+    private struct ArtworkPayload: Decodable {
+        let artworkData: String?
+        let artworkMimeType: String?
+        let title: String?
+        let artist: String?
+    }
+
     /// 问某个 bundle id 此刻在报什么。拿不到(没装 helper / 超时 / 那个 App 没在报)一律 nil。
     ///
     /// 位置已经在 helper 里按锚点外推过(`elapsed + (now - timestamp) * rate`)—— 载荷里的

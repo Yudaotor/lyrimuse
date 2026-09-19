@@ -519,6 +519,14 @@ public enum MediaControlClient {
         return current
     }
 
+    /// 此刻是不是正处在「焦点被别人占走、正靠回退取数」的状态,是的话回退到哪个播放器。
+    /// 封面那条路要跟快照对齐,靠的就是它 —— 不然会拿回占用者的图。
+    private static func focusFallbackTarget() -> PlaybackPlayer? {
+        appleMusicFocusLock.lock()
+        defer { appleMusicFocusLock.unlock() }
+        return fallbackActive ? lastAcceptedDirectQueryPlayer : nil
+    }
+
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {
         appleMusicFocusLock.lock()
         lastAcceptedDirectQueryPlayer = value
@@ -887,6 +895,13 @@ public enum MediaControlClient {
     // 拿它跟当前曲目比对,不匹配就当"还没更新好"重试,而不是把上一首的封面错挂到新歌上
     // (现象是网易云云盘歌"沿用上一首的封面"后补上)。
     public static func fetchArtwork(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> (data: Data, mimeType: String, trackKey: String)? {
+        // ⚠️ 焦点被别的 App 占走时,封面必须跟快照走**同一条路**。`media-control get --now` 问的是
+        // 系统级焦点,这时候它给的是**占用者**那张图(浏览器视频的缩略图)——下游那道 trackKey 守卫
+        // 会如实拦下来丢弃,于是歌还在、歌词还在,唯独封面没了。两边不对称就会长这样。
+        if let target = focusFallbackTarget(),
+           let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleIdentifier) {
+            return art
+        }
         guard let binaryPath = binaryPath() else { return nil }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
         // 封面 base64 有几百 KB。

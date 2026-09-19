@@ -34,6 +34,15 @@
 typedef void (*GetClientsFn)(dispatch_queue_t, void (^)(NSArray *));
 typedef void (*GetInfoForClientFn)(void *, void *, long, dispatch_queue_t, void (^)(CFDictionaryRef));
 
+/// 第三个参数是"要不要连封面数据一起给"的开关(实测:0 只给 ArtworkIdentifier / MIMEType /
+/// 原图尺寸,≥1 才附 `ArtworkData`)。⚠️ 带上封面这一趟明显更贵(一份 JPEG 走 base64 过 JSON),
+/// 所以**只在调用方明确要封面时**才置 1 —— 常规的状态查询不该每拍背一张图。
+/// ⚠️ 给不给还取决于**这一刻在放什么**:实测五家都给(汽水音乐 9KB、QQ音乐 113KB、Spotify 107KB、
+/// Apple Music 113KB),但 Spotify **放广告时不给** —— 一开始据此误判成"Spotify 不给封面",
+/// 换成真歌再测就有了。浏览器里的视频也不给。拿不到就是拿不到,调用方照旧退回既有来源。
+static const long kIncludeArtwork = 1;
+static const long kNoArtwork = 0;
+
 static NSString *K(const char *suffix) {
     return [NSString stringWithFormat:@"kMRMediaRemoteNowPlayingInfo%s", suffix];
 }
@@ -66,6 +75,13 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
         out[@"elapsedTime"] = @(live);
     }
     if (stamp) out[@"timestamp"] = @([stamp timeIntervalSince1970]);
+    // 封面:载荷里是原始 JPEG/PNG 字节,走 base64 过 JSON(与 media-control 的 artworkData 同形)。
+    NSData *art = raw[K("ArtworkData")];
+    if ([art isKindOfClass:NSData.class] && art.length > 0) {
+        out[@"artworkData"] = [art base64EncodedStringWithOptions:0];
+        NSString *mime = raw[K("ArtworkMIMEType")];
+        out[@"artworkMimeType"] = [mime isKindOfClass:NSString.class] ? mime : @"image/jpeg";
+    }
     return out;
 }
 
@@ -83,6 +99,8 @@ static void emit(id obj) {
 void nowplaying_clients(void *my_perl, void *cv) {
     @autoreleasepool {
         const char *want = getenv("LYRIMUSE_NOWPLAYING_BUNDLE");
+        const char *artEnv = getenv("LYRIMUSE_NOWPLAYING_ARTWORK");
+        const long artFlag = (artEnv && artEnv[0] == '1') ? kIncludeArtwork : kNoArtwork;
         void *h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
         if (!h) { emit(nil); return; }
         GetClientsFn getClients = (GetClientsFn)dlsym(h, "MRMediaRemoteGetNowPlayingClients");
@@ -107,7 +125,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
 
             dispatch_semaphore_t s2 = dispatch_semaphore_create(0);
             __block NSDictionary *info = nil;
-            getInfo((__bridge void *)c, NULL, 0, dispatch_get_global_queue(0, 0), ^(CFDictionaryRef raw) {
+            getInfo((__bridge void *)c, NULL, artFlag, dispatch_get_global_queue(0, 0), ^(CFDictionaryRef raw) {
                 if (raw) info = (__bridge_transfer NSDictionary *)CFRetain(raw);
                 dispatch_semaphore_signal(s2);
             });
