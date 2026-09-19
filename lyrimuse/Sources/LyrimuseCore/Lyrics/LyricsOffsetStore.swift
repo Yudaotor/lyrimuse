@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 import CryptoKit
+import OSLog
+
+// 用户亲手改动时间轴校正的留痕。歌词不同步类的报障里,第一个要排除的就是"这首歌被
+// 调过" —— 而校正值存在 UserDefaults 里,不看日志根本不知道它什么时候被谁改成了多少。
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-offset")
 
 // 单曲歌词时间轴微调——记住"这首歌的这份歌词该提前/延后多少毫秒",按 trackKey 持久化,
 // 下次播放同一首歌、同一份歌词内容时自动生效,不用每次重新调。
@@ -224,6 +229,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 清掉**全部**电台校准。跟另外三层各自独立 —— 理由同 clearAllTrackOffsets 那段。
     public func clearAllRadioOffsets() {
         guard !radioOffsets.isEmpty else { return }
+        logger.notice("cleared all \(self.radioOffsets.count, privacy: .public) radio offsets")
         radioOffsets = [:]
         radioOffsetCount = 0
         persistRadioOffsets()
@@ -376,6 +382,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 属于意外伤害(同 reset(forKey:pinKey:) 那段注释的取舍)。
     public func clearAllTrackOffsets() {
         if !offsets.isEmpty {
+            logger.notice("cleared all \(self.offsets.count, privacy: .public) track offsets")
             offsets.removeAll()
             trackOffsetCount = 0
             persist()
@@ -401,6 +408,7 @@ public final class LyricsOffsetStore: ObservableObject {
         }
         trackOffsetCount = offsets.count
         persist()
+        logger.notice("offset set to \(ms, privacy: .public)ms key=\(key, privacy: .public)")
         // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,collector 不再自动重选歌词源
         // (换一份内容就等于让这个校正值静默作废,见 LyricsPinStore)。归零就解钉。
         //

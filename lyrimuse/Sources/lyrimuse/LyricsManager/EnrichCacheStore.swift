@@ -1204,6 +1204,12 @@ public final class EnrichCacheStore: ObservableObject {
         // (校正值 key 里含内容指纹,见 LyricsPinStore)。刻意放在 persist() 成功**之后**:
         // 上面写盘失败那条分支会把条目原样放回去,那种情况下 pin 也不该丢。
         LyricsPinStore.shared.remove(keys: Set(victims))
+        // 删除是不可逆的(单条走废纸篓,批量靠上面那份自动快照),用户事后问"我的歌词
+        // 怎么少了"时,这一行是唯一能回答"什么时候删的、删了几条、有没有快照"的东西。
+        logger.notice("""
+            delete: removed \(victims.count, privacy: .public) entries, \
+            snapshot=\(self.lastAutoSnapshotURL?.lastPathComponent ?? "none", privacy: .public)
+            """)
         scheduleCollectorRestart()
         refreshSizeBytes()
     }
@@ -1221,6 +1227,12 @@ public final class EnrichCacheStore: ObservableObject {
         // deleteAllLyricsFiles)没有任何可恢复层。清空还会连带 LyricsPinStore.removeAll(),
         // 用户一句句听出来的时间轴对应的 pin 也一起没,而快照里正好带着 pins。
         lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "clear")
+        // 全仓最具破坏性的一个动作 —— 11 章已知坑 7 那次 833 条手工修正丢失就是它。
+        // 条数和快照落点必须在 raw 清空**之前**读出来。
+        logger.notice("""
+            clearAll: wiping \(self.raw.count, privacy: .public) entries, \
+            snapshot=\(self.lastAutoSnapshotURL?.lastPathComponent ?? "none", privacy: .public)
+            """)
         raw = [:]
         // 清空是"全清",不能让 persist 的读-改-写把刚清掉的东西从盘上并回来
         // ——「歌词管理」是可以一直开着的窗口,开窗之后 collector 每解析出一首新歌都会往盘上

@@ -1,5 +1,10 @@
 import Combine
 import Foundation
+import OSLog
+
+// 「已校准」名单的变动留痕:钉住的歌 collector 不再自动重选歌词源,所以"这首歌为什么
+// 一直不升级"和"我调好的怎么又被换了"两头都要靠它回答。
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-pin")
 
 /// 「已校准」名单:用户手动调过歌词时间轴的曲目,collector 不再自动给它们重选歌词源。
 ///
@@ -90,12 +95,14 @@ public final class LyricsPinStore: ObservableObject {
         for key in keys { pins.removeValue(forKey: key) }
         guard pins.count != before else { return }
         persist()
+        logger.notice("unpinned \(before - self.pins.count, privacy: .public) of \(keys.count, privacy: .public) requested")
     }
 
     /// 清空整份名单。跟 LyricsOffsetStore.clearAllTrackOffsets 成对使用 —— 校正值都清了
     /// 就没有要保护的东西了。
     public func removeAll() {
         guard !pins.isEmpty else { return }
+        logger.notice("cleared the whole pinned list (\(self.pins.count, privacy: .public) entries)")
         pins.removeAll()
         persist()
     }
