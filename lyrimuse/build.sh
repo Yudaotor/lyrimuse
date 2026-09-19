@@ -362,6 +362,30 @@ rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
 cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
 
+# 「按 bundle id 直接问某个播放器在放什么」的小 helper(焦点被别的 App 占走时用)。
+#
+# 形态跟别处都不一样,是被逼的:这些 MediaRemote 私有接口只对 **Apple 平台二进制**回话——
+# App 自己调 `MRMediaRemoteGetNowPlayingApplicationPID` 拿到的是 0,同样的调用放进
+# `/usr/bin/perl` 用 DynaLoader 加载的 dylib 里就是真值(media-control 自己也得绕这一层,
+# 它那个 adapter 的 `test` 子命令原话就是 "Tests if the adapter is entitled to use the
+# MediaRemote framework")。所以这里产出的是 **dylib + 一个 perl 加载器**,不是可执行文件。
+# 源码与两个接口的签名见 native/nowplaying-clients/nowplaying-clients.m。
+NPC_SRC="native/nowplaying-clients"
+NPC_DST="$APP_DIR/Contents/Resources/nowplaying-clients"
+rm -rf "$NPC_DST"
+mkdir -p "$NPC_DST"
+NPC_SLICES=()
+for arch in $ARCHES; do
+  npc_out="$FAT_DIR/libnowplaying-clients-$arch.dylib"
+  clang -dynamiclib -fobjc-arc -O2 -arch "$arch" -framework Foundation \
+    -o "$npc_out" "$NPC_SRC/nowplaying-clients.m"
+  NPC_SLICES+=("$npc_out")
+done
+# lipo 之后再签,顺序不能反(理由同 collector 那段)。
+merge_slices "$NPC_DST/libnowplaying-clients.dylib" "${NPC_SLICES[@]}"
+cp "$NPC_SRC/nowplaying-clients.pl" "$NPC_DST/nowplaying-clients.pl"
+codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
+
 # QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
 # (BSD-3-Clause 开源,https://github.com/ungive/media-control)读。这个工具不是单个

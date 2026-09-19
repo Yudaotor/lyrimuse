@@ -489,15 +489,16 @@ public enum MediaControlClient {
     private static let appleMusicFocusLock = NSLock()
     private static var lastAcceptedDirectQueryPlayer: PlaybackPlayer?
 
-    /// 这个 bundle id 对应的播放器有没有"绕开 media-control 直接问它自己"的通路。
-    /// 目前两家:Apple Music(JXA 问 Music.app)、Spotify(JXA 问 Spotify.app)。
-    /// QQ 音乐 / 网易云 / 酷狗 / 汽水音乐**没有** AppleScript 字典(见 02 章),它们只有 media-control
-    /// 这一条路,焦点被占时只能靠 `nilSnapshotClearsState` 的焦点档维持,问不出真相。
+    /// 这个 bundle id 对应的播放器,焦点被占时有没有办法绕开 media-control 问到它自己。
+    ///
+    /// **所有内置播放器都有** —— `NowPlayingClientsProbe` 是按 bundle id 直接问系统的,不挑播放器,
+    /// 连没有 AppleScript 字典的 QQ 音乐 / 网易云 / 酷狗 / 汽水音乐都覆盖。Apple Music 与 Spotify
+    /// 额外还有一条 JXA 通路,在探针不可用时兜底(见 `snapshotAfterFocusLost` 的两级顺序)。
+    ///
+    /// ⚠️ `.auto` 的 `bundleIdentifier` 是空字符串,不会匹配到任何真实 bundle id,不用单独排除。
     public static func directQueryPlayer(forBundleID bundleID: String?) -> PlaybackPlayer? {
-        guard let bundleID else { return nil }
-        if bundleID == PlaybackPlayer.appleMusic.bundleIdentifier { return .appleMusic }
-        if bundleID == PlaybackPlayer.spotify.bundleIdentifier { return .spotify }
-        return nil
+        guard let bundleID, !bundleID.isEmpty else { return nil }
+        return PlaybackPlayer.allCases.first { $0.bundleIdentifier == bundleID }
     }
     /// 此刻是不是正处在回退状态(只为让那条 notice 日志在**状态翻转**时打一次,不是每拍都打)。
     private static var fallbackActive = false
@@ -579,11 +580,26 @@ public enum MediaControlClient {
         let allowed = lastAcceptedDirectQueryPlayer
         appleMusicFocusLock.unlock()
         guard let player = allowed else { return nil }
-        let snapshot: MediaControlSnapshot?
+        // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify 有 AppleScript 字典)。
+        //
+        // ⚠️ 顺序是这样定的,别调过来:per-client 探针拿回来的是**同一份 MediaRemote 载荷**,
+        // 因此原样继承了那条链的锚点缺陷 —— Spotify 的开播锚点实测晚 ~2s(决策 28:+1.91 /
+        // +1.96 / +2.14),Apple Music 手动点歌时会连发好几个 elapsed=0 锚点(决策 35)。
+        // 真机对照:焦点被占期间暂停 Spotify,走 JXA 时 `pause transition delta=-0.157`,
+        // 走探针时 `delta=-2.039`。AppleScript 那份带的只是输出链路的领先量(0.06~0.65s),
+        // 明显更小。
+        var snapshot: MediaControlSnapshot?
         switch player {
         case .appleMusic: snapshot = fetchAppleMusicSnapshot()
         case .spotify: snapshot = fetchSpotifySnapshot()
-        default: snapshot = nil
+        default: break
+        }
+        let viaAppleScript = snapshot != nil
+        // 第二级:按 bundle id 直接问系统。不受焦点影响,而且是**没有 AppleScript 字典的那几家**
+        // (QQ 音乐 / 网易云 / 酷狗 / 汽水音乐)唯一能问到真相的通路;对上面两家则是字典不可用
+        // (没装 helper 之外的情况:Music.app 没在跑、自动化权限被收回)时的兜底。
+        if snapshot == nil {
+            snapshot = NowPlayingClientsProbe.snapshot(forBundleID: player.bundleIdentifier)
         }
         appleMusicFocusLock.lock()
         lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer(
@@ -598,7 +614,9 @@ public enum MediaControlClient {
         // 只在**进入**回退那一拍记一条(落盘),焦点被占多久都不会刷屏。
         if firstTick {
             let name = player.bundleIdentifier
-            logger.notice("now playing focus lost to another app; falling back to AppleScript for \(name, privacy: .public)")
+            // 说清走的是哪一级 —— 两级的精度与可用性不一样,只看"进回退了"分不出来。
+            let via = viaAppleScript ? "AppleScript" : "per-client MediaRemote probe"
+            logger.notice("now playing focus lost to another app; falling back to \(via, privacy: .public) for \(name, privacy: .public)")
         }
         return snapshot
     }

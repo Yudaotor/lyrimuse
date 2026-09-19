@@ -1214,9 +1214,16 @@ func runPlaybackPositionTests() {
         // 哪些播放器有"绕开 media-control 直接问它自己"的通路。
         expectEqual(M.directQueryPlayer(forBundleID: am), .appleMusic, "直查名单: Apple Music 有 JXA 通路")
         expectEqual(M.directQueryPlayer(forBundleID: sp), .spotify, "直查名单: Spotify 有 JXA 通路")
-        expectEqual(M.directQueryPlayer(forBundleID: "com.tencent.QQMusicMac"), nil,
-                    "直查名单: QQ 音乐没有 AppleScript 字典,问不出来 —— 不能为它 fork osascript")
-        expectEqual(M.directQueryPlayer(forBundleID: "com.netease.163music"), nil, "直查名单: 网易云同上")
+        // ⚠️ 没有 AppleScript 字典的几家**也在名单里**:NowPlayingClientsProbe 是按 bundle id 直接
+        // 问系统的,不挑播放器。它们只是少了 JXA 那一级兜底(见 snapshotAfterFocusLost 的两级顺序)。
+        expectEqual(M.directQueryPlayer(forBundleID: "com.tencent.QQMusicMac"), .qqMusic,
+                    "直查名单: QQ 音乐没有 AppleScript 字典,但探针按 bundle id 照样问得到")
+        expectEqual(M.directQueryPlayer(forBundleID: PlaybackPlayer.kugou.bundleIdentifier), .kugou,
+                    "直查名单: 酷狗同理")
+        expectEqual(M.directQueryPlayer(forBundleID: "com.example.unknown"), nil,
+                    "直查名单: 不认识的 App 不进名单 —— 别为一个没适配过的东西去问")
+        expectEqual(M.directQueryPlayer(forBundleID: ""), nil,
+                    "直查名单: 空 bundle id(.auto 就是空)不能匹配到任何播放器")
         expectEqual(M.directQueryPlayer(forBundleID: nil), nil, "直查名单: 没有 bundle id 就没有通路")
 
         // 正常路径:被接受的快照是谁报的,开关就跟谁走。
@@ -1230,12 +1237,17 @@ func runPlaybackPositionTests() {
                                               fallbackSucceeded: nil), .spotify,
                     "回退开关: 换成另一个能直查的播放器,开关跟着换 —— 别拿旧那家的通路去问")
         expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: "com.tencent.QQMusicMac",
+                                              fallbackSucceeded: nil), .qqMusic,
+                    "回退开关: 切到 QQ 音乐就跟着换 —— 别拿 Music.app 的通路去问一个没在用的播放器")
+        expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: "com.example.unknown",
                                               fallbackSucceeded: nil), nil,
-                    "回退开关: 切到没有通路的播放器当场关掉 —— 否则会为一个没在用的 Music.app 一直 fork")
-        // ⚠️ 这一条是"不给不相关用户弹自动化权限框"的保证:只听 QQ 音乐的人开关恒 nil。
+                    "回退开关: 切到没适配过的 App 当场关掉")
+        // ⚠️ "不给不相关用户弹自动化权限框"这条保证现在**不靠开关**,靠的是 snapshotAfterFocusLost
+        // 里那个 switch 只对 Apple Music / Spotify 调 JXA:只听 QQ 音乐的人开关虽然是 .qqMusic,
+        // 走的却是 per-client 探针(一个 perl 子进程),一个 Apple Event 都不会发。
         expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: "com.netease.163music",
-                                              fallbackSucceeded: nil), nil,
-                    "回退开关: 从没用过有通路的播放器就永远不打开(2026-08-02 否掉并发问法的理由)")
+                                              fallbackSucceeded: nil), .netease,
+                    "回退开关: 网易云也进名单 —— 它走探针那一级,不发 Apple Event")
 
         // 回退路径:拿到了就保持(焦点被占多久都兜得住),拿不到就关掉(收敛)。
         expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: nil,
