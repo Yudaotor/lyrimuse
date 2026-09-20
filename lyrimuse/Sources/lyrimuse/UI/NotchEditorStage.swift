@@ -104,6 +104,12 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 改造的出发点(见 widthValueText / usableWidthRange)。
     var showsEqualizer: Bool { AppSettings.shared.notchShowsEqualizer }
     var equalizerEar: NotchEqualizerEar { AppSettings.shared.notchEqualizerEar }
+    /// 卡片是否顶在宽度下限上 —— 与真窗口同一个判据(`usableWidthRange` 现算滑杆下界,
+    /// 跟推进来的 `steadyCardWidth` 比),预览里的音浪才跟真窗口落在同一档位置。
+    var isCardAtMinimumWidth: Bool {
+        steadyCardWidth <= NotchEditorStage.usableWidthRange(
+            notchWidth: notchWidth, contentTopInset: contentTopInset).lowerBound + 0.5
+    }
 
     /// 展开态那一组同上,一律现读设置——它们决定的正是"展开态"浮层里那几个
     /// 开关此刻要不要生效,预览必须如实反映。⚠️ 不含歌词行末尾那枚封面的开关/位置——那两项
@@ -1045,6 +1051,13 @@ struct NotchEditorStage: View {
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
+            // ⚠️ 卡片按**深色**外观画,不跟设置窗口走:真窗口把 appearance 锁死 `.darkAqua`
+            // (`NotchLyricsWindow`),而「磨砂玻璃」风格的背景是系统材质 `.thickMaterial` ——
+            // 同一个值在浅色外观下解析成另一套材质(一块发白的玻璃)。不钉这一层,浅色系统
+            // 外观下预览画的是白玻璃、真机是深磨砂,而"选这档长什么样"正是这块画布要回答的
+            // 问题。舞台其余部分(仿菜单栏条、壁纸)**不钉**:它们演的是真实屏幕,该跟真实
+            // 外观走 —— 整块一起钉会把仿菜单栏条也画成深色。
+            .environment(\.colorScheme, .dark)
             // 两种形态的真实宽推给替身 chrome(歌词行按它们定宽,见 NotchChromeSource.steadyCardWidth):
             // 拖宽度滑块时逐帧变,onChange 比卡片晚一帧跟上,16ms 肉眼不可辨。
             .onAppear { chrome.setCardWidths(steady: steadyCardWidth, expanded: expandedCardWidth) }

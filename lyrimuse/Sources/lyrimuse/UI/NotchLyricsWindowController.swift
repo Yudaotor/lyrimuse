@@ -113,6 +113,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         collapsesWhenPaused && ((!isPlayingNow && !hideWhenNotPlaying) || isAdBreakNow) && !isExpanded
     }
 
+    /// 卡片是否顶在**宽度下限**上:稳态真实宽已经贴着宽度滑杆能拖到的下界(再小,卡片也
+    /// 不会再窄)。音浪独占耳朵时只有这个状态居中(见 `NotchWidthBounds.soloEqualizerInset`),
+    /// 更宽一律贴外缘。下界跟编辑台/快捷面板那两根滑杆用同一份 `usableWidthRange` 现算,
+    /// 量化取整(拖到最底那一格的落点可以比裸耳朵下限高一个 step)已经算在里面;
+    /// 写成计算属性跟 isCollapsed 同一个理由:两个输入哪个变它都跟着变,不存在"忘了重算"。
+    /// 0.5 只是浮点余量。
+    var isCardAtMinimumWidth: Bool {
+        steadyCardWidth <= NotchEditorStage.usableWidthRange(
+            notchWidth: notchWidth, contentTopInset: contentTopInset).lowerBound + 0.5
+    }
+
     /// 「暂停/无播放时隐藏」的退场态:true 时 NotchWindowRoot 把整卡缩到刘海里
     /// (scale→0 + 透明),动画走完再 orderOut;恢复播放时先 orderFront 再翻回 false,卡片从
     /// 刘海里弹出来。窗口隐藏期间保持 true,这样下次露面一定是从无到有,而不是先满幅一帧。

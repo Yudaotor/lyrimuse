@@ -665,6 +665,11 @@ protocol NotchChromeSource: ObservableObject {
     var showsEqualizer: Bool { get }
     /// 音浪贴哪只耳朵的外缘。同上。
     var equalizerEar: NotchEqualizerEar { get }
+    /// 卡片此刻是否顶在**宽度下限**上(稳态真实宽已经贴着宽度滑杆能拖到的下界,再小卡片
+    /// 也不会更窄)。音浪独占耳朵时只有这个状态居中于可视耳朵段,其余一律贴外缘(见
+    /// `NotchWidthBounds.soloEqualizerInset`)。判据走 chrome 而不是让视图自算:下限是
+    /// 屏幕和耳朵配置两者的函数,视图两边都够不着 —— 理由同 showsEqualizer。
+    var isCardAtMinimumWidth: Bool { get }
     /// 用户要不要看展开区那行「下一句歌词预览」(`AppSettings.notchExpandedShowsNextLine`)。
     /// 跟 `expandedShowsLyricPreview`(这首歌有没有下一句)是两回事,两者都成立才画,见
     /// `showsExpandedLyricPreview`。同上,走 chrome 不直接读 AppSettings。
@@ -1167,18 +1172,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar
         let equalizerOnLeft = !collapsed && showsEqualizer(on: .left, module: playback.leftEar)
         let equalizerOnRight = collapsed || showsEqualizer(on: .right, module: playback.rightEar)
-        // 音浪**独占**这只耳朵时,它不再贴外缘,而是居中于**可视的那一段耳朵**。
-        // 其余情况(耳朵里还有模块)照旧贴外缘 —— 那时音浪跟模块是一组,而文字跑马灯
-        // 溢出时必须从外缘起排,不能居中。
-        // ⚠️ **hover 展开态不居中**(「展开要在最边上」):展开时耳朵宽出
-        // 一大截,居中就成了飘在中间 —— 判据与推导见 soloEqualizerInset 的 expanded 那段。
+        // 音浪**独占**这只耳朵时的位置:非展开态一律贴外缘(左耳最左、右耳最右);只有
+        // 卡片顶在宽度下限(最小宽,耳朵窄到音浪几乎填满可视段)时保持居中 —— 那是居中
+        // 修好偏心的那个状态,宽度一放开居中就成了"飘在中间"。其余情况(耳朵里还有模块)
+        // 本来就贴外缘 —— 那时音浪跟模块是一组,而文字跑马灯溢出时必须从外缘起排,不能居中。
+        // ⚠️ **hover 展开态也不居中**(「展开要在最边上」):展开时耳朵宽出一大截,居中
+        // 就成了飘在中间 —— 判据与推导见 soloEqualizerInset 的注释。
         let soloEqualizerLeft = equalizerOnLeft && !isIdleNoTrack && !controller.isAdBreakNow
             && leftModule == .none
         let soloEqualizerRight = equalizerOnRight && rightModule == .none
         let soloInset = NotchWidthBounds.soloEqualizerInset(
             earWidth: earWidth, barsWidth: EqualizerBars.width,
             cardPadding: NotchMetrics.cardHorizontalPadding,
-            expanded: controller.isExpanded)
+            expanded: controller.isExpanded,
+            atMinimumWidth: controller.isCardAtMinimumWidth)
         return HStack(spacing: 0) {
             // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配之后(原来写死在右耳),
             // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
@@ -1217,7 +1224,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 音浪独占时把它从外缘往里推,让它居中于可视的耳朵(见 soloEqualizerInset)。
+            // 音浪独占且卡片顶在宽度下限时才往里推(居中于可视耳朵),其余贴外缘
+            // (见 soloEqualizerInset)。
             .padding(.leading, soloEqualizerLeft ? soloInset : 0)
             // 内缩必须在 .frame(width:) **之前** —— 之后加等于把耳朵整体变宽 6pt,
             // 三段就不再严丝合缝铺满,背景形状/刘海空当会跟着错位。
