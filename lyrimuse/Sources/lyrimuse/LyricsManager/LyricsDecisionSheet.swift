@@ -15,7 +15,7 @@ import LyrimuseCore
 // 手工镜像 collector 常量的字段(crc32 表、归一化规则)是同一种做法:这个数字纯粹是
 // "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(用户
 // 反馈"v4"这种裸编号没有对照、看不出新旧),只用来判断存档是不是用旧算法跑的。
-private let currentLyricsScoringVersion = 19
+private let currentLyricsScoringVersion = 21
 
 struct LyricsDecisionSheet: View {
     let summary: EnrichCacheStore.Summary

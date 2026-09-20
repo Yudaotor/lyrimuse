@@ -237,9 +237,11 @@ func main() {
 	}
 	featureFlagsPath := filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json")
 	features = loadFeatureFlags(featureFlagsPath)
-	// 「Scrobble 的播放器」那一项**不重启也生效**:按 mtime 热重读这一个键,见 lastfmexclude.go 头注。
-	// 其余键仍然只在这里读一次(下面好几处会把它们展开进包级变量),改了要重启才算数。
+	// 「Scrobble 的播放器」和「歌词来源」两项**不重启也生效**:各按 mtime 热重读自己那一个键,
+	// 见 lastfmexclude.go / lyricsourcesreload.go 头注。其余键仍然只在这里读一次(下面好几处会
+	// 把它们展开进包级变量),改了要重启才算数。
 	setLastfmExcludePath(featureFlagsPath)
+	setLyricSourcesPath(featureFlagsPath)
 	// (删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features.Players)`。
 	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
 	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
@@ -340,9 +342,9 @@ func main() {
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
-	// 合唱串「智能」档的判定缓存(见 lastfmcollapse.go)。必须在 lastfmScrobblerIfEnabled
-	// 之前设好 —— 判定器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
-	lastfmCollapsePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-collapse.json")
+	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled
+	// 之前设好 —— 匹配器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
+	lastfmCatalogPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-catalog.json")
 	// collector→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
 	// recenttracks 落盘,App 读它代替自己直连轮询。
 	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")

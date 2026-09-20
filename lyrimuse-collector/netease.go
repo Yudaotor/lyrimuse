@@ -41,6 +41,10 @@ type neteaseInfo struct {
 	// SongID 是这首歌在网易云的 id,0=没拿到。给 amll-ttml-db 按 ID 直取歌词用
 	// (见 amllttml.go)——那个库的目录就是按平台音乐 ID 命名的。
 	SongID int64
+	// FromLocalClient:这条曲目的身份(songID)读自网易云客户端本地曲库(neteaseLocalSong),
+	// 不是搜索挑出来的。透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入条件
+	// 之一 —— 歌词正文仍然联网取,但"是哪首歌"这一步没经过 pick() 的挑选。
+	FromLocalClient bool
 	// AlbumID 是 Album 那张专辑在网易云的 id,0=没拿到。只给同专辑预取用
 	// (见 neteaseAlbumTracks)。跟 Title/Album 一样取自 pick() 选中的 chosen。
 	AlbumID int64
@@ -812,8 +816,11 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 选中的那条,下面整个搜索循环都不跑。省掉的不只是一跳网络:那段搜索是这条源最脆的
 	// 地方(按端点分桶的应用层限流、限流时照样回 HTTP 200,见上面 get() 里那段长注释),
 	// 而本地给的是客户端为这首歌记下的 songID,不是搜索排序猜出来的最像的那条。
+	var fromLocalClient bool
 	if local, ok := neteaseLocalSong(ctx, artist, title, album, durationSecs); ok {
 		chosen = &local
+		// 身份来自客户端曲库记下的 songID,不经搜索 —— 同源加权的准入条件。
+		fromLocalClient = true
 		// 置空查询词让下面的循环整个跳过 —— queries 在该循环之后不再被使用。
 		queries = nil
 	}
@@ -891,11 +898,12 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	}
 	id := chosen.ID
 	info := neteaseInfo{
-		SongURL:      fmt.Sprintf("https://music.163.com/song?id=%d", id),
-		Title:        chosen.Name,
-		Album:        chosen.Album.Name,
-		AlbumID:      chosen.Album.ID,
-		DurationSecs: chosen.Duration / 1000,
+		SongURL:         fmt.Sprintf("https://music.163.com/song?id=%d", id),
+		Title:           chosen.Name,
+		Album:           chosen.Album.Name,
+		AlbumID:         chosen.Album.ID,
+		DurationSecs:    chosen.Duration / 1000,
+		FromLocalClient: fromLocalClient,
 	}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
 	// NetEase 这条数据统一拼写:pick() 选中候选已经证明其中恰好一位通过 artistMatches 核实

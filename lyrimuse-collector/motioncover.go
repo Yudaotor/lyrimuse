@@ -200,24 +200,41 @@ func motionCoverPreviewSizedURL(tmpl string) string {
 	return r.Replace(tmpl)
 }
 
+// motionCoverFingerprintMaxDistance:动态封面首帧比对**专用**的阈值,不跟
+// `coverFingerprintMaxDistance`(给"设备封面 vs 远程候选"那条链路用,见 coverquality.go)
+// 共用——两条链路的"正例该有多松"并不一样,同一个常量服务两个判据只是巧合,不该假设它们
+// 必须同步涨跌。
+//
+// ⚠️ 12 是拿真实动态封面专辑重新量出来的,不是沿用旧值:
+//   - 已确认匹配的记录(98 条全量,不是抽样):距离 0～8,均值 2.3;
+//   - Apple 官方静态封面 vs 官方动态首帧的干净对照(60 张专辑,不掺我们自己封面源的噪声):
+//     54 张里 50 张 ≤10,3 张真的是别的问题(见下)、1 张是 11——跟下面「贴纸/光效」那条
+//     独立测到的《Lover》完全一致(两种图源量出来都是 11,不是抽样噪声);
+//   - 跨专辑的真实反例:17(XLOV)起步。
+//
+// 也就是说 0～8 正例、11 是官方给动态首帧叠了贴纸/光效之类装饰(比如 Taylor Swift
+// 《Lover》)导致的合理误差、17 起才是真的换错专辑,阈值 12 卡在 11 和 17 中间,比原来的
+// 10(卡在 10 和 17 中间,只差 1 就把 11 这一类真实例误杀)更贴合现在看到的数据。
+//
+// 60 张里另外那 3 张(1 张真反例 + 2 张距离 41 的同一张专辑两个版本)不是阈值能解决的:
+// 后两张查出来是 Apple 给这条动态封面做了"揭幕特效"——真实视频前十秒是逐渐聚拢的九宫格
+// 拼贴,首帧(=previewFrame)距离静态封面 41,可播到中段(视频时长过半)时已经收拢成跟
+// 静态封面逐位相同(距离 0)。这一类"首帧不代表定妆画面"的坑,不管阈值调多大都救不回来
+// (41 已经在真实反例的区间里),只能不靠 previewFrame 判——见 fillMotionCover 里
+// viaAnchor 那条分支,以及 Swift 侧 MotionCoverStore 下载完之后用视频中段真实帧的终审。
+const motionCoverFingerprintMaxDistance = 12
+
 // motionCoverMatchesCover:**这段动画画的就是这张封面吗**(用户提的判据:
 // 「可以确保动态的封面就是原本那个匹配到的封面,只是给它扩展成动态吗」)。
 //
-// 这是整条链路的**安全底座**,也是它敢把专辑 ID 的来路放宽的唯一原因。之前的做法是"只认
-// 已校验的目录锚点、绝不按文字匹配猜专辑",覆盖面因此被压在「Apple Music 播的目录曲目」
-// 这一档;而真正要防的从来不是"专辑 ID 猜错"本身,是"**画面跟用户看到的封面不是一张**"。
-// 直接比图像就把这件事从"身份对不对"(靠文字匹配,会错)变成"是不是同一张图"(客观可验)。
+// 这是这条链路对**文字匹配来的专辑 ID**(见 fillMotionCover 的"来路②")的安全底座,也是它
+// 敢把专辑 ID 的来路放宽的唯一原因。之前的做法是"只认已校验的目录锚点、绝不按文字匹配猜
+// 专辑",覆盖面因此被压在「Apple Music 播的目录曲目」这一档;而真正要防的从来不是"专辑 ID
+// 猜错"本身,是"**画面跟用户看到的封面不是一张**"。直接比图像就把这件事从"身份对不对"
+// (靠文字匹配,会错)变成"是不是同一张图"(客观可验)。
 //
-// 判据复用 `coverquality.go` 那套 8×8 均值哈希 + `coverFingerprintMaxDistance`(10)——
-// 它的阈值本来就是拿真实封面校准出来的(正例 0、反例 17～39)。用 5 张真有动态
-// 封面的专辑又量了一遍,数据比校准时更宽松:
-//
-//	首帧 vs Apple 标准封面        距离 1 / 2 / 2 / 1
-//	首帧 vs 我们实际显示那张(网易云) 距离 1 / 3 / 2   ← **跨源同样成立**
-//	跨专辑对照(16 组)             距离 19 … 34
-//
-// 也就是说 3 ↔ 19 之间是空的,阈值 10 落在空隙正中。跨源那三行尤其关键:我们实际铺的封面
-// 多半来自网易云或 QQ,而它跟 Apple 的首帧仍然判为同一张。
+// 判据复用 `coverquality.go` 那套 8×8 均值哈希,阈值用上面这个专属的
+// `motionCoverFingerprintMaxDistance`,校准依据见那个常量的注释。
 //
 // 返回两位:matched 是比对结论,verified 是"这一轮到底有没有真的比成"。取不到图(网络失败 /
 // 模板不认 / 解码失败)时 matched 恒 false、**verified 也是 false**——调用方(fillMotionCover)
@@ -239,12 +256,43 @@ func motionCoverMatchesCover(ctx context.Context, previewTmpl, coverURL string) 
 		return false, false
 	}
 	d := coverFingerprintDistance(coverFingerprint(previewImg), coverFingerprint(coverImg))
-	if d > coverFingerprintMaxDistance {
+	if d > motionCoverFingerprintMaxDistance {
 		log.Printf("motion-cover: preview/cover fingerprint distance %d > %d, skipping",
-			d, coverFingerprintMaxDistance)
+			d, motionCoverFingerprintMaxDistance)
 		return false, true
 	}
 	return true, true
+}
+
+// motionCoverAcceptsViaAnchor:首帧比对没通过(matched=false)时,专辑 ID 是不是仍然
+// 敢往下发。
+//
+// viaAnchor=true(专辑 ID 来自已校验的目录锚点——media-control 上报的 uniqueIdentifier
+// 经 iTunes lookup 查出来的)时,专辑身份已经确定,不需要靠这张图像比对二次确认;首帧
+// 没比过,大概率是 Apple 给这条动效做了"揭幕"一类创意处理(实测 Ariana Grande
+// 《Positions (Deluxe)》:首帧是逐渐聚拢的九宫格拼贴特效,距离静态封面 41,播到中段才
+// 收拢成跟静态封面一致的画面),不是专辑对不上。这类"首帧不代表定妆画面"的坑,Go 这边
+// 拿不到真实视频帧、判不出来,交给 App 侧下载完整段动画之后用视频中段的真实帧做终审
+// (见 MotionCoverStore)。
+//
+// viaAnchor=false(专辑 ID 来自文字匹配的 apple_music_url)时,这道图像比对是唯一的
+// 身份保险丝——没过就不能往下发,否则文字匹配猜错专辑会直接变成"这首歌配了另一张专辑
+// 的动画"。
+func motionCoverAcceptsViaAnchor(matched, viaAnchor bool) bool {
+	return matched || viaAnchor
+}
+
+// motionCoverFreshResultAppliesTo:fresh 的动态封面核对结论,是不是可以挪给一条**已存在**
+// 的记录(retainedCoverURL 是它最终留用的那张封面,已经过 coverSwapAllowed 的换封面判定)。
+//
+// fillMotionCover 比对的是 fresh 自己这一轮解析出来的封面(fresh.CoverURL),不是调用方
+// 最终留用的那张——backfillPeripheralFields 的 coverSwapAllowed 完全可能判定"不换封面",
+// 这时 retainedCoverURL 还是旧值,fresh 算出来的结论描述的是另一张图,不能挪用:挪了就会
+// 把"对着另一张图核对过"的结论错配成"这条记录核对过了",之后 motionCoverWorthBackfill
+// 直接放弃、再也不会用这条记录真正在用的封面重新核对(实测 M!LK《Bakuretsu Aishiteru》
+// 就是这样卡住的:重新拿它现在的封面去核对,距离只有 1,该匹配上)。
+func motionCoverFreshResultAppliesTo(retainedCoverURL string, fresh enrichEntry) bool {
+	return fresh.CoverURL == retainedCoverURL
 }
 
 // motionCoverAlbumIDFromAppleURL 从 enrich 记下的 apple_music_url 里抠出专辑 ID。

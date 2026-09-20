@@ -2,15 +2,19 @@ package main
 
 import "testing"
 
-// 同源加权：用户放 QQ 音乐时，偏向 QQ 自家的歌词。
+// 同源加权：用户放 QQ 音乐、**而且这一份是 QQ 客户端本地给出身份的**时，偏向 QQ 自家的歌词。
 //
 // 理由是时间轴对齐同一个音频母版，不是内容质量 —— 所以权重刻意压在逐字时间轴之下，
 // 见 match.go 里那一项的注释。
+//
+// ⚠️ v21 起多了一道准入：identityFromLocalClient。光是"源跟当前播放器同源"不再算数，
+// 因为搜索给出的只是"名字对得上的某一条"，同名的 live／重录／翻唱版轴根本不是一回事。
 func TestNativeSourceBonus(t *testing.T) {
 	const lrc = "[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n"
-	score := func(source string, wordTiming bool) int {
+	score := func(source string, wordTiming, local bool) int {
 		return scoreLyricCandidate("周杰伦", "太阳之子", "", 0,
-			lyricCandidate{source: source, lyrics: lrc, hasWordTiming: wordTiming}, false, 0)
+			lyricCandidate{source: source, lyrics: lrc, hasWordTiming: wordTiming,
+				identityFromLocalClient: local}, false, 0)
 	}
 
 	saved := nativeLyricSources
@@ -18,39 +22,56 @@ func TestNativeSourceBonus(t *testing.T) {
 
 	// 识别不出播放器时一分不加，行为跟改动前完全一致。
 	nativeLyricSources = nil
-	base := score("qq", false)
-	if got := score("kugou", false); got != base {
+	base := score("qq", false, true)
+	if got := score("kugou", false, true); got != base {
 		t.Errorf("没有 native 源时不该有来源差异: qq=%d kugou=%d", base, got)
 	}
 
-	// 放 QQ 音乐 → QQ 那份加分，别家不加。
+	// 放 QQ 音乐 → QQ 那份**且身份来自本地曲库**的加分，别家不加。
 	nativeLyricSources = map[string]bool{"qq": true}
-	if got := score("qq", false); got != base+250 {
-		t.Errorf("同源该加 250, got %d (base %d)", got, base)
+	if got := score("qq", false, true); got != base+250 {
+		t.Errorf("同源+本地身份该加 250, got %d (base %d)", got, base)
 	}
-	if got := score("kugou", false); got != base {
+	if got := score("kugou", false, true); got != base {
 		t.Errorf("非同源不该加分, got %d (base %d)", got, base)
+	}
+
+	// ⚠️ v21 这次收窄的守卫本体：同源、但身份是**搜索**出来的 → 一分不加。
+	// 这是用户明确要的语义：「不能说明你搜索出来的结果就是准确的」。搜出来的同名候选
+	// 可能是另一版录音，拿一个关于**平台**的事实去担保**这一版录音**的轴，不成立。
+	if got := score("qq", false, false); got != base {
+		t.Errorf("同源但身份来自搜索,不该加分, got %d (base %d)", got, base)
+	}
+	if got := score("qq", true, false); got != score("kugou", true, true) {
+		t.Errorf("同源但搜索来的,应当跟跨源同分: qq=%d kugou=%d",
+			got, score("kugou", true, true))
 	}
 
 	// ⚠️ 最要紧的一条：同源加权**压不过**逐字时间轴。
 	// 250 < 400 是故意的 —— 同源只说明轴大概率更准，不说明这份歌词完整正确。给到能压过
 	// 质量项的量级，就会重演那次"按来源加分"的翻车（0 次变对、6 次变错）。
-	if score("qq", false) >= score("kugou", true) {
+	if score("qq", false, true) >= score("kugou", true, true) {
 		t.Errorf("同源无逐字不该赢过跨源有逐字: qq=%d kugou+yrc=%d",
-			score("qq", false), score("kugou", true))
+			score("qq", false, true), score("kugou", true, true))
 	}
 	// 但同源 + 逐字必须赢过跨源 + 逐字（这正是用户那首歌该走到的结果）。
-	if score("qq", true) <= score("kugou", true) {
-		t.Errorf("同源+逐字该赢: qq=%d kugou=%d", score("qq", true), score("kugou", true))
+	if score("qq", true, true) <= score("kugou", true, true) {
+		t.Errorf("同源+逐字该赢: qq=%d kugou=%d",
+			score("qq", true, true), score("kugou", true, true))
 	}
 }
 
 func TestPlayerNativeLyricSource(t *testing.T) {
 	cases := map[string]string{
-		playerQQMusic: "qq", playerNetease: "netease",
-		// Apple Music / Spotify 不是这套里的歌词源，没有"同源"可言；auto 识别不出播放器，
-		// 不该瞎猜。三者都必须返回空。
-		playerAppleMusic: "", playerSpotify: "", playerAuto: "", "": "",
+		playerQQMusic: "qq", playerNetease: "netease", playerKugou: "kugou",
+		// Apple Music 对的是 applemusic 源(Music.app 本地 TTML / amp-api),它是这套里
+		// 唯一的官方逐字源。
+		playerAppleMusic: "applemusic",
+		// 汽水音乐对的是 soda 源(见 collector/soda.go)——它的曲目 id 直接取自汽水客户端
+		// 正在播的那一条,是这条加权里"时间轴对着同一份母版"最硬的一例。
+		playerSoda: "soda",
+		// Spotify 不是这套里的歌词源,没有"同源"可言；auto 识别不出播放器，不该瞎猜。
+		playerSpotify: "", playerAuto: "", "": "",
 	}
 	for player, want := range cases {
 		if got := playerNativeLyricSource(player); got != want {
@@ -73,6 +94,9 @@ func TestPlayerForBundleID(t *testing.T) {
 		neteaseMusicBundleID: playerNetease,
 		spotifyBundleID:      playerSpotify,
 		kugouMusicBundleID:   playerKugou,
+		// ⚠️ 汽水曾经漏在这张映射里(内置化时那份手写 case 清单没跟上),表现是"用汽水
+		// 听歌拿不到同源加权",不报错。现在函数改成反查生成表,这条用例是它的回归守卫。
+		sodaMusicBundleID: playerSoda,
 		// ⚠️ 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"—— playerBundleID
 		// 那个反方向的函数 default 分支返回 appleMusicBundleID,照抄过来就会把任何浏览器/
 		// 第三方 App 都认成 Apple Music。
@@ -93,11 +117,13 @@ func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
 	// ⚠️ 那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
 	// 旧判据(按 features.Players)会得出 {kugou, netease, qq} —— 三个源同时 +250,
 	// 而「解析决策」面板上那句"这个源就是你正在用的播放器"对三个都是假话。
-	// 新判据只看在放的那个:Apple Music 没有原生歌词源 → 空集,谁都不加。
+	// 新判据只看在放的那个:Apple Music 对的是 applemusic 源,恰好只有它一个。
 	setNativeLyricSourcesForPlayer(appleMusicBundleID)
-	if hasNativeLyricSource() {
-		t.Errorf("放 Apple Music 时不该有任何同源加权,got %v", nativeLyricSources)
+	if !isNativeLyricSource("applemusic") {
+		t.Errorf("放 Apple Music 时 applemusic 应当判为同源,got %v", nativeLyricSources)
 	}
+	// ⚠️ 这三条是那个 bug 的守卫本体,跟上面一条是两件事:在放 Apple Music,三个中文源
+	// 一条都不该沾边。
 	for _, src := range []string{"qq", "netease", "kugou"} {
 		if isNativeLyricSource(src) {
 			t.Errorf("放 Apple Music 时 %q 不该被判成同源", src)

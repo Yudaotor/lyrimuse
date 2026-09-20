@@ -45,6 +45,14 @@ const (
 	// 连 developer token 都没拿到(music.apple.com 的 JS bundle 拿不下来 / 里面的 JWT 全被拒)。
 	// 这个跟用户的账号无关,是那条公开的白嫖通路本身出了问题。
 	lyricFailureReasonAppleMusicNoDevToken = "applemusic_no_developer_token"
+	// soda_endpoint_changed:汽水那一路的取词端点不再是我们认识的形状(回了 200,但响应里
+	// 连 seo_track.track.id 都没有)。这一路走的是给搜索引擎爬的 SEO 端点、不是稳定契约,
+	// 同一客户端的 PC track_v2 已经整个下线过一次(实测现在回 200 + 0 字节)——所以"它哪天
+	// 变了"必须能被说出来。
+	//
+	// ⚠️ 跟另外两种结局分清楚,两者都**不**往这里记:曲库里有这首歌但没词(正常结果,走
+	// trackFoundNoLyrics)、这首没用汽水放过所以拿不到曲目 id(这一路的常态,见 soda.go 头注)。
+	lyricFailureReasonSodaEndpointChanged = "soda_endpoint_changed"
 )
 
 // 传输层通用代码(现象是「为什么这首歌搜不到」:九个源里六个在 DNS 解析这一步

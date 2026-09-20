@@ -16,7 +16,7 @@ of the actively maintained open-source options:
 - **[Lyric Fever](https://github.com/aviwad/LyricFever)** (MIT) — Spotify + Apple Music lyrics,
   macOS 15+. Describes itself as a "spiritual successor to LyricsX".
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)** (GPL-3.0, this project) — word-synced lyrics
-  for Apple Music, Spotify **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou)**, plus
+  for Apple Music, Spotify **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou, Soda Music)**, plus
   YouTube Music / Spotify Web playing in any browser; 11 lyric sources checked automatically, with
   **every candidate scored on one scale so the best match wins** (and the decision shown per
   track); translation, pinyin / Cantonese Jyutping / furigana; Last.fm & ListenBrainz scrobbling
@@ -32,7 +32,7 @@ of the actively maintained open-source options:
 | License · price | GPL-3.0 · free | MPL-2.0 · free | MIT · free |
 | Latest release | v1.8.0 (Sep 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
-| Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
+| Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
 | Lyric sources checked automatically | 11: NetEase, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Apple Music (official, opt-in) | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
 | Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |
@@ -48,7 +48,7 @@ of the actively maintained open-source options:
 ## Where Lyrimuse fits
 
 Lyrimuse is built for listeners the other two don't fully cover: you play music through
-**QQ Music, NetEase Cloud Music or Kugou** (not just Apple Music / Spotify); you play
+**QQ Music, NetEase Cloud Music, Kugou or Soda Music** (not just Apple Music / Spotify); you play
 **YouTube Music or Spotify in a browser** and still want desktop lyrics synced to the page's own
 progress; you want **Cantonese Jyutping or Japanese furigana** readings alongside the original
 lines; or you want **Last.fm / ListenBrainz scrobbling and listening stats** in the same app that

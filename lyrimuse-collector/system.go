@@ -793,7 +793,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		// 陈旧锚点重发(见 isStaleAnchorRepublish):命中时沿用原锚点的时间戳,并把 rate 按 0 传,
 		// 强制走"自己按锚点时间戳外推"那条路 —— elapsedTimeNow 是按假时间戳外推的,不能信。
 		now := time.Now()
-		anchorTS, republished := resolvePlayingAnchorTS(trackKey, raw.ElapsedTime, raw.Timestamp, raw.Duration, now)
+		anchorTS, republished := resolvePlayingAnchorTS(trackKey, raw.ElapsedTime, raw.Timestamp, raw.Duration, raw.BundleID, now)
 		rate := raw.PlaybackRate
 		if republished {
 			rate = 0

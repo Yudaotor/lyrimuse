@@ -48,8 +48,8 @@ extension Set where Element == PlaybackPlayer {
     /// 判据是"含 auto **或** 含 Apple Music",不是单纯的 `contains(.appleMusic)`。三种
     /// 配置都会走到那条路:
     ///   · 只勾 Apple Music → 读取整条就是 AppleScript(`radioAwareAppleMusicSnapshot`);
-    ///   · 多选里含 Apple Music → 命中它那一拍借 AppleScript 的精确位置;
-    ///   · **纯 auto(默认值)** → 同样会借 —— `refinedAppleMusicSnapshotIfNeeded` 的第一道
+    ///   · 多选里含 Apple Music → 命中它那一拍整份走 AppleScript;
+    ///   · **纯 auto(默认值)** → 同样会走 —— `adaptedSnapshot` 的第一道
     ///     guard 只看 `bundleID == com.apple.Music`、**完全不看 features.players**,在播的
     ///     是 Music.app 就走;焦点被别的 App 抢走时还会同步退回它
     ///     (`appleMusicSnapshotAfterFocusLost`)。

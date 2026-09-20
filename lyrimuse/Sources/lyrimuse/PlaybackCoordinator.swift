@@ -100,6 +100,9 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var nextLineText: String?
     // 下一句摆哪一边,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var nextLineSide: LyricDuet.Side?
+    // 下一行的罗马音/译文,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var nextLineRomanization: String?
+    @Published private(set) var nextLineTranslation: String?
     @Published private(set) var hasLyricsContent: Bool = false
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
@@ -136,6 +139,8 @@ final class PlaybackCoordinator: ObservableObject {
     // 歌词间奏点(歌词窗口的「•••」),见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     @Published private(set) var currentGapIndex: Int?
+    /// `currentGapIndex` 的不设门槛版本,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var rawGapWindow: LyricsGapWindow?
     // 当前行逐字填色是否已定格(悬浮歌词的 TimelineView 停表条件),见 LocalPlaybackSource
     // 同名属性的注释。
     @Published private(set) var currentLineFillSettled: Bool = true
@@ -774,6 +779,8 @@ final class PlaybackCoordinator: ObservableObject {
             },
             s.$nextLineText.assign(to: \.nextLineText, on: self),
             s.$nextLineSide.assign(to: \.nextLineSide, on: self),
+            s.$nextLineRomanization.assign(to: \.nextLineRomanization, on: self),
+            s.$nextLineTranslation.assign(to: \.nextLineTranslation, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
@@ -797,6 +804,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$allLines.assign(to: \.allLines, on: self),
             s.$lyricsGapMarkers.assign(to: \.lyricsGapMarkers, on: self),
             s.$currentGapIndex.assign(to: \.currentGapIndex, on: self),
+            s.$rawGapWindow.assign(to: \.rawGapWindow, on: self),
             s.$currentLineFillSettled.assign(to: \.currentLineFillSettled, on: self),
             s.$artworkData.assign(to: \.artworkData, on: self),
             // 解码在这里做一次,消费方(灵动岛顶行小封面/模糊背景)直接拿 NSImage,不在
@@ -1574,9 +1582,17 @@ final class PlaybackCoordinator: ObservableObject {
             if motionCoverFile != hit { motionCoverFile = hit }
             return
         }
+        // 下载完成后 MotionCoverStore 要拿视频中段的真实一帧跟它比一次(见该类型
+        // verifyMatchesReference 的注释)——当前显示的就是这张,跟六处图像消费面同一口径
+        // (highResArtworkImage 优先,没有才退系统那份)。这里拿不到(比如刚换歌那一瞬
+        // 封面还没到)就传 nil,MotionCoverStore 会跳过终审,不因为一时缺参照白白拒了。
+        let referenceImage = highResArtworkImage ?? artworkImage
+        let referenceHash = referenceImage?
+            .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            .map(CoverFingerprint.hash(of:))
         clear()
         motionCoverTask = Task { [weak self] in
-            let file = await MotionCoverStore.shared.prepare(master: found.master)
+            let file = await MotionCoverStore.shared.prepare(master: found.master, referenceHash: referenceHash)
             guard let file, !Task.isCancelled else { return }
             // 下载期间换歌了 —— 这份是上一首的。
             guard LocalPlaybackSource.shared.title == title else { return }

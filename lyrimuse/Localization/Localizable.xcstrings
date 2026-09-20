@@ -2642,25 +2642,19 @@
         }
       }
     },
-    "Scrobble" : {
+    "Scrobble 规则" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scrobble"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble"
+            "value" : "Scrobble Rules"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scrobble"
+            "value" : "Scrobble 規則"
           }
         }
       }
@@ -7213,25 +7207,117 @@
         }
       }
     },
-    "合唱歌曲的歌手" : {
+    "原始" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Artist for Collaborations"
+            "value" : "Raw"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合唱歌曲的歌手"
+            "value" : "原始"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合唱歌曲的歌手"
+            "value" : "原始"
+          }
+        }
+      }
+    },
+    "改写歌手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rewrite Artist"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改写歌手"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改寫歌手"
+          }
+        }
+      }
+    },
+    "改写曲名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rewrite Track Name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改写曲名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改寫歌曲名稱"
+          }
+        }
+      }
+    },
+    "合唱只发第一位" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaborations: First Artist Only"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合唱只发第一位"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合唱只送出第一位"
+          }
+        }
+      }
+    },
+    "匹配模式" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Matching Mode"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匹配模式"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比對模式"
           }
         }
       }
@@ -18791,29 +18877,6 @@
         }
       }
     },
-    "系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The system media channel is unavailable on this Mac — playback detection for QQ Music / NetEase Music is affected (Apple Music and Spotify are not)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "系統的媒體資訊通道在這台機器上無法使用，QQ 音樂 / 網易雲音樂的播放偵測會受影響（Apple Music、Spotify 不受影響）"
-          }
-        }
-      }
-    },
     "系统自动化授权：上次检测时已授权" : {
       "localizations" : {
         "en" : {
@@ -27794,23 +27857,6 @@
         }
       }
     },
-    "未勾选，此项关闭" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None checked, this is off"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未勾選，此項關閉"
-          }
-        }
-      }
-    },
     "未能保存，请再试一次" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28040,23 +28086,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌詞文字與 %@ 相同"
-          }
-        }
-      }
-    },
-    "这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "While a song has no lyrics or is still being searched, keep the lyrics slot with “♪ Title” instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這首歌沒有歌詞或還在搜尋時，用「♪ 歌名」占住歌詞的位置，不縮回小圖示；歌詞一到就換成歌詞。暫停時仍縮回圖示，廣告中不顯示"
           }
         }
       }
@@ -29560,25 +29589,25 @@
         }
       }
     },
-    "合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。" : {
+    "上送给 Last.fm 的歌手名和曲名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发。\n自定义：自己选改哪些部分。\n原始：原样发播放器报的标签。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Which artist name is sent to Last.fm for a duet.\nSmart: full credit if Last.fm already has the duet entry; first artist only if just they have the track; full credit if neither. Decided once per track.\nAll: the full credit as-is.\nFirst only: the other artist won't appear in your history."
+            "value" : "The artist and track names sent to Last.fm.\nSmart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match.\nCustom: pick which parts may change.\nRaw: exactly what the player reports."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。"
+            "value" : "上送给 Last.fm 的歌手名和曲名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发。\n自定义：自己选改哪些部分。\n原始：原样发播放器报的标签。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合唱時送給 Last.fm 的歌手名。\n智慧：Last.fm 已有這個合唱項目就送整串；沒有、但第一位名下有這首歌就只送第一位；兩邊都沒有仍送整串。每首歌只判定一次。\n全部：原樣整串。\n只送第一位：另一位不會出現在記錄裡。"
+            "value" : "送給 Last.fm 的歌手名與歌曲名稱。\n智慧：改用 Last.fm 上聽的人最多的那種寫法，找不到就原樣送出。\n自訂：自己選要改哪些部分。\n原始：原樣送出播放器回報的標籤。"
           }
         }
       }
@@ -32606,52 +32635,6 @@
         }
       }
     },
-    "十一个源都没找到可用的候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Lyrics from Any Source"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "十一个源都没找到可用的候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "十一個來源都沒找到可用的候選"
-          }
-        }
-      }
-    },
-    "十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the eleven sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "十一個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
-          }
-        }
-      }
-    },
     "连接 Apple Music" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33108,6 +33091,295 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」已經在這個列表裡了。"
+          }
+        }
+      }
+    },
+    "%1$@ 首源自带，%2$@ 首机翻" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ from the source, %2$@ machine-translated"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 首來源自帶，%2$@ 首機器翻譯"
+          }
+        }
+      }
+    },
+    "%@ 首待搜" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ to search"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 首待搜尋"
+          }
+        }
+      }
+    },
+    "十二个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of the twelve sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十二个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十二個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
+          }
+        }
+      }
+    },
+    "十二个源都没找到可用的候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Lyrics from Any Source"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十二个源都没找到可用的候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十二個來源都沒找到可用的候選"
+          }
+        }
+      }
+    },
+    "汽水音乐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soda Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汽水音乐"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汽水音樂"
+          }
+        }
+      }
+    },
+    "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汽水音樂的歌詞介面回傳了無法識別的內容（介面可能已變更）——這不是這首歌沒有歌詞，等一次版本更新通常會修好"
+          }
+        }
+      }
+    },
+    "没有缺失" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing missing"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有缺漏"
+          }
+        }
+      }
+    },
+    "系统的媒体信息通道在这台机器上用不了，播放状态会读不到。绕开它的只有一种配置：只勾 Apple Music、不勾「自动识别」；其余配置都要经这条通道读。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: Apple Music ticked on its own with “Auto-detect” unticked. Every other setup reads through this channel."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統的媒體資訊通道在這台電腦上無法使用，播放狀態會讀不到。繞開它的只有一種設定：只勾 Apple Music、不勾「自動辨識」；其餘設定都要經這條通道讀取。"
+          }
+        }
+      }
+    },
+    "这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌沒有歌詞或還在搜尋時，用歌名占住歌詞的位置，不縮回小圖示；歌詞一到就換成歌詞。暫停時仍縮回圖示，廣告中不顯示"
+          }
+        }
+      }
+    },
+    "%@ 的歌词缓存读不到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't read %@'s lyrics cache"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的歌詞快取讀不到"
+          }
+        }
+      }
+    },
+    "%@ 把歌词缓存放在受系统保护的目录里。授权「完全磁盘访问」之后，本机已经有的逐字歌词可以直接用，省去每次联网搜索。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 把歌詞快取放在受系統保護的目錄裡。授權「完全取用磁碟」之後，本機已經有的逐字歌詞可以直接用，省去每次連線搜尋。"
+          }
+        }
+      }
+    },
+    "授权对已经在运行的后台服务不生效。在系统设置里勾上之后，回到这里点一下「重启后台服务」。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Granting access does not reach a background service that is already running. After ticking it in System Settings, come back here and hit Restart background service."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權對已經在執行的背景服務不生效。在系統設定裡勾上之後，回到這裡按一下「重新啟動背景服務」。"
+          }
+        }
+      }
+    },
+    "重启后台服务" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart background service"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新啟動背景服務"
+          }
+        }
+      }
+    },
+    "读不到 %@ 的歌词缓存，点击看怎么处理" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't read %@'s lyrics cache — click to see what to do"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讀不到 %@ 的歌詞快取，按一下看如何處理"
+          }
+        }
+      }
+    },
+    "正在重启后台服务，它要把歌词缓存重新读一遍，通常要一两分钟…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restarting the background service. It has to read the whole lyrics cache again, which usually takes a minute or two…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重新啟動背景服務，它要把歌詞快取重新讀一遍，通常要一兩分鐘…"
+          }
+        }
+      }
+    },
+    "后台服务已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问」里确认一下 Lyrimuse 那一项是开着的。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景服務已經重新啟動過了，這個來源還是讀不到。到系統設定的「完全取用磁碟」裡確認一下 Lyrimuse 那一項是開著的。"
           }
         }
       }

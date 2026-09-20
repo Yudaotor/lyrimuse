@@ -33,6 +33,7 @@ import (
 func runRecheckMotionCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-motion-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
+	key := fs.String("key", "", `只重验这一条("歌手|歌名|专辑"),忽略下面的批量扫描条件——见 -key 的说明`)
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("recheck-motion-cover: %v", err)
 	}
@@ -49,10 +50,22 @@ func runRecheckMotionCoverCLI(args []string) {
 	}
 
 	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
-	os.Exit(runRecheckMotionCover(*apply))
+	os.Exit(runRecheckMotionCover(*apply, *key))
 }
 
-func runRecheckMotionCover(apply bool) int {
+// -key 补的是比"已经 checked=true 卡住"更早一步的坑:device 封面的记录只有在
+// `applyDeviceCoverUpgrade` 升级封面来源**那一刻**才会经 `recheckMotionCoverAfterDeviceCoverUpgrade`
+// 校验一次;之后 `backfillPeripheralFields` 每一轮重新解析出来的 `fresh.CoverURL` 几乎必然
+// 不是那张 device 封面(它传的 deviceCoverURL 恒为空,理由见 resolveTrackEnrichment 参数注释),
+// `motionCoverFreshResultAppliesTo` 因此正确地拒绝把结论挪给这条记录——但连带的后果是
+// `MotionCoverChecked` 永远停在**没查过**(不是"查过没有"),既不进上面那条批量扫描的
+// 命中条件,也没有任何自然重试路径会再碰它。这是设计上的死角,不是一次性网络抖动,
+// 只能手动点名重验。批量扫描条件刻意不跟着放宽:那会让全量 device 封面记录(数以千计)
+// 每次都被扫进去重新发两次 HTTP,这条命令的定位是"点名重验一条",不是新增一条自动巡检。
+func runRecheckMotionCover(apply bool, onlyKey string) int {
+	if onlyKey != "" {
+		return runRecheckMotionCoverOne(apply, onlyKey)
+	}
 	enrichMu.Lock()
 	var keys []string
 	for k, e := range enrichCache {
@@ -68,54 +81,14 @@ func runRecheckMotionCover(apply bool) int {
 	ctx := context.Background()
 	changed, unchanged, failed := 0, 0, 0
 	for _, key := range keys {
-		enrichMu.Lock()
-		e, ok := enrichCache[key]
-		enrichMu.Unlock()
-		if !ok {
-			continue
-		}
-		_, title, album := splitEnrichKey(key)
-		if title == "" {
-			fmt.Printf("── %s\n   跳过:key 不是 \"歌手|歌名|专辑\" 三段\n", key)
-			failed++
-			continue
-		}
-		e.MotionCoverChecked = false
-		e.fillMotionCover(ctx, title, album)
-		fmt.Printf("── %s\n", key)
-		switch {
-		case !e.MotionCoverChecked:
-			// 这一轮没查成(在飞/请求失败)——不算失败,下次自然再来。
-			fmt.Println("   跳过:这一轮没查成(网络/限流),保持原样,下次还会再试")
-			unchanged++
-			continue
-		case e.MotionCoverURL == "":
-			fmt.Println("   确认:这条记录确实没有动态封面(结论不变)")
-			unchanged++
-			continue
-		default:
-			fmt.Printf("   翻案:补上动态封面 %s\n", abbrev(e.MotionCoverURL, 96))
-		}
-		if !apply {
+		switch recheckOneMotionCoverKey(ctx, apply, key) {
+		case "changed":
 			changed++
-			continue
+		case "unchanged":
+			unchanged++
+		case "failed":
+			failed++
 		}
-		enrichMu.Lock()
-		cur, still := enrichCache[key]
-		if !still {
-			// 这期间被"歌词管理"删掉了——不要把它复活回去,跟 backfillPeripheralFields 同款。
-			enrichMu.Unlock()
-			fmt.Println("   写回时这条已不在缓存里,跳过")
-			continue
-		}
-		cur.MotionCoverChecked = e.MotionCoverChecked
-		cur.MotionCoverURL = e.MotionCoverURL
-		cur.MotionPreviewURL = e.MotionPreviewURL
-		enrichCache[key] = cur
-		enrichDirty = true
-		enrichMu.Unlock()
-		changed++
-		fmt.Println("   已写入")
 	}
 	if apply && changed > 0 {
 		saveEnrichCache()
@@ -133,4 +106,84 @@ func runRecheckMotionCover(apply bool) int {
 		return 1
 	}
 	return 0
+}
+
+// runRecheckMotionCoverOne:-key 的入口,只处理点名的这一条,不跑上面那条批量扫描。
+func runRecheckMotionCoverOne(apply bool, key string) int {
+	enrichMu.Lock()
+	_, ok := enrichCache[key]
+	enrichMu.Unlock()
+	if !ok {
+		fmt.Printf("缓存里没有这一条:%q\n", key)
+		return 1
+	}
+	result := recheckOneMotionCoverKey(context.Background(), apply, key)
+	if apply && result == "changed" {
+		saveEnrichCache()
+	}
+	verb := "预演"
+	if apply {
+		verb = "完成"
+	}
+	fmt.Printf("\n%s", verb)
+	if !apply {
+		fmt.Print("(加 -apply 才真写)")
+	}
+	fmt.Println()
+	if result == "failed" {
+		return 1
+	}
+	return 0
+}
+
+// recheckOneMotionCoverKey 对一条记录重验一次、打印过程,返回它落在哪一类
+// ("changed"/"unchanged"/"failed",空串是"写回时条目已被删掉"这一个不计入三类汇总的边缘情况,
+// 跟原来批量循环里那条 `continue` 不计数是同一行为)。全量复用 fillMotionCover 这同一份生产
+// 逻辑,不是另写一套比对代码——理由见文件头注。
+func recheckOneMotionCoverKey(ctx context.Context, apply bool, key string) string {
+	enrichMu.Lock()
+	e, ok := enrichCache[key]
+	enrichMu.Unlock()
+	if !ok {
+		fmt.Printf("── %s\n   跳过:缓存里没有这一条\n", key)
+		return "failed"
+	}
+	_, title, album := splitEnrichKey(key)
+	if title == "" {
+		fmt.Printf("── %s\n   跳过:key 不是 \"歌手|歌名|专辑\" 三段\n", key)
+		return "failed"
+	}
+	e.MotionCoverChecked = false
+	e.fillMotionCover(ctx, title, album)
+	fmt.Printf("── %s\n", key)
+	switch {
+	case !e.MotionCoverChecked:
+		// 这一轮没查成(在飞/请求失败)——不算失败,下次自然再来。
+		fmt.Println("   跳过:这一轮没查成(网络/限流),保持原样,下次还会再试")
+		return "unchanged"
+	case e.MotionCoverURL == "":
+		fmt.Println("   确认:这条记录确实没有动态封面(结论不变)")
+		return "unchanged"
+	default:
+		fmt.Printf("   翻案:补上动态封面 %s\n", abbrev(e.MotionCoverURL, 96))
+	}
+	if !apply {
+		return "changed"
+	}
+	enrichMu.Lock()
+	cur, still := enrichCache[key]
+	if !still {
+		// 这期间被"歌词管理"删掉了——不要把它复活回去,跟 backfillPeripheralFields 同款。
+		enrichMu.Unlock()
+		fmt.Println("   写回时这条已不在缓存里,跳过")
+		return ""
+	}
+	cur.MotionCoverChecked = e.MotionCoverChecked
+	cur.MotionCoverURL = e.MotionCoverURL
+	cur.MotionPreviewURL = e.MotionPreviewURL
+	enrichCache[key] = cur
+	enrichDirty = true
+	enrichMu.Unlock()
+	fmt.Println("   已写入")
+	return "changed"
 }

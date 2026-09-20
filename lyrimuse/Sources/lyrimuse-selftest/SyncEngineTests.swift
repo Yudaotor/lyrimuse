@@ -29,6 +29,75 @@ func runSyncEngineTests() {
         expectEqual(engine2.gapMarkers().map(\.index), [1], "间奏点(LRC): 只有 ≥15s 的起点差才标")
     }
 
+    // ---- 不设门槛的间奏窗口(悬浮歌词兜底,rawActiveGapWindow / TickResolution.rawGapWindow) ----
+    do {
+        // 前奏 2s(< minIntroMs 5000)、句间静默两处都是 3s(< minGapMs 6000)——门槛版
+        // 一处都不标,但 `currentLine` 在前奏这段确实是 nil(还没到第一句,没有"沿用上一行"
+        // 这条退路),悬浮歌词的兜底必须不看门槛也能拿到窗口,否则就是这次要修的
+        // 「有时候还是能看到♪」(短前奏 / 短间奏比 ≥5s/≥6s 的场景常见得多)。
+        let yrc = "[2000,1000](2000,500,0)aa (2500,500,0)bb \n"
+            + "[6000,1000](6000,500,0)cc (6500,500,0)dd \n"
+            + "[10000,1000](10000,500,0)ee (10500,500,0)ff \n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+        expectEqual(engine.gapMarkers(), [], "间奏窗口(不设门槛): 门槛版确认三段都不达标,对照组")
+        expectEqual(engine.activeGapIndex(atMs: 1000), nil, "间奏窗口(不设门槛): 门槛版前奏不算间奏")
+        expectEqual(engine.activeGapIndex(atMs: 4500), nil, "间奏窗口(不设门槛): 门槛版句间静默(3s)不算间奏")
+        expectEqual(engine.rawActiveGapWindow(atMs: 1000), LyricsGapWindow(startMs: 0, endMs: 2000),
+                    "间奏窗口(不设门槛): 前奏哪怕不到 5s,兜底也要能拿到窗口(0~第一句开始,不扣 leadMs)")
+        expectEqual(engine.rawActiveGapWindow(atMs: 500)?.startMs, 0, "间奏窗口(不设门槛): 前奏窗口起点是 0")
+        expectEqual(engine.rawActiveGapWindow(atMs: 4500), LyricsGapWindow(startMs: 4200, endMs: 6000),
+                    "间奏窗口(不设门槛): 第一句后 3s 静默哪怕不到 6s,兜底也要能拿到窗口(词尾+1200 ~ 下一句开始,不扣 leadMs)")
+        expectEqual(engine.rawActiveGapWindow(atMs: 8500), LyricsGapWindow(startMs: 8200, endMs: 10000),
+                    "间奏窗口(不设门槛): 第二句后同样 3s 静默也一样")
+        expectEqual(engine.rawActiveGapWindow(atMs: 2200), nil, "间奏窗口(不设门槛): 正在唱的时候仍然不算(词尾余量)")
+        // 窗口尾部必须顶到下一句真正开始那一刻,跟 currentLine 变回非 nil 的时刻严丝合缝:
+        // 下一句开始前一瞬间(5900)窗口仍要开着,不能提前关掉——提前关掉就会在"点熄灭"和
+        // "下一句出现"之间空出一段静默,退回静态「♪」。
+        expectEqual(engine.rawActiveGapWindow(atMs: 5900), LyricsGapWindow(startMs: 4200, endMs: 6000),
+                    "间奏窗口(不设门槛): 窗口一直开到下一句开始前一刻,不提前熄灭")
+        expectEqual(engine.rawActiveGapWindow(atMs: 6000), nil,
+                    "间奏窗口(不设门槛): 下一句真正开始那一刻窗口关闭,此时 currentLine 已经非 nil,衔接不留缝")
+        // 跟 tickQuery 的 rawGapWindow 字段必须同源,不能两条各算各的。
+        expectEqual(engine.tickQuery(atMs: 1000).rawGapWindow, engine.rawActiveGapWindow(atMs: 1000),
+                    "间奏窗口(不设门槛): tickQuery.rawGapWindow 与独立入口一致(前奏)")
+        expectEqual(engine.tickQuery(atMs: 4500).rawGapWindow, engine.rawActiveGapWindow(atMs: 4500),
+                    "间奏窗口(不设门槛): tickQuery.rawGapWindow 与独立入口一致(句间)")
+        // 门槛版(歌词窗口用)的 leadMs 熄灭余量只在 applyMinimumDuration=true 生效,不受这条
+        // 不设门槛路径的影响;门槛版本身的"下一句开始前 leadMs 先熄灭"由上一个测试块
+        // (8s 前奏那份 fixture)的 activeGapIndex(atMs: 24700) 覆盖。
+        expectEqual(engine.gapWindow(after: -1, applyMinimumDuration: false)?.end, 2000,
+                    "间奏窗口: applyMinimumDuration=false 时前奏窗口不扣 leadMs")
+    }
+
+    // ---- 前奏/间奏「•••」下方那句的罗马音/译文(TickResolution.nextRomanization/nextTranslation) ----
+    do {
+        // 同上一块的时间轴(前奏 2s、句间静默两处各 3s),每句都配一条罗马音/译文,时间戳
+        // 跟 YRC 对齐——验的是"line 为 nil 时那句该有的罗马音/译文,跟它变成当前行时
+        // allLines 里的罗马音/译文逐字一致",不是另一套简化规则。
+        let yrc = "[2000,1000](2000,500,0)aa (2500,500,0)bb \n"
+            + "[6000,1000](6000,500,0)cc (6500,500,0)dd \n"
+            + "[10000,1000](10000,500,0)ee (10500,500,0)ff \n"
+        let roma = "[00:02.00]roma-aa-bb\n[00:06.00]roma-cc-dd\n[00:10.00]roma-ee-ff\n"
+        let tr = "[00:02.00]tr-aa-bb\n[00:06.00]tr-cc-dd\n[00:10.00]tr-ee-ff\n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc)
+        expectEqual(engine.tickQuery(atMs: 1000).nextRomanization, "roma-aa-bb",
+                    "下一行罗马音: 前奏期间(还没到第一句)就该拿到第一句的罗马音")
+        expectEqual(engine.tickQuery(atMs: 1000).nextTranslation, "tr-aa-bb",
+                    "下一行译文: 前奏期间(还没到第一句)就该拿到第一句的译文")
+        expectEqual(engine.tickQuery(atMs: 4500).nextRomanization, "roma-cc-dd",
+                    "下一行罗马音: 句间静默里指向下一句的罗马音")
+        expectEqual(engine.tickQuery(atMs: 4500).nextTranslation, "tr-cc-dd",
+                    "下一行译文: 句间静默里指向下一句的译文")
+        // 跟这句变成当前行之后 allLines 里的值必须逐字一致——不是简化版,是同一份数据。
+        let lines = engine.allLines(idPrefix: "t")
+        expectEqual(engine.tickQuery(atMs: 4500).nextRomanization, lines[1].line.romanization,
+                    "下一行罗马音: 与这句变成当前行后 allLines 里的值一致")
+        expectEqual(engine.tickQuery(atMs: 4500).nextTranslation, lines[1].line.translation,
+                    "下一行译文: 与这句变成当前行后 allLines 里的值一致")
+    }
+
     // ---- 滚动先于染色(歌词窗口 AM 式提前滚动,tickQuery.scrollIndex) ----
     do {
         // 同上面间奏点块的时间轴:前奏 8s(标 -1、窗口熄于 7200);第一句 8~9s 唱完,
@@ -1054,5 +1123,85 @@ func runSyncEngineTests() {
 
         let plain = SyncedLyricLine(romanization: nil, translation: "t", mainText: "aabb", words: nil, wordGroups: nil, side: nil)
         expectEqual(plain.lineLevel, plain, "整行压平: 本来就是整行的原样返回(== 语义不变)")
+    }
+
+    // ---- 混排行里的中文片段跟拼音开关走(陶喆《My Anata》实测形状) ----
+    //
+    // 行内有假名 → 这一行的语言标签是日文 → 整行由**日文**开关放行;但行里的中文片段
+    // 不是日文,它该归拼音开关。拼音关着时中文片段换回原文,整行读音里不该剩任何带声调
+    // 拼音 —— 包括源自带/预生成的那份 `lyrics_roma`:它是完整版、事后切不出哪段是中文,
+    // 这种行必须绕过它现算(见 LyricsSyncEngine.romanizationText 那段注释)。
+    do {
+        print("\n== 混排行的拼音开关 ==")
+        let mixed = "苦等着あなた两年三个月 没有消息"
+        // 整首必须**不像日文歌**(含假名的行占比 < 50%),否则汉字读的是日语音读、本来就
+        // 归日文开关,这道过滤根本不该跑 —— 跟《My Anata》18/44 同一个形状。
+        var lrc = ["[00:01.00]\(mixed)"]
+        for i in 0..<9 {
+            lrc.append("[00:\(String(format: "%02d", 10 + i)).00]我不会怪你")
+        }
+        let lyrics = lrc.joined(separator: "\n") + "\n"
+        let sourceRoma = "[00:01.00]kǔ děng zhe anata liǎng nián sān gè yuè méiyǒu xiāoxí\n"
+        let toneMarks = CharacterSet(charactersIn: "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ")
+        func hasToneMark(_ s: String) -> Bool {
+            s.unicodeScalars.contains(where: { toneMarks.contains($0) })
+        }
+
+        let off = LyricsSyncEngine()
+        off.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: sourceRoma, lyricsYRC: "",
+                 romanizationScripts: [.japanese])
+        expectEqual(off.activeLine(atMs: 2_000)?.plainText, mixed, "混排行: 前置——拿到那一行")
+        let offRoma = off.activeLine(atMs: 2_000)?.romanization ?? ""
+        expectEqual(offRoma.contains("anata"), true,
+                    "混排行: 拼音关着时日文段仍出罗马字,实际 \(offRoma)")
+        expectEqual(hasToneMark(offRoma), false,
+                    "混排行: 拼音关着时整行不该剩拼音(预生成那份是完整版,要绕过),实际 \(offRoma)")
+        // 片段之间 joinLatin 会插空格,所以"原样穿透"比的是汉字本身、不是整串相等。
+        func hanOnly(_ s: String) -> String {
+            String(s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }
+                .map(Character.init))
+        }
+        expectEqual(hanOnly(offRoma), hanOnly("苦等着两年三个月 没有消息"),
+                    "混排行: 中文段一个汉字不少地穿透,位置对得上原文,实际 \(offRoma)")
+        expectEqual(off.activeLine(atMs: 11_000)?.romanization, nil,
+                    "混排行: 纯中文行照旧被拼音开关整行挡住")
+
+        let on = LyricsSyncEngine()
+        on.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: sourceRoma, lyricsYRC: "",
+                romanizationScripts: [.japanese, .chinese])
+        expectEqual(on.activeLine(atMs: 2_000)?.romanization,
+                    "kǔ děng zhe anata liǎng nián sān gè yuè méiyǒu xiāoxí",
+                    "混排行: 拼音开着时原样用源自带那份,不绕道现算")
+
+        // 逐词那条路(逐字歌词每个词底下各标一份)同样跟着开关走:中文词组的读音跟原文
+        // 一模一样 → buildWordGroups 判它没有信息增量 → 标成 nil,假名词组照常出罗马字。
+        func yrcLine(_ text: String, start: Int) -> String {
+            var out = "[\(start),\(text.count * 500)]"
+            for (i, ch) in text.enumerated() {
+                out += "(\(start + i * 500),500,0)\(ch) "
+            }
+            return out
+        }
+        let yrc = ([yrcLine("我的あなた", start: 1_000)]
+            + (0..<9).map { yrcLine("我不会怪你", start: 10_000 + $0 * 3_000) })
+            .joined(separator: "\n") + "\n"
+        let wordsOff = LyricsSyncEngine()
+        wordsOff.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc,
+                      romanizationScripts: [.japanese])
+        let groupsOff = wordsOff.activeLine(atMs: 1_500)?.wordGroups ?? []
+        func romaOf(_ groups: [SyncedLyricWordGroup], containing ch: String) -> String?? {
+            groups.first { $0.words.map(\.text).joined().contains(ch) }?.romanization
+        }
+        expectEqual(groupsOff.isEmpty, false, "混排行逐词: 前置——拿到词组")
+        expectEqual(romaOf(groupsOff, containing: "あ") ?? nil != nil, true,
+                    "混排行逐词: 假名词组仍标罗马字")
+        expectEqual(romaOf(groupsOff, containing: "我") ?? nil, nil,
+                    "混排行逐词: 拼音关着时中文词组不标读音")
+        let wordsOn = LyricsSyncEngine()
+        wordsOn.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc,
+                     romanizationScripts: [.japanese, .chinese])
+        let groupsOn = wordsOn.activeLine(atMs: 1_500)?.wordGroups ?? []
+        expectEqual(romaOf(groupsOn, containing: "我") ?? nil != nil, true,
+                    "混排行逐词: 拼音开着时中文词组照常标拼音")
     }
 }

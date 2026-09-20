@@ -107,7 +107,9 @@ func refreshKugouLocalIndexLocked() {
 	}
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
-		// 没装酷狗 / 没开过 / 路径变了 —— 都是正常情况,不记日志,免得每首歌刷一行。
+		// 没装酷狗 / 没开过 / 路径变了 —— 都是正常情况,静默退回网络解析。
+		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		noteLocalCacheDenied("kugou", dir, err)
 		kugouLocalIndex, kugouLocalReady = nil, true
 		return
 	}
@@ -122,9 +124,13 @@ func refreshKugouLocalIndexLocked() {
 
 	ents, err := os.ReadDir(dir)
 	if err != nil {
+		// ⚠️ stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
+		noteLocalCacheDenied("kugou", dir, err)
 		kugouLocalIndex = nil
 		return
 	}
+	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+	noteLocalCacheReadable("kugou")
 	idx := map[string][]kugouLocalEntry{}
 	for _, e := range ents {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".krc") {
@@ -192,6 +198,8 @@ func kugouLocalLyric(artist, title, album string) (kugouResult, bool) {
 	return kugouResult{
 		lrc: lrc, yrc: krcToYRC(body), tr: tr, roma: roma,
 		title: hit.title, artist: hit.artist, album: hit.album,
+		// 身份来自客户端为这一版录音下的那份 KRC,不经搜索 —— 同源加权的准入条件。
+		fromLocalClient: true,
 		// durationSecs 留 0:KRC 的 [total:] 实测恒为 0,没有可信时长。打分那边把 0 当
 		// "该源没给"处理(见 sourceReportedDurationSecs),不会因此扣分。
 	}, true

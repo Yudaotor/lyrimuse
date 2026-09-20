@@ -1,12 +1,16 @@
 import LyrimuseCore
 import SwiftUI
 
-/// 「与播放器联动」卡里的一行:标题 + 副标题(勾了谁)+ 尾部一排播放器图标芯片,点图标勾选 / 取消。
+/// 「与播放器联动」卡里的一行:标题 + 尾部一排播放器图标芯片,点图标勾选 / 取消。
 ///
 /// 为什么是图标芯片而不是三个 Toggle 或一个多选菜单:上面那张播放器网格已经用同一套图标(`PlayerIconView`
 /// 三级兜底取图)教过"哪个图标是哪个播放器",这里沿用同一种语言,一眼就能看出每项联动绑了谁;候选最多
 /// 五个,一排放得下。未勾选的芯片去饱和 + 半透明,勾选的带强调色描边,跟 `PlayerChoiceCard` 的选中态同源。
-/// 副标题把勾选结果再用文字写一遍(「Apple Music、Spotify」/「未勾选,此项关闭」),不靠图标一种通道。
+///
+/// ⚠️ **没有副标题**。它曾经把勾选结果再用文字写一遍(「Apple Music、Spotify」/「未勾选,此项关闭」),
+/// 而右边那排芯片已经把同一件事说清楚了 —— 三行摞在一起就是三行灰字复述右边的图标,把卡片撑高一倍。
+/// 旁白那条通道**不靠副标题**:每枚芯片自己带 `.accessibilityLabel` + `.isSelected`(见 `PlayerChip`),
+/// 去掉文字不会让 VoiceOver 听不出勾没勾。
 struct PlayerLinkageRow: View {
     let icon: String
     let title: String
@@ -16,13 +20,8 @@ struct PlayerLinkageRow: View {
     let chosen: Set<PlaybackPlayer>
     let onChange: (Set<PlaybackPlayer>) -> Void
 
-    private var summary: String {
-        let picked = candidates.filter { chosen.contains($0) }
-        return picked.isEmpty ? L10n.t("未勾选，此项关闭") : picked.map(\.displayName).joined(separator: "、")
-    }
-
     var body: some View {
-        SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
+        SettingsRow(icon: icon, title: title, help: help) {
             PlayerLinkageChips(candidates: candidates, chosen: chosen) { player in
                 var next = chosen
                 if next.contains(player) { next.remove(player) } else { next.insert(player) }
@@ -92,7 +91,7 @@ struct PlayerBundleChipsRow: View {
 
     var body: some View {
         SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
-            PlayerChipFlow(spacing: PlayerChipMetrics.spacing) {
+            SettingsFlowRow(spacing: PlayerChipMetrics.spacing) {
                 ForEach(choices) { choice in
                     let selected = !excluded.contains(choice.id)
                     PlayerChip(selected: selected, label: choice.name) {
@@ -180,33 +179,3 @@ private struct PlayerChip<Icon: View>: View {
     }
 }
 
-/// 芯片的流式排布:一行放不下就换行。整块经外层 `.frame(alignment: .trailing)` 贴 SettingsRow
-/// 尾部槽位的右缘,但**行内从左边开始摆**——右对齐会把换行后那零星几枚芯片顶到最右边单独悬空,
-/// 跟上一行对不上,看着像"漏了一截"(现象是)。
-/// 用 `Layout` 而不是 `HStack` + `fixedSize`:候选个数由用户的信任列表决定,写死一行会在窄窗口下
-/// 把标题挤没或把芯片裁掉半个。
-private struct PlayerChipFlow: Layout {
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let rows = ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing,
-                                         limit: proposal.width ?? .greatestFiniteMagnitude)
-        return ChipFlowGeometry.size(rows: rows, rowHeight: sizes.map(\.height).max() ?? 0, spacing: spacing)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let rowHeight = sizes.map(\.height).max() ?? 0
-        var y = bounds.minY
-        for row in ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing, limit: bounds.width) {
-            var x = bounds.minX
-            for index in row.indices {
-                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
-                                      proposal: ProposedViewSize(sizes[index]))
-                x += sizes[index].width + spacing
-            }
-            y += rowHeight + spacing
-        }
-    }
-}

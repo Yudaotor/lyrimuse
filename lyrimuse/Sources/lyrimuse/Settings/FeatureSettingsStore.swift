@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十一个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十二个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -27,7 +27,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
 // 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 collector/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -112,28 +112,28 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-// 合唱串("A & B")scrobble 时发哪个名字(三档)。rawValue 必须跟 collector
-// features.go 的 scrobbleArtistAll/First/Smart 常量逐字相同——两侧通过同一份 features.json
-// 交换,collector 只认这三个串,拼错就静默退回 all。
+// 上送 Last.fm 前怎么对待播放器报的标签(三档)。rawValue 必须跟 collector features.go 的
+// lastfmMatchSmart/Custom/Raw 常量逐字相同——两侧通过同一份 features.json 交换,collector
+// 只认这三个串,拼错就静默退回 raw。
 //
-// - smart:按 Last.fm 编目判定(collector lastfmcollapse.go):合唱串已被收录就原样发;没收录、
-//   而第一位歌手名下这首歌已被收录才只发第一位;两边都查不到或查询失败维持原样。每首歌只判
-//   一次、结论永久沿用。全新装机的默认档。
-// - all:原样发整串;老装机(features.json 已存在)的默认档,两条默认值的分野见
-//   `FeatureSettingsStore` 里 `isFreshInstall` 那段。
-// - first:纯字符串取第一位(collector firstCreditedArtist),不联网。
+// - smart:在 Last.fm 编目里找这首歌对应的条目,歌手和曲名都按那条发(collector
+//   lastfmcatalog.go)。等价于「自定义」下把改歌手、改曲名都打开。全新装机的默认档。
+// - custom:三个维度各自开关,见 `lastfmMatchArtist` / `lastfmMatchTrack` /
+//   `lastfmMatchFirstArtistOnly`。
+// - raw:原样发播放器报的标签,一个字都不动、不打网络;老装机(features.json 已存在)的
+//   默认档,两条默认值的分野见 `FeatureSettingsStore` 里 `isFreshInstall` 那段。
 //
 // ⚠️ **case 的声明顺序就是分段控件上从左到右的顺序** —— 唯一的消费点是
 // `AccountLinkingTab.lastfmScrobbleSettingsCard` 里那个 `ForEach(allCases)`,所以「智能」写在最前。
 // rawValue 才是跟 collector 的契约,与顺序无关:重排不动已存的值,也不动两侧的默认档。
-public enum LastfmScrobbleArtistMode: String, CaseIterable, Identifiable, Codable {
-    case smart, all, first
+public enum LastfmMatchMode: String, CaseIterable, Identifiable, Codable {
+    case smart, custom, raw
     public var id: Self { self }
     public var displayName: String {
         switch self {
         case .smart: return L10n.t("智能")
-        case .all: return L10n.t("全部")
-        case .first: return L10n.t("只发第一位")
+        case .custom: return L10n.t("自定义")
+        case .raw: return L10n.t("原始")
         }
     }
 }
@@ -193,10 +193,17 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lastfmMirrorScrobble: Bool?
     /// 合唱串上送档位,LastfmScrobbleArtistMode 的 rawValue("all"/"first"/"smart")。
     /// 缺失时 load() 退回下面的遗留布尔做一次迁移。
+    var lastfmMatchMode: String?
+    /// 下面三个只在 `custom` 档下读(另两档的值由档位本身决定)。都缺失时按 false ——
+    /// fail-closed 跟其余"改变上送内容"的开关一致。
+    var lastfmMatchArtist: Bool?
+    var lastfmMatchTrack: Bool?
+    var lastfmMatchFirstArtistOnly: Bool?
+    /// **遗留字段**(被上面的 lastfmMatchMode 取代,只留着给一次性迁移用):
+    /// `smart` ↔ 智能、`all` ↔ 原始、`first` ↔ 自定义且只开「合唱只发第一位」。
     var lastfmScrobbleArtistMode: String?
-    /// **遗留字段**(~ 09-03 之间的二态开关,被上面的 lastfmScrobbleArtistMode
-    /// 取代,只留着给一次性迁移用):true ↔ first,false/缺失 ↔ all。这台机器往后只写
-    /// lastfmScrobbleArtistMode,不再写它——跟 collector 侧 featureFlagsFile 对称。
+    /// **更早的遗留字段**(二态开关,被 lastfmScrobbleArtistMode 取代):true ↔ 旧的 `first`。
+    /// 迁移链因此是两级:这个 → ArtistMode → MatchMode。跟 collector 侧 featureFlagsFile 对称。
     var lastfmScrobbleFirstArtistOnly: Bool?
     /// 短于 30 秒的曲目也 scrobble 到 Last.fm。**默认 false = 现状**(Last.fm 官方规则要求曲目长于
     /// 30 秒)。只管 Last.fm(含给它兜底的本地收听日志/回填),ListenBrainz 不受影响 —— 见
@@ -242,6 +249,13 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 同上一套迁移标记(加 deezer 时补)。缺失 ⇒ 老配置,加载时把 deezer 补进
     /// 启用集合(只补这一次)。与 collector 侧 featureFlagsFile.DeezerLyrics 一一对应。
     var deezerLyrics: Bool?
+    /// 同上一套迁移标记(加 applemusic 时补)。与 collector 侧 featureFlagsFile.AppleMusicLyrics
+    /// 一一对应 —— ⚠️ 这个对应关系是硬性的:少了它,collector 那边 appleMusicSeen 恒为 nil、
+    /// 每次加载都把 applemusic 补回启用集合,用户在界面上取消勾选 Apple Music 对后台完全无效
+    /// (界面自己按 lyrics_sources 显示成已取消,两边说法不一致)。
+    var appleMusicLyrics: Bool?
+    /// 同上一套迁移标记(加 soda 时补)。与 collector 侧 featureFlagsFile.SodaLyrics 一一对应。
+    var sodaLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -275,6 +289,10 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsAutoUpgrade = "lyrics_auto_upgrade"
         case lyricsMachineTranslation = "lyrics_machine_translation"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
+        case lastfmMatchMode = "lastfm_match_mode"
+        case lastfmMatchArtist = "lastfm_match_artist"
+        case lastfmMatchTrack = "lastfm_match_track"
+        case lastfmMatchFirstArtistOnly = "lastfm_match_first_artist_only"
         case lastfmScrobbleArtistMode = "lastfm_scrobble_artist_mode"
         case lastfmScrobbleFirstArtistOnly = "lastfm_scrobble_first_artist_only"
         case scrobbleShortTracks = "scrobble_short_tracks"
@@ -289,6 +307,8 @@ struct FeatureFlagsFile: Codable, Equatable {
         case kuwoLyrics = "kuwo_lyrics"
         case miguLyrics = "migu_lyrics"
         case deezerLyrics = "deezer_lyrics"
+        case appleMusicLyrics = "applemusic_lyrics"
+        case sodaLyrics = "soda_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -382,7 +402,34 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 那一条路径上、且 `isFreshInstall` 成立时,并当场写实到盘上 —— 完整理由见那里。
     /// 这个初值**不能**直接改成 .smart:它同时是 features.json 损坏时的兜底,那种情况下的
     /// 机器几乎必然是老用户,改了就等于背着他折叠合唱串。
-    @Published public var lastfmScrobbleArtistMode: LastfmScrobbleArtistMode = .all
+    @Published public var lastfmMatchMode: LastfmMatchMode = .raw
+    /// 「自定义」档的三个维度。⚠️ 只在 `lastfmMatchMode == .custom` 时有意义 ——
+    /// 另两档由档位本身决定(智能 = 改歌手+改曲名、原始 = 全不改),写盘时由
+    /// `currentSnapshot` 按档位算出该落什么,不直接用这三个值。
+    @Published public var lastfmMatchArtist = false
+    @Published public var lastfmMatchTrack = false
+    @Published public var lastfmMatchFirstArtistOnly = false
+
+    /// 三个维度**按档位算出来的有效值** —— 落盘、以及任何"实际会怎么发"的判断都用它们,
+    /// 别直接读上面那三个 @Published(那三个只是「自定义」档的界面状态)。
+    /// 跟 collector `resolveLastfmMatch` 是同一份规则,两侧要一起改。
+    public var effectiveMatchArtist: Bool {
+        switch lastfmMatchMode {
+        case .smart: return true
+        case .custom: return lastfmMatchArtist
+        case .raw: return false
+        }
+    }
+    public var effectiveMatchTrack: Bool {
+        switch lastfmMatchMode {
+        case .smart: return true
+        case .custom: return lastfmMatchTrack
+        case .raw: return false
+        }
+    }
+    public var effectiveMatchFirstArtistOnly: Bool {
+        lastfmMatchMode == .custom && lastfmMatchFirstArtistOnly
+    }
     /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。**必须逐字等于 collector features.go 里
     /// boolOr 的默认值**(人工维持,见 load() 里的警告)。
     @Published public var scrobbleShortTracks = false
@@ -473,8 +520,17 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsAutoUpgrade: lyricsAutoUpgrade,
             lyricsMachineTranslation: lyricsMachineTranslation,
             lastfmMirrorScrobble: lastfmMirrorScrobble,
-            // 只写新键;遗留的 lastfm_scrobble_first_artist_only 是纯读的迁移字段(见其注释)。
-            lastfmScrobbleArtistMode: lastfmScrobbleArtistMode.rawValue,
+            // 只写新键;两个遗留字段(lastfm_scrobble_artist_mode /
+            // lastfm_scrobble_first_artist_only)都是纯读的迁移字段,见它们的注释。
+            //
+            // ⚠️ 三个布尔落盘的是**按档位算出来的有效值**,不是 UI 上那三个 @Published ——
+            // 智能档恒为 true/true/false、原始档恒为全 false。这样盘上永远不会出现
+            // 「mode=smart 但 match_artist=false」这种自相矛盾的组合,collector 那边也就
+            // 不必再判一次档位优先级(它确实不判,直接读布尔)。
+            lastfmMatchMode: lastfmMatchMode.rawValue,
+            lastfmMatchArtist: effectiveMatchArtist,
+            lastfmMatchTrack: effectiveMatchTrack,
+            lastfmMatchFirstArtistOnly: effectiveMatchFirstArtistOnly,
             scrobbleShortTracks: scrobbleShortTracks,
             lastfmScrobblePoint: lastfmScrobblePoint.rawValue,
             weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
@@ -492,6 +548,10 @@ public final class FeatureSettingsStore: ObservableObject {
             miguLyrics: lyricsSources.contains(.migu),
             // 同上,deezer 的迁移标记独立生效一次。
             deezerLyrics: lyricsSources.contains(.deezer),
+            // 同上,applemusic 的迁移标记独立生效一次。不写它,collector 会一直把这个源补回来。
+            appleMusicLyrics: lyricsSources.contains(.applemusic),
+            // 同上,soda 的迁移标记独立生效一次。不写它,collector 会一直把这个源补回来。
+            sodaLyrics: lyricsSources.contains(.soda),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -626,13 +686,13 @@ public final class FeatureSettingsStore: ObservableObject {
             // 一项脱节了(属性初值 .appleMusic vs collector 的 auto,已修)。改任一侧的
             // 默认值都要回头核对另一侧,别信这行注释说"一致"就跳过。
             //
-            // 上面那条对齐有且只有一个例外:「合唱歌曲的歌手」在**全新装机**上默认「智能」
+            // 上面那条对齐有且只有一个例外:「上送的写法」在**全新装机**上默认「智能」
             //。它只能在这里做,也只能在这一条路径上做 ——
             //  · 走到 `decoded != nil` 就说明文件在、能解析,那这台机器必是老的,一律维持原样;
             //  · 文件**损坏**时也会落到这个 guard 里,但那时 `isFreshInstall` 因信号②为 false,
             //    照旧 .all —— 老用户文件坏了,更不该顺手改他的 scrobble 行为。
             if Self.isFreshInstall {
-                lastfmScrobbleArtistMode = .smart
+                lastfmMatchMode = .smart
                 // 必须当场写实到盘上。collector 是另一个进程、读不到 UserDefaults,只认这份
                 // features.json,而它对"文件不存在"的兜底是 all(features.go
                 // resolveScrobbleArtistMode)—— 不写的话界面显示「智能」、实际一直在发整串,
@@ -668,10 +728,28 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
-        // 新键缺失/非法时退回遗留二态开关迁移一次(true → first),两者都没有才兜底 all ——
-        // 跟 collector 侧 resolveScrobbleArtistMode 是同一份规则。
-        lastfmScrobbleArtistMode = f.lastfmScrobbleArtistMode.flatMap(LastfmScrobbleArtistMode.init(rawValue:))
-            ?? ((f.lastfmScrobbleFirstArtistOnly ?? false) ? .first : .all)
+        // 上送匹配:新键缺失/非法时顺着**两级遗留链**迁移(lastfm_match_mode →
+        // lastfm_scrobble_artist_mode → lastfm_scrobble_first_artist_only),全都没有才
+        // 兜底「原始」—— 跟 collector 侧 resolveLastfmMatch 是同一份规则,两侧要一起改。
+        //
+        // ⚠️ 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
+        // 旧 first → 自定义且只开「合唱只发第一位」(⇒ 照旧不打网络)。
+        if let mode = f.lastfmMatchMode.flatMap(LastfmMatchMode.init(rawValue:)) {
+            lastfmMatchMode = mode
+            lastfmMatchArtist = f.lastfmMatchArtist ?? false
+            lastfmMatchTrack = f.lastfmMatchTrack ?? false
+            lastfmMatchFirstArtistOnly = f.lastfmMatchFirstArtistOnly ?? false
+        } else {
+            let legacyFirstOnly = f.lastfmScrobbleArtistMode == "first"
+                || (f.lastfmScrobbleArtistMode == nil && (f.lastfmScrobbleFirstArtistOnly ?? false))
+            switch f.lastfmScrobbleArtistMode {
+            case "smart": lastfmMatchMode = .smart
+            default: lastfmMatchMode = legacyFirstOnly ? .custom : .raw
+            }
+            lastfmMatchArtist = false
+            lastfmMatchTrack = false
+            lastfmMatchFirstArtistOnly = legacyFirstOnly
+        }
         scrobbleShortTracks = f.scrobbleShortTracks ?? false
         // 缺失/非法一律官方规则 —— 跟 collector 侧 resolveScrobblePoint 是同一份规则。
         lastfmScrobblePoint = f.lastfmScrobblePoint.flatMap(LastfmScrobblePoint.init(rawValue:)) ?? .half
@@ -712,6 +790,16 @@ public final class FeatureSettingsStore: ObservableObject {
             if f.deezerLyrics == nil {
                 // 同上,见 FeatureFlagsFile.deezerLyrics。
                 enabled.insert(.deezer)
+            }
+            if f.appleMusicLyrics == nil {
+                // 同上,见 FeatureFlagsFile.appleMusicLyrics。这一支必须跟 collector 侧
+                // resolveLyricsSources 的 appleMusicSeen 分支同进同退:只有一边补,同一份老配置
+                // 在界面和后台会得到两种不同的启用集合。
+                enabled.insert(.applemusic)
+            }
+            if f.sodaLyrics == nil {
+                // 同上,见 FeatureFlagsFile.sodaLyrics,跟 collector 侧的 sodaSeen 分支同进同退。
+                enabled.insert(.soda)
             }
         }
         lyricsSources = enabled

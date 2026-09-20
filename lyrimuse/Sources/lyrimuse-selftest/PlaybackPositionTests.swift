@@ -7,40 +7,6 @@ import Foundation
 
 @MainActor
 func runPlaybackPositionTests() {
-    // ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
-    // 快照前的年龄补偿+合理性核对(实测排查坐实的回归:缓存值不补偿年龄直接
-    // 当"当前位置"用,本地整条展示链慢 ~1.8s,详见该函数注释)。
-
-    do {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
-        // 稳定播放:缓存读数 100.0s、1.8s 前抓的、速率 1 → 补偿到 101.8s;新鲜读数 101.9s,
-        // 差 0.1s 在核对容差内 → 借用补偿后的值,而不是原始的 100.0。
-        let steady = MediaControlClient.ageCompensatedCachedElapsed(
-            cachedElapsed: 100.0, cachedPlaying: true, cachedRate: 1, cachedAt: t0,
-            freshElapsed: 101.9, freshPlaying: true, now: t0.addingTimeInterval(1.8)
-        )
-        expectEqual(steady.map { abs($0 - 101.8) < 0.001 }, true, "ageCompensatedCachedElapsed: 稳定播放按读数年龄×速率补偿")
-        // 单曲循环重启:缓存还是上一轮循环的位置(240s),真实已经回到 1.6s → 补偿后跟新鲜
-        // 读数差 2s 以上,缓存不可信,返回 nil(调用方退回新鲜读数)。
-        let loopRestart = MediaControlClient.ageCompensatedCachedElapsed(
-            cachedElapsed: 240.0, cachedPlaying: true, cachedRate: 1, cachedAt: t0,
-            freshElapsed: 1.6, freshPlaying: true, now: t0.addingTimeInterval(1.8)
-        )
-        expectEqual(loopRestart == nil, true, "ageCompensatedCachedElapsed: 单曲循环重启后过期缓存不借用")
-        // 缓存是暂停态读数(刚恢复播放):这段年龄里位置没在走,没法按速率外推 → 不借用。
-        let pausedCache = MediaControlClient.ageCompensatedCachedElapsed(
-            cachedElapsed: 100.0, cachedPlaying: false, cachedRate: 0, cachedAt: t0,
-            freshElapsed: 100.1, freshPlaying: true, now: t0.addingTimeInterval(1.8)
-        )
-        expectEqual(pausedCache == nil, true, "ageCompensatedCachedElapsed: 暂停态缓存读数不借用")
-        // 切歌加载瞬间速率短暂报 0 但确实在播:按速率 1 计,跟 collector/lb.go 同一处理。
-        let zeroRate = MediaControlClient.ageCompensatedCachedElapsed(
-            cachedElapsed: 100.0, cachedPlaying: true, cachedRate: 0, cachedAt: t0,
-            freshElapsed: 101.9, freshPlaying: true, now: t0.addingTimeInterval(1.8)
-        )
-        expectEqual(zeroRate.map { abs($0 - 101.8) < 0.001 }, true, "ageCompensatedCachedElapsed: 播放中速率报 0 按 1 计")
-    }
-
     // ---- MediaControlClient.livePositionSeconds: rate 缺失时别信 elapsedTimeNow ----
     // (实测坐实:Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
     // media-control 的 --now 外推是 elapsed + (now-ts)*rate —— rate 缺失时增量为 0,
@@ -240,23 +206,23 @@ func runPlaybackPositionTests() {
             let last = MC.PlayingAnchor(track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", instant: ts.addingTimeInterval(0.555))
             let later = ts.addingTimeInterval(34.5)
             // 同曲、elapsed 逐 ms 相等、时间戳变了、旧锚点外推 44s 远没到 268s 曲长 → 陈旧重发
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         true, "陈旧重发: 同 elapsed 换时间戳判为重发(实测样本)")
             // elapsed 变了(真实 seek / 恢复)→ 不是
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 44.2, timestamp: "T43", duration: 268.92, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 44.2, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: elapsed 变了就是真锚点")
             // 时间戳没变(同一个锚点被轮询多次看到)→ 不是
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", duration: 268.92, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 同一个锚点不算重发")
             // 换歌 → 不是
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 换歌不算")
             // elapsed == 0:跟「上一曲」重头播放签名相同,只按**时间**分(zeroAnchorRepublishWindowSecs)。
             // 实测两簇:开播双发挤在 2 秒内(汽水音乐 0.5~1.99s、连发累计 3.4s),真的回到 0 最近也在 175s 后。
             let atStart = MC.PlayingAnchor(track: "x|y", elapsed: 0, timestamp: "T00", instant: ts)
-            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T44", duration: 268.92, now: ts.addingTimeInterval(44)),
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T44", duration: 268.92, bundleID: PlaybackPlayer.soda.bundleIdentifier, now: ts.addingTimeInterval(44)),
                         false, "陈旧重发: elapsed=0 隔得太久(44s)不算重发")
-            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92, now: ts.addingTimeInterval(2)),
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92, bundleID: PlaybackPlayer.soda.bundleIdentifier, now: ts.addingTimeInterval(2)),
                         true, "陈旧重发: elapsed=0 开播 2 秒内重发算重发(时间戳解不出时按墙钟)")
             // 带真时间戳的实测样本(讨厌红楼梦:0.000@10:19:58 → 0.000@10:20:00,整首歌因此慢 1.93s)
             let zeroTS = "2026-09-18T10:19:58Z"
@@ -264,26 +230,62 @@ func runPlaybackPositionTests() {
             let zeroAnchor = MC.PlayingAnchor(track: "陶喆|讨厌红楼梦", elapsed: 0, timestamp: zeroTS, instant: zeroInstant)
             expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
                                                   timestamp: "2026-09-18T10:20:00Z", duration: 268.92,
+                                                  bundleID: PlaybackPlayer.soda.bundleIdentifier,
                                                   now: zeroInstant.addingTimeInterval(2.4)),
                         true, "陈旧重发: 开播双发的 0 锚点判为重发(实测样本)")
             // 连发三次时累计 3.4s,仍在窗口内(第二次重发也是跟**原**锚点比)
             expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
                                                   timestamp: "2026-09-18T10:20:02Z", duration: 268.92,
+                                                  bundleID: PlaybackPlayer.soda.bundleIdentifier,
                                                   now: zeroInstant.addingTimeInterval(4)),
                         true, "陈旧重发: 连发三次时第二次仍在窗口内")
             // 曲末归零 / 隔很久重播:实测最近的一次在 175s 之后,必须当真锚点
             expectEqual(MC.isStaleAnchorRepublish(last: zeroAnchor, track: "陶喆|讨厌红楼梦", elapsed: 0,
                                                   timestamp: "2026-09-18T10:22:53Z", duration: 268.92,
+                                                  bundleID: PlaybackPlayer.soda.bundleIdentifier,
                                                   now: zeroInstant.addingTimeInterval(175)),
                         false, "陈旧重发: 隔 175 秒的 0 锚点是真的回到 0")
             // 旧锚点外推已越过曲长(单曲循环回绕 / 曲末)→ 旧锚点已死,新的是真的
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T99", duration: 268.92, now: ts.addingTimeInterval(270)),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T99", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: ts.addingTimeInterval(270)),
                         false, "陈旧重发: 旧锚点外推越过曲长就信新锚点")
             // 没有时长信息 → 只看签名
-            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: nil, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: nil, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         true, "陈旧重发: 无时长时只看签名")
-            expectEqual(MC.isStaleAnchorRepublish(last: nil, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+            expectEqual(MC.isStaleAnchorRepublish(last: nil, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 没有上一个锚点不判")
+
+            // Spotify 实测(Dancing With Our Hands Tied):0.000@:53 | 0.000@:54 | 0.000@:55,
+            // 用它自己的 AppleScript 反推真起播点落在**第一个**锚点那一秒内 —— 跟汽水音乐同向。
+            let spotZeroTS = "2026-09-20T02:32:53Z"
+            let spotZeroInstant = MC.parseTimestamp(spotZeroTS) ?? ts
+            let spotZeroAnchor = MC.PlayingAnchor(track: "Taylor Swift|Dancing With Our Hands Tied", elapsed: 0,
+                                                  timestamp: spotZeroTS, instant: spotZeroInstant)
+            expectEqual(MC.isStaleAnchorRepublish(last: spotZeroAnchor, track: "Taylor Swift|Dancing With Our Hands Tied",
+                                                  elapsed: 0, timestamp: "2026-09-20T02:32:54Z", duration: 211,
+                                                  bundleID: PlaybackPlayer.spotify.bundleIdentifier,
+                                                  now: spotZeroInstant.addingTimeInterval(1)),
+                        true, "陈旧重发: Spotify 的 0 锚点连发判为重发(实测样本)")
+
+            // elapsed == 0 那条分支按播放器收窄:连发里**哪一个**是真起播点各家相反。Apple Music
+            // 切歌时连发 2~3 个 0 锚点(实测 :20/:22/:24),真起播点是**最后**一个 —— 判成重发就
+            // 整首歌快 4 秒,而且伺服看不见、只有暂停才纠得回来。名单外一律采信最新的那个。
+            let amZeroTS = "2026-09-20T01:50:20Z"
+            let amZeroInstant = MC.parseTimestamp(amZeroTS) ?? ts
+            let amZeroAnchor = MC.PlayingAnchor(track: "陈绮贞|嫉妒", elapsed: 0, timestamp: amZeroTS, instant: amZeroInstant)
+            expectEqual(MC.isStaleAnchorRepublish(last: amZeroAnchor, track: "陈绮贞|嫉妒", elapsed: 0,
+                                                  timestamp: "2026-09-20T01:50:24Z", duration: 267.6,
+                                                  bundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
+                                                  now: amZeroInstant.addingTimeInterval(4)),
+                        false, "陈旧重发: Apple Music 的 0 锚点连发不判重发(实测样本)")
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92,
+                                                  bundleID: PlaybackPlayer.kugou.bundleIdentifier, now: ts.addingTimeInterval(2)),
+                        false, "陈旧重发: 名单外的播放器(酷狗)0 锚点不判重发")
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92,
+                                                  bundleID: "com.example.player", now: ts.addingTimeInterval(2)),
+                        false, "陈旧重发: 认不出的第三方播放器 0 锚点不判重发")
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92,
+                                                  bundleID: nil, now: ts.addingTimeInterval(2)),
+                        false, "陈旧重发: 拿不到 bundle id 时 0 锚点不判重发")
 
             // 命中后 livePositionSeconds 按原锚点时刻自己外推,不信 elapsedTimeNow(它按假时间戳算成 73.75)
             let kept = MC.livePositionSeconds(
@@ -641,6 +643,74 @@ func runPlaybackPositionTests() {
             if snap { falseSnap = true; break }
         }
         expectEqual(falseSnap, false, "servoDecision(Spotify): ±0.05s 稳态抖动不误触发")
+    }
+
+    // ---- shouldProbeLateAnchor: Spotify 中途重发的晚锚点 ----
+    //
+    // 真机一天的日志:这种锚点 30 次,幅度集中在 1.0~2.0 秒。它比 seek 容差(2s)小、又不满足
+    // isStaleAnchorRepublish 的"elapsed 逐 ms 相等",两道闸都不管,伺服几拍后把它当新真相 ——
+    // 整首歌恒定落后,暂停才纠得回来。机制见 LocalPlaybackSource.shouldProbeLateAnchor。
+    do {
+        // 日志里的四个真实样本(真实位置 → 锚点报的值)。
+        let samples: [(String, Double, Double)] = [
+            ("Ed Sheeran|Castle on the Hill", 25.8, 23.8),
+            ("Olivia Rodrigo|vampire", 71.3, 69.6),
+            ("Dua Lipa|IDGAF", 200.3, 199.2),
+            ("Chappell Roan|Pink Pony Club", 258.1, 257.1),
+        ]
+        for (name, predicted, reported) in samples {
+            expectEqual(
+                LocalPlaybackSource.shouldProbeLateAnchor(
+                    reported: reported, predicted: predicted, tier: .cleanExtrapolated),
+                true, "shouldProbeLateAnchor: 实测样本 \(name) 应触发确认")
+        }
+    }
+
+    do {
+        // 稳态抖动与边界:0.05s 噪声不问,恰好 0.5s 不问(要**过**下沿才问)。
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 100.05, tier: .cleanExtrapolated),
+            false, "shouldProbeLateAnchor: ±0.05s 稳态抖动不问探针")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 100.5, tier: .cleanExtrapolated),
+            false, "shouldProbeLateAnchor: 恰好 0.5s 在下沿上,不问")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 100.51, tier: .cleanExtrapolated),
+            true, "shouldProbeLateAnchor: 过了下沿就问")
+    }
+
+    do {
+        // 跳变过 2 秒归 seek 分支(它自己会问探针),这里不重复;向前跳不是晚锚点。
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 4.172, predicted: 101.481, tier: .cleanExtrapolated),
+            false, "shouldProbeLateAnchor: 差 97s 的假锚点归 seek 分支,不在这里问")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 97.5, tier: .cleanExtrapolated),
+            false, "shouldProbeLateAnchor: 读数向前跳不是晚锚点")
+    }
+
+    do {
+        // 只对 Spotify 那一档开:Apple Music 的播放头是真值,QQ/网易云的整秒地板天天向后差。
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 101.5, tier: .precise),
+            false, "shouldProbeLateAnchor: 精确源不问")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 101.5, tier: .noisyFloored),
+            false, "shouldProbeLateAnchor: 地板量化源不问")
+    }
+
+    do {
+        // 这条钉住"为什么只问探针、不动位置":同样的 1.2s 晚锚点,伺服要第 3 拍才 snap 过去,
+        // 而探针 ~1 秒就回来 —— 坏值来不及固化。伺服真的更早 snap 的话这个设计就不成立了。
+        var ema = 0.0
+        var rounds = 0
+        for _ in 1...5 {
+            rounds += 1
+            let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: -1.2, tier: .cleanExtrapolated)
+            ema = newEMA
+            if snap { break }
+        }
+        expectEqual(rounds >= 3, true, "晚锚点: 伺服不该早于第 3 拍 snap 到坏锚点,实际 \(rounds) 拍")
     }
 
     // ---- 自然切歌锚点超前校正:Spotify gapless 整曲偏快的根修 ----

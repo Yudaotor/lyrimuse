@@ -164,10 +164,14 @@ func refreshNeteaseLocalIndexLocked(ctx context.Context) {
 	}
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
-		// 没装网易云 / 没登录过 / 路径变了 —— 正常情况,不记日志。
+		// 没装网易云 / 没登录过 / 路径变了 —— 正常情况,静默退回网络解析。
+		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		noteLocalCacheDenied("netease", path, err)
 		neteaseLocalIndex, neteaseLocalReady = nil, true
 		return
 	}
+	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+	noteLocalCacheReadable("netease")
 	now := time.Now()
 	if neteaseLocalReady && st.ModTime().Equal(neteaseLocalDBMod) && st.Size() == neteaseLocalDBSize {
 		return

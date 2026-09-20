@@ -114,6 +114,8 @@ func setLyricsFillPaths() {
 	// ⚠️ 全量扫库那份状态文件**不在**上面的清理范围里 —— 它记的正是"上一个进程没跑完的
 	// 那一轮",删掉就等于每次重启都放弃续跑。见 lyricsfullscan.go 头注。
 	setLyricsFullScanStatePath(configFilePath(clientName + "-lyrics-fullscan.json"))
+	// 本地缓存可读性:设置页那三格提示的数据源,由 collector 独家发布(见 localcachefs.go)。
+	setLocalCacheAccessPath(configFilePath(clientName + "-local-cache-access.json"))
 }
 
 // startLyricsFillSweeper 由 run() 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),

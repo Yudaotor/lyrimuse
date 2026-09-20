@@ -8,92 +8,112 @@ import (
 	"time"
 )
 
-// 合唱串上送的三档(all / first / smart)。
+// 上送写法由三个布尔决定(features.LastfmMatchArtist / Track / FirstArtistOnly,
+// 档位在 resolveLastfmMatch 那边就摊平了)。这里用 nil 匹配器跑,只考察**不联网的那一半**:
 //
-// 这一组钉的是:
-//  1. **默认原样发整串** —— 依据是 ListenBrainz 文档要求合唱 credit "include them all",
-//     以及 Navidrome 同名开关 Lastfm.ScrobbleFirstArtistOnly 默认也是 false。
-//  2. first 档走 firstCreditedArtist(纯字符串判断,**不联网**),结果可复现。
-//  3. smart 档在判定器为 nil(没配只读 api_key)时退化成原样发 —— 不能 panic、不能偷偷变成
-//     first 档。联网判定本身的行为在 lastfmcollapse_test.go。
-func TestResolveScrobbleArtist(t *testing.T) {
-	saved := features.LastfmScrobbleArtistMode
-	defer func() { features.LastfmScrobbleArtistMode = saved }()
-
+//  1. 三个布尔全 false(「原始」档)→ 歌手曲名一个字都不动。
+//  2. 只开截断 → 纯字符串取第一位(firstCreditedArtist),结果可复现、不打网络。
+//  3. **曲名永远不会被截断那一路碰**。
+//  4. 匹配器为 nil(没配只读 api_key)时开着匹配也不能 panic,退化成原样。
+func TestResolveScrobbleTags(t *testing.T) {
 	cases := []struct {
-		name string
-		mode string
-		in   string
-		want string
+		name                     string
+		artist, track, firstOnly bool
+		in                       string
+		want                     string
 	}{
-		{"默认:合唱串原样发整串", scrobbleArtistAll, "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
-		{"默认:单人名原样", scrobbleArtistAll, "周杰伦", "周杰伦"},
-		{"first:取第一位", scrobbleArtistFirst, "Khalil Fong & Fiona Sit", "Khalil Fong"},
-		{"first:单人名不受影响", scrobbleArtistFirst, "周杰伦", "周杰伦"},
+		{"原始:合唱串原样发整串", false, false, false, "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
+		{"原始:单人名原样", false, false, false, "周杰伦", "周杰伦"},
+		{"只发第一位:取第一位", false, false, true, "Khalil Fong & Fiona Sit", "Khalil Fong"},
+		{"只发第一位:单人名不受影响", false, false, true, "周杰伦", "周杰伦"},
 		// K/DA 那次真实事故:`/` 不能跟逗号顿号平级切,否则 `K/DA` 被劈成 `K`,
 		// 而 `K` 在 Last.fm 是一个真实存在的无关歌手(见 firstCreditedArtist 的注释)。
-		// 这里确认 first 档仍然走的是那套带守卫的判断,不是裸切。
-		{"first:K/DA 不能被劈成 K", scrobbleArtistFirst, "K/DA", "K/DA"},
-		{"smart 且判定器为 nil:原样发", scrobbleArtistSmart, "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
-		{"空串三种模式都原样返回", scrobbleArtistFirst, "", ""},
-		{"零值/未知档位当 all 处理", "", "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
+		// 这里确认截断那一路仍然走的是那套带守卫的判断,不是裸切。
+		{"只发第一位:K/DA 不能被劈成 K", false, false, true, "K/DA", "K/DA"},
+		{"匹配器为 nil:开着匹配也原样发", true, true, false, "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
+		// 匹配器为 nil 时匹配不成立 ⇒ 截断照样兜底(它本来就只在没匹配到时应用)。
+		{"匹配器为 nil + 只发第一位:仍截断", true, true, true, "Khalil Fong & Fiona Sit", "Khalil Fong"},
+		{"空串原样返回", false, false, true, "", ""},
 	}
 	for _, c := range cases {
-		features.LastfmScrobbleArtistMode = c.mode
-		if got := resolveScrobbleArtist(context.Background(), nil, c.in, "某首歌"); got != c.want {
-			t.Errorf("%s: resolveScrobbleArtist(%q) = %q, want %q", c.name, c.in, got, c.want)
+		setMatch(t, lastfmMatchCustom, c.artist, c.track, c.firstOnly)
+		gotArtist, gotTrack := resolveScrobbleTags(context.Background(), nil, c.in, "某首歌", 200)
+		if gotArtist != c.want {
+			t.Errorf("%s: 歌手 = %q, want %q", c.name, gotArtist, c.want)
+		}
+		if gotTrack != "某首歌" {
+			t.Errorf("%s: 曲名被动了(%q)—— 截断那一路绝不该碰曲名", c.name, gotTrack)
 		}
 	}
 }
 
 // features.json 的键名是两侧(Go / Swift)通过同一份文件交换的字符串,写错一个字母就是
-// "设置里改了、collector 永远读不到",而且**不报错**。这里把 Go 侧的 json tag 和三个档位值
-// 钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和 LastfmScrobbleArtistMode 的
-// rawValue(那边最容易漏)。同时钉住遗留二态开关的迁移:~ 09-03 之间写下的
-// lastfm_scrobble_first_artist_only=true 必须读成 first,不能因为换了键就回到默认档。
-func TestScrobbleArtistModeFlagRoundTrip(t *testing.T) {
-	const key = "lastfm_scrobble_artist_mode"
-	const legacy = "lastfm_scrobble_first_artist_only"
+// "设置里改了、collector 永远读不到",而且**不报错**。这里把 Go 侧的 json tag、三个档位值
+// 和**两级遗留迁移链**一起钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和
+// LastfmMatchMode 的 rawValue(那边最容易漏)。
+//
+// ⚠️ 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
+// 旧 first → 自定义且只开截断(⇒ 照旧不打网络)。这几条错一条,就是在老用户不知情的
+// 情况下改了往 Last.fm 写的内容,而 scrobble 落进去基本删不掉。
+func TestLastfmMatchModeFlagRoundTrip(t *testing.T) {
+	const key = "lastfm_match_mode"
+	const legacy = "lastfm_scrobble_artist_mode"
+	const legacy2 = "lastfm_scrobble_first_artist_only"
 
+	type want struct {
+		mode                     string
+		artist, track, firstOnly bool
+	}
 	cases := []struct {
 		name string
 		body string
-		want string
+		want want
 	}{
-		{"两个键都缺省 → all(默认发整串)", `{}`, scrobbleArtistAll},
-		{"显式 all", `{"` + key + `":"all"}`, scrobbleArtistAll},
-		{"显式 first", `{"` + key + `":"first"}`, scrobbleArtistFirst},
-		{"显式 smart", `{"` + key + `":"smart"}`, scrobbleArtistSmart},
-		{"非法值 → 退回默认 all", `{"` + key + `":"clever"}`, scrobbleArtistAll},
-		{"非法值 + 遗留 true → 退回遗留迁移 first", `{"` + key + `":"clever","` + legacy + `":true}`, scrobbleArtistFirst},
-		{"只有遗留 true → first(迁移)", `{"` + legacy + `":true}`, scrobbleArtistFirst},
-		{"只有遗留 false → all", `{"` + legacy + `":false}`, scrobbleArtistAll},
-		{"新键优先于遗留键", `{"` + key + `":"all","` + legacy + `":true}`, scrobbleArtistAll},
-		{"新键 smart 时遗留 true 不干扰", `{"` + key + `":"smart","` + legacy + `":true}`, scrobbleArtistSmart},
+		{"三个键都缺省 → 原始", `{}`, want{lastfmMatchRaw, false, false, false}},
+		{"显式智能 → 歌手曲名都可改", `{"` + key + `":"smart"}`, want{lastfmMatchSmart, true, true, false}},
+		{"显式原始", `{"` + key + `":"raw"}`, want{lastfmMatchRaw, false, false, false}},
+		{"自定义:三个子项缺省一律 false(fail-closed)", `{"` + key + `":"custom"}`, want{lastfmMatchCustom, false, false, false}},
+		{"自定义:只改曲名", `{"` + key + `":"custom","lastfm_match_track":true}`, want{lastfmMatchCustom, false, true, false}},
+		{"自定义:只改歌手 + 截断", `{"` + key + `":"custom","lastfm_match_artist":true,"lastfm_match_first_artist_only":true}`, want{lastfmMatchCustom, true, false, true}},
+		{"非法档位 → 退回默认原始", `{"` + key + `":"clever"}`, want{lastfmMatchRaw, false, false, false}},
+		// 一级遗留:lastfm_scrobble_artist_mode。
+		{"遗留 smart → 智能", `{"` + legacy + `":"smart"}`, want{lastfmMatchSmart, true, true, false}},
+		{"遗留 all → 原始", `{"` + legacy + `":"all"}`, want{lastfmMatchRaw, false, false, false}},
+		{"遗留 first → 自定义且只开截断(行为逐字不变)", `{"` + legacy + `":"first"}`, want{lastfmMatchCustom, false, false, true}},
+		{"新键优先于一级遗留", `{"` + key + `":"raw","` + legacy + `":"smart"}`, want{lastfmMatchRaw, false, false, false}},
+		{"非法新键 + 一级遗留 → 走遗留", `{"` + key + `":"clever","` + legacy + `":"first"}`, want{lastfmMatchCustom, false, false, true}},
+		// 二级遗留:更早的二态开关。
+		{"只有二级遗留 true → 自定义且只开截断", `{"` + legacy2 + `":true}`, want{lastfmMatchCustom, false, false, true}},
+		{"只有二级遗留 false → 原始", `{"` + legacy2 + `":false}`, want{lastfmMatchRaw, false, false, false}},
+		{"一级遗留优先于二级", `{"` + legacy + `":"all","` + legacy2 + `":true}`, want{lastfmMatchRaw, false, false, false}},
 	}
 	for _, c := range cases {
-		if got := loadFeatureFlagsFromJSON(t, c.body).LastfmScrobbleArtistMode; got != c.want {
-			t.Errorf("%s: %s → %q, want %q", c.name, c.body, got, c.want)
+		f := loadFeatureFlagsFromJSON(t, c.body)
+		got := want{f.LastfmMatchMode, f.LastfmMatchArtist, f.LastfmMatchTrack, f.LastfmMatchFirstArtistOnly}
+		if got != c.want {
+			t.Errorf("%s: %s → %+v, want %+v", c.name, c.body, got, c.want)
 		}
 	}
 }
 
-// mirrorAsync 的总窗口:智能档要多给判定那份预算,其余档维持 8 秒 —— 判定最多两个请求,
-// 不能把真正的写入挤掉。
+// mirrorAsync 的总窗口:**会联网匹配**时要多给判定那份预算(最多四个请求),不能把真正的
+// 写入挤掉;不匹配就维持 8 秒。判据是两个布尔,不是档位 —— 「自定义只开截断」同样不联网。
 func TestMirrorTimeoutBudget(t *testing.T) {
-	saved := features.LastfmScrobbleArtistMode
-	defer func() { features.LastfmScrobbleArtistMode = saved }()
-	features.LastfmScrobbleArtistMode = scrobbleArtistAll
+	setMatch(t, lastfmMatchRaw, false, false, false)
 	if got := mirrorTimeout(); got != 8*time.Second {
-		t.Errorf("all 档 mirrorTimeout = %v, want 8s", got)
+		t.Errorf("原始档 mirrorTimeout = %v, want 8s", got)
 	}
-	features.LastfmScrobbleArtistMode = scrobbleArtistFirst
+	setMatch(t, lastfmMatchCustom, false, false, true)
 	if got := mirrorTimeout(); got != 8*time.Second {
-		t.Errorf("first 档 mirrorTimeout = %v, want 8s", got)
+		t.Errorf("只开截断时 mirrorTimeout = %v, want 8s(不联网)", got)
 	}
-	features.LastfmScrobbleArtistMode = scrobbleArtistSmart
-	if got := mirrorTimeout(); got != 8*time.Second+lastfmCollapseBudget {
-		t.Errorf("smart 档 mirrorTimeout = %v, want %v", got, 8*time.Second+lastfmCollapseBudget)
+	setMatch(t, lastfmMatchCustom, false, true, false)
+	if got := mirrorTimeout(); got != 8*time.Second+lastfmCatalogBudget {
+		t.Errorf("只改曲名时 mirrorTimeout = %v, want %v", got, 8*time.Second+lastfmCatalogBudget)
+	}
+	setMatch(t, lastfmMatchSmart, true, true, false)
+	if got := mirrorTimeout(); got != 8*time.Second+lastfmCatalogBudget {
+		t.Errorf("智能档 mirrorTimeout = %v, want %v", got, 8*time.Second+lastfmCatalogBudget)
 	}
 }
 

@@ -127,6 +127,37 @@ func isCreditLine(text string) bool {
 	return creditLineRe.MatchString(text) || genericHanCreditLineRe.MatchString(text)
 }
 
+// 「标签 空白 冒号」跟 `OP：xxx` 这两种排版,是 isCreditLine 两条正则都够不着的署名行:
+// genericHanCreditLineRe 要求汉字**紧跟**冒号,`人声 : 甲`、`母带 : 乙`、`鼓 : 丙` 全部漏过;
+// creditLineRe 的词表是中英文角色名,认不得拉丁字母的版权方标签。两种都会以"整行拉丁字母
+// 比汉字多"的形态被 dominantScript 判成外语行,也都会被 lastLRCTimestampSecs 当成曲末。
+var spacedHanCreditLineRe = regexp.MustCompile(`^\p{Han}{1,8}[\s\x{3000}]+[:：]`)
+
+// 版权方标签只枚举这四个缩写,别放开成"任意短拉丁串 + 冒号":真歌词里 `Oh :` `I :` 这种
+// 形状出得来,枚举法在这里比结构判定安全。
+var copyrightLabelRe = regexp.MustCompile(`(?i)^(OP|SP|OA|SA)[\s\x{3000}]*[:：]`)
+
+// isRelaxedCreditLine 是 isCreditLineWithSpeakers 多认上面两种排版的版本。
+//
+// ⚠️ 两套判据是**故意**分开的,别合并成一套:
+//   - 严格版(isCreditLine / isCreditLineWithSpeakers)喂着**共识比对**、纯音乐判定、内嵌
+//     译文对齐 —— 那几处误判的代价是整份歌词被判废或对错行,宁可漏也不能多杀。
+//   - 宽松版只喂**翻译选行**和**曲长端点**,这两处误判的代价小得多:多跳一行 = 少翻一句 /
+//     曲长端点往前挪一句。
+//
+// 演唱者标签(男：/女：)的豁免两套都走,理由见 lyricspeaker.go。
+func isRelaxedCreditLine(text string, speakers map[string]bool) bool {
+	if isCreditLineWithSpeakers(text, speakers) {
+		return true
+	}
+	if len(speakers) > 0 {
+		if label, _, ok := lyricSplitLabel(text); ok && speakers[label] {
+			return false
+		}
+	}
+	return spacedHanCreditLineRe.MatchString(text) || copyrightLabelRe.MatchString(text)
+}
+
 // neteaseInstrumentalPlaceholderMarker 是网易云对纯音乐曲目自己给出的固定占位文案(常
 // 跟在完整制作人员名单里、同样带着时间戳)——命中即可高置信度判定"这整份不是真歌词",
 // 不需要再逐行数 credit 行,比 isCreditLine 的结构化判断更直接、误判空间更小。
@@ -180,7 +211,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 			continue
 		}
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(lines[i], ""))
-		if text == "" || isCreditLineWithSpeakers(text, speakers) {
+		if text == "" || isRelaxedCreditLine(text, speakers) {
 			continue
 		}
 		m := matches[len(matches)-1]
@@ -254,6 +285,19 @@ type lyricCandidate struct {
 	// 看到这个标记会跳过"不是带时间戳的歌词就判废"那条通用闸,改判一个专门写明"仅纯文本"
 	// 的理由——但分数依旧钉死在 -1,不会被 pickLyricCandidate/自动路径当成可用候选。
 	plainTextOnly bool
+	// identityFromLocalClient:这条候选的**身份**(是哪首歌)由播放器客户端自己的本地数据
+	// 给定,不是拿歌名去搜索猜出来的。五条本地路径都置位,各自给的东西不同:
+	//   - kugou / applemusic:歌词正文就在本地(KRC / TTML),零网络;
+	//   - qq / netease / soda:本地只给权威曲目 id(songmid / songID / track id),正文照旧
+	//     联网取 —— 但"是哪首歌"这一步已经不经搜索、没有挑错版本的余地。
+	// 唯一的用途是同源加权的准入(见 scoreLyricCandidateDetailed 里那一段):v21 起
+	// "跟当前播放器同源"不再单独成立,必须同时是本地给定身份的那一份。
+	//
+	// ⚠️ 各源的进程内结果缓存(kugouCache / qqURLCache / sodaCache …)按
+	// (artist,title,album) 存,标记**跟着首次解析那一次**:先用别的播放器听过、走网络存了
+	// 缓存,之后改用同源播放器听同一首,这一轮会漏标记、少拿 250 分。方向是保守的
+	// (漏加,不会多加),且 collector 重启后缓存清空会重新走本地,故不为它再加一层旁路。
+	identityFromLocalClient bool
 }
 
 // songLanguageCantonese/songLanguageMandarin:lyricCandidate.language 与
@@ -572,7 +616,24 @@ const lyricOvershootToleranceSecs = 5.0
 // 换成对的**:缓存里这类条目存着的是原版录音室歌词,不重打就一直用着错位的时间轴
 // (本机实测受影响 1 条,就是现象是的 Fred again..《Winnie (end of me) [Mixed]》)。
 // 金标集不含 DJ Mix 曲目,全库回放冠军 0 变化。
-const lyricsScoringVersion = 19
+// v20:曲长端点(lastLRCTimestampSecs)改用宽松版署名行判据 —— 严格版要求汉字**紧跟**冒号,
+// 于是「标签 空白 冒号」这一整类漏了过去,网易云习惯补在真末句之后的那行职员表被当成曲末。
+// v15 的头注早就点名《Purple Rain》「[08:36.866] 人声 : Prince」是同款,只是那次没修到带空格
+// 的写法:金标里网易云那份真末句是 224.3s,靠这行假端点凑到 516.9s、"吻合"521s 的曲长,白拿
+// duration +293,还把其余四家正确的短歌词打成 durationOff -500。提版本号是因为**存量要重打
+// 一遍才会换成对的**:本机实测 207 首曲长端点改变、58 首前移 ≥20s(最大 292.6s)。
+// 金标 latin-purple-rain 冠军不变(netease),五家改由 corroborated 收 —— 所有源同点结束
+// 说明这首歌本来就 3:44 唱完、后面是尾奏。
+// v21:同源加权(nativeSource +250)加了一道准入 —— 光是"这个源跟当前播放器同源"不再算数,
+// 这条候选的**身份必须来自那个播放器自己的本地数据**(见 lyricCandidate.identityFromLocalClient)。
+// 起因是用户的质疑:搜索出来的那条只是"名字对得上的某一条",同源并不能担保它就是耳朵里
+// 那一版录音,而给它 +250 反倒可能把一条匹配错版本的候选抬上冠军。
+// 本机存量实测的影响面:6680 条带决策记录的条目里,同源加权触发过 716 条,
+// 其中 355 条(49.6%)的冠军由它决定(酷狗 254 / QQ 101 / 网易云 0)。收紧准入后,这 355 条里
+// 只有身份来自本地的那部分还保得住,其余会退回按质量选 —— 酷狗本地缓存对它触发过的
+// 600 首覆盖率实测 18.8%(客户端只为其中一部分落盘,缓存本身并不清理)。
+// 提版本号是因为**存量要重打一遍才会换过来**:这一项参与过打分的条目都要重选。
+const lyricsScoringVersion = 21
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -719,8 +780,12 @@ const (
 )
 
 // nativeLyricSources 是「**这一刻正在播的那个播放器**自家的歌词源」("qq"/"netease"/
-// "kugou")。正在播的播放器没有原生歌词源(Apple Music / Spotify)或者认不出来时是空集,
-// 谁都不加分。
+// "kugou"/"applemusic"/"soda")。正在播的播放器没有原生歌词源(Spotify)或者认不出来时是
+// 空集,谁都不加分。
+//
+// ⚠️ 它只是同源加权的**两个条件之一**,v21 起单独成立已经不够了:候选还必须
+// identityFromLocalClient(身份由那个播放器自己的本地数据给定)。这里回答的是"哪个源跟
+// 当前播放器同源",那里回答的是"这一份是不是真的来自它"——搜出来的同源候选过不了第二关。
 //
 // 集合形状是历史遗留(单选年代是单个字符串,多选时改成集合),实际最多只有
 // 一个成员 —— 一次只可能有一个播放器在放。留着集合形状是为了不动 scoreLyricCandidate
@@ -735,7 +800,8 @@ const (
 //
 // 现象是的形状:六个播放器全勾(apple_music/auto/kugou/netease/qq/spotify),于是
 // nativeLyricSources = {kugou, netease, qq},**三个源同时拿 +250**;而他实际在用
-// Apple Music 听(np:lastPlayerBundleID = com.apple.Music),按定义**一条都不该给**。
+// Apple Music 听(np:lastPlayerBundleID = com.apple.Music),按定义这三条一条都不该给,
+// 该给的是 applemusic 那一条。
 // 后果有两层:①「解析决策」面板上「这个源就是你正在用的播放器」对三个源都是假话;
 // ② 这一项的**区分力被自己抵消**——三个中文源都 +250,它没法在三者之间区分,只剩
 // "系统性地把它们抬到 Musixmatch / LRCLIB 之上"这一个效果。
@@ -786,26 +852,27 @@ func hasNativeLyricSource() bool {
 // Music(对它的用途是对的 —— 调用方已经先排除了 playerAuto),反过来用会把任何不认识的
 // bundle id 都当成 Apple Music。这里认不出必须是"不知道",不是"就当是 Apple Music"。
 func playerForBundleID(bundleID string) string {
-	switch bundleID {
-	case appleMusicBundleID:
-		return playerAppleMusic
-	case qqMusicBundleID:
-		return playerQQMusic
-	case neteaseMusicBundleID:
-		return playerNetease
-	case spotifyBundleID:
-		return playerSpotify
-	case kugouMusicBundleID:
-		return playerKugou
-	default:
+	// 反查生成表(players_generated.go,生成自 shared/players.json),不手写 switch。
+	// ⚠️ 这里原本是一份**平行维护的 case 清单**,汽水音乐内置化时漏了它 —— 那之前没有
+	// soda 歌词源,漏了也看不出来;接上之后表现为"用汽水听歌却永远拿不到同源加权",
+	// 一个字都不报错。反查表就不可能再漏,代价是六个元素的遍历。
+	if bundleID == "" {
 		return ""
 	}
+	for player, id := range playerBundleIDs {
+		if id == bundleID {
+			return player
+		}
+	}
+	return ""
 }
 
 // playerNativeLyricSource 把播放器映射成它自家的歌词源。
 //
-// Apple Music / Spotify 不在此列 —— 它们**不是**这套里的歌词源(我们从没从它们那儿抓过
-// 歌词),没有"同源"可言。auto 同理:识别不出用户在用哪个播放器,就不该瞎猜。
+// Spotify 不在此列 —— 它**不是**这套里的歌词源,没有"同源"可言。auto 同理:识别不出用户
+// 在用哪个播放器,就不该瞎猜。Apple Music 对的是 applemusic 源(Music.app 本地 TTML /
+// amp-api),汽水音乐对的是 soda 源(seo_track);后者尤其贴这条加权的立论 —— 它的曲目 id
+// 就取自汽水客户端正在播的那一条,时间轴天然对着用户耳朵里的那个母版。
 func playerNativeLyricSource(player string) string {
 	// 表在 players_generated.go(生成自 shared/players.json 的 nativeLyricSource 字段)。
 	// 一个播放器只要本身也是这个项目的歌词源(酷狗就是这么白捡到的),在那份 JSON 里填上
@@ -927,8 +994,15 @@ func scoreLyricCandidateDetailed(
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
 	}
-	if isNativeLyricSource(c.source) {
-		// 跟当前播放器同源的歌词加分。
+	if isNativeLyricSource(c.source) && c.identityFromLocalClient {
+		// 跟当前播放器同源、**且身份由那个播放器的本地数据给定**的歌词加分。
+		//
+		// ⚠️ v21 收窄了准入:在此之前只要"源 == 当前播放器的原生源"就加,搜索出来的那条
+		// 一样拿满分。收窄的理由是这一项的立论只对"同一版录音"成立 —— 搜索给出的是
+		// "名字对得上的某一条",同名的 live / 重录 / 翻唱版轴根本不是一回事,给它 +250
+		// 等于拿一个关于**平台**的事实去担保一件关于**这一版录音**的事。本地路径没有这个
+		// 缺口:曲目 id 是客户端为用户正在听的这一条记下的,不经任何挑选。
+		// (影响面的实测数字见 lyricsScoringVersion v21 那段。)
 		//
 		// 理由是**时间轴**,不是内容质量:同一个平台的歌词是对着同一个音频母版对的轴,
 		// 时间戳天然吻合;跨平台的版本差异(前奏长短、母带版本)正是"整句慢半个字"的来源。

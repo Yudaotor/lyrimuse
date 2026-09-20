@@ -144,6 +144,17 @@ public struct LyricsGapMarker: Equatable, Identifiable {
     public var id: Int { index }
 }
 
+/// 一段间奏窗口的边界,不带 index——悬浮歌词兜底(`rawActiveGapWindow`)只需要知道
+/// "此刻这段窗口从哪到哪",不需要 `LyricsGapMarker` 那个用来在歌词窗口列表里定位插入点的 index。
+public struct LyricsGapWindow: Equatable {
+    public let startMs: Int
+    public let endMs: Int
+    public init(startMs: Int, endMs: Int) {
+        self.startMs = startMs
+        self.endMs = endMs
+    }
+}
+
 // 按当前歌曲的四个歌词字段选基准 + 按外推位置算当前应该展示哪一行,算法照抄
 // web/index.html 的 setLyrics()/syncLyrics():有 yrc(逐字)优先用,否则退化到 lyrics
 // 整行;roma/tr 各自独立解析、用 700ms 容差的最近邻匹配贴到对应原文行。
@@ -1477,6 +1488,8 @@ public final class LyricsSyncEngine {
         cachedNextIdx = Int.min
         cachedNextText = nil
         cachedNextSide = nil
+        cachedNextRomanization = nil
+        cachedNextTranslation = nil
         cachedLeadIdx = Int.min
         cachedLeadLine = nil
         lastScanIdx = Int.min
@@ -1500,6 +1513,23 @@ public final class LyricsSyncEngine {
             return true
         }
         return romanizationScripts.contains(option)
+    }
+
+    /// 这一行里的**中文片段**要不要换回原文 —— 只对混排行(行内既有假名又有汉字)有意义。
+    ///
+    /// 上面那道 `romanizationAllowed` 管的是整行:见到假名就确证这一行是日文,整行归
+    /// **日文**开关。但混排行里的中文片段不是日文,`Romanizer.japaneseSegments` 默认把它们
+    /// 渲染成拼音(见 `HanRunReading`)——日文开关开着、拼音开关关着时那份拼音照样被整行
+    /// 放出去,拼音开关就落空了。判真时片段按 `.original` 渲染,只留日文片段的罗马字。
+    ///
+    /// ⚠️ 整首歌像日文时不适用:那种歌里的汉字读的是日语音读(`applyCodeSwitchFallback`
+    /// 本来就只在 `!songLooksJapanese` 时跑),本来就归日文开关,跟拼音无关。
+    /// 粤语歌的汉字片段查粤拼那一档 —— 判据跟 `script(ofLine:song:)` 对纯汉字行的分派
+    /// 一致(汉字本身分不出普通话还是粤语,只能信 songScript 这个外部信号)。
+    private func masksHanRuns(in line: String) -> Bool {
+        guard !songLooksJapanese, Romanizer.looksJapanese(line), Romanizer.containsHan(line)
+        else { return false }
+        return !romanizationScripts.contains(songScript == .cantonese ? .cantonese : .chinese)
     }
     private var kanaAnnotation: KanaAnnotation?
 
@@ -1590,13 +1620,21 @@ public final class LyricsSyncEngine {
         // 同一个"标签行抢近邻词条"的坑,见 isBareSpeakerTag 的注释——罗马音跟译文共用
         // 同一套 nearestText+700ms 容差,症状对称。
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
-        // 内容匹配优先,理由跟 translationText 那段一致(同一个 trTextByPlainText/
-        // romaTextByPlainText 的建法,对称处理)。
-        if let byContent = romaTextByPlainText[Self.contentMatchKey(plainText)] {
-            return byContent
+        // 混排行要把中文片段换回原文时,源自带/预生成那份整行罗马音用不了:它是**完整版**
+        // (生成侧一律按拼音渲染中文片段、不看开关 —— 开关随时能改,按开关生成的话用户
+        // 一打开拼音,存量几千首就得全部回补),而且是拼好的一整个字符串,事后切不出
+        // 哪一段对应中文片段。这种行绕过整段来源查找,直接现算一份过滤过的。
+        // 代价是这一行的展示跟导出的 `.roma.lrc` 不一致 —— 那正是"生成完整、展示按开关
+        // 过滤"这条分工的应有之义。
+        if !masksHanRuns(in: plainText) {
+            // 内容匹配优先,理由跟 translationText 那段一致(同一个 trTextByPlainText/
+            // romaTextByPlainText 的建法,对称处理)。
+            if let byContent = romaTextByPlainText[Self.contentMatchKey(plainText)] {
+                return byContent
+            }
+            if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
+            guard romaLines.isEmpty else { return nil }
         }
-        if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
-        guard romaLines.isEmpty else { return nil }
         // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
         // 它解决的是那个真实 bug —— 中文歌被 ICU 音译成拼音展示,对中文读者
         // 是纯噪声(NetEase 本来就不给中文歌算 lyrics_roma,那本身就是"不需要"的信号)。
@@ -1638,11 +1676,15 @@ public final class LyricsSyncEngine {
     // 不能拿 wordGroupCache 的结果互相顶替 —— 纯汉字的日文行那样会把整行罗马音弄丢。
     private var segmentsCache: [String: [Romanizer.JapaneseSegment]] = [:]
 
+    /// ⚠️ 缓存 key 只有行文本,而片段读音还取决于 `romanizationScripts`(见 masksHanRuns)——
+    /// 靠的是开关改了必然走 `load()`:它是 `LoadFingerprint` 的一部分,指纹不等就整段重跑,
+    /// 这三个按行缓存一起清空。别把开关从 load 的入参里挪走,那会让这份缓存跨开关变化存活。
     private func cachedJapaneseSegments(for line: String) -> [Romanizer.JapaneseSegment] {
         if let cached = segmentsCache[line] { return cached }
         let segs = Romanizer.japaneseSegments(
             line, marks: kanaAnnotation?.marks(forLine: line) ?? [],
-            songLooksJapanese: songLooksJapanese)
+            songLooksJapanese: songLooksJapanese,
+            hanRuns: masksHanRuns(in: line) ? .original : .latin)
         segmentsCache[line] = segs
         return segs
     }
@@ -1834,6 +1876,10 @@ public final class LyricsSyncEngine {
     private var cachedNextIdx = Int.min
     private var cachedNextText: String?
     private var cachedNextSide: LyricDuet.Side?
+    /// 前奏/间奏「•••」下方那句(没有当前行陪衬时)要按正常行的规格展示罗马音/译文——
+    /// 随 text/side 同一次记忆化,不额外多扫一遍数组。
+    private var cachedNextRomanization: String?
+    private var cachedNextTranslation: String?
     // 单行展示面的「领先行」独立占一个槽:它跟 activeIdx 只在提前量窗口里
     // 不同(下标差 1),共用一个槽的话那段时间里两个下标每 tick 互相踢缓存,上面那段注释
     // 描述的塌缩("约 99% 的 tick 构建完即被丢弃")就整个失效 —— 而 lineAt 的构建正是
@@ -1973,7 +2019,15 @@ public final class LyricsSyncEngine {
         /// 下一行摆在哪一边(见 SyncedLyricLine.side)。**独立于 `line.side` 算**——对唱歌
         /// 交替演唱时,下一句的演唱者往往跟当前句不是同一位,不能假定它继承当前行的边。
         public let nextSide: LyricDuet.Side?
+        /// 下一行的罗马音/译文——跟 `line?.romanization`/`line?.translation` 同一对查找函数、
+        /// 同一套语言/标签闸算出来的,不是简化版。`line` 为 nil(前奏/间奏「•••」下方没有
+        /// 当前行陪衬)时,那句其实是接下来的第一句本身,该按正常行的规格展示这两项。
+        public let nextRomanization: String?
+        public let nextTranslation: String?
         public let gapIndex: Int?
+        /// `gapIndex` 的不设门槛版本(见 `gapWindow(after:applyMinimumDuration:)`)——`line`
+        /// 为 nil 时悬浮歌词拿它兜底画「•••」,不看这段间隔够不够格进歌词窗口的 `gapMarkers()`。
+        public let rawGapWindow: LyricsGapWindow?
     }
 
     /// - Parameter trackEndMs: 这首歌有多长(毫秒)。**只**给最后一句的显示窗口兜底 ——
@@ -1991,6 +2045,14 @@ public final class LyricsSyncEngine {
             gap = idx
         } else {
             gap = nil
+        }
+        // 不设门槛的原始窗口,给悬浮歌词兜底用(见 TickResolution.rawGapWindow 头注)——
+        // 跟 `gap` 各自独立算一遍(不是"gap 为 nil 时才算":门槛只影响 gap,不影响这个)。
+        let rawGap: LyricsGapWindow?
+        if let window = gapWindow(after: idx, applyMinimumDuration: false), posMs >= window.start, posMs < window.end {
+            rawGap = LyricsGapWindow(startMs: window.start, endMs: window.end)
+        } else {
+            rawGap = nil
         }
         // 单行展示面的取词:跟上面的 index/scrollIndex 共用同一次定位,不再扫一遍数组。
         let compact = CompactLyricLead.resolve(
@@ -2036,7 +2098,10 @@ public final class LyricsSyncEngine {
             compactLeadInMs: compactLeadInMs,
             nextText: next.text,
             nextSide: next.side,
-            gapIndex: gap)
+            nextRomanization: next.romanization,
+            nextTranslation: next.translation,
+            gapIndex: gap,
+            rawGapWindow: rawGap)
     }
 
     /// 滚动锚下标(TickResolution.scrollIndex 的本体):空档里指向下一行,其余时刻等于
@@ -2076,23 +2141,38 @@ public final class LyricsSyncEngine {
     /// 演唱时,下一句的演唱者常常跟当前句不是同一位,悬浮窗此前把预览文字摆在跟当前句
     /// 同一边,视觉上像是同一个人接着唱下一句。side 取自跟 text 同一份 wordSides/baseSides
     /// (跟 wordLines/baseLines 逐下标对齐,见 LyricDuet.planWords/plan 的产出),不是猜的。
-    private func nextAt(_ nextIdx: Int) -> (text: String?, side: LyricDuet.Side?) {
+    private func nextAt(_ nextIdx: Int) -> (text: String?, side: LyricDuet.Side?, romanization: String?, translation: String?) {
         // 按下一行下标记忆化,理由同 activeLine 的缓存注释 —— 逐字路径的 map+join 拼接
         // 原来每个 tick 都重做一遍,拼的却是几十秒不变的同一句。
-        if nextIdx == cachedNextIdx { return (cachedNextText, cachedNextSide) }
+        if nextIdx == cachedNextIdx {
+            return (cachedNextText, cachedNextSide, cachedNextRomanization, cachedNextTranslation)
+        }
         let text: String?
         let side: LyricDuet.Side?
+        let timeMs: Int?
         if usingWords {
             text = nextIdx < wordLines.count ? wordLines[nextIdx].words.map(\.text).joined() : nil
             side = nextIdx < wordSides.count ? wordSides[nextIdx] : nil
+            timeMs = nextIdx < wordLines.count ? wordLines[nextIdx].timeMs : nil
         } else {
             text = nextIdx < baseLines.count ? baseLines[nextIdx].text : nil
             side = nextIdx < baseSides.count ? baseSides[nextIdx] : nil
+            timeMs = nextIdx < baseLines.count ? baseLines[nextIdx].timeMs : nil
+        }
+        // 跟 buildLine 共用同一对查找函数、同一套语言/标签闸——这一句一旦变成当前行,
+        // 罗马音/译文该长什么样在这里就先算好了,不是另一套简化规则。
+        var romanization: String?
+        var translation: String?
+        if let text, let timeMs {
+            romanization = romanizationText(timeMs: timeMs, plainText: text)
+            translation = translationText(timeMs: timeMs, plainText: text)
         }
         cachedNextIdx = nextIdx
         cachedNextText = text
         cachedNextSide = side
-        return (text, side)
+        cachedNextRomanization = romanization
+        cachedNextTranslation = translation
+        return (text, side, romanization, translation)
     }
 
     // "歌词窗口"用:整首歌全部行一次性拿出来,构造方式跟 activeLine(atMs:) 完全一致
@@ -2154,7 +2234,9 @@ public final class LyricsSyncEngine {
     /// minPlainIntervalMs(一句歌词很少唱超过 15 秒),并假定前一句最多唱了间隔的三分之一
     /// (封顶 8 秒)。前奏单独一档:第一句开始得晚于 minIntroMs 才配一个间奏点。
     /// 窗口两端留余量:词尾后 tailMarginMs 才亮(别跟收尾的余音抢),下一句前 leadMs
-    /// 熄灭(给滚动/换行让路)。
+    /// 熄灭(给滚动/换行让路)——leadMs 这道余量只在 `applyMinimumDuration=true`(歌词窗口)
+    /// 时生效,悬浮歌词的不设门槛路径没有"下一句滚入"这回事,提前熄灭只会在熄灭到
+    /// `currentLine` 真正非 nil 之间空出一段静默,见 `gapWindow(after:applyMinimumDuration:)`。
     public enum GapRule {
         public static let minGapMs = 6000
         public static let minIntroMs = 5000
@@ -2181,20 +2263,28 @@ public final class LyricsSyncEngine {
     }
 
     /// 第 index 行之后(index == -1 为前奏)的间奏活跃窗口。nil = 这里没有值得标记的间奏。
-    public func gapWindow(after index: Int) -> (start: Int, end: Int)? {
+    /// `applyMinimumDuration` 默认 true(`GapRule` 那几道门槛,决定"值不值得在歌词窗口插一整排
+    /// 三点/记进 `gapMarkers()`",连带控制 leadMs 熄灭余量)——传 false 跳过门槛+leadMs,只算
+    /// geometry 本身、窗口尾部顶到下一句真正开始的时刻。悬浮歌词的兜底要这个:它没有"沿用
+    /// 上一行继续显示"这条退路(`currentLine` 一旦为 nil 就必须画点什么),leadMs 这段熄灭余量
+    /// 在这里只会在"点熄灭"和"下一句真正出现(`currentLine` 变回非 nil 的那一刻)"之间空出
+    /// 一段静态占位的间隙——见 `rawActiveGapWindow`。
+    public func gapWindow(after index: Int, applyMinimumDuration: Bool = true) -> (start: Int, end: Int)? {
+        let leadMs = applyMinimumDuration ? GapRule.leadMs : 0
         if index == -1 {
-            guard let first = gapLineStartMs(at: 0), first >= GapRule.minIntroMs else { return nil }
-            return (0, first - GapRule.leadMs)
+            guard let first = gapLineStartMs(at: 0) else { return nil }
+            if applyMinimumDuration { guard first >= GapRule.minIntroMs else { return nil } }
+            return (0, max(0, first - leadMs))
         }
         guard let start = gapLineStartMs(at: index),
               let next = gapLineStartMs(at: index + 1) else { return nil }
         if let end = gapLineEndMs(at: index) {
-            guard next - end >= GapRule.minGapMs else { return nil }
-            return (end + GapRule.tailMarginMs, next - GapRule.leadMs)
+            if applyMinimumDuration { guard next - end >= GapRule.minGapMs else { return nil } }
+            return (end + GapRule.tailMarginMs, next - leadMs)
         }
-        guard next - start >= GapRule.minPlainIntervalMs else { return nil }
+        if applyMinimumDuration { guard next - start >= GapRule.minPlainIntervalMs else { return nil } }
         let assumedEnd = start + min((next - start) / 3, GapRule.plainAssumedSingingCapMs)
-        return (assumedEnd, next - GapRule.leadMs)
+        return (assumedEnd, next - leadMs)
     }
 
     /// 整首歌全部间奏点(含前奏的 -1)。纯由时间轴决定,换歌/换词源后重算一次即可。
@@ -2218,5 +2308,16 @@ public final class LyricsSyncEngine {
         let idx = activeIndexCorrected(posMs)
         guard let window = gapWindow(after: idx) else { return nil }
         return (posMs >= window.start && posMs < window.end) ? idx : nil
+    }
+
+    /// `activeGapIndex` 的不设门槛版本,悬浮歌词兜底专用(见 `gapWindow(after:applyMinimumDuration:)`
+    /// 头注)。`currentLine` 为 nil 时——在正常有歌词的歌里这只发生在还没唱到第一句——
+    /// 这个函数给出此刻真实所在的窗口,不管它够不够格进 `gapMarkers()`。
+    public func rawActiveGapWindow(atMs rawPosMs: Int) -> LyricsGapWindow? {
+        let posMs = rawPosMs + effectiveOffsetMs
+        let idx = activeIndexCorrected(posMs)
+        guard let window = gapWindow(after: idx, applyMinimumDuration: false),
+              posMs >= window.start, posMs < window.end else { return nil }
+        return LyricsGapWindow(startMs: window.start, endMs: window.end)
     }
 }

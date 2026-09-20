@@ -14,7 +14,7 @@
 - **[Lyric Fever](https://github.com/aviwad/LyricFever)**（MIT）——Spotify + Apple Music
   的歌词体验，要求 macOS 15+，自称 "spiritual successor to LyricsX"。
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)**（GPL-3.0，即本项目）——逐字同步歌词，
-  除 Apple Music、Spotify 外**原生支持国内播放器（QQ 音乐、网易云音乐、酷狗）**，还支持浏览器里
+  除 Apple Music、Spotify 外**原生支持国内播放器（QQ 音乐、网易云音乐、酷狗、汽水音乐）**，还支持浏览器里
   播放的 YouTube Music / Spotify 网页版；11 个歌词源自动查证，**全部候选统一打分、择优胜出**
   （每首歌的决策过程可查）；翻译、拼音/粤拼/注音假名；Last.fm 与 ListenBrainz 打卡（scrobble）
   加本地听歌统计。macOS 14+，Apple Silicon 与 Intel 都有构建。
@@ -29,7 +29,7 @@
 | 许可证 · 价格 | GPL-3.0 · 免费 | MPL-2.0 · 免费 | MIT · 免费 |
 | 最新发布 | v1.8.0（2026-09） | v1.6.3（2022-04） | v3.3（2025-11） |
 | 最低 macOS | 14（Sonoma） | 10.11 | 15（Sequoia） |
-| 支持的播放器 | Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗——可任意组合 | Apple Music、Spotify、Vox、Audirvana、Swinsian（经其 MusicPlayer 组件） | Spotify、Apple Music |
+| 支持的播放器 | Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗、汽水音乐——可任意组合 | Apple Music、Spotify、Vox、Audirvana、Swinsian（经其 MusicPlayer 组件） | Spotify、Apple Music |
 | 浏览器网页播放器 | YouTube Music 与 Spotify 网页版，跟随页面自身进度同步 | — | — |
 | 自动查证的歌词源 | 11 个：网易云、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、Apple Music（官方源，需连账号） | 多个（经其 LyricsKit 组件） | 3 个：Spotify、LRCLIB、网易云 |
 | 匹配选择 | 所有源的全部候选统一打分（歌名/歌手/专辑/上报时长吻合度 + 逐字时间轴等质量信号）；每首歌都有决策面板，列出各候选得分与胜出原因；手动选定的歌词会被锁定、绝不被自动覆盖 | — | — |
@@ -44,7 +44,7 @@
 
 ## Lyrimuse 的定位
 
-Lyrimuse 面向另外两家没有完全覆盖的听歌方式：你用 **QQ 音乐、网易云音乐或酷狗** 听歌
+Lyrimuse 面向另外两家没有完全覆盖的听歌方式：你用 **QQ 音乐、网易云音乐、酷狗或汽水音乐** 听歌
 （不只是 Apple Music / Spotify）；你在**浏览器里开 YouTube Music 或 Spotify 网页版**、
 也想要跟着页面进度精确同步的桌面歌词；你想在原文旁边看到**粤拼或日语注音假名**；或者你想让
 **Last.fm / ListenBrainz 打卡和听歌统计**与歌词在同一个应用里完成——全部免费、开源、

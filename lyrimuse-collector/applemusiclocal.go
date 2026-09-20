@@ -192,7 +192,9 @@ func refreshApplemusicLocalIndexLocked() {
 	}
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
-		// 没装 / 没用过 Apple Music —— 正常情况,不记日志。
+		// 没装 / 没用过 Apple Music —— 正常情况,静默退回网络解析。
+		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		noteLocalCacheDenied("applemusic", dir, err)
 		applemusicLocalIndex, applemusicLocalReady = nil, true
 		return
 	}
@@ -207,8 +209,12 @@ func refreshApplemusicLocalIndexLocked() {
 
 	ents, err := os.ReadDir(dir)
 	if err != nil {
+		// ⚠️ stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
+		noteLocalCacheDenied("applemusic", dir, err)
 		return // 保留上一次的索引
 	}
+	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+	noteLocalCacheReadable("applemusic")
 	idx := map[string]applemusicLocalEntry{}
 	byName := map[string][]applemusicLocalEntry{}
 	budget := int64(applemusicLocalMaxTotalBytes)
@@ -294,5 +300,9 @@ done:
 	log.Printf("applemusic local: hit via %s %q - %q (%s%s)", via,
 		e.song.Attributes.ArtistName, e.song.Attributes.Name, e.kind,
 		map[bool]string{true: " +译文", false: ""}[tr != ""])
-	return applemusicResultFrom(e.song, lrc, yrc, tr, plainOnly), true
+	r := applemusicResultFrom(e.song, lrc, yrc, tr, plainOnly)
+	// 身份是 Music.app 自己认定的(id 命中)或它缓存里那一条(name 命中),不经 amp-api
+	// 搜索 —— 同源加权的准入条件。
+	r.fromLocalClient = true
+	return r, true
 }

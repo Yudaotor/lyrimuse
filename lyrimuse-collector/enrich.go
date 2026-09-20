@@ -1021,8 +1021,8 @@ func distinctLyricSources(scored []scoredLyricCandidateResult, onlyValid bool) [
 // 候选(能不能用另说)。
 func allEnabledLyricSourcesResponded(scored []scoredLyricCandidateResult) bool {
 	responded := lyricSourcesResponded(scored)
-	for source, enabled := range features.LyricsSources {
-		if !enabled {
+	for _, source := range lyricSourceNames {
+		if !lyricSourceEnabled(source) {
 			continue
 		}
 		if !containsString(responded, source) {
@@ -1340,8 +1340,8 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 		return true
 	}
 	missing := false
-	for source, enabled := range features.LyricsSources {
-		if !enabled {
+	for _, source := range lyricSourceNames {
+		if !lyricSourceEnabled(source) {
 			continue
 		}
 		found := false
@@ -2048,6 +2048,8 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	}
+	// 动态封面校验的结论只对 fresh.CoverURL 有效,见 motionCoverFreshResultAppliesTo。
+	motionCheckMatchesRetainedCover := motionCoverFreshResultAppliesTo(e.CoverURL, fresh)
 	// 存量 QQ 封面提档:早期拼的 QQ 封面 URL 写死 300x300,而同一个 mid 换个路径段就能拿到
 	// 800(见 qqCoverAtEdge)。这是**同一张图的另一档**、不是换封面 —— 所以刻意放在
 	// coverSwapAllowed 之外,也不动 CoverSource/CoverAlbum/AccentColor(主色从缩略图算,
@@ -2086,14 +2088,20 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	// ⚠️ **这两行是存量条目唯一的落地点**。上面 resolveTrackEnrichment 里的 fillMotionCover 对
 	// 已有条目照样跑、照样查得到,但这个函数对已存在的条目是**逐字段挑着覆盖**的 —— 不在这里
 	// 列出来,算出来的值就在函数返回时丢掉了,整份缓存一条也补不上。
-	if fresh.MotionCoverURL != "" {
-		e.MotionCoverURL = fresh.MotionCoverURL
-		e.MotionPreviewURL = fresh.MotionPreviewURL
-	}
-	// "核对过了"这一位单独同步:图像校验没通过 / 这张专辑压根没有动态封面时 MotionCoverURL
-	// 是空的,但那两种结论同样要记住,否则每轮 backfill 都会重下一次首帧再算一次指纹。
-	if fresh.MotionCoverChecked {
-		e.MotionCoverChecked = true
+	//
+	// 两行都挡在 motionCheckMatchesRetainedCover 之后:fresh 没能真的核对到 e 现在用的这张
+	// 封面,这一轮的结论(不管是"匹配上了"还是"核对过、没匹配上")都不作数,原样留给下一轮
+	// backfill 拿 e 真正在用的封面重新核对——不写、也不钉 checked。
+	if motionCheckMatchesRetainedCover {
+		if fresh.MotionCoverURL != "" {
+			e.MotionCoverURL = fresh.MotionCoverURL
+			e.MotionPreviewURL = fresh.MotionPreviewURL
+		}
+		// "核对过了"这一位单独同步:图像校验没通过 / 这张专辑压根没有动态封面时 MotionCoverURL
+		// 是空的,但那两种结论同样要记住,否则每轮 backfill 都会重下一次首帧再算一次指纹。
+		if fresh.MotionCoverChecked {
+			e.MotionCoverChecked = true
+		}
 	}
 	if fresh.NeteaseURL != "" {
 		e.NeteaseURL = fresh.NeteaseURL
@@ -2423,8 +2431,8 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, title, album string) 
 		e.MotionCoverChecked = true
 		return
 	}
-	// ⚠️ **最后这道是整条链路的安全底座,不能跳**:这段动画画的必须就是这条记录采用的那张
-	// 封面。没有它,来路②的错配会直接变成"这首歌配了另一张专辑的动画"。
+	// ⚠️ 这道图像校验,对来路②(文字匹配的 apple_music_url)是**唯一的身份保险丝**——
+	// 没有它,②的专辑猜错会直接变成"这首歌配了另一张专辑的动画"。
 	//
 	// matched/verified 两态:取图失败(网络抖动/CDN 限流/解码失败)跟"真的比对过、两张图
 	// 确实不是同一张"必须分开。合成一态的话,motionCoverMatchesCover 取图失败也回 false,
@@ -2437,7 +2445,7 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, title, album string) 
 		return
 	}
 	e.MotionCoverChecked = true
-	if !matched {
+	if !motionCoverAcceptsViaAnchor(matched, viaAnchor) {
 		return
 	}
 	e.MotionCoverURL = mc.Master
@@ -3005,6 +3013,9 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // (各自的 xxxLastFailureReasonNow 旁路)。amll 不做搜索(按网易云 / QQ 的曲目 ID 直取),
 // 别名对它本身没意义,但它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
 // —— 网易云 / QQ 不在名单里时它拿到空 ID 立刻返回,不花时间。
+// soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
+// 会影响命中 —— 本地那条路在别名轮里查空是预期的(署名换了就不再对应同一条录音),搜索
+// 那条路则正是别名要救的场景。
 // 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按 lyricSourceNames。
 func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
 	usable := map[string]bool{}
@@ -3267,7 +3278,7 @@ type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateRe
 
 // lyricSourceNames 是十个歌词源的名字,顺序无关紧要,只用来数进度分母。
 // applecover 不在里面 —— 它查的是封面。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"}
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个。features.LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
@@ -3312,6 +3323,12 @@ type lyricSourceResult struct {
 	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
 	amll amllResult
+	// identityFromLocalClient:这一份的身份由播放器客户端自己的本地数据给定,不是搜出来的。
+	// 五条本地路径会置位(kugou/applemusic 连正文都在本地,qq/netease/soda 只给权威 id)。
+	// 语义与唯一用途见 lyricCandidate.identityFromLocalClient —— 同源加权的准入条件。
+	// ⚠️ netease 那一路不走这个字段,它的事实在 ne.FromLocalClient 上(neteaseInfo 整个
+	// 结构本来就随 lyricSourceResult.ne 传过来,不必再抄一份)。
+	identityFromLocalClient bool
 }
 
 // lyricSourceResultTap 只给测试用(默认 nil,生产永远不设):fetchScoredLyricCandidatesStreaming
@@ -3361,6 +3378,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	dzLyr, dzTitle, dzArtist, dzAlbum, dzCover, dzDur, dzPlainOnly := dz.lyr, dz.matchTitle, dz.matchArtist, dz.matchAlbum, dz.matchCover, dz.srcDur, dz.plainOnly
 	am := raw["applemusic"]
 	amLyr, amYRC, amTr, amTitle, amArtist, amAlbum, amCover, amDur, amPlainOnly := am.lyr, am.yrc, am.tr, am.matchTitle, am.matchArtist, am.matchAlbum, am.matchCover, am.srcDur, am.plainOnly
+	soda := raw["soda"]
+	sodaLyr, sodaYRC, sodaTitle, sodaArtist, sodaAlbum, sodaCover, sodaDur := soda.lyr, soda.yrc, soda.matchTitle, soda.matchArtist, soda.matchAlbum, soda.matchCover, soda.srcDur
 	amll := raw["amll"].amll
 	appleCover := raw["applecover"].matchCover
 	// coverOrFallback:候选自己的源有封面就用自己的——网易云/QQ/酷狗/Musixmatch/
@@ -3397,20 +3416,20 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
 		// 不能等选完冠军再附着。
 		neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features.LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover), identityFromLocalClient: ne.FromLocalClient})
 	}
 	if qqLyr != "" {
 		// QQ 的译文固定是中文(跟网易云 tlyric 同款),语言标 "zh";罗马音的可用判定
 		// (原文假名占比 > 5%)也沿用同一套 usableValueAdd——韩文歌的罗马音会跟网易云
 		// 一样被判不可用,这是既有口径,不是 QQ 这路新加的规则。
 		qqUsableTr, qqUsableRoma := usableValueAdd(qqLyr, qqTr, "zh", qqRoma, features.LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback(qqCover), language: qqLang})
+		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback(qqCover), language: qqLang, identityFromLocalClient: qq.identityFromLocalClient})
 	}
 	if kugouLyr != "" {
 		// 酷狗 KRC `[language:]` 轨的译文固定中文,标 "zh";罗马音的可用判定同样走
 		// usableValueAdd 的假名占比闸(韩文歌的谐音轨在 kugou.go 里已先按汉字占比挡掉一次)。
 		kugouUsableTr, kugouUsableRoma := usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, features.LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback(kugouCover), language: kugouLang})
+		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback(kugouCover), language: kugouLang, identityFromLocalClient: kugou.identityFromLocalClient})
 	}
 	if mxLyr != "" {
 		mxUsableTr, _ := usableValueAdd(mxLyr, mxTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
@@ -3456,6 +3475,20 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			sourceReportedDurationSecs: amDur,
 			title:                      amTitle, artist: amArtist, album: amAlbum,
 			cover: coverOrFallback(amCover), plainTextOnly: amPlainOnly,
+			identityFromLocalClient: am.identityFromLocalClient,
+		})
+	}
+	if sodaLyr != "" {
+		// 官方逐字(格式与酷狗 KRC 同构,归一化见 soda.go)。没有译文/罗马音这两路:
+		// seo_track 只下发一份正文。没有 plainTextOnly —— 拿不到计时行时 krcToLRC 返回
+		// 空串,这里根本进不来。
+		candidates = append(candidates, lyricCandidate{
+			source: "soda", lyrics: sodaLyr,
+			wordTimingYRC: usableYRC(sodaLyr, sodaYRC), hasWordTiming: usableWordTiming(sodaLyr, sodaYRC),
+			sourceReportedDurationSecs: sodaDur,
+			title:                      sodaTitle, artist: sodaArtist, album: sodaAlbum,
+			cover:                   coverOrFallback(sodaCover),
+			identityFromLocalClient: soda.identityFromLocalClient,
 		})
 	}
 	if !amll.empty() {
@@ -3724,6 +3757,7 @@ func kugouSourceResult(r kugouResult) lyricSourceResult {
 		source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma,
 		matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover,
 		srcDur: r.durationSecs, language: r.language,
+		identityFromLocalClient: r.fromLocalClient,
 	}
 }
 
@@ -3854,7 +3888,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
 		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
 		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == ""}
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "", identityFromLocalClient: match.fromLocalLibrary}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
@@ -3970,7 +4004,17 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
 		appleID, _ := playbackTrackIDsFor(artist, title, album)
 		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID)
-		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
+	}()
+	go func() {
+		if skipSource("soda") {
+			resultsCh <- lyricSourceResult{source: "soda"}
+			return
+		}
+		// 不搜索:曲目 id 只来自汽水客户端的播放队列缓存,所以没用汽水放过这首时
+		// 一个请求都不发、安静空手而归(见 soda.go 头注)。取词走无签名的 seo_track。
+		r, noLyrics := sodaLyric(ctx, artist, title, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
 		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份

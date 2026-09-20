@@ -178,7 +178,7 @@ func TestMergeRadioKeys(t *testing.T) {
 // 修的真实缺陷 —— 借过来会把 applyRadioClock 刚换好的单曲表覆盖成整档节目的位置,
 // 下一拍必然命中单曲循环判定、会话每 5 秒被重建一次,playedSecs 永远涨不过一拍,于是电台上
 // 一条收听都提交不了(实测 4.5 小时里 loop restart 2397 次、listen recorded 只有 4 条)。
-// Swift 侧同义的闸在 refinedAppleMusicSnapshotIfNeeded,两边必须同时成立。
+// Swift 侧同义的闸在 adaptedSnapshot,两边必须同时成立。
 func TestBorrowAppleScriptPosition(t *testing.T) {
 	const am = appleMusicBundleID
 	cases := []struct {

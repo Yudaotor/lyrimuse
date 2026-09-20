@@ -894,6 +894,10 @@ type qqMusicMatch struct {
 	url, title, artist, album string
 	interval                  float64
 	unreliable                bool
+	// fromLocalLibrary:这个 mid 读自 QQ 客户端本地曲库(qqLocalMatch),不是 smartbox
+	// 搜出来的。透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入条件之一 ——
+	// 歌词正文仍然联网取,但"是哪首歌"这一步没有经过挑选,不存在挑错版本的余地。
+	fromLocalLibrary bool
 }
 
 func resolveQQMusicURL(ctx context.Context, artist, title, album string, durationSecs float64) string {

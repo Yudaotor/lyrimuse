@@ -453,6 +453,26 @@ func runOpsDiagnosticsTests() {
         expectEqual(failed?.status, 3, "ProcessRunner: 非零退出码如实返回")
         expectEqual(failed?.succeeded, false, "ProcessRunner: 非零退出不算成功")
 
+        // stderr:默认不接(空),显式要了才接得到。
+        //
+        // 这不是可有可无的开关 —— media-control 的 `test` 失败时 stdout 全空、原因只写在
+        // stderr 上,不接那根管子界面上就只剩一句「exit status 4」(真的发生过)。
+        let quiet = ProcessRunner.run("/bin/sh", ["-c", "echo oops >&2; exit 4"], timeout: 5)
+        expectEqual(quiet?.stderrText, "", "ProcessRunner: 默认不接 stderr —— 空,不是子进程没写")
+        let loud = ProcessRunner.run("/bin/sh", ["-c", "echo oops >&2; exit 4"], timeout: 5,
+                                     captureStderr: true)
+        expectEqual(loud?.stderrText, "oops\n", "ProcessRunner: captureStderr 真的把 stderr 接出来了")
+        expectEqual(loud?.status, 4, "ProcessRunner: 接了 stderr 不影响退出码")
+
+        // ⚠️ 两根管子必须并发读空。这一句往 stderr 灌 256KB(远超 64KB 管道缓冲区):
+        // 串行读的写法会在这里死锁,超时杀进程之后 stderr 也收不全。
+        let flood = ProcessRunner.run(
+            "/bin/sh", ["-c", "/usr/bin/head -c 262144 /dev/zero | /usr/bin/tr '\\0' 'x' >&2; echo done"],
+            timeout: 10, captureStderr: true)
+        expectEqual(flood?.timedOut, false, "ProcessRunner: stderr 灌满管道也不会卡死(两根管子并发读)")
+        expectEqual(flood?.stdoutText, "done\n", "ProcessRunner: stderr 灌满时 stdout 照样完整")
+        expectEqual(flood?.stderr.count, 262144, "ProcessRunner: 大块 stderr 一字节不少")
+
         // 可执行文件不存在 → nil（"根本没起来"），不是 status 非零。
         expectEqual(ProcessRunner.run("/nonexistent/binary", [], timeout: 5) == nil, true,
                     "ProcessRunner: 起不来的命令返回 nil")

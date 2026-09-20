@@ -67,14 +67,23 @@ const lyricMaxLabelRunes = 10
 // 第二个返回值是冒号后的正文(已 trim),第三个表示这一行到底有没有标签。
 func lyricSplitLabel(text string) (label, rest string, ok bool) {
 	rs := []rune(strings.TrimLeft(text, " \t　"))
+	// 标签与冒号之间允许有空白(`男 : 第一句` 跟 `男：第一句` 是同一种东西),但标签**内部**
+	// 不允许 —— 一旦空白后面又来了别的字,这行就是带冒号的歌词句子而不是标签。
+	// ⚠️ 别把空白整个当成 lyricLabelBreakers 里的普通中断字符:那样 `男 : …` 会在空格处
+	// 直接判成"不是标签",于是署名行过滤那边的演唱者豁免拿不到标签、把对唱行当职员表剔掉。
+	sawSpace := false
 	for i, r := range rs {
 		if r == '：' || r == ':' {
 			if i == 0 {
 				return "", "", false
 			}
-			return string(rs[:i]), strings.TrimSpace(string(rs[i+1:])), true
+			return strings.TrimRight(string(rs[:i]), " \t　"), strings.TrimSpace(string(rs[i+1:])), true
 		}
-		if lyricLabelBreakers[r] || i >= lyricMaxLabelRunes {
+		if r == ' ' || r == '\t' || r == '　' {
+			sawSpace = true
+			continue
+		}
+		if sawSpace || lyricLabelBreakers[r] || i >= lyricMaxLabelRunes {
 			return "", "", false
 		}
 	}

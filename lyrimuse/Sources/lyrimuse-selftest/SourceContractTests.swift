@@ -476,7 +476,7 @@ func runSourceContractTests() {
                             "电台: App 侧不能把 duration 置空 —— 进度锚点以 duration > 0 为闸,置空等于整档没歌词")
                 expectEqual(mcc.contains("elapsedTime: radioPosition ?? elapsed"), true,
                             "电台: 位置要用自己那块单曲表,取不到再退回原读数")
-                expectEqual(mcc.contains("guard snapshot.isRadio != true else { return snapshot }"), true,
+                expectEqual(mcc.contains("guard mediaControl.isRadio != true else { return mediaControl }"), true,
                             "电台: 不能借 AppleScript 那份位置(它同样是整档节目的)")
                 // 起表时刻(现象是「歌词进度偏慢」):必须用 stream watcher 观察到
                 // 换歌的那一刻,不是这一拍轮询的时刻。差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
@@ -640,6 +640,85 @@ func runSourceContractTests() {
             }
         }
 
+        // ---- 已适配的播放器不准退回通用通路 ----
+        //
+        // media-control 在取快照这一层只回答"现在是谁在放"。识别出来的播放器有自己的适配方式
+        // (目前只有 Apple Music:AppleScript 直接问 Music.app 的播放头)就必须走那条,跟用户勾
+        // 没勾「自动识别」无关。退回通用通路不会编译失败,表现是 Apple Music 的位置重新受
+        // media-control 锚点摆布 —— 整首歌恒定偏移、一暂停才纠回来。
+        do {
+            let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            func text(_ rel: String) -> String? {
+                try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)
+            }
+            if let mcc = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
+                // 走 media-control 的两条路径都要过 adaptedSnapshot,少一条就有一种配置漏网。
+                expectEqual(mcc.contains("return adaptedSnapshot(bundleID: bundleID, mediaControl: snapshot)"), true,
+                            "适配优先: 多选路径要把快照交给 adaptedSnapshot")
+                let probed = mcc.components(
+                    separatedBy: "bundleID: bundleID, mediaControl: snapshotWithProbedAlbum(snapshot))").count - 1
+                expectEqual(probed, 2,
+                            "适配优先: 自动识别与多选的信任分支都要交给 adaptedSnapshot(现在 \(probed) 处)")
+                // 整份顶替,不是只借一个字段 —— 只借字段就得配一道"差多少以内才肯借"的闸,
+                // 而那道闸恰好会在锚点偏得最狠的时候把真值挡在门外。
+                expectEqual(mcc.contains("return fetchAppleMusicSnapshot() ?? mediaControl"), true,
+                            "适配优先: Apple Music 那档要整份用 AppleScript 快照,拿不到才退回 media-control")
+                // 必须留的例外(电台那条钉在上面「电台」那一段里,不重复)。
+                expectEqual(mcc.contains("guard mediaControl.playing == true else { return mediaControl }"), true,
+                            "适配优先: 暂停态不问 AppleScript(冻结的 elapsedTime 本来就是精确值)")
+            } else {
+                expectEqual(true, false, "适配优先: 读不到 MediaControlClient.swift(路径挪了?)")
+            }
+            // collector 侧同一口径:AppleScript 那份整份顶替,只把 MediaRemote 独有的键合并回去。
+            // ⚠️ 两侧口径不一致时的表现是「打卡的位置对、界面上的歌词偏」,很难往这里想,所以两边都钉。
+            if let sys = text("lyrimuse-collector/system.go") {
+                expectEqual(sys.contains("mergeRadioKeys(state, raw)"), true,
+                            "适配优先: collector 侧也要整份顶替 + 只合并电台键")
+            } else {
+                expectEqual(true, false, "适配优先: 读不到 lyrimuse-collector/system.go(路径挪了?)")
+            }
+        }
+
+        // ---- Spotify 自然切歌(gapless)锚点偏置:两侧算法必须同一套判据 ----
+        //
+        // App 侧 LocalPlaybackSource.naturalAdvanceCorrection 与 collector 侧 poller.go 的
+        // 同名函数是两套独立实现(Swift/Go 各写一遍)。窗口常量(naturalAdvanceWindowSecs)
+        // 本来就该不同——collector 5s 轮询、没有事件通知,App 2s 轮询 + 事件,两边各自的
+        // poll 头注都写着这一条,不钉在这里。但偏置公式与可信区间的上下限必须逐字一致——
+        // 漏改一边的表现是"打卡的位置对、悬浮窗还是偏快/偏慢",跟"适配优先"那组一样隐蔽。
+        do {
+            let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            func text(_ rel: String) -> String? {
+                try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)
+            }
+            if let swiftSrc = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
+                expectEqual(swiftSrc.contains("naturalAdvanceMaxBiasSecs = 2.5"), true,
+                            "自然切歌偏置: App 侧可信上限该是 2.5")
+                expectEqual(swiftSrc.contains("naturalAdvanceMinBiasSecs = 0.05"), true,
+                            "自然切歌偏置: App 侧可信下限该是 0.05")
+                expectEqual(swiftSrc.contains("let bias = reported - overrun"), true,
+                            "自然切歌偏置: App 侧公式要是 reported - overrun")
+                expectEqual(swiftSrc.contains("guard bias > naturalAdvanceMinBiasSecs, bias <= naturalAdvanceMaxBiasSecs else { return nil }"), true,
+                            "自然切歌偏置: App 侧可信区间判据要 > 下限、<= 上限")
+            } else {
+                expectEqual(true, false, "自然切歌偏置: 读不到 LocalPlaybackSource.swift(路径挪了?)")
+            }
+            if let goSrc = text("lyrimuse-collector/poller.go") {
+                expectEqual(goSrc.contains("naturalAdvanceMaxBiasSecs = 2.5"), true,
+                            "自然切歌偏置: collector 侧可信上限该是 2.5")
+                expectEqual(goSrc.contains("naturalAdvanceMinBiasSecs = 0.05"), true,
+                            "自然切歌偏置: collector 侧可信下限该是 0.05")
+                expectEqual(goSrc.contains("bias = reported - overrun"), true,
+                            "自然切歌偏置: collector 侧公式要是 reported - overrun")
+                expectEqual(goSrc.contains("if bias <= naturalAdvanceMinBiasSecs || bias > naturalAdvanceMaxBiasSecs {"), true,
+                            "自然切歌偏置: collector 侧可信区间判据要同一开闭区间(取反写法,数学等价)")
+            } else {
+                expectEqual(true, false, "自然切歌偏置: 读不到 poller.go(路径挪了?)")
+            }
+        }
+
         // ---- 配置热重读:白名单两侧都要真的接上----
         //
         // `CollectorRestartPolicy.hotReloadedKeys` 里每一个键,都必须 ① 真是 features.json 的键(App 侧
@@ -655,22 +734,49 @@ func runSourceContractTests() {
                 .appendingPathComponent("lyrimuse-collector/lastfmexclude.go").path, encoding: .utf8)
             let goMain = try? String(contentsOfFile: repoRoot
                 .appendingPathComponent("lyrimuse-collector/main.go").path, encoding: .utf8)
-            expectEqual(CollectorRestartPolicy.hotReloadedKeys, ["lastfm_excluded_bundles"],
-                        "配置热重读: 白名单变了就要同步加守卫(现在只有 lastfm_excluded_bundles 一项)")
+            let sourcesGo = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse-collector/lyricsourcesreload.go").path, encoding: .utf8)
+            let featuresGo = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse-collector/features.go").path, encoding: .utf8)
+            let enrichGo = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse-collector/enrich.go").path, encoding: .utf8)
+            // 每个热重读的键归哪个 collector 文件解析。这张表本身就是守卫:白名单里多一个键、
+            // 表里没登记,下面第一条就红 —— 逼着新键说清"collector 哪里读它"。
+            let parsedIn: [String: String?] = [
+                "lastfm_excluded_bundles": go,
+                "lyrics_sources": sourcesGo,
+                "amll_lyrics": sourcesGo, "lyricfind_lyrics": sourcesGo, "kuwo_lyrics": sourcesGo,
+                "migu_lyrics": sourcesGo, "deezer_lyrics": sourcesGo, "applemusic_lyrics": sourcesGo,
+            ]
+            expectEqual(CollectorRestartPolicy.hotReloadedKeys, Set(parsedIn.keys),
+                        "配置热重读: 白名单变了就要在 parsedIn 里登记这个键由哪个 collector 文件解析")
             for key in CollectorRestartPolicy.hotReloadedKeys.sorted() {
                 expectEqual(store?.contains("= \"\(key)\"") ?? false, true,
                             "配置热重读: \(key) 要是 FeatureFlagsFile 的 CodingKey(App 侧写得进这个键)")
-                expectEqual(go?.contains("json:\"\(key)\"") ?? false, true,
-                            "配置热重读: collector 侧要按这个 json 键单独解析(lastfmexclude.go)")
+                expectEqual(parsedIn[key]??.contains("json:\"\(key)\"") ?? false, true,
+                            "配置热重读: collector 侧要按 \(key) 这个 json 键单独解析")
             }
             // 热重读的三件套:登记路径、Stat 比 mtime、消费点走热值而不是启动时那份。
-            expectEqual(goMain?.contains("setLastfmExcludePath(featureFlagsPath)") ?? false, true,
-                        "配置热重读: main() 要把 features.json 的路径登记给热读器,否则它永远退回启动值")
+            for needle in ["setLastfmExcludePath(featureFlagsPath)", "setLyricSourcesPath(featureFlagsPath)"] {
+                expectEqual(goMain?.contains(needle) ?? false, true,
+                            "配置热重读: main() 要有 \(needle),否则热读器永远退回启动值")
+            }
             for needle in ["os.Stat(lastfmExcludePath)", "ModTime().Equal(lastfmExcludeMTime)", "currentLastfmExcludedBundles()"] {
                 expectEqual(go?.contains(needle) ?? false, true, "配置热重读: lastfmexclude.go 要有 \(needle)")
             }
+            for needle in ["os.Stat(lyricSourcesPath)", "ModTime().Equal(lyricSourcesMTime)", "resolveLyricsSources("] {
+                expectEqual(sourcesGo?.contains(needle) ?? false, true, "配置热重读: lyricsourcesreload.go 要有 \(needle)")
+            }
             expectEqual(go?.contains("len(features.LastfmExcludedBundles) == 0") ?? false, false,
                         "配置热重读: 判定不能再直接读启动时那份 features.LastfmExcludedBundles")
+            // 歌词源的判据必须只有 lyricSourceEnabled 一处,且它读热值。多一处直接读
+            // features.LyricsSources,那一处就停在启动时的旧值 —— 表现成"这个源改了生效、那个源改了不生效"。
+            expectEqual(featuresGo?.contains("currentLyricSources()") ?? false, true,
+                        "配置热重读: lyricSourceEnabled 要读 currentLyricSources(),不是启动时那份")
+            expectEqual(featuresGo?.contains("features.LyricsSources[source]") ?? false, false,
+                        "配置热重读: 判定不能再直接读启动时那份 features.LyricsSources")
+            expectEqual(enrichGo?.contains("range features.LyricsSources") ?? false, false,
+                        "配置热重读: enrich.go 遍历启用源要走 lyricSourceNames + lyricSourceEnabled,不能直接遍历启动时那份")
             // App 侧真的按这个判据跳过重启,而不是白名单摆着没人用。
             expectEqual(store?.contains("CollectorRestartPolicy.needsRestart(changedKeys:") ?? false, true,
                         "配置热重读: save() 要按 CollectorRestartPolicy 决定跳不跳过重启")
@@ -678,12 +784,12 @@ func runSourceContractTests() {
 
         // 芯片换行的算术必须走 Core 里那份被 selftest 钉住的纯函数(settings-ui 组):在 Layout 里另写一遍,
         // 测试照样绿、界面照样能裁掉半枚芯片。Layout 的 Subviews 在测试里造不出来,这条源码守卫是唯一的拴绳。
-        if let row = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/PlayerLinkageRow.swift")) {
+        if let row = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/SettingsDesignSystem.swift")) {
             expectEqual(count(row, "ChipFlowGeometry.rows(") >= 2, true,
-                        "芯片换行: PlayerChipFlow 的量尺与落位都要调 ChipFlowGeometry.rows(现 \(count(row, "ChipFlowGeometry.rows(")) 处)")
+                        "芯片换行: SettingsFlowRow 的量尺与落位都要调 ChipFlowGeometry.rows(现 \(count(row, "ChipFlowGeometry.rows(")) 处)")
             expectEqual(row.contains("ChipFlowGeometry.size("), true, "芯片换行: 整块尺寸也走同一份纯函数")
         } else {
-            expectEqual(true, false, "芯片换行: 读不到 lyrimuse/Settings/PlayerLinkageRow.swift(路径挪了?)")
+            expectEqual(true, false, "芯片换行: 读不到 lyrimuse/Settings/SettingsDesignSystem.swift(路径挪了?)")
         }
         if let view = code(sourcesRoot.appendingPathComponent("lyrimuse/SettingsView.swift")) {
             expectEqual(count(view, "listenHistoryCard") + count(view, "historyExcludedBundles"), 0,
@@ -1158,7 +1264,7 @@ func runSourceContractTests() {
                         "引导页不越界: 少了把 step 存储值拉回合法区间的 onChange(of: steps.count)")
 
             // ⑧ Apple Music 自动化那一步的判据必须**同时**认 .appleMusic 和 .auto。
-            //    `refinedAppleMusicSnapshotIfNeeded` 只看在播的是不是 Music.app、完全不看
+            //    `adaptedSnapshot` 只看在播的是不是 Music.app、完全不看
             //    features.players,而 players 的默认值恰恰是 [.auto] —— 漏掉 .auto 等于让
             //    "保持默认、平时听 Apple Music"的人永远不被问这个权限。
             //    ⚠️ 判据本体挪进 `Set<PlaybackPlayer>.needsAppleMusicAutomation`
@@ -2417,6 +2523,10 @@ func runSourceContractTests() {
         let releasingDoc = read("docs/releasing.md")
         if !releasingDoc.isEmpty {
             expectEqual(releasingDoc.contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
+            // 落地页推送走脚本,不手写 URL 名单 —— 手写那份在加页那天不会有人想起来改,
+            // 而且漏推不报错,只表现成新页在 Bing 里迟迟不出现。
+            expectEqual(releasingDoc.contains("ping-indexnow.py"), true,
+                        "IndexNow: releasing.md 走 scripts/ping-indexnow.py(URL 列表从 sitemap 读),别退回手写名单")
         }
         // ⚠️ **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
@@ -2475,14 +2585,38 @@ func runSourceContractTests() {
 
         var goOffenders: [String] = []
         let goDir = repoRoot.appendingPathComponent("lyrimuse-collector").path
+        // `os.UserHomeDir()` 本身**不是**违规:读外部 App 的缓存(Music.app / 酷狗 / 网易云 /
+        // QQ 音乐 / 汽水音乐 / Spotify 的容器目录)只能从家目录拼,`configDir()` 表达不了别人家的
+        // 路径,那些函数头上也都写着"外部 App 的路径,不走 paths.go 那套身份口径"。这条守的是
+        // 「别自己拼**这个项目**的目录」——所以只在同一个函数里拼出自家字样时才算违规。
+        // ⚠️ 别改回"见到 os.UserHomeDir() 就红":那样每加一个读本地客户端数据的源都要来改闸,
+        // 而闸想防的(改目录/改名时漏改一处)跟外部路径毫无关系。
+        let ownPathMarkers = [".config", "library/logs", "lyrimuse", "clientname"]
+        var externalHomeUses = 0
         for f in ((try? fm.contentsOfDirectory(atPath: goDir)) ?? []).filter({ $0.hasSuffix(".go") && !$0.hasSuffix("_test.go") && $0 != "paths.go" }).sorted() {
-            for (n, code) in codeLines(goDir + "/" + f) {
+            let lines = codeLines(goDir + "/" + f)
+            for (n, code) in lines {
                 if code.contains("\".config\", clientName") || code.contains(".config/lyrimuse\"") { goOffenders.append("\(f):\(n) 配置目录") }
                 if code.contains("Library/Logs") { goOffenders.append("\(f):\(n) 日志路径") }
-                if code.contains("os.UserHomeDir()") { goOffenders.append("\(f):\(n) 自己拿家目录拼路径(走 configDir())") }
+                guard code.contains("os.UserHomeDir()") else { continue }
+                // 这一行往下到本函数结束(最多 12 行)拼的是谁的目录。
+                let body = lines
+                    .filter { $0.0 > n && $0.0 <= n + 12 }
+                    .prefix { !$0.1.hasPrefix("func ") }
+                    .map(\.1).joined(separator: "\n").lowercased()
+                if ownPathMarkers.contains(where: { body.contains($0) }) {
+                    goOffenders.append("\(f):\(n) 自己拿家目录拼这个项目的目录(走 configDir())")
+                } else {
+                    externalHomeUses += 1
+                }
             }
         }
         expectEqual(goOffenders, [], "身份收口(Go): 配置目录 / 日志路径只许在 paths.go 里拼,其余经 configDir() / logFilePath()")
+        // 上面那条豁免必须**真的在用**:读外部 App 本地数据的那批源(applemusiclocal / kugoulocal /
+        // neteaselocal / qqlocal / sodalocal / spotifyisrc)全靠 os.UserHomeDir() 拼别人家的容器目录。
+        // 扫到 0 处 = 判据被改回"见到就红"、或者那批源没了 —— 两种都该有人看一眼,别让豁免变成空条款。
+        expectEqual(externalHomeUses >= 4, true,
+                    "身份收口(Go): 外部 App 路径这条豁免仍在真实使用中,实际 \(externalHomeUses) 处")
         let pathsGo = (try? String(contentsOfFile: goDir + "/paths.go", encoding: .utf8)) ?? ""
         expectEqual(pathsGo.contains("LYRIMUSE_CONFIG_DIR") && pathsGo.contains("LYRIMUSE_LOG_FILE") && pathsGo.contains("LYRIMUSE_APP_BUNDLE_ID"), true,
                     "身份收口(Go): paths.go 读的三个环境变量名与 Swift LyrimusePaths.collectorEnvironment 一致")
@@ -2606,6 +2740,28 @@ func runSourceContractTests() {
         expectEqual(core.contains("FileManager"), false, "崩溃报告段: Core 侧不碰文件系统(目录扫描在 App 侧)")
         expectEqual(read("lyrimuse/Sources/lyrimuse-selftest/OpsDiagnosticsTests.swift").contains("CrashReportSummary.parse("), true,
                     "崩溃报告段: selftest 覆盖解析")
+
+        // ---- 产物形态:报告 + 两份**完整**日志,打成 zip ----
+        //
+        // 钉的是"完整"和"脱敏"必须同时成立。少了完整,要查的那一刻常落在窗口外(实测
+        // first-resolve 决策年龄 p90 是 7.2 天,而原来的导出窗口只有 4 小时、还压着 5000 行
+        // 上限,实测连 4 小时都给不全);少了脱敏,就等于让用户把未经处理的原始日志发出去,
+        // 那正是 LogRedactor 当初要堵的事。
+        expectEqual(exporter.contains(").zip\""), true, "诊断包: 产物是 zip,不是单个 txt")
+        expectEqual(exporter.contains("writeDiagnosticsBundle("), true, "诊断包: 有打包入口")
+        expectEqual(exporter.contains("(\"report.txt\", report)"), true, "诊断包: 报告单独成文件")
+        expectEqual(exporter.contains("LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)"),
+                    true, "诊断包: collector 完整日志单独成文件")
+        expectEqual(exporter.contains("(\"app-log.txt\", fullAppLogText(secrets: secrets))"),
+                    true, "诊断包: App 完整日志单独成文件")
+        // 这两个函数各自是完整日志的唯一出口,漏掉任何一处 redactAll 就是把原始日志发出去。
+        expectEqual(exporter.contains("return LogRedactor.redactAll(content, secrets: secrets)"),
+                    true, "诊断包: collector 完整日志过脱敏")
+        expectEqual(exporter.contains("LogRedactor.redactAll(recentAppLogLines()"),
+                    true, "诊断包: App 完整日志过脱敏")
+        // 按时间窗口 / 行数上限截 collector 日志那条路已经废掉,别让它复活。
+        expectEqual(exporter.contains("recentCollectorLogLines"), false, "诊断包: 不再按时间窗口截断")
+        expectEqual(exporter.contains("hardLineCap"), false, "诊断包: 不再有行数硬上限")
     }
 
     // ---- 补提交的反馈不许长在会消失的容器里----
@@ -2713,28 +2869,6 @@ func runSourceContractTests() {
             }
             return out.joined(separator: "\n")
         }
-
-        // ---- 产物形态:报告 + 两份**完整**日志,打成 zip ----
-        //
-        // 钉的是"完整"和"脱敏"必须同时成立。少了完整,要查的那一刻常落在窗口外(实测
-        // first-resolve 决策年龄 p90 是 7.2 天,而原来的导出窗口只有 4 小时、还压着 5000 行
-        // 上限,实测连 4 小时都给不全);少了脱敏,就等于让用户把未经处理的原始日志发出去,
-        // 那正是 LogRedactor 当初要堵的事。
-        expectEqual(exporter.contains(").zip\""), true, "诊断包: 产物是 zip,不是单个 txt")
-        expectEqual(exporter.contains("writeDiagnosticsBundle("), true, "诊断包: 有打包入口")
-        expectEqual(exporter.contains("(\"report.txt\", report)"), true, "诊断包: 报告单独成文件")
-        expectEqual(exporter.contains("LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)"),
-                    true, "诊断包: collector 完整日志单独成文件")
-        expectEqual(exporter.contains("(\"app-log.txt\", fullAppLogText(secrets: secrets))"),
-                    true, "诊断包: App 完整日志单独成文件")
-        // 这两个函数各自是完整日志的唯一出口,漏掉任何一处 redactAll 就是把原始日志发出去。
-        expectEqual(exporter.contains("return LogRedactor.redactAll(content, secrets: secrets)"),
-                    true, "诊断包: collector 完整日志过脱敏")
-        expectEqual(exporter.contains("LogRedactor.redactAll(recentAppLogLines()"),
-                    true, "诊断包: App 完整日志过脱敏")
-        // 按时间窗口 / 行数上限截 collector 日志那条路已经废掉,别让它复活。
-        expectEqual(exporter.contains("recentCollectorLogLines"), false, "诊断包: 不再按时间窗口截断")
-        expectEqual(exporter.contains("hardLineCap"), false, "诊断包: 不再有行数硬上限")
         /// 这个键缺了会不会炸:用 decodeIfPresent 解的、或者属性本身可选的,都不会。
         func tolerant(_ body: String, _ key: String) -> Bool {
             for raw in body.split(separator: "\n", omittingEmptySubsequences: false) {

@@ -67,7 +67,9 @@ Nothing else reaches Last.fm. Their API also accepts `mbid`, `albumArtist`, `tra
 
 ## 3. What is not rewritten
 
-Artist, track and album names are submitted exactly as the player reported them.
+On the ListenBrainz path, and on Last.fm's *All* and *First only* modes, artist, track and album
+names are submitted exactly as the player reported them. (Last.fm's *Smart* mode rewrites the
+artist and track to match the catalogue entry — see the next section.)
 
 The only processing applied is invisible-character cleanup: non-breaking and full-width spaces
 become ordinary spaces, zero-width characters and BOMs are removed, runs of whitespace collapse to
@@ -78,7 +80,7 @@ Nothing visible is changed — not capitalisation, not Traditional vs Simplified
 parenthetical subtitles, not multi-artist credits. `PRINCE` stays `PRINCE`, `無所謂` stays
 `無所謂`, and `一口 (The Day You Left Me)` keeps its subtitle.
 
-Why there is no external lookup to "canonicalise" names:
+Why there is no external lookup to "canonicalise" names by default:
 
 - Lyrimuse used to do exactly that. An audit of a real ~2,500-track library found roughly 200
   rewritten artist names, including `USA for Africa` → `Xtc Planet` and `LBI利比` → `Safehse`.
@@ -92,45 +94,90 @@ Why there is no external lookup to "canonicalise" names:
   rescrobbled, mpdscribble, mpdas, Koito, multi-scrobbler), none rewrites artist names from an
   external lookup by default.
 
-## 4. Multi-artist credits
+## 4. Matching mode
 
-Settings → Accounts → Last.fm → *Scrobble* → **Artists on collaborations**
-(`lastfm_scrobble_artist_mode` in `~/.config/lyrimuse/lyrimuse-features.json`):
+Settings → Accounts → Last.fm → *Scrobble* → **Matching Mode**
+(`lastfm_match_mode` in `~/.config/lyrimuse/lyrimuse-features.json`):
 
-| Mode | Value | Effect on `Khalil Fong & Fiona Sit` |
+| Mode | Value | Effect |
 |---|---|---|
-| **Smart** (default on fresh installs) | `smart` | Looks the track up on Last.fm once and decides per track (below) |
-| **All** (default on existing installs) | `all` | Submitted as-is |
-| First only | `first` | Submitted as `Khalil Fong` — pure string handling, no network call |
+| **Smart** (default on fresh installs) | `smart` | Finds this track's entry in Last.fm's catalogue and sends that entry's artist and title (below) |
+| Custom | `custom` | Pick which parts may change — see below |
+| **Raw** (default on existing installs) | `raw` | Exactly what the player reports, no network call |
 
-*All* stays the default wherever a `lyrimuse-features.json` already exists, because collapsing is
-irreversible — it removes Fiona Sit from your history, while leaving the credit intact costs at most
-one lightly-listened collaboration entry. Navidrome's option of the same name
-(`Lastfm.ScrobbleFirstArtistOnly`) also defaults to off. Fresh installs start on *Smart* instead: it
-only drops the second artist when Last.fm's own catalogue has no entry for the collaboration and
-does have the track under the first artist.
+*Custom* expands into three switches:
 
-Splitting (used by *First only* and *Smart*) is conservative: `/` is handled separately from `,`
-and `&`, so `K/DA` and `AC/DC` are not split into `K` and `AC`.
+| Switch | Value | Effect |
+|---|---|---|
+| Rewrite artist | `lastfm_match_artist` | The artist may be replaced with the catalogue entry's spelling |
+| Rewrite track name | `lastfm_match_track` | The title may be replaced with the catalogue entry's spelling |
+| Collaborations: first artist only | `lastfm_match_first_artist_only` | Truncates a joint credit to its first artist (`Khalil Fong & Fiona Sit` → `Khalil Fong`) — pure string handling, no network call |
 
-**Smart** uses Last.fm's own catalogue as the whitelist, following Last.fm's correction guidelines
-("only map to a joint artist name if a release exists under it; otherwise prefer the more
-prominently credited artist"):
+With only one rewrite dimension enabled, **a candidate is only accepted if the other field already
+matches** — otherwise the result would be a combination that does not exist in the catalogue, which
+lands back on a ghost entry with one listener: you.
 
-1. `track.getInfo` for the joint credit. If Last.fm already has it as a real entry (an MBID, or
-   ≥ 500 listeners, or a duration — none of which a ghost entry created by one scrobbler has), the
-   full credit is sent. Decided once, kept forever.
-2. Otherwise, `track.getInfo` for the first artist. If *that* entry exists as a real entry, only
-   the first artist is sent — also decided once and kept forever. If neither exists, the full credit
-   is sent and the track is re-checked after 90 days.
+"First artist only" differs from the other two: it applies **only when nothing was matched**. A
+matched spelling is already the entry Last.fm recognises, and truncating it would turn it into an
+entry that does not exist — `Hall & Oates / Maneater` (800k listeners) would become `Hall`. So
+"truncate only, no matching" is byte-for-byte the old *First only* mode, still without a network call.
 
-Any lookup failure (network, rate limit, malformed answer) keeps the full credit and caches
-nothing, so a hiccup never becomes a permanent decision. Decisions live in
-`~/.config/lyrimuse/lyrimuse-lastfm-collapse.json` with the evidence that produced them; delete the
+*Raw* stays the default wherever a `lyrimuse-features.json` already exists, because truncating a
+credit is irreversible — it removes Fiona Sit from your history. Navidrome's option of the same name
+(`Lastfm.ScrobbleFirstArtistOnly`) also defaults to off.
+
+Splitting is conservative: `/` is handled separately from `,` and `&`, so `K/DA` and `AC/DC` are not
+split into `K` and `AC`.
+
+### Smart mode
+
+What the player reports and what Last.fm's catalogue calls the same recording are often not the
+same characters, and submitting as-is lands the play on a "ghost" entry — no MBID, no album, zero
+duration, one listener: you. Measured on David Tao's 《那个女孩》: the player reports
+`陶喆, 卢广仲 / 那个女孩`, which Last.fm does not have at all; the Simplified `陶喆 / 那个女孩` has
+126 listeners; and the track's actual entry is the Traditional **`陶喆 / 那個女孩` — 889 listeners,
+4,580 plays, with a catalogue duration**. Last.fm's own `autocorrect` does not help: it does not map
+between Traditional and Simplified Chinese.
+
+So *Smart* looks the track up before submitting:
+
+1. `track.getInfo` as reported. **If it has an MBID**, nothing is touched, forever. An MBID is the
+   strongest signal of a real catalogue identity, and it is what keeps a properly credited
+   collaboration (Hall & Oates) from being moved onto a solo page by "more listeners".
+2. Otherwise candidates are collected from **exactly three places**: as reported, the first credited
+   artist, and entries under that artist whose title folds to the same key
+   (`artist.getTopTracks`, which is already ordered by listeners).
+3. Among the candidates Last.fm actually has catalogued (an MBID, or ≥ 500 listeners, or a catalogue
+   duration — a ghost entry has none of the three), the most-listened one wins, its duration is
+   verified, and its artist and track are what get submitted — decided once, kept forever. If no
+   candidate qualifies, it is sent as reported and re-checked after 90 days.
+
+It deliberately does **not** use `track.search`: that searches the literal string, which neither
+finds the Traditional entry nor excludes same-title-different-song hits like
+`张泽熙 / 那个女孩`. Title folding only folds spelling differences of one recording — Traditional
+vs Simplified, variant characters, diacritics, featured credits (`(feat. X)`) and reissue tags
+(`(Remastered 2014)`, `(Bonus Track)`). **Live, Remix, acoustic and instrumental markers are always
+kept**: those are different recordings. The winning candidate also has to pass a duration check
+(rejected if both sides know a duration and they differ by more than 8 seconds).
+
+Measured over 240 real tracks: 33 rewritten, 162 sent as-is, 45 undecidable. Examples:
+
+| Reported | Sent | Listeners |
+|---|---|---|
+| `周杰倫 / 手写的从前` | `周杰倫 / 手寫的從前` | 100 → 4,515 |
+| `Wang Leehom / 奇遇的起点` | `王力宏 / 奇遇的起點` | 1 → 144 |
+| `SZA & Phoebe Bridgers / Ghost in the Machine` | `SZA / Ghost in the Machine (feat. Phoebe Bridgers)` | 175 → 856,376 |
+| `PRINCE / Walk Don't Walk (2023 Remaster)` | `Prince / Walk Don't Walk` | 231 → 16,178 |
+
+Any lookup failure (network, rate limit, malformed answer, unreachable track list) sends the tags as
+reported and caches nothing, so a hiccup never becomes a permanent decision. Decisions live in
+`~/.config/lyrimuse/lyrimuse-lastfm-catalog.json` with the evidence that produced them; delete the
 file to re-decide everything.
 
-The legacy boolean `lastfm_scrobble_first_artist_only` is still read (`true` → `first`) but no
-longer written.
+The legacy keys are still read but no longer written, and migrate without changing behaviour:
+`lastfm_scrobble_artist_mode` maps `smart` → Smart, `all` → Raw, and `first` → Custom with only
+"first artist only" enabled; the older boolean `lastfm_scrobble_first_artist_only=true` is
+equivalent to `first`.
 
 ## 5. If a scrobble fails
 

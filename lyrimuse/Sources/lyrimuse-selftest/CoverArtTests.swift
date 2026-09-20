@@ -731,6 +731,65 @@ func runCoverArtTests() {
         }
     }
 
+    // ---- 封面感知指纹(aHash):动态封面下载后终审用它判"视频这一帧是不是这张封面" ----
+    //
+    // 跟上面「小封面预先重采样」共用同一套合成图手法,不复用那边局部定义的 synthesize(不同
+    // do 块之间不共享局部函数)。
+    do {
+        typealias F = CoverFingerprint
+        func synthesize(width: Int, height: Int, fill: (Int, Int) -> (UInt8, UInt8, UInt8)) -> CGImage? {
+            var bytes = [UInt8](repeating: 255, count: width * height * 4)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let (r, g, b) = fill(x, y)
+                    let o = (y * width + x) * 4
+                    bytes[o] = r; bytes[o + 1] = g; bytes[o + 2] = b
+                }
+            }
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+            return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                           bytesPerRow: width * 4, space: space,
+                           bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                           provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        }
+        // 左黑右白的竖分割图,两种分辨率(600×600 模拟静态封面、64×64 模拟从视频里抽出来的
+        // 缩小帧)——同一张图不同分辨率,距离该是 0,这正是 aHash 箱式取平均要保证的那件事
+        // (见 CoverFingerprint.hash 的注释)。
+        let big = synthesize(width: 600, height: 600, fill: { x, _ in x < 300 ? (0, 0, 0) : (255, 255, 255) })
+        let small = synthesize(width: 64, height: 64, fill: { x, _ in x < 32 ? (0, 0, 0) : (255, 255, 255) })
+        if let big, let small {
+            let hb = F.hash(of: big)
+            let hs = F.hash(of: small)
+            expectEqual(F.distance(hb, hs), 0, "封面指纹: 同一张图缩到不同分辨率,距离为 0")
+            expectEqual(F.distance(hb, hb), 0, "封面指纹: 跟自己比距离恒为 0")
+        } else {
+            expectEqual(false, true, "封面指纹: 竖分割合成图建不出来")
+        }
+        // 上黑下白的横分割图——跟上面竖分割是完全不同的画面,距离该远超阈值。
+        let rotated = synthesize(width: 600, height: 600, fill: { _, y in y < 300 ? (0, 0, 0) : (255, 255, 255) })
+        if let big, let rotated {
+            let distance = F.distance(F.hash(of: big), F.hash(of: rotated))
+            expectEqual(distance > F.motionCoverMaxDistance, true,
+                        "封面指纹: 竖分割 vs 横分割是两张不同的图,距离该超过阈值(实测 \(distance))")
+        } else {
+            expectEqual(false, true, "封面指纹: 横分割合成图建不出来")
+        }
+        // 在竖分割图上叠一点点局部噪声(模拟 Apple 给动态封面叠的贴纸/光效那类小范围装饰)——
+        // 距离该保持很小,不该被判成"不是同一张"。
+        let withSpeckle = synthesize(width: 600, height: 600, fill: { x, y in
+            if x >= 280, x < 320, y >= 280, y < 320 { return (255, 200, 0) } // 中心一小块高光
+            return x < 300 ? (0, 0, 0) : (255, 255, 255)
+        })
+        if let big, let withSpeckle {
+            let distance = F.distance(F.hash(of: big), F.hash(of: withSpeckle))
+            expectEqual(distance <= F.motionCoverMaxDistance, true,
+                        "封面指纹: 小范围局部装饰不该把同一张图判成不一样(实测距离 \(distance))")
+        } else {
+            expectEqual(false, true, "封面指纹: 带高光合成图建不出来")
+        }
+    }
+
     // ---- 动态封面(motion artwork)的 HLS 清单解析----
     //
     // fixture 是从 Prince《Timeless》(collectionId 6773830957)那条真 master m3u8

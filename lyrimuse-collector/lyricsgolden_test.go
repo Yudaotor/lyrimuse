@@ -119,6 +119,13 @@ type goldenSourceRaw struct {
 	Language     string  `json:"language,omitempty"`
 	Instrumental bool    `json:"instrumental,omitempty"`
 	PlainOnly    bool    `json:"plain_only,omitempty"`
+	// IdentityFromLocalClient:采集那一刻这一份的身份是不是由播放器客户端**本地**给出的
+	// (见 lyricCandidate.identityFromLocalClient)。v21 起它是同源加权的准入条件之一。
+	//
+	// ⚠️ 它不是应答内容,而是"这一次怎么拿到的"——取决于采集那台机器上客户端缓存/曲库里
+	// 有没有这首歌,所以**样本之间不可比**,也别手工改:改了等于伪造采集事实,让一条搜索来的
+	// 候选凭空拿到 250。要换语义就重采。
+	IdentityFromLocalClient bool `json:"identity_from_local_client,omitempty"`
 	// Netease:只有 source=netease 有。lyricSourceResult 对网易云走的是 ne neteaseInfo 这个
 	// 独立子结构,不复用上面的 lyr/yrc/tr。
 	Netease *goldenNetease `json:"netease,omitempty"`
@@ -140,6 +147,9 @@ type goldenNetease struct {
 	SongID       int64   `json:"song_id,omitempty"`
 	AlbumID      int64   `json:"album_id,omitempty"`
 	PureMusic    bool    `json:"pure_music,omitempty"`
+	// FromLocalClient:songID 取自网易云客户端本地曲库而非搜索。语义同
+	// goldenSourceRaw.IdentityFromLocalClient(netease 那一路的事实挂在 ne 上,不在外层)。
+	FromLocalClient bool `json:"from_local_client,omitempty"`
 }
 
 type goldenAMLL struct {
@@ -198,6 +208,10 @@ type goldenLabelEvidence struct {
 	// (物理矛盾),也得覆盖过半(不是残片)。
 	LyricsEndSecs float64 `json:"lyrics_end_secs"`
 	CoveragePct   float64 `json:"coverage_pct"`
+	// EndingCorroborated:冠军拿到了 corroborated 加分 —— 时长对不上,但别的独立源在同一个
+	// 时间点结束。有它的时候低覆盖率不是"残片",是这首歌本来就有长尾奏/长间奏(《Purple Rain》
+	// 8:41 的曲子 3:44 唱完,五个源一致停在那里,覆盖率只有 43%)。
+	EndingCorroborated bool `json:"ending_corroborated"`
 	// AlbumScore:冠军自报专辑与本地专辑的亲和(albumScore)。本地是现场专辑时要求 >0(同一场)。
 	AlbumScore int `json:"album_score"`
 	// LiveMismatch:一边是现场录音、另一边不是——按 albumHasLiveMarker(拉丁 live/concert 词元
@@ -230,6 +244,7 @@ func goldenComputeEvidence(q goldenQuery, ranked []scoredLyricCandidateResult) g
 	if winner == nil {
 		return ev
 	}
+	ev.EndingCorroborated = hasTerm(winner.ScoreTerms, scoreTermCorroborated)
 	wgrams := lyricGram3Set(lyricConsensusBody(winner.Lyrics))
 	for i := range ranked {
 		c := &ranked[i]
@@ -286,7 +301,8 @@ func abs(x float64) float64 {
 }
 
 // goldenJudgeEvidence 是"够不够格当金标"的闸。全部要过:
-//   - 有冠军:歌名过闸、版本一致;自报曲长偏差 ≤3%(没自报的放行);末句 ≤ 曲长+5s 且覆盖 ≥50%;
+//   - 有冠军:歌名过闸、版本一致;自报曲长偏差 ≤3%(没自报的放行);末句 ≤ 曲长+5s 且覆盖 ≥50%
+//     (拿到 corroborated 的放行——所有源同点结束 = 长尾奏,不是残片);
 //     并且**要么**有别的源印证正文(ConsensusPeers ≥1),**要么**(单候选)自报曲长偏差 ≤1% 且覆盖 ≥70%;
 //     本地是现场专辑时专辑亲和 >0;
 //   - 没冠军:必须是纯音乐类(标记来自源的明文断言),不接受"搜不到"当样本;
@@ -312,7 +328,9 @@ func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) e
 		if ev.LyricsEndSecs > q.DurationSecs+lyricOvershootToleranceSecs {
 			problems = append(problems, fmt.Sprintf("末句 %.1fs 晚于曲长 %.1fs", ev.LyricsEndSecs, q.DurationSecs))
 		}
-		if ev.CoveragePct < 50 {
+		// 覆盖率不足只在"没有别的源印证同一个结束点"时才算残片:所有源都停在同一处,
+		// 说明这首歌的歌词本来就到此为止,剩下的是尾奏。
+		if ev.CoveragePct < 50 && !ev.EndingCorroborated {
 			problems = append(problems, fmt.Sprintf("歌词只覆盖曲长的 %.0f%%", ev.CoveragePct))
 		}
 	}
@@ -401,11 +419,22 @@ func loadGoldenFixtures(t *testing.T) []*goldenFixture {
 	return out
 }
 
+// goldenSourceHasLocalIdentity:这一份的身份是不是播放器客户端本地给的。netease 那一路
+// 的事实挂在 ne 子结构上(lyricSourceResult 对它走独立通道),其余源在外层,这里把两处收成
+// 一个问句 —— 跟 goldenRawFromSource 里那两段分叉是同一个原因。
+func goldenSourceHasLocalIdentity(g goldenSourceRaw) bool {
+	if g.Netease != nil {
+		return g.Netease.FromLocalClient
+	}
+	return g.IdentityFromLocalClient
+}
+
 func goldenRawFromSource(g goldenSourceRaw) lyricSourceResult {
 	r := lyricSourceResult{
 		lyr: g.Lyrics, yrc: g.YRC, tr: g.Tr, roma: g.Roma,
 		matchTitle: g.Title, matchArtist: g.Artist, matchAlbum: g.Album, matchCover: g.Cover,
 		srcDur: g.DurationSecs, language: g.Language, instrumental: g.Instrumental, plainOnly: g.PlainOnly,
+		identityFromLocalClient: g.IdentityFromLocalClient,
 	}
 	if g.Netease != nil {
 		n := g.Netease
@@ -413,6 +442,7 @@ func goldenRawFromSource(g goldenSourceRaw) lyricSourceResult {
 			Cover: n.Cover, SongURL: n.SongURL, Lyrics: n.Lyrics, Trans: n.Trans, Roma: n.Roma, YRC: n.YRC,
 			DurationSecs: n.DurationSecs, Artist: n.Artist, Title: n.Title, Album: n.Album,
 			SongID: n.SongID, AlbumID: n.AlbumID, PureMusic: n.PureMusic,
+			FromLocalClient: n.FromLocalClient,
 		}
 	}
 	if g.AMLL != nil {
@@ -426,6 +456,7 @@ func goldenSourceFromRaw(source string, r lyricSourceResult) goldenSourceRaw {
 		Lyrics: r.lyr, YRC: r.yrc, Tr: r.tr, Roma: r.roma,
 		Title: r.matchTitle, Artist: r.matchArtist, Album: r.matchAlbum, Cover: r.matchCover,
 		DurationSecs: r.srcDur, Language: r.language, Instrumental: r.instrumental, PlainOnly: r.plainOnly,
+		IdentityFromLocalClient: r.identityFromLocalClient,
 	}
 	if source == "netease" {
 		n := r.ne
@@ -433,6 +464,7 @@ func goldenSourceFromRaw(source string, r lyricSourceResult) goldenSourceRaw {
 			Cover: n.Cover, SongURL: n.SongURL, Lyrics: n.Lyrics, Trans: n.Trans, Roma: n.Roma, YRC: n.YRC,
 			DurationSecs: n.DurationSecs, Artist: n.Artist, Title: n.Title, Album: n.Album,
 			SongID: n.SongID, AlbumID: n.AlbumID, PureMusic: n.PureMusic,
+			FromLocalClient: n.FromLocalClient,
 		}
 	}
 	if source == "amll" {
@@ -1022,8 +1054,23 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		if err := needWinner(); err != nil {
 			return err
 		}
-		if fx.Settings.PlayerBundleID == "" || !hasTerm(*winner, scoreTermNativeSource) {
-			return fmt.Errorf("要求:记录了播放器且冠军带 nativeSource 加分")
+		if fx.Settings.PlayerBundleID == "" {
+			return fmt.Errorf("要求:记录了采集时在放的播放器")
+		}
+		// 冠军必须**就是**那个播放器的原生源 —— 否则"有没有 nativeSource"是被"不同源"
+		// 决定的,这条样本对这一类什么也没守住。
+		if native := playerNativeLyricSource(playerForBundleID(fx.Settings.PlayerBundleID)); native != e.Winner {
+			return fmt.Errorf("要求:冠军是该播放器的原生源(播放器 %q → %q,实际冠军 %q)",
+				fx.Settings.PlayerBundleID, native, e.Winner)
+		}
+		// ⚠️ v21 起这一类有**两侧**,判据对着样本自己记下的事实核对,不再一律要求有加分:
+		//   - 身份来自播放器本地(identity_from_local_client)→ 必须有 nativeSource;
+		//   - 身份是搜出来的 → 必须**没有**,那正是这次收窄要守的东西。
+		// 库里两条样本各占一侧(native-local-kugou-angkorwat / native-earth-song)。
+		wantNative := goldenSourceHasLocalIdentity(fx.Sources[e.Winner])
+		if got := hasTerm(*winner, scoreTermNativeSource); got != wantNative {
+			return fmt.Errorf("要求:冠军身份来自本地=%v 时 nativeSource 应为 %v(实际 %v)",
+				wantNative, wantNative, got)
 		}
 	case "single-candidate":
 		if err := needWinner(); err != nil {

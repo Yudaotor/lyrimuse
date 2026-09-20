@@ -16,6 +16,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case netease = "netease_music"
     /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。⚠️ processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
     case kugou = "kugou_music"
+    /// Electron 应用,走 media-control。⚠️ 只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。
+    case soda = "soda_music"
     /// 自己有 AppleScript 字典,但位置直查路线已移除,现在全程 media-control。
     case spotify = "spotify"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
@@ -31,6 +33,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return "com.tencent.QQMusicMac"
         case .netease: return "com.netease.163music"
         case .kugou: return "com.kugou.mac.Music"
+        case .soda: return "com.soda.music"
         case .spotify: return "com.spotify.client"
         case .auto: return ""
         }
@@ -39,9 +42,11 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     /// 这个播放器自家的歌词源(同源加权)。Go 侧 playerNativeLyricSources 同源。
     public var nativeLyricSource: String? {
         switch self {
+        case .appleMusic: return "applemusic"
         case .qqMusic: return "qq"
         case .netease: return "netease"
         case .kugou: return "kugou"
+        case .soda: return "soda"
         default: return nil
         }
     }
@@ -55,8 +60,22 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .qqMusic: return "noisyFloored"
         case .netease: return "noisyFloored"
         case .kugou: return "cleanExtrapolated"
+        case .soda: return "cleanExtrapolated"
         case .spotify: return "cleanExtrapolated"
         default: return nil
+        }
+    }
+
+    /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。
+    /// ⚠️ 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反
+    /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
+    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。
+    public var republishesZeroAnchor: Bool {
+        switch self {
+        case .netease: return true
+        case .soda: return true
+        case .spotify: return true
+        default: return false
         }
     }
 

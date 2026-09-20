@@ -72,6 +72,12 @@ const (
 	// (media-user-token,6 个月过期、不可续期),所以没连的时候这一路会安静跳过。
 	// 覆盖率实测:用户本机 158 首"十源全空"的歌里,18 首 Apple 有时间轴、15 首有纯文本。
 	lyricSourceAppleMusic = "applemusic"
+	// 汽水音乐(加,见 soda.go 头注)。跟其它源都不同:它**不做搜索**,曲目 id 只来自汽水
+	// 客户端自己的播放队列缓存,所以只有"正在用汽水听歌"时才有候选 —— 那也正是它的价值
+	// 所在(时间轴对着用户耳朵里那一条录音),以及同源加权成立的场景。取词走 web 端给搜索
+	// 引擎用的 seo_track 端点,无签名、无 Cookie、无需登录。正文格式与酷狗 KRC 同构,
+	// 逐字归一化直接复用 krcToLRC / krcToYRC。
+	lyricSourceSoda = "soda"
 )
 
 const (
@@ -111,7 +117,7 @@ const (
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer,
-	lyricSourceAppleMusic,
+	lyricSourceAppleMusic, lyricSourceSoda,
 }
 
 type featureFlagsFile struct {
@@ -132,14 +138,22 @@ type featureFlagsFile struct {
 	// needsLyricsRescore / needsLyricsRetry),首次填充、封面/译文回填、用户手动重搜都不受它管。
 	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
-	// LastfmScrobbleArtistMode：合唱串("A & B")上送时发哪个名字,三档
-	// scrobbleArtistAll / scrobbleArtistFirst / scrobbleArtistSmart。
-	// 缺失/非法值时退回下面的遗留布尔做一次迁移,见 resolveScrobbleArtistMode。
-	// 语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
+	// LastfmMatchMode：上送 Last.fm 前怎么对待播放器报的标签,三档
+	// lastfmMatchSmart / lastfmMatchCustom / lastfmMatchRaw。缺失/非法值时顺着下面两个
+	// 遗留字段做一次迁移,见 resolveLastfmMatch。语义与取舍见 lastfm.go 里
+	// resolveScrobbleTags 与 lastfmcatalog.go 的注释。
+	LastfmMatchMode string `json:"lastfm_match_mode,omitempty"`
+	// 下面三个只在 lastfmMatchCustom 下读(另两档的值由档位本身决定,见 resolveLastfmMatch)。
+	// 都缺失时按 false —— fail-closed 跟其余"改变上送内容"的开关一致。
+	LastfmMatchArtist          *bool `json:"lastfm_match_artist,omitempty"`
+	LastfmMatchTrack           *bool `json:"lastfm_match_track,omitempty"`
+	LastfmMatchFirstArtistOnly *bool `json:"lastfm_match_first_artist_only,omitempty"`
+	// LastfmScrobbleArtistMode：**遗留字段**(被上面的 LastfmMatchMode 取代,只留着给一次性
+	// 迁移用)。`smart` ↔ 智能、`all` ↔ 原始、`first` ↔ 自定义且只开「合唱只发第一位」。
+	// 这台机器往后只写 LastfmMatchMode,不再写它。
 	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
-	// LastfmScrobbleFirstArtistOnly：**遗留字段**(~ 之间的二态开关,
-	// 被上面的 LastfmScrobbleArtistMode 取代,只留着给一次性迁移用)。true ↔ scrobbleArtistFirst,
-	// false/缺失 ↔ scrobbleArtistAll。这台机器往后只写 LastfmScrobbleArtistMode,不再写它。
+	// LastfmScrobbleFirstArtistOnly：**更早的遗留字段**(二态开关,被 LastfmScrobbleArtistMode
+	// 取代)。true ↔ 旧的 `first`。迁移链因此是两级:这个 → ArtistMode → MatchMode。
 	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
 	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(加,
 	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
@@ -196,6 +210,9 @@ type featureFlagsFile struct {
 	// 把 applemusic 补进去。⚠️ "开着"不等于"能用":这一路还要用户连过 Apple Music 才有
 	// 输出(见 applemusic.go 的 applemusic_not_connected),没连时它只是安静返回空。
 	AppleMusicLyrics *bool `json:"applemusic_lyrics,omitempty"`
+	// SodaLyrics:同上一套迁移标记(加 soda 时补)。缺失 ⇒ 老配置,把 soda 补进启用集合;
+	// 非空 ⇒ 用户已表态,尊重它。
+	SodaLyrics *bool `json:"soda_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -269,9 +286,17 @@ type featureFlags struct {
 	// 见 featureFlagsFile.LyricsAutoUpgrade。默认 true(现状)。
 	LyricsAutoUpgrade    bool
 	LastfmMirrorScrobble bool
-	// 合唱串上送档位,恒为 scrobbleArtistAll/First/Smart 之一(resolveScrobbleArtistMode
-	// 保证),默认 scrobbleArtistAll(发整串)。
-	LastfmScrobbleArtistMode string
+	// 上送匹配档位,恒为 lastfmMatchSmart/Custom/Raw 之一(resolveLastfmMatch 保证),
+	// 默认 lastfmMatchRaw(原样发)。只给日志和诊断看 —— 判断行为一律读下面三个布尔,
+	// 它们已经把档位摊平了(智能档恒为 true/true/false)。
+	LastfmMatchMode string
+	// 允许把歌手 / 曲名改写成 Last.fm 编目条目的写法。两个都 false = 不打网络。
+	LastfmMatchArtist bool
+	LastfmMatchTrack  bool
+	// 合唱串截成第一位(firstCreditedArtist,纯字符串、不联网)。**只在没匹配到编目条目时**
+	// 应用 —— 匹配到的写法已经是编目认的那条,再截一刀就把它变成一个不存在的条目了
+	// (Hall & Oates → Hall)。见 resolveScrobbleTags。
+	LastfmMatchFirstArtistOnly bool
 	// 见 featureFlagsFile.ScrobbleShortTracks。默认 false(短曲目不记,Last.fm 官方规则)。
 	ScrobbleShortTracks bool
 	// 见 featureFlagsFile.LastfmScrobblePoint。恒为 scrobblePointHalf/75/90/End 之一
@@ -363,6 +388,7 @@ func loadFeatureFlags(path string) featureFlags {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		log.Printf("read feature flags %s: %v (falling back to defaults)", path, err)
 	}
+	match := resolveLastfmMatch(f)
 	return featureFlags{
 		Players:        resolvePlayers(f.Players, f.Player),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
@@ -373,9 +399,12 @@ func loadFeatureFlags(path string) featureFlags {
 		// 必须跟这里一致(两侧默认值对齐那条老规矩,见上面 AlbumPrefetch 的注释)。
 		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
-		// 默认 scrobbleArtistAll:原样发整串。理由见 lastfm.go resolveScrobbleArtist ——
+		// 默认 lastfmMatchRaw:原样发。理由见 lastfm.go resolveScrobbleTags ——
 		// ListenBrainz 文档要求合唱 credit "include them all",Navidrome 同名开关默认也是 false。
-		LastfmScrobbleArtistMode: resolveScrobbleArtistMode(f.LastfmScrobbleArtistMode, f.LastfmScrobbleFirstArtistOnly),
+		LastfmMatchMode:            match.Mode,
+		LastfmMatchArtist:          match.Artist,
+		LastfmMatchTrack:           match.Track,
+		LastfmMatchFirstArtistOnly: match.FirstArtistOnly,
 		// 默认 false:照 Last.fm 官方规则,短于 30 秒不记。fail-closed 跟其余"改变上送内容"的
 		// 开关一致——字段缺失不能让老用户的历史突然多出一批短曲目。
 		ScrobbleShortTracks:       boolOr(f.ScrobbleShortTracks, false),
@@ -384,7 +413,7 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
@@ -396,45 +425,90 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 }
 
-// 合唱串上送档位(features.LastfmScrobbleArtistMode)。字符串值跟 Swift 侧
-// LastfmScrobbleArtistMode 的 rawValue 逐字相同 —— 两侧通过同一份 features.json 交换。
+// 上送匹配档位(features.LastfmMatchMode)。字符串值跟 Swift 侧 LastfmMatchMode 的
+// rawValue 逐字相同 —— 两侧通过同一份 features.json 交换。
 const (
-	// 原样发播放器报的整串(默认)。
-	scrobbleArtistAll = "all"
-	// 纯字符串取第一位(firstCreditedArtist),不联网。
-	scrobbleArtistFirst = "first"
-	// 按 Last.fm 编目判定:合唱串已被收录就原样发;没收录、而第一位歌手名下这首歌已被
-	// 收录才折成第一位;两边都查不到或查询失败维持原样。见 lastfmcollapse.go。
-	scrobbleArtistSmart = "smart"
+	// 智能:在 Last.fm 编目里找这首歌对应的条目,歌手和曲名都按那条发(见 lastfmcatalog.go)。
+	lastfmMatchSmart = "smart"
+	// 自定义:三个维度各自开关(改歌手 / 改曲名 / 合唱只发第一位)。
+	lastfmMatchCustom = "custom"
+	// 原始:原样发播放器报的标签,一个字都不动,不打网络。
+	lastfmMatchRaw = "raw"
 )
 
-// resolveScrobbleArtistMode 把文件里的档位字符串校验成三个常量之一;缺失/非法时退回
-// 遗留的二态开关 lastfm_scrobble_first_artist_only 做一次迁移(true → first),两者都没有
-// 才兜底 all。非法值**不**当成 all 静默吞掉之外还会记一行日志 —— 拼错档位名的后果是
-// "设置里选了智能、collector 一直在发整串",不报出来查不到。
+// 旧档位值(遗留键 lastfm_scrobble_artist_mode)。只在迁移时出现。
+const (
+	legacyScrobbleArtistAll   = "all"
+	legacyScrobbleArtistFirst = "first"
+	legacyScrobbleArtistSmart = "smart"
+)
+
+// lastfmMatchSettings 是档位摊平之后的四个值。判断行为一律读后三个布尔,别再去看 Mode ——
+// 智能档恒为 true/true/false,自定义档才按文件里的三个键。
+type lastfmMatchSettings struct {
+	Mode            string
+	Artist          bool
+	Track           bool
+	FirstArtistOnly bool
+}
+
+// resolveLastfmMatch 把文件里的档位校验成三个常量之一并摊平成布尔;缺失/非法时顺着
+// **两级遗留链**迁移:lastfm_match_mode → lastfm_scrobble_artist_mode →
+// lastfm_scrobble_first_artist_only,全都没有才兜底「原始」。
 //
-// ⚠️ 这里兜底 all **不能**跟着 App 改成 smart(「全新装机默认智能」)。
+// 迁移表(刻意做到**行为逐字不变**):
+//
+//	旧 smart → 智能
+//	旧 all   → 原始
+//	旧 first → 自定义,只开「合唱只发第一位」(改歌手/改曲名都关 ⇒ 照旧不打网络)
+//
+// 非法值除了兜底还记一行日志 —— 拼错档位名的后果是"设置里选了智能、collector 一直在
+// 发整串",不报出来查不到。
+//
+// ⚠️ 这里兜底「原始」**不能**跟着 App 改成「智能」(「全新装机默认智能」)。
 // 两个进程能拿到的信息不一样:那个默认值是按"这台机器是不是头一回用 lyrimuse"抬的,
 // 判据里有 UserDefaults(`np:hasCompletedOnboarding`)—— collector 是独立进程,读不到,
 // 自己判不了新老。分工因此是:**App 负责判、并把结论写实进 features.json**
 // (FeatureSettingsStore.isFreshInstall + load() 里那段 persistFile),collector 只管读。
 //
-// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** → all。
+// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** → 原始。
 // 全新装机那一路在 App 首次 load() 时就已经把文件连同 "smart" 一起落了盘。
 // 反过来说,要是哪天把 App 那次写盘去掉,这里就会变成"新用户界面显示智能、collector 发整串"
 // —— 改那边之前先回来看这段。
-func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
-	switch raw {
-	case scrobbleArtistAll, scrobbleArtistFirst, scrobbleArtistSmart:
-		return raw
+func resolveLastfmMatch(f featureFlagsFile) lastfmMatchSettings {
+	switch f.LastfmMatchMode {
+	case lastfmMatchSmart:
+		return lastfmMatchSettings{Mode: lastfmMatchSmart, Artist: true, Track: true}
+	case lastfmMatchCustom:
+		return lastfmMatchSettings{
+			Mode:            lastfmMatchCustom,
+			Artist:          boolOr(f.LastfmMatchArtist, false),
+			Track:           boolOr(f.LastfmMatchTrack, false),
+			FirstArtistOnly: boolOr(f.LastfmMatchFirstArtistOnly, false),
+		}
+	case lastfmMatchRaw:
+		return lastfmMatchSettings{Mode: lastfmMatchRaw}
 	case "":
 	default:
-		log.Printf("feature flags: unknown lastfm_scrobble_artist_mode %q (falling back)", raw)
+		log.Printf("feature flags: unknown lastfm_match_mode %q (falling back)", f.LastfmMatchMode)
 	}
-	if legacyFirstOnly != nil && *legacyFirstOnly {
-		return scrobbleArtistFirst
+
+	switch f.LastfmScrobbleArtistMode {
+	case legacyScrobbleArtistSmart:
+		return lastfmMatchSettings{Mode: lastfmMatchSmart, Artist: true, Track: true}
+	case legacyScrobbleArtistFirst:
+		return lastfmMatchSettings{Mode: lastfmMatchCustom, FirstArtistOnly: true}
+	case legacyScrobbleArtistAll:
+		return lastfmMatchSettings{Mode: lastfmMatchRaw}
+	case "":
+	default:
+		log.Printf("feature flags: unknown lastfm_scrobble_artist_mode %q (falling back)", f.LastfmScrobbleArtistMode)
 	}
-	return scrobbleArtistAll
+
+	if f.LastfmScrobbleFirstArtistOnly != nil && *f.LastfmScrobbleFirstArtistOnly {
+		return lastfmMatchSettings{Mode: lastfmMatchCustom, FirstArtistOnly: true}
+	}
+	return lastfmMatchSettings{Mode: lastfmMatchRaw}
 }
 
 // Last.fm scrobble 时点(features.LastfmScrobblePoint)。字符串值跟 Swift 侧
@@ -522,13 +596,13 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool, appleMusicSeen *bool) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool, appleMusicSeen *bool, sodaSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
 			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true, lyricSourceMigu: true,
-			lyricSourceDeezer: true, lyricSourceAppleMusic: true,
+			lyricSourceDeezer: true, lyricSourceAppleMusic: true, lyricSourceSoda: true,
 		}
 	}
 	m := make(map[string]bool, len(list)+1)
@@ -563,15 +637,24 @@ func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, ku
 	if appleMusicSeen == nil {
 		m[lyricSourceAppleMusic] = true
 	}
+	if sodaSeen == nil {
+		m[lyricSourceSoda] = true
+	}
 	return m
 }
 
 // lyricSourceEnabled 是"这个歌词源开着吗"的**唯一**判据。判定原先散在六处、形式还不
 // 完全一致(有的带 len==0 兜底、有的不带),统一到这里。
-// 注:resolveLyricsSources 在列表为空时返回全集,所以 LyricsSources 永远非 nil,
+// 注:resolveLyricsSources 在列表为空时返回全集,所以集合永远非 nil,
 // 那些 len==0 的兜底其实是历史冗余,留着不碍事。
+//
+// ⚠️ 读的是 currentLyricSources()(按 features.json 的 mtime 热重读),不是启动时展开的
+// features.LyricsSources —— 勾一下源就重启 collector 的代价是半分多钟的服务停摆,见
+// lyricsourcesreload.go 头注。这也是这个判据必须唯一的原因:多一处直接读 features.LyricsSources,
+// 那一处就还停在启动时的旧值。
 func lyricSourceEnabled(source string) bool {
-	return len(features.LyricsSources) == 0 || features.LyricsSources[source]
+	enabled := currentLyricSources()
+	return len(enabled) == 0 || enabled[source]
 }
 
 func resolveLyricsSourceMode(mode string) string {
@@ -659,7 +742,13 @@ func logFeatureSnapshot() {
 		"lyrics_machine_translation", features.LyricsMachineTranslation,
 		"lyrics_decision_trace", features.LyricsDecisionTrace,
 		"lastfm_mirror_scrobble", features.LastfmMirrorScrobble,
-		"lastfm_scrobble_artist_mode", orDash(features.LastfmScrobbleArtistMode),
+		// 档位 + 摊平后的三个布尔一起打:排查时「界面选了什么」和「实际按什么办」是两件事,
+		// 只记档位的话自定义档看不出它到底开了哪几项。三个布尔各占一个键 —— 拼成一个带
+		// 空格的值会被 slog 加引号,也不好 grep。
+		"lastfm_match_mode", orDash(features.LastfmMatchMode),
+		"lastfm_match_artist", features.LastfmMatchArtist,
+		"lastfm_match_track", features.LastfmMatchTrack,
+		"lastfm_match_first_artist_only", features.LastfmMatchFirstArtistOnly,
 		"lastfm_scrobble_point", orDash(features.LastfmScrobblePoint),
 		"scrobble_short_tracks", features.ScrobbleShortTracks,
 		"lastfm_excluded_bundles", len(features.LastfmExcludedBundles),

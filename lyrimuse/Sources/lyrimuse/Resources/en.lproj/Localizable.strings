@@ -13,6 +13,7 @@
 "%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首" = "%1$@ years ago today: %2$@ plays, most on repeat";
 "%1$@ 年前的这一周听了 %2$@ 次，最常循环的是这几首" = "%1$@ years ago, this week you listened %2$@ times — these looped the most";
 "%1$@ 首源自带 · %2$@ 首机翻" = "%1$@ from source · %2$@ machine-translated";
+"%1$@ 首源自带，%2$@ 首机翻" = "%1$@ from the source, %2$@ machine-translated";
 "%1$@ 首，预计%2$@。已经有歌词的也会重新选一次；人工修正过的、校准过时间轴的、纯音乐的不动。随时可以停，关掉也不用重来" = "%1$@ songs, roughly %2$@. Songs that already have lyrics get re-picked too. Manual fixes, calibrated timing and instrumentals are left alone. You can stop any time, and quitting won't lose progress";
 "%1$d 条候选在这些项上完全相同：%2$@" = "All %1$d candidates scored identically on: %2$@";
 "%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。" = "Only %2$d of %1$d candidates were corroborated, so they may not all be the same lyrics.";
@@ -27,15 +28,18 @@
 "%@ 小时前更新" = "Updated %@ h ago";
 "%@ 已下载，点击安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
+"%@ 把歌词缓存放在受系统保护的目录里。授权「完全磁盘访问」之后，本机已经有的逐字歌词可以直接用，省去每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
 "%@ 月" = "%@";
 "%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
 "%@ 次" = "×%@";
+"%@ 的歌词缓存读不到" = "Can't read %@'s lyrics cache";
 "%@ 种写法" = "%@ spellings";
 "%@ 秒" = "%@s";
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 首" = "%@ plays";
 "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
+"%@ 首待搜" = "%@ to search";
 "%@ 首待跟进" = "%@ to catch up";
 "%@ 首歌" = "%@ songs";
 "%@pt" = "%@pt";
@@ -87,10 +91,10 @@
 "QQ音乐" = "QQ Music";
 "Remaster/feat. 等标注" = "Remaster/feat. tags";
 "Safari 在设置里，不在菜单栏：先到「Safari 浏览器 → 设置 → 高级」勾上「显示网页开发者功能」，设置里就会多出「开发」一栏，在那里勾上「允许Apple事件中的JavaScript」。" = "Safari keeps this in Settings, not the menu bar: open Safari → Settings → Advanced and tick “Show features for web developers”, then a Developer pane appears in Settings — tick “Allow JavaScript from Apple Events” there.";
-"Scrobble" = "Scrobble";
 "Scrobble 到 Last.fm" = "Scrobble to Last.fm";
 "Scrobble 时机" = "Scrobble Point";
 "Scrobble 的播放器" = "Players to Scrobble";
+"Scrobble 规则" = "Scrobble Rules";
 "Server酱" = "ServerChan";
 "Token 无效，请重新复制一次" = "Invalid token — copy it again";
 "Top 歌手 + Top 歌曲各三条 + 总播放次数" = "Top three artists and tracks, plus total play count";
@@ -144,6 +148,7 @@
 "上次：过了 %1$@ 首，更新 %2$@ 首" = "Last run: went through %1$@, updated %2$@";
 "上游源没连上、没法查：%@" = "Upstream unreachable, could not search: %@";
 "上移" = "Move Up";
+"上送给 Last.fm 的歌手名和曲名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发。\n自定义：自己选改哪些部分。\n原始：原样发播放器报的标签。" = "The artist and track names sent to Last.fm.\nSmart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match.\nCustom: pick which parts may change.\nRaw: exactly what the player reports.";
 "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用" = "“Scrobble to Last.fm” above is off, so these settings have no effect right now";
 "下" = "Bottom";
 "下一句" = "Next Line";
@@ -334,9 +339,10 @@
 "动态封面" = "Animated Artwork";
 "勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open";
+"匹配模式" = "Matching Mode";
 "匹配算法" = "Matching Algorithm";
-"十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the eleven sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
-"十一个源都没找到可用的候选" = "No Lyrics from Any Source";
+"十二个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the twelve sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
+"十二个源都没找到可用的候选" = "No Lyrics from Any Source";
 "升级重试" = "Upgrade retry";
 "单日最高 · %@" = "Busiest day · %@";
 "单曲循环" = "Repeat One";
@@ -346,6 +352,7 @@
 "卡拉OK效果" = "Karaoke Effect";
 "即将导入：%@" = "About to import: %@";
 "厚" = "Thick";
+"原始" = "Raw";
 "去处理" = "Fix it";
 "去年今天听了 %@ 次，最常循环的是这几首" = "A year ago today: %@ plays, most on repeat";
 "去年的这一周听了 %@ 次，最常循环的是这几首" = "Last year, this week you listened %@ times — these looped the most";
@@ -397,14 +404,14 @@
 "右" = "Right";
 "右对齐" = "Right-Aligned";
 "右耳" = "Right Ear";
-"合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。" = "Which artist name is sent to Last.fm for a duet.\nSmart: full credit if Last.fm already has the duet entry; first artist only if just they have the track; full credit if neither. Decided once per track.\nAll: the full credit as-is.\nFirst only: the other artist won't appear in your history.";
-"合唱歌曲的歌手" = "Artist for Collaborations";
+"合唱只发第一位" = "Collaborations: First Artist Only";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
 "同步失败" = "Sync failed";
 "同步收听到 Last.fm（可选）" = "Scrobble to Last.fm (optional)";
 "同步收听记录" = "Scrobble your listens";
 "同步服务地址" = "Sync Server URL";
+"后台服务已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问」里确认一下 Lyrimuse 那一项是开着的。" = "The background service has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
 "后台采集服务" = "Background Collector Service";
 "后台采集服务已停用，改动会在下次启用时生效" = "The background service is turned off. The change takes effect when it is turned on again.";
 "后台采集服务未运行，歌词不会更新" = "Background collector is not running; lyrics will not update";
@@ -706,6 +713,7 @@
 "换一个组合，或者先清除那一项。" = "Pick a different combination, or clear that one first.";
 "换一句" = "Another line";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
+"授权对已经在运行的后台服务不生效。在系统设置里勾上之后，回到这里点一下「重启后台服务」。" = "Granting access does not reach a background service that is already running. After ticking it in System Settings, come back here and hit Restart background service.";
 "授权已失效" = "Authorization expired";
 "授权已失效，Scrobble 已暂停" = "Authorization revoked — scrobbling paused";
 "排序" = "Sort";
@@ -741,6 +749,8 @@
 "收听足迹" = "Listening Footprint";
 "收起" = "Collapse";
 "收起面板后生效" = "Takes effect after this panel closes";
+"改写曲名" = "Rewrite Track Name";
+"改写歌手" = "Rewrite Artist";
 "改回 iCloud" = "Switch Back to iCloud";
 "放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行" = "Lines too long to fit scroll horizontally; hover to see the full line";
 "放弃坏文件并重建" = "Discard and Rebuild";
@@ -855,7 +865,6 @@
 "服务器报错（5xx）：%@" = "Server error (5xx): %@";
 "服务器报错（HTTP 5xx），稍后重试通常会恢复" = "Server error (HTTP 5xx); retrying later usually works";
 "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
-"未勾选，此项关闭" = "None checked, this is off";
 "未取到" = "Not loaded";
 "未启用" = "Not Enabled";
 "未唱到的颜色" = "Unsung Color";
@@ -984,6 +993,7 @@
 "正在获取授权令牌…" = "Requesting authorization token…";
 "正在记录" = "Scrobbling now";
 "正在采用…" = "Applying…";
+"正在重启后台服务，它要把歌词缓存重新读一遍，通常要一两分钟…" = "Restarting the background service. It has to read the whole lyrics cache again, which usually takes a minute or two…";
 "正在重新匹配…" = "Re-matching…";
 "正在重新匹配…（%1$@/%2$@）" = "Re-matching… (%1$@/%2$@)";
 "正在重试无歌词条目…" = "Retrying entries without lyrics…";
@@ -1004,6 +1014,8 @@
 "毛玻璃" = "Frosted Glass";
 "毛玻璃浓淡" = "Frosted Glass Intensity";
 "毛玻璃背景" = "Frosted Glass Background";
+"汽水音乐" = "Soda Music";
+"汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
 "没在显示歌词时，菜单栏上的那个图标" = "The icon shown in the menu bar when no lyrics are displayed";
 "没拉到最近记录" = "Couldn't load recent scrobbles";
 "没有匹配的字体" = "No matching fonts";
@@ -1013,6 +1025,7 @@
 "没有封面数据时会使用下面选择的文字颜色作为备用" = "Falls back to the text color chosen below when there's no cover art";
 "没有找到匹配的设置" = "No matching settings";
 "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）" = "No timed version found — automatically adopted a plain-text fallback (viewable in the Lyrics Window)";
+"没有缺失" = "Nothing missing";
 "没能取到那年今日——Last.fm 没有响应" = "Couldn't load this day in past years — Last.fm didn't respond";
 "没能启动（%@）。可以先「暂时跳过」，之后到设置的「通用 → 后台采集服务」里重试，那一页会给出更细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → General → Background service, which reports a more detailed status.";
 "没能添加" = "Couldn’t add it";
@@ -1115,7 +1128,7 @@
 "粤拼" = "Jyutping";
 "系统兜底翻译" = "System Fallback Translation";
 "系统字体" = "System Font";
-"系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）" = "The system media channel is unavailable on this Mac — playback detection for QQ Music / NetEase Music is affected (Apple Music and Spotify are not)";
+"系统的媒体信息通道在这台机器上用不了，播放状态会读不到。绕开它的只有一种配置：只勾 Apple Music、不勾「自动识别」；其余配置都要经这条通道读。" = "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: Apple Music ticked on its own with “Auto-detect” unticked. Every other setup reads through this channel.";
 "系统自动化授权：上次检测时已授权" = "System automation access: granted as of the last check";
 "系统自动化授权：尚未授权" = "System automation access: not granted yet";
 "系统自动化授权：已拒绝，需要在系统设置里打开" = "System automation access: denied — enable it in System Settings";
@@ -1247,6 +1260,7 @@
 "请求权限" = "Request Access";
 "请求系统授权" = "Request Access";
 "读不出这个应用的标识，换一个试试。" = "Couldn’t read this app’s identifier. Try another one.";
+"读不到 %@ 的歌词缓存，点击看怎么处理" = "Can't read %@'s lyrics cache — click to see what to do";
 "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」。下面两条路二选一，效果一样：给权限后可以一键开启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」。" = "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access. Either option below works: grant access and use one-click enable, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu.";
 "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」，而且给完权限后要重启 Lyrimuse 才生效。下面两条路二选一，效果一样：给权限并重启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」（这条不需要任何权限）。" = "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access, and Lyrimuse must be restarted after you grant it. Either option below works: grant access and restart, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu (that one needs no permissions).";
 "读不到该浏览器的配置文件。给 Lyrimuse 开「完全磁盘访问权限」后就能一键开启；不想开权限的话，到该浏览器「查看 → 开发者」菜单里手动打开也一样。" = "Can’t read this browser’s preferences file. Grant Lyrimuse Full Disk Access and one-click enable will work; otherwise turn it on yourself from the browser’s View → Developer menu.";
@@ -1372,7 +1386,7 @@
 "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜" = "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the collector stops re-searching it";
 "这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
-"这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with “♪ Title” instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
+"这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
 "这首歌第一次播放，正在联网搜索歌词，完成后会自动显示，不需要手动刷新。" = "First time playing this track, so lyrics are being searched for online. They will appear on their own — no need to refresh.";
 "进入全屏" = "Enter Full Screen";
 "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm" = "Once connected, every track you play is scrobbled to Last.fm automatically";
@@ -1429,6 +1443,7 @@
 "采用此候选" = "Use This Candidate";
 "采纳为静态文本" = "Adopt as Static Text";
 "采集服务" = "Collector";
+"重启后台服务" = "Restart background service";
 "重新打开授权页面" = "Reopen Authorization Page";
 "重新扫描的范围：没有歌词的，加上只有纯文本的；人工修正过的不动" = "Rescans songs with no lyrics or plain text only. Manually corrected songs are left alone.";
 "重新扫描（%@ 首）" = "Rescan (%@)";

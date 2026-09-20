@@ -769,6 +769,11 @@ private struct LyricsSettingsTab: View {
     /// 复选框+空白+测试图标整行,专门只用来决定"这一行的测试图标要不要露出来";复选框的
     /// 高底色/`.help` 提示仍由 hoveredSource 驱动,两者不合并。
     @State private var hoveredRow: LyricsSource?
+    // collector 发布的「哪几家的客户端缓存被系统挡住了」。⚠️ 只认它的结论,别在 App 里
+    // 自己探一遍 —— 两个进程的 TCC 授权各自独立,理由见 LocalCacheAccess 头注。
+    @State private var localCacheAccess: LocalCacheAccess.State?
+    /// 哪一格的「客户端缓存读不到」说明正开着(`LocalCacheAccessHelp`)。同时最多一个。
+    @State private var localCacheHelpSource: LyricsSource?
 
     // MARK: - 歌词来源可用性测试
 
@@ -967,6 +972,7 @@ private struct LyricsSettingsTab: View {
                         HStack(spacing: 4) {
                             sourceCheckbox(source)
                             Spacer(minLength: 0)
+                            localCacheAccessory(source)
                             appleMusicConnectionAccessory(source)
                             sourceTestAccessory(source)
                         }
@@ -986,6 +992,63 @@ private struct LyricsSettingsTab: View {
             }
         }
         .onAppear { appleMusic.refresh() }
+        // 这个状态只在用户改授权时才变,5 秒一次绰绰有余;`LocalCacheAccess.current` 自己按
+        // mtime 缓存,没变过的一拍只花一次 stat。视图消失即取消,没有常驻计时器。
+        .task {
+            while !Task.isCancelled {
+                let state = LocalCacheAccess.current
+                if state != localCacheAccess { localCacheAccess = state }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    /// 那一格右侧的「客户端缓存读不到」提示。
+    ///
+    /// 酷狗 / QQ 音乐 / 网易云的歌词缓存住在各自的 `~/Library/Containers/…/Data` 里,读它要
+    /// 「完全磁盘访问」。没授权时这三条本地快速路径整条哑掉,而它们全程 fail-soft —— 界面上
+    /// 不说一句的话,表现与"这个源本来就慢"完全一样。点这个图标弹出说明(`LocalCacheAccessHelp`)。
+    ///
+    /// ⚠️ 命中区(18×18 的 `contentShape`)比图标(12pt)大一圈,而且说明走 popover 不走 tooltip:
+    /// 原先两者都只有图标那么大,指针要压准才出得来提示 —— 这颗锁是唯一能解释"这个源为什么没在用
+    /// 本地缓存"的地方,它不该难点。
+    ///
+    /// ⚠️ **只在 collector 报了被拒时出现**:能读是常态,常态不该占版面(同旁边那个测试图标
+    /// "没测过就悬停才出现"的取向)。而且状态只认 collector 的 —— App 自己探一遍得到的是
+    /// 另一个进程的授权结果,摆给用户就是个与事实无关的结论,理由见 `LocalCacheAccess` 头注。
+    ///
+    /// ⚠️ 别按来源名硬编码"哪三家需要授权":需不需要由**缓存路径在不在 `~/Library/Containers/`
+    /// 下**决定(汽水在 `Application Support/`、Apple Music 在 `Caches/`,都不需要),那个判断
+    /// 在 collector 侧,这里只负责显示它报上来的名单。
+    @ViewBuilder
+    private func localCacheAccessory(_ source: LyricsSource) -> some View {
+        if LocalCacheAccess.isDenied(source.rawValue, state: localCacheAccess) {
+            Button {
+                localCacheHelpSource = source
+            } label: {
+                Image(systemName: "lock.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(String(format: L10n.t("读不到 %@ 的歌词缓存，点击看怎么处理"), source.displayName))
+            .popover(
+                isPresented: Binding(
+                    get: { localCacheHelpSource == source },
+                    set: { if !$0, localCacheHelpSource == source { localCacheHelpSource = nil } }
+                ),
+                arrowEdge: .bottom
+            ) {
+                LocalCacheAccessHelp(source: source) {
+                    // 只有 collector 真的重新发布了状态(这个源不在名单里了)才会走到这里,
+                    // 所以这一下关闭是"事情办成了",不是"指令发出去了"。界面不自己改
+                    // localCacheAccess —— 那等于替另一个进程宣布结果。
+                    localCacheHelpSource = nil
+                }
+            }
+        }
     }
 
     /// Apple Music 那一格右侧的连接入口。
@@ -3096,7 +3159,13 @@ private struct PlayerSettingsTab: View {
             collectorCard
         }
         .id(L10n.current)
-        .onAppear { refreshUngatedNowPlaying(); refreshNotificationStatus(); refreshBrowserLiveStatus() }
+        .onAppear {
+            refreshUngatedNowPlaying(); refreshNotificationStatus(); refreshBrowserLiveStatus()
+            // 卡里那句「媒体信息通道用不了」是启动时自检的结论,而那一下正好跑在最容易抖的
+            // 时刻(见 MediaControlHealth 头注)。用户看到那句话的自然动作就是回这一页,
+            // 借这一下复查:只在结论确实是「不可用」时才真跑一次,好的时候什么都不做。
+            MediaControlHealth.shared.recheckIfUnavailable()
+        }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshNotificationStatus()
@@ -3264,53 +3333,29 @@ private struct PlayerSettingsTab: View {
     /// 原来的写法是"有信任项才显示",那在主动添加这个功能上就是一个**鸡生蛋**:没信任过
     /// 任何 App → 卡片不显示 → 没有地方点「添加」→ 只能回去被动等「自动识别」撞见。
     /// (同一个坑「网页播放器」卡踩过一次,见 `addablePlatformBrowsers` 头注。)
+    ///
+    /// ⚠️ 排版必须跟上面「播放器」「网页播放器」两张卡是同一套(3 列图标网格 +
+    /// `choiceCardChrome` 外壳),别改回一行一条的 `SettingsRow` 列表:这三张卡在同一页里
+    /// 上下挨着,讲的又是同一件事("哪些 App 算播放器"),两种排版并置会读成两类不相干的设置。
+    /// bundle id 这种只在排查时才看的细节移进点开的气泡里(跟浏览器头像那套同一个套路),
+    /// 格子面上只留图标+名字。
     private var trustedPlayersCard: some View {
         SettingsCard {
             // 补一个标题:playerCard 有自己的 SettingsCardHeader,紧跟着一张没有标题的卡在
             // 视觉上不成对,补上让两张卡看起来是同一套设计语言里的姐妹卡。
             SettingsCardHeader(title: L10n.t("已信任的播放器"))
-            // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
-            ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
-                if bundleID != stores.trustedPlayers.keys.sorted().first { CardDivider() }
-                // 图标用这个 App 自己的真图标(跟 playerCard 那套图标网格同一份取图标逻辑,
-                // AppIconResolver):一张卡里六个内置播放器都亮出真图标,紧接着这张卡却清一色一个
-                // 通用印章图标会显得不搭。查不到才退回印章图标,不留空白。
-                SettingsRow(
-                    icon: "checkmark.seal",
-                    iconImage: AppIconResolver.icon(forBundleID: bundleID),
-                    title: displayNameForTrusted(bundleID),
-                    subtitle: bundleID
-                ) {
-                    Button(L10n.t("移除")) {
-                        Task {
-                            await FeatureSettingsStore.shared.untrust(bundleID: bundleID)
-                            // ⚠️ **取消信任必须连带解除它的所有平台配对**。
-                            //
-                            // 「信任」和「配对」是两个存储(features.json 的 trusted_players /
-                            // AppSettings 的 browserPlatformPairs)。只动前者会漂出一个**看着在工作、
-                            // 其实全程被丢弃**的状态:浏览器还挂在「网页播放器」卡里、探针照常跑,
-                            // 但它的播放因为不在信任列表里被整条丢掉,"发现未知播放器"那张卡还会
-                            // 重新冒出来。
-                            //
-                            // 方向是**单向**的:取消信任 → 一并解除配对(不信任它,配对就没有
-                            // 任何意义);而「移除配对」**不**取消信任 —— 信任的语义比配对宽
-                            // (它还管"这个 App 的播放算不算数"),而且一个浏览器可能配了多个
-                            // 平台,退出其中一个不代表不要它了。
-                            unpairBrowserEverywhere(bundleID)
-                        }
+            SettingsRawRow {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    // 按 bundle id 排序,别让格子顺序随 Dictionary 遍历顺序每次启动乱跳。
+                    ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                        trustedPlayerTile(bundleID: bundleID)
                     }
+                    addTrustedPlayerTile
                 }
+                .frame(maxWidth: .infinity)
             }
-            if !stores.trustedPlayers.isEmpty { CardDivider() }
-            SettingsRow(
-                icon: "plus.circle",
-                title: L10n.t("添加播放器…"),
-                subtitle: L10n.t("从「应用程序」里挑一个——不用等它正在播放")
-            ) {
-                Button(L10n.t("选择…")) { chooseTrustedPlayerFromApplications() }
-            }
-            // 空列表时这张卡只剩标题和一个按钮,得有一句话交代"加进来会怎样",
-            // 否则它看起来像一个用途不明的入口。有信任项时那几行本身就说明了一切,不再重复。
+            // 空列表时这张卡只剩标题和一个格子,得有一句话交代"加进来会怎样",
+            // 否则它看起来像一个用途不明的入口。有信任项时那几格本身就说明了一切,不再重复。
             if stores.trustedPlayers.isEmpty {
                 SettingsNote {
                     Text(L10n.t("加进来的应用跟内置播放器同权：它在播什么就显示什么，也计入收听记录。加错了随时移除。"))
@@ -3326,6 +3371,121 @@ private struct PlayerSettingsTab: View {
             Button(L10n.t("知道了"), role: .cancel) { trustedPlayerPickerError = nil }
         } message: {
             Text(trustedPlayerPickerError ?? "")
+        }
+    }
+
+    /// 哪一格正展开详情气泡。⚠️ 跟 `expandedBrowserBundleID` 不同,这里**不需要**再搭一个
+    /// platformID 去消歧:一个 bundle id 在这张网格里只出现一次,不存在同一个按钮被渲染两遍。
+    @State private var expandedTrustedBundleID: String?
+
+    /// 一格已信任的 App。图标用它自己的真图标(跟上面两张卡同一份 `AppIconResolver`),
+    /// 查不到才退回印章图标 —— 一页里六个内置播放器都亮着真图标,这张卡清一色通用图标会显得不搭。
+    private func trustedPlayerTile(bundleID: String) -> some View {
+        Button { expandedTrustedBundleID = bundleID } label: {
+            VStack(spacing: 6) {
+                Self.appIconView(bundleID: bundleID, size: 26, fallbackSymbol: "checkmark.seal")
+                Text(displayNameForTrusted(bundleID))
+                    .font(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .foregroundStyle(.primary)
+            }
+            // 已信任 = 这个来源确实在生效,按跟上面两张卡同一套"选中"样式高亮(亮底+强调色
+            // 描边+角标)。这张卡里没有"没选中"的格子 —— 不信任的 App 压根不在这里。
+            .choiceCardChrome(isSelected: true)
+        }
+        .buttonStyle(.plain)
+        // bundle id 直接当 tooltip:排查时最常要看的就是它,指一下就有,不必先点开气泡。
+        .help(bundleID)
+        .popover(isPresented: Binding(
+            get: { expandedTrustedBundleID == bundleID },
+            set: { if !$0 { expandedTrustedBundleID = nil } }
+        )) {
+            trustedPlayerPopover(bundleID: bundleID)
+        }
+    }
+
+    /// 「添加播放器…」那一格。⚠️ 它是主动添加**唯一**的入口,不能跟着"有没有信任项"隐藏
+    /// (见 `trustedPlayersCard` 头注那条鸡生蛋)。
+    ///
+    /// 走未选中态的 `choiceCardChrome`(暗底+极淡描边),跟旁边亮着的已信任格子一眼分得开;
+    /// 「从「应用程序」里挑一个」那句副标题塞不进一格卡片,改挂 tooltip。
+    private var addTrustedPlayerTile: some View {
+        Button { chooseTrustedPlayerFromApplications() } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                Text(L10n.t("添加播放器…"))
+                    .font(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .foregroundStyle(.secondary)
+            }
+            .choiceCardChrome(isSelected: false)
+        }
+        .buttonStyle(.plain)
+        .help(L10n.t("从「应用程序」里挑一个——不用等它正在播放"))
+        // ⚠️ 手挂高亮:这一条在设置搜索目录里有登记(`SettingsSearchCatalog` 的
+        // 「添加播放器…」),而自动挂高亮+滚进视野的是 `SettingsRow`/`SettingsCardHeader`
+        // 那几个组件 —— 这里是一格自绘的卡片,不挂的话搜到它只会跳到这一页、既不高亮也不滚动。
+        .settingsSearchHighlight(title: L10n.t("添加播放器…"))
+    }
+
+    /// 点一格弹出的详情气泡:图标+名称+bundle id,底下是「移除」。
+    ///
+    /// 排版和"移除放在最底下"这个位置都跟浏览器头像那个气泡(`browserPermissionPopover`)
+    /// 一致 —— 两张卡并排在同一页里,点开长得不一样会被当成两种不同的东西。
+    private func trustedPlayerPopover(bundleID: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Self.appIconView(bundleID: bundleID, size: 24, fallbackSymbol: "checkmark.seal")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayNameForTrusted(bundleID)).font(.system(size: 13))
+                    // bundle id 可选中:它的用处就是被复制出去(贴进 issue、跟 features.json
+                    // 里那份对一对)。⚠️ `.fixedSize(vertical:)` 别删,理由同
+                    // `browserPermissionPopover` 里那条:NSPopover 的尺寸协商会把多行压成一行加省略号。
+                    Text(bundleID)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Divider()
+            HStack {
+                Button(L10n.t("移除")) {
+                    expandedTrustedBundleID = nil
+                    untrustPlayer(bundleID)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .padding(14)
+        .frame(width: 260)
+    }
+
+    /// 取消信任一个 App。
+    ///
+    /// ⚠️ **取消信任必须连带解除它的所有平台配对**。
+    ///
+    /// 「信任」和「配对」是两个存储(features.json 的 trusted_players /
+    /// AppSettings 的 browserPlatformPairs)。只动前者会漂出一个**看着在工作、
+    /// 其实全程被丢弃**的状态:浏览器还挂在「网页播放器」卡里、探针照常跑,
+    /// 但它的播放因为不在信任列表里被整条丢掉,"发现未知播放器"那张卡还会
+    /// 重新冒出来。
+    ///
+    /// 方向是**单向**的:取消信任 → 一并解除配对(不信任它,配对就没有
+    /// 任何意义);而「移除配对」**不**取消信任 —— 信任的语义比配对宽
+    /// (它还管"这个 App 的播放算不算数"),而且一个浏览器可能配了多个
+    /// 平台,退出其中一个不代表不要它了。
+    private func untrustPlayer(_ bundleID: String) {
+        Task {
+            await FeatureSettingsStore.shared.untrust(bundleID: bundleID)
+            unpairBrowserEverywhere(bundleID)
         }
     }
 
@@ -3697,7 +3857,7 @@ private struct PlayerSettingsTab: View {
     private func browserPlatformCard(platform: BrowserPositionProbe.BrowserMusicPlatform) -> some View {
         // ⚠️ 已配对的头像也要过 `isInstalled` 这道门。只在「+」菜单侧过滤装没装的话,
         // "配对过、后来把那个浏览器卸载了"会一直留一个取不到图标的虚线方框
-        // (`browserIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态 —— 那是
+        // (`appIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态 —— 那是
         // "设置里显示的东西跟实际能用的东西对不上"。
         //
         // ⚠️ **只是不显示,配对记录原样留在 `browserPlatformPairs` 里** —— 装回来自动恢复,
@@ -3757,7 +3917,7 @@ private struct PlayerSettingsTab: View {
             expandedBrowserBundleID = bundleID
             expandedBrowserPlatformID = platformID
         } label: {
-            Self.browserIconView(bundleID: bundleID, size: 22)
+            Self.appIconView(bundleID: bundleID, size: 22, fallbackSymbol: "app.dashed")
                 // ⚠️ 角标是自动展开那条的**兜底**:气泡一关就再没有任何提示了,而"还差两步"
                 // 这件事必须在卡片上长期看得见,否则用户关掉气泡就回到了原来那个"图标默默
                 // 待在那儿、没人告诉我还要干嘛"的状态。
@@ -3816,7 +3976,7 @@ private struct PlayerSettingsTab: View {
             liveAutomation ?? (verifiedBefore ? .authorized : nil)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Self.browserIconView(bundleID: bundleID, size: 24)
+                Self.appIconView(bundleID: bundleID, size: 24, fallbackSymbol: "app.dashed")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayNameForTrusted(bundleID)).font(.system(size: 13))
                     // ⚠️ 每条状态说明都必须 `.fixedSize(horizontal: false, vertical: true)`,否则会被
@@ -4130,12 +4290,16 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    private static func browserIconView(bundleID: String, size: CGFloat) -> some View {
+    /// 按 bundle id 取这个 App 的真图标,取不到才退回一个 SF Symbol。
+    /// - fallbackSymbol: 取不到时画什么。浏览器那几处用 `app.dashed`(读作"这个 App 是谁
+    ///   我们还不确定"),已信任那张卡用 `checkmark.seal`(那一格的语义是"信任过",不是"不确定")。
+    private static func appIconView(bundleID: String, size: CGFloat,
+                                    fallbackSymbol: String) -> some View {
         Group {
             if let icon = AppIconResolver.icon(forBundleID: bundleID) {
                 Image(nsImage: icon).resizable()
             } else {
-                Image(systemName: "app.dashed")
+                Image(systemName: fallbackSymbol)
             }
         }
         .frame(width: size, height: size)
@@ -4158,7 +4322,7 @@ private struct PlayerSettingsTab: View {
         // OnboardingView.needsAppleMusicAutomation)。
         //
         // ⚠️ 不能收窄成"只选了 Apple Music":① 同时选了别的播放器时,Apple Music 那条
-        // AppleScript 路径照样会被走到(见 MediaControlClient.refinedAppleMusicSnapshotIfNeeded);
+        // AppleScript 路径照样会被走到(见 MediaControlClient.adaptedSnapshot);
         // ② `players` 的默认值就是 `[.auto]`,而引导页含 auto 也会问这份权限 —— 收窄的话
         // **默认配置的人在引导里被问过,回头却在设置里找不到入口**;一旦当时点了拒绝、或者更新 /
         // 重签名之后 TCC 授权失效,就再没有任何地方能重新授权,而读取路径那边只往 OSLog 写一行
@@ -4234,13 +4398,19 @@ private struct PlayerSettingsTab: View {
                     Button(L10n.t("导出诊断…")) { exportDiagnostics() }
                 }
             }
-            // 私有通道自检失败时明说 —— 这条只影响 QQ 音乐/网易云(它们的播放信息全经
-            // media-control 读),Apple Music/Spotify 走 AppleScript 不受影响。不显示成
-            // 报错红字:用户无法修复它(只能等上游适配),说清受影响范围比制造焦虑有用。
+            // 私有通道自检失败时明说。不显示成报错红字:用户无法修复它(只能等上游适配),
+            // 说清受影响范围比制造焦虑有用。
+            //
+            // ⚠️ 受影响范围**不是**"只有 QQ 音乐/网易云"。判据在 `MediaControlClient.fetchSnapshot`
+            // 那三条路径上:勾了「自动识别」→ 整条路的基座就是 media-control(Apple Music 也在内,
+            // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 → 纯 AppleScript,
+            // 这是**唯一**绕开它的配置;其余组合(QQ 音乐/网易云/Spotify/酷狗/汽水…)一律经它读。
+            // 所以文案按"哪一种配置绕开了它"说,不按"哪几个播放器不受影响"说 —— 后者既不准
+            // (Spotify 其实也经这条通道),又会随着新增播放器过期。
             if case .unavailable(let message) = stores.mediaControlState {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）"))
+                    Text(L10n.t("系统的媒体信息通道在这台机器上用不了，播放状态会读不到。绕开它的只有一种配置：只勾 Apple Music、不勾「自动识别」；其余配置都要经这条通道读。"))
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.tertiary)

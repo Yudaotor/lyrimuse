@@ -15,7 +15,19 @@ public enum CollectorRestartPolicy {
     ///
     /// - `lastfm_excluded_bundles`:「Scrobble 的播放器」(lyrimuse-collector/lastfmexclude.go
     ///   `currentLastfmExcludedBundles`,照 lyricspins.go 的 `lyricsPinned` 写法 Stat + 重读)。
-    public static let hotReloadedKeys: Set<String> = ["lastfm_excluded_bundles"]
+    /// - `lyrics_sources` 与它那六个迁移标记(`amll_lyrics` / `lyricfind_lyrics` / `kuwo_lyrics` /
+    ///   `migu_lyrics` / `deezer_lyrics` / `applemusic_lyrics`):「歌词来源」的勾选
+    ///   (lyrimuse-collector/lyricsourcesreload.go `currentLyricSources`,同一套 Stat + 重读)。
+    ///   ⚠️ 六个标记必须跟 `lyrics_sources` 一起在名单里:取消勾选 amll / lyricfind / kuwo / migu /
+    ///   deezer / Apple Music 中任何一个,写盘时对应那个标记也跟着变(见 FeatureSettingsStore 的
+    ///   currentSnapshot),漏一个就等于"取消这几个源仍然要重启、取消别的源不用",行为随源而异。
+    ///   ⚠️ 同一张卡片上的 `lyrics_source_mode`(匹配算法)和 `lyrics_source_order`(拖拽顺序)**不在**
+    ///   名单里:collector 在启动时就把它们展开进包级变量、决定了走哪条取词路径。
+    public static let hotReloadedKeys: Set<String> = [
+        "lastfm_excluded_bundles",
+        "lyrics_sources",
+        "amll_lyrics", "lyricfind_lyrics", "kuwo_lyrics", "migu_lyrics", "deezer_lyrics", "applemusic_lyrics",
+    ]
 
     /// 这批改动要不要重启。**改动集合为空时照旧重启**:那不是"没必要重启",而是调用方没告诉我们改了什么
     /// (比如从损坏文件重建、或者外部原因触发的保存),保守起见维持既有行为。

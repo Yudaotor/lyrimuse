@@ -115,6 +115,18 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	// 装完内存就把路径清掉,新查到的别名只活在这个进程里。
 	artistAliasPath, mbPrimaryNamePath, qqArtistNamePath, appleStorefrontArtistPath, appleCatalogPath = "", "", "", "", ""
 	setNativeLyricSourcesForPlayer(player)
+	// ⚠️ 采集器要的是**真实环境**,所以把 externaldata_test.go 那层隔离解开。
+	// 那层隔离(TestMain 把"读其它 App 本地数据"的路径统一指到一个不存在的位置)守的是
+	// **回放类**测试:它们的结论不该取决于跑测试的人在酷狗 / QQ 里听过什么歌。这条理由对
+	// 采集器不成立 —— 它本来就在联网采这一刻的真实应答,而 identity_from_local_client
+	// (v21 同源加权的准入条件)恰恰就是"这台机器的客户端缓存/曲库里有没有这首歌"这个真实
+	// 事实;隔离着采,带本地身份的同源候选**永远采不到**,nativeSource 这一项就没有金标。
+	// 样本落盘之后回放侧照旧完全隔离:TestLyricsGolden 读的是 JSON 里那个布尔,不碰路径。
+	resetKugouLocalIndex(t, "")
+	resetQQLocalIndex(t, "")
+	resetNeteaseLocalIndex(t, "")
+	resetAppleLocalIndex(t, "")
+	resetSodaLocalIndex(t, "")
 
 	// ---- 查询词与时长:优先用决策存档里"当时实际用的",没有就按生产同一规则算 ----
 	qArtist, qTitle, qAlbum := toSimplified(parts[0]), toSimplified(parts[1]), toSimplified(parts[2])

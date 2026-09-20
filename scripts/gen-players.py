@@ -33,6 +33,8 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
                 apple_music 那条同时是「认不出来源」时的兜底值
 - nativeLyricSource  它自家的歌词源(同源加权 +250);没有就 null
 - positionTier  precise / cleanExtrapolated / noisyFloored;auto 为 null
+- republishesZeroAnchor  开播那个 elapsed=0 锚点会不会被这个播放器原样重发一次;auto 为 null
+                ⚠️ 只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移
 - tint          {"rgb": [r,g,b]} / {"source": "…"}(复用歌词来源配色) / {"secondary": true}
 - fallbackSymbol      没装这个 App、也没有随包图标时的 SF Symbol
 - bundledIcon   随包打包的品牌图资源名;没有就 null
@@ -167,6 +169,16 @@ def render_go(spec, players):
         if p.get("nativeLyricSource"):
             out.append("\t%s: %s,\n" % (p["goConst"], go_quote(p["nativeLyricSource"])))
     out.append("}\n")
+
+    out.append("\n// playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样\n"
+               "// 重发一次」。⚠️ 只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反\n"
+               "// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
+               "// 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。\n"
+               "var playerRepublishesZeroAnchor = map[string]bool{\n")
+    for p in concrete:
+        if p.get("republishesZeroAnchor") and p.get("goBundleConst"):
+            out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
     return "".join(out)
 
 
@@ -208,6 +220,16 @@ def render_core_swift(spec, players):
         if p.get("positionTier"):
             out.append('        case .%s: return "%s"\n' % (p["swiftCase"], p["positionTier"]))
     out.append("        default: return nil\n        }\n    }\n")
+
+    out.append("\n    /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。\n"
+               "    /// ⚠️ 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反\n"
+               "    /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
+               "    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。\n"
+               "    public var republishesZeroAnchor: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("republishesZeroAnchor"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
 
     out.append("\n    /// 这个 bundle id 属于哪个内置播放器 —— 认不出来(第三方 / 信任列表里的 App /\n"
                "    /// 空值)返回 nil。`.auto` 永远不会被返回:它不对应任何 App。\n"

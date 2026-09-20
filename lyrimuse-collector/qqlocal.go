@@ -157,10 +157,14 @@ func refreshQQLocalIndexLocked(ctx context.Context) {
 	}
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
-		// 没装 QQ 音乐 / 没登录过 / 路径变了 —— 都是正常情况,不记日志,免得每首歌刷一行。
+		// 没装 QQ 音乐 / 没登录过 / 路径变了 —— 都是正常情况,静默退回网络解析。
+		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		noteLocalCacheDenied("qq", path, err)
 		qqLocalIndex, qqLocalReady = nil, true
 		return
 	}
+	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+	noteLocalCacheReadable("qq")
 	now := time.Now()
 	if qqLocalReady && st.ModTime().Equal(qqLocalDBMod) && st.Size() == qqLocalDBSize {
 		return
@@ -248,8 +252,11 @@ func qqLocalMatch(ctx context.Context, artist, title, album string, durationSecs
 	// 那行同一用途,决策面板只记得到源名、记不到 mid 是怎么来的。
 	log.Printf("qq local: hit %q - %q (album %q) → %s", artist, title, e.album, e.mid)
 	// 复用 qqMatchFromCand:url 得是 qqSongURL 那个形状,下游 qqMidFromURL 才解得回 mid。
-	return qqMatchFromCand(qqCand{
+	m := qqMatchFromCand(qqCand{
 		mid: e.mid, title: e.title, artist: e.artist,
 		album: e.album, interval: e.duration,
-	}, false), true
+	}, false)
+	// 身份来自客户端曲库记下的那个 mid,不经搜索 —— 同源加权的准入条件。
+	m.fromLocalLibrary = true
+	return m, true
 }

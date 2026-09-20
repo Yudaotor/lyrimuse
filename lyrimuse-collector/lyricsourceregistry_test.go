@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -19,6 +20,7 @@ func allLyricSourceConstants() []string {
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
 		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
 		lyricSourceKuwo, lyricSourceMigu, lyricSourceDeezer, lyricSourceAppleMusic,
+		lyricSourceSoda,
 	}
 }
 
@@ -51,7 +53,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ③ 全集兜底(lyrics_sources 缺失/为空 = 全开)。漏一个 = 那个源在全新安装上被禁用。
-	full := resolveLyricsSources(nil, nil, nil, nil, nil, nil, nil)
+	full := resolveLyricsSources(nil, nil, nil, nil, nil, nil, nil, nil)
 	for _, s := range all {
 		if !full[s] {
 			t.Errorf("源 %q 不在 resolveLyricsSources 的全集兜底里(全新安装会禁用它)", s)
@@ -63,7 +65,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
 	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
 	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
-	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil)
+	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
 		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
 	}
@@ -79,8 +81,11 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !old[lyricSourceDeezer] {
 		t.Error("老配置(deezer_lyrics 缺失)应当把 deezer 补进启用集合")
 	}
+	if !old[lyricSourceSoda] {
+		t.Error("老配置(soda_lyrics 缺失)应当把 soda 补进启用集合")
+	}
 	no := false
-	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil, nil, nil)
+	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil, nil, nil, nil)
 	if statedAMLL[lyricSourceAMLL] {
 		t.Error("用户已表态(amll_lyrics=false)时不该再把 amll 补回来")
 	}
@@ -90,7 +95,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedAMLL[lyricSourceKuwo] {
 		t.Error("amll 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil, nil, nil)
+	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil, nil, nil, nil)
 	if statedLF[lyricSourceLyricFind] {
 		t.Error("用户已表态(lyricfind_lyrics=false)时不该再把 lyricfind 补回来")
 	}
@@ -100,7 +105,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedLF[lyricSourceKuwo] {
 		t.Error("lyricfind 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil, nil, nil)
+	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil, nil, nil, nil)
 	if statedKuwo[lyricSourceKuwo] {
 		t.Error("用户已表态(kuwo_lyrics=false)时不该再把 kuwo 补回来")
 	}
@@ -113,7 +118,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedKuwo[lyricSourceMigu] {
 		t.Error("kuwo 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
 	}
-	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no, nil, nil)
+	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no, nil, nil, nil)
 	if statedMigu[lyricSourceMigu] {
 		t.Error("用户已表态(migu_lyrics=false)时不该再把 migu 补回来")
 	}
@@ -123,7 +128,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedMigu[lyricSourceDeezer] {
 		t.Error("migu 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
 	}
-	statedDeezer := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, &no, nil)
+	statedDeezer := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, &no, nil, nil)
 	if statedDeezer[lyricSourceDeezer] {
 		t.Error("用户已表态(deezer_lyrics=false)时不该再把 deezer 补回来")
 	}
@@ -131,12 +136,23 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 		t.Error("deezer 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
 	}
 
-	statedAM := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, &no)
+	statedAM := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, &no, nil)
 	if statedAM[lyricSourceAppleMusic] {
 		t.Error("用户已表态(applemusic_lyrics=false)时不该再把 applemusic 补回来")
 	}
 	if !statedAM[lyricSourceDeezer] {
 		t.Error("applemusic 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
+	}
+	if !statedAM[lyricSourceSoda] {
+		t.Error("applemusic 已表态不影响 soda 的迁移——soda_lyrics 仍缺失时应该照常补它")
+	}
+
+	statedSoda := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil, &no)
+	if statedSoda[lyricSourceSoda] {
+		t.Error("用户已表态(soda_lyrics=false)时不该再把 soda 补回来")
+	}
+	if !statedSoda[lyricSourceAppleMusic] {
+		t.Error("soda 已表态不影响 applemusic 的迁移——applemusic_lyrics 仍缺失时应该照常补它")
 	}
 }
 
@@ -203,6 +219,83 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	}
 }
 
+// 每个「迁移标记」(`xxx_lyrics`)在 Go 与 Swift 两侧必须**一一对应**,而且 Swift 侧的三处
+// (CodingKeys / 保存时写回 / 读取时补默认)一处都不能少。
+//
+// 这条关系是硬性的,少了任何一处的后果都是**静默的**:collector 那边 xxxSeen 恒为 nil、
+// 每次加载都把这个源补回启用集合,于是**用户在设置里取消勾选这个源对后台完全无效**——
+// 而界面自己按 lyrics_sources 显示成已取消,两边说法不一致,从界面上根本看不出来。
+// (接 soda 时就漏了 Swift 那三处,靠人问"新源默认是启用还是停用"才翻出来。)
+//
+// 判据从 Go 侧的 json tag 出发,不靠命名规则推 Swift 的驼峰名(AMLLLyrics / LyricFindLyrics
+// 这些反推不出来),而是先从 Swift 的 CodingKeys 行里把该源的 case 名读出来,再拿它去核
+// 另外两处。
+func TestLyricsMigrationFlagsMatchOnBothSides(t *testing.T) {
+	goSrc, err := os.ReadFile("features.go")
+	if err != nil {
+		t.Fatalf("读不到 features.go: %v", err)
+	}
+	const swiftPath = "../lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift"
+	swiftRaw, err := os.ReadFile(swiftPath)
+	if err != nil {
+		t.Skipf("读不到 %s: %v", swiftPath, err)
+	}
+	swift := string(swiftRaw)
+
+	tags := regexp.MustCompile(`json:"([a-z_]+_lyrics),omitempty"`).FindAllStringSubmatch(string(goSrc), -1)
+	if len(tags) == 0 {
+		t.Fatal("features.go 里一个 xxx_lyrics 迁移标记都没找到(字段被改写了?同步更新这个测试)")
+	}
+	for _, m := range tags {
+		tag := m[1]
+		caseRe := regexp.MustCompile(`case (\w+) = "` + regexp.QuoteMeta(tag) + `"`)
+		cm := caseRe.FindStringSubmatch(swift)
+		if cm == nil {
+			t.Errorf("Swift 侧 CodingKeys 缺 %q —— collector 会一直把这个源补回来,用户取消勾选无效", tag)
+			continue
+		}
+		name := cm[1]
+		if !strings.Contains(swift, name+": lyricsSources.contains(.") {
+			t.Errorf("Swift 侧保存时没写回 %s(%s)—— 标记永远为 nil,迁移会每次都跑", name, tag)
+		}
+		if !strings.Contains(swift, "f."+name+" == nil") {
+			t.Errorf("Swift 侧读取时没有 f.%s == nil 那一支(%s)—— 界面与后台会得到两种启用集合", name, tag)
+		}
+	}
+}
+
+// 源特有的失败原因代码必须在**两处**消费面都接上:搜索弹窗的
+// `lyricSourceFailureReasons`(searchcli.go)和设置页测试按钮的那个 switch
+// (testlyricsourcescli.go)。
+//
+// 接 deezer 那次只补了前者,后者照样退回通用的 no_response —— 设置页那颗「测试」按钮
+// 于是把"换票这一步失败"说成了"这个源没反应"。当时的注释里写着"守卫没钉住它",这条就是
+// 补上的那道守卫:按源名扫两个文件的源码,少哪一处就报哪一处。
+//
+// 用源码扫描而不是跑一遍诊断:后者要造出每一种失败态(限流/地区限制/换票失败/端点变形),
+// 而这里要守的只是「这个源名在这两处都出现过」,读源码就能答。
+func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
+	// 有专属失败原因的源 → 它在两处 switch/check 里的源名。没有专属原因的源不在此列
+	// (它们只走传输层通用代码),新接的源如果加了 xxxLastFailureReasonNow,这里也要补一行。
+	sources := []string{"netease", "musixmatch", "lyricfind", "deezer", "soda"}
+	files := map[string]string{
+		"searchcli.go":           `check("%s"`,
+		"testlyricsourcescli.go": `case "%s":`,
+	}
+	for name, pattern := range files {
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("读不到 %s: %v", name, err)
+		}
+		body := string(raw)
+		for _, s := range sources {
+			if !strings.Contains(body, fmt.Sprintf(pattern, s)) {
+				t.Errorf("%s 里没接 %q 的失败原因 —— 两处消费面必须同时接,漏一处的表现见本测试头注", name, s)
+			}
+		}
+	}
+}
+
 // 「歌词管理」窗口的**来源筛选下拉**必须从 LyricsSource.allCases 派生,不许手写字面量清单。
 //
 // 用户实机发现的漏网之鱼:那份清单原来是手写的
@@ -253,7 +346,7 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 // 数字不用写死中文数字表——已知会用到的范围窄,给 5~9 手写映射即可,超出直接报错提醒
 // 去扩表,而不是默默算错。
 func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二"}
 	n := len(allLyricSourceConstants())
 	digit, ok := chineseDigits[n]
 	if !ok {
@@ -283,8 +376,8 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 // 「%d/8」(表现是界面上「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
 // 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
 func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
-	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一"}
-	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven"}
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十", 11: "十一", 12: "十二"}
+	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten", 11: "Eleven", 12: "Twelve"}
 	n := len(allLyricSourceConstants())
 	zh, okZh := chineseDigits[n]
 	en, okEn := englishWords[n]

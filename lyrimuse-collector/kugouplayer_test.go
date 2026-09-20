@@ -20,7 +20,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 	if got := playerBundleID(playerKugou); got != kugouMusicBundleID {
 		t.Errorf("playerBundleID(kugou) = %q，期望 %q", got, kugouMusicBundleID)
 	}
-	if got := mediaPlayerLabel(kugouMusicBundleID); got != "KuGou Music (macOS)" {
+	if got := mediaPlayerLabel(kugouMusicBundleID); got != "Kugou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(固定播放器分支) = %q", got)
 	}
 
@@ -30,7 +30,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 		t.Error("自动识别模式认不出酷狗的 bundle id")
 	}
 	features.Players = map[string]bool{playerAuto: true}
-	if got := mediaPlayerLabel(kugouMusicBundleID); got != "KuGou Music (macOS)" {
+	if got := mediaPlayerLabel(kugouMusicBundleID); got != "Kugou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(自动识别分支) = %q", got)
 	}
 

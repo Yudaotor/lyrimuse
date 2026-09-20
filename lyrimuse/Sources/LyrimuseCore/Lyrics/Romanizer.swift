@@ -228,12 +228,50 @@ public enum Romanizer {
         _ segs: [JapaneseSegment], original text: String
     ) -> String? {
         guard !segs.isEmpty else { return nil }
-        let joined = joinLatin(segs.map(\.latin))
+        let joined = joinLatin(mergingVerbatimRuns(segs, in: text).map(\.latin))
         // 刻意允许返回空串(整行只有促音「っ」这类病态行,归并后读音为空):旧路径
         // romanize(japanese:true) 对它返回 "" 而不落 ICU —— 落 ICU 会产出字面垃圾
         // "~tsu" 被展示出来。只有"读音跟原文一模一样"才算没有信息增量、交还 ICU 路径。
         guard joined != text else { return nil }
         return joined
+    }
+
+    /// 原文里本来连写、读音又是原样穿透的相邻片段,拼接成整行时不该被拆出空格。
+    ///
+    /// 分词器把"苦等着"切成三个片段,读音换回原文(`HanRunReading.original`)之后
+    /// `joinLatin` 会写成"苦 等 着"——那几个空格是**分词的痕迹**,不是原文的排版。
+    /// 判据:两个片段在原文里紧邻(前一个的 `utf16End` 就是后一个的 `utf16Start`),
+    /// 且各自的读音都跟自己那段原文一模一样。
+    ///
+    /// ⚠️ 只作用在**整行拼接**这一步,不动 `segments` 本身 —— 逐词分组(`buildWordGroups`)
+    /// 按片段边界跟逐字词对齐,把片段并粗了会连带改变分组粒度和换行。
+    /// 对读音不是原样穿透的片段(拼音、日语读音)判据天然不成立,所以 `.latin` 那条路
+    /// 只有连续标点这类本来就该连写的片段会被合并。
+    private static func mergingVerbatimRuns(
+        _ segs: [JapaneseSegment], in text: String
+    ) -> [JapaneseSegment] {
+        guard segs.count > 1 else { return segs }
+        let units = Array(text.utf16)
+        func isVerbatim(_ seg: JapaneseSegment) -> Bool {
+            guard seg.utf16Start >= 0, seg.utf16End <= units.count else { return false }
+            let piece = String(
+                utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
+            return seg.latin == piece
+        }
+        var out: [JapaneseSegment] = []
+        for seg in segs {
+            if let last = out.last, last.utf16End == seg.utf16Start,
+                isVerbatim(last), isVerbatim(seg)
+            {
+                out[out.count - 1] = JapaneseSegment(
+                    utf16Start: last.utf16Start,
+                    utf16Length: last.utf16Length + seg.utf16Length,
+                    latin: last.latin + seg.latin)
+                continue
+            }
+            out.append(seg)
+        }
+        return out
     }
 
     /// 韩语按空格切词的"片段"——跟 japaneseSegments 形状一致(UTF16 范围 + 读音),但来源
@@ -285,7 +323,8 @@ public enum Romanizer {
     ///   靠这个默认值保持不变。只有真正按"整首歌 vs 一行"两级判定的调用方
     ///   (`LyricsSyncEngine`/`LyricsRomanization`)会传入真实算出来的值。
     public static func japaneseSegments(
-        _ text: String, marks: [KanaAnnotation.Mark] = [], songLooksJapanese: Bool = true
+        _ text: String, marks: [KanaAnnotation.Mark] = [], songLooksJapanese: Bool = true,
+        hanRuns: HanRunReading = .latin
     ) -> [JapaneseSegment] {
         let cf = text as CFString
         let range = CFRangeMake(0, CFStringGetLength(cf))
@@ -319,7 +358,7 @@ public enum Romanizer {
                 utf16Start: r.location, utf16Length: r.length, latin: latin))
         }
         guard !songLooksJapanese else { return out }
-        return applyCodeSwitchFallback(to: out, in: text)
+        return applyCodeSwitchFallback(to: out, in: text, reading: hanRuns)
     }
 
     // MARK: - 行内中日无缝拼接(陶喆《My Anata》实测坐实)
@@ -344,6 +383,25 @@ public enum Romanizer {
     // 局限:真正紧贴无硬边界的日语词根+假名(比如"愛してる"里孤零零的"愛")仍然分不出来、
     // 继续当日语处理——这类词根跟假名之间从定义上就没有空白可用,是这个修法承认漏不掉的
     // 残余风险,接受"宁可漏改,不错改"。
+    //
+    // 这些片段的读音给什么,由 `hanRuns` 决定 —— 见 `HanRunReading`。两种模式共用同一份
+    // 区间判据(`independentHanUTF16Ranges`),差别只在命中之后写什么进 `latin`。
+
+    /// 混排行里那些**独立纯汉字片段**的读音怎么给。两种模式落在同一批片段上。
+    ///
+    /// ⚠️ 这是"这一行里的中文部分该不该出读音"的唯一表达方式。行的语言标签由
+    /// `script(ofLine:song:)` 判,见到假名就确证整行是日文、整行归**日文**开关管辖;
+    /// 混排行里的中文片段却不属于日文,它该归拼音/粤拼开关管 —— 那个开关关着时,
+    /// 展示层用 `.original` 把这些片段换回原文,只留日文片段的罗马字。
+    public enum HanRunReading: Sendable {
+        /// ICU 音译(拼音)。片段是中文,读音就该是拼音而不是日语音读。
+        case latin
+        /// 原文汉字。片段原样穿透,`readingFromSegments` 拼出来的整行里它就是原文;
+        /// 逐词那条路上 `buildWordGroups` 的 `joined == groupText` 判据会把这一组的
+        /// 读音判成"没有信息增量"、自动标成 nil,不必另写一条分支。
+        case original
+    }
+
     private enum ScriptRunKind { case kana, han, hardBoundary, other }
 
     private static let kanaScalarSet: CharacterSet = {
@@ -400,12 +458,13 @@ public enum Romanizer {
         return result
     }
 
-    /// 把完整落在"独立纯汉字区间"里的片段,读音从分词器给的日语读音改成 ICU 音译(拼音)。
+    /// 把完整落在"独立纯汉字区间"里的片段,读音从分词器给的日语读音换掉:`reading`
+    /// 是 `.latin` 就换成 ICU 音译(拼音),`.original` 就换回原文。
     /// 横跨区间边界、或只有部分落在区间里的片段(说明分词器认为它跟旁边的假名是同一个
     /// 日语词,比如"取った"的"取っ")一律不动——那正是"两侧都紧贴别的文字"的日语词根,
     /// 不该被拆开。
     private static func applyCodeSwitchFallback(
-        to segments: [JapaneseSegment], in text: String
+        to segments: [JapaneseSegment], in text: String, reading: HanRunReading
     ) -> [JapaneseSegment] {
         let ranges = independentHanUTF16Ranges(in: text)
         guard !ranges.isEmpty else { return segments }
@@ -415,11 +474,17 @@ public enum Romanizer {
             else { return seg }
             guard seg.utf16End <= units.count else { return seg }
             let piece = String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
-            guard let pinyin = piece.applyingTransform(.toLatin, reverse: false), pinyin != piece
-            else { return seg }
-            return JapaneseSegment(
-                utf16Start: seg.utf16Start, utf16Length: seg.utf16Length,
-                latin: pinyin.trimmingCharacters(in: .whitespaces))
+            switch reading {
+            case .original:
+                return JapaneseSegment(
+                    utf16Start: seg.utf16Start, utf16Length: seg.utf16Length, latin: piece)
+            case .latin:
+                guard let pinyin = piece.applyingTransform(.toLatin, reverse: false), pinyin != piece
+                else { return seg }
+                return JapaneseSegment(
+                    utf16Start: seg.utf16Start, utf16Length: seg.utf16Length,
+                    latin: pinyin.trimmingCharacters(in: .whitespaces))
+            }
         }
     }
 

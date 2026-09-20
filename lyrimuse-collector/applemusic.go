@@ -78,6 +78,10 @@ type applemusicResult struct {
 	// plainOnly:只拿到没有时间戳的正文 —— 语义同 deezer/lrclib 的同名字段(分数钉死 -1,
 	// 只有用户在弹窗里手点才会采用)。
 	plainOnly bool
+	// fromLocalClient:这份 TTML 读自 Music.app 自己的 fsCachedData(applemusicLocalLyric),
+	// 不是拿歌名去 amp-api 搜出来的。透传给 lyricCandidate.identityFromLocalClient,
+	// 是同源加权的准入条件之一。
+	fromLocalClient bool
 }
 
 func (r applemusicResult) empty() bool { return r.lyrics == "" && r.yrc == "" }

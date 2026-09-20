@@ -25,6 +25,10 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var nextLineText: String?
     // 下一句摆哪一边,见 PlaybackCoordinator 同名属性的注释——独立于 currentLine.side。
     @Published private(set) var nextLineSide: LyricDuet.Side?
+    // 下一行的罗马音/译文,见 PlaybackCoordinator 同名属性的注释——currentLine 为 nil 时
+    // (前奏/间奏「•••」下方)那句其实是接下来的第一句本身,靠它们按正常行的规格展示。
+    @Published private(set) var nextLineRomanization: String?
+    @Published private(set) var nextLineTranslation: String?
     @Published private(set) var isPlayingNow = false
     /// 此刻有没有曲目。false = 停播/播放器没开/刚装好还没放过歌 —— 停播时
     /// `LocalPlaybackSource.clearIfWasPlaying` 会把 title/artist 连同几个"这首歌"的判定一起清空。
@@ -41,6 +45,12 @@ private final class OverlayPlayback: ObservableObject {
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
     @Published private(set) var isRadioTalkBreak = false
     @Published private(set) var currentLineFillSettled = true
+    /// 间奏「•••」呼吸圆点(见 LyricsGapDotsView)的窗口边界——**不设门槛**的版本
+    /// (`PlaybackCoordinator.rawGapWindow`),不是歌词窗口那份 `lyricsGapMarkers`。悬浮窗
+    /// 没有"沿用上一行继续显示"这条退路,`currentLine` 一旦为 nil 就必须画点什么,门槛版
+    /// (5s 前奏 / 6s 间奏起标)会把没达标的那几秒晾成静态「♪」,而没达标的短前奏/短间奏
+    /// 比达标的场景常见得多。
+    @Published private(set) var rawGapWindow: LyricsGapWindow?
     /// 悬浮歌词实际显示用的前景色 —— 语义同 PlaybackCoordinator.displayForegroundColor
     /// (那份保留给设置页预览等别处),这里预组合成单个去重值:三个输入(动态高亮色/
     /// "跟随封面"开关/手选前景色)任何一个变了才发一次。
@@ -61,6 +71,9 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var showNextLinePreview = true
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
+    /// `mainFont` 背后那个原始磅值——`Font` 本身取不回数字,间奏点按字号比例算尺寸
+    /// (跟歌词窗口的 `lyricFontSize` 同一用途)得单独接一份。
+    @Published private(set) var mainFontSize: CGFloat = 20
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
@@ -98,6 +111,8 @@ private final class OverlayPlayback: ObservableObject {
                 .sink { [weak self] in self?.currentLine = $0 },
             p.$nextLineText.removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$nextLineSide.removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
+            p.$nextLineRomanization.removeDuplicates().sink { [weak self] in self?.nextLineRomanization = $0 },
+            p.$nextLineTranslation.removeDuplicates().sink { [weak self] in self?.nextLineTranslation = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             // CombineLatest3 而不是三个独立 sink:三个输入要**同时**拿到才能算,独立 sink 里另两个
             // 只能回头读存储属性 —— 正是本文件头注说的 willSet 旧值坑(灵动岛那份同款写法)。
@@ -113,6 +128,7 @@ private final class OverlayPlayback: ObservableObject {
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
+            p.$rawGapWindow.removeDuplicates().sink { [weak self] in self?.rawGapWindow = $0 },
             Publishers.CombineLatest3(p.$artworkAccentColor, s.$followsCoverArt, s.$foregroundColor)
                 .map { accent, follows, fg in (follows ? accent : nil) ?? fg }
                 .removeDuplicates()
@@ -126,6 +142,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
             s.$mainFont.removeDuplicates().sink { [weak self] in self?.mainFont = $0 },
+            s.$fontSize.map { CGFloat($0) }.removeDuplicates().sink { [weak self] in self?.mainFontSize = $0 },
             s.$romanizationFont.removeDuplicates().sink { [weak self] in self?.romanizationFont = $0 },
             s.$translationFont.removeDuplicates().sink { [weak self] in self?.translationFont = $0 },
             s.$previewFont.removeDuplicates().sink { [weak self] in self?.previewFont = $0 },
@@ -646,6 +663,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// nextLineInsetsDelta 不需要跟着改——两句 side 相同时 duetInsets(next) 跟
     /// duetInsets(current) 天然算出同一份值,delta 本来就是 0,已经隐含了这条判据。
     private var nextLinePreviewFont: Font {
+        // 前奏/间奏「•••」下方没有当前行陪衬——这句其实是接下来的第一句本身,不是伴随
+        // 当前行的预告小字,跟下面对唱换人那条理由(提前预告位置跳变)不是一回事,不受
+        // duetAlignmentOverride 影响,始终用 mainFont。
+        guard line != nil else { return playback.mainFont }
         guard playback.duetAlignmentOverride == .automatic,
               let nextSide = playback.nextLineSide, nextSide != line?.side
         else {
@@ -861,8 +882,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //
             // 有逐词标注(perWordRomanization)时,读音已经标在每个词的正下方了,这一整行
             // 就不再重复一遍。
+            // line 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬)退到 nextLineRomanization——
+            // 那句其实是接下来的第一句本身,该按正常行的规格展示,不是"预览小字没有罗马音"
+            // 那条既有限制的例外,是同一份数据换了个取值来源。
             if playback.showRomanization, !usesPerWordRomanization,
-                let roma = line?.romanization
+                let roma = line?.romanization ?? (line == nil ? playback.nextLineRomanization : nil)
             {
                 reportingTextRect(
                     Text(roma)
@@ -874,7 +898,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
                     .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
             }
-            if playback.showTranslation, let tr = line?.translation {
+            if playback.showTranslation, let tr = line?.translation ?? (line == nil ? playback.nextLineTranslation : nil) {
                 reportingTextRect(
                     Text(tr)
                         .font(playback.translationFont)
@@ -1330,7 +1354,32 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else if let window = playback.rawGapWindow {
+            // 前奏/间奏,跟歌词窗口同一份「•••」呼吸圆点(LyricsGapDotsView)——**不设门槛**
+            // (rawGapWindow,见其头注):悬浮窗没有"沿用上一行"这条退路,哪怕这段静默不到
+            // 5s/6s、够不着歌词窗口 gapMarkers() 的标准,这里也要画,不然就是短前奏/短间奏
+            // (比长间奏常见得多)时兜底状态机漏判、退回旧的静态「♪」。
+            //
+            // 不套 lyricsTextStroke:那层描边是按 alpha 阈值抠静态剪影,三颗点本身就在逐帧
+            // 变透明度/缩放,阈值一卡会把暗的那颗也描成跟亮的一样重,反而破坏"点亮进度"
+            // 这个信号;Apple Music 的原版三点同样不描边。
+            LyricsGapDotsView(
+                startMs: window.startMs, endMs: window.endMs,
+                dotSize: playback.mainFontSize * 0.32, spacing: playback.mainFontSize * 0.3,
+                color: playback.displayForegroundColor,
+                isPlaying: playback.isPlayingNow, isVisible: true,
+                reduceMotion: reduceMotion
+            ) { date in
+                (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: date)
+                    ?? PlaybackCoordinator.shared.pausedPositionMs ?? window.startMs)
+                    + PlaybackCoordinator.shared.currentLyricsOffsetMs
+            }
+            .frame(height: playback.mainFontSize * 0.5)
         } else {
+            // 兜底:数据层理论上「currentLine==nil 且以上分支都不命中」必然落在
+            // rawGapWindow 的覆盖范围内(前奏 index==-1 到最后一句之前的整段时间轴,
+            // 不受 GapRule 门槛限制),这里留着只是防真出现口径不一致时不要开天窗
+            // ——例如换歌那一拍 rawGapWindow 还没跟上新曲目的极短窗口。
             Text("♪")
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.3))

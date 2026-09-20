@@ -36,6 +36,13 @@ enum LyricSourceFailureReason {
             return L10n.t("Apple Music 的登录已过期或被吊销（登录有效期 6 个月，Apple 不提供自动续期）——在「歌词来源」卡片底部重新连接一次")
         case "applemusic_no_developer_token":
             return L10n.t("取不到 Apple Music 接口的公共访问令牌（music.apple.com 拉不通）——多半是网络问题，稍后重试通常会恢复")
+        case "soda_endpoint_changed":
+            // ⚠️ 这一条报的是**接口本身变了**,不是"这首歌没词"。汽水的取词走的是给搜索
+            // 引擎爬的 SEO 端点、不是稳定契约(同一客户端的 PC 接口已经整个下线过一次),
+            // 所以它改了形状要能说出来,而不是退化成"汽水一直没有歌词"。
+            // 另外两种结局都不会走到这里:曲库里有这首歌但没给词(正常结果)、这首没用汽水
+            // 放过所以取不到曲目 id(这一路的常态)。
+            return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好")
         case "musixmatch_direct_blocked":
             // ⚠️ 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
             // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。实测

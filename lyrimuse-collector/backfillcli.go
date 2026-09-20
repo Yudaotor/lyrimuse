@@ -47,10 +47,10 @@ func runBackfillLastfmCLI(args []string) {
 		emitBackfillOutcome(backfillOutcome{AbortedReason: fmt.Sprintf("load config: %v", err)})
 		return
 	}
-	// 合唱串「智能」档判定缓存的路径是包级变量,平时由 main.go 跟其它落盘路径一起设 —— 这条
-	// 子命令绕过了那段,自己设一次,否则回填里每首合唱歌都要重新打 track.getInfo,而且
-	// 常驻 collector 已经判过的结论也拿不到(两条路径必须读同一份缓存才能发同一个名字)。
-	lastfmCollapsePath = filepath.Join(cfgDir, clientName+"-lastfm-collapse.json")
+	// 「智能」档编目判定缓存的路径是包级变量,平时由 main.go 跟其它落盘路径一起设 —— 这条
+	// 子命令绕过了那段,自己设一次,否则回填里每首歌都要重新打 track.getInfo,而且
+	// 常驻 collector 已经判过的结论也拿不到(两条路径必须读同一份缓存才能发同一个写法)。
+	lastfmCatalogPath = filepath.Join(cfgDir, clientName+"-lastfm-catalog.json")
 	// 跨进程的"feed 提前拉一次"信号文件,跟常驻进程 main.go 设的是同一个路径(见 lastfmfeed.go)。
 	lastfmFeedNudgePath = filepath.Join(cfgDir, clientName+"-lastfm-feed-nudge")
 
@@ -62,7 +62,7 @@ func runBackfillLastfmCLI(args []string) {
 	if scrobbler != nil {
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名,读写本来就是两个 key
 		// (理由见 lastfm.go 里同一处的注释)。
-		scrobbler.collapse = newLastfmArtistCollapser(cfg.lastfmBridgeAPIKey())
+		scrobbler.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())
 	}
 	// dry-run 允许在没连账号时也跑 —— 那正是"还没连,先看看攒了多少条"这个场景。
 	if scrobbler == nil && !*dryRun {

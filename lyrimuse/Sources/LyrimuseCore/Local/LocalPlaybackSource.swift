@@ -22,6 +22,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 下一行摆在哪一边(见 SyncedLyricLine.side)——**独立于 currentLine?.side**,不能假定
     /// 下一句跟当前句是同一位演唱者(悬浮窗"下一句预览"对唱分栏 bug)。
     @Published public private(set) var nextLineSide: LyricDuet.Side?
+    /// 下一行的罗马音/译文——跟 currentLine 上同名字段同一对查找函数算出来的,不是简化版。
+    /// `currentLine` 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬),那句其实是接下来的
+    /// 第一句本身,该按正常行的规格展示这两项,见 LyricsOverlayView.lyricsCard。
+    @Published public private(set) var nextLineRomanization: String?
+    @Published public private(set) var nextLineTranslation: String?
     // "歌词窗口"(完整可滚动歌词列表)用——跟 currentLine/nextLineText 同一套 20Hz tick
     // 算出来,只在真的换了行时才重新赋值(见 fastTick())。allLines 换歌时才重新构造一次
     // (reloadCurrentLyrics()),不需要每 tick 重算——歌词内容本身在同一首歌播放期间不变。
@@ -49,6 +54,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // "此刻在不在间奏里"跟 currentLineIndex 一样只在真的变化时赋值(20Hz tick 判定)。
     @Published public private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     @Published public private(set) var currentGapIndex: Int?
+    /// `currentGapIndex` 的不设门槛版本——悬浮歌词兜底用(它没有"沿用上一行"这条退路,
+    /// `currentLine` 一旦为 nil 就必须画点什么,门槛只对"值不值得在歌词窗口插一整排三点"
+    /// 有意义)。见 `LyricsSyncEngine.gapWindow(after:applyMinimumDuration:)`。
+    @Published public private(set) var rawGapWindow: LyricsGapWindow?
     /// 当前行的逐字填色是否已经**完全定格**(所有词/组的过渡带都越过了 [0,1],继续按帧
     /// 重算不会再改变任何像素)。悬浮歌词的 TimelineView 用它做 paused 条件 —— 行尾拖延、
     /// 以最后一行收尾的间奏/曲末期间视觉零变化,不该让 30Hz 的表继续空转。每行至多翻转
@@ -295,7 +304,12 @@ public final class LocalPlaybackSource: ObservableObject {
     // "真实读数 − 墙钟外推值"偏差的滑动平均——见 servoDecision 的注释,
     // 实测排查坐实的"锁死偏差"问题的修复状态。播种/跳变/校正后都归零重新累计。
     private var posErrEMA: Double = 0
-    private static let seekJumpToleranceSecs = 2.0
+    // nonisolated:被 shouldProbeLateAnchor(nonisolated 纯函数)引用,不可变 Sendable。
+    private nonisolated static let seekJumpToleranceSecs = 2.0
+    /// 已经为哪个锚点问过「晚锚点」确认(见 shouldProbeLateAnchor)。坏锚点在位期间偏差每拍都在,
+    /// 不按锚点去重的话会每拍探一次。换歌 / 恢复播放时清掉 —— 新一首的锚点 elapsed 常常也是 0,
+    /// 不清就会被上一首的记录误抑制掉第一次确认。
+    private var posLateAnchorProbedElapsed: Double?
 
     // 地板量化源的「前向棘轮」阈值。
     //
@@ -381,6 +395,38 @@ public final class LocalPlaybackSource: ObservableObject {
     /// ⚠️ 值得重锚的判据是"比噪声大",不是"比 1 秒大" —— 用 `servoDecision` 那套给周期性
     /// 噪声源设计的门槛来卡一次性样本,是这条纠偏此前从不生效的直接原因。
     public static let groundTruthSnapToleranceSecs: Double = 0.30
+
+    /// Spotify 播放中途重发的「晚锚点」:新的 elapsedTime 比真实位置晚 1~2 秒,单看 MediaRemote
+    /// 是一个形状完全正常的锚点。它从两道既有的闸中间漏过去 —— `MediaControlClient.
+    /// isStaleAnchorRepublish` 要求 elapsed 逐 ms 相等(这里 elapsed 变了,29.3 ≠ 上一个锚点),
+    /// seek 分支要求跳变过 `seekJumpToleranceSecs`(这里够不着 2 秒)。
+    ///
+    /// 漏过去之后伺服会把它当成新真相:cleanExtrapolated 档 alpha 0.3、单样本限幅 ±0.75,持续
+    /// 同号的 1~2 秒误差第 3 拍(~6 秒)就把 EMA 推过 0.4 门槛 snap 过去;此后 reported 与
+    /// predicted 同出这一个坏锚点、误差再也不显现 —— 整首歌恒定落后,只有暂停(Spotify 那时会
+    /// 重打准锚点)才纠得回来。用户视角就是"歌词慢一两秒,暂停再播放就好了"。
+    ///
+    /// 一天的真机日志:这种锚点 30 次,幅度集中在 1.0~2.0 秒(另有 38 次锚点冻结重发被 stale 闸
+    /// 认出、57 次跳变过 2 秒进 seek 分支)。**幅度越大越容易自愈**是这个坑反直觉的地方 ——
+    /// 播到 100 秒时来一个 elapsed=2.5 的锚点(差 97 秒)反而进 seek 分支、探针 1.5 秒纠回来。
+    ///
+    /// 处置只有一件事:**问一次探针**,位置照旧走伺服,这里不自己动位置。探针 ~1 秒就回来,而
+    /// 伺服要 3 拍才 snap,坏值来不及固化;真拖动 0.5~2 秒时探针与新锚点一致、什么都不改,假锚点
+    /// 时探针把差折进偏置(与 seek 分支同一条处置,只是门槛低)。
+    ///
+    /// 0.5 秒的下沿:稳态抖动 ±0.05s、暂停/切换瞬间的单发陈旧读数实测 -1.27s。取 0.5 能把稳态
+    /// 噪声挡在外面,又接得住实测幅度最小的那一档(-1.0s);单发陈旧读数多问一次探针无害 ——
+    /// 它与新锚点一致时探针什么都不改。纯函数,selftest 直接覆盖。
+    public nonisolated static func shouldProbeLateAnchor(
+        reported: Double, predicted: Double, tier: PositionSourceTier
+    ) -> Bool {
+        guard tier == .cleanExtrapolated else { return false }
+        let backwards = predicted - reported
+        return backwards > lateAnchorProbeToleranceSecs && backwards <= seekJumpToleranceSecs
+    }
+
+    /// 见 shouldProbeLateAnchor。(nonisolated:同 seekJumpToleranceSecs,纯函数要读它。)
+    public nonisolated static let lateAnchorProbeToleranceSecs: Double = 0.5
 
     /// 只对地板量化源(noisyFloored)生效:棘轮的依据是"reported ≤ 真实位置"这条
     /// 不等式,而 Spotify 的读数恰恰恒略**超前**真值,对它棘轮
@@ -984,6 +1030,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
             }
             posErrEMA = 0
+            // 换歌 / 恢复播放:上一段的「晚锚点已确认过」记录作废(见 posLateAnchorProbedElapsed)。
+            posLateAnchorProbedElapsed = nil
             return (trackPosSeconds, true)
         }
         let gap = now.timeIntervalSince(prevWall)
@@ -1089,6 +1137,14 @@ public final class LocalPlaybackSource: ObservableObject {
                 SpotifyPositionProbe.shared.requestConfirmation(forKey: key)
             }
             return (trackPosSeconds, true)
+        }
+        // 跳变够不着 seek 容差、但读数相对外推**向后**退了半秒以上:Spotify 中途重发的晚锚点
+        // 长这个样子,机制与取值见 shouldProbeLateAnchor。只问探针,位置照旧往下走伺服。
+        if Self.shouldProbeLateAnchor(reported: reported, predicted: predicted, tier: tier),
+           anchorElapsedTime != posLateAnchorProbedElapsed {
+            posLateAnchorProbedElapsed = anchorElapsedTime
+            logger.notice("late anchor suspected: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) behind=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
+            SpotifyPositionProbe.shared.requestConfirmation(forKey: key)
         }
         posAnchorLagSampleValid = anchorLagSampleWasValid
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
@@ -1492,6 +1548,8 @@ public final class LocalPlaybackSource: ObservableObject {
         if currentLine != nil { currentLine = nil }
         if nextLineText != nil { nextLineText = nil }
         if nextLineSide != nil { nextLineSide = nil }
+        if nextLineRomanization != nil { nextLineRomanization = nil }
+        if nextLineTranslation != nil { nextLineTranslation = nil }
         if currentLineIndex != nil { currentLineIndex = nil }
         if scrollLineIndex != nil { scrollLineIndex = nil }
         if compactLine != nil { compactLine = nil }
@@ -1501,6 +1559,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 没有可显示的行,间奏点和"填色未定格"也一并归位 —— 别让上一首歌的残留值
         // 挂着(fillSettled 归 true:没有行就没有可动的填色,表该停着)。
         if currentGapIndex != nil { currentGapIndex = nil }
+        if rawGapWindow != nil { rawGapWindow = nil }
         if !currentLineFillSettled { currentLineFillSettled = true }
     }
 
@@ -1519,9 +1578,12 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
+        if r.nextRomanization != nextLineRomanization { nextLineRomanization = r.nextRomanization }
+        if r.nextTranslation != nextLineTranslation { nextLineTranslation = r.nextTranslation }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
+        if r.rawGapWindow != rawGapWindow { rawGapWindow = r.rawGapWindow }
         updateLineFillSettled(line: r.line, atRawMs: frozen)
     }
 
@@ -1557,9 +1619,12 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
+        if r.nextRomanization != nextLineRomanization { nextLineRomanization = r.nextRomanization }
+        if r.nextTranslation != nextLineTranslation { nextLineTranslation = r.nextTranslation }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
+        if r.rawGapWindow != rawGapWindow { rawGapWindow = r.rawGapWindow }
         updateLineFillSettled(line: r.line, atRawMs: pos)
     }
 
@@ -1620,6 +1685,8 @@ public final class LocalPlaybackSource: ObservableObject {
             currentLine = nil
             nextLineText = nil
             nextLineSide = nil
+            nextLineRomanization = nil
+            nextLineTranslation = nil
             currentLineIndex = nil
             scrollLineIndex = nil
             compactLine = nil
@@ -1629,6 +1696,7 @@ public final class LocalPlaybackSource: ObservableObject {
             allLines = []
             lyricsGapMarkers = []
             currentGapIndex = nil
+            rawGapWindow = nil
             if !currentLineFillSettled { currentLineFillSettled = true }
             artworkData = nil
             artworkAverageHex = nil
@@ -1673,6 +1741,7 @@ public final class LocalPlaybackSource: ObservableObject {
             posWasPlaying = false
             posPrevWall = nil
             posPrevDurationSecs = 0
+            posLateAnchorProbedElapsed = nil
             setReportedBias(0, anchorElapsed: nil)
             stopFastTimer()
         }

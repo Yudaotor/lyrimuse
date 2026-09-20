@@ -113,6 +113,7 @@ func TestIsStaleAnchorRepublish(t *testing.T) {
 	last := &playingAnchor{track: "方大同|忘了美麗", elapsed: 10.477, ts: "T09", at: ts.Add(500 * time.Millisecond)}
 	later := ts.Add(34500 * time.Millisecond)
 	zeroAt, _ := time.Parse(time.RFC3339, "2026-09-18T10:19:58Z")
+	spotZeroAt, _ := time.Parse(time.RFC3339, "2026-09-20T02:32:53Z")
 	zeroAnchor := &playingAnchor{track: "陶喆|讨厌红楼梦", elapsed: 0, ts: "2026-09-18T10:19:58Z", at: zeroAt}
 	cases := []struct {
 		name     string
@@ -121,26 +122,35 @@ func TestIsStaleAnchorRepublish(t *testing.T) {
 		elapsed  float64
 		ts       string
 		duration float64
+		bundleID string
 		now      time.Time
 		want     bool
 	}{
-		{"实测样本: 同 elapsed 换时间戳", last, "方大同|忘了美麗", 10.477, "T43", 268.92, later, true},
-		{"elapsed 变了是真锚点", last, "方大同|忘了美麗", 44.2, "T43", 268.92, later, false},
-		{"同一个锚点不算重发", last, "方大同|忘了美麗", 10.477, "T09", 268.92, later, false},
-		{"换歌不算", last, "方大同|南音", 10.477, "T43", 268.92, later, false},
-		{"elapsed=0 隔得太久不算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T44", 268.92, ts.Add(44 * time.Second), false},
-		{"elapsed=0 开播 2 秒内算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, ts.Add(2 * time.Second), true},
+		{"实测样本: 同 elapsed 换时间戳", last, "方大同|忘了美麗", 10.477, "T43", 268.92, spotifyBundleID, later, true},
+		{"elapsed 变了是真锚点", last, "方大同|忘了美麗", 44.2, "T43", 268.92, spotifyBundleID, later, false},
+		{"同一个锚点不算重发", last, "方大同|忘了美麗", 10.477, "T09", 268.92, spotifyBundleID, later, false},
+		{"换歌不算", last, "方大同|南音", 10.477, "T43", 268.92, spotifyBundleID, later, false},
+		{"elapsed=0 隔得太久不算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T44", 268.92, sodaMusicBundleID, ts.Add(44 * time.Second), false},
+		{"elapsed=0 开播 2 秒内算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, sodaMusicBundleID, ts.Add(2 * time.Second), true},
 		// 实测样本(讨厌红楼梦):0.000@10:19:58 → 0.000@10:20:00,不判重发就整首歌慢 1.93s
-		{"开播双发的 0 锚点(真时间戳)", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:00Z", 268.92, zeroAt.Add(2400 * time.Millisecond), true},
-		{"连发三次时第二次仍在窗口内", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:02Z", 268.92, zeroAt.Add(4 * time.Second), true},
-		{"隔 175 秒的 0 锚点是真的回到 0", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:22:53Z", 268.92, zeroAt.Add(175 * time.Second), false},
-		{"旧锚点越过曲长就信新锚点", last, "方大同|忘了美麗", 10.477, "T99", 268.92, ts.Add(270 * time.Second), false},
-		{"无时长只看签名", last, "方大同|忘了美麗", 10.477, "T43", 0, later, true},
-		{"没有上一个锚点不判", nil, "方大同|忘了美麗", 10.477, "T43", 268.92, later, false},
-		{"时间戳为空不判", last, "方大同|忘了美麗", 10.477, "", 268.92, later, false},
+		{"开播双发的 0 锚点(真时间戳)", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:00Z", 268.92, sodaMusicBundleID, zeroAt.Add(2400 * time.Millisecond), true},
+		{"连发三次时第二次仍在窗口内", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:02Z", 268.92, sodaMusicBundleID, zeroAt.Add(4 * time.Second), true},
+		{"隔 175 秒的 0 锚点是真的回到 0", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:22:53Z", 268.92, sodaMusicBundleID, zeroAt.Add(175 * time.Second), false},
+		{"旧锚点越过曲长就信新锚点", last, "方大同|忘了美麗", 10.477, "T99", 268.92, spotifyBundleID, ts.Add(270 * time.Second), false},
+		{"无时长只看签名", last, "方大同|忘了美麗", 10.477, "T43", 0, spotifyBundleID, later, true},
+		{"没有上一个锚点不判", nil, "方大同|忘了美麗", 10.477, "T43", 268.92, spotifyBundleID, later, false},
+		{"时间戳为空不判", last, "方大同|忘了美麗", 10.477, "", 268.92, spotifyBundleID, later, false},
+		// Spotify 实测(Dancing With Our Hands Tied):0.000@:53 | 0.000@:54 | 0.000@:55,
+		// 用它自己的 AppleScript 反推真起播点落在**第一个**锚点那一秒内 —— 跟汽水音乐同向。
+		{"Spotify 的 0 锚点连发算重发", &playingAnchor{track: "Taylor Swift|Dancing With Our Hands Tied", elapsed: 0, ts: "2026-09-20T02:32:53Z", at: spotZeroAt}, "Taylor Swift|Dancing With Our Hands Tied", 0, "2026-09-20T02:32:54Z", 211.0, spotifyBundleID, spotZeroAt.Add(1 * time.Second), true},
+		// Apple Music 切歌时连发 2~3 个 0 锚点(实测 :20/:22/:24),真起播点是**最后**一个 ——
+		// 跟汽水音乐相反,判成重发就整首歌快 4 秒。名单外的播放器一律采信最新的那个。
+		{"Apple Music 的 0 锚点连发不判重发", &playingAnchor{track: "陈绮贞|嫉妒", elapsed: 0, ts: "2026-09-20T01:50:20Z", at: zeroAt}, "陈绮贞|嫉妒", 0, "2026-09-20T01:50:24Z", 267.6, appleMusicBundleID, zeroAt.Add(4 * time.Second), false},
+		{"酷狗的 0 锚点连发不判重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, kugouMusicBundleID, ts.Add(2 * time.Second), false},
+		{"认不出的第三方播放器同样不判", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, "com.example.player", ts.Add(2 * time.Second), false},
 	}
 	for _, c := range cases {
-		if got := isStaleAnchorRepublish(c.last, c.track, c.elapsed, c.ts, c.duration, c.now); got != c.want {
+		if got := isStaleAnchorRepublish(c.last, c.track, c.elapsed, c.ts, c.duration, c.bundleID, c.now); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
 		}
 	}
@@ -152,11 +162,11 @@ func TestResolvePlayingAnchorTSKeepsOriginalOnRepublish(t *testing.T) {
 	playingAnchorMu.Unlock()
 	t0 := time.Date(2026, 9, 6, 16, 40, 9, 0, time.UTC)
 	ts0 := t0.Format(time.RFC3339)
-	if got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 10.477, ts0, 268.92, t0.Add(600*time.Millisecond)); got != ts0 || rep {
+	if got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 10.477, ts0, 268.92, spotifyBundleID, t0.Add(600*time.Millisecond)); got != ts0 || rep {
 		t.Fatalf("first anchor should be taken as is: got %s rep=%v", got, rep)
 	}
 	ts1 := t0.Add(34 * time.Second).Format(time.RFC3339)
-	got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 10.477, ts1, 268.92, t0.Add(34500*time.Millisecond))
+	got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 10.477, ts1, 268.92, spotifyBundleID, t0.Add(34500*time.Millisecond))
 	if got != ts0 || !rep {
 		t.Fatalf("republish should keep original ts: got %s rep=%v", got, rep)
 	}
@@ -167,7 +177,7 @@ func TestResolvePlayingAnchorTSKeepsOriginalOnRepublish(t *testing.T) {
 	}
 	// 真锚点(elapsed 变了)替换记录
 	ts2 := t0.Add(60 * time.Second).Format(time.RFC3339)
-	if got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 61.2, ts2, 268.92, t0.Add(60500*time.Millisecond)); got != ts2 || rep {
+	if got, rep := resolvePlayingAnchorTS("方大同|忘了美麗", 61.2, ts2, 268.92, spotifyBundleID, t0.Add(60500*time.Millisecond)); got != ts2 || rep {
 		t.Fatalf("genuine anchor should replace: got %s rep=%v", got, rep)
 	}
 }

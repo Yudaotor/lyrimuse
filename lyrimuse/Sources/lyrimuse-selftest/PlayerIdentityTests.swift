@@ -223,6 +223,7 @@ func runPlayerIdentityTests() {
             .qqMusic: ("qq_music", "com.tencent.QQMusicMac"),
             .netease: ("netease_music", "com.netease.163music"),
             .kugou: ("kugou_music", "com.kugou.mac.Music"),
+            .soda: ("soda_music", "com.soda.music"),
             .spotify: ("spotify", "com.spotify.client"),
         ]
         for (player, want) in expected {
@@ -269,7 +270,7 @@ func runPlayerIdentityTests() {
     //
     // `Set<PlaybackPlayer>.needsAppleMusicAutomation` —— 引导页那一步要不要出现、设置页那张
     // 权限卡要不要显示,都靠它。判据是"含 auto **或** 含 Apple Music",因为
-    // `refinedAppleMusicSnapshotIfNeeded` 的第一道 guard 只看在播的是不是 Music.app、
+    // `adaptedSnapshot` 的第一道 guard 只看在播的是不是 Music.app、
     // **完全不看 features.players**,而 players 的默认值恰恰是 [.auto]。
     //
     // 这条判据在引导页就是对的,设置页却一直停在 `contains(.appleMusic)` ——

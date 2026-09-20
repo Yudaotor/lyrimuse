@@ -508,6 +508,9 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 	// deezer:目前只有"换不到匿名 JWT"这一种已实测的失败模式
 	// (见 lyricsourcefailure.go 的 deezer_auth_failed)。
 	check("deezer", deezerLastFailureReasonNow)
+	// soda:只有"端点改了形状"这一种(见 lyricsourcefailure.go 的 soda_endpoint_changed)。
+	// 没用汽水放过这首歌 → 拿不到曲目 id → 这一路本来就不该有候选,那是常态不是失败。
+	check("soda", sodaLastFailureReasonNow)
 	// 传输层兜底(来龙去脉见 sourcebreaker.go 最后一节「传输层失败分类」):这一轮一个
 	// HTTP 响应都没拿到的源,报 dns_failed / connect_failed / server_error。放在具体代码之后、
 	// 只填空 —— 限流 / 地区限制 / 直连被堵比"连不上"更有信息量。只报启用的源:关掉的源这一轮

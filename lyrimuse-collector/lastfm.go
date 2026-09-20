@@ -50,10 +50,10 @@ type lastfmScrobbler struct {
 	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
-	// collapse 是合唱串「智能」档的判定器(见 lastfmcollapse.go),只在
-	// features.LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleArtist
+	// catalog 是「智能」档的编目匹配器(见 lastfmcatalog.go),只在
+	// features.LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleTags
 	// 调用;nil(没配只读 api_key)时该档整体退化成原样提交。
-	collapse *lastfmArtistCollapser
+	catalog *lastfmCatalogMatcher
 }
 
 // newLastfmScrobbler 三者任一为空则不启用(返回 nil,调用方需判空跳过)。
@@ -73,8 +73,8 @@ func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	s := newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
 	if s != nil {
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名/session key,判定这一步不碰写凭据。
-		// 三档都建(判定器只是读了一下缓存文件),档位在 resolveScrobbleArtist 里判。
-		s.collapse = newLastfmArtistCollapser(cfg.lastfmBridgeAPIKey())
+		// 三档都建(匹配器只是读了一下缓存文件),档位在 resolveScrobbleTags 里判。
+		s.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())
 	}
 	return s
 }
@@ -295,58 +295,56 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 	}
 }
 
-// resolveScrobbleArtist 决定这条提交实际发哪个艺人名 —— 三档,由
-// features.LastfmScrobbleArtistMode 选(设置里「合唱歌曲的歌手」:全部 / 只发第一位 / 智能):
+// resolveScrobbleTags 决定这条提交实际发哪个歌手名 + 曲名。设置里是三档(账号 → Last.fm →
+// 设置 → Scrobble 卡 →「匹配模式」:智能 / 自定义 / 原始),但档位在 features 那边已经
+// **摊平成三个布尔**了(resolveLastfmMatch),这里只按布尔办事:
 //
-//   - scrobbleArtistAll(默认):原样发播放器报的整串。
-//   - scrobbleArtistFirst:截成第一位(firstCreditedArtist,纯字符串判断,不联网)。
-//   - scrobbleArtistSmart:按 Last.fm 编目判定(lastfmcollapse.go):合唱串已被收录就原样发;
-//     没收录、而第一位歌手名下这首歌已被收录才折成第一位;两边都查不到或查询失败维持原样。
-//     每首歌只判一次、结论永久缓存。c 为 nil(没配只读 api_key)时该档退化成原样发。
+//   - LastfmMatchArtist / LastfmMatchTrack:允许把歌手 / 曲名改写成 Last.fm 编目条目的
+//     写法(lastfmcatalog.go)。两个都 false 就不打网络。智能档 = 两个都 true。
+//   - LastfmMatchFirstArtistOnly:合唱串截成第一位(firstCreditedArtist,纯字符串、不联网)。
 //
-// ## 为什么默认是"发整串"
+// ## ⚠️ 截断只在**没匹配到**编目条目时应用
+//
+// 匹配到的写法已经是 Last.fm 编目认的那一条,再截一刀就把它变成一个不存在的条目 ——
+// `Hall & Oates / Maneater`(80 万听众的正规合体条目)会被截成 `Hall`,比不改还糟。
+// 所以顺序是:先匹配;匹配上了就用它、不再截断;没匹配上(keep / defer / 查询失败 / 压根
+// 没开匹配)才轮到截断。「只开截断、不开匹配」因此跟旧的 `first` 档逐字等价。
+//
+// ## 为什么默认是「原始」
 //
 //   - ListenBrainz 文档明写合唱 credit 应当 "include them all";
 //   - Navidrome 的同名开关 `Lastfm.ScrobbleFirstArtistOnly` 默认也是 false,其代码注释
 //     说明这是给 Last.fm API 缺陷用的 workaround,不是正确性修复;
-//   - 折叠会丢信息且不可逆(把 "Khalil Fong & Fiona Sit" 发成 "方大同",薛凯琪就没了),
-//     而不折叠最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。
-//
-// ## 历史
-//
-// ~ 08-31 只有一套"联网条件式"(查不到就折,30 天 TTL),08-31 因"结果不可复现"
-// 被整个删掉、换成二态静态开关;把它修好后作为第三档加回来 —— 修了什么、为什么
-// 现在自洽,见 lastfmcollapse.go 头注(每首歌只判一次永久沿用、折叠前核查目标已收录、
-// 失败不缓存)和 docs/features/12 §4。
+//   - 无条件截断会丢信息且不可逆(把 "Khalil Fong & Fiona Sit" 发成 "方大同",薛凯琪就没了),
+//     而不截断最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。匹配不是
+//     无条件截断:它只在编目里真有更多人听的同一首歌时才改写。
 //
 // ⚠️ now-playing、scrobble、回填三条路径必须调**同一个**函数:否则会出现 "now playing 显示 A、
-// 落库却是 A & B" 的自相矛盾状态。智能档下唯一允许的分歧见 lastfmcollapse.go「一致性」一节。
-func resolveScrobbleArtist(ctx context.Context, c *lastfmArtistCollapser, artist, track string) string {
-	switch features.LastfmScrobbleArtistMode {
-	case scrobbleArtistFirst:
-		if first := firstCreditedArtist(artist); first != "" {
-			return first
-		}
-		return artist
-	case scrobbleArtistSmart:
-		return c.resolve(ctx, artist, track)
-	default:
-		return artist
+// 落库却是 A & B" 的自相矛盾状态。匹配下唯一允许的分歧见 lastfmcatalog.go「一致性」一节。
+func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, track string, durationSecs float64) (string, string) {
+	scope := matchScope{artist: features.LastfmMatchArtist, track: features.LastfmMatchTrack}
+	artist, track, matched := c.resolve(ctx, artist, track, durationSecs, scope)
+	if matched || !features.LastfmMatchFirstArtistOnly {
+		return artist, track
 	}
+	if first := firstCreditedArtist(artist); first != "" {
+		return first, track
+	}
+	return artist, track
 }
 
-// mirrorTimeout 是 mirrorAsync 给一次 Last.fm 写入的总窗口。智能档下多给判定那份预算
-// (最多两个 track.getInfo),免得判定把真正的写入挤掉;其余档不联网判定,维持 8 秒。
+// mirrorTimeout 是 mirrorAsync 给一次 Last.fm 写入的总窗口。会联网匹配时多给判定那份
+// 预算(最多四个请求),免得判定把真正的写入挤掉;不匹配就维持 8 秒。
 func mirrorTimeout() time.Duration {
 	const write = 8 * time.Second
-	if features.LastfmScrobbleArtistMode == scrobbleArtistSmart {
-		return write + lastfmCollapseBudget
+	if features.LastfmMatchArtist || features.LastfmMatchTrack {
+		return write + lastfmCatalogBudget
 	}
 	return write
 }
 
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string, durationSecs float64) error {
-	artist = resolveScrobbleArtist(ctx, s.collapse, artist, track)
+	artist, track = resolveScrobbleTags(ctx, s.catalog, artist, track, durationSecs)
 	p := map[string]string{"artist": artist, "track": track}
 	if album != "" {
 		p["album"] = album
@@ -360,7 +358,7 @@ func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, a
 func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64, durationSecs float64) error {
 	// 正在播放和完成收听必须走同一次判定,否则 Last.fm 上会出现"now playing 是 A、
 	// 落库却是 A & B"这种自相矛盾的状态。
-	artist = resolveScrobbleArtist(ctx, s.collapse, artist, track)
+	artist, track = resolveScrobbleTags(ctx, s.catalog, artist, track, durationSecs)
 	p := map[string]string{"artist": artist, "track": track, "timestamp": strconv.FormatInt(timestamp, 10)}
 	if album != "" {
 		p["album"] = album

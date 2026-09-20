@@ -2552,45 +2552,23 @@ struct LyricsWindowView: View {
     @ViewBuilder
     private func gapDotsRow(_ marker: LyricsGapMarker, id: String) -> some View {
         if playback.currentGapIndex == marker.index {
+            // 呼吸曲线/点亮算法抽到 LyricsGapDotsView(悬浮歌词共用,见该文件头注)。
             // 暂停时把表停掉——暂停在间奏中时圆点亮度/大小本来就该定格(闭包里的
-            // pausedPositionMs 兜底),表继续走只是白跑。
-            // 窗口面不可见也停(已知坑 #17):这是这扇窗里唯一一个满帧率、且整段间奏都在跑的
-            // 时钟,最小化时白烧得最多。
-            TimelineView(.animation(paused: !playback.isPlayingNow
-                                            || !windowController.isSurfaceVisible)) { context in
+            // pausedPositionMs 兜底),表继续走只是白跑。窗口面不可见也停(已知坑 #17):
+            // 这是这扇窗里唯一一个满帧率、且整段间奏都在跑的时钟,最小化时白烧得最多。
+            LyricsGapDotsView(
+                startMs: marker.startMs, endMs: marker.endMs,
+                dotSize: lyricFontSize * 0.32, spacing: lyricFontSize * 0.3,
+                color: primaryTextColor,
+                isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
+                reduceMotion: reduceMotion
+            ) { _ in
                 // 跟逐字填色同一套时间基准:外推位置 + 当前歌词偏移(间奏窗口是歌词
                 // 原始时间轴,见 LyricsGapMarker 注释)。暂停时 anchor 为 nil,退回
                 // 冻结位置,点就停在当下的亮度上。
-                let pos = (playback.anchor?.extrapolatedPositionMs()
+                (playback.anchor?.extrapolatedPositionMs()
                     ?? playback.pausedPositionMs ?? marker.startMs)
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
-                let span = max(1, marker.endMs - marker.startMs)
-                let progress = min(1, max(0, Double(pos - marker.startMs) / Double(span)))
-                // 呼吸(真机对拍 AM 后定的节奏):AM 的三点是**整体同步**放大缩小——同一帧一起到
-                // 最大、同一帧一起到最小,不是错峰的打字提示器波浪;**暂停播放时呼吸整个冻结**,不是
-                // 独立于播放进度的 wall-clock 循环,所以共享同一个由 `pos`(跟点亮进度同一套外推时间
-                // 基准,暂停时天然冻结)算出来的值,不各开一份 State/Animation —— 共享同一个数就是
-                // 同步本身。周期 7~8 秒是拿时间戳标定连拍量出来的,且不是匀速正弦:约 44% 的周期停在
-                // 小尺寸附近几乎不怎么变,鼓到最大再落回去只占中间那一小段,是"停留久、鼓得快"的
-                // 心跳感。用 raised-cosine 的平方去逼近这个"多数时间贴地、中段快速隆起"的形状(指数
-                // 越大,贴在低点的时间占比越大)。振幅不对称:0.90~1.28,理由见下面 breathe 那行注释。
-                let breathePeriodMs = 7000.0
-                let breathePhase = Double(pos).truncatingRemainder(dividingBy: breathePeriodMs) / breathePeriodMs
-                let breatheRaised = pow(0.5 - 0.5 * cos(2 * .pi * breathePhase), 2)
-                // 振幅只抬最低点、封顶仍然钉在 1.28 不动:0.90~1.28。对称的 ±28%(0.72~1.28)最小
-                // 那一档太小 —— 停留最久的那段"贴地"尺寸几乎看不清是个圆。呼吸曲线本身
-                // (raised-cosine 平方、周期 7s)和最大值都不变。
-                let breathe = reduceMotion ? 1 : 0.90 + 0.38 * breatheRaised
-                HStack(spacing: lyricFontSize * 0.3) {
-                    ForEach(0 ..< 3, id: \.self) { i in
-                        Circle()
-                            .fill(primaryTextColor)
-                            .frame(width: lyricFontSize * 0.32, height: lyricFontSize * 0.32)
-                            // 第 i 颗在间奏进行到 i/3 之后点亮,亮度平滑爬升。
-                            .opacity(0.22 + 0.78 * min(1, max(0, progress * 3 - Double(i))))
-                            .scaleEffect(breathe)
-                    }
-                }
             }
             .frame(height: lyricFontSize * 0.5)
             .id(id)

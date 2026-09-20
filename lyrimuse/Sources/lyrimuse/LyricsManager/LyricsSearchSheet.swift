@@ -360,7 +360,7 @@ struct LyricsSearchSheet: View {
     // 加——"曲库里有这首歌、但平台上没有歌词文本"的那几个源(语义见
     // LyricsSearchService.SearchUpdate.tracksFoundNoLyrics)。起因是现象是「为什么这首歌
     // 搜不到歌词」(Iris / OLORUNNS):网易云和 QQ 都精准命中了曲目(歌名/歌手/专辑/时长
-    // 四项全中)、只是平台没有词,而弹窗显示的跟"十一个源都没搜到这首歌"是同一句话——
+    // 四项全中)、只是平台没有词,而弹窗显示的跟"十二个源都没搜到这首歌"是同一句话——
     // 匹配明明是对的,用户完全看不出来,也无从判断该等还是该自己贴一份。
     @State private var tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics] = []
     @State private var selectedSource: String?
@@ -555,7 +555,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("十一个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                    Text(L10n.t("十二个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
@@ -670,7 +670,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L10n.t("十一个源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("十二个源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {

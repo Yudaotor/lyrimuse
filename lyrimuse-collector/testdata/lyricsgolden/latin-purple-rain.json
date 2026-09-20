@@ -1,14 +1,14 @@
 {
   "id": "latin-purple-rain",
   "category": "latin-title",
-  "note": "英文歌基线:歌手/歌名均无汉字,语言闸不许误杀;521s 的长曲,只有网易云一家末句吻合、其余四家都是短版吃 durationOff——守\"时长判据压过逐字\"这一档",
+  "note": "英文歌基线:歌手/歌名均无汉字,语言闸不许误杀;521s 的长曲,但歌词 3:44 就唱完、后半全是尾奏——五家末句一致停在 207~252s,没有任何一家吻合曲长,于是全部按 corroborated 收(末尾时间戳被别的独立源印证)。守两件事:① 长尾奏的低覆盖率(43%)不该被当成残片;② 曲长端点必须跳过尾部署名行——网易云那份在真末句之后补了一行 [08:36.866] 人声 : Prince,标签与冒号之间有空格、旧判据认不出,于是它被当成曲末,凭空给网易云 +293 的 duration 分、把其余四家正确的短歌词打成 durationOff -500",
   "label_evidence": {
     "consensus_peers": 4,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.16621880998080335,
-    "lyrics_end_secs": 516.866,
-    "coverage_pct": 99.20652591170825,
+    "lyrics_end_secs": 224.3,
+    "coverage_pct": 43.05182341650672,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -121,11 +121,11 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1299,
+        "score": 1106,
         "terms": [
           {
-            "kind": "duration",
-            "points": 293
+            "kind": "corroborated",
+            "points": 100
           },
           {
             "kind": "wordTiming",
@@ -158,11 +158,11 @@
       },
       {
         "source": "kugou",
-        "score": 188,
+        "score": 1038,
         "terms": [
           {
-            "kind": "durationOff",
-            "points": -500
+            "kind": "corroborated",
+            "points": 100
           },
           {
             "kind": "wordTiming",
@@ -181,6 +181,10 @@
             "points": 120
           },
           {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
             "kind": "translation",
             "points": 50
           }
@@ -191,11 +195,11 @@
       },
       {
         "source": "qq",
-        "score": 187,
+        "score": 1037,
         "terms": [
           {
-            "kind": "durationOff",
-            "points": -500
+            "kind": "corroborated",
+            "points": 100
           },
           {
             "kind": "wordTiming",
@@ -214,6 +218,10 @@
             "points": 120
           },
           {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
             "kind": "translation",
             "points": 50
           }
@@ -224,11 +232,11 @@
       },
       {
         "source": "lrclib",
-        "score": 1,
+        "score": 665,
         "terms": [
           {
-            "kind": "durationOff",
-            "points": -500
+            "kind": "corroborated",
+            "points": 100
           },
           {
             "kind": "lines",
@@ -241,16 +249,20 @@
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
           }
         ]
       },
       {
         "source": "kuwo",
-        "score": 1,
+        "score": 557,
         "terms": [
           {
-            "kind": "durationOff",
-            "points": -500
+            "kind": "corroborated",
+            "points": 100
           },
           {
             "kind": "lines",
@@ -259,6 +271,10 @@
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
           },
           {
             "kind": "translation",

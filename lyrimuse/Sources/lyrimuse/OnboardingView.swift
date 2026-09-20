@@ -92,7 +92,7 @@ struct OnboardingView: View {
     ///  - (上午)从 `== [.appleMusic]`(恰好只选了它)放宽成 `contains` —— 同日
     ///    这一步从单选改成多选,而"同时选了 Apple Music 和别的播放器"时那条 AppleScript
     ///    路径照样会被走到,权限仍然需要。
-    ///  - (本次)再补上 `.auto`。`MediaControlClient.refinedAppleMusicSnapshotIfNeeded`
+    ///  - (本次)再补上 `.auto`。`MediaControlClient.adaptedSnapshot`
     ///    的第一道 guard 是 `bundleID == PlaybackPlayer.appleMusic.bundleIdentifier`,
     ///    **完全不看 `features.players`** —— 也就是说只要在播的是 Music.app 就会走那条路。
     ///    而 `features.players` 的默认值恰恰是 `[.auto]`(FeatureSettingsStore),于是"保持
@@ -589,8 +589,8 @@ struct OnboardingView: View {
             // 原文是「（必需）」+「没有它，悬浮歌词完全没法显示任何内容」。那是**旧世界的
             // 说法**:接入 media-control 通道之前,Apple Music 的一切确实只能靠 AppleScript
             // 读。现在基础的"在播什么"来自 collector 的 media-control 通道,自动化权限管的是
-            // `MediaControlClient.refinedAppleMusicSnapshotIfNeeded`(借一个更精确的
-            // elapsedTime)加上 `MusicPlaybackController` 里那一整套播放/资料库控制。也就是
+            // `MediaControlClient.adaptedSnapshot`(Apple Music 的播放头与曲目信息整份
+            // 由它读)加上 `MusicPlaybackController` 里那一整套播放/资料库控制。也就是
             // 说没有它歌词照样显示 —— 继续写"完全没法显示"是在吓唬用户。
             //
             // 强度也跟着降成「推荐」并从 `nextIsLocked` 里移出去,理由见那边。

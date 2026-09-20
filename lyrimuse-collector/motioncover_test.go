@@ -255,3 +255,38 @@ func TestMotionCoverWorthBackfillCheckedAndAppleURL(t *testing.T) {
 		t.Error("既无锚点也无 apple_music_url 时不该算缺")
 	}
 }
+
+// 首帧比对没通过时,专辑 ID 是不是仍然敢往下发——真实案例见
+// motionCoverFingerprintMaxDistance 注释(Ariana Grande《Positions (Deluxe)》,
+// viaAnchor 时首帧距离 41 也该放行,留给 App 侧用视频中段真实帧终审)。
+func TestMotionCoverAcceptsViaAnchor(t *testing.T) {
+	cases := []struct {
+		name                     string
+		matched, viaAnchor, want bool
+	}{
+		{"比对通过,不管专辑ID来路", true, false, true},
+		{"比对通过,来自锚点", true, true, true},
+		{"没通过,来自锚点仍放行", false, true, true},
+		{"没通过,文字匹配来的专辑ID必须挡住", false, false, false},
+	}
+	for _, c := range cases {
+		if got := motionCoverAcceptsViaAnchor(c.matched, c.viaAnchor); got != c.want {
+			t.Errorf("%s: motionCoverAcceptsViaAnchor(%v, %v) = %v, want %v",
+				c.name, c.matched, c.viaAnchor, got, c.want)
+		}
+	}
+}
+
+// fresh 的动态封面核对结论只对它自己解析出来的那张封面(fresh.CoverURL)有效——
+// coverSwapAllowed 判定"不换封面"时,不能把这个结论错配到记录实际留用的旧封面上。
+// 真实案例:M!LK《Bakuretsu Aishiteru》就是这样被永久卡成"核对过、没有动态封面"的,
+// 见 backfillPeripheralFields 调用点的注释。
+func TestMotionCoverFreshResultAppliesTo(t *testing.T) {
+	const retained = "https://is1-ssl.mzstatic.com/.../VEATP-45199.jpg/1200x1200bb.jpg"
+	if !motionCoverFreshResultAppliesTo(retained, enrichEntry{CoverURL: retained}) {
+		t.Error("fresh 核对的就是最终留用的这张封面,结论该能挪用")
+	}
+	if motionCoverFreshResultAppliesTo(retained, enrichEntry{CoverURL: "https://y.qq.com/other.jpg"}) {
+		t.Error("fresh 核对的是另一张封面(coverSwapAllowed 没让它生效),结论不该挪给 retained 那张")
+	}
+}

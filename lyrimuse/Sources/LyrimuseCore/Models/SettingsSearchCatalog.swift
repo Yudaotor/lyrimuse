@@ -182,6 +182,7 @@ public enum SettingsSearchCatalog {
         lyrics("display", "全局时间轴偏移", kw: ["歌词偏移", "提前", "延后", "校准", "同步"]),
         // ---- 歌词 › 管理 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
+        lyrics("manage", "补搜缺失歌词", kw: ["重新扫描", "重搜", "补空", "没有歌词", "暂无", "缺失"]),
         lyrics("manage", "全量重新扫库", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
         lyrics("manage", "歌词文件夹", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
@@ -319,8 +320,13 @@ public enum SettingsSearchCatalog {
 
         // ---- 账号 ----
         account("listenBrainz", path: ["ListenBrainz"], "账户信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble", kw: ["Last.fm", "scrobble", "记录"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "合唱歌曲的歌手", kw: ["Last.fm", "scrobble", "合唱", "歌手"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 规则", kw: ["Last.fm", "scrobble", "记录", "规则"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "匹配模式", kw: ["Last.fm", "scrobble", "合唱", "歌手", "曲名", "繁简", "匹配"]),
+        // 「匹配模式」选了「自定义」才出现的三个维度。照样登记:用户搜「繁简」「合唱」时
+        // 该找得到它们,找到了再去把档位切到自定义 —— 搜不到才是坏体验。
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "改写歌手", kw: ["Last.fm", "scrobble", "歌手", "匹配", "自定义"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "改写曲名", kw: ["Last.fm", "scrobble", "曲名", "繁简", "匹配", "自定义"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "合唱只发第一位", kw: ["Last.fm", "scrobble", "合唱", "歌手", "第一位", "自定义"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 时机", kw: ["Last.fm", "scrobble", "50%", "曲终"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "短于 30 秒的曲目", kw: ["Last.fm", "scrobble", "短曲"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 的播放器", kw: ["Last.fm", "scrobble", "播放器", "排除", "不上送", "浏览器"]),

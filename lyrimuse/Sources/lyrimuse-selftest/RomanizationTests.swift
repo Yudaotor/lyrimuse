@@ -654,6 +654,66 @@ func runRomanizationTests() {
                         "行内拼接: 不传 songLooksJapanese(默认 true)时保持原行为不变,实际 \(untouchedLatins)")
         }
 
+        // ---- 拼音开关关着时,混排行里的中文片段换回原文(HanRunReading.original) ----
+        //
+        // 上面那段把中文片段渲染成了拼音,而这一行的语言标签是日文(见到假名就确证)、
+        // 整行由**日文**开关放行 —— 于是关掉拼音的人照样在这些行上看到一行拼音。
+        // `.original` 是展示层对这件事的表达:同一批片段(同一份区间判据)换回原文,
+        // 只留日文片段的罗马字。
+        do {
+            // 片段之间 joinLatin 会插空格("三更半夜"被分词器切成两个片段 → "三更 半夜"),
+            // 所以"原样穿透"这件事比的是**汉字本身**,不是整串相等。
+            func hanOnly(_ s: String) -> String {
+                String(s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }
+                    .map(Character.init))
+            }
+            func masked(_ line: String) -> String? {
+                Romanizer.lineReading(
+                    line, songLooksJapanese: false,
+                    segments: Romanizer.japaneseSegments(
+                        line, songLooksJapanese: false, hanRuns: .original))
+            }
+            let m1 = masked("三更半夜 さびし的我") ?? ""
+            expectEqual(m1.contains("sabishi"), true, "换回原文: 假名段仍出日语读音,实际 \(m1)")
+            expectEqual(hanOnly(m1), hanOnly("三更半夜 さびし的我"),
+                        "换回原文: 中文段一个汉字不少地穿透,实际 \(m1)")
+            // 分词痕迹不该漏成空格:原文里连写的中文段,换回原文之后仍然连写
+            // (mergingVerbatimRuns)。少了这条,整行会写成"三更 半夜 sabishi 的 我"。
+            expectEqual(m1.contains("三更半夜") && m1.contains("的我"), true,
+                        "换回原文: 原文里连写的中文段不被分词空格拆开,实际 \(m1)")
+            expectEqual(m1.contains("gèng") || m1.contains("geng"), false,
+                        "换回原文: 中文段不该再出拼音,实际 \(m1)")
+            expectEqual(m1.contains("sankou") || m1.contains("teki"), false,
+                        "换回原文: 中文段也不该退回日语音读,实际 \(m1)")
+
+            // 用户实报的那两行:整行读音里一个带声调拼音都不该剩 —— 这条是这个开关
+            // 到底有没有生效的判据,单看"某个词没了"会被别的变化蒙混过去。
+            let toneMarks = CharacterSet(charactersIn: "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ")
+            func hasToneMark(_ s: String) -> Bool {
+                s.unicodeScalars.contains(where: { toneMarks.contains($0) })
+            }
+            let m2 = masked("苦等着あなた两年三个月 没有消息") ?? ""
+            expectEqual(m2.contains("anata"), true, "换回原文: 「あなた」仍出罗马字,实际 \(m2)")
+            expectEqual(hanOnly(m2), hanOnly("苦等着两年三个月 没有消息"),
+                        "换回原文: 中文段一个汉字不少地穿透,实际 \(m2)")
+            expectEqual(m2.contains("苦等着") && m2.contains("两年三个月") && m2.contains("没有消息"),
+                        true, "换回原文: 中文段保持原文的连写,实际 \(m2)")
+            expectEqual(hasToneMark(m2), false, "换回原文: 整行不该剩任何带声调拼音,实际 \(m2)")
+            let m3 = masked("请不要说你已不爱我 亲爱的あなた") ?? ""
+            expectEqual(hasToneMark(m3), false, "换回原文: 整行不该剩任何带声调拼音,实际 \(m3)")
+            // 对照:同一行在 .latin(默认)下正是满屏拼音 —— 断言"改法真的改到了东西"。
+            let plain = Romanizer.lineReading(
+                "苦等着あなた两年三个月 没有消息", songLooksJapanese: false,
+                segments: Romanizer.japaneseSegments(
+                    "苦等着あなた两年三个月 没有消息", songLooksJapanese: false)) ?? ""
+            expectEqual(hasToneMark(plain), true, "对照: .latin 下中文段仍是拼音,实际 \(plain)")
+
+            // 反例守卫:两侧都不挨硬边界的汉字(日语词根)不在这批片段里,照常出日语读音。
+            let m4 = masked("4時半です") ?? ""
+            expectEqual(m4.contains("ji") && m4.contains("han"), true,
+                        "换回原文: 日语词根不受影响,实际 \(m4)")
+        }
+
         // 按行判定:有假名/谚文的行按自己算,**纯汉字**行才退回整首歌。
         expectEqual(Romanizer.script(ofLine: "サヨナラ", song: .chinese), .japanese,
                     "按行: 中文歌里的假名行仍是日文")

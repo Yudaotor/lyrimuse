@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,11 +24,15 @@ import (
 // 那处判断 —— `!lyric.content ? (vocal === 2 ? "纯音乐" : "暂无歌词")`,跟
 // enrichEntry.Instrumental 是同一个区分。
 //
-// ⚠️ 这条**和另外四条本地路径不是一个分量**。那四条各自省掉一整跳网络或一整轮挑选
-// (酷狗歌词正文在盘上、QQ/网易云拿权威 songmid/songID、Apple Music 官方 TTML 全文);
-// 这条只补一个标记。汽水那三条路都是断的,结论记在这里免得日后重挖:
-//   - 歌词不落盘,随 track_player 播放接口下发、只在内存。
-//   - 曲目 id 无处可用:没有对接汽水歌词源,拿到 id 没有下一步。
+// ⚠️ 这条**比另外四条本地路径薄**。那四条各自省掉一整跳网络或一整轮挑选(酷狗歌词正文
+// 在盘上、QQ/网易云拿权威 songmid/songID、Apple Music 官方 TTML 全文);这条出两样东西:
+// 纯音乐标记,以及 soda 歌词源唯一的身份入口 —— 曲目 id(见 sodaLocalTrackID)。
+// 那个 id 经 notePlayingSodaTrackID 落进 playbackTrackIDs,soda 源据此直取歌词,
+// 跟 amll 按 Apple/Spotify ID 直取是同一条路子。
+//
+// 关于汽水这几条路的结论,记在这里免得日后重挖:
+//   - 歌词不落盘,随 track_player 播放接口下发、只在内存 —— 但 web 端的 SEO 接口
+//     (`seo_track`,无签名无 Cookie)按 track id 就能取到全文,见 soda.go。
 //   - 曲名/歌手/专辑/时长与 MediaRemote 逐字节一致(含毫秒),零增量。
 //   - 服务端不下发 ISRC;缓存的音频是 CENC 加密的 M4A,ilst 只有 ©too。
 //
@@ -66,6 +71,8 @@ func sodaLocalQueuePath() string {
 // sodaLocalTrack 只摘这条路径用得上的字段。每首歌还带着几十个别的(音质档位、商业化
 // 权益、配色、副歌位置……),都不相干。
 type sodaLocalTrack struct {
+	// ID 是汽水自己的曲目 id(JSON 里是字符串,不是数字)。soda 歌词源按它直取,见 soda.go。
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Duration int64  `json:"duration"` // 毫秒
 	Vocal    int    `json:"vocal"`
@@ -167,7 +174,9 @@ func refreshSodaLocalIndexLocked() {
 	}
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
-		// 没装汽水 / 没登录过 / 路径变了 —— 正常情况,不记日志。
+		// 没装汽水 / 没登录过 / 路径变了 —— 正常情况,静默退回网络解析。
+		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		noteLocalCacheDenied("soda", path, err)
 		sodaLocalIndex, sodaLocalReady = nil, true
 		return
 	}
@@ -184,8 +193,12 @@ func refreshSodaLocalIndexLocked() {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		// 保留上一次的索引,理由同 qqlocal.go:重建失败是常态化的偶发(客户端正在写)。
+		// ⚠️ 但 stat 过了不代表这一步也过,被拒那一种要留痕。
+		noteLocalCacheDenied("soda", path, err)
 		return
 	}
+	// 读到了就撤掉「被拒」—— 授权之后设置页那个提示要能自己消失。
+	noteLocalCacheReadable("soda")
 	tracks, err := decodeSodaLocalQueue(raw)
 	if err != nil {
 		return
@@ -237,6 +250,31 @@ func pickSodaLocalEntry(entries []sodaLocalTrack, album string, durationSecs flo
 // sodaLocalInstrumental 回答"汽水客户端的队列缓存里,这首歌被标成纯音乐了吗"。
 // 只在所有联网源都没给出歌词、也没给出 instrumental 信号时才问它 ——
 // 见 instrumentalFromScored 的调用处。
+// sodaLocalTrackID 查「正在播的这首歌」在汽水那边的曲目 id。查不到给空串,调用方据此
+// 跳过 soda 源 —— 没装汽水 / 没用汽水放过这首,本来就不该有它的候选。
+//
+// 身份判据完全复用纯音乐那条路的 sodaLocalKey + pickSodaLocalEntry:同一份索引、同一套
+// 专辑与时长挑选,不另立一套(两条路要是挑中不同的条目,就会出现"纯音乐标记来自 A、
+// 歌词来自 B"的错配)。
+func sodaLocalTrackID(artist, title, album string, durationSecs float64) string {
+	key := sodaLocalKey(artist, title)
+	if key == "" {
+		return ""
+	}
+	sodaLocalMu.Lock()
+	refreshSodaLocalIndexLocked()
+	ents := append([]sodaLocalTrack(nil), sodaLocalIndex[key]...)
+	sodaLocalMu.Unlock()
+	if len(ents) == 0 {
+		return ""
+	}
+	t, ok := pickSodaLocalEntry(ents, album, durationSecs)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(t.ID)
+}
+
 func sodaLocalInstrumental(artist, title, album string, durationSecs float64) bool {
 	key := sodaLocalKey(artist, title)
 	if key == "" {

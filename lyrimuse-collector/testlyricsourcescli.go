@@ -178,6 +178,11 @@ func runTestLyricSourcesCLI(args []string) {
 				reason = ytmusicLastFailureReasonNow()
 			case "musixmatch":
 				reason = musixmatchLastFailureReasonNow()
+			case "soda":
+				// ⚠️ 跟 searchcli.go 的 lyricSourceFailureReasons 是**两处**,接源时两边都要补
+				// (deezer 那次就只补了一处,见下面那条注释)。这条由
+				// TestLyricSourceFailureReasonWiredInBothConsumers 钉住。
+				reason = sodaLastFailureReasonNow()
 			case "deezer":
 				// ,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
 				// ⚠️ 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的

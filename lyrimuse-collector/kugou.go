@@ -47,6 +47,9 @@ type kugouResult struct {
 	// songLanguageMandarin/songLanguageCantonese,见 kugouCanonicalLanguage。透传用,
 	// 跟 lyricCandidate.language 同一个模式,不参与打分。
 	language string
+	// fromLocalClient:这份歌词读自酷狗客户端自己的缓存(kugouLocalLyric),不是搜索来的。
+	// 透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入条件之一。
+	fromLocalClient bool
 }
 
 var (

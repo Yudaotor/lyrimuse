@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**跟著 Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，或瀏覽器裡的網頁版 YouTube Music / Spotify 播放，在 Mac 桌面上即時顯示逐字同步歌詞——外加 Last.fm 聆聽檔案和裝置端機器翻譯。**
+**跟著 Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Spotify，或瀏覽器裡的網頁版 YouTube Music / Spotify 播放，在 Mac 桌面上即時顯示逐字同步歌詞——外加 Last.fm 聆聽檔案和裝置端機器翻譯。**
 
 **語言 / Language:** [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 
@@ -16,9 +16,9 @@
 
 </div>
 
-Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視窗——Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，以及瀏覽器裡的網頁版 YouTube Music / Spotify，任選幾個組合（也可以交給自動偵測）——逐字同步、常駐最上層、跨 Space 顯示。就是網易雲音樂桌面用戶端那種「桌面歌詞」體驗，只不過是原生 macOS 版本。
+Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視窗——Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Spotify，以及瀏覽器裡的網頁版 YouTube Music / Spotify，任選幾個組合（也可以交給自動偵測）——逐字同步、常駐最上層、跨 Space 顯示。就是網易雲音樂桌面用戶端那種「桌面歌詞」體驗，只不過是原生 macOS 版本。
 
-**從 LyricsX 過來的？** LyricsX 自 2022 年 4 月起再沒發布過新版本。Lyrimuse 是一個持續維護的開源替代方案，**所有歌詞來源的候選統一評分、擇優勝出，專治配對到錯誤版本**，還額外涵蓋 QQ 音樂 / 網易雲 / 酷狗和瀏覽器網頁播放器——這裡有一份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+**從 LyricsX 過來的？** LyricsX 自 2022 年 4 月起再沒發布過新版本。Lyrimuse 是一個持續維護的開源替代方案，**所有歌詞來源的候選統一評分、擇優勝出，專治配對到錯誤版本**，還額外涵蓋 QQ 音樂 / 網易雲 / 酷狗 / 汽水音樂和瀏覽器網頁播放器——這裡有一份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
 **安裝：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 與 Intel 都支援；自動清掉一次性的 Gatekeeper 攔截）——或者到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手動下載，詳見[快速開始](#快速開始)。
 
@@ -53,7 +53,7 @@ Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視�
 - **這份本機記錄同樣會出現在歌詞視窗裡**——沒有歌曲播放的時候，它會變成一塊聆聽總覽面板，而不是一片空白（下面還會細說）
 
 ### 想怎麼看，你說了算
-- **播放器可多選，或者交給自動偵測**：讀取 Apple Music（走「自動化」權限）、QQ 音樂、網易雲音樂、酷狗音樂或 Spotify（都走 macOS 系統級 MediaRemote，不需要任何權限）的播放狀態——在設定裡任意組合勾選，也可以直接留在自動偵測，跟隨 macOS 目前系統級 Now Playing 焦點
+- **播放器可多選，或者交給自動偵測**：讀取 Apple Music（走「自動化」權限）、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂或 Spotify（都走 macOS 系統級 MediaRemote，不需要任何權限）的播放狀態——在設定裡任意組合勾選，也可以直接留在自動偵測，跟隨 macOS 目前系統級 Now Playing 焦點
 - **Apple Music 電台也當正規播放來源**——電台裡每首歌的歌詞都跟得上，不會越走越偏；主持人說話的時候顯示電台名稱和台標，而不是停在上一首歌；電台歌詞還有獨立的時間偏移，常聽的電台校一次就一直對
 - **網頁播放器也是正規播放器**：配對一次你常用的瀏覽器，網頁版 YouTube Music 或 Spotify 就能當播放器用——歌詞按頁面自己的進度列精確同步，還有一鍵自我檢測告訴你瀏覽器到底能不能被驅動；播廣告的時候動態島整張卡變黑，寫出還剩多久、這是第幾則廣告，YouTube Music 網頁廣告還多一顆跳過的按鈕
 - **三種展示方式**：經典桌面浮動視窗（想拖哪兒拖哪兒，也可以釘在頂部置中、或 Dock 之上的底部置中）、貼著螢幕頂部瀏海的動態島膠囊（可選顯示專輯封面，背景也能跟著封面模糊），或者一個仿 Apple Music 歌詞頁、可縮放的「歌詞視窗」——雙欄版面、封面模糊鋪底、完整歌詞自動捲動到目前這一行，Apple Music 提供動態封面的專輯那張大封面還會動起來——任意組合開啟，或者都不開
@@ -173,11 +173,11 @@ cd lyrimuse/lyrimuse
 
 `build.sh` 最後會把包裡每個二進位檔的架構列出來，跟目標不符（缺一半、或多帶了一份）都會回報。發佈資產不要手工打——用 `./package.sh`，它自己會把兩種架構各建置一次、各出一套 zip + sha256 + dmg，架構不符直接拒絕打包。
 
-QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播放來源支援額外需要 [ungive/media-control](https://github.com/ungive/media-control)——本機沒裝的話 `build.sh` 會自動用 Homebrew 裝一次，這一步也不需要你自己動手。
+QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／Spotify／自動偵測這幾個播放來源支援額外需要 [ungive/media-control](https://github.com/ungive/media-control)——本機沒裝的話 `build.sh` 會自動用 Homebrew 裝一次，這一步也不需要你自己動手。
 
 ### 不管選哪種方案
 
-從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，或者自動偵測），選了 Apple Music 的話再允許它以「自動化」方式讀取 Music.app 目前播放的歌曲資訊（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
+從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、Spotify，或者自動偵測），選了 Apple Music 的話再允許它以「自動化」方式讀取 Music.app 目前播放的歌曲資訊（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再調整任何其它東西才能看到歌詞——上面提到的所有附加功能都是後續在設定裡按需開啟的。
 
@@ -187,7 +187,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播�
 不需要。Lyrimuse 一直都是 ad-hoc 簽章——你不需要開發者帳號，這個專案本身也沒有。上面「快速開始」裡那個一次性的 Gatekeeper 解鎖步驟就是這個原因。
 
 **只支援 Apple Music 嗎，Spotify、QQ 音樂、網易雲音樂能用嗎？**
-都支援，外加酷狗音樂，一共五個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，跟隨 macOS 目前認為的「正在播放」。Apple Music 走「自動化」權限讀取；其它幾個完全不需要任何額外權限，走的是 macOS 系統級 MediaRemote。
+都支援，外加酷狗音樂和汽水音樂，一共六個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，跟隨 macOS 目前認為的「正在播放」。Apple Music 走「自動化」權限讀取；其它五個完全不需要任何額外權限，走的是 macOS 系統級 MediaRemote。
 
 **這跟網易雲音樂自帶的桌面歌詞是一回事嗎？**
 思路一樣，不是同一個 App——Lyrimuse 把「桌面浮動歌詞」這套體驗帶給多個播放器（不只是網易雲自己的用戶端），原生 macOS，還多了動態島樣式和一個仿 Apple Music 的完整歌詞視窗，不只是經典浮動視窗一種形態。
@@ -211,13 +211,13 @@ QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播�
 所有來源回傳的全部候選放在同一套標準下評分——歌名、歌手、專輯、回報時長的吻合度，再加逐字時間軸這類品質訊號——分數最高的勝出，而不是哪個來源先回傳就用哪個。決策全程可查：每首歌都有一個「解析決策」面板，列出各候選的得分和贏家勝出的原因。之後某個來源出現更乾淨、更完整的版本時還能自動升級換上；而你手動選定的歌詞會被鎖定，絕不會被自動覆蓋。手動搜尋介面也帶同樣的評分和標註，選錯版本一眼就能看出來。
 
 **Lyrimuse 和 LyricsX、Lyric Fever 有什麼差別？**
-LyricsX（最後一版發布於 2022 年 4 月，支援 macOS 10.11+）涵蓋 Apple Music、Spotify 等幾個經典播放器；Lyric Fever 專注 Spotify + Apple Music，需要 macOS 15+。Lyrimuse（macOS 14+）額外原生支援 QQ 音樂 / 網易雲音樂 / 酷狗，支援瀏覽器網頁播放器，逐行判定的拼音 / 粵拼 / 注音假名，以及 Last.fm / ListenBrainz 記錄（scrobble）加本機聆聽統計。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+LyricsX（最後一版發布於 2022 年 4 月，支援 macOS 10.11+）涵蓋 Apple Music、Spotify 等幾個經典播放器；Lyric Fever 專注 Spotify + Apple Music，需要 macOS 15+。Lyrimuse（macOS 14+）額外原生支援 QQ 音樂 / 網易雲音樂 / 酷狗 / 汽水音樂，支援瀏覽器網頁播放器，逐行判定的拼音 / 粵拼 / 注音假名，以及 Last.fm / ListenBrainz 記錄（scrobble）加本機聆聽統計。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
 ## 授權與版權說明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
-- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、中國移動（咪咕音樂）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
+- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、抖音（汽水音樂）、中國移動（咪咕音樂）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
 - **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十一個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名。封面與閒置頁把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解

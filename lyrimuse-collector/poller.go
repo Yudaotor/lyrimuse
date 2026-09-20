@@ -1532,7 +1532,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // borrowAppleScriptPosition 判「这一拍要不要再问一次 Music.app 要精确播放头」(纯函数,单测钉住)。
 //
 // ⚠️ **电台一律不借**(修,现象是「电台听的歌都没记到 Last.fm」)。Swift 侧
-// `MediaControlClient.refinedAppleMusicSnapshotIfNeeded` 就加了同义的一道闸
+// `MediaControlClient.adaptedSnapshot` 就加了同义的一道闸
 // (`guard snapshot.isRadio != true else { return snapshot }`),collector 是独立实现,那次**没跟过来** ——
 // 正是 02 章 537 行警告过的「改一边只修一半」,只是上次方向相反(只改了采集器、悬浮窗还是慢)。
 //

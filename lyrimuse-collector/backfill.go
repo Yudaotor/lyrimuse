@@ -187,13 +187,13 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		//
 		// 顺带:少了那次 trackEnrichment 调用,回填批次不再为每一条去查一遍富化缓存,
 		// 也少了一层"回填时才第一次解析这首歌"的意外联网。
-		// 合唱串处理跟活路径走**同一个**函数(resolveScrobbleArtist),否则同一首歌两条路
-		// 提交出去的艺人名会不一致。智能档下这里可能联网判定(每首歌一次、结论永久缓存,
-		// 活路径已判过的直接命中缓存),所以要带 ctx 和判定器。
-		artist := resolveScrobbleArtist(ctx, s.collapse, it.AR, it.TI)
+		// 写法处理跟活路径走**同一个**函数(resolveScrobbleTags),否则同一首歌两条路
+		// 提交出去的歌手/曲名会不一致。智能档下这里可能联网判定(每首歌一次、结论永久缓存,
+		// 活路径已判过的直接命中缓存),所以要带 ctx 和匹配器。
+		artist, track := resolveScrobbleTags(ctx, s.catalog, it.AR, it.TI, it.DUR)
 		idx := strconv.Itoa(i)
 		p["artist["+idx+"]"] = artist
-		p["track["+idx+"]"] = it.TI
+		p["track["+idx+"]"] = track
 		p["timestamp["+idx+"]"] = strconv.FormatInt(it.UTS, 10)
 		if it.AL != "" {
 			p["album["+idx+"]"] = it.AL

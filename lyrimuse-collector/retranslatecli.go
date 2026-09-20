@@ -62,7 +62,7 @@ func hasRepeatedTranslatableLine(lyrics, target string) bool {
 	speakers := lyricSpeakerLabels(lyrics)
 	seen := map[string]bool{}
 	for _, l := range lines {
-		if isCreditLineWithSpeakers(strings.TrimSpace(l.text), speakers) {
+		if isRelaxedCreditLine(strings.TrimSpace(l.text), speakers) {
 			continue
 		}
 		if !lineNeedsTranslation(l.text, target) {
@@ -113,7 +113,8 @@ scan:
 		if !ok {
 			continue
 		}
-		res, err := machineTranslateLRC(ctx, translateClient, lyrics, target)
+		artist, title, _ := splitEnrichKey(key)
+		res, err := machineTranslateLRC(ctx, translateClient, lyrics, target, artist, title)
 		oldLines := strings.Count(oldTr, "\n") + 1
 		fmt.Printf("── %s\n", key)
 		switch {

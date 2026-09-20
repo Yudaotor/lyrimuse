@@ -1,7 +1,7 @@
 {
   "id": "native-earth-song",
   "category": "native-player-source",
-  "note": "与当前播放器同源:采集时声明播放器是网易云音乐(com.netease.163music),只有 netease 这一条拿 +250(2026-09-02 修之前三个中文源会一起拿)。没有这 250 分 netease 也领先,但样本钉的是\"只加给在放的那一个\"",
+  "note": "与当前播放器同源、但身份来自**搜索** —— v21 收窄之后这一条一分不加,样本现在钉的就是这一侧。采集时声明播放器是网易云音乐(com.netease.163music),netease 确实是同源那一家,可它的 songID 是搜出来的(identity_from_local_client 缺席),而搜索给出的只是\"名字对得上的某一条\",担保不了它就是耳朵里那一版录音。另一侧(同源+本地身份→+250)由 native-local-kugou-angkorwat 守。历史:2026-09-02 之前三个中文源会一起拿这 250 分,那次修的是\"只加给在放的那一个\";这次修的是\"只加给真的来自它的那一份\"。两次都不影响这首歌的冠军 —— 没有这 250 分 netease 也领先。",
   "label_evidence": {
     "consensus_peers": 3,
     "title_accepted": true,
@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.1054335159298036,
     "lyrics_end_secs": 405.306,
     "coverage_pct": 99.84529738990929,
+    "ending_corroborated": false,
     "album_score": 1,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -115,7 +116,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1502,
+        "score": 1252,
         "terms": [
           {
             "kind": "duration",
@@ -124,10 +125,6 @@
           {
             "kind": "wordTiming",
             "points": 400
-          },
-          {
-            "kind": "nativeSource",
-            "points": 250
           },
           {
             "kind": "lines",

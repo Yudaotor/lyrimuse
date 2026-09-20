@@ -25,7 +25,9 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		LyricsSourceOrder:         []string{"kugou", "qq"},
 		LyricsDir:                 "/somewhere/custom",
 		LyricsTranslationLanguage: "zh",
-		LastfmScrobbleArtistMode:  "smart",
+		LastfmMatchMode:           "smart",
+		LastfmMatchArtist:         true,
+		LastfmMatchTrack:          true,
 		LastfmScrobblePoint:       "half",
 		AlbumPrefetch:             true,
 		LyricsDecisionTrace:       true,
@@ -45,7 +47,12 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		// 路径本身是用户的目录结构,跟排查无关,只记有没有自定义过。
 		"lyrics_dir=custom",
 		"lyrics_translation_language=zh",
-		"lastfm_scrobble_artist_mode=smart",
+		"lastfm_match_mode=smart",
+		// 档位摊平后的三个布尔也要在快照里 —— 排查时「界面选了什么」和「实际按什么办」
+		// 是两件事,只记档位的话自定义档看不出它到底开了哪几项。
+		"lastfm_match_artist=true",
+		"lastfm_match_track=true",
+		"lastfm_match_first_artist_only=false",
 		"album_prefetch=true",
 		"lyrics_decision_trace=true",
 		"trusted_players=com.google.Chrome",

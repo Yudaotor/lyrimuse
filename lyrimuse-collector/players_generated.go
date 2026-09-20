@@ -12,6 +12,7 @@ const (
 	playerQQMusic    = "qq_music"
 	playerNetease    = "netease_music"
 	playerKugou      = "kugou_music"
+	playerSoda       = "soda_music"
 	playerSpotify    = "spotify"
 	playerAuto       = "auto"
 )
@@ -22,6 +23,7 @@ const (
 	qqMusicBundleID      = "com.tencent.QQMusicMac"
 	neteaseMusicBundleID = "com.netease.163music"
 	kugouMusicBundleID   = "com.kugou.mac.Music"
+	sodaMusicBundleID    = "com.soda.music"
 	spotifyBundleID      = "com.spotify.client"
 )
 
@@ -31,6 +33,7 @@ var allPlayerIDs = []string{
 	playerQQMusic,
 	playerNetease,
 	playerKugou,
+	playerSoda,
 	playerSpotify,
 	playerAuto,
 }
@@ -42,6 +45,7 @@ var playerBundleIDs = map[string]string{
 	playerQQMusic:    qqMusicBundleID,
 	playerNetease:    neteaseMusicBundleID,
 	playerKugou:      kugouMusicBundleID,
+	playerSoda:       sodaMusicBundleID,
 	playerSpotify:    spotifyBundleID,
 }
 
@@ -52,6 +56,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	qqMusicBundleID:      true,
 	neteaseMusicBundleID: true,
 	kugouMusicBundleID:   true,
+	sodaMusicBundleID:    true,
 	spotifyBundleID:      true,
 }
 
@@ -62,18 +67,20 @@ var playerProcessNames = map[string]string{
 	playerQQMusic:    "QQMusic",
 	playerNetease:    "NeteaseMusic",
 	playerKugou:      "酷狗音乐",
+	playerSoda:       "汽水音乐",
 	playerSpotify:    "Spotify",
 }
 
 // knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "Spotify"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "Spotify"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
 	appleMusicBundleID:   "Apple Music (macOS)",
 	qqMusicBundleID:      "QQ Music (macOS)",
 	neteaseMusicBundleID: "NetEase Cloud Music (macOS)",
-	kugouMusicBundleID:   "KuGou Music (macOS)",
+	kugouMusicBundleID:   "Kugou Music (macOS)",
+	sodaMusicBundleID:    "Soda Music (macOS)",
 	spotifyBundleID:      "Spotify (macOS)",
 }
 
@@ -83,7 +90,19 @@ const defaultScrobbleLabel = "Apple Music (macOS)"
 // playerNativeLyricSources 是「播放器标识 → 它自家的歌词源」——用它听歌时
 // 优先选它自己的歌词(时间轴跟它的音频母版对得上)。没有自家源的播放器不在表里。
 var playerNativeLyricSources = map[string]string{
-	playerQQMusic: "qq",
-	playerNetease: "netease",
-	playerKugou:   "kugou",
+	playerAppleMusic: "applemusic",
+	playerQQMusic:    "qq",
+	playerNetease:    "netease",
+	playerKugou:      "kugou",
+	playerSoda:       "soda",
+}
+
+// playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样
+// 重发一次」。⚠️ 只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反
+// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
+// 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。
+var playerRepublishesZeroAnchor = map[string]bool{
+	neteaseMusicBundleID: true,
+	sodaMusicBundleID:    true,
+	spotifyBundleID:      true,
 }

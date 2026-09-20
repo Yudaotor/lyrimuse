@@ -982,8 +982,8 @@ struct AccountLinkingTab: View {
 
     /// 「设置」段的内容。
     ///
-    /// 目前两项:合唱歌曲的歌手(三档:全部 / 只发第一位 / 智能,绑
-    /// `features.lastfmScrobbleArtistMode`)、短于 30 秒的曲目(绑
+    /// 目前两项:匹配模式(三档:智能 / 自定义 / 原始,自定义再展开三个维度,绑
+    /// `features.lastfmMatchMode`)、短于 30 秒的曲目(绑
     /// `features.scrobbleShortTracks`,默认关)。前一项就在 collector 侧做完了
     /// (`resolveScrobbleArtist` + `features.lastfm_scrobble_first_artist_only`,带单测和 JSON
     /// 往返测试,文档也写了),但**一直没有任何界面入口** —— 只能手改
@@ -1000,43 +1000,69 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var lastfmScrobbleSettingsCard: some View {
         SettingsCard {
-            // 卡头就叫「Scrobble」,中英同字(英文用 scrobble、中文我定)。
-            // 三条依据:①本仓的中文界面**本来就不翻译这个词**(「Scrobble 到 Last.fm」
-            // 「Scrobble 已暂停」「总 scrobble」都是原样用);②卡头在这个仓的惯例是名词短语
-            // 而不是「X设置」(歌词来源 / 已信任的其它播放器 / 配置备份与搬家);③这张卡已经
-            // 在「设置」那一段里了,标题再写一遍「设置」是重复。
-            SettingsCardHeader(title: L10n.t("Scrobble"))
+            // 卡头「Scrobble 规则」:卡里四行(匹配模式 / 时机 / 短曲目 / 播放器)各自回答
+            // "什么才算一次 scrobble"的一个侧面,「规则」是它们的总称。三条边界:
+            // ①本仓的中文界面不翻译 scrobble 这个词(「Scrobble 到 Last.fm」「Scrobble 已暂停」
+            // 「总 scrobble」都是原样用);②卡头在这个仓的惯例是名词短语而不是「X设置」
+            // (歌词来源 / 已信任的其它播放器 / 配置备份与搬家);③这张卡已经在「设置」那一段
+            // 里了,标题再写一遍「设置」是重复。搜索目录(SettingsSearchCatalog)登记同一标题。
+            SettingsCardHeader(title: L10n.t("Scrobble 规则"))
             CardDivider()
             if features.lastfmMirrorScrobble {
                 SettingsRow(
-                    icon: "person.2",
-                    title: L10n.t("合唱歌曲的歌手"),
-                    // 只说两个选项各自的效果,不写"推荐/建议"、也不写后果告警(
-                    // 用户两次收窄这行字:先"只需要说明最终的效果是什么就好",再把
-                    // 「而 scrobble 落进 Last.fm 之后基本删不掉」整句圈掉)。
+                    icon: "text.magnifyingglass",
+                    title: L10n.t("匹配模式"),
+                    // 只说三档各自的效果,不写"推荐/建议"、也不写后果告警(用户两次收窄这行字:
+                    // 先"只需要说明最终的效果是什么就好",再把「而 scrobble 落进 Last.fm 之后
+                    // 基本删不掉」整句圈掉)。
                     //
-                    // 我为那半句争过两次(理由:这是**写侧**不可逆的操作,跟读侧算错了刷新
-                    // 一下就好不是一回事),所以明确去掉 —— 记在这儿是为了留住判断依据、
-                    // 不是留个翻案的口子。依据本身没丢:默认「全部」的完整论证在 collector
-                    // 侧 resolveScrobbleArtist 的头注(ListenBrainz 文档要求 include them
-                    // all、折叠不可逆且会丢人、Navidrome 同名开关默认也是关),以及
-                    // docs/features/12 §4 和公开文档 docs/scrobbling.md。
+                    // 我为那半句争过两次(理由:这是**写侧**不可逆的操作,跟读侧算错了刷新一下
+                    // 就好不是一回事),所以明确去掉 —— 记在这儿是为了留住判断依据、不是留个
+                    // 翻案的口子。依据本身没丢:默认「原始」的完整论证在 collector 侧
+                    // resolveScrobbleTags 的头注(ListenBrainz 文档要求 include them all、
+                    // 截断不可逆且会丢人、Navidrome 同名开关默认也是关),以及 docs/features/12 §4
+                    // 和公开文档 docs/scrobbling.md。
                     //
-                    // 「智能」那一档同样只写效果 —— 它按 Last.fm 上有没有这个合唱条目
-                    // 决定发哪个名字,机制(编目判定、每首歌只判一次、失败维持原样)在 collector
-                    // lastfmcollapse.go 头注和 docs/features/12 §4,不在这行字里展开。
-                    help: L10n.t("合唱时上送给 Last.fm 的歌手名。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。")
+                    // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
+                    // 一次、失败维持原样)在 collector lastfmcatalog.go 头注,不在这行字里展开。
+                    help: L10n.t("上送给 Last.fm 的歌手名和曲名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发。\n自定义：自己选改哪些部分。\n原始：原样发播放器报的标签。")
                 ) {
                     Picker("", selection: Binding(
-                        get: { features.lastfmScrobbleArtistMode },
-                        set: { features.lastfmScrobbleArtistMode = $0; Task { await features.save() } }
+                        get: { features.lastfmMatchMode },
+                        set: { features.lastfmMatchMode = $0; Task { await features.save() } }
                     )) {
-                        ForEach(LastfmScrobbleArtistMode.allCases) { mode in
+                        ForEach(LastfmMatchMode.allCases) { mode in
                             Text(mode.displayName).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
+                }
+                // 「自定义」的三个维度。⚠️ 只在选了自定义时才挂 —— 另两档的值由档位本身决定
+                // (智能 = 前两项都开、原始 = 全关),那时显示三个点了也不生效的开关只会让人
+                // 以为自己关掉了某件事。
+                if features.lastfmMatchMode == .custom {
+                    SettingsSubRow(title: L10n.t("改写歌手")) {
+                        Toggle("", isOn: Binding(
+                            get: { features.lastfmMatchArtist },
+                            set: { features.lastfmMatchArtist = $0; Task { await features.save() } }
+                        ))
+                    }
+                    SettingsSubRow(title: L10n.t("改写曲名")) {
+                        Toggle("", isOn: Binding(
+                            get: { features.lastfmMatchTrack },
+                            set: { features.lastfmMatchTrack = $0; Task { await features.save() } }
+                        ))
+                    }
+                    // 这一项跟上面两项不同:它不查编目、纯字符串截断,而且**只在没匹配到编目
+                    // 条目时**才生效(匹配到的写法已经是编目认的那条,再截一刀就把它变成一个
+                    // 不存在的条目)。判据在 collector resolveScrobbleTags。
+                    SettingsSubRow(title: L10n.t("合唱只发第一位")) {
+                        Toggle("", isOn: Binding(
+                            get: { features.lastfmMatchFirstArtistOnly },
+                            set: { features.lastfmMatchFirstArtistOnly = $0; Task { await features.save() } }
+                        ))
+                    }
                 }
                 CardDivider()
                 // Scrobble 时机(原话「只考虑 lastfm 的」):一次收听听到哪里才记到

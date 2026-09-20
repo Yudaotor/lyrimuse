@@ -4,7 +4,7 @@ import "testing"
 
 // 现象是「播放记录里 K/DA 的歌手怎么是 K」。
 //
-// 根因:lastfmcollapse 在 scrobble **之前**把查不到编目的合credit 串折成第一位艺人,而
+// 根因:编目匹配(lastfmcatalog.go)在 scrobble **之前**把查不到编目的合credit 串折成第一位艺人,而
 // firstCreditedArtist 当时把 `/` 跟逗号平级、无条件取第一段 ——
 // `K/DA/Madison Beer/i-dle/Jaira Burns` 于是被劈成 `K`。日志逐字记着:
 //

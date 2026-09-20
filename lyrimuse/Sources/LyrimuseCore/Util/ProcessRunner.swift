@@ -14,16 +14,23 @@ import Foundation
 /// 另外统一修掉一个到处都在犯的错:那些调用点都写 `process.standardError = Pipe()`
 /// 然后**从不读它**。管道缓冲区(64KB)一满,子进程就阻塞在 write 上不退出,而父进程正卡在
 /// waitUntilExit 等它退出 —— 互相等死。只是 osascript/media-control 平时输出很小才没炸。
-/// 这里 stderr 直接丢 nullDevice:调用方要的信息退出码和 stdout 已经给全了。
+/// 所以 stderr **默认**丢 nullDevice:绝大多数调用点要的信息退出码和 stdout 已经给全了。
+/// `captureStderr: true` 才另开一根管子 —— 有些子进程把唯一有用的那句话只写在 stderr 上
+/// (media-control 的 `test` 就是:失败时 stdout 全空,原因在 stderr,不捕获就只剩一句
+/// 「exit status 4」)。⚠️ 开了之后**两根管子必须并发读空**,理由跟上面那条互相等死一模一样。
 public enum ProcessRunner {
     public struct Result: Sendable {
         public let status: Int32
         public let stdout: Data
+        /// 只有 `captureStderr: true` 时才有内容,否则恒为空 —— 空不代表"子进程没往 stderr 写",
+        /// 只代表这次没接那根管子。
+        public let stderr: Data
         /// 超时被杀掉的。此时 status 没有意义(是被信号终止的),调用方应该当作失败。
         public let timedOut: Bool
 
         public var succeeded: Bool { status == 0 && !timedOut }
         public var stdoutText: String { String(data: stdout, encoding: .utf8) ?? "" }
+        public var stderrText: String { String(data: stderr, encoding: .utf8) ?? "" }
     }
 
     /// 同步跑完一条命令。**会阻塞到子进程结束或超时**,别在主线程上调。
@@ -36,11 +43,13 @@ public enum ProcessRunner {
     ///   `LyrimusePaths.collectorProcessEnvironment()`** —— 不传的话子命令会按自己的默认
     ///   规则找配置目录,Dev 变体下就跟 App 不是同一份数据(真实 bug:待补提交
     ///   清单的删除按钮点了没反应,见 ScrobbleBackfillService.runDelete)。
+    /// - Parameter captureStderr: 把 stderr 也接出来(默认不接,见类型头注)。
     public static func run(
         _ executable: String,
         _ arguments: [String],
         timeout: TimeInterval,
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        captureStderr: Bool = false
     ) -> Result? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -49,7 +58,8 @@ public enum ProcessRunner {
         if let environment { process.environment = environment }
         let outPipe = Pipe()
         process.standardOutput = outPipe
-        process.standardError = FileHandle.nullDevice
+        let errPipe: Pipe? = captureStderr ? Pipe() : nil
+        process.standardError = errPipe ?? FileHandle.nullDevice
 
         do {
             try process.run()
@@ -73,11 +83,44 @@ public enum ProcessRunner {
         // ⚠️ 顺序:先把管道读空,再 waitUntilExit()。反过来的话,子进程写满 64KB 缓冲区
         // 之后会阻塞在 write 上永远不退出,而我们正等着它退出。被 terminate 杀掉时管道
         // 关闭,这里的读也会正常返回,不会挂住。
+        //
+        // ⚠️ 接了 stderr 的话两根管子必须**并发**读:在这条线程上串行读完 stdout 再读 stderr,
+        // 子进程写满 stderr 缓冲区就会卡在 write 上,而它不写完 stdout 我们这边也读不完 ——
+        // 同一个死锁换一根管子照样成立。
+        let errBox = DataBox()
+        let errDone = DispatchSemaphore(value: 0)
+        if let errPipe {
+            DispatchQueue.global(qos: .utility).async {
+                errBox.set(errPipe.fileHandleForReading.readDataToEndOfFile())
+                errDone.signal()
+            }
+        }
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        if errPipe != nil { errDone.wait() }
         process.waitUntilExit()
         killer.cancel()
 
-        return Result(status: process.terminationStatus, stdout: data, timedOut: flag.fired)
+        return Result(status: process.terminationStatus, stdout: data,
+                      stderr: errBox.data, timedOut: flag.fired)
+    }
+}
+
+/// 后台队列读出来的 stderr。写在那条队列上、读在调用线程上,两边必须有同步
+/// (信号量已经把先后顺序定死了,这把锁是为了让"跨线程访问"这件事本身合法)。
+private final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = Data()
+
+    func set(_ newValue: Data) {
+        lock.lock()
+        value = newValue
+        lock.unlock()
+    }
+
+    var data: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
     }
 }
 

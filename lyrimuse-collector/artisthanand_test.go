@@ -31,7 +31,7 @@ func TestNormalizeArtistCreditHanAnd(t *testing.T) {
 }
 
 // artistCreditParts 接上 normalizeArtistCreditHanAnd 之后的端到端行为——这是
-// lastfmcollapse.go/enrich.go 那几处"是不是合唱串"判断实际读到的结果。
+// lastfmcatalog.go/enrich.go 那几处"是不是合唱串"判断实际读到的结果。
 func TestArtistCreditPartsHanAnd(t *testing.T) {
 	if got := artistCreditParts("Khalil Fong和Fiona Sit"); !reflect.DeepEqual(got, []string{"khalil fong", "fiona sit"}) {
 		t.Errorf("artistCreditParts(%q) = %v, want [khalil fong fiona sit]", "Khalil Fong和Fiona Sit", got)

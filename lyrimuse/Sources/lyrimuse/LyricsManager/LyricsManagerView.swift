@@ -250,6 +250,9 @@ func sourceColor(_ source: String) -> Color {
     // 棕/薄荷/蓝绿都被占了,选蓝色作为下一个未占用色(品牌色那系的红/粉早被网易云和
     // LyricFind 占了,不硬凑)。
     case "applemusic": return .blue
+    // 汽水音乐(加,见 collector/soda.go 头注)。品牌色是青绿一系,而 .teal 已被占,
+    // 取 .cyan 作为下一个未占用色。
+    case "soda": return .cyan
     default: return .secondary
     }
 }
@@ -283,6 +286,8 @@ func sourceDisplayName(_ source: String) -> String {
     // Apple Music——官方中文名就是「Apple Music」,Apple 自己在简中界面里
     // 也不译,保留原名。它是全部源里唯一给**官方逐字**时间轴的一家(见 collector/applemusic.go)。
     case "applemusic": return "Apple Music"
+    // 汽水音乐——官方中文名,跟网易云/QQ/酷狗同一档写法。
+    case "soda": return L10n.t("汽水音乐")
     case "": return L10n.t("无来源")
     default: return source
     }

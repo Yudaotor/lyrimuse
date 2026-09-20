@@ -154,6 +154,11 @@ func lyricSourceForHost(host string) string {
 		// 直接 return,失败一次都没记过。源整个哑掉时每首歌都要把它等到超时,正是本文件
 		// 头注里 Musixmatch DNS 事故那个形态。
 		return "applemusic"
+	case h == sodaSeoTrackHost || h == sodaSearchHost:
+		// 汽水的两个端点:取词的 SEO 曲目页(beta-luna.douyin.com)与搜索(api.qishui.com)。
+		// ⚠️ 取词那个只认这一个主机,别扩成 `*.douyin.com`:那个域名下还有抖音自己的一大
+		// 堆服务,跟歌词无关的故障会连带停掉这个源。
+		return "soda"
 	}
 	return ""
 }
