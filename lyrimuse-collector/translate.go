@@ -181,8 +181,8 @@ type translationResult struct {
 // backfillTranslation **整条**路径(翻译 → 写缓存 → 落盘)跑起来,而不是只能测中间那段。
 var translateBaseURL string
 
-func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target string) (translationResult, error) {
-	return machineTranslateLRCWithBase(ctx, hc, translateBaseURL, lyrics, target)
+func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, artist, title string) (translationResult, error) {
+	return machineTranslateLRCWithBase(ctx, hc, translateBaseURL, lyrics, target, artist, title)
 }
 
 // ── 逐行按文字系统分流 ───────────────────────────────────────────────────────
@@ -304,7 +304,90 @@ func anyLineNeedsTranslation(lyrics, target string) bool {
 
 // machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
 // 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
-func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, lyrics, target string) (translationResult, error) {
+// looksLikeLyricHeaderLine 认 LRC 的抬头行 ——「曲名 - 歌手」/「歌手 - 曲名」。
+// 判据整体照搬 Swift 侧 LyricsSyncEngine.looksLikeHeaderLine(展示端靠它把抬头行藏掉),
+// 两边各维护一份的理由跟 sanitizeFilename 那对一样:纯确定性的字符串比对,没有会随时间
+// 演进的业务判断。⚠️ 两条取舍必须跟着一起搬,少一条就会开始吞真歌词:
+//
+//  1. **只在第一条正文行认**。调用方负责只对第一行问。
+//  2. **曲名侧是"去括号后等值"而不是"出现在行内"**。Swift 那边的 selftest 抓到过反例:
+//     蛋堡《经典!》的真歌词「新的经典 蛋堡 x Jabberloop」里曲名和歌手都在,写成 contains
+//     就会被整行吞掉。歌手侧才用 contains,而且**不去括号** —— 抬头里歌手名常写在括号里
+//     (「First Love - 宇多田光 (宇多田ヒカル)」)。
+//
+// 抓不到的写法(曲名自带多个连字符、压根没有分隔符)是刻意放过的:宁可漏治,不可删空。
+func looksLikeLyricHeaderLine(text, title, artist string) bool {
+	if title == "" || artist == "" {
+		return false
+	}
+	lhs, rhs, ok := headerSplitLine(text)
+	if !ok {
+		return false
+	}
+	nl, nr := headerNorm(lhs), headerNorm(rhs)
+	if nl == "" || nr == "" {
+		return false
+	}
+	nt := headerNorm(stripHeaderBrackets(title))
+	na := headerNorm(artist)
+	if nt == "" || na == "" {
+		return false
+	}
+	if headerNorm(stripHeaderBrackets(lhs)) == nt && strings.Contains(nr, na) {
+		return true
+	}
+	return headerNorm(stripHeaderBrackets(rhs)) == nt && strings.Contains(nl, na)
+}
+
+// headerSplitLine 把一行切成抬头的两段:先认带空格的 " - "(抬头最常见的写法),只有它
+// **唯一**出现时才用 —— 这样「W-H-Y - 王力宏」这种曲名自带连字符的也能正确切开;没有
+// 带空格的写法时,退回"整行只有一个裸连字符"的情形(「陳柏宇-最後的擁抱」)。
+func headerSplitLine(text string) (lhs, rhs string, ok bool) {
+	if strings.Count(text, " - ") == 1 {
+		parts := strings.SplitN(text, " - ", 2)
+		return parts[0], parts[1], true
+	}
+	if strings.Count(text, " - ") == 0 && strings.Count(text, "-") == 1 {
+		parts := strings.SplitN(text, "-", 2)
+		return parts[0], parts[1], true
+	}
+	return "", "", false
+}
+
+// headerNorm 只留字母和数字再小写 —— 空格/标点/大小写在抬头和本地标签之间从来对不齐。
+func headerNorm(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// stripHeaderBrackets 去掉成对括号及其内容:抬头写的常是裸曲名,而本地标签带着
+// "(Remastered 2014)" 这类后缀,不去掉两边永远对不上。
+func stripHeaderBrackets(s string) string {
+	var b strings.Builder
+	depth := 0
+	for _, r := range s {
+		switch r {
+		case '(', '[', '（', '［':
+			depth++
+		case ')', ']', '）', '］':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth == 0 {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
+func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, lyrics, target, artist, title string) (translationResult, error) {
 	if lyrics == "" || target == "" {
 		return translationResult{}, nil
 	}
@@ -340,8 +423,18 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	var uniqueTexts []string
 	var occurrences [][]int
 	totalAttempted := 0
+	firstBodyLine := true
 	for i, l := range lines {
-		if isCreditLineWithSpeakers(strings.TrimSpace(l.text), speakers) {
+		text := strings.TrimSpace(l.text)
+		// 抬头行只在第一条正文行认(判据里写了为什么不能放开),判过就关掉标志 ——
+		// 不管它是不是抬头,后面的行都不该再走这条判定。
+		if text != "" && firstBodyLine {
+			firstBodyLine = false
+			if looksLikeLyricHeaderLine(text, title, artist) {
+				continue
+			}
+		}
+		if isRelaxedCreditLine(text, speakers) {
 			continue
 		}
 		if !lineNeedsTranslation(l.text, target) {
@@ -646,7 +739,8 @@ func backfillTranslation(key string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	target := myMemoryLangCode(features.LyricsTranslationLanguage)
-	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target)
+	artist, title, _ := splitEnrichKey(key)
+	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target, artist, title)
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读

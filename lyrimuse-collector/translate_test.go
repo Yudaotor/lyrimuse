@@ -205,7 +205,7 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	})
 	hc := srv.Client()
 	lrc := "[00:01.00]one\n[00:02.00]two\n[00:03.00]three"
-	res, err := machineTranslateLRCWithBase(context.Background(), hc, srv.URL, lrc, "zh-CN")
+	res, err := machineTranslateLRCWithBase(context.Background(), hc, srv.URL, lrc, "zh-CN", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
 		"[00:02.00]Just beat it\n" +
 		"[00:03.00]No one wants to be defeated\n" +
 		"[00:04.00]Just beat it"
-	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN")
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 		fmt.Fprint(w, `{"responseData":{"translatedText":"PLEASE SELECT TWO DISTINCT LANGUAGES"},"responseStatus":200}`)
 	})
 	_, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
-		"[00:01.00]hello", "zh-CN")
+		"[00:01.00]hello", "zh-CN", "", "")
 	if err == nil {
 		t.Error("哨兵串应该被当成失败,而不是当译文用")
 	}
@@ -279,7 +279,7 @@ func TestTranslateQuotaViaHTTP429(t *testing.T) {
 		fmt.Fprint(w, `{"responseData":{"translatedText":""},"responseDetails":"MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS FOR TODAY. NEXT AVAILABLE IN 15 HOURS"}`)
 	})
 	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
-		"[00:01.00]hello", "zh-CN")
+		"[00:01.00]hello", "zh-CN", "", "")
 	if err != nil {
 		t.Fatalf("429 应该被当成配额用尽而不是错误: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestTranslateQuotaFinished(t *testing.T) {
 		fmt.Fprint(w, `{"responseData":{"translatedText":"x"},"quotaFinished":true}`)
 	})
 	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
-		"[00:01.00]hello", "zh-CN")
+		"[00:01.00]hello", "zh-CN", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
 	lrc := "[00:01.00]one\n[00:02.50]two\n[01:03.25]three"
-	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN")
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		fmt.Fprintf(&b, "[00:%02d.00]line%d %s\n", i, i, strings.Repeat("word ", 8))
 	}
 	if _, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
-		strings.TrimRight(b.String(), "\n"), "zh-CN"); err != nil {
+		strings.TrimRight(b.String(), "\n"), "zh-CN", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if len(got) < 2 {
@@ -670,7 +670,7 @@ func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
 	lrc := "[00:01.00]最後のキスは\n[00:02.00]タバコのflavorがした\n" +
 		"[00:03.00]You are always gonna be my love\n[00:04.00]I'll remember to love\n" +
 		"[00:05.00]明日の今頃には"
-	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "en")
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "en", "", "")
 	if err != nil {
 		t.Fatalf("不该报错: %v", err)
 	}
