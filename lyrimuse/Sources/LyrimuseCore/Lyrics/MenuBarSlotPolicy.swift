@@ -206,15 +206,20 @@ public enum MenuBarSlotPolicy {
     /// 三条刻意保留的边界:① `isPlaying` 为 false 一律 nil —— 口径是「暂停不占宽」,
     /// 参考做法"暂停仍显示当前句"不学;② 广告态不显示广告标题;③ 没歌名就还是图标,不做品牌兜底。
     /// 返回 nil = 照旧收回图标;`isFallback` 告诉调用方这不是歌词句(配速不按歌词时长算)。
+    ///
+    /// `iconBesideLyrics`(歌词旁那枚进度图标开着)为真时**不加 ♪ 前缀**:那个前缀是为了
+    /// 让这行字一眼看出"这是歌名不是歌词",而旁边那枚图标已经在说同一件事,两个音符并排
+    /// (`♪≡ ♪ 歌名`)纯属重复。间奏那个单独的 ♪ 不受这里管辖 —— 它走的是 `lyricText`
+    /// 那条路(上面第二行就返回了),而且它必须是非空文本才能把槽留住,见 06 章已知坑 11。
     public static func displayText(
         lyricText: String, title: String, isPlaying: Bool, isAdBreak: Bool,
-        showsTitleWhenNoLyrics: Bool, placeholderGlyph: String
+        showsTitleWhenNoLyrics: Bool, placeholderGlyph: String, iconBesideLyrics: Bool
     ) -> (text: String, isFallback: Bool)? {
         guard isPlaying else { return nil }
         if !lyricText.isEmpty { return (lyricText, false) }
         guard showsTitleWhenNoLyrics, !isAdBreak else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return (placeholderGlyph + " " + trimmed, true)
+        return (iconBesideLyrics ? trimmed : placeholderGlyph + " " + trimmed, true)
     }
 }

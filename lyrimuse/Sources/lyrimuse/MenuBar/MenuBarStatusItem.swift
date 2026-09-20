@@ -1135,14 +1135,15 @@ final class MenuBarStatusItem: NSObject {
         let line = secondaryKind.showsSecondaryRow ? coordinator.currentLine : coordinator.compactLine
         let lyricText = line?.plainText
             ?? (coordinator.compactShowsPlaceholder ? MenuBarMarqueeRenderer.placeholderGlyph : "")
-        // 压根没有可显示的行(整首没歌词 / 还在搜)时按开关用「♪ 歌名」占槽,不塌回图标 ——
+        // 压根没有可显示的行(整首没歌词 / 还在搜)时按开关用歌名占槽,不塌回图标 ——
         // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
-        // 这里只消费。nil = 照旧收回图标。
+        // 这里只消费。nil = 照旧收回图标。歌词旁那枚图标开着时兜底文字不带 ♪ 前缀(理由见那个函数)。
         let display = MenuBarSlotPolicy.displayText(
             lyricText: lyricText, title: coordinator.title,
             isPlaying: coordinator.isPlayingNow, isAdBreak: coordinator.isCurrentTrackAdBreak,
             showsTitleWhenNoLyrics: settings.menuBarShowsTitleWhenNoLyrics,
-            placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph)
+            placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph,
+            iconBesideLyrics: settings.menuBarLyricsIconPosition != .off)
         let text = display?.text ?? ""
         titleFallbackActive = display?.isFallback ?? false
         // 「♪ 歌名」兜底不是歌词句,没有副行可言,照旧按单行(13pt)画。

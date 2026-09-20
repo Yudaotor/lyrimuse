@@ -447,7 +447,7 @@ struct MenuBarTitleFallbackRow: View {
         SettingsRow(
             icon: "music.note.list",
             title: L10n.t("无歌词时显示歌名"),
-            help: L10n.t("这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示")
+            help: L10n.t("这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示")
         ) {
             Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
         }

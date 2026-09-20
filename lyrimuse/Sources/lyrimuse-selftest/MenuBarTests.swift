@@ -1077,10 +1077,11 @@ func runMenuBarTests() {
     // 广告不显示广告标题、没歌名不做品牌兜底。
     do {
         typealias P = MenuBarSlotPolicy
-        func t(_ lyric: String, _ title: String, playing: Bool = true, ad: Bool = false, on: Bool = true)
+        func t(_ lyric: String, _ title: String, playing: Bool = true, ad: Bool = false,
+               on: Bool = true, icon: Bool = false)
             -> (text: String, isFallback: Bool)? {
             P.displayText(lyricText: lyric, title: title, isPlaying: playing, isAdBreak: ad,
-                          showsTitleWhenNoLyrics: on, placeholderGlyph: "♪")
+                          showsTitleWhenNoLyrics: on, placeholderGlyph: "♪", iconBesideLyrics: icon)
         }
         expectEqual(t("对这个世界如果你有太多的抱怨", "稻香")?.text, "对这个世界如果你有太多的抱怨", "歌名兜底: 有歌词句就显示歌词句")
         expectEqual(t("对这个世界如果你有太多的抱怨", "稻香")?.isFallback, false, "歌名兜底: 歌词句不算兜底")
@@ -1093,6 +1094,14 @@ func runMenuBarTests() {
         expectEqual(t("", "Ad Title", ad: true) == nil, true, "歌名兜底: 广告态不显示广告标题")
         expectEqual(t("", "") == nil, true, "歌名兜底: 没歌名就还是图标,不做品牌兜底")
         expectEqual(t("", "稻香", on: false) == nil, true, "歌名兜底: 开关关着照旧收回图标")
+        // 歌词旁那枚进度图标开着时不再加 ♪ 前缀:那个前缀说的是"这是歌名不是歌词",
+        // 图标已经在说同一件事,两个音符并排是重复。
+        expectEqual(t("", "稻香", icon: true)?.text, "稻香", "歌名兜底: 歌词旁有图标时不加 ♪ 前缀")
+        expectEqual(t("", "稻香", icon: true)?.isFallback, true, "歌名兜底: 去掉前缀仍算兜底(配速口径不变)")
+        expectEqual(t("", "  稻香  ", icon: true)?.text, "稻香", "歌名兜底: 去掉前缀时同样去首尾空白")
+        expectEqual(t("♪", "稻香", icon: true)?.text, "♪", "歌名兜底: 间奏的 ♪ 不归这条管,照旧占住槽位")
+        expectEqual(t("", "稻香", playing: false, icon: true) == nil, true,
+                    "歌名兜底: 有图标也一样,暂停收回图标")
     }
 
     // ---- 间隙里不许闪图标(否则表现为「菜单栏歌词有时消失、过一会儿又回来」)----
