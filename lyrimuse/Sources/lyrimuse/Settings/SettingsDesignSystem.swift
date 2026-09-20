@@ -854,6 +854,45 @@ struct SettingsProportionBar: View {
     }
 }
 
+// MARK: - 流式换行的一排小部件
+
+/// 一行放不下就换到下一行的横向排布(播放器候选芯片、歌词库统计的桶图例用)。
+///
+/// 用 `Layout` 而不是 `HStack` + `.fixedSize()`:这两处的项数和每项的宽度都由**数据和语言**
+/// 决定(信任列表里几个播放器、英文标签比中文长近一倍),写死一行会在窄窗口下把末尾几项裁掉,
+/// 或者把同一行里别的东西挤没。
+///
+/// 行内一律**从左边起排**,即便整块被外层贴到了右缘 —— 右对齐会让换行后零星几项顶到最右边
+/// 单独悬空、跟上一行对不上,看着像漏了一截。
+///
+/// 装箱几何在 `LyrimuseCore.ChipFlowGeometry`(selftest 钉着:单项宽过 limit 仍独占一行、
+/// 不丢不压缩;`limit` ≤ 0 的首帧按"不限"处理)。行间距与项间距同为 `spacing`。
+struct SettingsFlowRow: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing,
+                                         limit: proposal.width ?? .greatestFiniteMagnitude)
+        return ChipFlowGeometry.size(rows: rows, rowHeight: sizes.map(\.height).max() ?? 0, spacing: spacing)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rowHeight = sizes.map(\.height).max() ?? 0
+        var y = bounds.minY
+        for row in ChipFlowGeometry.rows(widths: sizes.map(\.width), spacing: spacing, limit: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                                      proposal: ProposedViewSize(sizes[index]))
+                x += sizes[index].width + spacing
+            }
+            y += rowHeight + spacing
+        }
+    }
+}
+
 // MARK: - 不画刻度的量化滑杆
 
 /// 量化到 `step` 的整数倍、但**不给底层 `Slider` 传 `step:` 入参**的滑杆。
