@@ -46,19 +46,21 @@ public enum OverlayCardGeometry {
 
     /// 卡片内容块按声部留出的两侧内缩。
     ///
-    /// 远侧留 `unit`(由 `LyricDuetLayout.insets` 按窗宽和字号算好):左声部在右边留、右声部
-    /// 在左边留、合唱两边都留;近侧留 `stageInset`(舞台在卡片里居中后两侧各让出的量,见
-    /// `duetStageInset`;窗口不比默认宽时为 0)—— 合唱本来就居中,不需要舞台,两侧仍只留
-    /// `unit`。`nil`(普通歌、前奏、覆盖生效)一律 0,排版跟没有这个功能时逐像素一致。
-    /// 近侧的呼吸空间由卡片自己的 `cardHorizontalPadding` 提供,不在这里重复。
+    /// 左右声部**不留远侧空白** —— 贴着文字那一侧已经有圆点+竖线标出是哪一边(悬浮窗的
+    /// `withSpeakerIndicator`),不需要再靠留白区分谁是谁;留白只会白白挤窄可用宽度,让本不该
+    /// 折行的句子提前折行。左右声部只留 `stageInset`(舞台在卡片里居中后两侧各让出的量,见
+    /// `duetStageInset`;窗口不比默认宽时为 0),且只留在**近侧**(文字实际贴的那一侧)。
+    /// 合唱(`.center`)没有圆点标记(它不属于任何一边),两侧仍留 `unit`(由
+    /// `LyricDuetLayout.insets` 按窗宽和字号算好),跟左右声部的排法区分开。`nil`(普通歌、
+    /// 前奏、覆盖生效)一律 0,排版跟没有这个功能时逐像素一致。
     public static func cardInsets(
         for side: LyricDuet.Side?, unit: CGFloat, stageInset: CGFloat = 0
     ) -> (leading: CGFloat, trailing: CGFloat) {
         guard let side else { return (0, 0) }
         let near = max(0, stageInset)
         switch side {
-        case .leading: return (near, unit)
-        case .trailing: return (unit, near)
+        case .leading: return (near, 0)
+        case .trailing: return (0, near)
         case .center: return (unit, unit)
         }
     }

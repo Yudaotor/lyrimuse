@@ -330,13 +330,15 @@ func runOverlayTests() {
         // = OverlayPlayback.cardHorizontalPadding(那个常量在 App target 里,core 侧拿不到)。
         let pad: CGFloat = 20
 
-        // 卡片内缩:只留远侧那一份。nil = 没有对唱信息(普通歌的每一行、对唱歌第一个标记
-        // 之前的前奏、非自动的「对齐方式」覆盖)——两侧恒为 0,普通歌排版逐像素不变。
+        // 卡片内缩:左右声部不留远侧空白 —— 贴着文字那一侧已经有圆点+竖线标出是哪一边,
+        // 不需要再靠留白区分。nil = 没有对唱信息(普通歌的每一行、对唱歌第一个标记之前的
+        // 前奏、非自动的「对齐方式」覆盖)——两侧恒为 0,普通歌排版逐像素不变。合唱没有
+        // 圆点标记,两侧仍留 unit。
         expectEqual(G.cardInsets(for: nil, unit: unit).leading, 0, "卡片内缩: 无声部时左侧 0")
         expectEqual(G.cardInsets(for: nil, unit: unit).trailing, 0, "卡片内缩: 无声部时右侧 0")
         expectEqual(G.cardInsets(for: D.leading, unit: unit).leading, 0, "卡片内缩: 左声部近侧不留")
-        expectEqual(G.cardInsets(for: D.leading, unit: unit).trailing, unit, "卡片内缩: 左声部远侧留满")
-        expectEqual(G.cardInsets(for: D.trailing, unit: unit).leading, unit, "卡片内缩: 右声部远侧留满")
+        expectEqual(G.cardInsets(for: D.leading, unit: unit).trailing, 0, "卡片内缩: 左声部远侧不再留白")
+        expectEqual(G.cardInsets(for: D.trailing, unit: unit).leading, 0, "卡片内缩: 右声部远侧不再留白")
         expectEqual(G.cardInsets(for: D.trailing, unit: unit).trailing, 0, "卡片内缩: 右声部近侧不留")
         expectEqual(G.cardInsets(for: D.center, unit: unit).leading, unit, "卡片内缩: 合唱两侧都留(左)")
         expectEqual(G.cardInsets(for: D.center, unit: unit).trailing, unit, "卡片内缩: 合唱两侧都留(右)")
@@ -378,8 +380,8 @@ func runOverlayTests() {
     //
     // 「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开……哪怕宽度拉得
     // 很宽,也尽量还是居中显示;剩余的宽度留给很长的歌词做冗余」。左右声部只在卡片正中一条
-    // 固定宽度的带(舞台)里分栏:近侧多缩进"舞台两侧各让出的量",远侧照旧;带外的宽度是
-    // 长句的冗余,换行点跟改动前一样。
+    // 固定宽度的带(舞台)里分栏:近侧多缩进"舞台两侧各让出的量",远侧不留白;带外的宽度是
+    // 长句的冗余。
     do {
         let G = OverlayCardGeometry.self
         let D = LyricDuet.Side.self
@@ -405,16 +407,17 @@ func runOverlayTests() {
         expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: 0), 456, "对唱舞台: 字号 0 时只剩基准宽度")
         expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: -5), 456, "对唱舞台: 负字号同字号 0")
 
-        // 1400 窗宽 / 31pt 那一档:远侧 unit 走 LyricDuetLayout(15% 被 4 字宽封顶 = 124)。
+        // 1400 窗宽 / 31pt 那一档:unit 走 LyricDuetLayout(15% 被 4 字宽封顶 = 124),现在只喂给
+        // 合唱用(左右声部不再用它)。
         let unit = LyricDuetLayout.insets(for: .leading, availableWidth: 1360, fontSize: 31).trailing
-        expectEqual(unit, 124, "对唱舞台: 这一档的远侧内缩是 4 字宽封顶的 124")
+        expectEqual(unit, 124, "对唱舞台: 合唱用的内缩是 4 字宽封顶的 124")
         let stage = G.duetStageInset(availableWidth: 1360, fontSize: 31)
 
-        // 舞台进 cardInsets:近侧 = 舞台让出的量,远侧照旧 unit;合唱本来就居中、不需要舞台;
-        // nil(普通歌 / 前奏 / 覆盖生效)恒 0。
+        // 舞台进 cardInsets:近侧 = 舞台让出的量,远侧不再留白(圆点标记已经够用);合唱
+        // 本来就居中、不需要舞台,两侧仍是 unit;nil(普通歌 / 前奏 / 覆盖生效)恒 0。
         expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).leading, stage, "对唱舞台: 左声部近侧缩进舞台让出的量")
-        expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing, unit, "对唱舞台: 左声部远侧照旧 unit")
-        expectEqual(G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).leading, unit, "对唱舞台: 右声部远侧照旧 unit")
+        expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing, 0, "对唱舞台: 左声部远侧不再留白")
+        expectEqual(G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).leading, 0, "对唱舞台: 右声部远侧不再留白")
         expectEqual(G.cardInsets(for: D.trailing, unit: unit, stageInset: stage).trailing, stage, "对唱舞台: 右声部近侧缩进舞台让出的量")
         expectEqual(G.cardInsets(for: D.center, unit: unit, stageInset: stage).leading, unit, "对唱舞台: 合唱左侧不加舞台")
         expectEqual(G.cardInsets(for: D.center, unit: unit, stageInset: stage).trailing, unit, "对唱舞台: 合唱右侧不加舞台")
@@ -453,12 +456,12 @@ func runOverlayTests() {
         let oldRightEnd = 1400 - pad - G.cardInsets(for: D.trailing, unit: unit).trailing
         expectEqual(oldRightEnd - oldLeftStart, 1360, "对唱舞台: 改动前两栏隔着整个可用宽度(对照)")
 
-        // 长句冗余:左声部的换行点仍在远侧内缩处 1400−20−124=1256,跟改动前一样 —— 舞台只挪
-        // 起笔位置,不吃掉长句的空间。
+        // 长句冗余:左声部远侧不再留白,换行点一路排到卡片右边缘(1400−20−0=1380)—— 舞台
+        // 只挪近侧的起笔位置,不吃掉长句能用的宽度。
         let leftWrapAt = 1400 - pad - G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing
-        expectEqual(leftWrapAt, 1256, "对唱舞台: 左声部换行点")
+        expectEqual(leftWrapAt, 1380, "对唱舞台: 左声部换行点")
         expectEqual(leftWrapAt, 1400 - pad - G.cardInsets(for: D.leading, unit: unit).trailing,
-                    "对唱舞台: 左声部换行点跟改动前相同")
+                    "对唱舞台: 左声部换行点跟不加舞台时相同")
     }
 
     // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
