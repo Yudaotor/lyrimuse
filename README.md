@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Floating, word-synced lyrics for your Mac — always on top, in the menu bar, as a Dynamic-Island-style capsule, or in a full lyrics window — for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, or YouTube Music / Spotify Web playing in your browser. Plus a Last.fm listening profile and on-device translation.**
+**Floating, word-synced lyrics for your Mac — always on top, in the menu bar, as a Dynamic-Island-style capsule, or in a full lyrics window — for Apple Music, Spotify, and YouTube Music / Spotify Web playing in your browser, plus popular Chinese players (QQ Music, NetEase Cloud Music, Kugou Music, Soda Music). Comes with a Last.fm listening profile and on-device translation.**
 
 **Language / 语言 / 語言:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md)
 
@@ -16,7 +16,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and pins floating lyrics on screen for whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — highlighted word by word like karaoke, always on top, across every Space. Prefer something quieter? Read the current line as menu bar lyrics instead, or tuck it into a capsule under the notch. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and pins floating lyrics on screen for whatever's playing — Apple Music, Spotify, YouTube Music / Spotify Web in a browser, or the Chinese players QQ Music, NetEase Cloud Music, Kugou Music and Soda Music; pick any combination, or just let it auto-detect — highlighted word by word like karaoke, always on top, across every Space. Prefer something quieter? Read the current line as menu bar lyrics instead, or tuck it into a capsule under the notch. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 **Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that **scores every candidate from every source to pick the right lyrics**, and also covers QQ Music / NetEase / Kugou / Soda Music and web players in a browser — here's a fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
