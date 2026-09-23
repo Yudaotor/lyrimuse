@@ -20,7 +20,13 @@ Lyrimuse sits quietly in your menu bar and pins floating lyrics on screen for wh
 
 **Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that **scores every candidate from every source to pick the right lyrics**, and also covers QQ Music / NetEase / Kugou / Soda Music and web players in a browser — here's a fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
-**Install:** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse` (Apple Silicon and Intel; clears the one-time Gatekeeper flag automatically) — or grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started).
+**Install** with Homebrew (Apple Silicon and Intel; clears the one-time Gatekeeper flag automatically) — or grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started):
+
+```bash
+brew tap yudaotor/lyrimuse
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time -- Homebrew requires this for any non-official tap
+brew install --cask lyrimuse
+```
 
 <img src="docs/images/hero-surfaces.png" alt="Lyrimuse lyrics surfaces — Apple-Music-style lyrics window, Dynamic-Island-style capsule, floating overlay with word-by-word highlight, menu-bar lyrics">
 <p align="center"><sub>Four ways to show lyrics — the full Lyrics Window, a Dynamic-Island-style capsule, the classic floating overlay (word-by-word highlight), and menu-bar lyrics</sub></p>

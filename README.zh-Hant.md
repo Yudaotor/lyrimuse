@@ -20,7 +20,13 @@ Lyrimuse 常駐在選單列裡，跟著目前播放把浮動歌詞釘在螢幕�
 
 **從 LyricsX 過來的？** LyricsX 自 2022 年 4 月起再沒發布過新版本。Lyrimuse 是一個持續維護的開源替代方案，**所有歌詞來源的候選統一評分、擇優勝出，專治配對到錯誤版本**，還額外涵蓋 QQ 音樂 / 網易雲 / 酷狗 / 汽水音樂和瀏覽器網頁播放器——這裡有一份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
-**安裝：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 與 Intel 都支援；自動清掉一次性的 Gatekeeper 攔截）——或者到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手動下載，詳見[快速開始](#快速開始)。
+**安裝：** 用 Homebrew（Apple Silicon 與 Intel 都支援；自動清掉一次性的 Gatekeeper 攔截）——或者到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手動下載，詳見[快速開始](#快速開始)：
+
+```bash
+brew tap yudaotor/lyrimuse
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # 一次性操作——Homebrew 要求任何非官方 tap 都得先信任
+brew install --cask lyrimuse
+```
 
 <img src="docs/images/hero-surfaces.png" alt="Lyrimuse 歌詞顯示形態——歌詞視窗、動態島膠囊、桌面浮動歌詞（逐字填色）、選單列歌詞">
 <p align="center"><sub>四種顯示形態——完整歌詞視窗、動態島樣式膠囊、經典桌面浮動歌詞（逐字填色）、選單列歌詞</sub></p>
