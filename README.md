@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics on your Mac desktop — plus a Last.fm listening profile and on-device translation — for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or YouTube Music / Spotify Web playing in your browser.**
+**Floating, word-synced lyrics for your Mac — always on top, in the menu bar, as a Dynamic-Island-style capsule, or in a full lyrics window — for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, or YouTube Music / Spotify Web playing in your browser. Plus a Last.fm listening profile and on-device translation.**
 
 **Language / 语言 / 語言:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md)
 
@@ -16,7 +16,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and pins floating lyrics on screen for whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — highlighted word by word like karaoke, always on top, across every Space. Prefer something quieter? Read the current line as menu bar lyrics instead, or tuck it into a capsule under the notch. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 **Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that **scores every candidate from every source to pick the right lyrics**, and also covers QQ Music / NetEase / Kugou / Soda Music and web players in a browser — here's a fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
@@ -36,7 +36,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 
 ## Features
 
-### Lyrics that just work
+### Word-by-word synced lyrics, matched automatically
 - **Word-by-word synced highlighting**, following playback in real time
 - **Twelve lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind (via YouTube Music), Deezer, AMLL (a hand-curated, word-by-word lyrics database), Soda Music (official word-by-word timing), and Apple Music's own lyrics (optional — connect your account in Settings; the only official source, with word-by-word timing on many tracks) — always picks the best match, no manual searching required
 - **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest — and Cantonese songs get word-aware Jyutping readings
@@ -45,14 +45,14 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, per-track timing offset if the sync ever drifts, a one-click retry that re-searches every track still missing lyrics, and a full rescan that re-picks the whole library under today's matching rules while leaving your hand-corrected lyrics alone
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
-### Your listening profile
+### Last.fm listening profile and scrobbling
 - **A real listening profile, not just scrobbling** — connect Last.fm in one click from the main Accounts section (no manual token juggling) and see today/7-day/all-time totals, a live "now scrobbling" indicator, and a real-time recent-plays list with covers. Lyrimuse submits the metadata your player reported, unchanged — it never rewrites artist or track names before sending ([how scrobbling works](docs/scrobbling.md))
 - **Top Artists / Albums / Tracks chart**, filterable by time period (7 days, 30 days, a year, or all-time), plus an on-this-day look-back at what you were playing in years past
 - **Every play is logged locally first**, even before you connect Last.fm — connect it later and a backfill queue catches up on everything logged while you were still deciding
 - **Pick when a play counts** — scrobble at the Last.fm default (50%), or hold it until 75%, 90%, or the track actually playing to the end; ListenBrainz submissions are unaffected. Individual players can be left out of Last.fm entirely, so plays from a player you'd rather not log stay out of your history
 - **That same local history also shows up in the Lyrics Window** — when nothing's playing, it becomes a listening overview instead of an empty screen (more on this below)
 
-### Show it your way
+### Floating overlay, menu bar lyrics, Dynamic Island, or a full lyrics window
 - **Choose your players — plural — or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Kugou Music / Soda Music / Spotify (via macOS's system-level MediaRemote — no permission needed); select any combination in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
 - **Apple Music radio is a first-class source too** — lyrics keep up with each track on a station instead of drifting, and while the host is talking you see the station's name and logo rather than the last song; radio lyrics get their own timing offset, so a station you listen to often can be nudged once and stay right
 - **Web players work too**: pair the browser of your choice once and YouTube Music or Spotify Web becomes a first-class player — lyrics sync precisely to the page's own progress bar, with a one-click self-test that tells you whether the browser can actually be driven; during an ad the capsule turns black and tells you how long is left and which ad of how many this is, and YouTube Music web ads get a skip button
@@ -65,7 +65,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
 - **Auto-hide when paused** so it never sits on your desktop doing nothing
 
-### Just a good Mac citizen
+### A native macOS menu bar app, done properly
 - **Simplified Chinese, Traditional Chinese and English UI**, switches instantly, no restart needed
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
 - **Search the settings** — type in the sidebar and the matching row is highlighted and scrolled to; a row tucked inside a collapsed group opens up on its own
@@ -186,6 +186,15 @@ You don't need to configure anything else to get lyrics — every optional extra
 
 ## FAQ
 
+**How do I get floating Apple Music lyrics on my Mac desktop, always on top?**
+Turn on the desktop overlay in Settings. It floats above every window on every Space, and you can drag it anywhere or pin it to the top center, or to the bottom center just above the Dock. When the lyrics carry word-level timing, each word fills in as it's sung. It can stay invisible in screenshots, recordings and screen shares, and hide itself while playback is paused. It works the same way for QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify and web players.
+
+**Can I show Spotify lyrics in the Mac menu bar?**
+Yes — turn on menu bar text mode and the current line appears right in the menu bar, for Spotify or any other supported player. Long lines scroll instead of being cut off, and an optional second row shows the next line, the translation or the romanization. Spotify is read through macOS's MediaRemote, so there's no permission to grant and no Spotify account to connect.
+
+**Does it show word-by-word lyrics for QQ Music, NetEase Cloud Music, Kugou or Soda Music?**
+Yes, whenever the lyrics carry word-level timing — NetEase Cloud Music, QQ Music, Kugou, Soda Music, Musixmatch, AMLL and Apple Music's own lyrics often do, and those lines fill in word by word. Lyrics with only line timing highlight a whole line at a time. The player you listen in doesn't limit which sources are searched: a song playing in Soda Music can still end up with QQ Music's word-by-word lyrics if they score best.
+
 **Do I need an Apple Developer account to install this?**
 No. Lyrimuse ships ad-hoc signed, like it always has — no developer account for you, or for the project. See "Getting Started" above for the one-time Gatekeeper step this implies.
 
@@ -213,8 +222,8 @@ Yes — pair the browser of your choice once in Settings, and YouTube Music or S
 **How does Lyrimuse avoid picking the wrong lyrics?**
 Every candidate from every source is scored on one scale — title, artist, album and reported-duration fit, plus quality signals like word-level timing — and the highest score wins, instead of whichever source happened to answer first. The decision is inspectable: each track has a resolution panel listing every candidate's score and why the winner won. When a source later offers a cleaner or richer match, Lyrimuse can upgrade to it automatically — while a lyric you picked by hand is locked and never overridden. Manual search shows the same scores and labels, so a wrong version is obvious before you pick it.
 
-**How is Lyrimuse different from LyricsX or Lyric Fever?**
-LyricsX (last release: April 2022, macOS 10.11+) covers Apple Music, Spotify and a few classic players; Lyric Fever focuses on Spotify + Apple Music and needs macOS 15+. Lyrimuse (macOS 14+) adds native QQ Music / NetEase Cloud Music / Kugou / Soda Music support, browser web players, per-line pinyin / Cantonese Jyutping / furigana, and Last.fm / ListenBrainz scrobbling with local listening stats. The fact-checked table is in [the comparison page](docs/lyrics-apps-comparison.md).
+**Is LyricsX still maintained, and how is Lyrimuse different from LyricsX or Lyric Fever?**
+LyricsX's last release was v1.6.3, in April 2022. It supports macOS 10.11+ and covers Apple Music, Spotify and a few classic players; Lyric Fever focuses on Spotify + Apple Music and needs macOS 15+. Lyrimuse (macOS 14+) adds native QQ Music / NetEase Cloud Music / Kugou / Soda Music support, browser web players, per-line pinyin / Cantonese Jyutping / furigana, and Last.fm / ListenBrainz scrobbling with local listening stats. The fact-checked table is in [the comparison page](docs/lyrics-apps-comparison.md).
 
 ## License and Copyright
 
