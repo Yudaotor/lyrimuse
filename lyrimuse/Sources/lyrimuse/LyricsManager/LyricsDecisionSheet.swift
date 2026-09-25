@@ -57,7 +57,7 @@ struct LyricsDecisionSheet: View {
         switch decision.path {
         case "first-resolve": return L10n.t("首次解析")
         case "upgrade": return L10n.t("升级重试")
-        case "rescore": return L10n.t("规则换版重选")
+        case "rescore": return L10n.t("评分规则更新后重选")
         // 「当初一条歌词都没搜到、后来又试了一次」那条路径(collector 的
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",
         // 这个是"本来没有、这次才填上"。
@@ -84,16 +84,16 @@ struct LyricsDecisionSheet: View {
         switch reason ?? "" {
         case "": return L10n.t("首轮")
         case "title-split": return L10n.t("按「署名 - 歌名」拆分")
-        case "cover-credit": return L10n.t("翻唱：按翻唱者")
-        case "alias-rescue": return L10n.t("别名轮：一个候选都没有")
+        case "cover-credit": return L10n.t("按翻唱者署名")
+        case "alias-rescue": return L10n.t("别名轮：无可用候选")
         // 「缺罗马音」三个字有歧义(「这里说的缺罗马音是什么意思？」)——
         // 它像在描述一个结果状态,其实说的是**触发原因**,而且省掉了主语(谁缺)。
         // 真实判据在 collector `enrich.go` 的 needsRomanizationRetry:这一轮拿回来的歌词
         // 是中日韩文字(dominantScript 判 Han/Kana/Hangul),而**没有任何一个源**给出
         // 罗马音字段、也没有源标出语种(标了的话本地能自己注音,不用再查)。
-        case "alias-roma": return L10n.t("别名轮：中日韩歌词但没有源给出罗马音")
-        case "alias-missing": return L10n.t("别名轮：补缺席的源")
-        case "primary-artist-variant": return L10n.t("只用第一位歌手")
+        case "alias-roma": return L10n.t("别名轮：补罗马音")
+        case "alias-missing": return L10n.t("别名轮：补查未应答的源")
+        case "primary-artist-variant": return L10n.t("仅用首位歌手")
         case "title-from-album": return L10n.t("标题反查：专辑曲目表")
         case "title-from-artist-search": return L10n.t("标题反查：歌手泛搜")
         case "title-from-apple-storefront": return L10n.t("标题反查：Apple 原产地商店")
@@ -118,13 +118,13 @@ struct LyricsDecisionSheet: View {
         })
     }
 
-    /// 一组的组头:「别名轮：补缺席的源 · 只问 X、Y」。
+    /// 一组的组头:「别名轮：补查未应答的源 · 仅查询 X、Y」。
     ///
     /// 别名轮有三档,**问的源范围不一样**,而这件事原来在界面上看不出来:
     /// 「补缺席的源」只定向问还缺着的那几个(带源名单),「一个候选都没有」和
     /// 「没有源给出罗马音」是全源重查(不带源名单)。实测全库存档里这个对应关系是死的:
     /// alias-missing 57 组全部带源名单,alias-rescue 57 组 / alias-roma 14 组全部不带。
-    /// 所以后者缀一句「全部源重问」,跟前者的「只问 X、Y」对称 —— 不然读的人只看到
+    /// 所以后者缀一句「全部源重新查询」,跟前者的「仅查询 X、Y」对称 —— 不然读的人只看到
     /// 一个歌手名,不知道这一轮的动作范围有多大。
     private func groupHeading(_ g: LyricQueryGroup) -> String {
         var head = queryReasonLabel(g.reason)
@@ -132,7 +132,7 @@ struct LyricsDecisionSheet: View {
         return head
     }
 
-    /// 一组问的**范围**:定向重查是「只问 X、Y」,别名轮的全源重查是「全部源重问」,
+    /// 一组问的**范围**:定向重查是「仅查询 X、Y」,别名轮的全源重查是「全部源重新查询」,
     /// 首轮没有范围可言、返回 nil。
     ///
     /// 从 groupHeading 里抽出来,因为**界面上这两半不再在同一行**:那串六七个
@@ -141,10 +141,10 @@ struct LyricsDecisionSheet: View {
     /// —— 纯文本没有字重和缩进可用,拆成两行反而更难读。
     private func groupScopeText(_ g: LyricQueryGroup) -> String? {
         if !g.sources.isEmpty {
-            return String(format: L10n.t("只问 %@"),
+            return String(format: L10n.t("仅查询 %@"),
                           g.sources.map { sourceDisplayName($0) }.joined(separator: "、"))
         }
-        return g.reason.hasPrefix("alias-") ? L10n.t("全部源重问") : nil
+        return g.reason.hasPrefix("alias-") ? L10n.t("全部源重新查询") : nil
     }
 
     var body: some View {
@@ -203,7 +203,7 @@ struct LyricsDecisionSheet: View {
                 // 就够了,还省掉一个要解释的名词。
                 Text(summary.isManual
                      ? L10n.t("记录的是手动修改之前的最后一次自动评估")
-                     : L10n.t("当初自动挑选歌词那一刻的存档，现在重新搜索结果可能不同"))
+                     : L10n.t("自动选定歌词时的存档，现在重新搜索结果可能不同"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -451,50 +451,50 @@ struct LyricsDecisionSheet: View {
             var detail = gapSentence(gap: gap, percent: percent, nearTie: nearTie,
                                      sayNearTie: true, separator: separator)
             // 内容一致意味着分差比的是包装,不是词本身 —— 这句话是这一档判词的全部价值。
-            detail += " " + L10n.t("分差比的是包装（有没有逐字轴、有没有译文），不是内容。")
-            return (String(format: L10n.t("%d 个源给的是同一份词"), contenders), detail)
+            detail += " " + L10n.t("分差来自附加信息（逐字时间轴、译文），与歌词正文无关。")
+            return (String(format: L10n.t("%d 个源的歌词正文相同"), contenders), detail)
 
         case let .decisiveNegative(term, loser, gap):
-            return (String(format: L10n.t("「%@」是胜负手"), termLabel(term.kind)),
-                    String(format: L10n.t("%1$@ 在这一项上被扣 %2$d 分，胜者没有这一项——%3$d 分的分差全在这里。"),
+            return (String(format: L10n.t("决定性差异：「%@」"), termLabel(term.kind)),
+                    String(format: L10n.t("%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。"),
                            sourceDisplayName(loser), abs(term.points), gap))
 
         case let .tooClose(contenders, corroborated, gap, percent, separator):
-            // 标题已经说了「几乎打平」,正文那句就别再复述一遍(sayNearTie: false)。
+            // 标题已经说了「接近平分」,正文那句就别再复述一遍(sayNearTie: false)。
             var detail = gapSentence(gap: gap, percent: percent, nearTie: true,
                                      sayNearTie: false, separator: separator)
             // 跟 .sameLyrics 的分水岭:那边每条候选都拿到了别的源的内容印证,这边没有。
             // 给出**计数**而不是只说「不是每条都有」——读的人眼睛正盯着冠亚两行,
             // 光说"不是每条"很容易读成"这两份不是同一份词",而它们往往恰恰是同一份。
-            detail += " " + String(format: L10n.t("%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。"),
+            detail += " " + String(format: L10n.t("%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。"),
                                    contenders, corroborated)
             // 标题两件事都说全:分差极小 **且** 内容印证不全 —— 后者才是这一档跟
             // .sameLyrics 的分水岭,也是真正值得人工看一眼的原因。
-            return (L10n.t("几乎打平，但内容印证不全"), detail)
+            return (L10n.t("接近平分，但内容印证不完整"), detail)
         }
     }
 
     /// 「差多少」那句话 + 「差在哪」那半句。
     ///
-    /// 打分项完全相同时**不说分差** —— 「分差只有 0 分，几乎打平」不是人话,
+    /// 打分项完全相同时**不说分差** —— 「分差只有 0 分，接近平分」说不通,
     /// 而 separator 那句「两边打分完全相同，先后由来源顺序决定」已经把话说全了
     /// (实测:方大同《1234567》酷狗与 QQ 同为 1219 分,原措辞就是这么露出来的)。
-    /// - sayNearTie: 句尾要不要缀「，几乎打平」。判词标题本身已经这么说时传 false,
+    /// - sayNearTie: 句尾要不要缀「，接近平分」。判词标题本身已经这么说时传 false,
     ///   否则一句话里同一件事说两遍。
     private func gapSentence(gap: Int, percent: Double?, nearTie: Bool, sayNearTie: Bool,
                              separator: LyricsVerdictSeparator) -> String {
         if case .identical = separator {
-            return L10n.t("两边打分完全相同，先后由来源顺序决定。")
+            return L10n.t("两者各项得分完全相同，按源的顺序排列。")
         }
         let pct = gapPercentText(gap: gap, percent: percent)
         var s: String
         if gap == 0 {
             // 分项有差但加起来正好抵平 —— 罕见,但不能说成「分差只有 0 分」。
-            s = L10n.t("两边同分。")
+            s = L10n.t("两者同分。")
         } else if nearTie && sayNearTie {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差只有 %d 分，几乎打平。"), gap)
-                : String(format: L10n.t("分差只有 %1$d 分（%2$@），几乎打平。"), gap, pct)
+                ? String(format: L10n.t("分差只有 %d 分，接近平分。"), gap)
+                : String(format: L10n.t("分差只有 %1$d 分（%2$@），接近平分。"), gap, pct)
         } else if nearTie {
             s = pct.isEmpty
                 ? String(format: L10n.t("分差只有 %d 分。"), gap)
@@ -512,7 +512,7 @@ struct LyricsDecisionSheet: View {
     private func separatorText(_ s: LyricsVerdictSeparator) -> String? {
         switch s {
         case .identical:
-            return L10n.t("两边打分完全相同，先后由来源顺序决定。")
+            return L10n.t("两者各项得分完全相同，按源的顺序排列。")
         case let .single(term) where term.points > 0:
             return String(format: L10n.t("唯一的差别是胜者在「%1$@」上多 %2$d 分。"),
                           termLabel(term.kind), term.points)
@@ -533,10 +533,10 @@ struct LyricsDecisionSheet: View {
         var lines: [String] = []
         var head = [pathLabel(decision)]
         if let applied = decision.applied {
-            head.append(applied ? L10n.t("已采用") : L10n.t("评估后维持原状"))
+            head.append(applied ? L10n.t("已采用") : L10n.t("评估后未更换"))
         }
         if let version = decision.scoringVersion, version < currentLyricsScoringVersion {
-            head.append(L10n.t("旧打分算法"))
+            head.append(L10n.t("旧版评分规则"))
         }
         if let ts = decision.decidedAt, ts > 0 {
             // 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(否则界面语言
@@ -553,7 +553,7 @@ struct LyricsDecisionSheet: View {
             lines.append(t.title + " —— " + t.detail)
         }
         if let rewrite = titleRewrite(decision) {
-            lines.append(String(format: L10n.t("歌名对不上：本地叫「%1$@」，找到的是《%2$@》"),
+            lines.append(String(format: L10n.t("歌名不一致：本地为「%1$@」，匹配到《%2$@》"),
                                 rewrite.from, rewrite.to))
             if let how = titleRewriteHow(decision) { lines.append("  " + how) }
         }
@@ -562,9 +562,9 @@ struct LyricsDecisionSheet: View {
         // 首轮那一组之外还问过什么。只有一组、且就是首轮时不重复印。
         // 跟界面用同一份 digest,拷出去的文本和屏幕上看到的是同一个形状。
         if let digest = queryDigest(decision) {
-            lines.append(String(format: L10n.t("这一轮实际问过 %d 组"), digest.total))
+            lines.append(String(format: L10n.t("本轮共查询 %d 组"), digest.total))
             if let t = digest.sharedTitle {
-                lines.append("  " + String(format: L10n.t("歌名始终是「%@」"), t))
+                lines.append("  " + String(format: L10n.t("歌名始终为「%@」"), t))
             }
             for g in digest.groups {
                 lines.append("  " + groupHeading(g))
@@ -589,7 +589,7 @@ struct LyricsDecisionSheet: View {
             // 一行 "LRCLIB · -1" 一样是看不懂的 —— 那个 -1 是内部手段,不是评价。
             if row.core.isInstrumentalMarker {
                 lines.append(sourceDisplayName(c.source) + " · " + L10n.t("纯音乐"))
-                lines.append(L10n.t("这个源明确说这首是纯音乐，所以它没有参与打分"))
+                lines.append(L10n.t("该源标记此曲为纯音乐，未参与评分"))
                 continue
             }
             if row.core.isRejected {
@@ -623,7 +623,7 @@ struct LyricsDecisionSheet: View {
                 lines.append(LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: terms))
             }
             if let peers = c.consensusPeers, !peers.isEmpty {
-                lines.append(String(format: L10n.t("跟 %@ 是同一份词"),
+                lines.append(String(format: L10n.t("与 %@ 正文相同"),
                                     peers.map { sourceDisplayName($0) }.joined(separator: "、")))
             }
         }
@@ -646,7 +646,7 @@ struct LyricsDecisionSheet: View {
                 }
                 if let rewrite {
                     VerdictCard(
-                        title: String(format: L10n.t("歌名对不上：本地叫「%1$@」，找到的是《%2$@》"),
+                        title: String(format: L10n.t("歌名不一致：本地为「%1$@」，匹配到《%2$@》"),
                                       rewrite.from, rewrite.to),
                         detail: titleRewriteHow(decision) ?? "",
                         tint: .orange)
@@ -666,7 +666,7 @@ struct LyricsDecisionSheet: View {
     /// 所以复用同一张译名表(queryReasonLabel)——漏补译名两处一起漏,不会一边对一边错。
     private func titleRewriteHow(_ decision: LyricsResolutionDecision) -> String? {
         guard let m = decision.retryMethod, !m.isEmpty else { return nil }
-        return String(format: L10n.t("本地那个歌名没搜到，最后靠「%@」问出真名。"),
+        return String(format: L10n.t("本地歌名无检索结果，经「%@」查得正式曲名。"),
                       queryReasonLabel(m))
     }
 
@@ -677,14 +677,14 @@ struct LyricsDecisionSheet: View {
             InfoChip(icon: "clock.arrow.circlepath", text: pathLabel(decision), tint: .blue)
             if let applied = decision.applied {
                 InfoChip(icon: applied ? "checkmark.circle" : "equal.circle",
-                         text: applied ? L10n.t("已采用") : L10n.t("评估后维持原状"),
+                         text: applied ? L10n.t("已采用") : L10n.t("评估后未更换"),
                          tint: applied ? .green : .secondary)
             }
             // 不展示具体版本号(裸编号没有对照、用户看不出新旧,见
             // currentLyricsScoringVersion 头注),只在存档确实比当前算法旧时提示一句——
             // 呼应面板副标题"现在重新搜索结果可能不同"那句话,给出具体原因。
             if let version = decision.scoringVersion, version < currentLyricsScoringVersion {
-                InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧打分算法"), tint: .orange)
+                InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧版评分规则"), tint: .orange)
             }
             if let ts = decision.decidedAt, ts > 0 {
                 // 同 dumpLines 那处——必须显式传 L10n.locale,不能落到 Locale.current。
@@ -742,7 +742,7 @@ struct LyricsDecisionSheet: View {
     /// 全库 644 行(3.74%)、443 份存档(10%)因此"分项加起来对不上总分" —— 不说这一句的话,
     /// 谁真去加一遍都会以为界面算错了(现状就是不说,藏得住只是因为没人去加)。
     private func clampNote(rawSum: Int, score: Int) -> String {
-        String(format: L10n.t("分项合计 %1$d，被夹到最低分 %2$d"), rawSum, score)
+        String(format: L10n.t("分项合计 %1$d，按下限计为 %2$d"), rawSum, score)
     }
 
     /// 「这一轮的输入与经过」——查询词 / 曲长 / 应答的源 / 问过哪几组词。
@@ -759,7 +759,7 @@ struct LyricsDecisionSheet: View {
                                 responded.count, LyricsSource.allCases.count))
         }
         if let digest = queryDigest(decision) {
-            parts.append(String(format: L10n.t("问过 %d 组词"), digest.total))
+            parts.append(String(format: L10n.t("查询 %d 组"), digest.total))
         }
         if let secs = decision.durationSecs, secs > 0 {
             parts.append(String(format: L10n.t("按 %@ 秒校验"), String(format: "%.0f", secs)))
@@ -830,11 +830,11 @@ struct LyricsDecisionSheet: View {
     /// `Winnie (end of me) [Mixed]`)。曲名变过(标题反查轮改写过曲名)时跟首轮那个不等,
     /// 才把它整句说出来 —— 那时候它是真信息,不是复读。
     private func roundsCaption(_ digest: LyricQueryDigest, queryTitle: String?) -> String {
-        var caption = String(format: L10n.t("问过 %d 组词"), digest.total)
+        var caption = String(format: L10n.t("查询 %d 组"), digest.total)
         guard let shared = digest.sharedTitle else { return caption }
         caption += " · " + (shared == trimmedOrNil(queryTitle)
                             ? L10n.t("歌名未变")
-                            : String(format: L10n.t("歌名始终是「%@」"), shared))
+                            : String(format: L10n.t("歌名始终为「%@」"), shared))
         return caption
     }
 
@@ -880,7 +880,7 @@ struct LyricsDecisionSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: inputsOpen ? "chevron.down" : "chevron.right")
                         .font(.caption2).frame(width: 10)
-                    Text(L10n.t("这一轮的输入与经过")).font(.caption)
+                    Text(L10n.t("本轮输入与过程")).font(.caption)
                     if !inputsOpen, !summary.isEmpty {
                         Text("· " + summary)
                             .font(.caption2).foregroundStyle(.secondary)
@@ -895,7 +895,7 @@ struct LyricsDecisionSheet: View {
             .onHover { inside in
                 if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
             }
-            .help(String(format: L10n.t("源数分母是当前启用的 %d 个源；老条目当年可用的源可能更少"), total))
+            .help(String(format: L10n.t("分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少"), total))
 
             if inputsOpen {
                 VStack(alignment: .leading, spacing: 8) {
@@ -965,8 +965,8 @@ struct LyricsDecisionSheet: View {
         if a.rows.isEmpty && a.sidelined.isEmpty {
             // 明细挪到旁路文件、又补不回来(文件被删 / 指纹对不上)时,别说成「没有任何源给出候选」。
             Text(decision.detailsExternal == true
-                 ? L10n.t("这一轮的候选明细找不到了")
-                 : L10n.t("这一轮没有任何源给出候选"))
+                 ? L10n.t("本轮候选明细已不可用")
+                 : L10n.t("本轮没有源返回候选"))
                 .font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)
@@ -1123,7 +1123,7 @@ struct LyricsDecisionSheet: View {
             // 冠亚军分差中位只有 24 分,而分差小的时候真正要问的是"这两份是不是同一份
             // 词"——是的话选谁都行,不是的话这 24 分就是在两份不同的歌词之间抛硬币。
             if let peers = c.consensusPeers, !peers.isEmpty {
-                Text(String(format: L10n.t("跟 %@ 是同一份词"),
+                Text(String(format: L10n.t("与 %@ 正文相同"),
                             peers.map { sourceDisplayName($0) }.joined(separator: "、")))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -1177,7 +1177,7 @@ struct LyricsDecisionSheet: View {
                     Spacer(minLength: 0)
                 }
                 if isInstrumental {
-                    Text(L10n.t("这个源明确说这首是纯音乐，所以它没有参与打分"))
+                    Text(L10n.t("该源标记此曲为纯音乐，未参与评分"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

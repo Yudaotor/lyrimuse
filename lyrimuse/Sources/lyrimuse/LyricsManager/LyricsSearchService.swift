@@ -71,9 +71,9 @@ final class LyricsSearchService {
             case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
             // v7:「两场不同演唱会」判据,见 collector 侧
             // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
-            case "liveAlbumConflict": return L10n.t("是另一场演出的现场版")
+            case "liveAlbumConflict": return L10n.t("现场版场次不符")
             // v23:见 collector 侧 lyrictimelineoffset.go。
-            case "timelineOffset": return L10n.t("时间轴整体错开，对的是另一个版本")
+            case "timelineOffset": return L10n.t("时间轴整体偏移")
             // v3新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -84,16 +84,16 @@ final class LyricsSearchService {
             case "translation": return L10n.t("自带译文")
             case "romanization": return L10n.t("自带罗马音")
             case "rejectNotTimed": return L10n.t("不是带时间戳的歌词")
-            case "rejectWrongLanguage": return L10n.t("语言跟这首歌对不上")
-            case "rejectCreditOnly": return L10n.t("整份只有署名行，没有正文")
-            case "rejectNoLastTimestamp": return L10n.t("取不到最后一句的时间")
-            case "rejectDurationMismatch": return L10n.t("时长明显对不上，也没有别的源印证")
+            case "rejectWrongLanguage": return L10n.t("语言不符")
+            case "rejectCreditOnly": return L10n.t("仅含署名行，无正文")
+            case "rejectNoLastTimestamp": return L10n.t("无法获取末句时间")
+            case "rejectDurationMismatch": return L10n.t("时长明显不符，且无其他源印证")
             // 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见 collector match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
             // 加,见 collector match.go 的 scoreRejectContinuousMix 头注。
-            case "rejectContinuousMix": return L10n.t("这是连续混音版，跟原版不是同一次编排")
+            case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             default: return kind
             }
         }

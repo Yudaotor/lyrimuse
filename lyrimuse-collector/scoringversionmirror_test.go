@@ -31,7 +31,7 @@ func TestScoringVersionMirroredInApp(t *testing.T) {
 	}
 	if mirrored != lyricsScoringVersion {
 		t.Errorf("打分版本两边不一致: Go lyricsScoringVersion=%d, App currentLyricsScoringVersion=%d —— "+
-			"改打分公式时两处要一起改,否则 App 的「旧打分算法」标记会静默失效",
+			"改打分公式时两处要一起改,否则 App 的「旧版评分规则」标记会静默失效",
 			lyricsScoringVersion, mirrored)
 	}
 }

@@ -129,7 +129,7 @@ public enum LyricsVerdictBuilder {
         "sourceDurationOff", "liveAlbumConflict", "wordTimingOverride", "timelineOffset",
     ]
 
-    /// 「几乎打平」的判据:分差 ≤1 分,或不到冠军分的 1%。
+    /// 「接近平分」的判据:分差 ≤1 分,或不到冠军分的 1%。
     /// 两条都要 —— 低分局(冠军 200 分)里 1% 还不到 2 分,高分局(冠军 1200)里 1% 是 12 分,
     /// 只用相对值会把低分局的真实差距说成打平,只用绝对值会把高分局的微弱差距说成有差距。
     public static func isNearTie(gap: Int, championScore: Int) -> Bool {
@@ -184,7 +184,7 @@ public enum LyricsVerdictBuilder {
         let nearTie = isNearTie(gap: gap, championScore: champion.score)
         let sep = separator(champion: champion, runnerUp: runnerUp)
 
-        // ② 否决性负分优先 —— 它比「几乎打平」更具体,而且这两类几乎不会同时命中
+        // ② 否决性负分优先 —— 它比「接近平分」更具体,而且这两类几乎不会同时命中
         //    (吃了 600 分负分还能打平的对局极罕见)。
         let championTerms = Dictionary(champion.terms.map { ($0.kind, $0.points) },
                                        uniquingKeysWith: { a, _ in a })

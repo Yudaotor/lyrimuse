@@ -952,7 +952,7 @@ func runLyricsManagerTests() {
         ]
         expectEqual(V.build(candidates: sampleC, winner: "kugou"),
                     .decisiveNegative(term: term("versionTags", -600), loser: "netease", gap: 221),
-                    "判词C: 亚军吃了冠军没有的 −600,绝对值 ≥ 221 分的分差 → 这一项就是胜负手")
+                    "判词C: 亚军吃了冠军没有的 −600,绝对值 ≥ 221 分的分差 → 这一项就是决定性差异")
         // 被拒的那条(rejectPlainTextOnly,存档里 score 恒为 -1)不参赛 —— 它进了候选表就会
         // 把 ranked/champion/共有项全带偏,而那个 -1 是内部手段不是评价。
         expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "musixmatch"],
@@ -1285,7 +1285,7 @@ func runLyricsManagerTests() {
         }
     }
 
-    // ---- 「这一轮的输入与经过」的版面 ----
+    // ---- 「本轮输入与过程」的版面 ----
     //
     // 会**静默**退回去的就是下面这几条 —— 改回一整句话不会编译报错,
     // 只会在某首专辑名长的歌上重新变成一团。

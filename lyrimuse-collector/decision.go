@@ -98,7 +98,7 @@ type lyricsDecision struct {
 	// 去读旁路文件。老记录没有它时由拆分那一步从候选里补上(decisionWinnerArtist)。
 	WinnerArtist string `json:"winner_artist,omitempty"`
 	// DetailsExternal:这一槽的 candidates / queries_tried 已经挪到旁路文件(decisionstore.go)。读的一方
-	// 按指纹补不回来时据此显示「候选明细缺失」,而不是误报成「这一轮没有任何源给出候选」—— 候选为空时
+	// 按指纹补不回来时据此显示「候选明细缺失」,而不是误报成「本轮没有源返回候选」—— 候选为空时
 	// Candidates 本来就因 omitempty 不落盘,光看字段在不在分不清这两种情况。
 	DetailsExternal bool `json:"details_external,omitempty"`
 }

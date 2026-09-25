@@ -271,7 +271,7 @@ func runSearchLyricsCLI(args []string) {
 		//
 		// Applied 这里给的是**近似值**:CLI 看不到缓存里的正文,只能按"冠军是否换了源"判,
 		// 于是"同源但换了内容"会被算成 false。调用方(EnrichCacheStore 那条采纳路径)知道真相,
-		// **必须覆写它** —— 不覆写的话「解析决策」弹窗会把 false 渲染成「评估后维持原状」,
+		// **必须覆写它** —— 不覆写的话「解析决策」弹窗会把 false 渲染成「评估后未更换」,
 		// 跟结果行说的"已换成一份"直接打架(实测撞到过)。
 		if p.Decidable {
 			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, effectiveDuration,

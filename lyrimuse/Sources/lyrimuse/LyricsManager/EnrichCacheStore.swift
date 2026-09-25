@@ -1215,7 +1215,7 @@ struct LyricsResolutionDecision: Decodable {
     let retryMethod: String?
     let correctedTitle: String?
     /// 候选明细挪到了旁路文件、却按指纹补不回来(`DecisionSidecar`)。true 时候选表显示「明细缺失」,
-    /// 而不是误报成「这一轮没有任何源给出候选」。
+    /// 而不是误报成「本轮没有源返回候选」。
     let detailsExternal: Bool?
     /// 这一轮**实际问出去的每一组查询词**(collector 侧见 querylog.go)。
     /// 上面 queryArtist/queryTitle/queryAlbum 记的只是**首轮**那一组;一轮解析最多会换五种

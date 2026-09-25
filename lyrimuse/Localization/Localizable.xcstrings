@@ -6781,7 +6781,7 @@
         }
       }
     },
-    "取不到最后一句的时间" : {
+    "无法获取末句时间" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -6793,13 +6793,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "取不到最后一句的时间"
+            "value" : "无法获取末句时间"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "取不到最後一句的時間"
+            "value" : "無法取得末句時間"
           }
         }
       }
@@ -10933,25 +10933,25 @@
         }
       }
     },
-    "当初自动挑选歌词那一刻的存档，现在重新搜索结果可能不同" : {
+    "自动选定歌词时的存档，现在重新搜索结果可能不同" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A snapshot from when the lyrics were picked automatically; searching again now may give different results"
+            "value" : "Saved when the lyrics were picked automatically; searching again now may give different results"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当初自动挑选歌词那一刻的存档，现在重新搜索结果可能不同"
+            "value" : "自动选定歌词时的存档，现在重新搜索结果可能不同"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "當初自動挑選歌詞那一刻的存檔，現在重新搜尋結果可能不同"
+            "value" : "自動選定歌詞時的存檔，現在重新搜尋結果可能不同"
           }
         }
       }
@@ -13044,25 +13044,25 @@
         }
       }
     },
-    "整份只有署名行，没有正文" : {
+    "仅含署名行，无正文" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Credits only, no actual lyrics"
+            "value" : "Credits only, no lyrics"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "整份只有署名行，没有正文"
+            "value" : "仅含署名行，无正文"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "整份只有署名行，沒有內文"
+            "value" : "僅含署名行，無正文"
           }
         }
       }
@@ -13543,25 +13543,25 @@
         }
       }
     },
-    "旧打分算法" : {
+    "旧版评分规则" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Older scoring"
+            "value" : "Older scoring rules"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "旧打分算法"
+            "value" : "旧版评分规则"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "舊評分演算法"
+            "value" : "舊版評分規則"
           }
         }
       }
@@ -13658,25 +13658,25 @@
         }
       }
     },
-    "时长明显对不上，也没有别的源印证" : {
+    "时长明显不符，且无其他源印证" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration is far off and nothing corroborates it"
+            "value" : "Duration clearly off, not corroborated"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "时长明显对不上，也没有别的源印证"
+            "value" : "时长明显不符，且无其他源印证"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "時長明顯對不上，也沒有其他來源印證"
+            "value" : "時長明顯不符，且無其他來源印證"
           }
         }
       }
@@ -13727,25 +13727,25 @@
         }
       }
     },
-    "是另一场演出的现场版" : {
+    "现场版场次不符" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A live recording from a different show"
+            "value" : "Live recording from a different show"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "是另一场演出的现场版"
+            "value" : "现场版场次不符"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "是另一場演出的現場版"
+            "value" : "現場版場次不符"
           }
         }
       }
@@ -20185,7 +20185,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Missing-Lyrics Refill"
+            "value" : "Missing lyrics refill"
           }
         },
         "zh-Hans" : {
@@ -20197,7 +20197,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "補搜尋缺失的歌詞"
+            "value" : "補搜缺失歌詞"
           }
         }
       }
@@ -20248,25 +20248,25 @@
         }
       }
     },
-    "规则换版重选" : {
+    "评分规则更新后重选" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rescore after rule change"
+            "value" : "Re-picked after a scoring rule update"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "规则换版重选"
+            "value" : "评分规则更新后重选"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "規則換版重選"
+            "value" : "評分規則更新後重選"
           }
         }
       }
@@ -20650,25 +20650,25 @@
         }
       }
     },
-    "评估后维持原状" : {
+    "评估后未更换" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Evaluated, kept current"
+            "value" : "Evaluated, not replaced"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "评估后维持原状"
+            "value" : "评估后未更换"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "評估後維持原狀"
+            "value" : "評估後未更換"
           }
         }
       }
@@ -20811,25 +20811,25 @@
         }
       }
     },
-    "语言跟这首歌对不上" : {
+    "语言不符" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Language does not match this song"
+            "value" : "Language mismatch"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "语言跟这首歌对不上"
+            "value" : "语言不符"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "語言跟這首歌對不上"
+            "value" : "語言不符"
           }
         }
       }
@@ -22243,25 +22243,25 @@
         }
       }
     },
-    "这一轮没有任何源给出候选" : {
+    "本轮没有源返回候选" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No source returned a candidate that round"
+            "value" : "No source returned a candidate this round"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这一轮没有任何源给出候选"
+            "value" : "本轮没有源返回候选"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這一輪沒有任何源給出候選"
+            "value" : "本輪沒有來源回傳候選"
           }
         }
       }
@@ -25011,7 +25011,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "First resolve"
+            "value" : "First resolution"
           }
         },
         "zh-Hans" : {
@@ -29411,36 +29411,36 @@
         }
       }
     },
-    "别名轮：一个候选都没有" : {
+    "别名轮：无可用候选" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alias round: no candidate at all"
+            "value" : "Alias round: no usable candidate"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "別名輪：一個候選都沒有"
+            "value" : "別名輪：無可用候選"
           }
         }
       }
     },
-    "别名轮：补缺席的源" : {
+    "别名轮：补查未应答的源" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alias round: sources that stayed silent"
+            "value" : "Alias round: sources that did not answer"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "別名輪：補缺席的來源"
+            "value" : "別名輪：補查未回應的來源"
           }
         }
       }
@@ -29485,7 +29485,7 @@
         }
       }
     },
-    "只用第一位歌手" : {
+    "仅用首位歌手" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -29497,24 +29497,24 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只用第一位歌手"
+            "value" : "僅用首位歌手"
           }
         }
       }
     },
-    "只问 %@" : {
+    "仅查询 %@" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "asked %@ only"
+            "value" : "queried %@ only"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只問 %@"
+            "value" : "僅查詢 %@"
           }
         }
       }
@@ -29666,19 +29666,19 @@
         }
       }
     },
-    "翻唱：按翻唱者" : {
+    "按翻唱者署名" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cover: by the covering artist"
+            "value" : "Covering artist from the title"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "翻唱：按翻唱者"
+            "value" : "按翻唱者署名"
           }
         }
       }
@@ -29717,7 +29717,7 @@
         }
       }
     },
-    "歌名始终是「%@」" : {
+    "歌名始终为「%@」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -29729,7 +29729,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌名始終是「%@」"
+            "value" : "歌名始終為「%@」"
           }
         }
       }
@@ -29921,7 +29921,7 @@
         }
       }
     },
-    "跟 %@ 是同一份词" : {
+    "与 %@ 正文相同" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -29933,7 +29933,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "與 %@ 是同一份歌詞"
+            "value" : "與 %@ 正文相同"
           }
         }
       }
@@ -29986,19 +29986,19 @@
         }
       }
     },
-    "这一轮实际问过 %d 组" : {
+    "本轮共查询 %d 组" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Queried %d ways this round"
+            "value" : "%d query sets this round"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這一輪實際問過 %d 組"
+            "value" : "本輪共查詢 %d 組"
           }
         }
       }
@@ -30020,19 +30020,19 @@
         }
       }
     },
-    "这个源明确说这首是纯音乐，所以它没有参与打分" : {
+    "该源标记此曲为纯音乐，未参与评分" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This source says the track is instrumental, so it was not scored"
+            "value" : "This source marks the track as instrumental, so it was not scored"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這個來源明確說這首是純音樂，所以它沒有參與評分"
+            "value" : "該來源標記此曲為純音樂，未參與評分"
           }
         }
       }
@@ -30229,19 +30229,19 @@
         }
       }
     },
-    "%1$@ 在这一项上被扣 %2$d 分，胜者没有这一项——%3$d 分的分差全在这里。" : {
+    "%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ lost %2$d points on it and the winner did not — that is the entire %3$d-point gap."
+            "value" : "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ 在這一項上被扣 %2$d 分，勝者沒有這一項——%3$d 分的分差全在這裡。"
+            "value" : "%1$@ 在此項被扣 %2$d 分，勝者未被扣分，%3$d 分的分差全部來自此項。"
           }
         }
       }
@@ -30280,53 +30280,53 @@
         }
       }
     },
-    "%d 个源给的是同一份词" : {
+    "%d 个源的歌词正文相同" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d sources returned the same lyrics"
+            "value" : "%d sources returned identical lyrics"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d 個來源給的是同一份歌詞"
+            "value" : "%d 個來源的歌詞正文相同"
           }
         }
       }
     },
-    "「%@」是胜负手" : {
+    "决定性差异：「%@」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” decided it"
+            "value" : "Deciding difference: “%@”"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」是勝負關鍵"
+            "value" : "決定性差異：「%@」"
           }
         }
       }
     },
-    "两边打分完全相同，先后由来源顺序决定。" : {
+    "两者各项得分完全相同，按源的顺序排列。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Both scored identically on every term; the order came from the source list."
+            "value" : "Both scored identically on every term; ordered by source order."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "兩邊評分完全相同，先後由來源順序決定。"
+            "value" : "兩者各項得分完全相同，按來源順序排列。"
           }
         }
       }
@@ -30365,70 +30365,70 @@
         }
       }
     },
-    "分差只有 %1$d 分（%2$@），几乎打平。" : {
+    "分差只有 %1$d 分（%2$@），接近平分。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Score gap: only %1$d (%2$@) — practically a tie."
+            "value" : "Score gap: only %1$d (%2$@) — nearly tied."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分差只有 %1$d 分（%2$@），幾乎打平。"
+            "value" : "分差只有 %1$d 分（%2$@），接近平分。"
           }
         }
       }
     },
-    "分差只有 %d 分，几乎打平。" : {
+    "分差只有 %d 分，接近平分。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Score gap: only %d — practically a tie."
+            "value" : "Score gap: only %d — nearly tied."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分差只有 %d 分，幾乎打平。"
+            "value" : "分差只有 %d 分，接近平分。"
           }
         }
       }
     },
-    "分差比的是包装（有没有逐字轴、有没有译文），不是内容。" : {
+    "分差来自附加信息（逐字时间轴、译文），与歌词正文无关。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The gap compares packaging (word-level timing, translations), not the lyrics themselves."
+            "value" : "The gap comes from extras (word-level timing, translations), not from the lyrics themselves."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分差比的是包裝（有沒有逐字軸、有沒有譯文），不是內容。"
+            "value" : "分差來自附加資訊（逐字時間軸、譯文），與歌詞正文無關。"
           }
         }
       }
     },
-    "分项合计 %1$d，被夹到最低分 %2$d" : {
+    "分项合计 %1$d，按下限计为 %2$d" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terms add up to %1$d; clamped to the floor of %2$d"
+            "value" : "Terms add up to %1$d; floored at %2$d"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分項合計 %1$d，被夾到最低分 %2$d"
+            "value" : "分項合計 %1$d，按下限計為 %2$d"
           }
         }
       }
@@ -30535,53 +30535,53 @@
         }
       }
     },
-    "歌名对不上：本地叫「%1$@」，找到的是《%2$@》" : {
+    "歌名不一致：本地为「%1$@」，匹配到《%2$@》" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Title mismatch: local title is “%1$@”, found under “%2$@”"
+            "value" : "Title mismatch: local title is “%1$@”, matched “%2$@”"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "曲名對不上：本機叫「%1$@」，找到的是《%2$@》"
+            "value" : "曲名不一致：本機為「%1$@」，比對到《%2$@》"
           }
         }
       }
     },
-    "本地那个歌名没搜到，最后靠「%@」问出真名。" : {
+    "本地歌名无检索结果，经「%@」查得正式曲名。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The local title found nothing; the real one came from “%@”."
+            "value" : "The local title returned nothing; the official title was found via “%@”."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本機那個曲名沒搜到，最後靠「%@」問出真名。"
+            "value" : "本機曲名無搜尋結果，經「%@」查得正式曲名。"
           }
         }
       }
     },
-    "源数分母是当前启用的 %d 个源；老条目当年可用的源可能更少" : {
+    "分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The denominator is the %d sources enabled right now; older entries may have had fewer available"
+            "value" : "The denominator is the %d sources enabled now; older entries may have had fewer available at the time"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "來源數分母是目前啟用的 %d 個來源；舊項目當年可用的來源可能更少"
+            "value" : "分母為目前啟用的 %d 個來源；較早的項目當時可用的來源可能更少"
           }
         }
       }
@@ -30654,58 +30654,58 @@
         }
       }
     },
-    "这一轮的输入与经过" : {
+    "本轮输入与过程" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inputs and what happened this round"
+            "value" : "This round's inputs and process"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這一輪的輸入與經過"
+            "value" : "本輪輸入與過程"
           }
         }
       }
     },
-    "问过 %d 组词" : {
+    "查询 %d 组" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d query sets tried"
+            "value" : "%d query sets"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "問過 %d 組詞"
+            "value" : "查詢 %d 組"
           }
         }
       }
     },
-    "%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。" : {
+    "%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only %2$d of %1$d candidates were corroborated, so they may not all be the same lyrics."
+            "value" : "Only %2$d of %1$d candidates were corroborated; their lyrics may differ."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$d 個候選裡只有 %2$d 個拿到了內容印證，未必都是同一份歌詞。"
+            "value" : "%1$d 個候選中僅 %2$d 個獲得內容印證，正文未必一致。"
           }
         }
       }
     },
-    "两边同分。" : {
+    "两者同分。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -30717,24 +30717,24 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "兩邊同分。"
+            "value" : "兩者同分。"
           }
         }
       }
     },
-    "几乎打平，但内容印证不全" : {
+    "接近平分，但内容印证不完整" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Practically a tie, but not all corroborated"
+            "value" : "Nearly tied, but not fully corroborated"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "幾乎打平，但內容印證不全"
+            "value" : "接近平分，但內容印證不完整"
           }
         }
       }
@@ -31113,36 +31113,36 @@
         }
       }
     },
-    "全部源重问" : {
+    "全部源重新查询" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "re-asked every source"
+            "value" : "re-queried every source"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "全部來源重問"
+            "value" : "全部來源重新查詢"
           }
         }
       }
     },
-    "别名轮：中日韩歌词但没有源给出罗马音" : {
+    "别名轮：补罗马音" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alias round: CJK lyrics, but no source supplied romanization"
+            "value" : "Alias round: missing romanization"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "別名輪：中日韓歌詞但沒有來源給出羅馬拼音"
+            "value" : "別名輪：補羅馬拼音"
           }
         }
       }
@@ -31256,25 +31256,25 @@
         }
       }
     },
-    "这是连续混音版，跟原版不是同一次编排" : {
+    "连续混音版，与原版编排不同" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This is a continuous mix, not the same take as the original"
+            "value" : "Continuous mix, arranged differently from the original"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这是连续混音版，跟原版不是同一次编排"
+            "value" : "连续混音版，与原版编排不同"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這是連續混音版，跟原版不是同一次編排"
+            "value" : "連續混音版，與原版編排不同"
           }
         }
       }
@@ -33583,25 +33583,25 @@
         }
       }
     },
-    "时间轴整体错开，对的是另一个版本" : {
+    "时间轴整体偏移" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Timeline shifted — synced to a different version"
+            "value" : "Whole timeline offset"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "时间轴整体错开，对的是另一个版本"
+            "value" : "时间轴整体偏移"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "時間軸整體錯開，對的是另一個版本"
+            "value" : "時間軸整體偏移"
           }
         }
       }
@@ -33629,25 +33629,25 @@
         }
       }
     },
-    "这一轮的候选明细找不到了" : {
+    "本轮候选明细已不可用" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This round's candidate details can't be found"
+            "value" : "This round's candidate details are no longer available"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这一轮的候选明细找不到了"
+            "value" : "本轮候选明细已不可用"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這一輪的候選明細找不到了"
+            "value" : "本輪候選明細已無法取得"
           }
         }
       }
