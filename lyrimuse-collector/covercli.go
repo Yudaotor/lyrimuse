@@ -113,7 +113,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 	}
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。deviceCoverURL
 	// 传空串:这条 CLI 没有实时播放上下文,拿不到"设备现在正在播这首歌"这个前提。
-	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "", nil)
+	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "", nil, lyricsDecisionPathFirstResolve)
 	p.newURL, p.newSource, p.newAlbum, p.newAccent = fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	// 换封面判定用的专辑名:播放器没报时是 Apple 目录回填的那个(resolveTrackEnrichment 里刚同步查过,这里读缓存;
 	// 这个一次性进程的回填缓存 path 为空 = 只用内存,不会盖掉常驻实例那份)。

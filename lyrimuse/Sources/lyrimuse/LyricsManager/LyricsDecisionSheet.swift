@@ -65,6 +65,9 @@ struct LyricsDecisionSheet: View {
         // 用户在详情页点「重新自动匹配」那一次(collector search-lyrics -pick 写下的存档)。
         // 跟上面三条自动路径分开显示:它是手动触发的,但用的是**同一套**自动决策规则。
         case "manual-rematch": return L10n.t("手动重新匹配")
+        // 补全封面 / 链接 / 主色那一轮(collector 的 backfillPeripheralFields):条目原本没词时收下这一轮的歌词,
+        // 否则只是一份评估存档。
+        case "peripheral-backfill": return L10n.t("补全曲目信息")
         // 兜底显示原始值:collector 那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
         // (而不是空白)。但那就是漏了 —— 这张表跟 collector 里 buildLyricsDecision 的 path
         // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。

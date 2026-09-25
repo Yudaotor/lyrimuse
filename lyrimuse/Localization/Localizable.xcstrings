@@ -30350,6 +30350,23 @@
         }
       }
     },
+    "补全曲目信息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track info backfill"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "補全曲目資訊"
+          }
+        }
+      }
+    },
     "翻唱：按翻唱者" : {
       "extractionState" : "manual",
       "localizations" : {

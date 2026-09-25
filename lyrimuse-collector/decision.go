@@ -147,14 +147,15 @@ type lyricsDecisionCandidate struct {
 // 加 manual-rematch 时就这么漏过一次(对拍反馈「这里的文案是否没做好中文的」)。
 // lyricsDecisionPaths 那个测试守着这份清单,改了要一起改。
 const (
-	lyricsDecisionPathFirstResolve  = "first-resolve"  // 首次解析
-	lyricsDecisionPathUpgrade       = "upgrade"        // 升级重试(本来有、想换更好的)
-	lyricsDecisionPathRefill        = "refill"         // 补搜缺失歌词(本来一条都没搜到)
-	lyricsDecisionPathRescore       = "rescore"        // 规则换版重选
-	lyricsDecisionPathManualRematch = "manual-rematch" // 用户点「重新自动匹配」那一次
+	lyricsDecisionPathFirstResolve  = "first-resolve"       // 首次解析
+	lyricsDecisionPathUpgrade       = "upgrade"             // 升级重试(本来有、想换更好的)
+	lyricsDecisionPathRefill        = "refill"              // 补搜缺失歌词(本来一条都没搜到)
+	lyricsDecisionPathRescore       = "rescore"             // 规则换版重选
+	lyricsDecisionPathManualRematch = "manual-rematch"      // 用户点「重新自动匹配」那一次
+	lyricsDecisionPathPeripheral    = "peripheral-backfill" // 补外围字段那一轮(条目原本没歌词时顺带收下)
 )
 
-// lyricsDecisionPaths 是上面那五条的清单,给测试用(见 lyricsdecisionpath_test.go)。
+// lyricsDecisionPaths 是上面那六条的清单,给测试用(见 lyricsdecisionpath_test.go)。
 func lyricsDecisionPaths() []string {
 	return []string{
 		lyricsDecisionPathFirstResolve,
@@ -162,6 +163,7 @@ func lyricsDecisionPaths() []string {
 		lyricsDecisionPathRefill,
 		lyricsDecisionPathRescore,
 		lyricsDecisionPathManualRematch,
+		lyricsDecisionPathPeripheral,
 	}
 }
 

@@ -1295,6 +1295,7 @@
 "行上按 %1$@ 次计，明细合计 %2$@ 次" = "The row counts %1$@, the breakdown totals %2$@";
 "行为" = "Behavior";
 "行数" = "Lines";
+"补全曲目信息" = "Track info backfill";
 "补提交" = "Backfill";
 "补提交没能完成，请稍后再试" = "Backfill didn't finish. Try again later.";
 "补搜中 %1$@/%2$@" = "Searching %1$@/%2$@";

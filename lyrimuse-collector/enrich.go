@@ -1852,7 +1852,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		commitEnrichEntrySince(key, p, stamp)
 		log.Printf("lyrics: committed early for %q (source=%s), peripheral fields still resolving", key, p.LyricsSource)
 	}
-	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL, early)
+	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL, early, lyricsDecisionPathFirstResolve)
 	// 首次解析:换曲那一拍 poller 留下的 Spotify 曲目 ID 一并写进条目(见 spotifytrack.go)。首次解析的 key
 	// 就是原始 key(canonical 命中的话走的是上面缓存命中那条路),直接按它查。
 	enrichMu.Lock()
@@ -2159,6 +2159,10 @@ func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, albu
 // backfillPeripheralFields 只补外围链接(Apple/QQ/网易云/主色),绝不动歌词/封面来源/
 // 人工修正标记等身份字段——这些一旦解析出结果就永久生效,不该被这条自愈路径悄悄改掉。
 func backfillPeripheralFields(key, artist, title, album string, durationSecs float64) {
+	// 开跑时的改动序号:这一轮顺带收下歌词之前要核对这期间没人改过这条(见 adoptBackfilledLyrics)。
+	enrichMu.Lock()
+	stamp := enrichEditStampLocked()
+	enrichMu.Unlock()
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -2170,7 +2174,7 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	// deviceCoverURL 传空串,理由见 resolveTrackEnrichment 参数注释:补的是已存在条目的
 	// 外围字段,补的这一刻播的多半已经是别的歌,不能假装这是"正在播的这首"。设备封面的
 	// 升级另有专门路径(applyDeviceCoverUpgrade),不走这里。
-	fresh := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, "", nil)
+	fresh := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, "", nil, lyricsDecisionPathPeripheral)
 	// 换封面判定用的专辑名:播放器没报时是 Apple 目录回填的那个(刚才 resolveTrackEnrichment 里已经同步查过,
 	// 这里只读缓存)。必须在取 enrichMu 之前算,理由见 trackEnrichment 里同一行的注释。
 	coverAlbum := coverAlbumForTrack(ctx, artist, title, album, durationSecs)
@@ -2262,6 +2266,11 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	if e.DurationSecs <= 0 {
 		e.DurationSecs = fresh.DurationSecs
 	}
+	// 条目原本没歌词、这一轮顺带搜到了:收下,规则见 adoptBackfilledLyrics。这期间被改过就不收。
+	lyricsAdopted := !enrichEditedSinceLocked(key, stamp) && adoptBackfilledLyrics(&e, fresh)
+	if lyricsAdopted {
+		log.Printf("lyrics: peripheral backfill filled empty lyrics for %q (source=%s score=%d)", key, e.LyricsSource, e.LyricsScore)
+	}
 	// 只推自己那个节流时间戳。**不要**去动 e.TS —— 那是这条记录的解析时刻,歌词重搜拿它
 	// 当起算点,推它等于每补一次外围字段就把歌词重搜往后拖 10 分钟(见 TS 字段的注释)。
 	e.PeripheralTS = time.Now().Unix()
@@ -2270,7 +2279,13 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
-	requestEnrichSave()
+	if lyricsAdopted {
+		// 收下了歌词:正在播的这首当场落盘(同首次解析),并导出歌词文件。
+		commitEnrichSave(key)
+		exportLyricsFilesFor(key)
+	} else {
+		requestEnrichSave()
+	}
 	if enrichNotify != nil {
 		select {
 		case enrichNotify <- struct{}{}:
@@ -2293,7 +2308,9 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 // 只有 resolveEnrichAsync(首次解析,唯一能保证这一刻确实对应"正在播放的这首歌"的
 // 调用点)会传非空值;backfillPeripheralFields(补的是已有条目,补的时候播的多半已经
 // 是别的歌)、covercli.go(手动 CLI,没有实时播放上下文)都传空串,走原有级联。
-func resolveTrackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64, deviceCoverURL string, onLyrics func(enrichEntry)) enrichEntry {
+//
+// decisionPath 是这一轮决策存档与 trace 标的来路(lyricsDecisionPath*),由调用方按自己是哪条路径给。
+func resolveTrackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64, deviceCoverURL string, onLyrics func(enrichEntry), decisionPath string) enrichEntry {
 	// 统一转成简体再往下传给 NetEase/QQ/酷狗/LRCLIB 的搜索接口——这几个平台的曲库/搜索
 	// 索引都是简体中文,本地 Apple Music 标签如果是繁体,拿繁体原文直接发起搜索请求会
 	// 完全查不到候选(不是匹配质量差,是搜索接口本身没命中)。match.go 的 normLoose 里
@@ -2345,14 +2362,14 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
 	// 就是这首歌以后一直显示的东西,不记下来事后无从复盘。
 	e.LyricsDecision = buildLyricsDecision(
-		lyricsDecisionPathFirstResolve, artist, title, album, durationSecs, scored, picked, picked != nil)
+		decisionPath, artist, title, album, durationSecs, scored, picked, picked != nil)
 	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
 	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。
 	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)
 	if picked != nil {
-		// 首次解析选中了 → 这一轮就是当前歌词的出处(分槽语义见 LyricsDecisionApplied)。
+		// 选中了 → 这一轮就是当前歌词的出处(分槽语义见 LyricsDecisionApplied)。
 		e.LyricsDecisionApplied = e.LyricsDecision
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
