@@ -366,6 +366,76 @@ func runSettingsInteractionTests() {
         expectEqual(F.importSummary(failed: 3, total: 3), .allFailed, "导入字体: 全部失败说「不是有效字体」")
         expectEqual(F.importSummary(failed: 1, total: 1), .allFailed, "导入字体: 只选一个且失败也算全部失败")
         expectEqual(F.importSummary(failed: 2, total: 5), .someFailed(2), "导入字体: 部分失败报失败个数")
+        expectEqual(F.importSummary(failed: 2, total: 2, unreadable: 2), .allUnreadable, "导入字体: 全是读不到文件时说读不到,不说「不是字体」")
+        expectEqual(F.importSummary(failed: 2, total: 2, unreadable: 1), .allFailed, "导入字体: 混着不是字体的,仍说「不是有效字体」")
+        expectEqual(F.importSummary(failed: 1, total: 3, unreadable: 1), .someFailed(1), "导入字体: 部分失败照旧报个数")
+
+        // 选中的字体此刻在不在
+        expectEqual(F.isMissing("", available: []), false, "字体未安装: 跟随系统字体永远可用")
+        expectEqual(F.isMissing("Lato", available: ["Lato", "Arial"]), false, "字体未安装: 在可用列表里")
+        expectEqual(F.isMissing("Lato", available: ["Arial"]), true, "字体未安装: 换机后没带过来 / 删掉了")
+        expectEqual(F.availableFamilyNames().contains("Helvetica"), true, "字体未安装: 实时族名列表里有系统字体")
+
+        // 同一族几个文件归成一行
+        let grouped = F.groupByFamily([(fileName: "Lato-Bold.ttf", family: "Lato"), (fileName: "b.otf", family: "abc"),
+                                       (fileName: "Lato-Regular.ttf", family: "Lato")])
+        expectEqual(grouped.map(\.family), ["abc", "Lato"], "导入字体: 按族名归并、不区分大小写排序")
+        expectEqual(grouped.last?.fileNames, ["Lato-Bold.ttf", "Lato-Regular.ttf"], "导入字体: 同族文件归在一行")
+
+        // 导入与删除的源码契约
+        let settingsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let store = (try? String(contentsOf: settingsDir.appendingPathComponent("Settings/CustomFontStore.swift"), encoding: .utf8)) ?? ""
+        let picker = (try? String(contentsOf: settingsDir.appendingPathComponent("UI/FontFamilyPicker.swift"), encoding: .utf8)) ?? ""
+        expectEqual(store.isEmpty || picker.isEmpty, false, "导入字体(契约): 读到源码")
+        let importBody = store.components(separatedBy: "func importFont(from url: URL) throws {").dropFirst().first ?? ""
+        let copyAt = importBody.range(of: "try fm.copyItem(at: url, to: staging)")?.lowerBound
+        let unregisterAt = importBody.range(of: "unregister(dest)")?.lowerBound
+        expectEqual(copyAt != nil && unregisterAt != nil && copyAt! < unregisterAt!, true,
+                    "导入字体(契约): 先复制到临时文件并校验,通过后才动旧的那份")
+        for field in ["fontFamilyName", "notchFontFamilyName", "menuBarLyricsFontFamily",
+                      "lyricsWindowFontFamily", "lyricsWindowMiniFontFamily"] {
+            expectEqual(store.contains("if settings.\(field) == font.familyName { settings.\(field) = \"\" }"), true,
+                        "删除字体(契约): \(field) 仍指向删掉的族时退回系统字体")
+        }
+        expectEqual(picker.contains("!customFonts.isImported($0) && customFonts.availableFamilies.contains($0)"), true,
+                    "字体选择器(契约): 系统字体区不重复列导入字体、不列已删掉的族")
+        expectEqual(picker.contains("String(format: L10n.t(\"%@（未安装）\"), selection)"), true,
+                    "字体选择器(契约): 选中的族不在时标「未安装」")
+    }
+
+    // ---- Apple Music 令牌文件:到期、被拒、老文件 ----
+    do {
+        typealias T = AppleMusicTokenFile
+        let fileDate = Date(timeIntervalSince1970: 1_700_000_000)
+        func parse(_ json: String) -> T.Info? { T.parse(Data(json.utf8), fileDate: fileDate) }
+        let base = parse(#"{"media_user_token":"t","storefront":"cn","saved_at":1800000000}"#)
+        expectEqual(base?.storefront, "cn", "Apple Music 令牌: 店面")
+        expectEqual(base?.expiresAt, Date(timeIntervalSince1970: 1_800_000_000 + T.tokenLifetime), "Apple Music 令牌: 没有 cookie 过期时刻时按保存时间 + 6 个月")
+        expectEqual(base?.rejected, false, "Apple Music 令牌: 没被拒")
+        expectEqual(parse(#"{"media_user_token":"t","saved_at":1800000000,"expires_at":1801000000}"#)?.expiresAt,
+                    Date(timeIntervalSince1970: 1_801_000_000), "Apple Music 令牌: cookie 自带的过期时刻优先")
+        expectEqual(parse(#"{"media_user_token":"t"}"#)?.savedAt, fileDate,
+                    "Apple Music 令牌: 老文件没有 saved_at 时用文件修改时间,不按「现在」起算")
+        expectEqual(parse(#"{"media_user_token":"t","saved_at":1800000000,"rejected_at":1800000500}"#)?.rejected, true,
+                    "Apple Music 令牌: 保存之后被拒过 = 失效")
+        expectEqual(parse(#"{"media_user_token":"t","saved_at":1800000000,"rejected_at":1799999000}"#)?.rejected, false,
+                    "Apple Music 令牌: 被拒早于这次保存(重连之前的事)不算")
+        expectEqual(parse(#"{"media_user_token":"  "}"#) == nil && parse("oops") == nil, true, "Apple Music 令牌: 没有令牌 = 未连接")
+        let payload = T.payload(token: "t", storefront: "", savedAt: Date(timeIntervalSince1970: 10), expiresAt: nil)
+        expectEqual(payload["expires_at"] == nil && payload["saved_at"] as? Int == 10, true, "Apple Music 令牌: cookie 没带过期时刻就不写 expires_at")
+
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/AppleMusicConnection.swift")
+        let conn = (try? String(contentsOf: src, encoding: .utf8)) ?? ""
+        let connectBody = conn.components(separatedBy: "public func connect() {").dropFirst().first ?? ""
+        let clearAt = connectBody.range(of: "Self.clearAppleWebsiteData {")?.lowerBound
+        let controllerAt = connectBody.range(of: "AppleMusicLoginWindowController(tokenURL:")?.lowerBound
+        expectEqual(clearAt != nil && controllerAt != nil && clearAt! < controllerAt!, true,
+                    "Apple Music 连接(契约): 先清掉旧登录态、清完才开登录窗(不然重连读回旧令牌)")
+        expectEqual(conn.contains("attributes: [.posixPermissions: 0o600]") && conn.contains("rename(tmp.path, url.path)"), true,
+                    "Apple Music 连接(契约): 凭据文件从创建起就是 0600")
+        expectEqual(conn.contains("expiresAt: tokenCookie.expiresDate"), true, "Apple Music 连接(契约): 记下 cookie 自带的过期时刻")
     }
 
     // ---- 配置包自报的导出时间 / 机器名(ConfigExportMetadata)----

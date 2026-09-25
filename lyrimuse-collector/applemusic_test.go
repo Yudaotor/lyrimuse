@@ -262,3 +262,38 @@ func TestApplemusicCoverReplacesAllPlaceholders(t *testing.T) {
 		t.Fatal("空 URL 应当返回空串")
 	}
 }
+
+// 令牌被拒:只标记文件里同一份令牌,已经记过不重写;回写店面保留新字段。
+func TestApplemusicMarkTokenRejected(t *testing.T) {
+	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
+	path := applemusicUserTokenPath()
+	write := func(f applemusicUserTokenFile) {
+		raw, _ := json.Marshal(f)
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func() applemusicUserTokenFile {
+		raw, _ := os.ReadFile(path)
+		var f applemusicUserTokenFile
+		_ = json.Unmarshal(raw, &f)
+		return f
+	}
+	write(applemusicUserTokenFile{MediaUserToken: "new", SavedAt: 100, ExpiresAt: 200})
+	applemusicMarkTokenRejected("old")
+	if read().RejectedAt != 0 {
+		t.Fatal("已经换了新令牌,旧令牌的 401 不该把新令牌标成失效")
+	}
+	applemusicMarkTokenRejected("new")
+	first := read().RejectedAt
+	if first == 0 {
+		t.Fatal("同一份令牌被拒要记下")
+	}
+	applemusicSaveStorefront("cn")
+	if f := read(); f.Storefront != "cn" || f.RejectedAt != first || f.ExpiresAt != 200 || f.SavedAt != 100 {
+		t.Fatalf("回写店面要保留其余字段: %+v", f)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("凭据文件权限要是 0600: %v %v", info.Mode().Perm(), err)
+	}
+}

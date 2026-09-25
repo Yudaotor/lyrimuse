@@ -31,6 +31,8 @@ struct FontFamilyPicker: View {
     @State private var query = ""
     @State private var importError: String?
 
+    /// 第一次打开时的系统字体族快照。导入字体启动时就注册了,也在这份快照里,而且删掉之后快照不会变 ——
+    /// 所以列出来之前再按 `CustomFontStore` 过一遍(见 `filtered`)。
     private static let families: [String] = NSFontManager.shared.availableFontFamilies
         // 点号开头的是系统内部字体(.AppleSystemUIFont 这类),不该出现在给人看的选单里。
         .filter { !$0.hasPrefix(".") }
@@ -48,10 +50,12 @@ struct FontFamilyPicker: View {
         return map
     }()
 
+    /// 系统字体区:排除导入字体(它们在上面的「已导入」区,带删除键)和已经不存在的族(本次运行里删掉的导入字体)。
     private var filtered: [String] {
         let keyword = query.trimmingCharacters(in: .whitespaces)
-        guard !keyword.isEmpty else { return Self.families }
-        return Self.families.filter { family in
+        let system = Self.families.filter { !customFonts.isImported($0) && customFonts.availableFamilies.contains($0) }
+        guard !keyword.isEmpty else { return system }
+        return system.filter { family in
             family.localizedCaseInsensitiveContains(keyword)
                 || (Self.localizedNames[family]?.localizedCaseInsensitiveContains(keyword) ?? false)
         }
@@ -73,7 +77,12 @@ struct FontFamilyPicker: View {
         family.isEmpty ? L10n.t("系统字体") : family
     }
 
-    private var currentLabel: String { Self.displayName(for: selection) }
+    /// 选中的族名此刻没有字体可用(换机后没带过来 / 在别处删掉了):标「未安装」,按钮上用系统字体显示。
+    private var selectionMissing: Bool { !customFonts.isAvailable(selection) }
+
+    private var currentLabel: String {
+        selectionMissing ? String(format: L10n.t("%@（未安装）"), selection) : Self.displayName(for: selection)
+    }
 
     var body: some View {
         Button {
@@ -84,7 +93,7 @@ struct FontFamilyPicker: View {
             HStack(spacing: 5) {
                 // 按钮上就用选中的那款字体显示它自己的名字,不用点开也知道现在是什么样。
                 Text(currentLabel)
-                    .font(selection.isEmpty ? .system(size: 13) : .custom(selection, size: 13))
+                    .font(selection.isEmpty || selectionMissing ? .system(size: 13) : .custom(selection, size: 13))
                     .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9, weight: .semibold))
@@ -124,11 +133,7 @@ struct FontFamilyPicker: View {
                                     showingList = false
                                 },
                                 onDelete: {
-                                    // 删的这款正被这个选择器选中就退回系统字体——不退的话按钮上会
-                                    // 留着一个再也选不出来的族名(渲染路径 Font.overlayFont 本身
-                                    // 会显式落回系统字体、不会崩,但按钮标签是直接 .custom(selection)
-                                    // 渲染的,删完不退会显示成一款查无此字的幽灵字体)。
-                                    if selection == font.familyName { selection = "" }
+                                    // 五处字体设置里仍指向这一族的,由 remove 一起退回系统字体。
                                     customFonts.remove(font)
                                 }
                             )
@@ -195,16 +200,22 @@ struct FontFamilyPicker: View {
 
         importError = nil
         var failureCount = 0
+        var unreadableCount = 0
         for url in panel.urls {
             do {
-                _ = try customFonts.importFont(from: url)
+                try customFonts.importFont(from: url)
+            } catch CustomFontStore.ImportError.unreadable {
+                failureCount += 1
+                unreadableCount += 1
             } catch {
                 failureCount += 1
             }
         }
-        switch CustomFontFile.importSummary(failed: failureCount, total: panel.urls.count) {
+        switch CustomFontFile.importSummary(failed: failureCount, total: panel.urls.count, unreadable: unreadableCount) {
         case .allImported:
             return
+        case .allUnreadable:
+            importError = L10n.t("导入失败：读不到所选文件，可能还没下载到本机或没有读取权限")
         case .allFailed:
             importError = L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
         case .someFailed(let n):

@@ -1092,8 +1092,8 @@ private struct LyricsSettingsTab: View {
     /// 连接管理弹窗:状态一句话 + 一到两个动作。
     ///
     /// 三种形态:未连接(说明它能带来什么 + 「连接账号」)、已连接(区域 + 到期日 + 「断开」)、
-    /// 快到期/已过期(橙色提醒 + 「重新连接」)。到期日是按 Apple 的 6 个月硬上限推算的,
-    /// 不是令牌自己声明的——它不是 JWT,读不出 exp。
+    /// 快到期 / 已过期 / 被 Apple 拒过(橙色提醒 + 「重新连接」)。到期日优先用登录时 cookie 自带的过期时刻,
+    /// 没有才按 Apple 的 6 个月硬上限推算(令牌不是 JWT,读不出 exp)。
     private var appleMusicConnectionPopover: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -1147,6 +1147,9 @@ private struct LyricsSettingsTab: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         let date = formatter.string(from: expiresAt)
+        if appleMusic.isRejected {
+            return L10n.t("Apple Music 登录已失效（过期或被吊销），需要重新连接")
+        }
         if expiresAt.timeIntervalSinceNow <= 0 {
             return L10n.t("登录已过期，需要重新连接")
         }

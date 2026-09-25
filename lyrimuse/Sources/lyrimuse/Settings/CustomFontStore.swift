@@ -17,88 +17,141 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "custom
 /// `fontFamilyName` 算一遍 `mainFont` 等派生字体(`recomputeFonts()`),这时如果自定义字体
 /// 还没注册,`NSFontManager` 找不到那个族名,会静默落回系统字体,直到下一次设置变动才会
 /// 纠正过来。调用点在 `AppDelegate.applicationDidFinishLaunching` 最前面。
+///
+/// 配置搬家只带族名、不带字体文件(中文字体动辄十几 MB);换机后指向的字体不在,选择器按 `isAvailable`
+/// 在名字后面标「未安装」。
 @MainActor
 final class CustomFontStore: ObservableObject {
     static let shared = CustomFontStore()
 
-    /// 一款已导入的字体:磁盘上的文件名 + Core Text 注册后读回的族名。
+    /// 一款已导入的字体族:同一族的几个文件(Regular / Bold …)只占一行,删除时一起删。
     struct ImportedFont: Identifiable, Equatable {
-        let fileName: String
         let familyName: String
-        var id: String { fileName }
+        let fileNames: [String]
+        var id: String { familyName }
     }
 
-    /// 按族名排序,给 `FontFamilyPicker` 展示用;删除按钮按 `fileName` 操作。
+    /// 注册成功的导入字体,按族名排序,给 `FontFamilyPicker` 展示用。注册失败的文件不列:选了也只会显示系统字体。
     @Published private(set) var fonts: [ImportedFont] = []
+    /// 此刻进程里能用的字体族名(`CustomFontFile.availableFamilyNames`),在注册 / 反注册之后刷新。
+    @Published private(set) var availableFamilies: Set<String> = []
 
     enum ImportError: Error {
         /// 扩展名不是 .ttf / .otf。
         case unsupportedFormat
-        /// 选中的文件读不出来(权限、文件已被移走等)。
+        /// 选中的文件读不出来(权限、没下载到本机、文件已被移走等)。
         case unreadable
-        /// 复制到本地成功,但 Core Text 认不出这是一份有效的字体。
+        /// 读出来了,但 Core Text 认不出这是一份有效的字体。
         case invalidFont
     }
 
     private let fm = FileManager.default
     private var directory: URL { LyrimusePaths.configFile("fonts") }
+    /// 本进程注册成功的文件名。
+    private var registered: Set<String> = []
+    /// 导入时先复制成这个前缀的临时文件、校验通过才替换正式文件;中途退出留下的在启动时清掉。
+    private static let stagingPrefix = ".importing-"
 
     private init() {
         registerAll()
     }
 
+    /// 族名此刻有没有字体可用(系统已装或导入并注册成功)。空串是跟随系统字体,永远可用。
+    func isAvailable(_ family: String) -> Bool {
+        !CustomFontFile.isMissing(family, available: availableFamilies)
+    }
+
+    /// 这个族名是不是导入字体(选择器的系统字体列表据此排除,免得同一款出现两次)。
+    func isImported(_ family: String) -> Bool {
+        fonts.contains { $0.familyName == family }
+    }
+
     // MARK: - 导入 / 删除(设置页调用)
 
-    /// 把一个本地字体文件收进这个 App 自己的目录并注册。同名文件直接覆盖——重新导入同一款
-    /// 字体是常见操作(换一份修过的文件),不该在磁盘上滚雪球攒出好几份同名文件。
-    @discardableResult
-    func importFont(from url: URL) throws -> ImportedFont {
+    /// 把一个本地字体文件收进这个 App 自己的目录并注册。同名文件覆盖——重新导入同一款字体是常见操作
+    /// (换一份修过的文件),不该在磁盘上攒出好几份同名文件。先复制到临时文件并校验,通过才替换:新文件
+    /// 读不到或不是字体时,原来那份照常可用。
+    func importFont(from url: URL) throws {
         guard CustomFontFile.isSupported(url) else { throw ImportError.unsupportedFormat }
 
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
         let dest = directory.appendingPathComponent(url.lastPathComponent)
-        if fm.fileExists(atPath: dest.path) {
-            // 先反注册旧的一份,避免同一个文件名短暂地对应两次注册。
-            var unregisterError: Unmanaged<CFError>?
-            CTFontManagerUnregisterFontsForURL(dest as CFURL, .process, &unregisterError)
-            try? fm.removeItem(at: dest)
+        // 选的就是这个目录里的那一份:已经在位,只补注册。
+        if url.resolvingSymlinksInPath().standardizedFileURL == dest.resolvingSymlinksInPath().standardizedFileURL {
+            guard registered.contains(dest.lastPathComponent) || register(dest) != nil else {
+                throw ImportError.invalidFont
+            }
+            refresh()
+            return
         }
+        let staging = directory.appendingPathComponent(Self.stagingPrefix + UUID().uuidString + ".tmp")
         do {
-            try fm.copyItem(at: url, to: dest)
+            try fm.copyItem(at: url, to: staging)
         } catch {
             logger.error("importFont: copy failed — \(String(describing: error), privacy: .public)")
             throw ImportError.unreadable
         }
-        guard let familyName = register(dest) else {
-            try? fm.removeItem(at: dest)
+        guard CustomFontFile.familyName(ofFontAt: staging) != nil else {
+            try? fm.removeItem(at: staging)
             throw ImportError.invalidFont
         }
-        let imported = ImportedFont(fileName: dest.lastPathComponent, familyName: familyName)
+        if fm.fileExists(atPath: dest.path) {
+            unregister(dest)
+            do {
+                _ = try fm.replaceItemAt(dest, withItemAt: staging)
+            } catch {
+                try? fm.removeItem(at: staging)
+                register(dest)
+                refresh()
+                logger.error("importFont: replace failed — \(String(describing: error), privacy: .public)")
+                throw ImportError.unreadable
+            }
+        } else {
+            do {
+                try fm.moveItem(at: staging, to: dest)
+            } catch {
+                try? fm.removeItem(at: staging)
+                logger.error("importFont: move failed — \(String(describing: error), privacy: .public)")
+                throw ImportError.unreadable
+            }
+        }
+        guard register(dest) != nil else {
+            try? fm.removeItem(at: dest)
+            refresh()
+            throw ImportError.invalidFont
+        }
         refresh()
-        return imported
     }
 
-    /// 反注册并删除。先反注册再删文件——反过来的话,万一删除中途失败,会留下一个
-    /// "文件没了但 Core Text 仍然认得"的悬空注册。
-    ///
-    /// 删除后如果这款字体正被悬浮歌词/灵动岛选中,不用在这里特意处理:`Font.overlayFont`
-    /// 本来就是"族名找不到就显式落回系统字体",不会崩、也不会显示错误的字。
+    /// 反注册并删除这一族的全部文件,再把仍指向这一族的字体设置(悬浮歌词、灵动岛、菜单栏、歌词窗口完整 /
+    /// 迷你五处)退回系统字体 —— 不退的话别处的按钮上留着一款查无此字的族名。系统里另装了同名字体族时不退,
+    /// 那一族还在。先反注册再删文件:反过来万一删除中途失败,会留下「文件没了但 Core Text 仍然认得」的悬空注册。
     func remove(_ font: ImportedFont) {
-        let url = directory.appendingPathComponent(font.fileName)
-        var unregisterError: Unmanaged<CFError>?
-        CTFontManagerUnregisterFontsForURL(url as CFURL, .process, &unregisterError)
-        try? fm.removeItem(at: url)
+        for name in font.fileNames {
+            let url = directory.appendingPathComponent(name)
+            unregister(url)
+            try? fm.removeItem(at: url)
+        }
         refresh()
+        guard !isAvailable(font.familyName) else { return }
+        let settings = AppSettings.shared
+        if settings.fontFamilyName == font.familyName { settings.fontFamilyName = "" }
+        if settings.notchFontFamilyName == font.familyName { settings.notchFontFamilyName = "" }
+        if settings.menuBarLyricsFontFamily == font.familyName { settings.menuBarLyricsFontFamily = "" }
+        if settings.lyricsWindowFontFamily == font.familyName { settings.lyricsWindowFontFamily = "" }
+        if settings.lyricsWindowMiniFontFamily == font.familyName { settings.lyricsWindowMiniFontFamily = "" }
     }
 
     // MARK: - 启动时注册
 
     private func registerAll() {
-        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
-            return
-        }
-        for url in files where CustomFontFile.isSupported(url) {
-            register(url)
+        let files = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for url in files {
+            if url.lastPathComponent.hasPrefix(Self.stagingPrefix) {
+                try? fm.removeItem(at: url)
+            } else if CustomFontFile.isSupported(url) {
+                register(url)
+            }
         }
         refresh()
     }
@@ -111,20 +164,25 @@ final class CustomFontStore: ObservableObject {
             logger.error("register \(url.lastPathComponent, privacy: .public) failed — \(String(describing: registerError), privacy: .public)")
             return nil
         }
+        registered.insert(url.lastPathComponent)
         return CustomFontFile.familyName(ofFontAt: url)
     }
 
+    private func unregister(_ url: URL) {
+        var unregisterError: Unmanaged<CFError>?
+        CTFontManagerUnregisterFontsForURL(url as CFURL, .process, &unregisterError)
+        registered.remove(url.lastPathComponent)
+    }
+
     private func refresh() {
-        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
-            fonts = []
-            return
-        }
-        fonts = files
-            .filter { CustomFontFile.isSupported($0) }
-            .compactMap { url -> ImportedFont? in
+        let files = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        let entries = files
+            .filter { CustomFontFile.isSupported($0) && registered.contains($0.lastPathComponent) }
+            .compactMap { url -> (fileName: String, family: String)? in
                 guard let family = CustomFontFile.familyName(ofFontAt: url) else { return nil }
-                return ImportedFont(fileName: url.lastPathComponent, familyName: family)
+                return (fileName: url.lastPathComponent, family: family)
             }
-            .sorted { $0.familyName.localizedCaseInsensitiveCompare($1.familyName) == .orderedAscending }
+        fonts = CustomFontFile.groupByFamily(entries).map { ImportedFont(familyName: $0.family, fileNames: $0.fileNames) }
+        availableFamilies = CustomFontFile.availableFamilyNames()
     }
 }

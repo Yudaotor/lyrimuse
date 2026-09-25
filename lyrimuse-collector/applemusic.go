@@ -149,10 +149,15 @@ func applemusicUserTokenPath() string {
 	return filepath.Join(configDir(), clientName+"-applemusic-token.json")
 }
 
+// applemusicUserTokenFile 与 App 侧 AppleMusicTokenFile(LyrimuseCore)读写同一个文件,字段两边同步改。
 type applemusicUserTokenFile struct {
 	MediaUserToken string `json:"media_user_token"`
 	Storefront     string `json:"storefront"`
 	SavedAt        int64  `json:"saved_at"`
+	// ExpiresAt 是登录时 cookie 自带的过期时刻(Unix 秒),没有时 App 按 saved_at + 6 个月推算。
+	ExpiresAt int64 `json:"expires_at,omitempty"`
+	// RejectedAt:带着这份令牌被 Apple 拒(401/403)的时刻。App 的连接卡片据此显示「已失效」。
+	RejectedAt int64 `json:"rejected_at,omitempty"`
 }
 
 // applemusicLoadUserToken 读用户令牌与 storefront。不发网络请求。
@@ -213,6 +218,7 @@ func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string)
 	case http.StatusUnauthorized, http.StatusForbidden:
 		// 带着 user token 还被拒 = 令牌过期或被吊销,跟取词端点同一个判定。
 		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
+		applemusicMarkTokenRejected(userToken)
 		return ""
 	default:
 		return ""
@@ -253,8 +259,31 @@ func applemusicSaveStorefront(storefront string) {
 	if err != nil {
 		return
 	}
-	// 0o600:文件里是用户的 Apple Music 访问凭据,权限跟 App 侧写它时保持一致。
-	_ = os.WriteFile(path, out, 0o600)
+	// writeFileAtomic 的临时文件是 0o600:文件里是用户的 Apple Music 访问凭据。
+	_ = writeFileAtomic(path, out)
+}
+
+// applemusicMarkTokenRejected 在令牌文件里记下「这份令牌被 Apple 拒了」。只在文件里还是**同一份**令牌时记:
+// 用户已经重连、换了新令牌,在飞的旧请求回来的 401 不能把新令牌标成失效。已经记过就不重写。
+func applemusicMarkTokenRejected(userToken string) {
+	path := applemusicUserTokenPath()
+	if path == "" || strings.TrimSpace(userToken) == "" {
+		return
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var f applemusicUserTokenFile
+	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) != strings.TrimSpace(userToken) || f.RejectedAt != 0 {
+		return
+	}
+	f.RejectedAt = time.Now().Unix()
+	out, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = writeFileAtomic(path, out)
 }
 
 // applemusicDevTokenPath:developer token 的磁盘缓存。它是**公开**的(从 Apple 自己的
@@ -682,6 +711,7 @@ func applemusicFetchTTML(ctx context.Context, storefront, songID, kind, devToken
 	case http.StatusUnauthorized, http.StatusForbidden:
 		// 带着 user token 还被拒 —— 令牌过期(6 个月硬上限)或被吊销,要用户重连。
 		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicTokenRejected)
+		applemusicMarkTokenRejected(userToken)
 		return "", fmt.Errorf("media-user-token rejected (status %d)", status)
 	default:
 		return "", fmt.Errorf("status %d", status)

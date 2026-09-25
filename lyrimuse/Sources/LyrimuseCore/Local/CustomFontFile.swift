@@ -19,17 +19,42 @@ public enum CustomFontFile {
         return CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String
     }
 
+    /// 此刻进程里能用的字体族名(系统已装 + 本进程注册的),每次现问 Core Text。
+    /// `NSFontManager.availableFontFamilies` / `availableMembers(ofFontFamily:)` 第一次读就缓存,反注册之后
+    /// 还说「在」,判断一款导入字体删掉之后还有没有只能问这里。
+    public static func availableFamilyNames() -> Set<String> {
+        Set((CTFontManagerCopyAvailableFontFamilyNames() as? [String]) ?? [])
+    }
+
+    /// 选中的族名此刻没有字体可用(换机后没带过来 / 删掉了):选择器在名字后面标「未安装」。空串是跟随系统字体,
+    /// 永远可用。
+    public static func isMissing(_ family: String, available: Set<String>) -> Bool {
+        !family.isEmpty && !available.contains(family)
+    }
+
+    /// 已导入的文件按族名归并:同一族的 Regular / Bold 等几个文件在列表里只占一行。族名按不区分大小写排序,
+    /// 族内文件名排序。
+    public static func groupByFamily(_ files: [(fileName: String, family: String)]) -> [(family: String, fileNames: [String])] {
+        Dictionary(grouping: files, by: \.family)
+            .map { (family: $0.key, fileNames: $0.value.map(\.fileName).sorted()) }
+            .sorted { $0.family.localizedCaseInsensitiveCompare($1.family) == .orderedAscending }
+    }
+
     /// 一次导入(可多选)之后给用户的结论。
     public enum ImportSummary: Equatable {
         case allImported
+        /// 一个都没进去,且全是读不到文件(没下载到本机、没有读取权限):提示说读不到,不说「不是字体」。
+        case allUnreadable
         /// 一个都没进去:多半是选错了文件,提示直接说「不是有效的字体文件」。
         case allFailed
         /// 部分失败:报失败的个数,其余已经导入。
         case someFailed(Int)
     }
 
-    public static func importSummary(failed: Int, total: Int) -> ImportSummary {
+    /// `unreadable` 是 `failed` 里读不到文件的那几个。
+    public static func importSummary(failed: Int, total: Int, unreadable: Int = 0) -> ImportSummary {
         guard failed > 0 else { return .allImported }
-        return failed >= total ? .allFailed : .someFailed(failed)
+        guard failed >= total else { return .someFailed(failed) }
+        return unreadable >= failed ? .allUnreadable : .allFailed
     }
 }

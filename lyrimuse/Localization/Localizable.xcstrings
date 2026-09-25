@@ -35477,6 +35477,75 @@
           }
         }
       }
+    },
+    "%@（未安装）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (not installed)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（未安装）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（未安裝）"
+          }
+        }
+      }
+    },
+    "导入失败：读不到所选文件，可能还没下载到本机或没有读取权限" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import failed: couldn't read the selected file. It may not be downloaded to this Mac, or Lyrimuse can't read it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入失败：读不到所选文件，可能还没下载到本机或没有读取权限"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯入失敗：讀不到所選檔案，可能還沒下載到這台 Mac，或沒有讀取權限"
+          }
+        }
+      }
+    },
+    "Apple Music 登录已失效（过期或被吊销），需要重新连接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music 登录已失效（过期或被吊销），需要重新连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music 登入已失效（過期或被撤銷），需要重新連線"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
