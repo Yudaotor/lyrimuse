@@ -29,7 +29,10 @@ import (
 //  2. primary.ldb(LevelDB)—— 客户端的元数据缓存。`!xmeta#cache#<类型>#<曲目 uri>#` 这组 key 下面按类型
 //     存着 Spotify 自己的元数据 protobuf:IdentityTrait(歌名 / 专辑 / 歌手)、spotify.metadata.Track
 //     (带时长)。实测本机 15207 首,缓存里最大的 12 个歌单每首都有 —— 客户端自己要放那首歌,就得先有它的
-//     元数据。
+//     元数据。按歌生成的电台(spotify:station:track:…)里接下来那几首常常只有 Track、没有 IdentityTrait
+//     (实测后面 12 首里 11 首如此),而 Track 里本来就有歌名(2)、专辑{2=名}(3)、歌手{2=名}(4,可重复):
+//     IdentityTrait 缺了就从它取。拿本机 enrich 缓存里带 spotify_track_id 的 368 条对过,专辑 368 条全对,
+//     两份都在的 238 条里 235 条三样逐字相同(余下是大小写 / 异体字 / 单曲与合辑的专辑名,宽松比对折得平)。
 //
 // 这两份都是**没有公开 schema 的内部格式**:字段一律按「长得像什么」定位(uid 是十六进制串、gid 是
 // 16 字节、元数据按 type_url 认),不按固定路径;任何一步认不出来就放弃,调用方退回同专辑那一层。
@@ -82,6 +85,35 @@ var spotifyShuffling = func() (on, ok bool) {
 	return false, false
 }
 
+// spotifyShuffleMemory:问不到随机状态(换歌那一拍 osascript 偶尔 2 秒内回不来)时,最近一次问到的结果
+// 在多久之内还能用。随机开关很少切换,沿用它比整轮退回同专辑预取好;太久没问到就不猜。
+const spotifyShuffleMemory = 30 * time.Minute
+
+var (
+	spotifyShuffleMu   sync.Mutex
+	spotifyLastShuffle struct {
+		on bool
+		at time.Time
+	}
+)
+
+// spotifyShufflingRemembered 先问 Spotify;问不到就用 spotifyShuffleMemory 之内最近一次的答案。
+func spotifyShufflingRemembered(now time.Time) (on, ok bool) {
+	on, ok = spotifyShuffling()
+	spotifyShuffleMu.Lock()
+	defer spotifyShuffleMu.Unlock()
+	if ok {
+		spotifyLastShuffle.on, spotifyLastShuffle.at = on, now
+		return on, true
+	}
+	if !spotifyLastShuffle.at.IsZero() && now.Sub(spotifyLastShuffle.at) <= spotifyShuffleMemory {
+		log.Printf("spotify upcoming: could not ask Spotify whether shuffle is on, using the answer from %s ago (shuffle=%v)",
+			now.Sub(spotifyLastShuffle.at).Round(time.Second), spotifyLastShuffle.on)
+		return spotifyLastShuffle.on, true
+	}
+	return false, false
+}
+
 // spotifyTrackMeta 是一首歌写进 enrich key 要用的那几样。
 type spotifyTrackMeta struct {
 	artist, title, album string
@@ -109,7 +141,7 @@ func spotifyUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if userDir == "" {
 		return nil, false
 	}
-	shuffled, ok := spotifyShuffling()
+	shuffled, ok := spotifyShufflingRemembered(time.Now())
 	if !ok {
 		log.Printf("spotify upcoming: could not ask Spotify whether shuffle is on, falling back to album prefetch")
 		return nil, false // 问不到随机状态:拿不准该按哪个顺序数,不猜
@@ -715,11 +747,15 @@ func spotifyResolveMeta(userDir string, ids []string) map[string]spotifyTrackMet
 		spotifyMetaCache = map[string]spotifyTrackMeta{}
 	}
 	for _, id := range missing {
+		track := vals[string(spotifyXmetaKey(spotifyTrackKind, id))]
 		m, ok := spotifyParseIdentity(vals[string(spotifyXmetaKey(spotifyIdentityKind, id))])
+		if !ok {
+			m, ok = spotifyParseTrackNames(track) // 电台里接下来那几首常常只有这一份,见文件头注
+		}
 		if !ok {
 			continue // 不缓存「没查到」:这首之后可能会被客户端写进缓存
 		}
-		m.seconds = spotifyParseDuration(vals[string(spotifyXmetaKey(spotifyTrackKind, id))])
+		m.seconds = spotifyParseDuration(track)
 		spotifyMetaCache[id] = m
 		out[id] = m
 	}
@@ -790,6 +826,48 @@ func spotifyParseIdentity(v []byte) (spotifyTrackMeta, bool) {
 		case 5:
 			if m.artist == "" {
 				m.artist = firstName(f.b)
+			}
+		}
+	}
+	return m, m.title != "" && m.artist != ""
+}
+
+// spotifyParseTrackNames 从 spotify.metadata.Track 取名字:2=歌名,3=专辑{2=名},4=歌手{2=名}(可重复,只取
+// 第一位,理由同 spotifyParseIdentity)。IdentityTrait 缺了才用它,见文件头注。
+func spotifyParseTrackNames(v []byte) (spotifyTrackMeta, bool) {
+	val := spotifyFindAny(v, "spotify.metadata.Track", 0)
+	if val == nil {
+		return spotifyTrackMeta{}, false
+	}
+	fields, err := pbParse(val)
+	if err != nil {
+		return spotifyTrackMeta{}, false
+	}
+	name := func(b []byte) string {
+		sub, err := pbParse(b)
+		if err != nil {
+			return ""
+		}
+		for _, f := range sub {
+			if f.num == 2 && f.wire == 2 {
+				return string(f.b)
+			}
+		}
+		return ""
+	}
+	var m spotifyTrackMeta
+	for _, f := range fields {
+		if f.wire != 2 {
+			continue
+		}
+		switch f.num {
+		case 2:
+			m.title = string(f.b)
+		case 3:
+			m.album = name(f.b)
+		case 4:
+			if m.artist == "" {
+				m.artist = name(f.b)
 			}
 		}
 	}

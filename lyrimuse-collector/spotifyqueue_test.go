@@ -108,11 +108,24 @@ func testSpotifyTrack(ms int64) []byte {
 	return pbMsg(pbVarint(1, 10), pbBytes(2, pbMsg(pbStr(1, "type.googleapis.com/spotify.metadata.Track"), pbBytes(2, v))))
 }
 
+// testSpotifyTrackNamed 造一份带名字的 spotify.metadata.Track:2=歌名,3=专辑{1=gid,2=名},4=歌手{1=gid,2=名},7=时长。
+func testSpotifyTrackNamed(title, album string, ms int64, artists ...string) []byte {
+	zz := uint64(ms<<1) ^ uint64(ms>>63)
+	gid := string(make([]byte, 16))
+	v := pbMsg(pbStr(1, gid), pbStr(2, title), pbBytes(3, pbMsg(pbStr(1, gid), pbStr(2, album))))
+	for _, a := range artists {
+		v = append(v, pbBytes(4, pbMsg(pbStr(1, gid), pbStr(2, a)))...)
+	}
+	v = append(v, pbVarint(7, zz)...)
+	return pbMsg(pbVarint(1, 10), pbBytes(2, pbMsg(pbStr(1, "type.googleapis.com/spotify.metadata.Track"), pbBytes(2, v))))
+}
+
 // testSpotifyEnv 造一个账号目录:状态文件 + primary.ldb。meta 里没有的曲目就不写元数据。
 type testSpotifyMeta struct {
 	title, album string
 	artists      []string
 	ms           int64
+	trackOnly    bool // 只写 spotify.metadata.Track(带名字),不写 IdentityTrait —— 电台里接下来那几首的样子
 }
 
 func newTestSpotifyEnv(t *testing.T, state []byte, meta map[int]testSpotifyMeta) {
@@ -129,6 +142,12 @@ func newTestSpotifyEnv(t *testing.T, state []byte, meta map[int]testSpotifyMeta)
 	seq := uint64(1)
 	for n, m := range meta {
 		id, _ := testSpotifyID(n)
+		if m.trackOnly {
+			entries = append(entries,
+				testLDBEntry{key: string(spotifyXmetaKey(spotifyTrackKind, id)), seq: seq, value: string(testSpotifyTrackNamed(m.title, m.album, m.ms, m.artists...))})
+			seq++
+			continue
+		}
 		entries = append(entries,
 			testLDBEntry{key: string(spotifyXmetaKey(spotifyIdentityKind, id)), seq: seq, value: string(testSpotifyIdentity(m.title, m.album, m.artists...))},
 			testLDBEntry{key: string(spotifyXmetaKey(spotifyTrackKind, id)), seq: seq + 1, value: string(testSpotifyTrack(m.ms))})
@@ -145,6 +164,13 @@ func newTestSpotifyEnv(t *testing.T, state []byte, meta map[int]testSpotifyMeta)
 	oldShuffle := spotifyShuffling
 	spotifyShuffling = func() (bool, bool) { return false, true }
 	t.Cleanup(func() { spotifyShuffling = oldShuffle })
+	resetShuffle := func() {
+		spotifyShuffleMu.Lock()
+		spotifyLastShuffle.on, spotifyLastShuffle.at = false, time.Time{}
+		spotifyShuffleMu.Unlock()
+	}
+	resetShuffle()
+	t.Cleanup(resetShuffle)
 	oldDelays := spotifyStateRetryDelays
 	spotifyStateRetryDelays = []time.Duration{0, 0, 0}
 	t.Cleanup(func() { spotifyStateRetryDelays = oldDelays })
@@ -231,6 +257,45 @@ func TestSpotifyIsContextUID(t *testing.T) {
 		if got := spotifyIsContextUID(s); got != want {
 			t.Errorf("spotifyIsContextUID(%q) = %v, want %v", s, got, want)
 		}
+	}
+}
+
+// 按歌生成的电台里接下来那几首常常只有 spotify.metadata.Track、没有 IdentityTrait:名字从 Track 取。
+// 两份都在时仍以 IdentityTrait 为准(testSpotifyTrack 里的歌名是 "ignored",取错了一眼看得出)。
+func TestSpotifyUpcomingFallsBackToTrackMetadata(t *testing.T) {
+	meta := testSpotifyMetas(1, 2, 4)
+	meta[3] = testSpotifyMeta{title: "歌3", album: "专辑3", artists: []string{"乙", "丙"}, ms: 3000, trackOnly: true}
+	newTestSpotifyEnv(t, testSpotifyState([][]int{{1, 2, 3, 4}}, 1), meta)
+	got, ok := spotifyUpcoming("甲", "歌1", 5)
+	if !ok || len(got) != 3 {
+		t.Fatalf("三首都该取到,得到 ok=%v %+v", ok, got)
+	}
+	if got[0].title != "歌2" || got[2].title != "歌4" {
+		t.Fatalf("两份都在的仍按 IdentityTrait 取名,得到 %+v", got)
+	}
+	if m := got[1]; m.title != "歌3" || m.artist != "乙" || m.album != "专辑3" || m.duration != 3 {
+		t.Fatalf("只有 Track 的那首该取到 乙 / 歌3 / 专辑3 / 3 秒,得到 %+v", m)
+	}
+}
+
+// 换歌那一拍问不到随机状态:30 分钟内沿用最近一次问到的结果,再久就不猜、退回同专辑。
+func TestSpotifyShuffleRemembersLastAnswer(t *testing.T) {
+	newTestSpotifyEnv(t, testSpotifyState([][]int{{1}}, 1), nil)
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	spotifyShuffling = func() (bool, bool) { return false, false }
+	if _, ok := spotifyShufflingRemembered(now); ok {
+		t.Fatal("从没问到过时不该猜")
+	}
+	spotifyShuffling = func() (bool, bool) { return true, true }
+	if on, ok := spotifyShufflingRemembered(now); !ok || !on {
+		t.Fatalf("问得到就用问到的,得到 on=%v ok=%v", on, ok)
+	}
+	spotifyShuffling = func() (bool, bool) { return false, false }
+	if on, ok := spotifyShufflingRemembered(now.Add(spotifyShuffleMemory)); !ok || !on {
+		t.Fatalf("记忆期内沿用上一次(随机开),得到 on=%v ok=%v", on, ok)
+	}
+	if _, ok := spotifyShufflingRemembered(now.Add(spotifyShuffleMemory + time.Second)); ok {
+		t.Fatal("超过记忆期就不猜")
 	}
 }
 
