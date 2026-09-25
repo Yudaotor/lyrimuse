@@ -730,6 +730,8 @@ protocol NotchChromeSource: ObservableObject {
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
     func closeFromQuickAction()
+    /// 展开态头部点专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
+    func toggleEditorial(_ kind: EditorialCard.Kind)
 }
 
 extension NotchChromeSource {
@@ -2381,6 +2383,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 明确的宽度提议才截得断长歌名/长专辑名。
     /// 广告期间三行都不画(`trackInfoShowsTrackFields`),留下的空 VStack 仍按 `maxWidth: .infinity` 吃掉
     /// 剩余宽度,把快捷操作那排键推到右端 —— 跟四项全关、只开快捷操作时同一个形态。
+    /// 头部的专辑名。当前这首有专辑简介时可点(开 / 关浮框),没有就只是文字 —— 判据与悬停态在
+    /// `NotchEditorialLine` 里,它自己订阅 `EditorialNotesStore`,简介到货只重画这一行。
+    private var trackInfoAlbumLine: some View {
+        NotchEditorialLine(kind: .album, text: metadataText(.album), tint: accentOrWhite,
+                           font: .system(size: 9), restingOpacity: 0.4, hoverOpacity: 0.75,
+                           tappable: !playback.album.isEmpty) { controller.toggleEditorial(.album) }
+    }
+
     private var trackInfoTextStack: some View {
         let fields = controller.trackInfoShowsTrackFields
         return VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
@@ -2390,14 +2400,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .foregroundStyle(accentOrWhite.opacity(0.9))
             }
             if fields && controller.expandedTrackInfoShowsArtist {
-                Text(metadataText(.artist))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(accentOrWhite.opacity(0.6))
+                NotchEditorialLine(kind: .artist, text: metadataText(.artist), tint: accentOrWhite,
+                                   font: .system(size: 10, weight: .medium), restingOpacity: 0.6, hoverOpacity: 0.9,
+                                   tappable: !playback.artist.isEmpty) { controller.toggleEditorial(.artist) }
             }
             if fields && controller.expandedTrackInfoShowsAlbum {
-                Text(metadataText(.album))
-                    .font(.system(size: 9))
-                    .foregroundStyle(accentOrWhite.opacity(0.4))
+                trackInfoAlbumLine
             }
         }
         .lineLimit(1)
@@ -3476,4 +3484,35 @@ private struct NotchLayerActiveReader<Content: View>: View {
     @ViewBuilder let content: (Bool) -> Content
 
     var body: some View { content(active) }
+}
+
+/// 展开态头部的歌手名 / 专辑名那一行。当前曲目有对应的简介(`EditorialNotesStore`)才接点击,指针移上去字色
+/// 提亮;没有简介时就是一行字,不给任何「能点」的暗示。
+private struct NotchEditorialLine: View {
+    @ObservedObject private var store = EditorialNotesStore.shared
+    let kind: EditorialCard.Kind
+    let text: String
+    let tint: Color
+    let font: Font
+    let restingOpacity: Double
+    let hoverOpacity: Double
+    /// 有歌手名 / 专辑名、不在广告里。
+    let tappable: Bool
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        let clickable = tappable && !text.isEmpty && store.card(kind) != nil
+        let label = Text(text)
+            .font(font)
+            .foregroundStyle(tint.opacity(clickable && hovered ? hoverOpacity : restingOpacity))
+        if clickable {
+            Button(action: action) { label }
+                .buttonStyle(.plain)
+                .onHover { hovered = $0 }
+                .accessibilityLabel(L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介"))
+        } else {
+            label
+        }
+    }
 }

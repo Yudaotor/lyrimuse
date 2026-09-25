@@ -1481,7 +1481,8 @@ func runSourceContractTests() {
             // 就全被省略号切掉;拆成三行,歌词区又被压矮一截。
             expectEqual(lwv.contains("VStack(spacing: Self.miniInfoLineSpacing)"), true,
                         "迷你顶部信息: 竖排(别改回三样串一行)")
-            expectEqual(lwv.contains("[first, rest.joined(separator: \" — \")]"), true,
+            expectEqual(lwv.contains("rest.isEmpty ? [[first]] : [[first], rest]")
+                        && lwv.contains("if j > 0 { Text(verbatim: \" — \").foregroundStyle(color) }"), true,
                         "迷你顶部信息: 第一样之外的几样合成第二行(「歌手 — 专辑」),别再一样拆一行")
             expectEqual(lwv.contains("private static let miniCoverMaxSide"), true,
                         "迷你封面: 有上限,行多时不跟着文字块长成一块方图")

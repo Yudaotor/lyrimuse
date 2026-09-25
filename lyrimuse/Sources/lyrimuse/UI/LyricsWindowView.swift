@@ -964,6 +964,12 @@ struct LyricsWindowView: View {
     @State private var showsMoreMenu = false
     /// 「显示简介」面板(「⋯」菜单项之一):与菜单同锚点、同玻璃样式。
     @State private var showsInfoPanel = false
+    /// 专辑简介 / 歌手简介面板开着的是哪一类(nil = 没开)。「⋯ › 显示专辑简介 / 显示歌手简介」或点「歌手 — 专辑」
+    /// 那一行的对应一段打开,与「显示简介」同锚点同样式。只在当前这首有对应简介时能打开;简介没了(换歌)就关。
+    @State private var editorialPanel: EditorialCard.Kind?
+    /// 迷你尺寸里点歌手 / 专辑弹出的简介(系统 popover,挂在顶部那组文字上)。迷你窗里没有「⋯」那个锚点。
+    @State private var miniEditorialKind: EditorialCard.Kind?
+    @ObservedObject private var editorial = EditorialNotesStore.shared
     /// 「你的常听」榜单面板(Last.fm 系列 #7)。
     @State private var showsChartsPanel = false
     /// 「⋯」按钮锚点矩形的**快照**。面板定位改读它、
@@ -1111,6 +1117,15 @@ struct LyricsWindowView: View {
             if previewMode { windowController.setPreviewHostVisible(visible) }
         }
         .onDisappear { if !previewMode { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
+        // 专辑简介:这扇窗开着时每次换歌预取,入口才能按「有没有简介」决定可不可点。预览不登记。
+        .onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }
+        .onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }
+        .onChange(of: editorialPanel.map { editorial.card($0) == nil } ?? false) { _, missing in
+            if missing { editorialPanel = nil }
+        }
+        .onChange(of: miniEditorialKind.map { editorial.card($0) == nil } ?? false) { _, missing in
+            if missing { miniEditorialKind = nil }
+        }
         // 音量跟"喜欢""播放模式"共用同一批刷新时机,理由见下面那段注释。
         // "喜欢"状态不跟着 2 秒轮询走(每读一次要起一个 osascript 子进程,为一个几乎不变
         // 的布尔值那么干不值当),换歌时由 PlaybackCoordinator 刷一次。悬浮窗还借"控制排
@@ -1442,14 +1457,14 @@ struct LyricsWindowView: View {
     /// 的字段 —— Spotify 会把广告词塞进 title(实测「Listen to music, ad-free.」),照搬出来就是
     /// 把广告词当歌名摆在这扇窗最顶上。判断口径跟完整布局左栏那套(`displayTitle` /
     /// `displayArtist`)同源,别在这儿另写一份。
-    private var miniHeaderParts: [String] {
+    private var miniHeaderParts: [LyricsWindowMiniHeaderFields.Part] {
         // 广告期间**整行不摆**,而不是改摆「广告中」:正下方的歌词区已经在说「广告中」了
         // (走同一份 `emptyStateSpec`),头上再说一遍是同一件事说两遍 —— 菜单栏面板遇到同一件事
         // 走的也是"这一格留空"那一支。
         if playback.isCurrentTrackAdBreak { return [] }
         // 口白换成台名:那不是广告,台名就是此刻"在放什么"的答案(同完整布局)。
-        if let station = radioTalkStation { return [station.name] }
-        return playback.miniHeaderFields.visibleValues(
+        if let station = radioTalkStation { return [.init(field: .title, value: station.name)] }
+        return playback.miniHeaderFields.visibleParts(
             title: playback.title, artist: playback.artist, album: playback.album)
     }
 
@@ -1461,11 +1476,11 @@ struct LyricsWindowView: View {
     ///
     /// **别把三样全串进一行**:长歌名一挤,歌手和专辑就全被省略号切掉;也别再拆成三行 ——
     /// 顶部这一块每多一行,歌词区就矮一截。歌名单独一行、次要信息合一行是两头的平衡点。
-    private var miniHeaderLines: [String] {
+    private var miniHeaderLines: [[LyricsWindowMiniHeaderFields.Part]] {
         let parts = miniHeaderParts
         guard let first = parts.first else { return [] }
-        let rest = parts.dropFirst()
-        return rest.isEmpty ? [first] : [first, rest.joined(separator: " — ")]
+        let rest = Array(parts.dropFirst())
+        return rest.isEmpty ? [[first]] : [[first], rest]
     }
 
     @ViewBuilder
@@ -1474,15 +1489,45 @@ struct LyricsWindowView: View {
         if !lines.isEmpty {
             VStack(spacing: Self.miniInfoLineSpacing) {
                 ForEach(lines.indices, id: \.self) { i in
-                    Text(lines[i])
-                        .font(.system(size: i == 0 ? Self.miniInfoFontSize : Self.miniSubInfoFontSize,
-                                      weight: i == 0 ? .semibold : .regular))
-                        .foregroundStyle(i == 0 ? miniPrimaryColor : miniSecondaryColor)
+                    let color = i == 0 ? miniPrimaryColor : miniSecondaryColor
+                    HStack(spacing: 0) {
+                        ForEach(lines[i].indices, id: \.self) { j in
+                            if j > 0 { Text(verbatim: " — ").foregroundStyle(color) }
+                            miniHeaderPart(lines[i][j], color: color)
+                        }
+                    }
+                    .font(.system(size: i == 0 ? Self.miniInfoFontSize : Self.miniSubInfoFontSize,
+                                  weight: i == 0 ? .semibold : .regular))
                 }
             }
             // 每一行只占一行,不许折:折了之后这一块的高度就跟着歌名长短忽高忽低,歌词区也跟着上下跳。
             .lineLimit(1)
             .truncationMode(.tail)
+            .popover(isPresented: Binding(get: { miniEditorialKind != nil },
+                                          set: { if !$0 { miniEditorialKind = nil } }),
+                     arrowEdge: .bottom) {
+                if let kind = miniEditorialKind, let card = editorial.card(kind) {
+                    EditorialNotesContent(card: card, primary: .primary, secondary: .secondary)
+                        .padding(14)
+                        .frame(width: 320, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    /// 迷你头部的一段。歌手 / 专辑在这首有对应简介时可点(弹 popover),歌名和其余情况就是字。
+    @ViewBuilder
+    private func miniHeaderPart(_ part: LyricsWindowMiniHeaderFields.Part, color: Color) -> some View {
+        let kind: EditorialCard.Kind? = part.field == .artist ? .artist : part.field == .album ? .album : nil
+        if let kind {
+            EditorialLinkText(text: part.value, available: editorial.card(kind) != nil,
+                              restColor: color, hoverColor: miniPrimaryColor,
+                              hint: L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介")) {
+                guard editorial.card(kind) != nil else { return }
+                miniEditorialKind = kind
+            }
+        } else {
+            Text(verbatim: part.value).foregroundStyle(color)
         }
     }
 
@@ -2108,6 +2153,25 @@ struct LyricsWindowView: View {
                                 .transition(.opacity)
                             trackInfoPanel
                                 .fixedSize()
+                                .padding(.leading, moreAnchorRect.maxX)
+                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                        }
+                    }
+                }
+                // 「专辑简介」面板:同锚点同样式,跟「显示简介」一样翻到按钮右边。
+                .overlay {
+                    if let kind = editorialPanel, moreAnchorRect != .zero, let card = editorial.card(kind) {
+                        ZStack(alignment: .bottomLeading) {
+                            Color.black.opacity(0.001)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.easeOut(duration: 0.12)) { editorialPanel = nil }
+                                }
+                                .transition(.opacity)
+                            editorialPanelView(card)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(width: 340)
                                 .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
                                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
@@ -2747,7 +2811,7 @@ struct LyricsWindowView: View {
             }
             .frame(height: 22)
             MarqueeText(id: displayArtistAlbum) {
-                Text(displayArtistAlbum)
+                artistAlbumLine
                     // 15.5:同一对拍量出 AM 副行墨高 28px、我们(17pt 时)31px,副行比
                     // 歌名小一号;歌名的 17pt 与 AM 完全一致(32px vs 32px)不动。
                     .font(.system(size: 15.5))
@@ -2895,6 +2959,18 @@ struct LyricsWindowView: View {
                 closeMoreMenu()
                 openInfoPanel()
             }
+            if editorial.artist != nil {
+                MoreMenuRow(title: L10n.t("显示歌手简介")) {
+                    closeMoreMenu()
+                    openEditorialPanel(.artist)
+                }
+            }
+            if editorial.album != nil {
+                MoreMenuRow(title: L10n.t("显示专辑简介")) {
+                    closeMoreMenu()
+                    openEditorialPanel(.album)
+                }
+            }
             // 「你的常听」(Last.fm 系列):榜单面板,连着账号才有这一行。
             LastfmLoveMenuRow()
             if LastfmStatsService.shared.isConnected {
@@ -2922,7 +2998,10 @@ struct LyricsWindowView: View {
         )
         .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
-        .onAppear { refreshMoreMenuTrackState() }
+        .onAppear {
+            refreshMoreMenuTrackState()
+            EditorialNotesStore.shared.refreshCurrent()
+        }
         // 菜单开着期间换曲(自然播完/手动切):两个状态行描述的是曲目,必须跟着重刷,
         // 否则勾和「已在资料库」还挂着上一首的状态、点撤销会打在新曲上(审阅 D2)。
         .onChange(of: moreMenuTrackIdentity) { _ in refreshMoreMenuTrackState() }
@@ -3114,8 +3193,21 @@ struct LyricsWindowView: View {
         }
     }
 
+    /// 专辑简介 / 歌手简介面板。正文由 `EditorialNotesStore` 在换歌时预取好,没有就不打开。
+    private func openEditorialPanel(_ kind: EditorialCard.Kind) {
+        guard editorial.card(kind) != nil else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            showsInfoPanel = false
+            showsChartsPanel = false
+            editorialPanel = kind
+        }
+    }
+
     private func openInfoPanel() {
-        withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = true }
+        withAnimation(.easeOut(duration: 0.12)) {
+            editorialPanel = nil
+            showsInfoPanel = true
+        }
         // 歌词来源与各平台链接都在 enrich 缓存里,在主线程直接读(理由同 moreMenu 那处:EnrichCacheReader
         // 只许在主线程用),缓存已加载时是 µs 级。
         let artist = playback.artist, title = playback.title, album = playback.album
@@ -3412,6 +3504,20 @@ struct LyricsWindowView: View {
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
+    /// 专辑简介 / 歌手简介面板:与「显示简介」同一套玻璃样式,内容是共用的 `EditorialNotesContent`。
+    private func editorialPanelView(_ card: EditorialCard) -> some View {
+        EditorialNotesContent(card: card, primary: primaryTextColor, secondary: secondaryTextColor, maxTextHeight: 260)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+            .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
+    }
+
     /// 「网页」行上平台的人话名。三个中文键早就在 Localizable 里(菜单那几项也在用);Spotify 是
     /// 品牌名,各语言写法一样,不过 L10n(跟 BrowserMusicPlatform.displayName 同一口径)。
     private static func platformDisplayName(_ platform: PlatformLinks.Platform) -> String {
@@ -3510,6 +3616,29 @@ struct LyricsWindowView: View {
     private var radioTalkStation: (name: String, image: NSImage?)? {
         guard playback.isRadioTalkBreak, let name = playback.radioStationName, !name.isEmpty else { return nil }
         return (name, playback.radioStationImage)
+    }
+
+    /// 「歌手 — 专辑」那一行的两段,各自只在当前这首有对应简介时接点击(点歌手看歌手简介、点专辑看专辑简介),
+    /// 否则就是字。广告期间整行留空(同 `displayArtistAlbum`)。拼法与 `artistAlbumText` 一致:缺哪一半只显示另一半。
+    @ViewBuilder
+    private var artistAlbumLine: some View {
+        if playback.isCurrentTrackAdBreak {
+            Text(verbatim: "")
+        } else {
+            HStack(spacing: 0) {
+                if !playback.displayArtist.isEmpty { editorialSegment(playback.displayArtist, kind: .artist) }
+                if !playback.displayArtist.isEmpty && !playback.album.isEmpty { Text(verbatim: " — ") }
+                if !playback.album.isEmpty { editorialSegment(playback.album, kind: .album) }
+            }
+        }
+    }
+
+    private func editorialSegment(_ text: String, kind: EditorialCard.Kind) -> some View {
+        EditorialLinkText(text: text, available: editorial.card(kind) != nil,
+                          restColor: secondaryTextColor, hoverColor: primaryTextColor,
+                          hint: L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介")) {
+            openEditorialPanel(kind)
+        }
     }
 
     /// 广告插播时第二行**留空**,不展示广告物料的歌手/专辑名(跟灵动岛一致)。这不是多余的
@@ -6267,6 +6396,54 @@ private struct ChartsPanelView: View {
             // Music.app 没在跑时先等它真正启动完,理由见 openCatalogPage 同一处注释。
             await MusicAutomationPermission.ensureMusicAppRunning()
             await MainActor.run { NSWorkspace.shared.open(url) }
+        }
+    }
+}
+
+/// 能点开简介的一段文字(完整布局的「歌手 — 专辑」、迷你尺寸的顶部文字)。有简介时:指针移上去换成手形光标、
+/// 字色提到 `hoverColor`、加下划线,点了执行 `action`;没有简介时就是一段普通文字,不给任何「能点」的暗示。
+/// 不加补间:它常被包在 `MarqueeText` 里,那一层把内容子树的动画整个摘掉了。
+private struct EditorialLinkText: View {
+    let text: String
+    let available: Bool
+    let restColor: Color
+    let hoverColor: Color
+    let hint: String
+    let action: () -> Void
+    @State private var hovered = false
+    /// 手形光标是 push 上去的,离开 / 失效 / 消失时必须 pop 回去,成对。
+    @State private var cursorPushed = false
+
+    var body: some View {
+        let lit = available && hovered
+        Text(verbatim: text)
+            .underline(lit)
+            .foregroundStyle(lit ? hoverColor : restColor)
+            .contentShape(Rectangle())
+            .onTapGesture { if available { action() } }
+            .onHover { inside in
+                hovered = inside
+                syncCursor()
+            }
+            .onChange(of: available) { _, _ in syncCursor() }
+            .onDisappear {
+                if cursorPushed {
+                    NSCursor.pop()
+                    cursorPushed = false
+                }
+            }
+            .accessibilityAddTraits(available ? .isButton : [])
+            .accessibilityHint(available ? hint : "")
+    }
+
+    private func syncCursor() {
+        let wants = available && hovered
+        if wants, !cursorPushed {
+            NSCursor.pointingHand.push()
+            cursorPushed = true
+        } else if !wants, cursorPushed {
+            NSCursor.pop()
+            cursorPushed = false
         }
     }
 }

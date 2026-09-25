@@ -547,6 +547,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.expandedShowsQuickActions = shows
             self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
         }
+        editorialDemandObserver = $isVisible.combineLatest($expandedTrackInfoShowsAlbum, $expandedTrackInfoShowsArtist)
+            .map { visible, album, artist in visible && (album || artist) }
+            .removeDuplicates()
+            .sink { [weak self] wants in self?.setEditorialDemand(wants) }
 
         // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
         // 额外订阅 currentLine 来触发重算。
@@ -562,6 +566,29 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 完全对称。
     func closeFromQuickAction() {
         setVisible(false)
+    }
+
+    /// 展开态头部点专辑名 / 歌手名。卡片从屏幕顶边垂下来、水平居中,所以卡片在屏幕上的矩形按窗口顶边与
+    /// 卡片宽高直接算。这一类没有简介时什么都不做(入口本来也不可点)。
+    func toggleEditorial(_ kind: EditorialCard.Kind) {
+        guard let window, let card = EditorialNotesStore.shared.card(kind) else { return }
+        let width = isExpanded ? expandedCardWidth : steadyCardWidth
+        let frame = NSRect(x: window.frame.midX - width / 2, y: window.frame.maxY - cardHeight,
+                           width: width, height: cardHeight)
+        NotchEditorialPanel.shared.toggle(card: card, cardFrame: frame, owner: window) { [weak self] hovered in
+            self?.setEditorialHovered(hovered)
+        }
+    }
+
+    /// 灵动岛开着且头部画歌手名或专辑名时,向 `EditorialNotesStore` 登记要预取(入口只在有简介时可点,
+    /// 得提前知道)。
+    private var holdsEditorialDemand = false
+    private var editorialDemandObserver: AnyCancellable?
+
+    private func setEditorialDemand(_ wants: Bool) {
+        guard wants != holdsEditorialDemand else { return }
+        holdsEditorialDemand = wants
+        if wants { EditorialNotesStore.shared.retain() } else { EditorialNotesStore.shared.release() }
     }
 
     // 打开/关闭"灵动岛歌词"的**唯一**入口——设置页那个 Toggle、菜单栏"显示灵动岛歌词"两处
@@ -645,6 +672,23 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     func setExpanded(_ expanded: Bool) {}
 
     func setExpandedFromWindow(_ expanded: Bool) {
+        cardHovered = expanded
+        applyHoverIntent()
+    }
+
+    /// 指针进出简介浮框(`NotchEditorialPanel`)。浮框算展开态的一部分:指针在上面时卡片不收。
+    func setEditorialHovered(_ hovered: Bool) {
+        guard hovered != editorialHovered else { return }
+        editorialHovered = hovered
+        applyHoverIntent()
+    }
+
+    /// 卡片自己、简介浮框,任一被指针停着就算悬停。两路都走同一套进入 / 收起延迟。
+    private var cardHovered = false
+    private var editorialHovered = false
+
+    private func applyHoverIntent() {
+        let expanded = cardHovered || editorialHovered
         // 每次新的 hover 事件都先撤掉上一次还没兑现的意图 —— "进了又出"必须净效果为零,
         // 而不是两个延迟各自到期、先展开再收起地闪一下。
         pendingHoverWork?.cancel()
@@ -684,6 +728,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func refreshExpanded() {
         let next = hoverExpanded || alertHold
         if next != isExpanded { isExpanded = next }
+        if next {
+            // 展开是「要看了」的时刻:换歌时还没对上专辑的曲目,collector 补上之后靠这一下变可点。
+            if holdsEditorialDemand { EditorialNotesStore.shared.refreshCurrent() }
+        } else {
+            NotchEditorialPanel.shared.close(ifOwner: window)
+        }
     }
 
     /// 「发现新播放器」主动提醒的开 / 关(来自 NotchUnknownPlayerPrompt.isAlerting 的 sink)。
@@ -999,6 +1049,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedTrackInfoShowsArtistObserver = nil
         expandedTrackInfoShowsAlbumObserver?.cancel()
         expandedTrackInfoShowsAlbumObserver = nil
+        editorialDemandObserver?.cancel()
+        editorialDemandObserver = nil
+        setEditorialDemand(false)
+        NotchEditorialPanel.shared.close(ifOwner: window)
         expandedShowsQuickActionsObserver?.cancel()
         expandedShowsQuickActionsObserver = nil
         trackPresenceObserver?.cancel()

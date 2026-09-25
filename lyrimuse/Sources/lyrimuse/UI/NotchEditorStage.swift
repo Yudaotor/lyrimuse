@@ -143,6 +143,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 快捷操作的 ✕ 在预览里**故意**是空实现:预览卡整块 `allowsHitTesting(false)`,点不到;真要能点到
     /// 也不该让"预览"把用户的灵动岛关掉(预览卡上的可点区域只开浮层、不产生副作用,见 05 章)。
     func closeFromQuickAction() {}
+    /// 同上:预览卡点不到,也不该从预览里弹一扇真浮框。
+    func toggleEditorial(_ kind: EditorialCard.Kind) {}
 
     /// 编辑台自己算出来的命中结果,这才是预览里真正生效的那条路。
     func setExpandedFromPreview(_ expanded: Bool) {

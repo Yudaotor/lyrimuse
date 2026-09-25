@@ -971,4 +971,68 @@ func runNotchTests() {
         expectEqual(step(false, visible: false, last: true, pending: true), .hideNow,
                     "显隐: 等缩回动画期间用户关掉灵动岛 = 立刻隐藏,不等那条动画")
     }
+
+    // ---- 源码契约:专辑简介的三个入口 ----
+    do {
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func read(_ name: String) -> String {
+            (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let view = read("NotchLyricsView.swift"), stage = read("NotchEditorStage.swift")
+        let controller = read("NotchLyricsWindowController.swift"), window = read("LyricsWindowView.swift")
+        let store = read("EditorialNotes.swift")
+        for (name, text) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller),
+                             ("LyricsWindowView", window), ("EditorialNotes", store)] {
+            expectEqual(text.isEmpty, false, "专辑简介契约: 读到 \(name).swift")
+        }
+        expectEqual(view.contains("if fields && controller.expandedTrackInfoShowsAlbum {\n                trackInfoAlbumLine"), true,
+                    "专辑简介契约: 灵动岛只在开了「显示专辑」时画那一行")
+        expectEqual(view.contains("tappable: !playback.album.isEmpty) { controller.toggleEditorial(.album) }"), true,
+                    "专辑简介契约: 灵动岛展开态点专辑名开 / 关浮框")
+        expectEqual(view.contains("tappable: !playback.artist.isEmpty) { controller.toggleEditorial(.artist) }"), true,
+                    "歌手简介契约: 灵动岛展开态点歌手名开 / 关浮框")
+        expectEqual(view.contains("let clickable = tappable && !text.isEmpty && store.card(kind) != nil"), true,
+                    "简介契约: 灵动岛的歌手名 / 专辑名只在这首有对应简介时可点")
+        expectEqual(controller.contains("let expanded = cardHovered || editorialHovered"), true,
+                    "简介契约: 指针停在浮框上时卡片不收")
+        expectEqual(controller.contains("NotchEditorialPanel.shared.close(ifOwner: window)"), true,
+                    "简介契约: 卡片收起就关浮框,不单独留在屏幕上")
+        expectEqual(controller.contains("map { visible, album, artist in visible && (album || artist) }"), true,
+                    "简介契约: 灵动岛开着、头部画歌手名或专辑名时才登记预取")
+        expectEqual(stage.contains("func toggleEditorial(_ kind: EditorialCard.Kind) {}"), true,
+                    "专辑简介契约: 编辑台预览里是空实现,不从预览弹真浮框")
+        expectEqual(controller.contains("NotchEditorialPanel.shared.toggle(card: card, cardFrame: frame, owner: window)"), true,
+                    "专辑简介契约: 真窗口按卡片在屏幕上的位置打开浮框")
+        expectEqual(window.contains("if editorial.album != nil {\n                MoreMenuRow(title: L10n.t(\"显示专辑简介\"))"), true,
+                    "专辑简介契约: 歌词窗口「⋯」菜单只在这首有专辑简介时出现「显示专辑简介」")
+        expectEqual(window.contains("if editorial.artist != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌手简介\"))"), true,
+                    "歌手简介契约: 歌词窗口「⋯」菜单只在这首有歌手简介时出现「显示歌手简介」")
+        expectEqual(window.contains(".onTapGesture { if available { action() } }")
+                    && window.contains("EditorialLinkText(text: text, available: editorial.card(kind) != nil,"), true,
+                    "简介契约: 歌词窗口「歌手 — 专辑」两段各自只在有对应简介时接点击")
+        expectEqual(window.components(separatedBy: "EditorialLinkText(text:").count - 1, 2,
+                    "简介契约: 完整布局「歌手 — 专辑」与迷你顶部都用同一个可点文字组件(悬停手形光标 + 下划线)")
+        expectEqual(window.contains("NSCursor.pointingHand.push()") && window.contains("NSCursor.pop()")
+                    && window.contains(".onDisappear {\n                if cursorPushed {"), true,
+                    "简介契约: 手形光标成对 push / pop,视图消失时也还回去")
+        expectEqual(window.contains("miniHeaderPart(lines[i][j], color: color)")
+                    && window.contains(".popover(isPresented: Binding(get: { miniEditorialKind != nil },"), true,
+                    "简介契约: 迷你尺寸顶部的歌手 / 专辑也能点开简介")
+        expectEqual(window.contains("editorialSegment(playback.displayArtist, kind: .artist)")
+                    && window.contains("editorialSegment(playback.album, kind: .album)"), true,
+                    "简介契约: 歌词窗口点歌手看歌手简介、点专辑看专辑简介")
+        expectEqual(window.contains(".onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }")
+                    && window.contains(".onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }"), true,
+                    "专辑简介契约: 歌词窗口开着才预取,设置页预览不算")
+        expectEqual(store.components(separatedBy: "AlbumEditorialNotes.fetchAlbumPage(").count - 1, 1,
+                    "简介契约: 专辑页只有一处发请求")
+        expectEqual(store.contains("album = nil\n            resolveArtistFromSiblings(track)"), true,
+                    "歌手简介契约: 这首没有 Apple 链接时,从同歌手的别的专辑页找歌手")
+        expectEqual(store.contains("Timer") || store.contains("Task.sleep"), false,
+                    "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
+        expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
+                    "专辑简介契约: 没有消费方挂着时一个请求都不发")
+    }
 }

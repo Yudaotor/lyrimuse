@@ -1022,4 +1022,125 @@ func runCoverArtTests() {
                         "字节数相同但内容不同的真封面绝不能被当成占位图")
         }
     }
+
+    // ---- 专辑简介:专辑 ID 解析 + 专辑页解析 ----
+    do {
+        typealias N = AlbumEditorialNotes
+        expectEqual(N.albumID(fromAppleMusicURL: "https://music.apple.com/cn/album/%E6%9C%AA%E6%9D%A5/272875165?i=272875201"), 272875165,
+                    "专辑简介: 从带 slug 和曲目参数的链接里取专辑 ID")
+        expectEqual(N.albumID(fromAppleMusicURL: "https://music.apple.com/us/album/272875165"), 272875165,
+                    "专辑简介: 没有 slug 也认")
+        expectEqual(N.albumID(fromAppleMusicURL: "https://music.apple.com/us/artist/khalil-fong/5439386"), nil,
+                    "专辑简介: 歌手页链接不算专辑")
+        expectEqual(N.albumID(fromAppleMusicURL: "https://y.qq.com/n/ryqq/albumDetail/272875165"), nil,
+                    "专辑简介: 别的平台的链接不认")
+        expectEqual(N.albumID(fromAppleMusicURL: nil), nil, "专辑简介: 没有链接")
+        expectEqual(N.pageURL(albumID: 272875165, storefront: "CN")?.absoluteString,
+                    "https://music.apple.com/cn/album/x/272875165", "专辑简介: 页面地址按店面小写、slug 写死 x")
+
+        // 与真实页面同形:专辑头部那一项带 contentDescriptor + modalPresentationDescriptor,同页还挂着别的专辑。
+        func page(_ json: String) -> String {
+            "<html><head></head><body><script type=\"application/json\" id=\"serialized-server-data\">\(json)</script></body></html>"
+        }
+        let json = """
+        {"data":[{"data":{"sections":[{"items":[
+          {"contentDescriptor":{"kind":"album","identifiers":{"storeAdamID":"999"}},
+           "modalPresentationDescriptor":{"headerTitle":"别的专辑","paragraphText":"不该被取到"}},
+          {"contentDescriptor":{"kind":"album","identifiers":{"storeAdamID":"272875165"}},
+           "modalPresentationDescriptor":{"headerTitle":"未来","headerSubtitle":"方大同 · 2007年",
+             "paragraphText":"  方大同在 2007 年推出的<i>国语大碟</i>。<br />第二段  "}}
+        ]}]}}]}
+        """
+        let notes = N.parse(html: page(json), albumID: 272875165)
+        expectEqual(notes?.title, "未来", "专辑简介: 标题取页面上的专辑名")
+        expectEqual(notes?.subtitle, "方大同 · 2007年", "专辑简介: 副标题原样保留")
+        expectEqual(notes?.text, "方大同在 2007 年推出的国语大碟。\n第二段", "专辑简介: 去掉 HTML 标签、<br> 换成换行、收首尾空白")
+        expectEqual(N.parse(html: page(json), albumID: 999)?.text, "不该被取到", "专辑简介: 按专辑 ID 挑对应的那一项")
+        expectEqual(N.parse(html: page(json), albumID: 123), nil, "专辑简介: 页面里没有这张专辑的简介 = nil,不拿别的专辑顶上")
+        let noIDs = """
+        {"data":[{"modalPresentationDescriptor":{"headerTitle":"x","paragraphText":"没有专辑标识"}}]}
+        """
+        expectEqual(N.parse(html: page(noIDs), albumID: 272875165), nil, "专辑简介: 没有专辑标识的形状不放行")
+        let blank = """
+        {"data":[{"contentDescriptor":{"identifiers":{"storeAdamID":"272875165"}},"modalPresentationDescriptor":{"paragraphText":"  <br/> "}}]}
+        """
+        expectEqual(N.parse(html: page(blank), albumID: 272875165), nil, "专辑简介: 正文清理后为空 = nil")
+        expectEqual(N.parse(html: "<html>没有内嵌数据</html>", albumID: 272875165), nil, "专辑简介: 页面不是预期形状 = nil")
+    }
+
+    // ---- 歌手简介:专辑页的署名歌手 + 歌手页简介 + API 补充字段 ----
+    do {
+        typealias N = AlbumEditorialNotes
+        func page(_ json: String) -> String {
+            "<html><body><script type=\"application/json\" id=\"serialized-server-data\">\(json)</script></body></html>"
+        }
+        // 专辑头部:简介 + subtitleLinks(与真实页面同形);播放按钮等别的节点也引用同一个专辑 ID,不能被当成头部。
+        let albumJSON = """
+        {"data":[{"data":{"sections":[{"items":[
+          {"playButton":{"contentDescriptor":{"kind":"album","identifiers":{"storeAdamID":"272875165"}}}},
+          {"contentDescriptor":{"kind":"album","identifiers":{"storeAdamID":"272875165"}},
+           "modalPresentationDescriptor":{"headerTitle":"未来","paragraphText":"专辑正文"},
+           "subtitleLinks":[
+             {"title":"方大同","segue":{"destination":{"contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"201549024"}}}}},
+             {"title":"某合唱","segue":{"destination":{"contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"42"}}}}},
+             {"title":"不是歌手","segue":{"destination":{"contentDescriptor":{"kind":"genre","identifiers":{"storeAdamID":"7"}}}}}
+           ]}
+        ]}]}}]}
+        """
+        let albumPage = N.parseAlbumPage(html: page(albumJSON), albumID: 272875165)
+        expectEqual(albumPage?.notes?.text, "专辑正文", "歌手简介: 专辑页一次拿到简介")
+        expectEqual(albumPage?.artists, [N.ArtistLink(name: "方大同", id: 201549024), N.ArtistLink(name: "某合唱", id: 42)],
+                    "歌手简介: 同一次拿到署名歌手,只认指向歌手页的链接")
+        let noNotesJSON = """
+        {"data":[{"contentDescriptor":{"kind":"album","identifiers":{"storeAdamID":"5"}},
+          "subtitleLinks":[{"title":"甲","segue":{"destination":{"contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"9"}}}}}]}]}
+        """
+        let noNotes = N.parseAlbumPage(html: page(noNotesJSON), albumID: 5)
+        expectEqual(noNotes?.notes, nil, "歌手简介: 专辑没有简介时 notes 为 nil")
+        expectEqual(noNotes?.artists.first?.id, 9, "歌手简介: 专辑没有简介也照样拿到署名歌手")
+
+        // 挑歌手
+        let links = [N.ArtistLink(name: "方大同", id: 1), N.ArtistLink(name: "王力宏", id: 2)]
+        expectEqual(N.pickArtist(links, localArtist: "王力宏 & 方大同")?.id, 1, "挑歌手: 名字能对上的第一位")
+        expectEqual(N.pickArtist([N.ArtistLink(name: "方大同", id: 1)], localArtist: "Khalil Fong")?.id, 1,
+                    "挑歌手: 只有一位署名时用它(播放器可能报另一种语言的写法)")
+        expectEqual(N.pickArtist(links, localArtist: "陶喆"), nil, "挑歌手: 多位都对不上时不猜")
+        expectEqual(N.pickArtist([], localArtist: "方大同"), nil, "挑歌手: 没有署名")
+
+        // 歌手页:头部那一项带 bio;页面别处指向这位歌手的链接不算。
+        let artistJSON = """
+        {"data":[{"data":{"sections":[{"items":[
+          {"title":"别处的链接","contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"201549024"}}},
+          {"id":"201549024","title":"方大同","contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"201549024"}},
+           "bio":"  第一段\\n\\n第二段  "}
+        ]}]}}]}
+        """
+        expectEqual(N.parseArtistBio(html: page(artistJSON), artistID: 201549024), "第一段\n\n第二段",
+                    "歌手简介: 取头部那一项的 bio,段落换行保留、首尾空白收掉")
+        expectEqual(N.parseArtistBio(html: page(artistJSON), artistID: 1), nil, "歌手简介: 歌手 ID 对不上 = nil")
+        let emptyBioJSON = """
+        {"data":[{"title":"甲","circleArtwork":{},"contentDescriptor":{"kind":"artist","identifiers":{"storeAdamID":"3"}}}]}
+        """
+        expectEqual(N.parseArtistBio(html: page(emptyBioJSON), artistID: 3), "", "歌手简介: 页面对、没有简介 = 空串(跟请求失败分开)")
+        expectEqual(N.artistPageURL(artistID: 201549024, storefront: "CN")?.absoluteString,
+                    "https://music.apple.com/cn/artist/x/201549024", "歌手简介: 页面地址")
+
+        // API 补充字段
+        let facts = N.parseArtistFacts(Data("""
+        {"data":[{"attributes":{"bornOrFormed":"1983年7月14日","genreNames":["国语流行","音乐"],"isGroup":false}}]}
+        """.utf8))
+        expectEqual(facts, N.ArtistFacts(bornOrFormed: "1983年7月14日", genres: ["国语流行"], isGroup: false),
+                    "歌手简介: 出生日期 + 类型,去掉「音乐」这个总类")
+        expectEqual(N.parseArtistFacts(Data("{\"data\":[{\"attributes\":{\"isGroup\":true}}]}".utf8)),
+                    N.ArtistFacts(bornOrFormed: nil, genres: [], isGroup: true), "歌手简介: 缺字段时对应行不出现")
+        expectEqual(N.parseArtistFacts(Data("oops".utf8)), nil, "歌手简介: 返回不是 JSON = nil")
+
+        // collector 缓存的 developer token
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        expectEqual(AppleMusicDeveloperToken.parse(Data("{\"token\":\"abc\",\"expiry\":2000003600}".utf8), now: now), "abc",
+                    "token: 没过期就用")
+        expectEqual(AppleMusicDeveloperToken.parse(Data("{\"token\":\"abc\",\"expiry\":2000000030}".utf8), now: now), nil,
+                    "token: 离过期不到一分钟不用")
+        expectEqual(AppleMusicDeveloperToken.parse(Data("{\"expiry\":2000003600}".utf8), now: now), nil, "token: 没有 token 字段")
+    }
 }

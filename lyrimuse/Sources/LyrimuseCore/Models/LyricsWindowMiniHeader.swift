@@ -33,12 +33,27 @@ public struct LyricsWindowMiniHeaderFields: OptionSet, Codable, Sendable, Hashab
     /// 放在 Core 而不是视图里,是因为"选了但值是空"这条边界最容易漏 —— 漏了就会画出
     /// 「歌名 - 」这种尾巴挂着分隔符的行。selftest 钉着它。
     public func visibleValues(title: String, artist: String, album: String) -> [String] {
+        visibleParts(title: title, artist: artist, album: album).map(\.value)
+    }
+
+    /// 同 `visibleValues`,每一段带上它是哪一样 —— 歌手 / 专辑那两段要各自接「看简介」的点击。
+    public struct Part: Equatable, Sendable {
+        public let field: LyricsWindowMiniHeaderFields
+        public let value: String
+
+        public init(field: LyricsWindowMiniHeaderFields, value: String) {
+            self.field = field
+            self.value = value
+        }
+    }
+
+    public func visibleParts(title: String, artist: String, album: String) -> [Part] {
         let source: [LyricsWindowMiniHeaderFields: String] =
             [.title: title, .artist: artist, .album: album]
         return Self.orderedAll.compactMap { field in
             guard contains(field), let v = source[field] else { return nil }
             let trimmed = v.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
+            return trimmed.isEmpty ? nil : Part(field: field, value: trimmed)
         }
     }
 }

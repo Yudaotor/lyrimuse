@@ -197,6 +197,11 @@ func runLyricsWindowTests() {
         expectEqual(H([.title, .artist, .album]).visibleValues(title: "歌", artist: "人", album: "  "), ["歌", "人"],
                     "迷你顶部: 选了但值为空白的那项跳过(不画「歌 - 」尾巴)")
         expectEqual(H([]).visibleValues(title: "歌", artist: "人", album: "专辑"), [], "迷你顶部: 全关就是空")
+        expectEqual(H([.title, .artist, .album]).visibleParts(title: "歌", artist: " 人 ", album: "专辑"),
+                    [.init(field: .title, value: "歌"), .init(field: .artist, value: "人"), .init(field: .album, value: "专辑")],
+                    "迷你顶部: 分段带上字段类型(歌手 / 专辑各自接看简介的点击),值同 visibleValues 一样收空白")
+        expectEqual(H([.artist, .album]).visibleParts(title: "歌", artist: "人", album: "").map(\.field), [.artist],
+                    "迷你顶部: 空的那项连段一起跳过")
         expectEqual(H.default.visibleValues(title: " 歌 ", artist: "人", album: ""), ["歌", "人"],
                     "迷你顶部: 首尾空白去掉")
     }

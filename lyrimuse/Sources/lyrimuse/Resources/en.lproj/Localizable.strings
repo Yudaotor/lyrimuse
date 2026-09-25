@@ -309,6 +309,7 @@
 "写入本地记录文件失败：%@" = "Couldn't save to the lyrics cache: %@";
 "减少推荐" = "Suggest Less";
 "几乎打平，但内容印证不全" = "Practically a tie, but not all corroborated";
+"出生日期" = "Born";
 "分差 %1$d 分（%2$@）。" = "Score gap: %1$d (%2$@).";
 "分差 %d 分。" = "Score gap: %d.";
 "分差只有 %1$d 分（%2$@）。" = "Score gap: only %1$d (%2$@).";
@@ -698,6 +699,7 @@
 "悬浮歌词宽度" = "Overlay lyrics width";
 "悬浮淡化" = "Fade on hover";
 "想法与建议" = "Ideas & Suggestions";
+"成立时间" = "Formed";
 "我已完成授权，继续" = "I've Authorized";
 "我的配色主题" = "My Themes";
 "截图、录屏、共享屏幕都拍不到，你照常看得见" = "Screenshots, recordings and screen sharing can't capture it, but you still see it";
@@ -844,6 +846,7 @@
 "显示/隐藏菜单栏歌词" = "Show/Hide Menu Bar Lyrics";
 "显示/隐藏译文" = "Show/Hide Translation";
 "显示专辑" = "Show Album";
+"显示专辑简介" = "Show Album Notes";
 "显示在哪块屏幕" = "Show On";
 "显示封面" = "Show Artwork";
 "显示播放控制" = "Show Playback Controls";
@@ -851,6 +854,7 @@
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
 "显示歌名" = "Show Track Title";
 "显示歌手" = "Show Artist";
+"显示歌手简介" = "Show Artist Bio";
 "显示歌词" = "Show Lyrics";
 "显示歌词校准" = "Show Lyrics Calibration";
 "显示歌词窗口" = "Show Lyrics Window";
@@ -936,10 +940,12 @@
 "来源可靠度" = "Source";
 "来源已选定：%@" = "Source pinned: %@";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
+"查看专辑简介" = "View Album Notes";
 "查看发布页面" = "View release page";
 "查看官方文档 →" = "View Official Docs →";
 "查看已有应用" = "My applications";
 "查看效果 + 教程 →" = "See Effect + Guide →";
+"查看歌手简介" = "View Artist Bio";
 "查询词：%@" = "Query: %@";
 "标为纯音乐" = "Mark as Instrumental";
 "标注哪些语言" = "Annotate";
@@ -1184,6 +1190,7 @@
 "简洁：只显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。" = "Compact: only the current line and the next one.\nFull: a scrolling page of lyrics, like the full size.";
 "管理" = "Library";
 "管理…" = "Manage…";
+"类型" = "Genre";
 "粗细" = "Weight";
 "粤拼" = "Jyutping";
 "系统兜底翻译" = "System Fallback Translation";
