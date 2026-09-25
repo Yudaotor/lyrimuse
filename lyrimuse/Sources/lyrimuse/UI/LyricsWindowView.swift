@@ -515,9 +515,6 @@ private final class LyricsWindowController: ObservableObject {
         behavior.remove(.fullScreenAuxiliary)
         behavior.insert(.fullScreenPrimary)
         window.collectionBehavior = behavior
-        // 临时诊断:只计数不打日志 —— 这里挂在 didUpdate 上,逐次打会淹掉
-        // 日志。计数由 SpaceDiagnostics 在 Space/激活事件里顺带报出来。定位后删。
-        SpaceDiagnostics.noteFullScreenCapabilityWrite()
     }
 
     /// 红绿灯默认位置(AppKit 坐标,标题栏容器内),首次 attach 时记录。

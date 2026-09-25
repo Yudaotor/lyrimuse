@@ -146,7 +146,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
         if isUnregisterLoginItemRun { return }
-        MainThreadStallProbe.start()
         // 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
         // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行
         // 就会第一次访问 AppSettings.shared,而它的 init() 末尾会用 fontFamilyName 算一遍
@@ -326,9 +325,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
         // 见那个类文件头的不变量)。
         NotchMirrorManager.start()
-        // 临时诊断:定位到根因后连同 Diagnostics/SpaceDiagnostics.swift 整个删掉,
-        // 见那个文件的头注。
-        SpaceDiagnostics.start()
         // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 挪到上面
         // BrowserAutomationPermission.manuallyAddedFamilies 那一行之后了(
         // 见那边的注释)——状态栏项的创建时机要尽量靠前。

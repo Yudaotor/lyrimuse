@@ -1405,14 +1405,6 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
                 // 自然切歌接手的那一首不采样(两套补偿会互相学);剩下的只认真·开播。
                 posAnchorLagSampleValid = natural == nil && rawReported <= Self.anchorLagFreshStartMaxSecs
-                // 临时诊断(排查"网易云切歌之后歌词偏慢,暂停重新播放就
-                // 正常"——排查完就删)。noisyFloored(QQ/网易云)换歌时没有类似 Spotify
-                // naturalAdvanceCorrection 的偏置估计,直接原样采信 rawReported 当播种值
-                // (见上面注释"QQ/网易云的整秒地板会把偏置估计噪声化")——想看这个播种值
-                // 本身是不是系统性偏后(不是纯抖动),所以在这里落一条日志。
-                if tier == .noisyFloored {
-                    logger.notice("neteaseDiag trackChange key=\(key, privacy: .public) rawReported=\(rawReported, format: .fixed(precision: 3)) seed=\(self.trackPosSeconds, format: .fixed(precision: 3))")
-                }
             } else {
                 // 刚从暂停恢复播放 / 首次观察(同曲)。这一笔读数在暂停期间被 elapsedTimeNow
                 // 空转污染过,不能原样采信 —— 削掉"不可能发生的前跳",见 resumeSeedSeconds。
@@ -1428,9 +1420,6 @@ public final class LocalPlaybackSource: ObservableObject {
                    let lead = Self.resumeLead(raw: rawReported, seed: trackPosSeconds) {
                     logger.notice("resume lead: seed \(self.trackPosSeconds, format: .fixed(precision: 3))s, player clock leads audio by \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
                     setReportedBias(lead, anchorElapsed: nil)
-                }
-                if tier == .noisyFloored {
-                    logger.notice("neteaseDiag resumeOrFirstObserve key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3))")
                 }
             }
             posErrEMA = 0
@@ -1633,10 +1622,6 @@ public final class LocalPlaybackSource: ObservableObject {
         if Self.shouldRatchetForward(reported: reported, predicted: predicted, tier: tier) {
             // 地板量化源(QQ 音乐/网易云)的前向棘轮:reported 恒 ≤ 真实位置,它比外推值
             // 靠前就证明外推值落后了,立刻向前采纳 —— 理由见 flooredForwardSnapEpsilonSecs。
-            if tier == .noisyFloored {
-                // 临时诊断(同上,排查完就删)。
-                logger.notice("neteaseDiag ratchetForward key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3))")
-            }
             trackPosSeconds = reported
             posErrEMA = 0
             return (trackPosSeconds, true)
@@ -1647,11 +1632,6 @@ public final class LocalPlaybackSource: ObservableObject {
         // 不然校正只改了内部累加器、UI 用的锚点还在按旧基准外推,校正根本到不了屏幕。
         let (newEMA, snap) = Self.servoDecision(errEMA: posErrEMA, error: reported - predicted, tier: tier)
         posErrEMA = newEMA
-        if tier != .precise {
-            // 临时诊断(同上,排查完就删)——想看换歌之后这个 EMA 要几轮
-            // 才能追上,以及每一轮 reported/predicted 的实际差距有多大、方向是否恒定。
-            logger.notice("neteaseDiag steady key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ema=\(newEMA, format: .fixed(precision: 3)) snap=\(snap, privacy: .public)")
-        }
         if snap {
             trackPosSeconds = tier == .precise ? reported : predicted + newEMA
             posErrEMA = 0
@@ -2927,14 +2907,6 @@ public final class LocalPlaybackSource: ObservableObject {
             let needsNewAnchor = anchor == nil || trackChanged || didReanchor
                 || anchor?.rate != rate || anchor?.durationMs != Int(duration * 1000)
             if needsNewAnchor {
-                // 临时诊断(排查完就删):锚点为什么重建、重建把屏上位置挪了多少。
-                // 逐字填色直接读这个锚点外推,所以 stepMs 就是换基准那一下看得见的跳。
-                let beforeMs = anchor?.extrapolatedPositionMs(now: now)
-                let wasNil = anchor == nil
-                let rateChg = anchor?.rate != rate
-                let durChg = anchor?.durationMs != Int(duration * 1000)
-                let stepMs = beforeMs.map { Int(positionSeconds * 1000) - $0 } ?? -99999
-                logger.notice("anchor rebuild: nil=\(wasNil) track=\(trackChanged) reanchor=\(didReanchor) rateChg=\(rateChg) durChg=\(durChg) stepMs=\(stepMs) dur=\(duration, format: .fixed(precision: 2)) rate=\(rate, format: .fixed(precision: 2))")
                 anchor = ProgressAnchor(
                     durationMs: Int(duration * 1000),
                     progressMs: Int(positionSeconds * 1000),
