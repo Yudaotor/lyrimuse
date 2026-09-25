@@ -61,8 +61,32 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return "noisyFloored"
         case .kugou: return "cleanExtrapolated"
         case .soda: return "cleanExtrapolated"
-        case .spotify: return "cleanExtrapolated"
+        case .spotify: return "precise"
         default: return nil
+        }
+    }
+
+    /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。
+    /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。
+    /// 只覆盖 Lyrimuse 自己这一份身份:collector 是独立签名身份,TCC 里是另一条记录。
+    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。
+    public var needsAutomationPermission: Bool {
+        switch self {
+        case .appleMusic: return true
+        case .spotify: return true
+        default: return false
+        }
+    }
+
+    /// collector 读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。
+    /// = 那些文件在 `~/Library/Containers/` 下;collector 侧有测试按真实路径对账。
+    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`。
+    public var needsFullDiskAccess: Bool {
+        switch self {
+        case .qqMusic: return true
+        case .netease: return true
+        case .kugou: return true
+        default: return false
         }
     }
 
@@ -75,6 +99,15 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return true
         case .soda: return true
         case .spotify: return true
+        default: return false
+        }
+    }
+
+    /// 这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播。
+    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`,Go 侧同源。
+    public var playingFromRate: Bool {
+        switch self {
+        case .kugou: return true
         default: return false
         }
     }

@@ -70,6 +70,31 @@ func runSyncEngineTests() {
                     "间奏窗口: applyMinimumDuration=false 时前奏窗口不扣 leadMs")
     }
 
+    // ---- 一行歌词的显示窗口(LyricDisplayWindow):按时长配速的滚动都读它 ----
+    do {
+        let W = LyricDisplayWindow.self
+        let starts = [1_000, 4_000, 9_500]
+        expectEqual(W.of(index: 0, starts: starts, trackDurationMs: 60_000), W.init(startMs: 1_000, dwellMs: 3_000),
+                    "显示窗口: 本句时间戳到下一句时间戳")
+        expectEqual(W.of(index: 2, starts: starts, trackDurationMs: 12_000), W.init(startMs: 9_500, dwellMs: 2_500),
+                    "显示窗口: 最后一句用曲长兜底")
+        expectEqual(W.of(index: 2, starts: starts, trackDurationMs: nil), W.init(startMs: 9_500, dwellMs: nil),
+                    "显示窗口: 最后一句不知道曲长时时长为 nil(起点照给)")
+        expectEqual(W.of(index: 2, starts: starts, trackDurationMs: 9_000)?.dwellMs, nil,
+                    "显示窗口: 曲长早于最后一句的时间戳不给负数")
+        expectEqual(W.of(index: 0, starts: [1_000, 1_000], trackDurationMs: nil)?.dwellMs, nil,
+                    "显示窗口: 时间戳重复不给 0")
+        expectEqual(W.of(index: 0, starts: [2_000, 1_500], trackDurationMs: nil)?.dwellMs, nil,
+                    "显示窗口: 时间戳乱序不给负数")
+        expectEqual(W.of(index: 0, starts: [1_000, 1_050], trackDurationMs: nil)?.dwellMs, nil,
+                    "显示窗口: 窗口不超过 50ms 当算不出来")
+        expectEqual(W.of(index: 0, starts: [1_000, 1_051], trackDurationMs: nil)?.dwellMs, 51,
+                    "显示窗口: 超过 50ms 就给")
+        expectEqual(W.of(index: nil, starts: starts, trackDurationMs: 60_000) == nil, true, "显示窗口: 没有当前行")
+        expectEqual(W.of(index: 3, starts: starts, trackDurationMs: 60_000) == nil, true, "显示窗口: 下标越界")
+        expectEqual(W.of(index: 0, starts: [Int](), trackDurationMs: 60_000) == nil, true, "显示窗口: 没有歌词")
+    }
+
     // ---- 前奏/间奏「•••」下方那句的罗马音/译文(TickResolution.nextRomanization/nextTranslation) ----
     do {
         // 同上一块的时间轴(前奏 2s、句间静默两处各 3s),每句都配一条罗马音/译文,时间戳
@@ -253,6 +278,28 @@ func runSyncEngineTests() {
             // 漏网的乐器署名:计数可能凑够,但词根挡住
             let s = D.speakers(in: ["小号：涂", "小打击乐器组：Joni", "小号：涂"])
             expectEqual(s.isEmpty, true, "对唱: 乐器/职能词根不是演唱者")
+        }
+
+        // ---- strippingKnownLabel: 译文/罗马音行的标签剥离 ----
+        // 正文行的标签由 plan/planWords 剥,译文和罗马音走的是另一条路,得单独剥一次。
+        do {
+            let speakers = Set(["v1", "v2"])
+            // 真实形态(《Heal the World》):TTML 的 agent 是小写 v1,机器翻译回吐的是大写 V1
+            expectEqual(D.strippingKnownLabel("V1：留出一点空间", speakers: speakers), "留出一点空间",
+                        "译文剥标签: 大小写不敏感(原文 v1 / 译文 V1)")
+            expectEqual(D.strippingKnownLabel("v1：Make a little space", speakers: speakers),
+                        "Make a little space", "译文剥标签: 原样小写也剥")
+            // 只剥这一份歌词自己认定过的标签,别见到"短标签 + 冒号"就动手
+            expectEqual(D.strippingKnownLabel("他说：我不走了", speakers: speakers), "他说：我不走了",
+                        "译文剥标签: 不在 speakers 里的一律不碰(真句子)")
+            expectEqual(D.strippingKnownLabel("Rap：欢迎来到我的房间", speakers: speakers),
+                        "Rap：欢迎来到我的房间", "译文剥标签: 没被判成演唱者的段落标记不剥")
+            // 剥完什么都不剩的行保持原样:那种行正文侧会被整行丢掉,译文跟着按时间戳落空即可,
+            // 在这里造一个空串出来反而要下游每处都防一遍。
+            expectEqual(D.strippingKnownLabel("v1：", speakers: speakers), "v1：",
+                        "译文剥标签: 剥完为空的不动")
+            expectEqual(D.strippingKnownLabel("v1：x", speakers: []), "v1：x",
+                        "译文剥标签: 这首歌没认出演唱者就不剥")
         }
         do {
             // 串烧 Live 的真实形态(《大笨钟+暗号+彩虹+龙卷风 (Live)》):每首各带一份署名,
@@ -752,6 +799,21 @@ func runSyncEngineTests() {
         expectEqual(nbspLine?.wordGroups?.count, 11,
                     "内容匹配: 命中之后逐字对齐应正常生效(11字11音节严格一一对应,不退回整行)")
 
+        // ③.6d 逐字数据把相邻两句整行并成一行:它的键是两句键拼起来的,单句键查不到,时间兜底
+        // 只会挂上其中一句。合并行要同时带两句的译文;第三句是独立的逐字行,照常按单句键命中。
+        let engineMerged = LyricsSyncEngine()
+        engineMerged.load(
+            lyrics: "[00:10.00]The devil's gotten to me\n[00:12.00]Through this dance\n[00:15.00]I'm full of funky fever",
+            lyricsTr: "[00:10.00]恶魔通过这舞步\n[00:12.00]将我掌控\n[00:15.00]我充满放克狂热",
+            lyricsRoma: "",
+            lyricsYRC: "[9500,4000](9500,2000,0)The devil's gotten to me (11500,2000,0)Through this dance\n" +
+                "[15000,2000](15000,2000,0)I'm full of funky fever")
+        let mergedLines = engineMerged.allLines(idPrefix: "t").map(\.line)
+        expectEqual(mergedLines.first?.translation, "恶魔通过这舞步 将我掌控",
+                    "内容匹配: 逐字把两句整行并成一行时,合并行带上两句的译文")
+        expectEqual(mergedLines.dropFirst().first?.translation, "我充满放克狂热",
+                    "内容匹配: 独立的逐字行照常按单句键命中,不受拼接键影响")
+
         // ③.6c 内容匹配还要对"标点差异"免疫(现象是 Prince《Cream (Without Rap
         // Monologue)》里带括号和声的句子全都没有译文)。真实缓存坐实:网易云整行 LRC 写
         // "U're so fine (U're so fine)"(ASCII 括号),YRC 逐字数据同一句写 "U're so fine （U're so
@@ -971,12 +1033,17 @@ func runSyncEngineTests() {
         //      出现 = max(8000, 10000-5000) = 8000;消失 = 13000(唱完即下场)到 5000ms
         expectEqual(L.displayDurationMs(prevLineEndMs: 8_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 40_000, fallbackEndMs: nil),
-                    5_000, "长间奏在后:窗口到唱完为止,不能算到下一句开始")
-        //    短间隙:上一句 9.8s 唱完、本句 10s 开始、13s 唱完 → 出现 9800、消失 13000
+                    5_000, "长间奏在后:窗口到本行下场为止,不能算到下一句开始")
+        //    短间隙:上一句 9.8s 唱完、本句 10s 开始、13s 唱完 到 出现 9800、消失 13000
         expectEqual(L.displayDurationMs(prevLineEndMs: 9_800, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
                     3_200, "短间隙:出现于上一句唱完那一刻")
-        //    长间奏在前:上一句 2s 就唱完、本句 10s 开始 → 出现被 reveal 夹在 5000
+        // 不变式:出现时刻恒 <= 本句开始(停留再长也不许把这一句推到它已经在唱之后)。
+        for prevEnd in [0, 9_000, 9_800, 9_999, 10_000, 11_000] {
+            expectEqual(L.leadInMs(prevLineEndMs: prevEnd, startMs: 10_000) >= 0, true,
+                        "leadIn 不为负(prevEnd=\(prevEnd))")
+        }
+        //    长间奏在前:上一句 2s 就唱完、本句 10s 开始 到 出现被 reveal 夹在 5000
         expectEqual(L.displayDurationMs(prevLineEndMs: 2_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
                     8_000, "长间奏在前:出现时刻被 revealMs 夹住,不会早于此")
@@ -1203,5 +1270,66 @@ func runSyncEngineTests() {
         let groupsOn = wordsOn.activeLine(atMs: 1_500)?.wordGroups ?? []
         expectEqual(romaOf(groupsOn, containing: "我") ?? nil != nil, true,
                     "混排行逐词: 拼音开着时中文词组照常标拼音")
+    }
+
+    // ---- GapDotsCurve:前奏/间奏「•••」三颗呼吸圆点的曲线 ----
+    //
+    // 四个展示面共用这一份:悬浮歌词 / 歌词窗口 / 灵动岛走 SwiftUI 的 LyricsGapDotsView,
+    // 菜单栏那一面是 CALayer 手排、把这条曲线采样成 CAKeyframeAnimation。视图搬不过去,
+    // 曲线必须是同一份,否则两套渲染的节奏迟早各漂各的 —— 下面这些断言就是钉这件事。
+    do {
+        typealias G = GapDotsCurve
+
+        // 进度:线性、夹在 0…1、零长窗口不炸
+        expectEqual(G.progress(posMs: 1_000, startMs: 1_000, endMs: 5_000), 0, "三点进度: 窗口起点 = 0")
+        expectEqual(G.progress(posMs: 5_000, startMs: 1_000, endMs: 5_000), 1, "三点进度: 窗口终点 = 1")
+        expectEqual(G.progress(posMs: 3_000, startMs: 1_000, endMs: 5_000), 0.5, "三点进度: 正中 = 0.5")
+        expectEqual(G.progress(posMs: 500, startMs: 1_000, endMs: 5_000), 0, "三点进度: 窗口之前夹到 0")
+        expectEqual(G.progress(posMs: 9_000, startMs: 1_000, endMs: 5_000), 1, "三点进度: 窗口之后夹到 1")
+        expectEqual(G.progress(posMs: 1_000, startMs: 1_000, endMs: 1_000), 0,
+                    "三点进度: 零长窗口不除零(span 兜底 1ms)")
+
+        // 点亮:第 i 颗在进度 i/3 之后才开始亮,地板永不穿透
+        expectEqual(G.opacity(dot: 0, progress: 0), G.opacityFloor, "三点点亮: 刚进间奏时第一颗也只在地板上")
+        expectEqual(G.opacity(dot: 2, progress: 0.5), G.opacityFloor, "三点点亮: 进度没到 2/3 时第三颗还没起亮")
+        expectEqual(G.opacity(dot: 0, progress: 1.0 / 3), G.opacityFloor + G.opacitySpan,
+                    "三点点亮: 第一颗在 1/3 处刚好满亮")
+        expectEqual(G.opacity(dot: 2, progress: 1), G.opacityFloor + G.opacitySpan,
+                    "三点点亮: 走完整段时第三颗满亮")
+        let ramp = stride(from: 0.0, through: 1.0, by: 0.02).map { G.opacity(dot: 1, progress: $0) }
+        expectEqual(zip(ramp, ramp.dropFirst()).allSatisfy { $0 <= $1 }, true, "三点点亮: 单调递增,不会亮了又暗回去")
+        expectEqual(ramp.allSatisfy { $0 >= G.opacityFloor && $0 <= G.opacityFloor + G.opacitySpan }, true,
+                    "三点点亮: 恒在地板与满亮之间")
+        // 三颗依次点亮,任一时刻靠前的那颗不会比靠后的暗
+        expectEqual(stride(from: 0.0, through: 1.0, by: 0.02).allSatisfy { p in
+            G.opacity(dot: 0, progress: p) >= G.opacity(dot: 1, progress: p)
+                && G.opacity(dot: 1, progress: p) >= G.opacity(dot: 2, progress: p)
+        }, true, "三点点亮: 恒按从左到右的顺序亮,不会中间那颗先亮")
+
+        // 呼吸:周期 7s、两端相接(循环不跳)、振幅有界、贴地那一段停留最久
+        expectEqual(G.breathe(atMs: 0), G.breatheMin, "三点呼吸: 周期起点在最小倍率")
+        expectEqual(abs(G.breathe(atMs: Int(G.breathePeriodMs)) - G.breatheMin) < 1e-12, true,
+                    "三点呼吸: 一个周期之后回到起点(循环接得上,不会每 7s 跳一下)")
+        expectEqual(abs(G.breathe(atMs: Int(G.breathePeriodMs / 2)) - (G.breatheMin + G.breatheSpan)) < 1e-12, true,
+                    "三点呼吸: 半个周期在峰值")
+        let cycle = (0 ..< 200).map { G.breathe(atMs: Int(G.breathePeriodMs) * $0 / 200) }
+        expectEqual(cycle.allSatisfy { $0 >= G.breatheMin - 1e-12 && $0 <= G.breatheMin + G.breatheSpan + 1e-12 },
+                    true, "三点呼吸: 倍率恒在 breatheMin…breatheMin+breatheSpan")
+        expectEqual(G.breatheMin < 1, true, "三点呼吸: 贴地那一段比原尺寸小,鼓起来才看得出是在呼吸")
+        expectEqual(G.breatheMin > 0.5, true,
+                    "三点呼吸: 贴地也不能太小 —— 停留最久的正是这一段,缩过头就看不清是个圆")
+        // raised-cosine 平方的意义:低处平、高处陡("停留久、鼓得快")。取靠近两端的同样
+        // 步长比一下斜率,低处必须比高处平缓。
+        let step = Int(G.breathePeriodMs) / 100
+        let nearFloor = G.breathe(atMs: step) - G.breathe(atMs: 0)
+        let nearPeak = abs(G.breathe(atMs: Int(G.breathePeriodMs / 2)) - G.breathe(atMs: Int(G.breathePeriodMs / 2) - step))
+        expectEqual(nearFloor < nearPeak, true, "三点呼吸: 贴地段比峰顶段平缓(raised-cosine²「停留久、鼓得快」)")
+
+        // 减弱动态效果:不呼吸,但点亮进度照旧 —— 那是信息,不是装饰
+        expectEqual(G.breathe(atMs: 1_234, reduceMotion: true), 1, "三点呼吸: reduceMotion 恒 1,不缩放")
+        expectEqual(G.opacity(dot: 1, progress: 0.5) > G.opacityFloor, true,
+                    "三点点亮: 点亮进度跟 reduceMotion 无关(它是信息不是装饰)")
+
+        expectEqual(G.dotCount, 3, "三点: 就是三颗 —— 四个展示面与菜单栏的槽宽算式都按它算")
     }
 }

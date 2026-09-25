@@ -66,6 +66,28 @@ jobs:
       - name: go vet
         run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
 
+      # 挡住新长出来的死代码。不是"零死代码"——允许清单在
+      # lyrimuse-collector/deadcode-baseline.txt，文件头写了往里加之前该问什么。
+      # deadcode 的版本必须钉住：v0.50.0 起要求 go >= 1.26，装不上本仓的工具链。
+      - name: 死代码（不得新增）
+        run: |
+          cd lyrimuse-collector
+          GOTOOLCHAIN="go${{ env.GO_VERSION }}" go run golang.org/x/tools/cmd/deadcode@v0.30.0 \
+            -test ./... | sed 's/.*unreachable func: //' | sort -u > /tmp/deadcode.now
+          /usr/bin/grep -vE '^\s*(#|$)' deadcode-baseline.txt | sort -u > /tmp/deadcode.base
+          new="$(comm -23 /tmp/deadcode.now /tmp/deadcode.base)"
+          gone="$(comm -13 /tmp/deadcode.now /tmp/deadcode.base)"
+          if [ -n "$gone" ]; then
+            echo "这些已经不再是死代码，可以从 deadcode-baseline.txt 里删掉了："
+            echo "$gone"
+          fi
+          if [ -n "$new" ]; then
+            echo "发现新的不可达函数——删掉它，或者连同解释它的注释一起处理："
+            echo "$new"
+            exit 1
+          fi
+          echo "没有新增死代码。"
+
       - name: go test
         run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...
 

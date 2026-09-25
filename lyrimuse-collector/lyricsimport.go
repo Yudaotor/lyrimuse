@@ -165,14 +165,22 @@ func lyricsFileSuffixOf(name string) string {
 	return suffix
 }
 
-func importLyricsFromFiles() {
-	if lyricsDir == "" {
-		return
+// 返回值 = 这一轮真正被文件改写的条目数。调用方(main.go)据此决定要不要作废启动期迁移
+// 水位:用户手改 lyrics/ 里的文件是**外来数据**入口,改过就得让后面那些存量迁移照常跑一遍
+// (见 startupmigration.go)。老调用点忽略返回值即可,行为不变。
+func importLyricsFromFiles() int { return importLyricsFromDir(lyricsDir()) }
+
+// importLyricsFromDir 同 importLyricsFromFiles,只是扫的是指定目录。热切换歌词文件夹时先导入
+// 新目录、再把 lyricsDir 指过去(见 lyricsdirswitch.go)。
+func importLyricsFromDir(dir string) int {
+	if dir == "" {
+		return 0
 	}
-	entries, err := os.ReadDir(lyricsDir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return // 目录还不存在(全新安装,还没导出过任何东西)是正常情况
+		return 0 // 目录还不存在(全新安装,还没导出过任何东西)是正常情况
 	}
+	adopted := 0
 
 	type group struct{ files map[string]string } // suffix -> 完整路径
 	groups := make(map[string]*group)
@@ -185,7 +193,7 @@ func importLyricsFromFiles() {
 		// 启动时清一次——导出过程中不能扫(会误删另一轮正在写的临时文件)。不在四个后缀里,
 		// 下面的分组本来也认不出它,清扫只是别让它永远躺在文件夹里。
 		if isLyricsTempFile(name) {
-			_ = os.Remove(filepath.Join(lyricsDir, name))
+			_ = os.Remove(filepath.Join(dir, name))
 			continue
 		}
 		suffix := lyricsFileSuffixOf(name)
@@ -198,7 +206,7 @@ func importLyricsFromFiles() {
 			g = &group{files: map[string]string{}}
 			groups[base] = g
 		}
-		g.files[suffix] = filepath.Join(lyricsDir, name)
+		g.files[suffix] = filepath.Join(dir, name)
 	}
 
 	enrichMu.Lock()
@@ -258,8 +266,10 @@ func importLyricsFromFiles() {
 		if changed {
 			enrichCache[key] = e
 			enrichDirty = true
+			adopted++
 		}
 	}
 	enrichMu.Unlock()
 	saveEnrichCache() // 内部会检查 enrichDirty,这一轮什么都没变时是无害的空操作
+	return adopted
 }

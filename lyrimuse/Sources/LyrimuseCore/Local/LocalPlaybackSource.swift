@@ -27,6 +27,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 第一句本身,该按正常行的规格展示这两项,见 LyricsOverlayView.lyricsCard。
     @Published public private(set) var nextLineRomanization: String?
     @Published public private(set) var nextLineTranslation: String?
+    /// 下一行的逐词分组(见 `LyricsSyncEngine.TickResolution.nextWordGroups`):`currentLine` 为 nil
+    /// 时悬浮歌词用它把罗马音逐词标在那句底下,跟它变成当前行之后的排版一致。
+    @Published public private(set) var nextLineWordGroups: [SyncedLyricWordGroup]?
     // "歌词窗口"(完整可滚动歌词列表)用——跟 currentLine/nextLineText 同一套 20Hz tick
     // 算出来,只在真的换了行时才重新赋值(见 fastTick())。allLines 换歌时才重新构造一次
     // (reloadCurrentLyrics()),不需要每 tick 重算——歌词内容本身在同一首歌播放期间不变。
@@ -293,6 +296,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // 预测差太多"这个分支,观感上跟直接按读数累加没有差别。
     private var trackPosSeconds: Double = 0
     private var posTrackingKey = ""
+    /// 上一轮那首是不是广告(换歌那一拍它就是"上一首是不是广告",见 spotifyNaturalStartKind)。
+    private var posPrevWasAdBreak = false
     private var posWasPlaying = false
     private var posPrevWall: Date?
     // 上一轮的报告值 —— 冻结检测(isFrozenReport)用它算"这一轮报告值前进了多少"。
@@ -302,6 +307,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // "真实读数 − 墙钟外推值"偏差的滑动平均——见 servoDecision 的注释,
     // 实测排查坐实的"锁死偏差"问题的修复状态。播种/跳变/校正后都归零重新累计。
     private var posErrEMA: Double = 0
+    /// 最近一次"播放器说状态变了"的信号到达时刻(只记真状态信号,不记纯锚点刷新)。
+    private var posStateSignalAt: Date?
     // nonisolated:被 shouldProbeLateAnchor(nonisolated 纯函数)引用,不可变 Sendable。
     private nonisolated static let seekJumpToleranceSecs = 2.0
     /// 已经为哪个锚点问过「晚锚点」确认(见 shouldProbeLateAnchor)。坏锚点在位期间偏差每拍都在,
@@ -426,6 +433,20 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 见 shouldProbeLateAnchor。(nonisolated:同 seekJumpToleranceSecs,纯函数要读它。)
     public nonisolated static let lateAnchorProbeToleranceSecs: Double = 0.5
 
+    /// 探针量出的偏置:**这一拍流读数 − 探针值**,两个数都必须取**原始域**(没扣过偏置的值)。
+    ///
+    /// 别拿 `resolvePositionSeconds` 里那个 `reported` 当减数 —— 它是 `rawReported - 偏置`,
+    /// 已经在扣过偏置的域里。混域算出来的是 `(流读数 − 探针值) + 旧偏置`:旧偏置为 0 时恰好
+    /// 等于正解,所以平时看不出来;偏置还在位时再来一次探针(开播那次与锚点变化那次可以隔
+    /// 百来毫秒先后落地),这一段差就被叠进去、整首歌的纠偏翻倍。叠出来的方向跟着旧偏置的
+    /// 符号走:偏负多了读数被加得过头、歌词偏快,偏正多了减得过头、歌词偏慢,暂停时播放器
+    /// 重打准锚点、偏置作废才回得准 —— 表现就是"忽快忽慢、一暂停就对齐"。
+    ///
+    /// 偏置符号约定:正=流读数超前真声(用时要减),负=落后(用时要加)。纯函数,selftest 覆盖。
+    public nonisolated static func probeMeasuredBias(streamRaw: Double, probeRaw: Double) -> Double {
+        streamRaw - probeRaw
+    }
+
     /// 只对地板量化源(noisyFloored)生效:棘轮的依据是"reported ≤ 真实位置"这条
     /// 不等式,而 Spotify 的读数恰恰恒略**超前**真值,对它棘轮
     /// 只会把位置锁在抖动的上包络、且 EMA 每次吸附都被清零,永远修不回来。
@@ -472,6 +493,38 @@ public final class LocalPlaybackSource: ObservableObject {
         let clamped = tier == .cleanExtrapolated ? max(-0.75, min(0.75, error)) : error
         let newEMA = errEMA * (1 - alpha) + clamped * alpha
         return (newEMA, abs(newEMA) > threshold)
+    }
+
+    /// 恢复播放时,播种值最多允许比冻结值超前这么多的硬上限(兜底)。
+    ///
+    /// 正常取值是"状态信号到达至今"这段(实测中位数 0.338s,见 `resumeSeedSeconds`);
+    /// 这个常量只在拿不到信号时兜底 —— 那时宁可不砍,也别按一个猜出来的上界砍。
+    /// 播放档轮询是 2 秒一拍,取它。
+    public nonisolated static let resumeMaxForwardCapSecs: Double = 2.0
+
+    /// 从暂停恢复那一拍该用哪个位置播种。纯函数,selftest 直接覆盖。
+    ///
+    /// 别直接采信这一笔读数:暂停期间 media-control 的 `elapsedTimeNow` **照样按暂停前的
+    /// rate 空转**(见 `livePositionSeconds` 开头那段),恢复那一笔因此普遍超前真实位置 ——
+    /// 真机 17 次恢复实测前跳 +0.37~+1.93s,而位置在暂停期间根本没走。种偏之后伺服要
+    /// 上百秒才拉得回来,这期间歌词一直偏快(用户视角:"进度偏一点,暂停一下就正常")。
+    ///
+    /// 冻结值(`pausedPositionMs`)是播放器暂停时自报的真实位置,**暂停中拖进度条也会刷新它**,
+    /// 所以它就是恢复那一刻的真值;真正未知的只有"从真按下播放到我们查到"这段延迟。
+    /// 它的上界是**恢复信号到达至今**这段(`posStateSignalAt`,实测 0.31~0.43s)——
+    /// 恢复不可能发生在信号之前。超过这个上界的超前一律削掉。
+    ///
+    /// 上界只能用状态信号,不能用"距上一次观测"(暂停档轮询 6 秒一拍,那个上界一路顶到
+    /// 兜底值、等于没砍 —— 实测过,中位数反而从 −0.273 退到 −0.350)。
+    ///
+    /// 落后或小幅超前**原样采信**:播放器真报了个新位置(暂停中拖动、跨曲恢复)就该听它,
+    /// 这道闸只砍"不可能发生的前跳"。
+    public nonisolated static func resumeSeedSeconds(
+        reported: Double, frozen: Double?, maxForwardSecs: Double
+    ) -> Double {
+        guard let frozen else { return reported }
+        let ceiling = frozen + min(max(0, maxForwardSecs), resumeMaxForwardCapSecs)
+        return reported > ceiling ? ceiling : reported
     }
 
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——
@@ -539,20 +592,280 @@ public final class LocalPlaybackSource: ObservableObject {
         return (overrun, bias)
     }
 
-    /// 当前曲目 MediaRemote 锚点相对真声的偏差(秒)——resolvePositionSeconds 对每笔原始读数先扣掉它。
-    /// 只对 Spotify(cleanExtrapolated)非零。正=锚点超前真声(gapless 自然切歌,08-20 量法见上);
-    /// **负=锚点落后真声**(允许:Spotify 给歌曲发 now-playing 常晚 ~2s 而 elapsedTime
+    /// 这份读数带不带"gapless 自然切歌后新曲位置领先真声"的毛病 —— 自然切歌校正与
+    /// repeat-one 回绕重估的总闸。纯函数,selftest 直接覆盖。
+    ///
+    /// 别收回成只看档位:Spotify 的 `player position` 归 precise 档(稳态干净、伺服按精确源
+    /// 调参),但它每次起播后都整首领先一截、伺服对它结构性失明(读数与外推同出一个钟)。
+    /// 两件事正交,只按档位开就会整首歌偏快、一暂停才对齐。Spotify 那一档具体怎么扣见 SpotifyStartKind。
+    ///
+    /// 酷狗不开:它的钟在单曲循环回绕与自然切歌处都是连续的(实测差 0.04~0.08s),按旧曲外推越界量估出来的
+    /// 只是我们自己外推的误差,而那个偏置一暂停也清不掉。自然切歌晚打的锚点另由
+    /// `MediaControlClient.resetAnchorStartCorrection` 按先到的归零锚点补。数据见 02 章「酷狗单曲循环报暂停」「酷狗自然切歌」。
+    public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
+        if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
+        return tier == .cleanExtrapolated || bundleID == PlaybackPlayer.spotify.bundleIdentifier
+    }
+
+    /// 播放器自己的钟是不是已经对回了出声位置 —— 偏置在位时,播放中的读数(已扣偏置)突然比外推
+    /// **退回了约一个偏置量**。纯函数,selftest 直接覆盖。
+    ///
+    /// 暂停那一拍作废偏置(`biasSurvivesAnchor` 的 `playing`)只在**看到**暂停时成立;暂停与恢复落在
+    /// 同一个轮询间隙里、一拍都没看到时,偏置还在,而 Spotify 的钟已经对齐,扣完偏置的读数恰好慢一个
+    /// 偏置量 —— precise 档伺服一拍就吸附过去,整首偏慢。这个签名不依赖看没看到暂停:暂停对齐、
+    /// 往回小拖(拖动同样让钟对齐)、播放中钟停一下等音频,三种成因下"采信原始读数、清偏置"都对。
+    /// 漏掉的暂停时长 d 让退回量变成 偏置+d,所以只设"至少退回这么多",不设上限(>2s 走 seek 分支)。
+    ///
+    /// 只看 `anchorElapsedTime == nil`(读的是播放器自己的钟):media-control 那条路上锚点重发另有
+    /// `biasSurvivesAnchor` 盯着,而那边 cleanExtrapolated 档的负偏置(探针量出的锚点落后)语义相反。
+    public nonisolated static func playerClockResynced(error: Double, bias: Double, anchorElapsedTime: Double?) -> Bool {
+        guard anchorElapsedTime == nil, bias > 0 else { return false }
+        return error <= -(bias - playerClockResyncToleranceSecs) && error < -playerClockResyncMinDropSecs
+    }
+    /// Spotify 同一首歌里读数换了钟(AppleScript `player position` ⇄ media-control)时怎么处置。
+    public enum SpotifyClockAction: Equatable {
+        /// 跟这一首采信的钟一致,照常。
+        case accept
+        /// 偶发退回 media-control 的一拍:不采信它的位置,照外推走。
+        case hold
+        /// 认定换钟:重锚到这一拍读数、偏置作废。
+        case switchClock
+    }
+    /// 退回 media-control 持续多久才认定换钟(AppleScript 真的不可用了:权限被收回 / Spotify 卡住)。
+    public nonisolated static let spotifyForeignClockHoldSecs = 4.0
+
+    /// 纯函数,selftest 直接覆盖。
+    ///
+    /// 两个钟对同一首歌的读数可以差出一秒多(gapless 自然切歌后 `player position` 自己领先,
+    /// media-control 的锚点另有自己的偏差),偏置也只对量它的那个钟成立。所以夹在 AppleScript 读数
+    /// 中间的一拍 media-control 不能喂进伺服 —— precise 档一拍就会被它拽过去,下一拍再拽回来。
+    /// 持续退回才换钟;回到 AppleScript 立即换回(它是首选的钟)。
+    public nonisolated static func spotifyClockAction(
+        acceptedPlayerClock: Bool?, readsPlayerClock: Bool, foreignSince: Date?, now: Date
+    ) -> SpotifyClockAction {
+        guard let accepted = acceptedPlayerClock, accepted != readsPlayerClock else { return .accept }
+        if !readsPlayerClock, now.timeIntervalSince(foreignSince ?? now) < spotifyForeignClockHoldSecs {
+            return .hold
+        }
+        return .switchClock
+    }
+
+    /// Spotify 自己的钟是不是进了歌尾那段(外推与读数都在最后几秒)。纯函数,selftest 直接覆盖。
+    ///
+    /// 歌尾最后一秒它会**停住或往回退**(数据见 02 章「订正」),这时读数既不是真声也不是
+    /// "钟已对齐",拿它喂伺服或 `playerClockResynced` 都会把
+    /// 位置往回拽 —— 而下一首的自然切歌校正正要拿这一段的连续外推当真值,拽一下就把下一首的偏置估歪
+    /// 同样的量。所以这一段照外推走。
+    ///
+    /// 要求**读数本身**也在歌尾:从歌尾往回拖,读数离开歌尾,照常走 seek 分支,不会被这里吞掉。
+    public nonisolated static func inPlayerClockTail(
+        predicted: Double, raw: Double, duration: Double, anchorElapsedTime: Double?
+    ) -> Bool {
+        guard anchorElapsedTime == nil, duration > 0 else { return false }
+        return predicted >= duration - playerClockTailSecs && raw >= duration - playerClockTailSecs - 1
+    }
+    public nonisolated static let playerClockTailSecs = 3.0
+
+    // ---- Spotify 自己的钟:按起播方式分档的领先量 ----
+    //
+    // `player position` 是解码器的钟,每次起播都先于出声跑一截,量取决于那一刻缓冲了多少,
+    // **按起播方式分得很开、同一种方式里很稳**(ScreenCaptureKit 截 Spotify 的音频当真值直接量的,
+    // 数据见 02 章「订正」):手动点播 / 没预载的换歌 ~0.24,播放中拖动 ~0.45,预载好的无缝换歌 0.49~0.73
+    // (这一档波动最大,先验取均值)。
+    // 暂停后恢复那一档不在这里 —— 那一拍有真值,当场量(resumeLead)。
+    //
+    // 别再拿"上一首连续放完 = 新曲真值"去估新曲的领先量:交界处声音并不连续(实测新曲出声比
+    // 旧曲名义结尾晚 0.5~0.8s,随曲目变),连续性一估就小、甚至估成负数被拒,整首偏快。
+    //
+    // 先验取实测值;每次暂停再用冻结值反推这一段真实的领先量(pauseResidualLead),按档慢慢修正
+    // (np:spotifyStartLeadByKind,机器本地)。
+
+    /// Spotify 这一段是怎么起播的 —— 决定用哪一档领先量,也决定暂停时的残差学进哪一档。
+    public enum SpotifyStartKind: String, CaseIterable, Sendable {
+        /// 手动点播 / 没预载的换歌(新曲的钟晚于旧曲名义结尾才开始走)。
+        case fresh
+        /// 播放中拖动。
+        case seek
+        /// 预载好的无缝换歌(新曲的钟在旧曲名义结尾那一刻就开始走),含单曲循环回绕。
+        case gapless
+        /// 广告放完接着放的那首。广告报的时长不准(实测报 29.99、29.09 就结束),"钟接不接得上"那道判据
+        /// 在这里判不准;领先量跟预载无缝换歌同一量级,不能学进 fresh(会把手动点播那档抬高一倍多)。
+        case afterAd
+    }
+
+    /// 同一首歌里读数跳回开头时,这是重新起播还是拖动。纯函数,selftest 直接覆盖。
+    ///
+    /// 两者在读数上一模一样(同曲、位置回到 ~0),领先量却差一截(重新起播同 fresh ~0.25,拖动 ~0.45~0.5)。
+    /// 能分开它们的是 Spotify 的分布式通知:重新起播(点同一首 / `play track`)先后发 `Stopped` 与
+    /// `Playing, Playback Position 0`,拖动一条都不发。数据见 02 章「Spotify 重新起播」。
+    public nonisolated static let spotifyRestartNoticeWindowSecs: TimeInterval = 3
+    public nonisolated static let spotifyRestartMaxRawSecs: Double = 3
+    public nonisolated static func spotifyJumpKind(raw: Double, playingFromStartNoticeAt: Date?, now: Date) -> SpotifyStartKind {
+        guard raw <= spotifyRestartMaxRawSecs, let noticeAt = playingFromStartNoticeAt else { return .seek }
+        let age = now.timeIntervalSince(noticeAt)
+        return age >= 0 && age <= spotifyRestartNoticeWindowSecs ? .fresh : .seek
+    }
+
+    public nonisolated static func spotifyStartLeadPrior(_ kind: SpotifyStartKind) -> Double {
+        switch kind {
+        case .fresh: return 0.24
+        case .seek: return 0.45
+        case .gapless: return 0.66
+        case .afterAd: return 0.66
+        }
+    }
+
+    /// 上一首还在播、这一首接着起来时的起播方式。纯函数,selftest 直接覆盖。
+    /// - previousWasAd: 上一首是不是广告(`isCurrentTrackAdBreak` 在上一首时的值)
+    public nonisolated static func spotifyNaturalStartKind(raw: Double, clockOverrun: Double, previousWasAd: Bool) -> SpotifyStartKind {
+        if previousWasAd, abs(clockOverrun) <= naturalAdvanceWindowSecs { return .afterAd }
+        return isPreloadedGaplessStart(raw: raw, clockOverrun: clockOverrun) ? .gapless : .fresh
+    }
+
+    /// 换歌那一拍,是不是预载好的无缝换歌。纯函数,selftest 直接覆盖。
+    /// - raw: 新曲第一笔读数(它自己的钟)
+    /// - clockOverrun: 旧曲**钟**按连续外推越过其时长的量(= 声音外推越界量 + 旧曲偏置)
+    /// 预载时新曲的钟在旧曲钟走到头那一刻就接上,两者一致;没预载时新曲的钟要等加载完才走,差出一截。
+    public nonisolated static func isPreloadedGaplessStart(raw: Double, clockOverrun: Double) -> Bool {
+        abs(clockOverrun) <= naturalAdvanceWindowSecs && abs(raw - clockOverrun) <= preloadedClockToleranceSecs
+    }
+    /// 实测:预载时两者差 ~0.1s;没预载时新曲的钟晚 1.9s。
+    public nonisolated static let preloadedClockToleranceSecs = 0.5
+
+    /// 暂停那一拍 Spotify 发布的冻结值比我们停在的位置**本来就大**这么多:发出暂停后声音还要淡出
+    /// ~0.25s 才停(实测 0.246~0.318),冻结值对应的是停下那一刻。偏置量得准时 `pause transition` 的
+    /// delta 实测 +0.25~+0.30。
+    public nonisolated static let spotifyPauseFadeSecs = 0.27
+
+    /// 暂停那一拍反推这一段真实的领先量。纯函数,selftest 直接覆盖。
+    /// - bias: 这一段在用的偏置(暂停作废之前的值)
+    /// - pauseDelta: 冻结值 − 暂停那一刻屏上位置
+    /// 真实领先 = 在用的偏置 + (淡出量 − delta)。残差超过 1s 多半是别的事(暂停前拖过 / 事件没跟上),不学。
+    public nonisolated static func pauseResidualLead(bias: Double, pauseDelta: Double) -> Double? {
+        let residual = spotifyPauseFadeSecs - pauseDelta
+        guard abs(residual) <= 1.0 else { return nil }
+        let lead = bias + residual
+        guard lead >= 0, lead <= naturalAdvanceMaxBiasSecs else { return nil }
+        return lead
+    }
+
+    /// 学到的领先量怎么更新:EMA α=0.3,别让一次异常样本把整档拽走。纯函数,selftest 直接覆盖。
+    public nonisolated static func learnedStartLead(current: Double, sample: Double) -> Double {
+        current * 0.7 + sample * 0.3
+    }
+
+    private static let spotifyStartLeadDefaultsKey = "np:spotifyStartLeadByKind"
+    private static let spotifyStartLeadSchemaDefaultsKey = "np:spotifyStartLeadSchema"
+
+    /// 起播领先量表的规则版本。某一档的**判定或学习规则**变了,就把版本 +1、在 `migratedStartLeadTable`
+    /// 里作废那一档(按规则作废,不按数值大小猜哪个坏了)。没有版本号的旧表算 1。
+    /// 2:广告之后那首从 fresh 拆出成 afterAd,旧 fresh 值里混着广告之后的样本,作废(见决策 47)。
+    public nonisolated static let spotifyStartLeadSchema = 2
+
+    /// 把按旧规则学的表迁到当前版本。纯函数,selftest 直接覆盖。
+    public nonisolated static func migratedStartLeadTable(_ table: [String: Double], fromSchema: Int) -> [String: Double] {
+        var migrated = table
+        if fromSchema < 2 { migrated.removeValue(forKey: SpotifyStartKind.fresh.rawValue) }
+        return migrated
+    }
+
+    /// 读表;表还是旧版本时先迁一次、连同版本号写回。
+    private func loadStartLeadTable() -> [String: Double] {
+        let defaults = env.defaults
+        let table = (defaults.dictionary(forKey: Self.spotifyStartLeadDefaultsKey) as? [String: Double]) ?? [:]
+        let schema = defaults.object(forKey: Self.spotifyStartLeadSchemaDefaultsKey) as? Int ?? 1
+        guard schema < Self.spotifyStartLeadSchema else { return table }
+        let migrated = Self.migratedStartLeadTable(table, fromSchema: schema)
+        defaults.set(migrated, forKey: Self.spotifyStartLeadDefaultsKey)
+        defaults.set(Self.spotifyStartLeadSchema, forKey: Self.spotifyStartLeadSchemaDefaultsKey)
+        logger.notice("spotify start lead table migrated: schema \(schema) -> \(Self.spotifyStartLeadSchema) \(table.keys.sorted(), privacy: .public) -> \(migrated.keys.sorted(), privacy: .public)")
+        return migrated
+    }
+
+    private func spotifyStartLead(_ kind: SpotifyStartKind) -> Double {
+        loadStartLeadTable()[kind.rawValue] ?? Self.spotifyStartLeadPrior(kind)
+    }
+
+    private func learnSpotifyStartLead(kind: SpotifyStartKind, sample: Double) {
+        var table = loadStartLeadTable()
+        let current = table[kind.rawValue] ?? Self.spotifyStartLeadPrior(kind)
+        let updated = Self.learnedStartLead(current: current, sample: sample)
+        table[kind.rawValue] = updated
+        env.defaults.set(table, forKey: Self.spotifyStartLeadDefaultsKey)
+        logger.notice("spotify start lead learned: kind=\(kind.rawValue, privacy: .public) sample=\(sample, format: .fixed(precision: 3)) \(current, format: .fixed(precision: 3)) → \(updated, format: .fixed(precision: 3))")
+    }
+
+    /// Spotify 自己的钟是不是开播起步晚了:还在曲首几秒、读数(已扣偏置)比外推慢出一截。纯函数,selftest 直接覆盖。
+    /// 跟 `playerClockResynced` 的签名重叠(都是"读数落后"),靠"还在曲首"区分 —— 曲首没有可对齐的领先。
+    public nonisolated static func playerClockStartedLate(raw: Double, reported: Double, predicted: Double) -> Bool {
+        raw < playerClockStartWindowSecs && reported < predicted - playerClockResyncMinDropSecs
+    }
+    public nonisolated static let playerClockStartWindowSecs = 3.0
+
+    /// 恢复播放那一拍,Spotify 自己的钟领先真声多少。纯函数,selftest 直接覆盖。
+    ///
+    /// 那个钟是解码器的钟,**每次重新起播都先跑一截**:恢复后第一笔读数比「暂停值 + 恢复后走过的时间」
+    /// 领先 0~1.5s(实测见 02 章「订正」),下一拍伺服就吸附过去、整首偏快,直到下一次暂停它才对回来。
+    /// 播种值(resumeSeedSeconds:暂停值 + 状态信号至今)就是真声,差值即领先量。守卫与自然切歌同一套。
+    public nonisolated static func resumeLead(raw: Double, seed: Double) -> Double? {
+        let lead = raw - seed
+        guard lead > naturalAdvanceMinBiasSecs, lead <= naturalAdvanceMaxBiasSecs else { return nil }
+        return lead
+    }
+
+    /// App 重启后第一拍,能不能接着用上一个进程给这首歌量的偏置。纯函数,selftest 直接覆盖。
+    ///
+    /// 不接的话,重启那一首余下部分偏快一个偏置量;更糟的是下一首的自然切歌校正拿这段偏快的位置当
+    /// 真值,估出来的偏置接近 0 被守卫拒掉,偏快顺着 gapless 连播链传下去。
+    ///
+    /// 记录是偏置量出来那一拍写的,带着那一刻的位置(`positionSecs`,旧记录没有按 0 算 —— 自然切歌那拍
+    /// 位置≈0),所以"从那以后一直连续在放"的签名是:扣掉偏置的读数 ≈ 那一刻的位置 + 记录至今的秒数。
+    /// 对不上(中途暂停过 —— 钟已对齐;拖过;重播过)就不接。只接播放器自己的钟那一档
+    /// (`anchorElapsed == nil`),media-control 那条路另有锚点判据。
+    public nonisolated static func restorablePlayerClockBias(
+        record: PositionBiasRecord, bundleID: String?, artist: String, title: String,
+        raw: Double, now: Date
+    ) -> Double? {
+        guard record.anchorElapsed == nil, record.biasSecs > 0,
+              record.bundleID == bundleID, record.artist == artist, record.title == title
+        else { return nil }
+        let age = now.timeIntervalSince1970 - Double(record.writtenAtMs) / 1000
+        let expected = (record.positionSecs ?? 0) + age
+        guard age >= 0, abs((raw - record.biasSecs) - expected) <= restoreContinuityToleranceSecs else { return nil }
+        return record.biasSecs
+    }
+    /// 记录时位置不是恰好 0(自然切歌播种在 −0.9~+0.7 之间),再留轮询间隔的余量。
+    public nonisolated static let restoreContinuityToleranceSecs = 2.0
+
+    /// 退回量跟偏置之间允许差多少(AppleScript 读数稳态噪声 ±0.06s,再留一倍余量)。
+    public nonisolated static let playerClockResyncToleranceSecs = 0.15
+    /// 至少退回这么多才算 —— 偏置很小(下限 0.05)时别让读数噪声把它误清。
+    public nonisolated static let playerClockResyncMinDropSecs = 0.2
+
+    /// 当前曲目读数相对真声的偏差(秒)——resolvePositionSeconds 对每笔原始读数先扣掉它。
+    /// 只在 `carriesGaplessLead` 为真的源上非零(cleanExtrapolated 档 + Spotify;Apple Music 恒为 0)。
+    /// 正=读数超前真声(gapless 自然切歌,量法见上);
+    /// **负=锚点落后真声**(允许:播放器给歌曲发 now-playing 常晚 ~2s 而 elapsedTime
     /// 仍是 0,`SpotifyPositionProbe` 量到的差折进来,见 resolvePositionSeconds 的地面真值分支)。
     private var posReportedBiasSecs: Double = 0
     /// 这份偏置是对着哪个锚点量的(那一刻快照的原始 anchorElapsedTime)。偏置只对这个锚点成立,
     /// 锚点一换就作废,见 biasSurvivesAnchor。偏置为 0 时恒为 nil。
     private var posBiasAnchorElapsed: Double?
 
-    private func setReportedBias(_ bias: Double, anchorElapsed: Double?, fromProbe: Bool = false) {
+    private func setReportedBias(_ bias: Double, anchorElapsed: Double?, fromProbe: Bool = false,
+                                 fromBrowserProbe: Bool = false, startKind: SpotifyStartKind? = nil) {
         posReportedBiasSecs = bias
         posBiasAnchorElapsed = bias == 0 ? nil : anchorElapsed
         posBiasFromProbe = bias != 0 && fromProbe
+        posBiasFromBrowserProbe = bias != 0 && fromBrowserProbe
+        posBiasStartKind = bias == 0 ? nil : startKind
     }
+    /// 当前偏置是网页探针的精确读数量出来的(页面 `currentTime` 对流读数)。它跟 Spotify 探针那份一样只属于
+    /// 量它时的锚点,走同一道 biasSurvivesAnchor 作废;但不参与 Spotify 的领先量学习。
+    private var posBiasFromBrowserProbe = false
+    /// 当前偏置是按哪一档起播领先量给的(nil = 别的来源:恢复当场量的、重启接回的、media-control 那条路的)。
+    /// 只有它非 nil 时,暂停那一拍的残差才学进对应那一档。
+    private var posBiasStartKind: SpotifyStartKind?
     /// 当前偏置是不是 Spotify 探针量出来的(而不是自然切歌估的)——只有它参与 probeLeadSecs 的学习。
     private var posBiasFromProbe = false
 
@@ -646,41 +959,41 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 按设备 UID 学到的领先量表。lazy:第一次用到时从 UserDefaults 读,顺带迁移旧的单值键。
     private lazy var probeLeadByDevice: [String: Double] = {
         var table: [String: Double] = [:]
-        if let json = UserDefaults.standard.string(forKey: Self.probeLeadByDeviceDefaultsKey),
+        if let json = env.defaults.string(forKey: Self.probeLeadByDeviceDefaultsKey),
            let data = json.data(using: .utf8),
            let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
             table = decoded
         }
-        if UserDefaults.standard.object(forKey: Self.legacyProbeLeadDefaultsKey) != nil {
-            let legacy = UserDefaults.standard.double(forKey: Self.legacyProbeLeadDefaultsKey)
-            if table.isEmpty, let route = AudioOutputRoute.current() {
+        if env.defaults.object(forKey: Self.legacyProbeLeadDefaultsKey) != nil {
+            let legacy = env.defaults.double(forKey: Self.legacyProbeLeadDefaultsKey)
+            if table.isEmpty, let route = env.outputRoute() {
                 table[route.uid] = legacy
                 logger.notice("probe lead: migrated legacy value \(legacy, format: .fixed(precision: 3)) to device \(route.name, privacy: .public)")
             }
-            UserDefaults.standard.removeObject(forKey: Self.legacyProbeLeadDefaultsKey)
-            Self.persistProbeLeadTable(table)
+            env.defaults.removeObject(forKey: Self.legacyProbeLeadDefaultsKey)
+            persistProbeLeadTable(table)
         }
         return table
     }()
 
-    private static func persistProbeLeadTable(_ table: [String: Double]) {
+    private func persistProbeLeadTable(_ table: [String: Double]) {
         if let data = try? JSONEncoder().encode(table), let json = String(data: data, encoding: .utf8) {
-            UserDefaults.standard.set(json, forKey: probeLeadByDeviceDefaultsKey)
+            env.defaults.set(json, forKey: Self.probeLeadByDeviceDefaultsKey)
         }
     }
 
     /// 按 bundle id 学到的锚点滞后量。lazy:第一次用到时从 UserDefaults 读。
     private lazy var anchorLagByPlayer: [String: Double] = {
-        guard let json = UserDefaults.standard.string(forKey: Self.anchorLagDefaultsKey),
+        guard let json = env.defaults.string(forKey: Self.anchorLagDefaultsKey),
               let data = json.data(using: .utf8),
               let table = try? JSONDecoder().decode([String: Double].self, from: data)
         else { return [:] }
         return table
     }()
 
-    private static func persistAnchorLagTable(_ table: [String: Double]) {
+    private func persistAnchorLagTable(_ table: [String: Double]) {
         if let data = try? JSONEncoder().encode(table), let json = String(data: data, encoding: .utf8) {
-            UserDefaults.standard.set(json, forKey: anchorLagDefaultsKey)
+            env.defaults.set(json, forKey: Self.anchorLagDefaultsKey)
         }
     }
 
@@ -697,16 +1010,25 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 单曲循环回绕)的曲子一律不采样,宁可少学几次。
     private var posAnchorLagSampleValid = false
 
+    /// 这个播放器走不走锚点滞后这套(学一个平均滞后、下一首开播预置)。纯函数,selftest 直接覆盖。
+    ///
+    /// 酷狗不走:它的晚打时有时无(同一个歌单连着三首,0.5s / 0 / 0.5s),平均值必然有的歌补过头、有的补不够;
+    /// 它晚打的那种由 `MediaControlClient.resetAnchorStartCorrection` 逐首补。
+    public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
+        bundleID != PlaybackPlayer.kugou.bundleIdentifier
+    }
+
     /// 这个播放器此刻该预置的锚点滞后量;没学到(或学到的太小)时为 0。
     private func anchorLag(forBundleID bundleID: String?) -> Double {
-        guard let bundleID, let lag = anchorLagByPlayer[bundleID], lag >= Self.anchorLagMinApplySecs
+        guard Self.learnsAnchorLag(bundleID: bundleID),
+              let bundleID, let lag = anchorLagByPlayer[bundleID], lag >= Self.anchorLagMinApplySecs
         else { return 0 }
         return lag
     }
 
     /// 播放器重发锚点那一刻量到一次残差:更新并持久化它的滞后量。
     private func learnAnchorLag(bundleID: String?, residual: Double) {
-        guard let bundleID else { return }
+        guard Self.learnsAnchorLag(bundleID: bundleID), let bundleID else { return }
         let prior = anchorLagByPlayer[bundleID]
         let next = Self.learnedAnchorLag(current: prior ?? 0, residual: residual, hasPrior: prior != nil)
         logger.notice("anchor lag learned: player=\(bundleID, privacy: .public) residual=\(residual, format: .fixed(precision: 3)) lag \(prior ?? 0, format: .fixed(precision: 3)) -> \(next, format: .fixed(precision: 3))")
@@ -715,11 +1037,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 滞后时会走 α 而不是直接采信(酷狗的换歌残差全被限幅夹成 0,正好踩这个)。
         guard next > 0 || prior != nil else { return }
         anchorLagByPlayer[bundleID] = next
-        Self.persistAnchorLagTable(anchorLagByPlayer)
+        persistAnchorLagTable(anchorLagByPlayer)
     }
 
     /// 此刻默认输出设备(startObservingOutputRoute 之后随系统变化刷新;为 nil 时按 .other 处理)。
-    private var currentOutputRoute: AudioOutputRoute.Current? = AudioOutputRoute.current()
+    private var currentOutputRoute: AudioOutputRoute.Current?
 
     /// 此刻该从探针值里扣掉的领先量:这台输出设备学过的值,或按传输类型的先验。
     private var probeLeadSecs: Double {
@@ -735,20 +1057,20 @@ public final class LocalPlaybackSource: ObservableObject {
         logger.notice("probe lead learned: residual=\(residual, format: .fixed(precision: 3)) device=\(route.name, privacy: .public) (\(route.transport.rawValue, privacy: .public)) lead \(self.probeLeadSecs, format: .fixed(precision: 3)) -> \(next, format: .fixed(precision: 3))")
         guard prior != next else { return }
         probeLeadByDevice[route.uid] = next
-        Self.persistProbeLeadTable(probeLeadByDevice)
+        persistProbeLeadTable(probeLeadByDevice)
     }
 
     /// 默认输出设备换了:换用那台设备的领先量;正在放 Spotify 且偏置是探针量的,再问一次探针让位置按新
     /// 领先量重折(否则要等用户下一次暂停)。
     private func outputRouteChanged() {
-        let route = AudioOutputRoute.current()
+        let route = env.outputRoute()
         guard route != currentOutputRoute else { return }
         let before = probeLeadSecs
         currentOutputRoute = route
         logger.notice("output route changed: \(route?.name ?? "-", privacy: .public) (\(route?.transport.rawValue ?? "-", privacy: .public)) probe lead \(before, format: .fixed(precision: 3)) -> \(self.probeLeadSecs, format: .fixed(precision: 3))")
         if posBiasFromProbe, posWasPlaying,
            lastSnapshot?.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier {
-            SpotifyPositionProbe.shared.requestConfirmation(forKey: posTrackingKey)
+            env.spotifyProbeRequestConfirmation(posTrackingKey)
         }
     }
 
@@ -759,15 +1081,21 @@ public final class LocalPlaybackSource: ObservableObject {
     /// PositionBiasFile 头注)。只在内容变了才写;只有 Spotify 与网页探针精确读数量出的偏置要发布,其余只在需要
     /// 把上一条非零记录作废时才写一条 0 —— 免得 Apple Music 每换一首歌都落一次盘。
     private func publishPositionBiasIfChanged(snapshot: MediaControlSnapshot, isSpotifyNative: Bool, now: Date) {
+        // 读数层补过的切歌修正(酷狗,见 MediaControlSnapshot.anchorStartCorrection)不经过偏置,但 collector
+        // 读的是原始锚点,同一段修正要按"对着原始锚点的负偏置"写给它。
+        let startCorrection = posReportedBiasSecs == 0 ? snapshot.anchorStartCorrection : nil
         let record = PositionBiasRecord(
             artist: snapshot.artist ?? "", title: snapshot.title ?? "",
             bundleID: snapshot.bundleIdentifier ?? "",
-            anchorElapsed: posBiasAnchorElapsed, biasSecs: posReportedBiasSecs,
-            writtenAtMs: Int64(now.timeIntervalSince1970 * 1000))
+            anchorElapsed: startCorrection != nil ? snapshot.anchorElapsedTime : posBiasAnchorElapsed,
+            biasSecs: startCorrection.map { -$0 } ?? posReportedBiasSecs,
+            writtenAtMs: Int64(now.timeIntervalSince1970 * 1000),
+            positionSecs: trackPosSeconds)
         if let last = lastPublishedBias, last.sameContent(as: record) { return }
-        guard isSpotifyNative || (lastPublishedBias?.biasSecs ?? 0) != 0 else { return }
+        guard isSpotifyNative || posBiasFromBrowserProbe || startCorrection != nil
+                || (lastPublishedBias?.biasSecs ?? 0) != 0 else { return }
         lastPublishedBias = record
-        PositionBiasFile.write(record)
+        env.writePositionBias(record)
     }
 
     /// 偏置能不能跟着这个锚点继续用。纯函数,selftest 直接覆盖。
@@ -783,10 +1111,35 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 从"开播锚点 = elapsedTime 0"改成"= 量偏置时的那个值":Spotify 有时开播半秒内会把锚点
     /// 从 0@T 改发成 1.923@T(BIRDS OF A FEATHER 实测),按旧判据这首歌任何偏置都活不过下一拍;
     /// `measuredAgainst` 缺失时退回旧判据。
-    public nonisolated static func biasSurvivesAnchor(anchorElapsedTime: Double?, measuredAgainst: Double? = nil) -> Bool {
-        guard let anchorElapsedTime else { return true }
+    ///
+    /// `anchorElapsedTime == nil` = 这一拍读的是播放器自己的钟(Spotify 的 AppleScript `player position`),
+    /// 没有锚点可比。那个钟**一暂停就对回出声位置**(暂停冻结值比暂停前一刻的读数退回一个偏置量,
+    /// 伺服 errEMA 同期 ≈0),所以偏置只活到暂停那一拍:`playing == false` 即作废。
+    public nonisolated static func biasSurvivesAnchor(anchorElapsedTime: Double?, measuredAgainst: Double? = nil, playing: Bool = true) -> Bool {
+        guard let anchorElapsedTime else { return playing }
         guard let measuredAgainst else { return anchorElapsedTime <= 0.001 }
         return abs(anchorElapsedTime - measuredAgainst) <= 0.001
+    }
+
+    /// 探针值该不该扣领先量;同一条判据也决定一次暂停残差有没有资格拿来学领先量。
+    ///
+    /// 探针读的是播放器自己的钟,而那个钟**只在开播锚点还在位的那段时间超前真声** —— gapless
+    /// 切歌后它先跑、等音频跟上(同 biasSurvivesAnchor 头注里那段)。播放器一旦在曲中重发锚点
+    /// (暂停 / 恢复 / 拖动),钟就与真声一致,探针本身即真值,这时再扣一个领先量等于凭空造出
+    /// 一个偏置,整首歌恒定偏慢那一段,直到暂停时冻结值把它揭穿。
+    ///
+    /// 两种场合的样本**绝不能喂进同一个领先量**:曲中样本把它往 0 拽、切歌样本把它往
+    /// 0.8 拽,学出来的中间值在两边都是错的 —— 一边扣多、一边扣少,而且方向相反。表现是
+    /// 歌词进度忽前忽后、一按暂停就跳回准的位置(暂停时偏置作废,显示改用播放器的冻结值)。
+    /// 真机按 `measuredAgainst` 分组,两簇残差符号完全不重叠:开播锚点那档 +0.25 / +0.26 / +0.59,
+    /// 曲中重打那档 −1.00 / −0.83(且量值正好等于当时的领先量,即真实领先量是 0)。
+    ///
+    /// 领先量按输出设备存盘(probeLeadByDevice),但**设备不是这件事的自变量** —— 决定它的是
+    /// 探针在什么时机量的。设备维度留着不改只是因为动存盘格式的代价更大;别据此以为换耳机
+    /// 会改变这个量。
+    public nonisolated static func probeLeadApplies(anchorElapsedTime: Double?) -> Bool {
+        guard let anchorElapsedTime else { return true }
+        return anchorElapsedTime <= 0.001
     }
 
     /// 播放时钟的只读快照,给「导出诊断信息」用(第 14 章 §7)。
@@ -832,11 +1185,17 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 上一轮快照的曲目时长(秒)——自然切歌判定要用"旧曲"的时长,而 resolve 被调用时
     /// snapshot 已经是新曲的了。apply() 每轮末尾更新(与 posTrackingKey 同批)。
     private var posPrevDurationSecs: Double = 0
-    /// 上一轮快照是否也是 cleanExtrapolated 档(Spotify)——自然切歌校正的"旧曲真值"
-    /// 必须来自 Spotify 自己的连续外推;auto 模式跨播放器切歌时,拿 QQ/网易云的整秒
-    /// 地板外推或 Apple Music 的播放头当旧曲真值去估 Spotify 偏置是错的
-    ///。
-    private var posPrevTierCleanExtrapolated = false
+    /// 上一轮快照的播放器(仅当它 `carriesGaplessLead`,否则 nil)——自然切歌校正的"旧曲真值"
+    /// 必须来自**同一个**播放器自己的连续外推;auto 模式跨播放器切歌时,拿 QQ/网易云的整秒
+    /// 地板外推或 Apple Music 的播放头当旧曲真值去估 Spotify 偏置是错的。
+    private var posPrevGaplessLeadBundleID: String?
+    /// 这一首 Spotify 眼下采信哪个钟(true = AppleScript `player position`;非 Spotify 为 nil)。
+    /// 换歌 / 首次观察 / 恢复播放那一拍按那一拍的读数定,见 spotifyClockAction。
+    private var posSpotifyAcceptedPlayerClock: Bool?
+    /// 读数从哪一刻起一直来自另一个钟(nil = 没在换钟)。
+    private var posSpotifyForeignClockSince: Date?
+    /// 进程启动后第一份带曲目的快照是否已经处理过 —— 接回上一个进程的偏置只在那一拍做。
+    private var posBiasRestoreChecked = false
     /// 暂停期间上一轮的原始冻结读数——暂停中用户在播放器里拖进度条时,冻结值会跳变
     /// (Spotify 同时重打对齐真声的锚点),旧偏置必须作废;不检测的话恢复播放后整曲
     /// 反向偏慢一个旧偏置。播放态清 nil。
@@ -937,12 +1296,16 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 专门的重锚路径,见函数体里那段提醒。`anchorElapsedTime`:这拍快照的原始锚点 elapsedTime,只用来
     /// 给新量出的偏置记"对着哪个锚点量的"(biasSurvivesAnchor)。`streamRaw`:探针那一拍 MediaRemote 自己的
     /// 读数(snapshot.elapsedTime),偏置按它折,见地面真值分支。
-    private func resolvePositionSeconds(reported rawReported: Double, rate: Double, key: String, now: Date, tier: PositionSourceTier, isGroundTruthSeed: Bool = false, anchorElapsedTime: Double? = nil, streamRaw: Double? = nil, anchorLagSeed: Double = 0) -> (seconds: Double, didReanchor: Bool) {
+    /// - gaplessLeadBundleID: 这一拍的播放器,仅当它 `carriesGaplessLead`(否则 nil)。自然切歌校正、
+    ///   repeat-one 回绕重估与偏置的存续都只看它,不看 `tier`。
+    /// - clockAction: Spotify 同曲换钟的处置(见 spotifyClockAction),只在同曲稳定播放那条路上生效。
+    /// - restoredBias: App 重启后第一拍可接着用的偏置(见 restorablePlayerClockBias),只在换歌分支生效。
+    private func resolvePositionSeconds(reported rawReported: Double, rate: Double, key: String, now: Date, tier: PositionSourceTier, gaplessLeadBundleID: String?, clockAction: SpotifyClockAction = .accept, restoredBias: Double? = nil, isGroundTruthSeed: Bool = false, groundTruthFromBrowser: Bool = false, anchorElapsedTime: Double? = nil, streamRaw: Double? = nil, anchorLagSeed: Double = 0) -> (seconds: Double, didReanchor: Bool) {
         // 锚点偏置(见 naturalAdvanceCorrection 一带的注释):同曲期间每笔读数相对真声恒定偏
         // bias(正=超前,负=落后),先扣掉再进入后续所有判断。raw 值只在三处直接用:换歌时的偏置
         // 估计、冻结检测的逐笔差分(常量偏置在差分里天然消掉,但语义上按原始值记)、
         // 以及真实 seek 之后的重新采信(Spotify 重打的新锚点是准的,偏置随之作废)。
-        if tier != .cleanExtrapolated, posReportedBiasSecs != 0 {
+        if gaplessLeadBundleID == nil, posReportedBiasSecs != 0 {
             // 同 key 跨播放器接续(同一首歌从 Spotify 切到别的源)不触发换歌分支——偏置
             // 只对 Spotify 这类会领先的源有意义,源变了立即作废。
             setReportedBias(0, anchorElapsed: nil)
@@ -979,13 +1342,29 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 观察/别的播放器)原样采信这次读数、偏置清零。只对 carriesGaplessLead 的源启用:
                 // Apple Music 的播放头本身就是真值,QQ/网易云的整秒地板会把偏置估计噪声化。
                 var corrected: (seed: Double, bias: Double)?
-                if tier == .cleanExtrapolated, posPrevTierCleanExtrapolated,
+                // Spotify 自己的钟不走连续性估计,按起播方式给领先量(见 SpotifyStartKind)。
+                let isSpotifyPlayerClock = gaplessLeadBundleID == PlaybackPlayer.spotify.bundleIdentifier
+                    && anchorElapsedTime == nil
+                var spotifyKind: SpotifyStartKind?
+                if let bundle = gaplessLeadBundleID, bundle == posPrevGaplessLeadBundleID,
                    posWasPlaying, let prevWall = posPrevWall,
                    posPrevDurationSecs > 0 {
                     let overrun = trackPosSeconds
                         + now.timeIntervalSince(prevWall) * (rate > 0 ? rate : 1)
                         - posPrevDurationSecs
-                    corrected = Self.naturalAdvanceCorrection(reported: rawReported, overrun: overrun)
+                    if isSpotifyPlayerClock {
+                        // 旧曲的钟 = 声音外推 + 旧曲偏置(此刻还没换成新曲的)。
+                        spotifyKind = Self.spotifyNaturalStartKind(
+                            raw: rawReported, clockOverrun: overrun + posReportedBiasSecs,
+                            previousWasAd: posPrevWasAdBreak)
+                    } else {
+                        corrected = Self.naturalAdvanceCorrection(reported: rawReported, overrun: overrun)
+                    }
+                    if !isSpotifyPlayerClock, corrected == nil, abs(overrun) <= Self.naturalAdvanceWindowSecs {
+                        // 像自然切歌、估出来的偏置却不可信:多半是上一首的位置本身就偏了(重启 / 恢复后没扣
+                        // 领先量),偏快顺着连播链往下传。留一行,排查时不用再从 stepMs 反推。
+                        logger.notice("natural advance rejected: raw \(rawReported, format: .fixed(precision: 3)) overrun \(overrun, format: .fixed(precision: 3)) → bias \(rawReported - overrun, format: .fixed(precision: 3))")
+                    }
                 }
                 // 学到过锚点滞后的播放器:用它,并让自然切歌那套让位(负=锚点落后真声)。
                 // 播种值同样要补上 —— 开播那一笔原始读数是 0,而真声已经走了这么多。
@@ -1011,6 +1390,19 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
                 setReportedBias(natural?.bias ?? -seedLag, anchorElapsed: anchorElapsedTime)
                 trackPosSeconds = natural?.seed ?? (rawReported + seedLag)
+                if natural == nil, seedLag == 0, let restoredBias {
+                    // App 重启后的第一拍,接着用上一个进程给这首歌量的偏置(见 restorablePlayerClockBias)。
+                    logger.notice("anchor bias restored after relaunch: \(restoredBias, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                    setReportedBias(restoredBias, anchorElapsed: nil)
+                    trackPosSeconds = rawReported - restoredBias
+                } else if isSpotifyPlayerClock {
+                    // 上一拍不在播(首次观察 / 暂停中换了歌)时不知道怎么起播的:按 fresh 给,但不学。
+                    let kind = spotifyKind ?? .fresh
+                    let lead = spotifyStartLead(kind)
+                    logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public)\(spotifyKind == nil ? " (unknown start)" : "", privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                    setReportedBias(lead, anchorElapsed: nil, startKind: spotifyKind)
+                    trackPosSeconds = rawReported - lead
+                }
                 // 自然切歌接手的那一首不采样(两套补偿会互相学);剩下的只认真·开播。
                 posAnchorLagSampleValid = natural == nil && rawReported <= Self.anchorLagFreshStartMaxSecs
                 // 临时诊断(排查"网易云切歌之后歌词偏慢,暂停重新播放就
@@ -1022,9 +1414,21 @@ public final class LocalPlaybackSource: ObservableObject {
                     logger.notice("neteaseDiag trackChange key=\(key, privacy: .public) rawReported=\(rawReported, format: .fixed(precision: 3)) seed=\(self.trackPosSeconds, format: .fixed(precision: 3))")
                 }
             } else {
-                // 刚从暂停恢复播放 / 首次观察(同曲):暂停冻结的 elapsedTime 带着同一个
-                // 超前锚点的值,偏置继续适用,采用已扣偏置的读数。
-                trackPosSeconds = reported
+                // 刚从暂停恢复播放 / 首次观察(同曲)。这一笔读数在暂停期间被 elapsedTimeNow
+                // 空转污染过,不能原样采信 —— 削掉"不可能发生的前跳",见 resumeSeedSeconds。
+                let sinceSignal = posStateSignalAt.map { now.timeIntervalSince($0) }
+                    ?? Self.resumeMaxForwardCapSecs
+                trackPosSeconds = Self.resumeSeedSeconds(
+                    reported: reported,
+                    frozen: pausedPositionMs.map { Double($0) / 1000 },
+                    maxForwardSecs: sinceSignal)
+                // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
+                if gaplessLeadBundleID != nil, anchorElapsedTime == nil, posStateSignalAt != nil,
+                   pausedPositionMs != nil,
+                   let lead = Self.resumeLead(raw: rawReported, seed: trackPosSeconds) {
+                    logger.notice("resume lead: seed \(self.trackPosSeconds, format: .fixed(precision: 3))s, player clock leads audio by \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                    setReportedBias(lead, anchorElapsed: nil)
+                }
                 if tier == .noisyFloored {
                     logger.notice("neteaseDiag resumeOrFirstObserve key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3))")
                 }
@@ -1036,6 +1440,19 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         let gap = now.timeIntervalSince(prevWall)
         let predicted = trackPosSeconds + gap * rate
+        switch clockAction {
+        case .accept:
+            break
+        case .hold:
+            trackPosSeconds = predicted
+            return (trackPosSeconds, false)
+        case .switchClock:
+            logger.notice("spotify clock switch: raw=\(rawReported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) toPlayerClock=\(anchorElapsedTime == nil)")
+            setReportedBias(0, anchorElapsed: nil)
+            trackPosSeconds = rawReported
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
         // 探针的**一次性地面真值**:不走 EMA,超过门槛直接重锚。
         //
         // 这条必须有,否则这个纠偏**几乎永远不会生效**(用真机日志坐实)。
@@ -1065,8 +1482,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // 它同样超前真声 ~0.9s,见 SpotifyPositionProbe 头注)。偏置归属这一拍的锚点
         // (biasSurvivesAnchor):暂停 / 拖动后 Spotify 重发的锚点是准的,偏置随之作废。
         if isGroundTruthSeed {
-            let delta = reported - predicted
-            guard abs(delta) > Self.groundTruthSnapToleranceSecs else {
+            // 网页探针的精确读数是页面自己的钟,不在流读数的钟域里,不扣流的旧偏置。
+            let truth = groundTruthFromBrowser ? rawReported : reported
+            let delta = truth - predicted
+            let tolerance = groundTruthFromBrowser
+                ? BrowserPositionProbe.preciseSnapToleranceSecs : Self.groundTruthSnapToleranceSecs
+            guard abs(delta) > tolerance else {
                 // 差在门槛内:探针与流一致,这一笔什么都不改。noisyFloored 保持 09-02 以来的
                 // 行为继续往下走(棘轮 / EMA 照常吃这一笔);cleanExtrapolated 直接沿用外推。
                 if tier == .cleanExtrapolated {
@@ -1085,10 +1506,13 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 倒是会差出 60~110 秒(Spotify 把开播那份 now-playing 带着新时间戳晚发,elapsed 0.367
                 // / 2.458 落在播到 60s / 110s 的时候,决策 29)—— 上限取 6s 会恰好把这两次真纠偏
                 // 都挡了。
-                setReportedBias(streamRaw - reported, anchorElapsed: anchorElapsedTime, fromProbe: true)
+                setReportedBias(
+                    Self.probeMeasuredBias(streamRaw: streamRaw, probeRaw: rawReported),
+                    anchorElapsed: anchorElapsedTime, fromProbe: !groundTruthFromBrowser,
+                    fromBrowserProbe: groundTruthFromBrowser)
             }
-            logger.notice("browser probe reanchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) delta=\(delta, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3))")
-            trackPosSeconds = reported
+            logger.notice("browser probe reanchor: reported=\(truth, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) delta=\(delta, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) precise=\(groundTruthFromBrowser)")
+            trackPosSeconds = truth
             posErrEMA = 0
             return (trackPosSeconds, true)
         }
@@ -1107,13 +1531,35 @@ public final class LocalPlaybackSource: ObservableObject {
         // 审查抓出)。签名=外推已到曲尾窗口、且按"回绕真值=越界量"估出的偏置落在可信
         // 区间(稳定播放到曲尾时 raw 是大值,估出的偏置≈整曲时长,天然不命中;向后拖到
         // 曲首的误判面与"手动跳歌落窗"同级,伤害同被 2.5s 上限钉死且方向偏慢)。
-        if tier == .cleanExtrapolated, posPrevDurationSecs > 0,
+        let isSpotifyPlayerClock = gaplessLeadBundleID == PlaybackPlayer.spotify.bundleIdentifier
+            && anchorElapsedTime == nil
+        // Spotify 自己的钟:回绕同样按起播方式给领先量(见 SpotifyStartKind),签名 = 读数回到曲首、外推在曲尾附近。
+        if isSpotifyPlayerClock, posPrevDurationSecs > 0,
+           rawReported < Self.naturalAdvanceWindowSecs,
+           abs(predicted - posPrevDurationSecs) <= Self.naturalAdvanceWindowSecs {
+            let kind: SpotifyStartKind = Self.isPreloadedGaplessStart(
+                raw: rawReported, clockOverrun: predicted + posReportedBiasSecs - posPrevDurationSecs) ? .gapless : .fresh
+            let lead = spotifyStartLead(kind)
+            logger.notice("repeat-one wrap: spotify start lead kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+            setReportedBias(lead, anchorElapsed: nil, startKind: kind)
+            trackPosSeconds = rawReported - lead
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
+        if !isSpotifyPlayerClock, gaplessLeadBundleID != nil, posPrevDurationSecs > 0,
            let corr = Self.naturalAdvanceCorrection(reported: rawReported, overrun: predicted - posPrevDurationSecs) {
             logger.notice("repeat-one wrap: seed \(corr.seed, format: .fixed(precision: 3))s, anchor leads audio by \(corr.bias, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
             setReportedBias(corr.bias, anchorElapsed: anchorElapsedTime)
             trackPosSeconds = corr.seed
             posErrEMA = 0
             return (trackPosSeconds, true)
+        }
+        // Spotify 自己的钟在歌尾会停住或往回退:这一段照外推走,见 inPlayerClockTail。排在 seek 分支之前 ——
+        // 停住的读数加上偏置,几拍就够得着 2s 容差,会被当成一次往回拖。只对会领先的源(Spotify)开。
+        if gaplessLeadBundleID != nil,
+           Self.inPlayerClockTail(predicted: predicted, raw: rawReported, duration: posPrevDurationSecs, anchorElapsedTime: anchorElapsedTime) {
+            trackPosSeconds = predicted
+            return (trackPosSeconds, false)
         }
         if abs(reported - predicted) > Self.seekJumpToleranceSecs {
             // 真实 seek/跳变:直接重锚到这次读数。seek 时 Spotify 会重打锚点,重打后的
@@ -1129,13 +1575,44 @@ public final class LocalPlaybackSource: ObservableObject {
             setReportedBias(0, anchorElapsed: nil)
             trackPosSeconds = rawReported
             posErrEMA = 0
+            if isSpotifyPlayerClock {
+                // Spotify 自己的钟:拖动之后同样先于出声跑一截(见 SpotifyStartKind.seek);
+                // 跳回开头且刚收到过「从头播放」的通知的是重新起播,按 fresh(见 spotifyJumpKind)。
+                let kind = Self.spotifyJumpKind(
+                    raw: rawReported, playingFromStartNoticeAt: spotifyPlayingFromStartNoticeAt, now: now)
+                let lead = spotifyStartLead(kind)
+                logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                setReportedBias(lead, anchorElapsed: nil, startKind: kind)
+                trackPosSeconds = rawReported - lead
+            }
             // Spotify 原生:先照单全收,再问一次 Spotify 的钟确认这个新锚点是真的(
             // 见 SpotifyPositionProbe.requestConfirmation)。真拖动探针与新锚点一致、什么都不改;
             // Spotify 把开播那份 now-playing 带着新时间戳晚发(播到 60s 时来一个 0.367)那种假锚点,
             // 探针 ~1s 后把位置纠回去、差折进偏置。只对 cleanExtrapolated:探针本来就只对它开。
             if tier == .cleanExtrapolated {
-                SpotifyPositionProbe.shared.requestConfirmation(forKey: key)
+                env.spotifyProbeRequestConfirmation(key)
             }
+            return (trackPosSeconds, true)
+        }
+        // Spotify 自己的钟开播头几秒还没走起来(加载中,实测首笔 0.001、1.3s 后才到 0.087):我们按起播领先量
+        // 播的种已经往前外推,读数反而落在后面。这不是"钟对齐了",是钟起步晚了 —— 跟着钟重新对准,偏置保留。
+        // 必须排在 playerClockResynced 之前,否则会被当成对齐、连偏置一起清掉。
+        if isSpotifyPlayerClock, posReportedBiasSecs > 0,
+           Self.playerClockStartedLate(raw: rawReported, reported: reported, predicted: predicted) {
+            logger.notice("player clock started late: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) raw=\(rawReported, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3))")
+            trackPosSeconds = reported
+            posErrEMA = 0
+            // 偏置文件里那一份的位置已经对不上了,下一拍按新位置重写(collector 靠它核连续性)。
+            lastPublishedBias = nil
+            return (trackPosSeconds, true)
+        }
+        // 读的是 Spotify 自己的钟、偏置在位,读数退回了约一个偏置量:钟已对回出声位置(没看到的暂停 /
+        // 往回小拖),见 playerClockResynced。必须排在伺服之前 —— precise 档一拍就会吸附到"慢一个偏置"的值上。
+        if Self.playerClockResynced(error: reported - predicted, bias: posReportedBiasSecs, anchorElapsedTime: anchorElapsedTime) {
+            logger.notice("player clock resync: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) raw=\(rawReported, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3))")
+            setReportedBias(0, anchorElapsed: nil)
+            trackPosSeconds = rawReported
+            posErrEMA = 0
             return (trackPosSeconds, true)
         }
         // 跳变够不着 seek 容差、但读数相对外推**向后**退了半秒以上:Spotify 中途重发的晚锚点
@@ -1144,7 +1621,7 @@ public final class LocalPlaybackSource: ObservableObject {
            anchorElapsedTime != posLateAnchorProbedElapsed {
             posLateAnchorProbedElapsed = anchorElapsedTime
             logger.notice("late anchor suspected: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) behind=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
-            SpotifyPositionProbe.shared.requestConfirmation(forKey: key)
+            env.spotifyProbeRequestConfirmation(key)
         }
         posAnchorLagSampleValid = anchorLagSampleWasValid
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
@@ -1170,8 +1647,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 不然校正只改了内部累加器、UI 用的锚点还在按旧基准外推,校正根本到不了屏幕。
         let (newEMA, snap) = Self.servoDecision(errEMA: posErrEMA, error: reported - predicted, tier: tier)
         posErrEMA = newEMA
-        if tier == .noisyFloored {
-            // ⚠️ 临时诊断(同上,排查完就删)——想看换歌之后这个 EMA 要几轮
+        if tier != .precise {
+            // 临时诊断(同上,排查完就删)——想看换歌之后这个 EMA 要几轮
             // 才能追上,以及每一轮 reported/predicted 的实际差距有多大、方向是否恒定。
             logger.notice("neteaseDiag steady key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ema=\(newEMA, format: .fixed(precision: 3)) snap=\(snap, privacy: .public)")
         }
@@ -1195,6 +1672,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// Spotify 最近一条 PlaybackStateChanged 通知里的分类提示(Track ID / Name / Artist),给换曲那一拍的
     /// 广告判定用,见 spotifyNativeAdCheckForNewTrack 与 SpotifyNotificationHint 头注。只在 apply() 里读。
     private var spotifyNotificationHint: SpotifyNotificationHint?
+    /// 最近一条「Playing、位置 ≈0」的 Spotify 通知是什么时候到的(见 spotifyJumpKind)。
+    private var spotifyPlayingFromStartNoticeAt: Date?
     // media-control 的事件流(QQ 音乐/网易云没有分布式通知,靠它)。见
     // MediaControlStreamWatcher —— 事件同样只当"提前 poll 一次"的信号。
     private var streamWatcher: MediaControlStreamWatcher?
@@ -1203,7 +1682,52 @@ public final class LocalPlaybackSource: ObservableObject {
     private var pendingNotificationPoll: Task<Void, Never>?
     private static let playerInfoDebounce: Duration = .milliseconds(250)
 
-    private init() {}
+    /// 位置状态机的外部依赖(见 PlaybackPositionEnvironment)。
+    private let env: PlaybackPositionEnvironment
+
+    private init() {
+        env = .live
+        currentOutputRoute = env.outputRoute()
+    }
+
+    private init(environment: PlaybackPositionEnvironment) {
+        env = environment
+        currentOutputRoute = environment.outputRoute()
+    }
+
+    /// 回放测试用的独立实例:不 `start()`、不挂通知,外部依赖全换成 `environment`。
+    public static func makeForPositionReplay(environment: PlaybackPositionEnvironment) -> LocalPlaybackSource {
+        LocalPlaybackSource(environment: environment)
+    }
+
+    /// 回放一拍快照:key 与换歌的算法同 `apply`,只跑位置状态机。
+    public func replayPosition(_ snapshot: MediaControlSnapshot, now: Date, isAdBreak: Bool = false) {
+        let key = snapshot.identityKey
+        let trackChanged = key != lastKey
+        let previousKey = lastKey
+        if trackChanged { lastKey = key }
+        lastSnapshot = snapshot
+        applyPosition(snapshot: snapshot, key: key, trackChanged: trackChanged, previousKey: previousKey,
+                      isSpotifyNative: snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier,
+                      isAdBreak: isAdBreak, now: now)
+    }
+
+    /// 回放:一条播放器状态通知到达(线上是 handlePlayerInfoChanged:记下时刻;暂停类通知同时冻住外推)。
+    public func replayPlayerStateEvent(at date: Date, freeze: Bool) {
+        posStateSignalAt = date
+        if freeze { freezeExtrapolationUntilNextPoll(now: date) }
+    }
+
+    /// 回放:Spotify「Playing、位置 ≈0」通知到达的时刻(线上由通知观察者记,见 spotifyJumpKind)。
+    public func replaySpotifyPlayingFromStartNotice(at date: Date) { spotifyPlayingFromStartNoticeAt = date }
+
+    /// 回放:此刻屏上的位置(播放中按锚点外推,暂停时是冻结位置)。
+    public func replayPositionMs(at now: Date) -> Int? {
+        anchor?.extrapolatedPositionMs(now: now) ?? pausedPositionMs
+    }
+
+    /// 回放:当前在用的锚点偏置(正 = 读数超前真声)。
+    public var replayReportedBiasSecs: Double { posReportedBiasSecs }
 
     public func start() {
         reschedulePollTimer()
@@ -1311,9 +1835,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 只读 Track ID / Name / Artist 做广告分类(上面那段 里的窄例外);位置与播放状态照旧只当
                 // "提前 poll 一次"的信号。userInfo 在主队列上读,跟下面 handler 同一条路。
                 let hint = SpotifyNotificationHint(userInfo: note.userInfo)
+                let playingFromStart = (note.userInfo?["Player State"] as? String) == "Playing"
+                    && ((note.userInfo?["Playback Position"] as? NSNumber)?.doubleValue ?? .infinity) < 1
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     if let hint, self.spotifyNotificationHint != hint { self.spotifyNotificationHint = hint }
+                    if playingFromStart { self.spotifyPlayingFromStartNoticeAt = Date() }
                     self.handlePlayerInfoChanged()
                 }
             }
@@ -1324,8 +1851,11 @@ public final class LocalPlaybackSource: ObservableObject {
     // 它自己的通知和 MediaRemote 的事件,合并后只查一次)。
     private func startStreamWatcher() {
         guard streamWatcher == nil else { return }
-        let watcher = MediaControlStreamWatcher { [weak self] in
-            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+        let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
+            MainActor.assumeIsolated {
+                self?.handlePlayerInfoChanged(freezeExtrapolation: pauseSignal,
+                                              stateSignal: pauseSignal || resumeSignal)
+            }
         }
         streamWatcher = watcher
         watcher.start()
@@ -1349,8 +1879,18 @@ public final class LocalPlaybackSource: ObservableObject {
     // 即便如此仍明显优于改动前:感知延迟从"平均 1 秒、最坏 2 秒"降到 ~0.5 秒且稳定。
     // 2 秒轮询 Timer 继续独立运行不动,是这套机制的兜底——去抖动/取消逻辑万一有任何
     // 边界情况没覆盖到,最坏也只是退化成改动之前的行为,不会漏状态。
-    private func handlePlayerInfoChanged() {
-        freezeExtrapolationUntilNextPoll()
+    /// `freezeExtrapolation` = 这个信号有没有可能意味着播放状态变了。
+    ///
+    /// 别无条件冻:冻结期间位置**完全不走**,而逐字填色直接读这个锚点 —— 一次信号就是
+    /// 一次几百毫秒的停顿再跳过去(实测 148~462ms)。两条分布式通知本来就只在状态变化时发,
+    /// 照旧冻;media-control 事件流不一样,它连锚点刷新也发,而把当前歌词行塞进署名字段的
+    /// 播放器**每唱一句就刷新一次锚点** —— 那种信号按状态变化处理,就是每句开头顿一下。
+    private func handlePlayerInfoChanged(freezeExtrapolation: Bool = true,
+                                        stateSignal: Bool = true) {
+        // 记时刻和冻结外推是**两件事**:冻结只认暂停(纯锚点刷新冻了就是每句一顿),
+        // 而"状态什么时候变的"这个上界,暂停和恢复都要记。
+        if stateSignal { posStateSignalAt = Date() }
+        if freezeExtrapolation { freezeExtrapolationUntilNextPoll() }
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.playerInfoDebounce)
@@ -1389,9 +1929,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 时走这条(位置继续走),已经暂停则走 `anchor = nil` 那条。**别把 needsNewAnchor
     /// 里的 rate 比较去掉** —— 去掉之后稳定播放期间会认为"不必重锚",这个 rate=0 的锚点
     /// 就永远留在那儿,进度条从此不动。
-    private func freezeExtrapolationUntilNextPoll() {
+    private func freezeExtrapolationUntilNextPoll(now: Date = Date()) {
         guard let current = anchor, current.rate > 0 else { return }
-        let now = Date()
         anchor = ProgressAnchor(
             durationMs: current.durationMs,
             progressMs: current.extrapolatedPositionMs(now: now),
@@ -1550,6 +2089,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if nextLineSide != nil { nextLineSide = nil }
         if nextLineRomanization != nil { nextLineRomanization = nil }
         if nextLineTranslation != nil { nextLineTranslation = nil }
+        if nextLineWordGroups != nil { nextLineWordGroups = nil }
         if currentLineIndex != nil { currentLineIndex = nil }
         if scrollLineIndex != nil { scrollLineIndex = nil }
         if compactLine != nil { compactLine = nil }
@@ -1580,6 +2120,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
         if r.nextRomanization != nextLineRomanization { nextLineRomanization = r.nextRomanization }
         if r.nextTranslation != nextLineTranslation { nextLineTranslation = r.nextTranslation }
+        if r.nextWordGroups != nextLineWordGroups { nextLineWordGroups = r.nextWordGroups }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
@@ -1621,6 +2162,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
         if r.nextRomanization != nextLineRomanization { nextLineRomanization = r.nextRomanization }
         if r.nextTranslation != nextLineTranslation { nextLineTranslation = r.nextTranslation }
+        if r.nextWordGroups != nextLineWordGroups { nextLineWordGroups = r.nextWordGroups }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
@@ -1687,6 +2229,7 @@ public final class LocalPlaybackSource: ObservableObject {
             nextLineSide = nil
             nextLineRomanization = nil
             nextLineTranslation = nil
+            nextLineWordGroups = nil
             currentLineIndex = nil
             scrollLineIndex = nil
             compactLine = nil
@@ -2048,11 +2591,13 @@ public final class LocalPlaybackSource: ObservableObject {
         // 权威复核只对原生客户端有意义(`spotify url` 与通知里的 Track ID 都是原生 App 才有,网页版没有这
         // 两个接口)——网页版只吃字段启发式本身的结果。先问 Spotify 自己刚广播的通知、对不上
         // 才退回 osascript,见 spotifyNativeAdCheckForNewTrack。
-        if snapshot.trackKey != lastKey, isSpotifyNative, !adByFields {
+        if snapshot.identityKey != lastKey, isSpotifyNative, !adByFields {
             spotifyNativeAdCheckForNewTrack(snapshot: snapshot)
         }
 
-        let key = snapshot.trackKey
+        // identityKey 而不是 trackKey:署名不可信的播放器要把署名剔出身份,否则换歌头几秒
+        // 身份会抖好几次(见 MediaControlSnapshot.identityKey)。封面核对那边用的是同一把尺子。
+        let key = snapshot.identityKey
         let trackChanged = key != lastKey
         // 必须在这里留一份旧 key:下面 `lastKey = key` 之后,`lastKey` 就等于 `key` 了,
         // 到浏览器探针那一段(`if trackChanged`)再读它只会读到新值。留它是为了让探针的
@@ -2135,34 +2680,79 @@ public final class LocalPlaybackSource: ObservableObject {
         // elapsedTime 对 Apple Music 是 Music.app 自己实时算出来的精确播放位置;对 QQ
         // 音乐是 media-control --now 的外推值,带噪声,经 resolvePositionSeconds 平滑
         // 过再用(见该函数注释)。
-        let now = Date()
+        applyPosition(snapshot: snapshot, key: key, trackChanged: trackChanged, previousKey: previousKey,
+                      isSpotifyNative: isSpotifyNative, isAdBreak: isCurrentTrackAdBreak, now: Date())
+        if anchor == nil {
+            // 暂停(anchor == nil 但曲目还在、位置已冻结)时**不能**把当前歌词行清掉。
+            //
+            // 不能无条件三连清空:一按暂停就让悬浮歌词/灵动岛/菜单栏那一行歌词
+            // 直接消失、歌词窗口的高亮也没了,会破坏用户按暂停的典型场景——"这句是什么?
+            // 我看一下"。停掉 20Hz 定时器是对的(暂停期间位置不
+            // 再前进,没有必要每秒算 20 次),但"停止推进"跟"清空显示"是两回事。
+            //
+            // 暂停态有精确的冻结位置(pausedPositionMs,见上面那段注释:AppleScript 和
+            // media-control 在暂停时给的 elapsedTime 都是冻结值),所以直接按这个位置解一
+            // 次当前行即可。真的没有位置或没有歌词内容时才回落到清空。
+            stopFastTimer()
+            resolveLinesForPausedPosition()
+        } else if syncEngine.hasContent {
+            ensureFastTimerRunning()
+        } else {
+            // 在播、但引擎里没有任何歌词内容(纯音乐/广告/还没解析出来):每一拍 fastTick
+            // 的四个查询都扫空数组、四个守卫全不触发,20Hz 定时器整首歌空转纯属浪费 ——
+            // 暂停(上面)和锁屏(setScreenLocked)都已特判掉这种空转,这里补上"在播但
+            // 没词"这一档。先补最后一拍把可能残留的行状态清掉再停表;collector 中途解析
+            // 出歌词会改 enrich 文件 mtime,上面 reloadCurrentLyrics 那个分支会让下一轮
+            // apply(≤2s)重新走到 hasContent 分支拉起定时器。
+            fastTick()
+            stopFastTimer()
+        }
+    }
+
+    /// 位置状态机:这一拍的快照 → 锚点 / 暂停位置 / 偏置,以及各项学习。`apply` 每拍调一次;
+    /// 回放测试经 `replayPosition` 直接调它(外部依赖全走 `env`,见 PlaybackPositionEnvironment)。
+    /// - isAdBreak: 这一首此刻是不是广告(`isCurrentTrackAdBreak`),下一次换歌时当"上一首是不是广告"用。
+    private func applyPosition(snapshot: MediaControlSnapshot, key: String, trackChanged: Bool, previousKey: String,
+                               isSpotifyNative: Bool, isAdBreak: Bool, now: Date) {
         let playing = snapshot.playing == true
         // 暂停/恢复那一拍的诊断:用户看到"一按暂停歌词进度变一下",要量的就是
         // "暂停前一刻屏上外推到哪"与"冻结值"之差、以及"冻结值"与"恢复后第一笔"之差。两个
         // 变量只在状态翻转的那一拍非 nil,日志也只在那一拍打一行。
         var pauseShownMs: Int?
         var pauseAnchorWasFrozenByEvent = false
-        // 锚点偏置(自然切歌量的、或 Spotify 探针量的)只属于量它时对着的那个锚点:Spotify 重新发布了
-        // 锚点(暂停冻结 / 恢复 / 拖动,原始 elapsedTime 变了)就作废,见 biasSurvivesAnchor。放在播放/
-        // 暂停两个分支之前 —— 暂停分支的 pausedPositionMs 和播放分支的 resolvePositionSeconds 都要看到
-        // 清零后的值。
-        if isSpotifyNative, key == posTrackingKey, posReportedBiasSecs != 0,
-           !Self.biasSurvivesAnchor(anchorElapsedTime: snapshot.anchorElapsedTime, measuredAgainst: posBiasAnchorElapsed) {
-            logger.notice("anchor bias dropped: player republished anchor elapsed=\(snapshot.anchorElapsedTime ?? -1, format: .fixed(precision: 3)) measuredAgainst=\(self.posBiasAnchorElapsed ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) playing=\(playing)")
+        /// 这一拍暂停作废的偏置是哪一档起播领先量、值多少(见 pauseResidualLead)。
+        var pauseLearnStart: (kind: SpotifyStartKind, bias: Double)?
+        // 锚点偏置(自然切歌量的、Spotify 探针量的、网页探针精确读数量的)只属于量它时对着的那个锚点:播放器重新发布了
+        // 锚点(暂停冻结 / 恢复 / 拖动,原始 elapsedTime 变了)就作废;读的是 Spotify 自己的钟时暂停即作废。
+        // 见 biasSurvivesAnchor。放在播放/暂停两个分支之前 —— 暂停分支的 pausedPositionMs 和播放分支的
+        // resolvePositionSeconds 都要看到清零后的值。
+        if isSpotifyNative || posBiasFromBrowserProbe, key == posTrackingKey, posReportedBiasSecs != 0,
+           !Self.biasSurvivesAnchor(anchorElapsedTime: snapshot.anchorElapsedTime, measuredAgainst: posBiasAnchorElapsed, playing: playing) {
+            logger.notice("anchor bias dropped: elapsed=\(snapshot.anchorElapsedTime ?? -1, format: .fixed(precision: 3)) (-1 = player clock) measuredAgainst=\(self.posBiasAnchorElapsed ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) playing=\(playing)")
             // 暂停发布的冻结值是耳朵里的位置,跟我们(探针纠过的)停在的位置一比就是探针钟的领先量。
             // 已经在暂停态(冻结锚点晚一拍才到)取 pausedPositionMs;同一拍翻转的取被事件冻住的锚点外推值。
-            if !playing, posBiasFromProbe, let frozen = snapshot.anchorElapsedTime {
+            //
+            // 只有"偏置是对着开播锚点量的"这一档有资格当领先量样本 —— 曲中重打的锚点上探针
+            // 本来就是真值,那一档的残差量的是我们多扣的那一份,喂进去会把两种场合搅成一个数
+            // (见 probeLeadApplies)。
+            if !playing, posBiasFromProbe, Self.probeLeadApplies(anchorElapsedTime: posBiasAnchorElapsed),
+               let frozen = snapshot.anchorElapsedTime {
                 let oursMs = anchor == nil ? pausedPositionMs : anchor?.extrapolatedPositionMs(now: now)
                 if let oursMs {
                     learnProbeLead(residual: Double(oursMs) / 1000 - frozen)
                 }
             }
+            // Spotify 自己的钟按起播方式给的偏置:暂停那一拍拿冻结值反推这一段真实的领先量,学进那一档
+            // (下面 pause transition 那一行算,那时屏上位置和冻结值都齐了)。
+            if !playing, snapshot.anchorElapsedTime == nil, let kind = posBiasStartKind {
+                pauseLearnStart = (kind, posReportedBiasSecs)
+            }
             setReportedBias(0, anchorElapsed: nil)
             // 播放中换了锚点就再问一次 Spotify 的钟(见 SpotifyPositionProbe.requestConfirmation):
             // 新锚点准就什么都不改;它要是又晚了 2s(或干脆是假的),探针把新偏置量出来。暂停
             // 发的冻结锚点不问 —— 那个就是 Spotify 自己的钟,而且探针只在播放中消费。
-            if playing {
-                SpotifyPositionProbe.shared.requestConfirmation(forKey: key)
+            if playing, isSpotifyNative {
+                env.spotifyProbeRequestConfirmation(key)
             }
         }
         // 非 Spotify 的纯外推源(汽水音乐这类)重发锚点的那一拍:播放器自己报的位置就是真值,
@@ -2191,6 +2781,8 @@ public final class LocalPlaybackSource: ObservableObject {
             posAnchorLagSampleValid = false
         }
         posPrevAnchorElapsed = snapshot.anchorElapsedTime
+        let isFirstObservationSinceLaunch = !posBiasRestoreChecked
+        posBiasRestoreChecked = true
         if playing, let duration = snapshot.duration, duration > 0 {
             // 切歌/加载瞬间 Spotify 会短暂报 rate=0(playing 仍 true),按 1 计——与
             // collector 的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
@@ -2212,18 +2804,17 @@ public final class LocalPlaybackSource: ObservableObject {
             // 本来就更准的 .cleanExtrapolated 连续外推,不会被整秒精度的探针值持续覆盖
             // 导致周期性回退。
             if trackChanged {
-                BrowserPositionProbe.shared.trackChanged(from: previousKey, to: key)
-                // Spotify 原生客户端:开播 2.5s 后问一次 player position 当地面真值,修
-                // "广告后开播锚点晚发 ~2.4s"那种单看 media-control 认不出来的锚点(
-                // 见 SpotifyPositionProbe 头注)。
-                SpotifyPositionProbe.shared.trackChanged(to: key, isSpotifyNative: isSpotifyNative)
+                env.browserProbeTrackChanged(previousKey, key)
+                // Spotify 原生客户端:开播 2.5s 后问一次。它带回两样东西 —— `artwork url`
+                // (图床 640 档地址,任何档位都要,见 spotifyArtworkURL)和 player position
+                // (只有 cleanExtrapolated 档消费,见下面那处闸门)。
+                env.spotifyProbeTrackChanged(key, isSpotifyNative)
             }
             // `expectedDuration` 不是可选的锦上添花:探针拿它在 JS 里认"这个标签页放的
             // 是不是同一首歌"(见 `BrowserPositionProbe.pageDurationToleranceSecs`),
             // YouTube Music 插播广告、同一浏览器里开着第二个 Spotify 标签页都靠它认出来。
             // 这里的 `duration` 已经被外层 `if playing, let duration, duration > 0` 保证 >0。
-            BrowserPositionProbe.shared.kickIfNeeded(
-                bundleIdentifier: snapshot.bundleIdentifier, key: key, expectedDuration: duration)
+            env.browserProbeKick(snapshot.bundleIdentifier, key, duration)
             let rawReportedForResolve: Double
             let effectiveTier: PositionSourceTier
             var usedBrowserProbe = false
@@ -2235,31 +2826,95 @@ public final class LocalPlaybackSource: ObservableObject {
             // 同样不行"见 `BrowserPositionProbe.pageClockIsRunning` 一带的头注。
             // 可信度判据已经全部下沉进探针内部(同一首歌 + 页面的钟在走),那里才有能证明这
             // 两件事的材料;这一层只负责把探针值当"精确种子"喂进伺服逻辑。
-            if let probed = BrowserPositionProbe.shared.consumeCorrection(forKey: key, rate: rate, now: now) {
-                rawReportedForResolve = probed
-                effectiveTier = .noisyFloored
+            var browserProbePrecise = false
+            // 整秒读数在 Safari 上一律不用(见 floorReadingApplies);额度照样消费,免得同一首反复探。
+            var browserCorrection = env.browserProbeConsume(key, rate, now)
+            if let c = browserCorrection, !c.isPrecise,
+               !BrowserPositionProbe.floorReadingApplies(reportedBundleID: snapshot.bundleIdentifier) {
+                logger.notice("browser probe floor reading ignored: \(c.seconds, format: .fixed(precision: 3))s vs stream \((snapshot.elapsedTime ?? -1), format: .fixed(precision: 3))s (bundle \(snapshot.bundleIdentifier ?? "-", privacy: .public))")
+                browserCorrection = nil
+            }
+            if let probed = browserCorrection {
+                rawReportedForResolve = probed.seconds
+                // 精确读数(页面 `currentTime`)跟流读数同一个钟:按源本来的档位走,cleanExtrapolated 时差值
+                // 折进偏置、锚点一重发就作废(见 biasSurvivesAnchor)。整秒读数仍按 noisyFloored。
+                effectiveTier = probed.isPrecise ? tier : .noisyFloored
+                browserProbePrecise = probed.isPrecise
                 usedBrowserProbe = true
-            } else if posWasPlaying, key == posTrackingKey,
-                      let probed = SpotifyPositionProbe.shared.consumeCorrection(forKey: key, rate: rate, now: now) {
+            } else if tier == .cleanExtrapolated, posWasPlaying, key == posTrackingKey,
+                      let probed = env.spotifyProbeConsume(key, rate, now) {
                 // Spotify 的一次性真值(见 SpotifyPositionProbe):同样走 isGroundTruthSeed 通道,
                 // 档位不变(cleanExtrapolated)。只在稳定播放中消费 —— 刚换歌那一拍要留给自然切歌
-                // 校正播种,刚恢复播放那一拍恢复锚点本身就是准的。先扣掉探针钟相对耳朵的领先量
-                // (probeLeadSecs,暂停时学出来的,见那一带注释)。
-                rawReportedForResolve = probed - probeLeadSecs
+                // 校正播种,刚恢复播放那一拍恢复锚点本身就是准的。
+                //
+                // 档位闸不能去掉:这个探针纠的是 media-control 锚点与 `player position` 的差。
+                // 快照本身已经是 `player position`(precise 档)时,两边同一个钟,再纠一遍只会把
+                // 领先量凭空扣进位置里。探针在那一档仍然会跑,但只为顺路带回 `artwork url`。
+                //
+                // 领先量只在开播锚点还在位时才扣:播放器在曲中重发过锚点的话,它的钟已经与真声
+                // 对齐,探针本身就是真值,再扣一次就是凭空造一个偏置(见 probeLeadApplies)。
+                let lead = Self.probeLeadApplies(anchorElapsedTime: snapshot.anchorElapsedTime)
+                    ? probeLeadSecs : 0
+                rawReportedForResolve = probed - lead
                 effectiveTier = tier
                 usedBrowserProbe = true // 名字沿用:含义是"这一笔是地面真值种子",见 resolvePositionSeconds
             } else {
-                rawReportedForResolve = snapshot.elapsedTime ?? 0
+                // 读数在后台读到之后,主线程可能卡半秒多才轮到这里:按读到的时刻补到 now,别让卡顿伪装成
+                // 位置误差(见 MediaControlSnapshot.capturedAt)。上限 2s,再长就当读数本身不可信,不补。
+                let captureLag = snapshot.capturedAt.map { now.timeIntervalSince($0) } ?? 0
+                let lagFix = captureLag > 0 && captureLag <= 2 ? captureLag * rate : 0
+                rawReportedForResolve = (snapshot.elapsedTime ?? 0) + lagFix
                 effectiveTier = tier
+            }
+            // Spotify 这一拍读的是哪个钟:AppleScript 那份没有锚点信息(anchorElapsedTime == nil)。
+            // 换歌 / 首次观察 / 恢复播放那一拍按这一拍定,之后同曲换钟走 spotifyClockAction。
+            let readsPlayerClock = snapshot.anchorElapsedTime == nil
+            if !isSpotifyNative || key != posTrackingKey || !posWasPlaying {
+                posSpotifyAcceptedPlayerClock = isSpotifyNative ? readsPlayerClock : nil
+                posSpotifyForeignClockSince = nil
+            }
+            // App 重启后的第一拍(见 restorablePlayerClockBias)。只在这一拍读一次文件。
+            var restoredBias: Double?
+            if isFirstObservationSinceLaunch, isSpotifyNative, readsPlayerClock, !usedBrowserProbe,
+               key != posTrackingKey, let record = env.readPositionBias() {
+                restoredBias = Self.restorablePlayerClockBias(
+                    record: record, bundleID: snapshot.bundleIdentifier,
+                    artist: snapshot.artist ?? "", title: snapshot.title ?? "",
+                    raw: rawReportedForResolve, now: now)
+                // 接回来的就是文件里这一份:记成"已发布",别用新的写入时刻重写它 —— 同一首里再重启一次,
+                // 连续性签名还要对着偏置量出来那一刻。
+                if restoredBias != nil { lastPublishedBias = record }
+            }
+            var clockAction = SpotifyClockAction.accept
+            if isSpotifyNative, !usedBrowserProbe {
+                clockAction = Self.spotifyClockAction(
+                    acceptedPlayerClock: posSpotifyAcceptedPlayerClock, readsPlayerClock: readsPlayerClock,
+                    foreignSince: posSpotifyForeignClockSince, now: now)
+                switch clockAction {
+                case .accept:
+                    posSpotifyForeignClockSince = nil
+                case .hold:
+                    if posSpotifyForeignClockSince == nil { posSpotifyForeignClockSince = now }
+                case .switchClock:
+                    posSpotifyAcceptedPlayerClock = readsPlayerClock
+                    posSpotifyForeignClockSince = nil
+                }
             }
             let (positionSeconds, didReanchor) = resolvePositionSeconds(
                 reported: rawReportedForResolve, rate: rate, key: key, now: now,
-                tier: effectiveTier, isGroundTruthSeed: usedBrowserProbe,
+                tier: effectiveTier,
+                gaplessLeadBundleID: Self.carriesGaplessLead(tier: effectiveTier, bundleID: snapshot.bundleIdentifier)
+                    ? snapshot.bundleIdentifier : nil,
+                clockAction: clockAction,
+                restoredBias: restoredBias,
+                isGroundTruthSeed: usedBrowserProbe,
+                groundTruthFromBrowser: browserProbePrecise,
                 anchorElapsedTime: snapshot.anchorElapsedTime, streamRaw: snapshot.elapsedTime,
                 anchorLagSeed: usedBrowserProbe ? 0 : anchorLag(forBundleID: snapshot.bundleIdentifier))
             if !posWasPlaying, key == posTrackingKey, let prevPaused = pausedPositionMs {
-                // 暂停→恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
-                logger.notice("resume transition: paused=\(Double(prevPaused) / 1000, format: .fixed(precision: 3)) resumed=\(positionSeconds, format: .fixed(precision: 3)) raw=\(rawReportedForResolve, format: .fixed(precision: 3)) delta=\(positionSeconds - Double(prevPaused) / 1000, format: .fixed(precision: 3)) rate=\(snapshot.playbackRate ?? -1, format: .fixed(precision: 2))")
+                // 暂停到恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
+                env.browserProbeReopenAfterResume(key)
+                logger.notice("resume transition: paused=\(Double(prevPaused) / 1000, format: .fixed(precision: 3)) resumed=\(positionSeconds, format: .fixed(precision: 3)) raw=\(rawReportedForResolve, format: .fixed(precision: 3)) delta=\(positionSeconds - Double(prevPaused) / 1000, format: .fixed(precision: 3)) rate=\(snapshot.playbackRate ?? -1, format: .fixed(precision: 2)) signalAge=\(self.posStateSignalAt.map { now.timeIntervalSince($0) } ?? -1, format: .fixed(precision: 3)) wouldSeed=\(Double(prevPaused) / 1000 + (self.posStateSignalAt.map { now.timeIntervalSince($0) } ?? 0), format: .fixed(precision: 3))")
             }
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
@@ -2272,6 +2927,14 @@ public final class LocalPlaybackSource: ObservableObject {
             let needsNewAnchor = anchor == nil || trackChanged || didReanchor
                 || anchor?.rate != rate || anchor?.durationMs != Int(duration * 1000)
             if needsNewAnchor {
+                // 临时诊断(排查完就删):锚点为什么重建、重建把屏上位置挪了多少。
+                // 逐字填色直接读这个锚点外推,所以 stepMs 就是换基准那一下看得见的跳。
+                let beforeMs = anchor?.extrapolatedPositionMs(now: now)
+                let wasNil = anchor == nil
+                let rateChg = anchor?.rate != rate
+                let durChg = anchor?.durationMs != Int(duration * 1000)
+                let stepMs = beforeMs.map { Int(positionSeconds * 1000) - $0 } ?? -99999
+                logger.notice("anchor rebuild: nil=\(wasNil) track=\(trackChanged) reanchor=\(didReanchor) rateChg=\(rateChg) durChg=\(durChg) stepMs=\(stepMs) dur=\(duration, format: .fixed(precision: 2)) rate=\(rate, format: .fixed(precision: 2))")
                 anchor = ProgressAnchor(
                     durationMs: Int(duration * 1000),
                     progressMs: Int(positionSeconds * 1000),
@@ -2337,6 +3000,11 @@ public final class LocalPlaybackSource: ObservableObject {
         if let shown = pauseShownMs, let paused = newPausedPositionMs {
             // 播放到暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
             logger.notice("pause transition: shown=\(Double(shown) / 1000, format: .fixed(precision: 3)) frozenRaw=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) paused=\(Double(paused) / 1000, format: .fixed(precision: 3)) delta=\(Double(paused - shown) / 1000, format: .fixed(precision: 3)) frozenByEvent=\(pauseAnchorWasFrozenByEvent) errEMA=\(self.posErrEMA, format: .fixed(precision: 3))")
+            // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),淡出量那个常数才对得上。
+            if pauseAnchorWasFrozenByEvent, let learn = pauseLearnStart,
+               let sample = Self.pauseResidualLead(bias: learn.bias, pauseDelta: Double(paused - shown) / 1000) {
+                learnSpotifyStartLead(kind: learn.kind, sample: sample)
+            }
         }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
         // 播放"——只在上面播放分支里更新的话,"播放到暂停到再播放"这个序列会因为暂停期间
@@ -2345,38 +3013,15 @@ public final class LocalPlaybackSource: ObservableObject {
         posTrackingKey = key
         posWasPlaying = playing
         posPrevWall = now
+        posPrevWasAdBreak = isAdBreak
         publishPositionBiasIfChanged(snapshot: snapshot, isSpotifyNative: isSpotifyNative, now: now)
         // 自然切歌判定要用"旧曲"的时长/来源——resolve 被调用时 snapshot 已是新曲,所以
         // 这里每轮把本轮的存下来,下一轮它们就是"上一首的"。
         posPrevDurationSecs = snapshot.duration ?? 0
-        posPrevTierCleanExtrapolated =
-            Self.positionSourceTier(forBundleID: snapshot.bundleIdentifier) == .cleanExtrapolated
+        posPrevGaplessLeadBundleID = Self.carriesGaplessLead(
+            tier: Self.positionSourceTier(forBundleID: snapshot.bundleIdentifier),
+            bundleID: snapshot.bundleIdentifier) ? snapshot.bundleIdentifier : nil
         if playing, posPausedRawSecs != nil { posPausedRawSecs = nil }
-        if anchor == nil {
-            // 暂停(anchor == nil 但曲目还在、位置已冻结)时**不能**把当前歌词行清掉。
-            //
-            // 这里原来是无条件三连清空,于是一按暂停,悬浮歌词/灵动岛/菜单栏那一行歌词
-            // 直接消失、歌词窗口的高亮也没了——而用户按暂停的典型场景恰恰是"这句是什么?
-            // 我看一下",清掉正是最不该发生的事。停掉 20Hz 定时器是对的(暂停期间位置不
-            // 再前进,没有必要每秒算 20 次),但"停止推进"跟"清空显示"是两回事。
-            //
-            // 暂停态有精确的冻结位置(pausedPositionMs,见上面那段注释:AppleScript 和
-            // media-control 在暂停时给的 elapsedTime 都是冻结值),所以直接按这个位置解一
-            // 次当前行即可。真的没有位置或没有歌词内容时才回落到清空。
-            stopFastTimer()
-            resolveLinesForPausedPosition()
-        } else if syncEngine.hasContent {
-            ensureFastTimerRunning()
-        } else {
-            // 在播、但引擎里没有任何歌词内容(纯音乐/广告/还没解析出来):每一拍 fastTick
-            // 的四个查询都扫空数组、四个守卫全不触发,20Hz 定时器整首歌空转纯属浪费 ——
-            // 暂停(上面)和锁屏(setScreenLocked)都已特判掉这种空转,这里补上"在播但
-            // 没词"这一档。先补最后一拍把可能残留的行状态清掉再停表;collector 中途解析
-            // 出歌词会改 enrich 文件 mtime,上面 reloadCurrentLyrics 那个分支会让下一轮
-            // apply(≤2s)重新走到 hasContent 分支拉起定时器。
-            fastTick()
-            stopFastTimer()
-        }
     }
 
     // 供外部(EnrichCacheStore 保存/删除歌词后)强制重新读取当前曲目的歌词——正常情况
@@ -2457,6 +3102,12 @@ public final class LocalPlaybackSource: ObservableObject {
         posErrEMA = 0
         // 我们主动发的 seek 同样会让 Spotify 重打锚点(与真声对齐)——锚点偏置作废。
         setReportedBias(0, anchorElapsed: nil)
+        // 例外:读的是 Spotify 自己的钟、且正在放 —— 拖完它照样先于出声跑一截(SpotifyStartKind.seek),
+        // 这里不预置的话,下一拍读数领先这一截,伺服一拍就吸附过去。暂停中拖的,恢复那一拍当场量。
+        if anchor != nil, lastSnapshot?.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier,
+           lastSnapshot?.anchorElapsedTime == nil {
+            setReportedBias(spotifyStartLead(.seek), anchorElapsed: nil, startKind: .seek)
+        }
         if let existing = anchor {
             anchor = ProgressAnchor(
                 durationMs: existing.durationMs,
@@ -2768,12 +3419,13 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 换歌时安排一次"旧封面过期清理"。只在真的有旧封面可挂时才安排——本来就没有封面的
     /// 情况下什么都不用做。取图回调先到就会把这个任务取消掉(见 fetchArtworkForCurrentTrack)。
-    private func scheduleArtworkStaleTimeout(forKey key: String) {
+    private func scheduleArtworkStaleTimeout(forKey key: String, after: TimeInterval? = nil) {
         artworkStaleTimeoutTask?.cancel()
         artworkStaleTimeoutTask = nil
         guard artworkData != nil else { return }
+        let deadline = after ?? Self.artworkStaleTimeout
         artworkStaleTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.artworkStaleTimeout))
+            try? await Task.sleep(for: .seconds(deadline))
             guard !Task.isCancelled, let self, self.lastKey == key else { return }
             logger.debug("artwork stale timeout: clearing previous cover after \(Self.artworkStaleTimeout)s")
             self.artworkData = nil
@@ -2801,14 +3453,29 @@ public final class LocalPlaybackSource: ObservableObject {
     // 挂着旧封面"这个原始目的。
     private static let artworkRetryDelays: [TimeInterval] = [0.3, 0.6, 1.2]
 
-    // 首轮定案后隔这么久再确认一次。防的是首轮抓到"新标题+旧封面"的合体载荷:识别
-    // 陈旧封面靠的是载荷自带的 artist/title(见 fetchArtwork 的 trackKey 注释),但如果
-    // 系统侧是先换了标题、封面字段晚一拍才刷,这份陈旧就带着**新歌**的标识,首轮的比对
-    // 拦不住。等 3 秒(系统侧封面到这时一定刷完了,量级参考 artworkRetryDelays 的实测)
-    // 再取一次,拿到不同的字节就换上——顺带把"播放器中途升级封面"(网易云先给占位图、
-    // 匹配到曲库后换真图)这类正常更新也接住了。只在确认结果**非空且属于这首歌**时才动,
-    // 一次瞬时的读取失败不该把已经挂好的封面抹掉。
-    private static let artworkConfirmDelay: TimeInterval = 3
+    // 首轮定案后按这张表再确认几次(累计 3 / 8 / 16 / 31 秒)。两件事靠它收敛:
+    //
+    // 1. 首轮可能抓到"新标题+旧封面"的合体载荷 —— 识别陈旧封面靠的是载荷自带的
+    //    artist/title(见 fetchArtwork 的 trackKey 注释),但系统侧先换标题、封面字段
+    //    晚一拍才刷时,这份陈旧带着**新歌**的标识,首轮的比对拦不住。
+    // 2. 播放器会**先推自己的占位图、真封面晚几秒才推**。酷狗 3.3.2 实测:换歌后头 8 秒
+    //    推的是它内置的那张蓝底黑胶唱片(同一张图被本机十几首歌共用),之后才换成真封面。
+    //    网易云"先给占位图、匹配到曲库后换真图"是同一类行为。
+    //
+    // 别退回"只确认一次"。3 秒那一档整个落在占位期里,字节没变就不替换、之后再也不看,
+    // 结果是**整首歌**都挂着播放器的占位图。它是一张合法的 600×600 JPEG,取图这条路上没有
+    // 任何一道判据能识破它,日志里也不留痕迹——看起来完全像"封面取不到"。
+    //
+    // 也别改成"识破占位图":那要么维护一份按播放器、按版本失效的图片哈希表,要么拿
+    // "多首歌共用同一张图"去猜(合辑封面本来就共用)。按时间多确认几次是通用的——没有这个
+    // 行为的播放器只是多几次字节比对,相同就原样丢弃。
+    //
+    // 档位密在 3~16 秒之间,是按占位期的实测分布排的:同一个播放器上量到过 3.2 / 7 / 8 秒
+    // 三种翻转时刻。稀疏排法(累计 3 / 8 / 16)在 8 秒那一档翻转的歌上最坏要等到第 16 秒才
+    // 换掉占位图;加密到累计 3 / 6 / 9 / 12 / 16 之后,翻转到换上的滞后收在 3 秒以内。
+    // 首尾两档不动:3 秒是"翻转最快的那种"能赶上的最早时机,31 秒是整条确认链的收尾。
+    // 别为了省这两次取图把中间挖空——挖掉的正是占位期的众数所在。
+    private static let artworkConfirmDelays: [TimeInterval] = [3, 3, 3, 3, 4, 15]
 
     /// 封面载荷的曲目标识和当前曲目是否算同一首。大小写不敏感:media-control 对同一首歌
     /// 报过大小写不一致的元数据(enrich 缓存那边为 "2 Bad"/"Scream" 踩过,见相应 memory),
@@ -2869,32 +3536,64 @@ public final class LocalPlaybackSource: ObservableObject {
             // 兜底任务**先**撤掉再去取色 —— 取色那次 await 有几十毫秒,3s 兜底在最后
             // 一次尝试逼近期限时可能正落在这个窗口里开火,把旧封面清掉又立刻被新封面
             // 覆盖,白闪一跳(对抗核实抓出的时序窗)。
-            self.artworkStaleTimeoutTask?.cancel()
-            self.artworkStaleTimeoutTask = nil
-            // 定案才取色(后台),丢弃路径一次都不算。
-            let averageHex = await hexFor(data)
-            guard expectedKey == self.lastKey else { return }
-            self.artworkData = data
-            self.artworkAverageHex = averageHex
-            self.noteRadioStationArtwork(data, forKey: expectedKey)
-            logger.debug("artwork fetched: bytes=\(data?.count ?? 0) retries=\(round) average=\(averageHex ?? "nil")")
+            // 认得出的播放器内置占位图**不采纳**:留着上一首的封面,等下面那张间隔表把真图
+            // 换上 —— 挂一张跟这首歌无关的唱片,比"旧封面多留几秒"糟(见
+            // KnownPlaceholderArtwork,以及本文件 artworkRetryDelays 上面"换歌不立即清旧
+            // 封面"那段)。这一支**不撤**兜底任务:真图万一永远不来,它照常把旧封面清掉,
+            // 否则上一首的封面会一直挂着。
+            if let data, KnownPlaceholderArtwork.isPlaceholder(data) {
+                logger.notice("artwork placeholder recognized: bytes=\(data.count), keeping previous cover")
+                // 兜底任务要**往后推过第一档确认**再挂上:它原来的期限是"最后一次取图 +3s",
+                // 而第一档确认也正好排在 +3s —— 两者撞在一起,旧封面先被清成灰底占位、下一拍
+                // 真封面才到,中间白闪一下,等于这道闸白拦。推到确认之后,认出占位图的这条路上
+                // 就是"旧封面 → 真封面"直接过渡;真图永远不来时它照常兜底,只是晚一档。
+                self.scheduleArtworkStaleTimeout(
+                    forKey: expectedKey,
+                    after: Self.artworkConfirmDelays.first.map { $0 + Self.artworkStaleTimeout })
+            } else {
+                self.artworkStaleTimeoutTask?.cancel()
+                self.artworkStaleTimeoutTask = nil
+                // 定案才取色(后台),丢弃路径一次都不算。
+                let averageHex = await hexFor(data)
+                guard expectedKey == self.lastKey else { return }
+                self.artworkData = data
+                self.artworkAverageHex = averageHex
+                self.noteRadioStationArtwork(data, forKey: expectedKey)
+                logger.debug("artwork fetched: bytes=\(data?.count ?? 0) retries=\(round) average=\(averageHex ?? "nil")")
+            }
 
-            // 二次确认,理由见 artworkConfirmDelay 的注释。
-            try? await Task.sleep(for: .seconds(Self.artworkConfirmDelay))
-            guard expectedKey == self.lastKey else { return }
-            let confirm = await attempt()
-            guard expectedKey == self.lastKey else { return }
-            guard let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
-                  Self.artworkKeyMatches(confirmKey, expectedKey),
-                  confirmData != self.artworkData else { return }
-            // 先比完字节确认真的要换,才算这一份的均值色(原来 attempt 顺手预算,字节相同
-            // 丢弃的常态路径每次白算一遍取色)。
-            let confirmHex = await hexFor(confirmData)
-            guard expectedKey == self.lastKey else { return }
-            logger.debug("artwork confirm pass replaced cover: bytes=\(confirmData.count)")
-            self.artworkData = confirmData
-            self.artworkAverageHex = confirmHex
-            self.noteRadioStationArtwork(confirmData, forKey: expectedKey)
+            // 二次确认,理由见 artworkConfirmDelays 的注释。换上一次就收工——占位图换成
+            // 真封面是一次性事件。
+            //
+            // 某一档读空、或读到别的歌,要 continue 不能 return:一次瞬时的读取失败不该
+            // 把已经挂好的封面抹掉,更不该让后面几档不再检查(播放器换真图的那一刻正好撞上
+            // 一次空载荷,整首歌就再也没有第二次机会了)。
+            var waited: TimeInterval = 0
+            for delay in Self.artworkConfirmDelays {
+                try? await Task.sleep(for: .seconds(delay))
+                waited += delay
+                guard expectedKey == self.lastKey else { return }
+                let confirm = await attempt()
+                guard expectedKey == self.lastKey else { return }
+                guard let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
+                      Self.artworkKeyMatches(confirmKey, expectedKey),
+                      // 这一档又读到占位图:字节确实跟当前挂着的不一样,但它不是真封面,
+                      // 换上去等于把上面那道闸白拦一次。
+                      !KnownPlaceholderArtwork.isPlaceholder(confirmData),
+                      confirmData != self.artworkData else { continue }
+                // 先比完字节确认真的要换,才算这一份的均值色(attempt 顺手预算的话,字节相同
+                // 丢弃的常态路径每次白算一遍取色)。
+                let confirmHex = await hexFor(confirmData)
+                guard expectedKey == self.lastKey else { return }
+                logger.notice("artwork confirm pass replaced cover after \(waited, privacy: .public)s: bytes=\(confirmData.count) hadCover=\(self.artworkData != nil)")
+                self.artworkData = confirmData
+                self.artworkAverageHex = confirmHex
+                self.noteRadioStationArtwork(confirmData, forKey: expectedKey)
+                return
+            }
+            if self.artworkData == nil {
+                logger.notice("artwork: still no matching system cover \(waited, privacy: .public)s after the track change for \(expectedKey, privacy: .public)")
+            }
         }
     }
 

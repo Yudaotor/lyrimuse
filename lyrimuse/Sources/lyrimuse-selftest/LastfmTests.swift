@@ -279,6 +279,117 @@ func runLastfmTests() {
                     "method=track.getinfo&track=%252B44", "lastfm query: 拼串按传入顺序")
     }
 
+    // ---- LastfmSignature:授权 / 喜欢用的 api_sig ----
+    //
+    // 跟 collector lastfmsign_test.go 是同一组向量:两边各算各的签名,任一处的排序或编码分叉,
+    // 对应那一侧就红。签错的表现是 Last.fm 报 error 13(Invalid method signature),连不上账号。
+    do {
+        typealias S = LastfmSignature
+        expectEqual(S.sign(["method": "auth.getsession", "api_key": "KEY", "token": "TOK"], secret: "SECRET"),
+                    "7159147741f8ad64a31b34b8a529be00", "lastfm 签名: auth.getsession")
+        expectEqual(S.sign(["method": "track.love", "artist": "周杰倫", "track": "晴天", "api_key": "KEY", "sk": "SK"],
+                           secret: "SECRET"),
+                    "937db1b27d3985a7c3b885731c6f2964", "lastfm 签名: 中文值按 UTF-8 字节拼")
+        expectEqual(S.sign(["artist[0]": "A", "artist[10]": "B", "artist[2]": "C", "method": "track.scrobble",
+                            "api_key": "KEY", "sk": "SK"], secret: "SECRET"),
+                    "5659761ac217b49797f2e0103d7866aa", "lastfm 签名: 键名按字节序,artist[10] 在 artist[2] 前")
+    }
+
+    // ---- LastfmImage:图片字段取哪一张、万能占位星当没有 ----
+    do {
+        typealias I = LastfmImage
+        let star = "https://lastfm.freetls.fastly.net/i/u/174s/\(I.placeholderHash).png"
+        func img(_ size: String, _ url: String) -> [String: Any] { ["size": size, "#text": url] }
+        expectEqual(I.pick([img("small", "s"), img("large", "L"), img("extralarge", "XL")]), "L",
+                    "lastfm 图: 有 large 取 large")
+        expectEqual(I.pick([img("small", "s"), img("extralarge", "XL")]), "XL", "lastfm 图: 没 large 退 extralarge")
+        expectEqual(I.pick([img("small", "s"), img("medium", "M")]), "M", "lastfm 图: 都没有退最后一项")
+        expectEqual(I.pick([img("large", star)]), nil, "lastfm 图: 占位星当没有图")
+        expectEqual(I.pick([img("large", ""), img("extralarge", "XL")]), nil,
+                    "lastfm 图: large 是空串就是没有图,不再往下找")
+        expectEqual(I.pick([] as [[String: Any]]), nil, "lastfm 图: 空数组")
+        expectEqual(I.pick("not an array"), nil, "lastfm 图: 形状不对")
+        expectEqual(I.pick(nil), nil, "lastfm 图: 缺字段")
+        expectEqual(I.usable("https://x/a.png"), "https://x/a.png", "lastfm 图: 现成 URL 原样")
+        expectEqual(I.usable(star), nil, "lastfm 图: 现成 URL 是占位星")
+        expectEqual(I.usable(""), nil, "lastfm 图: 空串")
+        expectEqual(I.usable(nil), nil, "lastfm 图: nil")
+    }
+
+    // ---- LastfmRecentRows:最近记录逐行解析 + 重复序号 ----
+    //
+    // dup 是行 id 的一部分:只在「同一时刻 + 同一首歌」之间编号。换成整表行号的话,每来一条新
+    // scrobble 后面所有行的 id 全变,列表会被当成整张替换、滚动位置被顶回去。
+    do {
+        typealias R = LastfmRecentRows
+        func track(_ title: String, _ artist: String, uts: String?, album: String? = nil,
+                   image: String? = nil) -> [String: Any] {
+            var t: [String: Any] = ["name": title, "artist": ["#text": artist]]
+            if let uts { t["date"] = ["uts": uts] }
+            if let album { t["album"] = ["#text": album] }
+            if let image { t["image"] = [["size": "large", "#text": image]] }
+            return t
+        }
+        let star = "https://x/\(LastfmImage.placeholderHash).png"
+        let json: [String: Any] = ["recenttracks": ["track": [
+            track("Now", "A", uts: nil),
+            track("Song", "A", uts: "1700000100", album: "Al", image: "https://x/a.png"),
+            track("Song", "A", uts: "1700000100"),
+            track("Song", "A", uts: "1700000000", image: star),
+            track("", "A", uts: "1699999999"),
+        ]]]
+        let rows = R.parse(json)
+        expectEqual(rows.count, 4, "最近记录: 没有曲名的行跳过")
+        expectEqual(rows.first?.uts, nil, "最近记录: 正在播放那行没有时间")
+        expectEqual(rows.map(\.dup), [0, 0, 1, 0], "最近记录: 同一时刻同一首歌才递增序号")
+        expectEqual(rows[1], R.Row(dup: 0, title: "Song", artist: "A", album: "Al", image: "https://x/a.png",
+                                   uts: 1_700_000_100), "最近记录: 字段齐全")
+        expectEqual(rows[3].image, nil, "最近记录: 占位星当没有图")
+        // 新 scrobble 插在最前面,已有行的 dup 不变(id 稳定)
+        var grown = json
+        grown["recenttracks"] = ["track": [track("Song", "A", uts: "1700000200")]
+            + ((json["recenttracks"] as? [String: Any])?["track"] as? [[String: Any]] ?? [])]
+        expectEqual(R.parse(grown).dropFirst().map(\.dup), rows.map(\.dup), "最近记录: 头部新增一条,旧行序号不变")
+        expectEqual(R.parse(["recenttracks": ["track": ["name": "Solo"]]]).isEmpty, true,
+                    "最近记录: track 不是数组时返回空")
+        expectEqual(R.parse([:]).isEmpty, true, "最近记录: 缺字段")
+    }
+
+    // ---- LastfmRequestGate:App 侧 Last.fm 限速队列的放行顺序与冷却 ----
+    do {
+        typealias G = LastfmRequestGate
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        var g = G()
+        g.enqueue(1, .background, now: t0)
+        g.enqueue(2, .background, now: t0)
+        g.enqueue(3, .interactive, now: t0)
+        g.enqueue(4, .interactive, now: t0)
+        var order: [Int] = []
+        while let id = g.popNext() { order.append(id) }
+        expectEqual(order, [3, 4, 1, 2], "限速队列: 前台先走,同一优先级按排队顺序")
+        expectEqual(g.isEmpty, true, "限速队列: 放完即空")
+        expectEqual(g.popNext(), nil, "限速队列: 空队列取不到")
+
+        var c = G()
+        expectEqual(c.waitBeforeRelease(now: t0), 0, "限速队列: 没有冷却不用等")
+        c.extendCooldown(until: t0.addingTimeInterval(60))
+        c.extendCooldown(until: t0.addingTimeInterval(10))
+        expectEqual(c.waitBeforeRelease(now: t0), 60, "限速队列: 冷却只往后推,较早的不覆盖较晚的")
+        c.adoptSharedCooldown(t0.addingTimeInterval(90))
+        expectEqual(c.waitBeforeRelease(now: t0), 90, "限速队列: 共享窗口更晚就并入")
+        c.adoptSharedCooldown(nil)
+        expectEqual(c.waitBeforeRelease(now: t0), 90, "限速队列: 共享窗口没有期限时不动")
+        expectEqual(c.waitBeforeRelease(now: t0.addingTimeInterval(100)), 0, "限速队列: 过了冷却期不用等")
+
+        var idle = G()
+        expectEqual(idle.interactiveIdle(for: 30, now: t0), true, "限速队列: 从没有前台请求算安静")
+        idle.enqueue(1, .background, now: t0)
+        expectEqual(idle.interactiveIdle(for: 30, now: t0), true, "限速队列: 后台排队不打断安静")
+        idle.enqueue(2, .interactive, now: t0)
+        expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(29)), false, "限速队列: 前台 30 秒内排过队")
+        expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(30)), true, "限速队列: 满 30 秒才算安静")
+    }
+
     // ---- PlayCountVariants:「第 N 次听」的写法孪生族(括号风格分裂实测) ----
     //
     // 丁世光《神经志》实测:`一口（The Day You Left Me）`全角 2 次/`一口(The Day You Left
@@ -1336,5 +1447,28 @@ func runLastfmTests() {
         expectEqual(LA.canonicalArtistKey("David Tao & 蔡健雅", table: two), PlayCountFold.canonicalArtistKey("David Tao & 蔡健雅"),
                     "歌手别名: 传表版与全局版的 canonicalArtistKey 一致")
         PlayCountFold.setLocalArtistAliases([:])
+    }
+
+    // ---- 热力图截断判据(LastfmHeatmapTruncation)----
+    //
+    // 判截断就会清空按天计数、重跑一百多页的首次全量:误判的代价是白扫一遍,漏判是热力图一直只剩最近几天。
+    do {
+        typealias H = LastfmHeatmapTruncation
+        expectEqual(H.looksTruncated(dailyTotal: 3_124, reportedTotal: 24_327, rescanAttempted: false), true,
+                    "热力图截断: 实测那次(3,124 vs 24,327)判截断")
+        expectEqual(H.looksTruncated(dailyTotal: 24_300, reportedTotal: 24_327, rescanAttempted: false), false,
+                    "热力图截断: 只差几十条是正常的")
+        expectEqual(H.looksTruncated(dailyTotal: 70, reportedTotal: 100, rescanAttempted: false), false,
+                    "热力图截断: 正好七成不算截断")
+        expectEqual(H.looksTruncated(dailyTotal: 69, reportedTotal: 100, rescanAttempted: false), true,
+                    "热力图截断: 不到七成算截断")
+        expectEqual(H.looksTruncated(dailyTotal: 0, reportedTotal: 100, rescanAttempted: false), true,
+                    "热力图截断: 一条都没有算截断")
+        expectEqual(H.looksTruncated(dailyTotal: 0, reportedTotal: nil, rescanAttempted: false), false,
+                    "热力图截断: 总数还没取到不判")
+        expectEqual(H.looksTruncated(dailyTotal: 0, reportedTotal: 0, rescanAttempted: false), false,
+                    "热力图截断: 总数为 0 不判")
+        expectEqual(H.looksTruncated(dailyTotal: 3_124, reportedTotal: 24_327, rescanAttempted: true), false,
+                    "热力图截断: 这次启动已经重扫过一轮就不再判(免得每 15 分钟重扫一遍)")
     }
 }

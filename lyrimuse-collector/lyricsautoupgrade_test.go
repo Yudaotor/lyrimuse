@@ -21,10 +21,10 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 		t.Error("关掉之后:不该再因为打分规则升级换掉已有歌词")
 	}
 
-	// 有源当初缺席、且已过节流窗口 → 开着时该升级重搜(构造方式照 lyricsretry_test.go 那组)
-	savedFeatures := features
-	defer func() { features = savedFeatures }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
+	// 有源当初缺席、且已过节流窗口 到 开着时该升级重搜(构造方式照 lyricsretry_test.go 那组)
+	savedFeatures := features()
+	defer func() { setFeatures(savedFeatures) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 	missed := enrichEntry{Lyrics: "[00:01.00]x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}
 	if !needsLyricsRetry(missed, false, false, true) {

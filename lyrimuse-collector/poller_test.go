@@ -201,6 +201,68 @@ func TestUpdatePosition_NaturalAdvanceSeedsFromContinuity(t *testing.T) {
 	}
 }
 
+// 读数来自 Spotify 自己的钟(AppleScript `player position`)时,自然切歌 / 回绕都不再按连续性估:
+// 那一份在 getSpotifyState 里已经扣掉了 App 给的领先量,这里再估就是扣两次。暂停那一拍偏置照样作废。
+func TestUpdatePosition_PlayerClockSkipsContinuityEstimate(t *testing.T) {
+	p := &poller{}
+	p.cur = snapshot{Title: "Old", Artist: "A", Album: "Alb", Duration: 194, Playing: true, Elapsed: 190, Rate: 1,
+		Bundle: spotifyBundleID, PositionFromPlayerClock: true}
+	p.updatePosition(nowAt(0))
+
+	p.cur = snapshot{Title: "New", Artist: "A", Album: "Alb", Duration: 175, Playing: true, Elapsed: 0.75, Rate: 1,
+		Bundle: spotifyBundleID, PositionFromPlayerClock: true}
+	p.updatePosition(baseTestTime.Add(3750 * time.Millisecond))
+	if p.posBias != 0 {
+		t.Fatalf("player clock must not get a continuity-estimated bias (already corrected upstream), got %v", p.posBias)
+	}
+	if diff := p.trackPos - 0.75; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("seed should be the (already corrected) reading 0.75, got %v", p.trackPos)
+	}
+
+	// 同一个钟、media-control 那条路上的偏置若在位,暂停那一拍照样作废(冻结值即真值)。
+	p.posBias = 0.5
+	p.cur.Playing, p.cur.Rate, p.cur.Elapsed = false, 0, 5.75
+	p.updatePosition(baseTestTime.Add(9750 * time.Millisecond))
+	if p.posBias != 0 {
+		t.Fatalf("pause on the player clock must drop the bias, got %v", p.posBias)
+	}
+	if diff := p.trackPos - 5.75; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("paused position should be the frozen 5.75, got %v", p.trackPos)
+	}
+}
+
+// 夹在 AppleScript 读数中间的一拍 media-control:两个钟差 2.5s,这一拍不能走 seek 分支重锚、
+// 也不能清掉对着 Spotify 自己的钟量的偏置;连着第二拍还是它,才认定换钟。
+func TestUpdatePosition_ForeignClockBeatIsHeldOnce(t *testing.T) {
+	p := &poller{}
+	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 50, Rate: 1,
+		Bundle: spotifyBundleID, PositionFromPlayerClock: true}
+	p.updatePosition(nowAt(0))
+	p.posBias = 1.0
+	p.cur.Elapsed = 55
+	p.updatePosition(nowAt(5))
+
+	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 57.5, Rate: 1,
+		Bundle: spotifyBundleID, AnchorElapsed: 3}
+	if reanchor, _ := p.updatePosition(nowAt(10)); reanchor {
+		t.Fatalf("a single media-control beat between AppleScript beats must not reanchor")
+	}
+	if diff := p.trackPos - 60; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("held beat should keep extrapolating to 60, got %v", p.trackPos)
+	}
+	if p.posBias != 1.0 {
+		t.Fatalf("held beat must not drop the player-clock bias, got %v", p.posBias)
+	}
+
+	p.cur.Elapsed = 62.5 // 第二拍还是 media-control:认定换钟,跟它走
+	if reanchor, _ := p.updatePosition(nowAt(15)); !reanchor {
+		t.Fatalf("a second media-control beat means the clock really switched and must reanchor")
+	}
+	if diff := p.trackPos - 62.5; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("after the switch the position should follow media-control 62.5, got %v", p.trackPos)
+	}
+}
+
 // 手动跳歌(旧曲远没播完)必须保持原行为:原样采信读数、不设偏置。
 func TestUpdatePosition_ManualSkipKeepsRawSeed(t *testing.T) {
 	p := &poller{}

@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -57,6 +59,46 @@ func mediaControlAnchorAge(ts string, now time.Time) (float64, bool) {
 	return now.Sub(t).Seconds(), true
 }
 
+// rateOnlyPlayingOverrunSecs:按锚点外推超过曲长多少还当它在播。循环每一遍都会重发锚点,
+// 超出曲长还没新锚点就是停了。与 Swift 侧 MediaControlClient.rateOnlyPlayingOverrunSecs 一致。
+const rateOnlyPlayingOverrunSecs = 2.0
+
+// effectivePlaying 判这一份读数算不算在播。与 Swift 侧 MediaControlClient.effectivePlaying 同一套规则。
+//
+// 酷狗单曲循环回到开头时发一份新锚点 elapsed=0,playing 却是 false、playbackRate 仍是 1,之后整遍
+// 都不再翻回 true;真暂停时 rate 归 0。只对 playerPlayingFromRate 的播放器按 rate 判,
+// 数据见 02 章「酷狗单曲循环报暂停」。
+func effectivePlaying(raw mediaControlRawState, now time.Time) bool {
+	if raw.Playing || !playerPlayingFromRate[raw.BundleID] || raw.PlaybackRate <= 0 || raw.Duration <= 0 {
+		return raw.Playing
+	}
+	age, ok := mediaControlAnchorAge(raw.Timestamp, now)
+	if !ok {
+		return false
+	}
+	position := raw.ElapsedTime + math.Max(0, age)*raw.PlaybackRate
+	return position <= raw.Duration+rateOnlyPlayingOverrunSecs
+}
+
+// mediaControlAnchorInstant 把 media-control 的锚点时间戳换成锚点时刻。
+//
+// 带 --micros 时时间戳是精确值(applyMicros 写成固定 6 位小数),原样用。旧的整秒格式
+// 恒无小数秒 = floor(真实时刻),取 ts+0.5(中点,误差 ±0.5s)。两种格式靠有没有小数部分
+// 区分;精确值再补半秒会凭空偏快,所以这道判断不能省。
+func mediaControlAnchorInstant(ts string) (time.Time, bool) {
+	if ts == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return time.Time{}, false
+	}
+	if !strings.Contains(ts, ".") {
+		t = t.Add(500 * time.Millisecond)
+	}
+	return t, true
+}
+
 // 「同一首曲目播放期间最后一次算出来的位置」。只服务上面那条暂停规则。按曲目记 ——
 // 换歌自动作废,不让上一首的位置漏到下一首头上。
 var (
@@ -102,11 +144,11 @@ func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, n
 	if ts == "" {
 		return elapsedTimeNow
 	}
-	t, err := time.Parse(time.RFC3339, ts)
-	if err != nil {
+	anchorAt, ok := mediaControlAnchorInstant(ts)
+	if !ok {
 		return elapsedTimeNow
 	}
-	aged := now.Sub(t).Seconds() - 0.5
+	aged := now.Sub(anchorAt).Seconds()
 	if aged <= 0 {
 		return elapsedTime
 	}
@@ -127,7 +169,7 @@ type playingAnchor struct {
 	track   string
 	elapsed float64
 	ts      string
-	at      time.Time // 订正后的锚点时刻(采集器只有整秒,取 ts+0.5)
+	at      time.Time // 订正后的锚点时刻,见 mediaControlAnchorInstant
 }
 
 var (
@@ -182,8 +224,8 @@ func resolvePlayingAnchorTS(track string, elapsed float64, ts string, duration f
 		return lastPlayingAnchor.ts, true
 	}
 	at := now
-	if t, err := time.Parse(time.RFC3339, ts); err == nil {
-		at = t.Add(500 * time.Millisecond)
+	if t, ok := mediaControlAnchorInstant(ts); ok {
+		at = t
 	}
 	lastPlayingAnchor = &playingAnchor{track: track, elapsed: elapsed, ts: ts, at: at}
 	lastIgnoredRepublishTS = ""

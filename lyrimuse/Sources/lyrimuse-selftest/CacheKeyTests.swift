@@ -7,6 +7,76 @@ import Foundation
 
 @MainActor
 func runCacheKeyTests() {
+    // ---- 正文小文件(collector enrichindex.go 的 enrichBody)解码:两边字段名逐字一致 ----
+    do {
+        let json = #"{"crc":3735928559,"lyrics":"[00:01.00]hi","lyrics_tr":"[00:01.00]你好","lyrics_roma":"[00:01.00]ni hao","lyrics_yrc":"[0,100](0,100,0)hi","plain_lyrics":"hi"}"#
+        let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: Data(json.utf8))
+        expectEqual(body?.crc, 3735928559, "正文小文件: crc 按 UInt32 解(collector 写的是 uint32)")
+        expectEqual(body?.lyricsYRC, "[0,100](0,100,0)hi", "正文小文件: lyrics_yrc")
+        expectEqual(body?.lyricsTr, "[00:01.00]你好", "正文小文件: lyrics_tr")
+        expectEqual(body?.lyricsRoma, "[00:01.00]ni hao", "正文小文件: lyrics_roma")
+        expectEqual(body?.plainLyrics, "hi", "正文小文件: plain_lyrics")
+        let sparse = try? JSONDecoder().decode(EnrichCacheBody.self, from: Data(#"{"crc":7,"lyrics":"x"}"#.utf8))
+        expectEqual(sparse?.lyricsYRC == nil && sparse?.lyrics == "x", true, "正文小文件: 空字段省略(omitempty)也能解")
+    }
+
+    // ---- 「歌词管理」精简条目(EnrichCacheSlim):校验值跟 collector 逐位一致、补回 / 写回不丢正文 ----
+    do {
+        // 这两个值是 collector enrichindex_test.go TestEnrichBodyCRCMatchesApp 钉住的同一组输入。
+        let full: [String: Any] = ["lyrics": "[00:01.00]你好", "lyrics_tr": "[00:01.00]hello",
+                                   "lyrics_roma": "[00:01.00]ni hao", "lyrics_yrc": "[1000,500](1000,500,0)你好",
+                                   "plain_lyrics": "你好", "cover_url": "https://x/c.jpg", "ts": 5]
+        expectEqual(EnrichCacheSlim.bodyCRC(full), 857489496, "精简条目: 五段正文的校验值跟 collector 一致")
+        expectEqual(EnrichCacheSlim.bodyCRC(["lyrics": "[00:01.00]x"]), 2260255535, "精简条目: 只有主歌词的校验值跟 collector 一致")
+        expectEqual(EnrichCacheSlim.bodyCRC(["cover_url": "x"]), 0, "精简条目: 没有正文校验值为 0")
+
+        let slim = EnrichCacheSlim.slim(full)
+        expectEqual(EnrichCacheSlim.isSlim(slim), true, "精简条目: slim 之后认得出来")
+        expectEqual(EnrichCacheSlim.strippedFields.allSatisfy { slim[$0] == nil }, true, "精简条目: 四块正文去掉")
+        expectEqual(slim["lyrics"] as? String, "[00:01.00]你好", "精简条目: 主歌词留着")
+        expectEqual(slim["cover_url"] as? String, "https://x/c.jpg", "精简条目: 元数据留着")
+        expectEqual(EnrichCacheSlim.presentFields(slim), EnrichCacheSlim.presentFields(full).union(.known),
+                    "精简条目: 位图记下有哪几块正文")
+        expectEqual(EnrichCacheSlim.presentFields(full), [.yrc, .tr, .roma, .plain], "精简条目: 完整条目按字段判")
+        let bare: [String: Any] = ["cover_url": "x"]
+        expectEqual(EnrichCacheSlim.isSlim(EnrichCacheSlim.slim(bare)), false, "精简条目: 没有正文的不精简")
+
+        let json = #"{"crc":857489496,"lyrics":"[00:01.00]你好","lyrics_tr":"[00:01.00]hello","lyrics_roma":"[00:01.00]ni hao","lyrics_yrc":"[1000,500](1000,500,0)你好","plain_lyrics":"你好"}"#
+        let body = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(json.utf8))
+        let back = EnrichCacheSlim.hydrate(slim, body: body)
+        expectEqual(back.map { NSDictionary(dictionary: $0) }, NSDictionary(dictionary: full),
+                    "精简条目: 用正文小文件补回之后跟原条目逐字段相同(标记去掉)")
+        let stale = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(#"{"crc":1,"lyrics_tr":"旧"}"#.utf8))
+        expectEqual(EnrichCacheSlim.hydrate(slim, body: stale) == nil, true, "精简条目: 校验值对不上不补")
+
+        // JSONSerialization 吞掉开头一个 U+FEFF:从主缓存解出来的条目按去掉 BOM 的内容算校验值,正文小文件里是原样。
+        do {
+            let bomJSON = Data("{\"lyrics_yrc\":\"\u{FEFF}[ti:x]\",\"lyrics\":\"[00:01.00]x\"}".utf8)
+            let parsed = try! JSONSerialization.jsonObject(with: bomJSON) as! [String: Any]
+            expectEqual((parsed["lyrics_yrc"] as? String)?.unicodeScalars.first == "\u{FEFF}", false,
+                        "精简条目: JSONSerialization 确实吞掉开头的 U+FEFF(这条挂了说明系统行为变了,口径可以收窄)")
+            let bomBody = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(
+                "{\"crc\":1,\"lyrics\":\"[00:01.00]x\",\"lyrics_yrc\":\"\u{FEFF}[ti:x]\"}".utf8))
+            let slimParsed = EnrichCacheSlim.slim(parsed)
+            let back = EnrichCacheSlim.hydrate(slimParsed, body: bomBody)
+            expectEqual((back?["lyrics_yrc"] as? String)?.unicodeScalars.first == "\u{FEFF}", true,
+                        "精简条目: 去掉 BOM 口径的校验值也认,补回的是正文小文件里的原样内容")
+        }
+
+        // 被改过的精简条目写回前从盘上那条取正文:改动的元数据保留、正文一个不少。
+        var edited = slim
+        edited["instrumental"] = true
+        let restored = EnrichCacheSlim.restoreBodies(edited, from: full)
+        var expected = full
+        expected["instrumental"] = true
+        expectEqual(NSDictionary(dictionary: restored), NSDictionary(dictionary: expected),
+                    "精简条目: restoreBodies 保留改动、补回正文、去掉标记")
+
+        let oldIndex: [String: [String: Any]] = ["a": ["lyrics": "x", "body_crc": 9]]
+        expectEqual(EnrichCacheSlim.indexHasFields(oldIndex), false, "精简条目: 老版本索引(没有位图)不当精简快照")
+        expectEqual(EnrichCacheSlim.indexHasFields(["a": slim, "b": bare]), true, "精简条目: 新索引可以直接用")
+    }
+
     // ---- EnrichCacheStore.buildSummaries 的"先查前缀再算指纹"这层优化----
     //
     // trackKey 里那段内容指纹是对整首歌词+YRC 正文取 SHA256,实测对全库 1760 条无条件都算
@@ -96,17 +166,6 @@ func runCacheKeyTests() {
         expectEqual(EnrichCacheKeys.sanitizeFilename("Artist|Song|Album"), "Artist - Song - Album", "EnrichCacheKeys: 「|」换成「 - 」")
         expectEqual(EnrichCacheKeys.sanitizeFilename("A/B|C:D|E*F?"), "A_B - C_D - E_F_", "EnrichCacheKeys: 不安全字符转下划线")
 
-        // 删除必须把两种形态各 4 个后缀全试一遍——漏掉带后缀那 4 个就是上面说的复活 bug。
-        let names = EnrichCacheKeys.exportedFileNames(forKey: "Artist|Song|Album")
-        expectEqual(names.count, 8, "EnrichCacheKeys: 待删文件名 = 普通名4个 + 消歧名4个")
-        expectEqual(names[0], "Artist - Song - Album.lrc", "EnrichCacheKeys: 普通名第一个是 .lrc")
-        expectEqual(names[3], "Artist - Song - Album.yrc", "EnrichCacheKeys: 普通名第四个是 .yrc")
-        expectEqual(
-            names[4], "Artist - Song - Album~\(String(format: "%06x", EnrichCacheKeys.crc32IEEE("Artist|Song|Album") & 0xFF_FFFF)).lrc",
-            "EnrichCacheKeys: 第五个开始是带消歧后缀的同族文件"
-        )
-        // 普通名恰好是消歧名的前缀,所以任何"按前缀筛"的写法都会出错——这条锁死这个陷阱。
-        expectEqual(names[4].hasPrefix("Artist - Song - Album"), true, "EnrichCacheKeys: 消歧名以普通名开头(禁止用 hasPrefix 区分两种形态)")
     }
 
     do {
@@ -135,19 +194,6 @@ func runCacheKeyTests() {
         expectEqual(cutEmoji.utf8.count <= EnrichCacheKeys.filenameMaxBytes, true, "EnrichCacheKeys: emoji 截断后不超上限")
         expectEqual(cutEmoji.contains("\u{FFFD}"), false, "EnrichCacheKeys: emoji 截断不产生替换字符")
 
-        // 超长 key 的待删清单要多出"截断前那个更长的名字"那 4 个 —— 那批存量文件漏删
-        // 同样会让条目复活。没超限的 key 则一个都不该多。
-        let longKey = String(repeating: "A", count: 140) + "|" + String(repeating: "B", count: 60) + "|专辑"
-        let longNames = EnrichCacheKeys.exportedFileNames(forKey: longKey)
-        expectEqual(longNames.count, 12, "EnrichCacheKeys: 超长 key 的待删清单 = 截断名4 + 消歧名4 + 截断前的名字4")
-        expectEqual(
-            longNames.contains(EnrichCacheKeys.sanitizeFilenameUntruncated(longKey) + ".lrc"), true,
-            "EnrichCacheKeys: 待删清单含截断前的文件名"
-        )
-        expectEqual(
-            EnrichCacheKeys.exportedFileNames(forKey: "Artist|Song|Album").count, 8,
-            "EnrichCacheKeys: 未超限的 key 不多出截断前的名字"
-        )
     }
 
     do {
@@ -231,6 +277,8 @@ func runCacheKeyTests() {
             ("中英之间空格", "陶喆|Sula 与 Lampa 的寓言|太平盛世", "陶喆|Sula 与 Lampa的寓言|太平盛世"),
             ("歌名繁简", "方大同|千纸鹤|回到未來", "方大同|千紙鶴|回到未來"),
             ("歌手名繁简", "孙燕姿|我懷念的|逆光", "孫燕姿|我懷念的|逆光"),
+            // ICU 对「嶽」按上下文取舍、单独出现时不转;collector 的 OpenCC 转。靠异体字表拉齐。
+            ("ICU 不转的异体字", "张震岳|路口|OK", "張震嶽|路口|OK"),
             ("大小写", "PRINCE|Kiss|Parade", "Prince|Kiss|Parade"),
         ]
         for (name, a, b) in loosePairs {
@@ -244,6 +292,91 @@ func runCacheKeyTests() {
         ]
         for (name, a, b) in looseDistinct {
             expectNotEqual(K.looseKey(a), K.looseKey(b), "looseKey 不同组: \(name)")
+        }
+
+        // ---- 跨语言对拍:跟 collector keyparity_test.go 逐条同样的输入和期望值 ----
+        //
+        // 宽松 key、cleanTag、歌名剥括号、手动选词指纹都要跟 Go 逐字节一致:collector 按宽松 key 复用
+        // 缓存时这边兜不到就是整首没词,指纹对不上就是手动锁悄悄失效。改向量必须两边一起改。
+        // 一律按标量数组比:String == 按规范等价比较,兼容表意字符与统一汉字会被判成相等。
+        let parityLoose: [(String, String)] = [
+            ("张震岳|路口|OK", "张震岳|路口|ok"),
+            ("張震嶽|路口|OK", "张震岳|路口|ok"),
+            ("方大同|等著你回來|Soulboy", "方大同|等著你回来|soulboy"),
+            ("谢安琪|囍帖街|", "谢安琪|囍帖街|"),
+            ("李荣浩|裙姊|嗯", "李荣浩|裙姊|嗯"),
+            ("不瞭解|一目瞭然|乾杯", "不了解|一目了然|干杯"),
+            ("İSTANBUL|ΣΟΦΙΑΣ|X", "istanbul|σοφιασ|x"),
+            ("A/B、C|T|X", "a&b&c|t|x"),
+            ("A\u{ff0c}B|T|X", "a&b|t|x"),       // 全角逗号也是分隔符
+            ("妳|祂|牠", "你|他|它"),              // OpenCC 表里没有,走异体字表兜底
+            ("藉藉无名|X|Y", "藉藉无名|x|y"),      // 词组取最长:先命中「藉藉」会变成「借借」
+            ("上\u{f99b}|X|Y", "上\u{f99b}|x|y"), // 兼容表意字符与「鍊」规范等价但按字节不等,不命中「上鍊」
+        ]
+        for (input, want) in parityLoose {
+            expectEqual(Array(K.looseKey(input).unicodeScalars), Array(want.unicodeScalars), "跨语言对拍 looseKey: \(input)")
+        }
+        let parityClean: [(String, String)] = [
+            ("A\u{200d}B", "AB"),
+            ("👩\u{200d}🎤 Song", "👩🎤 Song"),
+            ("A\u{2009}B", "A B"),
+            ("\u{3000}X\u{2028}", "X"),
+            (" A\u{00a0}\u{00a0}B ", "A B"),
+        ]
+        for (input, want) in parityClean {
+            expectEqual(Array(K.cleanTag(input).unicodeScalars), Array(want.unicodeScalars), "跨语言对拍 cleanTag: \(input.unicodeScalars.map { String($0.value, radix: 16) })")
+        }
+        let parityTitle: [(String, String)] = [
+            ("A (B (C)", "A"),
+            ("A (B) (C)", "A"),
+            ("歌 (Live)", "歌 (Live)"),
+            ("歌（译名）[Explicit]", "歌"),
+            ("(Interlude)", "(Interlude)"),
+            ("歌 (Live\u{0301})", "歌 (Live\u{0301})"), // 版本词按字节找,后面跟组合符也算
+        ]
+        for (input, want) in parityTitle {
+            expectEqual(Array(K.normalizedTitle(input).unicodeScalars), Array(want.unicodeScalars), "跨语言对拍 normalizedTitle: \(input)")
+        }
+        expectEqual(Array(K.sanitizeFilename("A|B\u{200b}").unicodeScalars), Array("A - B\u{200b}".unicodeScalars),
+                    "跨语言对拍 sanitizeFilename: 不裁 U+200B")
+        let parityCanon: [(String, String, String)] = [
+            ("[00:01.00]词\u{200b}\n[00:02.00]\u{200b}二", "词\u{200b}\n\u{200b}二", "75044a9df204"),
+            ("[00:01.00]]\u{0301}x", "]\u{0301}x", "ff3cee9eb5f6"),
+        ]
+        for (input, want, sha) in parityCanon {
+            expectEqual(Array(ManualPickLock.canonicalLyrics(input).unicodeScalars), Array(want.unicodeScalars),
+                        "跨语言对拍 canonicalLyrics(按标量比)")
+            expectEqual(ManualPickLock.fingerprint(lyrics: input), sha, "跨语言对拍 fingerprint")
+        }
+
+        // OpenCC 表与 collector 内嵌的那两份 .txt 逐条一致(漏跑 scripts/gen-opencc-t2s.py 会在这里红)。
+        // 解析规则同 collector t2s.go 的 loadT2SDict。
+        do {
+            let dictDir = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("lyrimuse-collector/dictionary")
+            func load(_ name: String) -> [[Unicode.Scalar]: [Unicode.Scalar]]? {
+                guard let text = try? String(contentsOf: dictDir.appendingPathComponent(name), encoding: .utf8) else { return nil }
+                var m: [[Unicode.Scalar]: [Unicode.Scalar]] = [:]
+                for raw in text.unicodeScalars.split(separator: "\n") {
+                    let line = GoStringSemantics.trimSpace(raw)
+                    guard let tab = line.unicodeScalars.firstIndex(of: "\t") else { continue }
+                    let key = Array(line.unicodeScalars[..<tab])
+                    let rest = line.unicodeScalars[line.unicodeScalars.index(after: tab)...]
+                    guard let first = rest.split(whereSeparator: { GoStringSemantics.isSpace($0) }).first else { continue }
+                    m[key] = Array(first)
+                }
+                return m
+            }
+            if let chars = load("TSCharacters.txt"), let phrases = load("TSPhrases.txt") {
+                var fileChars: [Unicode.Scalar: [Unicode.Scalar]] = [:]
+                for (k, v) in chars where k.count == 1 { fileChars[k[0]] = v }
+                expectEqual(fileChars == OpenCCT2S.characterEntries, true, "OpenCC 单字表与 collector 的 TSCharacters.txt 逐条一致")
+                expectEqual(phrases == OpenCCT2S.phraseEntries, true, "OpenCC 词组表与 collector 的 TSPhrases.txt 逐条一致")
+            } else {
+                expectEqual(false, true, "OpenCC 对账: 读不到 lyrimuse-collector/dictionary 下的 TS*.txt")
+            }
         }
         // looseKey 绝不能影响 normalizedKey —— 后者是真正落盘/显示用的那个。
         expectEqual(

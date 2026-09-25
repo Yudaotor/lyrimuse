@@ -20,6 +20,9 @@ public struct PositionBiasRecord: Codable, Equatable, Sendable {
     /// 与 `LocalPlaybackSource.posReportedBiasSecs` 同符号:reported = raw − bias;负=锚点落后真声。
     public var biasSecs: Double
     public var writtenAtMs: Int64
+    /// 写这份记录那一刻 App 算出的位置(秒)。App 重启后接回偏置时拿它核"从那以后一直连续在放"
+    /// (见 `LocalPlaybackSource.restorablePlayerClockBias`);collector 不读。旧文件没有这个键 = nil。
+    public var positionSecs: Double?
 
     enum CodingKeys: String, CodingKey {
         case artist, title
@@ -27,15 +30,18 @@ public struct PositionBiasRecord: Codable, Equatable, Sendable {
         case anchorElapsed = "anchor_elapsed"
         case biasSecs = "bias_secs"
         case writtenAtMs = "written_at_ms"
+        case positionSecs = "position_secs"
     }
 
-    public init(artist: String, title: String, bundleID: String, anchorElapsed: Double?, biasSecs: Double, writtenAtMs: Int64) {
+    public init(artist: String, title: String, bundleID: String, anchorElapsed: Double?, biasSecs: Double, writtenAtMs: Int64,
+                positionSecs: Double? = nil) {
         self.artist = artist
         self.title = title
         self.bundleID = bundleID
         self.anchorElapsed = anchorElapsed
         self.biasSecs = biasSecs
         self.writtenAtMs = writtenAtMs
+        self.positionSecs = positionSecs
     }
 
     /// 除写入时刻与那一刻的位置外全同 —— 决定"要不要再写一次"。
@@ -56,6 +62,13 @@ public enum PositionBiasFile {
         let enc = JSONEncoder()
         enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return try enc.encode(record)
+    }
+
+    /// 读最近一份记录;不存在 / 解析失败都当没有。App 自己只在重启后第一拍读一次
+    /// (接着用上一个进程量的偏置,见 `LocalPlaybackSource.restorablePlayerClockBias`)。
+    public static func read() -> PositionBiasRecord? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(PositionBiasRecord.self, from: data)
     }
 
     /// 原子写(临时文件 + rename),collector 那边永远读到的是整份。失败只记日志 —— 这条链路是

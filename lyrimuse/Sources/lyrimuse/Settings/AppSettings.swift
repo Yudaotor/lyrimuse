@@ -198,6 +198,7 @@ final class AppSettings: ObservableObject {
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
+        static let overlayLineOverflow = "np:overlayLineOverflow"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
@@ -258,7 +259,6 @@ final class AppSettings: ObservableObject {
         static let overlayShowHoverControls = "np:overlayShowHoverControls"
         // 悬浮歌词位置预设,取值见 OverlayPlacementMode。
         static let overlayPlacementMode = "np:overlayPlacementMode"
-        static let debugHUDEnabled = "np:debugHUD"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
@@ -272,6 +272,29 @@ final class AppSettings: ObservableObject {
         static let notchCardStyle = "np:notchCardStyle"
         static let notchShowLyrics = "np:notchShowLyrics"
         static let motionCoverEnabled = "np:motionCoverEnabled"
+        static let lyricsWindowBackgroundMode = "np:lyricsWindowBackgroundMode"
+        static let lyricsWindowBackgroundColorHex = "np:lyricsWindowBackgroundColorHex"
+        static let lyricsWindowBackgroundColorEndHex = "np:lyricsWindowBackgroundColorEndHex"
+        static let lyricsWindowGradientDirection = "np:lyricsWindowGradientDirection"
+        static let lyricsWindowFontFamily = "np:lyricsWindowFontFamily"
+        static let lyricsWindowMiniHeaderFields = "np:lyricsWindowMiniHeaderFields"
+        static let lyricsWindowMiniShowsTime = "np:lyricsWindowMiniShowsTime"
+        static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
+        static let lyricsWindowMiniLineOverflow = "np:lyricsWindowMiniLineOverflow"
+        static let lyricsWindowMiniLyricsLayout = "np:lyricsWindowMiniLyricsLayout"
+        static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
+        static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
+        static let lyricsWindowTextColorHex = "np:lyricsWindowTextColorHex"
+        static let lyricsWindowMiniTextColorMode = "np:lyricsWindowMiniTextColorMode"
+        static let lyricsWindowMiniTextColorHex = "np:lyricsWindowMiniTextColorHex"
+        static let lyricsWindowMiniBackgroundMode = "np:lyricsWindowMiniBackgroundMode"
+        static let lyricsWindowMiniBackgroundColorHex = "np:lyricsWindowMiniBackgroundColorHex"
+        static let lyricsWindowMiniBackgroundColorEndHex = "np:lyricsWindowMiniBackgroundColorEndHex"
+        static let lyricsWindowMiniGradientDirection = "np:lyricsWindowMiniGradientDirection"
+        static let lyricsWindowMiniFontFamily = "np:lyricsWindowMiniFontFamily"
+        static let lyricsWindowGlassIntensity = "np:lyricsWindowGlassIntensity"
+        static let lyricsWindowMiniGlassIntensity = "np:lyricsWindowMiniGlassIntensity"
+        static let lyricsWindowMiniFontSize = "np:lyricsWindowMiniFontSize"
         static let notchCollapsesWhenPaused = "np:notchCollapsesWhenPaused"
         static let notchShowsEqualizer = "np:notchShowsEqualizer"
         static let notchEqualizerEar = "np:notchEqualizerEar"
@@ -324,6 +347,8 @@ final class AppSettings: ObservableObject {
     // FontFamilyPicker。
     static let defaultFontFamilyName = ""
     static let defaultFontSize = 31.0
+    /// 悬浮歌词主字号的可调范围。设置页「文字」浮层和菜单栏面板快捷设置两根滑杆都读这一份。
+    static let overlayFontSizeRange: ClosedRange<Double> = 14...64
     /// 悬浮歌词主歌词行的字重档位。从 `.bold` 改成 `.semibold`(「较粗」)—— 用户把
     /// 自己在用的这一版悬浮歌词配置定为默认("帮我把我目前悬浮歌词的配置也设为默认的")。
     ///
@@ -560,8 +585,20 @@ final class AppSettings: ObservableObject {
     @Published var launchAtLoginEnabled: Bool {
         didSet {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
+            guard !syncingLaunchAtLoginFromSystem else { return }
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
         }
+    }
+    private var syncingLaunchAtLoginFromSystem = false
+
+    /// 按系统「登录项」的真实状态校正开机启动开关,不注册也不注销。用户在「系统设置 › 通用 › 登录项」里
+    /// 关掉或打开过 Lyrimuse 时,这里的开关要跟着说实话:只信自己记的值,勾亮着开机却不启动。
+    /// 系统给不出结论(`systemSaysEnabled == nil`)时不动。
+    func syncLaunchAtLoginFromSystem() {
+        guard let actual = LoginItemManager.shared.systemSaysEnabled, actual != launchAtLoginEnabled else { return }
+        syncingLaunchAtLoginFromSystem = true
+        launchAtLoginEnabled = actual
+        syncingLaunchAtLoginFromSystem = false
     }
     // 打开 Lyrimuse 时顺带唤起的播放器集合——只在 AppDelegate.applicationDidFinishLaunching
     // 里读一次(见那边的调用点),不是"实时生效"的开关,didSet 只负责持久化。默认空:
@@ -604,6 +641,11 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(overlayDuetAlignmentOverride.rawValue, forKey: Keys.overlayDuetAlignmentOverride)
         }
+    }
+    /// 悬浮歌词一行放不下时换行还是滚动。同样只有 `LyricsOverlayView` 读它,取舍见
+    /// `OverlayLineOverflow` 声明处注释。
+    @Published var overlayLineOverflow: OverlayLineOverflow {
+        didSet { defaults.set(overlayLineOverflow.rawValue, forKey: Keys.overlayLineOverflow) }
     }
     // 默认关闭:状态栏平时只是个不起眼的小图标,打开后会换成当前歌词行的文字,占用
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
@@ -841,14 +883,6 @@ final class AppSettings: ObservableObject {
     @Published var overlayPlacementMode: OverlayPlacementMode {
         didSet { defaults.set(overlayPlacementMode.rawValue, forKey: Keys.overlayPlacementMode) }
     }
-    // 调试 HUD:在悬浮歌词角落显示实时帧率(FrameRateProbe)。
-    //
-    // **刻意不进设置界面** —— 它是给开发/排障用的,不是功能。开:
-    //     defaults write me.yudaotor.lyrimuse np:debugHUD -bool true
-    // 然后重开悬浮歌词(或重启 App)。见 FrameRateProbe 的类型注释。
-    @Published var debugHUDEnabled: Bool {
-        didSet { defaults.set(debugHUDEnabled, forKey: Keys.debugHUDEnabled) }
-    }
     // "system"(跟随系统语言,默认)/"zh-hans"/"en"——手动覆盖 L10n 的语言解析。做成
     // @Published 而不是写完 UserDefaults 就完事,是为了让所有观察 AppSettings.shared 的界面
     // 在切换的一瞬间就重新渲染成新语言,不用重启 App。
@@ -971,6 +1005,169 @@ final class AppSettings: ObservableObject {
     @Published var motionCoverEnabled: Bool {
         didSet { defaults.set(motionCoverEnabled, forKey: Keys.motionCoverEnabled) }
     }
+
+    /// 歌词窗口的背景。默认 `.artwork` = 加这颗设置之前唯一的样子。
+    @Published var lyricsWindowBackgroundMode: LyricsWindowBackgroundMode {
+        didSet { defaults.set(lyricsWindowBackgroundMode.rawValue, forKey: Keys.lyricsWindowBackgroundMode) }
+    }
+    /// #RRGGBBAA。纯色档的颜色,也是渐变档的**起点**(上端)。
+    ///
+    /// 跟 `foregroundColorHex` 一样 didSet 缓存成 `Color`:消费点 `artworkBackground` 在 body 里,
+    /// 而这扇窗的 body 会被逐字填色的时钟带着高频求值,不该每次都重解析一遍字符串。
+    @Published var lyricsWindowBackgroundColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowBackgroundColorHex, forKey: Keys.lyricsWindowBackgroundColorHex)
+            lyricsWindowBackgroundColor = Color(hexWithAlpha: lyricsWindowBackgroundColorHex,
+                                                fallback: Self.defaultLyricsWindowBackgroundColorFallback)
+        }
+    }
+    /// #RRGGBBAA。渐变档的**终点**(下端)。纯色档不读它。
+    @Published var lyricsWindowBackgroundColorEndHex: String {
+        didSet {
+            defaults.set(lyricsWindowBackgroundColorEndHex, forKey: Keys.lyricsWindowBackgroundColorEndHex)
+            lyricsWindowBackgroundColorEnd = Color(hexWithAlpha: lyricsWindowBackgroundColorEndHex,
+                                                   fallback: Self.defaultLyricsWindowBackgroundColorEndFallback)
+        }
+    }
+    /// 歌词窗口的歌词字体族。**空串 = 跟随系统**,跟 `fontFamilyName`(悬浮歌词)/
+    /// `notchFontFamilyName`(灵动岛)/ `menuBarLyricsFontFamily`(菜单栏)同一条规则,别为这一面
+    /// 另起一套。只作用于**歌词文字**(正文 / 译文 / 罗马音),播控、时间、曲目信息那些界面元素
+    /// 照旧走系统字体 —— 跟悬浮歌词那边的取舍一致:字体是给"要读的内容"配的,不是给控件配的。
+    ///
+    /// 不缓存成 Font:这扇窗的字号是**跟着窗口尺寸算**的(见 LyricsWindowView.lyricFontSize),
+    /// 不像悬浮歌词那样有个固定的 fontSize 可以在 didSet 里预先派生好,只能在视图里现算。
+    @Published var lyricsWindowFontFamily: String {
+        didSet { defaults.set(lyricsWindowFontFamily, forKey: Keys.lyricsWindowFontFamily) }
+    }
+    // MARK: 迷你尺寸自己那一套外观
+    //
+    // 跟上面完整尺寸那组**同名同结构、各存各的**。两种尺寸是两种用法:完整尺寸多半是摊开来看的,
+    // 跟随封面好看;迷你常年钉在角落里当个小挂件,很多人要的是一块安静的纯色。共用一份配置就得
+    // 二选一,所以分开。
+    //
+    // 默认值跟完整那套逐字一致 —— 第一次切到迷你时观感不变,想改再改。
+    @Published var lyricsWindowMiniBackgroundMode: LyricsWindowBackgroundMode {
+        didSet {
+            defaults.set(lyricsWindowMiniBackgroundMode.rawValue, forKey: Keys.lyricsWindowMiniBackgroundMode)
+        }
+    }
+    @Published var lyricsWindowMiniBackgroundColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowMiniBackgroundColorHex, forKey: Keys.lyricsWindowMiniBackgroundColorHex)
+            lyricsWindowMiniBackgroundColor = Color(
+                hexWithAlpha: lyricsWindowMiniBackgroundColorHex,
+                fallback: Self.defaultLyricsWindowBackgroundColorFallback)
+        }
+    }
+    @Published var lyricsWindowMiniBackgroundColorEndHex: String {
+        didSet {
+            defaults.set(lyricsWindowMiniBackgroundColorEndHex, forKey: Keys.lyricsWindowMiniBackgroundColorEndHex)
+            lyricsWindowMiniBackgroundColorEnd = Color(
+                hexWithAlpha: lyricsWindowMiniBackgroundColorEndHex,
+                fallback: Self.defaultLyricsWindowBackgroundColorEndFallback)
+        }
+    }
+    @Published var lyricsWindowMiniGradientDirection: LyricsWindowGradientDirection {
+        didSet {
+            defaults.set(lyricsWindowMiniGradientDirection.rawValue, forKey: Keys.lyricsWindowMiniGradientDirection)
+        }
+    }
+    @Published var lyricsWindowMiniFontFamily: String {
+        didSet { defaults.set(lyricsWindowMiniFontFamily, forKey: Keys.lyricsWindowMiniFontFamily) }
+    }
+    private(set) var lyricsWindowMiniBackgroundColor: Color = .black
+    private(set) var lyricsWindowMiniBackgroundColorEnd: Color = .black
+
+    /// 迷你尺寸顶部那一行显示哪几样(歌名/歌手/专辑)。只管迷你,完整尺寸的曲目信息在左栏、另一套。
+    @Published var lyricsWindowMiniHeaderFields: LyricsWindowMiniHeaderFields {
+        didSet {
+            defaults.set(lyricsWindowMiniHeaderFields.rawValue, forKey: Keys.lyricsWindowMiniHeaderFields)
+        }
+    }
+    /// 迷你尺寸顶部那行下面要不要再摆一行「已播 / 总长」。
+    ///
+    /// **单独一颗设置,不并进 `lyricsWindowMiniHeaderFields`**:那个 OptionSet 管的是"这首歌的
+    /// 哪几样元数据",三样是同质的、拼在同一行里用「-」隔开;时间不是元数据、也不排在那一行里
+    /// (它自己一行、更小更淡)。并进去还会让老用户升级后默认拿不到 —— 那个键他们早就有值了,
+    /// 新加的位一律是 0;单开一颗键则是"没存过就按默认 true",所有人升级即可见。
+    @Published var lyricsWindowMiniShowsTime: Bool {
+        didSet { defaults.set(lyricsWindowMiniShowsTime, forKey: Keys.lyricsWindowMiniShowsTime) }
+    }
+    /// 迷你顶部信息那一组左边要不要摆一枚封面小图。
+    ///
+    /// 只有迷你有这一项 —— 完整尺寸的封面是左栏那张大的,跟进度条、播控排在一起,是另一套排版。
+    @Published var lyricsWindowMiniShowsCover: Bool {
+        didSet { defaults.set(lyricsWindowMiniShowsCover, forKey: Keys.lyricsWindowMiniShowsCover) }
+    }
+    /// 迷你窗一行放不下时换行还是滚动(同悬浮歌词那颗,取舍见 `OverlayLineOverflow`)。
+    /// 完整尺寸是一整页正文,恒换行,没有这一项。
+    @Published var lyricsWindowMiniLineOverflow: OverlayLineOverflow {
+        didSet { defaults.set(lyricsWindowMiniLineOverflow.rawValue, forKey: Keys.lyricsWindowMiniLineOverflow) }
+    }
+    /// 迷你窗中间的歌词排成两行(简洁)还是整页列表(多行),见 `LyricsWindowMiniLyricsLayout`。
+    @Published var lyricsWindowMiniLyricsLayout: LyricsWindowMiniLyricsLayout {
+        didSet { defaults.set(lyricsWindowMiniLyricsLayout.rawValue, forKey: Keys.lyricsWindowMiniLyricsLayout) }
+    }
+    /// 迷你窗鼠标移上去要不要浮出那条控制条(走带三键 / 音量 / 歌词时间轴)。
+    ///
+    /// 给一颗开关而不是"想不要就别把鼠标放上去":这扇小窗常年钉在角落,指针路过它是常事,
+    /// 每次路过都弹一排按钮对"只想看歌词"的人是纯打扰。关掉之后悬停只剩窗口控件那颗胶囊。
+    @Published var lyricsWindowMiniShowsControls: Bool {
+        didSet { defaults.set(lyricsWindowMiniShowsControls, forKey: Keys.lyricsWindowMiniShowsControls) }
+    }
+    /// 歌词文字色怎么定(完整 / 迷你各一套,同这一族其余外观设置)。判据与边界见
+    /// `LyricsWindowTextColorMode`;`.custom` 档才读下面那个 hex。
+    @Published var lyricsWindowTextColorMode: LyricsWindowTextColorMode {
+        didSet { defaults.set(lyricsWindowTextColorMode.rawValue, forKey: Keys.lyricsWindowTextColorMode) }
+    }
+    @Published var lyricsWindowTextColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowTextColorHex, forKey: Keys.lyricsWindowTextColorHex)
+            lyricsWindowTextColor = Color(hexWithAlpha: lyricsWindowTextColorHex,
+                                          fallback: Self.defaultLyricsWindowTextColorFallback)
+        }
+    }
+    @Published var lyricsWindowMiniTextColorMode: LyricsWindowTextColorMode {
+        didSet {
+            defaults.set(lyricsWindowMiniTextColorMode.rawValue, forKey: Keys.lyricsWindowMiniTextColorMode)
+        }
+    }
+    @Published var lyricsWindowMiniTextColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowMiniTextColorHex, forKey: Keys.lyricsWindowMiniTextColorHex)
+            lyricsWindowMiniTextColor = Color(hexWithAlpha: lyricsWindowMiniTextColorHex,
+                                              fallback: Self.defaultLyricsWindowTextColorFallback)
+        }
+    }
+    private(set) var lyricsWindowTextColor: Color = .white
+    private(set) var lyricsWindowMiniTextColor: Color = .white
+    /// 迷你尺寸的歌词字号**上限**。
+    ///
+    /// 不是"最终字号"。迷你的字号一直是跟着窗口尺寸算的(窗口拖小时字得跟着小,否则一句话
+    /// 要占三行),这颗设置给的是那个算式的上限 —— 窗口够大时按用户设定,窗口小了仍被宽高压下来
+    /// (见 LyricsWindowView.miniFontSize)。默认 34 就是加这颗设置之前 460pt 宽下算出来的值。
+    ///
+    /// 完整尺寸**不给**这颗:那边一屏排七行、字号由视口高度反推(lyricFontSize),再加一根滑杆
+    /// 就是两套规则打架 —— 拖窗口会把用户调好的数悄悄改掉。
+    @Published var lyricsWindowMiniFontSize: Double {
+        didSet { defaults.set(lyricsWindowMiniFontSize, forKey: Keys.lyricsWindowMiniFontSize) }
+    }
+    /// 毛玻璃浓淡。只有 `.glass` 档读它;复用悬浮歌词那套五档 Material,不另起一套档位。
+    @Published var lyricsWindowGlassIntensity: OverlayGlassIntensity {
+        didSet { defaults.set(lyricsWindowGlassIntensity.rawValue, forKey: Keys.lyricsWindowGlassIntensity) }
+    }
+    @Published var lyricsWindowMiniGlassIntensity: OverlayGlassIntensity {
+        didSet {
+            defaults.set(lyricsWindowMiniGlassIntensity.rawValue, forKey: Keys.lyricsWindowMiniGlassIntensity)
+        }
+    }
+    /// 渐变方向。只有 `.gradient` 档读它。
+    @Published var lyricsWindowGradientDirection: LyricsWindowGradientDirection {
+        didSet { defaults.set(lyricsWindowGradientDirection.rawValue, forKey: Keys.lyricsWindowGradientDirection) }
+    }
+    /// 上面两个 hex 的 Color 缓存(didSet 维护,别直接写)。
+    private(set) var lyricsWindowBackgroundColor: Color = .black
+    private(set) var lyricsWindowBackgroundColorEnd: Color = .black
     /// 暂停(或广告插播)时灵动岛要不要缩到最小 —— 只剩贴着刘海的一小块,两只耳朵退化成
     /// "左封面、右音浪"的 iPhone 灵动岛式极简形态(过这个默认形态,
     /// 把它开放成可关闭的配置项)。关掉之后暂停时卡片保持原来的稳态/
@@ -1234,6 +1431,25 @@ final class AppSettings: ObservableObject {
     @Published var overlayGlassIntensity: OverlayGlassIntensity {
         didSet { defaults.set(overlayGlassIntensity.rawValue, forKey: Keys.overlayGlassIntensity) }
     }
+    /// 迷你字号上限的默认值 / 可调区间。区间两头都有实测依据:14 以下在 460pt 宽里已经小到
+    /// 不如去看菜单栏那一行;48 以上一句中文就顶到两行、把下一行和译文挤出窗外。
+    /// 「自定义」档那颗调色盘没被改过时的起点。取白色 = 这扇窗一直以来的正文色,从它开始调
+    /// 比从一个随机颜色开始更接近用户心里的"现在这样,我微调一下"。
+    static let defaultLyricsWindowTextColorHex = "#FFFFFFFF"
+    static let defaultLyricsWindowTextColorFallback = Color.white
+    static let defaultLyricsWindowMiniFontSize: Double = 34
+    static let lyricsWindowMiniFontSizeRange: ClosedRange<Double> = 14...48
+
+    /// 自定义背景的默认配色:深蓝灰到近黑的竖向渐变。
+    ///
+    /// 默认档位是「跟随封面」,所以这两个值只在用户**主动切到**纯色/渐变那一刻才第一次被看到 ——
+    /// 给一个能直接用的深色,而不是纯黑或透明:切过去看到一片全黑会让人以为设置坏了,而透明
+    /// 又会撞上"白字配浅底"(这扇窗的文字默认是白的,见 LyricsWindowBackgroundLuma)。
+    static let defaultLyricsWindowBackgroundColorHex = "#2B2D42FF"
+    static let defaultLyricsWindowBackgroundColorEndHex = "#12131AFF"
+    static let defaultLyricsWindowBackgroundColorFallback = Color(red: 0.169, green: 0.176, blue: 0.259)
+    static let defaultLyricsWindowBackgroundColorEndFallback = Color(red: 0.071, green: 0.075, blue: 0.102)
+
     /// 「背景可见」= 背景色 alpha > 0.02 **或**毛玻璃开着。三处联动都读它:窗口阴影
     /// (LyricsOverlayWindowController)、拖拽捕获层(LyricsOverlayView.overlayBackground)、
     /// 编辑台的虚线边界(OverlayEditorStage)。玻璃是一块实打实的卡片,阴影和边界的语义跟纯色一致。
@@ -1328,12 +1544,21 @@ final class AppSettings: ObservableObject {
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
+    /// 上面四份字体的 AppKit 孪生。悬浮窗要知道"这一行不换行得多宽"才能决定对唱两侧留白让多少
+    /// (见 `OverlayCardGeometry.elasticInsetScale`),而测宽只能用 `NSFont`。必须跟对应的
+    /// `Font` 在**同一次** `recomputeFonts()` 里由同一组入参派生 —— 各算各的迟早会漂,而漂了不会
+    /// 报错,只会让留白让多让少差一点(同 `notchMainNSFont` 那条)。
+    @Published private(set) var overlayNSFonts = OverlayNSFonts()
     // 灵动岛歌词的三个派生字体,同上只在输入变化时重算、渲染路径只读:主行 / 主行同字号细一档
     // (广告态倒计时那截,跟「广告中」并排、刻意比它轻)/ 副行与展开区「下一句」预览(固定 11pt、细一档)。
     // 初值 = 加设置前 NotchLyricsView 里那三处硬编码,init() 末尾 recomputeNotchFonts() 立刻覆盖。
     @Published private(set) var notchMainFont: Font = .system(size: 13, weight: .semibold)
     @Published private(set) var notchMainDetailFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var notchSecondaryFont: Font = .system(size: 11, weight: .medium)
+    /// 主行那份字体的 AppKit 孪生。灵动岛歌词行的跟唱滚动要知道每个词画出来多宽,而测宽只能用
+    /// `NSFont`。必须跟 `notchMainFont` 在**同一次** `recomputeNotchFonts()` 里由同一组入参派生 ——
+    /// 各算各的迟早会漂,而漂了不会报错,只会让滚动偏移逐词错位。
+    @Published private(set) var notchMainNSFont: NSFont = .systemFont(ofSize: 13, weight: .semibold)
 
     // 四行的字重从**用户选的那一档**推导,不再各自硬编码(加「字重」设置)。
     // 默认档位 `.bold` 推出来的正好是改动前那四个硬编码值(bold / medium / regular / medium),
@@ -1351,6 +1576,18 @@ final class AppSettings: ObservableObject {
         previewFont = .overlayFont(
             familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
             weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps))
+        // AppKit 孪生:同一组入参、同一次派生,别在别处另算一遍。
+        overlayNSFonts = OverlayNSFonts(
+            main: .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize), weight: weight),
+            romanization: .overlayFont(
+                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.65,
+                weight: weight.lighter(by: OverlayFontWeight.romanizationSteps)),
+            translation: .overlayFont(
+                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+                weight: weight.lighter(by: OverlayFontWeight.translationSteps)),
+            preview: .overlayFont(
+                familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
+                weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps)))
     }
 
     /// 灵动岛那三个派生字体。字体族空串 = 系统字体、族名没装时回落系统字体,都由 `Font.overlayFont`
@@ -1362,6 +1599,7 @@ final class AppSettings: ObservableObject {
         let weight = notchFontWeight
         let lighter = weight.lighter(by: OverlayFontWeight.notchSecondarySteps)
         notchMainFont = .overlayFont(familyName: family, size: size, weight: weight)
+        notchMainNSFont = .overlayFont(familyName: family, size: size, weight: weight)
         notchMainDetailFont = .overlayFont(familyName: family, size: size, weight: lighter)
         notchSecondaryFont = .overlayFont(
             familyName: family, size: NotchLyricRowMetrics.secondaryFontSize, weight: lighter)
@@ -1426,6 +1664,10 @@ final class AppSettings: ObservableObject {
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)
             .flatMap(OverlayDuetAlignmentOverride.init(rawValue:)) ?? .automatic
+        // 默认 .wrap:换行是这个窗口一直以来的行为,滚动是另一档可选项 —— 升级上来的人
+        // 排版必须逐像素不变。
+        overlayLineOverflow = defaults.string(forKey: Keys.overlayLineOverflow)
+            .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
@@ -1483,8 +1725,7 @@ final class AppSettings: ObservableObject {
         // 默认自由拖动:这是改动前唯一的行为,老用户的窗口不能因为升级自己跑去居中。
         overlayPlacementMode = defaults.string(forKey: Keys.overlayPlacementMode)
             .flatMap(OverlayPlacementMode.init(rawValue:)) ?? .free
-        debugHUDEnabled = (defaults.object(forKey: Keys.debugHUDEnabled) as? Bool) ?? false
-        // ⚠️ 灵动岛那两个的**兜底不是 false,而是悬浮歌词那一份的值**(拆分时的
+        // 灵动岛那两个的**兜底不是 false,而是悬浮歌词那一份的值**(拆分时的
         // 迁移)。拆之前两个形态共用一份,老用户如果配的是"截屏时隐藏",拆完必须两边都还
         // 隐藏 —— 兜底写 false 的话,他的灵动岛会在某次升级后**悄悄开始出现在截图里**,而他
         // 什么都没改过。这类"静默放宽一条隐私设置"的迁移事故没有补救机会:截出去的图收不回来。
@@ -1545,6 +1786,54 @@ final class AppSettings: ObservableObject {
             .flatMap(NotchCardStyle.init(rawValue:)) ?? Self.defaultNotchCardStyle
         notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? Self.defaultNotchShowLyrics
         motionCoverEnabled = (defaults.object(forKey: Keys.motionCoverEnabled) as? Bool) ?? Self.defaultMotionCoverEnabled
+        lyricsWindowBackgroundMode = defaults.string(forKey: Keys.lyricsWindowBackgroundMode)
+            .flatMap(LyricsWindowBackgroundMode.init(rawValue:)) ?? .artwork
+        lyricsWindowBackgroundColorHex = defaults.string(forKey: Keys.lyricsWindowBackgroundColorHex)
+            ?? Self.defaultLyricsWindowBackgroundColorHex
+        lyricsWindowBackgroundColorEndHex = defaults.string(forKey: Keys.lyricsWindowBackgroundColorEndHex)
+            ?? Self.defaultLyricsWindowBackgroundColorEndHex
+        lyricsWindowGradientDirection = defaults.string(forKey: Keys.lyricsWindowGradientDirection)
+            .flatMap(LyricsWindowGradientDirection.init(rawValue:)) ?? .vertical
+        lyricsWindowFontFamily = defaults.string(forKey: Keys.lyricsWindowFontFamily) ?? ""
+        // 没存过(全新安装 / 老用户升级)才落默认档。不能用 `integer(forKey:)` 直接取 ——
+        // 它对"没存过"和"存了 0(一样都不显示)"返回同一个 0,后者是合法选择,会被悄悄改回默认。
+        lyricsWindowMiniHeaderFields = (defaults.object(forKey: Keys.lyricsWindowMiniHeaderFields) as? Int)
+            .map(LyricsWindowMiniHeaderFields.init(rawValue:)) ?? .default
+        // 同上那条"没存过才落默认"的写法:`bool(forKey:)` 对没存过也返回 false,会让默认变成关。
+        lyricsWindowMiniShowsTime = (defaults.object(forKey: Keys.lyricsWindowMiniShowsTime) as? Bool) ?? true
+        lyricsWindowMiniShowsCover =
+            (defaults.object(forKey: Keys.lyricsWindowMiniShowsCover) as? Bool) ?? true
+        // 默认 .wrap:换行是迷你窗一直以来的排法,升级上来的人排版不变。
+        lyricsWindowMiniLineOverflow = defaults.string(forKey: Keys.lyricsWindowMiniLineOverflow)
+            .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
+        // 默认 .compact:两行是迷你窗一直以来的样子,升级上来的人不变。
+        lyricsWindowMiniLyricsLayout = defaults.string(forKey: Keys.lyricsWindowMiniLyricsLayout)
+            .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .compact
+        lyricsWindowMiniShowsControls =
+            (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
+        lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)
+            .flatMap(LyricsWindowTextColorMode.init(rawValue:)) ?? .auto
+        lyricsWindowTextColorHex = defaults.string(forKey: Keys.lyricsWindowTextColorHex)
+            ?? Self.defaultLyricsWindowTextColorHex
+        lyricsWindowMiniTextColorMode = defaults.string(forKey: Keys.lyricsWindowMiniTextColorMode)
+            .flatMap(LyricsWindowTextColorMode.init(rawValue:)) ?? .auto
+        lyricsWindowMiniTextColorHex = defaults.string(forKey: Keys.lyricsWindowMiniTextColorHex)
+            ?? Self.defaultLyricsWindowTextColorHex
+        lyricsWindowMiniBackgroundMode = defaults.string(forKey: Keys.lyricsWindowMiniBackgroundMode)
+            .flatMap(LyricsWindowBackgroundMode.init(rawValue:)) ?? .artwork
+        lyricsWindowMiniBackgroundColorHex = defaults.string(forKey: Keys.lyricsWindowMiniBackgroundColorHex)
+            ?? Self.defaultLyricsWindowBackgroundColorHex
+        lyricsWindowMiniBackgroundColorEndHex = defaults.string(forKey: Keys.lyricsWindowMiniBackgroundColorEndHex)
+            ?? Self.defaultLyricsWindowBackgroundColorEndHex
+        lyricsWindowMiniGradientDirection = defaults.string(forKey: Keys.lyricsWindowMiniGradientDirection)
+            .flatMap(LyricsWindowGradientDirection.init(rawValue:)) ?? .vertical
+        lyricsWindowMiniFontFamily = defaults.string(forKey: Keys.lyricsWindowMiniFontFamily) ?? ""
+        lyricsWindowGlassIntensity = defaults.string(forKey: Keys.lyricsWindowGlassIntensity)
+            .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
+        lyricsWindowMiniGlassIntensity = defaults.string(forKey: Keys.lyricsWindowMiniGlassIntensity)
+            .flatMap(OverlayGlassIntensity.init(rawValue:)) ?? .default
+        lyricsWindowMiniFontSize = (defaults.object(forKey: Keys.lyricsWindowMiniFontSize) as? Double)
+            ?? Self.defaultLyricsWindowMiniFontSize
         notchCollapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool)
             ?? Self.defaultNotchCollapsesWhenPaused
         notchShowsEqualizer = (defaults.object(forKey: Keys.notchShowsEqualizer) as? Bool) ?? Self.defaultNotchShowsEqualizer
@@ -1650,6 +1939,18 @@ final class AppSettings: ObservableObject {
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = Self.backgroundVisible(hex: backgroundColorHex, glass: overlayBackgroundGlass)
         textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
+        lyricsWindowBackgroundColor = Color(hexWithAlpha: lyricsWindowBackgroundColorHex,
+                                            fallback: Self.defaultLyricsWindowBackgroundColorFallback)
+        lyricsWindowBackgroundColorEnd = Color(hexWithAlpha: lyricsWindowBackgroundColorEndHex,
+                                               fallback: Self.defaultLyricsWindowBackgroundColorEndFallback)
+        lyricsWindowMiniBackgroundColor = Color(hexWithAlpha: lyricsWindowMiniBackgroundColorHex,
+                                                fallback: Self.defaultLyricsWindowBackgroundColorFallback)
+        lyricsWindowMiniBackgroundColorEnd = Color(hexWithAlpha: lyricsWindowMiniBackgroundColorEndHex,
+                                                   fallback: Self.defaultLyricsWindowBackgroundColorEndFallback)
+        lyricsWindowTextColor = Color(hexWithAlpha: lyricsWindowTextColorHex,
+                                      fallback: Self.defaultLyricsWindowTextColorFallback)
+        lyricsWindowMiniTextColor = Color(hexWithAlpha: lyricsWindowMiniTextColorHex,
+                                          fallback: Self.defaultLyricsWindowTextColorFallback)
         // 没存过这个键(全新装这个字段 / 老用户升级)才在这里补上真正的默认值——现在所有
         // 属性都已经赋过值,读 foregroundColorHex 是安全的(上面 storedKaraokeUnsungColorHex
         // 那条注释解释了为什么不能在加载阶段就读)。这一次赋值是 init() 里的第二次赋值,

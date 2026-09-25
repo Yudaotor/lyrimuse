@@ -117,6 +117,15 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 探针那一支必须排在棘轮**之前**、自成一条路径,不能落进棘轮。
     public static let flooredMidpointBiasSecs: Double = 0.5
 
+    /// `<video>.currentTime` 比页面整秒文字最多领先这么多,才算同一个钟(见 youtubeMusicScript 第四段)。
+    /// 文字是 `floor(currentTime)`、渲染滞后 ≤0.05s,正常领先落在 [0, 1.05);电台 / 续播的累计时间
+    /// 差着整首歌长,远在窗口外。
+    public static let currentTimeSlackSecs: Double = 1.25
+
+    /// 精确读数(`currentTime`)跟我们的外推差多少以内不动(见 `LocalPlaybackSource.groundTruthSnapToleranceSecs`,
+    /// 那个 0.30 是给整秒读数的)。实测 Safari 里 media-control 外推与 `currentTime` 逐拍差 0.001s。
+    public static let preciseSnapToleranceSecs: Double = 0.1
+
     // MARK: - 探针值的可信度判据(重写)
 
     /// **别拿任何 MediaRemote 报的位置(如 `snapshot.elapsedTime`)或外推值当这个探针的
@@ -277,6 +286,12 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 判断逻辑写错了,是双方对"这段文字里到底有没有反斜杠"完全对不上。规避办法就是让
     /// JS 返回值**从头到尾不含任何双引号**:改用 `"<seconds>|<pausedFlag>"` 这种竖线
     /// 分隔的裸文本,没有引号就没有二次转义可言。
+    ///
+    /// **第四段:精确读数 `@<currentTime>,<Date.now() 毫秒>`**。前缀 `@` 不能省:AppleScript 那层靠
+    /// `r does not contain "|1"` 认暂停,不带前缀时 `||160.8…` 这种以 1 开头的读数会被当成暂停整条扔掉。`currentTime` 只有在跟整秒文字对得上
+    /// (`0 ≤ currentTime − 文字秒数 < currentTimeSlackSecs`)时才交出 —— 电台 / 续播那种累计时间差着
+    /// 整首歌长,落不进这个窗口,自动退回整秒读数。时间戳在 JS 里取,是读数那一刻的墙钟:osascript 的
+    /// 往返时间不再算进读数的年龄。第三段(封面)留空。
     private static let youtubeMusicScript = """
     (function(){
       var el = document.querySelector('.time-info');
@@ -286,12 +301,6 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       if (parts.length !== 2) return 'NOTFOUND';
       function toSecs(s) {
         var f = s.trim().split(':');
-    ///
-    /// **第四段:精确读数 `@<currentTime>,<Date.now() 毫秒>`**。前缀 `@` 不能省:AppleScript 那层靠
-    /// `r does not contain "|1"` 认暂停,不带前缀时 `||160.8…` 这种以 1 开头的读数会被当成暂停整条扔掉。`currentTime` 只有在跟整秒文字对得上
-    /// (`0 ≤ currentTime − 文字秒数 < currentTimeSlackSecs`)时才交出 —— 电台 / 续播那种累计时间差着
-    /// 整首歌长,落不进这个窗口,自动退回整秒读数。时间戳在 JS 里取,是读数那一刻的墙钟:osascript 的
-    /// 往返时间不再算进读数的年龄。第三段(封面)留空。
         if (f.length < 2 || f.length > 3) return -1;
         var n = 0;
         for (var i = 0; i < f.length; i++) {
@@ -307,7 +316,13 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       if (__EXPECT__ > 0 && Math.abs(total - __EXPECT__) > __TOL__) return 'NOTFOUND';
       var video = document.querySelector('video');
       var paused = video ? video.paused : false;
-      return cur + '|' + (paused ? '1' : '0');
+      var precise = '';
+      if (video && !paused) {
+        var ct = video.currentTime;
+        var lead = ct - cur;
+        if (lead >= 0 && lead < __CT_SLACK__) precise = '@' + ct.toFixed(3) + ',' + Date.now();
+      }
+      return cur + '|' + (paused ? '1' : '0') + '||' + precise;
     })()
     """
 
@@ -416,12 +431,26 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let key: String
         let seconds: Double
         let capturedAt: Date
+        /// true = `seconds` 是 `currentTime`、`capturedAt` 是 JS 读它那一刻;false = 整秒文字、osascript 返回那一刻。
+        let isPrecise: Bool
+    }
+
+    /// 交给伺服的一次性纠偏。`isPrecise` 决定下游按哪种精度用它(门槛、要不要折进偏置)。
+    public struct Correction: Equatable, Sendable {
+        public let seconds: Double
+        public let isPrecise: Bool
+        public init(seconds: Double, isPrecise: Bool) {
+            self.seconds = seconds
+            self.isPrecise = isPrecise
+        }
     }
 
     private let lock = NSLock()
     private var cached: CachedResult?
     private var inFlightKey: String?
     private var consumedKey: String?
+    /// 上一次交出去的是不是精确读数。恢复后只有它值得再探一次:整秒读数 ±0.5s,比恢复锚点本身还粗。
+    private var consumedWasPrecise = false
     private var generation = 0
     // 有界重试的记账(见 maxProbeAttempts):按曲目 key 计次,换歌清零。
     private var attemptKey: String?
@@ -540,7 +569,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 返回 nil 的情况:这首歌已经消费过一次 / 还没探测成功过 / 缓存的曲目跟当前曲目
     /// 对不上(换歌了)/ 缓存已经超过 `maxAge` 太旧——都应该原样退回既有的
     /// `resolvePositionSeconds` 逻辑(喂 `snapshot.elapsedTime`)。
-    public func consumeCorrection(forKey key: String, rate: Double, now: Date, maxAge: TimeInterval = 6) -> Double? {
+    public func consumeCorrection(forKey key: String, rate: Double, now: Date, maxAge: TimeInterval = 6) -> Correction? {
         lock.lock()
         defer { lock.unlock() }
         guard consumedKey != key else { return nil }
@@ -548,14 +577,15 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let age = now.timeIntervalSince(snapshot.capturedAt)
         guard age >= 0, age <= maxAge else { return nil }
         consumedKey = key
-        let corrected = snapshot.seconds + Self.flooredMidpointBiasSecs + rate * age
-        // ⚠️ **这一行跟 `probeAdvancing` 里那句"采信"不是一回事,两行都要有**(
+        consumedWasPrecise = snapshot.isPrecise
+        let corrected = snapshot.seconds + (snapshot.isPrecise ? 0 : Self.flooredMidpointBiasSecs) + rate * age
+        // **这一行跟 `probeAdvancing` 里那句"采信"不是一回事,两行都要有**(
         // 复量时暴露的日志盲区):"采信"打在**探针内部**(拿到一个可信读数、写进缓存),
         // 而这里才是**真的交给伺服逻辑用了**。同一首歌可能出现好几行"采信"却只有一行
         // "交出" —— 一次性额度(`consumedKey`)把后面几次挡在门外。只看"采信"会读成
         // "重锚了好几次",看不出这一拍的位置到底是探针给的还是外推的。
-        Self.logger.notice("probe: handing off correction \(corrected, privacy: .public)s (reading \(snapshot.seconds, privacy: .public)s + midpoint + \(age, privacy: .public)s lag), per-track budget exhausted")
-        return corrected
+        Self.logger.notice("probe: handing off correction \(corrected, privacy: .public)s (reading \(snapshot.seconds, privacy: .public)s\(snapshot.isPrecise ? " precise" : " + midpoint", privacy: .public) + \(age, privacy: .public)s lag), per-track budget exhausted")
+        return Correction(seconds: corrected, isPrecise: snapshot.isPrecise)
     }
 
     /// 换歌时清掉缓存——上一首歌的探测结果绝不能被当成这一首歌的位置用,也重新开放
@@ -581,6 +611,27 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 被别的 App 抢走一次)那条路径会把它清成 "",下一拍就重新算一次"换歌"。所以
         // 一首歌中途出现多轮探测**不一定是 bug**,但必须能从日志里看出是哪一种。
         Self.logger.notice("probe: track key changed, reopening per-track probe budget (old=\(previousKey, privacy: .public) new=\(newKey, privacy: .public))")
+    }
+
+    /// 整秒读数能不能拿来纠这个浏览器报的位置。Safari 的媒体进程不能:它的 media-control 锚点逐首、逐次状态变化
+    /// 都按页面自己的钟重发(与 YouTube Music 的 `currentTime` 逐拍差 0.001s),而页面文字在后台标签页里两秒才刷一次、
+    /// 比真实位置晚 2~3s,整秒读数只会把准的位置拉偏。精确读数不受这条限制。纯函数,selftest 直接覆盖。
+    public static func floorReadingApplies(reportedBundleID: String?) -> Bool {
+        reportedBundleID != MediaControlClient.safariMediaProcessBundleID
+    }
+
+    /// 同一首歌从暂停恢复:再开放一次探测额度。恢复锚点是按"按下播放"那一刻打的,出声要是卡了一下,
+    /// 页面的钟就比锚点晚这一截、而播放器要到下一次状态变化才重发(数据见 02 章「Safari 上的 YouTube Music」)。只重开这首已经消费过、而且交出的是精确读数的 key;正在飞的那次照常落地。
+    public func reopenAfterResume(key: String) {
+        lock.lock()
+        guard consumedKey == key, consumedWasPrecise else { lock.unlock(); return }
+        consumedKey = nil
+        cached = nil
+        attemptKey = nil
+        attemptCount = 0
+        lastAttemptEndedAt = nil
+        lock.unlock()
+        Self.logger.notice("probe: resumed, reopening per-track probe budget (key=\(key, privacy: .public))")
     }
 
     /// 如果这个 bundle id 受支持、这首歌还没消费过一次探测结果、且当前没有正在飞的同
@@ -652,8 +703,13 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         guard myGeneration == generation else { return } // 换歌了,这份结果作废
         if inFlightKey == key { inFlightKey = nil }
         guard let hit else { return }
-        cached = CachedResult(key: key, seconds: hit.seconds, capturedAt: Date())
-        // ⚠️ 这一条**故意不受 generation 之外的任何作废影响**、也不按曲目 key 存:它回答的
+        // 精确读数的年龄从 JS 读数那一刻算;读数时刻晚于现在(两边钟不可能差这么多,多半是解析出了岔子)就不用它。
+        if let precise = hit.precise, precise.readAt <= Date() {
+            cached = CachedResult(key: key, seconds: precise.seconds, capturedAt: precise.readAt, isPrecise: true)
+        } else {
+            cached = CachedResult(key: key, seconds: hit.seconds, capturedAt: Date(), isPrecise: false)
+        }
+        // 这一条**故意不受 generation 之外的任何作废影响**、也不按曲目 key 存:它回答的
         // 是"这个浏览器在放哪个平台",那件事跨曲目稳定,而位置纠偏是一首歌一次性的。
         // 存在同一个 lock 下,读在 `playingPlatformID`。
         lastMatch = (bundleID: bundleID, platformID: hit.platformID, at: Date())
@@ -799,6 +855,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let platformID: String
         /// 页面顺带交出的封面地址(目前只有 Spotify 网页版规则给,见 spotifyWebScript 头注)。
         let artworkURL: URL?
+        let precise: PreciseReading?
     }
 
     private static func probeAdvancing(
@@ -829,14 +886,15 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             logger.notice("probe #\(attempt, privacy: .public): page position is not advancing (\(first.seconds, privacy: .public)s -> \(second.seconds, privacy: .public)s), discarding")
             return nil
         }
-        logger.notice("probe #\(attempt, privacy: .public): accepting \(second.seconds, privacy: .public)s (previous \(first.seconds, privacy: .public)s, expected duration \(expect, privacy: .public)s, platform \(second.platformID, privacy: .public))")
+        logger.notice("probe #\(attempt, privacy: .public): accepting \(second.seconds, privacy: .public)s (previous \(first.seconds, privacy: .public)s, currentTime \(second.precise?.seconds ?? -1, privacy: .public), expected duration \(expect, privacy: .public)s, platform \(second.platformID, privacy: .public))")
         return second
     }
 
     private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family, platformIDs: Set<String>, expectedDuration: Double) -> ProbeHit? {
         for rule in siteRules where platformIDs.contains(rule.platformID) {
             if let reading = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
-                return ProbeHit(seconds: reading.seconds, platformID: rule.platformID, artworkURL: reading.artworkURL)
+                return ProbeHit(seconds: reading.seconds, platformID: rule.platformID,
+                                artworkURL: reading.artworkURL, precise: reading.precise)
             }
         }
         return nil
@@ -884,6 +942,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let script = rawScript
             .replacingOccurrences(of: "__EXPECT__", with: String(expect))
             .replacingOccurrences(of: "__TOL__", with: String(Int(pageDurationToleranceSecs)))
+            .replacingOccurrences(of: "__CT_SLACK__", with: String(currentTimeSlackSecs))
         let activeTab = activeTabExpression(family: family, windowIndex: "wi")
         let executeLine: String
         let executeActiveLine: String
@@ -941,6 +1000,81 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         }
     }
 
+    /// 「把正在放歌的那枚标签页翻到台前」的 AppleScript。URL 特征与进度探测同一份
+    /// (`urlContains`),两遍扫描的顺序也同 `buildAppleScript`:先扫各窗口**当前**标签页
+    /// (放歌的那枚多半就是用户正在看的这枚),再扫其余标签页。命中后做三件事:选中那枚
+    /// 标签页(Chromium `active tab index` / Safari `current tab`,两个词不同名,同
+    /// `buildAppleScript` 那条实测结论)、把它所在窗口的 `index` 提到 1、`activate` 整个
+    /// App。只翻页,不动播放状态。一次成功返回 "OK",一枚匹配的标签页都没有返回
+    /// "NOTFOUND"(不抛错)。不执行 JavaScript,没有休眠标签页挂起的风险,不需要逐事件
+    /// `with timeout`。
+    private static func buildRevealScript(
+        bundleID: String, family: BrowserAutomationPermission.Family, urlContains: String
+    ) -> String {
+        let activeTab = activeTabExpression(family: family, windowIndex: "wi")
+        let selectTab: String
+        switch family {
+        case .chromium: selectTab = "set active tab index of window wi to ti"
+        case .safari:   selectTab = "set current tab of window wi to tab ti of window wi"
+        }
+        return """
+        tell application id "\(bundleID)"
+            repeat with wi from 1 to count of windows
+                try
+                    if (URL of \(activeTab)) contains "\(urlContains)" then
+                        set index of window wi to 1
+                        activate
+                        return "OK"
+                    end if
+                end try
+            end repeat
+            repeat with wi from 1 to count of windows
+                repeat with ti from 1 to count of tabs of window wi
+                    if (URL of tab ti of window wi) contains "\(urlContains)" then
+                        try
+                            \(selectTab)
+                            set index of window wi to 1
+                            activate
+                            return "OK"
+                        end try
+                    end if
+                end repeat
+            end repeat
+            return "NOTFOUND"
+        end tell
+        """
+    }
+
+    /// 点「来源角标」/「在 XX 中显示」时,网页播放器(YouTube Music / Spotify 网页版)的
+    /// 跳转落点:把正在放歌的那枚浏览器标签页翻到台前。网页平台的"对应播放器页面"是**一枚
+    /// 标签页**而不是整个浏览器 —— 只激活 App 的话,浏览器多半本来就是前台 App(歌就是在它
+    /// 里面放的),用户看到的就是"点了没反应"。
+    ///
+    /// URL 判据与进度探测同一份 `siteRules`;能走到这里的调用方都是角标已经认出平台的情形,
+    /// 配对与自动化授权必然已齐(探测已经在跑),不需要新门槛。
+    ///
+    /// 同步执行、起一个 osascript 子进程,**别在主线程调**(同 `selfTest`)。
+    /// - Returns: 翻到了没有。false(没找到标签页 / 脚本失败 / 超时)由调用方兜底 ——
+    ///   退回整 App 激活,不比没有这条差。
+    ///
+    /// `bundleID` 收的是 MediaRemote 上报的原值,这里先折回宿主(`probeTargetBundleID`):
+    /// Safari 报的是 `com.apple.WebKit.GPU`,不折回的话 `family` 为 nil、也 tell 不动。
+    public static func revealPlayingTab(bundleID: String, platformID: String) -> Bool {
+        guard let host = probeTargetBundleID(forReported: bundleID),
+              let rule = siteRules.first(where: { $0.platformID == platformID }),
+              let family = BrowserAutomationPermission.family(forBundleID: host)
+        else { return false }
+        let appleScript = buildRevealScript(bundleID: host, family: family, urlContains: rule.urlContains)
+        guard let tempURL = writeTempScript(appleScript) else { return false }
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        guard let result = ProcessRunner.run("/usr/bin/osascript", [tempURL.path], timeout: probeTimeout),
+              result.succeeded
+        else { return false }
+        let revealed = result.stdoutText.contains("OK")
+        logger.notice("reveal tab platform=\(platformID, privacy: .public) bundle=\(host, privacy: .public) ok=\(revealed, privacy: .public)")
+        return revealed
+    }
+
     /// osascript 打印一个 AppleScript 字符串结果时会整体加一层引号——脚本约定返回值
     /// 是不含引号的裸文本(见 youtubeMusicScript 头注),所以这里只需要脱掉那层外层引号,
     /// 不需要处理任何内部转义。格式固定是 "<seconds>|<pausedFlag>",pausedFlag 非
@@ -957,15 +1091,28 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     public struct Reading: Equatable, Sendable {
         public let seconds: Double
         public let artworkURL: URL?
-        public init(seconds: Double, artworkURL: URL?) {
+        public let precise: PreciseReading?
+        public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil) {
             self.seconds = seconds
             self.artworkURL = artworkURL
+            self.precise = precise
         }
     }
 
-    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>]`。第二段非 "0"
-    /// (暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址(`SpotifyArtworkURL.parse`),
-    /// 别的一律 nil —— YouTube Music 的脚本没有第三段,老输出原样成立。纯函数,selftest 直接覆盖。
+    /// 页面媒体元素的 `currentTime` 和读它那一刻的墙钟(见 youtubeMusicScript 第四段)。
+    public struct PreciseReading: Equatable, Sendable {
+        public let seconds: Double
+        public let readAt: Date
+        public init(seconds: Double, readAt: Date) {
+            self.seconds = seconds
+            self.readAt = readAt
+        }
+    }
+
+    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>]]`。
+    /// 第二段非 "0"(暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址
+    /// (`SpotifyArtworkURL.parse`),别的一律 nil;第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
+    /// 整秒读数照旧成立。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("\""), text.hasSuffix("\""), text.count >= 2 {
@@ -975,6 +1122,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let parts = text.split(separator: "|", omittingEmptySubsequences: false)
         guard parts.count >= 2, parts[1] == "0", let seconds = Double(parts[0]) else { return nil }
         let artwork = parts.count >= 3 ? SpotifyArtworkURL.parse(String(parts[2])) : nil
-        return Reading(seconds: seconds, artworkURL: artwork)
+        var precise: PreciseReading?
+        if parts.count >= 4, parts[3].hasPrefix("@") {
+            let fields = parts[3].dropFirst().split(separator: ",")
+            if fields.count == 2, let ct = Double(fields[0]), ct >= 0,
+               let ms = Double(fields[1]), ms > 0 {
+                precise = PreciseReading(seconds: ct, readAt: Date(timeIntervalSince1970: ms / 1000))
+            }
+        }
+        return Reading(seconds: seconds, artworkURL: artwork, precise: precise)
     }
 }

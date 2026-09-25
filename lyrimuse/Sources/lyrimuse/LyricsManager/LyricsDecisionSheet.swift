@@ -15,7 +15,7 @@ import LyrimuseCore
 // 手工镜像 collector 常量的字段(crc32 表、归一化规则)是同一种做法:这个数字纯粹是
 // "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(用户
 // 反馈"v4"这种裸编号没有对照、看不出新旧),只用来判断存档是不是用旧算法跑的。
-private let currentLyricsScoringVersion = 21
+private let currentLyricsScoringVersion = 23
 
 struct LyricsDecisionSheet: View {
     let summary: EnrichCacheStore.Summary
@@ -80,7 +80,7 @@ struct LyricsDecisionSheet: View {
     private func queryReasonLabel(_ reason: String?) -> String {
         switch reason ?? "" {
         case "": return L10n.t("首轮")
-        case "title-split": return L10n.t("按「署名 - 曲名」拆分")
+        case "title-split": return L10n.t("按「署名 - 歌名」拆分")
         case "alias-rescue": return L10n.t("别名轮：一个候选都没有")
         // 「缺罗马音」三个字有歧义(「这里说的缺罗马音是什么意思？」)——
         // 它像在描述一个结果状态,其实说的是**触发原因**,而且省掉了主语(谁缺)。
@@ -154,13 +154,11 @@ struct LyricsDecisionSheet: View {
                         // (比如一轮维持原状的升级重试)。正是这两份对不上号让用户困惑
                         // (一轮被换曲窗口串扰时长的重试盖掉了首解存档,记录
                         // 跟生效歌词说不到一块去),所以两份并排都给看,不再只剩最后一轮。
-                        Picker("", selection: $selectedRecord) {
-                            ForEach(records.indices, id: \.self) { i in
-                                Text(records[i].label).tag(i)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
+                        SettingsSegmentedControlHashable(
+                            selection: $selectedRecord,
+                            options: Array(records.indices),
+                            label: { records[$0].label }
+                        )
                     }
                     if let decision {
                         // 顺序即「三层」:先一句判词回答"为什么是它",再摊候选表(每条一行,
@@ -551,7 +549,7 @@ struct LyricsDecisionSheet: View {
             lines.append(t.title + " —— " + t.detail)
         }
         if let rewrite = titleRewrite(decision) {
-            lines.append(String(format: L10n.t("曲名对不上：本地叫「%1$@」，找到的是《%2$@》"),
+            lines.append(String(format: L10n.t("歌名对不上：本地叫「%1$@」，找到的是《%2$@》"),
                                 rewrite.from, rewrite.to))
             if let how = titleRewriteHow(decision) { lines.append("  " + how) }
         }
@@ -562,7 +560,7 @@ struct LyricsDecisionSheet: View {
         if let digest = queryDigest(decision) {
             lines.append(String(format: L10n.t("这一轮实际问过 %d 组"), digest.total))
             if let t = digest.sharedTitle {
-                lines.append("  " + String(format: L10n.t("曲名始终是「%@」"), t))
+                lines.append("  " + String(format: L10n.t("歌名始终是「%@」"), t))
             }
             for g in digest.groups {
                 lines.append("  " + groupHeading(g))
@@ -644,7 +642,7 @@ struct LyricsDecisionSheet: View {
                 }
                 if let rewrite {
                     VerdictCard(
-                        title: String(format: L10n.t("曲名对不上：本地叫「%1$@」，找到的是《%2$@》"),
+                        title: String(format: L10n.t("歌名对不上：本地叫「%1$@」，找到的是《%2$@》"),
                                       rewrite.from, rewrite.to),
                         detail: titleRewriteHow(decision) ?? "",
                         tint: .orange)
@@ -664,7 +662,7 @@ struct LyricsDecisionSheet: View {
     /// 所以复用同一张译名表(queryReasonLabel)——漏补译名两处一起漏,不会一边对一边错。
     private func titleRewriteHow(_ decision: LyricsResolutionDecision) -> String? {
         guard let m = decision.retryMethod, !m.isEmpty else { return nil }
-        return String(format: L10n.t("本地那个曲名没搜到，最后靠「%@」问出真名。"),
+        return String(format: L10n.t("本地那个歌名没搜到，最后靠「%@」问出真名。"),
                       queryReasonLabel(m))
     }
 
@@ -831,8 +829,8 @@ struct LyricsDecisionSheet: View {
         var caption = String(format: L10n.t("问过 %d 组词"), digest.total)
         guard let shared = digest.sharedTitle else { return caption }
         caption += " · " + (shared == trimmedOrNil(queryTitle)
-                            ? L10n.t("曲名未变")
-                            : String(format: L10n.t("曲名始终是「%@」"), shared))
+                            ? L10n.t("歌名未变")
+                            : String(format: L10n.t("歌名始终是「%@」"), shared))
         return caption
     }
 
@@ -961,7 +959,10 @@ struct LyricsDecisionSheet: View {
     private func candidateSection(_ decision: LyricsResolutionDecision) -> some View {
         let a = analysis(decision)
         if a.rows.isEmpty && a.sidelined.isEmpty {
-            Text(L10n.t("这一轮没有任何源给出候选"))
+            // 明细挪到旁路文件、又补不回来(文件被删 / 指纹对不上)时,别说成「没有任何源给出候选」。
+            Text(decision.detailsExternal == true
+                 ? L10n.t("这一轮的候选明细找不到了")
+                 : L10n.t("这一轮没有任何源给出候选"))
                 .font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)

@@ -89,6 +89,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var isPlayingObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
     private var placementModeObserver: AnyCancellable?
+    private var showHoverControlsObserver: AnyCancellable?
     /// 位置模式。真值在 `AppSettings.overlayPlacementMode`,这里是订阅
     /// 来的镜像 —— 高度增长方向 / 热区换算 / 拖动闸 / 插拔屏对账每次都要读,不能每次去碰单例。
     /// 预设模式下位置由 `OverlayPlacement.presetFrame` 按**窗口所在那块屏**推导:切模式、宽度变、
@@ -97,6 +98,22 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 视图最近一次上报的内容高度(`updateHeight` 收到的原值)。「底部居中」下内容贴着窗口底边放,
     /// 热区换算要用它算内容块离窗口顶边多远(`OverlayControlHitTest.contentTopInset`);贴顶时用不着。
     private var lastContentHeight: CGFloat = 0
+    /// 控制排该不该画在卡片**下方**(而不是常规的上方)。「顶部居中」预设恒真;「自由」拖动时
+    /// 由 `recomputeControlsBelowCard()` 按窗口实际位置动态算——控制排画在上方会让它的顶边
+    /// 越过可见区顶边(= 被真实菜单栏挡住,层级比这个 `.floating` 悬浮窗高,盖住的部分既看
+    /// 不见也点不到)时才翻面,让卡片本身能贴到可见区顶边、控制排仍留在够得着的地方。见
+    /// `recomputeControlsBelowCard()` 头注。
+    @Published private(set) var controlsBelowCard = false
+    /// 悬停时露不露出那排播放控制按钮——真值在 `AppSettings.overlayShowHoverControls`
+    /// (⚙ 菜单/设置页「悬停控制条」都写它),这里是**滞后**生效的镜像:控制排此刻正显示着
+    /// (指针悬停中)的时候关掉这个开关,不会把控制排从指针底下当场抽走——那正是用户在
+    /// ⚙ 菜单里点这一项时的处境,菜单本身就挂在控制排上,当场收回等于点完这一下整排
+    /// (连同刚点过的这个菜单入口)从指针下面消失。改成等这次悬停结束(指针移开、控制排
+    /// 自然收起)才把新值应用进来,下一次悬停就不再露出;新值到达时若已经不在悬停中,
+    /// 照常立即生效。悬停中来的新值先记进 `pendingShowHoverControls`,由
+    /// `isHoveringForControls` 的 `didSet` 在悬停结束那一刻取用。
+    @Published private(set) var showHoverControls = AppSettings.shared.overlayShowHoverControls
+    private var pendingShowHoverControls: Bool?
 
     // MARK: - 点击穿透 + 悬停热区 + 长按拖动
     //
@@ -116,7 +133,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 并进来(只认歌词的话按钮从此点不到)见 `OverlayControlHitTest.chromeHoverZone`。
     /// 这块包围盒只用于**退出**判定;还没露出来时的**进入**判定只认歌词文字
     /// 矩形,见 `OverlayControlHitTest.chromeHoverHit`。
-    @Published private(set) var isHoveringForControls: Bool = false
+    @Published private(set) var isHoveringForControls: Bool = false {
+        didSet {
+            // 「悬停控制条」关掉这一下要**滞后**生效,见 `showHoverControls` 声明处注释——
+            // 这里只认"从悬停变成没悬停"这一次跳变,把攒着的新值放进去。
+            guard oldValue, !isHoveringForControls, let pending = pendingShowHoverControls else { return }
+            pendingShowHoverControls = nil
+            showHoverControls = pending
+        }
+    }
     /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 跟上面那个的区别是它**不**把
     /// 控制排并进来:让开是为了看清歌词底下那块桌面,指针停在按钮排上时歌词不该跟着淡掉。
     @Published private(set) var isHoveringLyrics: Bool = false
@@ -224,6 +249,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 存的位置在当前显示器配置下一块屏都看不见(外接屏拔了/睡了)时,上面那个落点是临时
         // 借主屏摆的 —— 标记成"借来的",这次运行不许把它写回磁盘,那块屏回来自己回去。
         isBorrowingScreen = placement.wasRescued
+        recomputeControlsBelowCard()
 
         // 拖动改由长按手势接管(见 handleGlobalMouseEvent),原生"点背景就拖"不再使用;
         // 点击穿透常年开启,只有悬停到播放控制按钮胶囊那个热区时才会被临时收回。
@@ -277,6 +303,22 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 self?.applyPlacementMode(mode)
             }
 
+        // 「悬停控制条」——sink 里只用收到的参数值(同上一条理由)。滞后生效的判断
+        // (悬停中就先攒着,等 isHoveringForControls 的 didSet 在悬停结束时取用)见
+        // `showHoverControls` 声明处注释。
+        showHoverControlsObserver = AppSettings.shared.$overlayShowHoverControls
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] newValue in
+                guard let self else { return }
+                if self.isHoveringForControls {
+                    self.pendingShowHoverControls = newValue
+                } else {
+                    self.pendingShowHoverControls = nil
+                    self.showHoverControls = newValue
+                }
+            }
+
         // 显示器配置变了(拔插外接屏、改分辨率、改排列、外接屏睡醒)之后对一次账:该救的救、
         // 该送回去的送回去,好端端在屏上的一概不动。详见 reconcilePlacementWithScreens()。
         //
@@ -304,7 +346,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 一次 didMove,同样只是白白重建 Timer —— 动画的目标 frame 本来就是这边自己
             // 算的,不需要经通知回存;最终落点由 setFrameAnimated 的完成回调统一存一次。
             MainActor.assumeIsolated {
-                guard let self, !self.isDragArmed, self.animatingTargetFrame == nil else { return }
+                guard let self else { return }
+                // 拖动中(武装)、程序性 resize 动画都会逐帧触发这个通知(见上面两段注释)——
+                // 翻不翻面要跟手,这里不受下面那条"跳过重复调度"的门槛限制。
+                self.recomputeControlsBelowCard()
+                guard !self.isDragArmed, self.animatingTargetFrame == nil else { return }
                 self.scheduleSavePosition(.windowMoved)
             }
         }
@@ -468,6 +514,31 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 「底部居中」是唯一的例外:底边固定、向上增高 —— 贴着 Dock 的窗口照旧向下长
     // 会撞上下面那条"底边不许越过可见区底边"的夹取、一点都长不了,译文一出来直接被裁掉。
     // 几何本体在 OverlayPlacement.grownFrame(两个方向都有 selftest)。
+    /// 重算 `controlsBelowCard`。跟窗口高度无关——翻不翻面只是换了卡片/控制排谁在"上面"那个
+    /// 槽位(见 `LyricsOverlayView.body` 头注第 3 条),窗口整体高度不变;所以这里只看
+    /// `window.frame`,不用等 `updateHeight` 参与。
+    ///
+    /// 「自由」模式下的判据:控制排若画在卡片上方,它的顶边就是**整扇窗**的顶边(内容贴着窗口
+    /// 锚边放)——一旦这个顶边达到或超过窗口所在那块屏的可见区顶边(= 菜单栏底边),控制排就
+    /// 会被真实菜单栏盖住(那层级比 `.floating` 悬浮窗高,盖住的部分既看不见也点不到,拖不动
+    /// 也点不了)。这时翻到卡片下方——卡片本身贴到可见区顶边,控制排让到卡片下面、仍在够
+    /// 得着的地方。一块屏都不沾时不翻(没有可信的边界可判)。
+    private func recomputeControlsBelowCard() {
+        guard let window else { return }
+        switch placementMode {
+        case .topCenter:
+            controlsBelowCard = true
+        case .bottomCenter:
+            controlsBelowCard = false
+        case .free:
+            guard let visible = Self.hostVisibleFrame(of: window.frame) else {
+                controlsBelowCard = false
+                return
+            }
+            controlsBelowCard = window.frame.maxY >= visible.maxY - 0.5
+        }
+    }
+
     private func updateHeight(_ contentHeight: CGFloat) {
         guard let window else { return }
         let contentChanged = abs(contentHeight - lastContentHeight) >= 0.5
@@ -650,6 +721,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// OverlayQuickSettingsMenu 的 NSMenuDelegate),不是内容也常驻。
     private let overlayQuickSettingsMenu = OverlayQuickSettingsMenu()
 
+    /// ⚙ 快捷设置菜单开着。菜单盖在悬浮窗上面,而悬停判定只看坐标、不知道上面有菜单:不拦的话
+    /// 指针在菜单上移动会反复翻转控制排显隐 / 按钮高亮,每次都让悬浮窗重渲染一遍、跟菜单抢主线程。
+    /// 菜单关掉后下一次 mouseMoved 就把悬停状态刷回真实值。
+    private var isQuickMenuOpen = false
+
     /// 执行某个按钮的动作。
     ///
     /// 这几个动作全都不依赖 View 的闭包上下文(播放控制是 MusicPlaybackController 的全局
@@ -680,8 +756,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             AppActions.shared.openLyricsWindow?()
         // 弹出快捷设置菜单——真正的 NSMenu,不受这扇窗口 ignoresMouseEvents 的影响,见
         // OverlayQuickSettingsMenu 声明处注释。
+        //
+        // 推迟到下一轮主 runloop 再弹:点击是全局监听器收到的(窗口常年点击穿透),同步弹的话菜单
+        // 整个跟踪循环会嵌在那次 HIToolbox 事件派发里跑,菜单里移动指针的事件送达变得不均匀、不跟手。
+        // popUp 是同步的,返回即菜单已关;期间 isQuickMenuOpen 让 handleMouseEvent 整段跳过。
         case .settingsMenu:
-            overlayQuickSettingsMenu.popUp()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isQuickMenuOpen = true
+                self.overlayQuickSettingsMenu.popUp()
+                self.isQuickMenuOpen = false
+            }
         // 关闭"桌面悬浮歌词"——唯一入口是 setVisible(_:)(见该方法声明处注释:设置页/
         // 菜单栏/全局快捷键三处都必须走这里),这里同样不能绕开它自己再切一份状态。
         case .closeOverlay:
@@ -755,10 +840,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard let window else {
             if !controlRectsLocal.isEmpty { controlRectsLocal = [:] }
             controlsHotZoneLocal = nil
-        //
-        // 推迟到下一轮主 runloop 再弹:点击是全局监听器收到的(窗口常年点击穿透),同步弹的话菜单
-        // 整个跟踪循环会嵌在那次 HIToolbox 事件派发里跑,菜单里移动指针的事件送达变得不均匀、不跟手。
-        // popUp 是同步的,返回即菜单已关;期间 isQuickMenuOpen 让 handleMouseEvent 整段跳过。
             lyricsHotZoneLocal = nil
             chromeHoverZoneLocal = nil
             return
@@ -794,7 +875,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
 
     private func handleMouseEvent(type: NSEvent.EventType) {
-        guard let window else { return }
+        guard let window, !isQuickMenuOpen else { return }
         // 锁定位置 = 停用整套手势(悬停控制排 + 长按拖动)。两个例外都不受这条限制:
         // ① .mouseMoved——「划过让开」需要它维护 isHoveringForControls,而那件事跟"能不能
         //    拖动窗口"无关,控制排不会因此露出来(下面 controlsShown 那行有
@@ -810,7 +891,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         //    不改动锁定分支之外任何代码的计算顺序。
         if isPositionLocked {
             if type == .leftMouseDown, isHoveringForControls, window.isVisible,
-               AppSettings.shared.overlayShowHoverControls,
+               showHoverControls,
                OverlayControlHitTest.control(
                    at: window.convertPoint(fromScreen: NSEvent.mouseLocation), in: controlRectsLocal
                ) == .unlockPill {
@@ -849,7 +930,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let controlsShown = OverlayControlHitTest.controlsShown(
             hovering: isHoveringForControls,
             positionLocked: AppSettings.shared.lockPosition,
-            hoverControlsEnabled: AppSettings.shared.overlayShowHoverControls)
+            hoverControlsEnabled: showHoverControls)
         let insideHotZone = controlsShown && (controlsHotZoneLocal?.contains(localPoint) ?? false)
 
         switch type {
@@ -886,7 +967,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             let nowHovered = OverlayControlHitTest.hoveredControl(
                 at: localPoint, in: controlRectsLocal,
                 insideWindow: insideWindow, positionLocked: isPositionLocked,
-                hoverControlsEnabled: AppSettings.shared.overlayShowHoverControls)
+                hoverControlsEnabled: showHoverControls)
             if hoveredControl != nowHovered {
                 hoveredControl = nowHovered
             }
@@ -1139,6 +1220,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func applyPlacementMode(_ mode: OverlayPlacementMode) {
         guard mode != placementMode else { return }
         placementMode = mode
+        recomputeControlsBelowCard()
         guard let window else { return }
         // 贴顶 / 贴底换了,内容块在窗口里的位置就换了;上报的内容坐标不会因此重发,得主动重算
         // (同 updateHeight 那条理由)。切成自由或顶部居中时 inset 归 0,重算一次同样对。

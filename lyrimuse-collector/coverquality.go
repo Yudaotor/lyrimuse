@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"image"
+	"image/color"
 	"log"
 	"strings"
 )
@@ -152,16 +153,27 @@ func coverFingerprintDistance(a, b uint64) int {
 }
 
 // coverImagesLikelySame:两张图感知上是不是同一张封面。
-func coverImagesLikelySame(a, b image.Image) bool {
 //
 // 先按原图比;不像的话把两张图四周的纯色边(补白 / 黑边)裁掉再比一次,任一次够近就算同一张。
 // 有的播放器交给系统的封面是把长方形图补白成正方形的(汽水音乐实测:150×150、上下两条白边,
 // 中间是被压扁的同一张专辑封面),两大块纯白混进 8×8 格子里,指纹跟真正的正方形封面差得很远,
 // 会被当成"另一张图"、按身份优先永久留下那张糊图。裁边只会让本来就是同一张的图更像,
 // 原图比得出"同一张"的情形不受影响。
+func coverImagesLikelySame(a, b image.Image) bool {
 	if a == nil || b == nil {
 		return false
 	}
+	if coverFingerprintsClose(a, b) {
+		return true
+	}
+	ta, tb := trimUniformBorder(a), trimUniformBorder(b)
+	if ta.Bounds() == a.Bounds() && tb.Bounds() == b.Bounds() {
+		return false
+	}
+	return coverFingerprintsClose(ta, tb)
+}
+
+func coverFingerprintsClose(a, b image.Image) bool {
 	fa, fb := coverFingerprint(a), coverFingerprint(b)
 	// 全 0 / 全 1 是退化指纹(纯色图、或者算失败),不该被当成"跟谁都一样"。
 	if fa == 0 || fb == 0 {
@@ -169,6 +181,111 @@ func coverImagesLikelySame(a, b image.Image) bool {
 	}
 	return coverFingerprintDistance(fa, fb) <= coverFingerprintMaxDistance
 }
+
+// 纯色边的判定口径。
+const (
+	// 每个通道跟边色相差不超过这么多算"同色"(0…255)。小图是有损 JPEG,纯白补边的像素
+	// 实际在 245~255 之间跳,边界那一两行还混着画面的颜色。
+	borderChannelTolerance = 24
+	// 一行 / 一列里至少这么多比例的像素是边色,才算这一行是边(容忍少量压缩噪点)。
+	borderUniformFraction = 0.97
+	// 每个方向最多裁到只剩这么多:纯色构图的封面(大片留白的极简设计)不能被裁没。
+	borderMinKeepFraction = 0.5
+)
+
+// trimUniformBorder 裁掉四周跟角上同色的整行 / 整列,返回中间的画面。没得裁就原样返回。
+// 上 / 左两边以左上角像素为边色,下 / 右两边以右下角为边色(补边通常对称,但不假设)。
+func trimUniformBorder(img image.Image) image.Image {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w < 16 || h < 16 {
+		return img
+	}
+	near := func(c, ref color.Color) bool {
+		r1, g1, b1, _ := c.RGBA()
+		r2, g2, b2, _ := ref.RGBA()
+		d := func(x, y uint32) int {
+			v := int(x>>8) - int(y>>8)
+			if v < 0 {
+				return -v
+			}
+			return v
+		}
+		return d(r1, r2) <= borderChannelTolerance && d(g1, g2) <= borderChannelTolerance &&
+			d(b1, b2) <= borderChannelTolerance
+	}
+	rowIsBorder := func(y int, ref color.Color) bool {
+		n := 0
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if near(img.At(x, y), ref) {
+				n++
+			}
+		}
+		return float64(n) >= borderUniformFraction*float64(w)
+	}
+	colIsBorder := func(x int, ref color.Color, y0, y1 int) bool {
+		n := 0
+		for y := y0; y < y1; y++ {
+			if near(img.At(x, y), ref) {
+				n++
+			}
+		}
+		return float64(n) >= borderUniformFraction*float64(y1-y0)
+	}
+	head := img.At(b.Min.X, b.Min.Y)
+	tail := img.At(b.Max.X-1, b.Max.Y-1)
+	maxTrimY := int(float64(h) * (1 - borderMinKeepFraction))
+	maxTrimX := int(float64(w) * (1 - borderMinKeepFraction))
+
+	top, bottom := b.Min.Y, b.Max.Y
+	for top < b.Max.Y && top-b.Min.Y < maxTrimY && rowIsBorder(top, head) {
+		top++
+	}
+	for bottom > top && (b.Max.Y-bottom)+(top-b.Min.Y) < maxTrimY && rowIsBorder(bottom-1, tail) {
+		bottom--
+	}
+	left, right := b.Min.X, b.Max.X
+	for left < b.Max.X && left-b.Min.X < maxTrimX && colIsBorder(left, head, top, bottom) {
+		left++
+	}
+	for right > left && (b.Max.X-right)+(left-b.Min.X) < maxTrimX && colIsBorder(right-1, tail, top, bottom) {
+		right--
+	}
+	r := image.Rect(left, top, right, bottom)
+	if r == b || r.Dx() < 8 || r.Dy() < 8 {
+		return img
+	}
+	return croppedImage{img: img, rect: r}
+}
+
+// coverContentSkewed:裁掉四周纯色边之后,画面的长宽比是否偏离正方形超过封面形状门槛
+// (deviceArtworkMaxAspectSkew,跟入库时的形状判据同一个值)。
+func coverContentSkewed(img image.Image) bool {
+	if img == nil {
+		return false
+	}
+	r := trimUniformBorder(img).Bounds()
+	w, h := float64(r.Dx()), float64(r.Dy())
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	longer, diff := w, w-h
+	if h > w {
+		longer, diff = h, h-w
+	}
+	return diff/longer > deviceArtworkMaxAspectSkew
+}
+
+// croppedImage 是 image.Image 的只读裁切视图(不拷像素)。不用各具体类型自带的 SubImage:
+// 解码器给出的类型不止一种,不是每种都有。
+type croppedImage struct {
+	img  image.Image
+	rect image.Rectangle
+}
+
+func (c croppedImage) ColorModel() color.Model { return c.img.ColorModel() }
+func (c croppedImage) Bounds() image.Rectangle { return c.rect }
+func (c croppedImage) At(x, y int) color.Color { return c.img.At(x, y) }
 
 func minEdge(img image.Image) int {
 	if img == nil {
@@ -297,6 +414,14 @@ func deviceCoverDecision(
 	cand := loadImage(candidateURL)
 	if cand == nil {
 		return true, "远程候选取不到/解不出来"
+	}
+	// 补边补出来的"方形":裁掉四周纯色边后画面不是正方形 = 播放器把一张长方形图硬补成了方形
+	// (汽水音乐实测 150×150、上下白边、中间 150×114),它不是封面本来的样子,不能当"这首歌封面
+	// 身份"的证据 —— 远程候选自己是正常的方形封面就让位。指纹在这里帮不上:这类图的构图跟正方形
+	// 原封面不同,同一张专辑实测距离 28,离阈值 10 很远。《Immortal》那一档不受影响:那张设备图
+	// 是正常的正方形,走不进这一支。
+	if coverContentSkewed(deviceImg) && !coverContentSkewed(cand) {
+		return false, "设备封面是补边的长方形图,改用远程候选"
 	}
 	if coverImagesLikelySame(deviceImg, cand) {
 		// 既对版又清晰 —— 这一档就是这次修复要拿到的结果。

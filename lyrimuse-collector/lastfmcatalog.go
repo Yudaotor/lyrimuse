@@ -93,13 +93,17 @@ import (
 // 复用,同一个歌手连播几首只拉一次。
 const (
 	lastfmAPIBase = "https://ws.audioscrobbler.com/2.0/"
+	// Last.fm 的限流错误码。多以 200 + {"error":29} 返回,认出来就让 Last.fm 读接口进
+	// 出站闸的限流窗口(reportEndpointRateLimited),别接着一首一首地撞。
+	lastfmErrRateLimited = 29
 	// 无 mbid 时,听众数 ≥ 这个值视为编目里的正规条目。实测:影子条目的听众数是
 	// 1~180,编目里最冷门的正规合体条目(《Scream Louder (Flyte Tyme Remix)》)是 597 且带 mbid。
 	lastfmCatalogListenersMin = 500
 	// defer(一条够格的候选都没有)多久之后允许重查。keep / match 永不重查(见头注)。
 	lastfmCatalogDeferRecheck = 90 * 24 * time.Hour
-	// 一次判定(最多四个请求)的总预算。
-	lastfmCatalogBudget = 15 * time.Second
+	// 一次判定的总预算(含扩展搜索)。扩展搜索的 Last.fm 请求并发发出,大头是没缓存时的
+	// MusicBrainz 别名(每位歌手约 2.2 s,最多 lastfmCatalogExtMaxAliasCredits 位)。
+	lastfmCatalogBudget = 25 * time.Second
 	// 单个 track.getInfo 的上限。collector 直连(不走系统代理)实测 p50 0.4 s,4 s 够用;
 	// 查不动时本来就退回「按原样提交」,宁可判不出也不能把提交本身拖死。
 	lastfmCatalogProbeTimeout = 4 * time.Second
@@ -137,6 +141,10 @@ type lastfmCatalogProbe struct {
 	MBID       string `json:"mbid,omitempty"`
 	Listeners  int    `json:"listeners"`
 	DurationMS int    `json:"duration_ms"`
+	// Artist / Name 是应答里那条条目自己的写法。autocorrect=1 时它可以跟查询串不同
+	// (查别名回的是正规条目那条)。基础判定不读它;扩展搜索按它提交(见 extCandidates)。
+	Artist string `json:"artist,omitempty"`
+	Name   string `json:"name,omitempty"`
 }
 
 // catalogued 判「这是编目里的正规条目」。三个信号任一成立即可 —— 都是影子条目不会有的
@@ -177,6 +185,11 @@ type lastfmCatalogDecision struct {
 	// 判据留痕,只写不读。
 	Own    *lastfmCatalogProbe `json:"own,omitempty"`
 	Chosen *lastfmCatalogProbe `json:"chosen,omitempty"`
+	// Via 是扩展搜索选中的候选从哪一路来的(name / top / search,兜底档带 +fallback),只写不读。
+	Via string `json:"via,omitempty"`
+	// Ext 是得出这条结论时的扩展判定口径(lastfmCatalogExtVersion)。只对 defer 有意义:
+	// 旧口径下的 defer 没跑过扩展搜索,要重判(见 lookup)。
+	Ext int `json:"ext,omitempty"`
 }
 
 // lastfmCatalogMatcher 按上面的判据决定一条 scrobble 该用哪个歌手名 + 曲名。
@@ -257,8 +270,8 @@ func (c *lastfmCatalogMatcher) resolve(ctx context.Context, artist, track string
 	c.store(key, d)
 	switch d.Verdict {
 	case verdictMatch:
-		log.Printf("lastfm catalog: %q / %q -> %q / %q (own: %s; chosen: %s)",
-			trimmedArtist, trimmedTrack, d.Artist, d.Track, d.Own.summary(), d.Chosen.summary())
+		log.Printf("lastfm catalog: %q / %q -> %q / %q (own: %s; chosen: %s; via %s)",
+			trimmedArtist, trimmedTrack, d.Artist, d.Track, d.Own.summary(), d.Chosen.summary(), orDefault(d.Via, "base"))
 	case verdictKeep:
 		log.Printf("lastfm catalog: keep %q / %q (%s)", trimmedArtist, trimmedTrack, d.Own.summary())
 	default:
@@ -314,7 +327,7 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 			Own: &own, Chosen: &p, Scope: scope.id(),
 		}, nil
 	}
-	return lastfmCatalogDecision{Verdict: verdictDefer, Artist: artist, Track: track, Own: &own, Scope: scope.id()}, nil
+	return c.decideExtended(ctx, artist, track, durationSecs, scope, own, cands)
 }
 
 // catalogCandidate 是一个「可能是这首歌在编目里的条目」的写法。probe 是已知的收录信息;
@@ -436,9 +449,13 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	defer resp.Body.Close()
 	var body struct {
 		Track struct {
+			Name      string `json:"name"`
 			MBID      string `json:"mbid"`
 			Listeners string `json:"listeners"`
 			Duration  string `json:"duration"`
+			Artist    struct {
+				Name string `json:"name"`
+			} `json:"artist"`
 		} `json:"track"`
 		Error   int    `json:"error"`
 		Message string `json:"message"`
@@ -446,6 +463,9 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	// 先解 body 再看状态码:Last.fm 的 API 错误多以 200 + {"error":N} 返回,偶尔也带 4xx;
 	// 两种形态下 "Track not found" 都是确定答案,其余非 200 才是"没查成"。
 	decodeErr := json.NewDecoder(resp.Body).Decode(&body)
+	if body.Error == lastfmErrRateLimited {
+		reportEndpointRateLimited(req.URL, "")
+	}
 	if body.Error == 6 && strings.Contains(strings.ToLower(body.Message), "not found") {
 		return lastfmCatalogProbe{Found: false}, nil
 	}
@@ -459,7 +479,8 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 		// 其它 error 6(参数问题)、29(限流)、8/11/16(服务端)…都不是"没收录",不能当结论用。
 		return lastfmCatalogProbe{}, fmt.Errorf("track.getInfo error %d: %s", body.Error, body.Message)
 	}
-	p := lastfmCatalogProbe{Found: true, MBID: body.Track.MBID}
+	p := lastfmCatalogProbe{Found: true, MBID: body.Track.MBID,
+		Artist: strings.TrimSpace(body.Track.Artist.Name), Name: strings.TrimSpace(body.Track.Name)}
 	// 听众数/时长:字段缺失按 0(Last.fm 对影子条目就是这么给的);字段**在但解析不出**
 	// 说明应答形态跟预期不符,信号不可信 —— 当"没查成",不缓存。这两个数字是判"收录"的
 	// 依据,读错了会让一条影子看着像正规条目,而改写不可逆,宁可这一次判不出。
@@ -495,7 +516,7 @@ func (c *lastfmCatalogMatcher) lookup(key string, now time.Time, scope matchScop
 	case verdictKeep, verdictMatch:
 		return d, true
 	case verdictDefer:
-		return d, now.Sub(time.Unix(d.TS, 0)) <= lastfmCatalogDeferRecheck
+		return d, d.Ext >= lastfmCatalogExtVersion && now.Sub(time.Unix(d.TS, 0)) <= lastfmCatalogDeferRecheck
 	default:
 		return d, false
 	}
@@ -504,6 +525,7 @@ func (c *lastfmCatalogMatcher) lookup(key string, now time.Time, scope matchScop
 func (c *lastfmCatalogMatcher) store(key string, d lastfmCatalogDecision) {
 	d.TS = time.Now().Unix()
 	d.V = lastfmCatalogDecisionVersion
+	d.Ext = lastfmCatalogExtVersion
 	c.mu.Lock()
 	c.cache[key] = d
 	snapshot := make(map[string]lastfmCatalogDecision, len(c.cache))

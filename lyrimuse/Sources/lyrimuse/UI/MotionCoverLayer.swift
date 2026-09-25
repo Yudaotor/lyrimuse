@@ -107,7 +107,6 @@ final class MotionCoverNSView: NSView {
             looper = nil
             player = nil
             loadedFile = nil
-            wantsPlaying = false
         } else if let file = desiredFile {
             load(file)
         }

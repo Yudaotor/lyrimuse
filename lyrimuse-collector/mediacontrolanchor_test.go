@@ -181,3 +181,30 @@ func TestResolvePlayingAnchorTSKeepsOriginalOnRepublish(t *testing.T) {
 		t.Fatalf("genuine anchor should replace: got %s rep=%v", got, rep)
 	}
 }
+
+// 酷狗单曲循环回到开头时报 playing:false、rate 仍是 1,整遍不再翻回 true;真暂停 rate 归 0。
+func TestEffectivePlayingKugouLoop(t *testing.T) {
+	anchor := time.Date(2026, 9, 24, 1, 55, 20, 0, time.UTC)
+	loop := mediaControlRawState{BundleID: kugouMusicBundleID, Title: "灵魂相愿", Artist: "张敬轩",
+		Duration: 300, ElapsedTime: 0, PlaybackRate: 1, Playing: false, Timestamp: "2026-09-24T01:55:20Z"}
+	cases := []struct {
+		name string
+		raw  mediaControlRawState
+		now  time.Time
+		want bool
+	}{
+		{"循环中 rate 1、没越过曲长 → 在播", loop, anchor.Add(75 * time.Second), true},
+		{"越过曲长 2s 以内仍算在播", loop, anchor.Add(301500 * time.Millisecond), true},
+		{"越过曲长还没新锚点 → 停了", loop, anchor.Add(303 * time.Second), false},
+		{"真暂停 rate 0 → 暂停", func() mediaControlRawState { r := loop; r.PlaybackRate = 0; r.ElapsedTime = 177.066; return r }(), anchor.Add(5 * time.Second), false},
+		{"别的播放器原样", func() mediaControlRawState { r := loop; r.BundleID = spotifyBundleID; return r }(), anchor.Add(75 * time.Second), false},
+		{"没有时间戳 → 原样", func() mediaControlRawState { r := loop; r.Timestamp = ""; return r }(), anchor.Add(75 * time.Second), false},
+		{"带 --micros 的时间戳", func() mediaControlRawState { r := loop; r.Timestamp = "2026-09-24T01:55:20.965410Z"; return r }(), anchor.Add(75 * time.Second), true},
+		{"报 playing:true 的不动", func() mediaControlRawState { r := loop; r.Playing = true; r.PlaybackRate = 0; return r }(), anchor.Add(75 * time.Second), true},
+	}
+	for _, c := range cases {
+		if got := effectivePlaying(c.raw, c.now); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+}

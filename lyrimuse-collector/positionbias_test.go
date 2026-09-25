@@ -65,3 +65,67 @@ func TestPositionBiasSignMatchesSwift(t *testing.T) {
 		t.Fatalf("方向反了: raw %.3f − bias %.3f 应≈6.419,得到 %.3f", raw, bias, got)
 	}
 }
+
+// Spotify 自己的钟那一档(AnchorElapsed == nil):按"记录那一刻的位置 + 记录至今"核连续性。
+func TestPlayerClockBiasApplies(t *testing.T) {
+	written := time.Date(2026, 9, 23, 6, 20, 0, 0, time.UTC)
+	pos := 5.911
+	rec := positionBiasRecord{Artist: "方大同", Title: "黑白", BundleID: spotifyBundleID,
+		BiasSecs: 0.267, WrittenAtMs: written.UnixMilli(), PositionSecs: &pos}
+	now := written.Add(30 * time.Second)
+	cases := []struct {
+		name string
+		rec  positionBiasRecord
+		raw  float64
+		want bool
+	}{
+		{"一直连续在放", rec, 5.911 + 30 + 0.267, true},
+		{"之后暂停过(位置比预期少一截)", rec, 20, false},
+		{"之后拖过", rec, 120, false},
+		{"media-control 那档的记录不套在这个钟上", func() positionBiasRecord { r := rec; r.AnchorElapsed = f64(0); return r }(), 5.911 + 30 + 0.267, false},
+		{"偏置为 0", func() positionBiasRecord { r := rec; r.BiasSecs = 0; return r }(), 36.178, false},
+		{"不是同一首", func() positionBiasRecord { r := rec; r.Title = "三人遊"; return r }(), 36.178, false},
+		{"旧记录没有位置按 0 算", func() positionBiasRecord { r := rec; r.PositionSecs = nil; return r }(), 30 + 0.267, true},
+	}
+	for _, c := range cases {
+		if got := playerClockBiasApplies(c.rec, "方大同", "黑白", spotifyBundleID, c.raw, now); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+	if playerClockBiasApplies(rec, "方大同", "黑白", spotifyBundleID, 5.911+0.267, written.Add(-5*time.Second)) {
+		t.Errorf("记录时刻在未来不该套")
+	}
+}
+
+// 酷狗自然切歌:App 在读数层按归零锚点补了 0.515s,对着原始锚点(0.980)写一条负偏置,collector 5 秒一拍看不到
+// 那份归零锚点,靠这条记录跟上;暂停之后锚点换成冻结值,记录自然不再套用。
+func TestPositionBiasAppliesKugouStartCorrection(t *testing.T) {
+	anchorTS := time.Date(2026, 9, 24, 3, 3, 24, 372887000, time.UTC)
+	elapsed := 0.980
+	rec := positionBiasRecord{Artist: "Little Sis Nora", Title: "GABBA GABBA", BundleID: kugouMusicBundleID,
+		AnchorElapsed: &elapsed, BiasSecs: -0.515, WrittenAtMs: anchorTS.Add(300 * time.Millisecond).UnixMilli()}
+	now := anchorTS.Add(30 * time.Second)
+	if !positionBiasApplies(rec, "Little Sis Nora", "GABBA GABBA", kugouMusicBundleID, 0.980, anchorTS, now) {
+		t.Fatalf("对着同一个原始锚点的负偏置应该套用")
+	}
+	if positionBiasApplies(rec, "Little Sis Nora", "GABBA GABBA", kugouMusicBundleID, 150.261, anchorTS.Add(150*time.Second), now.Add(150*time.Second)) {
+		t.Fatalf("暂停冻结锚点不该再套")
+	}
+}
+
+// Safari 恢复播放卡顿:App 的网页探针用页面 currentTime 量出恢复锚点领先 0.240s,写成对着恢复锚点的正偏置;
+// 恢复锚点 47.990、下一次暂停冻结 57.705。
+func TestPositionBiasAppliesSafariResumeStall(t *testing.T) {
+	const webkit = "com.apple.WebKit.GPU"
+	anchorTS := time.Date(2026, 9, 24, 7, 47, 38, 330000000, time.UTC)
+	elapsed := 47.990
+	rec := positionBiasRecord{Artist: "Fujii Kaze", Title: "Okay, Goodbye", BundleID: webkit,
+		AnchorElapsed: &elapsed, BiasSecs: 0.240, WrittenAtMs: anchorTS.Add(4460 * time.Millisecond).UnixMilli()}
+	now := anchorTS.Add(8 * time.Second)
+	if !positionBiasApplies(rec, "Fujii Kaze", "Okay, Goodbye", webkit, 47.990, anchorTS, now) {
+		t.Fatalf("对着恢复锚点量出的偏置应该套用")
+	}
+	if positionBiasApplies(rec, "Fujii Kaze", "Okay, Goodbye", webkit, 57.705, anchorTS.Add(10*time.Second), now.Add(2*time.Second)) {
+		t.Fatalf("暂停冻结锚点(Safari 重发的真值)不该再套")
+	}
+}

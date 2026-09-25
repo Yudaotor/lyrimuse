@@ -316,6 +316,25 @@ public enum MenuBarMarquee {
                             headHoldSeconds: head, tailHoldSeconds: tail)
     }
 
+    /// 没有逐字时间轴的一行按**显示时长**配速的滚动路径(时间 到 偏移),形状跟 `followScrollPath`
+    /// 一样,静态取值 / 剩余关键帧直接复用 `karaokeFillX` / `karaokeFillKeyframes`。
+    /// 三个点:开头停 `pacing.headHoldSeconds` → 匀速走到 `maxOffset` → 之后停在句尾(路径外取末值)。
+    /// - Parameter startMs: 这一行开始显示的时刻(歌词时间轴毫秒,跟调用方喂的 nowMs 同一个基准)。
+    /// - Parameter dwellMs: 这一行会显示多久;nil = 不知道,`pacing` 退回固定速度。
+    /// 空数组 = 装得下,不用滚。
+    public static func pacedScrollPath(
+        startMs: Int, dwellMs: Int?, maxOffset: CGFloat, averageCharWidth: CGFloat
+    ) -> [KaraokeFillPoint] {
+        guard maxOffset > 0 else { return [] }
+        let p = pacing(maxOffset: maxOffset, averageCharWidth: averageCharWidth,
+                       dwellSeconds: dwellMs.map { Double($0) / 1000 })
+        let moveStart = startMs + max(1, Int((p.headHoldSeconds * 1000).rounded()))
+        let travelMs = max(1, Int((Double(maxOffset / p.pointsPerSecond) * 1000).rounded()))
+        return [KaraokeFillPoint(ms: startMs, x: 0),
+                KaraokeFillPoint(ms: moveStart, x: 0),
+                KaraokeFillPoint(ms: moveStart + travelMs, x: maxOffset)]
+    }
+
     // MARK: - 跟唱滚动:有逐字时间轴时,滚动跟着正在唱的字走
 
     // 加("可以根据实际的宽度以及播放逐字进度去滚吗")。上面那套按 dwell
@@ -424,6 +443,23 @@ public enum MenuBarMarquee {
     /// 此刻的滚动偏移(静态取值:暂停 / 已唱完 / 装动画前的初值用)。跟填色边界同一条插值。
     public static func followScrollOffset(atMs ms: Int, path: [KaraokeFillPoint]) -> CGFloat {
         karaokeFillX(atMs: ms, path: path)
+    }
+
+    /// 偏移路径上文字真正在动的那一段(毫秒):从离开起始值之前的最后一个折点,到第一次到达
+    /// 终值的折点。这一段之前(还没唱到锚点)和之后(已经滚到底)偏移恒定,驱动在那两段不需要
+    /// 任何动画。nil = 路径为空或全程不动。
+    public struct FollowMotionSpan: Equatable, Sendable {
+        public let startMs: Int
+        public let endMs: Int
+    }
+
+    public static func followMotionSpan(path: [KaraokeFillPoint]) -> FollowMotionSpan? {
+        guard let first = path.first, let last = path.last, last.x != first.x,
+              let firstMoving = path.firstIndex(where: { $0.x != first.x }),
+              let firstAtEnd = path.firstIndex(where: { $0.x == last.x })
+        else { return nil }
+        // path[0].x == first.x,所以 firstMoving >= 1。
+        return FollowMotionSpan(startMs: path[firstMoving - 1].ms, endMs: path[firstAtEnd].ms)
     }
 
     /// 从"此刻"起到这句唱完的剩余滚动关键帧(`widths` 字段在这里装的是偏移量)。

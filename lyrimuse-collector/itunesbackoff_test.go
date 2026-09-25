@@ -202,3 +202,33 @@ func TestITunesSearchReportsUnreachedOnRateLimit(t *testing.T) {
 		t.Error("429 必须报 reached=false —— 空结果不代表 Apple 没有这首歌")
 	}
 }
+
+// 没拿到响应(连不上 / 超时)按 403 那一档退避;调用方自己取消的不算。
+func TestITunesSearchTransportFailureBacksOff(t *testing.T) {
+	resetITunesSearchBackoff(t)
+	ln := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := ln.URL
+	ln.Close()
+	old := itunesSearchBaseURL
+	itunesSearchBaseURL = closedURL
+	t.Cleanup(func() { itunesSearchBaseURL = old })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, reached := itunesSearch(ctx, "q", "cn"); reached {
+		t.Fatal("取消的请求不该报 reached")
+	}
+	if itunesSearchCoolingDown(time.Now()) {
+		t.Fatal("调用方自己取消不是 Apple 的状态,不该退避")
+	}
+
+	if _, reached := itunesSearch(context.Background(), "q", "cn"); reached {
+		t.Fatal("连不上不该报 reached")
+	}
+	if !itunesSearchCoolingDown(time.Now()) {
+		t.Fatal("连不上该进入退避")
+	}
+	if itunesSearchCoolingDown(time.Now().Add(itunesSearchForbiddenCooldown + time.Second)) {
+		t.Fatal("没拿到响应按 403 的固定档退避")
+	}
+}

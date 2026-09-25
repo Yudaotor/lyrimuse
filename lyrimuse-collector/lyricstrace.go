@@ -34,7 +34,7 @@ const lyricsTraceMaxBytes = 2 << 20
 // traceLyricsDecision 把一份决策记录追加进 trace 文件。d 为 nil 或开关关着时是空操作。
 // 失败只记日志不返回错误 —— trace 是旁路诊断,绝不能反过来影响解析主流程。
 func traceLyricsDecision(key string, d *lyricsDecision) {
-	if d == nil || !features.LyricsDecisionTrace {
+	if d == nil || !features().LyricsDecisionTrace {
 		return
 	}
 	if enrichPath == "" {

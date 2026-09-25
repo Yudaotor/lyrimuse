@@ -23,11 +23,15 @@ import LyrimuseCore
 @MainActor
 final class PlayerHealthMonitor: ObservableObject {
     @Published private(set) var warnings: [PlayerHealth.Warning] = []
+    /// 自动化权限被拒的那几家,徽标说明里点名用。
+    @Published private(set) var automationDeniedPlayers: [PlaybackPlayer] = []
+    /// 最近一次读到的 collector 服务状态;nil = 还没读过。播放器页那张卡片直接用它。
+    @Published private(set) var collectorState: LaunchdJobState?
 
     /// 徽标的悬停说明;没有警告时为 nil(侧栏据此决定画不画徽标)。
     var warningText: String? {
         guard !warnings.isEmpty else { return nil }
-        return warnings.map(Self.description).joined(separator: "；")
+        return warnings.map(description).joined(separator: "；")
     }
 
     private var timer: AnyCancellable?
@@ -37,7 +41,7 @@ final class PlayerHealthMonitor: ObservableObject {
     func start() {
         guard timer == nil else { return }
         refresh()
-        timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+        timer = Timer.publish(every: 2, tolerance: 0.5, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.refresh() }
         // 用户切去系统设置改权限再切回来,不等下一拍。
         activationObserver = NotificationCenter.default
@@ -50,11 +54,16 @@ final class PlayerHealthMonitor: ObservableObject {
         activationObserver = nil
     }
 
-    private func refresh() {
+    /// 立刻查一次(页面刚出现、刚启停过服务时调)。在飞时不重复起。
+    func refresh() {
         guard !refreshInFlight else { return }
         refreshInFlight = true
-        // 主线程能直接读的两项先读好(纯内存)。
-        let appleMusicSelected = FeatureSettingsStore.shared.players.contains(.appleMusic)
+        // 主线程能直接读的先读好:要查权限的那几家 = 当前选择需要自动化权限的 ∩ 本机装了
+        // (同设置页权限卡那份列表,见 `PlayerHealth.automationDeniedPlayers`)。
+        let selection = FeatureSettingsStore.shared.players
+        let permissions = PlayerAutomationPermissions.shared
+        let targets = PlayerHealth.automationDeniedPlayers(
+            selection: selection, isInstalled: permissions.isInstalled, isDenied: { _ in true })
         let collectorEnabled = AppSettings.shared.collectorServiceEnabled
         // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
         // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
@@ -62,22 +71,34 @@ final class PlayerHealthMonitor: ObservableObject {
         // Task { } 继承本类的 @MainActor 隔离,weak self 在这里解包不算"并发代码里引用捕获变量"
         // (原来整段包在 Task.detached 里、在 MainActor.run 闭包内解包,编译器会告警,Swift 6 是 error)。
         Task { [weak self] in
-            let (automationDenied, collectorRunning) = await Task.detached(priority: .utility) {
-                (MusicAutomationPermission.check(askIfNeeded: false) == .denied,
-                 CollectorServiceManager.isRunning)
+            let collector = await Task.detached(priority: .utility) {
+                CollectorServiceManager.state
             }.value
+            var denied: Set<PlaybackPlayer> = []
+            for player in targets {
+                if await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false) == .denied {
+                    denied.insert(player)
+                }
+            }
             guard let self else { return }
             self.refreshInFlight = false
+            if collector != self.collectorState { self.collectorState = collector }
+            let deniedPlayers = targets.filter { denied.contains($0) }
+            if deniedPlayers != self.automationDeniedPlayers { self.automationDeniedPlayers = deniedPlayers }
             let latest = PlayerHealth.warnings(.init(
-                appleMusicSelected: appleMusicSelected, automationDenied: automationDenied,
-                collectorServiceEnabled: collectorEnabled, collectorRunning: collectorRunning))
+                automationDeniedPlayers: deniedPlayers,
+                collectorServiceEnabled: collectorEnabled, collectorRunning: collector.isRunning))
             if latest != self.warnings { self.warnings = latest }
         }
     }
 
-    static func description(_ warning: PlayerHealth.Warning) -> String {
+    func description(_ warning: PlayerHealth.Warning) -> String {
         switch warning {
-        case .automationDenied: return L10n.t("Apple Music 自动化权限被拒，读不到播放状态")
+        case .automationDenied:
+            let names = ListFormatter()
+            names.locale = L10n.locale
+            let list = names.string(from: automationDeniedPlayers.map(\.displayName)) ?? ""
+            return String(format: L10n.t("%@ 的自动化权限被拒，读不到播放状态"), list)
         case .collectorNotRunning: return L10n.t("后台采集服务未运行，歌词不会更新")
         }
     }

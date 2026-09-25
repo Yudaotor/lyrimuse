@@ -8,15 +8,15 @@ import "testing"
 // 表现都是**静默失效**:用户选了酷狗,collector 认不出这个值就默默兜底成「自动识别」,
 // 界面一切正常、只是选择没生效。
 func TestKugouPlayerWiring(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 
 	// "players" 字段里的值必须被接受,不能被 resolvePlayers 当成认不出的值兜底掉。
 	if got := resolvePlayers([]string{"kugou_music"}, ""); !got[playerKugou] {
 		t.Errorf("resolvePlayers([kugou_music]) = %v，期望包含 %q（认不出会静默退回自动识别）", got, playerKugou)
 	}
 
-	features.Players = map[string]bool{playerKugou: true}
+	featuresRef().Players = map[string]bool{playerKugou: true}
 	if got := playerBundleID(playerKugou); got != kugouMusicBundleID {
 		t.Errorf("playerBundleID(kugou) = %q，期望 %q", got, kugouMusicBundleID)
 	}
@@ -29,7 +29,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 	if !isKnownPlayerBundleID(kugouMusicBundleID) {
 		t.Error("自动识别模式认不出酷狗的 bundle id")
 	}
-	features.Players = map[string]bool{playerAuto: true}
+	featuresRef().Players = map[string]bool{playerAuto: true}
 	if got := mediaPlayerLabel(kugouMusicBundleID); got != "Kugou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(自动识别分支) = %q", got)
 	}
@@ -59,8 +59,8 @@ func TestKugouPlayerWiring(t *testing.T) {
 // 「自动识别」放开到任意 App:口径是"用户显式信任",不是"一律接受"。
 // 白名单同时挡着显示和打卡(isTracked),一律接受等于让视频/播客写进永久收听历史。
 func TestTrustedPlayersWiring(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 
 	// 清洗:空 bundle id 丢掉、首尾空白去掉、内置播放器剔掉(它们本来就认,
 	// 留在名单里只会让"已信任"列表看起来莫名多几条)。
@@ -85,7 +85,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 		t.Error("空输入该返回 nil(调用方一律用 m[k] 取值,nil map 是合法零值读取)")
 	}
 
-	features.TrustedPlayers = got
+	featuresRef().TrustedPlayers = got
 
 	// 准入:内置永远认、信任过的认、陌生的一律不认。
 	for _, id := range []string{"com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID} {
@@ -125,10 +125,10 @@ func TestTrustedPlayersWiring(t *testing.T) {
 // 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** 到 整条丢掉。
 // 判据跟 isAdBreak 完全一致,区别只在作用域。四份真实样本见 trustedPlaybackNotASong 的注释。
 func TestTrustedPlaybackNotASong(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 	const arc = "company.thebrowser.Browser"
-	features.TrustedPlayers = map[string]string{arc: "Arc"}
+	featuresRef().TrustedPlayers = map[string]string{arc: "Arc"}
 
 	// —— 真实样本:Arc 放视频 ——
 	// ① 第一份(17:57):artist 和 album 都空

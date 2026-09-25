@@ -56,6 +56,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
     @Published private(set) var isVisible: Bool = AppSettings.shared.notchOverlayEnabled
     @Published private(set) var hideWhenNotPlaying: Bool = false
+    /// 窗口此刻是否真的看得见(`occlusionState` 含 `.visible`)。关掉灵动岛 / 暂停时隐藏(orderOut)、
+    /// 锁屏、屏保、熄屏都是 false。灵动岛所有按时间推进的表都按它停(经环境值 `notchCardLayerActive`),
+    /// SwiftUI 不会因为窗口看不见就自己停 `TimelineView(.animation)`。默认 true:宁可多跑也不能把看得见的窗口停表。
+    @Published private(set) var isSurfaceVisible = true
     // 常显内容行(歌词)相对窗口顶部的偏移——正好等于刘海(或无刘海屏幕的兜底高度)
     // 本身的高度,这样歌词永远从刘海往下才开始画,不会被刘海真实挡住一部分。
     // NotchLyricsView 读这个属性给歌词行加 .padding(.top, contentTopInset)。
@@ -332,6 +336,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var trackPresenceObserver: AnyCancellable?
     private var unknownPlayerAlertObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
+    private var occlusionObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
     // contentView.frame 都能读到新的高度),但 NSHostingView 内部的 SwiftUI 布局树没有
@@ -378,6 +383,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         hosting.sizingOptions = []
         panel.contentView = hosting
         hostingView = hosting
+
+        // 窗口还没 orderFront 时 occlusionState 也是「不可见」,所以初值保持 true;上屏后系统会补一次通知。
+        // 主实例和镜像副本都要挂:每扇窗各管各的树。
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main
+        ) { [weak self] note in
+            guard let win = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated {
+                let visible = win.occlusionState.contains(.visible)
+                if self?.isSurfaceVisible != visible { self?.isSurfaceVisible = visible }
+            }
+        }
 
         recomputeGeometry(animate: false)
 
@@ -537,6 +554,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     deinit {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
     }
 
     /// 展开态头部快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。只是 `setVisible(false)`
@@ -706,17 +724,21 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var hideGeneration = 0
 
     private func updateActualVisibility(isPlayingNow: Bool) {
-        // alertHold:「发现新播放器」提醒期间窗口必须在屏上 —— 那一刻按定义没有曲目、也没在播,
-        // 开着「暂停/无播放时隐藏」的机器上窗口正藏着;下面延迟隐藏那条 stillShow 判据同款。
-        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow || alertHold)
-        if shouldShow {
-            // 中途又播放了:挂着的延迟隐藏作废;窗口若已在屏上就一次 WindowServer 事务都不发。
+        // 该做哪一步由 Core 的 NotchVisibility 决定(selftest 覆盖),这里只执行。
+        let shouldShow = NotchVisibility.shouldShow(isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
+                                                    isPlaying: isPlayingNow, alertHold: alertHold)
+        let step = NotchVisibility.step(shouldShow: shouldShow, isVisible: isVisible,
+                                        lastApplied: lastAppliedShouldShow, isVanished: isVanished,
+                                        reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                                        hasPendingHide: pendingHideWork != nil)
+        switch step {
+        case .show(let orderFront, let replayReveal):
+            // 中途又播放了:挂着的延迟隐藏作废。
             cancelPendingHide()
-            // 「从无到有」露面的两种情况合并成一次出场动画:窗口刚上屏、或卡片从刘海里回场。先加计数再
-            // orderFront / 翻 isVanished —— 同一事务里 SwiftUI 看到的第一帧就是裁剪到刘海宽的起始态,
-            // 不会先满幅一帧。
-            if lastAppliedShouldShow != true || isVanished { revealGeneration &+= 1 }
-            if lastAppliedShouldShow != true {
+            // 先加出场动画计数再 orderFront / 翻 isVanished —— 同一事务里 SwiftUI 看到的第一帧就是裁剪到
+            // 刘海宽的起始态,不会先满幅一帧。
+            if replayReveal { revealGeneration &+= 1 }
+            if orderFront {
                 lastAppliedShouldShow = true
                 // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
                 // 从不激活成前台 App,只有它能不看"当前是否是活跃 App"这个前提就把窗口调到最前。
@@ -725,28 +747,24 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             // 先 orderFront 再翻回 false:卡片在已经可见的窗口里从刘海撑开。顺序反了动画会在看不见的窗口里播完。
             if isVanished { isVanished = false }
             return
-        }
-        guard lastAppliedShouldShow != false else { cancelPendingHide(); return }
-        // 「暂停/无播放时隐藏」开着时先让整卡缩进刘海、再 orderOut(推翻此前"暂停即
-        // 整窗消失、看不到动画是设置语义"的决定,见 05 章设计决策 #17)。⚠️ 别做成"先播 0.45s 收起
-        // 弹簧再走"——要的是"不经过暂停状态,直接从正常大小缩小到无":现在
-        // isCollapsed 在这个开关开着时不再把暂停算进去(卡片保持稳态尺寸),由 isVanished 驱动
-        // NotchWindowRoot 把整卡 scale→0 缩进刘海(NotchWindowRoot.vanishDuration),再等
-        // vanishSettleDelay 三重校验后 orderOut。仍然立刻隐藏的情况:系统减弱动态效果(不做尺寸
-        // 动画)、用户把灵动岛整个关掉(isVisible=false)、窗口本来就还没显示过(lastApplied == nil)。
-        // 截屏/录屏隐藏走的是 sharingType,不经这里,不受这 1/4 秒影响。
-        let animatesVanish = isVisible && lastAppliedShouldShow == true
-            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        guard animatesVanish else {
+        case .alreadyHidden:
+            cancelPendingHide()
+            return
+        case .hideNow:
             cancelPendingHide()
             lastAppliedShouldShow = false
             if isVanished { isVanished = false }
             window?.orderOut(nil)
             return
+        case .keepPendingVanish:
+            return
+        case .startVanish:
+            break
         }
-        // 已经在等退场动画就不重排:设置同步(syncStateFromSettings)等路径会带着同样的结论
-        // 再进来,重排只会把隐藏一推再推。
-        guard pendingHideWork == nil else { return }
+        // 「暂停/无播放时隐藏」开着时先让整卡缩进刘海、再 orderOut(见 05 章设计决策 #17):isVanished 驱动
+        // NotchWindowRoot 把整卡缩进刘海(NotchWindowRoot.vanishDuration),再等 vanishSettleDelay 三重校验后
+        // orderOut。别做成"先播 0.45s 收起弹簧再走"——要的是不经过暂停状态,直接从正常大小缩小到无。
+        // 截屏/录屏隐藏走的是 sharingType,不经这里。
         isVanished = true
         hideGeneration &+= 1
         let generation = hideGeneration
@@ -758,8 +776,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 // 开关与灵动岛仍开;平滑播放态仍是"没在放"。作废的那一路自己负责把 isVanished
                 // 翻回去(shouldShow 分支 / 立刻隐藏分支),这里不动它。
                 guard generation == self.hideGeneration else { return }
-                let stillShow = self.isVisible
-                    && (!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed || self.alertHold)
+                let stillShow = NotchVisibility.shouldShow(
+                    isVisible: self.isVisible, hideWhenNotPlaying: self.hideWhenNotPlaying,
+                    isPlaying: PlaybackCoordinator.shared.isPlayingSmoothed, alertHold: self.alertHold)
                 if stillShow {
                     // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
                     if self.isVanished { self.isVanished = false }
@@ -990,6 +1009,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil
         }
+        if let occlusionObserver {
+            NotificationCenter.default.removeObserver(occlusionObserver)
+            self.occlusionObserver = nil
+        }
         pendingHoverWork?.cancel()
         pendingHoverWork = nil
         window?.contentView = nil
@@ -1076,21 +1099,21 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 expandedTrackInfoShowsArtist: expandedTrackInfoShowsArtist,
                 expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
                 expandedShowsQuickActions: expandedShowsQuickActions))
-        let frame = NSRect(
-            x: geo.centerX - size.width / 2,
-            y: screen.frame.maxY - size.height,
-            width: size.width,
-            height: size.height
-        )
-        // 判等同上:setFrame(display: true) 是一次同步重绘 + WindowServer 事务,几何没变
-        // 时纯属白付(镜像 syncAll 的每次触达都会走到这里)。
-        if window.frame != frame { window.setFrame(frame, display: true, animate: animate) }
-        let hostFrame = NSRect(origin: .zero, size: size)
-        if hostingView?.frame != hostFrame { hostingView?.frame = hostFrame }
-    }
-}
         // 必须先取成整点,规则跟 AppKit 自己对窗口 frame 做的一致(实测:原点向下取整、宽高
         // 向上取整)。刘海高度 `safeAreaInsets.top` 在部分机型 / 缩放档下带小数(如 33.5),
         // 不取整的话:① 下面的判等永远不等(window.frame 已被取整),每次调用都白做一次同步
         // 重绘;② contentView 被设回未取整的尺寸、贴着窗口左下角,顶边空出半点,灵动岛
         // 上方露出一条菜单栏细缝。hostFrame 也要用取整后的尺寸,两处一起改。
+        let frame = NSRect(
+            x: (geo.centerX - size.width / 2).rounded(.down),
+            y: (screen.frame.maxY - size.height).rounded(.down),
+            width: size.width.rounded(.up),
+            height: size.height.rounded(.up)
+        )
+        // 判等同上:setFrame(display: true) 是一次同步重绘 + WindowServer 事务,几何没变
+        // 时纯属白付(镜像 syncAll 的每次触达都会走到这里)。
+        if window.frame != frame { window.setFrame(frame, display: true, animate: animate) }
+        let hostFrame = NSRect(origin: .zero, size: frame.size)
+        if hostingView?.frame != hostFrame { hostingView?.frame = hostFrame }
+    }
+}

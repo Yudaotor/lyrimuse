@@ -107,9 +107,9 @@ func TestPlanDedupeIsDeterministic(t *testing.T) {
 
 func TestResolveStaleFilesNeverTouchesWinner(t *testing.T) {
 	dir := t.TempDir()
-	old := lyricsDir
-	lyricsDir = dir
-	t.Cleanup(func() { lyricsDir = old })
+	old := lyricsDir()
+	setLyricsDir(dir)
+	t.Cleanup(func() { setLyricsDir(old) })
 
 	winner := "陶喆|Susan说|太平盛世"
 	loser := "陶喆|Susan 说|太平盛世"
@@ -141,9 +141,9 @@ func TestResolveStaleFilesNeverTouchesWinner(t *testing.T) {
 // 空目录下不该凭空列出文件(只列**确实存在**的,不按名字硬猜)。
 func TestResolveStaleFilesOnlyExisting(t *testing.T) {
 	dir := t.TempDir()
-	old := lyricsDir
-	lyricsDir = dir
-	t.Cleanup(func() { lyricsDir = old })
+	old := lyricsDir()
+	setLyricsDir(dir)
+	t.Cleanup(func() { setLyricsDir(old) })
 
 	plan := dedupePlan{groups: []dedupeGroup{{
 		winner: "陶喆|Susan说|太平盛世",
@@ -195,9 +195,9 @@ func TestPickDisplayKeyPrefersSimplifiedThenSpaced(t *testing.T) {
 // importLyricsFromFiles 会把它那份较差的正文当权威源读回来。
 func TestResolveStaleFilesIncludesWinnerWhenContentMovedIn(t *testing.T) {
 	dir := t.TempDir()
-	old := lyricsDir
-	lyricsDir = dir
-	t.Cleanup(func() { lyricsDir = old })
+	old := lyricsDir()
+	setLyricsDir(dir)
+	t.Cleanup(func() { setLyricsDir(old) })
 
 	winner := "陶喆|Susan 说|太平盛世" // 显示用这条
 	source := "陶喆|Susan说|太平盛世"  // 内容来自这条

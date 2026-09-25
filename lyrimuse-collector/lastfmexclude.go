@@ -96,7 +96,7 @@ func currentLastfmExcludedBundles() map[string]bool {
 	lastfmExcludeMu.Lock()
 	defer lastfmExcludeMu.Unlock()
 	if lastfmExcludePath == "" {
-		return features.LastfmExcludedBundles
+		return features().LastfmExcludedBundles
 	}
 	st, err := os.Stat(lastfmExcludePath)
 	if err != nil {

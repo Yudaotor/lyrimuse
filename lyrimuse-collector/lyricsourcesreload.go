@@ -56,7 +56,7 @@ func currentLyricSources() map[string]bool {
 	lyricSourcesMu.Lock()
 	defer lyricSourcesMu.Unlock()
 	if lyricSourcesPath == "" {
-		return features.LyricsSources
+		return features().LyricsSources
 	}
 	st, err := os.Stat(lyricSourcesPath)
 	if err != nil {
@@ -64,7 +64,7 @@ func currentLyricSources() map[string]bool {
 		// resolveLyricsSources 的全集兜底,退回它就是同一个答案。
 		lyricSourcesSet, lyricSourcesRead = nil, true
 		lyricSourcesMTime, lyricSourcesSize = time.Time{}, 0
-		return features.LyricsSources
+		return features().LyricsSources
 	}
 	if !lyricSourcesRead || !st.ModTime().Equal(lyricSourcesMTime) || st.Size() != lyricSourcesSize {
 		next := readLyricSources(lyricSourcesPath)
@@ -78,7 +78,7 @@ func currentLyricSources() map[string]bool {
 		lyricSourcesMTime, lyricSourcesSize, lyricSourcesRead = st.ModTime(), st.Size(), true
 	}
 	if lyricSourcesSet == nil {
-		return features.LyricsSources
+		return features().LyricsSources
 	}
 	return lyricSourcesSet
 }

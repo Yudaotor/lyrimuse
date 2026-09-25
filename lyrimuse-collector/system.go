@@ -85,6 +85,90 @@ const getStateScript = `(() => {
     }
 })()`
 
+// getSpotifyStateScript 是 getStateScript 的 Spotify 版:字段、守卫、失败一律
+// JSON.stringify(null) 的形状都跟它逐条对应,只有三处不同 ——
+//   - duration 要除 1000(Spotify 的 `duration of current track` 是**毫秒**,实测
+//     296533 = 4:56;Music.app 那份是秒,别照抄);
+//   - 没有 mediaKind(Spotify 不分 MV,notAudioMedia 对它恒假);
+//   - 多一个 positionFromPlayerClock,告诉 updatePosition 这一拍的位置是播放器自己的钟、
+//     不是 MediaRemote 锚点外推,那套锚点补偿要整套跳过(见 snapshot.PositionFromPlayerClock)。
+//
+// `Application("Spotify")` 在 JXA 里不会把没开的 Spotify 拉起来(拉起来的是 AppleScript 的
+// `tell application`,见 spotifyCurrentTrackURI 的 running 守卫);这里仍先问一次 running(),
+// 跟 Music.app 那份保持同一个形状。
+const getSpotifyStateScript = `(() => {
+    const Spotify = Application("Spotify");
+    try {
+        if (!Spotify.running()) return JSON.stringify(null);
+    } catch (e) {
+        return JSON.stringify(null);
+    }
+    let state;
+    try {
+        state = Spotify.playerState();
+    } catch (e) {
+        return JSON.stringify(null);
+    }
+    if (state === "stopped") return JSON.stringify(null);
+    try {
+        const track = Spotify.currentTrack;
+        return JSON.stringify({
+            title: track.name(),
+            artist: track.artist(),
+            album: track.album(),
+            duration: track.duration() / 1000,
+            elapsedTime: Spotify.playerPosition(),
+            playing: state === "playing",
+            playbackRate: state === "playing" ? 1 : 0,
+            isMusicApp: true,
+            positionFromPlayerClock: true,
+            bundleIdentifier: "com.spotify.client"
+        });
+    } catch (e) {
+        return JSON.stringify(null);
+    }
+})()`
+
+// getSpotifyState 与 getAppleMusicState 逐段对称,包括三档返回值的语义:
+// (nil,false)=osascript 本身跑不起来(硬失败,调用方跳过这一轮);(空 map,true)=
+// 脚本自己判定"没有可报告的正在播放"(Spotify 没在跑 / stopped / 权限被拒,这三种从这层
+// 往上分不开),让 poll() 走 nullStreak 渐进清空;(state,true)=读到了。
+//
+// 三个标签同样要先洗一遍不可见空白:这是 Spotify 这条路径**唯一的元数据入口**,
+// media-control 那条早在 fetchRawMediaControlState 里洗过,而这条绕过了那里,不洗的话
+// NBSP / 零宽字符会原样进 Last.fm,建出一个跟正常写法肉眼一样、实际是另一个实体的条目。
+func getSpotifyState(ctx context.Context) (map[string]any, bool) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", getSpotifyStateScript).Output()
+	if err != nil {
+		return nil, false
+	}
+	if strings.TrimSpace(string(out)) == "null" {
+		return map[string]any{}, true
+	}
+	var state map[string]any
+	if err := json.Unmarshal(out, &state); err != nil {
+		return nil, false
+	}
+	for _, k := range []string{"title", "artist", "album"} {
+		if v, ok := state[k].(string); ok {
+			state[k] = cleanMediaTag(v)
+		}
+	}
+	// 这个钟每次起播都领先真声一截,扣掉 App 量出的那一段(见 currentPlayerClockBias)。暂停态不扣。
+	if playing, _ := state["playing"].(bool); playing {
+		if el, ok := state["elapsedTime"].(float64); ok {
+			artist, _ := state["artist"].(string)
+			title, _ := state["title"].(string)
+			if bias, ok := currentPlayerClockBias(artist, title, el, time.Now()); ok {
+				state["elapsedTime"] = el - bias
+			}
+		}
+	}
+	return state, true
+}
+
 // getState reads the current now-playing state once, dispatching to whichever
 // player(s) the user selected (features().Players, 可多选). It is
 // the authoritative fallback: the stream subscription can go silent for
@@ -101,11 +185,16 @@ const getStateScript = `(() => {
 //     auto)到 getMultiSelectedState,核对 media-control 报的系统级 Now Playing 焦点
 //     是不是落在选中的这个子集里,是的话才认(跟 getAutoDetectedState 同一套"系统只有
 //     一个焦点"的道理,只是准入名单从"内置五个+信任列表"收窄成"用户这次选中的这几个")。
+//
+// 后两条路上还压着一条**不分配置**的规则:认出在播的是 Apple Music 或 Spotify 时,曲目与
+// 位置整份换成它自己的 AppleScript 那份(refineAppleMusicState / refineSpotifyState)。
+// Spotify 刻意**没有**对应的 getSpotifyOnlyState 短路:那会顺带废掉「网页播放器」卡
+// 配对的浏览器,而 Spotify Web 正是最常被配对的平台。
 func getState(ctx context.Context) (map[string]any, bool) {
-	if features.Players[playerAuto] {
+	if features().Players[playerAuto] {
 		return getAutoDetectedState(ctx)
 	}
-	if len(features.Players) == 1 && features.Players[playerAppleMusic] {
+	if len(features().Players) == 1 && features().Players[playerAppleMusic] {
 		return getAppleMusicOnlyState(ctx)
 	}
 	return getMultiSelectedState(ctx)
@@ -185,11 +274,6 @@ func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", getStateScript).Output()
 	if err != nil {
-//
-// 后两条路上还压着一条**不分配置**的规则:认出在播的是 Apple Music 或 Spotify 时,曲目与
-// 位置整份换成它自己的 AppleScript 那份(refineAppleMusicState / refineSpotifyState)。
-// Spotify 刻意**没有**对应的 getSpotifyOnlyState 短路:那会顺带废掉「网页播放器」卡
-// 配对的浏览器,而 Spotify Web 正是最常被配对的平台。
 		// osascript 本身跑不起来(极端情况,比如系统损坏/沙盒限制)——真正的硬失败,
 		// 调用方按"这次没读到"跳过整个 if 块处理,不碰 nullStreak。
 		return nil, false
@@ -294,16 +378,20 @@ func playerBundleID(player string) string {
 // 返回值也是真曲目 ID 的唯一来源,见 spotifytrack.go)。只在换曲时被 detectAdAtSessionStart 调一次;
 // 超时 / 权限被收回 / Spotify 没在跑都返回 ok=false,调用方退回 isAdBreak 的字段启发式。
 // 脚本前垫 running 守卫(02 章决策 9):`tell application "Spotify"` 发任何命令都会把没开的 Spotify 拉起来。
-func spotifyCurrentTrackURI(ctx context.Context) (uri string, ok bool) {
+//
+// 同一次脚本顺带带回曲目名:调用方要拿它核对「Spotify 此刻在播的」跟 media-control 报的是不是同一首
+// (见 spotifyTrackIDForSession)—— 两边在换歌那几秒里经常对不上。
+func spotifyCurrentTrackURI(ctx context.Context) (uri, name string, ok bool) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "osascript", "-e",
-		`if application "Spotify" is running then tell application "Spotify" to spotify url of current track`).Output()
+		`if application "Spotify" is running then tell application "Spotify" to return (spotify url of current track) & tab & (name of current track)`).Output()
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
-	uri = strings.TrimSpace(string(out))
-	return uri, uri != ""
+	uri, name, _ = strings.Cut(strings.TrimRight(string(out), "\r\n"), "\t")
+	uri = strings.TrimSpace(uri)
+	return uri, name, uri != ""
 }
 
 func isAdBreak(bundleID, artist, title, album string) bool {
@@ -380,12 +468,12 @@ func isAcceptedPlayerBundleID(bundleID string) bool {
 // 那会让"配对了却读不到播放"的断层从"要不要选一个具体播放器"这条线上重新冒出来。
 // 见 getMultiSelectedState/poller.isTracked。
 func isTrustedPlayerBundleID(bundleID string) bool {
-	if _, trusted := features.TrustedPlayers[bundleID]; trusted {
+	if _, trusted := features().TrustedPlayers[bundleID]; trusted {
 		return true
 	}
 	// Safari 的媒体进程按它的宿主算,见 mediaProxyOwners。
 	if owner, ok := mediaProxyOwners[bundleID]; ok {
-		_, trusted := features.TrustedPlayers[owner]
+		_, trusted := features().TrustedPlayers[owner]
 		return trusted
 	}
 	return false
@@ -438,7 +526,7 @@ func mediaPlayerLabel(bundleID string) string {
 	if owner, ok := mediaProxyOwners[bundleID]; ok {
 		lookupID = owner
 	}
-	if name, trusted := features.TrustedPlayers[lookupID]; trusted {
+	if name, trusted := features().TrustedPlayers[lookupID]; trusted {
 		if name != "" {
 			return name + " (macOS)"
 		}
@@ -516,6 +604,34 @@ type mediaControlRawState struct {
 	// 参数,这两个字段在那条路径上恒为空)。base64 编码的封面原始字节。
 	ArtworkData     string `json:"artworkData"`
 	ArtworkMimeType string `json:"artworkMimeType"`
+	// 带 --micros 调用时,duration/elapsedTime/elapsedTimeNow/timestamp 四个键被**替换**成下面
+	// 这四个(微秒;时间戳是 epoch 微秒)。applyMicros 换算回上面的原字段,下游只认原字段。
+	DurationMicros       *float64 `json:"durationMicros"`
+	ElapsedTimeMicros    *float64 `json:"elapsedTimeMicros"`
+	ElapsedTimeNowMicros *float64 `json:"elapsedTimeNowMicros"`
+	TimestampEpochMicros *int64   `json:"timestampEpochMicros"`
+}
+
+// mediaControlPreciseTimestampLayout 精确时间戳的写法:固定 6 位小数。别换成 RFC3339Nano ——
+// 它会删掉末尾的 0,微秒恰好落在整秒上时连小数点一起删,mediaControlAnchorInstant 就会把它
+// 当成旧的整秒格式、再补一次半秒。
+const mediaControlPreciseTimestampLayout = "2006-01-02T15:04:05.000000Z07:00"
+
+// applyMicros 把 --micros 的四个微秒键换算回原字段。原字段已有值的不动(不带 --micros 的输出
+// 原样通过)。
+func (r *mediaControlRawState) applyMicros() {
+	if r.DurationMicros != nil && r.Duration == 0 {
+		r.Duration = *r.DurationMicros / 1e6
+	}
+	if r.ElapsedTimeMicros != nil && r.ElapsedTime == 0 {
+		r.ElapsedTime = *r.ElapsedTimeMicros / 1e6
+	}
+	if r.ElapsedTimeNowMicros != nil && r.ElapsedTimeNow == 0 {
+		r.ElapsedTimeNow = *r.ElapsedTimeNowMicros / 1e6
+	}
+	if r.TimestampEpochMicros != nil && *r.TimestampEpochMicros > 0 && r.Timestamp == "" {
+		r.Timestamp = time.UnixMicro(*r.TimestampEpochMicros).UTC().Format(mediaControlPreciseTimestampLayout)
+	}
 }
 
 // seenMediaTypes 记已经报告过的 mediaType 取值,每个值只记一行 —— 这是个每 5 秒一拍的
@@ -547,43 +663,6 @@ func noteUnfamiliarMediaType(mediaType, title string) {
 	}
 }
 
-// getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
-// 薄封装——QQ 音乐/网易云音乐都没有 AppleScript 支持,Spotify 虽然有但实测
-// 坐实它同样把播放状态发布进系统级 MediaRemote,三者读取路径完全一样,只是各自要核对
-// 的 bundle id 不同,不需要把整个函数体抄三遍。
-func getQQMusicState(ctx context.Context) (map[string]any, bool) {
-	return matchMediaControlState(ctx, qqMusicBundleID)
-}
-
-func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
-	return matchMediaControlState(ctx, neteaseMusicBundleID)
-}
-
-func getSpotifyState(ctx context.Context) (map[string]any, bool) {
-	return matchMediaControlState(ctx, spotifyBundleID)
-}
-
-func getKugouMusicState(ctx context.Context) (map[string]any, bool) {
-	return matchMediaControlState(ctx, kugouMusicBundleID)
-}
-
-// matchMediaControlState 核对 media-control 报的 bundle id 是不是 expectedBundleID——
-// QQ 音乐/网易云音乐/Spotify 共用这同一份实现,真正调用子进程/解析原始输出的逻辑收在
-// fetchRawMediaControlState 里。
-func matchMediaControlState(ctx context.Context, expectedBundleID string) (map[string]any, bool) {
-	raw, bundleID, ok := fetchRawMediaControlState(ctx)
-	if !ok {
-		return nil, false
-	}
-	if bundleID != expectedBundleID {
-		// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等)在报告,
-		// 不是当前选定的这个——不能把它当成这个播放器的"正在播放",按"没有可报告的
-		// 正在播放"处理。
-		return map[string]any{}, true
-	}
-	return raw, true
-}
-
 // getAutoDetectedState 是 playerAuto("自动识别")的读取路径——不预先假定是哪个
 // 播放器,直接问 media-control 当前系统级 Now Playing 焦点是谁,再核对是不是这四个
 // 已知播放器之一(macOS 的 MediaRemote/Control Center 本来就只有一个"当前正在播放"
@@ -601,6 +680,9 @@ const (
 	autoDetectReject autoDetectClass = iota
 	// autoDetectAppleMusic:raw 还要再合一次 AppleScript 的读数(精度更高)。
 	autoDetectAppleMusic
+	// autoDetectSpotify:同 autoDetectAppleMusic —— 它也有自己的 AppleScript 字典,
+	// raw 只用来认身份,曲目与位置整份换成 getSpotifyState 那份。
+	autoDetectSpotify
 	// autoDetectBuiltin:其余内置播放器,raw 直接采纳。
 	autoDetectBuiltin
 	// autoDetectTrusted:用户信任过的未知播放器,采纳前还要过"这是不是一首歌"的守卫。
@@ -625,6 +707,9 @@ func classifyAutoDetected(bundleID string) autoDetectClass {
 	if bundleID == appleMusicBundleID {
 		return autoDetectAppleMusic
 	}
+	if bundleID == spotifyBundleID {
+		return autoDetectSpotify
+	}
 	if isKnownPlayerBundleID(bundleID) {
 		return autoDetectBuiltin
 	}
@@ -642,6 +727,8 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 	switch classifyAutoDetected(bundleID) {
 	case autoDetectAppleMusic:
 		return refineAppleMusicState(ctx, raw), true
+	case autoDetectSpotify:
+		return refineSpotifyState(ctx, raw), true
 	case autoDetectBuiltin:
 		return raw, true
 	case autoDetectReject:
@@ -704,6 +791,24 @@ func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]a
 	return raw
 }
 
+// refineSpotifyState 是 refineAppleMusicState 的 Spotify 版,getAutoDetectedState /
+// getMultiSelectedState 共用:bundleID 已经确认是 Spotify,曲目与位置**整份**换成
+// getSpotifyState 那份 AppleScript state;问不到(没有"自动化"权限 / Spotify 不可达 /
+// 超时)就退回 media-control 已经读到的这份,不整个放弃。
+//
+// 跟那边不同的是这里**一个键都不用从 raw 合回去**:mergeRadioKeys 补的两个键都是
+// Apple Music 电台专属的(radioStationHash 只有 Music.app 的电台会给,catalogDurationSecs
+// 由 appleCatalogAnchor 产出、第一行就把非 Apple Music 挡掉了)。
+//
+// 与 App 侧 MediaControlClient.adaptedSnapshot 必须同一口径:整份顶替,不做
+// "只借 elapsedTime、差得太多就不借"那种两源混合 —— 混合正是这条路以前不准的根因。
+func refineSpotifyState(ctx context.Context, raw map[string]any) map[string]any {
+	if state, ok := getSpotifyState(ctx); ok && len(state) > 0 {
+		return state
+	}
+	return raw
+}
+
 // getMultiSelectedState 是"显式多选了若干个具体播放器、没有勾自动识别"的读取路径——
 // 跟 getAutoDetectedState 同一套"系统级 Now Playing 只有一个焦点,问 media-control 一次
 // 就知道是谁"的机制,区别只在准入名单:这里认的是 features().Players 里用户这次选中的
@@ -713,7 +818,7 @@ func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]a
 // bundle id"——QQ音乐/网易云/Spotify/酷狗都由它统一派发,不再各有一个入口函数。
 func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 	accepted := map[string]bool{}
-	for p := range features.Players {
+	for p := range features().Players {
 		accepted[playerBundleID(p)] = true
 	}
 	raw, bundleID, ok := fetchRawMediaControlState(ctx)
@@ -747,6 +852,9 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 	if bundleID == appleMusicBundleID {
 		return refineAppleMusicState(ctx, raw), true
 	}
+	if bundleID == spotifyBundleID {
+		return refineSpotifyState(ctx, raw), true
+	}
 	return raw, true
 }
 
@@ -766,7 +874,8 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "get", "--now", "--no-artwork").Output()
+	// --micros 给出精确到微秒的锚点时间戳(不带它恒无小数秒),见 applyMicros。
+	out, err := exec.CommandContext(ctx, bin, "get", "--now", "--no-artwork", "--micros").Output()
 	if err != nil {
 		return nil, "", false
 	}
@@ -780,45 +889,24 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, "", false
 	}
+	// 必须紧跟解码:下面的酷狗署名修复第一个就要读 Duration。
+	raw.applyMicros()
 	noteUnfamiliarMediaType(raw.MediaType, raw.Title)
-	// elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
-	// elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实时钟外推
-	// (拿到过 1381 秒这种远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
-	// media-control 内部的外推基准归零。暂停时真正正确的位置就是这个原始 elapsedTime
-	// (暂停就是"冻结在这一刻",不需要外推),只有 playing=true 时才用 elapsedTimeNow。
-	// 暂停那一支不再无条件用原始 elapsedTime —— 锚点冻结的源(网页播放器)那个值恒为 0,
-	// 直接用会让位置在暂停瞬间归零。见 pausedPositionSecs(与 Swift 侧同一套规则)。
-	trackKey := raw.Artist + "|" + raw.Title
-	elapsed := raw.ElapsedTime
-	if raw.Playing {
-		// rate 缺失/为 0 时 elapsedTimeNow 不外推(Spotify 暂停后恢复播放的实测形态),要自己
-		// 按锚点时间戳补算 —— 见 playingPositionSecs(与 Swift 侧 livePositionSeconds 的
-		// rate 缺失分支同一套规则,采集器没有事件流,只能取整秒中点)。
-		// 陈旧锚点重发(见 isStaleAnchorRepublish):命中时沿用原锚点的时间戳,并把 rate 按 0 传,
-		// 强制走"自己按锚点时间戳外推"那条路 —— elapsedTimeNow 是按假时间戳外推的,不能信。
-		now := time.Now()
-		anchorTS, republished := resolvePlayingAnchorTS(trackKey, raw.ElapsedTime, raw.Timestamp, raw.Duration, raw.BundleID, now)
-		rate := raw.PlaybackRate
-		if republished {
-			rate = 0
-		}
-		elapsed = playingPositionSecs(raw.ElapsedTime, raw.ElapsedTimeNow, rate, anchorTS, now)
-		// App 量出的锚点偏置(见 positionbias.go):Spotify 给歌曲晚打 ~2s 的开播锚点,这里的外推
-		// 跟 App 一样恒定落后,由 App 问过 Spotify 自己的钟之后写文件告诉我们扣多少。放在
-		// rememberPlayingPosition 之前 —— 暂停规则回退到"最后一次播放位置"时拿到的也是扣过的值。
-		// 时间戳用 resolvePlayingAnchorTS 解出来的 anchorTS 而不是 raw.Timestamp:陈旧锚点重发
-		// (同一个 elapsed 带着新时间戳,见 isStaleAnchorRepublish)时前者仍是这个锚点**最初**发布的
-		// 时刻,偏置判"量在这个锚点之后"要对着它;拿重发的新时间戳比会把一份正确的偏置误判成过期。
-		if bias, ok := currentPositionBias(raw.Artist, raw.Title, raw.BundleID, raw.ElapsedTime, anchorTS, now); ok {
-			elapsed -= bias
-		}
-		rememberPlayingPosition(trackKey, elapsed)
-	} else {
-		age, hasAge := mediaControlAnchorAge(raw.Timestamp, time.Now())
-		last, hasLast := rememberedPlayingPosition(trackKey)
-		elapsed = pausedPositionSecs(raw.ElapsedTime, age, hasAge, last, hasLast)
+	// 酷狗 3.3.2 把**当前这句歌词**发布成 artist,在这里换回真署名
+	// (见 kugoulyricartist.go)。必须排在下面所有人之前:紧接着的锚点表 / 位置记忆
+	// 用的就是 `raw.Artist + "|" + raw.Title`,currentPositionBias 查的也是这个署名,
+	// 再往后 extract() 出来的 snapshot 更是整条链路的身份。
+	// 信任进来的其他播放器出同样的毛病走 trustedFixedTrack(见 trustedlyricartist.go),
+	// 两套按 bundle 互斥;那边歌词可能在 artist 也可能在 title,曲名署名一起换。
+	if fixed, ok := kugouFixedArtist(raw.BundleID, cleanMediaTag(raw.Title),
+		cleanMediaTag(raw.Artist), raw.Duration); ok {
+		raw.Artist = fixed
+	} else if fixedArtist, fixedTitle, ok := trustedFixedTrack(raw.BundleID, cleanMediaTag(raw.Title),
+		cleanMediaTag(raw.Artist), cleanMediaTag(raw.Album), raw.Duration); ok {
+		raw.Artist, raw.Title = fixedArtist, fixedTitle
 	}
-	// ⚠️ 不再对 Spotify 做 JXA 直查覆盖(与 App 侧同批移除,决策注释见
+	elapsed, sodaPreviewPending := mediaControlPositionSecs(&raw, time.Now())
+	// 不再对 Spotify 做 JXA 直查覆盖(与 App 侧同批移除,决策注释见
 	// lyrimuse MediaControlClient.fetchRawMediaControlSnapshot):三轮修补仍"经常进度
 	// 不准",回归与 QQ 音乐/网易云一致的 media-control 外推。两侧必须同批改——只改
 	// 一边就是"采集器和悬浮窗各说各话"的老坑。
@@ -877,6 +965,8 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		"radioStationHash": raw.RadioStationHash,
 		// 目录查到的权威曲长(0 = 没查到 / 自校验没过)。电台的时长以它为准,见 extract()。
 		"catalogDurationSecs": catalogDuration,
+		// 汽水试听段还在后台搜(见 sodapreview.go),poller 据此先不解析歌词。
+		"sodaPreviewPending": sodaPreviewPending,
 	}, raw.BundleID, true
 }
 
@@ -908,8 +998,18 @@ func fetchNowPlayingArtwork(ctx context.Context, expectedBundleID, expectedArtis
 	if err := json.Unmarshal(out, &raw); err != nil || raw.ArtworkData == "" {
 		return nil, "", false
 	}
-	if raw.BundleID != expectedBundleID ||
-		cleanMediaTag(raw.Artist) != expectedArtist || cleanMediaTag(raw.Title) != expectedTitle {
+	gotTitle := cleanMediaTag(raw.Title)
+	gotArtist := cleanMediaTag(raw.Artist)
+	// 这是**另一次**独立的 media-control 调用,拿回来的仍是播放器原样报的署名 —— 而
+	// expectedArtist 来自主路径、可能已经被换过(酷狗 3.3.2 拿歌词冒充署名,
+	// 见 kugoulyricartist.go)。不过同一把尺子的话这道核对恒不相等,系统直送封面会被
+	// 无声无息地全部丢掉、悄悄退回网络检索。
+	if fixed, ok := kugouKnownArtistFix(raw.BundleID, gotTitle); ok {
+		gotArtist = fixed
+	} else if fixedArtist, fixedTitle, ok := trustedKnownFix(raw.BundleID, gotArtist, gotTitle); ok {
+		gotArtist, gotTitle = fixedArtist, fixedTitle
+	}
+	if raw.BundleID != expectedBundleID || gotArtist != expectedArtist || gotTitle != expectedTitle {
 		return nil, "", false
 	}
 	decoded, err := base64.StdEncoding.DecodeString(raw.ArtworkData)
@@ -941,4 +1041,54 @@ func mediaControlBinaryPath() string {
 		return ""
 	}
 	return bin
+}
+
+// mediaControlPositionSecs 把解码(并换好署名)之后的原始状态换成这一拍要发布的位置:汽水试听换回原曲口径、
+// 在播判定(effectivePlaying)、播放中按锚点外推并扣 App 写来的偏置、暂停按冻结规则。会就地改 raw
+// (时长 / 位置 / Playing),调用方之后读的都是改过的那份。外部状态只有锚点表、位置记忆和偏置文件,
+// 与线上同一套全局量(测试里经 setPositionBiasPath 换文件)。
+func mediaControlPositionSecs(raw *mediaControlRawState, now time.Time) (elapsed float64, sodaPreviewPending bool) {
+	// 汽水非会员试听:时长 / 位置换回原曲口径(见 sodapreview.go)。同样要排在下面所有人之前 ——
+	// 锚点表、位置记忆、歌词匹配用的都是这份 raw。
+	_, sodaPreviewPending = applySodaPreview(raw)
+	// 报 playing:false 却还在播的播放器(见 effectivePlaying)。下面分播放 / 暂停两支、再往后
+	// extract() 读的都是 raw.Playing,改在这里一处。
+	raw.Playing = effectivePlaying(*raw, now)
+	// elapsedTimeNow 只在真的在播放时才可信——一首已经暂停的歌,
+	// elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实时钟外推
+	// (拿到过 1381 秒这种远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
+	// media-control 内部的外推基准归零。暂停时真正正确的位置就是这个原始 elapsedTime
+	// (暂停就是"冻结在这一刻",不需要外推),只有 playing=true 时才用 elapsedTimeNow。
+	// 暂停那一支不再无条件用原始 elapsedTime —— 锚点冻结的源(网页播放器)那个值恒为 0,
+	// 直接用会让位置在暂停瞬间归零。见 pausedPositionSecs(与 Swift 侧同一套规则)。
+	trackKey := raw.Artist + "|" + raw.Title
+	elapsed = raw.ElapsedTime
+	if raw.Playing {
+		// rate 缺失/为 0 时 elapsedTimeNow 不外推(Spotify 暂停后恢复播放的实测形态),要自己
+		// 按锚点时间戳补算 —— 见 playingPositionSecs(与 Swift 侧 livePositionSeconds 的
+		// rate 缺失分支同一套规则,采集器没有事件流,只能取整秒中点)。
+		// 陈旧锚点重发(见 isStaleAnchorRepublish):命中时沿用原锚点的时间戳,并把 rate 按 0 传,
+		// 强制走"自己按锚点时间戳外推"那条路 —— elapsedTimeNow 是按假时间戳外推的,不能信。
+		anchorTS, republished := resolvePlayingAnchorTS(trackKey, raw.ElapsedTime, raw.Timestamp, raw.Duration, raw.BundleID, now)
+		rate := raw.PlaybackRate
+		if republished {
+			rate = 0
+		}
+		elapsed = playingPositionSecs(raw.ElapsedTime, raw.ElapsedTimeNow, rate, anchorTS, now)
+		// App 量出的锚点偏置(见 positionbias.go):Spotify 给歌曲晚打 ~2s 的开播锚点,这里的外推
+		// 跟 App 一样恒定落后,由 App 问过 Spotify 自己的钟之后写文件告诉我们扣多少。放在
+		// rememberPlayingPosition 之前 —— 暂停规则回退到"最后一次播放位置"时拿到的也是扣过的值。
+		// 时间戳用 resolvePlayingAnchorTS 解出来的 anchorTS 而不是 raw.Timestamp:陈旧锚点重发
+		// (同一个 elapsed 带着新时间戳,见 isStaleAnchorRepublish)时前者仍是这个锚点**最初**发布的
+		// 时刻,偏置判"量在这个锚点之后"要对着它;拿重发的新时间戳比会把一份正确的偏置误判成过期。
+		if bias, ok := currentPositionBias(raw.Artist, raw.Title, raw.BundleID, raw.ElapsedTime, anchorTS, now); ok {
+			elapsed -= bias
+		}
+		rememberPlayingPosition(trackKey, elapsed)
+	} else {
+		age, hasAge := mediaControlAnchorAge(raw.Timestamp, now)
+		last, hasLast := rememberedPlayingPosition(trackKey)
+		elapsed = pausedPositionSecs(raw.ElapsedTime, age, hasAge, last, hasLast)
+	}
+	return elapsed, sodaPreviewPending
 }

@@ -7,6 +7,9 @@ import (
 	"log"
 	"log/slog"
 	"os/exec"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -26,21 +29,26 @@ import (
 // 也不会跟"读取播放状态"那条路径的权限请求产生任何交集——这也是为什么这个方向能够
 // 对 QQ 音乐同样生效。
 //
-// lastRunningByName 按进程名分别记"上一轮是否在跑"——playerAuto("自动识别")下要
-// 同时盯着 companionLaunchProcessNames() 返回的全部已知播放器,任意一个从没运行变成
-// 运行都算数,不能只用一个笼统的 bool(会丢失"到底是哪一个刚跳变"这个信息,也没法
-// 正确处理"A 在跑、B 刚启动"这种多个进程同时存在的情况)。手动选定单一播放器时这份
-// map 里实际上永远只有一个 key,行为跟旧版单 bool 完全等价。
-var lastRunningByName = map[string]bool{}
+// 每一轮只起**一个** `ps -axco pid=,comm=`,一次拿到全部进程的名字和 PID。原来是每个盯着的
+// 播放器各跑一次 `pgrep -x`、每秒一轮:勾满五个就是每秒五次 fork,实测每次约 4ms CPU,
+// 合计常驻约 2% 单核,而且记在临时子进程头上,活动监视器里的 collector 看不出来。
+// 名字取 `-c` 那一列(内核 p_comm),跟原来 `pgrep -x` 比的是同一个东西:16 字节上限照旧
+// (见 knownPlayerProcessNames),中文的「酷狗音乐」实测能对上。别换成 `pgrep -l`:它打印的
+// 名字跟匹配用的不是同一个来源(拿符号链接起的进程实测,按「酷狗音乐」匹配上、打印出来却是
+// 链接目标的名字)。
+//
+// lastPIDsByName 按进程名记"上一轮看到的 PID"。「刚启动」= 这一轮出现了上一轮没有的 PID ——
+// 比"上一轮不在跑、这一轮在跑"多认出一种:两次采样之间退出又重开(PID 换了)。原来靠 1 秒轮询
+// 去赌能采到中间那一下"不在跑"(Cmd-Q 再重开,进程只消失 1 秒左右),现在不用赌,间隔可以放宽。
+// playerAuto("自动识别")下同时盯全部已知播放器,任意一个刚启动都算数。记的是全部已知播放器,
+// 不只是这一轮盯着的那几个:用户新勾上一个正在跑的播放器,不该被当成"它刚启动"。
+// nil = 进程刚起、还没有上一轮(见 companionObserve)。
+var lastPIDsByName map[string][]int
 
-// companionLaunchInterval 是专门检测目标播放器启动状态用的轮询间隔——不能复用
-// poller.go 的 pollInterval(5 秒)。实测坐实(用 Music.app 验证的):真的用 Cmd-Q/Dock
-// 菜单退出再重新打开,从进程消失到重新出现整个窗口只有 1 秒左右,5 秒轮询大概率会两次
-// 采样都落在"已经重新在跑"这一侧,完全跳过中间那个短暂的"没在跑"状态,导致这次真实的
-// 跳变被彻底漏检(不是偶发,是复现过的真实 bug)。1 秒本身也不能 100% 保证覆盖所有
-// 场景,但 pgrep 这个检测本身开销极小,加密到 1 秒不会有任何可感知的资源代价,换来的
-// 是覆盖绝大多数真实使用节奏的可靠性。
-const companionLaunchInterval = 1 * time.Second
+// companionLaunchInterval 是检测目标播放器启动用的轮询间隔。PID 比对认得出"两次采样之间重启过",
+// 间隔只决定 Lyrimuse 最多晚几秒被拉起,3 秒够用;不复用 poller.go 的 pollInterval(5 秒)只是
+// 为了让这个延迟再短一点。
+const companionLaunchInterval = 3 * time.Second
 
 // startCompanionLaunchWatcher 独立于 poller.go 的主轮询跑,由 run() 用单独的
 // goroutine 启动,ctx 取消时退出。
@@ -61,23 +69,20 @@ func startCompanionLaunchWatcher(ctx context.Context) {
 // 开关、而且 Lyrimuse.app 当前**没有**在跑时,启动它。同一轮里有两个都刚启动(用户同时点开了
 // 两个播放器)只按第一个触发一次。
 func checkCompanionLaunch() {
-	// 不管开关开没开,每一轮都要照跑下面这个循环维护 lastRunningByName——开关关着的
-	// 时候如果直接跳过,关闭期间的真实状态变化不会被记录,开关重新打开的瞬间会凭空把
-	// "早就在跑"误判成"刚刚启动"。
-	var justStarted string
-	for _, name := range companionLaunchProcessNames() {
-		running := isProcessRunning(name)
-		if running && !lastRunningByName[name] && justStarted == "" {
-			justStarted = name
-		}
-		lastRunningByName[name] = running
+	procs, ok := processSnapshot()
+	if !ok {
+		return // ps 这一轮没跑成:不动上一轮的记录,下一轮接着比
 	}
+	// 不管开关开没开、这一轮盯不盯它,每一轮都要更新记录——关着的时候跳过的话,关闭期间的
+	// 真实状态变化不会被记下,开关重新打开的瞬间会把"早就在跑"误判成"刚刚启动"。
+	var justStarted string
+	justStarted, lastPIDsByName = companionObserve(companionLaunchProcessNames(), lastPIDsByName, procs)
 	// alreadyRunning 只为了把"跳过"这一种否决单独记一条日志——这是唯一需要事后能核实的
 	// 分支(开关关着/没有跳变都不值得记,每轮都记会刷爆日志)。判断本身仍然全在
 	// shouldCompanionLaunch 里,这里不重复一遍条件。
 	alreadyRunning := false
-	if !shouldCompanionLaunch(justStarted, features.LaunchLyrimuseOnMusicOpen, func() bool {
-		alreadyRunning = isProcessRunning(lyrimuseAppProcessName)
+	if !shouldCompanionLaunch(justStarted, features().LaunchLyrimuseOnMusicOpen, func() bool {
+		alreadyRunning = len(procs[lyrimuseAppProcessName]) > 0
 		return alreadyRunning
 	}) {
 		if alreadyRunning {
@@ -121,6 +126,67 @@ func shouldCompanionLaunch(justStarted string, enabled bool, lyrimuseRunning fun
 	return !lyrimuseRunning()
 }
 
+// companionObserve 用这一轮的进程快照算出新的记录,并返回刚启动的播放器名(没有就是空串)。
+// prev 为 nil(collector 刚起、还没有上一轮)时只记录不判断:那一刻已经在跑的播放器是早就开着的。
+// 不这样的话 collector 每次重启(改设置、崩溃被 KeepAlive 拉起、自动更新)的第一轮,都会把开着的
+// 播放器当成刚启动;用户这时已经退出了 Lyrimuse,就会被违背意愿拉起来。
+func companionObserve(names []string, prev, procs map[string][]int) (string, map[string][]int) {
+	next := make(map[string][]int, len(knownPlayerProcessNames))
+	for _, name := range knownPlayerProcessNames {
+		if pids := procs[name]; len(pids) > 0 {
+			next[name] = pids
+		}
+	}
+	if prev == nil {
+		return "", next
+	}
+	return companionJustStarted(names, prev, procs), next
+}
+
+// companionJustStarted 返回 names 里第一个「这一轮出现了上一轮没有的 PID」的进程名,没有就是空串。
+func companionJustStarted(names []string, prev, now map[string][]int) string {
+	for _, name := range names {
+		for _, pid := range now[name] {
+			if !slices.Contains(prev[name], pid) {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// processSnapshot 起一次 ps,返回 进程名(内核 p_comm) → PID 列表。选这条路的理由见文件头注。
+func processSnapshot() (map[string][]int, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/bin/ps", "-axco", "pid=,comm=").Output()
+	if err != nil {
+		return nil, false
+	}
+	return parseProcessList(string(out)), true
+}
+
+// parseProcessList 解 `ps -axco pid=,comm=` 的输出:每行「PID 名字」,PID 前面有对齐用的空格,
+// 名字本身可能带空格(「Google Chrome Helper」),所以只按第一个空格切。
+func parseProcessList(out string) map[string][]int {
+	procs := map[string][]int{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		i := strings.IndexByte(line, ' ')
+		if i <= 0 {
+			continue
+		}
+		pid, err := strconv.Atoi(line[:i])
+		if err != nil {
+			continue
+		}
+		if name := strings.TrimSpace(line[i+1:]); name != "" {
+			procs[name] = append(procs[name], pid)
+		}
+	}
+	return procs
+}
+
 // isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
 // Apple Event。只剩 launchLyrimuseApp 真要启动前那一次自查在用。
 func isProcessRunning(name string) bool {
@@ -137,22 +203,22 @@ func isProcessRunning(name string) bool {
 // 地方——用户不需要事先告诉 Lyrimuse 自己接下来要开哪个播放器。
 func companionLaunchProcessNames() []string {
 	var candidates []string
-	if features.Players[playerAuto] {
+	if features().Players[playerAuto] {
 		candidates = knownPlayerProcessNames
 	} else {
-		candidates = make([]string, 0, len(features.Players))
-		for player := range features.Players {
+		candidates = make([]string, 0, len(features().Players))
+		for player := range features().Players {
 			candidates = append(candidates, playerProcessNameFor(player))
 		}
 	}
 	// 「跟随播放器启动」按播放器逐个勾选(features().LaunchLyrimuseOnPlayers):键在就
 	// 只盯勾了的、且仍在候选(选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧
 	// PlayerLinkage.effective 同一条规则;键缺失是布尔年代的老配置,退回盯整个候选集合。
-	if features.LaunchLyrimuseOnPlayers == nil {
+	if features().LaunchLyrimuseOnPlayers == nil {
 		return candidates
 	}
-	names := make([]string, 0, len(features.LaunchLyrimuseOnPlayers))
-	for player := range features.LaunchLyrimuseOnPlayers {
+	names := make([]string, 0, len(features().LaunchLyrimuseOnPlayers))
+	for player := range features().LaunchLyrimuseOnPlayers {
 		name := playerProcessNameFor(player)
 		for _, candidate := range candidates {
 			if candidate == name {
@@ -203,7 +269,11 @@ func launchLyrimuseApp() {
 		return
 	}
 	// bundle id 来自 paths.go appBundleID()(环境变量可覆盖,缺省正式 id),上面按可执行名 `lyrimuse` 查"在不在跑"。
-	if err := exec.Command("open", "--background", "-b", appBundleID()).Start(); err != nil {
+	cmd := exec.Command("open", "--background", "-b", appBundleID())
+	if err := cmd.Start(); err != nil {
 		slog.Warn("companion launch: failed to open Lyrimuse.app", "err", err)
+		return
 	}
+	// open 很快就退出;不 Wait 它会一直挂成僵尸进程,直到 collector 退出。
+	go func() { _ = cmd.Wait() }()
 }

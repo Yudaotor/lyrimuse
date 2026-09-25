@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"log/slog"
@@ -55,7 +56,10 @@ var (
 // artworkRelayKey 是记录里用来认"还是同一个中继"的那个值。必须跟 artworkPublicURL
 // 一样把尾部斜杠削掉 —— 否则配置里多打一个 "/" 就会被判成换了中继,每次启动都把记录
 // 整份丢掉、退回全量 HEAD,而且只在日志里留一行,很难注意到。
-func artworkRelayKey() string { return strings.TrimRight(artworkRelayURL, "/") }
+func artworkRelayKey() string {
+	u, _ := artworkRelayTarget()
+	return strings.TrimRight(u, "/")
+}
 
 // artworkConfirmFile 是落盘形态。relay 一起存:换中继时整份作废(见头注)。
 type artworkConfirmFile struct {
@@ -72,8 +76,8 @@ func loadArtworkConfirmed() {
 	// 没配状态中继(绝大多数用户:只用本机悬浮歌词、不搭自己的网页中继)时整条路不存在,
 	// 这里一步都不该走 —— 跟 sweepDeviceArtwork 同一道门。不加这道门的话有两个实际后果:
 	// ① 每次启动白读一次盘;② 用户曾经配过、后来删掉地址时,旧记录会被判成"中继地址变了"
-	// 并在日志里反复喊一句 `... → ""`,看上去像出了错。
-	if artworkRelayURL == "" || artworkConfirmPath == "" {
+	// 并在日志里反复喊一句 `... 到 ""`,看上去像出了错。
+	if !artworkRelayConfigured() || artworkConfirmPath == "" {
 		return
 	}
 	b, err := os.ReadFile(artworkConfirmPath)
@@ -117,7 +121,7 @@ func loadArtworkConfirmed() {
 func markArtworkConfirmed(sha string) {
 	// 同上那道门。当前所有调用点都已经在"配了中继"的分支里,这里再判一次是为了让
 	// "没配中继 = 这个文件一个字节都不写"成为本文件自己的不变量,不依赖调用方维持。
-	if artworkRelayURL == "" || artworkConfirmPath == "" || sha == "" {
+	if !artworkRelayConfigured() || artworkConfirmPath == "" || sha == "" {
 		return
 	}
 	artworkConfirmMu.Lock()
@@ -165,5 +169,56 @@ func flushArtworkConfirmed() {
 	}
 	if err := os.Rename(tmp, artworkConfirmPath); err != nil {
 		slog.Error("save artwork-confirmed cache", "file", filepath.Base(artworkConfirmPath), "err", err)
+	}
+}
+
+var (
+	// artworkSweepMu 护着下面两个变量:当前那一轮存量补传的父 ctx 和取消函数。
+	artworkSweepMu     sync.Mutex
+	artworkSweepParent context.Context
+	artworkSweepCancel context.CancelFunc
+)
+
+// startArtworkSweep 起一轮存量设备封面补传(sweepDeviceArtwork),先取消上一轮。parent 记下来,
+// 换中继时 switchStateRelay 用它重起一轮。
+func startArtworkSweep(parent context.Context) {
+	artworkSweepMu.Lock()
+	defer artworkSweepMu.Unlock()
+	if artworkSweepCancel != nil {
+		artworkSweepCancel()
+	}
+	artworkSweepParent = parent
+	ctx, cancel := context.WithCancel(parent)
+	artworkSweepCancel = cancel
+	go sweepDeviceArtwork(ctx)
+}
+
+// switchStateRelay 在运行中换状态中继(config.json 热重读时调)。只换令牌时直接换;地址变了,
+// 「哪些封面已在中继上」的内存记录全都属于旧中继,清掉后按新中继重新读确认记录、重起一轮补传。
+//
+// 清记录和换地址在 artworkConfirmMu + artworkMu 之内一起做,让 flushArtworkConfirmed 不会把旧中继的
+// 确认记录记到新中继名下。锁顺序与 loadArtworkConfirmed 相同:先 artworkConfirmMu 再 artworkMu。
+func switchStateRelay(url, token string) {
+	old, _ := artworkRelayTarget()
+	if strings.TrimRight(old, "/") == strings.TrimRight(url, "/") {
+		setStateRelay(url, token)
+		return
+	}
+	artworkConfirmMu.Lock()
+	artworkMu.Lock()
+	setStateRelay(url, token)
+	artworkConfirmAt = map[string]int64{}
+	artworkConfirmDirty, artworkConfirmPend = false, 0
+	artworkUploaded = map[string]bool{}
+	artworkNextRetry = map[string]time.Time{}
+	artworkMu.Unlock()
+	artworkConfirmMu.Unlock()
+	log.Printf("artwork relay: relay address changed without a restart, re-confirming covers against the new one")
+	loadArtworkConfirmed()
+	artworkSweepMu.Lock()
+	parent := artworkSweepParent
+	artworkSweepMu.Unlock()
+	if parent != nil && parent.Err() == nil {
+		startArtworkSweep(parent)
 	}
 }

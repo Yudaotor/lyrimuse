@@ -365,6 +365,7 @@ var goldenRequiredCategories = map[string]string{
 	"cantonese":             "粤语歌",
 	"live-same-concert":     "现场版,候选与本地是同一场演出(live 标记双向对称,不吃 versionTags)",
 	"live-other-concert":    "现场版,另一场演出的候选吃 liveAlbumConflict",
+	"timeline-offset":       "时间轴相对时长对得上的几家整体平移的候选吃 timelineOffset,冠军交给对齐的那份(v23)",
 	"version-tag-mismatch":  "版本限定词错配的候选吃 versionTags -600",
 	"version-tag-edit":      "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
 	"language-version":      "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
@@ -484,7 +485,7 @@ func goldenRawRound(fx *goldenFixture) map[string]lyricSourceResult {
 // applyGoldenSettings 把样本里记录的包级状态设上,并登记还原。
 func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	t.Helper()
-	savedFeatures := features
+	savedFeatures := features()
 	nativeLyricSourcesMu.Lock()
 	savedNative := nativeLyricSources
 	nativeLyricSourcesMu.Unlock()
@@ -492,7 +493,7 @@ func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	savedAlias, hadAlias := artistAliasCache[fx.Query.Artist]
 	artistAliasMu.Unlock()
 	t.Cleanup(func() {
-		features = savedFeatures
+		setFeatures(savedFeatures)
 		nativeLyricSourcesMu.Lock()
 		nativeLyricSources = savedNative
 		nativeLyricSourcesMu.Unlock()
@@ -506,10 +507,10 @@ func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	})
 
 	s := fx.Settings
-	features.LyricsTranslationLanguage = s.TranslationLanguage
-	features.LyricsSources = s.Sources
-	features.LyricsSourceMode = resolveLyricsSourceMode(s.SourceMode)
-	features.LyricsSourceOrder = resolveLyricsSourceOrder(s.SourceOrder)
+	featuresRef().LyricsTranslationLanguage = s.TranslationLanguage
+	featuresRef().LyricsSources = s.Sources
+	featuresRef().LyricsSourceMode = resolveLyricsSourceMode(s.SourceMode)
+	featuresRef().LyricsSourceOrder = resolveLyricsSourceOrder(s.SourceOrder)
 	setNativeLyricSourcesForPlayer(s.PlayerBundleID)
 	artistAliasMu.Lock()
 	if artistAliasCache == nil {
@@ -921,6 +922,18 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		}
 		if hasTerm(*winner, scoreTermLiveAlbumConflict) || hasTerm(*winner, scoreTermVersionTags) {
 			return fmt.Errorf("要求:冠军不吃 liveAlbumConflict / versionTags")
+		}
+	case "timeline-offset":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		if hasTerm(*winner, scoreTermTimelineOffset) {
+			return fmt.Errorf("要求:冠军不吃 timelineOffset")
+		}
+		if !anyCand(func(c goldenRankedCandidate) bool {
+			return c.Source != e.Winner && hasTerm(c, scoreTermTimelineOffset)
+		}) {
+			return fmt.Errorf("要求:有非冠军候选吃到 timelineOffset")
 		}
 	case "live-other-concert":
 		if err := needWinner(); err != nil {

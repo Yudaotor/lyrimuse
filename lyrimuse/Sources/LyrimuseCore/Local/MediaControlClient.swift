@@ -61,6 +61,15 @@ public enum MediaControlClient {
     public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
         // 这一拍的归因从零开始记(只影响日志,不影响行为)。见 SnapshotFailure。
         setSnapshotFailure(nil)
+        // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
+        // collector 那边已经换成真署名了 —— 两边不一致的话,歌词缓存的 key 就对不上。
+        // 套在这个唯一的公开出口上,下游(trackKey、缓存查询、界面)一处都不用改。
+        // 见 PlayerArtistFix。
+        // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与 collector 发布时一致。
+        return PlayerPreviewFix.applied(to: PlayerArtistFix.applied(to: rawSnapshot(players: players)))
+    }
+
+    private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
         if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
@@ -189,11 +198,13 @@ public enum MediaControlClient {
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
         }
-        guard let decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout) else {
+        guard var decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout) else {
             // 脚本自己 return 了 null(Spotify 没在跑 / stopped / 没有曲目)。
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
         }
+        // 位置是在脚本快结束时读的(实测慢调用的读数跟着调用结束时刻走,±0.05s),就按这一刻记。
+        decoded.capturedAt = Date()
         return decoded
     }
 
@@ -355,6 +366,28 @@ public enum MediaControlClient {
         /// 电台 / 直播流才有的电台标识(实测:Apple Music Radio 播放时非空,
         /// 值形如 "CgkIBRoFwOSKqxkQBA")。只当"这是不是电台"的判据用,值本身不看。
         let radioStationHash: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case title, artist, album, bundleIdentifier, playing, playbackRate, radioStationHash
+        }
+
+        /// 带 `--micros` 调用时四个时间键会被**替换**成微秒版,交给 `MediaControlMicros.TimeFields`
+        /// 换算回原键名,下游只认一套字段。
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            title = try c.decodeIfPresent(String.self, forKey: .title)
+            artist = try c.decodeIfPresent(String.self, forKey: .artist)
+            album = try c.decodeIfPresent(String.self, forKey: .album)
+            bundleIdentifier = try c.decodeIfPresent(String.self, forKey: .bundleIdentifier)
+            playing = try c.decodeIfPresent(Bool.self, forKey: .playing)
+            playbackRate = try c.decodeIfPresent(Double.self, forKey: .playbackRate)
+            radioStationHash = try c.decodeIfPresent(String.self, forKey: .radioStationHash)
+            let times = try MediaControlMicros.TimeFields(from: decoder)
+            duration = times.duration
+            elapsedTime = times.elapsedTime
+            elapsedTimeNow = times.elapsedTimeNow
+            timestamp = times.timestamp
+        }
     }
 
     // media-control 不是单个独立二进制——可执行文件靠相对路径找同一次 Homebrew 安装
@@ -762,17 +795,27 @@ public enum MediaControlClient {
     private static func adaptedSnapshot(
         bundleID: String, mediaControl: MediaControlSnapshot
     ) -> MediaControlSnapshot {
-        guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return mediaControl }
         // 电台的适配方式**就是** media-control 的台标识 + RadioTrackClock 单曲表:
         // `player position` 在电台上报的同样是整档节目的位置,借过来会把
         // fetchRawMediaControlSnapshot 刚换好的那块单曲表覆盖回错的值。见 RadioTrackClock 头注。
         guard mediaControl.isRadio != true else { return mediaControl }
-        // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
-        // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
-        guard mediaControl.playing == true else { return mediaControl }
-        // 拿不到(没授「自动化」权限 / Music.app 不可达 / 超时)退回 media-control 这份,
-        // 不整个放弃 —— 跟 collector 侧 refineAppleMusicState 的 `return raw` 同一条退路。
-        return fetchAppleMusicSnapshot() ?? mediaControl
+        // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个
+        // 放弃 —— 跟 collector 侧 refineAppleMusicState / refineSpotifyState 的 `return raw` 同一条退路。
+        switch bundleID {
+        case PlaybackPlayer.appleMusic.bundleIdentifier:
+            // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
+            // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
+            guard mediaControl.playing == true else { return mediaControl }
+            return fetchAppleMusicSnapshot() ?? mediaControl
+        case PlaybackPlayer.spotify.bundleIdentifier:
+            // 这里跟 Apple Music **不一样**:暂停态也问。Spotify 的两个钟不重合 ——
+            // MediaRemote 那个冻结值是音频位置,`player position` 是它自己的钟,两者差一段输出
+            // 链路的领先量。播放中显示后者、暂停那一拍换成前者,就是一次肉眼可见的回跳;从头到尾
+            // 只用一个钟才没有接缝。
+            return fetchSpotifySnapshot() ?? mediaControl
+        default:
+            return mediaControl
+        }
     }
 
     // 真正调用 media-control 子进程、解析原始输出——fetchMediaControlSnapshot(核对
@@ -816,7 +859,7 @@ public enum MediaControlClient {
             return nil
         }
         return (imageData, raw.artworkMimeType ?? "image/jpeg",
-                MediaControlSnapshot.trackKey(artist: raw.artist, title: raw.title))
+                PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title))
     }
 
     // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部
@@ -907,6 +950,8 @@ public enum MediaControlClient {
     ///
     /// 纯函数,selftest 直接覆盖。
     public nonisolated static func estimatedAnchorInstant(timestamp: Date, firstSeenAt: Date) -> Date {
+        // 带 `--micros` 拿到的是精确锚点时刻,没有被抹掉的小数可估,原样返回(见 MediaControlMicros)。
+        guard !MediaControlMicros.isPrecise(timestamp) else { return timestamp }
         let observedGap = firstSeenAt.timeIntervalSince(timestamp)
         // 首见时刻早于时间戳(时钟回拨/解析异常)到 不猜,原样返回。
         guard observedGap > 0 else { return timestamp }
@@ -941,6 +986,7 @@ public enum MediaControlClient {
     /// (冻结值是准的)显示就退回去 0.95/0.73s。中点法把它压到 ±0.5,tight 目击压到 ±20ms。
     /// 纯函数,selftest 直接覆盖。
     public nonisolated static func estimatedAnchorInstant(timestamp: Date, sighting: AnchorSighting) -> Date {
+        guard !MediaControlMicros.isPrecise(timestamp) else { return timestamp }
         guard sighting.tight else { return estimatedAnchorInstant(timestamp: timestamp, firstSeenAt: sighting.at) }
         let guess = sighting.at.timeIntervalSince(timestamp) - streamAnchorLatency
         return timestamp.addingTimeInterval(min(max(guess, 0), 0.999))
@@ -1015,7 +1061,8 @@ public enum MediaControlClient {
         sighting: AnchorSighting? = nil,
         republishedAnchorInstant: Date? = nil,
         lastPlayingSampledAt: Date? = nil,
-        pauseObservedAt: Date? = nil
+        pauseObservedAt: Date? = nil,
+        playbackStartedAt: Date? = nil
     ) -> Double? {
         // firstSeenAt 是的旧入参(只有轮询首见时,loose 语义),sighting 是 09-07 带目击
         // 类型的新入参;同传时以 sighting 为准。既有调用方/测试只传 firstSeenAt,行为不变。
@@ -1056,7 +1103,8 @@ public enum MediaControlClient {
         // 的(见 noisyFloored 那一档的注释),不该被这条顺带改掉。
         if let rate = playbackRate, rate > 0, let base = elapsedTime, let timestamp,
            let effectiveSighting, now.timeIntervalSince(timestamp) > staleAnchorAfter {
-            let corrected = estimatedAnchorInstant(timestamp: timestamp, sighting: effectiveSighting)
+            let corrected = laterInstant(estimatedAnchorInstant(timestamp: timestamp, sighting: effectiveSighting),
+                                         playbackStartedAt)
             let aged = now.timeIntervalSince(corrected)
             if aged > 0 { return base + aged * rate }
         }
@@ -1070,10 +1118,18 @@ public enum MediaControlClient {
         // 下一首自然切歌的偏置估计带歪同样的量。有目击就按目击订正锚点时刻;没有(watcher 挂了、
         // 既有调用方不传)才退回 timestamp 本身 —— 行为跟改动前逐字相同,不更差。
         guard let base = elapsedTime, let timestamp else { return elapsedTimeNow ?? elapsedTime }
-        let anchorInstant = effectiveSighting.map { estimatedAnchorInstant(timestamp: timestamp, sighting: $0) } ?? timestamp
+        // 暂停中发布的锚点(见 notePlaybackStarted)从真正起播那一刻算,不从发布那一刻算。
+        let anchorInstant = laterInstant(
+            effectiveSighting.map { estimatedAnchorInstant(timestamp: timestamp, sighting: $0) } ?? timestamp,
+            playbackStartedAt)
         let aged = now.timeIntervalSince(anchorInstant)
         // 负数(时钟回拨/时区解析出错)时不倒推,老老实实用基准值。
         return aged > 0 ? base + aged : base
+    }
+
+    private nonisolated static func laterInstant(_ a: Date, _ b: Date?) -> Date {
+        guard let b, b > a else { return a }
+        return b
     }
 
     private static let timestampFormatter: ISO8601DateFormatter = {
@@ -1096,6 +1152,7 @@ public enum MediaControlClient {
 
     public nonisolated static func parseTimestamp(_ s: String?) -> Date? {
         guard let s else { return nil }
+        if let d = MediaControlMicros.date(fromTimestampString: s) { return d }
         if let d = plainTimestampFormatter.date(from: s) { return d }
         return timestampFormatter.date(from: s)
     }
@@ -1210,6 +1267,157 @@ public enum MediaControlClient {
         }
         anchorSightings[anchorKey] = AnchorSighting(at: at, tight: tight)
         pruneAnchorSightingsLocked()
+    }
+
+    // ---- 报 playing:false 却还在播的播放器 ----
+    //
+    // 酷狗单曲循环回到开头时发一份新锚点 `elapsed=0`,`playing` 却是 false、`playbackRate` 仍是 1,
+    // 之后整遍都不再翻回 true;真暂停时 rate 归 0(跟 `playing:false` 同一瞬间到,相隔 ≤3ms)。
+    // 只对 `playingFromRate` 的播放器按 rate 判,数据见 02 章「酷狗单曲循环报暂停」。
+
+    /// 按锚点外推超过曲长多少还当它在播。循环每一遍都会重发锚点,超出曲长还没新锚点就是停了。
+    public nonisolated static let rateOnlyPlayingOverrunSecs: TimeInterval = 2
+
+    /// 这一份读数算不算在播。纯函数,selftest 直接覆盖;Go 侧 `effectivePlaying` 同一套规则。
+    public nonisolated static func effectivePlaying(
+        bundleID: String?, playing: Bool?, playbackRate: Double?,
+        elapsedTime: Double?, timestamp: Date?, duration: Double?, now: Date
+    ) -> Bool? {
+        guard playing != true,
+              PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true,
+              let rate = playbackRate, rate > 0,
+              let elapsed = elapsedTime, let timestamp, let duration, duration > 0
+        else { return playing }
+        let position = elapsed + max(0, now.timeIntervalSince(timestamp)) * rate
+        return position <= duration + rateOnlyPlayingOverrunSecs ? true : playing
+    }
+
+    // ---- 自然切歌:归零锚点先于新曲目信息到 ----
+    //
+    // 酷狗自然切到下一首时,先在**上一首的标题下**发一份位置归零的锚点(elapsed ≤ 0.2),0.6~1s 后
+    // 标题才换过来,新标题下的锚点多数比真实起播晚 ~0.5s、之后播放中不再重发。归零那份是准的
+    // (与暂停冻结值反推的起播时刻差 0.04~0.05s),新标题那份整首歌恒偏慢。数据见 02 章「酷狗自然切歌」。
+    private static let resetAnchorLock = NSLock()
+    /// 最近几份归零锚点。只留一份不够:新标题下紧跟着的那份位置同样很小,会把旧标题那份顶掉。
+    nonisolated(unsafe) private static var recentResetAnchors: [ResetAnchor] = []
+    private static let recentResetAnchorLimit = 4
+
+    public struct ResetAnchor: Sendable, Equatable {
+        public var title: String
+        public var elapsed: Double
+        public var timestamp: Date
+        public init(title: String, elapsed: Double, timestamp: Date) {
+            self.title = title
+            self.elapsed = elapsed
+            self.timestamp = timestamp
+        }
+    }
+
+    /// 位置不超过这么多才算一份归零锚点。
+    public nonisolated static let resetAnchorMaxElapsed: Double = 1.0
+    /// 新标题的锚点离归零锚点多久之内、位置不超过多少,才按归零锚点的起播时刻算。
+    public nonisolated static let resetAnchorWindowSecs: TimeInterval = 3
+    /// 两份锚点推出的起播时刻至少差这么多才补(再小就是锚点本身的抖动);超过上限说明不是同一次起播。
+    public nonisolated static let resetAnchorMinCorrectionSecs: Double = 0.05
+    public nonisolated static let resetAnchorMaxCorrectionSecs: Double = 1.5
+
+    nonisolated(unsafe) private static var lastLoggedStartCorrectionKey: String?
+    /// 同一个锚点只记一行。
+    private nonisolated static func noteStartCorrectionLogged(anchorKey: String) -> Bool {
+        resetAnchorLock.lock()
+        defer { resetAnchorLock.unlock() }
+        guard lastLoggedStartCorrectionKey != anchorKey else { return false }
+        lastLoggedStartCorrectionKey = anchorKey
+        return true
+    }
+
+    /// 只对实测过的播放器开(决策 41)。
+    public nonisolated static func correctsFromResetAnchor(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.kugou.bundleIdentifier
+    }
+
+    /// stream watcher 报告:这一行带着锚点。位置归零的记下来,供之后换了标题的那份锚点对照。
+    nonisolated static func noteAnchorForReset(title: String?, elapsed: Double?, timestamp: Date?) {
+        guard let title, !title.isEmpty, let elapsed, elapsed <= resetAnchorMaxElapsed, let timestamp else { return }
+        resetAnchorLock.lock()
+        recentResetAnchors.append(ResetAnchor(title: title, elapsed: elapsed, timestamp: timestamp))
+        if recentResetAnchors.count > recentResetAnchorLimit { recentResetAnchors.removeFirst() }
+        resetAnchorLock.unlock()
+    }
+
+    private nonisolated static func currentResetAnchors() -> [ResetAnchor] {
+        resetAnchorLock.lock()
+        defer { resetAnchorLock.unlock() }
+        return recentResetAnchors
+    }
+
+    /// 新标题这份锚点该往前补多少秒(= 它推出的起播时刻比归零锚点推出的晚多少)。纯函数,selftest 直接覆盖。
+    ///
+    /// 对照的是最近一份**标题不同**的归零锚点:同一个标题下的归零是单曲循环回绕(或新标题自己那份),
+    /// 那份锚点本身就准。
+    public nonisolated static func resetAnchorStartCorrection(
+        resets: [ResetAnchor], title: String?, elapsed: Double?, timestamp: Date?
+    ) -> Double? {
+        guard let title, let elapsed, elapsed <= resetAnchorWindowSecs, let timestamp,
+              let reset = resets.last(where: { $0.title != title })
+        else { return nil }
+        let gap = timestamp.timeIntervalSince(reset.timestamp)
+        guard gap >= 0, gap <= resetAnchorWindowSecs else { return nil }
+        let correction = (timestamp.timeIntervalSince1970 - elapsed)
+            - (reset.timestamp.timeIntervalSince1970 - reset.elapsed)
+        guard correction > resetAnchorMinCorrectionSecs, correction <= resetAnchorMaxCorrectionSecs else { return nil }
+        return correction
+    }
+
+    // ---- 暂停中发布的锚点:真正开始计时的时刻 ----
+    //
+    // 网易云换歌时先在「暂停」态把新曲的 `elapsed=0 @ ts` 发出来,0.3~1.1s 后才真正出声,之后**不再
+    // 重发锚点**、只把 playing 翻成 true(实测还会真/假来回翻十几次,最后一次 true 离出声 ~0.05s)。
+    // 从锚点发布那一刻起算,整首歌恒偏快这段加载时间(数据见 02 章「网易云开播锚点」)。
+    // 这种锚点真正的起算时刻是它之后那次 `playing:true`。
+    private static let pausedAnchorLock = NSLock()
+    nonisolated(unsafe) private static var pausedAnchorKey: String?
+    nonisolated(unsafe) private static var pausedAnchorPublishedAt: Date?
+    nonisolated(unsafe) private static var anchorPlaybackStart: (key: String, at: Date)?
+    /// 暂停中发布的锚点之后多久内的 `playing:true` 才算它的起播(实测翻转都在发布后 1.2s 内)。
+    /// 再往后的恢复是另一回事(用户自己按了播放),那时播放器会重发锚点,不归这里管。
+    public nonisolated static let pausedAnchorStartWindow: TimeInterval = 5
+
+    /// stream watcher 报告:这一行打了新锚点,当时是不是暂停态。
+    nonisolated static func noteAnchorPublished(anchorKey: String, whilePaused: Bool, at: Date) {
+        pausedAnchorLock.lock()
+        defer { pausedAnchorLock.unlock() }
+        pausedAnchorKey = whilePaused ? anchorKey : nil
+        pausedAnchorPublishedAt = whilePaused ? at : nil
+    }
+
+    /// stream watcher 报告:这一行报了 `playing:true`。落在暂停锚点的窗口里就记成它的起播时刻(后到的覆盖先到的)。
+    nonisolated static func notePlaybackStarted(at: Date) {
+        pausedAnchorLock.lock()
+        defer { pausedAnchorLock.unlock() }
+        guard let key = pausedAnchorKey, let published = pausedAnchorPublishedAt,
+              Self.pausedAnchorStartApplies(publishedAt: published, startedAt: at)
+        else { return }
+        anchorPlaybackStart = (key, at.addingTimeInterval(-streamAnchorLatency))
+    }
+
+    /// 这个锚点(暂停中发布的)真正开始计时的时刻;不是这种锚点返回 nil。
+    nonisolated static func playbackStart(forAnchorKey key: String) -> Date? {
+        pausedAnchorLock.lock()
+        defer { pausedAnchorLock.unlock() }
+        guard let start = anchorPlaybackStart, start.key == key else { return nil }
+        return start.at
+    }
+
+    /// 纯函数,selftest 直接覆盖。
+    public nonisolated static func pausedAnchorStartApplies(publishedAt: Date, startedAt: Date) -> Bool {
+        let gap = startedAt.timeIntervalSince(publishedAt)
+        return gap >= 0 && gap <= pausedAnchorStartWindow
+    }
+
+    /// 这个播放器要不要把「暂停中发布的锚点」改从起播时刻算。只登记实测过的(网易云)。
+    public nonisolated static func startsPausedAnchorOnPlay(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.netease.bundleIdentifier
     }
 
     private nonisolated static func pruneAnchorSightingsLocked() {
@@ -1379,7 +1587,7 @@ public enum MediaControlClient {
         //
         // 这是 2 秒一轮的热路径 —— 它卡住,悬浮歌词就停住。超时是这里最要紧的东西。
         guard let r = ProcessRunner.run(
-            binaryPath, ["get", "--now", "--no-artwork"], timeout: snapshotTimeout),
+            binaryPath, ["get", "--now", "--no-artwork", "--micros"], timeout: snapshotTimeout),
             r.succeeded
         else {
             setSnapshotFailure(.mediaControlUnavailable)
@@ -1421,24 +1629,39 @@ public enum MediaControlClient {
         let anchorKey = Self.anchorKey(
             artist: raw.artist, title: raw.title, elapsedTime: raw.elapsedTime, timestamp: raw.timestamp)
         let timestampDate = Self.parseTimestamp(raw.timestamp)
+        // 下面一律用它,不用 raw.playing(见 effectivePlaying)。
+        let playing = Self.effectivePlaying(
+            bundleID: raw.bundleIdentifier, playing: raw.playing, playbackRate: raw.playbackRate,
+            elapsedTime: raw.elapsedTime, timestamp: timestampDate, duration: raw.duration, now: sampledAt)
         let sighting = Self.firstSeen(anchorKey: anchorKey, now: sampledAt)
         // 播放中的锚点先过一道"陈旧重发"判定(见 isStaleAnchorRepublish):命中就按原锚点时刻外推。
         var republishedAnchorInstant: Date?
-        if raw.playing == true, let timestampDate, let elapsedRaw = raw.elapsedTime, let timestampString = raw.timestamp {
+        if playing == true, let timestampDate, let elapsedRaw = raw.elapsedTime, let timestampString = raw.timestamp {
             let candidate = Self.estimatedAnchorInstant(timestamp: timestampDate, sighting: sighting)
             republishedAnchorInstant = Self.trackPlayingAnchor(
                 track: trackKey, elapsed: elapsedRaw, timestamp: timestampString,
                 candidateInstant: candidate, duration: raw.duration,
                 bundleID: raw.bundleIdentifier, now: sampledAt)
         }
-        let elapsed = Self.livePositionSeconds(
-            playing: raw.playing, elapsedTime: raw.elapsedTime, elapsedTimeNow: raw.elapsedTimeNow,
+        let liveElapsed = Self.livePositionSeconds(
+            playing: playing, elapsedTime: raw.elapsedTime, elapsedTimeNow: raw.elapsedTimeNow,
             playbackRate: raw.playbackRate, timestamp: timestampDate, now: sampledAt,
             lastPlayingPosition: Self.rememberedPlayingPosition(forTrack: trackKey),
             sighting: sighting, republishedAnchorInstant: republishedAnchorInstant,
             lastPlayingSampledAt: Self.rememberedPlayingSampledAt(forTrack: trackKey),
-            pauseObservedAt: Self.lastPauseObservedAt())
-        if raw.playing == true, let elapsed {
+            pauseObservedAt: Self.lastPauseObservedAt(),
+            playbackStartedAt: Self.startsPausedAnchorOnPlay(bundleID: raw.bundleIdentifier)
+                ? Self.playbackStart(forAnchorKey: anchorKey) : nil)
+        // 自然切歌时新标题的锚点晚打了,按先到的那份归零锚点的起播时刻补回来(见 resetAnchorStartCorrection)。
+        let startCorrection: Double? = playing == true && Self.correctsFromResetAnchor(bundleID: raw.bundleIdentifier)
+            ? Self.resetAnchorStartCorrection(
+                resets: Self.currentResetAnchors(), title: raw.title, elapsed: raw.elapsedTime, timestamp: timestampDate)
+            : nil
+        let elapsed = liveElapsed.map { $0 + (startCorrection ?? 0) }
+        if let startCorrection, Self.noteStartCorrectionLogged(anchorKey: anchorKey) {
+            logger.notice("natural advance anchor late: \(raw.title ?? "", privacy: .public) raw=\(raw.elapsedTime ?? -1, format: .fixed(precision: 3)) → +\(startCorrection, format: .fixed(precision: 3))s from the reset anchor")
+        }
+        if playing == true, let elapsed {
             Self.rememberPlayingPosition(elapsed, forTrack: trackKey, at: sampledAt)
         }
         // 这里**不再**对 Spotify 做 JXA 直查真值的覆盖(移除)。
@@ -1465,16 +1688,16 @@ public enum MediaControlClient {
         let isRadio = !(raw.radioStationHash ?? "").isEmpty
         Self.setRadioStationHash(isRadio ? raw.radioStationHash : nil)
         let radioPosition: Double? = isRadio
-            ? Self.advanceRadioClock(trackKey: trackKey, playing: raw.playing == true, now: sampledAt,
+            ? Self.advanceRadioClock(trackKey: trackKey, playing: playing == true, now: sampledAt,
                                      startedAt: Self.lastTrackChangeObserved(forKey: trackKey))
             : nil
-        let snapshot = MediaControlSnapshot(
+        var snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
             album: raw.album,
             duration: raw.duration,
             elapsedTime: radioPosition ?? elapsed,
-            playing: raw.playing,
+            playing: playing,
             playbackRate: raw.playbackRate,
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
             // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
@@ -1485,10 +1708,21 @@ public enum MediaControlClient {
             // 电台把锚点也换成自己那块表:留着原始值会让下游"锚点是不是开播那个"的判定
             // (anchorElapsedTime == 0)按整档节目的钟去解读,自相矛盾。
             anchorElapsedTime: radioPosition ?? raw.elapsedTime,
-            isRadio: isRadio ? true : nil
+            isRadio: isRadio ? true : nil,
+            anchorStartCorrection: startCorrection
         )
+        // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
+        // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(决策 41)。
+        if Self.stampsCaptureTime(bundleID: bundleID) { snapshot.capturedAt = sampledAt }
         return (snapshot, bundleID)
     }
+
+    /// 哪些播放器的 media-control 读数带上读到的时刻(见上面那句)。酷狗;Safari 的媒体进程
+    /// (它的外推与页面 `currentTime` 逐拍差 0.001s,读数本身就是真值,晚处理多少就差多少)。
+    public static func stampsCaptureTime(bundleID: String?) -> Bool {
+        correctsFromResetAnchor(bundleID: bundleID) || bundleID == safariMediaProcessBundleID
+    }
+    public static let safariMediaProcessBundleID = "com.apple.WebKit.GPU"
 
     // MARK: - 电台曲内时钟
 

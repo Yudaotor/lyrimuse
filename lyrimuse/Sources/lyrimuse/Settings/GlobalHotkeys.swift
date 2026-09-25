@@ -69,7 +69,7 @@ extension KeyboardShortcuts.Name {
         case .lyricsDelayHotkey: return L10n.t("歌词延后")
         case .lyricsQuickSearchHotkey: return L10n.t("搜索歌词")
         case .toggleTranslationHotkey: return L10n.t("显示/隐藏译文")
-        case .toggleRomanizationHotkey: return L10n.t("显示/隐藏发音")
+        case .toggleRomanizationHotkey: return L10n.t("显示/隐藏罗马音")
         case .toggleNotchOverlayHotkey: return L10n.t("显示/隐藏灵动岛歌词")
         case .toggleMenuBarLyricsHotkey: return L10n.t("显示/隐藏菜单栏歌词")
         case .lyricsOffsetResetHotkey: return L10n.t("歌词偏移归零")
@@ -207,7 +207,7 @@ enum GlobalHotkeys {
             let on = !AppSettings.shared.showRomanization
             AppSettings.shared.showRomanization = on
             flashHint(icon: "textformat.abc",
-                      text: on ? L10n.t("已显示发音") : L10n.t("已隐藏发音"))
+                      text: on ? L10n.t("已显示罗马音") : L10n.t("已隐藏罗马音"))
         }
         // 灵动岛/菜单栏歌词的显隐。跟「显示/隐藏悬浮歌词」凑齐三种形态 —— 原来只有悬浮
         // 那一个有键,另外两个没有,不对称。
@@ -233,12 +233,37 @@ enum GlobalHotkeys {
 
         // 见 allLyrimuseNames 注释:登记了名字却忘了写标题时,撞键提示会把内部标识符
         // 端给用户。这里只能查出这一半(另一半"压根没登记"没有办法自动发现)。
+        pauseWhileMenuTracking()
         #if DEBUG
         for name in KeyboardShortcuts.Name.allLyrimuseNames {
             assert(KeyboardShortcuts.Name.title(for: name) != name.rawValue,
                    "快捷键 \(name.rawValue) 没有在 KeyboardShortcuts.Name.title(for:) 里登记显示名")
         }
         #endif
+    }
+
+    private static var menuTrackingObservers: [NSObjectProtocol] = []
+
+    /// 本 App 的任何 `NSMenu` 跟踪期间(悬浮窗 ⚙ 菜单、菜单栏菜单、设置页下拉)关掉全局快捷键。
+    ///
+    /// KeyboardShortcuts 1.15.0 在 macOS 14+ 菜单打开时会装一个 `.eventTracking` 模式的 runloop
+    /// 观察者(`RunLoopLocalEventMonitor`),每轮把事件队列**整个**取空再逐个塞回。菜单跟踪期间
+    /// 队列里全是 mouseMoved,这一取一塞抢掉菜单自己的事件处理,表现是指针在菜单里移动时高亮
+    /// 一顿一顿。`isEnabled = false` 走库里 `updateEventHandler()` 的禁用分支,那个观察者随之停掉;
+    /// 两边收同一对通知,谁先谁后最终状态都一样。代价是菜单开着时全局快捷键不响应,跟系统原生
+    /// 菜单的行为一致;这 16 个快捷键里没有要在菜单打开时触发的(没有「开关菜单」这一类)。
+    /// 升级到带上游修复的版本需要 swift-tools 6.2,且 2.x 用了本机编不过的宏,见 Package.swift。
+    private static func pauseWhileMenuTracking() {
+        guard menuTrackingObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        menuTrackingObservers = [
+            center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { _ in
+                MainActor.assumeIsolated { KeyboardShortcuts.isEnabled = false }
+            },
+            center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: nil) { _ in
+                MainActor.assumeIsolated { KeyboardShortcuts.isEnabled = true }
+            },
+        ]
     }
 
     /// 把毫秒偏移显示成 "+0.50s" / "-0.25s"。正号要显式带上 —— 只有减号的话,用户按了

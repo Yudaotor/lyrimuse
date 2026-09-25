@@ -68,7 +68,7 @@ func runSearchLyricsCLI(args []string) {
 	// "没启用"、直接返回空列表。
 	if configDir() != "" {
 		cfgPath := filepath.Join(configDir(), "config.json")
-		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
+		setFeatures(loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json")))
 		// 同理,MusicBrainz 的歌手别名缓存也得自己加载一遍。
 		// retryArtistIdentities 会在没查到可用候选时拿 canonical 名再搜一次,而
 		// artistAliasPath 为空的话这份缓存既不读也不写 —— 每开一次"搜索候选歌词"
@@ -260,7 +260,7 @@ func runSearchLyricsCLI(args []string) {
 			SourcesSeen:          lyricSourcesWithCandidates(results),
 			SourcesResponded:     lyricSourcesResponded(results),
 			ResolvedDurationSecs: effectiveDuration,
-			Mode:                 features.LyricsSourceMode,
+			Mode:                 features().LyricsSourceMode,
 		}
 		if picked != nil {
 			p.Winner = picked.Source

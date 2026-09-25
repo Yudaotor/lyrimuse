@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -61,7 +62,6 @@ type ytmusicResult struct {
 
 const (
 	ytmusicDomain      = "https://music.youtube.com"
-	ytmusicBaseAPI     = ytmusicDomain + "/youtubei/v1/"
 	ytmusicHTTPTimeout = 6 * time.Second
 	// 每个真实浏览器都会发的 UA——跟 musixmatch.go/amllttml.go 同一个理由:这是未公开的
 	// 反爬接口,一个诚实的自定义 UA(比如 lrclib.go 那种"客户端名/版本号")在这类接口上
@@ -251,7 +251,25 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ytmusicBaseAPI+endpoint+"?alt=json", bytes.NewReader(raw))
+	var out []byte
+	err = tryEach(ctx, ytmusicAPIBases, func(base string) error {
+		b, err := ytmusicPostAt(ctx, base, endpoint, raw, visitorID)
+		if err == nil {
+			out = b
+		}
+		return err
+	})
+	if err != nil {
+		// 几个主机都没问成:跟原来一样按「没拿到」返回(nil, nil),调用方各自当空结果处理。
+		return nil, nil
+	}
+	return out, nil
+}
+
+// ytmusicPostAt 发到一个 InnerTube 主机。Origin 始终是 music.youtube.com:三个主机同一套接口,
+// 按 Origin 认这是 YouTube Music 的请求。err 非 nil 是没问成(含非 200)。
+func ytmusicPostAt(ctx context.Context, base, endpoint string, raw []byte, visitorID string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/youtubei/v1/"+endpoint+"?alt=json", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +285,7 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 }

@@ -146,7 +146,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
         if isUnregisterLoginItemRun { return }
-        // ⚠️ 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
+        MainThreadStallProbe.start()
+        // 必须是这个函数里第一个碰 AppSettings 的事之前:CustomFontStore.shared 的 init
         // 会把用户导入的字体注册进 Core Text(进程级,每次启动都要重新注册一遍)。下面一行
         // 就会第一次访问 AppSettings.shared,而它的 init() 末尾会用 fontFamilyName 算一遍
         // mainFont(recomputeFonts()) —— 这时如果自定义字体还没注册,NSFontManager 找不到
@@ -157,7 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。
         // 顺带清掉旧方案留在 ~/Library/LaunchAgents 的 plist(见 LoginItemManager 头注)。
         LoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)
-        // ⚠️ 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
+        AppSettings.shared.syncLaunchAtLoginFromSystem()
+        // 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
         // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动
         // 的内存态还是空的。见 AppSettingsMirror.restoreIfPristine 的注释。
         AppSettingsMirror.restoreIfPristine()

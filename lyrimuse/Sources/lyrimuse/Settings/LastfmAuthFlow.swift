@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 import AppKit
 import OSLog
 import LyrimuseCore
@@ -28,7 +27,7 @@ enum LastfmAuthError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .api(let msg): return String(format: L10n.t("Last.fm 返回错误: %@"), msg)
+        case .api(let msg): return String(format: L10n.t("Last.fm 返回错误：%@"), msg)
         case .parse: return L10n.t("解析 Last.fm 响应失败")
         }
     }
@@ -39,14 +38,7 @@ enum LastfmAuthFlow {
 
     // 算法在 LyrimuseCore.LastfmSignature(selftest 覆盖,跟 collector lastfm.go 的 sign() 用同一组向量)。
     static func signParams(_ params: [String: String], secret: String) -> String {
-        let sorted = params.sorted { $0.key < $1.key }
-        var s = ""
-        for (k, v) in sorted {
-            s += k + v
-        }
-        s += secret
-        let digest = Insecure.MD5.hash(data: Data(s.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
+        LastfmSignature.sign(params, secret: secret)
     }
 
     private static func buildURL(_ params: [String: String]) -> URL {

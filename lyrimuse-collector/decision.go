@@ -84,6 +84,23 @@ type lyricsDecision struct {
 	// 手动搜索 CLI 在 buildLyricsDecision **之后**填(跟 SourcesSkipped 同一个位置、
 	// 同一个理由:不给这个函数再加参数)。
 	QueriesTried []lyricQueryRecord `json:"queries_tried,omitempty"`
+	// ReusedFrom:这份歌词不是这条自己检索来的,是从**另一张专辑下的同一段录音**复用过来的,
+	// 值是那条的完整 key。非空时 Path 恒为 "cross-album-reuse"。
+	//
+	// 需要它是因为复用之后这条的 Winner/Candidates 说的是别人那一轮的事:光看
+	// lyrics_source=kugou 会以为这条自己问过酷狗,而它可能一次都没问成功过。排查"这首歌
+	// 的词哪来的"时,这个字段是唯一能把两条记录接起来的线。
+	//
+	// 同样服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。
+	ReusedFrom string `json:"reused_from,omitempty"`
+	// WinnerArtist:胜者那条候选(候选里第一条 Source == Winner 的)所报的歌手名。候选明细挪到旁路
+	// 文件之后(见 decisionstore.go),albumhint / learnedartistalias 要的就只是这一个字段,不必为它
+	// 去读旁路文件。老记录没有它时由拆分那一步从候选里补上(decisionWinnerArtist)。
+	WinnerArtist string `json:"winner_artist,omitempty"`
+	// DetailsExternal:这一槽的 candidates / queries_tried 已经挪到旁路文件(decisionstore.go)。读的一方
+	// 按指纹补不回来时据此显示「候选明细缺失」,而不是误报成「这一轮没有任何源给出候选」—— 候选为空时
+	// Candidates 本来就因 omitempty 不落盘,光看字段在不在分不清这两种情况。
+	DetailsExternal bool `json:"details_external,omitempty"`
 }
 
 // 一条候选的元数据 —— 字段跟 scoredLyricCandidateResult 一一对应,唯独**没有歌词正文**。
@@ -187,8 +204,26 @@ func buildLyricsDecision(
 			ConsensusPeers:             c.ConsensusPeers,
 		})
 	}
+	d.WinnerArtist = decisionWinnerArtist(d)
 	logLyricsDecision(d, picked)
 	return d
+}
+
+// decisionWinnerArtist 取胜者那条候选所报的歌手名:有 WinnerArtist 就用它,否则在候选里找第一条
+// Source == Winner 的(两个读者 albumhint / learnedartistalias 原来就是这么找的,口径不变)。
+func decisionWinnerArtist(d *lyricsDecision) string {
+	if d == nil || d.Winner == "" {
+		return ""
+	}
+	if d.WinnerArtist != "" {
+		return d.WinnerArtist
+	}
+	for _, c := range d.Candidates {
+		if c.Source == d.Winner {
+			return strings.TrimSpace(c.Artist)
+		}
+	}
+	return ""
 }
 
 // lyricsDecisionLogMaxCandidates:一行日志里最多列几个候选,多出来的折成 "+N"。

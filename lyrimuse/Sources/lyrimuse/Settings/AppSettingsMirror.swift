@@ -54,6 +54,9 @@ enum AppSettingsMirror {
                 at: ConfigPortability.configFolderURL, withIntermediateDirectories: true)
             let data = try JSONSerialization.data(
                 withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+            // 跟盘上那份一字不差就不写:偏好变化通知在值没变时也会发(空闲时每 5–10 秒一次),
+            // 不比对的话每次都是整份重写同一个文件。
+            if let existing = try? Data(contentsOf: fileURL), existing == data { return }
             // 目前这批键里没有任何凭据(密钥全在 config.json),但仍然走 writeSecurely ——
             // 以后往 np: 里加了带密的东西时,不必再回头想起还有这个文件要收紧权限。
             try data.writeSecurely(to: fileURL)

@@ -580,6 +580,23 @@ func albumHintIsSingleOrEP(album string) bool {
 	return strings.HasSuffix(a, " - single") || strings.HasSuffix(a, " - ep")
 }
 
+// trimSingleOrEPSuffix 去掉 albumHintIsSingleOrEP 认的那两个后缀(大小写不敏感),返回剩下的专辑名。
+// 没有后缀、或去掉后什么都不剩(专辑名本身就叫「 - Single」),原样返回。后缀表必须跟
+// albumHintIsSingleOrEP 一致。
+func trimSingleOrEPSuffix(album string) string {
+	t := strings.TrimSpace(album)
+	for _, suffix := range []string{" - Single", " - EP"} {
+		if len(t) <= len(suffix) || !strings.EqualFold(t[len(t)-len(suffix):], suffix) {
+			continue
+		}
+		if base := strings.TrimSpace(t[:len(t)-len(suffix)]); base != "" {
+			return base
+		}
+		return album
+	}
+	return album
+}
+
 // albumHintHasEditionQualifier:「(Deluxe Edition)」「(2018 Remaster)」「(豪华版)」这类再版 / 加料版,只作
 // 平手时的减分项 —— 同一张专辑的原版和豪华版都对上时,取名字最朴素的那张。
 func albumHintHasEditionQualifier(album string) bool {
@@ -614,13 +631,8 @@ func lyricResolvedArtists(artist, title, album string) []string {
 	if e.CanonicalArtist != "" {
 		out = append(out, e.CanonicalArtist)
 	}
-	if d := e.LyricsDecisionApplied; d != nil && d.Winner != "" {
-		for _, c := range d.Candidates {
-			if c.Source == d.Winner && strings.TrimSpace(c.Artist) != "" {
-				out = append(out, c.Artist)
-				break
-			}
-		}
+	if a := decisionWinnerArtist(e.LyricsDecisionApplied); a != "" {
+		out = append(out, a)
 	}
 	return out
 }

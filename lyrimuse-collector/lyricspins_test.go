@@ -10,8 +10,8 @@ import (
 // 用户手动校准过时间轴的歌，两条「自动重选歌词源」的路径都必须放手 —— 换一份歌词就等于
 // 把人家一句句听出来的校正值静默作废（校正值的 key 里含歌词内容指纹，见 lyricspins.go）。
 func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 
 	// 版本落后 到 不 pin 该重选。
 	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}

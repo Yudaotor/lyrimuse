@@ -16,6 +16,8 @@ import SwiftUI
 /// - **颜色跟图标走**:粉 / 桃 / 黄 / 淡紫四色都取自 AppIcon,深浅外观都只靠透明度,不另写两套。
 struct AboutHeroBackdrop: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 设置窗口看不见时停表:系统不会替被挡住 / 最小化的窗口停 TimelineView,这页一直 30 帧在画。
+    @Environment(\.previewHostVisible) private var windowVisible
 
     private struct Glyph {
         let symbol: String
@@ -71,7 +73,7 @@ struct AboutHeroBackdrop: View {
                 // 右边用桃色不用黄色:离线渲染深色外观时黄色柔光压在深灰底上发闷、偏土,桃色两种外观都干净。
                 glow(Self.peach, opacity: 0.22)
                     .position(x: width * 0.84, y: height * 0.30)
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || !windowVisible)) { context in
                     let t = context.date.timeIntervalSinceReferenceDate
                     ForEach(Array(Self.glyphs.enumerated()), id: \.offset) { _, glyph in
                         let drift = reduceMotion ? 0 : glyph.amplitude * CGFloat(sin(t * 2 * .pi / glyph.period + glyph.phase))

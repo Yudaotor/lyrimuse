@@ -17,9 +17,9 @@ import (
 //     回填兜底的);
 //   - 同一条件下的普通曲目仍然正常发 LB —— 分流只认"短",不是把 LB 整个关掉。
 func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
-	savedFlag, savedPath := features.ScrobbleShortTracks, listenLogPath
-	defer func() { features.ScrobbleShortTracks = savedFlag; listenLogPath = savedPath }()
-	features.ScrobbleShortTracks = true
+	savedFlag, savedPath := features().ScrobbleShortTracks, listenLogPath
+	defer func() { featuresRef().ScrobbleShortTracks = savedFlag; listenLogPath = savedPath }()
+	featuresRef().ScrobbleShortTracks = true
 	listenLogPath = filepath.Join(t.TempDir(), "listens.jsonl")
 
 	var lbPosts int32
@@ -80,15 +80,15 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 // shortTrackLastfmOnly 只在开关开着、且曲长在 (0, 30) 时为真——开关关着时短曲目根本进不了
 // 漏斗,这个判据为假只是"不额外分流"。
 func TestShortTrackLastfmOnly(t *testing.T) {
-	saved := features.ScrobbleShortTracks
-	defer func() { features.ScrobbleShortTracks = saved }()
-	features.ScrobbleShortTracks = true
+	saved := features().ScrobbleShortTracks
+	defer func() { featuresRef().ScrobbleShortTracks = saved }()
+	featuresRef().ScrobbleShortTracks = true
 	for dur, want := range map[float64]bool{20: true, 29.9: true, 30: false, 240: false, 0: false, -1: false} {
 		if got := shortTrackLastfmOnly(dur); got != want {
 			t.Errorf("开:shortTrackLastfmOnly(%v) = %v, want %v", dur, got, want)
 		}
 	}
-	features.ScrobbleShortTracks = false
+	featuresRef().ScrobbleShortTracks = false
 	if shortTrackLastfmOnly(20) {
 		t.Error("关:不该分流")
 	}

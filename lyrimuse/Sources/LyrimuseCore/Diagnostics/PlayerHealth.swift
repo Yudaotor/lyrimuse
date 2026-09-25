@@ -17,15 +17,14 @@ public enum PlayerHealth {
     }
 
     public struct Inputs: Equatable, Sendable {
-        public var appleMusicSelected: Bool
-        public var automationDenied: Bool
+        /// 自动化权限被拒的播放器(`automationDeniedPlayers` 算出来的)。
+        public var automationDeniedPlayers: [PlaybackPlayer]
         public var collectorServiceEnabled: Bool
         public var collectorRunning: Bool
 
-        public init(appleMusicSelected: Bool, automationDenied: Bool,
+        public init(automationDeniedPlayers: [PlaybackPlayer],
                     collectorServiceEnabled: Bool, collectorRunning: Bool) {
-            self.appleMusicSelected = appleMusicSelected
-            self.automationDenied = automationDenied
+            self.automationDeniedPlayers = automationDeniedPlayers
             self.collectorServiceEnabled = collectorServiceEnabled
             self.collectorRunning = collectorRunning
         }
@@ -35,7 +34,16 @@ public enum PlayerHealth {
     public static func warnings(_ inputs: Inputs) -> [Warning] {
         var out: [Warning] = []
         if inputs.collectorServiceEnabled && !inputs.collectorRunning { out.append(.collectorNotRunning) }
-        if inputs.appleMusicSelected && inputs.automationDenied { out.append(.automationDenied) }
+        if !inputs.automationDeniedPlayers.isEmpty { out.append(.automationDenied) }
         return out
+    }
+
+    /// 哪些播放器的自动化权限被拒、要在徽标上报:当前选择需要权限的那几家(跟设置页权限卡、引导页那一步
+    /// 同一份 `playersNeedingAutomation`,含「自动识别」时按超集算)∩ 本机装了 ∩ 系统记为拒绝。
+    /// 只看 Apple Music 会漏掉默认的「自动识别」和 Spotify。
+    public static func automationDeniedPlayers(
+        selection: Set<PlaybackPlayer>, isInstalled: (PlaybackPlayer) -> Bool, isDenied: (PlaybackPlayer) -> Bool
+    ) -> [PlaybackPlayer] {
+        selection.playersNeedingAutomation.filter { isInstalled($0) && isDenied($0) }
     }
 }

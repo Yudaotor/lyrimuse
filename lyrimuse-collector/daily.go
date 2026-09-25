@@ -61,8 +61,8 @@ var dailyDigestPath string
 // 的数据源(Last.fm 或 ListenBrainz，见 digest.go 的 resolveDigestSource)拉今天的统计
 // 推一条报告。取数/聚合/拼文案的逻辑统一定义在 digest.go(lastfmDigestStats/
 // listenbrainzDigestStats)，这里只负责判断该不该触发、选哪个源、传今天的时间范围。
-func (p *poller) dailyDigest(now time.Time) {
-	if !features.DailyDigest || p.lb.alerter == nil || p.lb.alerter.url == "" {
+func (p *poller) dailyDigest(now time.Time, env digestEnv) {
+	if !features().DailyDigest || env.alerter == nil || env.alerter.url == "" {
 		return
 	}
 	if !p.dailyLastCheckedAt.IsZero() && now.Sub(p.dailyLastCheckedAt) < dailyDigestCheckInterval {
@@ -78,9 +78,9 @@ func (p *poller) dailyDigest(now time.Time) {
 		return // 今天已经推送过了
 	}
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
-	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
-	source := resolveDigestSource(features.DailyDigestSource, lastfmConfigured, lbConfigured)
+	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
+	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
+	source := resolveDigestSource(features().DailyDigestSource, lastfmConfigured, lbConfigured)
 	if source == "" {
 		return // 两个账号都没配，这个功能没法跑，等用户配好任意一个
 	}
@@ -89,9 +89,9 @@ func (p *poller) dailyDigest(now time.Time) {
 	var stats digestStats
 	var err error
 	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), midnight.Unix(), now.Unix())
+		stats, err = lastfmDigestStats(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey(), midnight.Unix(), now.Unix())
 	} else {
-		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, midnight.Unix(), now.Unix())
+		stats, err = listenbrainzDigestStats(env.ctx, env.lbRoot, env.cfg.User, midnight.Unix(), now.Unix())
 	}
 	if err != nil {
 		return // 拉取失败,不标记已推送,下次检查再试
@@ -100,6 +100,8 @@ func (p *poller) dailyDigest(now time.Time) {
 		p.dailyState.save(today) // 今天确实没听,跳过不推送,但仍标记已处理,避免当天反复重查
 		return
 	}
-	digestPush(p.lb.alerter, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), stats)
+	if digestPush(env.alerter, fmt.Sprintf("🎧 今日听歌报告（%s）", now.Format("01-02")), stats) != nil {
+		return // 推送没成功,不标记已推送,下次检查再推
+	}
 	p.dailyState.save(today)
 }

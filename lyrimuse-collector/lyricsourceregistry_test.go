@@ -413,3 +413,16 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		}
 	}
 }
+
+// 热重读不许保留任何字段的旧值:App 侧改设置不再重启 collector(CollectorRestartPolicy 已删),
+// 被留下旧值的字段改了就永远不生效,而且不报错。有字段真要特殊处理,照 lyrics_dir 的做法在换快照
+// 之后另起一步(见 lyricsdirswitch.go),别在快照里留旧值。
+func TestFeaturesHotReloadKeepsNoStaleField(t *testing.T) {
+	goSrc, err := os.ReadFile("featuresreload.go")
+	if err != nil {
+		t.Fatalf("读不到 featuresreload.go: %v", err)
+	}
+	for _, m := range regexp.MustCompile(`next\.(\w+) = cur\.\w+`).FindAllStringSubmatch(string(goSrc), -1) {
+		t.Errorf("featuresreload.go 热重读时保留了 %s 的旧值,改它将永远不生效", m[1])
+	}
+}

@@ -146,10 +146,10 @@ func TestYTMusicAdProbeJSHasNoDoubleQuotes(t *testing.T) {
 
 // trustedPlaybackRejected 的分流:哪些情况会去做一次 AppleScript 复核,哪些不会。
 func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 	const chrome = "com.google.Chrome"
-	features.TrustedPlayers = map[string]string{chrome: "Google Chrome"}
+	featuresRef().TrustedPlayers = map[string]string{chrome: "Google Chrome"}
 	resetYTMusicAdCacheForTest(t)
 
 	// ① 内置播放器压根不进这条路(基础判据第一行就 return false)。

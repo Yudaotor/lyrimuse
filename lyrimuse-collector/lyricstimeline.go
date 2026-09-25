@@ -420,6 +420,9 @@ func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64)
 // 加闸的理由是它贵:实测 6952 条缓存要 9~10 秒,而连跑两轮第二轮 0 条改动 —— 每次进程
 // 启动白烧这 9 秒,正是"collector 一重启,歌词就要等一两分钟"的最大单项。
 func migrateLyricTimelines() {
+	if migrationDone(migrationLyricTimelines, migrationLyricTimelinesVersion) {
+		return
+	}
 	enrichMu.Lock()
 	fixed := 0
 	dropped := 0
@@ -464,4 +467,6 @@ func migrateLyricTimelines() {
 		log.Printf("lyric timeline migration: rehung %d entries, dropped contradictory word timing in %d entries", fixed, dropped)
 		saveEnrichCache()
 	}
+	// 落水位放在最后:上面任何一步 panic 都不会留下"已完成"的假记录。
+	markMigrationDone(migrationLyricTimelines, migrationLyricTimelinesVersion)
 }

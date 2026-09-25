@@ -39,6 +39,9 @@ type positionBiasRecord struct {
 	AnchorElapsed *float64 `json:"anchor_elapsed"`
 	BiasSecs      float64  `json:"bias_secs"`
 	WrittenAtMs   int64    `json:"written_at_ms"`
+	// 写这份记录那一刻 App 算出的位置(秒)。只有 Spotify 自己的钟那一档(AnchorElapsed == nil)用得上,
+	// 拿它核"从那以后一直连续在放",见 playerClockBiasApplies。旧文件没有这个键 = nil,按 0 算。
+	PositionSecs *float64 `json:"position_secs"`
 }
 
 const (
@@ -129,6 +132,53 @@ func currentPositionBias(artist, title, bundleID string, anchorElapsed float64, 
 	positionBiasMu.Unlock()
 	if changed {
 		log.Printf("position bias from app: %+.3fs applied to %q (anchor elapsed %.3f)", -rec.BiasSecs, key, anchorElapsed)
+	}
+	return rec.BiasSecs, true
+}
+
+// Spotify 自己的钟(AppleScript `player position`,getSpotifyState 那一份)每次起播都整首领先真声一截,
+// 量取决于起播方式;App 那边按起播方式给、每次暂停再学(LocalPlaybackSource.SpotifyStartKind),写进同一个
+// 文件,AnchorElapsed 为 nil。这边 5 秒一拍、没有事件通知,量不了也学不了,直接用 App 的。
+//
+// 什么时候扣(playerClockBiasApplies,纯函数、有测试):同一首(两边都先洗 cleanMediaTag 再比)、偏置非 0、
+// 并且"扣掉偏置的读数 ≈ 记录那一刻的位置 + 记录至今的秒数"(±2s)—— 这条签名同时挡住了"这一段之后暂停过
+// (冻结值即真值、钟已对齐)/ 拖过 / 重播过"和"App 没在跑、记录是很久以前的"。暂停态本身不扣:冻结值就是真值。
+const playerClockBiasContinuityToleranceSecs = 2.0
+
+func playerClockBiasApplies(rec positionBiasRecord, artist, title, bundleID string, raw float64, now time.Time) bool {
+	if rec.BiasSecs == 0 || rec.AnchorElapsed != nil || rec.BundleID != bundleID {
+		return false
+	}
+	if cleanMediaTag(rec.Artist) != artist || cleanMediaTag(rec.Title) != title {
+		return false
+	}
+	written := time.UnixMilli(rec.WrittenAtMs)
+	age := now.Sub(written).Seconds()
+	if age < 0 || now.Sub(written) > positionBiasMaxAge {
+		return false
+	}
+	pos := 0.0
+	if rec.PositionSecs != nil {
+		pos = *rec.PositionSecs
+	}
+	return math.Abs((raw-rec.BiasSecs)-(pos+age)) <= playerClockBiasContinuityToleranceSecs
+}
+
+// currentPlayerClockBias 给 getSpotifyState 用:这一拍 Spotify 自己的钟读数该扣多少。artist / title 是洗过的。
+func currentPlayerClockBias(artist, title string, raw float64, now time.Time) (float64, bool) {
+	rec, ok := readPositionBiasRecord(positionBiasPath)
+	if !ok || !playerClockBiasApplies(rec, artist, title, spotifyBundleID, raw, now) {
+		return 0, false
+	}
+	key := artist + "|" + title
+	positionBiasMu.Lock()
+	changed := key != positionBiasLastLoggedKey || rec.BiasSecs != positionBiasLastLoggedBias
+	if changed {
+		positionBiasLastLoggedKey, positionBiasLastLoggedBias = key, rec.BiasSecs
+	}
+	positionBiasMu.Unlock()
+	if changed {
+		log.Printf("player clock bias from app: %+.3fs applied to %q", -rec.BiasSecs, key)
 	}
 	return rec.BiasSecs, true
 }

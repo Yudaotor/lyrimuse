@@ -260,7 +260,7 @@ func sourceColor(_ source: String) -> Color {
 func sourceDisplayName(_ source: String) -> String {
     switch source {
     case "netease": return L10n.t("网易云音乐")
-    case "qq": return L10n.t("QQ音乐")
+    case "qq": return L10n.t("QQ 音乐")
     case "kugou": return L10n.t("酷狗音乐")
     case "musixmatch": return "Musixmatch"
     case "lrclib": return "LRCLIB"
@@ -688,6 +688,9 @@ struct LyricsManagerView: View {
         var token = "\u{0}"
         var generation = -1
         var result: [EnrichCacheStore.Summary] = []
+        /// sortedFiltered 的缓存:result 重算过(置 nil)或排序方式变了才重排。
+        var sortedFor: LyricsSortOption?
+        var sorted: [EnrichCacheStore.Summary] = []
     }
     @State private var filteredCache = FilteredCache()
 
@@ -749,6 +752,7 @@ struct LyricsManagerView: View {
         filteredCache.token = token
         filteredCache.generation = generation
         filteredCache.result = result
+        filteredCache.sortedFor = nil
         LyricsManagerBaseline.logFilter(
             inCount: base.count, outCount: result.count,
             elapsedMS: LyricsManagerBaseline.ms(since: recomputeStart))
@@ -762,7 +766,12 @@ struct LyricsManagerView: View {
     /// 而编辑框在同一个视图里,每敲一个字都会重算 body。全库八千多条时重排一遍默认顺序约 20ms、别的排序约 100ms,
     /// 不缓存就是每个键几十到几百毫秒的卡顿。
     private var sortedFiltered: [EnrichCacheStore.Summary] {
-        sortOption.sorted(filtered)
+        let base = filtered
+        if filteredCache.sortedFor == sortOption { return filteredCache.sorted }
+        let sorted = sortOption.sorted(base)
+        filteredCache.sortedFor = sortOption
+        filteredCache.sorted = sorted
+        return sorted
     }
 
     // 只有恰好选中一条时才显示单曲详情页——detail 侧整条链(编辑缓冲区、offset 输入框、
@@ -910,7 +919,7 @@ struct LyricsManagerView: View {
             Button(action: commitSearch) {
                 Image(systemName: "magnifyingglass")
             }
-            .help(L10n.t("搜索(或在搜索框按回车)"))
+            .help(L10n.t("搜索（或在搜索框按回车）"))
             .disabled(searchText == committedSearchText)
         }
         .font(.callout)
@@ -1530,7 +1539,7 @@ struct LyricsManagerView: View {
                 // ideal 默认值。
                 .navigationSplitViewColumnWidth(min: 480, ideal: 630, max: 900)
                 .confirmationDialog(
-                    L10n.t("确定要清空全部歌词缓存吗?"),
+                    L10n.t("确定要清空全部歌词缓存吗？"),
                     isPresented: $showClearAllConfirm,
                     titleVisibility: .visible
                 ) {
@@ -1546,7 +1555,7 @@ struct LyricsManagerView: View {
                     // 一定先打一份快照(EnrichCacheStore.clearAll)。 不能改成"随时可以
                     // 恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头
                     // 比不承诺更危险。
-                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
+                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录，包括你手动编辑、联网搜索采纳过的内容，已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份，能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
                 }
                 // 窗口开着期间换歌就跟着重新定位——不然停留在"开窗那一刻播的那首",见
                 // LyricsManagerNowPlayingObserver 类头注。首次挂载时 trackSignature 已经是
@@ -1615,7 +1624,7 @@ struct LyricsManagerView: View {
         // List 上的「删除」分处三个不同层级。同一条修饰符链上叠多个呈现修饰符历史上有
         // 互相顶掉的问题(见那两处各自的注释),分层挂就不用去论证"这个版本会不会冲突"。
         .confirmationDialog(
-            L10n.t("确定要清空全部歌词时间轴校正吗?"),
+            L10n.t("确定要清空全部歌词时间轴校正吗？"),
             isPresented: $showClearOffsetsConfirm,
             titleVisibility: .visible
         ) {
@@ -1625,11 +1634,11 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值,无法撤销。歌词内容本身不受影响;设置里的全局偏移和按播放器补偿也不会被清掉。清掉之后,这些歌会重新交给后台自动更新歌词源"), offsets.trackOffsetCount))
+            Text(String(format: L10n.t("这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值，无法撤销。歌词内容本身不受影响；设置里的全局偏移和按播放器补偿也不会被清掉。清掉之后，这些歌会重新交给后台自动更新歌词源"), offsets.trackOffsetCount))
         }
         // 电台校准的清空确认。同样单独挂一层,理由见上面那条。
         .confirmationDialog(
-            L10n.t("确定要清空全部电台校正吗?"),
+            L10n.t("确定要清空全部电台校正吗？"),
             isPresented: $showClearRadioOffsetsConfirm,
             titleVisibility: .visible
         ) {
@@ -1639,11 +1648,11 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("这会清掉你在电台上为 %d 首歌调出来的时间轴校正,无法撤销。这些校正只在放电台时生效,清掉不影响你正常播放这些歌时的歌词"), offsets.radioOffsetCount))
+            Text(String(format: L10n.t("这会清掉你在电台上为 %d 首歌调出来的时间轴校正，无法撤销。这些校正只在放电台时生效，清掉不影响你正常播放这些歌时的歌词"), offsets.radioOffsetCount))
         }
         // 恢复确认。跟上面两个确认弹窗一样各挂各的层级,不叠在同一条修饰符链上。
         .confirmationDialog(
-            L10n.t("确定要从这份备份恢复歌词库吗?"),
+            L10n.t("确定要从这份备份恢复歌词库吗？"),
             isPresented: $showRestoreSnapshotConfirm,
             titleVisibility: .visible
         ) {
@@ -1662,7 +1671,7 @@ struct LyricsManagerView: View {
             // 说清楚它**不是**"回到那一刻的状态":铺文件是覆盖+新增,不删除备份里没有的
             // 条目(restore 走的是 LyricsBackupArchive.plan,只有 added/overwritten 两类)。
             // 用户以为是整体回滚、结果发现之后新解析的歌还在,那是另一种惊吓。
-            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存"))
+            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。铺好之后会马上收进缓存，不用重启"))
         }
         .alert(L10n.t("恢复歌词库"), isPresented: Binding(
             get: { restoreSnapshotResult != nil },
@@ -1673,7 +1682,10 @@ struct LyricsManagerView: View {
             Text(restoreSnapshotResult ?? "")
         }
         // 见 AuxiliaryWindowActivation 注释——只记账,不碰 Dock 图标。
-        .onAppear { AuxiliaryWindowActivation.windowDidAppear("lyrics-manager") }
+        .onAppear {
+            AuxiliaryWindowActivation.windowDidAppear("lyrics-manager")
+            store.holdSnapshot("lyrics-manager")
+        }
         // 切回 App 时重新读一次盘。
         //
         // 列表是**开窗那一刻的快照**,而 collector 在窗口开着期间会持续往同一个文件写:新歌
@@ -1692,6 +1704,8 @@ struct LyricsManagerView: View {
         }
         .onDisappear {
             AuxiliaryWindowActivation.windowDidDisappear("lyrics-manager")
+            // 关窗后快照(连同列表约 300 MB)由 store 延时清掉,下次开窗重新读盘(约 0.7 秒)。
+            store.releaseSnapshot("lyrics-manager")
             // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true
@@ -1716,9 +1730,9 @@ struct LyricsManagerView: View {
     private var batchDeleteTitle: String {
         if pendingDeleteKeys.count == 1,
            let summary = store.summaries.first(where: { $0.key == pendingDeleteKeys[0] }) {
-            return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗?"), summary.artist, summary.title)
+            return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗？"), summary.artist, summary.title)
         }
-        return String(format: L10n.t("确定要删除选中的 %@ 条本地记录吗?"), "\(pendingDeleteKeys.count)")
+        return String(format: L10n.t("确定要删除选中的 %@ 条本地记录吗？"), "\(pendingDeleteKeys.count)")
     }
 
     // 三条完整独立的句子,不在运行时拼接——拼出来的句子英文侧语序没法翻。
@@ -1726,14 +1740,14 @@ struct LyricsManagerView: View {
     // 下次播放会重新解析),属于决策信息,值得在确认这一刻单独点出来。
     private var batchDeleteMessage: String {
         if pendingDeleteKeys.count == 1 {
-            return L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词")
+            return L10n.t("已导出到本地的歌词文件也会一并删除，下次播放这首歌会重新走一遍匹配解析，不保证一定能找到一样的歌词")
         }
         let pending = Set(pendingDeleteKeys)
         let manual = store.summaries.filter { pending.contains($0.key) && $0.isManual }.count
         if manual > 0 {
-            return String(format: L10n.t("其中 %@ 条是你手动修正过的,删掉之后找不回来。已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词"), "\(manual)")
+            return String(format: L10n.t("其中 %@ 条是你手动修正过的，删掉之后找不回来。已导出到本地的歌词文件也会一并删除，且无法撤销。下次播放这些歌会重新走一遍匹配解析，不保证能找到一样的歌词"), "\(manual)")
         }
-        return L10n.t("已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词")
+        return L10n.t("已导出到本地的歌词文件也会一并删除，且无法撤销。下次播放这些歌会重新走一遍匹配解析，不保证能找到一样的歌词")
     }
 
     private func performPendingDelete() {
@@ -1816,7 +1830,7 @@ struct LyricsManagerView: View {
                 Button {
                     LyricsFillSweep.request(keys: retryable)
                 } label: {
-                    Label(String(format: L10n.t("重试选中的无歌词 %@ 条"), "\(retryable.count)"),
+                    Label(String(format: L10n.t("补搜选中的 %@ 首"), "\(retryable.count)"),
                           systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.bordered)
@@ -1859,7 +1873,7 @@ struct LyricsManagerView: View {
                     Button(role: .destructive) {
                         LyricsFillSweep.requestCancel()
                     } label: {
-                        Label(isFull ? L10n.t("停止扫库") : L10n.t("停止重试"),
+                        Label(isFull ? L10n.t("停止扫库") : L10n.t("停止补搜"),
                               systemImage: "stop.circle")
                     }
                 } header: {
@@ -1867,15 +1881,17 @@ struct LyricsManagerView: View {
                     // "歌手|歌名|专辑",直接显示够认。
                     // 兜底那一句(还没开始搜第一首时)全量走现成的「全量重新扫库」,不另起一句
                     // 「正在全量重新扫库…」—— 少一个只在一瞬间露脸的翻译串。
-                    Text(status.current.map { String(format: L10n.t("正在搜：%@"), $0) }
-                         ?? (isFull ? L10n.t("全量重新扫库") : L10n.t("正在重试无歌词条目…")))
+                    Text(status.current.map { String(format: L10n.t("正在搜索：%@"), $0) }
+                         ?? (isFull ? L10n.t("全量重新扫库") : L10n.t("正在准备补搜…")))
                 }
             } else {
+                // 标题只说这是什么,菜单项只写范围和数量;规则拆成下面两行短句单独一节。
+                // 原来整句规则塞在标题里,菜单被撑成一条长长的灰字,读起来像日志。
                 Section {
                     Button {
                         LyricsFillSweep.request(keys: [])
                     } label: {
-                        Label(String(format: L10n.t("重试全部无歌词条目（%@ 首）"), "\(retryableAll.count)"),
+                        Label(String(format: L10n.t("全部缺失歌词（%@ 首）"), "\(retryableAll.count)"),
                               systemImage: "arrow.triangle.2.circlepath")
                     }
                     .disabled(retryableAll.isEmpty)
@@ -1883,25 +1899,29 @@ struct LyricsManagerView: View {
                         Button {
                             LyricsFillSweep.request(keys: retryableVisible)
                         } label: {
-                            Label(String(format: L10n.t("重试当前筛选出的无歌词条目（%@ 首）"), "\(retryableVisible.count)"),
+                            Label(String(format: L10n.t("当前筛选结果（%@ 首）"), "\(retryableVisible.count)"),
                                   systemImage: "line.3.horizontal.decrease.circle")
-                // 标题只说这是什么,菜单项只写范围和数量;规则拆成下面两行短句单独一节。
-                // 原来整句规则塞在标题里,菜单被撑成一条长长的灰字,读起来像日志。
                         }
                         .disabled(retryableVisible.isEmpty)
                     }
                 } header: {
-                    Text(L10n.t("逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰"))
+                    Text(L10n.t("联网补搜缺失的歌词"))
+                }
+                // 纯展示,不可点(菜单里的 Text 按禁用项画成灰色)。间隔是 collector 的
+                // lyricsFillSweepGap,改那边记得改这里。
+                Section {
+                    Text(L10n.t("逐首搜索，每首间隔约 15 秒"))
+                    Text(L10n.t("会跳过纯音乐和手动修正过的歌词"))
                 }
                 if let status, status.finishedAt != nil {
                     Section {
                         // 纯展示的一行,不可点。cancelled 时另说一句,免得"搜了 12 首"被当成全部。
-                        Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
+                        Text(String(format: L10n.t("上次搜索 %1$@ 首，补全 %2$@ 首"), "\(status.done)", "\(status.filled)"))
                         if status.cancelled == true {
-                            Text(L10n.t("上次被手动停止"))
+                            Text(L10n.t("已被手动停止"))
                         }
                     } header: {
-                        Text(L10n.t("上一轮"))
+                        Text(L10n.t("上次结果"))
                     }
                 }
             }
@@ -1921,18 +1941,18 @@ struct LyricsManagerView: View {
                 // 全量扫库复用这条通道,说「重试中」就不对了 —— 那一档用中性的「扫描中」
                 // (跟设置页「歌词库」那两行同一个串,不另起翻译)。同 .help 那句。
                 .accessibilityLabel(String(
-                    format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("重试中 %1$@/%2$@"),
+                    format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("补搜中 %1$@/%2$@"),
                     "\(status.done)", "\(status.total)"))
             } else {
-                Label(L10n.t("重试无歌词"), systemImage: "arrow.triangle.2.circlepath")
+                Label(L10n.t("补搜歌词"), systemImage: "arrow.triangle.2.circlepath")
                     .labelStyle(.titleAndIcon)
             }
         }
         .help(running
               ? String(format: status?.isFullScan == true
-                       ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("重试中 %1$@/%2$@"),
+                       ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("补搜中 %1$@/%2$@"),
                        "\(status?.done ?? 0)", "\(status?.total ?? 0)")
-              : L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
+              : L10n.t("立即联网补搜缺失的歌词，不必等歌曲再次播放"))
     }
 
     // 口径本体挪到 EnrichCacheStore.byteText —— 设置页「歌词库」那一行是第三处要显示同一个
@@ -2011,6 +2031,9 @@ struct LyricsManagerView: View {
             sourcesRespondedCount: 0,
             // 还没有任何一轮打分,更谈不上"按哪一版规则选的"。
             lyricsScoringVersion: 0,
+            lyricsFillCount: 0,
+            lyricsFillAt: 0,
+            lyricsRescoreAt: 0,
             isSearching: true,
             hasDecision: false,
             // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件,
@@ -2069,10 +2092,7 @@ struct LyricsManagerView: View {
         }) {
             key = exact
         } else {
-            let looseWanted = Set(candidates.map(EnrichCacheKeys.looseKey))
-            guard let match = store.summaries.first(where: {
-                looseWanted.contains(EnrichCacheKeys.looseKey($0.key))
-            })?.key else { return }
+            guard let match = candidates.lazy.compactMap({ store.key(matchingLoose: $0) }).first else { return }
             key = match
         }
         // 整体替换成这一条、不是追加:"回到当前播放"的语义是聚焦到这首歌。追加的话用户点完
@@ -2182,7 +2202,7 @@ struct LyricsManagerView: View {
                     wordTimingHint
                 }
 
-                editorSection(title: L10n.t("歌词(LRC)"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 220, monospaced: true, disabled: summary.hasWordTiming, showCopyButton: true)
+                editorSection(title: L10n.t("歌词（LRC）"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 220, monospaced: true, disabled: summary.hasWordTiming, showCopyButton: true)
                     // 两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的 editedLyrics(换曲 / 采纳候选 /
                     // 重新匹配)才重算正文;编辑框自己拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的回车会被归一化吃掉。
                     .onChange(of: editedLyrics, initial: true) { _, raw in
@@ -2295,6 +2315,11 @@ struct LyricsManagerView: View {
                                                  roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                                                  source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
                                                  sourceChoice: "", fromManualPick: true)
+                guard saved else {
+                    // 没存上:编辑框和偏移退回盘上那份。留着候选的话,下一次 ⌘S 会把它当手改存进去并锁定。
+                    loadDetail(key: key)
+                    return false
+                }
                 // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
                 // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
                 refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
@@ -2303,8 +2328,8 @@ struct LyricsManagerView: View {
                 // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
                 // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
                 // 叠加两套反馈互相矛盾)。
-                if saved { flashSaveEditFeedback() }
-                return saved
+                flashSaveEditFeedback()
+                return true
             }
         }
     }
@@ -2429,7 +2454,7 @@ struct LyricsManagerView: View {
             if summary.hasLyrics {
                 InfoChip(
                     icon: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
-                    text: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行歌词"),
+                    text: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行时间轴"),
                     tint: summary.hasWordTiming ? .blue : .secondary
                 )
             }
@@ -2513,13 +2538,13 @@ struct LyricsManagerView: View {
                 Button(L10n.t("重置")) { resetOffsetEdit(summary) }
             }
             Spacer()
-            Text(L10n.t("正数=提前显示,负数=延后显示"))
+            Text(L10n.t("正数=提前显示，负数=延后显示"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
         // 校准过之后行为会变,就在动手的地方说清楚 —— 别让用户事后去猜。
         if pins.isPinned(summary.key) {
-            Text(L10n.t("已校准的歌不再自动更换歌词源:后台一换歌词内容,这个校正值就会失效。把偏移改回 0 即解除"))
+            Text(L10n.t("已校准的歌不再自动更换歌词源：后台一换歌词内容，这个校正值就会失效。把偏移改回 0 即解除"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -2536,7 +2561,7 @@ struct LyricsManagerView: View {
         Label(
             // 改文案:原来这句让"先点「移除逐字时间轴」",而那个按钮已经去掉
             // 了(见 actionsRow 里的注释)。现在指向仍然存在的那条路——换一份不带逐字的候选。
-            L10n.t("播放用的是逐字时间轴,改「歌词(LRC)」不生效。要手改主歌词,先用「联网搜索候选歌词」换一份不带逐字的;译文/罗马音不受影响"),
+            L10n.t("播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/罗马音不受影响"),
             systemImage: "info.circle"
         )
         .font(.caption)
@@ -2603,7 +2628,8 @@ struct LyricsManagerView: View {
         HStack(spacing: 10) {
             Button {
                 Task {
-                    await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma)
+                    // 没存上就到此为止:红字横幅已经在说,编辑框里用户敲的内容原样留着,别闪「已保存」。
+                    guard await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma) else { return }
                     // 歌词(LRC)内容可能改了,offset 的 key(内容指纹)也跟着变——重新
                     // 从磁盘读一遍权威内容(而不是假设"这条路径不碰 yrc 所以沿用旧值"),
                     // 保证跟真正持久化下来的内容一致。
@@ -2773,7 +2799,7 @@ struct LyricsManagerView: View {
         editedLyrics = winner.lyrics
         editedTr = winner.lyricsTr
         editedRoma = winner.lyricsRoma
-        await store.saveEdit(
+        let saved = await store.saveEdit(
             key: key, lyrics: winner.lyrics, tr: winner.lyricsTr, roma: winner.lyricsRoma,
             yrc: winner.lyricsYRC, source: winner.source, markManual: false,
             // 空串 = 显式清掉「用户选定的源」。这颗按钮的语义就是**完全**交回
@@ -2785,13 +2811,15 @@ struct LyricsManagerView: View {
             sourcesSeen: pick.sourcesSeen, sourcesResponded: pick.sourcesResponded,
             decision: decision
         )
-        refreshOffsetState(artist: summary.artist, title: summary.title,
-                           lyrics: winner.lyrics, yrc: winner.lyricsYRC)
-        guard store.lastError == nil else {
-            // 落盘/重启失败不在这里重复报:store.lastError 那条红字横幅已经在说了。
+        guard saved else {
+            // 失败原因不在这里重复报:store.lastError 那条红字横幅已经在说了。编辑框退回盘上那份,
+            // 别让没存上的冠军留在框里被下一次 ⌘S 当手改存进去。
             rematchResult = nil
+            loadDetail(key: key)
             return
         }
+        refreshOffsetState(artist: summary.artist, title: summary.title,
+                           lyrics: winner.lyrics, yrc: winner.lyricsYRC)
         if winner.source == summary.lyricsSource {
             // 别说"更新的一份" —— 代码只知道"内容不一样",不知道哪份更新:同一个源完全可能
             // 这一轮匹配到**另一个版本**(不同 song id / 重新上传过的歌词)。同源两轮
@@ -3038,7 +3066,7 @@ private struct LyricsManagerRow: View {
                         // 文案用的也是这个字段,两处必须口径一致。
                         badge(summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
                               tint: summary.hasWordTiming ? .blue : .secondary, on: summary.hasLyrics,
-                              help: summary.hasWordTiming ? L10n.t("逐字时间戳") : L10n.t("整行时间戳"))
+                              help: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行时间轴"))
                         // 加机译/源自带区分:颜色跟详情页顶部的 InfoChip(见下方
                         // "机器翻译"那颗紫色小方块)统一,列表原来不管来源一律绿色,详情页却早就用
                         // 紫色标机译——同一份数据在两个地方讲两套语言。图标形状(书本)跟旁边罗马音
@@ -3047,7 +3075,7 @@ private struct LyricsManagerRow: View {
                               tint: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel ? .purple : .green,
                               on: summary.hasTranslation,
                               help: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel
-                                  ? L10n.t("译文(机器翻译)") : L10n.t("译文(歌词源自带)"))
+                                  ? L10n.t("译文（机器翻译）") : L10n.t("译文（歌词源自带）"))
                         badge("textformat.abc", tint: .purple, on: summary.hasRomanization,
                               help: L10n.t("罗马音"), forceLatinIcon: true)
                     }
@@ -3072,7 +3100,7 @@ private struct LyricsManagerRow: View {
                         // 69 条两者同时为真,而那一档说的是"词还不存在、只能等",在这一轮压根
                         // 没人应答时是一句它没资格下的结论。判据见 Summary.lastRoundHadNoResponder。
                         Text(L10n.t("无源应答")).font(.caption2).foregroundStyle(.secondary)
-                            .help(L10n.t("最近一轮解析时一个歌词源都没有应答（多半是那一刻网络不通），不是「这首歌没有词」。会自动重搜，也可以用工具栏「重试无歌词」立刻重来"))
+                            .help(L10n.t("最近一轮解析时一个歌词源都没有应答（多半是那一刻网络不通），不是「这首歌没有词」。会自动重搜，也可以用工具栏「补搜歌词」立刻重来"))
                     } else if summary.knownOnSources {
                         // 加,跟详情页 infoStrip 同一档:源里有歌、没人挂词,
                         // 不是故障,中性色。

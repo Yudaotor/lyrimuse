@@ -21,6 +21,7 @@ private final class PanelPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
     @Published private(set) var artist = ""
+    @Published private(set) var displayArtist = ""
     @Published private(set) var album = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
@@ -74,6 +75,9 @@ private final class PanelPlayback: ObservableObject {
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
+            // 两份都要:`artist` 给「有没有曲目」那道判断用(它问的是载荷里有没有东西),
+            // `displayArtist` 只画在卡片上。判据见 `PlayerArtistFix.displayArtist`。
+            p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
@@ -270,7 +274,7 @@ private struct MenuBarPanelView: View {
     let close: () -> Void
     // 长按 / 右键某个能翻面的格子之后,面板下半部分换成它自己的快捷设置;
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
-    @State private var quickTarget: LyricsSurface?
+    @State private var quickTarget: PanelQuickTarget?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 封面小图按像素预先重采样要知道显示倍率(见 coverView)。
     @Environment(\.displayScale) private var displayScale
@@ -287,8 +291,8 @@ private struct MenuBarPanelView: View {
             // 留着它高度落差也更小(快捷设置比两排钮块还矮一点)。
             if let quickTarget {
                 PanelQuickSettings(
-                    surface: quickTarget,
-                    toggle: toggleAction(for: quickTarget),
+                    target: quickTarget,
+                    action: quickAction(for: quickTarget),
                     back: { setQuickTarget(nil) },
                     close: close)
             } else {
@@ -327,8 +331,28 @@ private struct MenuBarPanelView: View {
     ///
     /// 而这个动画本来也没什么用:面板高度是 NSPopover 的窗口尺寸,归 AppKit 自己的
     /// resize 动画管(pop.animates),SwiftUI 这一层补间不到它。等于是白担了副作用。
-    private func setQuickTarget(_ surface: LyricsSurface?) {
-        quickTarget = surface
+    private func setQuickTarget(_ target: PanelQuickTarget?) {
+        quickTarget = target
+    }
+
+    /// 某一格的主动作。快捷设置头部那颗控件跟格子本身调的必须是**同一条闭包**(三个形态那里
+    /// 是总开关,歌词窗口那里是「打开」),两处各写一遍必然走岔 —— 尤其菜单栏歌词那条"先收面板"
+    /// 的绕路和歌词窗口这条"先收面板再开窗"的顺序。
+    private func quickAction(for target: PanelQuickTarget) -> () -> Void {
+        switch target {
+        case .surface(let surface): return toggleAction(for: surface)
+        case .lyricsWindow: return openLyricsWindowAction
+        }
+    }
+
+    /// 「歌词窗口」那一格:先收面板再开窗。收面板不只是顺手 —— `openLyricsWindow` 会
+    /// `NSApp.activate` 把那扇窗带到前台(见 NotchEditorStage 里那条注释),面板是一扇
+    /// `.transient` 的 popover,本来也会被这一下顶掉,显式收干净比让它自己被撞掉可控。
+    private var openLyricsWindowAction: () -> Void {
+        {
+            close()
+            AppActions.shared.openLyricsWindow?()
+        }
     }
 
     /// 某个形态"开 / 关"这一下该做什么。抽成一份是因为格子和快捷设置头部那个开关必须是
@@ -379,10 +403,14 @@ private struct MenuBarPanelView: View {
             HStack(spacing: 9) {
                 // 不带副文字(去掉「点击打开」):钮块本来就是按钮,
                 // "点击打开"是同义反复,去掉后跟第一排三个形态格的高度也更齐。
-                knobTile(symbol: "text.quote", title: L10n.t("歌词窗口"), on: false) {
-                    close()
-                    AppActions.shared.openLyricsWindow?()
-                }
+                //
+                // 这一格**也能翻面**:短按照旧开窗,长按 / 右键翻到它自己的快捷设置
+                // (背景样式 / 渐变方向 / 动态封面)。符号和标题都从 PanelQuickTarget 取,
+                // 别在这儿和背面各写一份。
+                knobTile(symbol: PanelQuickTarget.lyricsWindow.symbolName,
+                         title: PanelQuickTarget.lyricsWindow.panelTitle,
+                         on: false, quick: .lyricsWindow,
+                         action: openLyricsWindowAction)
                 // 这一格从「统计」换成「歌词管理」(统计入口收进
                 // 设置窗口的 Last.fm 账号页),底栏那条「歌词管理…」随之撤掉,不留双入口。
                 knobTile(symbol: "music.note.list", title: L10n.t("歌词管理"), on: false) {
@@ -396,7 +424,7 @@ private struct MenuBarPanelView: View {
     /// 三个「歌词展示形态」的格子:短按 = 开 / 关,长按或右键 = 翻到它自己的快捷设置。
     private func surfaceTile(_ surface: LyricsSurface) -> some View {
         knobTile(symbol: surface.symbolName, title: surface.panelTitle,
-                 on: surface.isEnabled, quick: surface,
+                 on: surface.isEnabled, quick: .surface(surface),
                  action: toggleAction(for: surface))
     }
 
@@ -425,7 +453,7 @@ private struct MenuBarPanelView: View {
     /// 广告时歌手/专辑都留空,不展示广告物料的名字(跟灵动岛一致的口径)。不是多余判断:
     /// 广告有时会带全 artist/album 字段,不显式清掉就会冒出广告主的名字。
     private var displayArtist: String {
-        playback.isCurrentTrackAdBreak ? "" : playback.artist
+        playback.isCurrentTrackAdBreak ? "" : playback.displayArtist
     }
 
     private var displayAlbum: String {
@@ -490,7 +518,7 @@ private struct MenuBarPanelView: View {
             // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
             if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
                 Button {
-                    PlaybackCoordinator.shared.openResolvedPlayerApp()
+                    PlaybackCoordinator.shared.openResolvedPlayer()
                     close()
                 } label: {
                     Image(nsImage: icon)
@@ -760,13 +788,13 @@ private struct MenuBarPanelView: View {
     // MARK: 圆钮块
 
     private func knobTile(symbol: String, title: String, subtitle: String? = nil, on: Bool,
-                          quick: LyricsSurface? = nil,
+                          quick: PanelQuickTarget? = nil,
                           action: @escaping () -> Void) -> some View {
         KnobTile(symbol: symbol, title: title, subtitle: subtitle, on: on,
                  action: action,
                  // 只有能长按的格子才接一个去处;「歌词管理」是纯动作,长按/右键
                  // 就当普通按一下(见 KnobTile.body 的 onSecondary)。
-                 openQuick: quick.map { surface in { setQuickTarget(surface) } })
+                 openQuick: quick.map { target in { setQuickTarget(target) } })
     }
 
     /// 面板上那些大圆钮块。

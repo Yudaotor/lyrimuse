@@ -30,17 +30,21 @@ struct PlayerChoiceCard: View {
     /// / collector `getState` 第一行都是「集合里含 auto 就走自动识别那条路」,auto 按超集处理,
     /// 具体勾选此时不参与"认哪几个"(见 docs 02)。这里只负责让界面把这件事说出来;卡片照样能勾。
     var isCoveredByAuto: Bool = false
+    /// 这台 Mac 上没装这个 App:图标压暗,提示里说出来。只有勾着但没装的、以及「更多播放器」
+    /// 弹层里的卡会是 false。
+    var isInstalled: Bool = true
     let onSelect: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 6) {
                 PlayerIconView(player: player)
+                    .opacity(isInstalled ? 1 : 0.45)
                 Text(player.displayName)
                     .font(.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isInstalled ? .primary : .secondary)
             }
             .choiceCardChrome(isSelected: isSelected, isCoveredByAuto: isCoveredByAuto)
         }
@@ -48,13 +52,17 @@ struct PlayerChoiceCard: View {
         // 旁白要能读出"选没选中" —— `Button` 自带 `.isButton`,但选中与否此前只存在于
         // 描边颜色里,VoiceOver 读到的永远是"Apple Music,按钮",听不出勾没勾。
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        // 虚线框和角标都是视觉,旁白读不到 —— 这句让它也能听到"这颗由自动识别接管"。
-        .accessibilityValue(isCoveredByAuto ? L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") : "")
-        // 指向就能读到那句话,不必先点一下才发现"取消勾选好像没用"。设置页和引导页都是普通
-        // 窗口,`.help()` 在这两处是真能弹出来的(悬浮窗那排按钮不行,那是另一回事)。
-        .help(isCoveredByAuto ? L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") : "")
+        // 虚线框、角标和压暗的图标都是视觉,旁白读不到 —— 用同一句提示补上。
+        .accessibilityValue(hint)
+        // 设置页和引导页都是普通窗口,`.help()` 在这两处是真能弹出来的(悬浮窗那排按钮不行)。
+        .help(hint)
     }
 
+    private var hint: String {
+        if isCoveredByAuto { return L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") }
+        if !isInstalled { return L10n.t("这台 Mac 上没装这个播放器") }
+        return ""
+    }
 }
 
 /// 一个播放器的图标,**不带卡片外壳**——三级兜底的取图逻辑本体在这里,`PlayerChoiceCard`
@@ -276,29 +284,3 @@ struct WebPlatformChoiceCard: View {
     }
 }
 
-/// 引导页网格里第三行第一格那张占位卡(只在引导页用,设置页那张卡六个选项正好排满
-/// 2 行,不需要它)——位置是固定的:六个真选项排完之后,网格自己留出来的这一格。
-/// 不用 Button 包、没有选中态的描边/底色——虚线框 + 三个点的视觉语言故意跟六张真选项卡
-/// 区分开,不会被当成"点了没反应的坏按钮"。
-struct MorePlayersComingCard: View {
-    var body: some View {
-        VStack(spacing: 6) {
-            Text("•••")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .frame(width: 26, height: 26)
-            Text(L10n.t("陆续支持中"))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-        )
-        .accessibilityElement(children: .combine)
-    }
-}

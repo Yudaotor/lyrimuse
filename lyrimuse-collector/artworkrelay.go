@@ -80,7 +80,29 @@ const (
 var (
 	artworkRelayURL   string
 	artworkRelayToken string
+	// stateRelayMu 护着 artworkRelayURL / artworkRelayToken / webRelayURL 三个变量。只在读写这三个
+	// 变量的那一瞬间持有,持有期间不拿别的锁。
+	stateRelayMu sync.RWMutex
 )
+
+// artworkRelayTarget 取这一刻的中继地址与令牌(同一次读出,不会一个新一个旧)。
+func artworkRelayTarget() (url, token string) {
+	stateRelayMu.RLock()
+	defer stateRelayMu.RUnlock()
+	return artworkRelayURL, artworkRelayToken
+}
+
+func artworkRelayConfigured() bool {
+	u, _ := artworkRelayTarget()
+	return u != ""
+}
+
+// setStateRelay 一次设好三个中继变量。设备封面上传和网页取色用的是同一个中继地址。
+func setStateRelay(url, token string) {
+	stateRelayMu.Lock()
+	defer stateRelayMu.Unlock()
+	artworkRelayURL, artworkRelayToken, webRelayURL = url, token, url
+}
 
 var (
 	artworkMu sync.Mutex
@@ -139,7 +161,12 @@ func artworkContentType(path string) string {
 // artworkPublicURL 是这张图在中继上的对外地址。带后缀纯粹是为了让 URL 看起来像张图
 // (有些 unfurler 会看扩展名);Worker 侧解析时会把后缀去掉,真正的类型存在 KV metadata 里。
 func artworkPublicURL(sha, path string) string {
-	return strings.TrimRight(artworkRelayURL, "/") + artworkRelayPath + sha + strings.ToLower(filepath.Ext(path))
+	base, _ := artworkRelayTarget()
+	return artworkPublicURLOn(base, sha, path)
+}
+
+func artworkPublicURLOn(base, sha, path string) string {
+	return strings.TrimRight(base, "/") + artworkRelayPath + sha + strings.ToLower(filepath.Ext(path))
 }
 
 // webSafeCoverURL 把一个要**离开这台机器**的 cover_url 换成外面真能加载的形态。
@@ -159,7 +186,7 @@ func webSafeCoverURL(coverURL string) string {
 		return coverURL
 	}
 	sha, path, ok := deviceArtworkRef(coverURL)
-	if !ok || artworkRelayURL == "" {
+	if !ok || !artworkRelayConfigured() {
 		return ""
 	}
 	artworkMu.Lock()
@@ -212,10 +239,11 @@ func scheduleArtworkUpload(sha, path string) {
 // 这一问的话每次 collector 重启都会把整个 artwork/ 目录重传一遍 —— 而 KV 免费版只有
 // 1000 写/天,读却有 100k/天。
 func ensureArtworkUploaded(ctx context.Context, sha, path string) error {
-	if artworkRelayURL == "" {
+	base, token := artworkRelayTarget()
+	if base == "" {
 		return fmt.Errorf("artwork relay: 未配置中继地址")
 	}
-	url := artworkPublicURL(sha, path)
+	url := artworkPublicURLOn(base, sha, path)
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
@@ -242,7 +270,7 @@ func ensureArtworkUploaded(ctx context.Context, sha, path string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", artworkContentType(path))
-	req.Header.Set("x-token", artworkRelayToken)
+	req.Header.Set("x-token", token)
 	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		return err
@@ -263,7 +291,7 @@ func ensureArtworkUploaded(ctx context.Context, sha, path string) error {
 // 顺序执行 + 每张之间留个间隔:这是启动路径,不该刚起来就对中继来一串并发请求;而且
 // 绝大多数轮次里每一张都会在 HEAD 那步命中,整个扫描就是几十次廉价的读。
 func sweepDeviceArtwork(ctx context.Context) {
-	if artworkRelayURL == "" || deviceArtworkDir == "" {
+	if !artworkRelayConfigured() || deviceArtworkDir == "" {
 		return
 	}
 	// 收尾落盘。用 defer 而不是写在函数末尾:扫一遍 700 张 × artworkSweepGap ≈ 3.5 分钟,

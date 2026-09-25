@@ -9,12 +9,23 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
-// lyricsDir is set once in main.go alongside enrichPath. Empty means exports
-// are disabled (e.g. flag not initialized yet, or path resolution failed).
-var lyricsDir string
+// lyricsDirValue 是歌词文件夹的当前位置,读写都经 lyricsDir() / setLyricsDir()。空 = 不导出
+// (还没初始化、或路径解析失败)。常驻进程里它会被热切换(见 lyricsdirswitch.go),读取方在一次
+// 操作里要用同一个目录时先取一份局部变量,别在循环里反复调 lyricsDir()。
+var lyricsDirValue atomic.Pointer[string]
+
+func lyricsDir() string {
+	if p := lyricsDirValue.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+func setLyricsDir(dir string) { lyricsDirValue.Store(&dir) }
 
 // splitEnrichKey 拆 "artist|title|album" cache key,只按前两个 "|" 分(专辑名里偶尔
 // 出现的 "|" 不会把切分打乱),跟 Swift 侧 EnrichCacheStore.splitKey(desktop-lyrics)
@@ -65,8 +76,37 @@ var lyricsFileSuffixes = [4]string{".lrc", ".tr.lrc", ".roma.lrc", ".yrc"}
 // 整条目删除的清理走 Swift 侧(desktop-lyrics 的"歌词管理"窗口删除时会同时删文件),
 // 这里的 Go-side sweep 无法区分"这个 key 刚被显式删除"和"这个 key 从未存在过",所以
 // 只负责清理仍存在条目的*过期变体文件*(如上)。
+//
+// 全量导出要对每个条目逐个读比 4 个文件,条目上千时是秒级的磁盘 IO;运行期只改了个别条目的
+// 路径用 exportLyricsFilesFor。启动与 CLI 仍用这个全量版本。
 func exportLyricsFiles() {
-	if lyricsDir == "" {
+	exportLyricsFilesMatching(nil)
+}
+
+// exportLyricsFilesFor 只导出 keys 以及跟它们落在同一个文件名(大小写折叠后)的条目,对这些
+// 条目写出的文件与全量导出逐字节相同。碰撞组必须整组导出:新条目让组从 1 个变成 2 个时,
+// 原来那个条目要改用带哈希后缀的文件名、并删掉它原先的无后缀文件。
+func exportLyricsFilesFor(keys ...string) {
+	if len(keys) == 0 {
+		return
+	}
+	folds := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		folds[lyricsFileFold(k)] = true
+	}
+	exportLyricsFilesMatching(folds)
+}
+
+// lyricsFileFold 是"文件系统会认成同一份文件"的分组键,见下面碰撞消歧那段。
+func lyricsFileFold(key string) string {
+	return strings.ToLower(sanitizeLyricsFilename(key))
+}
+
+// exportLyricsFilesMatching:onlyFolds 为 nil 时导出全部条目,否则只对分组键在其中的条目读写文件。
+// 碰撞分组始终按全部条目计算。
+func exportLyricsFilesMatching(onlyFolds map[string]bool) {
+	dir := lyricsDir()
+	if dir == "" {
 		return
 	}
 	type entryJob struct {
@@ -76,9 +116,6 @@ func exportLyricsFiles() {
 		manual               bool
 		variants             [4]string // 对应 lyricsFileSuffixes,空串表示这个变体没有内容
 	}
-//
-// 全量导出要对每个条目逐个读比 4 个文件,条目上千时是秒级的磁盘 IO;运行期只改了个别条目的
-// 路径用 exportLyricsFilesFor。启动与 CLI 仍用这个全量版本。
 	enrichMu.Lock()
 	jobs := make([]entryJob, 0, len(enrichCache))
 	for key, e := range enrichCache {
@@ -103,7 +140,7 @@ func exportLyricsFiles() {
 	if len(jobs) == 0 {
 		return
 	}
-	if err := os.MkdirAll(lyricsDir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
 
@@ -116,8 +153,10 @@ func exportLyricsFiles() {
 	// 全部 key(不只是从第二个开始)都加一个确定性哈希后缀——用哈希而非遇到顺序决定,
 	// 不受 Go map 遍历顺序(每次进程重启都随机)影响,同一个 key 每次都落在同一个文件名。
 	byFold := make(map[string][]int, len(jobs))
+	folds := make([]string, len(jobs))
 	for i, j := range jobs {
-		fold := strings.ToLower(sanitizeLyricsFilename(j.key))
+		fold := lyricsFileFold(j.key)
+		folds[i] = fold
 		byFold[fold] = append(byFold[fold], i)
 	}
 	disambiguated := make(map[int]string, len(jobs)) // job 下标 -> 加了哈希后缀的 base
@@ -132,6 +171,9 @@ func exportLyricsFiles() {
 	}
 
 	for i, j := range jobs {
+		if onlyFolds != nil && !onlyFolds[folds[i]] {
+			continue
+		}
 		base, ok := disambiguated[i]
 		if !ok {
 			base = sanitizeLyricsFilename(j.key)
@@ -141,7 +183,7 @@ func exportLyricsFiles() {
 			// 其中某一个的写入弄乱,留着只是一份意义不明的孤儿文件。
 			plainBase := sanitizeLyricsFilename(j.key)
 			for _, suffix := range lyricsFileSuffixes {
-				_ = os.Remove(filepath.Join(lyricsDir, plainBase+suffix))
+				_ = os.Remove(filepath.Join(dir, plainBase+suffix))
 			}
 		}
 		// 同理清掉"加长度上限之前那个更长的文件名"下的残留。这类文件是存量:长度上限
@@ -153,12 +195,12 @@ func exportLyricsFiles() {
 			for _, suffix := range lyricsFileSuffixes {
 				// 名字本身超过 255 字节时 Remove 会返回 ENAMETOOLONG,那正说明它不可能
 				// 存在过,和"文件不存在"一样忽略掉。
-				_ = os.Remove(filepath.Join(lyricsDir, untruncated+suffix))
+				_ = os.Remove(filepath.Join(dir, untruncated+suffix))
 			}
 		}
 		header := lyricsFileHeader(j.artist, j.title, j.album, j.source, j.manual)
 		for k, suffix := range lyricsFileSuffixes {
-			path := filepath.Join(lyricsDir, base+suffix)
+			path := filepath.Join(dir, base+suffix)
 			content := j.variants[k]
 			if content == "" {
 				_ = os.Remove(path) // 忽略"文件本来就不存在"的错误,这是预期情况

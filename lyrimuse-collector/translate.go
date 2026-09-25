@@ -15,7 +15,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -85,12 +87,17 @@ func parseLRCLines(lrc string) []lrcLine {
 // 待在一个块里,否则回来的译文没法跟行对上。单行本身就超长(理论上不会,歌词一行几十字)
 // 时单独成块,交给上层按"行数对不上就整块作废"处理。
 func chunkForTranslation(texts []string) [][]string {
+	return chunkLinesByBytes(texts, translateMaxChunkChars)
+}
+
+// chunkLinesByBytes 是 chunkForTranslation 的通用版,上限按字节(换行也算)。
+func chunkLinesByBytes(texts []string, maxBytes int) [][]string {
 	var chunks [][]string
 	var cur []string
 	curLen := 0
 	for _, t := range texts {
 		n := len(t) + 1 // +1 是拼接用的换行
-		if len(cur) > 0 && curLen+n > translateMaxChunkChars {
+		if len(cur) > 0 && curLen+n > maxBytes {
 			chunks = append(chunks, cur)
 			cur, curLen = nil, 0
 		}
@@ -425,6 +432,28 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	// 几次,结果必然一致(要么都翻、要么都没翻,不会随机命中一两次)。副产品是重复句子只翻
 	// 一次:MyMemory 那条网络兜底路的字符配额、on-device 的请求数,两条路都跟着省。
 	speakers := lyricSpeakerLabels(lyrics)
+	// 演唱者标签**不送去翻**,而且剥掉之后就不再加回来。
+	//
+	// 展示端的正文行会由 LyricDuet 把这个前缀剥掉(它靠标签决定这一行摆左边还是右边),
+	// 译文行走的是另一条路、没人剥 —— 于是主歌词显示「Make a little space」、底下译文是
+	// 「V1：留出一点空间」。实测 Michael Jackson《Heal the World》(applemusic 源的 TTML
+	// ttm:agent="v1"/"v2")95 行全中。
+	//
+	// 剥在**送翻之前**而不是只在展示端兜底,还顺带修两件事:
+	//   1. 标签本身会被当成句子的一部分翻译 —— 小写 `v1：` 回吐成大写「V1：」就是翻译器
+	//      按句首词处理过的痕迹,它还可能牵连后半句的语气和断句;
+	//   2. 同一句词挂着不同标签(`v1：Make a little space` / `v2：Make a little space`)
+	//      在下面的去重里算两句,白白多发一次请求、还可能翻出两个不一样的结果。
+	//
+	// 剥完为空的行(`v1：` 独占一行)留一个空串,lineNeedsTranslation 会跳过它 —— 那种行
+	// 展示端本来就整行丢掉,不需要译文。
+	if len(speakers) > 0 {
+		for i := range lines {
+			if label, rest, ok := lyricSplitLabel(lines[i].text); ok && speakers[label] {
+				lines[i].text = rest
+			}
+		}
+	}
 	seen := map[string]int{}
 	var uniqueTexts []string
 	var occurrences [][]int
@@ -481,6 +510,18 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		log.Printf("translate: on-device failed, falling back to network: %v", err)
 	}
 
+	// Google 翻出了可用结果才返回;服务失败或这批内容没翻出来都继续走 MyMemory。
+	if out, err := googleTranslateLines(ctx, hc, uniqueTexts, target); err == nil {
+		if res := assembleTranslationLRC(lines, scatter(out), totalAttempted); res.lrc != "" {
+			return res, nil
+		}
+	} else if !errors.Is(err, errGoogleTranslateSkipped) {
+		log.Printf("translate: google failed, falling back to MyMemory: %v", err)
+	}
+
+	if myMemoryQuotaPaused(myMemoryEndpoint(baseURL), time.Now()) {
+		return translationResult{quotaReached: true}, nil
+	}
 	chunks := chunkForTranslation(uniqueTexts)
 	if len(chunks) > translateMaxChunks {
 		return translationResult{}, fmt.Errorf("lyrics too long: %d chunks", len(chunks))
@@ -562,9 +603,7 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 	// autodetect:实测跟显式指定源语言结果一致,省掉自己做语种识别这一整块。
 	q.Set("langpair", "autodetect|"+target)
 	q.Set("de", randomTranslateEmail())
-	if baseURL == "" {
-		baseURL = "https://api.mymemory.translated.net/get"
-	}
+	baseURL = myMemoryEndpoint(baseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"?"+q.Encode(), nil)
 	if err != nil {
 		return nil, false, fmt.Errorf("build request: %w", err)
@@ -588,6 +627,7 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 	if body.QuotaFinished ||
 		resp.StatusCode == http.StatusTooManyRequests ||
 		strings.Contains(strings.ToUpper(body.ResponseDetails), translateQuotaSentinel) {
+		pauseMyMemoryQuota(baseURL, body.ResponseDetails, time.Now())
 		return nil, true, nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -601,6 +641,63 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 }
 
 var translateClient = &http.Client{Timeout: 15 * time.Second}
+
+// ---- MyMemory 当天配额用尽后整体停手 ----
+//
+// 配额是全局的:撞到一次之后,之后每放一首新歌都去再撞一次 429 毫无意义。认出配额用尽就
+// 在警告文本给的时间(「NEXT AVAILABLE IN 15 HOURS」)内不再请求,认不出小时数按
+// myMemoryQuotaPauseDefault,最长 myMemoryQuotaPauseMax。停手期间按「配额用尽」回给调用方,
+// 跟真撞到一次的处理完全一样(不记这首歌的失败次数)。
+//
+// 按端点记,单测每个假服务器各记各的。只在进程内存里,collector 重启归零、最多再撞一次。
+const (
+	myMemoryQuotaPauseDefault = time.Hour
+	myMemoryQuotaPauseMax     = 24 * time.Hour
+)
+
+var (
+	myMemoryQuotaMu    sync.Mutex
+	myMemoryQuotaUntil = map[string]time.Time{}
+	myMemoryNextHours  = regexp.MustCompile(`(?i)NEXT AVAILABLE IN\s+(\d+)\s+HOURS?`)
+)
+
+// myMemoryEndpoint:空串指正式端点。停手状态按它记,检查和记录两处必须用同一个写法。
+func myMemoryEndpoint(baseURL string) string {
+	if baseURL == "" {
+		return "https://api.mymemory.translated.net/get"
+	}
+	return baseURL
+}
+
+// myMemoryQuotaPauseFor 从警告文本里读恢复时间。
+func myMemoryQuotaPauseFor(details string) time.Duration {
+	m := myMemoryNextHours.FindStringSubmatch(details)
+	if m == nil {
+		return myMemoryQuotaPauseDefault
+	}
+	h, err := strconv.Atoi(m[1])
+	if err != nil || h <= 0 {
+		return myMemoryQuotaPauseDefault
+	}
+	if d := time.Duration(h) * time.Hour; d < myMemoryQuotaPauseMax {
+		return d
+	}
+	return myMemoryQuotaPauseMax
+}
+
+func pauseMyMemoryQuota(baseURL, details string, now time.Time) {
+	d := myMemoryQuotaPauseFor(details)
+	myMemoryQuotaMu.Lock()
+	myMemoryQuotaUntil[baseURL] = now.Add(d)
+	myMemoryQuotaMu.Unlock()
+	log.Printf("translate: MyMemory daily quota reached, pausing requests for %s", d)
+}
+
+func myMemoryQuotaPaused(baseURL string, now time.Time) bool {
+	myMemoryQuotaMu.Lock()
+	defer myMemoryQuotaMu.Unlock()
+	return now.Before(myMemoryQuotaUntil[baseURL])
+}
 
 // translationBackfillMaxAttempts / translationBackfillInterval:机翻补全的上限与节流。
 //
@@ -634,7 +731,7 @@ const (
 // (见 lyricsexport.go 里 content == "" 时的 os.Remove)。顺序错了,清掉的译文会在下次
 // 启动被 import 原样导回来。
 func invalidateStaleTranslations() {
-	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	if target == "" {
 		return
 	}
@@ -673,13 +770,13 @@ func invalidateStaleTranslations() {
 // 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
 // 机翻只是"没有社区译文时总比没有强"的兜底,不是升级。
 func needsTranslationBackfill(e enrichEntry) bool {
-	if !features.LyricsMachineTranslation {
+	if !features().LyricsMachineTranslation {
 		return false
 	}
 	if e.Lyrics == "" {
 		return false
 	}
-	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	if target == "" {
 		return false
 	}
@@ -744,7 +841,7 @@ func backfillTranslation(key string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	artist, title, _ := splitEnrichKey(key)
 	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target, artist, title)
 
@@ -763,11 +860,11 @@ func backfillTranslation(key string) {
 	lyricsChanged := false
 	defer func() {
 		enrichMu.Unlock()
-		saveEnrichCache()
+		requestEnrichSave()
 		if !lyricsChanged {
 			return
 		}
-		exportLyricsFiles()
+		exportLyricsFilesFor(key)
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文,要等下一次换歌才会被推出去(表现是"为什么当前这
 		// 歌没有英文译文",译文其实早就翻好、也落盘了,只是没人通知)。
@@ -781,6 +878,10 @@ func backfillTranslation(key string) {
 	e, ok := enrichCache[key]
 	if !ok {
 		// 翻译这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		return
+	}
+	// 正文在翻译期间换过(手改、采纳候选、重评分换了一份):这份译文对的是旧正文,不能挂到新正文上。
+	if e.Lyrics != lyrics {
 		return
 	}
 	// 期间用户可能刚好手动采纳了一份**用得上的**社区译文;那份优先,别覆盖。用得上是
@@ -868,7 +969,10 @@ func onDeviceTranslate(ctx context.Context, target string, lines []string) ([]st
 	}
 	if !res.OK {
 		switch res.Reason {
-		case "same-language", "needs-macos-26", "no-translation-framework", "undetected-source":
+		// 这几个值是跟 helper(lyrics-translate/main.swift 的 emit)的跨进程契约,
+		// 改那边的字面量必须同步改这里 —— 对不上会掉进 default,把一次正常的"这台机器
+		// 走不了端上翻译"报成错误、每首歌刷一行日志。
+		case "same-language", "needs-macos-15", "no-translation-framework", "undetected-source":
 			return nil, errOnDeviceUnavailable
 		case "supported", "notSupported", "unsupported":
 			// 语言包没下载。这是最值得让用户知道的一种"不可用",单独记一条日志,

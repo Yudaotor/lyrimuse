@@ -13,9 +13,9 @@ import (
 // 缓存又是"解析一次永久保留",于是那一瞬间的运气被永久固化。这个函数就是那道补救闸门,
 // 它的判定条件比较绕(五个 and 关系),所以逐条钉死。
 func TestNeedsLyricsRetry(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
 
 	long, recent := time.Now().Unix()-int64(lyricsRetryInterval/time.Second)-1, time.Now().Unix()
 
@@ -75,9 +75,9 @@ func TestNeedsLyricsRetry(t *testing.T) {
 
 // 未启用的源缺席不算数——只有**已启用**的源缺席才说明这次决定是在信息不全的情况下做的。
 func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"lrclib": true, "netease": false}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"lrclib": true, "netease": false}
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 
 	e := enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}

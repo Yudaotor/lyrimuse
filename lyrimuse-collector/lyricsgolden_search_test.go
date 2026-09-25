@@ -530,7 +530,7 @@ func TestLyricsSearchGoldenCapture(t *testing.T) {
 	if !ok {
 		t.Fatalf("缓存里没有 key=%q", key)
 	}
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
 	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
 	loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))

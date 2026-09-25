@@ -58,7 +58,8 @@ public enum NowPlayingClientsProbe {
             let data = Data(base64Encoded: base64), !data.isEmpty
         else { return nil }
         return (data, decoded.artworkMimeType ?? "image/jpeg",
-                MediaControlSnapshot.trackKey(artist: decoded.artist, title: decoded.title))
+                PlayerArtistFix.correctedTrackKey(
+                    bundle: bundleID, artist: decoded.artist, title: decoded.title))
     }
 
     /// 带封面那一趟的超时:比状态查询宽,一张图要过 base64。

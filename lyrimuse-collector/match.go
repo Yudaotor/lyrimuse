@@ -440,203 +440,12 @@ const lyricOvershootToleranceSecs = 5.0
 // 永久保留",每条记着自己是按哪一版规则选出来的(enrichEntry.LyricsScoringVersion);
 // 版本落后的条目会在这首歌下次被播放时后台重搜一轮、按新规则重选(见 needsLyricsRescore)。
 // 忘了 +1 的后果不是报错而是静默失效:新规则只对以后从没听过的歌生效,已经听过的那批
-// 永远停在旧选择上 —— 改权重时正是这样,用户那首歌缓存里还挂着按旧规则选出来
-// 的 Musixmatch。
+// 永远停在旧选择上。
 //
-// v2:时长档封顶从 +1000 压到 +300(不再压过逐字时间轴的 +400);歌词结尾
-// 超出曲目时长 5 秒以上的候选直接判无效。v1 = 这个字段还不存在时写入的所有条目。
-//
-// v3:四个新维度 + overshoot 独立档,全部经 201 首真实库内曲目的反事实消融
-// 坐实(联合 61 翻盘/5 纠错/0 回归/6 首手选金标签无损,评测器见 simeval_test.go):
-//   - 专辑亲和(150/+75/+40,只加不减):跨源层终于看专辑,精选集候选不再与原专辑平权;
-//   - 跨源正文共识(250/+150):五份歌词全文互证,替代只比末尾时间戳一个标量;
-//   - 标题吻合梯度(120/+60/+30):精确同名不再与"剥括号才相等"平权;
-//   - 增值内容决胜(译文+50/罗马音+30,带资格闸):同质候选间带可用增值内容者优先;
-//   - overshoot 独立档(−700):歌词末句超过曲长 5s 是物理矛盾,不再吃跨源印证豁免。
-//
-// v5:wordTimingOverride——逐字时间轴的 +400 是决定性因素、且另一个真实候选
-// 的标题吻合分更高时,撤销这份 +400(不是下调权重本身,是窄口子只在 titleMatch 也站在
-// 亚军那边时触发)。依据是对 1818 首真实曲库(861 条完整解析记录)的反事实消融:wordTiming
-// 是决定性因素的案例有 240 个(27.9%),其中标题吻合分同时也站在亚军那边的只有 2 个
-// (0.83%,且两个都是真实版本误配,titleMatch 这条判据 0 误报)——现象是的方大同《公园》
-// Timeless演唱会 vs 专场现场案是其中一个。见 applyWordTimingTitleOverride 的注释。
-//
-// v6:isProbablyWrongLanguageLyrics 补两道豁免(候选源自己确认的
-// candidateArtist 含汉字、或 knownArtistAlias(localArtist) 查到中文名),修的是"歌手
-// 用罗马化艺名+本地标签也是罗马化写法"这一类被误杀——现象是的方大同《南音》(本地标签
-// artist="Khalil Fong" title="Nanyin",两者都不含汉字)是真实案例:候选正文是这首歌真正
-// 的中文歌词,却被 v5 及更早版本判成"语言跟这首歌对不上"一票否决(Score -1),永远进不了
-// 自动解析的候选池。见 isProbablyWrongLanguageLyrics 的注释。
-//
-// v7:liveAlbumConflict——「两场不同演唱会」判据(-600,与 versionTags 同级)。
-// 现象是的陈奕迅《Shall We Dance (Live)》/《活着多好 (Live)》案:本地专辑《The Easy Ride
-// 演唱会 (Live)》,酷狗那份挂在《Get A Life (Live)》——**另一场巡演**,两场都收录了这首歌
-// 的现场版,标题吻合分打平(都逐字相等)、专辑亲和分也打平(都只够到 +40 档),错的那份靠
-// 逐字时间轴(Shall We Dance)或时长吻合更紧(活着多好)赢——两首歌赢在不同的项上,说明
-// 病根不在任何一个权重数字,而是**versionTagsMismatch 在"两边都是 Live"时静默**(限定词
-// 集合相等),没有任何判据能说出"这是另一场演出"。同日先试过三个方向都被真实库回放否决:
-// ①冠军专辑证据弱时撤销逐字/时长加分(47~150 个决策翻盘,绝大多数是再版/精选辑噪音);
-// ②奖励自报时长精确匹配(阈值越紧翻盘越多,70→358,变成"唯一凑巧报出逼近值的候选"抽奖);
-// ③抬高专辑词元档分值(安全区间(≤60)翻不了盘,能翻盘的分位(≥94)破坏"精确>子串>词元"
-// 的证据秩序)。三次失败的共同点:都在拿"专辑对不上"当负证据,违反"专辑对不上是零证据"
-// 的既有原则。v7 的判据不同:要求**双方都做出明确的身份声明且互相矛盾**——本地专辑名
-// 自己带 live 标记(录音室专辑名对"是哪场演出"没有发言权,Queen《The Game (Deluxe)》的
-// bonus 现场曲配《Queen Rock Montreal》是同一场演出,不许误伤)、候选也是现场录音、两边
-// 专辑名剥掉歌手名(防"周杰伦地表最强演唱会"vs"地表最强演唱会"的前缀粘连假冲突)和
-// live/演唱会类通用词之后**各自还有身份词、且完全不相交**——这时才是"两场不同命名的
-// 演出"的矛盾证据,不是"字符串没对上"的零证据。全库 2339 条真实决策回放:命中 29 个
-// 候选、涉及 24 首歌,逐条人工核对全部是真的另一场演出(Get A Life/2003演唱会/无与伦比
-// 2004/The One/超时代/Timeless演唱会/中国新歌声...),冠军改变 8 首、全部改对方向,
-// 0 误伤。见 liveAlbumIdentityConflict 的注释。
-//
-// v8:versionTags 的窄豁免 + 网易云 pick 的时长锚定档(陈奕迅《孤独探戈
-// (Live)》案,同一张 Easy Ride 专辑的第三类形态)。正确版本在网易云库里**存在**
-// (「孤独探戈(Acoustic Piano)(Live)」,专辑对、自报时长与本地逐位吻合),但被两道闸
-// 联手挡死:①netease pick 的"精确同名档优先"让三条错场次的精确同名(Get A Life/
-// Third Encounter/拉阔压轴)压过这条剥括号才同名的正确版本,pick 又完全不看时长;
-// ②即便召回,"(Acoustic Piano)"这节本地曲名没有的限定词会吃 versionTags -600,照样
-// 输给错场次候选。两处配套修(缺一都会更糟——只修 pick 不豁免,正确候选带着 -600 反而
-// 让录音室版夺冠):打分层豁免见 sameRecordingDespiteVersionTags(四道门:时长≤1% +
-// 专辑亲和 + 候选不缺本地限定词 + 多出的词全在 acoustic 家族白名单;全库回放现存 433 个
-// 吃 -600 的候选 0 豁免 0 翻盘,零误伤),pick 锚定档见 netease.go pick() 头注。
-//
-// v9:两处针对**中文平台命名形态**的修正(周杰伦《The One 周杰伦演唱会》案,
-// 现象是"QQ 搜出来的是录音室版"——检索层的修复在 qq.go 的专辑维度路线,不需要 bump;
-// 这两处是它牵出的打分层配套):
-// ①albumTokens 在拉丁↔CJK 交界处分词:QQ 把专辑写成"The One演唱会"(不留空格),原来
-//
-//	"one演唱会"粘成一个词元、与本地"The One 周杰伦演唱会"零共享词、albumScore=0,同一张
-//	专辑被判毫无亲和——与已有的"2011Live"数字↔字母交界分词同一性质,见 albumTokens 注释。
-//
-// ②versionTags 两道闸(versionTagsMismatch/sameRecordingDespiteVersionTags)改用
-//
-//	recordingVersionTags:专辑名带中文现场标记(演唱会/现场/音乐会)时视同声明了 "live"。
-//	QQ 给现场专辑曲目起名不带"(Live)"、live 身份只写在专辑名上且不加括号,原来这类正确
-//	候选吃 -600;对称地,本地专辑是"XX演唱会"而候选是干净录音室版时,现在能判出版本
-//	不符(原来两边限定词集合都是空、闸门静默)。只认中文标记不认拉丁词元的理由见
-//	recordingVersionTags 注释。全库 2360 条真实决策回放(旧逻辑副本与存档 parity 0):
-//	23 首受影响,唯一 1 处冠军改变是蔡健雅《达尔文》从录音室 kugou(srcDur 265 vs 本地
-//	308,差 14%)翻到 My Space 现场对版 netease(srcDur 308.04 逐位吻合)——改对;其余
-//	全是"-600 平反"(地表最强 7 首 QQ 候选)或"新判出录音室冒充"(冠军均不变),0 误伤。
-//	回放里抓到并已修掉的两类边界:专辑名括号里的描述文案不算标记(韦礼安《女孩》案,
-//	推导只看 stripParens 后的专辑名);候选是同一张专辑的截短拼法时不苛求它也推导出
-//	live(蔡健雅《依赖》案,见 sameRecordingDespiteVersionTags 第③门注释)。
-//
-// v10:修掉"标题反查泛搜"那条兜底的两处判据缺陷(泛搜结果不再整份 30 条
-// 交给纯时长判据、只取前 5 名;排歧义守卫从浮点精确相等改成 0.5s 真实余量)。详见
-// netease.go 的 retryTitleFromArtistSearchMaxRank / bestAlbumTrackAmbiguityMarginSecs。
-//
-// ⚠️ **这次提版本号本身就是修复的一部分,不是走个形式**:被写坏的条目(实测用户库里
-// 至少一条——DAOKO×米津玄師《打上花火》整屏显示的是《春雷》的歌词)只有在
-// needsLyricsRescore 放行时才会被重选,而那道闸的判据正是
-// `e.LyricsScoringVersion >= lyricsScoringVersion`。停在 9 的话,已经按 v9 打过分的
-// 114 条(实测,占有歌词条目的 3.5%)永远不会被重访,错的会一直错着。
-//
-// 提到 10 之后仍然救不回来的两类,如实记在这里:重打分次数已达 lyricsRescoreMaxAttempts
-// 的(实测 6 条)、以及 ManualLyrics 手动锁定的(实测 6 条,这类是**刻意**跳过的)。
-//
-// v11:lyricConsensusBody 跳过 `[kana:…]`/`[ti:…]`/`[offset:…]` 这类无时间戳
-// 的元数据标签行(isLRCMetaTagLine)。起因:QQ 的 `[kana:]` 假名标注行接进整行歌词
-// (qq.go attachKanaLine)后,E2E 实测《Lemon》的 QQ 候选从 1407 掉到 1158——一行 1700+
-// 字符的假名把正文 3-gram 相似度拖到 0.55 阈值以下、250 分共识没了,冠军会因此换成酷狗。
-// 这条规则对酷狗自带 `[kana:]` 的日文歌其实一直成立,只是没被注意。提版本号让已按 v10
-// 打过分的条目重新裁决(重算用的是决策留痕里的存量候选,不联网)。
-//
-// v12:distinctRecordingVersionTags 补裸 "edit"(只按整词匹配)。PRINCE《Diamonds and
-// Pearls (2023 Remaster)》案:酷狗《Diamonds And Pearls (Edit)》是剪短的单曲版(自报 260s vs 本地
-// 283s,差 8%,够不到 sourceDurationOff 的 12%),词表不认 "(Edit)",versionTags 静默、titleMatch 还按
-// "括号里没有版本词"给了精确档 120,+400 逐字 +250 共识后 1122 分压过 2023 Remaster 精确同名的 QQ
-// 1079。补词后该候选吃 versionTags -600、titleMatch 降到 60,QQ 那条胜出。全库决策扫描见词表处注释。
-//
-// v13:候选装配前把"烘进正文的逐行中文译文"摘出来(bakedtranslation.go)。同一首
-// 《Diamonds and Pearls (2023 Remaster)》案里 QQ 那条正确候选 118 行有 59 行是上传者烘进去的中文译文,
-// 正文跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41、拿不到共识分,显示时英中交替。摘掉后
-// 共识 +250、行数 -59、译文 +50(目标语言中文时);受影响的只有这种形态的候选,判据与全库实测见那边头注。
-//
-// v14:检索层挑选(kugou pickKugouSearchCandidate / qq qqPickCandidateWithAlbum +
-// qqPickCandidate)把"自报曲长偏差 >12%"当第一排序键,对不上的排到所有对得上的后面。PRINCE《319》案
-// (The VERSACE Experience 里 88 秒的 X-cerpt 节选版):两家的搜索结果里都有 88 秒的「319 (X-cerpt)」,却都
-// 按"标题精确同名压过一切"挑了 185 秒的完整版,到打分层吃 -700/-400 变 1 分照样被采用。打分规则本身
-// 没变,但挑回来的候选变了,存量条目要重搜一轮才会换成对的,所以提版本号。判据见 sourceDurationFits。
-//
-// v15:语种版本(粤语/国语)从"纯标签比对"升级成"批级推断 + 双向判决",外加两处
-// 同案牵出的小修。起因是陈奕迅《K歌之王》(本地《打得火热》粤语原版,222.351s)一次手动搜索的复盘:
-// ①QQ「K歌之王 (粤语)」——同专辑、自报 222s、language=yue、正文与网易云/LRCLIB 逐字相同、带逐字时间轴,
-// 却因为本地曲名没写「(粤语)」被判限定词不符 -600、标题档 120→60,1183 分的最优候选压到 523;
-// ②酷狗「K歌之王」(专辑 2003演唱会)是**国语版**(正文/language=cmn/自报 218s 三证),它的 -600 完全来自
-// 专辑名撞上现场标记,与语种无关——专辑若写成拉丁 "Third Encounter Live" 就是 946 分夺冠、悬浮窗上国语词;
-// ③咪咕「K歌之王 AIR(Night Version)」是 2025 年 AIR Studios 管弦重录的国语版,"night version" 不在词表,零惩罚。
-// 全库(3742 条)回放:v14 的 482 个 versionTags 罚分里语种词相关 7 个,4 个误罚 3 个罚对——其中张继聪
-// 《To Be Or Not To Be》那条**罚对且决定胜负**,所以不能把 粤语/国语 从限定词里摘掉了事;库里同时躺着
-// 两条**未被任何机制拦住**的错语种冠军(《七 (新歌+精選)》国语精选辑里的 K歌之王/低等动物配了粤语词:
-// 首次解析时网易云没应答,QQ 裸标题粤语词直接赢)。修法(见 inferLocalLanguageVersion 头注):
-//   - 候选自报 language(QQ/酷狗)+ 标题/专辑里的语种标签折成"这条候选声明的语种版本";本地侧按
-//     本地标签 → 专辑精确匹配候选的声明 → 自报时长能区分两版 三步推断;两边都知道才下判决;
-//   - 判决相同:语种标签从限定词比对与标题梯度里拿掉(QQ 那条回到 1183);判决不同:-600 且不豁免
-//     (酷狗那条不再靠专辑名巧合);一边不知道:v14 原样(To Be Or Not To Be 照罚)。
-//   - 语种标签统一折成两个规范键("(國)"/"(粵)" 单字与 cantonese/mandarin 都认),张继聪《Mau U So(国)》
-//     对酷狗「Mau U So (国语)」这种同语种不同拼法不再 -600;
-//   - 词表补 "day version"/"night version"(AIR 重录版命名);
-//   - lastLRCTimestampSecs 跳过尾部署名行(网易云「监制：」行虚增 duration 项 +72)。
-//
-// v16:中英同义的版本限定词折成同一个规范键(versionTagAliases:现场→live、不插电→
-// unplugged、伴奏/纯音乐→instrumental、清唱/阿卡贝拉/acapella→a cappella、混音→remix、加长版→extended、
-// 排练→rehearsal)。陶喆《今天没回家 (Live)》案:本地专辑「Soul Power (现场原音专辑)」,酷狗候选
-// 「今天没回家 (Live)」/「Soul Power (Live Concert)」是同一场演唱会,却因为本地集合 {live, 现场} 对候选
-// {live} 大小不等吃 -600 —— 补中文词表时把同义词当成了独立的键。全库 4214 条决策回放:
-// 22 个 -600 取消(陶喆 Soul Power 现场专辑 10 首 + 周杰伦地表最强 2 首的酷狗 CCTV 现场候选)、0 个新增、
-// 冠军变化 1 首(《二十二 (Live)》lrclib 319 → 酷狗 768,同专辑逐字版)。打分权重没变,但存量条目里
-// 这一批要重打一遍才会换成对的,所以提版本号。
-// 同版第三处:限定段的**中心词**是中文现场标记(演唱会/音乐会/现场)时视同声明 live
-// (qualifierDeclaresCJKLive)——v9 那条专辑级推导推广到括号段;词表里只有「现场」没有「演唱会」,
-// 同一形态只差用词就待遇不同(酷我「Will You Be There (1992…危险之旅演唱会)」认不出是现场版)。
-// 中心词判据(以标记结尾)挡住「(演唱会主题曲)」这类录音室曲目的描述性括号。全库回放:候选新增
-// live 声明 1 条(就是上面那条酷我候选,-600 从此正确落在它头上)、本地新增 0、冠军 0 变化;
-// 已按 v16 打过分的 12 条全是无现场标记的录音室曲目,不受影响,故不再提版本号。
-// 同版一起改:「两场不同演出」判据(liveAlbumIdentityConflict)的身份词从"只看专辑名"扩成
-// liveIdentityTokens(专辑名 ∪ 曲名里自带现场标记的限定段),候选专辑为空不再直接放行 —— 上面那两条
-// 酷狗 CCTV 现场候选此前是靠「现场≠live」误打误撞被罚的,折键之后要由这条判据接住;全库回放只有
-// 这 2 条新增冲突、0 取消、冠军不变。
-//
-// v17:版本限定词表的两处**语义**修正,起因是拿全库 632 条现存 versionTags 罚分
-// 按"差在哪个键"聚合、再用候选自报时长当地面真相做的一次普查(见 09 章第 51 条):
-//   - "album version" 移出词表 —— 它命名的是默认那一版,一侧沉默不等于另一个版本;该键
-//     "一侧独有"的 49 条里时长差 >12% 的 0 条(对照组 "edit" 是 10/12),见词表处注释;
-//   - "single version" 留在词表,但纳入新的 sameRecordingNamingOnlyTags:第③④门双向认它是
-//     纯命名不对称,只在时长≤1% + 专辑亲和坐实同一次录音时豁免(那 12 条真不同的过不了时长门)。
-//
-// 合计 60 条误罚取消、11 首冠军变化,逐条核过新冠军全是"时长吻合 + 同专辑 + 有逐字 + 跨源正文
-// 共识"。附带效果(同一个词表被三处共用):searchTitleVariants 对「(Album Version)」不再优先
-// 查带后缀的原标题(跟「(Remastered)」同待遇)、lrclib/kuwo 检索层的闸不再据此拒候选、
-// titleMatchTierPoints 的括号档回到精确 120 —— 三处方向一致,都是"这个后缀不该被当版本差异"。
-//
-// 全库决策存档回放见 09 章对应条目。
-//
-// v19:认 Apple Music「DJ Mix」专辑那一套版本命名 —— 词表补 "dj mix"/
-// "continuous mix",曲名后缀「[Mixed]」另走 isContinuousMixSegment(整段精确),都折进
-// continuousMixVersionTag;本地是连播混音版而候选不是时直接判不可用(scoreRejectContinuousMix),
-// 不走"重扣仍可用"那条路 —— 理由见那个常量的头注。提版本号是因为**存量要重打一遍才会
-// 换成对的**:缓存里这类条目存着的是原版录音室歌词,不重打就一直用着错位的时间轴
-// (本机实测受影响 1 条,就是现象是的 Fred again..《Winnie (end of me) [Mixed]》)。
-// 金标集不含 DJ Mix 曲目,全库回放冠军 0 变化。
-// v20:曲长端点(lastLRCTimestampSecs)改用宽松版署名行判据 —— 严格版要求汉字**紧跟**冒号,
-// 于是「标签 空白 冒号」这一整类漏了过去,网易云习惯补在真末句之后的那行职员表被当成曲末。
-// v15 的头注早就点名《Purple Rain》「[08:36.866] 人声 : Prince」是同款,只是那次没修到带空格
-// 的写法:金标里网易云那份真末句是 224.3s,靠这行假端点凑到 516.9s、"吻合"521s 的曲长,白拿
-// duration +293,还把其余四家正确的短歌词打成 durationOff -500。提版本号是因为**存量要重打
-// 一遍才会换成对的**:本机实测 207 首曲长端点改变、58 首前移 ≥20s(最大 292.6s)。
-// 金标 latin-purple-rain 冠军不变(netease),五家改由 corroborated 收 —— 所有源同点结束
-// 说明这首歌本来就 3:44 唱完、后面是尾奏。
-// v21:同源加权(nativeSource +250)加了一道准入 —— 光是"这个源跟当前播放器同源"不再算数,
-// 这条候选的**身份必须来自那个播放器自己的本地数据**(见 lyricCandidate.identityFromLocalClient)。
-// 起因是用户的质疑:搜索出来的那条只是"名字对得上的某一条",同源并不能担保它就是耳朵里
-// 那一版录音,而给它 +250 反倒可能把一条匹配错版本的候选抬上冠军。
-// 本机存量实测的影响面:6680 条带决策记录的条目里,同源加权触发过 716 条,
-// 其中 355 条(49.6%)的冠军由它决定(酷狗 254 / QQ 101 / 网易云 0)。收紧准入后,这 355 条里
-// 只有身份来自本地的那部分还保得住,其余会退回按质量选 —— 酷狗本地缓存对它触发过的
-// 600 首覆盖率实测 18.8%(客户端只为其中一部分落盘,缓存本身并不清理)。
-// 提版本号是因为**存量要重打一遍才会换过来**:这一项参与过打分的条目都要重选。
-const lyricsScoringVersion = 21
+// 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
+// docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
+// (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
+const lyricsScoringVersion = 23
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -657,7 +466,7 @@ const (
 	scoreTermSource       = "source"       // 来源本身的可靠度
 	scoreTermLines        = "lines"        // 行数(封顶 200)
 	scoreTermVersionTags  = "versionTags"  // 版本限定词对不上,重扣
-	scoreTermDurationOff  = "durationOff"  // 时长明显对不上,重扣(以前是直接判 -1)
+	scoreTermDurationOff  = "durationOff"  // 时长明显对不上,重扣
 	// v3 新增:
 	scoreTermDurationOvershoot = "durationOvershoot" // 歌词末句超过曲长 5s(物理矛盾),重扣
 	scoreTermAlbum             = "album"             // 候选自报专辑与本地专辑的亲和(只加不减)
@@ -671,6 +480,8 @@ const (
 	scoreTermWordTimingOverride = "wordTimingOverride" // 标题吻合度更高的候选存在时,撤销逐字加分
 	// v7 新增:
 	scoreTermLiveAlbumConflict = "liveAlbumConflict" // 本地和候选是两场不同命名的演出(现场专辑身份词矛盾),重扣
+	// v23 新增:
+	scoreTermTimelineOffset = "timelineOffset" // 时间轴相对时长对得上的几家整体平移,挂在另一个母带上,重扣(lyrictimelineoffset.go)
 )
 
 // lyricScoreTermKinds 是**会出现在 score_terms 里**的全部 kind。存在的唯一理由是给
@@ -686,7 +497,7 @@ func lyricScoreTermKinds() []string {
 		scoreTermDurationOff, scoreTermDurationOvershoot, scoreTermAlbum,
 		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
 		scoreTermRoma, scoreTermSourceDurationOff, scoreTermWordTimingOverride,
-		scoreTermLiveAlbumConflict,
+		scoreTermLiveAlbumConflict, scoreTermTimelineOffset,
 	}
 }
 

@@ -62,7 +62,7 @@ struct LastfmIdentityRow: View {
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(connected ? L10n.t("Last.fm 账户") : L10n.t("同步收听记录"))
+                Text(connected ? L10n.t("Last.fm 账号") : L10n.t("同步收听记录"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

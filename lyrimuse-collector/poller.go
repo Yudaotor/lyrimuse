@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -87,7 +89,7 @@ func tooShortToScrobble(durationSecs float64) bool {
 	if durationSecs <= 0 || durationSecs >= minTrackSecs {
 		return false
 	}
-	return !features.ScrobbleShortTracks
+	return !features().ScrobbleShortTracks
 }
 
 // shortTrackLastfmOnly 判"这次收听只发 Last.fm、不发 ListenBrainz"。短曲目只有在
@@ -96,7 +98,7 @@ func tooShortToScrobble(durationSecs float64) bool {
 // 没有一点关系",所以 LB 对短曲目维持原来的行为(不发)。两处调用:submitSingleAsync(活路径)
 // 和退出兜底那条同步路径,两处都要挡,漏一处就是"平时不发、退出时发"的分裂。
 func shortTrackLastfmOnly(durationSecs float64) bool {
-	return features.ScrobbleShortTracks && durationSecs > 0 && durationSecs < minTrackSecs
+	return features().ScrobbleShortTracks && durationSecs > 0 && durationSecs < minTrackSecs
 }
 
 // 「曲终」档(scrobblePointEnd)判定的容差,见 sessionEndedNaturally。
@@ -122,7 +124,7 @@ const (
 // 不再套 4 分钟上限:"听了 75%" 就是字面意思。
 func lastfmScrobblePointReached(s *playSession) bool {
 	d := s.meta.Duration
-	switch features.LastfmScrobblePoint {
+	switch features().LastfmScrobblePoint {
 	case scrobblePoint75:
 		return d <= 0 || s.playedSecs >= 0.75*d
 	case scrobblePoint90:
@@ -193,7 +195,7 @@ func (p *poller) recordLastfmListen(s *playSession, artistName string, meta snap
 	}
 	s.lastfmPending = &pendingLastfmListen{artistName: artistName, meta: meta, startedAt: startedAt}
 	if !p.settleLastfmPending(s) {
-		slog.Debug("lastfm: scrobble deferred to scrobble point", "point", features.LastfmScrobblePoint,
+		slog.Debug("lastfm: scrobble deferred to scrobble point", "point", features().LastfmScrobblePoint,
 			"played_secs", int(s.playedSecs), "duration_secs", int(meta.Duration), "artist", meta.Artist, "title", meta.Title)
 	}
 }
@@ -266,6 +268,7 @@ type poller struct {
 	lb  *lbClient
 
 	lfm         *lastfmScrobbler
+	lfmKey      lastfmScrobblerKey // 建 lfm 时用的那组输入,见 syncLiveConfig
 	lfmMirrored map[int64]bool
 
 	cur  snapshot
@@ -274,6 +277,9 @@ type poller struct {
 	// 终结时刻,见 finalize()/handle() 里 nullResumeGraceWindow 的用法。
 	recentFinalized   *playSession
 	recentFinalizedAt time.Time
+	// 正在被按住的撕裂快照的 key 与开始按住的时刻,见 holdTornTrackChange。
+	tornHoldKey   string
+	tornHoldSince time.Time
 
 	// Position tracking. media-control freezes elapsedTime during steady play and
 	// its timestamp drifts stale across sleep/idle, so we can't just extrapolate
@@ -300,6 +306,9 @@ type poller struct {
 	prevDuration float64 // 上一轮快照的曲目时长(自然切歌判定用"旧曲"时长)
 	prevPlaying  bool    // 上一轮快照是否在播(gapless 判定要求旧曲正在播)
 	prevBundle   string  // 上一轮快照的播放器 bundle(旧曲真值必须同样来自 Spotify)
+	// 上一轮快照的位置是不是 Spotify 自己的钟(snapshot.PositionFromPlayerClock)—— 认"偶发退回
+	// media-control 的那一拍"用,见 updatePosition 里 foreignClockBeat。
+	prevPlayerClock bool
 	// 上一轮是否触发了 loopRestart(单曲循环归位)——回绕分两拍被观察到时,第二拍的
 	// 偏置重估要以"已归位的新一遍位置"为真值基准,见 updatePosition 里回绕形态 (a)。
 	prevLoopRestart bool
@@ -310,19 +319,25 @@ type poller struct {
 	// 自建状态中继:每轮把"网页该显示的当前状态"推到 /push(Mac 在放优先,否则 iPhone
 	// 镜像,否则上次播放)。按状态变化 + 心跳去重。remoteTrack/lastListen 由 bridge/
 	// finalize 更新。这是取代 LB 作网页主数据源的写入端。
-	relayLastState string
-	relayLastAt    time.Time
-	relayWrites    int           // 累计成功 KV /push 写次数(埋点:实测每日写量+定位大头)
-	relayFailKey   string        // 上次推送失败时的 key:内容变了就清退避、立即再试
-	relayFailAt    time.Time     // 上次推送失败时刻(零=当前无退避)
-	relayBackoff   time.Duration // 当前退避间隔(失败翻倍,上限 10min)
-	remoteTrack    snapshot      // iPhone(经 Last.fm)当前在播;remoteAt 为零表示无
-	remoteAt       time.Time
-	lastListen     snapshot // 最近一条完成收听(供空闲时显示"上次播放")
-	lastListenAt   int64
-	lastListenDev  string
+	relayLastState   string
+	relayLastAt      time.Time
+	relayWrites      int           // 累计成功 KV /push 写次数(埋点:实测每日写量+定位大头)
+	relayFailKey     string        // 上次推送失败时的 key:内容变了就清退避、立即再试
+	relayFailAt      time.Time     // 上次推送失败时刻(零=当前无退避)
+	relayBackoff     time.Duration // 当前退避间隔(失败翻倍,上限 10min)
+	relayStateSince  time.Time     // 最近一次推上去的 key 从什么时候起没变过(不在播放的状态据此停心跳)
+	relayDeferKey    string        // 换歌后等封面的那条 key 与开始等的时刻(见 relayShouldPush)
+	relayDeferSince  time.Time
+	relayInflight    bool                 // 有一次推送在后台飞着;结果经 relayDoneCh 回主循环
+	relayDoneCh      chan relayPushResult // 容量 1,配合 relayInflight 保证发送永不阻塞
+	lastListenSeedCh chan lastListenSeed  // 启动时从 ListenBrainz 取回的最近一条收听(见 seedLastListen)
+	remoteTrack      snapshot             // iPhone(经 Last.fm)当前在播;remoteAt 为零表示无
+	remoteAt         time.Time
+	lastListen       snapshot // 最近一条完成收听(供空闲时显示"上次播放")
+	lastListenAt     int64
+	lastListenDev    string
 
-	// Last.fm bridge (iPhone via FastScrobbler→Last.fm) state.
+	// Last.fm bridge (iPhone via FastScrobbler到Last.fm) state.
 	forwardedSet    persistedTTLSet
 	lfmMirroredSet  persistedTTLSet
 	lastfmCheckedAt time.Time
@@ -346,9 +361,17 @@ type poller struct {
 	dailyState         dailyDigestState
 	dailyLastCheckedAt time.Time
 
+	// 每月 / 年度听歌小结(见 calendardigest.go)。
+	monthlyRun calendarDigestRun
+	yearlyRun  calendarDigestRun
+
 	// 历史播放 Top10 歌手,一天算一次推给状态中继(见 topartists.go)。
 	topArtistsState         topArtistsState
 	topArtistsLastCheckedAt time.Time
+
+	// 上面四档报告与 Top 歌手榜在后台 goroutine 里跑,有一轮在跑时为 true(见 runDigestsAsync)。
+	// 这几组 *State / *LastCheckedAt / *Run 字段只由那个 goroutine 读写。
+	digestBusy atomic.Bool
 
 	nullStreak int
 
@@ -363,6 +386,10 @@ type poller struct {
 	// 一慢,同步调用会连带堵住 poll() 后面紧接着的 pushRelayState,让网页刷新(包括
 	// enrichNotify 刚解析出的封面/歌词)跟着冻结最长 8 秒。
 	bridgeDoneCh chan bridgeFetchResult
+	// iPhone 完成收听转发到 LB 在后台跑(forwardBridgeListens),结果经这个 channel 回主循环;
+	// bridgeForwarding 为 true 时有一轮在飞,不另起一轮。
+	bridgeForwardDoneCh chan []bridgeForwardResult
+	bridgeForwarding    bool
 }
 
 // bridgeFetchResult 是后台 goroutine 拉取 Last.fm 数据(lastfmRecent)的结果，经
@@ -483,10 +510,10 @@ func (p *poller) isTracked() bool {
 	// 只在确认是已知播放器之一时才产出非空快照,这里认它是不是这几个之一即可,不能拿
 	// playerBundleID() 那种"只认一个固定值"的判断(会把除了默认兜底值以外的其它播放器
 	// 误判成"不是我关心的来源")。
-	if features.Players[playerAuto] {
+	if features().Players[playerAuto] {
 		return isAcceptedPlayerBundleID(p.cur.Bundle)
 	}
-	for player := range features.Players {
+	for player := range features().Players {
 		if p.cur.Bundle == playerBundleID(player) {
 			return true
 		}
@@ -517,8 +544,10 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 	}
 	p.lfmMirrored[timestamp] = true
 	p.lfmMirroredSet.save(p.lfmMirrored)
-	mirrorAsync(p.lfm, "scrobble", func(ctx context.Context) error {
-		err := p.lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
+	// 取一份局部变量再交给 goroutine:p.lfm 会被主循环换掉(syncLiveConfig)。
+	lfm := p.lfm
+	mirrorAsync(lfm, "scrobble", func(ctx context.Context) error {
+		err := lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
 		if err == nil {
 			// 我们自己刚写进 Last.fm 一条:几秒后拉一次 feed,App 那边"上一首"就能立刻进
 			// 列表,不用等下一个拉取周期(这里在 goroutine 里,只碰 atomic,见 lastfmfeed.go)。
@@ -681,11 +710,21 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		rate = 1
 	}
 	if p.cur.Bundle != spotifyBundleID && p.posBias != 0 {
-		// 同 key 跨播放器接续(同一首歌换了源):偏置只对打歪的 Spotify 锚点有意义。
+		// 同 key 跨播放器接续(同一首歌换了源):偏置只对 Spotify 的领先读数有意义。
 		p.posBias = 0
 	}
-	if sameTrackAsBefore && !p.snapshotStale && p.posBias != 0 && p.cur.AnchorElapsed > 0.001 {
-		// 偏置只属于**开播那个** MediaRemote 锚点(⚠️ 别让它在"暂停⇄恢复"之间继承
+	if p.cur.PositionFromPlayerClock && !p.cur.Playing && p.posBias != 0 {
+		// Spotify 自己的钟(见 snapshot.PositionFromPlayerClock)一暂停就对回出声位置,冻结值即真值,
+		// 再扣偏置就是把准的值往回拖一个偏置量。与 Swift 侧 biasSurvivesAnchor 的 playing 参数同一条规则。
+		p.posBias = 0
+	}
+	// 夹在 AppleScript 读数中间的一拍 media-control(osascript 偶发失败,refineSpotifyState 退回原始快照):
+	// 两个钟对同一首歌可以差出一秒多,这一拍不能走 seek 分支重锚,也不能按它的锚点作废偏置。只挡一拍 ——
+	// 下一拍还是它就认定换钟,照常走下面的分支。与 Swift 侧 spotifyClockAction 同一件事(那边按 4s 挡)。
+	foreignClockBeat := sameTrackAsBefore && !p.snapshotStale && p.cur.Playing && p.prevPlaying &&
+		p.cur.Bundle == spotifyBundleID && p.prevPlayerClock && !p.cur.PositionFromPlayerClock
+	if sameTrackAsBefore && !p.snapshotStale && !foreignClockBeat && p.posBias != 0 && p.cur.AnchorElapsed > 0.001 {
+		// 偏置只属于**开播那个** MediaRemote 锚点( 别让它在"暂停与恢复"之间继承
 		// :gapless 切歌后 Spotify 自己的钟会停一下等新音频,稳态就是音频位置;它后来重新发布
 		// 的任何锚点 —— 暂停冻结值、恢复、拖动 —— 都对齐它的钟,原始 elapsedTime 必然 >0)。这时
 		// 再扣偏置就是把准的值往回拖一个偏置量(App 侧实测暂停瞬间 −1.097s)。开播锚点没重发的
@@ -708,7 +747,8 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	wrapSeed, wrapBias := 0.0, 0.0
 	wrapOK := false
 	if sameTrackAsBefore && !p.snapshotStale && p.cur.Playing && p.prevPlaying &&
-		p.cur.Bundle == spotifyBundleID && p.prevBundle == spotifyBundleID && p.prevDuration > 0 {
+		p.cur.Bundle == spotifyBundleID && p.prevBundle == spotifyBundleID && p.prevDuration > 0 &&
+		!p.cur.PositionFromPlayerClock {
 		if p.prevLoopRestart { // (a)
 			base := prevTrackPos + gap*rate
 			if b := seedFromMC() - base; b > naturalAdvanceMinBiasSecs && b <= naturalAdvanceMaxBiasSecs {
@@ -733,6 +773,10 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 			p.cur.Elapsed += gap * rate
 		}
 		reanchor = false
+	case foreignClockBeat: // 同上 stale 分支的做法:位置按墙钟推进,Elapsed 同步外推保 prevElapse@prevWall 配对
+		p.trackPos += gap * rate
+		p.cur.Elapsed = p.prevElapse + gap*rate
+		reanchor = false
 	case key != p.trackKey: // new track / 重启首见 → 用 media-control 锚点补齐真实位置
 		// Spotify gapless 自然切歌(旧曲在播且已连续外推到结尾附近):锚点先于真声,
 		// 按旧曲连续性播种并量出整曲偏置——机制/守卫见 posBias 与 naturalAdvanceCorrection。
@@ -741,7 +785,11 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		p.posBias = 0
 		p.trackPos = seedFromMC()
 		if p.cur.Bundle == spotifyBundleID && p.prevBundle == spotifyBundleID &&
-			p.cur.Playing && p.prevPlaying && p.prevDuration > 0 && !p.prevWall.IsZero() {
+			p.cur.Playing && p.prevPlaying && p.prevDuration > 0 && !p.prevWall.IsZero() &&
+			!p.cur.PositionFromPlayerClock {
+			// 读数来自 Spotify 自己的钟(PositionFromPlayerClock)时跳过:那一份在 getSpotifyState 里已经扣掉了
+			// App 按起播方式给的领先量(currentPlayerClockBias),这里再按连续性估一遍就是扣两次;而且交界处声音
+			// 并不连续,连续性对那个钟本来就估不准(见 App 侧 LocalPlaybackSource.SpotifyStartKind)。
 			overrun := prevTrackPos + gap*rate - p.prevDuration
 			if seed, bias, ok := naturalAdvanceCorrection(p.trackPos, overrun); ok {
 				log.Printf("natural advance: seed %.3fs, anchor leads audio by %.3fs (raw %.3f)", seed, bias, p.trackPos)
@@ -802,6 +850,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	}
 	p.trackKey, p.prevElapse, p.prevWall = key, p.cur.Elapsed, now
 	p.prevDuration, p.prevPlaying, p.prevBundle = p.cur.Duration, p.cur.Playing, p.cur.Bundle
+	p.prevPlayerClock = p.cur.PositionFromPlayerClock
 	p.prevLoopRestart = loopRestart
 	// 负位置只对内部连续性有意义(自然切歌播种时=旧曲真声还没放完,或暂停冻结值扣完
 	// 偏置后略负),对外发布钳到 0。
@@ -865,15 +914,78 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if cov, _ := payload["artwork"].(string); cov != "" {
 		key += "|c"
 	}
-	changed := key != p.relayLastState
-	if !changed && !reanchored && now.Sub(p.relayLastAt) < 4*time.Minute {
+	reason, ok := p.relayShouldPush(now, key, payload, reanchored)
+	if !ok || p.relayInflight {
 		return
 	}
-	writeReason := "heartbeat"
+	// 推送放后台:中继一次往返中位约 0.9 秒、偶尔 6 秒超时,同步做会让主循环在换歌那一刻停住
+	// (暂停、拖进度、下一首都察觉不到)。记账在 applyRelayResult 里,仍只在主循环上改字段。
+	p.relayInflight = true
+	cfg := p.cfg
+	go func() {
+		err := postRelay(p.ctx, cfg, "/push", payload)
+		p.relayDoneCh <- relayPushResult{key: key, reason: reason, at: now, err: err}
+	}()
+}
+
+// 中继推送的节奏。省 KV 写额度(免费仅 1000 写/天,实测有一天写了 1022 次):进度由网页从锚点外推,
+// 连播中途无需重写。
+const (
+	// 心跳:同一状态最多隔这么久重写一次,须 < worker STALE_MS=5min,否则 KV 会被判过期而退回 LB。
+	relayHeartbeat = 4 * time.Minute
+	// 不在播放的状态(暂停 / 上次播放 / 空)维持这么久之后不再续心跳:之后 KV 过期、网页和飞书退回
+	// ListenBrainz 的「上次播放」,内容基本一样,省下的是长时间暂停每 4 分钟一次的写(实测占全部写的两成多)。
+	relayIdleHeartbeatFor = 30 * time.Minute
+	// 换了一首歌、封面还没到位时最多等这么久再推:封面一般几秒内就解析出来(enrichNotify 会立刻补一拍),
+	// 等一下就能一次写到位,不用先推一次无封面、再补推一次(实测补推约占全部写的一成)。网页本身
+	// 10 秒才拉一次,这点延迟看不出来。
+	relayCoverWait = 5 * time.Second
+)
+
+// relayTrackOf 取 key 里标识曲目的那段(去掉状态前缀和 |c / |a 后缀),用来判断是不是换了一首歌。
+func relayTrackOf(key string) string {
+	_, rest, _ := strings.Cut(key, "|")
+	rest = strings.TrimSuffix(rest, "|c")
+	return strings.TrimSuffix(rest, "|a")
+}
+
+// relayHasProgress:这个状态的负载带进度条(Mac 正在放 / iPhone 正在放)。只有它们需要重锚。
+func relayHasProgress(key string) bool {
+	return strings.HasPrefix(key, "mac|") || strings.HasPrefix(key, "ip|")
+}
+
+// relayShouldPush 决定这一拍要不要推、为什么推(给日志埋点)。只读写中继相关的 poller 字段,
+// 在主循环上调用。
+func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]any, reanchored bool) (string, bool) {
+	progress := relayHasProgress(key)
+	if !progress {
+		reanchored = false // 没有进度条的状态,重锚改不了网页上任何东西
+	}
+	changed := key != p.relayLastState
+	if changed && progress && relayTrackOf(key) != relayTrackOf(p.relayLastState) {
+		if cov, _ := payload["artwork"].(string); cov == "" {
+			if key != p.relayDeferKey {
+				p.relayDeferKey, p.relayDeferSince = key, now
+				return "", false
+			}
+			if now.Sub(p.relayDeferSince) < relayCoverWait {
+				return "", false
+			}
+		}
+	}
+	if !changed && !reanchored {
+		if now.Sub(p.relayLastAt) < relayHeartbeat {
+			return "", false
+		}
+		if !progress && now.Sub(p.relayStateSince) >= relayIdleHeartbeatFor {
+			return "", false
+		}
+	}
+	reason := "heartbeat"
 	if changed {
-		writeReason = "change"
+		reason = "change"
 	} else if reanchored {
-		writeReason = "reanchor"
+		reason = "reanchor"
 	}
 	// 退避:上次推送失败(配额爆/中继挂)后别每轮硬试(否则每 5s 白烧一次 worker 请求+刷屏)。
 	// 内容变了(key 变,如换歌)到 清退避立即再试,让 KV 恢复后尽快回主路径;同内容按退避重试。
@@ -881,22 +993,38 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		p.relayFailAt, p.relayBackoff = time.Time{}, 0
 	}
 	if !p.relayFailAt.IsZero() && now.Sub(p.relayFailAt) < p.relayBackoff {
-		return
+		return "", false
 	}
-	if err := postRelay(p.ctx, p.cfg, "/push", payload); err != nil {
-		log.Printf("relay push failed: %v", err)
-		p.relayFailKey, p.relayFailAt = key, now
+	return reason, true
+}
+
+// relayPushResult 是后台推送的结果,经 relayDoneCh 送回主循环。
+type relayPushResult struct {
+	key, reason string
+	at          time.Time
+	err         error
+}
+
+// applyRelayResult 在主循环上记账:成功更新去重锚点,失败进退避(去重锚点不动,按退避在后续 poll 重试)。
+func (p *poller) applyRelayResult(r relayPushResult) {
+	p.relayInflight = false
+	if r.err != nil {
+		log.Printf("relay push failed: %v", r.err)
+		p.relayFailKey, p.relayFailAt = r.key, r.at
 		if p.relayBackoff == 0 {
 			p.relayBackoff = 30 * time.Second
 		} else if p.relayBackoff < 10*time.Minute {
 			p.relayBackoff *= 2
 		}
-		return // 去重锚点不更新;按退避在后续 poll 重试
+		return
 	}
 	p.relayFailAt, p.relayBackoff, p.relayFailKey = time.Time{}, 0, ""
-	p.relayLastState, p.relayLastAt = key, now
+	if r.key != p.relayLastState {
+		p.relayStateSince = r.at
+	}
+	p.relayLastState, p.relayLastAt = r.key, r.at
 	p.relayWrites++
-	log.Printf("relay write #%d [%s] key=%q", p.relayWrites, writeReason, key) // 埋点:实测每日 KV 写量与来源
+	log.Printf("relay write #%d [%s] key=%q", p.relayWrites, r.reason, r.key) // 埋点:实测每日 KV 写量与来源
 }
 
 // pushScrobble 记一条完成收听。历史/今日统计现改由网页从 LB 合并(每条完成收听已双写 LB,
@@ -1008,6 +1136,11 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	p.recordLastfmListen(r.sess, r.artistName, r.meta, r.startedAt)
 	if r.err != nil {
 		log.Printf("submit listen failed: %v", r.err)
+		// 会话已经结束就不会再有人重试它(播放中每拍重试只管当前会话),交给待重发队列;
+		// LB 明确拒收(4xx)的重发也没用,不进队列。
+		if r.sess.ended && !errors.Is(r.err, errListenRejected) {
+			enqueueLBRetry(r.startedAt, lbMeta(r.meta))
+		}
 		return
 	}
 	r.sess.listenSent = true
@@ -1043,7 +1176,7 @@ func (p *poller) finalize(now time.Time) {
 	// 百分比档也可能恰好在最后一拍之后才过线。没到点**不**在这里丢(理由见 recordLastfmListen)。
 	s.ended, s.endedNaturally = true, sessionEndedNaturally(s, now)
 	if !p.settleLastfmPending(s) && s.lastfmPending != nil {
-		slog.Debug("lastfm: session ended before scrobble point", "point", features.LastfmScrobblePoint,
+		slog.Debug("lastfm: session ended before scrobble point", "point", features().LastfmScrobblePoint,
 			"played_secs", int(s.playedSecs), "duration_secs", int(s.meta.Duration), "artist", s.meta.Artist, "title", s.meta.Title)
 	}
 	if s.listenSent || s.submitting || tooShortToScrobble(s.meta.Duration) {
@@ -1070,13 +1203,14 @@ func (p *poller) detectAdAtSessionStart() bool {
 		return true
 	}
 	if p.cur.Bundle == spotifyBundleID {
-		uri, ok := spotifyCurrentTrackURI(p.ctx)
+		uri, name, ok := spotifyCurrentTrackURI(p.ctx)
 		if !ok {
 			return false
 		}
 		// 同一次脚本顺带留下真曲目 ID:缓存里的 spotify_url 由它换成真链接,LB 上送带
 		// spotify_id,见 spotifytrack.go。广告 / 本地文件 / 播客不是 spotify:track:,取不出 ID,什么都不记。
-		if id := spotifyTrackIDFromURI(uri); id != "" {
+		// Spotify 此刻播的跟 p.cur 不是同一首时不记(见 spotifyTrackIDForSession)。
+		if id := spotifyTrackIDForSession(p.cur.Title, uri, name); id != "" {
 			noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, id)
 		}
 		return spotifyURIIsAd(uri)
@@ -1130,8 +1264,9 @@ func (p *poller) announce(now time.Time, why string) {
 		// 暂停的歌 announce 上去,直接顶掉用户手机上正在放的那首的 nowplaying。
 		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
 		if playing && !lastfmSkip {
-			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
-				return p.lfm.updateNowPlaying(ctx, artist, title, album, durationSecs)
+			lfm := p.lfm
+			mirrorAsync(lfm, "now-playing", func(ctx context.Context) error {
+				return lfm.updateNowPlaying(ctx, artist, title, album, durationSecs)
 			}, nil) // now-playing 失败无需留痕:它是瞬时状态,下一拍自然覆盖(跟 scrobble 相反)
 		}
 		err := p.lb.submit(p.ctx, "playing_now", 0, m)
@@ -1169,6 +1304,12 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.meta.Duration, p.cur.Duration) {
 		p.sess.meta.Duration = p.cur.Duration
 	}
+	// 汽水非会员试听:会话开在试听段还没查到的那一拍,记下的是试听段长度,查到之后补成整首 ——
+	// 否则试听 30 秒就够着「听满一半」,被记成一次收听。判据见 sodaPreviewSessionBackfill。
+	if p.sess != nil && p.sess.key == key &&
+		sodaPreviewSessionBackfill(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.sess.meta.Duration, p.cur.Duration) {
+		p.sess.meta.Duration = p.cur.Duration
+	}
 
 	// Player quit or another app took over: finalize and drop the session.
 	if !isMusic {
@@ -1198,17 +1339,26 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		}
 		p.recentFinalized = nil
-		log.Printf("now playing: %s - %s", p.cur.Artist, p.cur.Title)
-		// 顺手把同一张专辑里其它还没解析过的曲目也丢到后台解析——用户按专辑顺序一首首听,
-		// 提前解析好等真播到那首歌时大概率不用现等。见 albumprefetch.go。
-		if features.AlbumPrefetch {
-			prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle)
+		// 带上 bundle:换歌是按播放器排查问题的起点(预解析走哪一层、署名修正、本地缓存命中都按
+		// 播放器分流),不带就追不到这一首是哪个播放器在放。
+		// bundle 放在最后,前半段格式不变,按「now playing: 歌手 - 歌名」grep 的老习惯照样好用。
+		log.Printf("now playing: %s - %s (bundle=%s)", p.cur.Artist, p.cur.Title, p.cur.Bundle)
+		// 记下正在播的这首:它的歌词提交要当场落盘、不走 2 秒节流(App 读的是磁盘文件,见 enrichsave.go)。
+		// 只能在这里记 —— trackEnrichment 也会被「上一首」调到(切歌后给上一首提交收听、空闲时中继推上一首)。
+		noteEnrichPlayingKey(enrichKey(p.cur.Artist, p.cur.Title, p.cur.Album))
+		// 顺手把接下来会播的那几首也丢到后台解析,提前解析好等真播到时大概率不用现等。
+		// 优先读播放器自己的队列,读不到才退回"同一张专辑里的其它曲目"——两层的理由见
+		// upcoming.go 头注。
+		if features().AlbumPrefetch {
+			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
 		}
 		// LB 的 playing_now 只在"换曲"时更新、同曲存活期内拒绝覆盖,迟到的歌词再也进不去。
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
+		// 汽水试听段还在搜:这一拍的时长是试听段长度,先不解析歌词,挂起等下一拍(见 SodaPreviewPending)。
+		if !p.cur.SodaPreviewPending &&
+			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -1255,7 +1405,8 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// isNewTrack 传 false:这是同一个 session 里等 enrich 完成的轮询重试,不是新曲目
 		// 开始播放的那一刻,不该再问一次 media-control 要设备封面(那一刻已经在上面
 		// "New track" 分支问过了)。
-		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false, p.cur.Radio)) > 0
+		resolved := !p.cur.SodaPreviewPending &&
+			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false, p.cur.Radio)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
@@ -1367,7 +1518,61 @@ func (p *poller) bridge(now time.Time) {
 	}()
 }
 
-// bridgeForwardingEnabled:iPhone→ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
+// bridgeForwardItem 是一条要转发给 LB 的 iPhone 完成收听(载荷在主循环上算好)。
+type bridgeForwardItem struct {
+	uts   int64
+	meta  lbTrackMeta
+	track snapshot
+}
+
+// bridgeForwardResult:rejected = LB 明确拒收(4xx,记进 forwarded 不再试);否则就是送达了。
+// 没送达的瞬时失败不出现在结果里,下一轮从它重试。
+type bridgeForwardResult struct {
+	item     bridgeForwardItem
+	rejected bool
+}
+
+// forwardBridgeListens 在后台按从旧到新的顺序逐条提交,瞬时失败就停(停在这一条,下一轮从它重试),
+// 结果经 bridgeForwardDoneCh 回主循环。
+func (p *poller) forwardBridgeListens(items []bridgeForwardItem) {
+	var out []bridgeForwardResult
+	for _, it := range items {
+		err := p.lb.submit(p.ctx, "single", it.uts, it.meta)
+		if err != nil {
+			if errors.Is(err, errListenRejected) {
+				log.Printf("bridge: skip rejected lastfm listen %q - %q: %v", it.track.Artist, it.track.Title, err)
+				out = append(out, bridgeForwardResult{item: it, rejected: true})
+				continue
+			}
+			log.Printf("bridge: forward lastfm listen failed, will retry: %v", err)
+			break
+		}
+		out = append(out, bridgeForwardResult{item: it})
+	}
+	select {
+	case p.bridgeForwardDoneCh <- out:
+	case <-p.ctx.Done():
+	}
+}
+
+// applyBridgeForwardResults 在主循环上把后台那一轮的结果记进 forwarded。
+func (p *poller) applyBridgeForwardResults(results []bridgeForwardResult) {
+	p.bridgeForwarding = false
+	if len(results) == 0 {
+		return
+	}
+	for _, r := range results {
+		p.forwarded[r.item.uts] = true
+		if !r.rejected {
+			log.Printf("bridge: listen from iPhone/Last.fm: %s - %s", r.item.track.Artist, r.item.track.Title)
+			p.pushScrobble(r.item.track, r.item.uts, "iphone")
+		}
+	}
+	p.forwardedSet.save(p.forwarded)
+	p.pushRelayState(time.Now(), false)
+}
+
+// bridgeForwardingEnabled:iPhone到ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
 // 的既有门槛。之前它跟"要不要拉 Last.fm"是同一个判断,现在拉取只看 Last.fm
 // 凭据(见 bridge()),这里单独保住 LB 那半边的条件不变。
 func (p *poller) bridgeForwardingEnabled() bool {
@@ -1406,6 +1611,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	// 第三方客户端后台漏了、之后补同步的旧时间戳记录,只要不在集合里就会被补上)。首次(无持久化
 	// 文件)只 seed 当前窗口、不回灌整段历史。
 	fwdChanged := false
+	var pending []bridgeForwardItem
 	if !p.fwdSeeded {
 		for _, s := range done {
 			if s.UTS > 0 {
@@ -1439,30 +1645,18 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 				p.forwarded[s.UTS], fwdChanged = true, true
 				continue
 			}
-			m := lbMeta(snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album})
+			m := lbMeta(snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album, Remote: true})
 			m.AdditionalInfo["source"] = "iphone"                     // 来源:iPhone(经 Last.fm 桥接)
 			m.AdditionalInfo["media_player"] = mediaPlayerLabelIPhone // 这条桥接固定是 iPhone 上的 Apple Music,不受本地 Mac 播放器选择影响
-			// 这条特意保留同步:失败要 break(停在这个点,下次从同一条重试)、成功要继续
-			// 处理 done 里剩下的旧记录——这个"按顺序处理、失败即停"的语义依赖同步调用,
-			// 改成 submitSingleAsync 那种即发即走会打乱这个顺序保证。且这里处理的是
-			// iPhone 那边已经完成的历史收听(不是当下的实时展示),没有 announce()/
-			// 内联 single 提交那样"卡住会冻结网页展示"的紧迫性(bridge 本身也只有每
-			// lastfmFeedInterval=15s/60s 才跑一次,不是每 5s 的 poll 主循环),所以这条暂不
-			// 纳入本轮"poll() 提交异步化"的范围。
-			if err := p.lb.submit(p.ctx, "single", s.UTS, m); err != nil {
-				if errors.Is(err, errListenRejected) {
-					// 永久性 4xx:LB 不会收这条,记入集合避免反复重试。
-					log.Printf("bridge: skip rejected lastfm listen %q - %q: %v", s.Artist, s.Title, err)
-					p.forwarded[s.UTS], fwdChanged = true, true
-					continue
-				}
-				// 瞬时失败(LB 挂/超时):停在此下轮重试,不记入集合(否则会漏)。
-				log.Printf("bridge: forward lastfm listen failed, will retry: %v", err)
-				break
-			}
-			log.Printf("bridge: listen from iPhone/Last.fm: %s - %s", s.Artist, s.Title)
-			p.pushScrobble(snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album}, s.UTS, "iphone")
-			p.forwarded[s.UTS], fwdChanged = true, true
+			pending = append(pending, bridgeForwardItem{uts: s.UTS, meta: m, track: snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album, Remote: true}})
+		}
+		// 提交放后台:LB 一次提交中位约 1.1 秒、慢时十几秒,手机一次同步上来好几条时串行跑在主循环里
+		// 会卡住十几到几十秒(暂停、换歌都察觉不到)。按顺序提交、失败即停这个语义留在后台那一轮里,
+		// 结果交回主循环再记进 forwarded。上一轮还在飞时不另起一轮:挑出来的条目还没记进 forwarded,
+		// 再起一轮会把它们重复转发。
+		if len(pending) > 0 && !p.bridgeForwarding {
+			p.bridgeForwarding = true
+			go p.forwardBridgeListens(pending)
 		}
 	}
 	// 修剪:只保留最近 forwardedTTL 的 uts,防集合无限增长。
@@ -1496,13 +1690,13 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 		return
 	}
 	// 记录 iPhone 当前在播,供中继 /push 显示(Mac 空闲时)。
-	p.remoteTrack, p.remoteAt = snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true}, now
+	p.remoteTrack, p.remoteAt = snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true, Remote: true}, now
 	key := np.Title + "|" + np.Artist
 	if key == p.remoteKey && now.Sub(p.remotePN) < playingNowRefresh {
 		return // already announced; refresh only every playingNowRefresh
 	}
 	p.remoteKey, p.remotePN = key, now
-	meta := lbMeta(snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true})
+	meta := lbMeta(snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true, Remote: true})
 	meta.AdditionalInfo["source"] = "iphone"                     // 来源:iPhone(经 Last.fm 桥接)
 	meta.AdditionalInfo["media_player"] = mediaPlayerLabelIPhone // 这条桥接固定是 iPhone 上的 Apple Music,不受本地 Mac 播放器选择影响
 	artist, title := np.Artist, np.Title
@@ -1557,7 +1751,47 @@ func needsRadioDurationBackfill(sameTrack, radio bool, sessionDuration, currentD
 	return sameTrack && radio && sessionDuration <= 0 && currentDuration > 0
 }
 
+// tornHoldMax:撕裂快照最多按住多久。超过就当它是真的换曲(同专辑相邻两首时长恰好逐位相同)。
+// 按住期间不开新会话、不起解析,代价是这种真换曲的歌词晚到这么久。见 09 章决策 69。
+const tornHoldMax = 12 * time.Second
+
+// tornTrackChange:next 相对 cur 只换了标题,歌手 / 专辑 / 时长 / 播放器都逐位不变。
+// 这是换曲时 MediaRemote 先发布新标题、其余字段还停在上一首的形态;电台的时长是整档
+// 节目的长度,不参与判定。
+func tornTrackChange(cur, next snapshot) bool {
+	if cur.Radio || next.Radio || cur.Title == "" || next.Title == "" || cur.Title == next.Title {
+		return false
+	}
+	if cur.Artist == "" || cur.Artist != next.Artist || cur.Album != next.Album || cur.Bundle != next.Bundle {
+		return false
+	}
+	return cur.Duration > 0 && math.Abs(cur.Duration-next.Duration) < 0.01
+}
+
+// holdTornTrackChange 报告这一轮是否按住 next、不采纳。同一个撕裂 key 按住满 tornHoldMax
+// 就放行;形态解除(key 变了或时长跟上来了)立即放行。
+func (p *poller) holdTornTrackChange(next snapshot, now time.Time) bool {
+	if !tornTrackChange(p.cur, next) {
+		p.tornHoldKey = ""
+		return false
+	}
+	k := next.key()
+	if p.tornHoldKey != k {
+		p.tornHoldKey, p.tornHoldSince = k, now
+		log.Printf("now playing: holding %q — only the title changed (artist/album/duration still %q/%q/%.3f)",
+			next.Title, next.Artist, next.Album, next.Duration)
+		return true
+	}
+	if now.Sub(p.tornHoldSince) < tornHoldMax {
+		return true
+	}
+	log.Printf("now playing: releasing %q after %s — the title-only change persisted", next.Title, tornHoldMax)
+	p.tornHoldKey = ""
+	return false
+}
+
 func (p *poller) poll() {
+	p.syncLiveConfig()
 	// snapshotStale:这一轮 p.cur 是否还是上一轮的陈旧残留——getState 直接失败,或
 	// 瞬时 null 未达 3 连清空门槛时,p.cur 原样保留,但它的 Elapsed 已经落后墙钟一整拍,
 	// updatePosition 不能把它当新鲜读数用(会误判 seek、清掉自然切歌偏置,
@@ -1572,21 +1806,26 @@ func (p *poller) poll() {
 			}
 		} else {
 			p.nullStreak = 0
-			p.cur = extract(state)
-			// 电台:把整档节目的位置/锚点换成按曲目边界自己起的单曲表(见 radioclock.go)。
-			// 换在这里而不是让下游各自判:updatePosition 那套伺服 / 偏置 / 回绕判定拿到的
-			// 因此是一份正常的单曲快照,一行也不用改。
-			// 这里还没到下面那句 now := time.Now(),差几微秒,对一块以秒计的表没有意义。
-			applyRadioClock(&p.cur, time.Now())
-			// 电台:目录查到的真曲长记成提示,条目下一次被读到时补进歌词缓存(见 radioduration.go)。
-			// 每拍都记 —— 换曲那一拍目录通常还没命中,几秒后才有值。
-			if p.cur.Radio {
-				noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+			// 撕裂快照按住不采纳:本轮 p.cur 原样保留、snapshotStale 保持 true,跟 getState
+			// 失败同一种处理。必须拦在这里而不是 handle():relay.go / lb.go 也拿 p.cur 调
+			// trackEnrichment,缓存未命中同样会起一次首次解析。
+			if next := extract(state); !p.holdTornTrackChange(next, time.Now()) {
+				p.cur = next
+				// 电台:把整档节目的位置/锚点换成按曲目边界自己起的单曲表(见 radioclock.go)。
+				// 换在这里而不是让下游各自判:updatePosition 那套伺服 / 偏置 / 回绕判定拿到的
+				// 因此是一份正常的单曲快照,一行也不用改。
+				// 这里还没到下面那句 now := time.Now(),差几微秒,对一块以秒计的表没有意义。
+				applyRadioClock(&p.cur, time.Now())
+				// 电台:目录查到的真曲长记成提示,条目下一次被读到时补进歌词缓存(见 radioduration.go)。
+				// 每拍都记 —— 换曲那一拍目录通常还没命中,几秒后才有值。
+				if p.cur.Radio {
+					noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+				}
+				// 播放器没报专辑名 到 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
+				// 挂在 AlbumHint 上、不动 Album:它只给呈现 / 上送用,见 snapshot.albumForUpload。
+				p.cur.AlbumHint = p.albumHintFor(p.cur)
+				p.snapshotStale = false
 			}
-			// 播放器没报专辑名 → 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
-			// 挂在 AlbumHint 上、不动 Album:它只给呈现 / 上送用,见 snapshot.albumForUpload。
-			p.cur.AlbumHint = p.albumHintFor(p.cur)
-			p.snapshotStale = false
 		}
 	}
 	now := time.Now()
@@ -1610,7 +1849,7 @@ func (p *poller) poll() {
 	// 或者勾的是自动识别),按"这一轮观测到的 bundle 是不是恰好是 Apple Music"决定要不要
 	// 补这次 AppleScript 精确定位——跟改动前 playerAuto 分支的道理完全一样,只是现在
 	// 多选/自动识别共用同一条判断,不需要再分两个 case。
-	if borrowAppleScriptPosition(features.Players[playerAppleMusic], p.cur.Bundle,
+	if borrowAppleScriptPosition(features().Players[playerAppleMusic], p.cur.Bundle,
 		p.cur.Playing, p.isTracked(), p.cur.Radio) {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			correctedAt := time.Now()
@@ -1631,9 +1870,7 @@ func (p *poller) poll() {
 	p.handle(now, reanchored, loopRestart)
 	p.bridge(now)
 	p.pushRelayState(now, reanchored)
-	p.weeklyDigest(now)
-	p.dailyDigest(now)
-	p.topArtistsDigest(now)
+	p.runDigestsAsync(now)
 }
 
 func run(ctx context.Context, cfg *config, lb *lbClient) error {
@@ -1648,24 +1885,37 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		// Last.fm 镜像写入(可选,三个凭证字段都配置且 lastfm_mirror_scrobble 开关打开才
 		// 启用)。这里是唯一的构造点,p.lfm==nil 天然让 mirrorScrobbleTracked/mirrorAsync
 		// 两处调用(now-playing 镜像 + scrobble 镜像)都跳过,不需要在两处各自判断开关。
-		lfm:             lastfmScrobblerIfEnabled(cfg),
-		lfmMirrored:     lfmMirrored,
-		forwardedSet:    forwardedSet,
-		lfmMirroredSet:  lfmMirroredSet,
-		forwarded:       forwarded,
-		fwdSeeded:       fwdSeeded,
-		weeklyState:     weeklyDigestState{path: weeklyDigestPath},
-		dailyState:      dailyDigestState{path: dailyDigestPath},
-		topArtistsState: topArtistsState{path: topArtistsStatePath},
-		submitDoneCh:    make(chan submitOutcome, 8),
-		announceDoneCh:  make(chan announceOutcome, 8),
-		bridgeDoneCh:    make(chan bridgeFetchResult, 1),
+		lfm:                 lastfmScrobblerIfEnabled(cfg),
+		lfmKey:              lastfmScrobblerKeyOf(cfg),
+		lfmMirrored:         lfmMirrored,
+		forwardedSet:        forwardedSet,
+		lfmMirroredSet:      lfmMirroredSet,
+		forwarded:           forwarded,
+		fwdSeeded:           fwdSeeded,
+		weeklyState:         weeklyDigestState{path: weeklyDigestPath},
+		dailyState:          dailyDigestState{path: dailyDigestPath},
+		monthlyRun:          calendarDigestRun{state: calendarDigestState{path: monthlyDigestPath}},
+		yearlyRun:           calendarDigestRun{state: calendarDigestState{path: yearlyDigestPath}},
+		topArtistsState:     topArtistsState{path: topArtistsStatePath},
+		submitDoneCh:        make(chan submitOutcome, 8),
+		announceDoneCh:      make(chan announceOutcome, 8),
+		bridgeDoneCh:        make(chan bridgeFetchResult, 1),
+		bridgeForwardDoneCh: make(chan []bridgeForwardResult, 1),
+		relayDoneCh:         make(chan relayPushResult, 1),
+		lastListenSeedCh:    make(chan lastListenSeed, 1),
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup
-	go startCompanionLaunchWatcher(ctx)   // 独立节奏,见 companionlaunch.go 顶部注释
-	go startEnrichCancelWatcher(ctx)      // 独立节奏,见 enrichcancel.go 顶部注释
-	go startLyricsFillSweeper(ctx)        // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
+	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
+		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
+	}
+	if cfg.User != "" && cfg.Token != "" && lb != nil {
+		go startLBRetryLoop(ctx, lb) // 会话结束后才失败的收听,后台重发,见 lbretry.go
+	}
+	go startCompanionLaunchWatcher(ctx) // 独立节奏,见 companionlaunch.go 顶部注释
+	go startEnrichCancelWatcher(ctx)    // 独立节奏,见 enrichcancel.go 顶部注释
+	go startEnrichEditWatcher(ctx)      // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
+	go startLyricsFillSweeper(ctx)      // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -1720,6 +1970,15 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.applySubmitOutcome(r)
 		case r := <-p.announceDoneCh:
 			p.applyAnnounceOutcome(r)
+		case r := <-p.relayDoneCh:
+			p.applyRelayResult(r)
+		case r := <-p.lastListenSeedCh:
+			// 本进程已经记下过一条真实收听(或 iPhone 桥接到了)就不用它:那条更新。
+			if p.lastListen.key() == "" {
+				p.lastListen, p.lastListenAt, p.lastListenDev = r.track, r.listenedAt, r.device
+			}
+		case r := <-p.bridgeForwardDoneCh:
+			p.applyBridgeForwardResults(r)
 		case r := <-p.bridgeDoneCh:
 			p.applyBridgeResult(r)
 		}

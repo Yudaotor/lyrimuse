@@ -82,6 +82,27 @@ public enum LyricDuet {
     /// 把标记归一成"身份键"。已知声部词走上面那张表;人名原样返回。
     public static func identity(of marker: String) -> String { canonicalMarker[marker] ?? marker }
 
+    /// 剥掉这一行开头的演唱者标签 —— 给**译文/罗马音**行用。
+    ///
+    /// 正文行的标签由 `plan` / `planWords` 在排版那一步剥掉,译文和罗马音走的却是另一条路
+    /// (`LRCParser.parse` 出来直接按时间戳配对显示),中间没有任何人管它们。表现是主歌词
+    /// 显示「Make a little space」、底下译文却是「V1：留出一点空间」(实测 Michael Jackson
+    /// 《Heal the World》,applemusic 源 + 机器翻译,95 行全中)。
+    ///
+    /// 大小写**不敏感**。TTML 的 `ttm:agent` 是小写 `v1`,而机器翻译把它当句首词、
+    /// 回吐的是大写 `V1` —— 拿原文那一份 speakers 去精确比对会一行都匹配不上。
+    ///
+    /// 只认这一份歌词**自己认定过**的标签(speakers 由 `speakers(in:)` 对正文判出来),
+    /// 不是见到"短标签 + 冒号"就剥:译文里「他说：我不走了」这种真句子必须留着。
+    public static func strippingKnownLabel(_ text: String, speakers: Set<String>) -> String {
+        guard !speakers.isEmpty,
+              let (label, rest, _) = splitLabel(text),
+              !rest.isEmpty,
+              speakers.contains(where: { $0.caseInsensitiveCompare(label) == .orderedSame })
+        else { return text }
+        return rest
+    }
+
     // MARK: - 行首标签拆分
 
     /// 冒号左边**不允许**出现的字符:空白和标点。
@@ -187,6 +208,12 @@ public enum LyricDuet {
         // 它天然放过真人名:「曲婉婷：」里「曲」虽是角色词,但正则要求它后面紧跟冒号或
         // 另一个角色词,「婉」两者都不是,整条匹配失败 —— 这正是我们想要的行为。
         if LyricsSyncEngine.matchesKeywordCreditPattern(label + "：") { return false }
+        // 同一张词表的另一条判据(标签里**含**一个双字角色词)。上面那条是精确角色名的正则,
+        // 「版权方」「总策划」「人声编辑」「封面设计」这种"角色词 + 一两个尾字"够不着它,于是
+        // 被收进说话人名单 —— 而那份名单回头是署名过滤的豁免,豁免那道门排在所有规则**最前面**,
+        // 一进去就再也不看别的判据了。表现:一首每句都带人名标记的对唱歌里,`版权方：…` 原样
+        // 显示在第一行,而同一条 `matchesRoleWordCredit` 本来判得出它是署名。
+        if LyricsSyncEngine.labelLooksLikeCreditRole(label) { return false }
         if label.contains(where: { nonNameCharacters.contains($0) }) { return false }
         // 纯数字/纯符号不是名字(「2000瓦：」这种)。
         if !label.contains(where: { $0.isLetter || $0.unicodeScalars.first?.properties.isIdeographic == true }) {

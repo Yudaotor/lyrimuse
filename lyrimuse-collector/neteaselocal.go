@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -263,4 +265,207 @@ func neteaseLocalSong(ctx context.Context, artist, title, album string, duration
 	// 客户端曲库、没走 /api/search"的唯一凭据,同 kugou local / qq local 那两行。
 	log.Printf("netease local: hit %q - %q (album %q) → %d", artist, title, song.Album.Name, song.ID)
 	return song, true
+}
+
+// ---- 播放队列:接下来会播的几首(见 upcoming.go)----
+
+// neteaseUpcomingOverride 让单测把队列文件指到临时路径。空 = 用真实路径。
+var neteaseUpcomingOverride string
+
+// neteaseUpcomingMaxBytes 是这份文件的大小上限。实测 552 首 1.29MB,16MB 是防"队列被塞到
+// 上万首 / 格式变了"时把内存吃光,不是格式约束。
+const neteaseUpcomingMaxBytes = 16 << 20
+
+// neteaseUpcomingPath 是网易云客户端的当前播放列表。
+//
+// 跟 neteaseLocalDBPath 是两份东西:那个是客户端曲库(sqlite),这个是**此刻的播放队列**
+// (明文 JSON,无加密)。
+func neteaseUpcomingPath() string {
+	if neteaseUpcomingOverride != "" {
+		return neteaseUpcomingOverride
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Library/Containers/com.netease.163music/Data/Documents",
+		"storage/file_storage/webdata/file/playingList")
+}
+
+// neteaseUpcomingFile 只摘这条路径用得上的字段。每个条目还带着几十个别的(推荐算法标记、
+// 版权位、来源页),都不相干。
+type neteaseUpcomingFile struct {
+	List []struct {
+		// DisplayOrder 实测恒等于数组下标,留着只为看得懂文件;顺序以数组为准。
+		DisplayOrder int `json:"displayOrder"`
+		// RandomOrder 是一个随机大数(实测 6354311200、492958900 这类):随机播放按它**从小到大**放。
+		// 实测连续 6 首的名次是 401 → 402 → 403 → 404 → 405 → 406,列表位置却是 96 → 371 → 225 → 549 → 188 → 375。
+		RandomOrder float64 `json:"randomOrder"`
+		Track       struct {
+			Name    string `json:"name"`
+			ID      string `json:"id"`
+			Artists []struct {
+				Name string `json:"name"`
+			} `json:"artists"`
+			Album struct {
+				Name string `json:"name"`
+			} `json:"album"`
+			Duration int64 `json:"duration"` // 毫秒
+		} `json:"track"`
+	} `json:"list"`
+}
+
+// neteasePlayOrder 记同一份列表里上一次看到的位置,用来从相邻两次换歌推断顺序 / 随机。
+//
+// 播放模式网易云存在内嵌浏览器的 localStorage 里(playingInfo / setting),值是加密的,读不到。
+// 但这份列表同时带着两种顺序:数组顺序(顺序播放)与 randomOrder 从小到大(随机播放),
+// 所以看新的一首在哪种顺序里正好是上一首的下一位就知道了。两种都不是(用户手动点了别的歌)
+// 就沿用上一次的结论;还没有结论时两种各取一份。
+type neteasePlayOrder struct {
+	list string // 文件路径 + mtime + 曲目数
+	pos  int
+	mode neteaseOrderMode
+}
+
+type neteaseOrderMode int
+
+const (
+	neteaseOrderUnknown neteaseOrderMode = iota
+	neteaseOrderList
+	neteaseOrderShuffle
+)
+
+var (
+	neteasePlayOrderMu   sync.Mutex
+	neteasePlayOrderLast neteasePlayOrder
+)
+
+// neteaseObservePosition 记下这一次的位置,返回此刻按哪种顺序往后数。rank 是 randomOrder 名次。
+func neteaseObservePosition(list string, pos int, rank []int) neteaseOrderMode {
+	neteasePlayOrderMu.Lock()
+	defer neteasePlayOrderMu.Unlock()
+	prev := neteasePlayOrderLast
+	if prev.list != list {
+		neteasePlayOrderLast = neteasePlayOrder{list: list, pos: pos}
+		return neteaseOrderUnknown
+	}
+	mode := prev.mode
+	switch {
+	case pos == prev.pos:
+	case pos == prev.pos+1:
+		mode = neteaseOrderList
+	case rank[pos] == rank[prev.pos]+1:
+		mode = neteaseOrderShuffle
+	}
+	if mode != prev.mode {
+		name := map[neteaseOrderMode]string{neteaseOrderList: "list order", neteaseOrderShuffle: "the shuffle order (randomOrder)"}[mode]
+		log.Printf("netease upcoming: position %d to %d follows %s", prev.pos, pos, name)
+	}
+	neteasePlayOrderLast = neteasePlayOrder{list: list, pos: pos, mode: mode}
+	return mode
+}
+
+// neteaseUpcoming 从网易云的播放队列文件里取接下来会播的几首。
+//
+// 这份文件**没有"当前播到第几首"的指针**(顶层只有 list 一个键),而且只在开始播一个列表时写一次,
+// 位置只能靠正在播的那首歌反查,查不到就退回同专辑预取。往后按哪种顺序数见 neteasePlayOrder;
+// 还判断不出来时两种顺序各取 n 首(去重),多解析几首换两种情况都命中。
+func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
+	path := neteaseUpcomingPath()
+	if path == "" {
+		return nil, false
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		// 没装网易云 / 没播过是常态,静默;被 TCC 拒了不是,那一种要留痕(见 localcachefs.go)。
+		noteLocalCacheDenied("netease", path, err)
+		return nil, false
+	}
+	if st.Size() > neteaseUpcomingMaxBytes {
+		return nil, false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		noteLocalCacheDenied("netease", path, err)
+		return nil, false
+	}
+	noteLocalCacheReadable("netease")
+	var f neteaseUpcomingFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return nil, false
+	}
+	joinArtists := func(i int) string {
+		names := make([]string, 0, len(f.List[i].Track.Artists))
+		for _, a := range f.List[i].Track.Artists {
+			if a.Name != "" {
+				names = append(names, a.Name)
+			}
+		}
+		return strings.Join(names, "/")
+	}
+	want := loosenEnrichKey(artist + "|" + title)
+	pos := -1
+	for i := range f.List {
+		if loosenEnrichKey(joinArtists(i)+"|"+f.List[i].Track.Name) == want {
+			pos = i
+			break
+		}
+	}
+	if pos < 0 {
+		return nil, false
+	}
+	// byRandom[k] = randomOrder 第 k 小的那首的下标;rank[i] = 第 i 首的名次。
+	byRandom := make([]int, len(f.List))
+	for i := range byRandom {
+		byRandom[i] = i
+	}
+	sort.SliceStable(byRandom, func(a, b int) bool { return f.List[byRandom[a]].RandomOrder < f.List[byRandom[b]].RandomOrder })
+	rank := make([]int, len(f.List))
+	for k, i := range byRandom {
+		rank[i] = k
+	}
+	mode := neteaseObservePosition(fmt.Sprintf("%s/%d/%d", path, st.ModTime().UnixNano(), len(f.List)), pos, rank)
+
+	seen := map[int]bool{}
+	res := make([]upcomingTrack, 0, 2*n)
+	take := func(indices func(yield func(int) bool)) {
+		got := 0
+		indices(func(i int) bool {
+			if got == n {
+				return false
+			}
+			tr := f.List[i].Track
+			if tr.Name == "" || seen[i] {
+				return true
+			}
+			seen[i] = true
+			got++
+			res = append(res, upcomingTrack{
+				artist: joinArtists(i),
+				title:  tr.Name,
+				album:  tr.Album.Name,
+				// 这份文件里的 duration 是毫秒(实测 295732),upcomingTrack 要秒。
+				duration: float64(tr.Duration) / 1000,
+			})
+			return true
+		})
+	}
+	listOrder := func(yield func(int) bool) {
+		for i := pos + 1; i < len(f.List) && yield(i); i++ {
+		}
+	}
+	shuffleOrder := func(yield func(int) bool) {
+		for k := rank[pos] + 1; k < len(byRandom) && yield(byRandom[k]); k++ {
+		}
+	}
+	switch mode {
+	case neteaseOrderList:
+		take(listOrder)
+	case neteaseOrderShuffle:
+		take(shuffleOrder)
+	default:
+		take(listOrder)
+		take(shuffleOrder)
+	}
+	return res, len(res) > 0
 }

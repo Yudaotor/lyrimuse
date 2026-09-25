@@ -186,6 +186,8 @@ struct NotchEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var chrome = NotchPreviewChrome()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 设置窗口看不看得见,见 PreviewHostVisibility.swift。下面 card 把它接到 notchCardLayerActive 上。
+    @Environment(\.previewHostVisible) private var previewHostVisible
 
     /// 当前开着哪个浮层(nil = 都没开)。
     ///
@@ -760,27 +762,7 @@ struct NotchEditorStage: View {
             popoverAnchor = .toolbar
             popover = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    // 图标锁死拉丁语区,理由同 SettingsRow:部分"字母造型"的 SF Symbol 带
-                    // CJK 变体,中文界面下会被渲染成汉字。
-                    .environment(\.locale, Locale(identifier: "en"))
-                Text(title)
-                    .lineLimit(1)
-                Text("·")
-                    .foregroundStyle(.tertiary)
-                // ⚠️ 摘要**必须**限宽 + 单行 + 尾部省略:它是派生值,内容里有显示器名这种
-                // 长度完全不受控的串。`.layoutPriority(-1)` 让它在标题之前被压 —— 不加的话
-                // SwiftUI 会把亏空按比例摊给按钮里所有文字,标题先被截成「风…」「屏…」,
-                // 入口的名字没了、摘要却还留着半截,主次正好反过来。
-                Text(summary)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 140, alignment: .leading)
-                    .layoutPriority(-1)
-            }
+            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -1045,6 +1027,9 @@ struct NotchEditorStage: View {
     /// 想看展开区的效果把指针移到卡片上即可,跟以前一样。中间有过一版"任一浮层都钉"(含工具栏),被否。
     private var card: some View {
         NotchLyricsView(controller: chrome)
+            // 这就是真窗口 NotchWindowRoot 给根上那一层的可见性:逐字填色 / 音浪 / 进度条 /
+            // 时间模块都按它停表。真窗口按自己的 occlusionState 给,预览按设置窗口的给。
+            .environment(\.notchCardLayerActive, previewHostVisible)
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
@@ -1445,7 +1430,7 @@ struct NotchEditorStage: View {
 enum NotchScreenSummary {
     static var current: String {
         let settings = AppSettings.shared
-        if settings.notchAllScreens { return L10n.t("所有屏幕") }
+        if settings.notchAllScreens { return L10n.t("全部屏幕") }
         if settings.notchScreenID.isEmpty { return L10n.t("自动") }
         if let screen = ScreenIdentity.screen(withID: settings.notchScreenID) {
             return screen.localizedName
@@ -1797,7 +1782,7 @@ struct NotchScreenPopover: View {
     var body: some View {
         SettingsPopoverShell(
             title: L10n.t("屏幕"),
-            help: L10n.t("「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」"),
+            help: L10n.t("「自动」选带刘海的那块；「全部屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」"),
             width: 300
         ) {
             NotchScreenSettingsRows(onScreenChange: onScreenChange)
@@ -1829,7 +1814,7 @@ struct NotchScreenSettingsRows: View {
         VStack(spacing: 0) {
             row(tag: "", title: L10n.t("自动"))
             CardDivider()
-            row(tag: Self.allScreensTag, title: L10n.t("所有屏幕"))
+            row(tag: Self.allScreensTag, title: L10n.t("全部屏幕"))
             ForEach(availableScreens, id: \.self) { screen in
                 if let id = ScreenIdentity.id(of: screen) {
                     CardDivider()

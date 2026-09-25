@@ -19,6 +19,11 @@ public enum AudioOutputRoute {
         public let uid: String
         public let name: String
         public let transport: Transport
+        public init(uid: String, name: String, transport: Transport) {
+            self.uid = uid
+            self.name = name
+            self.transport = transport
+        }
     }
 
     private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {

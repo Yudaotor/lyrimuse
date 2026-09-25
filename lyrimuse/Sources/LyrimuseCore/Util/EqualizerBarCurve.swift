@@ -36,15 +36,77 @@ import Foundation
 /// 放在 LyrimuseCore 是为了让 selftest 钉住那几条不变量(地板、上界、各根速度拉得开、
 /// 逐帧位移落在"活着但不抽"的区间里)。
 public enum EqualizerBarCurve {
-    /// smoothstep:f(0)=0、f(0.5)=0.5、f(1)=1,单调递增;0.5 以下被压低、以上被抬高。
-    public static func contrast(_ unit: Double) -> Double {
-        let u = min(1, max(0, unit))
-        return u * u * (3 - 2 * u)
+    // MARK: - 常数
+
+    /// 曲线的地板。条子最矮时仍有满量程的三成,看着还是一根短棍而不是一个点。见头注。
+    public static let floorLevel: Double = 0.30
+
+    /// 最慢 / 最快那根条子的速度倍率。两端拉开一倍半以上,才看得出"每根有自己的节奏";
+    /// 收成 1.0…1.0 的话五根只差相位,会一起呈现肉眼可辨的整齐推进。
+    public static let rateSlowest: Double = 0.60
+    public static let rateFastest: Double = 1.60
+
+    /// 叠加的两条正弦的基频(rad/s 的系数)与权重。两个频率不成简单整数比,叠加的周期
+    /// 长到肉眼认不出重复;单条正弦会让条子呈现规律的来回摆。
+    public static let frequencyA: Double = 5.2
+    public static let frequencyB: Double = 9.7
+    public static let weightA: Double = 0.6
+    public static let weightB: Double = 0.4
+
+    /// 每根条子的相位偏移,按**黄金角**(≈2.39996 rad)递推。等分相位会让条子呈现肉眼
+    /// 可辨的"波浪依次推过去";黄金角是最不成简单分数比的分割,**任意根数**都不会出现
+    /// 相位重合或整齐推进。用公式而不是手写数组:调根数不用连带重挑相位。
+    public static func phase(bar: Int) -> Double { Double(bar) * 2.399963 }
+
+    // MARK: - 曲线
+
+    /// 某根条子的速度倍率,在 `rateSlowest`…`rateFastest` 之间按条序线性铺开。
+    public static func rate(bar: Int, barCount: Int) -> Double {
+        guard barCount > 1 else { return 1 }
+        let t = Double(min(max(0, bar), barCount - 1)) / Double(barCount - 1)
+        return rateSlowest + (rateFastest - rateSlowest) * t
     }
 
-    /// 最终高度比例(0…1):先过对比曲线,再乘人声包络振幅,最后夹到 1。
-    /// **乘完再夹**(的既有决定):起音脉冲给到 1.25 时要能顶到上限,先夹会把脉冲吃掉。
-    public static func level(unit: Double, amplitude: Double) -> Double {
-        min(1, contrast(unit) * max(0, amplitude))
+    /// 某根条子此刻的形状值 0…1(还没乘人声振幅,也还没抬地板)。
+    public static func shape(bar: Int, barCount: Int, time: Double) -> Double {
+        guard time.isFinite else { return 0.5 }
+        let r = rate(bar: bar, barCount: barCount)
+        let p = phase(bar: bar)
+        let a = sin(time * frequencyA * r + p) * 0.5 + 0.5
+        let b = sin(time * frequencyB * r + p * 1.7) * 0.5 + 0.5
+        return a * weightA + b * weightB
+    }
+
+    /// 最终高度比例(0…1)。`amplitude` 是人声包络(`VocalEnvelope`),只压缩"能跳多高"。
+    ///
+    /// **乘完再夹**,别先把 amplitude 夹到 1:起音那一拍 `VocalEnvelope` 给到 1.25,
+    /// 先夹会把这个瞬态整个吃掉 —— 乘完再夹的效果是起音那一刻更多条子顶到上限然后回落,
+    /// 而高度永远不超过上限。
+    public static func level(bar: Int, barCount: Int, time: Double, amplitude: Double) -> Double {
+        let unit = floorLevel + (1 - floorLevel) * shape(bar: bar, barCount: barCount, time: time)
+        return min(1, max(0, unit * max(0, amplitude)))
+    }
+
+    // MARK: - 关键帧
+
+    /// 从 `start`(`timeIntervalSinceReferenceDate` 口径的秒)起每隔 `step` 秒取一个点、共 `count` 个,
+    /// 返回每根条子的高度比例序列(`[bar][i]`)。`amplitude(t)` 在每个时刻求一次、所有条子共用 ——
+    /// 跟原来每个 tick 求一次的口径一致。
+    ///
+    /// 给 `EqualizerBars` 预先排好一段、整段交给 Core Animation 播:曲线和人声包络都是时间的纯函数,
+    /// 未来几秒的值现在就算得出来,不必让主线程每秒醒 30 次现算。
+    public static func keyframes(barCount: Int, start: Double, step: Double, count: Int,
+                                 amplitude: (Double) -> Double) -> [[Double]] {
+        guard barCount > 0, count > 0, step > 0 else { return [] }
+        var out = Array(repeating: [Double](), count: barCount)
+        for b in 0..<barCount { out[b].reserveCapacity(count) }
+        for i in 0..<count {
+            let t = start + Double(i) * step
+            let amp = amplitude(t)
+            for b in 0..<barCount {
+                out[b].append(level(bar: b, barCount: barCount, time: t, amplitude: amp))
+            }
+        }
+        return out
     }
 }

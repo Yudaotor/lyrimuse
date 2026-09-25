@@ -13,7 +13,7 @@ Contents/Resources/。
 
 以源码/数据形式内嵌的组件:
 
-  4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector,见 t2s.go)
+  4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector 与 App,见 t2s.go / OpenCCT2STable.swift)
   5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
 
 ================================================================================
@@ -215,7 +215,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
    https://github.com/BYVoid/OpenCC
    繁→简词典数据(单字 + 多字词组两级)内嵌在 collector 里,用于统一搜索关键词的
    书写形式;2026-08-27 追加同一项目的简→繁单字词典(方向相反),给下面第 5 条粤拼
-   查表当兜底用。⚠️ 只用了它的**词典数据**,没有链接 OpenCC 代码,也没有引入 Go
+   查表当兜底用。繁→简那两份同时生成进 App(LyrimuseCore/Lyrics/OpenCCT2STable.swift,
+   由 scripts/gen-opencc-t2s.py 从同一份文件生成),给歌词缓存的宽松匹配用,好让两侧折法一致。
+   ⚠️ 只用了它的**词典数据**,没有链接 OpenCC 代码,也没有引入 Go
    移植版 github.com/liuzl/gocc —— 后者间接依赖 GPL-2.0-only 的 cedar-go,与本项目的
    GPL-3.0 不兼容(见 lyrimuse-collector/t2s.go 顶部注释)。
 ================================================================================

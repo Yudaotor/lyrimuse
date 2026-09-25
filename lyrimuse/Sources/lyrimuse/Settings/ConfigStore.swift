@@ -11,8 +11,16 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 // platformDiscord/platformFeishu/platformServerChan/platformTelegram)逐字对应——这是两侧通过同一份
 // config.json 交换的字符串,不是各自随便定义的展示文案。
 public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
-    case bark, dingtalk, wecom, discord, feishu, serverchan
+    case bark, dingtalk, wecom, discord, feishu, serverchan, telegram
     public var id: Self { self }
+
+    /// 下拉菜单里的排列:中文用户国内平台在前,其余国外平台在前(规则见 `NotificationPlatformRegion`)。
+    static var displayOrder: [NotificationPlatform] {
+        let chineseFirst = LyricsSourceRegion.prefersChineseSources(
+            appLanguageOverride: L10n.languageOverride, preferredLanguage: Locale.preferredLanguages.first)
+        return NotificationPlatformRegion.displayOrder(chineseFirst: chineseFirst)
+            .compactMap(NotificationPlatform.init(rawValue:))
+    }
 
     public var displayName: String {
         switch self {
@@ -22,6 +30,17 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .discord: return "Discord"
         case .feishu: return L10n.t("飞书")
         case .serverchan: return L10n.t("Server酱")
+        case .telegram: return "Telegram"
+        }
+    }
+
+    // 地址输入框前面那个标题。Telegram 这一栏填的是机器人 Token,Bark / Server酱 是带 Key 的推送地址,
+    // 统一叫「Webhook 地址」会让人不知道该填什么。
+    public var fieldLabel: String {
+        switch self {
+        case .bark, .serverchan: return L10n.t("推送地址")
+        case .telegram: return L10n.t("机器人 Token")
+        case .dingtalk, .wecom, .discord, .feishu: return L10n.t("Webhook 地址")
         }
     }
 
@@ -35,6 +54,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .discord: return "https://discord.com/api/webhooks/..."
         case .feishu: return "https://open.feishu.cn/open-apis/bot/v2/hook/..."
         case .serverchan: return L10n.t("https://sctapi.ftqq.com/你的SendKey.send")
+        case .telegram: return L10n.t("机器人 Token，形如 123456789:AAH…")
         }
     }
 
@@ -49,11 +69,13 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .wecom:
             return L10n.t("在企业微信群里：群设置 → 群机器人 → 添加机器人，创建后复制 Webhook 地址，不需要额外的签名设置")
         case .discord:
-            return L10n.t("服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL")
+            return L10n.t("服务器设置 → 整合（Integrations） → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL")
         case .feishu:
             return L10n.t("在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」")
         case .serverchan:
             return L10n.t("打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面")
+        case .telegram:
+            return L10n.t("在 Telegram 找 @BotFather 发送 /newbot 建一个机器人，把它给的 Token 填进「机器人 Token」。再给机器人发一句话，用浏览器打开 https://api.telegram.org/bot你的Token/getUpdates，chat 下面的 id 就是 Chat ID")
         }
     }
 
@@ -65,6 +87,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .discord: return URL(string: "https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks")!
         case .feishu: return URL(string: "https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot?lang=zh-CN")!
         case .serverchan: return URL(string: "https://sct.ftqq.com/")!
+        case .telegram: return URL(string: "https://core.telegram.org/bots/tutorial")!
         }
     }
 }
@@ -110,13 +133,28 @@ public final class ConfigStore: ObservableObject {
     // 持久化下来是为了 App 重启后"已连接:xxx"这句话不会退化成不带用户名的泛化文案
     // (LastfmConnectController 的 state 是内存态,重启即丢)。
     @Published public var lastfmScrobbleUsername = ""
-    @Published public var notificationPlatform: NotificationPlatform = .bark
+    // 切换平台时地址输入框换成那个平台自己的地址,见 Core `NotificationWebhookSlots`。load() 期间
+    // 不走这段(那时平台和地址是一起从磁盘读进来的)。
+    @Published public var notificationPlatform: NotificationPlatform = .bark {
+        didSet {
+            guard !isLoading, oldValue != notificationPlatform else { return }
+            notificationWebhookURL = webhookSlots.switchPlatform(
+                from: oldValue.rawValue, currentURL: notificationWebhookURL, to: notificationPlatform.rawValue
+            )
+        }
+    }
+    /// 当前平台的地址,即 config.json 的 `bark_url`(collector 只读这一份)。
     @Published public var notificationWebhookURL = ""
+    /// 其余平台各自存下的地址(`notification_webhook_urls`),只有 App 侧用。
+    private var webhookSlots = NotificationWebhookSlots(stored: [:], activePlatform: "bark", activeURL: "")
+    private var isLoading = false
     // 只有对应平台的机器人开了"加签"安全设置时才需要填,留空则按未加签处理——钉钉/
     // 飞书两个平台的签名算法不同(见 collector/notify.go),分开两个字段存,切换平台
     // 不会互相污染。
     @Published public var dingtalkSignSecret = ""
     @Published public var feishuSignSecret = ""
+    // Telegram 平台必填:推送发到哪个会话。地址栏可以只填机器人 Token,见 collector/notify.go telegramSendURL。
+    @Published public var telegramChatID = ""
 
     @Published public private(set) var lastError: String?
     /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启。
@@ -141,14 +179,18 @@ public final class ConfigStore: ObservableObject {
         var lastfmScrobbleAPIKey, lastfmScrobbleSecret, lastfmScrobbleSessionKey, lastfmScrobbleUsername: String
         var notificationPlatform: NotificationPlatform
         var notificationWebhookURL: String
+        var webhookURLsByPlatform: [String: String]
         var dingtalkSignSecret: String
         var feishuSignSecret: String
+        var telegramChatID: String
     }
     private var savedSnapshot = Snapshot(
         listenbrainzToken: "", listenbrainzUser: "", stateRelayURL: "", stateRelayToken: "",
         lastfmUser: "", lastfmAPIKey: "", lastfmScrobbleAPIKey: "", lastfmScrobbleSecret: "",
         lastfmScrobbleSessionKey: "", lastfmScrobbleUsername: "",
-        notificationPlatform: .bark, notificationWebhookURL: "", dingtalkSignSecret: "", feishuSignSecret: ""
+        notificationPlatform: .bark, notificationWebhookURL: "", webhookURLsByPlatform: [:],
+        dingtalkSignSecret: "", feishuSignSecret: "",
+        telegramChatID: ""
     )
     private var currentSnapshot: Snapshot {
         Snapshot(
@@ -158,7 +200,9 @@ public final class ConfigStore: ObservableObject {
             lastfmScrobbleAPIKey: lastfmScrobbleAPIKey, lastfmScrobbleSecret: lastfmScrobbleSecret,
             lastfmScrobbleSessionKey: lastfmScrobbleSessionKey, lastfmScrobbleUsername: lastfmScrobbleUsername,
             notificationPlatform: notificationPlatform, notificationWebhookURL: notificationWebhookURL,
-            dingtalkSignSecret: dingtalkSignSecret, feishuSignSecret: feishuSignSecret
+            webhookURLsByPlatform: persistedWebhookURLs,
+            dingtalkSignSecret: dingtalkSignSecret, feishuSignSecret: feishuSignSecret,
+            telegramChatID: telegramChatID
         )
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
@@ -191,7 +235,15 @@ public final class ConfigStore: ObservableObject {
             "notificationWebhookURL": notificationWebhookURL,
             "dingtalkSignSecret": dingtalkSignSecret,
             "feishuSignSecret": feishuSignSecret,
-        ].filter { !$0.value.isEmpty }
+        ].merging(
+            persistedWebhookURLs.map { ("notificationWebhookURL.\($0.key)", $0.value) },
+            uniquingKeysWith: { current, _ in current }
+        ).filter { !$0.value.isEmpty }
+    }
+
+    /// 各平台地址的落盘全集(并入当前平台此刻的地址)。
+    private var persistedWebhookURLs: [String: String] {
+        webhookSlots.persisted(activePlatform: notificationPlatform.rawValue, activeURL: notificationWebhookURL)
     }
 
     // 以下几个只读判断专给"推送账号"tab 的状态徽标用——刻意读 savedSnapshot(已保存的
@@ -256,7 +308,13 @@ public final class ConfigStore: ObservableObject {
     // 推送提醒支持多个平台,这个判断跟具体平台无关,只看 webhook 地址填没填
     // (平台本身有默认值 .bark,不会缺失)。
     public func pushMissingHint() -> String? {
-        savedSnapshot.notificationWebhookURL.isEmpty ? L10n.t("还没填 webhook 地址") : nil
+        let saved = savedSnapshot
+        if saved.notificationPlatform == .telegram {
+            if saved.notificationWebhookURL.isEmpty { return L10n.t("还没填机器人 Token") }
+            if saved.telegramChatID.trimmingCharacters(in: .whitespaces).isEmpty { return L10n.t("还没填 Chat ID") }
+            return nil
+        }
+        return saved.notificationWebhookURL.isEmpty ? L10n.t("还没填 webhook 地址") : nil
     }
 
     private init() {
@@ -289,12 +347,19 @@ public final class ConfigStore: ObservableObject {
         lastfmScrobbleUsername = raw["lastfm_scrobble_username"] as? String ?? ""
         // notification_platform 是这次新加的字段——旧配置文件里没有,缺失/无法识别的
         // 字符串都按 .bark 处理(这个字段加平台选择之前唯一支持过的形态)。
+        isLoading = true
+        defer { isLoading = false }
         notificationPlatform = (raw["notification_platform"] as? String).flatMap(NotificationPlatform.init) ?? .bark
         // JSON key 还是历史上的 bark_url——见 collector/config.go 里 NotificationWebhookURL
         // 字段上的注释,两边保持一致,不单独给 Lyrimuse 这边改名。
         notificationWebhookURL = raw["bark_url"] as? String ?? ""
+        webhookSlots = NotificationWebhookSlots(
+            stored: raw["notification_webhook_urls"] as? [String: String] ?? [:],
+            activePlatform: notificationPlatform.rawValue, activeURL: notificationWebhookURL
+        )
         dingtalkSignSecret = raw["dingtalk_sign_secret"] as? String ?? ""
         feishuSignSecret = raw["feishu_sign_secret"] as? String ?? ""
+        telegramChatID = raw["telegram_chat_id"] as? String ?? ""
         savedSnapshot = currentSnapshot
     }
 
@@ -319,8 +384,10 @@ public final class ConfigStore: ObservableObject {
             "lastfm_scrobble_username": lastfmScrobbleUsername,
             "notification_platform": notificationPlatform.rawValue,
             "bark_url": notificationWebhookURL,
+            "notification_webhook_urls": persistedWebhookURLs,
             "dingtalk_sign_secret": dingtalkSignSecret,
             "feishu_sign_secret": feishuSignSecret,
+            "telegram_chat_id": telegramChatID,
         ]
         do {
             // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)到 原子写 + 0600(这份就是
@@ -342,7 +409,7 @@ public final class ConfigStore: ObservableObject {
                 logger.notice("corrupt config.json moved aside as \(moved.lastPathComponent, privacy: .public)")
             }
         } catch {
-            lastError = String(format: L10n.t("无法移走损坏的配置文件: %@"), error.localizedDescription)
+            lastError = String(format: L10n.t("无法移走损坏的配置文件：%@"), error.localizedDescription)
             logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
             return false
         }
@@ -379,29 +446,16 @@ public final class ConfigStore: ObservableObject {
             logger.notice("save refused: config.json on disk is corrupt")
             return false
         } catch {
-            lastError = String(format: L10n.t("写入 config.json 失败: %@"), error.localizedDescription)
+            lastError = String(format: L10n.t("写入 config.json 失败：%@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        // 走共享的重启协调器,不直接调 restartAndWaitAsync —— 否则改一个凭据 + 改一个
-        // 开关会触发两次独立重启,第二次撞上 launchd 的节流阻塞约 10 秒(理由见
-        // CollectorRestartCoordinator 的头注释)。
-        if await CollectorRestartCoordinator.shared.requestRestart() {
-            lastError = nil
-            pendingUntilServiceEnabled = false
-            commitSnapshot()
-            return true
-        }
-        if !AppSettings.shared.collectorServiceEnabled {
-            // 同 FeatureSettingsStore.save():先试重启、失败了再看标志,服务被主动停用不算失败。
-            logger.notice("collector restart skipped: service disabled by the user; change applies on next start")
-            lastError = nil
-            pendingUntilServiceEnabled = true
-            commitSnapshot()
-            return true
-        }
-        lastError = L10n.t("已保存，但后台采集服务重启失败，改动要等下次重启才生效")
-        return false
+        // 不重启 collector:它按 mtime 自己热重读 config.json(configreload.go)。见 CollectorRestartPolicy 头注。
+        lastError = nil
+        // 同 FeatureSettingsStore.save():后台服务没在跑时,下次启动读盘生效,状态条提示「服务已停用」。
+        pendingUntilServiceEnabled = !CollectorServiceManager.isRunning
+        commitSnapshot()
+        return true
     }
 }
 
@@ -416,7 +470,7 @@ public enum ConfigFileSaveError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .refusedCorruptFile: return L10n.t("配置文件无法解析，为避免覆盖已放弃保存")
-        case .notSerializable: return L10n.t("内部数据不是合法 JSON,已放弃保存")
+        case .notSerializable: return L10n.t("内部数据不是合法 JSON，已放弃保存")
         }
     }
 }

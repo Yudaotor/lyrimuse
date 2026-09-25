@@ -130,6 +130,32 @@ func runOpsDiagnosticsTests() {
         expectEqual(P.isAcceptableRelayURL("np.yudaotor.me"), false, "没有 scheme 的裸 host 拒绝")
         expectEqual(P.isAcceptableRelayURL("https://"), false, "有 scheme 但没 host 拒绝")
         expectEqual(P.isAcceptableRelayURL(""), false, "空串在这里判 false,由调用方先行区分'没配置'")
+
+        // sanitizedConfig:地址不合规时连 token 一起清,其余字段一个不动。
+        func clean(_ obj: Any) -> (dict: NSDictionary?, dropped: Bool) {
+            let r = P.sanitizedConfig(obj)
+            return ((r.config as? [String: Any]).map { NSDictionary(dictionary: $0) }, r.droppedRelay)
+        }
+        let bad = clean(["state_relay_url": "http://attacker.example.com", "state_relay_token": "secret",
+                         "api_root": "https://api.example.com", "bundle_ids": ["a", "b"]])
+        expectEqual(bad.dropped, true, "导入净化: 不合规地址要报 droppedRelay(调用方记日志)")
+        expectEqual(bad.dict, NSDictionary(dictionary: ["state_relay_url": "", "state_relay_token": "",
+                                                        "api_root": "https://api.example.com", "bundle_ids": ["a", "b"]]),
+                    "导入净化: 地址和 token 一起清空,UI 不管的字段原样保留")
+        let good: [String: Any] = ["state_relay_url": "https://np.yudaotor.me", "state_relay_token": "t"]
+        expectEqual(clean(good).dropped, false, "导入净化: 合规地址不动")
+        expectEqual(clean(good).dict, NSDictionary(dictionary: good), "导入净化: 合规地址连同 token 原样保留")
+        for (url, why) in [("", "空串 = 没配置"), ("   ", "只有空白也算没配置")] {
+            let r = clean(["state_relay_url": url, "state_relay_token": "t"])
+            expectEqual(r.dropped == false && (r.dict?["state_relay_token"] as? String) == "t", true,
+                        "导入净化: \(why),token 不清")
+        }
+        expectEqual(clean(["state_relay_token": "t"]).dropped, false, "导入净化: 没有地址字段不动")
+        expectEqual(clean(["state_relay_url": 42, "state_relay_token": "t"]).dropped, false,
+                    "导入净化: 地址不是字符串的不管(跟原实现一致)")
+        let notDict = P.sanitizedConfig(["x"])
+        expectEqual(notDict.droppedRelay == false && (notDict.config as? [String]) == ["x"], true,
+                    "导入净化: config 段不是字典的原样返回")
     }
 
     // ---- writeSecurely(含凭据的文件必须落成 0600) ----
@@ -504,6 +530,62 @@ func runOpsDiagnosticsTests() {
         expectEqual(noisyBig?.timedOut, false, "ProcessRunner: stderr 狂写不该超时")
     }
 
+    // ---- BlockingCallGate(可能永久阻塞的同步调用) ----
+    //
+    // 自动化权限查询(AEDeterminePermissionToAutomateTarget)会无限期不返回,见 02 章决策 8。
+    // 这里用一个等信号量的闭包模拟"卡死",钉住三件事:超时照样按时回来、同一个 key 不会
+    // 因为反复请求越占越多线程、卡住的调用最终返回时还在等的人拿得到结果。
+    do {
+        print("\n== 阻塞调用闸门 ==")
+        final class Counter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var n = 0
+            func bump() { lock.lock(); n += 1; lock.unlock() }
+            var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+        }
+        final class Slot: @unchecked Sendable {
+            let done = DispatchSemaphore(value: 0)
+            var value: Int?
+        }
+        let gate = BlockingCallGate<String, Int>(label: "selftest.blocking-call-gate")
+        let release = DispatchSemaphore(value: 0)
+        let calls = Counter()
+        let stuck: @Sendable () -> Int = { calls.bump(); release.wait(); return 42 }
+        func ask(_ key: String, timeout: TimeInterval, _ work: @escaping @Sendable () -> Int) -> Slot {
+            let slot = Slot()
+            gate.run(key: key, timeout: timeout, work: work) { slot.value = $0; slot.done.signal() }
+            return slot
+        }
+
+        let started = Date()
+        let first = ask("a", timeout: 0.2, stuck)
+        let firstReturned = first.done.wait(timeout: .now() + 3) == .success
+        expectEqual(firstReturned, true, "闸门: 调用卡住时,等待者按超时返回")
+        expectEqual(first.value, nil, "闸门: 超时的等待者拿到 nil")
+        expectEqual(Date().timeIntervalSince(started) < 2, true, "闸门: 超时不陪卡住的调用一起等")
+        expectEqual(gate.isInFlight("a"), true, "闸门: 等待者超时后,底下那次调用仍记为在飞")
+
+        let second = ask("a", timeout: 0.2, stuck)
+        _ = second.done.wait(timeout: .now() + 3)
+        expectEqual(second.value, nil, "闸门: 在飞期间再请求同一个 key,同样按超时返回")
+        expectEqual(calls.value, 1, "闸门: 同一个 key 在飞时不另起调用(不会越卡越多线程)")
+
+        let other = ask("b", timeout: 2) { 7 }
+        _ = other.done.wait(timeout: .now() + 3)
+        expectEqual(other.value, 7, "闸门: 一个 key 卡住不挡别的 key")
+
+        let late = ask("a", timeout: 5, stuck)
+        release.signal()
+        _ = late.done.wait(timeout: .now() + 3)
+        expectEqual(late.value, 42, "闸门: 卡住的调用返回时,还在等的人拿到它的结果")
+        expectEqual(calls.value, 1, "闸门: 挂在在飞调用后面的请求不会自己再调一次")
+
+        let fresh = ask("a", timeout: 2) { calls.bump(); return 9 }
+        _ = fresh.done.wait(timeout: .now() + 3)
+        expectEqual(fresh.value, 9, "闸门: 调用返回之后,同一个 key 的下一次请求重新发起")
+        expectEqual(gate.isInFlight("a"), false, "闸门: 没有调用在飞时 isInFlight 为 false")
+    }
+
     // ---- GitHub star 数(「关于」页那个角标的判据) ----
     //
     // 守的是两件会静默坏掉的事:①解析出一个"看起来很确定"的错数字(Last.fm 那边 API key
@@ -795,6 +877,29 @@ func runOpsDiagnosticsTests() {
                             "装机校验: pid 比对要排在那句 running 成功提示之前")
             } else {
                 expectEqual(true, false, "装机校验: 找不到 pid 比对或成功提示(改写法了?)")
+            }
+            // collector 那段:开着后台服务时交给 App 的启动对账重装,脚本不再同时动同一个 label;
+            // 任何一条路都不跟 kickstart -k(它杀的正是 bootstrap 刚拉起的进程)。确认「新起来了」
+            // 要比对 open 之前记下的旧 pid,并且要等够久。
+            if let sectionStart = code.range(of: "COLLECTOR_PLIST=") {
+                let section = code[sectionStart.lowerBound...]
+                expectEqual(section.contains("kickstart"), false,
+                            "装机校验: collector 那段不准再 kickstart -k(会杀掉刚 bootstrap 起来的进程)")
+                expectEqual(section.contains("np:collectorServiceEnabled"), true,
+                            "装机校验: 开着后台服务时要交给 App 重装 collector,不跟它同时动 launchd")
+                expectEqual(section.contains("$OLD_COLLECTOR_PIDS"), true,
+                            "装机校验: 确认 collector 起来要比对旧 pid")
+                expectEqual(section.contains("seq 1 60"), true,
+                            "装机校验: 等 collector 要等够 60 秒(App 对账 + 加载缓存),固定 sleep 会误报没起来")
+            } else {
+                expectEqual(true, false, "装机校验: 找不到 collector 那段(COLLECTOR_PLIST=)")
+            }
+            if let recordRange = code.range(of: "OLD_COLLECTOR_PIDS="),
+               let openRange = code.range(of: "open -g \"$APP_DIR\"") {
+                expectEqual(recordRange.lowerBound < openRange.lowerBound, true,
+                            "装机校验: 旧 collector pid 要在 open 之前记(App 一起来就会重装它)")
+            } else {
+                expectEqual(true, false, "装机校验: 找不到旧 collector pid 的记录或 open -g")
             }
         } else {
             expectEqual(true, false, "装机校验: 读不到 build.sh(路径挪了?)")

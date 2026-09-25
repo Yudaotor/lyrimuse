@@ -45,6 +45,20 @@ type snapshot struct {
 	// notAudioMedia)。为真时 Duration 已在 extract() 里按"未知"(0)处理:视频时长里
 	// 带着歌外内容(前导对白、尾字幕),它不是这首歌的长度。
 	NotAudio bool
+	// PositionFromPlayerClock:Elapsed 是**播放器自己的钟**(AppleScript `player position`),
+	// 不是 MediaRemote 锚点外推出来的,AnchorElapsed 恒 0、没有"锚点重发"可看。
+	// 这个钟每次起播都整首领先真声一截:Elapsed 在 getSpotifyState 里已经扣掉了 App 按起播方式给的
+	// 那一段(currentPlayerClockBias),所以 updatePosition 的自然切歌偏置 / repeat-one 回绕重估对它**跳过**
+	// (再估一遍就是扣两次,而且交界处声音不连续、连续性本来就估不准)。
+	// 由 refineSpotifyState / getSpotifyState 置上;AppleScript 不可达退回 media-control 那份
+	// 原始快照时为假,按 AnchorElapsed 那条规则走。
+	PositionFromPlayerClock bool
+	// SodaPreviewPending:汽水非会员试听、试听段还在后台搜 —— 这一拍的 Duration 还是试听段长度,
+	// 拿它解析歌词会另开一个时长变体。poller 在它为真时先不解析(见 sodapreview.go)。
+	SodaPreviewPending bool
+	// Remote:iPhone 经 Last.fm 桥接来的这一条(转发的完成收听、同步的正在播放)。上送时只查歌词缓存、
+	// 不新建条目,见 bridgeenrich.go。
+	Remote bool
 }
 
 func (s snapshot) key() string {
@@ -156,5 +170,13 @@ func extract(state map[string]any) snapshot {
 		AnchorElapsed: num("anchorElapsedTime"),
 		Radio:         radio,
 		NotAudio:      notAudio,
+		PositionFromPlayerClock: func() bool {
+			v, _ := state["positionFromPlayerClock"].(bool)
+			return v
+		}(),
+		SodaPreviewPending: func() bool {
+			v, _ := state["sodaPreviewPending"].(bool)
+			return v
+		}(),
 	}
 }

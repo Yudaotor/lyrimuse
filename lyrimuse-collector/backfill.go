@@ -196,8 +196,9 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		p["artist["+idx+"]"] = artist
 		p["track["+idx+"]"] = track
 		p["timestamp["+idx+"]"] = strconv.FormatInt(it.UTS, 10)
-		if it.AL != "" {
-			p["album["+idx+"]"] = it.AL
+		// 专辑名同样走活路径那个函数(lastfmAlbumTag),日志里存的是原样。
+		if album := lastfmAlbumTag(it.AL); album != "" {
+			p["album["+idx+"]"] = album
 		}
 		// 跟活路径(lastfm.go 的 scrobble/updateNowPlaying)共用同一个 helper ——
 		// 补活路径的 duration 时统一的,免得"只发正数、整数秒"这条规则在两处各写一份、

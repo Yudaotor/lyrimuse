@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 // 设置页里那一小片「桌面」—— 真实壁纸的样图,以及取样/缩放它的那点缓存。
@@ -64,20 +65,35 @@ enum DesktopWallpaperSample {
         return cache
     }
 
+    /// 缩到多宽(pt)。预览舞台的宽度在这附近,按 2x 出像素,Retina 上不糊。
+    private static let targetWidth: CGFloat = 640
+
+    /// 用 ImageIO 直接解出一张缩略图,原图从头到尾不整张解码、也不留在内存里。
+    ///
+    /// 原来是 `NSImage(contentsOf:)` + `NSImage(size:flipped:drawingHandler:)`:后者是**懒绘制**,
+    /// 闭包攥着原图,每次需要重新光栅化都从原图再画一遍 —— 系统壁纸常见 6K,"缩到 640"
+    /// 实际一个字节都没省下来。
     private static func load() -> NSImage? {
         guard let screen = NSScreen.main,
               let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let original = NSImage(contentsOf: url)
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let pixelWidth = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let pixelHeight = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+              pixelWidth > 0, pixelHeight > 0
         else { return nil }
-        // 缩到预览条那么宽就够了(高度按比例)。
-        let targetWidth: CGFloat = 640
-        guard original.size.width > targetWidth else { return original }
-        let scale = targetWidth / original.size.width
-        let size = NSSize(
-            width: targetWidth, height: (original.size.height * scale).rounded())
-        return NSImage(size: size, flipped: false) { rect in
-            original.draw(in: rect)
-            return true
-        }
+        // 缩略图的上限按长边给;要的是"宽 = 640pt × 2",竖版壁纸长边是高,按比例换算。
+        let wantWidth = min(pixelWidth, Double(targetWidth) * 2)
+        let maxPixel = wantWidth * max(1, pixelHeight / pixelWidth)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
+        // 点尺寸按 2x 折回去:跟原来一样占 640pt 宽(原图本来就不到 1280px 时按实际像素 / 2)。
+        let size = NSSize(width: CGFloat(thumb.width) / 2, height: CGFloat(thumb.height) / 2)
+        return NSImage(cgImage: thumb, size: size)
     }
 }

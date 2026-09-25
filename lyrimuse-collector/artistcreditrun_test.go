@@ -44,7 +44,7 @@ func TestArtistMatchesNameContainingSeparator(t *testing.T) {
 		// 举例(「聪明不聪明」):YouTube Music 给的艺人字段带括号
 		// 外文别名,本地标签只有中文名,这串压根没有 artistCreditParts 认的分隔符,逐段比较
 		// 两档都够不着,靠去括号兜底才行。
-		{"丁世光", "丁世光(Dean Ting)", true, "去括号别名兜底,真实bug案例"},
+		{"丁世光", "丁世光(Dean Ting)", true, "去括号别名兜底"},
 		{"丁世光(Dean Ting)", "丁世光", true, "反向也要成立"},
 		// 去括号兜底不能重新打开尾随分隔符仿冒洞:括号内容剥掉之后仍然要过同一套
 		// artistCreditParts 长度守卫。

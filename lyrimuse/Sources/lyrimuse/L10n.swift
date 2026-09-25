@@ -39,8 +39,11 @@ enum L10n {
     // (源码里所有字符串字面量本来就是简体中文),所以系统语言没匹配到已知前缀时,兜底
     // 也应该退回中文而不是英文——保证在没有对应语言包的系统语言下,至少还是能读懂的
     // 原文,不会突然冒出一句读不懂的英文兜底。
+    /// 用户在设置里选的界面语言,原样返回("system" / "zh-hans" / "zh-hant" / "en",没设过是 nil)。
+    static var languageOverride: String? { UserDefaults.standard.string(forKey: languageOverrideKey) }
+
     static var current: String {
-        let override = UserDefaults.standard.string(forKey: languageOverrideKey) ?? "system"
+        let override = languageOverride ?? "system"
         if override == "en" || override == "zh-hans" || override == "zh-hant" { return override }
         return resolveSystem(Locale.preferredLanguages.first ?? "zh-hans")
     }

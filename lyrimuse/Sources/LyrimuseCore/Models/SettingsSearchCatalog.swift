@@ -90,6 +90,10 @@ public enum SettingsSearchCatalog {
     /// 同 `lyricsSectionDefault`,对应 `LastfmSection` 的第一个 case。
     public static let lastfmSectionDefault = "stats"
 
+    /// 「歌词显示」页第四段「歌词窗口」的分段取值(`AppearanceSettingsTab.Section.lyricsWindow`)。
+    /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
+    public static let lyricsWindowSectionValue = "lyricsWindow"
+
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这两个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
     public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm"]
@@ -131,6 +135,19 @@ public enum SettingsSearchCatalog {
                                    pathKeys: ["歌词显示", sectionTitle] + (group.map { [$0] } ?? []))
     }
 
+    /// 「歌词显示 › 歌词窗口」那一段。跟 `surface` 分开是因为这一段**不是**一个 `LyricsSurface`
+    /// (歌词窗口没有常驻开关,进不了那个枚举),分段取值只能直接写字面量;selftest 拿
+    /// `AppearanceSettingsTab.Section` 的源码枚举核它。这一段的「全部设置」抽屉不靠 `drawer`
+    /// 字段展开(那个字段是 `LyricsSurface` 类型),靠行高亮信号,见 `LyricsWindowAllSettingsDrawer`。
+    private static func lyricsWindow(_ title: String, sub: String? = nil, kw: [String] = [],
+                                     group: String? = nil) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("appearance"),
+                            sectionKey: LyricsSurface.appearanceSectionStorageKey,
+                            sectionValue: lyricsWindowSectionValue,
+                            titleKey: title, subtitleKey: sub, keywords: kw,
+                            pathKeys: ["歌词显示", "歌词窗口"] + (group.map { [$0] } ?? []))
+    }
+
     private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .tab("shortcuts"), titleKey: title, subtitleKey: sub,
                             keywords: kw + ["快捷键", "hotkey"], pathKeys: ["快捷键"])
@@ -168,12 +185,12 @@ public enum SettingsSearchCatalog {
                                       "LyricFind", "酷我", "咪咕", "测试", "顺序"]),
         lyrics("fetch", "匹配算法", kw: ["智能", "顺序优先", "打分"]),
         lyrics("fetch", "跟进算法升级", kw: ["重打分", "自动升级"]),
-        lyrics("fetch", "提前解析同专辑其它曲目", kw: ["预解析", "专辑"]),
+        lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
         // ---- 歌词 › 译文 ----
         lyrics("translation", "显示译文", kw: ["翻译"]),
         lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
-        lyrics("translation", "系统兜底翻译", kw: ["机翻", "MyMemory", "翻译"]),
+        lyrics("translation", "系统兜底翻译", kw: ["机翻", "Google", "MyMemory", "翻译"]),
         lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
         // ---- 歌词 › 效果 ----
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
@@ -193,7 +210,12 @@ public enum SettingsSearchCatalog {
         player("添加播放器…", sub: "从「应用程序」里挑一个——不用等它正在播放",
                kw: ["信任列表", "手动添加", "第三方播放器", "应用程序"], group: "已信任的播放器"),
         player("新播放器提醒", sub: "系统通知已关闭", kw: ["通知", "未知播放器"]),
-        player("Apple Music 自动化", kw: ["权限", "AppleScript", "自动化"]),
+        // 一条通用条目,不按播放器各登记一条:那张卡的行标题是播放器名(运行期从
+        // `playersNeedingAutomation` 来),登记成字面量就等于在第三个地方再抄一份播放器清单。
+        // 关键词把两家的名字都收进来,搜「Spotify 权限」同样命中。
+        player("自动化权限", kw: ["权限", "AppleScript", "自动化", "Apple Music", "Spotify"]),
+        // 同「自动化权限」那条:行标题是运行期拼出来的播放器名,只登记卡头。
+        player("完全磁盘访问权限", kw: ["权限", "磁盘", "隐私", "歌词缓存", "播放队列", "QQ音乐", "网易云音乐", "酷狗音乐"]),
         player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),
         player("播放器联动", kw: ["启动", "退出", "联动"]),
         player("打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"], group: "播放器联动"),
@@ -211,27 +233,28 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "文字颜色", kw: ["字色", "颜色", "跟随封面"], group: "文字"),
         surface(.overlay, "文字描边", kw: ["描边", "outline"], group: "文字"),
         surface(.overlay, "描边颜色", kw: ["描边"], group: "文字"),
-        surface(.overlay, "未唱颜色", kw: ["卡拉OK", "未唱", "逐字", "karaoke", "跟随封面"], group: "文字"),
+        surface(.overlay, "未唱到的颜色", kw: ["卡拉OK", "未唱", "未唱颜色", "逐字", "karaoke", "跟随封面"], group: "文字"),
         surface(.overlay, "背景颜色", kw: ["背景", "透明"], group: "背景"),
         surface(.overlay, "毛玻璃背景", kw: ["模糊", "玻璃", "blur"], group: "背景"),
-        surface(.overlay, "毛玻璃浓淡", kw: ["模糊", "玻璃", "blur", "强度", "薄", "厚", "材质"], group: "背景"),
+        surface(.overlay, "玻璃浓淡", kw: ["模糊", "玻璃", "毛玻璃", "浓淡", "blur", "强度", "薄", "厚", "材质"], group: "背景"),
         surface(.overlay, "双行显示", kw: ["两行", "副行", "下一句"], group: "排版"),
         surface(.overlay, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "排版"),
+        surface(.overlay, "长句处理", kw: ["换行", "滚动", "跑马灯", "折行", "长句", "太长"], group: "排版"),
         surface(.overlay, "宽度", kw: ["窗口宽度", "pt"]),
         surface(.overlay, "锁定位置", kw: ["锁定", "拖动"], group: "行为"),
         surface(.overlay, "长按拖动", kw: ["拖动", "长按"], group: "行为"),
         surface(.overlay, "悬浮淡化", kw: ["鼠标", "指针", "淡出", "让开"], group: "行为"),
         surface(.overlay, "悬停控制条", kw: ["鼠标", "指针", "悬停", "控制", "按钮", "菜单", "工具栏"], group: "行为"),
-        surface(.overlay, "截屏/录屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕"], group: "行为"),
-        surface(.overlay, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
+        surface(.overlay, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
+        surface(.overlay, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
         surface(.overlay, "恢复默认", sub: "不含排版、行为、位置和宽度", kw: ["重置"]),
 
         // ---- 歌词显示 › 灵动岛 ----
         surface(.notch, "灵动岛歌词", sub: "紧凑地贴着屏幕顶部的刘海显示", kw: ["开关", "刘海", "总开关"], inDrawer: false),
-        surface(.notch, "风格", kw: ["纯黑", "磨砂玻璃", "深色渐变", "跟随封面", "背景", "强调色"]),
-        surface(.notch, "屏幕", kw: ["自动", "所有屏幕", "指定屏幕", "显示器", "多屏"]),
+        surface(.notch, "风格", kw: ["纯黑", "毛玻璃", "磨砂玻璃", "深色渐变", "跟随封面", "背景", "强调色"]),
+        surface(.notch, "屏幕", kw: ["自动", "全部屏幕", "所有屏幕", "指定屏幕", "显示器", "多屏"]),
         surface(.notch, "左耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长"]),
         surface(.notch, "右耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长"]),
         surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
@@ -252,8 +275,8 @@ public enum SettingsSearchCatalog {
         surface(.notch, "快捷操作", kw: ["搜索歌词", "设置", "关闭", "图标键"], group: "展开态"),
         surface(.notch, "曲目信息", kw: ["封面", "歌名", "歌手", "专辑", "头部"], group: "展开态"),
         surface(.notch, "暂停缩回", kw: ["暂停", "收起", "缩回"], group: "行为"),
-        surface(.notch, "截屏/录屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕"], group: "行为"),
-        surface(.notch, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
+        surface(.notch, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
+        surface(.notch, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         surface(.notch, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
         // ---- 歌词显示 › 菜单栏 ----
@@ -273,13 +296,49 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
+        // ---- 歌词显示 › 歌词窗口 ----
+        // 预览下面那张卡「歌词窗口 [打开]」。搜「打开歌词窗口」另有快捷键那一条,各跳各的。
+        lyricsWindow("歌词窗口", kw: ["打开", "打开歌词窗口", "窗口"]),
+        lyricsWindow("背景", sub: "歌词窗口的背景：跟随封面／纯色／渐变／毛玻璃",
+                     kw: ["背景", "跟随封面", "纯色", "渐变", "颜色", "不透明度", "透明"],
+                     group: "外观"),
+        lyricsWindow("方向", kw: ["渐变", "背景", "从上到下", "从左到右", "横向", "竖向"], group: "外观"),
+        lyricsWindow("玻璃浓淡", sub: "毛玻璃的材质浓淡（五档）",
+                     kw: ["毛玻璃", "玻璃", "模糊", "透明", "材质", "背景", "浓淡"], group: "外观"),
+        lyricsWindow("字号", sub: "迷你尺寸的歌词字号上限",
+                     kw: ["字体大小", "大小", "迷你"], group: "外观"),
+        // 跟悬浮歌词那条「长句处理」同名、不同段,各自跳到自己那一段。
+        lyricsWindow("长句处理", sub: "迷你尺寸一行放不下时换行还是滚动",
+                     kw: ["换行", "滚动", "跑马灯", "折行", "长句", "太长", "迷你"], group: "布局"),
+        lyricsWindow("歌词布局", sub: "迷你尺寸只显示当前句和下一句，还是像完整尺寸那样整页滚动",
+                     kw: ["简洁", "多行", "列表", "行数", "两行", "迷你", "布局"], group: "布局"),
+        // 跟悬浮歌词那条「字体」同名、不同段:搜「字体」会同时列出两处,各自跳到自己那一段。
+        lyricsWindow("文字颜色", sub: "歌词窗口的文字颜色；「自动」会按背景亮度在浅色和深色之间切换",
+                     kw: ["颜色", "字体颜色", "文字", "浅色", "深色", "自定义", "自动"], group: "外观"),
+        lyricsWindow("指定颜色", kw: ["文字颜色", "自定义", "颜色"], group: "外观"),
+        lyricsWindow("字体", sub: "歌词窗口的歌词字体（正文、译文、罗马音）",
+                     kw: ["字体", "字型", "font", "歌词窗口"], group: "外观"),
+        lyricsWindow("歌名", sub: "迷你尺寸顶部显示歌名／歌手／专辑",
+                     kw: ["顶部信息", "标题", "迷你"], group: "顶部信息"),
+        lyricsWindow("歌手", kw: ["顶部信息", "艺人", "迷你"], group: "顶部信息"),
+        lyricsWindow("专辑", kw: ["顶部信息", "迷你"], group: "顶部信息"),
+        lyricsWindow("封面", sub: "迷你尺寸顶部信息左边那枚封面小图",
+                     kw: ["顶部信息", "迷你", "专辑封面", "小图"], group: "顶部信息"),
+        lyricsWindow("时间", sub: "迷你尺寸顶部显示「已播到哪 / 这首多长」",
+                     kw: ["顶部信息", "迷你", "时长", "进度", "剩余", "已播"], group: "顶部信息"),
+        // 渐变档才出现的第二个颜色。「顶部颜色」跟「颜色」是同一行标题的两种形态(三元),
+        // 扫描器只认得出这一条,登记它就够 —— 搜「颜色」由上面那条的 kw 兜住。
+        lyricsWindow("底部颜色", kw: ["渐变", "颜色", "背景"], group: "外观"),
+        lyricsWindow("动态封面", sub: "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停",
+                     kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
+
         // ---- 快捷键 ----
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
         shortcut("显示/隐藏灵动岛歌词", kw: ["灵动岛", "开关"]),
         shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),
         shortcut("锁定/解锁位置", kw: ["锁定", "位置"]),
         shortcut("显示/隐藏译文", kw: ["译文", "翻译"]),
-        shortcut("显示/隐藏发音", kw: ["罗马音", "发音"]),
+        shortcut("显示/隐藏罗马音", kw: ["罗马音", "发音", "拼音", "粤拼"]),
         shortcut("打开歌词管理", kw: ["歌词管理", "窗口"]),
         shortcut("打开歌词窗口", kw: ["歌词窗口", "窗口"]),
         shortcut("搜索歌词", kw: ["手动搜索", "换歌词"]),
@@ -300,8 +359,7 @@ public enum SettingsSearchCatalog {
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
         general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
         general("设置文件", sub: "含明文凭证；导入会覆盖全部设置并重启", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
-        general("动态封面", sub: "歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
-        general("清除所有设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除"]),
+        general("清除全部设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除", "清除所有设置"]),
 
         // ---- 关于 ----
         // 「软件更新」页(此前这四条住在「关于 › 更新」卡里)。「软件更新」同时也是「关于 › 更新」
@@ -319,21 +377,23 @@ public enum SettingsSearchCatalog {
         about("配置文件夹", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         // ---- 账号 ----
-        account("listenBrainz", path: ["ListenBrainz"], "账户信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
+        account("listenBrainz", path: ["ListenBrainz"], "账号信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 规则", kw: ["Last.fm", "scrobble", "记录", "规则"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "匹配模式", kw: ["Last.fm", "scrobble", "合唱", "歌手", "曲名", "繁简", "匹配"]),
-        // 「匹配模式」选了「自定义」才出现的三个维度。照样登记:用户搜「繁简」「合唱」时
-        // 该找得到它们,找到了再去把档位切到自定义 —— 搜不到才是坏体验。
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "改写歌手", kw: ["Last.fm", "scrobble", "歌手", "匹配", "自定义"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "改写曲名", kw: ["Last.fm", "scrobble", "曲名", "繁简", "匹配", "自定义"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "合唱只发第一位", kw: ["Last.fm", "scrobble", "合唱", "歌手", "第一位", "自定义"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "匹配模式", kw: ["Last.fm", "scrobble", "合唱", "歌手", "歌名", "曲名", "繁简", "匹配"]),
+        // 「匹配模式」选了「自定义」才出现的两个维度。照样登记:用户搜「繁简」「合唱」时
+        // 该找得到它们,找到了再去把档位切到自定义 —— 搜不到才是坏体验。标题本身只剩字段名,
+        // 所以关键词要把「改写 / 合唱 / 第一位」这些用户嘴里的说法都收进来。
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "歌名", kw: ["Last.fm", "scrobble", "歌名", "曲名", "繁简", "改写", "匹配", "编目", "自定义"]),
+        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "歌手", kw: ["Last.fm", "scrobble", "歌手", "合唱", "第一位", "改写", "匹配", "编目", "自定义"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 时机", kw: ["Last.fm", "scrobble", "50%", "曲终"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "短于 30 秒的曲目", kw: ["Last.fm", "scrobble", "短曲"]),
         account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 的播放器", kw: ["Last.fm", "scrobble", "播放器", "排除", "不上送", "浏览器"]),
         account("stateRelay", path: ["网页推送"], "连接信息", kw: ["中继", "网页", "relay", "worker", "推送"]),
-        account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知"]),
+        account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知", "Telegram", "钉钉", "飞书", "企业微信", "Discord"]),
         account("bark", path: ["推送提醒"], "每周听歌小结", kw: ["周报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每日听歌报告", kw: ["日报", "推送", "Bark"]),
+        account("bark", path: ["推送提醒"], "每月听歌小结", kw: ["月报", "推送", "Bark", "专辑"]),
+        account("bark", path: ["推送提醒"], "年度听歌小结", kw: ["年报", "年度", "推送", "Bark", "专辑"]),
     ]
 }
 

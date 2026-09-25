@@ -18,20 +18,20 @@ func TestResolveLastfmExcludedBundles(t *testing.T) {
 }
 
 func TestLastfmExcluded(t *testing.T) {
-	saved, savedPath := features, lastfmExcludePath
+	saved, savedPath := features(), lastfmExcludePath
 	defer func() {
-		features = saved
+		setFeatures(saved)
 		setLastfmExcludePath(savedPath)
 	}()
 	// 这一组测的是启动时解析好的那份(没登记文件路径的退路),显式钉住,别被别的测试留下的路径影响。
 	setLastfmExcludePath("")
 
-	features.LastfmExcludedBundles = map[string]bool{}
+	featuresRef().LastfmExcludedBundles = map[string]bool{}
 	if lastfmExcluded(qqMusicBundleID) {
 		t.Fatal("empty exclusion set must exclude nothing")
 	}
 
-	features.LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{qqMusicBundleID, "com.apple.Safari"})
+	featuresRef().LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{qqMusicBundleID, "com.apple.Safari"})
 	cases := []struct {
 		bundle string
 		want   bool
@@ -54,13 +54,13 @@ func TestLastfmExcluded(t *testing.T) {
 
 // features.json 改了之后不重启也要生效:按 mtime 热重读这一个键。
 func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
-	savedPath, savedFeatures := lastfmExcludePath, features
+	savedPath, savedFeatures := lastfmExcludePath, features()
 	defer func() {
 		setLastfmExcludePath(savedPath)
-		features = savedFeatures
+		setFeatures(savedFeatures)
 	}()
 	// 启动时解析出来的那份故意留空:命中的必须是文件里的值,不是它。
-	features.LastfmExcludedBundles = nil
+	featuresRef().LastfmExcludedBundles = nil
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "lyrimuse-features.json")
@@ -115,7 +115,7 @@ func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 
 	// 路径没登记(一次性 CLI 子命令)时退回启动时解析好的那份。
 	setLastfmExcludePath("")
-	features.LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{spotifyBundleID})
+	featuresRef().LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{spotifyBundleID})
 	if !lastfmExcluded(spotifyBundleID) {
 		t.Fatal("with no path registered the startup-parsed set should be used")
 	}

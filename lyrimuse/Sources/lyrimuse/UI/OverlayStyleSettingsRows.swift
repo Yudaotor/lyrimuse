@@ -103,7 +103,7 @@ struct OverlayTextSettingsRows: View {
                             guard newValue != settings.fontSize else { return }
                             settings.fontSize = newValue
                         }
-                    ), in: 14...36, step: 1)
+                    ), in: AppSettings.overlayFontSizeRange, step: 1)
                         .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
                         .foregroundStyle(.secondary)
@@ -163,7 +163,7 @@ struct OverlayTextSettingsRows: View {
             // 不会产生任何视觉效果的设置项没有意义。
             if settings.overlayLyricsKaraoke {
                 CardDivider()
-                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱颜色")) {
+                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱到的颜色")) {
                     colorModeMenu(
                         follows: $settings.karaokeUnsungFollowsCoverArt,
                         color: Binding(
@@ -279,6 +279,32 @@ struct OverlayLayoutSettingsRows: View {
                 // 控制,不经过任何系统分段控件的内部尺寸/动画逻辑。
                 OverlayAlignmentSegmentedControl(selection: $settings.overlayDuetAlignmentOverride)
             }
+            CardDivider()
+            // 归在「版面」这一组,判据同上面两行:它讲的是**版面**(一句话占几行、窗口高不高),
+            // 不是字长什么样。这一颗只管悬浮窗;歌词窗口迷你尺寸另有自己的一颗,灵动岛 / 菜单栏
+            // 只有一行高、恒滚动,不可配。
+            SettingsRow(
+                icon: "arrow.left.and.right.text.vertical",
+                title: L10n.t("长句处理"),
+                help: L10n.t("换行（默认）：一行放不下就折到下一行，窗口跟着变高。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。")
+            ) {
+                SettingsSegmentedControl(
+                    selection: $settings.overlayLineOverflow,
+                    options: OverlayLineOverflow.allCases,
+                    label: OverlayLineOverflowLabel.text(for:)
+                )
+            }
+        }
+    }
+}
+
+/// 「长句处理」两档的显示名。跟「对齐方式」同一个安排:枚举本体在 Core、不带界面文案,
+/// 文案留在界面层(Core 不依赖 L10n)。
+enum OverlayLineOverflowLabel {
+    static func text(for value: OverlayLineOverflow) -> String {
+        switch value {
+        case .wrap: return L10n.t("换行")
+        case .scroll: return L10n.t("滚动")
         }
     }
 }
@@ -412,7 +438,7 @@ struct OverlayBackgroundSettingsRows: View {
             // 复用「文字」组「粗细」那一行验证过的同一种下拉写法。
             if settings.overlayBackgroundGlass {
                 CardDivider()
-                SettingsSubRow(title: L10n.t("毛玻璃浓淡")) {
+                SettingsSubRow(title: L10n.t("玻璃浓淡")) {
                     Picker("", selection: $settings.overlayGlassIntensity) {
                         ForEach(OverlayGlassIntensity.allCases, id: \.self) { intensity in
                             Text(intensity.displayName).tag(intensity)
@@ -644,7 +670,7 @@ struct OverlayCustomThemeRows: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsRow(icon: "square.stack", title: L10n.t("我的配色主题")) {
-                Button(L10n.t("存为新主题…")) {
+                Button(L10n.t("存为新配色主题…")) {
                     newThemeName = ""
                     // 两个内联态互斥:正在确认删除时又点"存为新主题",两行同时展开会让人
                     // 分不清哪个按钮属于哪件事。

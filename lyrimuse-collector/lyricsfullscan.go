@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -244,12 +245,6 @@ func readLyricsFullScanStateLocked() lyricsFullScanState {
 	return state
 }
 
-func writeLyricsFullScanState(state lyricsFullScanState) {
-	lyricsFullScanMu.Lock()
-	defer lyricsFullScanMu.Unlock()
-	writeLyricsFullScanStateLocked(state)
-}
-
 // writeLyricsFullScanStateLocked:调用方必须已经握着 lyricsFullScanMu。
 func writeLyricsFullScanStateLocked(state lyricsFullScanState) {
 	path := lyricsFullScanStatePath
@@ -292,19 +287,28 @@ func setLyricsFullScanActive(active bool) {
 
 // lyricsFullScanTier 给一条缓存分层,-1 = 这一轮不碰它。分层规则见文件头注。
 // 纯函数(pin 由调用方查好传进来),单测直接钉。
-func lyricsFullScanTier(e enrichEntry, pinned, inflight bool) int {
+//
+// passStart 是这一场的起点(lyricsFullScanState.StartedAt,续跑不刷新):尝试时刻不早于它的条目
+// 这一场已经跑过,续跑时跳过。别去掉 —— 第 0、1 层跑完了条件照样成立(没搜到还是没歌词、没有逐字
+// 还是没有逐字),不看这个的话每次续跑都从头再搜一遍,重启一多同一批条目被搜几十次、排在后面的
+// 永远轮不到。0 = 不按这个跳。
+func lyricsFullScanTier(e enrichEntry, pinned, inflight bool, passStart int64) int {
 	if e.ManualLyrics || e.Instrumental || pinned || inflight {
 		return -1
 	}
+	tier, tried := -1, e.LyricsRescoreTS
 	switch {
 	case e.Lyrics == "":
-		return 0
+		tier, tried = 0, e.LyricsFillTS
 	case e.LyricsYRC == "":
-		return 1
+		tier = 1
 	case e.LyricsScoringVersion < lyricsScoringVersion:
-		return 2
+		tier = 2
 	}
-	return -1
+	if tier >= 0 && passStart > 0 && tried >= passStart {
+		return -1
+	}
+	return tier
 }
 
 // lyricsFullScanCandidates 挑这一轮要过的 key:三层各自按字典序排好(确定、可复现),
@@ -313,12 +317,18 @@ func lyricsFullScanCandidates() []string {
 	// pin 快照必须在拿 enrichMu **之前**取:它要读文件,不能把几千条的循环连同一次 Stat
 	// 一起压在缓存锁里(见 lyricsPinnedKeys 头注)。
 	pins := lyricsPinnedKeys()
+	passStart := readLyricsFullScanState().StartedAt
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
+	polluted := lyricsPollutedKeys(enrichCache)
 	var tiers [3][]string
 	for key, e := range enrichCache {
-		tier := lyricsFullScanTier(e, pins[key], enrichInflight[key])
+		tier := lyricsFullScanTier(e, pins[key], enrichInflight[key], passStart)
 		if tier < 0 {
+			continue
+		}
+		// 再搜也不会有的空条目不进全量,见 lyricsretryskip.go。
+		if tier == 0 && (lyricsNoAnchorGaveUp(key, e) || polluted[key]) {
 			continue
 		}
 		tiers[tier] = append(tiers[tier], key)
@@ -365,7 +375,7 @@ func lyricsFullScanOne(key string) bool {
 	enrichInflight[key] = true
 	enrichMu.Unlock()
 	// 同步跑:rescoreLyrics 自己 defer 清 enrichInflight,并负责落盘/导出/通知重推。
-	rescoreLyrics(key, artist, title, album, duration)
+	rescoreLyrics(withBackgroundOutbound(context.Background()), key, artist, title, album, duration)
 	enrichMu.Lock()
 	after := enrichCache[key]
 	enrichMu.Unlock()

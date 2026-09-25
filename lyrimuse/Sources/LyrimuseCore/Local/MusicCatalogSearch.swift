@@ -142,11 +142,38 @@ public enum MusicCatalogSearch {
         return fallback
     }
 
-    /// 按 歌手+歌名 查一次 iTunes,挑一张能对上的封面。挑不出就 nil(不留退路)。
+    /// 一次封面查询的结局。`unreached` 只说明这次没问成(退避中 / 超时 / 限流 / 非 200 /
+    /// 响应解不开),调用方绝不能把它记成「那边没有这一首」。
+    public enum ArtworkLookup: Sendable {
+        case found(ArtworkMatch)
+        case noMatch
+        case unreached
+
+        public var match: ArtworkMatch? {
+            if case .found(let m) = self { return m }
+            return nil
+        }
+    }
+
+    /// 把一次响应归成 `ArtworkLookup`。纯函数,selftest 钉住。
+    public static func artworkLookup(status: Int?, data: Data, title: String, artist: String,
+                                     album: String?) -> ArtworkLookup {
+        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
+        else { return .unreached }
+        if let hit = pickArtwork(decoded.results, title: title, artist: artist, album: album) {
+            return .found(hit)
+        }
+        return .noMatch
+    }
+
+    /// 按 歌手+歌名 查一次 iTunes,挑一张能对上的封面。挑不出是 `.noMatch`(不留退路)。
+    /// 后台批量调用,`ITunesSearchGate` 退避期间不发请求。
     public static func resolveArtwork(title: String, artist: String, album: String?,
-                                      storefront: String) async -> ArtworkMatch? {
-        guard let url = searchURL(title: title, artist: artist, storefront: storefront, limit: 12)
-        else { return nil }
+                                      storefront: String,
+                                      gate: ITunesSearchGate = .shared) async -> ArtworkLookup {
+        guard !gate.coolingDown(),
+              let url = searchURL(title: title, artist: artist, storefront: storefront, limit: 12)
+        else { return .unreached }
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
         let start = Date()
@@ -157,14 +184,16 @@ public enum MusicCatalogSearch {
         } catch {
             NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
-            return nil
+            return .unreached
         }
-        let status = (resp as? HTTPURLResponse)?.statusCode
+        let http = resp as? HTTPURLResponse
+        let status = http?.statusCode
         NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
                                statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
-        else { return nil }
-        return pickArtwork(decoded.results, title: title, artist: artist, album: album)
+        if let status {
+            gate.note(status: status, retryAfter: http?.value(forHTTPHeaderField: "Retry-After"))
+        }
+        return artworkLookup(status: status, data: data, title: title, artist: artist, album: album)
     }
 
     /// https://music.apple.com/… 到 music://…(注册给 Music.app 的 scheme,经
@@ -191,9 +220,13 @@ public enum MusicCatalogSearch {
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             return nil
         }
-        let status = (resp as? HTTPURLResponse)?.statusCode
+        let http = resp as? HTTPURLResponse
+        let status = http?.statusCode
         NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
                                statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+        if let status {
+            ITunesSearchGate.shared.note(status: status, retryAfter: http?.value(forHTTPHeaderField: "Retry-After"))
+        }
         guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return nil }
         return pickBest(decoded.results, title: title, artist: artist)

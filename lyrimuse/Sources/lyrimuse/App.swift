@@ -68,5 +68,6 @@ struct LyrimuseApp: App {
             OnboardingView()
         }
         .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
     }
 }

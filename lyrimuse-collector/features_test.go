@@ -10,15 +10,15 @@ import (
 // 启动快照。它的价值全在"覆盖得全不全"上:漏掉一个开关,那一项造成的行为差异事后就
 // 查不出来了 —— 所以这里逐字段核对,新增开关忘了加进快照会在这里红。
 func TestLogFeatureSnapshot(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
 
 	var buf bytes.Buffer
 	prev := log.Writer()
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(prev) })
 
-	features = featureFlags{
+	setFeatures(featureFlags{
 		Players:                   map[string]bool{"qq": true, "applemusic": true},
 		LyricsSources:             map[string]bool{"kugou": true, "netease": true, "deezer": false},
 		LyricsSourceMode:          "score",
@@ -33,7 +33,7 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		LyricsDecisionTrace:       true,
 		TrustedPlayers:            map[string]string{"com.google.Chrome": "Chrome"},
 		LastfmExcludedBundles:     map[string]bool{"com.apple.Safari": true},
-	}
+	})
 	logFeatureSnapshot()
 	out := buf.String()
 
@@ -70,7 +70,7 @@ func TestLogFeatureSnapshot(t *testing.T) {
 
 	// 空值要写成 "-",不能留空 —— key= 后面什么都没有,读的人分不清是"空"还是字段丢了。
 	buf.Reset()
-	features = featureFlags{LaunchLyrimuseOnPlayers: map[string]bool{}}
+	setFeatures(featureFlags{LaunchLyrimuseOnPlayers: map[string]bool{}})
 	logFeatureSnapshot()
 	out = buf.String()
 	for _, want := range []string{"players=-", "lyrics_sources=-", "lyrics_source_mode=-", "launch_on_players=-"} {

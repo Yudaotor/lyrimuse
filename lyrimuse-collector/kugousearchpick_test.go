@@ -18,7 +18,7 @@ func TestPickKugouSearchCandidate(t *testing.T) {
 		{Hash: "H4", SongName: "简单爱 (Live)", SingerName: "周杰伦、陈奕迅", AlbumName: "2015江苏卫视新年演唱会", Duration: 313},
 	}
 
-	t.Run("真实案例:56秒片段不再顶掉标题精确+专辑对得上+时长吻合的正主", func(t *testing.T) {
+	t.Run("56秒片段不再顶掉标题精确+专辑对得上+时长吻合的正主", func(t *testing.T) {
 		got := pickKugouSearchCandidate(realPage, "周杰伦", "简单爱 (Live)", "The One 周杰伦演唱会", 273.227)
 		if got == nil || got.Hash != "H1" {
 			t.Fatalf("想要 H1(The One 版),拿到 %+v", got)
@@ -44,7 +44,7 @@ func TestPickKugouSearchCandidate(t *testing.T) {
 	// durationOvershoot -700 + sourceDurationOff -400 变 1 分,而 1 分照样被采用。现在自报曲长对不上
 	// (>12%,与 sourceDurationOff 同口径)的排到所有对得上的后面,标题档只在同一组内比。
 	// 字符串与时长全部取自真实搜索结果。
-	t.Run("真实案例:自报曲长对不上的精确同名不再压过对得上的剥括号版(PRINCE《319》X-cerpt)", func(t *testing.T) {
+	t.Run("自报曲长对不上的精确同名不再压过对得上的剥括号版(PRINCE《319》X-cerpt)", func(t *testing.T) {
 		songs := []kugouSong{
 			{Hash: "7cd854d9", SongName: "319", SingerName: "Prince", AlbumName: "The Gold Experience (Explicit)", Duration: 185},
 			{Hash: "43aafa89", SongName: "319 (X-cerpt)", SingerName: "Prince", AlbumName: "The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]", Duration: 88},

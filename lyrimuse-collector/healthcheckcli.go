@@ -84,7 +84,7 @@ func runHealthcheckCLI(args []string) {
 		add("配置文件", healthOK, "%s", cfgPath)
 	}
 
-	features = loadFeatureFlags(filepath.Join(configDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(configDir, clientName+"-features.json")))
 	enabled := enabledLyricSourceNames()
 	if len(enabled) == 0 {
 		add("歌词来源开关", healthFail, "一个源都没启用,永远不会有歌词")
@@ -111,7 +111,7 @@ func runHealthcheckCLI(args []string) {
 
 	// 歌词导出目录:写不进去的话"歌词文件夹作为权威源"整条链路是坏的,而它不会有任何
 	// 显式报错 —— 只是每次导出都静默失败。
-	dir := features.LyricsDir
+	dir := features().LyricsDir
 	if dir == "" {
 		dir = filepath.Join(configDir, "lyrics")
 	}

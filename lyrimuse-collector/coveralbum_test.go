@@ -19,7 +19,7 @@ func TestPreferAppleCoverOverNetease(t *testing.T) {
 		want                        bool
 	}{
 		{
-			name:    "网易云给的是单曲版、Apple 给的是这张专辑:换成 Apple(真实案例)",
+			name:    "网易云给的是单曲版、Apple 给的是这张专辑:换成 Apple",
 			neAlbum: "Deadman", appAlbum: "KUN", appCover: cover, local: "KUN", want: true,
 		},
 		{

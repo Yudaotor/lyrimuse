@@ -14,13 +14,11 @@ import (
 	"io"
 	"log"
 	"math"
-	"net/http"
 	neturl "net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // kugouLyric 是歌词第四个候选来源(酷狗音乐,非官方接口:搜索到KRC 歌词库搜索到下载,三步)。
@@ -166,7 +164,10 @@ func krcToYRC(krc string) string {
 		})
 		lines[i] = m[1] + body
 	}
-	return strings.Join(lines, "\n")
+	// 纯空白词条在**源头**就归并掉,理由与 qrcToYRC 末尾那段相同(见 yrcwhitespace.go 头注)。
+	// 本机缓存实测有 111 条酷狗条目带着这种词条,一直靠启动期那道迁移反复擦。
+	merged, _ := yrcMergeWhitespaceTokens(strings.Join(lines, "\n"))
+	return merged
 }
 
 // ---- 酷狗 KRC 内嵌的译文 / 罗马音轨(`[language:<base64>]`) ----
@@ -272,7 +273,7 @@ func krcLanguageTrackToLRC(content [][]string, starts []int) string {
 	var out []string
 	for i, fragments := range content {
 		text := strings.Join(strings.Fields(strings.Join(fragments, "")), " ")
-		if text == "" || text == "//" {
+		if text == "" || text == "//" || isTranslationNotice(text) {
 			continue
 		}
 		ms := starts[i]
@@ -321,27 +322,16 @@ func kugouEscape(s string) string {
 	return strings.ReplaceAll(neturl.QueryEscape(s), "+", "%20")
 }
 
-func kugouGet(ctx context.Context, u string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return err
-	}
-// 每一步的备用主机 / 备用后端见 kugoufallback.go;
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d", resp.StatusCode)
-	}
-	return json.NewDecoder(resp.Body).Decode(v)
+// kugouSearchRejected:搜索接口查无结果时仍回 status=1 / errcode=0(实测),两个字段在但不是
+// 这两个值就是服务端拒绝。字段缺失不算:krcs 等别的接口不是这套约定,这里只给搜索用。
+func kugouSearchRejected(status, errcode *int) bool {
+	return (status != nil && *status != 1) || (errcode != nil && *errcode != 0)
 }
 
 // resolveKugouLyric:①搜索拿 hash/时长(歌手名+歌名都要对上,同 netease/qq 的身份校验);
 // ②用 hash+时长 查 KRC 歌词库候选(krcs.kugou.com,官方推荐候选优先,取第一条);
 // ③用候选的 id+accesskey 下载两次(lyrics.kugou.com,分别 fmt=lrc 整行、fmt=krc 逐字,
+// 每一步的备用主机 / 备用后端见 kugoufallback.go;
 // 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃;krc 单独失败不影响 lrc
 // (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
@@ -353,18 +343,14 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	// 同一个 hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
 	var chosen *kugouSong
 	for _, q := range searchTitleVariants(title) {
-		var sr struct {
-			Data struct {
-				Info []kugouSong `json:"info"`
-			} `json:"data"`
-		}
-		if err := kugouGet(ctx, "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
+		songs, ok := kugouSearchSongs(ctx, artist+" "+q)
+		if !ok {
 			continue
 		}
 		if lyricSearchItemsTap != nil {
-			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, sr.Data.Info)
+			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, songs)
 		}
-		chosen = pickKugouSearchCandidate(sr.Data.Info, artist, title, album, durationSecs)
+		chosen = pickKugouSearchCandidate(songs, artist, title, album, durationSecs)
 		if chosen != nil {
 			break
 		}

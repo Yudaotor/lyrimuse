@@ -92,14 +92,15 @@ func TestImportLyricsFromFilesSweepsTempFiles(t *testing.T) {
 	write("A - B - C.yrc.tmp.222222", "garbage")
 	write(".DS_Store", "x")
 
-	savedDir, savedCache := lyricsDir, enrichCache
+	savedDir, savedCache := lyricsDir(), enrichCache
 	t.Cleanup(func() {
 		enrichMu.Lock()
-		lyricsDir, enrichCache = savedDir, savedCache
+		setLyricsDir(savedDir)
+		enrichCache = savedCache
 		enrichMu.Unlock()
 	})
 	enrichMu.Lock()
-	lyricsDir = dir
+	setLyricsDir(dir)
 	enrichCache = map[string]enrichEntry{}
 	enrichMu.Unlock()
 
@@ -128,15 +129,16 @@ func TestImportLyricsFromFilesSweepsTempFiles(t *testing.T) {
 // 必须是一份完整、头部能解析、正文等于缓存的文件,不能出现 WriteFile 那种互相截断交错。
 func TestExportLyricsFilesConcurrentWritesStayWhole(t *testing.T) {
 	dir := t.TempDir()
-	savedDir, savedCache := lyricsDir, enrichCache
+	savedDir, savedCache := lyricsDir(), enrichCache
 	t.Cleanup(func() {
 		enrichMu.Lock()
-		lyricsDir, enrichCache = savedDir, savedCache
+		setLyricsDir(savedDir)
+		enrichCache = savedCache
 		enrichMu.Unlock()
 	})
 	body := strings.Repeat("[00:01.00]一行歌词正文用来把文件撑长一点,交错截断才看得出来\n", 200)
 	enrichMu.Lock()
-	lyricsDir = dir
+	setLyricsDir(dir)
 	enrichCache = map[string]enrichEntry{"歌手|歌名|专辑": {Lyrics: body, LyricsSource: "qq"}}
 	enrichMu.Unlock()
 
@@ -280,9 +282,9 @@ func TestSanitizeLyricsFilenameFitsAtomicWrite(t *testing.T) {
 // 文件**头部标签**重建 key、不看文件名,留着它下次启动就会把旧内容导回来顶掉新的。
 func TestExportLyricsFilesRemovesUntruncatedLeftover(t *testing.T) {
 	dir := t.TempDir()
-	oldDir := lyricsDir
-	lyricsDir = dir
-	t.Cleanup(func() { lyricsDir = oldDir })
+	oldDir := lyricsDir()
+	setLyricsDir(dir)
+	t.Cleanup(func() { setLyricsDir(oldDir) })
 
 	// 构造一个会被截断、但截断前仍在 255 以内的 key。
 	// 拼出来 212 字节:超过 200 的上限,但加上 ".lrc" 仍在 255 以内 —— 正是那批
@@ -328,9 +330,9 @@ func TestExportLyricsFilesRemovesUntruncatedLeftover(t *testing.T) {
 // 压成同一个名字,必须由已有的碰撞消歧接住,各写各的文件。
 func TestSanitizeLyricsFilenameTruncationStillDisambiguates(t *testing.T) {
 	dir := t.TempDir()
-	oldDir := lyricsDir
-	lyricsDir = dir
-	t.Cleanup(func() { lyricsDir = oldDir })
+	oldDir := lyricsDir()
+	setLyricsDir(dir)
+	t.Cleanup(func() { setLyricsDir(oldDir) })
 
 	prefix := strings.Repeat("同", 80) // 240 字节,远超上限
 	k1 := prefix + "甲|歌名|专辑"

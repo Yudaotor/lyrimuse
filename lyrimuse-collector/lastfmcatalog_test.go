@@ -36,6 +36,7 @@ type catalogServer struct {
 }
 
 func topKey(artist string) string         { return "top:" + artist }
+func searchKey(track string) string       { return "search:" + track }
 func infoKey(artist, track string) string { return artist + "\n" + track }
 
 // lastfmEndpointDecode 复刻 Last.fm GET 端点对 query value 的**第二遍**解码
@@ -58,8 +59,11 @@ func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmCata
 		// 第二遍的话,少编一层的 bug 在这里反而"测得过"——而那正是含 `+`/`%` 的歌名
 		// 一律 error 6 的真实事故(见 lastfmGetQuery)。
 		key := infoKey(lastfmEndpointDecode(q.Get("artist")), lastfmEndpointDecode(q.Get("track")))
-		if q.Get("method") == "artist.getTopTracks" {
+		switch q.Get("method") {
+		case "artist.getTopTracks":
 			key = topKey(lastfmEndpointDecode(q.Get("artist")))
+		case "track.search":
+			key = searchKey(lastfmEndpointDecode(q.Get("track")))
 		}
 		cs.mu.Lock()
 		cs.calls[key]++
@@ -72,6 +76,10 @@ func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmCata
 				fmt.Fprint(w, emptyTopTracksJSON)
 				return
 			}
+			if strings.HasPrefix(key, "search:") {
+				fmt.Fprint(w, emptySearchJSON)
+				return
+			}
 			t.Errorf("假 Last.fm 收到没预设应答的请求 %q", key)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -82,6 +90,8 @@ func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmCata
 		fmt.Fprint(w, resp.body)
 	}))
 	t.Cleanup(cs.srv.Close)
+	// 单测绝不连 MusicBrainz:别名来源默认是「查成了、没有别名」,要别名的用例自己换 stubAliases。
+	stubAliases(t, nil)
 	return &lastfmCatalogMatcher{
 		apiKey:  "k",
 		baseURL: cs.srv.URL,
@@ -128,6 +138,7 @@ var scopeAll = matchScope{artist: true, track: true}
 const (
 	notFoundJSON       = `{"error":6,"message":"Track not found"}`
 	emptyTopTracksJSON = `{"toptracks":{"track":[]}}`
+	emptySearchJSON    = `{"results":{"trackmatches":{"track":[]}}}`
 	// 影子条目的典型形态:没 mbid、一个听众、时长 0。
 	shadowJSON = `{"track":{"name":"t","mbid":"","listeners":"1","duration":"0"}}`
 )
@@ -274,6 +285,8 @@ func TestCatalogDecisionMatrix(t *testing.T) {
 			responses := map[string]probeResp{
 				infoKey(joint, track):   c.ownResp,
 				infoKey(primary, track): c.primaryResp,
+				// 基础判定判不了时,扩展搜索还会查合唱的第二位;这张矩阵只考察基础判定。
+				infoKey("荷莉", track): {body: notFoundJSON},
 			}
 			if c.tops != "" {
 				responses[topKey(primary)] = probeResp{body: c.tops}
@@ -358,7 +371,10 @@ func TestCatalogDoesNotSplitUnsplittableNames(t *testing.T) {
 		if n := cs.count(topKey(artist)); n != 1 {
 			t.Errorf("%q: 曲目表应按整串查 1 次,实际 %d", artist, n)
 		}
-		if n := cs.total(); n != 2 {
+		if n := cs.count(searchKey("某首歌")); n != 1 {
+			t.Errorf("%q: 扩展搜索应按曲名搜 1 次,实际 %d", artist, n)
+		}
+		if n := cs.total(); n != 3 {
 			t.Errorf("%q: 多打了请求,总数 %d(说明名字被切开了)", artist, n)
 		}
 	}
@@ -430,7 +446,7 @@ func TestCatalogDeferRechecksAfterWindow(t *testing.T) {
 	fresh := time.Now().Add(-lastfmCatalogDeferRecheck + time.Hour).Unix()
 	col.cache["A & B\n某首歌"] = lastfmCatalogDecision{
 		Verdict: verdictDefer, Artist: "A & B", TS: fresh,
-		V: lastfmCatalogDecisionVersion, Scope: scopeAll.id()}
+		V: lastfmCatalogDecisionVersion, Scope: scopeAll.id(), Ext: lastfmCatalogExtVersion}
 	if a, _, _ := col.resolve(context.Background(), "A & B", "某首歌", 0, scopeAll); a != "A & B" {
 		t.Errorf("未到期的 defer 应维持原样,got %q", a)
 	}
@@ -441,7 +457,7 @@ func TestCatalogDeferRechecksAfterWindow(t *testing.T) {
 	stale := time.Now().Add(-lastfmCatalogDeferRecheck - time.Hour).Unix()
 	col.cache["A & B\n某首歌"] = lastfmCatalogDecision{
 		Verdict: verdictDefer, Artist: "A & B", TS: stale,
-		V: lastfmCatalogDecisionVersion, Scope: scopeAll.id()}
+		V: lastfmCatalogDecisionVersion, Scope: scopeAll.id(), Ext: lastfmCatalogExtVersion}
 	if a, _, _ := col.resolve(context.Background(), "A & B", "某首歌", 0, scopeAll); a != "A" {
 		t.Errorf("到期重查、目标已收录 → 应改写,got %q", a)
 	}
@@ -649,14 +665,14 @@ func TestCatalogCachePersistence(t *testing.T) {
 // setMatch 临时改上送匹配设置,测完还原。
 func setMatch(t *testing.T, mode string, artist, track, firstOnly bool) {
 	t.Helper()
-	savedMode, savedA, savedT, savedF := features.LastfmMatchMode, features.LastfmMatchArtist,
-		features.LastfmMatchTrack, features.LastfmMatchFirstArtistOnly
+	savedMode, savedA, savedT, savedF := features().LastfmMatchMode, features().LastfmMatchArtist,
+		features().LastfmMatchTrack, features().LastfmMatchFirstArtistOnly
 	t.Cleanup(func() {
-		features.LastfmMatchMode, features.LastfmMatchArtist = savedMode, savedA
-		features.LastfmMatchTrack, features.LastfmMatchFirstArtistOnly = savedT, savedF
+		featuresRef().LastfmMatchMode, featuresRef().LastfmMatchArtist = savedMode, savedA
+		featuresRef().LastfmMatchTrack, featuresRef().LastfmMatchFirstArtistOnly = savedT, savedF
 	})
-	features.LastfmMatchMode, features.LastfmMatchArtist = mode, artist
-	features.LastfmMatchTrack, features.LastfmMatchFirstArtistOnly = track, firstOnly
+	featuresRef().LastfmMatchMode, featuresRef().LastfmMatchArtist = mode, artist
+	featuresRef().LastfmMatchTrack, featuresRef().LastfmMatchFirstArtistOnly = track, firstOnly
 }
 
 // 端到端:智能档走匹配器;原始档一个请求都不打。
@@ -751,5 +767,25 @@ func TestMatchScopeChangeInvalidatesCachedDecision(t *testing.T) {
 	}
 	if cs.total() == 0 {
 		t.Error("换了作用域应触发重查")
+	}
+}
+
+// 响应体里的 error 29 让 Last.fm 读接口进出站闸的限流窗口,别接着一首一首地撞。
+func TestLastfmCatalogErrorRateLimitedBlocksEndpoint(t *testing.T) {
+	saved := hostGuardShared
+	hostGuardShared = newHostGuard(time.Now)
+	t.Cleanup(func() { hostGuardShared = saved })
+
+	const artist, track = "陶喆", "那个女孩"
+	col, cs := newCatalogServer(t, map[string]probeResp{
+		infoKey(artist, track): {body: `{"error":29,"message":"Rate limit exceeded"}`},
+	})
+	col.resolve(context.Background(), artist, track, 0, scopeAll)
+	u, err := neturl.Parse(cs.srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, blocked := hostGuardShared.endpointBlockedUntil(guardEndpointKey(u)); !blocked {
+		t.Fatal("error 29 该让这个端点进限流窗口")
 	}
 }

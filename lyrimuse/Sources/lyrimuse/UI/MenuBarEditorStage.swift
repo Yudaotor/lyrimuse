@@ -199,7 +199,7 @@ struct MenuBarEditorStage: View {
         Button {
             popover = target
         } label: {
-            toolbarButtonLabel(icon: icon, title: title, summary: summary)
+            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -212,30 +212,12 @@ struct MenuBarEditorStage: View {
     /// popover(同一份 `popover` 状态挂两处会让两个 NSPopover 抢同一个锚点)、不画、不进无障碍树。
     private func toolbarGhostButton(icon: String, title: String, summary: String) -> some View {
         Button {} label: {
-            toolbarButtonLabel(icon: icon, title: title, summary: summary)
+            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
         .hidden()
         .accessibilityHidden(true)
-    }
-
-    private func toolbarButtonLabel(icon: String, title: String, summary: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .environment(\.locale, Locale(identifier: "en"))
-            Text(title)
-                .lineLimit(1)
-            Text("·")
-                .foregroundStyle(.tertiary)
-            Text(summary)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 140, alignment: .leading)
-                .layoutPriority(-1)
-        }
     }
 
     private enum StagePopover: Equatable {
@@ -398,13 +380,17 @@ struct MenuBarLyricsIconRow: View {
             title: L10n.t("歌词旁的图标"),
             help: L10n.t("在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。")
         ) {
-            Picker("", selection: $settings.menuBarLyricsIconPosition) {
-                ForEach(MenuBarLyricsIconPosition.allCases, id: \.self) { position in
-                    Text(position.displayName).tag(position)
+            SettingsSegmentedControlHashable(
+                selection: $settings.menuBarLyricsIconPosition,
+                options: MenuBarLyricsIconPosition.allCases,
+                label: { position in
+                    switch position {
+                    case .off: return L10n.t("不显示")
+                    case .leading: return L10n.t("左侧")
+                    case .trailing: return L10n.t("右侧")
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
+            )
         }
     }
 }
@@ -588,12 +574,16 @@ struct MenuBarWidthModeRow: View {
             // 判断,不进这行字。
             help: L10n.t("只影响装得下的句子。\n固定：短句也占满设定宽度，位置不变。\n自适应：短句按自己的宽度占位，这一项随句变宽变窄，旁边的图标跟着挪。")
         ) {
-            Picker("", selection: $settings.menuBarLyricsWidthMode) {
-                Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
-                Text(L10n.t("自适应")).tag(MenuBarLyricsWidthMode.adaptive)
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
+            SettingsSegmentedControlHashable(
+                selection: $settings.menuBarLyricsWidthMode,
+                options: MenuBarLyricsWidthMode.allCases,
+                label: { mode in
+                    switch mode {
+                    case .fixed: return L10n.t("固定")
+                    case .adaptive: return L10n.t("自适应")
+                    }
+                }
+            )
         }
         // 「对齐模式」只在**固定宽度**下出现(用户自己先判断出来的:"看起来是不是
         // 只会在固定宽度模式下生效?我理解自适应的模式下不存在对齐模式" —— 对的)。自适应

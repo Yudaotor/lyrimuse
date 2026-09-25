@@ -20,13 +20,11 @@ struct OnboardingView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openSettings) private var openSettings
     @State private var step = 0
-    @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
-    // 点"请求权限"之后到系统弹窗真正有结果之前的等待状态——见
-    // MusicAutomationPermission.requestWithTimeout 注释,这一步不能同步阻塞主线程。
-    @State private var isRequestingAutomation = false
-    // 等了 8 秒还没有结果(可能系统弹窗被晾在一边没处理,也可能就是那个已知的挂起
-    // bug 撞上了)——提前亮出"打开系统设置"这条备选路径,不用死等这次请求。
-    @State private var automationRequestTimedOut = false
+    // 「自动化」权限的状态/请求跟设置页共用同一个模型 —— 需要这份权限的播放器不止一个,
+    // 每家一套"请求中 / 超时 / 已确定"状态机分散在两个界面里必然漂。见那个类的头注。
+    @ObservedObject private var automation = PlayerAutomationPermissions.shared
+    // 「完全磁盘访问」同理,跟设置页「播放器」那张卡共用一个模型。
+    @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var collectorRunning = false
@@ -67,7 +65,7 @@ struct OnboardingView: View {
     //     此前完全埋在设置里,新来的人发现不了。
     private enum Step: Equatable {
         case welcome, playerChoice, automation, browserPairing, background,
-             displayMode, lyricsExtras, lastfm, done
+             fullDiskAccess, displayMode, lyricsExtras, lastfm, done
     }
 
     /// 上一步勾了「YouTube Music」——它不是 `features.players` 里的一个成员(见
@@ -98,17 +96,29 @@ struct OnboardingView: View {
     ///    而 `features.players` 的默认值恰恰是 `[.auto]`(FeatureSettingsStore),于是"保持
     ///    默认、平时听 Apple Music"的人走完整个引导都不会被问过这个权限,然后一直用着一个
     ///    进度不准、播放控制全按不动的版本。
-    ///  - 判据本身挪去 `Set<PlaybackPlayer>.needsAppleMusicAutomation`(LyrimuseCore),
-    ///    因为设置页那张权限卡漏了 `.auto`、跟这里不一致(见那个属性的头注)。这里只剩转发。
-    private var needsAppleMusicAutomation: Bool {
-        features.players.needsAppleMusicAutomation
+    ///  - 判据本身挪去 `Set<PlaybackPlayer>.playersNeedingAutomation`(LyrimuseCore),
+    ///    因为设置页那张权限卡漏了 `.auto`、跟这里不一致(见那个属性的头注)。
+    ///  - 从一个布尔扩成**一份列表**:有 AppleScript 字典的不止 Apple Music 一家,
+    ///    Spotify 的曲目与位置同样走它。这一步与设置页那张卡列的是同一份列表。
+    ///
+    /// 按"这台机器上装了"过滤在 `PlayerAutomationPermissions.visiblePlayers` 里 ——
+    /// 没装的播放器给不出权限,摆出来就是一行永远修不好的「未授权」。
+    private var automationTargets: [PlaybackPlayer] {
+        automation.visiblePlayers(for: features.players)
+    }
+
+    private var needsAutomationStep: Bool { !automationTargets.isEmpty }
+
+    /// 这一轮要替哪几家要「完全磁盘访问」—— 跟设置页那张卡同一份列表(选中 ∩ 需要 ∩ 装了)。
+    private var fullDiskAccessTargets: [PlaybackPlayer] {
+        fullDiskAccess.visiblePlayers(for: features.players)
     }
 
     // 这份列表本身不 @State,是纯粹从 features.players / wantsBrowserYouTubeMusic 派生出来
     // 的,它们一变下一次读到的就是新列表,不需要额外同步。
     private var steps: [Step] {
         var s: [Step] = [.welcome, .playerChoice]
-        if needsAppleMusicAutomation {
+        if needsAutomationStep {
             s.append(.automation)
         }
         // 勾了 YouTube Music 才有这一步。按**不在选完那一刻就跳浏览器选择**,
@@ -122,7 +132,13 @@ struct OnboardingView: View {
         // 见 body 里的 .disabled),只是提升 Last.fm 这个已经相当完整的功能被新用户
         // 发现的概率(之前完全没在 Onboarding 里出现过,只能自己摸到设置里折叠着的
         // 入口才会发现)。
-        s.append(contentsOf: [.background, .displayMode, .lyricsExtras, .lastfm, .done])
+        s.append(.background)
+        // 排在 `.background` 之后:授权状态只由 collector 发布,授权完还要重启它才生效,
+        // 这一步需要它已经在跑。
+        if !fullDiskAccessTargets.isEmpty {
+            s.append(.fullDiskAccess)
+        }
+        s.append(contentsOf: [.displayMode, .lyricsExtras, .lastfm, .done])
         return s
     }
 
@@ -178,6 +194,7 @@ struct OnboardingView: View {
                     case .automation: automationStep
                     case .browserPairing: browserPairingStep
                     case .background: backgroundStep
+                    case .fullDiskAccess: fullDiskAccessStep
                     case .displayMode: displayModeStep
                     case .lyricsExtras: lyricsExtrasStep
                     case .lastfm: lastfmStep
@@ -185,7 +202,9 @@ struct OnboardingView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(28)
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+                .padding(.bottom, 20)
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: .infinity)
@@ -209,6 +228,7 @@ struct OnboardingView: View {
                 }
                 if step > 0 {
                     Button(L10n.t("上一步")) { goTo(step - 1) }
+                        .controlSize(.large)
                 }
                 Button(isLastStep ? L10n.t("开始使用") : L10n.t("下一步")) {
                     if isLastStep {
@@ -218,14 +238,19 @@ struct OnboardingView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
+                .controlSize(.large)
                 // 判据收在 `nextIsLocked` 里一处(那边记着 automation 为什么被移出去)。
                 // 仍然是"软强制":只锁这一个按钮,不禁用/隐藏窗口的关闭按钮,而且旁边现在
                 // 有一个显式的「暂时跳过」。
                 .disabled(nextIsLocked)
             }
-            .padding(16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 440)
+        // 磨砂玻璃底。`ignoresSafeArea` 让它伸进标题栏那一截(窗口是 `.hiddenTitleBar`,见 App.swift),
+        // 玻璃从窗顶一直铺到窗底;内容本身仍在安全区内,不会跑到红绿灯底下。
+        .background { OnboardingGlassBackground().ignoresSafeArea() }
         // 撒花盖在**整扇窗**上(叠在 `.frame` 之后,所以它正好是窗口那么大):纸片会从进度点和
         // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 440pt 高的窗口里
         // 看着像"纸片撞在一条看不见的线上"。它自己从不吃点击,按钮照常能按(见 ConfettiOverlay)。
@@ -246,7 +271,7 @@ struct OnboardingView: View {
         // `launchctl print` 子进程,没必要在每次翻页都付这个钱。
         .onChange(of: step) { _, _ in
             guard currentStep == .done || currentStep == .background else { return }
-            automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
+            automation.refresh(automationTargets)
             collectorRunning = CollectorServiceManager.isRunning
         }
         // 走到最后一页就撒一阵花。判据挂 `currentStep` 而不是 `step`:最后一页的
@@ -255,9 +280,16 @@ struct OnboardingView: View {
         // 重放;退回去再翻回来会再撒一阵(那是用户主动重新走到终点)。
         .onChange(of: currentStep) { _, new in
             if new == .done { confettiBurst += 1 }
+            if new == .done || new == .fullDiskAccess { fullDiskAccess.refresh() }
+        }
+        // 「完全磁盘访问」的状态文件由 collector 写,不会推通知过来;只在用得到它的两步轮询
+        // (按 mtime 读,很便宜)。
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            guard currentStep == .fullDiskAccess || currentStep == .done else { return }
+            fullDiskAccess.refresh()
         }
         .onAppear {
-            automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
+            automation.refresh(automationTargets)
             collectorRunning = CollectorServiceManager.isRunning
             // 「YouTube Music」那一格的选中态按**当前真实配置**播种:已经配过
             // 浏览器的人重跑引导时,那一格该是亮的、后面那一步也该在,而不是让他重新勾一遍。
@@ -271,12 +303,7 @@ struct OnboardingView: View {
         // `clearRequestUI` 顺带把"正在等待"那套收掉:已经确定不再是 notDetermined 时还
         // 留着转圈/超时提示,就是状态文字说已授权、下面却还在等,两处互相矛盾。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            let latest = MusicAutomationPermission.check(askIfNeeded: false)
-            automationStatus = latest
-            if latest != .notDetermined {
-                isRequestingAutomation = false
-                automationRequestTimedOut = false
-            }
+            automation.refresh(automationTargets, clearRequestUI: true)
         }
         .onReceive(PlaybackCoordinator.shared.$isPlayingNow.removeDuplicates()) { playing in
             isPlayingNow = playing
@@ -305,6 +332,9 @@ struct OnboardingView: View {
     ///     这两条路本身是受控的。
     ///  ③ 无障碍:整块合成一个元素并报出"第 N 步,共 M 步",否则旁白读到的是一串无意义的
     ///     圆点。
+    ///
+    /// 当前这一步拉长成 16pt 的胶囊,走过的点是淡强调色、没走到的是灰 —— 不数点也看得出位置。
+    /// 数字写成紧凑的「2/8」(不带空格,斜杠两侧的空隙会让它看起来跟圆点脱节),跟圆点之间只隔 8pt。
     private var stepDots: some View {
         HStack(spacing: 8) {
             // 命中区靠**外扩一层 frame**做,不是 `.contentShape(Rectangle().size(…))`。
@@ -313,27 +343,31 @@ struct OnboardingView: View {
             // 第 N±1 步"。外层 frame 比圆点宽 6pt + spacing 0:视觉间距 6pt,命中区互不重叠。
             HStack(spacing: 0) {
                 ForEach(0..<steps.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
-                        .frame(width: 6, height: 6)
-                        .frame(width: 12, height: 12)
+                    let dotWidth: CGFloat = i == step ? 16 : 6
+                    Capsule()
+                        .fill(i == step ? Color.accentColor
+                              : i <= furthestStep ? Color.accentColor.opacity(0.35)
+                              : Color.secondary.opacity(0.3))
+                        .frame(width: dotWidth, height: 6)
+                        .frame(width: dotWidth + 6, height: 12)
                         .contentShape(Rectangle())
                         .onTapGesture { if i <= furthestStep { goTo(i) } }
                 }
             }
-            Text("\(step + 1) / \(steps.count)")
-                .font(.caption)
+            .animation(.easeOut(duration: 0.2), value: step)
+            // `.fixedSize()` 不能省:不钉住的话,这一行分宽时会把这段数字压到一个字宽、逐字竖排
+            // (10 步 + 大号按钮时实测出现),连带把底栏撑高、把上面的内容区挤矮。
+            Text("\(step + 1)/\(steps.count)")
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .fixedSize()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(
             format: L10n.t("第 %1$d 步，共 %2$d 步"), step + 1, steps.count))
     }
 
-    ///
-    /// 当前这一步拉长成 16pt 的胶囊,走过的点是淡强调色、没走到的是灰 —— 不数点也看得出位置。
-    /// 数字写成紧凑的「2/8」(不带空格,斜杠两侧的空隙会让它看起来跟圆点脱节),跟圆点之间只隔 8pt。
     // 语言选择并在这一页,不再是后面单独的一步。`L10n.t` 每次调用都重新解析
     // 语言(见 L10n.swift 里"不缓存"那段),所以在这里一改,**从下一步开始整个向导都是新
     // 语言** —— 而它原来排在第 6 步,前 5 步早就用错的语言讲完了。
@@ -375,65 +409,25 @@ struct OnboardingView: View {
         }
     }
 
-    private var playerChoiceStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("选择播放器"))
-                .font(.title2.bold())
-            // 现象是"把支持的播放器都写全"——这句原来漏了酷狗音乐
-            // (才接入,这句文案没跟着补)。"陆续支持中"的提示挪到网格里那张
-            // MorePlayersComingCard 卡片上了(用户第一次说"加几个点"时以为是指这句文案
-            // 末尾,截图纠正过来——指的是网格空出来那格,见下面 MorePlayersComingCard)。
-            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，浏览器里的 YouTube Music 也可以，还可以交给「自动识别」——平时用哪些就都勾上，随时可以在设置里改"))
-                .foregroundStyle(.secondary)
-            // 原来是一个纯文字下拉菜单,认不出图标、也看不出到底支持哪几家。换成一排
-            // 图标卡片,理由和取图标的办法见 PlayerChoiceCard 类头注。三列排 8 格:五个
-            // 具体播放器 + YouTube Music + 自动识别 + 一张 MorePlayersComingCard 占位,
-            // 正好铺满 3 行——不用横向滚动、也不会显得稀疏。
-            // (之前是 6 格 + 占位共 7 格;加了 YouTube Music 那一格之后是 8 格,
-            //  第三行仍然是"两张真卡 + 一格空",没有多出半空的一行。)
-            //
-            // 顺序不用 PlaybackPlayer.allCases 的声明顺序,走 displayOrder——
-            // 按系统语言排:简体中文语境国内三家排在 Spotify 前面,非简体中文
-            // 反过来。设置页"播放器"卡后来也用同一个顺序,见该属性类头注。
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                // 具体播放器(不含「自动识别」)。把「自动识别」和
-                // 「YouTube Music」的位置对调,所以这个 ForEach 从整份 displayOrder 收窄成
-                // "只排具体播放器",把「自动识别」挪到 YouTube Music **后面**单独排。
-                //
-                // ⚠️ 用 `filter` 从 displayOrder 派生,**不重抄一份数组** —— 那份顺序本身
-                // 是按系统语言算的(简体中文语境国内三家排在 Spotify 前面,非简体反过来,
-                // 见 `PlaybackPlayer.displayOrder`),抄一份就等于把语言排序这件事复制了
-                // 一遍;以后新增播放器也不用回来改这个文件。
-                ForEach(PlaybackPlayer.displayOrder.filter { $0 != .auto }) { player in
-                    // 从单选改成多选,跟设置页「播放器」卡口径一致(
-                    // 「这个引导页面之前调整了播放器的多选逻辑这里没改过来」)。此前这里
-                    // 刻意留着单选、注释里写着"不是遗漏",那条取舍被这次要求推翻了。
-                    //
     /// 标题问句 + 一句交代 Lyrimuse 跟着谁显示歌词;下面是装在一张淡玻璃卡里的 `PlayerPicker`
     /// (设置页那边包的是 `SettingsCard`,两处卡里的内容是同一个组件)。这一页不放设置页底下那行
     /// 「自动识别」说明:卡片上指向就能读到同一句提示。
-                    // 切换和"最后一个不能取消"的判断走 `features.togglePlayer` —— 跟设置页
-                    // 共用同一份,见那个方法的头注(选中集合的非空不变量在那里)。
-                    //
-                    // `isCoveredByAuto`:勾着「自动识别」(全新安装的默认值就是它)时,没单独
-                    // 勾上的那几张显示成"由自动识别接管" —— 跟设置页同一个组件、同一份判据
-                    // (两处网格必须长得一样,见 PlayerChoiceCard 头注)。这一页**不**跟着放
-                    // 设置页那行说明:高度预算本来就紧(见 body 顶部那条 ScrollView 兜底的
-                    // ⚠️),而这一步的副标题已经点过「自动识别」,卡片上指向就能读到那句提示。
-                    PlayerChoiceCard(player: player,
-                                     isSelected: features.players.contains(player),
-                                     isCoveredByAuto: features.players.contains(.auto)
-                                         && !features.players.contains(player)) {
-                        features.togglePlayer(player)
-                    }
-                }
-                // 五个具体播放器占掉 1 行 + 2 格之后,这三张接着往下排(第 2 行第 3 格 =
-                // YouTube Music,第 3 行 = 自动识别 + 陆续支持中)—— ForEach 之后紧跟着的
-                // 视图会被 LazyVGrid 自然往下排,不需要另外指定位置。
-                //
-                // YouTube Music 摆在这里而不是混进上面那个 ForEach:它不是
-                // `PlaybackPlayer` 的 case(理由见 `WebPlatformChoiceCard` 头注)。点它
-                // **不会**立刻跳去选浏览器,只是让后面多出一步 `.browserPairing`。
+    private var playerChoiceStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.t("你用什么听歌？"))
+                .font(.title2.bold())
+            // 这句不逐个列播放器名:网格里的卡片就是完整清单,文案里再列一遍每加一家就得回来改。
+            Text(L10n.t("Lyrimuse 会跟着正在播放的 App 显示歌词，之后随时能在设置里改"))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            // 图标网格(「自动识别」是其中一张卡)跟设置页「播放器」卡是同一个组件(PlayerPicker),两处必须长得一样。
+            // 网格只摆装了的播放器,没装的收进「更多播放器」,摆放规则见 PlayerPickerLayout。
+            //
+            // YouTube Music 追加在播放器卡后面:它不是 `PlaybackPlayer` 的 case(理由见
+            // `WebPlatformChoiceCard` 头注),点它**不会**立刻跳去选浏览器,只是让后面多出一步
+            // `.browserPairing`。它走的是浏览器配对那套状态,跟「自动识别」那张卡无关,勾没勾它都能点。
+            PlayerPicker(features: features) {
                 WebPlatformChoiceCard(
                     icon: WebPlatformIcon.image(Self.youTubeMusicPlatformID),
                     title: "YouTube Music",
@@ -441,20 +435,11 @@ struct OnboardingView: View {
                 ) {
                     toggleYouTubeMusic()
                 }
-                // 「自动识别」排在 YouTube Music 之后(对调)。
-                //
-                // ⚠️ 同样从 displayOrder 里取、不裸写 `PlaybackPlayer.auto`:这样"displayOrder
-                // 里有什么就显示什么"这条不变量对整个网格成立 —— 万一以后 displayOrder 不再
-                // 收 `.auto`(比如自动识别改成一个独立开关),这里跟着自动消失,而不是留一张
-                // 点了不知道会发生什么的孤卡。它在两种语言序里都排最后(实测),所以上面
-                // 那个 filter 摘掉它之后剩下的顺序逐项不变。
-                ForEach(PlaybackPlayer.displayOrder.filter { $0 == .auto }) { player in
-                    PlayerChoiceCard(player: player, isSelected: features.players.contains(player)) {
-                        features.togglePlayer(player)
-                    }
-                }
-                MorePlayersComingCard()
             }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.035)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+            .padding(.top, 16)
         }
     }
 
@@ -564,12 +549,6 @@ struct OnboardingView: View {
         // 自己先把候选分成两组,正是"点一下换位置"那个问题的来源。
         let isPaired = BrowserPairing.isPaired(bundleID, platformID: platformID)
         return WebPlatformChoiceCard(
-    /// 上一步选中的播放器里,有 AppleScript 字典的那几家各要一份「自动化」权限 ——
-    /// 一家一行,跟设置页那张卡列的是同一份列表(`automationTargets`)。
-    ///
-    /// 走到这一步时多半**已经有结果了**:上一步点中播放器的那一下就主动请求过
-    /// (`PlayerPicker` → `requestOnSelect`)。这一页因此更多是"核对 + 补救"——
-    /// 当时点了「不允许」、或者选的是「自动识别」而某家当时没在跑没能弹窗,在这里还能再点一次。
             icon: AppIconResolver.icon(forBundleID: bundleID),
             title: FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID,
             isSelected: isPaired
@@ -585,48 +564,70 @@ struct OnboardingView: View {
         }
     }
 
+    /// 上一步选中的播放器里,有 AppleScript 字典的那几家各要一份「自动化」权限 ——
+    /// 一家一行,跟设置页那张卡列的是同一份列表(`automationTargets`)。
+    ///
+    /// 走到这一步时多半**已经有结果了**:上一步点中播放器的那一下就主动请求过
+    /// (`PlayerPicker` → `requestOnSelect`)。这一页因此更多是"核对 + 补救"——
+    /// 当时点了「不允许」、或者选的是「自动识别」而某家当时没在跑没能弹窗,在这里还能再点一次。
     private var automationStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // ⚠️ 标题和正文一起改过,别照着旧版本改回去。
-            //
-            // 原文是「（必需）」+「没有它，悬浮歌词完全没法显示任何内容」。那是**旧世界的
-            // 说法**:接入 media-control 通道之前,Apple Music 的一切确实只能靠 AppleScript
-            // 读。现在基础的"在播什么"来自 collector 的 media-control 通道,自动化权限管的是
-            // `MediaControlClient.adaptedSnapshot`(Apple Music 的播放头与曲目信息整份
-            // 由它读)加上 `MusicPlaybackController` 里那一整套播放/资料库控制。也就是
-            // 说没有它歌词照样显示 —— 继续写"完全没法显示"是在吓唬用户。
-            //
-            // 强度也跟着降成「推荐」并从 `nextIsLocked` 里移出去,理由见那边。
-            Text(L10n.t("Apple Music 自动化权限（推荐）"))
+            // 标题和正文不能写成「（必需）」/「没有它，悬浮歌词完全没法显示任何内容」:
+            // 基础的"在播什么"来自 collector 的 media-control 通道,没有这个权限歌词照样
+            // 显示;自动化权限管的是 `MediaControlClient.adaptedSnapshot`(那几家的播放头与
+            // 曲目信息整份由它读)加上 `MusicPlaybackController` 里那一整套播放/资料库控制。
+            // 强度是「推荐」,不在 `nextIsLocked` 里,理由见那边。
+            Text(L10n.t("播放器自动化权限（推荐）"))
                 .font(.title2.bold())
-            Text(L10n.t("这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由后台服务读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"))
+            Text(L10n.t("用来校准播放进度，并让你在歌词上直接控制播放。不授权歌词照样显示，只是进度可能有偏差、控制按钮用不了。系统弹窗时选「允许」即可"))
                 .foregroundStyle(.secondary)
-            HStack {
-                Image(systemName: automationStatusIconName)
-                    .foregroundStyle(automationStatusIconColor)
-                Text(automationStatusCaption)
-                Spacer()
-                if isRequestingAutomation {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(automationActionTitle) { handleAutomationAction() }
-                }
-            }
-            if isRequestingAutomation {
-                if automationRequestTimedOut {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
-                        Button(L10n.t("打开系统设置")) {
-                            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+            ForEach(automationTargets, id: \.self) { player in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: automation.iconName(player))
+                            .foregroundStyle(automation.iconColor(player))
+                        Text(player.displayName)
+                        Text(automation.caption(player))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if automation.isRequesting(player) {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button(automation.actionTitle(player)) { automation.handleAction(player) }
                         }
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else {
-                    Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
+                    if automation.showsWaitingNote(player) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            PlayerAutomationWaitingNote(timedOut: automation.hasTimedOut(player))
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
                 }
+            }
+        }
+    }
+
+    /// 「完全磁盘访问」这一步。强度同 `.automation`:推荐、不锁「下一步」—— 没有它歌词照样能
+    /// 联网找到,只是用不上客户端自己的缓存和播放队列。
+    private var fullDiskAccessStep: some View {
+        let targets = fullDiskAccessTargets
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.t("完全磁盘访问权限（推荐）"))
+                .font(.title2.bold())
+            Text(FullDiskAccessGuide.reason(targets))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Image(systemName: fullDiskAccess.iconName(targets))
+                    .foregroundStyle(fullDiskAccess.iconColor(targets))
+                Text(fullDiskAccess.caption(targets))
+                Spacer()
+            }
+            if fullDiskAccess.grant(targets) != .granted || fullDiskAccess.restartPhase != .idle {
+                FullDiskAccessGuide(players: targets, showsReason: false)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -699,7 +700,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("译文与罗马音"))
                 .font(.title2.bold())
-            Text(L10n.t("听不懂的语言可以并排显示中文译文；日文、韩文、粤语还能标上罗马音跟着唱"))
+            Text(L10n.t("外语歌可以对照译文；日文、韩文、中文和粤语还能标上罗马音跟着唱"))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
                 toggleRow(
@@ -710,10 +711,10 @@ struct OnboardingView: View {
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示罗马音"),
-                    subtitle: L10n.t("日文、韩文、中文拼音、粤拼默认都会注音，可以在设置里单独关掉"),
+                    subtitle: L10n.t("日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭"),
                     isOn: $settings.showRomanization)
             }
-            Text(L10n.t("这两项只在「桌面悬浮歌词」和「歌词窗口」里显示——灵动岛受限于胶囊空间放不下，菜单栏歌词只能显示一行纯文字"))
+            Text(L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或罗马音"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -936,12 +937,22 @@ struct OnboardingView: View {
     private var readinessItems: [ReadinessItem] {
         var items: [ReadinessItem] = [
             ReadinessItem(id: "collector", ok: collectorRunning,
-                          title: L10n.t("常驻后台服务"), target: .background)
+                          title: L10n.t("后台采集服务"), target: .background)
         ]
-        if needsAppleMusicAutomation {
+        for player in automationTargets {
             items.append(ReadinessItem(
-                id: "automation", ok: automationStatus == .authorized,
-                title: L10n.t("Apple Music 自动化权限"), target: .automation))
+                id: "automation-\(player.rawValue)",
+                ok: automation.status(player) == .authorized,
+                title: String(format: L10n.t("%@ 自动化权限"), player.displayName),
+                target: .automation))
+        }
+        let fdaTargets = fullDiskAccessTargets
+        if !fdaTargets.isEmpty {
+            items.append(ReadinessItem(
+                id: "full-disk-access",
+                ok: fullDiskAccess.grant(fdaTargets) == .granted,
+                title: L10n.t("完全磁盘访问权限"),
+                target: .fullDiskAccess))
         }
         if wantsBrowserYouTubeMusic {
             items.append(ReadinessItem(
@@ -1056,8 +1067,10 @@ struct OnboardingView: View {
     /// (「自动识别和 youtubemusic 的顺序是不是应该换一下」)—— 两处顺序不一致,读的人会以为
     /// 其中一处是错的。
     private var chosenEntries: [ChosenEntry] {
+        // 「自动识别」下单独勾过的播放器不参与识别(见 PlayerPickerLayout),这里也不列。
+        let isAutoDetect = features.players.contains(.auto)
         var entries = PlaybackPlayer.displayOrder
-            .filter { $0 != .auto && features.players.contains($0) }
+            .filter { $0 != .auto && !isAutoDetect && features.players.contains($0) }
             .map(ChosenEntry.player)
         if wantsBrowserYouTubeMusic {
             entries.append(.webPlatform(id: Self.youTubeMusicPlatformID, title: "YouTube Music"))
@@ -1130,61 +1143,12 @@ struct OnboardingView: View {
 
     // 跟 GeneralSettingsTab 同一套状态展示逻辑,这里独立写一份而不是抽共享组件——
     // 就这几行纯展示分支,抽象成本比重复它本身更高。
-    private var automationStatusCaption: String {
-        switch automationStatus {
-        case .authorized: return L10n.t("已授权")
-        case .denied: return L10n.t("已拒绝")
-        case .notDetermined: return L10n.t("未授权")
-        }
-    }
-
-    private var automationStatusIconName: String {
-        switch automationStatus {
-        case .authorized: return "checkmark.circle.fill"
-        case .denied: return "xmark.circle.fill"
-        case .notDetermined: return "questionmark.circle.fill"
-        }
-    }
-
-    private var automationStatusIconColor: Color {
-        switch automationStatus {
-        case .authorized: return .green
-        case .denied: return .red
-        case .notDetermined: return .orange
-        }
-    }
-
-    private var automationActionTitle: String {
-        automationStatus == .notDetermined ? L10n.t("请求权限") : L10n.t("打开系统设置")
-    }
-
-    private func handleAutomationAction() {
-        if automationStatus == .notDetermined {
-            requestAutomationPermission()
-        } else {
-            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
-        }
-    }
-
-    // 见 MusicAutomationPermission.requestWithTimeout 注释——这一步不能直接在按钮
-    // 点击回调里同步调用,那样会把整个 App UI 冻结、表现成"点了没反应"。超时(返回
-    // nil)时 isRequestingAutomation 故意保持 true、不重新允许点"请求权限":原来那次
-    // 检查很可能还在后台跑着,不该让用户再并发触发第二次系统弹窗请求,只亮出"打开
-    // 系统设置"这条不冲突的备选路径。
-    private func requestAutomationPermission() {
-        isRequestingAutomation = true
-        automationRequestTimedOut = false
-        Task {
-            if let status = await MusicAutomationPermission.requestWithTimeout() {
-                automationStatus = status
-                isRequestingAutomation = false
-                automationRequestTimedOut = false
-            } else {
-                automationRequestTimedOut = true
-            }
-        }
-    }
-
+    /// 播放器网格点一下。切换本体走 `features.togglePlayer`(跟设置页共用那份"最后一个
+    /// 不能取消"的判断),**勾上**的那一下顺带把「自动化」权限要出来 —— 跟设置页
+    /// `toggleSelectedPlayer` 是同一条,分寸见 `PlayerAutomationPermissions.requestOnSelect`。
+    ///
+    /// 在这里要、而不是等到后面那一步:后面那一步只在**列表非空**时才存在,而列表正是由
+    /// 这一下决定的;等翻过去再问,用户已经离开"我刚说我用它"那个语境了。
     private func enableCollectorService() {
         isTogglingCollectorService = true
         collectorFailure = nil
@@ -1310,6 +1274,42 @@ private struct DisplayModeThumbnail: View {
                     .padding(.trailing, 3)
             }
             .frame(width: Self.width, height: Self.menuBarHeight, alignment: .trailing)
+        }
+    }
+}
+
+/// 引导窗口的磨砂玻璃底:`blendingMode = .behindWindow` 的 `NSVisualEffectView`,透出窗口后面的桌面
+/// 和别的窗口。
+///
+/// 材质用 `.hudWindow`:同一块彩色背景上并排比过,`.sidebar` 几乎是一块只透一点颜色的白板,
+/// `.popover` 次之,`.hudWindow` 透得最多、文字仍读得清;深色外观下它自动变深。
+/// `NSGlassEffectView`(液态玻璃)不适合铺整窗:窗口本身不透明,它只折射得到窗口里的东西,出来是一块实心灰。
+///
+/// 别换成 SwiftUI 的 `Material`:那是窗口**内部**混合(within-window),窗口底下是纯色时等于没模糊;
+/// `.containerBackground(_:for: .window)` 要 macOS 15,部署目标是 14。
+///
+/// 标题栏:scene 挂 `.windowStyle(.hiddenTitleBar)`(标题栏透明 + 内容铺满,玻璃才能通到窗顶),它顺带把
+/// 标题文字藏了,这里在进窗口时把 `titleVisibility` 设回 `.visible` —— 标题跟着界面语言走那条
+/// (`.navigationTitle`)仍然要看得见。别改成自己设 `titlebarAppearsTransparent` / `fullSizeContentView`:
+/// SwiftUI 管着 scene 的窗口样式,手设的会被它盖回去,标题栏留下一条底色带和分隔线。
+///
+/// `state = .active`:默认跟随窗口激活态,失焦时退成不透明的灰底 —— 引导过程中系统授权对话框一弹,
+/// 这扇窗就失焦,玻璃不该跟着一闪一闪。
+private struct OnboardingGlassBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = TitleRevealingEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+
+    private final class TitleRevealingEffectView: NSVisualEffectView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.titleVisibility = .visible
         }
     }
 }

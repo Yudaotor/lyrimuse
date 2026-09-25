@@ -69,6 +69,9 @@ type lastfmChartEntry struct {
 	Mbid         string
 }
 
+// lastfmReadClient 发 Last.fm 只读接口(周榜 / 歌手榜 / recenttracks)的请求。单测换成假服务器。
+var lastfmReadClient = http.DefaultClient
+
 func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
@@ -78,7 +81,7 @@ func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
 	if err != nil {
 		return err
 	}
-	resp, err := doHTTPTracked(http.DefaultClient, req)
+	resp, err := doHTTPTracked(lastfmReadClient, req)
 	if err != nil {
 		return err
 	}
@@ -162,6 +165,34 @@ func lastfmWeeklyTopArtists(ctx context.Context, user, apiKey string, from, to i
 	return entries, nil
 }
 
+// lastfmWeeklyTopAlbums 拉指定边界内的专辑排行。Artist 是专辑的署名歌手。
+func lastfmWeeklyTopAlbums(ctx context.Context, user, apiKey string, from, to int64) ([]lastfmChartEntry, error) {
+	var out struct {
+		WeeklyAlbumChart struct {
+			Album []struct {
+				Name      string `json:"name"`
+				PlayCount string `json:"playcount"`
+				Artist    struct {
+					Text string `json:"#text"`
+				} `json:"artist"`
+			} `json:"album"`
+		} `json:"weeklyalbumchart"`
+	}
+	params := neturl.Values{
+		"method": {"user.getWeeklyAlbumChart"}, "user": {user}, "api_key": {apiKey},
+		"from": {strconv.FormatInt(from, 10)}, "to": {strconv.FormatInt(to, 10)},
+	}
+	if err := lastfmAPIGet(ctx, params, &out); err != nil {
+		return nil, err
+	}
+	entries := make([]lastfmChartEntry, 0, len(out.WeeklyAlbumChart.Album))
+	for _, a := range out.WeeklyAlbumChart.Album {
+		pc, _ := strconv.Atoi(a.PlayCount)
+		entries = append(entries, lastfmChartEntry{Name: a.Name, Artist: a.Artist.Text, PlayCount: pc})
+	}
+	return entries, nil
+}
+
 // mostRecentMonday 返回 t 所在这一周的周一 00:00(本地时间)——ListenBrainz 源的周期
 // 边界用这个算，不依赖 Last.fm 账号自己的图表周(那是按首次 scrobble 日期定的、不一定
 // 是周一)。Go 的 time.Weekday: Sunday=0,Monday=1,...,Saturday=6，这里把 Sunday 当成 7
@@ -187,8 +218,8 @@ func mostRecentMonday(t time.Time) time.Time {
 // 两条路径共用同一份 weeklyState(见该类型声明处注释)，也共用同一套推送前提检查
 // (推送目的地未配置则整体跳过——alerter.push 本身也会在 url 为空时忽略，这里提前
 // 判断纯粹省一次网络请求)。
-func (p *poller) weeklyDigest(now time.Time) {
-	if !features.WeeklyDigest || p.lb.alerter == nil || p.lb.alerter.url == "" {
+func (p *poller) weeklyDigest(now time.Time, env digestEnv) {
+	if !features().WeeklyDigest || env.alerter == nil || env.alerter.url == "" {
 		return
 	}
 	if !p.weeklyLastCheckedAt.IsZero() && now.Sub(p.weeklyLastCheckedAt) < weeklyDigestCheckInterval {
@@ -196,16 +227,16 @@ func (p *poller) weeklyDigest(now time.Time) {
 	}
 	p.weeklyLastCheckedAt = now
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
-	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
-	source := resolveDigestSource(features.WeeklyDigestSource, lastfmConfigured, lbConfigured)
+	lastfmConfigured := env.cfg.LastfmUser != "" && env.cfg.lastfmBridgeAPIKey() != ""
+	lbConfigured := env.cfg.User != "" && env.cfg.Token != ""
+	source := resolveDigestSource(features().WeeklyDigestSource, lastfmConfigured, lbConfigured)
 	if source == "" {
 		return // 两个账号都没配，跳过
 	}
 
 	var from, to int64
 	if source == digestSourceLastfm {
-		weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey())
+		weeks, err := lastfmWeeklyChartList(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey())
 		if err != nil || len(weeks) == 0 {
 			return
 		}
@@ -225,9 +256,9 @@ func (p *poller) weeklyDigest(now time.Time) {
 	var stats digestStats
 	var err error
 	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), from, to)
+		stats, err = lastfmDigestStats(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey(), from, to)
 	} else {
-		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, from, to)
+		stats, err = listenbrainzDigestStats(env.ctx, env.lbRoot, env.cfg.User, from, to)
 	}
 	if err != nil {
 		return
@@ -238,6 +269,8 @@ func (p *poller) weeklyDigest(now time.Time) {
 	}
 	title := fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
 		time.Unix(from, 0).Local().Format("01-02"), time.Unix(to, 0).Local().Format("01-02"))
-	digestPush(p.lb.alerter, title, stats)
+	if digestPush(env.alerter, title, stats) != nil {
+		return
+	}
 	p.weeklyState.save(to)
 }

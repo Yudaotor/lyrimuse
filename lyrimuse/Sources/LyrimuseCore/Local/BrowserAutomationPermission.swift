@@ -51,6 +51,7 @@ public enum BrowserAutomationPermission {
         "company.thebrowser.Browser": "\(NSHomeDirectory())/Library/Application Support/Arc/User Data/Default/Preferences",
         "com.google.Chrome": "\(NSHomeDirectory())/Library/Application Support/Google/Chrome/Default/Preferences",
         "com.microsoft.edgemac": "\(NSHomeDirectory())/Library/Application Support/Microsoft Edge/Default/Preferences",
+        "com.brave.Browser": "\(NSHomeDirectory())/Library/Application Support/BraveSoftware/Brave-Browser/Default/Preferences",
     ]
     private static let safariBundleID = "com.apple.Safari"
     private static let safariPrefKey = "AllowJavaScriptFromAppleEvents" as CFString
@@ -75,6 +76,7 @@ public enum BrowserAutomationPermission {
     public static let knownBrowserBundleIDs: [String] = [
         "com.google.Chrome",
         "com.microsoft.edgemac", // Edge
+        "com.brave.Browser", // Brave
         safariBundleID,
     ]
 

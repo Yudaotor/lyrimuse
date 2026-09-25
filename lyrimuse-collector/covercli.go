@@ -48,7 +48,7 @@ func runRecheckCoverCLI(args []string) {
 	}
 	cfgDir := configDir()
 	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选),跟 dedupe-entries 同款。
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	// 封面主色只在配了状态中继时才算(见 relay.go 的 webRelayURL 头注)。这条子命令在
 	// main() 的子命令分流阶段就返回了,跑不到常驻路径那句赋值 —— 不补这一句,给网页配了
 	// 中继的用户在这里会把 accent_color 写成空(下面 -apply 那步是连着封面四件套一起写回的)。
@@ -113,7 +113,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 	}
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。deviceCoverURL
 	// 传空串:这条 CLI 没有实时播放上下文,拿不到"设备现在正在播这首歌"这个前提。
-	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "")
+	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "", nil)
 	p.newURL, p.newSource, p.newAlbum, p.newAccent = fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	// 换封面判定用的专辑名:播放器没报时是 Apple 目录回填的那个(resolveTrackEnrichment 里刚同步查过,这里读缓存;
 	// 这个一次性进程的回填缓存 path 为空 = 只用内存,不会盖掉常驻实例那份)。
@@ -215,7 +215,7 @@ func runRecheckInstrumentalCLI(args []string) {
 		log.Fatalf("recheck-instrumental: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	// 跟 recheck-cover 同款:刻意不读歌手身份/别名缓存,免得拿空 map 盖掉常驻实例攒的那份。
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")

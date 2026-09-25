@@ -43,7 +43,7 @@ func runRetranslateRepeatedCLI(args []string) {
 		log.Fatalf("retranslate-repeated: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
@@ -77,7 +77,7 @@ func hasRepeatedTranslatableLine(lyrics, target string) bool {
 }
 
 func runRetranslateRepeated(apply bool) int {
-	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	if target == "" {
 		fmt.Fprintln(os.Stderr, "没有配置译文目标语言,无事可做")
 		return 1

@@ -50,6 +50,17 @@ func runRecheckMotionCoverCLI(args []string) {
 	}
 
 	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
+	// 这份也必须加载。不加载的话 motionCoverFor 对每一张专辑都当"没查过",逐张
+	// 重抓 330 KB 的专辑页(还因为 motionCoverPath 为空而存不下来);而
+	// motionCoverAlbumHasKnownVideo 更是会对全表回 false,下面第②条命中条件直接哑掉。
+	loadMotionCoverCache(filepath.Join(cfgDir, clientName+"-motion-cover-cache.json"))
+	if !*apply {
+		// 预演不落任何盘:核验时可能要补抓专辑页(见 motionCoverAlbumArtworkFor),那会写
+		// motion 缓存;常驻实例这时还开着,两边各写各的整份 map 只会互相覆盖。
+		motionCoverMu.Lock()
+		motionCoverPath = ""
+		motionCoverMu.Unlock()
+	}
 	os.Exit(runRecheckMotionCover(*apply, *key))
 }
 
@@ -62,35 +73,54 @@ func runRecheckMotionCover(apply bool, onlyKey string) int {
 	enrichMu.Lock()
 	var keys []string
 	for k, e := range enrichCache {
-		if e.MotionCoverChecked && e.MotionCoverURL == "" {
+		if e.MotionCoverURL != "" {
+			continue
+		}
+		_, title, album := splitEnrichKey(k)
+		switch {
+		case e.MotionCoverChecked:
+			// ① 查过了、结论是"这条没有"。值得拿它**现在**的封面再问一次:当初比对用的
+			//    可能是一张后来被换掉的封面(见文件头注那个 Prince《Musicology》实测)。
+			keys = append(keys, k)
+		case motionCoverAlbumHasKnownVideo(e, title, album):
+			// ② 一位结论都没有,而这张专辑**本地缓存里已确认**有动态封面 —— 说明它卡在了
+			//    那条"fresh 的结论落不到这张封面上"的死角里(见
+			//    recheckMotionCoverAgainstCurrentCover 头注)。自动路径现在会自愈,但只在
+			//    这首歌下一次被播到时;这里是给存量的一次性清理。
+			//    判据必须是 motionCoverAlbumHasKnownVideo 而**不是** motionCoverWorthBackfill:
+			//    后者对"专辑还没查过"也回 true,那会把几千条记录扫进来,每条都去抓一次
+			//    330 KB 的专辑页——这条命令的定位是清理死角,不是代替日常 backfill。
 			keys = append(keys, k)
 		}
 	}
 	enrichMu.Unlock()
 	sort.Strings(keys) // 输出顺序稳定,方便人工核对
 
-	fmt.Printf("扫描完成:%d 条命中(已查过动态封面、结论是没有,值得用当前封面重验一次)\n\n", len(keys))
+	fmt.Printf("扫描完成:%d 条命中(结论是没有、或卡在没结论,值得用当前封面重验一次)\n\n", len(keys))
 
 	ctx := context.Background()
-	changed, unchanged, failed := 0, 0, 0
+	changed, recorded, unchanged, failed := 0, 0, 0, 0
 	for _, key := range keys {
 		switch recheckOneMotionCoverKey(ctx, apply, key) {
 		case "changed":
 			changed++
+		case "recorded":
+			recorded++
 		case "unchanged":
 			unchanged++
 		case "failed":
 			failed++
 		}
 	}
-	if apply && changed > 0 {
+	if apply && changed+recorded > 0 {
 		saveEnrichCache()
 	}
 	verb := "预演"
 	if apply {
 		verb = "完成"
 	}
-	fmt.Printf("\n%s:%d 条翻案,%d 条结论不变,%d 条失败", verb, changed, unchanged, failed)
+	fmt.Printf("\n%s:%d 条翻案,%d 条首次定案,%d 条结论不变,%d 条失败",
+		verb, changed, recorded, unchanged, failed)
 	if !apply {
 		fmt.Print("(加 -apply 才真写)")
 	}
@@ -111,7 +141,7 @@ func runRecheckMotionCoverOne(apply bool, key string) int {
 		return 1
 	}
 	result := recheckOneMotionCoverKey(context.Background(), apply, key)
-	if apply && result == "changed" {
+	if apply && (result == "changed" || result == "recorded") {
 		saveEnrichCache()
 	}
 	verb := "预演"
@@ -146,22 +176,33 @@ func recheckOneMotionCoverKey(ctx context.Context, apply bool, key string) strin
 		fmt.Printf("── %s\n   跳过:key 不是 \"歌手|歌名|专辑\" 三段\n", key)
 		return "failed"
 	}
+	hadVerdict := e.MotionCoverChecked
 	e.MotionCoverChecked = false
 	e.fillMotionCover(ctx, title, album)
 	fmt.Printf("── %s\n", key)
+	result := "changed"
 	switch {
 	case !e.MotionCoverChecked:
 		// 这一轮没查成(在飞/请求失败)——不算失败,下次自然再来。
 		fmt.Println("   跳过:这一轮没查成(网络/限流),保持原样,下次还会再试")
 		return "unchanged"
 	case e.MotionCoverURL == "":
-		fmt.Println("   确认:这条记录确实没有动态封面(结论不变)")
-		return "unchanged"
+		if hadVerdict {
+			fmt.Println("   确认:这条记录确实没有动态封面(结论不变)")
+			return "unchanged"
+		}
+		// 这一支**必须往下走去写回**:进来时这条一位结论都没有(卡在死角里的那批),
+		// 现在拿它真正在用的封面判出了"确实没有" —— 这是新结论,不落盘的话它每一轮都会
+		// 被重新扫进来、重新发两次 HTTP,正是 MotionCoverChecked 那一位要防的事。
+		fmt.Println("   定案:这条记录确实没有动态封面(此前一位结论都没有,这次记下来)")
+		result = "recorded"
+	case e.MotionCoverIdentityVerified:
+		fmt.Printf("   翻案(专辑身份核验放行,首帧跟封面对不上):补上动态封面 %s\n", abbrev(e.MotionCoverURL, 72))
 	default:
 		fmt.Printf("   翻案:补上动态封面 %s\n", abbrev(e.MotionCoverURL, 96))
 	}
 	if !apply {
-		return "changed"
+		return result
 	}
 	enrichMu.Lock()
 	cur, still := enrichCache[key]
@@ -174,9 +215,10 @@ func recheckOneMotionCoverKey(ctx context.Context, apply bool, key string) strin
 	cur.MotionCoverChecked = e.MotionCoverChecked
 	cur.MotionCoverURL = e.MotionCoverURL
 	cur.MotionPreviewURL = e.MotionPreviewURL
+	cur.MotionCoverIdentityVerified = e.MotionCoverIdentityVerified
 	enrichCache[key] = cur
 	enrichDirty = true
 	enrichMu.Unlock()
 	fmt.Println("   已写入")
-	return "changed"
+	return result
 }

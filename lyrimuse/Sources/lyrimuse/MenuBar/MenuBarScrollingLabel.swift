@@ -75,6 +75,11 @@ final class MenuBarScrollingLabel: NSView {
     private static let iconFillAnimationKey = "lyrimuse.progress-fill"
     private static let iconBasePositionAnimationKey = "lyrimuse.progress-base-pos"
     private static let iconBaseBoundsAnimationKey = "lyrimuse.progress-base-bounds"
+    private static let gapDotsBreatheAnimationKey = "lyrimuse.gapdots-breathe"
+    private static let gapDotsOpacityAnimationKey = "lyrimuse.gapdots-opacity"
+    /// 一个呼吸周期 / 一段点亮爬升各采几个关键帧。曲线是平滑的三角函数与线性段,
+    /// 采密了只是白占内存;48 帧摊在 7s 上约 7Hz,肉眼已经看不出折线。
+    private static let gapDotsSampleCount = 48
 
     private let clipLayer = CALayer()
     private let contentLayer = CALayer()
@@ -89,6 +94,11 @@ final class MenuBarScrollingLabel: NSView {
     private let iconFillLayer = CALayer()
     private let secondaryClipLayer = CALayer()
     private let secondaryTextLayer = CALayer()
+    /// 前奏/间奏那三颗呼吸圆点。**挂在 `contentLayer` 里**,跟(这一档里是空白的)文字长图
+    /// 同一个坐标系 —— 静止落位、对齐方式、槽宽让位这些都由既有的文字那条路算好了,圆点
+    /// 只要贴着那张空白位图画就天然落在对的地方,不用再写一套摆位。
+    private let gapDotsHostLayer = CALayer()
+    private var gapDotLayers: [CALayer] = []
     /// 副行装不下时右端渐隐用的遮罩(只在装不下时挂到 secondaryClipLayer.mask 上,见 placeSecondaryText)。
     private let secondaryFadeMask = CAGradientLayer()
 
@@ -138,6 +148,16 @@ final class MenuBarScrollingLabel: NSView {
         /// 副行四选一。`.off` = 单行排法(改动前逐像素不变);其余 = 双排,主行换成 10pt、副行 9pt
         /// (见 MenuBarLyricRows)。它同时决定副行图层的透明度(译文 / 罗马音 / 下一句各一档)。
         var secondaryKind: LyricSecondaryLine
+        /// 这一档是前奏/间奏三点时,那段间奏的起止(歌词时间轴毫秒)。点亮进度按它算。
+        /// nil = 这一档不是三点,或者拿不到窗口(那时三颗点只呼吸、不推进点亮)。
+        var gapWindow: GapWindow?
+    }
+
+    /// 一段间奏的起止。跟 Core 的 `LyricsGapWindow` 同形但**不复用**:那个住在歌词引擎里,
+    /// 这里只是把两个数捎给图层,不想为此让菜单栏渲染层依赖引擎的类型。
+    struct GapWindow: Equatable {
+        let startMs: Int
+        let endMs: Int
     }
 
     private var plan: Plan?
@@ -213,6 +233,17 @@ final class MenuBarScrollingLabel: NSView {
         contentLayer.addSublayer(baseClipLayer)
         fillClipLayer.addSublayer(fillTextLayer)
         contentLayer.addSublayer(fillClipLayer)
+        // 三颗圆点跟文字长图同住 contentLayer(理由见 gapDotsHostLayer 声明处)。每颗的
+        // anchorPoint 是**中心**而不是零 —— 呼吸是绕自己中心缩放,归零的话会朝右上角鼓出去。
+        gapDotsHostLayer.anchorPoint = .zero
+        gapDotsHostLayer.isHidden = true
+        for _ in 0 ..< GapDotsCurve.dotCount {
+            let dot = CALayer()
+            dot.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            gapDotsHostLayer.addSublayer(dot)
+            gapDotLayers.append(dot)
+        }
+        contentLayer.addSublayer(gapDotsHostLayer)
         clipLayer.addSublayer(contentLayer)
         layer?.addSublayer(clipLayer)
         // 进度图标那一支。几何关系跟上面那对裁剪层**逐条对称**,只是把横向换成纵向:
@@ -266,13 +297,15 @@ final class MenuBarScrollingLabel: NSView {
                  followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  icon: IconBadge? = nil,
                  secondaryText: String? = nil,
-                 secondaryKind: LyricSecondaryLine = .off) {
+                 secondaryKind: LyricSecondaryLine = .off,
+                 gapWindow: GapWindow? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: AppSettings.shared.menuBarLyricsAlignment,
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
                         pacing: pacing, fillPath: fillPath, followPath: followPath, icon: icon,
-                        secondaryText: secondaryText, secondaryKind: secondaryKind)
+                        secondaryText: secondaryText, secondaryKind: secondaryKind,
+                        gapWindow: gapWindow)
         guard next != plan else {
             isHidden = false
             return
@@ -322,6 +355,8 @@ final class MenuBarScrollingLabel: NSView {
         // contents 换掉、裁剪层的 bounds 也被重设,所以每次走到这儿都得按存底时钟重装一次,
         // 否则换句那一下进度会跳回 0 停在那儿。
         applyProgressFill()
+        // 三点同理:换档 / 换间奏窗口都要按存底时钟重装。
+        applyGapDots()
         needsLayout = true
     }
 
@@ -337,6 +372,7 @@ final class MenuBarScrollingLabel: NSView {
             karaokeClock = nil
             applyKaraokeFill()
             applyFollowScroll()
+            applyGapDots()
             return
         }
         let next = KaraokeClock(baseMs: positionMs, rate: rate, playing: playing, capturedAt: Date())
@@ -349,6 +385,7 @@ final class MenuBarScrollingLabel: NSView {
         karaokeClock = next
         applyKaraokeFill()
         applyFollowScroll()
+        applyGapDots()
     }
 
     /// 漂移门看的"动画在跑":填色那三条,或跟唱滚动那一条(卡拉OK关着时只有
@@ -357,6 +394,9 @@ final class MenuBarScrollingLabel: NSView {
         fillClipLayer.animation(forKey: Self.fillAnimationKey) != nil
             || (plan?.followPath != nil
                 && contentLayer.animation(forKey: Self.scrollAnimationKey) != nil)
+            // 三点这一档没有文字、既不染色也不滚,上面两条都判不出"有东西在动";不带它的话
+            // 漂移门会一直放行重装,锚点每 ~2s 例行重发就把呼吸打回相位起点、看着一顿一顿。
+            || gapDotLayers.first?.animation(forKey: Self.gapDotsBreatheAnimationKey) != nil
     }
 
     /// 整首歌的进度对表(进度图标用)。跟上面那条逐字染色的对表是**两条独立通道**,由
@@ -406,6 +446,7 @@ final class MenuBarScrollingLabel: NSView {
         iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+        removeGapDotsAnimations()
         preparedIcon = nil
         preparedSecondary = nil
         CATransaction.begin()
@@ -413,6 +454,7 @@ final class MenuBarScrollingLabel: NSView {
         textLayer.contents = nil
         fillTextLayer.contents = nil
         fillClipLayer.isHidden = true
+        gapDotsHostLayer.isHidden = true
         secondaryTextLayer.contents = nil
         secondaryClipLayer.isHidden = true
         iconBaseLayer.contents = nil
@@ -448,6 +490,7 @@ final class MenuBarScrollingLabel: NSView {
         textLayer.contents = nil
         fillTextLayer.contents = nil
         fillClipLayer.isHidden = true
+        gapDotsHostLayer.isHidden = true
         // 副行是歌词的一部分,跟主行一起收(图标留着)。
         secondaryTextLayer.contents = nil
         secondaryClipLayer.isHidden = true
@@ -465,6 +508,8 @@ final class MenuBarScrollingLabel: NSView {
         // 反白期间进度填色也整个隐掉(同逐字染色:基础图已换成选中色,强调色叠在选中
         // 背景上要么撞色要么看不清)。关掉菜单恢复。
         applyProgressFill()
+        // 三点只换颜色(上一行的 rebuildImage 已经换好了),动画照跑 —— 点开菜单看一眼
+        // 再关掉,呼吸不该被打回相位起点。
     }
 
     // 位图比例跟着按钮所在窗口走:状态项在不同 DPI 的显示器之间迁移、或第一次挂进
@@ -487,8 +532,16 @@ final class MenuBarScrollingLabel: NSView {
     }
 
     // 系统在浅色/深色之间切换时,labelColor 解析出来的是另一个值,得重画。
+    //
+    // 别在这里无条件 `rebuildImage()`:这个回调**不等于外观真的变了**。状态栏项在系统里
+    // 有多份 replicant 快照(实测 5 个窗口),AppKit 每重绘一份就对源视图 `setAppearance:`
+    // 一次,于是内容和外观都没动时回调照样连发。一次 rebuildImage 是三整行文字栅格化
+    // (主行/染色行/副行)加两张图标,全在主线程 —— 连发几次就是换句那一拍一段看得见的卡顿,
+    // 而且悬浮歌词/灵动岛/菜单栏/歌词窗口共用这条主线程,会一起停。
+    // 输入一个字节都没变时排出来的图逐像素相同,直接复用。
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        guard let now = currentBitmapInputs, now != lastBitmapInputs else { return }
         rebuildImage()
     }
 
@@ -508,8 +561,6 @@ final class MenuBarScrollingLabel: NSView {
         /// 那枚进度图标;没开就是 nil。
         let icon: CGRect?
     }
-        // 三点只换颜色(上一行的 rebuildImage 已经换好了),动画照跑 —— 点开菜单看一眼
-        // 再关掉,呼吸不该被打回相位起点。
 
     func contentGeometry() -> ContentGeometry? {
         guard let plan else { return nil }
@@ -532,13 +583,6 @@ final class MenuBarScrollingLabel: NSView {
         // 的一拍)时,原来的居中公式会算出大负数/大偏移,把可视窗甩到槽位外。
         // 开着进度图标时,这一格里是**并排的两块**:图标 + 间距 + 歌词格。整块一起在按钮里
         // 居中,图标按设置落在左端或右端;歌词格的宽度**不受影响**(图标占的是额外让出来的
-    //
-    // 别在这里无条件 `rebuildImage()`:这个回调**不等于外观真的变了**。状态栏项在系统里
-    // 有多份 replicant 快照(实测 5 个窗口),AppKit 每重绘一份就对源视图 `setAppearance:`
-    // 一次,于是内容和外观都没动时回调照样连发。一次 rebuildImage 是三整行文字栅格化
-    // (主行/染色行/副行)加两张图标,全在主线程 —— 连发几次就是换句那一拍一段看得见的卡顿,
-    // 而且悬浮歌词/灵动岛/菜单栏/歌词窗口共用这条主线程,会一起停。
-    // 输入一个字节都没变时排出来的图逐像素相同,直接复用。
         // 地方,用户设的「最大宽度」仍然全是歌词的)。
         //
         // 让出多宽用 `MenuBarProgressIcon.reservedWidth` —— 跟状态栏项**出生时**算槽宽
@@ -701,6 +745,53 @@ final class MenuBarScrollingLabel: NSView {
         applyProgressFill()
     }
 
+    /// 上一次 `rebuildImage()` 真正排出来那张图对应的全部输入。
+    ///
+    /// 前七项跟 `present()` 里 `bitmapsUnchanged` 那道判定一一对应;后四项(两个解析色、
+    /// 位图比例、外观)在那条路径上恒定,在外观回调这条路径上不是,所以一并记。
+    private struct BitmapInputs: Equatable {
+        var text: String
+        var hasFill: Bool
+        var icon: IconBadge?
+        var fontWeight: OverlayFontWeight
+        var fontSize: CGFloat
+        var secondaryText: String?
+        var secondaryKind: LyricSecondaryLine
+        var tint: NSColor
+        var fill: NSColor
+        var scale: CGFloat
+        var appearance: NSAppearance.Name
+    }
+
+    private var lastBitmapInputs: BitmapInputs?
+
+    /// 一组输入排出来的那几张图。
+    private struct BuiltBitmaps {
+        var main: MenuBarMarqueeRenderer.PreparedLine
+        var fill: MenuBarMarqueeRenderer.PreparedLine?
+        var secondary: MenuBarMarqueeRenderer.PreparedLine?
+        var icon: (base: MenuBarProgressIcon.Prepared, fill: MenuBarProgressIcon.Prepared)?
+    }
+
+    /// 排过的图按输入存住,最近的在前。
+    ///
+    /// 只记一份"上次的输入"不够:AppKit 给每一份 replicant 快照设的外观**不一定相同**,
+    /// 回调于是在两种外观之间交替到来,单值判重每次都打空、每次都整套重排。存住两种外观
+    /// 各自那一份,第二轮起就全是命中。键里已经含文本/字体/颜色/比例/外观,换句换设置自然
+    /// 落空,不需要另外失效,旧条目靠 `bitmapCacheLimit` 挤掉。
+    private var bitmapCache: [(inputs: BitmapInputs, built: BuiltBitmaps)] = []
+    private static let bitmapCacheLimit = 4
+
+    private var currentBitmapInputs: BitmapInputs? {
+        guard let plan else { return nil }
+        return BitmapInputs(
+            text: plan.text, hasFill: plan.fillPath != nil, icon: plan.icon,
+            fontWeight: plan.fontWeight, fontSize: plan.fontSize,
+            secondaryText: plan.secondaryText, secondaryKind: plan.secondaryKind,
+            tint: tintColor, fill: karaokeFillColor, scale: menuBarBitmapScale,
+            appearance: effectiveAppearance.name)
+    }
+
     /// 按当前颜色重排这一句。**不重启动画**:图片尺寸只跟文字+字体有关,颜色变了尺寸不变,
     /// 所以换 contents 是安全的,position 和动画原封不动(滚动**和**填色两条都是)。
     private func rebuildImage() {
@@ -709,11 +800,24 @@ final class MenuBarScrollingLabel: NSView {
         // 位图按**这个视图所在窗口**的比例栅格化(见 NSView.menuBarBitmapScale);
         // 排完记在 prepared.scale 里,换屏时跟当前值比对决定要不要重排(rebuildIfScaleChanged)。
         let scale = menuBarBitmapScale
+        // 先记下这一次要排的输入:下面的绘制会走 performAsCurrentDrawingAppearance,
+        // 那期间再来的外观回调靠它判重(见 viewDidChangeEffectiveAppearance),否则会套娃。
+        let inputs = currentBitmapInputs
+        lastBitmapInputs = inputs
         var built: MenuBarMarqueeRenderer.PreparedLine?
         var fillBuilt: MenuBarMarqueeRenderer.PreparedLine?
         var secondaryBuilt: MenuBarMarqueeRenderer.PreparedLine?
         var iconBase: MenuBarProgressIcon.Prepared?
         var iconFill: MenuBarProgressIcon.Prepared?
+        // 这组输入排过就直接复用(见 bitmapCache)。
+        let cached = inputs.flatMap { i in bitmapCache.first(where: { $0.inputs == i })?.built }
+        if let cached {
+            built = cached.main
+            fillBuilt = cached.fill
+            secondaryBuilt = cached.secondary
+            iconBase = cached.icon?.base
+            iconFill = cached.icon?.fill
+        }
         // 双排:主行按 10pt 那套字体画、位图不留富余;副行 9pt **同一个颜色**,压淡靠图层
         // opacity 而不是改颜色 —— labelColor 是动态色,改 alpha 再解析容易出错;而且反白态换成选中色时
         // 副行同样只需要压淡,不用另算一个色。
@@ -723,6 +827,7 @@ final class MenuBarScrollingLabel: NSView {
         // 绘制那一刻按"当前绘制 appearance"决定的。不套这一层的话,深色菜单栏上会画出
         // 一行几乎看不见的深色字(取决于 App 自己的 appearance,而不是菜单栏的)。
         effectiveAppearance.performAsCurrentDrawingAppearance {
+            guard cached == nil else { return }
             built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color, scale: scale,
                                                    font: mainFont, exactBox: twoRows)
             if plan.fillPath != nil {
@@ -744,14 +849,29 @@ final class MenuBarScrollingLabel: NSView {
                                                       scale: scale)
             }
         }
+        if cached == nil, let inputs, let main = built {
+            bitmapCache.insert(
+                (inputs, BuiltBitmaps(
+                    main: main, fill: fillBuilt, secondary: secondaryBuilt,
+                    icon: iconBase.flatMap { b in iconFill.map { f in (base: b, fill: f) } })),
+                at: 0)
+            if bitmapCache.count > Self.bitmapCacheLimit { bitmapCache.removeLast() }
+        }
         guard let built else {
             // 排版失败(宽度算成 0、内存分配失败)——宁可什么都不显示,也不要留半张旧图。
             isHidden = true
+            // 这一次没排出来,判重记录必须清掉,否则下一次同样输入会被挡在门外、永远不重试。
+            lastBitmapInputs = nil
             return
         }
         prepared = built
+        // 动态色(labelColor / 选中色)要在按钮当前 appearance 下解析成 CGColor,理由同下面
+        // 那张位图 —— 不解析的话深色菜单栏上会画出一组几乎看不见的深色圆点。
+        var dotCGColor = color.cgColor
+        effectiveAppearance.performAsCurrentDrawingAppearance { dotCGColor = color.cgColor }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        layoutGapDots(boxWidth: built.textWidth, boxHeight: built.pointHeight, color: dotCGColor)
         textLayer.contents = built.cg
         textLayer.contentsScale = built.scale
         // 用 bounds 而不是 frame:frame 会连 position 一起写,那就把动画的落点冲掉了。
@@ -1064,6 +1184,115 @@ final class MenuBarScrollingLabel: NSView {
     ///
     /// 播放中:一条从此刻到放完的线性动画,fillMode=forwards 停在满格、不循环。
     /// 暂停 / 曲长未知 / 菜单反白:静置(曲长未知就是 0,也就是整枚基础色,不假装有进度)。
+    // MARK: - 前奏/间奏的三颗呼吸圆点
+
+    /// 摆圆点。调用方(`rebuildImage`)负责套 CATransaction。
+    ///
+    /// 盒子就是那张**空白**文字长图的矩形(见 `MenuBarMarqueeRenderer.prepare` 对
+    /// `gapDotsToken` 的分支)——静止落位、对齐方式、图标让位这些都由文字那条路算过了,
+    /// 圆点贴着它画就天然落在对的地方。别把圆点挪去 `layout()` 里按 `geometry.lyrics`
+    /// 自己摆一遍:那会绕开滚动/对齐那套坐标,短句靠边的设置对三点就失效了。
+    private func layoutGapDots(boxWidth: CGFloat, boxHeight: CGFloat, color: CGColor) {
+        guard let plan, plan.text == MenuBarMarqueeRenderer.gapDotsToken else {
+            gapDotsHostLayer.isHidden = true
+            return
+        }
+        let pointSize = MenuBarMarqueeRenderer
+            .mainFont(for: plan.text, twoRows: plan.secondaryKind.showsSecondaryRow).pointSize
+        let metrics = MenuBarMarqueeRenderer.gapDotsMetrics(fontSize: pointSize)
+        gapDotsHostLayer.frame = CGRect(x: 0, y: 0, width: boxWidth, height: boxHeight)
+        gapDotsHostLayer.isHidden = false
+        let count = CGFloat(GapDotsCurve.dotCount)
+        let span = count * metrics.dot + (count - 1) * metrics.spacing
+        // 盒子比三颗点宽出的那一点是给呼吸留的余量(见 gapDotsWidth),居中摊到两侧。
+        let left = ((boxWidth - span) / 2).rounded()
+        let centerY = (boxHeight / 2).rounded()
+        for (i, dot) in gapDotLayers.enumerated() {
+            dot.bounds = CGRect(x: 0, y: 0, width: metrics.dot, height: metrics.dot)
+            dot.cornerRadius = metrics.dot / 2
+            dot.backgroundColor = color
+            dot.position = CGPoint(x: left + CGFloat(i) * (metrics.dot + metrics.spacing) + metrics.dot / 2,
+                                   y: centerY)
+        }
+    }
+
+    private func removeGapDotsAnimations() {
+        for dot in gapDotLayers {
+            dot.removeAnimation(forKey: Self.gapDotsBreatheAnimationKey)
+            dot.removeAnimation(forKey: Self.gapDotsOpacityAnimationKey)
+        }
+    }
+
+    /// 装上三点的两条动画:整组同步的**呼吸**(缩放,无限循环)与逐颗的**点亮**(不透明度,
+    /// 一次走完这段间奏)。跟这个文件里另外几条动画同一个哲学 —— 装好之后主线程一帧都不碰。
+    ///
+    /// 两条都从 `GapDotsCurve` 采样成关键帧,而不是用 CABasicAnimation 配缓动去"近似"那条
+    /// 曲线:另外三个展示面是逐帧求值同一个函数的,近似一次就意味着同屏两处的节奏对不上。
+    ///
+    /// **相位要对齐播放位置**,不能让动画从周期起点开跑:菜单栏和悬浮歌词常常同屏,
+    /// 各跑各的相位就是两组点各鼓各的。呼吸那条的 `beginTime` 因此往回挪"此刻在周期里
+    /// 走了多少"。
+    ///
+    /// 暂停 / 没有时钟时只落静止值、不装动画 —— 位置冻住,三颗点就该跟着冻住。
+    private func applyGapDots() {
+        removeGapDotsAnimations()
+        guard let plan, plan.text == MenuBarMarqueeRenderer.gapDotsToken else { return }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let nowMs = karaokeClock?.positionMs() ?? plan.gapWindow?.startMs ?? 0
+        // 拿不到间奏窗口时进度按 0(三颗点只呼吸、不推进点亮):占位判据(compactShowsPlaceholder)
+        // 和间奏窗口是两条各自独立的口径,极短的那一拍可能只有前者成立。
+        let progressNow = plan.gapWindow.map {
+            GapDotsCurve.progress(posMs: nowMs, startMs: $0.startMs, endMs: $0.endMs)
+        } ?? 0
+        let breatheNow = GapDotsCurve.breathe(atMs: nowMs, reduceMotion: reduceMotion)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (i, dot) in gapDotLayers.enumerated() {
+            dot.opacity = Float(GapDotsCurve.opacity(dot: i, progress: progressNow))
+            dot.transform = CATransform3DMakeScale(breatheNow, breatheNow, 1)
+        }
+        CATransaction.commit()
+
+        guard let clock = karaokeClock, clock.playing, clock.rate > 0 else { return }
+        let samples = Self.gapDotsSampleCount
+        let begin = gapDotsHostLayer.convertTime(CACurrentMediaTime(), from: nil)
+
+        if !reduceMotion {
+            let periodMs = GapDotsCurve.breathePeriodMs
+            let duration = periodMs / 1000 / clock.rate
+            let phase = Double(nowMs).truncatingRemainder(dividingBy: periodMs) / periodMs
+            let breathe = CAKeyframeAnimation(keyPath: "transform.scale")
+            breathe.values = (0...samples).map { k in
+                NSNumber(value: GapDotsCurve.breathe(atMs: Int(periodMs * Double(k) / Double(samples))))
+            }
+            breathe.duration = duration
+            breathe.calculationMode = .linear
+            breathe.repeatCount = .infinity
+            breathe.beginTime = begin - phase * duration
+            breathe.isRemovedOnCompletion = false
+            // 同一条动画对象 add 给三个图层没问题 —— CALayer.add 收的时候会自己拷一份。
+            for dot in gapDotLayers { dot.add(breathe, forKey: Self.gapDotsBreatheAnimationKey) }
+        }
+
+        guard let window = plan.gapWindow, window.endMs > nowMs else { return }
+        let remainMs = Double(window.endMs - nowMs)
+        for (i, dot) in gapDotLayers.enumerated() {
+            let lighting = CAKeyframeAnimation(keyPath: "opacity")
+            lighting.values = (0...samples).map { k in
+                let ms = nowMs + Int(remainMs * Double(k) / Double(samples))
+                let p = GapDotsCurve.progress(posMs: ms, startMs: window.startMs, endMs: window.endMs)
+                return NSNumber(value: GapDotsCurve.opacity(dot: i, progress: p))
+            }
+            lighting.duration = remainMs / 1000 / clock.rate
+            lighting.calculationMode = .linear
+            lighting.beginTime = begin
+            // 走完停在最后一帧:间奏尾巴那一小段(窗口已满、还没切到下一句)不能闪回地板亮度。
+            lighting.fillMode = .forwards
+            lighting.isRemovedOnCompletion = false
+            dot.add(lighting, forKey: Self.gapDotsOpacityAnimationKey)
+        }
+    }
+
     private func applyProgressFill() {
         iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)

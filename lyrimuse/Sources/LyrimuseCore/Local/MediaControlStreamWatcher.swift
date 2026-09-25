@@ -41,18 +41,23 @@ public struct MediaControlAnchorDigest {
     public let pausedAtArrival: Bool
     /// 这一行把曲目换成了哪一首(`MediaControlSnapshot.trackKey` 那一套)。nil = 这一行没换曲目。
     /// 电台那块曲内表要靠它起表,见 `RadioTrackClock` 头注「起表时刻」一节。
+    /// 这一行报了 `playing: true`。**只用来给"恢复发生在何时"定上界**,不参与冻结判定
+    /// (冻结只认暂停,见 `LocalPlaybackSource.handlePlayerInfoChanged`)。
+    public let resumedAtArrival: Bool
     public let trackChangeKey: String?
     /// 换曲目发生在哪一刻。锚点是**刚打好的**(tight)就用锚点时刻(带亚秒估计),否则只能用这一行的
     /// 到达时刻 —— 陈旧锚点的时刻可能是几分钟前的,当成换歌时刻会把位置推走一大截。
     public let trackChangeAt: Date?
 
     public init(merged: [String: Any], anchorKey: String?, tight: Bool, anchorAge: Double?,
-                pausedAtArrival: Bool = false, trackChangeKey: String? = nil, trackChangeAt: Date? = nil) {
+                pausedAtArrival: Bool = false, resumedAtArrival: Bool = false,
+                trackChangeKey: String? = nil, trackChangeAt: Date? = nil) {
         self.merged = merged
         self.anchorKey = anchorKey
         self.tight = tight
         self.anchorAge = anchorAge
         self.pausedAtArrival = pausedAtArrival
+        self.resumedAtArrival = resumedAtArrival
         self.trackChangeKey = trackChangeKey
         self.trackChangeAt = trackChangeAt
     }
@@ -67,7 +72,9 @@ public final class MediaControlStreamWatcher {
     private static let minRestartDelay: TimeInterval = 1
     private static let maxRestartDelay: TimeInterval = 30
 
-    private let onEvent: () -> Void
+    /// 参数 = 这一批行里**有没有可能换了播放状态**(暂停/恢复/换歌)。纯粹的锚点刷新传
+    /// false —— 下游据此决定要不要冻住外推,见 `LocalPlaybackSource.handlePlayerInfoChanged`。
+    private let onEvent: (Bool, Bool) -> Void
     private var process: Process?
     private var restartWork: DispatchWorkItem?
     private var restartDelay: TimeInterval = MediaControlStreamWatcher.minRestartDelay
@@ -75,7 +82,7 @@ public final class MediaControlStreamWatcher {
     /// 按行切分用的残留缓冲:管道给的是任意大小的数据块,一行 JSON 完全可能跨两次回调。
     private var buffer = Data()
 
-    public init(onEvent: @escaping () -> Void) {
+    public init(onEvent: @escaping (Bool, Bool) -> Void) {
         self.onEvent = onEvent
     }
 
@@ -117,7 +124,9 @@ public final class MediaControlStreamWatcher {
         proc.executableURL = URL(fileURLWithPath: binary)
         // --no-artwork:封面数据在这条路上纯属浪费 —— 事件只当触发信号,payload 一概不读,
         // 而封面是几百 KB 的 base64,每次状态变化都白白经过管道。
-        proc.arguments = ["stream", "--no-artwork"]
+        // --micros:锚点身份(anchorKey)里的时间戳要跟轮询路径同一种格式,两边必须同时带,
+        // 否则 tight 目击永远查不中。换算见 digest 开头。
+        proc.arguments = ["stream", "--no-artwork", "--micros"]
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
@@ -144,6 +153,9 @@ public final class MediaControlStreamWatcher {
         }
     }
 
+    /// 最近一行带 playing 的状态(nil = 还没见过)。判"锚点是不是在暂停中发布的"要用。
+    private var lastPlaying: Bool?
+
     /// stream 输出里"当前 Now Playing"的合并状态:`diff:false` 的行整份替换,`diff:true` 的行
     /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),外加判暂停
     /// 信号要用的 bundleIdentifier(见 `digest` 里的 `playingFromRate`),别的字段一概不存 —— 见文件头
@@ -156,6 +168,12 @@ public final class MediaControlStreamWatcher {
         // 一次回调可能带回多行,也可能只带回半行。只对**完整的**行(以 \n 结尾)做处理,
         // 剩下的半行留在 buffer 里等下一块数据。
         var fired = false
+        // 这一批里有没有**暂停**信号。冻结外推只为一件事:暂停那一刻播放器报的状态可能还是
+        // 旧的"在播"(见 `LocalPlaybackSource.handlePlayerInfoChanged`)。换歌不需要它 ——
+        // 换歌本来就会重建锚点;而 `changedTrackKey` 是拿原始署名算的,把当前歌词行塞进
+        // 署名字段的播放器每唱一句都会让它变,按状态变化处理就是每句开头顿一下。
+        var stateSignal = false
+        var resumeSignal = false
         while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
             let line = buffer[buffer.startIndex..<newline]
             buffer.removeSubrange(buffer.startIndex...newline)
@@ -163,14 +181,30 @@ public final class MediaControlStreamWatcher {
             fired = true
             let digest = Self.digest(line: Data(line), merged: mergedPayload, arrivedAt: arrivedAt)
             mergedPayload = digest.merged
+            if digest.resumedAtArrival { resumeSignal = true }
+            if digest.pausedAtArrival { lastPlaying = false }
+            if digest.resumedAtArrival { lastPlaying = true }
             if digest.pausedAtArrival {
+                stateSignal = true
                 MediaControlClient.notePauseObserved(at: arrivedAt)
+            }
+            if digest.resumedAtArrival, digest.anchorKey == nil {
+                // 只翻 playing、不带锚点的那一行:暂停中发布的锚点从这一刻开始计时(见 notePlaybackStarted)。
+                MediaControlClient.notePlaybackStarted(at: arrivedAt)
             }
             if let changed = digest.trackChangeKey, let at = digest.trackChangeAt {
                 MediaControlClient.noteTrackChangeObserved(key: changed, at: at)
             }
             if let key = digest.anchorKey {
                 MediaControlClient.noteStreamAnchorSighting(anchorKey: key, at: arrivedAt, tight: digest.tight)
+                // 同一行里 playing 与锚点一起到时,以这一行为准(上面已经更新过 lastPlaying)。
+                MediaControlClient.noteAnchorPublished(anchorKey: key, whilePaused: lastPlaying == false, at: arrivedAt)
+                if MediaControlClient.correctsFromResetAnchor(bundleID: digest.merged["bundleIdentifier"] as? String) {
+                    MediaControlClient.noteAnchorForReset(
+                        title: digest.merged["title"] as? String,
+                        elapsed: (digest.merged["elapsedTime"] as? NSNumber)?.doubleValue,
+                        timestamp: MediaControlClient.parseTimestamp(digest.merged["timestamp"] as? String))
+                }
                 // 每个新锚点一行(换歌/暂停/恢复才有),不是每拍都打。年龄是"到达时锚点整秒时间戳
                 // 已经多老",tight 与否就看它。
                 Self.logger.notice("anchor sighting tight=\(digest.tight) ageAtArrival=\(digest.anchorAge ?? -1, format: .fixed(precision: 3)) key=\(key, privacy: .public)")
@@ -181,7 +215,7 @@ public final class MediaControlStreamWatcher {
             // 进程能正常吐数据,说明它是活的,把退避计时器复位;否则一次成功启动之后的
             // 偶发退出会带着上一次积累的长延迟重启。
             restartDelay = Self.minRestartDelay
-            onEvent()
+            onEvent(stateSignal, resumeSignal)
         }
     }
 
@@ -200,11 +234,12 @@ public final class MediaControlStreamWatcher {
     public nonisolated static func digest(line: Data, merged: [String: Any], arrivedAt: Date) -> MediaControlAnchorDigest {
         guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
               object["type"] as? String == "data",
-              let payload = object["payload"] as? [String: Any]
+              let rawPayload = object["payload"] as? [String: Any]
         else { return MediaControlAnchorDigest(merged: merged, anchorKey: nil, tight: false, anchorAge: nil) }
+        let payload = MediaControlMicros.normalized(rawPayload)
         let isDiff = object["diff"] as? Bool ?? false
         var next: [String: Any] = isDiff ? merged : [:]
-        for key in ["artist", "title", "elapsedTime", "timestamp"] where payload.keys.contains(key) {
+        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier"] where payload.keys.contains(key) {
             if payload[key] is NSNull {
                 next.removeValue(forKey: key)
             } else {
@@ -213,20 +248,27 @@ public final class MediaControlStreamWatcher {
         }
         // 只看这一行**带不带** playing:false —— 取的是"暂停发生在这一刻"这个时刻,不是状态值本身
         // (状态仍由轮询快照决定,见文件头"唯一的例外")。
-        let paused = (payload["playing"] as? Bool) == false
+        //
+        // `playingFromRate` 的播放器(酷狗)还要认 `playbackRate:0`:单曲循环回到开头后它一直报
+        // `playing:false`、rate 1(见 `MediaControlClient.effectivePlaying`),这时真暂停只来一行
+        // `{playbackRate:0, …}`,不会再报一次 `playing:false`。不认它就不冻结外推,暂停那一刻回跳 ~0.45s。
+        let rateStopped = (payload["playbackRate"] as? NSNumber)?.doubleValue == 0
+            && PlaybackPlayer.builtin(forBundleID: next["bundleIdentifier"] as? String)?.playingFromRate == true
+        let paused = (payload["playing"] as? Bool) == false || rateStopped
+        let resumed = (payload["playing"] as? Bool) == true
         // 曲目换没换,跟锚点判定完全无关:只带 title/artist 的 diff 行(实测电台换歌就有这种形态)会在
         // 下面那道"没有 elapsedTime/timestamp 就早退"的闸之前返回,所以这一步必须在闸之前算。
         let changed = changedTrackKey(before: merged, after: next)
         guard payload.keys.contains("elapsedTime") || payload.keys.contains("timestamp") else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
-                                            pausedAtArrival: paused,
+                                            pausedAtArrival: paused, resumedAtArrival: resumed,
                                             trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let elapsed = (next["elapsedTime"] as? NSNumber)?.doubleValue
         let timestamp = next["timestamp"] as? String
         guard elapsed != nil || timestamp != nil else {
             return MediaControlAnchorDigest(merged: next, anchorKey: nil, tight: false, anchorAge: nil,
-                                            pausedAtArrival: paused,
+                                            pausedAtArrival: paused, resumedAtArrival: resumed,
                                             trackChangeKey: changed, trackChangeAt: changed == nil ? nil : arrivedAt)
         }
         let key = MediaControlClient.anchorKey(
@@ -236,7 +278,7 @@ public final class MediaControlStreamWatcher {
         // 年龄略负(时钟毛刺)也放行;没有可解析的时间戳就没法判"刚打好",只能 loose。
         let tight = age.map { $0 >= -1 && $0 <= MediaControlClient.tightSightingMaxAge } ?? false
         return MediaControlAnchorDigest(merged: next, anchorKey: key, tight: tight, anchorAge: age,
-                                        pausedAtArrival: paused, trackChangeKey: changed,
+                                        pausedAtArrival: paused, resumedAtArrival: resumed, trackChangeKey: changed,
                                         trackChangeAt: changed == nil ? nil
                                             : trackChangeInstant(anchorTimestamp: MediaControlClient.parseTimestamp(timestamp),
                                                                  tight: tight, arrivedAt: arrivedAt))

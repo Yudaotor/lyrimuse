@@ -85,6 +85,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                                  on: locked, action: #selector(toggleLockPosition)))
         }
         quick.addItem(.separator())
+        settings.syncLaunchAtLoginFromSystem()
         quick.addItem(toggle(L10n.t("开机启动"), symbol: "power",
                              on: settings.launchAtLoginEnabled,
                              action: #selector(toggleLaunchAtLogin)))

@@ -132,6 +132,24 @@ func artistMergeNameKey(name string) string {
 	return strings.ToLower(toSimplified(first))
 }
 
+// artistMergeNameKeyCached / artistMergeDisplayNameCached 是 artistMergeNameKey /
+// artistMergeDisplayName 的只读缓存版，步骤逐条相同，只是别名那一步查不到缓存就当没有。
+// 两对函数必须同步改。
+func artistMergeNameKeyCached(name string) string {
+	first := firstCreditedArtist(name)
+	if alias := cachedGenericArtistCanonicalName(first); alias != "" {
+		first = alias
+	}
+	return strings.ToLower(toSimplified(first))
+}
+
+func artistMergeDisplayNameCached(name string) string {
+	if alias := cachedGenericArtistCanonicalName(name); alias != "" {
+		return alias
+	}
+	return name
+}
+
 // artistMergeDisplayName 是展示用的名字——只做"已知别名换成中文名"这一步,不做
 // toSimplified/大小写折叠:那两步只是"判断是否同一个人"内部用的归一化,不代表要悄悄篡改
 // 这个人在库里原本的书写(繁体来源就展示繁体,不强制转简体)。
@@ -210,6 +228,8 @@ func budgetedArtistIdentity(budget int) artistIdentityFn {
 func warmArtistIdentityCache(entries []lastfmChartEntry, budget int) {
 	resolve := budgetedArtistIdentity(budget)
 	for _, e := range entries {
+		artistMergeNameKey(e.Name)
+		artistMergeDisplayName(e.Name)
 		first := firstCreditedArtist(e.Name)
 		mbid := ""
 		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
@@ -222,16 +242,24 @@ func warmArtistIdentityCache(entries []lastfmChartEntry, budget int) {
 	saveArtistIdentityCache()
 }
 
+// mergeAliasedArtists 是只读缓存的归并:身份、名字键、展示名三样都只读本地缓存,一个请求都不发。
+// 给后台定时任务用(Top 歌手榜、四档听歌报告):歌手榜有几十到几百位,名字键逐个联网
+// (MusicBrainz 全局 1.1 s 限速,查空的结果不落盘、每次进程重启都要重查)会一跑几十秒到几分钟。
+// 联网版是 mergeAliasedArtistsResolved,只给 collector top-artists 命令行用。见 15 章 §4。
 func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
-	return mergeAliasedArtistsResolved(entries, cacheOnlyArtistIdentity)
+	return mergeAliasedArtistsNamed(entries, cacheOnlyArtistIdentity, artistMergeNameKeyCached, artistMergeDisplayNameCached)
 }
 
 func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdentityFn) []lastfmChartEntry {
+	return mergeAliasedArtistsNamed(entries, resolve, artistMergeNameKey, artistMergeDisplayName)
+}
+
+func mergeAliasedArtistsNamed(entries []lastfmChartEntry, resolve artistIdentityFn, nameKey, displayName func(string) string) []lastfmChartEntry {
 	n := len(entries)
 	nameKeys := make([]string, n)
 	ids := make([]mbArtistIdentity, n)
 	for i, e := range entries {
-		nameKeys[i] = artistMergeNameKey(e.Name)
+		nameKeys[i] = nameKey(e.Name)
 		first := firstCreditedArtist(e.Name)
 		mbid := ""
 		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
@@ -242,10 +270,6 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 
 	parent := make([]int, n)
 	for i := range parent {
-// mergeAliasedArtists 是只读缓存的归并:身份、名字键、展示名三样都只读本地缓存,一个请求都不发。
-// 给后台定时任务用(Top 歌手榜、四档听歌报告):歌手榜有几十到几百位,名字键逐个联网
-// (MusicBrainz 全局 1.1 s 限速,查空的结果不落盘、每次进程重启都要重查)会一跑几十秒到几分钟。
-// 联网版是 mergeAliasedArtistsResolved,只给 collector top-artists 命令行用。见 15 章 §4。
 		parent[i] = i
 	}
 	var find func(int) int
@@ -312,7 +336,7 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 	order := make([]int, 0, n)
 	for i, e := range entries {
 		root := find(i)
-		display := artistMergeDisplayName(e.Name)
+		display := displayName(e.Name)
 		parts := len(artistCreditParts(e.Name))
 		b, ok := buckets[root]
 		if !ok {
@@ -365,17 +389,33 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 // 返回 (URL, definitive):definitive=true 表示"这是可负缓存的确定结论"(找到了,或
 // 两条腿都正常应答且都说没有);false 表示至少一条腿是暂时故障,空结果不可信。
 func resolveArtistAvatar(ctx context.Context, name string) (string, bool) {
-	qqPic, qqDef := qqSingerAvatar(name)
+	return resolveArtistAvatarVia(ctx, name, qqSingerAvatar, deezerArtistAvatar)
+}
+
+// resolveArtistAvatarVia 是 resolveArtistAvatar 的两条腿可替换的版本,单测直接喂假结果。
+func resolveArtistAvatarVia(ctx context.Context, name string,
+	qq func(string) (string, bool), deezer func(context.Context, string) (string, bool)) (string, bool) {
+	qqPic, qqDef := qq(name)
 	if qqPic != "" {
 		return qqPic, true
 	}
-	dzPic, dzDef := deezerArtistAvatar(ctx, name)
+	dzPic, dzDef := deezer(ctx, name)
 	if dzPic != "" {
 		return dzPic, true
 	}
 	// 两条腿都空:只有两边都是"正常应答查无此人"才算可负缓存的确定结论
 	return "", qqDef && dzDef
 }
+
+// deezerArtistSearchURL 是 Deezer 公开歌手搜索接口。单测换成假服务器。
+var deezerArtistSearchURL = "https://api.deezer.com/search/artist"
+
+// topArtistAvatar / warmTopArtistIdentities 是 topArtistsDigest 里联网的两步:取头像(QQ 音乐 /
+// Deezer)和后台预热 MusicBrainz 身份缓存。单测换掉这两个,只留 Last.fm 取榜与中继推送走假服务器。
+var (
+	topArtistAvatar         = resolveArtistAvatar
+	warmTopArtistIdentities = warmArtistIdentityCache
+)
 
 // deezerArtistAvatar 查 Deezer 的公开歌手搜索接口拿一张头像图——Last.fm 自己的
 // artist.getinfo 对所有歌手都返回同一张占位图,拿不到真实头像,而 Deezer 的
@@ -386,7 +426,7 @@ func resolveArtistAvatar(ctx context.Context, name string) (string, bool) {
 func deezerArtistAvatar(ctx context.Context, name string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	u := "https://api.deezer.com/search/artist?limit=1&q=" + neturl.QueryEscape(name)
+	u := deezerArtistSearchURL + "?limit=1&q=" + neturl.QueryEscape(name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", false
@@ -418,8 +458,8 @@ func deezerArtistAvatar(ctx context.Context, name string) (string, bool) {
 // (runDigestsAsync),检查间隔大得多。复用跟 weeklyDigest
 // 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置(数据要推给网页读
 // 的中继,没配这个推了也没地方读)。
-func (p *poller) topArtistsDigest(now time.Time) {
-	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" || p.cfg.StateRelayURL == "" {
+func (p *poller) topArtistsDigest(now time.Time, env digestEnv) {
+	if env.cfg.LastfmUser == "" || env.cfg.lastfmBridgeAPIKey() == "" || env.cfg.StateRelayURL == "" {
 		return
 	}
 	if !p.topArtistsLastCheckedAt.IsZero() && now.Sub(p.topArtistsLastCheckedAt) < topArtistsCheckInterval {
@@ -430,14 +470,13 @@ func (p *poller) topArtistsDigest(now time.Time) {
 		return // 磁盘上记录的上次成功推送还没满一天(比如刚重启,内存态丢了但磁盘状态还在)
 	}
 
-	entries, err := lastfmTopArtists(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), topArtistsFetchPool)
+	entries, err := lastfmTopArtists(env.ctx, env.cfg.LastfmUser, env.cfg.lastfmBridgeAPIKey(), topArtistsFetchPool)
 	if err != nil || len(entries) == 0 {
 		return
 	}
-	// 身份缓存预热放后台:这个函数在 poll 循环里**同步**跑(见下面头像那段注释),
-	// MusicBrainz 全局 1.1s 限速、整池预热要 ~1 分钟,绝不能在这里等。归并本体只读
-	// 缓存,今天没预热到的名字明天这一轮自然吃到——榜单一天才推一次,晚一天收敛无感。
-	go warmArtistIdentityCache(entries, topArtistsFetchPool)
+	// 缓存预热单开 goroutine:MusicBrainz 全局 1.1s 限速、整池预热要 ~1 分钟,不能在这里等。
+	// 归并本体只读缓存,今天没预热到的名字明天这一轮自然吃到——榜单一天才推一次,晚一天收敛无感。
+	go warmTopArtistIdentities(entries, topArtistsFetchPool)
 	merged := mergeAliasedArtists(entries)
 	if len(merged) > topArtistsN {
 		merged = merged[:topArtistsN]
@@ -463,7 +502,7 @@ func (p *poller) topArtistsDigest(now time.Time) {
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
-				avatar, _ := resolveArtistAvatar(p.ctx, name)
+				avatar, _ := topArtistAvatar(env.ctx, name)
 				artists[i] = topArtistEntry{
 					Name: name, PlayCount: playCount,
 					Avatar: avatar,
@@ -473,7 +512,7 @@ func (p *poller) topArtistsDigest(now time.Time) {
 		wg.Wait()
 	}
 	payload := map[string]any{"artists": artists, "updatedAt": now.Unix()}
-	if err := postRelay(p.ctx, p.cfg, "/top-artists", payload); err != nil {
+	if err := postRelay(env.ctx, env.cfg, "/top-artists", payload); err != nil {
 		return // 推失败就不存状态,下个检查周期(至多 24h 后)会自然重试,不会因为一次失败长期卡死
 	}
 	p.topArtistsState.save(now.Unix())

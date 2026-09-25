@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.2773681189485736,
     "lyrics_end_secs": 289.03,
     "coverage_pct": 94.31462483215246,
+    "ending_corroborated": false,
     "album_score": 100,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -233,6 +234,10 @@
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "timelineOffset",
+            "points": -600
           }
         ],
         "has_word_timing": true

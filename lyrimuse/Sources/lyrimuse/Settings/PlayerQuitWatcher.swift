@@ -19,6 +19,12 @@ final class PlayerQuitWatcher {
 
     private var observers: [NSObjectProtocol] = []
     private var pendingQuit: DispatchWorkItem?
+    /// 到点那一刻被 Lyrimuse 自己的窗口挡下了,等窗口关掉再判。
+    private var deferredForWindows = false
+
+    /// 窗口关掉之后再等多久重判。留一点余量给"关掉设置、紧接着从菜单栏打开歌词窗口"这种连续操作,
+    /// 不在两扇窗交接的空当里把 App 退掉。
+    private static let windowGoneGraceSeconds: TimeInterval = 2
 
     private init() {}
 
@@ -35,6 +41,13 @@ final class PlayerQuitWatcher {
             guard let bundleID = Self.bundleID(from: note) else { return }
             MainActor.assumeIsolated { self?.playerLaunched(bundleID) }
         })
+        // 被窗口挡下的那一次退出,靠这两条通知接回来。willClose 发出时窗口还算可见,所以不在这里当场判,
+        // 而是排一次延迟重判(到点时 fireIfStillDue 会重新看窗口)。
+        for name in [NSWindow.willCloseNotification, NSWindow.didMiniaturizeNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.lyrimuseWindowGone() }
+            })
+        }
     }
 
     private static func bundleID(from note: Notification) -> String? {
@@ -56,29 +69,42 @@ final class PlayerQuitWatcher {
         guard PlayerLinkage.shouldQuit(terminatedBundleID: bundleID,
                                        boundBundleIDs: boundBundleIDs,
                                        runningBundleIDs: Self.runningBundleIDs) else { return }
-        pendingQuit?.cancel()
         AppExit.logger.notice("followed player quit bundle=\(bundleID, privacy: .public) grace=\(PlayerLinkage.quitGraceSeconds, privacy: .public)s")
+        scheduleCheck(after: PlayerLinkage.quitGraceSeconds)
+    }
+
+    private func scheduleCheck(after seconds: TimeInterval) {
+        pendingQuit?.cancel()
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated { self?.fireIfStillDue() }
         }
         pendingQuit = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + PlayerLinkage.quitGraceSeconds, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
     private func playerLaunched(_ bundleID: String) {
-        guard pendingQuit != nil, boundBundleIDs.contains(bundleID) else { return }
+        guard pendingQuit != nil || deferredForWindows, boundBundleIDs.contains(bundleID) else { return }
         pendingQuit?.cancel()
         pendingQuit = nil
+        deferredForWindows = false
         AppExit.logger.notice("followed player relaunched bundle=\(bundleID, privacy: .public); quit cancelled")
+    }
+
+    /// 有窗口关掉 / 最小化了。只有之前被窗口挡下过、而且眼下没有别的重判在排队时才排一次。
+    private func lyrimuseWindowGone() {
+        guard deferredForWindows, pendingQuit == nil else { return }
+        scheduleCheck(after: Self.windowGoneGraceSeconds)
     }
 
     private func fireIfStillDue() {
         pendingQuit = nil
+        deferredForWindows = false
         let bound = boundBundleIDs
         // 宽限内又起来了 / 用户把设置改了 —— 到点按当下重算,不信排队那一刻的结论。
         guard !bound.isEmpty, bound.isDisjoint(with: Self.runningBundleIDs) else { return }
         if Self.userIsUsingLyrimuseWindows {
-            AppExit.logger.notice("followed player quit skipped: a Lyrimuse window is open")
+            deferredForWindows = true
+            AppExit.logger.notice("followed player quit deferred: a Lyrimuse window is open")
             return
         }
         AppExit.request(.followedPlayerQuit)

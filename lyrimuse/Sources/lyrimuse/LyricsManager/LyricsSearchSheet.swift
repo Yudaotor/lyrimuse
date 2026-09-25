@@ -542,7 +542,7 @@ struct LyricsSearchSheet: View {
             if isSearching {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…")
+                    Text(L10n.t("正在查询网易云 / QQ 音乐 / 酷狗 / Musixmatch / LRCLIB…")
                         + searchProgressSuffix)
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -974,7 +974,7 @@ struct LyricsSearchSheet: View {
                     characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
                 }
                 if c.hasWordTiming {
-                    characteristicBadge(L10n.t("逐字时间戳"), "text.word.spacing", .blue)
+                    characteristicBadge(L10n.t("逐字时间轴"), "text.word.spacing", .blue)
                 }
                 if c.hasTranslation {
                     characteristicBadge(L10n.t("译文"), "character.book.closed", .green)

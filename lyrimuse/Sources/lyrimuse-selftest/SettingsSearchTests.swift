@@ -79,8 +79,11 @@ func runSettingsSearchTests() {
         guard let structRange = settingsView.range(of: "struct AppearanceSettingsTab") else { return [] }
         return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
     }()
-    expectEqual(appearanceSectionCases, LyricsSurface.allCases.map(\.appearanceSectionRawValue),
-                "设置搜索: 「歌词显示」页三个分段跟 LyricsSurface 一一对应")
+    // 前三段跟 LyricsSurface 一一对应;第四段「歌词窗口」不是一个形态(那扇窗没有常驻开关),
+    // 取值只在目录那边有一份常量。
+    expectEqual(appearanceSectionCases,
+                LyricsSurface.allCases.map(\.appearanceSectionRawValue) + [SettingsSearchCatalog.lyricsWindowSectionValue],
+                "设置搜索: 「歌词显示」页前三段跟 LyricsSurface 一一对应,第四段是歌词窗口")
     expectEqual(SettingsSearchCatalog.lyricsSectionDefault, lyricsSectionCases.first,
                 "设置搜索: 「歌词」页默认分段 = 枚举第一个 case")
     expectEqual(SettingsSearchCatalog.lastfmSectionDefault, lastfmSectionCases.first,
@@ -119,7 +122,8 @@ func runSettingsSearchTests() {
         case (SettingsSearchCatalog.lyricsSectionKey?, let value?):
             if !lyricsSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         case (LyricsSurface.appearanceSectionStorageKey?, let value?):
-            if LyricsSurface(rawValue: value) == nil { badSections.append("\(entry.titleKey)→\(value)") }
+            // 核源码里那个枚举而不是 LyricsSurface:「歌词窗口」段不属于任何形态。
+            if !appearanceSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         case (SettingsSearchCatalog.lastfmSectionKey?, let value?):
             if !lastfmSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         default:
@@ -152,8 +156,14 @@ func runSettingsSearchTests() {
     let indexedTitles = Set(entries.map(\.titleKey) + entries.flatMap(\.alternateTitleKeys))
     /// 刻意不登记的标题:纯分组标题(其下每一行都登记了)与只读状态行。
     let intentionallyUnindexed: Set<String> = [
-        "主题", "文字", "背景", "排版", "行为",                       // 悬浮歌词抽屉的组标题
-        "封面", "菜单栏与 Dock", "语言与启动", "备份与迁移",             // 通用页卡头
+        // 「背景」不在这儿:歌词窗口那一段有一行真的叫这个名字、已登记在目录里,而这张白名单
+        // 跟目录必须不相交(下面那条断言)。悬浮歌词抽屉里同名的那个组标题因此顺带被目录覆盖 ——
+        // 搜「背景」会落到歌词窗口那一行,不再是查无此项。
+        "主题", "文字", "排版", "行为",                              // 悬浮歌词抽屉的组标题
+        // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
+        // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
+        "外观", "顶部信息", "布局",                               // 歌词显示 › 歌词窗口 的卡头
+        "菜单栏与 Dock", "语言与启动", "备份与迁移",                    // 通用页卡头
         "更新", "反馈与社区", "许可与版权", "诊断与数据",                 // 关于页卡头
         "自动更新", "已安装",                                         // 软件更新页:卡头与只读状态行
         "已改用自定义位置",                                           // 歌词文件夹的状态子行
@@ -248,8 +258,8 @@ func runSettingsSearchTests() {
 
     // 目录层面的抽查:四个面的「字号」都能被同一个词搜到,且顺序跟目录一致。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
-    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar"],
-                "目录: 「字号」命中悬浮歌词、灵动岛(2026-09-09 加)、菜单栏三条,按目录顺序")
+    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar", "lyricsWindow"],
+                "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、歌词窗口迷你尺寸四条,按目录顺序")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("播放器"), true, "目录: 搜「QQ」也能落到「播放器」卡")

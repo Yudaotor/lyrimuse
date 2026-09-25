@@ -74,7 +74,9 @@ enum LyricsBackupStore {
             // sidecar 的主体,为了 meta 把它一起废掉是本末倒置。
             var meta: Data?
             if let cacheData = try? Data(contentsOf: cacheURL) {
-                meta = LyricsBackupArchive.strippedMeta(fromCacheJSON: cacheData)
+                meta = LyricsBackupArchive.strippedMeta(
+                    fromCacheJSON: cacheData,
+                    decisionDirectory: LyrimusePaths.configFile(DecisionSidecar.directoryName))
                 if meta == nil {
                     logger.error("buildArchive: enrich cache present (\(cacheData.count) bytes) but strippedMeta returned nil")
                 }
@@ -142,15 +144,11 @@ enum LyricsBackupStore {
             if !plan.rejected.isEmpty {
                 logger.error("restore: rejected \(plan.rejected.count) unsafe names, first=\(plan.rejected[0], privacy: .public)")
             }
-            // 落盘前的最后一道闸,跟"名字长什么样"无关:把 URL 解析(standardized)之后,它的
-            // 父目录必须还是歌词目录本身。名字规则(sanitizedFileName)是第一道,这一道兜住
-            // "规则里没想到的形态" —— 两道都在,是因为写文件这件事错一次就是往用户磁盘上
-            // 别的地方写东西。
-            let dirPath = dir.standardizedFileURL.path
+            // 落盘前的最后一道闸(`LyricsBackupArchive.restoreTarget`):解析后的父目录必须还是
+            // 歌词目录本身。名字规则(sanitizedFileName)是第一道,这一道兜住"规则里没想到的形态"。
             for (name, isNew) in plan.added.map({ ($0, true) }) + plan.overwritten.map({ ($0, false) }) {
                 guard let text = payload.files[name] else { continue }
-                let target = dir.appendingPathComponent(name).standardizedFileURL
-                guard target.deletingLastPathComponent().path == dirPath else {
+                guard let target = LyricsBackupArchive.restoreTarget(named: name, in: dir) else {
                     result.rejected += 1
                     logger.error("restore: path escapes lyrics dir, refused: \(name, privacy: .public)")
                     continue
@@ -182,6 +180,12 @@ enum LyricsBackupStore {
         guard var result = outcome?.0, let pins = outcome?.1 else { return nil }
         // pins 走 @MainActor 的 store(它有 @Published,不能在后台改)。
         result.pinsAdded = LyricsPinStore.shared.merge(pins)
+        // 铺好的歌词文件和待采纳文件交给 collector 收进缓存(它是缓存唯一的写入方,见 EnrichEditChannel)。
+        // 失败只记日志:文件已经在歌词目录里了,collector 下次启动也会导入它们。
+        let adopt = await EnrichEditChannel.send("adopt_restore")
+        if !adopt.ok {
+            logger.error("restore: collector did not adopt the restored files: \(adopt.error ?? "", privacy: .public)")
+        }
         logger.notice("restore: +\(result.added) ~\(result.overwritten) !\(result.failed) x\(result.rejected) pins+\(result.pinsAdded) meta=\(result.metaBytes)B")
         return result
     }

@@ -54,6 +54,9 @@ type config struct {
 	// 平台时不会互相污染。
 	DingtalkSignSecret string `json:"dingtalk_sign_secret,omitempty"`
 	FeishuSignSecret   string `json:"feishu_sign_secret,omitempty"`
+	// TelegramChatID：Telegram 平台必填，推送发到哪个会话(个人是一串数字，群组以 -100 开头)。
+	// 地址那一栏(NotificationWebhookURL)可以只填机器人 Token，见 notify.go telegramSendURL。
+	TelegramChatID string `json:"telegram_chat_id,omitempty"`
 
 	// 日志等级:debug / info / warn / error,默认 info;环境变量 LYRIMUSE_LOG_LEVEL
 	// 优先。见 logsink.go。App 侧 ConfigStore 整份 JSON 原样读写,不认识的键不会被它抹掉。
@@ -87,14 +90,21 @@ func (c *config) lastfmBridgeAPIKey() string {
 //
 // 所以改成逐字段解:能认的认下来,认不下来的记进 loadIssues 交给调用方打日志。
 func loadConfig(path string) (*config, error) {
-	cfg := &config{}
 	data, err := os.ReadFile(path)
-	if err == nil {
-		cfg.loadIssues = decodeConfigPerField(data, cfg)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		// 只有这一种情况仍然是硬失败:文件在那儿但读不了(权限/IO),这跟"内容有问题"
 		// 不同——它意味着我们对配置一无所知,而且重试很可能还是这个结果。
 		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+	return configFromBytes(data), nil
+}
+
+// configFromBytes 是 loadConfig 读完文件之后的那一半:逐字段解、补默认值、登记脱敏。
+// data 为 nil 表示文件不存在。热重读(configreload.go)读到新内容后走同一条路,两边口径一致。
+func configFromBytes(data []byte) *config {
+	cfg := &config{}
+	if data != nil {
+		cfg.loadIssues = decodeConfigPerField(data, cfg)
 	}
 	if v := os.Getenv("LISTENBRAINZ_TOKEN"); v != "" {
 		cfg.Token = v
@@ -113,7 +123,7 @@ func loadConfig(path string) (*config, error) {
 	// 把这份配置里的凭据登记进日志脱敏表。放在 loadConfig 里而不是各个调用方那边:
 	// 每个子命令都会自己 loadConfig,登记在这里就一个都漏不掉(见 logscrub.go)。
 	rememberConfigSecrets(cfg)
-	return cfg, nil
+	return cfg
 }
 
 // decodeConfigPerField 把每个顶层 key 单独解一遍,一个字段的格式问题只影响它自己。

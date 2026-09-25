@@ -513,8 +513,8 @@ func TestSameRecordingDespiteVersionTags(t *testing.T) {
 		candDur              float64
 		want                 bool
 	}{
-		{"孤独探戈真实案例:acoustic 演奏方式标注", "孤独探戈(Acoustic Piano)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4, true},
-		// 时长差超 1% → 不豁免(Get A Life 那条错场次候选自报 233.081s,差 7.6%)
+		{"孤独探戈:acoustic 演奏方式标注", "孤独探戈(Acoustic Piano)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4, true},
+		// 时长差超 1% 到 不豁免(Get A Life 那条错场次候选自报 233.081s,差 7.6%)
 		{"时长差 7.6% 的错场次", "孤独探戈 (Live)", "Get A Life (Live)", 233.081, false},
 		// 候选缺本地已有的限定词 到 不豁免:本地是 Live、候选是录音室版,哪怕时长碰巧相同
 		{"候选缺 Live 标记", "孤独探戈", "The Easy Ride", 215.4, false},

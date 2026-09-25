@@ -48,6 +48,9 @@ type localCacheAccessState struct {
 	// 当前被系统挡住的来源名。**只列尝试过的** —— 没听过那个播放器的用户这里是空的,
 	// 界面因此什么都不显示(而不是显示一排"未知")。
 	Denied []string `json:"denied"`
+	// 当前确认读得到的来源名,与 Denied 互斥。设置页 / 引导页的「完全磁盘访问」那一行靠它
+	// 显示「已授权」;两边都不在 = 还没试过,界面按「未确认」处理。
+	Readable []string `json:"readable"`
 }
 
 var (
@@ -56,8 +59,9 @@ var (
 	localCacheDeniedReported = map[string]string{}
 	// 当前被拒的来源集合,变了才写状态文件 —— 这几个函数每首歌都会被调到,
 	// 无条件写盘就是每首一次 IO。
-	localCacheDeniedNow  = map[string]bool{}
-	localCacheAccessPath string
+	localCacheDeniedNow   = map[string]bool{}
+	localCacheReadableNow = map[string]bool{}
+	localCacheAccessPath  string
 )
 
 // setLocalCacheAccessPath 由 main() 在拿到单实例锁之后调用。空路径 = 不发布状态(单测默认如此)。
@@ -82,8 +86,9 @@ func noteLocalCacheDenied(source, path string, err error) {
 	localCacheDeniedMu.Lock()
 	repeated := localCacheDeniedReported[source] == msg
 	localCacheDeniedReported[source] = msg
-	changed := !localCacheDeniedNow[source]
+	changed := !localCacheDeniedNow[source] || localCacheReadableNow[source]
 	localCacheDeniedNow[source] = true
+	delete(localCacheReadableNow, source)
 	if changed {
 		writeLocalCacheAccessLocked()
 	}
@@ -101,11 +106,12 @@ func noteLocalCacheDenied(source, path string, err error) {
 func noteLocalCacheReadable(source string) {
 	localCacheDeniedMu.Lock()
 	defer localCacheDeniedMu.Unlock()
-	if !localCacheDeniedNow[source] {
+	if !localCacheDeniedNow[source] && localCacheReadableNow[source] {
 		return
 	}
 	delete(localCacheDeniedNow, source)
 	delete(localCacheDeniedReported, source)
+	localCacheReadableNow[source] = true
 	writeLocalCacheAccessLocked()
 }
 
@@ -114,13 +120,17 @@ func writeLocalCacheAccessLocked() {
 	if localCacheAccessPath == "" {
 		return
 	}
-	state := localCacheAccessState{UpdatedAt: time.Now().Unix(), Denied: []string{}}
+	state := localCacheAccessState{UpdatedAt: time.Now().Unix(), Denied: []string{}, Readable: []string{}}
 	for source := range localCacheDeniedNow {
 		state.Denied = append(state.Denied, source)
+	}
+	for source := range localCacheReadableNow {
+		state.Readable = append(state.Readable, source)
 	}
 	// 排序只为让这份文件的内容对同一份状态是稳定的(map 遍历序每次都不同),免得
 	// 读的一方以为状态变过。
 	sort.Strings(state.Denied)
+	sort.Strings(state.Readable)
 	data, err := json.Marshal(state)
 	if err != nil {
 		return

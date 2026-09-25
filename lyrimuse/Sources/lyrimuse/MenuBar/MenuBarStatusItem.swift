@@ -1109,9 +1109,13 @@ final class MenuBarStatusItem: NSObject {
         // 副行「下一句」却还是同一句。配速(currentLineDwellSeconds)与提前量(恒 0)随之切成 currentLine
         // 那套 —— 跟设置页预览(它一直镜像 currentLine)同一口径。
         let secondaryKind = settings.menuBarSecondaryLine
-        let line = secondaryKind.showsSecondaryRow ? coordinator.currentLine : coordinator.compactLine
+        let line = secondaryKind.displayedLine(compactLine: coordinator.compactLine, currentLine: coordinator.currentLine)
+        // 前奏/间奏占位给的是三点那个**记号串**,不是音符 —— 记号串在 scrollingLabel 那边
+        // 会被换成三颗 CALayer 圆点(跟悬浮歌词/灵动岛/歌词窗口同一条 GapDotsCurve)。
+        // 别顺手把下面 MenuBarSlotPolicy 那个「♪ 歌名」兜底也换掉:那说的是"这首歌没词",
+        // 跟"有词、只是此刻在间奏"是两件事。
         let lyricText = line?.plainText
-            ?? (coordinator.compactShowsPlaceholder ? MenuBarMarqueeRenderer.placeholderGlyph : "")
+            ?? (coordinator.compactShowsPlaceholder ? MenuBarMarqueeRenderer.gapDotsToken : "")
         // 压根没有可显示的行(整首没歌词 / 还在搜)时按开关用歌名占槽,不塌回图标 ——
         // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
         // 这里只消费。nil = 照旧收回图标。歌词旁那枚图标开着时兜底文字不带 ♪ 前缀(理由见那个函数)。
@@ -1139,7 +1143,7 @@ final class MenuBarStatusItem: NSObject {
         let lyricsActive = display != nil
         // 占位态(「♪ 歌名」兜底 / 间奏 ♪)按**即将到来的那一句**定宽。
         // 判据见 `upcomingLineSlotWidth`;非占位态恒 0,对正常歌词句零影响。
-        let placeholderNow = titleFallbackActive || text == MenuBarMarqueeRenderer.placeholderGlyph
+        let placeholderNow = titleFallbackActive || MenuBarMarqueeRenderer.isPlaceholder(text)
         let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
@@ -1232,7 +1236,8 @@ final class MenuBarStatusItem: NSObject {
                         dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showFixedWidth($0, text: text, windowWidth: textW,
-                                   pacing: nil, fillPath: fillPath, icon: icon)
+                                   pacing: nil, fillPath: fillPath, icon: icon,
+                                   gapWindow: gapWindow(for: text))
                 }
             } else {
                 present(class: "text", length: w, collapseDelay: 0,
@@ -1249,7 +1254,8 @@ final class MenuBarStatusItem: NSObject {
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
                                fillPath: karaokeFillPath(for: lineText),
-                               followPath: followReadingPath(for: lineText), icon: icon)
+                               followPath: followReadingPath(for: lineText), icon: icon,
+                               gapWindow: gapWindow(for: lineText))
             }
         }
     }
@@ -1329,7 +1335,8 @@ final class MenuBarStatusItem: NSObject {
             // 不带的话每句开头 3 秒都没有染色/没有图标,槽宽落地那一刻才突然冒出来。
             showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing,
                            fillPath: karaokeFillPath(for: lineText),
-                           followPath: followReadingPath(for: lineText), icon: icon)
+                           followPath: followReadingPath(for: lineText), icon: icon,
+                           gapWindow: gapWindow(for: lineText))
         }
     }
 
@@ -1405,7 +1412,8 @@ final class MenuBarStatusItem: NSObject {
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
-                                icon: MenuBarScrollingLabel.IconBadge? = nil) {
+                                icon: MenuBarScrollingLabel.IconBadge? = nil,
+                                gapWindow: MenuBarScrollingLabel.GapWindow? = nil) {
         liveIconView.clear()
         // 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
         // 状态栏项按 button.image 的尺寸算自己该占多宽。给它一张宽度恒为 windowWidth 的
@@ -1428,12 +1436,27 @@ final class MenuBarStatusItem: NSObject {
         scrollingLabel.frame = button.bounds
         scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing,
                                fillPath: fillPath, followPath: followPath, icon: icon,
-                               secondaryText: rowState.secondaryText, secondaryKind: rowState.kind)
+                               secondaryText: rowState.secondaryText, secondaryKind: rowState.kind,
+                               gapWindow: gapWindow)
         // 换句后立刻对一次表,填色 / 跟唱滚动从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
         if fillPath != nil || followPath != nil { syncKaraokeClock(force: true) }
+        // 三点那一档没有 fillPath/followPath,上面那条对不到它;它同样要立刻起步,
+        // 否则整段间奏都停在静止帧上,直到下一次锚点更新才开始呼吸。
+        if gapWindow != nil { syncKaraokeClock(force: true) }
         // 进度图标同理:重排位图会把裁剪层的几何重设,不立刻对表的话它会停在 0 直到下一次
         // 锚点更新。force 是因为位置往往一点没变(换句而已),过不了漂移门。
         if icon != nil { syncProgressClock(force: true) }
+    }
+
+    /// 这一格画的是三点时,那段间奏的起止(给点亮进度用);其余一律 nil。
+    ///
+    /// 口径跟悬浮歌词/灵动岛同一个 `rawGapWindow`(**不设门槛**那一份):菜单栏同样没有
+    /// "沿用上一行"的退路,占位一出现就得画点什么,套上 `GapRule` 的 5s/6s 门槛的话短前奏、
+    /// 短句间静默全都拿不到窗口。拿不到时三颗点只呼吸、不推进点亮,不会开天窗。
+    private func gapWindow(for text: String) -> MenuBarScrollingLabel.GapWindow? {
+        guard text == MenuBarMarqueeRenderer.gapDotsToken,
+              let window = PlaybackCoordinator.shared.rawGapWindow else { return nil }
+        return MenuBarScrollingLabel.GapWindow(startMs: window.startMs, endMs: window.endMs)
     }
 
     private func spacerImage(width: CGFloat, height: CGFloat) -> NSImage {

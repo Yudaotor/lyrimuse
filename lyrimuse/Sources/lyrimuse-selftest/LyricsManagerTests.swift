@@ -146,57 +146,6 @@ func runLyricsManagerTests() {
         expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults, "列宽: 来源列低于专属下限整组退回默认")
     }
 
-    // ---- EnrichCacheMerge: 「歌词管理」写回缓存的合并规则 ----
-    //
-    // 守的是一条**静默丢数据**的路径。「歌词管理」可以一直开着边听边整理,而 collector 在这期间
-    // 会往同一个文件写:新歌是新增 key,给已有歌补机翻译文/逐字/封面则是原地更新。窗口里的内存
-    // 快照只在开窗和点「刷新」时刷新,所以早先那种"整份覆盖写"会把这期间 collector 写的东西全
-    // 回滚掉。用户看到的第一个症状是"这首歌明明有翻译,列表里却没有译文标记" —— 那还只是显示层,
-    // 底下是真的在丢。
-    do {
-        let base: [String: [String: Any]] = ["A|a|x": ["lyrics": "L"]]
-
-        // ① 最要命的那一条:盘上的已有 key 被 collector 补了译文,而用户这次动的是**别的** key。
-        //    那份译文必须活下来。
-        let disk: [String: [String: Any]] = [
-            "A|a|x": ["lyrics": "L", "lyrics_tr": "译文"],   // collector 刚补上的
-            "B|b|y": ["lyrics": "N"],                        // collector 刚新增的一首
-        ]
-        var memory = base
-        memory["C|c|z"] = ["lyrics": "C"]                    // 用户新采纳的一首
-        let merged = EnrichCacheMerge.merge(
-            disk: disk, memory: memory, edited: ["C|c|z"], deleted: [])
-        expectEqual(merged["A|a|x"]?["lyrics_tr"] as? String, "译文",
-                    "EnrichCacheMerge: 用户没碰的 key,盘上新补的译文不能被回滚")
-        expectEqual(merged["B|b|y"] != nil, true,
-                    "EnrichCacheMerge: 窗口开着期间 collector 新增的歌不能被抹掉")
-        expectEqual(merged["C|c|z"]?["lyrics"] as? String, "C",
-                    "EnrichCacheMerge: 用户新采纳的内容要写进去")
-
-        // ② 用户编辑过的 key:以内存为准,盘上的旧值必须被盖掉(否则用户的修改看着像没保存)。
-        let edited = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "盘上旧的"]],
-            memory: ["A|a|x": ["lyrics": "用户改的"]],
-            edited: ["A|a|x"], deleted: [])
-        expectEqual(edited["A|a|x"]?["lyrics"] as? String, "用户改的",
-                    "EnrichCacheMerge: 用户编辑过的 key 以内存为准")
-
-        // ③ 用户删掉的 key:即便盘上还在也要删 —— 这正是"删除"的意思,也是 collector 会在
-        //    背后把它写回来的场景(它内存里还持有旧缓存)。
-        let deleted = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
-            edited: [], deleted: ["A|a|x"])
-        expectEqual(deleted["A|a|x"] == nil, true,
-                    "EnrichCacheMerge: 用户删掉的 key 不能被盘上的版本复活")
-
-        // ④ 先编辑、后删除同一个 key:删除赢。edited 里还留着它但内存里已经没有了。
-        let editThenDelete = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
-            edited: ["A|a|x"], deleted: ["A|a|x"])
-        expectEqual(editThenDelete["A|a|x"] == nil, true,
-                    "EnrichCacheMerge: 编辑后又删除,结果是删除")
-    }
-
     // ---- 歌词库备份归档(LyricsBackupArchive)----
     //
     // 这一组里最要紧的是**文件名安全**:归档是一份外来文件(别人的机器、或被人手改过),而恢复
@@ -257,6 +206,24 @@ func runLyricsManagerTests() {
         let again = A.plan(incoming: ["c.lrc", "../evil.lrc", "b.yrc", "a.lrc"],
                            existing: ["a.lrc", "z.lrc"])
         expectEqual(again, plan, "歌词备份: 输入顺序不影响结果")
+
+        // ---- 落盘前的最后一道闸(restoreTarget)----
+        // 不依赖名字规则:这里直接喂 sanitizedFileName 会拒掉的名字,确认第二道自己也挡得住。
+        let lyricsDir = URL(fileURLWithPath: "/Users/nobody/lyrimuse-restore-test/lyrics", isDirectory: true)
+        let dirPath = lyricsDir.standardizedFileURL.path
+        expectEqual(A.restoreTarget(named: "a.lrc", in: lyricsDir)?.path, dirPath + "/a.lrc", "歌词备份落盘: 普通名字落在歌词目录下")
+        expectEqual(A.restoreTarget(named: "陶喆 - 天天 - I'm O.K..yrc", in: lyricsDir)?.path,
+                    dirPath + "/陶喆 - 天天 - I'm O.K..yrc", "歌词备份落盘: 名字里带 .. 但不是路径分量的照常落盘")
+        expectEqual(A.restoreTarget(named: "sub/../a.lrc", in: lyricsDir)?.path, dirPath + "/a.lrc",
+                    "歌词备份落盘: 绕一圈仍在歌词目录里的按解析后的位置落")
+        for bad in ["../evil.lrc", "x/../../evil.lrc", "../../../.ssh/authorized_keys", "sub/a.lrc", "", "."] {
+            expectEqual(A.restoreTarget(named: bad, in: lyricsDir) == nil, true, "歌词备份落盘: 拒绝 \"\(bad)\"(解析后不在歌词目录本层)")
+        }
+        let plainDir = URL(fileURLWithPath: "/Users/nobody/lyrimuse-restore-test/lyrics")
+        expectEqual(A.restoreTarget(named: "a.lrc", in: plainDir)?.path, dirPath + "/a.lrc", "歌词备份落盘: 目录 URL 不带结尾斜杠也一样")
+        let dottedDir = URL(fileURLWithPath: "/Users/nobody/lyrimuse-restore-test/x/../lyrics", isDirectory: true)
+        expectEqual(A.restoreTarget(named: "a.lrc", in: dottedDir)?.path, dirPath + "/a.lrc",
+                    "歌词备份落盘: 用户自定义目录本身带 .. 时按解析后的目录比")
 
         // ---- 磁盘格式契约 ----
         //
@@ -362,6 +329,47 @@ func runLyricsManagerTests() {
         let v1Decoded = A.decode(Data(v1JSON.utf8))
         expectEqual(v1Decoded?.files["a.lrc"], "x", "歌词备份 meta: v1 老包照样能解出歌词")
         expectEqual(v1Decoded?.meta == nil, true, "歌词备份 meta: v1 老包解出来 meta 为空")
+    }
+
+    // ---- 判决记录的候选明细旁路文件(DecisionSidecar,collector decisionstore.go 同一套约定)----
+    do {
+        // 文件名逐字节跟 collector 一致:sha256(key) 前 16 字节小写十六进制(期望值由 Python hashlib 独立算出)。
+        expectEqual(DecisionSidecar.fileName(forKey: "王子|Purple Rain|"), "55248cfcc659699af70190eca1ba1e17.json",
+                    "判决旁路: 文件名 = sha256(key) 前 32 位十六进制 + .json")
+        let slot: [String: Any] = ["path": "first-resolve", "decided_at": NSNumber(value: 100),
+                                   "scoring_version": NSNumber(value: 23), "winner": "kugou",
+                                   "details_external": true]
+        let details: [String: Any] = ["path": "first-resolve", "decided_at": NSNumber(value: 100),
+                                      "scoring_version": NSNumber(value: 23), "winner": "kugou",
+                                      "candidates": [["source": "kugou", "score": 1100]],
+                                      "queries_tried": [["artist": "王子"]]]
+        let sameRecord: [String: Any] = ["key": "k", "latest": details, "applied_same": true]
+        let hydrated = DecisionSidecar.hydrate(slot, record: sameRecord)
+        expectEqual((hydrated["candidates"] as? [[String: Any]])?.count, 1, "判决旁路: 指纹对得上就补回候选")
+        expectEqual(hydrated["queries_tried"] != nil, true, "判决旁路: 查询词一并补回")
+        expectEqual(hydrated["details_external"] == nil, true, "判决旁路: 补回来之后去掉「明细在外面」标记")
+
+        var otherRound = slot
+        otherRound["decided_at"] = NSNumber(value: 999)
+        let untouched = DecisionSidecar.hydrate(otherRound, record: sameRecord)
+        expectEqual(untouched["candidates"] == nil, true, "判决旁路: 指纹对不上绝不拿别的轮次的候选来配")
+        expectEqual(untouched["details_external"] as? Bool, true, "判决旁路: 补不回来时标记保留,弹窗据此显示「明细缺失」")
+
+        // applied 槽单独存(一轮没被采纳的升级评估只换了 latest)时,按指纹找到 applied 那份。
+        var upgrade = details
+        upgrade["path"] = "upgrade"; upgrade["decided_at"] = NSNumber(value: 200)
+        let splitRecord: [String: Any] = ["key": "k", "latest": upgrade, "applied": details]
+        expectEqual((DecisionSidecar.hydrate(slot, record: splitRecord)["candidates"] as? [[String: Any]])?.count, 1,
+                    "判决旁路: 两槽分开存时按指纹找到对应那份")
+
+        // 本来就带候选(老条目 / 还没被拆过)原样返回;winner 缺失按空串比(collector omitempty)。
+        var inline = slot
+        inline["candidates"] = [["source": "qq", "score": 1]]
+        expectEqual((DecisionSidecar.hydrate(inline, record: sameRecord)["candidates"] as? [[String: Any]])?.first?["source"] as? String,
+                    "qq", "判决旁路: 已带候选的不动")
+        var a = slot; a.removeValue(forKey: "winner")
+        var b = details; b.removeValue(forKey: "winner")
+        expectEqual(DecisionSidecar.sameFingerprint(a, b), true, "判决旁路: 缺失的 winner 按空串比")
     }
 
     // ---- 「重新自动匹配」的采纳判定(LyricsRematchDecision)----
@@ -1124,6 +1132,55 @@ func runLyricsManagerTests() {
         expectEqual(F.Tier.empty.rawValue < F.Tier.lineOnly.rawValue, true, "全量分层: 没词的排最前")
         expectEqual(F.Tier.lineOnly.rawValue < F.Tier.staleVersion.rawValue, true,
                     "全量分层: 升逐字排在跟进旧版本之前")
+
+        // 续跑:这一场已经跑过的(尝试时刻不早于起点)不再挑 —— 第 0、1 层跑完条件照样成立,
+        // 不看这个的话每次续跑都从头再搜一遍。跟 collector lyricsFullScanTier 的 passStart 对齐。
+        func passTier(_ hasLyrics: Bool, _ hasWordTiming: Bool, _ version: Int,
+                      fill: Int64 = 0, rescore: Int64 = 0, start: Int64 = 1000) -> F.Tier? {
+            F.tier(hasLyrics: hasLyrics, hasWordTiming: hasWordTiming, scoringVersion: version,
+                   currentScoringVersion: 19, isManual: false, isInstrumental: false, isPinned: false,
+                   lastFillAt: fill, lastRescoreAt: rescore, passStart: start)
+        }
+        expectEqual(passTier(false, false, 0, fill: 1000), nil, "全量续跑: 空条目这一场补空过 → 不再挑")
+        expectEqual(passTier(false, false, 0, fill: 999), .empty, "全量续跑: 空条目上次补空早于这一场 → 照挑")
+        expectEqual(passTier(false, false, 0, rescore: 2000), .empty, "全量续跑: 空条目看补空时刻,不看重评时刻")
+        expectEqual(passTier(true, false, 19, rescore: 1500), nil, "全量续跑: 有词没逐字这一场重评过 → 不再挑")
+        expectEqual(passTier(true, true, 18, rescore: 1500), nil, "全量续跑: 版本落后这一场重评过 → 不再挑")
+        expectEqual(passTier(true, false, 19, rescore: 1500, start: 0), .lineOnly,
+                    "全量续跑: 没有在跑的一场(起点 0)→ 不按尝试时刻跳")
+        expectEqual(F.tier(hasLyrics: false, hasWordTiming: false, scoringVersion: 0, currentScoringVersion: 19,
+                           isManual: false, isInstrumental: false, isPinned: false, skipEmpty: true), nil,
+                    "全量分层: 再搜也不会有的空条目不进")
+        expectEqual(F.tier(hasLyrics: true, hasWordTiming: false, scoringVersion: 19, currentScoringVersion: 19,
+                           isManual: false, isInstrumental: false, isPinned: false, skipEmpty: true), .lineOnly,
+                    "全量分层: skipEmpty 只管第 0 层")
+
+        // 「再搜也不会有」的两类,跟 collector lyricsretryskip.go 同一组样本。
+        typealias R = LyricsRetrySkip
+        expectEqual(R.noAnchorGaveUp(artist: "", album: "", fillCount: R.noAnchorGiveUpCount), true,
+                    "无望跳过: 没歌手没专辑、补空失败够次数(播客单集那类)")
+        expectEqual(R.noAnchorGaveUp(artist: "", album: "", fillCount: 0), false,
+                    "无望跳过: 连歌手都缺也常能靠歌名搜到,次数不够不放弃")
+        expectEqual(R.noAnchorGaveUp(artist: "", album: "专辑", fillCount: 10), false, "无望跳过: 有专辑就不算")
+        func row(_ key: String, empty: Bool = true) -> R.Row {
+            let p = key.components(separatedBy: "|")
+            return R.Row(key: key, artist: p[0], title: p[1], album: p[2], isEmpty: empty)
+        }
+        let polluted = R.pollutedKeys([
+            row("作曲: 中岛美雪|漫步人生路 - 邓丽君|漫步人生路"), row("在你身边路虽远未疲倦|漫步人生路 - 邓丽君|漫步人生路"),
+            row("伴你漫步一段又一段|漫步人生路 - 邓丽君|漫步人生路"), row("有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路", empty: false),
+            row("陈慧琳 - 记事本|作曲: 周传雄|记事本"), row("陈慧琳 - 记事本|翻开随身携带的记事本|记事本"),
+            row("陈慧琳 - 记事本|再写下最后一行|记事本"),
+        ])
+        expectEqual(polluted.count, 6, "污染判据: 两种形态各 3 条空条目都认得出,有歌词的那条不标")
+        expectEqual(polluted.contains("有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路"), false, "污染判据: 只标空歌词条目")
+        let normal = R.pollutedKeys([
+            row("周杰伦|晴天|叶惠美"), row("周杰伦|以父之名|叶惠美"), row("周杰伦|东风破|叶惠美"),
+            row("盧廣仲|魚仔 - 電視劇<花甲男孩轉大人>主題曲|魚仔"),
+            row("歌手甲|Intro - Live|现场"), row("歌手乙|Intro - Live|现场"),
+        ])
+        expectEqual(normal.isEmpty, true, "污染判据: 正常专辑、歌名自带破折号、只有两个不同值都不标")
+        expectEqual(R.hasSplit("Jay-Z"), false, "污染判据: 不带空格的破折号不算分隔符")
 
         // 状态文件:collector 用 omitempty,没有待续的一轮时 active/startedAt 整个键都不出现。
         // 声明成非可选会让这份文件整个解不开,连打分版本号也一起读不到 —— 那才是真正的故障。

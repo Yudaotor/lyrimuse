@@ -202,20 +202,88 @@ func runNotchTests() {
 
     // ---- EqualizerBarCurve:音浪柱高曲线(每根条子各走各的、平滑、不塌底) ----
     do {
-        let c = EqualizerBarCurve.contrast
-        expectEqual(c(0), 0, "音浪曲线: 端点 0 不动(地板那条线永远在)")
-        expectEqual(c(1), 1, "音浪曲线: 端点 1 不动(仍能顶到上限)")
-        expectEqual(c(0.5), 0.5, "音浪曲线: 中点不动 —— 均值高度不变,不会重演「幅度太小」")
-        expectEqual(c(0.25) < 0.25, true, "音浪曲线: 小幅晃动被压低")
-        expectEqual(c(0.75) > 0.75, true, "音浪曲线: 大幅被拉伸")
-        expectEqual(abs(c(0.25) + c(0.75) - 1) < 1e-12, true, "音浪曲线: 关于 0.5 对称,压低多少就拉高多少")
-        let samples = stride(from: 0.0, through: 1.0, by: 0.01).map(c)
-        expectEqual(zip(samples, samples.dropFirst()).allSatisfy { $0 <= $1 }, true, "音浪曲线: 单调递增,不会出现「形状值升高柱子反而变矮」")
-        expectEqual(c(-0.3), 0, "音浪曲线: 越界输入夹回 0")
-        expectEqual(c(1.7), 1, "音浪曲线: 越界输入夹回 1")
-        expectEqual(EqualizerBarCurve.level(unit: 0.5, amplitude: 0.6), 0.3, "音浪曲线: 换气地板 0.6 按比例压低")
-        expectEqual(EqualizerBarCurve.level(unit: 0.9, amplitude: 1.25), 1, "音浪曲线: 起音脉冲 1.25 乘完再夹,能顶到上限")
-        expectEqual(EqualizerBarCurve.level(unit: 0.9, amplitude: 0), 0, "音浪曲线: 振幅 0 → 只剩地板")
+        let count = 5
+        let t0 = 800_000_000.0
+        let times = (0..<3000).map { t0 + Double($0) / 30.0 }
+
+        // 速度按条序铺开 —— "一条条单独在动"靠的就是这个,收成一样快就只剩相位差
+        let rates = (0..<count).map { EqualizerBarCurve.rate(bar: $0, barCount: count) }
+        expectEqual(rates.first!, EqualizerBarCurve.rateSlowest, "音浪速度: 第一根走最慢那档")
+        expectEqual(rates.last!, EqualizerBarCurve.rateFastest, "音浪速度: 最后一根走最快那档")
+        expectEqual(zip(rates, rates.dropFirst()).allSatisfy { $0 < $1 }, true, "音浪速度: 按条序单调变快")
+        expectEqual(EqualizerBarCurve.rate(bar: 0, barCount: 1), 1, "音浪速度: 只有一根时不做铺开,避免除零")
+        expectEqual(EqualizerBarCurve.rate(bar: 99, barCount: count), EqualizerBarCurve.rateFastest,
+                    "音浪速度: 条序越界夹到最快那档")
+
+        // 黄金角递推:任意根数都不会有两根落到同一个相位上(等分相位则会"依次推过去")
+        let wrapped = (0..<count).map { EqualizerBarCurve.phase(bar: $0).truncatingRemainder(dividingBy: 2 * .pi) }
+        let closest = (0..<count).flatMap { i in ((i + 1)..<count).map { abs(wrapped[i] - wrapped[$0]) } }.min() ?? 0
+        expectEqual(closest > 0.5, true, "音浪相位: 五根条子的相位两两拉得开,没有两根同步")
+
+        // 形状值与纯函数性
+        let shapes = times.flatMap { t in (0..<count).map { EqualizerBarCurve.shape(bar: $0, barCount: count, time: t) } }
+        expectEqual(shapes.allSatisfy { $0 >= 0 && $0 <= 1 }, true, "音浪形状: 形状值恒在 0…1")
+        expectEqual(shapes.max()! > 0.95 && shapes.min()! < 0.05, true, "音浪形状: 真的走得满,不是缩在中间一小段")
+        expectEqual(EqualizerBarCurve.shape(bar: 2, barCount: count, time: t0),
+                    EqualizerBarCurve.shape(bar: 2, barCount: count, time: t0),
+                    "音浪形状: 同一时刻永远同一个值(纯函数,重算 body 不会无故抽动)")
+
+        // 振幅口径:只压缩能跳多高,乘完再夹
+        expectEqual(EqualizerBarCurve.level(bar: 0, barCount: count, time: t0, amplitude: 0), 0,
+                    "音浪柱高: 振幅 0 → 只剩地板")
+        let levels = times.flatMap { t in (0..<count).map { EqualizerBarCurve.level(bar: $0, barCount: count, time: t, amplitude: 1) } }
+        expectEqual(levels.allSatisfy { $0 >= 0 && $0 <= 1 }, true, "音浪柱高: 比例恒在 0…1")
+        expectEqual(times.contains { t in (0..<count).contains { EqualizerBarCurve.level(bar: $0, barCount: count, time: t, amplitude: 1.25) >= 1 } }, true,
+                    "音浪柱高: 起音脉冲 1.25 乘完再夹,顶得到上限")
+        expectEqual(EqualizerBarCurve.level(bar: 2, barCount: count, time: t0, amplitude: 0.6)
+                        < EqualizerBarCurve.level(bar: 2, barCount: count, time: t0, amplitude: 1), true,
+                    "音浪柱高: 换气地板 0.6 把柱高按比例压低")
+
+        // 下面四条是这套曲线的身份,改坏任何一条观感都会退回被否掉的形态
+        var spreads: [Double] = []
+        var jumps: [Double] = []
+        var perBar = Array(repeating: [Double](), count: count)
+        var previous: [Double]? = nil
+        for t in times {
+            let row = (0..<count).map { EqualizerBarCurve.level(bar: $0, barCount: count, time: t, amplitude: 1) }
+            spreads.append(row.max()! - row.min()!)
+            if let p = previous {
+                jumps.append(zip(row, p).map { abs($0 - $1) }.reduce(0, +) / Double(count))
+                for b in 0..<count { perBar[b].append(abs(row[b] - p[b])) }
+            }
+            previous = row
+        }
+        let meanJump = jumps.reduce(0, +) / Double(jumps.count)
+        let meanSpread = spreads.reduce(0, +) / Double(spreads.count)
+        let barSpeeds = perBar.map { $0.reduce(0, +) / Double($0.count) }
+
+        expectEqual(levels.min()! >= EqualizerBarCurve.floorLevel - 1e-9, true,
+                    "音浪身份: 地板托着 —— 低谷的条子仍是一根短棍,不会缩成一个点(去掉地板会有 16.6% 的时间贴在满量程 12% 以下)")
+        expectEqual(meanJump < 0.055, true,
+                    "音浪身份: 逐帧位移有上限 —— 换成「快速冲顶 + 指数泄放」的非对称脉冲会到 0.082,那是一直在抽搐")
+        expectEqual(meanJump > 0.025, true,
+                    "音浪身份: 逐帧位移有下限 —— 再慢下去就是黏稠地漂,看不出在动")
+        expectEqual(barSpeeds.max()! / barSpeeds.min()! > 2, true,
+                    "音浪身份: 最快那根比最慢那根快一倍以上 —— 各走各的,不是整排一个节奏")
+        expectEqual(meanSpread > 0.35, true,
+                    "音浪身份: 柱间落差够大 —— 加一条全组共享的驱动会把它压到 0.31,那时五根同起同落")
+
+        // 预排关键帧(交给 Core Animation 播的那一段)必须逐点等于按时刻现算的值 ——
+        // 换成关键帧只是换了「谁来按帧推」,曲线本身一个点都不能变。
+        let step = 1.0 / 30
+        let amp: (Double) -> Double = { t in t - t0 < 1 ? 1.25 : 0.6 }
+        let frames = EqualizerBarCurve.keyframes(barCount: count, start: t0, step: step, count: 61, amplitude: amp)
+        expectEqual(frames.count, count, "音浪关键帧: 每根条子一条序列")
+        expectEqual(frames.allSatisfy { $0.count == 61 }, true, "音浪关键帧: 每条序列点数 = count")
+        let exact = (0..<count).allSatisfy { b in
+            (0..<61).allSatisfy { i in
+                let t = t0 + Double(i) * step
+                return frames[b][i] == EqualizerBarCurve.level(bar: b, barCount: count, time: t, amplitude: amp(t))
+            }
+        }
+        expectEqual(exact, true, "音浪关键帧: 逐点等于 level(time:amplitude:) 现算的值,振幅按每个采样时刻各求一次")
+        expectEqual(EqualizerBarCurve.keyframes(barCount: count, start: t0, step: 0, count: 10, amplitude: amp).isEmpty, true,
+                    "音浪关键帧: 步长非正时不排(防死循环 / 除零)")
     }
 
     // ---- NotchReveal:出场「从刘海撑开」的起始几何与时序 ----
@@ -413,9 +481,9 @@ func runNotchTests() {
         expectEqual(S.showsSkipButton(.after(seconds: 3)), false, "画不画: 倒计时期间不画(按了也只会得到一句「还不能跳过」)")
         expectEqual(S.showsSkipButton(.never), false, "画不画: 不可跳过的广告不画 —— 这次改动要的就是这一条")
         expectEqual(S.showsSkipButton(.notInAd), false, "画不画: 广告已经结束就不画")
-        // fail-**open**:脚本没跑成的原因(不是浏览器 / 没授权 / 超时)用户看不见,藏了键等于功能凭空消失,
-        // 画出来按下去至少能拿到一句可诊断的「没能跳过这条广告」。跟本文件其它 fail-closed 的地方相反,故意的。
-        expectEqual(S.showsSkipButton(nil), true, "画不画: 门槛脚本没跑成时照画(fail-open,留一条可诊断的路)")
+        expectEqual(S.showsSkipButton(nil), false, "画不画: 门槛脚本没跑成时不画 —— 没确认能跳就不给键")
+        expectEqual(S.gateRetryDelay(after: nil, round: 0), S.fastStartDelay, "门槛节奏: 脚本没跑成也继续探(开头快探)")
+        expectEqual(S.gateRetryDelay(after: nil), YouTubeMusicAdProbe.adRefreshInterval, "门槛节奏: 脚本没跑成之后按心跳重试,不放弃")
 
         expectEqual(S.gateRetryDelay(after: .after(seconds: 5)), 5.4, "门槛节奏: 倒计时那一档等到点再问(多给 0.4s 渲染)")
         expectEqual(S.gateRetryDelay(after: .after(seconds: 0)), 1.4, "门槛节奏: 秒数为 0 也至少等 1s,不打转")
@@ -484,7 +552,18 @@ func runNotchTests() {
                                  encoding: .utf8)) ?? ""
         expectEqual(view.isEmpty, false, "广告态契约: 读到 NotchLyricsView.swift")
         expectEqual(view.contains("var isAdBreakNow: Bool { get }"), true, "广告态契约: NotchChromeSource 声明 isAdBreakNow")
-        expectEqual(view.contains("hasTrack && !isAdBreakNow"), true, "广告态契约: 头部显隐判据含 !isAdBreakNow")
+        // 广告期间头部只剩快捷操作那排键:四项曲目字段被 trackInfoShowsTrackFields 挡掉,快捷操作不受它管。
+        // 高度算术与渲染两侧都得读这个值,漏一侧就是留一截空白或裁掉半截。
+        expectEqual(view.contains("var trackInfoShowsTrackFields: Bool { !isAdBreakNow }"), true,
+                    "广告态契约: 头部四项曲目字段在广告期间不画")
+        expectEqual(view.contains("|| expandedShowsQuickActions)"), true,
+                    "广告态契约: 快捷操作不受广告态挡(广告期间头部照样画那四颗键)")
+        expectEqual(view.contains("showsArtwork: fields && expandedTrackInfoShowsArtwork"), true,
+                    "广告态契约: 头部高度算术按广告态去掉四项曲目字段")
+        expectEqual(view.contains("if controller.trackInfoShowsTrackFields, controller.expandedTrackInfoShowsArtwork"), true,
+                    "广告态契约: 头部封面渲染读同一个判据")
+        expectEqual(view.contains("if fields && controller.expandedTrackInfoShowsTitle"), true,
+                    "广告态契约: 头部文字渲染读同一个判据")
         expectEqual(view.contains("if playback.isCurrentTrackAdBreak {\n                    adStatusColumn"), true,
                     "广告态契约: 歌词行在 lyricRowContent 这一层分流到 adStatusColumn")
         expectEqual(view.contains("showsLyricsOffsetControls: playback.showsLyricsOffsetControls && !playback.isCurrentTrackAdBreak"),
@@ -543,7 +622,19 @@ func runNotchTests() {
                     "广告态契约: 判空分支已随「恒显示」一起删干净,没留死代码")
         expectEqual(view.contains("adBreakEarIcon(alignment: .leading)"), true, "广告态契约: 左耳画的是广告标识")
         expectEqual(view.contains("Image(systemName: \"megaphone.fill\")"), true,
-                    "广告态契约: 左耳与状态行共用同一枚 megaphone.fill")
+                    "广告态契约: 左耳与封面替代方块共用同一枚 megaphone.fill")
+        // 状态行不画喇叭(左耳已经有一枚)。钉住它:
+        // 左耳那枚是恒显示的,状态行再画一枚就是同一件事说两遍 —— 别当成"图标掉了"改回去。
+        if let colStart = view.range(of: "private var adStatusColumn"),
+           let colEnd = view.range(of: "private var adCountdown") {
+            let col = String(view[colStart.lowerBound ..< colEnd.lowerBound])
+            expectEqual(col.contains("Image(systemName: \"megaphone"), false,
+                        "广告态契约: 状态行不画喇叭(左耳那枚恒显示,这里再来一枚是重复)")
+            expectEqual(col.contains("Text(L10n.t(\"广告中\"))"), true,
+                        "广告态契约: 状态行仍以「广告中」开头")
+        } else {
+            expectEqual(true, false, "广告态契约: 找不到 adStatusColumn / adCountdown(改名了?)")
+        }
         // 全 App 一共四个「当前曲目封面」位,广告期间都让位给同一枚喇叭。第四个(灵动岛展开
         // 头部 trackInfoArtwork)不在这里钉 —— 广告期间头部四项曲目字段一律不画
         // (`trackInfoShowsTrackFields`,上面已有断言),它是被那条覆盖的。
@@ -582,7 +673,7 @@ func runNotchTests() {
         // 这两个数住在 app target(NotchMetrics / EqualizerBars),selftest 够不着,所以这里
         // 抄一份**并在下面用源码契约钉住它们没被改** —— 只抄不钉的话,哪天常量动了这一组会
         // 悄悄变成在测一组不存在的几何。
-        let barsWidth: CGFloat = 15      // EqualizerBars.width = 5×1.8 + 4×1.5
+        let barsWidth: CGFloat = 16      // EqualizerBars.width = 5×2.0 + 4×1.5
         let cardPadding: CGFloat = 10    // NotchMetrics.cardHorizontalPadding
         let earWidth: CGFloat = 29.5
 
@@ -590,7 +681,7 @@ func runNotchTests() {
         let inset = B.soloEqualizerInset(
             earWidth: earWidth, barsWidth: barsWidth, cardPadding: cardPadding,
             expanded: false, atMinimumWidth: true)
-        expectEqual(inset, 2.25, "音浪(最小宽): 实测那组几何要往里推 2.25pt")
+        expectEqual(inset, 1.75, "音浪(最小宽): 实测那组几何要往里推 (29.5 − 16 − 10) / 2 = 1.75pt")
 
         // 这条才是目的:推完之后音浪中心必须落在「刘海边沿 到 卡片外沿」正中。
         // 以耳朵容器左沿(= 刘海边沿)为原点。
@@ -663,9 +754,9 @@ func runNotchTests() {
         expectEqual(viewSrc.contains("static let cardHorizontalPadding: CGFloat = 10"), true,
                     "音浪居中(契约): cardHorizontalPadding 仍是 10(上面抄的那份还成立)")
         expectEqual(barsSrc.contains("static let barCount = 5")
-                    && barsSrc.contains("static let barWidth: CGFloat = 1.8")
+                    && barsSrc.contains("static let barWidth: CGFloat = 2.0")
                     && barsSrc.contains("static let spacing: CGFloat = 1.5"), true,
-                    "音浪居中(契约): 音浪宽的三个因子仍是 5 / 1.8 / 1.5(合计 15)")
+                    "音浪居中(契约): 音浪宽的三个因子仍是 5 / 2.0 / 1.5(合计 16),且条宽与间距都落在整物理像素上")
         expectEqual(viewSrc.contains("NotchWidthBounds.soloEqualizerInset("), true,
                     "音浪居中(契约): 顶行确实走 Core 里那个公式,没在视图里另写一份")
         expectEqual(viewSrc.contains("soloEqualizerLeft ? soloInset : 0")
@@ -678,5 +769,206 @@ func runNotchTests() {
                     "音浪居中(契约): 「顶在下限」判据确实从 chrome 传进来了 —— 漏传等于最小宽那档也贴外缘")
         expectEqual(viewSrc.contains("expanded: controller.isExpanded"), true,
                     "音浪居中(契约): 展开态那一档确实接上了 —— 漏传等于展开时又飘回中间")
+    }
+
+    // ---- 时间类模块的秒表节拍:相位对齐曲目位置的整秒,不对齐墙钟 ----
+    do {
+        typealias C = NotchClockPhase
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let epoch = Date(timeIntervalSince1970: 0)
+        // baseAgeMs: 0 = 锚点刚收到;外推只看 fetchedAt 之后走过的相对时间,测试不受本机时钟影响。
+        func anchor(_ progressMs: Int, rate: Double = 1) -> ProgressAnchor {
+            ProgressAnchor(durationMs: 600_000, progressMs: progressMs, rate: rate, progressTs: nil,
+                           baseAgeMs: 0, fetchedAt: t0, fresh: true)
+        }
+        func secondAt(_ a: ProgressAnchor, _ date: Date) -> Int { a.extrapolatedPositionMs(now: date) / 1000 }
+
+        let a = anchor(1234)
+        let tick = C.tick(for: a, epoch: epoch)
+        expectEqual(abs(tick.start.timeIntervalSince(t0) - 0.766) < 1e-6, true, "秒表节拍: 第一次跳秒 = 位置走到下一个整秒(1.234s → 2s,差 0.766s)")
+        expectEqual(tick.interval, 1, "秒表节拍: 1 倍速每秒跳一次")
+        expectEqual(secondAt(a, tick.start.addingTimeInterval(-0.002)), 1, "秒表节拍: 跳秒前一刻位置还在 1s")
+        expectEqual(secondAt(a, tick.start.addingTimeInterval(0.002)), 2, "秒表节拍: 跳秒后一刻位置正好到 2s")
+        expectEqual(secondAt(a, tick.start.addingTimeInterval(tick.interval + 0.002)), 3, "秒表节拍: 下一拍正好到 3s")
+
+        let fast = anchor(1234, rate: 2)
+        let fastTick = C.tick(for: fast, epoch: epoch)
+        expectEqual(abs(fastTick.interval - 0.5) < 1e-12, true, "秒表节拍: 2 倍速半秒跳一次")
+        expectEqual(secondAt(fast, fastTick.start.addingTimeInterval(-0.002)), 1, "秒表节拍: 2 倍速跳秒前一刻还在 1s")
+        expectEqual(secondAt(fast, fastTick.start.addingTimeInterval(0.002)), 2, "秒表节拍: 2 倍速跳秒后一刻到 2s")
+
+        let onBoundary = C.tick(for: anchor(3000), epoch: epoch)
+        expectEqual(abs(onBoundary.start.timeIntervalSince(t0) - 1) < 1e-6, true, "秒表节拍: 正好在整秒上时下一拍排在 1s 之后")
+        expectEqual(C.tick(for: anchor(1234, rate: 0), epoch: epoch), C.Tick(start: epoch, interval: 1),
+                    "秒表节拍: 暂停(速率 0)钉在兜底起点上按 1 秒走")
+
+        expectEqual(C.mmss(ms: 0), "0:00", "时间格式: 0")
+        expectEqual(C.mmss(ms: 999), "0:00", "时间格式: 不足一秒向下取整")
+        expectEqual(C.mmss(ms: 61_999), "1:01", "时间格式: 秒两位补零")
+        expectEqual(C.mmss(ms: -5), "0:00", "时间格式: 负数按 0")
+        expectEqual(C.mmss(ms: 3_600_000), "60:00", "时间格式: 超过一小时仍按分钟累计")
+    }
+
+    // ---- 主行显示哪一句:副行开着看当前句,关着看提前亮出的那句(灵动岛与菜单栏共用) ----
+    do {
+        let current = SyncedLyricLine(romanization: nil, translation: nil, mainText: "当前句", words: nil, wordGroups: nil, side: nil)
+        let lead = SyncedLyricLine(romanization: nil, translation: nil, mainText: "提前亮出的下一句", words: nil, wordGroups: nil, side: nil)
+        expectEqual(LyricSecondaryLine.off.displayedLine(compactLine: lead, currentLine: current), lead,
+                    "主行取句: 副行关着 = 单行展示面提前亮出的那句")
+        for kind in [LyricSecondaryLine.nextLine, .translation, .romanization] {
+            expectEqual(kind.displayedLine(compactLine: lead, currentLine: current), current,
+                        "主行取句: 副行开着(\(kind))= 当前句,不抢跑")
+        }
+        expectEqual(LyricSecondaryLine.nextLine.displayedLine(compactLine: lead, currentLine: nil), nil,
+                    "主行取句: 副行开着、前奏里还没有当前句 = nil(显示间奏占位),不退回提前量那句")
+        expectEqual(LyricSecondaryLine.off.displayedLine(compactLine: nil, currentLine: current), nil,
+                    "主行取句: 副行关着、长间奏中段没有提前量 = nil,不退回当前句")
+    }
+
+    // ---- 跳过广告门槛的短缓存 ----
+    do {
+        typealias G = YouTubeMusicAdSkipper.GateCache
+        let t0 = Date(timeIntervalSince1970: 2_000_000)
+        var cache = G()
+        expectEqual(cache.lookup(host: "com.google.Chrome", now: t0), nil, "门槛缓存: 空缓存查不到")
+        cache.store(.ready, host: "com.google.Chrome", now: t0)
+        expectEqual(cache.lookup(host: "com.google.Chrome", now: t0.addingTimeInterval(G.ttl - 0.01)), .ready,
+                    "门槛缓存: TTL 以内同一浏览器复用")
+        expectEqual(cache.lookup(host: "com.google.Chrome", now: t0.addingTimeInterval(G.ttl)), nil,
+                    "门槛缓存: 到 TTL 就失效")
+        expectEqual(cache.lookup(host: "com.apple.Safari", now: t0), nil, "门槛缓存: 换了浏览器不复用")
+        cache.invalidate()
+        expectEqual(cache.lookup(host: "com.google.Chrome", now: t0), nil,
+                    "门槛缓存: 插播换到下一条时清掉,上一条的「能跳」不延续")
+        expectEqual(G.ttl < YouTubeMusicAdProbe.adRefreshInterval, true,
+                    "门槛缓存: TTL 必须短于 5 秒心跳,否则心跳会读到上一拍的旧判定")
+        expectEqual(G.ttl < YouTubeMusicAdSkipper.fastStartDelay * 2, true,
+                    "门槛缓存: TTL 盖不住两拍快探,开头快探不会全被缓存吃掉")
+    }
+
+    // ---- 源码契约:停表 / 窗口可见性 / 跳过广告门槛 / 快捷操作 ----
+    do {
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func read(_ name: String) -> String {
+            (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let view = read("NotchLyricsView.swift")
+        let root = read("NotchWindowRoot.swift")
+        let controller = read("NotchLyricsWindowController.swift")
+        for (name, text) in [("NotchLyricsView", view), ("NotchWindowRoot", root),
+                             ("NotchLyricsWindowController", controller)] {
+            expectEqual(text.isEmpty, false, "灵动岛契约: 读到 \(name).swift")
+        }
+
+        // 层内停表:NotchLyricsView 自己属性上的 @Environment 读到的是根上的值,拿不到 body 里
+        // NotchCardLayerActive 设的层值(同构复现:属性上读 63 次/2 秒不停,子视图里读 0 次)。
+        // 只看 NotchLyricsView 结构体本身:NotchScrubber 这类独立子视图在自己的属性上读是对的。
+        let viewStruct: String = {
+            guard let a = view.range(of: "struct NotchLyricsView<"),
+                  let b = view.range(of: "private struct QuickActionHint", range: a.upperBound..<view.endIndex)
+            else { return "" }
+            return String(view[a.lowerBound..<b.lowerBound])
+        }()
+        expectEqual(viewStruct.isEmpty, false, "停表契约: 切得出 NotchLyricsView 结构体那一段")
+        expectEqual(viewStruct.contains("private var cardLayerActive"), false,
+                    "停表契约: NotchLyricsView 不许在自己的属性上按层读 notchCardLayerActive(那样藏着的那份永不停表)")
+        expectEqual(view.components(separatedBy: "NotchLayerActiveReader {").count - 1 >= 2, true,
+                    "停表契约: 主歌词行与广告倒计时都经 NotchLayerActiveReader 在层内读")
+        expectEqual(view.contains("layerKaraokeLine(words: words, layerActive: layerActive)")
+                    && view.contains("lyricContent(layerActive: layerActive)"), true,
+                    "停表契约: 逐字歌词行与其余占位吃的是层内读到的值")
+        expectEqual(view.contains("currentLineFillSettled || !layerActive,"), true,
+                    "停表契约: 逐字歌词行按层内的值停表")
+        expectEqual(view.contains("isVisible: layerActive"), true, "停表契约: 间奏三点按层内的值停表")
+        expectEqual(view.contains(".transformEnvironment(\\.notchCardLayerActive) { $0 = $0 && active }"), true,
+                    "停表契约: 层修饰器与外层取与,不覆盖(外层是窗口可见性)")
+        expectEqual(view.contains(".environment(\\.notchCardLayerActive, active)"), false,
+                    "停表契约: 层修饰器不许直接覆盖成本层的值(会把窗口不可见时的停表冲掉)")
+
+        // 窗口看不见时整卡停表:SwiftUI 不会因遮挡 / orderOut 自己停 TimelineView(.animation)。
+        expectEqual(root.contains(".environment(\\.notchCardLayerActive, controller.isSurfaceVisible)"), true,
+                    "可见性契约: 根上把窗口可见性注入成层值的根")
+        expectEqual(controller.contains("NSWindow.didChangeOcclusionStateNotification, object: panel"), true,
+                    "可见性契约: 每扇灵动岛窗口(含镜像副本)都监听自己的遮挡变化")
+        expectEqual(controller.contains("@Published private(set) var isSurfaceVisible = true"), true,
+                    "可见性契约: 初值按可见算(上屏前 occlusionState 也是不可见,不能先停表)")
+        expectEqual(controller.components(separatedBy: "removeObserver(occlusionObserver)").count - 1, 2,
+                    "可见性契约: deinit 与 teardown 两处都摘掉遮挡通知")
+        expectEqual(controller.contains("let step = NotchVisibility.step(") && controller.contains("let stillShow = NotchVisibility.shouldShow("), true,
+                    "显隐契约: 控制器按 Core 的 NotchVisibility 决定显示 / 隐藏,延迟隐藏到点的复核也走同一份")
+        expectEqual(controller.contains("(!hideWhenNotPlaying || isPlayingNow || alertHold)")
+                    || controller.contains("(!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed"), false,
+                    "显隐契约: 控制器里不许再内联写一份「该不该显示」的判据")
+        expectEqual(view.contains("isPlaying: playback.isPlayingNow && surfaceVisible"), true,
+                    "可见性契约: 顶行音浪看不见时按暂停处理")
+        expectEqual(view.contains("if let anchor = playback.anchor, surfaceVisible {"), true,
+                    "可见性契约: 顶行时间模块看不见时不排表")
+
+        // 跳过广告:没确认能跳不给键;nil 之后不收摊;换条重判;bundle id 每拍现读。
+        expectEqual(view.contains("guard let state, state != .notInAd else { return }"), false,
+                    "跳过门槛契约: 脚本没跑成(nil)不许收摊(偶发超时会让整条广告再也探不到)")
+        expectEqual(view.contains("if state == .notInAd { return }"), true, "跳过门槛契约: 只有广告结束才收摊")
+        expectEqual(view.contains("let bundleID = await MainActor.run { LocalPlaybackSource.shared.lastResolvedBundleID }"), true,
+                    "跳过门槛契约: 浏览器 bundle id 每一拍现读")
+        expectEqual(view.contains(".onChange(of: playback.title) { _, _ in\n            if controller.isAdBreakNow { playback.syncAdSkipGate(adBreak: true) }"), true,
+                    "跳过门槛契约: 插播里换到下一条广告(只有标题在变)时重新判")
+        expectEqual(view.contains("guard gatedAdTitle != title else { return }"), true,
+                    "跳过门槛契约: 同一条广告不重起轮询(开始那一拍两条 onChange 前后脚到)")
+        expectEqual(view.contains("if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }"), true,
+                    "跳过门槛契约: 换条时清掉上一条的缓存判定")
+
+        // 快捷操作:Last.fm 那颗只在连着账号时出现,落点是设置 › Last.fm。
+        expectEqual(view.contains("if LastfmStatsService.shared.isConnected {\n                    quickActionButton(\"chart.bar.fill\""), true,
+                    "快捷操作契约: Last.fm 键只在连着账号时画")
+        expectEqual(view.contains("AppActions.shared.requestSettings(.account(.lastfm))"), true,
+                    "快捷操作契约: Last.fm 键翻到设置 › Last.fm 详情页")
+
+        // 主行取句的规则只有 Core 一份。
+        expectEqual(view.contains("secondary.displayedLine(compactLine: compact, currentLine: current)"), true,
+                    "主行取句契约: 灵动岛调 Core 的 displayedLine")
+        expectEqual(view.contains("showsSecondaryRow ? current : compact"), false,
+                    "主行取句契约: 灵动岛不许再内联写一份取句规则")
+        expectEqual(view.contains("NotchClockPhase.tick(for: anchor, epoch: clockEpoch)"), true,
+                    "秒表契约: App 侧的 schedule 由 Core 的 NotchClockPhase 算")
+    }
+
+    // ---- 窗口显示 / 隐藏决策 ----
+    do {
+        typealias V = NotchVisibility
+        // 该不该在屏上
+        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: true), false,
+                    "显隐: 灵动岛关着,什么都不显示")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: false, alertHold: false), true,
+                    "显隐: 没开「暂停时隐藏」时暂停也显示")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: false), false,
+                    "显隐: 开了「暂停时隐藏」且没在播 = 藏")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: true, alertHold: false), true,
+                    "显隐: 开了「暂停时隐藏」但在播 = 显示")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true), true,
+                    "显隐: 「发现新播放器」提醒挂着时即使没在播也要显示")
+
+        func step(_ show: Bool, visible: Bool = true, last: Bool?, vanished: Bool = false,
+                  reduce: Bool = false, pending: Bool = false) -> V.Step {
+            V.step(shouldShow: show, isVisible: visible, lastApplied: last, isVanished: vanished,
+                   reduceMotion: reduce, hasPendingHide: pending)
+        }
+        // 显示
+        expectEqual(step(true, last: nil), .show(orderFront: true, replayReveal: true), "显隐: 冷启动上屏 + 播出场动画")
+        expectEqual(step(true, last: false), .show(orderFront: true, replayReveal: true), "显隐: 从藏着到显示 = 上屏 + 出场动画")
+        expectEqual(step(true, last: true), .show(orderFront: false, replayReveal: false),
+                    "显隐: 已经在屏上又进来一次 = 一次 WindowServer 事务都不发、不重播动画")
+        expectEqual(step(true, last: true, vanished: true), .show(orderFront: false, replayReveal: true),
+                    "显隐: 缩回动画中途又播放了 = 窗口还在屏上,只让卡片从刘海里重新撑开")
+        // 隐藏
+        expectEqual(step(false, last: false), .alreadyHidden, "显隐: 本来就藏着 = 只作废挂着的延迟隐藏")
+        expectEqual(step(false, last: true), .startVanish, "显隐: 暂停时隐藏 = 先缩回刘海再 orderOut")
+        expectEqual(step(false, last: true, pending: true), .keepPendingVanish, "显隐: 已经在等缩回动画 = 不重排")
+        expectEqual(step(false, visible: false, last: true), .hideNow, "显隐: 用户关掉灵动岛 = 立刻隐藏,不做缩回动画")
+        expectEqual(step(false, last: nil), .hideNow, "显隐: 窗口还没显示过 = 立刻隐藏")
+        expectEqual(step(false, last: true, reduce: true), .hideNow, "显隐: 减弱动态效果 = 立刻隐藏")
+        expectEqual(step(false, visible: false, last: true, pending: true), .hideNow,
+                    "显隐: 等缩回动画期间用户关掉灵动岛 = 立刻隐藏,不等那条动画")
     }
 }

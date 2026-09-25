@@ -376,16 +376,58 @@ func TestProxyFallbackSkipsRetryForRequestsWithBody(t *testing.T) {
 	viaProxy := &stubRoundTripper{body: "should not be used"}
 	tr := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
 
-	req, err := http.NewRequest(http.MethodPost, "https://apic-appmobile.musixmatch.com/x", strings.NewReader("payload"))
+	req, err := http.NewRequest(http.MethodPost, "https://apic-appmobile.musixmatch.com/x", io.MultiReader(strings.NewReader("payload")))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if req.GetBody != nil {
+		t.Fatal("测试前提:io.MultiReader 建的请求不该有 GetBody")
 	}
 	if _, err := tr.RoundTrip(req); err == nil {
 		t.Fatal("期望直连的错误原样返回")
 	}
 	if viaProxy.calls != 0 {
-		t.Errorf("带 body 的请求被重放到代理 %d 次", viaProxy.calls)
+		t.Errorf("不能重放 body 的请求被重放到代理 %d 次", viaProxy.calls)
 	}
+}
+
+// bodyRecordingRoundTripper 记下每次收到的请求体。
+type bodyRecordingRoundTripper struct{ bodies []string }
+
+func (b *bodyRecordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	raw, _ := io.ReadAll(req.Body)
+	b.bodies = append(b.bodies, string(raw))
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: http.Header{}, Request: req}, nil
+}
+
+// 能重放的 body(bytes/strings.Reader 建的请求有 GetBody)直连失败后照样走代理,而且代理
+// 收到的是完整的 body,不是被直连那次读空了的。
+func TestProxyFallbackReplaysReplayableBody(t *testing.T) {
+	newFallbackTestEnv(t)
+	direct := &consumingFailRoundTripper{}
+	viaProxy := &bodyRecordingRoundTripper{}
+	tr := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.telegram.org/botX/sendMessage", strings.NewReader(`{"chat_id":"1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("直连失败时应被代理救回来, err=%v", err)
+	}
+	resp.Body.Close()
+	if len(viaProxy.bodies) != 1 || viaProxy.bodies[0] != `{"chat_id":"1"}` {
+		t.Errorf("代理收到的 body = %q", viaProxy.bodies)
+	}
+}
+
+// consumingFailRoundTripper 先把 body 读掉再失败 —— 模拟直连发到一半断掉。
+type consumingFailRoundTripper struct{}
+
+func (consumingFailRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	io.ReadAll(req.Body)
+	return nil, errors.New("connection reset")
 }
 
 // attempt 把 per-attempt 的 context 挂在 Body 上、等 Close 才释放。如果直接 cancel,

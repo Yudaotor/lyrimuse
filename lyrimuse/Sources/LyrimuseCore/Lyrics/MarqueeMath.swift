@@ -46,4 +46,35 @@ public enum MarqueeMath {
         // 一路插值到很小(灵动岛收起态卡片只有 notchWidth + 88),不封顶那几帧整行会被糊掉。
         return min(configured, containerWidth / 2)
     }
+
+    /// 逐词宽度到「第 i 个词画完时的累计宽度」(点),给跟唱滚动当 `wordEndXs` 用。
+    ///
+    /// **不能**改用 `MenuBarMarqueeRenderer.wordEndXs` 那条「按前缀整段测宽」的路子 ——
+    /// 两个展示面的排版模型不同,各自的测法在对方那里都是错的:
+    ///
+    /// - 菜单栏把整句排成**一张长图**(一个 NSAttributedString),词边界处有 kerning / 连字,
+    ///   所以它必须量前缀整段,各词单测再累加会跟长图逐词漂移。
+    /// - 灵动岛是 `HStack(spacing: 0)` 里**每个词一个独立 `Text`**,每个词各自成行布局、
+    ///   词之间没有 kerning,屏幕上第 i 个词的左缘就**等于**前 i 个词各自宽度之和。
+    ///   这里若改量前缀,反倒会跟真实渲染对不上。
+    ///
+    /// `measuredTotal` 是跑马灯那层 GeometryReader 量到的整行真实宽度:非 nil 且两边都为正时
+    /// 按它等比归一,把「字体测宽」与「SwiftUI 实际排版」之间的零头吸收掉(否则末尾几个词的
+    /// 偏移会带着累计误差,长句尤其明显)。传 nil = 不归一。
+    public static func cumulativeWordEndXs(wordWidths: [CGFloat],
+                                           measuredTotal: CGFloat? = nil) -> [CGFloat] {
+        guard !wordWidths.isEmpty else { return [] }
+        var running: CGFloat = 0
+        var ends: [CGFloat] = []
+        ends.reserveCapacity(wordWidths.count)
+        for w in wordWidths {
+            // 单调不减:脏数据(负宽)不许让累计倒退,否则 followReadingPath 那边的钳位
+            // 会把整条路径压平。
+            running += max(0, w)
+            ends.append(running)
+        }
+        guard let measuredTotal, measuredTotal > 0, running > 0 else { return ends }
+        let scale = measuredTotal / running
+        return ends.map { $0 * scale }
+    }
 }

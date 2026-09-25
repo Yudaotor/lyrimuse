@@ -112,7 +112,8 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
 	// isNewTrack 传 false:这里只是再查一次已经解析好的缓存(或触发首次解析),不是
 	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
+	// 桥接来的只查缓存,见 enrichmentFor。
+	enr := enrichmentFor(s)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
@@ -189,6 +190,23 @@ func lbMeta(s snapshot) lbTrackMeta {
 
 var errListenRejected = errors.New("listen rejected by server (4xx, non-retryable)")
 
+// apiRoot / apiToken 取 ListenBrainz 的地址和令牌。常驻进程里跟着 config.json 热重读走
+// (configreload.go),没登记热重读时(CLI 子命令、测试)用构造时给的那份。submit 跑在各自的
+// goroutine 里,所以这两个字段不能在运行中改写,一律经这里读。
+func (c *lbClient) apiRoot() string {
+	if lc := liveConfig(); lc != nil {
+		return lc.APIRoot
+	}
+	return c.root
+}
+
+func (c *lbClient) apiToken() string {
+	if lc := liveConfig(); lc != nil {
+		return lc.Token
+	}
+	return c.token
+}
+
 // submit posts one listen. listenType is "playing_now" or "single"; listenedAt
 // is only used for "single". LB(德国) is intermittently slow/down: playing_now
 // fails fast (the next refresh re-sends within playingNowRefresh), while a
@@ -203,7 +221,7 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 	// 纯本地 CPU/分配,不产生请求,但对"用不到这个功能的人应当完全无感"这条来说仍是多余的。
 	//
 	// dry-run 是例外:`-dry-run` 的全部用途就是"让我看看会发出去什么",没 token 也得照印。
-	if c.token == "" && !c.dryRun {
+	if c.apiToken() == "" && !c.dryRun {
 		// main.go 启动时已经打过一次提示,这里静默跳过,不逐条打日志刷屏。
 		return nil
 	}
@@ -271,11 +289,11 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 func (c *lbClient) submitOnce(ctx context.Context, body []byte, timeout time.Duration) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.root+"/1/submit-listens", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiRoot()+"/1/submit-listens", bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Token "+c.token)
+	req.Header.Set("Authorization", "Token "+c.apiToken())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := doHTTPTracked(c.hc, req)
 	if err != nil {

@@ -47,12 +47,17 @@ import (
 // 不另写解析器。逐字数据因此天然是 YRCParser 语法,跟 netease/qq/kugou 同一口径。
 
 const (
-	// sodaSeoTrackBase 是 web 端的 SEO 曲目端点。⚠️ 见头注:SEO 端点不是稳定契约。
-	sodaSeoTrackBase = "https://beta-luna.douyin.com/luna/h5/seo_track"
+	// sodaSeoTrackPath 是 web 端的 SEO 曲目端点路径,主机按 sodaSeoHosts 的顺序试(sourcefallback.go)。
+	// 见头注:SEO 端点不是稳定契约。
+	sodaSeoTrackPath = "/luna/h5/seo_track"
 	// sodaSeoTrackHost 单独列出来给熔断的主机映射用(sourcebreaker.go)。
 	sodaSeoTrackHost = "beta-luna.douyin.com"
-	// sodaImageBase:album.url_cover.uri 是 tos 路径,拼上它才是可取的图片地址。
-	sodaImageBase = "https://p3-luna.douyinpic.com/img/"
+	// sodaImageBase / sodaImageTemplate:接口没带 url_cover.urls / template_prefix 时的兜底值。
+	// 图片地址是「前缀 + uri + ~模板-处理参数.格式」,缺了 `~模板-...` 那段图片服务回 400。
+	sodaImageBase     = "https://p3-luna.douyinpic.com/img/"
+	sodaImageTemplate = "tplv-b829550vbb"
+	// sodaCoverTransform:跟网易云 800y800、QQ 800x800 同尺寸。
+	sodaCoverTransform = "resize:800:800.jpg"
 	// sodaLyricTimeout 跟别的逐字源同量级。这一路只有一次请求、没有搜索轮。
 	sodaLyricTimeout = 8 * time.Second
 	// sodaUserAgent:SEO 端点按普通网页请求对待,给一个常见桌面 UA 即可,不伪装客户端。
@@ -92,7 +97,9 @@ type sodaSeoTrackResponse struct {
 			Album struct {
 				Name     string `json:"name"`
 				URLCover struct {
-					URI string `json:"uri"`
+					URI            string   `json:"uri"`
+					URLs           []string `json:"urls"`
+					TemplatePrefix string   `json:"template_prefix"`
 				} `json:"url_cover"`
 			} `json:"album"`
 		} `json:"track"`
@@ -223,10 +230,20 @@ func sodaLyricByID(ctx context.Context, trackID, artist, title string) (sodaResu
 // sodaFetchSeoTrack 发一次 seo_track 请求并归一化。分出来是为了让单测能直接喂响应体
 // (见 sodaParseSeoTrack)。
 func sodaFetchSeoTrack(ctx context.Context, trackID string) (res sodaResult, trackFoundNoLyrics, broken bool, err error) {
+	err = tryEach(ctx, sodaSeoHosts, func(host string) error {
+		var e error
+		res, trackFoundNoLyrics, broken, e = sodaFetchSeoTrackAt(ctx, host, trackID)
+		return e
+	})
+	return res, trackFoundNoLyrics, broken, err
+}
+
+// sodaFetchSeoTrackAt 打一个主机上的 seo_track;两个主机同一个路径、同一个响应结构(实测)。
+func sodaFetchSeoTrackAt(ctx context.Context, host, trackID string) (res sodaResult, trackFoundNoLyrics, broken bool, err error) {
 	params := neturl.Values{}
 	params.Set("track_id", trackID)
 	params.Set("device_platform", "web")
-	u := sodaSeoTrackBase + "?" + params.Encode()
+	u := "https://" + host + sodaSeoTrackPath + "?" + params.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -292,19 +309,37 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 		title:        strings.TrimSpace(t.Name),
 		artist:       strings.Join(names, "/"),
 		album:        strings.TrimSpace(t.Album.Name),
-		cover:        sodaCoverURL(t.Album.URLCover.URI),
+		cover:        sodaCoverURL(t.Album.URLCover.URI, t.Album.URLCover.URLs, t.Album.URLCover.TemplatePrefix),
 		durationSecs: float64(t.Duration) / 1000,
 	}, false, false
 }
 
-// sodaCoverURL 把 album.url_cover.uri 那个 tos 路径拼成可取的图片地址。空 uri 给空串
-// (调用方的 coverOrFallback 会接手)。
-func sodaCoverURL(uri string) string {
+// sodaCoverURL 把 album.url_cover 的 uri / urls / template_prefix 拼成可取的图片地址。
+// 空 uri 给空串(调用方的 coverOrFallback 会接手)。
+func sodaCoverURL(uri string, bases []string, template string) string {
 	uri = strings.TrimSpace(uri)
 	if uri == "" {
 		return ""
 	}
-	return sodaImageBase + uri
+	base := sodaImageBase
+	for _, b := range bases {
+		if b = strings.TrimSpace(b); strings.HasPrefix(b, "https://") {
+			base = b
+			break
+		}
+	}
+	if !strings.HasSuffix(base, "/") {
+		base += "/"
+	}
+	if template = strings.TrimSpace(template); template == "" {
+		template = sodaImageTemplate
+	}
+	return base + uri + "~" + template + "-" + sodaCoverTransform
+}
+
+// sodaCoverNeedsTransform 认出缺了 `~模板-处理参数` 那段、取不到图的汽水封面地址。
+func sodaCoverNeedsTransform(u string) bool {
+	return strings.HasPrefix(u, "https://") && strings.Contains(u, "-luna.douyinpic.com/img/") && !strings.Contains(u, "~")
 }
 
 // ---- 搜索:本地拿不到曲目 id 时的兜底 ----
@@ -343,6 +378,9 @@ type sodaSearchItem struct {
 	Artist   string
 	Album    string
 	Duration float64 // 秒
+	// 非会员试听段(毫秒),没有就是 0。见 sodapreview.go。
+	PreviewStartMs    int64
+	PreviewDurationMs int64
 }
 
 // sodaSearchResponse 只摘曲目列表。结构是 result_groups[].data[].entity.track。
@@ -361,6 +399,10 @@ type sodaSearchResponse struct {
 					Album struct {
 						Name string `json:"name"`
 					} `json:"album"`
+					Preview struct {
+						Start    int64 `json:"start"`
+						Duration int64 `json:"duration"`
+					} `json:"preview"`
 				} `json:"track"`
 			} `json:"entity"`
 		} `json:"data"`
@@ -392,6 +434,9 @@ func sodaParseSearch(body sodaSearchResponse) []sodaSearchItem {
 				Artist:   strings.Join(names, "/"),
 				Album:    strings.TrimSpace(t.Album.Name),
 				Duration: float64(t.Duration) / 1000,
+
+				PreviewStartMs:    t.Preview.Start,
+				PreviewDurationMs: t.Preview.Duration,
 			})
 		}
 	}

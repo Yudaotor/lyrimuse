@@ -90,6 +90,10 @@ enum ConfigPortability {
         // 新机器的显示器尺寸/排布/UUID 全不一样,搬过去只会把窗口摆到看不见的地方。
         "np:lyricsWindowFrame",
         "np:lyricsWindowScreenID",
+        // 迷你窗的位置与所在屏幕,同上。迷你**尺寸**(np:lyricsWindowMiniSize)不在这里:
+        // 它只是一个大小,换台机器照样是用户想要的样子。
+        "np:lyricsWindowMiniOrigin",
+        "np:lyricsWindowMiniScreenID",
         "np:launchAtLoginEnabled",
         // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
         // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector
@@ -298,6 +302,10 @@ enum ConfigPortability {
                 do {
                     // 含全部账号凭据 —— 走 writeSecurely 收紧到 0600,见那边的注释。
                     try configData.writeSecurely(to: configURL)
+                    // 内存里的账号字段换成刚导入的这份,并清掉「有没保存的改动」:导入之后紧接着重启,
+                    // 退出时的兜底保存(`applicationShouldTerminate`,只在 isDirty 时写)会把内存里的
+                    // 旧值整份盖回 config.json。
+                    await MainActor.run { ConfigStore.shared.load() }
                 } catch {
                     logger.error("importData: writing config.json failed — \(String(describing: error), privacy: .public)")
                 }
@@ -331,14 +339,8 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
 
-        // 让 collector 读到刚写下去的 config.json/features.json。必须**在这里等它跑完**:
-        // 调用方紧接着就 restartApp() → NSApp.terminate,进程说没就没,fire-and-forget
-        // 的重启很可能根本来不及发出去。
-        //
-        // 失败不算导入失败:全新机器上 collector 还没装,kickstart 必然失败,而那条路径
-        // 随后的引导流程本来就会把服务装上、届时自然读的是新配置。
-        let reloaded = await CollectorControl.restartAndWaitAsync()
-        logger.notice("importData: collector reload after import — ok=\(reloaded)")
+        // 不重启 collector:config.json / features.json 它都按 mtime 自己热重读(lyrics_dir 也在运行中切换),
+        // 见 docs/features/14 章「改设置不再重启 collector」。
         return true
     }
 
@@ -377,14 +379,8 @@ enum ConfigPortability {
     /// 拦下来只会让人莫名其妙"我填的地址怎么没保存上";这里处理的是**外来文件**,
     /// 尤其在备份文件夹可以指向共享目录之后。两者信任级别不同。
     private static func sanitizeImportedConfig(_ configObj: Any) -> Any {
-        guard var config = configObj as? [String: Any] else { return configObj }
-        if let raw = config["state_relay_url"] as? String,
-           !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           !ImportPolicy.isAcceptableRelayURL(raw) {
-            // 连同 token 一起清掉:留着一把配不上地址的 token 没有意义,而万一以后哪里
-            // 补了个默认地址,它会跟着被发出去。
-            config["state_relay_url"] = ""
-            config["state_relay_token"] = ""
+        let (config, droppedRelay) = ImportPolicy.sanitizedConfig(configObj)
+        if droppedRelay {
             logger.warning("importData: dropped state_relay_url with an unacceptable scheme (and its token)")
         }
         return config

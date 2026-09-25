@@ -209,6 +209,8 @@ type rotatingLogFile struct {
 	size     int64
 	// 启动时就轮转过了(给 installLogSink 打那行提示用)。
 	rotatedAtOpen bool
+	// 轮转后把 fd 2 也指到新文件(常驻模式才开,见 redirectStderrTo)。
+	stderrFollows bool
 }
 
 // openRotatingLogFile:路径为空 / 打不开返回 nil,调用方退回 stderr。
@@ -254,6 +256,9 @@ func (r *rotatingLogFile) rotateLocked() {
 	_ = r.f.Close()
 	r.f = newF
 	r.size = 0
+	if r.stderrFollows {
+		redirectStderrTo(newF)
+	}
 	line := fmt.Sprintf("time=%s level=INFO msg=\"log: rotated, previous file exceeded %dMB, archived to lyrimuse.log.old\"\n",
 		time.Now().UTC().Format(logTimeLayout), r.maxBytes/1024/1024)
 	n, _ := r.f.WriteString(line)
@@ -275,6 +280,9 @@ func installLogSink(daemon bool) {
 		if f := openRotatingLogFile(logFilePath(), logRotateMaxBytes); f != nil {
 			base = f
 			logSink.file = f
+			// launchd 给的 fd 2 可能是启动期刚轮转掉的那份旧文件,一开始就指到当前文件。
+			f.stderrFollows = true
+			redirectStderrTo(f.f)
 		}
 	}
 	sq := newRepeatSquelcher(secretScrubber{w: base})

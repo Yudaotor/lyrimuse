@@ -269,8 +269,8 @@ func TestClassifyLyricSourceTransportFailure(t *testing.T) {
 func TestLyricSourceBreakerObserveTraced(t *testing.T) {
 	b, _ := newTestBreaker()
 	clientTimeout := &url.Error{Op: "Get", Err: errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)")}
-	b.observeTraced("music.163.com", clientTimeout, 0, "", transportTrace{dnsStarted: true})
-	b.observeTraced("c.y.qq.com", clientTimeout, 0, "", transportTrace{dnsStarted: true, dnsDone: true})
+	b.observeTraced("music.163.com", "", clientTimeout, 0, "", transportTrace{dnsStarted: true})
+	b.observeTraced("c.y.qq.com", "", clientTimeout, 0, "", transportTrace{dnsStarted: true, dnsDone: true})
 	got := b.transportFailureCodes()
 	if got["netease"] != lyricFailureReasonDNSFailed {
 		t.Errorf("netease: got %q want dns_failed(轨迹 DNS 未结束)", got["netease"])
@@ -468,5 +468,68 @@ func TestNeedsLyricsFirstFillShortIntervalWhenSourcesSkipped(t *testing.T) {
 	}
 	if needsLyricsFirstFill(enrichEntry{TS: now - 31}) {
 		t.Fatal("没有源被跳过的条目不该因为熔断器是空的就被拉进快速档")
+	}
+}
+
+// 同源另一个端点刚成功过时,某个端点的 5xx 只算它自己的问题(交给接口熔断),不把整个源停掉;
+// 传输层失败、或没有别的端点刚成功过,照旧按整个源算。
+func TestLyricSourceBreakerIgnoresSingleEndpoint5xxWhenSiblingHealthy(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	clock := func() time.Time { return now }
+	const dead, alive = "c.y.qq.com/soso/fcgi-bin/client_search_cp", "c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg"
+
+	b := newLyricSourceBreaker(clock)
+	b.observeTraced("c.y.qq.com", alive, nil, 200, "", transportTrace{})
+	for i := 0; i < 5; i++ {
+		b.observeTraced("c.y.qq.com", dead, nil, 500, "", transportTrace{})
+	}
+	if _, cooling := b.coolingDown("qq"); cooling {
+		t.Fatal("同源别的端点刚成功过,一个端点的 500 不该停掉整个源")
+	}
+
+	b = newLyricSourceBreaker(clock)
+	for i := 0; i < 2; i++ {
+		b.observeTraced("c.y.qq.com", dead, nil, 500, "", transportTrace{})
+	}
+	if _, cooling := b.coolingDown("qq"); !cooling {
+		t.Fatal("没有别的端点成功过,连续 5xx 照旧按整个源算")
+	}
+
+	b = newLyricSourceBreaker(clock)
+	b.observeTraced("c.y.qq.com", dead, nil, 200, "", transportTrace{})
+	for i := 0; i < 2; i++ {
+		b.observeTraced("c.y.qq.com", dead, nil, 500, "", transportTrace{})
+	}
+	if _, cooling := b.coolingDown("qq"); !cooling {
+		t.Fatal("只有这个端点自己刚成功过,不算同源别的端点健康")
+	}
+
+	b = newLyricSourceBreaker(clock)
+	b.observeTraced("c.y.qq.com", alive, nil, 200, "", transportTrace{})
+	now = now.Add(lyricSourceEndpointHealthyWindow + time.Second)
+	for i := 0; i < 2; i++ {
+		b.observeTraced("c.y.qq.com", dead, nil, 500, "", transportTrace{})
+	}
+	if _, cooling := b.coolingDown("qq"); !cooling {
+		t.Fatal("别的端点的成功已经过期,该按整个源算")
+	}
+
+	b = newLyricSourceBreaker(clock)
+	b.observeTraced("c.y.qq.com", alive, nil, 200, "", transportTrace{})
+	boom := errors.New("connection refused")
+	for i := 0; i < 2; i++ {
+		b.observeTraced("c.y.qq.com", dead, boom, 0, "", transportTrace{})
+	}
+	if _, cooling := b.coolingDown("qq"); !cooling {
+		t.Fatal("传输层失败是整个源的事,别的端点成功过也照算")
+	}
+
+	b = newLyricSourceBreaker(clock)
+	b.observeTraced("c.y.qq.com", alive, nil, 200, "", transportTrace{})
+	for i := 0; i < 2; i++ {
+		b.observe("c.y.qq.com", nil, 500, "")
+	}
+	if _, cooling := b.coolingDown("qq"); !cooling {
+		t.Fatal("不知道端点(observe)时按整个源算")
 	}
 }

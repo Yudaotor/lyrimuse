@@ -60,12 +60,27 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         // **菜单显示 ⟺ 转换真的会发生**,所以这里不需要再加一条
         // 「|| 已经不是默认值」的兜底(设置页那条仍然需要,它的判据是粘性的、宽得多)。
         if LocalPlaybackSource.shared.currentLyricsSupportsChineseVariant {
-            menu.addItem(submenu(L10n.t("简繁转换"), symbol: "character.bubble", menu: chineseVariantMenu(settings)))
+            menu.addItem(submenu(L10n.t("繁简转换"), symbol: "character.bubble", menu: chineseVariantMenu(settings)))
         }
+        // 图标跟设置页「歌词显示」里「显示译文」/「显示罗马音」两行同一份(text.bubble /
+        // textformat.alt),写的也是同一个 AppSettings 值——设置页那两行标题带「显示」二字,
+        // 这里跟「双行歌词」同一套简短命名(打钩本身已经表达了"显示/不显示")。
+        menu.addItem(toggle(L10n.t("译文"), symbol: "text.bubble",
+                            on: settings.showTranslation,
+                            action: #selector(toggleShowTranslation)))
+        menu.addItem(toggle(L10n.t("罗马音"), symbol: "textformat.alt",
+                            on: settings.showRomanization,
+                            action: #selector(toggleShowRomanization)))
         menu.addItem(toggle(L10n.t("双行歌词"), symbol: "text.aligncenter",
                             on: settings.showNextLinePreview,
                             action: #selector(toggleNextLinePreview)))
-        menu.addItem(submenu(L10n.t("更改配色"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
+        // 关掉这一项时**不会**当场把控制排从指针底下抽走——这颗菜单本身就挂在控制排上,
+        // 当场收回等于连刚点过的这个入口一起消失。真正生效被推迟到这次悬停结束那一刻,
+        // 见 LyricsOverlayWindowController.showHoverControls 声明处。
+        menu.addItem(toggle(L10n.t("悬停控制条"), symbol: "playpause.circle",
+                            on: settings.overlayShowHoverControls,
+                            action: #selector(toggleShowHoverControls)))
+        menu.addItem(submenu(L10n.t("配色主题"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
         menu.addItem(submenu(offsetMenuTitle, symbol: "timer", menu: lyricsOffsetMenu()))
         // 「位置」:自由 / 顶部居中 / 底部居中。放在这里是因为预设模式下
         // 想拖窗口只会得到一条「🔒 已固定为…，在 ⚙ 菜单里可改」+ 抖一下,用户下一步最可能就是想切模式 —— 就近给出口,
@@ -121,25 +136,17 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     private func colorThemeMenu(_ settings: AppSettings) -> NSMenu {
         let m = NSMenu()
         m.autoenablesItems = false
-        m.addItem(toggle(L10n.t("跟随封面"), symbol: "photo",
-                         on: settings.followsCoverArt,
-                         action: #selector(toggleFollowsCoverArt)))
-        m.addItem(.separator())
         let current = ColorTheme(
             name: "", foregroundColorHex: settings.foregroundColorHex,
             backgroundColorHex: settings.backgroundColorHex,
             textStrokeEnabled: settings.textStrokeEnabled, textStrokeColorHex: settings.textStrokeColorHex)
-        // 跟随封面开着时一个都不打勾 —— 那四个颜色字段此刻只是备用值,给它们打勾就是
-        // 「跟随封面 ✓」+「某主题 ✓」两个互相矛盾的"正在生效"(见头注释第 1 条)。
-        let showsCheckmarks = !settings.followsCoverArt
         for theme in ColorTheme.builtInPresets {
-            m.addItem(colorThemeItem(theme, checked: showsCheckmarks && theme.hasSameColors(as: current)))
+            m.addItem(colorThemeItem(theme, checked: theme.hasSameColors(as: current)))
         }
         if !settings.customColorThemes.isEmpty {
             m.addItem(.separator())
             for theme in settings.customColorThemes {
-                // 同上,自存主题也一样不打勾。
-                m.addItem(colorThemeItem(theme, checked: showsCheckmarks && theme.hasSameColors(as: current)))
+                m.addItem(colorThemeItem(theme, checked: theme.hasSameColors(as: current)))
             }
         }
         return m
@@ -221,6 +228,21 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         AppSettings.shared.showNextLinePreview.toggle()
     }
 
+    /// 写的是设置页「显示译文」同一个值——别处已经生效的地方(歌词窗口/灵动岛)会跟着一起变,
+    /// 不是悬浮歌词私有的开关。
+    @objc private func toggleShowTranslation() {
+        AppSettings.shared.showTranslation.toggle()
+    }
+
+    /// 同上,写的是「显示罗马音」那个总开关。
+    @objc private func toggleShowRomanization() {
+        AppSettings.shared.showRomanization.toggle()
+    }
+
+    @objc private func toggleShowHoverControls() {
+        AppSettings.shared.overlayShowHoverControls.toggle()
+    }
+
     /// 中文繁简要双写(跟 SettingsView.swift 那个 Picker 完全一致):AppSettings 负责持久化,
     /// LocalPlaybackSource 负责让**当前正在播的这首歌**立刻按新设置重新解析——只写前者的话
     /// 要等切下一首歌才会生效,像是这一项点了没反应。
@@ -236,10 +258,6 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     @objc private func setPlacementFree() { AppSettings.shared.overlayPlacementMode = .free }
     @objc private func setPlacementTopCenter() { AppSettings.shared.overlayPlacementMode = .topCenter }
     @objc private func setPlacementBottomCenter() { AppSettings.shared.overlayPlacementMode = .bottomCenter }
-
-    @objc private func toggleFollowsCoverArt() {
-        AppSettings.shared.followsCoverArt.toggle()
-    }
 
     @objc private func applyColorTheme(_ sender: NSMenuItem) {
         guard let theme = sender.representedObject as? ColorTheme else { return }

@@ -148,9 +148,9 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 // (最多 5 次、每次隔 10 分钟),而 needsLyricsRetry 的 6 小时起算点正是 e.TS —— 于是
 // 补个封面主色就能把"去别的源再搜一遍歌词"整体往后拖近一小时。两件事本来毫无关系。
 func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "kugou": true}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "kugou": true}
 
 	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。
 	longAgo := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1

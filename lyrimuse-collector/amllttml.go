@@ -504,25 +504,42 @@ func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) 
 	if platformDir == "" || musicID == "" {
 		return "", false
 	}
-	url := fmt.Sprintf("%s/%s/%s.ttml", amllRawBase, platformDir, musicID)
+	var ttml string
+	found := false
+	_ = tryEach(ctx, amllBases, func(base string) error {
+		body, ok, err := amllFetchAt(ctx, base, platformDir, musicID)
+		if err == nil {
+			ttml, found = body, ok
+		}
+		return err
+	})
+	return ttml, found
+}
+
+// amllFetchAt:err 非 nil 是没问成;ok=false、err=nil 是 404(库里没有)。
+func amllFetchAt(ctx context.Context, base, platformDir, musicID string) (string, bool, error) {
+	url := fmt.Sprintf("%s/%s/%s.ttml", base, platformDir, musicID)
 	client := lyricHTTPClient(amllHTTPTimeout)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", false
+		return "", false, err
 	}
 	resp, err := doHTTPTracked(client, req)
 	if err != nil {
-		return "", false
+		return "", false, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", false, nil
+	}
 	if resp.StatusCode != http.StatusOK {
-		return "", false
+		return "", false, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return "", false
+		return "", false, err
 	}
-	return string(body), true
+	return string(body), true, nil
 }
 
 // amllSkippedForMissingIDs:本进程里 amll 是否有过"两个 ID 都为空、一个请求都没发"的一轮。

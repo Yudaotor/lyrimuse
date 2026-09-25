@@ -109,16 +109,28 @@ public enum LyricsFullScan {
     ///   - `skipEmpty`:这条空条目属于「再搜也不会有」(见 `LyricsRetrySkip`),只对第 0 层生效。
     public static func tier(
         hasLyrics: Bool, hasWordTiming: Bool, scoringVersion: Int, currentScoringVersion: Int,
-        isManual: Bool, isInstrumental: Bool, isPinned: Bool
+        isManual: Bool, isInstrumental: Bool, isPinned: Bool,
+        lastFillAt: Int64 = 0, lastRescoreAt: Int64 = 0, passStart: Int64 = 0, skipEmpty: Bool = false
     ) -> Tier? {
         // 四道硬闸,跟 collector 一字不差。手改过的、确证纯音乐的、校准过时间轴的一律不碰;
         // 校准那道是全量扫库相对补空扫描**多出来**的一道(补空只碰没词的条目,没词就没有
         // 校正值可作废),缺了它一轮扫描会把用户一句句听出来的几百毫秒集体作废。
         if isManual || isInstrumental || isPinned { return nil }
-        if !hasLyrics { return .empty }
-        if !hasWordTiming { return .lineOnly }
-        if scoringVersion < currentScoringVersion { return .staleVersion }
-        // 已经是逐字**且**版本追平:同一套规则重跑必然得出同一个结论,纯粹白烧网络。
-        return nil
+        let tier: Tier
+        var tried = lastRescoreAt
+        if !hasLyrics {
+            tier = .empty
+            tried = lastFillAt
+        } else if !hasWordTiming {
+            tier = .lineOnly
+        } else if scoringVersion < currentScoringVersion {
+            tier = .staleVersion
+        } else {
+            // 已经是逐字**且**版本追平:同一套规则重跑必然得出同一个结论,纯粹白烧网络。
+            return nil
+        }
+        if passStart > 0 && tried >= passStart { return nil }
+        if tier == .empty && skipEmpty { return nil }
+        return tier
     }
 }

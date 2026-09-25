@@ -15,9 +15,9 @@ func withFeaturesFile(t *testing.T, body string) string {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("写临时 features.json: %v", err)
 	}
-	startup := features
+	startup := features()
 	t.Cleanup(func() {
-		features = startup
+		setFeatures(startup)
 		setLyricSourcesPath("")
 	})
 	setLyricSourcesPath(path)
@@ -81,7 +81,7 @@ func TestLyricSourcesFallBackToStartupSet(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := withFeaturesFile(t, `{"lyrics_sources":["netease"]`+allFlagsOn+`}`)
-			features.LyricsSources = map[string]bool{"lrclib": true}
+			featuresRef().LyricsSources = map[string]bool{"lrclib": true}
 			if lyricSourceEnabled("lrclib") {
 				t.Fatalf("前置条件:文件读得到时该按文件来")
 			}
@@ -96,10 +96,10 @@ func TestLyricSourcesFallBackToStartupSet(t *testing.T) {
 	}
 
 	t.Run("路径没登记", func(t *testing.T) {
-		startup := features
-		t.Cleanup(func() { features = startup; setLyricSourcesPath("") })
+		startup := features()
+		t.Cleanup(func() { setFeatures(startup); setLyricSourcesPath("") })
 		setLyricSourcesPath("")
-		features.LyricsSources = map[string]bool{"lrclib": true}
+		featuresRef().LyricsSources = map[string]bool{"lrclib": true}
 		if !lyricSourceEnabled("lrclib") || lyricSourceEnabled("kugou") {
 			t.Errorf("一次性 CLI 子命令(没登记路径)该直接用它自己加载的那份")
 		}

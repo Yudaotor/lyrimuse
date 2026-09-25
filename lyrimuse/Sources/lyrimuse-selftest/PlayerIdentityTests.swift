@@ -12,8 +12,12 @@ func runPlayerIdentityTests() {
         typealias L = LocalPlaybackSource
         expectEqual(L.positionSourceTier(forBundleID: "com.apple.Music") == .precise, true,
                     "档位映射: Apple Music → precise")
-        expectEqual(L.positionSourceTier(forBundleID: "com.spotify.client") == .cleanExtrapolated, true,
-                    "档位映射: Spotify → cleanExtrapolated")
+        // Spotify 跟 Apple Music 一样走 AppleScript 整份顶替(MediaControlClient.adaptedSnapshot),
+        // 读到的是播放器自己的钟 —— 这一档同时关掉整套 MediaRemote 锚点补偿(自然切歌偏置 /
+        // repeat-one 回绕 / 晚锚点探针 / SpotifyPositionProbe 的位置纠正)。判错档不会报错,
+        // 只会让那套补偿拿轮询噪声当"锚点超前量"估出来,变成整曲恒定偏移。
+        expectEqual(L.positionSourceTier(forBundleID: "com.spotify.client") == .precise, true,
+                    "档位映射: Spotify → precise(AppleScript player position)")
         expectEqual(L.positionSourceTier(forBundleID: "com.tencent.QQMusicMac") == .noisyFloored, true,
                     "档位映射: QQ 音乐 → noisyFloored")
         expectEqual(L.positionSourceTier(forBundleID: "com.netease.163music") == .noisyFloored, true,
@@ -37,6 +41,17 @@ func runPlayerIdentityTests() {
         expectEqual(L.shouldRatchetForward(reported: 10, predicted: 5,
                                            tier: L.positionSourceTier(forBundleID: "company.thebrowser.Browser")),
                     false, "档位映射: 未知源不吃前向棘轮")
+        // 档位是整套锚点补偿的总开关 —— 走 AppleScript 的两家一条都不该触发。
+        for (name, bundle) in [("Apple Music", "com.apple.Music"), ("Spotify", "com.spotify.client")] {
+            let tier = L.positionSourceTier(forBundleID: bundle)
+            expectEqual(tier == .precise, true, "档位映射: \(name) 归 precise")
+            expectEqual(L.shouldProbeLateAnchor(reported: 10, predicted: 11, tier: tier), false,
+                        "锚点补偿: \(name)(precise)不问晚锚点探针")
+            expectEqual(L.shouldRatchetForward(reported: 10, predicted: 5, tier: tier), false,
+                        "锚点补偿: \(name)(precise)不吃前向棘轮")
+            expectEqual(L.isFrozenReport(reportedAdvance: 0, gap: 2.0, rate: 1, tier: tier), false,
+                        "锚点补偿: \(name)(precise)不走冻结锚点守卫")
+        }
     }
 
     // ---- MusicPlaybackMode: 播放模式档位轮换,按播放器有没有「单曲循环」分两套 ----
@@ -277,27 +292,80 @@ func runPlayerIdentityTests() {
     // 漏掉 auto 那一条正是设置页那张卡藏过一阵子的原因:默认配置的人在引导里被问过这份权限、
     // 回设置里却找不到入口,更新/重签名导致 TCC 授权失效之后就再也没有地方能重新授权。
     do {
-        expectEqual(Set<PlaybackPlayer>([.auto]).needsAppleMusicAutomation, true,
-                    "自动化权限判据: 纯 auto(默认值)也要 —— 漏掉它正是设置页那张卡藏了半个月的原因")
-        expectEqual(Set<PlaybackPlayer>([.appleMusic]).needsAppleMusicAutomation, true,
-                    "自动化权限判据: 只勾 Apple Music,整条读取都是 AppleScript")
-        expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic]).needsAppleMusicAutomation, true,
-                    "自动化权限判据: 多选里含 Apple Music,命中它那一拍照样走 AppleScript")
-        expectEqual(Set<PlaybackPlayer>([.qqMusic, .auto]).needsAppleMusicAutomation, true,
-                    "自动化权限判据: 含 auto 就算(auto 是超集,随时可能在播 Music.app)")
-        // ⚠️ 反例才是这条判据的边界:一个 Music.app 都碰不到的配置不该看到这张卡。
-        expectEqual(Set<PlaybackPlayer>([.qqMusic]).needsAppleMusicAutomation, false,
-                    "自动化权限判据: 只勾 QQ 音乐 —— 那条 AppleScript 路一次都走不到,别拿无关权限烦人")
-        expectEqual(Set<PlaybackPlayer>([.qqMusic, .netease, .spotify]).needsAppleMusicAutomation, false,
-                    "自动化权限判据: 多选但全是别家,同样不显示")
-        expectEqual(Set<PlaybackPlayer>([]).needsAppleMusicAutomation, false,
+        typealias P = Set<PlaybackPlayer>
+        expectEqual(P([.auto]).playersNeedingAutomation, [.appleMusic, .spotify],
+                    "自动化权限判据: 纯 auto(默认值)按超集算,两家都要")
+        expectEqual(P([.appleMusic]).playersNeedingAutomation, [.appleMusic],
+                    "自动化权限判据: 只勾 Apple Music,只要它那一份")
+        expectEqual(P([.spotify]).playersNeedingAutomation, [.spotify],
+                    "自动化权限判据: 只勾 Spotify 也要一份 —— 它的曲目与位置同样走 AppleScript")
+        expectEqual(P([.appleMusic, .qqMusic]).playersNeedingAutomation, [.appleMusic],
+                    "自动化权限判据: 多选里只挑出真正需要的那几家,别把 QQ 音乐也列上")
+        expectEqual(P([.appleMusic, .spotify]).playersNeedingAutomation, [.appleMusic, .spotify],
+                    "自动化权限判据: 两家都勾就两行")
+        expectEqual(P([.qqMusic, .auto]).playersNeedingAutomation, [.appleMusic, .spotify],
+                    "自动化权限判据: 含 auto 就是超集,跟同时勾了谁无关")
+        // 顺序固定(allCases),两个界面按同一个顺序排,别让卡片里的行随集合迭代顺序跳。
+        expectEqual(P([.spotify, .appleMusic]).playersNeedingAutomation, [.appleMusic, .spotify],
+                    "自动化权限判据: 顺序固定,不随 Set 的迭代顺序变")
+        // 反例才是这条判据的边界:一个 AppleScript 播放器都碰不到的配置不该看到这张卡。
+        expectEqual(P([.qqMusic]).playersNeedingAutomation, [],
+                    "自动化权限判据: 只勾 QQ 音乐 —— 那条路一次都走不到,别拿无关权限烦人")
+        expectEqual(P([.qqMusic, .netease, .kugou, .soda]).playersNeedingAutomation, [],
+                    "自动化权限判据: 多选但全是没有 AppleScript 字典的,同样不显示")
+        expectEqual(P([]).playersNeedingAutomation, [],
                     "自动化权限判据: 空集不该崩(理论不该发生,但函数要安全)")
+        expectEqual(P([.qqMusic]).needsAnyAutomation, false, "自动化权限判据: 空列表 → 卡片不出现")
+        expectEqual(P([.auto]).needsAnyAutomation, true, "自动化权限判据: 非空 → 卡片出现")
+        // 每家该不该要这份权限,来自生成表,不是手抄 —— 新接一个有 AppleScript 字典的播放器时,
+        // 改 shared/players.json 就够,两个界面自动跟上。
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAutomationPermission),
+                    [.appleMusic, .spotify],
+                    "自动化权限判据: 需要权限的就这两家(改 shared/players.json 的 needsAutomationPermission)")
+        expectEqual(PlaybackPlayer.auto.needsAutomationPermission, false,
+                    "自动化权限判据: auto 自己不是一个 App,不对应任何权限目标")
         // 跟 isExclusivelyAppleMusic **不是**一回事 —— 混用会让多选/auto 下的播放控制
         // 武断地直接打给 Music.app,绕开 media-control 的焦点仲裁。钉一条免得后人合并。
-        expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic]).needsAppleMusicAutomation
+        expectEqual(P([.appleMusic, .qqMusic]).needsAnyAutomation
                         != (Set<PlaybackPlayer>([.appleMusic, .qqMusic]) == [.appleMusic]),
                     true,
                     "自动化权限判据: 跟「排他只有 Apple Music」是两个判据,不能互相替代")
+    }
+
+    // ---- 「完全磁盘访问权限」该替哪几家要 ----
+    //
+    // `Set<PlaybackPlayer>.playersNeedingFullDiskAccess` 决定设置页那张卡、引导页那一步、体检清单
+    // 那一项出不出现。每家要不要来自生成字段(shared/players.json,collector 侧
+    // TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账),含 auto 时按超集算。
+    do {
+        typealias P = Set<PlaybackPlayer>
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou],
+                    "完全磁盘访问判据: 客户端文件在私有容器里的就这三家")
+        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou],
+                    "完全磁盘访问判据: 纯 auto 按超集算")
+        expectEqual(P([.kugou, .spotify]).playersNeedingFullDiskAccess, [.kugou],
+                    "完全磁盘访问判据: 多选里只挑出要授权的那几家")
+        expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [],
+                    "完全磁盘访问判据: Spotify / 汽水 / Apple Music 的文件不在私有容器里,不出现")
+        // 状态文件里的来源名就是各家的 nativeLyricSource —— 对不上的话结论永远是「还没确认」。
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess).map(\.nativeLyricSource),
+                    ["qq", "netease", "kugou"],
+                    "完全磁盘访问判据: 要授权的每家都有 nativeLyricSource,且就是 collector 状态文件里的来源名")
+    }
+
+    // ---- collector 发布的可读性状态 到 一个结论 ----
+    do {
+        typealias A = LocalCacheAccess
+        let mixed = A.State(denied: ["kugou"], readable: ["qq", "netease"])
+        expectEqual(A.grant(for: ["qq", "kugou"], state: mixed), .denied, "授权结论: 有一家被拒就是被拒")
+        expectEqual(A.grant(for: ["qq", "netease"], state: mixed), .granted, "授权结论: 全部读得到才算已授权")
+        expectEqual(A.grant(for: ["qq", "soda"], state: mixed), .unknown, "授权结论: 有一家还没探到就是还没确认")
+        expectEqual(A.grant(for: ["qq"], state: nil), .unknown, "授权结论: 没有状态文件(collector 没在跑)是还没确认")
+        expectEqual(A.grant(for: [], state: mixed), .unknown, "授权结论: 空列表没东西可判")
+        // 旧版 collector 只写 denied,不写 readable:解得出来,readable 为空。
+        let legacy = try? JSONDecoder().decode(A.State.self, from: Data(#"{"updatedAt":1,"denied":["kugou"]}"#.utf8))
+        expectEqual(legacy?.readable, [], "授权结论: 旧版状态文件没有 readable 字段也能解")
+        expectEqual(A.grant(for: ["kugou"], state: legacy), .denied, "授权结论: 旧版状态文件照样报得出被拒")
     }
 
     // ---- YouTube Music 广告判据----
@@ -913,11 +981,14 @@ func runPlayerIdentityTests() {
                     "浏览器默认名单: Arc 不该出现在「+」菜单的默认候选里")
         expectEqual(BrowserAutomationPermission.family(forBundleID: arc), .chromium,
                     "浏览器适配: Arc 的引擎族判定必须原样保留(不在默认名单 ≠ 不支持)")
-        // Chrome / Edge / Safari 三个仍然默认展示 —— 免得"拿掉 Arc"被顺手扩大成"清空名单"。
-        for id in ["com.google.Chrome", "com.microsoft.edgemac", "com.apple.Safari"] {
+        // Chrome / Edge / Brave / Safari 仍然默认展示 —— 免得"拿掉 Arc"被顺手扩大成"清空名单"。
+        for id in ["com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", "com.apple.Safari"] {
             expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs.contains(id), true,
                         "浏览器默认名单: \(id) 应该仍在默认候选里")
         }
+        // Brave 是实测登记过的 Chromium 系(脚本字典 CrSuExJa、pref key 同名、Preferences 路径两层厂商目录)。
+        expectEqual(BrowserAutomationPermission.family(forBundleID: "com.brave.Browser"), .chromium,
+                    "浏览器适配: Brave 判成 Chromium 系")
         // Firefox 这类没提供脚本命令的浏览器照旧判不出来 —— 反向锚点,证明上面那条不是"什么都返回 chromium"。
         expectEqual(BrowserAutomationPermission.family(forBundleID: "org.mozilla.firefox"), nil,
                     "浏览器适配: 没提供脚本命令的浏览器仍应判不出引擎族")
@@ -1002,24 +1073,34 @@ func runPlayerIdentityTests() {
     // MARK: - PlayerHealth(侧栏「播放器」警告徽标的判定)
     do {
         typealias PH = PlayerHealth
-        expectEqual(PH.warnings(.init(appleMusicSelected: true, automationDenied: false,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
                                       collectorServiceEnabled: true, collectorRunning: true)),
                     [], "PlayerHealth: 一切正常不报")
-        expectEqual(PH.warnings(.init(appleMusicSelected: true, automationDenied: true,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.appleMusic],
                                       collectorServiceEnabled: true, collectorRunning: true)),
-                    [.automationDenied], "PlayerHealth: 选了 Apple Music 且权限被拒 → 报自动化")
-        expectEqual(PH.warnings(.init(appleMusicSelected: false, automationDenied: true,
-                                      collectorServiceEnabled: true, collectorRunning: true)),
-                    [], "PlayerHealth: 没选 Apple Music 时权限被拒不报(那份权限与当前播放器无关)")
-        expectEqual(PH.warnings(.init(appleMusicSelected: false, automationDenied: false,
+                    [.automationDenied], "PlayerHealth: 有播放器权限被拒 → 报自动化")
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
                                       collectorServiceEnabled: true, collectorRunning: false)),
                     [.collectorNotRunning], "PlayerHealth: 服务开着却没在跑 → 报采集服务")
-        expectEqual(PH.warnings(.init(appleMusicSelected: false, automationDenied: false,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
                                       collectorServiceEnabled: false, collectorRunning: false)),
                     [], "PlayerHealth: 用户自己关掉服务不算故障")
-        expectEqual(PH.warnings(.init(appleMusicSelected: true, automationDenied: true,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify],
                                       collectorServiceEnabled: true, collectorRunning: false)),
                     [.collectorNotRunning, .automationDenied], "PlayerHealth: 两条都中时采集服务排前面")
+
+        let allInstalled: (PlaybackPlayer) -> Bool = { _ in true }
+        let deniedAll: (PlaybackPlayer) -> Bool = { _ in true }
+        expectEqual(PH.automationDeniedPlayers(selection: [.auto], isInstalled: allInstalled, isDenied: { $0 == .appleMusic }),
+                    [.appleMusic], "PlayerHealth: 默认的「自动识别」下 Apple Music 被拒也要报")
+        expectEqual(PH.automationDeniedPlayers(selection: [.spotify], isInstalled: allInstalled, isDenied: deniedAll),
+                    [.spotify], "PlayerHealth: 只勾 Spotify 时它被拒要报")
+        expectEqual(PH.automationDeniedPlayers(selection: [.qqMusic, .netease], isInstalled: allInstalled, isDenied: deniedAll),
+                    [], "PlayerHealth: 不需要自动化权限的播放器不报")
+        expectEqual(PH.automationDeniedPlayers(selection: [.auto], isInstalled: { $0 == .appleMusic }, isDenied: deniedAll),
+                    [.appleMusic], "PlayerHealth: 没装的播放器不报(它给不出权限)")
+        expectEqual(PH.automationDeniedPlayers(selection: [.appleMusic], isInstalled: allInstalled, isDenied: { _ in false }),
+                    [], "PlayerHealth: 没被拒不报")
     }
 
     // ---- 与播放器联动:逐播放器多选----
@@ -1085,5 +1166,202 @@ func runPlayerIdentityTests() {
         expectEqual(TrustedPlayers.manualTrustOutcome(bundleID: "com.apple.Music",
                                                       trusted: [:], selfBundleID: ""),
                     .builtin(.appleMusic), "主动信任: selfBundleID 空串不当成「挑中了自己」")
+    }
+
+    // ---- 被歌词顶掉的署名(酷狗 3.3.2) ----
+    //
+    // 那一版把当前这一句歌词发布成 MediaRemote 的 artist,每唱一句换一次,曲名和时长
+    // 纹丝不动。真署名由 collector 从播放器自己的容器里读出来发布,App 读那条通道换回去
+    // —— 两边必须换成同一个值,否则歌词缓存的 key(artist|title|album)对不上。
+    do {
+        typealias F = PlayerArtistFix
+        let fix = F.State(bundle: "com.kugou.mac.Music", title: "爱情慢慢来", artist: "Stake", unreliable: true)
+
+        expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来", state: fix), "Stake",
+                    "署名纠正: bundle 与曲名都对得上 → 用 collector 发布的真署名")
+        expectEqual(F.artist(forBundle: "com.tencent.QQMusicMac", title: "爱情慢慢来", state: fix), nil,
+                    "署名纠正: 换了个播放器就不适用")
+        expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "我不难过", state: fix), nil,
+                    "署名纠正: 曲名对不上不用 —— 换歌那一刻两个进程不同步是常态,别把上一首的署名按上来")
+        expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来", state: nil), nil,
+                    "署名纠正: 没有发布过纠正时什么都不做")
+        expectEqual(F.artist(forBundle: nil, title: "爱情慢慢来", state: fix), nil,
+                    "署名纠正: 快照没有来源信息时不猜")
+        expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来",
+                             state: F.State(bundle: "com.kugou.mac.Music", title: "爱情慢慢来", artist: "", unreliable: true)), nil,
+                    "署名纠正: 空署名不算一条纠正")
+
+        // MediaControlSnapshot 的 memberwise init 是 internal,这里走 JSON(它是 Decodable)。
+        func snapshot(artist: String, title: String = "爱情慢慢来",
+                      bundle: String = "com.kugou.mac.Music") -> MediaControlSnapshot? {
+            let json = """
+                {"title":"\(title)","artist":"\(artist)","bundleIdentifier":"\(bundle)","duration":195}
+                """
+            return try? JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
+        }
+
+        expectEqual(F.applied(to: snapshot(artist: "被窝里面心酸"), state: fix)?.artist, "Stake",
+                    "署名纠正: 快照里的歌词被换回真署名")
+        expectEqual(F.applied(to: snapshot(artist: "许茹芸", title: "泪海"), state: fix)?.artist, "许茹芸",
+                    "署名纠正: 曲名对不上的快照原样放行")
+        expectEqual(F.applied(to: nil, state: fix) == nil, true, "署名纠正: 没有快照就没有纠正")
+
+        // 这条才是全部收益所在:同一首歌里歌词换了几句,曲目身份必须一动不动 —— 否则
+        // 每唱一句就是一次「换歌」,歌词重查、进度重锚、收听记录里多一条。
+        let keys = ["真的并不是我太过见外", "被窝里面心酸", "像个士兵原地待命", "怕你跟不上我的节奏"]
+            .compactMap { F.applied(to: snapshot(artist: $0), state: fix)?.trackKey }
+        expectEqual(keys.count, 4, "署名纠正: 四拍都拿到了快照")
+        expectEqual(Set(keys).count, 1, "署名纠正: 歌词换了四句,曲目身份仍是同一个")
+        expectEqual(keys.first, "Stake|爱情慢慢来", "署名纠正: 稳定下来的身份用的是真署名")
+
+        // 封面是**另一次**独立的 media-control 调用，载荷里是播放器原样报的署名。那道
+        // 「这份封面属于哪首歌」的核对要跟当前快照用同一把尺子，否则恒不相等——封面被
+        // 无声无息地全部丢掉，歌名歌词进度全对，唯独没有图。
+        // 曲目身份：**署名不可信的播放器整个把署名剔出去**。真署名由 collector 单向发布、
+        // 比 App 的轮询慢一截，换歌头几秒 App 只拿得到脏署名——让它参与身份，一首歌里身份
+        // 会抖三四次，而封面取图的完成回调正是拿身份核对的，每次都被丢掉（实测现象：这个
+        // 播放器永远没有封面，日志里一个字都没有）。
+        expectEqual(F.artistIsUnreliable(bundle: "com.kugou.mac.Music", state: fix), true,
+                    "署名纠正: 发布过纠正的播放器，署名按不可信处理")
+        expectEqual(F.artistIsUnreliable(bundle: "com.spotify.client", state: fix), false,
+                    "署名纠正: 别的播放器照旧可信")
+        expectEqual(F.artistIsUnreliable(bundle: "com.kugou.mac.Music", state: nil), false,
+                    "署名纠正: 没发布过纠正时不做任何假设")
+
+        // 曲名不参与「可不可信」的判断：换歌那一刻发布的还是上一首，而这里问的是播放器。
+        expectEqual(F.correctedTrackKey(bundle: "com.kugou.mac.Music", artist: "被窝里面心酸",
+                                        title: "另一首歌", state: fix),
+                    "|另一首歌",
+                    "署名纠正: 换到纠正还没跟上的那一首，身份同样不含署名")
+
+        let dirtyRun = ["真的并不是我太过见外", "被窝里面心酸", "Stake", "像个士兵原地待命"]
+            .map { F.correctedTrackKey(bundle: "com.kugou.mac.Music", artist: $0,
+                                       title: "爱情慢慢来", state: fix) }
+        expectEqual(Set(dirtyRun).count, 1,
+                    "署名纠正: 署名怎么抖，曲目身份纹丝不动（这正是封面丢失的根因）")
+        expectEqual(dirtyRun.first, "|爱情慢慢来", "署名纠正: 身份就是「曲名」本身")
+
+        expectEqual(F.correctedTrackKey(bundle: "com.spotify.client", artist: "Lady Gaga",
+                                        title: "爱情慢慢来", state: fix),
+                    "Lady Gaga|爱情慢慢来",
+                    "署名纠正: 别的播放器的曲目身份照旧带署名")
+        expectEqual(F.correctedTrackKey(bundle: "com.kugou.mac.Music", artist: "许茹芸",
+                                        title: "泪海", state: nil),
+                    "许茹芸|泪海",
+                    "署名纠正: 没发布过纠正时，身份照旧带署名")
+
+        // ---- 界面上显示哪一个 ----
+        //
+        // 身份和封面收拢了之后还剩最后一段:纠正落地之前,界面上的歌手位拿到的仍然是脏署名,
+        // 于是换歌头十几秒一直在跳歌词(实测依次是 `原唱：谈柒柒` `作曲：廖伟志`
+        // `【版权所有 未经许可 不得翻`)。判据不看内容,只问"播放器可不可信 + 这一首的纠正到了
+        // 没有",没到就空着 —— 跟广告 / 电台口白时把歌手位清空是同一个口径。
+        expectEqual(F.displayArtist(bundle: "com.kugou.mac.Music", title: "爱情慢慢来",
+                                    artist: "Stake", state: fix), "Stake",
+                    "显示署名: 纠正已经落地 → 照常显示")
+        for dirty in ["原唱：谈柒柒", "作曲：廖伟志", "【版权所有 未经许可 不得翻", "被窝里面心酸"] {
+            expectEqual(F.displayArtist(bundle: "com.kugou.mac.Music", title: "另一首歌",
+                                        artist: dirty, state: fix), "",
+                        "显示署名: 纠正还没跟上这一首 → 空着,不把歌词/制作信息冒充成歌手: \(dirty)")
+        }
+        expectEqual(F.displayArtist(bundle: "com.spotify.client", title: "Shallow",
+                                    artist: "Lady Gaga", state: fix), "Lady Gaga",
+                    "显示署名: 别的播放器一个字都不动")
+        expectEqual(F.displayArtist(bundle: "com.kugou.mac.Music", title: "泪海",
+                                    artist: "许茹芸", state: nil), "许茹芸",
+                    "显示署名: 没发布过纠正时不做任何假设,照常显示")
+        // 反向哨兵:这条判据只能作用在显示上。曲目身份那条(correctedTrackKey)剔的是署名本身,
+        // 两者判据相同、用途不同 —— 别拿 displayArtist 去拼 key,空串是另一个 key。
+        expectEqual(F.correctedTrackKey(bundle: "com.kugou.mac.Music", artist: "被窝里面心酸",
+                                        title: "爱情慢慢来", state: fix),
+                    "|爱情慢慢来",
+                    "显示署名: 身份那条不受影响(两条各管各的)")
+    }
+
+    // ---- 曲名也换:信任进来的其他播放器 ----
+    // 那类播放器把当前这句歌词写进 artist、把「歌名 - 歌手」整串写进 title。collector 拆出真
+    // 曲名与真署名一起发布(fixedTitle),App 要换成同一对,否则歌词缓存 key 对不上。
+    do {
+        typealias F = PlayerArtistFix
+        let bundle = "com.example.lyricplayer"
+        let rawTitle = "漫步人生路 - 邓丽君"
+        let fix = F.State(bundle: bundle, title: rawTitle, artist: "邓丽君",
+                          fixedTitle: "漫步人生路", unreliable: true)
+        func snapshot(artist: String, title: String) -> MediaControlSnapshot? {
+            let json = """
+                {"title":"\(title)","artist":"\(artist)","bundleIdentifier":"\(bundle)","duration":212}
+                """
+            return try? JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
+        }
+
+        let applied = F.applied(to: snapshot(artist: "在你身边路虽远未疲倦", title: rawTitle), state: fix)
+        expectEqual(applied?.artist, "邓丽君", "曲名纠正: 署名换成拆出来的真署名")
+        expectEqual(applied?.title, "漫步人生路", "曲名纠正: 曲名换成拆出来的真曲名")
+        expectEqual(F.applied(to: snapshot(artist: "伴你漫步一段又一段", title: "另一首 - 别人"), state: fix)?.title,
+                    "另一首 - 别人", "曲名纠正: 曲名对不上的快照原样放行")
+
+        // 换过的快照再拿去问(界面 displayArtist 就是这么问的)也得认:只认原样曲名的话,纠正
+        // 落地之后歌手位反而一直空着。
+        expectEqual(F.displayArtist(bundle: bundle, title: "漫步人生路", artist: "邓丽君", state: fix), "邓丽君",
+                    "曲名纠正: 拿换过的曲名问显示署名,照常显示")
+        expectEqual(F.applied(to: applied, state: fix)?.title, "漫步人生路",
+                    "曲名纠正: 已经换过的快照再套一次不会再变")
+
+        // 身份:换过曲名的快照、纠正还没落地的快照、封面那次独立取回的原始载荷,必须是同一个。
+        let keys = [
+            F.correctedTrackKey(bundle: bundle, artist: "邓丽君", title: "漫步人生路", state: fix),
+            F.correctedTrackKey(bundle: bundle, artist: "作曲: 中岛美雪", title: rawTitle, state: fix),
+            F.correctedTrackKey(bundle: bundle, artist: "伴你漫步一段又一段", title: rawTitle, state: fix),
+        ]
+        expectEqual(Set(keys).count, 1, "曲名纠正: 换没换曲名,曲目身份都是同一个(纠正落地那一刻不抖)")
+        expectEqual(keys.first, "|\(rawTitle)", "曲名纠正: 身份折回播放器原样报的曲名")
+
+        // 没有 fixedTitle 的纠正(酷狗那类)不动曲名。
+        let artistOnly = F.State(bundle: bundle, title: rawTitle, artist: "邓丽君", unreliable: true)
+        expectEqual(F.applied(to: snapshot(artist: "歌词", title: rawTitle), state: artistOnly)?.title, rawTitle,
+                    "曲名纠正: 没发布 fixedTitle 时曲名不动")
+        expectEqual(F.title(forBundle: bundle, title: rawTitle, state: artistOnly), nil,
+                    "曲名纠正: 没发布 fixedTitle 时不给曲名")
+
+        // 旧文件没有 fixedTitle 键,照旧解得出来。
+        let legacy = try? JSONDecoder().decode(
+            F.State.self, from: Data(#"{"bundle":"b","title":"t","artist":"a","unreliable":true}"#.utf8))
+        expectEqual(legacy?.fixedTitle, "", "曲名纠正: 没有 fixedTitle 键的旧文件解成空串")
+        expectEqual(legacy?.stableField, "", "曲名纠正: 没有 stableField 键的旧文件解成空串(按曲名比)")
+    }
+
+    // ---- 歌词在 title 里:按原样的 artist 当范围 ----
+    // 反过来的那类播放器:title 每唱一句换一次,「歌名 - 歌手」塞在 artist 里。拿 title 比只对得上
+    // 一拍,所以适用范围改按原样的 artist;曲目身份剔掉曲名、留原样的 artist。
+    do {
+        typealias F = PlayerArtistFix
+        let bundle = "com.example.lyricplayer"
+        let rawArtist = "邓丽君 - 漫步人生路"
+        let fix = F.State(bundle: bundle, artist: "邓丽君", fixedTitle: "漫步人生路",
+                          stableField: "artist", rawArtist: rawArtist, unreliable: true)
+        func snapshot(artist: String, title: String) -> MediaControlSnapshot? {
+            let json = """
+                {"title":"\(title)","artist":"\(artist)","bundleIdentifier":"\(bundle)","duration":212}
+                """
+            return try? JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8))
+        }
+
+        let lines = ["作曲: 中岛美雪", "在你身边路虽远未疲倦", "伴你漫步一段又一段"]
+        let applied = lines.compactMap { F.applied(to: snapshot(artist: rawArtist, title: $0), state: fix) }
+        expectEqual(applied.count, 3, "歌词在 title 里: 三拍都拿到了快照")
+        expectEqual(Set(applied.map { "\($0.artist ?? "")|\($0.title ?? "")" }), ["邓丽君|漫步人生路"],
+                    "歌词在 title 里: 每一拍都换成同一对真身份")
+        expectEqual(F.applied(to: snapshot(artist: "别人 - 别的歌", title: "歌词"), state: fix)?.title, "歌词",
+                    "歌词在 title 里: 原样 artist 对不上的快照原样放行")
+        expectEqual(F.displayArtist(bundle: bundle, title: "漫步人生路", artist: "邓丽君", state: fix), "邓丽君",
+                    "歌词在 title 里: 拿换过的快照问显示署名,照常显示")
+
+        let keys = lines.map { F.correctedTrackKey(bundle: bundle, artist: rawArtist, title: $0, state: fix) }
+            + [F.correctedTrackKey(bundle: bundle, artist: "邓丽君", title: "漫步人生路", state: fix)]
+        expectEqual(Set(keys).count, 1, "歌词在 title 里: 歌词怎么换、换没换过,曲目身份都是同一个")
+        expectEqual(keys.first, "\(rawArtist)|", "歌词在 title 里: 身份剔掉曲名、留原样的 artist")
+        // 换歌那一拍,文件里还是上一首:身份照样不含曲名,不会一句一个身份。
+        expectEqual(F.correctedTrackKey(bundle: bundle, artist: "陈慧琳 - 记事本", title: "第一句歌词", state: fix),
+                    "陈慧琳 - 记事本|", "歌词在 title 里: 纠正还没跟上的那一首,身份同样不含曲名")
     }
 }

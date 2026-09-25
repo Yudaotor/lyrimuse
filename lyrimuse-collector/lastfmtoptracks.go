@@ -103,8 +103,13 @@ func (c *lastfmCatalogMatcher) topTracks(ctx context.Context, artist string) ([]
 		Message string `json:"message"`
 	}
 	decodeErr := json.NewDecoder(resp.Body).Decode(&body)
-	// error 6 在这里是「这个歌手编目里没有」——确定的答案(空表),不是失败。
-	if body.Error == 6 && strings.Contains(strings.ToLower(body.Message), "not found") {
+	if body.Error == lastfmErrRateLimited {
+		reportEndpointRateLimited(req.URL, "")
+	}
+	// error 6 在这里是「这个歌手编目里没有」——确定的答案(空表),不是失败。实测措辞是
+	// "The artist you supplied could not be found",不含连着的 "not found":只认后者会把
+	// 每个 Last.fm 不认识的歌手都当成「没查成」,这首歌永远判不出结论、每次播放都重查。
+	if body.Error == 6 && lastfmNotFoundMessage(body.Message) {
 		c.storeTopTracks(key, nil)
 		return nil, nil
 	}
@@ -168,4 +173,11 @@ func catalogTitleMatches(rows []lastfmTopTrack, title string, limit int) []lastf
 		}
 	}
 	return out
+}
+
+// lastfmNotFoundMessage 认 Last.fm「查无此条」的两种措辞:track.getInfo 的 "Track not found"
+// 与 artist.getTopTracks 的 "The artist you supplied could not be found"。
+func lastfmNotFoundMessage(msg string) bool {
+	m := strings.ToLower(msg)
+	return strings.Contains(m, "not found") || strings.Contains(m, "could not be found")
 }

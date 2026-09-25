@@ -34,10 +34,10 @@ func runBackfillRomaCLI(args []string) {
 		log.Fatalf("backfill-roma: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
-	lyricsDir = features.LyricsDir
-	if lyricsDir == "" {
-		lyricsDir = filepath.Join(cfgDir, "lyrics")
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
+	setLyricsDir(features().LyricsDir)
+	if lyricsDir() == "" {
+		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
 	}
 
 	// 理由同 regenerate-jyutping:任何一种"没能确认独占"都当作拒绝,不 fail-open。

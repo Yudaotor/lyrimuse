@@ -24,6 +24,7 @@ const (
 	platformDiscord    = "discord"
 	platformFeishu     = "feishu"
 	platformServerChan = "serverchan"
+	platformTelegram   = "telegram"
 )
 
 // buildNotifyPayload 按平台拼出 POST body + 对应的 Content-Type。绝大多数平台都是
@@ -31,8 +32,17 @@ const (
 // JSON body,字段名也不是 title/body 那套通用命名,是它自己的 title/desp)。空/未识别
 // 的 platform 一律按 Bark 处理——这是这个字段加平台选择之前唯一支持过的形态,保留这个
 // 默认对已有配置最安全。
-func buildNotifyPayload(platform, title, body, feishuSecret string) (payload []byte, contentType string, err error) {
+func buildNotifyPayload(platform, title, body, feishuSecret, telegramChatID string) (payload []byte, contentType string, err error) {
 	switch platform {
+	case platformTelegram:
+		// Bot API sendMessage:纯文本,不设 parse_mode —— 设了 Markdown / HTML 就得转义正文里的
+		// 特殊字符,歌名里的 * _ [ ] < > 一个没转义整条就发不出去。
+		b, err := json.Marshal(map[string]any{
+			"chat_id":                  strings.TrimSpace(telegramChatID),
+			"text":                     title + "\n" + body,
+			"disable_web_page_preview": true,
+		})
+		return b, "application/json", err
 	case platformDingtalk, platformWecom:
 		// 钉钉、企业微信群机器人的纯文本消息是同一个形状:{"msgtype":"text",
 		// "text":{"content":"..."}}。标题和正文没有分开的字段,拼进同一段文本里,
@@ -72,6 +82,16 @@ func buildNotifyPayload(platform, title, body, feishuSecret string) (payload []b
 		})
 		return b, "application/json", err
 	}
+}
+
+// telegramSendURL 把用户填的值换成 sendMessage 地址:填的是完整地址(http 开头)就原样用,
+// 否则当成 @BotFather 给的机器人 Token 拼出来。
+func telegramSendURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
+	}
+	return "https://api.telegram.org/bot" + raw + "/sendMessage"
 }
 
 // dingtalkSignedURL 给钉钉机器人开了"加签"安全设置时用——把 timestamp/sign 追加成

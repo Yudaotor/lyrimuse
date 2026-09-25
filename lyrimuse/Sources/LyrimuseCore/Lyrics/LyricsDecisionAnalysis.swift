@@ -126,7 +126,7 @@ public enum LyricsVerdictBuilder {
     /// 那边新增负分项时这里要跟着补 —— 漏补只是少一类判词,不会出错。
     public static let vetoKinds: Set<String> = [
         "versionTags", "durationOff", "durationOvershoot",
-        "sourceDurationOff", "liveAlbumConflict", "wordTimingOverride",
+        "sourceDurationOff", "liveAlbumConflict", "wordTimingOverride", "timelineOffset",
     ]
 
     /// 「几乎打平」的判据:分差 ≤1 分,或不到冠军分的 1%。

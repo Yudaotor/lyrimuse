@@ -480,7 +480,6 @@ private struct IdleLastTrackHero: View {
     /// 一句话常被拆到两三行上,只摆一行就是半句。
     @State private var quotes: [[String]] = []
     @State private var quoteIndex = 0
-    @State private var breath = false
 
     private var lastTitle: String { UserDefaults.standard.string(forKey: "np:lastTrackTitle") ?? "" }
     private var lastArtist: String { UserDefaults.standard.string(forKey: "np:lastTrackArtist") ?? "" }
@@ -632,22 +631,21 @@ private struct IdleLastTrackHero: View {
 
     private var noTrackHero: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [Color.accentColor.opacity(0.12), .clear],
-                                         center: .center, startRadius: 8, endRadius: 90))
-                    .frame(width: 180, height: 180)
-                Image(systemName: "music.note")
-                    .font(.system(size: 54, weight: .medium))
-                    .foregroundStyle(.secondary)
+            // 呼吸交给 Core Animation(`LayerBreathing`):原来的 `.repeatForever` 是 SwiftUI 在主线程
+            // 逐帧推进的,而且这里没有可见性闸 —— 全新用户开着歌词窗口,不管窗口看不看得见都按屏幕
+            // 刷新率一直跑,没播放时也占着 CPU。
+            LayerBreathing(animating: !reduceMotion) {
+                ZStack {
+                    Circle()
+                        .fill(RadialGradient(colors: [Color.accentColor.opacity(0.12), .clear],
+                                             center: .center, startRadius: 8, endRadius: 90))
+                        .frame(width: 180, height: 180)
+                    Image(systemName: "music.note")
+                        .font(.system(size: 54, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .scaleEffect(breath ? 1.05 : 0.96)
-            .opacity(breath ? 1 : 0.8)
-            .animation(reduceMotion ? nil
-                       : .easeInOut(duration: 2.6).repeatForever(autoreverses: true),
-                       value: breath)
-            .onAppear { breath = true }
-            .onDisappear { breath = false }
+            .frame(width: 180, height: 180)
             Text(L10n.t("没有在播放"))
                 .font(.system(size: 20, weight: .semibold))
                 .padding(.top, 4)

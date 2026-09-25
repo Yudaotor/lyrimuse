@@ -36,6 +36,7 @@ public enum CompactLyricLead {
     /// 让人以为播放卡住了。
     public static let revealMs = 5000
 
+
     public enum Outcome: Equatable {
         /// 显示这一行(下标可能是当前行,也可能是下一行)。
         case line(Int)

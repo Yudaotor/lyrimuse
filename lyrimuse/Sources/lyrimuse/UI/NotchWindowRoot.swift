@@ -146,6 +146,8 @@ struct NotchWindowRoot: View {
             // (Time Profiler:mask/clip 更新约占动画期间主线程忙时的 10%)。
             // 设置页编辑台没有这层壳,那边照旧由 NotchLyricsView 自己裁。
             .environment(\.notchHostClipsCard, true)
+            // 窗口看不见时整卡停表(见 controller.isSurfaceVisible);cardBodyLayer 里每层再与自己的可见性取与。
+            .environment(\.notchCardLayerActive, controller.isSurfaceVisible)
             .frame(width: cardWidth, height: cardHeight)
             // 出场动画「从刘海撑开」:卡片「从无到有」露面时(冷启动 / 手动打开 /
             // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向

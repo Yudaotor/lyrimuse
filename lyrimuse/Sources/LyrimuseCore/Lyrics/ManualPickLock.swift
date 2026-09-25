@@ -28,12 +28,10 @@ public enum ManualPickLock {
         // selftest 里 YRC/CRLF 那几条既有回归)。按标量切等价于 Go 的 strings.Split(s, "\n"):
         // UTF-8 里字节 0x0A 只可能是 U+000A,残留的 \r 交给下面的 trim。
         for rawScalars in lyrics.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false) {
-            var line = String(String.UnicodeScalarView(rawScalars))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            var line = GoStringSemantics.trimSpace(rawScalars)
             // 一行可能挂多个时间戳(`[00:12.00][00:45.00]同一句`),逐个剥。
-            while line.hasPrefix("["), let end = line.firstIndex(of: "]") {
-                line = line[line.index(after: end)...]
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            while line.unicodeScalars.first == "[", let end = line.unicodeScalars.firstIndex(of: "]") {
+                line = GoStringSemantics.trimSpace(line.unicodeScalars[line.unicodeScalars.index(after: end)...])
             }
             if line.isEmpty { continue }
             out.append(line)

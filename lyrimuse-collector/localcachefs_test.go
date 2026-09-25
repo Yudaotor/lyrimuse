@@ -85,11 +85,17 @@ func TestEveryLocalCacheReadPathReportsDenial(t *testing.T) {
 		source string
 		sites  int
 	}{
-		{"kugoulocal.go", "kugou", 2},           // Stat 目录 + ReadDir
-		{"applemusiclocal.go", "applemusic", 2}, // Stat 目录 + ReadDir
-		{"sodalocal.go", "soda", 2},             // Stat 文件 + ReadFile
-		{"qqlocal.go", "qq", 1},                 // Stat 文件(查询走 sqlite,失败原因不止权限)
-		{"neteaselocal.go", "netease", 1},       // 同上
+		// 歌词缓存那条路 + 播放队列那条路(见 upcoming.go),两条各自的读取入口都要接上:
+		// 同一家的两份文件在同一个容器里、同一道 TCC 授权,但**读取入口是分开的**,
+		// 只接一条的话另一条被拒时照样无声无息。
+		{"kugoulocal.go", "kugou", 3},           // 歌词: Stat 目录 + ReadDir;队列: Stat 库文件
+		{"applemusiclocal.go", "applemusic", 2}, // Stat 目录 + ReadDir(没有队列这条路)
+		{"sodalocal.go", "soda", 3},             // 歌词索引: Stat + ReadFile;队列: ReadFile
+		{"qqlocal.go", "qq", 2},                 // 歌词: Stat 文件;队列: Stat 归档(plutil 拿不到 fs.ErrPermission)
+		{"neteaselocal.go", "netease", 3},       // 歌词: Stat 文件;队列: Stat + ReadFile
+		// 酷狗还有第三条路:当前曲目那份 plist(见 kugoulyricartist.go),同容器同一道授权,
+		// 但入口又是分开的。
+		{"kugoulyricartist.go", "kugou", 1}, // 当前曲目: Stat 文件(plutil 拿不到 fs.ErrPermission)
 	}
 	for _, w := range want {
 		raw, err := os.ReadFile(w.file)
@@ -119,6 +125,7 @@ func TestLocalCacheAccessStatePublishing(t *testing.T) {
 	localCacheDeniedMu.Lock()
 	localCacheDeniedReported = map[string]string{}
 	localCacheDeniedNow = map[string]bool{}
+	localCacheReadableNow = map[string]bool{}
 	localCacheDeniedMu.Unlock()
 
 	read := func() localCacheAccessState {
@@ -163,6 +170,15 @@ func TestLocalCacheAccessStatePublishing(t *testing.T) {
 	noteLocalCacheReadable("soda")
 	if got := read().Denied; len(got) != 0 {
 		t.Fatalf("撤一个不在名单里的来源不该改动状态,got %v", got)
+	}
+
+	// 读得到的来源要写进 readable(界面据此显示「已授权」),且与 denied 互斥。
+	if got := read().Readable; len(got) != 3 || got[0] != "kugou" || got[1] != "qq" || got[2] != "soda" {
+		t.Fatalf("读到过的来源都该在 readable 里(且有序),got %v", got)
+	}
+	noteLocalCacheDenied("qq", "/y", &fs.PathError{Op: "open", Path: "/y", Err: syscall.EPERM})
+	if st := read(); len(st.Readable) != 2 || len(st.Denied) != 1 || st.Denied[0] != "qq" {
+		t.Fatalf("被拒要从 readable 挪到 denied,got denied=%v readable=%v", st.Denied, st.Readable)
 	}
 }
 

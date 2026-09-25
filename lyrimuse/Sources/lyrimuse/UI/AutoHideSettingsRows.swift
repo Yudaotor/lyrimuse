@@ -77,26 +77,19 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .duringScreenCapture: return L10n.t("截屏/录屏时隐藏")
-        case .whenNotPlaying: return L10n.t("暂停/无播放时隐藏")
+        case .duringScreenCapture: return L10n.t("截屏时隐藏")
+        case .whenNotPlaying: return L10n.t("暂停时隐藏")
         }
     }
 
-    /// ⚠️ 只有截屏那一项有副标题,`.whenNotPlaying` 恒为 nil —— 这是**原样保留**改版前的
-    /// 文案组合,不是漏写。别顺手给另一项补一句:那会是一个新的 L10n 键(得同步进
-    /// Localizable.xcstrings 再跑 generate-strings.py),而这里刻意做到零新增键。
-    var subtitle: String? {
-        switch self {
-        case .duringScreenCapture: return L10n.t("别人看不到，你仍看得见")
-        case .whenNotPlaying: return nil
-        }
-    }
+    /// 两项都不带副标题。
+    var subtitle: String? { nil }
 
     /// 截屏那一项的覆盖范围放在 ⓘ 气泡里。措辞**不写死是哪个形态**:同一份文案
     /// 悬浮歌词和灵动岛各渲染一次。
     var help: String? {
         switch self {
-        case .duringScreenCapture: return L10n.t("截图、录屏、视频会议共享屏幕都拍不到它")
+        case .duringScreenCapture: return L10n.t("截图、录屏、共享屏幕都拍不到，你照常看得见")
         case .whenNotPlaying: return nil
         }
     }

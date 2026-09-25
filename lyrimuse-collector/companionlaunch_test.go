@@ -47,8 +47,8 @@ func TestShouldCompanionLaunch(t *testing.T) {
 // 这条测试钉的是"每个受支持的播放器都必须有自己的进程名,而且不能悄悄退化成 Music" ——
 // 以后再加播放器时漏接同一处会当场失败。
 func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
-	saved := features.Players
-	t.Cleanup(func() { features.Players = saved })
+	saved := features().Players
+	t.Cleanup(func() { featuresRef().Players = saved })
 
 	cases := []struct{ player, want string }{
 		{playerAppleMusic, "Music"},
@@ -68,7 +68,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 
 	// 多选年代同一个道理:选中集合里每个成员各自的进程名都要出现在
 	// companionLaunchProcessNames() 的结果里,不能只盯着某一个。
-	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
 	multi := companionLaunchProcessNames()
 	for _, want := range []string{"QQMusic", "酷狗音乐"} {
 		found := false
@@ -88,7 +88,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 
 	// 手动选定的每一个播放器,它的进程名都必须在"自动识别"那份列表里 —— 否则
 	// playerAuto 档会盖不住某个明明支持的播放器(酷狗当初就是这么漏的)。
-	features.Players = map[string]bool{playerAuto: true}
+	featuresRef().Players = map[string]bool{playerAuto: true}
 	auto := companionLaunchProcessNames()
 	for _, c := range cases {
 		found := false
@@ -106,7 +106,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 	// 自动识别跟具体播放器一起勾选时,auto 是超集,按 auto 的全量列表处理——不能因为
 	// 同时也勾了 QQ 音乐就退化成只盯 QQMusic 一个,那样反而丢了"自动检测本地新的
 	// 播放器"这条 auto 本该有的能力。
-	features.Players = map[string]bool{playerAuto: true, playerQQMusic: true}
+	featuresRef().Players = map[string]bool{playerAuto: true, playerQQMusic: true}
 	if got := companionLaunchProcessNames(); len(got) != len(knownPlayerProcessNames) {
 		t.Errorf("auto+qq 组合应等同于纯 auto(全量列表), got %v", got)
 	}
@@ -115,38 +115,38 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 // 「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失退回旧语义。
 func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 	defer func() {
-		features.Players = map[string]bool{playerAuto: true}
-		features.LaunchLyrimuseOnPlayers = nil
+		featuresRef().Players = map[string]bool{playerAuto: true}
+		featuresRef().LaunchLyrimuseOnPlayers = nil
 	}()
 
 	// 键缺失(老配置):跟布尔年代一样盯整个选中集合。
-	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
-	features.LaunchLyrimuseOnPlayers = nil
+	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+	featuresRef().LaunchLyrimuseOnPlayers = nil
 	if got := companionLaunchProcessNames(); len(got) != 2 {
 		t.Errorf("键缺失时应退回盯整个选中集合(2 个), got %v", got)
 	}
 
 	// 只勾了 QQ 音乐:只盯 QQMusic。
-	features.LaunchLyrimuseOnPlayers = map[string]bool{playerQQMusic: true}
+	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerQQMusic: true}
 	if got := companionLaunchProcessNames(); len(got) != 1 || got[0] != "QQMusic" {
 		t.Errorf("只勾 qq 时应只盯 QQMusic, got %v", got)
 	}
 
 	// 勾了但没选中的播放器不算(勾选记录保留,选回来自动恢复 —— 跟 Swift 侧 PlayerLinkage.effective 同一规则)。
-	features.LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true}
+	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true}
 	if got := companionLaunchProcessNames(); len(got) != 0 {
 		t.Errorf("勾了未选中的 spotify 不该盯任何进程, got %v", got)
 	}
 
 	// 空列表 = 明确关掉。
-	features.LaunchLyrimuseOnPlayers = map[string]bool{}
+	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{}
 	if got := companionLaunchProcessNames(); len(got) != 0 {
 		t.Errorf("空列表应一个都不盯, got %v", got)
 	}
 
-	// 自动识别 + 勾了两个:候选是全量五个,勾的两个都在 → 盯两个。
-	features.Players = map[string]bool{playerAuto: true}
-	features.LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true, playerAppleMusic: true}
+	// 自动识别 + 勾了两个:候选是全量五个,勾的两个都在 到 盯两个。
+	featuresRef().Players = map[string]bool{playerAuto: true}
+	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true, playerAppleMusic: true}
 	if got := companionLaunchProcessNames(); len(got) != 2 {
 		t.Errorf("auto + 勾两个 应盯 2 个, got %v", got)
 	}
@@ -157,5 +157,68 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 	}
 	if got := resolveLaunchLyrimuseOnPlayers(nil); got != nil {
 		t.Errorf("nil 应原样透传(表示键缺失), got %v", got)
+	}
+}
+
+// ps -axco pid=,comm= 的输出:PID 前面有对齐空格,名字可能带空格、可能是中文。
+func TestParseProcessList(t *testing.T) {
+	out := "    1 launchd\n  512 Google Chrome Helper\n98009 Music\n 9465 酷狗音乐\n98010 Music\n\nbogus line\n"
+	got := parseProcessList(out)
+	if len(got["Music"]) != 2 || got["Music"][0] != 98009 || got["Music"][1] != 98010 {
+		t.Errorf("同名多个进程都要记下,得到 %v", got["Music"])
+	}
+	if len(got["Google Chrome Helper"]) != 1 {
+		t.Errorf("名字带空格要整段保留,得到 %v", got)
+	}
+	if len(got["酷狗音乐"]) != 1 || got["酷狗音乐"][0] != 9465 {
+		t.Errorf("中文名要认得出来,得到 %v", got["酷狗音乐"])
+	}
+	if _, ok := got["line"]; ok {
+		t.Error("PID 不是数字的行该跳过")
+	}
+}
+
+// 「刚启动」= 这一轮出现了上一轮没有的 PID:新开的、两次采样之间退出又重开的都算;PID 没变不算;
+// 不在盯的名单里的不算。
+func TestCompanionJustStarted(t *testing.T) {
+	watch := []string{"Music", "Spotify"}
+	cases := []struct {
+		name      string
+		prev, now map[string][]int
+		want      string
+	}{
+		{"新开", map[string][]int{}, map[string][]int{"Spotify": {20}}, "Spotify"},
+		{"一直在跑", map[string][]int{"Music": {10}}, map[string][]int{"Music": {10}}, ""},
+		{"两次采样之间重开(PID 换了)", map[string][]int{"Music": {10}}, map[string][]int{"Music": {11}}, "Music"},
+		{"退出了", map[string][]int{"Music": {10}}, map[string][]int{}, ""},
+		{"没盯着的播放器", map[string][]int{}, map[string][]int{"QQMusic": {30}}, ""},
+		{"两个都刚开,按名单顺序取第一个", map[string][]int{}, map[string][]int{"Music": {1}, "Spotify": {2}}, "Music"},
+	}
+	for _, c := range cases {
+		if got := companionJustStarted(watch, c.prev, c.now); got != c.want {
+			t.Errorf("%s: 得到 %q,期望 %q", c.name, got, c.want)
+		}
+	}
+}
+
+// collector 刚起的第一轮只记录不判断:那时已经开着的播放器不算刚启动。之后照常比 PID。
+func TestCompanionObserveSeedsOnFirstRound(t *testing.T) {
+	watch := []string{"Music", "Spotify"}
+	running := map[string][]int{"Music": {10}, "Spotify": {20}}
+	got, next := companionObserve(watch, nil, running)
+	if got != "" {
+		t.Fatalf("第一轮不该判刚启动, got %q", got)
+	}
+	if len(next["Music"]) != 1 || len(next["Spotify"]) != 1 {
+		t.Fatalf("第一轮要把在跑的记下来: %v", next)
+	}
+	if got, _ := companionObserve(watch, next, running); got != "" {
+		t.Errorf("第二轮一直在跑也不算, got %q", got)
+	}
+	if got, _ := companionObserve(watch, next, map[string][]int{"Music": {11}, "Spotify": {20}}); got != "Music" {
+		t.Errorf("之后重开要认出来, got %q", got)
+	}
+	if got, _ := companionObserve(watch, map[string][]int{}, map[string][]int{"Spotify": {20}}); got != "Spotify" {
+		t.Errorf("上一轮记录为空(不是 nil)时照常判, got %q", got)
 	}
 }

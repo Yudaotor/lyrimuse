@@ -58,12 +58,28 @@ extension Set where Element == PlaybackPlayer {
     /// "该不该绕开 media-control 的焦点仲裁、把指令直接导向 Music.app"(`dispatch()` /
     /// `checkForCurrentPlayer` 用)。混用会让多选 / auto 下的播放控制武断地打给 Music.app。
     ///
-    /// 引导页就是按这个判据做的(见 OnboardingView.needsAppleMusicAutomation
-    /// 上那段沿革),设置页那张权限卡当时漏了、一直停在 `contains(.appleMusic)` ——
-    /// 于是默认配置的人在引导里被问过这个权限,回头却在设置里**找不到它**。
-    /// 把两处合并到这里,省得再漂一次。
-    public var needsAppleMusicAutomation: Bool {
-        contains(.auto) || contains(.appleMusic)
+    /// **别把这个列表再按"装没装这个 App"过滤进纯函数里**:那是运行期的事实
+    /// (`NSWorkspace`),留在视图层(`PlayerAutomationPermissions`)。判据要能被 selftest
+    /// 直接钉住,不该依赖这台机器上装了什么。
+    public var playersNeedingAutomation: [PlaybackPlayer] {
+        let all = PlaybackPlayer.allCases.filter(\.needsAutomationPermission)
+        guard !contains(.auto) else { return all }
+        return all.filter { contains($0) }
+    }
+
+    /// 上面那份列表空不空 —— 设置页那张卡、引导页那一步要不要出现。
+    public var needsAnyAutomation: Bool { !playersNeedingAutomation.isEmpty }
+
+    /// 这个配置下,collector 要读**哪几个播放器的私有容器** —— 也就是「完全磁盘访问」那一行要替
+    /// 哪几家说话。设置页那张卡和引导页那一步列的就是这个列表,顺序固定(`allCases`)。
+    ///
+    /// 判据同 `playersNeedingAutomation`:播放器本身要不要(`needsFullDiskAccess`,源头
+    /// shared/players.json,collector 侧按真实路径对账)+ 含 `auto` 时按超集全部都算。
+    /// 同样**不**在这里按「装没装」过滤,那一层留在视图层。
+    public var playersNeedingFullDiskAccess: [PlaybackPlayer] {
+        let all = PlaybackPlayer.allCases.filter(\.needsFullDiskAccess)
+        guard !contains(.auto) else { return all }
+        return all.filter { contains($0) }
     }
 }
 

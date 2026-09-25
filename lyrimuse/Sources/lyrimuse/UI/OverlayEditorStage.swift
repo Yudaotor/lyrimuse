@@ -62,6 +62,12 @@ final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
     /// 恒 nil / 恒 0:编辑台里拖不了窗口,自然也没有"拖动被拒"这回事。
     let placementLockNotice: String? = nil
     let placementLockShakeTick = 0
+    /// 编辑台画布没有真实屏幕坐标,判不了"是否顶到可见区顶边"——只跟着预设走,跟真窗口
+    /// `LyricsOverlayWindowController.recomputeControlsBelowCard` 的「顶部居中」分支同一个条件。
+    var controlsBelowCard: Bool { AppSettings.shared.overlayPlacementMode == .topCenter }
+    /// 编辑台画布没有真实悬停(`isHoveringForControls` 恒 false,上面那条注释),真窗口那套
+    /// "悬停中先攒着、悬停结束才生效"的滞后语义在这里无从谈起——直接跟原始设置值同步就够。
+    var showHoverControls: Bool { AppSettings.shared.overlayShowHoverControls }
 
     /// 真窗口借这一下重读「喜欢」(要起 osascript 子进程)。预览里**故意空实现** —— 同
     /// `NotchPreviewChrome.setExpanded`,理由是同一条:预览不该产生任何副作用。
@@ -519,30 +525,7 @@ struct OverlayEditorStage: View {
         Button {
             popover = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    // 图标锁死拉丁语区,理由同 SettingsRow:textformat 这类"字母造型"的
-                    // SF Symbol 带 CJK 变体,中文界面下会被渲染成汉字「格式」。
-                    .environment(\.locale, Locale(identifier: "en"))
-                Text(title)
-                    .lineLimit(1)
-                Text("·")
-                    .foregroundStyle(.tertiary)
-                // ⚠️ 摘要**必须**限宽 + 单行 + 尾部省略。它是纯派生值(见 OverlayStyleSummary),
-                // 内容里有用户装的字体族名 —— "Hiragino Sans GB W3"这种长名字不限宽的话会
-                // 把整条工具栏顶出编辑台。maxWidth 只是上限,短摘要照样贴着自己收缩。
-                Text(summary)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 140, alignment: .leading)
-                    // ⚠️ 加第三个入口时补的,离屏渲染验过:工具栏挤不下时,不加这
-                    // 一句 SwiftUI 会把亏空按比例摊给按钮里**所有**文字,标题先被截成「文…」
-                    // 「配…」「排…」—— 入口的名字没了,摘要却还留着半截,主次正好反过来。
-                    // 负优先级让摘要在标题之前被压,窄到极限时它先缩成「…」、标题始终完整。
-                    .layoutPriority(-1)
-            }
+            EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -736,9 +719,6 @@ struct OverlayEditorStage: View {
         return LyricsOverlayView(
             overlayController: chrome,
             onContentHeightChange: { overlayContentHeight = $0 },
-            // 调试 HUD 那个 fps 角标不属于"这扇窗在桌面上的样子",开着还会让帧率探针每帧
-            // tick 一次(见 LyricsOverlayView.showsDebugHUD)。
-            showsDebugHUD: false,
             previewLine: Self.previewLine)
             .frame(width: cardWidth, height: cardHeight, alignment: .top)
             // 裁到窗口自己的边界上。常态下这一层什么也不做(卡高就是量出来的内容高度),它兜的

@@ -33,37 +33,6 @@ func runLyricsParsingTests() {
         "LRC: 一行多个时间戳(副歌重复)各生成一条"
     )
 
-    // --- FrameRateProbe  ---
-    //
-    // 拆成纯值类型放 Core 就是为了能无屏测它(同 KaraokeFill/MarqueeMath)。
-    do {
-        var probe = FrameRateProbe()
-        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
-        expectEqual(probe.fps == nil, true, "帧率探针: 第一帧还没有样本")
-        probe.tick(at: t0)
-        expectEqual(probe.fps == nil, true, "帧率探针: 只有一帧仍算不出间隔")
-        // 稳定 30fps 喂 200 帧,EMA 该收敛到 30 附近。
-        var t = t0
-        for _ in 0..<200 {
-            t = t.addingTimeInterval(1.0 / 30)
-            probe.tick(at: t)
-        }
-        let fps = probe.fps ?? 0
-        expectEqual(abs(fps - 30) < 0.5, true, "帧率探针: 稳定 30fps 收敛到 30(实测 \(fps))")
-        // 长空档(暂停/停表)必须重新起算,不能把那个间隔算进平均值 —— 否则恢复播放后
-        // 读数会长时间失真。
-        probe.tick(at: t.addingTimeInterval(5))
-        expectEqual(probe.fps == nil, true, "帧率探针: 超过不连续阈值后重新起算")
-        // 时钟回拨/同一帧调两次不该污染平均值。
-        var probe2 = FrameRateProbe()
-        let s0 = Date(timeIntervalSinceReferenceDate: 2000)
-        probe2.tick(at: s0)
-        probe2.tick(at: s0)
-        expectEqual(probe2.fps == nil, true, "帧率探针: 零间隔被丢弃")
-        probe2.tick(at: s0.addingTimeInterval(-1))
-        expectEqual(probe2.fps == nil, true, "帧率探针: 负间隔被丢弃")
-    }
-
     // --- LRC 自带的 [offset:]  ---
     //
     // 这个字段此前全链路无人消费:parse() 把它当元信息行整个跳过,于是"歌词源明确告诉了我们

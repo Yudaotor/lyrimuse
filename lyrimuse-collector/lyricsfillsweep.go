@@ -114,8 +114,12 @@ func setLyricsFillPaths() {
 	// 全量扫库那份状态文件**不在**上面的清理范围里 —— 它记的正是"上一个进程没跑完的
 	// 那一轮",删掉就等于每次重启都放弃续跑。见 lyricsfullscan.go 头注。
 	setLyricsFullScanStatePath(configFilePath(clientName + "-lyrics-fullscan.json"))
-	// 本地缓存可读性:设置页那三格提示的数据源,由 collector 独家发布(见 localcachefs.go)。
-	setLocalCacheAccessPath(configFilePath(clientName + "-local-cache-access.json"))
+	// 播放器署名纠正:App 必须跟 collector 用同一个署名,否则歌词缓存 key 对不上
+	// (见 playerartistfix.go)。
+	setPlayerArtistFixPath(configFilePath(clientName + "-player-artist-fix.json"))
+	setPlayerPreviewFixPath(configFilePath(clientName + "-player-preview.json"))
+	// App 与 collector 共享的限流窗口(sharedcooldown.go),App 侧读写同名文件。
+	setSharedCooldownPath(configFilePath(clientName + "-outbound-cooldowns.json"))
 }
 
 // startLyricsFillSweeper 由 run() 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),
@@ -247,6 +251,10 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 	}
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
+	var polluted map[string]bool
+	if !req.manual {
+		polluted = lyricsPollutedKeys(enrichCache)
+	}
 	var keys []string
 	for key, e := range enrichCache {
 		if req.keys != nil && !req.keys[key] {
@@ -256,6 +264,10 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 			continue
 		}
 		if !req.manual && !needsLyricsFirstFill(e) {
+			continue
+		}
+		// 自动这一轮跳过再搜也不会有的,见 lyricsretryskip.go;手动点了就照搜。
+		if !req.manual && (lyricsNoAnchorGaveUp(key, e) || polluted[key]) {
 			continue
 		}
 		keys = append(keys, key)
@@ -396,7 +408,7 @@ func lyricsFillSweepOne(key string) bool {
 	enrichInflight[key] = true
 	enrichMu.Unlock()
 	// 同步跑:retryLyricsUpgrade 自己负责清 enrichInflight、落盘、导出、通知重推。
-	retryLyricsUpgrade(key, artist, title, album, dur, true)
+	retryLyricsUpgrade(withBackgroundOutbound(context.Background()), key, artist, title, album, dur, true)
 	enrichMu.Lock()
 	after := enrichCache[key]
 	enrichMu.Unlock()

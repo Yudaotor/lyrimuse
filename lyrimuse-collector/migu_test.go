@@ -75,3 +75,34 @@ func TestMiguArtistNameJoinsSingers(t *testing.T) {
 		t.Fatalf("多歌手应以 / 拼接并去空白,得到 %q", got)
 	}
 }
+
+// 专辑信息响应(实测形状,缩减):取专辑自己的封面、挑最大一档。
+func TestMiguParseAlbumCover(t *testing.T) {
+	body := []byte(`{"code":"000000","info":"","resource":[{"resourceType":"2003","albumId":"1001205876",` +
+		`"title":"Ultrasound 乐之路 1997-2003","imgItems":[` +
+		`{"imgSizeType":"01","img":"https://d.musicapp.migu.cn/a/small.webp"},` +
+		`{"imgSizeType":"03","img":"https://d.musicapp.migu.cn/a/large.webp"}]}]}`)
+	if got := miguParseAlbumCover(body, "1001205876"); got != "https://d.musicapp.migu.cn/a/large.webp" {
+		t.Errorf("该取专辑封面最大一档,得到 %q", got)
+	}
+	if got := miguParseAlbumCover(body, "999"); got != "" {
+		t.Errorf("专辑 id 对不上不该认,得到 %q", got)
+	}
+	notAlbum := []byte(`{"code":"000000","resource":[{"resourceType":"2","imgItems":[{"imgSizeType":"03","img":"x"}]}]}`)
+	if got := miguParseAlbumCover(notAlbum, "1"); got != "" {
+		t.Errorf("不是专辑资源不该认,得到 %q", got)
+	}
+	if got := miguParseAlbumCover([]byte(`{"code":"999999"}`), "1"); got != "" {
+		t.Errorf("接口报错不该认,得到 %q", got)
+	}
+}
+
+func TestMiguAlbumID(t *testing.T) {
+	it := miguItemFromJSON(t, `{"albums":[{"id":"1001205876","name":"Ultrasound 乐之路 1997-2003","type":"1"}]}`)
+	if it.albumID() != "1001205876" || it.albumName() != "Ultrasound 乐之路 1997-2003" {
+		t.Errorf("专辑 id / 名字解错: %q %q", it.albumID(), it.albumName())
+	}
+	if (miguSearchItem{}).albumID() != "" {
+		t.Error("没有专辑时 id 该是空串")
+	}
+}

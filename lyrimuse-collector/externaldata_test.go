@@ -27,5 +27,26 @@ func TestMain(m *testing.M) {
 	spotifyISRCUsersDirOverride = filepath.Join(missing, "SpotifyUsers")
 	applemusicLocalDirOverride = filepath.Join(missing, "fsCachedData")
 	sodaLocalQueueOverride = filepath.Join(missing, "QueueCache")
+	sodaPreloadOverride = filepath.Join(missing, "entries.db")
+	// 播放队列那几家(upcoming.go 的第一层):prefetchUpcoming 挂在 poller 换歌路径上,
+	// 经它的测试同样会读到真实队列,所以每一家的队列文件都要在这里指到不存在的路径
+	// (QQ / 酷狗旧库 / 网易云这几份也不例外)。
+	qqUpcomingOverride = filepath.Join(missing, "PlayingList.archive")
+	neteaseUpcomingOverride = filepath.Join(missing, "playingList")
+	kugouUpcomingOverride = filepath.Join(missing, "currentPlayList.sqlite")
+	kugouQueuePlistOverride = filepath.Join(missing, "userCurrentPlayList.plist")
+	kugouConfigPlistOverride = filepath.Join(missing, "KugouConfigPlist.plist")
+	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")
+	// YouTube Music 队列要去浏览器里跑 AppleScript;测试里一律"读不到",要测的用例自己换。
+	ytmusicQueueScript = func(string, string) (string, bool) { return "", false }
+	spotifyWebQueueScript = func(string, string) (string, bool) { return "", false }
+	browserQueueRetryDelay = 0
+	// 信任列表里的其他浏览器要去读本机 App 包判引擎族;测试里一律判不了,要测的用例自己换。
+	detectBrowserScriptFamily = func(string) string { return "" }
+	// Apple Music 的系统待播队列要跑 App 包里的 perl 加载器,单测里一律当作找不到。
+	nowPlayingClientsPathsOverride = func() (string, string) { return "", "" }
+	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
+	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。
+	googleTranslateEndpoint = ""
 	os.Exit(m.Run())
 }

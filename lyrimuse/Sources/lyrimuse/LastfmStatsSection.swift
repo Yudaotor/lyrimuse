@@ -48,6 +48,7 @@ struct LastfmStatsSection: View {
     @AppStorage("np:lastfmRecentCollapsed") private var recentCollapsed = false
     @AppStorage("np:lastfmOnThisDayCollapsed") private var onThisDayCollapsed = false
     @AppStorage("np:lastfmFootprintCollapsed") private var footprintCollapsed = false
+    @AppStorage("np:lastfmHeatmapCollapsed") private var heatmapCollapsed = false
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
@@ -59,8 +60,11 @@ struct LastfmStatsSection: View {
     // baselineFailed。这张卡只在已连接时才挂出来,所以"没有凭据直接 return"那条早退
     // 路径在这里不会发生(否则转圈会停不下来)。
     @State private var recentRefreshing = false
-    /// 档案卡右上角日历按钮弹出的播放热力图(LastfmHeatmapView)。
-    @State private var showHeatmap = false
+    /// 最近记录里哪几个「连续同一首」的折叠组是展开的,键是组里最新那一行的 id(RecentRun.id)。
+    @State private var expandedRuns: Set<String> = []
+    /// 热力图卡当前画的年份。0 = 还没选过,读的时候折成"最近一个有数据的年份"
+    /// (见 heatmapYearBinding)—— 有哪几年要等日桶同步落地才知道,定不到初始值上。
+    @State private var heatmapYear = 0
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -77,9 +81,11 @@ struct LastfmStatsSection: View {
                 recentCard
             case .chart: chartCard
             case .onThisDay:
-                // 「足迹」段(由「那年今日」改名):足迹卡在上——它天天有内容、全部从本地
-                // 日桶派生零请求;那年今日在下——一年里大半天是空的("那天没听"很正常),放上面会让
-                // 整段先看到一句"没有记录"(现象是「花样太少」后加足迹卡,随后定下这个顺序)。
+                // 「足迹」段(由「那年今日」改名)的卡序:热力图在最上——它是整段的总览
+                // (一整年每天听了多少),另两张卡都是从同一份日桶里挑出来的切片;足迹卡
+                // (里程碑)居中——它天天有内容、全部从本地日桶派生零请求;那年今日在最下
+                // ——一年里大半天是空的("那天没听"很正常),放上面会让整段先看到一句"没有记录"。
+                heatmapCard
                 listeningFootprintCard
                 onThisDayCard
             // 见 Tab.settings:内容由 AccountLinkingTab 画,这里只保持挂载不掉线。
@@ -169,34 +175,15 @@ struct LastfmStatsSection: View {
 
     private var statsCard: some View {
         SettingsCard {
-            // 热力图入口放这张卡右上角:热力图就是"今天/近7天/总量"这三个数字沿时间轴的
-            // 完整展开,语义同源。⚠️ 按钮必须放在卡片**内容里**(ZStack 角标),不能
-            // .overlay 挂在 SettingsCard 外面——macOS 26 的液态玻璃背景(glassEffect)
-            // 下外挂 overlay 不渲染(实测:截图里角标整个不出现)。
-            ZStack(alignment: .topTrailing) {
-                HStack(spacing: 0) {
-                    statCell(value: stats.overview?.today, label: L10n.t("今天"))
-                    Divider().padding(.vertical, 10)
-                    // 跟待机页那个「近 7 天」用**同一个口径**(自然日对齐,见
-                    // IdleListeningStats.lastSevenDays)—— 两处显示同一个名字的数字,
-                    // 算法必须一致,否则用户在设置页和待机页会看到两个不同的「近 7 天」。
-                    statCell(value: weekValue, label: L10n.t("近 7 天"))
-                    Divider().padding(.vertical, 10)
-                    statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
-                }
-                Button {
-                    showHeatmap = true
-                } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help(L10n.t("播放热力图"))
-                .padding(8)
-                .popover(isPresented: $showHeatmap, arrowEdge: .bottom) {
-                    LastfmHeatmapView()
-                }
+            HStack(spacing: 0) {
+                statCell(value: stats.overview?.today, label: L10n.t("今天"))
+                Divider().padding(.vertical, 10)
+                // 跟待机页那个「近 7 天」用**同一个口径**(自然日对齐,见
+                // IdleListeningStats.lastSevenDays)—— 两处显示同一个名字的数字,
+                // 算法必须一致,否则用户在设置页和待机页会看到两个不同的「近 7 天」。
+                statCell(value: weekValue, label: L10n.t("近 7 天"))
+                Divider().padding(.vertical, 10)
+                statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
             }
             // 首次连接的后台引导同步。数字/最近记录本身不依赖这轮扫描
             // (轻请求,见 LastfmStatsService 的说明),这里只是说明"热力图/次数合并
@@ -258,16 +245,14 @@ struct LastfmStatsSection: View {
                 // 收起后分段/时段选择器既看不到内容也改不了什么,藏起来
                 if !chartCollapsed {
                 HStack(spacing: 10) {
-                    Picker("", selection: Binding(
-                        get: { kindRaw },
-                        set: { kindRaw = $0; stats.refreshChart(kind: kind, period: period) }
-                    )) {
-                        ForEach(LastfmStatsService.ChartKind.allCases) { k in
-                            Text(k.displayName).tag(k.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    SettingsSegmentedControl(
+                        selection: Binding(
+                            get: { kind },
+                            set: { kindRaw = $0.rawValue; stats.refreshChart(kind: kind, period: period) }
+                        ),
+                        options: LastfmStatsService.ChartKind.allCases,
+                        label: \.displayName
+                    )
                     Picker("", selection: Binding(
                         get: { periodRaw },
                         set: { periodRaw = $0; stats.refreshChart(kind: kind, period: period) }
@@ -446,7 +431,7 @@ struct LastfmStatsSection: View {
                     .foregroundStyle(stats.baselineFailed ? .quaternary : .tertiary)
                     .help(stats.baselineFailed
                           ? String(format: L10n.t("上次刷新没有成功，显示的是 %@ 的内容"), Self.absolute(at))
-                          : String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
+                          : String(format: L10n.t("上次刷新：%@"), Self.absolute(at)))
                 }
                 // 手动刷新。轮询最慢要等两分钟,而"刚听完一首歌想立刻看到它"正是这张卡
                 // 最常见的用法 —— 干等不如给一颗按钮。
@@ -489,53 +474,24 @@ struct LastfmStatsSection: View {
                     // 见 LastfmStatsService.liveAbsorbedRecentID。注意只在渲染时跳过、
                     // 不从 recentRows 的构造里剔除 —— 它下面的同曲历史行算"第几次"仍要
                     // 把它数进去。
-                    ForEach(recentRows.filter { $0.track.id != stats.liveAbsorbedRecentID },
-                            id: \.track.id) { entry in
-                        let t = entry.track
-                        // 整行 = 打开 Last.fm 上这首歌的页面;「第 N 次听」那一格是自己的按钮(弹合并
-                        // 明细)。所以整行不再是 Button:Button 会吞掉 label 里一切内嵌
-                        // 控件的点击(见 collapsibleHeader 那个 "?" 的注释),改成容器 onTapGesture +
-                        // 内嵌 Button —— SwiftUI 里子视图的手势优先,点数字弹明细、点别处开网页。
-                        HStack(spacing: 10) {
-                            // 封面走三级兜底(自带 → getinfo 纠正 → 同专辑兄弟),理由见
-                            // LastfmStatsService.coverURL(for:)
-                            CachedImage(url: stats.coverURL(for: t)) {
-                                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                    // 连续听同一首的几行折成一组(RecentRepeatRuns)。分组在剔除被实时行吸收的那一行
+                    // **之后**做:看的是用户实际看到的相邻关系。
+                    ForEach(recentRuns) { run in
+                        if run.entries.count == 1 {
+                            historyRow(run.entries[0])
+                        } else {
+                            let expanded = expandedRuns.contains(run.id)
+                            historyRow(run.entries[0], repeatCount: run.entries.count, expanded: expanded) {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    if expanded { expandedRuns.remove(run.id) } else { expandedRuns.insert(run.id) }
+                                }
                             }
-                            .frame(width: 26, height: 26)
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(t.title).font(.system(size: 13)).lineLimit(1)
-                                Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            Spacer()
-                            // 次数没解析出来时它自己画 `···` 占位(安静的,不转、不闪):不是没有,
-                            // 是还没查到 —— 现象是"翻到新页这里空一截,看着像坏了"。已确定没有
-                            // 次数的曲目连占位都不给,不然它会在极少数确实查不到次数的行上永远挂着,
-                            // 变成一个说谎的"正在加载"。
-                            PlayCountBadge(
-                                artist: t.artist, title: t.title, count: entry.count,
-                                unavailable: stats.isPlayCountUnavailable(artist: t.artist, title: t.title),
-                                anchorDate: t.date,
-                                expectedTotal: stats.trackPlayCounts[
-                                    LastfmStatsService.playCountKey(artist: t.artist, title: t.title)])
-                            if let date = t.date {
-                                Text(Self.relative(date))
-                                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                                    // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
-                                    .help(Self.absolute(date))
-                                    // 宽度跟实时行的状态格共用同一个常量,否则「第 N 次听」
-                                    // 那一列会在两种行之间错开(见常量声明处)。
-                                    .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
+                            if expanded {
+                                ForEach(run.entries.dropFirst(), id: \.track.id) { entry in
+                                    historyRow(entry, indented: true)
+                                }
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
-                        }
-                        .rowHoverHighlight()
                     }
                     // 翻页(取代原来的"显示更多"一路展开):一路展开会把这一卡
                     // 撑到上百行 —— 整页越滚越长、每次刷新还要给上百首查播放次数,而看历史
@@ -611,6 +567,104 @@ struct LastfmStatsSection: View {
             totals: stats.trackPlayCounts,
             playCountKey: { LastfmStatsService.playCountKey(artist: $0, title: $1) })
         return zip(recentHistory, counts).map { (track: $0, count: $1) }
+    }
+
+    /// 显示用的行按「连续同一首」分好的组。id 取组里最新那一行的 id —— 新 scrobble 进来时
+    /// 下标全体后移,拿下标当 id 会让整张列表被当成替换(滚动位置被顶回去,见 RecentTrack.dup)。
+    private var recentRuns: [RecentRun] {
+        let shown = recentRows.filter { $0.track.id != stats.liveAbsorbedRecentID }
+        return RecentRepeatRuns.runs(rows: shown.map { (artist: $0.track.artist, title: $0.track.title) })
+            .map { RecentRun(entries: Array(shown[$0])) }
+    }
+
+    fileprivate struct RecentRun: Identifiable {
+        let entries: [(track: LastfmStatsService.RecentTrack, count: Int?)]
+        var id: String { entries[0].track.id }
+    }
+
+    /// 最近记录的一行。
+    /// - Parameters:
+    ///   - repeatCount: 非 nil = 这一行是折叠组的组头(组里最新那一次),歌名后面挂「×N」,点它展开/收起。
+    ///   - indented: 展开后组里较早的那几次,往里缩一格,读得出是上面那一行的明细。
+    @ViewBuilder
+    private func historyRow(_ entry: (track: LastfmStatsService.RecentTrack, count: Int?),
+                            repeatCount: Int? = nil, expanded: Bool = false, indented: Bool = false,
+                            onToggle: (() -> Void)? = nil) -> some View {
+        let t = entry.track
+        // 整行 = 打开 Last.fm 上这首歌的页面;「第 N 次听」那一格是自己的按钮(弹合并
+        // 明细)。所以整行不再是 Button:Button 会吞掉 label 里一切内嵌
+        // 控件的点击(见 collapsibleHeader 那个 "?" 的注释),改成容器 onTapGesture +
+        // 内嵌 Button —— SwiftUI 里子视图的手势优先,点数字弹明细、点别处开网页。
+        HStack(spacing: 10) {
+            // 封面走三级兜底(自带 到 getinfo 纠正 到 同专辑兄弟),理由见
+            // LastfmStatsService.coverURL(for:)
+            CachedImage(url: stats.coverURL(for: t)) {
+                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+            }
+            .frame(width: 26, height: 26)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 5) {
+                    Text(t.title).font(.system(size: 13)).lineLimit(1)
+                    if let repeatCount {
+                        repeatBadge(count: repeatCount, expanded: expanded) { onToggle?() }
+                    }
+                }
+                Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            // 次数没解析出来时它自己画 `···` 占位(安静的,不转、不闪):不是没有,
+            // 是还没查到——不给占位的话,翻到新页这里会空一截,看着像坏了。已确定
+            // 没有次数的曲目连占位都不给:给了的话,这类曲目会永远挂着占位,
+            // 变成一个说谎的"正在加载"。
+            PlayCountBadge(
+                artist: t.artist, title: t.title, count: entry.count,
+                unavailable: stats.isPlayCountUnavailable(artist: t.artist, title: t.title),
+                anchorDate: t.date,
+                expectedTotal: stats.trackPlayCounts[
+                    LastfmStatsService.playCountKey(artist: t.artist, title: t.title)])
+            if let date = t.date {
+                Text(Self.relative(date))
+                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                    // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
+                    .help(Self.absolute(date))
+                    // 宽度跟实时行的状态格共用同一个常量,否则「第 N 次听」
+                    // 那一列会在两种行之间错开(见常量声明处)。
+                    .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
+            }
+        }
+        // 明细行往里缩一个封面宽,读得出是上面组头的展开。
+        .padding(.leading, indented ? 14 + 26 : 14)
+        .padding(.trailing, 14)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
+        }
+        .rowHoverHighlight()
+    }
+
+    /// 组头歌名后面的「×N」:连续听了 N 次,点它展开/收起。自己是一颗按钮 —— 整行的点击是
+    /// 「打开 Last.fm 页面」,子视图的手势优先(同「第 N 次听」那一格)。
+    private func repeatBadge(count: Int, expanded: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 2) {
+                Text(verbatim: "×\(count)").monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(Color.primary.opacity(0.07)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(expanded ? L10n.t("收起") : String(format: L10n.t("连续听了 %d 次，点一下展开每一次"), count))
+        .accessibilityLabel(String(format: L10n.t("连续听了 %d 次，点一下展开每一次"), count))
+        .accessibilityValue(expanded ? L10n.t("展开") : L10n.t("收起"))
     }
 
     // MARK: - 小件
@@ -811,7 +865,7 @@ struct LastfmStatsSection: View {
                             // 就刷一次、每次都会重算整个 body,它跟着一起更新。
                             Text(String(format: L10n.t("%@更新"), Self.coarseRelative(at)))
                                 .font(.caption).foregroundStyle(.tertiary)
-                                .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
+                                .help(String(format: L10n.t("上次刷新：%@"), Self.absolute(at)))
                         }
                     }
                     if !onThisDayCollapsed {
@@ -847,7 +901,7 @@ struct LastfmStatsSection: View {
                             .buttonStyle(.plain)
                             .rowHoverHighlight()
                             .help(entry.lastPlayed.map {
-                                String(format: L10n.t("那天最后一次:%@"), Self.absolute($0))
+                                String(format: L10n.t("那天最后一次：%@"), Self.absolute($0))
                             } ?? "")
                         }
                     }
@@ -883,6 +937,64 @@ struct LastfmStatsSection: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - 播放热力图
+
+    /// 「足迹」段的第一张卡。
+    ///
+    /// 它原来是档案卡右上角一颗日历角标弹出的 popover。搬成卡片有两条理由:语义上它跟
+    /// 同段那两张卡是一件事(都在回看历史,而且跟足迹卡读的是同一份日桶);布局上 popover
+    /// 是一块尺寸随内容涨的独立面,格子边长可以钉死,卡片不行 —— 那 53 列得按卡片的实际
+    /// 宽度反算(见 LastfmHeatmapView.cellSize)。
+    private var heatmapCard: some View {
+        SettingsCard {
+            collapsibleHeader(icon: "square.grid.3x3.fill", title: L10n.t("播放热力图"),
+                              collapsed: $heatmapCollapsed) {
+                // 收起后选年份没有意义,跟榜单卡同款处理。
+                if !heatmapCollapsed { heatmapYearPicker }
+            }
+            if !heatmapCollapsed {
+                CardDivider()
+                LastfmHeatmapView(year: heatmapYearBinding)
+            }
+        }
+    }
+
+    /// 年份选到"最近一个有数据的年"而不是今年:刚换账号 / 年初时今年可能一格都没有。
+    /// 折在读这一侧、不在 onAppear 里种,是因为卡收起时热力图整个不在视图层级里,
+    /// 而卡头那颗选择器一直在 —— 种不上的话它会显示成"一年都没选中"。
+    private var heatmapYearBinding: Binding<Int> {
+        Binding(
+            get: { heatmapYear != 0 ? heatmapYear : LastfmHeatmapView.defaultYear(in: stats.dailyCounts) },
+            set: { heatmapYear = $0 }
+        )
+    }
+
+    /// 年份选择器。年数少时用分段控件(一眼全在、一次点中),多了换下拉菜单 ——
+    /// SettingsSegmentedControl 的宽度由段数定死(intrinsicContentSize 量一次就不再变),
+    /// 一个听了十几年的账号会把卡头撑出卡片。
+    ///
+    /// `.id(years)` 不能省:那个控件的 `updateNSView` 只同步选中项,**不重建段** ——
+    /// 首轮全量同步落地时年份表会从"只有今年"长出好几年,不换 id 的话段数停在旧的那一份,
+    /// 点哪一段都对不上。
+    @ViewBuilder
+    private var heatmapYearPicker: some View {
+        let years = LastfmHeatmapView.availableYears(in: stats.dailyCounts)
+        if years.count <= 8 {
+            SettingsSegmentedControlHashable(
+                selection: heatmapYearBinding,
+                options: years,
+                label: { "\($0)" }
+            )
+            .id(years)
+        } else {
+            Picker("", selection: heatmapYearBinding) {
+                ForEach(years, id: \.self) { y in Text(verbatim: "\(y)").tag(y) }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
         }
     }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -163,5 +164,40 @@ func TestIsDaemonInvocation(t *testing.T) {
 	}
 	if isDaemonInvocation([]string{"collector", "healthcheck"}) {
 		t.Fatalf("a subcommand must not count as daemon")
+	}
+}
+
+// 常驻模式下 fd 2 跟着轮转换到新文件:Go 运行时的 panic 直接写 fd 2,要落在当前日志里而不是 .old。
+func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
+	saved, err := syscall.Dup(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := false
+	restore := func() {
+		if !restored {
+			_ = syscall.Dup2(saved, 2)
+			_ = syscall.Close(saved)
+			restored = true
+		}
+	}
+	t.Cleanup(restore)
+
+	path := filepath.Join(t.TempDir(), "lyrimuse.log")
+	r := openRotatingLogFile(path, 40)
+	if r == nil {
+		t.Fatal("openRotatingLogFile returned nil")
+	}
+	r.stderrFollows = true
+	redirectStderrTo(r.f)
+	_, _ = r.Write([]byte("first line, about 25 b\n"))
+	_, _ = r.Write([]byte("second line pushes past the cap\n"))
+	_, _ = os.Stderr.WriteString("stderr probe after rotation\n")
+	restore()
+
+	cur, _ := os.ReadFile(path)
+	old, _ := os.ReadFile(path + ".old")
+	if !strings.Contains(string(cur), "stderr probe after rotation") || strings.Contains(string(old), "stderr probe") {
+		t.Fatalf("fd 2 应跟到新文件: cur=%q old=%q", cur, old)
 	}
 }

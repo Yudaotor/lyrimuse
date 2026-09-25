@@ -165,6 +165,93 @@ func TestDeviceCoverDecision(t *testing.T) {
 	if ov, _ := deviceCoverDecision(nil, neteaseBig, 800, neverLoad); ov {
 		t.Error("设备图解不出来时不该顶掉候选")
 	}
+
+	// ⑨ 设备图是把长方形图补白成的"方形"(汽水音乐那档)到 让位给方形的远程候选,哪怕
+	//    内容指纹对不上(构图不同,同一张专辑实测距离 28)。
+	if ov, why := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(synthCover(800, 1))); ov {
+		t.Errorf("补边的长方形设备图该让位给方形候选, why=%s", why)
+	}
+	// 候选自己也不是方形 到 不走这一支(两边都不是封面形状,没有更可信的一方),交回指纹判。
+	// 候选用左右补边,免得两边的白边重合到一起、把指纹比成"同一张"。
+	if ov, _ := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(pillarboxedCover(800, 600, 1))); !ov {
+		t.Error("候选同样不是方形时不该走补边这一支")
+	}
+}
+
+// pillarboxedCover:左右补白的版本(内容 contentWidth×edge 水平居中)。
+func pillarboxedCover(edge, contentWidth, seed int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, edge, edge))
+	content := synthCover(edge, seed)
+	left := (edge - contentWidth) / 2
+	for y := 0; y < edge; y++ {
+		for x := 0; x < edge; x++ {
+			if x >= left && x < left+contentWidth {
+				img.Set(x, y, content.At((x-left)*edge/contentWidth, y))
+			} else {
+				img.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+			}
+		}
+	}
+	return img
+}
+
+// letterboxedCover 模拟"长方形图补白成正方形":edge×edge 的白底,中间竖直居中贴一块
+// edge×contentHeight 的内容。
+func letterboxedCover(edge, contentHeight, seed int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, edge, edge))
+	for y := 0; y < edge; y++ {
+		for x := 0; x < edge; x++ {
+			img.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	content := synthCover(edge, seed)
+	top := (edge - contentHeight) / 2
+	for y := 0; y < contentHeight; y++ {
+		for x := 0; x < edge; x++ {
+			img.Set(x, top+y, content.At(x, y*edge/contentHeight))
+		}
+	}
+	return img
+}
+
+func TestTrimUniformBorder(t *testing.T) {
+	// 上下白边被裁掉,左右不动
+	got := trimUniformBorder(letterboxedCover(150, 114, 4)).Bounds()
+	if got.Dx() != 150 || got.Dy() != 114 {
+		t.Errorf("补边图该裁成 150×114, got %v", got)
+	}
+	// 没有边的图原样返回
+	if b := trimUniformBorder(synthCover(120, 1)).Bounds(); b != image.Rect(0, 0, 120, 120) {
+		t.Errorf("没有纯色边时不该裁, got %v", b)
+	}
+	// 纯色图最多裁到一半,不会裁没
+	if b := trimUniformBorder(solidCover(100, 255)).Bounds(); b.Dx() < 50 || b.Dy() < 50 {
+		t.Errorf("纯色图不能被裁到一半以下, got %v", b)
+	}
+}
+
+func TestCoverContentSkewed(t *testing.T) {
+	if !coverContentSkewed(letterboxedCover(150, 114, 4)) {
+		t.Error("补边补成方形的长方形图该判成不是封面形状")
+	}
+	if coverContentSkewed(synthCover(150, 4)) {
+		t.Error("正常方形封面不该判成歪")
+	}
+	// 四周一圈等宽白框(画框式设计):裁完仍是正方形,不算歪
+	framed := image.NewRGBA(image.Rect(0, 0, 150, 150))
+	inner := synthCover(110, 2)
+	for y := 0; y < 150; y++ {
+		for x := 0; x < 150; x++ {
+			if x >= 20 && x < 130 && y >= 20 && y < 130 {
+				framed.Set(x, y, inner.At(x-20, y-20))
+			} else {
+				framed.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+			}
+		}
+	}
+	if coverContentSkewed(framed) {
+		t.Error("四周等宽白框的方形封面不该判成歪")
+	}
 }
 
 func TestMinEdge(t *testing.T) {

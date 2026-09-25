@@ -64,6 +64,35 @@ public enum OverlayCardGeometry {
         }
     }
 
+    /// 两侧留白的**弹性系数** —— 留白只占"这一行本来就用不到"的那部分宽度。
+    ///
+    /// `cardInsets` 给的是理想留白。真按它缩进,可用宽度就少了那么多,于是一行还没填满就
+    /// 换了行:右边空着一截、左边还留着一截。这个函数按"文字要是不换行得多宽"
+    /// (`naturalContentWidth`)算出真正的富余,留白最多只吃掉富余那么多:
+    ///
+    ///   - 富余 ≥ 理想留白 → k == 1,留白照留(短句仍从舞台边起笔,排版逐像素不变);
+    ///   - 富余 < 理想留白 → k 按比例退,文字正好顶到远侧边缘;
+    ///   - 一行装不下(富余 ≤ 0)→ k == 0,留白整份让开,换行前先把整宽吃满。
+    ///
+    /// **判据是"这一行填没填满",不是"会不会多折一行"**。两者不等价:一句话不管让不让
+    /// 留白都要折成两行,但让开之后第一行能多装一个词、右边那截空白才填得上 —— 按行数判
+    /// 会在这种句子上判成"留白不花钱",而那正是用户看到的"左侧都没满就换行了"。
+    ///
+    /// `naturalContentWidth` 由调用方量(SwiftUI 的 `sizeThatFits(.unspecified)`:逐字那层
+    /// `WrapLayout` 在无宽度提案下走 `WrapLayoutMath.unconstrainedSize`,如实给出铺成一行
+    /// 要多宽),这里只管算,所以 selftest 能直接喂数字问它。
+    public static func elasticInsetScale(
+        totalInset: CGFloat, availableWidth: CGFloat, naturalContentWidth: CGFloat
+    ) -> CGFloat {
+        // 没有留白可让(普通歌、窗口不比默认宽)时直接返回,连量都不用量 —— 绝大多数
+        // 时间走的就是这一支。
+        guard totalInset > 0.5 else { return 1 }
+        guard availableWidth > 0 else { return 0 }
+        let slack = availableWidth - max(0, naturalContentWidth)
+        guard slack > 0 else { return 0 }
+        return min(1, slack / totalInset)
+    }
+
     /// 控制排(播放控制胶囊,锁定态则是解锁按钮)该在两侧留多少白。
     ///
     /// = 卡片内缩 + 卡片自己的水平内边距。这两项加起来正好是"从窗口边缘到卡片内容块边缘"
@@ -72,14 +101,16 @@ public enum OverlayCardGeometry {
     ///
     /// 合唱/普通歌(两侧相等)算出来左右对称,`.center` 对齐下位置跟改动前逐像素相同 ——
     /// 这是回归护栏:绝大多数歌不该因为修对唱而挪动一个像素。
-    public static func controlsInsets(
-        for side: LyricDuet.Side?, unit: CGFloat, stageInset: CGFloat = 0, cardHorizontalPadding: CGFloat
-    ) -> (leading: CGFloat, trailing: CGFloat) {
-        let card = cardInsets(for: side, unit: unit, stageInset: stageInset)
-        return (card.leading + cardHorizontalPadding, card.trailing + cardHorizontalPadding)
-    }
-}
     ///
     /// `scale` 是歌词块那边**真的用上了**的那份弹性系数(见 `elasticInsetScale`):留白让开
     /// 多少,按钮排就得跟着让开多少,否则又是一次"按钮跟歌词不对齐"。调用方从歌词块实际
     /// 被摆出来的宽度反推它,而不是自己再算一遍试探。
+    public static func controlsInsets(
+        for side: LyricDuet.Side?, unit: CGFloat, stageInset: CGFloat = 0, scale: CGFloat = 1,
+        cardHorizontalPadding: CGFloat
+    ) -> (leading: CGFloat, trailing: CGFloat) {
+        let card = cardInsets(for: side, unit: unit, stageInset: stageInset)
+        let k = min(1, max(0, scale))
+        return (card.leading * k + cardHorizontalPadding, card.trailing * k + cardHorizontalPadding)
+    }
+}

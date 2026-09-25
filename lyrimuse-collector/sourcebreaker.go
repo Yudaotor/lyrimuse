@@ -67,6 +67,9 @@ const (
 	// lyricSourceBreakerTripsDecay:离上一次跳闸多久没再跳,才把档位(trips)清零。
 	// 档位由时间清零而不是由"拿到一次正常响应"清零,理由见 observeWith 的 default 分支。
 	lyricSourceBreakerTripsDecay = 10 * time.Minute
+	// lyricSourceEndpointHealthyWindow:同源另一个端点多久之内成功过,这个端点的 5xx 就只算它自己
+	// 的问题(交给出站闸的接口熔断),不计入整个源的连续失败。见 observeWith 里 5xx 那一支。
+	lyricSourceEndpointHealthyWindow = time.Minute
 )
 
 const (
@@ -93,13 +96,16 @@ type lyricSourceBreaker struct {
 	// transport:按源累计的传输层结局(本文件最后一节「传输层失败分类」)。跟 state 分开放:
 	// state 在成功时会被整个删掉,而"这个源拿到过响应"这个事实恰恰要在成功之后留下来。
 	transport map[string]*lyricSourceTransportState
+	// endpointOK:源 到 端点键(guardEndpointKey)到 最近一次拿到非 5xx 响应的时刻。
+	endpointOK map[string]map[string]time.Time
 }
 
 func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
 	return &lyricSourceBreaker{
-		now:       now,
-		state:     map[string]*lyricSourceBreakerState{},
-		transport: map[string]*lyricSourceTransportState{},
+		now:        now,
+		state:      map[string]*lyricSourceBreakerState{},
+		transport:  map[string]*lyricSourceTransportState{},
+		endpointOK: map[string]map[string]time.Time{},
 	}
 }
 
@@ -127,9 +133,11 @@ func lyricSourceForHost(host string) string {
 		return "lrclib"
 	case h == "musixmatch.com" || strings.HasSuffix(h, ".musixmatch.com"):
 		return "musixmatch"
-	case h == "raw.githubusercontent.com":
+	case h == "raw.githubusercontent.com" || h == "cdn.jsdelivr.net" || h == "fastly.jsdelivr.net":
+		// 后两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),全仓只有 amll 在用。
 		return "amll"
-	case h == "music.youtube.com":
+	case h == "music.youtube.com" || h == "youtubei.googleapis.com" || h == "www.youtube.com":
+		// 后两个是同一套 InnerTube 的备用主机(sourcefallback.go 的 ytmusicAPIBases)。
 		return "lyricfind"
 	case h == "kuwo.cn" || strings.HasSuffix(h, ".kuwo.cn"):
 		return "kuwo"
@@ -167,10 +175,11 @@ func lyricSourceForHost(host string) string {
 // status 是响应状态码(err != nil 时忽略),retryAfter 是响应的 Retry-After 头原文(可空)。
 // 没有 DNS 轨迹的调用方(测试、以及日后别的入口)用这个;doHTTPTracked 走 observeTraced。
 func (b *lyricSourceBreaker) observe(host string, err error, status int, retryAfter string) {
-	b.observeWith(host, err, status, retryAfter, transportTrace{})
+	b.observeWith(host, "", err, status, retryAfter, transportTrace{})
 }
 
-func (b *lyricSourceBreaker) observeWith(host string, err error, status int, retryAfter string, tr transportTrace) {
+// observeWith 的 endpoint 是端点键(guardEndpointKey),空串表示不知道是哪个端点、按整个源算。
+func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, status int, retryAfter string, tr transportTrace) {
 	source := lyricSourceForHost(host)
 	if source == "" {
 		return
@@ -186,6 +195,12 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 	now := b.now()
 	st := b.state[source]
 	switch {
+	case err == nil && status >= 500 && b.otherEndpointHealthyLocked(source, endpoint, now):
+		// 同源另一个端点刚成功过:这是一个端点单独挂了(同主机别的接口照常),不是整个源坏了。
+		// 按源计数的话,一个一直 500 的端点会反复把整个源停掉,连带它健康的端点和备用链一起
+		// 被跳过;这种由出站闸的接口熔断按端点处理(hostguard.go)。传输层失败不走这一支:
+		// 连不上是整个源(或网络)的事。
+		return
 	case err != nil || status >= 500:
 		reason := lyricSourceCooldownReasonNetwork
 		if err == nil {
@@ -238,6 +253,14 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 		st.reason = lyricSourceCooldownReasonRateLimited
 		log.Printf("lyrics: source %s cooling down %s (reason=%s host=%s)", source, d, st.reason, host)
 	default:
+		if endpoint != "" {
+			m := b.endpointOK[source]
+			if m == nil {
+				m = map[string]time.Time{}
+				b.endpointOK[source] = m
+			}
+			m[endpoint] = now
+		}
 		if st == nil {
 			return
 		}
@@ -488,9 +511,24 @@ func classifyLyricSourceTransportFailure(err error, status int, tr transportTrac
 	return lyricFailureReasonConnectFailed
 }
 
-// observeTraced 是 observe 的带轨迹版本,doHTTPTracked 用它;observe 本身等价于零轨迹。
-func (b *lyricSourceBreaker) observeTraced(host string, err error, status int, retryAfter string, tr transportTrace) {
-	b.observeWith(host, err, status, retryAfter, tr)
+// observeTraced 是 observe 的带轨迹、带端点键的版本,doHTTPTracked 用它;observe 本身等价于零轨迹、
+// 不知道端点。
+func (b *lyricSourceBreaker) observeTraced(host, endpoint string, err error, status int, retryAfter string, tr transportTrace) {
+	b.observeWith(host, endpoint, err, status, retryAfter, tr)
+}
+
+// otherEndpointHealthyLocked:同源除 endpoint 以外的端点,有没有在 lyricSourceEndpointHealthyWindow
+// 之内成功过。endpoint 为空时一律 false(按整个源算)。调用方持有 b.mu。
+func (b *lyricSourceBreaker) otherEndpointHealthyLocked(source, endpoint string, now time.Time) bool {
+	if endpoint == "" {
+		return false
+	}
+	for k, at := range b.endpointOK[source] {
+		if k != endpoint && now.Sub(at) < lyricSourceEndpointHealthyWindow {
+			return true
+		}
+	}
+	return false
 }
 
 // noteTransport 在 observeWith 里(已持锁)记一笔。context.Canceled 已在那边开头被过滤。

@@ -46,15 +46,15 @@ func TestResolvePlayersAcceptsMultiSelect(t *testing.T) {
 // 的多选解析是同一份设计:auto 是超集,选了 auto 就按"内置+信任列表"整套准入判断,
 // 不管有没有额外勾了别的具体播放器；没有 auto 时按选中集合逐个比对 bundle id。
 func TestIsTrackedMultiSelect(t *testing.T) {
-	saved := features.Players
-	t.Cleanup(func() { features.Players = saved })
+	saved := features().Players
+	t.Cleanup(func() { featuresRef().Players = saved })
 
 	newPoller := func(bundle string) *poller {
 		return &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Bundle: bundle}}
 	}
 
 	// 单选 qq_music：只认它自己的 bundle id，别的一律不认。
-	features.Players = map[string]bool{playerQQMusic: true}
+	featuresRef().Players = map[string]bool{playerQQMusic: true}
 	if !newPoller(qqMusicBundleID).isTracked() {
 		t.Error("单选 qq_music 时,qq 自己的 bundle 该被认")
 	}
@@ -63,7 +63,7 @@ func TestIsTrackedMultiSelect(t *testing.T) {
 	}
 
 	// 多选 {qq_music, kugou_music}：两个都认,其它仍不认。
-	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
 	if !newPoller(qqMusicBundleID).isTracked() {
 		t.Error("多选 {qq,kugou} 时,qq 该被认")
 	}
@@ -76,7 +76,7 @@ func TestIsTrackedMultiSelect(t *testing.T) {
 
 	// 多选 {qq_music, auto}：auto 是超集,内置五个播放器全认（不局限于 qq 一个）,
 	// 陌生 App 仍然不认(除非进了信任列表,这里没配)。
-	features.Players = map[string]bool{playerQQMusic: true, playerAuto: true}
+	featuresRef().Players = map[string]bool{playerQQMusic: true, playerAuto: true}
 	if !newPoller(spotifyBundleID).isTracked() {
 		t.Error("多选 {qq,auto} 时,auto 该把内置的 spotify 也认下来(超集语义)")
 	}
@@ -89,12 +89,12 @@ func TestIsTrackedMultiSelect(t *testing.T) {
 // 自动识别**时也生效——配对浏览器这个动作跟"选没选自动识别"是两件独立的事,用户没有
 // 理由因为只选了具体播放器就让配对形同虚设。
 func TestIsTrackedMultiSelectHonorsTrustedPlayersWithoutAuto(t *testing.T) {
-	savedPlayers, savedTrusted := features.Players, features.TrustedPlayers
-	t.Cleanup(func() { features.Players, features.TrustedPlayers = savedPlayers, savedTrusted })
+	savedPlayers, savedTrusted := features().Players, features().TrustedPlayers
+	t.Cleanup(func() { featuresRef().Players, featuresRef().TrustedPlayers = savedPlayers, savedTrusted })
 
 	const chrome = "com.google.Chrome"
-	features.Players = map[string]bool{playerQQMusic: true} // 没有 auto
-	features.TrustedPlayers = map[string]string{chrome: "Chrome"}
+	featuresRef().Players = map[string]bool{playerQQMusic: true} // 没有 auto
+	featuresRef().TrustedPlayers = map[string]string{chrome: "Chrome"}
 
 	trusted := &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Album: "专辑", Bundle: chrome}}
 	if !trusted.isTracked() {
@@ -107,7 +107,7 @@ func TestIsTrackedMultiSelectHonorsTrustedPlayersWithoutAuto(t *testing.T) {
 	}
 
 	// Safari 走媒体代理别名(报告方是 com.apple.WebKit.GPU,信任的是 com.apple.Safari)。
-	features.TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
+	featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
 	viaProxy := &poller{cfg: &config{}, cur: snapshot{
 		Title: "曲目", Artist: "歌手", Album: "专辑", Bundle: "com.apple.WebKit.GPU"}}
 	if !viaProxy.isTracked() {
@@ -116,10 +116,10 @@ func TestIsTrackedMultiSelectHonorsTrustedPlayersWithoutAuto(t *testing.T) {
 }
 
 func TestIsTrustedPlayerBundleID(t *testing.T) {
-	saved := features.TrustedPlayers
-	t.Cleanup(func() { features.TrustedPlayers = saved })
+	saved := features().TrustedPlayers
+	t.Cleanup(func() { featuresRef().TrustedPlayers = saved })
 
-	features.TrustedPlayers = map[string]string{"com.google.Chrome": "Chrome"}
+	featuresRef().TrustedPlayers = map[string]string{"com.google.Chrome": "Chrome"}
 	if !isTrustedPlayerBundleID("com.google.Chrome") {
 		t.Error("信任列表里的 bundle id 该被认")
 	}
@@ -131,7 +131,7 @@ func TestIsTrustedPlayerBundleID(t *testing.T) {
 			"(那是 isAcceptedPlayerBundleID/isKnownPlayerBundleID 的职责)")
 	}
 
-	features.TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
+	featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
 	if !isTrustedPlayerBundleID("com.apple.WebKit.GPU") {
 		t.Error("信任 Safari 之后,它的媒体代理进程 com.apple.WebKit.GPU 该经别名表被认")
 	}

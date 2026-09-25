@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -325,10 +326,10 @@ func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 }
 
 func TestNeedsTranslationBackfill(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsMachineTranslation = true
-	features.LyricsTranslationLanguage = "zh"
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsMachineTranslation = true
+	featuresRef().LyricsTranslationLanguage = "zh"
 
 	base := enrichEntry{Lyrics: "[00:01.00]hello world"}
 	cases := []struct {
@@ -360,7 +361,7 @@ func TestNeedsTranslationBackfill(t *testing.T) {
 		}
 	}
 
-	features.LyricsMachineTranslation = false
+	featuresRef().LyricsMachineTranslation = false
 	if needsTranslationBackfill(base) {
 		t.Error("开关关掉时一律不翻")
 	}
@@ -473,9 +474,9 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 
 // 闸门层面走一遍同样的场景,确认 translationUsable 真的接进了 needsTranslationBackfill。
 func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsMachineTranslation = true
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsMachineTranslation = true
 
 	base := enrichEntry{
 		Lyrics:       "[00:01.00]The painful youth I've had",
@@ -483,12 +484,12 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 		LyricsTrLang: "zh",
 	}
 
-	features.LyricsTranslationLanguage = "zh"
+	featuresRef().LyricsTranslationLanguage = "zh"
 	if needsTranslationBackfill(base) {
 		t.Error("目标是中文、已有中文译文时不该再翻一遍")
 	}
 
-	features.LyricsTranslationLanguage = "ja"
+	featuresRef().LyricsTranslationLanguage = "ja"
 	if !needsTranslationBackfill(base) {
 		t.Error("目标是日语、只有中文译文时必须让机翻接手 —— 这正是这次要修的")
 	}
@@ -496,10 +497,10 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 
 // 换了目标语言之后,上一门语言累计的失败次数不该继续挡着。
 func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsMachineTranslation = true
-	features.LyricsTranslationLanguage = "ja"
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsMachineTranslation = true
+	featuresRef().LyricsTranslationLanguage = "ja"
 
 	e := enrichEntry{
 		Lyrics:                "[00:01.00]The painful youth I've had",
@@ -541,17 +542,19 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	})
 
 	savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient :=
-		features, enrichCache, enrichPath, translateBaseURL, lyricsDir, translateClient
+		features(), enrichCache, enrichPath, translateBaseURL, lyricsDir(), translateClient
 	defer func() {
-		features, enrichCache, enrichPath, translateBaseURL, lyricsDir, translateClient =
-			savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient
+		setFeatures(savedFeatures)
+		enrichCache, enrichPath, translateBaseURL, translateClient =
+			savedCache, savedPath, savedBase, savedClient
+		setLyricsDir(savedDir)
 	}()
 
-	features.LyricsMachineTranslation = true
-	features.LyricsTranslationLanguage = "zh"
+	featuresRef().LyricsMachineTranslation = true
+	featuresRef().LyricsTranslationLanguage = "zh"
 	translateBaseURL = srv.URL
 	translateClient = srv.Client()
-	lyricsDir = "" // 不测文件导出,exportLyricsFiles 会因此直接返回
+	setLyricsDir("") // 不测文件导出,exportLyricsFiles 会因此直接返回
 	enrichPath = filepath.Join(t.TempDir(), "enrich-cache.json")
 
 	const key = "Someone|Some Song|Some Album"
@@ -695,6 +698,48 @@ func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
 	for _, tag := range []string{"[00:01.00]", "[00:02.00]", "[00:05.00]"} {
 		if !strings.Contains(res.lrc, tag) {
 			t.Errorf("日文行的译文该带原时间戳 %s:\n%s", tag, res.lrc)
+		}
+	}
+}
+
+// 配额用尽之后整体停手:同一端点的下一首歌不再发请求,照样按「配额用尽」回给调用方。
+func TestTranslateQuotaPausesFurtherRequests(t *testing.T) {
+	var hits int32
+	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"responseData":{"translatedText":""},"responseDetails":"MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS FOR TODAY. NEXT AVAILABLE IN 15 HOURS"}`)
+	})
+	for i := 0; i < 3; i++ {
+		res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
+			"[00:01.00]hello", "zh-CN", "", "")
+		if err != nil || !res.quotaReached {
+			t.Fatalf("第 %d 次该报配额用尽: res=%+v err=%v", i+1, res, err)
+		}
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Fatalf("撞过一次之后不该再请求,实际 %d 次", n)
+	}
+	if !myMemoryQuotaPaused(srv.URL, time.Now().Add(14*time.Hour)) {
+		t.Error("按警告文本停 15 小时")
+	}
+	if myMemoryQuotaPaused(srv.URL, time.Now().Add(16*time.Hour)) {
+		t.Error("15 小时后恢复")
+	}
+}
+
+func TestMyMemoryQuotaPauseFor(t *testing.T) {
+	cases := map[string]time.Duration{
+		"NEXT AVAILABLE IN 15 HOURS":        15 * time.Hour,
+		"next available in 1 hour":          time.Hour,
+		"NEXT AVAILABLE IN 99 HOURS":        myMemoryQuotaPauseMax,
+		"quota finished":                    myMemoryQuotaPauseDefault,
+		"":                                  myMemoryQuotaPauseDefault,
+		"NEXT AVAILABLE IN 0 HOURS SECONDS": myMemoryQuotaPauseDefault,
+	}
+	for in, want := range cases {
+		if got := myMemoryQuotaPauseFor(in); got != want {
+			t.Errorf("%q: got %v, want %v", in, got, want)
 		}
 	}
 }

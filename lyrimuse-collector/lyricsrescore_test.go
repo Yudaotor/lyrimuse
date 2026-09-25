@@ -12,8 +12,8 @@ import (
 // 结尾超出曲目时长"判成无效之后,用户那首《我们的时光》缓存里还是按旧规则胜出的
 // Musixmatch。lyricsScoringVersion + 这个判定就是让存量条目跟上新规则的那条路径。
 func TestNeedsLyricsRescore(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
+	saved := features()
+	defer func() { setFeatures(saved) }()
 
 	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
 
@@ -131,9 +131,9 @@ func TestNeedsLyricsRescore(t *testing.T) {
 // 这个区分直接决定用户那首歌能不能修好:新规则下 Musixmatch 那份因为末尾超出曲长被判 -1,
 // 如果按 lyricSourcesWithCandidates 的口径,它就成了"缺席的源",重选会被永远推迟。
 func TestAllEnabledLyricSourcesResponded(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": false}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": false}
 
 	full := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 173},
@@ -169,9 +169,9 @@ func TestAllEnabledLyricSourcesResponded(t *testing.T) {
 // "所有启用的源都回来了才算数"让同一首歌连着两次都 deferred,次数烧光、永远轮不到重选。
 // 换成"当前这份歌词的来源这一轮回来了"就够 —— 它自己参与了新规则下的比较。
 func TestRescoreDecidable(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": false}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": false}
 
 	partial := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 173},
@@ -211,9 +211,9 @@ func TestRescoreDecidable(t *testing.T) {
 // 那条路的前置 needsLyricsRescore 要求 e.Lyrics != "",空串在那边只可能是"老条目有歌词
 // 但没记来源",必须保持严格。同一个空串在两条路径上语义不同,所以做成参数而不是就地推断。
 func TestRescoreDecidableNoCurrentLyrics(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": true}
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": true}
 
 	// 复刻「枫+退后+搁浅 (Live)」:五个启用源里只有酷狗给出候选
 	onlyKugou := []scoredLyricCandidateResult{{Source: "kugou", Score: 799}}

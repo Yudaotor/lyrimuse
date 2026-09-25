@@ -211,7 +211,33 @@ const qqAlbumLookupBudget = 4
 // error 非 nil = 所有主机都没问成(超时/非 200/解码失败),跟"接口正常应答但 0 条"是两回事
 // ——qqSearchSongs 靠这个区分"要不要退到 smartbox"。
 func qqClientSearch(ctx context.Context, query string) ([]qqSearchItem, error) {
-	u := "https://c.y.qq.com/soso/fcgi-bin/client_search_cp?format=json&new_json=1&t=0&aggr=1&cr=1&p=1&n=" +
+	var lastErr error
+	for _, base := range qqClientSearchBases {
+		items, err := qqClientSearchAt(ctx, base, query)
+		if err == nil {
+			return items, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return nil, lastErr
+		}
+	}
+	// 网页接口几个主机都没问成:退到客户端网关的搜索(另一套后端,结果字段同形)。
+	if items, err := qqMusicuSearchSongs(ctx, query); err == nil {
+		return items, nil
+	}
+	return nil, lastErr
+}
+
+// qqClientSearchBases:client_search_cp 的主机,按顺序试。响应结构(new_json=1)各主机一致,
+// 查无结果时都回 code 0。
+var qqClientSearchBases = []string{
+	"https://shc.y.qq.com/soso/fcgi-bin/client_search_cp",
+	"https://c.y.qq.com/soso/fcgi-bin/client_search_cp",
+}
+
+func qqClientSearchAt(ctx context.Context, base, query string) ([]qqSearchItem, error) {
+	u := base + "?format=json&new_json=1&t=0&aggr=1&cr=1&p=1&n=" +
 		strconv.Itoa(qqSearchLimit) + "&w=" + neturl.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -231,6 +257,12 @@ func qqClientSearch(ctx context.Context, query string) ([]qqSearchItem, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
+	// 查无结果时 code 仍是 0(实测),非 0 是服务端拒绝。
+	if out.Code != 0 {
+		reportEndpointRejected(req.URL)
+		return nil, fmt.Errorf("client_search_cp code %d", out.Code)
+	}
+	reportEndpointAccepted(req.URL)
 	return qqClientSearchItems(out), nil
 }
 
@@ -248,7 +280,15 @@ func qqSmartbox(ctx context.Context, query string) []qqSmartboxItem {
 // 正常应答但 0 条"是两回事——专辑路线要靠这个区分"确定没有"和"这次没查成"。
 func qqSmartboxAlbums(ctx context.Context, query string) ([]qqSmartboxItem, error) {
 	d, err := qqSmartboxRaw(ctx, query)
-	return d.Album.ItemList, err
+	if err == nil {
+		return d.Album.ItemList, nil
+	}
+	// smartbox 几个主机都没问成:退到客户端网关的专辑搜索。它比自动补全召回宽(会带出翻唱专辑),
+	// 条目同样只用 mid / name / singer,下游 resolveQQMatchViaAlbum 那几道身份闸照过。
+	if items, merr := qqMusicuSearchAlbums(ctx, query); merr == nil {
+		return items, nil
+	}
+	return nil, err
 }
 
 // qqSmartboxCategoryList 是 smartbox 响应里一个分类的条目列表。
@@ -262,7 +302,19 @@ type qqSmartboxData struct {
 }
 
 func qqSmartboxRaw(ctx context.Context, query string) (qqSmartboxData, error) {
-	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(query)
+	var data qqSmartboxData
+	err := qqTryHosts(ctx, qqWebHosts, func(host string) error {
+		d, err := qqSmartboxAt(ctx, host, query)
+		if err == nil {
+			data = d
+		}
+		return err
+	})
+	return data, err
+}
+
+func qqSmartboxAt(ctx context.Context, host, query string) (qqSmartboxData, error) {
+	u := "https://" + host + "/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return qqSmartboxData{}, err
@@ -278,11 +330,18 @@ func qqSmartboxRaw(ctx context.Context, query string) (qqSmartboxData, error) {
 		return qqSmartboxData{}, fmt.Errorf("smartbox status %d", resp.StatusCode)
 	}
 	var out struct {
+		Code int            `json:"code"`
 		Data qqSmartboxData `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return qqSmartboxData{}, err
 	}
+	// 查无结果时 code 仍是 0(实测),非 0 是服务端拒绝。
+	if out.Code != 0 {
+		reportEndpointRejected(req.URL)
+		return qqSmartboxData{}, fmt.Errorf("smartbox code %d", out.Code)
+	}
+	reportEndpointAccepted(req.URL)
 	return out.Data, nil
 }
 
@@ -407,7 +466,22 @@ type qqSingerSuggestion struct {
 // 需要不同的处理:qqSingerAvatar 只在 ok=false 时报"暂时故障"，qqArtistCanonicalName
 // 的缓存包装同理只在 ok=false 时不落盘负缓存。
 func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
-	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
+	var items []qqSingerSuggestion
+	err := qqTryHosts(context.Background(), qqWebHosts, func(host string) error {
+		got, ok := qqSingerSuggestionsAt(host, name)
+		if !ok {
+			return errQQNotReached
+		}
+		items = got
+		return nil
+	})
+	return items, err == nil
+}
+
+// qqSingerSuggestionsAt 只换 smartbox 的主机,不退到客户端网关的歌手搜索:qqArtistCanonicalName
+// 只信第一条建议、结论还会落盘,换一套排序不同的搜索当兜底,第一条可能就换了人。
+func qqSingerSuggestionsAt(host, name string) ([]qqSingerSuggestion, bool) {
+	u := "https://" + host + "/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return nil, false
@@ -423,6 +497,7 @@ func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
 		return nil, false
 	}
 	var out struct {
+		Code int `json:"code"`
 		Data struct {
 			Singer struct {
 				ItemList []struct {
@@ -435,6 +510,11 @@ func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, false
 	}
+	if out.Code != 0 {
+		reportEndpointRejected(req.URL)
+		return nil, false
+	}
+	reportEndpointAccepted(req.URL)
 	items := make([]qqSingerSuggestion, 0, len(out.Data.Singer.ItemList))
 	for _, it := range out.Data.Singer.ItemList {
 		items = append(items, qqSingerSuggestion{Name: it.Name, Pic: it.Pic})
@@ -578,6 +658,17 @@ func saveQQArtistNameCache() {
 // cachedQQArtistCanonicalName 是 qqArtistCanonicalName 的缓存包装,跟
 // canonicalArtistViaMusicBrainz 同一个模式:containsHan 守卫(已经是中文标签的不必
 // 查)、查一次缓存住。
+// qqArtistCanonicalNameFromCache 只读 cachedQQArtistCanonicalName 的缓存，判据同它。
+func qqArtistCanonicalNameFromCache(rawArtist string) string {
+	rawArtist = strings.TrimSpace(rawArtist)
+	if rawArtist == "" || containsHan(rawArtist) {
+		return ""
+	}
+	qqArtistNameMu.Lock()
+	defer qqArtistNameMu.Unlock()
+	return qqArtistNameCache[rawArtist]
+}
+
 func cachedQQArtistCanonicalName(rawArtist string) string {
 	rawArtist = strings.TrimSpace(rawArtist)
 	if rawArtist == "" || containsHan(rawArtist) {
@@ -609,35 +700,8 @@ func cachedQQArtistCanonicalName(rawArtist string) string {
 // qqSongAlbum returns the album name for a QQ song mid via qqSongDetail. Empty on any
 // failure — callers treat that as "unknown album" and fall back to name-based selection.
 func qqSongAlbum(ctx context.Context, mid string) string {
-	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Referer", "https://y.qq.com/")
-	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	var out struct {
-		Data []struct {
-			Album struct {
-				Name string `json:"name"`
-			} `json:"album"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return ""
-	}
-	if len(out.Data) == 0 {
-		return ""
-	}
-	return out.Data[0].Album.Name
+	d, _ := qqSongDetail(ctx, mid)
+	return d.albumName
 }
 
 // QQ 音乐图床的尺寸档写在**路径**里(`T002R300x300M000<mid>.jpg`),换个数字就换一档。
@@ -680,42 +744,14 @@ func qqAlbumCoverURL(albumMid string) string {
 // returned so callers can re-verify identity before trusting the cover (a QQ
 // smartbox hit can itself be a fan/cover account; see qqCoverFallback).
 func qqSongCoverAndSinger(ctx context.Context, mid string) (cover, singer string) {
-	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
+	d, ok := qqSongDetail(ctx, mid)
+	if !ok || d.albumMid == "" {
 		return "", ""
 	}
-	req.Header.Set("Referer", "https://y.qq.com/")
-	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return "", ""
+	if len(d.singers) > 0 {
+		singer = d.singers[0].name
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", ""
-	}
-	var out struct {
-		Data []struct {
-			Album struct {
-				Mid string `json:"mid"`
-			} `json:"album"`
-			Singer []struct {
-				Name string `json:"name"`
-			} `json:"singer"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 {
-		return "", ""
-	}
-	d := out.Data[0]
-	if d.Album.Mid == "" {
-		return "", ""
-	}
-	if len(d.Singer) > 0 {
-		singer = d.Singer[0].Name
-	}
-	return qqAlbumCoverURL(d.Album.Mid), singer
+	return qqAlbumCoverURL(d.albumMid), singer
 }
 
 // qqSongCatalogMids 取一首歌的 专辑 mid 与 首位歌手 mid —— 歌词窗口「前往专辑/前往艺人」
@@ -725,42 +761,14 @@ func qqSongCoverAndSinger(ctx context.Context, mid string) (cover, singer string
 // 多歌手只取第一位:QQ 的歌手页是一人一页,合唱曲目没有"这首歌的歌手页"这种东西,
 // 取主歌手是唯一说得通的选择(与 CanonicalArtist 只在单一歌手时才给值同一个取向)。
 func qqSongCatalogMids(ctx context.Context, mid string) (albumMid, singerMid string) {
-	if mid == "" {
+	d, ok := qqSongDetail(ctx, mid)
+	if !ok {
 		return "", ""
 	}
-	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return "", ""
+	if len(d.singers) > 0 {
+		singerMid = d.singers[0].mid
 	}
-	req.Header.Set("Referer", "https://y.qq.com/")
-	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return "", ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", ""
-	}
-	var out struct {
-		Data []struct {
-			Album struct {
-				Mid string `json:"mid"`
-			} `json:"album"`
-			Singer []struct {
-				Mid string `json:"mid"`
-			} `json:"singer"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 {
-		return "", ""
-	}
-	d := out.Data[0]
-	if len(d.Singer) > 0 {
-		singerMid = d.Singer[0].Mid
-	}
-	return d.Album.Mid, singerMid
+	return d.albumMid, singerMid
 }
 
 // qqCoverFallback finds an official-artist cover via QQ Music for when
@@ -887,15 +895,9 @@ type qqMusicMatch struct {
 	fromLocalLibrary bool
 }
 
-func resolveQQMusicURL(ctx context.Context, artist, title, album string, durationSecs float64) string {
-	return resolveQQMusicMatch(ctx, artist, title, album, durationSecs).url
-}
-
-// qqCand 是歌名维度的一条候选。提到包级(原来是 resolveQQMusicMatch 里的局部类型)只为
-// 一件事:让 qqCollectCandidates 能被单测直接调。身份闸怎么放行、以及"搜索结果自带的
-// 专辑名/时长有没有一路透传到候选上",以前都内联在一个必须联网的函数里,单测根本够不到
-// ——变异测试在 pickQQAlbumTrack 上暴露过同型盲区(改了调用点单测全绿),
-// 这里照同样的处置先拆出来再测。
+// qqCand 是歌名维度的一条候选。放在包级是为了让 qqCollectCandidates 能被单测直接调——
+// 身份闸怎么放行、以及"搜索结果自带的专辑名/时长有没有一路透传到候选上"这类逻辑必须
+// 能脱离网络单独测(变异测试在 pickQQAlbumTrack 上暴露过同型盲区,这里照同样的处置拆出来测)。
 type qqCand struct {
 	mid, title, artist string
 	album              string  // 搜索结果自带的专辑名(client_search_cp 路线才有),空=要另外查
@@ -1051,8 +1053,6 @@ func qqPickCandidate(cands []qqCand, artist string, durationSecs float64) (qqCan
 	return best, haveBest
 }
 
-func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) qqMusicMatch {
-	items := qqSearchSongs(ctx, qqSearchQueries(artist, title), title)
 // resolveQQMusicMatch finds the QQ Music song for a track. smartbox
 // yields a real songmid, so the link opens the actual song on both desktop
 // (y.qq.com/n/ryqq/songDetail) and the i.y.qq.com mobile player — a search
@@ -1061,6 +1061,8 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 // album name and the best albumScore wins, avoiding same-song-wrong-album
 // compilations. Leaves url empty (到 caller uses a search link) only when
 // nothing plausibly matches; never a confidently-wrong song.
+func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) qqMusicMatch {
+	items := qqSearchSongs(ctx, qqSearchQueries(artist, title), title)
 	if len(items) == 0 {
 		// 歌手名跨平台不一致时,退一步只按标题再搜(同样要带上去括号的那一版)
 		items = qqSearchSongs(ctx, searchTitleVariants(title), title)
@@ -1140,7 +1142,8 @@ var (
 
 type qqAlbumSong struct {
 	mid, name, singer string
-	interval          float64 // 官方时长,秒
+	singers           []string // 全部歌手;singer 是其中第一位
+	interval          float64  // 官方时长,秒
 }
 
 // qqAlbumSongs 拉一张专辑的曲目单(mid/曲名/歌手/时长),按 albumMid 缓存。
@@ -1160,7 +1163,17 @@ func qqAlbumSongs(ctx context.Context, albumMid string) ([]qqAlbumSong, error) {
 		"albumMid": albumMid, "begin": 0, "num": 100, "order": 2,
 	}, qqCommBase)
 	if err != nil {
-		return nil, err
+		// 客户端网关没拿到:退到网页版专辑接口,同一份曲目单。
+		songs, werr := qqAlbumSongsWeb(ctx, albumMid)
+		if werr != nil {
+			return nil, err
+		}
+		if len(songs) > 0 {
+			qqAlbumSongsMu.Lock()
+			qqAlbumSongsCache[albumMid] = songs
+			qqAlbumSongsMu.Unlock()
+		}
+		return songs, nil
 	}
 	var out struct {
 		SongList []struct {
@@ -1187,7 +1200,13 @@ func qqAlbumSongs(ctx context.Context, albumMid string) ([]qqAlbumSong, error) {
 		if len(si.Singer) > 0 {
 			singer = si.Singer[0].Name
 		}
-		songs = append(songs, qqAlbumSong{mid: si.Mid, name: si.Name, singer: singer, interval: si.Interval})
+		var singers []string
+		for _, sg := range si.Singer {
+			if sg.Name != "" {
+				singers = append(singers, sg.Name)
+			}
+		}
+		songs = append(songs, qqAlbumSong{mid: si.Mid, name: si.Name, singer: singer, singers: singers, interval: si.Interval})
 	}
 	if len(songs) > 0 {
 		qqAlbumSongsMu.Lock()
@@ -1504,44 +1523,62 @@ func qqLyric(ctx context.Context, mid string) qqLyricResult {
 }
 
 func resolveQQLyric(ctx context.Context, mid string) qqLyricResult {
-	u := "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?format=json&nobase64=1&g_tk=5381&songmid=" + neturl.QueryEscape(mid)
+	var res qqLyricResult
+	err := qqTryHosts(ctx, qqWebHosts, func(host string) error {
+		r, err := resolveQQLyricAt(ctx, host, mid)
+		if err == nil {
+			res = r
+		}
+		return err
+	})
+	if err == nil {
+		return res
+	}
+	// 网页接口几个主机都没问成:退到客户端网关取同一份整行歌词。
+	return qqMusicuLineLyric(ctx, mid)
+}
+
+// resolveQQLyricAt 的 error 非 nil 只表示这次没问成(建请求 / 传输 / 非 200 / 读不出 / 不是 JSON),
+// 接口正常答了都走 nil。
+func resolveQQLyricAt(ctx context.Context, host, mid string) (qqLyricResult, error) {
+	u := "https://" + host + "/lyric/fcgi-bin/fcg_query_lyric_new.fcg?format=json&nobase64=1&g_tk=5381&songmid=" + neturl.QueryEscape(mid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	req.Header.Set("Referer", "https://y.qq.com/") // 反爬要求带 y.qq.com 来源
 	req.Header.Set("User-Agent", qqUA)
 	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	// 响应可能被 jsonp 包裹(MusicJsonCallback({...}))：截第一个 { 到最后一个 }。
 	s := string(raw)
 	i, j := strings.IndexByte(s, '{'), strings.LastIndexByte(s, '}')
 	if i < 0 || j <= i {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	var out struct {
 		Lyric string `json:"lyric"`
 	}
 	if err := json.Unmarshal([]byte(s[i:j+1]), &out); err != nil {
-		return qqLyricResult{}
+		return qqLyricResult{}, errQQNotReached
 	}
 	// 顺序要紧:占位判定必须在 isTimedLRC **之前**。QQ 的纯音乐占位只有一行带戳,
 	// 过不了"≥3 行且过半"那道门槛,先过 isTimedLRC 的话这个明确结论就被当成"没歌词"扔掉了。
 	if isInstrumentalPlaceholderLyric(out.Lyric) {
-		return qqLyricResult{instrumental: true}
+		return qqLyricResult{instrumental: true}, nil
 	}
 	if l := out.Lyric; isTimedLRC(l) {
-		return qqLyricResult{lrc: l}
+		return qqLyricResult{lrc: l}, nil
 	}
 	// 走到这里只剩两种:没有真正的歌词正文(空串,或只有几行署名占位),或者有词但不带
 	// 时间戳。只有前者算 trackFoundNoLyrics —— 判据用 isCreditOnlyLRC 跟网易云那路
@@ -1549,9 +1586,9 @@ func resolveQQLyric(ctx context.Context, mid string) qqLyricResult {
 	// 完整注释)。QQ 这边实测到的是 `{"retcode":-1901}` 不带 lyric 字段 到 空串这一支,
 	// 但署名占位那一支同样得认:两家平台的"没有词"长什么样不该由这里各猜一套。
 	//
-	// ⚠️ 上面每一条 return 都是**请求失败**路径(建请求/传输/非 200/读不出 body/不是
-	// JSON),那些一律不算,否则就是把网络问题报成"这首歌没词"。
-	return qqLyricResult{trackFoundNoLyrics: isCreditOnlyLRC(out.Lyric)}
+	// 上面每一条带 errQQNotReached 的 return 都是**请求失败**路径(建请求/传输/非 200/读不出
+	// body/不是 JSON),那些一律不算,否则就是把网络问题报成"这首歌没词"。
+	return qqLyricResult{trackFoundNoLyrics: isCreditOnlyLRC(out.Lyric)}, nil
 }
 
 // ---- QQ音乐逐字(QRC)歌词 ----
@@ -1613,20 +1650,39 @@ func qqMusicuPost(ctx context.Context, method, module string, param any, comm ma
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://u.y.qq.com/cgi-bin/musicu.fcg", bytes.NewReader(raw))
+	var data json.RawMessage
+	var apiErr error
+	err = qqTryHosts(ctx, qqMusicuHosts, func(host string) error {
+		d, answered, err := qqMusicuPostAt(ctx, host, raw)
+		if !answered {
+			return err
+		}
+		data, apiErr = d, err
+		return nil
+	})
 	if err != nil {
 		return nil, err
+	}
+	return data, apiErr
+}
+
+// qqMusicuPostAt 发到一个网关主机。answered=false 是没问成(传输 / 非 200 / 解不开),调用方换下一个
+// 主机;answered=true 时网关答了,err 非 nil 是它回的业务错误码(比如查无此歌),换主机也是同一个答案。
+func qqMusicuPostAt(ctx context.Context, host string, raw []byte) (data json.RawMessage, answered bool, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+host+"/cgi-bin/musicu.fcg", bytes.NewReader(raw))
+	if err != nil {
+		return nil, false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", "tmeLoginType=-1;")
 	req.Header.Set("User-Agent", "okhttp/3.14.9")
 	resp, err := doHTTPTracked(lyricHTTPClient(8*time.Second), req)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
+		return nil, false, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	var out struct {
 		Code    int `json:"code"`
@@ -1636,12 +1692,12 @@ func qqMusicuPost(ctx context.Context, method, module string, param any, comm ma
 		} `json:"request"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if out.Code != 0 || out.Request.Code != 0 {
-		return nil, fmt.Errorf("qq musicu api error: code=%d request.code=%d", out.Code, out.Request.Code)
+		return nil, true, fmt.Errorf("qq musicu api error: code=%d request.code=%d", out.Code, out.Request.Code)
 	}
-	return out.Request.Data, nil
+	return out.Request.Data, true, nil
 }
 
 // qqEnsureSession 懒加载一个匿名 session,失败就返回零值(调用方据此放弃这次 QRC
@@ -1711,37 +1767,11 @@ func qqSongMetaByMid(ctx context.Context, mid string) qqSongMeta {
 		return v
 	}
 	qqSongMetaMu.Unlock()
-
-	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
+	d, ok := qqSongDetail(ctx, mid)
+	if !ok || d.id == 0 {
 		return qqSongMeta{}
 	}
-	req.Header.Set("Referer", "https://y.qq.com/")
-	req.Header.Set("User-Agent", qqUA)
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return qqSongMeta{}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return qqSongMeta{}
-	}
-	var out struct {
-		Data []struct {
-			ID       int64   `json:"id"`
-			Interval float64 `json:"interval"`
-			Language int     `json:"language"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 || out.Data[0].ID == 0 {
-		return qqSongMeta{}
-	}
-	m := qqSongMeta{id: out.Data[0].ID, interval: out.Data[0].Interval, language: out.Data[0].Language}
-	qqSongMetaMu.Lock()
-	qqSongMetaCache[mid] = m
-	qqSongMetaMu.Unlock()
-	return m
+	return qqSongMeta{id: d.id, interval: d.interval, language: d.language}
 }
 
 // qqCanonicalLanguage 把 fcg_play_single_song.fcg 的 language 数字字段折算成
@@ -1823,17 +1853,59 @@ func extractQRCLyricContent(xmlText string) string {
 	return html.UnescapeString(m[1])
 }
 
-var qqWordRegex = regexp.MustCompile(`([^\[\]()\n]+)\((\d+),(\d+)\)`)
-
 // qrcToYRC 把 QQ QRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。QQ 原生写法是
 // "词(词始ms,词长ms)"——词在括号前、只有两个数字;YRC 是"(词始ms,词长ms,flag)词"——
 // 标记在前、词紧跟其后、3个数字。这里做的是重排+补一个恒为 0 的 flag,行头
 // [行始,行长] 本身两边格式一致不用动。
+//
+// **按时间标记的位置切分,不去匹配词文本**。原来那版是一条正则
+// `([^\[\]()\n]+)\((\d+),(\d+)\)` 对整份正文做替换 —— 词文本的字符类把 `(` `)` 排除在外,
+// 于是**歌词里本身带括号的那个词根本匹配不上**,该词条原样留着 QRC 的两数字写法漏进 YRC。
+//
+// 现象(Adele《River Lea》的署名行,本机缓存里的真实产物):
+//
+//	(2778,463,0)Adele(3241,463,0) ((3704,463)(4167,463,0)阿(4630,463,0)黛…
+//	                              上一行:词「(」没转,留下两数字的 (3704,463)
+//
+// 后果有两层:① YRCParser 认不出那一段,逐字填色在该位置就是坏的;② 它还把前一个**空白
+// 词条**粘住 —— yrcMergeWhitespaceTokens 按三数字词条切分,切不出来就判「不用改」,于是那些
+// 空格永远归并不掉(现象是"某个字没有读条直接填满")。本机缓存实测 842 条 QQ 条目中招。
+//
+// 同一个文件里的 qrcToLineLRC 早就是对的 —— 它只删标记、不碰词文本
+// (见 TestQRCToLineLRCKeepsTextParentheses)。这里跟它对齐:词 = 两个标记之间的全部文本,
+// 括号、空格、任何字符一视同仁。
 func qrcToYRC(qrc string) string {
 	if qrc == "" {
 		return ""
 	}
-	return qqWordRegex.ReplaceAllString(qrc, "($2,$3,0)$1")
+	lines := strings.Split(qrc, "\n")
+	for i, line := range lines {
+		head := qrcLineHeadRegex.FindString(line) // "[行始,行长]",没有就是空串
+		body := line[len(head):]
+		locs := qrcWordTimingRegex.FindAllStringSubmatchIndex(body, -1)
+		if len(locs) == 0 {
+			continue // 元数据行 / 没有词计时的行原样保留
+		}
+		var b strings.Builder
+		b.WriteString(head)
+		prev := 0
+		for _, m := range locs {
+			// QRC 是"词在前、标记在后",所以这个标记对应的词是它**前面**那段文本。
+			b.WriteString("(" + body[m[2]:m[3]] + "," + body[m[4]:m[5]] + ",0)")
+			b.WriteString(body[prev:m[0]])
+			prev = m[1]
+		}
+		// 最后一个标记之后的残留:格式正常的 QRC 里没有,异常数据原样带走而不是悄悄丢掉。
+		b.WriteString(body[prev:])
+		lines[i] = b.String()
+	}
+	// 纯空白词条在**源头**就归并掉,别留给启动期那道迁移去擦。
+	// QRC 把空格作为独立计时条目,空格会占走前一个词的大部分演唱时长,悬浮窗于是"某个字
+	// 没有读条直接填满"(完整来龙去脉见 yrcwhitespace.go 头注)。musixmatch 的 richsyncToYRC
+	// 一直在源头做这件事,QQ / 酷狗这两条路却没有 —— 于是每解析一首新歌就又产生一批,靠
+	// migrateYRCWhitespaceTokens 在下次启动时擦,那道"迁移"因此跑了 39 次也收敛不了。
+	merged, _ := yrcMergeWhitespaceTokens(strings.Join(lines, "\n"))
+	return merged
 }
 
 // qqQRCResult 是 GetPlayLyricInfo 一次请求带回的三条轨道,都已归一化成 App 侧认识的
@@ -1857,23 +1929,6 @@ type qqQRCResult struct {
 // 进程重启自然再试)。
 //
 // 把同一份响应里的 trans(中文译文)/roma(罗马音)两轨也接了回来:请求体
-//
-// **按时间标记的位置切分,不去匹配词文本**。原来那版是一条正则
-// `([^\[\]()\n]+)\((\d+),(\d+)\)` 对整份正文做替换 —— 词文本的字符类把 `(` `)` 排除在外,
-// 于是**歌词里本身带括号的那个词根本匹配不上**,该词条原样留着 QRC 的两数字写法漏进 YRC。
-//
-// 现象(Adele《River Lea》的署名行,本机缓存里的真实产物):
-//
-//	(2778,463,0)Adele(3241,463,0) ((3704,463)(4167,463,0)阿(4630,463,0)黛…
-//	                              上一行:词「(」没转,留下两数字的 (3704,463)
-//
-// 后果有两层:① YRCParser 认不出那一段,逐字填色在该位置就是坏的;② 它还把前一个**空白
-// 词条**粘住 —— yrcMergeWhitespaceTokens 按三数字词条切分,切不出来就判「不用改」,于是那些
-// 空格永远归并不掉(现象是"某个字没有读条直接填满")。本机缓存实测 842 条 QQ 条目中招。
-//
-// 同一个文件里的 qrcToLineLRC 早就是对的 —— 它只删标记、不碰词文本
-// (见 TestQRCToLineLRCKeepsTextParentheses)。这里跟它对齐:词 = 两个标记之间的全部文本,
-// 括号、空格、任何字符一视同仁。
 // 从一开始就带着 roma=1/trans=1,响应却一直只解 lyric——那是接 QRC 那次刻意搁置的项
 // (见 enrich.go 候选装配处的注释)。实测四首(米津玄師 Lemon / NewJeans Ditto /
 // Taylor Swift Cruel Summer / 周杰伦 晴天):日/韩/英三首都带译文,日/韩带罗马音,中文歌
@@ -1999,8 +2054,9 @@ func attachKanaLine(lrc, kana string) string {
 // 过半带戳),不够就当没有——跟别的源的译文口径一致。
 
 var (
-	qrcLineHeadRegex   = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
-	qrcWordTimingRegex = regexp.MustCompile(`\(\d+,\d+\)`)
+	qrcLineHeadRegex = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
+	// 带捕获组:qrcToLineLRC 只拿它做删除(不读组),qrcToYRC 要用组里的词始/词长。
+	qrcWordTimingRegex = regexp.MustCompile(`\((\d+),(\d+)\)`)
 )
 
 // qqAuxiliaryLRC 把 GetPlayLyricInfo 的 trans/roma 字段(hex 密文)变成可直接进
@@ -2066,7 +2122,7 @@ func qrcToLineLRC(qrc string) string {
 		}
 		text := qrcWordTimingRegex.ReplaceAllString(line[len(m[0]):], "")
 		text = strings.Join(strings.Fields(text), " ")
-		if text == "" || text == "//" || isQQTranslationNotice(text) {
+		if text == "" || text == "//" || isTranslationNotice(text) {
 			continue
 		}
 		out = append(out, fmt.Sprintf("[%02d:%02d.%03d]%s", startMs/60000, (startMs/1000)%60, startMs%1000, text))
@@ -2088,7 +2144,7 @@ func cleanQQAuxiliaryLRC(lrc string) string {
 			continue
 		}
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(trimmed, ""))
-		if text == "" || text == "//" || isQQTranslationNotice(text) {
+		if text == "" || text == "//" || isTranslationNotice(text) {
 			continue
 		}
 		out = append(out, trimmed)
@@ -2100,10 +2156,16 @@ func isLRCOffsetTag(line string) bool {
 	return strings.HasPrefix(strings.ToLower(line), "[offset:")
 }
 
-// isQQTranslationNotice 认 QQ 音乐塞在译文轨第一行的版权声明(实测原话
-// 「QQ音乐享有本翻译作品的著作权」,挂在 [00:00.00] 上,会跟标题行对齐)。两种写法都认,
-// 但要求「著作权」一定在——别把歌词里恰好出现「QQ音乐」的句子误杀。
-func isQQTranslationNotice(text string) bool {
+// isTranslationNotice 认腾讯系(QQ音乐 / 酷狗)塞在译文轨开头的两种声明,它们挂在第一句之前的
+// 时间戳上,会被贴成标题行或第一句的译文:
+//   - 版权声明「QQ音乐享有本翻译作品的著作权」「TME享有本翻译作品的著作权」「腾讯享有本翻译作品的著作权」。
+//     要求「著作权」一定在——别把歌词里恰好出现「QQ音乐」的句子误杀。
+//   - 译者声明「以下歌词翻译由文曲大模型提供」「以下歌词翻译由微信翻译提供」。要求「歌词翻译由」
+//     与「提供」同时在。
+//
+// QQ 与酷狗两处译文轨出口、存量清洗 stripTranslationNotices 共用这一个判断,改判据三处一起生效。
+func isTranslationNotice(text string) bool {
 	return strings.Contains(text, "翻译作品的著作权") ||
-		(strings.Contains(text, "QQ音乐") && strings.Contains(text, "著作权"))
+		(strings.Contains(text, "QQ音乐") && strings.Contains(text, "著作权")) ||
+		(strings.Contains(text, "歌词翻译由") && strings.Contains(text, "提供"))
 }

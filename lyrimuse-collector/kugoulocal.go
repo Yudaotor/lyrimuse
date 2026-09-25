@@ -3,9 +3,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	neturl "net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -378,4 +383,170 @@ func lrcTimestamp(ms int) string {
 		ms = 0
 	}
 	return fmt.Sprintf("[%02d:%02d.%02d]", ms/60000, ms/1000%60, ms%1000/10)
+}
+
+// ---- 播放队列:接下来会播的几首(见 upcoming.go)----
+
+// kugouUpcomingOverride 让单测把队列库指到临时路径。空 = 用真实路径。
+var kugouUpcomingOverride string
+
+// kugouUpcomingSQL 只取拼 enrich key 用得上的那几个字段。
+//
+// 在 SQL 里 json_extract 而不是把整份 songInfo 拉回来:那个 BLOB 每行 91 个字段几 KB
+// (音质档位、商业化权益、一堆 hash),100 行就是几百 KB,而这里只要 4 个值。
+// songInfo 是 BLOB,不 cast 成 text 的话 json_extract 拿不到东西。
+const kugouUpcomingSQL = `SELECT songIndex AS i,
+  json_extract(cast(songInfo as text),'$.musicName') AS n,
+  json_extract(cast(songInfo as text),'$.albumName') AS al,
+  json_extract(cast(songInfo as text),'$.musicTime') AS d,
+  json_extract(cast(songInfo as text),'$.singerInfo') AS s,
+  json_extract(cast(songInfo as text),'$.showName') AS sn
+FROM CurrentSongList ORDER BY songIndex LIMIT 2000`
+
+// kugouUpcomingQueryTimeout:单次查询的墙钟上限,防"库被锁住 / 盘卡住"拖住主流程。
+const kugouUpcomingQueryTimeout = 4 * time.Second
+
+// kugouUpcomingPath 是另一份播放队列库,在读不到 userCurrentPlayList.plist 的队列
+// (kugouQueuePlistPath)时兜底。两种情形会走到这里:
+//
+//   - 3.3.2 之前的客户端:队列只存在这份库里。
+//   - 3.3.2 起播「首页 → 推荐」这类推荐流:plist 被清成 userLastNormalPlayList / userPreNormalPlayList
+//     两个空列表,队列改写在这份库里,每换一首重写一次(实测 15 首的推荐队列,mtime 跟着换歌走)。
+//
+// 播普通歌单时 3.3.2 起**不写**这份库,它停在上一次推荐流 / 升级前的内容上(实测一个 50 首歌单播了
+// 一整天,这份库一直是上一个歌单的 100 首)。那时 plist 读得到,走不到这里;万一走到,当前这首也
+// 不在库里,反查不到就退回同专辑预取。
+//
+// 跟 kgLyric 那条快速路径是两份东西:那个是歌词正文缓存,这个是播放队列。
+func kugouUpcomingPath() string {
+	if kugouUpcomingOverride != "" {
+		return kugouUpcomingOverride
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Library/Containers/com.kugou.mac.Music/Data/Library",
+		"Preferences/currentPlayList.sqlite")
+}
+
+// kugouUpcomingRow 是 kugouUpcomingSQL 查出来的一行。
+type kugouUpcomingRow struct {
+	Index int64   `json:"i"`
+	Name  string  `json:"n"` // "歌手 - 歌名"
+	Album string  `json:"al"`
+	Dur   float64 `json:"d"` // 秒
+	// Singer 是**再一层 JSON 字符串**(不是嵌套对象),要二次解析才拿得到 name。
+	Singer string `json:"s"`
+	// ShowName 是播放器显示、也是报给系统的那个歌名。多数跟 musicName 后半截一样,带版本说明的歌
+	// 只在这里有:实测 15 首的推荐队列里 3 首不同 —— musicName「aespa - UP」、showName「UP (KARINA Solo)」,
+	// 播放器报的是后者。拿 musicName 那半截去预解析,真播到时 key 对不上,等于白解析。
+	ShowName string `json:"sn"`
+}
+
+// kugouUpcomingArtist 从 singerInfo 那串 JSON 里取全部署名。
+//
+// 拼全部的理由同 sodaUpcomingArtist / qqUpcomingArtist。解不开就返回空串,由调用方
+// 退回用 musicName 的前缀那一半。
+func kugouUpcomingArtist(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var singers []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal([]byte(raw), &singers); err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(singers))
+	for _, s := range singers {
+		if s.Name != "" {
+			names = append(names, s.Name)
+		}
+	}
+	return strings.Join(names, "/")
+}
+
+// kugouUpcomingSplit 把 "歌手 - 歌名" 拆成两半。
+//
+// 只切**第一个** " - ":歌名本身可能还带破折号(实测 "冬妍DYan - No photo of you left to
+// survey (one day when I was twenty)"),多切一刀就把歌名截断了。没有分隔符时整串当歌名 ——
+// 那一行的歌手交给 singerInfo 出。
+func kugouUpcomingSplit(musicName string) (artist, title string) {
+	if i := strings.Index(musicName, " - "); i >= 0 {
+		return musicName[:i], musicName[i+len(" - "):]
+	}
+	return "", musicName
+}
+
+// kugouUpcoming 取酷狗接下来会播的几首。
+//
+// 先读 userCurrentPlayList.plist(当前队列 + 当前位置,见 kugouUpcomingFromPlist);那份文件
+// **读不到队列**(没有这个文件 / plutil 解不开 / 结构不认识 —— 更老的客户端,或者正在播推荐流)
+// 才退回 currentPlayList.sqlite(两种情形见 kugouUpcomingPath)。plist 读到了、只是当前这首不在里面时**不**退回 sqlite:plist 是
+// 当前队列,它说不在就是不在,拿那份过期库去反查只会预取一批不会播的歌。
+func kugouUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
+	if res, ok, handled := kugouUpcomingFromPlist(artist, title, n); handled {
+		return res, ok
+	}
+	return kugouUpcomingFromSQLite(artist, title, n)
+}
+
+// kugouUpcomingFromSQLite 从旧的播放队列库里取接下来会播的几首(兜底,见 kugouUpcoming)。
+//
+// 这份表**没有"当前播到第几首"的指针**:`currentProgress` 看着像,其实每一行都有值
+// (实测 59.7 / 180.6 / 59.6 / 120.7 …),不是当前进度 —— 别拿它定位。所以位置只能靠
+// 正在播的那首歌反查 `musicName`,查不到就退回同专辑预取(这份库停在上一个歌单是常态)。
+func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool) {
+	path := kugouUpcomingPath()
+	if path == "" {
+		return nil, false
+	}
+	if _, err := os.Stat(path); err != nil {
+		// 没装酷狗 / 没播过是常态,静默;被 TCC 拒了不是,那一种要留痕(见 localcachefs.go)。
+		noteLocalCacheDenied("kugou", path, err)
+		return nil, false
+	}
+	noteLocalCacheReadable("kugou")
+	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
+	defer cancel()
+	// mode=ro + net/url 组 URI 的理由同 queryQQLocalSongs:路径里带空格要转义,
+	// 只读快照撞上客户端写锁就直接失败、fail-soft 退回。
+	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, kugouUpcomingSQL).Output()
+	if err != nil {
+		return nil, false
+	}
+	trimmed := bytes.TrimSpace(out)
+	if len(trimmed) == 0 {
+		return nil, false // 零行时 sqlite3 -json 输出空串,不是 "[]"
+	}
+	var rows []kugouUpcomingRow
+	if err := json.Unmarshal(trimmed, &rows); err != nil {
+		return nil, false
+	}
+	want := loosenEnrichKey(artist + "|" + title)
+	pos := -1
+	tracks := make([]upcomingTrack, len(rows))
+	for i, r := range rows {
+		a, ti := kugouUpcomingSplit(r.Name)
+		if s := kugouUpcomingArtist(r.Singer); s != "" {
+			a = s
+		}
+		if pos < 0 && (loosenEnrichKey(a+"|"+ti) == want || r.ShowName != "" && loosenEnrichKey(a+"|"+r.ShowName) == want) {
+			pos = i
+		}
+		if r.ShowName != "" {
+			ti = r.ShowName
+		}
+		if ti == "" {
+			continue
+		}
+		// musicTime 本来就是秒(实测 210),别当毫秒。
+		tracks[i] = upcomingTrack{artist: a, title: ti, album: r.Album, duration: r.Dur}
+	}
+	if pos < 0 {
+		return nil, false
+	}
+	return kugouPickUpcoming("sqlite", tracks, pos, n)
 }

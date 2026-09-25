@@ -45,6 +45,12 @@
 
 typedef void (*GetClientsFn)(dispatch_queue_t, void (^)(NSArray *));
 typedef void (*GetInfoForClientFn)(void *, void *, long, dispatch_queue_t, void (^)(CFDictionaryRef));
+typedef void *(*QueueRequestCreateFn)(long, long);
+typedef void (*QueueRequestSetBoolFn)(void *, int);
+typedef void (*RequestQueueFn)(void *, void *, void *, dispatch_queue_t, void (^)(void *, CFErrorRef));
+typedef CFArrayRef (*QueueCopyItemsFn)(void *);
+typedef CFDictionaryRef (*ItemCopyInfoFn)(void *);
+typedef CFStringRef (*ItemGetIdentifierFn)(void *);
 
 /// 第三个参数是"要不要连封面数据一起给"的开关(实测:0 只给 ArtworkIdentifier / MIMEType /
 /// 原图尺寸,≥1 才附 `ArtworkData`)。⚠️ 带上封面这一趟明显更贵(一份 JPEG 走 base64 过 JSON),
@@ -108,11 +114,51 @@ static void emit(id obj) {
     fflush(stdout);
 }
 
+/// 这个 client 的待播队列:当前这首 + 之后 `count` 首。拿不到返回 nil。
+static NSDictionary *playbackQueue(void *h, id client, long count) {
+    QueueRequestCreateFn create = (QueueRequestCreateFn)dlsym(h, "MRPlaybackQueueRequestCreate");
+    QueueRequestSetBoolFn setMeta = (QueueRequestSetBoolFn)dlsym(h, "MRPlaybackQueueRequestSetIncludeMetadata");
+    RequestQueueFn request = (RequestQueueFn)dlsym(h, "MRMediaRemoteRequestNowPlayingPlaybackQueue");
+    QueueCopyItemsFn copyItems = (QueueCopyItemsFn)dlsym(h, "MRPlaybackQueueCopyContentItems");
+    ItemCopyInfoFn copyInfo = (ItemCopyInfoFn)dlsym(h, "MRContentItemCopyNowPlayingInfo");
+    ItemGetIdentifierFn getID = (ItemGetIdentifierFn)dlsym(h, "MRContentItemGetIdentifier");
+    if (!create || !setMeta || !request || !copyItems || !copyInfo) return nil;
+    void *req = create(0, count + 1);
+    if (!req) return nil;
+    setMeta(req, 1);
+    dispatch_semaphore_t s = dispatch_semaphore_create(0);
+    __block void *pq = NULL;
+    request(req, (__bridge void *)client, NULL, dispatch_get_global_queue(0, 0), ^(void *q, CFErrorRef err) {
+        if (q) pq = (void *)CFRetain(q);
+        dispatch_semaphore_signal(s);
+    });
+    CFRelease(req);
+    if (dispatch_semaphore_wait(s, dispatch_time(DISPATCH_TIME_NOW, 3LL * NSEC_PER_SEC)) != 0) return nil;
+    if (!pq) return nil;
+    NSArray *contentItems = (__bridge_transfer NSArray *)copyItems(pq);
+    CFRelease(pq);
+    NSMutableArray *items = [NSMutableArray array];
+    for (id item in contentItems) {
+        NSDictionary *info = (__bridge_transfer NSDictionary *)copyInfo((__bridge void *)item);
+        NSMutableDictionary *one = [NSMutableDictionary dictionary];
+        if ([info[K("Title")] isKindOfClass:NSString.class]) one[@"title"] = info[K("Title")];
+        if ([info[K("Artist")] isKindOfClass:NSString.class]) one[@"artist"] = info[K("Artist")];
+        if ([info[K("Album")] isKindOfClass:NSString.class]) one[@"album"] = info[K("Album")];
+        if ([info[K("Duration")] isKindOfClass:NSNumber.class]) one[@"duration"] = info[K("Duration")];
+        NSString *identifier = getID ? (__bridge NSString *)getID((__bridge void *)item) : nil;
+        if ([identifier isKindOfClass:NSString.class]) one[@"identifier"] = identifier;
+        [items addObject:one];
+    }
+    return @{@"items": items};
+}
+
 void nowplaying_clients(void *my_perl, void *cv) {
     @autoreleasepool {
         const char *want = getenv("LYRIMUSE_NOWPLAYING_BUNDLE");
         const char *artEnv = getenv("LYRIMUSE_NOWPLAYING_ARTWORK");
         const long artFlag = (artEnv && artEnv[0] == '1') ? kIncludeArtwork : kNoArtwork;
+        const char *queueEnv = getenv("LYRIMUSE_NOWPLAYING_QUEUE");
+        const long queueCount = queueEnv ? atol(queueEnv) : 0;
         void *h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
         if (!h) { emit(nil); return; }
         GetClientsFn getClients = (GetClientsFn)dlsym(h, "MRMediaRemoteGetNowPlayingClients");
@@ -134,6 +180,10 @@ void nowplaying_clients(void *my_perl, void *cv) {
             id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
             NSString *bid = [bidObj isKindOfClass:NSString.class] ? bidObj : nil;
             if (want && (!bid || strcmp(bid.UTF8String, want) != 0)) continue;
+            if (want && queueCount > 0) {
+                emit(playbackQueue(h, c, queueCount));
+                return;
+            }
 
             dispatch_semaphore_t s2 = dispatch_semaphore_create(0);
             __block NSDictionary *info = nil;

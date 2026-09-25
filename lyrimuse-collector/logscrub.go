@@ -121,6 +121,11 @@ func rememberConfigSecrets(c *config) {
 	if u, err := url.Parse(c.NotificationWebhookURL); err == nil {
 		registerSecretsMinLen(minPathSecretLen, strings.Split(u.Path, "/")...)
 	}
+	// 地址栏填的不是 URL(Telegram 允许只填机器人 Token，形如 123456789:AAH…)时整段都是凭据。
+	// 这种写法 url.Parse 会直接报错，上面那条登记不上。
+	if raw := strings.TrimSpace(c.NotificationWebhookURL); raw != "" && !strings.Contains(raw, "://") {
+		registerSecrets(raw)
+	}
 }
 
 // secretScrubber 包在 log 的输出 Writer 外面。

@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -259,4 +261,255 @@ func qqLocalMatch(ctx context.Context, artist, title, album string, durationSecs
 	// 身份来自客户端曲库记下的那个 mid,不经搜索 —— 同源加权的准入条件。
 	m.fromLocalLibrary = true
 	return m, true
+}
+
+// ---- 播放队列:接下来会播的几首(见 upcoming.go)----
+
+// qqUpcomingOverride 让单测把归档指到临时路径。空 = 用真实路径。
+var qqUpcomingOverride string
+
+// qqUpcomingMaxBytes 是 plutil 输出的大小上限。本机 13 首的队列转出来 132KB,
+// 16MB 是防"格式变了 / 队列被塞进上万首"时把内存吃光,不是格式约束。
+const qqUpcomingMaxBytes = 16 << 20
+
+// qqUpcomingPath 是 QQ 音乐客户端的当前播放列表归档(NSKeyedArchiver bplist)。
+// 跟 qqLocalDBPath 是两份完全不同的东西:那个是曲库(sqlite,存"这台机器上有哪些歌"),
+// 这个是**此刻的播放列表**。它只在开始播一个列表时写一次,之后换歌不重写 —— 顺序播放、
+// 随机播放都实测过,LastPlayingIndex 一直停在开播那一首。同目录的 normalPlayingList.archive
+// 与它逐字节相同,随机播放时也一样,所以打乱后的顺序不在这两份文件里。
+func qqUpcomingPath() string {
+	if qqUpcomingOverride != "" {
+		return qqUpcomingOverride
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Library/Containers/com.tencent.QQMusicMac/Data/Library",
+		"Application Support/QQMusicMac/iTemp/PlayingList.archive")
+}
+
+// qqDeref 把 NSKeyedArchiver 的对象引用解成实际对象。不是引用就原样返回 ——
+// 归档里同一个字段可能是 UID 也可能是立即值(实测 LastPlayingIndex 就是直接的整数)。
+func qqDeref(objs []any, v any) any {
+	u, ok := v.(plistUID)
+	if !ok {
+		return v
+	}
+	if int(u) < 0 || int(u) >= len(objs) {
+		return nil
+	}
+	return objs[u]
+}
+
+// qqPlistField 取一个字典字段并解引用。
+func qqPlistField(objs []any, obj any, key string) any {
+	m, ok := obj.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return qqDeref(objs, m[key])
+}
+
+// qqUpcomingArtist 把一条曲目的全部署名拼成一串。
+//
+// 拼**全部**的理由同 sodaUpcomingArtist:少了后面几位,loosenEnrichKey 折平分隔符
+// 之后仍然对不上播放器报的完整串,预取好的条目命中不了。singerList 是权威来源
+// (NSArray,每个成员一个 name);它空的时候才退回 singerInfo.name 那个主歌手。
+func qqUpcomingArtist(objs []any, song any) string {
+	var names []string
+	if list, ok := qqPlistField(objs, song, "singerList").(map[string]any); ok {
+		if arr, ok := qqDeref(objs, list["NS.objects"]).([]any); ok {
+			for _, it := range arr {
+				if s, ok := qqPlistField(objs, qqDeref(objs, it), "name").(string); ok && s != "" {
+					names = append(names, s)
+				}
+			}
+		}
+	}
+	if len(names) == 0 {
+		if s, ok := qqPlistField(objs, qqPlistField(objs, song, "singerInfo"), "name").(string); ok {
+			return s
+		}
+		return ""
+	}
+	return strings.Join(names, "/")
+}
+
+// qqPlayOrderLast 记同一份播放列表里上一次看到的位置,用来从相邻两次换歌推断顺序 / 随机(见 queueorder.go)。
+//
+// 播放模式 QQ 只存在加密的 MMKV 里(iData/),读不到;系统媒体接口上也没有(它注册的遥控命令不带
+// 随机 / 循环信息)。列表身份 = 归档路径 + mtime + 曲目数:归档只在开播时写,mtime 变了就是换了列表。
+var (
+	qqPlayOrderMu   sync.Mutex
+	qqPlayOrderLast queueOrder
+)
+
+// qqObservePosition 记下这一次的位置,返回此刻是否按随机处理。
+func qqObservePosition(list string, pos int) (shuffled bool) {
+	qqPlayOrderMu.Lock()
+	defer qqPlayOrderMu.Unlock()
+	prevPos := qqPlayOrderLast.pos
+	shuffled, flipped := qqPlayOrderLast.observe(list, pos)
+	if flipped {
+		log.Printf("qq upcoming: moved from position %d to %d in the play list, treating playback as shuffled and prefetching from the whole list", prevPos, pos)
+	}
+	return shuffled
+}
+
+// qqUpcoming 从 QQ 音乐的播放列表归档里取接下来会播的几首。
+//
+// 当前这首先看 LastPlayingIndex 那一条,对不上再在整份列表里按歌名歌手找(归档只在开播时写,
+// 换过歌之后 LastPlayingIndex 必然过期)。列表里找不到 = 这份文件是上一次播放留下的(用户切去
+// 别的播放器听、或者刚启动还没播),返回 ok=false,让调用方退回同专辑预取。
+// 推断为随机播放时交出的是「可能随机到的」那一批(见 queueShuffleWholeListMax 头注),n 不适用;
+// 那一批里全都解析过了也返回 ok=true(交给队列这一层处理过了,不必再退回同专辑预取)。
+// qqPlayingList 是解开的播放列表归档,以及此刻在播的这首在里面的位置。
+type qqPlayingList struct {
+	path  string
+	objs  []any
+	items []any
+	pos   int
+}
+
+// qqLoadPlayingList 读归档并找到当前这首:先看 LastPlayingIndex 那一条,对不上再在整份列表里按歌名歌手找。
+// 列表里没有这首(归档是上一次播放留下的)或读不动都返回 ok=false。
+func qqLoadPlayingList(artist, title string) (qqPlayingList, bool) {
+	path := qqUpcomingPath()
+	if path == "" {
+		return qqPlayingList{}, false
+	}
+	// 零外部依赖:用系统自带的 plutil 把 bplist 转成 XML 再解,同这个文件里 exec
+	// /usr/bin/sqlite3 的路数。 只能转 xml1,json 会因为 UID 直接失败,见 plistxml.go。
+	ctx, cancel := context.WithTimeout(context.Background(), qqLocalQueryTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/bin/plutil", "-convert", "xml1", "-o", "-", path).Output()
+	if err != nil {
+		// plutil 对读不到的文件是退出码非零 + stderr,拿不到 fs.ErrPermission。先 Stat 一次
+		// 把"被 TCC 拒"这一种单独认出来 —— 它不是常态,要在设置页留痕(见 localcachefs.go)。
+		if _, statErr := os.Stat(path); statErr != nil {
+			noteLocalCacheDenied("qq", path, statErr)
+		}
+		return qqPlayingList{}, false
+	}
+	noteLocalCacheReadable("qq")
+	if len(out) > qqUpcomingMaxBytes {
+		return qqPlayingList{}, false
+	}
+	root, err := parsePlistXML(out)
+	if err != nil {
+		return qqPlayingList{}, false
+	}
+	rootMap, ok := root.(map[string]any)
+	if !ok {
+		return qqPlayingList{}, false
+	}
+	objs, _ := rootMap["$objects"].([]any)
+	top, _ := rootMap["$top"].(map[string]any)
+	if len(objs) == 0 || top == nil {
+		return qqPlayingList{}, false
+	}
+	items, ok := qqPlistField(objs, qqPlistField(objs, qqDeref(objs, top["PlayingList"]), "ListData"), "NS.objects").([]any)
+	if !ok {
+		return qqPlayingList{}, false
+	}
+	want := loosenEnrichKey(artist + "|" + title)
+	isCurrent := func(i int) bool {
+		song := qqDeref(objs, items[i])
+		name, _ := qqPlistField(objs, song, "songName").(string)
+		return loosenEnrichKey(qqUpcomingArtist(objs, song)+"|"+name) == want
+	}
+	pos := -1
+	if idx, ok := qqDeref(objs, top["LastPlayingIndex"]).(int64); ok && idx >= 0 && int(idx) < len(items) && isCurrent(int(idx)) {
+		pos = int(idx)
+	} else {
+		for i := range items {
+			if isCurrent(i) {
+				pos = i
+				break
+			}
+		}
+	}
+	if pos < 0 {
+		return qqPlayingList{}, false // 列表里没有此刻在播的这首:归档是上一次播放留下的
+	}
+	return qqPlayingList{path: path, objs: objs, items: items, pos: pos}, true
+}
+
+func qqUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
+	pl, ok := qqLoadPlayingList(artist, title)
+	if !ok {
+		return nil, false
+	}
+	path, objs, items, pos := pl.path, pl.objs, pl.items, pl.pos
+	list := ""
+	if st, err := os.Stat(path); err == nil {
+		list = fmt.Sprintf("%s/%d/%d", path, st.ModTime().UnixNano(), len(items))
+	}
+	if qqObservePosition(list, pos) {
+		return qqShuffleCandidates(objs, items, pos), true
+	}
+	res := make([]upcomingTrack, 0, n)
+	for i := pos + 1; i < len(items) && len(res) < n; i++ {
+		if t, ok := qqTrackAt(objs, items, i); ok {
+			res = append(res, t)
+		}
+	}
+	return res, len(res) > 0
+}
+
+// qqShuffleCandidates 是随机播放时交出去预解析的那一批,规则见 queueShuffleWholeListMax 头注。
+func qqShuffleCandidates(objs []any, items []any, pos int) []upcomingTrack {
+	return shuffleCandidates(len(items), pos, func(i int) (upcomingTrack, bool) {
+		return qqTrackAt(objs, items, i)
+	})
+}
+
+// qqAlbumTracks 是 QQ 音乐的同专辑兜底:在播放列表归档里找到当前这首,拿它的 albumMid 问 QQ 自己的
+// 专辑曲目表(qqAlbumSongs,按 albumMid 缓存)。曲目名与全部歌手是 QQ 自己的写法,跟 QQ 播放器报的一致,
+// 写进 enrich key 不会跟真播到那一刻对不上。归档里没有这首、没有 albumMid、接口失败都返回 ok=false,
+// 由 albumTracks 退回网易云那条。
+func qqAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
+	pl, ok := qqLoadPlayingList(artist, title)
+	if !ok {
+		return nil, false
+	}
+	mid, _ := qqPlistField(pl.objs, qqPlistField(pl.objs, qqDeref(pl.objs, pl.items[pl.pos]), "albumInfo"), "albumMid").(string)
+	if mid == "" {
+		return nil, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	songs, err := qqAlbumSongs(ctx, mid)
+	if err != nil || len(songs) == 0 {
+		return nil, false
+	}
+	tracks := make([]albumTrack, 0, len(songs))
+	for _, s := range songs {
+		singers := s.singers
+		if len(singers) == 0 && s.singer != "" {
+			singers = []string{s.singer}
+		}
+		tracks = append(tracks, albumTrack{title: s.name, artist: strings.Join(singers, "/"), duration: s.interval})
+	}
+	log.Printf("album prefetch: %q from qq album %s (%d tracks)", album, mid, len(tracks))
+	return tracks, true
+}
+
+// qqTrackAt 取列表第 i 首;没有歌名的条目返回 ok=false。
+func qqTrackAt(objs []any, items []any, i int) (upcomingTrack, bool) {
+	song := qqDeref(objs, items[i])
+	name, _ := qqPlistField(objs, song, "songName").(string)
+	if name == "" {
+		return upcomingTrack{}, false
+	}
+	album, _ := qqPlistField(objs, qqPlistField(objs, song, "albumInfo"), "name").(string)
+	// song_Duration 是秒(实测 214),不是毫秒 —— 跟汽水那边相反,别照抄。
+	dur, _ := qqPlistField(objs, song, "song_Duration").(float64)
+	return upcomingTrack{
+		artist:   qqUpcomingArtist(objs, song),
+		title:    name,
+		album:    album,
+		duration: dur,
+	}, true
 }

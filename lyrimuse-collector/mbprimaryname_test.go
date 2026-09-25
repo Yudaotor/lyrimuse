@@ -33,7 +33,7 @@ func TestMBAliasCandidatesForRetry(t *testing.T) {
 		want    []string
 	}{
 		{
-			name:    "本名标签 → 换成艺名主名+其它同类型别名(真实案例)",
+			name:    "本名标签 → 换成艺名主名+其它同类型别名",
 			primary: "The Weeknd", aliases: weeknd, raw: "Abel Tesfaye",
 			want: []string{"The Weeknd", "አቤል መኮንን ተስፋዬ", "ザ・ウィークエンド"},
 		},

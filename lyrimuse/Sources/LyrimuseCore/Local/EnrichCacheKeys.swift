@@ -7,36 +7,6 @@ import Foundation
 // CollectorControl/PlaybackCoordinator/L10n,lyrimuse-selftest 只依赖 LyrimuseCore、跨
 // target 一行都测不到它。把确定性的纯换算下沉到这里,才能在 selftest 里对着 collector 的
 // 真实行为写断言(见 main.swift 里对应分节)。
-// 「歌词管理」写回缓存文件时的合并规则。
-//
-// 抽成纯函数放在这里(而不是留在 EnrichCacheStore 里)只有一个理由:那个类是 @MainActor、
-// 直接读写磁盘,测不了;而这段逻辑一旦错,代价是**静默丢用户的歌词数据**,必须能测。
-public enum EnrichCacheMerge {
-    /// 把用户在窗口里做的改动,合到**盘上此刻的内容**之上。
-    ///
-    /// 「歌词管理」是个可以一直开着的窗口,而 collector 在窗口开着期间会持续往同一个文件写:
-    /// 新歌是新增 key,给已有歌补机翻译文/逐字时间轴/封面则是**原地更新**。窗口里的内存快照
-    /// 只在开窗和点「刷新」时更新,所以整份覆盖写会把这期间 collector 写的东西全部回滚。
-    ///
-    /// - Parameters:
-    ///   - disk: 写盘前重新读到的磁盘内容(权威底稿)。
-    ///   - memory: 窗口里的内存快照。
-    ///   - edited: 用户明确编辑过的 key —— 以内存为准。在内存里已不存在则表示编辑后又删了。
-    ///   - deleted: 用户明确删除的 key —— 即便盘上还在也要删掉。
-    public static func merge(
-        disk: [String: [String: Any]],
-        memory: [String: [String: Any]],
-        edited: Set<String>,
-        deleted: Set<String>
-    ) -> [String: [String: Any]] {
-        var out = disk
-        for k in edited {
-            if let v = memory[k] { out[k] = v } else { out.removeValue(forKey: k) }
-        }
-        for k in deleted { out.removeValue(forKey: k) }
-        return out
-    }
-}
 
 public enum EnrichCacheKeys {
     // 跟 collector/lyricsexport.go 的同名变量逐一对应。
@@ -67,51 +37,59 @@ public enum EnrichCacheKeys {
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
     ]
 
-    private static let openBrackets: Set<Character> = ["（", "(", "[", "【"]
-    ///
-    /// 跟 Go 那条正则 `\s*[（(\[【]([^）)\]】]*)[）)\]】]\s*$` 的最左匹配等价:结尾闭括号往前、
-    /// 一直到上一个闭括号为止,取**最靠左**的开括号(括号不配对时不是离结尾最近的那个)。
-    private static let closeBrackets: Set<Character> = ["）", ")", "]", "】"]
+    private static let openBrackets: Set<Unicode.Scalar> = ["（", "(", "[", "【"]
+    private static let closeBrackets: Set<Unicode.Scalar> = ["）", ")", "]", "】"]
+
+    // 下面几个镜像 Go 的函数一律按 Unicode 标量处理,空白/大小写用 GoStringSemantics,理由见那边头注。
+    // 两侧必须逐字节一致,lyrimuse-selftest 与 docs 08 章「宽松匹配兜底」那条有对拍方法。
 
     /// collector 的 cleanMediaTag 的 Swift 版:各种不换行/全角空格折成普通空格,零宽字符
     /// 删掉,连续空白(Go `unicode.IsSpace` 口径)折成一个并去掉首尾。
     public static func cleanTag(_ s: String) -> String {
-        let mapped = s.map { c -> Character? in
-            switch c {
-            case "\u{00a0}", "\u{2007}", "\u{202f}", "\u{3000}": return " "
-            case "\u{200b}", "\u{200c}", "\u{200d}", "\u{feff}": return nil
-            default: return c
+        var out = String.UnicodeScalarView()
+        var pendingSpace = false
+        for u in s.unicodeScalars {
+            switch u {
+            case "\u{200b}", "\u{200c}", "\u{200d}", "\u{feff}": continue
+            default: break
             }
-        }.compactMap { $0 }
-        return String(mapped).split(separator: " ", omittingEmptySubsequences: true)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            if GoStringSemantics.isSpace(u) {
+                pendingSpace = !out.isEmpty
+                continue
+            }
+            if pendingSpace {
+                out.append(" ")
+                pendingSpace = false
+            }
+            out.append(u)
+        }
+        return String(out)
     }
 
     /// 反复剥掉歌名结尾的译名括号,碰到版本标记就停手;剥到空串则整个放弃(有些曲目的歌名
     /// 本身就是一对括号,比如 `(Interlude)`)。只看**结尾**那一组括号,中间的不动。
+    ///
+    /// 跟 Go 那条正则 `\s*[（(\[【]([^）)\]】]*)[）)\]】]\s*$` 的最左匹配等价:结尾闭括号往前、
+    /// 一直到上一个闭括号为止,取**最靠左**的开括号(括号不配对时不是离结尾最近的那个)。
     public static func normalizedTitle(_ title: String) -> String {
-        var t = cleanTag(title)
+        var t = Array(cleanTag(title).unicodeScalars)
+        func string(_ scalars: ArraySlice<Unicode.Scalar>) -> String {
+            String(String.UnicodeScalarView(scalars))
+        }
         while true {
-            let trimmed = t.trimmingCharacters(in: .whitespaces)
-            guard let last = trimmed.last, closeBrackets.contains(last) else { return t }
-            // 往回找最近的开括号;中间不能再夹别的闭括号(跟 Go 那条正则的 [^）)\]】]* 等价)。
-            var idx = trimmed.index(before: trimmed.endIndex)
-            var openIdx: String.Index?
-            while idx > trimmed.startIndex {
-                idx = trimmed.index(before: idx)
-                let c = trimmed[idx]
-                if closeBrackets.contains(c) { return t }
-                if openBrackets.contains(c) { openIdx = idx; break }
+            guard let last = t.last, closeBrackets.contains(last) else { return string(t[...]) }
+            var openIdx: Int?
+            var k = t.count - 2
+            while k >= 0, !closeBrackets.contains(t[k]) {
+                if openBrackets.contains(t[k]) { openIdx = k }
+                k -= 1
             }
-            guard let openIdx else { return t }
-            let inner = String(trimmed[trimmed.index(after: openIdx)..<trimmed.index(before: trimmed.endIndex)])
-                .lowercased()
-            if versionWords.contains(where: { inner.contains($0) }) { return t }
-            let head = String(trimmed[trimmed.startIndex..<openIdx])
-                .trimmingCharacters(in: .whitespaces)
-            if head.isEmpty { return t }
-            t = head
+            guard let openIdx else { return string(t[...]) }
+            let inner = GoStringSemantics.toLower(string(t[(openIdx + 1)..<(t.count - 1)]))
+            if versionWords.contains(where: { GoStringSemantics.contains(inner, $0) }) { return string(t[...]) }
+            let head = GoStringSemantics.trimSpace(string(t[..<openIdx]))
+            if head.isEmpty { return string(t[...]) }
+            t = Array(head.unicodeScalars)
         }
     }
 
@@ -130,11 +108,15 @@ public enum EnrichCacheKeys {
     /// 上面那个函数不加长度上限的版本,只用来算出"这个 key 在长度上限生效前会落到的
     /// 文件名",好在删除时把那份存量残留一起删掉。别拿它去拼新文件名。
     public static func sanitizeFilenameUntruncated(_ key: String) -> String {
-        var name = key.replacingOccurrences(of: "|", with: " - ")
-        for c in ["/", ":", "*", "?", "\"", "<", ">", "\\"] {
-            name = name.replacingOccurrences(of: c, with: "_")
+        var name = String.UnicodeScalarView()
+        for u in key.unicodeScalars {
+            switch u {
+            case "|": name.append(contentsOf: " - ".unicodeScalars)
+            case "/", ":", "*", "?", "\"", "<", ">", "\\": name.append("_")
+            default: name.append(u)
+            }
         }
-        return name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return GoStringSemantics.trimSpace(String(name))
     }
 
     /// 文件名 base(不含 .lrc 等后缀)的字节上限。
@@ -157,7 +139,7 @@ public enum EnrichCacheKeys {
         // UTF-8 续字节形如 10xxxxxx,往前退到字符首字节。
         while cut > 0, bytes[cut] & 0xC0 == 0x80 { cut -= 1 }
         let head = String(decoding: bytes[0..<cut], as: UTF8.self)
-        return head.trimmingCharacters(in: .whitespacesAndNewlines)
+        return GoStringSemantics.trimSpace(head)
     }
 
     // CRC-32(IEEE 802.3,反射多项式 0xEDB88320)——必须跟 Go 的 hash/crc32.ChecksumIEEE
@@ -193,33 +175,6 @@ public enum EnrichCacheKeys {
         return String(format: "%@~%06x", sanitizeFilename(key), sum)
     }
 
-    // 一个 key 在 lyrics/ 目录下**可能**占用的全部文件名:普通名 4 个 + 带消歧后缀 4 个。
-    //
-    // 为什么两种形态都要列出来、而不是先判断"这个 key 到底在不在碰撞组里":判断需要拿到
-    // 全部 key 才能分组,而删除场景下同时列出两种形态一样精确——带后缀的那个名字里含
-    // crc32(key),是这个 key 独有的,删它绝不可能误删碰撞组里别人的文件(要误删得同时满足
-    // sanitize 结果相同、crc32 低 24 位也相同)。删一个本来就不存在的路径是无害的空操作。
-    //
-    // ⚠️ 实测排查坐实的真实 bug 就出在这里:改动之前只拼普通名那 4 个,而本机
-    // 852 条缓存里有 219 条(25.7%)的导出文件带消歧后缀,删除时漏删 → collector 重启
-    // (删除本身就会触发一次重启)跑 importLyricsFromFiles 时又从这些残留文件把条目
-    // 原样导回来,表现是"删了一条,过一会儿它自己回来了"。collector 是按文件**头部标签**
-    // ([ar:]/[ti:]/[al:],见 lyricsimport.go:192)重建 key 的,不看文件名,所以文件名带不带
-    // 后缀都拦不住复活。
-    public static func exportedFileNames(forKey key: String) -> [String] {
-        let plain = sanitizeFilename(key)
-        let hashed = disambiguatedName(forKey: key)
-        var names = lyricsFileSuffixes.map { plain + $0 } + lyricsFileSuffixes.map { hashed + $0 }
-        // 长度上限生效之前导出的那份存量文件名也要列进来。它只在 key 长到会被截断时才
-        // 跟 plain 不同,所以正常条目这里一个名字都不会多出来。漏掉它的后果跟漏掉消歧名
-        // 一样:collector 重启会按文件头部标签把条目导回来。
-        let untruncated = sanitizeFilenameUntruncated(key)
-        if untruncated != plain {
-            names += lyricsFileSuffixes.map { untruncated + $0 }
-        }
-        return names
-    }
-
     // 批量删除真正要落地的 key 清单:选中集合跟"当前缓存里确实存在的 key"求交集。
     //
     // 选中集合里出现已经不存在的 key 是正常的、不是异常:List 的 selection 是纯 UI 状态,
@@ -249,15 +204,15 @@ public enum EnrichCacheKeys {
     /// 合 credit 的分隔符,跟 collector 的 `isArtistCreditSep`(match.go)同一份。
     /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 实测:
     /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。
-    private static let creditSeparators: Set<Character> = ["/", "、", "&", ",", "，"]
+    private static let creditSeparators: Set<Unicode.Scalar> = ["/", "、", "&", ",", "，"]
 
     public static func looseKey(_ key: String) -> String {
-        let simplified = NSMutableString(string: key) as CFMutableString
-        CFStringTransform(simplified, nil, "Hant-Hans" as CFString, false)
-        let folded = String((simplified as String).map { creditSeparators.contains($0) ? "&" : $0 })
-        return folded
-            .replacingOccurrences(of: " ", with: "")
-            .lowercased()
+        var out = String.UnicodeScalarView()
+        for u in OpenCCT2S.toSimplified(key).unicodeScalars {
+            if u == " " { continue }
+            out.append(creditSeparators.contains(u) ? "&" : GoStringSemantics.toLower(u))
+        }
+        return String(out)
     }
 
 }

@@ -60,7 +60,7 @@ const (
 type musixmatchResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
-	tr  string // 译文(逐行 LRC),语言取决于调用时传入的 features.LyricsTranslationLanguage,没有则空串
+	tr  string // 译文(逐行 LRC),语言取决于调用时传入的 features().LyricsTranslationLanguage,没有则空串
 	// title/artist/album/cover 是 Musixmatch 曲库里这首歌实际匹配到的信息——纯粹给
 	// "搜索候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自 track.search 响应本身
 	// (本来就已经查到,只是原来没往外传)。cover 用 500x500 这档,跟网易云封面挑的
@@ -957,7 +957,8 @@ func musixmatchTranslationLRC(ctx context.Context, trackID int64, originalLRC, l
 	if json.Unmarshal(body, &out) != nil || len(out.Message.Body.TranslationsList) == 0 {
 		return ""
 	}
-	tr := buildTranslatedLRC(originalLRC, out.Message.Body.TranslationsList)
+	// 原文是中文时它的「中文译文」常常只是繁简转写,见 dropScriptVariantLines。
+	tr := dropScriptVariantLines(originalLRC, buildTranslatedLRC(originalLRC, out.Message.Body.TranslationsList))
 	if !isTimedLRC(tr) {
 		return ""
 	}

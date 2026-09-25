@@ -297,8 +297,7 @@ public enum YouTubeMusicAdSkipper {
     /// 一颗按下去只换来「还不能跳过」的键比没有更糟。调用方在 nil 之后照常重试(见 `gateRetryDelay`),
     /// 偶发的一次失败不会让这条广告剩下的时间都没有键。
     public static func showsSkipButton(_ state: Skippability?) -> Bool {
-        guard let state else { return true }
-        return state == .ready
+        state == .ready
     }
 
     /// 广告刚开头**先快探几拍**的轮数与间隔。
@@ -324,8 +323,9 @@ public enum YouTubeMusicAdSkipper {
     /// `YouTubeMusicAdProbe.adRefreshInterval` 同一个节奏。`.ready` 也继续心跳 —— 一次插播可能连放
     /// 两条(徽章 1/2 到 2/2),第一条给跳、第二条不给,不盯着就会留一枚指向不存在的键的提示。
     /// 上限 20 秒挡住页面给出离谱数字。
-    public static func gateRetryDelay(after state: Skippability, round: Int = .max) -> TimeInterval {
-        switch state {
+    /// nil(脚本没跑成)按 `.never` 的节奏重试:开头快探,之后 5 秒心跳。
+    public static func gateRetryDelay(after state: Skippability?, round: Int = .max) -> TimeInterval {
+        switch state ?? .never {
         case .after(let seconds): return min(max(Double(seconds), 1), 20) + 0.4
         case .never: return round < fastStartRounds ? fastStartDelay : YouTubeMusicAdProbe.adRefreshInterval
         case .ready: return YouTubeMusicAdProbe.adRefreshInterval
@@ -344,9 +344,42 @@ public enum YouTubeMusicAdSkipper {
     /// 两次就是这么来的(当时第二份是设置页的编辑台预览,已另行修掉)。这一份缓存让同一拍里的后来者直接
     /// 复用结果,不对浏览器多发 AppleEvent。TTL 取 1.5s:远小于 5s 心跳(不会让心跳读到陈旧值),
     /// 又足够盖住"几个实例几乎同时起跳"这一拍。
-    private static let gateCacheTTL: TimeInterval = 1.5
+    ///
+    /// 值类型、不读时钟(时刻由调用方传入),selftest 直接覆盖;共享的那一份在下面加锁持有。
+    public struct GateCache: Sendable {
+        public static let ttl: TimeInterval = 1.5
+
+        private struct Entry: Sendable {
+            let state: Skippability
+            let host: String
+            let at: Date
+        }
+        private var entry: Entry?
+
+        public init() {}
+
+        /// 同一个浏览器、TTL 以内的判定;否则 nil(调用方去真探一次)。
+        public func lookup(host: String, now: Date) -> Skippability? {
+            guard let entry, entry.host == host, now.timeIntervalSince(entry.at) < Self.ttl else { return nil }
+            return entry.state
+        }
+
+        public mutating func store(_ state: Skippability, host: String, now: Date) {
+            entry = Entry(state: state, host: host, at: now)
+        }
+
+        public mutating func invalidate() { entry = nil }
+    }
+
     private static let gateCacheLock = NSLock()
-    private static var gateCache: (state: Skippability, host: String, at: Date)?
+    nonisolated(unsafe) private static var gateCache = GateCache()
+
+    /// 插播里换到下一条广告时调:缓存里那份是上一条的判定(比如「能跳」),TTL 内会被新一条直接复用。
+    public static func invalidateGateCache() {
+        gateCacheLock.lock()
+        gateCache.invalidate()
+        gateCacheLock.unlock()
+    }
 
     /// 探一次门槛:**只跑那段只读 JS,不按键、不复核**。同步阻塞(一次 AppleEvent 往返 ~0.2s),
     /// 调用方放后台线程。nil = 脚本没跑成(不是浏览器 / 没有自动化权限 / osascript 超时或非零退出)。
@@ -362,11 +395,9 @@ public enum YouTubeMusicAdSkipper {
             return nil
         }
         gateCacheLock.lock()
-        let cached = gateCache
+        let cached = gateCache.lookup(host: host, now: Date())
         gateCacheLock.unlock()
-        if let cached, cached.host == host, Date().timeIntervalSince(cached.at) < gateCacheTTL {
-            return cached.state
-        }
+        if let cached { return cached }
         guard let out = run(js: skipJS, host: host, family: family, label: "ytmusic-skip-gate") else {
             logger.info("gate: script did not run (host \(host, privacy: .public))")
             return nil
@@ -380,7 +411,7 @@ public enum YouTubeMusicAdSkipper {
         // 按钮不会自己刷出来"时坐实:日志里一片空白,只能靠猜)。每次探一次记一行,够看清时间线。
         logger.info("gate: \(String(describing: state), privacy: .public) (host \(host, privacy: .public))")
         gateCacheLock.lock()
-        gateCache = (state, host, Date())
+        gateCache.store(state, host: host, now: Date())
         gateCacheLock.unlock()
         return state
     }

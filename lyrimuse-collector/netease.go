@@ -9,15 +9,14 @@ import (
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
-	"io"
 	"log"
 	"math"
-	"net/http"
 	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 type neteaseInfo struct {
@@ -443,25 +442,6 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 	return info
 }
 
-// neteaseSearch 发一次搜索,主端点被限流时换备用端点再试一次。
-//
-// 实测:网易云的限流是**按端点分桶**的 —— 短时间内多查几十次之后
-// /api/search/get/web 稳定回 code 405,而同一刻 /api/search/get 照常返回 200,两者的
-// 响应结构完全一致(result.songs[] 里 name/id/artists/album/duration 都在)。
-//
-// 只有一个端点的时候,一撞上限流这个源就整个哑掉,而它是唯一给译文和罗马音的源;结果还会
-// 被永久缓存(缓存没有 TTL)。多一个桶不是为了跑得更快,是为了在被限的那几分钟里仍然有
-// 一条路走通。
-func neteaseSearch(get func(string, any) error, q string, out any) error {
-	escaped := neturl.QueryEscape(q)
-	const query = "?type=1&limit=30&s="
-	err := get(neteaseSearchEndpointPrimary+query+escaped, out)
-	if err == nil {
-		return nil
-	}
-	return get(neteaseSearchEndpointFallback+query+escaped, out)
-}
-
 // isInstrumentalPlaceholderLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
 //
 // 从 isNeteasePureMusicLyric 改名成来源中立:它对 **QQ 音乐**的占位文案
@@ -652,26 +632,13 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 }
 
 func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
-	cli := lyricHTTPClient(4 * time.Second)
 	get := func(u string, v any) error {
-		if err := neteaseThrottle(ctx, u); err != nil {
-			return err
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		// 按 neteaseHosts 顺序取,只有没问成才换主机(见 neteasefallback.go)。
+		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
 		if err != nil {
 			return err
 		}
-		req.Header.Set("Referer", "https://music.163.com/")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(cli, req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("status %d", resp.StatusCode)
-		}
-		// ⚠️ 网易云限流时**照样回 HTTP 200**,把拒绝写在 body 的 code 字段里(实测
+		// 网易云限流时**照样回 HTTP 200**,把拒绝写在 body 的 code 字段里(实测
 		// 短时间内连发几十次搜索之后,/api/search/get/web 稳定返回
 		// {"result":{},"code":405},而同一刻 /api/search/get 仍然正常 —— 是按端点分桶的
 		// 应用层限流,不是封 IP)。
@@ -681,10 +648,6 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		// 而网易云是唯一提供译文和罗马音的源 —— 一次几分钟的限流,能让那段时间里解析的
 		// 歌永远缺译文。当成错误返回之后,这个源就不会被记进 LyricsSourcesSeen,
 		// needsLyricsRetry 才有机会在之后重搜(见那边的 missing 判断)。
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
 		var probe struct {
 			Code int `json:"code"`
 		}
@@ -815,15 +778,11 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		queries = nil
 	}
 	for _, q := range queries {
-		var r struct {
-			Result struct {
-				Songs []neSong `json:"songs"`
-			} `json:"result"`
-		}
-		if err := neteaseSearch(get, q, &r); err != nil {
+		songs, err := neteaseSearchSongs(get, q)
+		if err != nil {
 			continue
 		}
-		if c := pick(r.Result.Songs); c != nil {
+		if c := pick(songs); c != nil {
 			// 专辑名完全相等(albumScore=200)已是最优,直接采用;否则继续尝试下个查询看能否
 			// 更好——注意 100 分只是"宽松包含"(可能是重发/纪念版),不能当作已经够好而提前退出。
 			if chosen == nil || albumScore(c.Album.Name, album) > albumScore(chosen.Album.Name, album) {
@@ -839,7 +798,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		// 官方曲库整体缺失,任何"标题+专辑名精确匹配"的候选先天就是仿冒号,nameOnlyMatch
 		// 的"歌手名字面对不上也认"这条规则对他们而言等于直接采信仿冒号的署名。
 		if nameOnlyArtist == "" && len(artistCreditParts(artist)) < 2 && !isNeteaseImpersonatorRidden(artist) {
-			nameOnlyArtist = nameOnlyMatch(r.Result.Songs)
+			nameOnlyArtist = nameOnlyMatch(songs)
 		}
 	}
 	// 专辑锚定兜底(周杰伦《简单爱 (Live)》/《The One 周杰伦演唱会》案):
@@ -917,13 +876,30 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			} `json:"album"`
 		} `json:"songs"`
 	}
-	if err := get(fmt.Sprintf("https://music.163.com/api/song/detail?ids=[%d]", id), &dr); err == nil && len(dr.Songs) > 0 && dr.Songs[0].Album.PicURL != "" {
+	picURL := ""
+	if err := get(fmt.Sprintf("https://music.163.com/api/song/detail?ids=[%d]", id), &dr); err == nil {
+		if len(dr.Songs) > 0 {
+			picURL = dr.Songs[0].Album.PicURL
+		}
+	} else {
+		// 老详情接口没问成(或这个桶被拒):退到 v3 详情接口,另一个桶,字段名是 al / ar / dt。
+		var v3 struct {
+			Songs []struct {
+				Al struct {
+					PicURL string `json:"picUrl"`
+				} `json:"al"`
+			} `json:"songs"`
+		}
+		if err := get("https://music.163.com/api/v3/song/detail?c="+neturl.QueryEscape(fmt.Sprintf(`[{"id":%d}]`, id)), &v3); err == nil && len(v3.Songs) > 0 {
+			picURL = v3.Songs[0].Al.PicURL
+		}
+	}
+	if picURL != "" {
 		// 800 是网易云这个图床实测的真实天花板(拿两张不同封面各测一轮:
 		// 800 给 800,再往上请求 1000/1200/2000 全部被 CDN 静默钳到 800、字节数跟 800
-		// 完全相同)。原来写死 600——悬浮歌词窗口那张满幅封面卡是 820px(@2x,QQ 音乐
-		// 那次修复时量出来的),600 拉到 820 是 1.37 倍放大,跟 QQ 当初被
-		// 现象是"很模糊"同一个问题,只是没人在网易云这条上报过,顺带一起提到实际上限。
-		info.Cover = dr.Songs[0].Album.PicURL + "?param=800y800"
+		// 完全相同)。悬浮歌词窗口那张满幅封面卡是 820px(@2x),600 拉到 820 是 1.37 倍
+		// 放大,肉眼可见模糊,必须取到网易云能给的实际上限。
+		info.Cover = picURL + "?param=800y800"
 	}
 	// 带时间轴的 LRC 歌词，网页跟实时进度条同步高亮滚动。一次老接口就能拿齐原文(lrc)+
 	// 中文翻译(tlyric)+罗马音(romalrc)，三者时间轴对齐；逐字(yrc，词级)走 v1 接口、只有
@@ -931,7 +907,8 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// ok=false 表示这次取词请求**根本没成功**(限流/超时/非 200)。必须跟"成功拿到响应、
 	// 但正文是空的"分开:后者才是 TrackFoundNoLyrics 说的"平台没有歌词",前者是源故障,
 	// 报成"这首歌没词"就是把网络问题栽赃给曲库(deezer.go 头注踩过同型的坑)。
-	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic, ok bool) {
+	// authoritative=false:这份是从 v1 接口退回来的,不拿它下「这首没词」的结论(见下面 TrackFoundNoLyrics)。
+	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic, ok, authoritative bool) {
 		var r struct {
 			Lrc struct {
 				Lyric string `json:"lyric"`
@@ -946,13 +923,21 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			// 压根不在结构体里,信号在解码那一步就丢了。
 			PureMusic bool `json:"pureMusic"`
 		}
-		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err != nil {
-			return "", "", "", false, false
+		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err == nil {
+			return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
+				stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
+				stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
+				r.PureMusic, true, true
 		}
-		return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
-			stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
-			stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
-			r.PureMusic, true
+		// 老歌词接口没问成(或这个桶被拒):退到 v1 接口(另一个桶)取同一套整行 / 译文 / 罗马音。
+		// v1 没有 pureMusic 字段,纯音乐只能靠正文占位判(isInstrumentalPlaceholderLyric)。
+		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric/v1?id=%d&lv=-1&tv=-1&rv=-1", songID), &r); err != nil {
+			return "", "", "", false, false, false
+		}
+		return stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Lrc.Lyric)),
+			stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Tlyric.Lyric)),
+			stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Romalrc.Lyric)),
+			false, true, false
 	}
 	fetchYRC := func(songID int64) string {
 		var r struct {
@@ -969,7 +954,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		return ""
 	}
 	info.SongID = id
-	lrc, tr, roma, pureMusic, lyricFetchOK := fetchBundle(id)
+	lrc, tr, roma, pureMusic, lyricFetchOK, lyricAuthoritative := fetchBundle(id)
 	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
 	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。
 	info.PureMusic = pureMusic || isInstrumentalPlaceholderLyric(lrc)
@@ -986,7 +971,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 采纳,见 enrich.go),报成"平台没有歌词"是错的。
 	//
 	// !info.PureMusic:纯音乐是另一个更强的结论,由 instrumentalMarker 那条路负责,两者互斥。
-	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic
+	//
+	// lyricAuthoritative:只认老接口的答复。v1 接口的「没词」长什么样没实测过,退到它时不下这个结论。
+	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && lyricAuthoritative && isCreditOnlyLRC(lrc) && !info.PureMusic
 	if isTimedLRC(lrc) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {
@@ -1015,8 +1002,7 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 	if albumID <= 0 {
 		return nil, false
 	}
-	cli := lyricHTTPClient(6 * time.Second)
-	// ⚠️ 两个端点的字段名不一样(实测 /api/v1/album/18906 坐实):老端点是
+	// 两个端点的字段名不一样(实测 /api/v1/album/18906 坐实):老端点是
 	// duration/artists,v1 端点是 dt/ar(id/name 两边一致)。原来只解码 duration/artists,
 	// 走 v1 兜底那条路时时长恒为 0、歌手恒为空——bestAlbumTrackByDuration 对时长 <=0 的
 	// 曲目直接跳过,等于"主端点被限流时这条兜底整个静默失效",而且表现跟"专辑里没有时长
@@ -1054,22 +1040,9 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 		// 就是它,实测用户盯着转圈等了 150 秒以上,其中约 120 秒是这层退避睡掉的。
 		// 退避现在**不睡了**(见 errNeteaseBucketCooling),这里最长仍然只等
 		// neteaseMinIntervalBetweenCalls 那一档。
-		if err := neteaseThrottle(context.Background(), u); err != nil {
-			return false
-		}
-		req, err := http.NewRequest(http.MethodGet, u, nil)
+		// Cookie os=pc 见函数注释,少了它会间歇性被 -462 拦掉。按 neteaseHosts 顺序取。
+		body, err := neteaseFetchBody(context.Background(), u, "os=pc", 6*time.Second)
 		if err != nil {
-			return false
-		}
-		req.Header.Set("Referer", "https://music.163.com/")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		req.Header.Set("Cookie", "os=pc") // 见函数注释,少了它会间歇性被 -462 拦掉
-		resp, err := doHTTPTracked(cli, req)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
 			return false
 		}
 		payload = struct {
@@ -1081,7 +1054,7 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 			} `json:"album"`
 			Songs []neAlbumSong `json:"songs"`
 		}{}
-		if json.NewDecoder(resp.Body).Decode(&payload) != nil {
+		if json.Unmarshal(body, &payload) != nil {
 			return false
 		}
 		// code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
@@ -1159,24 +1132,7 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 	// (专治这类"主名(外文别名)"形态),核验用的仍然是完整的原始 artist,不受这里影响。
 	q := stripParens(artist) + " " + album
 	get := func(u string) (int64, bool, bool) { // (albumID, found, requestSucceeded)
-		if err := neteaseThrottle(ctx, u); err != nil {
-			return 0, false, false
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return 0, false, false
-		}
-		req.Header.Set("Referer", "https://music.163.com/")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
-		if err != nil {
-			return 0, false, false
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return 0, false, false
-		}
-		body, err := io.ReadAll(resp.Body)
+		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
 		if err != nil {
 			return 0, false, false
 		}
@@ -1259,27 +1215,134 @@ const retryTitleFromAlbumMaxDurationDiffSecs = 2.0
 // 没收录这首歌。
 //
 // 两首歌时长同样接近、分不出该是哪首时返回空,宁可不给也不猜。
-func retryTitleFromAlbum(ctx context.Context, artist, album string, durationSecs float64) string {
-	title, _, _ := retryTitleFromAlbumDetailed(ctx, artist, album, durationSecs)
+func retryTitleFromAlbum(ctx context.Context, artist, album, localTitle string, durationSecs float64) string {
+	title, _, _, _ := retryTitleFromAlbumDetailed(ctx, artist, album, localTitle, durationSecs)
 	return title
 }
 
 // retryTitleFromAlbumDetailed 同 retryTitleFromAlbum,多带回命中时的时长误差——见
 // bestAlbumTrackByDurationDetailed 头注,给 enrich.go 裁决"这条兜底 vs retryTitleFromArtistSearch
-// 谁更可信"用。
-func retryTitleFromAlbumDetailed(ctx context.Context, artist, album string, durationSecs float64) (title string, diff float64, ok bool) {
+// 谁更可信"用。titleBacked=true 表示命中的是曲目表里跟本地标题近似的那首
+// (albumTrackByNearTitle),不是纯时长挑出来的。
+//
+// 必须先走 albumTrackByNearTitle、它弃权才退到纯时长:同专辑相邻曲目时长可以只差一两秒,
+// 本地标题只错一个字时纯时长会挑中别的歌(见 09 章决策 69)。近似标题**有歧义**时整条放弃,
+// 不退到纯时长。
+func retryTitleFromAlbumDetailed(ctx context.Context, artist, album, localTitle string, durationSecs float64) (title string, diff float64, titleBacked, ok bool) {
 	if album == "" || durationSecs <= 0 {
-		return "", 0, false
+		return "", 0, false, false
 	}
 	albumID, found := neteaseAlbumIDByName(ctx, artist, album)
 	if !found {
-		return "", 0, false
+		return "", 0, false, false
 	}
 	tracks, found := neteaseAlbumTracks(albumID)
 	if !found {
-		return "", 0, false
+		return "", 0, false, false
 	}
-	return bestAlbumTrackByDurationDetailed(tracks, durationSecs)
+	near, nearDiff, nearFound, nearAmbiguous := albumTrackByNearTitle(tracks, localTitle, durationSecs)
+	if nearAmbiguous {
+		return "", 0, false, false
+	}
+	if nearFound {
+		return near, nearDiff, true, true
+	}
+	title, diff, ok = bestAlbumTrackByDurationDetailed(tracks, durationSecs)
+	return title, diff, false, ok
+}
+
+// retryTitleFromAlbumNearTitleMaxDurationDiffSecs:近似标题命中时的时长容差。身份由标题文字
+// 担保,时长只用来排除专辑里另一次录音,所以比纯时长判据的 2s 宽;各平台对同一录音的曲长
+// 常差 2s 左右,卡 2s 会把正确答案卡在边缘。
+const retryTitleFromAlbumNearTitleMaxDurationDiffSecs = 5.0
+
+// albumTrackNearTitleMaxEditRatio:归一化后编辑距离 × 这个数 ≤ 较短一方的字符数才算近似,
+// 即至多 1/5 的字不同。5 个字的标题允许错 1 个字,4 个字及以下必须完全相等。
+const albumTrackNearTitleMaxEditRatio = 5
+
+// albumTrackByNearTitle 在专辑曲目表里找跟本地标题近似(错字/漏字/多字)的那一首。
+// 比较对象是 normLoose(stripParens(·)),编辑距离按 rune 算。
+//
+// 返回:found=唯一命中;ambiguous=有两首**标题不同**的曲目距离一样近,调用方必须整体弃权。
+// 两者都为 false 表示曲目表里没有近似标题,调用方可退回纯时长判据。
+//
+// 两边的数字序列不同就不算近似:「Part 1 / Part 2」「Interlude 1 / Interlude 2」这类
+// 系列曲目只差一个数字,编辑距离同样是 1。
+func albumTrackByNearTitle(tracks []albumTrack, localTitle string, durationSecs float64) (title string, diff float64, found, ambiguous bool) {
+	nl := []rune(normLoose(stripParens(localTitle)))
+	if len(nl) == 0 {
+		return "", 0, false, false
+	}
+	localDigits := digitRunes(nl)
+	localFull := []rune(normLoose(localTitle))
+	bestDist, bestFullDist := -1, 0
+	bestNorm := ""
+	for _, t := range tracks {
+		if t.title == "" || t.duration <= 0 {
+			continue
+		}
+		d := math.Abs(t.duration - durationSecs)
+		if d > retryTitleFromAlbumNearTitleMaxDurationDiffSecs {
+			continue
+		}
+		nt := []rune(normLoose(stripParens(t.title)))
+		if len(nt) == 0 || digitRunes(nt) != localDigits {
+			continue
+		}
+		dist := runeEditDistance(nl, nt)
+		if dist*albumTrackNearTitleMaxEditRatio > min(len(nl), len(nt)) {
+			continue
+		}
+		// 同一首歌在曲目表里出现多次(去括号后相同)不算歧义:先挑带括号的完整标题跟本地更近的
+		// (别让「(Live)」顶掉原版),再挑时长更近的。
+		fullDist := runeEditDistance(localFull, []rune(normLoose(t.title)))
+		switch {
+		case bestDist < 0 || dist < bestDist:
+			title, diff, bestDist, bestFullDist, bestNorm, ambiguous = t.title, d, dist, fullDist, string(nt), false
+		case dist == bestDist && string(nt) != bestNorm:
+			ambiguous = true
+		case dist == bestDist && (fullDist < bestFullDist || (fullDist == bestFullDist && d < diff)):
+			title, diff, bestFullDist = t.title, d, fullDist
+		}
+	}
+	if bestDist < 0 {
+		return "", 0, false, false
+	}
+	if ambiguous {
+		return "", 0, false, true
+	}
+	return title, diff, true, false
+}
+
+func digitRunes(rs []rune) string {
+	var b strings.Builder
+	for _, r := range rs {
+		if unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// runeEditDistance 是按 rune 的 Levenshtein 距离(插入/删除/替换各记 1)。
+func runeEditDistance(a, b []rune) int {
+	prev := make([]int, len(b)+1)
+	cur := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev, cur = cur, prev
+	}
+	return prev[len(b)]
 }
 
 // retryTitleFromArtistSearch 是 retryTitleFromAlbum 找不到时的第二道兜底——专救"本地专辑名
@@ -1325,24 +1388,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		} `json:"artists"`
 	}
 	get := func(u string) ([]albumTrack, bool) { // (candidates, requestSucceeded)
-		if err := neteaseThrottle(ctx, u); err != nil {
-			return nil, false
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return nil, false
-		}
-		req.Header.Set("Referer", "https://music.163.com/")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
-		if err != nil {
-			return nil, false
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, false
-		}
-		body, err := io.ReadAll(resp.Body)
+		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
 		if err != nil {
 			return nil, false
 		}

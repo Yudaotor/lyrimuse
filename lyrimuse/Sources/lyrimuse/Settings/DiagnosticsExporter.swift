@@ -61,8 +61,6 @@ enum DiagnosticsExporter {
             .appendingPathComponent("Desktop")
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        // 状态段要读 @MainActor 的单例,先在主线程取好;日志段(慢的那部分)扔后台。
-        let head = stateLines()
         let secrets = ConfigStore.shared.secretsForRedaction
         // 当前曲目的歌词解析状态也要在这里先算好——EnrichCacheReader 整个类型是
         // @MainActor(只有少数纯换算函数显式 nonisolated),`sourceInfo`/`lookup`/
@@ -72,6 +70,9 @@ enum DiagnosticsExporter {
         // 不是三个散文件落进下载目录。
         let bundleName = url.deletingPathExtension().lastPathComponent
         Task { @MainActor in
+            // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
+            // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
+            let head = stateLines(automation: await automationLine())
             await Task.detached(priority: .userInitiated) {
                 writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head,
                                        secrets: secrets, currentTrackLines: currentTrackLines)
@@ -83,8 +84,8 @@ enum DiagnosticsExporter {
     /// 一次拿到整份文本(日志段在主 actor 上读)。留着给"就是要一次拿到整份文本"的场景;
     /// 交互式导出请用 `exportInteractively()`,别在主线程上等这个。
     @MainActor
-    static func buildReport() -> String {
-        return (stateLines() + logLines(secrets: ConfigStore.shared.secretsForRedaction,
+    static func buildReport() async -> String {
+        return (stateLines(automation: await automationLine()) + logLines(secrets: ConfigStore.shared.secretsForRedaction,
                                         currentTrackLines: currentTrackLyricsLines()))
             .joined(separator: "\n")
     }
@@ -98,9 +99,17 @@ enum DiagnosticsExporter {
         }
     }
 
+    /// 报告里自动化权限那一行。查询走 `MusicAutomationPermission.status`(专用线程 + 超时):
+    /// 那次系统调用可能永远不返回,在主线程同步等会把整个 App 冻住(02 章决策 8)。
+    private static func automationLine() async -> String {
+        let status = await MusicAutomationPermission.status(
+            bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, askIfNeeded: false)
+        return "Automation permission: " + (status.map { "\($0)" } ?? "timed out")
+    }
+
     /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜。
     @MainActor
-    private static func stateLines() -> [String] {
+    private static func stateLines(automation: String) -> [String] {
         var lines: [String] = []
 
         lines.append("Lyrimuse Diagnostics")
@@ -132,7 +141,7 @@ enum DiagnosticsExporter {
         lines.append("== State ==")
         let settings = AppSettings.shared
         let config = ConfigStore.shared
-        lines.append("Automation permission: \(MusicAutomationPermission.check(askIfNeeded: false))")
+        lines.append(automation)
         // media-control 私有通道的自检结果。QQ 音乐/网易云的一切都经它读,一旦系统更新
         // 把那套私有 API 改坏,现象是"歌词不动",而这跟"没在放歌"从表象上分不开 ——
         // 报告里必须有这一行,否则排查会从歌词源一路白查到网络。见 MediaControlHealth。

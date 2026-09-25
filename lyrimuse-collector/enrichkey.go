@@ -385,6 +385,9 @@ func applyEnrichKeyMigration() bool {
 				k, enrichCache[k].LyricsSource, enrichCache[k].LyricsScore, winnerKey)
 		}
 		merged[nk] = e
+		if winnerKey != nk {
+			renameDecisionSidecar(winnerKey, nk) // 判决明细跟着 key 走(decisionstore.go);被并掉的留给启动清理
+		}
 		for _, k := range staleExportKeys(nk, winnerKey, olds) {
 			stale[k] = true
 			if k == winnerKey {
@@ -398,10 +401,10 @@ func applyEnrichKeyMigration() bool {
 	}
 
 	removedFiles := 0
-	if lyricsDir != "" {
+	if dir := lyricsDir(); dir != "" {
 		for k := range stale {
 			for _, name := range enrichExportedFileNames(k) {
-				if err := os.Remove(filepath.Join(lyricsDir, name)); err == nil {
+				if err := os.Remove(filepath.Join(dir, name)); err == nil {
 					removedFiles++
 				}
 			}

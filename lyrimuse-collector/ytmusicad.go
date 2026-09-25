@@ -143,12 +143,13 @@ const ytmusicAdProbeJS = `(function(){` +
 // 一致,不特意报"不支持"。
 func browserScriptFamily(bundleID string) string {
 	switch bundleID {
-	case "com.google.Chrome", "com.microsoft.edgemac", "company.thebrowser.Browser":
+	case "com.google.Chrome", "com.microsoft.edgemac", "company.thebrowser.Browser", "com.brave.Browser":
 		return "chromium"
 	case "com.apple.Safari":
 		return "safari"
 	default:
-		return ""
+		// 用户自己加进信任列表的浏览器:现场读它的脚本定义判,见 browserfamily.go。
+		return trustedBrowserScriptFamily(bundleID)
 	}
 }
 
@@ -244,16 +245,23 @@ func ytmusicAlbumPatch(reported string, verdict ytmusicAdVerdict, probed string)
 //   - 每次执行都套 `with timeout`(把 Arc 那种"挂起不返回"变成抓得住的错误)+ 裸
 //     `try…end try`(吞掉错误继续找下一个标签页)。
 func buildYTMusicAdAppleScript(bundleID, family string) string {
+	return buildBrowserTabAppleScript(bundleID, family, ytmusicHostMarker, ytmusicAdProbeJS)
+}
+
+// buildBrowserTabAppleScript 是上面那段模板本体:在 URL 含 host 的标签页里跑调用方给的 JS
+// (YouTube Music 的广告 / 队列探针、Spotify 网页版的队列探针共用)。js 里不许有双引号,
+// 理由见 ytmusicAdProbeJS 的注释。
+func buildBrowserTabAppleScript(bundleID, family, host, js string) string {
 	var activeTab, executeActive, executeTab string
 	switch family {
 	case "chromium":
 		activeTab = "active tab of window wi"
-		executeActive = "execute (active tab of window wi) javascript \"" + ytmusicAdProbeJS + "\""
-		executeTab = "execute (tab ti of window wi) javascript \"" + ytmusicAdProbeJS + "\""
+		executeActive = "execute (active tab of window wi) javascript \"" + js + "\""
+		executeTab = "execute (tab ti of window wi) javascript \"" + js + "\""
 	case "safari":
 		activeTab = "current tab of window wi"
-		executeActive = "do JavaScript \"" + ytmusicAdProbeJS + "\" in current tab of window wi"
-		executeTab = "do JavaScript \"" + ytmusicAdProbeJS + "\" in tab ti of window wi"
+		executeActive = "do JavaScript \"" + js + "\" in current tab of window wi"
+		executeTab = "do JavaScript \"" + js + "\" in tab ti of window wi"
 	default:
 		return ""
 	}
@@ -262,7 +270,7 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 		"\tset winCount to count of windows\n" +
 		"\trepeat with wi from 1 to winCount\n" +
 		"\t\ttry\n" +
-		"\t\t\tif (URL of " + activeTab + ") contains \"" + ytmusicHostMarker + "\" then\n" +
+		"\t\t\tif (URL of " + activeTab + ") contains \"" + host + "\" then\n" +
 		"\t\t\t\twith timeout of " + t + " seconds\n" +
 		"\t\t\t\t\tset r to " + executeActive + "\n" +
 		"\t\t\t\tend timeout\n" +
@@ -276,7 +284,7 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 		"\t\tset tabCount to count of tabs of window wi\n" +
 		"\t\trepeat with ti from 1 to tabCount\n" +
 		"\t\t\ttry\n" +
-		"\t\t\t\tif (URL of tab ti of window wi) contains \"" + ytmusicHostMarker + "\" then\n" +
+		"\t\t\t\tif (URL of tab ti of window wi) contains \"" + host + "\" then\n" +
 		"\t\t\t\t\twith timeout of " + t + " seconds\n" +
 		"\t\t\t\t\t\tset r to " + executeTab + "\n" +
 		"\t\t\t\t\tend timeout\n" +
@@ -378,33 +386,43 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 // JS 里又有单引号和逗号,拿 -e 传要在 shell/exec 层再套一层引号,是本仓库明确记过的
 // "多层引号把 payload 打坏"那类坑。写文件是零转义的。
 func runYTMusicAdProbe(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string) {
-	script := buildYTMusicAdAppleScript(bundleID, family)
-	if script == "" {
+	out, ok := runBrowserTabScript(ctx, bundleID, family, ytmusicHostMarker, ytmusicAdProbeJS)
+	if !ok {
+		// 失败原因很多(开关没开、TCC 没给权限、超时、浏览器没在跑),一律 unknown。
+		// 这条路径每首歌都会走,失败时不该刷屏。
 		return ytmusicAdUnknown, ""
 	}
-	f, err := os.CreateTemp("", "lyrimuse-ytmusic-ad-*.applescript")
+	return parseYTMusicAdProbe(out)
+}
+
+// runBrowserTabScript 在这个浏览器里找到 URL 含 host 的标签页、跑一段 JS,返回 osascript 的原始输出。
+// 任何失败(脚本拼不出、写不了临时文件、超时、浏览器不回)都是 ok=false。
+func runBrowserTabScript(ctx context.Context, bundleID, family, host, js string) (string, bool) {
+	script := buildBrowserTabAppleScript(bundleID, family, host, js)
+	if script == "" {
+		return "", false
+	}
+	f, err := os.CreateTemp("", "lyrimuse-browser-tab-*.applescript")
 	if err != nil {
-		return ytmusicAdUnknown, ""
+		return "", false
 	}
 	path := f.Name()
 	defer os.Remove(path)
 	if _, err := f.WriteString(script); err != nil {
 		f.Close()
-		return ytmusicAdUnknown, ""
+		return "", false
 	}
 	if err := f.Close(); err != nil {
-		return ytmusicAdUnknown, ""
+		return "", false
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, ytmusicAdProbeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/bin/osascript", filepath.Clean(path)).Output()
 	if err != nil {
-		// 失败原因很多(开关没开、TCC 没给权限、超时、浏览器没在跑),一律 unknown。
-		// 只在 debug 级别记一句:这条路径每首歌都会走,失败时不该刷屏。
-		return ytmusicAdUnknown, ""
+		return "", false
 	}
-	return parseYTMusicAdProbe(string(out))
+	return string(out), true
 }
 
 // trustedPlaybackRejected 是 `trustedPlaybackNotASong` 的"带 YouTube Music 广告复核"版本,

@@ -29,6 +29,12 @@ private final class OverlayPlayback: ObservableObject {
     // (前奏/间奏「•••」下方)那句其实是接下来的第一句本身,靠它们按正常行的规格展示。
     @Published private(set) var nextLineRomanization: String?
     @Published private(set) var nextLineTranslation: String?
+    /// 下一行的逐词分组,只在 `currentLine` 为 nil(前奏/间奏「•••」下方)时用来把罗马音逐词标在
+    /// 那句底下。跟 `currentLine` 同一道「卡拉OK效果」闸:关着时当前行压成整行、不带分组,这里一起清。
+    @Published private(set) var nextLineWordGroups: [SyncedLyricWordGroup]?
+    /// 当前行的显示窗口(`LyricDisplayWindow`,跟 `PlaybackCoordinator.currentLineDwellSeconds` 同一份)。
+    /// 滚动模式下没有逐字时间轴的行、以及当前行的译文 / 罗马音按它配速(`OverlayScrollingLyricRow.PacedWindow`)。
+    @Published private(set) var currentLineWindow: OverlayScrollingLyricRow.PacedWindow?
     @Published private(set) var isPlayingNow = false
     /// 此刻有没有曲目。false = 停播/播放器没开/刚装好还没放过歌 —— 停播时
     /// `LocalPlaybackSource.clearIfWasPlaying` 会把 title/artist 连同几个"这首歌"的判定一起清空。
@@ -59,10 +65,6 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var lockPosition = false
     /// 指针划过时让开(见 AppSettings.overlayFadeOnHover)。
     @Published private(set) var fadeOnHover = false
-    /// 悬停时露不露出那排播放控制按钮(见 AppSettings.overlayShowHoverControls)。
-    /// 默认 true —— 跟 AppSettings 那边的默认一致,别写成 false:这个初值在第一次 sink
-    /// 送达之前就会被 body 读到,写反会让控制排在窗口刚出现的那一拍闪一下。
-    @Published private(set) var showHoverControls = true
     /// 位置模式(见 AppSettings.overlayPlacementMode)。视图只关心一件事:内容块在窗口里
     /// 贴顶还是贴底(`.bottomCenter` 贴底,其余贴顶),见 body 末尾那条 `.frame(alignment:)`。
     @Published private(set) var placementMode: OverlayPlacementMode = .free
@@ -70,6 +72,29 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var showTranslation = false
     @Published private(set) var showNextLinePreview = true
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
+    /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
+    @Published private(set) var lineOverflow: OverlayLineOverflow = .wrap
+    /// 滚动模式下一行要占多高 = 字本身(`scrollTextHeight`)+ 描边那圈预留(`scrollStrokePadding`)。
+    ///
+    /// 滚动行必须显式定高:`MarqueeText` 的外壳是 `GeometryReader`,没有固有高度,不定高会在卡片的
+    /// VStack 里跟别的行平分高度、互相重叠。
+    /// 描边那圈不能漏:内容套了 `lyricsTextStroke`,四周各多出 `LyricsTextStrokeMetrics.inset`,
+    /// 框只给字高的话描边上下沿会被裁掉。
+    func scrollRowHeight(_ font: NSFont) -> CGFloat {
+        scrollTextHeight(font) + scrollStrokePadding
+    }
+
+    /// 一行字本身的高度:`ascender − descender + leading`,再留 2pt 接住 g/q 的下伸部分
+    /// (同 `MenuBarMarqueeRenderer.lineHeight`)。`OverlayLyricScrollView.textHeight` 必须是同一个式子。
+    func scrollTextHeight(_ font: NSFont) -> CGFloat {
+        ceil(font.ascender - font.descender + font.leading) + 2
+    }
+
+    /// 描边开着时一行上下两份预留加起来多高;关着为 0。
+    var scrollStrokePadding: CGFloat {
+        textStrokeEnabled ? LyricsTextStrokeMetrics.inset * 2 : 0
+    }
+
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
     /// `mainFont` 背后那个原始磅值——`Font` 本身取不回数字,间奏点按字号比例算尺寸
     /// (跟歌词窗口的 `lyricFontSize` 同一用途)得单独接一份。
@@ -95,6 +120,12 @@ private final class OverlayPlayback: ObservableObject {
     /// 对唱舞台两侧各让出的量(见 OverlayCardGeometry.duetStageInset):窗口比
     /// 默认宽时左右声部只在正中一条带里分栏,多出来的宽度留给长句。同样由窗宽和字号预组合。
     @Published private(set) var duetStageInset: CGFloat = 0
+    /// 卡片内容块拿得到的宽度 = 窗宽 − 两侧 20pt 卡片内边距。上面两个量的共同分母,
+    /// 视图还要拿它跟"这一行不换行要多宽"相减,算出两侧留白能吃掉多少富余
+    /// (见 `LyricsOverlayView.duetInsetScale`)。
+    @Published private(set) var cardAvailableWidth: CGFloat = 0
+    /// 四行字体的 AppKit 孪生,测宽用(见 `OverlayNaturalWidth`)。
+    @Published private(set) var overlayNSFonts = OverlayNSFonts()
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -113,6 +144,17 @@ private final class OverlayPlayback: ObservableObject {
             p.$nextLineSide.removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             p.$nextLineRomanization.removeDuplicates().sink { [weak self] in self?.nextLineRomanization = $0 },
             p.$nextLineTranslation.removeDuplicates().sink { [weak self] in self?.nextLineTranslation = $0 },
+            Publishers.CombineLatest3(p.$currentLineIndex, p.$allLines, p.$currentDurationMs)
+                .map { index, lines, duration -> OverlayScrollingLyricRow.PacedWindow? in
+                    LyricDisplayWindow.of(index: index, starts: lines.lazy.map(\.timeMs), trackDurationMs: duration)
+                        .map { .init(startMs: $0.startMs, dwellMs: $0.dwellMs) }
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.currentLineWindow = $0 },
+            Publishers.CombineLatest(p.$nextLineWordGroups, s.$overlayLyricsKaraoke)
+                .map { groups, karaoke in karaoke ? groups : nil }
+                .removeDuplicates()
+                .sink { [weak self] in self?.nextLineWordGroups = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             // CombineLatest3 而不是三个独立 sink:三个输入要**同时**拿到才能算,独立 sink 里另两个
             // 只能回头读存储属性 —— 正是本文件头注说的 willSet 旧值坑(灵动岛那份同款写法)。
@@ -135,12 +177,12 @@ private final class OverlayPlayback: ObservableObject {
                 .sink { [weak self] in self?.displayForegroundColor = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
             s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.fadeOnHover = $0 },
-            s.$overlayShowHoverControls.removeDuplicates().sink { [weak self] in self?.showHoverControls = $0 },
             s.$overlayPlacementMode.removeDuplicates().sink { [weak self] in self?.placementMode = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
+            s.$overlayLineOverflow.removeDuplicates().sink { [weak self] in self?.lineOverflow = $0 },
             s.$mainFont.removeDuplicates().sink { [weak self] in self?.mainFont = $0 },
             s.$fontSize.map { CGFloat($0) }.removeDuplicates().sink { [weak self] in self?.mainFontSize = $0 },
             s.$romanizationFont.removeDuplicates().sink { [weak self] in self?.romanizationFont = $0 },
@@ -183,6 +225,11 @@ private final class OverlayPlayback: ObservableObject {
                 }
                 .removeDuplicates()
                 .sink { [weak self] in self?.duetStageInset = $0 },
+            s.$overlayWidth
+                .map { CGFloat($0) - Self.cardHorizontalPadding * 2 }
+                .removeDuplicates()
+                .sink { [weak self] in self?.cardAvailableWidth = $0 },
+            s.$overlayNSFonts.removeDuplicates().sink { [weak self] in self?.overlayNSFonts = $0 },
         ]
     }
 }
@@ -237,6 +284,15 @@ protocol OverlayChromeSource: ObservableObject {
     var placementLockNotice: String? { get }
     /// 同一事件的抖动计数:每被拒一次 +1,视图据此让歌词卡左右抖一下(`OverlayRejectShake`)。
     var placementLockShakeTick: Int { get }
+    /// 控制排该不该画在卡片**下方**(而不是常规的上方)。真窗口按「顶部居中」预设 / 自由拖动时
+    /// 是否顶到可见区顶边动态算,见 `LyricsOverlayWindowController.recomputeControlsBelowCard`;
+    /// 编辑台预览没有真实屏幕位置,只跟着预设走。
+    var controlsBelowCard: Bool { get }
+    /// 悬停时露不露出那排播放控制按钮。真窗口是 `AppSettings.overlayShowHoverControls` 的
+    /// **滞后**镜像(悬停中改了先攒着,等这次悬停结束才生效,见
+    /// `LyricsOverlayWindowController.showHoverControls` 声明处);编辑台预览没有真实悬停,
+    /// 直接跟原始设置值同步。
+    var showHoverControls: Bool { get }
     /// 播放控制排刚露出来。真窗口借这一下重读一次「喜欢」状态 —— 那要起一个 osascript
     /// 子进程,所以做成回调而不是让视图直接打 `PlaybackCoordinator`:设置页预览必须能把
     /// 这条副作用空实现掉(同 `NotchChromeSource.setExpanded` 的处理)。
@@ -327,6 +383,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// **照画** —— 它回答的是"指针现在在哪颗按钮上",是功能反馈,不是装饰(同灵动岛那批
     /// `reduceMotion ? nil : .spring(...)` 的取舍)。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 设置页编辑台里那一份:设置窗口看不见时跟暂停一样停表(见 PreviewHostVisibility.swift)。
+    /// 桌面上那扇真窗读到的恒为 true。
+    @Environment(\.previewHostVisible) private var previewHostVisible
 
     // 悬浮窗高度跟着内容动态变化(见 LyricsOverlayWindowController.updateHeight)——这里
     // 汇报"这次渲染实际需要多高",不需要就什么都不做(默认空闭包,方便预览/测试构造)。
@@ -342,10 +401,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 歌词**文字**实际占据的矩形(overlayContent 命名坐标空间,多元素并集)。
     /// 给「指针划过时让开」当命中判据 —— 见 LyricsTextRectPreferenceKey。
     var onLyricsTextRectChange: (CGRect) -> Void = { _ in }
-    /// 要不要画调试 HUD 那个 fps 角标(隐藏开关 np:debugHUD)。设置页预览传 false ——
-    /// 那块画的是"这扇窗在桌面上长什么样",角标既不属于窗口,开着还会让 frameProbe
-    /// 每帧 tick 一次。
-    var showsDebugHUD: Bool = true
     /// 设置页预览的示例行,真窗口恒为 nil —— 见 OverlayPreviewLine。
     var previewLine: OverlayPreviewLine? = nil
 
@@ -353,10 +408,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
     private let overlayCoordSpaceName = "overlayContent"
-    /// 调试 HUD 的帧率探针。@State 而不是 @StateObject:它是纯值类型,而且**只在 HUD 开着
-    /// 时**才被 tick —— 关着的时候这里恒为初始值,不产生任何开销。
-    @State private var frameProbe = FrameRateProbe()
-    @State private var debugFPS: Double?
     /// 控制排横向落点的"冻结"状态,见 `OverlayControlsSidePin`。
     @State private var controlsSidePin: OverlayControlsSidePin = .free
 
@@ -371,7 +422,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         OverlayControlHitTest.controlsShown(
             hovering: overlayController.isHoveringForControls,
             positionLocked: playback.lockPosition,
-            hoverControlsEnabled: playback.showHoverControls)
+            hoverControlsEnabled: overlayController.showHoverControls)
     }
 
     /// 「指针划过时让开」的当前不透明度。
@@ -446,21 +497,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 淡出比淡入慢一点(0.18 vs 0.12):指针扫过去要立刻让开才有用,回来时慢一点更从容。
         .opacity(hoverFadeOpacity)
         .animation(.easeOut(duration: hoverFadeOpacity < 1 ? 0.12 : 0.18), value: hoverFadeOpacity)
-        // 调试 HUD(隐藏开关 np:debugHUD,不进设置界面)。挂 overlay 而不是塞进 VStack:
-        // 它绝不能改变布局 —— 上面三条 preference 报出去的高度/热区是窗口几何的输入,
-        // HUD 一旦占位就会把窗口撑高,量到的就不是原来那套渲染了。
-        .overlay(alignment: .topTrailing) {
-            if showsDebugHUD, AppSettings.shared.debugHUDEnabled {
-                Text(debugFPS.map { String(format: "%.0f fps", $0) } ?? "-- fps")
-                    .font(.system(size: 9, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 3))
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
         // 控制排每次露出来时重读一次"喜欢"状态。这条状态不跟着 2 秒轮询走(每次读要起一个
         // osascript 子进程,为一个几乎不变的布尔值那么干不值当),换歌时刷一次之外,就靠这里
         // ——正好覆盖"用户刚在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
@@ -500,11 +536,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //
         // 必须加在所有 background/测量修饰符**之后**:加在前面的话,那个测内容高度的
         // GeometryReader 量到的会变成整个窗口高度,updateHeight 就再也收不到真实内容高度了。
-        .frame(maxHeight: .infinity, alignment: playback.placementMode.anchorsBottom ? .bottom : .top)
+        //
+        // `minHeight: 0` 不能省:内容变高的那一拍窗口还没长(高度要经 preference → updateHeight
+        // 绕一圈,晚几帧),只写 maxHeight 的 frame 会取内容高度、比宿主高,NSHostingView 又把
+        // 它垂直居中,整块歌词上跳半个差值、等窗口长好再落回来。钉住 minHeight 后 frame 恒等于
+        // 宿主高度,多出来的内容照 alignment 从锚边那一侧往外溢(先被裁掉几帧),锚边的字不动。
+        .frame(minHeight: 0, maxHeight: .infinity, alignment: playback.placementMode.anchorsBottom ? .bottom : .top)
     }
 
-    /// 控制排槽位放在歌词卡片**下方**(「顶部居中」预设),其余模式在上方。见 body 头注第 3 条。
-    private var controlsSlotBelow: Bool { playback.placementMode == .topCenter }
+    /// 控制排槽位放在歌词卡片**下方**还是上方,判据见 `OverlayChromeSource.controlsBelowCard`
+    /// 与 body 头注第 3 条。
+    private var controlsSlotBelow: Bool { overlayController.controlsBelowCard }
 
     /// 播放控制排 / 锁定态解锁提示 / 位置已固定提示 三者共用的那一个槽位。常驻、透明度切换,
     /// 三个状态**等高**(胶囊 30pt + 离卡片 4pt + 离窗口边 4pt),切来切去歌词不跳。
@@ -628,13 +670,53 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
     }
 
+    /// 这张卡里最宽的那一行**不换行的话要多宽**(含声部圆点占掉的那一截)。
+    ///
+    /// 直接量文字,不经过布局(见 `OverlayNaturalWidth` 头注:在自定义 `Layout` 里对整棵
+    /// 卡片子树发无约束试探,会让主歌词行真的按"不换行"摆出来、冲出卡片被窗口裁掉)。
+    /// 四行都要量:留白是加在整块上的,只顾主行的话译文/下一句会替它提前折行。
+    private var cardNaturalWidth: CGFloat {
+        let fonts = playback.overlayNSFonts
+        let indicator = speakerIndicatorInset(side: duetDecorationSide)
+        var widest: CGFloat = 0
+        widest = max(widest, OverlayNaturalWidth.width(line?.plainText, font: fonts.main))
+        // 逐词标注时罗马音没有独立的一行(标在每个词正下方),但它照样会把那一行撑宽,
+        // 所以整行的罗马音也要参与取最大 —— 这是个近似:真实宽度是逐词 max(词, 读音)
+        // 相加,量不到,差的那一点只会让留白多让一点,不会反过来害得提前折行。
+        widest = max(widest, OverlayNaturalWidth.width(
+            romanizationRowText ?? (usesPerWordRomanization ? line?.romanization : nil)
+                ?? (upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
+            font: fonts.romanization))
+        widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation))
+        if playback.showNextLinePreview {
+            // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
+            let previewFont = nextLinePreviewFont == playback.mainFont ? fonts.main : fonts.preview
+            widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: previewFont))
+        }
+        guard widest > 0 else { return 0 }
+        return widest + indicator.leading + indicator.trailing
+    }
+
+    /// 两侧留白**这一行实际用上了多少**,0…1。判据与取舍见
+    /// `OverlayCardGeometry.elasticInsetScale`。
+    private var duetInsetScale: CGFloat {
+        OverlayCardGeometry.elasticInsetScale(
+            totalInset: duetInsets.leading + duetInsets.trailing,
+            availableWidth: playback.cardAvailableWidth,
+            naturalContentWidth: cardNaturalWidth)
+    }
+
     /// 控制排两侧该留多少白 —— 卡片内缩 + 卡片水平内边距,算法在 core 里跟卡片共用同一份
     /// (见 `OverlayCardGeometry`)。加总之后按钮排的近侧边缘跟歌词块的近侧边缘严格重合。
+    ///
+    /// 留白让开时按钮排要跟着让开同样多(`scale`),否则长句把歌词块推到卡片边缘、按钮排
+    /// 还钉在原来的缩进上 —— 又是一次"按钮不在歌词上方"。
     private var controlsInsets: (leading: CGFloat, trailing: CGFloat) {
         OverlayCardGeometry.controlsInsets(
             for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: controlsRealSide),
             unit: playback.duetInsetUnit,
             stageInset: playback.duetStageInset,
+            scale: duetInsetScale,
             cardHorizontalPadding: OverlayPlayback.cardHorizontalPadding)
     }
 
@@ -707,9 +789,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 容器——普通歌的排版必须逐像素不变,这是这份文件里反复出现的纪律(两侧内缩/nil
     /// 兜底都是同一条,见 duetInsets 的注释)。合唱不属于任何一侧,不该有边角标记。
     ///
-    ///
-    /// 留白让开时按钮排要跟着让开同样多(`scale`),否则长句把歌词块推到卡片边缘、按钮排
-    /// 还钉在原来的缩进上 —— 又是一次"按钮不在歌词上方"。
     /// 圆点+竖线摆在**文字所在的那一侧**(leading 摆左、trailing 摆右),不是固定摆
     /// 左边——这样无论这一行贴哪一边,指示都紧挨着文字,跟着一起换边。
     /// dot(6) + 间距(7) + 竖线(2) + 间距(7) = 22pt——withSpeakerIndicator 摆在文字前面
@@ -847,6 +926,138 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return (next.leading - current.leading, next.trailing - current.trailing)
     }
 
+    /// 图层版的主歌词行。宽度吃满卡片(滚动窗就是它),高度用跟 SwiftUI 那条同一个公式。
+    private func layerScrollingKaraokeRow(words: [SyncedLyricWord]) -> some View {
+        OverlayScrollingLyricRow(
+            spec: .init(
+                lineKey: line?.plainText ?? "",
+                words: words,
+                // 开了逐词罗马音才按词组排;否则只画一行字(同 karaokeWordRun 的两条分支)。
+                groups: usesPerWordRomanization ? line?.wordGroups : nil,
+                font: playback.overlayNSFonts.main,
+                romaFont: playback.overlayNSFonts.romanization,
+                baseColor: NSColor(playback.displayKaraokeUnsungColor),
+                fillColor: NSColor(playback.displayForegroundColor),
+                // 罗马音那一行的两色跟 SwiftUI 那边的 romaPalette 逐字一致:已唱是前景色打
+                // 0.75 折,未唱跟主行同一个未唱色(**不**跟着打折 —— 那条折扣只对"同一色调暗"
+                // 那套派生关系才有意义)。
+                romaBaseColor: NSColor(playback.displayKaraokeUnsungColor),
+                romaFillColor: NSColor(playback.displayForegroundColor.opacity(0.75)),
+                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                alignment: duetSide,
+                // 跟 SwiftUI 那条逐字染色的 TimelineView 同一条 paused 判据。
+                paused: !playback.isPlayingNow || playback.currentLineFillSettled || !previewHostVisible),
+            nowMs: Self.lyricsNowMs)
+        .frame(maxWidth: .infinity)
+        .frame(height: mainScrollRowHeight)
+    }
+
+    /// 换行模式的主歌词行:按可用宽度折成几行、每行一条图层行(`WrappedKaraokeRows`)。颜色、罗马音配色、
+    /// 描边、停表判据跟 `layerScrollingKaraokeRow` 逐项一致;对齐按声部(`duetRowAlignment`,同原来
+    /// `WrapLayout` 的 rowAlignment);文字矩形照旧写进 `wrapContentSink`(owner = `overlayLineLayoutKey`),
+    /// 鼠标命中那条路不用动。
+    private func layerWrappedKaraokeRows(words: [SyncedLyricWord]) -> some View {
+        WrappedKaraokeRows(
+            spec: .init(
+                lineKey: line?.plainText ?? "",
+                words: words,
+                groups: usesPerWordRomanization ? line?.wordGroups : nil,
+                font: playback.overlayNSFonts.main,
+                romaFont: playback.overlayNSFonts.romanization,
+                baseColor: NSColor(playback.displayKaraokeUnsungColor),
+                fillColor: NSColor(playback.displayForegroundColor),
+                romaBaseColor: NSColor(playback.displayKaraokeUnsungColor),
+                romaFillColor: NSColor(playback.displayForegroundColor.opacity(0.75)),
+                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                rowAlignment: duetRowAlignment,
+                paused: !playback.isPlayingNow || playback.currentLineFillSettled || !previewHostVisible),
+            nowMs: Self.lyricsNowMs,
+            contentRectSink: wrapContentSink,
+            sinkOwner: overlayLineLayoutKey)
+        .accessibilityElement()
+        .accessibilityLabel(Text(verbatim: line?.plainText ?? ""))
+    }
+
+    /// 图层行读的播放位置:跟逐字染色那条 TimelineView 逐字节一份 —— 锚点外推 ?? 暂停冻结位置,
+    /// 再叠歌词时间轴偏移。
+    private static func lyricsNowMs() -> Int {
+        (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: Date())
+            ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
+            + PlaybackCoordinator.shared.currentLyricsOffsetMs
+    }
+
+    /// 这一帧各行怎么排(显示什么、动不动、怎么动)。判据全在 Core 的 `OverlayRowPlan`,这里只喂输入;
+    /// 下面各行的分支照着它的 `Motion` 走,别在视图里另写条件。
+    private var rowPlan: OverlayRowPlan.Plan {
+        OverlayRowPlan.resolve(.init(
+            overflow: playback.lineOverflow,
+            hasLine: line != nil,
+            lineHasWords: line?.words != nil,
+            lineHasWordGroups: line?.wordGroups?.isEmpty == false,
+            lineRomanization: line?.romanization,
+            lineTranslation: line?.translation,
+            isPreviewLine: showingPreviewLine,
+            hasTimingWindow: playback.currentLineWindow != nil,
+            showRomanization: playback.showRomanization,
+            showTranslation: playback.showTranslation,
+            showNextLinePreview: playback.showNextLinePreview,
+            nextText: nextLineText,
+            nextRomanization: playback.nextLineRomanization,
+            nextTranslation: playback.nextLineTranslation,
+            nextHasWordGroups: playback.nextLineWordGroups?.isEmpty == false))
+    }
+
+    /// `.paced` 那几行的显示窗口。只在 `rowPlan` 判成 `.paced` 时取用(那时它必不为 nil)。
+    private var pacedWindow: OverlayScrollingLyricRow.PacedWindow? { playback.currentLineWindow }
+
+    /// 不滚的那一行。`lineLimit(1)` 不配 `fixedSize`:要让容器把宽度压下来,才会出「…」。
+    private func stillUpcomingText(_ text: String, font: Font, color: Color) -> some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+    }
+
+    /// 按显示时长配速的图层行。不填色(整行一个颜色),描边、对齐、停走跟跟唱那条同一套。
+    private func pacedLayerRow(
+        key: String, text: String, font: NSFont, color: Color,
+        alignment: LyricDuet.Side, height: CGFloat, window: OverlayScrollingLyricRow.PacedWindow
+    ) -> some View {
+        let ns = NSColor(color)
+        return OverlayScrollingLyricRow(
+            spec: .init(
+                lineKey: key,
+                words: [SyncedLyricWord(text: text, startMs: 0, durationMs: 0)],
+                groups: nil,
+                font: font,
+                romaFont: playback.overlayNSFonts.romanization,
+                baseColor: ns, fillColor: ns, romaBaseColor: ns, romaFillColor: ns,
+                strokeColor: playback.textStrokeEnabled ? NSColor(playback.textStrokeColor) : nil,
+                alignment: alignment,
+                paused: !playback.isPlayingNow || !previewHostVisible,
+                pacedWindow: window),
+            nowMs: Self.lyricsNowMs)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+    }
+
+    /// 主行在滚动模式下占多高。开了**逐词罗马音**时这一行是「字 + 它的读音」上下两行的
+    /// VStack(见 `karaokeWordRun`),高度要把读音那一行一起算进去,否则读音会被裁掉。
+    private var mainScrollRowHeight: CGFloat {
+        let main = playback.scrollTextHeight(playback.overlayNSFonts.main)
+        let roma = usesPerWordRomanization ? playback.scrollTextHeight(playback.overlayNSFonts.romanization) : 0
+        // 描边包的是字 + 读音那一整块,预留只加一份。
+        return main + roma + playback.scrollStrokePadding
+    }
+
+    /// 滚动模式下**没溢出**的短句靠哪边 —— 跟换行模式下 VStack 的对齐同一个来源,
+    /// 两种模式切来切去短句不该跳位置。溢出的句子一律从左起滚(见 `MarqueeText.restingAlignment`)。
+    private var marqueeRestingAlignment: Alignment {
+        Alignment(horizontal: duetAlignment, vertical: .center)
+    }
+
     private var duetRowAlignment: WrapLayout.RowAlignment {
         switch duetSide {
         case .leading: return .leading
@@ -856,6 +1067,52 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     private var lyricsCard: some View {
+        // 对唱行的两侧留白 —— 让左右真的读成两栏,而不是只靠字的落点(见 LyricDuetLayout)。
+        // 没有对唱信息的行(普通歌的每一行)insets 恒为 0,排版逐像素不变。
+        //
+        // 留白乘 `duetInsetScale`:它只占"这一行本来就用不到"的那部分宽度,一行装不下就整份
+        // 让开,别让留白逼出提前折行(见 OverlayCardGeometry.elasticInsetScale)。
+        lyricsCardContent
+            .padding(.leading, duetInsets.leading * duetInsetScale)
+            .padding(.trailing, duetInsets.trailing * duetInsetScale)
+            .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
+            .background(overlayBackground)
+            // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
+            .overlay(
+                RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                    .stroke(playback.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0),
+                            lineWidth: 2)
+            )
+            // 预设模式下想拖被拒:整张卡左右抖三下(照 macOS 密码框输错那一下的语义),
+            // 配合槽位里那条「已固定」胶囊。tick 每次 +1,GeometryEffect 里 sin 走整数个周期、
+            // 静止位精确归零。「减弱动态效果」开着时不抖(胶囊照样给)。纯位移、不改布局,
+            // 热区/高度上报不受影响。
+            .modifier(OverlayRejectShake(
+                travel: reduceMotion ? 0 : CGFloat(overlayController.placementLockShakeTick)))
+            .animation(reduceMotion ? nil : .linear(duration: 0.45),
+                       value: overlayController.placementLockShakeTick)
+            // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center,
+            // 跟原来完全一致——除非「对齐方式」覆盖生效,那时
+            // duetSide 会固定成用户选的方向,不带标记的普通歌也会跟着一起改对齐。
+            .multilineTextAlignment(duetTextAlignment)
+    }
+
+    /// 罗马音那一行的文字,没有就是 nil(这一行整个不出现)。
+    ///
+    /// 抽成计算属性而不是写在 body 的 `if let` 里:`overlayCardLayoutKey` 要拿同一份判据
+    /// 当内容身份,两处各写一遍迟早会漂 —— 漂了的表现是换了行还用上一行的留白试探结果。
+    ///
+    /// 有逐词标注(`usesPerWordRomanization`)时读音已经标在每个词正下方,这一整行不再重复。
+    /// `line` 为 nil(前奏/间奏「•••」下方没有当前行陪衬)时退到 `nextLineRomanization`——
+    /// 那句其实就是接下来的第一句本身,该按正常行的规格展示。
+    private var romanizationRowText: String? { rowPlan.romanization?.text }
+
+    /// 译文那一行的文字,没有就是 nil。`line` 为 nil 时的退路同 `romanizationRowText`。
+    private var translationRowText: String? { rowPlan.translation?.text }
+
+    private var lyricsCardContent: some View {
         VStack(alignment: duetAlignment, spacing: 4) {
             withSpeakerIndicator(side: duetDecorationSide, color: playback.displayForegroundColor) {
                 reportingMainLineRect(mainLine)
@@ -880,52 +1137,25 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // line 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬)退到 nextLineRomanization——
             // 那句其实是接下来的第一句本身,该按正常行的规格展示,不是"预览小字没有罗马音"
             // 那条既有限制的例外,是同一份数据换了个取值来源。
-            if playback.showRomanization, !usesPerWordRomanization,
-                let roma = line?.romanization ?? (line == nil ? playback.nextLineRomanization : nil)
-            {
-                reportingTextRect(
-                    Text(roma)
-                        .font(playback.romanizationFont)
-                        .foregroundStyle(playback.displayForegroundColor.opacity(0.6))
-                        .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
-                        .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor))
-                    // 补主歌词那边圆点+竖线占掉的宽度,理由见 speakerIndicatorInset 的注释。
-                    .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                    .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
-            }
-            if playback.showTranslation, let tr = line?.translation ?? (line == nil ? playback.nextLineTranslation : nil) {
-                reportingTextRect(
-                    Text(tr)
-                        .font(playback.translationFont)
-                        .foregroundStyle(playback.displayForegroundColor.opacity(0.75))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor))
-                    // 同上。
-                    .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                    .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
-            }
-            if playback.showNextLinePreview, let next = nextLineText {
-                // 分栏按**下一句自己的** side 算,不继承外层 VStack 的 duetAlignment
-                // (那个绑的是当前行)——.frame/.multilineTextAlignment 挂在
-                // reportingTextRect(...) 的返回值上、而不是塞进它的参数里,是为了不
-                // 打乱 reportingTextRect 量出来的文字矩形(它要量的是文字本身的紧凑
-                // 边界,不是撑满整行之后的边界,见 reportingMainLineRect 同一处理由)。
-                withSpeakerIndicator(side: nextLineDecorationSide, color: playback.displayForegroundColor.opacity(0.4)) {
-                    reportingTextRect(
-                        Text(next)
-                            .font(nextLinePreviewFont)
-                            .foregroundStyle(playback.displayForegroundColor.opacity(0.4))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
-                .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
-                // 补偿到"下一句自己真正的" insets,理由见 nextLineInsetsDelta 的注释——
-                // 不这样做的话,下一句只是在当前行的缩进基础上尽量靠边,换演唱者时轮到它
-                // 变成当前行的那一刻,缩进会重新按它自己的声部算,位置就会跳一下。
-                .padding(.leading, nextLineInsetsDelta.leading)
-                .padding(.trailing, nextLineInsetsDelta.trailing)
+            //
+            // 三行(罗马音/译文/下一句预览)的先后顺序**不是恒定的**,取决于 `line` 是否
+            // 为 nil——`nextLinePreviewRow` 在这两种状态下扮演的角色完全不同:
+            //  - `line` 不为 nil(正常唱着的一行):它是**另一句**、跟当前行无关的小字预览,
+            //    该照旧排在"当前行→当前行罗马音→当前行译文"**之后**。
+            //  - `line` 为 nil(前奏/间奏「•••」下方):`romanizationRowText`/`translationRowText`
+            //    退到的正是 `nextLinePreviewRow` 展示的**同一句**,而且用的是 mainFont 整行
+            //    大小(见 nextLinePreviewFont)、俨然就是这段时间里的"伪正文"——它必须排在
+            //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序;
+            //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
+            //    这个倒序。
+            if line == nil {
+                nextLinePreviewRow
+                romanizationRow
+                translationRow
+            } else {
+                romanizationRow
+                translationRow
+                nextLinePreviewRow
             }
             // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
@@ -949,29 +1179,171 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .transition(.opacity)
             }
         }
-        // 对唱行的两侧留白 —— 让左右真的读成两栏,而不是只靠字的落点(见 LyricDuetLayout)。
-        // 没有对唱信息的行(普通歌的每一行)insets 恒为 0,排版逐像素不变。
-        .padding(.leading, duetInsets.leading)
-        .padding(.trailing, duetInsets.trailing)
-        .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
-        .background(overlayBackground)
-        // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
-        .overlay(
-            RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
-                .stroke(playback.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
-        )
-        // 预设模式下想拖被拒:整张卡左右抖三下(照 macOS 密码框输错那一下的语义),
-        // 配合槽位里那条「已固定」胶囊。tick 每次 +1,GeometryEffect 里 sin 走整数个周期、静止位
-        // 精确归零。「减弱动态效果」开着时不抖(胶囊照样给)。纯位移、不改布局,热区/高度上报不受影响。
-        .modifier(OverlayRejectShake(
-            travel: reduceMotion ? 0 : CGFloat(overlayController.placementLockShakeTick)))
-        .animation(reduceMotion ? nil : .linear(duration: 0.45), value: overlayController.placementLockShakeTick)
         // 对唱歌词按演唱者分左右。不带标记的歌 duetSide 恒为 .center,
         // 跟原来完全一致——除非「对齐方式」覆盖生效,那时
         // duetSide 会固定成用户选的方向,不带标记的普通歌也会跟着一起改对齐。
         .multilineTextAlignment(duetTextAlignment)
+    }
+
+    /// 罗马音那一行——抽成独立视图是为了在 `lyricsCardContent` 里按 `line == nil` 换序
+    /// (见那边的头注),不然三行只能写死同一个先后顺序。
+    @ViewBuilder private var romanizationRow: some View {
+        if let roma = romanizationRowText, rowPlan.romanization?.motion == .paced, let window = pacedWindow {
+            reportingTextRect(
+                pacedLayerRow(key: roma, text: roma, font: playback.overlayNSFonts.romanization,
+                              color: playback.displayForegroundColor.opacity(0.6), alignment: duetSide,
+                              height: playback.scrollRowHeight(playback.overlayNSFonts.romanization),
+                              window: window))
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        } else if let roma = romanizationRowText, rowPlan.romanization?.motion == .still {
+            reportingTextRect(stillUpcomingText(roma, font: playback.romanizationFont,
+                                                color: playback.displayForegroundColor.opacity(0.6)))
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        } else if let roma = romanizationRowText {
+            reportingTextRect(
+                Text(roma)
+                    .font(playback.romanizationFont)
+                    .foregroundStyle(playback.displayForegroundColor.opacity(0.6))
+                    .overlayLineFit(playback.lineOverflow) // 换行模式如实撑高,不被裁掉
+                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                    .overlayScroll(playback.lineOverflow == .scroll, id: roma, alignment: marqueeRestingAlignment,
+                                   height: playback.scrollRowHeight(playback.overlayNSFonts.romanization)))
+                // 补主歌词那边圆点+竖线占掉的宽度,理由见 speakerIndicatorInset 的注释。
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        }
+    }
+
+    /// 译文那一行,同上——抽出来只为了换序,内容/样式一个字没变。
+    @ViewBuilder private var translationRow: some View {
+        if let tr = translationRowText, rowPlan.translation?.motion == .paced, let window = pacedWindow {
+            reportingTextRect(
+                pacedLayerRow(key: tr, text: tr, font: playback.overlayNSFonts.translation,
+                              color: playback.displayForegroundColor.opacity(0.75), alignment: duetSide,
+                              height: playback.scrollRowHeight(playback.overlayNSFonts.translation),
+                              window: window))
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        } else if let tr = translationRowText, rowPlan.translation?.motion == .still {
+            reportingTextRect(stillUpcomingText(tr, font: playback.translationFont,
+                                                color: playback.displayForegroundColor.opacity(0.75)))
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        } else if let tr = translationRowText {
+            reportingTextRect(
+                Text(tr)
+                    .font(playback.translationFont)
+                    .foregroundStyle(playback.displayForegroundColor.opacity(0.75))
+                    .overlayLineFit(playback.lineOverflow)
+                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                    .overlayScroll(playback.lineOverflow == .scroll, id: tr, alignment: marqueeRestingAlignment,
+                                   height: playback.scrollRowHeight(playback.overlayNSFonts.translation)))
+                // 同上。
+                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
+                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
+        }
+    }
+
+    /// 下一句预览那一行,同上——抽出来只为了换序,内容/样式一个字没变。
+    @ViewBuilder private var nextLinePreviewRow: some View {
+        if playback.showNextLinePreview, let next = nextLineText {
+            // 分栏按**下一句自己的** side 算,不继承外层 VStack 的 duetAlignment
+            // (那个绑的是当前行)——.frame/.multilineTextAlignment 挂在
+            // reportingTextRect(...) 的返回值上、而不是塞进它的参数里,是为了不
+            // 打乱 reportingTextRect 量出来的文字矩形(它要量的是文字本身的紧凑
+            // 边界,不是撑满整行之后的边界,见 reportingMainLineRect 同一处理由)。
+            withSpeakerIndicator(side: nextLineDecorationSide, color: playback.displayForegroundColor.opacity(0.4)) {
+                reportingTextRect(nextLinePreviewContent(next))
+            }
+            .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
+            .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
+            // 补偿到"下一句自己真正的" insets,理由见 nextLineInsetsDelta 的注释——
+            // 不这样做的话,下一句只是在当前行的缩进基础上尽量靠边,换演唱者时轮到它
+            // 变成当前行的那一刻,缩进会重新按它自己的声部算,位置就会跳一下。
+            .padding(.leading, nextLineInsetsDelta.leading)
+            .padding(.trailing, nextLineInsetsDelta.trailing)
+        }
+    }
+
+    /// 前奏/间奏「•••」下方那句(`line` 为 nil)能不能把罗马音逐词标在底下 —— 判据同
+    /// `usesPerWordRomanization`,数据取自下一行。设置页示例行在场时 `line` 不为 nil,恒为 nil。
+    private var upcomingWordGroups: [SyncedLyricWordGroup]? {
+        guard rowPlan.nextPerWordRomanization, let groups = playback.nextLineWordGroups, !groups.isEmpty
+        else { return nil }
+        return groups
+    }
+
+    /// 下一句预览的内容。有逐词分组时按「一组一列:字在上、读音在下」排,跟这句变成当前行之后
+    /// (`karaokeWordRun`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
+    @ViewBuilder
+    private func nextLinePreviewContent(_ next: String) -> some View {
+        let color = playback.displayForegroundColor.opacity(0.4)
+        let still = rowPlan.next?.motion == .still
+        if still, let groups = upcomingWordGroups {
+            // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。
+            ViewThatFits(in: .horizontal) {
+                upcomingGroupColumns(groups, key: next, color: color)
+                upcomingGroupColumns(groups, key: next, color: color)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+            }
+            .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else if still {
+            stillUpcomingText(next, font: nextLinePreviewFont, color: color)
+        } else if let groups = upcomingWordGroups {
+            upcomingGroupColumns(groups, key: next, color: color)
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else {
+            Text(next)
+                .font(nextLinePreviewFont)
+                .foregroundStyle(color)
+                .overlayLineFit(playback.lineOverflow)
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        }
+    }
+
+    /// 逐词列本体。换行模式走 WrapLayout(长句折行,同当前行);滚动模式排成一整条(不滚,见
+    /// `OverlayRowPlan.Motion.still`)。
+    /// 没有读音的组也占住读音那一行的高度(透明空格),理由同 `karaokeWordRun`。
+    @ViewBuilder
+    private func upcomingGroupColumns(_ groups: [SyncedLyricWordGroup], key: String, color: Color) -> some View {
+        let columns = ForEach(groups) { g in
+            VStack(alignment: .leading, spacing: 0) {
+                Text(g.words.map(\.text).joined())
+                    .font(nextLinePreviewFont)
+                    .foregroundStyle(color)
+                // 列宽规则跟图层行同一套(`OverlayRowLayout`:读音左右各留 romaSidePadding),
+                // 开唱那一刻列宽不变。
+                Text(g.romanization ?? " ")
+                    .font(playback.romanizationFont)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, OverlayRowLayout.romaSidePadding)
+                    .opacity(g.romanization == nil ? 0 : 1)
+            }
+            .fixedSize()
+        }
+        if playback.lineOverflow == .scroll {
+            HStack(alignment: .top, spacing: 0) { columns }
+                .fixedSize()
+        } else {
+            WrapLayout(rowAlignment: nextLineRowAlignment,
+                       contentKey: AnyHashable(OverlayLineKey(
+                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: playback.romanizationFont))) {
+                columns
+            }
+        }
+    }
+
+    private var nextLineRowAlignment: WrapLayout.RowAlignment {
+        switch nextLineDuetSide {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
     }
 
     /// 锁定态 hover 时是否露出"解锁"提示。判据本体在 Core(`OverlayControlHitTest
@@ -984,7 +1356,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         OverlayControlHitTest.unlockPillShown(
             hovering: overlayController.isHoveringForControls,
             positionLocked: playback.lockPosition,
-            hoverControlsEnabled: playback.showHoverControls)
+            hoverControlsEnabled: overlayController.showHoverControls)
     }
 
     /// 锁定态 hover 时露出的解锁提示——跟播放控制排共用**同一个槙位**(body 里的
@@ -1199,76 +1571,29 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     @ViewBuilder
     private var mainLine: some View {
-        if let words = line?.words {
-            // 逐字填色用 TimelineView(.animation) 直接从 PlaybackCoordinator.anchor 外推
-            // 播放位置,每帧现算 fillFraction,不经过 @Published 值 + .animation() 插值
-            // ——SwiftUI 对 .linear 这类曲线动画在重新定目标时是矢量相加而不是从当前值
-            // 接续,高频率更新下会造成逐字流转卡顿。暂停时 anchor 会变 nil(见 fastTick
-            // 守卫),paused 的第一个条件顺带把这个子树的刷新也停下来。
-            //
-            // 帧率上限见 WordKaraokeGradient.refreshInterval —— 那次实测(主线程
-            // 跑满 100%)是在歌词窗口上做的,当时只给窗口加了上限,**这里和灵动岛漏了**,
-            // 一直按显示器刷新率(ProMotion 120Hz)全速跑到。常驻显示的恰恰是
-            // 悬浮窗,所以这处漏掉的代价比窗口那处更大。
-            //
-            // paused 的第二个条件(性能审计落地):这一行填完之后到下一行开始
-            // 之前 —— 行尾拖延、以最后一行收尾的间奏/曲末 —— currentLine 不变、所有词的
-            // 渐变恒为纯色,视觉零变化,但表不停的话闭包每 tick 照跑(每词一个 LinearGradient
-            // 构造,一行 20 词就是每秒 600 个,换 0 像素变化)。currentLineFillSettled 每行
-            // 至多翻转两次,换行时 currentLine 赋值触发 body 重估,表自然恢复。
-            //
-            // ⚠️ 这里**故意**保持"TimelineView 包住整个 WrapLayout",没有照搬歌词窗口那套
-            // "下沉到每个字自己挂 TimelineView"(见 LyricsWindowView.KaraokeLineText.body
-            // 顶部那段)。下沉之后每个字是**各自独立**的 30Hz 时钟、tick 时刻互不对齐,
-            // 描边(整行一份 mask)反而可能被一行里 N 个错开的时刻各触发一次;整行一个表
-            // 30Hz 的闭包成本本来就有上限,收益配不上结构翻动。描边自身已经不再吃每帧
-            // 渐变变化 —— 剪影 mask 换成了静态源,见 lyricsTextStroke(maskSource:) 那段。
-            TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
-                                    paused: !playback.isPlayingNow || playback.currentLineFillSettled)) { context in
-                // 加上 currentLyricsOffsetMs——activeLine/activeLineIndex(决定"现在是哪一
-                // 行哪个词")内部已经把 offsetMs 加进判断了,这里如果不加同一个偏移量,
-                // "被判定成当前词"用的时间基准跟"这个词该填多满"用的时间基准就对不上:
-                // 词提前变成"当前词"了,但填色进度还是按未校正的原始位置算,会出现填到一半
-                // 就卡住、然后突然跳到下一个词从 0 开始的现象(现象是实测坐实)。
-                //
-                // anchor/currentLyricsOffsetMs **直读**协调器而不经 playback 代理:这个闭包
-                // 由 TimelineView 按帧重跑,每帧读到的都是最新值,订阅它们只会让重锚/校准
-                // 多打醒整个 body(见 OverlayPlayback 的注释)。
-                // ?? pausedPositionMs(修,四个展示面同款):暂停时 anchor 为 nil、冻结
-                // 位置在 pausedPositionMs —— 原来 `?? 0` 会让暂停触发的最后一帧渲染把填色
-                // 画成整行"未唱"(时间基准塌缩到 0),补兜底后停在暂停那一刻的真实进度。
-                let currentMs = (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: context.date)
-                    ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
-                    + PlaybackCoordinator.shared.currentLyricsOffsetMs
-                karaokeLineContent(words: words, atMs: currentMs)
-                    // 调试 HUD 的帧率取样。挂在**这个**闭包里是刻意的:它就是逐字填色的
-                    // 那条热路径,量的正是"这个 App 最贵的那段渲染实际拿到多少帧",而不是
-                    // 另起一个 TimelineView 去量一个跟它无关的数字(那样量出来的是
-                    // SwiftUI 愿意给一个空闲视图多少帧,毫无意义)。
-                    // 开关关着时整段不执行,零成本。
-                    .onChange(of: context.date) { _, date in
-                        guard showsDebugHUD, AppSettings.shared.debugHUDEnabled else { return }
-                        frameProbe.tick(at: date)
-                        debugFPS = frameProbe.fps
-                    }
-            }
-            .font(playback.mainFont)
-            // 描边的剪影 mask 用**静态副本**当 Canvas symbol(性能审计落地):
-            // 原来 symbol 就是 content 本身,活跃词的渐变每 tick 一变、symbol 就失效,整行
-            // 位图被二次合成并重跑高斯模糊 + alphaThreshold —— 而 mask 只消费 alpha 剪影,
-            // 剪影只由文字/字体/换行决定,一行存续期内 0 次真实变化,那些滤镜 pass 全是
-            // 重复计算。静态副本走同一个 karaokeLineContent(同排版/同字体/同换行),只随
-            // 换行/字体/宽度变化重建。
-            .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor) {
-                karaokeLineContent(words: words, atMs: nil)
-                    .font(playback.mainFont)
-            }
+        if let words = line?.words, rowPlan.main == .follow {
+            // 滚动模式下带逐字填色的主行走 AppKit 图层路,不走下面那条 SwiftUI 的。
+            // 理由(30Hz 重建 × 每帧平移 = 主线程被打满)见 OverlayScrollingLyricRow 头注。
+            layerScrollingKaraokeRow(words: words)
+        } else if let words = line?.words {
+            // 换行模式同样走图层:按宽度切成几行,每行一条图层行各自填色(见 WrappedKaraokeRows 头注)。
+            // 原来这里是 30Hz TimelineView 包整个 WrapLayout、每个字一个渐变 Text,悬浮窗每拍整窗
+            // 布局 + 提交一遍(实测播放中 9.3%,滚动模式的图层路 4.0%)。
+            layerWrappedKaraokeRows(words: words)
+        } else if let text = line?.mainText, rowPlan.main == .paced, let window = pacedWindow {
+            // 没有逐字时间轴:按这一句显示多久配速,开头停一会儿、句末前滚完,暂停就停。
+            pacedLayerRow(key: text, text: text, font: playback.overlayNSFonts.main,
+                          color: playback.displayForegroundColor, alignment: duetSide,
+                          height: playback.scrollRowHeight(playback.overlayNSFonts.main), window: window)
         } else if let text = line?.mainText {
             Text(text)
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor)
-                .fixedSize(horizontal: false, vertical: true)
+                .overlayLineFit(playback.lineOverflow)
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                // 整行歌词(没有逐字时间轴)没有跟唱路径可走,退回时间配速的「首停到匀速到尾停」。
+                .overlayScroll(playback.lineOverflow == .scroll, id: text, alignment: marqueeRestingAlignment,
+                               height: playback.scrollRowHeight(playback.overlayNSFonts.main))
         } else if !playback.hasTrack {
             // 没有任何曲目时,画品牌标记「♪ Lyrimuse」而不是复用曲内间奏那个 30% 不透明度
             // 的单个「♪」标记(那是给"这里有歌词、只是此刻没词"准备的轻标记,拿来当整个
@@ -1357,7 +1682,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 startMs: window.startMs, endMs: window.endMs,
                 dotSize: playback.mainFontSize * 0.32, spacing: playback.mainFontSize * 0.3,
                 color: playback.displayForegroundColor,
-                isPlaying: playback.isPlayingNow, isVisible: true,
+                isPlaying: playback.isPlayingNow, isVisible: previewHostVisible,
                 reduceMotion: reduceMotion
             ) { date in
                 (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: date)
@@ -1383,79 +1708,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 这一行能不能把罗马音标到每个词底下。要同时满足:用户开了罗马音、这一行确实分出了
     /// 词组——日文靠分词器、中文/粤语靠字数与音节数一一对应,拼不出来
     /// (比如中文/粤语行字数跟音节数对不上)时 wordGroups 为 nil,退回整行罗马音。
-    private var usesPerWordRomanization: Bool {
-        playback.showRomanization && line?.wordGroups?.isEmpty == false
-    }
+    private var usesPerWordRomanization: Bool { rowPlan.perWordRomanization }
 
-    /// 逐字行的内容本体,mainLine 的两个消费方共用同一份排版:
-    /// - `atMs` 非 nil:正常展示路径,按播放位置给每个词/组算填色渐变(TimelineView 每帧调);
-    /// - `atMs` 为 nil:描边剪影的**静态副本**(同字体/同排版/同换行,纯色填充)——mask 只
-    ///   消费 alpha 剪影,用它当 Canvas symbol,描边层就不再被每帧的渐变变化整行重算,
-    ///   见 mainLine 里 lyricsTextStroke(maskSource:) 那段注释。
-    @ViewBuilder
-    private func karaokeLineContent(words: [SyncedLyricWord], atMs currentMs: Int?) -> some View {
-        // 渐变素材每帧每行只取一次(纯色词跨帧复用同一实例,见 WordKaraokeGradient.Palette
-        // 注释;性能审计:原来逐词现造 LinearGradient+AnyShapeStyle,~95% 纯色词
-        // 每帧被迫重走样式失效)。currentMs == nil 是描边剪影副本,不需要素材。
-        // 已唱/未唱是独立的一对颜色(不再是"同一色调暗"的派生关系),原样传给两条渐变
-        // (主行 + 罗马音行)——未唱色不跟着 fg 的 0.75 罗马音折扣走一遍,那条折扣只对
-        // "同一色调暗"才有意义。
-        let unsungColor = playback.displayKaraokeUnsungColor
-        let palette = currentMs != nil
-            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor, unsungColor: unsungColor) : nil
-        let romaPalette = (currentMs != nil && usesPerWordRomanization)
-            ? WordKaraokeGradient.palette(fg: playback.displayForegroundColor.opacity(0.75), unsungColor: unsungColor) : nil
-        // 会自动换行的 WrapLayout——HStack(spacing: 0) 从不换行,一行装不下所有字时会把
-        // 每个 Text 压缩到自己出省略号,长的逐字歌词行会直接"消失"变成一串"…"。
-        // 见文件底部 WrapLayout 定义。contentKey:行身份+字体+罗马音开关 —— 都没变就跳过
-        // 逐词重新测宽(见 WrapLayout.Cache 的守卫注释)。
-        WrapLayout(rowAlignment: duetRowAlignment,
-                   contentKey: overlayLineLayoutKey,
-                   contentRectSink: wrapContentSink) {
-            if let groups = line?.wordGroups, usesPerWordRomanization {
-                // 一组一列:上面是这一组的字(各自逐字填色),下面是这一组的罗马音
-                // (跟着整组的进度填)。列宽由 VStack 取"上下两行里更宽的那个",
-                // 主文字之间的间距因此会被下面的罗马音撑开 —— Apple 那边也是这样。
-                ForEach(groups) { g in
-                    // 组内左对齐,跟歌词窗口/Apple Music 一致
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 0) {
-                            // indices 而不是 Array(enumerated()):后者每帧物化一个新数组
-                            // 纯为当 id,Range 零分配,下标当 id 与原 offset 语义一致。
-                            ForEach(g.words.indices, id: \.self) { i in
-                                wordText(g.words[i], atMs: currentMs, palette: palette)
-                            }
-                        }
-                        // 这一行开了逐词罗马音就每组都占住罗马音那一行的高度,哪怕这一组
-                        // 没有读音(修复:混合语言行里英文词的 romanization 是
-                        // nil,如果直接不摆这个子视图,VStack 矮一截,WrapLayoutMath.placements
-                        // 按行高居中会把矮的这一组网下压——韩文词上面还顶着字、英文词却
-                        // 悬在行中间,视觉上就成了"分两行"。用透明占位撑住同样的高度,
-                        // 组跟组之间才能在同一行对齐,空位置真的只是空,不是消失。
-                        // ⚠️ 占位内容不能是空字符串 ""——SwiftUI 的
-                        // Text("").fixedSize() 在这个上下文里量出来的高度**塌成了 0**
-                        // (没有字形可排,intrinsic size 直接归零),结果跟完全不摆这个子
-                        // 视图是同一个 bug、白修了一轮(对拍仍然"分两行"坐实)。换成
-                        // 一个空格 " "——任何字体都会给空格一个真实的行高占位,这是这个坑
-                        // 的标准规避写法。
-                        if usesPerWordRomanization {
-                            romaText(g.romanization ?? " ", group: g, atMs: currentMs, palette: romaPalette)
-                                .opacity(g.romanization == nil ? 0 : 1)
-                        }
-                    }
-                }
-            } else {
-                ForEach(words.indices, id: \.self) { i in
-                    wordText(words[i], atMs: currentMs, palette: palette)
-                }
-            }
-        }
-    }
-
-    /// WrapLayout 的内容身份:这些输入不变,行内每个 Text 的固有尺寸就不变,布局缓存可以
-    /// 跳过整行重新测宽。⚠️ 必须含**完整**字体身份(family/size/weight 都在 mainFont/
-    /// romanizationFont 里)和罗马音开关 —— 漏一样就会拿陈旧尺寸错误换行。填色渐变/描边
-    /// 不影响固有尺寸,刻意不进 key。
+    /// 逐字主行的内容身份:当作 `wrapContentSink` 的 owner(见 WrapContentRectSink —— 读热区的一方
+    /// 认它判断「这块矩形是不是这一行的」)。必须含**完整**字体身份(family/size/weight 都在 mainFont/
+    /// romanizationFont 里)和罗马音开关 —— 这些一变折行就变、之前量出的矩形就作废。填色 / 描边不影响
+    /// 排版,刻意不进 key。
     private var overlayLineLayoutKey: AnyHashable {
         AnyHashable(OverlayLineKey(
             text: line?.plainText,
@@ -1469,54 +1727,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let roma: Bool
         let mainFont: Font
         let romaFont: Font
-    }
-
-    /// 一组的罗马音。填色进度按**整组**算,不跟着组里单个字跳 —— 一组常常只对应一个读音
-    /// (「いつか」是一个词),按字跳会让下面这行一顿一顿的。currentMs 为 nil 时是描边
-    /// 剪影副本,纯色即可(mask 只取 alpha),见 karaokeLineContent。
-    private func romaText(
-        _ roma: String, group: SyncedLyricWordGroup, atMs currentMs: Int?,
-        palette: WordKaraokeGradient.Palette?
-    ) -> some View {
-        let style: AnyShapeStyle
-        if let currentMs, let palette {
-            // 裸起止版 fillFraction:别再每帧现造一个纯为传参的伪 SyncedLyricWord。
-            let fraction = KaraokeFill.fillFraction(
-                startMs: group.startMs, durationMs: max(1, group.endMs - group.startMs),
-                atMs: currentMs)
-            let band = WordKaraokeGradient.wordEdgeSoftenBand
-            style = palette.style(left: fraction - band, right: fraction + band)
-        } else {
-            // 不透明黑保证任何前景色/透明度设置下剪影都完整(过 alphaThreshold)。
-            style = AnyShapeStyle(Color.black)
-        }
-        return Text(roma)
-            .font(playback.romanizationFont)
-            .foregroundStyle(style)
-            .lineLimit(1)
-            .fixedSize()
-            // 左右各留一点,免得相邻两组的罗马音贴在一起分不清词界
-            .padding(.horizontal, 2)
-    }
-
-    private func wordText(
-        _ w: SyncedLyricWord, atMs currentMs: Int?, palette: WordKaraokeGradient.Palette?
-    ) -> some View {
-        let style: AnyShapeStyle
-        if let currentMs, let palette {
-            let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
-            let band = WordKaraokeGradient.wordEdgeSoftenBand
-            style = palette.style(left: fraction - band, right: fraction + band)
-        } else {
-            // 描边剪影副本 —— 理由见 romaText 同款分支。
-            style = AnyShapeStyle(Color.black)
-        }
-        return Text(w.text)
-            .foregroundStyle(style)
-            // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
-            // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入 mainLine 注释里
-            // 那套矢量叠加问题。也故意不在这里单独套描边——描边统一挂在 mainLine 里
-            // TimelineView 外层的 .lyricsTextStroke(maskSource:),见那边注释。
     }
 }
 
@@ -1537,13 +1747,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 // Canvas symbol 就失效,整行位图被二次合成并重跑高斯模糊 + alphaThreshold,而 mask 只
 // 消费 alpha 剪影,剪影在一行存续期内根本不变。那条路径改传一份同排版的纯色副本,
 // 描边层就只随换行/字体/宽度变化重建。
+/// 歌词描边的几何参数。换行模式(`OptionalTextStroke`,SwiftUI)和滚动模式
+/// (`OverlayScrollingLyricRow`,位图)两条渲染路都读这一份 —— 两边算法相同(剪影模糊后
+/// 按透明度硬阈值出实心轮廓),参数也必须相同,否则两种模式的描边粗细不一样。
+enum LyricsTextStrokeMetrics {
+    /// 剪影模糊半径(点)。不做成可调项,设置里只开颜色。
+    static let width: CGFloat = 1.2
+    /// 描边在内容四周预留的空白(点):模糊会让剪影往外胀,不留这一圈就会被裁掉。
+    static var inset: CGFloat { width * 2 }
+    /// 模糊后透明度不低于它的像素整片涂成描边色。
+    static let alphaThreshold: Double = 0.01
+}
+
 private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
     let enabled: Bool
     let color: Color
     let maskSource: MaskSource?
-    // 固定常量,不做成 Settings 可调项——只给颜色选择器,粗细留在代码里,保持克制
-    // (同类实现普遍也只开颜色)。1.2pt 在这个项目常用的歌词字号下是一圈清晰但不臃肿的细描边。
-    private let width: CGFloat = 1.2
+    private let width = LyricsTextStrokeMetrics.width
     private let symbolID = "np-lyrics-stroke"
 
     init(enabled: Bool, color: Color, maskSource: MaskSource?) {
@@ -1564,7 +1784,7 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
                         .foregroundStyle(color)
                         .mask {
                             Canvas { context, size in
-                                context.addFilter(.alphaThreshold(min: 0.01))
+                                context.addFilter(.alphaThreshold(min: LyricsTextStrokeMetrics.alphaThreshold))
                                 context.drawLayer { ctx in
                                     if let resolved = context.resolveSymbol(id: symbolID) {
                                         ctx.draw(resolved, at: CGPoint(x: size.width / 2, y: size.height / 2))
@@ -1911,5 +2131,37 @@ private struct OverlayRejectShake: GeometryEffect {
     func effectValue(size: CGSize) -> ProjectionTransform {
         let x = amplitude * sin(travel * .pi * 2 * cycles)
         return ProjectionTransform(CGAffineTransform(translationX: x, y: 0))
+    }
+}
+
+// MARK: - 「长句处理」的两个排版件
+
+extension View {
+    /// 一行放不下时这一行怎么量自己:
+    /// - 换行:`fixedSize(horizontal: false, vertical: true)` —— 横向接受外部提案(于是会折行)、
+    ///   纵向如实撑高不被裁。
+    /// - 滚动:钉成一行、两轴都按自然尺寸报 —— 跑马灯靠这个自然宽度判断有没有溢出,
+    ///   让外部提案把它压窄的话它会永远"装得下"、一格都不滚。
+    @ViewBuilder
+    func overlayLineFit(_ overflow: OverlayLineOverflow) -> some View {
+        switch overflow {
+        case .wrap: fixedSize(horizontal: false, vertical: true)
+        case .scroll: lineLimit(1).fixedSize()
+        }
+    }
+
+    /// 「长句处理 = 滚动」时把这一行套进跑马灯;换行模式原样返回、一个修饰符都不多套(默认档的
+    /// 排版必须逐像素不变)。
+    /// `height` 必须给(取 `OverlayPlayback.scrollRowHeight`):`MarqueeText` 外壳没有固有高度。
+    @ViewBuilder
+    func overlayScroll(_ on: Bool, id: AnyHashable, alignment: Alignment,
+                       height: CGFloat, follow: MarqueeFollow? = nil) -> some View {
+        if on {
+            // loops: false —— 歌词行滚到底就停在句尾,等换句(id 变)才归零。
+            MarqueeText(id: id, restingAlignment: alignment, follow: follow, loops: false) { self }
+                .frame(height: height)
+        } else {
+            self
+        }
     }
 }

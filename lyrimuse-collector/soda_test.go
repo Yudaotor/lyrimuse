@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // 真实响应片段(方大同《Sorry》,track_id 6705555863068739585,实抓)。
 // 格式是 `[行始ms,行长ms]<字内偏移ms,字长ms,0>字` —— 跟解密后的酷狗 KRC 正文逐字节同构,
@@ -49,7 +52,7 @@ func TestSodaParseSeoTrack(t *testing.T) {
 	if got.durationSecs != 222.653 {
 		t.Errorf("durationSecs = %v, want 222.653", got.durationSecs)
 	}
-	if got.cover != sodaImageBase+"tos-cn-v-2774c002/abc" {
+	if got.cover != sodaImageBase+"tos-cn-v-2774c002/abc~"+sodaImageTemplate+"-"+sodaCoverTransform {
 		t.Errorf("cover = %q", got.cover)
 	}
 }
@@ -109,11 +112,31 @@ func TestSodaParseSeoTrackDetectsBrokenShape(t *testing.T) {
 }
 
 func TestSodaCoverURL(t *testing.T) {
-	if got := sodaCoverURL(""); got != "" {
+	if got := sodaCoverURL("", nil, ""); got != "" {
 		t.Errorf("空 uri 应给空串, got %q", got)
 	}
-	if got := sodaCoverURL("  tos/x  "); got != sodaImageBase+"tos/x" {
-		t.Errorf("cover = %q", got)
+	// 接口实抓的 url_cover 形态:不带 `~模板-处理参数` 的地址回 400。
+	got := sodaCoverURL("tos-cn-v-2774c002/o84FFAQDnBofxEsFEAAq6CEhtB8yfcWggZEUBF",
+		[]string{"https://p3-luna.douyinpic.com/img/", "https://p6-luna.douyinpic.com/img/"}, "tplv-b829550vbb")
+	want := "https://p3-luna.douyinpic.com/img/tos-cn-v-2774c002/o84FFAQDnBofxEsFEAAq6CEhtB8yfcWggZEUBF~tplv-b829550vbb-resize:800:800.jpg"
+	if got != want {
+		t.Errorf("cover = %q, want %q", got, want)
+	}
+	if got := sodaCoverURL("  tos/x  ", nil, ""); got != sodaImageBase+"tos/x~"+sodaImageTemplate+"-"+sodaCoverTransform {
+		t.Errorf("缺 urls / template_prefix 时应用兜底值, got %q", got)
+	}
+	if got := sodaCoverURL("tos/x", []string{"http://insecure/", "https://p6-luna.douyinpic.com/img"}, "tplv-other"); got != "https://p6-luna.douyinpic.com/img/tos/x~tplv-other-"+sodaCoverTransform {
+		t.Errorf("应取第一个 https 前缀并补斜杠, got %q", got)
+	}
+	for u, want := range map[string]bool{
+		"https://p3-luna.douyinpic.com/img/tos-cn-v-2774c002/abc":                                    true,
+		"https://p3-luna.douyinpic.com/img/tos-cn-v-2774c002/abc~tplv-b829550vbb-resize:800:800.jpg": false,
+		"https://p2.music.126.net/x.jpg":                                                             false,
+		"":                                                                                           false,
+	} {
+		if got := sodaCoverNeedsTransform(u); got != want {
+			t.Errorf("sodaCoverNeedsTransform(%q) = %v, want %v", u, got, want)
+		}
 	}
 }
 
@@ -179,66 +202,16 @@ func TestSodaRankCandidatesPutsExactVersionFirst(t *testing.T) {
 }
 
 func TestSodaParseSearchTakesTracksGroupOnly(t *testing.T) {
-	var body sodaSearchResponse
-	body.ResultGroups = make([]struct {
-		ID   string `json:"id"`
-		Data []struct {
-			Entity struct {
-				Track struct {
-					ID       string `json:"id"`
-					Name     string `json:"name"`
-					Duration int64  `json:"duration"`
-					Artists  []struct {
-						Name string `json:"name"`
-					} `json:"artists"`
-					Album struct {
-						Name string `json:"name"`
-					} `json:"album"`
-				} `json:"track"`
-			} `json:"entity"`
-		} `json:"data"`
-	}, 2)
+	// 用 JSON 造响应而不是手写匿名结构体:响应结构加字段时这里不用跟着改。
 	// 非 tracks 组(同一个响应里还会回歌手/专辑/歌单)必须整组跳过。
-	body.ResultGroups[0].ID = "artists"
-	body.ResultGroups[0].Data = make([]struct {
-		Entity struct {
-			Track struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Duration int64  `json:"duration"`
-				Artists  []struct {
-					Name string `json:"name"`
-				} `json:"artists"`
-				Album struct {
-					Name string `json:"name"`
-				} `json:"album"`
-			} `json:"track"`
-		} `json:"entity"`
-	}, 1)
-	body.ResultGroups[0].Data[0].Entity.Track.ID = "should-be-skipped"
-	body.ResultGroups[0].Data[0].Entity.Track.Name = "不该出现"
-
-	body.ResultGroups[1].ID = "tracks"
-	body.ResultGroups[1].Data = make([]struct {
-		Entity struct {
-			Track struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Duration int64  `json:"duration"`
-				Artists  []struct {
-					Name string `json:"name"`
-				} `json:"artists"`
-				Album struct {
-					Name string `json:"name"`
-				} `json:"album"`
-			} `json:"track"`
-		} `json:"entity"`
-	}, 1)
-	tr := &body.ResultGroups[1].Data[0].Entity.Track
-	tr.ID = "123"
-	tr.Name = "Sorry"
-	tr.Duration = 222653
-	tr.Album.Name = "未来"
+	const raw = `{"result_groups":[
+		{"id":"artists","data":[{"entity":{"track":{"id":"should-be-skipped","name":"不该出现"}}}]},
+		{"id":"tracks","data":[{"entity":{"track":{"id":"123","name":"Sorry","duration":222653,
+			"album":{"name":"未来"},"preview":{"start":120960,"duration":60001}}}}]}]}`
+	var body sodaSearchResponse
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
 
 	got := sodaParseSearch(body)
 	if len(got) != 1 || got[0].ID != "123" {
@@ -246,5 +219,8 @@ func TestSodaParseSearchTakesTracksGroupOnly(t *testing.T) {
 	}
 	if got[0].Duration != 222.653 {
 		t.Errorf("时长该从毫秒换成秒, got %v", got[0].Duration)
+	}
+	if got[0].PreviewStartMs != 120960 || got[0].PreviewDurationMs != 60001 {
+		t.Errorf("试听段要带出来(sodapreview.go 用), got %+v", got[0])
 	}
 }

@@ -38,14 +38,55 @@ public struct MediaControlSnapshot: Decodable {
     /// 电台在这一种配置下完全不生效;现在那条路按曲目探一次 media-control 把判据补回来
     /// (见 `MediaControlClient.radioAwareAppleMusicSnapshot`),见 02 章「电台」一节。
     public let isRadio: Bool?
+    /// 这份读数是什么时候读到的(Spotify 的 AppleScript 那份与酷狗 / Safari 的 media-control 那份填,见 `MediaControlClient.fetchSpotifySnapshot` / `stampsCaptureTime`)。
+    /// 读数在后台读到、`LocalPlaybackSource.apply` 在主线程处理,主线程卡半秒多时读数会被记成"半秒前的位置",
+    /// 精确档伺服一拍就往回拽。apply 按它把读数补到处理那一刻。nil = 按处理时刻算(其它来源)。
+    public var capturedAt: Date? = nil
+    /// 这份读数的位置比原始锚点外推多补了多少秒(酷狗自然切歌,见 `MediaControlClient.resetAnchorStartCorrection`)。
+    /// `elapsedTime` 已经含着它,`anchorElapsedTime` 仍是原始值;App 据此把同一段修正写进偏置文件给 collector。
+    public var anchorStartCorrection: Double? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
+
+    /// 曲目身份——判「换歌了没有」和「这份封面属于哪一首」都用它，两处必须同一把尺子。
+    ///
+    /// 通常就等于 `trackKey`。但**署名不可信的播放器**（酷狗 3.3.2 拿当前这句歌词冒充
+    /// artist）要把署名整个剔出去：真署名由 collector 单向发布，而它 5 秒一拍、还要读
+    /// 播放器自己的 plist 才出得来，比 App 的轮询慢一截 —— 换歌头几秒 App 只拿得到脏署名。
+    /// 让它参与身份，一首歌里身份就会抖三四次（实测「锁 (R&B版)」一首歌内
+    /// `track changed` 触发 4 次：正确 → 版权声明行 → 歌词行 → 正确），而封面取图的完成
+    /// 回调正是拿身份核对的（`guard expectedKey == self.lastKey`），每次都被丢掉 ——
+    /// 表现就是这个播放器**永远没有封面**，而且日志里一个字都没有。
+    ///
+    /// **不要拿时长补进来**当区分度：换歌那一拍载荷里常常还没有 duration（实测
+    /// `dur=None` 能持续好几拍），补上它等于又引入一次身份变化，白费。代价是同名不同歌
+    /// 会撞（张学友和李佳薇都有《甲乙丙丁》）——要连着播两首同名的才撞得上，撞上的后果是
+    /// 歌词没跟着刷新，比没有封面轻。
+    /// 委托给封面核对用的**同一个**函数，两边是同一把尺子这件事因此是结构上的，
+    /// 不是靠两处各写一遍、指望它们保持一致。
+    public var identityKey: String {
+        PlayerArtistFix.correctedTrackKey(bundle: bundleIdentifier, artist: artist, title: title)
+    }
 
     // 抽成静态函数是给封面取图那条路复用的:fetchArtwork() 的返回里要带上"这份封面
     // 属于哪首歌"(用 get --now 载荷里自己的 artist/title 算),LocalPlaybackSource
     // 拿它跟当前曲目的 trackKey 比对,推导方式必须跟这里逐字符一致,不能各写一份。
     public static func trackKey(artist: String?, title: String?) -> String {
         "\(artist ?? "")|\(title ?? "")"
+    }
+
+    /// 回放测试造快照用(逐字段的 memberwise init 是 internal 的)。
+    public static func forReplay(
+        title: String?, artist: String?, album: String? = nil, duration: Double?, elapsedTime: Double?,
+        playing: Bool?, playbackRate: Double? = 1, bundleIdentifier: String?, anchorElapsedTime: Double?,
+        isRadio: Bool? = nil, capturedAt: Date? = nil, anchorStartCorrection: Double? = nil
+    ) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: true, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
     }
 
     /// 换掉专辑名的副本。唯一的用处是给 YouTube Music **每条队列第一首**
@@ -59,7 +100,33 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: newAlbum, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
+    }
+
+    /// 换掉署名的副本。唯一的用处是酷狗 3.3.2 把**当前这一句歌词**发布成 artist —— 真署名
+    /// 由 collector 从播放器自己的容器里读出来发布,App 读那条通道换回去,见 `PlayerArtistFix`。
+    /// 两边必须换成同一个值,否则歌词缓存的 key 对不上。
+    /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withArtist(_ newArtist: String) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: newArtist, album: album, duration: duration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
+    }
+
+    /// 换掉曲名的副本。唯一的用处是信任进来的其他播放器把歌词写进 artist、把「歌名 - 歌手」
+    /// 整串写进 title —— collector 拆出真曲名发布,App 读 `PlayerArtistFix` 换成同一个。
+    /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withTitle(_ newTitle: String) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: newTitle, artist: artist, album: album, duration: duration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
     }
 
     /// 换掉时长的副本。唯一的用处是电台:系统报的 `duration` 是**整档节目**的
@@ -71,7 +138,19 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: newDuration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
+    }
+
+    /// 汽水非会员试听换回原曲口径的副本:时长换成整首,位置与原始锚点都加上试听段起点。
+    /// 唯一的用处是 `PlayerPreviewFix`。写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withPreviewOffset(start: Double, fullDuration: Double) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: fullDuration,
+            elapsedTime: elapsedTime.map { $0 + start }, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime.map { $0 + start }, isRadio: isRadio, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
     }
 
     /// 换成电台口径的副本。位置**和锚点**都换成 `RadioTrackClock` 那块按曲目边界
@@ -90,6 +169,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: position, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: position, isRadio: true)
+            anchorElapsedTime: position, isRadio: true, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
     }
 }

@@ -41,3 +41,28 @@ public enum RecentPlayOrdinal {
         }
     }
 }
+
+/// 「最近记录」里**连续**听同一首歌的几行折成一组(单曲循环时一屏全是同一首)。
+///
+/// 「同一首」用的是跟次数换算同一把尺子 `PlayCountFold.familyKey`:同一首歌的两种写法
+/// (繁简 / 中英署名)在次数上是连着数的(第 5 次、第 6 次),折叠时也必须当成同一首,
+/// 否则会出现「上一组第 1–5 次、紧挨着的下一组第 6–7 次」这种一眼就是同一首歌的两组。
+public enum RecentRepeatRuns {
+    /// - Parameter rows: 按时间倒序、实际要显示的行(调用方已剔除不显示的行)。
+    /// - Returns: 覆盖全部下标的连续区间,顺序不变;长度 1 的区间就是不折叠的单行。
+    public static func runs(rows: [(artist: String, title: String)]) -> [Range<Int>] {
+        var out: [Range<Int>] = []
+        var start = 0
+        var currentKey: String?
+        for (i, row) in rows.enumerated() {
+            let key = PlayCountFold.familyKey(artist: row.artist, title: row.title)
+            if key != currentKey {
+                if i > start { out.append(start..<i) }
+                start = i
+                currentKey = key
+            }
+        }
+        if rows.count > start { out.append(start..<rows.count) }
+        return out
+    }
+}

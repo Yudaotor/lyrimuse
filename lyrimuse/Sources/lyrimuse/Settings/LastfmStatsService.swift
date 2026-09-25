@@ -83,8 +83,7 @@ final class LastfmStatsService: ObservableObject {
 
     /// Last.fm 给的图 URL 到 过滤掉"万能占位星"后的 URL(规则在 LyrimuseCore.LastfmImage)。
     private static func filteredImageURL(_ raw: String?) -> URL? {
-        guard let raw, !raw.isEmpty, !raw.contains("2a96cbd8b46e442fc41c2b86b821562f") else { return nil }
-        return URL(string: raw)
+        LastfmImage.usable(raw).flatMap(URL.init(string:))
     }
 
     /// 设置侧栏身份区的头像 URL(见 Settings/SettingsSidebarChrome.swift):`user.getinfo`
@@ -345,7 +344,16 @@ final class LastfmStatsService: ObservableObject {
         /// 没有的键当作"欠一次重探",下轮 resolvePlayCounts 就重问一次(见 playCountUnavailableDue)。
         var playCountUnavailableAt: [String: Double]?
         var playCountUnavailableStrikes: [String: Int]?
+        /// 写这份快照时「查不到次数」的判据版本(playCountRuleVersion)。版本对不上时,名单里的键
+        /// 丢掉退避时间戳 —— 按上面那条「欠一次重探」的语义,下一轮立刻按新判据重查,不必等退避到期。
+        /// 老文件没有 到 nil,同样当作对不上。
+        var playCountRule: Int?
     }
+
+    /// 「查不到次数」的判据版本。判据变宽(能把以前查不到的查出来)时加一,旧快照里那批「查不到」
+    /// 才会马上重查一次,而不是按 1 h 到 6 h 到 24 h 的退避干等。
+    /// 2 = track.getinfo 查无此条时回退 user.getTrackScrobbles。
+    private static let playCountRuleVersion = 2
 
     private static let recentPageCacheURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-pages.json")
 
@@ -375,6 +383,8 @@ final class LastfmStatsService: ObservableObject {
         if let unavailable = snap.playCountUnavailable, !unavailable.isEmpty {
             playCountUnavailable.formUnion(unavailable)
         }
+        // 判据版本对不上:名单照收,但不恢复退避状态 —— 这批键下一轮按新判据重查一次(见 playCountRule)。
+        guard snap.playCountRule == Self.playCountRuleVersion else { return }
         if let at = snap.playCountUnavailableAt {
             for (k, t) in at where playCountUnavailableAt[k] == nil {
                 playCountUnavailableAt[k] = Date(timeIntervalSince1970: t)
@@ -430,7 +440,8 @@ final class LastfmStatsService: ObservableObject {
                 }),
                 playCountUnavailableStrikes: Dictionary(uniqueKeysWithValues: scopedUnavailable.compactMap { k in
                     playCountUnavailableStrikes[k].map { (k, $0) }
-                }))
+                }),
+                playCountRule: Self.playCountRuleVersion)
             let url = Self.recentPageCacheURL
             await Task.detached(priority: .utility) {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
@@ -815,6 +826,9 @@ final class LastfmStatsService: ObservableObject {
         recentCoverByTrack = [:]
         recentCoverByAlbum = [:]
         localCovers = [:]
+        // 判重记录跟着清 —— 不清的话下一次 refreshLocalCovers 会认为"输入没变"、直接返回,
+        // 把刚清空的 localCovers 留在空状态。
+        localCoversInputs = nil
         playCountUnavailable = []
         playCountUnavailableAt = [:]
         playCountUnavailableStrikes = [:]
@@ -1008,15 +1022,18 @@ final class LastfmStatsService: ObservableObject {
         let plays: [(date: Date, album: String?)]
     }
 
-    /// 两个消费方:「显示简介」的首次/上次听(limit=1 取头尾两页,见 refreshNowPlayingSpan)和
-    /// 「第 N 次听」合并明细(每种写法各查一页 200 条,见 PlayCountBreakdownLoader)。
-    /// 失败(网络/限流/响应不认识)返回 nil,不区分原因 —— 两个消费方都只需要知道「这次没拿到」。
-    func fetchTrackScrobbles(artist: String, title: String, page: Int, limit: Int) async -> TrackScrobblesPage? {
+    /// 三个消费方:「显示简介」的首次/上次听(limit=1 取头尾两页,见 refreshNowPlayingSpan)、
+    /// 「第 N 次听」合并明细(每种写法各查一页 200 条,见 PlayCountBreakdownLoader),以及最近记录
+    /// 取次数时 track.getinfo 查无此条的回退(见 resolvePlayCounts)。
+    /// 失败(网络/限流/响应不认识)返回 nil,不区分原因 —— 消费方都只需要知道「这次没拿到」。
+    func fetchTrackScrobbles(artist: String, title: String, page: Int, limit: Int,
+                             priority: LastfmRateLimiter.Priority = .interactive) async -> TrackScrobblesPage? {
         guard let cred = credentials else { return nil }
         // user 参数由 request 统一注入,extra 里不重复给。
         guard let json = await request(
             method: "user.gettrackscrobbles", cred: cred,
-            extra: ["artist": artist, "track": title, "limit": "\(limit)", "page": "\(page)"])
+            extra: ["artist": artist, "track": title, "limit": "\(limit)", "page": "\(page)"],
+            priority: priority)
         else { return nil }
         // 响应根节点是 trackscrobbles;这个方法文档化程度低,留一个 recenttracks
         // 的兜底键名,两个都不认就当失败。
@@ -1372,11 +1389,9 @@ final class LastfmStatsService: ObservableObject {
     /// 里的自愈)。两个数都是"这个账号全部 scrobble"的口径,正常只差几十条。overview 还没取到时不判
     /// (nil 到 false),别在没有参照的时候把好数据当坏的。
     private func heatmapLooksTruncated() -> Bool {
-        // 一次启动只自愈一轮:万一 Last.fm 的 recenttracks 本来就给不全(总数与可翻到的历史不一致),
-        // 不能每 15 分钟把一百多页重扫一遍。重扫过一次还判截断,记一行日志了事。
-        guard !truncationRescanAttempted else { return false }
-        guard let total = overview?.total, total > 0 else { return false }
-        return Double(dailyCounts.values.reduce(0, +)) < Double(total) * 0.7
+        LastfmHeatmapTruncation.looksTruncated(dailyTotal: dailyCounts.values.reduce(0, +),
+                                               reportedTotal: overview?.total,
+                                               rescanAttempted: truncationRescanAttempted)
     }
     private var truncationRescanAttempted = false
 
@@ -2240,6 +2255,8 @@ final class LastfmStatsService: ObservableObject {
         /// 缺失/更小 = 旧口径 —— 加载时把次数表整个作废重取。索引首次建成时运行期也会
         /// 整表作废一次(见 ensureTitleFormsIndex),这里的版本管的是**跨启动**的同一件事。
         /// 老快照里的 hanMergedCounts 布尔字段不再读取,解码时被忽略即视为旧口径。
+        ///
+        /// 当前版本号与每一版口径改动的真实案例,记在决策日志——这里不重复。
         var mergedCountsVersion: Int?
         /// 加——之前这份快照只存了 `recent`(第一页的曲目内容),没存
         /// `recentTotalPages`,而后者启动时的默认值是 1。后果:冷启动/刚打开这一页时,
@@ -2255,8 +2272,6 @@ final class LastfmStatsService: ObservableObject {
         /// `onThisDayDay` 一起存——`DailyRefreshGate` 靠它判断"这份是哪一天算的",跨天了
         /// 照旧先显示旧的、背后重取。只在 `.loaded` 时写;empty/failed 不值得记。
         var onThisDay: OnThisDayResult?
-        ///
-        /// 当前版本号与每一版口径改动的真实案例,记在决策日志——这里不重复。
         var onThisDayDay: Date?
         var onThisDayUpdatedAt: Date?
         /// 各刷新键的上次拉取时刻(加,只存白名单里的键:12 组榜单、baseline、
@@ -2665,10 +2680,28 @@ final class LastfmStatsService: ObservableObject {
         if titleFormsLoaded { refreshLocalAliases(rebuildFamilies: true) }
     }
 
+    /// 上一次算出 `localCovers` 用的输入:行的身份序列 + enrich 缓存的版本。
+    ///
+    /// 这条路径由 feed 文件轮询驱动(collector 每 15 秒重写一次那份文件),而行和缓存
+    /// 绝大多数时候都没动。不判重就是每 15 秒把 recent 加"那年今日"的**每一行**重做两次
+    /// 模糊匹配查封面 —— 全在主线程上,实测一轮约 200ms;悬浮歌词/灵动岛/菜单栏/歌词窗口
+    /// 共用这条主线程,一停就是四个面一起停。
+    private var localCoversInputs: (keys: [String], cacheVersion: Date?)?
+
     private func refreshLocalCovers() {
+        let rows = recent + (onThisDay?.top.map(\.track) ?? [])
+        // 行和缓存都没动 → 算出来跟上次逐字节相同,直接留着(理由见 localCoversInputs)。
+        let keys = rows.map {
+            "\(Self.playCountKey(artist: $0.artist, title: $0.title))\u{1}\($0.album ?? "")"
+        }
+        let cacheVersion = EnrichCacheReader.decodedContentVersion
+        if let last = localCoversInputs, last.keys == keys, last.cacheVersion == cacheVersion {
+            return
+        }
+        localCoversInputs = (keys, cacheVersion)
         var out: [String: URL] = [:]
         var verified: [String: URL] = [:]
-        for r in recent + (onThisDay?.top.map(\.track) ?? []) {
+        for r in rows {
             let key = Self.playCountKey(artist: r.artist, title: r.title)
             if out[key] == nil,
                let url = EnrichCacheReader.coverURL(artist: r.artist, title: r.title, album: r.album ?? "") {
@@ -2938,27 +2971,31 @@ final class LastfmStatsService: ObservableObject {
             var missed = Set<String>()
             // 并发 2:比 getinfo 那边(4)更保守 —— iTunes Search 的限流比 Last.fm 紧,
             // 而这是最后一级兜底,慢一点没有代价。
-            await withTaskGroup(of: (String, MusicCatalogSearch.ArtworkMatch?, Bool).self) { group in
+            await withTaskGroup(of: (String, MusicCatalogSearch.ArtworkLookup).self) { group in
                 var index = 0
                 func addNext() {
                     guard index < targets.count else { return }
                     let item = targets[index]
                     index += 1
                     group.addTask {
-                        let hit = await MusicCatalogSearch.resolveArtwork(
+                        let outcome = await MusicCatalogSearch.resolveArtwork(
                             title: item.title, artist: item.artist, album: item.album,
                             storefront: storefront)
-                        return (item.key, hit, true)
+                        return (item.key, outcome)
                     }
                 }
                 for _ in 0..<min(2, targets.count) { addNext() }
-                for await (key, hit, ok) in group {
-                    if let hit {
+                for await (key, outcome) in group {
+                    switch outcome {
+                    case .found(let hit):
                         found[key] = hit.url
                         logger.notice("catalog cover: \(hit.confidence.rawValue, privacy: .public) for \(key, privacy: .public)")
-                    } else if ok {
+                    case .noMatch:
                         // 成功返回但挑不出能对上的条目 = 那边确实没有这一首,别每轮重问。
                         missed.insert(key)
+                    case .unreached:
+                        // 超时 / 限流 / 退避中:没问成,下一轮再试。
+                        break
                     }
                     addNext()
                 }
@@ -3116,6 +3153,19 @@ final class LastfmStatsService: ObservableObject {
                                                                      "autocorrect": "1", "username": cred.user],
                                                              priority: priority)
                         guard let json = res.json else {
+                            // track.getinfo 查无此条,scrobble 却可能在:只有你一个人听过的新条目,
+                            // Last.fm 常常不给它建 track 索引(几小时后仍 "Track not found"),
+                            // 但你的收听记录里有。改问 user.getTrackScrobbles —— 按精确写法匹配你的
+                            // scrobble 记录,@attr.total 就是这一写法的次数。只问本尊、不加孪生:
+                            // 这个接口不 autocorrect,孪生写法各自的次数没法按规范身份去重,
+                            // 加起来可能把同一批记录数两遍。
+                            if res.notFound, item.wantsCount,
+                               let page = await self.fetchTrackScrobbles(artist: item.artist, title: item.title,
+                                                                         page: 1, limit: 1, priority: priority),
+                               page.total > 0 {
+                                return (item.key, item.artist, item.album, true, page.total, nil,
+                                        item.wantsCount, item.zeroIsFinal)
+                            }
                             // Last.fm 明确说"没有这个实体"(error 6):ok=true,让下面按 unavailable
                             // 记账,别每轮重问(见 requestDetailed 注释)。次数显式传 0 而不是 nil ——
                             // "压根没这个实体"跟"0 次"是同一个答案,而 nil 在 PlayCountOutcome 里
@@ -3680,25 +3730,16 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 解析
 
+    /// 逐行解析与 dup 编号在 LyrimuseCore.LastfmRecentRows(selftest 覆盖)。
     private func parseRecent(_ json: [String: Any]) -> [RecentTrack] {
-        let items = (dig(json, "recenttracks", "track") as? [[String: Any]]) ?? []
-        var dupCount: [String: Int] = [:]
-        return items.compactMap { item in
-            let title = item["name"] as? String ?? ""
-            guard !title.isEmpty else { return nil }
-            let artist = dig(item, "artist", "#text") as? String ?? ""
-            let uts = dig(item, "date", "uts") as? String
-            // 只在"同一时刻+同一首歌"之间编号,不受整表位置影响(见 RecentTrack.dup)
-            let dupKey = "\(uts ?? "np")|\(artist)|\(title)"
-            let dup = dupCount[dupKey, default: 0]
-            dupCount[dupKey] = dup + 1
-            return RecentTrack(
-                dup: dup,
-                title: title,
-                artist: artist,
-                album: dig(item, "album", "#text") as? String,
-                imageURL: imageURL(item["image"]),
-                date: uts.flatMap { Double($0) }.map { Date(timeIntervalSince1970: $0) }
+        LastfmRecentRows.parse(json).map { r in
+            RecentTrack(
+                dup: r.dup,
+                title: r.title,
+                artist: r.artist,
+                album: r.album,
+                imageURL: r.image.flatMap(URL.init(string:)),
+                date: r.uts.map { Date(timeIntervalSince1970: $0) }
             )
         }
     }
@@ -3709,15 +3750,7 @@ final class LastfmStatsService: ObservableObject {
 
     /// image 字段里挑一张(large 优先)并滤掉万能占位星,规则在 LyrimuseCore.LastfmImage。
     private func imageURL(_ value: Any?) -> URL? {
-        guard let arr = value as? [[String: Any]] else { return nil }
-        let by = { (size: String) in arr.first { ($0["size"] as? String) == size } }
-        let url = (by("large") ?? by("extralarge") ?? arr.last)?["#text"] as? String ?? ""
-        guard !url.isEmpty else { return nil }
-        // Last.fm 的"万能占位图"(一颗白星,所有缺图的实体共用同一个文件名 hash)。
-        // 它是一个能正常加载的 URL,不滤掉的话会顶掉首字母色块、显示成一块灰 ——
-        // 歌曲榜实测:關於愛的定義/花田錯两行就是这么来的。
-        guard !url.contains("2a96cbd8b46e442fc41c2b86b821562f") else { return nil }
-        return URL(string: url)
+        LastfmImage.pick(value).flatMap(URL.init(string:))
     }
 
     private func dig(_ dict: [String: Any], _ path: String...) -> Any? {
@@ -3730,7 +3763,6 @@ final class LastfmStatsService: ObservableObject {
 
     private func fresh(_ key: String, ttl overrideTTL: TimeInterval? = nil) -> Bool {
         guard let at = fetchedAt[key] else { return false }
-    /// 逐行解析与 dup 编号在 LyrimuseCore.LastfmRecentRows(selftest 覆盖)。
         let age = Date().timeIntervalSince(at)
         // age < 0 表示那个时间戳落在**未来** —— 系统时钟被回拨(改时间、NTP 校正、
         // 跨时区带着改系统时钟)就会这样。修:旧写法直接 `age < ttl`,负数恒
@@ -3809,6 +3841,7 @@ final class LastfmStatsService: ObservableObject {
                     logger.notice("\(method, privacy: .public): http 429, backing off (attempt \(attempt, privacy: .public))")
                     await LastfmRateLimiter.shared.reportThrottled(cooldown: backoffCooldowns[min(attempt, backoffCooldowns.count - 1)])
                     if attempt < backoffCooldowns.count { continue }
+                    await LastfmRateLimiter.shared.reportRateLimitExhausted()
                     return (nil, false)
                 }
                 guard status == 200 else {
@@ -3824,6 +3857,7 @@ final class LastfmStatsService: ObservableObject {
                         logger.notice("\(method, privacy: .public): api error 29 (rate limit), backing off (attempt \(attempt, privacy: .public))")
                         await LastfmRateLimiter.shared.reportThrottled(cooldown: backoffCooldowns[min(attempt, backoffCooldowns.count - 1)])
                         if attempt < backoffCooldowns.count { continue }
+                        await LastfmRateLimiter.shared.reportRateLimitExhausted()
                         return (nil, false)
                     }
                     logger.notice("\(method, privacy: .public): api error \(errCode) \((obj?["message"] as? String) ?? "", privacy: .public)")

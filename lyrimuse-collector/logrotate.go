@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"syscall"
 )
 
 // 日志轮转。
@@ -25,9 +26,9 @@ import (
 // 继承给我们)——rename 只改目录项,不会让一个已经打开的 fd "跟着"改名后的新路径走,
 // 后续写入还是会落进被改名的那份旧文件里。所以必须在 rename 之后显式 os.OpenFile 一份
 // 新文件,把它交给调用方去 log.SetOutput,而不能指望"改完名字日志就自动另起一份"。
-const logRotateMaxBytes int64 = 30 * 1024 * 1024
 // fd 2 同理:常驻模式下由 redirectStderrTo 把它也指到当前文件,Go 运行时的 panic 输出直接写
 // fd 2,不这样的话轮转过一次之后 panic 就落进 .old 归档,再轮转两次就被删掉。
+const logRotateMaxBytes int64 = 30 * 1024 * 1024
 
 // logRotateKeepArchives:保留几份历史归档。最近的一份仍叫 `<path>.old`(App 侧诊断导出和
 // 用户的肌肉记忆都认这个名字),再往前是 `.old.1`、`.old.2`,数字越大越旧。
@@ -96,6 +97,11 @@ func archiveAndReopen(path string) (*os.File, bool) {
 }
 
 // logArchiveName:第 i 代归档的文件名,0 是最近的一份(`<path>.old`),数字越大越旧。
+// redirectStderrTo 把 fd 2 指到 f。只给常驻模式用(子命令的 stderr 是终端)。
+func redirectStderrTo(f *os.File) {
+	_ = syscall.Dup2(int(f.Fd()), 2)
+}
+
 func logArchiveName(path string, i int) string {
 	if i == 0 {
 		return path + ".old"

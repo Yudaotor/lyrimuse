@@ -154,6 +154,96 @@ func runCoverArtTests() {
         expectEqual(M.pickArtwork([item("周杰伦", "床边故事 (Live)", 地表最强)],
                                   title: "床边故事 (Live)", artist: "周杰伦", album: nil)?.confidence,
                     .trackOnly, "封面⑤: 行缺专辑名时退成中置信")
+
+        // 没问成(限流 / 非 200 / 解不开)必须跟「问到了但没有」分开 —— 后者才进「那边没有」名单。
+        func lookupKind(_ l: M.ArtworkLookup) -> String {
+            switch l {
+            case .found: return "found"
+            case .noMatch: return "noMatch"
+            case .unreached: return "unreached"
+            }
+        }
+        let emptyBody = Data(#"{"results":[]}"#.utf8)
+        let hitBody = Data(#"{"results":[{"trackName":"晴天","artistName":"周杰伦","collectionName":"叶惠美","artworkUrl100":"https://is1.mzstatic.com/x/100x100bb.jpg"}]}"#.utf8)
+        expectEqual(lookupKind(M.artworkLookup(status: 429, data: emptyBody, title: "晴天", artist: "周杰伦", album: nil)),
+                    "unreached", "封面⑤: 429 是没问成,不是那边没有")
+        expectEqual(lookupKind(M.artworkLookup(status: 403, data: emptyBody, title: "晴天", artist: "周杰伦", album: nil)),
+                    "unreached", "封面⑤: 403 是没问成")
+        expectEqual(lookupKind(M.artworkLookup(status: nil, data: Data(), title: "晴天", artist: "周杰伦", album: nil)),
+                    "unreached", "封面⑤: 没拿到响应是没问成")
+        expectEqual(lookupKind(M.artworkLookup(status: 200, data: Data("<html>".utf8), title: "晴天", artist: "周杰伦", album: nil)),
+                    "unreached", "封面⑤: 200 但解不开是没问成")
+        expectEqual(lookupKind(M.artworkLookup(status: 200, data: emptyBody, title: "晴天", artist: "周杰伦", album: nil)),
+                    "noMatch", "封面⑤: 200 空结果 = 那边没有")
+        expectEqual(lookupKind(M.artworkLookup(status: 200, data: hitBody, title: "晴天", artist: "周杰伦", album: "叶惠美")),
+                    "found", "封面⑤: 200 且对得上 = 命中")
+    }
+
+    // ---- iTunes Search 限流退避(口径同 collector apple.go noteITunesSearchStatus) ----
+    do {
+        typealias B = ITunesSearchBackoff
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        expectEqual(B.until(status: 429, retryAfter: "120", now: t0, current: nil),
+                    t0.addingTimeInterval(120), "iTunes 退避: 429 认 Retry-After")
+        expectEqual(B.until(status: 429, retryAfter: nil, now: t0, current: nil),
+                    t0.addingTimeInterval(B.retryAfterDefault), "iTunes 退避: 429 没给头用默认值")
+        expectEqual(B.until(status: 429, retryAfter: "86400", now: t0, current: nil),
+                    t0.addingTimeInterval(B.retryAfterMax), "iTunes 退避: Retry-After 封顶")
+        expectEqual(B.until(status: 403, retryAfter: nil, now: t0, current: nil),
+                    t0.addingTimeInterval(B.forbiddenCooldown), "iTunes 退避: 403 固定档")
+        expectEqual(B.until(status: 403, retryAfter: nil, now: t0, current: t0.addingTimeInterval(200)),
+                    t0.addingTimeInterval(200), "iTunes 退避: 403 不缩短已有的更长窗口")
+        expectEqual(B.until(status: 200, retryAfter: nil, now: t0, current: t0.addingTimeInterval(200)) == nil,
+                    true, "iTunes 退避: 正常响应清掉窗口")
+
+        let gate = ITunesSearchGate()
+        gate.note(status: 429, retryAfter: "60", now: t0)
+        expectEqual(gate.coolingDown(now: t0.addingTimeInterval(59)), true, "iTunes 退避: 窗口内不发")
+        expectEqual(gate.coolingDown(now: t0.addingTimeInterval(61)), false, "iTunes 退避: 窗口过了恢复")
+        gate.note(status: 429, retryAfter: "60", now: t0)
+        gate.note(status: 200, retryAfter: nil, now: t0.addingTimeInterval(1))
+        expectEqual(gate.coolingDown(now: t0.addingTimeInterval(2)), false, "iTunes 退避: 拿到正常响应立即恢复")
+    }
+
+    // ---- App 与 collector 共享的限流窗口(口径同 collector sharedcooldown.go) ----
+    do {
+        typealias O = OutboundCooldowns
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let merged = O.merge(["old": 999_000, "keep": 1_000_500, "k": 1_000_300],
+                             key: "k", until: t0.addingTimeInterval(100), now: t0)
+        expectEqual(merged["old"] == nil, true, "共享窗口: 过期条目写入时清掉")
+        expectEqual(merged["keep"], 1_000_500, "共享窗口: 别的没过期条目留着")
+        expectEqual(merged["k"], 1_000_300, "共享窗口: 已有更晚的截止时刻不缩短")
+        expectEqual(O.merge([:], key: "k", until: t0.addingTimeInterval(900), now: t0)["k"], 1_000_900,
+                    "共享窗口: 新条目写入")
+        expectEqual(O.until(["k": 1_000_100], key: "k", now: t0), Date(timeIntervalSince1970: 1_000_100),
+                    "共享窗口: 没过期读得到")
+        expectEqual(O.until(["k": 999_999], key: "k", now: t0) == nil, true, "共享窗口: 过期读不到")
+        // collector 写的 JSON(Go 的 map[string]float64)要解得开。
+        let goJSON = Data(#"{"endpoints":{"itunes.apple.com/search":1790253000.5}}"#.utf8)
+        expectEqual(O.decode(goJSON)[O.itunesSearchKey], 1790253000.5, "共享窗口: 解得开 collector 写的文件")
+        expectEqual(O.decode(Data("garbage".utf8)).isEmpty, true, "共享窗口: 坏文件当空")
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyrimuse-selftest-cooldowns-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName))
+        let now = Date()
+        let gate = ITunesSearchGate(store: store)
+        expectEqual(gate.coolingDown(now: now), false, "共享窗口: 文件不存在时不算冷却")
+        // collector 写进来的窗口:App 的 gate 也要认。
+        let other = OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName))
+        other.publish(O.itunesSearchKey, until: now.addingTimeInterval(60), now: now)
+        let fresh = ITunesSearchGate(store: OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName)))
+        expectEqual(fresh.coolingDown(now: now), true, "共享窗口: 另一个进程写的 iTunes 窗口也算冷却中")
+        // App 自己撞到的 429 写进去,另一个读者看得见。
+        let writerGate = ITunesSearchGate(store: store)
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent(O.fileName))
+        writerGate.note(status: 429, retryAfter: "120", now: now)
+        let reader = OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName))
+        expectEqual(reader.activeUntil(O.itunesSearchKey, now: now) != nil, true,
+                    "共享窗口: App 撞到的限流写进共享文件")
     }
 
     // ---- 封面取色:HSB 提亮 + 压饱和 ----
@@ -788,6 +878,33 @@ func runCoverArtTests() {
         } else {
             expectEqual(false, true, "封面指纹: 带高光合成图建不出来")
         }
+        // 去边第二次机会:Apple 给一部分专辑的动画四周压了一圈暗角、而静态封面没有,
+        // 同一张图因此被整图比判成两张(实测 Omar Apollo《Ivory》整图 16 / 去边 0)。
+        // 底图故意用"大片浅色 + 中心一块深色":外圈格子本来就紧贴均值,
+        // 四周一圈暗角才能把它们整圈翻面 —— 真实封面(浅背景人像)就是这个形态。
+        let plain = synthesize(width: 600, height: 600, fill: { x, y in
+            (x >= 225 && x < 375 && y >= 225 && y < 375) ? (40, 40, 40) : (200, 200, 200)
+        })
+        let vignetted = synthesize(width: 600, height: 600, fill: { x, y in
+            if x < 48 || x >= 552 || y < 48 || y >= 552 { return (0, 0, 0) } // 四周 8% 的暗角
+            return (x >= 225 && x < 375 && y >= 225 && y < 375) ? (40, 40, 40) : (200, 200, 200)
+        })
+        if let plain, let vignetted {
+            let full = F.distance(F.hash(of: plain), F.hash(of: vignetted))
+            let verdict = F.matches(vignetted, reference: F.reference(of: plain))
+            expectEqual(full > F.motionCoverMaxDistance, true,
+                        "封面指纹: 四周黑边让整图比超阈(实测 \(full))——这正是去边那一道要救的")
+            expectEqual(verdict.same, true,
+                        "封面指纹: 去掉四边 8% 后该判成同一张(实测距离 \(verdict.distance))")
+        } else {
+            expectEqual(false, true, "封面指纹: 带黑边合成图建不出来")
+        }
+        // ⚙️ 去边不能把真反例救成“同一张”——竖分割 vs 横分割去了边还是两张图。
+        if let big, let rotated {
+            let verdict = F.matches(rotated, reference: F.reference(of: big))
+            expectEqual(verdict.same, false,
+                        "封面指纹: 去边那一道不该把两张不同的图放过去(实测距离 \(verdict.distance))")
+        }
     }
 
     // ---- 动态封面(motion artwork)的 HLS 清单解析----
@@ -876,5 +993,33 @@ func runCoverArtTests() {
         expectEqual(M.attribute("MISSING", in: "A=1") == nil, true, "动态封面: 没有的键 → nil")
         expectEqual(M.parseResolution("960x960")?.0, 960, "动态封面: 分辨率解析")
         expectEqual(M.parseResolution("bad") == nil, true, "动态封面: 坏分辨率 → nil")
+    }
+
+    // ---- KnownPlaceholderArtwork:播放器自己推的内置占位图 ----
+    //
+    // 实测(酷狗 3.3.2):换歌后先推一张 35427 字节的蓝底黑胶唱片,几秒后才换真封面。
+    // 同一份字节在三首完全不同的歌上逐字节相同,而各自的真封面互不相同 —— 判据取整份
+    // 字节的 SHA-256,不按"多首共用"去猜(合辑封面本来就共用,那样会误伤)。
+    do {
+        typealias K = KnownPlaceholderArtwork
+
+        expectEqual(K.entries.isEmpty, false, "占位图登记表不该是空的")
+        for e in K.entries {
+            expectEqual(e.sha256Hex.count, 64, "占位图指纹必须是完整的 SHA-256(64 个十六进制字符)")
+            expectEqual(e.byteCount > 0, true, "占位图字节数要登记,判定靠它先便宜地筛一道")
+            expectEqual(e.player.isEmpty, false, "要记下是哪个播放器推的,过期时才查得到源头")
+        }
+
+        // 字节数对不上就直接否 —— 连 SHA-256 都不用算。
+        expectEqual(K.isPlaceholder(Data(repeating: 0, count: 1234)), false,
+                    "字节数对不上的图不是占位图")
+        expectEqual(K.isPlaceholder(Data()), false, "空数据不是占位图")
+
+        // 字节数撞上、内容不同 → 仍然否。这条是这套判据的核心:光看大小会误伤。
+        if let entry = K.entries.first {
+            let sameSizeDifferentBytes = Data(repeating: 0xAB, count: entry.byteCount)
+            expectEqual(K.isPlaceholder(sameSizeDifferentBytes), false,
+                        "字节数相同但内容不同的真封面绝不能被当成占位图")
+        }
     }
 }

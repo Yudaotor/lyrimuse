@@ -159,6 +159,8 @@ struct LyricsLibrarySizeLabel: View {
 /// 免得为了传 counts 让外层再订阅一次。
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
+    /// 设置窗口看不见时不轮询:补搜 / 全量扫库期间每写一首缓存就变,这一页会跟着反复解析整份缓存。
+    @Environment(\.previewHostVisible) private var windowVisible
     // collector 侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
@@ -170,6 +172,13 @@ struct LyricsLibraryStatsPanel: View {
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
     @ObservedObject private var pins = LyricsPinStore.shared
+    /// 补空扫描"开始"按钮点击后、扫描真正开始前的过渡状态(显示 loading 动画)。
+    /// 点击「开始」时置 true,下一次轮询读到 running = true 时清空。
+    @State private var fillSweepStarting = false
+    /// 全量扫描"开始"按钮点击后、扫描真正开始前的过渡状态(显示 loading 动画)。
+    @State private var fullScanStarting = false
+
+    private static let snapshotHolder = "settings-library-stats"
 
     private static let numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -222,8 +231,17 @@ struct LyricsLibraryStatsPanel: View {
         //
         // 之后留在这个循环里轮询补空扫描的进度:跑着的时候 2 秒一次、顺带
         // reload —— 每补上一首「暂无」那格就该少一;没在跑 5 秒一次只看进度文件的 mtime,
-        // 一次 stat 的开销。视图消失即取消,没有常驻计时器。
-        .task {
+        // 一次 stat 的开销。视图消失即取消,没有常驻计时器。设置窗口看不见时整个循环停掉,
+        // 重新看得见时从头来一遍(先按指纹 reload,再接着轮询)。
+        // 这一页看得见时握着「歌词管理」那份快照,看不见 / 离开这一页就放手(见 EnrichCacheStore.snapshotHolders)。
+        // 设置窗口隐藏时视图不一定消失,所以按 windowVisible 走,onDisappear 兜离开这一页。
+        .onAppear { if windowVisible { store.holdSnapshot(Self.snapshotHolder) } }
+        .onChange(of: windowVisible) { _, visible in
+            if visible { store.holdSnapshot(Self.snapshotHolder) } else { store.releaseSnapshot(Self.snapshotHolder) }
+        }
+        .onDisappear { store.releaseSnapshot(Self.snapshotHolder) }
+        .task(id: windowVisible) {
+            guard windowVisible else { return }
             await store.reload(onlyIfChanged: true)
             fullScanState = LyricsFullScan.current
             while !Task.isCancelled {
@@ -231,6 +249,11 @@ struct LyricsLibraryStatsPanel: View {
                 guard !Task.isCancelled else { break }
                 let sweep = LyricsFillSweep.current
                 if sweep != fillSweepStatus { fillSweepStatus = sweep }
+                // 扫描真正开始后,清除"正在启动"状态(让 loading 动画消失、切换到进度条)
+                if sweep?.running == true {
+                    if fillSweepStarting { fillSweepStarting = false }
+                    if fullScanStarting && sweep?.isFullScan == true { fullScanStarting = false }
+                }
                 // 这份文件一轮里只在开头/结尾各写一次(外加 collector 每次启动),按 mtime
                 // 读的开销就是一次 stat,跟着同一个节拍走即可。
                 let full = LyricsFullScan.current
@@ -424,17 +447,26 @@ struct LyricsLibraryStatsPanel: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    // 点击后、扫描真正开始前显示 loading 动画
+                    if fillSweepStarting {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 16, height: 16)
+                    }
                     // 不带 SF Symbol:同一行左边已经写着这一行在干什么,再叠一个 ⟳ 是往控件上
                     // 加装饰(要强调就改文字,别叠图标)。
-                    Button(L10n.t("开始")) { LyricsFillSweep.request(keys: []) }
+                    Button(L10n.t("开始")) {
+                        fillSweepStarting = true
+                        LyricsFillSweep.request(keys: [])
+                    }
                         .controlSize(.small)
                         .fixedSize()
                         // 全量那一轮跑着的时候也置灰,跟「全量重新扫库」那颗「开始」对称:collector
                         // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
-                        .disabled(retryable == 0 || running)
+                        .disabled(retryable == 0 || running || fillSweepStarting)
                         .help(running
                               ? L10n.t("另一轮扫描正在进行，等它结束再来")
-                              : L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
+                              : L10n.t("立即联网补搜缺失的歌词，不必等歌曲再次播放"))
                 }
             }
             .settingsGlassButtons()
@@ -450,7 +482,7 @@ struct LyricsLibraryStatsPanel: View {
     private static func sweepReceipt(_ status: LyricsFillSweep.Info?) -> String? {
         guard let status, status.running != true, status.isFullScan != true,
               status.finishedAt != nil, status.done > 0 else { return nil }
-        return String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"),
+        return String(format: L10n.t("上次搜索 %1$@ 首，补全 %2$@ 首"),
                       format(status.done), format(status.filled))
     }
 
@@ -485,9 +517,12 @@ struct LyricsLibraryStatsPanel: View {
     /// 跟隔壁「重新扫描（N 首）」那个数是**包含**关系:那 N 首正是这里的第 0 层。
     private func fullScanPending(_ currentVersion: Int) -> Int {
         let pinnedKeys = Set(pins.pins.keys)
+        let polluted = EnrichCacheStore.pollutedKeys(store.summaries)
+        let passStart = fullScanState?.startedAt ?? 0
         return store.summaries.reduce(into: 0) { total, summary in
             if EnrichCacheStore.fullScanTier(
-                summary, currentScoringVersion: currentVersion, pinnedKeys: pinnedKeys) != nil {
+                summary, currentScoringVersion: currentVersion, pinnedKeys: pinnedKeys,
+                passStart: passStart, pollutedKeys: polluted) != nil {
                 total += 1
             }
         }
@@ -545,12 +580,21 @@ struct LyricsLibraryStatsPanel: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        Button(L10n.t("开始")) { confirmFullScan = true }
+                        // 点击后、扫描真正开始前显示 loading 动画
+                        if fullScanStarting {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 16, height: 16)
+                        }
+                        Button(L10n.t("开始")) {
+                            fullScanStarting = true
+                            confirmFullScan = true
+                        }
                             .controlSize(.small)
                             .fixedSize()
                             // 补空那一轮跑着的时候也置灰:collector 一次只允许一轮在跑
                             // (runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
-                            .disabled(pending == 0 || running)
+                            .disabled(pending == 0 || running || fullScanStarting)
                             .help(running
                                   ? L10n.t("另一轮扫描正在进行，等它结束再来")
                                   : String(format: L10n.t("预计%@，随时可以停"),

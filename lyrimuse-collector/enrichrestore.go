@@ -58,17 +58,21 @@ const enrichRestoreSuffix = ".applied"
 //   - 备份里**没有**的字段(含那六个歌词字段,Swift 侧已剥掉)保持本机的值不动,所以既不会
 //     把刚从文件导进来的正文清掉,也不会把本机已经解析出来、而备份里没有的东西弄丢;
 //   - 备份里**有**的字段一律赢 —— 用户点的是"恢复",期待的是回到备份里那个样子。
-func adoptEnrichRestore(path string) {
+//
+// 返回值 = 这一轮有没有真的采纳到东西。调用方(main.go)据此作废启动期迁移水位:搬家带来的
+// 是**别的机器**导出的数据,可能停在更早的形态,必须让后面那些存量迁移照常跑一遍
+// (见 startupmigration.go)。老调用点忽略返回值即可,行为不变。
+func adoptEnrichRestore(path string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return // 不存在是绝大多数情况(没在搬家),不是错误
+		return false // 不存在是绝大多数情况(没在搬家),不是错误
 	}
 	var incoming map[string]map[string]json.RawMessage
 	if err := json.Unmarshal(data, &incoming); err != nil {
 		// 解不出来就**原样留着**:这份文件是用户搬家时的决策数据,删掉等于替他做了
 		// "反正也用不上"的决定。留着还能人工看/修。
 		log.Printf("enrich restore: parse failed, file kept as-is file=%s: %v", filepath.Base(path), err)
-		return
+		return false
 	}
 
 	enrichMu.Lock()
@@ -122,4 +126,5 @@ func adoptEnrichRestore(path string) {
 	}
 	log.Printf("enrich restore: adopted entries=%d created=%d merged=%d skipped=%d, renamed to %s",
 		created+mergedInto, created, mergedInto, skipped, filepath.Base(applied))
+	return created+mergedInto > 0
 }

@@ -11,6 +11,7 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -26,7 +27,11 @@ import (
 // 共用一个变量会逼它为了拿到取色而连带打开封面上传。
 var webRelayURL string
 
-func webRelayConfigured() bool { return webRelayURL != "" }
+func webRelayConfigured() bool {
+	stateRelayMu.RLock()
+	defer stateRelayMu.RUnlock()
+	return webRelayURL != ""
+}
 
 // relayState converts a snapshot (+ playing/device/listenedAt) into the exact
 // JSON shape the web reads from the state relay's /now (same shape the worker's
@@ -53,8 +58,8 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 	// LB API 自己的限制,状态中继/网页并不受它约束。这里改为直接从 trackEnrichment
 	// 现拿一份未裁剪的完整歌词字段——enrichCache 在 lbMeta 内部已经解析过一次,这里
 	// 只是再查一次内存缓存,没有额外网络开销。
-	// isNewTrack 传 false,理由同 lb.go 那处同名调用——这里也只是再查一次内存缓存。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
+	// 跟 lb.go 那处走同一个入口(桥接来的只查缓存,见 enrichmentFor)——这里也只是再查一次内存缓存。
+	enr := enrichmentFor(s)
 	st := map[string]any{
 		"ok": true, "playing": playing, "current": current,
 		// artist 用 meta.ArtistName(可能已被网易云/QQ 音乐核实的官方写法覆盖,统一大小写/
@@ -110,4 +115,65 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 		return fmt.Errorf("relay %s: status %d", path, resp.StatusCode)
 	}
 	return nil
+}
+
+// lastListenSeed 是启动时从 ListenBrainz 取回的最近一条收听,经 lastListenSeedCh 送回主循环。
+type lastListenSeed struct {
+	track      snapshot
+	listenedAt int64
+	device     string
+}
+
+// seedLastListen 在后台取 ListenBrainz 最近一条收听,给「上次播放」补上初值。
+//
+// 「上次播放」(p.lastListen)只活在内存里,collector 一重启(改设置、装机、崩溃被拉起都会)就空了。
+// 这时没在放歌的话,推给中继的是 {"empty":true}:飞书预览照实说「这会儿没在听歌」、网页新访客看到
+// 「还没有收听记录」(实测 3742 次预览里 419 次是这样)。取不到就算了,跟原来一样推空。
+func seedLastListen(ctx context.Context, root, user string, out chan<- lastListenSeed) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	u := strings.TrimRight(root, "/") + "/1/user/" + neturl.PathEscape(user) + "/listens?count=1"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return
+	}
+	resp, err := doHTTPTracked(http.DefaultClient, req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+	var body struct {
+		Payload struct {
+			Listens []struct {
+				ListenedAt    int64 `json:"listened_at"`
+				TrackMetadata struct {
+					TrackName      string         `json:"track_name"`
+					ArtistName     string         `json:"artist_name"`
+					ReleaseName    string         `json:"release_name"`
+					AdditionalInfo map[string]any `json:"additional_info"`
+				} `json:"track_metadata"`
+			} `json:"listens"`
+		} `json:"payload"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&body) != nil || len(body.Payload.Listens) == 0 {
+		return
+	}
+	l := body.Payload.Listens[0]
+	m := l.TrackMetadata
+	if m.TrackName == "" || m.ArtistName == "" {
+		return
+	}
+	device, _ := m.AdditionalInfo["source"].(string)
+	seed := lastListenSeed{
+		track:      snapshot{Title: m.TrackName, Artist: m.ArtistName, Album: m.ReleaseName},
+		listenedAt: l.ListenedAt,
+		device:     device,
+	}
+	select {
+	case out <- seed:
+	case <-ctx.Done():
+	}
 }

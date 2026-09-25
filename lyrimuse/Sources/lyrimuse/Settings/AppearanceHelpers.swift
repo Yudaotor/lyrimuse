@@ -121,3 +121,26 @@ extension Font {
         return Font(nsFont as CTFont)
     }
 }
+
+extension NSFont {
+    /// `Font.overlayFont` 的 AppKit 孪生:**同一套入参、同一条兜底**,解析出的必须是同一个字体。
+    ///
+    /// 为什么需要它:灵动岛歌词行的跟唱滚动要知道每个词画出来多宽,而测宽只能用 `NSFont`
+    /// (`NSString.size(withAttributes:)`),SwiftUI 的 `Font` 量不了。上面那个返回的本来就是
+    /// 从 `NSFont` 包出来的,这里把同一步拆出来单独给出。
+    ///
+    /// 两个函数的分支必须逐条对齐(空 familyName 走系统字体、装不上的字体族兜底到系统字体),
+    /// 改一个就得改另一个。解析出不同字体的后果不是报错而是**静默错位**:测宽用 A、屏幕上
+    /// 画的是 B,滚动偏移整句逐词漂移。两者由 `AppSettings.recomputeNotchFonts()` 在同一次、
+    /// 用同一组入参派生,那是唯一的调用点 —— 别在别处各算各的。
+    static func overlayFont(familyName: String, size: CGFloat, weight: OverlayFontWeight) -> NSFont {
+        guard !familyName.isEmpty,
+              let nsFont = NSFontManager.shared.font(
+                  withFamily: familyName, traits: [], weight: weight.appKitWeight, size: size
+              )
+        else {
+            return .systemFont(ofSize: size, weight: weight.nsWeight)
+        }
+        return nsFont
+    }
+}

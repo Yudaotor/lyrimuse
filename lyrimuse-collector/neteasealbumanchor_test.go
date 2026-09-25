@@ -15,7 +15,7 @@ func TestAnchorAlbumTrackForLocalTitle(t *testing.T) {
 		{title: "开不了口(Live)", artist: "周杰伦", duration: 555.0, neteaseSongID: 186044, neteaseAlbum: "The One 周杰伦演唱会"},
 	}
 
-	t.Run("真实案例:本地标题带空格括号,锚定到无空格的官方曲目", func(t *testing.T) {
+	t.Run("本地标题带空格括号,锚定到无空格的官方曲目", func(t *testing.T) {
 		got, ok := anchorAlbumTrackForLocalTitle(theOne, "周杰伦", "简单爱 (Live)", 273.227)
 		if !ok {
 			t.Fatal("应该锚定成功")

@@ -25,21 +25,43 @@ public enum LocalCacheAccess {
         public let updatedAt: Int64
         /// 被系统挡住的来源名,取值与 `LyricsSource` 的 rawValue 同一套(kugou / qq / netease …)。
         public let denied: [String]
+        /// 确认读得到的来源名,同一套取值。旧版 collector 不写这个字段,解出来是空。
+        public let readable: [String]
 
         enum CodingKeys: String, CodingKey {
-            case updatedAt, denied
+            case updatedAt, denied, readable
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
             denied = try c.decodeIfPresent([String].self, forKey: .denied) ?? []
+            readable = try c.decodeIfPresent([String].self, forKey: .readable) ?? []
         }
 
-        public init(updatedAt: Int64 = 0, denied: [String] = []) {
+        public init(updatedAt: Int64 = 0, denied: [String] = [], readable: [String] = []) {
             self.updatedAt = updatedAt
             self.denied = denied
+            self.readable = readable
         }
+    }
+
+    /// 一组来源合起来的「完全磁盘访问」结论。授权是整个 App 一份,所以一组来源只给一个结论。
+    public enum Grant: Equatable, Sendable {
+        /// 每个来源都确认读得到。
+        case granted
+        /// 至少一个来源被系统挡住。
+        case denied
+        /// 没有被拒的,但也没有全部确认读到(collector 没在跑、还没探到、或旧版 collector)。
+        case unknown
+    }
+
+    /// 被拒优先:只要有一个被挡住就是 `.denied`;空列表是 `.unknown`(没东西可判)。
+    public static func grant(for sources: [String], state: State? = current) -> Grant {
+        guard let state, !sources.isEmpty else { return .unknown }
+        if sources.contains(where: state.denied.contains) { return .denied }
+        if sources.allSatisfy(state.readable.contains) { return .granted }
+        return .unknown
     }
 
     public static let stateURL = LyrimusePaths.configFile("lyrimuse-local-cache-access.json")

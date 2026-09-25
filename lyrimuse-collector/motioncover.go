@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net/http"
@@ -73,7 +74,19 @@ type motionCover struct {
 	// 自己算均值(03 章第 4 节),这两个值留着给将来校准用,现在只记不用。
 	BgColor   string `json:"bg_color,omitempty"`
 	TextColor string `json:"text_color,omitempty"`
-	// Checked:这个 ID 查过了。见文件头 ⚠️ 3。
+	// AlbumArtwork:这张专辑在 Apple **目录**里的官方静态封面 URL 模板(同 PreviewFrame 一样带
+	// `{w}x{h}bb.{f}` 占位),取自 iTunes lookup 的 artworkUrl100。专辑身份核验用它,见
+	// motionCoverAlbumIdentityMatches。按需才查(motionCoverAlbumArtworkFor),不是每张都有。
+	//
+	// **别改成从专辑页上取**(videoArtwork 同级的那个 `artwork`)。看着是同一页、零成本,
+	// 实测它**不一定是专辑封面**:XLOV《I,God》那一格就是动画首帧本身(拿它"核身份"等于把
+	// 首帧比对再做一遍),Taylor Swift《folklore》那一格是一张编辑推荐图,只有《Midnights》
+	// 碰巧是真封面。目录 lookup 给的才是 Music*/….jpg 那张真正的专辑封面。
+	AlbumArtwork string `json:"album_artwork,omitempty"`
+	// AlbumArtworkChecked:AlbumArtwork 查过了(查到了、或目录里确实没有都算)。为空而这一位
+	// 为 false = 还没查过,不代表没有。
+	AlbumArtworkChecked bool `json:"album_artwork_checked,omitempty"`
+	// Checked:这个 ID 查过了。见文件头 3。
 	Checked bool `json:"checked"`
 }
 
@@ -259,31 +272,271 @@ func motionCoverMatchesCover(ctx context.Context, previewTmpl, coverURL string) 
 	if coverImg == nil {
 		return false, false
 	}
-	d := coverFingerprintDistance(coverFingerprint(previewImg), coverFingerprint(coverImg))
-	if d > motionCoverFingerprintMaxDistance {
-		log.Printf("motion-cover: preview/cover fingerprint distance %d > %d, skipping",
-			d, motionCoverFingerprintMaxDistance)
+	d, ok := motionCoverSameArtwork(previewImg, coverImg)
+	if !ok {
+		log.Printf("motion-cover: preview/cover fingerprint distance %d, skipping", d)
 		return false, true
 	}
 	return true, true
 }
 
-// motionCoverAcceptsViaAnchor:首帧比对没通过(matched=false)时,专辑 ID 是不是仍然
-// 敢往下发。
+// motionCoverBorderCrop:第二次机会里四边各去掉多少。
 //
-// viaAnchor=true(专辑 ID 来自已校验的目录锚点——media-control 上报的 uniqueIdentifier
-// 经 iTunes lookup 查出来的)时,专辑身份已经确定,不需要靠这张图像比对二次确认;首帧
-// 没比过,大概率是 Apple 给这条动效做了"揭幕"一类创意处理(实测 Ariana Grande
-// 《Positions (Deluxe)》:首帧是逐渐聚拢的九宫格拼贴特效,距离静态封面 41,播到中段才
-// 收拢成跟静态封面一致的画面),不是专辑对不上。这类"首帧不代表定妆画面"的坑,Go 这边
-// 拿不到真实视频帧、判不出来,交给 App 侧下载完整段动画之后用视频中段的真实帧做终审
-// (见 MotionCoverStore)。
+// 8% 是量出来的:Apple 给一部分专辑的 previewFrame **四周压了一圈暗角/黑边**,而静态封面
+// 没有 —— 同一张图因此被 8×8 均值哈希判成两张(实测 Omar Apollo《Ivory》:原图距离 16,
+// 去掉四边 8% 之后是 0)。4% 和 6% 去不干净(6、8),10% / 12% 也行但开始啃掉真实画面。
+const motionCoverBorderCrop = 0.08
+
+// motionCoverCroppedMaxDistance:第二次机会的门槛,**比第一次严**。
 //
-// viaAnchor=false(专辑 ID 来自文字匹配的 apple_music_url)时,这道图像比对是唯一的
-// 身份保险丝——没过就不能往下发,否则文字匹配猜错专辑会直接变成"这首歌配了另一张专辑
-// 的动画"。
-func motionCoverAcceptsViaAnchor(matched, viaAnchor bool) bool {
-	return matched || viaAnchor
+// 别跟 motionCoverFingerprintMaxDistance(12)取齐。多给一次机会就是多一次让真反例
+// 蒙混过关的机会,所以第二次必须换来更高的把握。8 是按本机全量量出来的:77 对已确认正例
+// 去边后中位 1 / p90 8,77 对跨专辑反例去边后**最小 14** —— 8 落在两者之间,离反例那一侧
+// 还有 6 的余量(第一道 12 对反例只有 2)。
+const motionCoverCroppedMaxDistance = 8
+
+// motionCoverSameArtwork:这两张图是不是同一张封面。返回判定用的那个距离和结论。
+//
+// 两道:先整图比,过不了再**把四边各去掉 8% 重比一次**、且门槛收到 8。第二道补的是
+// "同一张图、但预览帧多一圈暗角"这一类(见 motionCoverBorderCrop);它救不了、也**不该**
+// 救另一类——Apple 给某些专辑的动态封面用的是同一次拍摄的**另一种版式**(满幅原图 vs
+// 带标题和曲目表的方版,实测 Taylor Swift《Midnights》:整图 34、去边 36),那跟"换错专辑"
+// 在这套判据下数值上分不开,只能维持拒绝。
+func motionCoverSameArtwork(previewImg, coverImg image.Image) (int, bool) {
+	d := coverFingerprintDistance(coverFingerprint(previewImg), coverFingerprint(coverImg))
+	if d <= motionCoverFingerprintMaxDistance {
+		return d, true
+	}
+	c := coverFingerprintDistance(
+		coverFingerprint(cropBorderFraction(previewImg, motionCoverBorderCrop)),
+		coverFingerprint(cropBorderFraction(coverImg, motionCoverBorderCrop)))
+	if c <= motionCoverCroppedMaxDistance {
+		return c, true
+	}
+	return d, false
+}
+
+// cropBorderFraction 取中心那块(四边各按比例去掉)。拿不到 SubImage 的实现(理论上的
+// 自定义 image.Image)原样返回 —— 那时第二道退化成跟第一道同一个结果,不会误判成"同一张"。
+func cropBorderFraction(img image.Image, frac float64) image.Image {
+	b := img.Bounds()
+	dx, dy := int(float64(b.Dx())*frac), int(float64(b.Dy())*frac)
+	if b.Dx()-2*dx < 8 || b.Dy()-2*dy < 8 {
+		return img
+	}
+	type subImager interface {
+		SubImage(image.Rectangle) image.Image
+	}
+	if si, ok := img.(subImager); ok {
+		return si.SubImage(image.Rect(b.Min.X+dx, b.Min.Y+dy, b.Max.X-dx, b.Max.Y-dy))
+	}
+	return img
+}
+
+// motionCoverIdentity:专辑身份核验的结果(见 motionCoverAlbumIdentityMatches)。
+type motionCoverIdentity int
+
+const (
+	motionIdentityNotAsked  motionCoverIdentity = iota // 首帧已经比过了,没必要问
+	motionIdentityConfirmed                            // 这条封面就是 Apple 这张专辑的官方封面
+	motionIdentityRejected                             // 核过了,不是
+	motionIdentityUndecided                            // 这一轮没查成(取图/抓页失败)
+)
+
+// motionCoverDecision:这条记录跟这段动画的最终裁决。
+type motionCoverDecision int
+
+const (
+	motionDecisionPending        motionCoverDecision = iota // 这一轮定不了:什么都不落,留给下一次
+	motionDecisionReject                                    // 核对过了,这条不配这段动画
+	motionDecisionAccept                                    // 放行;App 侧照常做中段帧终审
+	motionDecisionAcceptIdentity                            // 放行;身份已核验,App 侧跳过终审
+)
+
+// decideMotionCover:首帧比对、专辑身份核验、专辑 ID 来路三件事合起来,这段动画配不配这条记录。
+//
+// 两道图像判据是**并联**的,任一道过就放行:
+//
+//   - **首帧比对**(frameMatched):动画首帧像不像这条记录的封面。便宜、命中率高,但它是个
+//     代理判据 —— Apple 把同一张封面做成另一种呈现时它必然判错:满幅原图 vs 带标题曲目表的
+//     方版(Taylor Swift《Midnights》,34)、上色版 vs 压银浮雕版(XLOV《I,God》,17)。
+//   - **专辑身份核验**(identity):这条记录的封面是不是 Apple 这张专辑的官方封面。它直接回答
+//     真正要防的那个问题("专辑 ID 会不会是文字匹配错的"),对动画本身长什么样免疫。身份
+//     确认了,动画的归属就没有疑问 —— 所以这一支放行时 App 侧**跳过**中段帧终审
+//     (motionDecisionAcceptIdentity):那道终审用的是同一个代理判据,会把刚确认的身份再否掉。
+//
+// viaAnchor(专辑 ID 来自已校验的目录锚点)时身份本来就确定,两道都没过也放行,但只是
+// motionDecisionAccept —— 交给 App 侧用视频中段真实帧终审,治"首帧是揭幕特效"那一类
+// (实测 Ariana Grande《Positions (Deluxe)》:首帧距离 41,中段 0)。
+//
+// 没锚点、首帧没过、身份这一轮又没查成时必须是 Pending 而不是 Reject:Reject 会落
+// MotionCoverChecked、从此不再核对,一次抓页失败就会被钉成"这条没有动态封面"。
+func decideMotionCover(frameMatched bool, identity motionCoverIdentity, viaAnchor bool) motionCoverDecision {
+	switch {
+	case frameMatched:
+		return motionDecisionAccept
+	case identity == motionIdentityConfirmed:
+		return motionDecisionAcceptIdentity
+	case viaAnchor:
+		return motionDecisionAccept
+	case identity == motionIdentityUndecided:
+		return motionDecisionPending
+	default:
+		return motionDecisionReject
+	}
+}
+
+// motionCoverIdentityMaxDistance:专辑身份核验的门槛(整图 8×8 均值哈希,**不给**去边那种
+// 第二次机会)。
+//
+// 这里比的是两张**静态**封面(这条记录在用的那张 vs Apple 官方专辑封面),同一张专辑的两份
+// 本该几乎逐位相同。本机实测 132 张专辑:封面 vs **自己**专辑的官方封面中位 0 / p90 2,
+// 76 张里 72 张 ≤8;封面 vs **别的**专辑的官方封面最小 12 / 中位 31,132 对里 0 对 ≤8。
+// 8 落在两者之间的空档里。别为了救那 4/76 往上调:它们是不同地区/版本的专辑美术
+// (陈绮贞几张),而这一支是**放行**动画、还让 App 跳过终审,宁可少救。那几条仍走首帧那一道。
+const motionCoverIdentityMaxDistance = 8
+
+// motionCoverAlbumIdentityMatches:这条记录的封面,是不是 Apple 这张专辑的**官方静态封面**。
+//
+// matched/verified 两态,口径同 motionCoverMatchesCover:取不到图 = verified false(这一轮
+// 没核成,别钉死结论)。模板为空(页面上压根没有这张专辑的官方封面)= 核过了、没核上。
+func motionCoverAlbumIdentityMatches(ctx context.Context, artworkTmpl, coverURL string) (matched, verified bool) {
+	if artworkTmpl == "" {
+		return false, true
+	}
+	if coverURL == "" {
+		return false, false
+	}
+	// 官方封面的模板跟 previewFrame 是同一种 `{w}x{h}bb.{f}` 形态,换真地址用同一个函数。
+	official := loadCoverImage(ctx, motionCoverPreviewSizedURL(artworkTmpl))
+	if official == nil {
+		return false, false
+	}
+	cover := loadCoverImage(ctx, coverURL)
+	if cover == nil {
+		return false, false
+	}
+	d := coverFingerprintDistance(coverFingerprint(official), coverFingerprint(cover))
+	if d > motionCoverIdentityMaxDistance {
+		log.Printf("motion-cover: album artwork/cover fingerprint distance %d > %d, identity not confirmed",
+			d, motionCoverIdentityMaxDistance)
+		return false, true
+	}
+	return true, true
+}
+
+// motionCoverIdentityFor:把"取官方封面模板 + 比对"两步合成一个四态结果。
+func motionCoverIdentityFor(ctx context.Context, albumID int64, coverURL string) motionCoverIdentity {
+	tmpl, done := motionCoverAlbumArtworkFor(ctx, albumID)
+	if !done {
+		return motionIdentityUndecided
+	}
+	matched, verified := motionCoverAlbumIdentityMatches(ctx, tmpl, coverURL)
+	switch {
+	case !verified:
+		return motionIdentityUndecided
+	case matched:
+		return motionIdentityConfirmed
+	default:
+		return motionIdentityRejected
+	}
+}
+
+// motionCoverAlbumArtworkFor:取这张专辑在 Apple 目录里的官方静态封面模板(身份核验用)。
+//
+// 按需才查:只有"这张专辑确有动画、首帧比对又没过"时才走到这里,量级是个位数张专辑,查一次
+// 就记进 motion 缓存(AlbumArtworkChecked),不重复问。第二个返回值同 motionCoverFor:
+// false = 这一轮没查成(在飞 / 请求失败),调用方别据此钉死结论。
+//
+// 只补 AlbumArtwork / AlbumArtworkChecked,**不动** Master 等:那些已经被 enrich 记录引用着。
+func motionCoverAlbumArtworkFor(ctx context.Context, collectionID int64) (string, bool) {
+	if collectionID <= 0 {
+		return "", false
+	}
+	key := fmt.Sprint(collectionID)
+	motionCoverMu.Lock()
+	c, ok := motionCoverCache[key]
+	if !ok {
+		// 调用方只在 motionCoverFor 刚给出定论之后才来问,缓存里没有说明被并发清掉了 ——
+		// 这一轮别凭空造一条(造出来的条目 Master 为空,会被读成"这张专辑没有动画")。
+		motionCoverMu.Unlock()
+		return "", false
+	}
+	if c.AlbumArtworkChecked {
+		motionCoverMu.Unlock()
+		return c.AlbumArtwork, true
+	}
+	motionCoverMu.Unlock()
+
+	art, ok := itunesCollectionArtwork(ctx, collectionID, motionCoverStorefront)
+	if !ok {
+		return "", false
+	}
+	motionCoverMu.Lock()
+	cur, still := motionCoverCache[key]
+	if still {
+		cur.AlbumArtwork = art
+		cur.AlbumArtworkChecked = true
+		motionCoverCache[key] = cur
+		motionCoverDirty = true
+	}
+	motionCoverMu.Unlock()
+	saveMotionCoverCache()
+	return art, true
+}
+
+// itunesArtworkSizeRE:Apple artwork URL 尾部那一段尺寸,如 `/100x100bb.jpg`。
+var itunesArtworkSizeRE = regexp.MustCompile(`/\d+x\d+bb\.[a-z]+$`)
+
+// itunesCollectionArtwork:一张专辑在 Apple 目录里的官方封面,换成 `{w}x{h}bb.{f}` 模板。
+// 第二个返回值 false = 请求失败(这一轮没查成);true 而串为空 = 查到了,但目录里没有这张
+// 或没给封面。
+//
+// 必须核 wrapperType 与 collectionId:同一个 id 空间里还有曲目 / 艺人,拿错了就是拿别的
+// 东西的图来核身份。尾部尺寸认不出来时原样保留 —— 100px 的图对 8×8 均值哈希也够用。
+func itunesCollectionArtwork(ctx context.Context, collectionID int64, country string) (string, bool) {
+	u := fmt.Sprintf("https://itunes.apple.com/lookup?id=%d&country=%s", collectionID, country)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+	var out struct {
+		Results []itunesCollectionResult `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", false
+	}
+	return pickCollectionArtwork(out.Results, collectionID), true
+}
+
+// itunesCollectionResult:lookup 结果里身份核验要用的那三个字段。
+type itunesCollectionResult struct {
+	WrapperType   string `json:"wrapperType"`
+	CollectionID  int64  `json:"collectionId"`
+	ArtworkURL100 string `json:"artworkUrl100"`
+}
+
+// pickCollectionArtwork:从 lookup 结果里挑出**这张专辑**的封面并换成模板。纯函数,单测钉着。
+func pickCollectionArtwork(results []itunesCollectionResult, collectionID int64) string {
+	for _, r := range results {
+		if r.WrapperType != "collection" || r.CollectionID != collectionID || r.ArtworkURL100 == "" {
+			continue
+		}
+		if itunesArtworkSizeRE.MatchString(r.ArtworkURL100) {
+			return itunesArtworkSizeRE.ReplaceAllString(r.ArtworkURL100, "/{w}x{h}bb.{f}")
+		}
+		return r.ArtworkURL100
+	}
+	return ""
 }
 
 // motionCoverFreshResultAppliesTo:fresh 的动态封面核对结论,是不是可以挪给一条**已存在**
@@ -344,6 +597,39 @@ var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 //
 // 最后那半条是刻意的,理由跟 `missingQQMids` 那条注释同源:动态封面的覆盖率只有三成上下,
 // 把"这张专辑就是没有"也算成缺,那七成条目会白重试 5 轮、每轮把开着的歌词源全部重查一遍。
+// motionCoverNeedsRecheckAgainstOwnCover:backfillPeripheralFields 跑完这一轮之后,这条
+// 记录的动态封面结论是不是**一位都没落下** —— 既没有地址,也没有"查过了"。
+//
+// 是的话就得拿它自己那张封面补算一次(recheckMotionCoverAgainstCurrentCover),否则它会
+// 永远停在"没查过"。这不是罕见分支:`freshApplies`(motionCoverFreshResultAppliesTo)
+// 对**设备直送封面**恒为假 —— backfill 给 resolveTrackEnrichment 传的 deviceCoverURL 恒为
+// 空串,fresh 解析出来的 cover_url 永远不可能是那张 file:// 图。
+//
+// 反过来三种情形都不补,免得白发请求:fresh 的结论已经落到这张封面上了、这条已经有动态
+// 封面了、这条已经核对过了(那一位存在的全部意义就是防重复核对)。
+func motionCoverNeedsRecheckAgainstOwnCover(freshApplies bool, e enrichEntry) bool {
+	return !freshApplies && e.MotionCoverURL == "" && !e.MotionCoverChecked
+}
+
+// motionCoverAlbumHasKnownVideo:这条记录所属的专辑,**本地缓存里已经确认**有动态封面。
+//
+// 跟 motionCoverWorthBackfill 的区别只有一处,但正是关键:专辑还没查过时它回 false
+// (那个回 true)。所以它**一个请求都不发**,纯查本地两份缓存,可以拿来在全量扫描里筛出
+// "值得为它发两次 HTTP"的那一小撮,而不必对整份缓存无差别重验。
+func motionCoverAlbumHasKnownVideo(e enrichEntry, title, album string) bool {
+	albumID, ok := appleCatalogAlbumIDFor(title, album)
+	if !ok {
+		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
+	}
+	if albumID <= 0 {
+		return false
+	}
+	motionCoverMu.Lock()
+	defer motionCoverMu.Unlock()
+	mc, cached := motionCoverCache[fmt.Sprint(albumID)]
+	return cached && mc.Master != ""
+}
+
 func motionCoverWorthBackfill(e enrichEntry, title, album string) bool {
 	if e.MotionCoverURL != "" || e.MotionCoverChecked {
 		return false
@@ -420,6 +706,7 @@ func parseMotionCover(page []byte, wantID string) (motionCover, bool) {
 		out.BgColor, _ = pf["bgColor"].(string)
 		out.TextColor, _ = pf["textColor1"].(string)
 	}
+	// 这一页 videoArtwork 旁边还挂着一个 `artwork`,**别拿它当专辑封面**,见 AlbumArtwork 字段注释。
 	return out, true
 }
 
@@ -480,4 +767,3 @@ func subtreeHasAdamID(v any, want string) bool {
 	}
 	return false
 }
-	// 这一页 videoArtwork 旁边还挂着一个 `artwork`,**别拿它当专辑封面**,见 AlbumArtwork 字段注释。

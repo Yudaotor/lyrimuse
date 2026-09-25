@@ -14,9 +14,9 @@ import (
 // 永远不会去做的解析。Chrome/Arc 报浏览器自己的 bundle id、直接在表里,所以从来没暴露。
 // 这组测试钉住三处修复对代理进程的行为。
 func TestSafariMediaProxyTrustResolution(t *testing.T) {
-	saved := features
-	t.Cleanup(func() { features = saved })
-	features.TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
 
 	const proxy = "com.apple.WebKit.GPU"
 
@@ -44,8 +44,8 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	})
 
 	t.Run("Safari 没被信任时代理进程照旧不认", func(t *testing.T) {
-		features.TrustedPlayers = map[string]string{}
-		defer func() { features.TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"} }()
+		featuresRef().TrustedPlayers = map[string]string{}
+		defer func() { featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"} }()
 		if isTrustedPlayerBundleID(proxy) {
 			t.Error("宿主不在信任表里时代理进程也不该被信任")
 		}
@@ -70,10 +70,10 @@ func TestNoNakedTrustedPlayersLookupInSystemGo(t *testing.T) {
 		if strings.HasPrefix(strings.TrimSpace(line), "//") {
 			continue
 		}
-		n += strings.Count(line, "features.TrustedPlayers[bundleID]")
+		n += strings.Count(line, "features().TrustedPlayers[bundleID]")
 	}
 	if n > 1 {
-		t.Errorf("system.go 里出现 %d 处 features.TrustedPlayers[bundleID] 裸查,只允许 "+
+		t.Errorf("system.go 里出现 %d 处 features().TrustedPlayers[bundleID] 裸查,只允许 "+
 			"isTrustedPlayerBundleID 内部那 1 处——新代码请改调 isTrustedPlayerBundleID,"+
 			"否则 Safari(媒体代理进程 com.apple.WebKit.GPU)会在你的判定里恒不受信任", n)
 	}

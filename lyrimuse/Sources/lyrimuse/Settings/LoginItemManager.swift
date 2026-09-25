@@ -39,6 +39,24 @@ final class LoginItemManager {
     /// 登录项此刻的真实状态(设置页 / 菜单读 AppSettings 的开关,这里是系统那一侧的真值)。
     var status: SMAppService.Status { SMAppService.mainApp.status }
 
+    /// 系统「登录项」里此刻是不是开着。`.notFound`(App 不在可注册的位置,比如 `swift run` 直跑)答 nil:
+    /// 那时系统给不出结论,不能拿它去改开关。
+    var systemSaysEnabled: Bool? {
+        switch status {
+        case .enabled: return true
+        case .requiresApproval, .notRegistered: return false
+        case .notFound: return nil
+        @unknown default: return nil
+        }
+    }
+
+    /// 用户在「系统设置 › 通用 › 登录项」里关掉过它:再注册也只会停在这里,得用户自己去那里打开。
+    var needsApproval: Bool { status == .requiresApproval }
+
+    func openSystemSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
     /// 用户拨开关(设置页 / 菜单栏 / 引导页三处都经 AppSettings.launchAtLoginEnabled 的 didSet 到这里)。
     func setEnabled(_ enabled: Bool) {
         removeLegacyLaunchAgentPlist()

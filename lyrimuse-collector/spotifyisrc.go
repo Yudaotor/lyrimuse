@@ -61,32 +61,20 @@ func spotifyISRCUsersDir() string {
 	return filepath.Join(home, "Library/Application Support/Spotify/PersistentCache/Users")
 }
 
-// spotifyISRCRescanMin:两次重扫之间的最小间隔。比另外三条本地路径的 60 秒长得多 ——
-// 一轮要读进几十 MB 并全量正则扫(实测约 5 秒),而 Spotify 在跑时这个目录的 mtime 一直在变,
-// 节流太短会变成持续的后台 CPU 开销。产出(某条录音的 ISRC)一旦写进缓存也不会再变。
-const spotifyISRCRescanMin = 15 * time.Minute
+var spotifyISRCShape = regexp.MustCompile(`^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$`)
 
-// spotifyISRCMaxFileBytes:单个 .ldb/.log 的读入上限。实测最大 2.2MB;设 32MB 是防"文件
-// 异常膨胀"时把内存吃光,不是格式约束。
-const spotifyISRCMaxFileBytes = 32 << 20
+// spotifyISRCMissTTL:「查过、没有」记多久。客户端可能过一会儿才把这首的元数据写进缓存,不能永久记成
+// 没有;但一首歌解析时会问好几次,不记的话每次都要重读一遍索引块。
+const spotifyISRCMissTTL = time.Minute
 
-// spotifyISRCMaxTotalBytes:一轮扫描读入的总字节上限。实测整个 primary.ldb 约 70MB。
-const spotifyISRCMaxTotalBytes = 256 << 20
+// spotifyISRCCacheCap 防无界增长。命中的永久记(一条录音的 ISRC 不会变)。
+const spotifyISRCCacheCap = 4096
 
 var (
-	// 两种 key 形态都认:`k:<22位>#` 是曲目详情记录,`spotify:track:<22位>` 出现在别的
-	// 记录里。实测两者合并跟只扫第一种命中数一样,但多认一种不花什么代价。
-	spotifyTrackKeyRe = regexp.MustCompile(`(?s)(?:k:|spotify:track:)([0-9A-Za-z]{22})[#\x00-\x20]`)
-	spotifyISRCRe     = regexp.MustCompile(`(?s)isrc.{0,2}?([A-Z]{2}[A-Z0-9]{3}[0-9]{7})`)
-)
-
-var (
-	spotifyISRCMu       sync.Mutex
-	spotifyISRCIndex    map[string]string // trackID -> ISRC
-	spotifyISRCScanned  time.Time
-	spotifyISRCDirMod   time.Time
-	spotifyISRCReady    bool
-	spotifyISRCBuilding bool
+	spotifyISRCMu     sync.Mutex
+	spotifyISRCHits   = map[string]string{}
+	spotifyISRCMisses = map[string]time.Time{}
+	spotifyISRCLogged = map[string]bool{}
 )
 
 // spotifyISRCLedgerDirs 列出所有账号的 primary.ldb(多账号登录过就有多个)。
@@ -108,128 +96,84 @@ func spotifyISRCLedgerDirs(root string) []string {
 	return dirs
 }
 
-// scanSpotifyISRCLedger 扫一个 primary.ldb 目录,把 trackID→ISRC 填进 idx。
-//
-// 切段方式:相邻两个 key 之间就是前一个 key 的 value。这是 LevelDB 里 key 有序排列的
-// 自然结果,不需要理解 protobuf 本身。
-func scanSpotifyISRCLedger(dir string, idx map[string]string, budget *int64) {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return
+// spotifyParseISRC 从 spotify.metadata.Track 的值里取 ISRC(external_id,第 10 个字段)。
+func spotifyParseISRC(v []byte) string {
+	val := spotifyFindAny(v, "spotify.metadata.Track", 0)
+	if val == nil {
+		return ""
 	}
-	for _, e := range ents {
-		name := e.Name()
-		if e.IsDir() || (filepath.Ext(name) != ".ldb" && filepath.Ext(name) != ".log") {
+	fields, err := pbParse(val)
+	if err != nil {
+		return ""
+	}
+	for _, f := range fields {
+		if f.num != 10 || f.wire != 2 {
 			continue
 		}
-		path := filepath.Join(dir, name)
-		st, err := e.Info()
-		if err != nil || st.Size() > spotifyISRCMaxFileBytes || *budget <= 0 {
-			continue
-		}
-		data, err := os.ReadFile(path)
+		sub, err := pbParse(f.b)
 		if err != nil {
 			continue
 		}
-		*budget -= int64(len(data))
-		keys := spotifyTrackKeyRe.FindAllSubmatchIndex(data, -1)
-		for i, m := range keys {
-			id := string(data[m[2]:m[3]])
-			if _, seen := idx[id]; seen {
-				continue
+		var typ, id string
+		for _, s := range sub {
+			if s.wire == 2 && s.num == 1 {
+				typ = string(s.b)
 			}
-			end := len(data)
-			if i+1 < len(keys) {
-				end = keys[i+1][0]
-			}
-			if sub := spotifyISRCRe.FindSubmatch(data[m[0]:end]); sub != nil {
-				idx[id] = string(sub[1])
+			if s.wire == 2 && s.num == 2 {
+				id = string(s.b)
 			}
 		}
+		if typ == "isrc" && spotifyISRCShape.MatchString(id) {
+			return id
+		}
 	}
+	return ""
 }
 
-// refreshSpotifyISRCIndexLocked 在缓存目录变过、且距上次扫描超过节流间隔时重建索引。
-// 调用方必须持有 spotifyISRCMu。
-//
-// 节流放到 5 分钟(比另外三条本地路径的 60 秒长):这一轮要读进几十 MB 并全量正则扫,
-// 比读一张 SQLite 表贵得多,而它的产出——某条录音的 ISRC——一旦写进缓存就不会变。
-func refreshSpotifyISRCIndexLocked() {
-	root := spotifyISRCUsersDir()
-	if root == "" {
-		spotifyISRCIndex, spotifyISRCReady = nil, true
-		return
-	}
-	st, err := os.Stat(root)
-	if err != nil || !st.IsDir() {
-		// 没装 Spotify / 没登录过 —— 正常情况,不记日志。
-		spotifyISRCIndex, spotifyISRCReady = nil, true
-		return
-	}
-	now := time.Now()
-	if spotifyISRCReady && st.ModTime().Equal(spotifyISRCDirMod) {
-		return
-	}
-	if spotifyISRCReady && now.Sub(spotifyISRCScanned) < spotifyISRCRescanMin {
-		return
-	}
-	spotifyISRCDirMod, spotifyISRCScanned, spotifyISRCReady = st.ModTime(), now, true
-
-	idx := map[string]string{}
-	budget := int64(spotifyISRCMaxTotalBytes)
-	for _, dir := range spotifyISRCLedgerDirs(root) {
-		scanSpotifyISRCLedger(dir, idx, &budget)
-	}
-	spotifyISRCIndex = idx
-	if len(idx) > 0 {
-		log.Printf("spotify isrc: indexed %d recordings from client cache", len(idx))
-	}
-}
-
-// spotifyISRCEnsureIndexAsync 触发一次**后台**索引构建;已经在建就什么都不做。
-//
-// ⚠️ 为什么绝不同步建:一轮全量扫描实测约 5 秒,而调用点在歌词解析的热路径上。宁可这一首
-// 拿不到 ISRC(照常走搜索,零损失),也不能让整条歌词链路等它。下一首就能用上。
-func spotifyISRCEnsureIndexAsync() {
-	spotifyISRCMu.Lock()
-	if spotifyISRCBuilding {
-		spotifyISRCMu.Unlock()
-		return
-	}
-	spotifyISRCBuilding = true
-	spotifyISRCMu.Unlock()
-	go func() {
-		spotifyISRCMu.Lock()
-		defer spotifyISRCMu.Unlock()
-		refreshSpotifyISRCIndexLocked()
-		spotifyISRCBuilding = false
-	}()
-}
-
-// spotifyISRCBuildIndexNow 同步建一次索引。只给单测用 —— 生产路径一律走
-// spotifyISRCEnsureIndexAsync。
-func spotifyISRCBuildIndexNow() {
-	spotifyISRCMu.Lock()
-	defer spotifyISRCMu.Unlock()
-	refreshSpotifyISRCIndexLocked()
-}
-
-// spotifyLocalISRC 查这条 Spotify 曲目的 ISRC。第二个返回值 false = 没查到,
-// 调用方照常走名称搜索。**从不阻塞**:索引没建好就先返回空,后台去建。
+// spotifyLocalISRC 查这条 Spotify 曲目的 ISRC。第二个返回值 false = 没查到,调用方照常走名称搜索。
 func spotifyLocalISRC(trackID string) (string, bool) {
 	if len(trackID) != 22 {
 		return "", false
 	}
 	spotifyISRCMu.Lock()
-	ready := spotifyISRCReady
-	code, ok := spotifyISRCIndex[trackID]
-	spotifyISRCMu.Unlock()
-	if !ready || !ok {
-		// 没建过,或这条查不到(索引可能旧了 —— 这首歌是刚听的)。丢后台重建,
-		// 里头的 mtime + 节流判断会决定要不要真扫。
-		spotifyISRCEnsureIndexAsync()
+	if code, ok := spotifyISRCHits[trackID]; ok {
+		spotifyISRCMu.Unlock()
+		return code, true
 	}
-	return code, ok
+	if at, ok := spotifyISRCMisses[trackID]; ok && time.Since(at) < spotifyISRCMissTTL {
+		spotifyISRCMu.Unlock()
+		return "", false
+	}
+	spotifyISRCMu.Unlock()
+
+	code := ""
+	if root := spotifyISRCUsersDir(); root != "" {
+		key := spotifyXmetaKey(spotifyTrackKind, trackID)
+		for _, dir := range spotifyISRCLedgerDirs(root) { // 登录过多个账号时每个账号一份库
+			if code = spotifyParseISRC(ldbGet(dir, [][]byte{key})[string(key)]); code != "" {
+				break
+			}
+		}
+	}
+
+	spotifyISRCMu.Lock()
+	defer spotifyISRCMu.Unlock()
+	if len(spotifyISRCHits) >= spotifyISRCCacheCap || len(spotifyISRCMisses) >= spotifyISRCCacheCap {
+		spotifyISRCHits, spotifyISRCMisses, spotifyISRCLogged = map[string]string{}, map[string]time.Time{}, map[string]bool{}
+	}
+	if code == "" {
+		spotifyISRCMisses[trackID] = time.Now()
+		return "", false
+	}
+	delete(spotifyISRCMisses, trackID)
+	spotifyISRCHits[trackID] = code
+	// 命中记一行(每首一次):取数方式依赖 Spotify 的内部格式,它换一版就可能静默失效,这行是唯一能
+	// 发现它失效的凭据。
+	if !spotifyISRCLogged[trackID] {
+		spotifyISRCLogged[trackID] = true
+		log.Printf("spotify isrc: %s -> %s (from client metadata cache)", trackID, code)
+	}
+	return code, true
 }
 
 // playbackISRC 是给歌词源用的入口:「这次播放的这首歌」的 ISRC,没有就返回空串。

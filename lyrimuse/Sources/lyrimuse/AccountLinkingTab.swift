@@ -118,6 +118,25 @@ private struct DestinationStatusIndicator: View {
 // SecureField。isEditing 的初始值取决于构造时刻 value 是否为空——已配置的字段一开始
 // 收起,从没配置过的字段一开始就是展开可填状态,行为上跟原来"直接摆一个 SecureField"
 // 没有区别,只是多了"配置好之后收起来"这一步。
+/// 输入框前面常驻一个标题。设置页这些卡片不在 Form 里,TextField 自己的 label 不显示,
+/// 只剩框里的占位字 —— 一填上内容就看不出这一栏是什么。
+private struct LabeledInputRow<Field: View>: View {
+    let label: String
+    @ViewBuilder let field: () -> Field
+
+    init(_ label: String, @ViewBuilder field: @escaping () -> Field) {
+        self.label = label
+        self.field = field
+    }
+
+    var body: some View {
+        HStack {
+            Text(label).fixedSize()
+            field().labelsHidden()
+        }
+    }
+}
+
 private struct SecretFieldRow: View {
     let label: String
     @Binding var value: String
@@ -135,7 +154,10 @@ private struct SecretFieldRow: View {
     var body: some View {
         if isEditing {
             HStack {
+                // 标题常驻在框外:框里的占位字一填上内容就没了,只剩一串圆点看不出是哪一项。
+                Text(label).fixedSize()
                 SecureField(label, text: $value, prompt: prompt.map(Text.init))
+                    .labelsHidden()
                 if !value.isEmpty {
                     Button(L10n.t("完成")) { isEditing = false }
                         .buttonStyle(.link)
@@ -359,6 +381,12 @@ struct AccountSidebarRow: View {
 // 数据本来就活在共享的 ConfigStore 里,跟"当前显示哪个账号"完全无关。
 struct AccountLinkingTab: View {
     let destination: AccountDestination
+    /// 设置窗口看不见时停掉下面那条补记待补数的轮询(见 PreviewHostVisibility.swift)。
+    @Environment(\.previewHostVisible) private var windowVisible
+    /// 那条轮询上一次处理过的收听日志修改时间。存在视图状态里而不是循环的局部变量:窗口看不见时循环停掉,
+    /// 重新看得见时要接着跟停之前那一次比,否则看不见期间追加的收听会被当成"已经看过"。
+    /// 两层可选:外层 nil = 这一页还没记过;`.some(nil)` = 记过,当时日志文件不存在。
+    @State private var listenLogSeen: Date??
     // 只用于同一个模块内"这个统计功能还依赖另一个账号"的跨账号跳转(比如 Last.fm 卡片
     // 里的"每周听歌小结"依赖推送提醒、"历史 Top10"依赖网页推送)——由 SettingsView 传入
     // 同一个改 selection 的闭包,点击后把侧边栏选中切到对应账号。
@@ -564,6 +592,43 @@ struct AccountLinkingTab: View {
         apply(picked)
     }
 
+    /// 「提醒」卡里一行听歌报告的行尾控件:数据源 Picker + 开关。Picker 只在开关打开时出现
+    /// (没开这个提醒,选哪个数据源无所谓),摆在开关左边、同一行,归属由行本身表达,不另加标签。
+    /// Picker 显示的是「这次实际会用哪个」(没手动选过时是 resolvedDigestSource 判定出的默认值)。
+    private func digestControls(
+        enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
+        source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
+    ) -> some View {
+        HStack(spacing: 8) {
+            if features[keyPath: enabled] {
+                Picker("", selection: Binding(
+                    get: { resolvedDigestSource(preference: features[keyPath: source]) },
+                    set: { picked in
+                        digestSourcePicked(picked, current: features[keyPath: source]) {
+                            features[keyPath: source] = $0
+                            Task { await features.save() }
+                        }
+                    }
+                )) {
+                    Text("Last.fm").tag("lastfm")
+                    Text("ListenBrainz").tag("listenbrainz")
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            Toggle("", isOn: Binding(
+                get: { features[keyPath: enabled] },
+                set: { newValue in
+                    let resolved = resolvedDigestSource(preference: features[keyPath: source])
+                    toggleGuarded(newValue,
+                        sameCardHint: config.pushMissingHint(),
+                        crossCard: digestCrossCard(source: resolved)
+                    ) { v in features[keyPath: enabled] = v; Task { await features.save() } }
+                }
+            ))
+        }
+    }
+
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
     // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
     // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。
@@ -627,7 +692,7 @@ struct AccountLinkingTab: View {
             Label(String(format: L10n.t("已连接：%@"), user), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case .invalid:
-            Label(L10n.t("Token 无效，请重新复制一次"), systemImage: "exclamationmark.circle.fill")
+            Label(L10n.t("Token 无效，请重新拷贝一次"), systemImage: "exclamationmark.circle.fill")
                 .foregroundStyle(.orange)
         case .unreachable:
             // 跟"Token 无效"分开说:连不上不代表 Token 有问题,说成无效会害人白白去重生成。
@@ -638,11 +703,11 @@ struct AccountLinkingTab: View {
 
     private var listenBrainzFields: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("账户信息"))
+            SettingsCardHeader(title: L10n.t("账号信息"))
             CardDivider()
             SettingsRawRow(insetToText: true, icon: "key.fill") {
                 VStack(alignment: .leading, spacing: 8) {
-                    SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
+                    SecretFieldRow(L10n.t("账号 Token"), value: $config.listenbrainzToken)
                     HStack(spacing: 8) {
                         listenBrainzTokenStatus
                         Spacer(minLength: 0)
@@ -1015,18 +1080,17 @@ struct AccountLinkingTab: View {
                     //
                     // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
                     // 一次、失败维持原样)在 collector lastfmcatalog.go 头注,不在这行字里展开。
-                    help: L10n.t("上送给 Last.fm 的歌手名和曲名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发。\n自定义：自己选改哪些部分。\n原始：原样发播放器报的标签。")
+                    help: L10n.t("上送给 Last.fm 的歌手名和歌名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发；专辑名去掉「 - Single」「 - EP」后缀。\n自定义：歌名、歌手分开选。\n原始：原样发播放器报的标签。")
                 ) {
-                    Picker("", selection: Binding(
-                        get: { features.lastfmMatchMode },
-                        set: { features.lastfmMatchMode = $0; Task { await features.save() } }
-                    )) {
-                        ForEach(LastfmMatchMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    SettingsSegmentedControl(
+                        selection: Binding(
+                            get: { features.lastfmMatchMode },
+                            set: { features.lastfmMatchMode = $0; Task { await features.save() } }
+                        ),
+                        options: LastfmMatchMode.allCases,
+                        label: \.displayName
+                    )
+                    .frame(width: 180)
                 }
                 // 「自定义」的两个维度:曲名一行、歌手一行。 只在选了自定义时才挂 ——
                 // 另两档的值由档位本身决定(智能 = 都匹配条目、原始 = 都原样),那时显示两行
@@ -1038,26 +1102,34 @@ struct AccountLinkingTab: View {
                 // 「合唱只发第一位」也并进歌手这一维当一档:它本来就是"歌手这个字段怎么发"
                 // 的一种答案,单开一行会让人以为它跟改写歌手是两件能叠加的事。
                 if features.lastfmMatchMode == .custom {
-                    SettingsSubRow(title: L10n.t("改写歌手")) {
-                        Toggle("", isOn: Binding(
-                            get: { features.lastfmMatchArtist },
-                            set: { features.lastfmMatchArtist = $0; Task { await features.save() } }
-                        ))
+                    SettingsSubRow(
+                        title: L10n.t("歌名"),
+                        help: L10n.t("匹配条目：改用 Last.fm 编目里这首歌的歌名写法，例如「那个女孩」发成「那個女孩」；编目里查不到就原样发。专辑名同时去掉「 - Single」「 - EP」后缀。\n原始：原样发播放器报的歌名。")
+                    ) {
+                        SettingsSegmentedControl(
+                            selection: Binding(
+                                get: { features.lastfmTrackRule },
+                                set: { features.lastfmTrackRule = $0; Task { await features.save() } }
+                            ),
+                            options: LastfmTrackRule.allCases,
+                            label: \.displayName
+                        )
                     }
-                    SettingsSubRow(title: L10n.t("改写曲名")) {
-                        Toggle("", isOn: Binding(
-                            get: { features.lastfmMatchTrack },
-                            set: { features.lastfmMatchTrack = $0; Task { await features.save() } }
-                        ))
-                    }
-                    // 这一项跟上面两项不同:它不查编目、纯字符串截断,而且**只在没匹配到编目
-                    // 条目时**才生效(匹配到的写法已经是编目认的那条,再截一刀就把它变成一个
-                    // 不存在的条目)。判据在 collector resolveScrobbleTags。
-                    SettingsSubRow(title: L10n.t("合唱只发第一位")) {
-                        Toggle("", isOn: Binding(
-                            get: { features.lastfmMatchFirstArtistOnly },
-                            set: { features.lastfmMatchFirstArtistOnly = $0; Task { await features.save() } }
-                        ))
+                    // 「只发第一位」不查编目、纯字符串截断,而且**只在没匹配到编目条目时**才
+                    // 落地(匹配到的写法已经是编目认的那条,再截一刀就把它变成一个不存在的
+                    // 条目)。判据在 collector resolveScrobbleTags,说明气泡里照实写了这一句。
+                    SettingsSubRow(
+                        title: L10n.t("歌手"),
+                        help: L10n.t("匹配条目：改用 Last.fm 编目里这首歌的歌手写法，例如「Wang Leehom」发成「王力宏」；编目里查不到就原样发。\n只发第一位：合唱串只取第一位，「陶喆, 卢广仲」发成「陶喆」，不查编目；Last.fm 上确实收录了这个合唱条目时不截。\n原始：原样发播放器报的歌手。")
+                    ) {
+                        SettingsSegmentedControl(
+                            selection: Binding(
+                                get: { features.lastfmArtistRule },
+                                set: { features.lastfmArtistRule = $0; Task { await features.save() } }
+                            ),
+                            options: LastfmArtistRule.allCases,
+                            label: \.displayName
+                        )
                     }
                 }
                 CardDivider()
@@ -1069,19 +1141,17 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "hourglass",
                     title: L10n.t("Scrobble 时机"),
-                    help: L10n.t("听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。\n只影响 Last.fm。")
+                    help: L10n.t("听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。")
                 ) {
-                    Picker("", selection: Binding(
-                        get: { features.lastfmScrobblePoint },
-                        set: { features.lastfmScrobblePoint = $0; Task { await features.save() } }
-                    )) {
-                        ForEach(LastfmScrobblePoint.allCases) { point in
-                            Text(point.displayName).tag(point)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
+                    SettingsSegmentedControl(
+                        selection: Binding(
+                            get: { features.lastfmScrobblePoint },
+                            set: { features.lastfmScrobblePoint = $0; Task { await features.save() } }
+                        ),
+                        options: LastfmScrobblePoint.allCases,
+                        label: \.displayName
+                    )
+                    .frame(width: 200)
                 }
                 CardDivider()
                 // 短曲目(加的开关,默认关)。Last.fm 官方规则 "The track must be
@@ -1112,7 +1182,7 @@ struct AccountLinkingTab: View {
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
-                    help: L10n.t("只有勾选的播放器放的歌才 scrobble 到 Last.fm，也只有它们更新 Last.fm 的正在播放；默认全部勾选。\n不影响 ListenBrainz、网页和歌词。浏览器里的网页播放器按整个浏览器算。"),
+                    help: L10n.t("只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。"),
                     choices: lastfmPlayerChoices,
                     excluded: features.lastfmExcludedBundles
                 ) { bundleID, on in
@@ -1255,14 +1325,15 @@ struct AccountLinkingTab: View {
         // 只 stat mtime、不无脑重跑:算待补数要 spawn 一个 collector 子进程(dry-run),
         // 按秒轮询它太重;stat 一个文件几乎免费,变了才真去算。busy 时不推进 seen,
         // 下一拍还会再来一次(refreshPending 自己会因 busy 早退)。
-        .task {
-            var seen = ScrobbleBackfillService.listenLogModifiedAt()
+        .task(id: windowVisible) {
+            guard windowVisible else { return }
+            if listenLogSeen == nil { listenLogSeen = .some(ScrobbleBackfillService.listenLogModifiedAt()) }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
                 guard !Task.isCancelled else { break }
                 let now = ScrobbleBackfillService.listenLogModifiedAt()
-                guard now != seen, !backfill.busy else { continue }
-                seen = now
+                guard now != listenLogSeen, !backfill.busy else { continue }
+                listenLogSeen = .some(now)
                 backfill.refreshPending()
             }
         }
@@ -1610,7 +1681,7 @@ struct AccountLinkingTab: View {
                     )
                     Spacer(minLength: 12)
                     Picker("", selection: $config.notificationPlatform) {
-                        ForEach(NotificationPlatform.allCases) { platform in
+                        ForEach(NotificationPlatform.displayOrder) { platform in
                             Text(platform.displayName).tag(platform)
                         }
                     }
@@ -1622,10 +1693,12 @@ struct AccountLinkingTab: View {
             CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField(
-                        L10n.t("Webhook 地址"), text: $config.notificationWebhookURL,
-                        prompt: Text(config.notificationPlatform.urlPlaceholder)
-                    )
+                    LabeledInputRow(config.notificationPlatform.fieldLabel) {
+                        TextField(
+                            config.notificationPlatform.fieldLabel, text: $config.notificationWebhookURL,
+                            prompt: Text(config.notificationPlatform.urlPlaceholder)
+                        )
+                    }
                     if config.notificationPlatform == .dingtalk {
                         SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
                         Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理"))
@@ -1634,6 +1707,13 @@ struct AccountLinkingTab: View {
                         SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
                         Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息"))
                             .font(.caption2).foregroundStyle(.secondary)
+                    } else if config.notificationPlatform == .telegram {
+                        LabeledInputRow(L10n.t("Chat ID")) {
+                            TextField(
+                                L10n.t("Chat ID"), text: $config.telegramChatID,
+                                prompt: Text(L10n.t("Chat ID，个人是一串数字，群组以 -100 开头"))
+                            )
+                        }
                     }
                 }
             }
@@ -1647,79 +1727,34 @@ struct AccountLinkingTab: View {
             // 数据源可选——Last.fm 的周榜接口(user.getWeekly*Chart)接受任意 from/to,不是只认
             // 官方周边界,所以每个 cadence 都能自己选数据源。行尾控件见 digestControls。
             //
-            // 改版:Picker 从"开关打开后另起一条 SettingsSubRow"改成**跟开关同一
-            // 行**、摆在开关左边。收益不只是省两行高度——原来那版为了让人分得清
-            // 两个同名的"数据源"子行各归谁管,注释里说要给它们不同标签,但代码里两条都写的
-            // L10n.t("数据源"),歧义一直在;放进同一行之后归属由行本身表达,标签直接不需要了
-            // (SettingsRow 的尾部控件统一套了 .labelsHidden())。
-            // 同一行放多个控件的既有写法见 SettingsView 的「全局时间轴偏移」那一行。
-            SettingsRow(
-                icon: "calendar",
-                title: L10n.t("每周听歌小结"),
-            ) {
-                HStack(spacing: 8) {
-                    // 仍然只在开关打开时才出现:没开这个提醒,选哪个数据源无所谓。
-                    if features.weeklyDigest {
-                        Picker("", selection: Binding(
-                            get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
-                            set: { picked in
-                                digestSourcePicked(picked, current: features.weeklyDigestSource) {
-                                    features.weeklyDigestSource = $0
-                                    Task { await features.save() }
-                                }
-                            }
-                        )) {
-                            Text("Last.fm").tag("lastfm")
-                            Text("ListenBrainz").tag("listenbrainz")
-                        }
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                    }
-                    Toggle("", isOn: Binding(
-                        get: { features.weeklyDigest },
-                        set: { newValue in
-                            let source = resolvedDigestSource(preference: features.weeklyDigestSource)
-                            toggleGuarded(newValue,
-                                sameCardHint: config.pushMissingHint(),
-                                crossCard: digestCrossCard(source: source)
-                            ) { v in features.weeklyDigest = v; Task { await features.save() } }
-                        }
-                    ))
-                }
-            }
-            CardDivider()
+            // 每一行的标题都要在 SettingsRow 调用点上写成字面量:设置搜索的对账测试只扫字面
+            // 调用点,标题改成变量传进辅助函数,这几行就从守卫里消失了。
             SettingsRow(
                 icon: "sun.max",
                 title: L10n.t("每日听歌报告")
             ) {
-                HStack(spacing: 8) {
-                    if features.dailyDigest {
-                        Picker("", selection: Binding(
-                            get: { resolvedDigestSource(preference: features.dailyDigestSource) },
-                            set: { picked in
-                                digestSourcePicked(picked, current: features.dailyDigestSource) {
-                                    features.dailyDigestSource = $0
-                                    Task { await features.save() }
-                                }
-                            }
-                        )) {
-                            Text("Last.fm").tag("lastfm")
-                            Text("ListenBrainz").tag("listenbrainz")
-                        }
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                    }
-                    Toggle("", isOn: Binding(
-                        get: { features.dailyDigest },
-                        set: { newValue in
-                            let source = resolvedDigestSource(preference: features.dailyDigestSource)
-                            toggleGuarded(newValue,
-                                sameCardHint: config.pushMissingHint(),
-                                crossCard: digestCrossCard(source: source)
-                            ) { v in features.dailyDigest = v; Task { await features.save() } }
-                        }
-                    ))
-                }
+                digestControls(enabled: \.dailyDigest, source: \.dailyDigestSource)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "calendar",
+                title: L10n.t("每周听歌小结")
+            ) {
+                digestControls(enabled: \.weeklyDigest, source: \.weeklyDigestSource)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "calendar.badge.clock",
+                title: L10n.t("每月听歌小结")
+            ) {
+                digestControls(enabled: \.monthlyDigest, source: \.monthlyDigestSource)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "trophy",
+                title: L10n.t("年度听歌小结")
+            ) {
+                digestControls(enabled: \.yearlyDigest, source: \.yearlyDigestSource)
             }
         }
     }

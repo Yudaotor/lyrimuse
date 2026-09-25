@@ -26,25 +26,34 @@ final class MotionCoverStore {
     /// 这个数就照它一个来定,不必为别的尺寸再存一档。
     static let targetPixelWidth = 920
 
-    /// 磁盘上限。一份 ~7 MB,400 MB 约合 55 张专辑;超了按访问时间删最旧的。
-    /// 动态封面覆盖率只有三成上下,实际很难长到这个量级,这个数是兜底不是常态。
-    private static let diskBudgetBytes: Int64 = 400 << 20
+    /// 磁盘上限。一份 ~6 MB,1 GB 约合 170 张专辑;超了按访问时间删最旧的。
+    ///
+    /// **别调回 400 MB**。那个数是按"覆盖率三成、很难长到这个量级"估的,实测不成立:
+    /// 一份普通听歌库用两周就有 71 张专辑带动态封面(共约 433 MB),400 MB 装不下 —— 表现不是
+    /// 报错,是**每放一张没缓存的就顶掉一张旧的**,下次回头听那张又要重下 6 MB、头几秒只有
+    /// 静态图。这一档的成本是磁盘,收益是"听过的专辑再听就是即时的",1 GB 是按那个实测量级
+    /// 留一倍余量。
+    private static let diskBudgetBytes: Int64 = 1024 << 20
 
     private let fm = FileManager.default
     /// 正在下的 key 到 任务。同一个 key 并发只跑一次(同 `ImageMemoryCache` 的做法)。
     private var inflight: [String: Task<URL?, Never>] = [:]
     /// 这一次运行里已经失败过的 key —— 失败多半是"Apple 改了结构 / 这档拿不到",反复重试
     /// 只是白发请求。刻意**不落盘**:进程重启后再给一次机会。
-    private var failed: Set<String> = []
-
-    private var directory: URL { LyrimusePaths.configFile("motion-covers") }
-
-    // MARK: - 对外
     ///
     /// **终审没过不算失败,别往这里塞**。那是"此刻拿来比对的封面不对",不是"这份资源
     /// 取不到" —— 换歌那几秒里参照图完全可能还是上一首的(播放器推自带占位图时更是如此,
     /// 见 `KnownPlaceholderArtwork`:那种情况下我们会刻意留着上一首的封面)。记进这里就等于
     /// 拿一次时序上的巧合,把整张专辑的动态封面封杀到进程重启。它归 `referenceRejected`。
+    private var failed: Set<String> = []
+
+    /// 终审没过的 (key, 参照图) 组合。跟 `failed` 分开的理由见上;**带上参照图的指纹**是
+    /// 关键:封面一换就是一个新组合,自然会再试一次,而参照图没变时不重复下载那几 MB。
+    private var referenceRejected: Set<String> = []
+
+    private var directory: URL { LyrimusePaths.configFile("motion-covers") }
+
+    // MARK: - 对外
 
     /// 已经在盘上的那份;没有就 nil(调用方据此决定要不要 `prepare`)。
     func cachedFile(master: URL) -> URL? {
@@ -63,28 +72,55 @@ final class MotionCoverStore {
     /// - Parameter reference: 当前显示的那张封面的 `CoverFingerprint.Reference`。下载完成后
     ///   会拿视频**中段**的真实一帧跟它比一次,理由见 `verifyMatchesReference` 的注释。传
     ///   nil(拿不到当前封面,比如刚换歌那一瞬)就跳过这道终审,不因为一时缺参照而白白拒了。
-    func prepare(master: URL, referenceHash: UInt64?) async -> URL? {
+    func prepare(master: URL, reference: CoverFingerprint.Reference?) async -> URL? {
         if let hit = cachedFile(master: master) { return hit }
         let key = cacheKey(for: master)
         if failed.contains(key) { return nil }
+        // 同一份参照图上次就没过终审,不必再下一遍那几 MB;参照图一换就是新组合,自然重试。
+        if let reference, referenceRejected.contains(Self.rejectionKey(key, reference)) { return nil }
         if let running = inflight[key] { return await running.value }
 
         let task = Task<URL?, Never> { [weak self] in
             guard let self else { return nil }
-            let result = await self.download(master: master, referenceHash: referenceHash)
-            await MainActor.run {
+            let outcome = await self.download(master: master, reference: reference)
+            return await MainActor.run { () -> URL? in
                 self.inflight[key] = nil
-                if result == nil { self.failed.insert(key) }
+                switch outcome {
+                case .ready(let file):
+                    return file
+                case .referenceMismatch:
+                    if let reference {
+                        self.referenceRejected.insert(Self.rejectionKey(key, reference))
+                    }
+                    return nil
+                case .unavailable:
+                    self.failed.insert(key)
+                    return nil
+                }
             }
-            return result
         }
         inflight[key] = task
         return await task.value
     }
 
+    /// `failed` / `referenceRejected` 两张表的键各自独立:前者按资源,后者按 (资源, 参照图)。
+    private nonisolated static func rejectionKey(_ key: String, _ reference: CoverFingerprint.Reference) -> String {
+        "\(key)|\(reference.full)|\(reference.cropped)"
+    }
+
     // MARK: - 下载
 
-    private nonisolated func download(master: URL, referenceHash: UInt64?) async -> URL? {
+    /// `download` 的三种结局。**`referenceMismatch` 必须跟 `unavailable` 分开**:
+    /// 前者是"这份动画本身没问题,是此刻拿来比对的那张封面不对",后者才是"这份资源取不到"。
+    /// 合成一种的话,换歌那几秒里一次参照图错位就会被记进 `failed`,整张专辑到进程重启为止
+    /// 都不再有动态封面。
+    private enum DownloadOutcome {
+        case ready(URL)
+        case referenceMismatch
+        case unavailable
+    }
+
+    private nonisolated func download(master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
         do {
             // ① master 到 选一档。
             let masterText = try await text(from: master)
@@ -92,14 +128,14 @@ final class MotionCoverStore {
             guard let picked = MotionCoverManifest.pick(variants, minimumWidth: Self.targetPixelWidth),
                   let variantURL = MotionCoverManifest.absolute(picked.uri, relativeTo: master) else {
                 logger.notice("motion cover: no usable variant in master playlist")
-                return nil
+                return .unavailable
             }
             // ② variant 到 那个承载全部分片的单文件。
             let variantText = try await text(from: variantURL)
             guard let name = MotionCoverManifest.mediaFileName(fromVariant: variantText),
                   let mediaURL = MotionCoverManifest.absolute(name, relativeTo: variantURL) else {
                 logger.notice("motion cover: variant has no EXT-X-MAP single file")
-                return nil
+                return .unavailable
             }
             // ③ 整份下下来,先落到临时文件——终审(④)要用 AVAsset 读它,得是个真实文件路径,
             // 不是内存里的 Data。落地在系统临时目录,不是最终缓存位置:没通过终审就地删掉,
@@ -107,25 +143,30 @@ final class MotionCoverStore {
             let (data, response) = try await URLSession.shared.data(from: mediaURL)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 logger.notice("motion cover: media http \(http.statusCode, privacy: .public)")
-                return nil
+                return .unavailable
             }
             guard Self.looksLikeMP4(data) else {
                 logger.notice("motion cover: payload is not an mp4 (\(data.count, privacy: .public) bytes)")
-                return nil
+                return .unavailable
             }
             let scratch = fm.temporaryDirectory.appendingPathComponent(
                 ProcessInfo.processInfo.globallyUniqueString + ".mp4")
             try data.write(to: scratch, options: .atomic)
             defer { try? fm.removeItem(at: scratch) }
             // ④ 终审:视频中段的真实一帧跟当前封面像不像。
-            if let referenceHash, !(await Self.verifyMatchesReference(scratch, referenceHash: referenceHash)) {
-                return nil
+            if let reference {
+                switch await Self.verifyMatchesReference(scratch, reference: reference) {
+                case .pass: break
+                case .mismatch: return .referenceMismatch
+                // 读不出时长/取不到帧 —— 是这份视频本身的问题,跟参照图无关,按资源不可用算。
+                case .undecidable: return .unavailable
+                }
             }
             // ⑤ 通过终审才落盘。
-            return try await MainActor.run { try self.store(data, master: master, width: picked.width) }
+            return .ready(try await MainActor.run { try self.store(data, master: master, width: picked.width) })
         } catch {
             logger.notice("motion cover: fetch failed — \(error.localizedDescription, privacy: .public)")
-            return nil
+            return .unavailable
         }
     }
 
@@ -141,21 +182,32 @@ final class MotionCoverStore {
     /// 中段(`duration * 0.5`)是经验取值,不是精确计算出的"揭幕结束点"——不同专辑的揭幕
     /// 时长不一样,但"放到一半"总落在片头效果之后、循环收尾之前,兼顾两端。
     ///
-    /// 取不到时长/取不到帧/解码失败,都当**没法确认**处理,返回 false——跟这条链路其它每一层
-    /// 一样,拿不准就不显示动态封面,不该让一次解码失败悄悄放过一段没验过的动画。
-    private nonisolated static func verifyMatchesReference(_ file: URL, referenceHash: UInt64) async -> Bool {
+    /// 取不到时长/取不到帧/解码失败都不显示动态封面 —— 跟这条链路其它每一层一样,拿不准就
+    /// 不显示,不该让一次解码失败悄悄放过一段没验过的动画。但它们要跟"比过了、不是同一张"
+    /// **分开报**(`undecidable` vs `mismatch`):前者是这份视频自己的问题、换张参照图也救不回来,
+    /// 后者换张参照图就可能通过。合成一个 false 的话,调用方就没法把它们分别记进
+    /// `failed` 和 `referenceRejected` 两张表。
+    private enum VerifyResult {
+        case pass
+        case mismatch
+        case undecidable
+    }
+
+    private nonisolated static func verifyMatchesReference(
+        _ file: URL, reference: CoverFingerprint.Reference
+    ) async -> VerifyResult {
         let asset = AVURLAsset(url: file)
-        guard let duration = try? await asset.load(.duration), duration.seconds > 0 else { return false }
+        guard let duration = try? await asset.load(.duration), duration.seconds > 0 else { return .undecidable }
         let midpoint = CMTime(seconds: duration.seconds * 0.5, preferredTimescale: duration.timescale)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        guard let frame = try? await generator.image(at: midpoint).image else { return false }
-        let distance = CoverFingerprint.distance(CoverFingerprint.hash(of: frame), referenceHash)
-        if distance > CoverFingerprint.motionCoverMaxDistance {
-            logger.notice("motion cover: mid-video frame distance \(distance, privacy: .public) > \(CoverFingerprint.motionCoverMaxDistance, privacy: .public), skipping")
-            return false
+        guard let frame = try? await generator.image(at: midpoint).image else { return .undecidable }
+        let (distance, same) = CoverFingerprint.matches(frame, reference: reference)
+        if !same {
+            logger.notice("motion cover: mid-video frame distance \(distance, privacy: .public), skipping")
+            return .mismatch
         }
-        return true
+        return .pass
     }
 
     private nonisolated func text(from url: URL) async throws -> String {

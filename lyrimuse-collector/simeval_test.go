@@ -394,7 +394,7 @@ func TestSimEval(t *testing.T) {
 
 	// v3 的增值内容维度读目标语言;评测样本采集时用户设置即 zh,黄金参照
 	// 也按 zh 生成——这里显式钉住,不依赖测试进程恰好没加载 features 的零值。
-	features.LyricsTranslationLanguage = "zh"
+	featuresRef().LyricsTranslationLanguage = "zh"
 
 	// 黄金参照:发货集合算出的每首冠军(见文件头注释)。
 	//
@@ -487,7 +487,7 @@ func TestSimEval(t *testing.T) {
 		// 样本里 lyrics_tr_lang 字段就是采集时记下的语言)
 		var batch []lyricCandidate
 		for _, rc := range run.Result.Candidates {
-			uTr, uRoma := usableValueAdd(rc.Lyrics, rc.LyricsTr, rc.LyricsTrLang, rc.LyricsRoma, features.LyricsTranslationLanguage)
+			uTr, uRoma := usableValueAdd(rc.Lyrics, rc.LyricsTr, rc.LyricsTrLang, rc.LyricsRoma, features().LyricsTranslationLanguage)
 			batch = append(batch, lyricCandidate{
 				source:                rc.Source,
 				lyrics:                rc.Lyrics,

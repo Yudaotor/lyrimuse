@@ -164,8 +164,8 @@ func TestCleanMediaTagScope(t *testing.T) {
 // features().ScrobbleShortTracks 才放行。三条不变量:曲长未知不拦;放行不影响半程规则(那在
 // listenThreshold);恰好 30 秒按既有口径放行(跟官方 "> 30" 差这一秒,历史行为,别顺手改)。
 func TestTooShortToScrobble(t *testing.T) {
-	saved := features.ScrobbleShortTracks
-	defer func() { features.ScrobbleShortTracks = saved }()
+	saved := features().ScrobbleShortTracks
+	defer func() { featuresRef().ScrobbleShortTracks = saved }()
 
 	cases := []struct {
 		name  string
@@ -184,7 +184,7 @@ func TestTooShortToScrobble(t *testing.T) {
 		{"开关开:曲长未知不拦", true, 0, false},
 	}
 	for _, c := range cases {
-		features.ScrobbleShortTracks = c.allow
+		featuresRef().ScrobbleShortTracks = c.allow
 		if got := tooShortToScrobble(c.dur); got != c.want {
 			t.Errorf("%s: tooShortToScrobble(%v) = %v, want %v", c.name, c.dur, got, c.want)
 		}
@@ -208,9 +208,9 @@ func TestScrobbleShortTracksFlagRoundTrip(t *testing.T) {
 
 // 回填复核也走同一条闸:开关关着时,日志里的短曲目记录不会被补上去;开着才补。
 func TestPendingBackfillListensHonorsShortTrackFlag(t *testing.T) {
-	savedFlag := features.ScrobbleShortTracks
+	savedFlag := features().ScrobbleShortTracks
 	savedPath := listenLogPath
-	defer func() { features.ScrobbleShortTracks = savedFlag; listenLogPath = savedPath }()
+	defer func() { featuresRef().ScrobbleShortTracks = savedFlag; listenLogPath = savedPath }()
 	listenLogPath = filepath.Join(t.TempDir(), "listens.jsonl")
 
 	now := time.Now()
@@ -218,12 +218,12 @@ func TestPendingBackfillListensHonorsShortTrackFlag(t *testing.T) {
 	appendListenLogLine(listenLogLine{T: "l", V: listenLogSchemaVersion, UTS: uts, AR: "A", TI: "短曲", DUR: 20, AT: now.Unix()})
 	appendListenLogLine(listenLogLine{T: "l", V: listenLogSchemaVersion, UTS: uts + 60, AR: "A", TI: "长曲", DUR: 200, AT: now.Unix()})
 
-	features.ScrobbleShortTracks = false
+	featuresRef().ScrobbleShortTracks = false
 	pending, _ := pendingBackfillListens(now)
 	if len(pending) != 1 || pending[0].TI != "长曲" {
 		t.Fatalf("开关关:应只剩长曲,got %+v", pending)
 	}
-	features.ScrobbleShortTracks = true
+	featuresRef().ScrobbleShortTracks = true
 	pending, _ = pendingBackfillListens(now)
 	if len(pending) != 2 {
 		t.Fatalf("开关开:短曲也该进待补清单,got %+v", pending)

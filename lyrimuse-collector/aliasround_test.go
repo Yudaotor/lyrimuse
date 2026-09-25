@@ -14,24 +14,24 @@ import (
 // 纯函数部分在这里钉住;整条 scoredLyricCandidatesStreaming 要联网,不在单测里跑。
 
 func TestLyricSourcesWorthAliasRetry(t *testing.T) {
-	savedFeatures := features
+	savedFeatures := features()
 	savedBreaker := lyricSourceBreakerShared
 	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
 	savedDZ := deezerLastFailureReasonNow()
 	savedAM := applemusicLastFailureReasonNow()
 	t.Cleanup(func() {
-		features = savedFeatures
+		setFeatures(savedFeatures)
 		lyricSourceBreakerShared = savedBreaker
 		ytmusicSetLastFailureReason(savedYT)
 		musixmatchSetLastFailureReason(savedMM)
 		deezerSetLastFailureReason(savedDZ)
 		applemusicSetLastFailureReason(savedAM)
 	})
-	features.LyricsSources = map[string]bool{}
+	featuresRef().LyricsSources = map[string]bool{}
 	for _, s := range lyricSourceNames {
-		features.LyricsSources[s] = true
+		featuresRef().LyricsSources[s] = true
 	}
-	features.LyricsSources["migu"] = false // 关掉的不算
+	featuresRef().LyricsSources["migu"] = false // 关掉的不算
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
 	// 酷我:传输层连不上 —— 换名字也没用
 	dns := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Err: &net.DNSError{Err: "no such host", IsNotFound: true}}}

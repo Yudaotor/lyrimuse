@@ -57,10 +57,10 @@ type proxyFallbackTransport struct {
 }
 
 func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// 带 body 的请求不做 fallback:重试要 req.Clone,而 Clone **不复制 body**(只有
-	// GetBody 才能重放),第二次拨过去会是一个空 body 的请求 —— 那种失败比不重试更难查。
-	// 这条通路当前全是 GET(musixmatch 的五个端点都是),这里只是把不变量写死。
-	if req.Body != nil {
+	// 带 body 且**不能重放**的请求不做 fallback:重试要 req.Clone,而 Clone 不复制 body,
+	// 第二次拨过去会是一个空 body 的请求 —— 那种失败比不重试更难查。能重放的(有 GetBody,
+	// http.NewRequest 拿 bytes.Reader / strings.Reader 建的都有)每次尝试取一份新 body,见 attempt。
+	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
 		return t.attempt(t.direct, req, proxyFallbackDirectBudget)
 	}
 
@@ -120,7 +120,16 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 // 刻意不设 Client.Timeout,头注里也写着别加回去。
 func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request, budget time.Duration) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(req.Context(), budget)
-	resp, err := rt.RoundTrip(req.Clone(ctx))
+	clone := req.Clone(ctx)
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		clone.Body = body
+	}
+	resp, err := rt.RoundTrip(clone)
 	if err != nil {
 		cancel()
 		return nil, err

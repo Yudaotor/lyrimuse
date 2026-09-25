@@ -72,6 +72,8 @@ final class LyricsSearchService {
             // v7:「两场不同演唱会」判据,见 collector 侧
             // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
             case "liveAlbumConflict": return L10n.t("是另一场演出的现场版")
+            // v23:见 collector 侧 lyrictimelineoffset.go。
+            case "timelineOffset": return L10n.t("时间轴整体错开，对的是另一个版本")
             // v3新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -114,13 +116,15 @@ final class LyricsSearchService {
             case "consensus": return L10n.t("歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到")
             case "translation": return L10n.t("自带可用的中文译文，同水平候选间优先")
             case "romanization": return L10n.t("日文歌词自带罗马音，同水平候选间优先")
-            case "versionTags": return L10n.t("括号里的 Live / Remix / Demo / Club Mix 等跟本地曲名对不上")
+            case "versionTags": return L10n.t("括号里的 Live / Remix / Demo / Club Mix 等跟本地歌名对不上")
             case "sourceDurationOff":
                 return L10n.t("这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上")
             case "wordTimingOverride":
                 return L10n.t("逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放")
             case "liveAlbumConflict":
                 return L10n.t("两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上")
+            case "timelineOffset":
+                return L10n.t("至少两家自报曲长跟本地一致、时间轴彼此对齐的来源都显示，这份歌词整首提前或延后了 2.5 秒以上——多半是按前奏长短不同的另一个母带做的轴，套在这次播放上会整首错位")
             case "durationOff":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":
@@ -128,7 +132,7 @@ final class LyricsSearchService {
             case "rejectPlainTextOnly":
                 return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮")
             case "rejectContinuousMix":
-                return L10n.t("你在放的是 DJ Mix 专辑里的一段（曲名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴")
+                return L10n.t("你在放的是 DJ Mix 专辑里的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴")
             default: return ""
             }
         }
@@ -344,7 +348,7 @@ final class LyricsSearchService {
 
         var errorDescription: String? {
             switch self {
-            case .processFailed(let msg): return String(format: L10n.t("搜索失败: %@"), msg)
+            case .processFailed(let msg): return String(format: L10n.t("搜索失败：%@"), msg)
             }
         }
     }

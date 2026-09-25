@@ -18,7 +18,7 @@ func TestBestAlbumTrackByDuration(t *testing.T) {
 		duration float64
 		want     string
 	}{
-		{"精确命中(真实案例)", dreamer, 236.344, "回留"},
+		{"精确命中", dreamer, 236.344, "回留"},
 		{"容差内的小误差也认", dreamer, 235.0, "回留"},
 		{"超出容差不认,宁可不给", dreamer, 233.0, ""},
 		{"没有任何曲目在容差内", dreamer, 999, ""},
@@ -26,7 +26,7 @@ func TestBestAlbumTrackByDuration(t *testing.T) {
 			{title: "A", duration: 200},
 			{title: "B", duration: 200.5},
 		}, 200.25, ""},
-		{"同一首歌被两个专辑重复收录,时长分毫不差,不算歧义(2026-08-30 真实案例:方大同" +
+		{"同一首歌被两个专辑重复收录,时长分毫不差,不算歧义(方大同" +
 			"《爱爱爱》同时收录在专辑《爱爱爱》和合辑《The Soulboy Collection》,时长都是" +
 			"213.266s)", []albumTrack{
 			{title: "爱爱爱", artist: "方大同", duration: 213.266},

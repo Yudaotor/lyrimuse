@@ -37,7 +37,7 @@ func runBackfillLastfmCLI(args []string) {
 
 	// 跟 searchcli.go 同一个理由:这条子命令走的是 main() 里那串提前 return 分支,
 	// 包级变量 features / listenLogPath 此刻都还是零值,必须自己按同样的路径规则装一遍。
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	// 只记路径、**不做压缩**:压缩会重写整份日志,而这条命令可能与常驻 collector 的
 	// 追加写并发。initListenLog 的压缩只该由启动路径做一次。
 	listenLogPath = filepath.Join(cfgDir, clientName+"-listens.jsonl")

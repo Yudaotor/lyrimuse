@@ -165,19 +165,53 @@ func runSettingsInteractionTests() {
 
     // 「歌词来源」卡的排列:中文用户中文源在前,其余国外源在前;组内顺序不变。
     do {
-        typealias P = CollectorRestartPolicy
-        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles"]), false,
-                    "重启判据: 只改「Scrobble 的播放器」不重启(collector 热读)")
-        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles", "players"]), true,
-                    "重启判据: 白名单里的键跟别的键一起变,照旧重启")
-        expectEqual(P.needsRestart(changedKeys: ["scrobble_short_tracks"]), true, "重启判据: 白名单之外的键要重启")
-        expectEqual(P.needsRestart(changedKeys: []), true,
-                    "重启判据: 不知道改了什么(空集合)保守重启,别把「从损坏文件重建」这类保存也跳过")
-        // 白名单里的键必须真是 features.json 的键、且 collector 侧真有对应的热重读 —— 拼错任一边都是
-        // "改了没反应、重启才生效"。这两条跨 target(FeatureFlagsFile 在 App 里、另一半在 Go 里),
-        // 只能靠 contracts 组那道源码守卫钉,见 SourceContractTests「配置热重读」那一块。
-        expectEqual(P.hotReloadedKeys.isEmpty, false, "重启判据: 白名单不该是空的(空 = 每次保存都重启)")
+        typealias R = LyricsSourceRegion
+        let all = ["kugou", "netease", "qq", "musixmatch", "lrclib", "amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"]
+        expectEqual(R.displayOrder(all, chineseFirst: true),
+                    ["kugou", "netease", "qq", "kuwo", "migu", "soda", "musixmatch", "lrclib", "amll", "lyricfind", "deezer", "applemusic"],
+                    "来源排列: 中文用户中文源在前,两组内保持原顺序")
+        expectEqual(R.displayOrder(all, chineseFirst: false),
+                    ["musixmatch", "lrclib", "amll", "lyricfind", "deezer", "applemusic", "kugou", "netease", "qq", "kuwo", "migu", "soda"],
+                    "来源排列: 其余用户国外源在前")
+        expectEqual(R.prefersChineseSources(appLanguageOverride: "en", preferredLanguage: "zh-Hans-CN"), false,
+                    "来源排列: 设置里明确选了英文界面,按非中文")
+        expectEqual(R.prefersChineseSources(appLanguageOverride: "zh-hant", preferredLanguage: "en-US"), true,
+                    "来源排列: 设置里明确选了中文界面,按中文")
+        expectEqual(R.prefersChineseSources(appLanguageOverride: "system", preferredLanguage: "zh-Hant-TW"), true,
+                    "来源排列: 跟随系统时,繁体中文系统算中文")
+        expectEqual(R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: "ja-JP"), false,
+                    "来源排列: 跟随系统时,日语系统算非中文(界面虽退回简体,更用得上国外源)")
+        expectEqual(R.prefersChineseSources(appLanguageOverride: nil, preferredLanguage: nil), false,
+                    "来源排列: 读不到系统语言时按非中文")
+    }
 
+    // 「通知平台」下拉菜单的排列:中文用户国内平台在前,其余国外平台在前。两组合起来必须正好是 App 侧
+    // NotificationPlatform 的全部 rawValue(跟 collector notify.go 的平台常量逐字对应),漏一个就从菜单里消失。
+    do {
+        typealias N = NotificationPlatformRegion
+        expectEqual(N.displayOrder(chineseFirst: true),
+                    ["bark", "dingtalk", "wecom", "feishu", "serverchan", "telegram", "discord"],
+                    "通知平台排列: 中文用户国内平台在前")
+        expectEqual(N.displayOrder(chineseFirst: false),
+                    ["telegram", "discord", "bark", "dingtalk", "wecom", "feishu", "serverchan"],
+                    "通知平台排列: 其余用户国外平台在前")
+        let all: Set<String> = ["bark", "dingtalk", "wecom", "discord", "feishu", "serverchan", "telegram"]
+        expectEqual(Set(N.displayOrder(chineseFirst: true)), all, "通知平台排列: 两组覆盖全部平台")
+        expectEqual(N.displayOrder(chineseFirst: true).count, all.count, "通知平台排列: 没有重复")
+        // App 侧枚举在 selftest 链不到的 target 里,按源码对一遍 case 列表。
+        let store = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/ConfigStore.swift").path,
+            encoding: .utf8)) ?? ""
+        let caseLine = store.split(separator: "\n").first { $0.contains("enum NotificationPlatform") }
+            .flatMap { _ in store.split(separator: "\n").first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case bark") } }
+        let cases = Set((caseLine ?? "").replacingOccurrences(of: "case", with: "")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+        expectEqual(cases, all, "通知平台排列: NotificationPlatform 的 case 跟两组对得上(加了平台要同步进 NotificationPlatformRegion)")
+    }
+
+    // ---- 保存时的键差分(CollectorRestartPolicy.changedKeys,只给日志用)----
+    do {
+        typealias P = CollectorRestartPolicy
         // 键差分:值变了 / 键被删 / 键新增都算变,值没变不算。
         expectEqual(P.changedKeys(from: ["a": 1, "b": "x"], to: ["a": 1, "b": "x"]), [], "键差分: 完全相同 → 空")
         expectEqual(P.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"], "键差分: 值变了")
@@ -288,5 +322,27 @@ func runSettingsInteractionTests() {
         expectEqual(h.goBack(), Loc(panel: "歌词", section: "translation"), "历史(分段): 后退把分段一起带回去")
         expectEqual(h.goBack(), Loc(panel: "歌词", section: "fetch"), "历史(分段): 再退一格回到起点那一段")
         expectEqual(h.goForward(), Loc(panel: "歌词", section: "translation"), "历史(分段): 前进走回去")
+    }
+
+    // ---- NotificationWebhookSlots ----
+    do {
+        print("\n== 推送平台各自的 webhook 地址 ==")
+        typealias S = NotificationWebhookSlots
+        var slots = S(stored: [:], activePlatform: "bark", activeURL: "https://api.day.app/KEY")
+        expectEqual(slots.switchPlatform(from: "bark", currentURL: "https://api.day.app/KEY", to: "telegram"), "",
+                    "推送地址: 切到没填过的平台,输入框是空的(不能还显示上一个平台的地址)")
+        expectEqual(slots.switchPlatform(from: "telegram", currentURL: "123:AAH", to: "bark"), "https://api.day.app/KEY",
+                    "推送地址: 切回来,原来的地址还在")
+        expectEqual(slots.switchPlatform(from: "bark", currentURL: "https://api.day.app/KEY", to: "telegram"), "123:AAH",
+                    "推送地址: 再切过去,那个平台刚才填的也还在")
+        expectEqual(slots.persisted(activePlatform: "telegram", activeURL: "456:BBB"),
+                    ["bark": "https://api.day.app/KEY", "telegram": "456:BBB"],
+                    "推送地址: 落盘全集并入当前平台此刻的地址")
+        expectEqual(slots.persisted(activePlatform: "telegram", activeURL: "  "), ["bark": "https://api.day.app/KEY"],
+                    "推送地址: 清空了的平台不落盘")
+        let legacy = S(stored: [:], activePlatform: "feishu", activeURL: "https://open.feishu.cn/x")
+        expectEqual(legacy.persisted(activePlatform: "feishu", activeURL: "https://open.feishu.cn/x"),
+                    ["feishu": "https://open.feishu.cn/x"],
+                    "推送地址: 旧配置只有 bark_url,读进来就记在当前平台名下")
     }
 }

@@ -74,7 +74,11 @@ public enum LyricsBackupArchive {
     ///
     /// 剥完为空的条目整条丢掉(只有歌词字段的条目没有任何值得搬的东西);解不出来返回 nil,
     /// 调用方据此把 `meta` 留空 —— 备份少一部分远好过整份打不出来。
-    public static func strippedMeta(fromCacheJSON data: Data) -> Data? {
+    ///
+    /// `decisionDirectory`:判决记录的候选明细旁路目录(`DecisionSidecar`)。给了就把两槽判决按指纹补齐再
+    /// 打包 —— 备份要自带完整证据,恢复到别的机器上由那边的 collector 保存时再拆出去;不给(老调用方 /
+    /// selftest)就原样打包主缓存里的判决。
+    public static func strippedMeta(fromCacheJSON data: Data, decisionDirectory: URL? = nil) -> Data? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
@@ -83,6 +87,9 @@ public enum LyricsBackupArchive {
         for (key, value) in root {
             guard var entry = value as? [String: Any] else { continue }
             for field in lyricFieldKeys { entry.removeValue(forKey: field) }
+            if let decisionDirectory {
+                entry = DecisionSidecar.hydrateEntry(entry, key: key, directory: decisionDirectory)
+            }
             guard !entry.isEmpty else { continue }
             out[key] = entry
         }
@@ -211,5 +218,14 @@ public enum LyricsBackupArchive {
             }
         }
         return plan
+    }
+
+    /// 落盘前的最后一道闸:`name` 拼到 `dir` 下、解析(standardized)之后,父目录必须还是 `dir`
+    /// 本身,否则 nil。跟名字长什么样无关 —— `sanitizedFileName` 是第一道,这一道兜住「规则里
+    /// 没想到的形态」。两道都在,是因为写文件这件事错一次就是往用户磁盘上别的地方写东西。
+    public static func restoreTarget(named name: String, in dir: URL) -> URL? {
+        let target = dir.appendingPathComponent(name).standardizedFileURL
+        guard target.deletingLastPathComponent().path == dir.standardizedFileURL.path else { return nil }
+        return target
     }
 }

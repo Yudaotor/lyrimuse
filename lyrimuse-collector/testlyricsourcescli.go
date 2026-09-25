@@ -47,7 +47,7 @@ func runTestLyricSourcesCLI(args []string) {
 	// "没启用",一个都测不了。
 	if configDir() != "" {
 		cfgPath := filepath.Join(configDir(), "config.json")
-		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
+		setFeatures(loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json")))
 	}
 
 	targets := enabledLyricSourceNames()

@@ -32,7 +32,7 @@ func TestLyricsFullScanTier(t *testing.T) {
 		{"正在飞 → 这一轮跳过", enrichEntry{Lyrics: "x", LyricsScoringVersion: cur - 1}, false, true, -1},
 	}
 	for _, c := range cases {
-		if got := lyricsFullScanTier(c.entry, c.pinned, c.inflight); got != c.want {
+		if got := lyricsFullScanTier(c.entry, c.pinned, c.inflight, 0); got != c.want {
 			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
 		}
 	}

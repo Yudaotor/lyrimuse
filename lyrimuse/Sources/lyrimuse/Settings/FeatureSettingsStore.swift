@@ -31,6 +31,15 @@ public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable 
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
+
+    /// 「歌词来源」卡里的排列:中文用户中文源在前,其余用户国外源在前(规则见 `LyricsSourceRegion`)。
+    /// 只是显示顺序,不影响「顺序优先」的优先级。
+    static var settingsDisplayOrder: [LyricsSource] {
+        let chineseFirst = LyricsSourceRegion.prefersChineseSources(
+            appLanguageOverride: L10n.languageOverride, preferredLanguage: Locale.preferredLanguages.first)
+        return LyricsSourceRegion.displayOrder(allCases.map(\.rawValue), chineseFirst: chineseFirst)
+            .compactMap(LyricsSource.init(rawValue:))
+    }
 }
 
 // Musixmatch 译文(collector/musixmatch.go 的 crowd.track.translations.get)目标语言——
@@ -138,6 +147,41 @@ public enum LastfmMatchMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// 「自定义」档下曲名怎么发。**不是新的落盘契约** —— 它是 `lastfm_match_track` 那个布尔的
+// 界面形状(catalog = true、raw = false),features.json 的字段一个没动,collector 侧
+// resolveScrobbleTags 也不用跟着改。
+//
+// 做成选项而不是继续用开关:「改写曲名」四个字没说出**改成什么**,开关只表达得了开/关,
+// 选项能把「改用编目里的写法」和「原样发」两件事都摆在明面上。
+public enum LastfmTrackRule: String, CaseIterable, Identifiable, Codable {
+    case catalog, raw
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .catalog: return L10n.t("匹配条目")
+        case .raw: return L10n.t("原始")
+        }
+    }
+}
+
+// 「自定义」档下歌手怎么发。同样是既有两个布尔(`lastfm_match_artist` /
+// `lastfm_match_first_artist_only`)的界面形状,不是新契约。
+//
+// 这三档**互斥**,而盘上那两个布尔还能表达出第四种组合(两个都 true =「先按编目匹配,
+// 匹配不到再截第一位」)。界面不再产出这种组合;读到它时按 `.catalog` 显示 —— 匹配本来就
+// 优先、截断只是它的兜底 —— 用户下一次拨动就会把它归一掉。
+public enum LastfmArtistRule: String, CaseIterable, Identifiable, Codable {
+    case catalog, firstOnly, raw
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .catalog: return L10n.t("匹配条目")
+        case .firstOnly: return L10n.t("只发第一位")
+        case .raw: return L10n.t("原始")
+        }
+    }
+}
+
 // Last.fm scrobble 时点:一次收听听到哪里才记到 Last.fm。rawValue 必须跟 collector
 // features.go 的 scrobblePointHalf/75/90/End 常量逐字相同——两侧通过同一份 features.json 交换,
 // collector 只认这四个串,拼错就静默退回官方规则。
@@ -223,6 +267,12 @@ struct FeatureFlagsFile: Codable, Equatable {
     // Last.fm 的周榜接口其实接受任意 from/to,不是只认它自己的官方周边界。
     var weeklyDigestSource: String?
     var dailyDigestSource: String?
+    // 见 collector/calendardigest.go——每月 / 年度听歌小结,跟周报、日报都是独立开关;数据源
+    // 字段同上,缺省交给 resolveDigestSource。
+    var monthlyDigest: Bool?
+    var yearlyDigest: Bool?
+    var monthlyDigestSource: String?
+    var yearlyDigestSource: String?
     var lyricsSources: [String]?
     /// **迁移标记,不是开关**。amll 的启用状态跟其余源一样记在 lyricsSources 里。
     ///
@@ -301,6 +351,10 @@ struct FeatureFlagsFile: Codable, Equatable {
         case dailyDigest = "daily_digest"
         case weeklyDigestSource = "weekly_digest_source"
         case dailyDigestSource = "daily_digest_source"
+        case monthlyDigest = "monthly_digest"
+        case yearlyDigest = "yearly_digest"
+        case monthlyDigestSource = "monthly_digest_source"
+        case yearlyDigestSource = "yearly_digest_source"
         case lyricsSources = "lyrics_sources"
         case amllLyrics = "amll_lyrics"
         case lyricFindLyrics = "lyricfind_lyrics"
@@ -376,6 +430,10 @@ public final class FeatureSettingsStore: ObservableObject {
         Task { await save() }
     }
 
+    /// 预解析待播曲目。字段名和 json 键(`album_prefetch`)是这个功能只预取
+    /// 「同一张专辑里其它曲目」那阵子留下的,语义**已经扩到整条播放队列**(见
+    /// collector/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边
+    /// 的坑刚踩过(`applemusic_lyrics`),为一个纯内部的名字不值得。
     @Published public var albumPrefetch = true
     /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉
     /// 。 初值 true 必须跟 collector 侧
@@ -408,6 +466,26 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lastfmMatchTrack = false
     @Published public var lastfmMatchFirstArtistOnly = false
 
+    /// 上面那三个布尔的界面形状:曲名一维、歌手一维。界面只绑这两个,布尔本身仍是
+    /// 落盘契约、也仍是 `effectiveMatch*` 的输入 —— 所以 collector 那侧一个字都不用改。
+    ///
+    /// 歌手那一维把「改写歌手」和「合唱只发第一位」合成了互斥的三档(理由见
+    /// `LastfmArtistRule`)。setter 每次都把两个布尔一起写,不会留下半旧半新的组合。
+    public var lastfmTrackRule: LastfmTrackRule {
+        get { lastfmMatchTrack ? .catalog : .raw }
+        set { lastfmMatchTrack = newValue == .catalog }
+    }
+    public var lastfmArtistRule: LastfmArtistRule {
+        get {
+            if lastfmMatchArtist { return .catalog }
+            return lastfmMatchFirstArtistOnly ? .firstOnly : .raw
+        }
+        set {
+            lastfmMatchArtist = newValue == .catalog
+            lastfmMatchFirstArtistOnly = newValue == .firstOnly
+        }
+    }
+
     /// 三个维度**按档位算出来的有效值** —— 落盘、以及任何"实际会怎么发"的判断都用它们,
     /// 别直接读上面那三个 @Published(那三个只是「自定义」档的界面状态)。
     /// 跟 collector `resolveLastfmMatch` 是同一份规则,两侧要一起改。
@@ -430,10 +508,6 @@ public final class FeatureSettingsStore: ObservableObject {
     }
     /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。**必须逐字等于 collector features.go 里
     /// boolOr 的默认值**(人工维持,见 load() 里的警告)。
-    /// 预解析待播曲目。字段名和 json 键(`album_prefetch`)是这个功能只预取
-    /// 「同一张专辑里其它曲目」那阵子留下的,语义**已经扩到整条播放队列**(见
-    /// collector/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边
-    /// 的坑刚踩过(`applemusic_lyrics`),为一个纯内部的名字不值得。
     @Published public var scrobbleShortTracks = false
     /// 默认 .half:官方规则那一刻就发,跟加这个设置之前一样。**必须逐字等于 collector features.go 里
     /// resolveScrobblePoint 的兜底值**(人工维持,见 load() 里的警告)。
@@ -445,6 +519,10 @@ public final class FeatureSettingsStore: ObservableObject {
     // 用户一旦手动选过之后的显式值。
     @Published public var weeklyDigestSource = ""
     @Published public var dailyDigestSource = ""
+    @Published public var monthlyDigest = false
+    @Published public var yearlyDigest = false
+    @Published public var monthlyDigestSource = ""
+    @Published public var yearlyDigestSource = ""
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     // 始终是全部 4 个源的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
@@ -538,6 +616,9 @@ public final class FeatureSettingsStore: ObservableObject {
             weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
+            monthlyDigest: monthlyDigest, yearlyDigest: yearlyDigest,
+            monthlyDigestSource: monthlyDigestSource.isEmpty ? nil : monthlyDigestSource,
+            yearlyDigestSource: yearlyDigestSource.isEmpty ? nil : yearlyDigestSource,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
             // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
             // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
@@ -750,6 +831,10 @@ public final class FeatureSettingsStore: ObservableObject {
         dailyDigest = f.dailyDigest ?? false
         weeklyDigestSource = f.weeklyDigestSource ?? ""
         dailyDigestSource = f.dailyDigestSource ?? ""
+        monthlyDigest = f.monthlyDigest ?? false
+        yearlyDigest = f.yearlyDigest ?? false
+        monthlyDigestSource = f.monthlyDigestSource ?? ""
+        yearlyDigestSource = f.yearlyDigestSource ?? ""
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理,跟
         // collector 侧 resolveLyricsSources 的兜底规则一致。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
@@ -852,7 +937,7 @@ public final class FeatureSettingsStore: ObservableObject {
                 logger.notice("corrupt features.json moved aside as \(moved.lastPathComponent, privacy: .public)")
             }
         } catch {
-            lastError = String(format: L10n.t("无法移走损坏的配置文件: %@"), error.localizedDescription)
+            lastError = String(format: L10n.t("无法移走损坏的配置文件：%@"), error.localizedDescription)
             logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
             return false
         }
@@ -913,42 +998,18 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.notice("save refused: features.json on disk is corrupt")
             return false
         } catch {
-            lastError = String(format: L10n.t("写入功能开关文件失败: %@"), error.localizedDescription)
+            lastError = String(format: L10n.t("写入功能开关文件失败：%@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        // 这批改动 collector 能自己按 mtime 热读到 → 不重启(见 CollectorRestartPolicy)。
-        // 文件已经写好了,collector 下一次问就是新值;省掉的是那 37~68 秒的重启空窗(启动要跑九道迁移 +
-        // 全量导入导出上万个歌词文件)。白名单之外的任何一个键跟着变,照旧重启。
-        if !CollectorRestartPolicy.needsRestart(changedKeys: changedKeys) {
-            logger.notice("collector restart skipped: only hot-reloaded keys changed (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
-            lastError = nil
-            pendingUntilServiceEnabled = false
-            commitSnapshot()
-            return true
-        }
-        // 去抖逻辑挪进了共享的 CollectorRestartCoordinator —— 原来这份是本
-        // store **私有**的,只合并得了自己的连续 save(),看不见 ConfigStore 也在重启,
-        // 于是"改一个凭据 + 改一个开关"仍然是两次重启(见协调器头注释)。
-        if await CollectorRestartCoordinator.shared.requestRestart() {
-            lastError = nil
-            pendingUntilServiceEnabled = false
-            commitSnapshot()
-            return true
-        }
-        if !AppSettings.shared.collectorServiceEnabled {
-            // 用户主动停用了后台服务:文件已是新值,collector 下次启动读盘即生效,不算失败。**先试重启、失败了再看
-            // 标志**,而不是看标志就跳过重启——build.sh 直接装机的机器上这个标志可能从没被写过(默认 false)但 job
-            // 在跑,跳过会让改动真的不生效。
-            logger.notice("collector restart skipped: service disabled by the user; change applies on next start")
-            lastError = nil
-            pendingUntilServiceEnabled = true
-            commitSnapshot()
-            return true
-        }
-        // 文件已经写了,说清后果:不是「没保存」,是「没生效」。
-        lastError = L10n.t("已保存，但后台采集服务重启失败，改动要等下次重启才生效")
-        return false
+        // 不重启 collector:它按 mtime 自己热重读这份文件(featuresreload.go),lyrics_dir 也在运行中
+        // 切换(lyricsdirswitch.go)。见 CollectorRestartPolicy 头注。
+        logger.notice("saved, collector hot-reloads it (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
+        lastError = nil
+        // 后台服务没在跑(用户停用了)时,文件已是新值、下次启动读盘生效;状态条据此提示「服务已停用」。
+        pendingUntilServiceEnabled = !CollectorServiceManager.isRunning
+        commitSnapshot()
+        return true
     }
 
 }

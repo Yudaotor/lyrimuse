@@ -60,6 +60,9 @@ final class PlaybackCoordinator: ObservableObject {
 
     @Published private(set) var title: String = ""
     @Published private(set) var artist: String = ""
+    /// 界面上显示的歌手名。判据见 `PlayerArtistFix.displayArtist` —— 署名不可信的播放器在
+    /// 纠正落地之前是空串。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
+    @Published private(set) var displayArtist: String = ""
     @Published private(set) var album: String = ""
     @Published private(set) var isPlayingNow: Bool = false
     // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
@@ -101,6 +104,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 下一行的罗马音/译文,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var nextLineRomanization: String?
     @Published private(set) var nextLineTranslation: String?
+    @Published private(set) var nextLineWordGroups: [SyncedLyricWordGroup]?
     @Published private(set) var hasLyricsContent: Bool = false
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
@@ -274,23 +278,12 @@ final class PlaybackCoordinator: ObservableObject {
         return Double(ms) / 1000
     }
 
-    var currentLineDwellSeconds: Double? {
-        guard let index = currentLineIndex, allLines.indices.contains(index) else { return nil }
-        let startMs = allLines[index].timeMs
-        let endMs: Int
     /// 当前行会显示多久(秒)。窗口口径见 `LyricDisplayWindow`(最后一句用曲长兜底,时间戳异常
     /// 返回 nil,调用方拿它做除数)。
-        if allLines.indices.contains(index + 1) {
-            endMs = allLines[index + 1].timeMs
-        } else if let duration = currentDurationMs, duration > startMs {
-            // 最后一句:用曲目时长兜底(尾奏通常还有几秒,足够滚完)。
-            endMs = duration
-        } else {
-            return nil
-        }
-        let seconds = Double(endMs - startMs) / 1000
-        // 时间戳异常(乱序/重复)时别返回 0 或负数 —— 调用方会拿它做除数。
-        return seconds > 0.05 ? seconds : nil
+    var currentLineDwellSeconds: Double? {
+        LyricDisplayWindow.of(index: currentLineIndex, starts: allLines.lazy.map(\.timeMs),
+                              trackDurationMs: currentDurationMs)?
+            .dwellMs.map { Double($0) / 1000 }
     }
 
     private var cancellables: [AnyCancellable] = []
@@ -360,21 +353,23 @@ final class PlaybackCoordinator: ObservableObject {
         if let platformID = resolvedWebPlatformID, let icon = WebPlatformIcon.image(platformID) {
             return icon
         }
-        return AppIconResolver.icon(forBundleID: id)
+        // 浏览器图标按宿主取:Safari 上报的 com.apple.WebKit.GPU 查不到 App 图标。
+        return AppIconResolver.icon(forBundleID: BrowserPositionProbe.probeTargetBundleID(forReported: id) ?? id)
     }
 
     /// 点面板右上角的来源角标:把正在播放的那个播放器唤到前台。
-    ///
-    /// 要按**宿主**找 App(`probeTargetBundleID`):Safari 上报的 `com.apple.WebKit.GPU`
-    /// 不是一个能打开的 App,裸查 `urlForApplication` 必然落空。
     ///
     /// 别用 NSRunningApplication.activate()(在跑就激活、没在跑才 openApplication):
     /// 实测点了毫无反应:macOS 14 起的**协作式激活**会把「后台 accessory App 请求
     /// 激活别的 App」静默拒绝 —— 不报错、不打日志、就是不动。NSWorkspace.openApplication
     /// 是系统认可的路径:对已在跑的 App 等价于"带到前台"(open -b 同款行为),没在跑就
     /// 顺便启动,一条路两件事。
+    ///
+    /// 要按**宿主**找 App(`probeTargetBundleID`):Safari 上报的 `com.apple.WebKit.GPU`
+    /// 不是一个能打开的 App,裸查 `urlForApplication` 必然落空。
     func openResolvedPlayerApp() {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else {
+        guard let id = BrowserPositionProbe.probeTargetBundleID(
+            forReported: LocalPlaybackSource.shared.lastResolvedBundleID) else {
             logger.notice("openResolvedPlayerApp: no resolved player")
             return
         }
@@ -390,6 +385,30 @@ final class PlaybackCoordinator: ObservableObject {
             } else {
                 logger.notice("openResolvedPlayerApp: activated \(id, privacy: .public)")
             }
+        }
+    }
+
+    /// 点来源角标 / 「在 XX 中显示」的统一入口:把此刻正在播放的播放器带到台前。
+    /// 原生播放器 = 激活那个 App(`openResolvedPlayerApp`);网页平台(YouTube Music /
+    /// Spotify 网页版)= 先把**正在放歌的那枚标签页**翻到台前(`revealPlayingTab`,URL 判据
+    /// 与进度探测同一份),翻不到再退回整 App 激活 —— 兜底永远在,不比只有整 App 激活差。
+    ///
+    /// 为什么网页平台不能只激活 App:歌多半就是在那个浏览器里放的,点击时浏览器本来就常是
+    /// 前台 App,再"激活"一次等于什么都没发生;要跳的"播放器页面"是那枚标签页。
+    ///
+    /// 标签页脚本要起 osascript 子进程(秒级上限),丢后台任务跑,不在点击的那条主线程上等。
+    func openResolvedPlayer() {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else {
+            logger.notice("openResolvedPlayer: no resolved player")
+            return
+        }
+        guard let platformID = resolvedWebPlatformID else {
+            openResolvedPlayerApp()
+            return
+        }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            if BrowserPositionProbe.revealPlayingTab(bundleID: id, platformID: platformID) { return }
+            await MainActor.run { self?.openResolvedPlayerApp() }
         }
     }
 
@@ -521,11 +540,18 @@ final class PlaybackCoordinator: ObservableObject {
     /// Apple Music 走 AppleScript 需要"自动化"权限;后台刷新路径上检查它,**绝不弹窗**。
     /// Spotify 不走这个检查:本仓没有针对它的权限探测(读播放位置那条路也没有),权限没给时
     /// 脚本自然失败、读回 nil,按钮不显示 —— 跟"读不出来就不显示"是同一个降级路径。
-    private func extendedControlPlayerForBackgroundRefresh() -> PlaybackPlayer? {
-        guard let player = extendedControlPlayer else { return nil }
-        if player == .appleMusic,
-           !MusicAutomationPermission.check(askIfNeeded: false).isAuthorized { return nil }
-        return player
+    ///
+    /// 只能在后台任务里 await,别改回主线程上同步调 `MusicAutomationPermission.check`:
+    /// 那次系统调用可能永远不返回,整个 App 跟着冻住(02 章决策 8)。查询超时当没权限。
+    nonisolated private static func backgroundRefreshAllowed(for player: PlaybackPlayer) async -> Bool {
+        guard player == .appleMusic else { return true }
+        return await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: false)
+    }
+
+    private func clearExtendedControls() {
+        if isFavorited != nil { isFavorited = nil }
+        if playbackMode != nil { playbackMode = nil }
+        if soundVolume != nil { soundVolume = nil }
     }
 
     /// 换歌时的三项后台回读(喜欢/播放模式/音量)——合并成**一次** osascript 子进程
@@ -533,20 +559,21 @@ final class PlaybackCoordinator: ObservableObject {
     /// 最坏还要两趟)。三个 seq 守卫原样保留:期间用户点了喜欢/切了模式/拖了音量,对应
     /// 项的回读结果单独作废,不牵连另两项。
     func refreshExtendedControls() {
-        let includeFavorited = isAppleMusicPlayingNow
-            && MusicAutomationPermission.check(askIfNeeded: false).isAuthorized
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
-            if isFavorited != nil { isFavorited = nil }
-            if playbackMode != nil { playbackMode = nil }
-            if soundVolume != nil { soundVolume = nil }
+        guard let player = extendedControlPlayer else {
+            clearExtendedControls()
             return
         }
+        let includeFavorited = isAppleMusicPlayingNow && player == .appleMusic
         let favSeq = favoritedActionSeq
         let modeSeq = playbackModeActionSeq
         let volSeq = volumeActionSeq
         Task.detached(priority: .utility) {
+            guard await Self.backgroundRefreshAllowed(for: player) else {
+                await MainActor.run { [weak self] in self?.clearExtendedControls() }
+                return
+            }
             let state = MusicPlaybackController.extendedControlsState(
-                for: player, includeFavorited: includeFavorited && player == .appleMusic)
+                for: player, includeFavorited: includeFavorited)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 if self.favoritedActionSeq == favSeq {
@@ -568,14 +595,14 @@ final class PlaybackCoordinator: ObservableObject {
     ///
     /// 权限用 askIfNeeded: false 检查 —— 这是个后台刷新,绝不能因为它弹出系统授权对话框。
     func refreshFavorited() {
-        guard isAppleMusicPlayingNow,
-              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+        guard isAppleMusicPlayingNow else {
             if isFavorited != nil { isFavorited = nil }
             return
         }
         let seq = favoritedActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.favoritedState()
+            let value = await Self.backgroundRefreshAllowed(for: .appleMusic)
+                ? MusicPlaybackController.favoritedState() : nil
             await MainActor.run { [weak self] in
                 guard let self, self.favoritedActionSeq == seq else { return }
                 guard self.isFavorited != value else { return }
@@ -591,13 +618,14 @@ final class PlaybackCoordinator: ObservableObject {
     /// 按钮同一套(见 LyricsOverlayView.controlButton)。
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+        guard let player = extendedControlPlayer else {
             if playbackMode != nil { playbackMode = nil }
             return
         }
         let seq = playbackModeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.playbackMode(for: player)
+            let value = await Self.backgroundRefreshAllowed(for: player)
+                ? MusicPlaybackController.playbackMode(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.playbackModeActionSeq == seq else { return }
                 guard self.playbackMode != value else { return }
@@ -608,13 +636,14 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 重新读一次 Music.app 的音量。跟 refreshFavorited 同一套前置判断与守卫。
     func refreshVolume() {
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+        guard let player = extendedControlPlayer else {
             if soundVolume != nil { soundVolume = nil }
             return
         }
         let seq = volumeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.soundVolume(for: player)
+            let value = await Self.backgroundRefreshAllowed(for: player)
+                ? MusicPlaybackController.soundVolume(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.volumeActionSeq == seq else { return }
                 guard self.soundVolume != value else { return }
@@ -773,6 +802,21 @@ final class PlaybackCoordinator: ObservableObject {
                     self?.refreshExtendedControls()
                 },
             s.$artist.assign(to: \.artist, on: self),
+            // 除了 artist / title 变化,还要每秒重读一次纠正文件:署名本来就干净的歌,纠正落地时
+            // artist / title 一个字都不变(App 2 秒一拍、collector 5 秒一拍,App 先看到新歌那一拍
+            // 文件里还是上一首),只靠 combineLatest 会把这首歌的歌手位整首钉在空串上。
+            // PlayerArtistFix.current 按 mtime 缓存,文件没变时只多一次 stat。
+            s.$artist.combineLatest(
+                s.$title,
+                Timer.publish(every: 1, on: .main, in: .common).autoconnect().map { _ in () }.prepend(())
+            )
+                .map { artist, title, _ in
+                    PlayerArtistFix.displayArtist(
+                        bundle: LocalPlaybackSource.shared.lastResolvedBundleID,
+                        title: title, artist: artist)
+                }
+                .removeDuplicates()
+                .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
@@ -784,6 +828,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$nextLineSide.assign(to: \.nextLineSide, on: self),
             s.$nextLineRomanization.assign(to: \.nextLineRomanization, on: self),
             s.$nextLineTranslation.assign(to: \.nextLineTranslation, on: self),
+            s.$nextLineWordGroups.assign(to: \.nextLineWordGroups, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
@@ -1588,13 +1633,22 @@ final class PlaybackCoordinator: ObservableObject {
         // verifyMatchesReference 的注释)——当前显示的就是这张,跟六处图像消费面同一口径
         // (highResArtworkImage 优先,没有才退系统那份)。这里拿不到(比如刚换歌那一瞬
         // 封面还没到)就传 nil,MotionCoverStore 会跳过终审,不因为一时缺参照白白拒了。
-        let referenceImage = highResArtworkImage ?? artworkImage
-        let referenceHash = referenceImage?
-            .cgImage(forProposedRect: nil, context: nil, hints: nil)
-            .map(CoverFingerprint.hash(of:))
+        //
+        // collector 靠**专辑身份核验**放行的,这里**必须**传 nil 跳过终审。那道终审比的是
+        // "动画画面像不像封面",跟 collector 的首帧比对是同一个代理判据;身份核验之所以存在,
+        // 正是因为这个判据对"Apple 把同一张封面做成另一种呈现"必然判错(满幅原图 vs 带标题的
+        // 方版、上色版 vs 压银浮雕版)。再拿它终审一次,就是把刚确认的身份原样否掉。
+        let reference: CoverFingerprint.Reference?
+        if found.identityVerified {
+            reference = nil
+        } else {
+            reference = (highResArtworkImage ?? artworkImage)?
+                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+                .map(CoverFingerprint.reference(of:))
+        }
         clear()
         motionCoverTask = Task { [weak self] in
-            let file = await MotionCoverStore.shared.prepare(master: found.master, referenceHash: referenceHash)
+            let file = await MotionCoverStore.shared.prepare(master: found.master, reference: reference)
             guard let file, !Task.isCancelled else { return }
             // 下载期间换歌了 —— 这份是上一首的。
             guard LocalPlaybackSource.shared.title == title else { return }
@@ -1634,45 +1688,46 @@ final class PlaybackCoordinator: ObservableObject {
         // 系统那份的像素宽(NSImage.pixelWidth 读图头,不触发整图解码)。没有系统封面时按 0 算 —— 任何原图都比它大。
         let systemWidth = artworkImage?.pixelWidth ?? 0
         let candidates = SpotifyArtworkURL.downloadCandidates(for: url)
+        let ordered = systemWidth == 0 ? Array(candidates.reversed()) : candidates
         spotifyCoverTask = Task { [weak self] in
-            var loaded: NSImage?
-            for candidate in candidates {
+            var shownWidth = systemWidth
+            var loadedAny = false
+            for candidate in ordered {
                 if Task.isCancelled { return }
                 // 原图档:这张要给歌词窗口 920pt@2x 的封面卡,不能吃缩略降采样(同 refreshHighResCover)。
-                if let image = await ImageMemoryCache.shared.load(candidate, variant: .original) {
-                    loaded = image
-                    break
+                guard let image = await DirectFirstImageLoad.loadOriginal(candidate) else {
+                    continue
                 }
+                loadedAny = true
+                // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
+                guard !Task.isCancelled, LocalPlaybackSource.shared.title == title,
+                      LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
+                // 比大小用像素(NSImage.pixelWidth),不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 ——
+                // Spotify 图床的原图带 797 dpi,2000×2000 的图 size.width 只有 181(装机实测;用点数就会在
+                // 这里把原图当成小图丢掉的)。理由与出处见 NSImage.pixelWidth 的注释(CachedImage.swift)。
+                let width = image.pixelWidth
+                guard width > shownWidth else { continue }
+                var hex: String?
+                var thumbnail: NSImage?
+                if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    (hex, thumbnail) = await Task.detached {
+                        (LocalPlaybackSource.computeAverageHex(cgImage: cg),
+                         Self.downscaledThumbnail(cg, maxPixel: 256))
+                    }.value
+                }
+                guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+                logger.notice("spotify original cover: swapped in \(width, privacy: .public)px for \(title, privacy: .public) (system=\(systemWidth, privacy: .public)px)")
+                self?.highResArtworkImage = image
+                self?.highResArtworkThumbnail = thumbnail
+                self?.highResAverageHex = hex
+                self?.spotifyCoverAppliedURL = url
+                shownWidth = width
             }
-            guard !Task.isCancelled else { return }
-            guard let image = loaded else {
+            if !loadedAny {
                 logger.notice("spotify original cover: no candidate loaded for \(title, privacy: .public)")
-                return
+            } else if shownWidth == systemWidth {
+                logger.notice("spotify original cover: nothing larger than system \(systemWidth, privacy: .public)px, keeping system cover")
             }
-            // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
-            guard LocalPlaybackSource.shared.title == title, LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
-            // ⚠️ 比大小用像素(NSImage.pixelWidth),不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 ——
-            // Spotify 图床的原图带 797 dpi,2000×2000 的图 size.width 只有 181(装机实测;用点数就会在
-            // 这里把原图当成小图丢掉的)。理由与出处见 NSImage.pixelWidth 的注释(CachedImage.swift)。
-            let width = image.pixelWidth
-            guard width > systemWidth else {
-                logger.notice("spotify original cover: \(width, privacy: .public)px is not larger than system \(systemWidth, privacy: .public)px, keeping system cover")
-                return
-            }
-            var hex: String?
-            var thumbnail: NSImage?
-            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                (hex, thumbnail) = await Task.detached {
-                    (LocalPlaybackSource.computeAverageHex(cgImage: cg),
-                     Self.downscaledThumbnail(cg, maxPixel: 256))
-                }.value
-            }
-            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
-            logger.notice("spotify original cover: swapped in \(width, privacy: .public)px for \(title, privacy: .public) (system=\(systemWidth, privacy: .public)px)")
-            self?.highResArtworkImage = image
-            self?.highResArtworkThumbnail = thumbnail
-            self?.highResAverageHex = hex
-            self?.spotifyCoverAppliedURL = url
         }
     }
 

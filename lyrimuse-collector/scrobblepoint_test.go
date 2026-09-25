@@ -16,9 +16,9 @@ import (
 
 func withScrobblePoint(t *testing.T, point string) {
 	t.Helper()
-	saved := features.LastfmScrobblePoint
-	features.LastfmScrobblePoint = point
-	t.Cleanup(func() { features.LastfmScrobblePoint = saved })
+	saved := features().LastfmScrobblePoint
+	featuresRef().LastfmScrobblePoint = point
+	t.Cleanup(func() { featuresRef().LastfmScrobblePoint = saved })
 }
 
 func withTempListenLog(t *testing.T) {

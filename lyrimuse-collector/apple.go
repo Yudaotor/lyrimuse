@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
@@ -447,15 +448,21 @@ func itunesSearchCoolingDown(now time.Time) bool {
 
 // noteITunesSearchStatus 按一次响应的状态码更新退避窗口。非限流状态码立即清掉窗口 ——
 // 跟 lyricSourceBreaker 的 default 分支同一条规矩:拿到一次正常响应就说明限流过去了。
-func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
 // status 传 0 表示没拿到响应(超时 / 连不上),按 403 那一档退避:限流时这个端点也会
 // 直接拖到超时,跟 403 一样拿不到 Retry-After。
+func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
 	itunesSearchMu.Lock()
-	defer itunesSearchMu.Unlock()
+	defer func() {
+		until := itunesSearchCooldownUntil
+		itunesSearchMu.Unlock()
+		if now.Before(until) {
+			publishSharedCooldown("itunes.apple.com", sharedCooldownITunesSearch, until)
+		}
+	}()
 	switch status {
 	case http.StatusTooManyRequests:
 		itunesSearchCooldownUntil = now.Add(parseLyricSourceRetryAfter(retryAfter))
-	case http.StatusForbidden:
+	case http.StatusForbidden, 0:
 		// 已经在更长的窗口里就别缩短它(429 给的 Retry-After 比这条固定档权威)。
 		if until := now.Add(itunesSearchForbiddenCooldown); until.After(itunesSearchCooldownUntil) {
 			itunesSearchCooldownUntil = until
@@ -498,6 +505,10 @@ func itunesSearch(ctx context.Context, q, country string) ([]itunesResult, bool)
 	}
 	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
+		// 调用方自己取消 / 超时,或本地出站闸拦下(没发出去),都不是 Apple 的状态。
+		if ctx.Err() == nil && !errors.Is(err, errHostGuarded) {
+			noteITunesSearchStatus(0, "", time.Now())
+		}
 		return nil, false
 	}
 	defer resp.Body.Close()

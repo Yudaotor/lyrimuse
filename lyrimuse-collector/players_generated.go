@@ -97,6 +97,15 @@ var playerNativeLyricSources = map[string]string{
 	playerSoda:       "soda",
 }
 
+// playerNeedsFullDiskAccess 是「播放器标识 → collector 读它的客户端文件要不要
+// 「完全磁盘访问」」。只供 TestPlayersNeedFullDiskAccessMatchesClientPaths 对账:
+// 运行期判据是路径本身(localcacheprobe.go),不查这张表。
+var playerNeedsFullDiskAccess = map[string]bool{
+	playerQQMusic: true,
+	playerNetease: true,
+	playerKugou:   true,
+}
+
 // playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样
 // 重发一次」。只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反
 // (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
@@ -105,4 +114,11 @@ var playerRepublishesZeroAnchor = map[string]bool{
 	neteaseMusicBundleID: true,
 	sodaMusicBundleID:    true,
 	spotifyBundleID:      true,
+}
+
+// playerPlayingFromRate 是「bundle id → 这个播放器报的 playing:false 不可信、要按
+// playbackRate > 0 判在不在播」。只列**实测见过**的播放器。
+// 判定本身在 effectivePlaying,Swift 侧 playingFromRate 同源。
+var playerPlayingFromRate = map[string]bool{
+	kugouMusicBundleID: true,
 }

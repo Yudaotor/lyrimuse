@@ -8,7 +8,7 @@
     "scripts/gen-players.py 生成,CI 跑 --check 保证生成物与本文件一致。",
     "",
     "字段说明见 scripts/gen-players.py 的文档字符串。",
-    "⚠️ note 会原样生成进 Swift 源码的注释,所以它也受注释卫生检查约束——别写日期戳",
+    "note 会原样生成进 Swift 源码的注释,所以它也受注释卫生检查约束——别写日期戳",
     "(哪天改的归 git)。"
   ],
   "players": [
@@ -24,10 +24,13 @@
       "nativeLyricSource": "applemusic",
       "positionTier": "precise",
       "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "needsAutomationPermission": true,
+      "needsFullDiskAccess": false,
       "tint": {"rgb": [0.98, 0.20, 0.35]},
       "fallbackSymbol": "music.note",
       "bundledIcon": null,
-      "note": "系统自带,走 AppleScript(JXA)直问 Music.app;scrobbleLabel 同时是 mediaPlayerLabel 认不出来源时的兜底值。"
+      "note": "系统自带,走 AppleScript(JXA)直问 Music.app,因此要一份「自动化」权限;scrobbleLabel 同时是 mediaPlayerLabel 认不出来源时的兜底值。"
     },
     {
       "id": "qq_music",
@@ -41,6 +44,9 @@
       "nativeLyricSource": "qq",
       "positionTier": "noisyFloored",
       "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": true,
       "tint": {"source": "qq"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "QQMusicIcon",
@@ -58,6 +64,9 @@
       "nativeLyricSource": "netease",
       "positionTier": "noisyFloored",
       "republishesZeroAnchor": true,
+      "playingFromRate": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": true,
       "tint": {"source": "netease"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "NeteaseIcon",
@@ -75,10 +84,13 @@
       "nativeLyricSource": "kugou",
       "positionTier": "cleanExtrapolated",
       "republishesZeroAnchor": false,
+      "playingFromRate": true,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": true,
       "tint": {"source": "kugou"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "KugouIcon",
-      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。⚠️ processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。"
+      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。"
     },
     {
       "id": "soda_music",
@@ -92,10 +104,13 @@
       "nativeLyricSource": "soda",
       "positionTier": "cleanExtrapolated",
       "republishesZeroAnchor": true,
+      "playingFromRate": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": false,
       "tint": {"rgb": [0.30, 0.85, 0.35]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "SodaMusicIcon",
-      "note": "Electron 应用,走 media-control。⚠️ 只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。"
+      "note": "Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。"
     },
     {
       "id": "spotify",
@@ -107,12 +122,15 @@
       "displayName": {"literal": "Spotify"},
       "scrobbleLabel": "Spotify (macOS)",
       "nativeLyricSource": null,
-      "positionTier": "cleanExtrapolated",
+      "positionTier": "precise",
       "republishesZeroAnchor": true,
+      "playingFromRate": false,
+      "needsAutomationPermission": true,
+      "needsFullDiskAccess": false,
       "tint": {"rgb": [0.11, 0.73, 0.33]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "SpotifyIcon",
-      "note": "自己有 AppleScript 字典,但位置直查路线已移除,现在全程 media-control。"
+      "note": "自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。"
     },
     {
       "id": "auto",
@@ -126,6 +144,9 @@
       "nativeLyricSource": null,
       "positionTier": null,
       "republishesZeroAnchor": null,
+      "playingFromRate": null,
+      "needsAutomationPermission": null,
+      "needsFullDiskAccess": null,
       "tint": {"secondary": true},
       "fallbackSymbol": "wand.and.stars",
       "bundledIcon": null,

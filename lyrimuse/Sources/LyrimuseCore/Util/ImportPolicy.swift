@@ -42,4 +42,19 @@ public enum ImportPolicy {
             return false
         }
     }
+
+    /// 导入配置包 `config` 段的最小净化:`state_relay_url` 非空却过不了 `isAcceptableRelayURL` 时,
+    /// **连同** `state_relay_token` 一起清空 —— 留着一把配不上地址的 token 没有意义,而万一以后哪里
+    /// 补了个默认地址,它会跟着被发出去。其余字段一个不动(理由见类型头注);不是字典的原样返回。
+    /// `droppedRelay` 给调用方记日志用。
+    public static func sanitizedConfig(_ configObj: Any) -> (config: Any, droppedRelay: Bool) {
+        guard var config = configObj as? [String: Any],
+              let raw = config["state_relay_url"] as? String,
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !isAcceptableRelayURL(raw)
+        else { return (configObj, false) }
+        config["state_relay_url"] = ""
+        config["state_relay_token"] = ""
+        return (config, true)
+    }
 }

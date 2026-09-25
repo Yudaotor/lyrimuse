@@ -14,8 +14,8 @@ import "testing"
 //	② Score<0 是"这个候选明确不可用"(没有时间戳/语言对不上/整份只有署名行)。全源全废时
 //	   自动路径一个字都不写,而"取第一条"会把一份废歌词写进用户的缓存。
 func TestPickLyricCandidateModes(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
+	saved := features()
+	defer func() { setFeatures(saved) }()
 
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 300},
@@ -25,17 +25,17 @@ func TestPickLyricCandidateModes(t *testing.T) {
 	enabled := map[string]bool{"netease": true, "qq": true, "kugou": true, "lrclib": true}
 
 	// 智能:取最高分。
-	features = featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart}
+	setFeatures(featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart})
 	if got := pickLyricCandidate(scored); got == nil || got.Source != "qq" {
 		t.Fatalf("智能模式该取最高分 qq(900),得到 %v", got)
 	}
 
 	// 顺序优先:按用户排的顺序取第一个能用的,不看分数(kugou 只有 500 分,但排在最前)。
-	features = featureFlags{
+	setFeatures(featureFlags{
 		LyricsSources:     enabled,
 		LyricsSourceMode:  lyricsModePriority,
 		LyricsSourceOrder: []string{"kugou", "qq", "netease"},
-	}
+	})
 	if got := pickLyricCandidate(scored); got == nil || got.Source != "kugou" {
 		t.Fatalf("顺序优先该取配置里第一个能用的 kugou,得到 %v", got)
 	}
@@ -50,17 +50,17 @@ func TestPickLyricCandidateModes(t *testing.T) {
 	}
 
 	// 关掉的源不许被选中(两种模式都要过这道过滤)。
-	features = featureFlags{
+	setFeatures(featureFlags{
 		LyricsSources:    map[string]bool{"netease": true, "kugou": true},
 		LyricsSourceMode: lyricsModeSmart,
-	}
+	})
 	if got := pickLyricCandidate(scored); got == nil || got.Source != "kugou" {
 		t.Fatalf("关掉 qq 之后该取 kugou(500),得到 %v", got)
 	}
 
 	// 全被判废 到 nil。调用方(CLI 的 -pick / 新按钮)必须按"一个能用的都没有"处理,
 	// 绝不能退回"取第一条"。
-	features = featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart}
+	setFeatures(featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart})
 	allRejected := []scoredLyricCandidateResult{
 		{Source: "qq", Score: -1},
 		{Source: "kugou", Score: -1},
@@ -93,8 +93,8 @@ func TestPickLyricCandidateModes(t *testing.T) {
 // 这组用例钉的正是那个"约束"的边界 —— 尤其是最后两条:约束不成立时必须**不换**,
 // 而不是悄悄退回全局最优(那等于推翻用户的选择,而"这一轮没应答"最常见的原因只是超时)。
 func TestPickLyricCandidatePreferring(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
+	saved := features()
+	defer func() { setFeatures(saved) }()
 
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 300},
@@ -102,7 +102,7 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 		{Source: "kugou", Score: 500},
 	}
 	enabled := map[string]bool{"netease": true, "qq": true, "kugou": true, "lrclib": true}
-	features = featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart}
+	setFeatures(featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart})
 
 	// 没选过源 到 逐字等价于 pickLyricCandidate。
 	if got := pickLyricCandidatePreferring(scored, ""); got == nil || got.Source != "qq" {
@@ -141,10 +141,10 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 
 	// 用户后来在设置里禁用了那个源 到 落到"不换"。保守是对的:"我选了这个源"和"我不想再用
 	// 这个源"是两个独立的意图,不该由这里替用户合并成"那就随便挑一个别的"。
-	features = featureFlags{
+	setFeatures(featureFlags{
 		LyricsSources:    map[string]bool{"netease": true, "qq": true, "lrclib": true},
 		LyricsSourceMode: lyricsModeSmart,
-	}
+	})
 	if got := pickLyricCandidatePreferring(scored, "kugou"); got != nil {
 		t.Fatalf("选定的源被禁用时该返回 nil(不换),得到 %v", got)
 	}

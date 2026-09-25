@@ -50,6 +50,23 @@ func runIdlePageTests() {
                     [2, 1, nil], "第 N 次听:算出 ≤0 时留空,不显示错的")
     }
 
+    // MARK: - 最近记录:连续听同一首折成一组(RecentRepeatRuns)
+    do {
+        let rows = [(artist: "周深", title: "奔赴超无限"),
+                    (artist: "周杰倫", title: "一路向北"),
+                    (artist: "周杰伦", title: "一路向北"),   // 繁简两种写法:同一首
+                    (artist: "周杰伦", title: "一路向北"),
+                    (artist: "陶喆", title: "爱很简单"),
+                    (artist: "周杰伦", title: "一路向北")]  // 中间隔了别的歌:另起一组
+        expectEqual(RecentRepeatRuns.runs(rows: rows), [0..<1, 1..<4, 4..<5, 5..<6],
+                    "连续同曲:按折叠族连续合并,繁简算同一首,隔开的不合并")
+        expectEqual(RecentRepeatRuns.runs(rows: []), [], "连续同曲:空列表")
+        expectEqual(RecentRepeatRuns.runs(rows: [(artist: "陶喆", title: "爱很简单")]), [0..<1],
+                    "连续同曲:单行就是一个长度 1 的区间")
+        expectEqual(RecentRepeatRuns.runs(rows: Array(repeating: (artist: "陶喆", title: "爱很简单"), count: 3)),
+                    [0..<3], "连续同曲:整页都是同一首时只有一组")
+    }
+
     // MARK: - 停播页:收听总览的派生算术(IdleListeningStats)
     do {
         let cal = Calendar.current

@@ -28,7 +28,7 @@ const digestTopN = 3
 
 // digestTally 是某首歌/某张专辑/某个歌手在统计区间内被听了几次。
 type digestTally struct {
-	Name, Sub string // 歌曲:Name=歌名,Sub=歌手；歌手:Name=歌手名,Sub 留空
+	Name, Sub string // 歌曲/专辑:Name=歌名或专辑名,Sub=歌手；歌手:Name=歌手名,Sub 留空
 	Count     int
 }
 
@@ -40,6 +40,50 @@ type digestStats struct {
 	// 推送文案据此判断要不要显示"累计时长"这一句，不是当成"今天真的听了 0 秒"。
 	TopTracks  []digestTally
 	TopArtists []digestTally
+	TopAlbums  []digestTally
+	// Truncated:逐条翻收听记录翻到上限还没翻完,上面的数字只是最近那一部分。推送里会写明。
+	Truncated bool
+}
+
+// digestEnv 是后台定时任务(四档听歌报告、Top 歌手榜)这一轮要用的配置快照。这些任务在单独的
+// goroutine 里跑(runDigestsAsync),而 p.cfg / p.lb.alerter 会被主循环的配置热重读换掉,所以
+// 开跑前在主循环上取一份,任务里只读这份,不读 p.cfg / p.lb。
+type digestEnv struct {
+	ctx     context.Context
+	cfg     *config
+	alerter *alerter
+	lbRoot  string
+}
+
+func (p *poller) digestEnvSnapshot() digestEnv {
+	env := digestEnv{ctx: p.ctx, cfg: p.cfg}
+	if p.lb != nil {
+		env.alerter, env.lbRoot = p.lb.alerter, p.lb.apiRoot()
+	}
+	return env
+}
+
+// runDigestsAsync 由主循环每一拍调用:上一轮还没跑完就跳过,否则开一个 goroutine 依次跑各任务。
+// 它们要联网取数、推送,网络差时一轮能到几十秒甚至几分钟,不能占住主循环(主循环停住期间换歌、
+// 暂停、拖进度都察觉不到,网页状态也不推)。各任务的 lastCheckedAt 与状态文件只在这个
+// goroutine 里读写,digestBusy 保证同一时刻只有一轮。
+func (p *poller) runDigestsAsync(now time.Time) {
+	if !p.digestBusy.CompareAndSwap(false, true) {
+		return
+	}
+	env := p.digestEnvSnapshot()
+	go func() {
+		defer p.digestBusy.Store(false)
+		p.runDigests(now, env)
+	}()
+}
+
+func (p *poller) runDigests(now time.Time, env digestEnv) {
+	p.weeklyDigest(now, env)
+	p.dailyDigest(now, env)
+	p.monthlyDigest(now, env)
+	p.yearlyDigest(now, env)
+	p.topArtistsDigest(now, env)
 }
 
 // resolveDigestSource 判定"这次检查该用哪个数据源"：preference 非空且明确指定就用它；
@@ -84,10 +128,27 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 	if err != nil {
 		return digestStats{}, err
 	}
-	var stats digestStats
-	for _, t := range tracks {
-		stats.TotalPlays += t.PlayCount
+	albums, err := lastfmWeeklyTopAlbums(ctx, user, apiKey, from, to)
+	if err != nil {
+		return digestStats{}, err
 	}
+	return digestStatsFromCharts(tracks, artists, albums), nil
+}
+
+// digestStatsFromCharts 把三份已按次数降序排好的榜单拼成统计结果。
+//
+// 播放次数取曲目榜合计和歌手榜合计里**大的那个**，不能只加曲目榜：Last.fm 的曲目榜一次
+// 最多返回 1000 条，月、年这种长区间会被截断；歌手条目少得多，一般是全量。见 15 章。
+func digestStatsFromCharts(tracks, artists, albums []lastfmChartEntry) digestStats {
+	var stats digestStats
+	trackSum, artistSum := 0, 0
+	for _, t := range tracks {
+		trackSum += t.PlayCount
+	}
+	for _, a := range artists {
+		artistSum += a.PlayCount
+	}
+	stats.TotalPlays = max(trackSum, artistSum)
 	for i, t := range tracks {
 		if i >= digestTopN {
 			break
@@ -95,7 +156,16 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 		stats.TopTracks = append(stats.TopTracks, digestTally{Name: t.Name, Sub: t.Artist, Count: t.PlayCount})
 	}
 	stats.TopArtists = digestTopArtists(artists)
-	return stats, nil
+	for _, a := range albums {
+		if len(stats.TopAlbums) >= digestTopN {
+			break
+		}
+		if strings.TrimSpace(a.Name) == "" {
+			continue
+		}
+		stats.TopAlbums = append(stats.TopAlbums, digestTally{Name: a.Name, Sub: a.Artist, Count: a.PlayCount})
+	}
+	return stats
 }
 
 // digestTopArtists 把 Last.fm 歌手榜条目**先归并、再取 Top N**。
@@ -131,30 +201,33 @@ func digestTopArtists(artists []lastfmChartEntry) []digestTally {
 
 // lbListenEntry 是一条 ListenBrainz 收听记录，只留这个功能要用的字段。
 type lbListenEntry struct {
-	Title, Artist string
-	ListenedAt    int64
-	DurationMs    int64 // 0 = 这条记录没带时长(比如 iPhone 桥接来的 playing_now 转发)，不计入总时长
+	Title, Artist, Release string // Release 可能为空(播放器没报专辑)，不计入专辑榜
+	ListenedAt             int64
+	DurationMs             int64 // 0 = 这条记录没带时长(比如 iPhone 桥接来的 playing_now 转发)，不计入总时长
 }
+
+// lbListensMaxPages:逐条翻收听记录的页数上限(一页 100 条)。一周听上千首并不罕见(本机
+// 8 月一个月 3,000 多条),上限按一周 5,000 条留足;这是保险丝,碰到了就在推送里写明不完整。
+const lbListensMaxPages = 50
 
 // lbListensInRange 拉该用户 [fromUnix,toUnix) 区间内的收听记录，按 max_ts 游标翻页
 // (ListenBrainz 一页最多 100 条，一周的量级可能不止一页，日报一般用不到翻页但同一份
-// 实现两边共用，不用维护两份"翻不翻页"的取数逻辑)。翻页上限 10 页(最多 1000 条)，
-// 纯粹是给一个"极端情况下别无限翻下去"的保险丝，正常用量不会碰到这个上限。
-func lbListensInRange(ctx context.Context, root, user string, fromUnix, toUnix int64) ([]lbListenEntry, error) {
-	var all []lbListenEntry
+// 实现两边共用，不用维护两份"翻不翻页"的取数逻辑)。翻到 lbListensMaxPages 页还没翻完时
+// truncated=true。
+func lbListensInRange(ctx context.Context, root, user string, fromUnix, toUnix int64) (all []lbListenEntry, truncated bool, err error) {
 	cursor := toUnix
-	for page := 0; page < 10; page++ {
+	for page := 0; page < lbListensMaxPages; page++ {
 		entries, oldestInPage, err := lbListensBefore(ctx, root, user, fromUnix, cursor)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		all = append(all, entries...)
 		if len(entries) < 100 || oldestInPage <= fromUnix {
-			break // 这一页不满 100 条(已经翻到底)，或者已经翻到区间起点之前，没有更早的了
+			return all, false, nil // 这一页不满 100 条(已经翻到底)，或者已经翻到区间起点之前，没有更早的了
 		}
 		cursor = oldestInPage // 下一页从"这一页最早一条"往更早继续翻
 	}
-	return all, nil
+	return all, true, nil
 }
 
 // lbListensBefore 拉一页(至多100条) listened_at 落在 (fromUnix, maxTs] 的记录，返回
@@ -182,6 +255,7 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 				TrackMetadata struct {
 					TrackName      string `json:"track_name"`
 					ArtistName     string `json:"artist_name"`
+					ReleaseName    string `json:"release_name"`
 					AdditionalInfo struct {
 						DurationMs int64 `json:"duration_ms"`
 					} `json:"additional_info"`
@@ -196,7 +270,7 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 	oldest := int64(0)
 	for _, l := range out.Payload.Listens {
 		entries = append(entries, lbListenEntry{
-			Title: l.TrackMetadata.TrackName, Artist: l.TrackMetadata.ArtistName,
+			Title: l.TrackMetadata.TrackName, Artist: l.TrackMetadata.ArtistName, Release: l.TrackMetadata.ReleaseName,
 			ListenedAt: l.ListenedAt, DurationMs: l.TrackMetadata.AdditionalInfo.DurationMs,
 		})
 		if oldest == 0 || l.ListenedAt < oldest {
@@ -211,14 +285,21 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 // 分别计数、按次数排序取 Top N，同时能顺带算出总时长(Last.fm 那条路径给不出这个)。
 // 逐条翻页有上限(见 lbListensInRange)，只用于日报、周报；月报、年报走 lbStatsDigest。
 func listenbrainzDigestStats(ctx context.Context, root, user string, from, to int64) (digestStats, error) {
-	listens, err := lbListensInRange(ctx, root, user, from, to)
+	listens, truncated, err := lbListensInRange(ctx, root, user, from, to)
 	if err != nil {
 		return digestStats{}, err
 	}
+	stats := digestStatsFromListens(listens)
+	stats.Truncated = truncated
+	return stats, nil
+}
+
+// digestStatsFromListens 是 listenbrainzDigestStats 的聚合部分，纯函数。
+func digestStatsFromListens(listens []lbListenEntry) digestStats {
 	var stats digestStats
 	stats.TotalPlays = len(listens)
-	trackIndex, artistIndex := map[string]int{}, map[string]int{}
-	var trackTallies, artistTallies []digestTally
+	trackIndex, artistIndex, albumIndex := map[string]int{}, map[string]int{}, map[string]int{}
+	var trackTallies, artistTallies, albumTallies []digestTally
 	for _, l := range listens {
 		stats.TotalDurationMs += l.DurationMs
 		tk := l.Title + "|" + l.Artist
@@ -233,7 +314,7 @@ func listenbrainzDigestStats(ctx context.Context, root, user string, from, to in
 		// 这里只能用 artistMergeNameKeyCached 这个按名字算键的版本,不能套 mergeAliasedArtists:
 		// 那个吃的是 lastfmChartEntry(带 mbid),而 LB 的收听记录里没有 mbid,并查集
 		// 的第二个信号本来就用不上,按名字键分桶已经是这条路径能做到的全部。
-		ak := artistMergeNameKey(l.Artist)
+		ak := artistMergeNameKeyCached(l.Artist)
 		if idx, ok := artistIndex[ak]; ok {
 			artistTallies[idx].Count++
 		} else {
@@ -241,27 +322,49 @@ func listenbrainzDigestStats(ctx context.Context, root, user string, from, to in
 			// 展示名用 artistMergeDisplayNameCached:只把已知罗马字艺名换成中文本名,**不**做
 			// 繁简/大小写折叠 —— 那两步只是判同一个人时内部用的,不该篡改用户库里原本
 			// 的书写(理由见 artistMergeDisplayName 的注释)。
-			artistTallies = append(artistTallies, digestTally{Name: artistMergeDisplayName(l.Artist), Count: 1})
+			artistTallies = append(artistTallies, digestTally{Name: artistMergeDisplayNameCached(l.Artist), Count: 1})
+		}
+		if release := strings.TrimSpace(l.Release); release != "" {
+			// 同一张专辑、同一个人的不同写法算一张(歌手部分用同一个归并键)。
+			rk := release + "|" + ak
+			if idx, ok := albumIndex[rk]; ok {
+				albumTallies[idx].Count++
+			} else {
+				albumIndex[rk] = len(albumTallies)
+				albumTallies = append(albumTallies, digestTally{Name: release, Sub: artistMergeDisplayNameCached(l.Artist), Count: 1})
+			}
 		}
 	}
-	sort.SliceStable(trackTallies, func(i, j int) bool { return trackTallies[i].Count > trackTallies[j].Count })
-	sort.SliceStable(artistTallies, func(i, j int) bool { return artistTallies[i].Count > artistTallies[j].Count })
-	if len(trackTallies) > digestTopN {
-		trackTallies = trackTallies[:digestTopN]
-	}
-	if len(artistTallies) > digestTopN {
-		artistTallies = artistTallies[:digestTopN]
-	}
-	stats.TopTracks, stats.TopArtists = trackTallies, artistTallies
-	return stats, nil
+	stats.TopTracks = topTallies(trackTallies)
+	stats.TopArtists = topTallies(artistTallies)
+	stats.TopAlbums = topTallies(albumTallies)
+	return stats
 }
 
-// digestPush 拼标题/正文并推送——weekly.go/daily.go 各自算好 title、拿到 stats 后调用
-// 同一份文案拼装逻辑，不用两边各写一遍几乎相同的 strings.Builder 拼接。只有超过 1 首
-// 不同的歌/1 个不同的歌手时才展示对应的 Top 榜单(只有一首歌时排名没有意义)。
-func digestPush(a *alerter, title string, stats digestStats) {
+// topTallies 按次数降序(同次数保持首次出现的顺序)取前 digestTopN 条。
+func topTallies(tallies []digestTally) []digestTally {
+	sort.SliceStable(tallies, func(i, j int) bool { return tallies[i].Count > tallies[j].Count })
+	if len(tallies) > digestTopN {
+		tallies = tallies[:digestTopN]
+	}
+	return tallies
+}
+
+// digestPush 推送一条听歌报告——各 cadence 各自算好 title、拿到 stats 后调用同一份文案
+// 拼装逻辑(digestBody)。推送失败返回错误，调用方不记「已推送」，下次检查重推。
+func digestPush(a *alerter, title string, stats digestStats) error {
+	return a.push(title, digestBody(stats))
+}
+
+// digestBody 拼推送正文。顺序是歌手、专辑、歌曲；某一类只有超过 1 条时才展示(只有一条时
+// 排名没有意义)。
+func digestBody(stats digestStats) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "共播放 %d 次", stats.TotalPlays)
+	if stats.Truncated {
+		fmt.Fprintf(&b, "共播放 %d 次以上（记录太多，只统计了最近这些）", stats.TotalPlays)
+	} else {
+		fmt.Fprintf(&b, "共播放 %d 次", stats.TotalPlays)
+	}
 	if stats.TotalDurationMs > 0 {
 		totalMin := stats.TotalDurationMs / 60000
 		if totalMin >= 60 {
@@ -270,10 +373,17 @@ func digestPush(a *alerter, title string, stats digestStats) {
 			fmt.Fprintf(&b, " · 约 %d 分", totalMin)
 		}
 	}
+	b.WriteString("\n")
 	if len(stats.TopArtists) > 1 {
-		b.WriteString("\n\nTop 歌手：\n")
+		b.WriteString("\nTop 歌手：\n")
 		for i, t := range stats.TopArtists {
 			fmt.Fprintf(&b, "%d. %s（%d）\n", i+1, t.Name, t.Count)
+		}
+	}
+	if len(stats.TopAlbums) > 1 {
+		b.WriteString("\nTop 专辑：\n")
+		for i, t := range stats.TopAlbums {
+			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Sub, t.Name, t.Count)
 		}
 	}
 	if len(stats.TopTracks) > 1 {
@@ -282,5 +392,5 @@ func digestPush(a *alerter, title string, stats digestStats) {
 			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Sub, t.Name, t.Count)
 		}
 	}
-	a.push(title, strings.TrimRight(b.String(), "\n"))
+	return strings.TrimRight(b.String(), "\n")
 }

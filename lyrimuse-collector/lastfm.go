@@ -67,7 +67,7 @@ func newLastfmScrobbler(apiKey, secret, sk string) *lastfmScrobbler {
 // lastfmScrobblerIfEnabled 是 newLastfmScrobbler 的唯一调用点(run() 里)，多包一层
 // features().LastfmMirrorScrobble 开关——跟凭据判断是 AND 关系,任一为否都返回 nil。
 func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
-	if !features.LastfmMirrorScrobble {
+	if !features().LastfmMirrorScrobble {
 		return nil
 	}
 	s := newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
@@ -322,9 +322,9 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 // now-playing、scrobble、回填三条路径必须调**同一个**函数:否则会出现 "now playing 显示 A、
 // 落库却是 A & B" 的自相矛盾状态。匹配下唯一允许的分歧见 lastfmcatalog.go「一致性」一节。
 func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, track string, durationSecs float64) (string, string) {
-	scope := matchScope{artist: features.LastfmMatchArtist, track: features.LastfmMatchTrack}
+	scope := matchScope{artist: features().LastfmMatchArtist, track: features().LastfmMatchTrack}
 	artist, track, matched := c.resolve(ctx, artist, track, durationSecs, scope)
-	if matched || !features.LastfmMatchFirstArtistOnly {
+	if matched || !features().LastfmMatchFirstArtistOnly {
 		return artist, track
 	}
 	if first := firstCreditedArtist(artist); first != "" {
@@ -333,11 +333,25 @@ func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, t
 	return artist, track
 }
 
+// lastfmAlbumTag 决定往 Last.fm 发的专辑名。曲名按 Last.fm 编目写法发时(LastfmMatchTrack:
+// 智能档恒开、自定义档的「曲名：匹配条目」)同时剥掉 Apple 给单曲 / EP 加的「 - Single」「 - EP」
+// 后缀(trimSingleOrEPSuffix):Last.fm 把带后缀和不带后缀的当成两张专辑,专辑榜会被拆成两条。
+// 曲名原样发时专辑名也原样。
+//
+// now-playing、scrobble、回填三条路径必须调这同一个函数(同 resolveScrobbleTags)。只管 Last.fm:
+// ListenBrainz 的 release_name 与本地收听日志一律记原样,回填时再经这里改。见 12 章 §4。
+func lastfmAlbumTag(album string) string {
+	if !features().LastfmMatchTrack {
+		return album
+	}
+	return trimSingleOrEPSuffix(album)
+}
+
 // mirrorTimeout 是 mirrorAsync 给一次 Last.fm 写入的总窗口。会联网匹配时多给判定那份
 // 预算(lastfmCatalogBudget,含扩展搜索),免得判定把真正的写入挤掉;不匹配就维持 8 秒。
 func mirrorTimeout() time.Duration {
 	const write = 8 * time.Second
-	if features.LastfmMatchArtist || features.LastfmMatchTrack {
+	if features().LastfmMatchArtist || features().LastfmMatchTrack {
 		return write + lastfmCatalogBudget
 	}
 	return write
@@ -346,7 +360,7 @@ func mirrorTimeout() time.Duration {
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string, durationSecs float64) error {
 	artist, track = resolveScrobbleTags(ctx, s.catalog, artist, track, durationSecs)
 	p := map[string]string{"artist": artist, "track": track}
-	if album != "" {
+	if album = lastfmAlbumTag(album); album != "" {
 		p["album"] = album
 	}
 	// duration 让 Last.fm 知道这条"正在播放"该挂多久 —— 不给的话它只能自己猜一个默认
@@ -360,7 +374,7 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 	// 落库却是 A & B"这种自相矛盾的状态。
 	artist, track = resolveScrobbleTags(ctx, s.catalog, artist, track, durationSecs)
 	p := map[string]string{"artist": artist, "track": track, "timestamp": strconv.FormatInt(timestamp, 10)}
-	if album != "" {
+	if album = lastfmAlbumTag(album); album != "" {
 		p["album"] = album
 	}
 	// 补:这条**活路径**原来不发 duration,而 backfill.go:200 一直在发 ——
@@ -427,6 +441,10 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 			if s.dead.CompareAndSwap(false, true) {
 				log.Printf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
 				writeLastfmMirrorStatus(apiErr)
+			}
+			// 凭据判死 = 这一条确定没写进去,跟入口短路那条同样要留痕,重新授权后回填能补回来。
+			if onFail != nil {
+				onFail(err)
 			}
 			return
 		}
@@ -508,7 +526,7 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (page lastfmRecentPa
 		log.Printf("lastfmRecent: build request: %v", err)
 		return lastfmRecentPage{}, false
 	}
-	resp, err := doHTTPTracked(http.DefaultClient, req)
+	resp, err := doHTTPTracked(lastfmReadClient, req)
 	if err != nil {
 		log.Printf("lastfmRecent: request failed: %v", err)
 		return lastfmRecentPage{}, false

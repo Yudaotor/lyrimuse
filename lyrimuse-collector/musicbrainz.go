@@ -550,14 +550,26 @@ func noteMBLookupFailure(raw string, err error, now time.Time) {
 }
 
 func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
+	aliases, _ := musicBrainzArtistAliasesChecked(ctx, rawArtist)
+	return aliases
+}
+
+// errMBLookupBackoff:这位歌手刚刚没查成,还在 mbLookupFailureTTL 的退避窗口里,这次没发请求。
+var errMBLookupBackoff = errors.New("musicbrainz: lookup in failure backoff")
+
+// musicBrainzArtistAliasesChecked 同 musicBrainzArtistAliases,但把「没查成」如实报出来:
+// err != nil = 这一刻不知道这位歌手有哪些别名(限速/5xx/超时/退避中),**不是**「没有别名」。
+// 要据此下永久结论的调用方(Last.fm 编目匹配)必须区分这两种情况 —— 别名缺了就可能漏掉
+// 真正的条目,拿残缺的候选集判出来的结论不能落盘。
+func musicBrainzArtistAliasesChecked(ctx context.Context, rawArtist string) ([]string, error) {
 	raw := strings.TrimSpace(rawArtist)
 	if raw == "" {
-		return nil
+		return nil, nil
 	}
 	mbPrimaryNameMu.Lock()
 	if v, ok := mbPrimaryNameCache[raw]; ok {
 		mbPrimaryNameMu.Unlock()
-		return v
+		return v, nil
 	}
 	mbPrimaryNameMu.Unlock()
 
@@ -568,7 +580,7 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	// 别名轮的构造阶段(enrich.go 的 retryArtistIdentities),于是每一轮别名都可能卡在
 	// 那把锁上,直接计进用户等歌词的时间里。
 	if mbLookupInFailureBackoff(raw, time.Now()) {
-		return nil
+		return nil, errMBLookupBackoff
 	}
 
 	resolved, err := lookupMusicBrainzArtistAliases(ctx, raw)
@@ -585,7 +597,7 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 		// TTL 再查一次",内存缓存仍然不写 —— 原意(一次偶发 503 不该把歌手钉死成"无别名")
 		// 完全保留,只是重试的节奏从"每一轮别名"降到"每 TTL 一次"。
 		noteMBLookupFailure(raw, err, time.Now())
-		return nil
+		return nil, err
 	}
 
 	mbPrimaryNameMu.Lock()
@@ -597,7 +609,7 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	}
 	mbPrimaryNameMu.Unlock()
 	saveMBPrimaryNameCache()
-	return resolved
+	return resolved, nil
 }
 
 // resolvedArtistCJKHint 给 isProbablyWrongLanguageLyrics 用,只读窥探
@@ -677,6 +689,29 @@ func resolveGenericArtistCanonicalName(ctx context.Context, rawArtist string) st
 		return v
 	}
 	return cachedQQArtistCanonicalName(rawArtist)
+}
+
+// cachedGenericArtistCanonicalName 是 resolveGenericArtistCanonicalName 的只读缓存版：三步的
+// 顺序与判据逐条相同，缓存不命中就当没有，不联网、不写缓存。两边改动必须同步。
+func cachedGenericArtistCanonicalName(rawArtist string) string {
+	if v := knownArtistAlias(rawArtist); v != "" {
+		return v
+	}
+	if v := cachedMusicBrainzCanonicalName(rawArtist); v != "" {
+		return v
+	}
+	return qqArtistCanonicalNameFromCache(rawArtist)
+}
+
+// cachedMusicBrainzCanonicalName 只读 canonicalArtistViaMusicBrainz 的缓存，判据同它。
+func cachedMusicBrainzCanonicalName(rawArtist string) string {
+	rawArtist = strings.TrimSpace(rawArtist)
+	if rawArtist == "" || containsHan(rawArtist) {
+		return ""
+	}
+	artistAliasMu.Lock()
+	defer artistAliasMu.Unlock()
+	return artistAliasCache[rawArtist]
 }
 
 // lookupMusicBrainzArtistAliases 的 error 专门回答"这一次到底查成没有":ctx 被取消、

@@ -26,6 +26,92 @@ func runCreditLineTests() {
         expectEqual(engine.activeLine(atMs: 27000)?.words?.map(\.text), ["la ", "la "], "SyncEngine(YRC): 真歌词行不受影响")
     }
 
+    // ---- 译文 / 罗马音跟着正文的署名判定走(按时间戳配对) ----
+    //
+    // 真实形态取自酷狗《春不晚 (DJ阿卓版)》:那份 `.tr.lrc` 整份**只有职员表**(正文头部那几行
+    // 署名换一种写法再写一遍),而头部最后一行署名(00:00.78)跟第一句真歌词(00:01.45)只差
+    // 670ms,落在 `nearestText` 的 700ms 容差里 —— 于是「监制音乐主管：颜陌」被第一句真歌词
+    // 就近认领,挂在它下面冒充译文。
+    do {
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:00.62]制作人Music Producer：蔡樱瑞\n[00:00.78]监制Musical Supervisor：颜陌\n"
+            + "[00:01.45]我为你挥毫旧谣一番\n[00:08.21]姑娘 一句春不晚\n"
+        let tr = "[00:00.62]制作人音乐制作人：蔡樱瑞\n[00:00.78]监制音乐主管：颜陌\n"
+        engine.load(lyrics: lrc, lyricsTr: tr, lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 2000)?.mainText, "我为你挥毫旧谣一番",
+                    "译文过滤: 正文第一句正常显示")
+        expectEqual(engine.activeLine(atMs: 2000)?.translation, nil,
+                    "译文过滤: 职员表的译文不许被 700ms 内的第一句真歌词就近认领")
+    }
+
+    do {
+        // 反向:正文留下来的那行,译文一条都不许被连累。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:00.78]监制：颜陌\n[00:01.45]我为你挥毫旧谣一番\n"
+        let tr = "[00:00.78]监制音乐主管：颜陌\n[00:01.45]I paint you an old ballad\n"
+        engine.load(lyrics: lrc, lyricsTr: tr, lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 2000)?.translation, "I paint you an old ballad",
+                    "译文过滤(反向): 正文留下的那行,译文照旧挂着")
+    }
+
+    do {
+        // 撞车保护:同一个时间戳上既有被判署名的行、又有留下来的真歌词,这个戳不算署名 ——
+        // 实测本机 7210 首里有 86 处,多半是 `[00:00.00]` 上抬头行跟第一句挤在一起。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:00.00]作词：甲\n[00:00.00]我为你挥毫旧谣一番\n[00:08.21]姑娘 一句春不晚\n"
+        let tr = "[00:00.00]I paint you an old ballad\n"
+        engine.load(lyrics: lrc, lyricsTr: tr, lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 1000)?.translation, "I paint you an old ballad",
+                    "译文过滤(撞车): 同一个戳上还留着真歌词时,它的译文不许被一起丢")
+    }
+
+    do {
+        // 罗马音同理,而且这条只有认时间戳才接得住:罗马音里的署名是拼音(`zuò cí : jiǎ`),
+        // 汉字角色词表一条都够不着 —— 全库量下来这类占被漏掉的大头。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:00.78]作词 : 甲\n[00:01.45]一句春不晚\n[00:08.21]留在真江南\n"
+        let roma = "[00:00.78]zuò cí : jiǎ\n[00:08.21]liú zài zhēn jiāng nán\n"
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 2000)?.romanization, nil,
+                    "罗马音过滤: 拼音写的职员表不许被 700ms 内的第一句就近认领")
+        expectEqual(engine.activeLine(atMs: 9000)?.romanization, "liú zài zhēn jiāng nán",
+                    "罗马音过滤(反向): 真歌词那行的罗马音照旧")
+    }
+
+    // ---- 长得像角色名的标签不许混进演唱者名单 ----
+    //
+    // 说话人豁免那道门排在署名过滤**所有规则最前面**,一进去就再也不看别的判据 —— 所以一个
+    // 角色标签只要被当成演唱者收进名单,同一条 `matchesRoleWordCredit` 判得出它是署名也没用。
+    // 真实形态取自《总有幸福在等你》(《欢乐颂》片尾曲):五位演唱者每人一个人名标记,
+    // `版权方：东阳正午阳光影视有限公司` 混在里面被当成第六个"演唱者",原样显示在第一行。
+    do {
+        expectEqual(LyricsSyncEngine.labelLooksLikeCreditRole("版权方"), true,
+                    "说话人否决: 「角色词 + 尾字」的标签本身就是角色名")
+        for role in ["总策划", "人声编辑", "封面设计", "合声编写", "版权运营", "主唱导演", "声乐编辑"] {
+            expectEqual(LyricsSyncEngine.labelLooksLikeCreditRole(role), true,
+                        "说话人否决: 全库量出来的同类标签: \(role)")
+        }
+        // 反向比正向重要:这道否决动的是"谁算演唱者",判错就是把真歌词行的标签当署名。
+        for name in ["蒋欣", "乔欣", "王子文", "杨紫", "刘涛", "曲婉婷", "合", "男", "女"] {
+            expectEqual(LyricsSyncEngine.labelLooksLikeCreditRole(name), false,
+                        "说话人否决(反向): 真演唱者标签一个都不许碰: \(name)")
+        }
+
+        let lines = [
+            "词：徐梦雅", "曲：捞仔", "版权方：东阳正午阳光影视有限公司",
+            "蒋欣：目视前方下巴抬高更漂亮", "乔欣：我很善良不代表我没主张",
+            "王子文：天真疯狂偶尔霸道嚣张", "杨紫：左手梦想右手随时疗伤",
+            "蒋欣：抖抖肩膀藏好背后的翅膀", "合：总有幸福在等你",
+        ]
+        let speakers = LyricDuet.speakers(in: lines)
+        expectEqual(speakers.contains("版权方"), false, "说话人否决: 「版权方」不进演唱者名单")
+        expectEqual(speakers.contains("蒋欣") && speakers.contains("合"), true,
+                    "说话人否决: 真演唱者和「合」照旧在名单里")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(lines, speakerExemptions: speakers),
+                    [true, true, true, false, false, false, false, false, false],
+                    "说话人否决: 头三行署名全删,五句带人名标记的真歌词一行不动")
+    }
+
     // ---- 歌词噪声过滤:日文标注 / 繁体自动识别 / 纯符号行 ----
     // 调研同类工具的默认过滤表之后补的。那类表把繁简两种写法都手工列进去(有「作詞」
     // 也有「作词」,但「録音」就只列了简体),我们改成转孪生写法再比一次,表不必双写。
@@ -134,6 +220,25 @@ func runCreditLineTests() {
                     "版权声明(反向): 只有「未经」的真歌词不算")
         expectEqual(LyricsSyncEngine.matchesCopyrightNotice("我不得不承认"), false,
                     "版权声明(反向): 只有「不得」的真歌词不算")
+
+        // 反过来说的「我拿到了授权」那一档:一个法务禁止词都没有,靠"取得类动词 + 授权"成对认。
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("【本音乐作品已获得正版授权】"),
+                    true, "授权声明: 括号包着的正版授权声明")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("已通过「腾讯音乐·启明星」获得官方翻唱授权"),
+                    true, "授权声明: 动词和「授权」之间隔着平台名")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("（本作品已经过词曲著作权利方授权）"),
+                    true, "授权声明: 「经过…授权」写法")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("【英文版翻译自花粥《二十岁的某一天》, 已获词曲授权】"),
+                    true, "授权声明: 「已获…授权」写法")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("本作品已獲得正版授權"),
+                    true, "授权声明: 繁体写法")
+        // 反向:两半必须齐,光有一个「授权」不删 —— 这是它误杀空间小的唯一来源。
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("谁授权你这样对我"), false,
+                    "授权声明(反向): 只有「授权」没有取得类动词不算")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("我要赌上我的版权"), false,
+                    "授权声明(反向): 语料里真出现过的、含「版权」的真歌词")
+        expectEqual(LyricsSyncEngine.matchesCopyrightNotice("我们经过那条街"), false,
+                    "授权声明(反向): 只有「经过」的真歌词不算")
     }
 
     do {
@@ -193,7 +298,25 @@ func runCreditLineTests() {
                     [false, false, false, false],
                     "拉丁角色名(反向): 段落标记(Chorus/Verse/Bridge/Rap)后面跟的是真歌词,一条都不许删")
 
-        // ---- 第十六轮(李佳薇《甲乙丙丁》头部「艺术指导」漏网) ----
+        // ③ 标签整个由英文角色词组成(乐器 / 声部 / 工程,可用 & / , and 连接,可带 by)。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["其实你很悲伤这很寻常我亲爱的偏执狂",
+             "Vocals: Harry Styles", "Drum Programming & Synths: Kid Harpoon & Tyler Johnson",
+             "Lead & Background Vocals : Michael Jackson", "Cello: Dev Hynes",
+             "Background Vocals by：Sam Carter"]),
+                    [false, true, true, true, true, true],
+                    "拉丁角色词标签: 乐器/声部/工程组成的标签 + 人名要删(真歌词不动)")
+        // 反例:单独的修饰词(Solo)不成立;右边是句子的由否决闸放过;人名标签不在词表里。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["其实你很悲伤这很寻常我亲爱的偏执狂",
+             "Solo: walking down the road alone", "Bass: I can feel it in my bones",
+             "Guitar: my only friend tonight", "Harry: we're not the same"]),
+                    [false, false, false, false, false],
+                    "拉丁角色词标签(反向): 单独修饰词、右边是句子、人名标签都不许删")
+        expectEqual(LyricsSyncEngine.matchesLatinRoleWordLabel("Drum Case Beater : Michael Jackson"), false,
+                    "拉丁角色词标签(反向): 标签里有一个词不在词表里就不认")
+
+        // ---- 李佳薇《甲乙丙丁》头部「艺术指导」漏网 ----
         //
         // 用 App 同一条路径(LRC+YRC 到 load 到 allLines)验证:64 行里 16 行署名要全删,
         // 「艺术指导：程楚楚(廊坊师范学院）」这条不能漏。标签「艺术指导」不含 creditRoleWords 任何词;右边
@@ -256,6 +379,41 @@ func runCreditLineTests() {
         expectEqual(drops[9], true, "《白发》: 「著作权人：+© 2019、赋音乐」被滤掉")
         expectEqual(drops.prefix(12).allSatisfy { $0 }, true, "《白发》: 头部 12 行职员表一行不剩")
         expectEqual(drops.suffix(4).allSatisfy { !$0 }, true, "《白发》: 四行真歌词一行不少")
+    }
+
+    // ---- 夹心补漏:前后**都**是署名的那一行,自己也是署名 ----
+    do {
+        // 《探故知》(浅影阿,酷狗源)头部 13 行职员表里只有一行漏到屏幕上:「箫：水玥儿」。
+        // 「箫」是**单字**角色标签 —— 关键词表的单字项只有「词曲编唱录混监鼓」,双字角色词
+        // 那条按设计不收单字(防的是把对唱标签「曲婉婷：」里的「曲」误杀)。同份里的
+        // 二胡/古筝/吉他/混音/监制都在表里,所以只有它一行露出来。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["探故知 - 浅影阿", "词：十七", "曲：孙思达", "编曲：姚亦宸", "吉他：林森密布",
+             "二胡：辰小弦", "古筝：紫格", "箫：水玥儿", "混音：杨骄杨", "监制：高启翔",
+             "无人可知 窗寒梦时", "一盏孤灯照旧年"],
+            trackTitle: "探故知", trackArtist: "浅影阿"),
+                    [true, true, true, true, true, true, true, true, true, true, false, false],
+                    "夹心: 《探故知》单字乐器标签「箫：」夹在古筝与混音之间要被删,两行真歌词不动")
+
+        // 反向哨兵,钉的是这条规则跟【已撤销】那条「从头尾向内扩展署名块」的分界:
+        // 那条只要求**一侧**连着署名块,于是这句紧跟头部署名的真对白被吃掉;这条要求
+        // **两侧都是**,它后面跟的是真歌词,条件不成立。哪天有人把「都」放宽成「其一」,
+        // 这条先红。
+        // 真歌词必须给够:只给五行的话三行命中形状 = 60%,反而把整份结构化过滤的闸门
+        // (shouldApplyStructuralCreditFilter,要求 ≥3 行且过半)顶开,这句会被**那条**
+        // 规则删掉,测不到夹心这条。这正是文件前面记过的那句「改这类规则前必须用整份入口验」。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["作词：甲", "作曲：乙", "他说：我不走", "我却转身离开", "留下一地尘埃",
+             "风把旧信吹散", "月光落在窗前", "谁还记得那年"]),
+                    [true, true, false, false, false, false, false, false],
+                    "夹心(反向): 紧跟署名块之后的真对白只有一侧是署名,不许删")
+
+        // 对唱分声部标记夹在两条署名中间也不许删 —— 形状判据复用
+        // matchesStructuralCreditPattern,它对写死的 男/女/合 标签直接豁免。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["作词：甲", "男：琴键上透着光", "编曲：丙", "女：夜色如水流淌", "合：一起走到天亮"]),
+                    [true, false, true, false, false],
+                    "夹心(反向): 男/女/合 是对唱标记,夹在两条署名之间同样豁免")
     }
 
     // ---- 署名行过滤:带分隔符的中文标签 + 纯英文无冒号 ----
@@ -563,7 +721,7 @@ func runCreditLineTests() {
         //
         // 乐器/职能名是开放集合,词表打不完。改成认形状,但要求整份 ≥2 行才生效。
         let shapeOnly = [
-            "西塔琴 Coral sitar：Jamie Wilson",   // 用户报的原文
+            "西塔琴 Coral sitar：Jamie Wilson",
             "中提琴 Viola：Istvan Loga",
             "竖琴Harp：Michael Maganuco",
             "富鲁格号 Flugehorn: Gary Alesbrook",
@@ -623,6 +781,40 @@ func runCreditLineTests() {
     // 「中文」开关根本没机会说话(闸看的是整首歌的语言)到 每行中文都被标东西:日语分词器
     // 给得出读音的出日文读音(词典外的字原样留着,就是"有些字有有些字没有"),给不出的退到
     // ICU 音译出拼音。下面用真实歌词片段钉住:开关只开日/韩时,这首歌一行罗马音都不该有。
+    // ---- 标签独占一行、值换到下一行的署名(「录音室 Recording Studio：」+ 下一行工作室名单) ----
+    //
+    // 冒号后为空的行一律不认(真歌词里「我对你说：」是语气停顿),值那一行又没有标签 ——
+    // 两行各自都够不着任何规则。只在标签是**双语且英文半边就是角色名**时才认这一对。
+    do {
+        let D = { (t: [String]) in LyricsSyncEngine.creditLineDropDecisions(t) }
+        for colon in ["：", ":"] {
+            let song = [
+                "作词 Lyricist：丁世光",
+                "作曲 Composer：丁世光",
+                "录音室 Recording Studio\(colon)",
+                "Retro Records Studio (BJ)/Barzilay Studio (LA)/Nathan's Studio (BJ)",
+                "雨不停下 不停下",
+                "似乎要把整座城市的忍耐都冲垮",
+            ]
+            expectEqual(D(song), [true, true, true, true, false, false],
+                        "标签独占一行: 标签行和下一行的名单一起删,真歌词不动(冒号 \(colon))")
+        }
+        // 下一行不像名单(没有 / 、 , 也没有括号):只删标签行,那一行留着。
+        expectEqual(D(["录音室 Recording Studio：", "雨不停下 不停下", "似乎要把整座城市的忍耐都冲垮"]),
+                    [true, false, false], "标签独占一行: 下一行像歌词就不连带")
+        // 纯中文标签独占一行不认 —— 可能是一句以冒号收尾的歌词。
+        expectEqual(D(["我对你说：", "我爱你/你爱我", "雨不停下 不停下"]), [false, false, false],
+                    "标签独占一行: 纯中文句子以冒号收尾不是署名")
+        expectEqual(D(["我的制作人说：", "别再唱了(真的)", "雨不停下 不停下"]), [false, false, false],
+                    "标签独占一行: 纯中文标签即使含角色词也不认")
+        // 英文半边不是角色名(对唱 / 说话人那一类)不认。
+        expectEqual(D(["妈妈 Mom：", "吃饭了/快点", "雨不停下 不停下"]), [false, false, false],
+                    "标签独占一行: 英文半边不是角色名不认")
+        // 标签行在最后一行:只删它自己,不越界。
+        expectEqual(D(["雨不停下 不停下", "录音室 Recording Studio："]), [false, true],
+                    "标签独占一行: 在最后一行也只删它自己")
+    }
+
     do {
         let lyrics = """
         [00:00.00]泠鸢yousa - 神的随波逐流

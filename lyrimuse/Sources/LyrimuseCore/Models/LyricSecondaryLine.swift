@@ -48,6 +48,14 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
         return text
     }
 
+    /// 主行显示哪一句:副行开着时是当前句(唱完停在填满的样子,直到下一句开始),关着时是单行展示面
+    /// 提前亮出的那句(`compactLine`,见 `CompactLyricLead`)。副行开着还抢跑的话,提前量窗口里主行已经是
+    /// 下一句、副行的「下一句」/ 译文却还对着上一句。灵动岛(`NotchPlayback.displayLine`)和菜单栏
+    /// (`MenuBarStatusItem.refresh`)都调这一份。
+    public func displayedLine(compactLine: SyncedLyricLine?, currentLine: SyncedLyricLine?) -> SyncedLyricLine? {
+        showsSecondaryRow ? currentLine : compactLine
+    }
+
     // MARK: - 灵动岛专用
 
     /// 展开区那行「下一句歌词预览」(`notchExpandedShowsNextLine`)在这个选项下是否被顶掉:

@@ -11,8 +11,64 @@ import LyrimuseCore
 // 暂停时隐藏,两个悬浮窗共用)和一次性设完就不动的(灵动岛显示在哪块屏)都不收 —— 前者
 // 在两片快捷设置里各出现一次,改一处却动两个形态,面板这么小放不下解释;后者本来就该去
 // 设置窗口。够不着的一律走底下那颗「全部设置…」,它会把设置窗口直接翻到对应那一段。
+//
+// **别把 `AppColorPicker` / `FontFamilyPicker` 这类自带 `.popover` 的控件搬进来**(歌词窗口
+// 那格的颜色和字体因此只在设置页)。这片设置住在一扇 `.transient` 的 NSPopover 里:嵌套的
+// 子 popover 是**另一扇窗**,点它就是"点在面板外面",面板会当场被收掉,子 popover 跟着一起
+// 消失 —— 表现是"点一下颜色块,整个面板就没了"。判据仍然成立(颜色改了立刻看得见),
+// 挡住的是控件形态;够不着的走底栏那颗「全部设置…」,不在行尾另写一句灰字解释。
 
-// MARK: - 三种形态的界面元数据
+// MARK: - 能翻到背面的那几格
+
+/// 面板里长按 / 右键能翻出快捷设置的格子:三个展示形态各一格,外加「歌词窗口」那一格。
+///
+/// **歌词窗口不是一个 `LyricsSurface`,别为了少包一层就往那个枚举里塞第四个 case。**
+/// 那个枚举的契约是"三个可以同时开着、各有常驻开关的展示形态"(见它的头注):歌词窗口是
+/// 一扇按需打开的真窗口,没有开关。塞进去的话 `isEnabled`、面板的 `toggleAction`、设置搜索
+/// 目录的 `surface(_:)` 都要多长一个永远为假 / 永远走不到的分支,而 `appearanceSectionRawValue`
+/// 那条"前三个 rawValue 是跨文件契约"的约定也会被稀释。
+///
+/// 反过来,「歌词显示」页第四段的分段取值是现成的(`SettingsSearchCatalog.lyricsWindowSectionValue`,
+/// selftest 钉着它认不回任何形态),所以底栏那颗「全部设置…」照样翻得过去。
+enum PanelQuickTarget: Hashable {
+    case surface(LyricsSurface)
+    case lyricsWindow
+}
+
+@MainActor
+extension PanelQuickTarget {
+    /// 跟格子上那枚符号是同一个来源 —— 格子和它"翻过来的背面"用两个符号就不像同一块了。
+    var symbolName: String {
+        switch self {
+        case .surface(let surface): return surface.symbolName
+        case .lyricsWindow: return "text.quote"
+        }
+    }
+
+    var panelTitle: String {
+        switch self {
+        case .surface(let surface): return surface.panelTitle
+        case .lyricsWindow: return L10n.t("歌词窗口")
+        }
+    }
+
+    /// 头部那枚图标要不要点亮。歌词窗口没有"开着"这个常驻状态(它是一扇按需打开的窗),
+    /// 恒为假 —— 跟它在钮块网格里那一格 `on: false` 同一个口径。
+    var isEnabled: Bool {
+        switch self {
+        case .surface(let surface): return surface.isEnabled
+        case .lyricsWindow: return false
+        }
+    }
+
+    /// 「歌词显示」页里对应那一段的分段取值,底栏那颗「全部设置…」拿它翻页。
+    var appearanceSectionValue: String {
+        switch self {
+        case .surface(let surface): return surface.appearanceSectionRawValue
+        case .lyricsWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
+        }
+    }
+}
 
 @MainActor
 extension LyricsSurface {
@@ -205,10 +261,11 @@ struct TileMouseRouter: NSViewRepresentable {
 /// 视觉上刻意跟圆钮块同一套(同样的圆角、同样的 quaternarySystemFill 底):它是那个格子
 /// "翻过来的背面",不是另开一扇窗。
 struct PanelQuickSettings: View {
-    let surface: LyricsSurface
-    /// 头部那个开关**直接复用格子自己的动作闭包** —— 同一个开关在两处必须一模一样,尤其
+    let target: PanelQuickTarget
+    /// 头部那颗控件**直接复用格子自己的动作闭包** —— 同一件事在两处必须一模一样,尤其
     /// 菜单栏歌词那一个(它要先收面板再切,理由见 MenuBarPanelView.toggleAction)。
-    let toggle: () -> Void
+    /// 三个形态那里它是总开关,歌词窗口那里是一颗「打开」——那一格本来就是"按一下开一扇窗"。
+    let action: () -> Void
     let back: () -> Void
     let close: () -> Void
 
@@ -241,29 +298,45 @@ struct PanelQuickSettings: View {
             }
             .buttonStyle(.plain)
             .help(L10n.t("返回"))
-            Image(systemName: surface.symbolName)
+            Image(systemName: target.symbolName)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(surface.isEnabled ? Color.accentColor : Color.secondary)
+                .foregroundStyle(target.isEnabled ? Color.accentColor : Color.secondary)
                 .frame(width: 18)
-            Text(surface.panelTitle).font(.system(size: 12, weight: .semibold))
+            Text(target.panelTitle).font(.system(size: 12, weight: .semibold))
             Spacer(minLength: 8)
-            // 开关的真值只从 AppSettings 读,set 一律转给 toggle() —— 那条闭包里才有资格
-            // 碰窗口控制器。
-            Toggle("", isOn: Binding(get: { surface.isEnabled }, set: { _ in toggle() }))
-                .labelsHidden()
-                .controlSize(.mini)
+            headerControl
         }
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .padding(.vertical, 7)
     }
 
+    /// 头部右边那一颗。三个形态是总开关;歌词窗口没有"开不开"可配(它是一扇按需打开的真窗口,
+    /// 见 `AppearanceSettingsTab` 第四段的注释),换成一颗「打开」—— 这块设置调的全是那扇窗里
+    /// 看得见的东西,"先把它开着"正该摆在最上面。
+    @ViewBuilder private var headerControl: some View {
+        switch target {
+        case .surface(let surface):
+            // 开关的真值只从 AppSettings 读,set 一律转给 action() —— 那条闭包里才有资格
+            // 碰窗口控制器。
+            Toggle("", isOn: Binding(get: { surface.isEnabled }, set: { _ in action() }))
+                .labelsHidden()
+                .controlSize(.mini)
+        case .lyricsWindow:
+            Button(action: action) {
+                Text(L10n.t("打开")).font(.system(size: 11))
+            }
+            .controlSize(.small)
+            .help(L10n.t("打开歌词窗口"))
+        }
+    }
+
     // MARK: 各形态自己的旋钮
 
     @ViewBuilder private var rows: some View {
-        switch surface {
-        case .overlay:
-            sliderRow(L10n.t("字号"), value: $settings.fontSize, range: 14...36)
+        switch target {
+        case .surface(.overlay):
+            sliderRow(L10n.t("字号"), value: $settings.fontSize, range: AppSettings.overlayFontSizeRange)
             sliderRow(L10n.t("宽度"), value: Binding(
                 get: { settings.overlayWidth },
                 set: { newValue in
@@ -291,7 +364,7 @@ struct PanelQuickSettings: View {
                                 LyricsOverlayWindowController.shared.setLocked(newValue)
                             }
                         }))
-        case .notch:
+        case .surface(.notch):
             row(L10n.t("风格")) {
                 Picker("", selection: $settings.notchCardStyle) {
                     ForEach(NotchCardStyle.allCases, id: \.self) { style in
@@ -341,20 +414,19 @@ struct PanelQuickSettings: View {
                     }
                 ), range: Self.notchFontSizeRange)
             }
-        case .menuBar:
+        case .surface(.menuBar):
             row(L10n.t("宽度模式")) {
-                Picker("", selection: $settings.menuBarLyricsWidthMode) {
-                    Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
-                    // 跟设置页同一个标签 —— 两处必须同进同出,否则就成了"一条带警告、
-                    // 一条不带"的两个入口。设置页那边按去掉了 Beta
-                    // 字样,这里跟着去掉(那次是 selftest 的"源码用了但 catalog 里没有的键"
-                    // 守卫把这处漏改逮出来的 —— 光改设置页会让这里指向一个已删的词条)。
-                    Text(L10n.t("自适应")).tag(MenuBarLyricsWidthMode.adaptive)
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                SettingsSegmentedControlHashable(
+                    selection: $settings.menuBarLyricsWidthMode,
+                    options: MenuBarLyricsWidthMode.allCases,
+                    label: { mode in
+                        switch mode {
+                        case .fixed: return L10n.t("固定")
+                        case .adaptive: return L10n.t("自适应")
+                        }
+                    }
+                )
                 .controlSize(.small)
-                .fixedSize()
             }
             sliderRow(L10n.t("最大宽度"), value: Binding(
                 get: { Double(settings.menuBarLyricsWidth) },
@@ -385,6 +457,39 @@ struct PanelQuickSettings: View {
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        case .lyricsWindow:
+            // 「背景」两行跟设置页那一段同序、同判据:方向只在渐变档出现(纯色没有方向可言),
+            // 跟菜单栏「对齐方式」是同一条规矩 —— **藏一个旋钮的前提是把"为什么"摆在它上面**,
+            // 这里"为什么"就是正上方那一行「样式」。
+            row(L10n.t("样式")) {
+                Picker("", selection: $settings.lyricsWindowBackgroundMode) {
+                    Text(L10n.t("跟随封面")).tag(LyricsWindowBackgroundMode.artwork)
+                    Text(L10n.t("纯色")).tag(LyricsWindowBackgroundMode.solid)
+                    Text(L10n.t("渐变")).tag(LyricsWindowBackgroundMode.gradient)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .fixedSize()
+            }
+            if settings.lyricsWindowBackgroundMode == .gradient {
+                row(L10n.t("方向")) {
+                    Picker("", selection: $settings.lyricsWindowGradientDirection) {
+                        Text(L10n.t("从上到下")).tag(LyricsWindowGradientDirection.vertical)
+                        Text(L10n.t("从左到右")).tag(LyricsWindowGradientDirection.horizontal)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .fixedSize()
+                }
+            }
+            // 动态封面**当场生效**:PlaybackCoordinator 订阅着这个值、拨一下就重算一次
+            // (见那边 `settings.$motionCoverEnabled` 那条 sink),不用等下一首。说明文字跟设置页
+            // 那一行同一句词条。
+            toggleRow(L10n.t("动态封面"),
+                      help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停"),
+                      isOn: $settings.motionCoverEnabled)
         }
     }
 
@@ -611,7 +716,7 @@ struct PanelQuickSettings: View {
             // 一次性信箱把设置窗口翻到「歌词显示」页(见 AppActions.pendingSettingsSelection),
             // 再顺手把那一页停在这一格自己的分段上 —— 那边是 @AppStorage,直接写
             // UserDefaults 就行,窗口已经开着也会立刻跟着翻。
-            UserDefaults.standard.set(surface.appearanceSectionRawValue,
+            UserDefaults.standard.set(target.appearanceSectionValue,
                                       forKey: LyricsSurface.appearanceSectionStorageKey)
             AppActions.shared.requestSettings(.tab(.appearance))
             AppActions.shared.openSettings?()

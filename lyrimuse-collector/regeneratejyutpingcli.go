@@ -35,10 +35,10 @@ func runRegenerateJyutpingCLI(args []string) {
 		log.Fatalf("regenerate-jyutping: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
-	lyricsDir = features.LyricsDir
-	if lyricsDir == "" {
-		lyricsDir = filepath.Join(cfgDir, "lyrics")
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
+	setLyricsDir(features().LyricsDir)
+	if lyricsDir() == "" {
+		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
 	}
 
 	// 理由同 dedupe-entries(见 ensureExclusiveForDedupe 上方那段注释):任何一种"没能

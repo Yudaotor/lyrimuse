@@ -96,7 +96,7 @@ enum MenuBarMarqueeRenderer {
     /// 双排下同样成立。`MenuBarStatusItem` 每次 refresh 算一次存进 `RowState`,测宽 / 排版 / 逐字边界都用那一份。
     static func mainFont(for text: String, twoRows: Bool) -> NSFont {
         guard twoRows else { return font(for: text) }
-        return text == placeholderGlyph
+        return isPlaceholder(text)
             ? NSFont.menuBarFont(ofSize: MenuBarLyricRows.mainPointSize) : doubleRowMainFont
     }
 
@@ -114,17 +114,47 @@ enum MenuBarMarqueeRenderer {
     /// 而「••• 歌名」读起来会变成在报间奏。
     static let placeholderGlyph = "♪"
 
+    /// 前奏/间奏占位的**记号串**。它不会被画出来 —— `MenuBarScrollingLabel` 认出这个串就
+    /// 改画三颗 CALayer 圆点(跟另外三个展示面同一条 `GapDotsCurve`),文字层留空。
+    ///
+    /// 做成一个在文字流里流通的串、而不是给 `present()` 多加一个布尔:槽宽策略、占位判据、
+    /// 去重比较、字体选择这一整套都是按"这一格里是哪段文字"写的,换成布尔要在五六处各判一次。
+    static let gapDotsToken = "\u{2022}\u{2022}\u{2022}"
+
+    /// 三颗点的直径与间距(点)。比例跟悬浮歌词/歌词窗口那边一致(0.32 / 0.30 倍字号),
+    /// 菜单栏字号本来就小,再按灵动岛那样补偿会把三颗点顶到行高外面。
+    static func gapDotsMetrics(fontSize: CGFloat) -> (dot: CGFloat, spacing: CGFloat) {
+        (dot: (fontSize * 0.32).rounded(), spacing: (fontSize * 0.30).rounded())
+    }
+
+    /// 三颗点整体占多宽。要留出呼吸鼓到最大(`GapDotsCurve` 上限)时两端多出来的那半圈,
+    /// 否则鼓起来的第一颗/最后一颗会被这一格的 `masksToBounds` 削掉一边。
+    static func gapDotsWidth(fontSize: CGFloat) -> CGFloat {
+        let m = gapDotsMetrics(fontSize: fontSize)
+        let peak = GapDotsCurve.breatheMin + GapDotsCurve.breatheSpan
+        let count = CGFloat(GapDotsCurve.dotCount)
+        return (count * m.dot + (count - 1) * m.spacing + m.dot * (peak - 1)).rounded(.up)
+    }
+
     /// 画**这段文字**用的字体。占位符 ♪ 恒用系统默认字重(字号仍跟设置走,行高才对得上):实测 U+266A 在
     /// medium / semibold 下会落到另一款回退字体,宽度从 6.5pt 跳到 12pt、字形也变(bold / heavy 又回到
     /// 7.1pt)—— 一个占位记号不该随用户的粗细设置换脸,而且它一变宽在自适应模式下就是一次槽位重建。
     static func font(for text: String) -> NSFont {
         let lineFont = font
-        return text == placeholderGlyph ? NSFont.menuBarFont(ofSize: lineFont.pointSize) : lineFont
+        return isPlaceholder(text) ? NSFont.menuBarFont(ofSize: lineFont.pointSize) : lineFont
+    }
+
+    /// 这段文字是不是占位记号(音符兜底前缀之外的两种占位:间奏三点、以及单独一个音符)。
+    /// 字体/槽宽/配速几处都要认它,判据只此一份。
+    static func isPlaceholder(_ text: String) -> Bool {
+        text == placeholderGlyph || text == gapDotsToken
     }
 
     /// 这段文字画出来有多宽(点)。取窗宽度和滚动距离都靠它算。
     static func width(of text: String) -> CGFloat {
-        width(of: text, font: font(for: text))
+        // 三颗点不是文字,量字形宽度会得到「•••」那三个字符的宽度,跟真正画出来的圆点对不上。
+        if text == gapDotsToken { return gapDotsWidth(fontSize: font.pointSize) }
+        return width(of: text, font: font(for: text))
     }
 
     static func width(of text: String, font: NSFont) -> CGFloat {
@@ -279,10 +309,16 @@ enum MenuBarMarqueeRenderer {
         let lineFont = font ?? Self.font(for: text)
         let box = exactBox ? boxHeight(for: lineFont) : ceil(lineFont.ascender - lineFont.descender) + 2
         let attributes: [NSAttributedString.Key: Any] = [.font: lineFont, .foregroundColor: color]
-        let textWidth = ceil((text as NSString).size(withAttributes: attributes).width)
-        // 不留尾部空白:旧版要留一个窗口宽,是因为要用 CGImage.cropping 裁窗口、越界会
-        // 拿到 nil。现在是图层平移 + 上层 masksToBounds 裁剪,平移量永远不超过
-        // textWidth - windowWidth,右边不会露出图外。
+        // 前奏/间奏那三颗点**不走文字这条路**:这里只出一张**空白**位图占住正确的尺寸,
+        // 圆点由 `MenuBarScrollingLabel` 用 CALayer 画在同一块地方 —— 每颗要单独改不透明度、
+        // 整组还要缩放呼吸,烘进位图就全动不了了。尺寸照常产出,是为了让下游(几何、静止落位、
+        // 去重、位图缓存)一行都不用为这一档另开分支。
+        let isGapDots = text == gapDotsToken
+        let textWidth = isGapDots
+            ? gapDotsWidth(fontSize: lineFont.pointSize)
+            : ceil((text as NSString).size(withAttributes: attributes).width)
+        // 不留尾部空白:图层平移 + 上层 masksToBounds 裁剪,平移量永远不超过
+        // textWidth - windowWidth,右边不会露出图外,不需要额外留白兜底。
         let pxW = Int(textWidth * scale), pxH = Int(box * scale)
         guard pxW > 0, pxH > 0,
               let ctx = CGContext(
@@ -296,7 +332,9 @@ enum MenuBarMarqueeRenderer {
         NSGraphicsContext.current = ns
         // flipped: false 到 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
         // 所以 y 给 1 就是"底部留 1pt 内边距"(双排 exactBox 不留,贴 0)。
-        (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: attributes)
+        if !isGapDots {
+            (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: attributes)
+        }
         NSGraphicsContext.restoreGraphicsState()
         guard let cg = ctx.makeImage() else { return nil }
         return PreparedLine(cg: cg, scale: scale, textWidth: textWidth,

@@ -7,6 +7,59 @@ import Foundation
 
 @MainActor
 func runOverlayTests() {
+    // ---- GapDotsCurve.opacityKeyframes:间奏三点交给 Core Animation 的亮度关键帧 ----
+    do {
+        let start = 10_000, end = 22_000
+        for dot in 0..<GapDotsCurve.dotCount {
+            for from in [10_000.0, 13_500.0, 17_000.0, 21_999.0] {
+                let frames = GapDotsCurve.opacityKeyframes(dot: dot, startMs: start, endMs: end, fromMs: from)
+                expectEqual(frames.first?.ms, from, "间奏三点关键帧: 从装动画那一刻起排(dot \(dot) from \(from))")
+                expectEqual(frames.last?.ms, Double(end), "间奏三点关键帧: 排到间奏结束")
+                // 关键帧之间线性插值必须逐点等于现算的 opacity —— 这正是「4 个关键帧就精确」的前提。
+                var exact = true
+                var t = from
+                while t <= Double(end) {
+                    let k = frames.lastIndex(where: { $0.ms <= t }) ?? 0
+                    let a = frames[k], b = frames[min(k + 1, frames.count - 1)]
+                    let f = b.ms > a.ms ? (t - a.ms) / (b.ms - a.ms) : 0
+                    let interp = a.opacity + (b.opacity - a.opacity) * f
+                    let want = GapDotsCurve.opacity(dot: dot, progress: GapDotsCurve.progress(posMs: Int(t), startMs: start, endMs: end))
+                    if abs(interp - want) > 0.002 { exact = false }
+                    t += 37
+                }
+                expectEqual(exact, true, "间奏三点关键帧: 线性插值逐点等于现算亮度(dot \(dot) from \(from))")
+            }
+        }
+        expectEqual(GapDotsCurve.opacityKeyframes(dot: 0, startMs: start, endMs: end, fromMs: 22_000).isEmpty, true,
+                    "间奏三点关键帧: 已到结束时间不排")
+    }
+
+    // ---- WindowCoverage:几乎被别的窗口整扇盖住(补 occlusionState 的盲区) ----
+    do {
+        // 实测那组几何:歌词窗口 (0,33,1470×863),终端只盖到 y=880,底下露一条 16pt 的缝。
+        let lw = CGRect(x: 0, y: 33, width: 1470, height: 863)
+        let term = CGRect(x: 0, y: 33, width: 1470, height: 847)
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: [term]), true,
+                    "窗口遮挡: 只露一条 16pt 的缝(实测那组)算看不见")
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: []), false,
+                    "窗口遮挡: 没有遮挡物时可见")
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: [lw]), true,
+                    "窗口遮挡: 整扇盖住算看不见")
+        let fortyGap = CGRect(x: 0, y: 33, width: 1470, height: 823)
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: [fortyGap]), false,
+                    "窗口遮挡: 露一条 40pt(一行歌词露得出来)仍算可见")
+        let far = CGRect(x: 2000, y: 0, width: 800, height: 600)
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: [far]), false,
+                    "窗口遮挡: 不相交的窗口不算遮挡")
+        // 两扇窗拼起来盖住:左右各一半,中间不留缝。
+        let left = CGRect(x: 0, y: 0, width: 735, height: 1000)
+        let right = CGRect(x: 735, y: 0, width: 735, height: 1000)
+        expectEqual(WindowCoverage.isEffectivelyHidden(target: lw, covers: [left, right]), true,
+                    "窗口遮挡: 两扇窗拼起来整扇盖住也算")
+        let area = WindowCoverage.uncoveredArea(target: lw, covers: [term])
+        expectEqual(abs(area - 1470 * 16) < 1470 * 4, true, "窗口遮挡: 露出面积 ≈ 1470×16(实测 \(area))")
+    }
+
     // ---- OverlayControlHitTest: 悬浮窗按钮的命中测试 ----
     // (结构性改动:悬浮窗改成常年 ignoresMouseEvents=true,胶囊上五个按钮的点击
     // 由控制器拿全局鼠标监听的屏幕坐标比对矩形自己分发。这段判定是整条链路上唯一能脱离
@@ -463,7 +516,75 @@ func runOverlayTests() {
                     "对唱舞台: 左声部换行点跟不加舞台时相同")
     }
 
-    // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
+    // ---- OverlayCardGeometry.elasticInsetScale:留白只吃"这一行本来就用不到"的富余 ----
+    //
+    // 判据是**填没填满**,不是**会不会多折一行**:一句话不管让不让留白都要折两行,但让开
+    // 之后第一行能多装一个词、右边那截空白才填得上。真实环境里的自然宽由 SwiftUI 的
+    // `sizeThatFits(.unspecified)` 量,这里直接喂数字。
+    do {
+        let G = OverlayCardGeometry.self
+        let pad: CGFloat = 20 // = OverlayPlayback.cardHorizontalPadding(App target 里的常量)
+
+        // 没有留白可让:恒 1。绝大多数歌(非对唱 / 窗口不比默认宽)走这一支。
+        expectEqual(G.elasticInsetScale(totalInset: 0, availableWidth: 526, naturalContentWidth: 900), 1,
+                    "弹性留白: 没有留白可让时恒 1")
+
+        // 短句:富余 126 比理想留白 39 还多,留白照留(排版逐像素不变)。
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 400), 1,
+                    "弹性留白: 短句留白照留")
+        // 富余正好等于理想留白:还是全留,文字正好顶到远侧边缘。
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 487), 1,
+                    "弹性留白: 富余正好够时全留")
+
+        // 富余不够一整份:按比例退,文字仍然正好顶到远侧边缘、一个像素不浪费。
+        let k1 = G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 500)
+        expectEqual(k1, 26.0 / 39, "弹性留白: 富余不够时按比例退")
+        expectEqual(526 - 39 * k1, 500, "弹性留白: 退完之后内容宽正好等于自然宽")
+
+        // 一行装不下:留白整份让开,换行前先把整宽吃满。**这一条就是"左侧都没满就换行了"**
+        // 的修法 —— 按行数判的旧判据在这里会判成 1(让不让都是两行),空白留着不填。
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 527), 0,
+                    "弹性留白: 差一点装不下就整份让开")
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 771), 0,
+                    "弹性留白: 一行装不下时整份让开")
+
+        // 退化输入:自然宽为负 / 0 当没有内容(全留);可用宽为 0 → 全让。
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: -100), 1,
+                    "弹性留白: 负自然宽当空内容,全留")
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 0, naturalContentWidth: 100), 0,
+                    "弹性留白: 可用宽 0 时全让")
+        // 留白比可用宽还大:照样只吃富余那么多,内容宽正好落在自然宽上,不会被缩成负数。
+        let k2 = G.elasticInsetScale(totalInset: 600, availableWidth: 526, naturalContentWidth: 100)
+        expectEqual(k2, 426.0 / 600, "弹性留白: 留白超过可用宽时也只吃掉富余")
+        expectEqual(526 - 600 * k2, 100, "弹性留白: 超大留白下内容宽仍等于自然宽")
+
+        // 控制排跟着同一份系数走 —— 让开多少按钮排就让开多少,不变式仍是"只比卡片多一份内边距"。
+        let unit = LyricDuetLayout.insets(for: .leading, availableWidth: 526, fontSize: 36).trailing
+        let stage = G.duetStageInset(availableWidth: 526, fontSize: 36)
+        expectEqual(stage, 39, "弹性留白: 566 窗宽 / 36pt 的舞台缩进")
+        for side: LyricDuet.Side? in [nil, .leading, .trailing, .center] {
+            for scale: CGFloat in [0, 0.5, 1] {
+                let card = G.cardInsets(for: side, unit: unit, stageInset: stage)
+                let ctrl = G.controlsInsets(for: side, unit: unit, stageInset: stage, scale: scale,
+                                            cardHorizontalPadding: pad)
+                let tag = "side=\(String(describing: side)) scale=\(scale)"
+                expectEqual(ctrl.leading - card.leading * scale, pad, "弹性留白: 控制排左侧跟着让开(\(tag))")
+                expectEqual(ctrl.trailing - card.trailing * scale, pad, "弹性留白: 控制排右侧跟着让开(\(tag))")
+            }
+            // scale 缺省 = 1 = 改动前的结果,不传的调用点行为不变。
+            let old = G.controlsInsets(for: side, unit: unit, stageInset: stage, cardHorizontalPadding: pad)
+            let one = G.controlsInsets(for: side, unit: unit, stageInset: stage, scale: 1, cardHorizontalPadding: pad)
+            expectEqual(old.leading, one.leading, "弹性留白: 控制排 scale 缺省同旧值(左)")
+            expectEqual(old.trailing, one.trailing, "弹性留白: 控制排 scale 缺省同旧值(右)")
+        }
+        // 越界的 scale 被夹住,不会算出负留白或者超过一份留白。
+        let clampedLow = G.controlsInsets(for: .leading, unit: unit, stageInset: stage, scale: -3, cardHorizontalPadding: pad)
+        let clampedHigh = G.controlsInsets(for: .leading, unit: unit, stageInset: stage, scale: 9, cardHorizontalPadding: pad)
+        expectEqual(clampedLow.leading, pad, "弹性留白: 负 scale 夹到 0")
+        expectEqual(clampedHigh.leading, stage + pad, "弹性留白: 超过 1 的 scale 夹到 1")
+    }
+
+    // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 到 AppKit 窗口本地 ----
     //
     // 这套换算不能**直接转成屏幕坐标存起来** —— 窗口一移动,SwiftUI 布局没变、
     // PreferenceKey 不重发,存的屏幕坐标就还停在旧位置,按钮和热区当场失效。
@@ -486,6 +607,123 @@ func runOverlayTests() {
             let once = H.windowLocalRect(swiftUI: a, windowHeight: 50)
             expectEqual(H.windowLocalRect(swiftUI: once, windowHeight: 50), a, "窗口本地: 翻两次回到原处")
         }
+    }
+
+    // ---- OverlayRowPlan:一帧里各行显示什么、动不动、怎么动 ----
+    //
+    // 真值表。改判据之前先看这张表:每一格都是真机上踩过的 —— 滚完跳回开头、下一句跟着滚、
+    // 前奏首句读音没对齐、示例行拿不到时间轴。
+    do {
+        typealias P = OverlayRowPlan
+        func plan(_ o: OverlayLineOverflow, line: Bool = true, words: Bool = true, groups: Bool = false,
+                  preview: Bool = false, timing: Bool = true, roma: Bool = true, nextGroups: Bool = false) -> P.Plan {
+            P.resolve(.init(overflow: o, hasLine: line, lineHasWords: words, lineHasWordGroups: groups,
+                            lineRomanization: "cur-roma", lineTranslation: "cur-tr",
+                            isPreviewLine: preview, hasTimingWindow: timing,
+                            showRomanization: roma, showTranslation: true, showNextLinePreview: true,
+                            nextText: "next", nextRomanization: "next-roma", nextTranslation: "next-tr",
+                            nextHasWordGroups: nextGroups))
+        }
+        func row(_ t: String, _ m: P.Motion) -> P.Row { P.Row(text: t, motion: m) }
+
+        // 换行模式:什么都不滚。
+        let wrap = plan(.wrap)
+        expectEqual(wrap.main, .wrap, "行排版: 换行模式主行折行")
+        expectEqual(wrap.romanization, row("cur-roma", .wrap), "行排版: 换行模式罗马音折行")
+        expectEqual(wrap.translation, row("cur-tr", .wrap), "行排版: 换行模式译文折行")
+        expectEqual(wrap.next, row("next", .wrap), "行排版: 换行模式下一句折行")
+
+        // 滚动模式 + 带逐字 + 有时间窗口:主行跟唱,当前行副行按时长配速,下一句不动。
+        let follow = plan(.scroll)
+        expectEqual(follow.main, .follow, "行排版: 带逐字的当前行跟唱滚动")
+        expectEqual(follow.romanization, row("cur-roma", .paced), "行排版: 当前行罗马音按时长配速")
+        expectEqual(follow.translation, row("cur-tr", .paced), "行排版: 当前行译文按时长配速")
+        expectEqual(follow.next, row("next", .still), "行排版: 下一句还没唱,滚动模式下不动")
+
+        // 没有逐字:有时间窗口按时长配速,没有就退回固定速度跑马灯。
+        expectEqual(plan(.scroll, words: false).main, .paced, "行排版: 没有逐字的主行按时长配速")
+        let noTiming = plan(.scroll, words: false, timing: false)
+        expectEqual(noTiming.main, .marquee, "行排版: 拿不到时间窗口时主行退回固定速度")
+        expectEqual(noTiming.translation, row("cur-tr", .marquee), "行排版: 拿不到时间窗口时副行退回固定速度")
+
+        // 设置页示例行没有时间轴:哪怕协调器那边有窗口(真实在播的那首)也不能拿来配速。
+        let preview = plan(.scroll, words: false, preview: true)
+        expectEqual(preview.main, .marquee, "行排版: 示例行不按真实歌曲的窗口配速")
+        expectEqual(preview.romanization?.motion, .marquee, "行排版: 示例行的副行同样退回固定速度")
+
+        // 没有当前行(前奏 / 间奏「•••」):下方那几行是接下来那句,滚动模式下全都不动。
+        let gap = plan(.scroll, line: false)
+        expectEqual(gap.main, nil, "行排版: 间奏没有主行")
+        expectEqual(gap.romanization, row("next-roma", .still), "行排版: 间奏里显示接下来那句的罗马音,不动")
+        expectEqual(gap.translation, row("next-tr", .still), "行排版: 间奏里显示接下来那句的译文,不动")
+        expectEqual(gap.next, row("next", .still), "行排版: 间奏里的下一句不动")
+        expectEqual(plan(.wrap, line: false).romanization, row("next-roma", .wrap), "行排版: 换行模式间奏照旧折行")
+
+        // 逐词罗马音:当前行分得出词组就标在每个词底下,整行罗马音那一行不出现。
+        let perWord = plan(.scroll, groups: true)
+        expectEqual(perWord.perWordRomanization, true, "行排版: 当前行分得出词组就逐词标")
+        expectEqual(perWord.romanization == nil, true, "行排版: 逐词标时整行罗马音让位")
+        // 间奏里接下来那句分得出词组:同样逐词标在它底下。
+        let gapPerWord = plan(.scroll, line: false, nextGroups: true)
+        expectEqual(gapPerWord.nextPerWordRomanization, true, "行排版: 前奏首句分得出词组就逐词标")
+        expectEqual(gapPerWord.romanization == nil, true, "行排版: 前奏首句逐词标时整行罗马音让位")
+        expectEqual(plan(.scroll, nextGroups: true).nextPerWordRomanization, false,
+                    "行排版: 有当前行时下一句预览不逐词标(那是另一句的小字预览)")
+
+        // 开关关掉就不出现。
+        let romaOff = plan(.scroll, groups: true, roma: false)
+        expectEqual(romaOff.romanization == nil && !romaOff.perWordRomanization, true, "行排版: 罗马音关掉哪儿都不出现")
+        expectEqual(plan(.scroll, line: false, roma: false, nextGroups: true).nextPerWordRomanization, false,
+                    "行排版: 罗马音关掉前奏首句也不逐词标")
+        let nextOff = P.resolve(.init(overflow: .scroll, hasLine: true, showNextLinePreview: false, nextText: "next"))
+        expectEqual(nextOff.next == nil, true, "行排版: 双行关掉没有下一句")
+        let noNext = P.resolve(.init(overflow: .scroll, hasLine: true, showNextLinePreview: true, nextText: nil))
+        expectEqual(noNext.next == nil, true, "行排版: 没有下一句就不出这一行")
+        // 当前行自己没有罗马音时不借用下一句的(只有没有当前行时才用接下来那句的)。
+        let curNoRoma = P.resolve(.init(overflow: .scroll, hasLine: true, lineRomanization: nil,
+                                        showRomanization: true, nextRomanization: "next-roma"))
+        expectEqual(curNoRoma.romanization == nil, true, "行排版: 当前行没有罗马音时不借下一句的")
+    }
+
+    // ---- OverlayRowLayout:图层行的横向排版(字的起止、读音落点、长图总宽) ----
+    //
+    // 字宽按「字数 × 10」、读音按「字数 × 6」测,每个数都能手算。
+    do {
+        typealias L = OverlayRowLayout
+        func w(_ t: String) -> SyncedLyricWord { SyncedLyricWord(text: t, startMs: 0, durationMs: 100) }
+        let main: (String) -> CGFloat = { CGFloat($0.count) * 10 }
+        let roma: (String) -> CGFloat = { CGFloat($0.count) * 6 }
+        let pad = L.romaSidePadding
+
+        // 一行字:逐个紧挨着排,左右各一份 inset。
+        let plain = L.layOut(words: [w("你"), w("好吗")], groups: nil, inset: 3, measureMain: main, measureRoma: roma)
+        expectEqual(plain.wordStartXs, [3, 13], "图层排版: 字从 inset 起逐个紧挨")
+        expectEqual(plain.wordEndXs, [13, 33], "图层排版: 每个字的右缘")
+        expectEqual(plain.boxWidth, 36, "图层排版: 总宽 = 字宽之和 + 两侧 inset")
+        expectEqual(plain.romaPlacements.isEmpty, true, "图层排版: 没开逐词罗马音就没有读音")
+
+        // 逐词罗马音:读音比字宽时列宽取读音 + 两侧留白,读音从列首 + 留白起画。
+        let g1 = SyncedLyricWordGroup(id: 0, words: [w("痛")], romanization: "tung3")   // 字 10,读音 30+4
+        let g2 = SyncedLyricWordGroup(id: 1, words: [w("到没")], romanization: "d")      // 字 20,读音 6+4
+        let grouped = L.layOut(words: [], groups: [g1, g2], inset: 0, measureMain: main, measureRoma: roma)
+        expectEqual(grouped.wordStartXs, [0, 30 + 2 * pad], "图层排版: 下一组从上一列的列宽之后起")
+        expectEqual(grouped.romaPlacements, [L.RomaPlacement(x: pad, text: "tung3"),
+                                             L.RomaPlacement(x: 30 + 2 * pad + pad, text: "d")],
+                    "图层排版: 读音从各自列首 + 留白起画")
+        expectEqual(grouped.boxWidth, 30 + 2 * pad + 20, "图层排版: 字比读音宽时列宽取字宽")
+        expectEqual(grouped.flatWords.map(\.text), ["痛", "到没"], "图层排版: 摊平的字保持排版顺序")
+
+        // 没有读音的组(混语言行里的英文词)按一个空格占位,不画读音、列宽照样算留白。
+        let bare = SyncedLyricWordGroup(id: 0, words: [w("a")], romanization: nil)   // 字 10,占位 6+4
+        let noRoma = L.layOut(words: [], groups: [bare, g1], inset: 0, measureMain: main, measureRoma: roma)
+        expectEqual(noRoma.romaPlacements.map(\.text), ["tung3"], "图层排版: 没有读音的组不画读音")
+        expectEqual(noRoma.wordStartXs[1], max(10, 6 + 2 * pad), "图层排版: 没有读音的组按空格占位算列宽")
+
+        // 相邻两组读音之间至少隔两份留白,不会首尾相接读成一串。
+        let tight = L.layOut(words: [], groups: [g1, SyncedLyricWordGroup(id: 1, words: [w("到")], romanization: "dou2")],
+                             inset: 0, measureMain: main, measureRoma: roma)
+        let firstEnd = tight.romaPlacements[0].x + roma("tung3")
+        expectEqual(tight.romaPlacements[1].x - firstEnd, 2 * pad, "图层排版: 相邻读音之间隔两份留白")
     }
 
     // ---- WrapLayoutMath ----
@@ -517,6 +755,13 @@ func runOverlayTests() {
         // 空输入不该炸，也不该造出一个空行。
         expectEqual(WrapLayoutMath.rows(sizes: [], maxWidth: 100, horizontalSpacing: 0).count, 0,
                     "WrapLayout: 空输入没有行")
+        // 没有宽度约束时的兜底尺寸:全部铺成一行,宽 = 各宽之和 + (n-1) 个间距,高 = 最高那个。
+        expectEqual(WrapLayoutMath.unconstrainedSize(sizes: [sz(30, 10), sz(40, 24), sz(20, 12)], horizontalSpacing: 5),
+                    CGSize(width: 100, height: 24), "WrapLayout: 无约束尺寸 = 宽之和 + 间距,高取最大")
+        expectEqual(WrapLayoutMath.unconstrainedSize(sizes: [sz(30, 10)], horizontalSpacing: 5),
+                    CGSize(width: 30, height: 10), "WrapLayout: 单个元素不加间距")
+        expectEqual(WrapLayoutMath.unconstrainedSize(sizes: [], horizontalSpacing: 5), .zero,
+                    "WrapLayout: 空输入尺寸为 0,不出负数间距")
 
         // 行高取本行最高的那个；总高度 = 各行行高 + 行距。
         let twoRows = WrapLayoutMath.totalSize(
@@ -676,6 +921,22 @@ func runOverlayTests() {
         let tiny = CGRect(x: 10, y: 10, width: 20, height: 10)
         expectEqual(OverlayPlacement.isSufficientlyVisible(frame: tiny, screens: [mainScreen]), true,
                     "OverlayPlacement: 比阈值还小的窗口只要整个在屏内就算可见")
+        // 露出多少才算够:宽 ≥ 60 且高 ≥ 30,两样缺一不可;跨两块屏时看任意一块。
+        let main1920 = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let peek = { (x: CGFloat, y: CGFloat) in CGRect(x: x, y: y, width: 446, height: 154) }
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(1920 - 60, 500), screens: [main1920]), true,
+                    "OverlayPlacement: 右边只露 60pt 仍算够得着")
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(1920 - 59, 500), screens: [main1920]), false,
+                    "OverlayPlacement: 右边只露 59pt 不够")
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(500, 1080 - 29), screens: [main1920]), false,
+                    "OverlayPlacement: 宽度够但只露 29pt 高也不够")
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(5000, 5000), screens: [main1920]), false,
+                    "OverlayPlacement: 完全不沾屏不可见")
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(-300, 500),
+                                                           screens: [main1920, CGRect(x: -1920, y: 0, width: 1920, height: 1080)]),
+                    true, "OverlayPlacement: 落在副屏上也算可见")
+        expectEqual(OverlayPlacement.isSufficientlyVisible(frame: peek(100, 100), screens: []), false,
+                    "OverlayPlacement: 没有屏幕时不算可见")
 
         // 一块屏都没有（理论上不会发生）时别崩、别乱动。
         expectEqual(OverlayPlacement.repositionIfOffscreen(frame: onMain, screens: []) == nil, true,
@@ -977,5 +1238,90 @@ func runOverlayTests() {
             }
         }
         expectEqual(bothTrue, 0, "控制排与解锁提示在 8 种组合下互斥(同一个槽位)")
+    }
+
+    // MARK: - 歌词窗口:自定义背景色该配白字还是深色字(LyricsWindowBackgroundLuma)
+    //
+    // 这一组钉的是"用户填了背景色之后,窗里的文字还看不看得见"。歌词窗口的正文一直是白的,
+    // 那是因为封面背景**必然**够暗(烘焙压过 EV −1.9 + 0.15 黑遮罩);能自己填色之后这个前提
+    // 就没了。判据里有 sRGB 线性化、alpha 与窗口底色混合、渐变取平均三处,算错了不会崩、
+    // 只会让某个配色下文字静默糊掉,肉眼盯界面是发现不了边界的。
+    do {
+        typealias L = LyricsWindowBackgroundLuma
+
+        // ---- hex 解析:三种合法写法 + 认不出来就是认不出来 ----
+        expectEqual(L.parse(hex: "#000000")?.a, 1, "背景色: 6 位 hex 的 alpha 补满")
+        expectEqual(L.parse(hex: "000000FF")?.a, 1, "背景色: 井号可省")
+        expectEqual(L.parse(hex: "#00000080").map { ($0.a * 100).rounded() / 100 }, 0.5,
+                    "背景色: 8 位 hex 读出 alpha")
+        expectEqual(L.parse(hex: "#12345") == nil, true, "背景色: 位数不对 → nil(不要自己编默认色)")
+        expectEqual(L.parse(hex: "#GGGGGG") == nil, true, "背景色: 非十六进制 → nil")
+
+        // ---- 不透明色:两端 ----
+        expectEqual(L.prefersLightText(hexes: ["#000000FF"], darkAppearance: false), true,
+                    "背景色: 纯黑 → 白字")
+        expectEqual(L.prefersLightText(hexes: ["#FFFFFFFF"], darkAppearance: false), false,
+                    "背景色: 纯白 → 深色字")
+        // 浅黄正是"白字会直接消失"的那一类,加这颗设置之前它必然出事
+        expectEqual(L.prefersLightText(hexes: ["#FFE680FF"], darkAppearance: true), false,
+                    "背景色: 浅黄 → 深色字(不因为系统是深色模式就维持白字)")
+        // 默认的自定义色必须落在白字一侧 —— 否则用户切到「纯色」第一眼就是文字翻转
+        expectEqual(L.prefersLightText(hexes: ["#2B2D42FF"], darkAppearance: false), true,
+                    "背景色: 默认深蓝灰 → 白字")
+
+        // ---- 半透明:同一个颜色,结论跟着系统外观走 ----
+        // 半透明黑盖在浅色窗口底上,实际看到的是中灰偏亮,白字在上面是看不清的。
+        // 这条最容易写错成"只看颜色自己的亮度",那样两种外观会给出同一个答案。
+        expectEqual(L.prefersLightText(hexes: ["#00000080"], darkAppearance: false), false,
+                    "背景色: 半透明黑 + 浅色外观 → 混出中灰,该用深色字")
+        expectEqual(L.prefersLightText(hexes: ["#00000080"], darkAppearance: true), true,
+                    "背景色: 同一个半透明黑 + 深色外观 → 仍然是暗底,白字")
+        // 全透明 = 整个就是窗口底色,结论完全由外观决定
+        expectEqual(L.prefersLightText(hexes: ["#FFFFFF00"], darkAppearance: true), true,
+                    "背景色: alpha 0 → 看的是窗口底色,深色外观下白字")
+        expectEqual(L.prefersLightText(hexes: ["#00000000"], darkAppearance: false), false,
+                    "背景色: alpha 0 + 浅色外观 → 深色字")
+
+        // ---- 渐变:取两端平均 ----
+        expectEqual(L.prefersLightText(hexes: ["#000000FF", "#FFFFFFFF"], darkAppearance: false), false,
+                    "背景色: 黑到白渐变取平均(0.5)→ 越过阈值,深色字")
+        expectEqual(L.prefersLightText(hexes: ["#000000FF", "#333333FF"], darkAppearance: false), true,
+                    "背景色: 黑到深灰渐变 → 主体仍是暗的,白字")
+
+        // ---- 认不出来时维持这扇窗原来的样子,不要翻转 ----
+        expectEqual(L.prefersLightText(hexes: ["坏值"], darkAppearance: false), true,
+                    "背景色: 颜色认不出来 → 维持白字(不拿坏配置去翻转文字)")
+        expectEqual(L.prefersLightText(hexes: [], darkAppearance: false), true,
+                    "背景色: 一个颜色都没有 → 维持白字")
+
+        // ---- 档位:一档跟封面,两档自定义完全不碰封面 ----
+        expectEqual(LyricsWindowBackgroundMode.artwork.usesArtwork, true, "背景档: 跟随封面用封面")
+        expectEqual(LyricsWindowBackgroundMode.solid.usesArtwork, false, "背景档: 纯色不碰封面")
+        expectEqual(LyricsWindowBackgroundMode.gradient.usesArtwork, false, "背景档: 渐变不碰封面")
+        expectEqual(LyricsWindowBackgroundMode.glass.usesArtwork, false, "背景档: 毛玻璃不碰封面")
+        // 颜色那一行只该在这两档出现 —— 毛玻璃画的是系统材质、不读颜色,跟随封面更不读。
+        expectEqual(LyricsWindowBackgroundMode.solid.usesCustomColor, true, "背景档: 纯色要给颜色")
+        expectEqual(LyricsWindowBackgroundMode.gradient.usesCustomColor, true, "背景档: 渐变要给颜色")
+        expectEqual(LyricsWindowBackgroundMode.glass.usesCustomColor, false,
+                    "背景档: 毛玻璃**不**读颜色(别再让颜色行跟着冒出来)")
+        expectEqual(LyricsWindowBackgroundMode.artwork.usesCustomColor, false, "背景档: 跟随封面不读颜色")
+        expectEqual(LyricsWindowBackgroundMode.allCases.count, 4, "背景档: 就四档")
+        // 毛玻璃折射的是窗口背后的桌面 —— 窗口自己不透明的话它只折射得到窗口底色,看着是块死灰。
+        // 这条不是观感取舍,是这一档能不能成立的前提,所以钉在类型上、不留给调用方记着。
+        expectEqual(LyricsWindowBackgroundMode.glass.alwaysNeedsTransparentWindow, true,
+                    "背景档: 毛玻璃必须让窗口透出去")
+        for mode in [LyricsWindowBackgroundMode.artwork, .solid, .gradient] {
+            expectEqual(mode.alwaysNeedsTransparentWindow, false,
+                        "背景档: 只有毛玻璃恒需透明窗口(\(mode.rawValue) 另看 alpha)")
+        }
+        // 删掉的那一档:存过它的配置必须认不出来,这样 AppSettings 那边的
+        // `flatMap(init(rawValue:)) ?? .artwork` 才会把它退回默认档,而不是卡在一个不存在的状态。
+        expectEqual(LyricsWindowBackgroundMode(rawValue: "artworkBlur") == nil, true,
+                    "背景档: 已删的「模糊封面」rawValue 认不出来 → 调用方回落默认档")
+
+        // ---- 渐变方向 ----
+        expectEqual(LyricsWindowGradientDirection.allCases.count, 2, "渐变方向: 竖向 / 横向")
+        expectEqual(LyricsWindowGradientDirection(rawValue: "vertical"), .vertical, "渐变方向: 竖向 rawValue")
+        expectEqual(LyricsWindowGradientDirection(rawValue: "horizontal"), .horizontal, "渐变方向: 横向 rawValue")
     }
 }

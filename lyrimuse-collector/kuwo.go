@@ -109,7 +109,19 @@ func kuwoCoverURL(short string) string {
 // 见 kuwoFetchLyric 那边——写错会被拒)。
 func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, error) {
 	q := strings.TrimSpace(title + " " + artist)
-	u := "https://search.kuwo.cn/r.s?all=" + neturl.QueryEscape(q) +
+	var items []kuwoSearchItem
+	err := tryEach(ctx, kuwoSearchBases, func(base string) error {
+		got, err := kuwoSearchAt(ctx, base, q)
+		if err == nil {
+			items = got
+		}
+		return err
+	})
+	return items, err
+}
+
+func kuwoSearchAt(ctx context.Context, base, q string) ([]kuwoSearchItem, error) {
+	u := base + "/r.s?all=" + neturl.QueryEscape(q) +
 		"&ft=music&itemset=web_2013&client=kt&pn=0&rn=10&rformat=json&encoding=utf8&pcjson=1"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -178,12 +190,25 @@ type kuwoLyricLine struct {
 // lrclist 可能是空数组(纯音乐/伴奏/无歌词),这种情况 HTTP 状态码仍是 200、`code`
 // 字段仍是 200,不是错误,调用方按"空列表"处理即可,不需要单独判 code。
 func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error) {
-	u := "https://kuwo.cn/openapi/v1/www/lyric/getlyric?musicId=" + neturl.QueryEscape(musicID)
+	var lines []kuwoLyricLine
+	err := tryEach(ctx, kuwoLyricBases, func(base string) error {
+		got, err := kuwoFetchLyricAt(ctx, base, musicID)
+		if err == nil {
+			lines = got
+		}
+		return err
+	})
+	return lines, err
+}
+
+// kuwoFetchLyricAt 的 Referer 跟着主机走(kuwo.cn 配 kuwo.cn、www 配 www,实测各自都通)。
+func kuwoFetchLyricAt(ctx context.Context, base, musicID string) ([]kuwoLyricLine, error) {
+	u := base + "/openapi/v1/www/lyric/getlyric?musicId=" + neturl.QueryEscape(musicID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Referer", "https://kuwo.cn/")
+	req.Header.Set("Referer", base+"/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {

@@ -42,7 +42,7 @@ func runOnboardingTests() {
     //  ① 到 `duration` 那一刻还有纸片停在画面里 = 用户看到"撒花撒了一半被整块抹掉";
     //  ② `elapsed == 0` 那一刻就有纸片在画面里 = 纸片凭空出现在画面中间,不是"落下来"。
     do {
-        let size = CGSize(width: 480, height: 420)   // 引导窗那扇
+        let size = CGSize(width: 480, height: 440)   // 引导窗那扇
         let field = ConfettiField(pieceCount: 90, seed: 7)
 
         var stillVisibleAtEnd: [String] = []
@@ -95,7 +95,7 @@ func runOnboardingTests() {
 
     // ---- 撒花:出场前 / 落完后 / 空画布都没有落点 ----
     do {
-        let size = CGSize(width: 480, height: 420)
+        let size = CGSize(width: 480, height: 440)
         let field = ConfettiField(pieceCount: 24, seed: 99)
         // 不写 `guard … else { return }`:这里 return 的是整个 runOnboardingTests(),
         // 以后在后面加小节会被静默跳过(拿到假绿)。

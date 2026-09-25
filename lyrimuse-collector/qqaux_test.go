@@ -84,17 +84,23 @@ func TestQQAuxiliaryPlainToLRCRejectsTooFewLines(t *testing.T) {
 	}
 }
 
-// 版权声明只认带「著作权」的那句;歌词正文里恰好出现「QQ音乐」不能被误杀。
-func TestIsQQTranslationNotice(t *testing.T) {
+// 版权声明只认带「著作权」的那句、译者声明要「歌词翻译由」加「提供」;歌词正文里恰好出现「QQ音乐」不能被误杀。
+func TestIsTranslationNotice(t *testing.T) {
 	cases := map[string]bool{
-		"QQ音乐享有本翻译作品的著作权":  true,
-		"本翻译作品的著作权归QQ音乐所有": true,
-		"我在QQ音乐上听到这首歌":     false,
-		"著作权":              false,
+		"QQ音乐享有本翻译作品的著作权":     true,
+		"本翻译作品的著作权归QQ音乐所有":    true,
+		"TME享有本翻译作品的著作权":      true,
+		"TME享有翻译作品的著作权":       true,
+		"腾讯享有本翻译作品的著作权":       true,
+		"以下歌词翻译由文曲大模型提供":      true,
+		"以下歌词翻译由微信翻译+文曲大模型提供": true,
+		"翻译由我提供":              false,
+		"我在QQ音乐上听到这首歌":        false,
+		"著作权":                 false,
 	}
 	for text, want := range cases {
-		if got := isQQTranslationNotice(text); got != want {
-			t.Errorf("isQQTranslationNotice(%q) = %v, want %v", text, got, want)
+		if got := isTranslationNotice(text); got != want {
+			t.Errorf("isTranslationNotice(%q) = %v, want %v", text, got, want)
 		}
 	}
 }

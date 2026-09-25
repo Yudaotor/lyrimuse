@@ -154,7 +154,7 @@ func simplifiedDistance(k string) int {
 // 算出来的,而胜者和落败者的 key 不同(它们的差异正是空格/大小写/字形,而 sanitizeLyricsFilename
 // 只替换 `|` 和几个非法字符,不折叠空格也不折叠字形)。这里仍然显式再核一遍,不靠推理。
 func resolveStaleFiles(plan dedupePlan) []string {
-	if lyricsDir == "" {
+	if lyricsDir() == "" {
 		return nil
 	}
 	// 这些文件属于"内容和显示是同一条"的胜者,内容已经正确,绝不能删。
@@ -185,7 +185,7 @@ func resolveStaleFiles(plan dedupePlan) []string {
 					log.Printf("dedupe: refusing to delete %q — it is also the winner's export file", name)
 					continue
 				}
-				p := filepath.Join(lyricsDir, name)
+				p := filepath.Join(lyricsDir(), name)
 				if _, err := os.Stat(p); err == nil {
 					out = append(out, p)
 				}
@@ -233,7 +233,7 @@ func runDedupeEntries(apply bool) int {
 	}
 	fmt.Printf("待删除的导出文件 %d 个:\n", len(plan.staleFiles))
 	for _, f := range plan.staleFiles {
-		fmt.Printf("  %s\n", strings.TrimPrefix(f, lyricsDir+"/"))
+		fmt.Printf("  %s\n", strings.TrimPrefix(f, lyricsDir()+"/"))
 	}
 
 	if !apply {
@@ -292,10 +292,10 @@ func runDedupeEntriesCLI(args []string) {
 		log.Fatalf("dedupe-entries: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
-	lyricsDir = features.LyricsDir
-	if lyricsDir == "" {
-		lyricsDir = filepath.Join(cfgDir, "lyrics")
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
+	setLyricsDir(features().LyricsDir)
+	if lyricsDir() == "" {
+		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
 	}
 
 	// 严格的单实例检查,而且**只对 -apply 生效前必须过**。

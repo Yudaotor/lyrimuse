@@ -157,8 +157,21 @@ func main() {
 	}
 	// `collector dedupe-entries [-apply]`:把 enrich 缓存里"其实是同一首歌"的重复条目
 	// 并成一条(见 dedupecli.go)。默认预演,-apply 才真改。
+	// `collector apply-enrich-edit <请求文件>`:后台服务没在跑时,App 用它执行一份歌词缓存改动
+	// (见 enrichedit.go)。
+	if len(os.Args) > 1 && os.Args[1] == "apply-enrich-edit" {
+		runApplyEnrichEditCLI(os.Args[2:])
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "dedupe-entries" {
 		runDedupeEntriesCLI(os.Args[2:])
+		return
+	}
+	// `collector cross-album-reuse [-tolerance N] [-all]`:列出同一首歌落在多张专辑下、
+	// 时长互相兼容、却各自选源拿到两份不同歌词的条目组(见 crossalbumcli.go)。**只读**,
+	// 是给「查找层加跨专辑复用规则」那一步做判据核对用的,不改任何数据。
+	if len(os.Args) > 1 && os.Args[1] == "cross-album-reuse" {
+		runCrossAlbumReuseCLI(os.Args[2:])
 		return
 	}
 	// `collector recheck-cover [-apply] "歌手|歌名|专辑" ...`:对指定条目重新解析一次封面
@@ -233,11 +246,23 @@ func main() {
 		logExit(exitReasonAlreadyRunning, "another collector instance holds the lock; exiting so shared caches are not clobbered, launchd KeepAlive will retry")
 		os.Exit(0)
 	}
+	// 本地缓存可读性:设置页 / 引导页「完全磁盘访问」与「歌词来源」锁的数据源,由 collector 独家
+	// 发布(见 localcachefs.go)。必须在拿到单实例锁之后(设路径会删掉旧文件)、下面那串耗时的
+	// 启动迁移之前 —— 重启后台服务之后界面等的就是这份结论。
+	setLocalCacheAccessPath(configFilePath(clientName + "-local-cache-access.json"))
+	probeLocalCacheAccess()
 	featureFlagsPath := filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json")
-	features = loadFeatureFlags(featureFlagsPath)
-	// 「Scrobble 的播放器」和「歌词来源」两项**不重启也生效**:各按 mtime 热重读自己那一个键,
-	// 见 lastfmexclude.go / lyricsourcesreload.go 头注。其余键仍然只在这里读一次(下面好几处会
-	// 把它们展开进包级变量),改了要重启才算数。
+	setFeatures(loadFeatureFlags(featureFlagsPath))
+	// 改设置**不再需要重启**:登记这个路径之后,features() 会按 mtime 自己重读(featuresreload.go)。
+	// 只有常驻进程登记 —— 上面那些一次性 CLI 子命令都在更早的分支里 return 了,它们不长跑、
+	// 没有"中途被改"这回事,不登记就一次盘都不探,行为与热重读上线之前逐字节一致。
+	//
+	// lyrics_dir 换了要搬一次家(导入新目录 + 整份导出),那一步等下面的启动迁移跑完才放开,
+	// 见 lyricsdirswitch.go 的 enableLyricsDirSwitch。
+	setFeaturesPath(featureFlagsPath)
+	// 这两项在全局热重读之前就各自做过一份按键的 mtime 重读。现在 features() 整体会重读,它们其实
+	// 已经冗余了 —— 留着不改是因为它们读的是同一个文件、结论必然一致,而合并要动 lyricSourceEnabled /
+	// lastfmExcluded 两条判定链上的每个调用点,风险与收益不成比例。后续清理时连同这条注释一起删。
 	setLastfmExcludePath(featureFlagsPath)
 	setLyricSourcesPath(featureFlagsPath)
 	// (删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features().Players)`。
@@ -269,6 +294,8 @@ func main() {
 	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
 	// mbArtistIdentity 注释。与 top-artists CLI 共用同一份文件。
 	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
+	// 启动期存量迁移的「已完成水位」(startupmigration.go)。必须在下面那串迁移之前载入。
+	loadMigrationState(filepath.Join(filepath.Dir(*cfgPath), clientName+"-migrations.json"))
 	// 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)以
 	// lyrics/ 文件夹为权威源,不只是 enrichCache 的只读存档——顺序很重要:先
 	// importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
@@ -280,10 +307,8 @@ func main() {
 	// 文件夹位置可以在"歌词"设置分类里自定义(lyrics_dir),留空则落到 config.json 同
 	// 目录下的默认 lyrics/ 子目录——切换新文件夹后不会自动搬运旧文件夹里已有的文件,
 	// 只从这一刻起只认新位置读写。
-	lyricsDir = features.LyricsDir
-	if lyricsDir == "" {
-		lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
-	}
+	defaultLyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
+	setLyricsDir(resolveLyricsDir(features().LyricsDir))
 	// 设备直送封面(deviceartwork.go)落盘目录——跟 lyrics/ 平级,不跟着 lyrics_dir 这个
 	// 用户可改的设置走:那个设置管的是"歌词权威源放哪",封面缓存是内部实现细节,不需要
 	// 暴露成一项用户配置。
@@ -291,9 +316,8 @@ func main() {
 	// 这些设备封面同时要托管到状态中继上,否则推给网页/ListenBrainz 的是别的机器
 	// 根本读不到的 file:// 本地路径,网页上就会没有封面。
 	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
-	artworkRelayURL, artworkRelayToken = cfg.StateRelayURL, cfg.StateRelayToken
-	// 只为网页算的东西(封面主色)据此整体跳过,见 relay.go 的 webRelayURL 头注。
-	webRelayURL = cfg.StateRelayURL
+	// 同一个地址也决定网页取色那些只为网页算的东西要不要算,见 relay.go 的 webRelayURL 头注。
+	setStateRelay(cfg.StateRelayURL, cfg.StateRelayToken)
 	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
 	// 又要在 lyricsDir() 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
@@ -302,35 +326,76 @@ func main() {
 	// migrateEnrichKeys 之前(备份里的 key 是导出那台机器当时的写法,得跟着一起归一化)、
 	// importLyricsFromFiles 之前(那一步负责让 lyrics/ 文件族赢下六个歌词字段)。
 	// 绝大多数启动这个文件不存在,直接早退,零成本。
-	adoptEnrichRestore(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json"))
-	migrateEnrichKeys()
+	// 从这里到 exportLyricsFiles 的一整段是**同步**的,跑在打出 "starting" 之前 ——
+	// 也就是说这段没跑完,collector 根本还没开始盯播放,用户那边是"重启后歌词迟迟不出来"。
+	// 实测 6952 条缓存 + 20046 个歌词文件的冷启动要 40 多秒,而这段原本一行日志都不打,
+	// 排查时完全是黑盒(得靠"缓存加载完"和 "starting" 两条日志之间的空档去推)。所以每一步
+	// 都计时,超过 300ms 的打一行。真正贵的那道(migrateLyricTimelines,实测 9~10 秒)另外
+	// 带了水位闸,跑过一遍就跳过,见 startupmigration.go。
+	startupStep := func(name string, fn func()) {
+		s := time.Now()
+		fn()
+		if d := time.Since(s); d >= 300*time.Millisecond {
+			log.Printf("startup: %s took %s", name, d.Round(10*time.Millisecond))
+		}
+	}
+	// 搬家带来的是**别的机器**导出的数据,可能停在更早的形态 —— 采纳到东西就作废水位,
+	// 让下面那些存量迁移这一轮照常全量跑。
+	enrichRestorePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json")
+	startupStep("adoptEnrichRestore", func() {
+		if adoptEnrichRestore(enrichRestorePath) {
+			invalidateMigrationState("enrich restore adopted")
+		}
+	})
+	startupStep("migrateEnrichKeys", migrateEnrichKeys)
 	// 存量「借来的封面被盖上归属戳」清洗(见 coverstampmigrate.go)。
 	// 位置只有两条约束:loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
 	// migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。跟歌词那条 import/export
 	// 链**没有**先后关系 —— 它一个歌词字段都不碰,只擦 cover_album。
-	migrateBorrowedCoverAlbums()
-	importLyricsFromFiles()
+	startupStep("migrateBorrowedCoverAlbums", migrateBorrowedCoverAlbums)
+	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
+	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)
+	// 用户手改 lyrics/ 里的文件同样是外来数据入口:改到了东西就作废水位,理由同上。
+	startupStep("importLyricsFromFiles", func() {
+		if n := importLyricsFromFiles(); n > 0 {
+			invalidateMigrationState(fmt.Sprintf("%d entries rewritten by lyrics/ files", n))
+		}
+	})
 	// 存量歌词正文里的 HTML / XML 字符实体(酷狗 `they&apos;re`,见 lyricentities.go)。
 	// 紧跟 import:lyrics/ 文件夹赢完之后改的才是权威内容;后面 export 把干净正文写回文件。
 	// 也要排在 migrateManualPickMarks 之前(那一步按最终正文算指纹)。
-	migrateLyricEntities()
+	startupStep("migrateLyricEntities", migrateLyricEntities)
+	// 存量译文里腾讯系塞的版权 / 译者声明行(见 translationnotice.go),同样夹在 import 与 export 之间。
+	startupStep("migrateTranslationNotices", migrateTranslationNotices)
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
-	invalidateStaleTranslations()
+	startupStep("invalidateStaleTranslations", invalidateStaleTranslations)
 	// 逐字歌词的空白词条清洗(Musixmatch richsync 存量,见 yrcwhitespace.go)。
 	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
 	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。
-	migrateYRCWhitespaceTokens()
+	// 必须排在空白词条归并**之前**:残缺的两数字词条(qrcToYRC 旧实现漏转的)会把相邻的
+	// 空白词条"粘住",归并器切不出来;先把词条修成标准三数字形态,下一步才轮得到它们。
+	startupStep("migrateQRCLeftoverTokens", migrateQRCLeftoverTokens)
+	startupStep("migrateYRCWhitespaceTokens", migrateYRCWhitespaceTokens)
 	// 行级时间轴与逐字轴打架时以逐字轴为准重挂(见 lyricstimeline.go)。
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
-	migrateLyricTimelines()
-	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
-	// ⚠️ 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
+	startupStep("migrateLyricTimelines", migrateLyricTimelines)
+	// 存量「用户选定的源」到「手动选定」留痕(见 manualpickmigrate.go)。
+	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
 	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
 	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
-	migrateManualPickMarks()
-	exportLyricsFiles()
+	startupStep("migrateManualPickMarks", migrateManualPickMarks)
+	startupStep("exportLyricsFiles", exportLyricsFiles)
+	// 判决记录的候选明细挪到旁路目录(decisionstore.go)。必须在 migrateSodaCoverURLs 之后:那道迁移扫的是
+	// 内存里候选的 cover_url,拆完就扫不到了。
+	startupStep("externalizeDecisions", externalizeDecisionsAtStartup)
+	startupStep("removeStaleEnrichTemps", removeStaleEnrichTemps)
+	// 给 App 的精简索引 + 正文小文件(enrichindex.go):缺失或比主缓存旧就重新生成。排在所有会改缓存的
+	// 启动迁移之后。
+	startupStep("refreshEnrichIndex", refreshEnrichIndexAtStartup)
+	// 启动迁移跑完了,从这里起 lyrics_dir 可以热切换;启动期间要是改过它,这一步当场补上。
+	enableLyricsDirSwitch()
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
 	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。
 	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
@@ -339,6 +404,8 @@ func main() {
 	artworkConfirmPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-artwork-confirmed.json")
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
+	// ListenBrainz 待重发队列(lbretry.go):会话结束后才失败的收听存在这里,后台重发。
+	lbRetryPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-retry.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
 	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled
 	// 之前设好 —— 匹配器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
@@ -354,15 +421,22 @@ func main() {
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
 	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
+	// App 侧改歌词缓存的请求目录(见 enrichedit.go)——跟 Swift 那边 EnrichEditChannel 的目录名逐字节一致。
+	setEnrichEditDir(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-requests"))
 	// App 量出的 Spotify 锚点偏置(见 positionbias.go)——跟 Swift 那边 PositionBiasFile.fileName 逐字节一致。
 	setPositionBiasPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-position-bias.json"))
 	// 「歌词管理」的「重试无歌词条目」请求文件 + 进度状态文件(见 lyricsfillsweep.go)。
 	setLyricsFillPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
+	monthlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-monthly-digest.json")
+	yearlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-yearly-digest.json")
 	topArtistsStatePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-top-artists.json")
 
-	lb := &lbClient{root: cfg.APIRoot, token: cfg.Token, hc: &http.Client{}, dryRun: *dryRun, alerter: newAlerter(cfg.NotificationPlatform, cfg.NotificationWebhookURL, cfg.DingtalkSignSecret, cfg.FeishuSignSecret)}
+	lb := &lbClient{root: cfg.APIRoot, token: cfg.Token, hc: &http.Client{}, dryRun: *dryRun, alerter: alerterFromConfig(cfg)}
+	// 从这里起 config.json 改了就热重读,不用重启(configreload.go)。放在上面那些按 cfg 设好的
+	// 状态之后:热重读换快照时要拿它们当"旧值"比。
+	setLiveConfig(*cfgPath, cfg)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -375,8 +449,11 @@ func main() {
 	// (见 artworkconfirmed.go 头注:这是把「每次重启约 700 次 KV 读」降到 0 的那一步)。
 	// 必须在 sweepDeviceArtwork 之前,也必须在 artworkRelayURL 定下来之后(换中继要作废旧记录)。
 	loadArtworkConfirmed()
-	go sweepDeviceArtwork(ctx)
+	startArtworkSweep(ctx)
+	// 常驻进程里播放热路径的保存走 2 秒节流(见 enrichsave.go);退出前把排着的那次补写当场做掉。
+	enableEnrichSaveThrottle()
 	err = run(ctx, cfg, lb)
+	flushEnrichSave()
 	if err != nil && ctx.Err() == nil {
 		fatalExit(exitReasonRunError, "err=%v", err)
 	}

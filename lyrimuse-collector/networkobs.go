@@ -53,6 +53,11 @@ var (
 // 是 Swift 侧的事,而且请求整个发生在框架内部,拿不到这个函数需要的 method/URL/状态
 // 码/耗时)。
 func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) {
+	// 本地出站闸(hostguard.go):限速排队、429 窗口、歌词源冷却。拦下的请求没发出去,
+	// 不计数、不喂熔断、不进审计汇总。
+	if err := hostGuardShared.admit(req); err != nil {
+		return nil, err
+	}
 	// DNS 阶段轨迹,只给歌词源的传输层失败分类用(sourcebreaker.go 最后一节的
 	// 段说明了为什么不能只看错误链)。钩子在拨号 goroutine 上跑、跟这里不同步,所以用
 	// 锁读写;请求结束后再读一次快照交给 observeTraced。非歌词源主机也会挂,开销是一个
@@ -106,10 +111,11 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		recordAPICall(summaryKey, elapsed, true, false, time.Now())
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
-		lyricSourceBreakerShared.observeTraced(req.URL.Host, err, 0, "", tr)
+		lyricSourceBreakerShared.observeTraced(req.URL.Host, guardEndpointKey(req.URL), err, 0, "", tr)
 		return resp, err
 	}
-	lyricSourceBreakerShared.observeTraced(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
+	lyricSourceBreakerShared.observeTraced(req.URL.Host, guardEndpointKey(req.URL), nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
+	hostGuardShared.observe(req, resp.StatusCode, resp.Header.Get("Retry-After"))
 	// 404 跟别的 4xx/5xx 分开(修)。对歌词源来说 404 是**正常应答**——"这个库里没有这首歌",
 	// 跟"这个源坏了"是两回事,原来 `>= 400` 一刀切同时污染了两头:
 	//   - WARN 被淹:amll 走 GitHub 裸文件,查不到就是 404,三天 18530 行 WARN、占日志体积

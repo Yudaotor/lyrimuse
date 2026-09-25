@@ -35,8 +35,8 @@ func TestLyricSourceSkipForDisabledBeatsCooling(t *testing.T) {
 // 网易云关掉时那一路不查,e.NeteaseURL 必然是空的——外围补全不能把它算缺项,否则每条记录都要
 // 白补 peripheralBackfillMaxAttempts 轮、每轮把开着的源全部重查一遍。
 func TestNeedsPeripheralBackfillIgnoresNeteaseURLWhenDisabled(t *testing.T) {
-	saved := features.LyricsSources
-	defer func() { features.LyricsSources = saved }()
+	saved := features().LyricsSources
+	defer func() { featuresRef().LyricsSources = saved }()
 
 	long := time.Now().Unix() - int64(enrichPeripheralRetryInterval/time.Second) - 1
 	e := enrichEntry{
@@ -45,11 +45,11 @@ func TestNeedsPeripheralBackfillIgnoresNeteaseURLWhenDisabled(t *testing.T) {
 		CoverURL: "https://is1-ssl.mzstatic.com/x.jpg", CoverSource: "apple", CoverAlbum: "KUN",
 		// NeteaseURL 留空
 	}
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true}
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true}
 	if !needsPeripheralBackfill(e, "蔡徐坤", "KUN") {
 		t.Error("网易云开着、链接为空:该补")
 	}
-	features.LyricsSources = map[string]bool{"netease": false, "qq": true}
+	featuresRef().LyricsSources = map[string]bool{"netease": false, "qq": true}
 	if needsPeripheralBackfill(e, "蔡徐坤", "KUN") {
 		t.Error("网易云关掉、链接为空:不该为此补——那一路根本不查")
 	}

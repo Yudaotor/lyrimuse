@@ -89,12 +89,15 @@ type miguSearchItem struct {
 		Name string `json:"name"`
 	} `json:"singers"`
 	Albums []struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"albums"` // 经常缺失
-	ImgItems []struct {
-		Img         string `json:"img"`
-		ImgSizeType string `json:"imgSizeType"` // "01"/"02"/"03",数字越大图越大
-	} `json:"imgItems"`
+	ImgItems []miguImgItem `json:"imgItems"`
+}
+
+type miguImgItem struct {
+	Img         string `json:"img"`
+	ImgSizeType string `json:"imgSizeType"` // "01"/"02"/"03",数字越大图越大
 }
 
 // artistName 把多个演唱者拼成一个字符串——身份闸 lyricSourceArtistMatches 自己会处理
@@ -116,11 +119,22 @@ func (it miguSearchItem) albumName() string {
 	return strings.TrimSpace(it.Albums[0].Name)
 }
 
+func (it miguSearchItem) albumID() string {
+	if len(it.Albums) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(it.Albums[0].ID)
+}
+
 // miguCoverURL 从 imgItems 里挑最大的一档("03"),没有就退到最后一条非空的。纯函数,
 // 便于单测。
 func miguCoverURL(it miguSearchItem) string {
+	return miguPickImg(it.ImgItems)
+}
+
+func miguPickImg(items []miguImgItem) string {
 	best := ""
-	for _, img := range it.ImgItems {
+	for _, img := range items {
 		u := strings.TrimSpace(img.Img)
 		if u == "" {
 			continue
@@ -137,7 +151,19 @@ func miguCoverURL(it miguSearchItem) string {
 // 的够挑;isCorrect=1 让咪咕自己纠一次错别字(实测不影响原版排第一)。
 func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, error) {
 	q := strings.TrimSpace(artist + " " + title)
-	u := "https://pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do?text=" + neturl.QueryEscape(q) +
+	var items []miguSearchItem
+	err := tryEach(ctx, miguSearchHosts, func(host string) error {
+		got, err := miguSearchAt(ctx, host, q)
+		if err == nil {
+			items = got
+		}
+		return err
+	})
+	return items, err
+}
+
+func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error) {
+	u := "https://" + host + "/MIGUM2.0/v1.0/content/search_all.do?text=" + neturl.QueryEscape(q) +
 		"&pageNo=1&pageSize=10&searchSwitch=" + neturl.QueryEscape(`{"song":1}`) + "&isCorrect=1"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -163,8 +189,11 @@ func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, er
 		return nil, err
 	}
 	if out.Code != "" && out.Code != "000000" {
+		// 查无结果时 code 仍是 000000(实测),别的值是服务端拒绝。
+		reportEndpointRejected(req.URL)
 		return nil, fmt.Errorf("code %s", out.Code)
 	}
+	reportEndpointAccepted(req.URL)
 	return out.SongResultData.Result, nil
 }
 
@@ -287,9 +316,13 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 			continue
 		}
 		it := candidates[rank].item
+		cover := miguCoverURL(it)
+		if c := miguAlbumCover(ctx, it.albumID()); c != "" {
+			cover = c
+		}
 		r := miguResult{
 			lyrics: lrc, title: it.Name, artist: it.artistName(), album: it.albumName(),
-			cover: miguCoverURL(it),
+			cover: cover,
 		}
 		if u := strings.TrimSpace(it.TrcURL); u != "" {
 			if tr, err := miguFetchLRC(ctx, u); err == nil && isTimedLRC(tr) {
@@ -299,4 +332,98 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 		return r
 	}
 	return miguResult{}
+}
+
+// ---- 专辑封面:按专辑 id 另问一次 ----
+//
+// 搜索结果里每首歌自带的 imgItems 是**这段录音最早所在那张专辑**的图,而 albums[0] 写的是这一条
+// 实际所属的专辑 —— 精选集、合辑里两者对不上。实测「陶喆 - 飞机场的10:30」那条专辑写的是
+// 「Ultrasound 乐之路 1997-2003」,图却是 1997 年首张专辑《David Tao》的蓝色封面;同一张精选集里
+// 的「天天 (2003 Version)」「飞机场的10:30 (原始试听版)」配的又是精选集自己的封面。封面挂在专辑名
+// 旁边展示、也会被当成这张专辑的封面存下来,所以按 albums[0].id 取专辑自己的那张。
+//
+// 只给**选中的那一条**问(一首歌一次),按专辑 id 缓存;问不到就退回歌曲自带的图,不比原来差。
+
+const miguAlbumInfoPath = "/MIGUM2.0/v1.0/content/resourceinfo.do"
+
+var (
+	miguAlbumCoverMu    sync.Mutex
+	miguAlbumCoverCache = map[string]string{} // 专辑 id → 封面地址(只存取到了的)
+)
+
+func miguAlbumCover(ctx context.Context, albumID string) string {
+	if albumID == "" {
+		return ""
+	}
+	miguAlbumCoverMu.Lock()
+	if v, ok := miguAlbumCoverCache[albumID]; ok {
+		miguAlbumCoverMu.Unlock()
+		return v
+	}
+	miguAlbumCoverMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	var body []byte
+	_ = tryEach(ctx, miguAlbumHosts, func(host string) error {
+		b, err := miguAlbumInfoAt(ctx, host, albumID)
+		if err == nil {
+			body = b
+		}
+		return err
+	})
+	if body == nil {
+		return ""
+	}
+	cover := miguParseAlbumCover(body, albumID)
+	if cover != "" {
+		miguAlbumCoverMu.Lock()
+		miguAlbumCoverCache[albumID] = cover
+		miguAlbumCoverMu.Unlock()
+	}
+	return cover
+}
+
+// miguAlbumInfoAt 取一个主机上的专辑信息响应体;err 非 nil 是没问成。
+func miguAlbumInfoAt(ctx context.Context, host, albumID string) ([]byte, error) {
+	u := "https://" + host + miguAlbumInfoPath + "?needSimple=00&resourceType=2003&resourceId=" + neturl.QueryEscape(albumID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Referer", "https://m.music.migu.cn/")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}
+
+// miguParseAlbumCover 从专辑信息响应里取封面。返回的资源必须是专辑(resourceType 2003)、而且就是要的那张。
+func miguParseAlbumCover(body []byte, albumID string) string {
+	var data struct {
+		Code     string `json:"code"`
+		Resource []struct {
+			ResourceType string        `json:"resourceType"`
+			AlbumID      string        `json:"albumId"`
+			ImgItems     []miguImgItem `json:"imgItems"`
+		} `json:"resource"`
+	}
+	if err := json.Unmarshal(body, &data); err != nil || data.Code != "000000" {
+		return ""
+	}
+	for _, r := range data.Resource {
+		if r.ResourceType != "2003" || (r.AlbumID != "" && r.AlbumID != albumID) {
+			continue
+		}
+		if c := miguPickImg(r.ImgItems); c != "" {
+			return c
+		}
+	}
+	return ""
 }

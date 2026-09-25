@@ -177,6 +177,12 @@ type featureFlagsFile struct {
 	// 简单——所以这里特意留空字符串而不是给一个非空的默认值常量。
 	WeeklyDigestSource string `json:"weekly_digest_source,omitempty"`
 	DailyDigestSource  string `json:"daily_digest_source,omitempty"`
+	// MonthlyDigest/YearlyDigest：见 calendardigest.go。跟周报、日报都是独立开关。数据源字段
+	// 同上，空值交给 resolveDigestSource。
+	MonthlyDigest       *bool  `json:"monthly_digest,omitempty"`
+	YearlyDigest        *bool  `json:"yearly_digest,omitempty"`
+	MonthlyDigestSource string `json:"monthly_digest_source,omitempty"`
+	YearlyDigestSource  string `json:"yearly_digest_source,omitempty"`
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
@@ -306,6 +312,10 @@ type featureFlags struct {
 	DailyDigest         bool
 	WeeklyDigestSource  string
 	DailyDigestSource   string
+	MonthlyDigest       bool
+	YearlyDigest        bool
+	MonthlyDigestSource string
+	YearlyDigestSource  string
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
 	// 订正:原注释说 `collector search-lyrics` 子命令"从不调用
@@ -343,9 +353,12 @@ type featureFlags struct {
 	LastfmExcludedBundles map[string]bool
 }
 
-// features is set once in main() before run() starts; every gate site reads
-// this package-level value (same style as enrichCache/lyricsDir等既有包级状态)。
-var features featureFlags
+// 这里原本是 `var features featureFlags` —— 启动时赋值一次、运行期再也不变,于是设置页
+// 每保存一次都得重启 collector 才生效(一次 40~47 秒的停摆)。现在改成了同名的**函数**
+// features(),内部是原子快照 + 按 mtime 热重读,见 featuresreload.go。
+//
+// 之所以保留 `features` 这个名字而不是另起一个访问器:`features().X` 这种旧写法会直接**编译失败**,
+// 183 个读点、53 个赋值点一个都漏不掉 —— 靠编译器兜底,不靠人眼。
 
 // resolveLaunchLyrimuseOnPlayers 把「跟随哪些播放器启动」的原始列表清洗成集合:键缺失(nil,布尔年代
 // 的老配置)原样返回 nil,由 companionLaunchProcessNames 退回旧语义;键在(哪怕是空列表)就严格按它来,
@@ -388,6 +401,29 @@ func loadFeatureFlags(path string) featureFlags {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		log.Printf("read feature flags %s: %v (falling back to defaults)", path, err)
 	}
+	return buildFeatureFlags(f)
+}
+
+// readFeatureFlags 是 loadFeatureFlags 的**不吞错**版本 —— 专给热重读用(featuresreload.go)。
+//
+// 两者的失败语义必须不同,这不是重复代码:启动那次读不出来,除了退回默认值没有别的东西可用;
+// 而热重读那一刻**手上正握着一份生效中的配置**,再退回默认就等于"文件坏了一下,用户所有设置当场
+// 被重置成出厂值"——那比"这次没更新成"严重得多。所以这里一律把错误抛出去,由调用方保留旧快照。
+func readFeatureFlags(path string) (featureFlags, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return featureFlags{}, err
+	}
+	var f featureFlagsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return featureFlags{}, err
+	}
+	return buildFeatureFlags(f), nil
+}
+
+// buildFeatureFlags 把解析好的文件结构变成运行期用的那份配置:默认值、清洗、老键迁移都在这里,
+// 两条读取路径(启动 / 热重读)共用它,免得默认值在两边各写一份、迟早漂移。
+func buildFeatureFlags(f featureFlagsFile) featureFlags {
 	match := resolveLastfmMatch(f)
 	return featureFlags{
 		Players:        resolvePlayers(f.Players, f.Player),
@@ -413,6 +449,10 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
+		MonthlyDigest:             boolOr(f.MonthlyDigest, false),
+		YearlyDigest:              boolOr(f.YearlyDigest, false),
+		MonthlyDigestSource:       f.MonthlyDigestSource,
+		YearlyDigestSource:        f.YearlyDigestSource,
 		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
@@ -720,44 +760,48 @@ func systemLanguageCode() string {
 // 本身 —— 那是用户的目录结构,跟排查无关。
 func logFeatureSnapshot() {
 	lyricsDirMode := "default"
-	if features.LyricsDir != "" {
+	if features().LyricsDir != "" {
 		lyricsDirMode = "custom"
 	}
 	// nil 和空集合含义不同:nil = 配置文件里压根没这个键(布尔年代的老配置,
 	// companionLaunchProcessNames 会退回旧语义),空集合 = 用户明确一个都不选。
 	launchOnPlayers := "legacy"
-	if features.LaunchLyrimuseOnPlayers != nil {
-		launchOnPlayers = sortedEnabledKeys(features.LaunchLyrimuseOnPlayers)
+	if features().LaunchLyrimuseOnPlayers != nil {
+		launchOnPlayers = sortedEnabledKeys(features().LaunchLyrimuseOnPlayers)
 	}
 	slog.Info("feature flags",
-		"players", sortedEnabledKeys(features.Players),
-		"album_prefetch", features.AlbumPrefetch,
-		"lyrics_auto_upgrade", features.LyricsAutoUpgrade,
-		"lyrics_sources", sortedEnabledKeys(features.LyricsSources),
-		"lyrics_source_mode", orDash(features.LyricsSourceMode),
-		"lyrics_source_order", orDash(strings.Join(features.LyricsSourceOrder, ",")),
+		"players", sortedEnabledKeys(features().Players),
+		"album_prefetch", features().AlbumPrefetch,
+		"lyrics_auto_upgrade", features().LyricsAutoUpgrade,
+		"lyrics_sources", sortedEnabledKeys(features().LyricsSources),
+		"lyrics_source_mode", orDash(features().LyricsSourceMode),
+		"lyrics_source_order", orDash(strings.Join(features().LyricsSourceOrder, ",")),
 		"lyrics_dir", lyricsDirMode,
-		"lyrics_translation_language", orDash(features.LyricsTranslationLanguage),
-		"lyrics_machine_translation", features.LyricsMachineTranslation,
-		"lyrics_decision_trace", features.LyricsDecisionTrace,
-		"lastfm_mirror_scrobble", features.LastfmMirrorScrobble,
+		"lyrics_translation_language", orDash(features().LyricsTranslationLanguage),
+		"lyrics_machine_translation", features().LyricsMachineTranslation,
+		"lyrics_decision_trace", features().LyricsDecisionTrace,
+		"lastfm_mirror_scrobble", features().LastfmMirrorScrobble,
 		// 档位 + 摊平后的三个布尔一起打:排查时「界面选了什么」和「实际按什么办」是两件事,
 		// 只记档位的话自定义档看不出它到底开了哪几项。三个布尔各占一个键 —— 拼成一个带
 		// 空格的值会被 slog 加引号,也不好 grep。
-		"lastfm_match_mode", orDash(features.LastfmMatchMode),
-		"lastfm_match_artist", features.LastfmMatchArtist,
-		"lastfm_match_track", features.LastfmMatchTrack,
-		"lastfm_match_first_artist_only", features.LastfmMatchFirstArtistOnly,
-		"lastfm_scrobble_point", orDash(features.LastfmScrobblePoint),
-		"scrobble_short_tracks", features.ScrobbleShortTracks,
-		"lastfm_excluded_bundles", len(features.LastfmExcludedBundles),
-		"weekly_digest", features.WeeklyDigest,
-		"weekly_digest_source", orDash(features.WeeklyDigestSource),
-		"daily_digest", features.DailyDigest,
-		"daily_digest_source", orDash(features.DailyDigestSource),
-		"launch_on_music_open", features.LaunchLyrimuseOnMusicOpen,
+		"lastfm_match_mode", orDash(features().LastfmMatchMode),
+		"lastfm_match_artist", features().LastfmMatchArtist,
+		"lastfm_match_track", features().LastfmMatchTrack,
+		"lastfm_match_first_artist_only", features().LastfmMatchFirstArtistOnly,
+		"lastfm_scrobble_point", orDash(features().LastfmScrobblePoint),
+		"scrobble_short_tracks", features().ScrobbleShortTracks,
+		"lastfm_excluded_bundles", len(features().LastfmExcludedBundles),
+		"weekly_digest", features().WeeklyDigest,
+		"weekly_digest_source", orDash(features().WeeklyDigestSource),
+		"daily_digest", features().DailyDigest,
+		"daily_digest_source", orDash(features().DailyDigestSource),
+		"monthly_digest", features().MonthlyDigest,
+		"monthly_digest_source", orDash(features().MonthlyDigestSource),
+		"yearly_digest", features().YearlyDigest,
+		"yearly_digest_source", orDash(features().YearlyDigestSource),
+		"launch_on_music_open", features().LaunchLyrimuseOnMusicOpen,
 		"launch_on_players", launchOnPlayers,
-		"trusted_players", orDash(sortedMapKeys(features.TrustedPlayers)),
+		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
 	)
 }
 

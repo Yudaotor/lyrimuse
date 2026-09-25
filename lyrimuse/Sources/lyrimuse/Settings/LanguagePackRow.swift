@@ -18,7 +18,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "langua
 /// 一被重建(所在卡片随 features 变化重建)@State 又清空,再空窗一次,看起来就像状态丢了。
 ///
 /// 提到这个单例里之后,重新进入设置页立刻拿得到上一次的结果,刷新在后台悄悄发生。
-@available(macOS 26.0, *)
+@available(macOS 15.0, *)
 @MainActor
 final class LanguagePackStatusStore: ObservableObject {
     static let shared = LanguagePackStatusStore()
@@ -162,7 +162,7 @@ final class LanguagePackStatusStore: ObservableObject {
 /// "下载了几种语言"——译文语言自己(简体中文)和同语系的繁体中文在这一对里是 unsupported,
 /// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(用户觉得
 /// "感觉有 bug",进程外探针对过:系统真值就是这 6 个)。help 气泡里把这条写明了。
-@available(macOS 26.0, *)
+@available(macOS 15.0, *)
 struct LanguagePackRow: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var store = LanguagePackStatusStore.shared

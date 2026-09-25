@@ -18,7 +18,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "automa
 // 只读现状)、procNotFound(-600)=目标应用标识符查不到(极端情况,当"还没问过"处理)。
 // event class/id 用 typeWildCard 是 Apple 文档里"查这个 App 整体自动化权限"的标准
 // 写法,不是针对某个具体事件。
-enum MusicAutomationPermissionStatus {
+enum MusicAutomationPermissionStatus: Sendable {
     case authorized
     case denied
     case notDetermined
@@ -28,6 +28,30 @@ enum MusicAutomationPermissionStatus {
 
 enum MusicAutomationPermission {
     private static let musicBundleID = "com.apple.Music"
+
+    private struct CheckKey: Hashable, Sendable {
+        let bundleID: String
+        let askIfNeeded: Bool
+    }
+
+    /// `AEDeterminePermissionToAutomateTarget` 可能无限期阻塞(见 02 章决策 8)。
+    /// 一律经这道闸调 `check(bundleID:askIfNeeded:)`,别在主线程或 `Task.detached` 里直接调。
+    private static let gate = BlockingCallGate<CheckKey, MusicAutomationPermissionStatus>(
+        label: "me.yudaotor.lyrimuse.automation-permission")
+
+    /// 只读查询的等待上限。正常一次 3–48ms,超过这个数就当"这次查不到"。
+    static let readTimeout: Double = 2
+
+    /// `check(bundleID:askIfNeeded:)` 的异步版:在专用线程上查,超时返回 nil(= 这次没拿到结果,
+    /// 不是"已拒绝")。同一目标、同一 `askIfNeeded` 的并发请求合并成一次系统调用。
+    static func status(bundleID: String, askIfNeeded: Bool,
+                       timeout: Double = readTimeout) async -> MusicAutomationPermissionStatus? {
+        await withCheckedContinuation { continuation in
+            gate.run(key: CheckKey(bundleID: bundleID, askIfNeeded: askIfNeeded), timeout: timeout,
+                     work: { check(bundleID: bundleID, askIfNeeded: askIfNeeded) },
+                     completion: { continuation.resume(returning: $0) })
+        }
+    }
 
     // askIfNeeded=true 且当前还没问过时,这一步会真的弹出系统的自动化授权对话框——
     // 跟第一次真的发送 Apple Event 弹出的是同一个系统机制,不是自己画的假弹窗。
@@ -123,8 +147,9 @@ enum MusicAutomationPermission {
     /// 不需要这个权限")。但设置成"自动识别"时,实际在播的完全可能就是 Apple Music —— 这时
     /// 那个前提不成立,直接返回 true 等于跳过了真正需要的权限检查,后面的 AppleScript 会静默
     /// 失败。悬浮窗那颗"喜欢"就是这种情况(见 PlaybackCoordinator.toggleFavorited)。
+    /// 读现状超时(返回 nil)时直接当没权限,不再去请求:那一刻系统查询已经卡住,再请求只会一起卡。
     static func checkAppleMusicSafely(askIfNeeded: Bool) async -> Bool {
-        let current = check(askIfNeeded: false)
+        guard let current = await status(bundleID: musicBundleID, askIfNeeded: false) else { return false }
         if current != .notDetermined { return current.isAuthorized }
         guard askIfNeeded else { return false }
         let result = await requestWithTimeout(launchMusicAppIfNeeded: false)
@@ -143,8 +168,9 @@ enum MusicAutomationPermission {
     // 超时不取消那次系统调用,它可能一直在后台挂着;调用方应该在后续别的时机
     // (.onAppear、App 重新变为前台)用 askIfNeeded:false 再读一次最新状态,
     // 覆盖"用户后来自己去系统设置手动开了、但这次请求已经放弃等待"这种情况。
+    // 别换回 withTaskGroup 做超时赛跑:任务组退出前要等所有子任务结束,卡住的检查不返回,
+    // 超时分支赢了也出不来。
     // launchMusicAppIfNeeded 默认 true(SettingsView/OnboardingView 这两个"用户显式点
-    /// 读现状超时(返回 nil)时直接当没权限,不再去请求:那一刻系统查询已经卡住,再请求只会一起卡。
     // 请求权限按钮"的场景需要——不然 Music.app 没在运行时权限弹窗根本不出现,见下面
     // ensureMusicAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
     // 按钮专用)传 false,理由见那边的注释。
@@ -168,17 +194,7 @@ enum MusicAutomationPermission {
         if launchIfNeeded {
             await ensureAppRunning(bundleID: bundleID)
         }
-    // 别换回 withTaskGroup 做超时赛跑:任务组退出前要等所有子任务结束,卡住的检查不返回,
-    // 超时分支赢了也出不来。
-        return await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
-            group.addTask { check(bundleID: bundleID, askIfNeeded: true) }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                return nil
-            }
-            defer { group.cancelAll() }
-            return await group.next() ?? nil
-        }
+        return await status(bundleID: bundleID, askIfNeeded: true, timeout: seconds)
     }
 
     /// 不再是 private:「前往专辑/艺人」「你的常听」那两条 music:// 深链

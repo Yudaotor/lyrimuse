@@ -55,7 +55,7 @@ final class LyricSourceTestService {
 
         var errorDescription: String? {
             switch self {
-            case .processFailed(let msg): return String(format: L10n.t("测试失败: %@"), msg)
+            case .processFailed(let msg): return String(format: L10n.t("测试失败：%@"), msg)
             }
         }
     }

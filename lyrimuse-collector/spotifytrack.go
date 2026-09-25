@@ -74,6 +74,29 @@ func (e enrichEntry) spotifyLink() string {
 	return e.SpotifyURL
 }
 
+// spotifyTrackIDForSession 决定这次开会话时要不要把 AppleScript 给的曲目 ID 记到 curTitle 名下。
+//
+// 必须核对曲目名:一首歌播完那一刻,Spotify 已经开始放下一首、位置归零,而 media-control 报的元数据
+// 还停在上一首,要再过 5 秒左右才跟上。poller 这时看到「key 没变、位置从结尾跳回开头」,会把它当成
+// 单曲循环重新起播、另开一个会话(loopRestart),于是这里拿到的是**下一首**的 ID,却记到了上一首名下。
+// 实测:本机 enrich 缓存里曾有 22 条 spotify_track_id 挂错了歌,日志覆盖得到的每一条都是
+// 「loop restart: 上一首」之后约 5 秒才「now playing: 下一首」,挂上去的正是下一首的 ID;90 次 loop
+// restart 里 39 次是这种误判。挂错的 ID 会一路流到 relay 的 Spotify 链接、ListenBrainz 的 spotify_id、
+// 按 Spotify ID 取歌词的 amll 源。
+//
+// 名字对不上就不记:宁可这一首这次没有 ID(下次播到再记),不能记一个别的歌的 ID。拿不到名字(老脚本 /
+// 输出格式变了)时同样不记。
+func spotifyTrackIDForSession(curTitle, uri, spotifyName string) string {
+	id := spotifyTrackIDFromURI(uri)
+	if id == "" || spotifyName == "" {
+		return ""
+	}
+	if loosenEnrichKey(normEnrichTitle(spotifyName)) != loosenEnrichKey(normEnrichTitle(curTitle)) {
+		return ""
+	}
+	return id
+}
+
 // noteSpotifyTrackID 由 poller 在换曲那一拍调用(不持 enrichMu)。
 func noteSpotifyTrackID(artist, title, album, id string) {
 	if id == "" || title == "" {

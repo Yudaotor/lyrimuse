@@ -9,33 +9,34 @@ import SwiftUI
 struct LastfmHeatmapView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme
-    /// 选中的年份。0 = 还没初始化(onAppear 时选到最近一个有数据的年份)。
-    @State private var year = 0
+    /// 要画哪一年。宿主持有 —— 年份选择器在卡头那一段,不在这个 View 的层级里。
+    @Binding var year: Int
+    /// 量到的卡身宽度,格子边长按它反算(见 cellSize)。首帧量不到,先按保守档画。
+    @State private var width: CGFloat = 0
 
     // GitHub 的两套官方色阶(浅/深色模式),第 0 档(零播放)用系统填充色融入设置页背景。
     private static let lightLevels = ["#9be9a8", "#40c463", "#30a14e", "#216e39"]
     private static let darkLevels = ["#0e4429", "#006d32", "#26a641", "#39d353"]
 
-    private var availableYears: [Int] {
-        let ys = Set(stats.dailyCounts.keys.compactMap { Int($0.prefix(4)) })
+    /// 有记录的年份 + 今年,倒序。宿主画年份选择器要用,所以是 static —— 这个 View
+    /// 收起时根本不在视图层级里,而卡头一直在。
+    static func availableYears(in dailyCounts: [String: Int]) -> [Int] {
+        let ys = Set(dailyCounts.keys.compactMap { Int($0.prefix(4)) })
         let current = Calendar.current.component(.year, from: Date())
         return ys.union([current]).sorted(by: >)
     }
 
+    /// 默认选最近一个**有数据**的年份——当前年可能还全空(刚换账号/年初)。
+    static func defaultYear(in dailyCounts: [String: Int]) -> Int {
+        let years = availableYears(in: dailyCounts)
+        let fallback = Calendar.current.component(.year, from: Date())
+        return years.first(where: { y in
+            dailyCounts.contains { $0.key.hasPrefix("\(y)-") && $0.value > 0 }
+        }) ?? years.first ?? fallback
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(L10n.t("播放热力图")).font(.headline)
-                Spacer()
-                Picker("", selection: $year) {
-                    ForEach(availableYears, id: \.self) { y in
-                        Text(verbatim: "\(y)").tag(y)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-            }
             grid
             HStack(spacing: 10) {
                 if stats.dailySyncing {
@@ -59,34 +60,64 @@ struct LastfmHeatmapView: View {
                 Text(L10n.t("多")).font(.caption2).foregroundStyle(.tertiary)
             }
         }
-        .padding(14)
-        .onAppear {
-            if year == 0 {
-                // 默认选最近一个**有数据**的年份——当前年可能还全空(刚换账号/年初)。
-                year = availableYears.first(where: { yearHasData($0) }) ?? availableYears.first ?? 2026
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, 12)
+        // 量的是**卡身给出来的**宽度,不是内容自己撑开的宽度 —— 所以 GeometryReader 挂在
+        // `.frame(maxWidth: .infinity)` 之后的 background 里。挂在里层会绕成一个环:格子边长
+        // 由宽度算、宽度又由格子撑出来,量到多少就锁死在多少。
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: HeatmapWidthKey.self, value: proxy.size.width)
             }
-            stats.refreshDailyCounts()
-        }
+        )
+        .onPreferenceChange(HeatmapWidthKey.self) { width = $0 }
+        .onAppear { stats.refreshDailyCounts() }
     }
 
     // MARK: - 网格
 
-    private static let cellSize: CGFloat = 11
-    private static let cellGap: CGFloat = 3
+    private static let horizontalPadding: CGFloat = 14
+    /// 一年最多跨 53 个周列。**按这个常数算边长,不按当年真实列数** —— 今年只画到今天
+    /// (列数不满),按真实列数算的话今年的格子会比往年大一圈,切年份时整幅图跳一下。
+    private static let columnCount = 53
+    private static let cellGap: CGFloat = 2
+    private static let weekdayLabelWidth: CGFloat = 12
+    private static let maxCell: CGFloat = 11
+    private static let minCell: CGFloat = 5
+    private static let fallbackCell: CGFloat = 7
+
+    /// 格子边长按可用宽度反算。**别钉回固定值**:53 列 ×(11+3)要 750pt,而这张卡所在的
+    /// 卡片列上限只有 600pt(SettingsPage.maxCardColumnWidth)、窄窗口下更小,钉死的结果是
+    /// 右边小半年被卡片裁掉。取半像素栅格是因为非整数边长会让相邻格子的边界落到不同物理
+    /// 像素上,看着一大一小。
+    private var cellSize: CGFloat {
+        guard width > 0 else { return Self.fallbackCell }
+        let columns = CGFloat(Self.columnCount)
+        // 列间 52 档 + 星期标签列后面那一档 = 53 档
+        let forCells = width - 2 * Self.horizontalPadding - Self.weekdayLabelWidth
+            - Self.cellGap * columns
+        let raw = ((forCells / columns) * 2).rounded(.down) / 2
+        return min(Self.maxCell, max(Self.minCell, raw))
+    }
 
     private var grid: some View {
         let weeks = weekColumns(year: year)
         let thresholds = levelThresholds(year: year)
+        let cell = cellSize
         return VStack(alignment: .leading, spacing: 3) {
             // 月份标签行:在包含每月 1 号的那一列上方标注。标签宽度超出列宽,靠
             // fixedSize 溢出绘制、不推挤布局;相邻月至少隔 4 列,不会叠字。
             HStack(spacing: Self.cellGap) {
+                // 这一格不能省:下面那行格子的左边还有星期标签列,不给同宽的占位,
+                // 整行月份标签就会**左移一列**,「1 月」压在星期标签上方。
+                Color.clear.frame(width: Self.weekdayLabelWidth, height: 1)
                 ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
                     Text(week.monthLabel ?? " ")
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                         .fixedSize()
-                        .frame(width: Self.cellSize, alignment: .leading)
+                        .frame(width: cell, alignment: .leading)
                 }
             }
             .frame(height: 10)
@@ -97,7 +128,7 @@ struct LastfmHeatmapView: View {
                         Text(row == 0 ? L10n.t("一") : row == 2 ? L10n.t("三") : row == 4 ? L10n.t("五") : " ")
                             .font(.system(size: 8))
                             .foregroundStyle(.tertiary)
-                            .frame(width: 12, height: Self.cellSize)
+                            .frame(width: Self.weekdayLabelWidth, height: cell)
                     }
                 }
                 ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
@@ -121,7 +152,7 @@ struct LastfmHeatmapView: View {
     private func cellShape(fill: Color) -> some View {
         RoundedRectangle(cornerRadius: 2, style: .continuous)
             .fill(fill)
-            .frame(width: Self.cellSize, height: Self.cellSize)
+            .frame(width: cellSize, height: cellSize)
     }
 
     // MARK: - 数据切片
@@ -204,9 +235,9 @@ struct LastfmHeatmapView: View {
         let prefix = "\(year)-"
         return stats.dailyCounts.filter { $0.key.hasPrefix(prefix) }.values.reduce(0, +)
     }
+}
 
-    private func yearHasData(_ y: Int) -> Bool {
-        let prefix = "\(y)-"
-        return stats.dailyCounts.contains { $0.key.hasPrefix(prefix) && $0.value > 0 }
-    }
+private struct HeatmapWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

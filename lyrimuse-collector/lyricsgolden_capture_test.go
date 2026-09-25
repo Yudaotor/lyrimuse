@@ -105,7 +105,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	}
 
 	// ---- 跟 search-lyrics CLI 一样把包级状态装好 ----
-	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
 	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
 	loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
@@ -258,10 +258,10 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		ScoringVersionAtCapture: lyricsScoringVersion,
 		Query:                   goldenQuery{Artist: qArtist, Title: qTitle, Album: qAlbum, DurationSecs: dur},
 		Settings: goldenSettings{
-			TranslationLanguage: features.LyricsTranslationLanguage,
-			Sources:             copyGoldenSources(features.LyricsSources),
-			SourceMode:          features.LyricsSourceMode,
-			SourceOrder:         append([]string(nil), features.LyricsSourceOrder...),
+			TranslationLanguage: features().LyricsTranslationLanguage,
+			Sources:             copyGoldenSources(features().LyricsSources),
+			SourceMode:          features().LyricsSourceMode,
+			SourceOrder:         append([]string(nil), features().LyricsSourceOrder...),
 			PlayerBundleID:      player,
 			ArtistCJKHint:       resolvedArtistCJKHint(qArtist),
 		},

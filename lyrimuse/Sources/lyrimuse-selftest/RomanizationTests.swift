@@ -391,6 +391,72 @@ func runRomanizationTests() {
     expectEqual(LyricsSyncEngine.matchesPromoCreditLine("你最爱听的唱片"), false,
                 "含平台词但不以角色词结尾: 真歌词")
 
+    // 平台水印(无冒号、也不以角色词结尾),见 LyricsSyncEngine.matchesPlatformWatermarkLine。
+    //
+    // 这一组的判据只有"含平台**品牌名** + 无冒号",精度全部来自品牌名那半边:拿这台机器上
+    // 1093042 行量过,含行业通名(唱片/娱乐/传媒/文化/Records)且无冒号的行有 165 种、里面
+    // 大量真歌词;换成只认品牌名只剩 11 种 66 行、全是水印。下面把两边都钉住。
+    expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine("『听歌就在中国酷狗*星曜计划』"), true,
+                "平台水印: 语料里出现最多的那一行")
+    expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine("本字幕由酷狗AI语音识别技术生成"), true,
+                "平台水印: 一句完整的话,不以任何角色词结尾")
+    expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine("QQ音乐·银河计划x幻音方舟"), true,
+                "平台水印: 另一家平台的写法")
+    expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine("酷狗国风品牌『国风新语』"), true,
+                "平台水印: 品牌名在行首")
+    // 反向:行业通名一个都不许进品牌词表 —— 进了,下面这几条真歌词当场被吞。
+    for real in ["你最爱听的唱片", "我只是进了这圈子叫娱乐", "找出几张老唱片",
+                 "Put on your records and regret me", "我的爱不是供你娱乐的玩具"] {
+        expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine(real), false,
+                    "平台水印(反向): 行业通名不是品牌名: \(real)")
+    }
+    // 有冒号的归"角色 + 冒号"那一整排规则,这条不重复判(分工同 matchesPromoCreditLine)。
+    expectEqual(LyricsSyncEngine.matchesPlatformWatermarkLine("发行: 杨佳妮@酷狗文化"), false,
+                "平台水印: 带冒号的交给关键词表/结构化规则,这条不认")
+
+    // 反盗版**口号**(不是法务声明,也没有品牌名),见 matchesAntiPiracySloganLine。
+    //
+    // 判据是「整行被一对全角括号包住 + 含反盗版词」,而括号那半边是精度的**全部**来源:
+    // 本机 1101697 行里含「盗版」的真歌词有两行(`盗版是怎么回事` `盗版这怎么回事`),都没有
+    // 括号 —— 光按词删就会把它们吃掉。下面正反两边都钉住。
+    expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine("〖盗版者必不火歌〗"), true,
+                "反盗版口号: 用户报的那一行")
+    expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine("【版权所有 翻版必究】"), true,
+                "反盗版口号: 换一种括号、换一个反盗版词")
+    for real in ["盗版是怎么回事", "盗版这怎么回事"] {
+        expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine(real), false,
+                    "反盗版口号(反向): 语料里真出现过的、含「盗版」的真歌词: \(real)")
+    }
+    expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine("「君は綺麗だ」"), false,
+                "反盗版口号(反向): 被括号包住但没有反盗版词的真歌词(日文台词)不算")
+    expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine("〖盗版者必不火歌"), false,
+                "反盗版口号(反向): 括号没闭合不算")
+    expectEqual(LyricsSyncEngine.matchesAntiPiracySloganLine("【盗版】可耻【盗版】"), false,
+                "反盗版口号(反向): 首尾像括号但内部还有同种括号,不是一整块")
+
+    // 来源说明(AI 字幕水印 / 公司供词 / 采样出处),见 matchesProvenanceNoticeLine。
+    // 三条都锚在整句句式上;「提供」「生成」「contains」单独出现的真歌词不能碰。
+    for notice in ["本字幕由AI语音对齐技术生成", "本字幕由TME AI技术生成", "本字幕由酷狗AI语音识别技术生成",
+                   "由星演国际有限公司提供",
+                   "Contains an interpolation of “Weak” written by Brian Alexander Morgan,",
+                   "Contains samples from \"Song\" performed by Someone"] {
+        expectEqual(LyricsSyncEngine.matchesProvenanceNoticeLine(notice), true, "来源说明: \(notice)")
+    }
+    for real in ["我会努力提供", "为反对纳粹的派对提供房间", "无声的贡献有天会懂", "由你决定",
+                 "由我来提供温暖的怀抱", "新的世界正在生成", "It contains all of my love",
+                 "Contains multitudes, like me"] {
+        expectEqual(LyricsSyncEngine.matchesProvenanceNoticeLine(real), false, "来源说明(反向): \(real)")
+    }
+    // 授权声明的「正式授权」写法走 matchesCopyrightNotice;光秃秃一个「授权」照旧不认。
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("（此版本为正式授权翻唱作品）"), true,
+                "授权声明: 正式授权")
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("我把心授权给你"), false,
+                "授权声明(反向): 没有取得类动词或正版/正式/独家/官方修饰")
+    // 走整份入口:来源说明行被删,前后真歌词留着。
+    expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+                    ["本字幕由AI语音对齐技术生成", "我想今天是完美的日子", "由星演国际有限公司提供", "因为昨日不堪回首"]),
+                [true, false, true, false], "来源说明: 整份入口里只删那两行")
+
     expectEqual(ChineseVariant.affects("这是一首简单的小情歌"), true, "affects: 纯中文")
         expectEqual(ChineseVariant.affects("First Love"), false, "affects: 纯英文没有汉字")
         expectEqual(ChineseVariant.affects(""), false, "affects: 空串")
@@ -806,6 +872,27 @@ func runRomanizationTests() {
                            romanizationScripts: [.chinese], songIsCantonese: true)
             expectEqual(engineOff.activeLine(atMs: 200)?.wordGroups, nil,
                         "端到端: 关掉粤拼开关后逐字歌词不再对齐出词组")
+        }
+
+        // ---- 前奏里首句的逐词分组(TickResolution.nextWordGroups) ----
+        // 悬浮歌词在「•••」下方预先画首句,罗马音要逐词对齐,而且跟开唱之后的分组逐组一致 ——
+        // 不一致的话开唱那一刻列宽会变、读音会挪位。
+        do {
+            let yrc = "[5000,1000](5000,500,0)你 (5500,500,0)好 \n"
+            let roma = "[00:05.00]nei5 hou2\n"
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "", lyricsTr: "", lyricsRoma: roma, lyricsYRC: yrc,
+                        romanizationScripts: [.cantonese], songIsCantonese: true)
+            let intro = engine.tickQuery(atMs: 1000)
+            expectEqual(intro.line == nil, true, "前奏首句分组: 1s 处还没有当前行")
+            expectEqual(intro.nextWordGroups?.map(\.romanization), ["nei5", "hou2"],
+                        "前奏首句分组: 首句每个字底下是自己的粤拼")
+            let sung = engine.activeLine(atMs: 5200)?.wordGroups
+            expectEqual(intro.nextWordGroups?.map { $0.words.map(\.text).joined() },
+                        sung?.map { $0.words.map(\.text).joined() },
+                        "前奏首句分组: 跟开唱后的分组逐组同字")
+            expectEqual(intro.nextWordGroups?.map(\.romanization), sung?.map(\.romanization),
+                        "前奏首句分组: 跟开唱后的分组逐组同读音")
         }
 
         // ---- 逐字数据把句中空格切成独立的零时长词时,仍要逐字对齐 ----

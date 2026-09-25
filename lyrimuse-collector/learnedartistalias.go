@@ -99,16 +99,7 @@ func learnedSourceArtistAlias(artist string) string {
 // 跟 lyricResolvedArtists(albumhint.go)取的是同一份证据的同一个字段路径,只是那边
 // 还额外要 CanonicalArtist、这边刻意不要(理由见 learnedSourceArtistAlias 头注)。
 func winningCandidateArtist(e enrichEntry) string {
-	d := e.LyricsDecisionApplied
-	if d == nil || d.Winner == "" {
-		return ""
-	}
-	for _, c := range d.Candidates {
-		if c.Source == d.Winner {
-			return strings.TrimSpace(c.Artist)
-		}
-	}
-	return ""
+	return decisionWinnerArtist(e.LyricsDecisionApplied)
 }
 
 // loadEnrichCacheReadOnly 把 enrich 缓存读进内存供**一次性子命令**查询

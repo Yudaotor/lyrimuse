@@ -133,3 +133,28 @@ func TestMergePeripheralKeepsSpotifyTrackID(t *testing.T) {
 		t.Fatal("winner 自己有 ID 时不被 loser 覆盖")
 	}
 }
+
+// 换歌那几秒 media-control 还停在上一首、Spotify 已经在放下一首:这时 AppleScript 给的 ID 是下一首的,
+// 不能记到上一首名下(实测挂错的 spotify_track_id 就是这么来的,见 spotifyTrackIDForSession)。
+func TestSpotifyTrackIDForSessionRequiresSameTrack(t *testing.T) {
+	const uri = "spotify:track:1wtOxkiel43cVs0Yux5Q4h"
+	cases := []struct {
+		curTitle, name string
+		want           bool
+	}{
+		{"2002", "drop dead", false},                     // 上一首的会话,Spotify 已经在放下一首
+		{"Snow On The Beach", "Snow On The Beach", true}, // 同一首
+		{"最長的電影", "最长的电影", true},                         // 繁简不同也算同一首(宽松比对)
+		{"Too Good", "", false},                          // 拿不到名字:不记
+	}
+	for _, c := range cases {
+		got := spotifyTrackIDForSession(c.curTitle, uri, c.name)
+		if (got != "") != c.want {
+			t.Errorf("cur=%q spotify=%q: 得到 %q,期望记=%v", c.curTitle, c.name, got, c.want)
+		}
+	}
+	// 广告 / 本地文件不是曲目,名字对得上也不记。
+	if got := spotifyTrackIDForSession("广告", "spotify:ad:9b66aab2fe084c29b171d660f207aacc", "广告"); got != "" {
+		t.Errorf("广告不该记 ID,得到 %q", got)
+	}
+}

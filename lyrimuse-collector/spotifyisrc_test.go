@@ -1,54 +1,51 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-// 合成的缓存块,不读本机真实的 Spotify 数据。形状照搬实测:一个 `k:<22位>#` 之后跟一段
-// protobuf 二进制,ISRC 以 `isrc` + 一个长度字节 + 12 位码的形式躺在里面。
-func synthSpotifyBlock(trackID, isrc string, withISRC bool) []byte {
-	b := []byte("k:" + trackID + "#")
-	b = append(b, 0x2a, 0x00, 0x12) // 一点二进制噪声,模拟 protobuf 头
-	b = append(b, []byte("type.googleapis.com/sp.data.T")...)
-	b = append(b, 0x51, 0x00)
-	if withISRC {
-		b = append(b, []byte("isrc")...)
-		b = append(b, 0x0c) // protobuf 的长度字节
-		b = append(b, []byte(isrc)...)
-		b = append(b, 'b', 0x00)
+// 合成的元数据缓存,不读本机真实的 Spotify 数据。形状照搬实测:primary.ldb 里
+// `!xmeta#cache#` + 01 2a + 曲目 uri 这个 key 下是 spotify.metadata.Track,ISRC 在它的
+// external_id(第 10 个字段 {1: "isrc", 2: 码})里。
+
+func testSpotifyTrackWithISRC(isrc string) []byte {
+	v := pbMsg(pbStr(2, "某首歌"), pbVarint(7, 360000))
+	if isrc != "" {
+		// 前面先放一个别的类型的外部 id —— 取数必须按 type 认,不能拿第一个就走。
+		v = append(v, pbBytes(10, pbMsg(pbStr(1, "upc"), pbStr(2, "000000000000")))...)
+		v = append(v, pbBytes(10, pbMsg(pbStr(1, "isrc"), pbStr(2, isrc)))...)
 	}
-	b = append(b, 0x7a, 0x00, 0x00)
-	return b
+	return pbMsg(pbVarint(1, 10), pbBytes(2, pbMsg(pbStr(1, "type.googleapis.com/spotify.metadata.Track"), pbBytes(2, v))))
 }
 
-func writeTestSpotifyCache(t *testing.T, blocks [][]byte) string {
+// writeTestSpotifyISRCCache 建一个 Users/<账号>-user/primary.ldb,每个账号一份 id→ISRC(空串 = 有记录但没 ISRC)。
+func writeTestSpotifyISRCCache(t *testing.T, accounts ...map[string]string) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "Users")
-	dir := filepath.Join(root, "someaccount-user", "primary.ldb")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("建目录失败: %v", err)
-	}
-	var all []byte
-	for _, b := range blocks {
-		all = append(all, b...)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "000123.ldb"), all, 0o644); err != nil {
-		t.Fatalf("写文件失败: %v", err)
+	for i, recs := range accounts {
+		dir := filepath.Join(root, "acct"+string(rune('a'+i))+"-user", "primary.ldb")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		var entries []testLDBEntry
+		seq := uint64(1)
+		for id, isrc := range recs {
+			entries = append(entries, testLDBEntry{key: string(spotifyXmetaKey(spotifyTrackKind, id)), seq: seq, value: string(testSpotifyTrackWithISRC(isrc))})
+			seq++
+		}
+		testWriteTable(t, filepath.Join(dir, "000123.ldb"), entries, 2, true)
 	}
 	return root
 }
 
-func resetSpotifyISRCIndex(t *testing.T, root string) {
+func resetSpotifyISRCCache(t *testing.T, root string) {
 	t.Helper()
 	clear := func() {
 		spotifyISRCMu.Lock()
-		spotifyISRCIndex, spotifyISRCReady = nil, false
-		spotifyISRCScanned, spotifyISRCDirMod = time.Time{}, time.Time{}
-		spotifyISRCBuilding = false
+		spotifyISRCHits, spotifyISRCMisses, spotifyISRCLogged = map[string]string{}, map[string]time.Time{}, map[string]bool{}
 		spotifyISRCMu.Unlock()
 	}
 	clear()
@@ -67,22 +64,13 @@ const (
 )
 
 func TestSpotifyLocalISRCHit(t *testing.T) {
-	// ⚠️ 无 ISRC 的那条**必须夹在中间**,后面还得有一条带 ISRC 的。放最后的话,
-	// 切段逻辑写错(一路扫到文件末尾)也不会露馅 —— 变异测试实测过这个漏洞。
-	root := writeTestSpotifyCache(t, [][]byte{
-		synthSpotifyBlock(testSpotifyID1, "HKA351401008", true),
-		synthSpotifyBlock(testSpotifyID3, "", false), // 有记录但没 ISRC
-		synthSpotifyBlock(testSpotifyID2, "USCA20801738", true),
-	})
-	resetSpotifyISRCIndex(t, root)
-	spotifyISRCBuildIndexNow() // 生产走异步,测试里同步建一次
-
-	for id, want := range map[string]string{
+	resetSpotifyISRCCache(t, writeTestSpotifyISRCCache(t, map[string]string{
 		testSpotifyID1: "HKA351401008",
+		testSpotifyID3: "", // 有记录但没 ISRC
 		testSpotifyID2: "USCA20801738",
-	} {
-		got, ok := spotifyLocalISRC(id)
-		if !ok || got != want {
+	}))
+	for id, want := range map[string]string{testSpotifyID1: "HKA351401008", testSpotifyID2: "USCA20801738"} {
+		if got, ok := spotifyLocalISRC(id); !ok || got != want {
 			t.Errorf("%s: 期望 %q,得到 ok=%v %q", id, want, ok, got)
 		}
 	}
@@ -92,38 +80,57 @@ func TestSpotifyLocalISRCHit(t *testing.T) {
 	}
 }
 
+// 第一次查就能命中:原来是后台全量建索引,第一次播到的歌必然查不到。
+func TestSpotifyLocalISRCHitsOnFirstLookup(t *testing.T) {
+	resetSpotifyISRCCache(t, writeTestSpotifyISRCCache(t, map[string]string{testSpotifyID1: "HKA351401008"}))
+	if got, ok := spotifyLocalISRC(testSpotifyID1); !ok || got != "HKA351401008" {
+		t.Fatalf("第一次查就该命中,得到 ok=%v %q", ok, got)
+	}
+}
+
 func TestSpotifyLocalISRCRejectsMalformed(t *testing.T) {
-	resetSpotifyISRCIndex(t, writeTestSpotifyCache(t, [][]byte{
-		synthSpotifyBlock(testSpotifyID1, "HKA351401008", true),
+	resetSpotifyISRCCache(t, writeTestSpotifyISRCCache(t, map[string]string{
+		testSpotifyID1: "HKA351401008",
+		testSpotifyID2: "not-an-isrc",
 	}))
-	spotifyISRCBuildIndexNow()
 	for _, bad := range []string{"", "太短", "0VTzUEuHYD8s7CgQ15cDP", "0VTzUEuHYD8s7CgQ15cDPoX"} {
 		if _, ok := spotifyLocalISRC(bad); ok {
 			t.Errorf("%q 长度不是 22,不该命中", bad)
 		}
 	}
-}
-
-func TestSpotifyLocalISRCNeverBlocks(t *testing.T) {
-	// 索引没建过时必须**立刻**返回(生产路径在歌词热路径上,一轮全量扫描实测约 5 秒)。
-	resetSpotifyISRCIndex(t, writeTestSpotifyCache(t, [][]byte{
-		synthSpotifyBlock(testSpotifyID1, "HKA351401008", true),
-	}))
-	start := time.Now()
-	_, ok := spotifyLocalISRC(testSpotifyID1)
-	if elapsed := time.Since(start); elapsed > 300*time.Millisecond {
-		t.Fatalf("首次查询不该阻塞,用了 %v", elapsed)
-	}
-	if ok {
-		t.Log("首次即命中(后台构建已抢先完成),不算错")
+	if got, ok := spotifyLocalISRC(testSpotifyID2); ok {
+		t.Errorf("形状不对的 ISRC 不该认,却给了 %q", got)
 	}
 }
 
 func TestSpotifyLocalISRCMissingDir(t *testing.T) {
-	resetSpotifyISRCIndex(t, filepath.Join(t.TempDir(), "没有这个目录"))
-	spotifyISRCBuildIndexNow()
+	resetSpotifyISRCCache(t, filepath.Join(t.TempDir(), "没有这个目录"))
 	if _, ok := spotifyLocalISRC(testSpotifyID1); ok {
 		t.Error("目录不存在时不该命中")
+	}
+}
+
+// 「查过、没有」只记一小会儿:客户端过一会儿才写进元数据是常态,过了 TTL 要重新查。
+func TestSpotifyLocalISRCMissExpires(t *testing.T) {
+	root := writeTestSpotifyISRCCache(t, map[string]string{testSpotifyID2: "USCA20801738"})
+	resetSpotifyISRCCache(t, root)
+	if _, ok := spotifyLocalISRC(testSpotifyID1); ok {
+		t.Fatal("还没写进缓存,不该命中")
+	}
+	// 客户端把这首写进来了(换一份库模拟)。TTL 之内仍按「没有」返回,不重读。
+	resetSpotifyISRCCache(t, root)
+	spotifyISRCUsersDirOverride = writeTestSpotifyISRCCache(t, map[string]string{testSpotifyID1: "HKA351401008"})
+	spotifyISRCMu.Lock()
+	spotifyISRCMisses[testSpotifyID1] = time.Now()
+	spotifyISRCMu.Unlock()
+	if _, ok := spotifyLocalISRC(testSpotifyID1); ok {
+		t.Error("TTL 之内该直接返回「没有」")
+	}
+	spotifyISRCMu.Lock()
+	spotifyISRCMisses[testSpotifyID1] = time.Now().Add(-2 * spotifyISRCMissTTL)
+	spotifyISRCMu.Unlock()
+	if got, ok := spotifyLocalISRC(testSpotifyID1); !ok || got != "HKA351401008" {
+		t.Errorf("过了 TTL 该重新查到,得到 ok=%v %q", ok, got)
 	}
 }
 
@@ -145,25 +152,11 @@ func TestSpotifyISRCLedgerDirsSkipsNonLedger(t *testing.T) {
 	}
 }
 
-func TestSpotifyISRCMultiAccount(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "Users")
-	for i, spec := range []struct{ id, isrc string }{
-		{testSpotifyID1, "HKA351401008"},
-		{testSpotifyID2, "USCA20801738"},
-	} {
-		dir := filepath.Join(root, fmt.Sprintf("acct%d-user", i), "primary.ldb")
 // 登录过多个账号时每个账号一份 primary.ldb,都要查。
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "0001.ldb"),
-			synthSpotifyBlock(spec.id, spec.isrc, true), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	resetSpotifyISRCIndex(t, root)
-	spotifyISRCBuildIndexNow()
-	// 登录过多个账号时每个账号一份 primary.ldb,都要扫。
+func TestSpotifyISRCMultiAccount(t *testing.T) {
+	resetSpotifyISRCCache(t, writeTestSpotifyISRCCache(t,
+		map[string]string{testSpotifyID1: "HKA351401008"},
+		map[string]string{testSpotifyID2: "USCA20801738"}))
 	for id, want := range map[string]string{testSpotifyID1: "HKA351401008", testSpotifyID2: "USCA20801738"} {
 		if got, ok := spotifyLocalISRC(id); !ok || got != want {
 			t.Errorf("%s: 期望 %q,得到 ok=%v %q", id, want, ok, got)

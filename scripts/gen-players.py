@@ -27,14 +27,23 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - bundleID      App bundle id;auto 是空字符串(没有固定目标,调用方据此 no-op)
 - goBundleConst Go 侧 bundle id 常量名;auto 为 null
 - processName   可执行文件名,companion-launch 的 pgrep -x 用;auto 为 null
-                ⚠️ 内核 p_comm 上限 16 字节,UTF-8 中文名要数字节
+                内核 p_comm 上限 16 字节,UTF-8 中文名要数字节
 - displayName   {"literal": …} 直接用 / {"l10n": …} 走 L10n.t(词条要在 .strings 里登记)
 - scrobbleLabel ListenBrainz 的 media_player 标签;auto 为 null
                 apple_music 那条同时是「认不出来源」时的兜底值
 - nativeLyricSource  它自家的歌词源(同源加权 +250);没有就 null
 - positionTier  precise / cleanExtrapolated / noisyFloored;auto 为 null
 - republishesZeroAnchor  开播那个 elapsed=0 锚点会不会被这个播放器原样重发一次;auto 为 null
-                ⚠️ 只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移
+                只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移
+- playingFromRate  这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播;auto 为 null
+                只给**实测见过**的播放器置 true(酷狗单曲循环回到开头时报 playing:false、rate 仍是 1,
+                真暂停时 rate 归 0)。判定本身在 MediaControlClient.effectivePlaying / effectivePlaying(Go)
+- needsAutomationPermission  这个播放器要不要 macOS 的「自动化」权限(我们向它发 Apple Event);auto 为 null
+                = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:collector 是独立
+                签名身份、TCC 里是另一条记录,那边没有 API 能查或触发它
+- needsFullDiskAccess  collector 读它的客户端文件要不要「完全磁盘访问」;auto 为 null
+                = 那些文件在 `~/Library/Containers/` 下(App 带沙盒)。collector 侧
+                TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账,填错会红
 - tint          {"rgb": [r,g,b]} / {"source": "…"}(复用歌词来源配色) / {"secondary": true}
 - fallbackSymbol      没装这个 App、也没有随包图标时的 SF Symbol
 - bundledIcon   随包打包的品牌图资源名;没有就 null
@@ -83,7 +92,7 @@ def gofmt(text):
     """把渲染结果过一遍 gofmt —— CI 第一步就是 gofmt -l,生成物当然也得是格式化过的。
 
     找不到 gofmt 时原样返回并提示:本地没装 Go 也该能改 JSON 重新生成,CI 那边照样会红。
-    ⚠️ --check 与写盘走同一条路径,否则两边会因为格式化与否得出不同结论。
+    --check 与写盘走同一条路径,否则两边会因为格式化与否得出不同结论。
     """
     exe = shutil.which("gofmt")
     if not exe:
@@ -140,7 +149,7 @@ def render_go(spec, players):
     out.append("}\n")
 
     out.append("\n// playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。\n"
-               "// ⚠️ pgrep 比的是内核 p_comm(16 字节上限,UTF-8 下中文名要数字节),加新播放器时要核。\n"
+               "// pgrep 比的是内核 p_comm(16 字节上限,UTF-8 下中文名要数字节),加新播放器时要核。\n"
                "var playerProcessNames = map[string]string{\n")
     for p in concrete:
         out.append("\t%s: %s,\n" % (p["goConst"], go_quote(p["processName"])))
@@ -170,13 +179,31 @@ def render_go(spec, players):
             out.append("\t%s: %s,\n" % (p["goConst"], go_quote(p["nativeLyricSource"])))
     out.append("}\n")
 
+    out.append("\n// playerNeedsFullDiskAccess 是「播放器标识 → collector 读它的客户端文件要不要\n"
+               "// 「完全磁盘访问」」。只供 TestPlayersNeedFullDiskAccessMatchesClientPaths 对账:\n"
+               "// 运行期判据是路径本身(localcacheprobe.go),不查这张表。\n"
+               "var playerNeedsFullDiskAccess = map[string]bool{\n")
+    for p in concrete:
+        if p.get("needsFullDiskAccess"):
+            out.append("\t%s: true,\n" % p["goConst"])
+    out.append("}\n")
+
     out.append("\n// playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样\n"
-               "// 重发一次」。⚠️ 只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反\n"
+               "// 重发一次」。只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反\n"
                "// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
                "// 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。\n"
                "var playerRepublishesZeroAnchor = map[string]bool{\n")
     for p in concrete:
         if p.get("republishesZeroAnchor") and p.get("goBundleConst"):
+            out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
+
+    out.append("\n// playerPlayingFromRate 是「bundle id → 这个播放器报的 playing:false 不可信、要按\n"
+               "// playbackRate > 0 判在不在播」。只列**实测见过**的播放器。\n"
+               "// 判定本身在 effectivePlaying,Swift 侧 playingFromRate 同源。\n"
+               "var playerPlayingFromRate = map[string]bool{\n")
+    for p in concrete:
+        if p.get("playingFromRate") and p.get("goBundleConst"):
             out.append("\t%s: true,\n" % p["goBundleConst"])
     out.append("}\n")
     return "".join(out)
@@ -221,13 +248,40 @@ def render_core_swift(spec, players):
             out.append('        case .%s: return "%s"\n' % (p["swiftCase"], p["positionTier"]))
     out.append("        default: return nil\n        }\n    }\n")
 
+    out.append("\n    /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。\n"
+               "    /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。\n"
+               "    /// 只覆盖 Lyrimuse 自己这一份身份:collector 是独立签名身份,TCC 里是另一条记录。\n"
+               "    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。\n"
+               "    public var needsAutomationPermission: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("needsAutomationPermission"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// collector 读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。\n"
+               "    /// = 那些文件在 `~/Library/Containers/` 下;collector 侧有测试按真实路径对账。\n"
+               "    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`。\n"
+               "    public var needsFullDiskAccess: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("needsFullDiskAccess"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
     out.append("\n    /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。\n"
-               "    /// ⚠️ 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反\n"
+               "    /// 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反\n"
                "    /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
                "    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。\n"
                "    public var republishesZeroAnchor: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("republishesZeroAnchor"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播。\n"
+               "    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`,Go 侧同源。\n"
+               "    public var playingFromRate: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("playingFromRate"):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 
