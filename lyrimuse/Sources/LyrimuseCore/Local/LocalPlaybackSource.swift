@@ -2568,6 +2568,11 @@ public final class LocalPlaybackSource: ObservableObject {
             YouTubeMusicAdProbe.shared.kickIfNeeded(
                 bundleIdentifier: snapshot.bundleIdentifier, key: youTubeMusicAdKey)
         }
+        // 暂停着的浏览器播放:进度探测不跑,面板角标「是哪个网页平台」的证据另外补(见 identifyIfNeeded)。
+        if snapshot.playing != true {
+            BrowserPositionProbe.shared.identifyIfNeeded(
+                bundleIdentifier: snapshot.bundleIdentifier, key: snapshot.identityKey, title: newTitle)
+        }
         // 权威复核只对原生客户端有意义(`spotify url` 与通知里的 Track ID 都是原生 App 才有,网页版没有这
         // 两个接口)——网页版只吃字段启发式本身的结果。先问 Spotify 自己刚广播的通知、对不上
         // 才退回 osascript,见 spotifyNativeAdCheckForNewTrack。

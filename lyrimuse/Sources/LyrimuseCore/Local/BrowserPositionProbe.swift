@@ -541,7 +541,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 1. **最近一次探测真的命中过某个平台** → 就是它。这是硬证据:探测成功意味着我们在
     ///    那个站点的页面里读到了一个**在走**的进度条。一个浏览器同时配对了两个平台时
-    ///    (这台机器上 Safari / Arc 就是),只有这一档答得上来。
+    ///    (这台机器上 Safari / Arc 就是),只有这一档答得上来。暂停着的歌进度探测不跑,
+    ///    这条证据由 `identifyIfNeeded` 按页面报的标题补上。
     /// 2. **只配对了一个平台** → 就当是它。这一档是**推断不是证据**,可能错:浏览器里放
     ///    别的、恰好也带齐 artist+album 的网页音源(播客站之类)时,角标会显示成那个平台。
     ///    代价是纯观感的 —— 角标点下去仍然是 `openResolvedPlayerApp()` 按 bundle id 唤浏览器,
@@ -556,6 +557,152 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ) -> String? {
         if let recentMatch, pairedPlatformIDs.contains(recentMatch) { return recentMatch }
         return pairedPlatformIDs.count == 1 ? pairedPlatformIDs.first : nil
+    }
+
+    // MARK: - 暂停时认平台
+
+    /// 「认平台」按曲目 key 记账:每首歌最多问一次,问没问到都算。和 `lastMatch` 同一把锁。
+    private var identifyKey: String?
+
+    /// 暂停着的浏览器播放:认出是哪个网页平台在放这首歌,补上 `lastMatch`。
+    ///
+    /// 进度探测只在**播放中**跑,而且只认**在走**的进度条(暂停的标签页直接跳过),所以一首
+    /// 一直停着的歌留不下任何证据;App 重启又会清掉内存里那条旧证据。浏览器同时配对了两个
+    /// 平台时 `resolvePlayingPlatformID` 只能靠那条证据,于是 Safari 里 YouTube Music 暂停着,
+    /// 面板角标却画成 Safari。
+    ///
+    /// 判据是页面的 `navigator.mediaSession.metadata.title`:系统「正在播放」的标题本来就是
+    /// 页面经它报上来的,暂停时也还在。两个平台的标签页各自停着一首歌是常态(实测 Safari:
+    /// YouTube Music 停在当前这首,Spotify 网页版停在另一首),所以不看「有没有这个站的标签页」,
+    /// 看哪一边报的标题**就是当前这首**,规则见 `platformMatchingTitle`。
+    ///
+    /// 只在真有歧义时才发起:配对了两个及以上平台、又没有未过期的证据。每首歌一次、失败不重试 ——
+    /// 认不出来的代价只是角标画浏览器图标,不值得反复 tell。
+    public func identifyIfNeeded(bundleIdentifier: String?, key: String, title: String) {
+        guard !title.isEmpty,
+              let host = Self.probeTargetBundleID(forReported: bundleIdentifier),
+              let family = BrowserAutomationPermission.family(forBundleID: host)
+        else { return }
+        let platformIDs = pairedPlatformIDs(forBundleID: host)
+        guard platformIDs.count >= 2 else { return }
+        let startedAt = Date()
+        lock.lock()
+        if let lastMatch, lastMatch.bundleID == host,
+           startedAt.timeIntervalSince(lastMatch.at) <= Self.matchedPlatformMaxAge {
+            lock.unlock()
+            return
+        }
+        guard identifyKey != key else { lock.unlock(); return }
+        identifyKey = key
+        lock.unlock()
+
+        let rules = Self.siteRules.filter { platformIDs.contains($0.platformID) }
+        Task.detached(priority: .utility) {
+            let script = Self.buildIdentifyScript(bundleID: host, family: family, rules: rules)
+            guard let tempURL = Self.writeTempScript(script) else { return }
+            defer { try? FileManager.default.removeItem(at: tempURL) }
+            guard let result = ProcessRunner.run("/usr/bin/osascript", [tempURL.path], timeout: Self.probeTimeout),
+                  result.succeeded
+            else {
+                Self.logger.info("identify: could not read page titles from \(host, privacy: .public)")
+                return
+            }
+            let pages = Self.parseIdentifyOutput(result.stdoutText)
+            guard let platformID = Self.platformMatchingTitle(title, pages: pages) else {
+                Self.logger.info("identify: no single platform reports the current title (\(pages.count, privacy: .public) tabs)")
+                return
+            }
+            self.recordIdentified(platformID: platformID, bundleID: host, key: key, startedAt: startedAt)
+        }
+    }
+
+    /// 锁不能在 `Task.detached` 闭包里直接拿(同 `applyProbeResult` 头注)。换了歌(`identifyKey`
+    /// 已经是别的)或者这期间进度探测留下了更新的证据,这份结果就不写。
+    private func recordIdentified(platformID: String, bundleID: String, key: String, startedAt: Date) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard identifyKey == key else { return }
+        if let lastMatch, lastMatch.bundleID == bundleID, lastMatch.at >= startedAt { return }
+        lastMatch = (bundleID: bundleID, platformID: platformID, at: Date())
+        Self.logger.notice("identify: paused page on \(platformID, privacy: .public) reports the current title")
+    }
+
+    /// 一枚标签页报上来的 mediaSession 标题。
+    public struct PageTitle: Equatable, Sendable {
+        public let platformID: String
+        public let title: String
+        public init(platformID: String, title: String) {
+            self.platformID = platformID
+            self.title = title
+        }
+    }
+
+    /// 哪个平台的标签页报的标题就是当前这首。恰好一个平台对得上才算;两边都对得上(同一首歌两边
+    /// 都开着)或都对不上,不下结论。比较前去掉首尾空白和反斜杠(`execute javascript` 会把返回值里的
+    /// 引号转义成真的 `\"`,见 `youtubeMusicScript` 头注),大小写不敏感,其余逐字相等 —— 这里要的是
+    /// 「就是这首」,不做模糊匹配。
+    public static func platformMatchingTitle(_ title: String, pages: [PageTitle]) -> String? {
+        func norm(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .precomposedStringWithCanonicalMapping
+                .lowercased()
+        }
+        let want = norm(title)
+        guard !want.isEmpty else { return nil }
+        let hits = Set(pages.filter { norm($0.title) == want }.map(\.platformID))
+        return hits.count == 1 ? hits.first : nil
+    }
+
+    /// 解析 `buildIdentifyScript` 的输出:一行一枚标签页,`<platformID>:<title>`。标题为空的行
+    /// (页面没设 mediaSession)丢掉。
+    public static func parseIdentifyOutput(_ raw: String) -> [PageTitle] {
+        raw.split(whereSeparator: \.isNewline).compactMap { line in
+            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty,
+                  !parts[1].trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            return PageTitle(platformID: String(parts[0]), title: String(parts[1]))
+        }
+    }
+
+    /// 读 mediaSession 标题的 JS。只用单引号(理由同 `SiteRule` 头注);标题里的换行换成空格,
+    /// 免得一枚标签页在输出里占两行。
+    private static let mediaSessionTitleScript = "(function(){var m=navigator.mediaSession&&navigator.mediaSession.metadata;var t=m&&m.title?m.title:'';return t.split(String.fromCharCode(10)).join(' ').split(String.fromCharCode(13)).join(' ');})()"
+
+    /// 扫一遍所有窗口的所有标签页,URL 对得上某条规则的就读一次标题,每枚一行输出。只读属性、
+    /// 不动播放;休眠标签页靠逐事件 `with timeout` 踢掉(同 `buildAppleScript`)。
+    private static func buildIdentifyScript(
+        bundleID: String, family: BrowserAutomationPermission.Family, rules: [SiteRule]
+    ) -> String {
+        let execute: String
+        switch family {
+        case .chromium: execute = "execute (tab ti of window wi) javascript \"\(mediaSessionTitleScript)\""
+        case .safari:   execute = "do JavaScript \"\(mediaSessionTitleScript)\" in tab ti of window wi"
+        }
+        let checks = rules.map { rule in
+            """
+                            if u contains "\(rule.urlContains)" then
+                                with timeout of \(probeEventTimeoutSeconds) seconds
+                                    set r to \(execute)
+                                end timeout
+                                set out to out & "\(rule.platformID):" & r & linefeed
+                            end if
+            """
+        }.joined(separator: "\n")
+        return """
+        tell application id "\(bundleID)"
+            set out to ""
+            repeat with wi from 1 to count of windows
+                repeat with ti from 1 to count of tabs of window wi
+                    try
+                        set u to URL of tab ti of window wi
+        \(checks)
+                    end try
+                end repeat
+            end repeat
+            return out
+        end tell
+        """
     }
 
     /// 取这首歌**唯一一次**的地面真值种子,外推到 `now` 这一刻(探针本身有约一次探测

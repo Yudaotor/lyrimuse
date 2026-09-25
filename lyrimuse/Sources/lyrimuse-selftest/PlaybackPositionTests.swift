@@ -1612,6 +1612,28 @@ func runPlaybackPositionTests() {
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: [], recentMatch: "youtubeMusic"),
                     nil, "来源角标: 全部取消配对后旧证据也不作数")
 
+        // ⑤b 暂停时认平台(identifyIfNeeded):哪个平台的标签页报的 mediaSession 标题就是当前这首。
+        //    Safari 里 YouTube Music 停在《Standing Next to You》、Spotify 网页版停在另一首 —— 角标原来画成 Safari。
+        let ytm = P.PageTitle(platformID: "youtubeMusic", title: "Standing Next to You (Usher Remix)")
+        let spo = P.PageTitle(platformID: "spotifyWeb", title: "Chicken Fried")
+        expectEqual(P.platformMatchingTitle("Standing Next to You (Usher Remix)", pages: [ytm, spo]),
+                    "youtubeMusic", "来源角标: 暂停时按页面标题认出 YouTube Music")
+        expectEqual(P.platformMatchingTitle("Chicken Fried", pages: [ytm, spo]),
+                    "spotifyWeb", "来源角标: 暂停时按页面标题认出 Spotify 网页版")
+        expectEqual(P.platformMatchingTitle("  standing next to you (usher remix) ", pages: [ytm]),
+                    "youtubeMusic", "来源角标: 标题比较忽略首尾空白和大小写")
+        expectEqual(P.platformMatchingTitle("Say \"Hi\"", pages: [P.PageTitle(platformID: "spotifyWeb", title: "Say \\\"Hi\\\"")]),
+                    "spotifyWeb", "来源角标: execute javascript 转义出来的反斜杠不影响比较")
+        expectEqual(P.platformMatchingTitle("Standing Next to You", pages: [ytm, spo]), nil,
+                    "来源角标: 只是前缀对得上不算(要的是就是这首)")
+        expectEqual(P.platformMatchingTitle("Chicken Fried",
+                                            pages: [spo, P.PageTitle(platformID: "youtubeMusic", title: "Chicken Fried")]),
+                    nil, "来源角标: 两个平台都开着这首 → 不下结论")
+        expectEqual(P.platformMatchingTitle("", pages: [ytm]), nil, "来源角标: 当前标题为空 → 不下结论")
+        expectEqual(P.parseIdentifyOutput("youtubeMusic:A: B\nspotifyWeb:\n\nspotifyWeb:C\n"),
+                    [P.PageTitle(platformID: "youtubeMusic", title: "A: B"), P.PageTitle(platformID: "spotifyWeb", title: "C")],
+                    "来源角标: 解析认平台输出(标题里的冒号保留、空标题丢掉)")
+
         // ⑥ 契约:第 ② 档能推断出来的平台一定得画得出图标。图标那一侧(`WebPlatformIcon`)
         //    在 app target、这里够不着,只钉 id 集合这一半 —— 新增平台时这条会红,提醒去补
         //    站点规则和图标(两处对不上不会编译报错,只表现成"角标位空着")。
