@@ -37,6 +37,36 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
 
+# 同一时刻只跑一个 build.sh。多个会话共用这棵工作树,每次都会装进 /Applications 并重启 App;两次同时跑
+# 会互相拆掉对方的暂存包、或者重启到对方装了一半的版本。后到的一次在这里原地排队,会话之间不用互相询问
+# 「能不能装 / 装好没有」。mkdir 是原子的;锁里记着持有者 pid,持有者已经不在了(被 SIGKILL,EXIT trap
+# 没跑)就接管。
+BUILD_LOCK="$PWD/.build/build.sh.lock"
+mkdir -p "$PWD/.build"
+build_lock_waited=0
+while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
+  holder="$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)"
+  stale=0
+  if [ -n "$holder" ]; then
+    kill -0 "$holder" 2>/dev/null || stale=1
+  elif [ -n "$(find "$BUILD_LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+    stale=1 # 建了目录、还没写进 pid 就被杀
+  fi
+  # 接管前再读一次 pid:别的排队者可能刚接管、写进了自己的 pid,那就不是陈旧锁了。
+  if [ "$stale" = 1 ] && [ "$(cat "$BUILD_LOCK/pid" 2>/dev/null || true)" = "$holder" ]; then
+    rm -rf "$BUILD_LOCK"
+    continue
+  fi
+  if [ "$build_lock_waited" = 0 ]; then
+    echo "==> 另一个 build.sh 正在跑(pid ${holder:-?}),排队等它结束…"
+    build_lock_waited=1
+  fi
+  sleep 2
+done
+echo $$ > "$BUILD_LOCK/pid"
+release_build_lock() { rm -rf "$BUILD_LOCK"; }
+trap release_build_lock EXIT
+
 NO_RESTART=0
 UNIVERSAL=0
 DEST=""
@@ -199,7 +229,7 @@ else
   # 这个脚本原来一个 trap 都没有(package.sh 有)。装配中途失败/被 Ctrl-C 时必须把暂存包
   # 收走,否则 /Applications 下会慢慢攒垃圾。 swap 之后 $STAGE 指向的是**旧包**,
   # 这个 trap 同时也就是"装完把旧包删掉"那一步,不用另写。
-  trap 'rm -rf "$STAGE"' EXIT
+  trap 'rm -rf "$STAGE"; release_build_lock' EXIT
   APP_DIR="$STAGE"
 fi
 BIN="$APP_DIR/Contents/MacOS/lyrimuse"
@@ -675,7 +705,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          这是 legacy NSUserNotification 时代的键、只决定该 App 通知样式的**初始默认值**
          (用户在系统设置里改过就以他的为准);对现代 UNUserNotificationCenter 是否仍生效
          没有实测坐实,成本近乎零所以加上 —— 最坏情况是个 no-op。
-         ⚠️ 本地通知不需要任何其它 Info.plist 键,也不需要 entitlements。 -->
+         本地通知不需要任何其它 Info.plist 键,也不需要 entitlements。 -->
     <key>NSUserNotificationAlertStyle</key>
     <string>alert</string>
     <!-- 2026-07-23 实测坐实：这个 key 缺失时,OnboardingView 第一步"请求权限"按钮
@@ -894,6 +924,10 @@ if [ -n "$OLD_PIDS" ]; then
     sleep 1
   done
 fi
+# 记下旧 collector 的 pid,给末尾「新 collector 起来了没有」那道确认用。必须在 open 之前取:
+# App 一起来就会自己重装 collector(见末尾那段)。
+COLLECTOR_BIN="$APP_DIR/Contents/Resources/collector"
+OLD_COLLECTOR_PIDS="$(pgrep -f "$COLLECTOR_BIN" 2>/dev/null | tr '\n' ' ' || true)"
 echo "==> launching via LaunchServices (open -g)"
 open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
@@ -959,18 +993,30 @@ echo "==> $APP_NAME running, pid ${pid% }"
 # COLLECTOR_LABEL 在上面跟 APP_NAME 一起定义。
 COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
 if [ -f "$COLLECTOR_PLIST" ]; then
-  echo "==> reloading collector job (refreshing its launch constraint)"
-  launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
-  sleep 1
-  launchctl bootstrap "gui/$(id -u)" "$COLLECTOR_PLIST" 2>/dev/null || true
-  sleep 1
-  launchctl kickstart -k "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
-  sleep 2
-  if cpid=$(pgrep -f "$APP_DIR/Contents/Resources/collector"); then
+  if [ "$(defaults read "$LABEL" np:collectorServiceEnabled 2>/dev/null || true)" = 1 ]; then
+    echo "==> waiting for the app to reinstall the collector job"
+  else
+    echo "==> reloading collector job (refreshing its launch constraint)"
+    launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
+    sleep 1
+    launchctl bootstrap "gui/$(id -u)" "$COLLECTOR_PLIST" 2>/dev/null || true
+  fi
+  cpid=""
+  for _ in $(seq 1 60); do
+    for p in $(pgrep -f "$COLLECTOR_BIN" 2>/dev/null || true); do
+      case " $OLD_COLLECTOR_PIDS " in
+        *" $p "*) ;;
+        *) cpid="$p" ;;
+      esac
+    done
+    [ -n "$cpid" ] && break
+    sleep 1
+  done
+  if [ -n "$cpid" ]; then
     echo "==> collector running, pid $cpid"
   else
     # 不 exit 1:App 本身已经起来了，collector 没起来是个独立故障，值得刺眼但不该让
     # 整个构建被判失败(而且这条分支真出现时，多半要人去看崩溃报告)。
-    echo "!! collector not running — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
+    echo "!! collector not running (no new process within 60s) — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
   fi
 fi
