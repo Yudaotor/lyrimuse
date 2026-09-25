@@ -1994,14 +1994,33 @@ func runSourceContractTests() {
 
             // ⑩ **后台服务没起来就不算走完引导**。`hasCompletedOnboarding` 一置真这扇窗口
             //    再也不会自动出现,而它是把 collector 装起来的主要入口(15 章记的那条不可
-            //    自愈死路)。同日新增的「暂时跳过」给那条死路开了新的到达方式,所以 finish()
-            //    必须挡着。
-            expectEqual(onboarding.contains("if collectorRunning {\n            settings.hasCompletedOnboarding = true"), true,
-                        "引导页不留死路: finish() 里 hasCompletedOnboarding 必须被 collectorRunning 守着(服务没装+引导标记完成=桌面永久停在「搜索歌词中…」)")
+            //    自愈死路)。判据本身的行为断言在 onboarding 组(`OnboardingFlow.marksCompleted`),
+            //    这里钉住 finish() 走的是它。
+            let onboardingCode = onboarding.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            let completionGuard = onboardingCode.firstIndex { $0.contains("OnboardingFlow.marksCompleted(collectorRunning:") }
+            let setsCompleted = onboardingCode.firstIndex { $0.contains("settings.hasCompletedOnboarding = true") }
+            expectEqual(completionGuard != nil && setsCompleted != nil && completionGuard! + 1 == setsCompleted!, true,
+                        "引导页不留死路: finish() 里 hasCompletedOnboarding 必须紧跟在 OnboardingFlow.marksCompleted 的判断里(服务没装+引导标记完成=桌面永久停在「搜索歌词中…」)")
 
             // ⑪ 最后一步必须是**体检清单**,不是无条件一句"一切就绪"。
-            expectEqual(onboarding.contains("private var readinessItems: [ReadinessItem]"), true,
+            expectEqual(onboarding.contains("private var readinessItems: [OnboardingFlow.ReadinessItem]"), true,
                         "引导页要体检: doneStep 的清单(readinessItems)不见了 —— 那是 automation 解锁之后唯一如实报告缺什么的地方")
+
+            // ⑪b 流程判断都在 `OnboardingFlow`(行为断言在 onboarding 组)。引导页自己再写一份
+            //     步骤序列 / 夹取 / 锁 / 清单 / 收尾页顺序,那些断言就钉不到真正在跑的代码了。
+            for call in ["OnboardingFlow.steps(", "OnboardingFlow.step(at:", "OnboardingFlow.nextIsLocked(",
+                         "OnboardingFlow.clamped(", "OnboardingFlow.navigate(", "OnboardingFlow.canJump(",
+                         "OnboardingFlow.index(of:", "OnboardingFlow.readinessItems(", "OnboardingFlow.chosenEntries("] {
+                expectEqual(onboardingCode.contains { $0.contains(call) }, true,
+                            "引导页走共享流程: 少了 \(call) —— 判断被抄回视图里了?")
+            }
+            // 两个网格共用的勾选切换、勾选即请求权限,判断本体在 LyrimuseCore(行为断言在 players 组)。
+            for (rel, call) in [("Settings/FeatureSettingsStore.swift", "players.toggling(player)"),
+                                ("Settings/PlayerAutomationPermissions.swift", "AutomationRequestPlan.onSelect(")] {
+                expectEqual(read(rel)?.contains(call), true,
+                            "引导页走共享流程: \(rel) 里少了 \(call) —— 判断被抄回 App target 了?")
+            }
 
             // ⑫ 引导页的「配对浏览器」必须有"自己挑一个"的出口。只铺 knownBrowserBundleIDs
             //    的话,Brave / Vivaldi / Opera / Arc 用户在引导里完全走不通。

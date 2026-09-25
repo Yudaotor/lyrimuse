@@ -81,6 +81,52 @@ extension Set where Element == PlaybackPlayer {
         guard !contains(.auto) else { return all }
         return all.filter { contains($0) }
     }
+
+    /// 在选中集合里点一下 `player` 之后的集合。选中的取消、没选中的勾上,但**不能取消到空集**:
+    /// 选中集合永远至少留一个,跟 `PlaybackPlayerPreference.selected` / collector
+    /// `resolvePlayers` 的非空保证对称。「自动识别」跟具体播放器不互斥,可以一起勾。
+    public func toggling(_ player: PlaybackPlayer) -> Set<PlaybackPlayer> {
+        var next = self
+        if contains(player) {
+            guard count > 1 else { return self }
+            next.remove(player)
+        } else {
+            next.insert(player)
+        }
+        return next
+    }
+}
+
+/// 勾上一个播放器那一刻,要向哪几家发起「自动化」权限请求。设置页与引导页两个网格共用
+/// (`PlayerAutomationPermissions.requestOnSelect`)。
+public enum AutomationRequestPlan {
+    public struct Request: Equatable, Sendable {
+        public let player: PlaybackPlayer
+        /// 目标没在跑时允不允许后台拉起它(不拉起的话系统弹窗压根不出现)。
+        public let launchIfNeeded: Bool
+
+        public init(player: PlaybackPlayer, launchIfNeeded: Bool) {
+            self.player = player
+            self.launchIfNeeded = launchIfNeeded
+        }
+    }
+
+    /// `launchIfNeeded` 按勾的是谁分开,别统一:
+    /// - 勾**具体播放器**是"我平时用它"的明确意图,允许后台拉起;
+    /// - 勾**自动识别**一次带出所有需要权限的播放器,只对已经在跑的那几家发起、且不拉起 ——
+    ///   把用户没开的播放器全部后台拉起来不是他点那一下的意思。
+    /// 没装的、本身不需要权限的一律不问。已有结论(授权 / 拒绝)的过滤由调用方做。
+    public static func onSelect(_ player: PlaybackPlayer,
+                                isInstalled: (PlaybackPlayer) -> Bool,
+                                isRunning: (PlaybackPlayer) -> Bool) -> [Request] {
+        if player == .auto {
+            return PlaybackPlayer.allCases
+                .filter { $0.needsAutomationPermission && isInstalled($0) && isRunning($0) }
+                .map { Request(player: $0, launchIfNeeded: false) }
+        }
+        guard player.needsAutomationPermission, isInstalled(player) else { return [] }
+        return [Request(player: player, launchIfNeeded: true)]
+    }
 }
 
 // 独立、轻量地读一次共享 features 文件(~/.config/lyrimuse/lyrimuse-features.json)里的

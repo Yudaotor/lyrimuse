@@ -353,6 +353,45 @@ func runPlayerIdentityTests() {
                     "完全磁盘访问判据: 要授权的每家都有 nativeLyricSource,且就是 collector 状态文件里的来源名")
     }
 
+    // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----
+    do {
+        print("\n== 播放器勾选切换 ==")
+        let only: Set<PlaybackPlayer> = [.spotify]
+        expectEqual(only.toggling(.spotify), only, "勾选切换: 最后一个不能取消(选中集合不能清空)")
+        expectEqual(only.toggling(.appleMusic), [.spotify, .appleMusic], "勾选切换: 没选中的勾上")
+        expectEqual(Set<PlaybackPlayer>([.spotify, .appleMusic]).toggling(.spotify), [.appleMusic],
+                    "勾选切换: 不止一个时能取消")
+        expectEqual(Set<PlaybackPlayer>([.qqMusic]).toggling(.auto), [.qqMusic, .auto],
+                    "勾选切换: 自动识别跟具体播放器不互斥,可以一起勾")
+        expectEqual(Set<PlaybackPlayer>([.auto]).toggling(.auto), [.auto],
+                    "勾选切换: 只剩自动识别时同样不能取消")
+    }
+
+    // ---- 勾上播放器那一刻向谁要自动化权限(PlayerAutomationPermissions.requestOnSelect)----
+    do {
+        print("\n== 勾选即请求权限 ==")
+        typealias Plan = AutomationRequestPlan
+        let everything: (PlaybackPlayer) -> Bool = { _ in true }
+        let nothing: (PlaybackPlayer) -> Bool = { _ in false }
+        expectEqual(Plan.onSelect(.spotify, isInstalled: everything, isRunning: nothing),
+                    [.init(player: .spotify, launchIfNeeded: true)],
+                    "勾选即请求: 勾具体播放器允许后台拉起(没在跑时不拉起就不弹窗)")
+        expectEqual(Plan.onSelect(.spotify, isInstalled: nothing, isRunning: nothing), [],
+                    "勾选即请求: 没装的不问")
+        expectEqual(Plan.onSelect(.qqMusic, isInstalled: everything, isRunning: everything), [],
+                    "勾选即请求: 本身不需要这份权限的不问")
+        expectEqual(Plan.onSelect(.auto, isInstalled: everything, isRunning: nothing), [],
+                    "勾选即请求: 勾自动识别时没在跑的一家都不问、也不拉起")
+        expectEqual(Plan.onSelect(.auto, isInstalled: everything, isRunning: { $0 == .spotify }),
+                    [.init(player: .spotify, launchIfNeeded: false)],
+                    "勾选即请求: 勾自动识别只问已经在跑的那几家,且不拉起")
+        expectEqual(Plan.onSelect(.auto, isInstalled: { $0 != .spotify }, isRunning: everything).map(\.player),
+                    [.appleMusic], "勾选即请求: 勾自动识别时没装的同样不问")
+        expectEqual(Plan.onSelect(.auto, isInstalled: everything, isRunning: everything).map(\.player),
+                    Set<PlaybackPlayer>([.auto]).playersNeedingAutomation,
+                    "勾选即请求: 都装了都在跑时,问的就是自动识别那份权限列表")
+    }
+
     // ---- collector 发布的可读性状态 到 一个结论 ----
     do {
         typealias A = LocalCacheAccess

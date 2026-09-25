@@ -88,27 +88,18 @@ final class PlayerAutomationPermissions: ObservableObject {
 
     /// 勾上一个播放器那一刻主动把权限要出来 —— 两个网格(设置页 / 引导页)点一下就调这里。
     ///
-    /// **`launchIfNeeded` 按勾的是谁分开**,别统一:
-    ///   · 勾的是**具体播放器** → 这是"我平时用它"的明确意图,允许后台拉起它。必须拉 ——
-    ///     目标没在跑时 `AECreateDesc` 解析不到进程,系统弹窗**压根不出现**
-    ///     (见 `MusicAutomationPermission.requestWithTimeout` 头注的实测记录)。
-    ///   · 勾的是**自动识别** → 它是超集、一次带出两家,把用户没开的播放器全部后台拉起来
-    ///     不是他点那一下的意思。只对**已经在跑**的那几家发起,其余等它真被用到时再说
-    ///     (设置页那张卡一直在,随时能手动点)。
+    /// 向谁要、允不允许后台拉起,由 `AutomationRequestPlan.onSelect` 决定(分寸见那边;勾具体
+    /// 播放器必须允许拉起 —— 目标没在跑时 `AECreateDesc` 解析不到进程,系统弹窗**压根不出现**,
+    /// 见 `MusicAutomationPermission.requestWithTimeout` 头注)。
     ///
-    /// 已经有结论的(authorized / denied)一律不碰:系统不会重复弹窗,再问一次只是白等。
+    /// 已经有结论的(authorized / denied)在 `request` 里一律不碰:系统不会重复弹窗,再问一次只是白等。
     func requestOnSelect(justEnabled player: PlaybackPlayer) {
-        if player == .auto {
-            for target in PlaybackPlayer.allCases where target.needsAutomationPermission {
-                guard isInstalled(target),
-                      MusicAutomationPermission.isRunning(bundleID: target.bundleIdentifier)
-                else { continue }
-                request(target, launchIfNeeded: false)
-            }
-            return
+        let plan = AutomationRequestPlan.onSelect(
+            player, isInstalled: isInstalled,
+            isRunning: { MusicAutomationPermission.isRunning(bundleID: $0.bundleIdentifier) })
+        for item in plan {
+            request(item.player, launchIfNeeded: item.launchIfNeeded)
         }
-        guard player.needsAutomationPermission, isInstalled(player) else { return }
-        request(player, launchIfNeeded: true)
     }
 
     /// 真正发起一次请求。

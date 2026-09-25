@@ -419,14 +419,12 @@ public final class FeatureSettingsStore: ObservableObject {
     /// LyrimuseCore `PlaybackPlayerPreference.selected` / collector `resolvePlayers` 对称
     /// —— 真放任清空,下一次 collector 重启读到的会是"什么都没选"这个非法状态(两侧都会
     /// 各自兜底成 auto,但界面会有一瞬间显示"什么都没选中",观感是错的)。
+    /// 判断本体在 `Set<PlaybackPlayer>.toggling`(selftest players 组钉着)。
     @MainActor
     public func togglePlayer(_ player: PlaybackPlayer) {
-        if players.contains(player) {
-            guard players.count > 1 else { return }
-            players.remove(player)
-        } else {
-            players.insert(player)
-        }
+        let next = players.toggling(player)
+        guard next != players else { return }
+        players = next
         Task { await save() }
     }
 

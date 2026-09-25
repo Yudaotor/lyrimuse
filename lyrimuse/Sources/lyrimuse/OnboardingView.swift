@@ -54,19 +54,9 @@ struct OnboardingView: View {
     /// 跟"这次走到哪"对不上的字段。
     @State private var confettiBurst = 0
 
-    // 这一版的三处结构调整:
-    //  ① `.language` 整个去掉 —— 语言选择并进 `.welcome`。它原来排在第 6 步,而前 5 步
-    //     早就用错的语言讲完了(`L10n.t` 每次调用都重新解析语言,见 L10n.swift 里那条
-    //     "不缓存"的注释,所以切换本来就是即时生效的,没有理由放在后面)。并进欢迎页而不是
-    //     单独排第 2 步,顺带治掉它"整页只有一个光秃秃 Picker、没有任何说明"这件事。
-    //  ② `.collectorService` 改名 `.background` —— 那一步现在同时管"常驻后台服务(必需)"
-    //     和"开机自动启动(可选)",两件事回答的是同一个问题:让 Lyrimuse 一直待命。
-    //  ③ 新增 `.lyricsExtras`(译文/罗马音)。这是这个 App 对中日韩听众最核心的能力之一,
-    //     此前完全埋在设置里,新来的人发现不了。
-    private enum Step: Equatable {
-        case welcome, playerChoice, automation, browserPairing, background,
-             fullDiskAccess, displayMode, lyricsExtras, lastfm, done
-    }
+    /// 步骤与流程判断(走哪几步、翻页夹下标、锁、体检清单、收尾页顺序)都在
+    /// `OnboardingFlow`(LyrimuseCore,selftest onboarding 组钉着),这里只调用和排版。
+    private typealias Step = OnboardingStep
 
     /// 上一步勾了「YouTube Music」——它不是 `features.players` 里的一个成员(见
     /// `WebPlatformChoiceCard` 的头注:网页播放器走的是"配对浏览器"那套状态),所以要单独
@@ -117,47 +107,20 @@ struct OnboardingView: View {
     // 这份列表本身不 @State,是纯粹从 features.players / wantsBrowserYouTubeMusic 派生出来
     // 的,它们一变下一次读到的就是新列表,不需要额外同步。
     private var steps: [Step] {
-        var s: [Step] = [.welcome, .playerChoice]
-        if needsAutomationStep {
-            s.append(.automation)
-        }
-        // 勾了 YouTube Music 才有这一步。按**不在选完那一刻就跳浏览器选择**,
-        // 而是把它排成后面单独一步("选了之后先不进行选择浏览器,引导在后面选择浏览器")
-        // —— 选播放器那一步的职责是"你平时用什么听歌",配哪个浏览器是下一个话题。
-        if wantsBrowserYouTubeMusic {
-            s.append(.browserPairing)
-        }
-        // lastfm 放在 language 之后、done 之前——跟前面 automation/collectorService
-        // 那两个"必需"步骤不同,这一步纯介绍性质、完全可跳过(下一步按钮从不为它禁用,
-        // 见 body 里的 .disabled),只是提升 Last.fm 这个已经相当完整的功能被新用户
-        // 发现的概率(之前完全没在 Onboarding 里出现过,只能自己摸到设置里折叠着的
-        // 入口才会发现)。
-        s.append(.background)
-        // 排在 `.background` 之后:授权状态只由 collector 发布,授权完还要重启它才生效,
-        // 这一步需要它已经在跑。
-        if !fullDiskAccessTargets.isEmpty {
-            s.append(.fullDiskAccess)
-        }
-        s.append(contentsOf: [.displayMode, .lyricsExtras, .lastfm, .done])
-        return s
+        OnboardingFlow.steps(.init(needsAutomation: needsAutomationStep,
+                                   wantsBrowserPairing: wantsBrowserYouTubeMusic,
+                                   needsFullDiskAccess: !fullDiskAccessTargets.isEmpty))
     }
 
-    /// 当前这一步。**所有地方都必须走这个访问器,不准再写 `steps[step]`**。
-    ///
-    /// 这是一处真的会崩的越界(修)。原来的注释论证过"当前安全,因为能让
-    /// `steps` 变短的控件全都在 index 1" —— 那句话只在"引导页是唯一宿主"时成立,而
-    /// `features.players` 是 `@Published`(FeatureSettingsStore),**设置窗口能同时开着改它**,
-    /// 引导页自己的 `.lastfm` 那一步还有个按钮专门去打开设置窗。失效路径:勾了 Apple Music
-    /// → 一路走到最后一步 `.done`(index = count-1)→ 打开设置 → 播放器 tab 取消勾选
-    /// Apple Music → `steps` 少一项 → body 重算 → `steps[count]` 数组越界,硬崩。
+    /// 当前这一步。**所有地方都必须走这个访问器,不准再写 `steps[step]`**:
+    /// `features.players` 是 `@Published`,设置窗口能同时开着改它、让 `steps` 变短,
+    /// 渲染这一刻 `step` 可能已经越界(见 14 章首启引导「`steps[step]` 越界」)。
     ///
     /// 两道防线都要有:这个访问器保证**渲染这一刻**不会越界(SwiftUI 重算 body 可能早于
     /// 任何 onChange),下面 `.onChange(of: steps.count)` 负责把 `step` 这个存储值本身拉回
     /// 合法区间(否则"上一步/下一步"的加减法会从一个非法下标继续往下算)。
-    /// `steps` 恒定至少 7 项,`count - 1` 不会是负数。
     private var currentStep: Step {
-        let list = steps
-        return list[min(max(step, 0), list.count - 1)]
+        OnboardingFlow.step(at: step, in: steps)
     }
 
     private var isLastStep: Bool { step >= steps.count - 1 }
@@ -172,7 +135,9 @@ struct OnboardingView: View {
     /// 那次把 automation 加进锁里,是为了治"用户误点了不允许还能一路走完、
     /// doneStep 却说一切就绪"。那个病根现在由 `doneStep` 的体检清单如实报告(见那边),
     /// 不需要再靠锁死按钮来兜。
-    private var nextIsLocked: Bool { currentStep == .background && !collectorRunning }
+    private var nextIsLocked: Bool {
+        OnboardingFlow.nextIsLocked(at: currentStep, collectorRunning: collectorRunning)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -262,8 +227,9 @@ struct OnboardingView: View {
         // 见 `currentStep` 头注:这一条负责把 `step` 这个**存储值**拉回合法区间(设置窗口
         // 同时开着、改了播放器集合时 steps 会变短)。渲染那一刻的安全由 currentStep 兜。
         .onChange(of: steps.count) { _, newCount in
-            if step > newCount - 1 { step = newCount - 1 }
-            if furthestStep > newCount - 1 { furthestStep = newCount - 1 }
+            let fixed = OnboardingFlow.clamped(.init(step: step, furthest: furthestStep), stepCount: newCount)
+            if step != fixed.step { step = fixed.step }
+            if furthestStep != fixed.furthest { furthestStep = fixed.furthest }
         }
         // 走到"体检"和"后台服务"这两步时重新读一次真实状态 —— 用户可能刚在系统设置里
         // 给了权限、或者从别处把服务装上了,清单必须反映此刻的事实而不是进门时的快照。
@@ -351,7 +317,9 @@ struct OnboardingView: View {
                         .frame(width: dotWidth, height: 6)
                         .frame(width: dotWidth + 6, height: 12)
                         .contentShape(Rectangle())
-                        .onTapGesture { if i <= furthestStep { goTo(i) } }
+                        .onTapGesture {
+                            if OnboardingFlow.canJump(toDot: i, furthest: furthestStep) { goTo(i) }
+                        }
                 }
             }
             .animation(.easeOut(duration: 0.2), value: step)
@@ -461,7 +429,7 @@ struct OnboardingView: View {
     private func toggleYouTubeMusic() {
         wantsBrowserYouTubeMusic.toggle()
         // 收起的是**后面**那一步,当前停留的下标(选播放器 = 1)不受影响 —— steps 变短
-        // 只会砍掉 index 1 之后的项,见 steps 上面那条结构性约束。
+        // 只会砍掉 index 1 之后的项,见 `OnboardingFlow.steps` 头注里条件步的位置约束。
     }
 
     /// 「配对浏览器」这一步。只在上一步勾了 YouTube Music 时出现。
@@ -927,43 +895,28 @@ struct OnboardingView: View {
 
     /// 最后一步要核对的几件事。只列**这一轮真的走过**的步骤 —— 跟 `steps` 派生自同一批
     /// 判据,没问 Apple Music 权限的人不该在清单上看到一条"未完成"的权限。
-    private struct ReadinessItem: Identifiable {
-        let id: String
-        let ok: Bool
-        let title: String
-        let target: Step
+    /// 哪几条、好没好、「去处理」跳哪一步由 `OnboardingFlow.readinessItems` 决定,这里只读运行期事实。
+    private var readinessItems: [OnboardingFlow.ReadinessItem] {
+        let targets = automationTargets
+        let fdaTargets = fullDiskAccessTargets
+        return OnboardingFlow.readinessItems(.init(
+            collectorRunning: collectorRunning,
+            automationTargets: targets,
+            authorized: Set(targets.filter { automation.status($0) == .authorized }),
+            fullDiskAccessGranted: fdaTargets.isEmpty ? nil : fullDiskAccess.grant(fdaTargets) == .granted,
+            browserPaired: wantsBrowserYouTubeMusic
+                ? BrowserPairing.hasAnyPair(platformID: Self.youTubeMusicPlatformID) : nil,
+            displayModeEnabled: !noDisplayModeEnabled))
     }
 
-    private var readinessItems: [ReadinessItem] {
-        var items: [ReadinessItem] = [
-            ReadinessItem(id: "collector", ok: collectorRunning,
-                          title: L10n.t("后台采集服务"), target: .background)
-        ]
-        for player in automationTargets {
-            items.append(ReadinessItem(
-                id: "automation-\(player.rawValue)",
-                ok: automation.status(player) == .authorized,
-                title: String(format: L10n.t("%@ 自动化权限"), player.displayName),
-                target: .automation))
+    private func readinessTitle(_ kind: OnboardingFlow.ReadinessKind) -> String {
+        switch kind {
+        case .collector: return L10n.t("后台采集服务")
+        case .automation(let player): return String(format: L10n.t("%@ 自动化权限"), player.displayName)
+        case .fullDiskAccess: return L10n.t("完全磁盘访问权限")
+        case .browser: return L10n.t("YouTube Music 的浏览器")
+        case .displayMode: return L10n.t("歌词显示方式")
         }
-        let fdaTargets = fullDiskAccessTargets
-        if !fdaTargets.isEmpty {
-            items.append(ReadinessItem(
-                id: "full-disk-access",
-                ok: fullDiskAccess.grant(fdaTargets) == .granted,
-                title: L10n.t("完全磁盘访问权限"),
-                target: .fullDiskAccess))
-        }
-        if wantsBrowserYouTubeMusic {
-            items.append(ReadinessItem(
-                id: "browser",
-                ok: BrowserPairing.hasAnyPair(platformID: Self.youTubeMusicPlatformID),
-                title: L10n.t("YouTube Music 的浏览器"), target: .browserPairing))
-        }
-        items.append(ReadinessItem(
-            id: "display", ok: !noDisplayModeEnabled,
-            title: L10n.t("歌词显示方式"), target: .displayMode))
-        return items
     }
 
     /// 从"无条件一句「一切就绪」"改成一张**体检清单**。
@@ -1067,20 +1020,15 @@ struct OnboardingView: View {
     /// (「自动识别和 youtubemusic 的顺序是不是应该换一下」)—— 两处顺序不一致,读的人会以为
     /// 其中一处是错的。
     private var chosenEntries: [ChosenEntry] {
-        // 「自动识别」下单独勾过的播放器不参与识别(见 PlayerPickerLayout),这里也不列。
-        let isAutoDetect = features.players.contains(.auto)
-        var entries = PlaybackPlayer.displayOrder
-            .filter { $0 != .auto && !isAutoDetect && features.players.contains($0) }
-            .map(ChosenEntry.player)
-        if wantsBrowserYouTubeMusic {
-            entries.append(.webPlatform(id: Self.youTubeMusicPlatformID, title: "YouTube Music"))
+        OnboardingFlow.chosenEntries(
+            players: features.players, displayOrder: PlaybackPlayer.displayOrder,
+            webPlatformID: wantsBrowserYouTubeMusic ? Self.youTubeMusicPlatformID : nil
+        ).map { entry in
+            switch entry {
+            case .player(let player): return .player(player)
+            case .webPlatform(let id): return .webPlatform(id: id, title: "YouTube Music")
+            }
         }
-        // 同样从 displayOrder 里取、不裸写 `PlaybackPlayer.auto` —— 理由同 playerChoiceStep
-        // 里那个 filter:万一以后 displayOrder 不再收 .auto,这里跟着自动消失。
-        entries += PlaybackPlayer.displayOrder
-            .filter { $0 == .auto && features.players.contains($0) }
-            .map(ChosenEntry.player)
-        return entries
     }
 
     /// 收尾这一页的"你选的播放器"。图标走 `PlayerIconView`(三级兜底的取图本体,跟选项卡
@@ -1122,7 +1070,7 @@ struct OnboardingView: View {
         .accessibilityLabel(L10n.t("你选的播放器") + "：" + names.joined(separator: "、"))
     }
 
-    private func readinessRow(_ item: ReadinessItem) -> some View {
+    private func readinessRow(_ item: OnboardingFlow.ReadinessItem) -> some View {
         HStack(spacing: 8) {
             Image(systemName: item.ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                 .foregroundStyle(item.ok ? Color.green : Color.orange)
@@ -1130,7 +1078,7 @@ struct OnboardingView: View {
                 // 图标是这一行唯一表达"好没好"的东西,旁白必须读得出来 —— 不然听到的只是
                 // 一串标题,分不出哪条是红的。
                 .accessibilityLabel(item.ok ? L10n.t("已就绪") : L10n.t("未完成"))
-            Text(item.title)
+            Text(readinessTitle(item.kind))
                 .font(.system(size: 13))
             Spacer(minLength: 8)
             if !item.ok {
@@ -1170,15 +1118,16 @@ struct OnboardingView: View {
     /// 翻到某一步。所有翻页都走它 —— `step` 的加减法和 `furthestStep` 的推进收在一处,
     /// 免得"下一步"按钮、进度点、体检清单的「去处理」各记一套。
     private func goTo(_ index: Int) {
-        let list = steps
-        step = min(max(index, 0), list.count - 1)
-        furthestStep = max(furthestStep, step)
+        let next = OnboardingFlow.navigate(to: index, from: .init(step: step, furthest: furthestStep),
+                                           stepCount: steps.count)
+        step = next.step
+        furthestStep = next.furthest
     }
 
     /// 跳到某一个具体步骤(体检清单的「去处理」用)。那一步不在本轮列表里就什么都不做 ——
     /// 清单本身是按同一份 `steps` 派生的,正常不会出现,但不值得为此崩一次。
     private func jump(to target: Step) {
-        guard let index = steps.firstIndex(of: target) else { return }
+        guard let index = OnboardingFlow.index(of: target, in: steps) else { return }
         goTo(index)
     }
 
@@ -1193,7 +1142,7 @@ struct OnboardingView: View {
         //
         // 跳过的人代价只是"下次启动会再问一次"(跟直接关窗完全同一档待遇),而 doneStep 的
         // 体检清单已经把这件事写在脸上了,不是无声惩罚。
-        if collectorRunning {
+        if OnboardingFlow.marksCompleted(collectorRunning: collectorRunning) {
             settings.hasCompletedOnboarding = true
         }
         dismissWindow(id: "onboarding")

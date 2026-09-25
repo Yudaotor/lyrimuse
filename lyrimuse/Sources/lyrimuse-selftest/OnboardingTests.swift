@@ -2,10 +2,12 @@ import CoreGraphics
 import Foundation
 import LyrimuseCore
 
-// 引导页的纯逻辑。目前只有最后一页那阵撒花的几何(`ConfettiField`)——
-// 引导页别的东西(步数怎么算、哪一步锁下一步、配对逻辑只有一份)靠 contracts 组的源码扫描
-// 守着,那些断言留在那边,别搬。
+// 引导页的纯逻辑:流程判断(`OnboardingFlow`:走哪几步、翻页夹下标、锁、收尾标记、体检清单、
+// 收尾页顺序)和最后一页那阵撒花的几何(`ConfettiField`)。
+// 「两个宿主只有一份实现」「引导页走的是这些函数」这类跨文件约束靠 contracts 组的源码扫描守着,
+// 那些断言留在那边;勾选切换与勾选即请求权限这两个共享判据在 players 组。
 func runOnboardingTests() {
+    checkOnboardingFlow()
     // ---- 撒花:同一个 seed 同一场雪 ----
     //
     // 这条是下面所有断言的前提:core 里那个 SplitMix64 是自己写的,一旦有人图省事换成
@@ -109,5 +111,177 @@ func runOnboardingTests() {
         } else {
             expectEqual(true, false, "撒花: 这场雪里没有一片是延迟出场的(样本不对)")
         }
+    }
+}
+
+private func checkOnboardingFlow() {
+    typealias F = OnboardingFlow
+    let allSteps: [OnboardingStep] = [.welcome, .playerChoice, .automation, .browserPairing, .background,
+                                      .fullDiskAccess, .displayMode, .lyricsExtras, .lastfm, .done]
+    func conditions(_ automation: Bool, _ browser: Bool, _ fda: Bool) -> F.Conditions {
+        F.Conditions(needsAutomation: automation, wantsBrowserPairing: browser, needsFullDiskAccess: fda)
+    }
+
+    // ---- 步骤序列 ----
+    do {
+        print("\n== 引导流程:步骤序列 ==")
+        let minimal = F.steps(conditions(false, false, false))
+        expectEqual(minimal, [.welcome, .playerChoice, .background, .displayMode, .lyricsExtras, .lastfm, .done],
+                    "引导步骤: 三个条件都不满足时只有固定的七步")
+        expectEqual(minimal.count, F.minimumStepCount, "引导步骤: 固定步数就是 minimumStepCount")
+        expectEqual(F.steps(conditions(true, true, true)), allSteps,
+                    "引导步骤: 三个条件都满足时十步,顺序固定")
+        expectEqual(F.steps(conditions(true, false, false))[2], .automation,
+                    "引导步骤: 自动化权限紧跟选播放器")
+        expectEqual(F.steps(conditions(false, true, false))[2], .browserPairing,
+                    "引导步骤: 只勾 YouTube Music 时配对浏览器紧跟选播放器")
+        let fdaOnly = F.steps(conditions(false, false, true))
+        expectEqual(fdaOnly.firstIndex(of: .fullDiskAccess), fdaOnly.firstIndex(of: .background).map { $0 + 1 },
+                    "引导步骤: 完全磁盘访问紧跟后台服务(授权状态要 collector 在跑才有)")
+
+        var badOrder: [String] = []
+        for mask in 0..<8 {
+            let c = conditions(mask & 1 != 0, mask & 2 != 0, mask & 4 != 0)
+            let list = F.steps(c)
+            let label = "automation=\(c.needsAutomation) browser=\(c.wantsBrowserPairing) fda=\(c.needsFullDiskAccess)"
+            let expectedCount = F.minimumStepCount + [c.needsAutomation, c.wantsBrowserPairing, c.needsFullDiskAccess].filter { $0 }.count
+            if list.count != expectedCount { badOrder.append("\(label): 步数 \(list.count)") }
+            if Array(list.prefix(2)) != [.welcome, .playerChoice] { badOrder.append("\(label): 开头不是欢迎 + 选播放器") }
+            if list.last != .done { badOrder.append("\(label): 最后一步不是 done") }
+            if Set(list).count != list.count { badOrder.append("\(label): 有重复的步骤") }
+            if list.contains(.automation) != c.needsAutomation { badOrder.append("\(label): 自动化权限那一步出没错了") }
+            if list.contains(.browserPairing) != c.wantsBrowserPairing { badOrder.append("\(label): 配对浏览器那一步出没错了") }
+            if list.contains(.fullDiskAccess) != c.needsFullDiskAccess { badOrder.append("\(label): 完全磁盘访问那一步出没错了") }
+            // 能改序列长度的只有选播放器那一步,条件步必须都排在它后面。
+            let playerIndex = list.firstIndex(of: .playerChoice) ?? -1
+            for conditional in [OnboardingStep.automation, .browserPairing, .fullDiskAccess] {
+                if let i = list.firstIndex(of: conditional), i <= playerIndex {
+                    badOrder.append("\(label): \(conditional) 排到了选播放器前面")
+                }
+            }
+            if let fda = list.firstIndex(of: .fullDiskAccess), let bg = list.firstIndex(of: .background), fda < bg {
+                badOrder.append("\(label): 完全磁盘访问排到了后台服务前面")
+            }
+            // 固定步骤的相对顺序不随条件变。
+            if list.filter({ minimal.contains($0) }) != minimal { badOrder.append("\(label): 固定步骤的相对顺序变了") }
+        }
+        expectEqual(badOrder, [], "引导步骤: 八种条件组合下的步数、首尾、条件步位置都对")
+    }
+
+    // ---- 翻页与防越界 ----
+    do {
+        print("\n== 引导流程:翻页与防越界 ==")
+        expectEqual(F.clampedIndex(-1, count: 7), 0, "引导翻页: 负下标夹到 0")
+        expectEqual(F.clampedIndex(99, count: 7), 6, "引导翻页: 超出的下标夹到最后一步")
+        expectEqual(F.clampedIndex(3, count: 7), 3, "引导翻页: 合法下标原样")
+        expectEqual(F.clampedIndex(3, count: 0), 0, "引导翻页: 空序列不崩")
+        expectEqual(F.step(at: -5, in: allSteps), .welcome, "引导翻页: 负下标取到第一步")
+        expectEqual(F.step(at: 42, in: allSteps), .done, "引导翻页: 超出的下标取到最后一步")
+        expectEqual(F.step(at: 0, in: []), .welcome, "引导翻页: 空序列不崩")
+
+        // 真崩过的那条路:勾着 Apple Music 走到最后一步,设置窗口里取消勾选,序列短一截。
+        let before = F.steps(conditions(true, false, false))
+        let atDone = before.count - 1
+        let after = F.steps(conditions(false, false, false))
+        expectEqual(F.step(at: atDone, in: after), .done, "引导翻页: 停在最后一步时序列变短,取到的仍是最后一步(不越界)")
+        let shrunk = F.clamped(.init(step: atDone, furthest: atDone), stepCount: after.count)
+        expectEqual(shrunk, F.Position(step: after.count - 1, furthest: after.count - 1),
+                    "引导翻页: 序列变短后两个存储值都拉回最后一步")
+        expectEqual(F.clamped(.init(step: 2, furthest: 4), stepCount: 7), F.Position(step: 2, furthest: 4),
+                    "引导翻页: 没越界的位置原样")
+        expectEqual(F.clamped(.init(step: -1, furthest: -1), stepCount: 7), F.Position(step: 0, furthest: 0),
+                    "引导翻页: 负数拉回 0")
+
+        let start = F.Position(step: 0, furthest: 0)
+        let forward = F.navigate(to: 1, from: start, stepCount: 7)
+        expectEqual(forward, F.Position(step: 1, furthest: 1), "引导翻页: 下一步推进走到过的最远处")
+        let farther = F.navigate(to: 4, from: forward, stepCount: 7)
+        let back = F.navigate(to: 2, from: farther, stepCount: 7)
+        expectEqual(back, F.Position(step: 2, furthest: 4), "引导翻页: 往回翻不缩小走到过的最远处")
+        expectEqual(F.navigate(to: 99, from: back, stepCount: 7), F.Position(step: 6, furthest: 6),
+                    "引导翻页: 翻过头夹到最后一步")
+        expectEqual(F.navigate(to: -3, from: back, stepCount: 7), F.Position(step: 0, furthest: 4),
+                    "引导翻页: 翻到负数夹到第一步,最远处不变")
+
+        expectEqual(F.canJump(toDot: 3, furthest: 4), true, "引导进度点: 走到过的点能点回去")
+        expectEqual(F.canJump(toDot: 4, furthest: 4), true, "引导进度点: 最远那一点能点")
+        expectEqual(F.canJump(toDot: 5, furthest: 4), false, "引导进度点: 没走到的点不能点(会绕过后台服务那道锁)")
+        expectEqual(F.canJump(toDot: -1, furthest: 4), false, "引导进度点: 负下标不能点")
+
+        expectEqual(F.index(of: .automation, in: allSteps), 2, "引导「去处理」: 在序列里就跳到它")
+        expectEqual(F.index(of: .automation, in: F.steps(conditions(false, false, false))), nil,
+                    "引导「去处理」: 本轮没这一步就不跳")
+    }
+
+    // ---- 锁与收尾 ----
+    do {
+        print("\n== 引导流程:锁与收尾 ==")
+        expectEqual(F.nextIsLocked(at: .background, collectorRunning: false), true,
+                    "引导锁: 后台服务那一步、服务没在跑时锁住下一步")
+        expectEqual(F.nextIsLocked(at: .background, collectorRunning: true), false,
+                    "引导锁: 服务跑起来就解锁")
+        let lockedElsewhere = allSteps.filter { $0 != .background && F.nextIsLocked(at: $0, collectorRunning: false) }
+        expectEqual(lockedElsewhere, [], "引导锁: 除后台服务外哪一步都不锁(自动化权限也不锁)")
+        expectEqual(F.marksCompleted(collectorRunning: true), true, "引导收尾: 服务在跑,点开始使用记成走完")
+        expectEqual(F.marksCompleted(collectorRunning: false), false,
+                    "引导收尾: 服务没跑就不记走完(否则窗口不再出现、服务也装不上)")
+    }
+
+    // ---- 体检清单 ----
+    do {
+        print("\n== 引导流程:体检清单 ==")
+        let minimal = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
+                                             fullDiskAccessGranted: nil, browserPaired: nil, displayModeEnabled: true))
+        expectEqual(minimal.map(\.kind), [.collector, .displayMode], "体检清单: 没走条件步时只有后台服务和显示方式")
+        expectEqual(minimal.allSatisfy(\.ok), true, "体检清单: 都好时全绿")
+
+        let full = F.readinessItems(.init(collectorRunning: false, automationTargets: [.appleMusic, .spotify],
+                                          authorized: [.appleMusic], fullDiskAccessGranted: false,
+                                          browserPaired: false, displayModeEnabled: false))
+        expectEqual(full.map(\.kind), [.collector, .automation(.appleMusic), .automation(.spotify),
+                                        .fullDiskAccess, .browser, .displayMode],
+                    "体检清单: 走过的步骤各一行,自动化权限一家一行、顺序跟那一步一致")
+        expectEqual(full.map(\.ok), [false, true, false, false, false, false],
+                    "体检清单: 每行好没好按对应事实判(只授权了 Apple Music)")
+        expectEqual(full.map(\.target), [.background, .automation, .automation, .fullDiskAccess, .browserPairing, .displayMode],
+                    "体检清单: 「去处理」跳回各自那一步")
+        expectEqual(Set(full.map(\.id)).count, full.count, "体检清单: 每行 id 不重复(ForEach 靠它)")
+        let granted = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
+                                             fullDiskAccessGranted: true, browserPaired: true, displayModeEnabled: true))
+        expectEqual(granted.map(\.kind), [.collector, .fullDiskAccess, .browser, .displayMode],
+                    "体检清单: 条件步走过且已就绪的照样列出(全绿时页面不显示清单,但判定要算进去)")
+        expectEqual(granted.allSatisfy(\.ok), true, "体检清单: 条件步都就绪时全绿")
+
+        // 清单里每一条「去处理」都必须能跳到本轮真的存在的那一步,否则按钮点了没反应。
+        var unreachable: [String] = []
+        for mask in 0..<8 {
+            let c = conditions(mask & 1 != 0, mask & 2 != 0, mask & 4 != 0)
+            let items = F.readinessItems(.init(
+                collectorRunning: false,
+                automationTargets: c.needsAutomation ? [.appleMusic] : [], authorized: [],
+                fullDiskAccessGranted: c.needsFullDiskAccess ? false : nil,
+                browserPaired: c.wantsBrowserPairing ? false : nil, displayModeEnabled: false))
+            let list = F.steps(c)
+            unreachable += items.filter { F.index(of: $0.target, in: list) == nil }.map { "\(c): \($0.kind)" }
+        }
+        expectEqual(unreachable, [], "体检清单: 同一组条件下每条「去处理」的目标都在本轮步骤里")
+    }
+
+    // ---- 收尾页「你选的播放器」----
+    do {
+        print("\n== 引导流程:收尾页顺序 ==")
+        let order: [PlaybackPlayer] = [.appleMusic, .spotify, .qqMusic, .netease, .auto]
+        let yt = "youtubeMusic"
+        expectEqual(F.chosenEntries(players: [.spotify, .appleMusic], displayOrder: order, webPlatformID: nil),
+                    [.player(.appleMusic), .player(.spotify)], "收尾页: 具体播放器按 displayOrder 排,不按集合迭代顺序")
+        expectEqual(F.chosenEntries(players: [.qqMusic], displayOrder: order, webPlatformID: yt),
+                    [.player(.qqMusic), .webPlatform(yt)], "收尾页: 网页平台排在具体播放器后面")
+        expectEqual(F.chosenEntries(players: [.auto, .spotify], displayOrder: order, webPlatformID: yt),
+                    [.webPlatform(yt), .player(.auto)],
+                    "收尾页: 勾着自动识别时单独勾的播放器不列;自动识别排在 YouTube Music 后面垫底")
+        expectEqual(F.chosenEntries(players: [.auto], displayOrder: order.filter { $0 != .auto }, webPlatformID: nil),
+                    [], "收尾页: 自动识别从 displayOrder 里取,那份顺序不收它时就不出现")
+        expectEqual(F.chosenEntries(players: [.soda], displayOrder: order, webPlatformID: nil), [],
+                    "收尾页: 不在 displayOrder 里的播放器不凭空出现")
     }
 }
