@@ -153,7 +153,7 @@ type featureFlagsFile struct {
 	// 这台机器往后只写 LastfmMatchMode,不再写它。
 	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
 	// LastfmScrobbleFirstArtistOnly：**更早的遗留字段**(二态开关,被 LastfmScrobbleArtistMode
-	// 取代)。true 与 旧的 `first`。迁移链因此是两级:这个 到 ArtistMode 到 MatchMode。
+	// 取代)。true 与 旧的 `first`。迁移链因此是两级:这个 → ArtistMode → MatchMode。
 	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
 	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(加,
 	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
@@ -500,7 +500,7 @@ type lastfmMatchSettings struct {
 //
 //	旧 smart → 智能
 //	旧 all   → 原始
-//	旧 first 到 自定义,只开「合唱只发第一位」(改歌手/改曲名都关 到 照旧不打网络)
+//	旧 first → 自定义,只开「合唱只发第一位」(改歌手/改曲名都关 到 照旧不打网络)
 //
 // 非法值除了兜底还记一行日志 —— 拼错档位名的后果是"设置里选了智能、collector 一直在
 // 发整串",不报出来查不到。

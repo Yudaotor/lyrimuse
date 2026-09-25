@@ -35,7 +35,7 @@ var (
 	t2sPhraseMap    map[string]string
 	t2sMaxPhraseLen int // TSPhrases.txt 里最长词条的 rune 长度,限定每个位置的搜索窗口
 	// s2tCharMap:STCharacters.txt 的简→繁单字映射,同样只取每个键的第一个候选。
-	// 简到繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
+	// 简→繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
 	// 挑的未必是具体这个字在这句里真正想要的那个繁体字——跟 App 侧 HanScript.swift 的
 	// PlayCountVariants 处理同一类问题时的取舍一致,唯一消费方 jyutping.go 只拿它当"查不到
 	// 读音时的兜底猜测",挑错的代价可接受,好过完全不转写。

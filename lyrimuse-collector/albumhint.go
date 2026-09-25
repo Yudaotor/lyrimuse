@@ -24,7 +24,7 @@ import (
 // 报上来的专辑名为空,就按「署名 + 曲名 + 时长」去 Apple 目录反查(iTunes Search 公开接口,纯 HTTPS,不依赖
 // 本机装 iTunes / Apple Music)。
 //
-// 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint 到 relay 网页、Last.fm album、LB release_name、
+// 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint → relay 网页、Last.fm album、LB release_name、
 // 本地收听日志),**绝不进 enrich 缓存 key**:App 侧 EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,
 // 这边若把 album 改掉,两边 key 对不上、App 拿不到词;广告判据 isAdBreak(Spotify 原生 album 为空即广告)、
 // 专辑预取、会话 key 也继续看 Album 本身。见 snapshot.albumForUpload。

@@ -3369,7 +3369,7 @@ struct NotchExpandedPopover: View {
 /// `width` 420 是**离屏量出来的**,不是拍脑袋。`SettingsRow` 固定开销 **150pt**:
 /// 2×14(左右内边距)+ 20(图标列)+ 3×12(图标 / 文字 / `Spacer` / 尾部控件四个子节点 = 三段
 /// `iconTextSpacing`)+ 12(`Spacer(minLength:)`)+ 54(开关固有宽,`NSSwitch().intrinsicContentSize`,
-/// 四档 controlSize 都是 54×24)。 手算最常漏的是"图标 到 文字"那一段 12pt。再加最宽那一行 ——
+/// 四档 controlSize 都是 54×24)。 手算最常漏的是"图标 → 文字"那一段 12pt。再加最宽那一行 ——
 /// 英文 "Hide During Screenshots/Recording" 216pt + ⓘ 19pt = 235pt,合计 385pt(中文只要 271pt);
 /// 1pt 步进的换行探测给出英文硬下限 386,按同族浮层的余量取 420。 不能指望"截断"兜底:标题没有
 /// `lineLimit`,超宽是**折行**,而 ⓘ 跟标题同处一个 HStack 会垂直居中、尾部开关却是 `.top` 对齐,

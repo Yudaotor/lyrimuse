@@ -3008,7 +3008,7 @@ private struct NotchScrubber: View {
                         .frame(width: proxy.size.width * fraction)
                 }
                 // 变粗只发生在下面那个**恒定高度的槽**里(垂直居中),布局上不占多一分 ——
-                // 别让 .frame(height: scrubberHeight) 直接参与布局:悬停 3到5 那 2pt 会把
+                // 别让 .frame(height: scrubberHeight) 直接参与布局:悬停 3→5 那 2pt 会把
                 // 时间行和三键整块往下推一下。
                 .frame(height: scrubberHeight)
                 .frame(maxHeight: .infinity)
@@ -3193,7 +3193,7 @@ private struct NotchScrubber: View {
     /// 上下各 8pt 的隐形命中区(见 gesture 那段注释),但那是"能不能按到"的问题,这里补的是
     /// "有没有按到"的**反馈**。
     ///
-    /// 幅度必须克制。参考实现是 5到9pt(+4),但那是在一个高得多的面板里;灵动岛展开区
+    /// 幅度必须克制。参考实现是 5→9pt(+4),但那是在一个高得多的面板里;灵动岛展开区
     /// 总共只有 expandedExtraHeight,进度条 + 3pt 间距 + 时间行已经占掉大半,
     /// 再长 4pt 会把时间行往下挤出可见区。3→5→6 是量过余量之后的取值。
     private var scrubberHeight: CGFloat {

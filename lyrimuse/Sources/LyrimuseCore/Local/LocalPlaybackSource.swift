@@ -544,7 +544,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     // ---- Spotify 自然切歌(gapless)锚点超前校正 --------------------------
     //
-    // 量出来的偏移(样本:Forever Love到在那遙遠的地方,media-control 0.25s 采样 + 旧曲连续外推
+    // 量出来的偏移(样本:Forever Love→在那遙遠的地方,media-control 0.25s 采样 + 旧曲连续外推
     // 做真值):gapless 自然切歌时,Spotify 在**旧曲真声还剩 ~0.84s** 时就换了元数据并
     // 打好新曲锚点(elapsedTime=0),此后整首歌 elapsedTimeNow 恒定超前真声 +0.888s
     // (±0.009s,60s 窗口内纹丝不动,锚点从不重打)。手动点播的锚点是点击瞬间打的、与

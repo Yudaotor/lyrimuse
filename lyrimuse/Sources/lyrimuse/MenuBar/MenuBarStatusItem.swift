@@ -674,7 +674,7 @@ final class MenuBarStatusItem: NSObject {
         // 「句中重建」实测长这样:
         //   20:09:05.314  rebuild: icon(38.5) -> text(195.22)      —— 按"这一瞬"的行建了
         //   20:09:05.331  coordinator currentLine updated          —— 17ms 后真正的行才到
-        //   20:09:05.346  deferred 2.968s -> text(173.29)          —— 配额已烧完 到 落在句中
+        //   20:09:05.346  deferred 2.968s -> text(173.29)          —— 配额已烧完 → 落在句中
         //
         // 成因是**两条链路的节奏差**:播放状态一变 `refresh()` 立刻就跑(@Published 直通),
         // 而"现在该显示第几句"要等歌词引擎 20Hz `fastTick` 的下一拍。于是边界上的第一次
@@ -786,9 +786,9 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// 27 以前记位置用的是 AppKit 老式的 App 自有 UserDefaults 键
     /// `NSStatusItem Preferred Position <autosaveName>`;27 起改由系统 MenuBarAgent 集中管理
-    /// (`com.apple.MenuBarAgent` 到 `TrailingItemPreferredPositions`),App 这边的键不再出现。
+    /// (`com.apple.MenuBarAgent` → `TrailingItemPreferredPositions`),App 这边的键不再出现。
     /// 老机制下,这个键在重建时会被删掉(删键时机是**旧项 dealloc**,不是 `removeStatusItem`
-    /// 当场),新项设 autosaveName 时因此查不到任何记住的位置 到 按默认插入点放到最左。
+    /// 当场),新项设 autosaveName 时因此查不到任何记住的位置 → 按默认插入点放到最左。
     ///
     /// 修法:与其猜 AppKit 什么时候删、删几次,不如让新旧两项**不同名**。老机制下每次重建换
     /// 一代 autosaveName(`<基名>-g<N>`,N 持久化,重启后首次建项沿用),并在建新项**之前**把

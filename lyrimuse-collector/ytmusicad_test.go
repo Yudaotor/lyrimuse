@@ -179,7 +179,7 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Errorf("artist 为空这一档不该发起 AppleScript(耗时 %v)", el)
 	}
 
-	// ④ 只有 album 空、artist 非空 到 会去复核。已取消的 ctx 到 复核必然失败 到 unknown
+	// ④ 只有 album 空、artist 非空 → 会去复核。已取消的 ctx 到 复核必然失败 到 unknown
 	//    到 **fail-closed 拒掉**。这一条正是"读不到时不许放广告进来"的守卫。
 	rejected2, patch2 := trustedPlaybackRejected(ctx, chrome, "KAO Hong Kong", "", "Liese Jelly to Bubble 全新登場")
 	if !rejected2 {

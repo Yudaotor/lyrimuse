@@ -16,7 +16,7 @@ import LyrimuseCore
 //     拷到别处、或用别的播放器读,罗马音就丢了。这是唯一真正值得为它动手的理由。
 //  ② 省掉换歌那一下整首现算的主线程开销(20Hz 热路径本来就有按行记忆化,不是瓶颈)。
 //
-// 读音本体走 `LyricsRomanization.romanizeLRC` 到 `Romanizer.lineReading`,跟 App 播放时
+// 读音本体走 `LyricsRomanization.romanizeLRC` → `Romanizer.lineReading`,跟 App 播放时
 // 的客户端兜底**是同一个函数**。预生成的产物必须跟现算逐字一致,否则同一首歌"装了缓存"和
 // "现算"读音不一样 —— 那种不一致不报错,只表现成用户偶尔觉得"某句罗马音怎么变了"。
 //

@@ -361,7 +361,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 那句英文将来改字影响。分隔符用 `String.fromCharCode(8226)` 拼(U+2022 圆点),不把
     /// 非 ASCII 字符直接写进这段嵌进 AppleScript 的源码里。
     ///
-    /// 万一将来 Spotify 换掉标题格式,这里会退化成"永远判暂停" 到 探针不出手 到 静默退回
+    /// 万一将来 Spotify 换掉标题格式,这里会退化成"永远判暂停" → 探针不出手 → 静默退回
     /// 既有的 MediaRemote 逻辑。这是**刻意选的失败方向**:宁可不纠偏,也不能把一个暂停
     /// 标签页的陈旧位置安到正在播的歌上。
     ///

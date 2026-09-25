@@ -111,7 +111,7 @@ func sodaLocalContradictsInstrumental(t sodaLocalTrack) bool {
 	return t.FirstVocal != nil && t.FirstVocal.Start > 0
 }
 
-// sodaLocalQueueFile 的顶层是「队列 key 到 队列」。 **不止一个 key**:推荐流是
+// sodaLocalQueueFile 的顶层是「队列 key → 队列」。 **不止一个 key**:推荐流是
 // "u_<uid>:feed",而每个「听歌模式」各有自己的 key(如
 // "u_<uid>:feedMode:feedMode_scene_mode_focus"),互不覆盖、一起留在文件里。
 // 所以按 map 遍历全部,别认死 "feed" 那一个。

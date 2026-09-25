@@ -68,7 +68,7 @@ public enum Romanizer {
     /// 日文**必须**走形态分析,不能用 ICU 的 Any-Latin。汉字是中日共用的文字系统,而
     /// Any-Latin 对汉字一律按普通话读——现象是的正是这个:
     ///
-    ///     火曜日の朝は   到 Any-Latin: "huǒ yào rìno cháoha"   —— 拼音,完全不对
+    ///     火曜日の朝は   → Any-Latin: "huǒ yào rìno cháoha"   —— 拼音,完全不对
     ///                    → 形态分析: "kayou hi no asa ha"
     ///     受話器を取った君 → Any-Latin: "shòu huà qìwo qǔtta jūn"
     ///                    → 形态分析: "juwa ki wo totta kimi"

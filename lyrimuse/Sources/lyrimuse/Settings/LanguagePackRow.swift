@@ -330,7 +330,7 @@ struct LanguagePackRow: View {
     /// .Configuration` 是 Equatable —— 同源同目标两次点击给的是**等值**配置,直接赋值它判定
     /// "没变"、不重跑,spinner 亮着(`downloading == code`)、底下却没任务在跑,永远转圈。
     ///
-    /// 曾经试过「先把 pending 清成 nil、下一拍 Task 里再赋值」想凑出 nil到config 的跳变,
+    /// 曾经试过「先把 pending 清成 nil、下一拍 Task 里再赋值」想凑出 nil→config 的跳变,
     /// **实测无效**(一次性 harness translationtask_probe.swift 坐实:两次等值请求 action 只跑
     /// 一次)—— SwiftUI 把同一轮里的 `nil` 和随后的 `config` 合并成一次更新,translationTask
     /// 看到的仍是"没变"。真正可靠的是给挂 translationTask 的那段视图一个每次都变的 `.id`:

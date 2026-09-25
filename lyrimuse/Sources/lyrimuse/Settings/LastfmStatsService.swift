@@ -81,7 +81,7 @@ final class LastfmStatsService: ObservableObject {
         ingestFeed(feed)
     }
 
-    /// Last.fm 给的图 URL 到 过滤掉"万能占位星"后的 URL(规则在 LyrimuseCore.LastfmImage)。
+    /// Last.fm 给的图 URL → 过滤掉"万能占位星"后的 URL(规则在 LyrimuseCore.LastfmImage)。
     private static func filteredImageURL(_ raw: String?) -> URL? {
         LastfmImage.usable(raw).flatMap(URL.init(string:))
     }
@@ -346,7 +346,7 @@ final class LastfmStatsService: ObservableObject {
         var playCountUnavailableStrikes: [String: Int]?
         /// 写这份快照时「查不到次数」的判据版本(playCountRuleVersion)。版本对不上时,名单里的键
         /// 丢掉退避时间戳 —— 按上面那条「欠一次重探」的语义,下一轮立刻按新判据重查,不必等退避到期。
-        /// 老文件没有 到 nil,同样当作对不上。
+        /// 老文件没有 → nil,同样当作对不上。
         var playCountRule: Int?
     }
 
@@ -1843,7 +1843,7 @@ final class LastfmStatsService: ObservableObject {
 
     struct TitleAliasDiscoverySnapshot: Codable {
         var username: String
-        /// 老快照没有这个字段,解码时给 nil 到 视作版本 1 到 整批作废(正是想要的)。
+        /// 老快照没有这个字段,解码时给 nil → 视作版本 1 到 整批作废(正是想要的)。
         var ruleVersion: Int?
         /// 跟 durations 同键的专辑名/mbid 缓存(加,证据门槛要用)。
         /// 老快照没有,给空表即可,下次查到就补上。

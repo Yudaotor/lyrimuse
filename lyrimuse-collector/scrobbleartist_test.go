@@ -52,8 +52,8 @@ func TestResolveScrobbleTags(t *testing.T) {
 // 和**两级遗留迁移链**一起钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和
 // LastfmMatchMode 的 rawValue(那边最容易漏)。
 //
-// 迁移表的承诺是**行为逐字不变**:旧 smart 到 智能、旧 all 到 原始、
-// 旧 first 到 自定义且只开截断(到 照旧不打网络)。这几条错一条,就是在老用户不知情的
+// 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
+// 旧 first → 自定义且只开截断(到 照旧不打网络)。这几条错一条,就是在老用户不知情的
 // 情况下改了往 Last.fm 写的内容,而 scrobble 落进去基本删不掉。
 func TestLastfmMatchModeFlagRoundTrip(t *testing.T) {
 	const key = "lastfm_match_mode"

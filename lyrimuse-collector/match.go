@@ -1640,7 +1640,7 @@ func lyricPrimaryQueryArtist(artist string) string {
 	return primary
 }
 
-// artistAliasTable 是"已知英文/罗马化艺名 到 本库常用中文名"的手工对照表。
+// artistAliasTable 是"已知英文/罗马化艺名 → 本库常用中文名"的手工对照表。
 //
 // 只保留通用机制(canonicalArtistViaMusicBrainz/cachedQQArtistCanonicalName,见
 // resolveGenericArtistCanonicalName 头注)覆盖不了、或会给出错误答案的六条残留案例——
@@ -1742,7 +1742,7 @@ func hanOnlyPortion(s string) string {
 // 拿英文名去网易云/QQ 搜,搜不到就算了。
 //
 // 不再额外查 knownArtistAlias(artistAliasTable 那张手工表)。退休
-// 理由:它在这里只是"方大同 与 Khalil Fong"这类问题的**单向**(英文 到 常用名)手工
+// 理由:它在这里只是"方大同 与 Khalil Fong"这类问题的**单向**(英文 → 常用名)手工
 // 补丁,而 musicBrainzArtistAliases(下面这条)双向通用、对任何歌手都生效(实测验证
 // 过,不是推断),这张表在这条路径上纯属冗余。
 //
@@ -2131,7 +2131,7 @@ var distinctRecordingVersionTags = []string{
 	// 地失效(词表只认英文时,该扣的 -600 不会触发,伴奏版会被当成正常版收了)。只收歧义
 	// 低、在标题括号/破折号位置里基本只作版本限定词讲的词(跟上面拉丁词一样的收词标准),
 	// 不收"翻唱"/"改编版"这类含义太宽、容易连累正常标题的词。
-	// 这些中文词进限定词集合时会经 canonicalVersionTag 折成对应的英文键(现场到live、
+	// 这些中文词进限定词集合时会经 canonicalVersionTag 折成对应的英文键(现场→live、
 	// 不插电→unplugged……见 versionTagAliases),集合比对才不会把「(Live)」和「(现场)」
 	// 当成两个版本。
 	"现场", "不插电", "伴奏", "纯音乐", "清唱", "混音", "加长版", "阿卡贝拉", "排练",

@@ -605,7 +605,7 @@ struct NotchEditorStage: View {
     /// 分组视图(`NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` / `NotchBehaviorSettingsRows`,
     /// `SettingsView.swift`),不再是"两处传同样的 items 数组"。
     ///
-    /// 横向预算:三颗时的账(中文 493 余 6pt / 英文 649 超 150pt)见 05 章「编辑台改造 到 搬过来的
+    /// 横向预算:三颗时的账(中文 493 余 6pt / 英文 649 超 150pt)见 05 章「编辑台改造 → 搬过来的
     /// 四件事」那张表;加第四颗「字体」前按同一套方法论(离屏复刻这一行的版式、`NSHostingView.fittingSize`)
     /// 重新量过:四颗入口、摘要压到零时的**硬下限**中文 374.0 / 英文 468.0(三颗时 288.0 / 380.0),都在最窄
     /// 卡片列 499 之内 —— 标题在任何窄档都不会截,亏空全由摘要吃(`toolbarButton` 摘要限宽 140 +

@@ -35,12 +35,12 @@ import SwiftUI
 /// 是它的对应版本。
 ///
 /// 四个状态**恒为 false**,也就是"一扇静止的、没人把指针放上去的窗":
-/// - `isHoveringForControls` 恒 false 到 播放控制排不显示。 藏住它靠的是
+/// - `isHoveringForControls` 恒 false → 播放控制排不显示。 藏住它靠的是
 ///     `overlayCapsuleBackground(visible:)`,别把这个参数当装饰删掉:`SettingsPage` 的
 ///     `GlassEffectContainer` 会让 `.opacity(0)` 在玻璃渲染里失效,光靠这条恒 false 挡不住
 ///     胶囊被画出来。那排按钮的点击由控制器按上报矩形自己分发(窗口常年
 ///     `ignoresMouseEvents`,视图里压根没有 Button),搬进设置页只画得出来、点不动。
-/// - `isHoveringLyrics` 恒 false 到 编辑台里不能有任何东西驱动它:真视图对它的反应是
+/// - `isHoveringLyrics` 恒 false → 编辑台里不能有任何东西驱动它:真视图对它的反应是
 ///     整卡淡到 15%(「指针划过时让开」),接进来会变成"想点它、它就躲"。
 ///   - `isDragArmed` / `showDragHint` 恒 false → 长按拖动和那条一次性手势提示都只有真窗口
 ///     才有,编辑台里没有对应的手势可武装。

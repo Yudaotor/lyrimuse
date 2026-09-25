@@ -3697,7 +3697,7 @@ struct LyricsWindowView: View {
     }
 
     /// 循环键三态(对齐 AM):关 → 列表循环(亮 repeat) → 单曲循环(亮
-    /// repeat.1) 到 关。此前只有 关与单曲 两态,而且 Music.app 的 song repeat=all 被解析
+    /// repeat.1) → 关。此前只有 关与单曲 两态,而且 Music.app 的 song repeat=all 被解析
     /// 塌缩成「列表」 —— 用户开着整张循环,这颗键却是灰的,也没法从 UI 点出这一档。
     /// Spotify 够不到(repeating 布尔且读不回),这颗整个不显示、只占位。
     private var repeatButton: some View {

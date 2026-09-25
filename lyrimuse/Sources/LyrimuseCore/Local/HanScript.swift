@@ -12,7 +12,7 @@ import Foundation
 /// 所以显示端取次数时要把孪生写法也查一遍、求和。
 ///
 /// 方向选择:先试繁→简,有变化就用;没变化再试简→繁。都用 ICU(CFStringTransform),
-/// 跟 EnrichCacheKeys.looseKey 同一套。 简到繁本质是一对多(发到發/髮),ICU 挑的未必是
+/// 跟 EnrichCacheKeys.looseKey 同一套。 简→繁本质是一对多(发→發/髮),ICU 挑的未必是
 /// Last.fm 上真实存在的那个写法 —— 挑错的后果只是那一次 getinfo 查不到、贡献 0 次,
 /// 可接受;绝不能反过来把这个转换结果当权威写法去显示或者构造 key。
 public enum HanScript {

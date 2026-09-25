@@ -551,7 +551,7 @@ func qqSingerAvatar(name string) (string, bool) {
 // 曲库认得的写法(通常是中文名)。
 //
 // 通用链路 canonicalArtistViaMusicBrainz/musicBrainzArtistAliases
-// 在"罗马化姓名 到 中文艺人"这个场景上有两类缺口:
+// 在"罗马化姓名 → 中文艺人"这个场景上有两类缺口:
 //  1. 查不到——李荣浩/窦靖童/陈柏宇/曲婉婷等十余位,MusicBrainz 索引或别名登记不覆盖。
 //  2. 查错人——同名撞车:MusicBrainz 对 "David Tao" 排第一的是一位无关的德国音乐人
 //     (陶喆本人反而没有查到中文别名);对 "Lexie Liu" 给出的是"刘昱妤",跟刘柏辛完全
@@ -1059,7 +1059,7 @@ func qqPickCandidate(cands []qqCand, artist string, durationSecs float64) (qqCan
 // link, by contrast, redirects mobile users to a useless QQ landing page.
 // When the album is known, the top few candidates are enriched with their
 // album name and the best albumScore wins, avoiding same-song-wrong-album
-// compilations. Leaves url empty (到 caller uses a search link) only when
+// compilations. Leaves url empty (→ caller uses a search link) only when
 // nothing plausibly matches; never a confidently-wrong song.
 func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) qqMusicMatch {
 	items := qqSearchSongs(ctx, qqSearchQueries(artist, title), title)

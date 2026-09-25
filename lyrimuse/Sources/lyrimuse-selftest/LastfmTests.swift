@@ -1261,7 +1261,7 @@ func runLastfmTests() {
         // 只认英文 → 中文:同 id 下全是中文写法(繁简)不产出别名——那本来就由折叠键管
         expectEqual(A.derive([e("方大同", "小小虫", netease: ne), e("方大同", "小小蟲", netease: ne)]), [:],
                     "本机别名: 中文↔中文不产出(折叠键已经管了)")
-        // 中文侧的繁简两种写法折到同一键 到 仍算唯一,照常产出(实测 Playful 与 玩乐/玩樂)
+        // 中文侧的繁简两种写法折到同一键 → 仍算唯一,照常产出(实测 Playful 与 玩乐/玩樂)
         expectEqual(A.derive([e("方大同", "Playful", netease: ne), e("方大同", "玩乐", netease: ne), e("方大同", "玩樂", netease: ne)]),
                     ["方大同": ["playful": "玩乐"]], "本机别名: 中文侧繁简两写法算一种,取字典序最小的原始写法")
         expectEqual(A.derive([e("方大同", "Oasis", netease: ne), e("方大同", "Oasis (Live)", netease: ne)]), [:],

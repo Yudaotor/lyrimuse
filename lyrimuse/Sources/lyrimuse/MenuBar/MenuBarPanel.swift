@@ -835,7 +835,7 @@ private struct MenuBarPanelView: View {
                 .accessibilityAddTraits(.isButton)
         }
 
-        /// 静止 到 悬停 到 按下三档系统填充色,一档比一档实一点点——默认的 Button + buttonStyle
+        /// 静止 → 悬停 → 按下三档系统填充色,一档比一档实一点点——默认的 Button + buttonStyle
         /// 什么反馈都没给,鼠标放上去看不出这一格是可点的。
         private var fillColor: NSColor {
             if pressing { return .secondarySystemFill }

@@ -172,7 +172,7 @@ public final class EnrichCacheStore: ObservableObject {
         let searchTitleLower: String
         let searchAlbumLower: String
 
-        /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap到
+        /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap→
         /// distinctArtists→筛选下拉),**不再**用于列表逐行渲染的文字——改掉:
         /// 同一个人如果原始标签一时中文一时英文(如"方大同"/"Khalil Fong"),会各自落进
         /// 独立的缓存条目(key 用原始写法拼),优先展示统一名会让两条本该能分清楚的记录在
@@ -192,7 +192,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// summaries 每重建一次 +1 —— 给视图侧的 filtered 缓存当失效键(见 LyricsManagerView),
     /// 数组本身没做 Equatable,靠这个代数判断"列表内容换过了没有"。
     private(set) var summariesGeneration = 0
-    /// 专辑归并展示名:归并键(toSimplified+小写)到 首见原写法。随 summaries 重建一次
+    /// 专辑归并展示名:归并键(toSimplified+小写)→ 首见原写法。随 summaries 重建一次
     /// (若做成计算属性、每次访问全量重建,List 每物化一行就要付一次 O(N) 次 ICU 变换,
     /// 是本模块里最重的操作之一)。
     @Published private(set) var albumDisplayMap: [String: String] = [:]

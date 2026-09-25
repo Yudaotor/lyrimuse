@@ -554,7 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 为什么需要:用户连报五次「设置窗某些位置滚不动、挪到旁边就好」。三轮探针把
     // 事实钉死了 —— 事件**确实进到了设置窗**,但 hitTest 停在 NSHostingView<ColumnView> 上、
     // 没能走进滚动视图;而那个滚动视图**包含鼠标点、不隐藏、alpha 满、从它往上每一层都含点**
-    // (日志里没有任何失败记录)。按 AppKit 语义(点在自己范围内 到 倒序问子视图 到 全 nil 才返回
+    // (日志里没有任何失败记录)。按 AppKit 语义(点在自己范围内 → 倒序问子视图 → 全 nil 才返回
     // 自己),这只能是某个子视图的 hitTest 返回了 nil。那是 SwiftUI NavigationSplitView 内部
     // 的行为,我们改不动;而且两次采样里树的形状还不一致(辅助功能树报内容滚动区
     // (220,33 680x487),探针在同一宿主视图子树里找到的是 (0,33 900x519),不是同一个)。
@@ -585,7 +585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let win = event.window else { return event }
         let loc = event.locationInWindow
         // **必须缓存这个判定**:不缓存时,主线程采样里这个函数下面能挂着
-        // **74/1439 个采样**,因为下面是一整条 `-[NSThemeFrame _performHitTestForContext:]` 到
+        // **74/1439 个采样**,因为下面是一整条 `-[NSThemeFrame _performHitTestForContext:]` →
         // `NSHostingView.hitTest` 到 `PlatformHitTestingManager.hitTest` 到
         // `MultiViewResponder.containsGlobalPoints` 的**深度递归** —— 也就是说下面那句
         // `root?.hitTest(loc)` 会把整个窗口的 SwiftUI 视图树递归走一遍。

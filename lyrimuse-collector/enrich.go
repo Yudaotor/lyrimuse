@@ -4279,7 +4279,7 @@ func loadEnrichCache(path string) {
 
 // saveEnrichCache atomically writes the cache when dirty (temp file + rename).
 //
-// enrichSaveMu 罩住 marshal到write到rename 全程,两个并发保存**串行**执行。不串行会
+// enrichSaveMu 罩住 marshal→write→rename 全程,两个并发保存**串行**执行。不串行会
 // 翻两种车:①两个保存都用 pid 命名的同一个 tmp 文件,先 rename 的把对方的文件偷走,
 // 后 rename 的报 no such file;②更毒的是慢的那个拿着**过期快照**最后落盘,把新数据
 // 盖回老状态。tmp 文件也用 os.CreateTemp 的随机名,同名互踩从根上不可能。

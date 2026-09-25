@@ -435,7 +435,7 @@ func TestMotionCoverAlbumHasKnownVideo(t *testing.T) {
 		t.Error("同一状态下 motionCoverWorthBackfill 该回 true(两者的分歧点)")
 	}
 
-	// ④ 两条来路都没有 到 否。
+	// ④ 两条来路都没有 → 否。
 	setMotion(&motionCover{Master: "https://mvod/x.m3u8", Checked: true})
 	if motionCoverAlbumHasKnownVideo(enrichEntry{}, "查无此歌", "查无此辑") {
 		t.Error("既无锚点也无 apple_music_url 时该回 false")
@@ -453,7 +453,7 @@ func TestMotionCoverNeedsRecheckAgainstOwnCover(t *testing.T) {
 	if motionCoverNeedsRecheckAgainstOwnCover(true, enrichEntry{}) {
 		t.Error("fresh 的结论已经落到这张封面上了,不该再补算一次")
 	}
-	// ③ 已经有动态封面 到 不补。
+	// ③ 已经有动态封面 → 不补。
 	if motionCoverNeedsRecheckAgainstOwnCover(false, enrichEntry{MotionCoverURL: "https://mvod/x.m3u8"}) {
 		t.Error("已经有动态封面的记录不该再补算")
 	}

@@ -274,7 +274,7 @@ func runSettingsInteractionTests() {
         expectEqual(d.record("歌词"), false, "历史: 重复选中当前页不记")
         expectEqual(d.canGoBack, false, "历史: 重复选中之后后退键仍是灰的")
         expectEqual(d.record("播放器"), true, "历史: 换了一页才记")
-        // 只去重「当前这一项」,不去重整条历史:A 到 B 到 A 是真的走了三步,
+        // 只去重「当前这一项」,不去重整条历史:A → B → A 是真的走了三步,
         // 后退应该回到 B 而不是直接跳过去。
         expectEqual(d.record("歌词"), true, "历史: A→B→A 的第二次 A 照记(不是全局去重)")
         expectEqual(d.goBack(), "播放器", "历史: A→B→A 后退回到 B")

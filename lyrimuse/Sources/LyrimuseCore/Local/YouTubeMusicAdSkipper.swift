@@ -169,7 +169,7 @@ public enum YouTubeMusicAdSkipper {
     }
 
     /// 「按了之后广告走了没」的判据(纯函数,selftest 钉着):播放器离开广告态算走了;仍在广告态但**徽章文字变了**
-    /// (「1/2」到「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。 **视频时间倒回不算**:
+    /// (「1/2」→「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。 **视频时间倒回不算**:
     /// 真机坐实,YouTube 对被 seek 的广告是从头重放(时间归 0、徽章不变),按"倒回 = 下一条了"会把重放误报成跳过。
     /// 徽章为空时只认离开广告态。`videoTime` 仍带着,只为日志。
     public static func adAdvanced(afterClick click: ClickResult, verify: VerifyResult) -> Bool {

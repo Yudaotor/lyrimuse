@@ -675,8 +675,8 @@ const appleStorefrontTrackAmbiguityMarginSecs = 0.5
 // 两档判据,跟 netease.go 的 bestAlbumTrackByDurationDetailed 同一套(同一件事两条路径
 // 不该一严一松):
 //
-//	① 曲名归一相等且过时长闸 到 铁证,直接取第一条。
-//	② 只剩跨文字系统一档(没有曲名证据、完全靠时长)到 扫完全表取时长最近的;若有一条
+//	① 曲名归一相等且过时长闸 → 铁证,直接取第一条。
+//	② 只剩跨文字系统一档(没有曲名证据、完全靠时长)→ 扫完全表取时长最近的;若有一条
 //	  **曲名不同**的亚军咬得太紧(差距 ≤ appleStorefrontTrackAmbiguityMarginSecs),就弃权 ——
 //	  专辑曲目表按**曲序**排列、跟像不像无关,不能只看"第一条落在容差内"。
 //

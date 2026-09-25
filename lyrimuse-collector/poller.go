@@ -1821,7 +1821,7 @@ func (p *poller) poll() {
 				if p.cur.Radio {
 					noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
 				}
-				// 播放器没报专辑名 到 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
+				// 播放器没报专辑名 → 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
 				// 挂在 AlbumHint 上、不动 Album:它只给呈现 / 上送用,见 snapshot.albumForUpload。
 				p.cur.AlbumHint = p.albumHintFor(p.cur)
 				p.snapshotStale = false

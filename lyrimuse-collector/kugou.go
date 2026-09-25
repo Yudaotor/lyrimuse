@@ -294,7 +294,7 @@ type kugouSong struct {
 	AlbumID    string  `json:"album_id"`
 	Duration   float64 `json:"duration"` // 秒
 	// TransParam.Language:酷狗搜索接口自带的语种标签,直接是人类可读字符串
-	// ("国语"/"粤语",如周杰伦《稻香》到"国语"、Beyond《海阔天空》到"粤语")。
+	// ("国语"/"粤语",如周杰伦《稻香》→"国语"、Beyond《海阔天空》→"粤语")。
 	TransParam struct {
 		Language string `json:"language"`
 	} `json:"trans_param"`

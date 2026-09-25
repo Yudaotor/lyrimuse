@@ -149,7 +149,7 @@ func TestDeviceCoverDecision(t *testing.T) {
 		t.Errorf("同一张图时该改用更清晰的候选, why=%s", why)
 	}
 
-	// ⑥ 候选更大但**不是同一张** 到 保留设备封面。 Immortal 那一档:设备那张小但对,
+	// ⑥ 候选更大但**不是同一张** → 保留设备封面。 Immortal 那一档:设备那张小但对,
 	//    候选那张大但挂错了。这条断言就是那个 bug 的回归测试。
 	ov, why = deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 4)))
 	if !ov {

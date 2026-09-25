@@ -73,7 +73,7 @@ struct NotchWindowRoot: View {
     }
 
     /// 上一次 body 见到的 `controller.isExpanded`,只给 cardAnimation 区分「hover 移开」用。
-    /// 依赖的时序:isExpanded 翻 false 到 objectWillChange 到 本视图 body 重估(此时这份
+    /// 依赖的时序:isExpanded 翻 false → objectWillChange → 本视图 body 重估(此时这份
     /// 还是 true,cardAnimation 据此选临界阻尼那条)→ body 之后 onChange 才把它写成 false
     /// (那次写入只改这个 @State,cardHeight/cardWidth 没变,不会再起一条动画)。
     @State private var wasExpanded = false
@@ -153,7 +153,7 @@ struct NotchWindowRoot: View {
             // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向
             // 0.20s 撑到全宽,纵向按住 0.06s 后 0.24s 长到全高,内容 0.10s 后 0.16s 淡入,总 0.30s。
             //
-            // 只裁剪、不缩放:scaleEffect(0.001 到 1) 会让封面模糊底一起被重新缩放
+            // 只裁剪、不缩放:scaleEffect(0.001 → 1) 会让封面模糊底一起被重新缩放
             // 裁切;裁剪路线内容始终在终态位置,封面一个像素都不动。
             // initialValue 是终态:keyframeAnimator 首次出现时停在 initialValue、trigger 变了才动,
             // 若 initialValue 写成起始态,视图第一次出现会永远卡在一条细缝上。每条轨用 MoveKeyframe

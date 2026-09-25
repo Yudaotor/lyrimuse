@@ -177,7 +177,7 @@ func getSpotifyState(ctx context.Context) (map[string]any, bool) {
 // 三条路径,按优先级:
 //   - 选了「自动识别」(不管还同时勾了别的具体播放器,auto 是超集,行为跟单选年代的
 //     playerAuto 完全一样)→ getAutoDetectedState;
-//   - 恰好只选了 Apple Music 一个、没有 auto 到 getAppleMusicOnlyState:主体是
+//   - 恰好只选了 Apple Music 一个、没有 auto → getAppleMusicOnlyState:主体是
 //     getAppleMusicState 的 AppleScript 路径,再补两个 MediaRemote 独有的键 —— 不补的话
 //     电台那一整层在这一种配置下完全不生效,理由见 getAppleMusicOnlyState 头注;
 //   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗/汽水音乐中的若干个,同样没有

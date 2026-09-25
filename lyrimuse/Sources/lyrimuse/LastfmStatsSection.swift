@@ -596,7 +596,7 @@ struct LastfmStatsSection: View {
         // 控件的点击(见 collapsibleHeader 那个 "?" 的注释),改成容器 onTapGesture +
         // 内嵌 Button —— SwiftUI 里子视图的手势优先,点数字弹明细、点别处开网页。
         HStack(spacing: 10) {
-            // 封面走三级兜底(自带 到 getinfo 纠正 到 同专辑兄弟),理由见
+            // 封面走三级兜底(自带 → getinfo 纠正 → 同专辑兄弟),理由见
             // LastfmStatsService.coverURL(for:)
             CachedImage(url: stats.coverURL(for: t)) {
                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)

@@ -806,8 +806,8 @@ public final class FeatureSettingsStore: ObservableObject {
         // lastfm_scrobble_artist_mode → lastfm_scrobble_first_artist_only),全都没有才
         // 兜底「原始」—— 跟 collector 侧 resolveLastfmMatch 是同一份规则,两侧要一起改。
         //
-        // 迁移表的承诺是**行为逐字不变**:旧 smart 到 智能、旧 all 到 原始、
-        // 旧 first 到 自定义且只开「合唱只发第一位」(到 照旧不打网络)。
+        // 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
+        // 旧 first → 自定义且只开「合唱只发第一位」(到 照旧不打网络)。
         if let mode = f.lastfmMatchMode.flatMap(LastfmMatchMode.init(rawValue:)) {
             lastfmMatchMode = mode
             lastfmMatchArtist = f.lastfmMatchArtist ?? false
