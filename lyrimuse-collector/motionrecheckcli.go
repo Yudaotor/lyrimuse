@@ -27,7 +27,7 @@ import (
 //   - motionCoverMatchesCover 才会真发两次 HTTP(取当前 cover_url 与官方首帧算指纹),
 //     开销是"这条记录值不值得算一次 8×8 均值哈希",不是"重新发现整个专辑"。
 //
-// 三条跟 retranslate-repeated 一致的约束:只挑会受益的条目(见 runRecheckMotionCover 里
+// 三条约束:只挑会受益的条目(见 runRecheckMotionCover 里
 // 那两条命中条件)、dry-run 默认、-apply 才真写且要求常驻实例已停(否则它下一次整份保存
 // 会把这边刚改的东西原样盖回来)。
 func runRecheckMotionCoverCLI(args []string) {

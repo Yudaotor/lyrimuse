@@ -35,10 +35,6 @@ func runBackfillRomaCLI(args []string) {
 	}
 	cfgDir := configDir()
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
-	setLyricsDir(features().LyricsDir)
-	if lyricsDir() == "" {
-		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
-	}
 
 	// 理由同 regenerate-jyutping:任何一种"没能确认独占"都当作拒绝,不 fail-open。
 	if *apply {
@@ -49,10 +45,7 @@ func runBackfillRomaCLI(args []string) {
 		}
 	}
 
-	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
-	// 顺序照抄 regenerate-jyutping:lyrics/ 是歌词家族的权威源,先让磁盘内容覆盖刚从 JSON
-	// 读出来的内存态,再在**权威内容**上生成,最后 export 写回去。
-	importLyricsFromFiles()
+	loadEnrichForMaintenance(cfgDir, *apply)
 	os.Exit(runBackfillRoma(*apply, *limit))
 }
 

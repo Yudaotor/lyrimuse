@@ -36,10 +36,6 @@ func runRegenerateJyutpingCLI(args []string) {
 	}
 	cfgDir := configDir()
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
-	setLyricsDir(features().LyricsDir)
-	if lyricsDir() == "" {
-		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
-	}
 
 	// 理由同 dedupe-entries(见 ensureExclusiveForDedupe 上方那段注释):任何一种"没能
 	// 确认独占"都当作拒绝,不 fail-open。
@@ -51,11 +47,7 @@ func runRegenerateJyutpingCLI(args []string) {
 		}
 	}
 
-	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
-	// 顺序照抄 main.go:lyrics/ 文件夹是歌词家族的权威源,先让磁盘内容覆盖刚从 JSON
-	// 读出来的内存态,再在**权威内容**上重算,最后 export 写回去。跳过这一步的话,会拿
-	// 一份可能已经过期的 JSON 去覆盖磁盘上更新的歌词。
-	importLyricsFromFiles()
+	loadEnrichForMaintenance(cfgDir, *apply)
 	os.Exit(runRegenerateJyutping(*apply))
 }
 

@@ -170,9 +170,16 @@ func lyricsFileSuffixOf(name string) string {
 // (见 startupmigration.go)。老调用点忽略返回值即可,行为不变。
 func importLyricsFromFiles() int { return importLyricsFromDir(lyricsDir()) }
 
+// importLyricsFromFilesReadOnly 同 importLyricsFromFiles,给常驻进程可能正在跑时的一次性命令预演用:只改内存,
+// 不落盘,也不清歌词临时文件(可能是常驻进程写到一半的)。
+func importLyricsFromFilesReadOnly() int { return importLyricsFrom(lyricsDir(), false) }
+
 // importLyricsFromDir 同 importLyricsFromFiles,只是扫的是指定目录。热切换歌词文件夹时先导入
 // 新目录、再把 lyricsDir 指过去(见 lyricsdirswitch.go)。
-func importLyricsFromDir(dir string) int {
+func importLyricsFromDir(dir string) int { return importLyricsFrom(dir, true) }
+
+// importLyricsFrom:persist=false 时不清临时文件、不保存缓存,其余与 importLyricsFromDir 相同。
+func importLyricsFrom(dir string, persist bool) int {
 	if dir == "" {
 		return 0
 	}
@@ -193,7 +200,9 @@ func importLyricsFromDir(dir string) int {
 		// 启动时清一次——导出过程中不能扫(会误删另一轮正在写的临时文件)。不在四个后缀里,
 		// 下面的分组本来也认不出它,清扫只是别让它永远躺在文件夹里。
 		if isLyricsTempFile(name) {
-			_ = os.Remove(filepath.Join(dir, name))
+			if persist {
+				_ = os.Remove(filepath.Join(dir, name))
+			}
 			continue
 		}
 		suffix := lyricsFileSuffixOf(name)
@@ -270,6 +279,8 @@ func importLyricsFromDir(dir string) int {
 		}
 	}
 	enrichMu.Unlock()
-	saveEnrichCache() // 内部会检查 enrichDirty,这一轮什么都没变时是无害的空操作
+	if persist {
+		saveEnrichCache() // 内部会检查 enrichDirty,这一轮什么都没变时是无害的空操作
+	}
 	return adopted
 }

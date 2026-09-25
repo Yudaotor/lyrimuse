@@ -84,19 +84,11 @@ func runCrossAlbumReuseCLI(args []string) {
 	//
 	// 不复用 acquireSingleInstanceLock:那个在锁文件打不开时 fail-open(让常驻实例照跑),
 	// 对常驻服务是对的取舍,对一个会改数据的一次性命令是错的。
-	if *apply {
-		if !ensureExclusiveForDedupe(cfgDir) {
-			log.Fatalf("cross-album-reuse: collector is running (or the exclusive lock is unavailable); stop it before -apply")
-		}
-		setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
-		setLyricsDir(features().LyricsDir)
-		if lyricsDir() == "" {
-			setLyricsDir(filepath.Join(cfgDir, "lyrics"))
-		}
-		enrichPath = filepath.Join(cfgDir, clientName+"-enrich-cache.json")
+	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+		log.Fatalf("cross-album-reuse: collector is running (or the exclusive lock is unavailable); stop it before -apply")
 	}
-
-	loadEnrichCacheReadOnly(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
+	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
+	loadEnrichForMaintenance(cfgDir, *apply)
 	enrichMu.Lock()
 	snapshot := make(map[string]enrichEntry, len(enrichCache))
 	for k, v := range enrichCache {

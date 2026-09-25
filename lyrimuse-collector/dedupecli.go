@@ -293,10 +293,6 @@ func runDedupeEntriesCLI(args []string) {
 	}
 	cfgDir := configDir()
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
-	setLyricsDir(features().LyricsDir)
-	if lyricsDir() == "" {
-		setLyricsDir(filepath.Join(cfgDir, "lyrics"))
-	}
 
 	// 严格的单实例检查,而且**只对 -apply 生效前必须过**。
 	//
@@ -316,7 +312,7 @@ func runDedupeEntriesCLI(args []string) {
 		}
 	}
 
-	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
+	loadEnrichForMaintenance(cfgDir, *apply)
 	os.Exit(runDedupeEntries(*apply))
 }
 

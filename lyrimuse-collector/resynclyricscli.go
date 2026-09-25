@@ -61,7 +61,7 @@ func runResyncLyricsCLI(args []string) {
 		os.Exit(1)
 	}
 
-	loadEnrichCache(filepath.Join(cfgDir, clientName+"-enrich-cache.json"))
+	loadEnrichForMaintenance(cfgDir, *apply)
 	os.Exit(runResyncLyrics(keys, *apply))
 }
 
