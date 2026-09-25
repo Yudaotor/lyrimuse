@@ -30350,6 +30350,23 @@
         }
       }
     },
+    "翻唱：按翻唱者" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cover: by the covering artist"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻唱：按翻唱者"
+          }
+        }
+      }
+    },
     "无源应答" : {
       "extractionState" : "manual",
       "localizations" : {

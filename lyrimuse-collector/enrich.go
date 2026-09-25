@@ -2833,7 +2833,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 「Musiq Soulchild」,专辑回填的 1 档旁证也顺带有了);没救回来就当没发生过,原身份那批
 	// 结果照旧往下走别名轮。递归有界:拆出来的曲名比原曲名少一段破折号,拆到没有破折号为止。
 	// 「Song - Remastered」这类被拆错的歌名最多白查一轮、候选过不了打分,不会多出错结果。
-	if !hasUsableLyricCandidate(results) {
+	// 翻唱重入那一轮不拆(coverPerformerOnly):拆出来的是曲名里别的名字,不是翻唱者。
+	if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {
 		if splitArtist, splitTitle, ok := albumHintTitleSplit(title); ok {
 			log.Printf("lyrics: %q - %q has no usable candidate, retrying as title-split identity %q - %q", artist, title, splitArtist, splitTitle)
 			splitCtx := withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)
@@ -2843,6 +2844,13 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 					artist, title, splitArtist, splitTitle, len(splitResults), lyricSourcesWithCandidates(splitResults))
 				return splitNe, splitResults
 			}
+		}
+	}
+	// 翻唱重入:曲名写着翻唱者(「(Cover by X)」「Covered by X」)、原身份一个能用的候选都没有时,换成翻唱者
+	// 整个重入一次,只认翻唱版本身,见 coverRescue。形态同上面的拆分重入:救回来就用,没救回来当没发生过。
+	if !hasUsableLyricCandidate(results) {
+		if coverNe, coverResults, ok := coverRescue(ctx, artist, title, album, durationSecs, onUpdate); ok {
+			return coverNe, coverResults
 		}
 	}
 	// 判据是"有没有**能用**的候选",不是"有没有候选"。写成 `len(results) > 0` 的话:九个源
@@ -2881,13 +2889,20 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// 这一条**只在救急(rescue)时**才问:原名一轮已经有源答出这首歌,说明本地署名本身没问题、
 		// 缺的那几个源多半是曲库里没有,再拿曲名去 iTunes 反查署名只会多两到四次请求、还可能把同名
 		// 同长的翻唱者带进来白查一轮;它要救的形状是"九个源全空"这种,别扩到"某个源缺"上。
-		var titleSearchIdentities []string
-		if rescue {
-			titleSearchIdentities = appleTitleSearchIdentities(ctx, artist, title, durationSecs)
+		//
+		// 翻唱重入那一轮(coverPerformerOnly)只用 retryArtistIdentities:前三路都是按曲名 / 专辑反推「这首歌是谁唱的」,
+		// 对翻唱推出来的是原唱,换过去查到的就是原唱的词,不是这版翻唱。
+		var catalogIdentities, storefrontIdentities, titleSearchIdentities []string
+		if !coverPerformerOnly(ctx) {
+			catalogIdentities = appleCatalogSearchIdentities(artist, title, album)
+			storefrontIdentities = appleStorefrontArtistIdentities(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results))
+			if rescue {
+				titleSearchIdentities = appleTitleSearchIdentities(ctx, artist, title, durationSecs)
+			}
 		}
 		altIdentities := dedupeArtistIdentities(
-			appleCatalogSearchIdentities(artist, title, album),
-			appleStorefrontArtistIdentities(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results)),
+			catalogIdentities,
+			storefrontIdentities,
 			titleSearchIdentities,
 			retryArtistIdentities(ctx, artist))
 		if len(altIdentities) > 0 {

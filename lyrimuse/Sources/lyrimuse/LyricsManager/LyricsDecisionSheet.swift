@@ -81,6 +81,7 @@ struct LyricsDecisionSheet: View {
         switch reason ?? "" {
         case "": return L10n.t("首轮")
         case "title-split": return L10n.t("按「署名 - 歌名」拆分")
+        case "cover-credit": return L10n.t("翻唱：按翻唱者")
         case "alias-rescue": return L10n.t("别名轮：一个候选都没有")
         // 「缺罗马音」三个字有歧义(「这里说的缺罗马音是什么意思？」)——
         // 它像在描述一个结果状态,其实说的是**触发原因**,而且省掉了主语(谁缺)。

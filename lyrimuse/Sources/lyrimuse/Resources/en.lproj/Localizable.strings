@@ -1242,6 +1242,7 @@
 "网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
 "罗马音" = "Romanization";
 "置于最顶层" = "Always on Top";
+"翻唱：按翻唱者" = "Cover: by the covering artist";
 "翻译语言包" = "Translation Languages";
 "耳机" = "Headphones";
 "联网搜索候选歌词" = "Search Online for Lyrics";

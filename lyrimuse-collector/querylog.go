@@ -39,6 +39,7 @@ import (
 const (
 	lyricQueryReasonPrimary      = ""                         // 首轮:本地标签原样
 	lyricQueryReasonTitleSplit   = "title-split"              // 「署名 - 曲名」拆分重入
+	lyricQueryReasonCoverCredit  = "cover-credit"             // 翻唱:换成曲名里写的翻唱者重入
 	lyricQueryReasonAliasRescue  = "alias-rescue"             // 别名轮:一个可用候选都没有
 	lyricQueryReasonAliasRoma    = "alias-roma"               // 别名轮:缺罗马音/语种信号
 	lyricQueryReasonAliasMissing = "alias-missing"            // 别名轮:某几个源没给出候选
@@ -50,10 +51,11 @@ const (
 	lyricQueryReasonTitleStorefront = "title-from-apple-storefront"
 )
 
-// lyricQueryReasons 是上面那八条(不含首轮的空串)的清单,给测试用。
+// lyricQueryReasons 是上面那九条(不含首轮的空串)的清单,给测试用。
 func lyricQueryReasons() []string {
 	return []string{
 		lyricQueryReasonTitleSplit,
+		lyricQueryReasonCoverCredit,
 		lyricQueryReasonAliasRescue,
 		lyricQueryReasonAliasRoma,
 		lyricQueryReasonAliasMissing,
