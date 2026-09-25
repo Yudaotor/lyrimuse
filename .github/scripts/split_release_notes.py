@@ -2,8 +2,7 @@
 """把双语（英中对照）发布日志拆成单语言的、真正排版过的 HTML，喂给 Sparkle
 （appcast 的 <description xml:lang> 内嵌，或 <sparkle:releaseNotesLink> 资产）。
 
-输入格式就是本仓 CHANGELOG.md 各节 / tag 注释的既有约定（2026-09-16 前是根目录的
-RELEASE_NOTES_v*.md，已合并进 CHANGELOG.md）：
+输入格式就是本仓 CHANGELOG.md 各节 / tag 注释的既有约定：
   - 开头若干个空行分隔的段落：英文段和中文段各自成段；
   - 小节标题形如 "New / 新功能"（英文 / 中文，按**最后一个** " / " 切开——
     "Last.fm & scrobbling / Last.fm 与打卡" 这种左半边自带斜杠的也能对付）；
@@ -14,8 +13,7 @@ RELEASE_NOTES_v*.md，已合并进 CHANGELOG.md）：
 （"The One演唱会"、演唱会/现场/音乐会 这类例子）占比远低于阈值，不会误判——
 这是对本仓行文习惯的经验阈值，不是通用断言；改了行文风格要回来核这个阈值。
 
-渲染（2026-09-03，用户看到 Sparkle 弹窗里 <pre> 排版报的）：Sparkle 的说明
-WebView 渲染 HTML 但**不渲染 markdown**，而 notes 源文件是 76 列硬换行的
+渲染：Sparkle 的说明 WebView 渲染 HTML 但**不渲染 markdown**，而 notes 源文件是 76 列硬换行的
 markdown——直接塞 <pre> 会得到"句子中间断行 + 裸 **粗体** [链接]()"的观感。
 所以这里把 markdown 转成真 HTML：标题/列表/加粗/链接/表格，段与 li 内的硬换行
 按 CJK 规则合并（两侧任一是 CJK 就直接拼接，否则补空格——中文句子拼接时不能
@@ -23,9 +21,8 @@ markdown——直接塞 <pre> 会得到"句子中间断行 + 裸 **粗体** [链
 
 用法：split_release_notes.py NOTES.md OUT_DIR
 产出：OUT_DIR/notes.{en,zh-Hans}.html（自包含页面：内嵌 CDATA 或挂资产均可用）。
-出错宁可整体失败也不出半截文件。2026-09-05 起 .github/scripts/check_release_tag.sh
-在 CI 构建前先跑一遍本脚本，非零退出＝拒发这个 tag；appcast 那步的单份 description
-兜底只剩安全阀。
+出错宁可整体失败也不出半截文件。.github/scripts/check_release_tag.sh 在 CI 构建前先跑
+一遍本脚本，非零退出＝拒发这个 tag；appcast 那步的单份 description 兜底只剩安全阀。
 """
 import html
 import pathlib

@@ -1,17 +1,14 @@
 name: CI
 
-# 每次 push 到 dev/main 和每个 PR 都跑一遍测试。
+# 每次 push 到 dev/main 和每个 PR 都跑一遍全部检查;release.yml 打 tag / 手动 dispatch 时经
+# workflow_call 对被发布的那个 commit 再整套跑一遍(发版不再有自己的一份测试步骤,检查只在这里定义)。
 #
-# release.yml 里也有同样的测试步骤，但它只在打 tag（和手动 dispatch）时触发 —— 也就是说
-# 平时提交挂没挂，全靠开发者记得在本地跑，等发版那一刻才由流水线发现。这个 workflow 把那
-# 道网关前移到每次提交。
-#
-# tag push 不会重复触发这里：下面只列了 branches，没有 tags 过滤器，而 GitHub 对 tag 的
-# push 事件只匹配 tags:，不匹配 branches:。
+# tag push 不会从 push 触发这里:下面只列了 branches,GitHub 对 tag 的 push 事件只匹配 tags:。
 on:
   push:
     branches: [dev, main]
   pull_request:
+  workflow_call:
 
 concurrency:
   # 跟 release 相反，这里**要**取消进行中的旧运行：连续推几次时只有最后一次的结论有意义，
@@ -35,10 +32,10 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
           # go.sum 在 lyrimuse-collector/ 而不是仓库根。不写这一行 setup-go 会找不到

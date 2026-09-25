@@ -21,28 +21,13 @@
 # (Sparkle 下载并解开这个 zip 完成自我升级),Homebrew cask 也从同一个 zip 安装。dmg 纯粹
 # 是给"去 Releases 页面手动下载"的人的,观感更像正经的 macOS 分发方式。
 #
-# appcast 里**主包那条 item 必须带这个子元素**:
+# appcast(两个 item,主包那条带 <sparkle:hardwareRequirements>arm64</...> 子元素)由 release.yml 生成,
+# 形状由 .github/scripts/check_appcast.py 校验,见 docs/releasing.md「流水线的硬约束」。
 #
-#     <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+# 不塞进 build.sh:build.sh 每次本地迭代都跑、职责是装了就重启;这里要构建两份、压缩、跑 hdiutil,
+# 只在发布时需要。
 #
-# Sparkle 在 Intel 客户端上会据此判定该条不适用、直接跳过(见 Sparkle 的
-# SPUAppcastItemStateResolver.isArm64HardwareRequirementOK),于是 Intel 用户只会看到"已是
-# 最新",而不会被推一个 arm64-only、装上就打不开的包。漏了它,Intel 用户会被自动更新推坏
-# —— 这是这套双资产方案里唯一一处"漏了就出事"的地方。
-#
-# 它是 <item> 的**子元素**,不是 <enclosure> 上的属性。这行注释之前写的就是
-# 属性写法(sparkle:hardwareRequirements="arm64"),错的:Sparkle 用
-# SUAppcastElementHardwareRequirements = "sparkle:hardwareRequirements" 从 item 的元素字典里
-# 取值,它自己的测试样例(Tests/Resources/testappcast_arm64HardwareRequirement.xml)也是写成
-# 元素。写成属性 XML 解析不报错、但匹配不到任何东西 —— 于是每个 Intel 客户端照样会被推
-# 这条更新,正好是它要防的那件事。
-#
-# 为什么不塞进 build.sh:build.sh 每次本地迭代都跑、职责是装了就重启;这里要构建两份、压缩、
-# 跑 hdiutil,只在发布时需要。同时也把"发布包到底是怎么打出来的"写进仓库 —— 在此之前它只
-# 存在于手工操作里,没有任何脚本记录。
-#
-# 这个脚本**不做**签名/公证/上传:Sparkle 的 EdDSA 私钥和 GitHub 凭据都不该被打包脚本碰。
-# 剩下的手工步骤在最后会打印出来。
+# 这个脚本**不做** EdDSA 签名 / 上传:Sparkle 私钥和 GitHub 凭据都不该被打包脚本碰,那两步在 release.yml。
 set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
@@ -83,9 +68,8 @@ for v in "${VARIANTS[@]}"; do
     echo "!! 两个变体版本号不一致($VERSION vs $ver)" >&2; exit 1
   fi
 
-  # 发布闸门:架构不符是**硬失败**,不像 build.sh 那样只打警告。v1.0.0~v1.2.0 三个版本都是
-  # 在没人察觉的情况下发成 arm64-only 的,而发布不可撤回 —— 唯一可靠的拦法就是"打包这步
-  # 过不去"。两个方向都查:主包多带一份 x86_64 就会触发那条 macOS 告警,Intel 包少一半就
+  # 发布闸门:架构不符是**硬失败**,不像 build.sh 那样只打警告 —— 发布不可撤回,唯一可靠的拦法
+  # 是"打包这步过不去"。两个方向都查:主包多带一份 x86_64 就会触发那条 macOS 告警,Intel 包少一半就
   # 等于没做。用 find -type f(不加 -perm)以免漏掉没有执行位的 Mach-O。
   bad=""
   while IFS= read -r f; do
@@ -214,18 +198,6 @@ for v in "${VARIANTS[@]}"; do
   printf "    %-40s %s\n" "$base.dmg" "$(human_size "$DIST/$base.dmg")"
 done
 
-PRIMARY="Lyrimuse-v$VERSION-macos"
-INTEL="Lyrimuse-v$VERSION-macos-intel"
 echo
-echo "==> 剩下的手工步骤(这个脚本故意不做):"
-echo "    1) 给**主包** zip 签 EdDSA、生成 appcast.xml,那条 item 必须带:"
-echo "         <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>   (item 的子元素,不是 enclosure 的属性)"
-echo "       (没有它,Intel 用户会被自动更新推一个 arm64-only 的包,装上打不开)"
-echo "       enclosure 指向 $PRIMARY.zip,不要指向 -intel 那份"
-echo "    2) gh release create v$VERSION --title \"Lyrimuse v$VERSION\" \\"
-echo "         dist/$PRIMARY.zip dist/$PRIMARY.zip.sha256 dist/$PRIMARY.dmg \\"
-echo "         dist/$INTEL.zip dist/$INTEL.zip.sha256 dist/$INTEL.dmg appcast.xml"
-echo "       release notes 里写清楚:普通用户下不带后缀那份,Intel Mac 下 -intel 那份"
-echo "    3) 更新 Homebrew cask(Yudaotor/homebrew-lyrimuse):version + sha256,"
-echo "       并加 depends_on arch: :arm64(cask 装的是主包,Intel 机器该被拒绝而不是装个跑不了的)"
-echo "       主包 sha256 = $(awk '{print $1}' "$DIST/$PRIMARY.zip.sha256")"
+echo "==> 资产已就绪。appcast、签名与发布由 release.yml 在打 tag 时完成;Homebrew cask 用 CI 发布的"
+echo "    .sha256 资产更新(本地包的哈希跟 CI 的不同)。完整步骤见 docs/releasing.md。"

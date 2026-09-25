@@ -19,9 +19,8 @@ appcast 只在**真打 tag** 时才生成得出来,而它错了的表现全是**
 
 # 为什么是独立文件而不是内嵌 heredoc
 
-`run: |` 块里每一行的缩进都不能浅于块本身,而 heredoc 的体又必须顶格(否则 python 收到的
-每行都带前导空白、直接 IndentationError)。这两条互相冲突 —— release.yml 里记着 2026-08-16
-踩过这个坑。放独立文件同时还能本地直接跑:
+放独立文件而不是内嵌进 release.yml:`run: |` 块里每一行的缩进都不能浅于块本身,而 heredoc 的体又
+必须顶格(否则 python 收到的每行都带前导空白、直接 IndentationError),两条互相冲突。独立文件还能本地直接跑:
 
     python3 .github/scripts/check_appcast.py 某份appcast.xml
 

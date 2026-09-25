@@ -4,17 +4,13 @@
 # 五条,任一不满足就非零退出、什么都不构建:
 #   1. tag 名形态合法——委托 lyrimuse/scripts/build-version.sh(vX.Y.Z / vX.Y.Z-(alpha|beta|rc).N 的唯一定义);
 #   2. 必须是 annotated tag(git cat-file -t == tag)。轻量 tag 的 %(contents) 返回的是 commit message,
-#      CI 会把它当发布日志发出去;浅克隆把 annotated tag 剥成 commit 时也落在这条
-#      (v1.0.0/v1.0.1 就是这样静默丢过正文,Release 页只剩 GitHub 自动生成的 compare 链接);
-#   3. 正文去空白后非空(`git tag -a -m ''` 是能打出来的,原来 appcast 那步兜底成一句 "See the GitHub release page");
+#      CI 会把它当发布日志发出去;浅克隆把 annotated tag 剥成 commit 时也落在这条;
+#   3. 正文去空白后非空(`git tag -a -m ''` 是能打出来的);
 #   4. 正文能被 .github/scripts/split_release_notes.py 拆成中英两份——AGENTS.md「提交」的两种写法
 #      (<!-- lang:en --> / <!-- lang:zh-Hans --> 标记式,或逐条中英交错式)都认,判据是两边都有实质内容,
 #      不是查两行注释在不在。
-#   5. 正式版 tag 的正文与 CHANGELOG.md 对应节**逐字相同**。发版日志过去是根目录
-#      一版一个 RELEASE_NOTES_vX.Y.Z.md,只当 `git tag -F` 的输入,发完就没有任何东西再读它——
-#      于是 RELEASE_NOTES_v1.7.0.md 悄悄比 tag 正文多了一行「## Download / 下载」标题都没人发现。
-#      现在日志合进 CHANGELOG.md、由 changelog_section.sh 抽节喂给 -F,这一条负责保证两边不再分叉。
-#      预发布 tag(vX.Y.Z-(alpha|beta|rc).N)跳过:测试版不进 CHANGELOG。
+#   5. 正式版 tag 的正文与 CHANGELOG.md 对应节**逐字相同**(打 tag 时由 changelog_section.sh 抽节
+#      喂给 -F,这一条保证两边不分叉)。预发布 tag(vX.Y.Z-(alpha|beta|rc).N)跳过:测试版不进 CHANGELOG。
 # 用法: check_release_tag.sh <tag> [--body-out FILE]
 #   --body-out 把正文原样写到 FILE(CI 用它喂 appcast 与 Release 正文,正文只读这一次)。
 # 报错文案用英文,跟 release.yml 其它 ::error:: 一致(CI 日志的读者不一定读中文)。
