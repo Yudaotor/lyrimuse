@@ -72,3 +72,64 @@ func TestParseAppleMusicUpcomingHonorsLimit(t *testing.T) {
 		t.Fatalf("该截到 3 首,得到 ok=%v len=%d", ok, len(got))
 	}
 }
+
+// AppleScript 实数转文本跟随系统地区:德 / 法 / 俄等地区下小数点是逗号,≥10000 还会变科学计数。
+// 这些值都是 `osascript 脚本 -AppleLocale de_DE` 实测输出的形状。
+func TestParseAppleScriptRealAcceptsLocaleDecimalComma(t *testing.T) {
+	cases := []struct {
+		in   string
+		want float64
+	}{
+		{"243.826", 243.826},
+		{"243,826", 243.826},
+		{"3,25\n", 3.25},
+		{"25,0", 25},
+		{"1,23455E+4", 12345.5},
+		{"1.23455E+4", 12345.5},
+		{"208", 208},
+	}
+	for _, c := range cases {
+		got, err := parseAppleScriptReal(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("parseAppleScriptReal(%q) = %v, %v;要 %v", c.in, got, err, c.want)
+		}
+	}
+	for _, bad := range []string{"", "x", "missing value"} {
+		if _, err := parseAppleScriptReal(bad); err == nil {
+			t.Errorf("parseAppleScriptReal(%q) 该报错", bad)
+		}
+	}
+}
+
+func TestParseAppleMusicUpcomingLocaleDecimalComma(t *testing.T) {
+	out := "Earth Song\tMichael Jackson\n" +
+		"You Are Not Alone\tMichael Jackson\tHIStory Continues\t344,825988769531\n"
+	got, ok := parseAppleMusicUpcoming(out, "Michael Jackson", "Earth Song", 5)
+	if !ok || len(got) != 1 {
+		t.Fatalf("该解出 1 首,得到 ok=%v got=%+v", ok, got)
+	}
+	if got[0].duration != 344.825988769531 {
+		t.Errorf("逗号小数点的时长解成了 %v —— 逗号地区下会静默变 0,预取选源少了时长这一票", got[0].duration)
+	}
+}
+
+func TestParseMusicAppAlbumTracks(t *testing.T) {
+	out := "Bad\tMichael Jackson\t247,16\n" +
+		"The Way You Make Me Feel\tMichael Jackson\t298.426\r\n" +
+		"\n" +
+		"坏行\n" +
+		"Speed Demon\tMichael Jackson\tmissing value\n"
+	got := parseMusicAppAlbumTracks(out)
+	if len(got) != 3 {
+		t.Fatalf("该解出 3 首(空行和缺列的行跳过),得到 %+v", got)
+	}
+	if got[0].duration != 247.16 || got[1].duration != 298.426 {
+		t.Errorf("时长解错: %v / %v", got[0].duration, got[1].duration)
+	}
+	if got[1].title != "The Way You Make Me Feel" {
+		t.Errorf("行尾 \\r 没剥掉: %q", got[1].title)
+	}
+	if got[2].duration != 0 {
+		t.Errorf("解不出的时长该按未知(0)处理,得到 %v", got[2].duration)
+	}
+}

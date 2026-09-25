@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -326,7 +325,7 @@ end tell`
 	if err != nil {
 		return 0, false
 	}
-	p, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	p, err := parseAppleScriptReal(string(out))
 	if err != nil || p < 0 {
 		return 0, false
 	}

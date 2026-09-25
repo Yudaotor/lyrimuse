@@ -260,8 +260,14 @@ end tell`, appleScriptQuote(album))
 	if err != nil {
 		return nil, false
 	}
+	return parseMusicAppAlbumTracks(string(out)), true
+}
+
+// parseMusicAppAlbumTracks 解 albumTracksFromMusicApp 那段脚本的输出:每行 名\t歌手\t时长(秒)。
+// 时长解不出来记 0(按"未知"处理),不丢这一行。
+func parseMusicAppAlbumTracks(out string) []albumTrack {
 	var tracks []albumTrack
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue
@@ -270,10 +276,10 @@ end tell`, appleScriptQuote(album))
 		if len(parts) != 3 {
 			continue
 		}
-		dur, _ := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+		dur, _ := parseAppleScriptReal(parts[2])
 		tracks = append(tracks, albumTrack{title: parts[0], artist: parts[1], duration: dur})
 	}
-	return tracks, true
+	return tracks
 }
 
 // appleScriptQuote 把一个字符串安全地嵌进 AppleScript 双引号字符串字面量里——转义反斜杠
@@ -282,6 +288,15 @@ func appleScriptQuote(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	return `"` + s + `"`
+}
+
+// parseAppleScriptReal 解析 AppleScript 里实数转成的文本(`x as text`、或拼进字符串)。
+// 这个转换跟随系统地区的小数分隔符:德 / 法 / 俄等地区下 243.826 输出 "243,826"、
+// 12345.5 输出 "1,23455E+4",直接交给 ParseFloat 会失败。实数文本不带千分位,
+// 所以出现的逗号只可能是小数点。凡是从 osascript 输出里取实数都走这里;
+// 要么就在脚本里先乘 1000 转成 integer(整数不受地区影响)。
+func parseAppleScriptReal(s string) (float64, error) {
+	return strconv.ParseFloat(strings.Replace(strings.TrimSpace(s), ",", ".", 1), 64)
 }
 
 // ---- 播放队列:接下来会播的几首(见 upcoming.go)----
@@ -373,7 +388,7 @@ func parseAppleMusicUpcoming(out, artist, title string, n int) ([]upcomingTrack,
 		if len(parts) != 4 || parts[0] == "" {
 			continue
 		}
-		dur, _ := strconv.ParseFloat(strings.TrimSpace(parts[3]), 64)
+		dur, _ := parseAppleScriptReal(parts[3])
 		res = append(res, upcomingTrack{
 			artist: parts[1], title: parts[0], album: parts[2],
 			// Music.app 的 duration 本来就是秒。
