@@ -662,8 +662,8 @@ private struct IdleLastTrackHero: View {
 
     // MARK: 取数
 
-    /// 封面 + 选句一次取完,全在后台线程:首次会解析整份 enrich 缓存 JSON(几 MB),
-    /// 之后靠 mtime 缓存是 µs 级。两件事共用同一次解析,别分两个 task。
+    /// 封面地址和歌词正文在主线程读(EnrichCacheReader 只许在主线程用:它的静态缓存没有锁,
+    /// 后台线程调它就是跟轮询并发改同一批字典;缓存已加载时这两次读取是 µs 级),解析与选句放后台。
     private func load() {
         let a = lastArtist, t = lastTitle, al = lastAlbum
         guard !t.isEmpty else {
@@ -671,19 +671,19 @@ private struct IdleLastTrackHero: View {
             quotes = []
             return
         }
+        let raw = EnrichCacheReader.coverURL(artist: a, title: t, album: al)
+        let lyrics = EnrichCacheReader.lookup(artist: a, title: t, album: al)?.lyrics ?? ""
         Task.detached(priority: .userInitiated) {
-            let raw = EnrichCacheReader.coverURL(artist: a, title: t, album: al)
             // 去掉网易云那个 `?param=600y600`(只降不升,对 216pt = 432px 的大图是白扔分辨率)
             let cover = raw.map { EnrichCacheReader.nativeSizedCoverURL($0) }
             var picked: [[String]] = []
-            if let entry = EnrichCacheReader.lookup(artist: a, title: t, album: al),
-               !entry.lyrics.isEmpty {
+            if !lyrics.isEmpty {
                 // 必须走 LRCParser:酷狗那批 CRLF 歌词自己 split("\n") 切不开,会把整首歌
                 // 当成一行(「整个桌面都是歌词」那个 bug 的同一个坑)。
                 //
                 // 排序 / 剥对唱标记 / 挡署名 / **把被拆成多行的碎片并回整句** / 收尾复验,
                 // 整条链都在 LyricQuotePicker 里(纯函数,被 selftest 钉住),这里只喂解析结果。
-                let parsed = LRCParser.parse(entry.lyrics)
+                let parsed = LRCParser.parse(lyrics)
                     .map { LyricQuotePicker.Line(timeMs: $0.timeMs, text: $0.text) }
                 picked = LyricQuotePicker.phrases(parsed, trackTitle: t, trackArtist: a)
             }

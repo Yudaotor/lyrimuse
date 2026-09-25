@@ -178,8 +178,8 @@ public struct EnrichCacheLyrics {
 @MainActor
 public enum EnrichCacheReader {
     private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
-    /// collector 给 App 的精简索引(去掉逐字 / 罗马音 / 译文 / 纯文本采纳四块正文,约为主缓存的三分之一)。
-    /// 「歌词管理」改完主缓存后会删掉它(`indexFileName`),见 `readsIndex`。
+    /// collector 给 App 的精简索引(去掉逐字 / 罗马音 / 译文 / 纯文本采纳四块正文,约为主缓存的三分之一),
+    /// collector 每次存盘最后写它。
     public nonisolated static let indexFileName = "lyrimuse-enrich-index.json"
     private static let indexURL = LyrimusePaths.configFile(indexFileName)
     private static let bodiesDir = LyrimusePaths.configFile("lyrimuse-lyrics-bodies")
@@ -216,8 +216,8 @@ public enum EnrichCacheReader {
     // 构建 —— 见 looseMatch(性能审计:原来每次精确 miss 都对全部 ~900 个 key
     // 逐个现算 ICU 繁简 transform,~7ms 主线程,新歌未解析窗口内每 2s 重复一遍)。
     private static var cachedLooseIndex: [String: String]?
-    // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadNow 的同步解码
-    // 会推进世代号,把在飞的旧结果作废)。nil = 没有在飞的后台解码。
+    // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadSoon 与内存压力让出
+    // 会推进世代号,把在飞的旧结果作废)。inFlightGeneration nil = 没有在飞的后台解码。
     private static var decodeGeneration = 0
     private static var inFlightGeneration: Int?
     private static var memoryPressureSource: DispatchSourceMemoryPressure?
@@ -303,8 +303,7 @@ public enum EnrichCacheReader {
     }
 
     /// 此刻该读哪一份:精简索引存在、不比主缓存旧(容 5 秒 —— collector 先写主缓存、最后写索引,中间有
-    /// 一小段)、且这一版没被判过作废,就读索引;否则读主缓存(老版本 collector 没写过索引 /「歌词管理」刚改过
-    /// 主缓存把索引删了 / 正文小文件对不上)。
+    /// 一小段)、且这一版没被判过作废,就读索引;否则读主缓存(老版本 collector 没写过索引 / 正文小文件对不上)。
     private static func currentSource() -> (url: URL, mtime: Date?, isIndex: Bool) {
         let main = mtime(of: cacheURL)
         if let idx = mtime(of: indexURL), let main, idx >= main.addingTimeInterval(-5), idx != indexRejectedAt {
@@ -755,10 +754,9 @@ public enum EnrichCacheReader {
     // 内容未换,拿它触发会把 lastEnrichMTime 提前推进,后台解码完成后再没有任何东西触发
     // reload,新歌词永远不上屏。
     //
-    // 两个例外仍走同步解码:①首次(cachedEntries == nil,冷启动/内存压力清空后)——保住
-    // "启动即有词",一次 ~40ms 在启动期无感;②reloadNow()(「歌词管理」保存/删除后的
-    // 强制重读)——用户显式操作,必须立刻读到刚写的内容,50ms 可接受,且推进世代号把
-    // 在飞的旧后台结果作废(对抗核实钉的豁免入口)。
+    // 只有冷启动(cachedEntries == nil 且不是内存压力让出的)走同步解码,保住"启动即有词"。
+    // 其余一律后台:包括「歌词管理」改完之后的重读(reloadSoon)—— 精简索引已经 32MB,release 构建
+    // 实测同步解一次 125~200ms,四个展示面一起卡;以及内存压力让出之后的重建(见 isRebuilding)。
     // 解码失败(文件损坏/半写状态)保留旧缓存不清空——下一拍 mtime 仍不等,自然重试。
 
     /// 「当前已解码内容」对应的文件 mtime。给 apply() 当重灌触发键(见上面那段注释)。
@@ -799,11 +797,19 @@ public enum EnrichCacheReader {
         }
     }
 
-    /// 同步重读(「歌词管理」保存/删除后由 forceReloadLyricsForCurrentTrack 调)。
-    public static func reloadNow() {
+    /// 歌词数据刚被改过(「歌词管理」保存/删除、采纳候选,经 forceReloadLyricsForCurrentTrack)时调:作废在飞的
+    /// 旧结果、立刻起一次后台解码;解完经 onContentAdopted 捅一次 poll,那一拍按 decodedContentVersion 重灌歌词。
+    /// 别改回在主线程同步解,理由见上面那段。
+    public static func reloadSoon() {
         decodeGeneration += 1 // 作废在飞的后台解码结果
         inFlightGeneration = nil
-        decodeSynchronously()
+        kickBackgroundDecode()
+    }
+
+    /// 缓存被内存压力让出、正在(或等着)后台重建。这段时间 loadEntries 返回 nil 而不是同步解,
+    /// LocalPlaybackSource 也不因为"内容版本变了"去重灌同一首歌(引擎里已经解析好的歌词照常显示)。
+    static var isRebuilding: Bool {
+        cachedEntries == nil && (releasedUnderMemoryPressure || inFlightGeneration != nil)
     }
 
     private static func decodeSynchronously() {
@@ -839,7 +845,7 @@ public enum EnrichCacheReader {
                 .flatMap { try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: $0) }
             await MainActor.run {
                 if inFlightGeneration == gen { inFlightGeneration = nil }
-                guard gen == decodeGeneration else { return } // 被 reloadNow/压力清空顶掉
+                guard gen == decodeGeneration else { return } // 被 reloadSoon/压力清空顶掉
                 guard let decoded else { return }             // 失败保留旧缓存,下一拍重试
                 adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true)
             }
@@ -912,7 +918,13 @@ public enum EnrichCacheReader {
         // 常规读取路径不再自己 stat/解码:poll 每拍的 refreshIfNeeded() 负责推进内容。
         // 这里兜一层"从未加载过"(App 启动后第一次消费先于第一拍 poll,或设置窗的
         // LastfmStatsService 独立调进来)的同步初始化。
-        if cachedEntries == nil { decodeSynchronously() }
+        // 内存压力让出之后别在这里同步解:那正是 releasedUnderMemoryPressure 要避开的 0.5 秒冻结,
+        // 而 11 个调用点(封面、平台链接、lookup……)任何一个先到都会把它绕过去。拿 nil 的调用方
+        // 在重建完那一拍(onContentAdopted → poll,封面那条经 enrichContentVersion)会再来。
+        if cachedEntries == nil {
+            guard !isRebuilding else { return nil }
+            decodeSynchronously()
+        }
         return cachedEntries
     }
 }

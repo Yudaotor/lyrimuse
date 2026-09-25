@@ -705,6 +705,59 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "封面沉降: 读不到 PlaybackCoordinator.swift(路径挪了?)")
             }
+            // ---- 歌词缓存直读(EnrichCacheReader)的线程与卡顿 ----
+            //
+            // 它是 @MainActor,静态缓存(整份条目、宽松索引、正文小文件……)没有锁。Swift 5 模式下从
+            // Task.detached 里同步调它只报警告、不切线程,于是后台线程跟轮询并发改同一批字典。
+            let nonisolatedReaderAPIs = ["nativeSizedCoverURL", "coverAlbumVerified", "artistTitleKey",
+                                         "coverURLString", "coverIndexByArtistTitle", "indexFileName"]
+            for rel in ["lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift",
+                        "lyrimuse/Sources/lyrimuse/UI/IdleStandbyView.swift"] {
+                guard let src = text(rel) else {
+                    expectEqual(true, false, "缓存直读: 读不到 \(rel)(路径挪了?)")
+                    continue
+                }
+                var offending: [String] = []
+                var rest = Substring(src)
+                while let r = rest.range(of: "Task.detached") {
+                    guard let open = rest[r.upperBound...].firstIndex(of: "{") else { break }
+                    var depth = 0
+                    var end = open
+                    for i in rest[open...].indices {
+                        if rest[i] == "{" { depth += 1 }
+                        if rest[i] == "}" { depth -= 1; if depth == 0 { end = i; break } }
+                    }
+                    let body = rest[open...end]
+                    var scan = body
+                    while let c = scan.range(of: "EnrichCacheReader.") {
+                        let name = scan[c.upperBound...].prefix { $0.isLetter || $0.isNumber }
+                        if !nonisolatedReaderAPIs.contains(String(name)) { offending.append(String(name)) }
+                        scan = scan[c.upperBound...]
+                    }
+                    rest = rest[end...]
+                }
+                expectEqual(offending, [], "缓存直读: \(rel) 在 Task.detached 里调了只许主线程用的 EnrichCacheReader")
+            }
+            // 「歌词管理」改完之后的重读、以及内存压力让出之后的重建,都不能在主线程同步解 32MB 的索引
+            // (release 实测 125~200ms,四个展示面一起卡)。
+            if let reader = text("lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift"),
+               let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
+                expectEqual(reader.contains("static func reloadNow("), false,
+                            "缓存直读: 强制重读别再是同步解码")
+                expectEqual(reader.contains("guard !isRebuilding else { return nil }"), true,
+                            "缓存直读: 压力让出后正在重建时 loadEntries 不许同步解")
+                if let r = lps.range(of: "public func forceReloadLyricsForCurrentTrack() {") {
+                    let body = lps[r.upperBound...].prefix(700)
+                    expectEqual(body.contains("EnrichCacheReader.reloadSoon()"), true,
+                                "缓存直读: 强制重读要走后台解码")
+                } else {
+                    expectEqual(true, false, "缓存直读: 找不到 forceReloadLyricsForCurrentTrack")
+                }
+                expectEqual(lps.contains("&& !enrichRebuilding) {"), true,
+                            "缓存直读: 重建期间同一首歌不因版本变化去重灌")
+            } else {
+                expectEqual(true, false, "缓存直读: 读不到 EnrichCacheReader / LocalPlaybackSource(路径挪了?)")
+            }
             if let enrich = text("lyrimuse-collector/enrich.go") {
                 expectEqual(enrich.components(separatedBy: "go settleDeviceCover(").count - 1, 2,
                             "封面沉降: 首次解析和已有条目升级是两条路都要盯后面那几秒,少挂一条那条路上的占位图就永久留下")

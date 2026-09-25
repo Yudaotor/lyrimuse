@@ -2611,7 +2611,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // 先无条件推进对外那个信号 —— 它的消费方(高清封面重查)关心的是"缓存内容变了",
         // 跟下面那个 reload 是否触发无关(reload 还看 trackChanged/hasContent)。
         if enrichContentVersion != enrichMTime { enrichContentVersion = enrichMTime }
-        if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
+        // 缓存被内存压力让出、正在后台重建时,同一首歌不因为"版本变了"去重灌:那一拍 lookup 拿不到东西,
+        // 重灌只会把引擎里好好的歌词换成空的;重建完 onContentAdopted 捅的那一拍再来。换歌照常走。
+        let enrichRebuilding = EnrichCacheReader.isRebuilding
+        if trackChanged || ((!syncEngine.hasContent || enrichMTime != lastEnrichMTime) && !enrichRebuilding) {
             if trackChanged {
                 logger.notice("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
@@ -3001,17 +3004,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // 不会自动重新读。本地模式的 EnrichCacheReader 每次都是直接读磁盘文件,写完盘立刻
     // 调用这个就能拿到最新内容,不需要等 collector 重启。
     public func forceReloadLyricsForCurrentTrack() {
-        // 用户显式操作(保存/删除歌词)必须立刻读到刚写的内容——同步重解,别等后台
-        // 世代号那条慢路径(见 EnrichCacheReader.reloadNow 注释);版本同步推进,免得
-        // 下一拍 poll 按版本差再白跑一次 reload(等值闸也会挡,这里省得它挡)。
-        EnrichCacheReader.reloadNow()
-        lastEnrichMTime = EnrichCacheReader.decodedContentVersion
-        reloadCurrentLyrics()
-        // 20Hz 定时器在"在播但没词"时是停着的(见 apply() 末尾)——刚保存进来的歌词若让
-        // hasContent 从无到有,这里得立刻拉起,不能干等下一轮 2s 轮询;fastTick 无条件补
-        // 一拍,让当前行马上按新内容解出来(暂停态走 anchor==nil 分支,同样立即生效)。
-        if anchor != nil, syncEngine.hasContent { ensureFastTimerRunning() }
-        fastTick()
+        // 刚写的内容在后台解(EnrichCacheReader.reloadSoon;同步解 32MB 的索引要 125~200ms,主线程上
+        // 四个展示面一起卡)。解完经 onContentAdopted 捅一次 poll:apply() 见 decodedContentVersion 变了
+        // 就重灌,末尾按有没有内容拉起 / 停掉 20Hz 定时器,暂停态按冻结位置解一次当前行。
+        EnrichCacheReader.reloadSoon()
     }
 
     /// 跳到曲目内的某个位置(毫秒)——发指令给播放器,并**立刻**把本地外推重锚到目标位置。

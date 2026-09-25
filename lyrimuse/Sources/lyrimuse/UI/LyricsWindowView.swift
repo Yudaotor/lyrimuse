@@ -2993,18 +2993,11 @@ struct LyricsWindowView: View {
         suggestLessUserToggled = false
         // 平台链接的加载必须放在下面那道 `isAppleMusicPlayer` 早退**之前** ——
         // 非 AM 播放器(QQ/网易云)正是要用它的那一档,放在早退之后等于永远不加载。
-        platformLinks = nil
+        // 在主线程直接读:EnrichCacheReader 只许在主线程用(静态缓存没有锁,后台线程调它就是跟轮询并发
+        // 改同一批字典),缓存已加载时这次读取是 µs 级。
         let linkArtist = playback.artist, linkTitle = playback.title, linkAlbum = playback.album
-        if !linkTitle.isEmpty {
-            Task.detached(priority: .userInitiated) {
-                let links = EnrichCacheReader.platformLinks(
-                    artist: linkArtist, title: linkTitle, album: linkAlbum)
-                await MainActor.run {
-                    guard generation == moreMenuStateGeneration else { return }
-                    platformLinks = links
-                }
-            }
-        }
+        platformLinks = linkTitle.isEmpty ? nil
+            : EnrichCacheReader.platformLinks(artist: linkArtist, title: linkTitle, album: linkAlbum)
         guard isAppleMusicPlayer else { return }
         Task.detached(priority: .userInitiated) {
             guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: false) else { return }
@@ -3122,21 +3115,12 @@ struct LyricsWindowView: View {
     }
 
     private func openInfoPanel() {
-        infoLyricsSource = nil
         withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = true }
-        // 歌词来源在 enrich 缓存里,首次加载要解析整份 JSON(mtime 缓存,之后是 µs 级),
-        // 放后台取,取到再补进面板。
+        // 歌词来源与各平台链接都在 enrich 缓存里,在主线程直接读(理由同 moreMenu 那处:EnrichCacheReader
+        // 只许在主线程用),缓存已加载时是 µs 级。
         let artist = playback.artist, title = playback.title, album = playback.album
-        Task.detached(priority: .userInitiated) {
-            // 一次缓存读同时供两处用(来源 + 各平台链接):都走 EnrichCacheReader,
-            // mtime 没变时是 µs 级,不值得拆成两个 task。
-            let info = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)
-            let links = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
-            await MainActor.run {
-                infoLyricsSource = info?.lyricsSource
-                platformLinks = links
-            }
-        }
+        infoLyricsSource = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        platformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
     }
 
     /// 「搜索歌词…」:点击瞬间快照曲目字段、后台解析 写回 key + 当前来源,齐了再弹面板。
@@ -3152,12 +3136,14 @@ struct LyricsWindowView: View {
         let p = PlaybackCoordinator.shared
         let artist = p.artist, title = p.title, album = p.album
         let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
+        // 三次缓存读取在主线程做(EnrichCacheReader 只许在主线程用,缓存已加载时 µs 级),
+        // 只有正文指纹(SHA-256)放后台。
+        let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
+            ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        // 「当前使用」双判据要的正文指纹。
+        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
         Task.detached(priority: .userInitiated) {
-            let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
-                ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-            let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-            // 「当前使用」双判据要的正文指纹,跟上面几次读取同在这个后台任务里。
-            let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
             let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
             await MainActor.run {
                 // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:collector
