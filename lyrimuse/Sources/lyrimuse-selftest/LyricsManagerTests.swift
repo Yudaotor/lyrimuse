@@ -1410,4 +1410,19 @@ func runLyricsManagerTests() {
             expectEqual(true, false, "候选行: 读不到 LyricsDecisionSheet.swift(路径挪了?)")
         }
     }
+
+    // ---- 窗口开着时多久问一次磁盘(LyricsManagerRefresh)----
+    do {
+        typealias R = LyricsManagerRefresh
+        expectEqual(R.shouldPoll(busy: true, sinceLastIdle: 0), true, "列表刷新: 占位行在等 / 扫描在跑时每拍都问")
+        expectEqual(R.shouldPoll(busy: false, sinceLastIdle: 5), false, "列表刷新: 闲着时不每拍都问")
+        expectEqual(R.shouldPoll(busy: false, sinceLastIdle: R.idleInterval - 0.1), false, "列表刷新: 闲时间隔没到不问")
+        expectEqual(R.shouldPoll(busy: false, sinceLastIdle: R.idleInterval), true, "列表刷新: 闲时间隔到了就问(窗口一直开着也能看到新补的译文)")
+        expectEqual(R.shouldPoll(busy: false, sinceLastIdle: Date().timeIntervalSince(.distantPast)), true,
+                    "列表刷新: 开窗后第一拍就问一次")
+        let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(view.contains("LyricsManagerRefresh.shouldPoll(busy: busy"), true, "列表刷新: 歌词管理的轮询走这条判定")
+    }
 }

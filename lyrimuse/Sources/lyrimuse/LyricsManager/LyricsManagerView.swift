@@ -630,6 +630,8 @@ struct LyricsManagerView: View {
     // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「补搜歌词」按钮和
     // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
+    /// 上一次「闲时」问磁盘的时刻,见 `LyricsManagerRefresh`。
+    @State private var lastIdleRefresh = Date.distantPast
     // nil = 全部歌手/专辑。跟 SourceFilter/TimingFilter 不同,歌手/专辑的候选值不是固定
     // 的几种,是从当前缓存数据里现算出来的(见 distinctArtists/distinctAlbums),所以
     // 这两个直接用 String? 而不是另建一个枚举。
@@ -1570,12 +1572,11 @@ struct LyricsManagerView: View {
                     refreshPlaceholder()
                     focusCurrentlyPlaying(scrollProxy: scrollProxy)
                 }
-                // 占位行等 collector 写完缓存才能自动"顶替"成真实条目——但换歌/reload 都
-                // 不会在"同一首歌搜索完成"这一刻自动发生,得有个人主动再问一次磁盘。5 秒
-                // 轮询一次(跟 PendingListensPanel 的 mtime 轮询同一个量级),reload
-                // (onlyIfChanged: true) 本身很便宜——文件没变时只是一次 stat,只有真的
-                // 搜完、文件真的变了才会有那一次解析开销。窗口关掉这个 .task 自动取消,
-                // 不会有常驻计时器漏在后台。
+                // 窗口开着期间 collector 一直在写缓存:占位行等它写完才能「顶替」成真实条目,补空扫描每条
+                // 搜完都会改文件,平时也会给已有的歌补译文、加新歌。换歌 / reload 都不会在这些时刻自动
+                // 发生,得有个人主动再问一次磁盘。占位行在等或扫描在跑时每拍都问,闲着时放慢到
+                // LyricsManagerRefresh.idleInterval 一次;reload(onlyIfChanged: true) 在文件没变时只是一次
+                // stat。窗口关掉这个 .task 自动取消,不会有常驻计时器漏在后台。
                 .task {
                     while !Task.isCancelled {
                         // 补空扫描跑着的时候加密到 2 秒:每条搜完 collector 都会改缓存文件、
@@ -1586,7 +1587,11 @@ struct LyricsManagerView: View {
                         // 没变就不赋值——不制造无意义的重渲染。
                         let sweep = LyricsFillSweep.current
                         if sweep != fillSweepStatus { fillSweepStatus = sweep }
-                        guard placeholderSummary != nil || sweep?.running == true else { continue }
+                        let busy = placeholderSummary != nil || sweep?.running == true
+                        guard LyricsManagerRefresh.shouldPoll(busy: busy,
+                                                              sinceLastIdle: Date().timeIntervalSince(lastIdleRefresh))
+                        else { continue }
+                        if !busy { lastIdleRefresh = Date() }
                         await store.reload(onlyIfChanged: true)
                         refreshPlaceholder()
                     }
@@ -1695,8 +1700,8 @@ struct LyricsManagerView: View {
         //
         // 挑"App 重新激活"当触发点,而不是上文件监听:典型用法就是切出去听歌、过一阵切回来,
         // 这个时机覆盖得住,而且 reload() 会把读盘+解析(缓存大了要 30ms 以上)放后台线程,
-        // 不像 FSEvent 那样需要自己做防抖。窗口一直摆在副屏、人从不切走的情况仍然要靠工具栏
-        // 的「刷新」—— 那颗按钮本来就在。
+        // 不像 FSEvent 那样需要自己做防抖。窗口一直摆在副屏、人从不切走的情况由列表那条轮询的
+        // 闲时档兜住(见 LyricsManagerRefresh)。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // onlyIfChanged:绝大多数激活时缓存文件根本没变,mtime 指纹相同就整条链
             // (读盘/解析/重建/summaries 重发布 → List 全量 diff)都不跑。
