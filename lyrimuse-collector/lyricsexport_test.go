@@ -219,7 +219,7 @@ func TestTruncateFilenameBase(t *testing.T) {
 			}
 			return nil
 		}},
-		// "abc " 是 4 字节一组,200 % 4 == 0 到 第 200 个字节(下标 199)正好是空格,
+		// "abc " 是 4 字节一组,200 % 4 == 0 → 第 200 个字节(下标 199)正好是空格,
 		// 截断点必然落在空格上。 别改成 3 字节的组:那样切在字母上,这条用例就废了
 		// (变异测试实测:改回 "ab " 后"不 trim"的变异能存活)。
 		{"截断点落在空格上要 trim 掉", strings.Repeat("abc ", 60), func(got string) error {

@@ -27,7 +27,7 @@ var spotifyTrackIDHints = map[string]string{}
 // 这次没记上 ID,下次播到再记。
 const spotifyTrackIDHintCap = 512
 
-// spotifyTrackIDFromURI 从 `spotify:track:<id>` 取 ID;不是曲目 URI 或形状不对 到 空串。
+// spotifyTrackIDFromURI 从 `spotify:track:<id>` 取 ID;不是曲目 URI 或形状不对 → 空串。
 // Spotify ID 是 22 位 base62,别的一律不认(别把 `missing value` 这种脚本回声当 ID)。
 func spotifyTrackIDFromURI(uri string) string {
 	const prefix = "spotify:track:"
@@ -64,7 +64,7 @@ func spotifyTrackURL(id string) string {
 	return "https://open.spotify.com/track/" + id
 }
 
-// spotifyLink 是对外(fields 到 relay / LB)那个 spotify_url 的唯一取值点:有真 ID 用真链接,否则退回
+// spotifyLink 是对外(fields → relay / LB)那个 spotify_url 的唯一取值点:有真 ID 用真链接,否则退回
 // resolveTrackEnrichment 拼的搜索页链接。放在读侧而不是写侧,是为了让 backfillPeripheralFields /
 // 重复条目合并这些会重写 SpotifyURL 的路径不必各自关心 ID —— 它们照旧只管搜索链接。
 func (e enrichEntry) spotifyLink() string {

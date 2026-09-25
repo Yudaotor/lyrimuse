@@ -20,7 +20,7 @@ import (
 
 // QQ 音乐客户端自己的本地曲库 —— QQ 源"拿 songmid"这一步的快速路径。
 //
-// 现有链路拿 mid 要走 qqMusicMatchCached 到 resolveQQMusicMatch:一次 smartbox /
+// 现有链路拿 mid 要走 qqMusicMatchCached → resolveQQMusicMatch:一次 smartbox /
 // client_search 搜索(6 秒超时)外加一整套候选打分挑选。那一步正是"挑错版本"的来源——
 // 同名曲、live/remix 变体、翻唱与仿冒账号,全靠打分去分辨(见 match.go 里 PRINCE《319》
 // X-cerpt 那桩)。

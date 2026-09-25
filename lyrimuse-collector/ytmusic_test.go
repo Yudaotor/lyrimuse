@@ -83,7 +83,7 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 		t.Errorf("中日文/长专辑名解析不对: %+v ok=%v", p2, ok)
 	}
 
-	// videoId 缺失(没有可播放的曲目)到 不接受这条。
+	// videoId 缺失(没有可播放的曲目)→ 不接受这条。
 	raw3 := ytmusicSearchItemJSON("Foo", "Bar • Baz • 3:00", "", "MUSIC_VIDEO_TYPE_ATV")
 	var item3 ytmusicSearchItem
 	_ = json.Unmarshal([]byte(raw3), &item3)

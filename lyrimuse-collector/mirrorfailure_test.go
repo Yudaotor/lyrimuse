@@ -12,15 +12,15 @@ import (
 )
 
 // 这一组守的是修的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
-// 同时不留痕(lfmMirrored 已标记 到 幂等守卫永久挡死;mirrorAsync 只打日志不重试;
+// 同时不留痕(lfmMirrored 已标记 → 幂等守卫永久挡死;mirrorAsync 只打日志不重试;
 // p.lfm != nil 时 appendListen 被跳过),一次网络抖动就永久少一条 scrobble。
 // 用户真实日志:2618 次成功收听里有 13 条这样丢掉的。
 //
 // 修法不是"撤销标记重发"(会从 goroutine 并发写 poller 的裸 map,fatal error),而是
 // 把失败落进 listens.jsonl 交给已有的回填。所以下面每个用例对应的都是"这一类失败该
 // 不该、以及怎么留痕",判错任何一类的代价都是不对称的:
-//   - 该留没留 到 永久少一条(修之前的状态)
-//   - 不该留却留了 到 回填时往 Last.fm 写重复,而 scrobble 落进去基本删不掉
+//   - 该留没留 → 永久少一条(修之前的状态)
+//   - 不该留却留了 → 回填时往 Last.fm 写重复,而 scrobble 落进去基本删不掉
 
 func TestProvablyNeverSent(t *testing.T) {
 	cases := []struct {
@@ -30,7 +30,7 @@ func TestProvablyNeverSent(t *testing.T) {
 	}{
 		{
 			// 实测日志里最多的一类:08-15 一次 40 分钟 DNS 故障丢了 10 条。
-			// 连 TCP 都没建起来,服务端不可能见过它 到 补提交零重复风险。
+			// 连 TCP 都没建起来,服务端不可能见过它 → 补提交零重复风险。
 			name: "DNS 解析失败 = 确定没发出去",
 			err:  fmt.Errorf("post: %w", &net.DNSError{Err: "no such host", Name: "ws.audioscrobbler.com"}),
 			want: true,
@@ -189,8 +189,8 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 
 // mayHaveStored 是 recordFailedMirror(活路径)和 runBackfill(回填整批隔离)**共用**的
 // 判据,两处都拿它决定"这一条要不要被永久排除"。判错的代价不对称:
-//   - 该隔离没隔离 到 重发,用户历史里多一条永久删不掉的重复
-//   - 不该隔离却隔离了 到 一条(回填时是**整批最多 50 条**)从没提交过的收听被彻底
+//   - 该隔离没隔离 → 重发,用户历史里多一条永久删不掉的重复
+//   - 不该隔离却隔离了 → 一条(回填时是**整批最多 50 条**)从没提交过的收听被彻底
 //     踢出清单,再点多少次回填也补不回来
 //
 // 所以这张表就是这两处行为的规格,改它等于同时改两处。

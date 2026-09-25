@@ -120,11 +120,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // 两种用途(按 host 分流):
-        //   lyrimuse://settings/software-update 到 把设置窗口翻到「软件更新」页(仿系统设置的
+        //   lyrimuse://settings/software-update → 把设置窗口翻到「软件更新」页(仿系统设置的
         //     x-apple.systempreferences: 深链;发版说明 / 支持回复里可以直接给这个链接,也是本机核对那一页
         //     外观的唯一非点按入口);带 ?check=1 则顺手发起一次检查(支持回复里「点这个链接检查更新」)。
         //     settings 下别的路径暂无定义,只打开设置窗口。
-        //   其它(lyrimuse://lastfm-auth-callback)到 Last.fm 授权回跳,原样。
+        //   其它(lyrimuse://lastfm-auth-callback)→ Last.fm 授权回跳,原样。
         if url.host == "settings" {
             if url.path == "/software-update" {
                 let wantsCheck = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
@@ -175,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
         // 启动后把 Last.fm 信息页那批小图(头像/封面)提前解码进内存:那一页是用户点进
         // 设置才打开的,启动到点进去之间有充足的空窗,预热完再打开就不会闪占位符了
-        // (触发点是 LastfmStatsService 首次实例化 到 loadSnapshot 到 prewarm)。
+        // (触发点是 LastfmStatsService 首次实例化 → loadSnapshot → prewarm)。
         // 延后 3 秒,不跟启动本身抢资源;没连 Last.fm 的话 loadSnapshot 直接返回,零成本。
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             _ = LastfmStatsService.shared
@@ -446,7 +446,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //
         // 两次踩坑的教训都写在这儿,别再走回去:
         //  ① 只做「延后 0.3 秒开窗、通知回调来了就取消」不够 —— 那只堵了"reopen 先到"
-        //     那一半。实测真实顺序是反的:didReceive 10:48:46.878 到 reopen 10:48:47.171,
+        //     那一半。实测真实顺序是反的:didReceive 10:48:46.878 → reopen 10:48:47.171,
         //     取消跑在前面、扑了个空。
         //  ② 抑制窗口如果用 `(NSApp.delegate as? AppDelegate)?.…` 来设
         //     那个转型在 SwiftUI 的 @NSApplicationDelegateAdaptor 下**拿不到**
@@ -519,7 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // ——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 退出原因日志:所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request
-        // 登记,没登记的按信号推断(Sparkle 正在装更新 到 sparkle_install,否则 external_request)。
+        // 登记,没登记的按信号推断(Sparkle 正在装更新 → sparkle_install,否则 external_request)。
         AppExit.logTermination(sparkleInstalling: SparkleUpdaterManager.shared.isInstallingUpdate)
         guard ConfigStore.shared.isDirty else { return .terminateNow }
         Task {
@@ -599,7 +599,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 任何窗口任何页面都在付的成本,只是那一页把它放大到了看得见。**别再顺着数据层查。**
         //
         // 修法不动判定逻辑本身,只是不再每个事件都重算:滚动手势期间指针本来就不动,
-        // 判定一次就够。同窗口 + 指针没挪 + 没过期 到 直接重放上次结论。
+        // 判定一次就够。同窗口 + 指针没挪 + 没过期 → 直接重放上次结论。
         let nowDate = Date()
         if let cached = lastScrollDecision,
            ScrollForwardDecision.canReuse(cachedWindow: cached.windowNumber,
@@ -610,7 +610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         let root = win.contentView?.superview ?? win.contentView
-        // 命中测试本来就能走进滚动视图 到 正常路径,**绝不插手**。
+        // 命中测试本来就能走进滚动视图 → 正常路径,**绝不插手**。
         var v = root?.hitTest(loc)
         var depth = 0
         while let cur = v, depth < 12 {

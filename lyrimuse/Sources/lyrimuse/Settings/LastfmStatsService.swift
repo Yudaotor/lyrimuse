@@ -43,7 +43,7 @@ final class LastfmStatsService: ObservableObject {
     // 而且"上一首刚 scrobble"这件事 collector 当场就知道、会提前拉一次 feed,App 那边
     // 10 s 内看到,不用再"换歌后等 10 秒强刷 3 个请求"。
     //
-    // 数据流:pollFeedFile(5 s 一次 stat,mtime 变了才解码)到 ingestFeed 到 跟网络响应
+    // 数据流:pollFeedFile(5 s 一次 stat,mtime 变了才解码)→ ingestFeed → 跟网络响应
     // **完全同一条** applyRecent 路径落地(作废判据/封面/次数解析/写法收割全都照旧),再把
     // fetchedAt["baseline"] 盖上戳——于是既有的 refreshBaseline 轮询在 feed 健康期间自然早退,
     // feed 一旦陈旧(collector 不在了)轮询就自动接管,不需要一个显式的"模式切换"。
@@ -53,7 +53,7 @@ final class LastfmStatsService: ObservableObject {
     private var feedTimer: Timer?
     private var feedMTime: Date?
     private var lastFeed: LastfmRecentFeed?
-    /// feed 里已完成的 50 行(RecentTrack 形态,新到旧),composeExactPage 的位置 0 起那份来源。
+    /// feed 里已完成的 50 行(RecentTrack 形态,新→旧),composeExactPage 的位置 0 起那份来源。
     private var feedCompletedRows: [RecentTrack] = []
 
     /// collector 的 feed 此刻是否"活着"(3 分钟内有写入)。几处**自动**强刷(换歌后 10 s、
@@ -127,7 +127,7 @@ final class LastfmStatsService: ObservableObject {
         }
         lastFeed = feed
 
-        // feed 行 到 RecentTrack,dup 编号规则跟 parseRecent 逐字一致(同一时刻+同一首歌才编号)。
+        // feed 行 → RecentTrack,dup 编号规则跟 parseRecent 逐字一致(同一时刻+同一首歌才编号)。
         var dupCount: [String: Int] = [:]
         let toRow: (LastfmRecentFeed.Track) -> RecentTrack = { t in
             let dupKey = "\(t.uts.map { String(Int($0)) } ?? "np")|\(t.artist)|\(t.title)"
@@ -166,8 +166,8 @@ final class LastfmStatsService: ObservableObject {
             baselineGen += 1
             applyRecent(page1)
         }
-        // feed 活着 到 给轮询那道 TTL 闸盖戳,它就不会再为同一份数据发请求;feed 陈旧(collector
-        // 不在)到 不盖,轮询在 110 s 内自然接管。`overview` 还是 nil(新账号第一次、或刚
+        // feed 活着 → 给轮询那道 TTL 闸盖戳,它就不会再为同一份数据发请求;feed 陈旧(collector
+        // 不在)→ 不盖,轮询在 110 s 内自然接管。`overview` 还是 nil(新账号第一次、或刚
         // resetAll)时也不盖:mergeOverview 在那种情况下要三个数都到齐才建,而 feed 给不出
         // 近 7 天——让轮询发一轮把 overview 建起来,之后 total/today 就由 feed 持续更新。
         if fresh, overview != nil { fetchedAt["baseline"] = now }
@@ -277,7 +277,7 @@ final class LastfmStatsService: ObservableObject {
 
     @Published private(set) var overview: Overview?
     @Published private(set) var recent: [RecentTrack] = []
-    /// 最近记录一页放多少条。从"8到30到100 一路展开"改成分页:一路展开会把
+    /// 最近记录一页放多少条。从"8→30→100 一路展开"改成分页:一路展开会把
     /// 一页撑到上百行(整页越滚越长、每页刷新都要给上百首查播放次数),而看历史本来就是
     /// 翻页的事,不是无限长列表。
     static let recentPageSize = 20
@@ -337,10 +337,10 @@ final class LastfmStatsService: ObservableObject {
         /// 名单的话,这批曲目每次重启都要重新问一遍才能再得出同一个"没有"的结论,一样是
         /// 白白的重复请求。
         var playCountUnavailable: [String]?
-        /// 每页抓取时的账号总数(页码字符串键,同 pages)。加,老文件没有 到 nil。
+        /// 每页抓取时的账号总数(页码字符串键,同 pages)。加,老文件没有 → nil。
         var totals: [String: Int]?
         /// "那边没有次数"结论的记录时刻(unix 秒)与连续命中次数,给退避重探用
-        /// (PlayCountUnavailableBackoff)。老文件没有 到 nil:名单里有、这两张表里
+        /// (PlayCountUnavailableBackoff)。老文件没有 → nil:名单里有、这两张表里
         /// 没有的键当作"欠一次重探",下轮 resolvePlayCounts 就重问一次(见 playCountUnavailableDue)。
         var playCountUnavailableAt: [String: Double]?
         var playCountUnavailableStrikes: [String: Int]?
@@ -578,7 +578,7 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// kind|period 到 榜单。切分段/时段时旧内容还在,不闪空。
+    /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     /// 正在拉取/拉取失败的榜单键(kind|period)。 必须按键分别追踪,不能用共享状态:
     /// 歌手榜和歌曲榜并发拉取时会互相干扰,一个的完成/失败状态会盖到另一个头上。
@@ -598,11 +598,11 @@ final class LastfmStatsService: ObservableObject {
     /// 确认,窗口就是一个网络 RTT)。规则:发起时自增并捕获,写回前核对,旧代直接丢弃。
     /// 所有读写都在 MainActor 上,check-then-write 天然原子。
     private var baselineGen = 0
-    /// 歌手名 到 真头像 URL。由 collector 的 artist-avatars 子命令解析(QQ 音乐优先、
+    /// 歌手名 → 真头像 URL。由 collector 的 artist-avatars 子命令解析(QQ 音乐优先、
     /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
     /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
     @Published private(set) var artistAvatars: [String: URL] = [:]
-    /// "歌手|歌名" 到 这首歌所属专辑的封面。歌曲榜的 API 图也是占位星,真封面得按首
+    /// "歌手|歌名" → 这首歌所属专辑的封面。歌曲榜的 API 图也是占位星,真封面得按首
     /// 调 track.getInfo 拿它的专辑图 —— 榜单到手后并发补一轮,查不到的(无专辑的单曲)
     /// 不进字典,UI 回落到首字母色块。
     @Published private(set) var trackCovers: [String: URL] = [:]
@@ -635,7 +635,7 @@ final class LastfmStatsService: ObservableObject {
     /// 16:36/16:38/16:40/16:46/16:50 五次查 userplaycount 都是 0 —— Last.fm 对新条目的按用户
     /// 计数滞后远超 15 分钟 —— 过了宽限那一轮把它钉死、随快照落盘,重启也不重问,而 Last.fm
     /// 网页那边已经显示 1 次。所以每条"没有"记下**时刻 + 连续命中次数**,按
-    /// PlayCountUnavailableBackoff(1 h 到 6 h 到 24 h)到期重探;取到正数就整套清掉。
+    /// PlayCountUnavailableBackoff(1 h → 6 h → 24 h)到期重探;取到正数就整套清掉。
     /// 两张表跟名单一起随 recentPageCache 快照落盘;老快照里没有时间戳的键当作"欠一次重探"。
     private var playCountUnavailableAt: [String: Date] = [:]
     private var playCountUnavailableStrikes: [String: Int] = [:]
@@ -644,7 +644,7 @@ final class LastfmStatsService: ObservableObject {
     /// (那时行也快被新的 scrobble 顶下去了,重查的成本自然收敛)。
     private static let playCountZeroGraceSecs: TimeInterval = 15 * 60
     private var coverUnavailable = Set<String>()
-    /// 上一次 applyRecent 时看的是第几页。翻了页就不做下面那套"同曲次数变多 到 旧总数
+    /// 上一次 applyRecent 时看的是第几页。翻了页就不做下面那套"同曲次数变多 → 旧总数
     /// 作废"的判定:换了一批完全不同的行,那个比较没有意义。
     private var lastAppliedRecentPage = 0
     /// 正在查次数的曲目键 —— 挡住"2 分钟定时刷新又触发一轮同样的请求"这种重复。
@@ -711,10 +711,10 @@ final class LastfmStatsService: ObservableObject {
     /// 「那年今日」这一轮到底发生了什么 —— 界面靠它决定画什么,不能只判 onThisDay 是不是 nil。
     ///
     /// 四种处境原来长得一模一样(onThisDay == nil),而它们该给用户看的东西完全不同:
-    ///   - `.pending`  还没取过 / 正在取 到 该显示"正在查"
-    ///   - `.loaded`   取到了 到 正常那张卡
-    ///   - `.empty`    请求成功但 1~3 年前的今天**确实**都没有记录 到 该明说,而不是空白
-    ///   - `.failed`   三年**全部**请求失败(网络/限流/API 抽风)到 该明说并给「重试」
+    ///   - `.pending`  还没取过 / 正在取 → 该显示"正在查"
+    ///   - `.loaded`   取到了 → 正常那张卡
+    ///   - `.empty`    请求成功但 1~3 年前的今天**确实**都没有记录 → 该明说,而不是空白
+    ///   - `.failed`   三年**全部**请求失败(网络/限流/API 抽风)→ 该明说并给「重试」
     ///
     /// `.empty` 和 `.failed` 必须分开,因为后者叠着一个更毒的行为:`fetchedAt["onthisday"]`
     /// 在**发请求之前**就写(见 refreshOnThisDay,那是刻意的 —— 否则一直失败会变成每次露面
@@ -748,7 +748,7 @@ final class LastfmStatsService: ObservableObject {
         /// 副标题讲的是"循环最多",下面却列着"最后听的",一张卡说两套口径,实测被绕住。
         let top: [TopTrack]
         /// 这份结果覆盖的是那一天还是那一周(当天为空时放宽到 ±3 天,见 OnThisDayPlanner)。
-        /// 老快照没有这个字段 到 nil 到 当作一天。
+        /// 老快照没有这个字段 → nil → 当作一天。
         var span: OnThisDayPlanner.Span?
         var isWeek: Bool { span == .week }
     }
@@ -1006,7 +1006,7 @@ final class LastfmStatsService: ObservableObject {
                 // 一首听了几年的歌显示「首次听=今天」比不显示误导得多(审阅)。
                 first = (await page(head.total))?.dates.first
             }
-            // 排序兜底:getTrackScrobbles 按新到旧返回是与 recenttracks 家族一致的观察,
+            // 排序兜底:getTrackScrobbles 按新→旧返回是与 recenttracks 家族一致的观察,
             // 但官方没写死 —— 万一哪天倒过来,交换一下也只是标签回正,不会显示错日期。
             if let f = first, let l = last, f > l { swap(&first, &last) }
             guard nowPlayingSpanKey == key else { return }
@@ -1015,7 +1015,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// `user.getTrackScrobbles` 的一页:这首歌(**按精确写法**匹配,不 autocorrect)在这个账号下
-    /// 的 scrobble,按新到旧分页。`total` 是 `@attr.total`,即这一写法在 Last.fm 上的总次数。
+    /// 的 scrobble,按新→旧分页。`total` 是 `@attr.total`,即这一写法在 Last.fm 上的总次数。
     struct TrackScrobblesPage {
         let total: Int
         let totalPages: Int
@@ -1168,7 +1168,7 @@ final class LastfmStatsService: ObservableObject {
                     if sample[k] == nil { sample[k] = r } // 响应是倒序,首见即当天最后一次
                     if let d = r.date, lastPlayed[k] == nil || d > lastPlayed[k]! { lastPlayed[k] = d }
                 }
-                // 确定性排序:次数降序 到 当天最后一次更晚的在前 到 歌名。少了后两级的话,
+                // 确定性排序:次数降序 → 当天最后一次更晚的在前 → 歌名。少了后两级的话,
                 // 并列时取谁全看字典迭代序,同一天刷两次能给出不同的"最多那首"。
                 let ranked = counts.keys.compactMap { key -> OnThisDayResult.TopTrack? in
                     guard let track = sample[key], let n = counts[key] else { return nil }
@@ -1200,8 +1200,8 @@ final class LastfmStatsService: ObservableObject {
             // 走到这儿 = 三年都没能给出可展示的结果。上面成功那一支是 `return` 出去的,
             // 所以这里只有两种可能,靠 responses 分开(它们该给用户看的东西完全不同,
             // 见 OnThisDayOutcome):
-            //   - 有响应过 到 那几天确实没听歌,如实说"没有记录";
-            //   - 一次都没回来 到 网络/限流/API 挂了,说"取不到"并给「重试」。
+            //   - 有响应过 → 那几天确实没听歌,如实说"没有记录";
+            //   - 一次都没回来 → 网络/限流/API 挂了,说"取不到"并给「重试」。
             //     这一支尤其要紧:失败已经占住了 6 小时 TTL(见函数开头),不给重试按钮
             //     就只能等 6 小时或重启 App —— 那正是现象是"有时候点进去是空白"。
             if responses == windows.count {
@@ -1215,7 +1215,7 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 播放热力图(每日计数)
 
-    /// "yyyy-MM-dd"(本地时区) 到 当日 scrobble 数。数据来自 user.getRecentTracks 全量
+    /// "yyyy-MM-dd"(本地时区) → 当日 scrobble 数。数据来自 user.getRecentTracks 全量
     /// 分页聚合:首次同步整个历史(两万条 ≈ 110 页,只跑一次),之后按 dailySyncedThrough
     /// 增量,通常一页就完。独立缓存文件,删了无损、下次重建。
     @Published private(set) var dailyCounts: [String: Int] = [:]
@@ -1341,7 +1341,7 @@ final class LastfmStatsService: ObservableObject {
         guard credentials != nil else { return }
         if !titleFormsLoaded { loadTitleForms() }
         if !dailyLoaded { loadDailySnapshot() }
-        // 水位说同步过了、数据却明显截断(见 heatmapLooksTruncated)到 不能判 .done,交给下面的
+        // 水位说同步过了、数据却明显截断(见 heatmapLooksTruncated)→ 不能判 .done,交给下面的
         // syncHistoryIfNeeded 自愈重扫 —— 这条路径是页面主刷新每次都走的,不用等用户打开热力图。
         if min(titleFormsSyncedThrough, dailySyncedThrough) > 0, !heatmapLooksTruncated() {
             bootstrapState = .done
@@ -1385,9 +1385,9 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 热力图的按天计数加起来比 Last.fm 报的总 scrobble 数少三成以上 到 判为截断(见 syncHistoryIfNeeded
+    /// 热力图的按天计数加起来比 Last.fm 报的总 scrobble 数少三成以上 → 判为截断(见 syncHistoryIfNeeded
     /// 里的自愈)。两个数都是"这个账号全部 scrobble"的口径,正常只差几十条。overview 还没取到时不判
-    /// (nil 到 false),别在没有参照的时候把好数据当坏的。
+    /// (nil → false),别在没有参照的时候把好数据当坏的。
     private func heatmapLooksTruncated() -> Bool {
         LastfmHeatmapTruncation.looksTruncated(dailyTotal: dailyCounts.values.reduce(0, +),
                                                reportedTotal: overview?.total,
@@ -1588,7 +1588,7 @@ final class LastfmStatsService: ObservableObject {
     //
     // 背景:同一首歌因写法差异(全半角括号/繁简/麼麽字形/双语拼接/空格)在 Last.fm 被记成
     // 多本账,猜枚举(PlayCountVariants)修一茬冒一茬。这里改成从用户**自己的全量播放历史**
-    // 建 折叠键(PlayCountFold)到 真实写法族 的索引:查次数时按族查,数据驱动、自更新 ——
+    // 建 折叠键(PlayCountFold)→ 真实写法族 的索引:查次数时按族查,数据驱动、自更新 ——
     // 新的分裂形态一旦在历史里出现就自动被族住,不需要再补表。userplaycount 只统计本用户
     // 的 scrobble,所以「历史里没有的写法」在 Last.fm 那边必然是 0,索引按构造即完备。
     //
@@ -1615,7 +1615,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     private static let titleFormsURL = LyrimusePaths.configFile("lyrimuse-lastfm-title-forms.json")
-    /// 折叠键 到 历史上真实出现过的写法族。
+    /// 折叠键 → 历史上真实出现过的写法族。
     private var titleForms: [String: [TitleForm]] = [:]
     /// 全量建成/增量补到的水位(uts)。0 = 从未建成,候选退回猜枚举。
     private var titleFormsSyncedThrough: TimeInterval = 0
@@ -1684,8 +1684,8 @@ final class LastfmStatsService: ObservableObject {
         scheduleSnapshotSave()
     }
 
-    /// 「第 N 次听」的孪生实体候选。索引就绪 到 历史真实写法族(去掉本尊,封顶 8);
-    /// 索引未建成(首次全量拉取中/失败过)到 退回猜枚举,行为与索引之前完全一致。
+    /// 「第 N 次听」的孪生实体候选。索引就绪 → 历史真实写法族(去掉本尊,封顶 8);
+    /// 索引未建成(首次全量拉取中/失败过)→ 退回猜枚举,行为与索引之前完全一致。
     private func playCountSiblings(artist: String, title: String) -> [(artist: String, title: String)] {
         if !titleFormsLoaded { loadTitleForms() }
         guard titleFormsSyncedThrough > 0 else {
@@ -1789,7 +1789,7 @@ final class LastfmStatsService: ObservableObject {
     // MARK: - 写法别名自动发现(动态)
     //
     // 背景:PlayCountFold.titleAliasesByArtist 是手工核定的静态表 —— 每条都要走一遍
-    // 「专辑曲目单定位候选到Last.fm 真实播放数交叉验证到时长比对排除假阳性」三步法,
+    // 「专辑曲目单定位候选→Last.fm 真实播放数交叉验证→时长比对排除假阳性」三步法,
     // 人工加一条要核实+改代码+重新装机。用户当面问「红色的这些你好像都没
     // 做好诶,是不能搞成一个通用的逻辑都去覆盖吗,只能这样一个一个加白?」,并明确
     // 拍板要「后台自动定期扫描、自动应用,不需要界面确认」。
@@ -1831,7 +1831,7 @@ final class LastfmStatsService: ObservableObject {
     /// 跟 foldVersion/mergedCountsVersion 是同一类闸门,但作废的东西不同:那两个管折叠键
     /// 和次数缓存,这个管**已采纳的别名本身**。
     ///
-    /// 1 到 2:判据从"同歌手 + duration 精确相等 + 候选唯一"收严成再加
+    /// 1 → 2:判据从"同歌手 + duration 精确相等 + 候选唯一"收严成再加
     /// evidenceAgrees(专辑否决 / mbid 放行)+ 反向唯一性。旧规则在这台机器上产出的 19 条
     /// 里已确认有错(陶喆 `I'm O.K.`/`Runaway` 双双指向《天天》;宇多田「Time」被判成
     /// 相隔 20 年的「SAKURAドロップス」),必须整批作废重扫。
@@ -1855,7 +1855,7 @@ final class LastfmStatsService: ObservableObject {
         /// 已经查到的 duration(毫秒),按 playCountKey(artist:title:) 存 —— 同一个写法
         /// 不会被反复问 Last.fm。0 = 查过但那个实体没有 duration,同样缓存不重查。
         var durations: [String: Int]
-        /// 尝试过的候选(不管有没有配上)到 上次尝试的时间(uts)。候选 key 是它的
+        /// 尝试过的候选(不管有没有配上)→ 上次尝试的时间(uts)。候选 key 是它的
         /// playCountKey;配不上的候选 discoveryRetryAfter 之内不重试。
         var attemptedAt: [String: TimeInterval]
     }
@@ -2104,7 +2104,7 @@ final class LastfmStatsService: ObservableObject {
         PlayCountFold.setLocalArtistAliases(tables.artists)
         PlayCountFold.setLocalTitleAliases(tables.titles)
         // 受影响的写法先攒起来,等族建好/重建好再按族索引把它们的次数标过期(见 flushLocalAliasStaleMarks):
-        // 歌手别名变了 到 这个歌手键、以及新旧代表写法的键;歌名别名变了 到 英文键 + 新旧中文歌名的折叠键。
+        // 歌手别名变了 → 这个歌手键、以及新旧代表写法的键;歌名别名变了 → 英文键 + 新旧中文歌名的折叠键。
         for key in Set(old.artists.keys).union(tables.artists.keys) where old.artists[key] != tables.artists[key] {
             pendingLocalArtistTouched.insert(key)
             if let v = old.artists[key] { pendingLocalArtistTouched.insert(LocalArtistAliases.artistKey(v)) }
@@ -2557,8 +2557,8 @@ final class LastfmStatsService: ObservableObject {
         return artist.trimmingCharacters(in: .whitespaces).lowercased() + "|" + a.lowercased()
     }
 
-    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)到 **本机缓存里 collector
-    /// 解析出的那张** 到 getinfo 纠正后的曲目封面 到 同专辑兄弟曲目的封面。四级都没有才留空位。
+    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ **本机缓存里 collector
+    /// 解析出的那张** → getinfo 纠正后的曲目封面 → 同专辑兄弟曲目的封面。四级都没有才留空位。
     ///
     /// 第二级(本地)的价值:Last.fm 对中文曲库缺图非常常见(只给全部缺图实体共用的
     /// 白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云往往是有图的,collector
@@ -2791,8 +2791,8 @@ final class LastfmStatsService: ObservableObject {
         playCountUnavailable.contains(Self.playCountKey(artist: artist, title: title))
     }
 
-    /// 这个键现在能不能去问次数:不在"没有"名单里 到 能;在名单里但退避期已过(或老快照里
-    /// 没有时间戳)到 能,重探一次;否则不能。见 playCountUnavailableAt 的注释。
+    /// 这个键现在能不能去问次数:不在"没有"名单里 → 能;在名单里但退避期已过(或老快照里
+    /// 没有时间戳)→ 能,重探一次;否则不能。见 playCountUnavailableAt 的注释。
     private func playCountUnavailableDue(_ key: String, now: Date) -> Bool {
         guard playCountUnavailable.contains(key) else { return true }
         guard let at = playCountUnavailableAt[key] else { return true }
@@ -2837,10 +2837,10 @@ final class LastfmStatsService: ObservableObject {
         for r in rows where !r.artist.isEmpty && !r.title.isEmpty {
             harvestTitleForm(artist: r.artist, title: r.title)
         }
-        // 同一首歌在窗口里多出一次收听 到 它的总数已经变了,作废让它重取。三条判据,
+        // 同一首歌在窗口里多出一次收听 → 它的总数已经变了,作废让它重取。三条判据,
         // 前两条跟上一轮比、第三条只看当下这一页,理由分别见下。
         //
-        // key 到 任一行:作废孪生键要用行上的原始 歌手/歌名 生成变体(key 已折小写,
+        // key → 任一行:作废孪生键要用行上的原始 歌手/歌名 生成变体(key 已折小写,
         // 但变体生成对大小写不敏感,folded 键一致即可)。
         var sample: [String: RecentTrack] = [:]
         for r in rows where !r.nowPlaying {
@@ -3311,7 +3311,7 @@ final class LastfmStatsService: ObservableObject {
                 // 不在这里调的话要等下一轮 applyRecent(110s),首次出图白等两分钟。
                 // resolveCatalogCovers 自带 inFlight/unavailable 守卫,重复调用无害。
                 if !noCover.isEmpty { resolveCatalogCovers(for: rows) }
-                // 有行刚补上封面 到 实时行复用的那两张索引跟着作废重建
+                // 有行刚补上封面 → 实时行复用的那两张索引跟着作废重建
                 if !covers.isEmpty || !albumCovers.isEmpty { rebuildRecentCoverIndex() }
             }
             scheduleSnapshotSave()
@@ -3320,7 +3320,7 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 歌手名纠正(封面的最后一招)
 
-    /// 歌手名 到 Last.fm 认的规范名。"" = 问过了,那边没有可纠正的(或者请求失败)。
+    /// 歌手名 → Last.fm 认的规范名。"" = 问过了,那边没有可纠正的(或者请求失败)。
     private var artistCorrections: [String: String] = [:]
     /// 同一个歌手正在飞的那次 getcorrection。最近记录一页里同一位歌手往往连着好几首,
     /// 不去重的话它们会各发一次一模一样的请求。
@@ -3766,7 +3766,7 @@ final class LastfmStatsService: ObservableObject {
         let age = Date().timeIntervalSince(at)
         // age < 0 表示那个时间戳落在**未来** —— 系统时钟被回拨(改时间、NTP 校正、
         // 跨时区带着改系统时钟)就会这样。修:旧写法直接 `age < ttl`,负数恒
-        // 成立 到 这个 key **永远**算"新鲜",所有走 fresh() 早退的自动刷新静默失效,而且
+        // 成立 → 这个 key **永远**算"新鲜",所有走 fresh() 早退的自动刷新静默失效,而且
         // 因为 fetchedAt 只在成功/失败路径上被覆盖、不会自己回到过去,这个状态会一直挂到
         // App 重启;唯一逃生口是显式 `force`(它把 fetchedAt 置 nil)。
         // 判为过期是安全方向:最坏是多发一次请求,而不是永久不发。
@@ -3824,7 +3824,7 @@ final class LastfmStatsService: ObservableObject {
         // acquire(),不绕开限速(否则退避形同虚设)。退避时长本身就是冷却期,不需要
         // 额外再睡一次:continue 回到循环顶部重新 acquire 时,pump() 会自然等到冷却期过。
         // 总重试次数不能设太多:resolvePlayCounts/resolveTrackCovers 是 withTaskGroup
-        // 批量调用,一个任务卡在这里重试会拖慢整批 for await 收敛。3 次、1s到2s到4s 递增
+        // 批量调用,一个任务卡在这里重试会拖慢整批 for await 收敛。3 次、1s→2s→4s 递增
         // 冷却,封顶在 10 秒量级——这几个数字没有实测依据,先用保守值,上线后按日志调优。
         let backoffCooldowns: [TimeInterval] = [1, 2, 4]
         for attempt in 0...backoffCooldowns.count {

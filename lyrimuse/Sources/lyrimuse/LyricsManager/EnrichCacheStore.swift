@@ -173,7 +173,7 @@ public final class EnrichCacheStore: ObservableObject {
         let searchAlbumLower: String
 
         /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap到
-        /// distinctArtists到筛选下拉),**不再**用于列表逐行渲染的文字——改掉:
+        /// distinctArtists→筛选下拉),**不再**用于列表逐行渲染的文字——改掉:
         /// 同一个人如果原始标签一时中文一时英文(如"方大同"/"Khalil Fong"),会各自落进
         /// 独立的缓存条目(key 用原始写法拼),优先展示统一名会让两条本该能分清楚的记录在
         /// 列表里长得一模一样、用户区分不出这是两条不同记录(比如两条记录只有大小写和
@@ -273,7 +273,7 @@ public final class EnrichCacheStore: ObservableObject {
 
     /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做
     ///   (性能审计:App 每次激活都触发一次 reload,而绝大多数激活时文件根本
-    ///   没变,整份 9.4MB 重读+解析+重建+summaries 重发布 到 List 全量 diff 全是白跑;
+    ///   没变,整份 9.4MB 重读+解析+重建+summaries 重发布 → List 全量 diff 全是白跑;
     ///   同仓 EnrichCacheReader 早有同款 mtime 门控)。开窗 onAppear 和工具栏「刷新」
     ///   保持默认 false(显式刷新语义)。
     /// 在飞的那次 reload。两个窗口(设置页「歌词库统计」、歌词管理)各有一条 2 秒轮询,
@@ -580,7 +580,7 @@ public final class EnrichCacheStore: ObservableObject {
     // 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
     // 排序层还按原始写法把同一张专辑劈成两半"。实测撞到:「春游」这张专辑
     // 一半曲目排在列表最上面、一半排在最下面 —— 播放器把它们分别报成 "Leah Dou" / "窦靖童"
-    // (歌手)和 "春遊" / "春游"(歌手/专辑繁简),排序键必须 canonical到primaryArtist到
+    // (歌手)和 "春遊" / "春游"(歌手/专辑繁简),排序键必须 canonical→primaryArtist→
     // 折简体+小写。归一化键现在在构建时预存进 Summary(normPrimaryArtist/normAlbum),
     // 比较器只做元组比较 —— 原来每次比较现算 4 次 CFStringTransform,852 条 ≈ 3.3 万次
     // ICU 调用,预算后只剩每条一次(还叠着 toSimplified 的 memo)。
@@ -591,7 +591,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// - Parameter offsetsSnapshot: LyricsOffsetStore 整份字典的一次性快照(调用方在
     ///   MainActor 上下文取好再传进来,见两处调用点的注释)——这个函数本身要能在后台线程跑,
     ///   不能在这里同步访问那个 @MainActor 单例。
-    /// 扫一遍歌词目录,得到「折叠后的文件基名 到 该组四个文件里最新的 mtime」。
+    /// 扫一遍歌词目录,得到「折叠后的文件基名 → 该组四个文件里最新的 mtime」。
     ///
     /// **一次目录枚举、批量取属性**,不逐条 stat:后者要么 O(n) 次系统调用,要么(如果按
     /// key 现推文件名)撞上「这个 key 有没有别的 key 折叠后同名」那个每次都扫全 `raw.keys` 的 O(n²)。实测本机

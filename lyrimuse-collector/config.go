@@ -22,7 +22,7 @@ type config struct {
 	// 早已下线,见 state-worker/src/index.js 顶部注释)。
 	StateRelayURL   string `json:"state_relay_url,omitempty"`
 	StateRelayToken string `json:"state_relay_token,omitempty"`
-	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler到Last.fm)的
+	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler→Last.fm)的
 	// "正在播放"转发进 LB，让网页也显示手机上的播放。LastfmUser 留空则不启用桥接;
 	// 只读用的 API Key 现在跟下面的 LastfmScrobbleAPIKey 是同一套凭据(见
 	// lastfmBridgeAPIKey())——LastfmAPIKey 是合并前的独立只读 Key 字段,只为了让
@@ -131,7 +131,7 @@ func configFromBytes(data []byte) *config {
 // 都不该出现在日志里)。
 //
 // 单独解的做法是"把这个 key 重新包成只含它的一份 JSON,再 Unmarshal 进 cfg 的副本",
-// 而不是用反射按 tag 找字段:让 encoding/json 自己去做 key到字段 的映射,大小写规则、
+// 而不是用反射按 tag 找字段:让 encoding/json 自己去做 key→字段 的映射,大小写规则、
 // 内嵌类型、omitempty 这些全都跟一次性解出来时**完全一致**,不会因为手写映射而产生
 // 第二套语义。副本成功了才写回 cfg,失败的那次不会留下半解析的痕迹。
 func decodeConfigPerField(data []byte, cfg *config) []string {

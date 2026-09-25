@@ -337,7 +337,7 @@ type poller struct {
 	lastListenAt     int64
 	lastListenDev    string
 
-	// Last.fm bridge (iPhone via FastScrobbler到Last.fm) state.
+	// Last.fm bridge (iPhone via FastScrobbler→Last.fm) state.
 	forwardedSet    persistedTTLSet
 	lfmMirroredSet  persistedTTLSet
 	lastfmCheckedAt time.Time
@@ -422,8 +422,8 @@ const nearDuplicateWindow = 30 * time.Minute
 //  1. **既有缺陷**:forwarded 集合是 7 天 TTL(dedup.go 的 forwardedTTL),而 bridge 读的是
 //     `user.getrecenttracks limit=50` —— 一个听歌频繁的用户,最近 50 条只覆盖一两天,
 //     远小于 7 天,所以"被 trim 掉的条目还留在窗口里"不会发生。但一个**听歌很少**的用户
-//     (一周十几首),最近 50 条能横跨好几周:超过 7 天的条目被 trim 到 集合里查不到 到
-//     bridge 又转发一次 到 记入集合 到 7 天后再被裁……周期性地把同一条重复灌进 ListenBrainz。
+//     (一周十几首),最近 50 条能横跨好几周:超过 7 天的条目被 trim → 集合里查不到 →
+//     bridge 又转发一次 → 记入集合 → 7 天后再被裁……周期性地把同一条重复灌进 ListenBrainz。
 //     整个链条只靠"窗口跨度 < TTL"这条**隐式**不变量撑着,而那取决于用户听歌多勤。
 //  2. **回填**:回填会往 Last.fm 写带过去时间戳的 scrobble。那些条目如果落进 bridge 的
 //     可见窗口,会被当成"真实 iPhone 收听"再转发进 LB(设备归属还会被错标成 iphone)。
@@ -988,7 +988,7 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		reason = "reanchor"
 	}
 	// 退避:上次推送失败(配额爆/中继挂)后别每轮硬试(否则每 5s 白烧一次 worker 请求+刷屏)。
-	// 内容变了(key 变,如换歌)到 清退避立即再试,让 KV 恢复后尽快回主路径;同内容按退避重试。
+	// 内容变了(key 变,如换歌)→ 清退避立即再试,让 KV 恢复后尽快回主路径;同内容按退避重试。
 	if key != p.relayFailKey {
 		p.relayFailAt, p.relayBackoff = time.Time{}, 0
 	}
@@ -1292,7 +1292,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// 那道闸之后剩下的第二道)。电台的 duration 只有 Apple 目录知道(快照自己报的是整档节目,
 	// 实测 7074.538s),而目录锚点是**异步**的:实测 Dolly Parton《Dumb Blonde》会话 20:15:45.030
 	// 建立、目录 20:15:49.740 才给出 150.447s,晚 4.7 秒。sess.meta 是会话创建那一刻的快照,
-	// 不补的话 listenThreshold 拿到的是 0 到 退回 240s 上限 到 电台曲目(普遍 2~4 分钟)永远够不着,
+	// 不补的话 listenThreshold 拿到的是 0 → 退回 240s 上限 → 电台曲目(普遍 2~4 分钟)永远够不着,
 	// 一条收听都提交不了 —— 跟 radioduration.go 头注里"条目落盘那一拍目录还没命中"是同一个异步坑,
 	// 只是那边补的是歌词缓存的时长、这边补的是打卡阈值的分母。
 	//
@@ -1457,7 +1457,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	}
 }
 
-// bridge kicks off a background fetch of Last.fm (iPhone via FastScrobbler到
+// bridge kicks off a background fetch of Last.fm (iPhone via FastScrobbler→
 // Last.fm) gently every lastfmFeedInterval(15 s / 空闲 60 s) — 见 bridgeDoneCh 顶部注释,
 // lastfmRecent 本身(8s 超时)挪到 goroutine 跑,不阻塞 poll() 后面紧跟的
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
@@ -1495,7 +1495,7 @@ func (p *poller) bridge(now time.Time) {
 	// 当场拉的代价不止"这一次白拉"(用户**第三次**报「补提交之后下面的列表没
 	// 刷新」的根因,前两次修在别处):拉回来的是旧内容,却照样把 feed 的 fetchedAt 刷成此刻,
 	// 于是 App 侧那道兜底强刷(ScrobbleBackfillService 在 accepted > 0 之后 8 秒发、判据是
-	// LastfmStatsService.feedIsFresh 到 LastfmRecentFeed.isFresh,fetchedAt 在 180 s 窗口内)
+	// LastfmStatsService.feedIsFresh → LastfmRecentFeed.isFresh,fetchedAt 在 180 s 窗口内)
 	// **永远判"新鲜"、永远不触发** —— 而 feed 只要 collector 活着就每 60 s 心跳重写一次
 	// (feedHeartbeat),fetchedAt 跟内容有没有变没关系。两头一叠,用户只能干等下一个
 	// 15 s/60 s 周期。镜像 scrobble 那条路径从一开始就是延迟 5 秒的,这里跟它对齐。
@@ -1572,7 +1572,7 @@ func (p *poller) applyBridgeForwardResults(results []bridgeForwardResult) {
 	p.pushRelayState(time.Now(), false)
 }
 
-// bridgeForwardingEnabled:iPhone到ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
+// bridgeForwardingEnabled:iPhone→ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
 // 的既有门槛。之前它跟"要不要拉 Last.fm"是同一个判断,现在拉取只看 Last.fm
 // 凭据(见 bridge()),这里单独保住 LB 那半边的条件不变。
 func (p *poller) bridgeForwardingEnabled() bool {
@@ -1729,11 +1729,11 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // 借过来会把 poll() 上面 applyRadioClock 刚换好的那块单曲表整个覆盖回去,而覆盖是直接写
 // `p.trackPos` 的(为了让下一拍从校准值续算,见下面那段的注释)。后果是一条完整的链:
 //
-//	整档位置写进 trackPos 到 下一拍 prevTrackPos 是几千秒、曲长却是一百多秒
-//	到「上一拍已过 90%、这一拍越过曲尾」的单曲循环判定必然成立(loopRestart)
-//	到 handle() 走 loopRestart 分支:finalize 当前会话 + 新建一个 playSession,playedSecs 归零
-//	到 每一拍都这样,已播时长永远涨不过一拍
-//	到 到不了 listenThreshold(曲长的一半),**一条收听都提交不了**
+//	整档位置写进 trackPos → 下一拍 prevTrackPos 是几千秒、曲长却是一百多秒
+//	→「上一拍已过 90%、这一拍越过曲尾」的单曲循环判定必然成立(loopRestart)
+//	→ handle() 走 loopRestart 分支:finalize 当前会话 + 新建一个 playSession,playedSecs 归零
+//	→ 每一拍都这样,已播时长永远涨不过一拍
+//	→ 到不了 listenThreshold(曲长的一半),**一条收听都提交不了**
 //
 // 实测(那 4.5 小时电台):`loop restart` 2397 次,单曲最高 145 次、每 5 秒一次贯穿整首;
 // 同期 `listen recorded` 只有 4 条。副作用还有 relay 每拍都当 reanchor 写一次(日志里 30 秒涨 8 个),

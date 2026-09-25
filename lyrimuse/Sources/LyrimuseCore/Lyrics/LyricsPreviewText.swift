@@ -168,7 +168,7 @@ public struct LyricsBodyEdit: Equatable, Sendable {
         hiddenSuffix = suffix
     }
 
-    /// 把编辑框里的正文拼回完整歌词。正文没变 到 原文原样;变了 到 前缀 + 新正文(逐行原样,用户加的空行也留着)+ 后缀,
+    /// 把编辑框里的正文拼回完整歌词。正文没变 → 原文原样;变了 → 前缀 + 新正文(逐行原样,用户加的空行也留着)+ 后缀,
     /// 原文以换行收尾的话拼出来也以换行收尾。
     public func reassembled(body newBody: String) -> String {
         if newBody == body { return original }

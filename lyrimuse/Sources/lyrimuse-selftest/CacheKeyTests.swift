@@ -134,8 +134,8 @@ func runCacheKeyTests() {
     //
     // 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
     // 大小写"的碰撞组成员改用带 crc32 后缀的文件名(lyricsexport.go:105-141),而 Swift 侧原来
-    // 一律只认普通名——删除时漏删 到 collector 重启后 importLyricsFromFiles 从残留文件把条目
-    // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 到 同一个 key 对应两组
+    // 一律只认普通名——删除时漏删 → collector 重启后 importLyricsFromFiles 从残留文件把条目
+    // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 → 同一个 key 对应两组
     // 文件、导入时各写一次、生效哪份取决于 Go map 的随机遍历顺序。
     // crc32 必须跟 Go 的 hash/crc32.ChecksumIEEE 逐位一致,否则算出来的文件名对不上。
 
@@ -170,7 +170,7 @@ func runCacheKeyTests() {
 
     do {
         // 文件名字节上限。 必须跟 collector/lyricsexport.go 的 lyricsFilenameMaxBytes
-        // 同值、同截断规则,否则删除时算出的文件名对不上 到 漏删 到 条目复活。
+        // 同值、同截断规则,否则删除时算出的文件名对不上 → 漏删 → 条目复活。
         expectEqual(EnrichCacheKeys.filenameMaxBytes, 200, "EnrichCacheKeys: 文件名字节上限跟 Go 侧同值")
 
         // 没超限的名字一个字节都不该动。
@@ -197,7 +197,7 @@ func runCacheKeyTests() {
     }
 
     do {
-        // 选中集合 到 实际删除计划:交集 + 排序。
+        // 选中集合 → 实际删除计划:交集 + 排序。
         let existing: Set<String> = ["B|b|al2", "A|a|al1", "C|c|al3"]
         expectEqual(
             EnrichCacheKeys.deletionPlan(selected: ["A|a|al1", "已经没了|x|y"], existing: existing),
@@ -444,7 +444,7 @@ func runCacheKeyTests() {
         // 本次修的就是这一条:只差 4 小时、TTL 远没到期,但已经是第二天了。
         expectEqual(needs(fetched: at(8, 16, 22), day: at(8, 16, 22), now: at(8, 17, 2)), true,
                     "跨天缓存: 跨过零点即使 TTL 没到期也要拉")
-        // 边界:同一天的 23:59 到 次日 00:00,只隔一分钟也算跨天。
+        // 边界:同一天的 23:59 → 次日 00:00,只隔一分钟也算跨天。
         expectEqual(needs(fetched: at(8, 16, 23, 59), day: at(8, 16, 23, 59), now: at(8, 17, 0, 0)),
                     true, "跨天缓存: 零点前后只差一分钟也算跨天")
         // 反向边界:同一天最早和最晚,不算跨天(只由 TTL 说了算)。
@@ -461,7 +461,7 @@ func runCacheKeyTests() {
     // MARK: - 合唱 credit 归并(ArtistCredit)
     //
     // 起因:同一首《Toronto 2014》两次收听在 Last.fm 上成了两个实体 —— Mac 照抄 Apple Music
-    // 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone到Last.fm到桥接)报的是主歌手
+    // 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone→Last.fm→桥接)报的是主歌手
     // 「Daniel Caesar」。后果是次数各记一本(两行都「第 1 次听」)、封面各挂一张(合唱实体挂
     // 单曲封面)。这两组断言钉住用来归并的两条口径。
     do {
@@ -525,7 +525,7 @@ func runCacheKeyTests() {
         let consensus = ArtistCredit.albumConsensusCovers(rows: rows)
         expectEqual(consensus[ArtistCredit.albumConsensusKey(artist: "Daniel Caesar", album: album)!],
                     albumArt, "共识封面: 少数派(单曲封面)那一行被多数派纠正")
-        // 每行各一张(合辑/逐曲封面)到 没有共识,不许乱纠正
+        // 每行各一张(合辑/逐曲封面)→ 没有共识,不许乱纠正
         let noConsensus = ArtistCredit.albumConsensusCovers(rows: [
             ("V.A.", "Compilation", URL(string: "https://lastfm.example/a.jpg")!),
             ("V.A.", "Compilation", URL(string: "https://lastfm.example/b.jpg")!),

@@ -1417,8 +1417,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .fill(Color.white.opacity(0.18))
                 .frame(width: 1, height: 12)
             // 参考 QQ 音乐悬浮歌词补的三个按钮。相对顺序原来照抄参考图
-            // (展开 到 锁定 到 设置 到 关闭),把**锁定和设置对调**,
-            // 现在是 展开 到 设置 到 锁定 到 关闭。
+            // (展开 → 锁定 → 设置 → 关闭),把**锁定和设置对调**,
+            // 现在是 展开 → 设置 → 锁定 → 关闭。
             //
             // 这么排也更站得住:锁定是这一排里唯一**会让整排立刻消失**的按钮(点完
             // lockPosition 变 true,controlsVisible 的条件不再成立,整条胶囊换成 unlockPill)。
@@ -1496,7 +1496,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     ///
     /// **上报矩形的那层 `.background(GeometryReader…)` 必须留在最外面,悬停的变形只准
     /// 发生在它里面**。那个矩形就是控制器分发点击用的判据:一旦让它跟着 hover 一起放大,
-    /// 指针停在按钮边缘时就会变成"变大到仍然命中到保持变大"和"缩回到不再命中到缩回"来回抖
+    /// 指针停在按钮边缘时就会变成"变大→仍然命中→保持变大"和"缩回→不再命中→缩回"来回抖
     /// 的自激反馈,而且按钮的可点区域会随指针位置伸缩。所以放大只加在 `Image` 上、高亮圆
     /// 只当背景画,`.frame` 那一层的尺寸**逐像素不变**(19/22pt),外层量到的还是原来那个矩形。
     ///

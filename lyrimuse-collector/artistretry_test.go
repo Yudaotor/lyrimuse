@@ -154,7 +154,7 @@ func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 	}
 }
 
-// 本地标签恰好已经是常用名(方大同)时，knownArtistAlias 单方向查(只认"英文 到 常用名")
+// 本地标签恰好已经是常用名(方大同)时，knownArtistAlias 单方向查(只认"英文 → 常用名")
 // 找不到——这条不该再靠手工登记反向表救回来，musicBrainzArtistAliases 这条通用查询
 // 本身就该够用，对任何歌手都成立，不需要事先登记。实测案例见 musicBrainzArtistAliases
 // 头注：方大同《Lovers Policy》(专辑《15》，五源真实标题是《情胜策略》)本地标签是

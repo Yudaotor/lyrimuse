@@ -42,9 +42,9 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
     public let source: String
     public let score: Int
     public let terms: [LyricsScoreTermValue]
-    /// 存档里的 `instrumental`。老存档没有这个字段 到 nil。
+    /// 存档里的 `instrumental`。老存档没有这个字段 → nil。
     public let instrumental: Bool?
-    /// 存档里的 `consensus_peers`。老存档没有 到 空。
+    /// 存档里的 `consensus_peers`。老存档没有 → 空。
     public let consensusPeers: [String]
 
     public init(source: String, score: Int, terms: [LyricsScoreTermValue],

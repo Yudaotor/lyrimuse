@@ -530,7 +530,7 @@ private final class LyricsWindowController: ObservableObject {
     /// 直接钉一个常量,无论父视图是谁、多高,按钮永远贴着它的顶边这么远。
     private var trafficLightDefaultXs: [NSWindow.ButtonType.RawValue: CGFloat] = [:]
     /// 红绿灯下移量(按 Apple Music 整窗参考图逐像素量出:红点中心 y=25.75pt):默认中心
-    /// 窗内 16pt,下移 10 到 26pt,与右上胶囊行(offset −safeTop+10)同心。
+    /// 窗内 16pt,下移 10 → 26pt,与右上胶囊行(offset −safeTop+10)同心。
     private static let trafficLightTopMargin: CGFloat = 18
     /// 红点(close)目标中心 x(按 Apple Music 整窗截图量出:红点中心 x=25.8pt);
     /// 整组随 close 平移,保留系统自己的按钮间距。
@@ -1004,7 +1004,7 @@ struct LyricsWindowView: View {
     @State private var lyricsSearchContext: LyricsSearchContext?
     /// 「添加到资料库」行的即时状态:此前点完静默关面板,成功/本来就在库/
     /// 失败三种结局全都看不出差别(实测"点了没反应"那次就是歌 7 月已在库、duplicate
-    /// 静默 no-op)。现在开菜单时异步查一次"已在库?",点击后行内走 添加中到已添加/失败,
+    /// 静默 no-op)。现在开菜单时异步查一次"已在库?",点击后行内走 添加中→已添加/失败,
     /// 全程不关菜单。
     private enum LibraryAddState: Equatable {
         case idle, alreadyInLibrary, adding, added, failed, removing, removeFailed
@@ -2041,7 +2041,7 @@ struct LyricsWindowView: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    // 置顶/全屏胶囊(AM 同位是 X/画中画那颗,x204-349px@2x 到 左缘 102pt、高 71px
+                    // 置顶/全屏胶囊(AM 同位是 X/画中画那颗,x204-349px@2x → 左缘 102pt、高 71px
                     // 与右上音量胶囊一致)。
                     //
                     // 预览里不摆:它管的是**这扇窗自己**(置顶、伪全屏),而预览根本不是一扇窗 ——
@@ -2278,7 +2278,7 @@ struct LyricsWindowView: View {
                 if !windowController.isSurfaceVisible { scrollPendingWhileHidden = true }
             }
             .onChange(of: playback.currentGapIndex) {
-                // 进入间奏 到 滚到那排「•••」(跟当前行同一个 41% 锚位)。出间奏不用管:
+                // 进入间奏 → 滚到那排「•••」(跟当前行同一个 41% 锚位)。出间奏不用管:
                 // 下一句开始时 currentLineIndex 变化,上面那条 onChange 自然把页面滚过去。
                 // intro(-1)不走 gapRowID:那一行刚在本次事务里插入、还没布局,scrollTo
                 // 解析不到 —— 交给 scrollToActiveLine 的"滚第一句、锚 0.52"路径,再延一拍
@@ -2388,7 +2388,7 @@ struct LyricsWindowView: View {
 
     /// 歌词正文字号。系数是从 AM 歌词页整窗截图(2940×1690 @2x,即
     /// 1470×845pt)量出来的:当前行「无敌铁金刚」墨高 89px,PingFang 粗体的墨高/字号比
-    /// 0.88(离线 ImageRenderer 标定)到 字号 50.6pt;除以窗高 845pt 得 0.0598×窗高,
+    /// 0.88(离线 ImageRenderer 标定)→ 字号 50.6pt;除以窗高 845pt 得 0.0598×窗高,
     /// 除以右栏宽 896.7pt 得 0.0564×右栏宽。两个锚在 AM 自己的窗口纵横比下相等,取
     /// min:窗口偏矮时高度锚接管(保住"一屏约 7 行"),偏窄时宽度锚接管(别让长句
     /// 疯狂折行)。上界不再夹死在 56 上:AM 全屏字号能到 68pt+,一比一就该跟着长。
@@ -2457,8 +2457,8 @@ struct LyricsWindowView: View {
                     }
                     ForEach(Array(playback.allLines.enumerated()), id: \.element.id) { index, item in
                         // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍 —— 稳定播放期间主线程
-                        // 曾有 ~22% 的时间耗在 NSHostingView.layout 到 ViewGraphRootValueUpdater.render 里,
-                        // 栈里能看到 ForEachChild.updateValue 到 lineView,也就是几十行全在重建。
+                        // 曾有 ~22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render 里,
+                        // 栈里能看到 ForEachChild.updateValue → lineView,也就是几十行全在重建。
                         // LyricsWindowView 订阅的是整个 PlaybackCoordinator(二十来个 @Published),任何一个
                         // 变动都会重算 body;而行视图带闭包参数(onTap/onHover),函数值永远不相等,SwiftUI
                         // 自带的结构比较救不了,必须显式给一个只比较**值输入**的 ==。
@@ -2468,7 +2468,7 @@ struct LyricsWindowView: View {
                             // 间奏进行中"当前"是那排「•••」,唱完的行不再保持活跃态。
                             isActive: item.id == activeID && playback.currentGapIndex == nil,
                             isHovered: hoveredLineID == item.id,
-                            // 这个值在 LyricsLineRow 到 KaraokeLineText 到 KaraokeWordText 一路只喂两处
+                            // 这个值在 LyricsLineRow → KaraokeLineText → KaraokeWordText 一路只喂两处
                             // TimelineView 的 paused(粗时钟 / 细时钟),不参与任何画面判断,所以窗口面不可见
                             // 时直接并进来一起停表(已知坑 #17):被完全遮住/最小化的窗口里 60Hz 细时钟照跑
                             // 是白烧。恢复可见那一帧时钟重新给真值,填色不插值(叶子 .transaction 清动画),
@@ -2511,7 +2511,7 @@ struct LyricsWindowView: View {
                         )
                         .equatable()
                         .id(item.id)
-                        // 这一行之后有间奏 到 插「•••」(不活跃时零高度不占位,见 gapDotsRow)。
+                        // 这一行之后有间奏 → 插「•••」(不活跃时零高度不占位,见 gapDotsRow)。
                         if let g = gapMarker(index) {
                             gapDotsRow(g, id: "\(item.id)-gap", centered: centered)
                         }
@@ -2607,8 +2607,8 @@ struct LyricsWindowView: View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 20)
             artworkCard
-            // 三段间距 19/19/15(对拍 AM:封面底到歌名 19、歌手底到进度条 23.5(帧距≈19)、
-            // 时间行到播控中心比我们短 5。22/14/20 那种逐段累积会把播控行推低 ~10pt)。
+            // 三段间距 19/19/15(对拍 AM:封面底→歌名 19、歌手底→进度条 23.5(帧距≈19)、
+            // 时间行→播控中心比我们短 5。22/14/20 那种逐段累积会把播控行推低 ~10pt)。
             trackInfoRow
                 .padding(.top, 19)
             // 进度条子视图自持五个拖动/补间瞬态:1Hz 补间推进、
@@ -2829,7 +2829,7 @@ struct LyricsWindowView: View {
                     suggestLessUserToggled = true
                     let newValue = !suggestLessApplied
                     suggestLessApplied = newValue
-                    // 串行链:连点两下(减少到撤销)若各自独立 detached,执行序没保证,
+                    // 串行链:连点两下(减少→撤销)若各自独立 detached,执行序没保证,
                     // 可能 false 先落、true 后落,终态与 UI 相反。
                     let previous = suggestLessSerialTask
                     suggestLessSerialTask = Task.detached(priority: .userInitiated) {
@@ -3021,7 +3021,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 点「添加到资料库」:添加中到已添加/失败,不关菜单。成功与否**不信 duplicate 的
+    /// 点「添加到资料库」:添加中→已添加/失败,不关菜单。成功与否**不信 duplicate 的
     /// 返回值** —— 它对"已在库静默 no-op"也报 ok,事后重新读回
     /// 资料库才算数;读回本身失败(nil)时才退回信命令返回值。
     private func addCurrentTrackToLibraryFromMenu() {
@@ -3037,14 +3037,14 @@ struct LyricsWindowView: View {
             let commandOK = MusicPlaybackController.addCurrentTrackToLibrary()
             let verified = MusicPlaybackController.currentTrackIsInLibrary()
             await MainActor.run {
-                // 关菜单到换曲到重开 后落地的旧结局不能贴到新曲的行上(审阅 D2c)
+                // 关菜单→换曲→重开 后落地的旧结局不能贴到新曲的行上(审阅 D2c)
                 guard generation == moreMenuStateGeneration else { return }
                 libraryAddState = (verified ?? commandOK) ? .added : .failed
             }
         }
     }
 
-    /// 点「从资料库删除」:删除中到回 idle(行翻回「添加到资料库」即反馈)/删除失败。
+    /// 点「从资料库删除」:删除中→回 idle(行翻回「添加到资料库」即反馈)/删除失败。
     /// 与添加同款纪律:成败不信命令返回值,事后读回资料库(目标=不在库)才算数。
     private func removeCurrentTrackFromLibraryFromMenu() {
         libraryAddState = .removing
@@ -3161,7 +3161,7 @@ struct LyricsWindowView: View {
             let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
             await MainActor.run {
                 // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:collector
-                // 算缓存 key 时会把标题结尾那种非版本标记的括号剥掉(林潔心《想逃避(22)》到「想逃避」),
+                // 算缓存 key 时会把标题结尾那种非版本标记的括号剥掉(林潔心《想逃避(22)》→「想逃避」),
                 // 这里传原始标题的话,手动搜索会重蹈自动解析"八个源全搜不到"的覆辙。
                 // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
                 lyricsSearchContext = LyricsSearchContext(
@@ -3466,7 +3466,7 @@ struct LyricsWindowView: View {
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
-    /// 设备类型 到 行图标(AM 的输出面板每行左侧是设备形状图标)。transportType 先分大类,
+    /// 设备类型 → 行图标(AM 的输出面板每行左侧是设备形状图标)。transportType 先分大类,
     /// AirPods 系按名称再细分(蓝牙传输层区分不出 Max/Pro)。
     private static func deviceSymbol(_ device: AudioOutputDeviceManager.Device) -> String {
         let name = device.name.lowercased()
@@ -3696,7 +3696,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 循环键三态(对齐 AM):关 到 列表循环(亮 repeat) 到 单曲循环(亮
+    /// 循环键三态(对齐 AM):关 → 列表循环(亮 repeat) → 单曲循环(亮
     /// repeat.1) 到 关。此前只有 关与单曲 两态,而且 Music.app 的 song repeat=all 被解析
     /// 塌缩成「列表」 —— 用户开着整张循环,这颗键却是灰的,也没法从 UI 点出这一档。
     /// Spotify 够不到(repeating 布尔且读不回),这颗整个不显示、只占位。
@@ -3851,7 +3851,7 @@ struct LyricsWindowView: View {
     }
 
     // Apple Music 歌词页的景深:当前行完全清晰,其余行统一压到低不透明度、并随距离
-    // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 到 0.35 缓降),远近感主要靠
+    // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 → 0.35 缓降),远近感主要靠
     // 模糊量区分。nil(还没播到第一句)整页轻虚化,保持可读。
 
     // 距离越远、高斯模糊越重——1.1pt/行、封顶 4pt。别调回 1.6pt/行封顶 6pt:AM 最远的
@@ -4035,7 +4035,7 @@ struct LyricsWindowView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// 「继续播放」:AM 走三段式(裸 play到上次那首到都不行),Spotify 自带恢复;任何
+    /// 「继续播放」:AM 走三段式(裸 play→上次那首→都不行),Spotify 自带恢复;任何
     /// 失败都兜底把播放器 App 带到前台 —— 点了必须有可见反应(裸 play 对空队列是静默
     /// no-op,只靠它会"点了没反应")。
     /// 实现在 `IdlePlaybackActions.resume(player:)`(灵动岛空闲展开卡放同一颗键),这里只转发。
@@ -4285,8 +4285,8 @@ private struct LyricsLineRow: View, Equatable {
 
     // 模糊量:同一次拟合解出 σ(d1)=3.0px、σ(d2)=4.5px、σ(d4)=7.5px —— 严格线性
     // σ = 1.5×(d+1)px,除以字号 101px 得 **0.0148×(d+1) 字号**(d1≈3%、d4≈7.4%,
-    // distance 本身封顶 4,不需要另设上限)。历史:08-04 固定 1.6pt/行"远行失真"到
-    // 1.1pt/行"不够糊"到 08-21 按特写目测 9%/22%"太糊"到 回收 6%/15%"还是有点糊"
+    // distance 本身封顶 4,不需要另设上限)。历史:08-04 固定 1.6pt/行"远行失真"→
+    // 1.1pt/行"不够糊"→ 08-21 按特写目测 9%/22%"太糊"→ 回收 6%/15%"还是有点糊"
     // ——前四版都在猜,这版是从截图解出来的,d1 比 6% 那版整整轻一半。
     // SwiftUI 的 .blur() 本身是可动画属性,复用调用点已有的 .animation(value: distance)。
     private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize) }
@@ -4329,9 +4329,9 @@ private struct LyricsLineRow: View, Equatable {
         .animation(nil, value: isHovered)
         .opacity(isHovered ? 1 : lineOpacity)
         // 激活行的不透明度**瞬时到位**(60fps 亮度轨迹实测):行落位瞬间填色已瞬时切到"未唱
-        // 暗色",若不透明度还在 0.42到1.0 慢慢爬,两通道相乘出一个"先暗一拍(129到120)再用
+        // 暗色",若不透明度还在 0.42→1.0 慢慢爬,两通道相乘出一个"先暗一拍(129→120)再用
         // 0.45s 爬回 139"的凹陷 —— 观感就是"新行像被重新加载一遍,闪烁一下"。激活行直接落在
-        // 终态(129到139 的一次性小步升,无凹陷);退场行/其他行仍走 lineTransition(1到0.42 的
+        // 终态(129→139 的一次性小步升,无凹陷);退场行/其他行仍走 lineTransition(1→0.42 的
         // 退暗要动画,否则旧行"啪"地熄灭)。模糊不在此列 —— 它由更外层的 .animation 驱动,
         // 激活行仍有 0.45s 的"对焦"过程。
         .animation(isActive ? nil : LyricsWindowView.lineTransition, value: distance)
@@ -4359,7 +4359,7 @@ private struct LyricsLineRow: View, Equatable {
     @ViewBuilder
     private var mainText: some View {
         // Apple Music 歌词页所有行同一字号同一字重(远近靠透明度+模糊区分,不靠字号),
-        // 当前行的逐字填色也是"同色 35% 到 全强度"的同色系渐变,不引入另一个强调色。
+        // 当前行的逐字填色也是"同色 35% → 全强度"的同色系渐变,不引入另一个强调色。
         // 这个"同色"由窗口层给(`.auto` 档解析出来就是老的"有封面白、没封面 .primary";
         // 用户钉死了颜色就是那个颜色),远近区分交给 lineOpacity。
         let base: Color = textColor
@@ -4403,7 +4403,7 @@ private struct LyricsLineRow: View, Equatable {
 // ---- 驱动方式的定稿(别再翻烧饼)----
 //
 // 逐帧重算(TimelineView 叶子时钟)是**实测后的终点**,不是没试过更"先进"的:排程式
-// (fillFraction 对时间线性 到 一次性排 .linear 显式动画交给渲染管线插值,这类歌词渲染的
+// (fillFraction 对时间线性 → 一次性排 .linear 显式动画交给渲染管线插值,这类歌词渲染的
 // 常规架构)CPU 上确实是零逐帧代码 —— 但 SCK 逐帧探针实测 **macOS 只以 ~20Hz 提交这些
 // 动画**(系统对长时程慢动画自动降档,无 API 干预;对照组悬浮歌词的 TimelineView 30Hz
 // 准点投递),20Hz×14px 的边缘步进正是那种"卡顿感"。TimelineView 的频率受控、实测准点,
@@ -4411,14 +4411,14 @@ private struct LyricsLineRow: View, Equatable {
 //
 // 逐帧的开销结构已经修到位(实测记录保留在此,别退回去):
 // * TimelineView 包在 WrapLayout 外面 = 每帧重排版(主线程 91% 忙,67% 在
-//   LayoutEngineBox.sizeThatFits)到 时钟必须下沉到**字级叶子**,布局每帧不再被推翻。
-// * 一行十几个相位不齐的满速字时钟并集盖满每个显示帧(85.8% 忙)到 行级 4Hz 粗时钟只判
+//   LayoutEngineBox.sizeThatFits)→ 时钟必须下沉到**字级叶子**,布局每帧不再被推翻。
+// * 一行十几个相位不齐的满速字时钟并集盖满每个显示帧(85.8% 忙)→ 行级 4Hz 粗时钟只判
 //   "哪个字正在扫",只有那个字保留满速细时钟。
 // * WrapLayout contentKey 缓存(粗 tick 不再整行重测宽)、Palette 纯色渐变跨帧复用
 //   (静态词不再每 tick 重建 AnyShapeStyle)。
 // 排程式那轮留下的三个修复也都保留:①激活瞬间取值跳变被行级 .animation(value:) 插值成
-// "全亮再褪色"到 叶子挂 .transaction 禁掉外来动画;②forceFilled 用 fraction=1.0 走不到
-// 纯色快路径、右缘 band 段被淡到半强度 到 定格值 1+band;③上浮参数(幅度 0.05em、时长
+// "全亮再褪色"→ 叶子挂 .transaction 禁掉外来动画;②forceFilled 用 fraction=1.0 走不到
+// 纯色快路径、右缘 band 段被淡到半强度 → 定格值 1+band;③上浮参数(幅度 0.05em、时长
 // min(词长,1000ms) —— 两头的取舍见 riseWindowMs 注释)。
 /// 迷你窗中间那两行(当前行 + 下一行)。换句**不做动画**,新的一句直接替上来(见 07 章决策 42)。
 ///
@@ -4919,7 +4919,7 @@ private struct KaraokeWordText: View {
                 // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
                 .offset(y: lift)
                 // 禁掉一切外来动画事务:填色/上浮由本时钟逐帧给真值,任何插值都是错的。
-                // 行激活瞬间 forceFilled到按时间 的取值跳变会落在行级
+                // 行激活瞬间 forceFilled→按时间 的取值跳变会落在行级
                 // .animation(value: distance) 的作用域里,渐变 stop 被从 1 插值回 0,
                 // 就是"下一行先全部亮一下、再从头逐字"那个 bug 的机制;未唱到的字时钟
                 // 停着,没有下一帧掰正,褪色动画会播完整。
@@ -5058,9 +5058,9 @@ private struct WindowProgressSection: View {
                         // 但变换也不能用 `.scaleEffect(x: f)`:横向缩放会把圆头一起压扁,f 越小越扁,小到
                         // 一定程度圆头直接没了、变成直角 —— 表现是"进度条有时候变成方的,不是弧形"。离线渲染
                         // 逐列量覆盖高度坐实(条高 48px,数字=该列有色行数,取右端 12 列):
-                        //   f=1.00 到 42,40,38,36,36,34,30,28,26,22,16,10   正常圆头
-                        //   f=0.50 到 48,48,46,46,44,42,40,38,34,30,24,14   已明显压扁
-                        //   f=0.02 到 48,48,48,48,48,48,48,48,48,48,48,48   纯矩形
+                        //   f=1.00 → 42,40,38,36,36,34,30,28,26,22,16,10   正常圆头
+                        //   f=0.50 → 48,48,46,46,44,42,40,38,34,30,24,14   已明显压扁
+                        //   f=0.02 → 48,48,48,48,48,48,48,48,48,48,48,48   纯矩形
                         // 一首 3 分钟的歌播到 0:04 就是 f≈0.02,进度靠前时方、靠后才圆是这个必然结果,
                         // 不是随机 —— 别按"偶发"去找竞态。
                         //
@@ -5237,7 +5237,7 @@ private struct WindowVolumeCapsule: View {
     var body: some View {
         if let volume = model.soundVolume {
             // 形态对照 AM 顶栏音量胶囊特写:**只有滑杆 + 右侧喇叭**,没有左侧静音键和分隔线,
-            // 整体宽高比 ≈4:1(32pt 高 到 总宽 ~143)。静音功能收进右侧喇叭(点击切换,图标仍随
+            // 整体宽高比 ≈4:1(32pt 高 → 总宽 ~143)。静音功能收进右侧喇叭(点击切换,图标仍随
             // 档位变)。尺寸按"菜单栏 64px 作共同标尺"的同屏对拍定:滑块 12.5pt 高 / 轨道 3pt、
             // 滑杆长 ≈125pt、喇叭 ≈25pt。
             HStack(spacing: compact ? 8 : 10) {
@@ -5352,7 +5352,7 @@ private struct WindowVolumeCapsule: View {
     }
 }
 
-/// 「…」按钮的窗内坐标,自绘菜单据此定位(anchorPreference 到 overlayPreferenceValue)。
+/// 「…」按钮的窗内坐标,自绘菜单据此定位(anchorPreference → overlayPreferenceValue)。
 private struct MoreMenuButtonBoundsKey: PreferenceKey {
     static let defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
@@ -5922,7 +5922,7 @@ private struct NowPlayingCountBadge: View {
 
     var body: some View {
         // 容器必须永远在场:onAppear/onChange 是取数的唯一触发点,挂在条件内容上会
-        // 陷入"没数字到不渲染到永远不取数"的死锁。
+        // 陷入"没数字→不渲染→永远不取数"的死锁。
         Group {
             if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {
                 // 点这行字直接跳设置的 Last.fm 详情页 —— 这个数字本来就来自 Last.fm scrobble 记录,
@@ -5983,7 +5983,7 @@ private struct InfoPanelListeningRows: View {
         }
         .onAppear { refresh() }
         // 面板开着跨曲(自然播完切歌)时也要重取:参数跟着 playback 变了、onAppear 却不再
-        // 触发,span 的 key 还是旧曲 到「首次/上次听」显示上一首的档案,跟同面板里新曲的
+        // 触发,span 的 key 还是旧曲 →「首次/上次听」显示上一首的档案,跟同面板里新曲的
         // 歌名混排。
         .onChange(of: "\(artist)|\(title)") { refresh() }
     }
@@ -6064,7 +6064,7 @@ private struct IdleLastfmSection: View {
     }
 }
 
-/// 近 12 周迷你热力图(系列 #4):列=周(旧到新)、行=周一到周日,数据直接读服务的
+/// 近 12 周迷你热力图(系列 #4):列=周(旧→新)、行=周一到周日,数据直接读服务的
 /// dailyCounts 天粒度桶(完整年历版在设置的统计页,LastfmHeatmapView)。
 private struct MiniHeatmapStrip: View {
     let dailyCounts: [String: Int]
@@ -6248,7 +6248,7 @@ private struct ChartsPanelView: View {
         .help(L10n.t("在 Apple Music 中打开"))
     }
 
-    /// 与 openCatalogPage 同一条跳转管线:iTunes Search 解析 到 music:// 原生跳页。
+    /// 与 openCatalogPage 同一条跳转管线:iTunes Search 解析 → music:// 原生跳页。
     private func open(_ entry: LastfmStatsService.ChartEntry) {
         let kind = kind
         Task.detached(priority: .userInitiated) {

@@ -7,8 +7,8 @@ import Foundation
 /// form-urlencoded 解码——后面那一遍会把 `+` 当成空格。于是含加号的歌名/歌手名走标准
 /// 编码必然查不到:
 ///
-///     track=夜曲%2B窃爱 (Live)    到 两遍解完是「夜曲 窃爱 (Live)」到 error 6 Track not found
-///     track=夜曲%252B窃爱 (Live)  到 两遍解完是「夜曲+窃爱 (Live)」到 命中,userplaycount=2
+///     track=夜曲%2B窃爱 (Live)    → 两遍解完是「夜曲 窃爱 (Live)」→ error 6 Track not found
+///     track=夜曲%252B窃爱 (Live)  → 两遍解完是「夜曲+窃爱 (Live)」→ 命中,userplaycount=2
 ///
 /// 这是**端点级**行为,不是某一首歌的问题:拿真实存在的乐队 `+44`(733,475 听众)单测过
 /// —— `artist=%2B44` 同样报 error 6,`artist=%252B44` 才命中。
@@ -30,7 +30,7 @@ public enum LastfmQuery {
         return set
     }()
 
-    /// 一个 query 分量的编码:`+` 到 `%252B`、`%` 到 `%2525`,其余按 unreserved 严格转义。
+    /// 一个 query 分量的编码:`+` → `%252B`、`%` → `%2525`,其余按 unreserved 严格转义。
     ///
     /// 两次 replace 的顺序不能反。先换 `%` 再换 `+`:反过来的话第一步产出的 `%2B`
     /// 里那个 `%` 会被第二步再啃一遍,变成 `%252525…`。

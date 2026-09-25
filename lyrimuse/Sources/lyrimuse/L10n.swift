@@ -48,7 +48,7 @@ enum L10n {
         return resolveSystem(Locale.preferredLanguages.first ?? "zh-hans")
     }
 
-    /// 系统首选语言标签 到 语言包目录名。规则本体在 LyrimuseCore 的 `UILanguage`(selftest 钉着
+    /// 系统首选语言标签 → 语言包目录名。规则本体在 LyrimuseCore 的 `UILanguage`(selftest 钉着
     /// zh-Hant-TW / zh-HK / zh-Hans-HK / 裸 zh / en-GB / ja 这些标签的分流),这里只是转发。
     static func resolveSystem(_ preferred: String) -> String {
         UILanguage.resolve(preferred: preferred)

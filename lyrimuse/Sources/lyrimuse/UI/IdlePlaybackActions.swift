@@ -5,7 +5,7 @@ import LyrimuseCore
 ///
 /// 从 `LyricsWindowView`(停播页 `idleWelcomeView` / `IdleStandbyView` 的回调)原样抽出来,
 /// 因为灵动岛没有曲目时的 hover 展开卡(`NotchLyricsView.idleExpandedPanel`)要放同一颗「继续播放」
-/// —— 两处各写一份"AM 三段式 到 兜底激活 App"必然漂(这个仓库为同类漂移付过几次账)。逻辑一个字没改,
+/// —— 两处各写一份"AM 三段式 → 兜底激活 App"必然漂(这个仓库为同类漂移付过几次账)。逻辑一个字没改,
 /// 歌词窗口那三个成员现在只是转发到这里。
 @MainActor
 enum IdlePlaybackActions {
@@ -27,7 +27,7 @@ enum IdlePlaybackActions {
         player == .appleMusic || player == .spotify
     }
 
-    /// 「继续播放」:AM 走三段式(裸 play 到 上次那首 到 都不行),Spotify 自带恢复;任何失败都兜底把
+    /// 「继续播放」:AM 走三段式(裸 play → 上次那首 → 都不行),Spotify 自带恢复;任何失败都兜底把
     /// 播放器 App 带到前台 —— 点了必须有可见反应(实测"点了没反应":裸 play 对空队列
     /// 静默 no-op)。
     static func resume(player: PlaybackPlayer) {

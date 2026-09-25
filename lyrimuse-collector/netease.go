@@ -132,7 +132,7 @@ const neteaseMinIntervalBetweenCalls = 250 * time.Millisecond
 // 上限,该桶有一次请求成功就清零,见 neteaseReportSuccess)。固定 30 秒是没有实测依据的
 // 保守起步值,而实际观察到的是退避期一过又立刻再被拒 —— 数出来的证据:
 //
-// 拿 ~25 小时的真实日志(~/Library/Logs/lyrimuse.log.old,18:47 到 09-02 19:12
+// 拿 ~25 小时的真实日志(~/Library/Logs/lyrimuse.log.old,18:47 → 09-02 19:12
 // UTC)统计 171 次拒绝(164× code 405 / 7× 406,**全部落在 /api/search/get/web 一个桶**):
 //   - 相邻两次拒绝间隔 **≤35 秒的有 89 次(52%)** —— 也就是"退避刚满就再撞一次";
 //   - 这种"满了就撞"最长**连成 21 次一串**(≈10.5 分钟一直在敲同一扇关着的门);
@@ -257,9 +257,9 @@ func neteaseReportSuccess(rawURL string) {
 // 病根是**张冠李戴**:`neteaseLastFailureReason` 只要进程里出现过一次
 // code 405 就会被贴上,而只要该源这一轮没给出候选就会显示出来 —— 两件独立的事被显示成
 // 因果。对照实验(同一分钟内跑两次 `collector search-lyrics`):
-//   - 《妳聽得到》:首个网易云请求吃 405 到 换备用端点 10 次全 200 到 仍然零候选,
+//   - 《妳聽得到》:首个网易云请求吃 405 → 换备用端点 10 次全 200 → 仍然零候选,
 //     面板显示"未给出候选 + 接口限流";
-//   - 《白发》:**同样**吃 405 到 走备用端点 到 netease **给出 4 条候选**,最终
+//   - 《白发》:**同样**吃 405 → 走备用端点 → netease **给出 4 条候选**,最终
 //     failureCodes 里根本没有 netease。
 //
 // 后者证明"吃过 405"跟"没给出候选"根本不是同一件事。加这道判据之后,只有该源这一轮
@@ -359,9 +359,9 @@ func neteaseLookup(ctx context.Context, artist, title, album string, durationSec
 
 // withholdImpersonatorRiddenIdentity 对"版权整体下架、曲库里只剩仿冒号"的艺人
 // (见 isNeteaseImpersonatorRidden)只保留**歌词族**字段,把身份/封面/跳转链接/专辑 id
-// 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 到 不写
-// CoverSource/CoverAlbum;AlbumID=0 到 专辑预取早退;SongURL 空 到 不写 NeteaseURL;
-// Artist 空 到 canonical_artist 走其它链路),唯一的差别是歌词照常进入全源打分。
+// 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 → 不写
+// CoverSource/CoverAlbum;AlbumID=0 → 专辑预取早退;SongURL 空 → 不写 NeteaseURL;
+// Artist 空 → canonical_artist 走其它链路),唯一的差别是歌词照常进入全源打分。
 //
 // 为什么身份/封面照旧不信:仿冒号能把歌名、专辑名、时长一字不差地抄成目标曲目,
 // pick() 的标题/歌手名校验对这类艺人天然拦不住(见 isNeteaseImpersonatorRidden 注释)。
@@ -558,7 +558,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 	// 专辑亲和 + 不缺本地限定词 + 多出的词全在 acoustic 家族白名单 —— 伴奏/粤语/国语
 	// 这类"时长相同但确是另一次录音"的词永不锚定,见 match.go 那边的注释);
 	// ②它的专辑分**严格高于**其它全部已通过校验的候选(证据必须是"唯独它对得上",
-	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 到 有歧义,放弃)。
+	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
 	// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
 	if durationSecs > 0 {
 		all := append(append([]cand{}, exactCands...), looseCands...)
@@ -595,7 +595,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 		if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
 			return cands[0].s // 唯一候选,没有歧义,直接信
 		}
-		// 多条候选(有歧义)到 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
+		// 多条候选(有歧义)→ 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
 		var best *neSearchSong
 		bestSc := 0
 		for _, c := range cands {
@@ -680,7 +680,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 只回一堆热门歌兜底。用去括号标题查,不中再换一个词序(实测 "标题 歌手" 召回更好)。
 	//
 	// 这里**故意不走 searchTitleVariants**,是唯一一个不走的源 —— 别把它"顺手统一"过去。
-	// 那个函数里的"版本限定词 到 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
+	// 那个函数里的"版本限定词 → 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
 	// 那三个源是**取第一条通过校验的候选就收工**,搜索词一偏就直接定死在错版本上。而下面
 	// 的 pick() 是**扫完 10 条结果再排序挑**(精确同名 exactCands 优先于宽松 looseCands,
 	// 再按专辑分),版本选择由排序负责,不依赖搜索词的写法。
@@ -714,7 +714,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	type neSong = neSearchSong
 	// 选谁的封面/链接:同名歌里混着别歌手的翻唱/演奏/卡拉OK/同名他人歌。优先级:
 	// ①歌名+歌手都匹配、且专辑分最高(专辑名 loose 相等=100 直接锁定正确专辑版本);
-	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 到 返回空,不串错歌手。
+	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 → 返回空,不串错歌手。
 	// 只信 byArtist(歌手名精确对上),不再有"歌手对不上、专辑名对上就认"的 byAlbum 兜底——
 	// 专辑名字段能被仿冒号无成本抄成任意值(比 artistMatches 要防的"歌手名加个符号"更难防),
 	// 官方曲库缺失时宁可 pick() 返回空,让 resolveTrackEnrichment 退到 QQ 音乐兜底(QQ 侧
@@ -806,7 +806,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 搜索排名里彻底挤出窗口(实测四条查询词各自的前 30 条里,官方 The One 版一次都没出现,
 	// 而 /api/album/18906 的曲目列表里它就躺着,id=186043、自报 273.0s 与本地 273.227s
 	// 相差 0.227s,还带 52 行 LRC)。本地专辑名 + 真实时长都已知时,改走"搜专辑
-	// (neteaseAlbumIDByName,artistMatches + albumScore>=100 双闸)到 浏览曲目 到 标题/
+	// (neteaseAlbumIDByName,artistMatches + albumScore>=100 双闸)→ 浏览曲目 → 标题/
 	// 歌手闸 + 时长唯一锚定"这条不依赖曲目搜索排名的入口,拿曲目 ID 接回既有的取词/取封面
 	// 流程。闸门与 pick() 同强度(见 anchorAlbumTrackForLocalTitle 头注),不是放宽。
 	//
@@ -1447,7 +1447,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 }
 
 // retryTitleFromArtistSearchMaxRank:泛搜回来的 30 条里,只有**排名最靠前的这几条**够格
-// 交给纯时长判据。修的真实 bug(打上花火 到 春雷案)。
+// 交给纯时长判据。修的真实 bug(打上花火 → 春雷案)。
 //
 // 病灶:这条兜底刻意不看标题文字(理由见 retryTitleFromArtistSearch 头注),判据只剩
 // "歌手对得上 + 时长差 < 2s"。而搜索词是"歌手 + 本地标题",标题一个字都没命中时,搜索

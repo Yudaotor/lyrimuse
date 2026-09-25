@@ -71,7 +71,7 @@ public enum CollectorServiceManager {
     /// 本地 build.sh 装机也靠这里:开着后台服务时 build.sh 不再自己重装 collector,只等这次对账
     /// 装完(两边同时 bootout/bootstrap 同一个 label 会互相杀掉对方刚拉起的进程)。Sparkle /
     /// Homebrew cask / 手动拖 .app 覆盖这三条路同样只有这里兜底。`install()` 本身就是完整的
-    /// bootout到写 plist到bootstrap 三级自愈,这里缺的只是一个启动时的触发点。
+    /// bootout→写 plist→bootstrap 三级自愈,这里缺的只是一个启动时的触发点。
     ///
     /// 判据用**二进制指纹**而不是"服务在不在跑":更新之后老进程往往还活着(要等下一次缺页
     /// 才被 SIGKILL),那一刻 isRunning 仍是 true,只看运行状态会整个错过这次更新,而等它
@@ -156,7 +156,7 @@ public enum CollectorServiceManager {
     // 做 old==new 短路),而 SettingsView.toggleCollectorService/OnboardingView.
     // enableCollectorService 在 setEnabledAndWait 完成后都会回写一次
     // settings.collectorServiceEnabled = enabling——这次赋值会再触发一次
-    // didSet到setEnabled(_:),派生出一个完全独立、不等待的冗余调用。如果用户在这次冗余
+    // didSet→setEnabled(_:),派生出一个完全独立、不等待的冗余调用。如果用户在这次冗余
     // 调用还没跑完(install() 内部失败重试路径最坏可达 2-3 秒)之前就快速切换开关,足以
     // 让 install()/uninstall() 真的并发执行,其中一个的 bootstrap 用到另一个已经删除的
     // plist 路径而静默失败,最终 launchd 实际状态跟 collectorServiceEnabled 显示的对不

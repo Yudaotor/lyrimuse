@@ -21,7 +21,7 @@ import Foundation
 public enum LyricsDecisionRow {
     /// 这条候选是不是"纯音乐标记"(不是候选,是一个信号)。
     ///
-    /// - instrumental: 存档里的 `instrumental` 字段。**老存档没有这个字段** 到 nil,
+    /// - instrumental: 存档里的 `instrumental` 字段。**老存档没有这个字段** → nil,
     ///   那时候的标记行只能继续按普通候选显示(存档是当时那一刻的固化,不能事后补)。
     /// - score: 存档里的分数。
     ///

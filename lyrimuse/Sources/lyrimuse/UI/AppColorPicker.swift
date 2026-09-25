@@ -80,8 +80,8 @@ struct AppColorPicker: View {
     // MARK: - 饱和度/明度方块
 
     /// 横轴饱和度、纵轴明度,拖一下/点一下都直接定位(`minimumDistance: 0`)。叠色用经典的
-    /// 双层渐变技巧:底色是当前色相在 S=1/B=1 的纯色,上面叠一层"白到透明"(横向,表达饱和度
-    /// 变化)、再叠一层"透明到黑"(纵向,表达明度变化)——不用逐像素算 HSB到RGB,三层 SwiftUI
+    /// 双层渐变技巧:底色是当前色相在 S=1/B=1 的纯色,上面叠一层"白→透明"(横向,表达饱和度
+    /// 变化)、再叠一层"透明→黑"(纵向,表达明度变化)——不用逐像素算 HSB→RGB,三层 SwiftUI
     /// 渐变叠加出来的视觉效果跟真正的 HSB 平面等价。
     private var saturationBrightnessField: some View {
         GeometryReader { geo in
@@ -214,7 +214,7 @@ struct AppColorPicker: View {
 
     /// 每次弹出面板时,把 `selection` 现在的值拆成 hue/saturation/brightness/opacity 这份内部
     /// 工作状态 —— 面板内部的拖拽/输入全部只读写这份状态,只有 `commit()` 才回写 `selection`,
-    /// 这样面板打开期间的每一次微小拖动不用反复做"Color 到 HSB 到 Color"的有损往返。
+    /// 这样面板打开期间的每一次微小拖动不用反复做"Color → HSB → Color"的有损往返。
     private func loadFromSelection() {
         let rgb = NSColor(selection.wrappedValue).usingColorSpace(.sRGB) ?? .white
         hue = Double(rgb.hueComponent)

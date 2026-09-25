@@ -26,14 +26,14 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CATALOG = os.path.join(ROOT, "Localizable.xcstrings")
 TARGETS = {
-    # catalog 语言码 到 仓库里 .lproj 目录名(小写是既有布局,别"修"它:L10n.swift 和
+    # catalog 语言码 → 仓库里 .lproj 目录名(小写是既有布局,别"修"它:L10n.swift 和
     # build.sh 都按这个名字找)
     "zh-Hans": "zh-hans.lproj",
     "en": "en.lproj",
     "zh-Hant": "zh-hant.lproj",
 }
 # 缺翻译时允许回退到源语言(简体)的语言。**当前为空**:规则是「新加文案必须把
-# 当前支持的语言都写全」(见 AGENTS.md「容易踩的具体坑 到 本地化」),所以 zh-Hant 跟 en 一样缺译就
+# 当前支持的语言都写全」(见 AGENTS.md「容易踩的具体坑 → 本地化」),所以 zh-Hant 跟 en 一样缺译就
 # 失败并列出缺的键。加繁体那天曾短暂开过回退,让 1196 条译文写入前树不红;译文齐了就关掉。
 FALLBACK_TO_SOURCE = set()
 OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")

@@ -7,9 +7,9 @@ import "testing"
 //
 // 下面三组曲目表是**真查网易云量回来的**(`/api/search/get?type=1&limit=30`),
 // 不是编的:名次就是搜索结果里的名次,时长是接口给的毫秒 / 1000。三组分别对应
-//   ① 这次的错例(打上花火 到 春雷),
-//   ② 修好、这次不能打死的正例(方大同 Love Love Love 到 爱爱爱),
-//   ③ 这条兜底当初存在的理由(陶喆 Airport in 10:30 到 飞机场的10:30)。
+//   ① 这次的错例(打上花火 → 春雷),
+//   ② 修好、这次不能打死的正例(方大同 Love Love Love → 爱爱爱),
+//   ③ 这条兜底当初存在的理由(陶喆 Airport in 10:30 → 飞机场的10:30)。
 // 只保留每组前 30 名里跟判定有关的那几条 + 足够的填充,好让名次对得上。
 
 // 查询:"米津玄师 Uchiagehanabi",本地时长 289.334s。
@@ -79,7 +79,7 @@ func TestArtistSearchRankCutoffRejectsCatalogCollision(t *testing.T) {
 		t.Fatalf("前置条件不成立:不截断时应当仍然选出《春雷》,实际 got=%q ok=%v", got, ok)
 	}
 
-	// 改动后:只有前 5 名够格,而前 5 名里一条都落不进 2s 容差 到 整体弃权。
+	// 改动后:只有前 5 名够格,而前 5 名里一条都落不进 2s 容差 → 整体弃权。
 	// 弃权是**正确**结果:上层还有 musixmatch 那条按本地标题搜到的正确候选兜着。
 	if got, _, ok := bestAlbumTrackByDurationDetailed(
 		topSearchRanked(all, retryTitleFromArtistSearchMaxRank), localDuration); ok {
@@ -131,7 +131,7 @@ func TestTopSearchRanked(t *testing.T) {
 func TestAmbiguityGuardUsesRealMargin(t *testing.T) {
 	const local = 200.0
 
-	// 两个**不同标题**、误差只差 0.3s(小于 0.5s 余量)到 分不出是哪首,弃权。
+	// 两个**不同标题**、误差只差 0.3s(小于 0.5s 余量)→ 分不出是哪首,弃权。
 	// 旧的精确相等判据在这里会直接把「甲」当答案交出去。
 	close2 := []albumTrack{
 		{title: "甲", artist: "X", duration: 200.1},
@@ -148,7 +148,7 @@ func TestAmbiguityGuardUsesRealMargin(t *testing.T) {
 		t.Fatalf("换个顺序也应当弃权,实际选出 %q", got)
 	}
 
-	// 差得够开(1.2s > 0.5s 余量)到 不算歧义,冠军照常胜出。
+	// 差得够开(1.2s > 0.5s 余量)→ 不算歧义,冠军照常胜出。
 	far := []albumTrack{
 		{title: "甲", artist: "X", duration: 200.1},
 		{title: "乙", artist: "X", duration: 201.3},

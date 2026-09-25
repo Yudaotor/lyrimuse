@@ -274,7 +274,7 @@ struct SettingsSearchField: View {
         .padding(.top, 8)
         .padding(.bottom, 6)
         .background {
-            // ⌘F 的落点。设置窗口是 accessory App 的 Settings scene,没有「编辑 到 查找」菜单可挂,
+            // ⌘F 的落点。设置窗口是 accessory App 的 Settings scene,没有「编辑 → 查找」菜单可挂,
             // 用一个不可见的按钮接快捷键。
             Button("") { focused.wrappedValue = true }
                 .keyboardShortcut("f", modifiers: .command)

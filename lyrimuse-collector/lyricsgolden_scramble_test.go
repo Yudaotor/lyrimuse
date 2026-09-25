@@ -2,12 +2,12 @@
 //
 // 目标:样本里不出现任何一句能读的歌词,但打分链路读到的每一个特征跟原文逐位相同。做法是
 // **同一首歌内一致的字符双射**:
-//   - 汉字 到 CJK 扩展 A 区(U+3400–U+4DBF)的汉字。\p{Han} / unicode.Han / unicode.IsLetter 对它们
+//   - 汉字 → CJK 扩展 A 区(U+3400–U+4DBF)的汉字。\p{Han} / unicode.Han / unicode.IsLetter 对它们
 //     全部为真,所以 cjkRatio / genericHanCreditLineRe / normLoose 的判定不变;真实歌词几乎不用
 //     这一区的字,于是"正文里出现了基本区汉字"就能当作"混进了明文"的探针(goldenFindUnscrambledLine);
-//     池子刻意剔掉 OpenCC 繁到简词典和异体字表里出现过的字,保证 toSimplified 对置乱后的文本是恒等;
-//   - 拉丁字母 到 a–z 上的一个置换,大写跟着小写走(ToLower 与置乱可交换);
-//   - 平假名 / 片假名 到 各自块内置换(kanaRatio 的范围判定不变);谚文 到 音节块内置换;
+//     池子刻意剔掉 OpenCC 繁→简词典和异体字表里出现过的字,保证 toSimplified 对置乱后的文本是恒等;
+//   - 拉丁字母 → a–z 上的一个置换,大写跟着小写走(ToLower 与置乱可交换);
+//   - 平假名 / 片假名 → 各自块内置换(kanaRatio 的范围判定不变);谚文 → 音节块内置换;
 //   - 数字、标点、空白、其它文字:原样。
 //
 // 置乱之前先做一次 toSimplified + foldDiacritics(canon):normLoose 内部会做同样的归一,先归一
@@ -49,7 +49,7 @@ const (
 	goldenScrambleMarker = "纯音乐"
 )
 
-// goldenHanPool 返回扩展 A 区里**不在**任何繁到简词典 / 异体字表出现过的字,按码位升序。
+// goldenHanPool 返回扩展 A 区里**不在**任何繁→简词典 / 异体字表出现过的字,按码位升序。
 //
 // 必须是惰性的(sync.Once),不能写成包级 var 的初始化表达式:t2sCharMap 等词典是在 t2s.go 的
 // init() 里填的,而包级 var 初始化跑在所有 init() 之前——那时三张表还是 nil,"剔除词典字"会静默
@@ -198,7 +198,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 	//   - 其它标签(人名、普通英文词)——分类只看形状(汉字数、有没有字母/标点),置乱保形,**整行连标签
 	// 一起置乱**。 标签**不能**一律原样:原样标签与置乱正文的接缝会造出原文里没有的
 	//     3-gram(或反过来抹掉重复),3-gram 集合基数一变 Jaccard 就漂——实测《躺在你的衣柜》netease
-	//     0.559到0.544 跨过 0.55 阈值丢了 100 分共识,采集闸 3 当场拦下。
+	//     0.559→0.544 跨过 0.55 阈值丢了 100 分共识,采集闸 3 当场拦下。
 	if label, _, ok := lyricSplitLabel(trimmed); ok {
 		if lyricKnownSpeakerSet[label] || !lyricPlausibleSpeakerName(label) {
 			off := strings.Index(rest, trimmed)

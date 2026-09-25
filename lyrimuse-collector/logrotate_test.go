@@ -146,7 +146,7 @@ func TestRotateLogIfNeeded_KeepsMultipleGenerations(t *testing.T) {
 		written = append(written, content)
 	}
 
-	// 最近的几份按新到旧排在 .old / .old.1 / .old.2 上,一份都不能串位。
+	// 最近的几份按新→旧排在 .old / .old.1 / .old.2 上,一份都不能串位。
 	for i := 0; i < logRotateKeepArchives; i++ {
 		want := written[len(written)-1-i]
 		got, err := os.ReadFile(logArchiveName(path, i))

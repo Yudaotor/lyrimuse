@@ -95,7 +95,7 @@ func runSettingsInteractionTests() {
         expectEqual(stepwise, R.moved(order, isVisible: vis, from: 3, to: 0), "写回: 三次相邻 swap 与一次拖拽结果一致(箭头与把手不打架)")
     }
 
-    // ---- ProportionBar(「歌词 到 管理」歌词库统计的分段比例条)----
+    // ---- ProportionBar(「歌词 → 管理」歌词库统计的分段比例条)----
     //
     // 数据用本机真实分布:3,325 / 232 / 9 / 38 / 65(逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无),可用宽 540、缝 1.5、下限 3。
     // 这个算法改错了完全不报错 —— 只是某一段消失或整条长出几 pt 被裁掉尾巴,肉眼未必看得出,所以钉在这里。
@@ -120,7 +120,7 @@ func runSettingsInteractionTests() {
         expectEqual(abs(crowded.reduce(0, +) - 100) < 0.001, true, "比例条: 段数太多时总宽仍等于可用宽度")
         expectEqual(crowded.allSatisfy { abs($0 - 1) < 0.001 }, true, "比例条: 段数太多时退化成均分")
         // 最宽的一段扣到下限还不够时继续扣次宽的:三个小段各抬到 12(亏空 33),40 那段最多只能让 28、
-        // 剩下 5 从 30 那段扣 到 [12, 25, 12, 12, 12]。
+        // 剩下 5 从 30 那段扣 → [12, 25, 12, 12, 12]。
         let cascade = P.widths(values: [40, 30, 1, 1, 1], available: 73, gap: 0, minWidth: 12)
         expectEqual(cascade.map { ($0 * 1000).rounded() / 1000 }, [12, 25, 12, 12, 12], "比例条: 亏空跨段扣回")
         expectEqual(abs(cascade.reduce(0, +) - 73) < 0.001, true, "比例条: 亏空跨段扣回后总宽仍守恒")
@@ -255,7 +255,7 @@ func runSettingsInteractionTests() {
         expectEqual(h.canGoForward, false, "历史: 到头就进不动了")
         expectEqual(h.goForward(), nil, "历史: 进不动时返回 nil")
 
-        // **从历史中间跳去一个新面板 到 前面那一截被截断**(同浏览器,也是系统设置的行为)。
+        // **从历史中间跳去一个新面板 → 前面那一截被截断**(同浏览器,也是系统设置的行为)。
         // 少了这一条,后退两步再点侧栏另一页,前进键会把你送回一条早就作废的路线。
         var t = H()
         t.seed("歌词")

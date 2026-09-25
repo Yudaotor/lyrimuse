@@ -11,7 +11,7 @@ import Foundation
 /// autocorrect=1 帮不上忙 —— 它只在「查询的实体不存在」时才改写,这两个实体都真实存在。
 /// 所以显示端取次数时要把孪生写法也查一遍、求和。
 ///
-/// 方向选择:先试繁到简,有变化就用;没变化再试简到繁。都用 ICU(CFStringTransform),
+/// 方向选择:先试繁→简,有变化就用;没变化再试简→繁。都用 ICU(CFStringTransform),
 /// 跟 EnrichCacheKeys.looseKey 同一套。 简到繁本质是一对多(发到發/髮),ICU 挑的未必是
 /// Last.fm 上真实存在的那个写法 —— 挑错的后果只是那一次 getinfo 查不到、贡献 0 次,
 /// 可接受;绝不能反过来把这个转换结果当权威写法去显示或者构造 key。
@@ -73,7 +73,7 @@ public enum PlayCountVariants {
     }
 
     /// 返回不含本尊、已按 歌手|歌名 小写键去重的候选列表(封顶 6)。
-    /// 顺序即优先级(实测账量):半角无空格(本字形到变体字形)> 全角(同序)>
+    /// 顺序即优先级(实测账量):半角无空格(本字形→变体字形)> 全角(同序)>
     /// 半角带空格 > 纯名 > 繁简孪生 —— 封顶挤掉的永远是低优先级候选。
     public static func siblings(artist: String, title: String) -> [(artist: String, title: String)] {
         var out: [(artist: String, title: String)] = []
@@ -240,7 +240,7 @@ public enum PlayCountVariants {
         "live", "现场", "现场版", "live版", "演唱会", "演唱会版", "演唱会现场",
     ]
 
-    /// 方括号尾缀:`南音 [Live 08]` 到 ("南音", "Live 08")。
+    /// 方括号尾缀:`南音 [Live 08]` → ("南音", "Live 08")。
     /// **只给分隔符归一用**,刻意不接进 stripCatalogNoise —— 「方括号里的目录学噪音要不要剥」
     /// 是另一个还没拍板的口径(的 E 项),混进来会顺手改掉它。
     static func bracketSuffixSplit(_ title: String) -> (base: String, sub: String)? {
@@ -254,7 +254,7 @@ public enum PlayCountVariants {
         return (base, sub)
     }
 
-    /// 破折号版本尾缀:`Bad - 2012 Remaster` 到 ("Bad", "2012 Remaster")。
+    /// 破折号版本尾缀:`Bad - 2012 Remaster` → ("Bad", "2012 Remaster")。
     /// 破折号**两侧必须有空白** —— 参考实现 export-lastfm-tracks.py 用的
     /// `\s*[-–]\s*` 会把 `Anti-Remastered` 切成 `Anti`(实测),这里刻意不照抄。
     /// 副题是不是噪音由 isCatalogNoiseSubtitle 判,
@@ -279,7 +279,7 @@ public enum PlayCountVariants {
         return (base, sub)
     }
 
-    /// 歌名结尾的括号副题:`一口（The Day You Left Me）` 到 ("一口", "The Day You Left Me")。
+    /// 歌名结尾的括号副题:`一口（The Day You Left Me）` → ("一口", "The Day You Left Me")。
     /// 开/闭括号不要求同风格配对 —— 目的只是切出副题,不是校验语法。
     static func subtitleSplit(_ title: String) -> (base: String, sub: String)? {
         let t = title.trimmingCharacters(in: .whitespaces)
@@ -362,7 +362,7 @@ public enum PlayCountFold {
 
     /// 查「写法族」用的键(第三批):歌手先归**合唱首位**(mergeArtist),
     /// 再把**罗马字写法折到中文本名**(canonicalArtist,本机推断的歌手别名表);歌名走 foldTitle,
-    /// 另外查歌名别名(本机推断表 到 自动发现表,没有手写表)把歌名维度的罗马字/译名
+    /// 另外查歌名别名(本机推断表 → 自动发现表,没有手写表)把歌名维度的罗马字/译名
     /// 也折到中文本名。
     ///
     /// 三个调用点必须**完全**用这一个函数(LastfmStatsService 的 insertForm /
@@ -400,11 +400,11 @@ public enum PlayCountFold {
         !s.unicodeScalars.contains { CharacterSet.hanLike.contains($0) }
     }
 
-    /// 合唱归首位 + 歌手写法归并(罗马字艺名 / 乐队别名 到 本机数据里的代表写法)。查不到就原样返回
+    /// 合唱归首位 + 歌手写法归并(罗马字艺名 / 乐队别名 → 本机数据里的代表写法)。查不到就原样返回
     /// (交给 key() 去做常规归一)。
     ///
     /// **没有手写表**:此前这里查的是编译进二进制的 `romanizedArtistAliases`(28 条,
-    /// `davidtao 到 陶喆` 这种),「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
+    /// `davidtao → 陶喆` 这种),「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
     /// 查的是 App 启动/enrich 缓存变化时由 `LocalArtistAliases.derive` 从本机数据推出来、经
     /// `setLocalArtistAliases` 灌进来的表(证据:collector 的 MusicBrainz 缓存 + 两种写法名下曲目共享
     /// ≥ 2 个歌曲 id,详见那个文件的头注)。实测这台机器上历史里真有两种写法并存的歌手
@@ -422,7 +422,7 @@ public enum PlayCountFold {
     private static let artistLock = NSLock()
     nonisolated(unsafe) private static var localArtistAliases: [String: String] = [:]
 
-    /// 灌入 `LocalArtistAliases.derive` 的结果:`stripSpaces(normalized(mergeArtist(写法))) 到 代表写法`。
+    /// 灌入 `LocalArtistAliases.derive` 的结果:`stripSpaces(normalized(mergeArtist(写法))) → 代表写法`。
     public static func setLocalArtistAliases(_ table: [String: String]) {
         artistLock.lock()
         localArtistAliases = table
@@ -436,7 +436,7 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 歌名维度的别名分三层查(见 familyKey):本机推断表 到 自动发现表。手写的
+    /// 歌名维度的别名分三层查(见 familyKey):本机推断表 → 自动发现表。手写的
     /// `titleAliasesByArtist`(方大同 7 条,三步法人工核过)删除——同样是去掉手工表:
     /// 那 7 条现在由 `EnrichTitleAliases.derive` 的 E1(同歌曲 id)/E2(时长 + 歌词都对得上)两条证据
     /// 路径自动推出来(selftest 用它们当回归样本钉住)。当年那张表的三步核实法留下的两条经验仍然有效、
@@ -470,19 +470,19 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 第三层歌名别名:从**本机 enrich 缓存**推出来的「英文/罗马字歌名 到 中文歌名」。
+    /// 第三层歌名别名:从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
     ///
     /// 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」——历史里
     /// 《那沙漠里的水》是同一首录音。两张既有表都够不着它:静态表要人工核实+改代码装机;
     /// 发现表靠 Last.fm 整秒 duration 撞相等,实测假阳性极高(那台机器上 14 条采纳里
-    /// 11 条是错的——「Mojito到红模仿」「Melody到中國姑娘」这种),而且它的扫描门(前台安静 60 s
+    /// 11 条是错的——「Mojito→红模仿」「Melody→中國姑娘」这种),而且它的扫描门(前台安静 60 s
     /// + 40 个请求的预算)在这台机器上从没让它跑完过一轮。
     ///
     /// 而 collector 早就替我们做过一件更可靠的事:两种写法各自播放时,歌词解析各自独立地把
     /// 它们匹配到了**同一个网易云 / QQ 的歌曲 id**(`netease_url` / `qq_music_url` 落在 enrich
     /// 缓存里)。两次独立检索落到同一个 id,比"时长整秒相等"硬得多,而且零网络、零新请求 ——
     /// 判定在 EnrichTitleAliases.derive(纯函数,selftest 钉住),App 侧 enrich 缓存一变就重算。
-    /// 查找顺序:静态表 到 发现表 到 这张表;结构与前两张完全一致。
+    /// 查找顺序:静态表 → 发现表 → 这张表;结构与前两张完全一致。
     private static let localLock = NSLock()
     nonisolated(unsafe) private static var localTitleAliasesByArtist: [String: [String: String]] = [:]
 
@@ -503,7 +503,7 @@ public enum PlayCountFold {
         let n = normalized(title)
         let stripped = stripCatalogNoise(n)
         // 第三批:中文歌名的 Live/Demo 版此前被 R1 当译名收进录音室版
-        // (`流沙 - Live` 到 《流沙》),而英文歌名的 `Melody - Live` 因为不含 CJK 段根本进不了
+        // (`流沙 - Live` → 《流沙》),而英文歌名的 `Melody - Live` 因为不含 CJK 段根本进不了
         // R1 —— 中英待遇不一致,也跟 isCatalogNoiseSubtitle 注释里「Live/Remix/Acoustic
         // 照旧分开」自相矛盾。实测拆开 54 族(方大同/陶喆居多),那些「本尊」行的数字合计小 200
         // —— 变对了,不是回归。顺带修掉两个重度退化键:`方大同|live版`(All Night /
@@ -535,7 +535,7 @@ public enum PlayCountFold {
     ///
     /// 刻意**只**对版本尾缀归一:`月食 - The Weeping Woman` 这种**译名**尾缀要留给 R1 收敛到
     /// 《月食》,一并归一会把它跟《月食》拆开。判定见 PlayCountVariants.isVersionSuffix。
-    /// 切法按「圆括号 到 方括号 到 破折号」顺序试,命中即止 —— 只归一**最外层**那一个尾缀。
+    /// 切法按「圆括号 → 方括号 → 破折号」顺序试,命中即止 —— 只归一**最外层**那一个尾缀。
     static func canonicalizeVersionSuffix(_ s: String) -> String {
         let splits = [PlayCountVariants.subtitleSplit,
                       PlayCountVariants.bracketSuffixSplit,
@@ -603,7 +603,7 @@ public enum PlayCountFold {
         return t
     }
 
-    /// NFKC(全角到半角) 到 繁简(ICU) 到 小写。
+    /// NFKC(全角→半角) → 繁简(ICU) → 小写。
     /// 模块内可见:PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
     /// 必须用同一个函数而不是再写一遍归一。
     static func normalized(_ s: String) -> String {
@@ -614,7 +614,7 @@ public enum PlayCountFold {
     }
 
     /// R1:恰好「CJK 段 + 拉丁段」(顺序不限、以空格分界、不含括号)的双语拼接名
-    /// 到 取 CJK 段。含括号或段落交错的不动 —— 宁可漏合,不错合。
+    /// → 取 CJK 段。含括号或段落交错的不动 —— 宁可漏合,不错合。
     static func collapseBilingual(_ s: String) -> String {
         guard !s.contains("("), !s.contains(")") else { return s }
         let t = s.trimmingCharacters(in: .whitespaces)

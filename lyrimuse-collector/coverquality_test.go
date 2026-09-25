@@ -87,7 +87,7 @@ func TestCoverURLIntendedEdge(t *testing.T) {
 		{"https://is1-ssl.mzstatic.com/image/thumb/abc/600x600bb.jpg", 600},
 		// QQ:尺寸档在路径里
 		{"https://y.qq.com/music/photo_new/T002R800x800M000abc.jpg", 800},
-		// 认不出来 到 0,调用方保守保留设备封面
+		// 认不出来 → 0,调用方保守保留设备封面
 		{"https://example.com/cover.jpg", 0},
 		{"", 0},
 		{"file:///Users/x/.config/lyrimuse/artwork/5b8fe093a7f81d31.jpg", 0},
@@ -113,7 +113,7 @@ func TestDeviceCoverDecision(t *testing.T) {
 		return nil
 	}
 
-	// ① 设备封面够清晰 到 直接顶掉,且**不取图**(快路径)
+	// ① 设备封面够清晰 → 直接顶掉,且**不取图**(快路径)
 	if ov, why := deviceCoverDecision(synthCover(600, 1), neteaseBig, 800, neverLoad); !ov {
 		t.Errorf("够清晰的设备封面该顶掉候选, why=%s", why)
 	}
@@ -122,7 +122,7 @@ func TestDeviceCoverDecision(t *testing.T) {
 		t.Error("边长正好等于门槛该算够清晰")
 	}
 
-	// ② 没有远程候选 到 顶掉(没有更好的选择),不取图
+	// ② 没有远程候选 → 顶掉(没有更好的选择),不取图
 	if ov, _ := deviceCoverDecision(synthCover(120, 1), "", 0, neverLoad); !ov {
 		t.Error("没有候选时该用设备封面")
 	}
@@ -130,12 +130,12 @@ func TestDeviceCoverDecision(t *testing.T) {
 		t.Error("候选是纯空白时该用设备封面")
 	}
 
-	// ③ 候选尺寸认不出来 到 保守顶掉(证不出它更好),不取图
+	// ③ 候选尺寸认不出来 → 保守顶掉(证不出它更好),不取图
 	if ov, why := deviceCoverDecision(synthCover(120, 1), "https://example.com/c.jpg", 0, neverLoad); !ov {
 		t.Errorf("候选尺寸认不出时该保留设备封面, why=%s", why)
 	}
 
-	// ④ 候选不比设备图大 到 顶掉,不取图
+	// ④ 候选不比设备图大 → 顶掉,不取图
 	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 120, neverLoad); !ov {
 		t.Error("候选跟设备图一样大时该保留设备封面")
 	}
@@ -143,7 +143,7 @@ func TestDeviceCoverDecision(t *testing.T) {
 		t.Error("候选比设备图小时该保留设备封面")
 	}
 
-	// ⑤ 候选更大 + **同一张图** 到 让位给高清候选。这就是《24K Magic》那一档。
+	// ⑤ 候选更大 + **同一张图** → 让位给高清候选。这就是《24K Magic》那一档。
 	ov, why := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 1)))
 	if ov {
 		t.Errorf("同一张图时该改用更清晰的候选, why=%s", why)
@@ -156,12 +156,12 @@ func TestDeviceCoverDecision(t *testing.T) {
 		t.Errorf("候选是另一张图时必须保留设备封面(否则 Immortal 那个 bug 复发), why=%s", why)
 	}
 
-	// ⑦ 候选取不到/解不出来 到 顶掉(退回改动前的行为)
+	// ⑦ 候选取不到/解不出来 → 顶掉(退回改动前的行为)
 	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(nil)); !ov {
 		t.Error("候选取不到时该保留设备封面")
 	}
 
-	// ⑧ 设备图本身解不出来 到 不顶掉(别拿一张解不出来的图换掉好候选)
+	// ⑧ 设备图本身解不出来 → 不顶掉(别拿一张解不出来的图换掉好候选)
 	if ov, _ := deviceCoverDecision(nil, neteaseBig, 800, neverLoad); ov {
 		t.Error("设备图解不出来时不该顶掉候选")
 	}

@@ -24,7 +24,7 @@ import (
 // 放 **Apple Music 目录曲目**(流媒体/加进资料库的目录条目)时,它就是 **Apple 的目录
 // 曲目 ID**——
 //
-//	uniqueIdentifier=1485220325 到 iTunes lookup 回 trackNumber=18 的「印地安老斑鸠 (Live)」、
+//	uniqueIdentifier=1485220325 → iTunes lookup 回 trackNumber=18 的「印地安老斑鸠 (Live)」、
 //	collectionId=1485220306、trackTimeMillis=208293,而同一份快照的 duration 是 208.293,
 //	逐位一致。
 //
@@ -44,8 +44,8 @@ import (
 //
 // 自校验顺带解决了 media-control 的"脏快照"(见 enrich.go 的 observeWrongDuration:换曲
 // 预载窗口里它会把**下一首**的时长和当前曲目的标题拼进同一份快照)。两种情形都安全:
-// uniqueIdentifier 跟着当前曲目 到 校验通过 到 用它的权威时长把脏时长顶掉;跟着下一首 到
-// 曲目名对不上 到 锚点作废、退回现状(30 秒去抖那条防线照旧)。不会更差。
+// uniqueIdentifier 跟着当前曲目 → 校验通过 → 用它的权威时长把脏时长顶掉;跟着下一首 →
+// 曲目名对不上 → 锚点作废、退回现状(30 秒去抖那条防线照旧)。不会更差。
 const (
 	// appleCatalogMaxPlausibleID:目录 ID 的合理上界。现役 ID 是 10 位数量级,留三个数量级
 	// 余量。本地持久 ID 是满量程 64 位,正数那一半靠这条挡掉绝大部分。
@@ -124,7 +124,7 @@ func appleCatalogAlbumIDFor(title, album string) (int64, bool) {
 }
 
 // loadAppleCatalogCache/saveAppleCatalogCache:整份 map 序列化 + 临时文件原子改名,跟
-// loadMBPrimaryNameCache 同一套。目录 ID 到 元数据是**不变映射**(ID 一旦发布就不会改指
+// loadMBPrimaryNameCache 同一套。目录 ID → 元数据是**不变映射**(ID 一旦发布就不会改指
 // 别的曲目),所以这份缓存永久有效、没有 TTL;只落盘查到了的条目。
 func loadAppleCatalogCache(path string) {
 	appleCatalogMu.Lock()
@@ -284,7 +284,7 @@ func appleCatalogAnchor(bundleID string, trackID int64, localTrackNumber int, lo
 	// 兄弟轨互相判等,而专辑名又必然相同,锚点照样"成立",把差 40~47% 的时长当成权威值:
 	//   XSCAPE (Deluxe) #8「Xscape」244.9s  vs #16「Xscape (Original Version)」344.4s
 	//   BADモード      #13「Face My Fears (English Version)」219.1s vs #14「(A. G. Cook Remix)」322.0s
-	// (两组都来自用户自己的资料库,不是构造的)。这正好推翻了原来那句"曲目名对不上 到
+	// (两组都来自用户自己的资料库,不是构造的)。这正好推翻了原来那句"曲目名对不上 →
 	// 锚点作废、不会更差"——只要下一首是同专辑的括号兄弟轨,曲目名就是"对得上"的。
 	// 锚点是**按 ID 认身份**的,压根不需要歌词检索那套宽松匹配。
 	if normLoose(t.TrackName) == "" || normLoose(t.TrackName) != normLoose(localTitle) {
@@ -368,7 +368,7 @@ var (
 
 // appleStorefrontArtistCacheVersion:落盘格式版本。v1 是裸 map(~ 09-12),里面的署名**没有经过
 // 「这首歌确实在那张专辑里」的核对**(见 appleStorefrontTrackMatches),已实测装进过错人(back number《Happy End - EP》
-// 到 韩国歌手 Rothy);v2 起整份换成 {"version":2,"entries":{…}},读到 v1 一律丢掉重查 —— 重查每张专辑只花一次,
+// → 韩国歌手 Rothy);v2 起整份换成 {"version":2,"entries":{…}},读到 v1 一律丢掉重查 —— 重查每张专辑只花一次,
 // 比逐条甄别哪条是错的划算,也比只删已知那一条彻底。
 const appleStorefrontArtistCacheVersion = 2
 
@@ -514,7 +514,7 @@ func saveAppleStorefrontTitleCache() {
 //     对上了韩国歌手 Rothy 的同名 EP,「Rothy」被当成 back number 的别名落盘、整张 EP 每首歌的别名轮都拿它白查四个源。
 //     只取**对上的那一首**的署名,不再把专辑里随便一首的署名都收进来。
 //   - **问哪些商店按文字系统定**(appleStorefrontsFor):基线 CN / US,署名 / 曲名 / 专辑名或首轮歌词正文里出现假名
-//     到 JP、谚文 到 KR、西里尔 到 RU、泰文 到 TH、繁体汉字 到 TW。日文歌只问 CN / US 是永远找不到原专辑的。
+//     → JP、谚文 → KR、西里尔 → RU、泰文 → TH、繁体汉字 → TW。日文歌只问 CN / US 是永远找不到原专辑的。
 func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) []string {
 	names, _ := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
 	return names
@@ -722,8 +722,8 @@ func appleStorefrontPickTrack(localTitle string, durationSecs float64, tracks []
 }
 
 // appleStorefrontsFor:按文字系统决定问哪些商店。
-// 基线 CN / US;样本(署名 / 曲名 / 专辑名 + 首轮歌词正文片段)里假名 到 JP、谚文 到 KR、西里尔 到 RU、泰文 到 TH、
-// 繁体汉字(toSimplified 会改动) 到 TW。最多再加两个商店:每多一个就多一次 Search(命中再一次 lookup),按专辑只算一次。
+// 基线 CN / US;样本(署名 / 曲名 / 专辑名 + 首轮歌词正文片段)里假名 → JP、谚文 → KR、西里尔 → RU、泰文 → TH、
+// 繁体汉字(toSimplified 会改动) → TW。最多再加两个商店:每多一个就多一次 Search(命中再一次 lookup),按专辑只算一次。
 // 这是**全仓唯一**的商店列表来源:apple.go 的两条匹配路径、albumhint.go 的候选查询、
 // appleTitleSearchIdentities 原本各自写死 CN/US,现已统一走这里(各调用点按自己手上的样本各算一次),
 // 免得"同一首歌在这条路径上问了 JP、在那条路径上没问"这种不一致。代价是非拉丁文字系统的歌请求数

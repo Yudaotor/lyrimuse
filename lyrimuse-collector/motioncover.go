@@ -26,8 +26,8 @@ import (
 // **发现路径**(全部在 Prince《Timeless》= collectionId 6773830957 上实测):
 //
 //	GET https://music.apple.com/{storefront}/album/x/{collectionID}
-//	  到 <script type="application/json" id="serialized-server-data"> 里是一份标准 JSON(实测 109 KB)
-//	  到 …/videoArtwork/dictionary/motionDetailSquare = { "video": <master m3u8>, "previewFrame": {…} }
+//	  → <script type="application/json" id="serialized-server-data"> 里是一份标准 JSON(实测 109 KB)
+//	  → …/videoArtwork/dictionary/motionDetailSquare = { "video": <master m3u8>, "previewFrame": {…} }
 //
 // slug 那一段可以直接写死成 `x`——Apple 只按 ID 定位,实测 HTTP 200。不需要 developer token、
 // cookie、Referer;返回的 master m3u8 同样是公开的(见 MotionCoverManifest 头注里的实测清单)。
@@ -62,7 +62,7 @@ const (
 
 // motionCover:一张专辑的动态封面资源。空 Master + Checked=true 表示"查过了,这张没有"。
 type motionCover struct {
-	// Master:方形(1:1)那份的 master m3u8 地址。App 侧据它选档 到 取 variant 到 下单文件。
+	// Master:方形(1:1)那份的 master m3u8 地址。App 侧据它选档 → 取 variant → 下单文件。
 	// 刻意存 master 而不是直接存最终那个 .mp4:选哪一档取决于**要画多大**,那是 App 才知道的事。
 	Master string `json:"master,omitempty"`
 	// PreviewFrame:静态首帧图的 URL **模板**(尾部带 `{w}x{h}bb.{f}` 占位,跟 Apple 的 artwork
@@ -585,15 +585,15 @@ var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 // 一条都没有)永远等不到动态封面,除非删缓存重解析。这是 ls-Alex 交叉核对时点出来的。
 //
 // **只读缓存、绝不发请求**:它跑在判断"值不值得补"的那一刻、还攥着 enrichMu,联网会把整条
-// 播放路径拖住。锁顺序因此是单向的 enrichMu 到 {appleCatalogMu, motionCoverMu} —— 这两个包
+// 播放路径拖住。锁顺序因此是单向的 enrichMu → {appleCatalogMu, motionCoverMu} —— 这两个包
 // 都不碰 enrichCache/enrichMu(核过),不存在反向嵌套。
 //
 // 判据是**三态**的,这是关键:
-//   - 这条已经有 master 了 到 不用补;
-//   - 拿不到已校验的目录专辑 ID(不是 Apple Music 目录曲目 / 锚点还没建立)到 补也补不出来,
+//   - 这条已经有 master 了 → 不用补;
+//   - 拿不到已校验的目录专辑 ID(不是 Apple Music 目录曲目 / 锚点还没建立)→ 补也补不出来,
 //     别浪费那 5 次机会;
-//   - motion 缓存里**压根没查过这张专辑** 到 值得补一次(查完就落进下面两态之一);
-//   - 查过了:缓存里有 master 到 算缺(等着被写进这条记录);缓存里是"查过了没有" 到 **不算缺**。
+//   - motion 缓存里**压根没查过这张专辑** → 值得补一次(查完就落进下面两态之一);
+//   - 查过了:缓存里有 master → 算缺(等着被写进这条记录);缓存里是"查过了没有" → **不算缺**。
 //
 // 最后那半条是刻意的,理由跟 `missingQQMids` 那条注释同源:动态封面的覆盖率只有三成上下,
 // 把"这张专辑就是没有"也算成缺,那七成条目会白重试 5 轮、每轮把开着的歌词源全部重查一遍。

@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 到 悬浮歌词」那几张卡里的**设置行本体**,从 SettingsView 抽出来的唯一一份实现。
+// 「歌词显示 → 悬浮歌词」那几张卡里的**设置行本体**,从 SettingsView 抽出来的唯一一份实现。
 //
 // 为什么抽(编辑台第二步):这一段现在有**两个**宿主 ——
 //   ① 内容区里原有的卡片列(overlayColorCard / overlayThemesCard / overlayTextCard /
@@ -403,9 +403,9 @@ struct OverlayAlignmentSegmentedControl: View {
 /// 共性太粗:改文字色和改背景色是两件互不相干的事,挤在一个入口里要先在七行里找。
 ///
 /// 拆分判据是**这个字段改的是哪一层**:
-///   - 文字层(字形 + 字色 + 描边)到 `OverlayTextSettingsRows`
-///   - 背景层(底色 + 底的材质)到 本组
-///   - 一键套一整套配色 到 `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
+///   - 文字层(字形 + 字色 + 描边)→ `OverlayTextSettingsRows`
+///   - 背景层(底色 + 底的材质)→ 本组
+///   - 一键套一整套配色 → `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
 /// 「跟随封面」归了文字(它接管的只有文字颜色),又归了主题 —— 它跟「配色主题」
 /// 回答的是同一个问题(文字色从哪来),见 `OverlayThemeSettingsRows` 头注。
 @MainActor

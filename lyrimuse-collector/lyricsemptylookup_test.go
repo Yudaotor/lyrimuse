@@ -47,7 +47,7 @@ func TestLyricsEmptyInCacheFile(t *testing.T) {
 		}
 	}
 
-	// 读不出来 / 解析不动 到 known=false,调用方按最保守的那一支走(等同改动之前)
+	// 读不出来 / 解析不动 → known=false,调用方按最保守的那一支走(等同改动之前)
 	if _, known := lyricsEmptyInCacheFile(filepath.Join(dir, "nope.json"), "a", "b", "c"); known {
 		t.Errorf("文件不存在时 known 必须为 false")
 	}

@@ -148,8 +148,8 @@ struct OnboardingView: View {
     /// `steps` 变短的控件全都在 index 1" —— 那句话只在"引导页是唯一宿主"时成立,而
     /// `features.players` 是 `@Published`(FeatureSettingsStore),**设置窗口能同时开着改它**,
     /// 引导页自己的 `.lastfm` 那一步还有个按钮专门去打开设置窗。失效路径:勾了 Apple Music
-    /// 到 一路走到最后一步 `.done`(index = count-1)到 打开设置 到 播放器 tab 取消勾选
-    /// Apple Music 到 `steps` 少一项 到 body 重算 到 `steps[count]` 数组越界,硬崩。
+    /// → 一路走到最后一步 `.done`(index = count-1)→ 打开设置 → 播放器 tab 取消勾选
+    /// Apple Music → `steps` 少一项 → body 重算 → `steps[count]` 数组越界,硬崩。
     ///
     /// 两道防线都要有:这个访问器保证**渲染这一刻**不会越界(SwiftUI 重算 body 可能早于
     /// 任何 onChange),下面 `.onChange(of: steps.count)` 负责把 `step` 这个存储值本身拉回
@@ -181,7 +181,7 @@ struct OnboardingView: View {
             // 窗口固定 480×440、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
             // 在此之前内容超出就是**静默裁切**:超出的部分既不滚动也不撑大窗口,只会被切掉
             // 或压成省略号,而且在开发机上通常看不出来 —— 最坏情况是英文界面(同一句话普遍
-            // 比中文多占一到两行)叠上「辅助功能 到 更大文字」。`.basedOnSize` 让内容装得下
+            // 比中文多占一到两行)叠上「辅助功能 → 更大文字」。`.basedOnSize` 让内容装得下
             // 时完全不出现滚动条、也不橡皮筋,观感跟改动前一模一样。
             //
             // 各步骤自己的高度预算(尤其"两条提示互斥"那种)照旧要守 —— 这层只是保证"预算
@@ -684,7 +684,7 @@ struct OnboardingView: View {
 
     /// 「译文与罗马音」这一步。
     ///
-    /// 为什么值得单独占一步:这是这个 App 对中日韩听众最核心的能力之一(设置里「歌词 到
+    /// 为什么值得单独占一步:这是这个 App 对中日韩听众最核心的能力之一(设置里「歌词 →
     /// 译文/效果」整整两卡),而在此之前引导里**一个字都没提** —— 新用户只有自己摸到设置
     /// 里折叠着的那几行才会发现。跟 `.lastfm` 同一档:介绍性质、不锁「下一步」。
     ///
@@ -1062,7 +1062,7 @@ struct OnboardingView: View {
     /// 都把「自动识别」放在了 YouTube Music **前面**,跟选播放器那一步的网格顺序相反。
     ///
     /// 顺序跟 `playerChoiceStep` 的网格逐项一致:具体播放器(按 `PlaybackPlayer.displayOrder`,
-    /// 那份顺序本身按系统语言算)到 YouTube Music 到 「自动识别」垫底。「自动识别」排在
+    /// 那份顺序本身按系统语言算)→ YouTube Music → 「自动识别」垫底。「自动识别」排在
     /// YouTube Music 之后是对调后的顺序,收尾这一页也要跟上
     /// (「自动识别和 youtubemusic 的顺序是不是应该换一下」)—— 两处顺序不一致,读的人会以为
     /// 其中一处是错的。

@@ -147,7 +147,7 @@ func TestDohDialRaceAllFailAndEmpty(t *testing.T) {
 	if conn, err := dohDialRaceWith(context.Background(), failing, "tcp", []string{"10.0.0.1", "10.0.0.2"}, "443"); conn != nil || err == nil {
 		t.Errorf("全失败应返回 (nil, err), 得到 conn=%v err=%v", conn, err)
 	}
-	// ips 为空 到 (nil, nil),由 dohDialContext 退回系统解析。
+	// ips 为空 → (nil, nil),由 dohDialContext 退回系统解析。
 	if conn, err := dohDialRaceWith(context.Background(), failing, "tcp", nil, "443"); conn != nil || err != nil {
 		t.Errorf("空地址表应返回 (nil, nil), 得到 conn=%v err=%v", conn, err)
 	}

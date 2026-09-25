@@ -39,11 +39,11 @@ import Foundation
 ///        导出文件(没有时间戳,不属于四种歌词后缀),此前**不在任何备份里**,100% 丢失;
 ///      * `manual_pick_sha`(手动选定后锁定的追溯凭据)同样没有落文件,丢了之后
 ///        `ManualPickLock` 把这首歌算成"从没手动选过",锁不上且**完全静默**;
-///      * `lyrics_scoring_version` 丢了会被读成 0、落后于当前打分版本 到 `needsLyricsRescore`
+///      * `lyrics_scoring_version` 丢了会被读成 0、落后于当前打分版本 → `needsLyricsRescore`
 ///        把**全库**排进"按新规则重选一次"的队列,赢家一变就把刚恢复的正文换掉,连带
 ///        单曲校正值的内容指纹一起失效(只有 `manual_lyrics` 和 pins 名单挡得住)。
-///    所以现在整份缓存**剥掉那六个歌词字段之后**一起带走:实测 41.8 MB 到 9.7 MB,
-///    base64 进 JSON 再 zlib 只占 1.25 MB(sidecar 13.8 MB 到 15.1 MB,+9%),
+///    所以现在整份缓存**剥掉那六个歌词字段之后**一起带走:实测 41.8 MB → 9.7 MB,
+///    base64 进 JSON 再 zlib 只占 1.25 MB(sidecar 13.8 MB → 15.1 MB,+9%),
 ///    换掉的是上面这四类真丢不可再生的东西。
 ///  - 顺带保住一个容易忽略的东西:单曲校正值的 key 里含**歌词内容指纹**,正文逐字节相同才查得到。
 ///    走文件族恢复正文一个字节都不变,所以那批校正值到了新机器**真的还有效**。
@@ -65,7 +65,7 @@ public enum LyricsBackupArchive {
         "lyrics", "lyrics_tr", "lyrics_roma", "lyrics_yrc", "lyrics_source", "manual_lyrics",
     ]
 
-    /// enrich 缓存的 JSON 到 `meta` 载荷用的字节:逐条剥掉 `lyricFieldKeys`,其余原样保留。
+    /// enrich 缓存的 JSON → `meta` 载荷用的字节:逐条剥掉 `lyricFieldKeys`,其余原样保留。
     ///
     /// 刻意做成"剥黑名单"而不是"挑白名单":这份缓存的字段是**长期在加**的(光就加了
     /// `plain_lyrics`/`plain_lyrics_source`/`manual_pick_sha` 等好几个),白名单的失效方式是
@@ -100,11 +100,11 @@ public enum LyricsBackupArchive {
     /// 配置包名里的这一段换成下面那个,就是 sidecar 名 —— 同名同时间戳,一眼看得出是一对。
     public static let configNameMarker = "-Config-"
     public static let lyricsNameMarker = "-Lyrics-"
-    /// sidecar 的扩展名。`.z` 是 zlib 压缩过的意思(14.5 MB 到 6.1 MB 实测),自己的格式、
+    /// sidecar 的扩展名。`.z` 是 zlib 压缩过的意思(14.5 MB → 6.1 MB 实测),自己的格式、
     /// 不假装是标准 gzip。
     public static let fileExtension = "json.z"
 
-    /// 配置包名 到 sidecar 名。认不出配置包命名规律时退回"整个名字后面接一段",宁可名字丑
+    /// 配置包名 → sidecar 名。认不出配置包命名规律时退回"整个名字后面接一段",宁可名字丑
     /// 也不要返回 nil 让调用方多一条分支。
     public static func sidecarName(forConfigName name: String) -> String {
         let stem = name.hasSuffix(".json") ? String(name.dropLast(5)) : name
@@ -127,11 +127,11 @@ public enum LyricsBackupArchive {
         public var at: String
         /// 从哪台机器导出的。
         public var device: String
-        /// 文件名 到 全文。**含 `[ar:]/[ti:]/[al:]/[source:]/[manual:1]` 那几行头部** ——
+        /// 文件名 → 全文。**含 `[ar:]/[ti:]/[al:]/[source:]/[manual:1]` 那几行头部** ——
         /// 头部就是 collector 认身份的依据(`importLyricsFromFiles` 按头部标签而不是文件名
         /// 定身份),剥掉就全成孤儿了。
         public var files: [String: String]
-        /// 「已校准」名单:归一化 enrich key 到 钉住时的 unix 秒。
+        /// 「已校准」名单:归一化 enrich key → 钉住时的 unix 秒。
         public var pins: [String: Int]
         /// enrich 缓存**剥掉六个歌词字段之后**的那一份(`strippedMeta` 的产物),原样是一段
         /// JSON 字节。nil = 这份备份不带(v1 老包,或打包时缓存读不出来)。
@@ -140,8 +140,8 @@ public enum LyricsBackupArchive {
         /// 不需要看懂**里面的字段,它只负责原样搬运——打包时从缓存文件读出来剥一遍,恢复时
         /// 原样写成一份待采纳文件交给 collector。用 `Data` 就不必为了 `Codable` 造一套
         /// 任意-JSON 的胶水类型,也不会因为将来 collector 加了新字段而需要动这边一行代码。
-        /// 代价是 base64 的 33% 膨胀(9.7 MB 到 12.9 MB),但压缩后只差 0.65 MB
-        /// (0.60 到 1.25 MB),换这份"字段无关、永不需要跟着改"的解耦是划算的。
+        /// 代价是 base64 的 33% 膨胀(9.7 MB → 12.9 MB),但压缩后只差 0.65 MB
+        /// (0.60 → 1.25 MB),换这份"字段无关、永不需要跟着改"的解耦是划算的。
         public var meta: Data?
 
         public init(v: Int = LyricsBackupArchive.payloadVersion, at: String, device: String,
@@ -155,13 +155,13 @@ public enum LyricsBackupArchive {
         }
     }
 
-    /// 载荷 到 归档字节(zlib 压缩)。压不动(理论上不会)就退回明文 —— 解码侧两种都认。
+    /// 载荷 → 归档字节(zlib 压缩)。压不动(理论上不会)就退回明文 —— 解码侧两种都认。
     public static func encode(_ payload: Payload) -> Data? {
         guard let raw = try? JSONEncoder().encode(payload) else { return nil }
         return ((try? (raw as NSData).compressed(using: .zlib)) as Data?) ?? raw
     }
 
-    /// 归档字节 到 载荷。**先试解压、失败当明文**:手改过的包、或将来某个版本改成不压缩,
+    /// 归档字节 → 载荷。**先试解压、失败当明文**:手改过的包、或将来某个版本改成不压缩,
     /// 都还能读出来 —— 恢复失败的代价(几千首歌的歌词和校正值)远高于多试一次的代价。
     public static func decode(_ data: Data) -> Payload? {
         let raw = ((try? (data as NSData).decompressed(using: .zlib)) as Data?) ?? data

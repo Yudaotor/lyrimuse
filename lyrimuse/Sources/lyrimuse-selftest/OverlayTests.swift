@@ -254,7 +254,7 @@ func runOverlayTests() {
         }
         expectEqual(monotone, true, "滞后闸: 严格档恒含于宽松档(不会在边界上抖)")
 
-        // ④ 歌词矩形这一轮没上报 到 严格档退回包围盒,别让按钮整个叫不出来。
+        // ④ 歌词矩形这一轮没上报 → 严格档退回包围盒,别让按钮整个叫不出来。
         expectEqual(H.chromeHoverHit(at: CGPoint(x: 450, y: 18), lyrics: nil, chrome: chrome,
                                      alreadyShowing: false), true,
                     "滞后闸: 没有歌词矩形时进入判定退回包围盒")
@@ -450,7 +450,7 @@ func runOverlayTests() {
         // 大字号按 12 个字宽兜底:48pt × 12 = 576 > 448,舞台按 576 算。
         expectEqual(G.duetStageInset(availableWidth: 1360, fontSize: 48), (1360 - 576) / 2,
                     "对唱舞台: 大字号时舞台按 12 个字宽兜底")
-        // 字宽兜底不会把舞台撑出卡片:可用 500、字号 48 到 舞台 min(500, 576) = 500 到 不缩进。
+        // 字宽兜底不会把舞台撑出卡片:可用 500、字号 48 → 舞台 min(500, 576) = 500 → 不缩进。
         expectEqual(G.duetStageInset(availableWidth: 500, fontSize: 48), 0,
                     "对唱舞台: 12 字宽超过可用宽度时舞台就是整张卡片")
         // 退化输入不产生负值/NaN。
@@ -584,7 +584,7 @@ func runOverlayTests() {
         expectEqual(clampedHigh.leading, stage + pad, "弹性留白: 超过 1 的 scale 夹到 1")
     }
 
-    // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 到 AppKit 窗口本地 ----
+    // ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
     //
     // 这套换算不能**直接转成屏幕坐标存起来** —— 窗口一移动,SwiftUI 布局没变、
     // PreferenceKey 不重发,存的屏幕坐标就还停在旧位置,按钮和热区当场失效。
@@ -901,7 +901,7 @@ func runOverlayTests() {
         expectEqual(OverlayPlacement.repositionIfOffscreen(frame: mostlyOff, screens: [mainScreen]) == nil, true,
                     "OverlayPlacement: 只露一部分但够得着,不动它")
 
-        // 只剩 30pt 露在屏内，低于 60pt 阈值 到 救回来。
+        // 只剩 30pt 露在屏内，低于 60pt 阈值 → 救回来。
         let slivered = CGRect(origin: CGPoint(x: 1440, y: 700), size: overlaySize)
         expectEqual(OverlayPlacement.repositionIfOffscreen(frame: slivered, screens: [mainScreen]) != nil, true,
                     "OverlayPlacement: 只剩一丝可见时救回来")
@@ -964,19 +964,19 @@ func runOverlayTests() {
         // 锚点存的是顶边,还原成 AppKit 的左下角 origin:1202 − 120 = 1082。
         let saved = CGRect(origin: CGPoint(x: 849, y: 1082), size: size)
 
-        // 两块屏都在 到 原样保留,一个点都不许动(这是这次修的主判据)。
+        // 两块屏都在 → 原样保留,一个点都不许动(这是这次修的主判据)。
         let kept = OverlayPlacement.restored(frame: saved, screens: [builtIn, external])
         expectEqual(kept.origin.x, 849, "OverlayPlacement: 副屏上的锚点原样保留 x")
         expectEqual(kept.origin.y, 1082, "OverlayPlacement: 副屏上的锚点原样保留 y")
         expectEqual(kept.wasRescued, false, "OverlayPlacement: 看得见就不算救援")
 
-        // 外接屏不在了(拔掉/休眠)到 才允许借主屏摆,并且标记成"借来的"(调用方据此不写盘)。
+        // 外接屏不在了(拔掉/休眠)→ 才允许借主屏摆,并且标记成"借来的"(调用方据此不写盘)。
         let rescued = OverlayPlacement.restored(frame: saved, screens: [builtIn])
         expectEqual(rescued.origin.x, 570, "OverlayPlacement: 一块屏都看不见时夹回主屏 (1470-900)")
         expectEqual(rescued.origin.y, 803, "OverlayPlacement: 一块屏都看不见时夹回主屏 (923-120)")
         expectEqual(rescued.wasRescued, true, "OverlayPlacement: 借屏落位必须标记出来")
 
-        // 一块屏都枚举不到(理论上不会发生)到 原样返回,别摆到凭空算出来的坐标上。
+        // 一块屏都枚举不到(理论上不会发生)→ 原样返回,别摆到凭空算出来的坐标上。
         let noScreens = OverlayPlacement.restored(frame: saved, screens: [])
         expectEqual(noScreens.origin.y, 1082, "OverlayPlacement: 没有屏幕时不动锚点")
         expectEqual(noScreens.wasRescued, false, "OverlayPlacement: 没有屏幕时不算救援")
@@ -988,7 +988,7 @@ func runOverlayTests() {
         let straddling = CGRect(x: 0, y: 900, width: 200, height: 200)
         expectEqual(OverlayPlacement.hostVisibleFrame(of: straddling, screens: [builtIn, external])?.minY, 956,
                     "OverlayPlacement: 跨屏时取相交面积更大的那块")
-        // 一块都不沾 到 nil,调用方据此"那就不夹了",而不是硬按主屏算把窗口往主屏方向推。
+        // 一块都不沾 → nil,调用方据此"那就不夹了",而不是硬按主屏算把窗口往主屏方向推。
         let nowhere = CGRect(x: 9000, y: 9000, width: 100, height: 100)
         expectEqual(OverlayPlacement.hostVisibleFrame(of: nowhere, screens: [builtIn, external]) == nil, true,
                     "OverlayPlacement: 不沾任何屏时没有可信边界")

@@ -233,7 +233,7 @@ func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, err
 const deezerISRCDirectScore = 1 << 20
 
 // deezerTrackByISRC 按 ISRC 直取一条录音。Deezer 有官方端点 /track/isrc:<ISRC>
-// (实测:HKA351401008 到 Special Person / Khalil Fong / 259s)。
+// (实测:HKA351401008 → Special Person / Khalil Fong / 259s)。
 //
 // 查不到时 Deezer 回 200 + {"error":{...}}(不是 4xx),所以跟 deezerSearch 一样要过
 // deezerHasError,不能只看状态码。

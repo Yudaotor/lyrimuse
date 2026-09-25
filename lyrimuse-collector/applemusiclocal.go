@@ -32,7 +32,7 @@ import (
 //  1. **官方人工译文**。现在的译文是 translate.go 的机器翻译(条目里
 //     lyrics_tr_source=machine);Apple 的 type="subtitle" 那种是官方人工版。
 // 覆盖有限:实测 26 份带 <translations> 的里只有 6 份是真翻译,其余 20 份是
-//     zh-Hant到zh-Hans 的繁简替换(见 applemusicSubtitleTranslation)。
+//     zh-Hant→zh-Hans 的繁简替换(见 applemusicSubtitleTranslation)。
 //  2. **catalog id 权威**。网络那条要先用歌名去 amp-api 搜索,搜出来的候选未必是正在播
 //     的这一版(那 5 首在 lyrimuse 的 apple catalog 缓存里一条都没有);这里的身份是
 //     Music.app 自己认定的,零搜索、零歧义。

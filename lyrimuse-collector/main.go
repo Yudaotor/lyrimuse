@@ -279,13 +279,13 @@ func main() {
 	lyricsPinsPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lyrics-pins.json")
 	// MB 主名(本名 与 艺名)那份缓存,见 musicBrainzPrimaryArtistName。
 	loadMBPrimaryNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-primary-cache.json"))
-	// Apple 目录曲目 ID 到 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
+	// Apple 目录曲目 ID → 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
 	// 条目,见 applecatalog.go。
 	loadAppleCatalogCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-catalog-cache.json"))
 	loadMotionCoverCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-motion-cover-cache.json"))
-	// "艺人|专辑" 到 Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
+	// "艺人|专辑" → Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
 	loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-artist-cache.json"))
-	// "艺人|专辑|曲名" 到 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
+	// "艺人|专辑|曲名" → 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
 	loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-title-cache.json"))
 	// 播放器没报专辑名时从 Apple 目录反查到的专辑(key = 署名|曲名|整秒时长),见 albumhint.go appleAlbumHint。
 	loadAppleAlbumHintCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-album-hint-cache.json"))
@@ -381,7 +381,7 @@ func main() {
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
 	startupStep("migrateLyricTimelines", migrateLyricTimelines)
-	// 存量「用户选定的源」到「手动选定」留痕(见 manualpickmigrate.go)。
+	// 存量「用户选定的源」→「手动选定」留痕(见 manualpickmigrate.go)。
 	// 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
 	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
 	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
@@ -410,12 +410,12 @@ func main() {
 	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled
 	// 之前设好 —— 匹配器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
 	lastfmCatalogPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-catalog.json")
-	// collector到App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
+	// collector→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
 	// recenttracks 落盘,App 读它代替自己直连轮询。
 	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")
-	// 回填子命令到常驻进程的"feed 提前拉一次"信号文件(见 lastfmfeed.go lastfmFeedNudgePath)。
+	// 回填子命令→常驻进程的"feed 提前拉一次"信号文件(见 lastfmfeed.go lastfmFeedNudgePath)。
 	lastfmFeedNudgePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-feed-nudge")
-	// collector到App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
+	// collector→App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边

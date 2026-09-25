@@ -22,9 +22,9 @@ import (
 // 顺序:**先正常走系统 DNS,它失败了才问 DoH**。这跟 musixmatch 那套(doh.go
 // dohDialContext:DoH 优先、退回系统解析)正好相反,因为两次的病不同 —— 那次系统
 // DNS 是**答错**(把 musixmatch 解析到 Facebook 的地址段),先问它没有意义;这次是**不答**,
-// 系统 DNS 正常时就不该多打一次 1.1.1.1。于是:系统 DNS 正常 到 一个包都不多发、行为跟以前
-// 逐位一致;系统 DNS 报错(NXDOMAIN / SERVFAIL / 超时)到 dohLookup 拿 IP 到 并发拨号
-// (dohDialRace);DoH 也没辄 到 把系统解析那条错误原样交回去,传输层分类照旧认成 dns_failed。
+// 系统 DNS 正常时就不该多打一次 1.1.1.1。于是:系统 DNS 正常 → 一个包都不多发、行为跟以前
+// 逐位一致;系统 DNS 报错(NXDOMAIN / SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号
+// (dohDialRace);DoH 也没辄 → 把系统解析那条错误原样交回去,传输层分类照旧认成 dns_failed。
 //
 // 三个细节:
 //   - 系统解析给一个**独立预算**(lyricSourceSystemDNSBudget,2s):DNS 挂住不答时不能让它把

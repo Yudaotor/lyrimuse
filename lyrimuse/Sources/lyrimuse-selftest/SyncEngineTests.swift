@@ -10,8 +10,8 @@ func runSyncEngineTests() {
     // ---- 间奏点(歌词窗口的 Apple Music 式「•••」) ----
     do {
         let engine = LyricsSyncEngine()
-        // 逐字:前奏 8s(≥5s 到 标);第一句唱到 9s、第二句 25s 开始(静默 16s ≥ 6s 到 标);
-        // 第二句唱到 26s、第三句 28s 开始(静默 2s 到 不标)。
+        // 逐字:前奏 8s(≥5s → 标);第一句唱到 9s、第二句 25s 开始(静默 16s ≥ 6s → 标);
+        // 第二句唱到 26s、第三句 28s 开始(静默 2s → 不标)。
         let yrc = "[8000,1000](8000,500,0)aa (8500,500,0)bb \n"
             + "[25000,1000](25000,500,0)cc (25500,500,0)dd \n"
             + "[28000,1000](28000,500,0)ee (28500,500,0)ff \n"
@@ -206,8 +206,8 @@ func runSyncEngineTests() {
 
     // ---- KaraokeFill.lineFillSettledMs: 整行填色定格时刻(悬浮歌词行尾停表用) ----
     // 阈值 = startMs + 有效时长 × (1 + wordEdgeSoftenBand),整行取所有词/组的最大值。
-    // 词:(1000, 500) 到 1000 + ceil(500×1.08) = 1540;极短词吃 minWordDurationMs(80)地板:
-    // (1000, 10) 到 1000 + ceil(80×1.08) = 1087;逐词罗马音按整组伪词(跨度可能远大于单词)
+    // 词:(1000, 500) → 1000 + ceil(500×1.08) = 1540;极短词吃 minWordDurationMs(80)地板:
+    // (1000, 10) → 1000 + ceil(80×1.08) = 1087;逐词罗马音按整组伪词(跨度可能远大于单词)
     // 填色,组也要算进最大值,否则罗马音还在填、行就被提前定格。
 
     do {
@@ -411,7 +411,7 @@ func runSyncEngineTests() {
             expectEqual(plan.sides, [.leading, .leading, .trailing], "对唱: plan 定边")
             expectEqual(plan.dropped, [false, false, false], "对唱: 行内前缀不丢行")
         }
-        // 独占一行的标记(《说好不哭》的真实形态):剥完为空 到 整行丢掉,但**归属照样延续**
+        // 独占一行的标记(《说好不哭》的真实形态):剥完为空 → 整行丢掉,但**归属照样延续**
         do {
             let plan = D.plan(lineTexts: ["周杰伦：", "没有了联络", "阿信：", "电话开始躲", "周杰伦：", "你什么都没有"])
             expectEqual(plan.dropped, [true, false, true, false, true, false], "对唱: 独占标记行整行丢掉")
@@ -449,7 +449,7 @@ func runSyncEngineTests() {
             expectEqual(plan.lines[0].words[0].durationMs, 180, "对唱逐字: 粘连词保留原时长")
         }
         do {
-            // 人名逐字拆开 + 独占一行:`周` `杰` `伦` `：` 整行剥空 到 丢掉
+            // 人名逐字拆开 + 独占一行:`周` `杰` `伦` `：` 整行剥空 → 丢掉
             let lines = [
                 LyricLineWords(timeMs: 24838, words: [w(24838, 154, "周"), w(24992, 204, "杰"), w(25196, 205, "伦"), w(25401, 255, "：")]),
                 LyricLineWords(timeMs: 26499, words: [w(26499, 203, "没"), w(26702, 255, "有")]),
@@ -498,7 +498,7 @@ func runSyncEngineTests() {
         expectEqual(KaraokeFill.fillFraction(for: word(1000, 500), atMs: 1250), 0.5,
                     "KaraokeFill: 正中间是 0.5")
 
-        // durationMs=0 的极短词（英文歌词常见）按下限算，否则瞬间 0到1 会很跳。
+        // durationMs=0 的极短词（英文歌词常见）按下限算，否则瞬间 0→1 会很跳。
         expectEqual(KaraokeFill.fillFraction(for: word(0, 0), atMs: 40), 0.5,
                     "KaraokeFill: durationMs=0 按 minWordDurationMs 下限算")
 
@@ -509,7 +509,7 @@ func runSyncEngineTests() {
         expectEqual(rounded(KaraokeFill.stops(left: 1.2, right: 1.36)),
                     [[0, 1], [1, 1]], "KaraokeFill: 早就唱完 → 整片亮色")
 
-        // 正常中间态：亮 到 过渡 到 暗，四个分段点。
+        // 正常中间态：亮 → 过渡 → 暗，四个分段点。
         expectEqual(rounded(KaraokeFill.stops(left: 0.2, right: 0.36)),
                     [[0, 1], [0.2, 1], [0.36, 0], [1, 0]],
                     "KaraokeFill: 中间态四个分段点")
@@ -567,7 +567,7 @@ func runSyncEngineTests() {
             KaraokeFill.tailClamped(ws, nextLineStartMs: next).map(\.durationMs)
         }
 
-        // 余量为 0(占全库 25.9%):末字填满与换行同一毫秒 到 压到换行前 lead
+        // 余量为 0(占全库 25.9%):末字填满与换行同一毫秒 → 压到换行前 lead
         expectEqual(tail(words([("a", 0, 500), ("b", 1000, 500)]), 1500), [500, 500 - lead],
                     "末字: 余量为 0 的行压到换行前 \(lead)ms 填满")
         // 真越过(3.0%,中位 295ms):同样压到换行前 lead
@@ -669,7 +669,7 @@ func runSyncEngineTests() {
         engine2.load(
             lyrics: "[00:01.00] alpha\n[00:10.00] beta\n[00:30.00] gamma",
             lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
-        // 采样点覆盖:第一句之前 / 各句内 / 长间奏(10s到30s 之间,gapWindow 会亮)/ 倒退。
+        // 采样点覆盖:第一句之前 / 各句内 / 长间奏(10s→30s 之间,gapWindow 会亮)/ 倒退。
         for ms in [0, 500, 1_500, 9_999, 12_000, 20_000, 31_000, 2_000, 500, 31_000, 1_500] {
             let r = engine2.tickQuery(atMs: ms)
             expectEqual(r.line, engine2.activeLine(atMs: ms), "tickQuery(\(ms)): line 与 activeLine 一致")
@@ -689,7 +689,7 @@ func runSyncEngineTests() {
         let engine3 = LyricsSyncEngine()
         engine3.load(
             lyrics: "[00:01.00] main line",
-            // 300ms 与 1700ms 距 1000ms 同为 700(都在容差上),旧扫描后见者胜 到 取 late。
+            // 300ms 与 1700ms 距 1000ms 同为 700(都在容差上),旧扫描后见者胜 → 取 late。
             lyricsTr: "[00:00.30] early\n[00:01.70] late",
             lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine3.allLines(idPrefix: "t").first?.line.translation, "late",
@@ -978,7 +978,7 @@ func runSyncEngineTests() {
 
         // upcomingLineText(独立公开 API,PlaybackCoordinator 之外没人直接用 tickQuery 时的
         // 退路)必须跟 tickQuery.nextText 逐位一致——这条本来就在跑(见上面那个
-        // do 块的②),这里只是确认重写 nextTextAt到nextAt 之后没有破坏它。
+        // do 块的②),这里只是确认重写 nextTextAt→nextAt 之后没有破坏它。
         expectEqual(engine.upcomingLineText(afterMs: 2_500), onFirstMale.nextText,
                     "nextSide 案: upcomingLineText 与 tickQuery.nextText 仍然一致")
     }
@@ -992,7 +992,7 @@ func runSyncEngineTests() {
         typealias L = CompactLyricLead
         let reveal = L.revealMs   // 5000
 
-        // ① 还在唱这一句 到 显示本行
+        // ① 还在唱这一句 → 显示本行
         expectEqual(L.resolve(activeIdx: 3, posMs: 9_000, lineEndMs: 10_000, nextStartMs: 12_000),
                     .line(3), "还没唱完:显示本行")
 
@@ -1012,7 +1012,7 @@ func runSyncEngineTests() {
         expectEqual(L.resolve(activeIdx: 3, posMs: 40_000 - reveal, lineEndMs: 10_000, nextStartMs: 40_000),
                     .line(4), "边界:进入提前量窗口就亮出下一句")
 
-        // ④ 保守边界 1:行级 LRC 不知道一行唱多久 到 一律不抢跑(维持"下一句开始才换"的旧行为)。
+        // ④ 保守边界 1:行级 LRC 不知道一行唱多久 → 一律不抢跑(维持"下一句开始才换"的旧行为)。
         //    猜早了会在人还在唱这句的时候把它换掉,比现状更糟。
         expectEqual(L.resolve(activeIdx: 3, posMs: 30_000, lineEndMs: nil, nextStartMs: 40_000),
                     .line(3), "行级 LRC:不抢跑")
@@ -1026,15 +1026,15 @@ func runSyncEngineTests() {
                     .line(-1), "前奏:不动")
 
         // ⑦ displayDurationMs:菜单栏跑马灯的配速依据。
-        //    这一项**必须**跟着显示窗口走 —— 沿用旧的「本句时间戳到下句时间戳」会在
+        //    这一项**必须**跟着显示窗口走 —— 沿用旧的「本句时间戳→下句时间戳」会在
         //    "长句 + 后面接长间奏"时把 dwell 算大,MenuBarMarquee.pacing 按它配速,
         //    句子会只滚出开头一小截就被换掉(比改动前更糟)。
         //    上一句 8s 唱完、本句 10s 开始、13s 唱完、下一句 40s 开始:
-        //      出现 = max(8000, 10000-5000) = 8000;消失 = 13000(唱完即下场)到 5000ms
+        //      出现 = max(8000, 10000-5000) = 8000;消失 = 13000(唱完即下场)→ 5000ms
         expectEqual(L.displayDurationMs(prevLineEndMs: 8_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 40_000, fallbackEndMs: nil),
                     5_000, "长间奏在后:窗口到本行下场为止,不能算到下一句开始")
-        //    短间隙:上一句 9.8s 唱完、本句 10s 开始、13s 唱完 到 出现 9800、消失 13000
+        //    短间隙:上一句 9.8s 唱完、本句 10s 开始、13s 唱完 → 出现 9800、消失 13000
         expectEqual(L.displayDurationMs(prevLineEndMs: 9_800, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
                     3_200, "短间隙:出现于上一句唱完那一刻")
@@ -1043,19 +1043,19 @@ func runSyncEngineTests() {
             expectEqual(L.leadInMs(prevLineEndMs: prevEnd, startMs: 10_000) >= 0, true,
                         "leadIn 不为负(prevEnd=\(prevEnd))")
         }
-        //    长间奏在前:上一句 2s 就唱完、本句 10s 开始 到 出现被 reveal 夹在 5000
+        //    长间奏在前:上一句 2s 就唱完、本句 10s 开始 → 出现被 reveal 夹在 5000
         expectEqual(L.displayDurationMs(prevLineEndMs: 2_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
                     8_000, "长间奏在前:出现时刻被 revealMs 夹住,不会早于此")
-        //    脏数据:上一句"唱完"比本句开始还晚 到 出现时刻不能算成晚于本句开始
+        //    脏数据:上一句"唱完"比本句开始还晚 → 出现时刻不能算成晚于本句开始
         expectEqual(L.displayDurationMs(prevLineEndMs: 11_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
                     3_000, "时间戳交叠:出现时刻夹到本句开始")
-        //    行级 LRC:不知道唱完时刻 到 退回"下一句开始"
+        //    行级 LRC:不知道唱完时刻 → 退回"下一句开始"
         expectEqual(L.displayDurationMs(prevLineEndMs: nil, startMs: 10_000,
                                         lineEndMs: nil, nextStartMs: 14_000, fallbackEndMs: nil),
                     4_000, "行级 LRC:窗口退回下一句开始")
-        //    最后一句:引擎不知道曲长,给 nil 到 由 PlaybackCoordinator 退回既有公式
+        //    最后一句:引擎不知道曲长,给 nil → 由 PlaybackCoordinator 退回既有公式
         expectEqual(L.displayDurationMs(prevLineEndMs: 9_000, startMs: 10_000,
                                         lineEndMs: 13_000, nextStartMs: nil, fallbackEndMs: nil),
                     nil, "最后一句:引擎算不出,交给上层用曲目时长兜底")
@@ -1104,12 +1104,12 @@ func runSyncEngineTests() {
         let engine = LyricsSyncEngine()
         engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
 
-        // 第 0 行还在唱:显示本行,它前面没有行 到 提前量 0(不能因为"没有上一行"就算出负数)。
+        // 第 0 行还在唱:显示本行,它前面没有行 → 提前量 0(不能因为"没有上一行"就算出负数)。
         let singing = engine.tickQuery(atMs: 10_500)
         expectEqual(singing.compactLine?.plainText, "aa bb ", "引擎提前量: 还在唱时显示本行")
         expectEqual(singing.compactLeadInMs, 0, "引擎提前量: 第一行没有上一行 → 0")
 
-        // 第 0 行唱完(11.0s)到 短间隙,立刻亮出第 1 行,但它 13.0s 才开唱 到 提前量 2000ms。
+        // 第 0 行唱完(11.0s)→ 短间隙,立刻亮出第 1 行,但它 13.0s 才开唱 → 提前量 2000ms。
         // 这条就是 `i - 1` 的照妖镜:取成 `i` 会算成 leadInMs(prevEnd: 14000, start: 13000) = 0。
         let lead = engine.tickQuery(atMs: 11_500)
         expectEqual(lead.compactLine?.plainText, "cc dd ", "引擎提前量: 唱完即切到下一句")
@@ -1126,7 +1126,7 @@ func runSyncEngineTests() {
         expectEqual(idle.compactLine == nil && idle.compactPlaceholder, true, "引擎提前量: 长间奏中段是 ♪")
         expectEqual(idle.compactLeadInMs, nil, "引擎提前量: 没有可显示的行时为 nil")
 
-        // 长间奏尾段(第 2 行开始前 5s 内)到 亮出第 2 行,提前量被 revealMs 夹住。
+        // 长间奏尾段(第 2 行开始前 5s 内)→ 亮出第 2 行,提前量被 revealMs 夹住。
         let capped = engine.tickQuery(atMs: 26_000)
         expectEqual(capped.compactLine?.plainText, "ee ff ", "引擎提前量: 进入提前量窗口亮出下一句")
         expectEqual(capped.compactLeadInMs, CompactLyricLead.revealMs,
@@ -1136,7 +1136,7 @@ func runSyncEngineTests() {
         //
         // 不喂曲长时最后一句的 compactDwellMs 恒为 nil,上层退回 currentLineDwellSeconds ——
         // 那个值按 currentLineIndex 取行,提前量窗口里指的是**已唱完的上一句**(错基数),
-        // 而且开唱那一刻 currentLineIndex 前进 到 值突变 到 pacing 变 到 滚动被重装。首停含
+        // 而且开唱那一刻 currentLineIndex 前进 → 值突变 → pacing 变 → 滚动被重装。首停含
         // 提前量,重装就等于把提前量**再等一遍**(最长 5 秒),最后一句可能整段唱完都不滚。
         // 所以这两条断言钉的是「同一句在开唱前后拿到同一个窗口」——它才是"不重装"的前提。
         let last = engine.tickQuery(atMs: 26_000, trackEndMs: 40_000)   // 第 2 行的提前量窗口内
@@ -1154,7 +1154,7 @@ func runSyncEngineTests() {
         expectEqual(engine.tickQuery(atMs: 11_500, trackEndMs: 40_000).compactDwellMs, 3_000,
                     "引擎提前量: 非最后一句的窗口不受曲长影响")
 
-        // 行级 LRC 一律不抢跑 到 提前量恒为 0,滚动行为一字不变。
+        // 行级 LRC 一律不抢跑 → 提前量恒为 0,滚动行为一字不变。
         let lineLevel = LyricsSyncEngine()
         lineLevel.load(lyrics: "[00:10.00]aabb\n[00:13.00]ccdd\n", lyricsTr: "", lyricsRoma: "",
                        lyricsYRC: "")
@@ -1194,7 +1194,7 @@ func runSyncEngineTests() {
 
     // ---- 混排行里的中文片段跟拼音开关走(陶喆《My Anata》实测形状) ----
     //
-    // 行内有假名 到 这一行的语言标签是日文 到 整行由**日文**开关放行;但行里的中文片段
+    // 行内有假名 → 这一行的语言标签是日文 → 整行由**日文**开关放行;但行里的中文片段
     // 不是日文,它该归拼音开关。拼音关着时中文片段换回原文,整行读音里不该剩任何带声调
     // 拼音 —— 包括源自带/预生成的那份 `lyrics_roma`:它是完整版、事后切不出哪段是中文,
     // 这种行必须绕过它现算(见 LyricsSyncEngine.romanizationText 那段注释)。
@@ -1241,7 +1241,7 @@ func runSyncEngineTests() {
                     "混排行: 拼音开着时原样用源自带那份,不绕道现算")
 
         // 逐词那条路(逐字歌词每个词底下各标一份)同样跟着开关走:中文词组的读音跟原文
-        // 一模一样 到 buildWordGroups 判它没有信息增量 到 标成 nil,假名词组照常出罗马字。
+        // 一模一样 → buildWordGroups 判它没有信息增量 → 标成 nil,假名词组照常出罗马字。
         func yrcLine(_ text: String, start: Int) -> String {
             var out = "[\(start),\(text.count * 500)]"
             for (i, ch) in text.enumerated() {

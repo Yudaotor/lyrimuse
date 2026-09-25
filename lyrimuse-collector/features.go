@@ -14,9 +14,9 @@ import (
 	"strings"
 )
 
-// featureFlagsFile is the on-disk shape written by desktop-lyrics's "设置" 到
+// featureFlagsFile is the on-disk shape written by desktop-lyrics's "设置" →
 // "功能开关" section and read once at collector startup — same "Swift 写共享
-// 文件 到 launchctl kickstart 重启 collector 到 collector 下次启动读到新内容"
+// 文件 → launchctl kickstart 重启 collector → collector 下次启动读到新内容"
 // 约定,已经在 enrichCache/lyrics 文件夹这两处验证过(见 main.go 顶部注释),collector
 // 没有文件监听,状态只在启动时读一次。用 *bool 而不是 bool——文件不存在、或者文件里
 // 缺某个字段,都要解读成"沿用现有行为"(默认开启),而不是"关闭";bool 零值会把两者
@@ -156,11 +156,11 @@ type featureFlagsFile struct {
 	// 取代)。true 与 旧的 `first`。迁移链因此是两级:这个 到 ArtistMode 到 MatchMode。
 	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
 	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(加,
-	// 设置里 Last.fm 到「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
+	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
 	// 30 秒,主流 scrobbler 都在客户端照做。**只管 Last.fm**(含给 Last.fm 兜底的本地收听日志和
 	// 回填),ListenBrainz 不受影响 —— 见 poller.go tooShortToScrobble / shortTrackLastfmOnly。
 	ScrobbleShortTracks *bool `json:"scrobble_short_tracks,omitempty"`
-	// LastfmScrobblePoint:一次收听**记到 Last.fm** 的时点(加,设置里 Last.fm 到
+	// LastfmScrobblePoint:一次收听**记到 Last.fm** 的时点(加,设置里 Last.fm →
 	// 「Scrobble 时机」),四档 scrobblePointHalf / scrobblePoint75 / scrobblePoint90 / scrobblePointEnd。
 	// 默认 scrobblePointHalf = 现状(官方规则:曲长一半或 4 分钟,先到为准)。**只管 Last.fm**:
 	// ListenBrainz、网页中继照旧在官方阈值那一刻提交,Last.fm 那一路(含给它兜底的本地收听日志)
@@ -172,8 +172,8 @@ type featureFlagsFile struct {
 	// 或都不开。
 	DailyDigest *bool `json:"daily_digest,omitempty"`
 	// WeeklyDigestSource/DailyDigestSource："lastfm"/"listenbrainz"/空。空值(用户
-	// 从没在设置里手动选过)交给 resolveDigestSource(digest.go)按"两个账号都配了到
-	// lastfm,只配了一个到用那个,都没配到跳过"自动判定,不是"缺省当 lastfm 处理"这么
+	// 从没在设置里手动选过)交给 resolveDigestSource(digest.go)按"两个账号都配了→
+	// lastfm,只配了一个→用那个,都没配→跳过"自动判定,不是"缺省当 lastfm 处理"这么
 	// 简单——所以这里特意留空字符串而不是给一个非空的默认值常量。
 	WeeklyDigestSource string `json:"weekly_digest_source,omitempty"`
 	DailyDigestSource  string `json:"daily_digest_source,omitempty"`
@@ -247,7 +247,7 @@ type featureFlagsFile struct {
 	// 的 launchLyrimuseOnPlayers)。键在就严格按它来(空列表 = 关),键缺失是布尔年代的老配置,退回
 	// 「盯整个选中集合 / auto 全量」。上面那个布尔 App 仍然写(= 列表非空),两者同时在时布尔只当总开关。
 	LaunchLyrimuseOnPlayers []string `json:"launch_lyrimuse_on_players,omitempty"`
-	// TrustedPlayers:用户显式信任的"未知播放器"—— bundle id 到 界面显示名。
+	// TrustedPlayers:用户显式信任的"未知播放器"—— bundle id → 界面显示名。
 	//
 	// 「自动识别」原来只认写死的五个播放器,别的 App 在报 Now Playing 一律当"没有可关心
 	// 的播放"。这道白名单不只挡显示,**也挡打卡**(poller.go 的 isTracked):放开它等于
@@ -261,7 +261,7 @@ type featureFlagsFile struct {
 	// 听说过的),而默认状态下一条垃圾都进不来。
 	TrustedPlayers map[string]string `json:"trusted_players,omitempty"`
 	// LastfmExcludedBundles:**不** scrobble 到 Last.fm 的播放器(bundle id 列表)。
-	// 设置 到 账号 到 Last.fm 到 设置 到「Scrobble 的播放器」取消勾选的那几个;缺失 / 空 = 全部上送(现状)。
+	// 设置 → 账号 → Last.fm → 设置 →「Scrobble 的播放器」取消勾选的那几个;缺失 / 空 = 全部上送(现状)。
 	// **只管 Last.fm**(含给它兜底的本地收听日志 / 回填与 now-playing),ListenBrainz 不受影响 —— 与
 	// ScrobbleShortTracks / LastfmScrobblePoint 同一口径。与 Swift 侧 FeatureFlagsFile.lastfmExcludedBundles
 	// 一一对应。语义、出口与粒度见 lastfmexclude.go 头注。
@@ -301,7 +301,7 @@ type featureFlags struct {
 	LastfmMatchTrack  bool
 	// 合唱串截成第一位(firstCreditedArtist,纯字符串、不联网)。**只在没匹配到编目条目时**
 	// 应用 —— 匹配到的写法已经是编目认的那条,再截一刀就把它变成一个不存在的条目了
-	// (Hall & Oates 到 Hall)。见 resolveScrobbleTags。
+	// (Hall & Oates → Hall)。见 resolveScrobbleTags。
 	LastfmMatchFirstArtistOnly bool
 	// 见 featureFlagsFile.ScrobbleShortTracks。默认 false(短曲目不记,Last.fm 官方规则)。
 	ScrobbleShortTracks bool
@@ -493,13 +493,13 @@ type lastfmMatchSettings struct {
 }
 
 // resolveLastfmMatch 把文件里的档位校验成三个常量之一并摊平成布尔;缺失/非法时顺着
-// **两级遗留链**迁移:lastfm_match_mode 到 lastfm_scrobble_artist_mode 到
+// **两级遗留链**迁移:lastfm_match_mode → lastfm_scrobble_artist_mode →
 // lastfm_scrobble_first_artist_only,全都没有才兜底「原始」。
 //
 // 迁移表(刻意做到**行为逐字不变**):
 //
-//	旧 smart 到 智能
-//	旧 all   到 原始
+//	旧 smart → 智能
+//	旧 all   → 原始
 //	旧 first 到 自定义,只开「合唱只发第一位」(改歌手/改曲名都关 到 照旧不打网络)
 //
 // 非法值除了兜底还记一行日志 —— 拼错档位名的后果是"设置里选了智能、collector 一直在
@@ -511,7 +511,7 @@ type lastfmMatchSettings struct {
 // 自己判不了新老。分工因此是:**App 负责判、并把结论写实进 features.json**
 // (FeatureSettingsStore.isFreshInstall + load() 里那段 persistFile),collector 只管读。
 //
-// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** 到 原始。
+// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** → 原始。
 // 全新装机那一路在 App 首次 load() 时就已经把文件连同 "smart" 一起落了盘。
 // 反过来说,要是哪天把 App 那次写盘去掉,这里就会变成"新用户界面显示智能、collector 发整串"
 // —— 改那边之前先回来看这段。

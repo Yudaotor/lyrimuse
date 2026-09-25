@@ -246,8 +246,8 @@ enum ICloudConfigStore {
         // 直到下完(那次小文件用了 1.06s,网络差时可以是几十秒)。而这个方法是在设置页
         // .onAppear、以及启动探测里同步调的,一卡就是整个界面卡住。
         //
-        // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 到 Current,
-        // 逐出后 到 NotDownloaded,两次都是立即返回)。
+        // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 → Current,
+        // 逐出后 → NotDownloaded,两次都是立即返回)。
         if isMaterialized(found.url), let data = try? Data(contentsOf: found.url) {
             let meta = metadata(in: data)
             found.exportedAt = meta.exportedAt

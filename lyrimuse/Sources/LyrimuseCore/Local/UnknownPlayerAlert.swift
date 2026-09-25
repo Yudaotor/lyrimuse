@@ -75,7 +75,7 @@ public enum UnknownPlayerAlert {
     public static let maxAnnounces = 3
     public static let announceCooldown: TimeInterval = 24 * 3600
 
-    /// 已经提醒过的记录:bundle id 到 (提醒过几次, 最后一次是什么时候)。
+    /// 已经提醒过的记录:bundle id → (提醒过几次, 最后一次是什么时候)。
     public struct AnnounceLog: Codable, Equatable, Sendable {
         public var count: Int
         public var lastAt: Date

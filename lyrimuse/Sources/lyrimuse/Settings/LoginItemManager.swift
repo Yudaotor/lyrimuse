@@ -14,7 +14,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "login-
 // App 的主线程是 46。灵动岛动画专项的 System Trace 就是这么看出来的(05 章决策 #25)。plist 加
 // `ProcessType = Interactive` 只抬到 31;只有经 LaunchServices 起(登录项 / `open`)才是 46。
 // 登录项正是 Apple 给"随登录启动的 GUI App"的正道:由 LaunchServices 按 App 的身份启动,
-// 单实例、优先级、App Nap 策略都跟双击打开一模一样,System Settings 到 通用 到 登录项里也能看到。
+// 单实例、优先级、App Nap 策略都跟双击打开一模一样,System Settings → 通用 → 登录项里也能看到。
 //
 // 14 章决策 9 曾写"ad-hoc 签名限制了 SMAppService 等官方路径",这次实测(ad-hoc 签名、装在
 // /Applications)`register()` 成功、状态 `.enabled`,那条判断按实测订正。

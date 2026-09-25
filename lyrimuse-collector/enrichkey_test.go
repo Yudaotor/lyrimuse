@@ -329,7 +329,7 @@ func TestStaleExportKeysAlwaysDropsLosers(t *testing.T) {
 		}
 	}
 
-	// 反过来:胜出的那条本来就叫归一化后的名字 到 它的文件留着,只删落选那条。
+	// 反过来:胜出的那条本来就叫归一化后的名字 → 它的文件留着,只删落选那条。
 	got = staleExportKeys(plain, plain, olds)
 	if len(got) != 1 || got[0] != subtitled {
 		t.Errorf("want only the loser stale, got %v", got)

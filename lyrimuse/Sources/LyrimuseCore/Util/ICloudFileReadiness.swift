@@ -21,8 +21,8 @@ public enum ICloudFileReadiness {
     ///   不存在(见 `ConfigSnapshotName.realName(ofDirectoryEntry:)`;新机器上几乎必然
     ///   是这个形态)。这种恰恰是**最需要先去下载**的情况。
     ///
-    /// 混成一档的代价是现象是上来的这个 bug:设置页点「导入」到 判定成"能读"到 跳过
-    /// `startDownloadingUbiquitousItem` 到 直接读一个不存在的路径失败 到 界面提示
+    /// 混成一档的代价是现象是上来的这个 bug:设置页点「导入」→ 判定成"能读"→ 跳过
+    /// `startDownloadingUbiquitousItem` → 直接读一个不存在的路径失败 → 界面提示
     /// "这份备份还没从 iCloud 下载下来,等一会儿再试"。而下载**从头到尾没有被发起过**,
     /// 等多久都没用,除非用户自己去 Finder 里把那个文件夹点下来。
     ///

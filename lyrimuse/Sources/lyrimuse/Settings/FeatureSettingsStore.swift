@@ -247,7 +247,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// `smart` 与 智能、`all` 与 原始、`first` 与 自定义且只开「合唱只发第一位」。
     var lastfmScrobbleArtistMode: String?
     /// **更早的遗留字段**(二态开关,被 lastfmScrobbleArtistMode 取代):true 与 旧的 `first`。
-    /// 迁移链因此是两级:这个 到 ArtistMode 到 MatchMode。跟 collector 侧 featureFlagsFile 对称。
+    /// 迁移链因此是两级:这个 → ArtistMode → MatchMode。跟 collector 侧 featureFlagsFile 对称。
     var lastfmScrobbleFirstArtistOnly: Bool?
     /// 短于 30 秒的曲目也 scrobble 到 Last.fm。**默认 false = 现状**(Last.fm 官方规则要求曲目长于
     /// 30 秒)。只管 Last.fm(含给它兜底的本地收听日志/回填),ListenBrainz 不受影响 —— 见
@@ -261,8 +261,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     // 或都不开。
     var dailyDigest: Bool?
     // "lastfm"/"listenbrainz"/缺省(空字符串)——两个 cadence 各自用哪个账号的数据源,
-    // 缺省时按 collector/digest.go 的 resolveDigestSource 规则(两个都配了到lastfm,
-    // 只配了一个到用那个,都没配到这个功能没法跑)自动判定,不是"缺省当 lastfm 处理"
+    // 缺省时按 collector/digest.go 的 resolveDigestSource 规则(两个都配了→lastfm,
+    // 只配了一个→用那个,都没配→这个功能没法跑)自动判定,不是"缺省当 lastfm 处理"
     // 这么简单,所以特意不给非空默认值。两个 cadence 都能自己选数据源,是因为
     // Last.fm 的周榜接口其实接受任意 from/to,不是只认它自己的官方周边界。
     var weeklyDigestSource: String?
@@ -321,7 +321,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 键缺失是布尔年代的老配置,collector 退回「盯整个选中集合 / auto 全量」。上面那个布尔仍然写(= 列表非空),
     /// 给还没升级的 collector 当总开关用;collector 侧对称的解析见 features.go / companionlaunch.go。
     var launchLyrimuseOnPlayers: [String]?
-    /// 用户显式信任的「未知播放器」:bundle id 到 界面显示名(反查不到 App 名时是空串)。
+    /// 用户显式信任的「未知播放器」:bundle id → 界面显示名(反查不到 App 名时是空串)。
     /// 语义见 LyrimuseCore 的 TrustedPlayers —— 为什么是"信任列表"而不是"一律接受",
     /// 那份注释里写了(白名单同时挡着打卡,一律接受会把视频/播客写进永久收听历史)。
     var trustedPlayers: [String: String]?
@@ -541,7 +541,7 @@ public final class FeatureSettingsStore: ObservableObject {
     // 想起来去菜单栏点一下 Lyrimuse。 改默认值必须跟 collector 侧 features.go 的
     // boolOr(..., true) 一起改,不然 Swift 这边显示「开」而真正执行的 collector 当它是关。
     // 从布尔改成逐播放器集合(见 LyrimuseCore.PlayerLinkage 头注)。默认值由 load 里的
-    // 迁移决定(布尔年代默认 true 到 当时的全部候选),这里的初值只是占位。写盘时同时落布尔 = 集合非空。
+    // 迁移决定(布尔年代默认 true → 当时的全部候选),这里的初值只是占位。写盘时同时落布尔 = 集合非空。
     @Published public var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
     /// 见 FeatureFlagsFile.trustedPlayers。改它一律走 trust/untrust 两个方法,别直接赋值
     /// —— 那两个方法负责反查 App 名并立刻落盘(collector 按 mtime 重读,不需要重启)。
@@ -680,7 +680,7 @@ public final class FeatureSettingsStore: ObservableObject {
         _ = await save()
     }
 
-    /// bundle id 到 App 的本地化显示名。查不到返回 nil(App 被删了/从没装过)。
+    /// bundle id → App 的本地化显示名。查不到返回 nil(App 被删了/从没装过)。
     ///
     /// 优先 `CFBundleDisplayName`(本地化名,中文系统上「酷狗音乐」这种)再退
     /// `CFBundleName`,最后退文件名去掉 .app —— 三级都落空才 nil。
@@ -772,7 +772,7 @@ public final class FeatureSettingsStore: ObservableObject {
                 // resolveScrobbleArtistMode)—— 不写的话界面显示「智能」、实际一直在发整串,
                 // 而且这个不一致会一直挂到用户碰巧改了别的开关触发一次 save 为止。
                 // 反过来说,这一写也让 collector 那边"文件不存在"重新只剩一个含义:
-                // 老用户从没动过任何开关 到 all。两边因此不需要各自判一次"新装没有"。
+                // 老用户从没动过任何开关 → all。两边因此不需要各自判一次"新装没有"。
                 //
                 // 用 persistFile() 而不是 save():这里只要把默认值固化下来,不该顺带触发
                 // collector 重启/热读那一套(全新装机时它多半还没配置好)。写失败也不致命 ——
@@ -802,8 +802,8 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
-        // 上送匹配:新键缺失/非法时顺着**两级遗留链**迁移(lastfm_match_mode 到
-        // lastfm_scrobble_artist_mode 到 lastfm_scrobble_first_artist_only),全都没有才
+        // 上送匹配:新键缺失/非法时顺着**两级遗留链**迁移(lastfm_match_mode →
+        // lastfm_scrobble_artist_mode → lastfm_scrobble_first_artist_only),全都没有才
         // 兜底「原始」—— 跟 collector 侧 resolveLastfmMatch 是同一份规则,两侧要一起改。
         //
         // 迁移表的承诺是**行为逐字不变**:旧 smart 到 智能、旧 all 到 原始、
@@ -897,8 +897,8 @@ public final class FeatureSettingsStore: ObservableObject {
         if let raw = f.launchLyrimuseOnPlayers {
             launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
         } else {
-            // 布尔年代的一次性迁移:true(默认)到 当时的全部候选(选中集合的具体播放器,auto 时五个全上),
-            // 这正是 collector 当年盯的范围;false 到 空。下次 save 就把列表写进文件,以后走新键。
+            // 布尔年代的一次性迁移:true(默认)→ 当时的全部候选(选中集合的具体播放器,auto 时五个全上),
+            // 这正是 collector 当年盯的范围;false → 空。下次 save 就把列表写进文件,以后走新键。
             launchLyrimuseOnPlayers = PlayerLinkage.migratedLaunchSet(
                 legacyEnabled: f.launchLyrimuseOnMusicOpen ?? true, selectedPlayers: players, requiresSole: false)
         }
@@ -945,7 +945,7 @@ public final class FeatureSettingsStore: ObservableObject {
         return await save()
     }
 
-    /// DecodingError 到 「键路径: 期望什么、遇到什么」一句话,不带值。别的错误退回 String(describing:)。
+    /// DecodingError → 「键路径: 期望什么、遇到什么」一句话,不带值。别的错误退回 String(describing:)。
     private static func describeDecodingError(_ error: Error) -> String {
         guard let decoding = error as? DecodingError else { return String(describing: error) }
         let context: DecodingError.Context

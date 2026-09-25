@@ -43,7 +43,7 @@ public enum BrowserAutomationPermission {
         case safari
     }
 
-    /// bundleID 到 这个 Chromium 系浏览器自己的 Preferences JSON 路径。
+    /// bundleID → 这个 Chromium 系浏览器自己的 Preferences JSON 路径。
     /// 只登记**实测验证过**存在这个 key 的浏览器——Vivaldi/Opera 大概率同源同构,但这台机器
     /// 没装、没法验证,先不瞎登记一个没实测过的路径。Brave 的厂商目录是两层
     /// (`BraveSoftware/Brave-Browser/`),不是 `Brave/`。
@@ -88,7 +88,7 @@ public enum BrowserAutomationPermission {
 
     // MARK: - 用户手动挑进来的浏览器
 
-    /// 用户自己从「应用程序」里挑进来的浏览器 到 **实测判定**出的引擎族。
+    /// 用户自己从「应用程序」里挑进来的浏览器 → **实测判定**出的引擎族。
     ///
     /// 上面那两张表只登记实测验证过的浏览器(理由见 `chromiumPrefsPaths` 那段),所以设置页
     /// 「添加浏览器」菜单原本只列得出四个,而 Brave / Vivaldi / Opera / Chromium / 各种 Beta
@@ -99,8 +99,8 @@ public enum BrowserAutomationPermission {
     /// 它只影响 `family(...)`(= "这个 App 驱不驱得动"),**不影响 `chromiumPrefsPaths`**
     /// (= "那个 JS 开关存在哪")。手动加进来的 Chromium 浏览器没有登记过 Preferences 路径,
     /// 于是 `status(...)` 恒为 `.unknown`、`enable(...)` 恒为 `.unsupported` —— 这是**有意的
-    /// 降级,不是漏做**:那个路径每个浏览器一个样(Arc到`Arc/`、Chrome到`Google/Chrome/`、
-    /// Edge到`Microsoft Edge/`,没有公式能从 bundleID 推出来),而 `enableChromium` 是会
+    /// 降级,不是漏做**:那个路径每个浏览器一个样(Arc→`Arc/`、Chrome→`Google/Chrome/`、
+    /// Edge→`Microsoft Edge/`,没有公式能从 bundleID 推出来),而 `enableChromium` 是会
     /// **覆盖写**那个文件的 —— 猜错路径就是拿用户别的浏览器的配置文件去赌。宁可让 UI 告诉
     /// "这个浏览器请你自己去它的菜单里开那一项"。
     ///

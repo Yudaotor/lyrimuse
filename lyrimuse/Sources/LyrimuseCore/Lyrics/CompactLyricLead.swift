@@ -55,11 +55,11 @@ public enum CompactLyricLead {
         // 前奏里提前亮出第一句 —— 那是另一个场景(整首歌的开场),行为变化面比"句间"大得多,
         // 用户这次要的只是句间的提前量。
         guard activeIdx >= 0 else { return .line(activeIdx) }
-        // 行级 LRC / 还在唱这一句 到 显示本行。见上面「保守边界 1」。
+        // 行级 LRC / 还在唱这一句 → 显示本行。见上面「保守边界 1」。
         guard let end = lineEndMs, posMs >= end else { return .line(activeIdx) }
-        // 最后一句唱完 到 仍显示它。见上面「保守边界 2」。
+        // 最后一句唱完 → 仍显示它。见上面「保守边界 2」。
         guard let next = nextStartMs else { return .line(activeIdx) }
-        // 进入提前量窗口(短间隙天然一进 end 就满足)到 亮出下一句。
+        // 进入提前量窗口(短间隙天然一进 end 就满足)→ 亮出下一句。
         if posMs >= next - revealMs { return .line(activeIdx + 1) }
         // 长间奏中段:唱完了,但下一句还远。
         return .placeholder
@@ -67,7 +67,7 @@ public enum CompactLyricLead {
 
     /// 某一行在单行展示面上**总共会显示多久**(毫秒)。菜单栏跑马灯拿它配速。
     ///
-    /// 为什么不能继续用 PlaybackCoordinator.currentLineDwellSeconds 那套「本句时间戳 到
+    /// 为什么不能继续用 PlaybackCoordinator.currentLineDwellSeconds 那套「本句时间戳 →
     /// 下句时间戳」:显示窗口已经变了。长句后面紧跟一段长间奏时,那套算法会把 dwell 算成
     /// 「一直显示到下一句开始」,而实际上这一句在**唱完那一刻**就被换走了 —— MenuBarMarquee
     /// .pacing 按偏大的 dwell 配速,长句会只滚出开头一小截就被切掉,**比改动前更糟**。

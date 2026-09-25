@@ -306,7 +306,7 @@ func TestDoHTTPTracked_HungDNSClassifiedAsDNSFailed(t *testing.T) {
 	}
 }
 
-// 对照:解析成功、连接被拒 到 connect_failed(DNS 轨迹走完且无错,不能误归 dns)。
+// 对照:解析成功、连接被拒 → connect_failed(DNS 轨迹走完且无错,不能误归 dns)。
 func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) {
 	saved := lyricSourceBreakerShared
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
@@ -331,7 +331,7 @@ func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) 
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				// 把 c.y.qq.com:80 改指到本机已关闭的端口。DNS 阶段在这里被跳过(没有钩子会触发),
-				// 分类只能靠错误链 —— connection refused 不含 DNSError 到 connect_failed。
+				// 分类只能靠错误链 —— connection refused 不含 DNSError → connect_failed。
 				return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			},
 		},
@@ -346,7 +346,7 @@ func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) 
 	}
 }
 
-// 状态码 到(failed, notfound)的映射只存在于 doHTTPTracked 里。上面那条用例是直接调
+// 状态码 →(failed, notfound)的映射只存在于 doHTTPTracked 里。上面那条用例是直接调
 // recordAPICall 传参的,绕过了这一步 —— 变异测试实测:把 `failed := ... && !notFound`
 // 改回 `>= 400`,那条照样全绿。这里走真实 HTTP,把这一步单独钉死。
 func TestDoHTTPTracked404IsNotAFailure(t *testing.T) {

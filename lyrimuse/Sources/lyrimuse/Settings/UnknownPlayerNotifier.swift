@@ -232,7 +232,7 @@ final class UnknownPlayerNotifier: NSObject {
         }
     }
 
-    /// 这个 App 已经被信任了 到 把还挂在通知中心的那条撤掉。
+    /// 这个 App 已经被信任了 → 把还挂在通知中心的那条撤掉。
     /// 别让「要不要信任 Chrome」在通知中心挂几天。
     func dismissDelivered(bundleID: String) {
         let id = "\(Self.categoryID).\(bundleID)"
@@ -311,7 +311,7 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
         case Self.trustActionID:
             await Self.trust(bundleID)
         case UNNotificationDefaultActionIdentifier:
-            // 点通知正文 到 直接停在设置页的「播放器」那一栏(发现卡和已信任列表都在那儿),
+            // 点通知正文 → 直接停在设置页的「播放器」那一栏(发现卡和已信任列表都在那儿),
             // 不能只调 openSettings() —— 那样只是把窗口叫出来、落在上次那一栏。
             //
             // requestSettings 必须**先**调:它两条路一起走(信箱管"窗口还没建出来"、

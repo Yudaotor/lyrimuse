@@ -27,7 +27,7 @@ func TestNativeSourceBonus(t *testing.T) {
 		t.Errorf("没有 native 源时不该有来源差异: qq=%d kugou=%d", base, got)
 	}
 
-	// 放 QQ 音乐 到 QQ 那份**且身份来自本地曲库**的加分，别家不加。
+	// 放 QQ 音乐 → QQ 那份**且身份来自本地曲库**的加分，别家不加。
 	nativeLyricSources = map[string]bool{"qq": true}
 	if got := score("qq", false, true); got != base+250 {
 		t.Errorf("同源+本地身份该加 250, got %d (base %d)", got, base)
@@ -171,14 +171,14 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 		t.Error("见过同源候选却没选它，该重试（这正是被『有逐字就不重试』挡死的那种）")
 	}
 
-	// 已经就是同源 到 没什么可换的。
+	// 已经就是同源 → 没什么可换的。
 	already := missed
 	already.LyricsSource = "qq"
 	if needsLyricsRetry(already, false, false, true) {
 		t.Error("已经是同源，不该重试")
 	}
 
-	// 同源当初压根没答过 到 重搜也变不出来。
+	// 同源当初压根没答过 → 重搜也变不出来。
 	unseen := missed
 	unseen.LyricsSourcesSeen = []string{"kugou", "lrclib"}
 	if needsLyricsRetry(unseen, false, false, true) {
@@ -199,7 +199,7 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 	}
 }
 
-// 预取用了另一个版本的时长做校验 到 真播放时长对不上就重选一次。
+// 预取用了另一个版本的时长做校验 → 真播放时长对不上就重选一次。
 // 坐实案例：网易云《梦想家》Tango 2:44，Spotify 版 ~4:06，预取按 164s 选了短版歌词。
 //
 // 签名改:mismatch 由调用方(trackEnrichment)用 durationMismatch 算好、
@@ -224,7 +224,7 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 	if retryAt(entry, 166) {
 		t.Error("差 2 秒是标注抖动，不该白跑网络")
 	}
-	// 旧条目没记校验时长 到 一律不回溯，别让一次升级把全库重新解析一遍。
+	// 旧条目没记校验时长 → 一律不回溯，别让一次升级把全库重新解析一遍。
 	legacy := entry
 	legacy.ResolvedDurationSecs = 0
 	if retryAt(legacy, 246) {

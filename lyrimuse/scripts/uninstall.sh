@@ -99,7 +99,7 @@ fi
 
 # 「开机启动」自是系统登录项(SMAppService.mainApp,不再是 LaunchAgent plist),
 # shell 里没有对应的注销命令,只能请 App 自己来:`lyrimuse --unregister-login-item` 只注销
-# 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 到 登录项」里留一条指向不存在
+# 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 → 登录项」里留一条指向不存在
 # 路径的死项,所以要在用户把 App 拖进废纸篓**之前**做。测试(uninstall_test.sh)用 PREFIX
 # 指向临时目录时这一步不该碰真 App,所以按 PREFIX 是否为 $HOME 门控。
 unregister_login_item() {

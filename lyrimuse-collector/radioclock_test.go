@@ -25,7 +25,7 @@ func TestAdvanceRadioClock(t *testing.T) {
 	if s.position != 0 || s.trackKey != "Clairo|Juna" {
 		t.Fatalf("track change must reset to 0, got %+v", s)
 	}
-	// 暂停:上一拍还在播 到 那段算数(基本都在播);之后每一拍都冻结。
+	// 暂停:上一拍还在播 → 那段算数(基本都在播);之后每一拍都冻结。
 	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(21*time.Second))
 	if s.position != 10 {
 		t.Fatalf("want 10 before pause, got %.3f", s.position)
@@ -111,7 +111,7 @@ func TestExtractRadioDuration(t *testing.T) {
 	if s.Duration != 0 {
 		t.Fatalf("no catalog duration → radio duration must be unknown (0), got %.3f", s.Duration)
 	}
-	// 目录查到了权威曲长就用它 —— 电台的分母靠这个才有意义(整档 3390.122s 到 单曲 226.283s)。
+	// 目录查到了权威曲长就用它 —— 电台的分母靠这个才有意义(整档 3390.122s → 单曲 226.283s)。
 	radioState["catalogDurationSecs"] = 226.283
 	if got := extract(radioState).Duration; got != 226.283 {
 		t.Fatalf("radio duration should come from the Apple catalog, got %.3f want 226.283", got)
@@ -207,7 +207,7 @@ func TestBorrowAppleScriptPosition(t *testing.T) {
 //
 // 修 borrowAppleScriptPosition 之后剩下的第二道闸。实测 Dolly Parton《Dumb Blonde》:
 // 会话 20:15:45.030 建立、Apple 目录 20:15:49.740 才给出 150.447s,晚 4.7 秒;sess.meta 是会话
-// 创建那一刻的快照,不补的话 listenThreshold 拿到 0 到 退回 240s 上限 到 150 秒的歌永远够不着。
+// 创建那一刻的快照,不补的话 listenThreshold 拿到 0 → 退回 240s 上限 → 150 秒的歌永远够不着。
 func TestNeedsRadioDurationBackfill(t *testing.T) {
 	cases := []struct {
 		name             string

@@ -10,7 +10,7 @@ import (
 // 所以判据单独抽成纯函数并在这里穷举。
 //
 // 刻意**不测** maybeGenerateHelperRoma 本身:它要起 lyrics-romanize 子进程,而测试
-// 二进制旁边没有那个 helper,直接测会因为"找不到 到 静默返回"而恒真通过 —— 那是一条
+// 二进制旁边没有那个 helper,直接测会因为"找不到 → 静默返回"而恒真通过 —— 那是一条
 // 证明不了任何东西的测试。
 func TestShouldGenerateHelperRoma(t *testing.T) {
 	cases := []struct {

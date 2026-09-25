@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// 合成一个跟酷狗客户端落盘形态一致的 .krc:zlib 压缩 到 逐字节异或 krcXORKey 到 前面加
+// 合成一个跟酷狗客户端落盘形态一致的 .krc:zlib 压缩 → 逐字节异或 krcXORKey → 前面加
 // "krc1" 魔数。用合成数据而不是拷一份真文件:真文件是用户自己的听歌记录,不该进仓库,
 // 而格式契约("krc1"+xor+zlib)本身就是这里要钉住的东西。
 func writeTestKRC(t *testing.T, dir, name, body string) string {

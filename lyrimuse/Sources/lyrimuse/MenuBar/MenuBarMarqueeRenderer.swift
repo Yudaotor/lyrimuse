@@ -26,7 +26,7 @@ enum MenuBarMarqueeRenderer {
     /// 后来放开的这一项,选自定义字体就是接受这份不一致,不做任何"提醒会不搭"的
     /// UI——那属于产品判断,不是这里该拦的事。
     ///
-    /// 实测(本机 SF 13pt,字体族仍是系统默认时):六档字重的 ascender/descender 完全相同 到
+    /// 实测(本机 SF 13pt,字体族仍是系统默认时):六档字重的 ascender/descender 完全相同 →
     /// `lineHeight` 不随字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),
     /// 拉丁字随字重变宽(medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下
     /// 换档那一刻槽宽变一次。默认档(系统字体 / `.regular`)与 `menuBarFont(ofSize: 0)` 逐点同宽
@@ -41,7 +41,7 @@ enum MenuBarMarqueeRenderer {
 
     /// 字号可选的合法区间(加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
     /// .thickness` 恒 22pt(带刘海的机器菜单栏本身 33pt 高,按钮仍是 22),而 `lineHeight` 逐字号实测
-    /// 13到18 / 14到19 / 15到20 / 16到21 / 17到23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
+    /// 13→18 / 14→19 / 15→20 / 16→21 / 17→23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
     /// 缩小、槽宽跟着失真。下限 10pt 之下在菜单栏里已经读不清。存量配置越界时夹回区间,不崩不留空白。
     static let fontSizeRange: ClosedRange<CGFloat> = 10...16
 
@@ -330,7 +330,7 @@ enum MenuBarMarqueeRenderer {
         let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ns
-        // flipped: false 到 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
+        // flipped: false → 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
         // 所以 y 给 1 就是"底部留 1pt 内边距"(双排 exactBox 不留,贴 0)。
         if !isGapDots {
             (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: attributes)

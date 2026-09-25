@@ -37,7 +37,7 @@ func TestHanVariantsTableInvariants(t *testing.T) {
 		if src == dst {
 			t.Errorf("%c → 自己,这条没有意义", src)
 		}
-		// 不许成链(A到B 且 B到C):逐字替换只跑一遍,成链就意味着结果取决于遍历顺序。
+		// 不许成链(A→B 且 B→C):逐字替换只跑一遍,成链就意味着结果取决于遍历顺序。
 		if next, ok := hanVariantMap[dst]; ok {
 			t.Errorf("%c → %c → %c 成链了,逐字替换只跑一遍,结果会不确定", src, dst, next)
 		}

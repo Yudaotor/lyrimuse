@@ -279,7 +279,7 @@ final class MenuBarLiveIconView: NSView {
             let key = pressKeys[keyIndex]
             key.isHidden = false
             key.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.pianoPressRects[keyIndex].size)
-            // 每键在自己的时隙里快起慢落:0到1(按下)保持一拍到0(抬起)。
+            // 每键在自己的时隙里快起慢落:0→1(按下)保持一拍→0(抬起)。
             let s0 = Double(slot) * 0.25
             let animation = CAKeyframeAnimation(keyPath: "opacity")
             animation.values = [0, 0, 1, 1, 0, 0]

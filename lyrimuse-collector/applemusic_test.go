@@ -166,7 +166,7 @@ func TestApplemusicDevTokenRenewMarginIsSane(t *testing.T) {
 // TestApplemusicNeverGuessesStorefront 钉死订正的那件事:
 // storefront 拿不到时**绝不能退回某个默认区**。
 //
-// 它同时决定取词那一趟的鉴权(URL 里的区 != 订阅区 到 一律 404),所以猜一个区的后果不是
+// 它同时决定取词那一趟的鉴权(URL 里的区 != 订阅区 → 一律 404),所以猜一个区的后果不是
 // "少查到几首区域独占曲目",而是整源静默全灭 —— 而且 applemusicFetchTTML 把 404 当正常
 // 结果返回 ("", nil),不报错不记原因,光看日志根本发现不了。改回 `sf = "us"` 这类兜底
 // 就会被这条拦住。

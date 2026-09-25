@@ -119,7 +119,7 @@ func runSourceContractTests() {
             diff(catalog.hant, hantGen, "zh-hant")
             diff(catalog.en, enGen, "en")
 
-            // ---- 语言协商(加繁体):系统语言标签 到 语言包目录名,规则见 UILanguage ----
+            // ---- 语言协商(加繁体):系统语言标签 → 语言包目录名,规则见 UILanguage ----
             expectEqual(UILanguage.resolve(preferred: "zh-Hans-CN"), "zh-hans", "本地化: zh-Hans-CN → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh"), "zh-hans", "本地化: 裸 zh → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh-SG"), "zh-hans", "本地化: zh-SG → 简体包")
@@ -709,8 +709,8 @@ func runSourceContractTests() {
                     expectEqual(face_text.contains("L10n.t(\"口白\")"), true, "电台: \(face)要显示「口白」")
                     // 歌词窗口有**三条**独立分支:元数据行(lyricsKind)、空状态(emptyStateSpec),
                     // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次现象是障:
-                    // 只补元数据行 到 标题对了、中间那格还在转圈搜(第一次截图);
-                    // 再补空状态仍不够 到 口白期间上一首的 allLines 原样留着,走不到空状态,
+                    // 只补元数据行 → 标题对了、中间那格还在转圈搜(第一次截图);
+                    // 再补空状态仍不够 → 口白期间上一首的 allLines 原样留着,走不到空状态,
                     // 那一栏继续滚上一首的词(第二次截图)。灵动岛 / 悬浮窗只显示
                     // "当前这一行",各自的 isRadioTalkBreak 分支天然盖住,唯独这里是整段列表。
                     if rel.hasSuffix("LyricsWindowView.swift") {
@@ -767,8 +767,8 @@ func runSourceContractTests() {
                 expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
                 // 电台不借 AppleScript 那份播放头。App 侧同义的闸就有了
                 // (上面那条 `guard snapshot.isRadio != true`),collector 漏了整整一天 —— 后果不是
-                // "位置不准"这么轻:整档节目的位置写进 trackPos 到 每拍都命中单曲循环判定 到 会话每
-                // 5 秒重建、playedSecs 归零 到 电台上一条收听都提交不了(实测 4.5 小时 2397 次
+                // "位置不准"这么轻:整档节目的位置写进 trackPos → 每拍都命中单曲循环判定 → 会话每
+                // 5 秒重建、playedSecs 归零 → 电台上一条收听都提交不了(实测 4.5 小时 2397 次
                 // loop restart、只有 4 条 listen recorded)。两侧必须同时成立,少一边就是这个形态。
                 expectEqual(poller.contains("playing, tracked, radio bool) bool {"), true,
                             "电台: collector 借不借 AppleScript 位置要走 borrowAppleScriptPosition(纯函数,Go 单测钉住)")
@@ -1769,7 +1769,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "引导页一份实现: 读不到 SettingsView.swift(路径挪了?)")
         }
 
-        // ④ **平台 到 图标那张查表**只允许一份(从 SettingsView 的 private 类型里
+        // ④ **平台 → 图标那张查表**只允许一份(从 SettingsView 的 private 类型里
         //    搬出来的原因就是引导页够不着)。
         //
         // 判据容易写错,记下来:别断言"`YouTubeMusicIcon`/`SpotifyIcon`
@@ -1829,7 +1829,7 @@ func runSourceContractTests() {
         // 原来的论证是"能让 steps 变短的控件全都在 index 1,所以安全",而它默认"引导页是
         // 唯一宿主":`features.players` 是 @Published,设置窗口能同时开着改它,引导页自己的
         // `.lastfm` 那一步还有个按钮专门去打开设置窗。走到最后一步再去设置里取消勾选
-        // Apple Music,`steps` 少一项 到 `steps[count]` 数组越界。守卫是 `currentStep`
+        // Apple Music,`steps` 少一项 → `steps[count]` 数组越界。守卫是 `currentStep`
         // (夹住下标)+ `.onChange(of: steps.count)`(把存储值本身拉回来)那一对。
         if let onboarding = read("OnboardingView.swift") {
             let rawIndexing = onboarding.split(separator: "\n", omittingEmptySubsequences: false)
@@ -1962,7 +1962,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
         }
 
-        // ⑭b **App 到 collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
+        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
         // Swift 侧 PositionBiasFile 写、Go 侧 positionbias.go 读;改了一边不改另一边,collector 会安静地
         // 读不到 / 解不出,网页那边 Spotify 歌词就悄悄回到慢 2 秒。
         let biasGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/positionbias.go").path
@@ -2041,7 +2041,7 @@ func runSourceContractTests() {
             .deletingLastPathComponent()   // lyrimuse(包目录)
             .deletingLastPathComponent()   // 仓库根
         let docPath = repoRoot.appendingPathComponent("docs/features/08-lyrics-engine.md").path
-        /// 「十六」到 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
+        /// 「十六」→ 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
         func chineseNumeral(_ s: String) -> Int? {
             let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
                                             "六": 6, "七": 7, "八": 8, "九": 9]
@@ -2183,9 +2183,9 @@ func runSourceContractTests() {
     //
     // 真机 `sample` 抓栈坐实的卡顿(现象是「设置页切分页有延迟、不跟手」):「播放器」页的
     // body 里直接调了 `MusicAutomationPermission.check`(底下是 AEDeterminePermissionToAutomateTarget
-    // 到 semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
+    // → semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
     // .status`(读 Chromium Preferences 文件)、`CollectorServiceManager.state`(起 launchctl 子进程
-    // 并 waitUntilExit)。4 个浏览器 × 每次 body 重算 到 主线程一次阻塞 20–380ms;60 秒切分页采样
+    // 并 waitUntilExit)。4 个浏览器 × 每次 body 重算 → 主线程一次阻塞 20–380ms;60 秒切分页采样
     // 主线程 70% 在忙、其中 `browserAvatarButton` 一条路径 524 个采样。PlayerHealthMonitor 同款。
     //
     // 修法是"查在后台、画只读缓存"。这条闸钉住的不是"别调这些函数",而是**只能在这几个
@@ -2537,7 +2537,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 到 退出路径」)----
+    // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 → 退出路径」)----
     //
     // 两侧的退出路径都要打 `exiting reason=<code>`:App 侧所有主动 terminate 只准经 AppExit.request
     // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),collector 常驻路径(main.go)不准再出现裸
@@ -3086,7 +3086,7 @@ func runSourceContractTests() {
     // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
     // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
     skillGuard: do {
-        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift 到 上 4 层到仓库根
+        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift → 上 4 层到仓库根
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -3329,7 +3329,7 @@ func runSourceContractTests() {
             //
             // 一、匹配**不带**变量名前缀。原来数的是 `process.executableURL = …`,于是
             //    `CollectorServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
-            //    它是**真的在 spawn collector**(bundledCollectorVersion 到 collector version)、
+            //    它是**真的在 spawn collector**(bundledCollectorVersion → collector version)、
             //    且当时不带环境,却因为 execs=0/envs=0 恰好"配平"蒙混过关:守卫当时成立靠的是
             //    "那个文件的变量恰好叫 p 不叫 process"。放宽后它红了,已给那处补上环境。
             //
@@ -3510,11 +3510,11 @@ func runSourceContractTests() {
     // 而 Go 的 `omitempty` 恰恰让零值字段整个不出现。两边一撞,一行完全正常的输出会**整行**
     // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
     //
-    // 两次事故,同一条 Go到Swift 边界:
-    //  ① searchLyricsPick 到 LyricsSearchService.Pick:decidable==false 这条完全
+    // 两次事故,同一条 Go→Swift 边界:
+    //  ① searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
     //     正常的分支里 collector 不写 decisionJSON,于是那一行解码失败、pick 恒为 nil,好几种
     //     该有专属文案的正常结局被吞成兜底那一句;
-    //  ② backfillOutcome 到 ScrobbleBackfillService.Outcome:Go 的 Items 只在
+    //  ② backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
     //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
     //     功能上线那天起就这样(两侧一个字没改过),只是 lastRunFailed 那天才把它从"一声不吭"
     //     变成"界面报一句失败" —— 用户那趟 26 条全补进了 Last.fm、markBackfilled 的回执也落了
@@ -3597,7 +3597,7 @@ func runSourceContractTests() {
 
     // ---- 日志规范----
     //
-    // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 到 日志」:正文一律英文、`component: message key=value`;
+    // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
     // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
     // 绕开 Logger 的日志进不了导出);collector 走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
     // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、Logger 的 subsystem 只有一个。

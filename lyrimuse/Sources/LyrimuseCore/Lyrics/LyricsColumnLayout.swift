@@ -49,7 +49,7 @@ public struct LyricsColumnWidths: Equatable, Sendable {
         var out = start
         switch divider {
         case 0:
-            // 边界右移(dx > 0)= 歌名变宽 到 歌手必须变窄,所以是减号。
+            // 边界右移(dx > 0)= 歌名变宽 → 歌手必须变窄,所以是减号。
             // 上限还要保证歌名不低于 minTitle。
             //
             // totalWidth <= 0 = 调用方还没量到可用宽度(首帧、或列表当前一行都没有)。
@@ -61,7 +61,7 @@ public struct LyricsColumnWidths: Equatable, Sendable {
                 : maxColumn
             out.artist = clamp(start.artist - dx, minColumn, min(maxColumn, room))
         case 1:
-            // 内部边界:歌手 + 专辑 之和不变 到 歌名宽度完全不受影响,不需要看 totalWidth。
+            // 内部边界:歌手 + 专辑 之和不变 → 歌名宽度完全不受影响,不需要看 totalWidth。
             let d = clamp(dx, minColumn - start.artist, min(start.album - minColumn, maxColumn - start.artist))
             out.artist = start.artist + d
             out.album = start.album - d
@@ -80,7 +80,7 @@ public struct LyricsColumnWidths: Equatable, Sendable {
         let budget = totalWidth - chrome - minTitle
         guard budget > 0, w.total > budget else { return w }
         let floorTotal = minColumn + minColumn + minSourceColumn
-        // 连各列下限之和都塞不进去 到 直接全部回落到下限,歌名只能被挤窄(总比某列消失好)。
+        // 连各列下限之和都塞不进去 → 直接全部回落到下限,歌名只能被挤窄(总比某列消失好)。
         guard budget > floorTotal else {
             return LyricsColumnWidths(artist: minColumn, album: minColumn, source: minSourceColumn)
         }

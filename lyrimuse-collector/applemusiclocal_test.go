@@ -133,13 +133,13 @@ func TestApplemusicLocalPrefersSyllable(t *testing.T) {
 
 func TestApplemusicLocalTranslationOnlySubtitle(t *testing.T) {
 	dir := writeAppleLocalCache(t, []appleLocalSpec{
-		// ① 真翻译(subtitle),key 对得上 到 应当拿到译文
+		// ① 真翻译(subtitle),key 对得上 → 应当拿到译文
 		{ID: "301", Name: "真翻译", Rels: map[string]string{
 			"syllable-lyrics": appleLocalTTML("subtitle", []string{"L1", "L2"})}},
-		// ② 繁简替换(replacement) 到 必须忽略:那不是译文,仓库另有 toSimplified 处理繁简
+		// ② 繁简替换(replacement) → 必须忽略:那不是译文,仓库另有 toSimplified 处理繁简
 		{ID: "302", Name: "繁简替换", Rels: map[string]string{
 			"syllable-lyrics": appleLocalTTML("replacement", []string{"L1", "L2"})}},
-		// ③ key 对不上(Apple 自己的数据就有这种) 到 宁可不给也不按顺序硬凑
+		// ③ key 对不上(Apple 自己的数据就有这种) → 宁可不给也不按顺序硬凑
 		{ID: "303", Name: "key错位", Rels: map[string]string{
 			"syllable-lyrics": appleLocalTTML("subtitle", []string{"L83274", "L83275"})}},
 	})
@@ -200,7 +200,7 @@ func TestApplemusicLocalMatchesByNameWhenNoCatalogID(t *testing.T) {
 	if _, ok := applemusicLocalLyric("", "某歌手", "按名字找得到", "", 400); ok {
 		t.Error("时长差 >12%% 不该命中")
 	}
-	// 播放器没报时长时 sourceDurationFits 不下结论 到 照常命中。
+	// 播放器没报时长时 sourceDurationFits 不下结论 → 照常命中。
 	if _, ok := applemusicLocalLyric("", "某歌手", "按名字找得到", "", 0); !ok {
 		t.Error("时长未知时应当命中")
 	}

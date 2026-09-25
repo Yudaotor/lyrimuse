@@ -61,7 +61,7 @@ func TestKRCLanguageTracksAlignByLineIndex(t *testing.T) {
 	}
 }
 
-// 行数与 KRC 计时行数不等 到 整轨放弃(对不齐宁可整体不要)。
+// 行数与 KRC 计时行数不等 → 整轨放弃(对不齐宁可整体不要)。
 func TestKRCLanguageTracksRejectLineCountMismatch(t *testing.T) {
 	b64 := krcLanguageB64(t, []map[string]any{
 		{"type": 1, "lyricContent": [][]string{{"只有"}, {"三行"}, {"译文"}}},

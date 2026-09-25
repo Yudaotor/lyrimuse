@@ -20,7 +20,7 @@ func runLyricsManagerTests() {
         // 这里取 48 只是为了让下面几条上下限的算术好对,纯函数对 chrome 取值没有假设。)
         let total: CGFloat = 630, chrome: CGFloat = 48
 
-        // 第 0 条:边界右移 = 歌名变宽 到 歌手变窄(减号方向不能搞反)
+        // 第 0 条:边界右移 = 歌名变宽 → 歌手变窄(减号方向不能搞反)
         expectEqual(
             W.dragged(from: d, divider: 0, dx: 20, totalWidth: total, chrome: chrome).artist,
             d.artist - 20, "列宽: 拖第0条向右 → 歌手变窄(歌名吸收)"
@@ -63,7 +63,7 @@ func runLyricsManagerTests() {
         let d = W.defaults
         let total: CGFloat = 630, chrome: CGFloat = 48
 
-        // 第 1 条(歌手|专辑):此消彼长,两列之和不变 到 歌名宽度完全不受影响
+        // 第 1 条(歌手|专辑):此消彼长,两列之和不变 → 歌名宽度完全不受影响
         do {
             let r = W.dragged(from: d, divider: 1, dx: 25, totalWidth: total, chrome: chrome)
             expectEqual(r.artist, d.artist + 25, "列宽: 拖第1条向右 → 歌手变宽")
@@ -100,7 +100,7 @@ func runLyricsManagerTests() {
             expectEqual(r.artist >= W.minColumn && r.album >= W.minColumn && r.source >= W.minSourceColumn,
                         true, "列宽: 收敛后每列仍不低于各自下限")
         }
-        // 极窄到连三列下限都塞不下 到 全部回落下限(宁可挤窄歌名,也不让某列消失)
+        // 极窄到连三列下限都塞不下 → 全部回落下限(宁可挤窄歌名,也不让某列消失)
         do {
             let r = W.fitted(W.defaults, totalWidth: 240, chrome: chrome)
             expectEqual(r, LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn),
@@ -127,7 +127,7 @@ func runLyricsManagerTests() {
         // 修好之后:宽度取自行内容边界(725 - 11.5 ≈ 713),chrome 只剩三个 8pt 列间距
         expectEqual(W.fitted(stored, totalWidth: 713, chrome: 8 * 3), stored,
                     "列宽: 按行内容宽度算时,存下来的列宽原样渲染")
-        // 出问题时:宽度停在首帧的 218pt,budget 掉到三列下限之和以下 到 恒定输出下限,
+        // 出问题时:宽度停在首帧的 218pt,budget 掉到三列下限之和以下 → 恒定输出下限,
         // 存进去的值完全影响不了画面,也就是用户看到的"拖不动"
         expectEqual(W.fitted(stored, totalWidth: 218, chrome: 36), floors,
                     "列宽: 宽度测量失效时会被钳成常量(记录当时的错误现象)")
@@ -387,7 +387,7 @@ func runLyricsManagerTests() {
                              sameWordTiming: false),
                     .adopt, "重新匹配: 正常情况采纳冠军")
 
-        // 当前源没应答 到 一步都不许动,而且要排在所有其它判定**之前**(哪怕冠军看起来很好)。
+        // 当前源没应答 → 一步都不许动,而且要排在所有其它判定**之前**(哪怕冠军看起来很好)。
         expectEqual(D.decide(decidable: false, winnerSource: "kugou", currentHasWordTiming: false,
                              winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
                              sameWordTiming: false),
@@ -399,33 +399,33 @@ func runLyricsManagerTests() {
                              sameWordTiming: false),
                     .keptNoCandidate, "重新匹配: 没有冠军就什么都不动")
 
-        // 逐字保护:现有的有逐字、冠军没有 到 保留。
+        // 逐字保护:现有的有逐字、冠军没有 → 保留。
         expectEqual(D.decide(decidable: true, winnerSource: "lrclib", currentHasWordTiming: true,
                              winnerHasWordTiming: false, sameSource: false, sameLyrics: false,
                              sameWordTiming: false),
                     .keptWouldLoseWordTiming, "重新匹配: 不许把逐字换成整行")
-        // 反向:现有的没逐字、冠军有 到 当然要换(这正是升级)。
+        // 反向:现有的没逐字、冠军有 → 当然要换(这正是升级)。
         expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
                              winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
                              sameWordTiming: false),
                     .adopt, "重新匹配: 从整行升级到逐字要换")
-        // 两边都有逐字 到 正常比内容。
+        // 两边都有逐字 → 正常比内容。
         expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: true,
                              winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
                              sameWordTiming: false),
                     .adopt, "重新匹配: 两边都有逐字时照常换")
 
-        // 冠军跟现状逐项一致 到 一个字都不写(免得白白落盘 + 踢一次 collector 重启)。
+        // 冠军跟现状逐项一致 → 一个字都不写(免得白白落盘 + 踢一次 collector 重启)。
         expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: true,
                              winnerHasWordTiming: true, sameSource: true, sameLyrics: true,
                              sameWordTiming: true),
                     .unchanged, "重新匹配: 完全没变化时不写盘")
-        // 同源但正文变了(那个源自己更新了歌词)到 要换。
+        // 同源但正文变了(那个源自己更新了歌词)→ 要换。
         expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
                              winnerHasWordTiming: false, sameSource: true, sameLyrics: false,
                              sameWordTiming: true),
                     .adopt, "重新匹配: 同源但正文更新了也要换")
-        // 同源同正文、但逐字变了(上一轮没拿到逐字、这轮拿到了)到 要换。
+        // 同源同正文、但逐字变了(上一轮没拿到逐字、这轮拿到了)→ 要换。
         expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
                              winnerHasWordTiming: true, sameSource: true, sameLyrics: true,
                              sameWordTiming: false),
@@ -473,7 +473,7 @@ func runLyricsManagerTests() {
         expectEqual(ManualPickLock.fingerprint(lyrics: ""), "", "手动选定锁: 空正文给空串")
         expectEqual(sha.count, 12, "手动选定锁: 指纹取 12 位十六进制")
 
-        // 正常路径:用户选过、内容还是那份、当前没锁 到 开关打开时要锁上。
+        // 正常路径:用户选过、内容还是那份、当前没锁 → 开关打开时要锁上。
         expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
                                               isLocked: false, locking: true), true,
                     "手动选定锁: 选过+内容没变+没锁 → 打开开关时锁上")
@@ -707,7 +707,7 @@ func runLyricsManagerTests() {
                 hasWordTiming: word, hasLyrics: line,
                 hasPlainTextFallback: plain, isInstrumental: inst)
         }
-        // (逐字, 逐行, 纯文本, 纯音乐) 到 该落进哪个桶
+        // (逐字, 逐行, 纯文本, 纯音乐) → 该落进哪个桶
         let table: [(Bool, Bool, Bool, Bool, LyricsKind)] = [
             (true,  true,  true,  true,  .wordByWord),
             (true,  true,  true,  false, .wordByWord),
@@ -788,7 +788,7 @@ func runLyricsManagerTests() {
                     "当前使用: 候选没有词时退回只比来源")
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: nil, currentFingerprint: "x"), false,
                     "当前使用: 没有当前来源就没有当前")
-        // 指纹本身是 ManualPickLock 的既有口径:时间戳全变、CRLF、词不变 到 相同。
+        // 指纹本身是 ManualPickLock 的既有口径:时间戳全变、CRLF、词不变 → 相同。
         let a = ManualPickLock.fingerprint(lyrics: "[00:01.00]你好\n[00:05.00]世界")
         let b = ManualPickLock.fingerprint(lyrics: "[00:02.50]你好\r\n[00:06.10]世界\n")
         expectEqual(a == b && !a.isEmpty, true, "同词标注: 复用只取词的指纹,时间戳/CRLF 不影响")
@@ -819,7 +819,7 @@ func runLyricsManagerTests() {
         expectEqual(d.groups[1].queries.first?.artist, "Hikaru Utada", "查询摘要: 组内按出现顺序,不排序")
         expectEqual(d.groups[1].sources, SRC, "查询摘要: 源名单每组只留一份")
 
-        // 曲名变过(标题反查轮)到 不提取,曲名并回每一条,不丢信息。
+        // 曲名变过(标题反查轮)→ 不提取,曲名并回每一条,不丢信息。
         let mixed = [
             LyricQueryRound(artist: "方大同", title: "Love Love Love", reason: "", sources: []),
             LyricQueryRound(artist: "方大同", title: "爱爱爱", reason: "title-from-artist-search", sources: []),
@@ -986,9 +986,9 @@ func runLyricsManagerTests() {
         expectEqual(V.champion(among: tie, winner: "netease")?.source, "kugou",
                     "取胜者: winner 不在并列最高分里就退回最高分那条(qq/kugou 同分,按源名定序)")
 
-        // 差在多项上 到 .multiple,**什么都不说**。此前实测否掉过一版「一句话解释凭什么赢」:
+        // 差在多项上 → .multiple,**什么都不说**。此前实测否掉过一版「一句话解释凭什么赢」:
         // 只有 13.2% 的对局存在单一强势维度能真的解释分差,其余硬写一句就是编。
-        // 这一组同时验另一条分水岭:网易云没有 consensus 到 不是「全员一致」,退到 tooClose。
+        // 这一组同时验另一条分水岭:网易云没有 consensus → 不是「全员一致」,退到 tooClose。
         let tooCloseMulti = [
             cand("qq", 700, [("duration", 300), ("lines", 150), ("consensus", 250)]),
             cand("kugou", 696, [("duration", 297), ("lines", 149), ("consensus", 250)]),
@@ -1022,7 +1022,7 @@ func runLyricsManagerTests() {
         expectEqual(V.isNearTie(gap: 5, championScore: 200), false, "nearTie: 低分局 5/200 =2.5%,不算")
         expectEqual(V.isNearTie(gap: 2, championScore: 0), false, "nearTie: 冠军分非正时只认绝对值")
 
-        // 命不中任何一档 到 nil,面板整块不渲染(常驻一块「暂无判词」的灰框只会占地方)。
+        // 命不中任何一档 → nil,面板整块不渲染(常驻一块「暂无判词」的灰框只会占地方)。
         let noVerdict = [cand("qq", 900, [("duration", 300), ("wordTiming", 400), ("lines", 200)]),
                          cand("kugou", 500, [("duration", 300), ("lines", 200)])]
         expectEqual(V.build(candidates: noVerdict, winner: "qq"), nil,
@@ -1259,7 +1259,7 @@ func runLyricsManagerTests() {
             .deletingLastPathComponent()   // lyrimuse
             .appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsDecisionSheet.swift")
         if let text = try? String(contentsOfFile: sheet.path, encoding: .utf8) {
-            // 判据本身住在 Core(LyricsScoredCandidate.isInstrumentalMarker 到 LyricsDecisionRow),
+            // 判据本身住在 Core(LyricsScoredCandidate.isInstrumentalMarker → LyricsDecisionRow),
             // 面板只负责调用 —— 渲染和 dumpLines 两处都要调,少一处就是一边对一边错。
             let marker = text.components(separatedBy: "isInstrumentalMarker").count - 1
             expectEqual(marker >= 2, true,

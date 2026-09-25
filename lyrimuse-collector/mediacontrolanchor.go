@@ -158,7 +158,7 @@ func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, n
 // ---- Spotify 陈旧锚点重发—— 跟 Swift 侧 MediaControlClient.isStaleAnchorRepublish
 // 同一套判据,两侧必须同时改。完整实测记录见那边的注释与 docs/features/02。要点:
 // Spotify 会在播放中把 now-playing 信息重发一遍,elapsedTime **逐 ms 不变**、时间戳却换成
-// 当下(实测 10.477@:09 到 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
+// 当下(实测 10.477@:09 → 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
 // 几十秒。签名 = 同一首歌 + elapsed 相等 + 时间戳变了 + 按旧锚点外推还没越过曲长
 // (越过曲长的旧锚点已死)。elapsed==0 的重发跟「上一曲」重头播放签名相同,**只对
 // playerRepublishesZeroAnchor 里的播放器**判,且要离原锚点 zeroAnchorRepublishWindowSecs 之内
@@ -211,7 +211,7 @@ func republishGapSeconds(last *playingAnchor, ts string, now time.Time) float64 
 	return now.Sub(last.at).Seconds()
 }
 
-// resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 到 原锚点的
+// resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 → 原锚点的
 // 时间戳(第二个返回值 true,调用方据此强制自己外推);否则记下这次并原样返回。
 func resolvePlayingAnchorTS(track string, elapsed float64, ts string, duration float64, bundleID string, now time.Time) (string, bool) {
 	playingAnchorMu.Lock()

@@ -22,7 +22,7 @@ import SwiftUI
 // 但只要给它加一层哪怕完全透明的 Color.clear.contentShape(Rectangle()),点击就会被这个
 // 窗口吞掉 —— 那意味着用户点不动被盖住的那一段菜单栏。这是这次重构唯一的真风险点。
 struct NotchWindowRoot: View {
-    /// 「暂停/无播放时隐藏」的退场动画:整卡以刘海中心为锚 scale到0 并透明,
+    /// 「暂停/无播放时隐藏」的退场动画:整卡以刘海中心为锚 scale→0 并透明,
     /// 缩进刘海里。 别做成"先播收起弹簧再走"——不要经过暂停收起态,直接从
     /// 正常大小缩到无;时长按"半秒太久、砍一半"的口径取 0.2s,ease-in(加速冲进刘海)。
     static let vanishDuration: TimeInterval = 0.2
@@ -74,7 +74,7 @@ struct NotchWindowRoot: View {
 
     /// 上一次 body 见到的 `controller.isExpanded`,只给 cardAnimation 区分「hover 移开」用。
     /// 依赖的时序:isExpanded 翻 false 到 objectWillChange 到 本视图 body 重估(此时这份
-    /// 还是 true,cardAnimation 据此选临界阻尼那条)到 body 之后 onChange 才把它写成 false
+    /// 还是 true,cardAnimation 据此选临界阻尼那条)→ body 之后 onChange 才把它写成 false
     /// (那次写入只改这个 @State,cardHeight/cardWidth 没变,不会再起一条动画)。
     @State private var wasExpanded = false
 

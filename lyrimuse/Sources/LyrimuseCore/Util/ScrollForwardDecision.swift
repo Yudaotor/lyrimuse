@@ -8,8 +8,8 @@ import Foundation
 /// `AppDelegate.forwardScrollIfStranded` 是装在**全局滚轮监视器**里的:每个进到本 App 的
 /// 滚轮事件都要先判一次"这一下本来有没有人会处理",而那个判断里有一句
 /// `root?.hitTest(loc)` —— 抓到的主线程栈显示它下面是一整条
-/// `-[NSThemeFrame _performHitTestForContext:]` 到 `NSHostingView.hitTest` 到
-/// `PlatformHitTestingManager.hitTest` 到 `MultiViewResponder.containsGlobalPoints` 的**深度
+/// `-[NSThemeFrame _performHitTestForContext:]` → `NSHostingView.hitTest` →
+/// `PlatformHitTestingManager.hitTest` → `MultiViewResponder.containsGlobalPoints` 的**深度
 /// 递归**,等于把整个窗口的 SwiftUI 视图树走一遍。
 ///
 /// 触控板惯性滚动每秒发几十到上百个事件,于是每秒就有几十到上百次全窗口递归命中测试压在

@@ -290,7 +290,7 @@ func ytmusicPostAt(ctx context.Context, base, endpoint string, raw []byte, visit
 	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 }
 
-// ---- ① search:歌名+歌手 到 videoId ----
+// ---- ① search:歌名+歌手 → videoId ----
 
 // ytmusicSearchItem 只挑了 search 响应里这一路真正用得上的字段(flexColumns 的两段
 // 文字 = 歌名 / "歌手 • 专辑 • 时长"、封面缩略图、以及能确认"这是不是真录音室曲目"的
@@ -445,7 +445,7 @@ func ytmusicPickSearchItem(items []ytmusicParsedSearchItem, artist, title, album
 			}
 			continue
 		}
-		// 已经选中的是真录音室曲目、这条不是 到 不换(ATV 优先级最高)。
+		// 已经选中的是真录音室曲目、这条不是 → 不换(ATV 优先级最高)。
 		if bestATV && !it.isATV {
 			continue
 		}
@@ -541,7 +541,7 @@ func ytmusicWalkJSON(node any, visit func(map[string]any)) {
 	}
 }
 
-// ---- ② next:videoId 到 歌词的 browseId ----
+// ---- ② next:videoId → 歌词的 browseId ----
 
 // ytmusicLyricsBrowseID 从 "next"(播放这首歌时 YouTube Music 侧边栏那套 tab 列表,
 // ytmusicapi 叫 get_watch_playlist)的响应里找 pageType 是
@@ -595,7 +595,7 @@ func ytmusicFetchLyricsBrowseID(ctx context.Context, videoID, visitorID string) 
 	return ytmusicLyricsBrowseID(raw)
 }
 
-// ---- ③ browse:browseId 到 带时间戳的逐行歌词 ----
+// ---- ③ browse:browseId → 带时间戳的逐行歌词 ----
 
 // ytmusicLyricLine 是一行歌词(毫秒精度),字段来自 timedLyricsData 数组元素的
 // lyricLine/cueRange.{start,end}TimeMilliseconds(拿真实响应核实过,

@@ -165,7 +165,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	//     要填联系邮箱、文档还警告 free text search 是 "unconstrained"。
 	//     (Pano 反而拿 MusicBrainz 名单当 allowlist **保护**合唱串不被切,方向相反。)
 	//  3. **实测有真错**。本机 2514 条缓存审计:194 条被改写,其中
-	//     `USA for Africa`到`Xtc Planet`、`LBI利比`到`Safehse` 明确错误。而写进 Last.fm
+	//     `USA for Africa`→`Xtc Planet`、`LBI利比`→`Safehse` 明确错误。而写进 Last.fm
 	//     公共 artist 页的东西基本收不回来(纠错库已冻结)。
 	//
 	// 归一没有被放弃,只是挪了位置:**显示/统计层**照旧合并(App 侧 PlayCountFold.

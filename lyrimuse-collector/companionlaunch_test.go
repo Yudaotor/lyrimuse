@@ -144,7 +144,7 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 		t.Errorf("空列表应一个都不盯, got %v", got)
 	}
 
-	// 自动识别 + 勾了两个:候选是全量五个,勾的两个都在 到 盯两个。
+	// 自动识别 + 勾了两个:候选是全量五个,勾的两个都在 → 盯两个。
 	featuresRef().Players = map[string]bool{playerAuto: true}
 	featuresRef().LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true, playerAppleMusic: true}
 	if got := companionLaunchProcessNames(); len(got) != 2 {

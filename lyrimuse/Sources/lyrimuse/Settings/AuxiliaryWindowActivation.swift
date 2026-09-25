@@ -140,7 +140,7 @@ enum AuxiliaryWindowActivation {
         let open = openAuxiliaryWindows()
         guard !open.isEmpty else { return result }
 
-        // orderedWindows 是前到后;最小化的窗口不一定在里面,所以可见那扇找不到时退回枚举顺序。
+        // orderedWindows 是前→后;最小化的窗口不一定在里面,所以可见那扇找不到时退回枚举顺序。
         let frontVisible = NSApp.orderedWindows.first { w in open.contains(w) && w.isVisible }
             ?? open.first { $0.isVisible }
         let minimized = open.filter(\.isMiniaturized)

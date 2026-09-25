@@ -6,9 +6,9 @@ import SwiftUI
 /// `Task { await features.save() }` 丢弃返回值,所以 FeatureSettingsStore.lastError 一直没人读——开关翻了、
 /// 文件也写了,collector 却没重启,界面上看不出来(14 章决策 8 说的正是这类信息)。这里用一条浮在 detail 列底部的
 /// 状态条一处覆盖全部调用点,不逐卡挂、不改调用点。三种状态按优先级:
-///   1. 任一 Store 的 lastError 非空 到 橙色:原因 + 「重试」(重试 = 再走一次 save(),幂等)+ 关闭;
-///   2. 重启排队 / 进行中 到 一行小字「正在应用到后台服务…」(0.5s 去抖 + 最多 3s 确认,撞上 launchd 节流可到 10s);
-///   3. 上次保存因后台服务被主动停用而没重启 到 中性提示,服务一启用就消失。
+///   1. 任一 Store 的 lastError 非空 → 橙色:原因 + 「重试」(重试 = 再走一次 save(),幂等)+ 关闭;
+///   2. 重启排队 / 进行中 → 一行小字「正在应用到后台服务…」(0.5s 去抖 + 最多 3s 确认,撞上 launchd 节流可到 10s);
+///   3. 上次保存因后台服务被主动停用而没重启 → 中性提示,服务一启用就消失。
 /// 用 overlay 而不是 safeAreaInset:这条会随每次拨开关出现又消失,inset 会让整页内容上下跳;顶部那条损坏横幅是
 /// 持久态才用 inset。
 struct CollectorApplyStatusBar: View {

@@ -11,10 +11,10 @@ import SwiftUI
 // appearance 下解析成白、浅色下解析成黑,取值时"当前是哪个 appearance"决定一切。
 //
 // 于是同一个「跟随系统」在三个宿主里给出了三个答案(对拍报的):
-//   * **真实菜单栏**:状态栏按钮的 appearance 是菜单栏那一档(用户机器上是深的)到 **白字**,对;
-//   * **设置页的色块**:`Color(nsColor: .labelColor)` 在**设置窗口**(浅色)里求值 到 **黑块**;
+//   * **真实菜单栏**:状态栏按钮的 appearance 是菜单栏那一档(用户机器上是深的)→ **白字**,对;
+//   * **设置页的色块**:`Color(nsColor: .labelColor)` 在**设置窗口**(浅色)里求值 → **黑块**;
 //   * **设置页的预览**:那条预览用的是真的 `MenuBarScrollingLabel`,但它嵌在设置窗口里,
-//     `effectiveAppearance` 同样是浅色 到 画出**黑字**。
+//     `effectiveAppearance` 同样是浅色 → 画出**黑字**。
 // 三处说的是同一件事、画出来三个样,而用户要照着色块和预览去判断菜单栏上会看到什么。
 //
 // 修法是把"按哪个 appearance 解析"从各自的宿主里拿出来,统一钉到**真实状态栏那一项**上。
@@ -56,7 +56,7 @@ final class MenuBarAppearanceStore: ObservableObject {
     private weak var host: NSView?
     private var pendingSettle: DispatchWorkItem?
 
-    /// 报信之后等多久再读。得盖过"新建按钮 到 状态栏排版 到 appearance 连翻七次落定"这一整段
+    /// 报信之后等多久再读。得盖过"新建按钮 → 状态栏排版 → appearance 连翻七次落定"这一整段
     /// (这台 27 机器上约 70ms;26.5.1 那台按 `rebuildStatusItem` 头注的记录,项落位要 0.3~1s,
     /// 排版应当在落位之前),又不能让真正的明暗变化显得迟钝。0.4s:系统切深浅色的过渡动画本身就
     /// 比这长,用户看不出这点延迟。

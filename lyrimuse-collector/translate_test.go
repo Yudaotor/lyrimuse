@@ -210,7 +210,7 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 三行全部回退成原文 到 每行译文都等于原文 到 全被跳过 到 没有译文,而不是错位的译文
+	// 三行全部回退成原文 → 每行译文都等于原文 → 全被跳过 → 没有译文,而不是错位的译文
 	if res.lrc != "" {
 		t.Errorf("行数对不上时应该没有译文,实际得到:\n%s", res.lrc)
 	}

@@ -113,7 +113,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 //  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
 //     不单独占一个歌手名额;
 //  2. resolveGenericArtistCanonicalName(musicbrainz.go):已知的英文/罗马化艺名换成
-//     本库常用中文名(比如"Dean Ting"到"丁世光")——从只查
+//     本库常用中文名(比如"Dean Ting"→"丁世光")——从只查
 //     knownArtistAlias(match.go 的 artistAliasTable)改成先试 MusicBrainz/QQ 音乐
 //     两条通用机制,只有两条都查不到才落到手工表那两条真实残留案例,见其头注;
 //  3. toSimplified:繁体折成简体(比如"周杰倫"和"周杰伦"折成同一个键);
@@ -366,7 +366,7 @@ func mergeAliasedArtistsNamed(entries []lastfmChartEntry, resolve artistIdentity
 		b := buckets[root]
 		name := b.name
 		// 显示名优先级:桶里真实出现过的中文成员名 > 身份解析的中文名(桶里全是罗马
-		// 写法时,如 "Ronghao Li"到"李荣浩") > 主轨挑出的名字。
+		// 写法时,如 "Ronghao Li"→"李荣浩") > 主轨挑出的名字。
 		if b.hanName != "" {
 			name = b.hanName
 		} else if b.zh != "" {

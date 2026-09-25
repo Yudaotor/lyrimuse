@@ -13,8 +13,8 @@ import (
 // 网易云/QQ/酷狗的搜索词是「妳听得到」,而它们曲库里这首叫「你听得到」,三家一条都匹配
 // 不上。实测 A/B(同一时刻、同一 duration,只改标题写法):
 //
-//	妳聽得到 / 周杰倫 / 葉惠美  到 只有 LRCLIB 给出候选
-//	你听得到 / 周杰伦 / 叶惠美  到 酷狗 + 网易云 + QQ + LRCLIB
+//	妳聽得到 / 周杰倫 / 葉惠美  → 只有 LRCLIB 给出候选
+//	你听得到 / 周杰伦 / 叶惠美  → 酷狗 + 网易云 + QQ + LRCLIB
 //	妳听得到 / 周杰伦 / 叶惠美  到 只有 LRCLIB   —— 单字隔离:艺人专辑全简体也没用
 //
 // 表是**推出来的,不是手工维护的**(「做成通用逻辑,后续遇到这种字的问题都要
@@ -32,7 +32,7 @@ import (
 //go:embed dictionary/HanVariants.txt
 var hanVariantsFS embed.FS
 
-// hanVariantMap:变体字 到 大陆规范字。空表是可接受的降级(等于这一层不存在),不 panic。
+// hanVariantMap:变体字 → 大陆规范字。空表是可接受的降级(等于这一层不存在),不 panic。
 var hanVariantMap = loadHanVariants()
 
 func loadHanVariants() map[rune]rune {

@@ -44,7 +44,7 @@ import (
 //
 // 这个源又哑了一次,但**跟上面那种反爬是两回事**,别按同一个思路去查。
 // 这次是系统 DNS 把 apic-*.musixmatch.com 解析到了不属于 Musixmatch 的地址
-// (apic-appmobile 到 31.13.91.6,Facebook 的段;DoH 查到的真实地址是 44.212.146.46 /
+// (apic-appmobile → 31.13.91.6,Facebook 的段;DoH 查到的真实地址是 44.212.146.46 /
 // 52.5.55.223),TLS 握手直接失败("no alternative certificate subject name matches"),
 // 一个字节都拿不到。反爬会正经返回 401 + hint=captcha 的 JSON;这次是连接根本建不起来。
 // 用 curl --resolve 强连真实 IP 立刻 200 + 拿到 token —— 服务器一直好好的。
@@ -93,7 +93,7 @@ var (
 	// 量出来的根因:相册预取/批量导入触发很多首歌同时解析时,原来每个 goroutine 独立
 	// 判定"没有可用 token"就各自发一次 token.get,而 apic 那台机器实测把除第一个之外的
 	// 并发请求全按反爬拒掉(401 hint=captcha);被拒的按官方样例退避 10 秒重试一次,但
-	// 20 秒的搜索预算根本扛不住 N 个 goroutine 各自跑一遍"发请求到等 10 秒到重试"。持有
+	// 20 秒的搜索预算根本扛不住 N 个 goroutine 各自跑一遍"发请求→等 10 秒→重试"。持有
 	// 这把锁横跨"读磁盘 + 必要时发网络请求"整段,其余 goroutine 直接排队,而不是各自
 	// 再抢一次网络——16 个并发请求因此变成至多 1~2 次真实的 token.get。
 	musixmatchTokenFetchMu sync.Mutex
@@ -422,7 +422,7 @@ func musixmatchHTTPClient() *http.Client {
 }
 
 // musixmatchDo 发起一次带统一身份参数(app_id/usertoken/t)的请求。action=="token.get"
-// 时不附带 usertoken(避免 musixmatchEnsureToken到musixmatchDo到musixmatchEnsureToken
+// 时不附带 usertoken(避免 musixmatchEnsureToken→musixmatchDo→musixmatchEnsureToken
 // 递归),其余 action 都需要先有一个可用 token。
 func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]byte, error) {
 	if action != "token.get" {
@@ -465,7 +465,7 @@ type musixmatchTrackMatch struct {
 	// 和同一份契约——false 时 track.richsync.get 必然 404。
 	//
 	// 16 首横跨欧美/日/韩/华语/纯音乐样本上,has_richsync 对
-	// track.richsync.get 的结果**预测 16/16 全中**(1到200、0到404),其中 4 首是 0(25%)。
+	// track.richsync.get 的结果**预测 16/16 全中**(1→200、0→404),其中 4 首是 0(25%)。
 	// 关键的一首是五月天《倔強》——has_subtitles=1、has_lyrics=1,走的是主路径,
 	// 但 has_richsync=0;没有这道闸就每次都白打一趟往返。
 	hasRichsync bool
@@ -965,7 +965,7 @@ func musixmatchTranslationLRC(ctx context.Context, trackID int64, originalLRC, l
 	return tr
 }
 
-// buildTranslatedLRC 把 crowd.track.translations.get 返回的"原文行到译文"逐条映射,
+// buildTranslatedLRC 把 crowd.track.translations.get 返回的"原文行→译文"逐条映射,
 // 拼成一份跟原文歌词时间轴对齐的独立 LRC——用原文歌词自己的时间戳(Swift 侧
 // LyricsSyncEngine 用 nearestText 按时间戳就近匹配展示译文,不是按行号对应,见
 // enrich.go scoredLyricCandidates 里网易云 tr/roma 的同一套用法)。翻译覆盖不全(有些

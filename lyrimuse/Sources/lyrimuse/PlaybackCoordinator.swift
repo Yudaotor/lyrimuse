@@ -75,7 +75,7 @@ final class PlaybackCoordinator: ObservableObject {
     //
     // 实测的一个约束:当前 media-control 路径是 2 秒轮询,而"恢复播放"要
     // 等下一次轮询才被感知(实测 pause 被感知于 T,grace 于 T+2.0 到期,resume 直到 T+4.0
-    // 才感知到),所以"宽限期内恢复到取消收起"这条路**目前几乎走不到**。真正在起作用的是
+    // 才感知到),所以"宽限期内恢复→取消收起"这条路**目前几乎走不到**。真正在起作用的是
     // 另一半:切歌间隙/seek 这类 isPlayingNow 压根不掉 false 的抖动。等事件驱动
     // (media-control stream / Spotify 分布式通知)把感知延迟降到亚秒,取消路径才会真正生效
     // —— 到那时不必调这里的 2 秒,它本来就是按"用户感知得到的一口气"定的。
@@ -887,7 +887,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 被"同专辑预取"提前解析好的曲目,换歌后 1 秒就抓到了 640px 那张、是清晰的。
             //
             // 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
-            // 高清图时再跑一遍就是"清空到重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
+            // 高清图时再跑一遍就是"清空→重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
             // 表现成封面每隔几秒闪一下。而 collector 写缓存是常态(每解析一首歌都写)。
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
@@ -914,7 +914,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
                 .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
             // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
-            // 跟 hex到Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
+            // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
             // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
             // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。)
             //
@@ -1049,7 +1049,7 @@ final class PlaybackCoordinator: ObservableObject {
     ///   混泥、σ 小见人形,所以仍是"降采样出场、高斯只融边"。
     /// - 逐格**饱和度**归一 + 少数派**色相**收拢(Addison 亮封面五轮对拍,
     ///   详见各段落内注释):S 抬到 p75×1.5(cap 0.95)防白纱/留白灰化;偏主色相(S²
-    ///   加权圆均值)>60° 的格子夹回 ±60°(青 logo 格到橄榄,AM 的场=一个主色系+近亲
+    ///   加权圆均值)>60° 的格子夹回 ±60°(青 logo 格→橄榄,AM 的场=一个主色系+近亲
     ///   点缀);灰阶封面两步都自动 no-op。
     /// - 成场后 CIVibrance 0.4 + **闭环饱和度乘子**(= satTarget ÷ 融合后场的实测均值 S,
     ///   clamp [0.6, 2.2]):σ35 融合互混+光斑 lighten 会磨掉 ~30% 饱和,固定乘子对
@@ -1060,7 +1060,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// - 光斑仍锚**原始**最亮格(归一化前的亮度),羽化外沿 0.7W(旧 0.40 有可见轮廓,
     ///   AM 没有独立光斑,只有柔和的色场渐变)。
     /// - 视图层 3 层 lighten α0.25 摆动照旧(对拍显示 α 在归一化的平场上影响很小)。
-    /// 定量:四区 V5/V50/V95/S50/H50 加权 loss 从旧参数 1.41 到 0.79(工具 scratchpad
+    /// 定量:四区 V5/V50/V95/S50/H50 加权 loss 从旧参数 1.41 → 0.79(工具 scratchpad
     /// bgbake6 + sweep_pair6)。残余主要是 AM 各区内部还有 0.10~0.21 的柔和起伏(其动画
     /// 瞬间的相位),我们单帧偏平 —— 由摆动动画在时间维上补。
     nonisolated private static func bakeWindowBackgroundLayers(cgImage: CGImage, seed: UInt64) -> WindowBackgroundLayers? {
@@ -1100,8 +1100,8 @@ final class PlaybackCoordinator: ObservableObject {
         // 跟随封面的**鲜艳端**而不是面积均值 —— 白纱/留白参与 6×6 平均会把格子灰化
         // (实测 AM 各区 S50 0.63~0.97,我们 0.13~0.65,左上区整个发灰)。与上面的亮度
         // 归一化对称:各格 S 向全场 p75 鲜艳端部分归一(satHomog 0.6),保 H/V
-        // (c' = max−(max−c)×k 只放大与 max 的距离)。灰阶封面 p75 本身≈0 到 自动
-        // 不动,不伤黑白封面;中饱和封面 p75≈均值 到 变化很小,不动摇 08-21 的对拍校准。
+        // (c' = max−(max−c)×k 只放大与 max 的距离)。灰阶封面 p75 本身≈0 → 自动
+        // 不动,不伤黑白封面;中饱和封面 p75≈均值 → 变化很小,不动摇 08-21 的对拍校准。
         var cellSat = [Double](repeating: 0, count: 36)
         for i in 0..<36 {
             let o = i * 4
@@ -1112,7 +1112,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 少数派色相向主色相收拢(五轮实拍):封面小块青色 logo 的格子被下面
         // 的饱和归一放大成刺眼纯绿斑 —— AM 的场是"一个主色系 + 近亲色点缀",同帧对拍
         // 它同区是暖橄榄绿。主色相 = S² 加权圆均值;偏离 >60° 的格子夹回主色相 ±60°
-        // (青到橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
+        // (青→橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
         // S≈0 被跳过,自动 no-op。
         //
         // 实测反例推翻了当时"真双色封面被拉向均值,AM 的场本来就读作
@@ -1123,7 +1123,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 有多大:小块 logo 杂色天然只占总权重几个百分点,但这张封面的暖色区占了到
         // ~27%——早就不是"少数派",是构图里第二个真实色系。加一道"离群到底占多少权重"
         // 的判据:只有离群权重明显是小头(<20%)时才当杂色拉回来;逼近对半分的两大色系
-        // 直接放行,交给下面 σ35 高斯模糊做自然的空间过渡(蓝到绿到棕,而不是硬夹出一片
+        // 直接放行,交给下面 σ35 高斯模糊做自然的空间过渡(蓝→绿→棕,而不是硬夹出一片
         // 假色),这也更贴近圣米歇尔山这类反例里 AM 自己的观感。
         func rgbToHSV(_ r: Double, _ g: Double, _ b: Double) -> (h: Double, s: Double, v: Double) {
             let mx = Swift.max(r, g, b), mn = Swift.min(r, g, b), d = mx - mn
@@ -1245,7 +1245,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 补丁(少数派色相收拢/角度上限/hueCoherenceScale)全都是在给一个**方向错了**的
         // 基础倍率止血。真根因直到这天才找到——"自己去多播几首歌,把 Apple
         // Music 原生「播放中」窗口的背景跟我们的取色结果对比着截图",于是这轮直接控制
-        // 真机 Music.app(菜单「窗口到播放中」能调出跟 AM 一模一样的原生沉浸态)播了 5 首
+        // 真机 Music.app(菜单「窗口→播放中」能调出跟 AM 一模一样的原生沉浸态)播了 5 首
         // 色彩特征完全不同的歌(你瞒我瞒/黑夜/Get on the Boat/Earth Song/The Beautiful
         // Ones),把 AM 真实截图和这份 6×6 算法各自跑出来的饱和度做了正面比对:
         //
@@ -1258,7 +1258,7 @@ final class PlaybackCoordinator: ObservableObject {
         //                                            均值 ≈ 0.56
         //
         // AM 的背景饱和度是源图鲜艳端的**一半左右**,不是 1.5 倍——"×1.5"这个方向从
-        // 一开始就反了,这也是本条注释历史上四次打补丁(发绿到发粉到夹错色相到依然偏
+        // 一开始就反了,这也是本条注释历史上四次打补丁(发绿→发粉→夹错色相→依然偏
         // 鲜艳)始终按下葫芦浮起瓢的原因:补丁全在压一个基数过大 3 倍的放大器,压得住
         // 一张封面就压不住下一张。
         //
@@ -1268,13 +1268,13 @@ final class PlaybackCoordinator: ObservableObject {
         // 0.55 仍然让个别封面(你瞒我瞒、Beautiful Ones)的网格 p75 比 AM 真实值高
         // 出 1.5~2 倍——单点均值天然会被"两个色系互相稀释"拉低,不能代表人眼真正
         // 盯着看的那一小片区域有多鲜艳。改用网格 p75 重新拟合,并统一把下面 satMul
-        // 的上下限也按同一幅度收下来(0.6~2.2 到 0.35~1.6,那两个数同样是照着旧的
+        // 的上下限也按同一幅度收下来(0.6~2.2 → 0.35~1.6,那两个数同样是照着旧的
         // ×1.5 基线定的,基数变了它们也该跟着变,不然只压这一处、卡在 satMul 那道
         // 上下限里的封面照样纹丝不动)。0.35 是 5 组真实封面网格比对后取的折中值——
         // 单一参数拟合不出每张封面的精确比例(源图饱和度与 AM 输出并非严格线性,
         // 越浓烈的封面 AM 相对给得越足),折中值让 5 张里 4 张落在 AM 真实值的
         // 0.8~1.5 倍以内,只有你瞒我瞒因为下面高斯模糊在蓝棕两色交界处生成的过渡色
-        // (structural 问题,不是这个系数能治的)仍偏高一截。灰阶封面 satP75≈0 到 目标
+        // (structural 问题,不是这个系数能治的)仍偏高一截。灰阶封面 satP75≈0 → 目标
         // 仍≈0,这条 no-op 性质不变。
         //
         // 第九轮,固定倍率 0.35 本身又被推翻——用户这轮批量拉了
@@ -1285,14 +1285,14 @@ final class PlaybackCoordinator: ObservableObject {
         // 0.65~0.96(封面本身极浓烈),AM 真机输出 p75 也跟着到 0.76~1.00(AM 几乎
         // **不怎么压**这类封面,AM/源 比值 0.98~1.20,不是"减半"是"原样甚至更浓"),
         // 而固定 0.35 倍无论源图多浓都只给 0.23~0.34,砍掉了七成还多,肉眼看就是"浓烈
-        // 橙红到浑浊灰棕"。全部 23 组按 (源 satP75, AM 真机 p75) 作对数-对数回归得
+        // 橙红→浑浊灰棕"。全部 23 组按 (源 satP75, AM 真机 p75) 作对数-对数回归得
         // 幂函数 AM_p75 ≈ 0.94 × satP75^1.45(R²≈0.77)——固定倍率模型的本质缺陷是
         // "把 AM 的处理看成线性缩放",而真机数据是一条**凸曲线**:源图越浓烈,AM 保留
         // 的比例反而越高,不是越低。换成这条幂函数重新烘焙同一批 23 张封面,7 组"差别
         // 大"里那 5 组纯饱和度问题的(网格 p75 target vs 实测)误差从均值 0.39 收到
-        // 0.13(P. Control 0.41到0.03,小镇姑娘 0.58到0.05,详细数字见
+        // 0.13(P. Control 0.41→0.03,小镇姑娘 0.58→0.05,详细数字见
         // docs/features/07-lyrics-window.md 第九轮记录);其余 15 组"还好/可以接受"
-        // 的均值误差基本没变(0.133到0.142,在噪声范围内)。剩下 2 组"差别大"(黑夜/
+        // 的均值误差基本没变(0.133→0.142,在噪声范围内)。剩下 2 组"差别大"(黑夜/
         // Get on the Boat)复测 hueCoherenceScale 都是 1.0(算法判定色相完全一致、
         // 没有触发任何色相纠偏),说明它们的偏差另有病灶(大概率出在色相本身而不是
         // 饱和度量级),这条幂函数**修不了它们**,留给下一轮专门查色相。0.94/1.45
@@ -1306,7 +1306,7 @@ final class PlaybackCoordinator: ObservableObject {
         // /金棕色相(15°~55°)额外加成",遂在 36 组全量数据上做了 `AM_p75 = a×satP75^b
         // ×(1+c×warmScore)` 的二变量回归——**加了色相项后 R²只从 0.754 升到 0.762,
         // 提升在噪声量级,而且逐条看是拆东墙补西墙**:改善了 20 Y.O./Say Yes/Twisted
-        // Elegance 这几张,却让原本拟合得很好的 P.Control(误差 0.018到0.098)、黑夜、
+        // Elegance 这几张,却让原本拟合得很好的 P.Control(误差 0.018→0.098)、黑夜、
         // Get on the Boat、NEXZLoco 全部变差——色相不是这堆"暖色发灰"案例背后的真正
         // 变量(反例:玩乐是绿色封面残差 2.16、Controversy 是品红封面残差 1.68,比任何
         // 暖色案例都离谱)。结论:**不采纳色相项**,只用全量 36 组重新拟合单变量幂函数
@@ -1359,7 +1359,7 @@ final class PlaybackCoordinator: ObservableObject {
         // satTarget 换成幂函数后数值整体变大,但**这里的上下限
         // 刻意没跟着抬**——23 组真机回归数据里只有 1 组(I Wanna Be Your Lover,蓝底
         // +人像肤色两大色系反差大)顶到过 1.6 那个上限,而且顶到上限也治不好它:这张
-        // 封面 σ35 模糊后 fieldS 崩得极狠(0.56到0.15),就算把上限抬到 2.2/3.5,网格
+        // 封面 σ35 模糊后 fieldS 崩得极狠(0.56→0.15),就算把上限抬到 2.2/3.5,网格
         // p75 依然从 0.37 的目标冲到 0.8~1.0(实测过,见 07-lyrics-window.md 第九轮)
         // ——根子是"闭环乘子按面积均值 fieldS 算、但目标 satTarget 是按网格 p75 校准"
         // 这个本来就存在的口径错位,抬上限只会把这类高反差封面推向过饱和,不抬上限则
@@ -1390,7 +1390,7 @@ final class PlaybackCoordinator: ObservableObject {
             .applyingFilter("CIExposureAdjust", parameters: ["inputEV": -0.15]))
         guard let base = render(baseImage) else { return nil }
 
-        // 背景均色 到 HSB 的 h/s(见 WindowBackgroundLayers.tintHue 注释)。均色取烘焙
+        // 背景均色 → HSB 的 h/s(见 WindowBackgroundLayers.tintHue 注释)。均色取烘焙
         // 后的 base(就是屏幕上那层),亮度再乘 0.85 对齐视图层的 0.15 黑遮罩 —— 不过
         // 只取 h/s,乘不乘只影响没人用的 v,留个心眼而已。
         var tintHue: Double = 0
@@ -1499,7 +1499,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 给当前曲目找一张比系统那份更大的封面。见 highResArtworkImage 的注释。
     ///
     /// onlyIfMissing:给"缓存内容变了"那条补查路用 —— 已经拿到高清图就直接不动,别走下面
-    /// 那条 clearHighRes()到重下 的路(会让封面闪一下,理由见调用点)。换歌那条路传 false:
+    /// 那条 clearHighRes()→重下 的路(会让封面闪一下,理由见调用点)。换歌那条路传 false:
     /// 上一首的高清图**必须**立刻撤掉。
     private func refreshHighResCover(onlyIfMissing: Bool = false) {
         if onlyIfMissing, highResArtworkImage != nil { return }
@@ -1594,7 +1594,7 @@ final class PlaybackCoordinator: ObservableObject {
     ///   * 下载回来后再校验一次 `title` 没变。
     ///
     /// 跟那条**不同**的两点:
-    ///   * 用 `albumMatchedMotionCover`(精确 key 到 仍然认专辑的 looseMatch),同样不退到"忽略专辑"
+    ///   * 用 `albumMatchedMotionCover`(精确 key → 仍然认专辑的 looseMatch),同样不退到"忽略专辑"
     ///     那一级 —— 在这里退一步拿到的是**另一张专辑的动画**,比一张静态错图扎眼得多；
     ///   * 盘上已经有那份文件时**同步**换上、不走 Task:同一张专辑的下一首歌不该再闪一次静态图。
     private func refreshMotionCover(onlyIfMissing: Bool = false) {
@@ -1663,16 +1663,16 @@ final class PlaybackCoordinator: ObservableObject {
     /// 又不小,永远不进那条路 —— 可歌词窗口那张卡要画到 920px。这里拿的是 AppleScript `artwork url`
     /// (SpotifyPositionProbe 开播 2.5s 后那次脚本顺带带回),身份由播放时刻保证、不靠匹配,所以不需要
     /// CoverArtReplacementGate 那套判据,只要"拿回来的比系统那份宽"就换。下载顺序 原图(82c1,实测
-    /// 800 / 1425 / 2000)到 640,见 SpotifyArtworkURL.downloadCandidates。
+    /// 800 / 1425 / 2000)→ 640,见 SpotifyArtworkURL.downloadCandidates。
     ///
     /// 时序:换歌时 LocalPlaybackSource 把 spotifyArtworkURL 置 nil,这里只清自己的记录、不动图(旧图由
-    /// refreshHighResCover 的 clearHighRes 撤);探针带回地址 到 下载 到 换上,期间显示系统那份 600。
+    /// refreshHighResCover 的 clearHighRes 撤);探针带回地址 → 下载 → 换上,期间显示系统那份 600。
     ///
     /// 系统那份没有时(换歌那几秒系统还挂着上一首、被 fetchArtworkForCurrentTrack 丢掉),这张就是唯一的封面:
     /// 先下 640 档立刻挂上,再升级原图档;系统那份在时仍先下原图。下载走 DirectFirstImageLoad(先直连、
     /// 连不上再走系统代理):经系统代理时这两档实测要几十秒到超时,直连一两秒。每一档都等到下载结束,
     /// 下完还是这首才换 —— 别加「等 N 秒就放弃」:放弃之后图照样下完,却没人再把它挂上。
-    /// 同一地址已经换上就不再动(spotifyCoverAppliedURL),避免 artworkData 重发时清空到重设闪一下;
+    /// 同一地址已经换上就不再动(spotifyCoverAppliedURL),避免 artworkData 重发时清空→重设闪一下;
     /// 反过来被清空了(highResArtworkImage == nil)就按同一地址从内存缓存放回。
     private func refreshSpotifyOriginalCover(_ url: URL?) {
         spotifyCoverTask?.cancel()
@@ -1782,8 +1782,8 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 播放/暂停 —— 各 UI 面(歌词窗/灵动岛/悬浮层热键/菜单栏面板/全局快捷键)都走这里,
     /// 不直接调 MusicPlaybackController.playPause():发命令的同时**乐观翻转**观感层
-    /// isPlayingSmoothed,封面缩放/播放图标点击即动。真实链路(命令到播放器切状态到分布式
-    /// 通知到250ms 去抖到poll 子进程到apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
+    /// isPlayingSmoothed,封面缩放/播放图标点击即动。真实链路(命令→播放器切状态→分布式
+    /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
     /// 反馈明显迟钝(现象是"扩大延迟太久")。
     ///
     /// 只翻观感层、不碰 isPlayingNow 真值:进度时钟/歌词填色仍由 poll 链路驱动,状态机

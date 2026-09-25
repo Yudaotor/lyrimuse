@@ -122,7 +122,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 	}
 }
 
-// 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** 到 整条丢掉。
+// 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** → 整条丢掉。
 // 判据跟 isAdBreak 完全一致,区别只在作用域。四份真实样本见 trustedPlaybackNotASong 的注释。
 func TestTrustedPlaybackNotASong(t *testing.T) {
 	saved := features()

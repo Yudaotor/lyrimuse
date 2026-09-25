@@ -34,12 +34,12 @@ struct LyricsSearchSheet: View {
     // 而当初胜出的 Musixmatch 拿的是 962 —— 用户看着"分最高的没被选",其实看的是另一套数。
     let durationSecs: Double
     /// 采纳后面板留着不关。三个入口里只有悬浮窗 ⚙ 的独立小窗传 true —— 那是"边听边换词"的
-    /// 入口,换一个源听两句不对再换,原来要关窗到重开到再等九个源重搜(最坏 20 秒);留着的话
+    /// 入口,换一个源听两句不对再换,原来要关窗→重开→再等九个源重搜(最坏 20 秒);留着的话
     /// 同一批候选还在,点即切。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)和歌词窗口
     /// 的 sheet(关了才看得到背后的歌词)维持关窗。
     let keepsOpenAfterApply: Bool
-    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 到 挪「当前使用」徽标,
-    /// 留着的话给一条回声、关窗模式直接关;失败 到 关窗模式照旧关(调用方那边的 lastError 红字
+    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标,
+    /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
     /// 负责说明),留着的话在标题栏说一句、让人直接重试。
     let onApply: (LyricsSearchService.Candidate) async -> Bool
 
@@ -686,7 +686,7 @@ struct LyricsSearchSheet: View {
                     List(candidates, selection: selectedSourceBinding) { c in
                         candidateRow(c)
                     }
-                    // 把理想/上限各放宽一档(280到300、320到380):这一列要放
+                    // 把理想/上限各放宽一档(280→300、320→380):这一列要放
                     // 歌名/歌手/专辑三行,长专辑名在 280pt 下必换行甚至截断;右侧预览
                     // 有 minWidth 380 兜着,拖不塌。
                     .frame(minWidth: 250, idealWidth: 300, maxWidth: 380)
@@ -749,7 +749,7 @@ struct LyricsSearchSheet: View {
             currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
     }
 
-    /// source 到 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
+    /// source → 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
     /// 每次 body 算一遍不贵;指纹本身在 Candidate 构造时算好了。
     private var duplicateAnchors: [String: String] {
         LyricsCandidateDuplicates.firstMatches(candidates.map { (source: $0.source, fingerprint: $0.fingerprint) })
@@ -766,7 +766,7 @@ struct LyricsSearchSheet: View {
     /// 一把关掉——那样写盘在背后跑、面板上什么反馈都没有):
     /// ① 防重入 —— 写盘 + 排 collector 重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
     /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
-    /// ③ 成功 到 `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
+    /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
     ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
     private func apply(_ c: LyricsSearchService.Candidate) async {
         guard applyingSource == nil else { return }

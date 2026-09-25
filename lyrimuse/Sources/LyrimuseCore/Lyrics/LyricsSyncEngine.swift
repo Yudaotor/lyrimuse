@@ -168,7 +168,7 @@ public final class LyricsSyncEngine {
     private var trLines: [LyricLine] = []
     private var usingWords = false
 
-    /// 内容匹配用的"歌词原文 到 译文/罗马音"字典。见 load() 里构建它
+    /// 内容匹配用的"歌词原文 → 译文/罗马音"字典。见 load() 里构建它
     /// 那一段的注释——解决的是逐字(YRC)算出来的行时间戳跟服务端整行 LRC(译文/罗马音
     /// 就是照这份 LRC 的时间戳生成的)对同一句词标的时间不一致、超出 nearestText 700ms
     /// 容差导致查不到译文的问题。查找时按内容优先,查不到才退回 nearestText 时间最近邻。
@@ -1681,7 +1681,7 @@ public final class LyricsSyncEngine {
     ///
     /// 从"按整首歌"改成"按行":一首中文歌里引用的日文行(《这样吧》里的
     /// 「サヨナラ」)该按**日文**开关走、出罗马字,而同一首歌的中文行该按**中文**开关走
-    /// (默认关 到 不显示)。按整首歌判做不到这件事,只能二选一:要么中文行被塞注音
+    /// (默认关 → 不显示)。按整首歌判做不到这件事,只能二选一:要么中文行被塞注音
     ///,要么中日混唱歌(陶喆《My Anata》,41% 的行是日文)的日文行
     /// 一起丢掉罗马音。判定本身在 Romanizer.script(ofLine:song:)。
     private func romanizationAllowed(for line: String) -> Bool {
@@ -1825,7 +1825,7 @@ public final class LyricsSyncEngine {
             if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
             guard romaLines.isEmpty else { return nil }
         }
-        // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 到 一律不兜底"。
+        // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
         // 它解决的是那个真实 bug —— 中文歌被 ICU 音译成拼音展示,对中文读者
         // 是纯噪声(NetEase 本来就不给中文歌算 lyrics_roma,那本身就是"不需要"的信号)。
         //
@@ -1838,7 +1838,7 @@ public final class LyricsSyncEngine {
         // 那是另一回事(汉字在两种语言里读音完全不同,见 Romanizer.romanize 的注释)。
         if let cached = romanizerFallbackCache[plainText] { return cached }
         // 日文行的整行读音从 segmentsCache 派生,与 wordGroups 共用同一次分词(
-        // 性能审计:原来这里走 Romanizer.romanize到japaneseReading 自建一个 CFStringTokenizer,
+        // 性能审计:原来这里走 Romanizer.romanize→japaneseReading 自建一个 CFStringTokenizer,
         // 与 buildWordGroups 的 japaneseSegments 对同一行各分一遍词,日文歌 allLines 构建的
         // 分词次数直接翻倍)。两条路径的读音优先级完全一致(particleLatin > 假名标注 > 分词器
         // 转写 > 原文,尾部同走 mergeSokuon,见 Romanizer.readingFromSegments),selftest 有
@@ -1859,7 +1859,7 @@ public final class LyricsSyncEngine {
         return result
     }
 
-    // 行文本 到 分词片段。romanizationText(整行读音兜底)和 wordGroups(逐词罗马音)各要
+    // 行文本 → 分词片段。romanizationText(整行读音兜底)和 wordGroups(逐词罗马音)各要
     // 一份同一行的分词结果,原来各自跑一遍 CFStringTokenizer —— 这里按行缓存一份共用。
     // 两个消费方的启用门**不一样**(wordGroups 要求行内有假名,整行读音只要有汉字即可,
     // 见 buildWordGroups 的 guard),所以缓存必须放在两道门之前、由各自的门决定用不用,
@@ -1879,7 +1879,7 @@ public final class LyricsSyncEngine {
         return segs
     }
 
-    // 行文本 到 词组。跟 romanizerFallbackCache 同样按行缓存:同一行在播放期间会被反复
+    // 行文本 → 词组。跟 romanizerFallbackCache 同样按行缓存:同一行在播放期间会被反复
     // 查询(20Hz 定位 + 每帧填色),分词是纯 CPU 活,不该每次重算。
     private var wordGroupCache: [String: [SyncedLyricWordGroup]?] = [:]
 
@@ -2017,7 +2017,7 @@ public final class LyricsSyncEngine {
         while i < words.count {
             var j = i
             var end = starts[j] + words[j].text.utf16.count
-            // 有片段跨过这一组的右边界 到 把下一个词也吃进来,直到边界落在片段之间。
+            // 有片段跨过这一组的右边界 → 把下一个词也吃进来,直到边界落在片段之间。
             var grew = true
             while grew {
                 grew = false

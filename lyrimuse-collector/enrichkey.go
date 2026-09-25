@@ -20,8 +20,8 @@ import (
 // Spotify 报 `不散的筵席（I Miss You）`,网易云/Apple Music 报 `不散的筵席`。于是同一首歌
 // 存成两条,各自独立跑一遍全源搜索、各自选中不同的源:
 //
-//	丁世光|不散的筵席|神經志 The Journal              到 netease,43 行时间戳,score 1107
-//	丁世光|不散的筵席（I Miss You）|神經志 The Journal  到 kugou, 83 行时间戳,score 1203
+//	丁世光|不散的筵席|神經志 The Journal              → netease,43 行时间戳,score 1107
+//	丁世光|不散的筵席（I Miss You）|神經志 The Journal  → kugou, 83 行时间戳,score 1203
 //
 // 后果不只是"歌词管理里多一行"。两份歌词的**断行和时间轴根本不是一份东西**(43 行 vs
 // 83 行,后者把每个短句单独成行),于是用哪个播放器听,歌词推进的节奏就不一样 ——
@@ -198,7 +198,7 @@ func staleExportKeys(newKey, winnerKey string, olds []string) []string {
 	return out
 }
 
-// planEnrichKeyMigration 把当前缓存里的 key 按归一化结果分组,返回"新 key 到 这一组的旧
+// planEnrichKeyMigration 把当前缓存里的 key 按归一化结果分组,返回"新 key → 这一组的旧
 // key(已排序)"。纯函数,好测;真正改内存/删文件的是下面的 migrateEnrichKeys。
 func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 	buckets := map[string][]string{}

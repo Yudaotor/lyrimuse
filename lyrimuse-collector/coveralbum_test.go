@@ -291,7 +291,7 @@ func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
 	const album = "Michael"
 	deviceCover := "file:///Users/x/.config/lyrimuse/artwork/abc.jpg"
 	enrichCache = map[string]enrichEntry{
-		// 本机播过、cover_album 已经逐字对上这张专辑 到 归属可外借。
+		// 本机播过、cover_album 已经逐字对上这张专辑 → 归属可外借。
 		"Michael Jackson|Hollywood Tonight|" + album: {CoverURL: deviceCover, CoverSource: "device", CoverAlbum: album},
 		// QQ 那张精选集图也在,但排在第二档。
 		"Michael Jackson|Much Too Soon|" + album: {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"},

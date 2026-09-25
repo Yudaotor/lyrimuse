@@ -17,13 +17,13 @@ func TestMediaProxyOwnerAcceptance(t *testing.T) {
 	saved := features().TrustedPlayers
 	defer func() { featuresRef().TrustedPlayers = saved }()
 
-	// 信任了 Safari 到 它的媒体进程也该被采纳
+	// 信任了 Safari → 它的媒体进程也该被采纳
 	featuresRef().TrustedPlayers = map[string]string{safari: "Safari"}
 	if !isAcceptedPlayerBundleID(webkit) {
 		t.Error("信任了 Safari,WebKit 媒体进程该被采纳")
 	}
 
-	// 没信任 Safari 到 别名不能凭空放行(别名不是白名单)
+	// 没信任 Safari → 别名不能凭空放行(别名不是白名单)
 	featuresRef().TrustedPlayers = map[string]string{}
 	if isAcceptedPlayerBundleID(webkit) {
 		t.Error("没信任 Safari 时不该放行 WebKit 媒体进程")

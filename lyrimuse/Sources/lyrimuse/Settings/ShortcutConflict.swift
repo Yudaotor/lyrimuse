@@ -117,7 +117,7 @@ enum ShortcutConflict {
 
     /// macOS 自己占用的组合(⌘Space 切输入法、⌃↑ 调度中心……)。
     ///
-    /// 每次录制现算一遍、不缓存:用户随时可能去「系统设置 到 键盘快捷键」里改,缓存下来
+    /// 每次录制现算一遍、不缓存:用户随时可能去「系统设置 → 键盘快捷键」里改,缓存下来
     /// 就会拿着一份过期的表拒绝一个其实已经空出来的组合。这个调用很轻(一次
     /// `CopySymbolicHotKeys`),而录制是低频操作。
     private static func isTakenBySystem(_ shortcut: KeyboardShortcuts.Shortcut) -> Bool {

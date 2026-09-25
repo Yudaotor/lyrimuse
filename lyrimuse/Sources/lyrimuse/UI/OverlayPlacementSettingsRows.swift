@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 到 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
+// 「歌词显示 → 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
 //
 // 跟「排版」「行为」同一个模子:一份行组件(`OverlayPlacementSettingsRows`)给两个宿主 ——
 //   ① 编辑台工具栏第二行那颗「位置 ▾」点开的浮层(`OverlayPlacementPopover`);

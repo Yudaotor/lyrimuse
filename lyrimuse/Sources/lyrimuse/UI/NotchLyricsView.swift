@@ -180,7 +180,7 @@ private final class NotchPlayback: ObservableObject {
     /// 广告开始时、以及插播里换到下一条广告时起一轮门槛轮询;广告结束时收摊。
     ///
     /// 节奏见 `YouTubeMusicAdSkipper.gateRetryDelay(after:)`:倒计时那一档等到点再问(否则最坏要等满
-    /// 一个 5 秒心跳,而整条广告可能就 15 秒),其余走 5 秒心跳 —— 一次插播可能连放两条(徽章 1/2 到 2/2),
+    /// 一个 5 秒心跳,而整条广告可能就 15 秒),其余走 5 秒心跳 —— 一次插播可能连放两条(徽章 1/2 → 2/2),
     /// 第一条不给跳、第二条给跳,所以问出 `.never` **也要**继续心跳,不能问出一次就收摊。
     /// 门槛轮询自己的日志(跟 Core 那一侧同一个 category,时间线连得上)。
     static let skipGateLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
@@ -240,10 +240,10 @@ private final class NotchPlayback: ObservableObject {
 
     /// 去点 YT Music 页面自己的「跳过广告」按钮。点 + 复核两次 AppleEvent 往返加 0.8s 等页面切换(正常 ~1.2s,
     /// 极端 6s 超时),放后台线程;结果回主线程用歌词行上的瞬态横幅回报(跟音量提示同一条通道):
-    ///   * 点到了且复核广告已走 到 只给一下触觉(页面随即切正片,灵动岛按换曲流程自己刷新);
-    ///   * 按钮还没出现 到 页面上读得到「N 秒后可跳过」就说「N 秒后可跳过」,读不到(不可跳过的广告)说
+    ///   * 点到了且复核广告已走 → 只给一下触觉(页面随即切正片,灵动岛按换曲流程自己刷新);
+    ///   * 按钮还没出现 → 页面上读得到「N 秒后可跳过」就说「N 秒后可跳过」,读不到(不可跳过的广告)说
     ///     「这条广告还不能跳过」;
-    ///   * 点了没生效 / 没有标签页在放广告 / 脚本没跑成 到 「没能跳过这条广告」。
+    ///   * 点了没生效 / 没有标签页在放广告 / 脚本没跑成 → 「没能跳过这条广告」。
     /// **每一种结果都有反馈**:只给触觉不够 —— 触觉在 Mac 上几乎察觉不到,一颗键按下去
     /// 没有任何可见反应是最坏的交互(表现是"点了页面没动、灵动岛也一片安静")。
     /// 不套 `controlButton` 那层 Apple Music 自动化权限守卫:这是浏览器自动化,权限在 `BrowserAutomationPermission`
@@ -428,7 +428,7 @@ extension NotchEarModule {
     /// 剩下三类是真的会被裁的,数字都是离屏实测:
     ///   - 三键 = 命中框 15 + 18 + 15,`spacing: 0`(见 `earControls` 的横向账)= **48**
     ///   - 时间 = 11.5pt 等宽数字下 "-12:34" / "-88:88" 实测 **39.0**
-    ///   - 封面 = `NotchMetrics.earArtworkSide` 现算,**不给估计值**(这台机器菜单栏 32 到 22pt)
+    ///   - 封面 = `NotchMetrics.earArtworkSide` 现算,**不给估计值**(这台机器菜单栏 32 → 22pt)
     func minEarContentWidth(contentTopInset: CGFloat) -> CGFloat {
         switch self {
         case .none, .title, .artist, .album: return 0
@@ -1090,7 +1090,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 动画性能专项):这一层平时整个压在封面模糊图底下、一个像素都看不见,却在 hover
                 // 展开/收起时随卡片尺寸每帧重画 —— Time Profiler 实测(4 次 hover 展开)主线程
                 // 24% 的忙时是 CoreGraphics 在给这道看不见的渐变做 rgba64 轴向着色
-                // (`ripc_DrawShading` 到 `rgba64_shade_axial_RGB`,964×382px 每帧一遍)。纯色的
+                // (`ripc_DrawShading` → `rgba64_shade_axial_RGB`,964×382px 每帧一遍)。纯色的
                 // `Color` 视图落成一个只有 backgroundColor 的 CALayer,尺寸变化零重画;底部圆角由
                 // 外层 ZStack 那道统一的 clipShape 负责,这里不必再裁。颜色取渐变的中间一档。
                 Color(hexWithAlpha: "#14212AFF", fallback: .black)
@@ -1613,7 +1613,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 展开的时候黑斑还会动」):`Image(nsImage:).resizable().scaledToFill()` 把 600px 的封面一步缩到 46px
     /// 走的是线性采样、没有面积平均,半调网点封面(陶喆《I'm O.K.》黄底黑点)缩出来是一片摩尔纹黑斑,
     /// 而且随展开动画里的亚像素相位一帧一个样。改成按目标像素边长预先重采样一次(`ArtworkThumbnailCache`
-    /// 到 `ArtworkThumbnail.squareBitmap`,`.high` 插值),`Image(decorative:scale:)` 逐像素贴,跟左耳
+    /// → `ArtworkThumbnail.squareBitmap`,`.high` 插值),`Image(decorative:scale:)` 逐像素贴,跟左耳
     /// App 图标(`NotchIdleAppIcon`,决策 #30)同一招。裁方(aspect-fill 居中裁)也挪进位图里做,
     /// 所以这里不再 `.scaledToFill()`;`.frame` 仍钉一次,`clipShape` 才按这枚的尺寸裁圆角(见上)。
     /// 悬停 / 按下反馈补。状态由
@@ -1629,7 +1629,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// diff 就只有签名和 buttonStyle 两行(这个文件同时有别的会话在改,小 diff 是硬要求)。
     private func artworkButton(_ image: NSImage, side: CGFloat, hovering: Bool) -> some View {
         let scale = max(1, displayScale)
-        // 点封面 到 打开歌词窗口。走 AppActions 统一入口,激活
+        // 点封面 → 打开歌词窗口。走 AppActions 统一入口,激活
         // 时序(先 NSApp.activate 再 openWindow)在注册处已处理,跟快捷键/菜单/面板同路。
         return Button {
             AppActions.shared.openLyricsWindow?()
@@ -1658,7 +1658,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 别"顺手"加回来:加回来就要重新论证这个尺寸下动效能不能看清,而那已经实测过一次了。
                 .clipShape(RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous))
                 // 那圈 0.18 白描边搬进了 `NotchArtworkButtonStyle` —— 它现在要随悬停 / 按下
-                // 抬亮(0.18 到 0.38 到 0.5),留在标签里只能是定值。
+                // 抬亮(0.18 → 0.38 → 0.5),留在标签里只能是定值。
                 .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
         }
         .buttonStyle(NotchArtworkButtonStyle(cornerRadius: NotchMetrics.artworkCornerRadius,
@@ -1927,7 +1927,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 方案二)就在它下面再放一行 11pt 的副行,两行 + 3pt 间距 = 31pt,竖直居中塞进
     /// 44pt 的行里,**行高不变** —— 这是选方案二而不是叠行方案的全部理由:不动 `cardHeight`、
     /// 编辑台舞台常量、出场动画这片高度体系(05 章决策 22)。
-    /// 主行那一格的高度随「字号」走(`playback.mainLineHeight`,11…17pt 到 13…19pt),两行最多 35pt,
+    /// 主行那一格的高度随「字号」走(`playback.mainLineHeight`,11…17pt → 13…19pt),两行最多 35pt,
     /// 仍在 44 里、上下各余 ≥ 4pt —— 字号范围就是按这条倒推的,Core 有 selftest 钉着。
     @ViewBuilder
     private var lyricTextColumn: some View {
@@ -2207,7 +2207,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         guard let words = coordinator.currentLine?.words, !words.isEmpty else {
             return VocalEnvelope.idleAmplitude
         }
-        // 位置口径必须跟逐字填色完全一致(锚点外推 到 暂停冻结值兜底 到 叠加生效偏移),
+        // 位置口径必须跟逐字填色完全一致(锚点外推 → 暂停冻结值兜底 → 叠加生效偏移),
         // 否则条子跟高亮的字对不上,那比不跟着动更奇怪。
         let posMs = (coordinator.anchor?.extrapolatedPositionMs(now: date)
             ?? coordinator.pausedPositionMs ?? 0)
@@ -2417,17 +2417,17 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 不该比歌名重。
     ///
     /// 各颗键的语义:
-    ///   * 搜索歌词 到 `AppActions.openLyricsQuickSearch`,跟悬浮歌词 ⚙ 菜单的「搜索歌词…」同一扇小窗。
+    ///   * 搜索歌词 → `AppActions.openLyricsQuickSearch`,跟悬浮歌词 ⚙ 菜单的「搜索歌词…」同一扇小窗。
     ///     头部本来就要求 `hasTrack`,所以不用像那边一样再按"有没有歌"决定显隐。广告期间四颗照常画、照常可点
     ///     (头部此时只剩这一排,见 `trackInfoShowsTrackFields`)。
-    ///   * 显示歌词 到 切 `AppSettings.notchShowLyrics`(稳态那 44pt 歌词行的开关)。**展开态里看不出
+    ///   * 显示歌词 → 切 `AppSettings.notchShowLyrics`(稳态那 44pt 歌词行的开关)。**展开态里看不出
     ///     变化**(展开永远画歌词行,见 `showsLyricRow`),关着时字形压淡到四成、tooltip 换成「显示歌词」,
     ///     让"现在是关的"当场可辨;收回稳态才看得出效果。状态读 `controller.showsLyrics`(控制器的镜像),
     ///     不另订阅 AppSettings。
     ///   * Last.fm 到 设置 › Last.fm 详情页(`openLastfmSettingsPage`)。是去 App 里某个页面、不是对这首歌做什么,
     ///     所以在竖线右边。只在 `LastfmStatsService.isConnected` 时画:没连的人点了只会落到一张连接卡上。
-    ///   * 设置 到 直接翻到 设置 › 歌词显示 › 灵动岛,照抄 `OverlayQuickSettingsMenu.openMoreSettings` 那三行。
-    ///   * 关闭 到 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` 到 `setVisible(false)`),跟悬浮歌词
+    ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛,照抄 `OverlayQuickSettingsMenu.openMoreSettings` 那三行。
+    ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词
     ///     那颗 ✕ 同一个意思;再打开走菜单栏面板 / 设置 / 快捷键。备选的"只收起这一次"被否:hover 展开
     ///     本来移开指针就收,那颗键等于没用。
     ///
@@ -2666,7 +2666,7 @@ private struct QuickActionTooltipOverlay: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 气泡自己量出来的尺寸(见下面那层 preference)。**只用来收敛边界**,不是显示的前提 ——
     /// 量不到时走 `fallbackHeight` 那条降级路,气泡照画,只是不夹边;拿它当前提就变成
-    /// "量不到 到 永远不显示"的全有全无。
+    /// "量不到 → 永远不显示"的全有全无。
     @State private var bubbleSize: CGSize = .zero
 
     private static let gap: CGFloat = 5
@@ -2759,7 +2759,7 @@ private struct QuickActionBubbleSizeKey: PreferenceKey {
     }
 }
 
-/// 那排键各自的位置(键名 到 bounds),`quickActionButton` 报上来、`QuickActionTooltipOverlay` 取用。
+/// 那排键各自的位置(键名 → bounds),`quickActionButton` 报上来、`QuickActionTooltipOverlay` 取用。
 private struct QuickActionAnchorKey: PreferenceKey {
     static let defaultValue: [String: Anchor<CGRect>] = [:]
     static func reduce(value: inout [String: Anchor<CGRect>],
@@ -2804,7 +2804,7 @@ private struct NotchIconButton: View {
                 .frame(width: hitSize, height: hitSize)
                 .contentShape(Rectangle())
         }
-        // 圆角按命中框的比例取(22 到 6,18 到 5,15 到 4),跟歌词窗口 22pt 高的 `OffsetNudgeButton` 用 6 一致。
+        // 圆角按命中框的比例取(22 → 6,18 → 5,15 → 4),跟歌词窗口 22pt 高的 `OffsetNudgeButton` 用 6 一致。
         .buttonStyle(NotchIconButtonStyle(tint: tint, cornerRadius: (hitSize * 0.27).rounded(),
                                           hovering: hovering))
         .onHover { hovering = $0 }
@@ -3109,7 +3109,7 @@ private struct NotchScrubber: View {
     /// "Lyrics"、繁体是「歌詞」),写死的宽度换个语言就不对;垫片跟真文案共用同一份
     /// `L10n.t("歌词")`,三种语言都自动成立。
     ///
-    /// `.monospacedDigit()` 管另一半:等宽数字让「+0.2」到「+0.8」这种同位数变化也不抖。
+    /// `.monospacedDigit()` 管另一半:等宽数字让「+0.2」→「+0.8」这种同位数变化也不抖。
     /// 偏移**没有上下界**(`LyricsOffsetStore.nudge` 不 clamp),真调到 ±100s 就靠
     /// `minimumScaleFactor` 把字缩一点,而不是把按钮推走 —— 位置稳定优先于字号。
     private var offsetReadout: some View {
@@ -3117,7 +3117,7 @@ private struct NotchScrubber: View {
         return HoverReveal { hovering in
             // 垫片必须**独占尺寸**、真文案走 `.overlay`。**写成 ZStack 是错的**:ZStack 的宽度
             // 取最宽的那个子视图,真文案照样能把它撑大 —— 离屏实测(NSHostingView.fittingSize):
-            // ZStack 版在两位整数秒时 46 到 51/52pt、「+100.0s」到 58pt,极差 12pt,等于没修;
+            // ZStack 版在两位整数秒时 46 → 51/52pt、「+100.0s」到 58pt,极差 12pt,等于没修;
             // overlay 版七种数值全是 46pt,极差 0.00pt。`minimumScaleFactor` 只在宽度**被约束**
             // 时才介入,而 ZStack 压根没约束它;overlay 的尺寸由父视图说了算、反过来撑不大父视图,
             // 所以约束是真的存在,超长值走缩放而不是推走按钮。
@@ -3147,7 +3147,7 @@ private struct NotchScrubber: View {
     /// 撑宽度用的最宽变体:符号 + **一位**整数 + 一位小数。
     ///
     /// 为什么不预留两位整数(`+10.2s`):那样静止态(`0.0s`)会永久多出 12pt 空隙、− / + 被推得
-    /// 离数字明显更远(实测 40pt 到 52pt);收成一位只多 6pt(40 到 46)。而歌词偏移调到 ±10 秒
+    /// 离数字明显更远(实测 40pt → 52pt);收成一位只多 6pt(40 → 46)。而歌词偏移调到 ±10 秒
     /// 这首歌的词已经完全对不上了,不值得为这个量级常驻一份空隙。真超过就由
     /// `minimumScaleFactor(0.7)` 把字缩一点(`+10.2s` 需要 50pt/46pt ≈ 0.92,远在 0.7 之内,
     /// 缩了也看不出来),**宽度仍然恒定** —— 位置稳定是硬要求,字号不是。
@@ -3195,7 +3195,7 @@ private struct NotchScrubber: View {
     ///
     /// 幅度必须克制。参考实现是 5到9pt(+4),但那是在一个高得多的面板里;灵动岛展开区
     /// 总共只有 expandedExtraHeight,进度条 + 3pt 间距 + 时间行已经占掉大半,
-    /// 再长 4pt 会把时间行往下挤出可见区。3到5到6 是量过余量之后的取值。
+    /// 再长 4pt 会把时间行往下挤出可见区。3→5→6 是量过余量之后的取值。
     private var scrubberHeight: CGFloat {
         if scrubbingFraction != nil { return 6 }
         return hoveringScrubber ? 5 : 3

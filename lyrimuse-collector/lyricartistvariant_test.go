@@ -66,7 +66,7 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"Taylor Swift", ""},
 		{"周杰伦", ""},
 		{"", ""},
-		// 尾随分隔符的仿冒形态:只切出 1 段,规整后与原串无差别 到 无变体。
+		// 尾随分隔符的仿冒形态:只切出 1 段,规整后与原串无差别 → 无变体。
 		{"周杰伦、", ""},
 		// "with"/"x" 刻意不当作分隔词:真实艺名的常见组成部分。
 		{"Sleeping With Sirens", ""},
@@ -139,7 +139,7 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	if got := bySource["netease"].Title; got != "base-netease" {
 		t.Errorf("netease candidate = %q, want base round's (base-netease)", got)
 	}
-	// 原串轮判废、变体轮可用 到 顶替。
+	// 原串轮判废、变体轮可用 → 顶替。
 	if got := bySource["qq"].Title; got != "extra-qq" {
 		t.Errorf("qq candidate = %q, want extra round's (extra-qq)", got)
 	}
@@ -156,7 +156,7 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 			t.Errorf("%s missing rescored ScoreTerms", s)
 		}
 	}
-	// 合并后没有真实 lrclib 候选 到 Instrumental 标记保留。
+	// 合并后没有真实 lrclib 候选 → Instrumental 标记保留。
 	if !instrumentalKept {
 		t.Errorf("lrclib instrumental marker dropped, want kept")
 	}

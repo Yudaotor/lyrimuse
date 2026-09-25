@@ -67,7 +67,7 @@ func TestSplitBakedTranslationLeavesGenuineLyricsAlone(t *testing.T) {
 	if _, _, _, n := splitBakedTranslation(lrc, yrc, true); n != 0 {
 		t.Errorf("纯外文正文不该被摘: n=%d", n)
 	}
-	// 2. 中文歌(标签含汉字)里夹几行英文:标签不是外文歌、原文行也没有假名/谚文 到 不动。
+	// 2. 中文歌(标签含汉字)里夹几行英文:标签不是外文歌、原文行也没有假名/谚文 → 不动。
 	lrc, yrc = bakedSample(12, true)
 	if _, _, _, n := splitBakedTranslation(lrc, yrc, false); n != 0 {
 		t.Errorf("本地标签含汉字、原文又不是日韩文时不该摘: n=%d", n)
@@ -88,7 +88,7 @@ func TestSplitBakedTranslationLeavesGenuineLyricsAlone(t *testing.T) {
 	if _, _, _, n := splitBakedTranslation(strings.Join(l, "\n"), "", true); n != 0 {
 		t.Errorf("中英比例悬殊时不该摘: n=%d", n)
 	}
-	// 5. 真双语歌形态:段落级交错(先 8 行英文再 8 行中文),不是逐句一比一 到 紧跟比例不够,不动。
+	// 5. 真双语歌形态:段落级交错(先 8 行英文再 8 行中文),不是逐句一比一 → 紧跟比例不够,不动。
 	l = nil
 	for i := 0; i < 8; i++ {
 		l = append(l, formatLRCStamp(36000+i*3000)+"placeholder english line "+string(rune('a'+i)))

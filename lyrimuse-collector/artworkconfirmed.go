@@ -76,7 +76,7 @@ func loadArtworkConfirmed() {
 	// 没配状态中继(绝大多数用户:只用本机悬浮歌词、不搭自己的网页中继)时整条路不存在,
 	// 这里一步都不该走 —— 跟 sweepDeviceArtwork 同一道门。不加这道门的话有两个实际后果:
 	// ① 每次启动白读一次盘;② 用户曾经配过、后来删掉地址时,旧记录会被判成"中继地址变了"
-	// 并在日志里反复喊一句 `... 到 ""`,看上去像出了错。
+	// 并在日志里反复喊一句 `... → ""`,看上去像出了错。
 	if !artworkRelayConfigured() || artworkConfirmPath == "" {
 		return
 	}

@@ -419,7 +419,7 @@ struct SettingsView: View {
         if let first = settingsSearchHits.first { openSettingsSearchHit(first) }
     }
 
-    /// 命中一条:翻分类 到 切分段(写那一页的 @AppStorage 键,那边立刻跟着翻)到 发高亮 / 展抽屉信号 到
+    /// 命中一条:翻分类 → 切分段(写那一页的 @AppStorage 键,那边立刻跟着翻)→ 发高亮 / 展抽屉信号 →
     /// 清空搜索框。目录条目怎么写见 Core `SettingsSearchCatalog` 头注。
     private func openSettingsSearchHit(_ hit: SettingsSearchHit) {
         let entry = hit.entry
@@ -856,7 +856,7 @@ private struct LyricsSettingsTab: View {
         )
     }
 
-    /// bundle id 到 人看得懂的名字。内置的用枚举自带的显示名,信任项用当初存下来的那份(空串时
+    /// bundle id → 人看得懂的名字。内置的用枚举自带的显示名,信任项用当初存下来的那份(空串时
     /// 现查一次 NSWorkspace),都查不到就退回 bundle id 本身 —— 退回也比显示空白好。
     private func playerDisplayName(_ bundleID: String) -> String {
         if let builtin = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
@@ -1709,7 +1709,7 @@ private struct LyricsSettingsTab: View {
 
     private var translationCard: some View {
         SettingsCard {
-            // 顺序是一条链:要不要显示译文 到 要哪种语言 到 没有译文时兜底 到 兜底要的语言包。
+            // 顺序是一条链:要不要显示译文 → 要哪种语言 → 没有译文时兜底 → 兜底要的语言包。
             SettingsRow(
                 icon: "text.bubble",
                 title: L10n.t("显示译文"),
@@ -2859,7 +2859,7 @@ private struct AppearanceSettingsTab: View {
 
     /// 每一段开头那张"这个形态开不开"的卡。
     ///
-    /// 放在这一段的最上面,而不是集中成一张总开关卡:"开启 到 立刻在下面调它的样子"是一条直线,
+    /// 放在这一段的最上面,而不是集中成一张总开关卡:"开启 → 立刻在下面调它的样子"是一条直线,
     /// 集中的话要开某个形态得先退回总览、开完再切回来,来回两次。
     ///
     /// 关着的时候这一段也不会是空白 —— 这张卡本身就是内容,不需要另给"还没开启"的占位提示。
@@ -2912,8 +2912,8 @@ private struct AppearanceSettingsTab: View {
 /// 结构上就是一份,不靠"两处 `items` 数组必须逐字相同"这种靠人守的约定。
 ///
 /// **分组按卡片解剖走**:
-///   - 「歌词行」= 歌词行本身的一切:显不显示 到 对齐方式 到 副行(展开时预览下一句)到 卡拉OK效果
-///     到 行末封面(封面位置);
+///   - 「歌词行」= 歌词行本身的一切:显不显示 → 对齐方式 → 副行(展开时预览下一句)→ 卡拉OK效果
+///     → 行末封面(封面位置);
 ///   - 「展开态」= 只有 hover 展开才有的东西:控制区(播放控制 / 歌词校准)+ 快捷操作(头部右侧
 ///     四颗键)+ 曲目信息头部(封面 / 歌名 / 歌手 / 专辑,四项归在一个「曲目信息」标题行下面);
 ///   - 「行为」= 什么时候缩、什么时候藏:暂停缩回 + 两项自动隐藏(`AutoHideSettingsRows`)。
@@ -3151,7 +3151,7 @@ private struct LyricSecondaryLineRow: View {
 /// 「歌词行」组 —— 工具栏「歌词行」浮层(`NotchLyricRowPopover`)与「全部设置」抽屉
 /// `lyricRowGroup` 调的是这同一份。
 ///
-/// 顺序:显示歌词 到(对齐方式 到 副行 到 展开时预览下一句)到 卡拉OK效果 到 显示封面(到 封面位置)。
+/// 顺序:显示歌词 →(对齐方式 → 副行 → 展开时预览下一句)→ 卡拉OK效果 → 显示封面(→ 封面位置)。
 /// 先把歌词这一格自己的事说完(显不显示、怎么对齐、下面加哪一行、怎么填色),再说行末那枚封面。
 ///
 /// **「显示歌词」关着时其余整组隐藏**(不是禁用):没有歌词行,"靠哪边 / 副行放什么 / 怎么填色 /
@@ -3516,21 +3516,21 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
 /// 收纳盒",是**这个形态全部可配项的完整兜底通路**(键盘 / VoiceOver / "我就想找个开关,不想点开
 /// 浮层"的场合)。工具栏那几个浮层入口和宽度调整条这些**原有**配置项,也必须能在"全部设置"里找到。
 ///
-/// **各组的顺序 = 工具栏两行入口的顺序**(风格 到 屏幕 到 左耳 到 右耳 到 宽度 / 展开宽度 到
-/// 歌词行 到 字体 到 展开态 到 行为 到 恢复默认),标题也跟工具栏按钮一字不差 —— 抽屉是浮层的镜像,
+/// **各组的顺序 = 工具栏两行入口的顺序**(风格 → 屏幕 → 左耳 → 右耳 → 宽度 / 展开宽度 →
+/// 歌词行 → 字体 → 展开态 → 行为 → 恢复默认),标题也跟工具栏按钮一字不差 —— 抽屉是浮层的镜像,
 /// 同一组东西在两个入口叫两个名字、排两种顺序就是"这一个那一个"。
 ///
 /// 顶部工具栏和编辑台里那条宽度调整条**本体不受影响** —— 那条横向空间是"刚好塞满、不能再挤"
 /// 的上限(见 NotchEditorStage.toolbar 头上那条提醒)。这里是**多开一条兜底入口**,不是挪走原来
 /// 那条:每一组都复用浮层背后**同一份**组件,不是另起一份平行实现:
-///   - 风格 到 `NotchStyleSettingsRows()`
-///   - 屏幕 到 `NotchScreenSettingsRows(onScreenChange:)`(这里没有编辑台预览要刷新,传空闭包——真窗口
+///   - 风格 → `NotchStyleSettingsRows()`
+///   - 屏幕 → `NotchScreenSettingsRows(onScreenChange:)`(这里没有编辑台预览要刷新,传空闭包——真窗口
 ///     的更新在组件内部已经带着 `notchOverlayEnabled` 守卫做完了)
-///   - 左耳 / 右耳 到 `NotchEarSettingsRows(side:)`(顶部那行「显示音浪」开关也在里面,跟浮层一模一样)
-///   - 宽度 / 展开宽度 到 本文件的 `widthRow` / `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口
-///   - 歌词行 / 展开态 / 行为 到 `NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` /
+///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:)`(顶部那行「显示音浪」开关也在里面,跟浮层一模一样)
+///   - 宽度 / 展开宽度 → 本文件的 `widthRow` / `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口
+///   - 歌词行 / 展开态 / 行为 → `NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` /
 ///     `NotchBehaviorSettingsRows`(跟三个浮层是同一份视图,不是"同样的 items 数组")
-///   - 字体 到 `NotchFontSettingsRows`(跟工具栏第二行「字体」浮层同一份;字体族 / 粗细 / 字号三行)
+///   - 字体 → `NotchFontSettingsRows`(跟工具栏第二行「字体」浮层同一份;字体族 / 粗细 / 字号三行)
 private struct NotchAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -3965,7 +3965,7 @@ private struct PlayerSettingsTab: View {
     @ViewBuilder
     /// **这张卡总是显示,哪怕一条信任项都没有** —— 它是「添加播放器…」唯一的入口。
     /// 原来的写法是"有信任项才显示",那在主动添加这个功能上就是一个**鸡生蛋**:没信任过
-    /// 任何 App 到 卡片不显示 到 没有地方点「添加」到 只能回去被动等「自动识别」撞见。
+    /// 任何 App → 卡片不显示 → 没有地方点「添加」→ 只能回去被动等「自动识别」撞见。
     /// (同一个坑「网页播放器」卡踩过一次,见 `addablePlatformBrowsers` 头注。)
     ///
     /// 排版必须跟上面「播放器」「网页播放器」两张卡是同一套(3 列图标网格 +
@@ -4112,7 +4112,7 @@ private struct PlayerSettingsTab: View {
     /// 但它的播放因为不在信任列表里被整条丢掉,"发现未知播放器"那张卡还会
     /// 重新冒出来。
     ///
-    /// 方向是**单向**的:取消信任 到 一并解除配对(不信任它,配对就没有
+    /// 方向是**单向**的:取消信任 → 一并解除配对(不信任它,配对就没有
     /// 任何意义);而「移除配对」**不**取消信任 —— 信任的语义比配对宽
     /// (它还管"这个 App 的播放算不算数"),而且一个浏览器可能配了多个
     /// 平台,退出其中一个不代表不要它了。
@@ -4263,7 +4263,7 @@ private struct PlayerSettingsTab: View {
     ///
     /// **不要把这些查询搬回 view body**。`browserSetupIncomplete` / `browserJSLikelyWorking` /
     /// `browserPermissionPopover` 底下是 `MusicAutomationPermission.check`
-    /// (`AEDeterminePermissionToAutomateTarget` 到 `semaphore_wait_trap`,跨进程问 tccd,单次
+    /// (`AEDeterminePermissionToAutomateTarget` → `semaphore_wait_trap`,跨进程问 tccd,单次
     /// 3–48ms、中位 4ms)和 `BrowserAutomationPermission.status`(读 Chromium Preferences 文件)。
     /// 配了 4 个浏览器时每个平台卡片各画一遍 = 每次 body 重算 4–8 次 IPC、主线程阻塞 20–380ms,
     /// 表现为"设置页切分页有延迟、不跟手"。
@@ -4363,7 +4363,7 @@ private struct PlayerSettingsTab: View {
     ///
     /// 判据是"一个配对都不剩"而不是"移除了这个平台的配对":同一个浏览器可以配多个平台,
     /// 只撤掉其中一个的时候它显然还要留着。手动加进来的浏览器一加进来就**同步**被配对了
-    /// (`chooseBrowserFromApplications` 到 `trustAndPairBrowser` 到 `pairBrowser`,后者不在
+    /// (`chooseBrowserFromApplications` → `trustAndPairBrowser` → `pairBrowser`,后者不在
     /// await 之后),所以不存在"刚加完还没配上"这个中间态被误清的窗口。
     ///
     /// 忘掉的成本很低:再要它时「从应用程序中选择…」重新挑一次即可 —— 这份字典存的本来就是
@@ -4396,8 +4396,8 @@ private struct PlayerSettingsTab: View {
     // **展示条件是"这台机器上装了受支持的浏览器",不是"已经信任过某个浏览器"**。
     // 「+」菜单走的是 `trustAndPairBrowser`,**不要求先信任** —— 选一个没信任过的浏览器会
     // 一步自动信任+配对。也就是说这张卡是"信任这件事本身的入口",不是"信任之后才用得上的
-    // 配置面板"。拿"已信任"当条件会制造**鸡生蛋**:没信任过任何浏览器 到 卡片不显示 到
-    // 界面上没有任何地方能发起信任 到 只能靠"真的用浏览器放歌 到 被动检测到未知播放器"这条
+    // 配置面板"。拿"已信任"当条件会制造**鸡生蛋**:没信任过任何浏览器 → 卡片不显示 →
+    // 界面上没有任何地方能发起信任 → 只能靠"真的用浏览器放歌 → 被动检测到未知播放器"这条
     // 被动路径绕回来。
     //
     // "不为了'这里没事'而占地方"这条原则**保留**,只是判据是"装了受支持浏览器 = 真的有事
@@ -4455,7 +4455,7 @@ private struct PlayerSettingsTab: View {
             // 「App 重新变成活跃」正好是这条流程的天然节拍:去浏览器操作这件事**必然**要
             // 切走再切回来。比起给配置文件挂 FSEvents 或者起个定时器轮询,这个信号更准
             // (不会在用户没做任何事的时候空刷)、也更省 —— 而且它同时覆盖另一道门:用户
-            // 去「系统设置 到 自动化」里勾完回来,那一行也会跟着更新。
+            // 去「系统设置 → 自动化」里勾完回来,那一行也会跟着更新。
             //
             // 只是让 SwiftUI 重新读一遍,不发起任何 AppleScript/自检 —— 自检有子进程开销,
             // 不该在每次切回 App 时白跑一次(要不要跑由用户点「重新检测」决定)。
@@ -5081,8 +5081,8 @@ private struct PlayerSettingsTab: View {
             // 说清受影响范围比制造焦虑有用。
             //
             // 受影响范围**不是**"只有 QQ 音乐/网易云"。判据在 `MediaControlClient.fetchSnapshot`
-            // 那三条路径上:勾了「自动识别」到 整条路的基座就是 media-control(Apple Music 也在内,
-            // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 到 纯 AppleScript,
+            // 那三条路径上:勾了「自动识别」→ 整条路的基座就是 media-control(Apple Music 也在内,
+            // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 → 纯 AppleScript,
             // 这是**唯一**绕开它的配置;其余组合(QQ 音乐/网易云/Spotify/酷狗/汽水…)一律经它读。
             // 所以文案按"哪一种配置绕开了它"说,不按"哪几个播放器不受影响"说 —— 后者既不准
             // (Spotify 其实也经这条通道),又会随着新增播放器过期。
@@ -5116,8 +5116,8 @@ private struct PlayerSettingsTab: View {
         }
         // 不能只在 onAppear 读一次。
         //
-        // collector 的 job 在 bootout到bootstrap 中途,`launchctl print` 会退出码 0 但输出里
-        // 认不出 state 字段 到 解析成 .unknown(见 LaunchdPrintParser:"我读不懂"跟"我知道它
+        // collector 的 job 在 bootout→bootstrap 中途,`launchctl print` 会退出码 0 但输出里
+        // 认不出 state 字段 → 解析成 .unknown(见 LaunchdPrintParser:"我读不懂"跟"我知道它
         // 没跑"刻意分开两档)。而 build.sh 的重装顺序恰好制造这个窗口:**先** kickstart App
         // (设置窗口恢复、onAppear 读一次状态)、**再** reload collector 的 job。于是这一次读
         // 正好落在中间态上,之后再没人重读,卡片就永久挂着一个橙色警告和一颗本不该出现的
@@ -5799,7 +5799,7 @@ private struct GeneralSettingsTab: View {
     ///
     /// 面板只能按扩展名过滤(`.json`),挡不住"选了个别的 json"。所以选完**先自己验一遍**
     /// 再弹确认框 —— 只在确认后 guard 住的话,体验仍然是"点了确认才报错",甚至要走完
-    /// "确认 到 App 重启 到 发现什么都没变"才知道选错了。
+    /// "确认 → App 重启 → 发现什么都没变"才知道选错了。
     private func pickConfigFileToImport() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true

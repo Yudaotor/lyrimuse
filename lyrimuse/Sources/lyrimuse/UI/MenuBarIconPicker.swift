@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 「通用 到 菜单栏与 Dock」里挑菜单栏图标的那 12 格(从 `SettingsView.menuBarIconChoice`
+/// 「通用 → 菜单栏与 Dock」里挑菜单栏图标的那 12 格(从 `SettingsView.menuBarIconChoice`
 /// 搬出来,定型)。
 ///
 /// **不带预览**,别再加回仿菜单栏那块编辑台(壁纸底 + 苹果标 + wifi/电池/时钟、

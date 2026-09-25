@@ -123,7 +123,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	}
 	local := deviceArtworkURLPrefix + path
 
-	// 还没确认传上去 到 空串(而不是 file://)。网页据此走自己的 iTunes 兜底。
+	// 还没确认传上去 → 空串(而不是 file://)。网页据此走自己的 iTunes 兜底。
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("未上传时应返回空串,绝不能透传本地路径, got %q", got)
 	}
@@ -131,7 +131,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	// 才真正发请求)。
 	waitArtworkIdle(t)
 
-	// 确认传上去之后 到 中继上的 https 地址。
+	// 确认传上去之后 → 中继上的 https 地址。
 	artworkMu.Lock()
 	artworkUploaded[testSHA] = true
 	artworkMu.Unlock()
@@ -140,7 +140,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 		t.Errorf("已上传时 = %q, want %q", got, want)
 	}
 
-	// 没配中继(用户没搭中继、只用 LB)到 依然不能透传本地路径。
+	// 没配中继(用户没搭中继、只用 LB)→ 依然不能透传本地路径。
 	artworkRelayURL = ""
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("没配中继时应返回空串, got %q", got)

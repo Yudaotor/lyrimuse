@@ -328,14 +328,14 @@ final class AppSettings: ObservableObject {
         // 看懂),自定义配色主题数组是个例外,但用 JSON 编码成字符串(不是 Data blob)
         // 存,`defaults read` 好歹还能读出一段可辨认的 JSON 文本,不是不可读的乱码。
         static let customColorThemesJSON = "np:customColorThemesJSON"
-        // 平台 id 到 已配对浏览器 bundle id 集合。同样存 JSON 字符串(不是 Data),理由见
+        // 平台 id → 已配对浏览器 bundle id 集合。同样存 JSON 字符串(不是 Data),理由见
         // customColorThemesJSON 上面那条注释;Set 编码出来是 JSON 数组,`defaults read`
         // 照样能看懂。
         static let browserPlatformPairsJSON = "np:browserPlatformPairsJSON"
-        // 用户手动挑进来的浏览器 bundle id 到 探测判定出的引擎族("chromium"/"safari")。
+        // 用户手动挑进来的浏览器 bundle id → 探测判定出的引擎族("chromium"/"safari")。
         // 同样存 JSON 字符串,理由同上。
         static let manualBrowserFamiliesJSON = "np:manualBrowserFamiliesJSON"
-        // bundle id 到 最近一次「检测是否已生效」通过的时刻。
+        // bundle id → 最近一次「检测是否已生效」通过的时刻。
         static let browserJSVerifiedAtJSON = "np:browserJSVerifiedAtJSON"
         /// 「接收测试版更新」。这台机器的偏好,不随配置搬家(见 ConfigPortability.machineLocalDefaultsKeys)。
         static let receiveBetaUpdates = "np:receiveBetaUpdates"
@@ -503,7 +503,7 @@ final class AppSettings: ObservableObject {
     /// 悬浮歌词 / 灵动岛的「卡拉OK效果」:这一面要不要按逐字时间轴填色。关掉就把
     /// 有逐字数据的行压成整行高亮(`SyncedLyricLine.lineLevel`),没有逐字数据的歌本来就是整行。
     ///
-    /// 按形态各一颗(悬浮歌词 到「文字」浮层,灵动岛 到「歌词行」浮层,菜单栏 到 既有的
+    /// 按形态各一颗(悬浮歌词 →「文字」浮层,灵动岛 →「歌词行」浮层,菜单栏 → 既有的
     /// `menuBarLyricsKaraoke`):卡拉OK是某个面怎么画的问题,跟繁简 / 罗马音那类改歌词内容本身的
     /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口**始终**逐字、不给开关。
     ///
@@ -555,8 +555,8 @@ final class AppSettings: ObservableObject {
     /// 地区用户在国内三家播放器上的使用率跟英文用户更接近,不该被并进简体那一档。
     /// 判据是字符串前缀/子串匹配(跟 L10n.current 同一套朴素写法,不依赖
     /// Locale.Language.script 这类新引入 API 在不同系统版本上的推断是否可靠):
-    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个 到 认成繁体;剩下以 "zh" 开头的(裸 "zh"、
-    /// "zh-cn"、"zh-hans"、"zh-sg" 等)到 简体。
+    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个 → 认成繁体;剩下以 "zh" 开头的(裸 "zh"、
+    /// "zh-cn"、"zh-hans"、"zh-sg" 等)→ 简体。
     static let userReadsSimplifiedChinese: Bool = {
         guard let first = Locale.preferredLanguages.first?.lowercased(), first.hasPrefix("zh") else { return false }
         // 判据本体在 LyrimuseCore 的 UILanguage(跟 L10n 的语言协商同一份):含 hans 一定简体、
@@ -899,10 +899,10 @@ final class AppSettings: ObservableObject {
     // 永久冻结、拒绝以后所有自动升级(打分改进/该源后来给出逐字/换了更好的源)。默认 false。
     //
     // 严格两态,中间不留东西:
-    //   false 到 采纳只是"当下换上这份",缓存里一个约束标记都不写(saveEdit 收到
+    //   false → 采纳只是"当下换上这份",缓存里一个约束标记都不写(saveEdit 收到
     //           `sourceChoice: ""`,把可能残留的 lyrics_source_choice 显式清掉),之后
     //           打分改进/升级重试照常调整这首歌,**也可以换成别的源**;
-    //   true  到 置 manual_lyrics,collector 三条自愈路径(firstFill/rescore/retry)第一行
+    //   true  → 置 manual_lyrics,collector 三条自愈路径(firstFill/rescore/retry)第一行
     //           就否决,这首歌定死在这份内容上。
     //
     // **不要**再引入"关 = 只限制在所选源内"这种中间态(记 lyrics_source_choice、自愈照跑但被
@@ -912,8 +912,8 @@ final class AppSettings: ObservableObject {
     // 不冻结;直接编辑歌词正文的"保存修改"永远置为 true,跟这个开关也无关——那份内容
     // 删了找不回来,自动逻辑没理由觉得自己比人工更懂)。
     //
-    // **翻面时会追溯处理存量**:打开 到 把"手动采纳过、且当前内容还是当初采纳那一份"的歌一并
-    // 置 manual_lyrics;关掉 到 弹一次确认,问要不要把因它而锁的那批解开(不默认解,也不
+    // **翻面时会追溯处理存量**:打开 → 把"手动采纳过、且当前内容还是当初采纳那一份"的歌一并
+    // 置 manual_lyrics;关掉 → 弹一次确认,问要不要把因它而锁的那批解开(不默认解,也不
     // 默认留——两种意图都讲得通,而目前没有单曲解锁入口,猜错的代价是逐首点「重新自动
     // 匹配」、连歌词内容一起被换掉)。判据见 LyrimuseCore/ManualPickLock.shouldFlip,
     // 留痕字段是 `manual_pick_sha`,批量落地在 EnrichCacheStore.applyManualPickLock。
@@ -1470,7 +1470,7 @@ final class AppSettings: ObservableObject {
     }
     // 见 Keys.followsCoverArt 注释。纯持久化,不在这里连带计算任何缓存值——实际生效
     // 靠 PlaybackCoordinator.displayForegroundColor 读取这个开关+按曲目算出的动态色,
-    // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex到didSet 里转 Color 缓存"的
+    // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex→didSet 里转 Color 缓存"的
     // 模式不一样,因为这个开关本身不是一个颜色值。
     @Published var followsCoverArt: Bool {
         didSet { defaults.set(followsCoverArt, forKey: Keys.followsCoverArt) }
@@ -1498,7 +1498,7 @@ final class AppSettings: ObservableObject {
     }
 
     // 用户自己从「应用程序」里挑进来的浏览器(「这里点+号出来的是否可以加
-    // 一个选项是自己在本机的应用程序里面选」)。bundle id 到 引擎族的 rawValue。
+    // 一个选项是自己在本机的应用程序里面选」)。bundle id → 引擎族的 rawValue。
     //
     // 存的是**判定结果**而不是"用户加过这个 App":引擎族是靠读那个 App 的脚本定义现场判出来的
     // (BrowserAutomationPermission.detectedFamily),把结论存下来,免得每次启动都去磁盘上
@@ -1514,7 +1514,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    // 浏览器那道 JS 开关最近一次**被实测证明可用**的时刻(bundle id 到 时间)。
+    // 浏览器那道 JS 开关最近一次**被实测证明可用**的时刻(bundle id → 时间)。
     //
     // 存这个是因为那道开关的状态**根本读不出来** —— Chromium 系存在浏览器 profile 的
     // `Preferences` 里,别的 App 读那个目录要「完全磁盘访问权限」。于是设置页只能永远显示

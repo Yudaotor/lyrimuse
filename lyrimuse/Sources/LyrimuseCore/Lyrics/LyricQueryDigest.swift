@@ -7,8 +7,8 @@ import Foundation
 /// [Instrumental]》)一轮问了 9 组词,逐条平铺出来是这样:
 ///
 ///     · Utada - Beautiful World (Da Capo Version) [Instrumental]（首轮）
-///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 到 只问 网易云音乐、QQ音乐、LRCLIB、Musixmatch、AMLL、酷我音乐、咪咕音乐）
-///     · 宇多田ヒカル - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 到 只问 网易云音乐、QQ音乐、LRCLIB、…）
+///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 → 只问 网易云音乐、QQ音乐、LRCLIB、Musixmatch、AMLL、酷我音乐、咪咕音乐）
+///     · 宇多田ヒカル - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 → 只问 网易云音乐、QQ音乐、LRCLIB、…）
 ///     …再来六行一模一样的后缀
 ///
 /// 屏幕上 20 多个视觉行,而**真正的信息只有「曲名没变,换了 9 个歌手名」**:曲名重复 9 遍、

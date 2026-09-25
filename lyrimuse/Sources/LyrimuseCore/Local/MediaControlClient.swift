@@ -43,15 +43,15 @@ public enum MediaControlClient {
     /// players 是当前选中的播放器集合(可多选,取代原来的单值 `player:`
     /// 参数)。三条路径,按优先级(跟 collector 侧 system.go 的 getState() 是同一套设计,
     /// 两侧必须同步维护):
-    ///   - 选了「自动识别」(不管是否同时还勾了别的具体播放器,auto 是超集)到
+    ///   - 选了「自动识别」(不管是否同时还勾了别的具体播放器,auto 是超集)→
     ///     fetchAutoDetectedSnapshot;
-    ///   - 恰好只选了 Apple Music 一个、没有 auto 到 跳过 media-control,直接走
+    ///   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
     ///     fetchAppleMusicSnapshot 的 AppleScript 路径(跟单选年代完全一样,不多背一次
     /// 子进程往返)。 这条路外面包了一层 radioAwareAppleMusicSnapshot:
     ///     电台判据是 MediaRemote 独有的字段,AppleScript 拿不到,不补的话这一种配置下电台
     ///     完全不生效。补法是**按曲目探一次**,不是每拍都问 —— 上面那句"不多背一次往返"仍然
     ///     成立到换歌粒度,详见那个函数的头注;
-    ///   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,没有 auto)到
+    ///   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,没有 auto)→
     ///     fetchMultiSelectedSnapshot,核对 media-control 报的系统级 Now Playing 焦点是不是
     ///     落在选中的这个子集里。
     ///
@@ -572,7 +572,7 @@ public enum MediaControlClient {
     /// MediaRemote 的「正在播放」是**系统级的单一焦点**,任何注册了 MPNowPlayingInfoCenter
     /// 的 App 都能占走 —— 网页里一个 video 元素就够。而默认配置(`[.auto]`)下 Apple Music 的
     /// 身份基座**也是** media-control(它回答"现在是谁在放",位置再交给 `adaptedSnapshot`
-    /// 里的 AppleScript)。焦点一被占,这条路直接 return nil 到 `LocalPlaybackSource` 把歌词 /
+    /// 里的 AppleScript)。焦点一被占,这条路直接 return nil → `LocalPlaybackSource` 把歌词 /
     /// 标题 / 封面全清空,而 Music.app 一直在放、AppleScript 一问就知道。
     ///
     /// 坐实:本机 UserDefaults 的 `np:unknownPlayerNotices` 里存着 Chrome 2 次、Edge 1 次、
@@ -945,15 +945,15 @@ public enum MediaControlClient {
     ///   - `τ < ts + 1`     (frac < 1)
     ///   - `τ ≤ 首见时刻`    (我们不可能在它发布之前看到它)
     /// 取 `[ts, min(ts+1, 首见时刻)]` 的中点。这个式子的好处是**永远不会比现状更差**:
-    ///   - 事件流即时发现(首见 − ts 很小)到 误差 ≤ 那个间隔的一半,很小
-    ///   - 只靠 2 秒轮询发现(间隔 ≥ 1)到 退化成 `ts + 0.5`,最坏 ±0.5s,仍是现状 [0,1) 的一半
+    ///   - 事件流即时发现(首见 − ts 很小)→ 误差 ≤ 那个间隔的一半,很小
+    ///   - 只靠 2 秒轮询发现(间隔 ≥ 1)→ 退化成 `ts + 0.5`,最坏 ±0.5s,仍是现状 [0,1) 的一半
     ///
     /// 纯函数,selftest 直接覆盖。
     public nonisolated static func estimatedAnchorInstant(timestamp: Date, firstSeenAt: Date) -> Date {
         // 带 `--micros` 拿到的是精确锚点时刻,没有被抹掉的小数可估,原样返回(见 MediaControlMicros)。
         guard !MediaControlMicros.isPrecise(timestamp) else { return timestamp }
         let observedGap = firstSeenAt.timeIntervalSince(timestamp)
-        // 首见时刻早于时间戳(时钟回拨/解析异常)到 不猜,原样返回。
+        // 首见时刻早于时间戳(时钟回拨/解析异常)→ 不猜,原样返回。
         guard observedGap > 0 else { return timestamp }
         return timestamp.addingTimeInterval(min(1.0, observedGap) / 2)
     }
@@ -977,8 +977,8 @@ public enum MediaControlClient {
     /// 被看到",而是 watcher 刚(重)启、media-control 把当前**旧**锚点整份吐了一遍 —— 只能算 loose。
     public nonisolated static let tightSightingMaxAge: TimeInterval = 1.5
 
-    /// 带目击类型的锚点时刻估计。tight 到 到达时刻回退一个典型延迟,再夹进 [ts, ts+1)(floor
-    /// 语义 + frac<1,两条界跟上面一样);loose 到 退回上面的中点法。
+    /// 带目击类型的锚点时刻估计。tight → 到达时刻回退一个典型延迟,再夹进 [ts, ts+1)(floor
+    /// 语义 + frac<1,两条界跟上面一样);loose → 退回上面的中点法。
     ///
     /// 为什么值得多这一档(实测,Spotify 暂停后恢复播放):恢复那一刻 Spotify 重打
     /// 锚点且 playbackRate 变 null,media-control 的 elapsedTimeNow 从此不再外推,App 只能自己
@@ -1028,10 +1028,10 @@ public enum MediaControlClient {
     /// 跟屏上只差 0.1s。在 Spotify 自己界面里按暂停它会发布冻结值(带新时间戳),那时旧规则是对的。
     ///
     /// 规则(有暂停事件时刻 `pauseObservedAt`,且它落在上一拍之后、现在之前):
-    ///  - 锚点时间戳比暂停事件早 `pauseAnchorMaxSkew` 以上 到 锚点**早于**暂停,冻结值不可信,
+    ///  - 锚点时间戳比暂停事件早 `pauseAnchorMaxSkew` 以上 → 锚点**早于**暂停,冻结值不可信,
     ///    把上一拍的位置按 rate=1 外推到暂停那一刻;
-    ///  - 否则锚点就是暂停时发布的 到 原样用冻结值(与旧规则一致)。
-    /// 没有事件时刻(watcher 挂了 / 事件比轮询晚)到 退回旧规则。
+    ///  - 否则锚点就是暂停时发布的 → 原样用冻结值(与旧规则一致)。
+    /// 没有事件时刻(watcher 挂了 / 事件比轮询晚)→ 退回旧规则。
     public nonisolated static func pausedPositionSeconds(
         elapsedTime: Double?, anchorTimestamp: Date?,
         lastPlaying: (position: Double, sampledAt: Date)?, pauseObservedAt: Date?, now: Date
@@ -1443,7 +1443,7 @@ public enum MediaControlClient {
     // 变回 1)。MediaRemote 按新时间戳外推,media-control 的 elapsedTimeNow 随之退回 34 秒
     // (01:41:46 读到 73.75,真实 ≈107.6),App 的 seek 分支把它当成真实回跳重锚 —— 用户看到
     // "歌词落后很多,一暂停往前补一大段"(暂停时 Spotify 才重新算了一次真实位置)。广告开始后
-    // 1~2 秒也常见同一形态(elapsed 0 @ :30 到 0 @ :31)。触发源没查到:AppleScript 读 Spotify
+    // 1~2 秒也常见同一形态(elapsed 0 @ :30 → 0 @ :31)。触发源没查到:AppleScript 读 Spotify
     // 属性不会触发(01:44 实测,事件流纹丝不动)。
     //
     // 签名 = **同一首歌、elapsedTime 逐 ms 相等、时间戳变了**:真实的 seek / 暂停 / 恢复必然改
@@ -1517,8 +1517,8 @@ public enum MediaControlClient {
     nonisolated(unsafe) private static var lastPlayingAnchor: PlayingAnchor?
     nonisolated(unsafe) private static var lastIgnoredRepublishTimestamp: String?
 
-    /// 记住"上一个播放锚点",并判定这次是不是它的陈旧重发。是 到 返回原锚点时刻(调用方据此自己
-    /// 外推);否 到 记下这次的锚点,返回 nil。日志只在每个被忽略的新时间戳第一次出现时打一行。
+    /// 记住"上一个播放锚点",并判定这次是不是它的陈旧重发。是 → 返回原锚点时刻(调用方据此自己
+    /// 外推);否 → 记下这次的锚点,返回 nil。日志只在每个被忽略的新时间戳第一次出现时打一行。
     private nonisolated static func trackPlayingAnchor(
         track: String, elapsed: Double, timestamp: String, candidateInstant: Date, duration: Double?,
         bundleID: String?, now: Date

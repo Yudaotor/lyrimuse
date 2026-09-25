@@ -200,8 +200,8 @@ enum LyricsBackupStore {
         LyrimusePaths.configFile("lyrics-backups")
     }
 
-    /// 只保留最近这么多份。歌词库实测 14.5 MB 到 压缩后 6.1 MB,三份约 18 MB —— 够覆盖
-    /// "清空 到 发现不对"这个窗口,又不至于在用户不知情的地方长成一个无上限的黑洞
+    /// 只保留最近这么多份。歌词库实测 14.5 MB → 压缩后 6.1 MB,三份约 18 MB —— 够覆盖
+    /// "清空 → 发现不对"这个窗口,又不至于在用户不知情的地方长成一个无上限的黑洞
     /// (那正是配置包 sidecar 当初被否掉进 iCloud 的理由之一,见 14 章 §4)。
     static let autoSnapshotKeepCount = 3
 

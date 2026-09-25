@@ -11,8 +11,8 @@ import (
 // 上送写法由三个布尔决定(features().LastfmMatchArtist / Track / FirstArtistOnly,
 // 档位在 resolveLastfmMatch 那边就摊平了)。这里用 nil 匹配器跑,只考察**不联网的那一半**:
 //
-//  1. 三个布尔全 false(「原始」档)到 歌手曲名一个字都不动。
-//  2. 只开截断 到 纯字符串取第一位(firstCreditedArtist),结果可复现、不打网络。
+//  1. 三个布尔全 false(「原始」档)→ 歌手曲名一个字都不动。
+//  2. 只开截断 → 纯字符串取第一位(firstCreditedArtist),结果可复现、不打网络。
 //  3. **曲名永远不会被截断那一路碰**。
 //  4. 匹配器为 nil(没配只读 api_key)时开着匹配也不能 panic,退化成原样。
 func TestResolveScrobbleTags(t *testing.T) {

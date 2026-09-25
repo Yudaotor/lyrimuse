@@ -5,7 +5,7 @@ import SwiftUI
 /// SF Symbols 里 `textformat.abc` 这类"字母表"符号会跟着 locale 变形。用
 /// ImageRenderer 逐个 locale 实测:
 ///
-///     en 到 Abc      zh 到 甲乙丙      ja 到 あいう      ko 到 가나다
+///     en → Abc      zh → 甲乙丙      ja → あいう      ko → 가나다
 ///
 /// 这个特性本身是好的,别处该留着——比如「译文」用的 `character.book.closed`,中文下画的
 /// 是封面写着"字"的词典,比英文原版更贴切。

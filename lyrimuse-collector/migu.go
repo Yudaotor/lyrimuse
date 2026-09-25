@@ -17,8 +17,8 @@ import (
 	"encoding/json"
 )
 
-// miguLyric 是歌词第九个候选来源(咪咕音乐,非官方接口:搜索到按元数据校验重排到并发拉
-// 前几条歌词到挑第一份真同步的;选中的那条带 trcUrl 就再拉一份中文译文)。接口契约
+// miguLyric 是歌词第九个候选来源(咪咕音乐,非官方接口:搜索→按元数据校验重排→并发拉
+// 前几条歌词→挑第一份真同步的;选中的那条带 trcUrl 就再拉一份中文译文)。接口契约
 // 用 curl 实测过两个端点:`pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do`
 // 搜歌(带 `User-Agent` + `Referer: https://m.music.migu.cn/` 即可,不需要签名/登录),
 // 结果里每条直接给 `lyricUrl`(逐行 LRC 文件)和可选的 `trcUrl`(同一时间轴的中文译文

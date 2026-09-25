@@ -151,7 +151,7 @@ public enum PlayCountBreakdownMath {
         var variants: [PlayCountBreakdown.Variant] = []
         var plays: [PlayCountBreakdown.Play] = []
         // 编号截止:没拉完的写法里,已拉到的最旧一条;取各写法里**最晚**的那个(任何一个没拉完
-        // 的写法都可能在它自己的截止之前藏着没拉到的条)。有写法一条都没拉到(失败)到 整体不编号。
+        // 的写法都可能在它自己的截止之前藏着没拉到的条)。有写法一条都没拉到(失败)→ 整体不编号。
         var cutoff: Date?
         for (index, input) in inputs.enumerated() {
             var dupCount: [TimeInterval: Int] = [:]

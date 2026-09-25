@@ -21,7 +21,7 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 		t.Errorf("应挑到 257s 那条(而不是 4s 的脏数据),实际 %v", got)
 	}
 
-	// 多个都在容差内 到 取最接近的
+	// 多个都在容差内 → 取最接近的
 	got = pickLRCLIBSearchResult([]lrclibSearchItem{
 		item("Blue Gangsta", 270, lrc),
 		item("Blue Gangsta", 256, lrc),
@@ -61,12 +61,12 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 		t.Error("歌手对不上的候选不该被采纳")
 	}
 
-	// 全部超出时长容差 到 挑不出,宁可这一源没结果
+	// 全部超出时长容差 → 挑不出,宁可这一源没结果
 	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 600, lrc)}, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("时长差一倍以上的候选不该被采纳")
 	}
 
-	// 本地时长未知 到 退回"取第一个过门的",不因为无法核对就整源放弃
+	// 本地时长未知 → 退回"取第一个过门的",不因为无法核对就整源放弃
 	got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 0, lrc), item("Blue Gangsta", 257, lrc)}, "Michael Jackson", "Blue Gangsta", "", 0)
 	if got == nil || got.Duration != 0 {
 		t.Errorf("本地时长未知时应取第一个过门的候选,实际 %v", got)

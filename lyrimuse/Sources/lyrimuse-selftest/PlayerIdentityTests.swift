@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runPlayerIdentityTests() {
-    // ---- bundleID 到 数据源档位映射 ----
+    // ---- bundleID → 数据源档位映射 ----
     do {
         typealias L = LocalPlaybackSource
         expectEqual(L.positionSourceTier(forBundleID: "com.apple.Music") == .precise, true,
@@ -67,7 +67,7 @@ func runPlayerIdentityTests() {
         expectEqual(Mode.shuffle.next(allowsRepeatOne: true), .repeatOne, "播放模式: 随机→单曲")
         expectEqual(Mode.repeatOne.next(allowsRepeatOne: true), .list, "播放模式: 单曲→列表")
 
-        // 列表循环档(补,AM 循环键三态):全部到单曲;够不到单曲的播放器直接回列表
+        // 列表循环档(补,AM 循环键三态):全部→单曲;够不到单曲的播放器直接回列表
         expectEqual(Mode.repeatAll.next(allowsRepeatOne: true), .repeatOne, "播放模式: 全部→单曲")
         expectEqual(Mode.repeatAll.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 全部→列表")
 
@@ -84,8 +84,8 @@ func runPlayerIdentityTests() {
         //   可能读到它),回不去正是设计意图,不是卡住;把它也算进"必须回到原点"的话,
         //   断言直接红了,是断言写宽了,不是实现错了。
         // ② 列表循环档:next() 的老三档轮换不产出它 —— 产出它的是歌词
-        //   窗口循环键自己的三态 switch(关到全部到单曲到关),cyclePlaybackMode 读到它时
-        //   顺 AM 语义走 全部到单曲,不需要转回来。
+        //   窗口循环键自己的三态 switch(关→全部→单曲→关),cyclePlaybackMode 读到它时
+        //   顺 AM 语义走 全部→单曲,不需要转回来。
         for allows in [true, false] {
             for start in Mode.allCases {
                 var cur = start
@@ -175,7 +175,7 @@ func runPlayerIdentityTests() {
     //
     // 判据跟 collector 的 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在作用域:
     // 那个只服务 Spotify 广告,这个服务信任列表。样本全是真抓的,四份:
-    //   酷狗 周杰伦/七里香、Spotify 方大同/Soulboy、Apple Music 卢广仲/100种生活 到 是歌
+    //   酷狗 周杰伦/七里香、Spotify 方大同/Soulboy、Apple Music 卢广仲/100种生活 → 是歌
     //   Arc 放视频 两次:①artist/album 都空 ②artist=频道名「Dream in reality」、album 仍空
     // **album 是这四份里唯一 100% 分对的字段** —— ② 正是"只卡 artist 不够"的证据。
     do {
@@ -212,7 +212,7 @@ func runPlayerIdentityTests() {
 
         // ---- Safari 媒体代理进程(王力宏《你不知道的事》Safari 网页播放案) ----
         // Safari 播网页音频报的是 com.apple.WebKit.GPU,信任表存的是宿主 com.apple.Safari。
-        // 原来这里裸查 trusted[bundleID],对代理进程恒落空 到 Safari 播非歌视频这道守卫恒不
+        // 原来这里裸查 trusted[bundleID],对代理进程恒落空 → Safari 播非歌视频这道守卫恒不
         // 生效。collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修(那边还多两处:
         // getAutoDetectedState 整条丢播放、mediaPlayerLabel 谎报 Apple Music)。
         let safariTrusted = ["com.apple.Safari": "Safari"]
@@ -458,7 +458,7 @@ func runPlayerIdentityTests() {
         // ⓪-d "这条是不是广告"的字段/页面判据(LocalPlaybackSource.adBreakByFields)。
         //    真凶:Safari / Arc 同时配对了 spotifyWeb 和 youtubeMusic,原来 `isSpotify` 只看"配对过
         //    Spotify 网页版"就把原生那套"album 空即广告"套到了 YT Music 上 —— MV 常常不报专辑名,
-        //    整首被标成「广告中」(王子《Why You Wanna Treat Me So Bad?》album 空 到 广告;同专辑带
+        //    整首被标成「广告中」(王子《Why You Wanna Treat Me So Bad?》album 空 → 广告;同专辑带
         //    专辑名的《Sexy Dancer》正常)。网页版现在只认 SpotifyWebAdProbe 的正向证据。
         expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "Why You Wanna Treat Me So Bad?", artist: "王子",
                                       album: "", youTubeMusicVerdict: .song, spotifyWebVerdict: nil), false,
@@ -511,7 +511,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.parse("0|0|0|")?.strongAd, false, "读数强弱: 歌不谈强弱,恒 false")
         expectEqual(P.Reading(verdict: .song, strongAd: true, album: "").strongAd, false,
                     "读数强弱: 构造时歌 + strong 会被归一成 false,不存在\"强信号的歌\"这种状态")
-        // 状态机吃的是 badge 口径:换曲那一拍读到弱 ad(到 nil)不是广告;同曲期间弱 ad 也只是「保持」。
+        // 状态机吃的是 badge 口径:换曲那一拍读到弱 ad(→ nil)不是广告;同曲期间弱 ad 也只是「保持」。
         expectEqual(S.nextAdBreakState(previous: false, isNewTrack: true, adByFields: false, pageVerdict: nil), false,
                     "广告状态机: 换曲那一拍只有裸标题(badge 口径 nil)→ 不是广告(用户报的 bug)")
         expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "It's Gonna Be Lonely", artist: "Prince", album: "Prince",
@@ -700,8 +700,8 @@ func runPlayerIdentityTests() {
     // 页面复核根本轮不到(YT Music 广告的 artist 是广告主频道名、非空,所以走得到)。
     //
     // 判据来自现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
-    //   4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調) 到 0|0|0|0
-    //   6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」) 到 1|1|1|1
+    //   4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調) → 0|0|0|0
+    //   6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」) → 1|1|1|1
     do {
         typealias S = SpotifyWebAdProbe
 
@@ -829,7 +829,7 @@ func runPlayerIdentityTests() {
         }
         // ---- Safari 的媒体代理进程----
         // 实测撞上的断层:「网页播放器」卡里配对了 Safari(配对会把 com.apple.Safari 写进
-        // 信任列表),可真播起来 MediaRemote 上报的是 com.apple.WebKit.GPU,不在名单里 到
+        // 信任列表),可真播起来 MediaRemote 上报的是 com.apple.WebKit.GPU,不在名单里 →
         // 整条播放不被采纳,同时"发现未知播放器"卡还跳出来要用户再信任一个看不懂的 bundle id。
         do {
             let webkit = "com.apple.WebKit.GPU"

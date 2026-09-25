@@ -295,8 +295,8 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 	}
 }
 
-// resolveScrobbleTags 决定这条提交实际发哪个歌手名 + 曲名。设置里是三档(账号 到 Last.fm 到
-// 设置 到 Scrobble 卡 到「匹配模式」:智能 / 自定义 / 原始),但档位在 features 那边已经
+// resolveScrobbleTags 决定这条提交实际发哪个歌手名 + 曲名。设置里是三档(账号 → Last.fm →
+// 设置 → Scrobble 卡 →「匹配模式」:智能 / 自定义 / 原始),但档位在 features 那边已经
 // **摊平成三个布尔**了(resolveLastfmMatch),这里只按布尔办事:
 //
 //   - LastfmMatchArtist / LastfmMatchTrack:允许把歌手 / 曲名改写成 Last.fm 编目条目的
@@ -511,7 +511,7 @@ type lastfmRecentPage struct {
 
 // lastfmRecent fetches a user's recent Last.fm tracks: the currently-playing one
 // (if any) and completed scrobbles with timestamps (newest first). Bridges iPhone
-// playback (FastScrobbler到Last.fm) into ListenBrainz — now-playing mirrors the
+// playback (FastScrobbler→Last.fm) into ListenBrainz — now-playing mirrors the
 // live track, completed scrobbles are forwarded as listens so "last played" and
 // history reflect the phone on any device. 同一份响应也落成 App 读的
 // recent feed(lastfmfeed.go),所以顺手多解 image / @attr.total。
@@ -588,7 +588,7 @@ func parseLastfmRecent(body []byte) (lastfmRecentPage, error) {
 			continue
 		}
 		tr := lastfmTrack{Title: t.Name, Artist: t.Artist.Text, Album: t.Album.Text}
-		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large 到 extralarge 到 最后一档)。
+		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large → extralarge → 最后一档)。
 		pick := func(size string) string {
 			for _, im := range t.Image {
 				if im.Size == size {

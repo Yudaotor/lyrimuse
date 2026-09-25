@@ -146,7 +146,7 @@ public enum LyricQuotePicker {
         if terminalPunctuation.contains(last) { return false }
         if text.count <= 5 { return true }
         if danglesAtEnd(text) { return true }
-        // 下一行以附着成分开头 到 它是这一行的尾巴
+        // 下一行以附着成分开头 → 它是这一行的尾巴
         if let head = next.first, encliticHeads.contains(head) { return true }
         return false
     }

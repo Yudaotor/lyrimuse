@@ -37,8 +37,8 @@ import (
 //
 // MyMemory 实测日译中/英译中的质量对"看个大意"这个用途够用:
 //
-//	君のことが好きだから      到 因为我喜欢你
-//	The painful youth I've had 到 我经历过的痛苦的青春
+//	君のことが好きだから      → 因为我喜欢你
+//	The painful youth I've had → 我经历过的痛苦的青春
 //
 // 译文沿用**主歌词自己的时间戳**逐行生成,不另求时间轴 —— 天然逐行对齐,比社区译文各自
 // 带一套时间戳还准(播放端是按最近时间戳配对的,见 LyricsSyncEngine.nearestText)。
@@ -191,7 +191,7 @@ type translationResult struct {
 // machineTranslateLRC 把主歌词逐行机翻成 target 语言,返回一份跟主歌词同时间戳的译文 LRC。
 // 返回空串表示"这次没有译文"(已经是目标语言/一行都没翻成/配额用尽),不是错误。
 // translateBaseURL 为空时走 MyMemory 正式端点。留这个包级变量是为了让测试能把
-// backfillTranslation **整条**路径(翻译 到 写缓存 到 落盘)跑起来,而不是只能测中间那段。
+// backfillTranslation **整条**路径(翻译 → 写缓存 → 落盘)跑起来,而不是只能测中间那段。
 var translateBaseURL string
 
 func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, artist, title string) (translationResult, error) {
@@ -214,7 +214,7 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, a
 // 英文行本来就不需要译文(assembleTranslationLRC 也早就会跳过"没翻动"的行),剩下的日文行
 // 单独成批,后端识别出来就是日文,两边都能正常工作。
 //
-// 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 到 英文译文)这套判断
+// 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 → 英文译文)这套判断
 // 帮不上忙 —— 但那种情况整批识别本来也会失败,不比现在更糟。
 type lyricScript int
 
@@ -316,7 +316,7 @@ func anyLineNeedsTranslation(lyrics, target string) bool {
 }
 
 // machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
-// 单测靠它把整条链路(分块 到 请求 到 行数校验 到 回写时间戳)跑在本地假服务器上。
+// 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
 // looksLikeLyricHeaderLine 认 LRC 的抬头行 ——「曲名 - 歌手」/「歌手 - 曲名」。
 // 判据整体照搬 Swift 侧 LyricsSyncEngine.looksLikeHeaderLine(展示端靠它把抬头行藏掉),
 // 两边各维护一份的理由跟 sanitizeFilename 那对一样:纯确定性的字符串比对,没有会随时间
@@ -720,7 +720,7 @@ const (
 // 也就是机制在、只是没有触发的机会。
 //
 // 放在启动时扫一遍正好覆盖这个场景:Swift 侧改完译文语言会重启 collector
-// (FeatureSettingsStore.save 到 CollectorControl.restartAndWaitAsync)。
+// (FeatureSettingsStore.save → CollectorControl.restartAndWaitAsync)。
 //
 // **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云/Musixmatch)
 // 质量高于机翻,而且清掉之后万一机翻失败(没网/超额),用户就一份译文都没有了;留着它
@@ -850,7 +850,7 @@ func backfillTranslation(key string) {
 	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
 	// 界面永远看不到。现象是"译文语言切成英文了还是没有翻译",日志里译文明明
 	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
-	// backfillPeripheralFields 一直是"解锁到saveEnrichCache",另外三条补全路径全漏了。
+	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
 	//
 	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
 	// 在持锁期间调用会死锁。

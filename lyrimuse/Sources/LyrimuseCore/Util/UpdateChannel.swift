@@ -40,7 +40,7 @@ public enum UpdateChannel {
         }
     }
 
-    /// 解析 `/repos/{owner}/{repo}/releases` 的响应,只取三个字段。顶层不是数组、或某条缺 tag_name 到 nil(整份不信)。
+    /// 解析 `/repos/{owner}/{repo}/releases` 的响应,只取三个字段。顶层不是数组、或某条缺 tag_name → nil(整份不信)。
     public static func parseReleases(_ data: Data) -> [Release]? {
         guard let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
         var out: [Release] = []
@@ -53,7 +53,7 @@ public enum UpdateChannel {
         return out
     }
 
-    /// 非 draft、tag 能解析的 Release 里版本最高的那一个;没有 到 nil。draft 的还没发出来、资产可能不全;
+    /// 非 draft、tag 能解析的 Release 里版本最高的那一个;没有 → nil。draft 的还没发出来、资产可能不全;
     /// 解析不了的 tag(历史遗留的奇形怪状)不参与比较。
     public static func newestRelease(_ releases: [Release]) -> Release? {
         releases

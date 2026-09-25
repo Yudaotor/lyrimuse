@@ -13,7 +13,7 @@ import (
 // musixmatchEnsureToken 判定"没有可用 token"之后,并发的每个 goroutine 各自去发一次
 // token.get——apic 那台机器实测把除第一个之外的并发请求全按反爬拒掉(401
 // hint=captcha),被拒的按官方样例退避 10 秒重试一次,但 20 秒的搜索预算扛不住 N 个
-// goroutine 各跑一遍"发请求到等 10 秒到重试"。
+// goroutine 各跑一遍"发请求→等 10 秒→重试"。
 //
 // 这条测试验证修法本身(单飞锁),不碰网络——用 musixmatchDoFetchToken 这个缝把"真的
 // 换 token"换成一个只计次的桩,断言 16 个并发调用只触发 1 次。

@@ -3,7 +3,7 @@ import Foundation
 /// Apple Music「动态封面」(motion artwork)的 HLS 清单解析(「帮我看看怎么把我们的
 /// 封面搞成 applemusic 里面的那种会动的效果」)。
 ///
-/// 这一层只做**纯字符串 到 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
+/// 这一层只做**纯字符串 → 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
 /// 发现资源在 collector(`motioncover.go`),下载与播放在 App(`MotionCoverStore` / `MotionCoverLayer`)。
 ///
 /// 全部结论都是在 Prince《Timeless》(collectionId 6773830957)上实测出来的:
@@ -176,7 +176,7 @@ public enum MotionCoverManifest {
         return nil
     }
 
-    /// `768x768` 到 (768, 768)。
+    /// `768x768` → (768, 768)。
     public static func parseResolution(_ s: String) -> (Int, Int)? {
         let parts = s.lowercased().split(separator: "x")
         guard parts.count == 2, let w = Int(parts[0]), let h = Int(parts[1]), w > 0, h > 0 else { return nil }

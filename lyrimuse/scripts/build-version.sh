@@ -1,12 +1,12 @@
 #!/bin/bash
-# 展示版本 到 CFBundleVersion 构建号(四段纯数字)。**唯一**定义处:build.sh 写 Info.plist、release.yml 生成
+# 展示版本 → CFBundleVersion 构建号(四段纯数字)。**唯一**定义处:build.sh 写 Info.plist、release.yml 生成
 # appcast、selftest(update-channel 组)交叉校验 Core 的 ReleaseVersion 都调它,别在别处再写一份映射。
 #
-#   X.Y.Z            到 X.Y.Z.1000     正式版
-#   X.Y.Z-alpha.N    到 X.Y.Z.N        (1 ≤ N ≤ 99)
-#   X.Y.Z-beta.N     到 X.Y.Z.(100+N)  (1 ≤ N ≤ 399)
-#   X.Y.Z-rc.N       到 X.Y.Z.(500+N)  (1 ≤ N ≤ 499)
-#   其它形态          到 退出码 1,什么都不打印(前导 v 可有可无;数字不许带前导零)
+#   X.Y.Z            → X.Y.Z.1000     正式版
+#   X.Y.Z-alpha.N    → X.Y.Z.N        (1 ≤ N ≤ 99)
+#   X.Y.Z-beta.N     → X.Y.Z.(100+N)  (1 ≤ N ≤ 399)
+#   X.Y.Z-rc.N       → X.Y.Z.(500+N)  (1 ≤ N ≤ 499)
+#   其它形态          → 退出码 1,什么都不打印(前导 v 可有可无;数字不许带前导零)
 #
 # 为什么要有第四段:Sparkle 比较版本用的是 sparkle:version / CFBundleVersion,而它的
 # SUStandardVersionComparator 实测把 "-" 之后的全部忽略 —— "1.6.0-beta.1" 与 "1.6.0"、"beta.2" 与

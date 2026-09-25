@@ -110,7 +110,7 @@ func TestLyricsUpgradeBaselineEmptyEntry(t *testing.T) {
 	if baseline != 0 || !comparable {
 		t.Errorf("空歌词条目: baseline=%d comparable=%v, want 0/true", baseline, comparable)
 	}
-	// 有歌词、版本又是当前版本 到 照旧用它自己的分数当基准(不能被上面那一支吃掉)。
+	// 有歌词、版本又是当前版本 → 照旧用它自己的分数当基准(不能被上面那一支吃掉)。
 	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion}
 	if baseline, comparable = lyricsUpgradeBaseline(e, nil); baseline != 900 || !comparable {
 		t.Errorf("有歌词同版本: baseline=%d comparable=%v, want 900/true", baseline, comparable)

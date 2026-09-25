@@ -104,7 +104,7 @@ const (
 // 返回 `a|b|c|album`:前三段各为 0/1(ad-showing / 广告徽章 / 裸标题),第四段是**页面上
 // 读到的专辑名**(加,可能为空)。判定留给 Go 侧(parseYTMusicAdProbe),这样
 // 这条规则是可单测的,不是埋在一段没法跑测试的 JS 里。
-// 页面上压根找不到播放器 到 `NOTFOUND`,让调用方走 fail-closed。
+// 页面上压根找不到播放器 → `NOTFOUND`,让调用方走 fail-closed。
 //
 // **专辑名必须放最后一段**:它是任意文本、理论上可以含 `|`,解析那边按"最多切 4 段"
 // 切,第四段原样保留。
@@ -434,10 +434,10 @@ func runBrowserTabScript(ctx context.Context, bundleID, family, host, js string)
 // 所以基础判据原样不动,复核作为**外面一层**加上去。
 //
 // 复核只在一种情况下发生:基础判据要拒、而且**唯一的理由是 album 为空**(artist 非空)。
-//   - artist 为空 到 一律拒,不复核。真曲目必有歌手,而这也挡住了"广告连频道名都没报"那档,
+//   - artist 为空 → 一律拒,不复核。真曲目必有歌手,而这也挡住了"广告连频道名都没报"那档,
 //     省掉一次 AppleScript 往返。
-//   - 复核结果 isSong 到 放行(这就是 YouTube Music 终于能被识别的那一步)。
-//   - isAd 或 unknown 到 拒。**unknown 也拒**是刻意的 fail-closed,见文件头注。
+//   - 复核结果 isSong → 放行(这就是 YouTube Music 终于能被识别的那一步)。
+//   - isAd 或 unknown → 拒。**unknown 也拒**是刻意的 fail-closed,见文件头注。
 //
 // 第二个返回值是**要补给上游的专辑名**(空串 = 不用补),见 ytmusicAlbumPatch。这条复核
 // 本来就只在"album 为空"时才发生,正好是需要补的那一刻,顺路带回来不多花一次 AppleScript。

@@ -187,8 +187,8 @@ func runOpsDiagnosticsTests() {
 
     // ---- JSONConfigDocument(共享配置文件三态读写)----
     //
-    // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)到 加载判 corrupt、保存
-    // **拒绝**、文件字节一字不动;② 写盘失败 到 内存里的字典和状态**不变**。都拿真实的临时目录跑。
+    // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)→ 加载判 corrupt、保存
+    // **拒绝**、文件字节一字不动;② 写盘失败 → 内存里的字典和状态**不变**。都拿真实的临时目录跑。
     // 原来 ConfigStore 把「不存在」和「坏了」混成一回事,一个 JSON 语法错误之后任何一次保存都会用 14 个空串
     // 覆盖 config.json(凭据全丢)——这一组断言就是不让它回来。
     do {
@@ -208,7 +208,7 @@ func runOpsDiagnosticsTests() {
             return false
         }
 
-        // ① 不存在 到 missing;首次保存允许创建;写完状态推进到 loaded、凭据模式落成 0600。
+        // ① 不存在 → missing;首次保存允许创建;写完状态推进到 loaded、凭据模式落成 0600。
         let fresh = dir.appendingPathComponent("fresh.json")
         var d1 = D.load(url: fresh)
         expectEqual(d1.state, .missing, "三态: 文件不存在 → missing")
@@ -233,7 +233,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(d2.raw["listenbrainz_token"] as? String, "new", "合并: 写成功后内存镜像同步")
         expectEqual(d2.merging(fields: ["a": 1]).count, 3, "合并: knownKeys 缺省 = 只覆盖给的键,其余全留")
 
-        // ③ 坏 JSON 到 corrupt;保存抛 refusedCorruptFile;文件字节一字不动;原因里不带文件内容。
+        // ③ 坏 JSON → corrupt;保存抛 refusedCorruptFile;文件字节一字不动;原因里不带文件内容。
         let bad = dir.appendingPathComponent("bad.json")
         let badBytes = Data(#"{"listenbrainz_token": "SECRETTOKENVALUE", oops"#.utf8)
         try? badBytes.write(to: bad)
@@ -267,7 +267,7 @@ func runOpsDiagnosticsTests() {
         case .failure: expectEqual(true, false, "parseObject: {} 必须成功")
         }
 
-        // ④ 写失败不污染内存:目标路径的父目录不存在 到 写盘抛错 到 raw / state 不变。secure 与否都要成立。
+        // ④ 写失败不污染内存:目标路径的父目录不存在 → 写盘抛错 → raw / state 不变。secure 与否都要成立。
         for secure in [true, false] {
             let orphan = dir.appendingPathComponent("no-such-dir/orphan.json")
             var d4 = D(url: orphan, raw: ["keep": "me"], state: .loaded)
@@ -284,7 +284,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(threw4b, true, "写失败不污染内存: 目标路径是目录 → 写盘抛错")
         expectEqual(d4b.raw["keep"] as? String, "me", "写失败不污染内存: 目录占位时字典不变")
 
-        // 序列化不了(字典里混进 Date)到 notSerializable,文件与内存都不动。
+        // 序列化不了(字典里混进 Date)→ notSerializable,文件与内存都不动。
         var d4c = D.load(url: normal)
         var err4c: Error?
         do { try d4c.save(fields: ["when": Date()], secure: false) } catch { err4c = error }
@@ -292,7 +292,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(D.load(url: normal).raw["when"] == nil, true, "写失败不污染内存: notSerializable 时文件没动")
         expectEqual(d4c.raw["when"] == nil, true, "写失败不污染内存: notSerializable 时字典没动")
 
-        // ⑤ markCorrupt:对象层面之上判定不可用(字段类型对不上)到 一样拒绝保存。
+        // ⑤ markCorrupt:对象层面之上判定不可用(字段类型对不上)→ 一样拒绝保存。
         var d5 = D.load(url: normal)
         d5.markCorrupt(reason: "fields do not decode")
         expectEqual(d5.isCorrupt, true, "markCorrupt: loaded → corrupt")
@@ -499,7 +499,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(flood?.stdoutText, "done\n", "ProcessRunner: stderr 灌满时 stdout 照样完整")
         expectEqual(flood?.stderr.count, 262144, "ProcessRunner: 大块 stderr 一字节不少")
 
-        // 可执行文件不存在 到 nil（"根本没起来"），不是 status 非零。
+        // 可执行文件不存在 → nil（"根本没起来"），不是 status 非零。
         expectEqual(ProcessRunner.run("/nonexistent/binary", [], timeout: 5) == nil, true,
                     "ProcessRunner: 起不来的命令返回 nil")
 
@@ -948,7 +948,7 @@ func runOpsDiagnosticsTests() {
     }
 
     // 提交前的两道闸(.githooks/pre-commit):gofmt 保证暂存的 .go 文件已格式化(CI 第一步
-    // 就是它),注释卫生(到 scripts/check-comment-hygiene.py)保证注释只写现状与约束、过程性
+    // 就是它),注释卫生(→ scripts/check-comment-hygiene.py)保证注释只写现状与约束、过程性
     // 内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
     // 失效是静默的:丢了执行位、检查器被挪走、或者哪一道闸被删掉,hook 直接放行,
     // 谁都看不出来 —— 所以这里逐条钉住每道闸的存在。

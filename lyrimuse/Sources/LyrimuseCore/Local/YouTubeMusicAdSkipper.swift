@@ -52,8 +52,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// ## 做完要复核
 ///
-/// 动完等 `verifyDelay` 再探一次(`verifyJS`):播放器离开广告态、或徽章翻页(1/2 到 2/2)到 `.skipped`;
-/// 同一条广告还在走 到 `.clickedNoEffect`,用户看到「没能跳过这条广告」而不是一片安静。每一步记日志。
+/// 动完等 `verifyDelay` 再探一次(`verifyJS`):播放器离开广告态、或徽章翻页(1/2 → 2/2)→ `.skipped`;
+/// 同一条广告还在走 → `.clickedNoEffect`,用户看到「没能跳过这条广告」而不是一片安静。每一步记日志。
 public enum YouTubeMusicAdSkipper {
     public enum Outcome: Equatable, Sendable {
         /// 按下去了,而且复核时广告已经走了(播放器离开广告态,或翻到了插播里的下一条)。
@@ -204,7 +204,7 @@ public enum YouTubeMusicAdSkipper {
         return YouTubeMusicAdProbe.shared.cachedBadgeVerdict(forKey: key, now: now) == .ad
     }
 
-    /// 跑一次:门槛 到 AXPress 到 复核。同步、会阻塞(两次 AppleEvent 往返 + 一次 AX 遍历 + `verifyDelay`,正常 ~1.2s,
+    /// 跑一次:门槛 → AXPress → 复核。同步、会阻塞(两次 AppleEvent 往返 + 一次 AX 遍历 + `verifyDelay`,正常 ~1.2s,
     /// 极端 6s 超时),调用方放后台;调用方自己保证**同一时刻只跑一份**(`NotchPlayback.skipAdInFlight`)—— 真机日志里
     /// 用户连按几下,几份并行的 run 交错,各自的复核读到的是别人按完的页面。nil = 连门槛脚本都没跑成(不是浏览器 /
     /// 没有自动化权限 / osascript 超时或非零退出)。
@@ -278,7 +278,7 @@ public enum YouTubeMusicAdSkipper {
         case notInAd
     }
 
-    /// 门槛脚本的返回 到 `Skippability`。纯映射,selftest 钉着。
+    /// 门槛脚本的返回 → `Skippability`。纯映射,selftest 钉着。
     ///
     /// `notYet(nil)` 才是「不给跳」:页面上那句「你可以在 N 秒后 跳转到视频」是**可跳过广告独有**的,
     /// 不可跳过的广告压根没有这个元素(真机抓过 DOM,见头注)。所以"读不到秒数"不是"读失败",
@@ -302,7 +302,7 @@ public enum YouTubeMusicAdSkipper {
 
     /// 广告刚开头**先快探几拍**的轮数与间隔。
     ///
-    /// 真机时间线(只读抓的,用户没碰鼠标):`t+0.2 never` 到 `t+5.4 after(1)` 到 `t+8.4 ready`。
+    /// 真机时间线(只读抓的,用户没碰鼠标):`t+0.2 never` → `t+5.4 after(1)` → `t+8.4 ready`。
     /// 第一拍的 `never` 不是"这条广告不给跳",是**页面那一刻还没渲染出**跳过键 / 「N 秒后可跳过」
     /// 那个预览元素;而按 5 秒心跳等下一拍,白白把提示推迟到第 8 秒之后 —— YouTube 通常第 5 秒就把
     /// 键放出来,用户在前 8 秒看到的是"没反应"(「还没有展开时,它并没有实时更新
@@ -321,7 +321,7 @@ public enum YouTubeMusicAdSkipper {
     /// 一条 5 秒倒计时的广告最坏要到第 10 秒键才出现,而整条广告可能就 15 秒。`.never` 分两段:
     /// 开头 `fastStartRounds` 拍按 `fastStartDelay` 快探(见上),之后退回 5 秒心跳,跟
     /// `YouTubeMusicAdProbe.adRefreshInterval` 同一个节奏。`.ready` 也继续心跳 —— 一次插播可能连放
-    /// 两条(徽章 1/2 到 2/2),第一条给跳、第二条不给,不盯着就会留一枚指向不存在的键的提示。
+    /// 两条(徽章 1/2 → 2/2),第一条给跳、第二条不给,不盯着就会留一枚指向不存在的键的提示。
     /// 上限 20 秒挡住页面给出离谱数字。
     /// nil(脚本没跑成)按 `.never` 的节奏重试:开头快探,之后 5 秒心跳。
     public static func gateRetryDelay(after state: Skippability?, round: Int = .max) -> TimeInterval {

@@ -30,8 +30,8 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
     /// AppKit 的 0...15 权重刻度,5 是标准 regular。
     ///
     /// 这是 `NSFontManager.font(withFamily:traits:weight:size:)` 认的那一套整数刻度,跟
-    /// `NSFont.Weight` 那套浮点刻度**不是一回事**,别混用。刻度不是等距的(semibold 8 到 bold 9,
-    /// 但 medium 6 到 semibold 8 跳了 2),这也正是推导要走**档位下标**而不是"权重减 N"的原因。
+    /// `NSFont.Weight` 那套浮点刻度**不是一回事**,别混用。刻度不是等距的(semibold 8 → bold 9,
+    /// 但 medium 6 → semibold 8 跳了 2),这也正是推导要走**档位下标**而不是"权重减 N"的原因。
     public var appKitWeight: Int {
         switch self {
         case .light: return 4

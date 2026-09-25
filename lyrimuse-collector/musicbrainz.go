@@ -27,7 +27,7 @@ import (
 // 网易云/QQ 按曲目匹配、以及最后手工登记的 artistAliasTable,依次接棒兜底,不会因为
 // MusicBrainz 覆盖不到某个冷门歌手就比现状更差。
 
-// artistAliasCache 是"原始歌手标签(本地播放器给的标签,英文/罗马化)到 MusicBrainz 查到
+// artistAliasCache 是"原始歌手标签(本地播放器给的标签,英文/罗马化)→ MusicBrainz 查到
 // 的中文别名"的持久化缓存,按歌手整体缓存,不按曲目——同一个歌手不管有多少首歌,只需要
 // 成功查一次 MusicBrainz 就够了。空字符串是内存里的合法值,代表"这次查了,没有可用的
 // 中文别名",避免同一进程内对同一个歌手反复重新查询。
@@ -133,7 +133,7 @@ func musicbrainzThrottle(ctx context.Context) error {
 // 背后那条 CLI)的默认档用——实测:artistMergeNameKey 走
 // resolveGenericArtistCanonicalName,而 CLI 进程既没加载别名缓存、又对 4 个时段 × 30 条里每个
 // 非中文歌手名都真查 MusicBrainz(全局 1.1 s 限速)+ QQ,一次跑 1 分 49 秒,App 侧 25 s 看门狗必然
-// 把它杀掉 到 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
+// 把它杀掉 → 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
 // 这里让 canonical 名那一步也遵守同一个承诺;归并仍有 mbid 身份缓存 + 名字键两路信号。
 var artistCanonicalCacheOnly bool
 
@@ -396,7 +396,7 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) string
 var (
 	mbPrimaryNameMu    sync.Mutex
 	mbPrimaryNameCache = map[string][]string{}
-	// mbLookupFailedUntil:"这位歌手刚刚没查成"的负缓存,歌手原始标签 到 退避到期时刻。
+	// mbLookupFailedUntil:"这位歌手刚刚没查成"的负缓存,歌手原始标签 → 退避到期时刻。
 	// 跟 mbPrimaryNameCache 共用 mbPrimaryNameMu,不另开一把锁。
 	mbLookupFailedUntil = map[string]time.Time{}
 	mbPrimaryNamePath   string // 空 = 只用内存不持久化(单测/一次性子命令)
@@ -523,9 +523,9 @@ func saveMBPrimaryNameCache() {
 // "没有别名"上,而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。
 //
 // 跟"查空"要分开看,两者处置不同:
-//   - 查成了、但 MB 确实没登记别名(err == nil、resolved 为空)到 写进内存缓存,
+//   - 查成了、但 MB 确实没登记别名(err == nil、resolved 为空)→ 写进内存缓存,
 //     本进程内不再查;不落盘,换个进程还能再试(见 saveMBPrimaryNameCache 头注)。
-//   - 根本没查成(限速/5xx/超时)到 内存缓存一个字都不写,只记这里的退避到期时刻。
+//   - 根本没查成(限速/5xx/超时)→ 内存缓存一个字都不写,只记这里的退避到期时刻。
 const mbLookupFailureTTL = 10 * time.Minute
 
 // mbLookupInFailureBackoff 报告这位歌手是不是还在"刚刚没查成"的退避窗口里。
@@ -615,7 +615,7 @@ func musicBrainzArtistAliasesChecked(ctx context.Context, rawArtist string) ([]s
 // resolvedArtistCJKHint 给 isProbablyWrongLanguageLyrics 用,只读窥探
 // artistAliasCache/mbPrimaryNameCache/qqArtistNameCache 这三份缓存——本次 resolve
 // 链路里别的步骤(CanonicalArtist 解析走 canonicalArtistViaMusicBrainz/
-// cachedQQArtistCanonicalName;别名重试走 retryArtistIdentities到
+// cachedQQArtistCanonicalName;别名重试走 retryArtistIdentities→
 // musicBrainzArtistAliases/cachedQQArtistCanonicalName)有没有已经查到过这位歌手的
 // 中文写法。
 //

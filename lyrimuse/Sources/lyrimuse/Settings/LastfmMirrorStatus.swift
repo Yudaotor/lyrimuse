@@ -50,8 +50,8 @@ enum LastfmMirrorStatus {
 
 /// 让"授权已失效"红标能**自愈**的观察器。collector 恢复后(重启进程 + 首次提交成功)
 /// 会把状态文件删掉,但"文件被删"不在 SwiftUI 的观察体系里 —— 徽标所在的行没有任何
-/// 被观察对象变化就不重渲染,红标滞留(实测:Last.fm 误报 error 4 到 熔断
-/// 落文件 到 collector 重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
+/// 被观察对象变化就不重渲染,红标滞留(实测:Last.fm 误报 error 4 → 熔断
+/// 落文件 → collector 重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
 /// 开着设置页时 collector 熔断落了文件,红标也该自己冒出来,不用重开窗口。
 ///
 /// 每 5 秒重读一次(LastfmMirrorStatus.current 按 mtime 缓存,常态代价是一次 stat),

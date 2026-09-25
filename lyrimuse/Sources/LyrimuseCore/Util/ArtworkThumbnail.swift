@@ -18,7 +18,7 @@ import Foundation
 /// 跟 `NotchIdleAppIcon`(修左耳 App 图标锯齿)同一招:**按目标像素尺寸预先光栅化一次**,
 /// 在 px×px 的 CoreGraphics 位图上用 `.high` 插值把源图画进去(Lanczos 级别的重采样,大比例缩小时做面积
 /// 平均),视图层拿 `Image(decorative:scale:)` 逐像素贴上去、不再有任何运行期缩放 —— 相位不再变,黑斑
-/// 既不会有、也不会动。这里是纯函数部分(CGImage 到 CGImage),放 Core 是为了让 selftest 能拿一张合成的
+/// 既不会有、也不会动。这里是纯函数部分(CGImage → CGImage),放 Core 是为了让 selftest 能拿一张合成的
 /// 1px 黑白棋盘格直接断言"缩出来是灰的、不是黑白噪点";按 NSImage 缓存那层在 App target
 /// (`ArtworkThumbnailCache`)。
 ///

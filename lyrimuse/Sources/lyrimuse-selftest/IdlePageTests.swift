@@ -17,7 +17,7 @@ func runIdlePageTests() {
                 .lowercased()
         }
 
-        // 同一首歌连着听三次(列表倒序:最新在前),总数 10 到 10 / 9 / 8
+        // 同一首歌连着听三次(列表倒序:最新在前),总数 10 → 10 / 9 / 8
         let three = [(artist: "方大同", title: "月亮代表我的心"),
                      (artist: "方大同", title: "月亮代表我的心"),
                      (artist: "方大同", title: "月亮代表我的心")]
@@ -38,12 +38,12 @@ func runIdlePageTests() {
             playCountKey: key),
                     [16, 15], "第 N 次听:繁简两种写法同页时按折叠族递减,不是两行同一个 N")
 
-        // 查不到总数 到 nil(宁可不显示)
+        // 查不到总数 → nil(宁可不显示)
         expectEqual(RecentPlayOrdinal.ordinals(rows: [(artist: "无名", title: "无此曲")],
                                                totals: [:], playCountKey: key),
                     [nil], "第 N 次听:表里没有这首就不显示")
 
-        // 竞态:窗口里的同族收听比总数还多 到 算出 ≤0 的位置一律 nil,不显示「第 0 次」
+        // 竞态:窗口里的同族收听比总数还多 → 算出 ≤0 的位置一律 nil,不显示「第 0 次」
         expectEqual(RecentPlayOrdinal.ordinals(rows: three,
                                                totals: [key("方大同", "月亮代表我的心"): 2],
                                                playCountKey: key),
@@ -82,7 +82,7 @@ func runIdlePageTests() {
                                               calendar: cal, dayKey: dayKey),
                     [0, 7, 0, 3, 5], "走势序列:正序、缺的天补 0(桶只存非零天)")
 
-        // 环比:前一个 7 天 100 到 最近 7 天 113
+        // 环比:前一个 7 天 100 → 最近 7 天 113
         let wow = IdleListeningStats.weekOverWeekDelta(
             dailyCounts: [off(-13): 100, off(-6): 113], today: today, calendar: cal, dayKey: dayKey)
         expectEqual(wow.map { Int(($0 * 100).rounded()) } ?? -999, 13, "环比:113 比 100 = +13%")

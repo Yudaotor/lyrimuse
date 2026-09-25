@@ -537,7 +537,7 @@ struct AccountLinkingTab: View {
     // 改另一处。
     //
     // resolvedDigestSource:preference 非空且对应账号确实配好了就用它;否则按"两个都配了
-    // 到Last.fm,只配了一个到用那个,都没配到空字符串(交给调用方按'需要先配置'处理)"解析。
+    // →Last.fm,只配了一个→用那个,都没配→空字符串(交给调用方按'需要先配置'处理)"解析。
     private func resolvedDigestSource(preference: String) -> String {
         let lastfmOK = config.lastfmBridgeMissingHint() == nil
         // 数据源是要去**读**统计的,所以看 isListenBrainzReadable(token+用户名),
@@ -1219,7 +1219,7 @@ struct AccountLinkingTab: View {
     //
     // 实测"断开听了几首、回来什么都没有"抓到的死锁:那两行的显示条件都是
     // `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们
-    // 自己的 .onAppear 上,就成了"不显示 到 不刷新 到 永远是 0 到 永远不显示"。
+    // 自己的 .onAppear 上,就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
     // 当时数据层是完全正确的(日志里躺着 3 条待补),纯粹是界面永远不去问一次。
     //
     // 拆 tab 之后这张卡改成只在「连接」段选中时才挂载,onAppear/task 因此

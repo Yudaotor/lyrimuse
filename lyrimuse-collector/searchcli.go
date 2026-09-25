@@ -198,7 +198,7 @@ func runSearchLyricsCLI(args []string) {
 	// 「搜索候选歌词」就新起一个进程**,进程内缓存永远从空开始 —— 于是每点一次都要在
 	// 第一轮跑完之后再串行等一趟 MusicBrainz。
 	//
-	// 实测(DAOKO×米津玄師《打上花火》,逐条打时间戳):第一轮 20.03s 撞满总截止 到 26.03s
+	// 实测(DAOKO×米津玄師《打上花火》,逐条打时间戳):第一轮 20.03s 撞满总截止 → 26.03s
 	// 才等到 `musicbrainz.org/ws/2/artist/ FAILED after 6001ms: context deadline exceeded`,
 	// 整整 6 秒纯串行等待。而 MusicBrainz 这阵子本来就慢:同一时刻直连探测三次是
 	// 5.60s / 2.99s / 11.51s(超时),6 秒的客户端上限经常撞满,不是偶发。
@@ -508,7 +508,7 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 	// (见 lyricsourcefailure.go 的 deezer_auth_failed)。
 	check("deezer", deezerLastFailureReasonNow)
 	// soda:只有"端点改了形状"这一种(见 lyricsourcefailure.go 的 soda_endpoint_changed)。
-	// 没用汽水放过这首歌 到 拿不到曲目 id 到 这一路本来就不该有候选,那是常态不是失败。
+	// 没用汽水放过这首歌 → 拿不到曲目 id → 这一路本来就不该有候选,那是常态不是失败。
 	check("soda", sodaLastFailureReasonNow)
 	// 传输层兜底(来龙去脉见 sourcebreaker.go 最后一节「传输层失败分类」):这一轮一个
 	// HTTP 响应都没拿到的源,报 dns_failed / connect_failed / server_error。放在具体代码之后、
@@ -528,7 +528,7 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 	// 网易云 / QQ 的曲目 ID 取词,两个 ID 都拿不到时一个请求都不发、传输层表里没有它。
 	// 判据故意要求**网易云和 QQ 都**带传输层代码:只有一边死、另一边正常答了却没匹配上,
 	// amll 缺 ID 是"上游没这首"的正常结果,不是连不上,那时如实留空("未给出候选")。
-	// 网易云 / QQ 被用户关掉时它们不发请求、没有传输层记录 到 也不派生:那时 amll 缺 ID 是
+	// 网易云 / QQ 被用户关掉时它们不发请求、没有传输层记录 → 也不派生:那时 amll 缺 ID 是
 	// 配置使然,不是网络(要不要在界面上单说这一点,归「未启用」那档管)。
 	if amllSkippedForMissingIDs && enabled("amll") && !containsString(responded, "amll") {
 		if _, has := reasons["amll"]; !has && transport["netease"] != "" && transport["qq"] != "" {

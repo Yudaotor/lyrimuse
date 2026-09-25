@@ -5,7 +5,7 @@ import Foundation
 /// 存在的理由是同一次收听会以**两种歌手写法**进 Last.fm:
 ///
 /// - Mac 这边照抄 Apple Music 的逐曲 credit(`Daniel Caesar & Mustafa`);
-/// - 手机那边(iPhone 到 Last.fm,再桥接回来)报的是主歌手(`Daniel Caesar`)。
+/// - 手机那边(iPhone → Last.fm,再桥接回来)报的是主歌手(`Daniel Caesar`)。
 ///
 /// 例如同一首《Toronto 2014》08:58 从手机进来记在 `Daniel Caesar` 名下、
 /// 11:11 从 Mac 进来记在 `Daniel Caesar & Mustafa` 名下 —— Last.fm 上是**两个实体**,于是
@@ -30,7 +30,7 @@ public enum ArtistCredit {
         var head = trimmed
         // 先切 feat.:它常带括号(`A (feat. B)`),按分隔符切不开。
         // 直接在原串上做 .caseInsensitive 查找,不拿 lowercased() 的下标去索引原串 ——
-        // 小写化对某些字符会改变长度(ß到ss),跨串用下标是错的。
+        // 小写化对某些字符会改变长度(ß→ss),跨串用下标是错的。
         for marker in featMarkers {
             var from = trimmed.startIndex
             while let r = trimmed.range(of: marker, options: [.caseInsensitive],

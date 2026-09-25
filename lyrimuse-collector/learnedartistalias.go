@@ -15,10 +15,10 @@ import (
 // 现象是王子《1999 (Edit)》搜不到歌词。「王子」是 Prince 的中文译名 —— YouTube Music
 // 这类播放器会把歌手名本地化,而九个歌词源里这首歌的署名一律是 "Prince"。实测对照:
 //
-//	王子   + 1999 (Edit)          到 九个源 0 条候选
-//	王子   + 1999                 到 4 个源命中,但 kugou 只有 462 分
-//	Prince + 1999 (Edit)          到 5 个源命中,kugou 1122 分(同一条候选,差 660 分)
-//	王子   + Little Red Corvette  到 0 条候选(说明不是这一首特有)
+//	王子   + 1999 (Edit)          → 九个源 0 条候选
+//	王子   + 1999                 → 4 个源命中,但 kugou 只有 462 分
+//	Prince + 1999 (Edit)          → 5 个源命中,kugou 1122 分(同一条候选,差 660 分)
+//	王子   + Little Red Corvette  → 0 条候选(说明不是这一首特有)
 //
 // retryArtistIdentities 本来就有三条别名来源(MusicBrainz 中文名 / MB 全部登记写法 /
 // QQ 歌手搜索建议),但对「王子」三条全部落空 —— MB 上 Prince 没登记这个中文别名,而

@@ -159,7 +159,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 而"有没有 +1"本身已经把"钟在走"和"钟停了"完全分开了。
     ///
     /// 两个已知的、**刻意选择**的失败方向,都往"不纠偏"倒:① 倍速 0.5x 时 1.5 秒只走
-    /// 0.75 秒媒体时间,floor 可能不 +1 到 判否;② 用户往回拖进度条(second < first)到 判否。
+    /// 0.75 秒媒体时间,floor 可能不 +1 → 判否;② 用户往回拖进度条(second < first)→ 判否。
     /// 两种都只是这一轮不纠偏、下一轮重试,跟类头注里"暂停判据宁可退化成永远判暂停"是同一个
     /// 取向:宁可不纠偏,也不能采信一个读错了标签页的值。
     public static func pageClockIsRunning(first: Double, second: Double) -> Bool {
@@ -336,7 +336,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// **进度条里那个 `<input>` 是个陷阱,别用**。它长得特别像好东西:
     /// `[data-testid=playback-progressbar] input` 带 `value=145000 max=269340`,毫秒精度、
     /// max 还跟 media-control 报的 `duration=269.339773` 严丝合缝。但连打三拍实测是
-    /// **140000 到 145000 到 145000**(5 秒一跳、而且滞后),同期文字是 2:18 到 2:22 到 2:25
+    /// **140000 → 145000 → 145000**(5 秒一跳、而且滞后),同期文字是 2:18 → 2:22 → 2:25
     /// 一直在走 —— 那个 value 是给滑块用的节流状态,不是实时位置。照它写出来的进度会一顿一顿。
     ///
     /// ## 暂停判据:`document.title` 里有没有那个分隔符
@@ -407,10 +407,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     })()
     """
 
-    /// MediaRemote 报上来的 bundle id 到 **真正能被 AppleScript 驱动的那个 App**。
+    /// MediaRemote 报上来的 bundle id → **真正能被 AppleScript 驱动的那个 App**。
     ///
     /// 绝大多数情况原样返回;只有"媒体代理进程"要换成它的宿主(目前只有一条实测登记过的:
-    /// `com.apple.WebKit.GPU` 到 `com.apple.Safari`,见 `TrustedPlayers.mediaProxyOwners`)。
+    /// `com.apple.WebKit.GPU` → `com.apple.Safari`,见 `TrustedPlayers.mediaProxyOwners`)。
     /// 纯函数,给 selftest 钉住这条跨层不变量 —— 漏了它的后果是"配对了 Safari 却永远不
     /// 同步",一条日志都不会有。
     public static func probeTargetBundleID(forReported bundleID: String?) -> String? {
@@ -471,7 +471,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// 平台 id 到 用户已配对(主动选过、允许对它探测)的浏览器 bundle id 集合。UI 层直接
+    /// 平台 id → 用户已配对(主动选过、允许对它探测)的浏览器 bundle id 集合。UI 层直接
     /// 写这个属性来更新配对(见类头注"平台与浏览器配对即开关"),读写都过 `lock`——写者是
     /// 主线程(设置页用户操作),读者是 `kickIfNeeded`/`probeOnce` 所在的后台线程,两边
     /// 必须用同一把锁,不能假设"设置很少变就不用管并发"。
@@ -539,10 +539,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// **证据优先,推断兜底**,两档:
     ///
-    /// 1. **最近一次探测真的命中过某个平台** 到 就是它。这是硬证据:探测成功意味着我们在
+    /// 1. **最近一次探测真的命中过某个平台** → 就是它。这是硬证据:探测成功意味着我们在
     ///    那个站点的页面里读到了一个**在走**的进度条。一个浏览器同时配对了两个平台时
     ///    (这台机器上 Safari / Arc 就是),只有这一档答得上来。
-    /// 2. **只配对了一个平台** 到 就当是它。这一档是**推断不是证据**,可能错:浏览器里放
+    /// 2. **只配对了一个平台** → 就当是它。这一档是**推断不是证据**,可能错:浏览器里放
     ///    别的、恰好也带齐 artist+album 的网页音源(播客站之类)时,角标会显示成那个平台。
     ///    代价是纯观感的 —— 角标点下去仍然是 `openResolvedPlayerApp()` 按 bundle id 唤浏览器,
     ///    行为一个字不变。收益是这一档覆盖了绝大多数人的实际配置(一个浏览器只配一个平台),
@@ -743,8 +743,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         case blocked
         /// 命令发到了、浏览器收下了,但**一直不回**(AppleEvent 超时 -1712)。
         /// 跟 `blocked` 分开,是因为它是另一种失败方式而不是同一件事的另一种说法:
-        /// Chrome 那道开关关着时会**立刻**抛一句清清楚楚的错误(到 `blocked`),而 Arc
-        /// 关着时**什么都不说、直接不回**(到 这里)。当前标签页本身卡死(页面在跑死循环)
+        /// Chrome 那道开关关着时会**立刻**抛一句清清楚楚的错误(→ `blocked`),而 Arc
+        /// 关着时**什么都不说、直接不回**(→ 这里)。当前标签页本身卡死(页面在跑死循环)
         /// 也会落进来,所以文案上只说"多半是开关没勾",不把它当成板上钉钉的结论。
         case noReply
         /// 其它失败(超时、TCC 没授权、语法错误…)。带上原始输出供 UI 显示。
@@ -819,7 +819,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 而且 **认关键词不认整句** —— 那句提示是本地化过的,各语言都不一样。逐条实测出处:
         //   - Chrome/Edge(取自自己的 locale.pak):英文 "Executing JavaScript through
         //     AppleScript is turned off…",中文「通过 AppleScript 执行 JavaScript 的功能已关闭…」
-        //     到 稳定锚点是 "AppleScript" + ("turned off" / 「已关闭」)。
+        //     → 稳定锚点是 "AppleScript" + ("turned off" / 「已关闭」)。
         //   - Safari(在这台机器上实测原样抄回来的):"You must enable 'Allow
         //     JavaScript from Apple Events' in the Developer section of Safari Settings to use
         //     'do JavaScript'."(错误号 8)—— 注意它说的是 **Apple Events** 而不是 AppleScript,

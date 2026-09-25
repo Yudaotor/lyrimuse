@@ -16,7 +16,7 @@ import (
 // 自报 232s),曲长实际 223.3s。实调把两边原始 body 拉回来比 sha256,证实都是上游原样
 // 落库、我们零清洗 —— 坏的是上游数据本身。
 //
-// 这份坏 LRC 单调递增、末句时间戳也正常(204.81s),坏只坏在**内部**:第 27到28 行凭空
+// 这份坏 LRC 单调递增、末句时间戳也正常(204.81s),坏只坏在**内部**:第 27→28 行凭空
 // 跳 48.6 秒,第 41~49 行 9 句完整长句挤在 6.86 秒里(同样这 9 句在 richsync 里跨 46 秒)。
 // 而引擎里所有与时间有关的判据(durationFits/corroboratedEndings/sourceDurationOff)
 // **全都只看末句这一个标量**,25% 容差对这首歌意味着 167~228s 这个 61 秒宽的窗口全算
@@ -93,7 +93,7 @@ func normTimelineText(s string) string {
 }
 
 // lrcStampMs 把 lrcTimestampCaptureRe 的一次匹配换算成毫秒。
-// 小数位按位数解释:2 位是百分秒(xx到xx*10ms),3 位是毫秒。
+// 小数位按位数解释:2 位是百分秒(xx→xx*10ms),3 位是毫秒。
 func lrcStampMs(m []string) int {
 	mm, _ := strconv.Atoi(m[1])
 	ss, _ := strconv.Atoi(m[2])
@@ -125,7 +125,7 @@ func twoDigits(n int) string {
 
 // rehangLRCOnYRC 用逐字轴的行起点重挂行级 LRC 的时间戳。
 //
-// 返回(新 LRC, 旧毫秒到新毫秒映射, 是否真的改过)。映射给译文/罗马音复用 —— 它们的
+// 返回(新 LRC, 旧毫秒→新毫秒映射, 是否真的改过)。映射给译文/罗马音复用 —— 它们的
 // 时间戳是照原文 LRC 抄的(translate.go 的 assembleTranslationLRC / musixmatch.go 的
 // buildTranslatedLRC),不跟着重挂就会相对正文错位。
 //

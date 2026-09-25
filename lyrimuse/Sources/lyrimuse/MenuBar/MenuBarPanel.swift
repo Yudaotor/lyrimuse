@@ -55,8 +55,8 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var highResArtworkImage: NSImage?
     @Published private(set) var highResArtworkThumbnail: NSImage?
     /// 面板该显示的那张 —— 别在视图里各写一遍 `?? `,漏一处就又是一个显示原图的消费面。
-    /// 优先级:预缩小的高清图 到 高清原图(理论上不该走到,thumbnail 跟原图同一趟产出,
-    /// 只有缩图失败才会) 到 系统那张。
+    /// 优先级:预缩小的高清图 → 高清原图(理论上不该走到,thumbnail 跟原图同一趟产出,
+    /// 只有缩图失败才会) → 系统那张。
     var displayArtworkImage: NSImage? { highResArtworkThumbnail ?? highResArtworkImage ?? artworkImage }
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
@@ -151,7 +151,7 @@ final class MenuBarPanelController {
         let pop = NSPopover()
         pop.behavior = .transient
         // 「点了马上弹出」:NSPopover 默认那段弹出/收起动画本身就有
-        // 一两百毫秒,跟"按下到松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
+        // 一两百毫秒,跟"按下→松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
         // 三处一起改(另两处见 MenuBarStatusItem.attachButtonChrome / statusButtonClicked
         // 和 PanelPlayback.highResArtworkThumbnail),这里关动画,弹出即到位。
         pop.animates = false
@@ -205,7 +205,7 @@ final class MenuBarPanelController {
         // 真实症状不是"点了没反应",而是**面板弹在了桌面 Space 上**:日志里
         // `panel opened` 照常打出来(说明点击到位、popover 也 show 了),用户在全屏里看不见,
         // 于是再点一下——第二下走 toggle 开头 `popover.isShown` 那个分支把它关掉。日志上就是
-        // 一对间隔一两秒的 opened/closed(17:22:28到17:22:30、17:22:57到17:22:58 实测)。
+        // 一对间隔一两秒的 opened/closed(17:22:28→17:22:30、17:22:57→17:22:58 实测)。
         //
         // 成因:NSPopover 自建的窗口 collectionBehavior 是默认的"受管",进不了别的 App 的
         // 全屏 Space;而这个面板刻意**不** NSApp.activate()(理由见下面 FirstMouseHostingView
@@ -472,7 +472,7 @@ private struct MenuBarPanelView: View {
     /// 抽成独立属性只为了让上面那个 `if` 能整块开关它(没抽的话那段 55 行要整体缩进)。
     private var trackHeader: some View {
         HStack(alignment: .top, spacing: 9) {
-            // 点封面 到 打开歌词窗口(跟灵动岛上两处封面同一动作);
+            // 点封面 → 打开歌词窗口(跟灵动岛上两处封面同一动作);
             // 先收面板再开窗,同「歌词窗口」块的顺序。
             Button {
                 close()
@@ -498,7 +498,7 @@ private struct MenuBarPanelView: View {
                 // 专辑行。只在真有专辑名时才渲染 —— Spotify 常常
                 // 不上报专辑,占一个空行会让卡片凭空高一截、看着像排版错了。
                 //
-                // 用 .tertiary 而不是 .secondary:标题(primary)到 歌手(secondary)到
+                // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
                 // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
                 // 加上这一行之后文字块约 45pt,正好跟 44pt 的封面齐平(原来只有两行、
                 // 比封面矮一截),所以卡片总高几乎不变。
@@ -577,7 +577,7 @@ private struct MenuBarPanelView: View {
     /// 三个展示面对"没在放"说同样的话,不是各写一份。
     ///
     /// 这里不留走带三键:没有曲目时上一首/下一首对空队列是**静默 no-op**,裸 play 同样
-    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play 到 上次那首 到 都不行就把
+    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play → 上次那首 → 都不行就把
     /// 播放器带到前台)。一颗点下去必有可见反应的键,比三颗按不出东西的键有用。
     ///
     /// 点完**不收面板**:放起来之后这张卡当场变成正在播放卡,那是最好的反馈;真走到"把播放器
@@ -852,7 +852,7 @@ private struct MenuBarPanelView: View {
 
         private var content: some View {
             // 图标在**上**、文字在下(不是图标在左、文字在右):
-            // 面板内容宽 316,一排三个 + 9pt 间距 到 每格 99pt,再扣掉 16pt 内边距、28pt 图标
+            // 面板内容宽 316,一排三个 + 9pt 间距 → 每格 99pt,再扣掉 16pt 内边距、28pt 图标
             // 和 7pt 间隔,留给文字只有 **48pt**。「菜单栏歌词」在 11pt 下要 55pt,靠
             // minimumScaleFactor(0.82) 缩到 9pt 勉强够,实测仍被截成「菜单栏...」;英文更
             // 没救 —— "Floating Lyrics"/"Menu Bar Lyrics" 缩到 0.72 都还在截断。
@@ -919,7 +919,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 右下角那一格:平时是版本号(到 关于页),有未安装的新版本时是升级提示(到 设置的「软件更新」页)。
+    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ 设置的「软件更新」页)。
     ///
     /// 状态来自 `SparkleUpdaterManager.availableUpdate`(Sparkle 委托只记状态、不接管显示,
     /// 见那边注释),开窗时取一次快照。升级提示用强调色 + 下载图标,而不是只换文字——跟
@@ -1262,7 +1262,7 @@ private struct PanelProgressSection: View {
         }
     }
 
-    /// 静止 4pt 到 悬停 6pt 到 拖动中 7pt。槽高恒为 14pt(见调用点),所以这三档都不动布局。
+    /// 静止 4pt → 悬停 6pt → 拖动中 7pt。槽高恒为 14pt(见调用点),所以这三档都不动布局。
     private var scrubberHeight: CGFloat {
         if scrubFraction != nil { return 7 }
         return hoveringScrubber ? 6 : 4

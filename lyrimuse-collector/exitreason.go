@@ -11,7 +11,7 @@ import (
 //	exiting reason=<code> [detail]
 //
 // 形态固定、原因码英文 snake_case、可 grep(App 侧同款前缀记在 lifecycle 分类,见 AppExit.swift;
-// 规则在 AGENTS.md「容易踩的具体坑 到 退出路径」)。排「collector 为什么自己退了」只需 grep 一个
+// 规则在 AGENTS.md「容易踩的具体坑 → 退出路径」)。排「collector 为什么自己退了」只需 grep 一个
 // 前缀 —— 此前最常见的退出(每次 launchctl kickstart -k 重启)一行日志都没有。
 //
 // 走 log.Printf 而不是 fmt.Fprintln(os.Stderr):log 的输出经 logscrub.go 的脱敏出口并带 LUTC

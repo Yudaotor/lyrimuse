@@ -220,7 +220,7 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 		// 数**当档位。可 consecutive 是按请求数涨的,而一轮搜索里同一个源要发好几个请求
 		// (网易云 4 个歌手别名变体、QQ 的 smartbox + client_search 加起来更多),源整个挂掉
 		// 时它们在同一瞬间一起失败,于是一次抖动就能把阶梯从头走到尾。实测日志:
-		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s到30s到1m到2m到5m 五档,网易云 0.8 秒内到顶
+		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s→30s→1m→2m→5m 五档,网易云 0.8 秒内到顶
 		// 并一路涨到 consecutive=22;整份日志里冷却到顶 5 分钟发生过 331 次,可配对的 35 例
 		// 里有 14 例是"第一档 15 秒都还没过完就到顶"。用户看得见的后果:一次 2 秒的 DNS 抖动
 		// 换来 7 个源停摆 5 分钟,期间播到的歌被判"暂无歌词"(《One Last Kiss》那一例)。
@@ -302,7 +302,7 @@ func parseLyricSourceRetryAfter(v string) time.Duration {
 	return d
 }
 
-// lyricSourceRoundPlan:这一轮该跳过的源 到 剩余冷却时长。
+// lyricSourceRoundPlan:这一轮该跳过的源 → 剩余冷却时长。
 type lyricSourceRoundPlan map[string]time.Duration
 
 // planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
@@ -457,7 +457,7 @@ func (r *lyricSourceRound) skippedSources() []string {
 // IP 直连立刻 200,网易云 / QQ 的第一条结果就是这首(标题 / 专辑 / 歌手三项精确命中)。
 //
 // 判据是**这个源在本进程里有没有拿到过任何一个 HTTP 响应**(状态码 < 500 即算 —— 4xx 也是
-// 服务器在说话,404 = 没这首、403 = 反爬,跟上面熔断的口径一致):一次都没有、且失败过 到 报
+// 服务器在说话,404 = 没这首、403 = 反爬,跟上面熔断的口径一致):一次都没有、且失败过 → 报
 // 最多见的那一类失败(dns_failed / connect_failed / server_error,见 lyricsourcefailure.go)。
 // 拿到过响应的源**不报** —— "响应了但没这首歌"跟"连不上"必须分开,这正是这次要修的混淆。
 //
@@ -468,8 +468,8 @@ func (r *lyricSourceRound) skippedSources() []string {
 // 只看错误链会把"DNS 不答"归成 connect_failed,界面再说一句"域名能解析",正好说反。所以
 // doHTTPTracked 给每个请求挂 httptrace.ClientTrace 记 DNSStart / DNSDone(net 包在系统解析器
 // 与纯 Go 解析器两条路上都会调这两个钩子,ctx 被取消时 DNSDone 也会带 err 调一次),
-// 分类时**先看轨迹**:DNS 阶段开始了却没结束、或结束时带错 到 dns_failed;错误链里有 DNSError
-// 到 dns_failed;其余才是 connect_failed。复用连接(没有 DNS 阶段)与 DoH 自定义拨号(musixmatch,
+// 分类时**先看轨迹**:DNS 阶段开始了却没结束、或结束时带错 → dns_failed;错误链里有 DNSError
+// → dns_failed;其余才是 connect_failed。复用连接(没有 DNS 阶段)与 DoH 自定义拨号(musixmatch,
 // 没有 net 包的 DNS 钩子)拿不到轨迹,退回错误链判定 —— 后者今天被 musixmatch_direct_blocked
 // 这个具体代码盖住,看不出差别;若日后把 DoH 扩到别的源,dohDialContext 用 %w 包住的系统解析
 // NXDOMAIN 会让"DoH 解析成功但拨不通"被归成 dns_failed,到那时要一并改。
@@ -564,7 +564,7 @@ func dominantLyricSourceTransportFailure(failures map[string]int) string {
 	return best
 }
 
-// transportFailureCodes:本进程里一个响应都没拿到过、又确实失败过的源 到 最多见的那类失败代码。
+// transportFailureCodes:本进程里一个响应都没拿到过、又确实失败过的源 → 最多见的那类失败代码。
 // 没有这样的源返回 nil。
 func (b *lyricSourceBreaker) transportFailureCodes() map[string]string {
 	b.mu.Lock()

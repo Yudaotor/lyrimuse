@@ -12,7 +12,7 @@ import (
 // 关掉之后重打分和升级重搜都不该发生,而首次填充(needsLyricsFirstFill)必须照常 —— 那是
 // "这首歌一条歌词都没有",不属于"把用户已经拿到的那份换掉"。
 func TestLyricsAutoUpgradeGate(t *testing.T) {
-	// 打分版本落后 到 开着时该重打分
+	// 打分版本落后 → 开着时该重打分
 	stale := enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: lyricsScoringVersion - 1}
 	if !needsLyricsRescore(stale, false, true) {
 		t.Error("开着时:打分版本落后应该触发重打分")
@@ -21,7 +21,7 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 		t.Error("关掉之后:不该再因为打分规则升级换掉已有歌词")
 	}
 
-	// 有源当初缺席、且已过节流窗口 到 开着时该升级重搜(构造方式照 lyricsretry_test.go 那组)
+	// 有源当初缺席、且已过节流窗口 → 开着时该升级重搜(构造方式照 lyricsretry_test.go 那组)
 	savedFeatures := features()
 	defer func() { setFeatures(savedFeatures) }()
 	featuresRef().LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}

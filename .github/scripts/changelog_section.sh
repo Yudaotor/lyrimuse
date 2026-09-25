@@ -14,7 +14,7 @@
 # 开头的行(v1.5.0/v1.6.0/v1.7.0 三份实证),所以边界不会被正文撞掉。
 #
 # 用法: changelog_section.sh <tag> [CHANGELOG 路径]
-# 找不到该节 到 非零退出(发版前没写日志,应当拦住)。
+# 找不到该节 → 非零退出(发版前没写日志,应当拦住)。
 set -euo pipefail
 
 usage() { echo "usage: $0 <tag> [changelog-path]" >&2; exit 2; }

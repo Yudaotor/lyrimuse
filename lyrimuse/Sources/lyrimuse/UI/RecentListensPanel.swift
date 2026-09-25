@@ -303,7 +303,7 @@ enum RelativeDayFormat {
 
 /// 没连 Last.fm 时,「播放记录」类面板显示的内容:本地静默记的、还没提交的收听
 /// (collector 不管连没连账号都在往本地记,见 ScrobbleBackfillService 类头注释)。
-/// 跟设置页「账号 到 Last.fm」标签的 pendingListensRow 共用同一个数据源、同一套
+/// 跟设置页「账号 → Last.fm」标签的 pendingListensRow 共用同一个数据源、同一套
 /// "多久算太旧"的规则,不在这里另起一份判定;比那边多了一段 5 秒 mtime 轮询——那边
 /// 挂在整张设置卡上跟着卡的生命周期走,这里没有更外层的卡可挂,自己管自己的。
 ///

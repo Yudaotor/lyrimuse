@@ -29,9 +29,9 @@ struct IdleStandbyView: View {
     /// LyricsWindowView(与原欢迎态同一份),这里只负责按钮。
     let onResume: () -> Void
     let onOpenPlayer: () -> Void
-    /// (歌名, 歌手) 到 经 iTunes Search 解析后 music:// 打开那张专辑页。
+    /// (歌名, 歌手) → 经 iTunes Search 解析后 music:// 打开那张专辑页。
     let onOpenAlbum: (String, String) -> Void
-    /// (歌名, 歌手) 到 打开这首歌在 Apple Music 的曲目页。
+    /// (歌名, 歌手) → 打开这首歌在 Apple Music 的曲目页。
     let onOpenTrack: (String, String) -> Void
 
     @ObservedObject private var stats = LastfmStatsService.shared
@@ -76,7 +76,7 @@ struct IdleStandbyView: View {
             var tick = 0
             while !Task.isCancelled {
                 // 守卫放在**循环里**而不是循环外:放外面的话,页面开着期间在设置里连上/断开
-                // 账号都要等视图重建才生效(连上到永远不开始轮询,断开到白轮但拉不到)。
+                // 账号都要等视图重建才生效(连上→永远不开始轮询,断开→白轮但拉不到)。
                 // 服务侧那几个 refresh 自己也 guard credentials,所以断开后这里是空转。
                 if stats.isConnected {
                     stats.refreshBaseline()
@@ -464,10 +464,10 @@ private struct IdleOverviewCard: View {
 /// 下面挂一句从这首歌歌词里挑出来的话。
 ///
 /// 三级空态:
-/// 1. 有上次那首、缓存里有封面 到 唱片;
-/// 2. 有上次那首、没有封面 到 同尺寸的色块 + 大号首字母(封面存的是**远端** URL,
+/// 1. 有上次那首、缓存里有封面 → 唱片;
+/// 2. 有上次那首、没有封面 → 同尺寸的色块 + 大号首字母(封面存的是**远端** URL,
 ///    断网/冷启动拿不到图是常态而不是意外,所以这一级是常客);
-/// 3. 连 UserDefaults 都没有(全新用户/清过 defaults)到 退回呼吸音符 + 原来那句提示。
+/// 3. 连 UserDefaults 都没有(全新用户/清过 defaults)→ 退回呼吸音符 + 原来那句提示。
 private struct IdleLastTrackHero: View {
     let player: PlaybackPlayer
     let onResume: () -> Void

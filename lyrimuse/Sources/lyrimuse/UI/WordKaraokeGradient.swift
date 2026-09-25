@@ -6,7 +6,7 @@ import LyrimuseCore
 // LinearGradient。悬浮歌词(LyricsOverlayView)、灵动岛(NotchLyricsView)、歌词窗口
 // (LyricsWindowView)三处共用同一份,不再各自维护、也不会有观感不一致的问题。
 //
-// 算法本体在 LyrimuseCore/Lyrics/KaraokeFill.swift —— 这里只剩"分段 到 颜色"的映射,
+// 算法本体在 LyrimuseCore/Lyrics/KaraokeFill.swift —— 这里只剩"分段 → 颜色"的映射,
 // 薄到没有任何判断逻辑,所以它是**故意不测**的那一层(能测的都在 Core 那边被 selftest
 // 钉住了)。外层容器/描边这些跟具体窗口形态相关的处理各自留在各自的 View 里。
 enum WordKaraokeGradient {

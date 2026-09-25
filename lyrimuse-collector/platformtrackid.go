@@ -36,7 +36,7 @@ import (
 //
 // 读侧在 `fetchScoredLyricCandidatesStreaming` 的 amll goroutine 里,那条路径不持 enrichMu;
 // 写侧一个在 system.go(不持)、一个在 noteSpotifyTrackID 里(持)。自带锁之后锁序只可能是
-// enrichMu 到 这把,不存在反向,不会成环。
+// enrichMu → 这把,不存在反向,不会成环。
 type playbackTrackIDs struct {
 	appleCatalogID string
 	spotifyTrackID string

@@ -1,8 +1,8 @@
 // lyricsgolden_test.go — 歌词搜索的**回归金标集**(golden corpus)。
 //
 // 这里守的不是"某条规则对某个输入怎么判",而是"**这首真实的歌,拿到这组真实的候选,最后选对了**"——
-// 从各源原始应答一路到冠军的整条离线链路(候选构建 到 时间轴自洽修复 到 跨源末尾印证 到
-// 跨源正文共识 到 逐条打分 到 纯音乐标记 到 逐字加分撤销 到 稳定排序 到 挑选),跑的是生产同一份
+// 从各源原始应答一路到冠军的整条离线链路(候选构建 → 时间轴自洽修复 → 跨源末尾印证 →
+// 跨源正文共识 → 逐条打分 → 纯音乐标记 → 逐字加分撤销 → 稳定排序 → 挑选),跑的是生产同一份
 // 代码 rankLyricSourceResults / pickLyricCandidate,不在测试里另抄一份骨架。
 //
 // 为什么需要它:116 个测试文件里全是按函数钉的规则,历次"全库回放"都是一次性脚本、
@@ -18,7 +18,7 @@
 //
 // 正文不入库明文:01 章版权立场写的是"不托管、不转发、不再分发",真实歌词进 git 就违背这一条。
 // 样本里的歌词/逐字/译文/罗马音都经过 scrambleLyricRound 的**保形置乱**(同一首内一致的字符双射,
-// 汉字到汉字、拉丁到拉丁保大小写、假名/谚文各自块内;时间戳、标点、数字、署名行、演唱者标签、
+// 汉字→汉字、拉丁→拉丁保大小写、假名/谚文各自块内;时间戳、标点、数字、署名行、演唱者标签、
 // 元数据标签、纯音乐占位原样不动)。打分读到的每一个特征——时间戳密度、末句时刻、行数、汉字/假名
 // 占比、3-gram 共识、署名结构——置乱前后逐位相同,采集器(lyricsgolden_capture_test.go)会把
 // "置乱前后 rank 结果逐项一致"当作写入前的硬闸,不一致就拒绝入库。所以样本文本看起来是乱码是**预期**,
@@ -164,7 +164,7 @@ type goldenExpect struct {
 	Winner string `json:"winner"`
 	// InstrumentalMarker:搭车的纯音乐标记来自哪个源,空 = 没有。
 	InstrumentalMarker string `json:"instrumental_marker,omitempty"`
-	// Verdicts:源 到 "accepted" 或 reject 的 kind(scoreRejectNotTimed 等)。
+	// Verdicts:源 → "accepted" 或 reject 的 kind(scoreRejectNotTimed 等)。
 	Verdicts map[string]string `json:"verdicts"`
 	// ---- 分项快照 ----
 	// Ranked:排序后的候选列表(纯音乐标记那条不在里面)。
@@ -304,7 +304,7 @@ func abs(x float64) float64 {
 //     并且**要么**有别的源印证正文(ConsensusPeers ≥1),**要么**(单候选)自报曲长偏差 ≤1% 且覆盖 ≥70%;
 //     本地是现场专辑时专辑亲和 >0;
 //   - 没冠军:必须是纯音乐类(标记来自源的明文断言),不接受"搜不到"当样本;
-//   - 缓存那份跟冠军不是同一份(differs)且不是用户手选 到 有争议,拒绝。
+//   - 缓存那份跟冠军不是同一份(differs)且不是用户手选 → 有争议,拒绝。
 func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) error {
 	if winner == "" {
 		if ev.Instrumental == "" {
@@ -774,7 +774,7 @@ func TestLyricsGoldenCategoryCoverage(t *testing.T) {
 }
 
 // TestLyricsGoldenFixturesAreScrambled:样本里不许出现明文歌词——置乱后的正文不可能命中任何
-// OpenCC 繁到简词典里的字(置乱池刻意避开了它们),也不可能出现 goldenScrambleForbiddenSample
+// OpenCC 繁→简词典里的字(置乱池刻意避开了它们),也不可能出现 goldenScrambleForbiddenSample
 // 里这些高频真实汉字。命中就说明有人手工往样本里塞了明文,或者采集时绕过了 scrambleLyricRound。
 func TestLyricsGoldenFixturesAreScrambled(t *testing.T) {
 	// 检索层样本里只有 lrclib 的搜索结果带正文,一并查。
@@ -1075,8 +1075,8 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 				fx.Settings.PlayerBundleID, native, e.Winner)
 		}
 		// v21 起这一类有**两侧**,判据对着样本自己记下的事实核对,不再一律要求有加分:
-		//   - 身份来自播放器本地(identity_from_local_client)到 必须有 nativeSource;
-		//   - 身份是搜出来的 到 必须**没有**,那正是这次收窄要守的东西。
+		//   - 身份来自播放器本地(identity_from_local_client)→ 必须有 nativeSource;
+		//   - 身份是搜出来的 → 必须**没有**,那正是这次收窄要守的东西。
 		// 库里两条样本各占一侧(native-local-kugou-angkorwat / native-earth-song)。
 		wantNative := goldenSourceHasLocalIdentity(fx.Sources[e.Winner])
 		if got := hasTerm(*winner, scoreTermNativeSource); got != wantNative {

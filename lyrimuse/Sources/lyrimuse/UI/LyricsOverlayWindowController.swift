@@ -76,7 +76,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var isBorrowingScreen = false
 
     /// 一次"存位置"的来源。必须区分,因为**「锁定位置」开着时用户根本挪不动窗口**——手势整套
-    /// 停用(`setLocked` 到 `syncMouseMonitors` 连鼠标监听器都卸了,`handleMouseEvent` 开头也
+    /// 停用(`setLocked` → `syncMouseMonitors` 连鼠标监听器都卸了,`handleMouseEvent` 开头也
     /// 直接 return)。那种状态下收到的 `didMove` 只可能来自我们自己、或者**系统**:显示器消失
     /// 时 macOS 会自行把窗口搬到剩下那块屏。把系统的这一次搬家当成用户意图存进锚点,就等于让
     /// 一次息屏永久改写用户拖好的位置 —— 这是"悬浮歌词经常在主屏和副屏之间切换"的最后一环
@@ -273,7 +273,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         ))
         hosting.frame = NSRect(origin: .zero, size: size)
         hosting.autoresizingMask = [.width, .height]
-        // 尺寸完全由这边的显式通道驱动(GeometryReader 报高度 到 updateHeight 到
+        // 尺寸完全由这边的显式通道驱动(GeometryReader 报高度 → updateHeight →
         // setFrameAnimated,hosting 用 autoresizingMask 铺满 contentView),macOS 13+
         // NSHostingView 默认 .standardBounds 的那套 intrinsic 尺寸测量/失效传播没有任何
         // 消费者 —— 每次换行/开关译文都白做几档 sizeThatFits,显式声明掐掉整条路径。
@@ -294,7 +294,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         }
 
         // 位置模式。初始值上面建窗口时已经用过(presetOrigin),这里只接**之后的**
-        // 变化:用户在设置里切模式 到 当场按新预设落位。sink 里只用收到的参数值(willSet 时机,
+        // 变化:用户在设置里切模式 → 当场按新预设落位。sink 里只用收到的参数值(willSet 时机,
         // 回读 AppSettings 拿到的是旧值 —— 本文件 isPlayingObserver 那段注释里的坑)。
         placementModeObserver = AppSettings.shared.$overlayPlacementMode
             .removeDuplicates()
@@ -559,7 +559,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             anchorsBottom: placementMode.anchorsBottom, visibleFrame: Self.hostVisibleFrame(of: current))
         guard abs(newFrame.height - current.height) >= 0.5 else { // 避免亚像素抖动反复触发
             // 贴底时热区换算依赖内容高(内容块离窗口顶边 = 窗高 − 内容高):窗高没变、内容高变了
-            // (比如单行歌词在 120pt 地板之下的 70到90),按钮的真实位置也跟着挪了,得重算一次。
+            // (比如单行歌词在 120pt 地板之下的 70→90),按钮的真实位置也跟着挪了,得重算一次。
             if contentChanged, placementMode.anchorsBottom { recomputeHitRegions() }
             return
         }
@@ -832,7 +832,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         recomputeHitRegions()
     }
 
-    // 三份 Raw 坐标 到 三份 Local 坐标的统一换算入口。除了上面三个 onXxxChange 回调各自的
+    // 三份 Raw 坐标 → 三份 Local 坐标的统一换算入口。除了上面三个 onXxxChange 回调各自的
     // "SwiftUI 报了新坐标"触发之外,updateHeight 每次真正改变窗口高度后也会调这个函数——
     // 见 controlRectsRaw 声明处的注释,这是让换算结果跟着窗口高度走、不用干等 SwiftUI
     // 偶然重新报一次坐标的关键一环。
@@ -1032,7 +1032,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             guard !isDragArmed, let start = pressStartLocation else { return }
             let moved = hypot(loc.x - start.x, loc.y - start.y)
             if placementMode.isPreset {
-                // 按在歌词上、拉出一段距离 = 明确在拖窗口 到 给一次「已固定」反馈(胶囊 + 抖动);
+                // 按在歌词上、拉出一段距离 = 明确在拖窗口 → 给一次「已固定」反馈(胶囊 + 抖动);
                 // 这次按住之后再怎么拖都不重复,松手才复位。事件本身照旧穿透到下层。
                 if !presetDragRejectedThisPress, moved > presetDragIntentDistance {
                     presetDragRejectedThisPress = true
@@ -1064,7 +1064,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 原因:窗口在长按判定期间 ignoresMouseEvents 一直是 true(真穿透),物理按下
     // 那一刻的原始 mouseDown 因此从没被这个窗口收到过——那个真实事件已经被派发去了
     // 下层 App/桌面,没法"追认"回来。自己在监听器里手动追踪 dragged 事件、算 delta、
-    // 调 setFrameOrigin,每一帧都要走一遍"WindowServer 派发事件到我们的监听器观察到到
+    // 调 setFrameOrigin,每一帧都要走一遍"WindowServer 派发事件→我们的监听器观察到→
     // 应用进程再发指令挪窗口"的来回,这条链路天然比原生拖动多好几层调度,实测就是
     // "有卡顿感"的根源,不是靠省掉个把 Task 调度就能追平的。
     //
@@ -1147,11 +1147,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 函数是唯一能覆盖它的手段。
     //
     // 两个方向,顺序要紧:
-    // ① 盘上那个锚点现在**看得见**,而窗口不在那儿 到 送回去。两种情形合并成一支:
+    // ① 盘上那个锚点现在**看得见**,而窗口不在那儿 → 送回去。两种情形合并成一支:
     //    · 正在借屏显示(外接屏插回来/睡醒了);
     //    · 「锁定位置」开着 —— 那时位置由锚点唯一决定,窗口偏离了只可能是系统在显示器消失
     //      时替我们搬的家(用户挪不动,见 PositionSaveSource),搬回来。
-    // ② 当前位置看不见了(那块屏刚被拔掉)到 借主屏显示,但**不写盘**(见 isBorrowingScreen)。
+    // ② 当前位置看不见了(那块屏刚被拔掉)→ 借主屏显示,但**不写盘**(见 isBorrowingScreen)。
     //
     // 不做的事:未锁定、也没在借屏,而窗口好端端待在某块屏上时,一律不动它 —— 不"归位"、
     // 不跟焦点跑、不按主屏重排。用户主诉的"经常在主屏和副屏之间切换位置"就是这类自动搬家
@@ -1195,7 +1195,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     //
     // 三个入口,几何全在 OverlayPlacement.presetFrame(selftest 覆盖),这里只回答"在哪块屏上算":
     //   · 启动(presetOrigin):锚点还原出的落点在哪块屏,就在那块屏上按预设算 —— 锚点在预设模式下
-    //     只承担"记住在哪块屏"这一件事(位置本身每次重算);没锚点 / 锚点那块屏不在 到 主屏。
+    //     只承担"记住在哪块屏"这一件事(位置本身每次重算);没锚点 / 锚点那块屏不在 → 主屏。
     //   · 切模式(applyPlacementMode):窗口此刻在哪块屏,就在那块屏上算;切回「自由」什么都不动
     //     (锚点一直跟着写,当前位置就是锚点),只是从此按顶边长、内容贴顶。
     //   · 屏幕参数变化(reconcilePresetPlacement):沿用自由模式那套"借屏"语义 —— 锚点那块屏回来了
@@ -1242,7 +1242,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let currentHost = OverlayPlacement.hostVisibleFrame(of: current, screens: screens)
         let host: CGRect
         if isBorrowingScreen, let anchorHost {
-            // 锚点那块屏回来了(外接屏插回 / 睡醒)到 回去。
+            // 锚点那块屏回来了(外接屏插回 / 睡醒)→ 回去。
             host = anchorHost
             isBorrowingScreen = false
         } else if let currentHost {
@@ -1258,7 +1258,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         }
         guard let target = OverlayPlacement.presetFrame(mode: placementMode, size: current.size, visibleFrame: host)
         else { return }
-        // 亚像素之内不动 —— 会白白触发一次 didMove 到 位置持久化。
+        // 亚像素之内不动 —— 会白白触发一次 didMove → 位置持久化。
         if abs(target.minX - current.minX) < 0.5, abs(target.minY - current.minY) < 0.5 { return }
         window.setFrameOrigin(target.origin)
     }

@@ -6,9 +6,9 @@ import Foundation
 // 计数器在 Harness.swift。
 //
 // 加断言:
-//   - 已有领域 到 写进对应文件的 runXxxTests() 函数体里(顺序执行,失败只计数不中断),
+//   - 已有领域 → 写进对应文件的 runXxxTests() 函数体里(顺序执行,失败只计数不中断),
 //     用 `// ---- 小节标题 ----` 分节,跟原来一样。
-//   - 新领域   到 新建 XxxTests.swift(平铺在本目录,别建子目录:好几条守卫靠 #filePath 往上数
+//   - 新领域   → 新建 XxxTests.swift(平铺在本目录,别建子目录:好几条守卫靠 #filePath 往上数
 //     目录层数定位仓库文件),写 func runXxxTests() { … },再在 groups 里加一行。
 //     忘了加会被下面的「注册表守卫」当场 FAIL:它扫本目录所有 run…Tests() 定义,逐个核对
 //     本文件有没有引用。

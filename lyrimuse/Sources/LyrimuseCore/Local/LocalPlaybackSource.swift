@@ -364,7 +364,7 @@ public final class LocalPlaybackSource: ObservableObject {
         case noisyFloored
     }
 
-    /// bundleID 到 数据源画像。纯函数,selftest 直接覆盖。
+    /// bundleID → 数据源画像。纯函数,selftest 直接覆盖。
     public nonisolated static func positionSourceTier(forBundleID bundleID: String?) -> PositionSourceTier {
         // 把默认档从 noisyFloored 翻成 cleanExtrapolated,并把真正"整秒下取整 +
         // 大抖动"的那两个显式列出来。
@@ -1202,7 +1202,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posPausedRawSecs: Double?
 
     /// 换曲那一拍"按字段/页面判定这条是不是广告"(纯函数,selftest 钉着;收出来):
-    ///   - YouTube Music 探针判成广告 到 广告(`showsAdBadge`:只有 `.ad` 算,nil 不算);
+    ///   - YouTube Music 探针判成广告 → 广告(`showsAdBadge`:只有 `.ad` 算,nil 不算);
     ///   - Spotify **网页版**:只认 `SpotifyWebAdProbe` 的正向证据 `.ad`,nil / `.song` 都不算 ——
     ///     配对关系不等于此刻在放 Spotify,不能按配对套下面那套启发式;
     ///   - Spotify **原生**客户端:字段启发式(album 空 / artist 空 / 标题「—」,与 collector `isAdBreak`
@@ -1219,8 +1219,8 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 「广告中」标志的状态机(纯函数,selftest 钉着;从 apply 里收出来):
     ///   - 换曲那一拍按当下字段/页面判定定初值(`adByFields`);
-    ///   - 同曲期间字段/页面说是广告 到 往 true 棘轮(Spotify 广告字段会闪变,见 apply() 里那段);
-    ///   - 同曲期间**页面明确说是歌**(`.song`,不是 nil)到 回落成 false —— 只有 YouTube Music 的
+    ///   - 同曲期间字段/页面说是广告 → 往 true 棘轮(Spotify 广告字段会闪变,见 apply() 里那段);
+    ///   - 同曲期间**页面明确说是歌**(`.song`,不是 nil)→ 回落成 false —— 只有 YouTube Music 的
     ///     音乐视频会走到这一条:前贴片广告跟正片共用同一份 MediaSession 元数据,判定会在同一个
     /// key 下先 ad 后 song(见 YouTubeMusicAdProbe.verdictMaxAge 的提醒);
     ///   - 其余保持不变(含 nil:探针超时/还没探到,不许把已判定的广告抹掉,也不许把歌变成广告)。
@@ -1313,7 +1313,7 @@ public final class LocalPlaybackSource: ObservableObject {
         let reported = rawReported - posReportedBiasSecs
         // 冻结检测要用"上一轮的报告值",这里先算差值、再统一记录本轮值(defer 保证
         // 每条退出路径都记,包括下面的各个 early return)。探针那一笔**不记**:它不是
-        // MediaRemote 流里的样本,记了会让下一拍的差分变成"探针值到流读数"的假倒退,
+        // MediaRemote 流里的样本,记了会让下一拍的差分变成"探针值→流读数"的假倒退,
         // 恰好落进冻结守卫的"几乎没动"区间(Δ≈2s、间隔 2s 时差分≈0)。
         let reportedAdvance = rawReported - (posPrevReported ?? rawReported)
         defer { if !isGroundTruthSeed { posPrevReported = rawReported } }
@@ -1841,11 +1841,11 @@ public final class LocalPlaybackSource: ObservableObject {
         watcher.start()
     }
 
-    // 通知到达 到 去抖动之后补查一次 poll()。
+    // 通知到达 → 去抖动之后补查一次 poll()。
     //
     // 用"去抖动"(延迟一小段再查,期间再来通知就重新计时)而不是"立刻查一次+之后节流",
     // 是实测量出来的必要选择,不是随手挑的:
-    // ① Music.app 一次用户操作会连发 2 条 playerInfo(实测:按暂停 到 第一条 +116ms、
+    // ① Music.app 一次用户操作会连发 2 条 playerInfo(实测:按暂停 → 第一条 +116ms、
     //    第二条 +231ms),而且**第一条带的往往还是操作前的旧状态**(按暂停时第一条
     //    Player State 居然是 Playing,第二条才是 Paused);
     // ② 更关键的是 Music.app 自己的 AppleScript 可见状态也不是立刻切换的——实测
@@ -1945,11 +1945,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// **刚失去快照的头几拍必须留在 2s 档**。`clearIfWasPlaying()` 会把
     /// title 清空(那是对的,停播不该留半吊子状态),于是下面那行立刻判成"空闲"、降到 10s ——
     /// 而快照变 nil 最常见的原因**根本不是空闲**,是浏览器播放的广告闸 fail-closed 丢了这一拍
-    /// (`trustedPlaybackRejected` 到 探针判定还没到 到 `gate` 拒)。一拍本该 2 秒就自愈的
-    /// 抖动,被这次降档自己延长成 10 秒:**一次拿不到 到 把下次去拿的时间推迟 5 倍**,而
+    /// (`trustedPlaybackRejected` → 探针判定还没到 → `gate` 拒)。一拍本该 2 秒就自愈的
+    /// 抖动,被这次降档自己延长成 10 秒:**一次拿不到 → 把下次去拿的时间推迟 5 倍**,而
     /// 探针 ~187ms 就把结果放进缓存了,没人去读。
     ///
-    /// 真机实测(16:02:24.464 `snapshot failed` 到 16:02:31.486 `snapshot recovered`)
+    /// 真机实测(16:02:24.464 `snapshot failed` → 16:02:31.486 `snapshot recovered`)
     /// 真空期 **7.0 秒**,期间菜单栏 16:02:27.651 `slot rebuild: fixed(223.5) -> icon(38.5)`
     /// 塌成图标、灵动岛同时退到兜底图标。那 7 秒还是**侥幸**:靠 16:02:31 一条 media-control
     /// 事件唤醒补查才提前救回,没有那条事件就是满 10 秒。
@@ -1979,7 +1979,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 每拍 poll 末尾调:状态档位变了才重建 Timer(重建本身廉价,但没必要每拍做)。
-    /// 事件唤醒(handlePlayerInfoChanged到poll)让"暂停到播放"在下一拍前就被感知,
+    /// 事件唤醒(handlePlayerInfoChanged→poll)让"暂停→播放"在下一拍前就被感知,
     /// 感知到的那拍会立刻把节拍调回 2s。
     private func adjustPollCadence() {
         let desired = desiredPollInterval
@@ -2168,7 +2168,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 settledThresholdMs = KaraokeFill.lineFillSettledMs(words: words, groups: line?.wordGroups)
             }
             // 必须用 effectiveOffsetMs(含歌词自带的 [offset:]),不能用 offsetMs:
-            // settledThresholdMs 来自词时间戳(歌词原始时间轴),而"播放位置 到 歌词时间轴"
+            // settledThresholdMs 来自词时间戳(歌词原始时间轴),而"播放位置 → 歌词时间轴"
             // 的换算就是引擎那句「所有查询入口都必须用 effectiveOffsetMs」管的事 ——
             // 全链路核对 [offset:] 处理时抓到这里是唯一漏改的入口(
             // 那次只改了引擎内部五个入口,这处在引擎外面、漏了),带非零 offset 的歌
@@ -2627,7 +2627,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 会继续套用**上一个播放器**那一档 —— 正是"把浏览器的补偿套到 Apple Music 上"这个
         // effectiveOffset 注释里明写要防的形态(加播放器维度时发现)。
         //
-        // 放在 reload 判断之后:换歌那一支已经经 reloadCurrentLyrics 到 applyOffsets 算过一遍,
+        // 放在 reload 判断之后:换歌那一支已经经 reloadCurrentLyrics → applyOffsets 算过一遍,
         // 这里只补"没换歌但换了播放器"这一种情况,不重复跑。
         let bundleID = snapshot.bundleIdentifier
         if bundleID != lastAppliedBundleID {
@@ -2892,7 +2892,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 anchorElapsedTime: snapshot.anchorElapsedTime, streamRaw: snapshot.elapsedTime,
                 anchorLagSeed: usedBrowserProbe ? 0 : anchorLag(forBundleID: snapshot.bundleIdentifier))
             if !posWasPlaying, key == posTrackingKey, let prevPaused = pausedPositionMs {
-                // 暂停到恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
+                // 暂停→恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
                 env.browserProbeReopenAfterResume(key)
                 logger.notice("resume transition: paused=\(Double(prevPaused) / 1000, format: .fixed(precision: 3)) resumed=\(positionSeconds, format: .fixed(precision: 3)) raw=\(rawReportedForResolve, format: .fixed(precision: 3)) delta=\(positionSeconds - Double(prevPaused) / 1000, format: .fixed(precision: 3)) rate=\(snapshot.playbackRate ?? -1, format: .fixed(precision: 2)) signalAge=\(self.posStateSignalAt.map { now.timeIntervalSince($0) } ?? -1, format: .fixed(precision: 3)) wouldSeed=\(Double(prevPaused) / 1000 + (self.posStateSignalAt.map { now.timeIntervalSince($0) } ?? 0), format: .fixed(precision: 3))")
             }
@@ -2970,7 +2970,7 @@ public final class LocalPlaybackSource: ObservableObject {
         }()
         if newPausedPositionMs != pausedPositionMs { pausedPositionMs = newPausedPositionMs }
         if let shown = pauseShownMs, let paused = newPausedPositionMs {
-            // 播放到暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
+            // 播放→暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
             logger.notice("pause transition: shown=\(Double(shown) / 1000, format: .fixed(precision: 3)) frozenRaw=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) paused=\(Double(paused) / 1000, format: .fixed(precision: 3)) delta=\(Double(paused - shown) / 1000, format: .fixed(precision: 3)) frozenByEvent=\(pauseAnchorWasFrozenByEvent) errEMA=\(self.posErrEMA, format: .fixed(precision: 3))")
             // 屏上位置得是被暂停事件当场冻住的那一刻(frozenByEvent),淡出量那个常数才对得上。
             if pauseAnchorWasFrozenByEvent, let learn = pauseLearnStart,
@@ -2979,7 +2979,7 @@ public final class LocalPlaybackSource: ObservableObject {
             }
         }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
-        // 播放"——只在上面播放分支里更新的话,"播放到暂停到再播放"这个序列会因为暂停期间
+        // 播放"——只在上面播放分支里更新的话,"播放→暂停→再播放"这个序列会因为暂停期间
         // 完全没走到这行,让下一次恢复播放时的判断误用暂停前的陈旧 posPrevWall/
         // posWasPlaying,而不是正确识别出"刚从暂停恢复"。
         posTrackingKey = key
@@ -3212,7 +3212,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这一刻在放的电台(载荷里的 `radioStationHash`),不是电台就是 nil。见 currentRadioOffsetKey。
     private var currentStationHash: String?
 
-    /// 这首歌**在这个台上**的时间轴校准 key。不是电台 / 拿不到台标哈希 / 还没有曲目身份 到 空串,
+    /// 这首歌**在这个台上**的时间轴校准 key。不是电台 / 拿不到台标哈希 / 还没有曲目身份 → 空串,
     /// 那一层整个不适用,行为跟这个功能加进来之前逐字相同。
     private var currentRadioOffsetKey: String {
         guard lastSnapshot?.isRadio == true, let hash = currentStationHash else { return "" }
@@ -3280,7 +3280,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着一字未变的
         // found 走到这里 —— 原来每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算
         // + allLines/gapMarkers 重建,单次 10-50ms 主线程,正撞上 30Hz 填色渲染。快照含
-        // resolved/instrumental:它们翻转("搜索中"到"确实没有")时快照必不相等,不会被
+        // resolved/instrumental:它们翻转("搜索中"→"确实没有")时快照必不相等,不会被
         // 闸吞掉;比较用 String ==(mtime 已变时 lookup 是新解码实例,引用比较必 miss,
         // 别指望它)。 闸只跳"重算",不跳上面的粘性置位;闸后的 found 派生赋值
         // (hasLyricsContent 等)在快照相等时算出来的必然是同值,skip 无害。
@@ -3775,7 +3775,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if contrastRatio(strokeLum, ownLum) >= minContrast { return (r, g, b) }
 
         // ③ 解析出两侧的目标相对亮度:比描边亮要到 upper,比描边暗要到 lower。
-        //    (L+0.05)/(S+0.05) = minContrast 到 L = (S+0.05)*minContrast - 0.05
+        //    (L+0.05)/(S+0.05) = minContrast → L = (S+0.05)*minContrast - 0.05
         let upper = (strokeLum + 0.05) * minContrast - 0.05
         let lower = (strokeLum + 0.05) / minContrast - 0.05
 

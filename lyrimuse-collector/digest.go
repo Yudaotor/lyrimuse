@@ -87,7 +87,7 @@ func (p *poller) runDigests(now time.Time, env digestEnv) {
 }
 
 // resolveDigestSource 判定"这次检查该用哪个数据源"：preference 非空且明确指定就用它；
-// 否则按"两个都配了到Last.fm，只配了一个到用那个，都没配到返回空字符串"解析出默认值。
+// 否则按"两个都配了→Last.fm，只配了一个→用那个，都没配→返回空字符串"解析出默认值。
 // 空字符串意味着两个账号都没配，调用方应该跳过这次检查(等同于既有 weeklyDigest/
 // dailyDigest 顶部那些"缺前提就 return"的判断，不是新增行为，只是把"该用哪个源"这一步
 // 单独抽出来)。Swift 侧 AccountLinkingTab 的 Picker 默认值展示用的是同一套规则(各自

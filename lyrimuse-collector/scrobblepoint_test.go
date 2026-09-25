@@ -28,7 +28,7 @@ func withTempListenLog(t *testing.T) {
 	t.Cleanup(func() { listenLogPath = saved })
 }
 
-// features.json 到 档位:缺省 / 非法 / 类型错都兜底成官方规则,四个合法值原样过。字符串值必须
+// features.json → 档位:缺省 / 非法 / 类型错都兜底成官方规则,四个合法值原样过。字符串值必须
 // 跟 Swift 侧 LastfmScrobblePoint 的 rawValue 逐字相同(那边最容易漏)。
 func TestScrobblePointFlagRoundTrip(t *testing.T) {
 	const key = "lastfm_scrobble_point"
@@ -202,7 +202,7 @@ func TestScrobblePointEndCommitsOnlyWhenTrackFinished(t *testing.T) {
 		p.applySubmitOutcome(submitOutcome{sess: s, meta: s.meta, artistName: "A", startedAt: s.startedAt.Unix()})
 	}
 
-	// 中途切歌:挂起 到 finalize 不发,条目留着。
+	// 中途切歌:挂起 → finalize 不发,条目留着。
 	cut := mk("切掉", 150, 2*time.Second)
 	submit(cut)
 	if cut.lastfmPending == nil || !cut.listenSent {
@@ -226,7 +226,7 @@ func TestScrobblePointEndCommitsOnlyWhenTrackFinished(t *testing.T) {
 		t.Fatalf("放到结尾应记一行,got %+v", got)
 	}
 
-	// LB 慢:finalize 先到(会话结束、判成放完),提交结果后到 到 当场发。
+	// LB 慢:finalize 先到(会话结束、判成放完),提交结果后到 → 当场发。
 	late := mk("迟到", 198, 3*time.Second)
 	p.sess = late
 	p.finalize(now) // submitting=true 让 finalize 不再另起提交,模拟结果还在路上
@@ -241,7 +241,7 @@ func TestScrobblePointEndCommitsOnlyWhenTrackFinished(t *testing.T) {
 		t.Fatalf("应共两行,got %+v", got)
 	}
 
-	// 同样迟到、但会话是被切掉的 到 留在会话上,不发。
+	// 同样迟到、但会话是被切掉的 → 留在会话上,不发。
 	lateCut := mk("迟到且切掉", 120, 3*time.Second)
 	p.sess = lateCut
 	p.finalize(now)

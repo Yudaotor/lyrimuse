@@ -80,8 +80,8 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 // ② /api/get 去掉 album_name —— album_name 是参与
 //
 //	匹配的,传一个 LRCLIB 那边没有的专辑名会直接 404,哪怕这首歌其实收录了。同一首
-//	Michael Jackson - Blue Gangsta:album_name=XSCAPE 到 200、=XSCAPE (Deluxe) 到 200
-//	(它库里恰好两条都有)、=一个瞎写的专辑名 到 **404**、完全不传 到 200。而 Music.app
+//	Michael Jackson - Blue Gangsta:album_name=XSCAPE → 200、=XSCAPE (Deluxe) → 200
+//	(它库里恰好两条都有)、=一个瞎写的专辑名 → **404**、完全不传 → 200。而 Music.app
 //	的专辑标签跟 LRCLIB 的写法经常对不上(本地化名、(Deluxe Edition) vs (Deluxe)、
 //	大小写),所以这一级是纯赚:仍然是 artist+track 精确匹配,没有任何"挑候选"的风险。
 //

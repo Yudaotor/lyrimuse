@@ -176,12 +176,12 @@ func getSpotifyState(ctx context.Context) (map[string]any, bool) {
 //
 // 三条路径,按优先级:
 //   - 选了「自动识别」(不管还同时勾了别的具体播放器,auto 是超集,行为跟单选年代的
-//     playerAuto 完全一样)到 getAutoDetectedState;
+//     playerAuto 完全一样)→ getAutoDetectedState;
 //   - 恰好只选了 Apple Music 一个、没有 auto 到 getAppleMusicOnlyState:主体是
 //     getAppleMusicState 的 AppleScript 路径,再补两个 MediaRemote 独有的键 —— 不补的话
 //     电台那一整层在这一种配置下完全不生效,理由见 getAppleMusicOnlyState 头注;
 //   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗/汽水音乐中的若干个,同样没有
-//     auto)到 getMultiSelectedState,核对 media-control 报的系统级 Now Playing 焦点
+//     auto)→ getMultiSelectedState,核对 media-control 报的系统级 Now Playing 焦点
 //     是不是落在选中的这个子集里,是的话才认(跟 getAutoDetectedState 同一套"系统只有
 //     一个焦点"的道理,只是准入名单从"内置五个+信任列表"收窄成"用户这次选中的这几个")。
 //
@@ -209,10 +209,10 @@ func getState(ctx context.Context) (map[string]any, bool) {
 //
 // 在这之前这条路直接 `return getAppleMusicState(ctx)`,一次
 // media-control 都不问,于是:
-//   - `radioStationHash` 拿不到 到 电台判据恒假 到 radioclock.go 那套单曲口径、
+//   - `radioStationHash` 拿不到 → 电台判据恒假 → radioclock.go 那套单曲口径、
 //     radiostationcard.go 那道"别把台名当一首歌写进歌词缓存"的守卫,全都不生效;
-//   - `catalogDurationSecs` 拿不到 到 就算判据补上了,snapshot.extract() 也只能把整档
-//     节目那个数(实测 3390.122s)当曲长 到 App 的进度条分母、口白判据跟着一起废。
+//   - `catalogDurationSecs` 拿不到 → 就算判据补上了,snapshot.extract() 也只能把整档
+//     节目那个数(实测 3390.122s)当曲长 → App 的进度条分母、口白判据跟着一起废。
 //
 // 讽刺的是判据本身一处 bundle id 都不认(谁报 radioStationHash 就算谁),**只勾
 // Apple Music 反而是唯一不生效的配置**;默认勾着「自动识别」走 getAutoDetectedState,
@@ -298,7 +298,7 @@ func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
 	// **原样进 Last.fm**,在那边建出一个跟正常写法肉眼完全一样、实际却是另一个实体的
 	// 条目;而 enrichKey 那边又洗过,缓存 key 与上送值两边口径不一致。
 	//
-	// 洗 ≠ 改写:这里只把不可见字符规范化(NBSP/全角空格到普通空格、删零宽、连续空白
+	// 洗 ≠ 改写:这里只把不可见字符规范化(NBSP/全角空格→普通空格、删零宽、连续空白
 	// 折成一个),不替换任何可见内容 —— 跟 lbMeta「原样上送」那条原则不冲突,业界
 	// (Web Scrobbler 的 removeZeroWidth/trim 等)也普遍这么做。
 	for _, k := range []string{"title", "artist", "album"} {
@@ -418,10 +418,10 @@ func isKnownPlayerBundleID(bundleID string) bool {
 // 因此从"靠用户选对"变成"选错了也有兜底"。
 //
 // 全靠真实样本定的,四份实测:
-//   - 酷狗音乐   artist=周杰伦          album=七里香            到 是歌
-//   - Apple Music artist=方大同         album=Soulboy/100种生活 到 是歌
-//   - Spotify     artist=方大同         album=Soulboy           到 是歌
-//   - Arc 放视频  artist=""/频道名      album=**恒为空**        到 不是歌
+//   - 酷狗音乐   artist=周杰伦          album=七里香            → 是歌
+//   - Apple Music artist=方大同         album=Soulboy/100种生活 → 是歌
+//   - Spotify     artist=方大同         album=Soulboy           → 是歌
+//   - Arc 放视频  artist=""/频道名      album=**恒为空**        → 不是歌
 //
 // **album 是这四份样本里唯一 100% 分对的字段**。artist 单独不够:YouTube 会把**频道名**
 // 塞进 artist(实测 `Dream in reality` / `VEILLE + JOUR J de la rentrée 2024`,时长 925 秒
@@ -439,7 +439,7 @@ func trustedPlaybackNotASong(bundleID, artist, album string) bool {
 	}
 	// isTrustedPlayerBundleID 而不是裸查 features().TrustedPlayers[bundleID]:Safari 的
 	// 播放报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,
-	// 裸查永远落空 到 这道守卫对 Safari 恒不生效(修,王力宏《你不知道的事》
+	// 裸查永远落空 → 这道守卫对 Safari 恒不生效(修,王力宏《你不知道的事》
 	// Safari 网页播放案连带查出来的三处同型裸查之一,见 getAutoDetectedState 那处的注释)。
 	if !isTrustedPlayerBundleID(bundleID) {
 		return false
@@ -478,7 +478,7 @@ func isTrustedPlayerBundleID(bundleID string) bool {
 	return false
 }
 
-// mediaProxyOwners 是「媒体进程 bundle id 到 真正的宿主 App bundle id」。
+// mediaProxyOwners 是「媒体进程 bundle id → 真正的宿主 App bundle id」。
 //
 // Safari 播网页音视频时解码/播放跑在独立的 WebKit GPU 进程里,MediaRemote 报"现在谁在放"
 // 报的是那个进程(com.apple.WebKit.GPU)而不是 com.apple.Safari。Chromium 系(Arc/Chrome/
@@ -540,7 +540,7 @@ func mediaPlayerLabel(bundleID string) string {
 // 因为差的是一个 U+00A0(不换行空格)。媒体标签里带 NBSP 并不罕见(有些发行版的官方元数据
 // 就是这么打的),而这个字符会一路原样传下去:
 //
-//	缓存 key    "方大同|偷笑|爱爱爱"  vs  "方大同|偷笑\u00a0|爱爱爱"   到 两条独立条目
+//	缓存 key    "方大同|偷笑|爱爱爱"  vs  "方大同|偷笑\u00a0|爱爱爱"   → 两条独立条目
 //	导出文件名  "方大同 - 偷笑 - 爱爱爱.lrc"  vs  "方大同 - 偷笑\u00a0 - 爱爱爱.lrc"
 //
 // 两边各自解析歌词、各自打分、各自导出文件,谁也不知道对方存在。用户看到的就是"同一首歌
@@ -741,7 +741,7 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 	// 必须走 isTrustedPlayerBundleID,不能裸查 features().TrustedPlayers[bundleID]
 	// (修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
 	// MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
-	// com.apple.Safari,裸查永远落空 到 Safari 的播放在这条 auto 路径被整条当成
+	// com.apple.Safari,裸查永远落空 → Safari 的播放在这条 auto 路径被整条当成
 	// "不相关 App"丢掉。Swift 侧(MediaControlClient)走 TrustedPlayers.isTrusted
 	// 做了代理解析、认了这首歌,于是 App 显示曲目并挂出"搜索歌词中…"占位,而 collector
 	// 这边认为什么都没在放、永远不会去解析——占位行就永远停在那。Chrome/Arc 报的是
@@ -924,7 +924,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// 的形态,AppleScript 直接问 Music.app 要 duration of current track 不会串;而且
 	// AppleScript 给的精度还更高(实测 289.7659912109375 vs 目录 289.766),拿目录值去盖
 	// 反而是降精度。覆盖就该待在产生那个 bug 的那份快照上。
-	// 锚点的**另一半**(appleCatalogByTrack 索引 到 歌词检索身份)不受影响:它在这个函数里
+	// 锚点的**另一半**(appleCatalogByTrack 索引 → 歌词检索身份)不受影响:它在这个函数里
 	// 就写好了,auto 模式下照常建立。
 	// 正常情况两者逐位相等(实测 208.293 对 208.293),只有撞上 media-control 的"脏快照"
 	// (换曲预载窗口里把**下一首**的时长拼进当前曲目的快照,见 enrich.go 的
@@ -933,7 +933,7 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// 时长是这里唯一被覆盖的字段:标签本身没有"脏"的已知形态,而且换掉它会牵动缓存 key。
 	duration := raw.Duration
 	// catalogDuration:只在目录锚点**通过自校验**时才非零 —— 也就是"这个时长是权威的、属于当前这首歌"。
-	// 电台要靠它:那条路上快照报的是整档节目时长,而目录知道单曲的真实长度(实测 3390.122 到 226.283)。
+	// 电台要靠它:那条路上快照报的是整档节目时长,而目录知道单曲的真实长度(实测 3390.122 → 226.283)。
 	// 单独一个键而不是复用 duration:下面 refineAppleMusicState 整份顶替时,只有"权威"这一层信息值得带过去。
 	catalogDuration := 0.0
 	if anchor, ok := appleCatalogAnchor(raw.BundleID, raw.UniqueIdentifier, raw.TrackNumber, title, album); ok {

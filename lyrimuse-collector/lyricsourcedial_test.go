@@ -91,7 +91,7 @@ func TestLyricSourceDial_SystemDNSHealthyNeverTouchesDoH(t *testing.T) {
 	}
 }
 
-// 系统 DNS NXDOMAIN 到 问 DoH 到 并发拨 DoH 给的地址;轨迹上 DNSDone 报成功(此后连不上是 connect 不是 dns)。
+// 系统 DNS NXDOMAIN → 问 DoH → 并发拨 DoH 给的地址;轨迹上 DNSDone 报成功(此后连不上是 connect 不是 dns)。
 func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 	p := &dialProbe{
 		sysErr: &net.DNSError{Err: "no such host", Name: "c.y.qq.com", IsNotFound: true},
@@ -130,7 +130,7 @@ func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 	}
 }
 
-// 系统 DNS 失败、DoH 也空:返回的错误链里保留 *net.DNSError,轨迹 DNSDone 带错 到 传输层分类认成 dns_failed。
+// 系统 DNS 失败、DoH 也空:返回的错误链里保留 *net.DNSError,轨迹 DNSDone 带错 → 传输层分类认成 dns_failed。
 func TestLyricSourceDial_BothFailKeepsDNSError(t *testing.T) {
 	sysErr := &net.DNSError{Err: "i/o timeout", Name: "lrclib.net", IsTimeout: true}
 	p := &dialProbe{sysErr: sysErr}
@@ -155,7 +155,7 @@ func TestLyricSourceDial_BothFailKeepsDNSError(t *testing.T) {
 	}
 }
 
-// DoH 解析成功但地址拨不通:错误链**不**带 DNSError,轨迹 DNSDone 无错 到 connect_failed,不是 dns_failed。
+// DoH 解析成功但地址拨不通:错误链**不**带 DNSError,轨迹 DNSDone 无错 → connect_failed,不是 dns_failed。
 func TestLyricSourceDial_DoHResolvedButUnreachableIsConnectFailure(t *testing.T) {
 	p := &dialProbe{
 		sysErr:  &net.DNSError{Err: "no such host", Name: "mobilecdn.kugou.com", IsNotFound: true},

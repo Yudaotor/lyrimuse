@@ -84,7 +84,7 @@ type backfillOutcome struct {
 // pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。
 //
 // 折叠规则(读侧唯一权威):
-//   - t=="l" 收 uts到收听行(同 uts 后来的覆盖先前的)
+//   - t=="l" 收 uts→收听行(同 uts 后来的覆盖先前的)
 //   - t=="s" 记 uts 已提交过
 //
 // 官方指南:"Scrobbles should be sent in order, therefore cached scrobbles should be sent
@@ -327,8 +327,8 @@ func truncateForLog(b []byte) string {
 // 网络超时/连接中断意味着请求**可能已经到了 Last.fm 并落库**,只是回执丢在路上。这时候
 // 有两种选择,而它们的代价完全不对称:
 //
-//   - 下次自动重试 到 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
-//   - 就此搁置     到 最多少补一条,用户的历史仍然是干净的
+//   - 下次自动重试 → 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
+//   - 就此搁置     → 最多少补一条,用户的历史仍然是干净的
 //
 // 所以选后者。这些条目不会被自动重试;将来若要救回来,正路是拿 user.getRecentTracks
 // 按时间区间对账(那个方法不需要认证),确认服务端确实没有再放行 —— 那部分单独实现。
@@ -398,7 +398,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 				log.Printf("backfill: aborted, %d listen(s) stay pending (server refused, nothing stored): %v", len(batch), err)
 				return out
 			}
-			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)到 可能已落库,
+			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)→ 可能已落库,
 			// 重发是最大的自造重复源,整批进隔离。
 			for _, it := range batch {
 				markQuarantined(it.UTS)

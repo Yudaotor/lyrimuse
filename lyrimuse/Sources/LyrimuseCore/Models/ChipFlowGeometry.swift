@@ -19,7 +19,7 @@ public enum ChipFlowGeometry {
 
     /// 按顺序装箱:装不下就换行。**单个就比 limit 宽时仍然独占一行**(而不是丢掉或压缩)——
     /// 宁可这一行溢出一点被看见,也不要静默少画一枚芯片,那会让用户以为某个播放器不在候选里。
-    /// `widths` 为空 到 空数组;`limit` ≤ 0(还没量到宽度的首帧)按"不限"处理,全塞一行。
+    /// `widths` 为空 → 空数组;`limit` ≤ 0(还没量到宽度的首帧)按"不限"处理,全塞一行。
     public static func rows(widths: [CGFloat], spacing: CGFloat, limit: CGFloat) -> [Row] {
         guard !widths.isEmpty else { return [] }
         let bound = limit > 0 ? limit : .greatestFiniteMagnitude

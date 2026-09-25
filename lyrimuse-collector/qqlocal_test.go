@@ -105,7 +105,7 @@ func TestQQLocalMatchRejectsDurationMismatch(t *testing.T) {
 	if m, ok := qqLocalMatch(context.Background(), "周杰伦", "西西里", "", 300); ok {
 		t.Fatalf("时长差 >12%% 不该命中,却给了 %+v", m)
 	}
-	// 播放器没报时长(0)时 sourceDurationFits 不下结论 到 照常命中。
+	// 播放器没报时长(0)时 sourceDurationFits 不下结论 → 照常命中。
 	if _, ok := qqLocalMatch(context.Background(), "周杰伦", "西西里", "", 0); !ok {
 		t.Fatal("时长未知时应当命中")
 	}

@@ -57,7 +57,7 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 		t.Fatalf("got %v want %v", got, want)
 	}
 
-	// 都齐了 到 空
+	// 都齐了 → 空
 	full := []scoredLyricCandidateResult{}
 	for _, s := range lyricSourceNames {
 		full = append(full, scoredLyricCandidateResult{Source: s, Score: 100})

@@ -689,7 +689,7 @@ struct LastfmStatsSection: View {
     /// Button 会把控件的点击吞掉)。这里手搭,但尺寸全部取自 SettingsRowMetrics,跟同一页
     /// 其它卡的图标列/文字起点/内边距严格对齐。
     /// 粗到分钟的相对时间。不到一分钟一律说"刚刚" —— 这行字每次刷新都会重算,秒级
-    /// 精度会让它一直跳数字(28 秒到45 秒到刚过 1 分…),而"上次刷新是多久以前"本来也
+    /// 精度会让它一直跳数字(28 秒→45 秒→刚过 1 分…),而"上次刷新是多久以前"本来也
     /// 不需要精确到秒。要精确时刻的话 tooltip 里有。
     private static func coarseRelative(_ date: Date) -> String {
         Date().timeIntervalSince(date) < 60 ? L10n.t("刚刚") : relative(date)
@@ -1073,7 +1073,7 @@ struct LastfmStatsSection: View {
         .padding(.vertical, 10)
     }
 
-    /// 日桶键 "yyyy-MM-dd" 到 按 App 语言格式化的日期(不带时间)。
+    /// 日桶键 "yyyy-MM-dd" → 按 App 语言格式化的日期(不带时间)。
     private static func dayLabel(_ key: String) -> String {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3,

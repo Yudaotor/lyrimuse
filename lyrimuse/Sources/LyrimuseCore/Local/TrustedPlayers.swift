@@ -1,6 +1,6 @@
 import Foundation
 
-/// 用户显式信任的「未知播放器」名单 —— bundle id 到 界面显示名。
+/// 用户显式信任的「未知播放器」名单 —— bundle id → 界面显示名。
 ///
 /// ## 为什么是"信任列表"而不是"一律接受"
 ///
@@ -28,7 +28,7 @@ public enum TrustedPlayers {
 
     private static let featuresURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
-    /// bundle id 到 显示名(可能是空串:反查不到 App 名时)。文件不存在/解析失败一律空表。
+    /// bundle id → 显示名(可能是空串:反查不到 App 名时)。文件不存在/解析失败一律空表。
     public static var current: [String: String] {
         guard let data = try? Data(contentsOf: featuresURL),
               let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data),
@@ -80,7 +80,7 @@ public enum TrustedPlayers {
 
     // MARK: - 媒体代理进程
 
-    /// 「媒体进程 bundle id 到 真正的宿主 App bundle id」。
+    /// 「媒体进程 bundle id → 真正的宿主 App bundle id」。
     ///
     /// Safari 播网页音视频时,解码/播放跑在一个**独立的 WebKit GPU 进程**里,而 MediaRemote
     /// 报"现在谁在放"时报的是**那个进程**(`com.apple.WebKit.GPU`),不是 `com.apple.Safari`。
@@ -90,7 +90,7 @@ public enum TrustedPlayers {
     /// 不加这层的后果是**用户看得见的断层**(实测撞上,原话「为什么这里又
     /// 出现了一个 webkit 啥玩意」):在设置页「网页播放器」卡里配对了 Safari,配对动作也确实
     /// 把 `com.apple.Safari` 写进了信任列表,可真播起来上报方是 `com.apple.WebKit.GPU` ——
-    /// 不在名单里 到 整条播放不被采纳,同时"发现未知播放器"那张卡还会跳出来要用户再信任一个
+    /// 不在名单里 → 整条播放不被采纳,同时"发现未知播放器"那张卡还会跳出来要用户再信任一个
     /// 看不懂的 bundle id。两个身份、两套机制,中间没人搭桥。
     ///
     /// **选择"别名"而不是"配对时连带把代理进程也写进信任列表"**:后者会在设置页
@@ -110,17 +110,17 @@ public enum TrustedPlayers {
         return mediaProxyOwners[bundleID]
     }
 
-    /// 一条来自**信任的未知播放器**的播放,歌手名**或专辑名**是空的 到 判成"这不是一首歌",
+    /// 一条来自**信任的未知播放器**的播放,歌手名**或专辑名**是空的 → 判成"这不是一首歌",
     /// 整条丢掉(不解析歌词、不打卡)。
     ///
     /// 判据跟 collector 的 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在
     /// 作用域:那个只服务 Spotify 广告,这个服务信任列表。
     ///
     /// 全靠真实样本定的,四份实测:
-    ///   - 酷狗音乐    artist=周杰伦     album=七里香              到 是歌
-    ///   - Apple Music artist=方大同     album=Soulboy/100种生活   到 是歌
-    ///   - Spotify     artist=方大同     album=Soulboy             到 是歌
-    ///   - Arc 放视频  artist=""/频道名  album=**恒为空**          到 不是歌
+    ///   - 酷狗音乐    artist=周杰伦     album=七里香              → 是歌
+    ///   - Apple Music artist=方大同     album=Soulboy/100种生活   → 是歌
+    ///   - Spotify     artist=方大同     album=Soulboy             → 是歌
+    ///   - Arc 放视频  artist=""/频道名  album=**恒为空**          → 不是歌
     ///
     /// **album 是这四份样本里唯一 100% 分对的字段**。artist 单独不够:YouTube 会把**频道名**
     /// 塞进 artist(实测 `Dream in reality` / 时长 925 秒的法语 vlog),从数据形状上跟
@@ -144,7 +144,7 @@ public enum TrustedPlayers {
             return false
         }
         // 走 isTrusted 而不是裸查 trusted[bundleID]:Safari 的播放报的是媒体代理进程
-        // com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,裸查永远落空 到
+        // com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,裸查永远落空 →
         // 这道守卫对 Safari 恒不生效,Safari 播非歌曲视频(album 为空)会被当成一首歌
         // (修,collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修,
         // 见 system.go getAutoDetectedState 那处的完整案情)。

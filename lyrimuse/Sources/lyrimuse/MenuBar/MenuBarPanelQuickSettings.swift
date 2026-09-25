@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import LyrimuseCore
 
-// 菜单栏面板里「长按 / 右键某个圆钮块 到 原地展开它自己的设置」这一套(用户提议)。
+// 菜单栏面板里「长按 / 右键某个圆钮块 → 原地展开它自己的设置」这一套(用户提议)。
 // 分三块:格子的鼠标路由(TileMouseRouter)、展开后那一小片设置(PanelQuickSettings)、
 // 以及能翻到背面的那几格的界面元数据(PanelQuickTarget + LyricsSurface 扩展)。
 // 面板本体在 MenuBarPanel.swift。
@@ -399,7 +399,7 @@ struct PanelQuickSettings: View {
                 // 正好是头注那条判据说的"这个形态自己的、调了立刻看得见的旋钮"(切到「译文」当场
                 // 多一行字、字号拖一格主行当场变大)。
                 //
-                // 顺序跟设置页「歌词行」组一致(显示歌词 到 对齐方式 到 副行),字号来自「字体」组、
+                // 顺序跟设置页「歌词行」组一致(显示歌词 → 对齐方式 → 副行),字号来自「字体」组、
                 // 排在这一段最后 —— 上面的风格/宽度说的是整张卡,这四行是"歌词行自己的事"。
                 secondaryLineRow(selection: $settings.notchSecondaryLine)
                 // 灵动岛的字号跟「副行」**互不影响**,不要照搬菜单栏那边的「由副行决定」:

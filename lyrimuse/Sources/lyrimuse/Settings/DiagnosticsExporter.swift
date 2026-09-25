@@ -14,7 +14,7 @@ import Darwin
 //
 //  1. 结构化那一段(== State ==)只复用 ConfigStore 已有的 isXConfigured/xMissingHint()
 //     这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
-//  2. 附在报告末尾的日志正文统一过 redacted() 到 LogRedactor 脱敏。
+//  2. 附在报告末尾的日志正文统一过 redacted() → LogRedactor 脱敏。
 //
 // 第 2 条是补的,补之前这条约束实际上是**破的**:第 1 条只管结构化字段,而
 // 报告末尾把 ~/Library/Logs/lyrimuse.log 的最后 200 行原样附上,凭据从日志正文里漏出去。
@@ -43,7 +43,7 @@ enum DiagnosticsExporter {
     // NSSavePanel)。写入路径由用户自己在系统存储面板里确认,天然不会撞上桌面/文稿/
     // 下载三个目录可能存在的 TCC 保护,也跟这个项目里选歌词文件夹用 NSOpenPanel 是
     // 同一个思路。
-    /// 弹保存面板 到 后台生成内容 到 写盘 到 在访达里选中它。
+    /// 弹保存面板 → 后台生成内容 → 写盘 → 在访达里选中它。
     ///
     /// **顺序是刻意的**:面板先弹,内容后生成。buildReport 里的 OSLogStore 查询要
     /// **4.4 秒**(扫 24 小时、拉回一万多行),又整个跑在主线程上 —— 面板先弹能让界面立刻
@@ -90,7 +90,7 @@ enum DiagnosticsExporter {
             .joined(separator: "\n")
     }
 
-    /// 配置文件三态 到 报告里的一个词。纯函数,不需要 actor。
+    /// 配置文件三态 → 报告里的一个词。纯函数,不需要 actor。
     private static func describe(_ state: JSONConfigDocument.LoadState) -> String {
         switch state {
         case .missing: return "missing"

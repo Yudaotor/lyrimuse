@@ -379,7 +379,7 @@ func qqSearchQueries(artist, title string) []string {
 // 补 smartbox 的条件收在"正式搜索没给出任何标题精确同名的候选"上:smartbox 的价值就是
 // 补那条最规范的版本,正式搜索已经有精确同名候选时它给不出新信息,这一次请求可以省掉。
 // 这也顺带保住了原来的降级路径——正式接口哪天再被反爬打死(旧注释就是上一次留下的),
-// 结果为空 到 一定不含精确同名 到 必然补 smartbox,行为退回之前的样子。
+// 结果为空 → 一定不含精确同名 → 必然补 smartbox,行为退回之前的样子。
 func qqSearchSongs(ctx context.Context, queries []string, title string) []qqSearchItem {
 	var out []qqSearchItem
 	seen := map[string]bool{}
@@ -1079,13 +1079,13 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 		cands = qqCollectCandidates(items, artist, title, false) // artistMatches 太严格(跨平台歌手名写法不同)时放宽成 looseContains,但仍要求歌手名沾边
 	}
 	if len(cands) == 0 {
-		// 歌名维度一无所获 到 专辑维度还有机会(标题带括号时 smartbox 恒 0 条;命中不了
+		// 歌名维度一无所获 → 专辑维度还有机会(标题带括号时 smartbox 恒 0 条;命中不了
 		// 就照旧返回零值,上层退搜索链接,绝不给错歌)。零值本来就不进缓存,degraded
 		// 信号在这条路径上不用管。
 		m, _ := resolveQQMatchViaAlbum(ctx, artist, title, album)
 		return m
 	}
-	// 有专辑名 到 给前几条补专辑、按 albumScore 去重。采集器一首歌只解析一次,
+	// 有专辑名 → 给前几条补专辑、按 albumScore 去重。采集器一首歌只解析一次,
 	// 频次低;补专辑失败(反爬/超时)时降级到按名字选,不影响出具体歌链接。
 	viaAlbumDegraded := false // 专辑路线曾网络失败 → 本函数所有回落出口都要打 unreliable
 	if album != "" {
@@ -1095,19 +1095,19 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 		}
 		// 歌名维度找到了条目但**专辑证据为零**(smartbox 只回热门录音室版是常态——
 		// 周杰伦《龙拳 (Live)》案:它对 "周杰伦 龙拳" 恒只回八度空间那一条,The One 演唱会的
-		// Live 版根本不在联想结果里)到 先试专辑维度,能以专辑为锚找到对版就用它。
+		// Live 版根本不在联想结果里)→ 先试专辑维度,能以专辑为锚找到对版就用它。
 		var viaAlbum qqMusicMatch
 		viaAlbum, viaAlbumDegraded = resolveQQMatchViaAlbum(ctx, artist, title, album)
 		if viaAlbum.url != "" {
 			return viaAlbum
 		}
-		// 专辑维度也没有 到 回落到原有行为(标题精确同名但专辑对不上的那条)。专辑路线是
+		// 专辑维度也没有 → 回落到原有行为(标题精确同名但专辑对不上的那条)。专辑路线是
 		// 因网络失败(而非"确定没有")空手而回时,给回落结果打 unreliable,不让它进缓存。
 		if haveBest {
 			return qqMatchFromCand(best, viaAlbumDegraded)
 		}
 	}
-	// 无专辑 / 补专辑没命中 到 精确同名优先,否则第一条(smartbox 首条通常是规范版)。
+	// 无专辑 / 补专辑没命中 → 精确同名优先,否则第一条(smartbox 首条通常是规范版)。
 	// 这两个出口同样可能是专辑路线网络失败后的回落(龙拳案的录音室候选 exact=false、
 	// 专辑分 0,bestMid 一直是空,实际就落在 cands[0] 这里),unreliable 一并带上。
 	// album/interval:client_search_cp 路线在搜索结果里就带着,由 qqMatchFromCand 原样
@@ -1128,8 +1128,8 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durat
 // 0 条;而 QQ 给现场专辑曲目起名**不带 (Live)**(The One 演唱会里就叫"龙拳"),live 身份
 // 只在专辑名上。也就是说歌名维度**永远**够不到现场专辑曲目,必须以专辑为锚:
 // smartbox 的 album 分类(实测 "周杰伦 The One" 能命中专辑,而带上"周杰伦演唱会"后缀
-// 就 0 条——所以查询词要先剥歌手名和现场类通用词)到 GetAlbumSongList 拉曲目单
-// (musicu.fcg 未登录可用,实测)到 按标题闸挑曲目。
+// 就 0 条——所以查询词要先剥歌手名和现场类通用词)→ GetAlbumSongList 拉曲目单
+// (musicu.fcg 未登录可用,实测)→ 按标题闸挑曲目。
 //
 // 这条路线只在歌名维度**拿不出专辑证据**时启用(见 resolveQQMusicMatch 里的调用点),
 // 三道身份闸:专辑歌手 looseContains、albumScore≥1、曲目 lyricTitleAccepted 且最优
@@ -1346,7 +1346,7 @@ func qqAlbumTiedSongsAreSameTrack(tied []qqAlbumSong) bool {
 //
 // 第二个返回值 degraded:路上发生过**网络层失败**(超时/限流/解码失败),"没找到"这个
 // 结论不可信——调用方拿它决定回落结果要不要进 qqURLCache(对抗性复核抓出的真实毒化
-// 时序:一次 6s 超时 到 零值 到 回落录音室版被按 artist|title|album 永久正缓存,本进程
+// 时序:一次 6s 超时 → 零值 → 回落录音室版被按 artist|title|album 永久正缓存,本进程
 // 后续所有重搜/自愈全部命中毒化条目,恰好把这条路线要修的 bug 原样钉回去)。
 func resolveQQMatchViaAlbum(ctx context.Context, artist, title, album string) (m qqMusicMatch, degraded bool) {
 	if album == "" || title == "" {
@@ -1499,7 +1499,7 @@ type qqLyricResult struct {
 	// instrumental 是两个不同的结论"以及"请求失败不算"),见那边的头注。
 	//
 	// 实测形态(Iris / OLORUNNS):fcg_query_lyric_new.fcg 回 HTTP 200 + body
-	// {"retcode":-1901,"code":-1901,"subcode":-1901},lyric 字段压根不存在 到 空串。
+	// {"retcode":-1901,"code":-1901,"subcode":-1901},lyric 字段压根不存在 → 空串。
 	trackFoundNoLyrics bool
 }
 
@@ -1583,7 +1583,7 @@ func resolveQQLyricAt(ctx context.Context, host, mid string) (qqLyricResult, err
 	// 走到这里只剩两种:没有真正的歌词正文(空串,或只有几行署名占位),或者有词但不带
 	// 时间戳。只有前者算 trackFoundNoLyrics —— 判据用 isCreditOnlyLRC 跟网易云那路
 	// 同一把尺子(为什么不是 `== ""`、也不是 `!isTimedLRC`,见 netease.go 里那条判据的
-	// 完整注释)。QQ 这边实测到的是 `{"retcode":-1901}` 不带 lyric 字段 到 空串这一支,
+	// 完整注释)。QQ 这边实测到的是 `{"retcode":-1901}` 不带 lyric 字段 → 空串这一支,
 	// 但署名占位那一支同样得认:两家平台的"没有词"长什么样不该由这里各猜一套。
 	//
 	// 上面每一条带 errQQNotReached 的 return 都是**请求失败**路径(建请求/传输/非 200/读不出
@@ -2099,7 +2099,7 @@ func hasQRCLineTiming(s string) bool {
 	return false
 }
 
-// qrcToLineLRC 把 QRC 逐字正文压成逐行 LRC:行头 [行始ms,行长ms] 到 [mm:ss.SSS],正文去掉
+// qrcToLineLRC 把 QRC 逐字正文压成逐行 LRC:行头 [行始ms,行长ms] → [mm:ss.SSS],正文去掉
 // 每个词后面的 (词始,词长),多余空白折成单个空格(罗马音是 `yu (1547,223)me (1771,152)`
 // 这种词后带空格的写法,去掉计时后正好留下音节间的空格)。只剩计时没有文字的行、`//`
 // 占位行、版权声明行丢掉;[offset:] 标签原样保留(App 侧 LRCParser 会应用它);其它元数据

@@ -3,7 +3,7 @@ import LyrimuseCore
 
 // 歌词罗马音预生成小助手。collector(Go)算不了这一步 —— 日文**必须**走 CFStringTokenizer
 // 形态分析(不能用 ICU 通用音译:汉字是中日共用的,Any-Latin 会一律按普通话读,
-// 「火曜日の朝は」到"huǒ yào rìno cháoha"),中文/韩文走 ICU `applyingTransform(.toLatin)`,
+// 「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU `applyingTransform(.toLatin)`,
 // 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成一个独立的 Swift 可执行文件打包进
 // Contents/Resources/,由 collector 按相对路径调用 —— 跟 lyrics-translate / media-control
 // 完全同一个形态。

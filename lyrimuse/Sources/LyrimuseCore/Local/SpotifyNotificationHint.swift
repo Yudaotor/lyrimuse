@@ -22,7 +22,7 @@ public struct SpotifyNotificationHint: Equatable, Sendable {
         self.receivedAt = receivedAt
     }
 
-    /// 从通知 userInfo 构造。没有 Track ID 的通知 到 nil,别拿空串去分类。
+    /// 从通知 userInfo 构造。没有 Track ID 的通知 → nil,别拿空串去分类。
     public init?(userInfo: [AnyHashable: Any]?, receivedAt: Date = Date()) {
         guard let info = userInfo, let id = info["Track ID"] as? String,
               !id.trimmingCharacters(in: .whitespaces).isEmpty
@@ -38,7 +38,7 @@ public struct SpotifyNotificationHint: Equatable, Sendable {
 
     /// 这条提示说的是不是 media-control 快照里的这首歌。歌名逐字相等(忽略大小写与首尾空白);歌手允许一边是
     /// 另一边的前缀 —— 多歌手曲目两边的拼接写法未必一致,而歌名已经足够定身份,歌手只是防同名不同人。
-    /// 任一方歌名为空 到 不匹配(空对空也不算,那不是证据)。
+    /// 任一方歌名为空 → 不匹配(空对空也不算,那不是证据)。
     public func matches(title: String?, artist snapshotArtist: String?) -> Bool {
         let a = Self.fold(name), b = Self.fold(title ?? "")
         guard !a.isEmpty, a == b else { return false }

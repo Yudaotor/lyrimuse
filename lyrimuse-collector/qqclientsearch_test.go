@@ -267,16 +267,16 @@ func TestQQSearchNeedsSmartboxSupplement(t *testing.T) {
 	if !qqSearchNeedsSmartboxSupplement(prince, "Little Red Corvette") {
 		t.Error("一条精确同名都没有,该补 smartbox")
 	}
-	// 有精确同名候选 到 省掉这次请求。
+	// 有精确同名候选 → 省掉这次请求。
 	if qqSearchNeedsSmartboxSupplement(append(prince,
 		qqSearchItem{Mid: "e", Name: "Little Red Corvette", Album: "1999"}), "Little Red Corvette") {
 		t.Error("已有精确同名候选,不该再补 smartbox")
 	}
-	// 正式接口空手而回(被反爬打死的降级路径)到 必须补。
+	// 正式接口空手而回(被反爬打死的降级路径)→ 必须补。
 	if !qqSearchNeedsSmartboxSupplement(nil, "Little Red Corvette") {
 		t.Error("正式接口一条都没回时必须补 smartbox,这是降级路径")
 	}
-	// 本地曲名为空 到 无从判断,保守地补。
+	// 本地曲名为空 → 无从判断,保守地补。
 	if !qqSearchNeedsSmartboxSupplement(prince, "") {
 		t.Error("本地曲名为空时该保守地补")
 	}
@@ -285,7 +285,7 @@ func TestQQSearchNeedsSmartboxSupplement(t *testing.T) {
 		[]qqSearchItem{{Mid: "x", Name: "little red  corvette"}}, "Little Red Corvette") {
 		t.Error("normLoose 下已经同名,不该判为需要补")
 	}
-	// 带 (Live) 的本地曲名:候选里有一条同样带 (Live) 的精确同名 到 不补。
+	// 带 (Live) 的本地曲名:候选里有一条同样带 (Live) 的精确同名 → 不补。
 	// 这一档对应周杰伦《七里香 (Live)》——两个演唱会版本曲名都叫"七里香 (Live)",
 	// 该由 albumScore 去分胜负,不该再多打一次 smartbox 把录音室版混进来。
 	if qqSearchNeedsSmartboxSupplement(

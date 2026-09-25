@@ -27,11 +27,11 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	})
 
 	t.Run("notASong 守卫对代理进程同样生效", func(t *testing.T) {
-		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)到 该被守卫丢掉。
+		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)→ 该被守卫丢掉。
 		if !trustedPlaybackNotASong(proxy, "某个频道名", "") {
 			t.Error("Safari(代理进程)播 album 为空的内容,该判成不是一首歌")
 		}
-		// 真歌两个字段齐全 到 放行。
+		// 真歌两个字段齐全 → 放行。
 		if trustedPlaybackNotASong(proxy, "王力宏", "十八般武藝") {
 			t.Error("字段齐全的真歌不该被丢掉")
 		}

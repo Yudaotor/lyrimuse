@@ -61,7 +61,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 		Source: "kugou", Score: 100,
 		Lyrics: "[00:01.00]a\n[00:02.00]b\n[00:03.00]c\n",
 	}
-	// 只有标记 + 另一个源的真候选 到 标记要留着(网易云自己没有真候选)
+	// 只有标记 + 另一个源的真候选 → 标记要留着(网易云自己没有真候选)
 	out := mergeLyricCandidateRounds("A", "T", "AL", 0, []scoredLyricCandidateResult{marker, real}, nil)
 	kept := false
 	for _, r := range out {
@@ -73,7 +73,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 		t.Error("网易云的纯音乐标记该留下(它自己没有真候选)")
 	}
 
-	// 网易云既有真候选、又带标记 到 标记必须被丢掉(自相矛盾)
+	// 网易云既有真候选、又带标记 → 标记必须被丢掉(自相矛盾)
 	neReal := real
 	neReal.Source = "netease"
 	out2 := mergeLyricCandidateRounds("A", "T", "AL", 0, []scoredLyricCandidateResult{marker, neReal}, nil)

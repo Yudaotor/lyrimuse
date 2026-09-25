@@ -209,7 +209,7 @@ func qmKeySchedule(key []byte, mode int) [16]qmRoundKey {
 }
 
 // qm3DESDecrypt implements the EDE3 3DES decrypt this codebase's KRC/QRC
-// counterpart implementations use (D(k3)到E(k2)到D(k1)), ECB-style (8-byte
+// counterpart implementations use (D(k3)→E(k2)→D(k1)), ECB-style (8-byte
 // blocks, no chaining) — matches decryptQRC's caller, which feeds it whole
 // multi-block ciphertexts and expects the equivalent plaintext back.
 func qm3DESDecrypt(key, data []byte) []byte {

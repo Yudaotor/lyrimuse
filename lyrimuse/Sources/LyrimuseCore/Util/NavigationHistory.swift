@@ -51,7 +51,7 @@ public struct NavigationHistory<Item: Hashable> {
     @discardableResult
     public mutating func record(_ item: Item) -> Bool {
         if current == item { return false }
-        // 从中间跳走 到 前面那一截作废。先截断再 append,否则 index 会指错。
+        // 从中间跳走 → 前面那一截作废。先截断再 append,否则 index 会指错。
         if index >= 0, index < items.count - 1 {
             items.removeSubrange((index + 1)...)
         }

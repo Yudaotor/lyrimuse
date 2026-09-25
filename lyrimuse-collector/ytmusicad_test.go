@@ -23,7 +23,7 @@ func TestParseYTMusicAdVerdict(t *testing.T) {
 		{"只有 ad-showing 命中", "1|0|0", ytmusicAdIsAd},
 		{"只有广告徽章命中", "0|1|0", ytmusicAdIsAd},
 		{"只有裸标题命中", "0|0|1", ytmusicAdIsAd},
-		// 页面上找不到播放器 到 不知道,调用方 fail-closed。
+		// 页面上找不到播放器 → 不知道,调用方 fail-closed。
 		{"NOTFOUND", "NOTFOUND", ytmusicAdUnknown},
 		{"空输出", "", ytmusicAdUnknown},
 		{"只有空白", "   \n", ytmusicAdUnknown},
@@ -55,7 +55,7 @@ func TestBrowserScriptFamily(t *testing.T) {
 	if got := browserScriptFamily("com.apple.Safari"); got != "safari" {
 		t.Errorf("Safari 方言判错: %q", got)
 	}
-	// 没有提供脚本命令的浏览器(以及一切非浏览器)返回空串 到 调用方静默跳过,
+	// 没有提供脚本命令的浏览器(以及一切非浏览器)返回空串 → 调用方静默跳过,
 	// 跟 Swift 侧 family 返回 nil 的处理一致。
 	for _, id := range []string{"org.mozilla.firefox", "com.apple.Music", "", "com.whatever.app"} {
 		if got := browserScriptFamily(id); got != "" {
@@ -157,7 +157,7 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Error("内置播放器不该被这条守卫拒掉")
 	}
 
-	// ② 两个字段都齐全 到 基础判据本来就放行,不该触发任何复核。
+	// ② 两个字段都齐全 → 基础判据本来就放行,不该触发任何复核。
 	rejected, patch := trustedPlaybackRejected(context.Background(), chrome, "周杰伦", "七里香", "枫")
 	if rejected {
 		t.Error("artist+album 齐全的不该被拒")
@@ -167,7 +167,7 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Errorf("上游有专辑名时不该给补丁, got %q", patch)
 	}
 
-	// ③ artist 为空 到 直接拒,**不做**复核(真曲目必有歌手;这一档也省掉一次 AppleScript
+	// ③ artist 为空 → 直接拒,**不做**复核(真曲目必有歌手;这一档也省掉一次 AppleScript
 	//    往返)。用一个会让复核必然超时的 ctx 来证明"没走复核":真去复核的话这里会慢。
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
@@ -272,7 +272,7 @@ func TestYTMusicAdCacheKeyedByTrack(t *testing.T) {
 	if _, al := ytmusicAdProbe(shortCtx, "com.google.Chrome", "Queen\x00Another One Bites The Dust"); al != "A Night at the Opera" {
 		t.Errorf("命中缓存时该带回专辑名, got %q", al)
 	}
-	// 换成广告那条身份 到 缓存不命中 到 走真探测 到 这里必然失败成 unknown。
+	// 换成广告那条身份 → 缓存不命中 → 走真探测 → 这里必然失败成 unknown。
 	if got, _ := ytmusicAdProbe(shortCtx, "com.google.Chrome", "KAO Hong Kong\x00Liese"); got != ytmusicAdUnknown {
 		t.Errorf("换曲目该绕过缓存, got %v", got)
 	}

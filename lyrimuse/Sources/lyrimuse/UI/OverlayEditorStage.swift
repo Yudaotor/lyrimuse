@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 到 悬浮歌词」的**编辑台**:一块接近真实窗口尺寸的大画布,悬浮歌词直接在上面
+// 「歌词显示 → 悬浮歌词」的**编辑台**:一块接近真实窗口尺寸的大画布,悬浮歌词直接在上面
 // 改。渲染的是真正的 `LyricsOverlayView`(不是简化复刻件),行为跟桌面上那扇真悬浮窗
 // 逐像素一致。设置行**不在这个文件里**,在 OverlayStyleSettingsRows.swift —— 它跟内容区
 // 下面那几张卡是**同一份**实现,两个宿主只负责外壳,别在这里就地写一遍行(渲染和设置行走
@@ -42,7 +42,7 @@ import SwiftUI
 ///     `ignoresMouseEvents`,视图里压根没有 Button),搬进设置页只画得出来、点不动。
 /// - `isHoveringLyrics` 恒 false 到 编辑台里不能有任何东西驱动它:真视图对它的反应是
 ///     整卡淡到 15%(「指针划过时让开」),接进来会变成"想点它、它就躲"。
-///   - `isDragArmed` / `showDragHint` 恒 false 到 长按拖动和那条一次性手势提示都只有真窗口
+///   - `isDragArmed` / `showDragHint` 恒 false → 长按拖动和那条一次性手势提示都只有真窗口
 ///     才有,编辑台里没有对应的手势可武装。
 @MainActor
 final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
@@ -136,10 +136,10 @@ struct OverlayEditorStage: View {
     /// 288 是**实测出来的最坏情况**,不是拍的(用真 LyricsOverlayView 在
     /// NSHostingView 里按不同设置量 fittingSize;完整数据见
     /// docs/features/04-desktop-overlay.md「编辑台改造」第九步):
-    ///   - 罗马音/译文/下一句三行全开、主歌词一行 到 20pt:167.5 / 31pt:206.5 / 36pt:222.5
-    ///   - 同上,主歌词换行到两行         到 20pt:191.5 / 31pt:243.5 / 36pt:265.5
+    ///   - 罗马音/译文/下一句三行全开、主歌词一行 → 20pt:167.5 / 31pt:206.5 / 36pt:222.5
+    ///   - 同上,主歌词换行到两行         → 20pt:191.5 / 31pt:243.5 / 36pt:265.5
     ///   - 逐词罗马音(日文那种标在每个词底下的)+ 译文 + 下一句,主歌词两行
-    ///                                     到 20pt:242.5 / 31pt:260.5 / 36pt:286.5
+    ///                                     → 20pt:242.5 / 31pt:260.5 / 36pt:286.5
     /// 这张表只量到 36pt。字号滑杆上限是 `AppSettings.overlayFontSizeRange`(64),36pt 以上
     /// 开多行时卡片会超出这一格,按下面「装不下的照旧溢出」处理:预览裁掉底边,真悬浮窗不受影响
     /// (它按内容长高,见 LyricsOverlayWindowController.updateHeight)。
@@ -158,7 +158,7 @@ struct OverlayEditorStage: View {
     /// 「桌面悬浮歌词」那张总开关卡的底边落在 551.5pt,而用户常用的 552pt 高窗口里可视内容
     /// 只有 519pt,开关只露出 13.5pt。这几个数是**量出来的**(对拍 1358×1038 @144dpi
     /// = 679×519pt,按 2x 逐行采样):舞台顶 138.5 + 332 = 470.5 = 舞台底,+6+15 是 caption
-    /// 那一行,+14 是卡间距 到 卡顶 505.5;卡高 46(离屏 NSHostingView 量的总开关卡,见
+    /// 那一行,+14 是卡间距 → 卡顶 505.5;卡高 46(离屏 NSHostingView 量的总开关卡,见
     /// docs/features/04-desktop-overlay.md 的高度账)。
     ///
     /// 266 是**照上面那张实测表**挑的,不是随手压的:它仍然覆盖 20/31/36pt 三档的「三个显示
@@ -169,7 +169,7 @@ struct OverlayEditorStage: View {
     /// 本身一个像素都没少。
     ///
     /// 同一轮还删掉了舞台下面那行 caption(21pt,见 totalHeight),两笔合计 −43pt:编辑台
-    /// 425 到 382,总开关卡底 551.5 到 508.5,519pt 的可视内容里完整露出、底下还剩 10.5pt。
+    /// 425 → 382,总开关卡底 551.5 → 508.5,519pt 的可视内容里完整露出、底下还剩 10.5pt。
     private static let maxCardHeight: CGFloat = 266
 
     /// 卡片可用的那一格。卡片在这一格里垂直居中。
@@ -198,7 +198,7 @@ struct OverlayEditorStage: View {
     ///
     /// 这条公式本身从第八步起就是对的,坏的是**喂给它的数**:第十一步之前
     /// `ContentHeightPreferenceKey` 的 reduce 是覆盖式的,真实高度会被别的分支贡献的
-    /// `defaultValue`(0)冲掉,`overlayContentHeight` 恒为 0 到 卡高被摁在 120pt 的地板上 到
+    /// `defaultValue`(0)冲掉,`overlayContentHeight` 恒为 0 → 卡高被摁在 120pt 的地板上 →
     /// `.clipped()` 把译文和下一句整个裁掉。看到"编辑台不画译文/下一句"先量这个数,别去查
     /// `OverlayPlayback` 的那几个显隐开关(实测它们一直是对的)。来龙去脉见那个 key 的注释和
     /// docs/features/04-desktop-overlay.md「编辑台改造」第十一步。
@@ -251,7 +251,7 @@ struct OverlayEditorStage: View {
     /// 整块(工具栏两行 + 画布)占的高度。
     ///
     /// **把舞台底下那行 caption 整个删了**(省 `captionSpacing` 6 +
-    /// `captionHeight` 15 = 21pt),同一轮跟 `maxCardHeight` 288 到 266 一起把编辑台从 425
+    /// `captionHeight` 15 = 21pt),同一轮跟 `maxCardHeight` 288 → 266 一起把编辑台从 425
     /// 压到 382;起因、实测和完整的高度账写在 `maxCardHeight` 那条注释里。
     /// 删得掉是因为那一行**常态是空字符串**:第六步起它只在"窗口比舞台还宽、两端确实没画全"
     /// 时写一句「两端已裁切」,其余时候占着 21pt 什么都不显示。那句提示**搬进了舞台**
@@ -382,7 +382,7 @@ struct OverlayEditorStage: View {
     /// 分组:「配色」按内容拆成「主题」(配色主题 / 我的配色主题)和「背景」(背景颜色 / 毛玻璃);
     /// 文字层那几项(字体/粗细/字号/卡拉OK/文字色/描边)归「文字」;「跟随封面」归「主题」
     /// (它跟「配色主题」回答的是同一个问题,见 `OverlayThemeSettingsRows` 头注)。**顺序跟「全部设置」
-    /// 抽屉的渲染顺序逐字一致**(主题 到 文字 到 背景 到 排版 到 宽度 到 行为)—— 抽屉的职责是工具栏
+    /// 抽屉的渲染顺序逐字一致**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为)—— 抽屉的职责是工具栏
     /// 浮层的全量兜底通路,两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
     ///
     /// 横向够不够(加第三个入口时离屏量的,别凭感觉重排):这一条的可用宽度
@@ -944,7 +944,7 @@ struct OverlayEditorStage: View {
     ///      这一句不会让控制器里的镜像变陈旧:真值始终在 AppSettings。
     /// 订正:这里原来还写着"窗口真被打开时 setVisible 会按持久化值再应用
     ///      一次几何" —— **那是假的**,`setVisible(_:)` 当时只应用两个隐藏偏好和 lockPosition,
-    ///      从不碰宽度。于是"关着改宽度 到 再打开"会按旧宽度冒出来(关这一下本身就走
+    ///      从不碰宽度。于是"关着改宽度 → 再打开"会按旧宽度冒出来(关这一下本身就走
     ///      `.shared.setVisible(false)`,实例已经在了)。已经在那边补上 `setWidth(持久化值)`,
     ///      这条守卫的正确性挂在那一句上,别把它当清理删掉。
     ///   ③ **clamp 与量化只走 snap**,不在这里另写一份字面量区间(见 widthRange 那条跨三处的契约)。
@@ -955,7 +955,7 @@ struct OverlayEditorStage: View {
     ///     子树只有 `KeyViewProxy` / `_FocusRingView`,递归找不到任何 `NSSlider`。所以"editing
     ///     边沿只由 AppKit 的鼠标 tracking 产生"这个前提在这里根本不成立,edge 是 SwiftUI 自己发的。
     ///   - 对它发 `AXIncrement` / `AXDecrement`(VoiceOver 上下调节走的就是这两个 action)实测
-    ///     每一次都是完整的 `EDITING(true) 到 set 到 EDITING(false)`,`commitWidth` 照常执行、
+    ///     每一次都是完整的 `EDITING(true) → set → EDITING(false)`,`commitWidth` 照常执行、
     ///     `draggingWidth` 照常清回 nil。四个独立探针(裸 Slider / 照抄这套 binding 的复刻件)结论一致。
     /// 多加一条写入路径,比它想防的那个并不存在的问题更贵。
     /// (顺带一条实测订正:AX 的一次增减走的是**区间的 10%**,不是 `widthStep` —— 值仍然过 `snap()`

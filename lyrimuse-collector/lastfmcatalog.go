@@ -25,16 +25,16 @@ import (
 // 条目:没有 mbid、没有专辑、时长 0、听众只有你一个。结果不是「记得不够好看」,而是这次
 // 收听跟这首歌真正的条目、跟你自己以前的收听全都对不上。实测陶喆《那个女孩》:
 //
-//	陶喆, 卢广仲 / 那个女孩   到 track.getInfo 查无此条(我们自己发过去的那几次造出来的)
-//	陶喆 / 那个女孩(简体)    到 126 听众、无 mbid、无编目时长 —— 也是影子
-//	陶喆 / 那個女孩(繁体)    到 889 听众、编目时长 267 s —— 这才是这首歌的条目
+//	陶喆, 卢广仲 / 那个女孩   → track.getInfo 查无此条(我们自己发过去的那几次造出来的)
+//	陶喆 / 那个女孩(简体)    → 126 听众、无 mbid、无编目时长 —— 也是影子
+//	陶喆 / 那個女孩(繁体)    → 889 听众、编目时长 267 s —— 这才是这首歌的条目
 //
 // 同一首歌在这台机器的历史里已经裂成三本账(`陶喆/那個女孩` 8 次、`David Tao/那个女孩
 // (feat. 卢广仲)` 2 次、`陶喆, 卢广仲/那个女孩` 1 次)。
 //
 // # 判定
 //
-//  1. 按原样查一次 track.getInfo。**有 mbid** 到 原样发,永久。mbid 是编目正规身份最硬的
+//  1. 按原样查一次 track.getInfo。**有 mbid** → 原样发,永久。mbid 是编目正规身份最硬的
 //     信号(影子条目不会有),有它就说明播放器报的写法本身已经是编目认的那条 ——
 //     Hall & Oates、`Michael Jackson & Janet Jackson / Scream` 这类正规合体署名靠这一步
 //     保住,不会被下面的「听众更多」挪到单人页上去。
@@ -202,7 +202,7 @@ type lastfmCatalogMatcher struct {
 
 	mu    sync.Mutex
 	cache map[string]lastfmCatalogDecision
-	// 歌手 到 编目曲目表,进程内复用,不落盘(见 topTracks)。
+	// 歌手 → 编目曲目表,进程内复用,不落盘(见 topTracks)。
 	tops map[string][]lastfmTopTrack
 }
 
@@ -306,7 +306,7 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 		return lastfmCatalogDecision{}, err
 	}
 	// 按听众降序逐个复核,第一个过时长闸的就是结论。排序稳定:同听众时保持收集顺序
-	// (原样 到 第一位歌手 到 曲目表自带的降序),免得同分候选每次判出不同的写法。
+	// (原样 → 第一位歌手 → 曲目表自带的降序),免得同分候选每次判出不同的写法。
 	sortCandidatesByListeners(cands)
 	for _, cand := range cands {
 		if !cand.probe.catalogued() {
@@ -436,7 +436,7 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	ctx, cancel := context.WithTimeout(ctx, lastfmCatalogProbeTimeout)
 	defer cancel()
 	// 不用 q.Encode():Last.fm 的 GET 端点会对 query value 多解一次码,含加号的歌名走标准
-	// 编码必然 error 6 —— 而这里 error 6 的语义是"没收录 到 可以改写",查错了就是把正规条目
+	// 编码必然 error 6 —— 而这里 error 6 的语义是"没收录 → 可以改写",查错了就是把正规条目
 	// 判成影子(真实事故,见 lastfmGetQuery)。
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+lastfmGetQuery(q), nil)
 	if err != nil {
@@ -493,7 +493,7 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	return p, nil
 }
 
-// atoiOrZero:空串 到 0,nil;其余必须是整数。
+// atoiOrZero:空串 → 0,nil;其余必须是整数。
 func atoiOrZero(s string) (int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

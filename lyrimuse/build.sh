@@ -92,7 +92,7 @@ fi
 # 拿什么身份签。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
 #
 # 为什么要这个:ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash
-# (`codesign -d -r-` 到 `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
+# (`codesign -d -r-` → `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
 # 二进制一重编 cdhash 就变,存的那条再也对不上 —— 用户看到的是「设置里的勾还亮着,App 却说没授权」,
 # 每次 build.sh 之后都要手动把勾取消再勾上一遍(用户第 N 次撞上:「为什么我明明已经有授权了,
 # 每次点击跳过广告还是会说让我去授权?」)。换成一张固定的自签名证书之后,要求变成
@@ -236,7 +236,7 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
 # Label,TCC 自动化权限按这个认)和 Info.plist 的 CFBundleIdentifier(UserDefaults
 # 偏好域按这个认)一起统一改成同一个反向域名式字符串——早先(打包成 .app
-# 那次)特意把这两者分开,是因为那次只是"裸可执行文件到.app 包"的格式迁移,需要
+# 那次)特意把这两者分开,是因为那次只是"裸可执行文件→.app 包"的格式迁移,需要
 # CFBundleIdentifier 继续等于旧的裸可执行文件隐式落的偏好域名"desktop-lyrics"、才能
 # 无缝接上已有设置;这次是主动做一次完整改名+一次性数据迁移(见下方 UserDefaults
 # 迁移步骤),不再需要保留那个历史包袱,直接统一成标准写法更清爽。副作用:改这两个
@@ -661,7 +661,7 @@ cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-h
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 # **遍历,不要再逐个文件写 cp**。这里原来是一行一个图标的 cp 清单,
 # 而 `Bundle.main.path(forResource:)` 找不到资源时各调用点都有 SF Symbol 兜底 —— 于是
-# "加了一张图 到 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
+# "加了一张图 → 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
 # 不崩溃,极难发现(当天新增 Spotify 平台图标时当场踩到)。遍历之后这类漏拷不可能再发生。
 # Resources/ 下的 PNG 全都是要随包分发的,没有"只用于开发"的例外;.lproj 目录和
 # THIRD_PARTY_LICENSES 各有各的拷贝方式,不走这里。
@@ -860,7 +860,7 @@ fi
 #      表现是"装完了但行为没变",比直接报错难查得多。`set -euo pipefail` 拦不住。
 #   2. RENAME_SWAP 是**单次原子 vfs 操作**,没有"App 短暂不存在"的窗口 —— 并发的 launchd /
 #      Finder / 正在跑的进程任一时刻看到的要么是完整旧包、要么是完整新包。两步 mv
-#      (旧挪走到新挪上)做不到这点,中间那一瞬 /Applications 下没有这个 App。
+#      (旧挪走→新挪上)做不到这点,中间那一瞬 /Applications 下没有这个 App。
 # 换完之后 $STAGE 指向的是**旧包**,交给上面那个 EXIT trap 删 —— 顺带等于装完才删旧包,
 # 老进程在被重启之前一直有完整的一份可用。
 # 首装(目标还不存在)时 renamex_np 返回 ENOENT,回退 mv;那条路径上目标不存在,没有嵌套风险。

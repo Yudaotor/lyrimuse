@@ -8,7 +8,7 @@ import Foundation
 /// (`dailyCounts`,全量历史)早就知道哪几天有记录、有几条。
 ///
 /// 现在先用日桶排计划:每一年先看当天,当天为空就放宽到**那一周**(当天 ±3 天),日桶里
-/// 加起来仍是 0 的窗口**根本不发请求**;按"年份近 到 远、天 到 周"的顺序排,调用方沿着计划
+/// 加起来仍是 0 的窗口**根本不发请求**;按"年份近 → 远、天 → 周"的顺序排,调用方沿着计划
 /// 逐个请求,第一个拿到行的就是结果。日桶没同步过(首次连接的全量同步还没跑完)时退回
 /// "三年、只看当天、都发"的旧计划。
 ///
@@ -35,7 +35,7 @@ public enum OnThisDayPlanner {
 
     /// - Parameters:
     ///   - years: 往前探几年(1...years)。
-    ///   - dailyCounts: 日桶("yyyy-MM-dd" 到 条数);`synced == false` 时不看它(全部窗口都发、只看当天)。
+    ///   - dailyCounts: 日桶("yyyy-MM-dd" → 条数);`synced == false` 时不看它(全部窗口都发、只看当天)。
     public static func plan(
         today: Date, years: Int, dailyCounts: [String: Int], synced: Bool,
         calendar: Calendar = .current, dayKey: (Date) -> String
@@ -100,7 +100,7 @@ public enum ListeningMilestones {
         public let longestStreakEnd: String?
         /// 今年 1 月 1 日到今天的合计。
         public let yearToDate: Int
-        /// 最近一个"同一段日期区间(1 月 1 日 到 今天的月日)里有记录"的往年,及其合计——给"今年至今 vs 那年同期"用。
+        /// 最近一个"同一段日期区间(1 月 1 日 → 今天的月日)里有记录"的往年,及其合计——给"今年至今 vs 那年同期"用。
         public let priorYearSameSpan: (year: Int, count: Int)?
 
         /// 显式 public:合成的逐成员构造器是 internal,selftest(另一个 target)要构造期望值够不着。

@@ -577,7 +577,7 @@ func TestCatalogRequestShape(t *testing.T) {
 				t.Errorf("请求 %d 缺 %q: %s", i, want, raw)
 			}
 		}
-		// `+` 到 %252B、`%` 到 %2525(双重编码);绝不能出现裸的 %2B。
+		// `+` → %252B、`%` → %2525(双重编码);绝不能出现裸的 %2B。
 		if !strings.Contains(raw, "%252B") || !strings.Contains(raw, "%2525") {
 			t.Errorf("请求 %d 的歌名没有按 Last.fm GET 口径双重编码: %s", i, raw)
 		}

@@ -66,7 +66,7 @@ func TestConsensusPeersReachDecisionJSON(t *testing.T) {
 	}
 }
 
-// 端到端:查询词记录 到 存档 到 JSON,键名与嵌套结构都要对得上 App 侧解码。
+// 端到端:查询词记录 → 存档 → JSON,键名与嵌套结构都要对得上 App 侧解码。
 func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	ctx, log := withLyricQueryLog(context.Background())
 
@@ -90,7 +90,7 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	if got[1].Reason != lyricQueryReasonTitleSplit || got[1].Artist != "Musiq Soulchild" {
 		t.Errorf("拆分那一组不对: %+v", got[1])
 	}
-	// 定序:qq 到 kugou 到 musixmatch(lyricSourceNames 的顺序),不是字典序、更不是 map 序。
+	// 定序:qq → kugou → musixmatch(lyricSourceNames 的顺序),不是字典序、更不是 map 序。
 	if want := []string{"qq", "kugou", "musixmatch"}; strings.Join(got[2].Sources, ",") != strings.Join(want, ",") {
 		t.Errorf("别名轮的源名单 = %v, want %v —— 必须按 lyricSourceNames 定序,否则同一轮解析每次序列化出不同 JSON",
 			got[2].Sources, want)

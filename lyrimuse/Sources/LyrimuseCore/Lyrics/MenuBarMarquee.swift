@@ -32,8 +32,8 @@ public enum MenuBarMarquee {
     // (真正的平滑)。渲染那一半必须落在 AppKit 那边(要测字宽、要画图),但"此刻该偏移多少"
     // 仍然是纯函数,留在这里给 selftest 覆盖。
     //
-    // 一个完整周期跟按字符那版一致:先停 holdSeconds(开头最该看清)到 匀速滚过 maxOffset 到
-    // 末尾再停 holdSeconds 到 回到开头循环。
+    // 一个完整周期跟按字符那版一致:先停 holdSeconds(开头最该看清)→ 匀速滚过 maxOffset →
+    // 末尾再停 holdSeconds → 回到开头循环。
     //
     // 用「已过去的秒数」而不是「第几帧」当输入,是有意的:计时器回调会被主线程上别的活儿
     // (逐字高亮那套 60fps 的重绘)推迟,累加式计帧会把这些延迟原样变成忽快忽慢的滚动 ——
@@ -83,7 +83,7 @@ public enum MenuBarMarquee {
     //
     // 保留 scrollOffset 不删:它是这段运动的可读定义,也是关键帧的验收标准。
     public struct ScrollKeyframes: Equatable, Sendable {
-        /// 一个完整周期的秒数(停 到 滚 到 停)。CA 那边 repeatCount = .infinity。
+        /// 一个完整周期的秒数(停 → 滚 → 停)。CA 那边 repeatCount = .infinity。
         public let duration: Double
         /// 归一化时刻(0...1),跟 offsets 一一对应。
         public let keyTimes: [Double]
@@ -350,15 +350,15 @@ public enum MenuBarMarquee {
     // 没有逐字时间轴的句子(纯 LRC 的源)仍走上面的时间配速,两套按句切换、同一句不混。
     //
     // 两步纯函数:
-    //   1. followReadingPath:词时间轴 到 "阅读位置"随时间的折线(x = 正在唱的词的左缘)。
+    //   1. followReadingPath:词时间轴 → "阅读位置"随时间的折线(x = 正在唱的词的左缘)。
     // 刻意**不**直接用 karaokeFillPath 那条填色边界:边界在词间空隙是平的保持段,
     //      滚动跟着它会"唱一个字动一下、词间停一下",英文歌词空隙长尤其明显。这里改成
     //      **词起点连线**:从本词起唱到下词起唱之间匀速走过本词的宽度,空隙被吸收进运动里,
     //      整句连续不停顿,速度随唱速自然变化。
-    //   2. followScrollPath:阅读位置 到 滚动偏移,offset = clamp(x − 锚点, 0, maxOffset)。
+    //   2. followScrollPath:阅读位置 → 滚动偏移,offset = clamp(x − 锚点, 0, maxOffset)。
     //      钳位会让折线出现新的折点(穿过两道钳位的时刻),这里显式把它们补进路径,
     //      **线性插值后逐点等于钳位函数** —— CA 那边仍然是 .linear,不用改驱动方式。
-    // 两步都是"时间 到 值"的折线,跟填色边界同一形状,静态取值和剩余关键帧直接复用
+    // 两步都是"时间 → 值"的折线,跟填色边界同一形状,静态取值和剩余关键帧直接复用
     // karaokeFillX / karaokeFillKeyframes(见下面两个薄封装),不另写一份插值。
 
     /// 锚点:正在唱的字停在格子宽的这个比例处。取 0.45 让它略偏左 —— 右边留更多还没唱的字
@@ -394,7 +394,7 @@ public enum MenuBarMarquee {
         return points
     }
 
-    /// 阅读位置 到 滚动偏移路径(x 字段在这里装的是偏移量,>= 0,越大表示文字越往左走)。
+    /// 阅读位置 → 滚动偏移路径(x 字段在这里装的是偏移量,>= 0,越大表示文字越往左走)。
     /// 空数组 = 这一句不用滚(装得下)或输入无效。
     /// - Parameter textWidth: 整句长图的点宽;maxOffset = textWidth − windowWidth。
     public static func followScrollPath(
@@ -480,7 +480,7 @@ public enum MenuBarMarquee {
     //   * 逐字染色的进度来自**歌词时间轴**(词起止),范围是**这一句**,方向横向(跟着字走),
     //     而且只有带 YRC 的歌才有;
     //   * 这里的进度来自**播放位置 / 曲长**,范围是**整首歌**,方向纵向(用户从
-    //     "左到右"和"下到上"里选的后者,像水位),任何歌都有 —— 连没歌词的都有,只是那时候
+    //     "左→右"和"下→上"里选的后者,像水位),任何歌都有 —— 连没歌词的都有,只是那时候
     //     菜单栏本来就不显示歌词、这枚图标也就不出现。
     // 两边唯一共享的是"边界怎么装成 CA 动画"这个形状;共用的那点手法在
     // MenuBarScrollingLabel 的互补裁剪图层里,算法各写各的。

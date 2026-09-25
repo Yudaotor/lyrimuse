@@ -11,14 +11,14 @@ import LyrimuseCore
 // 额外接一层判断。
 //
 // 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传)。
-// 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗到重开到再等九个源重搜一遍
+// 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗→重开→再等九个源重搜一遍
 // (最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条
 // "已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、歌词窗口的 sheet)维持关窗:
 // 前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。collector 重启照旧每次采纳排一次
 // (`scheduleCollectorRestart` 已合并:在飞最多一个、补一次),**刻意不**延后到关窗那一刻 ——
 // 重启存在的理由正是 collector 内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去。
 //
-// 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确到
+// 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确→
 // 宽松两级,缺条目退 normalizedKey),没有抽成公用类型共享——那边多一层"sheet(item:) 的
 // 身份即快照、弹窗期间换歌不串"的要求,这边窗口本来就是"每次点『搜索歌词…』都现查一次、
 // 开着期间盯着看不跟着换歌重算",两处生命周期不一样,硬凑一个共享类型只会让"谁负责什么"
@@ -65,8 +65,8 @@ struct LyricsQuickSearchWindow: View {
                     durationSecs: context.durationSecs, keepsOpenAfterApply: true
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply 三步:reload 兜"store 还没加载过"
-                    // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)到
-                    // saveEdit 到 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
+                    // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)→
+                    // saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                     // 不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
                     await EnrichCacheStore.shared.reload(onlyIfChanged: true)
                     let saved: Bool

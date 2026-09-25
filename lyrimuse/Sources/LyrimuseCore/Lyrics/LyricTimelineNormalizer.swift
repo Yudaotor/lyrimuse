@@ -28,11 +28,11 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 ///
 /// ## 三条规则(顺序即代码顺序)
 ///
-///   1. 字起点比前一个字**倒退** 到 整行退化(乱序的行没有可信的字级时间轴)。
-///   2. 字起点**早于行首**:差 ≤250ms 夹到行首、终点不动;超过 到 整行退化。
+///   1. 字起点比前一个字**倒退** → 整行退化(乱序的行没有可信的字级时间轴)。
+///   2. 字起点**早于行首**:差 ≤250ms 夹到行首、终点不动;超过 → 整行退化。
 ///   3. 字起点**不早于下一行起点**:差 ≤250ms 就拉到「下一行起点 − tailWindowMs」(换行提前量
 ///      140ms + 最短填色 120ms,见 KaraokeFill),终点不动,让它在换行前那 260ms 里能被看见填完;
-///      超过 到 整行退化。拉的时候不越过前一个字的起点、不早于行首。相邻两行时间戳相同(对唱/
+///      超过 → 整行退化。拉的时候不越过前一个字的起点、不早于行首。相邻两行时间戳相同(对唱/
 ///      重复行)时没有可用边界,这条不判。
 ///
 /// 退化 = 这一行只剩一个覆盖全部文字的字,从行首扫到下一行开始(没有下一行就到原来最后一个字
@@ -67,7 +67,7 @@ public enum LyricTimelineNormalizer {
         var out: [LyricLineWords] = []
         out.reserveCapacity(lines.count)
         for (i, line) in lines.enumerated() {
-            // 相邻行同一时间戳 到 没有可用的下一行边界(对唱两声部 / 重复行都会这样)。
+            // 相邻行同一时间戳 → 没有可用的下一行边界(对唱两声部 / 重复行都会这样)。
             var nextStart: Int? = nil
             if i + 1 < lines.count, lines[i + 1].timeMs > line.timeMs {
                 nextStart = lines[i + 1].timeMs

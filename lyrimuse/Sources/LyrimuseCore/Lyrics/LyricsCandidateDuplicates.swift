@@ -13,7 +13,7 @@ import Foundation
 public enum LyricsCandidateDuplicates {
     /// 给**按名次排好**的候选算「这条跟前面哪一条的词逐字相同」。
     ///
-    /// 返回 `source 到 前面第一条同指纹候选的 source`。每组的首条(名次最高那条)不在结果里
+    /// 返回 `source → 前面第一条同指纹候选的 source`。每组的首条(名次最高那条)不在结果里
     /// ——徽章挂在后来者身上,指向排在前面的那个;指纹为空(没有词)的候选既不当锚也不被标。
     /// 同一个 source 出现两次时以第一次为准(候选本来就一源一条)。
     public static func firstMatches(_ ordered: [(source: String, fingerprint: String)]) -> [String: String] {

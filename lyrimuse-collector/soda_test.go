@@ -159,7 +159,7 @@ func TestSodaCandidateScoreGates(t *testing.T) {
 		album  = "未来"
 		dur    = 222.653
 	)
-	// 正版:三道闸全过,时长几乎一致 到 分数最高。
+	// 正版:三道闸全过,时长几乎一致 → 分数最高。
 	if got := sodaCandidateScore(items[0], artist, title, album, dur); got <= 100 {
 		t.Errorf("正版应当拿到时长加分, got %d", got)
 	}

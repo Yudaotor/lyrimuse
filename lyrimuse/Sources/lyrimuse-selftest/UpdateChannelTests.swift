@@ -59,7 +59,7 @@ func runUpdateChannelTests() {
         }
     }
 
-    // ---- UpdateChannel(Release 列表 到 该读哪份 appcast)----
+    // ---- UpdateChannel(Release 列表 → 该读哪份 appcast)----
     do {
         print("\n== 测试版频道 ==")
         typealias U = UpdateChannel

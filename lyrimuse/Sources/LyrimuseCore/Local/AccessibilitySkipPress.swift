@@ -25,7 +25,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// ## 权限
 ///
-/// 要用户在「系统设置 到 隐私与安全性 到 辅助功能」里勾上 Lyrimuse。`isTrusted` 为 false 时不动手、回 `.notTrusted`,
+/// 要用户在「系统设置 → 隐私与安全性 → 辅助功能」里勾上 Lyrimuse。`isTrusted` 为 false 时不动手、回 `.notTrusted`,
 /// 由调用方 `promptForTrust()` 弹系统那个"想要控制这台电脑"的对话框 + 横幅说明。 **ad-hoc 签名的构建(build.sh
 /// `codesign --sign -`)每次重装 cdhash 都变**,TCC 存的是按 cdhash 的 designated requirement —— 重装之后设置里那个勾
 /// 还在,但 `AXIsProcessTrusted()` 回 false,要用户把勾**取消再勾上**。发布包同样是 ad-hoc(这台机器没有签名证书),

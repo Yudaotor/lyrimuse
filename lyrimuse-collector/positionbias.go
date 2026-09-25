@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// App 到 collector 的「位置偏置」文件(「collector 复用 App 量出的偏置」)。
+// App → collector 的「位置偏置」文件(「collector 复用 App 量出的偏置」)。
 //
 // Spotify 给歌曲发 now-playing 常晚 ~2s 而 elapsedTime 仍是 0,之后整首歌 MediaRemote 的每笔读数
 // 都从这个晚打的锚点外推、恒定落后 ~2s。App 侧(LocalPlaybackSource / SpotifyPositionProbe)开播

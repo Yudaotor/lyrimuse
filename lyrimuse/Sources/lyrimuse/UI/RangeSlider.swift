@@ -85,7 +85,7 @@ struct RangeSlider: View {
 
     // MARK: - 几何
 
-    /// 值 到 滑块**左边缘**的 x(滑块中心 = 这个值 + 半个滑块)。
+    /// 值 → 滑块**左边缘**的 x(滑块中心 = 这个值 + 半个滑块)。
     private func x(for value: Double, travel: CGFloat) -> CGFloat {
         let span = range.upperBound - range.lowerBound
         guard span > 0 else { return 0 }
@@ -93,7 +93,7 @@ struct RangeSlider: View {
         return CGFloat(min(max(fraction, 0), 1)) * travel
     }
 
-    /// 指针 x 到 值(未量化)。
+    /// 指针 x → 值(未量化)。
     private func value(atCenterX x: CGFloat, travel: CGFloat) -> Double {
         let fraction = Double((x - Self.thumbSize / 2) / travel)
         return range.lowerBound + min(max(fraction, 0), 1) * (range.upperBound - range.lowerBound)
@@ -135,7 +135,7 @@ struct RangeSlider: View {
         onChange(pair.steady, pair.expanded)
     }
 
-    /// VoiceOver 增减:一次完整的"按下 到 改值 到 松手",调用方的落盘出口(松手)照常触发。
+    /// VoiceOver 增减:一次完整的"按下 → 改值 → 松手",调用方的落盘出口(松手)照常触发。
     private func adjust(_ thumb: Thumb, direction: AccessibilityAdjustmentDirection) {
         let current = thumb == .steady ? lower : upper
         let delta = direction == .increment ? adjustableStep : -adjustableStep

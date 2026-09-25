@@ -3,11 +3,11 @@
 // 第一层(lyricsgolden_test.go)守的是"拿到各源的最终候选之后怎么打分挑冠军";这一层守的是再往前
 // 一步——各源自己的**身份闸 + 挑选**:同名歌里混着翻唱/演奏/卡拉OK/另一场演唱会/另一位歌手的同名歌,
 // 源模块要在自己的搜索结果里挑出"就是本地这首"的那一条,挑不出就宁可空手(第 09 章那几条真实错配
-// ——打上花火到春雷、The One 演唱会到录音室版、孤独探戈落在错场次——都是死在这一步)。
+// ——打上花火→春雷、The One 演唱会→录音室版、孤独探戈落在错场次——都是死在这一步)。
 //
 // 四个源有自己的挑选逻辑,四个纯函数各接一份样本:
 //   - netease:neteasePickSong(从 resolveNeteaseInfo 的 pick 闭包提出)
-//   - qq:qqCollectCandidates(strict / loose 两档)到 qqPickCandidateWithAlbum(有本地专辑名)/ qqPickCandidate
+//   - qq:qqCollectCandidates(strict / loose 两档)→ qqPickCandidateWithAlbum(有本地专辑名)/ qqPickCandidate
 //   - kugou:pickKugouSearchCandidate(含 lyricRecordingTriangleMatches 第三档)
 //   - lrclib:pickLRCLIBSearchResultDetailed(先带时间戳、再纯文本兜底)
 //
@@ -50,7 +50,7 @@ type searchGoldenFixture struct {
 	// Items:该源这一次搜索返回的全部条目,按返回顺序。
 	Items []searchGoldenItem `json:"items"`
 	// AlbumLookup(qq 特有):候选没自带专辑名时,生产会按 qqAlbumLookupBudget 的预算去查详情——采集时
-	// 用同一个纯函数、同一份预算逻辑真的查一遍并记下 mid 到 专辑名,回放时照表还原,不联网。
+	// 用同一个纯函数、同一份预算逻辑真的查一遍并记下 mid → 专辑名,回放时照表还原,不联网。
 	AlbumLookup map[string]string  `json:"album_lookup,omitempty"`
 	Expect      searchGoldenExpect `json:"expect"`
 	Judge       searchGoldenJudge  `json:"judge"`
@@ -244,7 +244,7 @@ func runSearchGolden(fx *searchGoldenFixture) searchGoldenExpect {
 			e.PickedNoAlbum = c.mid
 		}
 		// 跟 resolveQQMusicMatch 同一条路:有本地专辑名先走专辑档(候选没自带专辑名时生产会去查一次,
-		// 样本里查不了 到 恒空,等于"这条没有专辑信息"),专辑档没选出够格的再退到不看专辑的挑选。
+		// 样本里查不了 → 恒空,等于"这条没有专辑信息"),专辑档没选出够格的再退到不看专辑的挑选。
 		// 专辑档"有 best 但 bestScore==0"那一支在生产里会先去专辑维度检索(网络),这里没有,退到 best 本身。
 		// 生产在"有 best 但专辑分为 0"时会先走专辑维度检索(网络),失败才退回 best;这里没有那一步,
 		// 直接退回 best——差别只在那条网络路径,挑选结果是否站得住由 goldenJudgeSearchPick 另行把关。

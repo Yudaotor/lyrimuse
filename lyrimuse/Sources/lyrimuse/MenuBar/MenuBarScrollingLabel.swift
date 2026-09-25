@@ -19,7 +19,7 @@ import SwiftUI
 //     本身没错,但它治不了现象是的病。
 //   * 真正的差距在**驱动方式**。灵动岛歌名是真窗口里的 SwiftUI 视图,offset 交给
 //     Core Animation 在渲染层插值,主线程零参与;菜单栏那条路每一帧都必须走
-//     "模型侧换图 到 label 重渲染 到 系统状态栏更新",帧与帧之间的间隔完全取决于主线程
+//     "模型侧换图 → label 重渲染 → 系统状态栏更新",帧与帧之间的间隔完全取决于主线程
 //     什么时候轮得到它。主线程上还跑着 20Hz 的逐字高亮重绘、2 秒一次的播放轮询,
 //     一旦被挤,滚动就跟着一顿一顿。
 //   * 而 MenuBarExtra **注定**只能走那条路:探针读出 NSStatusBarButton 的实际内容后
@@ -105,7 +105,7 @@ final class MenuBarScrollingLabel: NSView {
     /// 歌词旁边那枚带播放进度的图标要不要画、画哪一款、摆哪边(nil = 关着)。
     ///
     /// 存的是**款式枚举**而不是 NSImage:NSImage 没有值语义的相等性,放进 `Plan` 会让
-    /// "同参数重复调用是空操作"这条失效(每次都判定成变了 到 每次重排位图 + 重启动画)。
+    /// "同参数重复调用是空操作"这条失效(每次都判定成变了 → 每次重排位图 + 重启动画)。
     /// 真正的图从 `MenuBarProgressIcon`(内部走 `MenuBarIconStyle.cachedImage`)现取。
     struct IconBadge: Equatable {
         let style: MenuBarIconStyle
@@ -248,7 +248,7 @@ final class MenuBarScrollingLabel: NSView {
         layer?.addSublayer(clipLayer)
         // 进度图标那一支。几何关系跟上面那对裁剪层**逐条对称**,只是把横向换成纵向:
         // fillClip 露出 [底, 边界]、baseClip 露出 [边界, 顶](用户从
-        // "左到右"和"下到上"里选的后者,像水位涨上来)。
+        // "左→右"和"下→上"里选的后者,像水位涨上来)。
         for l in [iconHostLayer, iconBaseClipLayer, iconBaseLayer, iconFillClipLayer, iconFillLayer] {
             l.anchorPoint = .zero
         }
@@ -267,7 +267,7 @@ final class MenuBarScrollingLabel: NSView {
         secondaryClipLayer.isHidden = true
         secondaryClipLayer.addSublayer(secondaryTextLayer)
         layer?.addSublayer(secondaryClipLayer)
-        // 渐隐遮罩:从左到右 不透明 到 不透明 到 透明,中间那个 location 在 placeSecondaryText 里按格宽算。
+        // 渐隐遮罩:从左到右 不透明 → 不透明 → 透明,中间那个 location 在 placeSecondaryText 里按格宽算。
         secondaryFadeMask.startPoint = CGPoint(x: 0, y: 0.5)
         secondaryFadeMask.endPoint = CGPoint(x: 1, y: 0.5)
         secondaryFadeMask.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
@@ -312,7 +312,7 @@ final class MenuBarScrollingLabel: NSView {
         }
         // 只有**位图内容会变**时才重排(兑现 PreparedLine.color 注释承诺的那类
         // 幂等):位图内容只由 text+解析色+要不要染色决定,几何推迟落地这类"同一句只换
-        // 槽宽/配速"的调用(interim 到 重建落地)原来会把逐像素相同的长图白排一遍。颜色在
+        // 槽宽/配速"的调用(interim → 重建落地)原来会把逐像素相同的长图白排一遍。颜色在
         // 本路径不变(highlighted/appearance 变化各有自己的入口,那两处照旧重画)。
         // fillPath 的**有无**参与判定(强调色那张图要不要排),路径数值本身不影响位图。
         // 图标也进这道判定:换款式(用户在设置里一款款点着挑)、开关这一项、换边,
@@ -337,7 +337,7 @@ final class MenuBarScrollingLabel: NSView {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
                 && $0.followPath == next.followPath
                 && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
-                // 单双排切换主行字体从 13 变 10,滚动距离跟着变 到 算滚动参数;只换副行文字 / 在译文和
+                // 单双排切换主行字体从 13 变 10,滚动距离跟着变 → 算滚动参数;只换副行文字 / 在译文和
                 // 罗马音之间切档不算 —— 主行一个数都没动,别把正在滚的句子打回开头。
                 && $0.secondaryKind.showsSecondaryRow == next.secondaryKind.showsSecondaryRow
         } ?? false)
@@ -610,8 +610,8 @@ final class MenuBarScrollingLabel: NSView {
         // 就藏在头注下面五行。
         //
         // 反解关系(跟 lyricsSlot 的定义互为逆运算):
-        //   · 图标在左:slot.x = 图标块左沿 + reserved  到 图标块左沿 = slot.x − reserved
-        //   · 图标在右:slot.x 就是歌词格左沿          到 图标块左沿 = slot.x + 歌词宽 + gap
+        //   · 图标在左:slot.x = 图标块左沿 + reserved  → 图标块左沿 = slot.x − reserved
+        //   · 图标在右:slot.x 就是歌词格左沿          → 图标块左沿 = slot.x + 歌词宽 + gap
         let iconX: CGFloat
         switch plan.icon?.position {
         case .leading:
@@ -1173,7 +1173,7 @@ final class MenuBarScrollingLabel: NSView {
     // MARK: - 整首歌的进度(歌词旁那枚图标)
 
     /// 按当前 plan + 存底时钟(重新)装进度填色。跟上面 `applyKaraokeFill` **逐条对称**,
-    /// 只是两处换了:横向换成纵向(用户选的"下到上,像水位"),按词边界分段的关键帧换成
+    /// 只是两处换了:横向换成纵向(用户选的"下→上,像水位"),按词边界分段的关键帧换成
     /// **一条匀速动画**(整首歌的进度本来就是匀速的,不需要分段)。
     ///
     /// 两个裁剪层同样做**互补**运动 —— 文件头注那条"白边"教训对图标一字不改地成立:两张

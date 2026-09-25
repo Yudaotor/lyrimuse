@@ -12,8 +12,8 @@ import (
 // 多解一次码**。它先做一遍标准 percent-decode,再对结果做一遍 form-urlencoded 解码 ——
 // 后面那一遍把 `+` 当成空格。于是含加号的歌名/歌手名走标准编码必然查不到:
 //
-//	track=夜曲%2B窃爱 (Live)    到 两遍解完是「夜曲 窃爱 (Live)」到 error 6 Track not found
-//	track=夜曲%252B窃爱 (Live)  到 两遍解完是「夜曲+窃爱 (Live)」到 命中
+//	track=夜曲%2B窃爱 (Live)    → 两遍解完是「夜曲 窃爱 (Live)」→ error 6 Track not found
+//	track=夜曲%252B窃爱 (Live)  → 两遍解完是「夜曲+窃爱 (Live)」→ 命中
 //
 // 端点级行为,不是某首歌的问题:拿真实存在的乐队 `+44`(733,475 听众)单测过 ——
 // `artist=%2B44` 同样 error 6,`artist=%252B44` 才命中。

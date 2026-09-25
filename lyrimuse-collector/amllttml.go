@@ -89,7 +89,7 @@ type ttmlDiv struct {
 //	<span>How </span><span>it </span><span>goes</span>   —— 空格在 span **内部**
 //
 // 前者的空白收不到,拼出来就是 "Whataride"。往下的连锁反应:粘住的假词翻译器原样返回,
-// translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 到 用户看到的
+// translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 → 用户看到的
 // 「没有翻译」。实测用户库 4 首 amll 来源的歌全中,每首 26~42 行粘连。
 // 中文那种逐字写法(<span>没</span><span>有</span>)span 之间本来就没有空白,不受影响。
 const ttmMetadataNS = "http://www.w3.org/ns/ttml#metadata"

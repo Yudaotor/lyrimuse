@@ -21,9 +21,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 // SUFeedURL 仍决定要不要做周期性后台检查、读哪份 appcast。
 //
 // 页面那半边的状态机(`flow` / `pendingItem` / 攥着的 reply 闭包)见下面「软件更新页」一节;要点是**谁在等**:
-//   - 周期检查(没人在页面上等)发现更新 到 记下来给侧栏 / 页面显示,立刻 dismiss 让 Sparkle 收工;
-//   - 页面上点「检查更新」到 找到后攥着 reply,「立即更新」才答 install,窗口关掉答 dismiss;
-//   - 页面上点「立即更新 / 立即重启」而手里没有 reply(周期检查早就 dismiss 过)到 再发一次检查,找到时自动答 install。
+//   - 周期检查(没人在页面上等)发现更新 → 记下来给侧栏 / 页面显示,立刻 dismiss 让 Sparkle 收工;
+//   - 页面上点「检查更新」→ 找到后攥着 reply,「立即更新」才答 install,窗口关掉答 dismiss;
+//   - 页面上点「立即更新 / 立即重启」而手里没有 reply(周期检查早就 dismiss 过)→ 再发一次检查,找到时自动答 install。
 //
 // updaterDelegate 自接一个只**记状态**的桥(UpdaterDelegateBridge):Sparkle
 // 发现/下载完/用户跳过/开始安装时把结论写进 `availableUpdate`,给菜单栏面板底栏那一格
@@ -31,10 +31,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "update
 //
 // 这个桥多接两个**会改 Sparkle 决策**的委托,只为「接收测试版更新」这一个开关
 // (AppSettings.receiveBetaUpdates):
-//   - feedURLString(for:):开关开着 到 返回版本最高的那个 Release(含预发布)自己 tag 目录下的
-//     appcast;关着 到 nil,Sparkle 退回 Info.plist 的 `releases/latest/download/appcast.xml`
+//   - feedURLString(for:):开关开着 → 返回版本最高的那个 Release(含预发布)自己 tag 目录下的
+//     appcast;关着 → nil,Sparkle 退回 Info.plist 的 `releases/latest/download/appcast.xml`
 //     (GitHub 的 latest 不含 prerelease,所以正式用户永远看不到测试版)。
-//   - allowedChannels(for:):开关开着 到 {"beta"};关着 到 空集。预发布 appcast 的 item 都带
+//   - allowedChannels(for:):开关开着 → {"beta"};关着 → 空集。预发布 appcast 的 item 都带
 //     <sparkle:channel>beta</sparkle:channel>,这是第二道保险。
 // 为什么必须自己挑 appcast、以及 Sparkle 版本比较器对 "-beta.N" 的实测行为,见 Core
 // `UpdateChannel` / `ReleaseVersion` 头注与 15 章决策 11。
@@ -496,8 +496,8 @@ final class SparkleUpdaterManager: ObservableObject {
         }
     }
 
-    /// AppSettings.receiveBetaUpdates 的 didSet 调进来:开 到 立刻查一遍 Release 列表并在后台跑一次检查
-    /// (checkForUpdatesInBackground 只在真有更新时才弹窗),让开关有即时反馈;关 到 清掉地址缓存,
+    /// AppSettings.receiveBetaUpdates 的 didSet 调进来:开 → 立刻查一遍 Release 列表并在后台跑一次检查
+    /// (checkForUpdatesInBackground 只在真有更新时才弹窗),让开关有即时反馈;关 → 清掉地址缓存,
     /// 下一次检查回到默认的 latest。关掉不会把已装的测试版退回正式版 —— Sparkle 只往高版本走,
     /// 要等下一个版本号更高的正式版。
     func betaChannelPreferenceChanged(enabled: Bool) {

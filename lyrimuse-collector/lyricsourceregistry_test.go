@@ -271,7 +271,7 @@ func TestLyricsMigrationFlagsMatchOnBothSides(t *testing.T) {
 // 用源码扫描而不是跑一遍诊断:后者要造出每一种失败态(限流/地区限制/换票失败/端点变形),
 // 而这里要守的只是「这个源名在这两处都出现过」,读源码就能答。
 func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
-	// 有专属失败原因的源 到 它在两处 switch/check 里的源名。没有专属原因的源不在此列
+	// 有专属失败原因的源 → 它在两处 switch/check 里的源名。没有专属原因的源不在此列
 	// (它们只走传输层通用代码),新接的源如果加了 xxxLastFailureReasonNow,这里也要补一行。
 	sources := []string{"netease", "musixmatch", "lyricfind", "deezer", "soda"}
 	files := map[string]string{

@@ -21,7 +21,7 @@ import (
 	"sync"
 )
 
-// kugouLyric 是歌词第四个候选来源(酷狗音乐,非官方接口:搜索到KRC 歌词库搜索到下载,三步)。
+// kugouLyric 是歌词第四个候选来源(酷狗音乐,非官方接口:搜索→KRC 歌词库搜索→下载,三步)。
 // 只缓存成功(拿到逐行 LRC)的结果,跟 qqLyric/lrclibLyric 的缓存策略一致。是否采用交给
 // enrich.go 里统一的 scoreLyricCandidate 打分决定,这里只负责"尽力拿一份候选"。
 type kugouResult struct {
@@ -132,7 +132,7 @@ var (
 // 行始的偏移量,从 0 开始逐词累加,加到这一行的行长为止。网易云原生 YRC:
 // "[行始ms,行长ms](词始ms,词长ms,flag)词"——这里的"词始ms"是从整首歌开头算起的绝对
 // 时间戳。两种格式外形都是"三个数字加一对括号",实际语义完全不是一回事:若只做尖括号
-// 到圆括号的语法转换而不做这层相对转绝对的换算,Swift 端(YRCParser 按"词始时间戳=
+// →圆括号的语法转换而不做这层相对转绝对的换算,Swift 端(YRCParser 按"词始时间戳=
 // 绝对播放位置"这个假设算 fillFraction)读到的词始时间戳会远小于真实播放位置,导致
 // 这一行一开始播放,行内所有词的 fillFraction 立刻超过 1(已"填满"),整行瞬间全部
 // 点亮,没有逐字推进效果。
@@ -455,7 +455,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 		}
 		byTriangle := false
 		if !lyricSourceArtistMatches(s.SingerName, artist) {
-			// 歌手闸不过 到 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
+			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
 			// = 同一次录音。修的是"艺名与本名 / 乐队名与成员名"这类连分隔符都没有、
 			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
 			// lyricRecordingTriangleMatches 的注释)。酷狗是各源里唯一**已经把正主

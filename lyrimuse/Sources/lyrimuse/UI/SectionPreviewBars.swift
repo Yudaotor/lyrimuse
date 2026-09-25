@@ -217,7 +217,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 跟上面 `dwellSeconds` 同一个理由在 body 求值时读,不为它另开一条 @State 镜像
     /// (锚点每 ~2s 重发一次会带着 body 重算,晚一步也补得上)。
     ///
-    /// 都没有 到 nil 到 整枚图标只画基础色。**没在放歌时的示例句因此不会演假进度**,跟
+    /// 都没有 → nil → 整枚图标只画基础色。**没在放歌时的示例句因此不会演假进度**,跟
     /// 上面 karaokeFillPath 那条"不为示例句编造进度"是同一个原则。
     private var progressDurationMs: Int? {
         [anchor?.durationMs, PlaybackCoordinator.shared.currentDurationMs]
@@ -563,7 +563,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 短句右边空出一块是**正常的**,真菜单栏上就是这样 —— 那正是固定宽度换来的稳定:
     /// 长短句来回切,这一项和右边的图标都不会动。
     ///
-    /// (这一段反复过两次:先是两条分支都钉成上限宽 到 那时语义还是"上限",
+    /// (这一段反复过两次:先是两条分支都钉成上限宽 → 那时语义还是"上限",
     /// 于是预览空一大片而真机不空,是真偏差;改成按文字自然宽度之后语义对上了,但用户
     /// 随即指出真机上那种伸缩本身就难看,于是把设置改成固定宽度,两边又都钉死了。)
     @ViewBuilder

@@ -44,7 +44,7 @@ final class ImageMemoryCache {
     private static let failureTTL: TimeInterval = 10 * 60
     private static let failureCap = 512
 
-    /// 正在下载中的 URL 到 共享的加载任务。没有它的话同一个 URL 出现在 N 行就是 N 个
+    /// 正在下载中的 URL → 共享的加载任务。没有它的话同一个 URL 出现在 N 行就是 N 个
     /// 并发请求 + N 次解码:URLCache 不合并并发的同 URL 请求(第一个还没写回,后面全 miss),
     /// 冷缓存时是真发 N 次网络(审阅坐实)。
     private var inFlight: [String: Task<NSImage?, Never>] = [:]

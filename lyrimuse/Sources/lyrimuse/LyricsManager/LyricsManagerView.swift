@@ -957,7 +957,7 @@ struct LyricsManagerView: View {
                 // 「排序」(加排序功能,选的是"筛选栏加一个下拉"而不是
                 // 点列表头排序那个方案)。宽度同样是量出来的(离屏 NSHostingView.fittingSize,
                 // `.font(.caption)` + `.controlSize(.small)`,取九个选项里最长的一条):
-                // 中文最长("专辑 A到Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
+                // 中文最长("专辑 A→Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
                 // 跟「来源」「时间轴」同一个套路多留 30pt 余量给箭头/内边距/系统版本差异。
                 //
                 // 跟「来源」「时间轴」不同,这一行(歌手/专辑/排序)**没有**挂
@@ -1030,9 +1030,9 @@ struct LyricsManagerView: View {
     /// 下拉的宽度是**量出来的**,不是拍的(`.font(.caption)` 在这台机器上解析
     /// 成 10pt,用 NSFont 实测):
     ///   - 「来源」最长值 "Musixmatch" 58pt / "All Sources" 54pt,加菜单箭头与内边距约 28pt,
-    ///     再加左边"Source"标签约 35pt 到 需要约 121pt,给 150。
+    ///     再加左边"Source"标签约 35pt → 需要约 121pt,给 150。
     ///   - 「时间轴」最长值 **"Word Timing Only" 86pt**(英文!),同样加箭头/内边距/标签
-    ///     到 需要约 149pt,给 175。原来写的 110 连这个值本身都装不下 —— 那条注释里
+    ///     → 需要约 149pt,给 175。原来写的 110 连这个值本身都装不下 —— 那条注释里
     ///     "最长 4 字"量的是中文,英文这一档从来没被算进去过。
     @ViewBuilder
     private var filterControlsGroup: some View {
@@ -1064,7 +1064,7 @@ struct LyricsManagerView: View {
     private var selectionAndFilterActions: some View {
         HStack(spacing: 12) {
             // 「全选筛选结果」给一个显式按钮,不能只靠 ⌘A:这个窗口的核心动线正是"在筛选
-            // 栏勾出一批 到 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
+            // 栏勾出一批 → 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
             // 会变成"全选搜索框里的文字"。按钮上带的数字跟标题栏副标题「N / 852 首」左边
             // 那个数完全一致,用户一眼能对上"我选的就是筛出来的这批"。
             if selectedKeys.isEmpty {
@@ -1087,7 +1087,7 @@ struct LyricsManagerView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        // 单行,不许因为数字变长(852 到 2572)而换行。
+        // 单行,不许因为数字变长(852 → 2572)而换行。
         .lineLimit(1)
         // 固定槽位 + 右对齐:内容少的时候空在左边,右缘永远咬着同一条线。
         .frame(width: 280, alignment: .trailing)
@@ -1278,7 +1278,7 @@ struct LyricsManagerView: View {
                     // 看着像一片白屏。
                     // 用 .overlay 而不是拿 if/else 把 List 整个换掉:那样要把下面 .onAppear
                     // (真正触发 reload() 的地方)挪到一个"loading 分支和 loaded 分支都在
-                    // 的容器"上才不会死锁(loading 时 List 不存在到onAppear 不触发到永远
+                    // 的容器"上才不会死锁(loading 时 List 不存在→onAppear 不触发→永远
                     // loading)——.overlay 直接叠在同一个 List 上,List 本身、它的 onAppear
                     // 一个字都不用动,只是内容还是空的那几百毫秒里多画一层提示。
                     .overlay {
@@ -1293,7 +1293,7 @@ struct LyricsManagerView: View {
                     }
                     // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
                     // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
-                    // selectedKeys 就会变成"右键点空白 到 菜单显示『删除 8 条』 到 删掉 8 条
+                    // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
                     // 根本不在右键位置的条目"。空集时整个菜单不给任何项(= 文档说的停用菜单)。
                     // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
                     // 右键点已选中区内任一行则 keys 是整个选区——这正是需要的原生行为,给每行
@@ -1699,7 +1699,7 @@ struct LyricsManagerView: View {
         // 的「刷新」—— 那颗按钮本来就在。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // onlyIfChanged:绝大多数激活时缓存文件根本没变,mtime 指纹相同就整条链
-            // (读盘/解析/重建/summaries 重发布 到 List 全量 diff)都不跑。
+            // (读盘/解析/重建/summaries 重发布 → List 全量 diff)都不跑。
             Task { await store.reload(onlyIfChanged: true) }
         }
         .onDisappear {
@@ -1783,7 +1783,7 @@ struct LyricsManagerView: View {
         // 「源里有歌、无词」同理单独一颗,跟行上的徽章一一对应。
         let noLyrics = picked.filter { !$0.hasLyrics && !$0.isInstrumental && !$0.hasPlainTextFallback }
         // 「最近一轮零应答」再切一档,顺序必须跟行徽章的判定链一致
-        // (零应答 到 源里有歌无词 到 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾 ——
+        // (零应答 → 源里有歌无词 → 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾 ——
         // 那正是把「源里有歌、无词」单独拎一颗出来时立的规矩。
         let noResponder = noLyrics.filter(\.lastRoundHadNoResponder).count
         let indexed = noLyrics.filter { !$0.lastRoundHadNoResponder && $0.knownOnSources }.count
@@ -1823,7 +1823,7 @@ struct LyricsManagerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            // 多选的另一条动线:筛出「仅无歌词」到 全选 到 让 collector 现在就把这批
+            // 多选的另一条动线:筛出「仅无歌词」→ 全选 → 让 collector 现在就把这批
             // 重搜一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,进度在工具栏那颗
             // 「补搜歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
             if !retryable.isEmpty {
@@ -2431,7 +2431,7 @@ struct LyricsManagerView: View {
                     }
                 }
             }
-            // 跟工具栏按钮、右键菜单走同一条 requestDelete 到 侧栏那个确认弹窗的路径:
+            // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
             // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。
             ActionTile(icon: "trash", title: L10n.t("删除本地记录"),
                        help: L10n.t("删除本地记录"), destructive: true) {
@@ -3133,7 +3133,7 @@ private struct LyricsManagerRow: View {
             } else {
                 // 只画来源徽章。"这份当初有几个源应答"不在列表里露出:那个数完整展开的
                 // 地方是详情页「解析决策」弹窗第一行「本轮应答的源」,列表这一列再挂一个
-                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 到 应答源最少」。
+                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 → 应答源最少」。
                 SourceBadge(source: summary.lyricsSource)
                     .frame(width: widths.source, alignment: .leading)
 
@@ -3149,7 +3149,7 @@ private struct LyricsManagerRow: View {
         }
         .padding(.vertical, 3)
         // 让整行(含上下 3pt 内边距)都算命中这一行。不加的话在内边距上右键会被判成"点在
-        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 到 菜单不出现,
+        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 → 菜单不出现,
         // 表现成"右键有时候没反应"。
         .contentShape(Rectangle())
         // 把这一行内容的实际左右边界报给上层,表头照它对齐(见 RowContentBoundsKey 注释)。

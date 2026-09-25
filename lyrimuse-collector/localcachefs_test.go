@@ -79,7 +79,7 @@ func TestNoteLocalCacheDenied(t *testing.T) {
 // TCC 允许 stat 一个目录却拒绝列它的内容是实际发生过的形态。只在 stat 那一支接,
 // 这类拒绝会继续无声无息。
 func TestEveryLocalCacheReadPathReportsDenial(t *testing.T) {
-	// 文件 到 (来源, 该文件里受 TCC 影响的读取入口数)
+	// 文件 → (来源, 该文件里受 TCC 影响的读取入口数)
 	want := []struct {
 		file   string
 		source string
@@ -160,7 +160,7 @@ func TestLocalCacheAccessStatePublishing(t *testing.T) {
 		t.Fatalf("读得到的来源该被撤掉,got %v", got)
 	}
 
-	// 全部恢复 到 空名单,界面据此什么都不显示。
+	// 全部恢复 → 空名单,界面据此什么都不显示。
 	noteLocalCacheReadable("qq")
 	if got := read().Denied; len(got) != 0 {
 		t.Fatalf("全部恢复后名单该空,got %v", got)

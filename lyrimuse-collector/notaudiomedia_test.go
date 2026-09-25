@@ -81,7 +81,7 @@ func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
 		t.Fatalf("普通曲目必须保留时长,得到 notAudio=%v duration=%.3f", n.NotAudio, n.Duration)
 	}
 
-	// 电台那条路不受影响:它有自己的换算(整档节目 到 目录单曲时长),而且电台的
+	// 电台那条路不受影响:它有自己的换算(整档节目 → 目录单曲时长),而且电台的
 	// mediaType 报什么都不该改变这个行为 —— 两条闸是 switch 的两个分支,不会互相吃掉。
 	radio := map[string]any{
 		"title": "Juna", "artist": "Clairo", "bundleIdentifier": "com.apple.Music",

@@ -89,7 +89,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     // MARK: - 按播放器偏移
 
-    /// bundle id 到 偏移(毫秒)。第三层,按加回来 —— 但语义跟 08-18 那版
+    /// bundle id → 偏移(毫秒)。第三层,按加回来 —— 但语义跟 08-18 那版
     /// **不是一回事**:那版是代码内部为 Spotify 写死的补偿(用户看不见、重置不了,后来被根修
     /// 取代),这版是设置页那个下拉框里用户自己选播放器、自己调的值。
     ///
@@ -99,13 +99,13 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 撤掉它的单独设置、重新跟随「全部」。
     ///
     /// 为什么这层有存在价值(而"全局 + 单曲"两层不够):偏差的成因分三类,各自的作用域不同 ——
-    ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 到 全局那层;
+    ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 → 全局那层;
     ///  - **播放器侧**:某个 App 报的播放位置本身就系统性地不准。最硬的例子是浏览器:
     ///    Arc/Chrome 这类只在切歌时报一次锚点、之后 elapsedTime 再也不刷新
     ///    (`PositionSourceTier.cleanExtrapolated`),我们只能按墙钟外推,而那一次锚点的
     ///    时间戳本身只有整秒精度(见 MediaControlClient.estimatedAnchorInstant)。这类偏差
     ///    **换首歌照旧、换个播放器就没了**,正好落在"播放器"这个维度上;
-    ///  - **这份歌词自己**的时间轴不准 到 单曲那层(key 里带内容指纹)。
+    ///  - **这份歌词自己**的时间轴不准 → 单曲那层(key 里带内容指纹)。
     ///
     /// 零值一律**不落盘**(见 setPlayerOffset):字典里留着的就是"用户真的配过的播放器",
     /// 设置页那个下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里了,也不能让
@@ -157,7 +157,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     // MARK: - 按「电台 + 曲目」偏移
 
-    /// `台标哈希|歌手|歌名|指纹` 到 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
+    /// `台标哈希|歌手|歌名|指纹` → 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
     ///
     /// # 为什么必须单独一层
     ///
@@ -295,7 +295,7 @@ public final class LyricsOffsetStore: ObservableObject {
         return out
     }
 
-    /// `歌手|歌名|指纹` 到 前两段归一化后的同形 key。段数不对(不是这个仓库写出来的 key)
+    /// `歌手|歌名|指纹` → 前两段归一化后的同形 key。段数不对(不是这个仓库写出来的 key)
     /// 就原样返回,不猜。歌手/歌名本身不含 `|`(enrichKey 那套 SplitN 3 的既有约定),所以
     /// 从右边切出指纹段、再从左边切出歌手段是安全的。
     private nonisolated static func normalizedTrackKey(_ key: String) -> String {
@@ -409,7 +409,7 @@ public final class LyricsOffsetStore: ObservableObject {
         trackOffsetCount = offsets.count
         persist()
         logger.notice("offset set to \(ms, privacy: .public)ms key=\(key, privacy: .public)")
-        // 校正值非零 = 用户已经亲手把这首歌调准了 到 钉住它,collector 不再自动重选歌词源
+        // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,collector 不再自动重选歌词源
         // (换一份内容就等于让这个校正值静默作废,见 LyricsPinStore)。归零就解钉。
         //
         // 注意 pinKey 跟上面那个 key 是**两套身份**:key 含歌词内容指纹(内容一换就查不到,

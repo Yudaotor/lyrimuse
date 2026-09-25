@@ -78,7 +78,7 @@ func TestToJyutpingLine(t *testing.T) {
 		{"最长匹配优先: 唔該晒不能被短词唔該截断", "唔該晒", "m4 goi1 saai3"},
 		// 修的真 bug:拉丁/数字**紧接**汉字(中间没有空格)时,读音会被粘在
 		// 拉丁串尾巴上。上面那条 "Baby 我爱你" 因为输入自带空格,恰好绕开了这个洞。
-		// 真实缓存里的原样输出:《从何唱起》"Do re mi当中找我道理" 到 "Do re midong1 …"。
+		// 真实缓存里的原样输出:《从何唱起》"Do re mi当中找我道理" → "Do re midong1 …"。
 		{"拉丁紧接汉字要分隔(修前粘成 babyngo5)", "baby我爱你", "baby ngo5 oi3 nei5"},
 		{"大写同理(修前粘成 OKlaa1)", "OK啦", "OK laa1"},
 		{"汉字—拉丁—汉字两侧都要分隔(修前粘成 lovenei5)", "我love你", "ngo5 love nei5"},

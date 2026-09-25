@@ -82,7 +82,7 @@ func adoptEnrichRestore(path string) bool {
 			skipped++
 			continue
 		}
-		// 本机那条(可能不存在)到 字段 map。json tag 上普遍带 omitempty,所以零值字段
+		// 本机那条(可能不存在)→ 字段 map。json tag 上普遍带 omitempty,所以零值字段
 		// 压根不会出现在这份 map 里,下面的覆盖天然是"并集,备份优先"。
 		base := map[string]json.RawMessage{}
 		if old, ok := enrichCache[key]; ok {

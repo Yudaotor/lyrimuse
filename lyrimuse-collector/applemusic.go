@@ -447,7 +447,7 @@ func applemusicDevTokenWorks(ctx context.Context, devToken string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// applemusicEnsureDeveloperToken 拿(并缓存)developer token。内存 到 磁盘 到 网络,
+// applemusicEnsureDeveloperToken 拿(并缓存)developer token。内存 → 磁盘 → 网络,
 // 单飞锁保证同一时刻只有一个 goroutine 真的去抓 bundle。
 func applemusicEnsureDeveloperToken(ctx context.Context) string {
 	if tok := applemusicCachedDevToken(); tok != "" {

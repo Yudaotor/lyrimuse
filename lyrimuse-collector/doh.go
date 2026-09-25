@@ -17,10 +17,10 @@ import (
 //
 // 这台机器上
 //
-//	apic-appmobile.musixmatch.com  系统 DNS 到 31.13.91.6（Facebook 的地址段）
-//	                               DoH 查询 到 44.212.146.46 / 52.5.55.223（AWS）
-//	apic-desktop.musixmatch.com    系统 DNS 到 98.159.108.57
-//	                               DoH 查询 到 18.154.206.x
+//	apic-appmobile.musixmatch.com  系统 DNS → 31.13.91.6（Facebook 的地址段）
+//	                               DoH 查询 → 44.212.146.46 / 52.5.55.223（AWS）
+//	apic-desktop.musixmatch.com    系统 DNS → 98.159.108.57
+//	                               DoH 查询 → 18.154.206.x
 //
 // 连过去的结果是 TLS 握手直接失败(`SSL: no alternative certificate subject name
 // matches target host name`)—— 证书当然对不上,那台机器根本不是 Musixmatch。

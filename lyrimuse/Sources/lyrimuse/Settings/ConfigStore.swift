@@ -103,7 +103,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // collector,所以持久化是一个显式调用点。
 //
 // 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了):现在是
-// AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` 到 `save()`),
+// AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` → `save()`),
 // 界面上只剩一个只读的 `autosaveStatusBar` 显示保存状态。
 //
 // isDirty 判定专门跟"已保存快照"比较,不看别的——如果直接读 @Published 字段是否非空,
@@ -165,8 +165,8 @@ public final class ConfigStore: ObservableObject {
 
     static let fileURL = LyrimusePaths.configFile("config.json")
 
-    /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON 到 字段的映射在 load,
-    /// 字段 到 JSON 在 persistFile,这里只管字节与字典。
+    /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON → 字段的映射在 load,
+    /// 字段 → JSON 在 persistFile,这里只管字节与字典。
     private var document = JSONConfigDocument(url: ConfigStore.fileURL)
 
     /// 诊断导出用:磁盘上那份文件的三态。
@@ -207,7 +207,7 @@ public final class ConfigStore: ObservableObject {
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
 
-    /// 给诊断导出**脱敏**用:字段名 到 该字段当前的值。
+    /// 给诊断导出**脱敏**用:字段名 → 该字段当前的值。
     ///
     /// 这批值只有一个正当用途:交给 `LogRedactor` 去把它们从日志正文里**抹掉**。
     /// 任何把它们写进报告、日志或界面的用法都直接违反 `DiagnosticsExporter` 开头那条
@@ -390,8 +390,8 @@ public final class ConfigStore: ObservableObject {
             "telegram_chat_id": telegramChatID,
         ]
         do {
-            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)到 原子写 + 0600(这份就是
-            // 凭据本体)到 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
+            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是
+            // 凭据本体)→ 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
             try document.save(fields: fields, secure: true)
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile

@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// foldDiacritics 把拉丁字母上的变音符号折掉:Beyoncé 到 Beyonce、Sigur Rós 到 Sigur Ros。
+// foldDiacritics 把拉丁字母上的变音符号折掉:Beyoncé → Beyonce、Sigur Rós → Sigur Ros。
 //
 // 为什么需要:歌词源的曲库对同一个艺人/曲名的写法并不统一(播放器标签带变音、某个源的
 // 库里是无变音的 ASCII 写法,或反过来),normLoose 只做小写化+去标点,'é' 和 'e' 在它眼里
@@ -51,7 +51,7 @@ var diacriticFoldsUpper = func() map[rune]string {
 		if upper == r {
 			continue // 没有大写形态(比如 ß 的大写在实践中仍写作 ss)
 		}
-		// 折叠结果也跟着变大写:Æ 到 AE 而不是 ae,保持原文的大小写观感。
+		// 折叠结果也跟着变大写:Æ → AE 而不是 ae,保持原文的大小写观感。
 		m[upper] = strings.ToUpper(folded)
 	}
 	return m

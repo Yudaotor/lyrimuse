@@ -68,7 +68,7 @@ func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	})
 
 	t.Run("已知别名仍然换成中文名", func(t *testing.T) {
-		// artistAliasTable 里登记了 "dean ting" 到 "丁世光"。这一步不能弄丢。
+		// artistAliasTable 里登记了 "dean ting" → "丁世光"。这一步不能弄丢。
 		got := mergeAliasedArtists([]lastfmChartEntry{
 			{Name: "Dean Ting", PlayCount: 11},
 			{Name: "丁世光", PlayCount: 4},

@@ -196,7 +196,7 @@ public enum MusicCatalogSearch {
         return artworkLookup(status: status, data: data, title: title, artist: artist, album: album)
     }
 
-    /// https://music.apple.com/… 到 music://…(注册给 Music.app 的 scheme,经
+    /// https://music.apple.com/… → music://…(注册给 Music.app 的 scheme,经
     /// LaunchServices 打开即原生跳页、不动播放队列,实机验证)。非 music.apple.com
     /// 的输入一律拒绝,不做泛化改写。
     public static func musicSchemeURL(_ httpsURL: String?) -> URL? {

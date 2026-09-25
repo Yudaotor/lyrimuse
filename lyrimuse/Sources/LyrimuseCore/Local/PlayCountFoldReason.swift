@@ -21,7 +21,7 @@ public enum PlayCountFoldReason: String, CaseIterable, Hashable, Codable {
     case catalogNoise
     /// 同一个版本尾缀的分隔符写法不同(`X - Live` / `X (Live)` / `X [Live]`)
     case versionSuffix
-    /// 「CJK 段 + 拉丁段」的双语拼接名折到 CJK 段(《月食 The Weeping Woman》到《月食》)
+    /// 「CJK 段 + 拉丁段」的双语拼接名折到 CJK 段(《月食 The Weeping Woman》→《月食》)
     case bilingualTitle
     /// 合唱署名归第一位(`A & B` 与 `A`)
     case artistCredit
@@ -72,7 +72,7 @@ public enum PlayCountFoldExplainer {
                             baseArtist: String, variantArtist: String) -> PlayCountFoldReason? {
         if a == b { return nil }
         if let r = stagedTextReason(a, b) { return r }
-        // foldTitle 不等、familyKey 却相等 到 是歌名别名表把两个折叠键并到一起的。
+        // foldTitle 不等、familyKey 却相等 → 是歌名别名表把两个折叠键并到一起的。
         if PlayCountFold.familyKey(artist: baseArtist, title: a)
             == PlayCountFold.familyKey(artist: variantArtist, title: b) {
             return .titleAlias

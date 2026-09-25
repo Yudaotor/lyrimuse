@@ -36,7 +36,7 @@ final class MotionCoverStore {
     private static let diskBudgetBytes: Int64 = 1024 << 20
 
     private let fm = FileManager.default
-    /// 正在下的 key 到 任务。同一个 key 并发只跑一次(同 `ImageMemoryCache` 的做法)。
+    /// 正在下的 key → 任务。同一个 key 并发只跑一次(同 `ImageMemoryCache` 的做法)。
     private var inflight: [String: Task<URL?, Never>] = [:]
     /// 这一次运行里已经失败过的 key —— 失败多半是"Apple 改了结构 / 这档拿不到",反复重试
     /// 只是白发请求。刻意**不落盘**:进程重启后再给一次机会。
@@ -122,7 +122,7 @@ final class MotionCoverStore {
 
     private nonisolated func download(master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
         do {
-            // ① master 到 选一档。
+            // ① master → 选一档。
             let masterText = try await text(from: master)
             let variants = MotionCoverManifest.parseVariants(master: masterText)
             guard let picked = MotionCoverManifest.pick(variants, minimumWidth: Self.targetPixelWidth),
@@ -130,7 +130,7 @@ final class MotionCoverStore {
                 logger.notice("motion cover: no usable variant in master playlist")
                 return .unavailable
             }
-            // ② variant 到 那个承载全部分片的单文件。
+            // ② variant → 那个承载全部分片的单文件。
             let variantText = try await text(from: variantURL)
             guard let name = MotionCoverManifest.mediaFileName(fromVariant: variantText),
                   let mediaURL = MotionCoverManifest.absolute(name, relativeTo: variantURL) else {

@@ -111,8 +111,8 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
 
     /// 基础守卫已经判"不是一首歌"之后,再决定怎么处置。纯函数,可单测。
     ///
-    ///   - artist 为空 到 一律 reject,**不看判定**。真曲目必有歌手,顺带省掉一次 AppleEvent。
-    ///   - 判定缺失(还没探到)到 reject。刻意的 fail-closed:宁可这一轮没识别,下一轮就好。
+    ///   - artist 为空 → 一律 reject,**不看判定**。真曲目必有歌手,顺带省掉一次 AppleEvent。
+    ///   - 判定缺失(还没探到)→ reject。刻意的 fail-closed:宁可这一轮没识别,下一轮就好。
     ///   - 其余按判定走。
     public static func gate(artist: String?, verdict: Verdict?) -> Gate {
         let trimmed = (artist ?? "").trimmingCharacters(in: .whitespaces)
@@ -158,8 +158,8 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     ///
     /// 归一成 `1/2` 之后 Swift / Go 两侧的 parse 一个字都不用改,`AdSlot` 那三道合理性检查
     /// 继续兜底:日文 / 韩文「2件中1件目」这种**总数在前**的写法会解成 `2/1`,被"总数不小于
-    /// 序号"挡掉 到 不显示。宁缺毋错。只播一条广告时徽章通常不带计数(「赞助商广告 ·」)、
-    /// 或者只有时间(「广告 · 0:20」)到 两种都是空串。
+    /// 序号"挡掉 → 不显示。宁缺毋错。只播一条广告时徽章通常不带计数(「赞助商广告 ·」)、
+    /// 或者只有时间(「广告 · 0:20」)→ 两种都是空串。
     ///
     /// 找专辑用**遍历 + indexOf**,不用 CSS 属性选择器 `a[href*=...]`:选择器里那个值
     /// 含 `/`,不加引号不是合法 CSS 标识符,而加引号只能加单引号 —— 单引号又已经被外面
@@ -214,7 +214,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// UI 塌成"没有在播放"),但**再探一次的间隔**按判定分档,见 `refreshInterval(for:)`。
     public static let verdictMaxAge: TimeInterval = 60
     /// 判定是**广告**时,多久之后就该再问一次页面。广告一条只有 5～30 秒,前贴片放完页面就是
-    /// 歌了 —— 5 秒一探,ad到song 的翻转最多晚 5 秒被看到(外加一次 ~0.2 秒的 AppleEvent 往返),
+    /// 歌了 —— 5 秒一探,ad→song 的翻转最多晚 5 秒被看到(外加一次 ~0.2 秒的 AppleEvent 往返),
     /// 而不是等满 60 秒;代价是广告期间每 5 秒一次往返,广告本来就短,可以接受。
     public static let adRefreshInterval: TimeInterval = 5
 
@@ -225,7 +225,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 注释里那句"两者之间的窄窗里 `cachedReading` 仍返回旧判定,不会出现 nil"对广告档成立、
     /// 对歌档**根本没有窄窗**:可读期与再探间隔同时到点,age 跨过 60 的那一拍必然同时满足
     /// ①`cachedReading` 刚过期返回 nil、②这一拍才开始**异步**重探(结果这一拍拿不到),
-    /// 于是 `gate` fail-closed 到 快照整条丢掉 到 `clearIfWasPlaying()` 到 三个展示面一起塌成
+    /// 于是 `gate` fail-closed → 快照整条丢掉 → `clearIfWasPlaying()` → 三个展示面一起塌成
     /// "没有在播放"。也就是说**一首 album 为空的歌,每 60 秒就掉一次真空期**,不是只在
     /// 换曲/广告边界 —— "广告之后几秒没有歌曲信息"只是最显眼的那一次。
     ///
@@ -388,7 +388,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// (见 02 章决策 #26):
     ///   - `.song` 原样;
     ///   - 强信号的 `.ad`(ad-showing / 徽章)原样;
-    ///   - **只靠裸标题**撑起来的 `.ad` 到 nil(「拿不准」)。
+    ///   - **只靠裸标题**撑起来的 `.ad` → nil(「拿不准」)。
     ///
     /// 为什么裸标题在这里不算数:换歌的那两三秒页面 `document.title` 会退成裸的「YouTube Music」
     /// (18:07:19 抓到的边界样本:上一首刚结束、`<video>` 停在 0.0、标题已是「YouTube Music」),
@@ -494,7 +494,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
             }
             // 只有**真的写了缓存**才唤醒补查 —— 探测失败(nil)时缓存没变,补查那一拍还是
             // 读到同样的 nil、还是 fail-closed,白跑一次子进程。这一条同时也是自激循环的
-            // 闸:补查 到 kickIfNeeded 看到刚写的新鲜判定会直接跳过,不会再探。
+            // 闸:补查 → kickIfNeeded 看到刚写的新鲜判定会直接跳过,不会再探。
             let sink = reading != nil ? self.resultSink : nil
             self.lock.unlock()
             // 在锁外调:sink 里是 `Task { @MainActor … poll() }`,而 poll 那条路会回头

@@ -30,7 +30,7 @@ import LyrimuseCore
 // 极其重要的一条不变量,贯穿 AppDelegate/SettingsView/MenuBarMenu 三处外部路由代码:
 // 这个类是 `static let shared`,真正引用到 `.shared` 才会执行 init() 建窗口——而
 // init() 里订阅 PlaybackCoordinator.$isPlayingNow 的这个 Combine sink,在订阅的
-// 一瞬间就会用当下的 isVisible(默认 true)触发一次 updateActualVisibility到
+// 一瞬间就会用当下的 isVisible(默认 true)触发一次 updateActualVisibility→
 // orderFront。也就是说,只要有任何代码在"经典"样式生效期间不小心引用了
 // `NotchLyricsWindowController.shared`(哪怕只是拿来读一下属性),这个没人要的
 // 灵动岛胶囊就会凭空出现在屏幕顶部。三处外部路由代码因此都必须做到:只有在
@@ -129,13 +129,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 「暂停/无播放时隐藏」的退场态:true 时 NotchWindowRoot 把整卡缩到刘海里
-    /// (scale到0 + 透明),动画走完再 orderOut;恢复播放时先 orderFront 再翻回 false,卡片从
+    /// (scale→0 + 透明),动画走完再 orderOut;恢复播放时先 orderFront 再翻回 false,卡片从
     /// 刘海里弹出来。窗口隐藏期间保持 true,这样下次露面一定是从无到有,而不是先满幅一帧。
     @Published private(set) var isVanished = false
 
     /// 出场动画的触发计数:每次卡片「从无到有」露面 —— 窗口刚 orderFront(冷启动、手动打开
     /// 灵动岛)或从 isVanished 回场 —— 加一,`NotchWindowRoot` 的 keyframeAnimator 以它为 trigger 播一遍
-    /// 「从刘海撑开」(细节见 NotchReveal / NotchRevealShape 头注)。两件事同时发生只加一次。收起 到 稳态那条
+    /// 「从刘海撑开」(细节见 NotchReveal / NotchRevealShape 头注)。两件事同时发生只加一次。收起 → 稳态那条
     /// 弹簧不走这里:那是尺寸变化,不是出场。
     @Published private(set) var revealGeneration = 0
 
@@ -356,7 +356,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     /// pinnedScreenID **必须**在这里传进来,不能等构造完再赋值:init() 末尾就会
     /// recomputeGeometry() 一次、并订阅播放状态(订阅那一瞬间就会触发一次
-    /// updateActualVisibility 到 orderFront)。晚设一步的话,新建的副本会先按
+    /// updateActualVisibility → orderFront)。晚设一步的话,新建的副本会先按
     /// targetScreen() 在**主屏**上摆好并显示出来,然后才被挪到它该去的那块屏 ——
     /// 表现为主屏上闪一下重叠的第二个灵动岛。
     /// 这个参数**不能**给默认值。给了默认值之后 `NotchLyricsWindowController()` 这个
@@ -404,7 +404,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 夹回可见区域"那段既有处理。系统触发的几何变化不需要过渡动画,直接跳变。
         //
         // 只有主实例注册 —— 镜像副本的屏幕参数处理统一由 NotchMirrorManager 的同款
-        // 通知驱动(refresh 到 syncStateFromSettings 到 recomputeGeometry),副本再注册
+        // 通知驱动(refresh → syncStateFromSettings → recomputeGeometry),副本再注册
         // 一份就是同一次插拔跑两遍全量几何;副本被钉的屏拔掉时,
         // 它自己的 observer 也只会按 resolvedScreen()==nil 空转,真正的清理本来就在
         // manager 那侧。
@@ -429,7 +429,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.updateActualVisibility(isPlayingNow: isPlaying)
         }
 
-        // 广告插播 到 收起(isCollapsed 的第三个输入)。同一个 willSet 坑同一个修法:
+        // 广告插播 → 收起(isCollapsed 的第三个输入)。同一个 willSet 坑同一个修法:
         // 存 sink 参数值,绝不回头读 PlaybackCoordinator 的存储属性。写入 @Published
         // 即生效,几何不用重算(窗口常驻最大尺寸,收起只是内容层的事,同 isPlayingNow)。
         adBreakObserver = PlaybackCoordinator.shared.$isCurrentTrackAdBreak.sink { [weak self] isAd in
@@ -856,7 +856,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 的高度、无刘海屏是菜单栏高度,两者不再强制取大者,见 geometry(for) 头注)。
     /// 只有「封面」那一档
     /// 用得到 —— 它的边长是这个值的函数。**不给估计值**是刻意的:拿 28pt(高菜单栏机器的
-    /// 上界)当常量,在这台机器(菜单栏 32 到 封面 22pt)上就白占 6pt/耳、卡片白宽 12pt。
+    /// 上界)当常量,在这台机器(菜单栏 32 → 封面 22pt)上就白占 6pt/耳、卡片白宽 12pt。
     static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat,
                              leftEar: NotchEarModule, rightEar: NotchEarModule,
                              showsEqualizer: Bool, equalizerEar: NotchEqualizerEar,

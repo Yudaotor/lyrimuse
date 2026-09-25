@@ -129,7 +129,7 @@ func runLyricsOffsetTests() {
         //
         // Arc 用真实 bundle id(它就是这个功能的动机);对照播放器用枚举而不是字面量,枚举漂了
         // 断言跟着漂。注意 **Arc 不在 PlaybackPlayer 里** —— 它靠 TrustedPlayers 那份
-        // bundleID到名字映射进来,所以这层的维度只能是 bundleID,换成枚举就把动机里那个 App
+        // bundleID→名字映射进来,所以这层的维度只能是 bundleID,换成枚举就把动机里那个 App
         // 挡在门外了。
         let arc = "company.thebrowser.Browser"
         let appleMusic = PlaybackPlayer.appleMusic.bundleIdentifier
@@ -143,7 +143,7 @@ func runLyricsOffsetTests() {
         store.setPlayerOffset(800, forBundleID: arc)
         store.setGlobalOffset(100)
         store.setOffset(-50, forKey: key, pinKey: "")
-        // 二选一:Arc 单独配过 到 只用它那档(800),「全部」那 100 完全不参与。
+        // 二选一:Arc 单独配过 → 只用它那档(800),「全部」那 100 完全不参与。
         expectEqual(store.baseOffsetMs(forBundleID: arc), 800, "按播放器: 配过就只用自己那档,不加全部")
         expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), 750,
                     "按播放器: 生效值 = 自己那档 + 单曲(800 - 50)")
@@ -275,7 +275,7 @@ func runLyricsOffsetTests() {
         store.nudge(by: 300, forKey: keyA, pinKey: pinKey)
         expectEqual(pins.isPinned(pinKey), true, "已校准: 调过偏移就自动钉住,不需要另外开开关")
 
-        // 关键一条:同一首歌换了一份歌词内容 到 旧校正值查不到(这是既有设计,内容指纹变了),
+        // 关键一条:同一首歌换了一份歌词内容 → 旧校正值查不到(这是既有设计,内容指纹变了),
         // 但 pin 仍然在 —— 它认的是"这首歌",不是"这一份内容"。pin 要是也跟着失效,后台就会
         // 继续换源、把用户下一次校准的成果再作废一次,这条闸等于没装。
         expectEqual(store.offset(forKey: keyB), 0, "已校准: 换内容后旧校正值查不到(既有设计)")

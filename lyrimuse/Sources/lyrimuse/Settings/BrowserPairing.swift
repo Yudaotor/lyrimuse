@@ -30,7 +30,7 @@ enum BrowserPairing {
         BrowserAutomationPermission.manuallyAddedFamilies[bundleID] = family
     }
 
-    /// 纯写配对关系(平台 到 一组浏览器 bundle id),顺带同步给探针。
+    /// 纯写配对关系(平台 → 一组浏览器 bundle id),顺带同步给探针。
     static func pair(_ bundleID: String, platformID: String) {
         let settings = AppSettings.shared
         var pairs = settings.browserPlatformPairs
@@ -54,7 +54,7 @@ enum BrowserPairing {
     ///
     /// 头像那一行铺的是 `settings.browserPlatformPairs`,写它是纯本地、瞬时的。而
     /// `features.trust` 里那句 `save()` 会走一整套 **collector 重启**:
-    /// `CollectorRestartCoordinator` 0.5 秒去抖 到 `launchctl kickstart -k` 到 轮询到一个
+    /// `CollectorRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个
     /// **新 pid** 才返回,确认超时 3 秒(`CollectorControl.restartConfirmTimeout`)。也就是说
     /// 最坏情况要 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。 别把这套重启**夹在**
     /// "用户在菜单里点了那个浏览器"和"头像出现"之间去等——那会连带把自动展开的气泡也

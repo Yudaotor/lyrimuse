@@ -29,8 +29,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 //
 // 现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
 //
-//     4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調)  到 0|0|0|0
-//     6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」)  到 1|1|1|1
+//     4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調)  → 0|0|0|0
+//     6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」)  → 1|1|1|1
 //
 // 用 `data-testid` 而不是文字,因为**跟语言无关** —— 页面上那些「广告 • 第 1 个,共 3 个」
 // 是跟着界面语言走的,英文界面下就成了 "Advertisement"。

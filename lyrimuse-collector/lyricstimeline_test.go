@@ -59,7 +59,7 @@ func TestRehangLRCOnYRCRealCase(t *testing.T) {
 	if n := len(splitLines(got)); n != len(splitLines(rumourLRC)) {
 		t.Errorf("行数变了: got %d want %d", n, len(splitLines(rumourLRC)))
 	}
-	// 映射给译文用:旧 27.41s 到 新 18.315s
+	// 映射给译文用:旧 27.41s → 新 18.315s
 	if remap[27410] != 18315 {
 		t.Errorf("remap[27410]: got %d want 18315", remap[27410])
 	}
@@ -194,7 +194,7 @@ func TestRehangCandidateTimelines(t *testing.T) {
 	}
 }
 
-// ---- 逐字轴自相矛盾 到 弃用 ----
+// ---- 逐字轴自相矛盾 → 弃用 ----
 //
 // 测试数据取自真实缓存条目 陈奕迅|2001太空漫游 (Live)|The Easy Ride 演唱会 (Live)
 // (现象是"LRC 写着 32 秒有词、播放到 32 秒人已开唱歌词却不出"):netease 的行级与逐字
@@ -226,11 +226,11 @@ const (
 )
 
 func TestWordTimingContradictsLRC(t *testing.T) {
-	// 真实打架数据:9/10 行配上、中位偏差约 41.5s 到 矛盾成立
+	// 真实打架数据:9/10 行配上、中位偏差约 41.5s → 矛盾成立
 	if !wordTimingContradictsLRC(taikongLRC, taikongYRC) {
 		t.Error("《2001太空漫游 (Live)》形态(中位偏差 40s+)应判为矛盾")
 	}
-	// 同一批 YRC,把 LRC 时间戳换成跟 YRC 一致的 到 不矛盾(自洽双轴的常态,全库 92% <0.5s)
+	// 同一批 YRC,把 LRC 时间戳换成跟 YRC 一致的 → 不矛盾(自洽双轴的常态,全库 92% <0.5s)
 	consistent := "[01:14.35]大预言话:地球是大限将至\n" +
 		"[01:17.64]到今天还是未有事\n" +
 		"[01:21.64]未是时候就无谓乱下赌注\n" +

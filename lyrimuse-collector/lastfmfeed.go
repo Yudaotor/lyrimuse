@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// collector 到 App 的 Last.fm「最近记录」feed。
+// collector → App 的 Last.fm「最近记录」feed。
 //
 // 背景:App 的 Last.fm 统计页此前自己每 110 秒直连 `user.getrecenttracks` 拉一次最近记录
 // (外加两个只为取 @attr.total 的计数请求),而这个 collector 为了 iPhone 桥接**本来就每
@@ -37,11 +37,11 @@ const feedHeartbeat = 60 * time.Second
 
 // feed 拉取节奏(自适应,替代原来固定的 lastfmPollInterval=15s):
 //   - 有人在听(本机在放、或 feed 里最近 feedActivityWindow 内有 now-playing / 新 scrobble)
-//     到 feedIntervalActive(15 s),跟原桥接一样快,红点/新行 ≤15 s 到位;
-//   - 完全空闲 到 feedIntervalIdle(60 s):这时 Last.fm 上不会有任何新东西,拉得再快也只是
+//     → feedIntervalActive(15 s),跟原桥接一样快,红点/新行 ≤15 s 到位;
+//   - 完全空闲 → feedIntervalIdle(60 s):这时 Last.fm 上不会有任何新东西,拉得再快也只是
 //     白发请求。手机一开播,最多 60 s 后进入活跃节奏。
 //
-// 桥接(iPhone到LB 转发)沿用同一个节奏:空闲时 60 s 才发现手机开播,对"转发已完成的收听"
+// 桥接(iPhone→LB 转发)沿用同一个节奏:空闲时 60 s 才发现手机开播,对"转发已完成的收听"
 // 这件事毫无影响(bridgeMaxListenAge 是 3 天)。
 const (
 	feedIntervalActive = 15 * time.Second

@@ -24,7 +24,7 @@ import (
 // 为什么必须起子进程,而粤拼不用:**差异从来不是"要不要缓存",是"谁算得出来"**。
 // 粤拼是纯查表(rime-cantonese 词典 go:embed 进本二进制,见 jyutping.go),Go 自己就算得出。
 // 而日文读音**必须**走 CFStringTokenizer 形态分析(不能用 ICU 通用音译:汉字是中日共用的,
-// Any-Latin 会一律按普通话读,「火曜日の朝は」到"huǒ yào rìno cháoha"),中文/韩文走 ICU
+// Any-Latin 会一律按普通话读,「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU
 // applyingTransform(.toLatin) —— 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成
 // lyrics-romanize 这个 Swift 子进程,跟 lyrics-translate / media-control 同一个形态。
 //
@@ -112,7 +112,7 @@ func (e *enrichEntry) maybeGenerateHelperRoma() {
 //
 // 单独抽出来是为了**能被测到**。判据本身(尤其"已有罗马音就不动"和"粤语该让粤拼先手")
 // 是这个功能唯一会造成破坏的地方,而 maybeGenerateHelperRoma 要起子进程 —— 测试二进制旁边
-// 没有 lyrics-romanize,直接测那个函数会因为"helper 找不到 到 静默返回"而**恒真通过**,
+// 没有 lyrics-romanize,直接测那个函数会因为"helper 找不到 → 静默返回"而**恒真通过**,
 // 那是一条证明不了任何东西的测试。判据是纯函数,测它才有意义。
 func (e *enrichEntry) shouldGenerateHelperRoma() bool {
 	if e.Lyrics == "" || e.LyricsRoma != "" {

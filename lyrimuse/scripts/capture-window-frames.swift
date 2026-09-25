@@ -47,7 +47,7 @@ final class Output: NSObject, SCStreamOutput {
         let ci = CIImage(cvPixelBuffer: pb)
         let scale = 2.0
         let fullH = Double(CVPixelBufferGetHeight(pb))
-        // CIImage 原点左下;窗口坐标左上 到 换算
+        // CIImage 原点左下;窗口坐标左上 → 换算
         let crop = CGRect(x: rx * scale, y: fullH - (ry + rh) * scale, width: rw * scale, height: rh * scale)
         let cropped = ci.cropped(to: crop)
         guard let cg = ctx.createCGImage(cropped, from: crop) else { return }

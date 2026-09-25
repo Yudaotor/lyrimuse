@@ -218,7 +218,7 @@ func TestLastLRCTimestampSkipsTrailingCredit(t *testing.T) {
 	if got, ok := lastLRCTimestampSecs(duet); !ok || got != 40 {
 		t.Errorf("对唱末句 = %.2f/%v, want 40", got, ok)
 	}
-	// 只有署名行没有正文时照旧返回 false 之外的行为不变:全是署名 到 找不到末句。
+	// 只有署名行没有正文时照旧返回 false 之外的行为不变:全是署名 → 找不到末句。
 	if _, ok := lastLRCTimestampSecs("[00:00.00]作词 : 林夕\n[00:01.00]作曲 : 陈辉阳\n"); ok {
 		t.Errorf("整份只有署名行,不该提出末句时间戳")
 	}

@@ -103,7 +103,7 @@ enum MusicAutomationPermission {
         }
     }
 
-    // 系统设置里"隐私与安全性 到 自动化"面板——被拒绝后官方没有 API 能再触发一次
+    // 系统设置里"隐私与安全性 → 自动化"面板——被拒绝后官方没有 API 能再触发一次
     // 系统弹窗,只能引导用户自己去这里手动打开;跟 collector 那份权限共用同一个
     // 面板,一个跳转按钮足够覆盖两边的"去看看"需求。
     static var systemSettingsURL: URL {

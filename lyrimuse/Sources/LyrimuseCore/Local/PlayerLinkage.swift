@@ -35,7 +35,7 @@ public enum PlayerLinkage {
     /// 没有宽限、会让歌词整个消失再出现一次;5 秒内任一个绑定的播放器又起来就取消。
     public static let quitGraceSeconds: TimeInterval = 5
 
-    /// 老配置迁移(布尔年代 到 集合):
+    /// 老配置迁移(布尔年代 → 集合):
     /// - 「打开 Lyrimuse 时启动 X」(`requiresSole`):当年只在唯一具体播放器时才显示开关,true 就迁成那一个;
     ///   当年含糊(纯 auto / 两个以上)开关本来就隐藏着,迁成空。
     /// - 「跟随播放器启动」:true 迁成当时的全部候选(collector 当年盯的就是这个范围)。

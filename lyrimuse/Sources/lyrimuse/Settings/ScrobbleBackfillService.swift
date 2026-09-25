@@ -56,7 +56,7 @@ final class ScrobbleBackfillService: ObservableObject {
         // Swift 自动合成的解码器对**非可选**属性一律走 decode(_:forKey:),缺 key 直接 throw,
         // **属性默认值不参与解码**。而 Go 那边 `Items []backfillItem json:"items,omitempty"`
         // 只在 dry-run 分支填(backfill.go runBackfill:真跑那条路径从来不设 Items),于是
-        // **每一次真跑**的输出都没有 items 键 到 keyNotFound 到 run() 里那句 try? 吞成 nil 到
+        // **每一次真跑**的输出都没有 items 键 → keyNotFound → run() 里那句 try? 吞成 nil →
         // lastRunFailed。也就是说:回填子进程 exit 0、scrobble 发出去了、服务端确认了、
         // markBackfilled 的回执行也落了盘,只有 App 读不懂结果。
         //
@@ -66,7 +66,7 @@ final class ScrobbleBackfillService: ObservableObject {
         // 它从"静默"变成"报一句失败"。
         //
         // 同一个坑已经在 LyricsSearchService.Pick 上踩过一次并修过(那边注释写着
-        // 「实测验证过,不是猜的」)—— 两处是同一条 Go到Swift 边界上的同一个语义错配。所以这里
+        // 「实测验证过,不是猜的」)—— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
         // **所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,但哪天谁给 eligible
         // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
         // 反推这条要求,两个结构一起守。
@@ -147,7 +147,7 @@ final class ScrobbleBackfillService: ObservableObject {
                 ignored=\(out?.ignored ?? -1, privacy: .public) \
                 quarantined=\(out?.quarantined ?? -1, privacy: .public)
                 """)
-            // 真的有条目补进了 Last.fm 到 统计页手里的缓存全过时了(现象是
+            // 真的有条目补进了 Last.fm → 统计页手里的缓存全过时了(现象是
             // "补提交后最近记录没刷新"):最近记录/今天/近7天立刻强刷,不等 2 分钟 TTL
             // 或下次换歌;热力图的增量水位拨回回填窗口起点,不拨的话补进历史那些天会被
             // 增量同步永远漏掉(见 rewindDailySyncForBackfill 注释)。accepted == 0
@@ -214,7 +214,7 @@ final class ScrobbleBackfillService: ObservableObject {
             // 诊断导出)都是自己 new Process、顺手就把 collectorProcessEnvironment 设上了。
             // 不传的后果:delete-listen 按 collector 自己的默认规则找配置目录,**Dev 变体**
             // 下 App 读的是 ~/.config/lyrimuse-dev、删的却是 ~/.config/lyrimuse,那几条 uts
-            // 在正式版日志里根本不存在 到 deleted:0 到 ok=false 到 列表原样重拉一遍 到 界面上
+            // 在正式版日志里根本不存在 → deleted:0 → ok=false → 列表原样重拉一遍 → 界面上
             // 就是"点了没反应"。正式版两个目录同名,所以这个 bug 只在 Dev 上现形。
             guard let r = ProcessRunner.run(
                 path, ["delete-listen", "-uts", String(uts)], timeout: 15,
