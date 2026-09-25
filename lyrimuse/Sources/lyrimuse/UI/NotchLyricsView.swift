@@ -658,7 +658,7 @@ enum NotchMetrics {
 /// 缩略图、以及 hover 才展开的第三行。两份渲染必然越漂越远,不如让预览用真的那一份。
 @MainActor
 protocol NotchChromeSource: ObservableObject {
-    /// 收起态(没在播放且没 hover):窗口缩到刘海本身大小,内容整套摘掉。
+    /// 收起态(暂停 / 广告且没 hover):卡片只留顶行那一条,宽度收到两只耳朵(`NotchWindowRoot.cardWidth`),歌词行不渲染。
     var isCollapsed: Bool { get }
     var isExpanded: Bool { get }
     /// 物理刘海的宽度,顶行中间要给它让出空当。无刘海屏幕是 0。

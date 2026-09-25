@@ -22,7 +22,7 @@ import LyrimuseCore
 // 1) 位置是算出来的、贴死在屏幕顶部居中,不支持用户拖拽(见 NotchLyricsWindow 里
 //    isMovableByWindowBackground = false),所以没有"锁定位置"这个概念,也不需要
 //    像经典悬浮窗那样持久化位置。
-// 2) 稳态(没在播放、没 hover)缩到刘海本身(或无刘海屏幕的兜底胶囊)大小;播放中
+// 2) 暂停 / 广告时收起:只留顶行那一条、宽度收到两只耳朵(见 isCollapsed);播放中
 //    常显"歌名+控制按钮+当前歌词"整套,不需要 hover 才能看到——歌词类信息本来就该
 //    随时可见。hover 时在下面多展开一块补充信息(下一句歌词预览+迷你进度条),展开
 //    态里播放控制按钮直接常驻,不需要再单独 hover 一次才出现。
@@ -42,10 +42,9 @@ import LyrimuseCore
 // 屏幕硬件层面真实不发光的区域,不是"渲染层级"问题,任何 App 都不可能把内容"显示"在
 // 那个区域本身。
 //
-// isCollapsed(缩到刘海大小,内容整套不渲染)跟已有的 hideWhenNotPlaying(整个窗口
+// isCollapsed(收起到顶行那一条,歌词行不渲染)跟 hideWhenNotPlaying(整个窗口
 // 隐藏)是两个独立机制,不冲突:后者关闭时窗口本身还在(用户能看到"这里有个东西"),
-// 只是不常显内容、缩到最小,hover 到这一小块区域上依然能重新展开出完整内容(包括
-// 播放按钮,可以用来重新播放)。见 isCollapsed/collapsedFallbackWidth。
+// hover 到收起的卡片上依然能重新展开出完整内容(包括播放按钮,可以用来重新播放)。见 isCollapsed。
 @MainActor
 // 已经有 NotchChromeSource 要的全部四个属性和 setExpanded,只是把这层契约显式写出来
 // —— 这样「外观」页的预览可以拿一个轻量替身装同一份 NotchLyricsView。
@@ -88,31 +87,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 单独存一份而不是每次现读,是为了让下面的 isCollapsed 能写成计算属性。
     @Published private(set) var isPlayingNow: Bool = false
 
-    // 当前没有在播放、也没有 hover 展开时为 true——这时窗口收缩到真实刘海本身的大小
-    // (无真刘海屏幕退到 collapsedFallbackWidth 那个兜底胶囊宽度),歌名/控制按钮/歌词
-    // 这一整套常显内容完全不渲染,单纯是一小块跟屏幕硬件本身融为一体的黑色区域。
-    // NotchLyricsView 读这个属性决定要不要渲染 topRow/lyricRow。
+    // 收起态:卡片只留顶行那一条高度,宽度收到两只耳朵(算法在 NotchWindowRoot.cardWidth 的收起分支),
+    // 歌词行与展开区不渲染;hover 照样能展开出完整内容(含播放键)。
+    // 三个开关各自的作用:collapsesWhenPaused 关掉就不收;hideWhenNotPlaying 开着时暂停直接缩进刘海
+    // (isVanished)、不经过收起态;广告插播(isAdBreakNow)同样收起。
     //
-    // 从存储属性改成**计算属性**,修的是"暂停时鼠标移上去没反应"这个 bug:
-    // 它原来只在 recomputeGeometry() 里赋值,而 hover 改 isExpanded 的那条路径
-    // (setExpandedFromWindow)刻意不调 recomputeGeometry("窗口尺寸跟展开与否无关了")。
-    // 于是暂停状态下移上去,isExpanded 确实变成了 true、isCollapsed 却还留在 true —— 卡片
-    // 高度走 NotchWindowRoot.cardHeight 的 collapsed 分支原地不动,内容也照样不渲染,
-    // 看着就是"灵动岛对 hover 毫无反应",而文件顶部承诺的"hover 到这一小块上依然能重新
-    // 展开出完整内容(包括播放按钮,可以用来重新播放)"整个落空。
-    //
-    // 原来那版注释说它跟窗口尺寸"保持单一数据源、不在两处各自算一遍" —— 单一数据源确实
-    // 做到了,但**同步**没有:公式只有一份,却挂在一条 hover 时根本不会走的路径上。写成
-    // 计算属性之后,两个输入哪个变它都跟着变,不存在"忘了重算"这回事。
-    // 加入广告插播维度:Spotify 放广告时同样收起("和暂停一样
-    // 缩回去")——广告没有歌词可展示,歌名位只显示「广告中」(见 NotchLyricsView.topRow),
-    // hover 仍可展开(跟暂停态一致,里面有控制按钮可以切歌跳过广告)。
-    // 加入 collapsesWhenPaused 维度(把"暂停/广告时缩到最小"开放成可关
-    // 的配置项):关掉之后暂停/广告态不再收缩,卡片保持原来的稳态/展开尺寸。
-    // 加入 hideWhenNotPlaying 维度:开着「暂停/无播放时隐藏」时,暂停态**不再经过
-    // 收起态**——用户目验"先收起再消失"后否掉("直接从正常大小缩小到无,不要经历那个暂停状态"),
-    // 改为整卡从当前大小缩进刘海(isVanished,见 updateActualVisibility)。广告插播仍收起:
-    // 广告期间 isPlayingNow 为 true、窗口不隐藏,收起态照旧有意义。
+    // 必须是计算属性:hover 改 isExpanded 的那条路径(setExpandedFromWindow)不调 recomputeGeometry,
+    // 存成存储属性的话暂停时 hover 不会展开。
     var isCollapsed: Bool {
         collapsesWhenPaused && ((!isPlayingNow && !hideWhenNotPlaying) || isAdBreakNow) && !isExpanded
     }
@@ -200,8 +181,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 用户的想法:「配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的
     /// 宽度,上限就是悬浮展开时候的宽度」—— 稳态是下限,这个是上限。
     @Published private(set) var expandedCardWidth: CGFloat = 360
-    /// 收起态卡片的宽度:物理刘海本身的宽度,无真刘海的屏幕退到兜底胶囊宽度。
-    @Published private(set) var collapsedCardWidth: CGFloat = collapsedFallbackWidth
 
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
@@ -220,10 +199,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     static func menuBarHeight(of screen: NSScreen) -> CGFloat {
         max(fallbackNotchHeight, screen.frame.maxY - screen.visibleFrame.maxY)
     }
-    // 收起态(没在播放、没 hover)在无真刘海屏幕上退到的兜底宽度——真刘海屏幕收起态
-    // 直接用 notchWidth 本身(跟硬件刘海严丝合缝),这个值只在没有真刘海可以贴的场景
-    // 才用得到,给一个能装得下一小块胶囊、不会小到近乎看不见的经验值。
-    private static let collapsedFallbackWidth: CGFloat = 120
     // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
     // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
     // 数值本身在 NotchMetrics.compactRowHeight —— 视图那边按同一个数字排版,
@@ -1126,8 +1101,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             steady: newSteady,
             expandedSetting: expandedContentWidth ?? CGFloat(AppSettings.shared.notchExpandedContentWidth))
         if expandedCardWidth != newExpanded { expandedCardWidth = newExpanded }
-        let newCollapsed = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
-        if collapsedCardWidth != newCollapsed { collapsedCardWidth = newCollapsed }
         // 窗口恒为**最大**形态(展开态)的尺寸,不再随收起/稳态/展开三种形态改。三种形态
         // 现在是卡片在这个固定窗口里自己变大变小(NotchWindowRoot),窗口只在屏幕几何或
         // 宽度设置变化时才动。
