@@ -3320,8 +3320,22 @@ func runSourceContractTests() {
             expectEqual(v < g && v < b, true, "tag 校验: 校验步排在装工具链与构建之前(失败零构建成本)")
         }
         expectEqual(yml.contains("steps.changelog."), false, "tag 校验: 旧的 Extract tag changelog 步已并入校验步")
-        expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
-                    "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
+        expectEqual(yml.contains("body: ${{ steps.tag.outputs.body }}")
+                    && yml.components(separatedBy: "needs.tag.outputs.body").count - 1 >= 2, true,
+                    "tag 校验: 校验 job 输出正文一次,appcast 与 Release 正文引用同一个输出(正文只读一次)")
+        // 发版流水线的几道关卡:对被发布的 commit 整套跑 CI、appcast 签名用包内公钥验过、先草稿后公开、
+        // 证书私钥不可导出、dmgbuild 按哈希装。
+        expectEqual(yml.contains("uses: ./.github/workflows/ci.yml") && yml.contains("needs: [tag, checks]"), true,
+                    "发版关卡: 构建依赖 tag 校验与整套 CI 检查")
+        expectEqual(read(".github/workflows/ci.yml").contains("workflow_call:"), true, "发版关卡: ci.yml 可被发版流程复用")
+        expectEqual(yml.contains("swift .github/scripts/verify_sparkle_signature.swift"), true,
+                    "发版关卡: 写 appcast 之前用包内 SUPublicEDKey 验签")
+        expectEqual(read(".github/scripts/verify_sparkle_signature.swift").contains("SUPublicEDKey"), true,
+                    "发版关卡: 验签脚本读的是 App 自己内置的公钥")
+        expectEqual(yml.contains("draft: true") && yml.contains("gh release edit") && yml.contains("--draft=false"), true,
+                    "发版关卡: Release 先草稿、核对资产后再公开")
+        expectEqual(yml.contains("-T /usr/bin/codesign -x") && yml.contains("--require-hashes -r .github/scripts/dmgbuild-requirements.txt"), true,
+                    "发版关卡: 签名私钥不可导出,dmgbuild 按哈希安装")
         // docs/releasing.md 跟 AGENTS.md 一样**不进版本库**(理由同下一段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过,别改回无条件 expectEqual。
         let releasingDoc = read("docs/releasing.md")
