@@ -68,11 +68,17 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
     let spec: Spec
     /// 这一刻的播放位置(毫秒,含歌词时间轴偏移)。装动画时读一次,之后不按帧调。
     let nowMs: () -> Int
+    /// 所在那一层此刻显示着没有。灵动岛的稳态 / 展开两份歌词行靠透明度轮流显示(`NotchCardLayerActive`),
+    /// 窗口看不见时整卡也是 false;别的宿主恒为默认值 true。它是本视图的输入,翻回 true 时 SwiftUI 会
+    /// 重新调 updateNSView,在那一层露面之前把这一句补画上。
+    @Environment(\.notchCardLayerActive) private var layerActive
 
     func makeNSView(context: Context) -> OverlayLyricScrollView { OverlayLyricScrollView() }
 
     func updateNSView(_ view: OverlayLyricScrollView, context: Context) {
         view.nowProvider = nowMs
+        // 藏着的那一层不重画位图、不重装动画:换句时这两件事都等它显示出来再做。
+        guard layerActive else { return }
         view.apply(spec: spec, nowMs: nowMs())
     }
 }

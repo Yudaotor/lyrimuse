@@ -1035,4 +1035,17 @@ func runNotchTests() {
         expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
     }
+
+    // ---- 藏着的那一层歌词行不重画(源码契约) ----
+    // 灵动岛的稳态 / 展开两份歌词行常驻、靠透明度轮流显示;藏着的那份换句时不该照样重画位图、重装动画。
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        let row = (try? String(contentsOf: ui.appendingPathComponent("OverlayScrollingLyricRow.swift"),
+                               encoding: .utf8)) ?? ""
+        expectEqual(row.contains("@Environment(\\.notchCardLayerActive) private var layerActive"), true,
+                    "隐藏层契约: 共用歌词行把「这一层显示着没有」当输入读(翻回 true 才会重新 updateNSView)")
+        expectEqual(row.contains("guard layerActive else { return }\n        view.apply(spec: spec, nowMs: nowMs())"), true,
+                    "隐藏层契约: 藏着时不调 apply(不重画位图、不装动画)")
+    }
 }
