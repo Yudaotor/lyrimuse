@@ -1628,7 +1628,7 @@ func runSourceContractTests() {
         }
         if let view = read("UI/LyricsOverlayView.swift") {
             // 默认 loops = true 是给灵动岛歌名那类常驻标签的;歌词行滚一遍停在句尾,等换句才归零。
-            expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, follow: follow, loops: false)"), true,
+            expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, loops: false)"), true,
                         "悬浮滚动: overlayScroll 的跑马灯必须 loops: false(否则滚完一行又跳回开头)")
             // 还没轮到唱的下一句不滚:预览那一段里不许再出现滚动 / 配速行。
             if let a = view.range(of: "private func nextLinePreviewContent"),

@@ -2156,10 +2156,10 @@ extension View {
     /// `height` 必须给(取 `OverlayPlayback.scrollRowHeight`):`MarqueeText` 外壳没有固有高度。
     @ViewBuilder
     func overlayScroll(_ on: Bool, id: AnyHashable, alignment: Alignment,
-                       height: CGFloat, follow: MarqueeFollow? = nil) -> some View {
+                       height: CGFloat) -> some View {
         if on {
             // loops: false —— 歌词行滚到底就停在句尾,等换句(id 变)才归零。
-            MarqueeText(id: id, restingAlignment: alignment, follow: follow, loops: false) { self }
+            MarqueeText(id: id, restingAlignment: alignment, loops: false) { self }
                 .frame(height: height)
         } else {
             self

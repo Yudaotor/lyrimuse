@@ -193,7 +193,7 @@ private final class NotchPlayback: ObservableObject {
     /// (同 `controlsDidBecomeVisible` 在预览里是空实现)。
     func syncAdSkipGate(adBreak: Bool) {
         guard adBreak else {
-            NotchPlayback.skipGateLogger.info("gate: adBreak false → stop")
+            NotchPlayback.skipGateLogger.notice("gate: adBreak false → stop")
             adSkipGateTask?.cancel()
             adSkipGateTask = nil
             gatedAdTitle = nil
@@ -205,7 +205,7 @@ private final class NotchPlayback: ObservableObject {
         // 插播里换到了下一条:上一条的判定(尤其「能跳」)不能延续过来,先收键、清缓存,从快探重新判。
         let nextAdInBreak = gatedAdTitle != nil
         gatedAdTitle = title
-        NotchPlayback.skipGateLogger.info("gate: adBreak true → start\(nextAdInBreak ? " (next ad in break)" : "", privacy: .public)")
+        NotchPlayback.skipGateLogger.notice("gate: adBreak true → start\(nextAdInBreak ? " (next ad in break)" : "", privacy: .public)")
         if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }
         adSkipGateTask?.cancel()
         adSkipAvailable = false
@@ -220,7 +220,7 @@ private final class NotchPlayback: ObservableObject {
                     guard let self, !Task.isCancelled else { return }
                     if self.adSkipAvailable != shows {
                         self.adSkipAvailable = shows
-                        NotchPlayback.skipGateLogger.info(
+                        NotchPlayback.skipGateLogger.notice(
                             "gate: adSkipAvailable -> \(shows, privacy: .public) (state \(String(describing: state), privacy: .public))")
                     }
                 }
@@ -1003,12 +1003,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 问题只可能落在两处:body 压根没被这次翻转叫醒(那 onChange 也不会响),或者 body 看见了、
         // 但三道门里有一条此刻是假的(那 canSkipAd 响、hint 不响)。两条探针正好把这两种分开。
         .onChange(of: playback.canSkipAd) { _, value in
-            NotchPlayback.skipGateLogger.info("""
+            NotchPlayback.skipGateLogger.notice("""
                 view: canSkipAd=\(value, privacy: .public) expanded=\(controller.isExpanded, privacy: .public)                 showsLyrics=\(controller.showsLyrics, privacy: .public) hint=\(showsAdSkipHint, privacy: .public)
                 """)
         }
         .onChange(of: showsAdSkipHint) { _, value in
-            NotchPlayback.skipGateLogger.info("view: adSkipHint=\(value, privacy: .public)")
+            NotchPlayback.skipGateLogger.notice("view: adSkipHint=\(value, privacy: .public)")
         }
         // 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
         // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
@@ -1952,8 +1952,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             } else {
                 MarqueeText(id: playback.displayLine?.plainText ?? "",
                             restingAlignment: playback.mainLyricAlignment,
-                            edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth,
-                            follow: nil) {
+                            edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
                     lyricContent(layerActive: layerActive)
                 }
             }

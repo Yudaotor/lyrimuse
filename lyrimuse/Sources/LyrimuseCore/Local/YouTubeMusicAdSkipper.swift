@@ -217,43 +217,43 @@ public enum YouTubeMusicAdSkipper {
               !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host)
         else {
-            logger.info("skip: no browser family for bundle \(reportedBundleID ?? "nil", privacy: .public)")
+            logger.notice("skip: no browser family for bundle \(reportedBundleID ?? "nil", privacy: .public)")
             return nil
         }
         guard let out = run(js: skipJS, host: host, family: family, label: "ytmusic-skip") else {
-            logger.info("skip: script did not run (osascript failed / timed out)")
+            logger.notice("skip: script did not run (osascript failed / timed out)")
             return nil
         }
         guard let click = parseClick(out) else {
-            logger.info("skip: unparseable output \(out, privacy: .public)")
+            logger.notice("skip: unparseable output \(out, privacy: .public)")
             return nil
         }
         switch click {
         case .notYet(let seconds):
-            logger.info("skip: not yet skippable (\(seconds.map(String.init) ?? "?", privacy: .public)s)")
+            logger.notice("skip: not yet skippable (\(seconds.map(String.init) ?? "?", privacy: .public)s)")
             return .notYetSkippable(secondsUntilSkippable: seconds)
         case .notFound:
-            logger.info("skip: no ad-showing player")
+            logger.notice("skip: no ad-showing player")
             return .notFound
         case .skippable(let desc, let badge, let videoTime):
             let press = AccessibilitySkipPress.press(browserBundleID: host, hostMarker: YouTubeMusicAdProbe.hostMarker)
             switch press {
             case .notTrusted:
-                logger.info("skip: gate open (\(desc, privacy: .public)) but no accessibility trust")
+                logger.notice("skip: gate open (\(desc, privacy: .public)) but no accessibility trust")
                 return .needsAccessibility
             case .webAreaNotFound:
-                logger.info("skip: gate open but no YT Music web area in the AX tree (tab not frontmost?)")
+                logger.notice("skip: gate open but no YT Music web area in the AX tree (tab not frontmost?)")
                 return .tabNotFrontmost
             case .buttonNotFound, .pressFailed, .browserNotRunning:
                 // `.browserNotRunning` 理论上到不了这儿(门槛脚本刚刚才在那个浏览器里跑通),留着是为了
                 // 编译期就把新增的失败态逼着处理掉;真出现了归"没能跳过",详情在 ytmusic-skip 日志里。
-                logger.info("skip: gate open but AX press failed: \(String(describing: press), privacy: .public)")
+                logger.notice("skip: gate open but AX press failed: \(String(describing: press), privacy: .public)")
                 return .clickedNoEffect
             case .pressed(let pressedDesc):
                 Thread.sleep(forTimeInterval: verifyDelay)
                 let verifyRaw = run(js: verifyJS, host: host, family: family, label: "ytmusic-skip-verify")
                 let verify = verifyRaw.flatMap(parseVerify)
-                logger.info("skip: pressed \(pressedDesc, privacy: .public) (dom \(desc, privacy: .public)) badge=\(badge, privacy: .public) t=\(videoTime) → verify=\(verifyRaw ?? "nil", privacy: .public)")
+                logger.notice("skip: pressed \(pressedDesc, privacy: .public) (dom \(desc, privacy: .public)) badge=\(badge, privacy: .public) t=\(videoTime) → verify=\(verifyRaw ?? "nil", privacy: .public)")
                 if let verify, adAdvanced(afterClick: click, verify: verify) { return .skipped }
                 return .clickedNoEffect
             }
@@ -391,7 +391,7 @@ public enum YouTubeMusicAdSkipper {
               !host.isEmpty,
               let family = BrowserAutomationPermission.family(forBundleID: host)
         else {
-            logger.info("gate: no browser family for bundle \(reportedBundleID ?? "nil", privacy: .public)")
+            logger.notice("gate: no browser family for bundle \(reportedBundleID ?? "nil", privacy: .public)")
             return nil
         }
         gateCacheLock.lock()
@@ -399,17 +399,17 @@ public enum YouTubeMusicAdSkipper {
         gateCacheLock.unlock()
         if let cached { return cached }
         guard let out = run(js: skipJS, host: host, family: family, label: "ytmusic-skip-gate") else {
-            logger.info("gate: script did not run (host \(host, privacy: .public))")
+            logger.notice("gate: script did not run (host \(host, privacy: .public))")
             return nil
         }
         guard let click = parseClick(out) else {
-            logger.info("gate: unparseable output \(out, privacy: .public)")
+            logger.notice("gate: unparseable output \(out, privacy: .public)")
             return nil
         }
         let state = skippability(from: click)
         // 这条路以前一行日志都没有,于是"按钮该出现却没出现"根本无从排查(现象是"展开态下
         // 按钮不会自己刷出来"时坐实:日志里一片空白,只能靠猜)。每次探一次记一行,够看清时间线。
-        logger.info("gate: \(String(describing: state), privacy: .public) (host \(host, privacy: .public))")
+        logger.notice("gate: \(String(describing: state), privacy: .public) (host \(host, privacy: .public))")
         gateCacheLock.lock()
         gateCache.store(state, host: host, now: Date())
         gateCacheLock.unlock()

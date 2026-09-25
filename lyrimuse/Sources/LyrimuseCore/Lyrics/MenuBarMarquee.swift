@@ -445,23 +445,6 @@ public enum MenuBarMarquee {
         karaokeFillX(atMs: ms, path: path)
     }
 
-    /// 偏移路径上文字真正在动的那一段(毫秒):从离开起始值之前的最后一个折点,到第一次到达
-    /// 终值的折点。这一段之前(还没唱到锚点)和之后(已经滚到底)偏移恒定,驱动在那两段不需要
-    /// 任何动画。nil = 路径为空或全程不动。
-    public struct FollowMotionSpan: Equatable, Sendable {
-        public let startMs: Int
-        public let endMs: Int
-    }
-
-    public static func followMotionSpan(path: [KaraokeFillPoint]) -> FollowMotionSpan? {
-        guard let first = path.first, let last = path.last, last.x != first.x,
-              let firstMoving = path.firstIndex(where: { $0.x != first.x }),
-              let firstAtEnd = path.firstIndex(where: { $0.x == last.x })
-        else { return nil }
-        // path[0].x == first.x,所以 firstMoving >= 1。
-        return FollowMotionSpan(startMs: path[firstMoving - 1].ms, endMs: path[firstAtEnd].ms)
-    }
-
     /// 从"此刻"起到这句唱完的剩余滚动关键帧(`widths` 字段在这里装的是偏移量)。
     /// nil 的三种情况同 karaokeFillKeyframes:已到路径末端、速率非正、路径为空 —— 调用方
     /// 静置在 followScrollOffset 的取值上。

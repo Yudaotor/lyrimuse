@@ -1,5 +1,4 @@
 import LyrimuseCore
-import OSLog
 import SwiftUI
 
 // 超长文字(歌名/歌词)靠自动滚动展示全部内容,而不是硬截断/省略号。测量内容真实宽度
@@ -15,43 +14,6 @@ import SwiftUI
 // Swift 不支持泛型类型里放 static stored property,这两个纯常量挪到文件作用域。
 let marqueePixelsPerSecond: Double = 24
 let marqueeHoldDuration: Double = 1.1
-/// 跟唱动画与播放位置之间允许偏差这么多(点)。超了就从此刻重新起一条动画:那是 seek /
-/// 重新对锚点 / 播放速率不是 1,不是正常误差。
-/// 跟上面两个常量同因放在文件作用域:泛型类型里放不了 static stored property。
-let marqueeFollowResyncTolerance: CGFloat = 8
-/// 跟唱对表的间隔(纳秒)。只做比对,不写状态;没偏差时这个循环什么都不改。
-let marqueeFollowCheckInterval: UInt64 = 250_000_000
-/// 跟唱时钟瞬时归位之后、发动画之前等这么久(纳秒),保证归位那一帧先提交。
-/// 归位和动画不能落在同一次 SwiftUI 更新里:否则归位会被吞掉,动画从旧值(上一句的末尾)起跑。
-let marqueeFollowSnapSettle: UInt64 = 34_000_000
-
-/// 跟唱滚动的诊断。每建一条路径打一行(换句 / 换宽度 / 换字体时),不按帧打。
-let marqueeLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "marquee")
-
-/// 跟唱滚动的输入。非 nil 且这一句确实溢出时,偏移改由**播放位置**决定,上面那套
-/// 「首停到匀速到尾停到循环」的时间配速不启动。
-///
-/// 两种配速按句切换、同一句不混,跟菜单栏同一条规则(06 章「滚动规则」):这一句有逐字
-/// 时间轴就跟唱,没有(纯 LRC 的源)就退回时间配速。数学直接复用菜单栏那两个纯函数
-/// (`MenuBarMarquee.followReadingPath` / `followScrollPath`),这里只负责驱动。
-struct MarqueeFollow: Equatable {
-    /// 这一句的逐字时间轴。
-    let words: [SyncedLyricWord]
-    /// 每个词**单独**排版的点宽。不是前缀宽 —— 灵动岛这一行是 `HStack(spacing: 0)` 里
-    /// 每词一个独立 `Text`,理由见 `MarqueeMath.cumulativeWordEndXs`。
-    let wordWidths: [CGFloat]
-    /// 这一帧的播放位置(毫秒,含歌词时间轴偏移)。按帧调用,内部直读协调器。
-    let nowMs: (Date) -> Int
-    /// 这一帧要不要停表(暂停 / 这一层藏着),语义同 `TimelineView` 的 paused。
-    let paused: Bool
-
-    /// 闭包不参与相等性 —— 它每次 body 求值都是新实例,进了判据会让"内容没变"永远不成立。
-    /// 路径只由 words 和宽度决定,这两项相等就不用重算。
-    static func == (a: MarqueeFollow, b: MarqueeFollow) -> Bool {
-        a.words == b.words && a.wordWidths == b.wordWidths && a.paused == b.paused
-    }
-}
-
 struct MarqueeText<Content: View>: View {
     let id: AnyHashable
     /// **没溢出时**内容靠容器哪一边。溢出时一律 .leading,不受这个参数影响 —— 滚动是
@@ -69,37 +31,15 @@ struct MarqueeText<Content: View>: View {
     /// 落在那里肉眼分不清"被裁掉"和"被封面盖住"。顶行的歌名/歌手同样是硬切,但它们旁边
     /// 是刘海/音浪而不是封面,没有同样的误读风险,保持原样(要开就在调用点传值即可)。
     var edgeFadeWidth: CGFloat = 0
-    /// 非 nil = 这一句跟着唱到哪滚到哪(见 `MarqueeFollow`)。
-    var follow: MarqueeFollow? = nil
-    /// 时间配速滚到底之后要不要回到开头再来一遍。true(默认)= 循环,给常驻的标签用(歌名 / 歌手);
+    /// 滚到底之后要不要回到开头再来一遍。true(默认)= 循环,给常驻的标签用(歌名 / 歌手);
     /// false = 滚一遍就停在末尾,直到 `id` 变(换句)才归零,给歌词行用 —— 那一句还没换走时回到开头
-    /// 等于把刚读完的结尾又藏起来。跟唱配速本来就停在末尾,不受它影响。
+    /// 等于把刚读完的结尾又藏起来。
     var loops: Bool = true
     @ViewBuilder let content: () -> Content
 
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var offset: CGFloat = 0
-    /// 跟唱滚动的偏移路径(时间到偏移的折线)。空 = 这一句不跟唱(没逐字 / 装得下 / 还没量到宽度)。
-    /// 只在 words 或两个宽度变化时重算,不按帧算。
-    @State private var followPath: [MenuBarMarquee.KaraokeFillPoint] = []
-    /// 跟唱模式下"此刻还停在开头"。只给右端渐隐带用,由一个定时 Task 在越过锚点那一刻翻一次,
-    /// **不按帧写** —— 渐隐带只有 0 和非 0 两种状态,为它每帧写一次 @State 不划算。
-    @State private var followAtStart: Bool = true
-    @State private var followFadeTask: Task<Void, Never>?
-    /// 跟唱的时钟(毫秒,同 `MarqueeFollow.nowMs`)。一条线性动画把它推过文字真正在动的那一段,
-    /// 偏移由 `MarqueeFollowOffset` 按路径逐帧现算。跟唱模式下 `offset` 恒为 0。
-    @State private var followClockMs: Double = 0
-    /// 跟唱的驱动:起动画 + 低频对表,不按帧写。
-    @State private var followTask: Task<Void, Never>?
-    /// 最近一次**内容宽度**是给哪一份内容量的。
-    ///
-    /// 换句那一拍 `id` 的 onChange 先跑,而内层 GeometryReader 还没量到新内容 ——
-    /// 此时 `contentWidth` 仍是**上一句**的。跟唱路径的 maxOffset 与归一基准都由它算,
-    /// 拿旧宽度建出来的路径边界是错的(真机实测偏差到 ±107pt:本句真实 maxOffset 21.5、
-    /// 却按 127 建),而驱动会立刻按它起跑,直到新宽度到达才纠正 —— 表现就是滚动范围不对、
-    /// 末尾的词露不全。所以建路径前必须确认"这个宽度是当前这份内容的"。
-    @State private var measuredID: AnyHashable?
     /// 每次重新开始滚动就 +1。它本身不参与画面,只为了让归零那次赋值**一定**是一次真的
     /// 状态变化 —— 详见 restart() 里那段。
     @State private var generation: Int = 0
@@ -122,31 +62,16 @@ struct MarqueeText<Content: View>: View {
                     // 跳过),滚动位置也必须回到起点重新开始。
                     restart()
                 }
-                // 同一句里逐字时间轴迟到 / 词宽重新量到(字体换了)也要重建路径。
-                .onChange(of: follow) { _, _ in
-                    rebuildFollowPath()
-                    // 只有 paused 翻转时路径不变、rebuildFollowPath 会提前返回,
-                    // 驱动得在这里单独再起(暂停要停表、恢复要按新位置接着跑)。
-                    runFollowDriver()
-                }
         }
         .clipped()
         // 无条件挂,不写成 `if fadeWidth > 0 { .mask(...) }`:那样渐隐带宽度归零的
         // 那一刻视图身份会变、整棵子树重建,正在跑的滚动动画会被打断。宽度为 0 时
         // gradient 那一段本身就是零宽,等效于没有 mask。
         .mask(fadeMask)
-        .onDisappear {
-            scrollTask?.cancel()
-            followFadeTask?.cancel()
-            followTask?.cancel()
-        }
+        .onDisappear { scrollTask?.cancel() }
     }
 
-    /// 跟唱模式在跑吗。路径为空就退回时间配速 —— 没有逐字时间轴、这一句装得下、
-    /// 或者宽度还没量到,三种情况都会让路径是空的。
-    private var followActive: Bool { follow != nil && !followPath.isEmpty }
-
-    /// 量好宽度、并且按当前配速摆好位置的内容。两条配速在这里分叉。
+    /// 量好宽度、并且按当前偏移摆好位置的内容。
     @ViewBuilder
     private func positioned(in outerProxy: GeometryProxy) -> some View {
         let measured = content()
@@ -170,34 +95,27 @@ struct MarqueeText<Content: View>: View {
                     GeometryReader { innerProxy in
                         Color.clear
                             .onAppear {
-                                noteContentMeasured(innerProxy.size.width, container: outerProxy.size.width)
+                                apply(content: innerProxy.size.width, container: outerProxy.size.width)
                             }
                             .onChange(of: innerProxy.size.width) { _, w in
-                                noteContentMeasured(w, container: outerProxy.size.width)
+                                apply(content: w, container: outerProxy.size.width)
                             }
                     }
                 )
 
-        // 时间配速写 `offset`(restart() 里那个循环);跟唱写 `followClockMs`,偏移由
-        // `MarqueeFollowOffset` 按路径现算(runFollowDriver())。两者任一时刻只有一个非零。
-        //
-        // 这里刻意**没有** TimelineView。别把偏移挂到逐字染色那档 30Hz 的时钟上每帧现算:
-        // 横向平移 30 帧肉眼可见地顿,而且闭包每帧重建一次 measured(逐字 HStack + 量宽
-        // GeometryReader)。也别按词逐段发 `withAnimation` 再 `Task.sleep` 接力:段与段交界处
-        // 会停帧或两条线性动画叠着跑。一句只发一条动画,见 05 章决策 #38。
+        // 这里刻意**没有** TimelineView:连续位移挂到逐字染色那档 30Hz 的时钟上每帧现算,横向平移会
+        // 肉眼可见地顿,而且闭包每帧重建一次 measured。偏移只由 restart() 里那条线性动画推。
         measured
             // 把内容子树从动画事务里摘出去。`withAnimation` 的作用域是**整次 SwiftUI 更新**,
-            // 不只是括号里那一句 —— 滚动每段发一条 `.linear`,窗口几乎一直开着,这一行内部任何
-            // 一次布局变化(字形回退晚解析、逐字视图重排导致某个词宽差一丝、内容换了)只要落进
-            // 同一次更新,就会被那条动画接管:本该瞬时归位的东西变成**滑过去**,看上去就是
-            // 「一个词脱离原位漂移」。词越多、段越密,撞上的概率越高,所以长句最明显。
+            // 不只是括号里那一句 —— 这一行内部任何一次布局变化(字形回退晚解析、某个词宽差一丝、
+            // 内容换了)只要落进滚动那次 `.linear` 所在的更新,就会被那条动画接管:本该瞬时归位的
+            // 东西变成**滑过去**,看上去就是「一个词脱离原位漂移」。
             //
             // 这跟 `NotchLyricsView` 里那条治「封面遮挡歌词」的 `.animation(nil, value:)` 是
             // 同一类问题的同一个解,只是那条按单个判据挡、这里把整个子树一次挡掉 —— 跑马灯的
             // 内容本来就只该靠下面这个 offset 移动,内部不需要任何补间。
             .transaction { $0.animation = nil }
             .offset(x: -offset)
-            .modifier(MarqueeFollowOffset(ms: followClockMs, path: followActive ? followPath : []))
             // 归零那一下必须**瞬时**,不能被任何补间接管(理由见 restart())。
             //
             // generation 每次 restart 都会变,这条修饰符就在那一刻把 offset 的变化钉成
@@ -224,15 +142,11 @@ struct MarqueeText<Content: View>: View {
     /// 右端渐隐带当前宽度。offset 是**模型值**,这正是想要的:归零走
     /// `disablesAnimations` 的事务(渐隐带瞬时出现,跟文字瞬时归位同步),起步走
     /// `withAnimation(.linear)`(渐隐带跟着平滑收掉)。
-    ///
-    /// 跟唱模式下 offset 恒为 0(偏移由 `MarqueeFollowOffset` 现算),这里改喂 `followAtStart`:渐隐带只有
-    /// "0 / 非 0"两种状态,为它每帧写一次 @State 不划算,所以由 `scheduleFollowFade()` 在
-    /// 越过锚点那一刻翻一次。判据本体仍是同一个 `trailingFadeWidth`,两条路口径一致。
     private var fadeWidth: CGFloat {
         MarqueeMath.trailingFadeWidth(configured: edgeFadeWidth,
                                       contentWidth: contentWidth,
                                       containerWidth: containerWidth,
-                                      offset: followActive ? (followAtStart ? 0 : 1) : offset)
+                                      offset: offset)
     }
 
     /// 遮罩:左边一整块不透明 + 右端一条 black→clear 的渐隐带。渐隐带是 `.frame(width:)`
@@ -243,16 +157,6 @@ struct MarqueeText<Content: View>: View {
             LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
                 .frame(width: fadeWidth)
         }
-    }
-
-    /// 内层 GeometryReader 量到了**当前这份内容**的宽度。
-    ///
-    /// 只有这条路径能给 `measuredID` 盖章 —— 外层容器宽度变化那条 onChange 传的是缓存的
-    /// `contentWidth`,不是新测量,盖章会让上面那道闸形同虚设。盖章放在 apply 的提前返回
-    /// **之前**:新内容宽度恰好跟旧的一样时 apply 会跳过,但那一份仍然是量过的。
-    private func noteContentMeasured(_ width: CGFloat, container: CGFloat) {
-        if measuredID != id { measuredID = id }
-        apply(content: width, container: container)
     }
 
     private func apply(content: CGFloat, container: CGFloat) {
@@ -276,164 +180,13 @@ struct MarqueeText<Content: View>: View {
         //
         // 溢出与否翻转(拖宽了装得下 / 拖窄了装不下)、正在滚动中(去程的终点跟着容器宽变了)、
         // 内容换了,三种情况照旧重启 —— 这三种才是"需要从头来"的。
-        // 跟唱路径的 maxOffset 是 `contentWidth − containerWidth`,两个宽度任意一个变了就得重算 ——
-        // 这一句放在上面那条"不重启"的捷径**之前**:那条捷径的理由是"时间配速在等待期间重启是白做",
-        // 而跟唱模式下容器变宽变窄会真的改变该滚到哪,漏了它 hover 展开/收起之后整句都按旧宽度滚。
-        rebuildFollowPath()
         if !contentChanged, wasOverflowing == isOverflowing, !midScroll { return }
         restart()
-    }
-
-    /// 重算跟唱的偏移路径。只在 words / 两个宽度变化时调用,不按帧调。
-    private func rebuildFollowPath() {
-        // 宽度还不是这一份内容的(换句那一拍)就先不建 —— 见 measuredID 的注释。
-        // 新宽度一到 noteContentMeasured 会再叫一次。
-        guard measuredID == id else { return }
-        guard let follow, !follow.words.isEmpty, isOverflowing else {
-            if !followPath.isEmpty { followPath = [] }
-            followFadeTask?.cancel()
-            followFadeTask = nil
-            followTask?.cancel()
-            followTask = nil
-            return
-        }
-        // 逐词宽度到累计宽度,再按实测总宽归一(灵动岛是每词一个独立 Text,理由见那个函数)。
-        let ends = MarqueeMath.cumulativeWordEndXs(wordWidths: follow.wordWidths,
-                                                   measuredTotal: contentWidth)
-        let reading = MenuBarMarquee.followReadingPath(words: follow.words, wordEndXs: ends)
-        let path = MenuBarMarquee.followScrollPath(reading: reading,
-                                                   windowWidth: containerWidth,
-                                                   textWidth: contentWidth)
-        guard path != followPath else { return }
-        // 两个宽度来源的对账。`contentWidth` 是 SwiftUI 内层 GeometryReader 量的真实排版宽度,
-        // `nsSum` 是逐词用 NSFont 测出来的和 —— cumulativeWordEndXs 按前者归一。两者差得多
-        // 就说明归一的基准本身可疑(逐字那一行是 HStack 套 TimelineView,这个形状在本文件里
-        // 有过量宽失效的前科),表现就是滚动提前停住、末尾露不全。
-        let nsSum = follow.wordWidths.reduce(0, +)
-        marqueeLogger.notice("""
-            follow path: words=\(follow.words.count, privacy: .public)             contentW=\(Double(self.contentWidth), format: .fixed(precision: 2))             nsSum=\(Double(nsSum), format: .fixed(precision: 2))             delta=\(Double(self.contentWidth - nsSum), format: .fixed(precision: 2))             containerW=\(Double(self.containerWidth), format: .fixed(precision: 2))             maxOffset=\(Double(self.contentWidth - self.containerWidth), format: .fixed(precision: 2))             lastEnd=\(Double(ends.last ?? -1), format: .fixed(precision: 2))             pathLastX=\(Double(path.last?.x ?? -1), format: .fixed(precision: 2))             fadeCfg=\(Double(self.edgeFadeWidth), format: .fixed(precision: 2))
-            """)
-        followPath = path
-        scheduleFollowFade(path: path)
-        runFollowDriver()
-    }
-
-    /// 跟唱的驱动:一条 `withAnimation(.linear)` 把 `followClockMs` 推过文字真正在动的那一段,
-    /// 之后只按 `marqueeFollowCheckInterval` 对表,偏差超过 `marqueeFollowResyncTolerance`
-    /// 才从此刻重起一条。跟菜单栏把剩余路径交给一条 `CAKeyframeAnimation` 同一个做法。
-    private func runFollowDriver() {
-        followTask?.cancel()
-        followTask = nil
-        guard followActive, let follow else { return }
-        // 两套配速不能同时写偏移。换句那一拍路径还没建好(宽度没到),restart() 会先起
-        // 时间配速那条循环;等路径建好、跟唱接手时必须把它收掉,否则首停结束后两条一起动。
-        scrollTask?.cancel()
-        scrollTask = nil
-        if offset != 0 {
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) { offset = 0 }
-        }
-        // 暂停:停在此刻该在的位置,不补间(补间会在暂停那一下再滑一小段)。
-        guard !follow.paused else {
-            snapFollowClock(toMs: follow.nowMs(Date()))
-            return
-        }
-        // 动画只覆盖文字真正在动的那一段(`followMotionSpan`):之前(还没唱到锚点)时钟停在起动那一刻,
-        // 之后(已经滚到底)停在终点。平台期里挂着一条动画,渲染会按屏幕刷新率白跑。
-        followTask = Task { @MainActor in
-            // 当前这条动画的起点(毫秒)与起跑时刻;nil = 没有动画在跑。
-            var run: (ms: Int, at: Date)?
-            // 时钟已在上一轮停在运动起点上、那一帧已提交:从这里起动画不用再等 settle。
-            var parkedAtStart = false
-            while !Task.isCancelled {
-                let path = followPath
-                guard let span = MenuBarMarquee.followMotionSpan(path: path) else { return }
-                let now = Date()
-                let nowMs = follow.nowMs(now)
-                if let current = run {
-                    let clockMs = min(span.endMs, current.ms + Int(now.timeIntervalSince(current.at) * 1000))
-                    let drift = abs(MenuBarMarquee.karaokeFillX(atMs: nowMs, path: path)
-                                    - MenuBarMarquee.karaokeFillX(atMs: clockMs, path: path))
-                    if drift <= marqueeFollowResyncTolerance {
-                        if clockMs >= span.endMs { return }
-                        try? await Task.sleep(nanoseconds: marqueeFollowCheckInterval)
-                        continue
-                    }
-                    run = nil
-                    parkedAtStart = false
-                }
-                guard nowMs < span.endMs else {
-                    snapFollowClock(toMs: span.endMs)
-                    return
-                }
-                if nowMs < span.startMs {
-                    snapFollowClock(toMs: span.startMs)
-                    parkedAtStart = true
-                    // 分段睡:等待期间 seek 了要能在一个对表间隔内发现。至少睡一个 settle,
-                    // 保证停靠那一帧先于后面的动画提交。
-                    let waitNs = UInt64(span.startMs - nowMs) * 1_000_000
-                    try? await Task.sleep(nanoseconds: max(min(waitNs, marqueeFollowCheckInterval),
-                                                           marqueeFollowSnapSettle))
-                    continue
-                }
-                if !parkedAtStart {
-                    snapFollowClock(toMs: nowMs)
-                    try? await Task.sleep(nanoseconds: marqueeFollowSnapSettle)
-                    if Task.isCancelled { return }
-                }
-                let startMs = follow.nowMs(Date())
-                guard startMs < span.endMs else {
-                    snapFollowClock(toMs: span.endMs)
-                    return
-                }
-                // 屏幕上的起点是停靠 / 归位时的值,时长按此刻的真实剩余算:起跑时最多落后一个
-                // settle,线性收敛到终点时为 0,落在 resync 容差以内。
-                withAnimation(.linear(duration: Double(span.endMs - startMs) / 1000)) {
-                    followClockMs = Double(span.endMs)
-                }
-                run = (startMs, Date())
-                parkedAtStart = false
-                try? await Task.sleep(nanoseconds: marqueeFollowCheckInterval)
-            }
-        }
-    }
-
-    /// 瞬时把跟唱时钟落到某一刻(同时打断正在跑的那条动画)。
-    private func snapFollowClock(toMs ms: Int) {
-        let value = Double(ms)
-        guard value != followClockMs else { return }
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) { followClockMs = value }
-    }
-
-    /// 右端渐隐带的那一次翻转:路径上偏移第一次离开 0 的时刻 = 阅读位置越过锚点、文字开始动。
-    /// 在那之前文字静止在开头、末端硬切在封面旁边,正是需要渐隐带的那个状态。
-    private func scheduleFollowFade(path: [MenuBarMarquee.KaraokeFillPoint]) {
-        followFadeTask?.cancel()
-        followFadeTask = nil
-        guard let follow else { return }
-        followAtStart = true
-        guard let moveMs = path.first(where: { $0.x > 0 })?.ms else { return }
-        followFadeTask = Task { @MainActor in
-            while !Task.isCancelled {
-                let remain = moveMs - follow.nowMs(Date())
-                if remain <= 0 {
-                    followAtStart = false
-                    return
-                }
-                // 暂停时 nowMs 不前进,这个循环就在这儿慢慢空转 —— 200ms 一档够跟手,
-                // 又不至于变成第二个每帧时钟。
-                try? await Task.sleep(nanoseconds: UInt64(min(remain, 200)) * 1_000_000)
-            }
-        }
     }
 
     private func restart() {
         scrollTask?.cancel()
         scrollTask = nil
-        rebuildFollowPath()
         // 归零必须在**关掉动画的事务**里做,而且要保证这次赋值真的是一次状态变化。
         //
         // 现象是的两个症状("换句时文字从右边滑回开头"、"有时候慢慢滚回到
@@ -455,9 +208,6 @@ struct MarqueeText<Content: View>: View {
             generation &+= 1
         }
         guard isOverflowing else { return }
-        // 跟唱这一句不起时间配速的循环 —— 两套同时跑会各写各的 offset。哪一套生效由
-        // followActive 一处决定(路径空就退回时间配速),判据不许在这里再写第二份。
-        guard !followActive else { return }
         scrollTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
@@ -495,23 +245,5 @@ struct MarqueeText<Content: View>: View {
                 try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
             }
         }
-    }
-}
-
-/// 跟唱偏移:动画的是播放时钟(`ms`),偏移按路径现算。`GeometryEffect` 只在渲染阶段逐帧取值,
-/// 不重跑 body、不触发布局,一句一条线性动画就能连续走完整条折线。空路径 = 不偏移。
-private struct MarqueeFollowOffset: GeometryEffect {
-    var ms: Double
-    let path: [MenuBarMarquee.KaraokeFillPoint]
-
-    var animatableData: Double {
-        get { ms }
-        set { ms = newValue }
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        guard !path.isEmpty else { return ProjectionTransform() }
-        let x = MenuBarMarquee.karaokeFillX(atMs: Int(ms.rounded()), path: path)
-        return ProjectionTransform(CGAffineTransform(translationX: -x, y: 0))
     }
 }

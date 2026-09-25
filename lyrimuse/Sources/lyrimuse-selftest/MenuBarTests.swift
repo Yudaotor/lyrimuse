@@ -354,27 +354,6 @@ func runMenuBarTests() {
         }
         expectEqual(MenuBarMarquee.followAnchorFraction < 1, true,
                     "跟唱末端静止: 锚点比例 < 1 是上面那段静止期存在的前提,调它要连这条一起想")
-        // 运动区间:区间外偏移恒定,区间端点落在路径上的首个离开起点 / 首个到达终值的时刻。
-        if let span = MenuBarMarquee.followMotionSpan(path: path), let last = path.last {
-            expectEqual(span.startMs < span.endMs, true, "跟唱运动区间: 起点早于终点")
-            for ms in stride(from: (path.first?.ms ?? 0) - 500, through: span.startMs, by: 7) {
-                expectEqual(MenuBarMarquee.followScrollOffset(atMs: ms, path: path), 0,
-                            "跟唱运动区间: 起点之前偏移恒为 0(ms=\(ms))")
-            }
-            for ms in stride(from: span.endMs, through: last.ms + 500, by: 7) {
-                expectEqual(MenuBarMarquee.followScrollOffset(atMs: ms, path: path), last.x,
-                            "跟唱运动区间: 终点之后偏移恒为终值(ms=\(ms))")
-            }
-            expectEqual(MenuBarMarquee.followScrollOffset(atMs: span.startMs + 1, path: path) > 0, true,
-                        "跟唱运动区间: 起点一过就开始动(起点不能取晚)")
-            expectEqual(MenuBarMarquee.followScrollOffset(atMs: span.endMs - 1, path: path) < last.x, true,
-                        "跟唱运动区间: 终点之前还没到底(终点不能取早)")
-        } else {
-            expectEqual(true, false, "跟唱运动区间: 溢出的句子却没有运动区间")
-        }
-        expectEqual(MenuBarMarquee.followMotionSpan(path: []), nil, "跟唱运动区间: 空路径为 nil")
-        expectEqual(MenuBarMarquee.followMotionSpan(path: [.init(ms: 0, x: 3), .init(ms: 10, x: 3)]), nil,
-                    "跟唱运动区间: 全程不动为 nil")
         // 剩余关键帧 / 静态取值跟填色那套是同一条插值。
         guard let frames = MenuBarMarquee.followScrollKeyframes(path: path, nowMs: 1000, rate: 1) else {
             expectEqual(true, false, "跟唱关键帧: 句子没唱完却返回了 nil")
@@ -780,27 +759,6 @@ func runMenuBarTests() {
         expectEqual(M.isOverflowing(contentWidth: 290.5, containerWidth: 286), true,
                     "死区是严格大于 4pt")
 
-        // ② cumulativeWordEndXs:灵动岛跟唱滚动要的 wordEndXs
-        //
-        // 灵动岛的逐字行是 HStack(spacing: 0) 里每个词一个独立 Text,所以第 i 个词的左缘
-        // 就是前 i 个词各自宽度之和 —— 跟菜单栏那条"按前缀整段测宽"刚好相反,两边的测法
-        // 在对方那里都是错的。理由写在函数头注,这里钉行为。
-        expectEqual(M.cumulativeWordEndXs(wordWidths: [10, 20, 30]), [10, 30, 60],
-                    "cumulativeWordEndXs: 逐词宽度累加")
-        expectEqual(M.cumulativeWordEndXs(wordWidths: []), [],
-                    "cumulativeWordEndXs: 空输入给空数组")
-        expectEqual(M.cumulativeWordEndXs(wordWidths: [10, -5, 30]), [10, 10, 40],
-                    "cumulativeWordEndXs: 负宽当 0,累计单调不减")
-        // 归一:字体测出来 60,SwiftUI 实际排成 90,等比拉到实际宽度上。
-        expectEqual(M.cumulativeWordEndXs(wordWidths: [10, 20, 30], measuredTotal: 90), [15, 45, 90],
-                    "cumulativeWordEndXs: 按实测总宽等比归一")
-        expectEqual(M.cumulativeWordEndXs(wordWidths: [10, 20, 30], measuredTotal: 0), [10, 30, 60],
-                    "cumulativeWordEndXs: 实测总宽为 0(还没量到)时不归一")
-        // 归一后末项必须正好等于实测总宽 —— 跟唱路径的 maxOffset 是按它算的,差一点点
-        // 就会在句尾留下一小截永远滚不到的字。
-        let normalized = M.cumulativeWordEndXs(wordWidths: [7, 13, 21, 4], measuredTotal: 123.5)
-        expectEqual(abs((normalized.last ?? 0) - 123.5) < 1e-9, true,
-                    "cumulativeWordEndXs: 归一后末项逐位等于实测总宽")
         expectEqual(M.isOverflowing(contentWidth: 400, containerWidth: 0), false,
                     "容器宽度还没测出来(首帧 0)时一律不算溢出——否则 distance 恒等于内容宽")
 
