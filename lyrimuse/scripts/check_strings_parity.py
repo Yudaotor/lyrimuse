@@ -48,7 +48,7 @@ def keys_of(path):
 def source_literals():
     """源码里所有 L10n.t 的字面量 → {串: 第一处出现的位置}(位置用来报错时指路)。
 
-    ⚠️ 只扫 `Sources/lyrimuse`,跟 selftest 里那条同款守卫**同一个范围**(见
+    只扫 `Sources/lyrimuse`,跟 selftest 里那条同款守卫**同一个范围**(见
     `Sources/lyrimuse-selftest/main.swift` 里「源码里每一个 L10n.t 都必须在 catalog 里」
     那一段的注释)。两条理由是那边原有的:全部调用点都在这个 target;LyrimuseCore 是纯
     逻辑库、不碰 UI 文案。
