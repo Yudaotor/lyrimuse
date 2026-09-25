@@ -1598,6 +1598,8 @@ func runSourceContractTests() {
                 expectEqual(body.contains("stillUpcomingText(next"), true, "悬浮滚动: 下一句在滚动模式下固定显示")
                 expectEqual(body.contains("overlayScroll(") || body.contains("pacedLayerRow("), false,
                             "悬浮滚动: 下一句预览里不许再挂滚动(还没唱的内容不该动)")
+                expectEqual(body.contains(".frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)"), true,
+                            "悬浮滚动: 放不下的逐词列从开头显示(frame 要带 minWidth: 0,否则被居中、两头都裁)")
             } else {
                 expectEqual(true, false, "悬浮滚动: 找不到 nextLinePreviewContent / upcomingGroupColumns(改名了?)")
             }

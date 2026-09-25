@@ -1283,10 +1283,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let still = rowPlan.next?.motion == .still
         if still, let groups = upcomingWordGroups {
             // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。
+            // `minWidth: 0` 不能省:否则 frame 取列的整宽、被外层居中,变成两头都裁。
             ViewThatFits(in: .horizontal) {
                 upcomingGroupColumns(groups, key: next, color: color)
                 upcomingGroupColumns(groups, key: next, color: color)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                     .clipped()
             }
             .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
