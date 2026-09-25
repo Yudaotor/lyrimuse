@@ -27,9 +27,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// 要用户在「系统设置 → 隐私与安全性 → 辅助功能」里勾上 Lyrimuse。`isTrusted` 为 false 时不动手、回 `.notTrusted`,
 /// 由调用方 `promptForTrust()` 弹系统那个"想要控制这台电脑"的对话框 + 横幅说明。 **ad-hoc 签名的构建(build.sh
-/// `codesign --sign -`)每次重装 cdhash 都变**,TCC 存的是按 cdhash 的 designated requirement —— 重装之后设置里那个勾
-/// 还在,但 `AXIsProcessTrusted()` 回 false,要用户把勾**取消再勾上**。发布包同样是 ad-hoc(这台机器没有签名证书),
-/// 所以每次升级之后第一次按「跳过广告」都会再提示一次。这是签名方式的限制,不是 bug;换 Developer ID 签名才能根治。
+/// 找不到证书时退回的 `codesign --sign -`)每次重装 cdhash 都变**,TCC 存的是按 cdhash 的 designated requirement ——
+/// 重装之后设置里那个勾还在,但 `AXIsProcessTrusted()` 回 false,要用户把勾**取消再勾上**。本机开发构建和发布包都用
+/// 固定的自签名证书签(15 章「签名身份」),要求是「identifier + 证书根」、跨版本不变;只有换证书那一次要重新授权。
 ///
 /// 只读遍历 + 对一颗按钮做一次 `AXPress`,不动别的元素、不改焦点、不把浏览器拉到前台。
 public enum AccessibilitySkipPress {

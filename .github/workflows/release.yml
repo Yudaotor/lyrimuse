@@ -1,6 +1,6 @@
 name: Release
 
-# Real tag push (v*) -> build, ad-hoc sign, package, publish a public GitHub Release.
+# Real tag push (v*) -> build, sign, package, publish a public GitHub Release.
 # Manual dispatch (Actions tab, no tag needed) -> build, sign, package, upload as a
 # workflow artifact only. The "Create GitHub Release" step is gated on the ref being a
 # tag, not on which event triggered the run -- that's what makes workflow_dispatch a safe
@@ -27,7 +27,7 @@ env:
 
 jobs:
   build:
-    name: Build, ad-hoc sign, package
+    name: Build, sign, package
     # Pinned to a specific image, not "macos-latest" -- macos-latest can silently jump to
     # a newer Xcode/OS on GitHub's own schedule; bump this deliberately instead.
     #
@@ -240,10 +240,69 @@ jobs:
         run: python3 -m pip install --user --break-system-packages dmgbuild
         continue-on-error: true
 
+      # Sign with a fixed self-signed certificate instead of ad-hoc. An ad-hoc signature's
+      # designated requirement is the build's own cdhash, and TCC stores grants against that
+      # requirement, so every Sparkle update left Accessibility / Automation / Full Disk
+      # Access switched on in System Settings but no longer honoured. With a certificate
+      # the requirement is `identifier ... and certificate root = H"..."`, which survives
+      # rebuilds. Gatekeeper is unaffected either way: the app is not notarized.
+      #
+      # The p12 must be exported with `openssl pkcs12 -export -legacy` -- OpenSSL 3's
+      # default MAC algorithm makes `security import` fail with "MAC verification failed
+      # (wrong password?)". set-key-partition-list is what lets codesign use the key
+      # without a UI prompt; without it the step hangs until the job times out.
+      #
+      # A tag build without the secret fails here rather than silently shipping ad-hoc;
+      # a manual dispatch falls back to ad-hoc with a warning, and package.sh's gate is only
+      # enforced for tag builds.
+      - name: Import release signing certificate
+        env:
+          P12_BASE64: ${{ secrets.MACOS_SIGN_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [ -z "$P12_BASE64" ]; then
+            if [ "$IS_TAG" = "true" ]; then
+              echo "::error::MACOS_SIGN_P12 is not set; refusing to publish an ad-hoc signed release"
+              exit 1
+            fi
+            echo "::warning::MACOS_SIGN_P12 is not set; this dry run is ad-hoc signed"
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/release-signing.keychain-db"
+          KC_PW="$(openssl rand -hex 24)"
+          P12="$RUNNER_TEMP/release-signing.p12"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$P12"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          security import "$P12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$P12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" "$KC" > /dev/null
+          # build.sh calls plain `codesign -s`, which only searches the user search list.
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          SHA="$(security find-identity -p codesigning "$KC" | awk '/"Lyrimuse Release Signing"/{print $2; exit}')"
+          if [ -z "$SHA" ]; then
+            echo "::error::no \"Lyrimuse Release Signing\" identity in the imported p12"
+            exit 1
+          fi
+          echo "LYRIMUSE_SIGN_ID=$SHA" >> "$GITHUB_ENV"
+          echo "RELEASE_SIGNING_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          echo "Signing identity: $SHA"
+
       - name: Build + package release assets
+        env:
+          LYRIMUSE_REQUIRE_STABLE_SIGNATURE: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '' }}
         run: |
           LYRIMUSE_VERSION="${{ steps.version.outputs.bundle_version }}" ./lyrimuse/package.sh
           ls -la lyrimuse/dist
+
+      - name: Remove release signing keychain
+        if: always()
+        run: |
+          if [ -n "${RELEASE_SIGNING_KEYCHAIN:-}" ]; then
+            security delete-keychain "$RELEASE_SIGNING_KEYCHAIN" || true
+          fi
 
       - name: Upload workflow artifact (every run -- tag push or manual dispatch)
         uses: actions/upload-artifact@v4

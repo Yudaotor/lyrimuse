@@ -842,6 +842,41 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- 发布包用固定证书签----
+    //
+    // CI 上没有本机那张证书,build.sh 会退回 ad-hoc,而 ad-hoc 的签名要求是 cdhash:用户每次 Sparkle 更新后
+    // 辅助功能 / 自动化 / 完全磁盘访问的授权都失效。release.yml 从 Secret 导入发布证书、把 LYRIMUSE_SIGN_ID
+    // 设成它的 SHA-1;package.sh 在打 tag 时拦下任何不是「证书根」要求的包。三件事缺一件,发出去的包就
+    // 悄悄退回 ad-hoc,所以一起钉住。
+    do {
+        let lyrimuseDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+        let packageScript = lyrimuseDir.appendingPathComponent("package.sh")
+        let workflow = lyrimuseDir.deletingLastPathComponent()
+            .appendingPathComponent(".github/workflows/release.yml")
+        if let pkg = try? String(contentsOfFile: packageScript.path, encoding: .utf8),
+           let wf = try? String(contentsOfFile: workflow.path, encoding: .utf8) {
+            expectEqual(pkg.contains("LYRIMUSE_REQUIRE_STABLE_SIGNATURE"), true,
+                        "发布签名: package.sh 还有「必须固定证书」那道闸")
+            expectEqual(pkg.contains("*\"certificate root\"*"), true,
+                        "发布签名: package.sh 的闸按签名要求里的 certificate root 判")
+            expectEqual(pkg.contains("\"$app/Contents/Resources/collector\""), true,
+                        "发布签名: collector 也过闸(它自己持有完全磁盘访问 / 自动化授权)")
+            expectEqual(wf.contains("echo \"LYRIMUSE_SIGN_ID=$SHA\" >> \"$GITHUB_ENV\""), true,
+                        "发布签名: release.yml 把导入的证书交给 build.sh")
+            expectEqual(wf.contains("set-key-partition-list"), true,
+                        "发布签名: release.yml 设了 partition list(不设 codesign 会卡在弹窗上)")
+            expectEqual(wf.contains("LYRIMUSE_REQUIRE_STABLE_SIGNATURE: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '' }}"), true,
+                        "发布签名: 打 tag 的构建强制过闸")
+            expectEqual(wf.contains("security delete-keychain"), true,
+                        "发布签名: 临时钥匙串用完删掉")
+        } else {
+            expectEqual(true, false, "发布签名: 读不到 package.sh 或 .github/workflows/release.yml(路径挪了?)")
+        }
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

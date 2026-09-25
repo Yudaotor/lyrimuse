@@ -124,6 +124,24 @@ for v in "${VARIANTS[@]}"; do
   fi
   # 签名也验一遍 —— 签名一坏,用户那边表现成"打开就闪退",发出去才发现代价太大。
   codesign -v --deep --strict "$app"
+  # 发布闸门:签名要求必须是「identifier + 证书根」,不能是 cdhash。ad-hoc 签名的要求是一条 cdhash,
+  # 用户每次更新后 TCC 里的辅助功能 / 自动化 / 完全磁盘访问授权都对不上、勾亮着却失效;而证书那头
+  # 缺了(Secret 过期、导入失败)build.sh 会静默退回 ad-hoc,所以只能在这里拦。
+  # LYRIMUSE_REQUIRE_STABLE_SIGNATURE=1 时硬失败(release.yml 打 tag 时设),否则只警告。
+  # App 本体和 collector 都查:两者各自持有 TCC 授权。
+  for signed in "$app" "$app/Contents/Resources/collector"; do
+    req="$(codesign -d -r- "$signed" 2>&1 | awk '/designated =>/{sub(/.*designated => /,""); print; exit}')"
+    case "$req" in
+      *"certificate root"*) ;;
+      *)
+        if [ "${LYRIMUSE_REQUIRE_STABLE_SIGNATURE:-}" = 1 ]; then
+          echo "!! $label ${signed#"$STAGE"/} 的签名要求不是固定证书(拿到「$req」),拒绝打包" >&2
+          exit 1
+        fi
+        echo "    ⚠ ${signed#"$STAGE"/} 是 ad-hoc 签名:用户更新后系统授权会失效(发布构建会在这里失败)" >&2
+        ;;
+    esac
+  done
   echo "    架构与签名校验通过"
 done
 

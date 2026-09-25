@@ -89,7 +89,8 @@ else
   ARCHES="$(uname -m)"
 fi
 
-# 拿什么身份签。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
+# 拿什么身份签。默认是 ad-hoc(`-`);发布构建由 release.yml 从 Secret 导入发布证书、经 LYRIMUSE_SIGN_ID 指定,
+# package.sh 在打 tag 时拒收 ad-hoc 签名的包。
 #
 # 为什么要这个:ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash
 # (`codesign -d -r-` → `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
