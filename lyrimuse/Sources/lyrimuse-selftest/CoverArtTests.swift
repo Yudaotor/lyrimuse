@@ -1143,4 +1143,57 @@ func runCoverArtTests() {
                     "token: 离过期不到一分钟不用")
         expectEqual(AppleMusicDeveloperToken.parse(Data("{\"expiry\":2000003600}".utf8), now: now), nil, "token: 没有 token 字段")
     }
+
+    // ---- 专辑简介:店面顺序 + 404 换店面 + 404 与失败分开 ----
+    do {
+        typealias N = AlbumEditorialNotes
+        expectEqual(N.albumRef(fromAppleMusicURL: "https://music.apple.com/us/album/fnf/1686489462?i=1686490168&uo=4"),
+                    N.AlbumRef(id: 1686489462, storefront: "us"), "店面: 从链接里取专辑 ID 与店面")
+        expectEqual(N.albumRef(fromAppleMusicURL: "https://music.apple.com/album/272875165"),
+                    N.AlbumRef(id: 272875165, storefront: nil), "店面: 链接不带店面时为 nil")
+        expectEqual(N.albumRef(fromAppleMusicURL: "https://y.qq.com/n/ryqq/albumDetail/1"), nil, "店面: 别的平台的链接不认")
+        expectEqual(N.storefronts(region: "CN", linkStorefront: "us"), ["cn", "us"], "店面: 用户地区在前、链接店面在后,小写")
+        expectEqual(N.storefronts(region: "cn", linkStorefront: "CN"), ["cn"], "店面: 两个一样只问一次")
+        expectEqual(N.storefronts(region: nil, linkStorefront: "jp"), ["jp"], "店面: 没有地区就只问链接店面")
+        expectEqual(N.storefronts(region: nil, linkStorefront: nil), ["us"], "店面: 都没有退回 us")
+
+        expectEqual(N.PageFetch.classify(statusCode: 200, body: "x"), .ok("x"), "页面: 200 = 取到")
+        expectEqual(N.PageFetch.classify(statusCode: 404, body: "x"), .notFound, "页面: 404 = 这个店面没有,不是失败")
+        expectEqual(N.PageFetch.classify(statusCode: 503, body: nil), .failed, "页面: 5xx = 失败,下次再试")
+        expectEqual(N.PageFetch.classify(statusCode: nil, body: nil), .failed, "页面: 网络错误 = 失败")
+        expectEqual(N.PageFetch.classify(statusCode: 200, body: nil), .failed, "页面: 200 但正文解不出 = 失败")
+
+        let html = "<html><script type=\"application/json\" id=\"serialized-server-data\">"
+            + "{\"data\":[{\"contentDescriptor\":{\"kind\":\"album\",\"identifiers\":{\"storeAdamID\":\"7\"}},"
+            + "\"modalPresentationDescriptor\":{\"paragraphText\":\"正文\"}}]}</script></html>"
+        func resolve(_ storefronts: [String], _ answers: [String: N.PageFetch]) -> (N.AlbumPageResult, [String]) {
+            final class Box: @unchecked Sendable { var result: N.AlbumPageResult = .failed; var asked: [String] = [] }
+            let box = Box()
+            let sem = DispatchSemaphore(value: 0)
+            Task.detached {
+                box.result = await N.resolveAlbumPage(albumID: 7, storefronts: storefronts) { url in
+                    let sf = url.pathComponents.dropFirst().first ?? ""
+                    box.asked.append(sf)
+                    return answers[sf] ?? .failed
+                }
+                sem.signal()
+            }
+            sem.wait()
+            return (box.result, box.asked)
+        }
+        let page = N.parseAlbumPage(html: html, albumID: 7)!
+        var r = resolve(["cn", "us"], ["cn": .notFound, "us": .ok(html)])
+        expectEqual(r.0, .found(page, storefront: "us"), "换店面: 用户店面 404,链接店面取到,记下是哪个店面给的")
+        expectEqual(r.1, ["cn", "us"], "换店面: 按顺序问")
+        r = resolve(["cn", "us"], ["cn": .ok(html)])
+        expectEqual(r.1, ["cn"], "换店面: 第一个取到就不再问")
+        r = resolve(["cn", "us"], ["cn": .notFound, "us": .notFound])
+        expectEqual(r.0, .missing, "换店面: 都 404 = 没有(本次运行不再问)")
+        r = resolve(["cn", "us"], ["cn": .failed, "us": .ok(html)])
+        expectEqual(r.0, .failed, "换店面: 网络失败直接停,算失败(下次再试),不去问下一个店面")
+        expectEqual(r.1, ["cn"], "换店面: 失败后不再问")
+        r = resolve(["cn"], ["cn": .ok("<html>形状不对</html>")])
+        expectEqual(r.0, .failed, "换店面: 页面形状不对算失败")
+        expectEqual(resolve([], [:]).0, .failed, "换店面: 没有店面可问算失败")
+    }
 }

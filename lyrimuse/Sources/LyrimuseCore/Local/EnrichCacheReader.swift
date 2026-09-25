@@ -242,41 +242,36 @@ public enum EnrichCacheReader {
         return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
     }
 
-    /// 当前曲目在缓存里的**实际条目 key**(歌词窗口「搜索歌词」写回用):
-    /// 精确命中用精确 key;宽松命中返回缓存里真实存在的那条 key —— 播放器报法与缓存
-    /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
-    /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
-    /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
-    /// 这首歌在各平台的跳转目标。**零网络** —— 全是 collector 早就存好的字段,
-    /// 首次调用要解析整份缓存 JSON(之后靠 mtime 缓存是 µs 级),别在主线程调。
-    /// 沿用 lookup/sourceInfo 同款的 精确 key → 宽松 key 两级匹配。
-    /// 这首歌所属的 Apple Music 专辑 ID(专辑简介用),取自 `apple_music_url`。**零网络**,匹配方式与
-    /// `platformLinks` 相同;缓存首次加载要解析整份 JSON,别在主线程调冷路径。
-    public static func appleAlbumID(artist: String, title: String, album: String) -> Int64? {
+    /// 这首歌所属的 Apple Music 专辑(专辑简介用),取自 `apple_music_url`:专辑 ID + 链接里的店面。**零网络**,
+    /// 匹配方式与 `platformLinks` 相同;缓存首次加载要解析整份 JSON,别在主线程调冷路径。
+    public static func appleAlbumRef(artist: String, title: String, album: String) -> AlbumEditorialNotes.AlbumRef? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
-        return AlbumEditorialNotes.albumID(fromAppleMusicURL: entry.appleMusicURL)
+        return AlbumEditorialNotes.albumRef(fromAppleMusicURL: entry.appleMusicURL)
     }
 
-    /// 同一位歌手(key 的歌手段 = `cleanTag(artist)`)在缓存里带 Apple 链接的专辑 ID,去重、最多 `limit` 个。
-    /// 当前这首没有 `apple_music_url` 时,歌手简介靠它从同歌手的别的专辑页拿到歌手 ID。整表扫一遍(几千次字符串
-    /// 前缀比较,毫秒级),调用方按歌手记住结果;缓存首次加载要解析整份 JSON,别在主线程调冷路径。
+    /// 同一位歌手(key 的歌手段 = `cleanTag(artist)`)在缓存里带 Apple 链接的专辑,按专辑 ID 去重、升序取前 `limit` 个
+    /// (字典遍历顺序不定,排序后每次挑中的是同一批)。当前这首没有 `apple_music_url` 时,歌手简介靠它从同歌手的
+    /// 别的专辑页拿到歌手 ID。整表扫一遍(几千次字符串前缀比较,毫秒级),调用方按歌手记住结果;缓存首次加载要
+    /// 解析整份 JSON,别在主线程调冷路径。
     /// nil = 缓存此刻还没加载好(不是「没有」,调用方别把它记成找不到);`[]` = 加载好了,确实没有。
-    public static func appleAlbumIDs(forArtist artist: String, limit: Int = 3) -> [Int64]? {
+    public static func appleAlbumRefs(forArtist artist: String, limit: Int = 3) -> [AlbumEditorialNotes.AlbumRef]? {
         let artistKey = EnrichCacheKeys.cleanTag(artist)
         guard !artistKey.isEmpty else { return [] }
         guard let all = loadEntries() else { return nil }
         let prefix = artistKey + "|"
-        var ids: [Int64] = []
+        var refs: [Int64: AlbumEditorialNotes.AlbumRef] = [:]
         for (key, entry) in all where key.hasPrefix(prefix) {
-            guard let id = AlbumEditorialNotes.albumID(fromAppleMusicURL: entry.appleMusicURL), !ids.contains(id) else { continue }
-            ids.append(id)
-            if ids.count >= limit { break }
+            guard let ref = AlbumEditorialNotes.albumRef(fromAppleMusicURL: entry.appleMusicURL), refs[ref.id] == nil else { continue }
+            refs[ref.id] = ref
         }
-        return ids
+        return refs.keys.sorted().prefix(limit).compactMap { refs[$0] }
     }
 
+    /// 这首歌在各平台的跳转目标。**零网络** —— 全是 collector 早就存好的字段,
+    /// 首次调用要解析整份缓存 JSON(之后靠 mtime 缓存是 µs 级),别在主线程调。
+    /// 沿用 lookup/sourceInfo 同款的 精确 key → 宽松 key 两级匹配。
     public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -316,6 +311,11 @@ public enum EnrichCacheReader {
         return nil
     }
 
+    /// 当前曲目在缓存里的**实际条目 key**(歌词窗口「搜索歌词」写回用):
+    /// 精确命中用精确 key;宽松命中返回缓存里真实存在的那条 key —— 播放器报法与缓存
+    /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
+    /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
+    /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
     public static func resolvedKey(artist: String, title: String, album: String) -> String? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)

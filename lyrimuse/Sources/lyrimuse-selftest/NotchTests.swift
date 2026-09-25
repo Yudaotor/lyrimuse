@@ -1034,6 +1034,15 @@ func runNotchTests() {
                     "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
         expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
+        expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 2,
+                    "简介契约: 专辑页回来时已经换歌,按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
+        expectEqual(store.contains("if self.currentKey == track.key { self.artist = card } else { self.refreshCurrent() }"), true,
+                    "简介契约: 歌手页回来时已经换歌,同样按当前曲目重查")
+        expectEqual(store.contains("appleAlbumRefs(forArtist: track.artist, limit: 3)")
+                    && store.contains("return self.trySiblings(refs.dropFirst(), name: name, track: track)"), true,
+                    "简介契约: 同歌手的别的专辑最多试 3 张,对不上换下一张")
+        expectEqual(store.contains("case .failed:\n                return\n            }\n            self.albumPages[ref.id] = .some(fetched)"), true,
+                    "简介契约: 失败不记(下次再试),取到和都 404 都记")
     }
 
     // ---- 藏着的那一层歌词行不重画(源码契约) ----

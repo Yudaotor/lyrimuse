@@ -24,16 +24,19 @@ struct EditorialCard: Equatable {
 /// 那一行的两段、「⋯ › 显示专辑简介 / 显示歌手简介」)。
 ///
 /// 入口**只在有简介时可点**,所以要在点之前就知道:有消费方挂着(`retain`)时,每次换歌(停稳 0.6s 后)预取。
-///   - 专辑:专辑 ID 取自 enrich 缓存里的 `apple_music_url`,请求专辑公开页一次,同时拿到简介和署名歌手;
+///   - 专辑:专辑 ID 取自 enrich 缓存里的 `apple_music_url`,请求专辑公开页一次,同时拿到简介和署名歌手。先问
+///     系统地区的店面,404 再问链接自带的店面(`AlbumEditorialNotes.storefronts`);
 ///   - 歌手:从署名里挑出这首歌的歌手(`AlbumEditorialNotes.pickArtist`);这首自己的专辑页给不出时,从同歌手在
-///     缓存里的别的专辑页找。再请求歌手公开页拿简介;出生日期 / 类型
-///     只有 Apple Music API 给,collector 缓存的 developer token 有效时顺带取,没有就不显示那两行。
-/// 专辑按专辑 ID、歌手按歌手 ID 记住结果,同一个只取一次;请求失败不记,下次换歌 / 消费方再来时重试。
-/// 没有消费方时一个请求都不发。店面按系统地区,跟「前往专辑」同一口径。
+///     缓存里的别的专辑页找,按专辑 ID 升序最多试 3 张,对上一张就停。再按给出专辑页的那个店面请求歌手公开页
+///     拿简介;出生日期 / 类型只有 Apple Music API 给,collector 缓存的 developer token 有效时顺带取,没有就不显示那两行。
+/// 专辑按专辑 ID、歌手按歌手 ID 记住结果,同一个只取一次;所有店面都 404 记成「没有」,本次运行不再问;
+/// 网络失败 / 页面形状不对不记,下次换歌 / 消费方再来时重试。同一张专辑 / 同一位歌手在飞时不重复发,
+/// 请求回来时已经换歌,就按此刻在放的曲目再查一次(命中刚记下的结果,不多发请求)。
+/// 没有消费方时一个请求都不发。
 @MainActor
 final class EditorialNotesStore: ObservableObject {
     static let shared = EditorialNotesStore()
-    /// 每次重查一行:为什么没取 / 取了哪一张专辑、哪一位歌手。不按帧打。
+    /// 真正发请求、拿到结论时各一行 notice;缓存命中与跳过走 debug,展开灵动岛不落盘。
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "editorial")
 
     /// 当前曲目的专辑 / 歌手简介。nil = 没有 / 还没取到;入口可不可点只看它。
@@ -44,15 +47,28 @@ final class EditorialNotesStore: ObservableObject {
         kind == .album ? album : artist
     }
 
-    private var albumPages: [Int64: AlbumEditorialNotes.AlbumPage] = [:]
+    /// 取到的专辑页与给出它的店面。
+    private struct FetchedAlbum {
+        let page: AlbumEditorialNotes.AlbumPage
+        let storefront: String
+    }
+
+    /// 兜底找到的歌手与该问哪个店面。
+    private struct ResolvedArtist {
+        let link: AlbumEditorialNotes.ArtistLink
+        let storefront: String
+    }
+
+    /// 值为 nil = 所有店面都 404,这张专辑没有公开页。
+    private var albumPages: [Int64: FetchedAlbum?] = [:]
     /// 值为 nil = 查过了,这位歌手没有简介。
     private var artistCards: [Int64: EditorialCard?] = [:]
     /// 按歌手名(`cleanTag`)记住兜底找到的歌手;值为 nil = 找过了,找不到。
-    private var artistLinks: [String: AlbumEditorialNotes.ArtistLink?] = [:]
+    private var artistLinks: [String: ResolvedArtist?] = [:]
     private var albumsInFlight: Set<Int64> = []
     private var artistsInFlight: Set<Int64> = []
     private var demand = 0
-    /// 最近一次要的是哪首歌。换歌后晚到的结果按它丢弃。
+    /// 最近一次要的是哪首歌。换歌后晚到的结果按它判断:不直接用,改按当前曲目重查。
     private var currentKey = ""
     private var cancellables: Set<AnyCancellable> = []
 
@@ -108,27 +124,27 @@ final class EditorialNotesStore: ObservableObject {
 
     private func refresh(_ track: Track) {
         guard demand > 0, !track.title.isEmpty else {
-            Self.logger.notice("refresh skipped: demand \(self.demand, privacy: .public) title empty \(track.title.isEmpty, privacy: .public)")
+            Self.logger.debug("refresh skipped: demand \(self.demand, privacy: .public) title empty \(track.title.isEmpty, privacy: .public)")
             return
         }
         currentKey = track.key
         // enrich 缓存在主线程读(同歌词窗口「⋯」菜单的平台链接):缓存加载好之后是 µs 级。
-        guard let albumID = EnrichCacheReader.appleAlbumID(artist: track.artist, title: track.title,
-                                                           album: track.album) else {
-            Self.logger.notice("no apple album for current track; artist via siblings")
+        guard let ref = EnrichCacheReader.appleAlbumRef(artist: track.artist, title: track.title,
+                                                        album: track.album) else {
+            Self.logger.debug("no apple album for current track; artist via siblings")
             album = nil
             resolveArtistFromSiblings(track)
             return
         }
-        Self.logger.notice("album \(albumID, privacy: .public) for current track")
-        withAlbumPage(albumID) { [weak self] page in
-            guard let self, self.currentKey == track.key else { return }
-            self.album = page.notes.map {
+        withAlbumPage(ref) { [weak self] fetched in
+            guard let self else { return }
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            self.album = fetched?.page.notes.map {
                 EditorialCard(kind: .album, title: $0.title.isEmpty ? track.album : $0.title,
                               subtitle: $0.subtitle, facts: [], text: $0.text)
             }
-            if let link = AlbumEditorialNotes.pickArtist(page.artists, localArtist: track.artist) {
-                self.loadArtist(link, for: track)
+            if let fetched, let link = AlbumEditorialNotes.pickArtist(fetched.page.artists, localArtist: track.artist) {
+                self.loadArtist(ResolvedArtist(link: link, storefront: fetched.storefront), for: track)
             } else {
                 self.resolveArtistFromSiblings(track)
             }
@@ -136,7 +152,7 @@ final class EditorialNotesStore: ObservableObject {
     }
 
     /// 这首歌自己的专辑页给不出歌手(没有 apple_music_url,或署名对不上)时:从同歌手在缓存里的别的专辑页
-    /// 拿歌手 ID(`EnrichCacheReader.appleAlbumIDs(forArtist:)`)。按歌手记住结论,同一位只找一次。
+    /// 拿歌手 ID(`EnrichCacheReader.appleAlbumRefs(forArtist:)`)。按歌手记住结论,同一位只找一次。
     private func resolveArtistFromSiblings(_ track: Track) {
         let name = EnrichCacheKeys.cleanTag(track.artist)
         guard !name.isEmpty else {
@@ -148,68 +164,89 @@ final class EditorialNotesStore: ObservableObject {
             return
         }
         // 缓存还没加载好:这次先不显示,也不记成找不到(加载完会经 enrichContentVersion 再来)。
-        guard let ids = EnrichCacheReader.appleAlbumIDs(forArtist: track.artist, limit: 1) else {
-            Self.logger.notice("siblings: enrich cache not loaded yet")
+        guard let refs = EnrichCacheReader.appleAlbumRefs(forArtist: track.artist, limit: 3) else {
+            Self.logger.debug("siblings: enrich cache not loaded yet")
             artist = nil
             return
         }
-        guard let albumID = ids.first else {
-            Self.logger.notice("siblings: no apple album for this artist")
+        trySiblings(refs[...], name: name, track: track)
+    }
+
+    /// 依次问同歌手的别的专辑页,署名里对上这位歌手就停;都对不上(或都没有公开页)才记成找不到。
+    /// 中途请求失败 / 在飞:不记,链条就此停下,下次再来。
+    private func trySiblings(_ refs: ArraySlice<AlbumEditorialNotes.AlbumRef>, name: String, track: Track) {
+        guard let ref = refs.first else {
+            Self.logger.debug("siblings: no album credits this artist")
             artistLinks[name] = .some(nil)
-            artist = nil
+            if currentKey == track.key { artist = nil }
             return
         }
-        Self.logger.notice("siblings: album \(albumID, privacy: .public)")
-        withAlbumPage(albumID) { [weak self] page in
+        withAlbumPage(ref) { [weak self] fetched in
             guard let self else { return }
-            let link = AlbumEditorialNotes.pickArtist(page.artists, localArtist: track.artist)
-            self.artistLinks[name] = link
-            guard self.currentKey == track.key else { return }
-            if let link { self.loadArtist(link, for: track) } else { self.artist = nil }
+            guard let fetched, let link = AlbumEditorialNotes.pickArtist(fetched.page.artists, localArtist: track.artist) else {
+                return self.trySiblings(refs.dropFirst(), name: name, track: track)
+            }
+            let resolved = ResolvedArtist(link: link, storefront: fetched.storefront)
+            self.artistLinks[name] = resolved
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            self.loadArtist(resolved, for: track)
         }
     }
 
-    /// 专辑页:缓存命中就地回调;没有就请求一次(同一张在飞时不重复发,这次不回调,下次换歌 / 消费方来时再说)。
-    private func withAlbumPage(_ albumID: Int64, _ body: @escaping (AlbumEditorialNotes.AlbumPage) -> Void) {
-        if let page = albumPages[albumID] {
-            body(page)
+    /// 专辑页:记过结论(取到 / 没有)就地回调;没有就请求一次,取到或确认没有时回调。
+    /// 同一张在飞时不重复发、这次不回调 —— 在飞的那一次回来时若已换歌,它的回调会按当前曲目重查。
+    private func withAlbumPage(_ ref: AlbumEditorialNotes.AlbumRef, _ body: @escaping (FetchedAlbum?) -> Void) {
+        if let known = albumPages[ref.id] {
+            body(known)
             return
         }
-        guard !albumsInFlight.contains(albumID) else { return }
-        albumsInFlight.insert(albumID)
-        let storefront = Self.storefront
+        guard !albumsInFlight.contains(ref.id) else { return }
+        albumsInFlight.insert(ref.id)
+        let storefronts = AlbumEditorialNotes.storefronts(region: Self.region, linkStorefront: ref.storefront)
+        Self.logger.notice("fetch album \(ref.id, privacy: .public) storefronts \(storefronts.joined(separator: ","), privacy: .public)")
         Task { [weak self] in
-            let page = await Task.detached(priority: .utility) {
-                await AlbumEditorialNotes.fetchAlbumPage(albumID: albumID, storefront: storefront)
+            let result = await Task.detached(priority: .utility) {
+                await AlbumEditorialNotes.fetchAlbumPage(albumID: ref.id, storefronts: storefronts)
             }.value
             guard let self else { return }
-            self.albumsInFlight.remove(albumID)
-            guard let page else { return }
-            self.albumPages[albumID] = page
-            body(page)
+            self.albumsInFlight.remove(ref.id)
+            let fetched: FetchedAlbum?
+            switch result {
+            case .found(let page, let storefront):
+                fetched = FetchedAlbum(page: page, storefront: storefront)
+            case .missing:
+                Self.logger.notice("album \(ref.id, privacy: .public) has no page in \(storefronts.joined(separator: ","), privacy: .public)")
+                fetched = nil
+            case .failed:
+                return
+            }
+            self.albumPages[ref.id] = .some(fetched)
+            body(fetched)
         }
     }
 
-    private func loadArtist(_ link: AlbumEditorialNotes.ArtistLink, for track: Track) {
+    private func loadArtist(_ resolved: ResolvedArtist, for track: Track) {
+        let link = resolved.link
         if let cached = artistCards[link.id] {
             artist = cached
             return
         }
         guard !artistsInFlight.contains(link.id) else { return }
         artistsInFlight.insert(link.id)
-        let storefront = Self.storefront
+        let storefront = resolved.storefront
         let token = AppleMusicDeveloperToken.cached()
+        Self.logger.notice("fetch artist \(link.id, privacy: .public) storefront \(storefront, privacy: .public)")
         Task { [weak self] in
             async let bio = Self.fetchBio(artistID: link.id, storefront: storefront)
             async let facts = Self.fetchFacts(artistID: link.id, storefront: storefront, token: token)
             let (text, extra) = await (bio, facts)
             guard let self else { return }
             self.artistsInFlight.remove(link.id)
-            // 歌手页没取成:不记,下次再试。取成了但没有简介:记成 nil。
+            // 歌手页没取成:不记,下次再试。取成了但没有简介(含这个店面没有这位歌手的页面):记成 nil。
             guard let text else { return }
             let card = text.isEmpty ? nil : Self.artistCard(name: link.name, bio: text, facts: extra)
             self.artistCards[link.id] = card
-            if self.currentKey == track.key { self.artist = card }
+            if self.currentKey == track.key { self.artist = card } else { self.refreshCurrent() }
         }
     }
 
@@ -237,7 +274,8 @@ final class EditorialNotesStore: ObservableObject {
         return EditorialCard(kind: .artist, title: name, subtitle: "", facts: rows, text: bio)
     }
 
-    private static var storefront: String { Locale.current.region?.identifier.lowercased() ?? "us" }
+    /// 系统地区,跟「前往专辑」同一口径。店面的最终顺序见 `AlbumEditorialNotes.storefronts`。
+    private static var region: String? { Locale.current.region?.identifier }
 
     private struct Track: Equatable {
         let artist: String
