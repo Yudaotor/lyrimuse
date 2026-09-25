@@ -371,7 +371,7 @@ func main() {
 	startupStep("migrateTranslationNotices", migrateTranslationNotices)
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
-	startupStep("invalidateStaleTranslations", invalidateStaleTranslations)
+	startupStep("invalidateStaleTranslations", func() { invalidateStaleTranslations() })
 	// 逐字歌词的空白词条清洗(Musixmatch richsync 存量,见 yrcwhitespace.go)。
 	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
 	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。

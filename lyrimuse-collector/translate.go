@@ -123,7 +123,7 @@ func chunkLinesByBytes(texts []string, maxBytes int) [][]string {
 // (现象是的就是这个)。
 //
 // 两处调用都删了,改由**逐行**判定接管:
-//   - needsTranslationBackfill 靠 anyLineNeedsTranslation(有任何一行需要翻才起 goroutine,
+//   - needsTranslationBackfill 靠 hasTranslatableLines(有任何一行需要翻才起 goroutine,
 //     省配额的意图一样达到,而且更准);
 //   - machineTranslateLRCWithBase 内部本来就是逐行挑行、翻完按下标散回去的
 //     (没送去翻的行留空串),那套逻辑一直是对的,只是被这道整首闸挡在门外没机会跑。
@@ -304,19 +304,131 @@ func lineNeedsTranslation(text, target string) bool {
 	return true
 }
 
-// anyLineNeedsTranslation:整首歌里还有没有需要翻的行。给 needsTranslationBackfill 用,
+// hasTranslatableLines:这首歌有没有真会被送去翻的行。给 needsTranslationBackfill 用,
 // 免得一首整篇都已经是目标语言的歌反复起 goroutine、白烧三次重试额度。
-func anyLineNeedsTranslation(lyrics, target string) bool {
-	for _, l := range parseLRCLines(lyrics) {
-		if lineNeedsTranslation(l.text, target) {
-			return true
-		}
-	}
-	return false
+//
+// 必须跟执行那边(machineTranslateLRCWithBase)走同一份筛选(selectTranslationWork):中文歌里
+// 常常只有署名行是英文,只看"有没有外文行"会判成要翻,执行时署名行被剔掉、一行不剩,于是记一次
+// 失败、6 小时后再来,三次用光 —— 而重试次数只在译文或目标语言变了才清零,这首歌之后换成一份
+// 真需要翻的歌词也不会再翻。
+func hasTranslatableLines(lyrics, target, artist, title string) bool {
+	return len(selectTranslationWork(lyrics, target, artist, title).uniqueTexts) > 0
 }
 
-// machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
-// 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
+// translatableMemo 记最近一次 hasTranslatableLines 的结论:needsTranslationBackfill 每轮轮询都会为正在放的
+// 那首问一次,筛选要把整首过一遍(实测一首约 0.3ms),而答案只在正文或目标语言变了才会变。只记一首就够,
+// 轮询问的一直是同一首。调用方持 enrichMu(测试里单 goroutine 直接调)。
+var translatableMemo struct {
+	key, lyrics, target string
+	result              bool
+}
+
+func translatableMemoFor(key, lyrics, target string) bool {
+	m := &translatableMemo
+	if m.key == key && m.target == target && m.lyrics == lyrics {
+		return m.result
+	}
+	artist, title, _ := splitEnrichKey(key)
+	m.key, m.lyrics, m.target = key, lyrics, target
+	m.result = hasTranslatableLines(lyrics, target, artist, title)
+	return m.result
+}
+
+// translationWork 是一次机翻真正要送出去的内容,见 selectTranslationWork。
+type translationWork struct {
+	lines       []lrcLine
+	uniqueTexts []string
+	occurrences [][]int // occurrences[k] = uniqueTexts[k] 在 lines 里出现过的全部下标
+	attempted   int     // 送翻的行数(去重前),assembleTranslationLRC 的分母
+}
+
+// selectTranslationWork 挑出这首歌要送去翻的行:剥掉演唱者标签、跳过抬头行与署名行、只留跟目标语言
+// 不是同一套文字的行,再按原文去重。触发判断(hasTranslatableLines)与执行(machineTranslateLRCWithBase)
+// 共用这一份,两边口径一旦分开,就会出现"判成要翻、执行时一行不剩"的白跑。
+func selectTranslationWork(lyrics, target, artist, title string) translationWork {
+	lines := parseLRCLines(lyrics)
+	if len(lines) == 0 {
+		return translationWork{}
+	}
+	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
+	//
+	// 署名行先剔掉:`[00:02.000] 编曲: Edward Chan/方大同` 这种行拉丁字母
+	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
+	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
+	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
+	// "written*3 < attempted" 那道阈值、整份译文被判作废。
+	//
+	// 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
+	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
+	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
+	//
+	// 按原文**去重**再送翻:副歌反复的歌(如 Michael Jackson《Beat It》)
+	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
+	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
+	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
+	// 等于原文就不写进译文栏"的规则会把那 6 次全部悄悄丢掉。歌词越重复,译文看起来就越
+	// 支离破碎,却不是网络配额或语言包的问题。
+	//
+	// occurrences[k] 记录 uniqueTexts[k] 这句话在原文里出现过的**全部**下标——翻完按
+	// uniqueTexts 的下标算出结果,一次性广播回它的每一个出现位置,保证同一句话不管重复
+	// 几次,结果必然一致(要么都翻、要么都没翻,不会随机命中一两次)。副产品是重复句子只翻
+	// 一次:MyMemory 那条网络兜底路的字符配额、on-device 的请求数,两条路都跟着省。
+	speakers := lyricSpeakerLabels(lyrics)
+	// 演唱者标签**不送去翻**,而且剥掉之后就不再加回来。
+	//
+	// 展示端的正文行会由 LyricDuet 把这个前缀剥掉(它靠标签决定这一行摆左边还是右边),
+	// 译文行走的是另一条路、没人剥 —— 于是主歌词显示「Make a little space」、底下译文是
+	// 「V1：留出一点空间」。实测 Michael Jackson《Heal the World》(applemusic 源的 TTML
+	// ttm:agent="v1"/"v2")95 行全中。
+	//
+	// 剥在**送翻之前**而不是只在展示端兜底,还顺带修两件事:
+	//   1. 标签本身会被当成句子的一部分翻译 —— 小写 `v1：` 回吐成大写「V1：」就是翻译器
+	//      按句首词处理过的痕迹,它还可能牵连后半句的语气和断句;
+	//   2. 同一句词挂着不同标签(`v1：Make a little space` / `v2：Make a little space`)
+	//      在下面的去重里算两句,白白多发一次请求、还可能翻出两个不一样的结果。
+	//
+	// 剥完为空的行(`v1：` 独占一行)留一个空串,lineNeedsTranslation 会跳过它 —— 那种行
+	// 展示端本来就整行丢掉,不需要译文。
+	if len(speakers) > 0 {
+		for i := range lines {
+			if label, rest, ok := lyricSplitLabel(lines[i].text); ok && speakers[label] {
+				lines[i].text = rest
+			}
+		}
+	}
+	seen := map[string]int{}
+	var uniqueTexts []string
+	var occurrences [][]int
+	totalAttempted := 0
+	firstBodyLine := true
+	for i, l := range lines {
+		text := strings.TrimSpace(l.text)
+		// 抬头行只在第一条正文行认(判据里写了为什么不能放开),判过就关掉标志 ——
+		// 不管它是不是抬头,后面的行都不该再走这条判定。
+		if text != "" && firstBodyLine {
+			firstBodyLine = false
+			if looksLikeLyricHeaderLine(text, title, artist) {
+				continue
+			}
+		}
+		if isRelaxedCreditLine(text, speakers) {
+			continue
+		}
+		if !lineNeedsTranslation(l.text, target) {
+			continue
+		}
+		totalAttempted++
+		if k, ok := seen[l.text]; ok {
+			occurrences[k] = append(occurrences[k], i)
+			continue
+		}
+		seen[l.text] = len(uniqueTexts)
+		uniqueTexts = append(uniqueTexts, l.text)
+		occurrences = append(occurrences, []int{i})
+	}
+	return translationWork{lines: lines, uniqueTexts: uniqueTexts, occurrences: occurrences, attempted: totalAttempted}
+}
+
 // looksLikeLyricHeaderLine 认 LRC 的抬头行 ——「曲名 - 歌手」/「歌手 - 曲名」。
 // 判据整体照搬 Swift 侧 LyricsSyncEngine.looksLikeHeaderLine(展示端靠它把抬头行藏掉),
 // 两边各维护一份的理由跟 sanitizeFilename 那对一样:纯确定性的字符串比对,没有会随时间
@@ -400,90 +512,14 @@ func stripHeaderBrackets(s string) string {
 	return b.String()
 }
 
+// machineTranslateLRCWithBase 是 machineTranslateLRC 的可注入版本,baseURL 为空时用 MyMemory 正式端点。
+// 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
 func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, lyrics, target, artist, title string) (translationResult, error) {
 	if lyrics == "" || target == "" {
 		return translationResult{}, nil
 	}
-	lines := parseLRCLines(lyrics)
-	if len(lines) == 0 {
-		return translationResult{}, nil
-	}
-	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
-	//
-	// 署名行先剔掉:`[00:02.000] 编曲: Edward Chan/方大同` 这种行拉丁字母
-	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
-	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
-	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
-	// "written*3 < attempted" 那道阈值、整份译文被判作废。
-	//
-	// 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
-	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
-	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
-	//
-	// 按原文**去重**再送翻:副歌反复的歌(如 Michael Jackson《Beat It》)
-	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
-	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
-	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
-	// 等于原文就不写进译文栏"的规则会把那 6 次全部悄悄丢掉。歌词越重复,译文看起来就越
-	// 支离破碎,却不是网络配额或语言包的问题。
-	//
-	// occurrences[k] 记录 uniqueTexts[k] 这句话在原文里出现过的**全部**下标——翻完按
-	// uniqueTexts 的下标算出结果,一次性广播回它的每一个出现位置,保证同一句话不管重复
-	// 几次,结果必然一致(要么都翻、要么都没翻,不会随机命中一两次)。副产品是重复句子只翻
-	// 一次:MyMemory 那条网络兜底路的字符配额、on-device 的请求数,两条路都跟着省。
-	speakers := lyricSpeakerLabels(lyrics)
-	// 演唱者标签**不送去翻**,而且剥掉之后就不再加回来。
-	//
-	// 展示端的正文行会由 LyricDuet 把这个前缀剥掉(它靠标签决定这一行摆左边还是右边),
-	// 译文行走的是另一条路、没人剥 —— 于是主歌词显示「Make a little space」、底下译文是
-	// 「V1：留出一点空间」。实测 Michael Jackson《Heal the World》(applemusic 源的 TTML
-	// ttm:agent="v1"/"v2")95 行全中。
-	//
-	// 剥在**送翻之前**而不是只在展示端兜底,还顺带修两件事:
-	//   1. 标签本身会被当成句子的一部分翻译 —— 小写 `v1：` 回吐成大写「V1：」就是翻译器
-	//      按句首词处理过的痕迹,它还可能牵连后半句的语气和断句;
-	//   2. 同一句词挂着不同标签(`v1：Make a little space` / `v2：Make a little space`)
-	//      在下面的去重里算两句,白白多发一次请求、还可能翻出两个不一样的结果。
-	//
-	// 剥完为空的行(`v1：` 独占一行)留一个空串,lineNeedsTranslation 会跳过它 —— 那种行
-	// 展示端本来就整行丢掉,不需要译文。
-	if len(speakers) > 0 {
-		for i := range lines {
-			if label, rest, ok := lyricSplitLabel(lines[i].text); ok && speakers[label] {
-				lines[i].text = rest
-			}
-		}
-	}
-	seen := map[string]int{}
-	var uniqueTexts []string
-	var occurrences [][]int
-	totalAttempted := 0
-	firstBodyLine := true
-	for i, l := range lines {
-		text := strings.TrimSpace(l.text)
-		// 抬头行只在第一条正文行认(判据里写了为什么不能放开),判过就关掉标志 ——
-		// 不管它是不是抬头,后面的行都不该再走这条判定。
-		if text != "" && firstBodyLine {
-			firstBodyLine = false
-			if looksLikeLyricHeaderLine(text, title, artist) {
-				continue
-			}
-		}
-		if isRelaxedCreditLine(text, speakers) {
-			continue
-		}
-		if !lineNeedsTranslation(l.text, target) {
-			continue
-		}
-		totalAttempted++
-		if k, ok := seen[l.text]; ok {
-			occurrences[k] = append(occurrences[k], i)
-			continue
-		}
-		seen[l.text] = len(uniqueTexts)
-		uniqueTexts = append(uniqueTexts, l.text)
-		occurrences = append(occurrences, []int{i})
-	}
+	work := selectTranslationWork(lyrics, target, artist, title)
+	lines, uniqueTexts, occurrences, totalAttempted := work.lines, work.uniqueTexts, work.occurrences, work.attempted
 	if len(uniqueTexts) == 0 {
 		return translationResult{}, nil // 整首都已经是目标语言了
 	}
@@ -503,9 +539,13 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		return full
 	}
 	// 优先端上翻译:不联网、无配额、歌词不出这台机器,而且没有 500 字符的分块限制,
-	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到网络翻译。
-	if out, err := onDeviceTranslate(ctx, appleLangCode(target), uniqueTexts); err == nil {
-		return assembleTranslationLRC(lines, scatter(out), totalAttempted), nil
+	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)、或者翻出来基本没动(逐行请求
+	// 互不知情,会把一部分行原样吐回来),都退到网络翻译 —— 跟下面 Google 那段同一个口径。
+	if out, err := onDeviceTranslator(ctx, appleLangCode(target), uniqueTexts); err == nil {
+		if res := assembleTranslationLRC(lines, scatter(out), totalAttempted); res.lrc != "" {
+			return res, nil
+		}
+		log.Printf("translate: on-device returned too few translated lines, falling back to network")
 	} else if !errors.Is(err, errOnDeviceUnavailable) {
 		log.Printf("translate: on-device failed, falling back to network: %v", err)
 	}
@@ -719,8 +759,9 @@ const (
 // 现象是的就是这个。当时实测本机缓存:12 条语言不匹配,其中 11 条"会在下次播放时重翻",
 // 也就是机制在、只是没有触发的机会。
 //
-// 放在启动时扫一遍正好覆盖这个场景:Swift 侧改完译文语言会重启 collector
-// (FeatureSettingsStore.save → CollectorControl.restartAndWaitAsync)。
+// 两个触发点:启动时扫一遍(main.go 的启动步骤);运行中改了译文语言 —— 改设置不再重启 collector,
+// features.json 由 maybeReloadFeatures 热重读,它发现语言变了就调 reapplyTranslationLanguage。
+// 只挂启动那一处的话,运行中改语言之后旧语言的机翻会一直留着(机翻开关关着时一直显示)。
 //
 // **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云/Musixmatch)
 // 质量高于机翻,而且清掉之后万一机翻失败(没网/超额),用户就一份译文都没有了;留着它
@@ -730,13 +771,15 @@ const (
 // lyrics/ 文件赢(那是权威源),后者会把这里清空的字段同步成"删掉对应的 .tr.lrc"
 // (见 lyricsexport.go 里 content == "" 时的 os.Remove)。顺序错了,清掉的译文会在下次
 // 启动被 import 原样导回来。
-func invalidateStaleTranslations() {
+//
+// 返回清掉的 key:运行中那条路要按条重写导出文件(启动时由后面整份导出负责)。
+func invalidateStaleTranslations() []string {
 	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	if target == "" {
-		return
+		return nil
 	}
 	enrichMu.Lock()
-	cleared := 0
+	var clearedKeys []string
 	for key, e := range enrichCache {
 		if e.LyricsTr == "" || e.LyricsTrSource != "machine" {
 			continue
@@ -750,8 +793,9 @@ func invalidateStaleTranslations() {
 		// 攒下的次数挡掉(needsTranslationBackfill 里 sameTarget 那段的同一个道理)。
 		e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
 		enrichCache[key] = e
-		cleared++
+		clearedKeys = append(clearedKeys, key)
 	}
+	cleared := len(clearedKeys)
 	if cleared > 0 {
 		// 必须置脏:saveEnrichCache 开头就是 `if !enrichDirty || enrichPath == "" { return }`,
 		// 不置的话下面那次保存会被静默跳过,清空只活在内存里、重启就回来了。
@@ -763,13 +807,22 @@ func invalidateStaleTranslations() {
 		// 必须在解锁之后:saveEnrichCache 自己要拿同一把 enrichMu。
 		saveEnrichCache()
 	}
+	return clearedKeys
+}
+
+// reapplyTranslationLanguage:运行中改了译文语言时,清掉旧语言的机翻,并按条重写这几首的导出文件
+// (译文清空 = 删掉 .tr.lrc,见 lyricsexport.go)。由 maybeReloadFeatures 在后台 goroutine 里调。
+func reapplyTranslationLanguage() {
+	if keys := invalidateStaleTranslations(); len(keys) > 0 {
+		exportLyricsFilesFor(keys...)
+	}
 }
 
 // needsTranslationBackfill 判断这条要不要机翻补一份译文。
 //
 // 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
 // 机翻只是"没有社区译文时总比没有强"的兜底,不是升级。
-func needsTranslationBackfill(e enrichEntry) bool {
+func needsTranslationBackfill(e enrichEntry, key string) bool {
 	if !features().LyricsMachineTranslation {
 		return false
 	}
@@ -790,20 +843,18 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	if sameTarget && e.TranslationRetryCount >= translationBackfillMaxAttempts {
 		return false
 	}
-	// 逐行看:一行都不需要翻(整首都已经是目标语言那套文字)时别起 goroutine —— 否则会
-	// 一次次翻出空结果、把三次重试额度白白烧完,之后这首歌就算真该翻也不会再试了。
-	//
-	// 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
-	// "汉字占多数"的歌整首跳过,于是华语歌里整行英文的副歌永远等不到译文。
-	// 已删除,理由见文件上方那段【已删除】注释 —— 下面这条逐行判定完全覆盖它的意图。
-	if !anyLineNeedsTranslation(e.Lyrics, target) {
-		return false
-	}
 	if sameTarget && e.TranslationTS > 0 &&
 		time.Now().Unix()-e.TranslationTS < int64(translationBackfillInterval/time.Second) {
 		return false
 	}
-	return true
+	// 逐行看:没有真会被送去翻的行(整首都已经是目标语言那套文字、或者外文的只有署名/抬头)时
+	// 别起 goroutine —— 否则会一次次翻出空结果、把三次重试额度白白烧完。排在节流之后:这一步
+	// 要把整首歌过一遍筛选,而这个函数每轮轮询都在 enrichMu 里跑。
+	//
+	// 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
+	// "汉字占多数"的歌整首跳过,于是华语歌里整行英文的副歌永远等不到译文。
+	// 已删除,理由见文件上方那段【已删除】注释 —— 下面这条逐行判定完全覆盖它的意图。
+	return translatableMemoFor(key, e.Lyrics, target)
 }
 
 // myMemoryLangCode 把 features().LyricsTranslationLanguage 的 ISO 639-1 代码转成 MyMemory
@@ -923,6 +974,10 @@ const lyricsTrSourceMachine = "machine"
 // errOnDeviceUnavailable 表示"这台机器上这条路本来就走不通"(系统太老/语言包没装/helper
 // 不在),跟"该翻但翻失败了"区分开:前者是常态、不该刷日志,后者才值得记一笔。
 var errOnDeviceUnavailable = errors.New("on-device translation unavailable")
+
+// onDeviceTranslator 是 machineTranslateLRCWithBase 实际调用的端上翻译;测试换成假的,覆盖"端上翻空之后退到
+// 网络"那条路(真的 helper 在测试二进制旁边不存在,只会走 unavailable)。
+var onDeviceTranslator = onDeviceTranslate
 
 // onDeviceTranslate 调打包在 Contents/Resources/ 里的 Swift 小助手做端上翻译。
 //

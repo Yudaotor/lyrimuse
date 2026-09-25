@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 // review 坐实的真实 bug:jyut6ping3.words.dict.yaml 里混了 696 条带逗号/
 // 顿号/句号的完整谚语("笑左，笑埋右"这类),toJyutpingLine 按 rune 窗口整段命中、整段
@@ -33,6 +37,10 @@ func TestIsAllHan(t *testing.T) {
 // 兜住了,只要以后重新拉取上游数据换了这份 txt、又不小心把带标点的谚语条目带回来,
 // 这条测试就会炸,而不是安安静静地在某首歌的歌词里吞掉一个逗号才被用户发现。
 func TestJyutpingWordMapHasNoPunctuationKeys(t *testing.T) {
+	ensureJyutpingDicts()
+	if len(jyutpingWordMap) == 0 {
+		t.Fatal("词典没加载上")
+	}
 	for word := range jyutpingWordMap {
 		if !isAllHan(word) {
 			t.Fatalf("jyutpingWordMap contains a non-Han key %q — toJyutpingLine would silently drop its non-Han characters when this word matches", word)
@@ -157,5 +165,22 @@ func TestMaybeGenerateJyutpingRoma(t *testing.T) {
 		if e.LyricsRoma != c.wantRoma {
 			t.Errorf("%s: LyricsRoma = %q, want %q", c.name, e.LyricsRoma, c.wantRoma)
 		}
+	}
+}
+
+// 词典只在第一次查表时解析,不放进 init():每个 collector 进程(含 App 每次搜歌词拉起的 search-lyrics
+// 子进程)启动都要付那 16ms / 9.6MB,而只有粤语歌用得到。
+func TestJyutpingDictsLoadLazily(t *testing.T) {
+	src, err := os.ReadFile("jyutping.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "\nfunc init() {") {
+		t.Fatal("jyutping.go 不该在 init() 里加载词典")
+	}
+	// 用多音词断言:词级读音(zung6 jiu3)只有词典整份加载好、最长词长也算好了才查得到,单字兜底给不出。
+	// 单独跑这条(-run TestJyutpingDictsLoadLazily)才测得到"首次调用",同进程里别的用例可能已经加载过。
+	if got := toJyutpingLine("重要"); got != "zung6 jiu3" {
+		t.Fatalf("首次查表要自己把词典加载上: %q", got)
 	}
 }

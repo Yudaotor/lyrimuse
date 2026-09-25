@@ -138,4 +138,9 @@ func maybeReloadFeatures() {
 	if prev != nil && prev.LyricsDir != next.LyricsDir {
 		go switchLyricsDir(next.LyricsDir)
 	}
+	// 译文语言换了:旧语言的机翻清掉(启动时那一遍管不到运行中的修改,见 invalidateStaleTranslations)。
+	// 放后台:这里可能正被持着 enrichMu 的调用方经 features() 调到,而清理自己要拿那把锁。
+	if prev != nil && prev.LyricsTranslationLanguage != next.LyricsTranslationLanguage {
+		go reapplyTranslationLanguage()
+	}
 }

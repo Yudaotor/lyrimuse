@@ -134,9 +134,31 @@ func (e *enrichEntry) shouldGenerateHelperRoma() bool {
 // ICU 音译(粤语汉字走 .toLatin 会出普通话拼音,完全不对)。两个函数都只在 LyricsRoma
 // 为空时才动手,所以①先跑就等于"粤语优先用粤拼"。
 //
-// 三个调用点(retryLyricsUpgrade / rescoreLyrics / resolveTrackEnrichment)统一走这个
-// 包装,别再各自单独调①—— 那样第二步会被漏掉,而且漏掉是静默的。
+// ②要起子进程,**不能在持 enrichMu 时调**:首次解析(resolveTrackEnrichment)本来就不持锁,直接调它;
+// 升级重试 / 重评分改动条目时持着锁,走 generatedRomaFor(锁外先算)+ applyPregeneratedRoma(锁里填)。
+// 别在各处单独调①,第二步会被静默漏掉。
 func (e *enrichEntry) maybeGenerateRoma() {
 	e.maybeGenerateJyutpingRoma()
 	e.maybeGenerateHelperRoma()
+}
+
+// generatedRomaFor 按 maybeGenerateRoma 的规则给这份正文算一份罗马音(sourceRoma 非空就原样返回)。
+// 可能起 lyrics-romanize 子进程(平均几十毫秒,超时 20 秒),调用方别持 enrichMu。
+func generatedRomaFor(lyrics, sourceRoma, songLanguage string) string {
+	e := enrichEntry{Lyrics: lyrics, LyricsRoma: sourceRoma, SongLanguage: songLanguage}
+	e.maybeGenerateRoma()
+	return e.LyricsRoma
+}
+
+// applyPregeneratedRoma 把锁外用 generatedRomaFor 算好的罗马音填进来(本字段为空时才填)。prepared 为空
+// (锁外判断这一轮不会换正文、没算)就只补粤拼:纯查表,持锁也便宜;helper 那一步留给下一次解析。
+func (e *enrichEntry) applyPregeneratedRoma(prepared string) {
+	if e.LyricsRoma != "" {
+		return
+	}
+	if prepared != "" {
+		e.LyricsRoma = prepared
+		return
+	}
+	e.maybeGenerateJyutpingRoma()
 }

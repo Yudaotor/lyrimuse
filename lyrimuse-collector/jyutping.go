@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -89,7 +90,18 @@ var jyutpingWordMap map[string]string
 // 只转写一次、结果永久缓存),没必要额外设更小的上限自找麻烦。
 var jyutpingMaxWordRunes int
 
-func init() {
+// jyutpingDictsOnce:三份词典第一次用到时才解析。只有粤语歌会用到(maybeGenerateJyutpingRoma),而放在
+// init() 里的话每个 collector 进程启动都要付约 16ms 解析、常驻约 9.6MB —— 包括 App 每次联网搜歌词拉起的
+// search-lyrics 子进程和各个命令行子命令,它们一首粤语歌都碰不到。
+var jyutpingDictsOnce sync.Once
+
+// ensureJyutpingDicts 在读三份词典之前调用。查表的入口(jyutpingReading / jyutpingWordReading /
+// toJyutpingLine)自己会调,直接读 map 的地方(测试)要先调它。
+func ensureJyutpingDicts() {
+	jyutpingDictsOnce.Do(loadJyutpingDicts)
+}
+
+func loadJyutpingDicts() {
 	jyutpingCharMap = loadJyutpingDict(jyutpingDictFS, "dictionary/JyutpingChars.txt")
 	jyutpingCollisionOverrideMap = loadJyutpingDict(jyutpingCollisionOverrideDictFS, "dictionary/JyutpingCollisionOverrides.txt")
 	jyutpingWordMap = loadJyutpingWordDict("dictionary/JyutpingWords.txt")
@@ -181,6 +193,7 @@ func isAllHan(s string) bool {
 // jyutpingReading 查一个字的粤拼读音:直接查不到时,借 s2tCharMap 转一次繁体再查一次
 // (见 jyutpingCharMap 的注释)。两次都查不到返回 false。
 func jyutpingReading(r rune) (string, bool) {
+	ensureJyutpingDicts()
 	// 见 jyutpingCollisionOverrideMap 的注释:这 38 个字自己在字表里就有独立的一条
 	// (通常是某个生僻/罕见含义),必须先查这张表挡在前面,不然下面第一步会先命中那个
 	// 无关的独立读音,永远轮不到"当简体字用时该读什么"这层。
@@ -205,6 +218,7 @@ func jyutpingReading(r rune) (string, bool) {
 // "查不到就转一次繁体再查"兜底,只是把单字的转换扩展成逐字转换再拼回词——
 // JyutpingWords.txt 跟 JyutpingChars.txt 同源,主体同样是繁体收字。
 func jyutpingWordReading(word string) (string, bool) {
+	ensureJyutpingDicts()
 	if jp, ok := jyutpingWordMap[word]; ok {
 		return jp, true
 	}
@@ -242,6 +256,7 @@ func jyutpingWordReading(word string) (string, bool) {
 // 词表本身也不是万能的——遇到词表没收录的词,还是会退回单字、可能跟语境不符,跟单字表
 // 那个"选一个主读音"的简化是同一类局限,只是覆盖面比纯单字查表宽得多。
 func toJyutpingLine(text string) string {
+	ensureJyutpingDicts()
 	runes := []rune(text)
 	var b strings.Builder
 	// 分隔只发生在**读音**与相邻内容之间。原文里本来连写的东西(拉丁串内部、撇号跟

@@ -114,18 +114,18 @@ func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
 		"[00:29.31]月亮代表我的心\n" +
 		"[01:02.00]It represent my heart!\n" +
 		"[01:06.00]It represent my heart!\n"
-	if !anyLineNeedsTranslation(mixed, "zh-CN") {
+	if !hasTranslatableLines(mixed, "zh-CN", "", "") {
 		t.Error("华语歌夹整行英文副歌:应当放行去翻那几行英文" +
 			"(2026-08-23 之前被 looksLikeTargetLanguage 整首跳过)")
 	}
 	// 反面:整首都是中文,别白起 goroutine 烧配额
 	allZh := "[00:01.00]你问我爱你有多深\n[00:05.00]月亮代表我的心\n"
-	if anyLineNeedsTranslation(allZh, "zh-CN") {
+	if hasTranslatableLines(allZh, "zh-CN", "", "") {
 		t.Error("整首中文不该触发翻译")
 	}
 	// 行内混排、且**汉字仍占多数**时不该触发
 	inline := "[00:01.00]我们的时光 baby 一起走过\n[00:05.00]我的情也真 oh 我的爱也真\n"
-	if anyLineNeedsTranslation(inline, "zh-CN") {
+	if hasTranslatableLines(inline, "zh-CN", "", "") {
 		t.Error("行内混排(每行汉字仍占多数)不该触发翻译")
 	}
 	// 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
@@ -133,7 +133,7 @@ func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
 	// 中文再抄一遍,略显冗余但不影响原文;要治得给 dominantScript 换更细的判据(比如按
 	// 词而不是按字符计权),那是另一件事。这里把行为钉住,免得以后当成回归改错方向。
 	latinHeavy := "[00:01.00]说好不哭 oh yeah\n"
-	if !anyLineNeedsTranslation(latinHeavy, "zh-CN") {
+	if !hasTranslatableLines(latinHeavy, "zh-CN", "", "") {
 		t.Error("拉丁字母多于汉字的混排行:当前口径是判成需要翻(见上面注释)")
 	}
 }
@@ -356,13 +356,13 @@ func TestNeedsTranslationBackfill(t *testing.T) {
 		}(), true},
 	}
 	for _, c := range cases {
-		if got := needsTranslationBackfill(c.e); got != c.want {
+		if got := needsTranslationBackfill(c.e, ""); got != c.want {
 			t.Errorf("%s: = %v, want %v", c.name, got, c.want)
 		}
 	}
 
 	featuresRef().LyricsMachineTranslation = false
-	if needsTranslationBackfill(base) {
+	if needsTranslationBackfill(base, "") {
 		t.Error("开关关掉时一律不翻")
 	}
 }
@@ -485,12 +485,12 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 	}
 
 	featuresRef().LyricsTranslationLanguage = "zh"
-	if needsTranslationBackfill(base) {
+	if needsTranslationBackfill(base, "") {
 		t.Error("目标是中文、已有中文译文时不该再翻一遍")
 	}
 
 	featuresRef().LyricsTranslationLanguage = "ja"
-	if !needsTranslationBackfill(base) {
+	if !needsTranslationBackfill(base, "") {
 		t.Error("目标是日语、只有中文译文时必须让机翻接手 —— 这正是这次要修的")
 	}
 }
@@ -509,17 +509,17 @@ func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 	}
 
 	e.TranslationLang = "ja"
-	if needsTranslationBackfill(e) {
+	if needsTranslationBackfill(e, "") {
 		t.Error("同一个目标语言下次数用尽就该停手")
 	}
 
 	e.TranslationLang = "zh-CN" // 之前为中文失败了那么多次
-	if !needsTranslationBackfill(e) {
+	if !needsTranslationBackfill(e, "") {
 		t.Error("换到日语后应该重新开始尝试,而不是背着中文那轮的失败次数")
 	}
 
 	e.TranslationLang = "" // 老条目没记语言:当成同一门语言,维持原有行为
-	if needsTranslationBackfill(e) {
+	if needsTranslationBackfill(e, "") {
 		t.Error("老条目不该因为没记语言就绕过次数上限")
 	}
 }

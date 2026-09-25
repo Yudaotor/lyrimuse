@@ -644,7 +644,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRetry(e, wrongDuration, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if needsTranslationBackfill(e) && !enrichInflight[key] {
+		} else if needsTranslationBackfill(e, key) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go backfillTranslation(key)
 		}
@@ -1406,6 +1406,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	}()
 	enrichMu.Lock()
 	sourceChoice := enrichCache[key].LyricsSourceChoice
+	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
 	enrichMu.Unlock()
 
@@ -1416,6 +1417,11 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	seen := lyricSourcesWithCandidates(scored)
+	// 罗马音兜底可能要起子进程,在上锁之前算好(见 maybeGenerateRoma);只在这一轮会换正文时才算。
+	var preparedRoma string
+	if picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", songLanguageFromScored(scored))
+	}
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1500,7 +1506,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		e.SongLanguage = songLanguageFromScored(scored)
-		e.maybeGenerateRoma()
+		e.applyPregeneratedRoma(preparedRoma)
 		lyricsChanged = true
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
@@ -1660,6 +1666,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	enrichMu.Lock()
 	currentSource := enrichCache[key].LyricsSource
 	sourceChoice := enrichCache[key].LyricsSourceChoice
+	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
 	enrichMu.Unlock()
 
@@ -1673,6 +1680,11 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	// 所以自动 rescore 永远不是"手上没歌词"的处境,这一支的口径一字不变。
 	decidable := rescoreDecidable(scored, currentSource, false)
 	seen := lyricSourcesWithCandidates(scored)
+	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
+	var preparedRoma string
+	if decidable && picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
+		preparedRoma = generatedRomaFor(picked.Lyrics, "", songLanguageFromScored(scored))
+	}
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1760,7 +1772,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 			e.SongLanguage = songLanguageFromScored(scored)
-			e.maybeGenerateRoma()
+			e.applyPregeneratedRoma(preparedRoma)
 			lyricsChanged = true
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
