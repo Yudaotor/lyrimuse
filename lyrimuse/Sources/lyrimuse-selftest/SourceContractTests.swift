@@ -3765,5 +3765,12 @@ func runSourceContractTests() {
         let stats = code("Settings/LastfmStatsService.swift")
         expectEqual(stats.contains("LastfmHeatmapTruncation.looksTruncated("), true, "设置判定走 Core: 热力图截断")
         expectEqual(stats.contains("* 0.7"), false, "设置判定走 Core: 截断阈值不在 App 里另写一份")
+        let icloud = code("Settings/ICloudConfigStore.swift")
+        expectEqual(icloud.contains("ConfigExportMetadata.read(data)"), true, "设置判定走 Core: 配置包自报信息的读取")
+        expectEqual(portability.contains("ConfigExportMetadata.exportedAtString("), true, "设置判定走 Core: 导出时间跟读取同一个格式")
+        let fonts = code("Settings/CustomFontStore.swift")
+        expectEqual(fonts.contains("CustomFontFile.isSupported(url)"), true, "设置判定走 Core: 导入字体的格式判断")
+        expectEqual(fonts.contains("CTFontManagerCreateFontDescriptorsFromURL"), false, "设置判定走 Core: 族名读取不在 App 里另写一份")
+        expectEqual(code("UI/FontFamilyPicker.swift").contains("CustomFontFile.importSummary("), true, "设置判定走 Core: 导入字体的失败提示")
     }
 }

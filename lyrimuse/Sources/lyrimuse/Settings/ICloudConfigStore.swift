@@ -256,16 +256,9 @@ enum ICloudConfigStore {
         return found
     }
 
-    /// 从配置内容里取出自报的导出时间和机器名。解析失败一律返回空,不抛错 ——
-    /// 这两个字段只用来把提示写得具体一点,拿不到也不该妨碍导入。
+    /// 从配置内容里取出自报的导出时间和机器名,规则见 `ConfigExportMetadata`。
     static func metadata(in data: Data) -> (exportedAt: Date?, deviceName: String?) {
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return (nil, nil)
-        }
-        let date = (obj["exportedAt"] as? String).flatMap {
-            ISO8601DateFormatter().date(from: $0)
-        }
-        return (date, obj["deviceName"] as? String)
+        ConfigExportMetadata.read(data)
     }
 
     /// 这个文件现在能不能直接读,而**不会**触发下载。

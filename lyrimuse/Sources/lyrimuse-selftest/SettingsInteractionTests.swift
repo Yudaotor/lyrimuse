@@ -345,4 +345,44 @@ func runSettingsInteractionTests() {
                     ["feishu": "https://open.feishu.cn/x"],
                     "推送地址: 旧配置只有 bark_url,读进来就记在当前平台名下")
     }
+
+    // ---- 导入字体(CustomFontFile)----
+    do {
+        typealias F = CustomFontFile
+        for (name, want) in [("a.ttf", true), ("B.OTF", true), ("c.Ttf", true), ("d.ttc", false),
+                             ("e.txt", false), ("noext", false), ("f.ttf.zip", false)] {
+            expectEqual(F.isSupported(URL(fileURLWithPath: "/tmp/\(name)")), want, "导入字体: \(name) 收不收")
+        }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyrimuse-selftest-font-\(ProcessInfo.processInfo.processIdentifier).ttf")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try? Data("not a font".utf8).write(to: tmp)
+        expectEqual(F.familyName(ofFontAt: tmp), nil, "导入字体: 改了扩展名的非字体文件认不出族名(导入时报「不是有效字体」)")
+        let arial = URL(fileURLWithPath: "/System/Library/Fonts/Supplemental/Arial.ttf")
+        if FileManager.default.fileExists(atPath: arial.path) {
+            expectEqual(F.familyName(ofFontAt: arial), "Arial", "导入字体: 真字体读得出族名(只读文件、不注册)")
+        }
+        expectEqual(F.importSummary(failed: 0, total: 3), .allImported, "导入字体: 全部成功不提示")
+        expectEqual(F.importSummary(failed: 3, total: 3), .allFailed, "导入字体: 全部失败说「不是有效字体」")
+        expectEqual(F.importSummary(failed: 1, total: 1), .allFailed, "导入字体: 只选一个且失败也算全部失败")
+        expectEqual(F.importSummary(failed: 2, total: 5), .someFailed(2), "导入字体: 部分失败报失败个数")
+    }
+
+    // ---- 配置包自报的导出时间 / 机器名(ConfigExportMetadata)----
+    do {
+        typealias M = ConfigExportMetadata
+        let at = Date(timeIntervalSince1970: 1_790_000_000)
+        let bundle: [String: Any] = [M.exportedAtKey: M.exportedAtString(at), M.deviceNameKey: "我的 MacBook", "version": 3]
+        let data = (try? JSONSerialization.data(withJSONObject: bundle)) ?? Data()
+        let back = M.read(data)
+        expectEqual(back.exportedAt, at, "配置包信息: 写出去的导出时间原样读得回来")
+        expectEqual(back.deviceName, "我的 MacBook", "配置包信息: 机器名原样读回")
+        let noMeta = M.read(Data(#"{"version":3}"#.utf8))
+        expectEqual(noMeta.exportedAt == nil && noMeta.deviceName == nil, true, "配置包信息: 老包没有这两个字段就都是空")
+        expectEqual(M.read(Data(#"{"exportedAt":"昨天"}"#.utf8)).exportedAt, nil, "配置包信息: 时间格式不对读成空,不抛错")
+        expectEqual(M.read(Data(#"{"exportedAt":123}"#.utf8)).exportedAt, nil, "配置包信息: 类型不对读成空")
+        let junk = M.read(Data("not json".utf8))
+        expectEqual(junk.exportedAt == nil && junk.deviceName == nil, true, "配置包信息: 不是 JSON 也不抛错")
+        expectEqual(M.read(Data(#"["exportedAt"]"#.utf8)).deviceName, nil, "配置包信息: 顶层不是对象读成空")
+    }
 }

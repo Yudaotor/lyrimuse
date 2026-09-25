@@ -225,11 +225,11 @@ enum ConfigPortability {
     static func buildExportData() -> Data? {
         var bundle: [String: Any] = [
             "version": exportFormatVersion,
-            "exportedAt": ISO8601DateFormatter().string(from: Date()),
+            ConfigExportMetadata.exportedAtKey: ConfigExportMetadata.exportedAtString(Date()),
             // 从哪台机器导出的。iCloud 文件夹里会攒着好几份配置,只有时间戳的话分不清
             // 是哪台机器写的 —— 导入前的那句确认里要能说清楚"这份来自谁"。
             // 只是台机器名,不是敏感信息。
-            "deviceName": Host.current().localizedName ?? "",
+            ConfigExportMetadata.deviceNameKey: Host.current().localizedName ?? "",
         ]
 
         if let configData = try? Data(contentsOf: configURL),

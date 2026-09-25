@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -201,10 +202,14 @@ struct FontFamilyPicker: View {
                 failureCount += 1
             }
         }
-        guard failureCount > 0 else { return }
-        importError = failureCount == panel.urls.count
-            ? L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
-            : String(format: L10n.t("%@ 个文件导入失败，其余已导入"), "\(failureCount)")
+        switch CustomFontFile.importSummary(failed: failureCount, total: panel.urls.count) {
+        case .allImported:
+            return
+        case .allFailed:
+            importError = L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
+        case .someFailed(let n):
+            importError = String(format: L10n.t("%@ 个文件导入失败，其余已导入"), "\(n)")
+        }
     }
 
     private func row(family: String, label: String) -> some View {

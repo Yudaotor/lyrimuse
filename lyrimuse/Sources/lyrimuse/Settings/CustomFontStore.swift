@@ -40,8 +40,6 @@ final class CustomFontStore: ObservableObject {
         case invalidFont
     }
 
-    private static let allowedExtensions: Set<String> = ["ttf", "otf"]
-
     private let fm = FileManager.default
     private var directory: URL { LyrimusePaths.configFile("fonts") }
 
@@ -55,8 +53,7 @@ final class CustomFontStore: ObservableObject {
     /// 字体是常见操作(换一份修过的文件),不该在磁盘上滚雪球攒出好几份同名文件。
     @discardableResult
     func importFont(from url: URL) throws -> ImportedFont {
-        let ext = url.pathExtension.lowercased()
-        guard Self.allowedExtensions.contains(ext) else { throw ImportError.unsupportedFormat }
+        guard CustomFontFile.isSupported(url) else { throw ImportError.unsupportedFormat }
 
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
         let dest = directory.appendingPathComponent(url.lastPathComponent)
@@ -100,7 +97,7 @@ final class CustomFontStore: ObservableObject {
         guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             return
         }
-        for url in files where Self.allowedExtensions.contains(url.pathExtension.lowercased()) {
+        for url in files where CustomFontFile.isSupported(url) {
             register(url)
         }
         refresh()
@@ -114,14 +111,7 @@ final class CustomFontStore: ObservableObject {
             logger.error("register \(url.lastPathComponent, privacy: .public) failed — \(String(describing: registerError), privacy: .public)")
             return nil
         }
-        return familyName(of: url)
-    }
-
-    private func familyName(of url: URL) -> String? {
-        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor],
-              let first = descriptors.first
-        else { return nil }
-        return CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String
+        return CustomFontFile.familyName(ofFontAt: url)
     }
 
     private func refresh() {
@@ -130,9 +120,9 @@ final class CustomFontStore: ObservableObject {
             return
         }
         fonts = files
-            .filter { Self.allowedExtensions.contains($0.pathExtension.lowercased()) }
+            .filter { CustomFontFile.isSupported($0) }
             .compactMap { url -> ImportedFont? in
-                guard let family = familyName(of: url) else { return nil }
+                guard let family = CustomFontFile.familyName(ofFontAt: url) else { return nil }
                 return ImportedFont(fileName: url.lastPathComponent, familyName: family)
             }
             .sorted { $0.familyName.localizedCaseInsensitiveCompare($1.familyName) == .orderedAscending }
