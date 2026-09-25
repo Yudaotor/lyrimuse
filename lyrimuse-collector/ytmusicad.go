@@ -337,13 +337,27 @@ func ytmusicAdReuseWindow(v ytmusicAdVerdict) time.Duration {
 	return ytmusicAdMaxAge
 }
 
+// ytmusicAdNotFoundRetry:这个浏览器里没有 YouTube Music 标签页(脚本回 NOTFOUND)时,同一个 key 多久内
+// 不再探。信任的浏览器放普通视频(有频道名、没有专辑名)会一直走到这道复核;不记的话整段视频每拍都遍历
+// 一遍所有窗口和标签页,Arc 没开 JS 开关时每次还要挂到超时、卡住主循环。超时 / 读失败不记。
+// Swift 侧 YouTubeMusicAdProbe.notFoundRetryInterval 同值。
+const ytmusicAdNotFoundRetry = 30 * time.Second
+
 var (
 	ytmusicAdMu    sync.Mutex
 	ytmusicAdKey   string
 	ytmusicAdVal   ytmusicAdVerdict
 	ytmusicAdAlbum string
 	ytmusicAdAt    time.Time
+	// 最近一次回 NOTFOUND 的 key 与时刻,见 ytmusicAdNotFoundRetry。
+	ytmusicAdNotFoundKey string
+	ytmusicAdNotFoundAt  time.Time
 )
+
+// ytmusicAdProbeNotFound:脚本输出是不是 NOTFOUND。
+func ytmusicAdProbeNotFound(raw string) bool {
+	return strings.Contains(strings.Trim(strings.TrimSpace(raw), "\""), "NOTFOUND")
+}
 
 // ytmusicAdProbe 判断"此刻这个浏览器里的 YouTube Music 播的是广告还是歌"。
 //
@@ -366,15 +380,24 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 		ytmusicAdMu.Unlock()
 		return v, al
 	}
+	if ytmusicAdNotFoundKey == cacheKey && time.Since(ytmusicAdNotFoundAt) < ytmusicAdNotFoundRetry {
+		ytmusicAdMu.Unlock()
+		return ytmusicAdUnknown, ""
+	}
 	ytmusicAdMu.Unlock()
 
-	v, album := runYTMusicAdProbe(ctx, target, family)
+	v, album, notFound := runYTMusicAdProbe(ctx, target, family)
 
 	ytmusicAdMu.Lock()
 	// unknown 不进缓存:那多半是"这一下没读到"(超时/标签页刚好在切),下一轮该重试,
-	// 缓存住它等于把一次偶发失败按整首歌的时长放大。
+	// 缓存住它等于把一次偶发失败按整首歌的时长放大。NOTFOUND 另记,见 ytmusicAdNotFoundRetry。
 	if v != ytmusicAdUnknown {
 		ytmusicAdKey, ytmusicAdVal, ytmusicAdAlbum, ytmusicAdAt = cacheKey, v, album, time.Now()
+		if ytmusicAdNotFoundKey == cacheKey {
+			ytmusicAdNotFoundKey = ""
+		}
+	} else if notFound {
+		ytmusicAdNotFoundKey, ytmusicAdNotFoundAt = cacheKey, time.Now()
 	}
 	ytmusicAdMu.Unlock()
 	return v, album
@@ -385,14 +408,17 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 // 脚本**写进临时文件**再执行,不用 `osascript -e`:这段 AppleScript 里嵌着一整段 JS、
 // JS 里又有单引号和逗号,拿 -e 传要在 shell/exec 层再套一层引号,是本仓库明确记过的
 // "多层引号把 payload 打坏"那类坑。写文件是零转义的。
-func runYTMusicAdProbe(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string) {
+//
+// 第三个值:脚本回的是 NOTFOUND(见 ytmusicAdNotFoundRetry)。单测替换它。
+var runYTMusicAdProbe = func(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string, bool) {
 	out, ok := runBrowserTabScript(ctx, bundleID, family, ytmusicHostMarker, ytmusicAdProbeJS)
 	if !ok {
 		// 失败原因很多(开关没开、TCC 没给权限、超时、浏览器没在跑),一律 unknown。
 		// 这条路径每首歌都会走,失败时不该刷屏。
-		return ytmusicAdUnknown, ""
+		return ytmusicAdUnknown, "", false
 	}
-	return parseYTMusicAdProbe(out)
+	v, album := parseYTMusicAdProbe(out)
+	return v, album, ytmusicAdProbeNotFound(out)
 }
 
 // runBrowserTabScript 在这个浏览器里找到 URL 含 host 的标签页、跑一段 JS,返回 osascript 的原始输出。

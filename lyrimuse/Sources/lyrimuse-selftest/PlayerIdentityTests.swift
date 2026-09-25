@@ -112,6 +112,33 @@ func runPlayerIdentityTests() {
         expectEqual(MusicPlaybackController.supportsExtendedControls(.netease), false, "能力: 网易云不支持")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.kugou), false, "能力: 酷狗不支持(无 .sdef)")
         expectEqual(MusicPlaybackController.supportsRepeatOne(.kugou), false, "能力: 酷狗没有单曲循环")
+
+        // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
+        // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。
+        typealias Route = MusicPlaybackController.ControlRoute
+        let route = MusicPlaybackController.controlRoute
+        expectEqual(route(true, nil), Route.appleMusicScript, "控制分派: 只勾 Apple Music → AppleScript")
+        expectEqual(route(false, nil), Route.mediaControl, "控制分派: 焦点正常 → media-control")
+        expectEqual(route(false, .appleMusic), Route.appleMusicScript, "控制分派: 焦点被占、回退到 Apple Music → 发给 Music.app")
+        expectEqual(route(false, .spotify), Route.spotifyScript, "控制分派: 焦点被占、回退到 Spotify → 发给 Spotify")
+        expectEqual(route(false, .qqMusic), Route.mediaControl, "控制分派: 没有 AppleScript 的播放器 → 仍走 media-control")
+        do {
+            let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            func src(_ path: String) -> String {
+                (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
+            }
+            let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
+            let client = src("LyrimuseCore/Local/MediaControlClient.swift")
+            let adProbe = src("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
+            expectEqual(controller.contains("focusFallback: MediaControlClient.focusControlTarget())"), true,
+                        "控制分派(契约): dispatch 按焦点回退目标分派")
+            expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
+                        && client.contains("fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : nil"), true,
+                        "控制分派(契约): 只有经 AppleScript 回退问到的播放器才改发 AppleScript")
+            expectEqual(adProbe.contains("if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date())")
+                        && adProbe.contains("if reading == nil, notFound {"), true,
+                        "NOTFOUND 免探期(契约): kickIfNeeded 查免探期、只在 NOTFOUND 时记")
+        }
     }
 
     // ---- 信任列表:「自动识别」放开到任意 App ----
@@ -474,6 +501,22 @@ func runPlayerIdentityTests() {
         //    判定翻转必然伴随 key 变化,没有 MV 前贴片那种同 key 翻转。
         expectEqual(SpotifyWebAdProbe.refreshInterval < SpotifyWebAdProbe.verdictMaxAge, true,
                     "Spotify 网页广告探针: 再探间隔同样必须严格小于可读期(同构缺陷,同日一起修)")
+
+        // ⓪-b3 没有 YouTube Music 标签页(NOTFOUND)时,同一个 key 在免探期内不再遍历浏览器。
+        expectEqual(P.isNotFound("NOTFOUND\n"), true, "NOTFOUND: 原样输出")
+        expectEqual(P.isNotFound("\"NOTFOUND\""), true, "NOTFOUND: 被 AppleScript 包了一层引号")
+        expectEqual(P.isNotFound("0|0|0||"), false, "NOTFOUND: 正常读数不算")
+        let nfAt = Date(timeIntervalSince1970: 1_000_000)
+        expectEqual(P.notFoundSuppresses(notedKey: "a\u{0}t", notedAt: nfAt, key: "a\u{0}t",
+                                         now: nfAt.addingTimeInterval(P.notFoundRetryInterval - 1)), true,
+                    "NOTFOUND 免探期: 期内同 key 不再探")
+        expectEqual(P.notFoundSuppresses(notedKey: "a\u{0}t", notedAt: nfAt, key: "a\u{0}t",
+                                         now: nfAt.addingTimeInterval(P.notFoundRetryInterval)), false,
+                    "NOTFOUND 免探期: 到期重探")
+        expectEqual(P.notFoundSuppresses(notedKey: "a\u{0}t", notedAt: nfAt, key: "b\u{0}t",
+                                         now: nfAt.addingTimeInterval(1)), false,
+                    "NOTFOUND 免探期: 换了曲目立刻探")
+        expectEqual(P.notFoundRetryInterval < P.verdictMaxAge, true, "NOTFOUND 免探期比判定可读期短")
 
         // ⓪-c 「广告中」标志的状态机(LocalPlaybackSource.nextAdBreakState,同日从 apply() 收出来)。
         //    同曲棘轮原来只往 true 走(Spotify 广告字段会闪变),MV 前贴片放完页面判定翻成 song

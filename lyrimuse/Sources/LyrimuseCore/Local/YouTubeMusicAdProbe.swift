@@ -255,11 +255,32 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         }
     }
 
+    /// 这个浏览器里没有 YouTube Music 标签页(脚本回 NOTFOUND)时,同一个 key 多久内不再探。
+    /// 信任的浏览器放普通视频(有频道名、没有专辑名)会一直走到这道复核;不记的话整段视频每拍都遍历一遍
+    /// 所有窗口和标签页,Arc 没开 JS 开关时每次还要挂到超时。超时 / 读失败不记,下一拍照常重试。
+    public static let notFoundRetryInterval: TimeInterval = 30
+
+    /// 脚本输出是不是 NOTFOUND(没找到能答的 YouTube Music 标签页)。纯函数,selftest 覆盖。
+    public static func isNotFound(_ raw: String) -> Bool {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            .contains("NOTFOUND")
+    }
+
+    /// 这个 key 此刻是不是还在 NOTFOUND 的免探期里。纯函数,selftest 覆盖。
+    public static func notFoundSuppresses(notedKey: String?, notedAt: Date?, key: String, now: Date) -> Bool {
+        guard notedKey == key, let notedAt else { return false }
+        let age = now.timeIntervalSince(notedAt)
+        return age >= 0 && age < notFoundRetryInterval
+    }
+
     private let lock = NSLock()
     private var cachedKey: String?
     private var cachedReadingValue: Reading?
     private var cachedAt: Date?
     private var inFlightKey: String?
+    private var notFoundKey: String?
+    private var notFoundAt: Date?
     /// 探针结果落地(缓存已更新)时的回调 —— `LocalPlaybackSource` 挂上"立刻 poll 一次",
     /// 不等下一拍 2s 轮询来消费。照 `SpotifyPositionProbe.setResultSink`
     /// 那条成熟先例:poll() 自己会核对曲目身份,消费那边还有 key 一道门,多查一次完全无害。
@@ -477,14 +498,25 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
             lock.unlock()
             return
         }
+        if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date()) {
+            lock.unlock()
+            return
+        }
         inFlightKey = key
         lock.unlock()
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
-            let reading = Self.probeOnce(bundleID: hostBundleID, family: family)
+            let (reading, notFound) = Self.probeOnce(bundleID: hostBundleID, family: family)
             self.lock.lock()
             if self.inFlightKey == key { self.inFlightKey = nil }
+            if reading == nil, notFound {
+                self.notFoundKey = key
+                self.notFoundAt = Date()
+            } else if reading != nil, self.notFoundKey == key {
+                self.notFoundKey = nil
+                self.notFoundAt = nil
+            }
             // nil 不进缓存:那多半是"这一下没读到"(超时/标签页刚好在切),下一轮该重试,
             // 缓存住它等于把一次偶发失败按整首歌的时长放大。
             if let reading {
@@ -510,16 +542,19 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         cachedReadingValue = nil
         cachedAt = nil
         inFlightKey = nil
+        notFoundKey = nil
+        notFoundAt = nil
         lock.unlock()
     }
 
-    private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family) -> Reading? {
+    /// 第二个值:脚本回的是 NOTFOUND(见 `notFoundRetryInterval`)。
+    private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family) -> (Reading?, Bool) {
         guard let out = BrowserTabProbeScript.run(
             bundleID: bundleID, family: family, hostMarker: hostMarker, js: probeJS,
             eventTimeoutSeconds: eventTimeoutSeconds, processTimeout: processTimeout,
             label: "ytmusic-ad")
-        else { return nil }
-        return parse(out)
+        else { return (nil, false) }
+        return (parse(out), isNotFound(out))
     }
 
     /// 逐项照 `BrowserPositionProbe.buildAppleScript` 的写法:`tell application id`(不写死

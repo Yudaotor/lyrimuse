@@ -1851,26 +1851,41 @@ func (p *poller) poll() {
 	// 多选/自动识别共用同一条判断,不需要再分两个 case。
 	if borrowAppleScriptPosition(features().Players[playerAppleMusic], p.cur.Bundle,
 		p.cur.Playing, p.isTracked(), p.cur.Radio) {
-		if pos, ok := appleMusicPosition(p.ctx); ok {
-			correctedAt := time.Now()
-			p.cur.Position, p.cur.AnchorTS = pos, correctedAt
-			// 实测排查坐实的一个真实 bug(不是这次网页/本地进度差的全部
-			// 根因,但独立成立、值得修):光纠正 p.cur.Position/AnchorTS(这一轮推给
-			// 网页的值)不够——下一轮 updatePosition() 的"稳定播放:按真实经过时间
-			// 累加"分支(p.trackPos += gap*rate,见该函数)是从 p.trackPos 这个内部
-			// 累加器续算的,这里的校准值从没回写过 p.trackPos/p.prevWall,所以这次
-			// 校准只在"这一轮"昙花一现,下一轮立刻从纠正前那个可能已经悄悄漂移的旧
-			// p.trackPos 继续累加,校准效果被吃掉——只有累积漂移凑巧超过 2 秒的 seek
-			// 容差时才会被动纠正一次。回写这两个字段,让下一轮从这次校准过的真值+
-			// 对应时刻开始累加,而不是从旧累加器续算。
-			p.trackPos = pos
-			p.prevWall = correctedAt
-		}
+		p.calibrateAppleMusicPosition(now)
 	}
 	p.handle(now, reanchored, loopRestart)
 	p.bridge(now)
 	p.pushRelayState(now, reanchored)
 	p.runDigestsAsync(now)
+}
+
+// appleMusicPositionQuery 单独问一次 Music.app 的播放头;单测替换它。
+var appleMusicPositionQuery = appleMusicPosition
+
+// calibrateAppleMusicPosition 用 Music.app 自己的播放头校准这一拍的位置(调用方已经判过 borrowAppleScriptPosition)。
+func (p *poller) calibrateAppleMusicPosition(now time.Time) {
+	if p.cur.PositionFromPlayerClock && !p.snapshotStale {
+		// 这一拍的快照本身就是 Music.app 的 AppleScript 读数(extract 在读完那一刻记下 McTS),
+		// 直接用它,不再起第二个 osascript 问同一个值。回写 trackPos/prevWall 的理由同下。
+		pos := p.cur.Elapsed + now.Sub(p.cur.McTS).Seconds()
+		p.cur.Position, p.cur.AnchorTS = pos, now
+		p.trackPos = pos
+		p.prevWall = now
+	} else if pos, ok := appleMusicPositionQuery(p.ctx); ok {
+		correctedAt := time.Now()
+		p.cur.Position, p.cur.AnchorTS = pos, correctedAt
+		// 实测排查坐实的一个真实 bug(不是这次网页/本地进度差的全部
+		// 根因,但独立成立、值得修):光纠正 p.cur.Position/AnchorTS(这一轮推给
+		// 网页的值)不够——下一轮 updatePosition() 的"稳定播放:按真实经过时间
+		// 累加"分支(p.trackPos += gap*rate,见该函数)是从 p.trackPos 这个内部
+		// 累加器续算的,这里的校准值从没回写过 p.trackPos/p.prevWall,所以这次
+		// 校准只在"这一轮"昙花一现,下一轮立刻从纠正前那个可能已经悄悄漂移的旧
+		// p.trackPos 继续累加,校准效果被吃掉——只有累积漂移凑巧超过 2 秒的 seek
+		// 容差时才会被动纠正一次。回写这两个字段,让下一轮从这次校准过的真值+
+		// 对应时刻开始累加,而不是从旧累加器续算。
+		p.trackPos = pos
+		p.prevWall = correctedAt
+	}
 }
 
 func run(ctx context.Context, cfg *config, lb *lbClient) error {

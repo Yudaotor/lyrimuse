@@ -77,6 +77,7 @@ const getStateScript = `(() => {
             playbackRate: state === "playing" ? 1 : 0,
             isMusicApp: true,
             mediaKind: mediaKind,
+            positionFromPlayerClock: true,
             bundleIdentifier: "com.apple.Music"
         });
     } catch (e) {
@@ -85,12 +86,13 @@ const getStateScript = `(() => {
 })()`
 
 // getSpotifyStateScript 是 getStateScript 的 Spotify 版:字段、守卫、失败一律
-// JSON.stringify(null) 的形状都跟它逐条对应,只有三处不同 ——
+// JSON.stringify(null) 的形状都跟它逐条对应,只有两处不同 ——
 //   - duration 要除 1000(Spotify 的 `duration of current track` 是**毫秒**,实测
 //     296533 = 4:56;Music.app 那份是秒,别照抄);
-//   - 没有 mediaKind(Spotify 不分 MV,notAudioMedia 对它恒假);
-//   - 多一个 positionFromPlayerClock,告诉 updatePosition 这一拍的位置是播放器自己的钟、
-//     不是 MediaRemote 锚点外推,那套锚点补偿要整套跳过(见 snapshot.PositionFromPlayerClock)。
+//   - 没有 mediaKind(Spotify 不分 MV,notAudioMedia 对它恒假)。
+//
+// 两份都带 positionFromPlayerClock:这一拍的位置是播放器自己的钟、不是 MediaRemote 锚点外推
+// (见 snapshot.PositionFromPlayerClock)。
 //
 // `Application("Spotify")` 在 JXA 里不会把没开的 Spotify 拉起来(拉起来的是 AppleScript 的
 // `tell application`,见 spotifyCurrentTrackURI 的 running 守卫);这里仍先问一次 running(),
@@ -718,21 +720,34 @@ func classifyAutoDetected(bundleID string) autoDetectClass {
 	return autoDetectReject
 }
 
+// fetchRawNowPlaying 是两条 media-control 读取路径取原始快照的入口;单测替换它。
+var fetchRawNowPlaying = fetchRawMediaControlState
+
 func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
-	raw, bundleID, ok := fetchRawMediaControlState(ctx)
+	raw, bundleID, ok := fetchRawNowPlaying(ctx)
 	if !ok {
+		if state, ok := stateAfterFocusLost(ctx, nil); ok {
+			return state, true
+		}
 		return nil, false
 	}
 	switch classifyAutoDetected(bundleID) {
 	case autoDetectAppleMusic:
+		noteFocusAccepted(bundleID)
 		return refineAppleMusicState(ctx, raw), true
 	case autoDetectSpotify:
+		noteFocusAccepted(bundleID)
 		return refineSpotifyState(ctx, raw), true
 	case autoDetectBuiltin:
+		noteFocusAccepted(bundleID)
 		return raw, true
 	case autoDetectReject:
 		// 空字符串(没有任何 App 在报告 Now Playing)或者别的不相关 App(网页视频/
-		// 还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
+		// 还没被信任的播放器)——先看上一份被接受的播放器自己还在不在放(见 focusfallback.go),
+		// 问不到才按"没有可报告的正在播放"处理。
+		if state, ok := stateAfterFocusLost(ctx, nil); ok {
+			return state, true
+		}
 		return map[string]any{}, true
 	}
 	// 用户显式信任过的未知播放器跟内置的完全同权(见 features().TrustedPlayers),
@@ -757,6 +772,9 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		// 被拒"时去问一次页面本身是广告还是歌,读不到就退回原判据。见 ytmusicad.go 头注。
 		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
 		if rejected {
+			if state, ok := stateAfterFocusLost(ctx, nil); ok {
+				return state, true
+			}
 			return map[string]any{}, true
 		}
 		// YouTube Music 每条队列的**第一首**在 MediaSession 里没有专辑名(YT Music
@@ -765,6 +783,7 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		if patchAlbum != "" {
 			raw["album"] = patchAlbum
 		}
+		noteFocusAccepted(bundleID)
 		return raw, true
 	}
 	return map[string]any{}, true
@@ -820,15 +839,21 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 	for p := range features().Players {
 		accepted[playerBundleID(p)] = true
 	}
-	raw, bundleID, ok := fetchRawMediaControlState(ctx)
+	raw, bundleID, ok := fetchRawNowPlaying(ctx)
 	if !ok {
+		if state, ok := stateAfterFocusLost(ctx, accepted); ok {
+			return state, true
+		}
 		return nil, false
 	}
 	if !accepted[bundleID] {
 		if !isTrustedPlayerBundleID(bundleID) {
 			// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等),既不在
-			// 这次选中的子集里、也没被信任过——不能把它当成"正在播放",按"没有可关心的
-			// 正在播放"处理。
+			// 这次选中的子集里、也没被信任过——不能把它当成"正在播放"。先看上一份被接受的
+			// 播放器自己还在不在放(见 focusfallback.go),问不到才按"没有可关心的正在播放"处理。
+			if state, ok := stateAfterFocusLost(ctx, accepted); ok {
+				return state, true
+			}
 			return map[string]any{}, true
 		}
 		// 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过一道
@@ -841,6 +866,9 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 		// 没报专辑名的那些歌(album 常常是空的)能靠"页面是不是在放广告"这道复核进来。见 ytmusicad.go 头注。
 		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
 		if rejected {
+			if state, ok := stateAfterFocusLost(ctx, accepted); ok {
+				return state, true
+			}
 			return map[string]any{}, true
 		}
 		// 同 getAutoDetectedState 那处:补上 YouTube Music 队列第一首缺的专辑名。
@@ -848,6 +876,7 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 			raw["album"] = patchAlbum
 		}
 	}
+	noteFocusAccepted(bundleID)
 	if bundleID == appleMusicBundleID {
 		return refineAppleMusicState(ctx, raw), true
 	}

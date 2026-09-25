@@ -15,19 +15,25 @@ import Foundation
 // media-control 的播放控制指令走的是系统级 MediaRemote,对"当前系统认定的 Now
 // Playing 焦点"生效,不需要指定具体是哪个 App——跟读取状态那条路径依赖同一个
 // "当前是谁在报告"的系统机制,QQ 音乐/网易云音乐被读取路径确认正在播放时,这几个
-// 控制指令天然作用在它们身上,不会误控到别的 App)。失败就静默失败(跟
+// 控制指令天然作用在它们身上,不会误控到别的 App;焦点被别的 App 占着时例外,见 controlRoute)。失败就静默失败(跟
 // AppleMusicPositionClient 一样宽松,不是核心路径)。
 public enum MusicPlaybackController {
     public static func playPause() {
-        dispatch(appleScript: #"tell application "Music" to playpause"#, mediaControlCommand: "toggle-play-pause")
+        dispatch(appleScript: #"tell application "Music" to playpause"#,
+                 spotifyScript: #"tell application "Spotify" to playpause"#,
+                 mediaControlCommand: "toggle-play-pause")
     }
 
     public static func nextTrack() {
-        dispatch(appleScript: #"tell application "Music" to next track"#, mediaControlCommand: "next-track")
+        dispatch(appleScript: #"tell application "Music" to next track"#,
+                 spotifyScript: #"tell application "Spotify" to next track"#,
+                 mediaControlCommand: "next-track")
     }
 
     public static func previousTrack() {
-        dispatch(appleScript: #"tell application "Music" to previous track"#, mediaControlCommand: "previous-track")
+        dispatch(appleScript: #"tell application "Music" to previous track"#,
+                 spotifyScript: #"tell application "Spotify" to previous track"#,
+                 mediaControlCommand: "previous-track")
     }
 
     /// 「喜欢」这件事只有 Apple Music 有——QQ 音乐/网易云音乐没有 AppleScript 支持,
@@ -598,7 +604,8 @@ public enum MusicPlaybackController {
             runAppleScript(script)
             return
         }
-        dispatch(appleScript: script, mediaControlCommand: "seek", mediaControlArguments: [value])
+        dispatch(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
+                 mediaControlCommand: "seek", mediaControlArguments: [value])
     }
 
     /// 把秒数格式化成两个后端都吃、且能安全拼进 AppleScript 源码的字符串。抽成独立的纯
@@ -620,10 +627,34 @@ public enum MusicPlaybackController {
         return String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), clamped)
     }
 
-    private static func dispatch(appleScript: String, mediaControlCommand: String, mediaControlArguments: [String] = []) {
-        if PlaybackPlayerPreference.isExclusivelyAppleMusic {
+    /// 播放控制发给谁。
+    public enum ControlRoute: Equatable, Sendable {
+        case appleMusicScript
+        case spotifyScript
+        case mediaControl
+    }
+
+    /// 纯函数,selftest 覆盖。media-control 的控制指令作用于系统级 Now Playing 焦点;焦点被别的 App
+    /// 占着、屏上这首靠 AppleScript 回退问到时(`MediaControlClient.focusControlTarget`),指令要直接发给
+    /// 那个播放器,否则落在占用者身上。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐没有 AppleScript,仍走 media-control。
+    public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?) -> ControlRoute {
+        if exclusivelyAppleMusic { return .appleMusicScript }
+        switch focusFallback {
+        case .appleMusic: return .appleMusicScript
+        case .spotify: return .spotifyScript
+        default: return .mediaControl
+        }
+    }
+
+    private static func dispatch(appleScript: String, spotifyScript: String,
+                                 mediaControlCommand: String, mediaControlArguments: [String] = []) {
+        switch controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+                            focusFallback: MediaControlClient.focusControlTarget()) {
+        case .appleMusicScript:
             runAppleScript(appleScript)
-        } else {
+        case .spotifyScript:
+            runAppleScript(spotifyRunningGuard + spotifyScript)
+        case .mediaControl:
             runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
         }
     }

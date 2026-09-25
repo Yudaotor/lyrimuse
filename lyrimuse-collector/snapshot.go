@@ -47,11 +47,11 @@ type snapshot struct {
 	NotAudio bool
 	// PositionFromPlayerClock:Elapsed 是**播放器自己的钟**(AppleScript `player position`),
 	// 不是 MediaRemote 锚点外推出来的,AnchorElapsed 恒 0、没有"锚点重发"可看。
-	// 这个钟每次起播都整首领先真声一截:Elapsed 在 getSpotifyState 里已经扣掉了 App 按起播方式给的
+	// Spotify 这个钟每次起播都整首领先真声一截:Elapsed 在 getSpotifyState 里已经扣掉了 App 按起播方式给的
 	// 那一段(currentPlayerClockBias),所以 updatePosition 的自然切歌偏置 / repeat-one 回绕重估对它**跳过**
 	// (再估一遍就是扣两次,而且交界处声音不连续、连续性本来就估不准)。
-	// 由 refineSpotifyState / getSpotifyState 置上;AppleScript 不可达退回 media-control 那份
-	// 原始快照时为假,按 AnchorElapsed 那条规则走。
+	// Apple Music 那份(getAppleMusicState)也置上:poll() 据此直接用这一拍的读数校准位置,不再另问一次。
+	// AppleScript 不可达退回 media-control 那份原始快照时为假,按 AnchorElapsed 那条规则走。
 	PositionFromPlayerClock bool
 	// SodaPreviewPending:汽水非会员试听、试听段还在后台搜 —— 这一拍的 Duration 还是试听段长度,
 	// 拿它解析歌词会另开一个时长变体。poller 在它为真时先不解析(见 sodapreview.go)。

@@ -520,6 +520,9 @@ public enum MediaControlClient {
     }
     /// 此刻是不是正处在回退状态(只为让那条 notice 日志在**状态翻转**时打一次,不是每拍都打)。
     private static var fallbackActive = false
+    /// 这一拍回退是不是经 AppleScript 问到的(而不是 per-client 探针)。播放控制要不要改发 AppleScript 看它,
+    /// 见 `focusControlTarget`。
+    private static var fallbackViaAppleScript = false
 
     /// 回退开关的状态转移。纯函数,selftest 覆盖 —— 这条把"它会不会一直白 fork 下去"
     /// 写成了可验证的形式。
@@ -543,6 +546,15 @@ public enum MediaControlClient {
         appleMusicFocusLock.lock()
         defer { appleMusicFocusLock.unlock() }
         return fallbackActive ? lastAcceptedDirectQueryPlayer : nil
+    }
+
+    /// 焦点被别的 App 占着、屏上这首是经 AppleScript 回退问到的那个播放器 —— 播放控制要直接发给它。
+    /// media-control 的控制指令作用于系统焦点,这时发出去落在占用者(网页视频)身上。
+    /// 经 per-client 探针回退的不算:那说明它的 AppleScript 这时就不通。
+    public static func focusControlTarget() -> PlaybackPlayer? {
+        appleMusicFocusLock.lock()
+        defer { appleMusicFocusLock.unlock() }
+        return fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : nil
     }
 
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {
@@ -631,6 +643,7 @@ public enum MediaControlClient {
             current: allowed, acceptedBundleID: nil, fallbackSucceeded: snapshot != nil)
         let firstTick = !fallbackActive
         fallbackActive = snapshot != nil
+        fallbackViaAppleScript = viaAppleScript
         appleMusicFocusLock.unlock()
         guard snapshot != nil else {
             setSnapshotFailure(.appleScriptUnavailable)
