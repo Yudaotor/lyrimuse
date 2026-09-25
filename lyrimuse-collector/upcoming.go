@@ -218,7 +218,9 @@ func queueUpcomingEnrich(tracks []upcomingTrack) {
 		queued++
 		// isNewTrack 传 false:这一刻的设备 Now Playing 数据对应的是**正在播的那首**,
 		// 不能拿来当这些曲目的封面(同 albumprefetch.go 的调用点)。
-		go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, t.title, t.album, "", t.duration, false)
+		// 曲名先过 normEnrichTitle,跟 trackEnrichment 发起搜索用同一份查询词:key 里剥掉的尾括号
+		// (「（合作音乐人:X）」这类)原样发给歌词源会全部落空,落下的空条目正好占着播放时的 key。
+		go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
 	}
 	// 正常路径也打一行 —— 同专辑那条路当初只在"超上限被跳过"时打日志,于是"预取到底跑没跑"
 	// 完全不可观测,排查时卡在过这一点上。

@@ -141,7 +141,8 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			// isNewTrack 传 false:预取的是同专辑里**没在播**的其它曲目,这一刻的设备
 			// Now Playing 数据对应的是当前正在播的那首,不能拿来当这些曲目的封面——见
 			// trackEnrichment 参数注释。
-			go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, t.title, album, "", t.duration, false)
+			// 曲名先过 normEnrichTitle,理由同 upcoming.go 的调用点。
+			go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, normEnrichTitle(t.title), album, "", t.duration, false)
 		}
 		// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
 		// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
