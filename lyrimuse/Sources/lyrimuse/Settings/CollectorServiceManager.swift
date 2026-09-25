@@ -124,7 +124,7 @@ public enum CollectorServiceManager {
     public static var isRunning: Bool { state.isRunning }
 
     /// 打包进这份 App 里的 collector 二进制,自己报出来的版本号(`collector version`,
-    /// 对应 Go 侧 main.go 的 clientVersion)——加,给设置页"后台采集服务"卡片
+    /// 对应 Go 侧 main.go 的 clientVersion)——加,给设置页"歌词引擎"卡片
     /// 检测"App 本体版本"跟"这份 App 实际打包的 collector 版本"是否一致用。
     ///
     /// clientVersion 那个字面量是手动同步的(见 clientVersion 声明处注释),同步有可能漏。

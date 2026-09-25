@@ -46,6 +46,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         // 只有根菜单挂了 delegate,子菜单跟着根菜单一起重建,不会重复进来。
         rebuild(menu)
+        AutomationAlertMonitor.shared.refresh()
     }
 
     func menuWillOpen(_ menu: NSMenu) { onHighlightChange?(true) }
@@ -57,6 +58,17 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
+
+        // 正在播的这家自动化权限被拒或作废时,顶上一行提示 + 处理入口(判据见 AutomationAlert)。
+        // 读的是 AutomationAlertMonitor 的缓存,构建路径上不做跨进程查询。
+        if let alert = AutomationAlertMonitor.shared.alert {
+            let item = makeItem(String(format: L10n.t("%@ 的自动化权限未开启…"), alert.player.displayName),
+                                symbol: "exclamationmark.triangle.fill",
+                                selector: #selector(resolveAutomationAlert))
+            item.toolTip = L10n.t("没有它，播放进度可能不准，歌词上的播放控制也用不了")
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
 
         // ---- 「快速开关」子菜单 ----
         // 把四个状态开关收进二级子菜单,顶层只留"点一下就发生一件事"的动作
@@ -246,6 +258,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     @objc private func openLyricsManager() { AppActions.shared.openLyricsManager?() }
     @objc private func openLyricsWindow() { AppActions.shared.openLyricsWindow?() }
     @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
+    @objc private func resolveAutomationAlert() { AutomationAlertMonitor.shared.resolve() }
 
     @objc private func openAbout() {
         // 直接跳到设置窗口的"关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套

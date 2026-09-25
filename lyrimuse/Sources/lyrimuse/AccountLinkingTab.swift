@@ -1783,7 +1783,7 @@ struct AccountLinkingTab: View {
             Label(error, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption).foregroundStyle(.red)
         } else if let lastSavedAt {
-            Text(String(format: L10n.t("上次保存：%@ · 采集器已重启"), lastSavedAt.formatted(date: .omitted, time: .shortened)))
+            Text(String(format: L10n.t("上次保存：%@ · 歌词引擎已重启"), lastSavedAt.formatted(date: .omitted, time: .shortened)))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

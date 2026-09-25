@@ -2431,7 +2431,7 @@ struct LyricsManagerView: View {
                     }
                 } else {
                     ActionTile(icon: "waveform", title: L10n.t("标为纯音乐"),
-                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜")) {
+                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，歌词引擎也不再反复重搜")) {
                         Task { await store.setInstrumental(key: summary.key, true) }
                     }
                 }

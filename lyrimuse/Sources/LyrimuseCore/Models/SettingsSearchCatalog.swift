@@ -216,7 +216,7 @@ public enum SettingsSearchCatalog {
         player("自动化权限", kw: ["权限", "AppleScript", "自动化", "Apple Music", "Spotify"]),
         // 同「自动化权限」那条:行标题是运行期拼出来的播放器名,只登记卡头。
         player("完全磁盘访问权限", kw: ["权限", "磁盘", "隐私", "歌词缓存", "播放队列", "QQ音乐", "网易云音乐", "酷狗音乐"]),
-        player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),
+        player("歌词引擎", kw: ["collector", "launchd", "服务", "运行状态", "后台采集服务", "后台服务", "采集"]),
         player("播放器联动", kw: ["启动", "退出", "联动"]),
         player("打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"], group: "播放器联动"),
         player("跟随播放器启动", kw: ["联动", "自动启动"], group: "播放器联动"),

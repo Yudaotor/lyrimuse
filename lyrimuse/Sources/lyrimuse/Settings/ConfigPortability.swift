@@ -81,6 +81,9 @@ enum ConfigPortability {
         // 跟着备份搬去新机器的后果是:新机器上装了同一个播放器却永不提示,而新机器
         // 恰恰最需要提示(浏览器的 bundle id 还可能不一样)。
         "np:unknownPlayerNotices",
+        // 「这台机器曾经授权过哪几个播放器的自动化权限」—— TCC 授权是每台机器各自的,
+        // 带到新机器会让那边从没授权过的播放器被当成「授权作废」来提示。
+        "np:automationEverAuthorized",
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",

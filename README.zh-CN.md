@@ -118,8 +118,8 @@ Lyrimuse 一直都是 ad-hoc 签名——不管用下面哪种方式拿到，都
 4. 除非我明确要求，不要从源码构建。
 5. 启动它（`open -a Lyrimuse`），并确认在运行（`pgrep -x Lyrimuse` 能打出 PID）。
 6. 首次启动会弹出引导向导——那部分由我自己点：告诉我它会让我选播放器、
-   （只在选 Apple Music 时）授权对 Music.app 的「自动化」访问、以及启用后台
-   采集服务，然后把控制权交还给我。
+   （只在选 Apple Music 时）授权对 Music.app 的「自动化」访问、以及启用
+   歌词引擎，然后把控制权交还给我。
 最后用中文汇报你做了什么、有没有失败的步骤。
 ```
 
@@ -185,7 +185,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/Spotify/自动识别这几�
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
@@ -254,7 +254,7 @@ LyricsX 最后一个发布版是 2022 年 4 月的 v1.6.3。它支持 macOS 10.1
 
 ## 卸载
 
-把 `Lyrimuse.app` 拖进废纸篓**是不够的**。后台采集服务在 launchd 里注册的是 `KeepAlive`
+把 `Lyrimuse.app` 拖进废纸篓**是不够的**。歌词引擎（进程名 `collector`）在 launchd 里注册的是 `KeepAlive`
 类型的 job，它的 LaunchAgent 会留下来，于是 launchd 会一直去启动一个已经不存在的二进制。
 
 ```sh

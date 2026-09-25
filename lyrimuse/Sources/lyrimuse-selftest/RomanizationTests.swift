@@ -580,10 +580,15 @@ func runRomanizationTests() {
         expectEqual(Romanizer.script(of: "그대 漢字"), .korean, "Script: 谚文+汉字 → 韩文")
 
         // 默认值:四项全开——总开关一旦打开,不该还要用户逐项勾选才看得到。
-        expectEqual(RomanizationScripts.default.contains(.japanese), true, "默认: 日文开")
-        expectEqual(RomanizationScripts.default.contains(.korean), true, "默认: 韩文开")
-        expectEqual(RomanizationScripts.default.contains(.chinese), true, "默认: 拼音开")
-        expectEqual(RomanizationScripts.default.contains(.cantonese), true, "默认: 粤拼开")
+        let zhUI = RomanizationScripts.defaultScripts(chineseUI: true)
+        let otherUI = RomanizationScripts.defaultScripts(chineseUI: false)
+        expectEqual(zhUI.contains(.chinese), false, "默认: 中文界面不标拼音(对认字的人是噪声)")
+        expectEqual(zhUI.contains(.japanese) && zhUI.contains(.korean) && zhUI.contains(.cantonese), true,
+                    "默认: 中文界面日文、韩文、粤拼照开")
+        expectEqual(otherUI.contains(.japanese), true, "默认: 非中文界面日文开")
+        expectEqual(otherUI.contains(.korean), true, "默认: 非中文界面韩文开")
+        expectEqual(otherUI.contains(.chinese), true, "默认: 非中文界面拼音开")
+        expectEqual(otherUI.contains(.cantonese), true, "默认: 非中文界面粤拼开")
 
         // ---- 引擎级：开关真的能挡住罗马音吗 ----
         func romanization(

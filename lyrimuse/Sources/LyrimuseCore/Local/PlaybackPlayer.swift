@@ -100,7 +100,7 @@ extension Set where Element == PlaybackPlayer {
 /// 勾上一个播放器那一刻,要向哪几家发起「自动化」权限请求。设置页与引导页两个网格共用
 /// (`PlayerAutomationPermissions.requestOnSelect`)。
 public enum AutomationRequestPlan {
-    public struct Request: Equatable, Sendable {
+    public struct Request: Equatable {
         public let player: PlaybackPlayer
         /// 目标没在跑时允不允许后台拉起它(不拉起的话系统弹窗压根不出现)。
         public let launchIfNeeded: Bool
@@ -186,4 +186,26 @@ public enum PlaybackPlayerPreference {
     /// `Set<PlaybackPlayer>.soleExplicitPlayer`——App target(FeatureSettingsStore.players)
     /// 直接用同一个扩展,不重复这份逻辑。
     public static var soleExplicitPlayer: PlaybackPlayer? { selected.soleExplicitPlayer }
+}
+
+/// 引导结束之后,菜单栏菜单要不要提示「这个播放器的自动化权限没了」。
+public enum AutomationAlert {
+    public enum Grant: Equatable, Sendable {
+        case authorized, denied, undetermined
+    }
+
+    /// 要提示的那一家;不提示就是 nil。只在**这一刻实际在播**的正是需要这份权限的播放器、
+    /// 而它没有授权时提示:
+    /// - 被拒(点过「不允许」,或在系统设置里关了);
+    /// - 未决、但这台机器曾经授权过它 —— App 更新或重签名后系统里的授权跟新身份对不上。
+    /// 从没授权过的未决不提示:那是还没问过,不是失效。`grant` 为 nil(这次查询超时)也不提示。
+    public static func player(toAlert playing: PlaybackPlayer?, grant: Grant?,
+                              everAuthorized: Bool) -> PlaybackPlayer? {
+        guard let playing, playing.needsAutomationPermission, let grant else { return nil }
+        switch grant {
+        case .authorized: return nil
+        case .denied: return playing
+        case .undetermined: return everAuthorized ? playing : nil
+        }
+    }
 }

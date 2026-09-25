@@ -419,6 +419,26 @@ func runPlayerIdentityTests() {
                     "勾选即请求: 都装了都在跑时,问的就是自动识别那份权限列表")
     }
 
+    // ---- 引导结束后菜单栏提示「自动化权限未开启」(AutomationAlertMonitor)----
+    do {
+        print("\n== 自动化权限失效提示 ==")
+        typealias A = AutomationAlert
+        expectEqual(A.player(toAlert: .spotify, grant: .denied, everAuthorized: false), .spotify,
+                    "权限失效提示: 在播的这家被拒 → 提示")
+        expectEqual(A.player(toAlert: .appleMusic, grant: .undetermined, everAuthorized: true), .appleMusic,
+                    "权限失效提示: 曾经授权过、现在回到未决(更新 / 重签名后作废)→ 提示")
+        expectEqual(A.player(toAlert: .appleMusic, grant: .undetermined, everAuthorized: false), nil,
+                    "权限失效提示: 从没授权过的未决不提示(还没问过,不是失效)")
+        expectEqual(A.player(toAlert: .spotify, grant: .authorized, everAuthorized: true), nil,
+                    "权限失效提示: 已授权不提示")
+        expectEqual(A.player(toAlert: .qqMusic, grant: .denied, everAuthorized: true), nil,
+                    "权限失效提示: 在播的这家本身不需要这份权限就不提示")
+        expectEqual(A.player(toAlert: nil, grant: .denied, everAuthorized: true), nil,
+                    "权限失效提示: 没在播不提示(不对没在用的播放器唠叨)")
+        expectEqual(A.player(toAlert: .spotify, grant: nil, everAuthorized: true), nil,
+                    "权限失效提示: 查询超时不提示(拿不到结论就不下结论)")
+    }
+
     // ---- collector 发布的可读性状态 到 一个结论 ----
     do {
         typealias A = LocalCacheAccess

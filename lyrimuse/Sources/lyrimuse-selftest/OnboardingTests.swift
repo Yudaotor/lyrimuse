@@ -116,100 +116,62 @@ func runOnboardingTests() {
 
 private func checkOnboardingFlow() {
     typealias F = OnboardingFlow
-    let allSteps: [OnboardingStep] = [.welcome, .playerChoice, .automation, .browserPairing, .background,
-                                      .fullDiskAccess, .displayMode, .lyricsExtras, .lastfm, .done]
-    func conditions(_ automation: Bool, _ browser: Bool, _ fda: Bool) -> F.Conditions {
-        F.Conditions(needsAutomation: automation, wantsBrowserPairing: browser, needsFullDiskAccess: fda)
-    }
+    let allSteps: [OnboardingStep] = [.welcome, .playerChoice, .browserPairing, .background, .displayMode, .done]
 
     // ---- 步骤序列 ----
     do {
         print("\n== 引导流程:步骤序列 ==")
-        let minimal = F.steps(conditions(false, false, false))
-        expectEqual(minimal, [.welcome, .playerChoice, .background, .displayMode, .lyricsExtras, .lastfm, .done],
-                    "引导步骤: 三个条件都不满足时只有固定的七步")
+        let minimal = F.steps(.init(wantsBrowserPairing: false))
+        expectEqual(minimal, [.welcome, .playerChoice, .background, .displayMode, .done],
+                    "引导步骤: 没勾 YouTube Music 时是固定的五步")
         expectEqual(minimal.count, F.minimumStepCount, "引导步骤: 固定步数就是 minimumStepCount")
-        expectEqual(F.steps(conditions(true, true, true)), allSteps,
-                    "引导步骤: 三个条件都满足时十步,顺序固定")
-        expectEqual(F.steps(conditions(true, false, false))[2], .automation,
-                    "引导步骤: 自动化权限紧跟选播放器")
-        expectEqual(F.steps(conditions(false, true, false))[2], .browserPairing,
-                    "引导步骤: 只勾 YouTube Music 时配对浏览器紧跟选播放器")
-        let fdaOnly = F.steps(conditions(false, false, true))
-        expectEqual(fdaOnly.firstIndex(of: .fullDiskAccess), fdaOnly.firstIndex(of: .background).map { $0 + 1 },
-                    "引导步骤: 完全磁盘访问紧跟后台服务(授权状态要 collector 在跑才有)")
-
-        var badOrder: [String] = []
-        for mask in 0..<8 {
-            let c = conditions(mask & 1 != 0, mask & 2 != 0, mask & 4 != 0)
-            let list = F.steps(c)
-            let label = "automation=\(c.needsAutomation) browser=\(c.wantsBrowserPairing) fda=\(c.needsFullDiskAccess)"
-            let expectedCount = F.minimumStepCount + [c.needsAutomation, c.wantsBrowserPairing, c.needsFullDiskAccess].filter { $0 }.count
-            if list.count != expectedCount { badOrder.append("\(label): 步数 \(list.count)") }
-            if Array(list.prefix(2)) != [.welcome, .playerChoice] { badOrder.append("\(label): 开头不是欢迎 + 选播放器") }
-            if list.last != .done { badOrder.append("\(label): 最后一步不是 done") }
-            if Set(list).count != list.count { badOrder.append("\(label): 有重复的步骤") }
-            if list.contains(.automation) != c.needsAutomation { badOrder.append("\(label): 自动化权限那一步出没错了") }
-            if list.contains(.browserPairing) != c.wantsBrowserPairing { badOrder.append("\(label): 配对浏览器那一步出没错了") }
-            if list.contains(.fullDiskAccess) != c.needsFullDiskAccess { badOrder.append("\(label): 完全磁盘访问那一步出没错了") }
-            // 能改序列长度的只有选播放器那一步,条件步必须都排在它后面。
-            let playerIndex = list.firstIndex(of: .playerChoice) ?? -1
-            for conditional in [OnboardingStep.automation, .browserPairing, .fullDiskAccess] {
-                if let i = list.firstIndex(of: conditional), i <= playerIndex {
-                    badOrder.append("\(label): \(conditional) 排到了选播放器前面")
-                }
-            }
-            if let fda = list.firstIndex(of: .fullDiskAccess), let bg = list.firstIndex(of: .background), fda < bg {
-                badOrder.append("\(label): 完全磁盘访问排到了后台服务前面")
-            }
-            // 固定步骤的相对顺序不随条件变。
-            if list.filter({ minimal.contains($0) }) != minimal { badOrder.append("\(label): 固定步骤的相对顺序变了") }
-        }
-        expectEqual(badOrder, [], "引导步骤: 八种条件组合下的步数、首尾、条件步位置都对")
+        expectEqual(F.steps(.init(wantsBrowserPairing: true)), allSteps,
+                    "引导步骤: 勾了 YouTube Music 时配对浏览器紧跟选播放器,共六步")
+        expectEqual(Set(allSteps).count, allSteps.count, "引导步骤: 没有重复的步骤")
     }
 
     // ---- 翻页与防越界 ----
     do {
         print("\n== 引导流程:翻页与防越界 ==")
-        expectEqual(F.clampedIndex(-1, count: 7), 0, "引导翻页: 负下标夹到 0")
-        expectEqual(F.clampedIndex(99, count: 7), 6, "引导翻页: 超出的下标夹到最后一步")
-        expectEqual(F.clampedIndex(3, count: 7), 3, "引导翻页: 合法下标原样")
+        expectEqual(F.clampedIndex(-1, count: 5), 0, "引导翻页: 负下标夹到 0")
+        expectEqual(F.clampedIndex(99, count: 5), 4, "引导翻页: 超出的下标夹到最后一步")
+        expectEqual(F.clampedIndex(3, count: 5), 3, "引导翻页: 合法下标原样")
         expectEqual(F.clampedIndex(3, count: 0), 0, "引导翻页: 空序列不崩")
         expectEqual(F.step(at: -5, in: allSteps), .welcome, "引导翻页: 负下标取到第一步")
         expectEqual(F.step(at: 42, in: allSteps), .done, "引导翻页: 超出的下标取到最后一步")
         expectEqual(F.step(at: 0, in: []), .welcome, "引导翻页: 空序列不崩")
 
-        // 真崩过的那条路:勾着 Apple Music 走到最后一步,设置窗口里取消勾选,序列短一截。
-        let before = F.steps(conditions(true, false, false))
+        // 真崩过的那条路:停在最后一步时,设置窗口里改了选择,序列短一截。
+        let before = F.steps(.init(wantsBrowserPairing: true))
         let atDone = before.count - 1
-        let after = F.steps(conditions(false, false, false))
+        let after = F.steps(.init(wantsBrowserPairing: false))
         expectEqual(F.step(at: atDone, in: after), .done, "引导翻页: 停在最后一步时序列变短,取到的仍是最后一步(不越界)")
         let shrunk = F.clamped(.init(step: atDone, furthest: atDone), stepCount: after.count)
         expectEqual(shrunk, F.Position(step: after.count - 1, furthest: after.count - 1),
                     "引导翻页: 序列变短后两个存储值都拉回最后一步")
-        expectEqual(F.clamped(.init(step: 2, furthest: 4), stepCount: 7), F.Position(step: 2, furthest: 4),
+        expectEqual(F.clamped(.init(step: 2, furthest: 3), stepCount: 5), F.Position(step: 2, furthest: 3),
                     "引导翻页: 没越界的位置原样")
-        expectEqual(F.clamped(.init(step: -1, furthest: -1), stepCount: 7), F.Position(step: 0, furthest: 0),
+        expectEqual(F.clamped(.init(step: -1, furthest: -1), stepCount: 5), F.Position(step: 0, furthest: 0),
                     "引导翻页: 负数拉回 0")
 
         let start = F.Position(step: 0, furthest: 0)
-        let forward = F.navigate(to: 1, from: start, stepCount: 7)
+        let forward = F.navigate(to: 1, from: start, stepCount: 5)
         expectEqual(forward, F.Position(step: 1, furthest: 1), "引导翻页: 下一步推进走到过的最远处")
-        let farther = F.navigate(to: 4, from: forward, stepCount: 7)
-        let back = F.navigate(to: 2, from: farther, stepCount: 7)
-        expectEqual(back, F.Position(step: 2, furthest: 4), "引导翻页: 往回翻不缩小走到过的最远处")
-        expectEqual(F.navigate(to: 99, from: back, stepCount: 7), F.Position(step: 6, furthest: 6),
+        let farther = F.navigate(to: 3, from: forward, stepCount: 5)
+        let back = F.navigate(to: 2, from: farther, stepCount: 5)
+        expectEqual(back, F.Position(step: 2, furthest: 3), "引导翻页: 往回翻不缩小走到过的最远处")
+        expectEqual(F.navigate(to: 99, from: back, stepCount: 5), F.Position(step: 4, furthest: 4),
                     "引导翻页: 翻过头夹到最后一步")
-        expectEqual(F.navigate(to: -3, from: back, stepCount: 7), F.Position(step: 0, furthest: 4),
+        expectEqual(F.navigate(to: -3, from: back, stepCount: 5), F.Position(step: 0, furthest: 3),
                     "引导翻页: 翻到负数夹到第一步,最远处不变")
 
-        expectEqual(F.canJump(toDot: 3, furthest: 4), true, "引导进度点: 走到过的点能点回去")
-        expectEqual(F.canJump(toDot: 4, furthest: 4), true, "引导进度点: 最远那一点能点")
-        expectEqual(F.canJump(toDot: 5, furthest: 4), false, "引导进度点: 没走到的点不能点(会绕过后台服务那道锁)")
-        expectEqual(F.canJump(toDot: -1, furthest: 4), false, "引导进度点: 负下标不能点")
+        expectEqual(F.canJump(toDot: 2, furthest: 3), true, "引导进度点: 走到过的点能点回去")
+        expectEqual(F.canJump(toDot: 3, furthest: 3), true, "引导进度点: 最远那一点能点")
+        expectEqual(F.canJump(toDot: 4, furthest: 3), false, "引导进度点: 没走到的点不能点(会绕过歌词引擎那道锁)")
+        expectEqual(F.canJump(toDot: -1, furthest: 3), false, "引导进度点: 负下标不能点")
 
-        expectEqual(F.index(of: .automation, in: allSteps), 2, "引导「去处理」: 在序列里就跳到它")
-        expectEqual(F.index(of: .automation, in: F.steps(conditions(false, false, false))), nil,
+        expectEqual(F.index(of: .browserPairing, in: allSteps), 2, "引导「去处理」: 在序列里就跳到它")
+        expectEqual(F.index(of: .browserPairing, in: F.steps(.init(wantsBrowserPairing: false))), nil,
                     "引导「去处理」: 本轮没这一步就不跳")
     }
 
@@ -217,14 +179,14 @@ private func checkOnboardingFlow() {
     do {
         print("\n== 引导流程:锁与收尾 ==")
         expectEqual(F.nextIsLocked(at: .background, collectorRunning: false), true,
-                    "引导锁: 后台服务那一步、服务没在跑时锁住下一步")
+                    "引导锁: 「让它跑起来」那一页、歌词引擎没在跑时锁住下一步")
         expectEqual(F.nextIsLocked(at: .background, collectorRunning: true), false,
-                    "引导锁: 服务跑起来就解锁")
+                    "引导锁: 歌词引擎跑起来就解锁(那一页的权限小节不参与锁)")
         let lockedElsewhere = allSteps.filter { $0 != .background && F.nextIsLocked(at: $0, collectorRunning: false) }
-        expectEqual(lockedElsewhere, [], "引导锁: 除后台服务外哪一步都不锁(自动化权限也不锁)")
-        expectEqual(F.marksCompleted(collectorRunning: true), true, "引导收尾: 服务在跑,点开始使用记成走完")
+        expectEqual(lockedElsewhere, [], "引导锁: 除「让它跑起来」外哪一步都不锁")
+        expectEqual(F.marksCompleted(collectorRunning: true), true, "引导收尾: 歌词引擎在跑,点开始使用记成走完")
         expectEqual(F.marksCompleted(collectorRunning: false), false,
-                    "引导收尾: 服务没跑就不记走完(否则窗口不再出现、服务也装不上)")
+                    "引导收尾: 歌词引擎没跑就不记走完(否则窗口不再出现、引擎也装不上)")
     }
 
     // ---- 体检清单 ----
@@ -232,7 +194,7 @@ private func checkOnboardingFlow() {
         print("\n== 引导流程:体检清单 ==")
         let minimal = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
                                              fullDiskAccessGranted: nil, browserPaired: nil, displayModeEnabled: true))
-        expectEqual(minimal.map(\.kind), [.collector, .displayMode], "体检清单: 没走条件步时只有后台服务和显示方式")
+        expectEqual(minimal.map(\.kind), [.collector, .displayMode], "体检清单: 没有权限要求、没勾 YouTube Music 时只有两行")
         expectEqual(minimal.allSatisfy(\.ok), true, "体检清单: 都好时全绿")
 
         let full = F.readinessItems(.init(collectorRunning: false, automationTargets: [.appleMusic, .spotify],
@@ -240,31 +202,28 @@ private func checkOnboardingFlow() {
                                           browserPaired: false, displayModeEnabled: false))
         expectEqual(full.map(\.kind), [.collector, .automation(.appleMusic), .automation(.spotify),
                                         .fullDiskAccess, .browser, .displayMode],
-                    "体检清单: 走过的步骤各一行,自动化权限一家一行、顺序跟那一步一致")
+                    "体检清单: 该要的各一行,自动化权限一家一行、顺序跟那一页一致")
         expectEqual(full.map(\.ok), [false, true, false, false, false, false],
                     "体检清单: 每行好没好按对应事实判(只授权了 Apple Music)")
-        expectEqual(full.map(\.target), [.background, .automation, .automation, .fullDiskAccess, .browserPairing, .displayMode],
-                    "体检清单: 「去处理」跳回各自那一步")
+        expectEqual(full.map(\.target), [.background, .background, .background, .background, .browserPairing, .displayMode],
+                    "体检清单: 歌词引擎和两类权限都跳回「让它跑起来」,其余跳回各自那一页")
         expectEqual(Set(full.map(\.id)).count, full.count, "体检清单: 每行 id 不重复(ForEach 靠它)")
         let granted = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
                                              fullDiskAccessGranted: true, browserPaired: true, displayModeEnabled: true))
         expectEqual(granted.map(\.kind), [.collector, .fullDiskAccess, .browser, .displayMode],
-                    "体检清单: 条件步走过且已就绪的照样列出(全绿时页面不显示清单,但判定要算进去)")
-        expectEqual(granted.allSatisfy(\.ok), true, "体检清单: 条件步都就绪时全绿")
+                    "体检清单: 走过且已就绪的照样列出(全绿时页面不显示清单,但判定要算进去)")
+        expectEqual(granted.allSatisfy(\.ok), true, "体检清单: 都就绪时全绿")
 
-        // 清单里每一条「去处理」都必须能跳到本轮真的存在的那一步,否则按钮点了没反应。
+        // 清单里每一条「去处理」都必须能跳到本轮真的存在的那一页,否则按钮点了没反应。
         var unreachable: [String] = []
-        for mask in 0..<8 {
-            let c = conditions(mask & 1 != 0, mask & 2 != 0, mask & 4 != 0)
+        for browser in [false, true] {
             let items = F.readinessItems(.init(
-                collectorRunning: false,
-                automationTargets: c.needsAutomation ? [.appleMusic] : [], authorized: [],
-                fullDiskAccessGranted: c.needsFullDiskAccess ? false : nil,
-                browserPaired: c.wantsBrowserPairing ? false : nil, displayModeEnabled: false))
-            let list = F.steps(c)
-            unreachable += items.filter { F.index(of: $0.target, in: list) == nil }.map { "\(c): \($0.kind)" }
+                collectorRunning: false, automationTargets: [.appleMusic], authorized: [],
+                fullDiskAccessGranted: false, browserPaired: browser ? false : nil, displayModeEnabled: false))
+            let list = F.steps(.init(wantsBrowserPairing: browser))
+            unreachable += items.filter { F.index(of: $0.target, in: list) == nil }.map { "browser=\(browser): \($0.kind)" }
         }
-        expectEqual(unreachable, [], "体检清单: 同一组条件下每条「去处理」的目标都在本轮步骤里")
+        expectEqual(unreachable, [], "体检清单: 每条「去处理」的目标都在本轮步骤里")
     }
 
     // ---- 收尾页「你选的播放器」----
@@ -283,5 +242,68 @@ private func checkOnboardingFlow() {
                     [], "收尾页: 自动识别从 displayOrder 里取,那份顺序不收它时就不出现")
         expectEqual(F.chosenEntries(players: [.soda], displayOrder: order, webPlatformID: nil), [],
                     "收尾页: 不在 displayOrder 里的播放器不凭空出现")
+    }
+
+    // ---- 推荐项(自动化权限 / 完全磁盘访问没开不算没做完)----
+    do {
+        print("\n== 引导流程:推荐项 ==")
+        let optionalOff = F.readinessItems(.init(collectorRunning: true, automationTargets: [.spotify], authorized: [],
+                                                 fullDiskAccessGranted: false, browserPaired: nil, displayModeEnabled: true))
+        expectEqual(optionalOff.filter(\.isOptional).map(\.kind), [.automation(.spotify), .fullDiskAccess],
+                    "推荐项: 自动化权限和完全磁盘访问是推荐项")
+        expectEqual(F.requiredReady(optionalOff), true, "推荐项: 只有推荐项没开时仍是「一切就绪」")
+        let browserMissing = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
+                                                    fullDiskAccessGranted: nil, browserPaired: false, displayModeEnabled: true))
+        expectEqual(F.requiredReady(browserMissing), false, "推荐项: 勾了 YouTube Music 却没配浏览器,是真没做完")
+        let noCollector = F.readinessItems(.init(collectorRunning: false, automationTargets: [], authorized: [],
+                                                 fullDiskAccessGranted: nil, browserPaired: nil, displayModeEnabled: true))
+        expectEqual(F.requiredReady(noCollector), false, "推荐项: 后台服务没跑是真没做完")
+        let noDisplay = F.readinessItems(.init(collectorRunning: true, automationTargets: [], authorized: [],
+                                               fullDiskAccessGranted: nil, browserPaired: nil, displayModeEnabled: false))
+        expectEqual(F.requiredReady(noDisplay), false, "推荐项: 三种显示方式全关是真没做完")
+    }
+
+    // ---- 后台服务自动启用 / 授权后带回前台 ----
+    do {
+        print("\n== 引导流程:自动启用与带回前台 ==")
+        expectEqual(F.autoStartsBackgroundService(at: .background, collectorRunning: false, installing: false, lastAttemptFailed: false),
+                    true, "自动启用: 走到后台服务那一步、服务没跑就开始装")
+        expectEqual(F.autoStartsBackgroundService(at: .background, collectorRunning: true, installing: false, lastAttemptFailed: false),
+                    false, "自动启用: 已经在跑不再装")
+        expectEqual(F.autoStartsBackgroundService(at: .background, collectorRunning: false, installing: true, lastAttemptFailed: false),
+                    false, "自动启用: 正在装不重复发起")
+        expectEqual(F.autoStartsBackgroundService(at: .background, collectorRunning: false, installing: false, lastAttemptFailed: true),
+                    false, "自动启用: 上次装失败了,翻回来不自动重试(等用户点重试)")
+        let elsewhere = allSteps.filter { $0 != .background &&
+            F.autoStartsBackgroundService(at: $0, collectorRunning: false, installing: false, lastAttemptFailed: false) }
+        expectEqual(elsewhere, [], "自动启用: 只在后台服务那一步发生")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: false), true,
+                    "带回前台: 窗口在后面时刚多授权了一项 → 带回来")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 1, grantedNow: 2, appIsActive: false), true,
+                    "带回前台: 已有一项、又授权了一项 → 也带回来")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 0, grantedNow: 1, appIsActive: true), false,
+                    "带回前台: 本来就在前台不用抢")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 2, appIsActive: false), false,
+                    "带回前台: 数量没变,每次刷新不重复抢焦点")
+        expectEqual(F.bringsBackAfterGrant(grantedBefore: 2, grantedNow: 1, appIsActive: false), false,
+                    "带回前台: 权限被撤不抢焦点")
+    }
+
+    // ---- 收尾页「放一首歌试试」----
+    do {
+        print("\n== 引导流程:放一首歌试试 ==")
+        func input(_ title: String = "晴天", lyrics: Bool = false, instrumental: Bool = false, none: Bool = false,
+                   ad: Bool = false, offline: Bool = false) -> F.LiveInput {
+            F.LiveInput(title: title, artist: "周杰伦", hasLyrics: lyrics, instrumental: instrumental,
+                        noLyrics: none, adBreak: ad, networkDown: offline)
+        }
+        expectEqual(F.liveCheck(input("")), .notPlaying, "放一首歌试试: 没读到曲目 → 提示放一首")
+        expectEqual(F.liveCheck(input("", lyrics: true)), .notPlaying, "放一首歌试试: 没有曲目时其它标志都不算")
+        expectEqual(F.liveCheck(input(ad: true, offline: true)), .adBreak, "放一首歌试试: 广告优先")
+        expectEqual(F.liveCheck(input(lyrics: true, offline: true)), .lyricsReady, "放一首歌试试: 歌词在手时断网不影响")
+        expectEqual(F.liveCheck(input(instrumental: true)), .instrumental, "放一首歌试试: 纯音乐")
+        expectEqual(F.liveCheck(input(none: true, offline: true)), .noLyrics, "放一首歌试试: 确定没歌词排在断网前")
+        expectEqual(F.liveCheck(input(offline: true)), .offline, "放一首歌试试: 还在找又断网 → 网络问题")
+        expectEqual(F.liveCheck(input()), .searching, "放一首歌试试: 其余情况是还在找")
     }
 }

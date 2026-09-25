@@ -147,16 +147,16 @@ struct FullDiskAccessGuide: View {
                 Text(FullDiskAccessGuide.reason(players))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(L10n.t("在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启后台服务」——授权对已经在运行的后台服务不生效。"))
+            Text(L10n.t("在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启歌词引擎」——授权对已经在运行的歌词引擎不生效。"))
                 .fixedSize(horizontal: false, vertical: true)
             switch model.restartPhase {
             case .waiting:
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
-                    Text(L10n.t("正在重启后台服务，等它重新确认授权…"))
+                    Text(L10n.t("正在重启歌词引擎，等它重新确认授权…"))
                 }
             case .stillDenied:
-                Text(L10n.t("后台服务已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"))
+                Text(L10n.t("歌词引擎已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"))
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
                 actions
@@ -176,7 +176,7 @@ struct FullDiskAccessGuide: View {
     private var actions: some View {
         HStack(spacing: 8) {
             Button(L10n.t("打开系统设置")) { model.openSystemSettings() }
-            Button(L10n.t("重启后台服务")) {
+            Button(L10n.t("重启歌词引擎")) {
                 Task { await model.restartCollector(for: players) }
             }
             .disabled(coordinator.isRestarting)

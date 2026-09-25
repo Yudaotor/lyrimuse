@@ -655,40 +655,6 @@
         }
       }
     },
-    "正在应用到后台服务…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applying to the background service…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在套用到背景服務…"
-          }
-        }
-      }
-    },
-    "后台采集服务已停用，改动会在下次启用时生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The background service is turned off. The change takes effect when it is turned on again."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務已停用，變更會在下次啟用時生效"
-          }
-        }
-      }
-    },
     "源里有歌、无词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1122,29 +1088,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "標為純音樂"
-          }
-        }
-      }
-    },
-    "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the collector stops re-searching it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這首本來就沒有歌詞（口白、過場、純樂器）：標上之後不再顯示為「無歌詞」，擷取服務也不再反覆重新搜尋"
           }
         }
       }
@@ -2759,29 +2702,6 @@
         }
       }
     },
-    "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse needs a background service running at all times to read playback state, resolve lyrics and artwork, and cache them locally. Without it, the floating lyrics and the notch have nothing to show. Click Enable below; it then starts automatically at login and needs no further attention"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一個背景程式常駐執行，負責讀取播放狀態、解析歌詞/封面並寫入本機快取——沒有它，浮動歌詞/動態島同樣無法顯示任何內容。按下面的按鈕即可啟用，之後登入時會自動啟動，不用再管"
-          }
-        }
-      }
-    },
     "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3360,29 +3280,6 @@
         }
       }
     },
-    "一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Floating lyrics that follow along on your desktop. The next few steps get it set up, and you can change any of this later in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一個貼心的桌面浮動歌詞小工具。接下來用幾個簡單步驟幫你把它調整成合適的樣子——這些選項以後隨時可以在設定裡再調整"
-          }
-        }
-      }
-    },
     "一切就绪" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3655,29 +3552,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一首"
-          }
-        }
-      }
-    },
-    "上次保存：%@ · 采集器已重启" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last saved: %@ · Collector restarted"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次保存：%@ · 采集器已重启"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次儲存：%@ · 擷取器已重新啟動"
           }
         }
       }
@@ -7685,29 +7559,6 @@
         }
       }
     },
-    "同步收听到 Last.fm（可选）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble to Last.fm (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步收听到 Last.fm（可选）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步聆聽記錄到 Last.fm（選填）"
-          }
-        }
-      }
-    },
     "同步服务地址" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7727,75 +7578,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步伺服器網址"
-          }
-        }
-      }
-    },
-    "后台采集服务" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background Collector Service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務"
-          }
-        }
-      }
-    },
-    "后台采集服务未运行，歌词不会更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background collector is not running; lyrics will not update"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务未运行，歌词不会更新"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務未執行，歌詞不會更新"
-          }
-        }
-      }
-    },
-    "后台采集服务重启失败" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not restart the background service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务重启失败"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務重新啟動失敗"
           }
         }
       }
@@ -7865,29 +7647,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "啟用"
-          }
-        }
-      }
-    },
-    "启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't enable it — a permission or system restriction may have kept the background service from starting. Export Diagnostics shows the specific cause and makes it easier to report"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "啟用失敗，可能是權限或系統限制導致背景服務沒能正常啟動，匯出診斷資訊能看到具體原因，也方便回報問題"
           }
         }
       }
@@ -16351,29 +16110,6 @@
         }
       }
     },
-    "歌词显示在哪里" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Where Lyrics Appear"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词显示在哪里"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞顯示在哪裡"
-          }
-        }
-      }
-    },
     "歌词来源" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18273,29 +18009,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "狀態列寬度有限，歌詞可能被截斷；把滑鼠移到上面永遠能看到完整的這一行"
-          }
-        }
-      }
-    },
-    "现在去设置里连接" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Now in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现在去设置里连接"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "現在去設定裡連線"
           }
         }
       }
@@ -23321,29 +23034,6 @@
         }
       }
     },
-    "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, every track you play is scrobbled to Last.fm automatically, and you'll get your own listening profile here too"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連上之後，你播放的每一首歌都會自動 scrobble 到 Last.fm，還能在這裡看到你專屬的聽歌記錄"
-          }
-        }
-      }
-    },
     "连不上 ListenBrainz，稍后会自动重试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24126,29 +23816,6 @@
         }
       }
     },
-    "采集服务" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collector"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "采集服务"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "擷取服務"
-          }
-        }
-      }
-    },
     "重新打开授权页面" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24759,29 +24426,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "需要先設定「%@」（%@）"
-          }
-        }
-      }
-    },
-    "需要后台采集服务在运行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Requires the background collector to be running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要后台采集服务在运行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要背景擷取服務在執行"
           }
         }
       }
@@ -26276,29 +25920,6 @@
         }
       }
     },
-    "这个版本打包时漏了同步后台采集服务的版本号。不影响功能，采集服务的实际代码跟 App 是同一个版本，不需要你做任何处理" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This build shipped with a stale version number for the background collector. Nothing is broken — the collector runs the same code as the app, and there's nothing you need to do."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 版本和后台采集服务版本不一致，可能是这次打包时漏了同步版本号，建议重新安装 App"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 版本和背景擷取服務版本不一致，可能是這次打包時漏了同步版本號，建議重新安裝 App"
-          }
-        }
-      }
-    },
     "上次刷新没有成功，显示的是 %@ 的内容" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26782,121 +26403,6 @@
         }
       }
     },
-    "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由后台服务读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This permission keeps the Apple Music playback position accurate and lets you control playback right from the lyrics (play/pause, skip, scrub, love, add to library). Lyrics still show without it — the basic playback info comes from the background service — the position is just less accurate and those buttons won't do anything. The button below brings up the system authorization dialog; choose “Allow”. You can come back to this in Settings any time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由后台服务读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個權限用來把 Apple Music 的播放進度校正得更準，以及讓你直接在歌詞上控制播放（播放/暫停、切歌、拖進度、喜歡、加入資料庫）。沒有它歌詞照樣能顯示——基本的播放資訊由背景服務讀取——只是進度會有偏差、那些按鈕按不動。按下面的按鈕會跳出系統授權對話框，選擇「允許」即可；隨時可以在設定裡重新開啟這一步"
-          }
-        }
-      }
-    },
-    "让它一直待命" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keep It Running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "让它一直待命"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讓它一直待命"
-          }
-        }
-      }
-    },
-    "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse needs a helper running in the background to read playback state, resolve lyrics and artwork, and write them to a local cache — without it the floating lyrics and the Dynamic Island have nothing to show"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一個背景程式常駐執行，負責讀取播放狀態、解析歌詞/封面並寫入本機快取——沒有它，浮動歌詞/動態島無法顯示任何內容"
-          }
-        }
-      }
-    },
-    "后台采集服务：运行中" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background service: running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务：运行中"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務：執行中"
-          }
-        }
-      }
-    },
-    "后台采集服务：未运行（必需）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background service: not running (required)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务：未运行（必需）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務：未執行（必要）"
-          }
-        }
-      }
-    },
     "开机时自动启动 Lyrimuse" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26939,29 +26445,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "譯文與羅馬拼音"
-          }
-        }
-      }
-    },
-    "外语歌可以对照译文；日文、韩文、中文和粤语还能标上罗马音跟着唱" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show a translation for songs in other languages, plus romanization for Japanese, Korean, Chinese and Cantonese so you can sing along"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "外语歌可以对照译文；日文、韩文、中文和粤语还能标上罗马音跟着唱"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "外語歌可以對照譯文；日文、韓文、中文和粵語還能標上羅馬拼音跟著唱"
           }
         }
       }
@@ -27104,29 +26587,6 @@
         }
       }
     },
-    "Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse lives in the menu bar at the top right — click it to open Settings, the lyrics manager and the lyrics window. Hold ⌘ and drag to move the icon somewhere else. You can also set global hotkeys under Shortcuts in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 住在螢幕右上角的選單列裡，按一下它就能開啟設定、歌詞管理和歌詞視窗；按住 ⌘ 拖移可以把圖像挪個位置。常用操作還能在設定的「快速鍵」裡設定全域快速鍵"
-          }
-        }
-      }
-    },
     "Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27157,52 +26617,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上次檢查：%@"
-          }
-        }
-      }
-    },
-    "后台采集服务还没启用，所以这次不算走完引导——下次启动会再问一次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The background service isn't enabled yet, so this doesn't count as finishing setup — you'll be asked again next launch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务还没启用，所以这次不算走完引导——下次启动会再问一次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務還沒啟用，所以這次不算走完引導——下次啟動會再問一次"
-          }
-        }
-      }
-    },
-    "已就绪" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ready"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已就绪"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已就緒"
           }
         }
       }
@@ -27253,29 +26667,6 @@
         }
       }
     },
-    "没能启动（%@）。可以先「暂时跳过」，之后到设置的「通用 → 后台采集服务」里重试，那一页会给出更细的状态。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't start (%@). You can skip this for now and retry later under Settings → General → Background service, which reports a more detailed status."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没能启动（%@）。可以先「暂时跳过」，之后到设置的「通用 → 后台采集服务」里重试，那一页会给出更细的状态。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法啟動（%@）。可以先「暫時略過」，之後到設定的「一般 → 背景擷取服務」裡重試，那一頁會給出更詳細的狀態。"
-          }
-        }
-      }
-    },
     "足迹" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27299,29 +26690,6 @@
         }
       }
     },
-    "菜单栏图标开机就在，不用每次自己打开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The menu bar icon is there as soon as you log in, so you never have to open it yourself"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "菜单栏图标开机就在，不用每次自己打开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選單列圖像登入後就在，不用每次自己打開"
-          }
-        }
-      }
-    },
     "日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27341,75 +26709,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日文、韓文、中文、粵語預設都會標註，可在設定裡依語言關閉"
-          }
-        }
-      }
-    },
-    "缪斯已经就位——接下来交给音乐。按下「开始使用」，让每一句歌词都跟着旋律亮起来" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The Muse has taken her place — the rest is music. Hit Get Started and let every line light up with the melody"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缪斯已经就位——接下来交给音乐。按下「开始使用」，让每一句歌词都跟着旋律亮起来"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "繆斯已經就位——接下來交給音樂。按下「開始使用」，讓每一句歌詞都跟著旋律亮起來"
-          }
-        }
-      }
-    },
-    "缪斯还在候场——把上面标橙的那几项补齐，她随时可以开嗓" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The Muse is waiting in the wings — sort out the items marked orange above and she's ready to sing"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缪斯还在候场——把上面标橙的那几项补齐，她随时可以开嗓"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "繆斯還在候場——把上面標成橘色的那幾項補齊，她隨時可以開嗓"
-          }
-        }
-      }
-    },
-    "歌词会跟着这些走：%@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrics will follow these: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词会跟着这些走：%@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞會跟著這些走：%@"
           }
         }
       }
@@ -33324,40 +32623,6 @@
         }
       }
     },
-    "授权对已经在运行的后台服务不生效。在系统设置里勾上之后，回到这里点一下「重启后台服务」。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Granting access does not reach a background service that is already running. After ticking it in System Settings, come back here and hit Restart background service."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權對已經在執行的背景服務不生效。在系統設定裡勾上之後，回到這裡按一下「重新啟動背景服務」。"
-          }
-        }
-      }
-    },
-    "重启后台服务" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restart background service"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重新啟動背景服務"
-          }
-        }
-      }
-    },
     "读不到 %@ 的歌词缓存，点击看怎么处理" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33371,40 +32636,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "讀不到 %@ 的歌詞快取，按一下看如何處理"
-          }
-        }
-      }
-    },
-    "正在重启后台服务，它要把歌词缓存重新读一遍，通常要一两分钟…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restarting the background service. It has to read the whole lyrics cache again, which usually takes a minute or two…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在重新啟動背景服務，它要把歌詞快取重新讀一遍，通常要一兩分鐘…"
-          }
-        }
-      }
-    },
-    "后台服务已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The background service has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景服務已經重新啟動過了，這個來源還是讀不到。到系統設定的「完整磁碟取用權限」裡確認一下 Lyrimuse 那一項是開著的。"
           }
         }
       }
@@ -34068,52 +33299,6 @@
         }
       }
     },
-    "播放器自动化权限（推荐）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Player Automation Permission (recommended)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放器自动化权限（推荐）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放器自動化權限（建議）"
-          }
-        }
-      }
-    },
-    "用来校准播放进度，并让你在歌词上直接控制播放。不授权歌词照样显示，只是进度可能有偏差、控制按钮用不了。系统弹窗时选「允许」即可" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keeps the playback position accurate and lets you control playback from the lyrics. Lyrics still show without it, but timing may drift and the controls won't work. Choose “Allow” when macOS asks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用来校准播放进度，并让你在歌词上直接控制播放。不授权歌词照样显示，只是进度可能有偏差、控制按钮用不了。系统弹窗时选「允许」即可"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用來校準播放進度，並讓你在歌詞上直接控制播放。不授權歌詞照樣顯示，只是進度可能有偏差、控制按鈕無法使用。系統跳出視窗時選「允許」即可"
-          }
-        }
-      }
-    },
     "%@ 自动化权限" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34177,23 +33362,6 @@
         }
       }
     },
-    "完全磁盘访问权限（推荐）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Full Disk Access (recommended)"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完整磁碟取用權限（建議）"
-          }
-        }
-      }
-    },
     "还没确认" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34241,57 +33409,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 把歌詞快取和播放佇列放在受系統保護的目錄裡。授權後，本機已有的歌詞可以直接用，還能預先解析接下來要播的歌；不授權歌詞照樣能連線找到。"
-          }
-        }
-      }
-    },
-    "在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启后台服务」——授权对已经在运行的后台服务不生效。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and hit Restart background service — access doesn’t reach a background service that is already running."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在系統設定的「完整磁碟取用權限」裡開啟 Lyrimuse（列表裡沒有就按「+」把它加進去），再回到這裡按一下「重新啟動背景服務」——授權對已經在執行的背景服務不生效。"
-          }
-        }
-      }
-    },
-    "正在重启后台服务，等它重新确认授权…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restarting the background service and waiting for it to check access again…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在重新啟動背景服務，等它重新確認授權…"
-          }
-        }
-      }
-    },
-    "后台服务已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The background service has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景服務已經重新啟動過了，還是讀不到。到系統設定的「完整磁碟取用權限」裡確認一下 Lyrimuse 那一項是開著的。"
           }
         }
       }
@@ -34742,23 +33859,6 @@
         }
       }
     },
-    "后台采集服务没有响应" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The background service didn't respond"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景擷取服務沒有回應"
-          }
-        }
-      }
-    },
     "「系统设置 › 通用 › 登录项」里关掉了 Lyrimuse，要开机启动得在那里重新打开" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35109,6 +34209,1271 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "類型"
+          }
+        }
+      }
+    },
+    "%@ 的自动化权限未开启…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Automation Access Is Off…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的自动化权限未开启…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的自動化權限未開啟…"
+          }
+        }
+      }
+    },
+    "没有它，播放进度可能不准，歌词上的播放控制也用不了" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without it, playback progress may drift and the playback controls on the lyrics won’t work"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有它，播放进度可能不准，歌词上的播放控制也用不了"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有它，播放進度可能不準，歌詞上的播放控制也用不了"
+          }
+        }
+      }
+    },
+    "跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注罗马音。接下来几步帮你调成合适的样子，以后随时能在设置里改" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注罗马音。接下来几步帮你调成合适的样子，以后随时能在设置里改"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟著正在播放的歌顯示歌詞：桌面、動態島、選單列、歌詞視窗都能放，還能對照譯文、標注羅馬拼音。接下來幾步幫你調成合適的樣子，之後隨時能在設定裡改"
+          }
+        }
+      }
+    },
+    "菜单栏图标：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menu bar icon: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "菜单栏图标：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選單列圖像：%@"
+          }
+        }
+      }
+    },
+    "已经在放了还没反应？看看选的播放器对不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already playing and nothing shows? Check the player you picked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已经在放了还没反应？看看选的播放器对不对"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已經在放了還沒反應？看看選的播放器對不對"
+          }
+        }
+      }
+    },
+    "去歌词管理里手动找" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search manually in Lyrics Manager"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去歌词管理里手动找"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去歌詞管理裡手動找"
+          }
+        }
+      }
+    },
+    "去开启" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去开启"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去開啟"
+          }
+        }
+      }
+    },
+    "推荐开启，获取更多功能：直接用本机已有的歌词，还能提前准备下一首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended for more features: use lyrics already on this Mac and get the next song ready ahead of time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推荐开启，获取更多功能：直接用本机已有的歌词，还能提前准备下一首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推薦開啟，取得更多功能：直接用本機已有的歌詞，還能提前準備下一首"
+          }
+        }
+      }
+    },
+    "推荐开启，获取更多功能：播放进度更准，还能在歌词上直接控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended for more features: more accurate progress, and playback controls right on the lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推荐开启，获取更多功能：播放进度更准，还能在歌词上直接控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推薦開啟，取得更多功能：播放進度更準，還能在歌詞上直接控制播放"
+          }
+        }
+      }
+    },
+    "正在应用到歌词引擎…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applying to the lyrics engine…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在应用到歌词引擎…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在套用到歌詞引擎…"
+          }
+        }
+      }
+    },
+    "歌词引擎已停用，改动会在下次启用时生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine is turned off. The change takes effect when it is turned on again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎已停用，改动会在下次启用时生效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎已停用，變更會在下次啟用時生效"
+          }
+        }
+      }
+    },
+    "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，歌词引擎也不再反复重搜" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the lyrics engine stops re-searching it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，歌词引擎也不再反复重搜"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首本來就沒有歌詞（口白、過場、純樂器）：標上之後不再顯示為「無歌詞」，歌詞引擎也不再反覆重新搜尋"
+          }
+        }
+      }
+    },
+    "歌词引擎负责认歌、找歌词和封面，在后台常驻运行，必装。点下面的按钮启用，之后开机会自动运行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine recognizes songs and finds lyrics and artwork. It runs in the background and is required. Click Enable below; after that it starts automatically at login"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎负责认歌、找歌词和封面，在后台常驻运行，必装。点下面的按钮启用，之后开机会自动运行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎負責認歌、找歌詞和封面，在背景常駐執行，必裝。按下面的按鈕啟用，之後登入時會自動啟動"
+          }
+        }
+      }
+    },
+    "上次保存：%@ · 歌词引擎已重启" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last saved: %@ · Lyrics engine restarted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次保存：%@ · 歌词引擎已重启"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次儲存：%@ · 歌詞引擎已重新啟動"
+          }
+        }
+      }
+    },
+    "歌词引擎" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics Engine"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎"
+          }
+        }
+      }
+    },
+    "歌词引擎未运行，歌词不会更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine isn’t running; lyrics won’t update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎未运行，歌词不会更新"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎未執行，歌詞不會更新"
+          }
+        }
+      }
+    },
+    "启用失败，可能是权限或系统限制导致歌词引擎没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't enable it — a permission or system restriction may have kept the lyrics engine from starting. Export Diagnostics shows the specific cause and makes it easier to report"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用失败，可能是权限或系统限制导致歌词引擎没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "啟用失敗，可能是權限或系統限制導致歌詞引擎沒能正常啟動，匯出診斷資訊能看到具體原因，也方便回報問題"
+          }
+        }
+      }
+    },
+    "这个版本打包时漏了同步歌词引擎的版本号。不影响功能，歌词引擎的实际代码跟 App 是同一个版本，不需要你做任何处理" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This build shipped with a stale version number for the lyrics engine. Nothing is broken — the lyrics engine runs the same code as the app, and there's nothing you need to do."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个版本打包时漏了同步歌词引擎的版本号。不影响功能，歌词引擎的实际代码跟 App 是同一个版本，不需要你做任何处理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個版本打包時漏了同步歌詞引擎的版本號。不影響功能，歌詞引擎的實際程式碼跟 App 是同一個版本，不需要你做任何處理"
+          }
+        }
+      }
+    },
+    "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由歌词引擎读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This permission keeps the Apple Music playback position accurate and lets you control playback right from the lyrics (play/pause, skip, scrub, love, add to library). Lyrics still show without it — the basic playback info comes from the lyrics engine — the position is just less accurate and those buttons won't do anything. The button below brings up the system authorization dialog; choose “Allow”. You can come back to this in Settings any time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由歌词引擎读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個權限用來把 Apple Music 的播放進度校正得更準，以及讓你直接在歌詞上控制播放（播放/暫停、切歌、拖進度、喜歡、加入資料庫）。沒有它歌詞照樣能顯示——基本的播放資訊由歌詞引擎讀取——只是進度會有偏差、那些按鈕按不動。按下面的按鈕會跳出系統授權對話框，選擇「允許」即可；隨時可以在設定裡重新開啟這一步"
+          }
+        }
+      }
+    },
+    "歌词引擎还没启用，所以这次不算走完引导——下次启动会再问一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine isn't enabled yet, so this doesn't count as finishing setup — you'll be asked again next launch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎还没启用，所以这次不算走完引导——下次启动会再问一次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎還沒啟用，所以這次不算走完引導——下次啟動會再問一次"
+          }
+        }
+      }
+    },
+    "没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法啟動（%@）。可以先「暫時略過」，之後到設定的「播放器 → 歌詞引擎」裡重試，那一頁會給出更詳細的狀態。"
+          }
+        }
+      }
+    },
+    "授权对已经在运行的歌词引擎不生效。在系统设置里勾上之后，回到这里点一下「重启歌词引擎」。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Granting access doesn’t reach a lyrics engine that’s already running. After ticking it in System Settings, come back here and hit Restart Lyrics Engine."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授权对已经在运行的歌词引擎不生效。在系统设置里勾上之后，回到这里点一下「重启歌词引擎」。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權對已經在執行的歌詞引擎不生效。在系統設定裡勾上之後，回到這裡按一下「重新啟動歌詞引擎」。"
+          }
+        }
+      }
+    },
+    "重启歌词引擎" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart Lyrics Engine"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重启歌词引擎"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新啟動歌詞引擎"
+          }
+        }
+      }
+    },
+    "正在重启歌词引擎，它要把歌词缓存重新读一遍，通常要一两分钟…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restarting the lyrics engine. It has to read the whole lyrics cache again, which usually takes a minute or two…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重启歌词引擎，它要把歌词缓存重新读一遍，通常要一两分钟…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重新啟動歌詞引擎，它要把歌詞快取重新讀一遍，通常要一兩分鐘…"
+          }
+        }
+      }
+    },
+    "歌词引擎已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎已經重新啟動過了，這個來源還是讀不到。到系統設定的「完整磁碟取用權限」裡確認一下 Lyrimuse 那一項是開著的。"
+          }
+        }
+      }
+    },
+    "在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启歌词引擎」——授权对已经在运行的歌词引擎不生效。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and hit Restart Lyrics Engine — access doesn’t reach a lyrics engine that’s already running."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启歌词引擎」——授权对已经在运行的歌词引擎不生效。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系統設定的「完整磁碟取用權限」裡開啟 Lyrimuse（列表裡沒有就按「+」把它加進去），再回到這裡按一下「重新啟動歌詞引擎」——授權對已經在執行的歌詞引擎不生效。"
+          }
+        }
+      }
+    },
+    "正在重启歌词引擎，等它重新确认授权…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restarting the lyrics engine and waiting for it to check access again…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重启歌词引擎，等它重新确认授权…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重新啟動歌詞引擎，等它重新確認授權…"
+          }
+        }
+      }
+    },
+    "歌词引擎已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎已經重新啟動過了，還是讀不到。到系統設定的「完整磁碟取用權限」裡確認一下 Lyrimuse 那一項是開著的。"
+          }
+        }
+      }
+    },
+    "歌词引擎没有响应" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine didn't respond"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎没有响应"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎沒有回應"
+          }
+        }
+      }
+    },
+    "日文、韩文、粤语默认会标注，中文拼音可在设置里打开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日文、韩文、粤语默认会标注，中文拼音可在设置里打开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日文、韓文、粵語預設會標注，國語拼音可在設定裡開啟"
+          }
+        }
+      }
+    },
+    "让它跑起来" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get It Running"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让它跑起来"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讓它跑起來"
+          }
+        }
+      }
+    },
+    "歌词怎么显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How Lyrics Show Up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词怎么显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞怎麼顯示"
+          }
+        }
+      }
+    },
+    "歌词引擎必装，权限推荐开启，不开也能用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics engine is required; the permissions are recommended but optional"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词引擎必装，权限推荐开启，不开也能用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞引擎必裝，權限推薦開啟，不開也能用"
+          }
+        }
+      }
+    },
+    "认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizes songs and finds lyrics and artwork. Runs only on this Mac; looking up lyrics sends nothing but track info such as title and artist"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "認歌、找歌詞和封面；只在本機執行，找歌詞時只傳送歌名、歌手這類曲目資訊"
+          }
+        }
+      }
+    },
+    "正在启用…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在启用…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在啟用…"
+          }
+        }
+      }
+    },
+    "自动化权限让播放进度更准，还能在歌词上直接控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automation access keeps playback progress accurate and lets you control playback right from the lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动化权限让播放进度更准，还能在歌词上直接控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動化權限讓播放進度更準，還能在歌詞上直接控制播放"
+          }
+        }
+      }
+    },
+    "完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Disk Access lets %@ use lyrics already on this Mac — it only reads their own lyrics cache and play queue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整磁碟取用權限讓%@直接用本機已有的歌詞，只讀它們自己的歌詞快取和播放佇列"
+          }
+        }
+      }
+    },
+    "去连接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去連接"
+          }
+        }
+      }
+    },
+    "缪斯还在候场——把下面标橙的那几项补齐，她随时可以开嗓" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The muse is waiting in the wings — sort out the orange items below and she’s ready to sing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缪斯还在候场——把下面标橙的那几项补齐，她随时可以开嗓"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繆斯還在候場——把下面標橘的那幾項補齊，她隨時可以開嗓"
+          }
+        }
+      }
+    },
+    "按下「开始使用」，让每一句歌词都跟着旋律亮起来" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click “Get Started” and let every line light up with the music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按下「开始使用」，让每一句歌词都跟着旋律亮起来"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按下「開始使用」，讓每一句歌詞都跟著旋律亮起來"
+          }
+        }
+      }
+    },
+    "放一首歌试试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play a song to try it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放一首歌试试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放一首歌試試"
+          }
+        }
+      }
+    },
+    "现在是广告" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An ad is playing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在是广告"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在是廣告"
+          }
+        }
+      }
+    },
+    "歌词已经跟上了" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics are showing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词已经跟上了"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞已經跟上了"
+          }
+        }
+      }
+    },
+    "这首是纯音乐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This one is instrumental"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首是纯音乐"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首是純音樂"
+          }
+        }
+      }
+    },
+    "正在找歌词…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finding lyrics…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在找歌词…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在找歌詞…"
+          }
+        }
+      }
+    },
+    "没找到这首的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No lyrics found for this song"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没找到这首的歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒找到這首的歌詞"
+          }
+        }
+      }
+    },
+    "网络连不上，暂时找不到歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reach the network — no lyrics yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络连不上，暂时找不到歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網路連不上，暫時找不到歌詞"
+          }
+        }
+      }
+    },
+    "等歌开始就会显示歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics will show once the song starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等歌开始就会显示歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等歌開始就會顯示歌詞"
+          }
+        }
+      }
+    },
+    "正在播放「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now playing “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在播放「%@」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在播放「%@」"
+          }
+        }
+      }
+    },
+    "歌词跟着" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics follow"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词跟着"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞跟著"
+          }
+        }
+      }
+    },
+    "在菜单栏里" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the menu bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在菜单栏里"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在選單列裡"
+          }
+        }
+      }
+    },
+    "点它打开设置和歌词窗口" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click it for Settings and the lyrics window"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点它打开设置和歌词窗口"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按它打開設定和歌詞視窗"
+          }
+        }
+      }
+    },
+    "同步你的收听记录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync your listening history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步你的收听记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步你的收聽記錄"
+          }
+        }
+      }
+    },
+    "自动识别正在播放的 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whichever app is playing, detected automatically"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动识别正在播放的 App"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動識別正在播放的 App"
+          }
+        }
+      }
+    },
+    "自动识别正在播放的 App，外加 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whichever app is playing, plus %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动识别正在播放的 App，外加 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動識別正在播放的 App，外加 %@"
           }
         }
       }

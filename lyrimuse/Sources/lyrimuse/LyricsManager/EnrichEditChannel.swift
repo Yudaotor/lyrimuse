@@ -81,12 +81,12 @@ enum EnrichEditChannel {
         // 这时报失败,改动过后照样生效。
         if (try? FileManager.default.removeItem(at: request)) != nil {
             logger.error("enrich edit: collector did not pick up the request within \(Int(resultTimeout), privacy: .public)s")
-            return Result(ok: false, changed: 0, error: L10n.t("后台采集服务没有响应"))
+            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"))
         }
         logger.notice("enrich edit: collector is still executing the request, waiting for it")
         if let answer = await waitForResult(result, timeout: executingTimeout) { return answer }
         logger.error("enrich edit: collector did not finish within \(Int(resultTimeout + executingTimeout), privacy: .public)s")
-        return Result(ok: false, changed: 0, error: L10n.t("后台采集服务没有响应"))
+        return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"))
     }
 
     private static func waitForResult(_ url: URL, timeout: TimeInterval) async -> Result? {

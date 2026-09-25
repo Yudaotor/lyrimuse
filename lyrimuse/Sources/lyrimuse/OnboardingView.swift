@@ -29,6 +29,10 @@ struct OnboardingView: View {
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
+    /// 收尾页「放一首歌试试」那一行的输入,只订阅用得到的几个属性(理由同 `isPlayingNow`)。
+    @State private var liveInput = OnboardingFlow.LiveInput(
+        title: "", artist: "", hasLyrics: false, instrumental: false,
+        noLyrics: false, adBreak: false, networkDown: false)
     // 只用来决定要不要提醒"灵动岛/菜单栏歌词得等播起来才看得见"。
     //
     // 刻意**不**写成 `@ObservedObject private var coordinator = PlaybackCoordinator.shared`:
@@ -97,7 +101,35 @@ struct OnboardingView: View {
         automation.visiblePlayers(for: features.players)
     }
 
-    private var needsAutomationStep: Bool { !automationTargets.isEmpty }
+    /// 「让它跑起来」那一页上已经授权了几项(自动化权限每家一项、完全磁盘访问一项)。
+    /// 只在那一页计数,其余页恒 0 —— 供「授权完把窗口带回前台」用。
+    private var grantedPermissionCount: Int {
+        guard currentStep == .background else { return 0 }
+        let automationGranted = automationTargets.filter { automation.status($0) == .authorized }.count
+        let fdaTargets = fullDiskAccessTargets
+        let fdaGranted = !fdaTargets.isEmpty && fullDiskAccess.grant(fdaTargets) == .granted
+        return automationGranted + (fdaGranted ? 1 : 0)
+    }
+
+    /// 那一页要的权限是不是都给了(不用再轮询)。
+    private var allPermissionsGranted: Bool {
+        grantedPermissionCount == automationTargets.count + (fullDiskAccessTargets.isEmpty ? 0 : 1)
+    }
+
+    /// 收尾页实时状态要的那几个属性,合成一个去重后的发布者。不整个订阅协调器(理由见 `isPlayingNow`)。
+    @MainActor private static let liveInputs: AnyPublisher<OnboardingFlow.LiveInput, Never> = {
+        let c = PlaybackCoordinator.shared
+        return Publishers.CombineLatest4(c.$title, c.$displayArtist, c.$hasLyricsContent, c.$isCurrentTrackInstrumental)
+            .combineLatest(Publishers.CombineLatest3(c.$currentTrackHasNoLyrics, c.$isCurrentTrackAdBreak,
+                                                     c.$collectorNetworkDown))
+            .map { track, flags in
+                OnboardingFlow.LiveInput(title: track.0, artist: track.1, hasLyrics: track.2,
+                                         instrumental: track.3, noLyrics: flags.0,
+                                         adBreak: flags.1, networkDown: flags.2)
+            }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }()
 
     /// 这一轮要替哪几家要「完全磁盘访问」—— 跟设置页那张卡同一份列表(选中 ∩ 需要 ∩ 装了)。
     private var fullDiskAccessTargets: [PlaybackPlayer] {
@@ -107,9 +139,11 @@ struct OnboardingView: View {
     // 这份列表本身不 @State,是纯粹从 features.players / wantsBrowserYouTubeMusic 派生出来
     // 的,它们一变下一次读到的就是新列表,不需要额外同步。
     private var steps: [Step] {
-        OnboardingFlow.steps(.init(needsAutomation: needsAutomationStep,
-                                   wantsBrowserPairing: wantsBrowserYouTubeMusic,
-                                   needsFullDiskAccess: !fullDiskAccessTargets.isEmpty))
+        OnboardingFlow.steps(flowConditions)
+    }
+
+    private var flowConditions: OnboardingFlow.Conditions {
+        .init(wantsBrowserPairing: wantsBrowserYouTubeMusic)
     }
 
     /// 当前这一步。**所有地方都必须走这个访问器,不准再写 `steps[step]`**:
@@ -156,13 +190,9 @@ struct OnboardingView: View {
                     switch currentStep {
                     case .welcome: welcomeStep
                     case .playerChoice: playerChoiceStep
-                    case .automation: automationStep
                     case .browserPairing: browserPairingStep
                     case .background: backgroundStep
-                    case .fullDiskAccess: fullDiskAccessStep
                     case .displayMode: displayModeStep
-                    case .lyricsExtras: lyricsExtrasStep
-                    case .lastfm: lastfmStep
                     case .done: doneStep
                     }
                 }
@@ -239,6 +269,12 @@ struct OnboardingView: View {
             guard currentStep == .done || currentStep == .background else { return }
             automation.refresh(automationTargets)
             collectorRunning = CollectorServiceManager.isRunning
+            // 走到这一步就开始装,页面照样显示安装过程和结果(不在 App 启动时静默装)。
+            if OnboardingFlow.autoStartsBackgroundService(
+                at: currentStep, collectorRunning: collectorRunning,
+                installing: isTogglingCollectorService, lastAttemptFailed: collectorFailure != nil) {
+                enableCollectorService()
+            }
         }
         // 走到最后一页就撒一阵花。判据挂 `currentStep` 而不是 `step`:最后一页的
         // **下标**会因为设置窗口同时改播放器集合而变(见 `currentStep` 头注),而"到了 .done
@@ -246,14 +282,28 @@ struct OnboardingView: View {
         // 重放;退回去再翻回来会再撒一阵(那是用户主动重新走到终点)。
         .onChange(of: currentStep) { _, new in
             if new == .done { confettiBurst += 1 }
-            if new == .done || new == .fullDiskAccess { fullDiskAccess.refresh() }
+            if new == .done || new == .background { fullDiskAccess.refresh() }
         }
         // 「完全磁盘访问」的状态文件由 collector 写,不会推通知过来;只在用得到它的两步轮询
         // (按 mtime 读,很便宜)。
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            guard currentStep == .fullDiskAccess || currentStep == .done else { return }
-            fullDiskAccess.refresh()
+            switch currentStep {
+            case .done: fullDiskAccess.refresh()
+            // 用户可能去系统设置里手动开,窗口不在前台时收不到「切回来」那次刷新。
+            case .background where !allPermissionsGranted:
+                if !fullDiskAccessTargets.isEmpty { fullDiskAccess.refresh() }
+                if !automationTargets.isEmpty { automation.refresh(automationTargets) }
+            default: break
+            }
         }
+        // 在系统设置里授权完、窗口还在后面时,把引导带回前台(只在已授权的项多了一项的那一刻)。
+        .onChange(of: grantedPermissionCount) { before, now in
+            if OnboardingFlow.bringsBackAfterGrant(grantedBefore: before, grantedNow: now,
+                                                   appIsActive: NSApp.isActive) {
+                AppActions.shared.openOnboarding?()
+            }
+        }
+        .onReceive(Self.liveInputs) { liveInput = $0 }
         .onAppear {
             automation.refresh(automationTargets)
             collectorRunning = CollectorServiceManager.isRunning
@@ -341,29 +391,37 @@ struct OnboardingView: View {
     // 语言** —— 而它原来排在第 6 步,前 5 步早就用错的语言讲完了。
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: "text.quote")
-                .font(.system(size: 44))
-                .foregroundStyle(Color.accentColor)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 64, height: 64)
+                .accessibilityHidden(true)
             Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
-            Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整"))
+            Text(L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注罗马音。接下来几步帮你调成合适的样子，以后随时能在设置里改"))
                 .foregroundStyle(.secondary)
-            Divider()
-            HStack(spacing: 10) {
-                Image(systemName: "globe")
-                    .foregroundStyle(.secondary)
-                Text(L10n.t("界面语言"))
-                Spacer(minLength: 12)
-                Picker(L10n.t("界面语言"), selection: $settings.appLanguage) {
-                    Text(L10n.t("跟随系统")).tag("system")
-                    Text(L10n.t("简体中文")).tag("zh-hans")
-                    Text(L10n.t("繁體中文")).tag("zh-hant")
-                    Text("English").tag("en")
+                .fixedSize(horizontal: false, vertical: true)
+            // 两个跟「这台 Mac 上怎么用它」有关的偏好:界面语言、开机启动。
+            VStack(alignment: .leading, spacing: 0) {
+                setupRow(icon: "globe", tint: .secondary, title: L10n.t("界面语言"), subtitle: nil) {
+                    Picker(L10n.t("界面语言"), selection: $settings.appLanguage) {
+                        Text(L10n.t("跟随系统")).tag("system")
+                        Text(L10n.t("简体中文")).tag("zh-hans")
+                        Text(L10n.t("繁體中文")).tag("zh-hant")
+                        Text("English").tag("en")
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                setupDivider
+                setupRow(icon: "power", tint: .secondary, title: L10n.t("开机时自动启动 Lyrimuse"), subtitle: nil) {
+                    // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
+                    Toggle(L10n.t("开机时自动启动 Lyrimuse"), isOn: $settings.launchAtLoginEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
+            .onboardingCard()
             // 一句不阻断的告知 + 链接,正文在 README(见 LegalNotices 头注),设置「关于」页
             // 还有同一个入口。刻意**不做**阻断式的「接受」页:引导的原则是介绍性内容不锁下一步,GPL 个人
             // 工具也没有需要「接受」的条款 —— 「接受版本号存偏好」那套是分发渠道场景的产物。
@@ -532,36 +590,42 @@ struct OnboardingView: View {
         }
     }
 
-    /// 上一步选中的播放器里,有 AppleScript 字典的那几家各要一份「自动化」权限 ——
-    /// 一家一行,跟设置页那张卡列的是同一份列表(`automationTargets`)。
+    /// 「让它跑起来」这一页:一张卡片里的一组状态行 —— 歌词引擎(必装,走到这一页自动开始装),
+    /// 以及按需出现的每家播放器自动化权限、完全磁盘访问。每行只写名称和状态,需要处理时才出现
+    /// 按钮;两项权限各有什么用收在卡片下面。开机启动是偏好不是要核对的状态,放在欢迎页。
     ///
-    /// 走到这一步时多半**已经有结果了**:上一步点中播放器的那一下就主动请求过
-    /// (`PlayerPicker` → `requestOnSelect`)。这一页因此更多是"核对 + 补救"——
-    /// 当时点了「不允许」、或者选的是「自动识别」而某家当时没在跑没能弹窗,在这里还能再点一次。
-    private var automationStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 标题和正文不能写成「（必需）」/「没有它，悬浮歌词完全没法显示任何内容」:
-            // 基础的"在播什么"来自 collector 的 media-control 通道,没有这个权限歌词照样
-            // 显示;自动化权限管的是 `MediaControlClient.adaptedSnapshot`(那几家的播放头与
-            // 曲目信息整份由它读)加上 `MusicPlaybackController` 里那一整套播放/资料库控制。
-            // 强度是「推荐」,不在 `nextIsLocked` 里,理由见那边。
-            Text(L10n.t("播放器自动化权限（推荐）"))
+    /// 歌词引擎和开机启动**不是同一件事**:collector 是独立的 launchd job(KeepAlive,装上
+    /// 之后本来就开机自启),开机启动开关管的是 Lyrimuse 这个 App 自己(`LoginItemManager`)。
+    /// 这条区别不写进界面文案。
+    ///
+    /// 自动化权限走到这一页时多半已经有结果了:选播放器那一下就请求过(`requestOnSelect`),
+    /// 这里是核对 + 补救。两项权限都是推荐项,不在 `nextIsLocked` 里。
+    private var backgroundStep: some View {
+        let fdaTargets = fullDiskAccessTargets
+        return VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.t("让它跑起来"))
                 .font(.title2.bold())
-            Text(L10n.t("用来校准播放进度，并让你在歌词上直接控制播放。不授权歌词照样显示，只是进度可能有偏差、控制按钮用不了。系统弹窗时选「允许」即可"))
+            Text(L10n.t("歌词引擎必装，权限推荐开启，不开也能用"))
                 .foregroundStyle(.secondary)
-            ForEach(automationTargets, id: \.self) { player in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: automation.iconName(player))
-                            .foregroundStyle(automation.iconColor(player))
-                        Text(player.displayName)
-                        Text(automation.caption(player))
-                            .foregroundStyle(.secondary)
-                        Spacer()
+            VStack(alignment: .leading, spacing: 0) {
+                setupRow(icon: engineIcon, tint: engineTint, title: L10n.t("歌词引擎"),
+                         subtitle: L10n.t("认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息")) {
+                    engineTrailing
+                }
+                // 自动启用没起来时的交代:原因 + 出路(按钮已经变成「重试」)。
+                if let collectorFailure {
+                    rowNote(collectorFailure, tint: .orange)
+                }
+                ForEach(automationTargets, id: \.self) { player in
+                    setupDivider
+                    setupRow(icon: automation.iconName(player), tint: automation.iconColor(player),
+                             title: String(format: L10n.t("%@ 自动化权限"), player.displayName),
+                             subtitle: automation.caption(player)) {
                         if automation.isRequesting(player) {
                             ProgressView().controlSize(.small)
-                        } else {
+                        } else if automation.status(player) != .authorized {
                             Button(automation.actionTitle(player)) { automation.handleAction(player) }
+                                .controlSize(.small)
                         }
                     }
                     if automation.showsWaitingNote(player) {
@@ -570,106 +634,179 @@ struct OnboardingView: View {
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .padding(.leading, Self.setupRowIndent)
+                        .padding(.bottom, 8)
                     }
                 }
-            }
-        }
-    }
-
-    /// 「完全磁盘访问」这一步。强度同 `.automation`:推荐、不锁「下一步」—— 没有它歌词照样能
-    /// 联网找到,只是用不上客户端自己的缓存和播放队列。
-    private var fullDiskAccessStep: some View {
-        let targets = fullDiskAccessTargets
-        return VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("完全磁盘访问权限（推荐）"))
-                .font(.title2.bold())
-            Text(FullDiskAccessGuide.reason(targets))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Image(systemName: fullDiskAccess.iconName(targets))
-                    .foregroundStyle(fullDiskAccess.iconColor(targets))
-                Text(fullDiskAccess.caption(targets))
-                Spacer()
-            }
-            if fullDiskAccess.grant(targets) != .granted || fullDiskAccess.restartPhase != .idle {
-                FullDiskAccessGuide(players: targets, showsReason: false)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// 「让它一直待命」这一步(由原 `collectorServiceStep` 扩成)。
-    ///
-    /// 两件事摆在一页:**常驻后台服务(必需)** 和 **开机自动启动 Lyrimuse(可选)**。它们
-    /// 回答的是同一个问题,但**不是同一件事**:collector 是一个独立的 launchd job(KeepAlive,
-    /// 装上之后本来就开机自启,跟这个开关无关),而这个开关管的是 Lyrimuse 这个 App 自己
-    /// (`LoginItemManager`,见 AppSettings.launchAtLoginEnabled 的 didSet)。两者互不拉起:
-    /// App 退出后 collector 照常采集(见 01 章)。
-    ///
-    /// 这条区别**刻意不写进界面文案**("去掉括号里面的文案")。原来
-    /// 副标题后面挂着一句"(后台采集服务是独立的,装上之后本来就会开机自启)",两行小字塞不下、
-    /// 在窗口里撑出去了,而且它解释的是一个用户根本没问的区别 —— 上面那张卡已经说清 collector
-    /// 自己会常驻。这里记着是给改代码的人看的,不是给用户看的。
-    private var backgroundStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("让它一直待命"))
-                .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容"))
-                .foregroundStyle(.secondary)
-            HStack {
-                Image(systemName: collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(collectorRunning ? .green : .red)
-                Text(collectorRunning
-                     ? L10n.t("后台采集服务：运行中")
-                     : L10n.t("后台采集服务：未运行（必需）"))
-                Spacer()
-                if isTogglingCollectorService {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(L10n.t("启用")) { enableCollectorService() }
-                        .disabled(collectorRunning)
+                if !fdaTargets.isEmpty {
+                    setupDivider
+                    fullDiskAccessRow(fdaTargets)
                 }
             }
-            // 点了「启用」却没起来时的交代。在此之前这条路是**全静默**的:
-            // 图标停在红色「未运行」,没有原因、没有下一步,而这一步又锁着「下一步」——
-            // 卡在这里的用户彻底走不动,界面上连"这不是你的错"都没说。
-            if let collectorFailure {
-                Text(collectorFailure)
+            .onboardingCard()
+            if let note = permissionBenefitNote(fdaTargets) {
+                Text(note)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Divider()
-            toggleRow(
-                icon: "power",
-                title: L10n.t("开机时自动启动 Lyrimuse"),
-                subtitle: L10n.t("菜单栏图标开机就在，不用每次自己打开"),
-                isOn: $settings.launchAtLoginEnabled)
         }
     }
 
-    /// 「译文与罗马音」这一步。
-    ///
-    /// 为什么值得单独占一步:这是这个 App 对中日韩听众最核心的能力之一(设置里「歌词 →
-    /// 译文/效果」整整两卡),而在此之前引导里**一个字都没提** —— 新用户只有自己摸到设置
-    /// 里折叠着的那几行才会发现。跟 `.lastfm` 同一档:介绍性质、不锁「下一步」。
+    private var engineIcon: String {
+        if collectorRunning { return "checkmark.circle.fill" }
+        return isTogglingCollectorService ? "circle.dotted" : "xmark.circle.fill"
+    }
+
+    private var engineTint: Color {
+        if collectorRunning { return .green }
+        return isTogglingCollectorService ? .secondary : .red
+    }
+
+    /// 歌词引擎那一行的尾部:在跑只写状态;正在装转圈;没起来才给按钮(自动启用失败后是「重试」)。
+    @ViewBuilder
+    private var engineTrailing: some View {
+        if collectorRunning {
+            Text(L10n.t("运行中"))
+                .foregroundStyle(.secondary)
+        } else if isTogglingCollectorService {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("正在启用…"))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Button(collectorFailure == nil ? L10n.t("启用") : L10n.t("重试")) { enableCollectorService() }
+                .controlSize(.small)
+        }
+    }
+
+    /// 完全磁盘访问那一行。没授权时行尾「打开系统设置」,下面一句怎么生效 +「重启歌词引擎」
+    /// (授权对已经在跑的歌词引擎不生效);授权后只剩状态。动作本体在 `FullDiskAccessPermission`。
+    @ViewBuilder
+    private func fullDiskAccessRow(_ targets: [PlaybackPlayer]) -> some View {
+        let granted = fullDiskAccess.grant(targets) == .granted
+        setupRow(icon: fullDiskAccess.iconName(targets), tint: fullDiskAccess.iconColor(targets),
+                 title: L10n.t("完全磁盘访问权限"), subtitle: fullDiskAccess.caption(targets)) {
+            if fullDiskAccess.restartPhase == .waiting {
+                ProgressView().controlSize(.small)
+            } else if !granted {
+                Button(L10n.t("打开系统设置")) { fullDiskAccess.openSystemSettings() }
+                    .controlSize(.small)
+            }
+        }
+        if !granted {
+            VStack(alignment: .leading, spacing: 4) {
+                switch fullDiskAccess.restartPhase {
+                case .waiting:
+                    Text(L10n.t("正在重启歌词引擎，等它重新确认授权…"))
+                case .stillDenied:
+                    Text(L10n.t("歌词引擎已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"))
+                        .foregroundStyle(Color.orange)
+                case .idle:
+                    Text(L10n.t("授权对已经在运行的歌词引擎不生效。在系统设置里勾上之后，回到这里点一下「重启歌词引擎」。"))
+                }
+                if fullDiskAccess.restartPhase != .waiting {
+                    Button(L10n.t("重启歌词引擎")) {
+                        Task { await fullDiskAccess.restartCollector(for: targets) }
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, Self.setupRowIndent)
+            .padding(.bottom, 10)
+        }
+    }
+
+    /// 卡片下面那几句:只讲这一轮真的出现了的权限各有什么用。完全磁盘访问那句按 collector 实际读的
+    /// 路径写(只读这几家在 ~/Library/Containers 下的歌词缓存与播放队列,localcachefs.go 头注);
+    /// 别写「不上传」:开了网页中继时当前歌词会推到用户自己的服务器。
+    private func permissionBenefitNote(_ fdaTargets: [PlaybackPlayer]) -> String? {
+        var lines: [String] = []
+        if !automationTargets.isEmpty {
+            lines.append(L10n.t("自动化权限让播放进度更准，还能在歌词上直接控制播放"))
+        }
+        if !fdaTargets.isEmpty {
+            lines.append(String(format: L10n.t("完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列"),
+                                fullDiskAccess.playerNames(fdaTargets)))
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    /// 卡片里的一行:左侧内容(固定宽度,几行的标题对齐在同一条竖线上)+ 名称(+ 一行小字)+ 尾部控件。
+    private static let setupRowIndent: CGFloat = 30
+
+    private func cardRow<Leading: View, Trailing: View>(
+        leadingWidth: CGFloat = 20, title: String, subtitle: String?,
+        @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            leading()
+                .frame(width: leadingWidth)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 13))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.vertical, 9)
+    }
+
+    /// 左侧是一个 SF Symbol 的卡片行。
+    private func setupRow<Trailing: View>(icon: String, tint: Color, title: String, subtitle: String?,
+                                          @ViewBuilder trailing: () -> Trailing) -> some View {
+        cardRow(title: title, subtitle: subtitle) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(tint)
+                .environment(\.locale, Locale(identifier: "en"))
+        } trailing: {
+            trailing()
+        }
+    }
+
+    private func cardDivider(indent: CGFloat) -> some View {
+        Divider().padding(.leading, indent)
+    }
+
+    private var setupDivider: some View {
+        cardDivider(indent: Self.setupRowIndent)
+    }
+
+    private func rowNote(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(tint)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, Self.setupRowIndent)
+            .padding(.bottom, 8)
+    }
+
+    /// 「歌词怎么显示」页的下半部分:译文与罗马音。这是这个 App 对中日韩听众最核心的能力之一
+    /// (设置里「歌词 → 译文/效果」整整两卡),介绍性质、不锁「下一步」。
     ///
     /// 这里只放**两个总开关**,不放"标注哪些语言"那一排。那几个走的是
     /// `romanizationScripts` 的**双写**(AppSettings 持久化 + LocalPlaybackSource 让当前这首
     /// 歌立刻重新解析,见 SettingsView.romanizationToggle 的头注),只写一边就会出"改了要等
     /// 下一首才生效"这种错位 —— 引导页照抄一份等于给那条约束开第二个漂移点。默认值
-    /// (`RomanizationScripts.default`:日 / 韩 / 中 / 粤全开)对绝大多数人本来就是对的,细调留给设置页。
+    /// (`RomanizationScripts.defaultScripts(chineseUI:)`,跟界面语言走)对绝大多数人本来就是对的,细调留给设置页。
     ///
     /// 两个总开关只管悬浮歌词和歌词窗口;灵动岛和菜单栏的译文 / 罗马音走各自的「副行」
     /// (`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写。
-    private var lyricsExtrasStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("译文与罗马音"))
-                .font(.title2.bold())
-            Text(L10n.t("外语歌可以对照译文；日文、韩文、中文和粤语还能标上罗马音跟着唱"))
-                .foregroundStyle(.secondary)
+    private var lyricsExtrasSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 toggleRow(
                     icon: "text.bubble",
@@ -679,7 +816,9 @@ struct OnboardingView: View {
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示罗马音"),
-                    subtitle: L10n.t("日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭"),
+                    subtitle: settings.romanizationScripts.contains(.chinese)
+                        ? L10n.t("日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭")
+                        : L10n.t("日文、韩文、粤语默认会标注，中文拼音可在设置里打开"),
                     isOn: $settings.showRomanization)
             }
             Text(L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或罗马音"))
@@ -722,7 +861,7 @@ struct OnboardingView: View {
     // 是 `currentStep` + `.onChange(of: steps.count)` 那一对,详见 `currentStep` 头注。
     private var displayModeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("歌词显示在哪里"))
+            Text(L10n.t("歌词怎么显示"))
                 .font(.title2.bold())
             Text(L10n.t("这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关"))
                 .foregroundStyle(.secondary)
@@ -766,6 +905,8 @@ struct OnboardingView: View {
                     tint: .secondary,
                     text: L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"))
             }
+            Divider()
+            lyricsExtrasSection
         }
     }
 
@@ -798,7 +939,8 @@ struct OnboardingView: View {
             // 放在 Form/List 里才会自动变成右侧胶囊开关。设置页是靠 SettingsRow 统一挂了
             // 这一句(Settings/SettingsDesignSystem.swift:346),向导里没有那个祖先,不写
             // 就是一排复选框,不报错也不崩,只是长得跟设置页对不上。
-            Toggle("", isOn: isOn)
+            // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
         }
@@ -811,7 +953,7 @@ struct OnboardingView: View {
     /// 同样必须显式 `.toggleStyle(.switch)`:macOS 上 Toggle 默认画成**复选框**,只有放在
     /// Form/List 里才会自动变成右侧胶囊开关,而向导里没有那个祖先(完整理由见 displayModeRow)。
     private func toggleRow(
-        icon: String, title: String, subtitle: String, isOn: Binding<Bool>
+        icon: String, title: String, subtitle: String?, isOn: Binding<Bool>
     ) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: icon)
@@ -825,13 +967,16 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13))
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 12)
-            Toggle("", isOn: isOn)
+            // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
         }
@@ -867,32 +1012,6 @@ struct OnboardingView: View {
             && !settings.showLyricsInMenuBar
     }
 
-    // 纯介绍性质,不收集任何凭据(那些留给设置里的 Last.fm 详情页)——向导这一步只
-    // 负责让用户知道有这个功能、值不值得现在就去配。点了"现在去设置里连接"会直接
-    // 打开设置窗口并停在 Last.fm 详情页(见 AppActions.pendingSettingsSelection),
-    // 不用先关掉引导向导再自己去侧边栏找。
-    private var lastfmStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 真实的 Last.fm 品牌图标,不再拿 SF Symbol 的循环箭头
-            // 凑数 —— 跟设置页账号卡片、菜单栏面板底栏、Dock 右键菜单同一张 PNG
-            // (`lastfmBadge` / `LastfmIcon.png`,素材来源和"为什么不设 isTemplate"见
-            // AccountLinkingTab.swift 里 `lastfmBadgeImage` 的注释)。
-            //
-            // 圆角按 `lastfmBadge` 的默认比例(size * 0.22)走,不额外指定 —— 那个比例是
-            // 这张图在别处已经在用的,写死一个数只会让同一张图在引导页长得不一样。
-            lastfmBadge(size: 44)
-            Text(L10n.t("同步收听到 Last.fm（可选）"))
-                .font(.title.bold())
-            Text(L10n.t("连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案"))
-                .foregroundStyle(.secondary)
-            Button(L10n.t("现在去设置里连接")) {
-                AppActions.shared.requestSettings(.account(.lastfm))
-                NSApp.activate(ignoringOtherApps: true)
-                openSettings()
-            }
-        }
-    }
-
     /// 最后一步要核对的几件事。只列**这一轮真的走过**的步骤 —— 跟 `steps` 派生自同一批
     /// 判据,没问 Apple Music 权限的人不该在清单上看到一条"未完成"的权限。
     /// 哪几条、好没好、「去处理」跳哪一步由 `OnboardingFlow.readinessItems` 决定,这里只读运行期事实。
@@ -911,7 +1030,7 @@ struct OnboardingView: View {
 
     private func readinessTitle(_ kind: OnboardingFlow.ReadinessKind) -> String {
         switch kind {
-        case .collector: return L10n.t("后台采集服务")
+        case .collector: return L10n.t("歌词引擎")
         case .automation(let player): return String(format: L10n.t("%@ 自动化权限"), player.displayName)
         case .fullDiskAccess: return L10n.t("完全磁盘访问权限")
         case .browser: return L10n.t("YouTube Music 的浏览器")
@@ -919,70 +1038,72 @@ struct OnboardingView: View {
         }
     }
 
-    /// 从"无条件一句「一切就绪」"改成一张**体检清单**。
+    /// 收尾页:居中的头部(App 图标 + 状态角标 + 标题 + 一句话)→ 实时状态横幅(「放一首歌试试」)
+    /// →「要处理的」卡片(有才出现)→ 三格小卡片(跟着哪些播放器 / 菜单栏图标 / Last.fm)。
     ///
-    /// 这一改同时顶掉了两件旧设计:
-    ///  ① 那次把 automation 锁进「下一步」,治的是"用户误点不允许还能一路走完、
-    ///     这一页却说一切就绪"。病根其实在这一页**撒谎**,不在按钮不够严 —— 清单如实报告
-    ///     之后,那道锁就没必要了(见 `nextIsLocked`)。
-    ///  ② 这一页原来只说"可以随时在设置里调整",而这是个**没有 Dock 图标的菜单栏 App**:
-    ///     点完「开始使用」窗口一关,屏幕上什么都不会发生,新用户根本不知道它去哪了。首启
-    ///     那个"⌘+拖拽可以挪位置"的气泡本来能交代这件事,但它 T+1.5s 就弹、8 秒后消失,
-    ///     恰好被这扇引导窗口盖住(已在 MenuBarStatusItem 里改成引导走完才弹),所以图标
-    ///     在哪、怎么挪、快捷键去哪配,这一页必须自己讲一遍。
+    /// 「要处理的」那张是 automation 从「下一步」那道锁里移出去之后**唯一如实报告缺什么**的地方
+    /// (见 `nextIsLocked`):误点「不允许」还能一路走完,这一页不能无条件说「一切就绪」。
+    /// 全绿时整张不出现。必需项在前(「去处理」),推荐项在后(「去开启」,写明开了能多得到什么)。
+    ///
+    /// 这是个**没有 Dock 图标的菜单栏 App**:点完「开始使用」窗口一关,屏幕上什么都不会发生,
+    /// 所以图标在哪、长什么样,这一页必须自己讲(首启那个 ⌘+拖拽气泡等引导走完才弹)。
     private var doneStep: some View {
         let items = readinessItems
-        let allOK = items.allSatisfy(\.ok)
+        let allOK = OnboardingFlow.requiredReady(items)
+        let pending = items.filter { !$0.ok && !$0.isOptional } + items.filter { !$0.ok && $0.isOptional }
         return VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: allOK ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(allOK ? Color.green : Color.orange)
-                Text(allOK ? L10n.t("一切就绪") : L10n.t("还差一点"))
-                    .font(.title.bold())
-            }
-            // 一句俏皮话。App 名 Lyrimuse = Lyric + Muse,收尾这一页
-            // 是整个向导唯一适合把这个双关点破的地方 —— 前面每一步都在讲权限/服务/开关,
-            // 只有这里是"配完了,去听歌吧"。两种状态各一句:全绿是送别,没全绿是"再等等你"。
-            //
-            // 文案里点名了「开始使用」这个按钮,英文那版对应 "Get Started"(catalog 里
-            // 「开始使用」的既有译法)—— 以后改按钮文案要连这句一起改,别让它指向一个不存在
-            // 的按钮。
-            Text(allOK ? L10n.t("缪斯已经就位——接下来交给音乐。按下「开始使用」，让每一句歌词都跟着旋律亮起来")
-                       : L10n.t("缪斯还在候场——把上面标橙的那几项补齐，她随时可以开嗓"))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // 你在前面挑的那几个播放器 —— 把这一片换成它
-            // (「这个地方不要放着几个吧,放刚才选了的那些播放器」)。收尾这一页原来铺着
-            // 四行清一色的绿勾,信息量约等于零;换成"歌词会跟着这些走"之后,这一页才真的
-            // 在说"你配好了什么"。
-            chosenPlayersStrip
-            // **清单没有被删掉,只是全绿时不出现**。它是 `automation` 从「下一步」那道锁里
-            // 移出去之后**唯一如实报告缺什么**的地方(见 nextIsLocked / doneStep 的头注) ——
-            // 整条删掉就又回到治过的那个病:用户误点「不允许」还能一路走完,这一页
-            // 却无条件说"一切就绪"。折中是只列**没就绪**的那几行:全绿时页面干净,出问题时
-            // 一眼看到红的那条并能直接跳回去处理。
-            if !allOK {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(items.filter { !$0.ok }) { item in
-                        readinessRow(item)
+            doneHeader(allOK: allOK)
+            liveBanner
+            if !pending.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(pending.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { setupDivider }
+                        pendingRow(item)
                     }
                 }
+                .onboardingCard()
             }
-            Text(L10n.t("Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // 见 finish():后台服务没起来时这次不算走完引导,下次启动还会再问。写在脸上,
-            // 不做无声惩罚。
+            HStack(alignment: .top, spacing: 10) {
+                playersTile
+                menuBarTile
+                lastfmTile
+            }
+            // 见 finish():歌词引擎没起来时这次不算走完引导,下次启动还会再问。写在脸上,不做无声惩罚。
             if !collectorRunning {
-                Text(L10n.t("后台采集服务还没启用，所以这次不算走完引导——下次启动会再问一次"))
+                Text(L10n.t("歌词引擎还没启用，所以这次不算走完引导——下次启动会再问一次"))
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func doneHeader(allOK: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 56, height: 56)
+                .overlay(alignment: .bottomTrailing) {
+                    ZStack {
+                        Circle().fill(Color.white).frame(width: 17, height: 17)
+                        Image(systemName: allOK ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(allOK ? Color.green : Color.orange)
+                    }
+                    .offset(x: 3, y: 3)
+                }
+                .accessibilityHidden(true)
+            Text(allOK ? L10n.t("一切就绪") : L10n.t("还差一点"))
+                .font(.title2.bold())
+            // 文案里点名了「开始使用」这个按钮(英文 "Get Started"),改按钮文案要连这句一起改。
+            Text(allOK ? L10n.t("按下「开始使用」，让每一句歌词都跟着旋律亮起来")
+                       : L10n.t("缪斯还在候场——把下面标橙的那几项补齐，她随时可以开嗓"))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// 收尾这一页那一串里的一项。之所以要这么一个类型:这一串**混着两种东西** ——
@@ -1031,61 +1152,212 @@ struct OnboardingView: View {
         }
     }
 
-    /// 收尾这一页的"你选的播放器"。图标走 `PlayerIconView`(三级兜底的取图本体,跟选项卡
-    /// 共用一份,见那边头注)。
-    private var chosenPlayersStrip: some View {
+    /// 实时状态横幅(「放一首歌试试」):判定在 `OnboardingFlow.liveCheck`,这里只管排版。
+    /// 歌词已跟上是绿底,找不到 / 断网是橙底,其余中性。
+    private var liveBanner: some View {
+        let state = OnboardingFlow.liveCheck(liveInput)
+        let song = liveInput.title
+        let tint: Color? = switch state {
+        case .lyricsReady: .green
+        case .noLyrics, .offline: .orange
+        default: nil
+        }
+        return HStack(alignment: .center, spacing: 10) {
+            Group {
+                switch state {
+                case .searching: ProgressView().controlSize(.small)
+                case .lyricsReady: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                case .noLyrics, .offline: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                case .notPlaying, .adBreak, .instrumental: Image(systemName: "music.note").foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 16))
+            .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(liveHeadline(state))
+                    .font(.system(size: 13, weight: .medium))
+                Group {
+                    switch state {
+                    case .notPlaying:
+                        Button(L10n.t("已经在放了还没反应？看看选的播放器对不对")) { jump(to: .playerChoice) }
+                            .buttonStyle(.link)
+                    case .noLyrics:
+                        Button(L10n.t("去歌词管理里手动找")) { AppActions.shared.openLyricsManager?() }
+                            .buttonStyle(.link)
+                    case .adBreak:
+                        Text(L10n.t("等歌开始就会显示歌词"))
+                            .foregroundStyle(.secondary)
+                    default:
+                        Text(String(format: L10n.t("正在播放「%@」"), song))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .font(.system(size: 11))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill((tint ?? Color.primary).opacity(tint == nil ? 0.035 : 0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.2)))
+    }
+
+    private func liveHeadline(_ state: OnboardingFlow.LiveCheck) -> String {
+        switch state {
+        case .notPlaying: return L10n.t("放一首歌试试")
+        case .adBreak: return L10n.t("现在是广告")
+        case .lyricsReady: return L10n.t("歌词已经跟上了")
+        case .instrumental: return L10n.t("这首是纯音乐")
+        case .searching: return L10n.t("正在找歌词…")
+        case .noLyrics: return L10n.t("没找到这首的歌词")
+        case .offline: return L10n.t("网络连不上，暂时找不到歌词")
+        }
+    }
+
+    /// 三格小卡片的外壳:图标一行、标题 + 一两行说明,最底下可选一个链接。
+    private func doneTile<Top: View, Bottom: View>(
+        title: String, detail: String,
+        @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            top()
+                .frame(height: 24, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            bottom()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
+    }
+
+    /// 选的播放器:图标走 `PlayerIconView`(三级兜底取图,跟选项卡共用一份),最多并排四个;
+    /// 名字那一行既是给眼睛的说明,也是旁白唯一能读到的内容。
+    ///
+    /// 「自动识别」不是一个 App,不画成图标:图标只排真实的播放器 / 网页平台(并排、不重叠),
+    /// 自动识别用文字说。只开了自动识别时放一个普通的魔法棒符号占住图标位。
+    private var playersTile: some View {
         let entries = chosenEntries
-        let names = entries.map(\.displayName)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                ForEach(entries) { entry in
-                    switch entry {
-                    case .player(let player):
-                        PlayerIconView(player: player, size: 24)
-                    case .webPlatform(let id, _):
-                        if let icon = WebPlatformIcon.image(id) {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                        } else {
-                            // 没走 build.sh 打包时取不到随包图标 —— 同 WebPlatformChoiceCard 的兜底。
-                            Image(systemName: "globe")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.white)
-                                .frame(width: 24, height: 24)
-                                .background(Color.secondary,
-                                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
+        let autoDetect = entries.contains { if case .player(.auto) = $0 { return true } else { return false } }
+        let apps = entries.filter { if case .player(.auto) = $0 { return false } else { return true } }
+        let appNames = apps.map(\.displayName).joined(separator: "、")
+        let detail = !autoDetect ? appNames
+            : apps.isEmpty ? L10n.t("自动识别正在播放的 App")
+            : String(format: L10n.t("自动识别正在播放的 App，外加 %@"), appNames)
+        return doneTile(title: L10n.t("歌词跟着"), detail: detail) {
+            if apps.isEmpty {
+                Image(systemName: "wand.and.sparkles")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 4) {
+                    ForEach(Array(apps.prefix(4))) { entry in
+                        chosenEntryIcon(entry)
                     }
                 }
             }
-            // 光排一串图标读不出名字(尤其"自动识别"那张纯色块),名字这一行既是给眼睛的
-            // 说明,也是旁白唯一能读到的内容 —— 上面那排图标本身不带任何标签。
-            Text(String(format: L10n.t("歌词会跟着这些走：%@"), names.joined(separator: " · ")))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        } bottom: {
+            EmptyView()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("你选的播放器") + "：" + names.joined(separator: "、"))
+        .accessibilityLabel(L10n.t("你选的播放器") + "：" + detail)
     }
 
-    private func readinessRow(_ item: OnboardingFlow.ReadinessItem) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundStyle(item.ok ? Color.green : Color.orange)
-                .environment(\.locale, Locale(identifier: "en"))
-                // 图标是这一行唯一表达"好没好"的东西,旁白必须读得出来 —— 不然听到的只是
-                // 一串标题,分不出哪条是红的。
-                .accessibilityLabel(item.ok ? L10n.t("已就绪") : L10n.t("未完成"))
-            Text(readinessTitle(item.kind))
-                .font(.system(size: 13))
-            Spacer(minLength: 8)
-            if !item.ok {
-                Button(L10n.t("去处理")) { jump(to: item.target) }
-                    .buttonStyle(.link)
-                    .font(.callout)
+    @ViewBuilder
+    private func chosenEntryIcon(_ entry: ChosenEntry) -> some View {
+        switch entry {
+        case .player(let player):
+            PlayerIconView(player: player, size: 24)
+        case .webPlatform(let id, _):
+            if let icon = WebPlatformIcon.image(id) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            } else {
+                // 没走 build.sh 打包时取不到随包图标 —— 同 WebPlatformChoiceCard 的兜底。
+                Image(systemName: "globe")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(Color.secondary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
+        }
+    }
+
+    /// 画出用户此刻选的那一款菜单栏图标(12 款可选,只说「在菜单栏里」新用户不知道找哪个)。
+    /// 跟设置页图标选择器同一份绘制(`MenuBarIconStyle.cachedImage`)。
+    private var menuBarTile: some View {
+        doneTile(title: L10n.t("在菜单栏里"), detail: L10n.t("点它打开设置和歌词窗口")) {
+            Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
+                .renderingMode(.template)
+                .foregroundStyle(Color.primary)
+                .frame(width: 36, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.secondary.opacity(0.14)))
+                .accessibilityLabel(String(format: L10n.t("菜单栏图标：%@"), settings.menuBarIconStyle.displayName))
+        } bottom: {
+            EmptyView()
+        }
+    }
+
+    /// Last.fm:纯介绍,不收集凭据。点「去连接」直接打开设置并停在 Last.fm 详情页
+    /// (见 AppActions.pendingSettingsSelection)。图标跟设置页账号卡片同一张(`lastfmBadge`)。
+    private var lastfmTile: some View {
+        doneTile(title: "Last.fm", detail: L10n.t("同步你的收听记录")) {
+            lastfmBadge(size: 24)
+                .accessibilityHidden(true)
+        } bottom: {
+            Button(L10n.t("去连接")) {
+                AppActions.shared.requestSettings(.account(.lastfm))
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            }
+            .buttonStyle(.link)
+            .font(.system(size: 11, weight: .medium))
+        }
+    }
+
+    /// 「要处理的」卡片里的一行:必需项橙色感叹号 +「去处理」;推荐项灰色 + 写明开了能多得到什么 +「去开启」。
+    private func pendingRow(_ item: OnboardingFlow.ReadinessItem) -> some View {
+        cardRow(title: readinessTitle(item.kind),
+                subtitle: item.isOptional ? recommendedBenefit(item.kind) : nil) {
+            if item.isOptional {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            } else {
+                // 图标是这一行唯一表达"没好"的东西,旁白必须读得出来。
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel(L10n.t("未完成"))
+            }
+        } trailing: {
+            Button(item.isOptional ? L10n.t("去开启") : L10n.t("去处理")) { jump(to: item.target) }
+                .buttonStyle(.link)
+        }
+    }
+
+    private func recommendedBenefit(_ kind: OnboardingFlow.ReadinessKind) -> String {
+        switch kind {
+        case .fullDiskAccess:
+            return L10n.t("推荐开启，获取更多功能：直接用本机已有的歌词，还能提前准备下一首")
+        default:
+            return L10n.t("推荐开启，获取更多功能：播放进度更准，还能在歌词上直接控制播放")
         }
     }
 
@@ -1110,7 +1382,7 @@ struct OnboardingView: View {
             // 是固定英文的诊断串(见那边头注:它本来就是拿来贴给别人看的),所以只放进括号里
             // 当线索,不承担正文的表达。
             collectorFailure = state.isRunning ? nil : String(
-                format: L10n.t("没能启动（%@）。可以先「暂时跳过」，之后到设置的「通用 → 后台采集服务」里重试，那一页会给出更细的状态。"),
+                format: L10n.t("没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。"),
                 state.description)
         }
     }
@@ -1230,8 +1502,9 @@ private struct DisplayModeThumbnail: View {
 /// 引导窗口的磨砂玻璃底:`blendingMode = .behindWindow` 的 `NSVisualEffectView`,透出窗口后面的桌面
 /// 和别的窗口。
 ///
-/// 材质用 `.hudWindow`:同一块彩色背景上并排比过,`.sidebar` 几乎是一块只透一点颜色的白板,
-/// `.popover` 次之,`.hudWindow` 透得最多、文字仍读得清;深色外观下它自动变深。
+/// 材质用 `.sidebar`:用真实壁纸把 `.hudWindow` / `.popover` / `.menu` / `.sidebar` /
+/// `.underWindowBackground` / `.fullScreenUI` 和「满模糊 + 一层雾」并排比过,作者选的是它 ——
+/// 最白、最厚,只透出颜色轮廓,文字最稳;深色外观下它自动变深。
 /// `NSGlassEffectView`(液态玻璃)不适合铺整窗:窗口本身不透明,它只折射得到窗口里的东西,出来是一块实心灰。
 ///
 /// 别换成 SwiftUI 的 `Material`:那是窗口**内部**混合(within-window),窗口底下是纯色时等于没模糊;
@@ -1244,10 +1517,13 @@ private struct DisplayModeThumbnail: View {
 ///
 /// `state = .active`:默认跟随窗口激活态,失焦时退成不透明的灰底 —— 引导过程中系统授权对话框一弹,
 /// 这扇窗就失焦,玻璃不该跟着一闪一闪。
+///
+/// 厚薄只换材质,别调玻璃层的 `alphaValue`:降透明度不会让模糊变弱,只是把没模糊过的桌面原样混进来,
+/// 看着像脏玻璃(试过 0.8 / 0.9,作者都不满意)。
 private struct OnboardingGlassBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = TitleRevealingEffectView()
-        view.material = .hudWindow
+        view.material = .sidebar
         view.blendingMode = .behindWindow
         view.state = .active
         return view
@@ -1260,5 +1536,14 @@ private struct OnboardingGlassBackground: NSViewRepresentable {
             super.viewDidMoveToWindow()
             window?.titleVisibility = .visible
         }
+    }
+}
+
+private extension View {
+    /// 引导页里的淡玻璃卡片:欢迎页的两个偏好、「让它跑起来」的状态行、收尾页的两张卡片共用一份。
+    func onboardingCard() -> some View {
+        padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.035)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     }
 }

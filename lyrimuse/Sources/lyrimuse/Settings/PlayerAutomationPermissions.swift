@@ -77,6 +77,7 @@ final class PlayerAutomationPermissions: ObservableObject {
                 guard let latest = await MusicAutomationPermission.status(bundleID: bundleID, askIfNeeded: false),
                       let self else { return }
                 if self.statuses[player] != latest { self.statuses[player] = latest }
+                if latest == .authorized { AutomationGrantMemory.record(player) }
                 self.setNotRunning(player, latest == .notDetermined && !running)
                 if clearRequestUI, latest != .notDetermined {
                     self.requesting.remove(player)
@@ -123,6 +124,7 @@ final class PlayerAutomationPermissions: ObservableObject {
             self.requesting.remove(player)
             if let result {
                 self.statuses[player] = result
+                if result == .authorized { AutomationGrantMemory.record(player) }
                 self.timedOut.remove(player)
                 if result != .notDetermined { self.setNotRunning(player, false) }
             } else {

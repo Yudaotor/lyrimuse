@@ -577,7 +577,11 @@ final class AppSettings: ObservableObject {
     /// 跟 showRomanization 是两层:那个是"显不显示罗马音这一行"的总开关,这个决定
     /// **哪些语言**会产出罗马音。总开关关掉时这里的选择不起作用,但也不会被清掉。
     @Published var romanizationScripts: RomanizationScripts {
-        didSet { defaults.set(romanizationScripts.rawValue, forKey: Keys.romanizationScripts) }
+        didSet {
+            // 跟随界面语言换默认值时不落盘:没落盘 = 用户没手动改过,下次切语言或重启还按语言算。
+            guard !applyingLanguageDefaultRomanization else { return }
+            defaults.set(romanizationScripts.rawValue, forKey: Keys.romanizationScripts)
+        }
     }
     @Published var showTranslation: Bool {
         didSet { defaults.set(showTranslation, forKey: Keys.showTranslation) }
@@ -613,8 +617,8 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(quitWithPlayers.map(\.rawValue).sorted(), forKey: Keys.quitWithPlayers) }
     }
     // collector 常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
-    // 照抄成 true:首次启动必须走一遍引导页面里的"启用"按钮，让用户看到真实的安装+验证
-    // 过程，不能在 init() 阶段就静默尝试装一个 LaunchAgent。
+    // 照抄成 true:不能在 init() 阶段就静默装一个 LaunchAgent。首次安装发生在引导走到
+    // 「让它跑起来」那一页时(自动开始、页面上显示真实的安装与结果，见 OnboardingFlow.autoStartsBackgroundService)。
     @Published var collectorServiceEnabled: Bool {
         didSet {
             defaults.set(collectorServiceEnabled, forKey: Keys.collectorServiceEnabled)
@@ -887,7 +891,23 @@ final class AppSettings: ObservableObject {
     // @Published 而不是写完 UserDefaults 就完事,是为了让所有观察 AppSettings.shared 的界面
     // 在切换的一瞬间就重新渲染成新语言,不用重启 App。
     @Published var appLanguage: String {
-        didSet { defaults.set(appLanguage, forKey: Keys.appLanguage) }
+        didSet {
+            defaults.set(appLanguage, forKey: Keys.appLanguage)
+            followLanguageForDefaultRomanization()
+        }
+    }
+    private var applyingLanguageDefaultRomanization = false
+
+    /// 罗马音从没手动改过(没落盘)时,默认值跟着界面语言变(引导第一页就能切语言,而默认值
+    /// 在启动时就算好了)。只改内存;播放侧那份同步改(双写,见 SettingsView 的罗马音开关)。
+    private func followLanguageForDefaultRomanization() {
+        guard defaults.object(forKey: Keys.romanizationScripts) == nil else { return }
+        let next = RomanizationScripts.defaultScripts(chineseUI: L10n.current.hasPrefix("zh"))
+        guard next != romanizationScripts else { return }
+        applyingLanguageDefaultRomanization = true
+        romanizationScripts = next
+        applyingLanguageDefaultRomanization = false
+        LocalPlaybackSource.shared.romanizationScripts = next
     }
     // 单曲歌词时间轴微调(菜单里的"歌词时间轴"/两个可选快捷键)每点一次调整多少——做成
     // 可调的步长而不是代码里的固定常量,跟 menuBarLyricsMaxChars 同样的取舍。范围
@@ -1626,14 +1646,12 @@ final class AppSettings: ObservableObject {
         hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
         hasShownMenuBarPositionHint = defaults.bool(forKey: Keys.hasShownMenuBarPositionHint)
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
-        // 没存过时用 .default。 这条注释修过一次:它原来写的是
-        // "(日文/韩文开、中文关)—— 等于改成可配置之前的实际观感",而 `.default` 早在
-        // 就改成了**四项全开**(日/韩/拼音/粤拼,见 Romanizer.swift 那边的
-        // 头注:总开关一打开不该还要用户再逐项勾选)。注释停在旧值上,引导页照着它写的
-        // 副标题就跟着错了(说"中文拼音、粤拼要去设置里另外打开",实际默认就开着)。
-        // 别再照抄这句话,以 RomanizationScripts.default 的定义为准。
+        // 没存过时按界面语言取默认值,以 `RomanizationScripts.defaultScripts(chineseUI:)` 为准,
+        // 别在注释或文案里另抄一份具体开了哪几项。L10n.current 直接读 np:appLanguage 那个键,
+        // 不依赖 self.appLanguage(它在下面才赋值)。
         romanizationScripts = (defaults.object(forKey: Keys.romanizationScripts) as? Int)
-            .map(RomanizationScripts.init(rawValue:)) ?? .default
+            .map(RomanizationScripts.init(rawValue:))
+            ?? RomanizationScripts.defaultScripts(chineseUI: L10n.current.hasPrefix("zh"))
         // 默认值跟 App 界面语言联动——译文这几个歌词源(网易云/QQ 音乐)给的固定是
         // 中文翻译,不是"任意语言译文",界面语言不是中文的人默认看到一堆看不懂的
         // 中文字没有意义。L10n.current 直接读 np:appLanguage 这个 UserDefaults key

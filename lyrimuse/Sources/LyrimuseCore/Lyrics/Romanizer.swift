@@ -618,11 +618,16 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     /// 客户端完全没有开关能控制显不显示。
     public static let cantonese = RomanizationScripts(rawValue: 1 << 3)
 
-    /// 改:四项默认全开——"显示罗马音"总开关一旦打开,不该还要用户再去
-    /// 逐项勾选才看得到东西。此前中文(拼音)单独默认关是因为普通话读者本来就认字、
-    /// 拼音是纯噪声;但那次决定早于粤拼的出现,不该被直接套用到全部四项上(用户
-    /// 拍板:统一默认开)。
+    /// 四项全开。只作 Core 内部的占位初值(`LocalPlaybackSource` / `LyricsSyncEngine` 启动时
+    /// 会被 App 的设置覆盖);用户没手动改过时的默认值走 `defaultScripts(chineseUI:)`。
     public static let `default`: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
+
+    /// 用户没手动改过时的默认值,跟界面语言走:中文界面(简体 / 繁体)不标普通话拼音 ——
+    /// 对认字的人是噪声;日文、韩文、粤拼照开。其它界面语言四项全开,「显示罗马音」
+    /// 一打开就看得到东西。
+    public static func defaultScripts(chineseUI: Bool) -> RomanizationScripts {
+        chineseUI ? [.japanese, .korean, .cantonese] : .default
+    }
 }
 
 extension Romanizer {

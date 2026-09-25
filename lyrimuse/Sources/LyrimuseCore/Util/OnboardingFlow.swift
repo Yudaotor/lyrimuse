@@ -2,8 +2,7 @@ import Foundation
 
 /// 首启引导的步骤。`OnboardingView` 按它排页面。
 public enum OnboardingStep: Equatable, Hashable, Sendable {
-    case welcome, playerChoice, automation, browserPairing, background,
-         fullDiskAccess, displayMode, lyricsExtras, lastfm, done
+    case welcome, playerChoice, browserPairing, background, displayMode, done
 }
 
 /// 首启引导的流程判断:走哪几步、翻页怎么夹下标、哪一步锁「下一步」、收尾页列什么。
@@ -17,35 +16,26 @@ public enum OnboardingFlow {
 
     /// 决定这一轮走哪几步的条件。
     public struct Conditions: Equatable, Sendable {
-        /// 自动化权限那一步要列的播放器非空(选中 ∩ 需要 ∩ 装了)。
-        public var needsAutomation: Bool
         /// 选播放器那一步勾了 YouTube Music。
         public var wantsBrowserPairing: Bool
-        /// 完全磁盘访问那一步要列的播放器非空(选中 ∩ 需要 ∩ 装了)。
-        public var needsFullDiskAccess: Bool
 
-        public init(needsAutomation: Bool, wantsBrowserPairing: Bool, needsFullDiskAccess: Bool) {
-            self.needsAutomation = needsAutomation
+        public init(wantsBrowserPairing: Bool) {
             self.wantsBrowserPairing = wantsBrowserPairing
-            self.needsFullDiskAccess = needsFullDiskAccess
         }
     }
 
     /// 固定出现的步数,也是 `steps` 的长度下限。
-    public static let minimumStepCount = 7
+    public static let minimumStepCount = 5
 
-    /// 这一轮的步骤序列。三个条件步的位置是硬约束:
-    /// - `.automation`、`.browserPairing` 紧跟选播放器,且只出现在它后面 —— 能让序列变长变短的
-    ///   控件都在选播放器那一步,条件步排在它前面会让用户脚下的下标跟着变;
-    /// - `.fullDiskAccess` 必须排在 `.background` 之后:授权状态由 collector 发布,授权完还要
-    ///   重启它才生效。
+    /// 这一轮的步骤序列。唯一的条件步 `.browserPairing` 紧跟选播放器、只出现在它后面 ——
+    /// 能让序列变长变短的控件都在选播放器那一步,条件步排在它前面会让用户脚下的下标跟着变。
+    /// 自动化权限、完全磁盘访问不是单独的步骤,是 `.background`(「让它跑起来」)页里按需出现的
+    /// 小节:完全磁盘访问的状态由 collector 发布,授权完还要重启它,所以放在装歌词引擎的同一页、
+    /// 排在它下面。
     public static func steps(_ conditions: Conditions) -> [OnboardingStep] {
         var list: [OnboardingStep] = [.welcome, .playerChoice]
-        if conditions.needsAutomation { list.append(.automation) }
         if conditions.wantsBrowserPairing { list.append(.browserPairing) }
-        list.append(.background)
-        if conditions.needsFullDiskAccess { list.append(.fullDiskAccess) }
-        list.append(contentsOf: [.displayMode, .lyricsExtras, .lastfm, .done])
+        list.append(contentsOf: [.background, .displayMode, .done])
         return list
     }
 
@@ -108,6 +98,19 @@ public enum OnboardingFlow {
         step == .background && !collectorRunning
     }
 
+    /// 走到后台服务那一步时要不要自动开始启用。服务已在跑、正在装、或上一次装失败了都不自动
+    /// 再来:失败之后由用户点「重试」,不在每次翻回这一步时反复重试。
+    public static func autoStartsBackgroundService(at step: OnboardingStep, collectorRunning: Bool,
+                                                   installing: Bool, lastAttemptFailed: Bool) -> Bool {
+        step == .background && !collectorRunning && !installing && !lastAttemptFailed
+    }
+
+    /// 用户在系统设置里授权完、引导窗口此刻不在前台时,要不要把它带回来。只在「这一页已授权的
+    /// 权限多了一项」的那一刻触发,不在每次状态刷新时抢焦点。
+    public static func bringsBackAfterGrant(grantedBefore: Int, grantedNow: Int, appIsActive: Bool) -> Bool {
+        grantedNow > grantedBefore && !appIsActive
+    }
+
     /// 点「开始使用」时要不要把引导记成走完。服务没在跑就不记:标记一旦置真这扇窗口不会再自动
     /// 出现,而它是装 collector 的主要入口(服务没装 + 引导标记完成 = 桌面永久停在「搜索歌词中…」)。
     public static func marksCompleted(collectorRunning: Bool) -> Bool {
@@ -117,7 +120,7 @@ public enum OnboardingFlow {
     // MARK: - 收尾页体检清单
 
     /// 清单里的一项是什么。标题文案由视图层按它取。
-    public enum ReadinessKind: Equatable, Hashable, Sendable {
+    public enum ReadinessKind: Equatable, Hashable {
         case collector
         case automation(PlaybackPlayer)
         case fullDiskAccess
@@ -125,7 +128,7 @@ public enum OnboardingFlow {
         case displayMode
     }
 
-    public struct ReadinessItem: Equatable, Identifiable, Sendable {
+    public struct ReadinessItem: Equatable, Identifiable {
         public let kind: ReadinessKind
         public let ok: Bool
         /// 「去处理」跳回哪一步。
@@ -146,10 +149,24 @@ public enum OnboardingFlow {
             self.ok = ok
             self.target = target
         }
+
+        /// 推荐项(自动化权限、完全磁盘访问):没开也不算没做完 —— 收尾页标题照样是「一切就绪」,
+        /// 这一行改成「推荐开启」的提示。其余几项没好就是真没做完(没有它们屏幕上就没有歌词)。
+        public var isOptional: Bool {
+            switch kind {
+            case .automation, .fullDiskAccess: return true
+            case .collector, .browser, .displayMode: return false
+            }
+        }
+    }
+
+    /// 必需项都好了没有(决定收尾页标题是「一切就绪」还是「还差一点」)。推荐项不算在内。
+    public static func requiredReady(_ items: [ReadinessItem]) -> Bool {
+        items.allSatisfy { $0.ok || $0.isOptional }
     }
 
     /// 生成清单要的运行期事实。可选项为 nil = 本轮没有那一步,清单里也不列。
-    public struct ReadinessInput: Equatable, Sendable {
+    public struct ReadinessInput: Equatable {
         public var collectorRunning: Bool
         /// 自动化权限那一步列的播放器,顺序即清单顺序。
         public var automationTargets: [PlaybackPlayer]
@@ -178,10 +195,10 @@ public enum OnboardingFlow {
         var items = [ReadinessItem(kind: .collector, ok: input.collectorRunning, target: .background)]
         for player in input.automationTargets {
             items.append(ReadinessItem(kind: .automation(player),
-                                       ok: input.authorized.contains(player), target: .automation))
+                                       ok: input.authorized.contains(player), target: .background))
         }
         if let granted = input.fullDiskAccessGranted {
-            items.append(ReadinessItem(kind: .fullDiskAccess, ok: granted, target: .fullDiskAccess))
+            items.append(ReadinessItem(kind: .fullDiskAccess, ok: granted, target: .background))
         }
         if let paired = input.browserPaired {
             items.append(ReadinessItem(kind: .browser, ok: paired, target: .browserPairing))
@@ -190,10 +207,58 @@ public enum OnboardingFlow {
         return items
     }
 
+    // MARK: - 收尾页「放一首歌试试」
+
+    /// 收尾页那一行实时状态:从「服务在跑」到「屏幕上真的有歌词」中间还有好几环
+    /// (认出播放器、读到曲目、找到歌词),在引导里就让人看到结果,而不是关掉窗口才发现。
+    public enum LiveCheck: Equatable, Sendable {
+        /// 没读到在播的曲目(没在放,或在放的播放器没被认出来)。
+        case notPlaying
+        case adBreak
+        case lyricsReady
+        case instrumental
+        case searching
+        case noLyrics
+        case offline
+    }
+
+    public struct LiveInput: Equatable, Sendable {
+        public var title: String
+        public var artist: String
+        public var hasLyrics: Bool
+        public var instrumental: Bool
+        public var noLyrics: Bool
+        public var adBreak: Bool
+        public var networkDown: Bool
+
+        public init(title: String, artist: String, hasLyrics: Bool, instrumental: Bool,
+                    noLyrics: Bool, adBreak: Bool, networkDown: Bool) {
+            self.title = title
+            self.artist = artist
+            self.hasLyrics = hasLyrics
+            self.instrumental = instrumental
+            self.noLyrics = noLyrics
+            self.adBreak = adBreak
+            self.networkDown = networkDown
+        }
+    }
+
+    /// 优先级:没有曲目 > 广告 > 有歌词 > 纯音乐 > 确定没歌词 > 断网 > 还在找。
+    /// 「有歌词」排在「断网」前面:歌词已经在手,断网不影响它显示。
+    public static func liveCheck(_ input: LiveInput) -> LiveCheck {
+        guard !input.title.isEmpty else { return .notPlaying }
+        if input.adBreak { return .adBreak }
+        if input.hasLyrics { return .lyricsReady }
+        if input.instrumental { return .instrumental }
+        if input.noLyrics { return .noLyrics }
+        if input.networkDown { return .offline }
+        return .searching
+    }
+
     // MARK: - 收尾页「你选的播放器」
 
     /// 收尾页那一串里的一项:`PlaybackPlayer` 的 case,或不是 case 的网页平台(按平台 id)。
-    public enum ChosenEntry: Equatable, Hashable, Sendable {
+    public enum ChosenEntry: Equatable, Hashable {
         case player(PlaybackPlayer)
         case webPlatform(String)
     }

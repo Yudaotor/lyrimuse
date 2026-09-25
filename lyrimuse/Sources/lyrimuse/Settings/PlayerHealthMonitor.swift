@@ -99,7 +99,7 @@ final class PlayerHealthMonitor: ObservableObject {
             names.locale = L10n.locale
             let list = names.string(from: automationDeniedPlayers.map(\.displayName)) ?? ""
             return String(format: L10n.t("%@ 的自动化权限被拒，读不到播放状态"), list)
-        case .collectorNotRunning: return L10n.t("后台采集服务未运行，歌词不会更新")
+        case .collectorNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         }
     }
 }

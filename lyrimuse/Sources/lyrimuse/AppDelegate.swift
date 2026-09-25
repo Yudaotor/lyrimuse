@@ -355,6 +355,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // 「跟随播放器退出」的监听,开关空集时它只是订阅着不做事。
         PlayerQuitWatcher.shared.start()
+        // 菜单栏菜单顶部「自动化权限未开启」那一行的数据源(引导结束后权限被拒或作废时提示)。
+        AutomationAlertMonitor.shared.start()
 
         // 首次启动的完整引导向导——触发点在 SceneActionRegistrar.onAppear,不在这里:
         // openWindow(id:) 这个 SwiftUI 环境 action 只有挂载的 View 才能拿到,这个时机

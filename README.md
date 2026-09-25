@@ -171,7 +171,7 @@ xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swif
 brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
 ```
 
-Then `build.sh` builds both the app and its background collector in one shot:
+Then `build.sh` builds both the app and its lyrics engine (the background process named `collector`) in one shot:
 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
@@ -186,7 +186,7 @@ QQ Music / NetEase Cloud Music / Kugou Music / Soda Music / Spotify / auto-detec
 
 ### After any option
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its lyrics engine (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 
@@ -257,7 +257,7 @@ failing is an error, because the others still produce lyrics.
 
 ## Uninstalling
 
-Dragging `Lyrimuse.app` to the Trash is **not** enough. The background collector is
+Dragging `Lyrimuse.app` to the Trash is **not** enough. The lyrics engine (process name `collector`) is
 registered with launchd as a `KeepAlive` job, so its LaunchAgent stays behind and
 launchd keeps trying to start a binary that is no longer there.
 

@@ -54,7 +54,7 @@ struct CollectorApplyStatusBar: View {
             case .applying:
                 strip {
                     ProgressView().controlSize(.small)
-                    Text(L10n.t("正在应用到后台服务…"))
+                    Text(L10n.t("正在应用到歌词引擎…"))
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
@@ -62,7 +62,7 @@ struct CollectorApplyStatusBar: View {
                 strip {
                     Image(systemName: "pause.circle")
                         .foregroundStyle(.secondary)
-                    Text(L10n.t("后台采集服务已停用，改动会在下次启用时生效"))
+                    Text(L10n.t("歌词引擎已停用，改动会在下次启用时生效"))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)

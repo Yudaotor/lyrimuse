@@ -5054,7 +5054,7 @@ private struct PlayerSettingsTab: View {
             SettingsRow(
                 icon: collectorStatusIconName,
                 iconTint: collectorStatusIconColor,
-                title: L10n.t("后台采集服务"),
+                title: L10n.t("歌词引擎"),
                 // 同 permissionCard:副标题只留状态,职责说明进「?」。
                 subtitle: collectorStatusCaption,
                 help: L10n.t("读取播放状态、抓歌词和封面")
@@ -5073,7 +5073,7 @@ private struct PlayerSettingsTab: View {
             if collectorEnableFailed {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
+                    Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
                     Button(L10n.t("导出诊断…")) { exportDiagnostics() }
                 }
             }
@@ -5106,8 +5106,8 @@ private struct PlayerSettingsTab: View {
             if let mismatch = collectorVersionMismatch {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("这个版本打包时漏了同步后台采集服务的版本号。不影响功能，采集服务的实际代码跟 App 是同一个版本，不需要你做任何处理"))
-                    Text("App \(mismatch.appVersion) · \(L10n.t("采集服务")) \(mismatch.collectorVersion)")
+                    Text(L10n.t("这个版本打包时漏了同步歌词引擎的版本号。不影响功能，歌词引擎的实际代码跟 App 是同一个版本，不需要你做任何处理"))
+                    Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.collectorVersion)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .textSelection(.enabled)
