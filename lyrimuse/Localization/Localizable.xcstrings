@@ -16874,25 +16874,25 @@
         }
       }
     },
-    "正在查询网易云 / QQ 音乐 / 酷狗 / Musixmatch / LRCLIB…" : {
+    "正在查询各个歌词源…" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Searching NetEase Cloud Music / QQ Music / Kugou Music / Musixmatch / LRCLIB…"
+            "value" : "Searching lyrics sources…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"
+            "value" : "正在查询各个歌词源…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在查詢網易雲 / QQ音樂 / 酷狗 / Musixmatch / LRCLIB…"
+            "value" : "正在查詢各個歌詞來源…"
           }
         }
       }

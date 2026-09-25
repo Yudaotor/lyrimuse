@@ -542,7 +542,7 @@ struct LyricsSearchSheet: View {
             if isSearching {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text(L10n.t("正在查询网易云 / QQ 音乐 / 酷狗 / Musixmatch / LRCLIB…")
+                    Text(L10n.t("正在查询各个歌词源…")
                         + searchProgressSuffix)
                         .font(.callout)
                         .foregroundStyle(.secondary)
