@@ -73,7 +73,7 @@ var (
 // 每一首发布纠正。只恢复文件不恢复判定,署名本来就干净的歌永远等不到纠正,App 那边一直没有歌手。
 func setPlayerArtistFixPath(path string) {
 	// 恢复判定必须在放开 playerArtistFixMu 之后做:kugouFixedArtist 持着 kugouLyricArtistMu
-	// 调 publishPlayerArtistFix,锁序是 kugou 到 fix,反过来会死锁。
+	// 调 publishPlayerArtistFix,锁序是 kugou → fix,反过来会死锁。
 	switch prev := setPlayerArtistFixPathLocked(path); prev.Bundle {
 	case "":
 	case kugouMusicBundleID:

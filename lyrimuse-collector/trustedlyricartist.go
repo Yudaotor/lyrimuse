@@ -111,10 +111,10 @@ type trustedLyricArtistState struct {
 
 // advanceTrustedLyricArtist 推进一拍并返回新状态。纯函数。
 //
-//   - 不在范围内 / 两个字段都空 / 没有时长 到 空状态(不参与);
+//   - 不在范围内 / 两个字段都空 / 没有时长 → 空状态(不参与);
 //   - 换曲目(bundle、时长变了,专辑从一个值变成另一个值,或两个字段同时跟第一次见到的不一样了)
 //     到 重新起判,confirmed 非空时直接按已判定起步;
-//   - 同一曲目内只有一个字段换了 到 记一次换值;同一个字段窗口里第二次换 到 判定成立,之后本曲一直成立。
+//   - 同一曲目内只有一个字段换了 → 记一次换值;同一个字段窗口里第二次换 → 判定成立,之后本曲一直成立。
 func advanceTrustedLyricArtist(prev trustedLyricArtistState, bundle, title, artist, album string, duration float64, eligible bool, confirmed trustedRotField, now time.Time) trustedLyricArtistState {
 	if !eligible || duration <= 0 || (title == "" && artist == "") {
 		return trustedLyricArtistState{}

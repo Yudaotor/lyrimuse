@@ -106,11 +106,11 @@ type hostGuard struct {
 	// backgroundMaxWait:后台请求的等待上限,见 hostGuardBackgroundMaxWait。
 	backgroundMaxWait time.Duration
 	buckets           map[string]*hostBucket
-	// blocked:端点键 到 窗口截止时刻。
+	// blocked:端点键 → 窗口截止时刻。
 	blocked map[string]time.Time
-	// heldLogged:主机 到 上一次记「被拦下」日志的时刻。
+	// heldLogged:主机 → 上一次记「被拦下」日志的时刻。
 	heldLogged map[string]time.Time
-	// health:端点键 到 接口熔断状态。
+	// health:端点键 → 接口熔断状态。
 	health map[string]*endpointHealth
 }
 

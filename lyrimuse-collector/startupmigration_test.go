@@ -15,7 +15,7 @@ func TestStartupMigrationState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migrations.json")
 	loadMigrationState(path)
 
-	// 没跑过 到 该跑。
+	// 没跑过 → 该跑。
 	if migrationDone("x", 1) {
 		t.Error("水位文件不存在时该判为没跑过")
 	}
@@ -36,7 +36,7 @@ func TestStartupMigrationState(t *testing.T) {
 		t.Error("水位该落盘并在重新载入后仍然成立")
 	}
 
-	// 外来数据进来 到 全部作废。
+	// 外来数据进来 → 全部作废。
 	invalidateMigrationState("test")
 	if migrationDone("x", 1) {
 		t.Error("作废之后该判为没跑过")

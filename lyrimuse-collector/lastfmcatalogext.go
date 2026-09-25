@@ -31,7 +31,7 @@ import (
 //
 // 上面三处都是**强**身份。另有一处**弱**身份:
 //
-//   - 中英双语的歌手名拆成两半(`鹤 The Crane` 到 `鹤` / `The Crane`)。拆出来的一半可能
+//   - 中英双语的歌手名拆成两半(`鹤 The Crane` → `鹤` / `The Crane`)。拆出来的一半可能
 //     恰好是另一个同名艺人,所以从这一半名下找到的条目必须同时满足:有 mbid 或听众 ≥
 //     lastfmCatalogListenersMin、编目时长和播放器时长都有且对得上(见 weakCandidateOK)。
 //
@@ -41,7 +41,7 @@ import (
 //
 //  1. 强身份里「编目正规条目」(catalogued)听众最多、过时长闸的那条;
 //  2. 弱身份里同样够格、且过 weakCandidateOK 的那条;
-//  3. 都没有 到 强身份候选里听众最多的那条,前提是它明显比原样的人多
+//  3. 都没有 → 强身份候选里听众最多的那条,前提是它明显比原样的人多
 //     (lastfmCatalogFallbackMinListeners / lastfmCatalogFallbackFactor)。这一档对应的是
 //     「编目里根本没有正规条目」的歌:几个影子条目里挑大家实际在用的那条,而不是自己再
 //     建一条只有自己的影子。
@@ -441,7 +441,7 @@ func catalogCreditNames(artist string) []string {
 }
 
 // bilingualArtistHalves 把「中文名 + 英文名」这种双语歌手名拆成两半:`鹤 The Crane` 到
-// (`鹤`, `The Crane`),`YELLOW黄宣` 到 (`黄宣`, `YELLOW`)。
+// (`鹤`, `The Crane`),`YELLOW黄宣` → (`黄宣`, `YELLOW`)。
 //
 // 只认**恰好两段**:一段全是中日韩文字、一段全是拉丁字母(中间的空格 / 标点 / 数字跟着
 // 相邻那段走)。三段以上(`A吴B`)的结构说不清哪半是名字,不拆;拉丁那段少于两个字母的

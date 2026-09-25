@@ -28,7 +28,7 @@ import (
 // `原唱：谈柒柒` `作曲：廖伟志` `艺人统筹：小帅` `发行：华声时代` `【版权所有 未经许可 不得翻`。
 // 这个版本还**从不上报专辑**(载荷里根本没有 album 键)。
 //
-// 不修的话每一句歌词都是一次"换歌":曲目身份 key 变 到 重跑一整轮十源检索、重推 relay、
+// 不修的话每一句歌词都是一次"换歌":曲目身份 key 变 → 重跑一整轮十源检索、重推 relay、
 // 而且把歌词当歌手名提交进 Last.fm / ListenBrainz 的收听记录 —— 站外那份是收不回来的。
 //
 // 别指望用户能关掉:酷狗设置里那个"桌面歌词"开关管的是悬浮窗,实测关掉之后这条
@@ -170,9 +170,9 @@ type kugouLyricArtistState struct {
 
 // advanceKugouLyricArtist 推进一拍并返回新状态。纯函数。
 //
-//   - 不是酷狗 / 没有曲名 到 空状态(这套判定不参与);
+//   - 不是酷狗 / 没有曲名 → 空状态(这套判定不参与);
 //   - 换曲目(title 或 duration 变了)到 重新起判,记下这一拍的署名;
-//   - 同一曲目内署名从一个非空值变成另一个非空值 到 判定成立,之后本曲一直成立。
+//   - 同一曲目内署名从一个非空值变成另一个非空值 → 判定成立,之后本曲一直成立。
 func advanceKugouLyricArtist(prev kugouLyricArtistState, bundle, title, artist string, duration float64, confirmed bool) kugouLyricArtistState {
 	if bundle != kugouMusicBundleID || title == "" {
 		return kugouLyricArtistState{}

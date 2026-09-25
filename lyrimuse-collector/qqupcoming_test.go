@@ -12,7 +12,7 @@ import (
 //
 // 写的是 **XML plist** 而不是 bplist:qqUpcoming 内部要 exec `plutil -convert xml1`,
 // 而 plutil 对 XML 输入是恒等转换 —— 于是不必在测试里造二进制,走的仍是完整那条路
-// (exec 到 解析 到 UID 解引用 到 提取)。
+// (exec → 解析 → UID 解引用 → 提取)。
 type qqArchive struct{ objects []string }
 
 func (a *qqArchive) add(frag string) int {

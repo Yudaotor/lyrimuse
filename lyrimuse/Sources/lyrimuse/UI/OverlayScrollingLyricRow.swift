@@ -300,7 +300,7 @@ final class OverlayLyricScrollView: NSView {
         guard let ctx = makeContext(scale: scale) else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        // flipped: false 到 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),
+        // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),
         // 各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
         let mainY = inset + romaHeight + 1
         let romaY = inset + 1

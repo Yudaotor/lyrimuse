@@ -36,7 +36,7 @@ public enum LastfmLove {
             == b.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
-    /// 写请求的表单体:按 RFC 3986 unreserved 严格转义(`+` 到 `%2B`、空格到 `%20`),键按字母序。
+    /// 写请求的表单体:按 RFC 3986 unreserved 严格转义(`+` → `%2B`、空格 → `%20`),键按字母序。
     /// POST 表单不像读接口的 query 那样被多解一次码,不走 `LastfmQuery` 的双重转义 —— 跟 collector
     /// 用 Go `url.Values.Encode` 发写请求同一个口径。
     public static func formBody(_ params: [String: String]) -> String {
