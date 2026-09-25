@@ -1045,10 +1045,8 @@ struct LyricsWindowView: View {
     /// 「减少推荐」写操作串行链:快速连点时两个 detached task 之间本无顺序保证,
     /// 后点的先执行会让终态与 UI 相反 —— 每次写先 await 上一次,保证按点击序生效。
     @State private var suggestLessSerialTask: Task<Void, Never>?
-    /// 音频输出面板(AirPlay 键)开着没有;isExternalOutput = 默认输出是非内建设备
-    /// (键染红,开窗/开关面板/选设备时刷新)。
+    /// 音频输出面板(AirPlay 键)开着没有。设备列表与「外接输出中」(键染红)归 `AudioOutputMonitor`。
     @State private var showsOutputMenu = false
-    @State private var isExternalOutput = false
     @Environment(\.colorScheme) private var colorScheme
     /// 歌词那一栏的实际宽度。字号按它算 —— 写死 28pt 的话窗口越拖越大、文字占的比例
     /// 越来越小,右边空出一大片(用户对比 Apple Music 提的)。Apple Music 的
@@ -1146,8 +1144,6 @@ struct LyricsWindowView: View {
         // 以及每次 App 重新变成前台时刷一次 —— 后者正好覆盖"用户刚切去 Music.app 点了
         // 心、再切回来"这条路径。
         .onAppear {
-            // 这个是 CoreAudio 查询,便宜,预览也要(耳机图标是画面的一部分)。
-            isExternalOutput = AudioOutputDeviceManager.isExternalOutputActive()
             // 下面三个各起一个 osascript 子进程。预览**不主动刷** —— 它们读的是
             // PlaybackCoordinator 的共享状态,换歌时协调器自己会刷,真窗口/悬浮窗打开时也会刷,
             // 预览跟着读现成的值就够了。为"用户瞄一眼设置页"白起三个子进程,跟下面那条
@@ -1156,10 +1152,6 @@ struct LyricsWindowView: View {
             PlaybackCoordinator.shared.refreshFavorited()
             PlaybackCoordinator.shared.refreshPlaybackMode()
             PlaybackCoordinator.shared.refreshVolume()
-        }
-        // 面板开合时都刷一次"外接输出中":用户可能刚在系统里切过输出。
-        .onChange(of: showsOutputMenu) {
-            isExternalOutput = AudioOutputDeviceManager.isExternalOutputActive()
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)
@@ -1780,7 +1772,6 @@ struct LyricsWindowView: View {
             miniTransportPill
             WindowVolumeCapsule(onArtwork: hasArtworkBackground,
                                 showsOutputMenu: .constant(false),
-                                isExternalOutput: false,
                                 compact: true)
             miniOffsetPill
         }
@@ -2074,8 +2065,7 @@ struct LyricsWindowView: View {
                     // 留着只是挡住要看的东西。
                     if !isIdle, !previewMode {
                         WindowVolumeCapsule(onArtwork: hasArtworkBackground,
-                                            showsOutputMenu: $showsOutputMenu,
-                                            isExternalOutput: isExternalOutput)
+                                            showsOutputMenu: $showsOutputMenu)
                         // 贴右缘 5pt(AM 胶囊亮缘离窗缘 8px@2x,布局缘取 5 让亮缘落到同位)。
                         .padding(.trailing, 5)
                         // 胶囊**不能**落进窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,与真实
@@ -3544,22 +3534,10 @@ struct LyricsWindowView: View {
     }
 
     /// 音频输出面板(AirPlay 键弹出):AM 同款版式——每行 设备类型图标 + 名称 + 右侧勾选,
-    /// 玻璃底与「⋯」菜单同一套。设备列表在面板出现时现枚举(CoreAudio 同步调用,µs 级)。
+    /// 玻璃底与「⋯」菜单同一套。列表由 `OutputDeviceList` 读 `AudioOutputMonitor`,开着时插拔设备也跟着变。
     private var outputDevicePanel: some View {
-        let devices = AudioOutputDeviceManager.outputDevices()
-        let current = AudioOutputDeviceManager.defaultOutputDeviceID()
-        return VStack(alignment: .leading, spacing: 2) {
-            ForEach(devices, id: \.id) { device in
-                OutputDeviceRow(
-                    title: device.name,
-                    symbol: Self.deviceSymbol(device),
-                    isCurrent: device.id == current
-                ) {
-                    AudioOutputDeviceManager.setDefaultOutput(device.id)
-                    isExternalOutput = AudioOutputDeviceManager.isExternalOutputActive()
-                    withAnimation(.easeOut(duration: 0.12)) { showsOutputMenu = false }
-                }
-            }
+        OutputDeviceList {
+            withAnimation(.easeOut(duration: 0.12)) { showsOutputMenu = false }
         }
         .padding(6)
         .frame(minWidth: 230, alignment: .leading)
@@ -3574,7 +3552,7 @@ struct LyricsWindowView: View {
 
     /// 设备类型 → 行图标(AM 的输出面板每行左侧是设备形状图标)。transportType 先分大类,
     /// AirPods 系按名称再细分(蓝牙传输层区分不出 Max/Pro)。
-    private static func deviceSymbol(_ device: AudioOutputDeviceManager.Device) -> String {
+    fileprivate static func deviceSymbol(_ device: AudioOutputDeviceManager.Device) -> String {
         let name = device.name.lowercased()
         switch device.kind {
         case .builtIn: return "laptopcomputer"
@@ -5331,10 +5309,10 @@ private struct WindowProgressSection: View {
 
 private struct WindowVolumeCapsule: View {
     let onArtwork: Bool
-    /// 输出面板开关与"外接输出中"(键染红)状态都归窗口层管(面板是窗级 overlay,
-    /// 见 LyricsWindowView.outputDevicePanel),这里只负责按钮本身。
+    /// 输出面板开关归窗口层管(面板是窗级 overlay,见 LyricsWindowView.outputDevicePanel),这里只负责
+    /// 按钮本身;「外接输出中」(键染红)读 `AudioOutputMonitor`,订阅只失效这颗胶囊。
     @Binding var showsOutputMenu: Bool
-    let isExternalOutput: Bool
+    @ObservedObject private var output = AudioOutputMonitor.shared
     /// 迷你窗控制条那一档:**只留滑杆和喇叭**,不摆 AirPlay 键和那条发丝分隔线,滑杆也短一半。
     /// 460pt 宽里三颗胶囊并排,这颗按完整形态(总宽 ~143)会把另外两颗挤出去;而输出面板是
     /// 窗级 overlay、迷你窗根本没有它的位置。
@@ -5390,7 +5368,7 @@ private struct WindowVolumeCapsule: View {
                             .font(.system(size: 17))
                             .frame(width: 22)
                             .foregroundStyle(
-                                isExternalOutput
+                                output.isExternal
                                     ? AnyShapeStyle(Color.red) : AnyShapeStyle(capsuleIconColor))
                     }
                     .buttonStyle(.plain)
@@ -5608,6 +5586,27 @@ private struct ListenHistoryPane: View {
         .padding(.bottom, 52)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.colorScheme, onArtwork ? .dark : colorScheme)
+    }
+}
+
+/// 输出面板的设备列表。自己订阅 `AudioOutputMonitor`,设备增减 / 默认输出变化只失效这一块;
+/// 选择失败时不关面板,勾留在原来那台。
+private struct OutputDeviceList: View {
+    @ObservedObject private var output = AudioOutputMonitor.shared
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(output.devices, id: \.id) { device in
+                OutputDeviceRow(
+                    title: device.name,
+                    symbol: LyricsWindowView.deviceSymbol(device),
+                    isCurrent: device.id == output.defaultID
+                ) {
+                    if output.select(device.id) { close() }
+                }
+            }
+        }
     }
 }
 

@@ -239,6 +239,27 @@ func runLyricsWindowTests() {
                     "进度外推: 不超过曲长")
     }
 
+    // ---- 输出设备:跟着系统切换走、列表只由监听刷新(源码契约) ----
+    do {
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let audio = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/AudioOutputDevices.swift"),
+                                 encoding: .utf8)) ?? ""
+        let view = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                encoding: .utf8)) ?? ""
+        expectEqual(audio.isEmpty || view.isEmpty, false, "输出设备(契约): 读到两份源码")
+        expectEqual(audio.contains("for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices] {")
+                    && audio.contains("AudioObjectAddPropertyListenerBlock("), true,
+                    "输出设备(契约): 监听默认输出与设备增减,控制中心 / AirPods 自动接管时输出键跟着变")
+        expectEqual(audio.contains("guard hasOutputStreams(id), !isHidden(id), canBeDefaultOutput(id),"), true,
+                    "输出设备(契约): 隐藏设备与不能当默认输出的设备不进列表")
+        expectEqual(view.contains("AudioOutputDeviceManager.outputDevices()"), false,
+                    "输出设备(契约): 歌词窗口不在渲染时现枚举设备,只读 AudioOutputMonitor")
+        expectEqual(view.contains("output.isExternal\n                                    ? AnyShapeStyle(Color.red)"), true,
+                    "输出设备(契约): 输出键染红读监听结果")
+        expectEqual(view.contains("if output.select(device.id) { close() }"), true,
+                    "输出设备(契约): 切换失败不关面板")
+    }
+
     // ---- 窗口控制器的收尾与窗口不可见时停表(源码契约) ----
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
