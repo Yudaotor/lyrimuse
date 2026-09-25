@@ -465,13 +465,7 @@ func processEnrichEditRequests() {
 // writeEnrichEditResult 原子写结果文件:App 在轮询它,不能读到半截。
 func writeEnrichEditResult(path string, res enrichEditResult) {
 	data, _ := json.Marshal(res)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		log.Printf("enrich edit: write result failed: %v", err)
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := writeFileAtomic(path, data); err != nil {
 		log.Printf("enrich edit: write result failed: %v", err)
 	}
 }

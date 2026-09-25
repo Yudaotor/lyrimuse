@@ -104,7 +104,15 @@ func deleteListensByUTS(targets []int64) (deleted, remaining int, err error) {
 		drop[u] = true
 	}
 
-	lines := readListenLog()
+	listenLogMu.Lock()
+	defer listenLogMu.Unlock()
+	if listenLogPath == "" {
+		return 0, 0, fmt.Errorf("收听日志路径未设置")
+	}
+	// 在跨进程锁内读全文再重写:常驻进程这期间追加的收听不会被改名替换掉(见 lockListenLogFile)。
+	unlock := lockListenLogFile(listenLogPath)
+	defer unlock()
+	lines := readListenLogAt(listenLogPath)
 	kept := make([]listenLogLine, 0, len(lines))
 	for _, line := range lines {
 		if drop[line.UTS] {
@@ -118,11 +126,6 @@ func deleteListensByUTS(targets []int64) (deleted, remaining int, err error) {
 		return 0, len(lines), nil
 	}
 
-	listenLogMu.Lock()
-	defer listenLogMu.Unlock()
-	if listenLogPath == "" {
-		return 0, 0, fmt.Errorf("收听日志路径未设置")
-	}
 	tmp := listenLogPath + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {

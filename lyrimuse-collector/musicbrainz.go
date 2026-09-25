@@ -85,11 +85,7 @@ func saveArtistAliasCache() {
 	if err != nil {
 		return
 	}
-	tmp := artistAliasPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, artistAliasPath); err != nil {
+	if err := writeFileAtomic(artistAliasPath, data); err != nil {
 		slog.Error("save artist alias cache", "err", err)
 	}
 }
@@ -224,11 +220,7 @@ func saveArtistIdentityCache() {
 	if err != nil {
 		return
 	}
-	tmp := artistIdentityPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, artistIdentityPath); err != nil {
+	if err := writeFileAtomic(artistIdentityPath, data); err != nil {
 		slog.Error("save artist identity cache", "err", err)
 	}
 }
@@ -471,11 +463,7 @@ func saveMBPrimaryNameCache() {
 	if err != nil {
 		return
 	}
-	tmp := mbPrimaryNamePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, mbPrimaryNamePath); err != nil {
+	if err := writeFileAtomic(mbPrimaryNamePath, data); err != nil {
 		slog.Error("save musicbrainz primary name cache", "err", err)
 	}
 }

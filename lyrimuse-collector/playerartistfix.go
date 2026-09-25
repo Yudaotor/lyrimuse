@@ -127,7 +127,7 @@ func writePlayerArtistFixLocked(next playerArtistFixState) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(playerArtistFixPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(playerArtistFixPath, data); err != nil {
 		slog.Warn("player artist fix: state write failed", "err", err)
 		return
 	}

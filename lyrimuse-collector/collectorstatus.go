@@ -57,7 +57,7 @@ func markCollectorNetworkDown() {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(collectorStatusPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(collectorStatusPath, data); err != nil {
 		slog.Error("collector status: write failed", "err", err)
 		return
 	}

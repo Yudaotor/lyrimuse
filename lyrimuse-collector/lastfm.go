@@ -484,7 +484,7 @@ func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(lastfmStatusPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(lastfmStatusPath, data); err != nil {
 		slog.Error("lastfm mirror: write status file failed", "err", err)
 	}
 }

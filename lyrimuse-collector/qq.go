@@ -646,11 +646,7 @@ func saveQQArtistNameCache() {
 	if err != nil {
 		return
 	}
-	tmp := qqArtistNamePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, qqArtistNamePath); err != nil {
+	if err := writeFileAtomic(qqArtistNamePath, data); err != nil {
 		slog.Error("save QQ artist name cache", "err", err)
 	}
 }

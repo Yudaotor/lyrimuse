@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -157,6 +158,8 @@ func appendListenLogLine(line listenLogLine) {
 		slog.Error("listen log: mkdir failed", "err", err)
 		return
 	}
+	unlock := lockListenLogFile(listenLogPath)
+	defer unlock()
 	// 0600:里面没有凭据,但一整份听歌历史本身就是隐私。
 	f, err := os.OpenFile(listenLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -177,6 +180,11 @@ func readListenLog() []listenLogLine {
 	listenLogMu.Lock()
 	path := listenLogPath
 	listenLogMu.Unlock()
+	return readListenLogAt(path)
+}
+
+// readListenLogAt 同 readListenLog,但不碰 listenLogMu:给已经持有 listenLogMu 与文件锁的整份重写用。
+func readListenLogAt(path string) []listenLogLine {
 	if path == "" {
 		return nil
 	}
@@ -211,14 +219,18 @@ func readListenLog() []listenLogLine {
 
 // compactListenLog 行数超上限时丢掉最旧的那批。启动时调一次,见常量注释。
 func compactListenLog() {
-	lines := readListenLog()
+	listenLogMu.Lock()
+	defer listenLogMu.Unlock()
+	if listenLogPath == "" {
+		return
+	}
+	unlock := lockListenLogFile(listenLogPath)
+	defer unlock()
+	lines := readListenLogAt(listenLogPath)
 	if len(lines) <= listenLogMaxLines {
 		return
 	}
 	keep := lines[len(lines)-listenLogKeepLines:]
-
-	listenLogMu.Lock()
-	defer listenLogMu.Unlock()
 	tmp := listenLogPath + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -247,4 +259,25 @@ func compactListenLog() {
 		return
 	}
 	log.Printf("listen log: compacted %d lines -> %d", len(lines), len(keep))
+}
+
+// lockListenLogFile 在收听日志旁的锁文件上拿跨进程排他锁,返回解锁函数。常驻进程的追加 / 压缩与 delete-listen
+// 子命令的整份重写必须串行:重写是「读全文 → 写临时文件 → 改名替换」,期间另一个进程追加的那一行落在旧文件上,
+// 随改名一起丢掉 —— 进程内的 listenLogMu 管不到另一个进程。整份重写要在锁内读全文。锁文件打不开时退回不加锁
+// (解锁函数是空操作),不让收听日志因此写不进去。调用方先拿 listenLogMu 再拿它,顺序各处一致。
+func lockListenLogFile(logPath string) func() {
+	f, err := os.OpenFile(logPath+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		slog.Warn("listen log: lock file unavailable, continuing without it", "err", err)
+		return func() {}
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		slog.Warn("listen log: flock failed, continuing without it", "err", err)
+		return func() {}
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}
 }

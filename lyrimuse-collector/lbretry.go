@@ -73,11 +73,7 @@ func saveLBRetryLocked(items []lbRetryItem) {
 	if err != nil {
 		return
 	}
-	tmp := lbRetryPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, lbRetryPath); err != nil {
+	if err := writeFileAtomic(lbRetryPath, data); err != nil {
 		slog.Error("lb retry: save failed", "err", err)
 	}
 }

@@ -55,11 +55,7 @@ func (s persistedTTLSet) save(m map[int64]bool) {
 	if err != nil {
 		return
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := writeFileAtomic(s.path, data); err != nil {
 		slog.Error("save dedup state", "file", filepath.Base(s.path), "err", err)
 	}
 }

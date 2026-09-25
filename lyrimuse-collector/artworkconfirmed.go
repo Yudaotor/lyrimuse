@@ -163,11 +163,7 @@ func flushArtworkConfirmed() {
 	if err != nil {
 		return
 	}
-	tmp := artworkConfirmPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, artworkConfirmPath); err != nil {
+	if err := writeFileAtomic(artworkConfirmPath, data); err != nil {
 		slog.Error("save artwork-confirmed cache", "file", filepath.Base(artworkConfirmPath), "err", err)
 	}
 }

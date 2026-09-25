@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -125,12 +126,8 @@ func saveAppleAlbumHintCache() {
 	if err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	if err := writeFileAtomic(path, data); err != nil {
+		slog.Error("save apple album hint cache", "err", err)
 	}
 }
 

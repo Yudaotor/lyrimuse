@@ -5,7 +5,6 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -225,15 +224,9 @@ func writeLastfmRecentFeed(user string, page lastfmRecentPage, fetchedAt time.Ti
 	if err != nil {
 		return
 	}
-	// 临时文件 + rename:App 可能正在读。临时文件放同目录,rename 才是同一文件系统内的原子操作。
-	tmp := filepath.Join(filepath.Dir(lastfmFeedPath), "."+filepath.Base(lastfmFeedPath)+".tmp")
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		slog.Error("lastfm feed: write temp failed", "err", err)
-		return
-	}
-	if err := os.Rename(tmp, lastfmFeedPath); err != nil {
-		slog.Error("lastfm feed: rename failed", "err", err)
-		os.Remove(tmp)
+	// 原子写:App 可能正在读。
+	if err := writeFileAtomic(lastfmFeedPath, data); err != nil {
+		slog.Error("lastfm feed: write failed", "err", err)
 		return
 	}
 	lastfmFeedLastKey = key

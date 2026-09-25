@@ -631,15 +631,9 @@ func (c *lastfmCatalogMatcher) save(snapshot map[string]lastfmCatalogDecision) {
 		return
 	}
 	// 先写临时文件再 rename,跟 saveEnrichCache 同一个理由(半截文件不能被下次读到);
-	// 临时名带 pid,免得常驻 collector 和 backfill 子命令互相覆盖。
-	tmp := fmt.Sprintf("%s.tmp.%d", lastfmCatalogPath, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	// 常驻 collector 和 backfill 子命令都会写这份:writeFileAtomic 的临时文件名是随机的。
+	if err := writeFileAtomic(lastfmCatalogPath, data); err != nil {
 		slog.Error("lastfm catalog: write cache failed", "err", err)
-		return
-	}
-	if err := os.Rename(tmp, lastfmCatalogPath); err != nil {
-		slog.Error("lastfm catalog: rename cache failed", "err", err)
-		_ = os.Remove(tmp)
 	}
 }
 

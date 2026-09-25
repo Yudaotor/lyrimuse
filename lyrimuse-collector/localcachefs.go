@@ -135,7 +135,7 @@ func writeLocalCacheAccessLocked() {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(localCacheAccessPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(localCacheAccessPath, data); err != nil {
 		slog.Warn("local cache access: state write failed", "err", err)
 	}
 }

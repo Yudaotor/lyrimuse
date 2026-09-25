@@ -228,11 +228,10 @@ func parseLyricsFillRequest(text string) lyricsFillRequest {
 
 // readLyricsFillRequest 读一次请求文件并无条件消费掉(一次性信号,同 checkEnrichCancelRequest)。
 func readLyricsFillRequest() (lyricsFillRequest, bool) {
-	data, err := os.ReadFile(lyricsFillRequestPath)
+	data, err := claimRequestFile(lyricsFillRequestPath)
 	if err != nil {
 		return lyricsFillRequest{}, false
 	}
-	_ = os.Remove(lyricsFillRequestPath)
 	req := parseLyricsFillRequest(string(data))
 	if !req.all && !req.full && !req.cancel && len(req.keys) == 0 {
 		return lyricsFillRequest{}, false
@@ -424,7 +423,7 @@ func writeLyricsFillStatus(s lyricsFillStatus) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(lyricsFillStatusPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(lyricsFillStatusPath, data); err != nil {
 		slog.Warn("lyrics fill sweep: status write failed", "err", err)
 	}
 }

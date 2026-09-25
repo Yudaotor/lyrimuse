@@ -334,14 +334,8 @@ func applemusicSaveDevTokenFile(token string, expiry time.Time) {
 	if err != nil {
 		return
 	}
-	// 先写临时文件再 rename,理由同 musixmatchSaveTokenFile。
-	tmp := fmt.Sprintf("%s.tmp.%d", path, os.Getpid())
-	if os.WriteFile(tmp, raw, 0o600) != nil {
-		return
-	}
-	if os.Rename(tmp, path) != nil {
-		os.Remove(tmp)
-	}
+	// 常驻进程和 search-lyrics 等子命令都会写这份:writeFileAtomic 的临时文件名是随机的。
+	_ = writeFileAtomic(path, raw)
 }
 
 // applemusicJWTExpiry 从 JWT payload 里读 exp。**不校验签名** —— 我们不是这张票的验证方,

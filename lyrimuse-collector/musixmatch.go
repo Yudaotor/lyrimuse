@@ -342,13 +342,7 @@ func musixmatchSaveTokenFile(token string, expiry time.Time) {
 	}
 	// 先写临时文件再 rename:两个进程同时刷新 token 时不会读到半份内容。临时文件名带
 	// 进程号,否则并发的两个写入方会互相覆盖同一个 tmp,rename 出去的可能是半份别人的。
-	tmp := fmt.Sprintf("%s.tmp.%d", path, os.Getpid())
-	if os.WriteFile(tmp, raw, 0o600) != nil {
-		return
-	}
-	if os.Rename(tmp, path) != nil {
-		os.Remove(tmp)
-	}
+	_ = writeFileAtomic(path, raw)
 }
 
 // musixmatchFetchToken 请求一个新 token。401 表示这次匿名请求被限流/拒绝,官方样例

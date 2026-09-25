@@ -256,7 +256,7 @@ func writeLyricsFullScanStateLocked(state lyricsFullScanState) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := writeFileAtomic(path, data); err != nil {
 		slog.Warn("lyrics full scan: state write failed", "err", err)
 	}
 }

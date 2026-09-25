@@ -7,6 +7,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -136,12 +137,8 @@ func saveMotionCoverCache() {
 	if err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	if err := writeFileAtomic(path, data); err != nil {
+		slog.Error("save motion cover cache", "err", err)
 	}
 }
 

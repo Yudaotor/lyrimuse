@@ -34,9 +34,9 @@ import (
 // ## 顺序与新鲜度
 //
 // 每次保存:判决旁路 → 正文小文件 → 主缓存 → 索引(索引**最后**落盘)。App 只在「索引存在、且不比主缓存
-// 旧(容 5 秒)」时读索引,否则照旧读主缓存。App 自己改主缓存(「歌词管理」保存 / 删除)时会删掉索引,
-// 立刻退回主缓存那条路;collector 被重启之后 `refreshEnrichIndexAtStartup` 发现索引缺失或比主缓存旧,
-// 重新生成。命令行子命令的保存同样会写这两份(它们也设了 enrichPath)。
+// 旧(容 5 秒)」时读索引,否则照旧读主缓存。主缓存只有 collector 写(App 的「歌词管理」改动也是交给
+// collector 执行,见 enrichedit.go);collector 被重启之后 `refreshEnrichIndexAtStartup` 发现索引缺失或比
+// 主缓存旧,重新生成。命令行子命令的保存同样会写这两份(它们也设了 enrichPath)。
 
 // enrichBodyCRCs:上次写出的正文校验值(key → crc,0 = 没有正文、不写文件)。enrichSaveMu 保护;
 // nil = 还没从磁盘上的索引种过。
@@ -217,6 +217,8 @@ func writeEnrichIndex(snapshot map[string]enrichEntry, crcs map[string]uint32) {
 	}
 }
 
+// writeFileAtomic 写临时文件再改名。临时文件名是随机的:常驻进程和一次性命令(App 调的 search-lyrics 等)
+// 会同时保存同一份缓存,固定的 `.tmp` 名会让一方把另一方写到一半的文件改名上位,读取时解析失败、整份缓存悄悄变空。
 func writeFileAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
 	if err != nil {

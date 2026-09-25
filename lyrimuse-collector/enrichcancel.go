@@ -62,11 +62,10 @@ func startEnrichCancelWatcher(ctx context.Context) {
 // checkEnrichCancelRequest 读一次请求文件、无条件消费掉(不管有没有真的找到对应的
 // in-flight 搜索都删除)——这份文件只是个一次性信号,不是需要持续存在的状态。
 func checkEnrichCancelRequest() {
-	data, err := os.ReadFile(enrichCancelRequestPath)
+	data, err := claimRequestFile(enrichCancelRequestPath)
 	if err != nil {
 		return // 大多数轮次文件不存在,是正常状态,不用打日志刷屏
 	}
-	_ = os.Remove(enrichCancelRequestPath)
 	key := strings.TrimSpace(string(data))
 	if key == "" {
 		return

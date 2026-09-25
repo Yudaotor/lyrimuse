@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"math"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -254,7 +253,7 @@ func publishPlayerPreviewFix(bundle, title, artist string, p sodaPreview) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(playerPreviewFixPath, data, 0o644); err != nil {
+	if err := writeFileAtomic(playerPreviewFixPath, data); err != nil {
 		slog.Warn("player preview fix: state write failed", "err", err)
 		return
 	}

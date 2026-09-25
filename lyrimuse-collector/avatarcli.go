@@ -54,7 +54,9 @@ func runArtistAvatarsCLI(args []string) {
 	}
 
 	out := map[string]string{}
-	dirty := false
+	// 本进程这次写进缓存的条目。落盘时只拿这些覆盖磁盘上的最新版本 —— App 可能同时起好几个 artist-avatars
+	// 进程,各自整份写回会互相抹掉对方刚查到的头像。
+	updated := map[string]avatarCacheEntry{}
 	now := time.Now()
 	// 先把缓存命中的收掉,剩下的才要打网络
 	var misses []string
@@ -96,8 +98,7 @@ func runArtistAvatarsCLI(args []string) {
 			case url != "" || definitive:
 				// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都可以放心存 14 天
 				out[name] = url
-				cache[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
-				dirty = true
+				updated[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
 			case hasOld && old.URL != "":
 				// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
 				// 过期的真图永远好过一个空位;不这么做会抹掉好头像)。
@@ -105,22 +106,17 @@ func runArtistAvatarsCLI(args []string) {
 			default:
 				// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。
 				out[name] = ""
-				cache[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
-				dirty = true
+				updated[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
 			}
 		}(name)
 	}
 	wg.Wait()
 
-	if dirty {
-		if data, err := json.MarshalIndent(cache, "", "  "); err == nil {
-			// 临时文件 + rename 原子落盘:App 可能同时起两个 artist-avatars 进程(切时段
-			// 触发两批解析),半写状态被另一个进程读到会整份解析失败、缓存全丢。
-			tmp := cachePath + ".tmp"
-			if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if len(updated) > 0 {
+		merged := mergeAvatarCache(cachePath, updated)
+		if data, err := json.MarshalIndent(merged, "", "  "); err == nil {
+			if err := writeFileAtomic(cachePath, data); err != nil {
 				slog.Error("artist-avatars: write cache failed", "err", err)
-			} else if err := os.Rename(tmp, cachePath); err != nil {
-				slog.Error("artist-avatars: rename cache failed", "err", err)
 			}
 		}
 	}
@@ -129,4 +125,17 @@ func runArtistAvatarsCLI(args []string) {
 	if err := enc.Encode(out); err != nil {
 		log.Fatalf("artist-avatars: encode: %v", err)
 	}
+}
+
+// mergeAvatarCache 重读磁盘上此刻的缓存,再用本进程这次查到的条目覆盖。读不出来就只写这次的结果之外的
+// 空底 —— 与启动时「缓存坏了当没有」同一个口径。
+func mergeAvatarCache(cachePath string, updated map[string]avatarCacheEntry) map[string]avatarCacheEntry {
+	merged := map[string]avatarCacheEntry{}
+	if data, err := os.ReadFile(cachePath); err == nil {
+		_ = json.Unmarshal(data, &merged)
+	}
+	for name, entry := range updated {
+		merged[name] = entry
+	}
+	return merged
 }

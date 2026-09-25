@@ -156,12 +156,8 @@ func saveAppleCatalogCache() {
 	if err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	if err := writeFileAtomic(path, data); err != nil {
+		slog.Error("save apple catalog cache", "err", err)
 	}
 }
 
@@ -416,11 +412,7 @@ func saveAppleStorefrontArtistCache() {
 	if err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := writeFileAtomic(path, data); err != nil {
 		slog.Error("save apple storefront artist cache", "err", err)
 	}
 }
@@ -483,11 +475,7 @@ func saveAppleStorefrontTitleCache() {
 	if err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := writeFileAtomic(path, data); err != nil {
 		slog.Error("save apple storefront title cache", "err", err)
 	}
 }

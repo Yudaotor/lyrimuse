@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -255,11 +254,5 @@ func saveProxyFallbackHint(host string, useProxy bool) {
 	}
 	// tmp + rename,临时文件名带进程号 —— 跟 musixmatchSaveTokenFile 同一个理由:并发的
 	// 两个写入方不能互相覆盖同一个 tmp,否则 rename 出去的可能是半份别人的内容。
-	tmp := fmt.Sprintf("%s.tmp.%d", path, os.Getpid())
-	if os.WriteFile(tmp, raw, 0o600) != nil {
-		return
-	}
-	if os.Rename(tmp, path) != nil {
-		os.Remove(tmp)
-	}
+	_ = writeFileAtomic(path, raw)
 }
