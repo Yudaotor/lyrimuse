@@ -169,7 +169,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Fatal("一个源都没有应答,没有可采的东西")
 	}
 	raw := rounds[0]
-	t.Logf("联网共 %d 轮,第一轮 %d 个源应答(含 applecover)", len(rounds), len(raw))
+	t.Logf("联网共 %d 轮,第一轮 %d 个源应答", len(rounds), len(raw))
 	for i := 1; i < len(rounds); i++ {
 		var names []string
 		for s := range rounds[i] {

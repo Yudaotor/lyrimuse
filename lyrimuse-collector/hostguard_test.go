@@ -656,3 +656,52 @@ func TestHostGuardCoversQQMusicuPost(t *testing.T) {
 		t.Fatalf("上送类 POST 不归出站闸管: %v", err)
 	}
 }
+
+// 一个源因本地排队已满被拦下后,同源同类请求换到别的主机也拦下,不能靠备用链绕过限速;另一类(后台 /
+// 前台)和别的源不受影响,持有期过了恢复放行。
+func TestHostGuardHoldsSourceAfterQueueFull(t *testing.T) {
+	g, c := newTestGuard(hostRate{perSec: 0.01, burst: 1})
+	g.maxWait = time.Second
+	g.backgroundMaxWait = time.Second
+	roundCtx, round := withLyricSourceRound(context.Background())
+	if err := g.admit(mustReq(t, roundCtx, http.MethodGet, "https://c.y.qq.com/soso/fcgi-bin/client_search_cp")); err != nil {
+		t.Fatal(err)
+	}
+	err := g.admit(mustReq(t, roundCtx, http.MethodGet, "https://c.y.qq.com/soso/fcgi-bin/client_search_cp"))
+	if !errors.Is(err, errHostRateLimited) || !errors.Is(err, errHostGuarded) {
+		t.Fatalf("排不上队该返回 errHostRateLimited(也认 errHostGuarded): %v", err)
+	}
+	if err := g.admit(mustReq(t, roundCtx, http.MethodGet, "https://shc.y.qq.com/soso/fcgi-bin/client_search_cp")); !errors.Is(err, errHostRateLimited) {
+		t.Fatalf("同源换主机该拦下: %v", err)
+	}
+	if got := round.skippedSources(); len(got) != 1 || got[0] != "qq" {
+		t.Fatalf("该记 qq 被跳过: %v", got)
+	}
+	if err := g.admit(mustReq(t, context.Background(), http.MethodGet, "https://lrclib.net/api/get")); err != nil {
+		t.Fatalf("别的源不受影响: %v", err)
+	}
+	bg := withBackgroundOutbound(context.Background())
+	if err := g.admit(mustReq(t, bg, http.MethodGet, "https://i.y.qq.com/soso/fcgi-bin/client_search_cp")); err != nil {
+		t.Fatalf("前台被拦不该连累后台: %v", err)
+	}
+	c.add(hostGuardSourceHold)
+	if err := g.admit(mustReq(t, context.Background(), http.MethodGet, "https://u6.y.qq.com/soso/fcgi-bin/client_search_cp")); err != nil {
+		t.Fatalf("持有期过了该放行: %v", err)
+	}
+}
+
+// 接口熔断仍是普通的 errHostGuarded,不触发同源持有:主地址坏了照旧换备用。
+func TestHostGuardCircuitOpenDoesNotHoldSource(t *testing.T) {
+	g, _ := newTestGuard(hostRate{perSec: 100, burst: 100})
+	dead := mustReq(t, context.Background(), http.MethodGet, "https://c.y.qq.com/x")
+	for i := 0; i < endpointTripAfter; i++ {
+		g.observe(dead, http.StatusInternalServerError, "")
+	}
+	err := g.admit(dead)
+	if !errors.Is(err, errHostGuarded) || errors.Is(err, errHostRateLimited) {
+		t.Fatalf("熔断该是普通 errHostGuarded: %v", err)
+	}
+	if err := g.admit(mustReq(t, context.Background(), http.MethodGet, "https://shc.y.qq.com/x")); err != nil {
+		t.Fatalf("熔断不该连累同源备用主机: %v", err)
+	}
+}

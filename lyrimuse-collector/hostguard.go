@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -45,6 +46,14 @@ import (
 // 回环地址(单测的 httptest 服务器)不经过这里。
 
 var errHostGuarded = errors.New("held back by local outbound guard")
+
+// errHostRateLimited:本地限速排不上队(是 errHostGuarded 的一种,errors.Is 两个都认)。
+var errHostRateLimited = fmt.Errorf("%w: local rate limit queue is full", errHostGuarded)
+
+// hostGuardSourceHold:一个歌词源的请求因本地排队已满被拦下后,同一个源、同一类(前台 / 后台分开计)的请求
+// 在这段时间里一律拦下。限速按主机计,各源的备用链会换到同服务的另一个主机或另一个接口,只拦单个主机挡不住,
+// 见决策 94。
+const hostGuardSourceHold = 3 * time.Second
 
 // hostRate 是一个主机的令牌桶参数:每秒补充 perSec 个,最多攒 burst 个。
 type hostRate struct {
@@ -112,6 +121,8 @@ type hostGuard struct {
 	heldLogged map[string]time.Time
 	// health:端点键 → 接口熔断状态。
 	health map[string]*endpointHealth
+	// sourceHeld:"歌词源|bg" 或 "歌词源|fg" → 暂停放行到的时刻,见 hostGuardSourceHold。
+	sourceHeld map[string]time.Time
 }
 
 // endpointHealth 是一个端点的熔断状态。两种失败分开计:fails 数 5xx,被这个端点的任何非 5xx
@@ -140,7 +151,29 @@ func newHostGuard(now func() time.Time) *hostGuard {
 		blocked:           map[string]time.Time{},
 		heldLogged:        map[string]time.Time{},
 		health:            map[string]*endpointHealth{},
+		sourceHeld:        map[string]time.Time{},
 	}
+}
+
+func sourceHoldKey(source string, background bool) string {
+	if background {
+		return source + "|bg"
+	}
+	return source + "|fg"
+}
+
+// sourceHeldNow:这个源这一类请求此刻是不是在 hostGuardSourceHold 里。
+func (g *hostGuard) sourceHeldNow(source string, background bool) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	until, ok := g.sourceHeld[sourceHoldKey(source, background)]
+	return ok && g.now().Before(until)
+}
+
+func (g *hostGuard) holdSource(source string, background bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.sourceHeld[sourceHoldKey(source, background)] = g.now().Add(hostGuardSourceHold)
 }
 
 var hostGuardShared = newHostGuard(time.Now)
@@ -212,11 +245,21 @@ func (g *hostGuard) admit(req *http.Request) error {
 		}
 	}
 
+	background := isBackgroundOutbound(ctx)
+	if source != "" && g.sourceHeldNow(source, background) {
+		if round != nil {
+			round.markSkipped(source)
+		}
+		return errHostRateLimited
+	}
 	if err := g.acquire(ctx, host); err != nil {
-		if errors.Is(err, errHostGuarded) {
+		if errors.Is(err, errHostRateLimited) {
 			g.logHeld(host, "local rate limit queue is full")
-			if source != "" && round != nil {
-				round.markSkipped(source)
+			if source != "" {
+				g.holdSource(source, background)
+				if round != nil {
+					round.markSkipped(source)
+				}
 			}
 		}
 		return err
@@ -283,7 +326,7 @@ func (g *hostGuard) acquireBackground(ctx context.Context, host string) error {
 			return nil
 		}
 		if time.Now().Add(wait).After(limitAt) {
-			return errHostGuarded
+			return errHostRateLimited
 		}
 		t := time.NewTimer(wait)
 		select {
@@ -337,7 +380,7 @@ func (g *hostGuard) acquire(ctx context.Context, host string) error {
 	deadline, _ := ctx.Deadline()
 	wait, ok := g.reserve(host, deadline)
 	if !ok {
-		return errHostGuarded
+		return errHostRateLimited
 	}
 	if wait <= 0 {
 		return nil

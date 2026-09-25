@@ -200,7 +200,6 @@ func TestGoldenScrambleKeepsRankingParity(t *testing.T) {
 		"amll":   {source: "amll", amll: amllResult{lrc: ja, tr: tr}},
 		"musixmatch": {source: "musixmatch", lyr: "[00:00.50]作词：占位甲\n[00:01.00]作曲：占位乙\n[00:02.00]编曲：占位丙\n[00:03.00]纯音乐，请欣赏\n",
 			matchTitle: "占位曲", matchArtist: "占位歌手"},
-		"applecover": {source: "applecover", matchCover: "https://example.invalid/cover.jpg"},
 	}
 	before := goldenExpectFromRanked(rankLyricSourceResults("占位歌手", "占位曲", "占位专辑", 130, raw))
 	scrambled := scrambleLyricRound(raw, "parity")

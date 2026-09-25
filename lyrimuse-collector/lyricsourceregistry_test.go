@@ -157,8 +157,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 
 // 并发收集那个循环的次数、以及结果 channel 的缓冲,都必须**跟着源数走**,不许写字面量。
 //
-// 硬编码过字面量(如 `for i := 0; i < 9`)会跟 goroutine 数(源数 + 1,多出来的是
-// applecover)脱节——每加一个源就多丢一份结果:循环先数满就退出,**最后到达的那个源的
+// 硬编码过字面量(如 `for i := 0; i < 9`)会跟 goroutine 数(每个源一个)脱节——每加一个源就多丢一份结果:循环先数满就退出,**最后到达的那个源的
 // 应答被直接扔掉**,且丢的往往是最慢的源、不容易被察觉,表现是该源明明取回了内容却从
 // 没进过候选列表,而丢掉的不只是那一个源自己的候选——跨源正文共识也会跟着少算一份。
 //
@@ -171,10 +170,11 @@ func TestLyricSourceCollectLoopTracksSourceCount(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
-		// 收集循环:源数 + applecover
-		"for i := 0; i < len(lyricSourceNames)+1; i++ {",
-		// 结果 channel 的缓冲同理
-		"make(chan lyricSourceResult, len(lyricSourceNames)+1)",
+		// 收集循环:按源清单逐个核对到齐
+		"for !allLyricSourcesBack() {",
+		"allLyricSourcesBack := func() bool {\n\t\tfor _, s := range lyricSourceNames {",
+		// 结果 channel 的缓冲:每个源一个 goroutine,都能不阻塞地放下自己那一份
+		"make(chan lyricSourceResult, len(lyricSourceNames))",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("enrich.go 里没找到 %q —— 这两处必须跟源数联动,写死字面量会在下次加源时静默丢结果", want)
