@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,5 +49,9 @@ func TestMain(m *testing.M) {
 	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
 	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。
 	googleTranslateEndpoint = ""
+	// 编目匹配的名字来源(Apple 目录反查 / YouTube Music 英文署名)会联网;单测一律当作「查成了、没有」,
+	// 要测它们的用例自己换(stubCatalogNameSources)。
+	catalogAppleTitleAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }
+	catalogYTMusicAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }
 	os.Exit(m.Run())
 }

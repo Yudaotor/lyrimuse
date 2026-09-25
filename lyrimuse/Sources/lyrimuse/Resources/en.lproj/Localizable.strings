@@ -134,6 +134,8 @@
 "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" = "All three are off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it";
 "三连音符" = "Three Notes";
 "上" = "Top";
+"上一期没进榜" = "Not in the previous chart";
+"上一期（%@ – %@）没有收听记录，不显示升降" = "No scrobbles in the previous period (%@ – %@), so no rank changes";
 "上一步" = "Back";
 "上一轮还没跑完，稍后会自动接着跑" = "The previous run hasn't finished; it resumes automatically";
 "上一页" = "Previous";
@@ -432,6 +434,7 @@
 "同步收听到 Last.fm（可选）" = "Scrobble to Last.fm (optional)";
 "同步收听记录" = "Scrobble your listens";
 "同步服务地址" = "Sync Server URL";
+"名次跟上一期一样" = "Same rank as the previous period";
 "后台服务已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" = "The background service has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
 "后台服务已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。" = "The background service has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
 "后台采集服务" = "Background Collector Service";
@@ -524,6 +527,7 @@
 "宽度" = "Width";
 "宽度模式" = "Width Mode";
 "对悬浮歌词和灵动岛生效" = "Applies to the floating lyrics and the notch";
+"对比 %@ – %@" = "Compared with %@ – %@";
 "对齐方式" = "Alignment";
 "导入" = "Import";
 "导入…" = "Import…";
@@ -809,6 +813,7 @@
 "文字颜色" = "Text Color";
 "断开" = "Disconnect";
 "断开 Last.fm？" = "Disconnect Last.fm?";
+"新" = "New";
 "新播放器提醒" = "New Player Alerts";
 "方向" = "Direction";
 "无时间戳" = "No timing";
@@ -1059,6 +1064,8 @@
 "每按一次调整的幅度" = "Amount per press";
 "每日听歌报告" = "Daily Listening Report";
 "每月听歌小结" = "Monthly Listening Digest";
+"比上一期上升 %@ 名" = "Up %@ from the previous period";
+"比上一期下降 %@ 名" = "Down %@ from the previous period";
 "比下面的宽度更长时就截断，末尾加省略号，不滚动" = "Longer than the width below gets cut off with an ellipsis, no scrolling";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";

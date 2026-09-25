@@ -323,7 +323,11 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 // 落库却是 A & B" 的自相矛盾状态。匹配下唯一允许的分歧见 lastfmcatalog.go「一致性」一节。
 func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, track string, durationSecs float64) (string, string) {
 	scope := matchScope{artist: features().LastfmMatchArtist, track: features().LastfmMatchTrack}
-	artist, track, matched := c.resolve(ctx, artist, track, durationSecs, scope)
+	matchDuration := durationSecs
+	if catalogDurationUnknown(ctx) {
+		matchDuration = 0
+	}
+	artist, track, matched := c.resolve(ctx, artist, track, matchDuration, scope)
 	if matched || !features().LastfmMatchFirstArtistOnly {
 		return artist, track
 	}
@@ -588,7 +592,8 @@ func parseLastfmRecent(body []byte) (lastfmRecentPage, error) {
 			continue
 		}
 		tr := lastfmTrack{Title: t.Name, Artist: t.Artist.Text, Album: t.Album.Text}
-		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large → extralarge → 最后一档)。
+		// 依次取 large、extralarge、最后一档里第一个非空的,跟 App 侧 LastfmImage.pick 同一条规则,
+		// 改一处必须同步改另一处。
 		pick := func(size string) string {
 			for _, im := range t.Image {
 				if im.Size == size {

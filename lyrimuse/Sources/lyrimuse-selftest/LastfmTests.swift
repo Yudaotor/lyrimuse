@@ -305,8 +305,12 @@ func runLastfmTests() {
         expectEqual(I.pick([img("small", "s"), img("extralarge", "XL")]), "XL", "lastfm 图: 没 large 退 extralarge")
         expectEqual(I.pick([img("small", "s"), img("medium", "M")]), "M", "lastfm 图: 都没有退最后一项")
         expectEqual(I.pick([img("large", star)]), nil, "lastfm 图: 占位星当没有图")
-        expectEqual(I.pick([img("large", ""), img("extralarge", "XL")]), nil,
-                    "lastfm 图: large 是空串就是没有图,不再往下找")
+        expectEqual(I.pick([img("large", ""), img("extralarge", "XL")]), "XL",
+                    "lastfm 图: large 是空串退 extralarge(跟 collector 同规则)")
+        expectEqual(I.pick([img("large", ""), img("extralarge", ""), img("mega", "MG")]), "MG",
+                    "lastfm 图: 前两档都是空串退最后一项")
+        expectEqual(I.pick([img("small", ""), img("large", ""), img("extralarge", "")]), nil,
+                    "lastfm 图: 全是空串就是没有图")
         expectEqual(I.pick([] as [[String: Any]]), nil, "lastfm 图: 空数组")
         expectEqual(I.pick("not an array"), nil, "lastfm 图: 形状不对")
         expectEqual(I.pick(nil), nil, "lastfm 图: 缺字段")
@@ -388,6 +392,59 @@ func runLastfmTests() {
         idle.enqueue(2, .interactive, now: t0)
         expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(29)), false, "限速队列: 前台 30 秒内排过队")
         expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(30)), true, "限速队列: 满 30 秒才算安静")
+    }
+
+    // ---- ChartComparison / ChartMovement:「听得最多」榜单跟上一期比的名次升降 ----
+    //
+    // 上一期是紧挨着本期之前、同样长的窗口;三个长度跟 collector topArtistsPeriodSpan 同一组。
+    do {
+        typealias C = ChartComparison
+        typealias M = ChartMovement
+        expectEqual(C.span(forPeriod: "7day"), 7 * 86_400, "榜单升降: 近 7 天")
+        expectEqual(C.span(forPeriod: "1month"), 30 * 86_400, "榜单升降: 近 30 天(跟 Last.fm 1month 滚动榜同口径)")
+        expectEqual(C.span(forPeriod: "12month"), 365 * 86_400, "榜单升降: 近一年")
+        expectEqual(C.span(forPeriod: "overall"), nil, "榜单升降: 全部没有上一期")
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let w = C.previousWindow(span: 7 * 86_400, now: now)
+        expectEqual(w.to, now.addingTimeInterval(-7 * 86_400), "榜单升降: 上一期结束于本期开始")
+        expectEqual(w.from, now.addingTimeInterval(-14 * 86_400), "榜单升降: 上一期同样长")
+
+        let cur = [C.key(artist: "Prince", name: "Bambi"), C.key(artist: "prince", name: "3121"),
+                   C.key(artist: "A", name: "New Song")]
+        let prev = [C.key(artist: "PRINCE", name: "3121"), C.key(artist: "X", name: "Y"), C.key(artist: "Prince", name: "BAMBI"),
+                    C.key(artist: "Prince", name: "Bambi")]
+        expectEqual(C.previousRanks(current: cur, previous: prev), [3, 1, 0],
+                    "榜单升降: 按歌手+名称对齐,大小写不算差异,重复取靠前,上一期没有为 0")
+        expectEqual(C.key(artist: "A", name: "B") == C.key(artist: "AB", name: ""), false,
+                    "榜单升降: 歌手和名称之间有分隔,拼接不会撞键")
+
+        let albums: [String: Any] = ["weeklyalbumchart": ["album": [
+            ["name": "Xscape", "playcount": "12", "artist": ["#text": "Michael Jackson"]],
+            ["name": "", "playcount": "3", "artist": ["#text": "Nobody"]],
+            ["name": "15", "playcount": "5", "artist": ["#text": "方大同"]],
+        ]]]
+        let parsed = C.parseWeeklyChart(albums, container: "weeklyalbumchart", item: "album")
+        expectEqual(parsed?.keys, [C.key(artist: "Michael Jackson", name: "Xscape"), C.key(artist: "方大同", name: "15")],
+                    "榜单升降: 周榜按名次取对齐键,没有名称的行跳过")
+        expectEqual(parsed?.listens, 17, "榜单升降: 合计次数(判上一期有没有收听)")
+        let single: [String: Any] = ["weeklyartistchart": ["artist": ["name": "Alpha", "playcount": "4"]]]
+        expectEqual(C.parseWeeklyChart(single, container: "weeklyartistchart", item: "artist")?.keys,
+                    [C.key(artist: "", name: "Alpha")], "榜单升降: 只有一条时是对象也认")
+        let empty: [String: Any] = ["weeklytrackchart": ["track": [] as [Any]]]
+        expectEqual(C.parseWeeklyChart(empty, container: "weeklytrackchart", item: "track")?.listens, 0,
+                    "榜单升降: 上一期没有收听 = 合计 0,不是解析失败")
+        expectEqual(C.parseWeeklyChart(["error": 6], container: "weeklytrackchart", item: "track") == nil, true,
+                    "榜单升降: 形状不对当作取数失败")
+
+        expectEqual(M.of(rank: 3, previousRank: nil), nil, "榜单升降: 没有可比的上一期不显示")
+        expectEqual(M.of(rank: 3, previousRank: 0), .new, "榜单升降: 上一期没进榜 = 新")
+        expectEqual(M.of(rank: 3, previousRank: 3), .same, "榜单升降: 名次没变")
+        expectEqual(M.of(rank: 2, previousRank: 5), .up(3), "榜单升降: 前进 3 名")
+        expectEqual(M.of(rank: 5, previousRank: 2), .down(3), "榜单升降: 后退 3 名")
+        expectEqual(M.up(3).stepText, "3", "榜单升降: 数字")
+        expectEqual(M.up(99).stepText, "99", "榜单升降: 99 照常显示")
+        expectEqual(M.up(157).stepText, "99+", "榜单升降: 超过 99 显示 99+")
+        expectEqual(M.new.stepText, nil, "榜单升降: 新没有数字")
     }
 
     // ---- PlayCountVariants:「第 N 次听」的写法孪生族(括号风格分裂实测) ----

@@ -90,8 +90,9 @@ func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmCata
 		fmt.Fprint(w, resp.body)
 	}))
 	t.Cleanup(cs.srv.Close)
-	// 单测绝不连 MusicBrainz:别名来源默认是「查成了、没有别名」,要别名的用例自己换 stubAliases。
+	// 单测绝不连 MusicBrainz / Apple / YouTube:别名来源默认是「查成了、没有别名」,要别名的用例自己换。
 	stubAliases(t, nil)
+	stubCatalogNameSources(t, catalogNameSources{})
 	return &lastfmCatalogMatcher{
 		apiKey:  "k",
 		baseURL: cs.srv.URL,
@@ -787,5 +788,36 @@ func TestLastfmCatalogErrorRateLimitedBlocksEndpoint(t *testing.T) {
 	}
 	if _, blocked := hostGuardShared.endpointBlockedUntil(guardEndpointKey(u)); !blocked {
 		t.Fatal("error 29 该让这个端点进限流窗口")
+	}
+}
+
+// catalogNameSources 是编目匹配除 MusicBrainz 之外的三路名字来源的桩(nil 字段 = 这一路查成了、没有名字)。
+type catalogNameSources struct {
+	storefront   map[string][]string
+	appleTitle   map[string][]string // 键 "歌手\n曲名"
+	ytmusic      map[string][]string // 键 "歌手\n曲名"
+	ytmusicErr   error
+	lyrics       map[string][]string // 键 "歌手\n曲名"
+	lyricPending bool
+}
+
+func stubCatalogNameSources(t *testing.T, s catalogNameSources) {
+	t.Helper()
+	savedSF, savedAT, savedYT, savedLY := catalogStorefrontAliases, catalogAppleTitleAliases, catalogYTMusicAliases, catalogLyricsIdentity
+	t.Cleanup(func() {
+		catalogStorefrontAliases, catalogAppleTitleAliases, catalogYTMusicAliases, catalogLyricsIdentity = savedSF, savedAT, savedYT, savedLY
+	})
+	catalogStorefrontAliases = func(artist string) []string { return s.storefront[artist] }
+	catalogAppleTitleAliases = func(_ context.Context, artist, title string, _ float64) ([]string, error) {
+		return s.appleTitle[artist+"\n"+title], nil
+	}
+	catalogYTMusicAliases = func(_ context.Context, artist, title string, _ float64) ([]string, error) {
+		if s.ytmusicErr != nil {
+			return nil, s.ytmusicErr
+		}
+		return s.ytmusic[artist+"\n"+title], nil
+	}
+	catalogLyricsIdentity = func(artist, title string) ([]string, bool) {
+		return s.lyrics[artist+"\n"+title], s.lyricPending
 	}
 }

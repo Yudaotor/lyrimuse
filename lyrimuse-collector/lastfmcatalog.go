@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -101,6 +102,12 @@ const (
 	lastfmCatalogListenersMin = 500
 	// defer(一条够格的候选都没有)多久之后允许重查。keep / match 永不重查(见头注)。
 	lastfmCatalogDeferRecheck = 90 * 24 * time.Hour
+	// 候选名字来源不全时判出的 defer(Provisional)多久后重判。开播那一刻判的多半是这种(歌词还没解析完),
+	// 打卡在几分钟之后,要赶在那之前让它失效。
+	lastfmCatalogProvisionalRecheck = 3 * time.Minute
+	// 一次判定没查成时,预算还剩这么多才再试一次(出站闸排满这类一两秒就恢复的情况)。
+	lastfmCatalogRetryMinBudget = 8 * time.Second
+	lastfmCatalogRetryDelay     = 1500 * time.Millisecond
 	// 一次判定的总预算(含扩展搜索)。扩展搜索的 Last.fm 请求并发发出,大头是没缓存时的
 	// MusicBrainz 别名(每位歌手约 2.2 s,最多 lastfmCatalogExtMaxAliasCredits 位)。
 	lastfmCatalogBudget = 25 * time.Second
@@ -190,6 +197,9 @@ type lastfmCatalogDecision struct {
 	// Ext 是得出这条结论时的扩展判定口径(lastfmCatalogExtVersion)。只对 defer 有意义:
 	// 旧口径下的 defer 没跑过扩展搜索,要重判(见 lookup)。
 	Ext int `json:"ext,omitempty"`
+	// Provisional:这条 defer 是在候选名字来源不全时判的(见 decideExtended),只在
+	// lastfmCatalogProvisionalRecheck 之内有效。
+	Provisional bool `json:"provisional,omitempty"`
 }
 
 // lastfmCatalogMatcher 按上面的判据决定一条 scrobble 该用哪个歌手名 + 曲名。
@@ -261,6 +271,15 @@ func (c *lastfmCatalogMatcher) resolve(ctx context.Context, artist, track string
 	ctx, cancel := context.WithTimeout(ctx, lastfmCatalogBudget)
 	defer cancel()
 	d, err := c.decide(ctx, trimmedArtist, trimmedTrack, durationSecs, scope)
+	if err != nil && catalogRetryable(err) && budgetLeft(ctx) >= lastfmCatalogRetryMinBudget {
+		// 再试一次:出站闸排满、单个请求超时这类一两秒就恢复的失败,不值得为它按原样发出去。
+		// Last.fm 明确回了限流 / 参数错误 / 坏数据的不重试(限流时最该做的就是停手)。
+		select {
+		case <-time.After(lastfmCatalogRetryDelay):
+			d, err = c.decide(ctx, trimmedArtist, trimmedTrack, durationSecs, scope)
+		case <-ctx.Done():
+		}
+	}
 	if err != nil {
 		// 查不动(限流/网络/Last.fm 抽风)时不缓存也不改写:下次再判,别把一次偶发失败
 		// 变成一个永久的错误决定。
@@ -275,8 +294,12 @@ func (c *lastfmCatalogMatcher) resolve(ctx context.Context, artist, track string
 	case verdictKeep:
 		log.Printf("lastfm catalog: keep %q / %q (%s)", trimmedArtist, trimmedTrack, d.Own.summary())
 	default:
+		recheck := lastfmCatalogDeferRecheck
+		if d.Provisional {
+			recheck = lastfmCatalogProvisionalRecheck
+		}
 		log.Printf("lastfm catalog: defer %q / %q (nothing catalogued: %s; recheck after %s)",
-			trimmedArtist, trimmedTrack, d.Own.summary(), lastfmCatalogDeferRecheck)
+			trimmedArtist, trimmedTrack, d.Own.summary(), recheck)
 	}
 	return d.Artist, orDefault(d.Track, trimmedTrack), d.Verdict == verdictMatch
 }
@@ -299,6 +322,33 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 	// 挪到单人页上去。
 	if own.MBID != "" {
 		return keep, nil
+	}
+	// MV 标题(parseVideoTitle):按拆出来的「演唱者 / 歌名」整个判一遍,时长当未知(MV 比录音室版长)。
+	// 判出编目条目就改写成它;判不出就原样发 —— 拿视频标题本身再跑一遍扩展搜索没有意义。翻唱 / 特辑不拆。
+	if v := parseVideoTitle(artist, track); v.Kind == videoTitleMusicVideo && scope.track {
+		va := v.Artist
+		if !scope.artist {
+			va = artist
+		}
+		if va != artist || v.Song != track {
+			vd, err := c.decide(ctx, va, v.Song, 0, scope)
+			if err != nil {
+				return lastfmCatalogDecision{}, err
+			}
+			switch vd.Verdict {
+			case verdictKeep, verdictMatch:
+				chosen := vd.Chosen
+				if vd.Verdict == verdictKeep {
+					chosen = vd.Own
+				}
+				return lastfmCatalogDecision{
+					Verdict: verdictMatch, Artist: vd.Artist, Track: orDefault(vd.Track, v.Song),
+					Own: &own, Chosen: chosen, Scope: scope.id(), Via: strings.TrimSuffix("video+"+vd.Via, "+"),
+				}, nil
+			}
+			return lastfmCatalogDecision{Verdict: verdictDefer, Artist: artist, Track: track, Own: &own,
+				Scope: scope.id(), Provisional: vd.Provisional}, nil
+		}
 	}
 
 	cands, err := c.candidates(ctx, artist, track, own, scope)
@@ -516,7 +566,11 @@ func (c *lastfmCatalogMatcher) lookup(key string, now time.Time, scope matchScop
 	case verdictKeep, verdictMatch:
 		return d, true
 	case verdictDefer:
-		return d, d.Ext >= lastfmCatalogExtVersion && now.Sub(time.Unix(d.TS, 0)) <= lastfmCatalogDeferRecheck
+		recheck := lastfmCatalogDeferRecheck
+		if d.Provisional {
+			recheck = lastfmCatalogProvisionalRecheck
+		}
+		return d, d.Ext >= lastfmCatalogExtVersion && now.Sub(time.Unix(d.TS, 0)) <= recheck
 	default:
 		return d, false
 	}
@@ -587,4 +641,36 @@ func (c *lastfmCatalogMatcher) save(snapshot map[string]lastfmCatalogDecision) {
 		slog.Error("lastfm catalog: rename cache failed", "err", err)
 		_ = os.Remove(tmp)
 	}
+}
+
+// catalogRetryable:本地出站闸排队排满(errHostRateLimited,不含 429 窗口 / 冷却那种 errHostGuarded)
+// 或单个请求超时。
+func catalogRetryable(err error) bool {
+	return errors.Is(err, errHostRateLimited) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// catalogDurationUnknownKey:ctx 上标记「这一条的时长是视频的长度」(Music.app 的 music video、
+// YouTube Music 页面认出的 MV,见 snapshot.notAudioMedia)。编目匹配按未知时长判 —— MV 比录音室版长,
+// 拿它比时长会把正规条目挡掉(实测 JISOO《FLOWER》174 s 的条目被 MV 时长挡下);发给 Last.fm 的
+// duration 参数照报真实长度。
+type catalogDurationUnknownKey struct{}
+
+func withCatalogDurationUnknown(ctx context.Context, notAudio bool) context.Context {
+	if !notAudio {
+		return ctx
+	}
+	return context.WithValue(ctx, catalogDurationUnknownKey{}, true)
+}
+
+func catalogDurationUnknown(ctx context.Context) bool {
+	v, _ := ctx.Value(catalogDurationUnknownKey{}).(bool)
+	return v
+}
+
+// budgetLeft 是 ctx 离截止还剩多久;没有截止时当作充足。
+func budgetLeft(ctx context.Context) time.Duration {
+	if dl, ok := ctx.Deadline(); ok {
+		return time.Until(dl)
+	}
+	return lastfmCatalogBudget
 }

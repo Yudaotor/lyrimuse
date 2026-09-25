@@ -209,7 +209,7 @@ func (p *poller) settleLastfmPending(s *playSession) bool {
 	}
 	l := s.lastfmPending
 	s.lastfmPending, s.lastfmSettled = nil, true
-	p.mirrorScrobbleTracked(l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration)
+	p.mirrorScrobbleTracked(l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration, l.meta.NotAudio)
 	// 本地收听日志:**只在没有在往 Last.fm 提交时**才记(见 appendListen 的注释)。
 	//
 	// 这一段原来的注释写的是"**无条件**记一笔,不看任何账号配没配",而紧跟着的就是
@@ -230,7 +230,7 @@ func (p *poller) settleLastfmPendingSync(ctx context.Context, s *playSession) {
 	}
 	l := s.lastfmPending
 	s.lastfmPending, s.lastfmSettled = nil, true
-	p.mirrorScrobbleSync(ctx, l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration)
+	p.mirrorScrobbleSync(withCatalogDurationUnknown(ctx, l.meta.NotAudio), l.artistName, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Artist, l.meta.Duration)
 	if p.lfm == nil {
 		appendListen(l.meta.Artist, l.meta.Title, l.meta.albumForUpload(), l.startedAt, l.meta.Duration)
 	}
@@ -535,7 +535,8 @@ func (p *poller) isTracked() bool {
 // 必须是**播放器报的原始艺人名** —— 上送本身也是原样发原始标签,
 // 见 listenLogLine.AR 的注释,回填会拿它重新跑一遍同样的归一化,喂折叠后的值进去等于
 // 折叠两次。
-func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64, rawArtist string, durationSecs float64) {
+// notAudio:这一条是 MV(snapshot.NotAudio),编目匹配按未知时长判,见 withCatalogDurationUnknown。
+func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64, rawArtist string, durationSecs float64, notAudio bool) {
 	if p.lfm == nil || timestamp <= 0 {
 		return
 	}
@@ -547,7 +548,7 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 	// 取一份局部变量再交给 goroutine:p.lfm 会被主循环换掉(syncLiveConfig)。
 	lfm := p.lfm
 	mirrorAsync(lfm, "scrobble", func(ctx context.Context) error {
-		err := lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
+		err := lfm.scrobble(withCatalogDurationUnknown(ctx, notAudio), artist, title, album, timestamp, durationSecs)
 		if err == nil {
 			// 我们自己刚写进 Last.fm 一条:几秒后拉一次 feed,App 那边"上一首"就能立刻进
 			// 列表,不用等下一个拉取周期(这里在 goroutine 里,只碰 atomic,见 lastfmfeed.go)。
@@ -1249,6 +1250,7 @@ func (p *poller) announce(now time.Time, why string) {
 	// 跟 artist/title/album 一样在**闭包外**取值:下面那个 goroutine 直接读 p.cur 就是
 	// 跨 goroutine 读 poller 状态,违反"所有状态只在 poll 主循环里碰"那条不变量。
 	durationSecs := p.cur.Duration
+	notAudio := p.cur.NotAudio
 	playing := p.cur.Playing
 	// Last.fm 那一路的按播放器排除(lastfmexclude.go):只挡 track.updateNowPlaying,LB 的 playing_now 照发。
 	// 同样在闭包外取值,理由同上。
@@ -1266,7 +1268,7 @@ func (p *poller) announce(now time.Time, why string) {
 		if playing && !lastfmSkip {
 			lfm := p.lfm
 			mirrorAsync(lfm, "now-playing", func(ctx context.Context) error {
-				return lfm.updateNowPlaying(ctx, artist, title, album, durationSecs)
+				return lfm.updateNowPlaying(withCatalogDurationUnknown(ctx, notAudio), artist, title, album, durationSecs)
 			}, nil) // now-playing 失败无需留痕:它是瞬时状态,下一拍自然覆盖(跟 scrobble 相反)
 		}
 		err := p.lb.submit(p.ctx, "playing_now", 0, m)

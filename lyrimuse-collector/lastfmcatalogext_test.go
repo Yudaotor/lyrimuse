@@ -242,11 +242,15 @@ func TestCatalogExtNotUsedWhenBaseDecides(t *testing.T) {
 	}
 }
 
-// MB 别名没查成:整次判定当作没查成,不落盘(残缺的候选集判出的 defer 可能漏掉真正的条目)。
-func TestCatalogExtAliasFailureNotCached(t *testing.T) {
+// MB 别名没查成:维持原样,只记短期 defer(几分钟后重判),兜底档不走 —— 残缺的候选集判出的长期结论
+// 可能漏掉真正的条目。
+func TestCatalogExtAliasFailureOnlyProvisional(t *testing.T) {
 	const artist, track = "丁世光", "一口"
 	col, _ := newCatalogServer(t, map[string]probeResp{
 		infoKey(artist, track): {body: trackJSON("", 47, 0)},
+		// 兜底档本来能挑中的影子条目(听众远多于原样):候选不全时不该挑。
+		searchKey(track):            {body: searchJSON("丁世光", "一口", 47, "Dean Ting", "一口", 900)},
+		infoKey("Dean Ting", track): {body: trackJSON("", 900, 0)},
 	})
 	saved := catalogArtistAliases
 	catalogArtistAliases = func(context.Context, string) ([]string, error) { return nil, errMBLookupBackoff }
@@ -254,8 +258,32 @@ func TestCatalogExtAliasFailureNotCached(t *testing.T) {
 	if a, _, _ := col.resolve(context.Background(), artist, track, 0, scopeAll); a != artist {
 		t.Errorf("没查成应维持原样,got %q", a)
 	}
-	if _, ok := col.cache[artist+"\n"+track]; ok {
-		t.Error("别名没查成时不该落盘")
+	d := decisionOf(col, artist, track)
+	if d.Verdict != verdictDefer || !d.Provisional {
+		t.Fatalf("应只记短期 defer,got %+v", d)
+	}
+	if _, ok := col.lookup(artist+"\n"+track, time.Now().Add(lastfmCatalogProvisionalRecheck+time.Minute), scopeAll); ok {
+		t.Error("短期 defer 过了 lastfmCatalogProvisionalRecheck 应重判")
+	}
+	if _, ok := col.lookup(artist+"\n"+track, time.Now(), scopeAll); !ok {
+		t.Error("短期 defer 在有效期内应命中,免得每一拍都重查")
+	}
+}
+
+// 别名没查成时别的名字照查:MusicBrainz 退避中,Apple 区服对照给出的「BTS」名下有编目条目,照样改写。
+func TestCatalogExtAliasFailureStillMatchesOtherNames(t *testing.T) {
+	const artist, track = "防弹少年团", "Dynamite"
+	col, _ := newCatalogServer(t, map[string]probeResp{
+		infoKey(artist, track): {body: trackJSON("", 128, 0)},
+		infoKey("BTS", track):  {body: namedTrackJSON("BTS", "Dynamite", "m-dynamite", 1500000, 199000)},
+	})
+	saved := catalogArtistAliases
+	catalogArtistAliases = func(context.Context, string) ([]string, error) { return nil, errMBLookupBackoff }
+	t.Cleanup(func() { catalogArtistAliases = saved })
+	stubCatalogNameSources(t, catalogNameSources{storefront: map[string][]string{artist: {"BTS"}}})
+	a, tr, matched := col.resolve(context.Background(), artist, track, 199, scopeAll)
+	if a != "BTS" || tr != "Dynamite" || !matched {
+		t.Fatalf("resolve = %q / %q matched=%v, want BTS / Dynamite", a, tr, matched)
 	}
 }
 

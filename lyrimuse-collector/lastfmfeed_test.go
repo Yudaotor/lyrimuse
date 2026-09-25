@@ -276,3 +276,20 @@ func TestBackfillFeedNudgeIsDelayedNotImmediate(t *testing.T) {
 		t.Fatal("延迟到了之后应当到期一次")
 	}
 }
+
+// 取档规则跟 App 侧 LastfmImage.pick 一致(selftest「LastfmImage」同一组形状):依次取 large、
+// extralarge、最后一档里第一个非空的;全是空串就是没有图。
+func TestParseLastfmRecentImageSkipsEmptyTiers(t *testing.T) {
+	body := []byte(`{"recenttracks":{"@attr":{"total":"3"},"track":[
+  {"name":"a","artist":{"#text":"A"},"date":{"uts":"3"},"image":[{"size":"large","#text":""},{"size":"extralarge","#text":"XL"}]},
+  {"name":"b","artist":{"#text":"A"},"date":{"uts":"2"},"image":[{"size":"large","#text":""},{"size":"extralarge","#text":""},{"size":"mega","#text":"MG"}]},
+  {"name":"c","artist":{"#text":"A"},"date":{"uts":"1"},"image":[{"size":"small","#text":""},{"size":"large","#text":""},{"size":"extralarge","#text":""}]}
+]}}`)
+	page, err := parseLastfmRecent(body)
+	if err != nil || len(page.Done) != 3 {
+		t.Fatalf("parse: %v %+v", err, page)
+	}
+	if got := []string{page.Done[0].Image, page.Done[1].Image, page.Done[2].Image}; got[0] != "XL" || got[1] != "MG" || got[2] != "" {
+		t.Errorf("取档: %q", got)
+	}
+}

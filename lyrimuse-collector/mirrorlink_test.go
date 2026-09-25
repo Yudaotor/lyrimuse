@@ -277,12 +277,12 @@ func TestMirrorScrobbleTrackedMarksBeforeSendingAndIsIdempotent(t *testing.T) {
 	}
 	uts := time.Now().Add(-3 * time.Minute).Unix()
 
-	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200)
+	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200, false)
 	waitFor(t, "成功收尾跑完", func() bool {
 		_, err := os.Stat(lastfmStatusPath)
 		return lastfmFeedNudgeAt.Load() != 0 && os.IsNotExist(err)
 	})
-	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200)
+	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200, false)
 	// 守卫失效时第二次提交在 goroutine 里发出,给它时间到达假服务器。
 	time.Sleep(200 * time.Millisecond)
 
@@ -302,7 +302,7 @@ func TestMirrorScrobbleTrackedUncertainFailureIsLoggedAndQuarantined(t *testing.
 	env := newMirrorPoller(t, func() (string, error) { return "", errors.New("connection reset by peer") })
 	uts := time.Now().Add(-3 * time.Minute).Unix()
 
-	env.p.mirrorScrobbleTracked("Folded", "Song", "Album", uts, "Raw A & B", 215)
+	env.p.mirrorScrobbleTracked("Folded", "Song", "Album", uts, "Raw A & B", 215, false)
 
 	waitFor(t, "留痕写进日志", func() bool { return logKinds(uts) == "lq" })
 	l, _ := listenLine(uts)
@@ -319,7 +319,7 @@ func TestMirrorScrobbleTrackedFatalErrorIsLoggedForBackfill(t *testing.T) {
 	env := newMirrorPoller(t, func() (string, error) { return `{"error":9,"message":"Invalid session key"}`, nil })
 	uts := time.Now().Add(-3 * time.Minute).Unix()
 
-	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200)
+	env.p.mirrorScrobbleTracked("Artist", "Song", "Album", uts, "Artist", 200, false)
 
 	waitFor(t, "留痕写进日志", func() bool { return logKinds(uts) != "" })
 	if k := logKinds(uts); k != "l" {
@@ -336,10 +336,10 @@ func TestMirrorScrobbleTrackedFatalErrorIsLoggedForBackfill(t *testing.T) {
 
 func TestMirrorScrobbleTrackedSkipsWithoutScrobblerOrTimestamp(t *testing.T) {
 	env := newMirrorPoller(t, func() (string, error) { return acceptedOne, nil })
-	env.p.mirrorScrobbleTracked("A", "S", "", 0, "A", 200)
+	env.p.mirrorScrobbleTracked("A", "S", "", 0, "A", 200, false)
 	lfm := env.p.lfm
 	env.p.lfm = nil
-	env.p.mirrorScrobbleTracked("A", "S", "", 1790000000, "A", 200)
+	env.p.mirrorScrobbleTracked("A", "S", "", 1790000000, "A", 200, false)
 	env.p.lfm = lfm
 	if env.requests.Load() != 0 || len(env.p.lfmMirrored) != 0 {
 		t.Error("没有时间戳或没连账号时不该标记、不该发请求")

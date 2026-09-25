@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -55,10 +56,12 @@ import (
 // 正规条目的歌手会因为 MB 别名名下「听众更多」被挪到另一个名字下,跟他以前判过的歌分成
 // 两个歌手页。
 //
-// # 失败即不落盘
+// # 没查成时不下永久结论
 //
-// 任何一路没查成(网络 / 限流 / MB 退避中)都返回 error:候选集残缺时判出的 defer 或
-// 兜底结论可能漏掉真正的条目,而结论是永久的。
+// Last.fm 那几路(track.getInfo / 曲目表 / track.search)任何一路没查成都返回 error,整次判定不落盘。
+// 名字来源(MusicBrainz 别名 / Apple / YouTube Music / 歌词署名)有一路没查成时,其余名字照查:第 1、2 档
+// 找到的编目正规条目照用,第 3 档(兜底)不走,defer 只记短期(Provisional)—— 候选集残缺时判出的 defer
+// 或兜底结论可能漏掉真正的条目,而那两种结论是长期的。
 const (
 	// 第三档(兜底)候选至少要有这么多听众。一两个人用过的写法多半是某个人手打错的,
 	// 不能当成「大家实际在用的那条」。
@@ -72,7 +75,7 @@ const (
 	// track.search 一页取多少条。结果按歌手严格过滤,取多一点只是多几行 JSON。
 	lastfmCatalogSearchLimit = "30"
 	// 扩展判定的口径版本。旧口径下判的 defer 在加载后按这个版本重判一次(见 lookup)。
-	lastfmCatalogExtVersion = 1
+	lastfmCatalogExtVersion = 2
 )
 
 // catalogArtistAliases 是 MusicBrainz 别名来源,单测替换成桩。
@@ -106,11 +109,9 @@ func (c *lastfmCatalogMatcher) decideExtended(ctx context.Context, artist, track
 	// 不许改歌手时,别的名字下的条目一条都用不上,只剩 track.search 里歌手折叠后跟原样相等
 	// 的那几条(繁简不同的同一个写法,跟基础判定 candidates 的 allowed 同一口径)。
 	var names []extName
+	partial := false
 	if scope.artist {
-		var err error
-		if names, err = c.extNames(ctx, artist); err != nil {
-			return lastfmCatalogDecision{}, err
-		}
+		names, partial = c.extNames(ctx, artist, track, durationSecs)
 	}
 	cands, err := c.extCandidates(ctx, artist, track, names, base, scope)
 	if err != nil {
@@ -140,6 +141,14 @@ func (c *lastfmCatalogMatcher) decideExtended(ctx context.Context, artist, track
 				Own: &own, Chosen: &p, Scope: scope.id(), Via: e.via,
 			}, nil
 		}
+	}
+
+	// 名字来源有一路没查成(MusicBrainz 退避 / 503、YouTube Music 失败、歌词还没解析完):上面两档用的都是编目
+	// 正规条目,缺了某些名字只是可能少找到一条,找到的那条照用;第 3 档要在「全部候选」里挑大家在用的那条,
+	// 候选不全就可能挑错而结论是永久的,所以不走,只记一条短期 defer(Provisional),几分钟后重判。
+	if partial {
+		deferred.Provisional = true
+		return deferred, nil
 	}
 
 	// 第 3 档:编目里没有正规条目。在强身份候选(含基础判定查过的那几条)里挑大家实际在用的那条。
@@ -184,9 +193,12 @@ func weakCandidateOK(p lastfmCatalogProbe, durationSecs float64) bool {
 	return p.DurationMS > 0 && durationSecs > 0 && p.durationFits(durationSecs)
 }
 
-// extNames 列出扩展搜索要查的名字:合唱各位(强)、他们的 MusicBrainz 别名(强)、双语名的
-// 两半(弱)。不含原样整串本身(基础判定查过了)。去重按折叠键,强身份优先。
-func (c *lastfmCatalogMatcher) extNames(ctx context.Context, artist string) ([]extName, error) {
+// extNames 列出扩展搜索要查的名字,强身份在前:合唱各位、他们的 MusicBrainz 别名、Apple 区服对照、
+// YouTube Music 英文署名(都是强);歌词解析时胜出候选报的署名、双语名的两半(弱)。不含原样整串本身
+// (基础判定查过了)。去重按折叠键,强身份优先,超过 lastfmCatalogExtMaxNames 截掉的是排在后面的弱身份。
+// 第二个返回值 partial = 有一路名字来源这次没查成(见 decideExtended 里怎么处理),其余照常列出。
+func (c *lastfmCatalogMatcher) extNames(ctx context.Context, artist, track string, durationSecs float64) ([]extName, bool) {
+	partial := false
 	var out []extName
 	seen := map[string]bool{lastfmCatalogArtistKey(artist): true}
 	add := func(name string, strength identityStrength) {
@@ -214,10 +226,50 @@ func (c *lastfmCatalogMatcher) extNames(ctx context.Context, artist string) ([]e
 	for _, who := range aliasOf {
 		aliases, err := catalogArtistAliases(ctx, who)
 		if err != nil {
-			return nil, fmt.Errorf("artist aliases for %q: %w", who, err)
+			log.Printf("lastfm catalog: artist aliases for %q unavailable: %v (continuing with other names)", who, err)
+			partial = true
+			continue
 		}
 		for _, a := range aliases {
 			add(a, identityStrong)
+		}
+	}
+	for _, who := range aliasOf {
+		for _, a := range catalogStorefrontAliases(who) {
+			add(a, identityStrong)
+		}
+	}
+	if appleNames, err := catalogAppleTitleAliases(ctx, artist, track, durationSecs); err != nil {
+		log.Printf("lastfm catalog: apple storefront names for %q / %q unavailable: %v", artist, track, err)
+		partial = true
+	} else {
+		for _, a := range appleNames {
+			add(a, identityStrong)
+		}
+	}
+	if ytNames, err := catalogYTMusicAliases(ctx, artist, track, durationSecs); err != nil {
+		log.Printf("lastfm catalog: youtube music names for %q / %q unavailable: %v", artist, track, err)
+		partial = true
+	} else {
+		for _, a := range ytNames {
+			add(a, identityStrong)
+		}
+	}
+	lyricNames, pending := catalogLyricsIdentity(artist, track)
+	if pending {
+		partial = true
+	}
+	for _, n := range lyricNames {
+		// 「BTS(防弹少年团)」这种括号写法拆成括号外、括号里两个名字;整串本身不是任何人的名字,不查。
+		if outer, inner, ok := parenthesizedAlias(n); ok {
+			add(outer, identityWeak)
+			add(inner, identityWeak)
+			continue
+		}
+		add(n, identityWeak)
+		if han, latin, ok := bilingualArtistHalves(n); ok {
+			add(han, identityWeak)
+			add(latin, identityWeak)
 		}
 	}
 	halvesOf := aliasOf
@@ -230,10 +282,11 @@ func (c *lastfmCatalogMatcher) extNames(ctx context.Context, artist string) ([]e
 			add(latin, identityWeak)
 		}
 	}
+	// 加入顺序就是强身份在前(歌词署名、双语两半这两路弱身份最后加),截断截掉的是弱身份。
 	if len(out) > lastfmCatalogExtMaxNames {
 		out = out[:lastfmCatalogExtMaxNames]
 	}
-	return out, nil
+	return out, partial
 }
 
 // extCandidates 对每个名字查一次「这个名字 + 原曲名」和它的曲目表,再按曲名搜一次全站。

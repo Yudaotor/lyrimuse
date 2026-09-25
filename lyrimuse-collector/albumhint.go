@@ -305,8 +305,13 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 	}
 	cands := albumHintCandidatesFromResults(results, title, durationSecs)
 	if len(cands) == 0 {
-		// 搬运频道形态兜底:署名位是频道名、歌手写在曲名破折号前面,见 albumHintTitleSplit。只发「前段 后段」一个查询。
-		if titleArtist, song, ok := albumHintTitleSplit(title); ok {
+		// 搬运频道形态兜底:署名位是频道名、歌手写在曲名破折号前面(见 albumHintTitleSplit),或者是 MV 标题
+		// (见 titleSplitIdentity,MV 的时长跟录音室版对不上,按未知处理)。只发「前段 后段」一个查询。
+		if titleArtist, song, isMV, ok := titleSplitIdentity(artist, title); ok {
+			splitDuration := durationSecs
+			if isMV {
+				splitDuration = 0
+			}
 			var alt []itunesResult
 			q := neturl.QueryEscape(titleArtist + " " + song)
 			// 样本用这一轮真正的署名/曲名(不是被搬运频道污染的那一对),见 appleStorefrontsFor。
@@ -314,7 +319,7 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 				ars, _ := itunesSearch(ctx, q, country)
 				alt = append(alt, ars...)
 			}
-			cands = albumHintCandidatesFromTitleSplit(alt, titleArtist, song, durationSecs)
+			cands = albumHintCandidatesFromTitleSplit(alt, titleArtist, song, splitDuration)
 		}
 	}
 	if len(cands) == 0 {

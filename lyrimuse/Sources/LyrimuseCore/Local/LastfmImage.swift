@@ -15,10 +15,13 @@ public enum LastfmImage {
     }
 
     /// `image` 字段 `[{size: small/medium/large/extralarge, "#text": url}]` 里挑一张:
-    /// 优先 large,没有退 extralarge,再退数组最后一项;挑中的是空串或占位图返回 nil。
+    /// 依次取 large、extralarge、数组最后一项里第一个非空的 URL,挑中的是占位图返回 nil。
+    /// 跟 collector `parseLastfmRecent` 的取档规则一致(那边写进 feed 的图,App 按原样用),
+    /// 改一处必须同步改另一处。
     public static func pick(_ value: Any?) -> String? {
         guard let arr = value as? [[String: Any]] else { return nil }
-        let by = { (size: String) in arr.first { ($0["size"] as? String) == size } }
-        return usable((by("large") ?? by("extralarge") ?? arr.last)?["#text"] as? String)
+        let by = { (size: String) in arr.first { ($0["size"] as? String) == size }?["#text"] as? String }
+        let tiers = [by("large"), by("extralarge"), arr.last?["#text"] as? String]
+        return usable(tiers.compactMap { $0 }.first { !$0.isEmpty })
     }
 }

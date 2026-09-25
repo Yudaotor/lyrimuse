@@ -272,7 +272,9 @@ struct LastfmStatsSection: View {
                 if entries.isEmpty {
                     placeholderRow(L10n.t("这个时段还没有记录"))
                 } else {
-                    chartList(entries)
+                    let window = stats.chartWindow(kind, period)
+                    chartList(entries, showMovement: (window?.listens ?? 0) > 0)
+                    if let window { chartWindowCaption(window) }
                 }
             } else if stats.chartFailed(kind, period) {
                 retryRow { stats.refreshChart(kind: kind, period: period) }
@@ -295,7 +297,8 @@ struct LastfmStatsSection: View {
         }
     }
 
-    private func chartList(_ entries: [LastfmStatsService.ChartEntry], interactive: Bool = true) -> some View {
+    private func chartList(_ entries: [LastfmStatsService.ChartEntry], interactive: Bool = true,
+                           showMovement: Bool = false) -> some View {
         let maxCount = max(entries.map(\.playcount).max() ?? 1, 1)
         return VStack(spacing: 0) {
             ForEach(entries) { e in
@@ -307,6 +310,9 @@ struct LastfmStatsSection: View {
                     Text("\(e.rank)")
                         .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
                         .frame(width: 16, alignment: .trailing)
+                    if showMovement {
+                        movementLabel(ChartMovement.of(rank: e.rank, previousRank: e.previousRank))
+                    }
                     thumb(for: e)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(e.name).font(.system(size: 13)).lineLimit(1)
@@ -336,6 +342,52 @@ struct LastfmStatsSection: View {
             }
         }
         .padding(.vertical, 5)
+    }
+
+    /// 名次升降:▲n 前进、▼n 后退、「新」上一期没进榜、– 没变。名次差超过 99 显示 99+(见 ChartMovement)。
+    @ViewBuilder
+    private func movementLabel(_ movement: ChartMovement?) -> some View {
+        Group {
+            switch movement {
+            case .up?:
+                Text("▲" + (movement?.stepText ?? "")).foregroundStyle(.green)
+                    .help(String(format: L10n.t("比上一期上升 %@ 名"), movement?.stepText ?? ""))
+            case .down?:
+                Text("▼" + (movement?.stepText ?? "")).foregroundStyle(.red)
+                    .help(String(format: L10n.t("比上一期下降 %@ 名"), movement?.stepText ?? ""))
+            case .same?:
+                Text("–").foregroundStyle(.tertiary)
+                    .help(L10n.t("名次跟上一期一样"))
+            case .new?:
+                Text(L10n.t("新"))
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 4)
+                    .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
+                    .help(L10n.t("上一期没进榜"))
+            case nil:
+                Color.clear
+            }
+        }
+        .font(.system(size: 10.5))
+        .monospacedDigit()
+        .lineLimit(1)
+        .frame(width: 34, alignment: .leading)
+    }
+
+    /// 榜单下面那一行:对比的是哪一段;上一期一条收听都没有时说明为什么没有箭头。
+    private func chartWindowCaption(_ window: LastfmStatsService.ChartWindow) -> some View {
+        let from = window.from.formatted(.dateTime.year().month().day())
+        let to = window.to.formatted(.dateTime.year().month().day())
+        let text = window.listens > 0
+            ? String(format: L10n.t("对比 %@ – %@"), from, to)
+            : String(format: L10n.t("上一期（%@ – %@）没有收听记录，不显示升降"), from, to)
+        return Text(text)
+            .font(.system(size: 10.5))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
     }
 
     /// Last.fm 的实体页地址。路径段里的 "/" 必须转义 —— 专辑名里带斜杠(The Hits/The

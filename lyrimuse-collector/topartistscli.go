@@ -31,6 +31,9 @@ func runTopArtistsCLI(args []string) {
 	// 四档并发取数在 Go 里只是四个 goroutine —— 一次 spawn,切时段零等待(
 	// 发散采纳)。
 	allPeriods := fs.Bool("all-periods", false, "fetch 7day/1month/12month/overall in one run")
+	// -with-previous(配 -all-periods):每档再取上一期、按同一套合并对齐名次,给 App 画升降箭头。
+	// 输出换成 {"7day":{"rows":[...],"previous":{...}},...},见 topArtistsPeriodOutput。
+	withPrevious := fs.Bool("with-previous", false, "with -all-periods: also compare each period with the previous one")
 	mbBudget := fs.Int("mb-budget", 0, "resolve up to N uncached artist identities via MusicBrainz (0 = cache only)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("top-artists: %v", err)
@@ -74,41 +77,20 @@ func runTopArtistsCLI(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if *allPeriods {
-		periods := []string{"7day", "1month", "12month", "overall"}
-		type periodResult struct {
-			period  string
-			entries []lastfmChartEntry
-			err     error
-		}
-		ch := make(chan periodResult, len(periods))
-		for _, pd := range periods {
-			go func(pd string) {
-				pool := topArtistsFetchPool
-				if pool < *limit*3 {
-					pool = *limit * 3
+		results := topArtistsAllPeriods(ctx, cfg.LastfmUser, cfg.lastfmBridgeAPIKey(), *limit, resolve, *withPrevious, time.Now())
+		var out any
+		if *withPrevious {
+			out = results
+		} else {
+			plain := map[string][]topArtistEntry{}
+			for pd, r := range results {
+				rows := make([]topArtistEntry, 0, len(r.Rows))
+				for _, row := range r.Rows {
+					rows = append(rows, topArtistEntry{Name: row.Name, PlayCount: row.PlayCount})
 				}
-				entries, err := lastfmTopArtistsPeriod(ctx, cfg.LastfmUser, cfg.lastfmBridgeAPIKey(), pd, pool)
-				ch <- periodResult{pd, entries, err}
-			}(pd)
-		}
-		out := map[string][]topArtistEntry{}
-		for range periods {
-			r := <-ch
-			if r.err != nil {
-				// 单个时段失败不拖垮整批 —— 缺的那档 App 侧会按失败态显示重试,
-				// 其余三档照常可用。
-				log.Printf("top-artists: period %s failed: %v", r.period, r.err)
-				continue
+				plain[pd] = rows
 			}
-			merged := mergeAliasedArtistsResolved(r.entries, resolve)
-			if len(merged) > *limit {
-				merged = merged[:*limit]
-			}
-			rows := make([]topArtistEntry, 0, len(merged))
-			for _, e := range merged {
-				rows = append(rows, topArtistEntry{Name: e.Name, PlayCount: e.PlayCount})
-			}
-			out[r.period] = rows
+			out = plain
 		}
 		if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 			log.Fatalf("top-artists: encode: %v", err)
@@ -138,4 +120,122 @@ func runTopArtistsCLI(args []string) {
 	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 		log.Fatalf("top-artists: encode: %v", err)
 	}
+}
+
+// topArtistsPeriodSpan 是各时段的长度,上一期 = 紧挨着的前一段同样长的窗口。按这三个长度用
+// user.getWeekly*Chart 取出的本期榜跟 Last.fm 滚动榜(user.getTop* 的 7day / 1month / 12month)
+// 逐条一致,两期同口径。overall 没有上一期。App 侧 LyrimuseCore.ChartComparison 用同一组长度,
+// 两处必须同步改。
+var topArtistsPeriodSpan = map[string]time.Duration{
+	"7day":    7 * 24 * time.Hour,
+	"1month":  30 * 24 * time.Hour,
+	"12month": 365 * 24 * time.Hour,
+}
+
+// topArtistsCLIRow 是 -with-previous 输出里的一行。
+type topArtistsCLIRow struct {
+	Name      string `json:"name"`
+	PlayCount int    `json:"playCount"`
+	// PrevRank:上一期合并后榜里的名次;0 = 上一期榜里没有。nil = 这一档没有可比的上一期
+	// (overall、上一期取数失败、或上一期一条收听都没有)。
+	PrevRank *int `json:"prevRank,omitempty"`
+}
+
+// topArtistsPrevious 是这一档对比的上一期窗口。Listens 为 0 时 App 不画箭头、只说明原因。
+type topArtistsPrevious struct {
+	From    int64 `json:"from"`
+	To      int64 `json:"to"`
+	Listens int   `json:"listens"`
+}
+
+type topArtistsPeriodOutput struct {
+	Rows []topArtistsCLIRow `json:"rows"`
+	// Previous 为 nil = 没有上一期可比(overall 或上一期取数失败)。
+	Previous *topArtistsPrevious `json:"previous,omitempty"`
+}
+
+// topArtistsAllPeriods 四个时段并发取数、合并、截断;withPrevious 时每档再取上一期并对齐名次。
+// 单个时段本期失败就不出现在结果里(App 按失败态给重试);上一期失败只是这一档没有箭头。
+func topArtistsAllPeriods(ctx context.Context, user, apiKey string, limit int, resolve artistIdentityFn, withPrevious bool, now time.Time) map[string]topArtistsPeriodOutput {
+	periods := []string{"7day", "1month", "12month", "overall"}
+	type periodResult struct {
+		period   string
+		entries  []lastfmChartEntry
+		err      error
+		previous []lastfmChartEntry
+		window   *topArtistsPrevious
+	}
+	ch := make(chan periodResult, len(periods))
+	for _, pd := range periods {
+		go func(pd string) {
+			pool := topArtistsFetchPool
+			if pool < limit*3 {
+				pool = limit * 3
+			}
+			r := periodResult{period: pd}
+			r.entries, r.err = lastfmTopArtistsPeriod(ctx, user, apiKey, pd, pool)
+			if span, ok := topArtistsPeriodSpan[pd]; ok && withPrevious && r.err == nil {
+				from, to := now.Add(-2*span).Unix(), now.Add(-span).Unix()
+				prev, err := lastfmWeeklyTopArtists(ctx, user, apiKey, from, to)
+				if err != nil {
+					log.Printf("top-artists: previous %s failed: %v", pd, err)
+				} else {
+					listens := 0
+					for _, e := range prev {
+						listens += e.PlayCount
+					}
+					r.previous = prev
+					r.window = &topArtistsPrevious{From: from, To: to, Listens: listens}
+				}
+			}
+			ch <- r
+		}(pd)
+	}
+	out := map[string]topArtistsPeriodOutput{}
+	for range periods {
+		r := <-ch
+		if r.err != nil {
+			// 单个时段失败不拖垮整批 —— 缺的那档 App 侧会按失败态显示重试,
+			// 其余三档照常可用。
+			log.Printf("top-artists: period %s failed: %v", r.period, r.err)
+			continue
+		}
+		merged := mergeAliasedArtistsResolved(r.entries, resolve)
+		if len(merged) > limit {
+			merged = merged[:limit]
+		}
+		var ranks []int
+		if r.window != nil && r.window.Listens > 0 {
+			ranks = previousMergedRanks(merged, mergeAliasedArtistsResolved(r.previous, resolve), artistMergeNameKey)
+		}
+		rows := make([]topArtistsCLIRow, 0, len(merged))
+		for i, e := range merged {
+			row := topArtistsCLIRow{Name: e.Name, PlayCount: e.PlayCount}
+			if ranks != nil {
+				rank := ranks[i]
+				row.PrevRank = &rank
+			}
+			rows = append(rows, row)
+		}
+		out[r.period] = topArtistsPeriodOutput{Rows: rows, Previous: r.window}
+	}
+	return out
+}
+
+// previousMergedRanks 给本期(已合并)每一条找它在上一期(已合并)榜里的名次,找不到为 0。
+// 两边都按合并用的名字键对齐,繁简 / 中英文艺名 / 合唱串跟合并本身同一把尺子;
+// 上一期同一个键出现多次时取靠前的那个。
+func previousMergedRanks(current, previous []lastfmChartEntry, nameKey func(string) string) []int {
+	prevRank := make(map[string]int, len(previous))
+	for i, e := range previous {
+		k := nameKey(e.Name)
+		if _, seen := prevRank[k]; k != "" && !seen {
+			prevRank[k] = i + 1
+		}
+	}
+	out := make([]int, len(current))
+	for i, e := range current {
+		out[i] = prevRank[nameKey(e.Name)]
+	}
+	return out
 }

@@ -403,6 +403,9 @@ type itunesResult struct {
 	// 署名不是一个人)排到后面。同样是 iTunes Search 一直在回、之前没解码的字段。
 	ReleaseDate          string `json:"releaseDate"`
 	CollectionArtistName string `json:"collectionArtistName"`
+	// TrackID:同一条录音在各区商店是同一个 id,编目匹配靠它把中国区的署名跟美区的署名对上
+	// (appleLinkedArtistNames)。
+	TrackID int64 `json:"trackId"`
 }
 
 // ---- iTunes Search 的限流退避 ----

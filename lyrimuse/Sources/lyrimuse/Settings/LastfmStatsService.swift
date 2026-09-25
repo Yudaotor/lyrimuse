@@ -220,6 +220,14 @@ final class LastfmStatsService: ObservableObject {
             case .tracks: return ("toptracks", "track")
             }
         }
+        /// 上一期用的周榜接口与列表路径(带 from / to 取任意窗口,见 LyrimuseCore.ChartComparison)。
+        var weeklyChart: (method: String, container: String, item: String) {
+            switch self {
+            case .artists: return ("user.getweeklyartistchart", "weeklyartistchart", "artist")
+            case .albums: return ("user.getweeklyalbumchart", "weeklyalbumchart", "album")
+            case .tracks: return ("user.getweeklytrackchart", "weeklytrackchart", "track")
+            }
+        }
     }
 
     enum Period: String, CaseIterable, Identifiable {
@@ -250,7 +258,16 @@ final class LastfmStatsService: ObservableObject {
         /// 只有专辑榜有真封面(歌手/歌曲的 image 是 Last.fm 的白星占位图,见设计方案的
         /// 数据盘点表),其余留 nil,由 UI 画首字母色块。
         let imageURL: URL?
+        /// 上一期名次(升降箭头用):0 = 上一期榜里没有,nil = 这一档没有可比的上一期。
+        var previousRank: Int? = nil
         var id: Int { rank }
+    }
+
+    /// 一档榜单对比的上一期窗口。listens 为 0 = 上一期一条收听都没有:不画箭头,只说明原因。
+    struct ChartWindow: Equatable, Codable {
+        let from: Date
+        let to: Date
+        let listens: Int
     }
 
     struct RecentTrack: Identifiable, Equatable, Codable {
@@ -580,6 +597,8 @@ final class LastfmStatsService: ObservableObject {
 
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
+    /// kind|period → 这一档对比的上一期窗口。没有这一项 = 没有可比的上一期(全部、上一期取数失败)。
+    @Published private(set) var chartWindows: [String: ChartWindow] = [:]
     /// 正在拉取/拉取失败的榜单键(kind|period)。 必须按键分别追踪,不能用共享状态:
     /// 歌手榜和歌曲榜并发拉取时会互相干扰,一个的完成/失败状态会盖到另一个头上。
     @Published private(set) var chartLoadingKeys: Set<String> = []
@@ -602,6 +621,9 @@ final class LastfmStatsService: ObservableObject {
     /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
     /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
     @Published private(set) var artistAvatars: [String: URL] = [:]
+    /// 这次运行里已经交给 collector 查过头像的歌手名(查到没查到都算,失败会撤回)。查不到的名字
+    /// 不进 artistAvatars,不记一下的话每切一次时段都要再起一个 collector 进程。
+    private var avatarRequested: Set<String> = []
     /// "歌手|歌名" → 这首歌所属专辑的封面。歌曲榜的 API 图也是占位星,真封面得按首
     /// 调 track.getInfo 拿它的专辑图 —— 榜单到手后并发补一轮,查不到的(无专辑的单曲)
     /// 不进字典,UI 回落到首字母色块。
@@ -768,6 +790,10 @@ final class LastfmStatsService: ObservableObject {
         charts["\(kind.rawValue)|\(period.rawValue)"]
     }
 
+    func chartWindow(_ kind: ChartKind, _ period: Period) -> ChartWindow? {
+        chartWindows["\(kind.rawValue)|\(period.rawValue)"]
+    }
+
     /// 断开/换账号时把一切归零 —— 统计数字、榜单、头像、封面都是**上一个身份**的,
     /// 挂着不清,重连另一个账号后页面会先展示前任的数据。
     func resetAll() {
@@ -818,7 +844,9 @@ final class LastfmStatsService: ObservableObject {
         try? FileManager.default.removeItem(at: Self.historyCheckpointURL)
         bootstrapState = .notStarted
         charts = [:]
+        chartWindows = [:]
         artistAvatars = [:]
+        avatarRequested = []
         trackCovers = [:]
         trackPlayCounts = [:]
         recentTrackCovers = [:]
@@ -2281,6 +2309,8 @@ final class LastfmStatsService: ObservableObject {
         /// 时间戳判过期(时钟回拨),这里正好靠它兜底。 白名单**不含**任何播放次数相关的键:
         /// `playCountFetchedAt` 刻意不落盘(见其注释),别顺手把它塞进来。
         var fetchedAt: [String: Date]?
+        /// 榜单对比的上一期窗口,跟 charts 一起存(老快照没有,解码为 nil)。
+        var chartWindows: [String: ChartWindow]?
     }
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
@@ -2311,6 +2341,7 @@ final class LastfmStatsService: ObservableObject {
         // 存在的那个空窗,不是新引入的更差状态。
         recentTotalPages = snap.recentTotalPages ?? 1
         charts = snap.charts
+        chartWindows = snap.chartWindows ?? [:]
         artistAvatars = snap.artistAvatars
         trackCovers = snap.trackCovers
         // 旧口径的次数不端上桌 —— 见 mergedCountsVersion 字段注释。 改动合并口径必须
@@ -2415,7 +2446,8 @@ final class LastfmStatsService: ObservableObject {
                 onThisDay: onThisDayOutcome == .loaded ? onThisDay : nil,
                 onThisDayDay: onThisDayOutcome == .loaded ? onThisDayDay : nil,
                 onThisDayUpdatedAt: onThisDayOutcome == .loaded ? onThisDayUpdatedAt : nil,
-                fetchedAt: fetchedAt.filter { Self.persistedFetchedAtKeys.contains($0.key) })
+                fetchedAt: fetchedAt.filter { Self.persistedFetchedAtKeys.contains($0.key) },
+                chartWindows: chartWindows)
             // 编码 + 落盘挪出主线程:这个类是 @MainActor,Task{} 会继承它的隔离,原来
             // JSONEncoder 和同步的 atomic 写(临时文件 + rename)全压在主线程上。
             let url = Self.snapshotURL
@@ -3501,6 +3533,11 @@ final class LastfmStatsService: ObservableObject {
 
     func refreshChart(kind: ChartKind, period: Period) {
         let key = "\(kind.rawValue)|\(period.rawValue)"
+        // 切到一档还新鲜的歌手榜也要补头像:合并榜一次拉回四档,当时只补了正在看的那一档,
+        // 这里不补的话,只在别的时段出现过的名字要等到榜单过期重拉、而且恰好正看着它才有头像。
+        if kind == .artists, let entries = charts[key] {
+            resolveAvatars(names: entries.map(\.name))
+        }
         guard fresh(key) == false else { return }
         guard let cred = credentials else { return }
         fetchedAt[key] = Date()
@@ -3529,9 +3566,14 @@ final class LastfmStatsService: ObservableObject {
     /// 一行「重试」强得多,见 refreshMergedArtistChart)。返回 false = 请求失败。
     private func fetchChartDirect(kind: ChartKind, period: Period, key: String,
                                   cred: (user: String, key: String)) async -> Bool {
+        // 上一期跟本期并发取、一起落地:分两次落的话,箭头那一列会在榜单出来之后才插进来、把整行挤一下。
+        let window = ChartComparison.span(forPeriod: period.rawValue)
+            .map { ChartComparison.previousWindow(span: $0, now: Date()) }
+        async let previousChart = fetchPreviousChart(kind: kind, window: window, cred: cred)
         guard let json = await request(method: kind.method, cred: cred,
                                        extra: ["period": period.rawValue, "limit": "10"])
         else { return false }
+        let previous = await previousChart
         let (outer, inner) = kind.listPath
         let items = (dig(json, outer, inner) as? [[String: Any]]) ?? []
         var entries: [ChartEntry] = []
@@ -3546,7 +3588,18 @@ final class LastfmStatsService: ObservableObject {
             entries.append(ChartEntry(rank: idx + 1, name: name, detail: detail,
                                       playcount: count, imageURL: image))
         }
+        if let previous, previous.listens > 0 {
+            let ranks = ChartComparison.previousRanks(
+                current: entries.map { ChartComparison.key(artist: $0.detail, name: $0.name) },
+                previous: previous.keys)
+            for i in entries.indices { entries[i].previousRank = ranks[i] }
+        }
         charts[key] = entries
+        if let window, let previous {
+            chartWindows[key] = ChartWindow(from: window.from, to: window.to, listens: previous.listens)
+        } else {
+            chartWindows[key] = nil
+        }
         scheduleSnapshotSave()
         switch kind {
         case .tracks: resolveTrackCovers(entries, cred: cred)
@@ -3554,6 +3607,18 @@ final class LastfmStatsService: ObservableObject {
         case .albums: break
         }
         return true
+    }
+
+    /// 取上一期周榜并解析成对齐键。window 为 nil(全部)或请求 / 解析失败时返回 nil。
+    private func fetchPreviousChart(kind: ChartKind, window: (from: Date, to: Date)?,
+                                    cred: (user: String, key: String)) async -> (keys: [String], listens: Int)? {
+        guard let window else { return nil }
+        let chart = kind.weeklyChart
+        guard let json = await request(method: chart.method, cred: cred,
+                                       extra: ["from": String(Int(window.from.timeIntervalSince1970)),
+                                               "to": String(Int(window.to.timeIntervalSince1970))])
+        else { return nil }
+        return ChartComparison.parseWeeklyChart(json, container: chart.container, item: chart.item)
     }
 
     /// 给一批歌曲榜条目补真封面。并发全放开也就 10 个轻量 JSON 请求,Last.fm 的
@@ -3597,12 +3662,13 @@ final class LastfmStatsService: ObservableObject {
             process.environment = LyrimusePaths.collectorProcessEnvironment()
             // -all-periods:四个时段一次进程拿全(Go 侧四路并发取数),切时段零等待、
             // 也免了每档各一次 spawn + 磁盘加载(发散采纳)。
-            process.arguments = ["top-artists", "-all-periods", "-limit", "10"]
+            // -with-previous:每档再带上一期(同一套合并对齐名次),输出形状见 collector topArtistsPeriodOutput。
+            process.arguments = ["top-artists", "-all-periods", "-with-previous", "-limit", "10"]
             let pipe = Pipe()
             let errPipe = Pipe()
             process.standardOutput = pipe
             process.standardError = errPipe
-            var rows: [String: [[String: Any]]] = [:]
+            var rows: [String: [String: Any]] = [:]
             do {
                 try process.run()
                 // 看门狗:子命令自己有 15 秒网络超时,25 秒还没退就是卡死了 —— 不杀的话
@@ -3617,7 +3683,7 @@ final class LastfmStatsService: ObservableObject {
                 process.waitUntilExit()
                 watchdog.cancel()
                 guard process.terminationStatus == 0,
-                      let arr = try JSONSerialization.jsonObject(with: data) as? [String: [[String: Any]]]
+                      let arr = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
                 else {
                     // 失败时把子命令的 stderr 带进日志 —— 原来丢 nullDevice,collector 侧
                     // log.Fatal 的死因(配置缺失/网络全挂)从这边完全看不见。
@@ -3651,20 +3717,32 @@ final class LastfmStatsService: ObservableObject {
                 return
             }
             var byKey: [String: [ChartEntry]] = [:]
-            for (pd, periodRows) in rows {
-                byKey["\(ChartKind.artists.rawValue)|\(pd)"] = periodRows.enumerated().compactMap { idx, row -> ChartEntry? in
+            var windowsByKey: [String: ChartWindow] = [:]
+            for (pd, period) in rows {
+                let key = "\(ChartKind.artists.rawValue)|\(pd)"
+                let periodRows = period["rows"] as? [[String: Any]] ?? []
+                byKey[key] = periodRows.enumerated().compactMap { idx, row -> ChartEntry? in
                     guard let name = row["name"] as? String, !name.isEmpty else { return nil }
                     let count = row["playCount"] as? Int ?? 0
-                    return ChartEntry(rank: idx + 1, name: name, detail: "", playcount: count, imageURL: nil)
+                    return ChartEntry(rank: idx + 1, name: name, detail: "", playcount: count, imageURL: nil,
+                                      previousRank: row["prevRank"] as? Int)
+                }
+                if let previous = period["previous"] as? [String: Any],
+                   let from = previous["from"] as? Int, let to = previous["to"] as? Int {
+                    windowsByKey[key] = ChartWindow(from: Date(timeIntervalSince1970: TimeInterval(from)),
+                                                    to: Date(timeIntervalSince1970: TimeInterval(to)),
+                                                    listens: previous["listens"] as? Int ?? 0)
                 }
             }
             let filled = byKey
+            let filledWindows = windowsByKey
             await MainActor.run {
                 let svc = LastfmStatsService.shared
                 svc.chartLoadingKeys.remove(cacheKey)
                 let now = Date()
                 for (key, entries) in filled {
                     svc.charts[key] = entries
+                    svc.chartWindows[key] = filledWindows[key]
                     svc.fetchedAt[key] = now // 四档全部盖到 TTL,切时段不再各自重拉
                 }
                 // 用户正看的时段可能不在返回里(单时段失败被 Go 侧跳过):按失败态给重试入口
@@ -3684,8 +3762,9 @@ final class LastfmStatsService: ObservableObject {
     /// 让 collector 去查一批歌手头像。失败静默 —— 头像是锦上添花,查不到就显示首字母,
     /// 不值得占一条错误提示。
     private func resolveAvatars(names: [String]) {
-        let missing = names.filter { artistAvatars[$0] == nil }
+        let missing = names.filter { artistAvatars[$0] == nil && !avatarRequested.contains($0) }
         guard !missing.isEmpty else { return }
+        avatarRequested.formUnion(missing)
         let collectorPath = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Resources/collector").path
         Task.detached(priority: .utility) {
@@ -3702,6 +3781,7 @@ final class LastfmStatsService: ObservableObject {
                 try process.run()
             } catch {
                 logger.notice("artist-avatars: launch failed: \(error.localizedDescription, privacy: .public)")
+                await MainActor.run { LastfmStatsService.shared.avatarRequested.subtract(missing) }
                 return
             }
             // 看门狗:冷缓存串行解析 10 个名字最坏约一分钟(每名 6s 超时),75 秒兜底,
@@ -3717,6 +3797,7 @@ final class LastfmStatsService: ObservableObject {
                 let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(),
                                  encoding: .utf8)?.prefix(300) ?? ""
                 logger.notice("artist-avatars failed (exit \(process.terminationStatus)): \(String(err), privacy: .public)")
+                await MainActor.run { LastfmStatsService.shared.avatarRequested.subtract(missing) }
                 return
             }
             await MainActor.run {

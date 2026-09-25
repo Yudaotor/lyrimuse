@@ -3838,6 +3838,17 @@ func runSourceContractTests() {
         let stats = code("Settings/LastfmStatsService.swift")
         expectEqual(stats.contains("LastfmHeatmapTruncation.looksTruncated("), true, "设置判定走 Core: 热力图截断")
         expectEqual(stats.contains("* 0.7"), false, "设置判定走 Core: 截断阈值不在 App 里另写一份")
+        // 歌手榜头像:合并榜一次拉回四档、只补正在看的那一档,切到还新鲜的另一档时要在「新鲜就返回」之前补。
+        if let fn = stats.range(of: "func refreshChart(kind: ChartKind, period: Period) {"),
+           let avatars = stats.range(of: "resolveAvatars(names: entries.map(\\.name))", range: fn.upperBound..<stats.endIndex),
+           let freshGate = stats.range(of: "guard fresh(key) == false else { return }", range: fn.upperBound..<stats.endIndex) {
+            expectEqual(avatars.lowerBound < freshGate.lowerBound, true,
+                        "Last.fm 榜单: 切到还新鲜的歌手榜也补头像(在新鲜判断之前)")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 refreshChart / 补头像 / 新鲜判断")
+        }
+        expectEqual(stats.contains("!avatarRequested.contains($0)"), true,
+                    "Last.fm 榜单: 同一次运行里问过的歌手名不再起 collector 查头像")
         let icloud = code("Settings/ICloudConfigStore.swift")
         expectEqual(icloud.contains("ConfigExportMetadata.read(data)"), true, "设置判定走 Core: 配置包自报信息的读取")
         expectEqual(portability.contains("ConfigExportMetadata.exportedAtString("), true, "设置判定走 Core: 导出时间跟读取同一个格式")

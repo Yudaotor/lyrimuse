@@ -2421,12 +2421,19 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// (pickLyricCandidate 是纯函数,下面正式挑那次再调一遍不冲突)。
 	// coverAlbum 只进下面的**挑选过程**;写 e.CoverAlbum 的几处仍各写来源自己报的专辑名 /
 	// 真实入参 album,回填名绝不落盘成 cover_album(理由见 coverAlbumForTrack 头注)。
+	//
+	// MV 标题(parseVideoTitle):曲库按视频标题搜不到,封面按拆出来的「演唱者 / 歌名」查、时长当未知(MV 比
+	// 录音室版长)。翻唱 / 特辑不拆:查不到就没有封面,不拿原唱的封面顶(03 章)。
+	coverArtist, coverTitle, coverDuration := artist, title, durationSecs
+	if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {
+		coverArtist, coverTitle, coverDuration = v.Artist, v.Song, 0
+	}
 	coverAlbum := album
 	if coverAlbum == "" {
-		coverAlbum = appleAlbumHintSync(ctx, artist, title, durationSecs,
-			coverAlbumCorroboration(artist, title, album, e.CanonicalArtist, pickLyricCandidate(scored)))
+		coverAlbum = appleAlbumHintSync(ctx, coverArtist, coverTitle, coverDuration,
+			coverAlbumCorroboration(coverArtist, coverTitle, album, e.CanonicalArtist, pickLyricCandidate(scored)))
 	}
-	appleMatch := appleMusicMatchCached(ctx, artist, title, coverAlbum)
+	appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum)
 	if e.CoverURL == "" && appleMatch.cover != "" {
 		e.CoverURL = appleMatch.cover
 		e.CoverSource = "apple"
@@ -2463,7 +2470,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		// 避开精选集/合辑顶替原始专辑封面。
 		// 第二个返回值(QQ 侧的歌手名)刻意丢弃:它不该进 canonical_artist(理由见上面
 		// 解析链路那段)。这里只要封面。
-		qqCover, _ := qqCoverFallback(ctx, artist, title, coverAlbum)
+		qqCover, _ := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)
 		if qqCover != "" {
 			// 只在真拿到值时才覆盖——若 QQ 也没有,保留网易云/Apple 那张"对不上版但好歹
 			// 有图"的兜底,好过把已有封面抹成空。
@@ -2835,10 +2842,15 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 「Song - Remastered」这类被拆错的歌名最多白查一轮、候选过不了打分,不会多出错结果。
 	// 翻唱重入那一轮不拆(coverPerformerOnly):拆出来的是曲名里别的名字,不是翻唱者。
 	if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {
-		if splitArtist, splitTitle, ok := albumHintTitleSplit(title); ok {
+		if splitArtist, splitTitle, isMV, ok := titleSplitIdentity(artist, title); ok {
 			log.Printf("lyrics: %q - %q has no usable candidate, retrying as title-split identity %q - %q", artist, title, splitArtist, splitTitle)
 			splitCtx := withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)
-			splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, durationSecs, onUpdate)
+			// MV 的时长跟录音室版对不上,按未知打分(同 YouTube Music MV 的处理,02 章决策 33)。
+			splitDuration := durationSecs
+			if isMV {
+				splitDuration = 0
+			}
+			splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)
 			if hasUsableLyricCandidate(splitResults) {
 				log.Printf("lyrics: title-split identity fallback succeeded: original=%q - %q identity=%q - %q candidates=%d sources=%v",
 					artist, title, splitArtist, splitTitle, len(splitResults), lyricSourcesWithCandidates(splitResults))
