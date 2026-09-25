@@ -19,7 +19,7 @@ public enum LyricsOffsetScope {
     ///   跟"选择播放器"图标网格用同一套顺序)——那个属性定义在 App 主
     ///   target 的 `FeatureSettingsStore.swift`(依赖 `AppSettings`/`L10n`),LyrimuseCore
     ///   不能反向依赖它,所以顺序作为参数从外面传进来,而不是这个函数自己在内部读。
-    /// - `trusted`: 用户信任的未知播放器(`TrustedPlayers.current`,bundleID → 显示名)。
+    /// - `trusted`: 用户信任的未知播放器(`TrustedPlayers.current`,bundleID 到 显示名)。
     /// - `configured`: 已经配过非零偏移的 bundleID(`LyricsOffsetStore.playerOffsets.keys`)。
     /// - `nowPlaying`: 此刻真正在放的那个,没有就传 nil。
     ///

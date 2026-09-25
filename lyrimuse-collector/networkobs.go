@@ -54,7 +54,7 @@ var (
 // 码/耗时)。
 func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) {
 	// DNS 阶段轨迹,只给歌词源的传输层失败分类用(sourcebreaker.go 最后一节的
-	// ⚠️ 段说明了为什么不能只看错误链)。钩子在拨号 goroutine 上跑、跟这里不同步,所以用
+	// 段说明了为什么不能只看错误链)。钩子在拨号 goroutine 上跑、跟这里不同步,所以用
 	// 锁读写;请求结束后再读一次快照交给 observeTraced。非歌词源主机也会挂,开销是一个
 	// 闭包结构体加一次 WithContext 的浅拷贝,可忽略。
 	var (
@@ -206,7 +206,7 @@ type apiCallWindow struct {
 	first, last time.Time
 	count       int
 	failed      int
-	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked 里那段 ⚠️。
+	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked 里那段 提醒。
 	notfound  int
 	durations []time.Duration
 }
@@ -283,7 +283,7 @@ func networkLooksDown() bool {
 
 // beginNetworkRound 开始一轮观察,返回的函数给出"从这一刻到调用它为止"的网络成败。
 //
-// ⚠️ 上面那个 networkLooksDown() **不能**用在常驻采集器里,只对一次性子命令成立:
+// 上面那个 networkLooksDown() **不能**用在常驻采集器里,只对一次性子命令成立:
 // 它读的是进程启动以来的累计值,而 `failures == attempts` 这个条件只要进程早期有过
 // 任何一次成功就永远不再成立 —— 开机时有网、后来断网,它一路报"网络正常"。
 // 一次性 CLI 跑完就退出,累计值天然等于"这一次的",所以那边没问题。
@@ -311,7 +311,7 @@ func roundLooksNetworkDown(attempts, failures int32) bool {
 //
 // 判据是"至少有一个请求真的成功了" —— 网络通、源确实回了话、就是没有这首歌。
 //
-// ⚠️ 刻意不写成 `!roundLooksNetworkDown(...)`:那个要 attempts>=3 **且**全挂才算不通,
+// 刻意不写成 `!roundLooksNetworkDown(...)`:那个要 attempts>=3 **且**全挂才算不通,
 // 于是"这一轮只发出去 1~2 个请求、而且全挂"(大部分源被熔断跳过时就是这个形状,见
 // sourcebreaker.go)会从它的网眼里漏过去、被当成确证查无 —— 那明明更像没查成。
 // 这里宁可严一点:漏判的代价只是这一轮继续显示"搜索歌词中…",下一轮自愈会再来;

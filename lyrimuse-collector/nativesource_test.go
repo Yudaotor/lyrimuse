@@ -7,7 +7,7 @@ import "testing"
 // 理由是时间轴对齐同一个音频母版，不是内容质量 —— 所以权重刻意压在逐字时间轴之下，
 // 见 match.go 里那一项的注释。
 //
-// ⚠️ v21 起多了一道准入：identityFromLocalClient。光是"源跟当前播放器同源"不再算数，
+// v21 起多了一道准入：identityFromLocalClient。光是"源跟当前播放器同源"不再算数，
 // 因为搜索给出的只是"名字对得上的某一条"，同名的 live／重录／翻唱版轴根本不是一回事。
 func TestNativeSourceBonus(t *testing.T) {
 	const lrc = "[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n"
@@ -27,7 +27,7 @@ func TestNativeSourceBonus(t *testing.T) {
 		t.Errorf("没有 native 源时不该有来源差异: qq=%d kugou=%d", base, got)
 	}
 
-	// 放 QQ 音乐 → QQ 那份**且身份来自本地曲库**的加分，别家不加。
+	// 放 QQ 音乐 到 QQ 那份**且身份来自本地曲库**的加分，别家不加。
 	nativeLyricSources = map[string]bool{"qq": true}
 	if got := score("qq", false, true); got != base+250 {
 		t.Errorf("同源+本地身份该加 250, got %d (base %d)", got, base)
@@ -36,7 +36,7 @@ func TestNativeSourceBonus(t *testing.T) {
 		t.Errorf("非同源不该加分, got %d (base %d)", got, base)
 	}
 
-	// ⚠️ v21 这次收窄的守卫本体：同源、但身份是**搜索**出来的 → 一分不加。
+	// v21 这次收窄的守卫本体：同源、但身份是**搜索**出来的 到 一分不加。
 	// 这是用户明确要的语义：「不能说明你搜索出来的结果就是准确的」。搜出来的同名候选
 	// 可能是另一版录音，拿一个关于**平台**的事实去担保**这一版录音**的轴，不成立。
 	if got := score("qq", false, false); got != base {
@@ -47,7 +47,7 @@ func TestNativeSourceBonus(t *testing.T) {
 			got, score("kugou", true, true))
 	}
 
-	// ⚠️ 最要紧的一条：同源加权**压不过**逐字时间轴。
+	// 最要紧的一条：同源加权**压不过**逐字时间轴。
 	// 250 < 400 是故意的 —— 同源只说明轴大概率更准，不说明这份歌词完整正确。给到能压过
 	// 质量项的量级，就会重演那次"按来源加分"的翻车（0 次变对、6 次变错）。
 	if score("qq", false, true) >= score("kugou", true, true) {
@@ -82,11 +82,9 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 
 // 同源加权的判据从「用户勾了哪些播放器」换成「**这一刻在放的是哪个**」。
 //
-// (这里原来是 TestResolveNativeLyricSources,钉的是多选那次的行为:
-//
-//	「选中集合里每个成员各自的原生源都收进来」。那个函数连同它的判据一起删了 —— 它对
-//	别的按播放器分叉的功能成立,对**这一项**不成立,理由见 match.go 里 nativeLyricSources
-//	的注释:这一项的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的属性。)
+// 不能按"选中集合里每个成员各自的原生源都收进来"这种多选判据来做:这一项的立论是
+// "时间轴对着同一份音频母版",那是正在播的那个播放器的属性,不是"我允许哪些播放器"——
+// 理由见 match.go 里 nativeLyricSources 的注释。
 func TestPlayerForBundleID(t *testing.T) {
 	cases := map[string]string{
 		appleMusicBundleID:   playerAppleMusic,
@@ -94,10 +92,10 @@ func TestPlayerForBundleID(t *testing.T) {
 		neteaseMusicBundleID: playerNetease,
 		spotifyBundleID:      playerSpotify,
 		kugouMusicBundleID:   playerKugou,
-		// ⚠️ 汽水曾经漏在这张映射里(内置化时那份手写 case 清单没跟上),表现是"用汽水
+		// 汽水曾经漏在这张映射里(内置化时那份手写 case 清单没跟上),表现是"用汽水
 		// 听歌拿不到同源加权",不报错。现在函数改成反查生成表,这条用例是它的回归守卫。
 		sodaMusicBundleID: playerSoda,
-		// ⚠️ 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"—— playerBundleID
+		// 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"—— playerBundleID
 		// 那个反方向的函数 default 分支返回 appleMusicBundleID,照抄过来就会把任何浏览器/
 		// 第三方 App 都认成 Apple Music。
 		"com.google.Chrome": "",
@@ -114,15 +112,15 @@ func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
 	saved := nativeLyricSources
 	t.Cleanup(func() { nativeLyricSources = saved })
 
-	// ⚠️ 那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
-	// 旧判据(按 features.Players)会得出 {kugou, netease, qq} —— 三个源同时 +250,
+	// 那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
+	// 旧判据(按 features().Players)会得出 {kugou, netease, qq} —— 三个源同时 +250,
 	// 而「解析决策」面板上那句"这个源就是你正在用的播放器"对三个都是假话。
 	// 新判据只看在放的那个:Apple Music 对的是 applemusic 源,恰好只有它一个。
 	setNativeLyricSourcesForPlayer(appleMusicBundleID)
 	if !isNativeLyricSource("applemusic") {
 		t.Errorf("放 Apple Music 时 applemusic 应当判为同源,got %v", nativeLyricSources)
 	}
-	// ⚠️ 这三条是那个 bug 的守卫本体,跟上面一条是两件事:在放 Apple Music,三个中文源
+	// 这三条是那个 bug 的守卫本体,跟上面一条是两件事:在放 Apple Music,三个中文源
 	// 一条都不该沾边。
 	for _, src := range []string{"qq", "netease", "kugou"} {
 		if isNativeLyricSource(src) {
@@ -173,21 +171,21 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 		t.Error("见过同源候选却没选它，该重试（这正是被『有逐字就不重试』挡死的那种）")
 	}
 
-	// 已经就是同源 → 没什么可换的。
+	// 已经就是同源 到 没什么可换的。
 	already := missed
 	already.LyricsSource = "qq"
 	if needsLyricsRetry(already, false, false, true) {
 		t.Error("已经是同源，不该重试")
 	}
 
-	// 同源当初压根没答过 → 重搜也变不出来。
+	// 同源当初压根没答过 到 重搜也变不出来。
 	unseen := missed
 	unseen.LyricsSourcesSeen = []string{"kugou", "lrclib"}
 	if needsLyricsRetry(unseen, false, false, true) {
 		t.Error("同源没出现过，不该为它重试")
 	}
 
-	// ⚠️ 最要紧：用户手改过的绝不能被这条新路径重搜覆盖掉 —— 那是缓存里唯一不可恢复的东西。
+	// 最要紧：用户手改过的绝不能被这条新路径重搜覆盖掉 —— 那是缓存里唯一不可恢复的东西。
 	manual := missed
 	manual.ManualLyrics = true
 	if needsLyricsRetry(manual, false, false, true) {
@@ -201,7 +199,7 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 	}
 }
 
-// 预取用了另一个版本的时长做校验 → 真播放时长对不上就重选一次。
+// 预取用了另一个版本的时长做校验 到 真播放时长对不上就重选一次。
 // 坐实案例：网易云《梦想家》Tango 2:44，Spotify 版 ~4:06，预取按 164s 选了短版歌词。
 //
 // 签名改:mismatch 由调用方(trackEnrichment)用 durationMismatch 算好、
@@ -226,7 +224,7 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 	if retryAt(entry, 166) {
 		t.Error("差 2 秒是标注抖动，不该白跑网络")
 	}
-	// 旧条目没记校验时长 → 一律不回溯，别让一次升级把全库重新解析一遍。
+	// 旧条目没记校验时长 到 一律不回溯，别让一次升级把全库重新解析一遍。
 	legacy := entry
 	legacy.ResolvedDurationSecs = 0
 	if retryAt(legacy, 246) {

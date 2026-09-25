@@ -67,7 +67,7 @@ func TestAppleMatchMissCachedAfterRealMiss(t *testing.T) {
 	}
 }
 
-// ⚠️ 这条是整个改动的要害:被限流时的空结果**不能**被当成"Apple 没有这首歌"。
+// 这条是整个改动的要害:被限流时的空结果**不能**被当成"Apple 没有这首歌"。
 // iTunes Search 98.4% 的失败是 403/429,不做这道区分的话,一次限流会把那段时间里
 // 解析过的每一首歌都错记进负缓存,窗口内连封面和跳转链接一起丢掉。
 func TestAppleMatchRateLimitIsNotCachedAsMiss(t *testing.T) {
@@ -163,7 +163,7 @@ func TestAppleMatchPartialStorefrontFailureIsNotAMiss(t *testing.T) {
 	itunesSearchBaseURL = srv.URL
 	t.Cleanup(func() { itunesSearchBaseURL = old })
 
-	// ⚠️ album 必须传空:album 非空时还会跑 resolveAppleMusicMatchViaAlbum,那条路径自己
+	// album 必须传空:album 非空时还会跑 resolveAppleMusicMatchViaAlbum,那条路径自己
 	// 也算一遍 reached,会把 searchAppleMusicMatch 这一层的缺陷盖住 —— 变异测试实测,
 	// 带专辑名时"只要一个商店成功就算 reached"这个变异能存活。空 album 让 viaAlbum 直接
 	// 早退,这一层的判定才暴露出来。

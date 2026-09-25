@@ -16,7 +16,7 @@ func TestNotAudioMedia(t *testing.T) {
 	}{
 		// —— mediaType 一律不参与判据(实测:MV 也报 Music,这个字段认不出 MV)——
 		{"mediaType=Music:不参与判据", map[string]any{"mediaType": mediaTypeMusic}, false},
-		// ⚠️ 这一条钉的是**负面结论**:哪怕真有播放器报 Video,也不能据此关掉时长打分。
+		// 这一条钉的是**负面结论**:哪怕真有播放器报 Video,也不能据此关掉时长打分。
 		// Safari 放 YouTube Music 本来就是视频站,反判会把一整个播放器的时长证据静默关掉,
 		// 而对 Apple Music 的 MV(唯一确认的现场)收益为零。
 		{"mediaType=Video:仍不参与判据", map[string]any{"mediaType": "MRMediaRemoteMediaTypeVideo"}, false},
@@ -27,7 +27,7 @@ func TestNotAudioMedia(t *testing.T) {
 		{"mediaKind=music video:不是音频", map[string]any{"mediaKind": "music video"}, true},
 		{"mediaKind=movie:不是音频", map[string]any{"mediaKind": "movie"}, true},
 		{"mediaKind=TV show:不是音频", map[string]any{"mediaKind": "TV show"}, true},
-		// ⚠️ unknown 刻意**不**算视频:本地导入的文件在这个字段上报什么还没实测,
+		// unknown 刻意**不**算视频:本地导入的文件在这个字段上报什么还没实测,
 		// 宁可保持现状也不要误伤一整类曲目。这是白名单而不是反判的全部理由。
 		{"mediaKind=unknown:按音频处理,不误伤本地文件", map[string]any{"mediaKind": "unknown"}, false},
 
@@ -45,7 +45,7 @@ func TestNotAudioMedia(t *testing.T) {
 
 // extract:认出 MV 之后时长必须变成"未知"(0),而不是换成别的数。
 //
-// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录:实测目录根本不给 MV 时长
+// 跟电台那条不同,这里**不**退回 Apple 目录:实测目录根本不给 MV 时长
 // (按 MV 的 trackId 反查 lookup 返回 kind=music-video、trackTimeMillis 缺失)。
 // 0 之所以是对的,是因为下游全都按"未知"处理:match.go 的时长打分整段挂在
 // `durationSecs > 0` 下,enrich.go 的 durationMismatch 任一方为 0 也不触发。
@@ -81,7 +81,7 @@ func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
 		t.Fatalf("普通曲目必须保留时长,得到 notAudio=%v duration=%.3f", n.NotAudio, n.Duration)
 	}
 
-	// 电台那条路不受影响:它有自己的换算(整档节目 → 目录单曲时长),而且电台的
+	// 电台那条路不受影响:它有自己的换算(整档节目 到 目录单曲时长),而且电台的
 	// mediaType 报什么都不该改变这个行为 —— 两条闸是 switch 的两个分支,不会互相吃掉。
 	radio := map[string]any{
 		"title": "Juna", "artist": "Clairo", "bundleIdentifier": "com.apple.Music",

@@ -61,10 +61,9 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ④ 老配置的一次性迁移:amll/lyricfind/kuwo 各自的迁移标记缺失时补进去,已表态时
-	// 尊重用户选择。这条不是补测——实测坐实过:漏了迁移标记参数那版代码在真实
-	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
-	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
-	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
+	// 尊重用户选择。 迁移标记参数跟真实源数脱节时,lyrics_sources 里只有旧的六个源、
+	// 没有对应迁移字段的机器上,search-lyrics 的 sourcesTotal 会停在 6、候选列表里一条
+	// 新源都没有——这里钉死的正是这个场景(见 resolveLyricsSources 里对应的注释)。
 	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
 		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
@@ -158,13 +157,10 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 
 // 并发收集那个循环的次数、以及结果 channel 的缓冲,都必须**跟着源数走**,不许写字面量。
 //
-// 接第十个源时实测坐实的坑:那行曾经是硬编码的 `for i:= 0; i < 9`,而 goroutine
-// 数是"源数 + 1"(多出来的是 applecover)。两个数从来没绑在一起,于是每加一个源就多丢一份
-// 结果——循环先数满就退出,**最后到达的那个源的应答被直接扔掉**。当时的现象是:新接的
-// deezer 明明取回了 2810 字节逐行歌词,却从没进过候选列表;`git log -S` 查下来这个字面量
-// 自引入起一次都没改过,也就是说 08-31 接酷我、09-04 接咪咕时就已经在丢一份了,只是丢的
-// 那份通常是 applecover 或最慢的源、没人察觉。修完同一首歌 deezer 立刻以 660 分 64 行进榜,
-// 而且 lrclib 从 620 涨到 770(跨源正文共识 +150)——丢掉的从来不只是那一个源自己的候选。
+// 硬编码过字面量(如 `for i := 0; i < 9`)会跟 goroutine 数(源数 + 1,多出来的是
+// applecover)脱节——每加一个源就多丢一份结果:循环先数满就退出,**最后到达的那个源的
+// 应答被直接扔掉**,且丢的往往是最慢的源、不容易被察觉,表现是该源明明取回了内容却从
+// 没进过候选列表,而丢掉的不只是那一个源自己的候选——跨源正文共识也会跟着少算一份。
 //
 // 用源码扫描而不是跑一遍收集循环:那需要真网或一整套假源,而这里要守的东西很简单——
 // 「这两处有没有跟 lyricSourceNames 绑在一起」,读源码就能答。
@@ -198,7 +194,7 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	if err != nil {
 		t.Skipf("读不到 %s: %v", p, err)
 	}
-	// ⚠️ 别按"以 netease 开头"来找这一行。枚举的**声明顺序是有语义的**(它同时是设置页九个
+	// 别按"以 netease 开头"来找这一行。枚举的**声明顺序是有语义的**(它同时是设置页九个
 	// 勾选框的展示序和"顺序优先"模式的默认顺序,见 Swift 侧那段注释),排序本来就会变:
 	// 按实测采用率把 kugou 提到首位时,原先写死的 `case\s+(netease[^\n]*)` 当场
 	// 匹配不到、整条守卫直接 Fatal —— 而它要守的是"九个源一个不漏",跟谁排第一无关。
@@ -275,7 +271,7 @@ func TestLyricsMigrationFlagsMatchOnBothSides(t *testing.T) {
 // 用源码扫描而不是跑一遍诊断:后者要造出每一种失败态(限流/地区限制/换票失败/端点变形),
 // 而这里要守的只是「这个源名在这两处都出现过」,读源码就能答。
 func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
-	// 有专属失败原因的源 → 它在两处 switch/check 里的源名。没有专属原因的源不在此列
+	// 有专属失败原因的源 到 它在两处 switch/check 里的源名。没有专属原因的源不在此列
 	// (它们只走传输层通用代码),新接的源如果加了 xxxLastFailureReasonNow,这里也要补一行。
 	sources := []string{"netease", "musixmatch", "lyricfind", "deezer", "soda"}
 	files := map[string]string{
@@ -298,10 +294,10 @@ func TestLyricSourceFailureReasonWiredInBothConsumers(t *testing.T) {
 
 // 「歌词管理」窗口的**来源筛选下拉**必须从 LyricsSource.allCases 派生,不许手写字面量清单。
 //
-// 用户实机发现的漏网之鱼:那份清单原来是手写的
-// `[.all, .named("amll"), .named("netease"), …, .named("lyricfind"), .none]`,停在 lyricfind
-// 那个时代,此后接的酷我(08-31)/ 咪咕(09-04)/ Deezer(09-13)/ Apple Music(09-17)四个源
-// **在下拉里根本不存在** —— 列表里明明有这些源的歌词,按来源却永远筛不出来。
+// 漏网之鱼:那份清单原来是手写的
+// `[.all, .named("amll"), .named("netease"), …, .named("lyricfind"), .none]`,是一份跟
+// LyricsSource.allCases 平行维护的字面量副本 —— 后续接入的酷我 / 咪咕 / Deezer / Apple Music
+// 四个源**在下拉里根本不存在** —— 列表里明明有这些源的歌词,按来源却永远筛不出来。
 //
 // 上面那几个 Test 全都没能拦住它:它们守的是"源常量有没有挂进某个清单",而这里是
 // 另一种形态——一份**平行维护的字面量副本**,每加一个源都要人肉同步一次。所以这条守卫
@@ -398,7 +394,7 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		{"../lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift", "// " + zh + "个歌词源——rawValue"},
 	}
 	// docs/features 只留本地、不进版本控制,所以 CI 检出的树里根本没有这一整个目录。
-	// ⚠️ 判据是**目录在不在**,不是逐个文件容错:目录在却少一份 = 真的被挪走/改名了,那仍然要报。
+	// 判据是**目录在不在**,不是逐个文件容错:目录在却少一份 = 真的被挪走/改名了,那仍然要报。
 	docsCheckedOut := true
 	if _, err := os.Stat("../docs/features"); err != nil {
 		docsCheckedOut = false

@@ -11,14 +11,14 @@ import SwiftUI
 //
 // 数据面见 PlayCountBreakdownLoader / PlayCountBreakdown(Core,纯函数,selftest 钉住编号与合并)。
 
-/// 最近记录里那格「第 N 次听」。原来是一段 Text,现在是一颗可点的小按钮 + 弹框宿主。
+/// 最近记录里那格「第 N 次听」:一颗可点的小按钮 + 弹框宿主。
 /// `nil` 次数时照旧显示 `···` 占位(没确认「那边没有」才显示,理由见 unavailable)。
 struct PlayCountBadge: View {
     let artist: String
     let title: String
     /// 行上显示的 N;nil = 还没解析出来。
     let count: Int?
-    /// 已确认 Last.fm 那边没有这一项 → 连 `···` 都不显示,否则这个占位会在极少数确实查不到
+    /// 已确认 Last.fm 那边没有这一项 到 连 `···` 都不显示,否则这个占位会在极少数确实查不到
     /// 次数的行上永远挂着,变成一个说谎的"正在加载"(沿用原来那格的判断)。
     let unavailable: Bool
     /// 这一行自己那条 scrobble 的时刻,明细里高亮它。实时行传 nil(这一次还没落库)。
@@ -262,15 +262,14 @@ struct PlayCountBreakdownPopover: View {
             Text(Self.timeLabel(p.date))
                 .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 .help(LastfmStatsSection.absolute(p.date))
-            // 刻意不在这里重复写法的歌名:色点对回上面的清单就够了,多一列字反而挤(现象是)。
+            // 刻意不在这里重复写法的歌名:色点对回上面的清单就够了,多一列字反而挤。
             Spacer(minLength: 8)
             if let album = p.album {
-                // 字号/色跟上半段的专辑分组行、跟同行的次数与时刻取齐。原来是 10.5 + `.quaternary`:
-                // `.quaternary` 在这套界面里本是背景填充色,唯二的文字用法是「···」占位和「未取到」
-                // 这种刻意淡掉的态 —— 拿它显示真实内容,浅色模式下 10.5pt 几乎读不出来(
-                // 对拍圈出这一列「根本看不清」)。
+                // 字号/色跟上半段的专辑分组行、跟同行的次数与时刻取齐。 不能用 `.quaternary`:
+                // 它在这套界面里本是背景填充色,唯二的文字用法是「···」占位和「未取到」这种
+                // 刻意淡掉的态 —— 拿它显示真实内容,浅色模式下 10.5pt 几乎读不出来。
                 //
-                // 宽度 150 → 240:440 的框里这一行左侧固定只吃掉 14+64+8+35+8+8+14 ≈ 151,余量一直
+                // 宽度 150 到 240:440 的框里这一行左侧固定只吃掉 14+64+8+35+8+8+14 ≈ 151,余量一直
                 // 在那儿闲着,而 150 把「The Best of Earth, Wind & Fire Vol. 1」这类精选集名截成
                 // 省略号 —— 同一张专辑的相邻两行长得一模一样,本来能一眼看出的"这两次同一张"反而
                 // 看不出来了。真正超长的仍会截,`help` 兜住全名。

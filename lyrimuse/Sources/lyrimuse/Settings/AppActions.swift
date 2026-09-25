@@ -64,7 +64,7 @@ final class AppActions {
     /// 「这段时间内的 reopen 别开歌词窗口」—— 点系统通知时用。
     ///
     /// 点通知会连带弹出歌词窗口(applicationShouldHandleReopen 是为「点 Dock
-    /// 图标开歌词窗口」写的,系统激活 App 时也会走到它)。⚠️ 别在通知回调里写
+    /// 图标开歌词窗口」写的,系统激活 App 时也会走到它)。 别在通知回调里写
     /// `(NSApp.delegate as? AppDelegate)?.cancel...` —— **实测无声失败**,那是全仓唯一一处
     /// NSApp.delegate 用法,SwiftUI 的 @NSApplicationDelegateAdaptor 下这个转型拿不到我们的
     /// AppDelegate(日志里那行 suppressed 从来没出现过就是证据)。所以状态放这里 ——

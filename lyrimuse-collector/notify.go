@@ -15,8 +15,8 @@ import (
 
 // 推送提醒目前支持的平台——绝大多数都是"群机器人 webhook"这个模子:一个 URL,POST
 // 一份 JSON 就能收到消息(Server酱是个例外,见下)。新增平台照这个模子接,只需要在
-// buildNotifyPayload 里加一个 case;不是这个模子的(比如 Telegram Bot API 那种"URL
-// 本身就带 token、query string 传参"的),接入方式不同,这里先不管。
+// buildNotifyPayload 里加一个 case。Telegram 多要一个 Chat ID,地址也可以只填机器人
+// Token,见 telegramSendURL。
 const (
 	platformBark       = "bark"
 	platformDingtalk   = "dingtalk"

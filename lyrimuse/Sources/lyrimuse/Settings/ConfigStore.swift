@@ -8,7 +8,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 // 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 collector/notify.go 顶部
 // 注释),Lyrimuse 这边只管选平台+填 webhook 地址,不关心具体协议。rawValue
 // 必须跟 collector 侧的平台字符串常量(platformBark/platformDingtalk/platformWecom/
-// platformDiscord/platformFeishu/platformServerChan)逐字对应——这是两侧通过同一份
+// platformDiscord/platformFeishu/platformServerChan/platformTelegram)逐字对应——这是两侧通过同一份
 // config.json 交换的字符串,不是各自随便定义的展示文案。
 public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     case bark, dingtalk, wecom, discord, feishu, serverchan
@@ -79,8 +79,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // 文本字段不走 Toggle 那种"改了立刻存盘+重启"的即时保存——不能每敲一个字符就重启一次
 // collector,所以持久化是一个显式调用点。
 //
-// ⚠️ 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了):现在是
-// AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` → `save()`),
+// 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了):现在是
+// AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` 到 `save()`),
 // 界面上只剩一个只读的 `autosaveStatusBar` 显示保存状态。
 //
 // isDirty 判定专门跟"已保存快照"比较,不看别的——如果直接读 @Published 字段是否非空,
@@ -127,8 +127,8 @@ public final class ConfigStore: ObservableObject {
 
     static let fileURL = LyrimusePaths.configFile("config.json")
 
-    /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON → 字段的映射在 load,
-    /// 字段 → JSON 在 persistFile,这里只管字节与字典。
+    /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON 到 字段的映射在 load,
+    /// 字段 到 JSON 在 persistFile,这里只管字节与字典。
     private var document = JSONConfigDocument(url: ConfigStore.fileURL)
 
     /// 诊断导出用:磁盘上那份文件的三态。
@@ -163,9 +163,9 @@ public final class ConfigStore: ObservableObject {
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
 
-    /// 给诊断导出**脱敏**用:字段名 → 该字段当前的值。
+    /// 给诊断导出**脱敏**用:字段名 到 该字段当前的值。
     ///
-    /// ⚠️ 这批值只有一个正当用途:交给 `LogRedactor` 去把它们从日志正文里**抹掉**。
+    /// 这批值只有一个正当用途:交给 `LogRedactor` 去把它们从日志正文里**抹掉**。
     /// 任何把它们写进报告、日志或界面的用法都直接违反 `DiagnosticsExporter` 开头那条
     /// 硬约束(诊断文件会被贴进公开 issue)。字段名本身不敏感,打码后会以
     /// `<redacted:lastfmScrobbleAPIKey>` 的形式留在报告里,方便排查时知道那里原本是哪一项。
@@ -301,7 +301,7 @@ public final class ConfigStore: ObservableObject {
     // 只把当前字段写回磁盘,不重启 collector。抛出的错误里带具体原因,调用方决定怎么
     // 呈现给用户。
     //
-    // ⚠️ 原注释说"底部保存栏会先把两个 store 都写完盘、再统一重启一次" —— **那个保存栏
+    // 原注释说"底部保存栏会先把两个 store 都写完盘、再统一重启一次" —— **那个保存栏
     // 已经不存在了**,而且全仓 grep 确认本方法**只被自己的 save() 调用**,没有任何外部
     // 协调者。"只重启一次"这件事现在由 CollectorRestartCoordinator
     // 负责——两个 store 的 save() 都走它,它去抖合并。
@@ -323,8 +323,8 @@ public final class ConfigStore: ObservableObject {
             "feishu_sign_secret": feishuSignSecret,
         ]
         do {
-            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是
-            // 凭据本体)→ 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
+            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)到 原子写 + 0600(这份就是
+            // 凭据本体)到 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
             try document.save(fields: fields, secure: true)
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile
@@ -364,7 +364,7 @@ public final class ConfigStore: ObservableObject {
 
     // 保存入口:持久化 + 重启 collector + 提交快照,一步到位。
     //
-    // ⚠️ 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
+    // 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
     // 两句都已过时。保存栏没了,本方法现在是**唯一**的保存路径,
     // 四个调用点:AccountLinkingTab 的输入自动保存(1480)与账号切换兜底(1062)、
     // LastfmAuthFlow 授权成功那一刻(220)、以及 AppDelegate 退出前的兜底存盘(377,

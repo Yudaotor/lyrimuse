@@ -12,7 +12,7 @@ import AppKit
 // (还没解析出来/这首歌本来就没有封面)时退回 darkGradient 的固定渐变,不会露出空白背景,
 // 具体判断逻辑在 NotchLyricsView.backgroundLayer。
 //
-// ⚠️ **这个枚举不只决定背景**:`.coverArt` 同时让**前景**(歌名/歌手/歌词/逐字染色/
+// **这个枚举不只决定背景**:`.coverArt` 同时让**前景**(歌名/歌手/歌词/逐字染色/
 // 播放键/进度条/音浪)走封面主色,其余三种风格前景恒为白。改这个枚举时记得它牵着两处渲染。
 enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case solidBlack
@@ -24,11 +24,11 @@ enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
 /// 灵动岛**稳态/展开**那一行里,左右两只耳朵各显示什么。displayName 定义在
 /// NotchLyricsView.swift(跟卡片本身的 UI 强相关),这里只负责持久化用的 rawValue。
 ///
-/// ⚠️ **只管稳态/展开那一套耳朵,管不到收起态**(没在播放且没 hover 时的 iPhone 灵动岛式
+/// **只管稳态/展开那一套耳朵,管不到收起态**(没在播放且没 hover 时的 iPhone 灵动岛式
 /// 极简形态:左封面、右音浪)。收起态单侧耳宽是 `NotchMetrics.collapsedEarWidth` = 34pt,
 /// 11.5pt 字号下连两个汉字都装不下,不单独给它配一套。
 ///
-/// ⚠️ **音浪(EqualizerBars)不在这个列表里**,它恒定钉在右耳外缘 —— 它是播放指示灯不是内容,
+/// **音浪(EqualizerBars)不在这个列表里**,它恒定钉在右耳外缘 —— 它是播放指示灯不是内容,
 /// 且在两种形态下都住右耳、收放切换时不横跳。**唯一的例外是右耳选了 `.controls`**:那时音浪
 /// 让位(见 NotchLyricsView.topRow),因为播放/暂停那枚按钮的图标本身就在报播放状态(在播时
 /// 画的是 ⏸),音浪摆在它旁边是同一件事说两遍。
@@ -45,7 +45,7 @@ enum NotchEarModule: String, Codable, Hashable, CaseIterable {
     /// 专辑封面小图。尺寸按收起态那枚走(约 23pt),不是歌词行末尾那枚 32pt 的 —— 耳朵只有
     /// `contentTopInset` 那么高。点它跟另外两处封面一样:打开歌词窗口。
     case artwork
-    /// 上一首 / 播放暂停 / 下一首。放进右耳时音浪让位,见上面那段⚠️。
+    /// 上一首 / 播放暂停 / 下一首。放进右耳时音浪让位,见上面那段提醒。
     case controls
     /// 已播时长。稳态下卡片里没有进度条(那个只在 hover 展开时才有),这是唯一能看时间的地方。
     case elapsed
@@ -90,7 +90,7 @@ enum MenuBarLyricsWidthMode: String, Codable, Hashable, CaseIterable {
 // 图标本身就是 `menuBarIconStyle` 那 12 款里当前选中的那一款:它是这个软件在菜单栏上的脸,
 // 而且是**模板图**,染色能直接复用歌词那套互补裁剪管线、跟旁边的歌词共用同两个颜色设置。
 //
-// ⚠️ **只在显示歌词时出现**,跟"歌词收成小图标"那一态是两回事:那一态里图标本来就独占整格、
+// **只在显示歌词时出现**,跟"歌词收成小图标"那一态是两回事:那一态里图标本来就独占整格、
 // 还带着「随播放律动」的 12 套动画,再叠一层进度染色要另定一条优先级规则,而暂停时进度本来
 // 就不动、染一半反而像卡住了。所以这一项的落点**只有**歌词那条渲染路径
 // (MenuBarScrollingLabel),`showIcon` 那条一行不碰。
@@ -108,7 +108,7 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 // 头注),不再复制第三份出来。两个 UserDefaults key 分别是
 // `np:menuBarLyricsAlignment` / `np:notchLyricsAlignment`。
 //
-// ⚠️ 跟悬浮歌词的 `OverlayDuetAlignmentOverride` **不是**一回事,别合并:那边的非自动选项还会
+// 跟悬浮歌词的 `OverlayDuetAlignmentOverride` **不是**一回事,别合并:那边的非自动选项还会
 // 连带关掉声部指示圆点和两侧内缩(见那个类型的头注)。这个类型只管"有空位时靠哪边",不碰任何
 // 装饰;rawValue 恰好同名只是方便,不是耦合。
 //
@@ -162,7 +162,7 @@ extension LyricsRestingAlignment {
     /// `contentLayer.position.x`),没有 SwiftUI 对齐值可用。
     var swiftUIAlignment: Alignment {
         switch self {
-        // ⚠️ `.automatic` 不该走到这里 —— 消费点先过 `resolved(duetSide:)` 再取这个值
+        // `.automatic` 不该走到这里 —— 消费点先过 `resolved(duetSide:)` 再取这个值
         // (`NotchPlayback.mainLyricAlignment` 那三个)。真走到了给左对齐,跟没有声部信息时的兜底一致。
         case .leading, .automatic: return .leading
         case .center: return .center
@@ -239,16 +239,16 @@ final class AppSettings: ObservableObject {
         // PlaybackCoordinator.displayForegroundColor。跟 foregroundColorHex 是独立的
         // 两个字段:开着这个模式时 foregroundColorHex 仍然保留、当"没有封面数据时的
         // 备用色"用,不会被覆盖/清空。
-        // ⚠️ 作用范围**只有桌面悬浮歌词**。此前它连带管着灵动岛整卡的前景
+        // 作用范围**只有桌面悬浮歌词**。此前它连带管着灵动岛整卡的前景
         // 取色,而它的入口全挂在悬浮歌词上;现在灵动岛那一半并进了 `notchCardStyle` 的
         // 「跟随封面」选项,两边彻底独立,详见 NotchCardStyle 上方那段注释。
         static let followsCoverArt = "np:followsCoverArt"
         static let lockPosition = "np:lockPosition"
-        // ⚠️ 这两个键的**作用范围只有桌面悬浮歌词**,灵动岛那一份是下面的 notchHide* 两个。
+        // 这两个键的**作用范围只有桌面悬浮歌词**,灵动岛那一份是下面的 notchHide* 两个。
         // 键名沿用旧名不改,取值范围写在 @Published 那两处的注释里。
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
-        // 灵动岛自己那一份。⚠️ 首次读取时从上面那两个旧键**继承**,见 init() —— 拆分对老用户
+        // 灵动岛自己那一份。 首次读取时从上面那两个旧键**继承**,见 init() —— 拆分对老用户
         // 必须是无感的。
         static let notchHideDuringScreenCapture = "np:notchHideDuringScreenCapture"
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
@@ -305,14 +305,14 @@ final class AppSettings: ObservableObject {
         // 看懂),自定义配色主题数组是个例外,但用 JSON 编码成字符串(不是 Data blob)
         // 存,`defaults read` 好歹还能读出一段可辨认的 JSON 文本,不是不可读的乱码。
         static let customColorThemesJSON = "np:customColorThemesJSON"
-        // 平台 id → 已配对浏览器 bundle id 集合。同样存 JSON 字符串(不是 Data),理由见
+        // 平台 id 到 已配对浏览器 bundle id 集合。同样存 JSON 字符串(不是 Data),理由见
         // customColorThemesJSON 上面那条注释;Set 编码出来是 JSON 数组,`defaults read`
         // 照样能看懂。
         static let browserPlatformPairsJSON = "np:browserPlatformPairsJSON"
-        // 用户手动挑进来的浏览器 bundle id → 探测判定出的引擎族("chromium"/"safari")。
+        // 用户手动挑进来的浏览器 bundle id 到 探测判定出的引擎族("chromium"/"safari")。
         // 同样存 JSON 字符串,理由同上。
         static let manualBrowserFamiliesJSON = "np:manualBrowserFamiliesJSON"
-        // bundle id → 最近一次「检测是否已生效」通过的时刻。
+        // bundle id 到 最近一次「检测是否已生效」通过的时刻。
         static let browserJSVerifiedAtJSON = "np:browserJSVerifiedAtJSON"
         /// 「接收测试版更新」。这台机器的偏好,不随配置搬家(见 ConfigPortability.machineLocalDefaultsKeys)。
         static let receiveBetaUpdates = "np:receiveBetaUpdates"
@@ -327,11 +327,11 @@ final class AppSettings: ObservableObject {
     /// 悬浮歌词主歌词行的字重档位。从 `.bold` 改成 `.semibold`(「较粗」)—— 用户把
     /// 自己在用的这一版悬浮歌词配置定为默认("帮我把我目前悬浮歌词的配置也设为默认的")。
     ///
-    /// ⚠️ 这一改**推翻了原来写在这里的"必须是 `.bold`"**,原话是:加「字重」这个设置之前主歌词行
+    /// 这一改**推翻了原来写在这里的"必须是 `.bold`"**,原话是:加「字重」这个设置之前主歌词行
     /// 的权重就是硬编码的 bold,默认值一改,所有老用户的悬浮歌词升级后当场变样。这条代价是
     /// 知情接受的 —— 影响范围是新装 + 存量里从没动过这一项的人,动过的键早已落盘。
     ///
-    /// ⚠️ 顺带**整条派生阶梯下移一档**:其余三行由这一档推导(规则和档位差见 `OverlayFontWeight`),
+    /// 顺带**整条派生阶梯下移一档**:其余三行由这一档推导(规则和档位差见 `OverlayFontWeight`),
     /// `.bold` 档推的是 主 9 / 罗马音 6 / 译文 5 / 下一句 6,`.semibold` 档推的是 主 8 / 罗马音 5 /
     /// 译文 4 / 下一句 5。`OverlayFontWeight` 里那条"`.bold` 推出来的四个权重 = 改动前的四个硬编码值"
     /// 的不变量**照旧钉着**(它锚的是阶梯和档位差没被重排),只是它锚的那一档不再是默认档。
@@ -352,7 +352,7 @@ final class AppSettings: ObservableObject {
     // (`notchExpandedShowsArtwork` 就从 true 改成过 false),两处
     // 分别硬编码会有其中一处漏改、"点了重置却恢复不出真正默认值"的风险。
     //
-    // ⚠️ **整体校准过一次**:用户把自己在用的这一版灵动岛设置定为默认("再帮我把目前
+    // **整体校准过一次**:用户把自己在用的这一版灵动岛设置定为默认("再帮我把目前
     // 我灵动岛的设置也设置为默认的",同一天先后对菜单栏、悬浮歌词做过同样的事)。逐键比对后动了
     // 十项:左右耳、暂停时收起、展开卡片的四个内容开关、歌词行封面、歌词对齐,以及稳态/展开两个
     // 宽度。改的是"这个键没存过时用什么" —— 动过的人键早已落盘、升级后一字不变;跟着变的是新装
@@ -361,7 +361,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchCardStyle = NotchCardStyle.coverArt
     // 灵动岛稳态宽 / 展开宽的默认值(是两个键)。
     //
-    // ⚠️ 前这里只有**一个**常量、两个键共用它,理由写的是"保证'没存过'的新装机器上
+    // 前这里只有**一个**常量、两个键共用它,理由写的是"保证'没存过'的新装机器上
     // hover 不会莫名多长一截"。那天按用户的实际配置拆成一对(稳态 252 / 展开 482):hover 展开比
     // 稳态宽本来就是这对设置存在的意义(读侧的 max 只保证展开不比稳态窄,没规定必须相等),而
     // "改一个漏一个"的那份担心由这两行紧挨着 + 05 章那张表兜住。
@@ -376,7 +376,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchRightEar = NotchEarModule.none
     /// 灵动岛两个自动隐藏开关的默认值(补,为了把它们纳入「重置」)。
     ///
-    /// ⚠️ **`init()` 的兜底刻意不读这两个常量**,别看到不一致就"顺手统一" —— 那边走的是
+    /// **`init()` 的兜底刻意不读这两个常量**,别看到不一致就"顺手统一" —— 那边走的是
     /// 从悬浮歌词旧键继承的**迁移**逻辑(`legacyHideDuringCapture` 那两行),原因写在那里:
     /// 两个形态拆开之前共用一份设置,兜底写 false 会让老用户的灵动岛在某次升级后**悄悄开始
     /// 出现在截图里**,而他什么都没改过。"新装默认值"和"老配置迁移值"本来就是两件事,
@@ -392,7 +392,7 @@ final class AppSettings: ObservableObject {
     /// (`PlaybackCoordinator.refreshMotionCover`,连下载都不发)和**减弱动态效果**
     /// (`LyricsWindowView.artworkCard`,视图环境值只能在视图里判);④ 之后唯一的
     /// 消费面是歌词窗口那张按需打开的卡,窗口没开就完全不存在这回事。
-    /// ⚠️ 这里原来写着"见 `MotionCoverGate`" —— **没有这个类型**,是落地时留下的错引用,
+    /// 这里原来写着"见 `MotionCoverGate`" —— **没有这个类型**,是落地时留下的错引用,
     /// 三道闸各自实现在上面点名的位置。
     static let defaultMotionCoverEnabled = true
     /// 暂停时是否收起成一条(从 true 改成 false):用户在用的是"暂停也保持展开",
@@ -403,7 +403,7 @@ final class AppSettings: ObservableObject {
     static let defaultNotchExpandedShowsNextLine = true
     static let defaultNotchExpandedShowsControls = true
     /// 展开卡片里的四项默认从关改成开(用户在用的就是这一套:歌词微调 + 歌名 + 歌手 +
-    /// 专辑)。⚠️ 连带后果:**展开态默认高度变高**(多出这四行),这是知情接受的 —— 展开态本来就是
+    /// 专辑)。 连带后果:**展开态默认高度变高**(多出这四行),这是知情接受的 —— 展开态本来就是
     /// "hover 之后看详细信息"的那一面。`defaultNotchExpandedShowsArtwork` 保持关(用户也关着)。
     static let defaultNotchExpandedShowsLyricsOffset = true
     static let defaultNotchExpandedShowsArtwork = false
@@ -422,8 +422,8 @@ final class AppSettings: ObservableObject {
     /// 正好退化成 leading(见 `LyricsRestingAlignment.resolved(duetSide:)`),所以非对唱歌的观感
     /// 一字不变,变的只有对唱歌。
     static let defaultNotchLyricsAlignment = LyricsRestingAlignment.automatic
-    /// 灵动岛歌词行「副行」默认「下一句」:用户提这个需求的原话是「主要目的是让它可以提前
-    /// 看到下一行歌词」,默认就该是那个;两行塞进原来的 44pt,升级上来的用户卡片高度不变。
+    /// 灵动岛歌词行「副行」默认「下一句」:这项的主要目的是让它可以提前
+    /// 看到下一行歌词,默认就该是那个;两行塞进原来的 44pt,升级上来的用户卡片高度不变。
     static let defaultNotchSecondaryLine = LyricSecondaryLine.nextLine
     /// 灵动岛歌词的字体三件。默认值 = 加这组设置
     /// 之前 `NotchLyricsView` 里硬编码的那套(系统字体 / semibold / 13pt),升级上来的用户一个像素都不变。字号的
@@ -436,7 +436,7 @@ final class AppSettings: ObservableObject {
     // 文字/染色两个自定义色,不含 `menuBarLyricsWidth`(宽度,结构性尺寸设置)和
     // `showLyricsInMenuBar`(总开关),取舍跟悬浮歌词/灵动岛两个「重置」一致。单独命名是为了
     // init() 和重置按钮读同一份,不各自硬编码。
-    /// 宽度模式的默认值。⚠️ 改这个默认值影响两批人:新装的用户,以及**存量里从来没动过这一项的**
+    /// 宽度模式的默认值。 改这个默认值影响两批人:新装的用户,以及**存量里从来没动过这一项的**
     /// 用户(键没存过就走 init() 的兜底)。动过的用户键早已落盘,不受影响。
     static let defaultMenuBarLyricsWidthMode = MenuBarLyricsWidthMode.adaptive
     /// 见 LyricsRestingAlignment:.leading 就是改动前写死的行为。
@@ -455,7 +455,7 @@ final class AppSettings: ObservableObject {
     /// 菜单栏歌词的字体族。空串 = 跟随系统菜单栏(`FontFamilyPicker` 那套"空串 = 跟随系统"哨兵,
     /// 跟悬浮歌词 `fontFamilyName` / 灵动岛 `notchFontFamilyName` 同一条规则,别为这一面另起一套)。
     /// 06 章原先记的"字体族继续跟随系统菜单栏"是加这项之前的决定(理由是跟隔壁时钟/电量等
-    /// 系统菜单项字体不搭);用户显式要求放开,在「重置」范围内。
+    /// 系统菜单项字体不搭);现在放开这一维,纳入「重置」范围内。
     static let defaultMenuBarLyricsFontFamily = ""
     /// 菜单栏歌词的粗细。类型直接复用 `OverlayFontWeight`(LyrimuseCore 里那条六档阶梯):
     /// 名字带 Overlay,但跟 `LyricsRestingAlignment` 一样是跨展示面共用的纯枚举,六档、显示名、
@@ -478,7 +478,7 @@ final class AppSettings: ObservableObject {
     /// 悬浮歌词 / 灵动岛的「卡拉OK效果」:这一面要不要按逐字时间轴填色。关掉就把
     /// 有逐字数据的行压成整行高亮(`SyncedLyricLine.lineLevel`),没有逐字数据的歌本来就是整行。
     ///
-    /// 按形态各一颗(悬浮歌词 →「文字」浮层,灵动岛 →「歌词行」浮层,菜单栏 → 既有的
+    /// 按形态各一颗(悬浮歌词 到「文字」浮层,灵动岛 到「歌词行」浮层,菜单栏 到 既有的
     /// `menuBarLyricsKaraoke`):卡拉OK是某个面怎么画的问题,跟繁简 / 罗马音那类改歌词内容本身的
     /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口**始终**逐字、不给开关。
     ///
@@ -530,8 +530,8 @@ final class AppSettings: ObservableObject {
     /// 地区用户在国内三家播放器上的使用率跟英文用户更接近,不该被并进简体那一档。
     /// 判据是字符串前缀/子串匹配(跟 L10n.current 同一套朴素写法,不依赖
     /// Locale.Language.script 这类新引入 API 在不同系统版本上的推断是否可靠):
-    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个 → 认成繁体;剩下以 "zh" 开头的(裸 "zh"、
-    /// "zh-cn"、"zh-hans"、"zh-sg" 等)→ 简体。
+    /// 含 "hant"/"-tw"/"-hk"/"-mo" 里任意一个 到 认成繁体;剩下以 "zh" 开头的(裸 "zh"、
+    /// "zh-cn"、"zh-hans"、"zh-sg" 等)到 简体。
     static let userReadsSimplifiedChinese: Bool = {
         guard let first = Locale.preferredLanguages.first?.lowercased(), first.hasPrefix("zh") else { return false }
         // 判据本体在 LyrimuseCore 的 UILanguage(跟 L10n 的语言协商同一份):含 hans 一定简体、
@@ -612,7 +612,7 @@ final class AppSettings: ObservableObject {
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
-    // ⚠️ 已经没有读取方了,只为兼容老配置文件保留(见下面 menuBarLyricsWidth)。
+    // 已经没有读取方了,只为兼容老配置文件保留(见下面 menuBarLyricsWidth)。
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
@@ -733,10 +733,10 @@ final class AppSettings: ObservableObject {
     // "跟随封面"开着时的动态值由 OverlayPlayback 现算(见该文件 karaokeUnsungColor 的
     // CombineLatest3),跟 foregroundColorHex 与 followsCoverArt 的分工完全对称。
     //
-    // ⚠️ 已唱/未唱是两个独立的、平级的颜色,各自都能选"跟随封面"或"具体颜色"。**不要**再加一个
+    // 已唱/未唱是两个独立的、平级的颜色,各自都能选"跟随封面"或"具体颜色"。**不要**再加一个
     // "要不要自定义未唱色"的开关卡在未唱色前面。
     //
-    // ⚠️ 故意**不做成 ColorTheme 的字段**——跟 `followsCoverArt` 同一个判断(见那个属性上方
+    // 故意**不做成 ColorTheme 的字段**——跟 `followsCoverArt` 同一个判断(见那个属性上方
     // 注释):内置预设/自存主题不必因为多了这一项而跟着长一个新字段、多一轮迁移。
     @Published var karaokeUnsungFollowsCoverArt: Bool {
         didSet { defaults.set(karaokeUnsungFollowsCoverArt, forKey: Keys.karaokeUnsungFollowsCoverArt) }
@@ -762,7 +762,7 @@ final class AppSettings: ObservableObject {
     // AppDelegate(启动时)和 `UI/AutoHideSettingsRows.swift` 的 `AutoHideItem.binding(for:)`
     // (运行时切换)里手动调用 LyricsOverlayWindowController.shared.setHiddenFromCapture(_:)。
     //
-    // ⚠️ **只对桌面悬浮歌词生效**。灵动岛那一份是 `notchHideDuringScreenCapture`,
+    // **只对桌面悬浮歌词生效**。灵动岛那一份是 `notchHideDuringScreenCapture`,
     // **别再往这个属性上接灵动岛的调用点**。
     @Published var hideDuringScreenCapture: Bool {
         didSet { defaults.set(hideDuringScreenCapture, forKey: Keys.hideDuringScreenCapture) }
@@ -771,7 +771,7 @@ final class AppSettings: ObservableObject {
     // 一样只负责持久化,"生效"这一步挪到 AppDelegate(启动时)和 `AutoHideItem.binding(for:)`
     // (运行时切换,见 UI/AutoHideSettingsRows.swift)里手动调用 LyricsOverlayWindowController.shared.
     // setHideWhenNotPlaying(_:)。默认 false,保留"不管播不播放悬浮窗都一直显示"的原有行为。
-    // ⚠️ 同上,**只对桌面悬浮歌词生效**;灵动岛那一份是 `notchHideWhenNotPlaying`。
+    // 同上,**只对桌面悬浮歌词生效**;灵动岛那一份是 `notchHideWhenNotPlaying`。
     @Published var hideWhenNotPlaying: Bool {
         didSet { defaults.set(hideWhenNotPlaying, forKey: Keys.hideWhenNotPlaying) }
     }
@@ -783,7 +783,7 @@ final class AppSettings: ObservableObject {
     // 语义、默认值、生效方式跟上面那两个完全一致(只负责持久化,"生效"在 AppDelegate 启动时和
     // `AutoHideItem.binding(for: .notch)` 里手动调 `NotchLyricsWindowController`)。
     //
-    // ⚠️ 两个形态的这两行共用同一份视图与文案(`UI/AutoHideSettingsRows.swift`,靠
+    // 两个形态的这两行共用同一份视图与文案(`UI/AutoHideSettingsRows.swift`,靠
     // `AutoHideSurface` 分流)——**共用的是视图和文案,不是值**,别因为看到一份共用组件就把
     // 两对 Binding 又合回去。
     @Published var notchHideDuringScreenCapture: Bool {
@@ -798,7 +798,7 @@ final class AppSettings: ObservableObject {
     // 它跟「点击穿透」解的是同一个痛点的两半:穿透保证"点得到下层",这个保证"看得到下层"。
     // 开了背景卡片或把字号调大之后,悬浮窗仍会实打实盖住下面窗口的内容,而穿透对此无能为力。
     //
-    // ⚠️ 开着它会改变鼠标监听器的生命周期:见 LyricsOverlayWindowController.syncMouseMonitors
+    // 开着它会改变鼠标监听器的生命周期:见 LyricsOverlayWindowController.syncMouseMonitors
     // ——「锁定位置」原本会把监听器整个卸掉,而"锁定位置 + 划过让开"恰恰是最常见的组合。
     // 只负责持久化,"生效"在 controller 那边(它直读这个开关)。默认 false,保留原有行为。
     @Published var overlayFadeOnHover: Bool {
@@ -824,7 +824,7 @@ final class AppSettings: ObservableObject {
     /// 同 `overlayDragNeedsLongPress`。关掉的那一刻若控制排正显示着也会自愈:两侧判据
     /// 下一拍就算出 false,热区随之不再拦截点击。
     ///
-    /// ⚠️ 关掉**不影响**锁定态的解锁提示 —— 判据合并在 `OverlayControlHitTest.controlsShown`,
+    /// 关掉**不影响**锁定态的解锁提示 —— 判据合并在 `OverlayControlHitTest.controlsShown`,
     /// 那一支走的是互斥的 `hovering && lockPosition`。否则"锁定位置 + 关掉这个开关"的用户
     /// 在悬浮窗上就再没有解锁出路了。
     ///
@@ -865,38 +865,37 @@ final class AppSettings: ObservableObject {
     // 永久冻结、拒绝以后所有自动升级(打分改进/该源后来给出逐字/换了更好的源)。默认 false。
     //
     // 严格两态,中间不留东西:
-    //   false → 采纳只是"当下换上这份",缓存里一个约束标记都不写(saveEdit 收到
+    //   false 到 采纳只是"当下换上这份",缓存里一个约束标记都不写(saveEdit 收到
     //           `sourceChoice: ""`,把可能残留的 lyrics_source_choice 显式清掉),之后
     //           打分改进/升级重试照常调整这首歌,**也可以换成别的源**;
-    //   true  → 置 manual_lyrics,collector 三条自愈路径(firstFill/rescore/retry)第一行
+    //   true  到 置 manual_lyrics,collector 三条自愈路径(firstFill/rescore/retry)第一行
     //           就否决,这首歌定死在这份内容上。
     //
-    // ⚠️ **不要**再引入"关 = 只限制在所选源内"这种中间态(记 lyrics_source_choice、自愈照跑但被
+    // **不要**再引入"关 = 只限制在所选源内"这种中间态(记 lyrics_source_choice、自愈照跑但被
     // 约束在所选源内)。关 = 不限制源。
     //
     // 只影响"采纳候选"这一条路径("重新自动匹配"是算法自己的选择,跟这个开关无关,永远
     // 不冻结;直接编辑歌词正文的"保存修改"永远置为 true,跟这个开关也无关——那份内容
     // 删了找不回来,自动逻辑没理由觉得自己比人工更懂)。
     //
-    // **翻面时会追溯处理存量**:打开 → 把"手动采纳过、且当前内容还是当初采纳那一份"的歌一并
-    // 置 manual_lyrics;关掉 → 弹一次确认,问要不要把因它而锁的那批解开(不默认解,也不
+    // **翻面时会追溯处理存量**:打开 到 把"手动采纳过、且当前内容还是当初采纳那一份"的歌一并
+    // 置 manual_lyrics;关掉 到 弹一次确认,问要不要把因它而锁的那批解开(不默认解,也不
     // 默认留——两种意图都讲得通,而目前没有单曲解锁入口,猜错的代价是逐首点「重新自动
     // 匹配」、连歌词内容一起被换掉)。判据见 LyrimuseCore/ManualPickLock.shouldFlip,
     // 留痕字段是 `manual_pick_sha`,批量落地在 EnrichCacheStore.applyManualPickLock。
-    // ⚠️ 这个联动挂在 SettingsView 的 Toggle setter 上,不在下面的 didSet 里 —— 理由见
+    // 这个联动挂在 SettingsView 的 Toggle setter 上,不在下面的 didSet 里 —— 理由见
     // 那处注释(要弹框/要回执;而且 didSet 会被配置导入顺带触发)。
     @Published var manualPickLocksLyrics: Bool {
         didSet { defaults.set(manualPickLocksLyrics, forKey: Keys.manualPickLocksLyrics) }
     }
     // 首次启动的完整引导向导(欢迎/播放器/自动化权限/常驻服务/语言/显示形态/Last.fm/
-    // 完成)只走一次。⚠️ 只由 finish() 置位,也就是**真的走到最后一步**才算引导过 ——
-    // 中途关窗等于"稍后再说",下次启动会再问一次(改;此前是"不管从哪一步
-    // 关窗都算引导过",会把第一步就关窗的用户永久困在"服务没装、引导再也不出现"的
-    // 死路上)。走完之后菜单栏留有"重新运行引导…"随时可以重来。这个向导上线前的老版本
-    // 只有"自动化权限"
-    // 这一步单独的 NSAlert(hasShownAutomationOnboarding,现已废弃),init() 里做
-    // 一次性迁移:老版本已经弹过那一步的,直接视为"已经引导过"，不会突然对已经
-    // 用过这个 App 的人强插一整套全新的多步向导。
+    // 完成)只走一次。 只由 finish() 置位,也就是**真的走到最后一步**才算引导过 ——
+    // 中途关窗等于"稍后再说",下次启动会再问一次:不能中途关窗也算数,否则第一步就关窗的
+    // 用户会永久困在"服务没装、引导再也不出现"的死路上。走完之后菜单栏留有"重新运行引导…"
+    // 随时可以重来。这个向导上线前的老版本只有"自动化权限"这一步单独的 NSAlert
+    // (hasShownAutomationOnboarding,现已废弃),init() 里做一次性迁移:老版本已经弹过
+    // 那一步的,直接视为"已经引导过"，不会突然对已经用过这个 App 的人强插一整套全新的
+    // 多步向导。
     @Published var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
@@ -950,7 +949,7 @@ final class AppSettings: ObservableObject {
     /// 歌词预览、当前播放行照常显示,跟开着这个开关时一模一样(回归修复,见
     /// NotchChromeSource.showsLyricRow 的注释)。
     ///
-    /// ⚠️ 判据本身**必须经 `NotchChromeSource.showsLyrics`/`showsLyricRow` 走**,不许在视图里
+    /// 判据本身**必须经 `NotchChromeSource.showsLyrics`/`showsLyricRow` 走**,不许在视图里
     /// 直接读这个属性:卡片高度(NotchWindowRoot)、内容渲染(NotchLyricsView)、设置页编辑台
     /// 三处要用同一个值,而后两者拿到的是替身 chrome。三处各读各的必然漂,漂的表现是"行不见了
     /// 高度还留着"。
@@ -960,13 +959,13 @@ final class AppSettings: ObservableObject {
     /// 有动态封面的专辑要不要让封面动起来(「帮我看看怎么把我们的封面搞成
     /// applemusic 里面的那种会动的效果」)。
     ///
-    /// ⚠️ **消费面只有一个:歌词窗口左栏那张封面卡**。落地当天灵动岛那枚缩略图也叠了一层,
+    /// **消费面只有一个:歌词窗口左栏那张封面卡**。落地当天灵动岛那枚缩略图也叠了一层,
     /// 灵动岛那枚缩略图**不叠**这一层(原话:「帮我把灵动岛上的封面全部改为静态的吧,只有
     /// 歌词窗口的保留;因为灵动岛上的效果不是很好」)—— 那一格最大也就 trackInfoArtworkSide
     /// 这个量级、耳朵那档只有 32pt,而 motion artwork 是给整张专辑封面设计的慢镜头,缩到那么
     /// 小只剩一片蠕动的色块。详见 `NotchLyricsView.artworkThumbnail` 上方那段。
     ///
-    /// ⚠️ 这只是**总闸**。关着 = 一定不动;开着 ≠ 一定在动 —— 还有低电量模式
+    /// 这只是**总闸**。关着 = 一定不动;开着 ≠ 一定在动 —— 还有低电量模式
     /// (`PlaybackCoordinator.refreshMotionCover`)和「减弱动态效果」
     /// (`LyricsWindowView.artworkCard`)两道。整条链路见 `MotionCoverStore` 头注。
     @Published var motionCoverEnabled: Bool {
@@ -979,7 +978,7 @@ final class AppSettings: ObservableObject {
     ///
     /// 默认 `true`——维持这个功能一直以来的既有行为,老用户升上来观感不变,只是现在能关了。
     ///
-    /// ⚠️ 判据本身**必须经 `NotchLyricsWindowController.isCollapsed` 走**(同上面 showsLyrics
+    /// 判据本身**必须经 `NotchLyricsWindowController.isCollapsed` 走**(同上面 showsLyrics
     /// 那条纪律):真窗口那一侧订阅这个设置后镜像成 `@Published`,不在计算属性里直接读
     /// AppSettings——那样设置一改,依赖 isCollapsed 的视图不会立刻收到 objectWillChange。
     @Published var notchCollapsesWhenPaused: Bool {
@@ -987,7 +986,7 @@ final class AppSettings: ObservableObject {
     }
     /// 要不要显示播放指示条(音浪)。默认 `true`——维持一直以来的既有行为,老用户升上来
     /// 观感不变。关掉之后两只耳朵都只按各自选的模块渲染,不再固定带音浪(见
-    /// NotchLyricsView.topRow 头上那段⚠️)。
+    /// NotchLyricsView.topRow 头上那段提醒)。
     @Published var notchShowsEqualizer: Bool {
         didSet { defaults.set(notchShowsEqualizer, forKey: Keys.notchShowsEqualizer) }
     }
@@ -1004,7 +1003,7 @@ final class AppSettings: ObservableObject {
     // ②新增一块可选的"曲目信息头部"(封面 + 歌名/歌手/专辑,四项独立开关),解决"两只耳朵
     // 都配成非文本模块(比如剩余时长)时,hover 展开也看不出是哪首歌"这个缺口。
     //
-    // ⚠️ 头部里的封面(`notchExpandedShowsArtwork`)落点反复过:最初设计里就带一枚,用户
+    // 头部里的封面(`notchExpandedShowsArtwork`)落点反复过:最初设计里就带一枚,用户
     // 看过效果后指出"跟歌词行末尾已有的那枚封面重复了",要求并回那一枚(见下面
     // `notchLyricRowShowsArtwork` / `notchLyricRowArtworkPosition`,那两项不属于这个
     // "展开态"分组——歌词行那枚封面稳态/展开都常显,不是 hover 才有的东西);过了几轮之后
@@ -1034,7 +1033,7 @@ final class AppSettings: ObservableObject {
     /// 入口。默认 `false`——这块内容以前不存在,升级上来的用户不该无缘无故多出一截没见过的
     /// UI,想要的人自己去「展开态」浮层里开(跟 `notchExpandedShowsArtwork` 那批同一个理由)。
     ///
-    /// ⚠️ 这个开关**只影响渲染,不影响高度**——按钮塞进的是时间行中间本来就空着的位置
+    /// 这个开关**只影响渲染,不影响高度**——按钮塞进的是时间行中间本来就空着的位置
     /// (`NotchScrubber` 的时间行左右两个时间数字之间,`HStack` 里原来是个 `Spacer()`),
     /// 按钮尺寸被刻意收窄到跟这一行本来的高度齐平,不会把行撑高,所以跟 `notchExpandedShowsNextLine`/
     /// `notchExpandedShowsControls` 那批不一样,**不需要**过 `NotchChromeSource`/
@@ -1071,8 +1070,8 @@ final class AppSettings: ObservableObject {
     }
 
     /// 歌词行(`NotchLyricsView.lyricRowContent`)末尾那枚封面缩略图要不要显示。
-    /// 默认 `true`——这枚封面就有,用户还曾要求去掉开关、固定
-    /// 显示,这次重新给它开开关必须保 true 默认值,不然升级上来的用户会发现封面凭空
+    /// 默认 `true`——这枚封面本来就一直显示,这个开关不能改变升级用户已经在看的
+    /// 行为,默认值必须是 true,不然升级上来的用户会发现封面凭空
     /// 消失。稳态/展开两种形态都受这个开关影响(它本来就是稳态歌词行的一部分,不是
     /// hover 才出现的内容)。
     @Published var notchLyricRowShowsArtwork: Bool {
@@ -1163,7 +1162,7 @@ final class AppSettings: ObservableObject {
     // 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定的档位差推导(见
     // `OverlayFontWeight` 里那三个 `*Steps` 常量)。
     //
-    // ⚠️ **只归悬浮歌词**。歌词窗口刻意不复用这一整套主题(见 LyricsWindowView 顶部注释:
+    // **只归悬浮歌词**。歌词窗口刻意不复用这一整套主题(见 LyricsWindowView 顶部注释:
     // foregroundColor / textStrokeEnabled / fontFamilyName / fontSize / overlayWidth 都不吃),
     // 灵动岛和菜单栏各有自己的一套。别因为名字里没有 overlay 就以为它是全局的 —— 所以这个
     // 键名带了 `overlay` 前缀,跟旁边两个没带前缀的历史遗留键(fontFamilyName / fontSize,
@@ -1255,7 +1254,7 @@ final class AppSettings: ObservableObject {
     }
     // 见 Keys.followsCoverArt 注释。纯持久化,不在这里连带计算任何缓存值——实际生效
     // 靠 PlaybackCoordinator.displayForegroundColor 读取这个开关+按曲目算出的动态色,
-    // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex→didSet 里转 Color 缓存"的
+    // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex到didSet 里转 Color 缓存"的
     // 模式不一样,因为这个开关本身不是一个颜色值。
     @Published var followsCoverArt: Bool {
         didSet { defaults.set(followsCoverArt, forKey: Keys.followsCoverArt) }
@@ -1283,7 +1282,7 @@ final class AppSettings: ObservableObject {
     }
 
     // 用户自己从「应用程序」里挑进来的浏览器(「这里点+号出来的是否可以加
-    // 一个选项是自己在本机的应用程序里面选」)。bundle id → 引擎族的 rawValue。
+    // 一个选项是自己在本机的应用程序里面选」)。bundle id 到 引擎族的 rawValue。
     //
     // 存的是**判定结果**而不是"用户加过这个 App":引擎族是靠读那个 App 的脚本定义现场判出来的
     // (BrowserAutomationPermission.detectedFamily),把结论存下来,免得每次启动都去磁盘上
@@ -1299,14 +1298,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    // 浏览器那道 JS 开关最近一次**被实测证明可用**的时刻(bundle id → 时间)。
+    // 浏览器那道 JS 开关最近一次**被实测证明可用**的时刻(bundle id 到 时间)。
     //
-    // ⚠️ 存这个是因为那道开关的状态**根本读不出来** —— Chromium 系存在浏览器 profile 的
+    // 存这个是因为那道开关的状态**根本读不出来** —— Chromium 系存在浏览器 profile 的
     // `Preferences` 里,别的 App 读那个目录要「完全磁盘访问权限」。于是设置页只能永远显示
     // 「无法确认状态」,用户手动开完没有任何反馈,每次重开设置又回到原点(
     // 「然后呢,状态怎么进一步流转?卡在这里」)。
     //
-    // ⚠️ 它记的是**"某时刻实测通过"这个事实**,不是"现在一定还开着" —— 用户后来把开关
+    // 它记的是**"某时刻实测通过"这个事实**,不是"现在一定还开着" —— 用户后来把开关
     // 关掉我们无从得知。所以 UI 上一律带着"上次检测"的口径说,并且永远保留重新检测的入口,
     // 不许写成"已开启"这种断言当下的说法。这条是今晚被粘滞状态坑过四次之后立的规矩。
     @Published var browserJSVerifiedAt: [String: Date] {
@@ -1389,7 +1388,7 @@ final class AppSettings: ObservableObject {
         hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
         hasShownMenuBarPositionHint = defaults.bool(forKey: Keys.hasShownMenuBarPositionHint)
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
-        // 没存过时用 .default。⚠️ 这条注释修过一次:它原来写的是
+        // 没存过时用 .default。 这条注释修过一次:它原来写的是
         // "(日文/韩文开、中文关)—— 等于改成可配置之前的实际观感",而 `.default` 早在
         // 就改成了**四项全开**(日/韩/拼音/粤拼,见 Romanizer.swift 那边的
         // 头注:总开关一打开不该还要用户再逐项勾选)。注释停在旧值上,引导页照着它写的
@@ -1404,7 +1403,7 @@ final class AppSettings: ObservableObject {
         // 这个开关"的默认值——已经手动开过/关过的人,defaults.object(forKey:) 能读到
         // 已持久化的值,不会被默认值的变化覆盖。
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
-        // 默认开。⚠️ 只改这个兜底值是**不够**的:init() 里的赋值不触发 didSet,而真正去
+        // 默认开。 只改这个兜底值是**不够**的:init() 里的赋值不触发 didSet,而真正去
         // 注册登录项的是 didSet 里那句 LoginItemManager.setEnabled —— 光改这里会变成
         // "开关显示开着、系统里其实没注册"的假象。补的那一步在
         // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
@@ -1490,7 +1489,7 @@ final class AppSettings: ObservableObject {
         // 隐藏 —— 兜底写 false 的话,他的灵动岛会在某次升级后**悄悄开始出现在截图里**,而他
         // 什么都没改过。这类"静默放宽一条隐私设置"的迁移事故没有补救机会:截出去的图收不回来。
         //
-        // ⚠️ 用局部变量而不是直接读 `self.hideDuringScreenCapture`:类的 init 在所有存储
+        // 用局部变量而不是直接读 `self.hideDuringScreenCapture`:类的 init 在所有存储
         // 属性都赋值完之前不准碰 self,那样写编译不过("used before being initialized")。
         let legacyHideDuringCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         let legacyHideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
@@ -1595,20 +1594,20 @@ final class AppSettings: ObservableObject {
         overlayFontWeight = defaults.string(forKey: Keys.overlayFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultOverlayFontWeight
         // 默认 488pt(从 640 改下来 —— 用户把自己在用的这一版悬浮歌词配置定为默认,
-        // 他的宽度调整条停在 488)。⚠️ 宽度**不在**「恢复默认」的范围里(跟锁定位置一起排除,
+        // 他的宽度调整条停在 488)。 宽度**不在**「恢复默认」的范围里(跟锁定位置一起排除,
         // 见 OverlayStyleDefaults.restoreTextAndColors 的头注),所以这个数字只对新装 / 没存过
         // 这个键的配置生效。合法区间的唯一真源是 OverlayEditorStage.widthRange(300…1400)。
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
         notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
         // 没存过就落到 Self.defaultNotchExpandedContentWidth(前这里读的是稳态那个
-        // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。⚠️ 无论如何**不读用户当前的
+        // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。 无论如何**不读用户当前的
         // 稳态值**:那样老用户的展开宽会被钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个。
         notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt
         karaokeUnsungFollowsCoverArt = (defaults.object(forKey: Keys.karaokeUnsungFollowsCoverArt) as? Bool) ?? false
-        // ⚠️ 这里还不能读 foregroundColorHex 算真正的默认值——Swift 的类初始化规则是"所有
+        // 这里还不能读 foregroundColorHex 算真正的默认值——Swift 的类初始化规则是"所有
         // 存储属性都赋过值之前不能读 self 的任何属性",哪怕那个属性在**这同一个 init() 里**
         // 已经在上面赋过值了。真正的派生挪到 init() 末尾(那时所有属性都已就绪,`recomputeFonts()`
         // 等其它派生值也是在那里算的)——这里先存一下"到底存没存过",用一个占位值顶着。

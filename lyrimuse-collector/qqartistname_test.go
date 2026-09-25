@@ -30,7 +30,7 @@ func TestPickQQArtistCanonicalName(t *testing.T) {
 }
 
 // 查空**不落盘**、查到才落盘——跟 artistAliasCache/mbPrimaryNameCache 同一条规则、
-// 同一个理由(见 saveArtistAliasCache 前的 ⚠️)。
+// 同一个理由(见 saveArtistAliasCache 前的 提醒)。
 func TestQQArtistNameCachePersistsOnlyHits(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/qq-artist.json"

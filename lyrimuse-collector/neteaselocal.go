@@ -28,7 +28,7 @@ import (
 // resolveNeteaseInfo 现在先查它;命中就直接当作 pick() 选中的那条 chosen,整个搜索循环
 // (多条查询词 × /api/search,还带限流退避)都不跑。
 //
-// ⚠️ 跟酷狗本地 KRC(kugoulocal.go)**不是**一回事,跟 qqlocal 一样只省"找到是哪首歌"
+// 跟酷狗本地 KRC(kugoulocal.go)**不是**一回事,跟 qqlocal 一样只省"找到是哪首歌"
 // 这一步 —— 歌词正文(/api/song/lyric)照旧联网取,所以同样**不碰熔断**。
 //
 // 为什么值得:网易云那段搜索是这条源最脆的地方 —— 它按端点分桶做应用层限流,**限流时
@@ -39,13 +39,13 @@ import (
 // 不限于"正在用网易云播放":dbTrack 收的是客户端见过的歌(播放历史 62 条、歌单、搜索结果
 // 都会进),734 行远大于播放历史本身。
 //
-// ⚠️ 全程 fail-soft:没装网易云 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,
+// 全程 fail-soft:没装网易云 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,
 // 照常走原来的搜索。
 
 // neteaseLocalDBOverride 让单测把库指到临时路径。空 = 用真实路径。
 var neteaseLocalDBOverride string
 
-// neteaseLocalDBPath 是网易云客户端的主数据库。⚠️ 外部 App 的路径,不走 paths.go 那套。
+// neteaseLocalDBPath 是网易云客户端的主数据库。 外部 App 的路径,不走 paths.go 那套。
 func neteaseLocalDBPath() string {
 	if neteaseLocalDBOverride != "" {
 		return neteaseLocalDBOverride
@@ -141,7 +141,7 @@ func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocal
 	if len(rows) > neteaseLocalMaxRows {
 		rows = rows[:neteaseLocalMaxRows]
 	}
-	// ⚠️ 逐行解,单行解不开就跳过而不是整批放弃:jsonStr 是客户端写进去的整条曲目 JSON,
+	// 逐行解,单行解不开就跳过而不是整批放弃:jsonStr 是客户端写进去的整条曲目 JSON,
 	// 里头混进一条格式异常的记录不该让另外七百多条一起失效。
 	tracks := make([]neteaseLocalTrack, 0, len(rows))
 	for _, r := range rows {
@@ -165,7 +165,7 @@ func refreshNeteaseLocalIndexLocked(ctx context.Context) {
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
 		// 没装网易云 / 没登录过 / 路径变了 —— 正常情况,静默退回网络解析。
-		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
 		noteLocalCacheDenied("netease", path, err)
 		neteaseLocalIndex, neteaseLocalReady = nil, true
 		return

@@ -6,18 +6,15 @@ import (
 	"testing"
 )
 
-// mbAliasCandidatesForRetry 的判据(加,当时叫 mbPrimaryNameForRetry、只给
-// 一个"主名"字符串;改成给全部已登记写法,见其声明处头注)。
+// mbAliasCandidatesForRetry 的判据(见其声明处头注)。
 //
-// 起因是真实反馈:《Hurry Up Tomorrow》里的「Cry For Me」搜不到歌词。实测原因是 Apple
-// Music 把歌手标成 Abel Tesfaye(本名),而五个歌词源全按 The Weeknd 索引 —— 原样查
-// 0 条候选,换成 The Weeknd 五个源全有。MB 搜 "Abel Tesfaye" 的首条就是 score=100 /
-// name="The Weeknd",数据一直在手上,只是没被用。
+// 现实情况:Apple Music 有时把歌手标成本名(如 Abel Tesfaye),而歌词源按艺名
+// (The Weeknd)索引 —— 原样查询 0 条候选,换成艺名五个源全有,MB 搜本名的首条
+// 就是 score=100 / name="The Weeknd"。
 //
 // 下面这份别名列表是从 MusicBrainz 真实抓下来的(artist c8b03190-306c-4120-bb0b-
-// 6f2ebfc06ea9,重新核对过 primary 字段的真实值——"The Weeknd"这条本身
-// primary=false,反而是从没用过的日文别名 primary=true,这正是那次改动
-// 不能按 alias.Primary 过滤的实测依据),不是编的。
+// 6f2ebfc06ea9,重新核对过 primary 字段的真实值)。 不能按 alias.Primary 过滤:
+// "The Weeknd"这条本身 primary=false,反而是从没用过的日文别名 primary=true。
 func TestMBAliasCandidatesForRetry(t *testing.T) {
 	weeknd := []mbAlias{
 		{Name: "Abel Makkonen Tesfaye", Type: "Legal name", Locale: "en"},
@@ -96,9 +93,8 @@ func TestMBAliasCandidatesForRetry(t *testing.T) {
 	}
 }
 
-// 方大同这个真实案例(见 musicBrainzArtistAliases 头注):MusicBrainz 上这位歌手的
-// 主名登记的就是"方大同"本身,本地标签恰好也是"方大同"时,旧版本一看"主名==本地标签"
-// 就地返回空——这个测试锁定"主名等于本地标签也不该整体放弃"这条判据,防止回归。
+// MusicBrainz 上有些歌手的主名登记就是本地标签本身(如"方大同"),主名等于本地标签也
+// 不该整体放弃(见 musicBrainzArtistAliases 头注)——这个测试锁定这条判据,防止回归。
 func TestMBAliasCandidatesForRetryPrimaryEqualsRawStillReturnsOtherAliases(t *testing.T) {
 	aliases := []mbAlias{
 		{Name: "方大同", Type: "Artist name", Locale: "zh"},
@@ -117,8 +113,8 @@ func TestMBAliasCandidatesForRetryPrimaryEqualsRawStillReturnsOtherAliases(t *te
 // 这条不是洁癖:MusicBrainz 限速按 IP、1 req/s,而 musicbrainzThrottle 是进程内节流 ——
 // 常驻 collector、手动搜索那个一次性 CLI、跑测试的进程各自计时,互相不知道。撞上 503
 // 就返回空;要是把空也永久写进文件,一次偶发限速会把这位歌手永久钉死在"没有别名"上,
-// 而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。⚠️ artistAliasCache 当初就是
-// 这么做的(空值永久落盘),那英《微笑着离去》真撞上了(MusicBrainz 503 →
+// 而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。 artistAliasCache 当初就是
+// 这么做的(空值永久落盘),那英《微笑着离去》真撞上了(MusicBrainz 503 到
 // 语言闸误杀真候选),已改成跟这里一致的"只存非空"规则,见 musicbrainz.go 里
 // saveArtistAliasCache 的注释。
 func TestMBPrimaryNameCachePersistsOnlyHits(t *testing.T) {

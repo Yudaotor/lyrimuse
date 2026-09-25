@@ -95,7 +95,7 @@ func runSettingsInteractionTests() {
         expectEqual(stepwise, R.moved(order, isVisible: vis, from: 3, to: 0), "写回: 三次相邻 swap 与一次拖拽结果一致(箭头与把手不打架)")
     }
 
-    // ---- ProportionBar(「歌词 → 管理」歌词库统计的分段比例条)----
+    // ---- ProportionBar(「歌词 到 管理」歌词库统计的分段比例条)----
     //
     // 数据用本机真实分布:3,325 / 232 / 9 / 38 / 65(逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无),可用宽 540、缝 1.5、下限 3。
     // 这个算法改错了完全不报错 —— 只是某一段消失或整条长出几 pt 被裁掉尾巴,肉眼未必看得出,所以钉在这里。
@@ -120,7 +120,7 @@ func runSettingsInteractionTests() {
         expectEqual(abs(crowded.reduce(0, +) - 100) < 0.001, true, "比例条: 段数太多时总宽仍等于可用宽度")
         expectEqual(crowded.allSatisfy { abs($0 - 1) < 0.001 }, true, "比例条: 段数太多时退化成均分")
         // 最宽的一段扣到下限还不够时继续扣次宽的:三个小段各抬到 12(亏空 33),40 那段最多只能让 28、
-        // 剩下 5 从 30 那段扣 → [12, 25, 12, 12, 12]。
+        // 剩下 5 从 30 那段扣 到 [12, 25, 12, 12, 12]。
         let cascade = P.widths(values: [40, 30, 1, 1, 1], available: 73, gap: 0, minWidth: 12)
         expectEqual(cascade.map { ($0 * 1000).rounded() / 1000 }, [12, 25, 12, 12, 12], "比例条: 亏空跨段扣回")
         expectEqual(abs(cascade.reduce(0, +) - 73) < 0.001, true, "比例条: 亏空跨段扣回后总宽仍守恒")
@@ -163,9 +163,7 @@ func runSettingsInteractionTests() {
         expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero, "芯片换行: 没有候选时不占高")
     }
 
-    // ---- 改配置要不要重启 collector(CollectorRestartPolicy)----
-    // 背景:重启一次 collector,从 SIGTERM 到重新开始服务实测 37~68 秒(启动要在 74MB 缓存之上跑九道迁移 +
-    // 全量导入导出 14307 个歌词文件)。能被 collector 按 mtime 热读的键就别为它付这笔钱。
+    // 「歌词来源」卡的排列:中文用户中文源在前,其余国外源在前;组内顺序不变。
     do {
         typealias P = CollectorRestartPolicy
         expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles"]), false,
@@ -223,7 +221,7 @@ func runSettingsInteractionTests() {
         expectEqual(h.canGoForward, false, "历史: 到头就进不动了")
         expectEqual(h.goForward(), nil, "历史: 进不动时返回 nil")
 
-        // **从历史中间跳去一个新面板 → 前面那一截被截断**(同浏览器,也是系统设置的行为)。
+        // **从历史中间跳去一个新面板 到 前面那一截被截断**(同浏览器,也是系统设置的行为)。
         // 少了这一条,后退两步再点侧栏另一页,前进键会把你送回一条早就作废的路线。
         var t = H()
         t.seed("歌词")
@@ -242,7 +240,7 @@ func runSettingsInteractionTests() {
         expectEqual(d.record("歌词"), false, "历史: 重复选中当前页不记")
         expectEqual(d.canGoBack, false, "历史: 重复选中之后后退键仍是灰的")
         expectEqual(d.record("播放器"), true, "历史: 换了一页才记")
-        // ⚠️ 只去重「当前这一项」,不去重整条历史:A → B → A 是真的走了三步,
+        // 只去重「当前这一项」,不去重整条历史:A 到 B 到 A 是真的走了三步,
         // 后退应该回到 B 而不是直接跳过去。
         expectEqual(d.record("歌词"), true, "历史: A→B→A 的第二次 A 照记(不是全局去重)")
         expectEqual(d.goBack(), "播放器", "历史: A→B→A 后退回到 B")

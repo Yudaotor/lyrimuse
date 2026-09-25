@@ -97,11 +97,11 @@ struct LyricsDecisionSheet: View {
         }
     }
 
-    /// 把存档里的查询词记录压成分组摘要(现象是「这部分可读性很差」)。
+    /// 把存档里的查询词记录压成分组摘要。
     ///
-    /// 逐条平铺的老写法在真实案例上彻底失效:宇多田光《Beautiful World (Da Capo Version)
-    /// [Instrumental]》一轮问了 9 组词,屏幕上 20 多个视觉行,而其中曲名重复 9 遍、
-    /// 那串七个源的名单重复 8 遍 —— 真正的信息只有「曲名没变,换了 9 个歌手名」。
+    /// 逐条平铺在多轮重试场景下会失效:举例,一轮问了 9 组词,屏幕上 20 多个视觉行,
+    /// 而其中曲名重复 9 遍、那串七个源的名单重复 8 遍 —— 真正的信息只有「曲名没变,
+    /// 换了 9 个歌手名」。
     /// 压缩规则与"曲名变过就不提取"这类边界都在 `LyricQueryDigestBuilder`(Core,selftest 覆盖)。
     private func queryDigest(_ decision: LyricsResolutionDecision) -> LyricQueryDigest? {
         guard let tried = decision.queriesTried, !tried.isEmpty else { return nil }
@@ -195,9 +195,8 @@ struct LyricsDecisionSheet: View {
                 Text(L10n.t("解析决策")).font(.headline)
                 // 手动改过歌词的条目,这份存档描述的是人工覆盖**之前**那次自动评估。
                 //
-                // 文案里原来直接写着 "collector"(现象是"这英文一点都不可读")。
-                // 那是内部组件名 —— 它在界面上的正式称呼是「后台采集服务」(见设置页
-                // 「播放器」那一栏)。但这句话压根不需要点名是谁干的:用户要知道的是
+                // 不能写内部组件名 "collector" —— 它在界面上的正式称呼是「后台采集
+                // 服务」(见设置页「播放器」那一栏)。但这句话压根不需要点名是谁干的:用户要知道的是
                 // "这是当初自动挑歌词那一刻的快照,不是现在重新搜的结果",主语换成动作本身
                 // 就够了,还省掉一个要解释的名词。
                 Text(summary.isManual
@@ -308,8 +307,7 @@ struct LyricsDecisionSheet: View {
 
     /// 把「歌手 / 歌名 / 专辑」这类**异质**字段拼成一行:每个值带标签、用「」框住。
     ///
-    /// 对拍报「需要能看出来分别是歌名、歌手、专辑」。原来是拿 `" / "` 或
-    /// `" · "` 把几个值直接拼起来,读的人只能靠位置猜是谁 —— 而这几个值经常长得几乎一样
+    /// 不能拿 `" / "` 或 `" · "` 把几个值直接拼起来:读的人只能靠位置猜是谁 —— 而这几个值经常长得几乎一样
     /// (截图那次:歌名 `JANE DOE`、专辑 `JANE DOE - Single`),更要命的是**值里本来就有
     /// 分隔符**(`米津玄師、宇多田ヒカル` 里的顿号、`JANE DOE - Single` 里的连字符),
     /// 跟拼接用的分隔符混成一片,连"这是几个值"都读不出来。
@@ -353,7 +351,7 @@ struct LyricsDecisionSheet: View {
     /// 标签和值同色正是这块被说"乱"的病根之一 —— 一行里哪几个字是结构、哪几个字是数据,
     /// 全靠读的人自己分。「」仍然留着:它回答"到哪儿为止"(歌手名里本来就有顿号),
     /// 跟明暗回答的"谁是谁"是两件事,那轮的结论没被推翻。
-    /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注的 ⚠️。
+    /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注的 提醒。
     private func groupQueriesLine(_ g: LyricQueryGroup) -> Text {
         func dimmed(_ text: String) -> AttributedString {
             var out = AttributedString(text)
@@ -442,7 +440,7 @@ struct LyricsDecisionSheet: View {
 
     /// 判词的两行文案。Core 只给结构(它不做本地化),措辞在这儿。
     ///
-    /// ⚠️ **不归因**:`.multiple` 那一档刻意什么都不说 —— 此前实测否掉过一版
+    /// **不归因**:`.multiple` 那一档刻意什么都不说 —— 此前实测否掉过一版
     /// 「用一句话解释胜者凭什么赢」,只有 13.2% 的对局存在单一强势维度能真的解释分差。
     /// 这里只在 `.single`(唯一一项有差)和 `.identical`(完全平局)时才开口。
     private func verdictText(_ v: LyricsVerdict) -> (title: String, detail: String) {
@@ -464,7 +462,7 @@ struct LyricsDecisionSheet: View {
             var detail = gapSentence(gap: gap, percent: percent, nearTie: true,
                                      sayNearTie: false, separator: separator)
             // 跟 .sameLyrics 的分水岭:那边每条候选都拿到了别的源的内容印证,这边没有。
-            // ⚠️ 给出**计数**而不是只说「不是每条都有」——读的人眼睛正盯着冠亚两行,
+            // 给出**计数**而不是只说「不是每条都有」——读的人眼睛正盯着冠亚两行,
             // 光说"不是每条"很容易读成"这两份不是同一份词",而它们往往恰恰是同一份。
             detail += " " + String(format: L10n.t("%1$d 条候选里只有 %2$d 条拿到了内容印证，未必都是同一份词。"),
                                    contenders, corroborated)
@@ -476,7 +474,7 @@ struct LyricsDecisionSheet: View {
 
     /// 「差多少」那句话 + 「差在哪」那半句。
     ///
-    /// ⚠️ 打分项完全相同时**不说分差** —— 「分差只有 0 分，几乎打平」不是人话,
+    /// 打分项完全相同时**不说分差** —— 「分差只有 0 分，几乎打平」不是人话,
     /// 而 separator 那句「两边打分完全相同，先后由来源顺序决定」已经把话说全了
     /// (实测:方大同《1234567》酷狗与 QQ 同为 1219 分,原措辞就是这么露出来的)。
     /// - sayNearTie: 句尾要不要缀「，几乎打平」。判词标题本身已经这么说时传 false,
@@ -539,8 +537,8 @@ struct LyricsDecisionSheet: View {
             head.append(L10n.t("旧打分算法"))
         }
         if let ts = decision.decidedAt, ts > 0 {
-            // ⚠️ 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(
-            // 现象是:界面语言切成英文之后,这里的日期还是"2026年8月22日"中文格式)——
+            // 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(否则界面语言
+            // 切成英文之后,这里的日期仍会显示成中文格式)——
             // Date.formatted(date:time:) 不传 locale 时默认走系统区域设置,跟不走 .strings
             // 表的其它系统 API 是同一类坑,见 L10n.locale 头注那次"语言名中英混排"案例。
             head.append(Date(timeIntervalSince1970: TimeInterval(ts))
@@ -687,7 +685,7 @@ struct LyricsDecisionSheet: View {
                 InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧打分算法"), tint: .orange)
             }
             if let ts = decision.decidedAt, ts > 0 {
-                // ⚠️ 同 dumpLines 那处——必须显式传 L10n.locale,不能落到 Locale.current。
+                // 同 dumpLines 那处——必须显式传 L10n.locale,不能落到 Locale.current。
                 InfoChip(icon: "calendar",
                          text: Date(timeIntervalSince1970: TimeInterval(ts))
                              .formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: L10n.locale)),
@@ -719,7 +717,7 @@ struct LyricsDecisionSheet: View {
 
     /// 「当前启用的源里，这几个没有应答」。
     ///
-    /// ⚠️ 分母是**当前**启用的源,存档里没有记「当时启用了哪些」——所以措辞只说
+    /// 分母是**当前**启用的源,存档里没有记「当时启用了哪些」——所以措辞只说
     /// "当前启用的"、不说"没露面"那种像是在陈述历史事实的话,并在 tooltip 里点明。
     /// 跟列表里那个「3/9」角标是同一个取舍(见 LyricsManagerView 里那段注释)。
     private func silentSourcesText(_ responded: [String]) -> String? {
@@ -774,14 +772,12 @@ struct LyricsDecisionSheet: View {
 
     /// 字段表的标签列:压暗、右对齐、退到背景去。
     ///
-    /// 现象是「这部分 UI 非常垃圾,完全不能看出有效信息,非常乱」时的落点。
-    /// 这块此前已经为可读性改过两轮(都在先压缩查询词分组,再给异质字段加
-    /// 标签 +「」),两轮治的都是**内容**;这一轮的病在**版面**:
+    /// 内容压缩过(查询词分组、异质字段加标签 +「」)之后,剩下的问题在**版面**:
     ///   - 八行清一色 `.caption2` + `.secondary`,结构和数据同色同字号,没有任何层级;
-    ///   - 「查询词：歌手「A」歌名「B」专辑「C」」这种整句在真实曲目上要折两行,而折下来
+    ///   - 「查询词:歌手「A」歌名「B」专辑「C」」这种整句在真实曲目上要折两行,而折下来
     ///     那半行的左边缘跟**下一个字段的行首**完全重合 —— "续行"和"新字段"长得一模一样
-    ///     (用户那张截图里,专辑名 `Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)`
-    ///     正是这么断在两行上的)。
+    ///     (专辑名 `Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)` 这类长字段就会
+    ///     这么断在两行上)。
     /// 拆成标签列 + 值列之后:标签压暗、值用正常字色(数据才是主角),而值列有了固定的
     /// 左边缘,续行永远落在值列里,不再冒充新字段。
     private func inputFieldLabel(_ label: String) -> some View {
@@ -806,7 +802,7 @@ struct LyricsDecisionSheet: View {
     /// 而两行一亮一暗,不读标签也分得出谁是谁 —— 老写法两行同色,区别只藏在
     /// 「本轮应答的源：」和「当前启用的其余源没有应答：」两句开头,得逐字读才发现。
     ///
-    /// ⚠️ 逐段上色走 `AttributedString`,**不要**写成 `Text(a) + Text(b)`:那个 `+` 在
+    /// 逐段上色走 `AttributedString`,**不要**写成 `Text(a) + Text(b)`:那个 `+` 在
     /// macOS 26 SDK 里已经标了 deprecated(本仓部署目标是 14,所以现在不报警告 —— 也就是说
     /// 哪天把部署目标抬上去,它会突然冒出一片警告)。AttributedString 这条路同样能逐段上色,
     /// 且没有这个到期日。
@@ -979,7 +975,7 @@ struct LyricsDecisionSheet: View {
             let showsCover = (decision.candidates ?? []).contains { !($0.coverUrl ?? "").isEmpty }
             let top = a.rows.first?.core.score ?? 0
             VStack(alignment: .leading, spacing: 4) {
-                // ⚠️ 这里**刻意没有**一句「胜者行是绝对分、其余各行是差值」的表头说明。
+                // 这里**刻意没有**一句「胜者行是绝对分、其余各行是差值」的表头说明。
                 // 第一轮加过、同一轮改法的第二步连同折叠态那行文字一起撤掉 —— 折叠态不印
                 // 分项之后,屏幕上就只剩分数和右边那列差值**一种**单位,那句话没有要澄清的
                 // 对象了(它当初存在的唯一理由就是两种单位长得一模一样)。
@@ -1050,8 +1046,7 @@ struct LyricsDecisionSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            // 可点时换手型光标 —— 没有它,「能点」这件事在 macOS 上没有任何视觉线索
-            // (列表里那个「3/9」角标就是这么丢的,现象是「我点击也没有反应」)。
+            // 可点时换手型光标 —— 没有它,「能点」这件事在 macOS 上没有任何视觉线索。
             .onHover { inside in
                 if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
             }
@@ -1061,7 +1056,7 @@ struct LyricsDecisionSheet: View {
             // 治好了,**重复没治**。折叠态该回答的是"谁赢了、差多少、有没有逐字",这几件上面
             // 那一行(徽章 + 皇冠 + 逐字标签 + 分数 + 差值 + 分数条)已经全答了;"差在哪"是
             // 第二个问题,点开再答。
-            // ⚠️ 差值分解**没被删掉,是搬进了展开态** —— 展开态原来只印绝对明细,这行一撤,
+            // 差值分解**没被删掉,是搬进了展开态** —— 展开态原来只印绝对明细,这行一撤,
             // 「差在哪」就会在界面上彻底消失(只剩「拷贝」出去的纯文本还有),那等于把整个
             // 差值分解废掉。
             if isOpen {
@@ -1102,11 +1097,10 @@ struct LyricsDecisionSheet: View {
             if let terms = c.scoreTerms, !terms.isEmpty {
                 // 直接摊开,不做悬停 —— 这是复盘界面,把证据全亮出来正是它存在的目的。
                 //
-                // ⚠️ 这里**刻意不用** .textSelection(.enabled)。现象是"点了哪个框,
-                // 哪个框的文字就被挤到下面一个位置":那个修饰符会让 SwiftUI 在点击时把这段
-                // 文字从静态 Text 切到可选中的渲染路径,而两条路径的竖向度量(基线/内边距)
-                // 不一致,于是整段往下跳一截。先试过给它配 .frame(maxWidth:.infinity) —— 那
-                // 治的是横向重新折行,对这个竖向位移无效(实测无变化)。
+                // 这里**刻意不用** .textSelection(.enabled):那个修饰符会让 SwiftUI 在
+                // 点击时把这段文字从静态 Text 切到可选中的渲染路径,而两条路径的竖向度量
+                // (基线/内边距)不一致,点哪个框哪个框的文字就会往下跳一截。
+                // `.frame(maxWidth: .infinity)` 治不了这个 —— 那治的是横向重新折行。
                 //
                 // 想复制这些证据走上面标题栏那个「拷贝」按钮:它一次拷走整份决策,
                 // 比拖选一段更实用 —— 这个面板的用途本来就是"贴进 issue 里复盘"。
@@ -1185,7 +1179,7 @@ struct LyricsDecisionSheet: View {
                 } else if row.core.isRejected, let terms = c.scoreTerms, !terms.isEmpty {
                     // explanation 对被拒的候选吐的是「不可用：X」+ 那一项的解释,
                     // 正好是这里要说的话 —— 不用另写一份措辞。
-                    // ⚠️ 显式判 isRejected,不靠"走到 else 了就一定是被拒":这一行的措辞
+                    // 显式判 isRejected,不靠"走到 else 了就一定是被拒":这一行的措辞
                     // (「不可用：…」)只对被拒的候选成立,哪天 isContender 多出第三类,
                     // 不判的话会给它印一句错的话。
                     Text(LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: terms))

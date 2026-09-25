@@ -52,7 +52,7 @@ public enum LyricsPreviewText {
         // `[...]` 之后的正文(喂给署名判据的就是它 —— 那套规则认的是词,不是时间戳)。
         struct Line { let raw: String; let body: String; let isBlank: Bool }
         var lines: [Line] = []
-        // ⚠️ 按 Unicode 标量切,不能 `split(separator: "\n")`:`\r\n` 是单个字素簇、跟 `"\n"`
+        // 按 Unicode 标量切,不能 `split(separator: "\n")`:`\r\n` 是单个字素簇、跟 `"\n"`
         // 不相等,CRLF 的社区歌词(酷狗尤其常见)会整份切不开。同 ManualPickLock.canonicalLyrics
         // 那处踩过的坑,理由完整写在那边。
         for rawScalars in lyrics.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -168,7 +168,7 @@ public struct LyricsBodyEdit: Equatable, Sendable {
         hiddenSuffix = suffix
     }
 
-    /// 把编辑框里的正文拼回完整歌词。正文没变 → 原文原样;变了 → 前缀 + 新正文(逐行原样,用户加的空行也留着)+ 后缀,
+    /// 把编辑框里的正文拼回完整歌词。正文没变 到 原文原样;变了 到 前缀 + 新正文(逐行原样,用户加的空行也留着)+ 后缀,
     /// 原文以换行收尾的话拼出来也以换行收尾。
     public func reassembled(body newBody: String) -> String {
         if newBody == body { return original }

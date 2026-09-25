@@ -13,7 +13,7 @@ import Foundation
 public enum PlayCountFoldReason: String, CaseIterable, Hashable, Codable {
     /// 只差大小写 / 空格有无 / 首尾空白
     case caseOrSpacing
-    /// 全角↔半角(NFKC 兼容分解:全角括号、全角空格、全角字母数字)
+    /// 全角与半角(NFKC 兼容分解:全角括号、全角空格、全角字母数字)
     case fullwidth
     /// 繁简(含同折简体的字形变体:麼/麽)
     case hanScript
@@ -21,11 +21,11 @@ public enum PlayCountFoldReason: String, CaseIterable, Hashable, Codable {
     case catalogNoise
     /// 同一个版本尾缀的分隔符写法不同(`X - Live` / `X (Live)` / `X [Live]`)
     case versionSuffix
-    /// 「CJK 段 + 拉丁段」的双语拼接名折到 CJK 段(《月食 The Weeping Woman》→《月食》)
+    /// 「CJK 段 + 拉丁段」的双语拼接名折到 CJK 段(《月食 The Weeping Woman》到《月食》)
     case bilingualTitle
-    /// 合唱署名归第一位(`A & B` ↔ `A`)
+    /// 合唱署名归第一位(`A & B` 与 `A`)
     case artistCredit
-    /// 歌手罗马字 / 别名表折到中文本名(David Tao ↔ 陶喆)
+    /// 歌手罗马字 / 别名表折到中文本名(David Tao 与 陶喆)
     case artistAlias
     /// 歌名别名表(静态或自动发现)折到中文本名
     case titleAlias
@@ -72,7 +72,7 @@ public enum PlayCountFoldExplainer {
                             baseArtist: String, variantArtist: String) -> PlayCountFoldReason? {
         if a == b { return nil }
         if let r = stagedTextReason(a, b) { return r }
-        // foldTitle 不等、familyKey 却相等 → 是歌名别名表把两个折叠键并到一起的。
+        // foldTitle 不等、familyKey 却相等 到 是歌名别名表把两个折叠键并到一起的。
         if PlayCountFold.familyKey(artist: baseArtist, title: a)
             == PlayCountFold.familyKey(artist: variantArtist, title: b) {
             return .titleAlias
@@ -85,7 +85,7 @@ public enum PlayCountFoldExplainer {
     /// 不经我们的折叠规则,但用户核对「合并了哪些记录」时同样想看到 —— 原因沿同一条流水线判到
     /// 双语拼接那一级为止(专辑名没有别名表)。
     ///
-    /// ⚠️ 跟 `reasons` 不同,这里对不上任何一档返回 **nil、不是 .other**:写法族那一层「并了却说不出
+    /// 跟 `reasons` 不同,这里对不上任何一档返回 **nil、不是 .other**:写法族那一层「并了却说不出
     /// 为什么」是异常,该报;而专辑名之间对不上是**常态** —— 同一首录音本来就会出现在原专辑、精选集、
     /// 专辑的另一语言名(王力宏《心中的日月》= 「Shangri-la」)下面,那是不同的专辑,不是写法差异,
     /// 挂「其他折叠规则」就说反了(那会让人以为是我们的折叠规则把它们并在一起的)。

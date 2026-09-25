@@ -356,7 +356,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
     // 唱盘单独一张(旋转的就是它:方形画布、圆心=画布中心,绕层中心转不晃,盘面带一颗
     // 偏心标记点,旋转的可见性全靠它)+ 静止的唱臂(右上支点伸到盘面,一眼读出"唱机")。
     // 静态帧 = 两者合成;活体在 MenuBarLiveIconView.buildVinyl 里分两层,只转唱盘。
-    // 尺寸放大过两轮(15×13.5 → 16.6×15 整体,再单独把盘从 12.6 → 14.4:
+    // 尺寸放大过两轮(15×13.5 到 16.6×15 整体,再单独把盘从 12.6 到 14.4:
     // "盘再大点、唱臂保持")。盘沿会探到唱臂线下面穿过,层序上臂在上,视觉正确。
     static let vinylCanvas = NSSize(width: 16.6, height: 15)
     static let vinylDiscSide: CGFloat = 14.4

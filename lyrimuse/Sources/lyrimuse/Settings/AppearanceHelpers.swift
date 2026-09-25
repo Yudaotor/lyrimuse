@@ -52,7 +52,7 @@ extension Color {
 // 那种"取不到就默默换系统字体、你毫无感知"的隐式行为,而是先用 NSFontManager 显式查一次
 // 是否真的装了这个字体族。
 //
-// ⚠️ `OverlayFontWeight` **本体在 LyrimuseCore**(`Util/OverlayFontWeight.swift`),不在这里。
+// `OverlayFontWeight` **本体在 LyrimuseCore**(`Util/OverlayFontWeight.swift`),不在这里。
 // 加「字重」设置时搬过去的:四行字重从"各自硬编码"变成"用户选主行、其余三行按固定
 // 档位差推导",推导规则是纯逻辑而且带一条必须钉住的兼容性不变量(默认档位要逐个复现改动前那
 // 四个权重),selftest 只依赖 LyrimuseCore,判据不下沉就覆盖不到。留在这里的只有三件真正需要
@@ -85,11 +85,11 @@ extension OverlayFontWeight {
 
     /// 设置页那个下拉里的显示名。
     ///
-    /// ⚠️ 刻意**不用**「Light / Regular / Medium / Semibold…」这套字体行业术语的中文直译。这一栏
+    /// 刻意**不用**「Light / Regular / Medium / Semibold…」这套字体行业术语的中文直译。这一栏
     /// 面向的是"我想让歌词看起来粗一点/细一点"的人,不是排版从业者;真正的权重刻度在
     /// `appKitWeight` 里,不需要用界面文案去复述它。
     ///
-    /// 中文取的是一条**单调的强度阶梯**:细 → 常规 → 稍粗 → 较粗 → 加粗 → 特粗,稍 / 较 / 加 /
+    /// 中文取的是一条**单调的强度阶梯**:细 到 常规 到 稍粗 到 较粗 到 加粗 到 特粗,稍 / 较 / 加 /
     /// 特 四个程度副词自己就把顺序说清楚了,不用读者去记"semibold 比 medium 粗"。
     /// (写的是「中等 / 半粗」—— 前者读不出方向、后者是 semibold 直译,
     ///  跟这一行原来叫「字重」是同一类毛病,同一次一起改掉。英文保持行业术语不动:那边

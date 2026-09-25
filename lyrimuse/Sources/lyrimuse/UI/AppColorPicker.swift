@@ -45,7 +45,7 @@ struct AppColorPicker: View {
         } label: {
             ColorSwatch(color: selection.wrappedValue, cornerRadius: 5)
                 .frame(width: 32, height: 20)
-                // ⚠️ 必须显式给一个矩形命中区(现象是「点击不了了」实测坐实):
+                // 必须显式给一个矩形命中区(现象是「点击不了了」实测坐实):
                 // SwiftUI 的 Shape 默认按"画出来的内容"命中,`RoundedRectangle.fill(color)`
                 // 在 color 是全透明(alpha 0,「背景颜色」默认就是它)时等于**没画东西**,那一整块
                 // 就成了点不到的死区。不加这一句时颜色不透明还点得开,一拖到全透明就点不开了——
@@ -80,8 +80,8 @@ struct AppColorPicker: View {
     // MARK: - 饱和度/明度方块
 
     /// 横轴饱和度、纵轴明度,拖一下/点一下都直接定位(`minimumDistance: 0`)。叠色用经典的
-    /// 双层渐变技巧:底色是当前色相在 S=1/B=1 的纯色,上面叠一层"白→透明"(横向,表达饱和度
-    /// 变化)、再叠一层"透明→黑"(纵向,表达明度变化)——不用逐像素算 HSB→RGB,三层 SwiftUI
+    /// 双层渐变技巧:底色是当前色相在 S=1/B=1 的纯色,上面叠一层"白到透明"(横向,表达饱和度
+    /// 变化)、再叠一层"透明到黑"(纵向,表达明度变化)——不用逐像素算 HSB到RGB,三层 SwiftUI
     /// 渐变叠加出来的视觉效果跟真正的 HSB 平面等价。
     private var saturationBrightnessField: some View {
         GeometryReader { geo in
@@ -153,7 +153,7 @@ struct AppColorPicker: View {
     // MARK: - Hex 输入 + 屏幕取色
 
     /// 只认 6 位 RGB,不透明度另有滑杆管 —— 用户不用记「RRGGBBAA 最后两位是透明度」这种格式。
-    /// ⚠️ 只在**回车**时应用(`onSubmit`),不做"每敲一个字就实时解析":那样会在还没打完
+    /// 只在**回车**时应用(`onSubmit`),不做"每敲一个字就实时解析":那样会在还没打完
     /// 一个合法值的中途反复用半成品覆盖 hue/saturation/brightness,输入体验会一直"抖"。
     private var hexField: some View {
         HStack(spacing: 2) {
@@ -214,7 +214,7 @@ struct AppColorPicker: View {
 
     /// 每次弹出面板时,把 `selection` 现在的值拆成 hue/saturation/brightness/opacity 这份内部
     /// 工作状态 —— 面板内部的拖拽/输入全部只读写这份状态,只有 `commit()` 才回写 `selection`,
-    /// 这样面板打开期间的每一次微小拖动不用反复做"Color → HSB → Color"的有损往返。
+    /// 这样面板打开期间的每一次微小拖动不用反复做"Color 到 HSB 到 Color"的有损往返。
     private func loadFromSelection() {
         let rgb = NSColor(selection.wrappedValue).usingColorSpace(.sRGB) ?? .white
         hue = Double(rgb.hueComponent)
@@ -264,7 +264,7 @@ struct AppColorPicker: View {
 
 /// 色块本体:圆角矩形填色。触发按钮和面板内的预览色块共用同一份画法。
 ///
-/// ⚠️ **刻意不垫棋盘格**(垫过,观感是「太丑了」)。垫它的理由本来是
+/// **刻意不垫棋盘格**(垫过,观感是「太丑了」)。垫它的理由本来是
 /// (跟 `ColorThemeSwatch.swift` 的三段色条同一个理由:半透明看着像"空白"),但那份色条
 /// 有 28×12 的整段横条铺开,这里的色块只有 22~28pt 见方,格子数太少,棋盘格在这么小的
 /// 面积里不读作"透明度提示",读作一小块脏兮兮的方格纹理。透明度本身已经有 `opacityRow`

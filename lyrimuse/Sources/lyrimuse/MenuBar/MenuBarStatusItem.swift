@@ -12,13 +12,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menuba
 //
 // ---- 为什么是"SF Symbol 的音符 + 自己画的三条线",而不是一张 PNG ----
 //
-// 现象是"图标怎么变成这个鬼样子了,这么小"。量下来是两次缩小**乘在了一起**:
-//   * 那次(commit 579f8b3)为了让图标别比旁边的系统图标大,做了两件事 ——
-//     重新生成一张四周带内边距的 PNG,**并且**把显示尺寸从 16 缩到 14;
-//   * 而那张 PNG 里字形只占画布的 61% 宽 / **42% 高**(实测:36×36 的画布,字形只有
-//     22×15,上下各留了 10 px 空白)。
-// 两者相乘,字形的实际视觉高度只剩 14 × 0.42 ≈ 5.9pt,而菜单栏里系统图标的字形普遍在
-// 13pt 上下 —— 看着就是"小了一大圈"。
+// PNG 方案会让字形显得偏小:显示尺寸(16到14pt)与画布内边距(字形只占画布 61% 宽 /
+// **42% 高**,实测:36×36 的画布,字形只有 22×15,上下各留了 10 px 空白)两次缩小会
+// **乘在一起**,字形实际视觉高度只剩 14 × 0.42 ≈ 5.9pt,而菜单栏里系统图标的字形普遍
+// 在 13pt 上下 —— 比旁边图标明显小一圈。
 //
 // 光把显示尺寸调大治不了本:字形只占 42% 高,要让它到 13pt,画布得 31pt,菜单栏
 // (thickness 22pt)根本放不下。而那张 PNG 的字形本身只有 22×15 像素,放大必糊 ——
@@ -92,23 +89,23 @@ final class MenuBarStatusItem: NSObject {
 
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
-        // ⚠️ 每一条订阅都必须 .receive(on: RunLoop.main),不能直接 sink —— 这个项目已经
+        // 每一条订阅都必须 .receive(on: RunLoop.main),不能直接 sink —— 这个项目已经
         // 实测踩过两次:@Published 的 publisher 在 **willSet** 时机发射,回调执行时属性
         // 本身还是**旧值**。下面这些回调都不用发射值、而是转头去读 AppSettings/
         // PlaybackCoordinator 的当前状态(refresh() 内部这么做),直接 sink 会读到旧值:
         // isPlayingNow 从 false 变 true 时 refresh() 读到的仍是 false,菜单栏永远不显示
         // 歌词。挪到下一个 runloop 循环再跑,属性此时已经落定成新值。
-        // ⚠️ 这里订阅的是 compactLine(决定**显示哪一句**);下面另有一条 currentLine 的
+        // 这里订阅的是 compactLine(决定**显示哪一句**);下面另有一条 currentLine 的
         // 订阅,那条管的是"逐字填色路径此刻可不可用" —— 提前量窗口里显示的是下一句、但它
         // 还没开唱,karaokeFillPath 那道 `line.plainText == text` 守卫会不给路径(正确:
         // 没唱就不该有填色);等真的开唱时 currentLine 才变,那一下要重画一次把填色挂上。
-        // 两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。
+        // 两个事件在短间隙里相差不到一秒,文本相同 到 槽宽相同 到 不触发状态项重建。
         coordinator.$compactLine
             // 同一句内部会因为逐字之外的原因被重新赋值(译文/罗马音中途补上),去重掉 ——
-            // 不去重的话滚动会被反复打回开头。⚠️ 去重键是「首词时间戳#纯文本」,不能只看
+            // 不去重的话滚动会被反复打回开头。 去重键是「首词时间戳#纯文本」,不能只看
             // 纯文本:副歌里相邻两行**同词不同时**,只看文本第二行
             // 的换行事件会被吞掉,菜单栏挂着第一行的填色路径 —— 第一行唱完动画停在全填,
-            // 第二行一出场就整句强调色。同理「先无逐字、解析中途补上」(words nil→非 nil)
+            // 第二行一出场就整句强调色。同理「先无逐字、解析中途补上」(words nil到非 nil)
             // 也必须算换句,否则这句到换行前都不会开始染色。
             .map { line -> String in
                 guard let line else { return "" }
@@ -136,7 +133,7 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来)。
         //
-        // ⚠️ 订阅的必须是**现在真正在用的那个**设置。把宽度从字数改成点时
+        // 订阅的必须是**现在真正在用的那个**设置。把宽度从字数改成点时
         // 这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效。
         //
         // debounce 而不是 receive(on:):宽度变化现在会触发状态栏项**重建**(macOS 26
@@ -150,7 +147,7 @@ final class MenuBarStatusItem: NSObject {
         // 才生效 —— 那样用户在设置里点一下,菜单栏上看着像没反应。
         settings.$menuBarLyricsWidthMode.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「对齐模式」跟宽度模式同一条路。⚠️ 必须走 refresh() 而不是
+        // 「对齐模式」跟宽度模式同一条路。 必须走 refresh() 而不是
         // refreshColors():后者只重排位图 + 重放填色,**不碰 position** —— 而对齐改的正是
         // position。refresh 会一路走到 present(),Plan 里带着 alignment、比出不同,静止分支
         // 就会按新对齐重新落位(见 MenuBarScrollingLabel.restartAnimation)。
@@ -164,7 +161,7 @@ final class MenuBarStatusItem: NSObject {
         settings.$menuBarIconAnimates.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 歌词旁那枚带进度的图标:开/关/换边要立刻看到(用户就是盯着菜单栏点的)。
-        // ⚠️ 必须走 refresh():它改的是这一项的**槽宽**(多让出 图标宽 + 5pt),而槽宽只在
+        // 必须走 refresh():它改的是这一项的**槽宽**(多让出 图标宽 + 5pt),而槽宽只在
         // 项出生那一刻算数 —— refreshColors 那条只重画不重建,换过去菜单栏上会是"图标画出来
         // 了但格子没变宽",歌词右边被挤出去(见 present 头注两条铁律)。
         settings.$menuBarLyricsIconPosition.dropFirst().receive(on: RunLoop.main)
@@ -185,10 +182,10 @@ final class MenuBarStatusItem: NSObject {
         settings.$menuBarHoverShowsControls.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.evaluateHoverEngagement() }.store(in: &cancellables)
         // ② 中间那个键画 ⏸ 还是 ▶。用**观感层** isPlayingSmoothed 而不是 isPlayingNow:
-        // 这三个键最典型的用法就是"点一下暂停",而真实链路(命令→播放器切状态→分布式通知→
-        // poll→apply)实测 0.5~1s,等真值回读图标才翻,手指还压在键上却看着像没生效
+        // 这三个键最典型的用法就是"点一下暂停",而真实链路(命令到播放器切状态到分布式通知到
+        // poll到apply)实测 0.5~1s,等真值回读图标才翻,手指还压在键上却看着像没生效
         // (见 PlaybackCoordinator.userTogglePlayPause 的乐观回声)。
-        // ⚠️ 这条**不能**走 refresh():接管期间 refresh 是早退的(见它开头那道 guard),
+        // 这条**不能**走 refresh():接管期间 refresh 是早退的(见它开头那道 guard),
         // 图标要在接管期间照样跟得上,所以直接推给那一层自己重画。
         coordinator.$isPlayingSmoothed.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] on in self?.hoverControls.setPlaying(on) }.store(in: &cancellables)
@@ -225,7 +222,7 @@ final class MenuBarStatusItem: NSObject {
         // 时间轴偏移任一变化都重新对一次表。这条**不走 refresh**(不涉及槽位/内容,只是
         // 时钟),标签内部有 250ms 漂移门,逐 poll 的锚点更新几乎都被无声吸收,不会打断
         // 正在跑的填色动画。偏移微调(默认步长 200ms)在漂移门之下,必须 force 立即生效。
-        // ⚠️ 锚点/暂停位置这两条同时喂**两条**对表通道:逐字染色(对歌词时间轴)和进度图标
+        // 锚点/暂停位置这两条同时喂**两条**对表通道:逐字染色(对歌词时间轴)和进度图标
         // (对播放位置)。两者的位置口径差一个歌词时间轴偏移,见 syncProgressClock 头注。
         coordinator.$anchor.receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -256,7 +253,7 @@ final class MenuBarStatusItem: NSObject {
         // 一遍(跟 hasSeenChineseLyrics 类那种"条件成立就一直显示"刻意反过来,这个是
         // "展示过一次就永远不再显示")。
         //
-        // ⚠️ **引导还没走完时整个不弹**。首启的时间线是:T+0.5s 弹引导窗口
+        // **引导还没走完时整个不弹**。首启的时间线是:T+0.5s 弹引导窗口
         // (MenuBarSceneActions,过 iCloud 导入询问那一道之后)、T+1.5s 弹这个气泡、T+9.5s
         // 它自动消失(MenuBarPositionHint.autoDismissSeconds = 8)。也就是说这个"一辈子只
         // 出现一次"的提示,恰好在用户正盯着引导向导读第一屏的时候在旁边闪 8 秒然后**永久
@@ -299,7 +296,7 @@ final class MenuBarStatusItem: NSObject {
     /// 把播放时钟喂给歌词旁那枚进度图标。跟 `syncKaraokeClock` 是**两条**通道,差别只有
     /// 一处,但那一处正是这个功能对不对的关键:
     ///
-    /// ⚠️ **这里不加 `currentLyricsOffsetMs`**。那个偏移是把歌词往前/往后挪(让字跟得上
+    /// **这里不加 `currentLyricsOffsetMs`**。那个偏移是把歌词往前/往后挪(让字跟得上
     /// 人声),歌本身放到第几秒并没有变 —— 加上去的话,用户把歌词调快 2 秒,进度图标也跟着
     /// 虚报 2 秒。染色那条**必须**加(它对的是歌词时间轴),这条**必须**不加(它对的是
     /// 播放位置)。两个函数长得像,改其中一个之前先看清是哪一条。
@@ -373,8 +370,8 @@ final class MenuBarStatusItem: NSObject {
 
     /// macOS 27 以前(本 App 支持的 14 / 15 / 26 全在内)AppKit 记这一项位置用的 UserDefaults
     /// 键(值 = 项右边缘到屏幕右缘的距离,pt;在 26.5.1 真机上核对过:拖到
-    /// origin.x=1146、宽 55、屏宽 1512 → 存值 313 ≈ 1512 − 1201)。macOS 27 起位置改由系统
-    /// MenuBarAgent 集中管理(`com.apple.MenuBarAgent` → `TrailingItemPreferredPositions`),
+    /// origin.x=1146、宽 55、屏宽 1512 到 存值 313 ≈ 1512 − 1201)。macOS 27 起位置改由系统
+    /// MenuBarAgent 集中管理(`com.apple.MenuBarAgent` 到 `TrailingItemPreferredPositions`),
     /// 这个键不再出现。
     private static func preferredPositionDefaultsKey(for autosaveName: String) -> String {
         "NSStatusItem Preferred Position \(autosaveName)"
@@ -384,7 +381,7 @@ final class MenuBarStatusItem: NSObject {
     /// 判:读得到系统 MenuBarAgent 的那份 dict 就是新机制(27+),读不到就是老机制(26.x 及
     /// 更早,直到本 App 的最低支持版本 14)。不用 `operatingSystemVersion` 硬编码 27 这个数——
     /// 万一哪个小版本把机制挪了,按机制判仍然是对的。
-    /// ⚠️ 这个判断只做一次缓存:同一进程里机制不会变,而每次重建都去读一遍别的 App 的 defaults
+    /// 这个判断只做一次缓存:同一进程里机制不会变,而每次重建都去读一遍别的 App 的 defaults
     /// 没有必要。
     private static let usesLegacyPositionDefaults: Bool = {
         CFPreferencesCopyAppValue(
@@ -414,7 +411,7 @@ final class MenuBarStatusItem: NSObject {
         hoverControls.frame = button.bounds
         hoverControls.autoresizingMask = [.width, .height]
         button.addSubview(hoverControls)
-        // ⚠️ hover 的 tracking area 装在**按钮**身上(owner 是上面那一层,理由见
+        // hover 的 tracking area 装在**按钮**身上(owner 是上面那一层,理由见
         // MenuBarHoverControlsView 头注),所以必须在这里跟着重装:按钮每次重建都是新的,
         // 旧按钮身上的区域跟它一起没了 —— 漏了这一行的症状是"重建过一次之后悬停再没反应"。
         hoverControls.installTracking(on: button)
@@ -438,8 +435,8 @@ final class MenuBarStatusItem: NSObject {
 
     /// **图标态**的槽宽 = 图标宽 + 这个数。
     ///
-    /// ⚠️ 订正了这个常量的含义。原注释写的是「窗口宽 + 系统内边距(实测健康态
-    /// 160 → 178)」,读起来像 AppKit 会额外吃掉 18pt。**实测不是**:打日志对账
+    /// 订正了这个常量的含义。原注释写的是「窗口宽 + 系统内边距(实测健康态
+    /// 160 到 178)」,读起来像 AppKit 会额外吃掉 18pt。**实测不是**:打日志对账
     /// `requested` / `button.bounds.width` / `item.length` 三个数,按钮宽恒等于我们申请的
     /// 槽宽(只做取整)—— AppKit 一点都没多要,这 18pt 全是我们自己留的。
     ///
@@ -454,7 +451,7 @@ final class MenuBarStatusItem: NSObject {
     /// 在高亮态(鼠标按住时那个圆角块)下一眼就能看到歌词右边空一大截。
     ///
     /// 歌词态不像图标态那样靠 AppKit 居中(我们自己摆图层),所以它只需要一点点防裁边的余量:
-    /// 4pt ≈ 文字宽度测量与实际绘制之间的取整误差量级。⚠️ 反推内容宽的地方
+    /// 4pt ≈ 文字宽度测量与实际绘制之间的取整误差量级。 反推内容宽的地方
     /// (`currentLyricsSlot` / `renderInterimLyrics`)必须用**同一个**常量,否则歌词格
     /// 算出来的宽度跟真实槽宽差一截 —— 那正是 「点暂停生效上一首」的病根形状。
     private static let lyricsSlotPadding: CGFloat = 4
@@ -464,14 +461,14 @@ final class MenuBarStatusItem: NSObject {
     private static let rebuildQuietSecs: TimeInterval = 3
     /// 歌词消失之后,**槽宽**还替它留多久。
     ///
-    /// ⚠️ 这跟下面那个「内容」的保持时长是**两件事**,别让它们共用同一个数:
+    /// 这跟下面那个「内容」的保持时长是**两件事**,别让它们共用同一个数:
     ///
     /// 实测(12 小时日志)媒体层会**凭空报假暂停**——`pause transition` 之后几秒又
     /// `resume transition`,而 `resume` 那行的 `delta` 显示**播放位置按墙钟照样前进了**,
     /// 也就是音乐从头到尾没停过。12 小时里抓到 5 次,时长 1.88 / 1.92 / 4.11 / 6.46 / 6.53 秒。
     /// 每一次都精确产生「歌词突然消失、过一会儿又回来」。3 秒的窗只盖得住最短那两次。
     ///
-    /// 关键性质:**只要槽宽没缩,恢复那一刻目标宽度跟原来相同 → `needsRebuild` 为假 →
+    /// 关键性质:**只要槽宽没缩,恢复那一刻目标宽度跟原来相同 到 `needsRebuild` 为假 到
     /// 整个假暂停期间零重建**,邻居一个像素都不动。所以把几何这一半单独拉长到 8 秒
     /// (覆盖实测最长的 6.53 秒还有余量),而内容那一半仍按用户选的 3 秒 ——
     /// 真暂停时他照样在 3 秒后看到图标,只是那枚图标画在还没缩的宽槽里。
@@ -505,8 +502,8 @@ final class MenuBarStatusItem: NSObject {
         // 顺序在 refresh() 之后:接管态的进/出各自要一次内容重画,合在一起会互相盖。
         evaluateHoverEngagement()
     }
-    /// 本轮收缩观察窗的起点。⚠️ 必须记住起点而不是每次给满窗:推迟的重跑走的还是
-    /// refresh() → present(),不记起点的话每次重算都重新发满一个观察窗,收缩被无限
+    /// 本轮收缩观察窗的起点。 必须记住起点而不是每次给满窗:推迟的重跑走的还是
+    /// refresh() 到 present(),不记起点的话每次重算都重新发满一个观察窗,收缩被无限
     /// 顺延 —— 暂停后槽永远缩不回去(实现当天差点带着这个 bug 部署)。
     /// 目标不再是收缩(歌词回来了 / 几何已一致 / 用户手动关开关)时清零。
     private var collapseObserveBegan: Date?
@@ -533,7 +530,7 @@ final class MenuBarStatusItem: NSObject {
     /// 收缩额外恒等一个观察窗(collapseDelay)——间隙常在 1~2s 内结束,歌词回来时
     /// 几何目标恢复原样,这对"缩了又扩"的重建就整个省掉了。
     ///
-    /// ⚠️ **别在观察窗期间把图标居中画在还没缩的宽槽里顶着。** 那样只顾了几何、没顾画面:
+    /// **别在观察窗期间把图标居中画在还没缩的宽槽里顶着。** 那样只顾了几何、没顾画面:
     /// 观察窗省下的是**重建**,而屏幕上照样看到歌词被图标顶掉、过一两秒又回来
     /// (「Menu bar lyrics sometimes disappear ... then reappear later」)。观察窗本来就是按
     /// "间隙常在 1~2s 内结束"留的,
@@ -557,19 +554,17 @@ final class MenuBarStatusItem: NSObject {
         pendingRefresh?.cancel()
         pendingRefresh = nil
 
-        // 短命行不改槽宽(只管收缩;**两个方向都管**,现象是
-        // "换行时先按上一句的长度渲染,然后同一行又变一次")。为一句活不过静默窗的短句改槽宽,
+        // 短命行不改槽宽(只管收缩;**两个方向都管**)。为一句活不过静默窗的短句改槽宽,
         // 花掉的是一次重建配额 —— 下一句(往往活得久得多)的几何因此撞进静默窗,被推迟到
         // **句中**才落地,槽宽当着用户的面跳一下。
         //
-        // 加宽原来是豁免的,而复采日志里 14 次"落在静默窗地板上"的重建有 11 次是加宽 ——
-        // 那正是 MenuBarSlotPolicy 头注里那条不变式原来的漏洞。判据、实测现行与两组统计
-        // 都在那个文件的声明处。
+        // 加宽不能豁免:复采日志里 14 次"落在静默窗地板上"的重建有 11 次是加宽。判据、
+        // 实测现行与两组统计都在 MenuBarSlotPolicy 的声明处。
         //
-        // ⚠️ 只在**两个歌词槽之间**成立(text/fixed 互相之间也算,不要求同态):图标↔歌词
+        // 只在**两个歌词槽之间**成立(text/fixed 互相之间也算,不要求同态):图标与歌词
         // 那次重建跟"这一句活多久"无关,而且收进图标槽走的是收缩观察窗(collapseDelay)
         // 自己的节奏,不受这条影响。跨态放行是刻意的 —— 「装不下要滚」的 fixed 槽恒等于
-        // 最大宽度,长短句交替时 fixed↔text 正是幅度最大的那种跳(实测 268 ↔ 100),把它
+        // 最大宽度,长短句交替时 fixed与text 正是幅度最大的那种跳(实测 268 与 100),把它
         // 排除在外等于把最该管的一种漏掉。代价是跳过期间 displayClass 停在旧态、跟屏幕上
         // 画的不完全对应,这没问题:它只是重建判定的缓存键,而跳过期间的内容由 interim
         // 按**当前槽宽**重新排版,不读这个键。
@@ -586,9 +581,9 @@ final class MenuBarStatusItem: NSObject {
                 \(dwellSeconds ?? -1, privacy: .public)s): \
                 \(item.length, privacy: .public) -> \(length, privacy: .public)
                 """)
-            // ⚠️ 跟这条早退之外的每一条路径口径一致:歌词还在(collapseDelay 恒为 0),
-            // 收缩观察窗就该清零。漏了这一句的话,"间隙里刚起了一个观察窗 → 歌词回来但
-            // 全是短句 → 一路走这条早退"时,那个起点会一直挂着;等下次真要收进图标槽时
+            // 跟这条早退之外的每一条路径口径一致:歌词还在(collapseDelay 恒为 0),
+            // 收缩观察窗就该清零。漏了这一句的话,"间隙里刚起了一个观察窗 到 歌词回来但
+            // 全是短句 到 一路走这条早退"时,那个起点会一直挂着;等下次真要收进图标槽时
             // observeRemaining 已经被算成 0,收缩当场就发生 —— 观察窗(专治"缩了又扩"
             // 那对重建)等于白设。
             collapseObserveBegan = nil
@@ -601,12 +596,12 @@ final class MenuBarStatusItem: NSObject {
         // 宽度给邻居排位" —— 邻居关心的只有 length。长度一模一样时重建一次,邻居前后位置
         // 完全相同,那次重建对布局零收益,却实打实花掉一次重建配额、把下一句的几何推进静默窗。
         //
-        // 实测(40 分钟 39 次重建):**5 次是 `text(223.5) ↔ fixed(223.5)` 这种
+        // 实测(40 分钟 39 次重建):**5 次是 `text(223.5) 与 fixed(223.5)` 这种
         // 长度一字不差的纯形态翻转**,而且成簇出现(37 秒里连着 5 次全是 223.5)。成因是自适应
         // 下 `.text` 的槽宽 = 文字宽、`.fixed` 的槽宽 = 最大宽度,一句文字宽顶到上限的句子
         // 两边算出来就是同一个数(分界只差 `MenuBarMarqueeRenderer.presentation` 的 0.5pt 容差)。
         //
-        // ⚠️ 不重建 **≠** 不换画法:形态变化照旧走 `render`。三条渲染路径(`showIcon` /
+        // 不重建 **≠** 不换画法:形态变化照旧走 `render`。三条渲染路径(`showIcon` /
         // `showStaticText` / `showFixedWidth`)本来就各自显式清掉另外两条的残留(title、image、
         // imagePosition、scrollingLabel、liveIconView,见 showStaticText 里那段"两种写法互相
         // 收拾干净,不靠遗留状态"),而且"在既有 button 上重画"本来就是早在跑的路径 —— 改动前
@@ -628,12 +623,11 @@ final class MenuBarStatusItem: NSObject {
             return
         }
 
-        // ⚠️ 面板开着时把几何变化整个挡下来。状态栏这一项的按钮**就是那张 popover 的锚点
+        // 面板开着时把几何变化整个挡下来。状态栏这一项的按钮**就是那张 popover 的锚点
         // 视图**,而重建 = removeStatusItem + 新建一项,等于把锚连根拔掉:轻则面板当场自己
         // 消失(用户手还在上面),重则内容按新槽宽画出去、槽却还是旧宽度,歌词压到左边邻居
-        // 的图标上(现象是过这一幕,当时只当成"面板开着切开关"的个例,用调用侧
-        // 先收面板绕过去了 —— 触发源其实不止那一个:自适应宽度模式下**每换一句**都改槽宽,
-        // 歌词间隙/暂停的收缩也改,面板开着时这些都会踩到)。
+        // 的图标上。触发源不止一个:自适应宽度模式下**每换一句**都改槽宽,歌词间隙/暂停的
+        // 收缩也改,面板开着时这些都会踩到。
         //
         // 不排期补做,交给 setPanelOpen(false) 收面板那一刻的 refresh() —— 面板还开着就
         // 重建这件事本身没有安全的时机。期间内容照旧就地换(目标是图标才换,理由同下面
@@ -646,7 +640,7 @@ final class MenuBarStatusItem: NSObject {
             // return,自适应宽度模式下面板开着期间状态栏歌词会冻在旧句(当时注释里"歌词
             // 最多晚到面板收起"的取舍,在 interim 机制就绪后已无必要)。
             //
-            // ⚠️ 这条**刻意不跟**下面推迟分支那道「观察窗内不画图标」:那条要靠
+            // 这条**刻意不跟**下面推迟分支那道「观察窗内不画图标」:那条要靠
             // observeRemaining 倒计时,而这条路径在计时开始前就 return 了,没有"窗口走完"这回事
             // —— 照搬过来就变成"面板开着期间歌词一直挂着",面板开多久挂多久,比闪一下更糟。
             // 面板开着本身就是用户正在操作的几秒钟,不是那个要保护的间隙。
@@ -678,9 +672,9 @@ final class MenuBarStatusItem: NSObject {
         // ---- 从图标槽回到歌词槽:先让「该显示哪一句」落定,再建----
         //
         // 「句中重建」实测长这样:
-        //   20:09:05.314  rebuild: icon(38.5) -> text(195.22)      ← 按"这一瞬"的行建了
-        //   20:09:05.331  coordinator currentLine updated          ← 17ms 后真正的行才到
-        //   20:09:05.346  deferred 2.968s -> text(173.29)          ← 配额已烧完 → 落在句中
+        //   20:09:05.314  rebuild: icon(38.5) -> text(195.22)      —— 按"这一瞬"的行建了
+        //   20:09:05.331  coordinator currentLine updated          —— 17ms 后真正的行才到
+        //   20:09:05.346  deferred 2.968s -> text(173.29)          —— 配额已烧完 到 落在句中
         //
         // 成因是**两条链路的节奏差**:播放状态一变 `refresh()` 立刻就跑(@Published 直通),
         // 而"现在该显示第几句"要等歌词引擎 20Hz `fastTick` 的下一拍。于是边界上的第一次
@@ -693,19 +687,19 @@ final class MenuBarStatusItem: NSObject {
         //
         // **同一个病还有第二处,终验时才抓到**:换歌那一下也在赛跑,只是两边都是
         // 歌词槽,所以上面那个"离开图标槽"的条件盖不到 ——
-        //   21:49:01.273  rebuild: text(307.8) -> text(160.2)   ← 「♪ 歌名」占位,按它的宽建了
-        //   21:49:01.295  decide:  text(160.2) -> text(272.0)   ← **22ms** 后下一句的宽才知道
+        //   21:49:01.273  rebuild: text(307.8) -> text(160.2)   —— 「♪ 歌名」占位,按它的宽建了
+        //   21:49:01.295  decide:  text(160.2) -> text(272.0)   —— **22ms** 后下一句的宽才知道
         //   21:49:01.295  deferred 2.978s
-        //   21:49:04.325  rebuild: text(160.2) -> text(272.0)   ← 3 秒后才跳到位
+        //   21:49:04.325  rebuild: text(160.2) -> text(272.0)   —— 3 秒后才跳到位
         // 「占位槽按下一句定宽」本来就是为这一幕做的,但换歌那一刻新歌的歌词
         // 还没解析出来,`upcomingW` 拿不到值。所以判据从"离开图标槽"扩成**"目标还不作数"**:
         // 占位内容(targetIsProvisional)同样等一个落定窗再建。
         //
-        // ⚠️ 收进图标槽有它自己的收缩观察窗(collapseDelay),两者目的不同:那个是"别为一段
+        // 收进图标槽有它自己的收缩观察窗(collapseDelay),两者目的不同:那个是"别为一段
         // 一两秒的间隙白收一次",这个是"别按还没落定的目标建"。
-        // ⚠️ 窗口**不因目标变化重新计时**:那样目标一直在变就永远建不出来。固定窗 + 到点取
+        // 窗口**不因目标变化重新计时**:那样目标一直在变就永远建不出来。固定窗 + 到点取
         // 最新值,既没有饿死的可能,也正好拿到落定后的那个值。
-        // ⚠️ 窗口**一旦开了就粘住**(`iconExitSettleBegan != nil`):开窗的那一拍目标是"不作数"的,
+        // 窗口**一旦开了就粘住**(`iconExitSettleBegan != nil`):开窗的那一拍目标是"不作数"的,
         // 下一拍算出来的往往已经作数了 —— 若只看当拍的 provisional,窗口会在第二拍当场失效、
         // 立刻建一次,等于没等。实测那一幕:14.980 建、14.996 开窗、15.132 就建了。
         let settleOpen = iconExitSettleBegan != nil
@@ -745,21 +739,20 @@ final class MenuBarStatusItem: NSObject {
                 // 都走到,notice 级会让它逐句落盘。错位排查真正要对时间线的是"重建何时
                 // 执行"(下面那条,3s 至多一次,保持 notice);推迟细节要看时开 debug 采集。
                 logger.debug("slot rebuild deferred \(delay, privacy: .public)s: \(self.displayClass, privacy: .public) -> \(cls, privacy: .public)(\(length, privacy: .public))")
-                // 推迟的只是**几何**,内容不等(现象是"3s 延迟之后歌词
-                // 有时不及时更新"——自适应模式逐句都是几何变化,内容跟着几何一起等
-                // 就是逐句都可能晚 3s):目标是图标就把图标画进还没变的槽里(图标在
+                // 推迟的只是**几何**,内容不等(自适应模式逐句都是几何变化,内容若跟着
+                // 几何一起等,就会逐句都可能晚 3s):目标是图标就把图标画进还没变的槽里(图标在
                 // 任意槽宽下都居中,见 showIcon);目标是歌词就按**当前槽宽**先画一版
                 // 过渡(interim,装得下居中静止、装不下就地滚),槽宽跟上后 refresh
                 // 会按目标重画。
                 if let button = statusItem?.button {
                     if cls == "icon" {
-                        // ⚠️ 歌词消失之后,**内容**和**几何**各有各的保持时长:
+                        // 歌词消失之后,**内容**和**几何**各有各的保持时长:
                         //   · 内容:满 iconContentHoldSecs(3s,用户选的)才换成图标 —— 在那之前
                         //     一笔都不画,上一句留在原地,一两秒的间隙/ 假暂停整个看不出来;
                         //   · 几何:满 collapseDelay(slotReleaseSecs 8s)才缩窄 —— 中间这 5 秒里
                         //     图标画在**还没缩的宽槽**里。
                         // 拉开这两个数才对:实测的假暂停 1.9~6.5 秒,只要槽宽没缩,
-                        // 恢复那一刻目标宽度跟原来相同 → needsRebuild 为假 → **零重建**,邻居一个
+                        // 恢复那一刻目标宽度跟原来相同 到 needsRebuild 为假 到 **零重建**,邻居一个
                         // 像素都不动;而共用 3 秒时,4 秒的假暂停必然缩一次再弹回来。
                         //
                         // 判据只认 observeRemaining / 窗口已开多久,不认 delay:delay 还含重建静默
@@ -791,37 +784,21 @@ final class MenuBarStatusItem: NSObject {
     ///
     /// ## macOS 27 以前(14 / 15 / 26):重建会把这一项"记住的位置"抹掉,必须自己保住
     ///
-    /// 现象是"另一台 macOS 26.5.1 的机器上,状态栏项每次重建都跳到菜单栏最左侧,⌘拖回去
-    /// 下次重建又跳",这台 27 的开发机复现不出来。往两台机器各部署了七轮文件日志(系统日志
-    /// 在那台机器上已损坏、走不通)才钉死,证据链:
-    ///
-    ///  - 两台机器重建后都是先出现在 x=0、约 0.3~1s 后落位;27 上落位时**右边缘守住不动**
-    ///    (1253→1253),26.5.1 上不管用户之前把它拖到哪(1059 / 1146 两次实测),落点都是
-    ///    同一个固定位置(右边缘 1028,离屏幕右缘 484pt,即"新项默认插入点"=最左)。
-    ///  - 27 以前记位置用的是 AppKit 老式的 App 自有 UserDefaults 键
-    ///    `NSStatusItem Preferred Position <autosaveName>`(值 = 右边缘到屏幕右缘的距离,
-    ///    实测拖到 1146 后存值 313 ≈ 1512−1201);27 起改由系统 MenuBarAgent 集中管理
-    ///    (`com.apple.MenuBarAgent` → `TrailingItemPreferredPositions`),App 这边的键不再出现。
-    ///  - **决定性的一条**:重建前这个键在(而且跟着用户的拖拽在更新),重建之后它**没了**,
-    ///    之后 5 秒内也没被写回。新项设 autosaveName 时查不到任何记住的位置 → 按默认插入点
-    ///    放到最左。App 启动那一次之所以正常,是因为还没发生过 remove、上一次会话留下的键完好。
-    ///  - 删键的时机不是 `removeStatusItem` 当场,而是**旧项 dealloc**(`statusItem = item`
-    ///    赋值、最后一个强引用消失那一刻)——"remove 之后立刻把键写回"那版实测仍然被删。
+    /// 27 以前记位置用的是 AppKit 老式的 App 自有 UserDefaults 键
+    /// `NSStatusItem Preferred Position <autosaveName>`;27 起改由系统 MenuBarAgent 集中管理
+    /// (`com.apple.MenuBarAgent` 到 `TrailingItemPreferredPositions`),App 这边的键不再出现。
+    /// 老机制下,这个键在重建时会被删掉(删键时机是**旧项 dealloc**,不是 `removeStatusItem`
+    /// 当场),新项设 autosaveName 时因此查不到任何记住的位置 到 按默认插入点放到最左。
     ///
     /// 修法:与其猜 AppKit 什么时候删、删几次,不如让新旧两项**不同名**。老机制下每次重建换
     /// 一代 autosaveName(`<基名>-g<N>`,N 持久化,重启后首次建项沿用),并在建新项**之前**把
     /// 位置写到新名字的键下——旧项 dealloc 删的是自己那条,碰不到新项的;新项第一次登记这个
     /// 名字,系统一定去 defaults 里读。写的是 App 自己的 defaults,不碰私有 API。
     /// 27+(MenuBarAgent 机制)不换代:位置在系统 plist 里、按固定名字管,换名字只会往那里多
-    /// 登记垃圾、App 自己清不掉,而且 27 上本来就没这个 bug。老机制下键还不存在(装完还没
+    /// 登记垃圾、App 自己清不掉,而且 27 上没有这个 bug。老机制下键还不存在(装完还没
     /// 拖过)时没什么可带,也不换代,等用户拖过一次就有了。
     ///
-    /// 在 26.5.1 真机上验证通过:重建前右边缘 1115,重建后 1s 起稳定在 1115
-    /// (存值 399 ≈ 1512−1115),图标留在用户拖的位置。
-    ///
-    /// ⚠️ 排查期间走过几条岔路,记一笔免得重走:①"下一个 runloop 就读 window.frame"两台
-    /// 都读 0,那是采样太早不是卡死,至少要 0.3s 才落位;②一度把"1s 后稳定"当成"归位",其实
-    /// 是稳定在错的位置,"稳"和"对"要分开看;③"推迟到下一拍再建"没用,病根不在时序在删键。
+    /// 完整的跨机型/跨系统版本调查证据链见 docs/features/06-menubar.md 决策 30。
     private func rebuildStatusItem(length: CGFloat) {
         let defaults = UserDefaults.standard
         let preservedPosition = Self.usesLegacyPositionDefaults
@@ -876,8 +853,8 @@ final class MenuBarStatusItem: NSObject {
             // 只占歌词那一格(见 evaluateHoverEngagement 里 setSlot 那一行),图标那一块不在
             // 任何一个键的矩形里,不用为它单开分支("点击图标范围之后
             // 依旧是唤起面板")。
-            // ⚠️ 点击位置**必须**从屏幕坐标换算,**不能**用 `event.locationInWindow`
-            // (实测坐实,现象是"点了暂停,实际是上一首")。同一次点击两条路的结果:
+            // 点击位置**必须**从屏幕坐标换算,**不能**用 `event.locationInWindow`
+            // 。同一次点击两条路的结果:
             //   viaEvent  = (72, 11)      —— 而且**连点两次恒为同一个值**,真实点击不可能
             //                                像素级相同,说明这个坐标根本不在 button.window
             //                                这个坐标系里(macOS 26 起菜单栏由 MenuBarAgent 托管)
@@ -925,7 +902,7 @@ final class MenuBarStatusItem: NSObject {
 
     /// 进出都**不等**:指针一进来当场换成三个键,一离开当场变回歌词。
     ///
-    /// ⚠️ 进入这一侧**不要**压延时(照灵动岛 hover 展开那档 `hoverEnterDelay` 0.12s 取
+    /// 进入这一侧**不要**压延时(照灵动岛 hover 展开那档 `hoverEnterDelay` 0.12s 取
     /// 0.2s 那种)。那个理由听着成立——"菜单栏上路过比停下常见,指针横穿去点右边别的
     /// App 图标时会扫过这一项,不等一下就是歌词闪一下变三个键再闪回来"。实测后要求
     /// **去掉延迟**("我们这个悬浮上去目前有个延迟在变成控制键,帮我去掉延迟")——手感上
@@ -949,8 +926,8 @@ final class MenuBarStatusItem: NSObject {
     ///     一句 ♪ 的槽宽只有二三十点)。开着「歌词旁的图标」时这一格比整个按钮窄一截
     ///     (图标宽 + 5pt 间距),门槛按窄的那个算。
     ///
-    /// ⚠️ 第 4、5 条合起来还有一个副作用值得知道:**暂停之后歌词槽会收成图标槽**(refresh()
-    /// 里那道 lyricsActive guard,收缩延时 3s),所以"暂停 → 想再点播放"这条路只在指针
+    /// 第 4、5 条合起来还有一个副作用值得知道:**暂停之后歌词槽会收成图标槽**(refresh()
+    /// 里那道 lyricsActive guard,收缩延时 3s),所以"暂停 到 想再点播放"这条路只在指针
     /// 一直停在这一项上时才走得通 —— 接管期间 refresh() 早退,那次收缩根本不会发生,三个
     /// 键就停在原地等着。指针一离开,收缩才照旧进行。
     private func evaluateHoverEngagement() {
@@ -984,12 +961,12 @@ final class MenuBarStatusItem: NSObject {
 
     /// 歌词那一格在按钮里的位置(纵向给满)。三个键就排在这一格里。
     ///
-    /// ⚠️ **从槽宽 `item.length` 反推,绝不问歌词层要**(修 bug 时改的)。
+    /// **从槽宽 `item.length` 反推,绝不问歌词层要**(修 bug 时改的)。
     /// 歌词层那份几何按 `plan` 算,而 `plan` 是易失的:悬停接管时被清一次(只留图标)、
     /// 暂停收成图标那条路又清一次;偏偏 `displayClass` 因为重建节流还停在陈旧的 `"fixed"`,
     /// 于是"该不该接管"说是、"歌词格在哪"却答不上来,退回整个按钮居中 —— 三个键的位置
-    /// 就在两套之间跳(实测 `48.5/72.5/96.5` ↔ `36/60/84`,差 12.5pt 正好够点到隔壁键,
-    /// 现象是"点了暂停,生效的是上一首")。槽宽是这一项的硬事实,只有重建才变,而重建
+    /// 就在两套之间跳(实测 `48.5/72.5/96.5` 与 `36/60/84`,差 12.5pt 正好够点到隔壁键)。
+    /// 槽宽是这一项的硬事实,只有重建才变,而重建
     /// 期间本来就不接管。算式与歌词层摆图层共用一份,在 `MenuBarHoverControls.lyricsSlot`。
     ///
     /// `item.length - lyricsSlotPadding` 这个反推口径跟 `renderInterimLyrics` 里那条一致
@@ -1012,7 +989,7 @@ final class MenuBarStatusItem: NSObject {
     /// 撑宽度的透明占位图都原样留着 —— 否则 hover 一进一出就是连发两次状态栏项重建,正撞
     /// present 头注第 2 条铁律(两次重建相隔 ~1s 会把邻居的**像素**晾在旧位置且不自愈)。
     private func hideLyricsForHoverControls() {
-        // ⚠️ 开着「歌词旁的图标」时只收歌词、**把图标留在原地**("如果有
+        // 开着「歌词旁的图标」时只收歌词、**把图标留在原地**("如果有
         // 开启左右侧图标的话,悬浮之后图标依旧保留,只是歌词部分变为控制键")。那枚图标就画在
         // scrollingLabel 自己的图层上,`clear()` 会连它一起抹掉 —— 这也正是刚接上时它会跟着
         // 歌词一起消失的原因。判据读**这一层的实际状态**而不是设置值:设置刚改完、还没走到
@@ -1049,7 +1026,7 @@ final class MenuBarStatusItem: NSObject {
     /// 一个"没有生效"的听觉反馈。必须用异步版 checkForCurrentPlayerSafely(同步版可能永久
     /// 挂起主线程,坑在它定义处)。
     ///
-    /// ⚠️ 这已经是这段守卫的第四份(另三份在 LyricsOverlayWindowController.withMusicPermission、
+    /// 这已经是这段守卫的第四份(另三份在 LyricsOverlayWindowController.withMusicPermission、
     /// NotchLyricsView.controlButton、GlobalHotkeys)。抽成公共函数要同时动那三个文件、且它们
     /// 各自的 Task 隔离标注不同 —— 记一笔,下次碰到这三处之一时一起收。
     private func withMusicPermission(_ action: @escaping @MainActor () -> Void) {
@@ -1089,7 +1066,7 @@ final class MenuBarStatusItem: NSObject {
     /// `presentation`、重建卡拉OK填色路径,再把 `pendingRefresh` 取消重排一次。结果相同,
     /// 白算 3 遍。
     ///
-    /// ⚠️ **只有订阅走这条,直接调用点一律保持同步**,因为有两处依赖同步语义:
+    /// **只有订阅走这条,直接调用点一律保持同步**,因为有两处依赖同步语义:
     /// ① `start()` 末尾那次 —— 紧接着就要读 `statusItem?.button`(见那里的注释);
     /// ② `setPanelOpen(false)` 那次 —— 注释写明"顺序在 refresh() 之后",
     ///    `evaluateHoverEngagement()` 必须看到 refresh 已经画完的内容,否则两次内容重画
@@ -1115,13 +1092,13 @@ final class MenuBarStatusItem: NSObject {
         //
         // 歌词和几何都停在接管那一刻,退出接管时 evaluateHoverEngagement 补一次 refresh()
         // 把这段时间的变化一次性落地(跟面板开着期间挡下几何变化同一个模型)。
-        // ⚠️ 中间那个键的 ⏸/▶ 不靠这条路更新 —— 它有自己的订阅(isPlayingSmoothed)。
+        // 中间那个键的 ⏸/▶ 不靠这条路更新 —— 它有自己的订阅(isPlayingSmoothed)。
         guard !hoverControlsEngaged else { return }
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
         // 单行展示面取 compactLine(唱完就切走,见 CompactLyricLead)。
         //
-        // ⚠️ 长间奏中段 compactLine 是 nil,这里**必须**给一个非空的 ♪ 而不是空串:空串会
+        // 长间奏中段 compactLine 是 nil,这里**必须**给一个非空的 ♪ 而不是空串:空串会
         // 落进下面那条 `guard ... lyricsActive` 把整个歌词槽收回成小图标(一次状态项重建),
         // 而长间奏动辄十几秒 —— 表现就是菜单栏歌词塌掉、过一会儿又弹回来。给 ♪ 则槽位留着,
         // 视觉上也跟灵动岛那边的占位一致。
@@ -1209,7 +1186,7 @@ final class MenuBarStatusItem: NSObject {
             let secondaryW = rowState.secondaryText.map {
                 MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
             } ?? 0
-            // ⚠️ 副行是**「下一句」**时不许它撑宽槽位(「宽不再被下一句撑大」)。
+            // 副行是**「下一句」**时不许它撑宽槽位(「宽不再被下一句撑大」)。
             // 那一句马上就会变成主行、到时候自然把槽撑宽;现在就为它占地方,等于当前这一行短的
             // 时候也按下一行的长度占着,菜单栏上白占一大块。装不下就走尾部渐隐,那条路本来就有。
             // 译文 / 罗马音**不同**:它们是**这一句自己的**内容,不给宽度就永远只能看到半截,
@@ -1227,7 +1204,7 @@ final class MenuBarStatusItem: NSObject {
                 isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
             // 同一首歌内只涨不缩(用户要「不能跳来跳去」)。判据、代价与
             // "为什么是换歌而不是换行重置"都在 MenuBarSlotFloor 的声明处。
-            // ⚠️ 只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
+            // 只套在**自适应**这条(.text)分支上:.fixed 那条的槽宽本来就是常量。
             let naturalSlotW = textW + reserved + Self.lyricsSlotPadding
             let w = slotFloor.width(
                 target: naturalSlotW,
@@ -1248,9 +1225,9 @@ final class MenuBarStatusItem: NSObject {
                 // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
                 // 可以叠强调色) —— 改走图层渲染,窗口宽就取文字自身宽:槽宽公式跟上面
                 // 完全一致,footprint 逐像素不变,只是画的人从按钮换成了 scrollingLabel。
-                // ⚠️ **进度图标也走这条岔路**,理由一模一样:一枚要按进度
+                // **进度图标也走这条岔路**,理由一模一样:一枚要按进度
                 // 半染色的图标同样塞不进 button.title/image 那条 AppKit 自绘的路。
-                // ⚠️ **双排也走**:button.title 只能画一行。
+                // **双排也走**:button.title 只能画一行。
                 present(class: "text", length: w, collapseDelay: 0,
                         dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
@@ -1278,7 +1255,7 @@ final class MenuBarStatusItem: NSObject {
     }
 
     /// 几何变化被推迟期间的过渡渲染:把**最新**这句歌词按当前(还没变的)槽宽画出来,
-    /// 让内容永远实时、只有槽宽在等静默窗。装得下→居中静止;装不下→在当前槽里滚。
+    /// 让内容永远实时、只有槽宽在等静默窗。装得下到居中静止;装不下到在当前槽里滚。
     /// 只在当前已是歌词槽(text/fixed)时有意义 —— 当前是图标槽(38pt)时不硬塞:
     /// 20pt 的窗里滚歌词只会闪成一条缝,保持图标到重建(首句最多晚一个静默窗,只发生
     /// 在"收缩后 3s 内歌词又回来"的边缘场景)。
@@ -1287,8 +1264,8 @@ final class MenuBarStatusItem: NSObject {
     /// 治的是这一幕(实测原样,菜单栏日志):
     ///
     /// ```
-    /// slot rebuild: icon(38.5) -> text(112.423461)      ← 「♪ 歌名」兜底,槽宽按占位文字算
-    /// slot rebuild: text(112.42) -> fixed(223.500000)   ← 第一句一来,槽宽当场 ×2
+    /// slot rebuild: icon(38.5) -> text(112.423461)      —— 「♪ 歌名」兜底,槽宽按占位文字算
+    /// slot rebuild: text(112.42) -> fixed(223.500000)   —— 第一句一来,槽宽当场 ×2
     /// ```
     ///
     /// 占位文字(「♪ 歌名」或间奏的 ♪)的宽度跟**即将到来的歌词**毫无关系,所以那一次槽宽
@@ -1297,14 +1274,14 @@ final class MenuBarStatusItem: NSObject {
     /// **之前**(这里 —— 占位期间就把槽撑到位,歌词一出现几何已经对了,只渲染一次)。
     ///
     /// 这是 `MenuBarSlotPolicy` 那条不变式管不到的一半:它只在两个**歌词槽**之间生效,
-    /// 图标↔占位↔歌词这几跳不受它管。
+    /// 图标与占位与歌词这几跳不受它管。
     ///
-    /// ⚠️ **代价**:占位期间这一项比它自己需要的宽 —— 「♪ 歌名」会居中浮在一个按下一句
+    /// **代价**:占位期间这一项比它自己需要的宽 —— 「♪ 歌名」会居中浮在一个按下一句
     /// 尺寸开出来的槽里。这跟自适应模式"省空间"的初衷有点冲突,但换来的是**邻居少挪一次**
-    /// (icon → 宽槽,而不是 icon → 窄槽 → 宽槽)和歌词只渲染一次,这是刻意选的
+    /// (icon 到 宽槽,而不是 icon 到 窄槽 到 宽槽)和歌词只渲染一次,这是刻意选的
     /// 后者。真要回退,把这个函数恒返回 0 即可,其余代码不用动。
     ///
-    /// ⚠️ 上限仍是「最大宽度」(调用点 `min(settings.menuBarLyricsWidth, ...)`):下一句超出上限时
+    /// 上限仍是「最大宽度」(调用点 `min(settings.menuBarLyricsWidth, ...)`):下一句超出上限时
     /// 槽就等于最大宽度,而那一句到时候会是 `.fixed`(槽宽也是最大宽度)—— 两边算出同一个数,
     /// 配合"长度相同不重建"那条,连形态翻转那次重建都省掉了。
     ///
@@ -1392,7 +1369,7 @@ final class MenuBarStatusItem: NSObject {
         // 一张透明占位图撑宽度、文字画在图层上),这里显式改回来,让"这一模式只有文字"
         // 这件事写在代码里,而不是靠别处的残留值。
         //
-        // ⚠️ 老实说一句:实测(离线位图探针,逐像素数非透明占比)**不改也能画出
+        // 老实说一句:实测(离线位图探针,逐像素数非透明占比)**不改也能画出
         // 文字** —— image 为 nil 时 AppKit 会无视 .imageOnly 照样画 title,两种写法的
         // 渲染结果和按钮宽度完全一样。所以这一行不是在修一个看得见的 bug,是不想把
         // "两个模式之间靠遗留状态碰巧对上"这件事留在代码里。
@@ -1421,16 +1398,16 @@ final class MenuBarStatusItem: NSObject {
     /// 正常路径:这一格恒占 windowWidth,文字画在图层上。装得下就静止(pacing == nil),
     /// 装不下就交给 Core Animation 滚。
     ///
-    /// ⚠️ 装得下的句子**也**走这里,不走 button.title —— 这正是"固定宽度"的实现点。
+    /// 装得下的句子**也**走这里,不走 button.title —— 这正是"固定宽度"的实现点。
     /// button.title 那条路的宽度跟着文字走(实测同一首歌连着三句是 231/145/207pt),
-    /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃(现象是)。
+    /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃。
     private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 icon: MenuBarScrollingLabel.IconBadge? = nil) {
         liveIconView.clear()
-        // ⚠️ 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
+        // 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
         // 状态栏项按 button.image 的尺寸算自己该占多宽。给它一张宽度恒为 windowWidth 的
         // 空图,这一项的 footprint 就跟内容彻底脱钩了,而且不用去猜系统给状态栏按钮留了
         // 多少内边距(那是算不出来的,只能让 AppKit 自己算)。

@@ -2,12 +2,10 @@ package main
 
 import "testing"
 
-// 真实故障(周杰伦《简单爱 (Live)》/《The One 周杰伦演唱会》,「搜索候选歌词」
-// 弹窗 8 个源只有酷狗回了一条错场次的「无与伦比演唱会」版):这首歌在网易云明明存在
-// (album 18906 / song 186043,自报 273.0s 与本地 273.227s 只差 0.227s,52 行 LRC),但
-// 曲目搜索被 UGC 翻做/仿冒号刷屏,四条查询词各自的前 30 条里官方版一次都没出现——搜索
-// 召回失败不等于曲库没有。anchorAlbumTrackForLocalTitle 是补这个缺口的专辑锚定判据,
-// 见其头注。
+// 网易云的曲目搜索有时会被 UGC 翻唱/仿冒版刷屏(例如周杰伦《简单爱 (Live)》查询,
+// 四条查询词各自的前 30 条里官方版一次都没出现),搜索召回失败不等于曲库没有——这首歌
+// 其实明明存在(album 18906 / song 186043,自报 273.0s 与本地 273.227s 只差 0.227s,
+// 52 行 LRC)。anchorAlbumTrackForLocalTitle 是补这个缺口的专辑锚定判据,见其头注。
 func TestAnchorAlbumTrackForLocalTitle(t *testing.T) {
 	// 按 /api/album/18906 的真实数据裁剪(时长取真实值)。
 	theOne := []albumTrack{

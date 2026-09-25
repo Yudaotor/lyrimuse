@@ -25,6 +25,18 @@
 // 加载的 dylib 里就拿到真值。这跟 media-control 自己要绕一层 perl 是同一个原因。
 //
 // 输出:一行 JSON。给了 bundle id 就只输出那一个(拿不到则 `null`),没给就输出全部,便于诊断。
+//
+// ## 待播队列(`LYRIMUSE_NOWPLAYING_QUEUE=N`,必须同时给 bundle id)
+//
+//   MRPlaybackQueueRequestCreate(location, length)       location 相对当前这首:0 = 当前这首
+//   MRPlaybackQueueRequestSetIncludeMetadata(request, 1)
+//   MRMediaRemoteRequestNowPlayingPlaybackQueue(request, client, origin, queue, ^(playbackQueue, error))
+//   MRPlaybackQueueCopyContentItems(playbackQueue) → 每项 MRContentItemCopyNowPlayingInfo
+//
+// 请求那个也是**五个参数**:反汇编它的函数序言,x1 / x2 被拿去拼一个播放器路径(client、origin),
+// x3 / x4 各被 retain / copy 一次(queue 与 block)。按 client 问就不受系统焦点被别的 App 抢走的影响。
+// 输出 `{"items":[{title, artist, album, duration, identifier}…]}`,第一项是当前这首,供调用方核对。
+// 实测只有 Apple Music 真的给队列(打乱之后的真实顺序,一次最多 40 首左右);Spotify / 酷狗只给当前这一首。
 
 #import <Foundation/Foundation.h>
 #import <objc/message.h>

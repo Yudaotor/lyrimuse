@@ -13,7 +13,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	saved := features
 	t.Cleanup(func() { features = saved })
 
-	// 版本落后 → 不 pin 该重选。
+	// 版本落后 到 不 pin 该重选。
 	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
 	if !needsLyricsRescore(stale, false, true) {
 		t.Fatal("前提不成立：版本落后的条目本来就该重选，测试用例失效")
@@ -22,7 +22,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		t.Error("已校准的条目不该被 rescore 换掉歌词")
 	}
 
-	// 同源当初落选 → 不 pin 该重试。这一条尤其要紧：它是刻意越过「已经有逐字就不重试」
+	// 同源当初落选 到 不 pin 该重试。这一条尤其要紧：它是刻意越过「已经有逐字就不重试」
 	// 那道闸的，pin 要是排在那两条后面就会被一起越过。
 	savedNative := nativeLyricSources
 	t.Cleanup(func() { nativeLyricSources = savedNative })
@@ -104,7 +104,7 @@ func TestLyricsPinnedRereadsWhenFileChanges(t *testing.T) {
 		t.Error("文件里没有的 key 不该判成已校准")
 	}
 
-	// 用户把校正值清成 0 → App 把这条从名单里去掉 → 这边**不重启**也要立刻跟上。
+	// 用户把校正值清成 0 到 App 把这条从名单里去掉 到 这边**不重启**也要立刻跟上。
 	write(`{"version":1,"pins":{}}`, base.Add(time.Minute))
 	if lyricsPinned("周杰伦|退后|依然范特西") {
 		t.Error("文件已经改过（key 被去掉），该按新内容判定")

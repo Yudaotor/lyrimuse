@@ -23,7 +23,7 @@ import (
 // 防视频守卫:信任的非内置播放器,artist 或 album 有一个为空就整条丢掉。而 YouTube Music
 // 经 MediaSession 报出来的 album **常常是空的**,于是被当成"浏览器里的视频"挡在门外。
 //
-// ⚠️ 是"常常"不是"总是"(别写成"恒为空"):同一个 Chrome 里
+// 是"常常"不是"总是"(别写成"恒为空"):同一个 Chrome 里
 // 播 YT Music,「死神」「September」的 album 是空的,而「Bad」报的是
 // `The Essential Michael Jackson`。所以这不是"YT Music 一律进不来",是"看运气"——报了专辑名
 // 的那些本来就能进,这条复核是给报不出来的那些兜底。
@@ -44,7 +44,7 @@ import (
 // "KAO Hong Kong 的一首歌"收下 —— 跟仓库里已记录的 Spotify 事故同一个形态(用户曾在
 // 「最近播放」看到 `Now Streaming on Hulu.` / `BLIZZARD® Double Flip Deal BOGO for 99¢`)。
 //
-// ⚠️ 别指望 `minTrackSecs = 30` 兜住:那条 Liese 广告是 **30.021 秒**,比 30 秒地板高
+// 别指望 `minTrackSecs = 30` 兜住:那条 Liese 广告是 **30.021 秒**,比 30 秒地板高
 // 21 毫秒,照样过闸(打卡阈值 min(时长/2,240)=15s,播满就超)。YouTube 的标准 30 秒广告位
 // 基本都会这样贴着线过去。
 //
@@ -93,23 +93,23 @@ const (
 	ytmusicAdProbeEventTimeout = 4
 )
 
-// ytmusicAdProbeJS ——⚠️ **返回值绝不能含双引号**。`execute … javascript` 把 JS 返回的
+// ytmusicAdProbeJS —— **返回值绝不能含双引号**。`execute … javascript` 把 JS 返回的
 // 字符串再包一层 AppleScript 字符串时,会把里面已有的双引号**真的**转义成反斜杠(不是
 // 显示转义,是字符串本身多了真实的 `\`),等于整段被二次转义,拿去跟手写字面量比 contains
 // 会稳定判 false。Swift 侧 youtubeMusicScript 为此专门放弃了 JSON.stringify,改用竖线
 // 分隔的裸文本;这里照抄同一条纪律。
 //
-// ⚠️ 同理,JS 里的字符串字面量**只用单引号** —— 整段要嵌进 AppleScript 的双引号字符串。
+// 同理,JS 里的字符串字面量**只用单引号** —— 整段要嵌进 AppleScript 的双引号字符串。
 //
 // 返回 `a|b|c|album`:前三段各为 0/1(ad-showing / 广告徽章 / 裸标题),第四段是**页面上
 // 读到的专辑名**(加,可能为空)。判定留给 Go 侧(parseYTMusicAdProbe),这样
 // 这条规则是可单测的,不是埋在一段没法跑测试的 JS 里。
-// 页面上压根找不到播放器 → `NOTFOUND`,让调用方走 fail-closed。
+// 页面上压根找不到播放器 到 `NOTFOUND`,让调用方走 fail-closed。
 //
-// ⚠️ **专辑名必须放最后一段**:它是任意文本、理论上可以含 `|`,解析那边按"最多切 4 段"
+// **专辑名必须放最后一段**:它是任意文本、理论上可以含 `|`,解析那边按"最多切 4 段"
 // 切,第四段原样保留。
 //
-// ⚠️ 找专辑用**遍历 + indexOf**,不用 CSS 属性选择器 `a[href*=...]`:选择器里那个值含
+// 找专辑用**遍历 + indexOf**,不用 CSS 属性选择器 `a[href*=...]`:选择器里那个值含
 // `/`,不加引号不是合法 CSS 标识符,而加引号只能加单引号 —— 单引号已经被外面那层 JS
 // 字符串占了。认专辑靠 `browse/MPREb` 前缀:YouTube Music 的**专辑** browse id 一律以
 // `MPREb_` 开头,歌手链接是 `channel/UC…`,所以既跟语言无关(不受 byline 里「2026年」这类
@@ -137,9 +137,10 @@ const ytmusicAdProbeJS = `(function(){` +
 
 // browserScriptFamily 回答"这个 bundle id 该用哪种 AppleScript 方言"。
 //
-// 清单与 Swift 侧 BrowserAutomationPermission 保持一致(Chromium 系三家 + Safari);
-// 别的浏览器(Firefox 等没有提供脚本命令的)返回空串,调用方静默跳过 —— 跟 Swift 侧
-// `family` 返回 nil 时的处理一致,不特意报"不支持"。
+// 写死的清单与 Swift 侧 BrowserAutomationPermission 保持一致(Chromium 系四家 + Safari);信任列表里的
+// 其他浏览器现场读脚本定义判(trustedBrowserScriptFamily,口径同 Swift 侧 detectedFamily)。判不了的
+// (Firefox 等没有提供脚本命令的)返回空串,调用方静默跳过 —— 跟 Swift 侧 `family` 返回 nil 时的处理
+// 一致,不特意报"不支持"。
 func browserScriptFamily(bundleID string) string {
 	switch bundleID {
 	case "com.google.Chrome", "com.microsoft.edgemac", "company.thebrowser.Browser":
@@ -156,18 +157,18 @@ func browserScriptFamily(bundleID string) string {
 // 三个标志任一为 1 就算广告,理由见文件头注(误判成广告只丢一轮,误判成歌是永久污染)。
 // 形状不认识(空、NOTFOUND、段数不够、前三段非 0/1)一律 unknown —— 不猜。
 //
-// ⚠️ 只切 5 段(SplitN):最后一段是专辑名,是任意文本、可能自带 `|`,原样保留。用普通 Split
+// 只切 5 段(SplitN):最后一段是专辑名,是任意文本、可能自带 `|`,原样保留。用普通 Split
 // 的话专辑名里一个竖线就会让整条读数退化成"形状不对",连带把广告判定一起丢掉。
 //
-// ⚠️ 探针多返回了一段「广告徽章上的计数」(第四段,形如 `1/2`),专辑名因此挪到
+// 探针多返回了一段「广告徽章上的计数」(第四段,形如 `1/2`),专辑名因此挪到
 // 第五段。collector 这边**不消费**那个计数(它只做 gate 和专辑补全,计数是给 App 侧界面用的),
 // 但必须正确跳过它 —— 不改这里的话 SplitN 4 会把 `1/2|专辑名` 整个当成专辑名。
 //
-// ⚠️ **只认 5 段,不给旧形状留兼容分支**(跟 Swift 侧 parse 同一套,理由也同):专辑名里
+// **只认 5 段,不给旧形状留兼容分支**(跟 Swift 侧 parse 同一套,理由也同):专辑名里
 // 自带 `|` 是明确支持的,那时旧的 4 段形状切出来也是 5 段、跟新形状逐字同形,分不开。
 // 少于 5 段就是畸形输入 —— 专辑名取不到,但前三段的判定照样解。
 //
-// ⚠️ 跟 Swift 侧 `YouTubeMusicAdProbe.parse` 是同一套语义,两边必须同时改。
+// 跟 Swift 侧 `YouTubeMusicAdProbe.parse` 是同一套语义,两边必须同时改。
 func parseYTMusicAdProbe(raw string) (ytmusicAdVerdict, string) {
 	s := strings.TrimSpace(raw)
 	// AppleScript 有时会把返回值再包一层双引号,脱掉。
@@ -213,7 +214,7 @@ func parseYTMusicAdVerdict(raw string) ytmusicAdVerdict {
 }
 
 // ytmusicAlbumPatch 回答"要不要拿探针读到的专辑名去补上游那份、补成什么"。
-// 返回空串 = 不动上游那份。⚠️ 跟 Swift 侧 `YouTubeMusicAdProbe.albumPatch` 同一套判据。
+// 返回空串 = 不动上游那份。 跟 Swift 侧 `YouTubeMusicAdProbe.albumPatch` 同一套判据。
 //
 // 起因是现象是「YouTube Music 播一张专辑的时候,第一首歌怎么不上送专辑名」。
 // 当场抓的实测(两张不同专辑、四个采样)坐实那是 **YouTube Music 自己的疏漏**:它开一条新
@@ -299,7 +300,7 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 // 按曲目身份缓存对**音频歌曲**是安全的:广告在 media-control 里是一条**独立的 now-playing 条目**
 // (自己的 title/artist/duration,实测如此),换成广告身份就变了、缓存自然失效。
 //
-// ⚠️ 对**音乐视频(MV)的前贴片广告**不成立(现象是「有视频的歌识别错了,变成广告了」):
+// 对**音乐视频(MV)的前贴片广告**不成立(现象是「有视频的歌识别错了,变成广告了」):
 // 前贴片在 #movie_player 里放,MediaSession 元数据却一直是这首歌自己的 —— 本仓日志 08:30:22～
 // 08:30:37 三轮 `rejected as advertisement (王子 - Why You Wanna Treat Me So Bad?)`,08:31:27 才
 // `now playing`,正好是这 60 秒缓存到期后的第一轮。也就是说同一个 key 下判定会从 ad 翻成 song。
@@ -307,7 +308,7 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 // 之后每轮再问页面 —— 广告本来只有 5～30 秒,前贴片一过下一轮就能放行,而不是白丢 60 秒。
 // Swift 侧 YouTubeMusicAdProbe.refreshInterval(for:) 是同一套分档。
 //
-// ⚠️ **但"两边同时改"只管判据,不管这两个缓存常数**(订正,02 章决策 32)。Swift 侧的
+// **但"两边同时改"只管判据,不管这两个缓存常数**(订正,02 章决策 32)。Swift 侧的
 // 歌档是 45 秒、不再是 60:那边 `kickIfNeeded` 是**异步**的(同步路径不能被一次
 // AppleScript 往返卡住 UI 轮询),再探间隔一旦等于可读有效期就没有重叠窗 —— 判定过期那一拍必然
 // 「读缓存拿到 nil + 这一拍才开始重探」,fail-closed 把快照整条丢掉、三个展示面一起塌成"没有在
@@ -317,7 +318,7 @@ func buildYTMusicAdAppleScript(bundleID, family string) string {
 // 缓存 / 节流策略本来就该各按各的执行模型走。
 const ytmusicAdMaxAge = 60 * time.Second
 
-// ytmusicAdRefreshWhenAd 是"上次判定是广告"时的复用窗口,见 ytmusicAdMaxAge 上面那段⚠️。
+// ytmusicAdRefreshWhenAd 是"上次判定是广告"时的复用窗口,见 ytmusicAdMaxAge 上面那段提醒。
 const ytmusicAdRefreshWhenAd = 5 * time.Second
 
 // ytmusicAdReuseWindow 给出某个缓存判定还能复用多久:歌 60 秒,广告 5 秒。
@@ -373,7 +374,7 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 
 // runYTMusicAdProbe 真正起 osascript。
 //
-// ⚠️ 脚本**写进临时文件**再执行,不用 `osascript -e`:这段 AppleScript 里嵌着一整段 JS、
+// 脚本**写进临时文件**再执行,不用 `osascript -e`:这段 AppleScript 里嵌着一整段 JS、
 // JS 里又有单引号和逗号,拿 -e 传要在 shell/exec 层再套一层引号,是本仓库明确记过的
 // "多层引号把 payload 打坏"那类坑。写文件是零转义的。
 func runYTMusicAdProbe(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string) {
@@ -415,10 +416,10 @@ func runYTMusicAdProbe(ctx context.Context, bundleID, family string) (ytmusicAdV
 // 所以基础判据原样不动,复核作为**外面一层**加上去。
 //
 // 复核只在一种情况下发生:基础判据要拒、而且**唯一的理由是 album 为空**(artist 非空)。
-//   - artist 为空 → 一律拒,不复核。真曲目必有歌手,而这也挡住了"广告连频道名都没报"那档,
+//   - artist 为空 到 一律拒,不复核。真曲目必有歌手,而这也挡住了"广告连频道名都没报"那档,
 //     省掉一次 AppleScript 往返。
-//   - 复核结果 isSong → 放行(这就是 YouTube Music 终于能被识别的那一步)。
-//   - isAd 或 unknown → 拒。**unknown 也拒**是刻意的 fail-closed,见文件头注。
+//   - 复核结果 isSong 到 放行(这就是 YouTube Music 终于能被识别的那一步)。
+//   - isAd 或 unknown 到 拒。**unknown 也拒**是刻意的 fail-closed,见文件头注。
 //
 // 第二个返回值是**要补给上游的专辑名**(空串 = 不用补),见 ytmusicAlbumPatch。这条复核
 // 本来就只在"album 为空"时才发生,正好是需要补的那一刻,顺路带回来不多花一次 AppleScript。

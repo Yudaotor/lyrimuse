@@ -12,7 +12,7 @@ import Foundation
 public enum KaraokeFill {
     /// 逐字时长下限——只影响这一个词自己的填色速度,不改 startMs、不影响下一个词何时
     /// 开始。英文歌词(NetEase/QQ/酷狗给的逐字对齐)比中文更容易出现 durationMs==0 或
-    /// 几十毫秒的极短词(介词/冠词一类),硬边界瞬间 0→1 在这种词密集的句子里会显得更"跳"。
+    /// 几十毫秒的极短词(介词/冠词一类),硬边界瞬间 0到1 在这种词密集的句子里会显得更"跳"。
     public static let minWordDurationMs = 80
 
     /// 一行的最后一个字必须在换行前多久填满。30Hz 下 140ms ≈ 4 帧 —— 足够真的看见
@@ -38,7 +38,7 @@ public enum KaraokeFill {
     /// 合计约四成的行都会表现成现象是"最后一点不走完就下一句"。有些歌是 100%(实测
     /// Dijon/Daniel Caesar 的几张专辑整张都是)。
     ///
-    /// ⚠️ 只**缩**最后一个字的终点,不动 startMs、不动换行时刻、不碰其它字 —— 下一句一秒
+    /// 只**缩**最后一个字的终点,不动 startMs、不动换行时刻、不碰其它字 —— 下一句一秒
     /// 都不会迟到。真正越过太多的行(压完不足 minTailFillMs)按下限兜住:那种情况下"填满"
     /// 和"不跳变"没法同时满足,宁可不跳变。
     public static func tailClamped(_ words: [SyncedLyricWord], nextLineStartMs: Int?) -> [SyncedLyricWord] {

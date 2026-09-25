@@ -115,7 +115,7 @@ func TestITunesSearchBackoff(t *testing.T) {
 // TestNonLyricAppleHostsStayUnmapped —— 那边一并覆盖 music.apple.com / mvod / mzstatic,
 // 是这里原有那条的超集。
 //
-// ⚠️ 原来那条还顺手断言了 amp-api.music.apple.com 也不在表里,那是**写错的**:当时它
+// 原来那条还顺手断言了 amp-api.music.apple.com 也不在表里,那是**写错的**:当时它
 // 确实不在,但那是个缺口(applemusic 因此成了唯一从未被熔断过的歌词源),不是该锁住的
 // 正确状态。现在它已经归进 applemusic,由 TestEveryLyricSourceHasAHostMapping 守着。
 
@@ -158,7 +158,7 @@ func TestITunesSearchSkipsRequestWhileCoolingDown(t *testing.T) {
 		if got != nil {
 			t.Errorf("退避中该返回空,得到 %d 条", len(got))
 		}
-		// ⚠️ 退避中的空结果**不是**"Apple 没有这首歌" —— reached 必须为 false,
+		// 退避中的空结果**不是**"Apple 没有这首歌" —— reached 必须为 false,
 		// 否则 appleMusicMatchCached 会把限流期间的每首歌都错记进负缓存。
 		if reached {
 			t.Error("退避中该报 reached=false,空结果不代表 Apple 没有")

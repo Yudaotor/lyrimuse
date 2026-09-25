@@ -42,7 +42,7 @@ func TestVersionTagsCoverClubMixFamily(t *testing.T) {
 		}
 	}
 
-	// ⚠️ 反例守卫:裸「club」绝不能进词表。同一张专辑上的「Earth Song」本地标题没有任何
+	// 反例守卫:裸「club」绝不能进词表。同一张专辑上的「Earth Song」本地标题没有任何
 	// 混音标记,而正确候选是 "Earth Song (Hani's club experience)" —— 收了裸 club 的话,
 	// 本地空集 vs 候选有标记 = 版本不符,-600 会打在**唯一正确**的那条上。
 	if got := titleVersionTags("Earth Song (Hani's club experience)"); len(got) != 0 {

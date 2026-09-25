@@ -108,7 +108,7 @@ func TestTransportFailureCodesAreWired(t *testing.T) {
 		t.Error("sourcebreaker.go 的 observeWith 没有调 noteTransport")
 	}
 	// DNS 轨迹必须真的从 doHTTPTracked 挂上并送进 observeTraced,否则"Client.Timeout 掐断的 DNS 挂住"
-	// 这一类永远归成 connect_failed(见 sourcebreaker.go 最后一节 ⚠️ 段)。
+	// 这一类永远归成 connect_failed(见 sourcebreaker.go 最后一节 段)。
 	obs, err := os.ReadFile("networkobs.go")
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestLyricSourceFailureReasonsWith(t *testing.T) {
 		}
 	}
 
-	// amll 的三个否定分支:只有一边死 / 没有缺 ID 标记 / amll 自己给过候选 → 都不派生。
+	// amll 的三个否定分支:只有一边死 / 没有缺 ID 标记 / amll 自己给过候选 到 都不派生。
 	oneSide := map[string]string{"netease": lyricFailureReasonDNSFailed}
 	if r := lyricSourceFailureReasonsWith(nil, oneSide, enabled, true); r["amll"] != "" {
 		t.Errorf("只有网易云死、QQ 正常:amll 缺 ID 是上游没这首,不该报 upstream_unreachable,得到 %q", r["amll"])
@@ -189,7 +189,7 @@ func TestLyricSourceFailureReasonsWith(t *testing.T) {
 	if r := lyricSourceFailureReasonsWith(amllAnswered, both, enabled, true); r["amll"] != "" {
 		t.Errorf("amll 给过候选就不该报任何代码,得到 %q", r["amll"])
 	}
-	// amll 被关掉 → 不报;网易云 / QQ 的启用状态本身不进判据 —— 只看它们有没有传输层记录
+	// amll 被关掉 到 不报;网易云 / QQ 的启用状态本身不进判据 —— 只看它们有没有传输层记录
 	// (关掉的源不发请求、通常没有记录,那时自然不派生;这里给了记录就得派生)。
 	amllOff := func(s string) bool { return s != "amll" }
 	if r := lyricSourceFailureReasonsWith(nil, both, amllOff, true); r["amll"] != "" {

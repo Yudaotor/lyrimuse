@@ -39,7 +39,7 @@ public enum OverlayDuetAlignmentOverride: String, Codable, Hashable, CaseIterabl
     /// (两处消费方对 `nil` 的既有处理正好就是"当成普通歌":内缩归零、指示圆点不显示),
     /// 不需要在这两处消费方内部各写一份"override 生效时怎么办"的分支。
     ///
-    /// ⚠️ 不能直接把 `effectiveAlignmentSide` 的结果拿来当这两处的输入——`leading`/
+    /// 不能直接把 `effectiveAlignmentSide` 的结果拿来当这两处的输入——`leading`/
     /// `trailing` 覆盖会让**每一行**(包括完全没有对唱标记的普通歌)都变成非 `.center`,
     /// `withSpeakerIndicator` 会误以为"这里真的有人在唱"而在每一行冒出一个圆点,这不是
     /// issue 要的效果(issue 只要求对齐方向可选,没有要求普通歌也长出装饰)。

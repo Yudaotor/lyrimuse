@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-// kugouLyric 是歌词第四个候选来源(酷狗音乐,非官方接口:搜索→KRC 歌词库搜索→下载,三步)。
+// kugouLyric 是歌词第四个候选来源(酷狗音乐,非官方接口:搜索到KRC 歌词库搜索到下载,三步)。
 // 只缓存成功(拿到逐行 LRC)的结果,跟 qqLyric/lrclibLyric 的缓存策略一致。是否采用交给
 // enrich.go 里统一的 scoreLyricCandidate 打分决定,这里只负责"尽力拿一份候选"。
 type kugouResult struct {
@@ -134,7 +134,7 @@ var (
 // 行始的偏移量,从 0 开始逐词累加,加到这一行的行长为止。网易云原生 YRC:
 // "[行始ms,行长ms](词始ms,词长ms,flag)词"——这里的"词始ms"是从整首歌开头算起的绝对
 // 时间戳。两种格式外形都是"三个数字加一对括号",实际语义完全不是一回事:若只做尖括号
-// →圆括号的语法转换而不做这层相对转绝对的换算,Swift 端(YRCParser 按"词始时间戳=
+// 到圆括号的语法转换而不做这层相对转绝对的换算,Swift 端(YRCParser 按"词始时间戳=
 // 绝对播放位置"这个假设算 fillFraction)读到的词始时间戳会远小于真实播放位置,导致
 // 这一行一开始播放,行内所有词的 fillFraction 立刻超过 1(已"填满"),整行瞬间全部
 // 点亮,没有逐字推进效果。
@@ -183,7 +183,7 @@ func krcToYRC(krc string) string {
 // 行始时间戳取 KRC 那一行的行始——App 侧把译文贴到酷狗 fmt=lrc 那份整行歌词上用的是
 // 700ms 最近邻,实测两套时间戳最近邻差最大 9ms。
 //
-// ⚠️ 韩文歌的 type 0 轨**不是罗马音,是中文谐音**(Ditto 实测:「马列做 say it back」
+// 韩文歌的 type 0 轨**不是罗马音,是中文谐音**(Ditto 实测:「马列做 say it back」
 // 「啊亲们 挠木 摸咯」),照单全收会把这种谐音当罗马音显示。这里用汉字占比
 // 把它挡掉(krcLanguageRomaMaxHanRatio);下游 usableValueAdd 的"原文假名占比 > 5%"是第二道闸。
 
@@ -264,7 +264,7 @@ func krcLanguageTracks(b64, krc string) (tr, roma string) {
 }
 
 // krcLanguageTrackToLRC 按行序号把一条轨拼成逐行 LRC:行数与 KRC 计时行数不等就整轨放弃
-// (对不齐宁可整体不要,跟假名标注同一口径);空行、`//` 占位行跳过;不够 3 行带戳当没有。
+// (对不齐宁可整体不要,跟假名标注同一口径);空行、`//` 占位行、版权声明行跳过;不够 3 行带戳当没有。
 func krcLanguageTrackToLRC(content [][]string, starts []int) string {
 	if len(content) == 0 || len(content) != len(starts) {
 		return ""
@@ -292,8 +292,8 @@ type kugouSong struct {
 	AlbumName  string  `json:"album_name"`
 	AlbumID    string  `json:"album_id"`
 	Duration   float64 `json:"duration"` // 秒
-	// TransParam.Language:实测坐实酷狗搜索接口自带的语种标签,直接是人类可读字符串
-	// ("国语"/"粤语"),交叉验证过周杰伦《稻香》→"国语"、Beyond《海阔天空》→"粤语"。
+	// TransParam.Language:酷狗搜索接口自带的语种标签,直接是人类可读字符串
+	// ("国语"/"粤语",如周杰伦《稻香》到"国语"、Beyond《海阔天空》到"粤语")。
 	TransParam struct {
 		Language string `json:"language"`
 	} `json:"trans_param"`
@@ -331,6 +331,7 @@ func kugouGet(ctx context.Context, u string, v any) error {
 	if err != nil {
 		return err
 	}
+// 每一步的备用主机 / 备用后端见 kugoufallback.go;
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode)
@@ -427,11 +428,11 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 // pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。
 //
 // 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
-// 不看专辑和时长,于是排序靠前的杂项能把同页靠后的正主顶掉。真实案例(周杰伦《简单爱
-// (Live)》/《The One 周杰伦演唱会》,本地 273.227s):酷狗对"周杰伦 简单爱 (Live)"返回的
-// 第 1 条是「简单爱 (无与伦比演唱会 m 56s)」——一个 56 秒的片段、专辑名为空,剥括号后
-// 标题也叫"简单爱"、歌手也对,先到先得直接定死;而第 2 条就是「简单爱 (Live)」《The One
-// 演唱会》273s——**标题跟本地 normLoose 精确相等 + 专辑 token 对得上 + 时长只差 0.227s**,
+// 不看专辑和时长,于是排序靠前的杂项能把同页靠后的正主顶掉。例如酷狗对"周杰伦 简单爱
+// (Live)"(本地 273.227s)返回的第 1 条是「简单爱 (无与伦比演唱会 m 56s)」——一个 56 秒
+// 的片段、专辑名为空,剥括号后标题也叫"简单爱"、歌手也对,先到先得直接定死;而第 2 条
+// 才是「简单爱 (Live)」《The One 演唱会》273s——**标题跟本地 normLoose 精确相等 + 专辑
+// token 对得上 + 时长只差 0.227s**,
 // 三项证据全在,却永远轮不到。netease.go 的 queries 注释里早写过这个对比:"那三个源是取
 // 第一条通过校验的候选就收工,搜索词一偏就直接定死在错版本上"——这里把酷狗从那个名单里
 // 摘出来。
@@ -468,8 +469,8 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 		}
 		byTriangle := false
 		if !lyricSourceArtistMatches(s.SingerName, artist) {
-			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
-			// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
+			// 歌手闸不过 到 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
+			// = 同一次录音。修的是"艺名与本名 / 乐队名与成员名"这类连分隔符都没有、
 			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
 			// lyricRecordingTriangleMatches 的注释)。酷狗是各源里唯一**已经把正主
 			// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
@@ -540,14 +541,13 @@ func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
 		return ""
 	}
 	cover := strings.ReplaceAll(out.Data.ImgURL, "{size}", "480")
-	// ⚠️ 真实故障(现象是"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
+	// 现象是"酷狗的没有返回封面"(截图里酷狗那条候选是空白占位图,
 	// netease 那条却有缩略图):酷我/acg 的这个接口原样返回的是 "http://" 前缀,collector
 	// 这边发请求不受影响(没有 ATS 限制),但这个 URL 之后会原样进 lyricCandidate.cover、
 	// 一路传到 Swift 侧的 AsyncImage——macOS App Transport Security 默认拒绝纯 HTTP 的
 	// 网络请求,图片静默加载失败、退回占位图标,不会报错也不会抛异常,只在真机 UI 上才
-	// 看得出来(拿 CLI 直查 cover_url 字符串本身看不出这个问题,之前用这个办法验证过、
-	// 没发现是因为凑巧没测到走 http 这条路的场景)。实测坐实同一张图换成 https 也是 200,
-	// 强制换成 https 就地修好,不需要额外配置 ATS 例外域名(改 Info.plist 加白名单域名是
-	// 更大范围的例外,没必要为一张图开这个口子)。
+	// 看得出来(拿 CLI 直查 cover_url 字符串本身看不出这个问题)。同一张图换成 https
+	// 也是 200,强制换成 https 就地修好,不需要额外配置 ATS 例外域名(改 Info.plist 加
+	// 白名单域名是更大范围的例外,没必要为一张图开这个口子)。
 	return strings.Replace(cover, "http://", "https://", 1)
 }

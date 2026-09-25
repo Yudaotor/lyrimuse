@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-// LRC↔YRC 时间轴自洽修复。
+// LRC与YRC 时间轴自洽修复。
 //
 // 起因(现象是《Rumour Has It》"明显进度对不上"):Musixmatch 在同一个
 // track_id 下挂着两份**不同年份做的、互不兼容**的资产 —— track.subtitle.get 那份
@@ -16,7 +16,7 @@ import (
 // 自报 232s),曲长实际 223.3s。实调把两边原始 body 拉回来比 sha256,证实都是上游原样
 // 落库、我们零清洗 —— 坏的是上游数据本身。
 //
-// 这份坏 LRC 单调递增、末句时间戳也正常(204.81s),坏只坏在**内部**:第 27→28 行凭空
+// 这份坏 LRC 单调递增、末句时间戳也正常(204.81s),坏只坏在**内部**:第 27到28 行凭空
 // 跳 48.6 秒,第 41~49 行 9 句完整长句挤在 6.86 秒里(同样这 9 句在 richsync 里跨 46 秒)。
 // 而引擎里所有与时间有关的判据(durationFits/corroboratedEndings/sourceDurationOff)
 // **全都只看末句这一个标量**,25% 容差对这首歌意味着 167~228s 这个 61 秒宽的窗口全算
@@ -37,7 +37,7 @@ import (
 //	netease 只有 24/568 满足 —— 它的两份是**根本不同的资产**(LRC 常带署名行、行数对不上),
 //	对它重挂会挂错,判据会自动放弃。
 //
-// ⚠️ "以逐字轴为准"不是无条件成立的,必须带安全闸:消融过程中抓到反例
+// "以逐字轴为准"不是无条件成立的,必须带安全闸:消融过程中抓到反例
 // MJ《Rock With You (Single Version)》—— 两套轴同样打架,但坏的是 **YRC** 那边,重挂后
 // 末句从 176.1s 跳到 216.6s,而曲长只有 204.2s,歌词尾巴反而甩出曲目 12 秒。全库 516 条
 // 可判时长的条目里正好有这么 1 条会被改坏,闸把它挡住了。
@@ -50,7 +50,7 @@ type yrcLineHead struct {
 
 // yrcLineHeads 按**文档序**解析 YRC 的行(不排序:要与 LRC 的行顺序一一对应)。
 //
-// ⚠️ 抓词文本只能用"把词标记整体删掉、剩下的就是文本",不能用
+// 抓词文本只能用"把词标记整体删掉、剩下的就是文本",不能用
 // `\((\d+),(\d+),\d+\)([^(]*)` 这种"标记后面跟非左括号"的写法 —— 歌词正文里本来就有
 // 字面左括号(和声/伴唱标注),`[^(]*` 会在它那里截断。实测《Rumour Has It》第 14 行
 // `(59954,1182,0)(rumour)` 会被解析成空串,整行从 "Rumour has it (rumour)" 缩成
@@ -93,7 +93,7 @@ func normTimelineText(s string) string {
 }
 
 // lrcStampMs 把 lrcTimestampCaptureRe 的一次匹配换算成毫秒。
-// 小数位按位数解释:2 位是百分秒(xx→xx*10ms),3 位是毫秒。
+// 小数位按位数解释:2 位是百分秒(xx到xx*10ms),3 位是毫秒。
 func lrcStampMs(m []string) int {
 	mm, _ := strconv.Atoi(m[1])
 	ss, _ := strconv.Atoi(m[2])
@@ -125,7 +125,7 @@ func twoDigits(n int) string {
 
 // rehangLRCOnYRC 用逐字轴的行起点重挂行级 LRC 的时间戳。
 //
-// 返回(新 LRC, 旧毫秒→新毫秒映射, 是否真的改过)。映射给译文/罗马音复用 —— 它们的
+// 返回(新 LRC, 旧毫秒到新毫秒映射, 是否真的改过)。映射给译文/罗马音复用 —— 它们的
 // 时间戳是照原文 LRC 抄的(translate.go 的 assembleTranslationLRC / musixmatch.go 的
 // buildTranslatedLRC),不跟着重挂就会相对正文错位。
 //
@@ -177,7 +177,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 			return lrc, nil, false
 		}
 	}
-	// ⚠️ 判"要不要改"必须带容差,不能直接比毫秒:输出格式 [mm:ss.xx] 只到百分秒,
+	// 判"要不要改"必须带容差,不能直接比毫秒:输出格式 [mm:ss.xx] 只到百分秒,
 	// 18315ms 写出去是 [00:18.31]、读回来就成了 18310ms。按精确相等判的话,重挂过的
 	// 内容每次读回都还差那 5ms,启动期迁移会**每次开机都重写一遍整份缓存**(单测
 	// TestRehangLRCOnYRCIdempotent 抓到的就是这个)。容差取 10ms = 一个百分秒位。
@@ -196,7 +196,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	if !changed {
 		return lrc, nil, false
 	}
-	// ⚠️ 只替换内容行的时间戳,**原样保留**元数据行([ti:]/[ar:]/[al:]/[by:])与空行。
+	// 只替换内容行的时间戳,**原样保留**元数据行([ti:]/[ar:]/[al:]/[by:])与空行。
 	// 打分的 lines 项按 len(strings.Split(lyrics,"\n")) 计分(match.go),把元数据行和
 	// 空行也数进去 —— 按内容行重新生成整个文件会把它们丢掉,实测会让全库最干净的 kugou
 	// 集体掉分被 qq 反超(消融里假翻盘 175 条)。修数据的改动只动该动的那一维。
@@ -253,8 +253,8 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 // 偏差 <3s(其中 92% <0.5s —— qq/kugou/amll 的 LRC 本来就是从逐字轴转出来的,天生自洽),
 // ≥10s 的只有 10 条、逐条核对全部是无可争辩的坏数据(含已知旧案 Rock With You 19.4s ——
 // 那条当年确认坏的是 YRC 侧,rehang 的时长闸拦下了"修",但没有"弃",坏 YRC 一直在驱动
-// 播放;这次一并解决)。3~6.5s 之间还有 11 条含糊地带刻意不动 —— 哪边对判不了,等有
-// 真实反馈再说。
+// 播放;这次一并解决)。3~6.5s 之间还有 11 条含糊地带刻意不动 —— 哪边对判不了,
+// 不强行归类。
 //
 // 配对用 LCS(最长公共子序列)对齐两边归一化文本相同的行,配对行 ≥8 且 ≥LRC 内容行的
 // 一半才评估(配太少时中位数不可信);中位数(不是均值)抗个别错配。
@@ -413,6 +413,12 @@ func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64)
 // 形态照抄 migrateYRCWhitespaceTokens。幂等:改过的内容再跑是空操作。
 //
 // 跳过用户手改过的条目:manual_lyrics 是全部自愈路径的一票否决闸,这里同样尊重。
+//
+// 带水位闸(startupmigration.go):跑过一遍就不再重跑。它满足水位闸要求的两个前提 ——
+// 幂等(见上一行),而且运行期写入的新数据在**候选装配期**已经过同一套重挂
+// (applyLyricTimelineFixes 调的是同一个 rehangLRCOnYRC),不靠这道迁移兜底。
+// 加闸的理由是它贵:实测 6952 条缓存要 9~10 秒,而连跑两轮第二轮 0 条改动 —— 每次进程
+// 启动白烧这 9 秒,正是"collector 一重启,歌词就要等一两分钟"的最大单项。
 func migrateLyricTimelines() {
 	enrichMu.Lock()
 	fixed := 0
@@ -447,11 +453,10 @@ func migrateLyricTimelines() {
 		fixed++
 	}
 	if fixed > 0 || dropped > 0 {
-		// ⚠️ 必须显式置脏:saveEnrichCache 只在 enrichDirty 时才真的写盘。这里不置的话,
+		// 必须显式置脏:saveEnrichCache 只在 enrichDirty 时才真的写盘。这里不置的话,
 		// 迁移结果能不能落盘取决于同一次启动里**别的路径**有没有恰好把标志置过 true ——
-		// 实测坐实这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
-		// entries"、JSON 的 mtime 却纹丝不动,每次开机白干一遍;而 08-28 那次 1010 条
-		// 重挂能落盘纯属搭了别的脏标志的顺风车。
+		// 漏了这一步,迁移可以连续多次启动都报"dropped 10 entries"、JSON 的 mtime
+		// 却纹丝不动,每次开机白干一遍;此前的迁移能落盘,纯属搭了别的脏标志的顺风车。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

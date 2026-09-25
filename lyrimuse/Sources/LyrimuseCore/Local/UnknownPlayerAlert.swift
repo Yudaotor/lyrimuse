@@ -2,9 +2,8 @@ import Foundation
 
 /// 「发现新播放器」的判据 —— 纯函数,这件事唯一的真相来源。
 ///
-/// 现象是:「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」。
-/// 在这之前唯一的发现路径是设置页那张卡,而它**只在那个播放器此刻正在报 Now Playing 时**
-/// 才出现 —— 不主动打开设置页就永远看不到。
+/// 设置页那张「发现新播放器」卡**只在那个播放器此刻正在报 Now Playing 时**才出现 ——
+/// 不主动打开设置页就永远看不到,识别到新播放器却没有信任它这件事没有通知机制提醒。
 ///
 /// ## 为什么判据要下沉到这里
 ///
@@ -39,7 +38,7 @@ public enum UnknownPlayerAlert {
         guard !id.isEmpty else { return false }
         // 负数(时钟回拨/观察时刻在未来)当"新鲜" —— 宁可多提示一次也别静默
         guard now.timeIntervalSince(observedAt) < freshWindow else { return false }
-        // ⚠️ trim 后判空,跟 TrustedPlayers.notASong 完全一致。卡片原来写的是裸 isEmpty,
+        // trim 后判空,跟 TrustedPlayers.notASong 完全一致。卡片原来写的是裸 isEmpty,
         // 于是 album = " " 的播放能过卡片、过不了守卫 —— 那是个既有 bug,这次一并抹平。
         guard !artist.trimmingCharacters(in: .whitespaces).isEmpty,
               !album.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -54,9 +53,9 @@ public enum UnknownPlayerAlert {
     /// 播客(artist=节目名、album 常常非空)一旦被信任就会被当歌打卡进 Last.fm/ListenBrainz
     /// 的**永久历史**;微信语音/视频号是这台机器上真正"天天来一次"的那个。
     ///
-    /// ⚠️ 刻意**不**写成"整个 com.apple.* 都静音":Safari 放网页音乐跟 Chrome 一样正当,
+    /// 刻意**不**写成"整个 com.apple.* 都静音":Safari 放网页音乐跟 Chrome 一样正当,
     /// 一刀切会把它也埋掉。只列点名的。
-    /// ⚠️ 设置页那张卡**不**受这份名单影响 —— 真想信任播客的人照样点得到,这正是
+    /// 设置页那张卡**不**受这份名单影响 —— 真想信任播客的人照样点得到,这正是
     /// "卡片保留作兜底"的价值。
     public static let mutedForAnnounce: Set<String> = [
         "com.apple.podcasts", "com.apple.TV", "com.apple.iBooksX", "com.apple.news",
@@ -76,7 +75,7 @@ public enum UnknownPlayerAlert {
     public static let maxAnnounces = 3
     public static let announceCooldown: TimeInterval = 24 * 3600
 
-    /// 已经提醒过的记录:bundle id → (提醒过几次, 最后一次是什么时候)。
+    /// 已经提醒过的记录:bundle id 到 (提醒过几次, 最后一次是什么时候)。
     public struct AnnounceLog: Codable, Equatable, Sendable {
         public var count: Int
         public var lastAt: Date
@@ -88,7 +87,7 @@ public enum UnknownPlayerAlert {
     ///  6. `appDisplayName` 反查得到 —— 反查不到 App 名(`com.apple.WebKit.GPU` 这种)
     ///     说明它不是用户能理解的东西,通知标题只能摆一串 bundle id,别弹;
     ///  7. 稳定性:同一个 bundle id 连续被观察到够久。实测这台机器上焦点抖动是常态
-    ///     (12 分钟里 4 组亚秒级往返 Music ⇄ Chrome),不设这道门会为一个只抢了两秒
+    ///     (12 分钟里 4 组亚秒级往返 Music 与 Chrome),不设这道门会为一个只抢了两秒
     ///     焦点的 App 烧掉它那几次提醒机会;
     ///  8. 次数与冷却(见 maxAnnounces / announceCooldown)。
     public static func shouldAnnounce(

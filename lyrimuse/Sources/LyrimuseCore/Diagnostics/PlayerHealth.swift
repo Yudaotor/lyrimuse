@@ -8,8 +8,8 @@ import Foundation
 /// (`PlayerHealthMonitor`),那里只负责把读到的值填进 `Inputs`。
 public enum PlayerHealth {
     public enum Warning: Equatable, CaseIterable, Sendable {
-        /// 已选播放器含 Apple Music,且自动化权限被系统记为"拒绝"。播放器没在运行时权限
-        /// 查询返回的是 notDetermined 而不是 denied,所以"播放器没开"天然不会触发这一条。
+        /// 当前选择下需要自动化权限的播放器里,有本机装了、且被系统记为"拒绝"的。播放器没在
+        /// 运行时权限查询返回的是 notDetermined 而不是 denied,所以"播放器没开"天然不会触发这一条。
         case automationDenied
         /// 「后台采集服务」开关开着,launchd 里却没有活着的进程(没注册 / 崩溃循环)。
         /// 用户自己关掉服务不算故障。

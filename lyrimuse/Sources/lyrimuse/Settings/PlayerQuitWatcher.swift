@@ -9,8 +9,10 @@ import LyrimuseCore
 /// - collector 不退:它是常驻服务,也是「跟随播放器启动」的执行者 —— 播放器再打开时正是它把 Lyrimuse 拉回来。
 /// - 宽限内任一个绑定的播放器又启动就取消(播放器崩溃自动重启 / 手动重启 / Spotify 更新后重启);到点再核一遍
 ///   进程表,不信排队那一刻的结论。
-/// - 设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时不退:用户正在用 Lyrimuse 本身,不在他手上把 App
-///   关掉。悬浮歌词和灵动岛是 NSPanel、不能成为 key,不算。
+/// - 设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时先不退:用户正在用 Lyrimuse 本身,不在他手上把 App
+///   关掉。悬浮歌词和灵动岛是 NSPanel、不能成为 key,不算。这一次**只是推迟**:记下 `deferredForWindows`,
+///   之后有窗口关掉 / 最小化就再等 `windowGoneGraceSeconds` 重判一次(原来是直接放弃,之后关掉窗口
+///   Lyrimuse 也一直开着)。
 @MainActor
 final class PlayerQuitWatcher {
     static let shared = PlayerQuitWatcher()

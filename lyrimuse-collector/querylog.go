@@ -24,7 +24,7 @@ import (
 // 库里还有多少条是这么来的完全无从下手"—— retry_method 就是为此加的,这里只是把同一个
 // 思路从"胜者那一条的来路"推广到"整轮的提问记录"。
 //
-// ⚠️ 与 lyricsDecision 的三条铁律一致:**只写不读** —— 解析逻辑的任何分支都不许拿它当
+// 与 lyricsDecision 的三条铁律一致:**只写不读** —— 解析逻辑的任何分支都不许拿它当
 // 输入。它也不参与打分,所以不需要 bump lyricsScoringVersion。
 //
 // 走 ctx 而不是改函数签名,理由同 lyricSourceRound(sourcebreaker.go):
@@ -33,7 +33,7 @@ import (
 // record 是空操作,行为逐字节不变。
 
 // lyricQueryReason* 是一条查询记录的来路。空字符串 = 首轮(按本地标签直接问)。
-// ⚠️ 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.queryReasonLabel 那个 switch 里补
+// 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.queryReasonLabel 那个 switch 里补
 // 中文译名 —— 那边 default 是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看
 // (决策路径译名就这么漏过一次)。lyricQueryReasons 那个测试守着这份清单。
 const (

@@ -16,7 +16,7 @@ import (
 
 // 五条客户端缓存快速路径的静默规则:只有"被系统拒绝"要留痕,别的一概不作声。
 //
-// ⚠️ 这条守卫盯的是一个**不会以任何其它方式暴露**的故障:TCC 拒绝之后整条路径 fail-soft,
+// 这条守卫盯的是一个**不会以任何其它方式暴露**的故障:TCC 拒绝之后整条路径 fail-soft,
 // 线上表现与"没装那个播放器"逐字节相同,只有这行日志能把两者分开。
 func TestNoteLocalCacheDenied(t *testing.T) {
 	var buf bytes.Buffer
@@ -75,11 +75,11 @@ func TestNoteLocalCacheDenied(t *testing.T) {
 
 // 每条快速路径的**每个读取入口**都要接上判据。
 //
-// ⚠️ 数目是判据的一部分:`os.Stat` 过了不代表 `os.ReadDir` / `os.ReadFile` 也过 ——
+// 数目是判据的一部分:`os.Stat` 过了不代表 `os.ReadDir` / `os.ReadFile` 也过 ——
 // TCC 允许 stat 一个目录却拒绝列它的内容是实际发生过的形态。只在 stat 那一支接,
 // 这类拒绝会继续无声无息。
 func TestEveryLocalCacheReadPathReportsDenial(t *testing.T) {
-	// 文件 → (来源, 该文件里受 TCC 影响的读取入口数)
+	// 文件 到 (来源, 该文件里受 TCC 影响的读取入口数)
 	want := []struct {
 		file   string
 		source string
@@ -106,7 +106,7 @@ func TestEveryLocalCacheReadPathReportsDenial(t *testing.T) {
 
 // 状态文件是设置页那三格提示的唯一数据源:被拒要写进去,授权之后要能自己撤掉。
 //
-// ⚠️ "撤掉"这一半跟"写进去"同样要紧 —— 少了它,用户授权之后界面上那个橙色提示会一直挂着,
+// "撤掉"这一半跟"写进去"同样要紧 —— 少了它,用户授权之后界面上那个橙色提示会一直挂着,
 // 而此刻它说的事情已经不成立了。
 func TestLocalCacheAccessStatePublishing(t *testing.T) {
 	prevOut := log.Writer()
@@ -153,7 +153,7 @@ func TestLocalCacheAccessStatePublishing(t *testing.T) {
 		t.Fatalf("读得到的来源该被撤掉,got %v", got)
 	}
 
-	// 全部恢复 → 空名单,界面据此什么都不显示。
+	// 全部恢复 到 空名单,界面据此什么都不显示。
 	noteLocalCacheReadable("qq")
 	if got := read().Denied; len(got) != 0 {
 		t.Fatalf("全部恢复后名单该空,got %v", got)

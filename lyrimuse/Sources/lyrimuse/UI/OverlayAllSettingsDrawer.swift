@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」那一段底部的**全部设置**抽屉,(编辑台第三步)。
+// 「歌词显示 到 悬浮歌词」那一段底部的**全部设置**抽屉,(编辑台第三步)。
 //
 // 它替掉的是原来铺在编辑台下面的六张卡(总开关 / 配色 / 我的配色主题 / 文字 / 窗口 /
 // 恢复)。那六张卡在 552pt 高的设置窗口里要滚两屏,而编辑台+工具栏浮层已经把高频项
@@ -9,19 +9,19 @@ import SwiftUI
 // 占着两屏,收成一个默认折叠的抽屉,展开是就地长出来(不跳页、不开新窗口:那两种都会
 // 让"改一项、回头看一眼编辑台"变成来回切换)。
 //
-// ⚠️ 「桌面悬浮歌词」总开关**不收进来**。它是这一段的主开关,收进折叠区等于"要先展开
+// 「桌面悬浮歌词」总开关**不收进来**。它是这一段的主开关,收进折叠区等于"要先展开
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
-// ⚠️ 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏五个入口一一
-// 对应**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为 → 恢复默认)。别给抽屉另起一套分组名:
+// 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏五个入口一一
+// 对应**(主题 到 文字 到 背景 到 排版 到 宽度 到 行为 到 恢复默认)。别给抽屉另起一套分组名:
 // 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
-//   - 主题 / 文字 / 背景 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
-//     ⚠️ 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
+//   - 主题 / 文字 / 背景 / 排版 到 OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
+// 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
 //     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注;
 //     「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
-//   - 行为 → OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
+//   - 行为 到 OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
 //     同一份视图,不再各自拼)
-//   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
+//   - 恢复 到 OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
 // 「宽度」那根滑杆写在本文件里、不属于任何一组(跟灵动岛抽屉里的两根宽度滑杆同一个摆法)——
 // 它跟编辑台里那条宽度调整条(第六步替掉了原来的拖拽握柄)是同一个值的两个入口:
 // 那边 step 2、紧挨着窗口、看得见效果;这边 step 10、跟其它设置行同列,是键盘/VoiceOver 和
@@ -43,8 +43,7 @@ struct OverlayAllSettingsDrawer: View {
             disclosureHeader
             if isExpanded {
                 CardDivider()
-                // 重新分组:原来是「配色」(七行混着文字色和背景色)+ 一组无标题的
-                // 「我的配色主题」,现在按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
+                // 按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
                 // (拆分判据见 OverlayStyleSettingsRows.swift 里 OverlayBackgroundSettingsRows
                 // 的头注)。顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的
                 // 全量兜底通路",两个宿主分组不一样的话,用户按工具栏的记忆到抽屉里找会落空。
@@ -73,7 +72,7 @@ struct OverlayAllSettingsDrawer: View {
         // onChange 管"抽屉已经在屏、信号后到"。展开动画跟点标题那一处同一条。
         .onAppear { expandForSearchIfNeeded() }
         .onChange(of: pendingSearchDrawer) { _, _ in expandForSearchIfNeeded() }
-        // ⚠️ 这里**故意没有** `.animation(_:value: isExpanded)`。展开/收起的动画写在改状态
+        // 这里**故意没有** `.animation(_:value: isExpanded)`。展开/收起的动画写在改状态
         // 那一处(disclosureHeader 里的 withAnimation)—— 挂在卡片上动的是容器自身的几何,
         // 同一个事务里任何不相干的布局变化都会被一起动起来(理由见
         // Animation.settingsCardReveal 的声明,那条是踩过实例之后定下的)。抽屉里恰恰有
@@ -113,7 +112,7 @@ struct OverlayAllSettingsDrawer: View {
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
-                // ⚠️ Spacer 是**必需**的,不是那两句话留下的残骸:整行可点靠的是下面那句
+                // Spacer 是**必需**的,不是那两句话留下的残骸:整行可点靠的是下面那句
                 // `contentShape(Rectangle())`,而它认的是 HStack 的实际尺寸 —— 没有 Spacer
                 // 撑满宽度,命中区就缩回"三角形 + 两个字"那一小截。
                 Spacer(minLength: 0)
@@ -193,7 +192,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 宽度滑杆。编辑台里那条宽度调整条改的是同一个值,这里是它的兜底通路(键盘/VoiceOver,
     /// 以及"我想输一个准数"的场合)。
     ///
-    /// ⚠️ 区间是**跨三处的契约**(真源见 `OverlayEditorStage.widthRange`):这根滑杆、菜单栏快捷面板里的同一根、
+    /// 区间是**跨三处的契约**(真源见 `OverlayEditorStage.widthRange`):这根滑杆、菜单栏快捷面板里的同一根、
     /// 以及编辑台调整条的 `OverlayEditorStage.widthRange`。三处必须一致:任何一处能产生别处
     /// 够不到的值,用户下次一动另一根滑杆就会被弹回去,表现是"我调好的宽度自己变了"。
     private var widthRow: some View {
@@ -210,7 +209,7 @@ struct OverlayAllSettingsDrawer: View {
                         // 还会同步写一次 UserDefaults。
                         guard newValue != settings.overlayWidth else { return }
                         settings.overlayWidth = newValue
-                        // ⚠️ 补上的守卫(原来这一句是裸调的)。
+                        // 补上的守卫(原来这一句是裸调的)。
                         // `LyricsOverlayWindowController.shared` 是 `static let`,光是读一下
                         // 就会执行 init() 把窗口建出来 —— 悬浮歌词关着的用户,只要碰一下这根
                         // 滑杆就会凭空多出一扇(不可见但已经装好监听器和观察者的)窗。宽度的
@@ -237,13 +236,13 @@ struct OverlayAllSettingsDrawer: View {
     /// 菜单执行的是同一件事,两处**不能**各写一份赋值:以后新增一个外观字段时很容易只往
     /// 其中一处补上,表现为"从菜单点恢复和从抽屉点恢复,恢复出来的样子不一样"。
     ///
-    /// ⚠️ 标题和副标题合起来是这颗按钮的**作用范围声明**,两个入口都要带,不是装饰。
+    /// 标题和副标题合起来是这颗按钮的**作用范围声明**,两个入口都要带,不是装饰。
     /// 两句都改过,因为老那两句合起来在说谎:标题「恢复默认文字与配色」+ 副标题
     /// 「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而实际上它只写 9 个字段,
     /// 「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 /
     /// 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。
     /// 现在标题念**它真正覆盖的那三个浮层**、副标题念**没覆盖的**,跟菜单栏那颗同一个句式
-    /// (见 MenuBarStyleDefaults 头注)。⚠️ 功能本身没改 —— 排版和行为该不该纳入是产品取舍,
+    /// (见 MenuBarStyleDefaults 头注)。 功能本身没改 —— 排版和行为该不该纳入是产品取舍,
     /// 不是这次要顺手动的东西。
     private var resetRow: some View {
         SettingsRow(

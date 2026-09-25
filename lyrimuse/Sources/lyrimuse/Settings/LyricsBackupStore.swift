@@ -13,18 +13,16 @@ enum LyricsBackupStore {
 
     /// enrich 缓存(打包 `meta` 时**只读**它)。
     ///
-    /// ⚠️ 同一个路径在 `EnrichCacheReader` 和 `EnrichCacheStore` 里各有一份 `private static let`
+    /// 同一个路径在 `EnrichCacheReader` 和 `EnrichCacheStore` 里各有一份 `private static let`
     /// —— 那两处都是私有的,为了这里一次只读访问去放宽它们的可见性不值得,所以这是第三份。
     /// 三处必须一致;真要收拢,该收进 Core 的一个 public 常量里,那是另一件事。
     private static let enrichCacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
 
-    /// 恢复时把 `meta` 落成这份**待采纳**文件,由 collector 在启动路径里合并进缓存
-    /// (`lyrimuse-collector/enrichrestore.go` 的 `adoptEnrichRestore`,采纳成功后自己删掉)。
+    /// 恢复时把 `meta` 落成这份**待采纳**文件,由 collector 合并进缓存(`lyrimuse-collector/enrichrestore.go`
+    /// 的 `adoptEnrichRestore`,采纳成功后自己删掉):restore 收尾时发 adopt_restore 当场合并,collector
+    /// 没收到的话下次启动也会合并。
     ///
-    /// 为什么不在这里直接盖 `lyrimuse-enrich-cache.json`:collector 内存里握着整份缓存、
-    /// 有七处会整份写回磁盘,盖了大概率被它盖回去(「清空了又回来」)。交给
-    /// collector 自己在启动时合并,跟 `lyrics/` 文件族被 `importLyricsFromFiles` 采纳
-    /// 是同一个时机、同一把 `enrichMu` 锁,天然没有竞态。
+    /// 别在这里直接盖 `lyrimuse-enrich-cache.json`:collector 是它唯一的写入方(见 EnrichEditChannel)。
     private static let enrichRestoreURL = LyrimusePaths.configFile("lyrimuse-enrich-restore.json")
 
     /// 当前这台机器上歌词库的规模,给设置页那句"约 N MB"用。**不读文件内容**(只 stat),
@@ -114,17 +112,17 @@ enum LyricsBackupStore {
         var failed = 0
         var pinsAdded = 0
         /// `meta` 那份待采纳文件的字节数;0 = 这份备份不带(v1 老包)或写盘失败。
-        /// 真正生效是在 collector 下一次启动时(见 enrichRestoreURL 的注释)。
+        /// restore 收尾时交给 collector 采纳(见 restore(from:) 末尾)。
         var metaBytes = 0
         var total: Int { added + overwritten }
     }
 
     /// 把归档铺回歌词目录 + 并回「已校准」名单。
     ///
-    /// ⚠️ 调用顺序要紧:必须排在 features.json 导入**之后** —— 歌词目录是
+    /// 调用顺序要紧:必须排在 features.json 导入**之后** —— 歌词目录是
     /// `features.lyricsDir`(用户可自定义的绝对路径),先铺后导会铺到旧机器那个目录里去。
     static func restore(from data: Data) async -> RestoreResult? {
-        // ⚠️ 目录必须在这一刻(features.json 已经导入完之后)才取。
+        // 目录必须在这一刻(features.json 已经导入完之后)才取。
         let dir = FeatureSettingsStore.shared.effectiveLyricsDir
         let restoreURL = enrichRestoreURL
         let outcome = await Task.detached(priority: .userInitiated) { () -> (RestoreResult, [String: Int])? in
@@ -166,11 +164,9 @@ enum LyricsBackupStore {
                 }
             }
             // enrich 缓存的非歌词字段:只落一份**待采纳**文件,不碰缓存本身(理由见
-            // enrichRestoreURL 的注释)。真正合并进缓存发生在 collector 下一次启动 ——
-            // 跟歌词文件族被 importLyricsFromFiles 采纳是同一个时机,所以调用方本来就要
-            // 走的那次重启一并把这两件事都落地,不需要额外的时序安排。
+            // enrichRestoreURL 的注释),由收尾那次 adopt_restore 跟歌词文件一起收进缓存。
             //
-            // ⚠️ 写失败只记日志、不算恢复失败:歌词文件已经铺好了(那是主体),把整次恢复
+            // 写失败只记日志、不算恢复失败:歌词文件已经铺好了(那是主体),把整次恢复
             // 判成失败反而会让用户以为歌词也没进去。
             if let meta = payload.meta, !meta.isEmpty {
                 do {
@@ -200,8 +196,8 @@ enum LyricsBackupStore {
         LyrimusePaths.configFile("lyrics-backups")
     }
 
-    /// 只保留最近这么多份。歌词库实测 14.5 MB → 压缩后 6.1 MB,三份约 18 MB —— 够覆盖
-    /// "清空 → 发现不对"这个窗口,又不至于在用户不知情的地方长成一个无上限的黑洞
+    /// 只保留最近这么多份。歌词库实测 14.5 MB 到 压缩后 6.1 MB,三份约 18 MB —— 够覆盖
+    /// "清空 到 发现不对"这个窗口,又不至于在用户不知情的地方长成一个无上限的黑洞
     /// (那正是配置包 sidecar 当初被否掉进 iCloud 的理由之一,见 14 章 §4)。
     static let autoSnapshotKeepCount = 3
 
@@ -261,7 +257,7 @@ enum LyricsBackupStore {
 
     /// 轮转:超出 `autoSnapshotKeepCount` 的旧快照删掉。
     ///
-    /// ⚠️ 这里**逐个删确切的 URL**,不用任何通配 —— 这个目录理论上只有我们自己写的东西,
+    /// 这里**逐个删确切的 URL**,不用任何通配 —— 这个目录理论上只有我们自己写的东西,
     /// 但 `autoSnapshots()` 已经按扩展名筛过一遍,删的必须是那份筛出来的清单里的元素,
     /// 不能对目录做 removeItem。
     private static func pruneAutoSnapshots() {

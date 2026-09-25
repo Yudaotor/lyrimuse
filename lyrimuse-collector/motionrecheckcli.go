@@ -13,10 +13,10 @@ import (
 // `collector recheck-motion-cover [-apply]` —— 扫描整份 enrich 缓存,把"这一条已经查过
 // 动态封面、结论是没有"的记录,用它**当前**的 cover_url 重新校验一次。
 //
-// 为什么需要它:applyDeviceCoverUpgrade 已经联动了(见
-// recheckMotionCoverAfterDeviceCoverUpgrade),但那条路径只在 CoverSource**从非 device
-// 变成 device 那一刻**触发一次——已经是 CoverSource=="device" 的存量记录不会再经过那条
-// 升级路径,永远等不到重新校验的机会。这条命令就是补这批存量的一次性清理,实测
+// 为什么需要它:自动路径(applyDeviceCoverUpgrade 与 backfillPeripheralFields 末尾,都走
+// recheckMotionCoverAgainstCurrentCover)只在"封面刚换身份"或"这条还没有任何结论"时才起。
+// 已经 MotionCoverChecked==true、结论是"没有"的存量记录不在那两条路上——那一位就是用来
+// 防重复查的,自动路径不该、也不会去动它。这条命令是给这批存量的一次性清理,实测
 // (Prince《Musicology》):同一张专辑两首歌 cover_url 现在字节完全相同、专辑本身确有
 // 动态封面,但先解析的那首因为当时 cover_url 还是网易云给的封面、校验没通过,
 // MotionCoverChecked 从此锁死;后来 cover_url 被设备直送版本覆盖,却没人再给它一次机会。
@@ -27,9 +27,9 @@ import (
 //   - motionCoverMatchesCover 才会真发两次 HTTP(取当前 cover_url 与官方首帧算指纹),
 //     开销是"这条记录值不值得算一次 8×8 均值哈希",不是"重新发现整个专辑"。
 //
-// 三条跟 retranslate-repeated 一致的约束:只挑会受益的条目(MotionCoverChecked 且
-// MotionCoverURL 为空)、dry-run 默认、-apply 才真写且要求常驻实例已停(否则它下一次
-// 整份保存会把这边刚改的东西原样盖回来)。
+// 三条跟 retranslate-repeated 一致的约束:只挑会受益的条目(见 runRecheckMotionCover 里
+// 那两条命中条件)、dry-run 默认、-apply 才真写且要求常驻实例已停(否则它下一次整份保存
+// 会把这边刚改的东西原样盖回来)。
 func runRecheckMotionCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-motion-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
@@ -53,15 +53,8 @@ func runRecheckMotionCoverCLI(args []string) {
 	os.Exit(runRecheckMotionCover(*apply, *key))
 }
 
-// -key 补的是比"已经 checked=true 卡住"更早一步的坑:device 封面的记录只有在
-// `applyDeviceCoverUpgrade` 升级封面来源**那一刻**才会经 `recheckMotionCoverAfterDeviceCoverUpgrade`
-// 校验一次;之后 `backfillPeripheralFields` 每一轮重新解析出来的 `fresh.CoverURL` 几乎必然
-// 不是那张 device 封面(它传的 deviceCoverURL 恒为空,理由见 resolveTrackEnrichment 参数注释),
-// `motionCoverFreshResultAppliesTo` 因此正确地拒绝把结论挪给这条记录——但连带的后果是
-// `MotionCoverChecked` 永远停在**没查过**(不是"查过没有"),既不进上面那条批量扫描的
-// 命中条件,也没有任何自然重试路径会再碰它。这是设计上的死角,不是一次性网络抖动,
-// 只能手动点名重验。批量扫描条件刻意不跟着放宽:那会让全量 device 封面记录(数以千计)
-// 每次都被扫进去重新发两次 HTTP,这条命令的定位是"点名重验一条",不是新增一条自动巡检。
+// -key:只重验点名的这一条,绕开下面两条命中条件。留着是为了排查——手里已经有一条可疑
+// 的 key 时,不必为它跑一遍全量扫描。
 func runRecheckMotionCover(apply bool, onlyKey string) int {
 	if onlyKey != "" {
 		return runRecheckMotionCoverOne(apply, onlyKey)

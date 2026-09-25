@@ -89,7 +89,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     // MARK: - 按播放器偏移
 
-    /// bundle id → 偏移(毫秒)。第三层,按加回来 —— 但语义跟 08-18 那版
+    /// bundle id 到 偏移(毫秒)。第三层,按加回来 —— 但语义跟 08-18 那版
     /// **不是一回事**:那版是代码内部为 Spotify 写死的补偿(用户看不见、重置不了,后来被根修
     /// 取代),这版是设置页那个下拉框里用户自己选播放器、自己调的值。
     ///
@@ -99,13 +99,13 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 撤掉它的单独设置、重新跟随「全部」。
     ///
     /// 为什么这层有存在价值(而"全局 + 单曲"两层不够):偏差的成因分三类,各自的作用域不同 ——
-    ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 → 全局那层;
+    ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 到 全局那层;
     ///  - **播放器侧**:某个 App 报的播放位置本身就系统性地不准。最硬的例子是浏览器:
     ///    Arc/Chrome 这类只在切歌时报一次锚点、之后 elapsedTime 再也不刷新
     ///    (`PositionSourceTier.cleanExtrapolated`),我们只能按墙钟外推,而那一次锚点的
     ///    时间戳本身只有整秒精度(见 MediaControlClient.estimatedAnchorInstant)。这类偏差
     ///    **换首歌照旧、换个播放器就没了**,正好落在"播放器"这个维度上;
-    ///  - **这份歌词自己**的时间轴不准 → 单曲那层(key 里带内容指纹)。
+    ///  - **这份歌词自己**的时间轴不准 到 单曲那层(key 里带内容指纹)。
     ///
     /// 零值一律**不落盘**(见 setPlayerOffset):字典里留着的就是"用户真的配过的播放器",
     /// 设置页那个下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里了,也不能让
@@ -114,7 +114,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     /// 这个播放器**自己那一档的原始值**(设置页显示/编辑的就是它),没配过是 0。
     ///
-    /// ⚠️ 这不是"生效值" —— 生效的基准走 `baseOffsetMs(forBundleID:)`(二选一)。两者的区别在
+    /// 这不是"生效值" —— 生效的基准走 `baseOffsetMs(forBundleID:)`(二选一)。两者的区别在
     /// "没配过"这种情况上:这里返回 0,而生效基准会退回「全部播放器」那档。
     public func playerOffset(forBundleID bundleID: String?) -> Int {
         guard let bundleID, !bundleID.isEmpty else { return 0 }
@@ -157,7 +157,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     // MARK: - 按「电台 + 曲目」偏移
 
-    /// `台标哈希|歌手|歌名|指纹` → 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
+    /// `台标哈希|歌手|歌名|指纹` 到 偏移(毫秒)。**只在放电台时生效**,正常播放这首歌完全不受影响。
     ///
     /// # 为什么必须单独一层
     ///
@@ -258,7 +258,7 @@ public final class LyricsOffsetStore: ObservableObject {
     // 故意标 nonisolated——纯函数,不碰 offsets 这份实例状态,不需要 MainActor 隔离,
     // 也方便 selftest(跑在 main.swift 顶层、非 async 上下文)直接调用。
     public nonisolated static func trackKey(artist: String, title: String, lyrics: String, lyricsYRC: String) -> String {
-        // ⚠️ 前两段必须走 EnrichCacheKeys 那套归一化(跟 enrich 缓存 key 同一套),不能原样
+        // 前两段必须走 EnrichCacheKeys 那套归一化(跟 enrich 缓存 key 同一套),不能原样
         // 拼播放器报的字符串。
         //
         // 修的真 bug:播放侧传进来的是**播放器原始**歌手/歌名,而「歌词管理」传
@@ -295,7 +295,7 @@ public final class LyricsOffsetStore: ObservableObject {
         return out
     }
 
-    /// `歌手|歌名|指纹` → 前两段归一化后的同形 key。段数不对(不是这个仓库写出来的 key)
+    /// `歌手|歌名|指纹` 到 前两段归一化后的同形 key。段数不对(不是这个仓库写出来的 key)
     /// 就原样返回,不猜。歌手/歌名本身不含 `|`(enrichKey 那套 SplitN 3 的既有约定),所以
     /// 从右边切出指纹段、再从左边切出歌手段是安全的。
     private nonisolated static func normalizedTrackKey(_ key: String) -> String {
@@ -334,7 +334,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 取一份快照传进去,后台线程只做普通字典查找。
     public var offsetsSnapshot: [String: Int] { offsets }
 
-    // ⚠️ 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
+    // 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
     // 顺手钉进 LyricsPinStore、让 collector 不再自动换歌词源(理由见那个类型的注释)。
     // 给默认值等于允许某条路径静默漏掉这件事,而漏掉的表现是"用户校准过的歌过一阵自己
     // 又不准了",极难归因 —— 这个仓库在 offset key 上已经栽过一次同类的坑(见
@@ -357,7 +357,7 @@ public final class LyricsOffsetStore: ObservableObject {
     }
 
     /// 播放到这首歌时,把它的"已校准"钉住状态跟当前校正值重新对一遍——维护的是 set() 里
-    /// 那条同一个不变式(非零校正值⇄钉住),不是只补不清的单向操作。
+    /// 那条同一个不变式(非零校正值与钉住),不是只补不清的单向操作。
     ///
     /// 为什么必须双向:这里原来叫 backfillPinIfNeeded、只会钉不会
     /// 解钉——pin 只有在 set() 被调用的那一刻才会跟着改,可 set() 不是校正值变回 0 的
@@ -409,7 +409,7 @@ public final class LyricsOffsetStore: ObservableObject {
         trackOffsetCount = offsets.count
         persist()
         logger.notice("offset set to \(ms, privacy: .public)ms key=\(key, privacy: .public)")
-        // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,collector 不再自动重选歌词源
+        // 校正值非零 = 用户已经亲手把这首歌调准了 到 钉住它,collector 不再自动重选歌词源
         // (换一份内容就等于让这个校正值静默作废,见 LyricsPinStore)。归零就解钉。
         //
         // 注意 pinKey 跟上面那个 key 是**两套身份**:key 含歌词内容指纹(内容一换就查不到,

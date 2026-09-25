@@ -26,7 +26,7 @@ import (
 //
 //  1. **本功能上线之前的收听补不回来** —— 那时候一次收听只流向 Last.fm / ListenBrainz /
 //     网页中继三个都需要账号的地方,没连账号就等于没落盘。数据不存在,不是"存了没发"。
-//  2. **Last.fm 只接受约两周内的时间戳**。更老的会被服务端 ignore。⚠️ 这一条的依据是
+//  2. **Last.fm 只接受约两周内的时间戳**。更老的会被服务端 ignore。 这一条的依据是
 //     社区口径,**本仓库内没有实证**:原文引的是 lastfm.go call() 里的一句注释,而那句
 //     已删——它对**活路径**不成立(当场提交不可能超窗),是从回填场景抄过去的
 //     猜测。删掉不影响回填侧这条限制本身,但要调 backfillMaxAge 的人得自己实测,别再顺着
@@ -84,7 +84,7 @@ type backfillOutcome struct {
 // pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。
 //
 // 折叠规则(读侧唯一权威):
-//   - t=="l" 收 uts→收听行(同 uts 后来的覆盖先前的)
+//   - t=="l" 收 uts到收听行(同 uts 后来的覆盖先前的)
 //   - t=="s" 记 uts 已提交过
 //
 // 官方指南:"Scrobbles should be sent in order, therefore cached scrobbles should be sent
@@ -120,7 +120,8 @@ func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int)
 		if submitted[uts] {
 			continue
 		}
-		// 本地复核一遍"算不算一次收听"—— 不信任日志一定干净(手工编辑过、旧版本写的)。
+		// 本地复核一遍"算不算一次收听"—— 不信任日志一定干净(可能被手工编辑过,或是
+		// 旧版本写下的)。
 		// 短曲目按**当前**开关判(tooShortToScrobble):开关开着时写下的短曲目记录,关掉后再
 		// 回填会被这里筛掉——回填是把"现在也算收听"的记录补上去,不是复刻当时的口径。
 		if tooShortToScrobble(l.DUR) {
@@ -139,7 +140,7 @@ func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int)
 // markBackfilled 追加一条回执行。**先写盘再算成功** —— 写不进去就当没提交过,
 // 下次会重来(重复提交一条 vs 永久漏掉一条,前者更糟,所以这里必须先落盘)。
 //
-// ⚠️ 顺序上它必须在**收到服务端确认之后**调用:提前写等于把"发出去了"当成"接受了",
+// 顺序上它必须在**收到服务端确认之后**调用:提前写等于把"发出去了"当成"接受了",
 // 而超时那条路径恰恰是发出去了但不知道结果。
 func markBackfilled(uts int64) {
 	appendListenLogLine(listenLogLine{
@@ -178,7 +179,7 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		// 歌手名**原样用日志里存的播放器原始标签**(见 listenLogLine.AR 注释——那正是
 		// 为此存的原始输入)。
 		//
-		// ⚠️ 改。这里曾补过一层 canonical_artist 替换,目的是
+		// 改。这里曾补过一层 canonical_artist 替换,目的是
 		// "跟活路径口径一致"。现在活路径(lbMeta)已经撤销了那层替换,这里必须**同步
 		// 撤销** —— 否则就会反过来出现"当场提交发原串、事后回填发改写名"的新分裂,
 		// 正是当初补它想消灭的那个问题。撤销的完整依据见 lb.go 里 lbMeta 那段注释
@@ -325,8 +326,8 @@ func truncateForLog(b []byte) string {
 // 网络超时/连接中断意味着请求**可能已经到了 Last.fm 并落库**,只是回执丢在路上。这时候
 // 有两种选择,而它们的代价完全不对称:
 //
-//   - 下次自动重试 → 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
-//   - 就此搁置     → 最多少补一条,用户的历史仍然是干净的
+//   - 下次自动重试 到 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
+//   - 就此搁置     到 最多少补一条,用户的历史仍然是干净的
 //
 // 所以选后者。这些条目不会被自动重试;将来若要救回来,正路是拿 user.getRecentTracks
 // 按时间区间对账(那个方法不需要认证),确认服务端确实没有再放行 —— 那部分单独实现。
@@ -350,7 +351,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 	now := time.Now()
 	pending, tooOld := pendingBackfillListens(now)
 	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld}
-	// ⚠️ dry-run 的判断必须排在 `s == nil` **之前**。空跑一个请求都不发,压根不需要
+	// dry-run 的判断必须排在 `s == nil` **之前**。空跑一个请求都不发,压根不需要
 	// scrobbler —— 而"还没连账号"恰恰是这个功能最主要的场景:界面要在那个状态下把本地
 	// 已记录的清单列出来。顺序反了的话未连接时永远拿不到清单,新功能在主场景下直接失效
 	// (被 TestDryRunReturnsListNewestFirst 抓到)。
@@ -396,7 +397,7 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 				log.Printf("backfill: aborted, %d listen(s) stay pending (server refused, nothing stored): %v", len(batch), err)
 				return out
 			}
-			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)→ 可能已落库,
+			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)到 可能已落库,
 			// 重发是最大的自造重复源,整批进隔离。
 			for _, it := range batch {
 				markQuarantined(it.UTS)

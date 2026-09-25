@@ -70,7 +70,7 @@ public enum ReorderDrag {
         return min(max(translation, first - mid), last - mid)
     }
 
-    /// 松手:把可见列表里 `from` → `to` 的一次移动写回完整排列,不可见(禁用)的槽位不动。
+    /// 松手:把可见列表里 `from` 到 `to` 的一次移动写回完整排列,不可见(禁用)的槽位不动。
     /// `to` 是被拖行在可见列表里的**最终**下标。下标越界或原地不动时原样返回。
     public static func moved<Element>(_ order: [Element], isVisible: (Element) -> Bool, from: Int, to: Int) -> [Element] {
         var visible = order.filter(isVisible)

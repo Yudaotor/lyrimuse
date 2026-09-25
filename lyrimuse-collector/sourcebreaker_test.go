@@ -54,7 +54,7 @@ func TestLyricSourceForHost(t *testing.T) {
 }
 
 // 连续两次网络失败才开;之后**每熔断一轮**按 15/30/60/120/300 秒升一档;一次成功整体清零。
-// "每熔断一轮"是修正过的口径(原来是每失败一个请求升一档),所以这里每升一档
+// 是"每熔断一轮"升一档,不是"每失败一个请求"升一档——每升一档
 // 之前都得先把上一档的冷却等过去 —— 冷却窗口里的失败不升档,那一条由下面那个测试单独钉。
 func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	b, clk := newTestBreaker()
@@ -95,12 +95,12 @@ func TestLyricSourceBreakerTripsAfterTwoFailuresAndEscalates(t *testing.T) {
 	}
 }
 
-// ⚠️ 回归钉:一轮搜索里同一个源要发好几个请求(网易云 4 个歌手别名变体、QQ 的 smartbox +
+// 回归钉:一轮搜索里同一个源要发好几个请求(网易云 4 个歌手别名变体、QQ 的 smartbox +
 // client_search),源整个挂掉时它们在同一瞬间一起失败 —— 这**一波**故障只能升一档。
 //
 // 之前档位是 `st.consecutive - lyricSourceBreakerTripAfter`,拿失败请求数当档位,
-// 于是一次抖动就把阶梯走到头。实测日志:QQ 在 14:38:19.804 这同一毫秒里连跳 15s→30s→1m→2m
-// →5m 五档,网易云 0.8 秒内到顶、consecutive 一路涨到 22;整份日志冷却到顶 5 分钟 331 次,
+// 于是一次抖动就把阶梯走到头。实测日志:QQ 在 14:38:19.804 这同一毫秒里连跳 15s到30s到1m到2m
+// 到5m 五档,网易云 0.8 秒内到顶、consecutive 一路涨到 22;整份日志冷却到顶 5 分钟 331 次,
 // 可配对的 35 例里 14 例是"第一档 15 秒都没过完就到顶"。用户看得见的后果是一次 2 秒的 DNS
 // 抖动换来七个源停摆 5 分钟(《One Last Kiss》首播被判"暂无歌词")。
 func TestLyricSourceBreakerDoesNotEscalateWithinOneCooldown(t *testing.T) {
@@ -129,7 +129,7 @@ func TestLyricSourceBreakerDoesNotEscalateWithinOneCooldown(t *testing.T) {
 	}
 	// 成功一次**当场解除冷却,但不重置档位**(修)。
 	//
-	// ⚠️ 这里原来断言的是"成功后回到第一档 15s" —— 那条断言钉住的正是后来要修的缺陷:
+	// 这里原来断言的是"成功后回到第一档 15s" —— 那条断言钉住的正是后来要修的缺陷:
 	// 200/404 只证明"这会儿能通",不证明"限流已经过去"。对 lrclib 那种用 503 限流、
 	// 同时又常态返 404("这首歌没有")的源,两者交错之下档位永远停在第一档,实测 12 小时
 	// 103 次跳闸里 98 次是 trip=1,冷却一过就再撞一次限流,等于每 15 秒骚扰它一轮。
@@ -215,7 +215,7 @@ func TestLyricSourceBreakerIgnoresCanceledAnd4xx(t *testing.T) {
 }
 
 // 传输层失败分类(sourcebreaker.go 最后一节)。错误链按 http.Client.Do 真实返回的
-// 形状来造:*url.Error → *net.OpError → *net.DNSError,分类必须能逐层解开;另一半靠 httptrace
+// 形状来造:*url.Error 到 *net.OpError 到 *net.DNSError,分类必须能逐层解开;另一半靠 httptrace
 // 的 DNS 轨迹 —— 那是评审抓到的坑:各源 client 都设了 Client.Timeout,DNS **挂住**时 Go 会把
 // 错误整体换成 *http.timeoutError(纯字符串、无 Unwrap),错误链里再也没有 DNSError,只看链
 // 会把"DNS 不答"归成 connect_failed。
@@ -294,11 +294,11 @@ func TestLyricSourceTransportFailureCodes(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		b.observe("music.163.com", dns, 0, "")
 	}
-	// QQ:1 次 DNS + 2 次超时 → 超时占多数。
+	// QQ:1 次 DNS + 2 次超时 到 超时占多数。
 	b.observe("c.y.qq.com", dns, 0, "")
 	b.observe("c.y.qq.com", timeout, 0, "")
 	b.observe("u.y.qq.com", timeout, 0, "")
-	// 酷狗:1 次 DNS + 1 次超时 → 并列,DNS 优先。
+	// 酷狗:1 次 DNS + 1 次超时 到 并列,DNS 优先。
 	b.observe("mobilecdn.kugou.com", timeout, 0, "")
 	b.observe("mobilecdn.kugou.com", dns, 0, "")
 	// LRCLIB:只回过 503。
@@ -339,7 +339,7 @@ func TestLyricSourceTransportFailureCodes(t *testing.T) {
 	if _, cooling := b.coolingDown("migu"); cooling {
 		t.Error("咪咕最后一次成功,不该冷却")
 	}
-	// 之后网易云成功一次 → 从名单里消失。
+	// 之后网易云成功一次 到 从名单里消失。
 	b.observe("music.163.com", nil, 200, "")
 	if _, still := b.transportFailureCodes()["netease"]; still {
 		t.Error("网易云拿到响应后不该再报 dns_failed")
@@ -392,7 +392,7 @@ func TestLyricSourceBreakerPlanRoundNeverSkipsAllEnabled(t *testing.T) {
 	if len(plan) != 2 {
 		t.Fatalf("未启用的冷却源也应跳过,实际 %v", plan)
 	}
-	// 什么都没冷却 → nil
+	// 什么都没冷却 到 nil
 	b2, _ := newTestBreaker()
 	if plan := b2.planRound(lyricSourceNames, allOn); plan != nil {
 		t.Fatalf("无冷却时应返回 nil,实际 %v", plan)
@@ -425,8 +425,8 @@ func TestLyricSourceRoundViaContext(t *testing.T) {
 	}
 }
 
-// 这一轮有源被跳过而落成"没歌词"的条目该早点补搜,分两档:被跳过的源还在冷却 → 等 10 分钟;
-// 都不冷却了 → 30 秒。没跳过的照旧 24 小时;补过一次之后回到正常退避。
+// 这一轮有源被跳过而落成"没歌词"的条目该早点补搜,分两档:被跳过的源还在冷却 到 等 10 分钟;
+// 都不冷却了 到 30 秒。没跳过的照旧 24 小时;补过一次之后回到正常退避。
 func TestNeedsLyricsFirstFillShortIntervalWhenSourcesSkipped(t *testing.T) {
 	orig := anyLyricSourceCooling
 	defer func() { anyLyricSourceCooling = orig }()

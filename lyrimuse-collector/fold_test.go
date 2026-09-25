@@ -66,7 +66,7 @@ func TestNormLooseFoldsDiacritics(t *testing.T) {
 				p[0], normLoose(p[0]), p[1], normLoose(p[1]))
 		}
 	}
-	// ⚠️ 反向保证：折叠不能把本来不同的名字揉成同一个。
+	// 反向保证：折叠不能把本来不同的名字揉成同一个。
 	if normLoose("Sade") == normLoose("Suede") {
 		t.Error("折叠过度：Sade 和 Suede 不该相等")
 	}

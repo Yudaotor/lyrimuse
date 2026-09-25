@@ -45,7 +45,7 @@ enum L10n {
         return resolveSystem(Locale.preferredLanguages.first ?? "zh-hans")
     }
 
-    /// 系统首选语言标签 → 语言包目录名。规则本体在 LyrimuseCore 的 `UILanguage`(selftest 钉着
+    /// 系统首选语言标签 到 语言包目录名。规则本体在 LyrimuseCore 的 `UILanguage`(selftest 钉着
     /// zh-Hant-TW / zh-HK / zh-Hans-HK / 裸 zh / en-GB / ja 这些标签的分流),这里只是转发。
     static func resolveSystem(_ preferred: String) -> String {
         UILanguage.resolve(preferred: preferred)
@@ -64,11 +64,11 @@ enum L10n {
     /// 界面语言对应的 `Locale` —— 给那些**不走 .strings 表、但仍该跟着界面语言变**的系统
     /// API 用,典型是 `Locale.localizedString(forIdentifier:)` 生成的语言名/地区名。
     ///
-    /// 直接用 `Locale.current` 是个真实踩过的坑(现象是):「翻译语言包」下拉里
+    /// 直接用 `Locale.current` 会踩一个坑:「翻译语言包」下拉里
     /// 语言名走 `Locale.current`、状态文案走 `L10n.t()`,于是把界面切成英文之后,同一行里
     /// 左边是「英语」右边是 "Downloaded",中英混排。
     ///
-    /// ⚠️ 不是所有 `Locale.current` 都该换成它 —— 判断标准是"这个值是说给眼睛看的界面文本,
+    /// 不是所有 `Locale.current` 都该换成它 —— 判断标准是"这个值是说给眼睛看的界面文本,
     /// 还是关于用户这个人/这台机器的事实":`AppSettings.userReadsChinese`(这个人读不读中文)
     /// 和译文目标语言的"跟随系统"档(母语可能既非中也非英,而界面只有中英两版)都必须继续
     /// 跟随**系统**语言,换成界面语言反而是 bug。

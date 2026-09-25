@@ -20,17 +20,23 @@ import (
 	"unicode"
 )
 
-// 机器翻译兜底:歌词源自带社区译文时一律用社区译文,没有才拿 MyMemory 机翻补上。
+// 机器翻译兜底:歌词源自带社区译文时一律用社区译文,没有才机翻补上。
 //
 // 为什么需要:lyrics_tr 目前只在网易云/Musixmatch 恰好带社区翻译时才有。实测本机缓存
 // 179 条有歌词的记录里带译文的 40 条(22%),而"歌词里没有中文"的外语歌 32 条里带译文的
 // 只有 1 条 —— 也就是听英文/日文歌时 97% 看不到翻译,恰恰是最需要翻译的场景。
 //
-// 为什么是 MyMemory:免费、不需要 API key(可选传邮箱提额),而且实测日译中/英译中的质量
-// 对"看个大意"这个用途够用:
+// 三级降级链,按顺序试,前一级失败才走下一级:
+//  1. 端上翻译(onDeviceTranslate,macOS 15+ 且语言包已装):不联网、歌词不出这台机器;
+//  2. Google(googleTranslateLines):无 key、无日配额,未公开端点,挂了自动冷却;
+//  3. MyMemory(translateChunk):公开 API,但有日配额。
 //
-//	君のことが好きだから      → 因为我喜欢你
-//	The painful youth I've had → 我经历过的痛苦的青春
+// 取舍与端点实测见 docs/features/10-translation-romanization.md 决策 20。
+//
+// MyMemory 实测日译中/英译中的质量对"看个大意"这个用途够用:
+//
+//	君のことが好きだから      到 因为我喜欢你
+//	The painful youth I've had 到 我经历过的痛苦的青春
 //
 // 译文沿用**主歌词自己的时间戳**逐行生成,不另求时间轴 —— 天然逐行对齐,比社区译文各自
 // 带一套时间戳还准(播放端是按最近时间戳配对的,见 LyricsSyncEngine.nearestText)。
@@ -106,7 +112,7 @@ func chunkForTranslation(texts []string) [][]string {
 // (translationUsable 里那三处),一份中英混排的中文译文当然算中文译文。
 // 但用它来判"正文要不要翻"就错了 —— 华语歌里整行英文的副歌很常见,
 // 《方大同 - 月亮代表我的心》44 行里 35 行中文、8 行 "It represent my heart!",
-// 汉字占多数 ⇒ 判成"已经是中文" ⇒ 整首跳过,那 8 行英文永远等不到译文
+// 汉字占多数 到 判成"已经是中文" 到 整首跳过,那 8 行英文永远等不到译文
 // (现象是的就是这个)。
 //
 // 两处调用都删了,改由**逐行**判定接管:
@@ -114,8 +120,8 @@ func chunkForTranslation(texts []string) [][]string {
 //     省配额的意图一样达到,而且更准);
 //   - machineTranslateLRCWithBase 内部本来就是逐行挑行、翻完按下标散回去的
 //     (没送去翻的行留空串),那套逻辑一直是对的,只是被这道整首闸挡在门外没机会跑。
-// 逐行判据是 dominantScript:「我们的时光 baby 一起走过」主体是汉字 ⇒ 不翻;
-// 「It represent my heart!」主体是拉丁 ⇒ 翻。行内混排和整行外语,这才分得开。
+// 逐行判据是 dominantScript:「我们的时光 baby 一起走过」主体是汉字 到 不翻;
+// 「It represent my heart!」主体是拉丁 到 翻。行内混排和整行外语,这才分得开。
 
 // looksChinese 判断一段文本是不是中文。只认中文这一种语言 —— 判别只是个兜底,用在
 // 没记语言的老条目上,而"是不是中文"恰好是唯一需要判、也判得准的一种(会自带译文的
@@ -137,7 +143,7 @@ func looksChinese(text string) bool {
 
 // translationUsable 判断一条已有的译文对**当前**的目标语言还算不算数。
 //
-// ⚠️ 判据**不能**是"有译文就跳过":一首网易云歌词一旦带上它那份
+// 判据**不能**是"有译文就跳过":一首网易云歌词一旦带上它那份
 // 固定中文的社区译文,把设置改成日语的用户就永远只能看到中文 —— 机翻根本没机会跑。
 // 而降低网易云/QQ 的打分并不能解决这件事:打分里压根没有"有译文"这一项(见
 // scoreLyricCandidate),译文不参与选源;降分只会把原文歌词的质量一起赔进去。
@@ -145,7 +151,7 @@ func translationUsable(e enrichEntry, target string) bool {
 	if e.LyricsTr == "" {
 		return false
 	}
-	// ⚠️ 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
+	// 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
 	//
 	// 实测抓到:App 侧"采纳候选/手改译文"那条路(EnrichCacheStore.saveEdit)
 	// 只写 lyrics_tr,不动 lyrics_tr_lang / lyrics_tr_source。于是采纳一份网易云的中文
@@ -178,7 +184,7 @@ type translationResult struct {
 // machineTranslateLRC 把主歌词逐行机翻成 target 语言,返回一份跟主歌词同时间戳的译文 LRC。
 // 返回空串表示"这次没有译文"(已经是目标语言/一行都没翻成/配额用尽),不是错误。
 // translateBaseURL 为空时走 MyMemory 正式端点。留这个包级变量是为了让测试能把
-// backfillTranslation **整条**路径(翻译 → 写缓存 → 落盘)跑起来,而不是只能测中间那段。
+// backfillTranslation **整条**路径(翻译 到 写缓存 到 落盘)跑起来,而不是只能测中间那段。
 var translateBaseURL string
 
 func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, artist, title string) (translationResult, error) {
@@ -187,8 +193,8 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, a
 
 // ── 逐行按文字系统分流 ───────────────────────────────────────────────────────
 //
-// 实测坐实的真 bug:宇多田ヒカル 的 First Love 是**日英混排**(主歌日文、
-// 副歌整段英文),译文目标选英文时,两个后端对**整批文本**做语种识别都判成"英文",于是
+// 日英混排的歌(主歌日文、副歌整段英文,如宇多田ヒカル的 First Love)译文目标选
+// 英文时,两个后端对**整批文本**做语种识别都判成"英文",于是
 //
 //	on-device helper: {"ok":false,"source":"en","reason":"same-language"}
 //	MyMemory:         "PLEASE SELECT TWO DISTINCT LANGUAGES"
@@ -201,7 +207,7 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target, a
 // 英文行本来就不需要译文(assembleTranslationLRC 也早就会跳过"没翻动"的行),剩下的日文行
 // 单独成批,后端识别出来就是日文,两边都能正常工作。
 //
-// 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 → 英文译文)这套判断
+// 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 到 英文译文)这套判断
 // 帮不上忙 —— 但那种情况整批识别本来也会失败,不比现在更糟。
 type lyricScript int
 
@@ -303,11 +309,11 @@ func anyLineNeedsTranslation(lyrics, target string) bool {
 }
 
 // machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
-// 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
+// 单测靠它把整条链路(分块 到 请求 到 行数校验 到 回写时间戳)跑在本地假服务器上。
 // looksLikeLyricHeaderLine 认 LRC 的抬头行 ——「曲名 - 歌手」/「歌手 - 曲名」。
 // 判据整体照搬 Swift 侧 LyricsSyncEngine.looksLikeHeaderLine(展示端靠它把抬头行藏掉),
 // 两边各维护一份的理由跟 sanitizeFilename 那对一样:纯确定性的字符串比对,没有会随时间
-// 演进的业务判断。⚠️ 两条取舍必须跟着一起搬,少一条就会开始吞真歌词:
+// 演进的业务判断。 两条取舍必须跟着一起搬,少一条就会开始吞真歌词:
 //
 //  1. **只在第一条正文行认**。调用方负责只对第一行问。
 //  2. **曲名侧是"去括号后等值"而不是"出现在行内"**。Swift 那边的 selftest 抓到过反例:
@@ -403,11 +409,11 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
 	// "written*3 < attempted" 那道阈值、整份译文被判作废。
 	//
-	// ⚠️ 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
+	// 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
 	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
 	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
 	//
-	// 按原文**去重**再送翻(Michael Jackson《Beat It》实测坐实):副歌反复的歌
+	// 按原文**去重**再送翻:副歌反复的歌(如 Michael Jackson《Beat It》)
 	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
 	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
 	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
@@ -468,7 +474,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		return full
 	}
 	// 优先端上翻译:不联网、无配额、歌词不出这台机器,而且没有 500 字符的分块限制,
-	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到 MyMemory。
+	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到网络翻译。
 	if out, err := onDeviceTranslate(ctx, appleLangCode(target), uniqueTexts); err == nil {
 		return assembleTranslationLRC(lines, scatter(out), totalAttempted), nil
 	} else if !errors.Is(err, errOnDeviceUnavailable) {
@@ -617,13 +623,13 @@ const (
 // 也就是机制在、只是没有触发的机会。
 //
 // 放在启动时扫一遍正好覆盖这个场景:Swift 侧改完译文语言会重启 collector
-// (FeatureSettingsStore.save → CollectorControl.restartAndWaitAsync)。
+// (FeatureSettingsStore.save 到 CollectorControl.restartAndWaitAsync)。
 //
 // **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云/Musixmatch)
 // 质量高于机翻,而且清掉之后万一机翻失败(没网/超额),用户就一份译文都没有了;留着它
 // translationUsable 照样判它不可用、让机翻覆盖过去,那条路本来就通。
 //
-// ⚠️ 调用点必须夹在 importLyricsFromFiles() 和 exportLyricsFiles() 之间:前者让磁盘上的
+// 调用点必须夹在 importLyricsFromFiles() 和 exportLyricsFiles() 之间:前者让磁盘上的
 // lyrics/ 文件赢(那是权威源),后者会把这里清空的字段同步成"删掉对应的 .tr.lrc"
 // (见 lyricsexport.go 里 content == "" 时的 os.Remove)。顺序错了,清掉的译文会在下次
 // 启动被 import 原样导回来。
@@ -690,7 +696,7 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	// 逐行看:一行都不需要翻(整首都已经是目标语言那套文字)时别起 goroutine —— 否则会
 	// 一次次翻出空结果、把三次重试额度白白烧完,之后这首歌就算真该翻也不会再试了。
 	//
-	// ⚠️ 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
+	// 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
 	// "汉字占多数"的歌整首跳过,于是华语歌里整行英文的副歌永远等不到译文。
 	// 已删除,理由见文件上方那段【已删除】注释 —— 下面这条逐行判定完全覆盖它的意图。
 	if !anyLineNeedsTranslation(e.Lyrics, target) {
@@ -703,7 +709,7 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	return true
 }
 
-// myMemoryLangCode 把 features.LyricsTranslationLanguage 的 ISO 639-1 代码转成 MyMemory
+// myMemoryLangCode 把 features().LyricsTranslationLanguage 的 ISO 639-1 代码转成 MyMemory
 // 认的写法。只有中文需要转:MyMemory 要 zh-CN/zh-TW 这种带地区的写法,而那个设置里存的是
 // 两位代码。其余语言原样透传。
 func myMemoryLangCode(iso string) string {
@@ -747,12 +753,12 @@ func backfillTranslation(key string) {
 	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
 	// 界面永远看不到。现象是"译文语言切成英文了还是没有翻译",日志里译文明明
 	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
-	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
+	// backfillPeripheralFields 一直是"解锁到saveEnrichCache",另外三条补全路径全漏了。
 	//
 	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
 	// 在持锁期间调用会死锁。
 	//
-	// 导出只在歌词族字段真的变了的时候做:它每次都要全量扫一遍 enrichCache,而这几条
+	// 导出只在歌词族字段真的变了的时候做,而且只导这一条(exportLyricsFilesFor):这几条
 	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
 	lyricsChanged := false
 	defer func() {
@@ -880,7 +886,7 @@ func onDeviceTranslate(ctx context.Context, target string, lines []string) ([]st
 	return res.Lines, nil
 }
 
-// appleLangCode 把 features.LyricsTranslationLanguage 的 ISO 639-1 代码转成 Apple
+// appleLangCode 把 features().LyricsTranslationLanguage 的 ISO 639-1 代码转成 Apple
 // Translation 认的 BCP-47 写法。跟 myMemoryLangCode 分开:同一个"中文"两边写法不同
 // (zh-Hans vs zh-CN),混用会让其中一条路静默失效。
 func appleLangCode(iso string) string {

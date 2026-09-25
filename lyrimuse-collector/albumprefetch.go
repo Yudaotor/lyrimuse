@@ -18,20 +18,25 @@ import (
 // 首歌时,大概率已经在后台解析完了,不用现等。跟正常路径复用同一套 enrichCache/
 // enrichInflight 去重,不会跟真播放到那首歌时的解析撞车重复跑。
 //
-// 曲目表从哪来,按**歌词来源**分流,而不是按播放器:
+// 曲目表从哪来:播放器本机有这张专辑的曲目表就用它自己的,没有才问歌词平台:
 //
-//   Apple Music → AppleScript 问 Music.app 的本地资料库。最准,因为曲目字符串跟播放器
-//                 上报的逐字节一致,算出来的 enrich key 必然对得上。
-//   其余播放器  → 用解析这首歌时命中的那个平台的专辑接口(目前:网易云)。
+//   Apple Music 到 AppleScript 问 Music.app 的本地资料库。最准,因为曲目字符串跟播放器
+//                 上报的逐字节一致,算出来的 enrich key 必然对得上。资料库里没收全的,按目录锚点
+//                 的专辑 id 从 Apple 目录补(applemusicalbum.go)。
+//   Spotify     到 客户端自己的元数据缓存(spotifyalbum.go),同样是播放器自己的写法;
+//                 那张专辑没被客户端加载过时退回下一条。
+//   QQ 音乐     到 QQ 自己的专辑曲目表(按播放列表归档里这首的 albumMid 问);问不到退回下一条。
+//   酷狗        到 酷狗自己的专辑曲目表(按队列里这首的文件 hash 问专辑);问不到退回下一条。
+//   汽水        到 汽水网页版的专辑分享页(按这首的专辑 id);问不到退回下一条。
+//   其余播放器  到 用解析这首歌时命中的那个平台的专辑接口(目前:网易云)。
 //
-// 为什么不是"按播放器":trackEnrichment 里除了广告判断**没有任何 bundleID 分支** ——
-// 你用 Spotify 听歌时,歌词本来就是去网易云/QQ 搜的。所以要的不是"问 Spotify 它的专辑
-// 有哪些歌"(那需要 Spotify Web API 的 OAuth 凭据,仓库里没有也不该硬编码),而是"这张
-// 专辑有哪些歌" —— 后者网易云就能答,且对 Spotify / QQ 音乐 / 网易云三个播放器通用。
+// 播放器自己的曲目表优先,是因为写进 enrich key 的歌名要跟它真播到时报的一致;歌词平台的曲目表
+// 在繁简、大小写、版本后缀上常跟播放器不同,下面的宽松去重兜得住一部分,兜不住的就是白解析一首。
+// Spotify 只走本地缓存、不走 Web API:在线接口要 OAuth 凭据,仓库里没有也不该硬编码。
+// 网易云那条对任何播放器通用 —— 要的只是"这张专辑有哪些歌"。
 //
-// 之前这里**只有** Music.app 那一条,而调用点没有任何播放器判断:用别的播放器
-// 听歌时,它拿着别家的专辑名去查 Apple Music 资料库,必然查不到,每换一张专辑白跑一次
-// osascript;更糟的是那段脚本没有 running 守卫,会把没开的 Music.app 拉起来。
+// 每条来源都必须按 bundleID 挑:拿别家的专辑名去查 Music.app 资料库必然查不到,还会白跑一次
+// osascript(那段脚本没有 running 守卫,会把没开的 Music.app 拉起来)。
 
 // albumPrefetchMaxTracks 是安全阀——防止专辑名字段被打上"整个作品集"这类离谱大合集
 // (几十上百首)时,一次性炸出上百个并发解析请求。正常专辑几首到二十来首都远低于这个数,
@@ -176,9 +181,9 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	// 修正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
 	// 精选集。把三档分数真的量出来之后,那个担心站不住:
 	//
-	//   albumScore("神经志",                "神經志 The Journal")   = 100  ← 想要的
-	//   albumScore("Bad",                   "Bad 25th Anniversary") = 100  ← 怕的
-	//   albumScore("King of Pop [Box set]", "Bad")                  =   0  ← 最怕的,本来就进不来
+	//   albumScore("神经志",                "神經志 The Journal")   = 100  —— 想要的
+	//   albumScore("Bad",                   "Bad 25th Anniversary") = 100  —— 怕的
+	//   albumScore("King of Pop [Box set]", "Bad")                  =   0  —— 最怕的,本来就进不来
 	//
 	// 真正灾难性的那种(76 首的合集、上百首的作品集)名字跟本地专辑毫不沾边,天然是 0 分,
 	// 不需要 200 这道闸去挡。而 200 挡掉的全是"同一张专辑、写法不同"——繁简(normLoose
@@ -203,12 +208,12 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	defer cancel()
 	// tab/linefeed 是 AppleScript 内置常量(制表符/换行符),用它们而不是手动往脚本字符串里
 	// 塞转义序列——更不容易写错,也不用担心 Go/AppleScript 两层转义规则互相打架。
-	// ⚠️ 先判 running 再 tell:`tell application "Music"` 只要发出任何命令就会**启动**
+	// 先判 running 再 tell:`tell application "Music"` 只要发出任何命令就会**启动**
 	// Music.app —— 一个只用 Spotify/QQ 音乐的用户会被每换一张专辑就静默拉起一次 Apple
 	// Music。本仓其它几段 Music/Spotify 脚本(getStateScript、spotifyPositionScript)
 	// 开头都有同样的守卫,同一个理由。
 	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
-	// 纪录片)挡在 AppleScript 这一层——实测坐实:Michael Jackson《XSCAPE
+	// 纪录片)挡在 AppleScript 这一层——例如 Michael Jackson《XSCAPE
 	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
 	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
 	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部歌词源,注定全军覆没,

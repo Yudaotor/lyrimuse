@@ -16,7 +16,7 @@ import (
 // TestManualPickFingerprintMatchesSwift 用一组金标准值把两边钉在一起,Swift selftest 里有
 // 同样输入、同样期望的一条。
 //
-// ⚠️ **不含时间戳、不含 YRC**,这不是省事而是要害:collector 启动时的几道规范化
+// **不含时间戳、不含 YRC**,这不是省事而是要害:collector 启动时的几道规范化
 // (migrateYRCWhitespaceTokens 重排逐字词条、migrateLyricTimelines 重挂行时间轴)会在采纳
 // 之后的几秒内改写内容,对原始字节取指纹的话当场失配、开关一首都锁不上,而且完全静默。
 // 完整来龙去脉见 Swift 侧 ManualPickLock.fingerprint 的头注。
@@ -90,7 +90,7 @@ func manualPickCanonicalLyrics(lyrics string) string {
 //
 // # 调用时机
 //
-// ⚠️ 必须排在 importLyricsFromFiles / migrateYRCWhitespaceTokens / migrateLyricTimelines
+// 必须排在 importLyricsFromFiles / migrateYRCWhitespaceTokens / migrateLyricTimelines
 // **之后** —— 那三步都会重写 Lyrics/LyricsYRC,在它们之前算指纹的话,写下的指纹当场就
 // 过期了,老用户打开开关照样一首都锁不上(而且同样是静默的)。见 main.go 的调用点。
 func migrateManualPickMarks() {

@@ -9,16 +9,14 @@ import Foundation
 func runLastfmTests() {
     // ---- 「第 N 次听」的作废判据:按最新一条收听的时刻,而不是页内出现次数 ----
     //
-    // 现象是「第 15 次听下面紧跟着第 21 次听」。根因:原来只按页内出现次数判作废,而连播同一
-    // 首歌时这一页很快被它占满 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,缓存总数于是
-    // 永久冻结(实测冻在 15,真实合计 22 = 园游会 10 + 園遊會 12 两个 Last.fm 实体),而实时行
-    // 是每次换歌现取的、显示 21。完整推导见 PlayCountRecency 的注释。
+    // 页内出现次数在连播同一首歌时会饱和 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,
+    // 不能拿来判断要不要作废旧计次。完整推导见 PlayCountRecency 的注释。
     do {
         typealias R = PlayCountRecency
         func at(_ e: Double) -> Date { Date(timeIntervalSince1970: e) }
         let k = "周杰倫|园游会"
 
-        // 同一个 key 多条 → 取**最新**那条(不是第一条也不是最后一条)
+        // 同一个 key 多条 到 取**最新**那条(不是第一条也不是最后一条)
         expectEqual(R.newest([(k, at(1000)), (k, at(3000)), (k, at(2000))])[k], at(3000),
                     "次数作废: 取同曲最新那条的时刻")
 
@@ -50,7 +48,7 @@ func runLastfmTests() {
         let now = at(10_000)
         let throttle: TimeInterval = 300
 
-        // 用户那一幕:页内 11 行 vs 缓存 3 → 缓存必错。本进程还没问过(nil)→ 立刻作废,
+        // 用户那一幕:页内 11 行 vs 缓存 3 到 缓存必错。本进程还没问过(nil)到 立刻作废,
         // 这正是"重启后第一轮就质疑一次"。
         expectEqual(R.contradicted(onPage: 11, cachedTotal: 3, lastFetched: nil,
                                    now: now, recheckAfter: throttle), true,
@@ -78,10 +76,10 @@ func runLastfmTests() {
 
     // ---- 「第 N 次听」判据④:距离上次验证太久,不看页内次数 ----
     //
-    // 真实案例:方大同《ORANGe MOON》缓存冻结在 1,直接查 Last.fm track.getInfo 核实
-    // 真实 userplaycount = 31。根因是判据③的第一道闸 `onPage > cachedTotal`:这首歌很久
-    // 没被主动播放,这次只是又听了一次重新出现在页面上,onPage=1 恰好没有超过冻住的旧值 1,
-    // ③直接判"没问题"、压根不会走到"上次验证是多久以前"这一步。这条判据不依赖页内次数,
+    // 根因是判据③的第一道闸 `onPage > cachedTotal`,只能抓"缓存明显偏小"的情况
+    // (比如缓存冻结在 1、服务端真实是 31 这种量级差):这首歌很久没被主动播放,这次
+    // 只是又听了一次重新出现在页面上,onPage=1 恰好没有超过冻住的旧值 1,③直接判
+    // "没问题"、压根不会走到"上次验证是多久以前"这一步。这条判据不依赖页内次数,
     // 只问时间,补上这个盲区。
     do {
         typealias R = PlayCountRecency
@@ -89,18 +87,18 @@ func runLastfmTests() {
         let now = at(1_000_000)
         let maxAge: TimeInterval = 24 * 60 * 60
 
-        // 从没验证过(nil)→ 无条件过期,宁可多查一次
+        // 从没验证过(nil)到 无条件过期,宁可多查一次
         expectEqual(R.stale(lastFetched: nil, now: now, maxAge: maxAge), true,
                     "判据④: 从没验证过(nil) → 过期")
-        // 刚验证过 → 不过期
+        // 刚验证过 到 不过期
         expectEqual(R.stale(lastFetched: at(1_000_000 - 60), now: now, maxAge: maxAge), false,
                     "判据④: 1 分钟前刚验证过 → 不过期")
-        // 恰好到点(>=)→ 过期;差一点没到 → 不过期(边界值两侧都要对)
+        // 恰好到点(>=)到 过期;差一点没到 到 不过期(边界值两侧都要对)
         expectEqual(R.stale(lastFetched: at(1_000_000 - 24 * 60 * 60), now: now, maxAge: maxAge), true,
                     "判据④: 恰好 24 小时前验证过 → 过期(>= 边界)")
         expectEqual(R.stale(lastFetched: at(1_000_000 - 24 * 60 * 60 + 1), now: now, maxAge: maxAge), false,
                     "判据④: 差 1 秒不到 24 小时 → 还不过期")
-        // ⚠️ 核心场景:即使页内次数(1)没有超过缓存总数(旧值 1),只要验证时刻够久,判据④
+        // 核心场景:即使页内次数(1)没有超过缓存总数(旧值 1),只要验证时刻够久,判据④
         // 依然要能独立地判定过期——它完全不看这两个数字,这条断言就是在确认这一点
         // (跟判据③形成对比:同样的 onPage=1/cachedTotal=1,contradicted 会判 false)。
         expectEqual(R.contradicted(onPage: 1, cachedTotal: 1, lastFetched: nil,
@@ -119,13 +117,13 @@ func runLastfmTests() {
         typealias R = PlayCountRecency
         // 这一组的 currentPlayCounted 全传 false = "这一次还没落库",也就是
         // 之前唯一存在的那条路径,行为必须逐字不变(下面第二组管已落库的情形)。
-        // 正题:trackPlayCounts 学到了更高的总数 → 采纳,+1 换算成显示值
+        // 正题:trackPlayCounts 学到了更高的总数 到 采纳,+1 换算成显示值
         expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 27, currentPlayCounted: false), 28,
                     "nowPlayingCount 追赶: 27+1=28,比当前 17 高 → 采纳")
         // 还没显示过(nil,理论上不该发生在这条路径,但当 0 处理不炸)
         expectEqual(R.reconciledNowPlayingCount(current: nil, freshTotal: 5, currentPlayCounted: false), 6,
                     "nowPlayingCount 追赶: current 为 nil 时按 0 比较")
-        // ⚠️ 只能涨、不能跌 —— 新数字更低时必须按兵不动,不能让显示的数字倒退
+        // 只能涨、不能跌 —— 新数字更低时必须按兵不动,不能让显示的数字倒退
         expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10, currentPlayCounted: false), nil,
                     "nowPlayingCount 追赶: 新总数更低 → 不采纳,返回 nil")
         // 等于当前值:没有新信息,不该触发一次无意义的写入(SwiftUI 不必要的重渲染)
@@ -138,16 +136,14 @@ func runLastfmTests() {
 
     // ---- 当前这次播放已经落库时不再 +1 ----
     //
-    // 实测(《Cow-girl moderne》,第一次听):06:02:06 开播 → 约 06:03:30 越过 scrobble
-    // 门槛、Last.fm 记账 userplaycount 0→1 → 06:03:45 resolvePlayCounts 取到 1 → 追赶把
-    // 徽标从 1 抬到 2。同一次收听算了两遍。第一次听的歌**必然**中招:正是这次 scrobble 让
-    // 它第一次出现在最近记录里,新 key 无条件取数,必定撞在"已入账、还在播"的窗口上。
+    // 第一次听的歌**必然**中招:正是这次 scrobble 让它第一次出现在最近记录里,新 key
+    // 无条件取数,必定撞在"已入账、还在播"的窗口上,把同一次收听算两遍。
     do {
         typealias R = PlayCountRecency
-        // 正题:总数已经含这一次 → 不加那个 1,维持原数字
+        // 正题:总数已经含这一次 到 不加那个 1,维持原数字
         expectEqual(R.reconciledNowPlayingCount(current: 1, freshTotal: 1, currentPlayCounted: true), nil,
                     "已落库: 1+0=1 与当前相等 → 不动(改之前这里会抬到 2)")
-        // 听过 5 次的老歌正在听第 6 次:换歌时取到 5 显示 6,过门槛后总数变 6 → 仍是 6
+        // 听过 5 次的老歌正在听第 6 次:换歌时取到 5 显示 6,过门槛后总数变 6 到 仍是 6
         expectEqual(R.reconciledNowPlayingCount(current: 6, freshTotal: 6, currentPlayCounted: true), nil,
                     "已落库: 老歌过门槛后总数追平显示值 → 不动")
         // 收回本次会话里已经多算出来的那一次 —— 否则"只能涨"会把错数字永久焊住
@@ -156,7 +152,7 @@ func runLastfmTests() {
         // 但只收回**恰好一次**:再低的跌幅只可能是 Last.fm 返回了陈旧值,采纳会来回闪
         expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10, currentPlayCounted: true), nil,
                     "已落库: 跌幅超过一次 → 不采纳(陈旧值,实测过 16 vs 27 那种)")
-        // 连播同一首:第二遍落库后总数 2 → 直接涨到 2(换歌那一刻的取数被 key 守卫挡住了)
+        // 连播同一首:第二遍落库后总数 2 到 直接涨到 2(换歌那一刻的取数被 key 守卫挡住了)
         expectEqual(R.reconciledNowPlayingCount(current: 1, freshTotal: 2, currentPlayCounted: true), 2,
                     "已落库: 连播第二遍 → 照常涨")
         // freshTotal 0 且已落库:算出来是 0,不该显示"第 0 次听"
@@ -259,8 +255,8 @@ func runLastfmTests() {
     // ---- Last.fm GET query 的双重编码 ----
     //
     // 端点会对 query value 多解一次码(第二遍是 form-urlencoded 口径,`+` 当空格),所以
-    // `+` 和 `%` 必须各多编一层。实测:track=…%2B… → error 6 Track not found;
-    // track=…%252B… → 命中 userplaycount=2。用真实存在的乐队 `+44` 独立验证过是端点级行为。
+    // `+` 和 `%` 必须各多编一层。实测:track=…%2B… 到 error 6 Track not found;
+    // track=…%252B… 到 命中 userplaycount=2。用真实存在的乐队 `+44` 独立验证过是端点级行为。
     // URLComponents.queryItems 走的 urlQueryAllowed **放行 `+`**,正是这个坑的入口。
     do {
         typealias Q = LastfmQuery
@@ -523,7 +519,7 @@ func runLastfmTests() {
                        F.foldTitle("薛凱琪"),
                        "折叠键: 方括号不在结尾时也不许退化成尾部人名")
         // ⑦ 版本尾缀分隔符归一:分隔符不携带信息,副题内容才携带
-        // ⚠️ 裸场次标记**不**归一(并行核实推翻了原设计):album.getinfo 实测
+        // 裸场次标记**不**归一(并行核实推翻了原设计):album.getinfo 实测
         //    方大同 21 条 `X - Live` 与《This Love Live 2007》21 首曲目完全双射,而 30 条
         //    `X (Live)` 只有 2 首在那张里 —— 两种写法是**两场不同的演唱会**,归一会错并。
         expectNotEqual(F.foldTitle("流沙 - Live"), F.foldTitle("流沙 (Live)"),
@@ -571,8 +567,8 @@ func runLastfmTests() {
         expectNotEqual(F.foldTitle("All Night - Live版"), F.foldTitle("Live版"),
                        "折叠键: Live版 靠「以 版 收尾」判据挡住 R1 退化")
         // ⑧ 歌手写法归并只作用在查族用的 familyKey 上,且**没有手写表**:表由
-        // LocalArtistAliases.derive 从本机数据推出来再灌进来。这里用一份最小的 MusicBrainz 缓存夹具
-        // 复现旧静态表覆盖过的形态,证明"去掉手工表之后能力没丢"。
+        // LocalArtistAliases.derive 从本机数据推出来再灌进来。这里用一份最小的 MusicBrainz 缓存
+        // 夹具还原这个归并形态,确认覆盖得到。
         typealias LA = LocalArtistAliases
         let mb = LA.MusicBrainzCaches(
             aliasCache: ["Crowd Lu": "卢广仲", "Khalil Fong": "方大同"],
@@ -636,7 +632,7 @@ func runLastfmTests() {
         expectEqual(F.familyKey(artist: "Khalil Fong", title: "Love Love Love"),
                     F.familyKey(artist: "方大同", title: "愛愛愛"),
                     "查族键: 罗马字歌手名 + 译名歌名,两层别名叠加也要同族")
-        // ⚠️ 核心安全约束:这张表必须按(歌手,歌名)登记,不能是全局 title->title——
+        // 核心安全约束:这张表必须按(歌手,歌名)登记,不能是全局 title->title——
         // 王力宏名下真实存在一首同样叫《Love Love Love》的歌,跟方大同《爱爱爱》毫不相干。
         expectNotEqual(F.familyKey(artist: "王力宏", title: "Love Love Love"),
                        F.familyKey(artist: "方大同", title: "爱爱爱"),
@@ -739,7 +735,7 @@ func runLastfmTests() {
         let r2b = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200], todayStart: 1000,
                                               bucketToday: nil, syncedThrough: 1100)
         expectEqual(r2b.count, 2, "today: 桶为 nil 当 0")
-        // ③ 两者都不行:窗口全是今天、日桶停在昨天 → 只给下界、不精确。
+        // ③ 两者都不行:窗口全是今天、日桶停在昨天 到 只给下界、不精确。
         let r3 = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200, 1100, 1050], todayStart: 1000,
                                              bucketToday: nil, syncedThrough: 500)
         expectEqual(r3.count, 4, "today: 退化成下界")
@@ -758,7 +754,7 @@ func runLastfmTests() {
         typealias S = LastfmPageComposer.Source<Int>
         let ident: (Int) -> String = { String($0) }
 
-        // 起点换算:抓第 3 页时总数 100,现在 103 → 多了 3 条,第 3 页的旧起点 40 现在是 43。
+        // 起点换算:抓第 3 页时总数 100,现在 103 到 多了 3 条,第 3 页的旧起点 40 现在是 43。
         expectEqual(C.firstPosition(page: 3, pageSize: 20, totalAtFetch: 100, totalNow: 103), 43, "拼页: 总数涨 3 → 起点下移 3")
         expectEqual(C.firstPosition(page: 1, pageSize: 20, totalAtFetch: 100, totalNow: 100), 0, "拼页: 没涨 → 原位")
         expectEqual(C.firstPosition(page: 2, pageSize: 20, totalAtFetch: 100, totalNow: 99), nil, "拼页: 总数变小(删过记录)→ 这份来源作废")
@@ -769,7 +765,7 @@ func runLastfmTests() {
         let cachedP3 = S(firstPosition: 43, rows: Array(43 ..< 63))
         expectEqual(C.compose(page: 3, pageSize: 20, total: 103, sources: [feed, cachedP3], identity: ident),
                     Array(40 ..< 60), "拼页: feed 的 40..49 + 缓存页下移后的 50..59 拼齐")
-        // 只有 feed:第 2 页(20..39)拼得齐,第 3 页(40..59)有洞 → nil。
+        // 只有 feed:第 2 页(20..39)拼得齐,第 3 页(40..59)有洞 到 nil。
         expectEqual(C.compose(page: 2, pageSize: 20, total: 103, sources: [feed], identity: ident),
                     Array(20 ..< 40), "拼页: 只靠 feed 拼第 2 页")
         expectEqual(C.compose(page: 3, pageSize: 20, total: 103, sources: [feed], identity: ident),
@@ -778,12 +774,12 @@ func runLastfmTests() {
         let tail = S(firstPosition: 40, rows: Array(40 ..< 45))
         expectEqual(C.compose(page: 3, pageSize: 20, total: 45, sources: [tail], identity: ident),
                     Array(40 ..< 45), "拼页: 最后一页只有 5 行")
-        // 超出范围的页 → nil;total 0 → nil。
+        // 超出范围的页 到 nil;total 0 到 nil。
         expectEqual(C.compose(page: 4, pageSize: 20, total: 45, sources: [tail], identity: ident), nil, "拼页: 页码越界")
         expectEqual(C.compose(page: 1, pageSize: 20, total: 0, sources: [feed], identity: ident), nil, "拼页: 空账号")
         // 错位检测:总数涨了 3,但其中一条是手机迟到同步**插进 feed 窗口之下**的——比它新的那段
         // 记录真实只下移了 2,缓存页按"下移 3"铺过来就整体偏一格:它的第 8 条(真实记录 49)落到
-        // 位置 50,而 feed 的位置 49 已经是记录 49 → 同一条出现两次 → 判错位 → nil。
+        // 位置 50,而 feed 的位置 49 已经是记录 49 到 同一条出现两次 到 判错位 到 nil。
         let misaligned = S(firstPosition: 43, rows: Array(42 ..< 62))
         expectEqual(C.compose(page: 3, pageSize: 20, total: 103, sources: [feed, misaligned], identity: ident),
                     nil, "拼页: 同一条记录出现两次 → 判错位 → nil")
@@ -807,7 +803,7 @@ func runLastfmTests() {
         let key: (Date) -> String = { fmt.string(from: $0) }
         let today = fmt.date(from: "2026-09-03")!.addingTimeInterval(3600 * 13) // 当天 13:00
 
-        // 计划:去年当天有 → 天窗口;前年当天无、那周有 → 周窗口;3 年前整段都无 → 不发。
+        // 计划:去年当天有 到 天窗口;前年当天无、那周有 到 周窗口;3 年前整段都无 到 不发。
         let buckets: [String: Int] = ["2025-09-03": 5, "2024-09-01": 2, "2024-09-06": 7, "2023-08-20": 3]
         let plan = OnThisDayPlanner.plan(today: today, years: 3, dailyCounts: buckets, synced: true, dayKey: key)
         expectEqual(plan.map { "\($0.yearsAgo):\($0.span.rawValue):\($0.expected ?? -1)" },
@@ -821,7 +817,7 @@ func runLastfmTests() {
         expectEqual(OnThisDayPlanner.plan(today: today, years: 3, dailyCounts: [:], synced: true, dayKey: key).isEmpty,
                     true, "那年今日计划: 日桶同步过且全空 → 零请求")
 
-        // 足迹:~ 09-02 连续四天,09-03(今天)还没记录 → 当前连续 4;最长 5(08-10~08-14)。
+        // 足迹:~ 09-02 连续四天,09-03(今天)还没记录 到 当前连续 4;最长 5(08-10~08-14)。
         var days: [String: Int] = [:]
         for d in ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"] { days[d] = 10 }
         for d in ["2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"] { days[d] = 20 }
@@ -861,7 +857,7 @@ func runLastfmTests() {
     //
     // 陳綺貞《慢歌 3》16:36 落库,五次查 userplaycount 都是 0,过了 15 分钟宽限那一轮把它永久钉进
     // playCountUnavailable、随快照落盘,重启也不重问 —— 而 Last.fm 网页那边已经显示 1 次。
-    // 现在"没有"带时间戳:1 h → 6 h → 24 h 封顶,到期重探;拿到正数整套清掉(那部分在
+    // 现在"没有"带时间戳:1 h 到 6 h 到 24 h 封顶,到期重探;拿到正数整套清掉(那部分在
     // LastfmStatsService,这里只钉日程表)。
     do {
         typealias B = PlayCountUnavailableBackoff
@@ -890,22 +886,18 @@ func runLastfmTests() {
 
     // ---- 次数记账三态:字段缺失 ≠ 那边是 0 ----
     //
-    // 现象是「为什么这三个 lastfm 里面没有播放次数」。现场:10:56:00 那一批 20 首里 17 首正常,
-    // prince|1999 / prince|little red corvette / prince & the revolution|kiss (extended) 三首
-    // 同时"没有次数",日志里那一批**全是 200、一条 api error 都没有**;5 分钟后拿同样的参数
-    // 直接问,分别是 18 / 20 / 1 次,user.getTrackScrobbles 显示这些收听最早可追到。
-    // 根因是判据把 `userplaycount` **字段缺失**(Last.fm 的按用户计数是另一次后端查询,高并发下
-    // 会静默缺字段)当成了"那边回答 0 次",于是一次抖动被写成定论、还随快照落盘 —— 而进了
+    // `userplaycount` **字段缺失**(Last.fm 的按用户计数是另一次后端查询,高并发下会静默
+    // 缺字段)不等于"那边回答 0 次"——混为一谈会把一次抖动写成定论、随快照落盘,而进了
     // 「那边没有」名单的行连 `···` 占位都不画,看起来就是"这行天生没有次数"。
     do {
         typealias O = PlayCountOutcome
         func c(_ ok: Bool, _ n: Int?, _ old: Bool) -> O {
             O.classify(requestSucceeded: ok, reportedCount: n, rowIsOldEnough: old)
         }
-        // ① 本次修复的那一条:请求成功、行也够老,但响应没带 userplaycount → 不许记定论
+        // ① 本次修复的那一条:请求成功、行也够老,但响应没带 userplaycount 到 不许记定论
         expectEqual(c(true, nil, true), .unanswered,
                     "次数三态: 成功返回但没带 userplaycount → 没答上来,不记进「那边没有」")
-        // ② 那边真的回答 0,且行够老 → 这才是定论
+        // ② 那边真的回答 0,且行够老 到 这才是定论
         expectEqual(c(true, 0, true), .definitivelyNone,
                     "次数三态: 够老的行拿到 0 → 那边确实没有")
         // ③ 已知坑:刚 scrobble 完的 0 是"还没并账",不是答案(playCountZeroGraceSecs)
@@ -1033,7 +1025,7 @@ func runLastfmTests() {
         expectEqual(partial.total, 302, "合并明细: 合计仍按各写法 total 算")
         expectEqual(partial.ordinals, [302, 301, 300, nil], "合并明细: 截止之后的行照常编号,之前的留空")
         expectEqual(partial.canLoadOlder, true, "合并明细: 有没拉完的 → 给「加载更早的」")
-        // 两种都没拉完 → 取较晚的那个截止
+        // 两种都没拉完 到 取较晚的那个截止
         let both = M.build([
             v("A", "x", total: 300, isSelf: true, [5000, 3000]),
             v("A", "X", total: 300, [4000, 3500]),
@@ -1076,7 +1068,7 @@ func runLastfmTests() {
                     "专辑分组: 全部没有专辑名 → 只有 nil 一组(界面据此不画子行)")
     }
 
-    // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 → 中文歌名」 ----
+    // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 到 中文歌名」 ----
     //
     // 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」。本机缓存里
     // `Khalil Fong|Oasis|梦想家 The Dreamer` 与 `方大同|那沙漠里的水|梦想家 The Dreamer` 各自独立解析,
@@ -1121,18 +1113,18 @@ func runLastfmTests() {
                     == PlayCountFold.familyKey(artist: "方大同", title: "那沙漠里的水"), false,
                     "本机别名: 清空后不再同族(别让这条测试的状态漏给别的断言)")
 
-        // 闸 1:同一个 id 被匹配给两首不同的中文歌 → 整组不采纳
+        // 闸 1:同一个 id 被匹配给两首不同的中文歌 到 整组不采纳
         expectEqual(A.derive([
             e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne), e("方大同", "梦想家", netease: ne),
         ]), [:], "本机别名: 中文侧不唯一 → 不采纳")
-        // 闸 2:两侧都有时长且差太多 → 不采纳;一侧缺时长 → 只凭 id 采纳
+        // 闸 2:两侧都有时长且差太多 到 不采纳;一侧缺时长 到 只凭 id 采纳
         expectEqual(A.derive([e("方大同", "Oasis", netease: ne, dur: 161), e("方大同", "那沙漠里的水", netease: ne, dur: 240)]), [:],
                     "本机别名: 时长差 79 s → 不采纳")
         expectEqual(A.derive([e("方大同", "Oasis", netease: ne, dur: 161), e("方大同", "那沙漠里的水", netease: ne, dur: 163)]),
                     ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 时长差 2 s 在容差内")
         expectEqual(A.derive([e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne, dur: 161)]),
                     ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 一侧没时长 → 只凭 id")
-        // 闸 3:同一个英文键从两个 id 组推出不同的中文名 → 两条都撤
+        // 闸 3:同一个英文键从两个 id 组推出不同的中文名 到 两条都撤
         expectEqual(A.derive([
             e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne),
             e("方大同", "Oasis", qq: "https://y.qq.com/n/ryqq/songDetail/AAA"), e("方大同", "绿洲", qq: "https://y.qq.com/n/ryqq/songDetail/AAA"),
@@ -1155,10 +1147,10 @@ func runLastfmTests() {
                               e("陶喆", "What Is Love", netease: "https://music.163.com/song?id=150540"),
                               e("陶喆", "我喜欢(Ballad Version)", netease: "https://music.163.com/song?id=150540")]), [:],
                     "本机别名: 英文侧两个不同歌名落到同一 id → 至少一条配错,整组不采纳")
-        // 只认英文 → 中文:同 id 下全是中文写法(繁简)不产出别名——那本来就由折叠键管
+        // 只认英文 到 中文:同 id 下全是中文写法(繁简)不产出别名——那本来就由折叠键管
         expectEqual(A.derive([e("方大同", "小小虫", netease: ne), e("方大同", "小小蟲", netease: ne)]), [:],
                     "本机别名: 中文↔中文不产出(折叠键已经管了)")
-        // 中文侧的繁简两种写法折到同一键 → 仍算唯一,照常产出(实测 Playful ↔ 玩乐/玩樂)
+        // 中文侧的繁简两种写法折到同一键 到 仍算唯一,照常产出(实测 Playful 与 玩乐/玩樂)
         expectEqual(A.derive([e("方大同", "Playful", netease: ne), e("方大同", "玩乐", netease: ne), e("方大同", "玩樂", netease: ne)]),
                     ["方大同": ["playful": "玩乐"]], "本机别名: 中文侧繁简两写法算一种,取字典序最小的原始写法")
         expectEqual(A.derive([e("方大同", "Oasis", netease: ne), e("方大同", "Oasis (Live)", netease: ne)]), [:],
@@ -1228,7 +1220,7 @@ func runLastfmTests() {
                               e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)],
                              artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: ["khalilfong": "方大同"]) }),
                     ["方大同": ["blackhole": "黑洞里"]], "E2: 传入刚推出的歌手表 → 同桶,推出")
-        // 整秒精度的一侧:224 vs 224.499 仍在 0.6 s 容差内(Twenty Three ↔ 才二十三 实测)
+        // 整秒精度的一侧:224 vs 224.499 仍在 0.6 s 容差内(Twenty Three 与 才二十三 实测)
         expectEqual(A.derive([e("方大同", "Twenty Three", dur: 224, lyrics: lrcHans),
                               e("方大同", "才二十三", dur: 224.498992919922, lyrics: lrcHant)]),
                     ["方大同": ["twentythree": "才二十三"]], "E2: 一侧整秒精度,差 0.5 s 仍采纳")
@@ -1245,7 +1237,7 @@ func runLastfmTests() {
         expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: nil),
                               e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)]), [:],
                     "E2: 一侧没有歌词 → 不采纳")
-        // 歌词可信闸:Weather Report 61 s 过场曲配上了 271 s 那首的词 → 这条的歌词不可信,不参与
+        // 歌词可信闸:Weather Report 61 s 过场曲配上了 271 s 那首的词 到 这条的歌词不可信,不参与
         expectEqual(A.derive([e("方大同", "Weather Report", dur: 61.08, resolved: 271.5, lyrics: lrcHans),
                               e("方大同", "天气先生", dur: 61.08, lyrics: lrcHant)]), [:],
                     "E2: 播放器时长与所配歌词时长差 210 s → 歌词不可信,不采纳")
@@ -1261,7 +1253,7 @@ func runLastfmTests() {
                               e("方大同", "黑洞里", dur: 213.9, lyrics: lrcHant)]), [:],
                     "E2: 两侧都是毫秒级、差 0.3 s → 不采纳(同一份录音差不到 0.01 s)")
         // 同脚本只连"等长且恰好一个字不同":你/妳 这种字形差异成一类,英文名 + 两个中文写法三种写法并到一起;
-        // 代表 = 含汉字 → 本机条目多 → 字典序
+        // 代表 = 含汉字 到 本机条目多 到 字典序
         expectEqual(A.derive([e("方大同", "Write A Song For You", dur: 197.273696, lyrics: lrcHans),
                               e("方大同", "为你写的歌", dur: 197.273, lyrics: lrcHant),
                               e("方大同", "为妳写的歌", dur: 197.274002, lyrics: lrcHant),
@@ -1298,7 +1290,7 @@ func runLastfmTests() {
         func e(_ artist: String, _ title: String, netease: String) -> A.Entry {
             .init(artist: artist, title: title, neteaseURL: "https://music.163.com/song?id=" + netease, qqMusicURL: nil, durationSecs: nil)
         }
-        // MusicBrainz 三份缓存各给一条,方向不限:alias-cache 原始→中文;identity zh;primary 中文→[英文别名]
+        // MusicBrainz 三份缓存各给一条,方向不限:alias-cache 原始到中文;identity zh;primary 中文到[英文别名]
         let mb = LA.MusicBrainzCaches(
             aliasCache: ["Crowd Lu": "卢广仲"],
             identityZh: ["Soft Lipa": "蛋堡"],
@@ -1313,7 +1305,7 @@ func runLastfmTests() {
         expectEqual(t["卢广仲"], nil, "歌手别名: 代表自己不入表")
         expectEqual(t["michaeljackson"], nil, "歌手别名: 没有证据的歌手不入表")
 
-        // 共享歌曲 id:≥ 2 个不同 id 才算;单个不算(方大同 ↔ 王诗安 那种合唱撞一首)
+        // 共享歌曲 id:≥ 2 个不同 id 才算;单个不算(方大同 与 王诗安 那种合唱撞一首)
         let two = LA.derive(caches: .init(), entries: [
             e("David Tao", "Regular friends", netease: "150623"), e("陶喆", "普通朋友", netease: "150623"),
             e("David Tao", "Let's Fall in Love", netease: "150560"), e("陶喆", "讨厌红楼梦", netease: "150560"),
@@ -1330,7 +1322,7 @@ func runLastfmTests() {
         expectEqual(rep["crowdlu"], "盧廣仲", "歌手别名: 代表取本机曲目最多的汉字写法(繁体 3 首 > 简体 1 首)")
         expectEqual(rep["卢广仲"], nil, "歌手别名: 繁简本来就同一个键,不需要别名")
         // MusicBrainz 缓存里的合唱串 / 带逗号的乐队名不当边的端点:归首位会切出碎片(`Earth, Wind & Fire`
-        // → `Earth`),拿碎片连边就是乱连(实测推出 earth → アース)
+        // 到 `Earth`),拿碎片连边就是乱连(实测推出 earth 到 アース)
         let duet = LA.derive(caches: .init(aliasCache: ["Khalil Fong & Fiona Sit": "方大同",
                                                        "Earth, Wind & Fire": "アース、ウインド&ファイアー"]), entries: [])
         expectEqual(duet["khalilfong"], nil, "歌手别名: 缓存里的合唱串不当边(首位歌手另有 primary/共现证据)")

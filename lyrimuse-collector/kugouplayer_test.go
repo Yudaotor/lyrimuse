@@ -109,7 +109,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 
 	// ListenBrainz 的 media_player 标签:用 App 自己的名字,反查不到退回 bundle id ——
 	// 绝不能谎报成 Apple Music(那会让来源统计彻底失真)。mediaPlayerLabel
-	// 只看传入的 bundleID + TrustedPlayers,不再看 features.Players,这里不需要设置
+	// 只看传入的 bundleID + TrustedPlayers,不再看 features().Players,这里不需要设置
 	// 它,保留旧断言只是确认这条不变量继续成立。
 	if got := mediaPlayerLabel("com.foobar.mac"); got != "Foobar2000 (macOS)" {
 		t.Errorf("信任 App 的标签 = %q,期望 Foobar2000 (macOS)", got)
@@ -122,7 +122,7 @@ func TestTrustedPlayersWiring(t *testing.T) {
 	}
 }
 
-// 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** → 整条丢掉。
+// 「这不是一首歌」守卫:信任的未知播放器上报空歌手名**或空专辑名** 到 整条丢掉。
 // 判据跟 isAdBreak 完全一致,区别只在作用域。四份真实样本见 trustedPlaybackNotASong 的注释。
 func TestTrustedPlaybackNotASong(t *testing.T) {
 	saved := features

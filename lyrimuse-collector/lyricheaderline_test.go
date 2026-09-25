@@ -20,7 +20,7 @@ func TestLooksLikeLyricHeaderLine(t *testing.T) {
 		{"曲名自带连字符,靠带空格的那个切", "W-H-Y - 某歌手", "W-H-Y", "某歌手", true},
 		{"大小写/空格不影响", "sometitle - some artist", "SomeTitle", "SomeArtist", true},
 
-		// ⚠️ 最要紧的一条:真歌词里曲名和歌手都出现,但不是「两段等值」的形状。
+		// 最要紧的一条:真歌词里曲名和歌手都出现,但不是「两段等值」的形状。
 		// 曲名侧写成 contains 的话这句会被整行吞掉(Swift 侧 selftest 抓到过的真实反例)。
 		{"真歌词里同时含曲名和歌手", "新的经典 蛋堡 x Jabberloop", "经典", "蛋堡", false},
 

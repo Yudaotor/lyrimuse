@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 func runPlayerIdentityTests() {
-    // ---- bundleID → 数据源档位映射 ----
+    // ---- bundleID 到 数据源档位映射 ----
     do {
         typealias L = LocalPlaybackSource
         expectEqual(L.positionSourceTier(forBundleID: "com.apple.Music") == .precise, true,
@@ -42,7 +42,7 @@ func runPlayerIdentityTests() {
     // ---- MusicPlaybackMode: 播放模式档位轮换,按播放器有没有「单曲循环」分两套 ----
     //
     // Spotify 的 AppleScript 字典里 `repeating` 只是布尔,够不到 repeat-one —— 所以它的按钮
-    // 只在 列表 ↔ 随机 两档之间倒。轮换必须**闭合**:不管从哪一档起步,反复点下去都要能回到
+    // 只在 列表 与 随机 两档之间倒。轮换必须**闭合**:不管从哪一档起步,反复点下去都要能回到
     // 原点,否则按钮会卡在一个出不来的档位上。
     do {
         typealias Mode = MusicPlaybackController.MusicPlaybackMode
@@ -52,7 +52,7 @@ func runPlayerIdentityTests() {
         expectEqual(Mode.shuffle.next(allowsRepeatOne: true), .repeatOne, "播放模式: 随机→单曲")
         expectEqual(Mode.repeatOne.next(allowsRepeatOne: true), .list, "播放模式: 单曲→列表")
 
-        // 列表循环档(补,AM 循环键三态):全部→单曲;够不到单曲的播放器直接回列表
+        // 列表循环档(补,AM 循环键三态):全部到单曲;够不到单曲的播放器直接回列表
         expectEqual(Mode.repeatAll.next(allowsRepeatOne: true), .repeatOne, "播放模式: 全部→单曲")
         expectEqual(Mode.repeatAll.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 全部→列表")
 
@@ -64,13 +64,13 @@ func runPlayerIdentityTests() {
 
         // 轮换闭合:连点下去不能卡在某一档出不来。
         //
-        // ⚠️ 例外是**只能离开、回不去**的过渡态,它们能一步走掉(上面那些断言)就够了:
+        // 例外是**只能离开、回不去**的过渡态,它们能一步走掉(上面那些断言)就够了:
         // ① "单曲档 + 不支持单曲"(用户在 Apple Music 里开着单曲循环、切到 Spotify 播放时
         //   可能读到它),回不去正是设计意图,不是卡住;把它也算进"必须回到原点"的话,
         //   断言直接红了,是断言写宽了,不是实现错了。
         // ② 列表循环档:next() 的老三档轮换不产出它 —— 产出它的是歌词
-        //   窗口循环键自己的三态 switch(关→全部→单曲→关),cyclePlaybackMode 读到它时
-        //   顺 AM 语义走 全部→单曲,不需要转回来。
+        //   窗口循环键自己的三态 switch(关到全部到单曲到关),cyclePlaybackMode 读到它时
+        //   顺 AM 语义走 全部到单曲,不需要转回来。
         for allows in [true, false] {
             for start in Mode.allCases {
                 var cur = start
@@ -128,7 +128,7 @@ func runPlayerIdentityTests() {
 
     // ---- Safari 那道 JS 开关:读不到 ≠ 关着 ----
     //
-    // 真实故障(「可以现在就是勾着的啊」):Safari 里那个「允许 Apple 事件中的
+    // Safari 里那个「允许 Apple 事件中的
     // JavaScript」确实勾着、自检也实测通过(界面绿字「现在可以被驱动了」),界面却同时橙字
     // 告警「这个开关已经被关掉了——重启后就会失效」,还把菜单路径指引整块摆出来让用户再去
     // 勾一遍(而它本来就勾着,照做无事发生)。
@@ -136,7 +136,7 @@ func runPlayerIdentityTests() {
     // 根因:`CFPreferencesCopyAppValue` 返回 nil 被判成 `.disabled`。nil 有两种成因——真的
     // 没设过、以及**读不到**(`com.apple.Safari` 是 TCC 保护域,别的 App 读它要「完全磁盘访问
     // 权限」,没有才是常态),这里分不出来,所以只能是 `.unknown`。隔壁 Chromium 分支一直就是
-    // 这么做的,Safari 这边是漏了。实测坐实:同一台机器同一个值,终端身份(有权限)读到 1、
+    // 这么做的,Safari 这边是漏了。同一台机器同一个值,终端身份(有权限)读到 1、
     // App 身份读到 nil —— 读得到读不到只取决于调用方的 TCC 身份,跟开关死活无关。
     //
     // 连带影响:`browserJSLikelyWorking` 对 `.disabled` 是一票否决,所以误判还会让整张卡
@@ -160,7 +160,7 @@ func runPlayerIdentityTests() {
     //
     // 判据跟 collector 的 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在作用域:
     // 那个只服务 Spotify 广告,这个服务信任列表。样本全是真抓的,四份:
-    //   酷狗 周杰伦/七里香、Spotify 方大同/Soulboy、Apple Music 卢广仲/100种生活 → 是歌
+    //   酷狗 周杰伦/七里香、Spotify 方大同/Soulboy、Apple Music 卢广仲/100种生活 到 是歌
     //   Arc 放视频 两次:①artist/album 都空 ②artist=频道名「Dream in reality」、album 仍空
     // **album 是这四份里唯一 100% 分对的字段** —— ② 正是"只卡 artist 不够"的证据。
     do {
@@ -197,7 +197,7 @@ func runPlayerIdentityTests() {
 
         // ---- Safari 媒体代理进程(王力宏《你不知道的事》Safari 网页播放案) ----
         // Safari 播网页音频报的是 com.apple.WebKit.GPU,信任表存的是宿主 com.apple.Safari。
-        // 原来这里裸查 trusted[bundleID],对代理进程恒落空 → Safari 播非歌视频这道守卫恒不
+        // 原来这里裸查 trusted[bundleID],对代理进程恒落空 到 Safari 播非歌视频这道守卫恒不
         // 生效。collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修(那边还多两处:
         // getAutoDetectedState 整条丢播放、mediaPlayerLabel 谎报 Apple Music)。
         let safariTrusted = ["com.apple.Safari": "Safari"]
@@ -266,16 +266,16 @@ func runPlayerIdentityTests() {
                     "多选.soleExplicitPlayer: 空集不该崩、也没有唯一答案(理论不该发生,但函数要安全)")
     }
 
-    // ---- 「Apple Music 自动化」这份权限对谁有意义----
+    // ---- 「自动化」权限要向哪几个播放器要----
     //
-    // `Set<PlaybackPlayer>.needsAppleMusicAutomation` —— 引导页那一步要不要出现、设置页那张
-    // 权限卡要不要显示,都靠它。判据是"含 auto **或** 含 Apple Music",因为
-    // `adaptedSnapshot` 的第一道 guard 只看在播的是不是 Music.app、
-    // **完全不看 features.players**,而 players 的默认值恰恰是 [.auto]。
+    // `Set<PlaybackPlayer>.playersNeedingAutomation` —— 设置页那张卡列哪几行、引导页那一步
+    // 列哪几行、体检清单核哪几项,全靠它。两条判据合起来:哪些播放器**本身**要这份权限
+    // (生成字段 `needsAutomationPermission`,源头 shared/players.json),以及含 auto 时按
+    // 超集算 —— `adaptedSnapshot` 的分派**只看 bundle id、完全不看 features.players**,
+    // 而 players 的默认值恰恰是 [.auto]。
     //
-    // 这条判据在引导页就是对的,设置页却一直停在 `contains(.appleMusic)` ——
-    // 于是默认配置的人在引导里被问过这份权限、回设置里却找不到入口,更新/重签名导致 TCC
-    // 授权失效之后就再也没有地方能重新授权。两处合并到这一个属性上。
+    // 漏掉 auto 那一条正是设置页那张卡藏过一阵子的原因:默认配置的人在引导里被问过这份权限、
+    // 回设置里却找不到入口,更新/重签名导致 TCC 授权失效之后就再也没有地方能重新授权。
     do {
         expectEqual(Set<PlaybackPlayer>([.auto]).needsAppleMusicAutomation, true,
                     "自动化权限判据: 纯 auto(默认值)也要 —— 漏掉它正是设置页那张卡藏了半个月的原因")
@@ -315,7 +315,7 @@ func runPlayerIdentityTests() {
         //    LocalPlaybackSource.isCurrentTrackAdBreak 标成广告驱动 UI(chrome 上
         //    YT Music 的广告也像 Spotify 那样显示「广告中」)。丢弃的话 UI 拿不到任何东西,
         //    30 秒广告期间灵动岛/悬浮窗会整个塌成"没有在播放"再弹回来。
-        //    ⚠️ 放行**不等于**会被记录:Swift 侧一行 scrobble 都不发,提交 listen 全在
+        // 放行**不等于**会被记录:Swift 侧一行 scrobble 都不发,提交 listen 全在
         //    collector(lastfm.go / lb.go),那边由 ytmusicad.go 自己拦。
         expectEqual(P.gate(artist: "Michael Jackson", verdict: .song), .acceptAsSong,
                     "广告闸: 判定是歌 → 放行当歌")
@@ -390,7 +390,7 @@ func runPlayerIdentityTests() {
         // ⓪-d "这条是不是广告"的字段/页面判据(LocalPlaybackSource.adBreakByFields)。
         //    真凶:Safari / Arc 同时配对了 spotifyWeb 和 youtubeMusic,原来 `isSpotify` 只看"配对过
         //    Spotify 网页版"就把原生那套"album 空即广告"套到了 YT Music 上 —— MV 常常不报专辑名,
-        //    整首被标成「广告中」(王子《Why You Wanna Treat Me So Bad?》album 空 → 广告;同专辑带
+        //    整首被标成「广告中」(王子《Why You Wanna Treat Me So Bad?》album 空 到 广告;同专辑带
         //    专辑名的《Sexy Dancer》正常)。网页版现在只认 SpotifyWebAdProbe 的正向证据。
         expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "Why You Wanna Treat Me So Bad?", artist: "王子",
                                       album: "", youTubeMusicVerdict: .song, spotifyWebVerdict: nil), false,
@@ -443,7 +443,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.parse("0|0|0|")?.strongAd, false, "读数强弱: 歌不谈强弱,恒 false")
         expectEqual(P.Reading(verdict: .song, strongAd: true, album: "").strongAd, false,
                     "读数强弱: 构造时歌 + strong 会被归一成 false,不存在\"强信号的歌\"这种状态")
-        // 状态机吃的是 badge 口径:换曲那一拍读到弱 ad(→ nil)不是广告;同曲期间弱 ad 也只是「保持」。
+        // 状态机吃的是 badge 口径:换曲那一拍读到弱 ad(到 nil)不是广告;同曲期间弱 ad 也只是「保持」。
         expectEqual(S.nextAdBreakState(previous: false, isNewTrack: true, adByFields: false, pageVerdict: nil), false,
                     "广告状态机: 换曲那一拍只有裸标题(badge 口径 nil)→ 不是广告(用户报的 bug)")
         expectEqual(S.adBreakByFields(isSpotifyNative: false, title: "It's Gonna Be Lonely", artist: "Prince", album: "Prince",
@@ -460,7 +460,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.parse("0|1|0")?.verdict, .ad, "广告判据: 只有广告徽章命中也算广告")
         expectEqual(P.parse("0|0|1")?.verdict, .ad, "广告判据: 只有裸标题命中也算广告")
         // 形状不认识一律 nil ——**不猜**,让调用方 fail-closed。
-        // ⚠️ `"1|0|0|0"` 从这张表里**移走**了:第四段现在是专辑名(任意文本),
+        // `"1|0|0|0"` 从这张表里**移走**了:第四段现在是专辑名(任意文本),
         // 它是一个合法的读数(广告 + 专辑名"0"),不再是"形状不对"。见下面第四段那一组。
         for raw in ["NOTFOUND", "", "   \n", "1|0", "1|x|0", "true|false|false"] {
             expectEqual(P.parse(raw), nil, "广告判据: 形状不认识时不做推断(\(raw.debugDescription))")
@@ -471,7 +471,7 @@ func runPlayerIdentityTests() {
 
         // ①-b 第四段:页面上读到的专辑名。
         //
-        // 起因是现象是「YouTube Music 播一张专辑时,第一首歌不上送专辑名」。实测坐实那是
+        // 现象:「YouTube Music 播一张专辑时,第一首歌不上送专辑名」——那是
         // YT Music 自己的疏漏(队列第一首的 MediaSession 里 album 恒空,页面 byline 上却有),
         // 详见 YouTubeMusicAdProbe.albumPatch 的注释和那张四行实测表。
         expectEqual(P.parse("0|0|0||Already Gone")?.album, "Already Gone",
@@ -480,9 +480,9 @@ func runPlayerIdentityTests() {
                     "专辑补齐: 带专辑名不影响前三段的判定")
         expectEqual(P.parse("0|0|0||")?.album, "", "专辑补齐: 页面上没读到 → 空串,不是解析失败")
         expectEqual(P.parse("0|0|0")?.album, "", "专辑补齐: 只有三段(旧形状)也照样解得出,专辑为空")
-        // ⚠️ 专辑名是**任意文本**,可以自带分隔符。`maxSplits: 4` 保证最后一段原样保留 ——
+        // 专辑名是**任意文本**,可以自带分隔符。`maxSplits: 4` 保证最后一段原样保留 ——
         // 用普通 split 的话这条会退化成"形状不对"而整条读数被丢掉(连带丢掉广告判定)。
-        // ⚠️ 这条同时是"为什么 parse 不给 4 段旧形状留兼容分支"的证据:
+        // 这条同时是"为什么 parse 不给 4 段旧形状留兼容分支"的证据:
         // 旧形状 `0|0|0|A|B` 切出来也是 5 段、跟新形状逐字同形,兼容分支只会把 A 当成计数。
         expectEqual(P.parse("0|0|0||A|B")?.album, "A|B", "专辑补齐: 专辑名里自带 | 时原样保留")
         expectEqual(P.parse("1|0|0||0")?.album, "0",
@@ -497,7 +497,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.parse("1|1|0|2/2|")?.adSlot, .init(index: 2, total: 2), "广告计数: 翻页到 2/2")
         expectEqual(P.parse("1|1|0||")?.adSlot, nil, "广告计数: 徽章没有计数(只播一条 / 还没渲染)→ 没有,不编")
         expectEqual(P.parse("1|1|0|abc|")?.adSlot, nil, "广告计数: 形状不对 → 当没有")
-        // ⚠️ 计数形状不对**不能**把判定连坐掉 —— 前三段是判定(fail-closed),计数只是装饰。
+        // 计数形状不对**不能**把判定连坐掉 —— 前三段是判定(fail-closed),计数只是装饰。
         expectEqual(P.parse("1|1|0|abc|")?.verdict, .ad, "广告计数: 计数坏了,广告判定照常成立")
         expectEqual(P.parse("1|1|0|abc|某专辑")?.album, "某专辑", "广告计数: 计数坏了,专辑名照常解")
         expectEqual(P.parse("1|1|0|0/2|")?.adSlot, nil, "广告计数: 序号从 1 起,0 不合法")
@@ -519,11 +519,11 @@ func runPlayerIdentityTests() {
                     "专辑补齐: 上游是 nil 同样算空")
         expectEqual(P.albumPatch(reported: "   ", reading: song), "Already Gone",
                     "专辑补齐: 上游全是空白同样算空")
-        // ⚠️ 上游报了就一律不动 —— 探针只补缺,不做纠正。第二首起 MediaSession 自己有专辑名,
+        // 上游报了就一律不动 —— 探针只补缺,不做纠正。第二首起 MediaSession 自己有专辑名,
         // 那份是权威(而页面 byline 在换歌那一瞬间可能还停在上一首)。
         expectEqual(P.albumPatch(reported: "The Essential Michael Jackson", reading: song), nil,
                     "专辑补齐: 上游已经有专辑名 → 一个字都不动")
-        // ⚠️ 广告不补:广告没有专辑,而广告期间页面 byline 读到的多半是上一首歌的残留,
+        // 广告不补:广告没有专辑,而广告期间页面 byline 读到的多半是上一首歌的残留,
         // 补上去等于给广告安一个别人的专辑名。
         expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .ad, strongAd: true, album: "Already Gone")),
                     nil, "专辑补齐: 判定是广告 → 不补(byline 上那个多半是上一首的残留)")
@@ -531,7 +531,7 @@ func runPlayerIdentityTests() {
         expectEqual(P.albumPatch(reported: "", reading: P.Reading(verdict: .song, strongAd: false, album: "  ")), nil,
                     "专辑补齐: 探针读到的是空白 → 不补,别把专辑名写成一串空格")
 
-        // ② ⚠️ JS 源码里不许出现双引号。它整段要嵌进 AppleScript 的双引号字符串,而
+        // ② JS 源码里不许出现双引号。它整段要嵌进 AppleScript 的双引号字符串,而
         //    `execute … javascript` 会把返回值里已有的双引号**真的**转义成反斜杠(不是显示
         //    转义),整段被二次转义之后拿去比 contains 会稳定判 false —— 这是
         //    BrowserPositionProbe.youtubeMusicScript 为此放弃 JSON.stringify 的同一个坑。
@@ -575,7 +575,7 @@ func runPlayerIdentityTests() {
         expectEqual(safari.contains("do JavaScript"), true, "广告判据: safari 用 do JavaScript")
         expectEqual(safari.contains("execute ("), false, "广告判据: safari 不该出现 Chromium 方言")
 
-        // ⑤ ⚠️ 跨语言防漂:同一份判据在 collector(Go)里还有一份,两边必须同时改
+        // ⑤ 跨语言防漂:同一份判据在 collector(Go)里还有一份,两边必须同时改
         //    (跟 TrustedPlayers.notASong / trustedPlaybackNotASong 那一对是同样的关系)。
         //    这里直接读 Go 源码对账 —— 光靠注释里那句"两边必须同时改"拦不住漏改。
         let goSource = URL(fileURLWithPath: #filePath)
@@ -596,7 +596,7 @@ func runPlayerIdentityTests() {
             // 超时秒数两边对齐 —— 不一致会让两侧在"浏览器不回"时表现不一样,排查时极难对上。
             expectEqual(go.contains("ytmusicAdProbeEventTimeout = \(P.eventTimeoutSeconds)"), true,
                         "广告判据/跨语言: AppleScript 事件超时两边同值")
-            // ⚠️ 加:上面那串 marker 只能保证"关键字都在",保证不了两边的 JS **真的
+            // 加:上面那串 marker 只能保证"关键字都在",保证不了两边的 JS **真的
             // 一样** —— 少一个分号、选择器顺序不同、少读一个字段,marker 全过、行为却已经漂了。
             // 这一条直接把两段 JS 拼出来逐字比。Go 侧是反引号串用 `+` 拼的,取出所有反引号里的
             // 片段接起来就是最终那串。
@@ -632,8 +632,8 @@ func runPlayerIdentityTests() {
     // 页面复核根本轮不到(YT Music 广告的 artist 是广告主频道名、非空,所以走得到)。
     //
     // 判据来自现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
-    //   4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調) → 0|0|0|0
-    //   6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」) → 1|1|1|1
+    //   4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調) 到 0|0|0|0
+    //   6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」) 到 1|1|1|1
     do {
         typealias S = SpotifyWebAdProbe
 
@@ -652,7 +652,7 @@ func runPlayerIdentityTests() {
         expectEqual(S.parse("\"1|1|1|1\""), .ad, "Spotify 广告判据: 脱掉 AppleScript 多包的引号")
         expectEqual(S.parse("\"0|0|0|0\"\n"), .song, "Spotify 广告判据: 脱引号+换行")
 
-        // ② 出口。⚠️ 跟 YT Music 那个闸**少一个出口**:走到这条路上的播放本来就要被丢掉
+        // ② 出口。 跟 YT Music 那个闸**少一个出口**:走到这条路上的播放本来就要被丢掉
         //    (歌手名为空),判定说"是歌"也不能让它变成一首可采纳的歌 —— 一首真歌不会没有
         //    歌手名,那多半是别的网页音频。所以这里只回答"要不要作为广告放行"。
         expectEqual(S.gate(verdict: .ad), .acceptAsAd, "Spotify 广告闸: 判定是广告 → 放行并标成广告")
@@ -662,7 +662,7 @@ func runPlayerIdentityTests() {
         expectEqual(S.gate(verdict: nil), .reject,
                     "Spotify 广告闸: 还没探到 → fail-closed,维持改动前的行为")
 
-        // ③ 值不值得去问页面。⚠️ 这道门同时把 YT Music 探针的领地(artist 非空)挡在外面 ——
+        // ③ 值不值得去问页面。 这道门同时把 YT Music 探针的领地(artist 非空)挡在外面 ——
         //    不然配对了两个平台的浏览器每一轮要背两次 osascript 往返。
         expectEqual(S.fieldShapeNeedsProbe(title: "广告", artist: ""), true,
                     "Spotify 探测门槛: 标题非空 + 歌手为空(广告的真实形状)→ 值得问")
@@ -675,11 +675,11 @@ func runPlayerIdentityTests() {
         expectEqual(S.fieldShapeNeedsProbe(title: nil, artist: nil), false,
                     "Spotify 探测门槛: 全 nil → 不问")
 
-        // ④ ⚠️ JS 源码里不许出现双引号(整段要嵌进 AppleScript 的双引号字符串),也不许出现
+        // ④ JS 源码里不许出现双引号(整段要嵌进 AppleScript 的双引号字符串),也不许出现
         //    反斜杠(那是 AppleScript 那边的转义字符)。同 YT Music 那条纪律。
         expectEqual(S.probeJS.contains("\""), false, "Spotify 广告判据: JS 里不许有双引号")
         expectEqual(S.probeJS.contains("\\"), false, "Spotify 广告判据: JS 里不许有反斜杠")
-        // ⚠️ **绝不能用子串匹配 `[data-testid*=ad]`**:歌曲态里就有 `add-button`(含 "ad"),
+        // **绝不能用子串匹配 `[data-testid*=ad]`**:歌曲态里就有 `add-button`(含 "ad"),
         //    会稳定误判成广告。这条机械闸钉住"只用精确匹配"。
         expectEqual(S.probeJS.contains("*="), false,
                     "Spotify 广告判据: 不许用 CSS 子串匹配(add-button 会把歌曲误判成广告)")
@@ -701,7 +701,7 @@ func runPlayerIdentityTests() {
                         "Spotify 广告判据/\(family): 有兜底返回")
         }
 
-        // ⑥ ⚠️ 两个探针必须共用**同一份** AppleScript 模板(抽成
+        // ⑥ 两个探针必须共用**同一份** AppleScript 模板(抽成
         //    `BrowserTabProbeScript`)。把各自的域名和 JS 抠掉之后,骨架必须逐字相同 ——
         //    谁把模板 fork 出去改一行,这条当场红。模板里每一行都是踩出来的(先扫当前标签页
         //    躲 Arc 休眠、with timeout 兜挂起、两种方言的注入命令不同名),漂开的代价是
@@ -761,7 +761,7 @@ func runPlayerIdentityTests() {
         }
         // ---- Safari 的媒体代理进程----
         // 实测撞上的断层:「网页播放器」卡里配对了 Safari(配对会把 com.apple.Safari 写进
-        // 信任列表),可真播起来 MediaRemote 上报的是 com.apple.WebKit.GPU,不在名单里 →
+        // 信任列表),可真播起来 MediaRemote 上报的是 com.apple.WebKit.GPU,不在名单里 到
         // 整条播放不被采纳,同时"发现未知播放器"卡还跳出来要用户再信任一个看不懂的 bundle id。
         do {
             let webkit = "com.apple.WebKit.GPU"
@@ -926,13 +926,13 @@ func runPlayerIdentityTests() {
 
     // 悬浮歌词字重("加一个控制字体粗细的功能配置")。
     //
-    // ⚠️ 这一组的**第一条是兼容性不变量,不是风格检查**:加这个设置之前,四行的字重是四个硬编码
+    // 这一组的**第一条是兼容性不变量,不是风格检查**:加这个设置之前,四行的字重是四个硬编码
     // 值(主 bold=9 / 罗马音 medium=6 / 译文 regular=5 / 下一句 medium=6)。现在它们由用户选的
     // 那一档推导,而 `.bold` 这一档必须逐个推回原来那四个数 —— 它锚的是"阶梯顺序和三个档位差
     // 没被人悄悄重排",破了它,停在 bold 档的用户升级后当场变样,没有任何报错、没有任何日志,
     // 只有"我的歌词怎么变细了"。
     //
-    // ⚠️ `.bold` **不再是默认档**:`AppSettings.defaultOverlayFontWeight` 那天按用户
+    // `.bold` **不再是默认档**:`AppSettings.defaultOverlayFontWeight` 那天按用户
     // 要求改成了 `.semibold`(把他自己在用的那一版悬浮歌词配置定为默认)。上面那条不变量照旧,
     // 下面另加一组"当前默认档"的派生断言 —— 那组硬编码的 `.semibold` 由 SourceContractTests 里
     // 的「悬浮歌词默认字重闸」盯着,跟 AppSettings 漂开会当场红(selftest 只依赖 LyrimuseCore,

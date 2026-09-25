@@ -7,7 +7,7 @@ import SwiftUI
 /// 这颗颜色就是叠在材质上的着色深浅);玻璃本身的"材质浓淡"这半在这颗设置加之前是写死的
 /// `.regularMaterial`,没有任何调节口——这颗设置补的是这一半。
 ///
-/// ⚠️ **做不成连续滑杆**:没有"模糊半径"这种可以连续插值的底层参数暴露出来。真要连续调,
+/// **做不成连续滑杆**:没有"模糊半径"这种可以连续插值的底层参数暴露出来。真要连续调,
 /// 得抛开 SwiftUI 的 `Material`,自己包一层 `NSVisualEffectView` 的 `NSViewRepresentable`——
 /// 那是明显更大的一次改动(还要接住"系统「减少透明度」开着时材质自动退成近乎不透明底色"这条
 /// `LyricsOverlayView.overlayBackground` 里已经在吃的系统兜底,换成手搭的 NSVisualEffectView

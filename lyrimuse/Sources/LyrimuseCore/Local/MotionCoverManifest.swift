@@ -3,7 +3,7 @@ import Foundation
 /// Apple Music「动态封面」(motion artwork)的 HLS 清单解析(「帮我看看怎么把我们的
 /// 封面搞成 applemusic 里面的那种会动的效果」)。
 ///
-/// 这一层只做**纯字符串 → 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
+/// 这一层只做**纯字符串 到 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
 /// 发现资源在 collector(`motioncover.go`),下载与播放在 App(`MotionCoverStore` / `MotionCoverLayer`)。
 ///
 /// 全部结论都是在 Prince《Timeless》(collectionId 6773830957)上实测出来的:
@@ -25,7 +25,7 @@ import Foundation
 ///     最大 4/255。也就是说 Apple 这段素材本身就是按**无缝循环**做的 —— 播放侧 `AVPlayerLooper`
 ///     硬接就够,不需要 pingpong 倒放或交叉淡化。
 ///
-/// ⚠️ 这是在解析**公开网页里的非公开字段**:Apple 改一次结构这条路就断。所以每一层都必须
+/// 这是在解析**公开网页里的非公开字段**:Apple 改一次结构这条路就断。所以每一层都必须
 /// "解析不出来就当这张专辑没有动态封面",绝不能把失败往上抛成用户可见的错误 —— 覆盖率本来就低
 /// (抽 10 张专辑只有 3 张有:Prince《Timeless》、Taylor Swift《1989 (Taylor's Version)》、
 /// Michael Jackson《Thriller》;测到的华语专辑一张都没有),用户对"这首没有"是无感的。
@@ -55,7 +55,7 @@ public enum MotionCoverManifest {
 
     /// 从 master m3u8 里挑出所有**可播**档位。
     ///
-    /// ⚠️ 刻意跳过 `#EXT-X-I-FRAME-STREAM-INF`:那些是给 trick play(拖拽预览)用的纯 I 帧轨,
+    /// 刻意跳过 `#EXT-X-I-FRAME-STREAM-INF`:那些是给 trick play(拖拽预览)用的纯 I 帧轨,
     /// 名字里带 `trickPlay`、同样声明着 `RESOLUTION`,当成播放档会拿到一个每帧都是关键帧的
     /// 怪东西。master 里它们的条数跟正片一样多(实测各 8 条),不排掉就是一半的噪声。
     public static func parseVariants(master: String) -> [Variant] {
@@ -148,7 +148,7 @@ public enum MotionCoverManifest {
     /// `public` 是为了让 selftest(独立 target)能直接钉这两个真实踩到的陷阱 —— 值里自带逗号、
     /// 以及 `BANDWIDTH` 会命中 `AVERAGE-BANDWIDTH` 的尾巴。经 `parseVariants` 间接测覆盖不到边界。
     ///
-    /// ⚠️ 不能简单按逗号切:`CODECS="avc1.64001f,mp4a.40.2"` 的值**自己带逗号**,而
+    /// 不能简单按逗号切:`CODECS="avc1.64001f,mp4a.40.2"` 的值**自己带逗号**,而
     /// `STABLE-VARIANT-ID` 之类的值又可能带 `=`。所以从 `KEY=` 开始扫,带引号的读到闭合引号,
     /// 不带引号的读到下一个逗号。
     public static func attribute(_ key: String, in attrs: String) -> String? {
@@ -176,7 +176,7 @@ public enum MotionCoverManifest {
         return nil
     }
 
-    /// `768x768` → (768, 768)。
+    /// `768x768` 到 (768, 768)。
     public static func parseResolution(_ s: String) -> (Int, Int)? {
         let parts = s.lowercased().split(separator: "x")
         guard parts.count == 2, let w = Int(parts[0]), let h = Int(parts[1]), w > 0, h > 0 else { return nil }

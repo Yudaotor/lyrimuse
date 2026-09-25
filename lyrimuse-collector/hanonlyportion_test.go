@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// hanOnlyPortion 的判据——见其声明处头注(曹格《Superman》专辑"妳是我的寶貝"真实故障:
+// hanOnlyPortion 的判据——见其声明处头注(举例:曹格《Superman》专辑"妳是我的寶貝",
 // 本地标签"Gary 曹格"八个源全部搜不到,单独查"曹格"四个源立刻命中,分数都在1100+)。
 func TestHanOnlyPortion(t *testing.T) {
 	cases := []struct{ in, want, why string }{
@@ -25,7 +25,7 @@ func TestHanOnlyPortion(t *testing.T) {
 	}
 }
 
-// retryArtistIdentities 接上 hanOnlyPortion 之后的端到端行为——真实案例复现。
+// retryArtistIdentities 接上 hanOnlyPortion 之后的端到端行为。
 func TestRetryArtistIdentitiesHanOnlyPortion(t *testing.T) {
 	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Gary 曹格": ""})

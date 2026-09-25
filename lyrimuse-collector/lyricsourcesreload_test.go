@@ -108,7 +108,7 @@ func TestLyricSourcesFallBackToStartupSet(t *testing.T) {
 
 func TestLyricSourcesHotReadHonorsMigrationFlags(t *testing.T) {
 	// 迁移标记齐全 = 已经保存过设置的配置,严格按列表来:取消勾选的源必须真的关掉。
-	// ⚠️ applemusic 这一条是实打实踩过的:App 侧只要不写 applemusic_lyrics,这里的
+	// applemusic 这一条是实打实踩过的:App 侧只要不写 applemusic_lyrics,这里的
 	// appleMusicSeen 就恒为 nil,resolveLyricsSources 每次都把它补回启用集合,
 	// 界面上取消勾选对后台毫无作用。
 	withFeaturesFile(t, `{"lyrics_sources":["netease"]`+allFlagsOn+`}`)

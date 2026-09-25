@@ -21,9 +21,8 @@ final class AppLanguageObserver: ObservableObject {
 
 /// 只转发"当前播放的是哪首歌"的窄代理,同上面 AppLanguageObserver 一个套路。
 ///
-/// 现象是"歌词管理开着的时候换了首歌,高亮的还是开窗那一刻的旧歌"——原来
-/// 只在开窗那一刻(`pendingAutoFocus`)和点「回到当前播放」按钮时定位一次,窗口开着期间
-/// 换歌不会跟着动。这个窗口特意**不**整对象订阅 `PlaybackCoordinator`(见 detailView
+/// 让高亮跟着"窗口开着期间换歌"实时更新,不止在开窗那一刻和点「回到当前播放」按钮时
+/// 定位一次。这个窗口特意**不**整对象订阅 `PlaybackCoordinator`(见 detailView
 /// 顶部注释:那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新,订阅整对象会
 /// 把这个窗口的 body 拖进 20Hz 重渲染),所以要单独开一条窄管道,只转发 artist/title/album
 /// 这三个"换歌才变一次"的属性,合成一个去重后的签名串,给 `.onChange` 当触发信号用——
@@ -45,12 +44,10 @@ final class LyricsManagerNowPlayingObserver: ObservableObject {
 // 歌词来源筛选。"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
 // 条目永久没有这个值,除非重新解析)。
 //
-// ⚠️ 修:这份清单原来是**手写的字面量**,停在 lyricfind 那个时代(注释还写着
-// "collector 只会写入这七种"),此后接的酷我 / 咪咕 / Deezer / Apple Music 四个源在这个
-// 下拉里**根本不存在** —— 按来源筛选时永远筛不到它们,而列表里明明有这些源的歌词。
-// 用户实机发现的("这些地方是不是都没有适配后续加的歌词源")。
+// 必须从 LyricsSource.allCases 派生,不能手写字面量清单——手写清单会在加新源时
+// 静默漏掉它,按来源筛选永远筛不到。
 //
-// 根治办法是**从 LyricsSource.allCases 派生**而不是再手写一遍:那个枚举已经是全项目
+// 派生的理由:那个枚举已经是全项目
 // "歌词源有哪些"的唯一真源(设置页勾选框、顺序优先排序、搜索弹窗徽章都读它),
 // 派生之后以后加源这里自动跟上,不存在"忘了补"这种可能。顺序也跟着枚举走 —— 那个顺序
 // 本身有语义(按实测采用率排),两处保持一致比各排各的好。
@@ -193,7 +190,7 @@ func primaryArtist(_ full: String) -> String {
 // 繁体折成简体,只用来算"是不是同一个人/同一张专辑"的归并键,不改动任何展示文案——
 // 跟 collector 那边 match.go/t2s.go 的 toSimplified 是同一个目的,但这边是 Swift 代码,
 // 没有引入 gocc 那类第三方库,直接用 Foundation/ICU 内置的 "Traditional-Simplified"
-// transform 就能做,不需要额外依赖(实测坐实:"100種生活"/"100种生活" 这类
+// transform 就能做,不需要额外依赖(例如:"100種生活"/"100种生活" 这类
 // 繁简差一个字的专辑名,之前的归并键只转小写、不管繁简,被当成两张不同专辑,在筛选下拉
 // 里重复出现)。
 //
@@ -362,10 +359,10 @@ private struct ColumnDividerHandle: View {
             // minimumDistance: 1 而不是 0——0 会让双击的第一次按下就被当成拖拽开始,
             // 下面那个双击复位手势永远收不到。
             //
-            // ⚠️ 位移必须在**表头这个固定坐标空间**里算(location - startLocation),不能用
+            // 位移必须在**表头这个固定坐标空间**里算(location - startLocation),不能用
             // value.translation:translation 是相对手势所在视图算的,而这个手柄正是随列宽
             // 变化而移动的那个视图——拖宽一点手柄就往右跑一点,光标相对它的偏移被吃掉,
-            // 形成反馈回路。真机实测坐实:拖 40pt 只涨了 22pt,而且本该守恒的
+            // 形成反馈回路。实测:拖 40pt 只涨了 22pt,而且本该守恒的
             // "歌手+专辑总宽"也被破坏(歌名被反向挤窄 13.5pt)。命名坐标空间挂在表头容器上,
             // 它不随列宽改变,量出来的位移才跟鼠标实际移动一致。
             .gesture(
@@ -380,10 +377,8 @@ private struct ColumnDividerHandle: View {
 // 窗口位置/尺寸/所在屏幕的持久化(补——「歌词窗口」修过同一类
 // 问题,这扇姐妹窗口当时漏补)。这扇窗完全靠 SwiftUI `Window(id:)` 的系统状态恢复,而
 // 系统那套的问题不在"存不存",在**它不认识屏幕**:多显示器下拔插一次或换个分辨率,
-// 窗口经常回到主屏、或者落在一块已经不存在的屏幕的坐标上——现象是
-// "歌词管理打开是这样的,左边都不展示了" —— 表格标题列被从左边硬切、且各行掉的
-// 字符数不一样、没有省略号,跟 SwiftUI 自己"行内容超宽时右边省略号截断"的行为对不上,
-// 唯一解释是窗口有一截落在了当前屏幕看不见的地方。
+// 窗口经常回到主屏、或者落在一块已经不存在的屏幕的坐标上,表现为表格标题列被从左边
+// 硬切、各行掉的字符数不一样、没有省略号。
 //
 // 不复制 LyricsWindowView.swift 里 LyricsWindowController 整个类——那个还带置顶/
 // 伪全屏/红绿灯重定位,跟这扇窗口无关;这里只抽最小的一份:存 frame(绝对屏幕坐标)+
@@ -412,11 +407,8 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
         restorePersistedFrame(window)
         // 手动挂进「Window」菜单(= Dock 图标右键菜单里的窗口列表)——理由见姐妹窗口
         // LyricsWindowView.swift 的 LyricsWindowController.addToWindowsMenu 那段注释:
-        // 现象是"Dock 右键菜单里没有'歌词管理'",现场探针实测这扇窗最小化后
-        // AXSubrole 也是 AXDialog(这次连「设置」「歌词窗口」一起测,三扇窗最小化后全都是
-        // AXDialog——之前只测到「歌词窗口」时误以为是它独有的,其实是这个 App 的窗口普遍
-        // 现象,「设置」当时凑巧没被抓到真正最小化的状态)。既然 AppKit 的自动"Window"菜单
-        // 填充信不过,不管三扇窗谁是谁非,统一手动登记。
+        // AppKit 自动的"Window"菜单填充在这三扇窗(歌词管理/设置/歌词窗口)身上都不可信
+        // (它们最小化后 AXSubrole 都是 AXDialog),所以三扇窗统一手动登记,不区分谁真的需要。
         window.isExcludedFromWindowsMenu = false
         NSApp.addWindowsItem(window, title: window.title, filename: false)
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
@@ -519,19 +511,18 @@ struct LyricsManagerView: View {
     @StateObject private var nowPlaying = LyricsManagerNowPlayingObserver()
     // searchText 是搜索框里**正在打字**的内容(见 searchBar,手写 TextField 绑定,每敲一个
     // 字符都会变);committedSearchText 才是真正喂给 filtered 的那份,只在按下回车/点搜索
-    // 按钮(两者都调 commitSearch)或者搜索框被清空时才更新。现象是"输入就
-    // 卡"——原因是 filtered 的缓存键
-    // filterToken 里原来直接拼了 searchText,每敲一个字符 token 就变、缓存作废,store.summaries
-    // 上百条全量重过滤一遍(还要重算 4~5 处引用点,见 FilteredCache 类头注),这在几百条记录规模
-    // 下逐字符都能感觉到卡顿。拆成两份状态之后,没敲完之前 committedSearchText 不变、
-    // filterToken 不变、filtered 直接命中缓存,真正的过滤只在用户明确"搜索完了"这一下发生。
+    // 按钮(两者都调 commitSearch)或者搜索框被清空时才更新。 两者不能合并:filtered 的
+    // 缓存键 filterToken 若直接拼 searchText,每敲一个字符 token 就变、缓存作废,
+    // store.summaries 上百条全量重过滤一遍(还要重算 4~5 处引用点,见 FilteredCache 类头注),
+    // 几百条记录规模下逐字符都能感觉到卡顿。拆成两份状态之后,没敲完之前 committedSearchText
+    // 不变、filterToken 不变、filtered 直接命中缓存,真正的过滤只在用户明确"搜索完了"这一下发生。
     @State private var searchText = ""
     @State private var committedSearchText = ""
     // 搜索框的焦点态,只用来给 searchBar 的边框上一圈强调色高亮(视觉细化)——
     // 纯展示用途，不影响 committedSearchText 那套提交逻辑。
     @FocusState private var searchFieldFocused: Bool
-    // 多选。原来是单选的 `String?`,那种绑定下 List 完全不响应 Cmd 点选/Shift 连选。
-    // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 原来的单曲详情页,≥2 = 批量操作面板。
+    // 多选,支持 Cmd 点选/Shift 连选。
+    // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 单曲详情页,≥2 = 批量操作面板。
     @State private var selectedKeys: Set<String> = []
     // 待删 key 的**快照**。删除确认弹窗一律只读这一份,绝不在弹窗回调里现读 selectedKeys:
     // 弹窗弹出时 List 会失去 first responder,已知会出现 selection 被系统清空的情况,现读
@@ -636,7 +627,7 @@ struct LyricsManagerView: View {
     @State private var missingLyricsOnly = false
     @State private var instrumentalOnly = false
     // collector 侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
-    // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「重试无歌词」按钮和
+    // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「补搜歌词」按钮和
     // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
     // nil = 全部歌手/专辑。跟 SourceFilter/TimingFilter 不同,歌手/专辑的候选值不是固定
@@ -662,10 +653,9 @@ struct LyricsManagerView: View {
     @State private var pendingRestoreSnapshot: LyricsBackupStore.Snapshot?
     @State private var showRestoreSnapshotConfirm = false
     @State private var restoreSnapshotResult: String?
-    // "这次开窗还没有自动定位过当前播放的歌"。⚠️ 不能靠"selectedKeys 是空的"来判断这是不是
-    // 一次全新的开窗——实测坐实(加文件日志抓到 `focus bail: selection not empty`,
-    // 第二次开窗时 sel=1):SwiftUI 的 Window scene 关掉之后**并不销毁根视图**,@State 原样
-    // 留着,第二次打开时 selectedKeys 还是上次选的那一条。原来那道 `guard selectedKeys.isEmpty`
+    // "这次开窗还没有自动定位过当前播放的歌"。 不能靠"selectedKeys 是空的"来判断这是不是
+    // 一次全新的开窗——SwiftUI 的 Window scene 关掉之后**并不销毁根视图**,@State 原样
+    // 留着,第二次打开时 selectedKeys 还是上次选的那一条(实测:第二次开窗 sel=1)。原来那道 `guard selectedKeys.isEmpty`
     // 于是从第二次开窗起就把定位整个挡掉了(选中不刷新、列表也不滚),表现成"选中的还是当前
     // 播放这首、但列表不会滚过去"——因为上次开窗时自动选中的本来就是它。
     // 窗口关闭时(根视图 .onDisappear)置回 true,所以是"每次开窗定位一次"而不是"整个 App
@@ -684,9 +674,8 @@ struct LyricsManagerView: View {
     }
 
     // 归并字典(歌手/专辑展示名、筛选下拉候选)全部下沉进 EnrichCacheStore,
-    // 随 summaries 重建一次 —— 原来是这里的计算属性,每次访问全量重建:List 每物化一行
-    // 就为专辑归并付一次 O(N) 次 ICU 变换,是本模块审计里最重的一条(锚点见
-    // EnrichCacheStore.albumDisplayMap 的注释)。展示歌手名同样下沉(Summary.displayArtist)。
+    // 随 summaries 重建一次,不按行现算——按行现算要为专辑归并付一次 O(N) 次 ICU 变换
+    // (锚点见 EnrichCacheStore.albumDisplayMap 的注释)。展示歌手名同样下沉(Summary.displayArtist)。
 
     private func albumDisplay(_ album: String) -> String {
         store.albumDisplayMap[toSimplified(album).lowercased()] ?? album
@@ -738,9 +727,8 @@ struct LyricsManagerView: View {
             switch timingFilter {
             case .all: break
             case .wordTiming: guard s.hasWordTiming else { return false }
-            // 补 s.hasLyrics 这道闸:改之前"仅整行"只看 !hasWordTiming,会把
-            // 完全没有歌词/只有纯文本兜底的行也算进来(它们同样 hasWordTiming==false)——
-            // "整行时间戳"该指真的有逐行 LRC 的那批,不是"反正不是逐字的都算"。
+            // s.hasLyrics 这道闸是必需的:"整行时间戳"只该指真的有逐行 LRC 的那批,
+            // 不能只看 !hasWordTiming——完全没有歌词/只有纯文本兜底的行同样 hasWordTiming==false。
             case .lineOnly: guard s.hasLyrics && !s.hasWordTiming else { return false }
             case .plainTextOnly: guard s.hasPlainTextFallback else { return false }
             }
@@ -770,11 +758,9 @@ struct LyricsManagerView: View {
     /// `filtered` 按当前排序方式排好的版本——List 的数据源、以及一切"顺序对用户可见"的
     /// 地方(比如 orderedVisibleKeys 那份删除计划)都该用这个,而不是 `filtered` 本身。
     ///
-    /// 不另外包一层缓存盒:`filtered` 那份缓存是为了避开"每行现算一次 ICU 归并"这个
-    /// 真正昂贵的操作(见 FilteredCache 声明处的注释),这里排序比较的全是预算好的
-    /// normPrimaryArtist/normAlbum/searchTitleLower 字段,是廉价的字符串/元组比较,
-    /// 一次 body 里被求值 2~3 遍(List 数据源 + orderedVisibleKeys)的成本可以忽略——
-    /// 为它单独维护一套 token/generation 缓存盒反而是最不值得的复杂度。
+    /// 跟 `filtered` 共用缓存盒:一次 body 里要求值 3~4 遍(List 数据源、全选 / 删除的可见集合、补搜菜单),
+    /// 而编辑框在同一个视图里,每敲一个字都会重算 body。全库八千多条时重排一遍默认顺序约 20ms、别的排序约 100ms,
+    /// 不缓存就是每个键几十到几百毫秒的卡顿。
     private var sortedFiltered: [EnrichCacheStore.Summary] {
         sortOption.sorted(filtered)
     }
@@ -807,16 +793,12 @@ struct LyricsManagerView: View {
 
     // 选中集合里"当前筛选结果中真的看得见"的那些,按列表显示顺序返回。
     //
-    // ⚠️ 这是防误删的关键一道:filtered 是计算属性,selectedKeys 是独立 @State,行从筛选
-    // 结果里消失后 SwiftUI 不保证替你把 key 从 selection 里剪掉。真实误操作路径:搜
-    // "Jackson" 多选 8 条 → 清空搜索框 → 点删除,此时那 8 条一条也看不见,弹窗却写着 8 条,
-    // 删完用户完全不知道删了什么,而这个删除是不可逆的(连 lyrics/ 下导出文件一起删)。
+    // 这是防误删的关键一道:filtered 是计算属性,selectedKeys 是独立 @State,行从筛选
+    // 结果里消失后 SwiftUI 不保证替你把 key 从 selection 里剪掉——选中的行被筛选筛没时,
+    // 界面上看不见却还留在 selection 里,而删除是不可逆的(连 lyrics/ 下导出文件一起删)。
     // 所有删除入口和所有计数都走这个函数,保证"弹窗说删 N 条" == "列表里看得见的 N 条"。
-    // 按 sortedFiltered 顺序(= 列表当前实际显示的顺序)而不是 Set 顺序,是为了让删除
-    // 计划稳定可复现,并且跟用户在屏幕上看到的顺序一致(加排序功能之前这里
-    // 用的是 filtered,那时"filtered 顺序"=="显示顺序"是同一件事;加了排序之后两者
-    // 分开了,这里必须跟着换成 sortedFiltered,否则"删除计划"的顺序会跟屏幕上看到的
-    // 顺序对不上)。
+    // 按 sortedFiltered 顺序(= 列表当前实际显示的顺序)而不是 Set 顺序,这样删除计划
+    // 才跟屏幕上看到的顺序一致。
     private func orderedVisibleKeys(_ keys: Set<String>) -> [String] {
         // 占位行永远排除在"可删除/可批量操作"范围之外——它不对应任何 raw 条目,删它没有
         // 意义(EnrichCacheStore.delete 本身会安全地把不存在的 key 过滤掉,这里提前排除
@@ -966,10 +948,10 @@ struct LyricsManagerView: View {
                 // 「排序」(加排序功能,选的是"筛选栏加一个下拉"而不是
                 // 点列表头排序那个方案)。宽度同样是量出来的(离屏 NSHostingView.fittingSize,
                 // `.font(.caption)` + `.controlSize(.small)`,取九个选项里最长的一条):
-                // 中文最长("专辑 A→Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
+                // 中文最长("专辑 A到Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
                 // 跟「来源」「时间轴」同一个套路多留 30pt 余量给箭头/内边距/系统版本差异。
                 //
-                // ⚠️ 跟「来源」「时间轴」不同,这一行(歌手/专辑/排序)**没有**挂
+                // 跟「来源」「时间轴」不同,这一行(歌手/专辑/排序)**没有**挂
                 // `ViewThatFits` 反应窗口变窄——那套机制是专为下面那一行
                 // (`filterControlsGroup` + `selectionAndFilterActions`)排的,这一行至今没有
                 // 类似的处理:改动前只有「歌手」「专辑」两个下拉时也是同一个状况,只是
@@ -987,23 +969,21 @@ struct LyricsManagerView: View {
                 Spacer()
             }
 
-            // ⚠️ 重排,修的是现象是"这一排会随着点击选中变来变去"。三个成因,
-            // 缺一不可地一起改掉(只改其中一个仍然会晃):
+            // 这一排的宽度必须跟选中状态、筛选状态完全无关,否则会随点击抖动。三点
+            // 缺一不可:
             //
-            //  1. 两个 Picker 用的是 `.frame(maxWidth:)` —— maxWidth 只是**上限**,不是
-            //     承诺。这一排一挤,它就往下掉,于是「来源」在不同状态下分别显示成
-            //     "A..." / "All So..." / "All Sour..."。改成固定 `width:`。
-            //  2. 三个胶囊没有行数限制,挤到一定程度就**换行成两行**,整排高度跟着跳。
-            //     行数上限加在 PillChipToggleStyle 里(见那边)。
-            //  3. 尾部那组控件的**组成本身**会变(未选中=「全选 N 首」;选中=「已选 N 首」+
-            //     「取消选择」;有筛选再多一条分隔线+「清除筛选」),宽度需求跟着变,于是
-            //     每点一下就把左边那半挤出不同的形状 —— 这才是"随点击变来变去"的直接原因。
-            //     修法是给它一个**固定宽度**的槽位,内容在槽里换,槽不变。
+            //  1. 两个 Picker 用固定 `width:`,不用 `.frame(maxWidth:)`——maxWidth 只是
+            //     **上限**,不是承诺,一挤就会显示成 "A..." / "All So..." / "All Sour..."
+            //     这类不同截断。
+            //  2. 三个胶囊要有行数上限(加在 PillChipToggleStyle 里),否则挤到一定程度会
+            //     换行成两行,整排高度跟着跳。
+            //  3. 尾部那组控件给一个**固定宽度**的槽位,内容在槽里换、槽不变——它的组成
+            //     本身会变(未选中=「全选 N 首」;选中=「已选 N 首」+「取消选择」;有筛选
+            //     再多一条分隔线+「清除筛选」),宽度需求跟着变,是"随点击变来变去"的直接原因。
             //
-            // 为什么"固定宽度"这条特别重要:下面 `header(_:)` 那段注释已经为同一件事付过
-            // 一次账 —— `ViewThatFits(in: .horizontal)` 比的是**理想宽度**,只要某个候选的
-            // 宽度随状态变,候选就会来回翻,"转圈出现/消失会让整个顶部跳一下"。所以这里
-            // 两个候选的理想宽度都必须与选中状态、与筛选状态无关,只跟窗口宽度有关。
+            // 跟下面 `header(_:)` 那段注释是同一条原则:`ViewThatFits(in: .horizontal)` 比的
+            // 是**理想宽度**,候选宽度只要随状态变就会来回翻。两个候选的理想宽度必须只跟
+            // 窗口宽度有关。
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
                     filterControlsGroup
@@ -1041,9 +1021,9 @@ struct LyricsManagerView: View {
     /// 下拉的宽度是**量出来的**,不是拍的(`.font(.caption)` 在这台机器上解析
     /// 成 10pt,用 NSFont 实测):
     ///   - 「来源」最长值 "Musixmatch" 58pt / "All Sources" 54pt,加菜单箭头与内边距约 28pt,
-    ///     再加左边"Source"标签约 35pt → 需要约 121pt,给 150。
+    ///     再加左边"Source"标签约 35pt 到 需要约 121pt,给 150。
     ///   - 「时间轴」最长值 **"Word Timing Only" 86pt**(英文!),同样加箭头/内边距/标签
-    ///     → 需要约 149pt,给 175。原来写的 110 连这个值本身都装不下 —— 那条注释里
+    ///     到 需要约 149pt,给 175。原来写的 110 连这个值本身都装不下 —— 那条注释里
     ///     "最长 4 字"量的是中文,英文这一档从来没被算进去过。
     @ViewBuilder
     private var filterControlsGroup: some View {
@@ -1075,7 +1055,7 @@ struct LyricsManagerView: View {
     private var selectionAndFilterActions: some View {
         HStack(spacing: 12) {
             // 「全选筛选结果」给一个显式按钮,不能只靠 ⌘A:这个窗口的核心动线正是"在筛选
-            // 栏勾出一批 → 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
+            // 栏勾出一批 到 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
             // 会变成"全选搜索框里的文字"。按钮上带的数字跟标题栏副标题「N / 852 首」左边
             // 那个数完全一致,用户一眼能对上"我选的就是筛出来的这批"。
             if selectedKeys.isEmpty {
@@ -1098,7 +1078,7 @@ struct LyricsManagerView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        // 单行,不许因为数字变长(852 → 2572)而换行。
+        // 单行,不许因为数字变长(852 到 2572)而换行。
         .lineLimit(1)
         // 固定槽位 + 右对齐:内容少的时候空在左边,右缘永远咬着同一条线。
         .frame(width: 280, alignment: .trailing)
@@ -1113,11 +1093,10 @@ struct LyricsManagerView: View {
                 configuration.isOn.toggle()
             } label: {
                 configuration.label
-                    // ⚠️ 这两行是"整排高度忽高忽低"的直接原因。原来标签没有
-                    // 任何行数/尺寸约束,整排一挤,"Manually Edited Only"/"Missing Lyrics
-                    // Only"这些英文长标签就**折成两行**,胶囊变高、整排跟着变高;中文标签
-                    // 短,所以只在英文界面暴露。钉成单行 + 按内容取自然宽度之后,一个胶囊
-                    // 的尺寸只跟它自己的文字有关,与这一排剩多少空间无关。
+                    // 长英文标签(如 "Manually Edited Only")没有行数约束会折成两行,
+                    // 胶囊跟着变高、整排高度不稳定;中文标签短,不会暴露这个问题。钉成单行
+                    // + 按内容取自然宽度之后,一个胶囊的尺寸只跟它自己的文字有关,与这一排
+                    // 剩多少空间无关。
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 11)
@@ -1190,11 +1169,9 @@ struct LyricsManagerView: View {
     // 四列可以摊开的横向空间 = 行内容的宽度。列宽的收敛(fitted)和拖拽夹值(dragged)都只
     // 认这一个测量值。
     //
-    // ⚠️ 修的就是这里。原来这里用的是另一个 @State headerWidth,由表头
-    // .background 里的 GeometryReader 通过 .onAppear/.onChange(of: g.size.width) 更新——
-    // 而那对回调在首帧拿到一个很窄的宽度之后就**再也没有跟上后续布局**。真机证据:侧栏实际
-    // 渲染宽度约 725pt(表头和每一行都按这个宽度画出来),但 fitted 拿到的宽度 ≤218pt,于是
-    // budget 掉到三列下限之和以下、走进"极窄"分支,把三列**恒定**钳到各自下限(56/56/70)。
+    // 别改成用 GeometryReader 的 .onAppear/.onChange(of: g.size.width) 去更新一个
+    // @State headerWidth:那对回调只在首帧后就不再跟进后续布局变化,会让 fitted 拿到的
+    // 宽度远小于侧栏实际渲染宽度,三列因此恒定钳在各自下限。
     // 存下来的值当时是 56/137.66/70:专辑存的是 137.66、画出来却是 56 —— 也就是说无论怎么
     // 拖、往哪个方向拖,存进去的值都被这一步抹平成同一组常量,界面纹丝不动,表现成"列宽根本
     // 拖不动",而且全程没有任何报错。
@@ -1289,10 +1266,10 @@ struct LyricsManagerView: View {
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
                     // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List
-                    // 看着像一片白屏(现象是"打开歌词管理页面列表会白一会")。
+                    // 看着像一片白屏。
                     // 用 .overlay 而不是拿 if/else 把 List 整个换掉:那样要把下面 .onAppear
                     // (真正触发 reload() 的地方)挪到一个"loading 分支和 loaded 分支都在
-                    // 的容器"上才不会死锁(loading 时 List 不存在→onAppear 不触发→永远
+                    // 的容器"上才不会死锁(loading 时 List 不存在到onAppear 不触发到永远
                     // loading)——.overlay 直接叠在同一个 List 上,List 本身、它的 onAppear
                     // 一个字都不用动,只是内容还是空的那几百毫秒里多画一层提示。
                     .overlay {
@@ -1305,9 +1282,9 @@ struct LyricsManagerView: View {
                             }
                         }
                     }
-                    // ⚠️ 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
+                    // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
                     // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
-                    // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
+                    // selectedKeys 就会变成"右键点空白 到 菜单显示『删除 8 条』 到 删掉 8 条
                     // 根本不在右键位置的条目"。空集时整个菜单不给任何项(= 文档说的停用菜单)。
                     // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
                     // 右键点已选中区内任一行则 keys 是整个选区——这正是需要的原生行为,给每行
@@ -1450,11 +1427,10 @@ struct LyricsManagerView: View {
                         // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
                         // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的入口。
                         //
-                        // ⚠️ 修:这里原来只有 `Label(cacheSizeText, systemImage)`
-                        // 当 Menu 的标签,旧注释还写着"菜单本身的标题就是总大小,不需要另外找
-                        // 地方展示这个数字"——但 macOS 工具栏里的 Label **默认只画图标、把标题
-                        // 整个丢掉**(跟 MenuBarMenu.swift 里"下拉菜单默认不画 Label 图标"是相反
-                        // 方向的同一类默认行为),所以那个数字从来没真的出现在界面上,工具栏上
+                        // 只用 `Label(cacheSizeText, systemImage)` 当 Menu 的标签不够:
+                        // macOS 工具栏里的 Label **默认只画图标、把标题整个丢掉**(跟
+                        // MenuBarMenu.swift 里"下拉菜单默认不画 Label 图标"是相反方向的同一类
+                        // 默认行为),数字不会真的出现在界面上,工具栏上
                         // 只有一个硬盘图标 + 展开箭头。补 .labelStyle(.titleAndIcon) 让标题真的
                         // 画出来。
                         //
@@ -1567,7 +1543,7 @@ struct LyricsManagerView: View {
                     Button(L10n.t("取消"), role: .cancel) {}
                 } message: {
                     // 文案从"无法撤销"改成"会先自动备份":clearAll 动手之前
-                    // 一定先打一份快照(EnrichCacheStore.clearAll)。⚠️ 不能改成"随时可以
+                    // 一定先打一份快照(EnrichCacheStore.clearAll)。 不能改成"随时可以
                     // 恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头
                     // 比不承诺更危险。
                     Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
@@ -1702,8 +1678,8 @@ struct LyricsManagerView: View {
         //
         // 列表是**开窗那一刻的快照**,而 collector 在窗口开着期间会持续往同一个文件写:新歌
         // 是新增条目,给已有歌补机翻译文/逐字时间轴则是原地更新。不刷新的话,一首刚补上译文
-        // 的歌在列表里始终不亮绿色的译文标记 —— 用户的原话是"这首歌明明有翻译,但没有译文
-        // 的 tag",而歌词本身在悬浮窗里是正常显示的(那条路径读的是实时数据)。
+        // 的歌在列表里始终不亮绿色的译文标记,而歌词本身在悬浮窗里是正常显示的
+        // (那条路径读的是实时数据)。
         //
         // 挑"App 重新激活"当触发点,而不是上文件监听:典型用法就是切出去听歌、过一阵切回来,
         // 这个时机覆盖得住,而且 reload() 会把读盘+解析(缓存大了要 30ms 以上)放后台线程,
@@ -1711,7 +1687,7 @@ struct LyricsManagerView: View {
         // 的「刷新」—— 那颗按钮本来就在。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // onlyIfChanged:绝大多数激活时缓存文件根本没变,mtime 指纹相同就整条链
-            // (读盘/解析/重建/summaries 重发布 → List 全量 diff)都不跑。
+            // (读盘/解析/重建/summaries 重发布 到 List 全量 diff)都不跑。
             Task { await store.reload(onlyIfChanged: true) }
         }
         .onDisappear {
@@ -1793,7 +1769,7 @@ struct LyricsManagerView: View {
         // 「源里有歌、无词」同理单独一颗,跟行上的徽章一一对应。
         let noLyrics = picked.filter { !$0.hasLyrics && !$0.isInstrumental && !$0.hasPlainTextFallback }
         // 「最近一轮零应答」再切一档,顺序必须跟行徽章的判定链一致
-        // (零应答 → 源里有歌无词 → 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾 ——
+        // (零应答 到 源里有歌无词 到 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾 ——
         // 那正是把「源里有歌、无词」单独拎一颗出来时立的规矩。
         let noResponder = noLyrics.filter(\.lastRoundHadNoResponder).count
         let indexed = noLyrics.filter { !$0.lastRoundHadNoResponder && $0.knownOnSources }.count
@@ -1833,9 +1809,9 @@ struct LyricsManagerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            // 多选的另一条动线:筛出「仅无歌词」→ 全选 → 让 collector 现在就把这批
+            // 多选的另一条动线:筛出「仅无歌词」到 全选 到 让 collector 现在就把这批
             // 重搜一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,进度在工具栏那颗
-            // 「重试无歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
+            // 「补搜歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
             if !retryable.isEmpty {
                 Button {
                     LyricsFillSweep.request(keys: retryable)
@@ -1860,7 +1836,7 @@ struct LyricsManagerView: View {
         .padding(24)
     }
 
-    /// 工具栏「重试无歌词」:让 collector 现在就把没歌词的存量条目重搜一遍,不用等
+    /// 工具栏「补搜歌词」:让 collector 现在就把没歌词的存量条目重搜一遍,不用等
     /// 每首歌各自再被播到(补空路径设计上只在重播时触发,见 collector/lyricsfillsweep.go 头注)。
     /// 两个入口:全库、或当前筛选出来的那批(只在筛选真的缩小了范围时才出现,免得两个数字一样
     /// 的按钮并排)。跑着的时候**图标本身**换成一个确定进度的圆环 + 「3/82」——macOS 工具栏
@@ -1874,11 +1850,10 @@ struct LyricsManagerView: View {
         let retryableVisible = sortedFiltered.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
         return Menu {
             if let status, running {
-                // ⚠️ 这一轮**不一定**是补空重试:「全量重新扫库」复用同一条通道(状态文件、
+                // 这一轮**不一定**是补空重试:「全量重新扫库」复用同一条通道(状态文件、
                 // 单轮互斥、取消都共用,见 collector/lyricsfullscan.go 头注),所以两句文案都得
                 // 按 isFullScan 分流。不分流的话,全量跑着的时候这里会说「停止重试」「正在重试
-                // 无歌词条目」,而实际在跑的是全量扫库 —— 说的跟做的不是一回事(修,
-                // 同批修掉的还有设置页那处把两行进度画重复的)。
+                // 无歌词条目」,而实际在跑的是全量扫库 —— 说的跟做的不是一回事。
                 let isFull = status.isFullScan
                 Section {
                     Button(role: .destructive) {
@@ -1910,6 +1885,8 @@ struct LyricsManagerView: View {
                         } label: {
                             Label(String(format: L10n.t("重试当前筛选出的无歌词条目（%@ 首）"), "\(retryableVisible.count)"),
                                   systemImage: "line.3.horizontal.decrease.circle")
+                // 标题只说这是什么,菜单项只写范围和数量;规则拆成下面两行短句单独一节。
+                // 原来整句规则塞在标题里,菜单被撑成一条长长的灰字,读起来像日志。
                         }
                         .disabled(retryableVisible.isEmpty)
                     }
@@ -1980,8 +1957,7 @@ struct LyricsManagerView: View {
         EnrichCacheStore.byteText(Int64(bytes))
     }
 
-    // 补/收「正在搜索歌词」占位行(现象是"一首歌还在首次歌词搜索的时候,
-    // 歌词管理页面看不到那条记录")。根因是这个列表的数据源(EnrichCacheStore.summaries)
+    // 补/收「正在搜索歌词」占位行。根因是这个列表的数据源(EnrichCacheStore.summaries)
     // 完全来自 collector 写的缓存文件——collector 联网搜索期间什么都不往文件里写(只保留
     // "搜到结果"的那次落盘,见 collector/enrich.go 的守卫),所以搜索还没出结论这段窗口期,
     // 这首歌在缓存文件里压根不存在,不是"存在但没显示"。
@@ -2064,11 +2040,10 @@ struct LyricsManagerView: View {
     // 普通函数内直接访问单例属性即可,不用建立订阅。
     private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, animated: Bool = true) {
         let playback = PlaybackCoordinator.shared
-        // ⚠️ key 必须走 EnrichCacheKeys.normalizedKey —— 那是缓存 key 在 Swift 侧的**唯一
+        // key 必须走 EnrichCacheKeys.normalizedKey —— 那是缓存 key 在 Swift 侧的**唯一
         // 构造点**(逐字节镜像 collector 的 enrichKey)。手拼 "artist|title|album" 会漏掉
         // 两道清洗:cleanTag(各类空格/零宽字符)和 normalizedTitle(循环剥结尾括号里的副题)。
         //
-        // 现象是「进歌词管理不会自动定位到正在播的曲目」,实测就是这条:
         // Apple Music 报的是「Dynasties and Dystopia (from the series Arcane League of
         // Legends)」,而缓存里那条 key 是剥掉副题的「Dynasties and Dystopia」——精确匹配
         // 落空,而 looseKey 只折大小写/空格/繁简、折不掉那段副题,于是本函数静默返回,
@@ -2081,14 +2056,10 @@ struct LyricsManagerView: View {
         let rawKey = "\(playback.artist)|\(playback.title)|\(playback.album)"
         // 先精确命中,不中再按 looseKey(小写 + 去空格 + 繁转简)兜一次。
         //
-        // ⚠️ 缓存里的 key 是**当初写进去那一刻**播放器报的原样,而播放器报的大小写/空格
-        // 会漂。现象是「歌词管理里定位不到 Shhh」,查下来正是这个:那条 08-17
-        // 入库时上报的是 `Prince|Shhh|The Gold Experience`,而今天整张 The Gold Experience
-        // 重播时报的是 `PRINCE|…`(同专辑今天新入库的 15 条全是 PRINCE)。精确比较落空、
-        // 而且这个函数**找不到就静默返回**,看起来就像这首歌根本没被缓存过。
-        //
-        // 悬浮窗那边没事,是因为 EnrichCacheReader 早就有同一道兜底;collector 也有,所以
-        // 它没有重复入库一条 PRINCE 的 —— 少的只有这一处。
+        // 缓存里的 key 是**当初写进去那一刻**播放器报的原样,而播放器报的大小写/空格
+        // 会漂(如 `Prince` 可能今天报成 `PRINCE`)。精确比较落空,而且这个函数**找不到就
+        // 静默返回**,看起来就像这首歌根本没被缓存过——悬浮窗和 collector 都有同一道兜底,
+        // 这里缺了只影响歌词管理这一处。
         let candidates = normalizedKey == rawKey ? [normalizedKey] : [normalizedKey, rawKey]
         let key: String
         // 「正在搜索」占位行也要能被定位到——它此刻就是这首歌在列表里**唯一**存在的样子,
@@ -2110,8 +2081,7 @@ struct LyricsManagerView: View {
         DispatchQueue.main.async {
             if animated {
                 withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
-                // 补一发校正(现象是「点一次没用,要点两次才跳到当前播放这首」)。
-                // 跟下面开窗那条是**同一个**根因,只是 08-07 加校正时只给了不带动画那条路:
+                // 补一发校正:跟下面开窗那条是**同一个**根因——
                 // List 的行高是懒量的,没被滚到过的行一直按估算高度算。列表几千条、目标又
                 // 在视口外老远时,一次 scrollTo 按估算落点走,停下来的位置差着一截 —— 而
                 // 「点第二次就好了」恰恰是这个机制的自证:第一次已经把目标附近那些行量出了
@@ -2145,8 +2115,8 @@ struct LyricsManagerView: View {
     // 直接读写 raw[key],喂一个不存在的 key 进去没有意义。等 collector 写完缓存、下一次
     // reload 把这一行换成真实条目之后,点开就是正常的 detailView,不需要用户做任何事。
     //
-    // 加「停止搜索」:现象是这段等待没有上限(见 cancelPlaceholderSearch 的
-    // 注释),之前唯一的出路是干等。
+    // 「停止搜索」按钮:这段等待没有上限(见 cancelPlaceholderSearch 的注释),没有这颗
+    // 按钮用户只能干等。
     private func placeholderDetailView(_ summary: EnrichCacheStore.Summary) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             headerTitleBlock(summary)
@@ -2165,7 +2135,7 @@ struct LyricsManagerView: View {
 
     /// 通知 collector"别再等这首歌的搜索结果了"。
     ///
-    /// 起因(现象是):这段"搜索歌词中…"的等待此前**没有任何上限**——
+    /// "搜索歌词中…"的等待**没有总上限**——
     /// `resolveTrackEnrichment` 内部歌词那一步有 20s 兜底,但整个函数(还跟着
     /// MusicBrainz/Apple Music/QQ 兜底封面这几步顺序网络请求)没有总超时,某一步卡住时
     /// 占位行会一直挂着,用户没有任何退出方式。
@@ -2177,9 +2147,9 @@ struct LyricsManagerView: View {
     ///
     /// App 侧不主动清空占位行,等 collector 真正写完再让位:collector 现在的取消分支
     /// (`resolveEnrichAsync` 里 `ctx.Err() != nil` 那支)不再是"什么都不写",而是跟"自然
-    /// 查无"走同一条落盘路径,把这一轮标记成"暂无歌词"永久写回缓存(改,起因是
-    /// 现象是"点了停止搜索,记录不该直接消失,应该保留、标成无歌词,灵动岛/悬浮歌词也
-    /// 不该继续显示搜索中")。既然缓存那边真的会有一条新记录,这里就不能再乐观地把
+    /// 查无"走同一条落盘路径,把这一轮标记成"暂无歌词"永久写回缓存(要求:点了停止搜索,
+    /// 记录不该直接消失,应该保留、标成无歌词,灵动岛/悬浮歌词也
+    /// 不该继续显示搜索中)。既然缓存那边真的会有一条新记录,这里就不能再乐观地把
     /// `placeholderSummary` 清空——那样只会让这一行凭空消失,而下面 `.task` 里那个 5 秒
     /// 轮询是靠 `placeholderSummary != nil` 才会继续去问磁盘的(见那段注释),清空之后反而
     /// 没人再检查,除非用户碰巧做了别的触发 reload 的操作(换歌/重开窗口)。写完取消信号
@@ -2319,7 +2289,7 @@ struct LyricsManagerView: View {
                 // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
                 // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
                 //
-                // ⚠️ 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
+                // 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
                 // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
                 let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                                                  roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
@@ -2352,13 +2322,10 @@ struct LyricsManagerView: View {
 
     /// 详情页顶部:左边歌名/歌手/专辑,右边四个常用操作。
     ///
-    /// 操作区从"文字长条按钮"换成下面的固定尺寸图标方块 2×2 网格
-    /// （`actionTileGrid`，用户对照 button-group-options.html 的方案 B 选定）——顺带
-    /// 简化了这里:旧版按钮是文字长条,英文文案实测比中文长一截("Resolution decision /
-    /// Auto re-match / Search Online for Lyrics / Delete Saved Lyrics"逐个都比中文长),
-    /// 逼出过一版"一排/折两排/由 ViewThatFits 兜底"的三级布局,还是在英文下出过整页错位的
-    /// bug（当时的教训注释見 git 历史）。方块网格从根上不受这个变量影响——每块固定
-    /// `ActionTile.size` 宽高,标签超长就 `.lineLimit(2)` 截断,4 块的**总宽度是常量**,
+    /// 操作区是固定尺寸图标方块 2×2 网格(`actionTileGrid`)。方块网格不受文案长度影响
+    /// (英文文案比中文长一截,如 "Resolution decision / Auto re-match / Search Online
+    /// for Lyrics / Delete Saved Lyrics")——每块固定 `ActionTile.size` 宽高,标签超长就
+    /// `.lineLimit(2)` 截断,4 块的**总宽度是常量**,
     /// 跟中文/英文/任何语言都无关,所以这里只需要「标题和网格并排」/「标题在上、网格在下」
     /// 两种候选就够了,不再需要"网格自己再折两排"那一档。
     private func header(_ summary: EnrichCacheStore.Summary) -> some View {
@@ -2416,8 +2383,7 @@ struct LyricsManagerView: View {
             }
             // 同一时刻只允许一个 collector 子进程(LyricsSearchService 每次 performSearch
             // 开头无条件 cancelRunning)。自动匹配飞行途中打开这个弹窗会把它杀掉,自动那边
-            // 收到非零退出码、误报"搜索失败" —— 索性挡住,跟旧版 searchButton 的
-            // .disabled(rematchRunningKey != nil) 是同一条约束。
+            // 会收到非零退出码、误报"搜索失败" —— 用 disabled(rematchRunningKey != nil) 挡住。
             ActionTile(icon: "magnifyingglass", title: L10n.t("联网搜索候选歌词"),
                        help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
                 showSearchSheet = true
@@ -2440,7 +2406,7 @@ struct LyricsManagerView: View {
                     }
                 }
             }
-            // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
+            // 跟工具栏按钮、右键菜单走同一条 requestDelete 到 侧栏那个确认弹窗的路径:
             // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。
             ActionTile(icon: "trash", title: L10n.t("删除本地记录"),
                        help: L10n.t("删除本地记录"), destructive: true) {
@@ -2457,7 +2423,7 @@ struct LyricsManagerView: View {
                 text: sourceDisplayName(summary.lyricsSource),
                 tint: sourceColor(summary.lyricsSource)
             )
-            // ⚠️ 跟列表那颗同名徽章同一个坑:hasWordTiming 在"完全没有歌词"时也是
+            // 跟列表那颗同名徽章同一个坑:hasWordTiming 在"完全没有歌词"时也是
             // false,不加 hasLyrics 这道闸的话,无歌词的条目也会显示一个看起来像真结论
             // 的"整行歌词"——下面 `!summary.hasLyrics` 那组分支才是这种情况该显示的内容。
             if summary.hasLyrics {
@@ -2476,7 +2442,7 @@ struct LyricsManagerView: View {
             // 之所以也必须标出来,理由跟「已校准」一样:它同样是一个看不见的约束,不说清楚
             // 的话"为什么这首歌一直是这个源"查不出来。解除办法是那颗「重新自动匹配」。
             //
-            // ⚠️ 这枚徽章**永远不会亮**:这个字段没有写入方了,而且 collector
+            // 这枚徽章**永远不会亮**:这个字段没有写入方了,而且 collector
             // 每次启动都会把存量清空并转成 manual_pick_sha(见 manualpickmigrate.go)。
             // 留着纯粹是因为"删掉这套机制"是一次独立的清理(字段 + preferring 函数 + 单测 +
             // 详情面板和列表两枚徽章),不该混进改开关语义那次改动;留着也不产生任何行为
@@ -2750,7 +2716,7 @@ struct LyricsManagerView: View {
         case .keptNoCandidate:
             // 三种成因分开说。
             if update.instrumental {
-                // ⚠️ 订正:上面这句"自动路径此时也是一个字都不写"已经不对了——
+                // 订正:上面这句"自动路径此时也是一个字都不写"已经不对了——
                 // collector 的 rescoreLyrics 在这个局面下早就会把 instrumental 写回缓存
                 // (enrich.go 那段"纯音乐结论也要在这条路径上落地"),这颗
                 // 按钮走的是独立的 -pick 路径,之前只弹 toast、从没跟着写,导致「歌词管理」
@@ -2798,11 +2764,9 @@ struct LyricsManagerView: View {
         var decision: [String: Any]?
         if let data = pick.decisionJSON.data(using: .utf8),
            var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            // ⚠️ 覆写 applied:collector 那边**看不到缓存里的正文**,只能拿"冠军是否换了源"近似
-            // (searchLyricsPick 里写明了这是近似值)。同源换内容时它会算成 false,而「解析决策」
-            // 弹窗把 false 渲染成「评估后维持原状」—— 跟结果行直接打架(实测
-            // 撞到:结果行说"换了一份"、存档说"维持原状")。走到这里就是真的采纳了,只有采纳
-            // 这一条路径会写存档,所以无条件置 true。
+            // 覆写 applied:走到这里就是真的采纳了,只有采纳这一条路径会写存档,所以
+            // 无条件置 true——不能沿用 collector 那边"冠军是否换了源"的近似值(它看不到
+            // 缓存里的正文,同源换内容时会算成 false),否则「解析决策」弹窗会跟结果行打架。
             obj["applied"] = true
             decision = obj
         }
@@ -2830,8 +2794,8 @@ struct LyricsManagerView: View {
         }
         if winner.source == summary.lyricsSource {
             // 别说"更新的一份" —— 代码只知道"内容不一样",不知道哪份更新:同一个源完全可能
-            // 这一轮匹配到**另一个版本**(不同 song id / 重新上传过的歌词)。实测坐实同源两轮
-            // 返回的东西会变:周杰伦《I Do》点按钮那轮酷狗带逐字(wordTiming 400 分),十分钟后
+            // 这一轮匹配到**另一个版本**(不同 song id / 重新上传过的歌词)。同源两轮
+            // 返回的东西确实会变,例如周杰伦《I Do》点按钮那轮酷狗带逐字(wordTiming 400 分),十分钟后
             // 同一首同一个源一个逐字都不返回。所以如实说"哪里不一样",让用户自己判断。
             //
             // 三句完整句子而不是拼接:中文的"都"和英文的语序都拼不出来(同 batchDeleteMessage
@@ -2918,7 +2882,7 @@ private struct SourceBadge: View {
     let source: String
     // 行被选中时系统会铺一层高饱和度蓝底(backgroundProminence 变成 .increased)——固定的
     // 品牌色(浅绿/浅红背景+同色系文字)跟这层蓝底混在一起,深浅都对不上,糊成一团看不清
-    // (现象是)。跟 AccountLinkingTab.swift 的 DestinationStatusLabel
+    // 跟 AccountLinkingTab.swift 的 DestinationStatusLabel
     // 同一个思路:选中时退回系统的 .primary(会跟着蓝底自动换成白色,天然清晰),不铺蓝底
     // 的正常状态才用来源自己的品牌色,保持"一眼看出是哪个来源"这个设计意图不变。
     @Environment(\.backgroundProminence) private var backgroundProminence
@@ -2936,9 +2900,8 @@ private struct SourceBadge: View {
 }
 
 // 详情页顶部四个操作(解析决策/重新自动匹配/联网搜索候选歌词/删除本地记录)的固定尺寸
-// 图标方块——取代原来的文字长条按钮,理由见 LyricsManagerView.header 的注释。
-// 图标在上、短标签在下,尺寸固定(见下面 Self.size),标签超长时 .lineLimit(2) 截断+
-// .help() 兜底完整文案,不会像旧版文字按钮那样把整行撑宽。
+// 图标方块。图标在上、短标签在下,尺寸固定(见下面 Self.size),标签超长时 .lineLimit(2)
+// 截断 + .help() 兜底完整文案,不撑宽整行。
 private struct ActionTile: View {
     // 尺寸挂在这个类型自己身上(而不是 LyricsManagerView 那边)：Swift 的 private 是
     // 按"所在声明"限定作用域,不是按文件——LyricsManagerView 里的 private 常量,这个
@@ -3055,20 +3018,20 @@ private struct LyricsManagerRow: View {
                     // 「正在搜索」占位行(去掉转圈,只留文字):人工修正/逐字/
                     // 译文/罗马音这些字段此刻全是默认值,显示成"关"跟真的查出来是关是两件事,
                     // 干脆一个标记都不给——下面副标题那行的"搜索歌词中…"已经说明白了状态,
-                    // 现象是"这几个字就够了,不用再加一个转圈"。
+                    // 这几个字已经够,不需要再加一个转圈。
                     if !summary.isSearching {
                         badge("pencil.circle.fill", tint: .orange, on: summary.isManual,
                               help: L10n.t("人工修正过"))
                         // 「来源已选定」= 用户在「联网搜索候选歌词」里挑过一次源,
                         // 跟上面「人工修正」是两件事——那个一票否决全部自动路径,这个只把
-                        // 重选约束在这个源内(见详情面板同名 InfoChip 的注释)。
-                        // 现象是补上:之前这个约束只在展开详情才看得到,列表本身完全没有
-                        // 提示,容易让人误以为"选了却什么都没记住"。图标/颜色跟详情面板那颗
+                        // 重选约束在这个源内(见详情面板同名 InfoChip 的注释)。这个约束
+                        // 只在展开详情才看得到还不够,列表本身也要有提示,否则容易让人
+                        // 误以为"选了却什么都没记住"。图标/颜色跟详情面板那颗
                         // 保持一致,help 文案里带上具体选的是哪个源。
                         badge("pin.circle.fill", tint: .indigo, on: !summary.sourceChoice.isEmpty,
                               help: String(format: L10n.t("来源已选定：%@"),
                                            sourceDisplayName(summary.sourceChoice)))
-                        // ⚠️ on 不能写死 true:hasWordTiming 在"完全没有歌词"时也是 false,
+                        // on 不能写死 true:hasWordTiming 在"完全没有歌词"时也是 false,
                         // 会跟"整行时间戳"撞成同一个默认值——之前就是这么把"无歌词"的行也
                         // 画上了一个看起来很像真结论的"整行时间戳"图标。真正的判据是
                         // hasLyrics(有没有正文,不管是不是逐字),同一行下方的红色"无歌词"
@@ -3090,14 +3053,13 @@ private struct LyricsManagerRow: View {
                     }
                 }
                 if summary.isSearching {
-                    // ⚠️ 不能落进下面 !hasLyrics 那个分支:占位行的 hasLyrics/isInstrumental
+                    // 不能落进下面 !hasLyrics 那个分支:占位行的 hasLyrics/isInstrumental
                     // 都是默认值 false,会显示成刺眼的红色"无歌词"——那是"确认没有"的结论,
                     // 而这里连问都还没问完,两者不能混为一谈(正是这次要修的问题本身)。
                     Text(L10n.t("搜索歌词中…")).font(.caption2).foregroundStyle(.secondary)
                 } else if !summary.hasLyrics {
                     // 确证过的纯音乐不算"缺东西":同一格换成中性色的「纯音乐」,别用红色
-                    // 报警——它没什么要修的(现象是「一堆显示无歌词、其实都是
-                    // 纯音乐」)。判据是 collector 联网拿到的明确结论,不是猜的。
+                    // 报警——它没什么要修的。判据是 collector 联网拿到的明确结论,不是猜的。
                     if summary.isInstrumental {
                         Text(L10n.t("纯音乐")).font(.caption2).foregroundStyle(.secondary)
                     } else if summary.hasPlainTextFallback {
@@ -3143,7 +3105,7 @@ private struct LyricsManagerRow: View {
             } else {
                 // 只画来源徽章。"这份当初有几个源应答"不在列表里露出:那个数完整展开的
                 // 地方是详情页「解析决策」弹窗第一行「本轮应答的源」,列表这一列再挂一个
-                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 → 应答源最少」。
+                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 到 应答源最少」。
                 SourceBadge(source: summary.lyricsSource)
                     .frame(width: widths.source, alignment: .leading)
 
@@ -3159,7 +3121,7 @@ private struct LyricsManagerRow: View {
         }
         .padding(.vertical, 3)
         // 让整行(含上下 3pt 内边距)都算命中这一行。不加的话在内边距上右键会被判成"点在
-        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 → 菜单不出现,
+        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 到 菜单不出现,
         // 表现成"右键有时候没反应"。
         .contentShape(Rectangle())
         // 把这一行内容的实际左右边界报给上层,表头照它对齐(见 RowContentBoundsKey 注释)。

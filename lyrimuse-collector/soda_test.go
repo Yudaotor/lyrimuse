@@ -73,7 +73,7 @@ func TestSodaParseSeoTrackPrefersTopLevelLyric(t *testing.T) {
 // 没有计时行的响应必须当成"没有候选"——口径同 krcToLRC 里那条守卫:一份只剩头部标签的
 // 壳会被上游当成拿到候选、不再回落别的源。
 //
-// ⚠️ 这一类要判成 **trackFoundNoLyrics(曲库里有、没给词)**,不是 broken:曲目本身
+// 这一类要判成 **trackFoundNoLyrics(曲库里有、没给词)**,不是 broken:曲目本身
 // 在响应里,端点是好的。判成 broken 会让一首没词的歌把整个源报成失效。
 func TestSodaParseSeoTrackRejectsUntimed(t *testing.T) {
 	for _, content := range []string{"", "   ", "[ti:只有头没有正文]", "没有任何时间戳的纯文本"} {
@@ -136,7 +136,7 @@ func TestSodaCandidateScoreGates(t *testing.T) {
 		album  = "未来"
 		dur    = 222.653
 	)
-	// 正版:三道闸全过,时长几乎一致 → 分数最高。
+	// 正版:三道闸全过,时长几乎一致 到 分数最高。
 	if got := sodaCandidateScore(items[0], artist, title, album, dur); got <= 100 {
 		t.Errorf("正版应当拿到时长加分, got %d", got)
 	}

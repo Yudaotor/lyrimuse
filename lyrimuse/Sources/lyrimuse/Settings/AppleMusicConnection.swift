@@ -18,7 +18,7 @@ import WebKit
 ///
 /// 所以这里做的是那套手工流程的自动化版本:**在 App 内嵌的 WebView 里打开 Apple 自己的
 /// 登录页**,登录和授权全由 Apple 的页面完成,我们只在 cookie store 里取结果。
-/// ⚠️ 刻意**不**走 MusicKit JS 的 `authorize()`——那个要 developer token(付费账号),
+/// 刻意**不**走 MusicKit JS 的 `authorize()`——那个要 developer token(付费账号),
 /// 而且在嵌入式 WebView 里有已知的认证失败问题(Apple Developer Forums thread 710088,
 /// Cider / lito 这些客户端都踩过)。
 ///
@@ -183,7 +183,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
                       !token.isEmpty else { return }
                 // storefront 取 Apple 标记账号所在区的 itua cookie。
                 //
-                // ⚠️ 这两个 cookie 由 Apple 的登录流程**分别**写入,不保证同时就位,而这个
+                // 这两个 cookie 由 Apple 的登录流程**分别**写入,不保证同时就位,而这个
                 // 轮询是在 media-user-token 一出现就收网的 —— 早先的写法在这里直接
                 // `?? "us"`,于是这个时序差会被固化成一个错的区,后果是取词端点全线 404、
                 // 整个 Apple Music 源静默失效(详见 applemusic.go 的 applemusicLoadUserToken)。

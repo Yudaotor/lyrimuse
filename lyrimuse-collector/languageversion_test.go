@@ -164,7 +164,7 @@ func TestCrossLanguageVersionTags(t *testing.T) {
 		{"本地也是英文版就不算不符", "Dried Flower (English ver.)", "Dried flower (English ver.)", false},
 		{"日文版同理", "Song", "Song (Japanese ver.)", true},
 		{"同一声明的不同拼法要折成一个键", "Song (日文版)", "Song (Japanese ver.)", false},
-		// ⚠️ 这两条是"中文版归到国语同一个键"的正反面:分成两个键的话第一条会变成 true,
+		// 这两条是"中文版归到国语同一个键"的正反面:分成两个键的话第一条会变成 true,
 		// 凭空造出一批新的错配 —— 比漏判更糟。
 		{"中文版与国语是同一个声明", "Song (中文版)", "Song (国语)", false},
 		{"中文版与粤语仍然是两个版本", "Song (中文版)", "Song (粤语)", true},
@@ -218,7 +218,7 @@ func TestLastLRCTimestampSkipsTrailingCredit(t *testing.T) {
 	if got, ok := lastLRCTimestampSecs(duet); !ok || got != 40 {
 		t.Errorf("对唱末句 = %.2f/%v, want 40", got, ok)
 	}
-	// 只有署名行没有正文时照旧返回 false 之外的行为不变:全是署名 → 找不到末句。
+	// 只有署名行没有正文时照旧返回 false 之外的行为不变:全是署名 到 找不到末句。
 	if _, ok := lastLRCTimestampSecs("[00:00.00]作词 : 林夕\n[00:01.00]作曲 : 陈辉阳\n"); ok {
 		t.Errorf("整份只有署名行,不该提出末句时间戳")
 	}

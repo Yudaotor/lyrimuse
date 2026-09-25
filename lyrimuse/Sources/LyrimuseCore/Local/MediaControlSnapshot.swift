@@ -33,7 +33,7 @@ public struct MediaControlSnapshot: Decodable {
     /// 这首歌(实测见 `RadioTrackClock` 头注),所以 duration 置 nil(未知),elapsedTime 换成
     /// `RadioTrackClock` 自己按曲目边界起的表。下游拿到的因此是一份正常的单曲快照,不需要各自再判一次。
     ///
-    /// ⚠️ 纯 JXA 路(fetchAppleMusicSnapshot)拿不到这个字段 —— AppleScript 问 Music.app 要不到
+    /// 纯 JXA 路(fetchAppleMusicSnapshot)拿不到这个字段 —— AppleScript 问 Music.app 要不到
     /// MediaRemote 独有的键。设置里**只**选了 Apple Music 时走的正是那条路,之前
     /// 电台在这一种配置下完全不生效;现在那条路按曲目探一次 media-control 把判据补回来
     /// (见 `MediaControlClient.radioAwareAppleMusicSnapshot`),见 02 章「电台」一节。
@@ -81,7 +81,7 @@ public struct MediaControlSnapshot: Decodable {
     /// `MediaControlClient.radioAwareAppleMusicSnapshot`)。锚点跟着换的理由与那边逐字相同:
     /// 留着原始值会让下游"锚点是不是开播那个"的判定按整档节目的钟去解读,自相矛盾。
     ///
-    /// ⚠️ `duration` **原样不动**:系统那份报的是整档节目(实测 3390.122s),但置 nil 会让
+    /// `duration` **原样不动**:系统那份报的是整档节目(实测 3390.122s),但置 nil 会让
     /// `LocalPlaybackSource.apply` 建不起进度锚点、整档节目都没有歌词(真踩过)。
     /// 真曲长由 collector 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。

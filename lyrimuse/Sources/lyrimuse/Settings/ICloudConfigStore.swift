@@ -52,7 +52,7 @@ enum ICloudConfigStore {
     /// 存的是**裸路径字符串**,没用 security-scoped bookmark:这个 App 非沙箱,拿到路径就
     /// 能读写。(沙箱 App 才需要 bookmark 来跨启动保留授权。)
     ///
-    /// ⚠️ 这个键必须留在本机、不跟着配置搬家 —— 它是"这台机器上的一个路径",在新机器上
+    /// 这个键必须留在本机、不跟着配置搬家 —— 它是"这台机器上的一个路径",在新机器上
     /// 多半不存在。已加进 ConfigPortability.machineLocalDefaultsKeys。
     static let customFolderKey = "np:backupFolderPath"
 
@@ -246,8 +246,8 @@ enum ICloudConfigStore {
         // 直到下完(那次小文件用了 1.06s,网络差时可以是几十秒)。而这个方法是在设置页
         // .onAppear、以及启动探测里同步调的,一卡就是整个界面卡住。
         //
-        // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 → Current,
-        // 逐出后 → NotDownloaded,两次都是立即返回)。
+        // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 到 Current,
+        // 逐出后 到 NotDownloaded,两次都是立即返回)。
         if isMaterialized(found.url), let data = try? Data(contentsOf: found.url) {
             let meta = metadata(in: data)
             found.exportedAt = meta.exportedAt
@@ -374,7 +374,7 @@ enum ICloudConfigStore {
     // 而这两个方法**只**为那套清理服务(数份数喂菜单项 / 真正去删)。`latestSnapshot()`
     // 走的是完全独立的 `BackupDiscovery.latest(in:)`,不依赖它们。
     //
-    // ⚠️ 别再加回来。写入时清理、定时清理、"超过 N 份就提醒"都不要 —— 这是明确否掉过的
+    // 别再加回来。写入时清理、定时清理、"超过 N 份就提醒"都不要 —— 这是明确否掉过的
     // 方向,不是没人想到。真要省空间,卡头菜单里的「打开备份文件夹」让用户自己删。
 
 }

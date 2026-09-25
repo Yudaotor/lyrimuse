@@ -17,10 +17,10 @@ import (
 // 要等每首歌各自被重新解析一遍才慢慢生效。这跟 regenerate-jyutping 存在的理由一模一样
 // (那条是算法/词典改了要重算,这条是功能刚上线要回补),形态也照抄它。
 //
-// ⚠️ 只补**空的**。已经有 lyrics_roma 的一律不动,不管它来自哪一路(源自带 / 粤拼) ——
+// 只补**空的**。已经有 lyrics_roma 的一律不动,不管它来自哪一路(源自带 / 粤拼) ——
 // 同 maybeGenerateHelperRoma 的规矩:绝不覆盖已经可用的内容。
 //
-// ⚠️ 默认只打印计划,-apply 才落盘;-apply 前必须确认独占(常驻 collector 内存里握着整份
+// 默认只打印计划,-apply 才落盘;-apply 前必须确认独占(常驻 collector 内存里握着整份
 // enrichCache,它下一次保存会把我们的修改整份盖回去)。
 func runBackfillRomaCLI(args []string) {
 	fs := flag.NewFlagSet("backfill-roma", flag.ExitOnError)
@@ -148,7 +148,7 @@ func runBackfillRoma(apply bool, limit int) int {
 		e.LyricsRoma = roma
 		enrichCache[k] = e
 	}
-	// ⚠️ **必须置脏**:saveEnrichCache() 开头有一道 `if !enrichDirty { return }`,不置就是
+	// **必须置脏**:saveEnrichCache() 开头有一道 `if !enrichDirty { return }`,不置就是
 	// 静默不落盘 —— 而 exportLyricsFiles() 照常把文件写出去,于是"文件有、缓存没有",
 	// 只有下次启动 importLyricsFromFiles 把文件读回来才碰巧变正常。实测踩到
 	// (20 条试跑:.roma.lrc 写了 20 个,cache 的 mtime 纹丝不动)。

@@ -23,6 +23,12 @@ import NaturalLanguage
 //        {"ok":false,"reason":"notInstalled","source":"ja"}
 // 行数**必须**原样返回,调用方靠下标对齐;翻不动的行原样回传。
 
+// 按系统分三档,**三档都必须吐一行合法 JSON**(调用方只认这个):
+//   macOS 26+   `TranslationSession(installedSource:target:)` 直接构造,不碰 AppKit。
+//   macOS 15…25 框架同样完整,但这个版本区间里拿 session 的**唯一**入口是 SwiftUI 的
+//               `.translationTask`,所以挂一个离屏视图去接(translateOnMacOS15)。
+//   macOS 14    Translation 整个框架都没有,`#available` 直接落到 needs-macos-15。
+//
 struct Input: Decodable {
     let target: String
     let lines: [String]
@@ -104,3 +110,6 @@ struct LyricsTranslate {
         #endif
     }
 }
+                //
+                // 这道闸是下面两条路共同的前置条件,不能只挡 26 那条:macOS 15 那条走的
+                // `.translationTask` 撞上没装的语言包同样会弹下载 UI。

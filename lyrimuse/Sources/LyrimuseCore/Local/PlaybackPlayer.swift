@@ -25,7 +25,7 @@ import Foundation
 // 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
 // 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
 //
-// ⚠️ 枚举本体(case、bundleIdentifier、nativeLyricSource、positionTierID、
+// 枚举本体(case、bundleIdentifier、nativeLyricSource、positionTierID、
 // builtin(forBundleID:))现在由 scripts/gen-players.py 从 shared/players.json 生成,
 // 在同目录的 PlaybackPlayer+Generated.swift —— 接一个新播放器改那份 JSON,不改这里。
 // 上面这段设计背景留在手写文件里:它讲的是"为什么这么设计",不随播放器清单变动。
@@ -42,22 +42,21 @@ extension Set where Element == PlaybackPlayer {
         return specific.count == 1 ? specific.first : nil
     }
 
-    /// 这个配置下,**问 Music.app 的那条 AppleScript 路会不会被走到** —— 也就是
-    /// 「Apple Music 自动化」这份系统权限对这个用户有没有意义。
+    /// 这个配置下,**哪几个播放器的 AppleScript 路会被走到** —— 也就是该向用户要哪几份
+    /// 「自动化」权限。设置页那张卡和引导页那一步列的就是这个列表,顺序固定(`allCases`)。
     ///
-    /// 判据是"含 auto **或** 含 Apple Music",不是单纯的 `contains(.appleMusic)`。三种
-    /// 配置都会走到那条路:
-    ///   · 只勾 Apple Music → 读取整条就是 AppleScript(`radioAwareAppleMusicSnapshot`);
-    ///   · 多选里含 Apple Music → 命中它那一拍整份走 AppleScript;
-    ///   · **纯 auto(默认值)** → 同样会走 —— `adaptedSnapshot` 的第一道
-    ///     guard 只看 `bundleID == com.apple.Music`、**完全不看 features.players**,在播的
-    ///     是 Music.app 就走;焦点被别的 App 抢走时还会同步退回它
-    ///     (`appleMusicSnapshotAfterFocusLost`)。
+    /// 两条判据合起来:
+    ///   · 哪些播放器**本身**需要这份权限 —— `PlaybackPlayer.needsAutomationPermission`
+    ///     (生成字段,源头是 shared/players.json:有 AppleScript 字典且本仓真在用);
+    ///   · 含 `auto` 时**全部**都算 —— auto 按超集处理,在播的是哪家由系统焦点仲裁决定,
+    ///     而 `adaptedSnapshot` 的分派**只看 bundle id、完全不看 features.players**,
+    ///     只要在播的是 Music.app 或 Spotify 就会走它们各自那条 AppleScript 路;焦点被别的
+    ///     App 抢走时还会同步退回(`snapshotAfterFocusLost`)。
     ///
-    /// ⚠️ **不是 `PlaybackPlayerPreference.isExclusivelyAppleMusic` 的替代品**。那一条问的是
-    /// 更强的"该不该绕开 media-control 的焦点仲裁、把指令直接导向 Music.app"(dispatch() /
-    /// checkForCurrentPlayer 用),两者不能互换 —— 混用会让多选 / auto 下的播放控制武断地
-    /// 打给 Music.app。这一条只回答"这份权限值不值得给这个用户看"。
+    /// 这里回答的只是"该向用户要哪几份权限"。**不是**
+    /// `PlaybackPlayerPreference.isExclusivelyAppleMusic` 的替代品 —— 那一条问的是更强的
+    /// "该不该绕开 media-control 的焦点仲裁、把指令直接导向 Music.app"(`dispatch()` /
+    /// `checkForCurrentPlayer` 用)。混用会让多选 / auto 下的播放控制武断地打给 Music.app。
     ///
     /// 引导页就是按这个判据做的(见 OnboardingView.needsAppleMusicAutomation
     /// 上那段沿革),设置页那张权限卡当时漏了、一直停在 `contains(.appleMusic)` ——

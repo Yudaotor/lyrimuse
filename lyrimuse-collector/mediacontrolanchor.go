@@ -92,9 +92,9 @@ func rememberPlayingPosition(track string, pos float64) {
 // playbackRate 变 null;复测 elapsedTimeNow 2 分 14 秒纹丝不动),只能自己按
 // elapsedTime + (now − 锚点时刻) 补算。而 timestamp 恒无小数,直接拿它当锚点时刻会恒偏快
 // frac ∈ [0,1)(实测 .914/.724/.560),暂停一下就退回去,还把下一首自然切歌的偏置估计带歪。
-// 采集器没有事件流、5s 轮询首见必然晚于 1s,按 Swift 侧 estimatedAnchorInstant 的退化形态
-// 取 ts+0.5,误差 ±0.5s。App 侧靠 stream watcher 能把锚点钉到 ±20ms,采集器做不到,这是两侧
-// 刻意的不对称(见 docs/features/02)。
+// 锚点时刻取 mediaControlAnchorInstant:带 --micros 的精确时间戳原样用;旧的整秒格式按 Swift 侧
+// estimatedAnchorInstant 的退化形态取 ts+0.5,误差 ±0.5s(采集器没有事件流、5s 轮询首见必然
+// 晚于 1s)。
 func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, now time.Time) float64 {
 	if rate > 0 {
 		return elapsedTimeNow
@@ -116,11 +116,11 @@ func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, n
 // ---- Spotify 陈旧锚点重发—— 跟 Swift 侧 MediaControlClient.isStaleAnchorRepublish
 // 同一套判据,两侧必须同时改。完整实测记录见那边的注释与 docs/features/02。要点:
 // Spotify 会在播放中把 now-playing 信息重发一遍,elapsedTime **逐 ms 不变**、时间戳却换成
-// 当下(实测 10.477@:09 → 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
+// 当下(实测 10.477@:09 到 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
 // 几十秒。签名 = 同一首歌 + elapsed 相等 + 时间戳变了 + 按旧锚点外推还没越过曲长
 // (越过曲长的旧锚点已死)。elapsed==0 的重发跟「上一曲」重头播放签名相同,**只对
 // playerRepublishesZeroAnchor 里的播放器**判,且要离原锚点 zeroAnchorRepublishWindowSecs 之内
-// (两簇的实测分布见 Swift 侧那段注释)。⚠️ 那张名单不能外扩:连发里哪一个是真起播点各家相反
+// (两簇的实测分布见 Swift 侧那段注释)。 那张名单不能外扩:连发里哪一个是真起播点各家相反
 // (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移、只有暂停才纠得回来。
 // 命中时沿用**原**锚点的时间戳自己外推,不信 elapsedTimeNow。
 type playingAnchor struct {
@@ -169,7 +169,7 @@ func republishGapSeconds(last *playingAnchor, ts string, now time.Time) float64 
 	return now.Sub(last.at).Seconds()
 }
 
-// resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 → 原锚点的
+// resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 到 原锚点的
 // 时间戳(第二个返回值 true,调用方据此强制自己外推);否则记下这次并原样返回。
 func resolvePlayingAnchorTS(track string, elapsed float64, ts string, duration float64, bundleID string, now time.Time) (string, bool) {
 	playingAnchorMu.Lock()

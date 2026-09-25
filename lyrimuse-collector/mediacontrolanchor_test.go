@@ -8,9 +8,9 @@ import (
 
 // 「暂停时该报哪个位置」。样本全是真抓的:
 //   - Arc(网页播放器,页面没调 setPositionState):elapsedTime 恒 0、timestamp 恒为开播
-//     那一刻 → 一按暂停位置就归零,这是要修的那个 bug。
+//     那一刻 到 一按暂停位置就归零,这是要修的那个 bug。
 //   - QQ/网易云/Apple Music:暂停时会带新鲜时间戳重发一次 elapsedTime,那个值就是暂停位置
-//     → 必须保持原样,一点都不能动。
+//     到 必须保持原样,一点都不能动。
 func TestPausedPositionSecs(t *testing.T) {
 	// ① Arc 形态:锚点 187 秒没刷新、报告值 0,而播放中最后一次位置是 187
 	if got := pausedPositionSecs(0, 187, true, 187, true); got != 187 {
@@ -25,11 +25,11 @@ func TestPausedPositionSecs(t *testing.T) {
 	if got := pausedPositionSecs(99, 30, true, 100, true); got != 99 {
 		t.Errorf("只差一拍不算冻结,得到 %v", got)
 	}
-	// ④ 没有"最后位置"可用(刚启动/刚换歌)→ 原样
+	// ④ 没有"最后位置"可用(刚启动/刚换歌)到 原样
 	if got := pausedPositionSecs(0, 999, true, 0, false); got != 0 {
 		t.Errorf("没有最后位置时原样返回,得到 %v", got)
 	}
-	// ⑤ 时间戳解不出来 → 不猜,原样
+	// ⑤ 时间戳解不出来 到 不猜,原样
 	if got := pausedPositionSecs(0, 0, false, 187, true); got != 0 {
 		t.Errorf("拿不到锚点年龄时原样返回,得到 %v", got)
 	}
@@ -132,7 +132,7 @@ func TestIsStaleAnchorRepublish(t *testing.T) {
 		{"换歌不算", last, "方大同|南音", 10.477, "T43", 268.92, spotifyBundleID, later, false},
 		{"elapsed=0 隔得太久不算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T44", 268.92, sodaMusicBundleID, ts.Add(44 * time.Second), false},
 		{"elapsed=0 开播 2 秒内算重发", &playingAnchor{track: "x|y", elapsed: 0, ts: "T00", at: ts}, "x|y", 0, "T02", 268.92, sodaMusicBundleID, ts.Add(2 * time.Second), true},
-		// 实测样本(讨厌红楼梦):0.000@10:19:58 → 0.000@10:20:00,不判重发就整首歌慢 1.93s
+		// 实测样本(讨厌红楼梦):0.000@10:19:58 到 0.000@10:20:00,不判重发就整首歌慢 1.93s
 		{"开播双发的 0 锚点(真时间戳)", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:00Z", 268.92, sodaMusicBundleID, zeroAt.Add(2400 * time.Millisecond), true},
 		{"连发三次时第二次仍在窗口内", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:20:02Z", 268.92, sodaMusicBundleID, zeroAt.Add(4 * time.Second), true},
 		{"隔 175 秒的 0 锚点是真的回到 0", zeroAnchor, "陶喆|讨厌红楼梦", 0, "2026-09-18T10:22:53Z", 268.92, sodaMusicBundleID, zeroAt.Add(175 * time.Second), false},

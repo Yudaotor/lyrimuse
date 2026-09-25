@@ -1,6 +1,6 @@
 import Foundation
 
-/// App ⇄ collector 的「补空扫描」通道(见 collector/lyricsfillsweep.go 头注)。
+/// App 与 collector 的「补空扫描」通道(见 collector/lyricsfillsweep.go 头注)。
 ///
 /// 背景:collector 给空歌词条目再搜一轮的补空路径,设计上只在这首歌**再次被播放**时触发;
 /// 「歌词管理」里躺着的存量空条目用户不重播就永远不会动。这条通道让用户在窗口里主动要一轮:
@@ -30,7 +30,7 @@ public enum LyricsFillSweep {
         public let filled: Int
         /// 这一轮(这次开工)跑完了多少条。
         ///
-        /// ⚠️ 算速度只能用它,不能用 `done`:全量的 `done` 是累计值,而 `startedAt` 是**这一轮**
+        /// 算速度只能用它,不能用 `done`:全量的 `done` 是累计值,而 `startedAt` 是**这一轮**
         /// 开工的时刻,两者相除会得出"一开工就跑完了三千首"这种荒唐速度,「大约还要」当场变成
         /// 「就快好了」。字段缺席(补空那一轮、以及旧版 collector)时退回 `done`,那时两者相等。
         public let roundDone: Int?

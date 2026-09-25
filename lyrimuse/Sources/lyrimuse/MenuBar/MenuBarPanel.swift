@@ -8,7 +8,7 @@ import LyrimuseCore
 /// AppSettings 48 个只读 4 个,整对象订阅会让歌词窗口拖音量、设置页无关滑杆这类写入
 /// 打醒整个面板 body。只转发实读字段,值类型一律 removeDuplicates。
 ///
-/// ⚠️ sink 只用参数值,不回读源属性(@Published willSet 时机,回读是旧值)。
+/// sink 只用参数值,不回读源属性(@Published willSet 时机,回读是旧值)。
 ///
 /// anchor 入订阅(同 NotchPlayback 的取舍:progressArea 要在 body 里按锚点存在性分
 /// 播放/暂停两条分支,而锚点只在换歌/seek 时重建,低频);currentLyricsOffsetMs 仍由
@@ -40,24 +40,22 @@ private final class PanelPlayback: ObservableObject {
     /// 系统那张封面的**高清替代**(`PlaybackCoordinator.highResArtworkImage`),系统给的
     /// 实在太小/不像封面时才有值。
     ///
-    /// ⚠️ 消费方必须写 `highResArtworkImage ?? artworkImage` —— 这是那个属性声明处就写明的
-    /// 口径(灵动岛、歌词窗口、悬浮歌词三处都照它写)。这个面板之前**只订阅了
-    /// `artworkImage`**,于是它是唯一一个显示系统原图的消费面:现象是「为什么这两个地方的
-    /// 封面不一样」(方大同《白发》,Chrome 里放 YouTube Music)——系统经 MediaSession 给的
-    /// 是一帧 **150×84 的 MV 画面**(长宽比偏离正方形 0.44,远超
-    /// `deviceArtworkMaxAspectSkew` 的 0.15,所以 collector 侧那道守卫正确地没把它当封面
-    /// 收下),面板显示的就是那帧 MV,而歌词窗口/灵动岛显示的是缓存里正确的专辑封面。
+    /// 消费方必须写 `highResArtworkImage ?? artworkImage` —— 这是那个属性声明处就写明的
+    /// 口径(灵动岛、歌词窗口、悬浮歌词三处都照它写)。漏订阅 `highResArtworkImage`、只订阅
+    /// `artworkImage` 的消费面会显示系统原图而不是缓存里的专辑封面——系统经 MediaSession
+    /// 给的封面有时是一帧偏离正方形长宽比的 MV 画面(超过 `deviceArtworkMaxAspectSkew`
+    /// 的 0.15,collector 侧那道守卫因此没把它当封面收下),两者显示的会不一样。
     ///
-    /// ⚠️ 面板**画的不是它本尊**,是它的预缩小图 `highResArtworkThumbnail`:
+    /// 面板**画的不是它本尊**,是它的预缩小图 `highResArtworkThumbnail`:
     /// 这张是懒解码的原图档(1400~3000px),面板 44pt 那格首帧直接画它 = 主线程整张解码再缩,
-    /// 离线量过 ~30ms,而面板每次打开都是全新建树、每次都重付——这就是现象是「点图标之后
-    /// 有个小延迟才弹出」的一部分。缩好的小图由 PlaybackCoordinator 在图到货时后台烘一次。
+    /// 离线量过 ~30ms,而面板每次打开都是全新建树、每次都重付,是"点图标之后有个小延迟
+    /// 才弹出"的一部分。缩好的小图由 PlaybackCoordinator 在图到货时后台烘一次。
     /// 这里仍然订阅本尊只是为了跟 thumbnail 同进退时不出现"图有、缩略没有"的半拍。
     @Published private(set) var highResArtworkImage: NSImage?
     @Published private(set) var highResArtworkThumbnail: NSImage?
     /// 面板该显示的那张 —— 别在视图里各写一遍 `?? `,漏一处就又是一个显示原图的消费面。
-    /// 优先级:预缩小的高清图 → 高清原图(理论上不该走到,thumbnail 跟原图同一趟产出,
-    /// 只有缩图失败才会) → 系统那张。
+    /// 优先级:预缩小的高清图 到 高清原图(理论上不该走到,thumbnail 跟原图同一趟产出,
+    /// 只有缩图失败才会) 到 系统那张。
     var displayArtworkImage: NSImage? { highResArtworkThumbnail ?? highResArtworkImage ?? artworkImage }
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
@@ -97,7 +95,7 @@ private final class PanelPlayback: ObservableObject {
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
-            // ⚠️ 这条订阅不能省:高清替代是**换歌后异步下载**的,只改
+            // 这条订阅不能省:高清替代是**换歌后异步下载**的,只改
             // 读取处不加订阅的话,面板会一直停在系统原图上、等到下一次别的 @Published
             // 变化顺带刷新才换过来。按指针去重跟上面那条同款(每次到货都是新实例)。
             p.$highResArtworkImage.removeDuplicates(by: { $0 === $1 })
@@ -135,7 +133,7 @@ final class MenuBarPanelController {
     /// cmd-tab 这类不带点击的失焦也要收 —— App 真的活跃过时靠这个通知兜住。
     private var resignActiveObserver: NSObjectProtocol?
     /// 切 Space 也要收 —— 面板现在会出现在每个 Space 上(见 toggle 里 collectionBehavior
-    /// 那段),不收的话切走之后它还挂在那儿。⚠️ 挂在 NSWorkspace 的通知中心,不是
+    /// 那段),不收的话切走之后它还挂在那儿。 挂在 NSWorkspace 的通知中心,不是
     /// NotificationCenter.default,拆的时候也要从那边拆。
     private var spaceChangeObserver: NSObjectProtocol?
     /// 面板开/关 —— 状态栏那行滚动歌词要跟着反白,跟 NSMenu 的 delegate 回调同一件事。
@@ -149,7 +147,7 @@ final class MenuBarPanelController {
         let pop = NSPopover()
         pop.behavior = .transient
         // 「点了马上弹出」:NSPopover 默认那段弹出/收起动画本身就有
-        // 一两百毫秒,跟"按下→松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
+        // 一两百毫秒,跟"按下到松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
         // 三处一起改(另两处见 MenuBarStatusItem.attachButtonChrome / statusButtonClicked
         // 和 PanelPlayback.highResArtworkThumbnail),这里关动画,弹出即到位。
         pop.animates = false
@@ -198,12 +196,12 @@ final class MenuBarPanelController {
         }
         onVisibilityChange?(true)
         pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        // ⚠️ 修「别的 App 全屏时面板打不开」。
+        // 修「别的 App 全屏时面板打不开」。
         //
         // 真实症状不是"点了没反应",而是**面板弹在了桌面 Space 上**:日志里
         // `panel opened` 照常打出来(说明点击到位、popover 也 show 了),用户在全屏里看不见,
         // 于是再点一下——第二下走 toggle 开头 `popover.isShown` 那个分支把它关掉。日志上就是
-        // 一对间隔一两秒的 opened/closed(17:22:28→17:22:30、17:22:57→17:22:58 实测)。
+        // 一对间隔一两秒的 opened/closed(17:22:28到17:22:30、17:22:57到17:22:58 实测)。
         //
         // 成因:NSPopover 自建的窗口 collectionBehavior 是默认的"受管",进不了别的 App 的
         // 全屏 Space;而这个面板刻意**不** NSApp.activate()(理由见下面 FirstMouseHostingView
@@ -216,7 +214,7 @@ final class MenuBarPanelController {
         // 常驻悬浮窗防 Mission Control 搬动的,套在一个活几秒的 popover 上反而像卡住的残影;
         // .ignoresCycle 管 Cmd-` 轮转,popover 窗口本来就不在那张表里。
         //
-        // ⚠️ 只能放在 show **之后**:那个窗口是 show 内部现建的,willShow 时
+        // 只能放在 show **之后**:那个窗口是 show 内部现建的,willShow 时
         // `contentViewController?.view.window` 还是 nil。也不需要像 LyricsWindowView 那样
         // 持续守护——每次 toggle 都是全新的 NSPopover(didClose 里置 nil),AppKit 不会回写,
         // 跟着每次弹出设一次就够。formUnion 而不是直接赋值:别把 AppKit 自己塞的位覆盖掉。
@@ -243,7 +241,7 @@ final class MenuBarPanelController {
 /// 这一下**只用来激活 App**,不会传给控件。SwiftUI 的控件全都住在 NSHostingView 这一层
 /// 里,它默认返回 false,于是面板里除了三个圆钮块(TileMouseRouter 自己接了 first mouse)
 /// 之外的东西 —— 播放键、进度条、底栏、快捷设置里的滑杆/开关 —— 都得先点一下"唤醒"、
-/// 再点一下才动。现象是「打开之后没有马上获得焦点,需要点一下才行」就是这个。
+/// 再点一下才动。
 ///
 /// 不走 `NSApp.activate()` 那条路:那会把用户正在用的 App 顶到后台,只为了瞄一眼面板,
 /// 代价比问题本身还大(系统控制中心也不激活任何 App)。这里只是让这一层认下第一次点击,
@@ -264,13 +262,13 @@ private final class FirstMouseHostingController<Content: View>: NSHostingControl
 // MARK: - 面板本体
 
 private struct MenuBarPanelView: View {
-    // ⚠️ 跟 MenuBarStatusMenu 文件头同一条不变量:**渲染路径只读 AppSettings/
+    // 跟 MenuBarStatusMenu 文件头同一条不变量:**渲染路径只读 AppSettings/
     // PlaybackCoordinator,绝不碰两个悬浮窗控制器的 .shared**(碰了就把用户关掉的
     // 悬浮窗凭空建出来)。动作闭包里可以碰 —— 那是用户主动要求。
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 PanelPlayback 的注释。
     @StateObject private var playback = PanelPlayback()
     let close: () -> Void
-    // 长按 / 右键某个「歌词展示形态」的格子之后,面板下半部分换成它自己的快捷设置;
+    // 长按 / 右键某个能翻面的格子之后,面板下半部分换成它自己的快捷设置;
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
     @State private var quickTarget: LyricsSurface?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -322,11 +320,10 @@ private struct MenuBarPanelView: View {
 
     /// 展开 / 收起快捷设置。
     ///
-    /// ⚠️ **不包 withAnimation**。原来包了 0.15s 的 easeOut,想让面板高度
-    /// 变化柔和一点;但 withAnimation 开的是一个**事务**,这一帧里所有可动画的变化都会被它
-    /// 接管 —— 包括「正在播放」卡里那行歌词(跑马灯的横向偏移、逐字填色的渐变)。现象是的
-    /// 「收起快捷设置时整行歌词跳一下」就是这么来的:歌词行本来跟这次展开/收起毫无关系,
-    /// 却被顺带补间了一次。
+    /// **不包 withAnimation**。withAnimation 开的是一个**事务**,这一帧里所有可动画的
+    /// 变化都会被它接管 —— 包括「正在播放」卡里那行歌词(跑马灯的横向偏移、逐字填色的
+    /// 渐变)。包了的话,收起快捷设置时整行歌词会跟着跳一下:歌词行本来跟这次展开/收起
+    /// 毫无关系,却被顺带补间了一次。
     ///
     /// 而这个动画本来也没什么用:面板高度是 NSPopover 的窗口尺寸,归 AppKit 自己的
     /// resize 动画管(pop.animates),SwiftUI 这一层补间不到它。等于是白担了副作用。
@@ -337,7 +334,7 @@ private struct MenuBarPanelView: View {
     /// 某个形态"开 / 关"这一下该做什么。抽成一份是因为格子和快捷设置头部那个开关必须是
     /// **同一种**行为 —— 尤其菜单栏歌词那条"先收面板"的绕路,两处各写一遍必然走岔。
     ///
-    /// ⚠️ 这里只是**造闭包**、不执行,文件头那条"渲染路径绝不碰两个悬浮窗控制器 .shared"
+    /// 这里只是**造闭包**、不执行,文件头那条"渲染路径绝不碰两个悬浮窗控制器 .shared"
     /// 的不变量没被破坏:闭包体要等用户真按了才跑。
     private func toggleAction(for surface: LyricsSurface) -> () -> Void {
         switch surface {
@@ -408,9 +405,8 @@ private struct MenuBarPanelView: View {
     // 广告插播时这张卡的三行文案。判据 isCurrentTrackAdBreak 由 LocalPlaybackSource 给
     // (字段启发式 + 同曲棘轮 + AppleScript `spotify url` 权威分类)。
     //
-    // 现象是「广告这里要显示广告而不是一个横」指的就是这张卡 —— 我第一轮
-    // 改到了 LyricsWindowView(那处也确实缺,一并留着),但没解决这里。灵动岛
-    // (NotchLyricsView)和歌词窗口歌词区(emptyStateSpec)早就是「广告中」了,口径统一。
+    // 广告插播时这张卡显示「广告中」——灵动岛(NotchLyricsView)和歌词窗口歌词区
+    // (emptyStateSpec)是同一口径。
     private var displayTitle: String {
         if playback.isCurrentTrackAdBreak { return L10n.t("广告中") }
         // 电台口白 / 台卡:换成台名,跟灵动岛、歌词窗口同一口径。抓不到台卡就照旧。
@@ -448,7 +444,7 @@ private struct MenuBarPanelView: View {
     /// 抽成独立属性只为了让上面那个 `if` 能整块开关它(没抽的话那段 55 行要整体缩进)。
     private var trackHeader: some View {
         HStack(alignment: .top, spacing: 9) {
-            // 点封面 → 打开歌词窗口(跟灵动岛上两处封面同一动作);
+            // 点封面 到 打开歌词窗口(跟灵动岛上两处封面同一动作);
             // 先收面板再开窗,同「歌词窗口」块的顺序。
             Button {
                 close()
@@ -462,9 +458,7 @@ private struct MenuBarPanelView: View {
                 Text(displayTitle)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
-                // 去掉了这一行右边的「● 记录中」标识。原来是
-                // 红点 + 文案跟在歌手后面,靠一个 HStack 拼起来;去掉之后这里只剩歌手
-                // 一个 Text,外层那层 HStack 也一并拆掉,不留空壳容器。
+                // 这一行只有歌手一个 Text,没有额外包装的空壳容器。
                 //
                 // 顺带清掉了只服务它的 recording 计算属性,以及只被 recording 用到的
                 // features(FeatureSettingsStore)订阅 —— 留着的话这张面板会因为任何
@@ -476,7 +470,7 @@ private struct MenuBarPanelView: View {
                 // 专辑行。只在真有专辑名时才渲染 —— Spotify 常常
                 // 不上报专辑,占一个空行会让卡片凭空高一截、看着像排版错了。
                 //
-                // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
+                // 用 .tertiary 而不是 .secondary:标题(primary)到 歌手(secondary)到
                 // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
                 // 加上这一行之后文字块约 45pt,正好跟 44pt 的封面齐平(原来只有两行、
                 // 比封面矮一截),所以卡片总高几乎不变。
@@ -491,7 +485,8 @@ private struct MenuBarPanelView: View {
             // 来源角标:右上角放播放器的真实 App 图标(比文字
             // 胶囊更好认更安静),悬停给名字。放卡片内容内部而不是 .overlay ——
             // 设置页实测过卡片背景吞外挂 overlay 的坑,别再赌。
-            // 加点击:点角标把这个播放器唤到前台,顺手收面板
+            // 加点击:点角标跳到那个播放器(网页平台翻到正在放歌的那枚标签页,
+            // 原生播放器激活 App —— `openResolvedPlayer` 一条路管两种),顺手收面板
             // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
             if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
                 Button {
@@ -515,7 +510,7 @@ private struct MenuBarPanelView: View {
             // 摆在那儿只剩占位图和两行空文本;进度条没时长本来就不渲染;三键里前两颗对空
             // 队列是静默 no-op。
             //
-            // ⚠️ 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图
+            // 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图
             // 失败)照旧走下面这条 —— 那时候渐变占位图是有意义的(它代表一首真的歌),而卡片
             // 右边还有歌名/歌手撑着。广告插播同理(标题是「广告中」,有东西在放)。
             if isIdleNoTrack {
@@ -553,8 +548,8 @@ private struct MenuBarPanelView: View {
     /// 指哪家播放器、能不能真的「继续播放」(AM / Spotify 有 AppleScript,其余只能「打开 X」)。
     /// 三个展示面对"没在放"说同样的话,不是各写一份。
     ///
-    /// ⚠️ 这里不留走带三键:没有曲目时上一首/下一首对空队列是**静默 no-op**,裸 play 同样
-    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play → 上次那首 → 都不行就把
+    /// 这里不留走带三键:没有曲目时上一首/下一首对空队列是**静默 no-op**,裸 play 同样
+    /// 打不着(`IdlePlaybackActions.resume` 为此才是三段式:裸 play 到 上次那首 到 都不行就把
     /// 播放器带到前台)。一颗点下去必有可见反应的键,比三颗按不出东西的键有用。
     ///
     /// 点完**不收面板**:放起来之后这张卡当场变成正在播放卡,那是最好的反馈;真走到"把播放器
@@ -769,7 +764,7 @@ private struct MenuBarPanelView: View {
                           action: @escaping () -> Void) -> some View {
         KnobTile(symbol: symbol, title: title, subtitle: subtitle, on: on,
                  action: action,
-                 // 只有能长按的格子才接一个去处;「歌词窗口」「统计」是纯动作,长按/右键
+                 // 只有能长按的格子才接一个去处;「歌词管理」是纯动作,长按/右键
                  // 就当普通按一下(见 KnobTile.body 的 onSecondary)。
                  openQuick: quick.map { surface in { setQuickTarget(surface) } })
     }
@@ -812,8 +807,8 @@ private struct MenuBarPanelView: View {
                 .accessibilityAddTraits(.isButton)
         }
 
-        /// 静止 → 悬停 → 按下三档系统填充色,一档比一档实一点点。原来是 Button,靠
-        /// buttonStyle 什么反馈都没给,鼠标放上去看不出这一格是可点的。
+        /// 静止 到 悬停 到 按下三档系统填充色,一档比一档实一点点——默认的 Button + buttonStyle
+        /// 什么反馈都没给,鼠标放上去看不出这一格是可点的。
         private var fillColor: NSColor {
             if pressing { return .secondarySystemFill }
             return hovering ? .tertiarySystemFill : .quaternarySystemFill
@@ -828,8 +823,8 @@ private struct MenuBarPanelView: View {
         // 形态(比如首次使用时的一次性提示),而不是把这个符号原样放回来。
 
         private var content: some View {
-            // 图标在**上**、文字在下。原来是图标在左、文字在右:
-            // 面板内容宽 316,一排三个 + 9pt 间距 → 每格 99pt,再扣掉 16pt 内边距、28pt 图标
+            // 图标在**上**、文字在下(不是图标在左、文字在右):
+            // 面板内容宽 316,一排三个 + 9pt 间距 到 每格 99pt,再扣掉 16pt 内边距、28pt 图标
             // 和 7pt 间隔,留给文字只有 **48pt**。「菜单栏歌词」在 11pt 下要 55pt,靠
             // minimumScaleFactor(0.82) 缩到 9pt 勉强够,实测仍被截成「菜单栏...」;英文更
             // 没救 —— "Floating Lyrics"/"Menu Bar Lyrics" 缩到 0.72 都还在截断。
@@ -896,7 +891,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ 设置的「软件更新」页)。
+    /// 右下角那一格:平时是版本号(到 关于页),有未安装的新版本时是升级提示(到 设置的「软件更新」页)。
     ///
     /// 状态来自 `SparkleUpdaterManager.availableUpdate`(Sparkle 委托只记状态、不接管显示,
     /// 见那边注释),开窗时取一次快照。升级提示用强调色 + 下载图标,而不是只换文字——跟
@@ -944,7 +939,7 @@ private struct MenuBarPanelView: View {
         case .active:
             lastfmButton(tint: .secondary, help: nil) {
                 // 必须走 lastfmBadge():那张 PNG 四角是不透明的白,不裁圆角的话深色模式下
-                // 就是四个白点(现象是的正是这一处)。
+                // 就是四个白点。
                 lastfmBadge(size: 11)
             }
         case .error(let message), .missingCreds(let message):
@@ -1104,9 +1099,9 @@ private struct PanelProgressSection: View {
                     Capsule().fill(Color.accentColor)
                         .frame(width: max(4, geo.size.width * fraction))
                 }
-                // ⚠️ 变粗只发生在**外层那个恒高的槽**里(下面 .frame(height: 14)),垂直居中、
-                // 布局上一分不多占 —— 灵动岛那边踩过:高度直接参与布局的话,悬停那 2pt 会把
-                // 时间行和三个播放键整块往下推一下(现象是「移到进度条上按钮会位移」)。
+                // 变粗只发生在**外层那个恒高的槽**里(下面 .frame(height: 14)),垂直居中、
+                // 布局上一分不多占——高度若直接参与布局,悬停那 2pt 会把时间行和三个播放键
+                // 整块往下推一下。
                 .frame(height: scrubberHeight)
                 .frame(maxHeight: .infinity)
                 // reduceMotion 下仍然变粗 —— 那是功能反馈(告诉你这条能拖),不是装饰,
@@ -1164,21 +1159,19 @@ private struct PanelProgressSection: View {
             // 「正的步长 = 提前」这条口径不在这里定义,跟右键菜单的 nudgeEarlier、
             // 设置页那个 Stepper(▲ = 提前)是同一条。
             //
-            // 现象是「这两个按钮有点反直觉,想歌词快一点应该点右边」。原来是
-            // 左「提前」右「延后」——那个左右分工其实是把右键菜单的**上下**顺序(提前在上)
-            // 顺手横过来,横过来就丢了含义。而这一行左右夹着 1:02 / -5:28 两个播放时间,
-            // 读者的参照系就是播放器:右 = 往前 = 赶快一点。
+            // 左右分工按这一行的参照系来定:这一行左右夹着 1:02 / -5:28 两个播放时间,
+            // 读者的参照系是播放器——右 = 往前 = 赶快一点,不是右键菜单里"提前在上"的
+            // 上下顺序横过来套用(横过来会丢掉含义)。
             //
-            // 顺带把两颗圆箭头换掉(原来是 gobackward/goforward,Apple 的「快退/快进 15 秒」
-            // 符号):它们在这个位置一直在往"调播放进度"上带 —— 上一轮为此才在中间补了
-            // 「歌词」这个词 —— 而 ± 压根没有方向隐喻,只说"把这个数字调大/调小"。
+            // 圆箭头不是 Apple 的「快退/快进 15 秒」符号(gobackward/goforward):那对符号
+            // 在这个位置容易被读成"调播放进度",± 没有方向隐喻,只说"把这个数字调大/调小"。
             offsetButton("minus", help: nudgeHelp(L10n.t("延后"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
             }
-            // 中间这一格必须带「歌词」这个**词**(现象是)。原来 0 的时候只放一个
-            // ⏱ 图标,而这一整行左右夹着 1:02 / -5:28 两个播放时间 —— 两个圆箭头夹一个钟表,
-            // 在这个语境里怎么看都像"快退/快进",误读成调播放进度。位置本身就是误导源,光换
-            // 图标救不回来,得有个词把它跟播放进度切开。
+            // 中间这一格必须带「歌词」这个**词**:0 时只放一个 ⏱ 图标的话,这一整行左右
+            // 夹着 1:02 / -5:28 两个播放时间——两个圆箭头夹一个钟表,在这个语境里怎么看
+            // 都像"快退/快进",容易误读成调播放进度,位置本身就是误导源,光换图标救不回来,
+            // 得有个词把它跟播放进度切开。
             //
             // 定宽 64pt:实测最宽的形态是英文两位数负值 "Lyrics -12.5s" = 60.9pt(9.5pt
             // 等宽数字)。不定宽的话两颗按钮会随数值长短左右跳。
@@ -1241,7 +1234,7 @@ private struct PanelProgressSection: View {
         }
     }
 
-    /// 静止 4pt → 悬停 6pt → 拖动中 7pt。槽高恒为 14pt(见调用点),所以这三档都不动布局。
+    /// 静止 4pt 到 悬停 6pt 到 拖动中 7pt。槽高恒为 14pt(见调用点),所以这三档都不动布局。
     private var scrubberHeight: CGFloat {
         if scrubFraction != nil { return 7 }
         return hoveringScrubber ? 6 : 4

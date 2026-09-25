@@ -139,7 +139,7 @@ public enum PlayCountBreakdownMath {
 
     /// 把各写法的分页结果合成一份明细。
     ///
-    /// **每条 scrobble 都原样保留,不做跨写法"同一时刻去重"**。⚠️ 别假设"同一秒同一
+    /// **每条 scrobble 都原样保留,不做跨写法"同一时刻去重"**。 别假设"同一秒同一
     /// 个账号只可能有一条 scrobble",把后一种写法里与前一种写法同秒的条当作 Last.fm 大小写不敏感返回的
     /// 同一条剔掉——用户点开卢广仲《Boring》后对账那行报「行上按 18 次计,明细合计 16 次」,查 Last.fm
     /// 网页坐实那个假设不成立:`卢广仲|Boring` 13 条、`Crowd Lu|Boring` 5 条,其中 4 对**同一分钟**——
@@ -151,7 +151,7 @@ public enum PlayCountBreakdownMath {
         var variants: [PlayCountBreakdown.Variant] = []
         var plays: [PlayCountBreakdown.Play] = []
         // 编号截止:没拉完的写法里,已拉到的最旧一条;取各写法里**最晚**的那个(任何一个没拉完
-        // 的写法都可能在它自己的截止之前藏着没拉到的条)。有写法一条都没拉到(失败)→ 整体不编号。
+        // 的写法都可能在它自己的截止之前藏着没拉到的条)。有写法一条都没拉到(失败)到 整体不编号。
         var cutoff: Date?
         for (index, input) in inputs.enumerated() {
             var dupCount: [TimeInterval: Int] = [:]

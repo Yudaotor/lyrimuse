@@ -22,7 +22,7 @@ func TestResolvePlayersMigratesLegacySingleValue(t *testing.T) {
 	if got := resolvePlayers([]string{"some_removed_player"}, "netease_music"); len(got) != 1 || !got[playerNetease] {
 		t.Errorf("resolvePlayers([认不出的值], netease_music) = %v，期望迁移成 {netease_music}", got)
 	}
-	// legacy 也认不出(全新安装/文件损坏)→ 最终兜底 auto。
+	// legacy 也认不出(全新安装/文件损坏)到 最终兜底 auto。
 	if got := resolvePlayers(nil, ""); len(got) != 1 || !got[playerAuto] {
 		t.Errorf("resolvePlayers(nil, \"\") = %v，期望兜底 {auto}", got)
 	}

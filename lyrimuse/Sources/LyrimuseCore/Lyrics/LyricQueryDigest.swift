@@ -2,13 +2,13 @@ import Foundation
 
 /// 把「这一轮实际问过哪些查询词」压成可读的分组。
 ///
-/// **为什么需要这一层**:V1 落地当天用户就报「这部分可读性很差」。真实案例
-/// (宇多田光《Beautiful World (Da Capo Version) [Instrumental]》)一轮问了 9 组词,
-/// 逐条平铺出来是这样:
+/// **为什么需要这一层**:一轮问询可能对同一首歌换着歌手名/源名重试很多次,逐条平铺
+/// 会把界面刷成一堵重复文字墙。举例(宇多田光《Beautiful World (Da Capo Version)
+/// [Instrumental]》)一轮问了 9 组词,逐条平铺出来是这样:
 ///
 ///     · Utada - Beautiful World (Da Capo Version) [Instrumental]（首轮）
-///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 → 只问 网易云音乐、QQ音乐、LRCLIB、Musixmatch、AMLL、酷我音乐、咪咕音乐）
-///     · 宇多田ヒカル - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 → 只问 网易云音乐、QQ音乐、LRCLIB、…）
+///     · Hikaru Utada - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 到 只问 网易云音乐、QQ音乐、LRCLIB、Musixmatch、AMLL、酷我音乐、咪咕音乐）
+///     · 宇多田ヒカル - Beautiful World (Da Capo Version) [Instrumental]（别名轮：补缺席的源 到 只问 网易云音乐、QQ音乐、LRCLIB、…）
 ///     …再来六行一模一样的后缀
 ///
 /// 屏幕上 20 多个视觉行,而**真正的信息只有「曲名没变,换了 9 个歌手名」**:曲名重复 9 遍、
@@ -19,7 +19,7 @@ import Foundation
 ///      曲名变过(标题反查轮)时 `sharedTitle` 为 nil,曲名并回每一条里,不丢信息。
 ///   2. **按「来路 + 源名单」分组**,组内歌手名拼成一行。那串源名单于是每组只出现一次。
 ///
-/// ⚠️ **分组不排序**,保持首次出现的顺序 —— 先问什么、后问什么本身就是要复盘的信息
+/// **分组不排序**,保持首次出现的顺序 —— 先问什么、后问什么本身就是要复盘的信息
 /// (首轮问的对不对、别名轮是被什么触发的)。组内歌手名同理按出现顺序,只去重。
 public struct LyricQueryRound: Sendable, Equatable {
     public let artist: String

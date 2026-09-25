@@ -35,7 +35,7 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
     /// `@attr.total`:账号总 scrobble 数。
     public let total: Int
     public let nowPlaying: Track?
-    /// 已完成的 scrobble,新→旧,≤50 条。
+    /// 已完成的 scrobble,新到旧,≤50 条。
     public let tracks: [Track]
 
     public init(username: String, fetchedAt: TimeInterval, total: Int, nowPlaying: Track?, tracks: [Track]) {
@@ -56,12 +56,12 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
         return age >= 0 && age < Self.freshWindow
     }
 
-    /// 从文件解码。任何形状不对 → nil(调用方视作"没有 feed")。
+    /// 从文件解码。任何形状不对 到 nil(调用方视作"没有 feed")。
     public static func decode(_ data: Data) -> LastfmRecentFeed? {
         try? JSONDecoder().decode(LastfmRecentFeed.self, from: data)
     }
 
-    /// 按 Last.fm 网页的分页口径,总条数 → 总页数(每页 `pageSize` 条,至少 1 页)。
+    /// 按 Last.fm 网页的分页口径,总条数 到 总页数(每页 `pageSize` 条,至少 1 页)。
     public static func totalPages(total: Int, pageSize: Int) -> Int {
         guard pageSize > 0, total > 0 else { return 1 }
         return (total + pageSize - 1) / pageSize
@@ -71,10 +71,10 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
     ///
     /// 两份数据凑:热力图日桶 `bucketToday`(截至 `syncedThrough` 为止今天的条数,只存非零天,
     /// 所以 nil 可能是 0)+ feed 里的行。三种情形:
-    ///  - feed 的 50 行窗口**盖住了整天**(最旧一行早于今日零点)→ 直接数窗口里今天的行,精确;
-    ///  - 窗口盖不住整天,但日桶今天同步过(`syncedThrough >= todayStart`)→ 桶 + 窗口里晚于
+    ///  - feed 的 50 行窗口**盖住了整天**(最旧一行早于今日零点)到 直接数窗口里今天的行,精确;
+    ///  - 窗口盖不住整天,但日桶今天同步过(`syncedThrough >= todayStart`)到 桶 + 窗口里晚于
     ///    `syncedThrough` 的行,精确到"同步收尾那几秒内多算一条"的量级(下次 top-up 归正);
-    ///  - 两者都不行(今天听了 >50 首、日桶又还停在昨天)→ 只能给下界(窗口里今天的行数),
+    ///  - 两者都不行(今天听了 >50 首、日桶又还停在昨天)到 只能给下界(窗口里今天的行数),
     ///    `exact == false`,调用方可以补一个 `limit=1` 请求把真值拿回来。
     public static func todayCount(
         rowUTS: [TimeInterval], todayStart: TimeInterval,

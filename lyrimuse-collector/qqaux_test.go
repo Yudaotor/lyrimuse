@@ -38,7 +38,7 @@ func TestQQAuxiliaryPlainToLRCCleansTranslationTrack(t *testing.T) {
 	}
 }
 
-// roma 轨沿用 QRC 的 XML 包装 + 逐字计时,要压成逐行 LRC:[行始,行长]→[mm:ss.SSS],
+// roma 轨沿用 QRC 的 XML 包装 + 逐字计时,要压成逐行 LRC:[行始,行长]到[mm:ss.SSS],
 // 去掉 (词始,词长),只剩计时没有文字的行丢掉,音节间空格保留一个。
 func TestQQAuxiliaryPlainToLRCConvertsQRCRomaTrack(t *testing.T) {
 	content := strings.Join([]string{

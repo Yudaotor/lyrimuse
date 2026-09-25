@@ -21,7 +21,7 @@ import (
 // 所以 decryptKRC 那套算法原样可用,不需要第二个解析器(本机实测 60 个文件 60 个解得开)。
 //
 // 为什么值得专门走一条:
-//   - **零网络**。网络那条是"搜索 → KRC 库查候选 → 下载两次"四次往返,这条是读一个几 KB
+//   - **零网络**。网络那条是"搜索 到 KRC 库查候选 到 下载两次"四次往返,这条是读一个几 KB
 //     的本地文件。
 //   - **是客户端为用户正在听的那一版音频下的那一份**,不是搜索打分猜出来的最像的那个。
 //     这个仓库为"匹配到错版本"付出的一整套代价(候选打分、版本限定词比对、时长吻合度)
@@ -41,16 +41,16 @@ import (
 // `歌手 - 歌名_hash.krc`、一份 `<数字>.krc`),pickKugouLocalEntry 就是为这个存在的。拿到的候选仍然照常进 scoreLyricCandidate 打分,不搞
 // "命中即采纳" —— 万一同名歌配错了,打分还有机会把它比下去。
 //
-// ⚠️ 全程 fail-soft:目录不在 / 读不动 / 格式变了 / 解不开,一律当作没命中。它读的是**另一个
+// 全程 fail-soft:目录不在 / 读不动 / 格式变了 / 解不开,一律当作没命中。它读的是**另一个
 // App 的缓存目录**,那个 App 升级随时可能改路径或换格式,不能让它拖垮歌词主流程。
 //
-// ⚠️ 读这个目录**不需要**「完全磁盘访问」—— 实测一个拿不到 TCC.db 的进程(即没有 FDA)
+// 读这个目录**不需要**「完全磁盘访问」—— 实测一个拿不到 TCC.db 的进程(即没有 FDA)
 // 照样读得到:它不在 TCC 保护的那几个位置里。
 
 // kugouLocalDirOverride 让单测把目录指到临时路径。空 = 用真实路径。
 var kugouLocalDirOverride string
 
-// kugouLocalLyricDir 是酷狗客户端的歌词缓存目录。⚠️ 这是**外部 App** 的路径,不是这个项目
+// kugouLocalLyricDir 是酷狗客户端的歌词缓存目录。 这是**外部 App** 的路径,不是这个项目
 // 自己的数据位置,所以不走 paths.go 那套身份口径。
 func kugouLocalLyricDir() string {
 	if kugouLocalDirOverride != "" {
@@ -108,7 +108,7 @@ func refreshKugouLocalIndexLocked() {
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
 		// 没装酷狗 / 没开过 / 路径变了 —— 都是正常情况,静默退回网络解析。
-		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
 		noteLocalCacheDenied("kugou", dir, err)
 		kugouLocalIndex, kugouLocalReady = nil, true
 		return
@@ -124,7 +124,7 @@ func refreshKugouLocalIndexLocked() {
 
 	ents, err := os.ReadDir(dir)
 	if err != nil {
-		// ⚠️ stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
+		// stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
 		noteLocalCacheDenied("kugou", dir, err)
 		kugouLocalIndex = nil
 		return
@@ -208,7 +208,7 @@ func kugouLocalLyric(artist, title, album string) (kugouResult, bool) {
 // kugouLocalTitleMatches:宽松标题判据 —— **只认"多出来的是副标题"这一种差异**,不是裸的
 // 互相包含。
 //
-// ⚠️ 用 looseContains 会误配,实测撞上:拿「周深 - 大梦」去查,命中的是缓存里的
+// 用 looseContains 会误配,实测撞上:拿「周深 - 大梦」去查,命中的是缓存里的
 // 「大梦归 (《兰香如故》电视剧主题曲)」—— 那是另一首歌,只是名字前两个字一样。判据因此改成
 // "长的那个以短的那个开头,**而且紧接着必须是分隔符**":「我知道(电视剧…)」多出来的是
 // `(`,是副标题;「大梦归」多出来的是`归`,是另一个词。
@@ -216,7 +216,7 @@ func kugouLocalLyric(artist, title, album string) (kugouResult, bool) {
 // 这同时顺手挡住了 Live / Remix 那类:「Song Name Live」多出来的是字母,不算副标题 ——
 // 那本来就是另一个录音,不该拿它的歌词顶上。
 //
-// ⚠️ 这一层的误配比别处更难被下游发现:本地候选的 sourceReportedDurationSecs 是 0
+// 这一层的误配比别处更难被下游发现:本地候选的 sourceReportedDurationSecs 是 0
 // (KRC 的 [total:] 实测恒为 0),打分里最硬的那个"源报时长对不对得上"信号缺席,所以判据
 // 必须在这里就收紧,不能指望打分兜底。
 func kugouLocalTitleMatches(cached, want string) bool {
@@ -245,7 +245,7 @@ func kugouLocalTitleMatches(cached, want string) bool {
 // looseKugouLocalMatchesLocked:精确键落空时的兜底 —— **歌手仍然要精确相等**(normLoose 后),
 // 只放宽歌名:两边互相包含就算数(looseContains,跟这个仓库跨源比标题用的是同一把尺子)。
 //
-// ⚠️ 只放宽歌名、不放宽歌手,是刻意的:歌名带副标题是酷狗的常态,而歌手名放宽会让
+// 只放宽歌名、不放宽歌手,是刻意的:歌名带副标题是酷狗的常态,而歌手名放宽会让
 // 「周杰伦」匹配到「周杰伦、杨瑞代」这类合唱条目,那是**另一个录音**。
 //
 // 多个候选时挑 normLoose 长度跟查询最接近的那个 —— 查「我知道」时,「我知道(电视剧…)」
@@ -362,7 +362,7 @@ func krcToLRC(krc string) string {
 			continue
 		}
 	}
-	// ⚠️ 判据是"有没有计时行",不是"输出非空" —— 一份只剩头部标签、正文全丢了的 KRC
+	// 判据是"有没有计时行",不是"输出非空" —— 一份只剩头部标签、正文全丢了的 KRC
 	// 照样能产出几行 `[ti:]`/`[ar:]`,那是一个**看着非空、其实一句歌词都没有**的壳,
 	// 会被上游当成拿到候选而不再回落网络。
 	if timed == 0 {

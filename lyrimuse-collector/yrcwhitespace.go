@@ -90,6 +90,10 @@ func yrcMergeWhitespaceTokens(yrc string) (string, bool) {
 // migrateYRCWhitespaceTokens 对整个 enrich 缓存跑一遍 yrcMergeWhitespaceTokens。
 // 调用时机(main.go):importLyricsFromFiles 之后、exportLyricsFiles 之前 —— 修的是
 // 权威内容,修完由 export 写回导出文件。幂等:清洗过的内容不再含空白词条,重复跑是空操作。
+// 带水位闸(startupmigration.go)。它是在 qrcToYRC / krcToYRC 两个出口都补上源头归并
+// **之后**才够格加的:在那之前,每用 QQ / 酷狗解析一首新歌就又产生一批空白词条,这道迁移
+// 每次启动都能捞到东西(日志实测跑了 39 次,最近两次只隔 22 分钟、分别修 14 条和 13 条)——
+// 那种状态下加闸等于让新数据永远没人管。现在源头已经归并,它才真正变成一次性的存量清洗。
 func migrateYRCWhitespaceTokens() {
 	enrichMu.Lock()
 	fixed := 0
@@ -104,7 +108,7 @@ func migrateYRCWhitespaceTokens() {
 	}
 	if fixed > 0 {
 		// 必须显式置脏,否则 saveEnrichCache 是空操作 —— 同 migrateLyricTimelines 里
-		// 那条实测坐实的潜伏 bug,这里是同一个形态。
+		// 那条潜伏 bug,这里是同一个形态。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

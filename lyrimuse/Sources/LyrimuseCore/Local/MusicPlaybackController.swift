@@ -35,7 +35,7 @@ public enum MusicPlaybackController {
     /// 这两个函数不走 dispatch 的双后端分派,只发 AppleScript;调用方负责先确认当前播放器
     /// 确实是 Apple Music、以及自动化权限已经拿到(跟上面几个动作同一个约定)。
     ///
-    /// ⚠️ 属性名在不同 macOS 上不一样。这台 macOS 27 的 Music.app 脚本字典里已经没有
+    /// 属性名在不同 macOS 上不一样。这台 macOS 27 的 Music.app 脚本字典里已经没有
     /// `loved` 了,同一个属性(四字符码都是 `pLov`)改名成了 `favorited`;而更早的系统上
     /// 只有 `loved`。
     /// 订正(真机实测):这段注释原来断言"字典里不存在的属性会让整段编译失败、
@@ -130,7 +130,7 @@ public enum MusicPlaybackController {
 
     /// 把当前曲目从资料库删除。匹配口径与 currentTrackIsInLibrary() 完全同一套
     /// (歌名+歌手+专辑,专辑空退两字段),删匹配的第一条 —— delete 作用在 library
-    /// playlist 上就是从资料库整个移除(区别于从普通歌单移除)。没匹配时脚本报错→
+    /// playlist 上就是从资料库整个移除(区别于从普通歌单移除)。没匹配时脚本报错到
     /// 返回 false。Apple Music 专属,调用方约定同上;不要在主线程调用。
     @discardableResult
     public static func removeCurrentTrackFromLibrary() -> Bool {
@@ -154,10 +154,10 @@ public enum MusicPlaybackController {
         """#) != nil
     }
 
-    /// 恢复播放(歌词窗口欢迎态「继续播放」,Apple Music)。⚠️ 裸 `play` 对空队列是
+    /// 恢复播放(歌词窗口欢迎态「继续播放」,Apple Music)。 裸 `play` 对空队列是
     /// **静默 no-op**(实测:stopped 态发 play,state 仍 stopped——Music 停播/
     /// 重启后队列是空的,没有"上次上下文"可恢复)。三段式:①裸 play(接住"有队列只是
-    /// 停了");②读回仍没在播 → 在资料库找上次播的那首(调用方从 UserDefaults 记录里给)
+    /// 停了");②读回仍没在播 到 在资料库找上次播的那首(调用方从 UserDefaults 记录里给)
     /// 直接播,资料库上下文会自然续播后面的歌;③都不行返回 false,调用方兜底激活 App。
     /// 曲名/歌手是外部数据,拼进 AppleScript 前必须转义引号/反斜杠。不要在主线程调用。
     public static func resumePlayback(lastTitle: String?, lastArtist: String?) -> Bool {
@@ -227,7 +227,7 @@ public enum MusicPlaybackController {
     /// `spotify:ad:…` / `spotify:local:…`)。Spotify 的脚本字典没有 AM 那样的 `reveal`(只有会从头重播的
     /// `play track`),定位靠它注册的 `spotify` URL scheme:App 侧拿这个 URI 经 `SpotifyURI.deepLink` 转成
     /// 深链交给 LaunchServices 打开,客户端跳到曲目页(见 lyrimuse/SpotifyReveal.swift)。
-    /// Spotify 没在跑 / 没曲目 / 权限被拒 → nil。不要在主线程调用。
+    /// Spotify 没在跑 / 没曲目 / 权限被拒 到 nil。不要在主线程调用。
     public static func spotifyCurrentTrackURI() -> String? {
         guard let out = runAppleScriptCapturing(
             spotifyRunningGuard + #"tell application "Spotify" to return (spotify url of current track) as text"#
@@ -246,11 +246,11 @@ public enum MusicPlaybackController {
         case shuffle
         case repeatOne
         /// 列表循环(Music.app `song repeat = all`)。补上:AM 的循环键是三态
-        /// 关→全部→单曲,此前这一档被解析塌缩成 list —— 用户在 Music.app 开着整张循环,
+        /// 关到全部到单曲,此前这一档被解析塌缩成 list —— 用户在 Music.app 开着整张循环,
         /// 我们的循环键却是灰的,还没法从 UI 点出这一档。
         case repeatAll
 
-        /// 下一档。allowsRepeatOne=false 时跳过「单曲循环」,只在 列表 ↔ 随机 之间倒。
+        /// 下一档。allowsRepeatOne=false 时跳过「单曲循环」,只在 列表 与 随机 之间倒。
         ///
         /// Spotify 就是这一档:它的 AppleScript 字典里只有 `repeating`(布尔),够不到
         /// repeat-one —— 它 App 内部虽然有三态,脚本接口只暴露开/关。与其让按钮点到一个
@@ -260,7 +260,7 @@ public enum MusicPlaybackController {
             case .list: return .shuffle
             case .shuffle: return allowsRepeatOne ? .repeatOne : .list
             case .repeatOne: return .list
-            // 顺 AM 循环键语义:全部 → 单曲(够不到单曲的播放器直接回列表)。
+            // 顺 AM 循环键语义:全部 到 单曲(够不到单曲的播放器直接回列表)。
             case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
             }
         }
@@ -282,7 +282,7 @@ public enum MusicPlaybackController {
 
     /// Spotify 的脚本前面都要垫这一句。
     ///
-    /// ⚠️ `tell application "Spotify" to …` 只要发出任何命令就会**启动** Spotify —— 一个只用
+    /// `tell application "Spotify" to …` 只要发出任何命令就会**启动** Spotify —— 一个只用
     /// Apple Music 的用户会被莫名其妙拉起一个播放器。本仓另外两处 Spotify 脚本
     /// (MediaControlClient.spotifyPlayerPosition、collector 的 spotifyPositionScript)开头
     /// 都有同样的守卫,同一个理由。读不到时返回空串,上层解析不出来自然就是 nil。
@@ -374,7 +374,7 @@ public enum MusicPlaybackController {
                 """#
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
-        // ⚠️ 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
+        // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
         // shared/players.json:新播放器默认落到这里,跟 supportsExtendedControls 的口径
         // 一致(`== .appleMusic || == .spotify`)。真要给某个新播放器支持,在上面显式加一个 case。
         default:
@@ -413,7 +413,7 @@ public enum MusicPlaybackController {
         return ExtendedControlsState(favorited: favorited, mode: mode, volume: Int(parts[2]))
     }
 
-    /// Spotify 的模式段 `shuffling;shuffling enabled` → 档位。纯函数,selftest 直接覆盖。
+    /// Spotify 的模式段 `shuffling;shuffling enabled` 到 档位。纯函数,selftest 直接覆盖。
     ///
     /// `shuffling enabled` 为 false = 这个账号 / 播放上下文不允许随机(用户的 Free 账号真机实测:
     /// `set shuffling to true` 被接受、退出码 0,读回仍是 false,Spotify 自己界面上的随机键同样点不动)——
@@ -456,7 +456,7 @@ public enum MusicPlaybackController {
             // 布尔,映射不到「单曲循环」,而它开着与否不该影响这颗按钮显示的档位(用户可能在 Spotify
             // 里自己开了整张循环,那不是我们这三档里的任何一档,按「列表」显示才是诚实的)。
             // 与 extendedControlsState 的 Spotify 分支同一段模式脚本、同一个解析 —— 两条回读路径
-            // 不能对同一状态给出不同答案。空串(Spotify 没在跑)第一截是 "" → nil。
+            // 不能对同一状态给出不同答案。空串(Spotify 没在跑)第一截是 "" 到 nil。
             guard let out = runAppleScriptCapturing(spotifyRunningGuard + spotifyModePartScript) else { return nil }
             return spotifyPlaybackMode(fromModePart: out.trimmingCharacters(in: .whitespacesAndNewlines))
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
@@ -466,13 +466,13 @@ public enum MusicPlaybackController {
 
     /// 切到某个播放模式。
     ///
-    /// ⚠️ 「列表播放」**不**顺手把 `song repeat` 设成 all —— 那是"列表循环",是另一回事,
+    /// 「列表播放」**不**顺手把 `song repeat` 设成 all —— 那是"列表循环",是另一回事,
     /// 用户没要求就把整个资料库改成永远循环下去是多管闲事。这里只保证"不是单曲循环、
     /// 不是随机",repeat 原来是 off 还是 all 一概保留(用户可能在 Music.app 里特意开的)。
     /// 只有从单曲循环切出来时才必须动它,否则读回来还是单曲循环。
     /// 返回值 = 指令有没有被接受。
     ///
-    /// ⚠️ **写完不要马上回读**。实测坐实:`set shuffle enabled to true` 这段脚本
+    /// **写完不要马上回读**。实测坐实:`set shuffle enabled to true` 这段脚本
     /// 正常退出、值也确实写进去了,但另起一个进程去 `get shuffle enabled`,250ms 之后读回来
     /// 的仍是旧值(再等一会儿才变)。原来的 cyclePlaybackMode 正是写完就回读,于是那个旧值
     /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
@@ -636,7 +636,7 @@ public enum MusicPlaybackController {
     /// 歌词莫名其妙不动了。
     static let appleScriptTimeout: TimeInterval = 5
 
-    // ⚠️ 下面两个 runXxx 是**发完就不管**(try? process.run(),不等退出),所以它们不会
+    // 下面两个 runXxx 是**发完就不管**(try? process.run(),不等退出),所以它们不会
     // 卡住调用方,不需要走 ProcessRunner。改成等待反而会把"发一条播放指令"变成一次阻塞。
     private static func runAppleScript(_ script: String) {
         let process = Process()

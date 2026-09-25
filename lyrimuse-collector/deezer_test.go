@@ -15,7 +15,7 @@ func deezerTrackFromJSON(t *testing.T, raw string) deezerTrack {
 	return tr
 }
 
-// synchronizedLines → 逐行 LRC。形状是从 pipe.deezer.com 真实响应里 dump 出来的
+// synchronizedLines 到 逐行 LRC。形状是从 pipe.deezer.com 真实响应里 dump 出来的
 // (Joseph Kamel《Crash》64 行):只认 lrcTimestamp + line 同时非空的行。Deezer 用空 line
 // 表示间奏,原样拼进去会变成一堆空行——那会拉低 lines 这一项的分,还会在歌词面上留白。
 func TestDeezerBuildLRC(t *testing.T) {
@@ -47,32 +47,32 @@ func TestDeezerCandidateScore(t *testing.T) {
 	if got := deezerCandidateScore(original, "Joseph Kamel", "Crash", "Crash - Single", 164); got < 0 {
 		t.Fatalf("原版应当通过,得到 %d", got)
 	}
-	// 时长几乎相等 → 拿到接近满额的时长加分(100 + ~50)。
+	// 时长几乎相等 到 拿到接近满额的时长加分(100 + ~50)。
 	if got := deezerCandidateScore(original, "Joseph Kamel", "Crash", "Crash - Single", 164); got < 140 {
 		t.Fatalf("时长几乎相等时应当拿到高额时长加分,得到 %d", got)
 	}
-	// 本地不知道时长 → 该项不参与,只剩身份闸的基础分。
+	// 本地不知道时长 到 该项不参与,只剩身份闸的基础分。
 	if got := deezerCandidateScore(original, "Joseph Kamel", "Crash", "Crash - Single", 0); got != 100 {
 		t.Fatalf("本地时长未知时应当只有基础分 100,得到 %d", got)
 	}
 
-	// 时长差超过容差 → 淘汰(把 165s 的原版配到 88s 的节选版那类错配)。
+	// 时长差超过容差 到 淘汰(把 165s 的原版配到 88s 的节选版那类错配)。
 	if got := deezerCandidateScore(original, "Joseph Kamel", "Crash", "Crash - Single", 88); got >= 0 {
 		t.Fatalf("时长差超出容差应当淘汰,得到 %d", got)
 	}
-	// 歌手对不上 → 淘汰。
+	// 歌手对不上 到 淘汰。
 	other := deezerTrackFromJSON(t, `{"id":1,"title":"Crash","duration":165,
 		"artist":{"name":"Charli xcx"},"album":{"title":"CRASH"}}`)
 	if got := deezerCandidateScore(other, "Joseph Kamel", "Crash", "Crash - Single", 164); got >= 0 {
 		t.Fatalf("歌手对不上应当淘汰,得到 %d", got)
 	}
-	// 版本限定词对不上 → 淘汰(现场版不能顶原版)。
+	// 版本限定词对不上 到 淘汰(现场版不能顶原版)。
 	live := deezerTrackFromJSON(t, `{"id":2,"title":"Crash (Live)","duration":165,
 		"artist":{"name":"Joseph Kamel"},"album":{"title":"Crash"}}`)
 	if got := deezerCandidateScore(live, "Joseph Kamel", "Crash", "Crash - Single", 164); got >= 0 {
 		t.Fatalf("版本限定词对不上应当淘汰,得到 %d", got)
 	}
-	// ⚠️ 反过来钉住一个**既有缺口**(不是这个源引入的):
+	// 反过来钉住一个**既有缺口**(不是这个源引入的):
 	// distinctRecordingVersionTags 只收英文 + 中文版本词,法语的「(Version acoustique)」
 	// 认不出来 —— 而 Deezer 的法语曲库恰恰常年把 acoustic 版这么标。它今天能过闸,
 	// 靠的不是 acoustic 家族那条豁免(sameRecordingExtraTagWhitelist),而是根本没被
@@ -82,7 +82,7 @@ func TestDeezerCandidateScore(t *testing.T) {
 	if got := deezerCandidateScore(acoustique, "Joseph Kamel", "Crash", "Crash - Single", 164); got < 0 {
 		t.Fatalf("现状是认不出法语版本词、照常通过;这条一旦变红说明词表补了法语,把这段注释一起更新: %d", got)
 	}
-	// 没有 id 的条目 → 淘汰(后面取词没法发请求)。
+	// 没有 id 的条目 到 淘汰(后面取词没法发请求)。
 	noID := deezerTrackFromJSON(t, `{"title":"Crash","duration":165,"artist":{"name":"Joseph Kamel"},"album":{"title":"Crash"}}`)
 	if got := deezerCandidateScore(noID, "Joseph Kamel", "Crash", "Crash - Single", 164); got >= 0 {
 		t.Fatalf("没有 id 应当淘汰,得到 %d", got)

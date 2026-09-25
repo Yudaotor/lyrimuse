@@ -61,7 +61,7 @@ func runTopArtistsCLI(args []string) {
 	// 名字 ≤2 次 MusicBrainz 请求、全局 1.1s 限速,预算大时耐心等)。
 	loadArtistIdentityCache(filepath.Join(configDir(), clientName+"-artist-identity-cache.json"))
 	// 归并的名字键(artistMergeNameKey)还会经 resolveGenericArtistCanonicalName 查
-	// "英文标签 → 中文常用名"——那条链有自己的两份缓存(MusicBrainz 中文别名 / QQ 歌手名),
+	// "英文标签 到 中文常用名"——那条链有自己的两份缓存(MusicBrainz 中文别名 / QQ 歌手名),
 	// 跟常驻进程共用同一份文件,这里也得加载,否则每个名字都当"没查过"(实测 CLI
 	// 因此跑 1 分 49 秒被 App 看门狗杀掉)。预算为 0 时那条链同样只读缓存不联网,见
 	// artistCanonicalCacheOnly。

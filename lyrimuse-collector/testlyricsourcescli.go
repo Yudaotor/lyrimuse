@@ -18,17 +18,14 @@ import (
 // ——跟 search-lyrics 那条"陆续出结果"是同一个体验诉求,复用它的流式底层
 // (scoredLyricCandidatesStreaming)而不是另起一套。
 //
-// ⚠️ **探测范围**没有按 -source 收窄:两首探测曲各自内部仍然会把全部启用的源一起
+// **探测范围**没有按 -source 收窄:两首探测曲各自内部仍然会把全部启用的源一起
 // 并发打一遍(跟 healthcheck/search-lyrics 完全一样),不给每个源单独写一套"只探测它自己"
 // 的调用——AMLL 需要先从网易云/QQ 拿到平台 ID 才能测,拆出来反而更复杂。
 //
-// 但**要测的源全部有了结论之后就不再跑下去**(修的 bug,下面 allReported/cancel)
+// 但**要测的源全部有了结论之后就不再跑下去**(下面 allReported/cancel)
 // ——这条 CLI 的全部产出就是那几行 NDJSON,最后一个目标源报完之后再跑不会多出
-// 任何输出,只会让调用方干等。原来两首探测曲雷打不动各跑到底,`-source deezer` 这种
-// "只要一行"的调用于是在 deezer 那行打完之后还要再跑一整首探测曲(实测 5.8s 出结果、
-// 12.0s 才退出),设置页那颗按钮因此在结果已经显示出来之后还持续显示"测试中…"六秒以上
-// (用户实机反馈"点了单个源的测试,结束之后右边的测试状态一直没有变更")——那颗按钮的
-// "测试中"是跟着子进程活着算的,见 SettingsView.isTestingLyricSources。现在最后一个目标源
+// 任何输出,只会让调用方干等,还会让设置页那颗按钮多显示"测试中…"好几秒
+// (跟子进程是否还活着挂钩,见 SettingsView.isTestingLyricSources)。最后一个目标源
 // 一报完就取消这一轮探测(fetchScoredLyricCandidatesStreaming 的收集循环认 ctx.Done,跟
 // "用户主动取消搜索"走的是同一条路),进程随即正常退出(退出码仍然是 0,Swift 侧
 // 不会当成失败)。
@@ -69,7 +66,7 @@ func runTestLyricSourcesCLI(args []string) {
 	reported := make(map[string]bool, len(targets))
 
 	// 取消闸:targets 里每个源都已经有结论之后,这一轮探测剩下的部分再跑也不会改变
-	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注那段 ⚠️。
+	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注那段 提醒。
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	allReported := func() bool {
@@ -138,7 +135,7 @@ func runTestLyricSourcesCLI(args []string) {
 	// media-user-token,没有凭据这一轮必然一无所获,让它跟着跑两首探测曲纯粹是让用户白等
 	// (单测它的时候更是一次网络请求都不必发)。
 	//
-	// ⚠️ 状态给 "warn" 不是 "fail" —— 这不是"源坏了",是"还没配置";Swift 侧据此提示
+	// 状态给 "warn" 不是 "fail" —— 这不是"源坏了",是"还没配置";Swift 侧据此提示
 	// 去连接账号,而不是报故障。设置页那颗测试按钮在未连接时本来就是禁用的(见
 	// SettingsView.sourceTestAccessory),所以这条路平时只有"全部测试"会走到。
 	if wanted[lyricSourceAppleMusic] && !applemusicConnected() {
@@ -169,9 +166,8 @@ func runTestLyricSourcesCLI(args []string) {
 			status, reasonCode = "fail", lyricTestReasonNetworkDown
 		} else {
 			// 目前接了具体失败原因诊断的源(分别见 ytmusic.go/musixmatch.go/
-			// netease.go 头注——每一条都是实测复现过、不是猜的)。QQ/酷狗/LRCLIB/AMLL
-			// 逐一验证过,没有找到当前能复现的失败信号(见对应文件排查记录),没有对应
-			// 旁路,拿不到具体原因时统一退回上面的通用代码,不编一个没核实过的理由。
+			// netease.go 头注)。QQ/酷狗/LRCLIB/AMLL 没有对应旁路,拿不到具体原因时
+			// 统一退回上面的通用代码,不编一个没核实过的理由。
 			var reason string
 			switch src {
 			case "lyricfind":
@@ -179,13 +175,13 @@ func runTestLyricSourcesCLI(args []string) {
 			case "musixmatch":
 				reason = musixmatchLastFailureReasonNow()
 			case "soda":
-				// ⚠️ 跟 searchcli.go 的 lyricSourceFailureReasons 是**两处**,接源时两边都要补
+				// 跟 searchcli.go 的 lyricSourceFailureReasons 是**两处**,接源时两边都要补
 				// (deezer 那次就只补了一处,见下面那条注释)。这条由
 				// TestLyricSourceFailureReasonWiredInBothConsumers 钉住。
 				reason = sodaLastFailureReasonNow()
 			case "deezer":
 				// ,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
-				// ⚠️ 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的
+				// 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的
 				// lyricSourceFailureReasons,这条路照样退回通用的 no_response —— 设置页那颗
 				// 「测试」按钮于是只会说「这个源没反应」,把"换票这一步失败"说成了"没反应"。
 				// 再接新源时记得这里和 searchcli.go 是**两处**,守卫没钉住它。

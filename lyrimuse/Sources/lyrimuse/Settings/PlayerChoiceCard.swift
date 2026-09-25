@@ -18,7 +18,7 @@ import SwiftUI
 ///    才退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套纯色块占位,不留空白
 ///    方块。
 ///
-/// ⚠️ 选中态"只用强调色描边+浅底、**不额外叠对号图标**"这条被推翻了(原注释
+/// 选中态"只用强调色描边+浅底、**不额外叠对号图标**"这条被推翻了(原注释
 /// 原样留在下面 `ChoiceCardChrome` 里)。当初成立是因为这个网格是**单选**:页面上永远只有
 /// 一张卡是亮的,靠对比就读得出来。改成多选之后要回答的问题变成"我到底勾了哪几个",纯颜色
 /// 差异在色觉障碍/「增强对比度」下会整个失效,而且旁白用户完全无从得知 —— 所以现在选中态
@@ -26,13 +26,9 @@ import SwiftUI
 struct PlayerChoiceCard: View {
     let player: PlaybackPlayer
     let isSelected: Bool
-    /// 没勾这一颗,但**勾着「自动识别」**,所以它照样会被识别(「为什么我
-    /// 现在把 qq 音乐这里取消勾选了,但是实际上还是可以识别到我现在 qq 音乐里面播放的歌?」)。
-    ///
-    /// 语义一个字没改 —— `MediaControlClient.fetchSnapshot` / collector `getState` 第一行都是
-    /// 「集合里含 auto 就走自动识别那条路」,auto 按超集处理,具体勾选此时不参与"认哪几个"
-    /// (见 docs 02)。改的只是**界面把这件事说出来**:在此之前六张卡长得一模一样、取消勾选
-    /// 还会如实变灰,用户当然会以为那一下生效了。
+    /// 没勾这一颗,但**勾着「自动识别」**,所以它照样会被识别。`MediaControlClient.fetchSnapshot`
+    /// / collector `getState` 第一行都是「集合里含 auto 就走自动识别那条路」,auto 按超集处理,
+    /// 具体勾选此时不参与"认哪几个"(见 docs 02)。这里只负责让界面把这件事说出来;卡片照样能勾。
     var isCoveredByAuto: Bool = false
     let onSelect: () -> Void
 
@@ -66,7 +62,7 @@ struct PlayerChoiceCard: View {
 ///
 /// 从 `PlayerChoiceCard` 里抽出来:引导页收尾那一页要在正文里排一串小图标
 /// (「你选的这几个播放器」),那里既没有选中态也不能点,套不进 `PlayerChoiceCard`;而这
-/// 三级兜底(已装的真图标 → 随包品牌图 → 纯色块占位)是这个仓库反复调过的东西,照抄一份
+/// 三级兜底(已装的真图标 到 随包品牌图 到 纯色块占位)是这个仓库反复调过的东西,照抄一份
 /// 就等于开第二个漂移点——表现过"换一台没装全的机器,图标网格里一半 App
 /// 的图标看着都跟坏了一样",根因正是当时少了中间那一级。
 struct PlayerIconView: View {
@@ -106,7 +102,7 @@ struct PlayerIconView: View {
 
 /// 「可勾选的图标块」共用的一套配色 —— 播放器卡、网页平台卡、「播放器联动」那排芯片全走这里。
 ///
-/// ⚠️ 选中态**不拿强调色铺底**。这些网格都是多选,而设置页默认就是"全勾"的形状:强调色底 +
+/// 选中态**不拿强调色铺底**。这些网格都是多选,而设置页默认就是"全勾"的形状:强调色底 +
 /// 强调色描边 + 强调色对号三层同色一叠,六张卡一起亮起来整页就糊成一块蓝(实机采样过,卡片底
 /// #DBE2ED、比周围底色暗 17 阶,整片网格读起来是一块色块而不是六个选项)。
 ///
@@ -115,7 +111,7 @@ struct PlayerIconView: View {
 /// 亮/暗的对比不依赖色相,「增强对比度」和色觉障碍下都还在(这正是这个网格当初补对号要解决的
 /// 同一件事,见 `PlayerChoiceCard` 头注)。
 ///
-/// ⚠️ 深浅外观两档分开,不要合并成一个 opacity:深色外观下"提亮"要靠白色叠加,浅色外观下同一个
+/// 深浅外观两档分开,不要合并成一个 opacity:深色外观下"提亮"要靠白色叠加,浅色外观下同一个
 /// 数值会直接烧成纯白。
 enum ChoiceHighlight {
     static func fill(isSelected: Bool, isHovering: Bool = false, scheme: ColorScheme) -> Color {
@@ -136,7 +132,7 @@ enum ChoiceHighlight {
 
     /// 选中块底下那层很轻的投影,"抬起来"这件事的另一半。
     ///
-    /// ⚠️ 深色外观返回 `.clear`:深色底上的黑色投影只会把卡片周围糊脏一圈,提亮本身已经把层次
+    /// 深色外观返回 `.clear`:深色底上的黑色投影只会把卡片周围糊脏一圈,提亮本身已经把层次
     /// 表达完了。
     static func selectedShadow(isSelected: Bool, scheme: ColorScheme) -> Color {
         guard isSelected, scheme != .dark else { return .clear }
@@ -174,11 +170,10 @@ private struct ChoiceCardChrome: ViewModifier {
             )
             .overlay(shape.strokeBorder(ChoiceHighlight.stroke(isSelected: isSelected, scheme: colorScheme),
                                         lineWidth: ChoiceHighlight.lineWidth(isSelected: isSelected)))
-            // 「由自动识别接管」= **虚线**强调色描边。虚线在这个网格里已经有
-            // 既定含义:`MorePlayersComingCard` 那张占位卡就是虚线,读作"不是一个你勾上的
-            // 选项"。所以虚线+强调色正好表达"它在生效,但不是你勾的"。
+            // 「由自动识别接管」= **虚线**强调色描边:虚线读作"不是一个你勾上的选项",
+            // 加上强调色正好表达"它在生效,但不是你勾的"。
             //
-            // ⚠️ 刻意**不做成"浅一点的实心对号"**:那和真选中态只差一个透明度,在「增强
+            // 刻意**不做成"浅一点的实心对号"**:那和真选中态只差一个透明度,在「增强
             // 对比度」/色觉障碍下两者会糊成同一个东西,而这张网格才因为
             // "纯颜色差异表达不了勾了哪几个"补上对号(见 PlayerChoiceCard 头注)——再拿
             // 透明度去区分两种状态等于把那次的教训原地推翻。
@@ -222,7 +217,7 @@ private struct ChoiceCardChrome: ViewModifier {
 }
 
 extension View {
-    /// ⚠️ 凡是摆进"选播放器"这类图标网格的卡片都走这里,别在调用点另写一份圆角/底色/描边 ——
+    /// 凡是摆进"选播放器"这类图标网格的卡片都走这里,别在调用点另写一份圆角/底色/描边 ——
     /// 设置页「网页播放器」卡和这边的播放器卡并排在同一页,样式各写一份下次调色就会漏一处
     /// (它们曾经就是两份)。
     func choiceCardChrome(isSelected: Bool,
@@ -243,7 +238,7 @@ extension View {
 /// (见 `BrowserPairing`)。硬塞成一个 `PlaybackPlayer` case 会让 bundleIdentifier /
 /// collector 侧的 playerXxx 常量 / `soleExplicitPlayer` 那一串全都要为它开特例。
 ///
-/// ⚠️ 卡片外壳走 `choiceCardChrome`,跟播放器卡同一份 —— 它们在同一个网格里并排,长得
+/// 卡片外壳走 `choiceCardChrome`,跟播放器卡同一份 —— 它们在同一个网格里并排,长得
 /// 不一样就会被当成两种不同的控件。
 struct WebPlatformChoiceCard: View {
     let icon: NSImage?

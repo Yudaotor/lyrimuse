@@ -14,7 +14,7 @@ import LyrimuseCore
 // 每次弹出前整棵重建(menuNeedsUpdate)。菜单项十几个,重建的代价可以忽略,换来的是
 // "显示的一定是此刻的状态",不用为每一项单独维护刷新逻辑。
 //
-// ⚠️ 贯穿全文件的一条不变量(跟 AppDelegate/SettingsView/GlobalHotkeys 那三处同源,
+// 贯穿全文件的一条不变量(跟 AppDelegate/SettingsView/GlobalHotkeys 那三处同源,
 // 详见 NotchLyricsWindowController 顶部注释):**构建菜单时只读 AppSettings,绝不碰
 // LyricsOverlayWindowController.shared / NotchLyricsWindowController.shared**。两个
 // 控制器都是 `static let shared`,真正引用到才会执行 init() 建窗口,而 init() 里订阅

@@ -11,35 +11,34 @@ import LyrimuseCore
 // 额外接一层判断。
 //
 // 这扇窗口**采纳后不关**(`keepsOpenAfterApply: true`,三个入口里只有它这么传)。
-// 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗→重开→再等九个源重搜一遍
+// 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗到重开到再等九个源重搜一遍
 // (最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条
 // "已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、歌词窗口的 sheet)维持关窗:
 // 前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。collector 重启照旧每次采纳排一次
 // (`scheduleCollectorRestart` 已合并:在飞最多一个、补一次),**刻意不**延后到关窗那一刻 ——
 // 重启存在的理由正是 collector 内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去。
 //
-// 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确→
+// 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确到
 // 宽松两级,缺条目退 normalizedKey),没有抽成公用类型共享——那边多一层"sheet(item:) 的
 // 身份即快照、弹窗期间换歌不串"的要求,这边窗口本来就是"每次点『搜索歌词…』都现查一次、
 // 开着期间盯着看不跟着换歌重算",两处生命周期不一样,硬凑一个共享类型只会让"谁负责什么"
 // 变得含糊。
 //
-// ⚠️ 真实故障(现象是"已经切歌了,点开搜索页面看到的还是上一首"):上一句里
-// "每次新建都现查一次"这半句本身就是错的——`Window(id:)` 这扇窗口只要没被真的关掉(只是
+// 上一段"每次新建都现查一次"这半句本身是错的:`Window(id:)` 这扇窗口只要没被真的关掉(只是
 // 切到后台/被别的窗口挡住),再点一次「搜索歌词…」只是把已经存在的视图实例带到前台,
 // `.task` 只在这个视图**首次挂载**时跑一遍,不会跟着"又点了一次按钮"重跑,`context` 停留
 // 在第一次打开时查到的那首歌。修法见 `AppActions.quickSearchRefreshRequests`——每次调用
 // `openLyricsQuickSearch` 都往那个 subject send 一下,这里额外 `.onReceive` 它、收到就
 // 重新 `loadContext()`,跟 `.task` 各管一段("窗口还没建出来"用 `.task`,"窗口已经开着"用
 // `.onReceive`),合起来才是真正的"每次点这个按钮都现查一次"。
-// ⚠️ 第二个真实故障(由上一条修法引出):`.onReceive` 只替换了 `context`,而 SwiftUI 里
+// 上一条修法还留了一个问题:`.onReceive` 只替换了 `context`,而 SwiftUI 里
 // `if let context { LyricsSearchSheet(...) }` 从 Optional(A) 换成 Optional(B) 保持**同一个视图
 // 身份**——面板里的查询词 @State 与首次挂载才跑的 `.task` 都不会重置,屏幕上还是上一首的查询词
 // 和候选,而下面 onApply 闭包捕获的已是新 `context.key`:采纳会把上一首的歌词写进当前这首的
 // 条目。修在 `LyricsSearchSheet` 内部(按原始字段 `.task(id:)` 重搜 + `.onChange` 重置查询词),
 // **刻意不**在这里加 `.id(context.key)` 整棵重建——探针实测重建时新面板的搜索会被旧面板迟到的
-// cancelRunning() 杀掉,详见那边 `.task(id:)` 上方的注释。这个文件的代码没有变,只有这条说明。
-// ⚠️ 不像 LyricsWindowView 那边特意 `Task.detached` 到背景线程读 EnrichCacheReader(那扇
+// cancelRunning() 杀掉,详见那边 `.task(id:)` 上方的注释。
+// 不像 LyricsWindowView 那边特意 `Task.detached` 到背景线程读 EnrichCacheReader(那扇
 // 窗口有 60fps 的逐字填色,主线程哪怕短暂卡顿都会被看见)——这扇窗口只在打开这一瞬间读一次
 // 缓存,直接在 MainActor 上做,没有必要为这一次性读多绕一层线程切换。
 struct LyricsQuickSearchWindow: View {
@@ -66,26 +65,24 @@ struct LyricsQuickSearchWindow: View {
                     durationSecs: context.durationSecs, keepsOpenAfterApply: true
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply 三步:reload 兜"store 还没加载过"
-                    // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)→
-                    // saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
+                    // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)到
+                    // saveEdit 到 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                     // 不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
                     await EnrichCacheStore.shared.reload(onlyIfChanged: true)
                     let saved: Bool
                     if candidate.isPlainTextOnly {
-                        // ⚠️ 真实故障修复:这条分流从 08-30 加纯文本候选起就一直缺 ——
-                        // 歌词管理与歌词窗口两处都按 isPlainTextOnly 走 savePlainTextEdit,这里
-                        // 却把没有时间戳的纯文本直接当 LRC 喂进 saveEdit,后果正是 savePlainTextEdit
-                        // 头注写的:这首歌在别的展示面上从"至少有静态文字"退化成"看起来完全没有
-                        // 歌词"。跟 09-01 补 markManual 时漏掉歌词窗口那处是同一种失误(改了两处漏
-                        // 第三处),selftest contracts 组现在有「采纳候选入口」守卫钉住三处同进同出。
+                        // 这条分流必须按 isPlainTextOnly 走 savePlainTextEdit,跟歌词管理、
+                        // 歌词窗口两处保持一致——喂没有时间戳的纯文本直接当 LRC 进 saveEdit,
+                        // 后果正是 savePlainTextEdit 头注写的:这首歌在别的展示面上从"至少有
+                        // 静态文字"退化成"看起来完全没有歌词"。selftest contracts 组的「采纳候选
+                        // 入口」守卫钉住三处同进同出,防止漏改其中一处。
                         saved = await EnrichCacheStore.shared.savePlainTextEdit(
                             key: context.key, plainLyrics: candidate.lyrics, source: candidate.source)
                     } else {
-                        // ⚠️ 真实故障修复:这里原来一直没传 markManual/sourceChoice,
-                        // 落进 saveEdit 的默认值 markManual: true——跟 LyricsManagerView.swift
-                        // 那条「采纳候选」路径不是同一套行为,等于这扇小窗每次采纳都在悄悄
-                        // 永久冻结这首歌,跟那次"采纳候选不该冻结"的设计决定
-                        // 不一致——补齐,让两个入口保持同一套逻辑。
+                        // 必须显式传 markManual/sourceChoice,跟 `LyricsManagerView.swift`
+                        // 那条「采纳候选」路径保持同一套行为——落进 saveEdit 的默认值是
+                        // markManual: true,不传等于这扇小窗每次采纳都悄悄永久冻结这首歌,
+                        // 跟"采纳候选不该冻结"这条设计决定不一致。
                         //
                         // sourceChoice 恒传空串(= 显式清掉):关态不留任何源约束,开态靠
                         // manual_lyrics 就够了。完整理由见 LyricsManagerView.swift 那个

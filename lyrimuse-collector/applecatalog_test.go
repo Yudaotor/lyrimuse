@@ -11,9 +11,9 @@ import (
 
 // 真实数据(实测 iTunes lookup):
 //
-//	id=1485220321 → 「枫+退后+搁浅 (Live)」/ artistName=「南拳妈妈弹头」/
+//	id=1485220321 到 「枫+退后+搁浅 (Live)」/ artistName=「南拳妈妈弹头」/
 //	                collectionArtistName=「周杰伦」/ 专辑「周杰伦地表最强世界巡回演唱会 (Live)」/ 119.213s
-//	id=1485220325 → 「印地安老斑鸠 (Live)」/ artistName=「周杰伦」/ collectionArtistName 缺省 / 208.293s
+//	id=1485220325 到 「印地安老斑鸠 (Live)」/ artistName=「周杰伦」/ collectionArtistName 缺省 / 208.293s
 const (
 	anchorMedleyID = int64(1485220321)
 	anchorNextID   = int64(1485220325)
@@ -66,7 +66,7 @@ func TestAppleCatalogPlausibleID(t *testing.T) {
 
 func TestAppleCatalogAnchorGuards(t *testing.T) {
 	seedAnchorCache(t)
-	// 基准:bundle/ID/标题/专辑全对 → 拿到锚点,且时长是权威值
+	// 基准:bundle/ID/标题/专辑全对 到 拿到锚点,且时长是权威值
 	got, ok := appleCatalogAnchor(appleMusicBundleID, anchorMedleyID, 0, "枫+退后+搁浅 (Live)", anchorAlbum)
 	if !ok {
 		t.Fatalf("基准情形应拿到锚点")
@@ -85,7 +85,7 @@ func TestAppleCatalogAnchorGuards(t *testing.T) {
 		}
 	}
 
-	// ⚠️ 最重要的一条:media-control 的"脏快照"——标题是当前曲目、别的字段来自下一首。
+	// 最重要的一条:media-control 的"脏快照"——标题是当前曲目、别的字段来自下一首。
 	// 拿下一首的 ID 配当前曲目的标题,自校验必须挡住,不然会用错的时长去打分。
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorNextID, 0, "枫+退后+搁浅 (Live)", anchorAlbum); ok {
 		t.Errorf("曲目名对不上时不该拿到锚点(这正是脏快照的形态)")
@@ -95,7 +95,7 @@ func TestAppleCatalogAnchorGuards(t *testing.T) {
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorMedleyID, 0, "枫+退后+搁浅 (Live)", "叶惠美"); ok {
 		t.Errorf("专辑名对不上时不该拿到锚点")
 	}
-	// 本地没有专辑标签 → 只校曲目名,照样成立
+	// 本地没有专辑标签 到 只校曲目名,照样成立
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorMedleyID, 0, "枫+退后+搁浅 (Live)", ""); !ok {
 		t.Errorf("本地专辑标签为空时应只校曲目名并通过")
 	}
@@ -127,16 +127,16 @@ func TestAppleCatalogSearchIdentities(t *testing.T) {
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorMedleyID, 0, "枫+退后+搁浅 (Live)", anchorAlbum); !ok {
 		t.Fatalf("准备阶段:锚点应成立")
 	}
-	// 本地署名是「南拳妈妈弹头」→ 专辑署名「周杰伦」是新身份;曲目署名跟本地一样,去掉
+	// 本地署名是「南拳妈妈弹头」到 专辑署名「周杰伦」是新身份;曲目署名跟本地一样,去掉
 	got := appleCatalogSearchIdentities("南拳妈妈弹头", "枫+退后+搁浅 (Live)", anchorAlbum)
 	if !reflect.DeepEqual(got, []string{"周杰伦"}) {
 		t.Errorf("appleCatalogSearchIdentities = %#v, want [周杰伦]", got)
 	}
-	// 没有锚点的曲目 → 空
+	// 没有锚点的曲目 到 空
 	if got := appleCatalogSearchIdentities("周杰伦", "根本没播过的歌", "某专辑"); got != nil {
 		t.Errorf("没有锚点时应返回 nil,得到 %#v", got)
 	}
-	// 专辑署名缺省(曲目署名==专辑主人)的那条:本地署名一致 → 没有新身份可试
+	// 专辑署名缺省(曲目署名==专辑主人)的那条:本地署名一致 到 没有新身份可试
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorNextID, 0, "印地安老斑鸠 (Live)", anchorAlbum); !ok {
 		t.Fatalf("准备阶段:第二条锚点应成立")
 	}
@@ -169,13 +169,13 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 	}
 }
 
-// TestAppleStorefrontCanonicalTitleLive 钉住那个病根的**确切形状**(现象是
-// 「为什么这首歌只搜出这一个结果」,Mrs. GREEN APPLE《クスシキ》):Apple Music 国际区把
+// TestAppleStorefrontCanonicalTitleLive 钉住这个案例的**确切形状**
+// (Mrs. GREEN APPLE《クスシキ》):Apple Music 国际区把
 // 这首日文歌的标签写成罗马字「KUSUSHIKI」,而 JP 商店里它叫「クスシキ」——三家中文源收录的
 // 都是后者,拿罗马字问九个源只有 LRCLIB 答得上来。
 //
-// ⚠️ 这个案例的要害是**署名在每个商店都一样**(「Mrs. GREEN APPLE」到处都这么写)。改之前
-// 那个循环取完 hit 就只看 ArtistName,署名重复直接 continue,曲名跟着被丢掉 —— 所以下面
+// 这个案例的要害是**署名在每个商店都一样**(「Mrs. GREEN APPLE」到处都这么写)。提醒
+// 署名重复不能让取曲名的循环也 continue 丢弃候选——两者是独立的两件事,所以下面
 // 两条断言要一起看:拿不到任何新署名,却**必须**拿得到曲名。只断言曲名的话,一旦有人把取
 // 曲名那几行挪回署名去重之后,这个测试照样绿。
 //
@@ -190,7 +190,7 @@ func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
 	appleStorefrontArtistCache = map[string][]string{}
 
 	const wantTitle = "クスシキ"
-	// ⚠️ lyricSamples 不能省。问哪些商店由 appleStorefrontsFor 按**文字系统**定,而这首歌
+	// lyricSamples 不能省。问哪些商店由 appleStorefrontsFor 按**文字系统**定,而这首歌
 	// 三项标签全是罗马字 —— 只有首轮某个源给回来的日文正文能把 JP 商店带进来(真实调用点
 	// enrich.go 传的就是 lyricSamplesForStorefront(results))。这也是这条修复的**前提**:
 	// 九个源一条正文都没给出来时,手上没有任何日文信号,这个死结仍然解不开。
@@ -200,7 +200,7 @@ func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
 	if normLoose(got) != normLoose(wantTitle) {
 		t.Fatalf("应该能从 JP 商店拿回日文原名 %q, got %q", wantTitle, got)
 	}
-	// 署名这一路什么都拿不到 —— 正是这个形状让曲名在改之前被静默丢弃。
+	// 署名这一路什么都拿不到 —— 这个形状下曲名仍然**必须**拿得到,不能被静默丢弃。
 	names := appleStorefrontArtistIdentities(context.Background(),
 		"Mrs. GREEN APPLE", "KUSUSHIKI", "KUSUSHIKI - Single", 188.348, samples)
 	for _, n := range names {
@@ -332,7 +332,7 @@ func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
 //
 // 原来的自校验用 lyricTitleAccepted,而它的**第二档**是「双方各自 stripParens 之后判相等」——
 // 于是同一张专辑上的括号兄弟轨互相判等,专辑名又必然相同,锚点照样"成立",把差 40~47% 的
-// 时长当成权威值喂给下游。这直接推翻了原注释里那句「曲目名对不上 → 锚点作废、不会更差」:
+// 时长当成权威值喂给下游。这直接推翻了原注释里那句「曲目名对不上 到 锚点作废、不会更差」:
 // 只要下一首是同专辑的括号兄弟轨,曲目名就是"对得上"的。
 //
 // 下面三组全部来自用户自己的资料库(AppleScript 读出来的真实曲目 + iTunes lookup 的真实时长)。
@@ -358,11 +358,11 @@ func TestAppleCatalogAnchorRejectsSiblingTracks(t *testing.T) {
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, 850697814, 8, "Xscape", albumXscape); ok {
 		t.Errorf("「Xscape」不该被「Xscape (Original Version)」的锚点认领(差 99.5s)")
 	}
-	// ② 完全同名的兄弟轨:曲目名一模一样、专辑也一样,只有序号不同 → 靠音轨号挡住
+	// ② 完全同名的兄弟轨:曲目名一模一样、专辑也一样,只有序号不同 到 靠音轨号挡住
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, 850697815, 1, "Love Never Felt So Good", albumXscape); ok {
 		t.Errorf("本地是 #1、ID 指向 #17,序号对不上就该作废(234.911 vs 245.671)")
 	}
-	// ③ 正主:序号也对得上 → 成立
+	// ③ 正主:序号也对得上 到 成立
 	got, ok := appleCatalogAnchor(appleMusicBundleID, 850697799, 1, "Love Never Felt So Good", albumXscape)
 	if !ok || got.DurationSecs != 234.911 {
 		t.Errorf("序号对得上的正主应成立,得到 ok=%v dur=%v", ok, got.DurationSecs)
@@ -429,7 +429,7 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 	if got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", 0); !reflect.DeepEqual(got, []string{"Prince"}) {
 		t.Errorf("无时长时只信第一条, got %v", got)
 	}
-	// iTunes 那条没报时长而本地有时长 → 核不了,不采。
+	// iTunes 那条没报时长而本地有时长 到 核不了,不采。
 	noDur := []itunesResult{{TrackName: "Hello", ArtistName: "Adele"}}
 	if got := pickAppleTitleSearchIdentities(noDur, "某人", "Hello", 295); len(got) != 0 {
 		t.Errorf("iTunes 未报时长时不该采, got %v", got)
@@ -514,9 +514,9 @@ var liveAgainUSTracks = []itunesResult{
 	{TrackName: "Love Can (Live)", ArtistName: "David Tao", TrackTimeMillis: 435404},
 }
 
-// TestAppleStorefrontPickTrackMedley 钉住那个真实 bug 的**确切形状**(现象是陶喆
+// TestAppleStorefrontPickTrackMedley 钉住这个案例的**确切形状**(陶喆
 // 《组曲: 火鸟功 / 我太傻 / Melody (Live)》配了《Run Away (Live)》的歌词):本地标题带中文结构性
-// 前缀、首轮召回为空 → 触发标题反查 → Apple 原产地商店这条路在同一张 31 首的现场专辑里
+// 前缀、首轮召回为空 到 触发标题反查 到 Apple 原产地商店这条路在同一张 31 首的现场专辑里
 // 按时长认人。两首串烧的正确答案都在表里、时长几乎逐毫秒对得上,只是排在第 28 / 第 30 位。
 func TestAppleStorefrontPickTrackMedley(t *testing.T) {
 	cases := []struct {
@@ -565,7 +565,7 @@ func TestAppleStorefrontPickTrackGuards(t *testing.T) {
 		t.Errorf("曲名铁证应优先, got %v", hit)
 	}
 
-	// ② 只剩跨文字系统一档时:亚军咬得太紧 → 弃权(宁可不给也不猜)。
+	// ② 只剩跨文字系统一档时:亚军咬得太紧 到 弃权(宁可不给也不猜)。
 	ambiguous := []itunesResult{
 		{TrackName: "Foo (Live)", TrackTimeMillis: 300000},
 		{TrackName: "Bar (Live)", TrackTimeMillis: 300200},
@@ -587,7 +587,7 @@ func TestAppleStorefrontPickTrackGuards(t *testing.T) {
 	if hit := appleStorefrontPickTrack("某首中文歌 (Live)", 300, farOff); hit != nil {
 		t.Errorf("没有曲名证据、时长又差 6s → 不该认, got %q", hit.TrackName)
 	}
-	// 同样差 6s,但曲名归一相等 → 走它自己那档更宽的容差,行为跟改动前一样。
+	// 同样差 6s,但曲名归一相等 到 走它自己那档更宽的容差,行为跟改动前一样。
 	sameFarOff := []itunesResult{{TrackName: "Foo (Live)", TrackTimeMillis: 306000}}
 	if hit := appleStorefrontPickTrack("Foo (Live)", 300, sameFarOff); hit == nil {
 		t.Error("曲名相等那一档的容差不该被改窄")

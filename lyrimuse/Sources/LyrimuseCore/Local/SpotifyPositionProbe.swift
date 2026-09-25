@@ -1,7 +1,12 @@
 import Foundation
 import os
 
-/// Spotify 原生客户端的一次性「地面真值」探针。
+/// Spotify 原生客户端的一次性「地面真值」探针,兼图床封面地址的取回口。
+///
+/// **位置那一半只在 `cleanExtrapolated` 档生效**。快照本身就是 AppleScript `player position`
+/// 时(`PositionSourceTier.precise`,见那个枚举的头注)两边同一个钟,`consumeCorrection` 那条
+/// 分支在 `LocalPlaybackSource.apply` 里被档位闸挡掉;探针照跑,只为下面「顺带带回封面地址」
+/// 那一节。开关是 shared/players.json 的 `positionTier`。
 ///
 /// ## 要解决的现象
 ///
@@ -51,7 +56,7 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
 
     /// 换歌后等多久再问。09-07 定 2.5s(太早 Spotify 的钟可能还没起步 / gapless 时先超前后停顿),
     /// 收到 2.0s:现在两次采样验钟在走、不过关还会重试一次(retryAfterFailedLiveness),
-    /// 早半秒的风险由它们兜;整条链(观察到换歌 → 探针 → 结果回调立刻 poll)约 3s,现象是过
+    /// 早半秒的风险由它们兜;整条链(观察到换歌 到 探针 到 结果回调立刻 poll)约 3s,现象是过
     /// 「开头那几秒歌词慢」,链越短越好,但 2.0 以下那段"钟先超前 0.9s 再停"的窗口还没过完。
     public static let delayAfterTrackStart: TimeInterval = 2.0
     /// 开播那次两采样没过活性(钟还没起步 / 正在停顿)时,隔多久再试一次(只试一次)。
@@ -214,7 +219,7 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
         return Sample(parsed: parsed, midpoint: t0.addingTimeInterval(t1.timeIntervalSince(t0) / 2), rtt: t1.timeIntervalSince(t0))
     }
 
-    /// 取这首歌**唯一一次**的真值,外推到 now。同一首歌只交出一次;不是这首 / 过期 → nil,
+    /// 取这首歌**唯一一次**的真值,外推到 now。同一首歌只交出一次;不是这首 / 过期 到 nil,
     /// 调用方原样退回既有逻辑。
     public func consumeCorrection(forKey key: String, rate: Double, now: Date) -> Double? {
         lock.lock()

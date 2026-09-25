@@ -42,7 +42,7 @@ func TestLyricSpeakerLabels(t *testing.T) {
 	if len(got) != 0 {
 		t.Errorf("署名标签不该算演唱者: got %v", got)
 	}
-	// 《圣诞星》形态:周杰伦 x2 + 杨瑞代 x1 → 2 个不同 / 3 处 / 有重复
+	// 《圣诞星》形态:周杰伦 x2 + 杨瑞代 x1 到 2 个不同 / 3 处 / 有重复
 	got = lyricSpeakerLabels("[00:01.00]周杰伦：\n[00:02.00]一\n[00:03.00]杨瑞代：\n[00:04.00]二\n[00:05.00]周杰伦：\n[00:06.00]三\n")
 	if !got["周杰伦"] || !got["杨瑞代"] || len(got) != 2 {
 		t.Errorf("人名标记过闸: got %v", got)

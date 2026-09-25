@@ -31,7 +31,7 @@ import UserNotifications
 ///  - `lsappinfo info <lyrimuse pid>` 能拿到 bundleID + bundle path + **checkin time** ——
 ///    这正是 `bundleProxyForCurrentProcess` 需要的东西,而且不是靠 `open` 拿到的。
 /// 结论:本地通知不走 APNs,不需要开发者证书/公证/entitlements,Info.plist 一个键都不用加。
-/// ⚠️ 但 `interruptionLevel` 的 `.timeSensitive` / `.critical` 需要 entitlement,ad-hoc 拿不到,
+/// 但 `interruptionLevel` 的 `.timeSensitive` / `.critical` 需要 entitlement,ad-hoc 拿不到,
 /// **别写** —— 默认的 `.active` 够用。
 @MainActor
 final class UnknownPlayerNotifier: NSObject {
@@ -43,7 +43,7 @@ final class UnknownPlayerNotifier: NSObject {
     static let trustActionID = "unknown-player.trust"
     /// 通知 userInfo 里携带 bundle id 的键。
     ///
-    /// ⚠️ 处理按钮时**必须**从这里读,绝不能回头去读 `MediaControlClient.lastUngatedNowPlaying`:
+    /// 处理按钮时**必须**从这里读,绝不能回头去读 `MediaControlClient.lastUngatedNowPlaying`:
     /// 通知可能在通知中心躺了几小时,那时焦点早换人了 —— 读现值会「点 Chrome 的旧通知,
     /// 结果信任了 QuickTime」。
     static let bundleIDKey = "bundleID"
@@ -52,7 +52,7 @@ final class UnknownPlayerNotifier: NSObject {
     /// 把高频后台时间戳塞进去会污染 isDirty / 底部保存栏的语义(而且 collector 侧只读不写,
     /// 别自己造出第二个写者)。
     ///
-    /// ⚠️ 这个键**必须**在 ConfigPortability.machineLocalDefaultsKeys 里 —— 它跟
+    /// 这个键**必须**在 ConfigPortability.machineLocalDefaultsKeys 里 —— 它跟
     /// `np:hasShownOverlayDragHint` 是完全同一类「这台机器提示过没有」。跟着备份搬去新机器
     /// 的后果是:新机器上装了同一个播放器却永不提示,而新机器恰恰最需要提示。
     private static let logKey = "np:unknownPlayerNotices"
@@ -72,7 +72,7 @@ final class UnknownPlayerNotifier: NSObject {
     ///    查不到的话,通知照样显示但**按钮不出现**,而且不报错;
     ///  - delegate 设晚了,冷启动时用户点按钮的回调会丢。
     func registerCategory() {
-        // ⚠️ **只放一个 action**。macOS 的规则:1 个 action 直接渲染成一个可见按钮,
+        // **只放一个 action**。macOS 的规则:1 个 action 直接渲染成一个可见按钮,
         // 2 个及以上就折叠成「选项 ∨」下拉、要多点一下才看得到
         // (现象是「这里可以直接把按钮选项放在外面吗,不要在选项里面点进去了」)。
         // 原来那个「忽略」按钮的处理逻辑本来就是空的(纯 dismiss),而划掉/点通知上的 ×
@@ -232,7 +232,7 @@ final class UnknownPlayerNotifier: NSObject {
         }
     }
 
-    /// 这个 App 已经被信任了 → 把还挂在通知中心的那条撤掉。
+    /// 这个 App 已经被信任了 到 把还挂在通知中心的那条撤掉。
     /// 别让「要不要信任 Chrome」在通知中心挂几天。
     func dismissDelivered(bundleID: String) {
         let id = "\(Self.categoryID).\(bundleID)"
@@ -273,7 +273,7 @@ final class UnknownPlayerNotifier: NSObject {
 }
 
 extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
-    /// ⚠️ App 前台时系统默认**不显示**横幅。而这个 App 默认是前台的
+    /// App 前台时系统默认**不显示**横幅。而这个 App 默认是前台的
     /// (Info.plist 写着 LSUIElement=true,但 AppDelegate 运行时按 showInDock 把
     /// activationPolicy 翻成了 .regular,默认开),所以少了这个方法,「用户正开着设置页
     /// 找这个功能」的时候反而收不到通知。
@@ -292,13 +292,13 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
     ) async {
         Logger(subsystem: "me.yudaotor.lyrimuse", category: "notify")
             .notice("didReceive action=\(response.actionIdentifier, privacy: .public)")
-        // ⚠️ 第一件事:告诉 AppDelegate「这次激活是点通知来的」。
+        // 第一件事:告诉 AppDelegate「这次激活是点通知来的」。
         // 系统点通知时会先激活 App,那会触发 applicationShouldHandleReopen —— 它是为
         // 「点 Dock 图标开歌词窗口」写的,不拦住就会连带弹出歌词窗口
         // (现象是「点击通知怎么还打开了歌词窗口」)。那边把开窗延后了 0.3 秒
         // 专等这一下取消。
         // 只管设标记 —— AppDelegate 那边会查两次(进 reopen 时 + 真要开窗前)。
-        // ⚠️ 别改回 `(NSApp.delegate as? AppDelegate)?.…`:那个转型在
+        // 别改回 `(NSApp.delegate as? AppDelegate)?.…`:那个转型在
         // @NSApplicationDelegateAdaptor 下拿不到我们的 AppDelegate,实测无声失败。
         await MainActor.run {
             AppActions.shared.suppressLyricsOnReopenUntil = Date().addingTimeInterval(2)
@@ -311,7 +311,7 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
         case Self.trustActionID:
             await Self.trust(bundleID)
         case UNNotificationDefaultActionIdentifier:
-            // 点通知正文 → 直接停在设置页的「播放器」那一栏(发现卡和已信任列表都在那儿),
+            // 点通知正文 到 直接停在设置页的「播放器」那一栏(发现卡和已信任列表都在那儿),
             // 不能只调 openSettings() —— 那样只是把窗口叫出来、落在上次那一栏。
             //
             // requestSettings 必须**先**调:它两条路一起走(信箱管"窗口还没建出来"、

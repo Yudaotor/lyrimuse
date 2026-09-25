@@ -2,9 +2,9 @@ package main
 
 import "testing"
 
-// cjkSpaceStripped:CJK 姓名之间的空格。的真实案例 —— 伊藤美奈子
-// 《雨のメヌエット》(专辑 TENDERLY)**九个源零候选**,把歌手名的空格去掉再搜,网易云
-// 立刻给出完整候选(日文原词 + 中文译文 + 逐行罗马音,score 379)。判据与理由见其头注。
+// cjkSpaceStripped:CJK 姓名之间的空格。去掉空格能让召回率天差地别——伊藤美奈子
+// 《雨のメヌエット》(专辑 TENDERLY)带空格时九个源零候选,去掉空格后网易云立刻给出
+// 完整候选(日文原词 + 中文译文 + 逐行罗马音,score 379)。判据与理由见其头注。
 func TestCJKSpaceStripped(t *testing.T) {
 	cases := []struct{ in, want, why string }{
 		// ---- 正向:空白两侧都是 CJK,该去 ----

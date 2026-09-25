@@ -29,7 +29,7 @@ public enum LogRedactor {
 
     /// 用已知的密钥原文做字面替换。
     ///
-    /// - Parameter secrets: 字段名 → 该字段当前的值。字段名只用于在报告里标出"这里原本是
+    /// - Parameter secrets: 字段名 到 该字段当前的值。字段名只用于在报告里标出"这里原本是
     ///   哪一项",本身不敏感;值为空或过短的条目会被跳过。
     ///
     /// 按值的长度**降序**替换:两个凭据互为前缀/子串时(例如 relay token 恰好以某个 key
@@ -66,7 +66,7 @@ public enum LogRedactor {
     public static func redactPatterns(_ text: String) -> String {
         var out = text
 
-        // query 参数:`api_key=xxx` → `api_key=<redacted>`。值取到分隔符为止 —— & 结束下
+        // query 参数:`api_key=xxx` 到 `api_key=<redacted>`。值取到分隔符为止 —— & 结束下
         // 一个参数,引号/空格结束整个 URL(Go 的 *url.Error 把 URL 包在双引号里)。
         //
         // `(?!<redacted)` 不可省:第一层值级脱敏已经把命中的凭据换成了

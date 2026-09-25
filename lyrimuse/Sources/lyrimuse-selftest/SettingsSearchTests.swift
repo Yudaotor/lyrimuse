@@ -1,7 +1,7 @@
 import LyrimuseCore
 import Foundation
 
-// 设置搜索:Core 目录 ↔ 源码调用点 ↔ 本地化 catalog 三方对账,加匹配器纯函数。
+// 设置搜索:Core 目录 与 源码调用点 与 本地化 catalog 三方对账,加匹配器纯函数。
 //
 // 目录是静态表,会漂;这一组守的就是"漂了要红":
 //   1. 目录自身:id 不重复、面包屑非空、目的地 / 分段取值跟 SettingsView / AccountLinkingTab 里的枚举
@@ -246,7 +246,7 @@ func runSettingsSearchTests() {
     expectEqual(SettingsSearchMatcher.ranked([("a", [String]())], query: "", title: { $0.0 }, secondary: { $0.1 }).count, 0,
                 "匹配: 空查询零结果")
 
-    // 目录层面的抽查:三个面的「字号」都能被同一个词搜到,且悬浮歌词那条排在菜单栏那条前面(目录顺序)。
+    // 目录层面的抽查:四个面的「字号」都能被同一个词搜到,且顺序跟目录一致。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar"],
                 "目录: 「字号」命中悬浮歌词、灵动岛(2026-09-09 加)、菜单栏三条,按目录顺序")

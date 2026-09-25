@@ -160,7 +160,7 @@ func TestWriteLastfmRecentFeedShape(t *testing.T) {
 	if !info1.ModTime().Equal(info2.ModTime()) {
 		t.Fatal("内容没变、10s 内不该重写")
 	}
-	// 没有 now-playing 了 → 内容变了 → 重写,且 nowPlaying 键消失。
+	// 没有 now-playing 了 到 内容变了 到 重写,且 nowPlaying 键消失。
 	page.NowPlaying = nil
 	writeLastfmRecentFeed("KhalilChan3", page, at.Add(20*time.Second))
 	raw, _ = os.ReadFile(lastfmFeedPath)
@@ -239,7 +239,7 @@ func TestLastfmFeedNudgeFile(t *testing.T) {
 // 就每 feedHeartbeat 重写一次,fetchedAt 跟内容变没变根本无关。两头一叠,用户只能干等
 // 下一个 15 s/60 s 周期 —— 表现就是"点了补提交,下面的列表半天不动"。
 //
-// 钉的是:信号在、周期没到 → 这一拍**不拉**,但排下一个 backfillFeedNudgeDelay 之后到期的请求。
+// 钉的是:信号在、周期没到 到 这一拍**不拉**,但排下一个 backfillFeedNudgeDelay 之后到期的请求。
 func TestBackfillFeedNudgeIsDelayedNotImmediate(t *testing.T) {
 	savedPath := lastfmFeedNudgePath
 	lastfmFeedNudgeAt.Store(0)

@@ -13,7 +13,7 @@ import (
 // Canvas 画剪影,而 Canvas 是**居中**绘制剪影的,只有"剪影与 content 在 canvas 里占同一块
 // 矩形"时才逐点对齐。原来 symbols 里的剪影没有那道 padding:
 //
-//   - 普通 Text 按自然宽度收缩,剪影比 canvas 窄一圈 padding,居中绘制正好补回来 → 对齐;
+//   - 普通 Text 按自然宽度收缩,剪影比 canvas 窄一圈 padding,居中绘制正好补回来 到 对齐;
 //   - 逐字行是 WrapLayout,它**撑满被提议的宽度** —— content 撑满的是 padding 内的宽度、
 //     剪影撑满的是 canvas 整宽,两者差正好一圈 padding。
 //

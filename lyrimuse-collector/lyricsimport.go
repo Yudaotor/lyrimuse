@@ -29,7 +29,7 @@ type parsedLyricsFile struct {
 // parseLyricsFile 读一个 .lrc/.yrc 文件,拆出 lyricsFileHeader(见 lyricsexport.go)写的
 // [ar:]/[ti:]/[al:]/[source:]/[manual:1] 头部标签。
 //
-// ⚠️ 按"固定行号"读头部,不能按"这行长得像不像标签"来扫描:有些歌词源原文第一行就是
+// 按"固定行号"读头部,不能按"这行长得像不像标签"来扫描:有些歌词源原文第一行就是
 // "[ti:xxx]" 这类它自己的 ID 标签(不是我们写的头),扫描式判断会把这种内容行误吞成
 // 头部,导致正文缺行且每次重启都被悄悄裁掉。头部结构固定为 [ar:]/[ti:]/[al:] 三行、
 // 可选 [source:]/[manual:1]、之后必须紧跟一个空行分隔符,因此只按行号消费,不做"像不像
@@ -117,7 +117,7 @@ func readVariantBody(path string) string {
 // 是"歌词部分以 lyrics/ 文件夹为权威源"的导入/调和步骤,main.go 里排在 loadEnrichCache
 // 之后、exportLyricsFiles 之前。
 //
-// ⚠️ 只增不删:文件不存在不代表用户想删——专辑名大小写不一致会让同一首歌长出两条缓存
+// 只增不删:文件不存在不代表用户想删——专辑名大小写不一致会让同一首歌长出两条缓存
 // 条目,二者 sanitizeLyricsFilename 出的文件名在大小写不敏感的文件系统上其实是同一个
 // 文件,先写的会被后写的悄悄覆盖(exportLyricsFiles 已用确定性哈希后缀堵住这个碰撞本身,
 // 见其注释),但"文件因为这个 bug 意外丢失"和"用户真的想删除"这两种情况,从"文件不
@@ -128,7 +128,7 @@ func readVariantBody(path string) string {
 // 缓存字段,下次 export 还会把它重新写回来——这是刻意的取舍,不是遗漏。
 //
 // 算法:
-//  1. 扫 lyricsDir,按去掉后缀的文件名前缀分组(同一首歌的 .lrc/.tr.lrc/.roma.lrc/.yrc)。
+//  1. 扫 lyricsDir(),按去掉后缀的文件名前缀分组(同一首歌的 .lrc/.tr.lrc/.roma.lrc/.yrc)。
 //  2. 组内挑一个能解析出头部的文件还原 (artist,title,album)——文件名本身不可信
 //     (sanitizeLyricsFilename 是单向有损转换,见 lyricsexport.go),头部标签才是权威
 //     身份信息。整组都缺头(老版本文件)就跳过,沿用 JSON 里的旧值。
@@ -137,7 +137,7 @@ func readVariantBody(path string) string {
 //     time.Now()),这样 needsPeripheralBackfill 会在这首歌真正被播放时才补封面/链接,
 //     不会被 10 分钟节流误伤。
 //
-// ⚠️ 必须挑**最长**的匹配后缀,不能"首次命中就 break"。
+// 必须挑**最长**的匹配后缀,不能"首次命中就 break"。
 //
 // lyricsFileSuffixes 是 [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"],而 ".lrc" 是
 // ".tr.lrc"/".roma.lrc" 的真后缀 —— 按数组顺序首次命中,"X.tr.lrc" 会被判成主歌词、

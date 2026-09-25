@@ -39,7 +39,7 @@ public struct KanaAnnotation {
         public var utf16End: Int { utf16Start + utf16Length }
     }
 
-    /// 行文本 → 这一行的标注。按行文本索引而不是行号:逐字歌词(YRC)的行集合跟 LRC 的
+    /// 行文本 到 这一行的标注。按行文本索引而不是行号:逐字歌词(YRC)的行集合跟 LRC 的
     /// 行集合不一定一一对应,用文本对得上就行。同一句重复出现时读音也一样,后写覆盖前写
     /// 没有影响。
     private let byLine: [String: [Mark]]
@@ -83,7 +83,7 @@ public struct KanaAnnotation {
                     guard entryIdx < entries.count else { return nil }
                     pendingInEntry = entries[entryIdx].count
                 }
-                // 一条读音可能覆盖好几个字(「明日」→ あした),把这几个字并成一个 Mark。
+                // 一条读音可能覆盖好几个字(「明日」到 あした),把这几个字并成一个 Mark。
                 let start = utf16Pos
                 var length = 0
                 var consumed = 0

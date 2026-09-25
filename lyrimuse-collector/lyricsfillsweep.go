@@ -56,14 +56,14 @@ const (
 	//
 	// 两者的账完全不同:补空一轮最多 lyricsFillSweepDailyCap(40)条、一天一次,15 秒×40
 	// 才 10 分钟,快不快无所谓;全量是 5300+ 首连着跑,15 秒 gap 让总时长变成 **26.6 小时**
-	// (实测 18 秒/首,其中 15 秒是纯等待)。5 秒 → 约 8 秒/首 → 约 12 小时。
+	// (实测 18 秒/首,其中 15 秒是纯等待)。5 秒 到 约 8 秒/首 到 约 12 小时。
 	//
 	// 5 秒这个值的依据是实测各源的真实速率,不是拍脑袋(从 api call summary 读的,
 	// 80 秒窗口约 4~5 首):网易云 71 次 ≈ 0.89 req/s、iTunes 68 次 ≈ 0.85、QQ smartbox 60 次
-	// ≈ 0.75,**这三个源当时一次 503 都没有**。gap 15→5 让平均速率涨到约 2.3 倍(网易云约
+	// ≈ 0.75,**这三个源当时一次 503 都没有**。gap 15到5 让平均速率涨到约 2.3 倍(网易云约
 	// 2 req/s),对这种量级的平台仍在安全区。
 	//
-	// ⚠️ 别把它当"越小越好"的旋钮往下调:一首歌会打出 100+ 个请求、散到十几个主机,gap 是
+	// 别把它当"越小越好"的旋钮往下调:一首歌会打出 100+ 个请求、散到十几个主机,gap 是
 	// 这些**突发之间**唯一的喘息,而整个采集器没有任何 per-host 限流器(查过,
 	// 一个 rate.Limiter 都没有)。真要再往下压,先补限流再说。
 	// (musicbrainz 不在此列:它自己有 1.1 秒全局最小间隔 + 结果永久缓存,见 musicbrainz.go。)
@@ -111,7 +111,7 @@ func setLyricsFillPaths() {
 	lyricsFillStatusPath = configFilePath(clientName + "-lyrics-fill-status.json")
 	_ = os.Remove(lyricsFillRequestPath)
 	_ = os.Remove(lyricsFillStatusPath)
-	// ⚠️ 全量扫库那份状态文件**不在**上面的清理范围里 —— 它记的正是"上一个进程没跑完的
+	// 全量扫库那份状态文件**不在**上面的清理范围里 —— 它记的正是"上一个进程没跑完的
 	// 那一轮",删掉就等于每次重启都放弃续跑。见 lyricsfullscan.go 头注。
 	setLyricsFullScanStatePath(configFilePath(clientName + "-lyrics-fullscan.json"))
 	// 本地缓存可读性:设置页那三格提示的数据源,由 collector 独家发布(见 localcachefs.go)。
@@ -269,7 +269,7 @@ func lyricsFillSweepCandidates(req lyricsFillRequest) []string {
 
 // cancelLyricsFillSweep 停掉正在跑的这一轮。
 //
-// ⚠️ 顺带清掉全量扫库的"待续"标记,而且**只能**在这里清 —— 扫描循环的出口分不清"用户
+// 顺带清掉全量扫库的"待续"标记,而且**只能**在这里清 —— 扫描循环的出口分不清"用户
 // 按了停止"和"进程正在关机"(两者都是 ctx 被取消),放在那里会让每次重启都把该续的一轮
 // 擦掉。这里是用户按停止的唯一入口,语义明确:他不想要了。见 lyricsfullscan.go 头注。
 //

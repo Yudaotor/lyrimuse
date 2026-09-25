@@ -25,8 +25,8 @@ import (
 // **发现路径**(全部在 Prince《Timeless》= collectionId 6773830957 上实测):
 //
 //	GET https://music.apple.com/{storefront}/album/x/{collectionID}
-//	  → <script type="application/json" id="serialized-server-data"> 里是一份标准 JSON(实测 109 KB)
-//	  → …/videoArtwork/dictionary/motionDetailSquare = { "video": <master m3u8>, "previewFrame": {…} }
+//	  到 <script type="application/json" id="serialized-server-data"> 里是一份标准 JSON(实测 109 KB)
+//	  到 …/videoArtwork/dictionary/motionDetailSquare = { "video": <master m3u8>, "previewFrame": {…} }
 //
 // slug 那一段可以直接写死成 `x`——Apple 只按 ID 定位,实测 HTTP 200。不需要 developer token、
 // cookie、Referer;返回的 master m3u8 同样是公开的(见 MotionCoverManifest 头注里的实测清单)。
@@ -61,7 +61,7 @@ const (
 
 // motionCover:一张专辑的动态封面资源。空 Master + Checked=true 表示"查过了,这张没有"。
 type motionCover struct {
-	// Master:方形(1:1)那份的 master m3u8 地址。App 侧据它选档 → 取 variant → 下单文件。
+	// Master:方形(1:1)那份的 master m3u8 地址。App 侧据它选档 到 取 variant 到 下单文件。
 	// 刻意存 master 而不是直接存最终那个 .mp4:选哪一档取决于**要画多大**,那是 App 才知道的事。
 	Master string `json:"master,omitempty"`
 	// PreviewFrame:静态首帧图的 URL **模板**(尾部带 `{w}x{h}bb.{f}` 占位,跟 Apple 的 artwork
@@ -205,12 +205,16 @@ func motionCoverPreviewSizedURL(tmpl string) string {
 // 共用——两条链路的"正例该有多松"并不一样,同一个常量服务两个判据只是巧合,不该假设它们
 // 必须同步涨跌。
 //
-// ⚠️ 12 是拿真实动态封面专辑重新量出来的,不是沿用旧值:
+// 12 是拿真实动态封面专辑重新量出来的,不是沿用旧值:
 //   - 已确认匹配的记录(98 条全量,不是抽样):距离 0～8,均值 2.3;
 //   - Apple 官方静态封面 vs 官方动态首帧的干净对照(60 张专辑,不掺我们自己封面源的噪声):
 //     54 张里 50 张 ≤10,3 张真的是别的问题(见下)、1 张是 11——跟下面「贴纸/光效」那条
 //     独立测到的《Lover》完全一致(两种图源量出来都是 11,不是抽样噪声);
-//   - 跨专辑的真实反例:17(XLOV)起步。
+//   - 跨专辑的反例:本机 77 对合成跨专辑对照量到的最小值是 **14**。
+//     这一行原来写的是“17(XLOV)起步”—— XLOV《I,God》**不是反例**:两张图是同一张设计,
+//     动画首帧是上色版、静态封面是压银浮雕版。也就是说正例(17)跟反例(14 起)在这个
+//     度量上**本来就重叠**。所以别再往上调这个阈值去救漏判 —— 它们分不开;
+//     这一类靠并联的另一道度量(专辑身份核验)来救,见 decideMotionCover。
 //
 // 也就是说 0～8 正例、11 是官方给动态首帧叠了贴纸/光效之类装饰(比如 Taylor Swift
 // 《Lover》)导致的合理误差、17 起才是真的换错专辑,阈值 12 卡在 11 和 17 中间,比原来的
@@ -328,15 +332,15 @@ var appleAlbumIDInURLRE = regexp.MustCompile(`/album/[^/]*/(\d+)`)
 // 一条都没有)永远等不到动态封面,除非删缓存重解析。这是 ls-Alex 交叉核对时点出来的。
 //
 // **只读缓存、绝不发请求**:它跑在判断"值不值得补"的那一刻、还攥着 enrichMu,联网会把整条
-// 播放路径拖住。锁顺序因此是单向的 enrichMu → {appleCatalogMu, motionCoverMu} —— 这两个包
+// 播放路径拖住。锁顺序因此是单向的 enrichMu 到 {appleCatalogMu, motionCoverMu} —— 这两个包
 // 都不碰 enrichCache/enrichMu(核过),不存在反向嵌套。
 //
 // 判据是**三态**的,这是关键:
-//   - 这条已经有 master 了 → 不用补;
-//   - 拿不到已校验的目录专辑 ID(不是 Apple Music 目录曲目 / 锚点还没建立)→ 补也补不出来,
+//   - 这条已经有 master 了 到 不用补;
+//   - 拿不到已校验的目录专辑 ID(不是 Apple Music 目录曲目 / 锚点还没建立)到 补也补不出来,
 //     别浪费那 5 次机会;
-//   - motion 缓存里**压根没查过这张专辑** → 值得补一次(查完就落进下面两态之一);
-//   - 查过了:缓存里有 master → 算缺(等着被写进这条记录);缓存里是"查过了没有" → **不算缺**。
+//   - motion 缓存里**压根没查过这张专辑** 到 值得补一次(查完就落进下面两态之一);
+//   - 查过了:缓存里有 master 到 算缺(等着被写进这条记录);缓存里是"查过了没有" 到 **不算缺**。
 //
 // 最后那半条是刻意的,理由跟 `missingQQMids` 那条注释同源:动态封面的覆盖率只有三成上下,
 // 把"这张专辑就是没有"也算成缺,那七成条目会白重试 5 轮、每轮把开着的歌词源全部重查一遍。
@@ -390,7 +394,7 @@ var serializedServerDataRE = regexp.MustCompile(
 	`(?s)<script type="application/json" id="serialized-server-data">(.*?)</script>`)
 
 // parseMotionCover 从专辑页里解出方形动态封面。wantID 是目标专辑的十进制 ID,用来确认拿到的
-// 节点确实属于它(见文件头 ⚠️ 2)。解析不出来返回零值 + false —— 调用方据此记"这张没有"。
+// 节点确实属于它(见文件头 2)。解析不出来返回零值 + false —— 调用方据此记"这张没有"。
 func parseMotionCover(page []byte, wantID string) (motionCover, bool) {
 	m := serializedServerDataRE.FindSubmatch(page)
 	if m == nil {
@@ -476,3 +480,4 @@ func subtreeHasAdamID(v any, want string) bool {
 	}
 	return false
 }
+	// 这一页 videoArtwork 旁边还挂着一个 `artwork`,**别拿它当专辑封面**,见 AlbumArtwork 字段注释。

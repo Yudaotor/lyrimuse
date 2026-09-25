@@ -33,7 +33,7 @@ struct OnboardingView: View {
     @State private var isTogglingCollectorService = false
     // 只用来决定要不要提醒"灵动岛/菜单栏歌词得等播起来才看得见"。
     //
-    // ⚠️ 刻意**不**写成 `@ObservedObject private var coordinator = PlaybackCoordinator.shared`:
+    // 刻意**不**写成 `@ObservedObject private var coordinator = PlaybackCoordinator.shared`:
     // 那会订阅整个单例,而它有二十来个 @Published(currentLine/anchor/artworkImage… 每个播放
     // tick 都在变),整个向导会跟着高频重渲染 —— 这个仓库为"@ObservedObject 订阅整个单例"
     // 踩过一次真实的 20Hz 过度重渲染 bug(见"歌词管理"窗口那次)。这里只要 isPlayingNow 这
@@ -74,7 +74,7 @@ struct OnboardingView: View {
     /// `WebPlatformChoiceCard` 的头注:网页播放器走的是"配对浏览器"那套状态),所以要单独
     /// 记一笔,用来决定后面那一步 `.browserPairing` 要不要出现。
     ///
-    /// ⚠️ 刻意**不持久化**这个布尔。真正要落盘的东西是配对本身
+    /// 刻意**不持久化**这个布尔。真正要落盘的东西是配对本身
     /// (`AppSettings.browserPlatformPairs`),而它在下一步才产生;这里存一个"用户表达过
     /// 意愿"的中间态只会多一个跟真实状态对不上的字段。重新跑引导时按"已经配过没有"重新
     /// 播种(见 `onAppear`),这样格子的选中态如实反映当前配置,不是一个孤立的记忆。
@@ -88,7 +88,7 @@ struct OnboardingView: View {
 
     /// 这一轮要不要问 Apple Music 自动化权限。
     ///
-    /// ⚠️ 判据翻过两次,别再收窄回去:
+    /// 判据翻过两次,别再收窄回去:
     ///  - (上午)从 `== [.appleMusic]`(恰好只选了它)放宽成 `contains` —— 同日
     ///    这一步从单选改成多选,而"同时选了 Apple Music 和别的播放器"时那条 AppleScript
     ///    路径照样会被走到,权限仍然需要。
@@ -128,12 +128,12 @@ struct OnboardingView: View {
 
     /// 当前这一步。**所有地方都必须走这个访问器,不准再写 `steps[step]`**。
     ///
-    /// ⚠️ 这是一处真的会崩的越界(修)。原来的注释论证过"当前安全,因为能让
+    /// 这是一处真的会崩的越界(修)。原来的注释论证过"当前安全,因为能让
     /// `steps` 变短的控件全都在 index 1" —— 那句话只在"引导页是唯一宿主"时成立,而
     /// `features.players` 是 `@Published`(FeatureSettingsStore),**设置窗口能同时开着改它**,
     /// 引导页自己的 `.lastfm` 那一步还有个按钮专门去打开设置窗。失效路径:勾了 Apple Music
-    /// → 一路走到最后一步 `.done`(index = count-1)→ 打开设置 → 播放器 tab 取消勾选
-    /// Apple Music → `steps` 少一项 → body 重算 → `steps[count]` 数组越界,硬崩。
+    /// 到 一路走到最后一步 `.done`(index = count-1)到 打开设置 到 播放器 tab 取消勾选
+    /// Apple Music 到 `steps` 少一项 到 body 重算 到 `steps[count]` 数组越界,硬崩。
     ///
     /// 两道防线都要有:这个访问器保证**渲染这一刻**不会越界(SwiftUI 重算 body 可能早于
     /// 任何 onChange),下面 `.onChange(of: steps.count)` 负责把 `step` 这个存储值本身拉回
@@ -148,7 +148,7 @@ struct OnboardingView: View {
 
     /// 「下一步」现在被锁住了没有。
     ///
-    /// ⚠️ 只剩 `.background` 一条。`.automation` 从这里**移出去**了,理由是它的
+    /// 只剩 `.background` 一条。`.automation` 从这里**移出去**了,理由是它的
     /// 前提本身站不住:基础的"在播什么"来自 media-control 通道(collector),自动化权限管的是
     /// 进度精度和整套播放/资料库控制 —— 没有它歌词照样显示。多选之后更明显:勾了
     /// Apple Music + Spotify 的人,被一个只对其中一个播放器有意义的权限挡在原地。
@@ -160,12 +160,12 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ⚠️ 这一层 ScrollView 是**溢出兜底**,不是"让内容可以随便长"。
+            // 这一层 ScrollView 是**溢出兜底**,不是"让内容可以随便长"。
             //
-            // 窗口固定 480×420、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
+            // 窗口固定 480×440、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
             // 在此之前内容超出就是**静默裁切**:超出的部分既不滚动也不撑大窗口,只会被切掉
             // 或压成省略号,而且在开发机上通常看不出来 —— 最坏情况是英文界面(同一句话普遍
-            // 比中文多占一到两行)叠上「辅助功能 → 更大文字」。`.basedOnSize` 让内容装得下
+            // 比中文多占一到两行)叠上「辅助功能 到 更大文字」。`.basedOnSize` 让内容装得下
             // 时完全不出现滚动条、也不橡皮筋,观感跟改动前一模一样。
             //
             // 各步骤自己的高度预算(尤其"两条提示互斥"那种)照旧要守 —— 这层只是保证"预算
@@ -227,7 +227,7 @@ struct OnboardingView: View {
         }
         .frame(width: 480, height: 420)
         // 撒花盖在**整扇窗**上(叠在 `.frame` 之后,所以它正好是窗口那么大):纸片会从进度点和
-        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 420pt 高的窗口里
+        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 440pt 高的窗口里
         // 看着像"纸片撞在一条看不见的线上"。它自己从不吃点击,按钮照常能按(见 ConfettiOverlay)。
         .overlay { ConfettiOverlay(burst: confettiBurst) }
         // 窗口标题跟着界面语言走。App.swift 里 `Window(L10n.t("欢迎使用 Lyrimuse"), id:)`
@@ -268,9 +268,8 @@ struct OnboardingView: View {
         // 用户点"请求权限"之后可能会切到系统设置面板手动处理(尤其是等超时了、
         // 走"打开系统设置"这条备选路径的时候),切回来时重新读一次最新状态——不然
         // 界面会一直卡在切出去之前的旧状态,像是"我明明点了允许,这里怎么还没变"。
-        // 顺带清掉 isRequestingAutomation/automationRequestTimedOut:如果已经确定
-        // 不再是 notDetermined,就没有理由继续显示"正在等待"这套 UI——不这样做的话,
-        // 上面状态文字已经变成"已授权"了,下面却还卡在超时提示/转圈,两处互相矛盾。
+        // `clearRequestUI` 顺带把"正在等待"那套收掉:已经确定不再是 notDetermined 时还
+        // 留着转圈/超时提示,就是状态文字说已授权、下面却还在等,两处互相矛盾。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             let latest = MusicAutomationPermission.check(askIfNeeded: false)
             automationStatus = latest
@@ -282,7 +281,7 @@ struct OnboardingView: View {
         .onReceive(PlaybackCoordinator.shared.$isPlayingNow.removeDuplicates()) { playing in
             isPlayingNow = playing
         }
-        // ⚠️ 这里原来挂着 `.onDisappear { settings.hasCompletedOnboarding = true }`,
+        // 这里原来挂着 `.onDisappear { settings.hasCompletedOnboarding = true }`,
         // 也就是"不管走没走完(包括直接点红绿灯关窗)都算引导过了"。去掉。
         //
         // 那个行为会造成一条不可自愈的死路:常驻服务默认不装,而歌词全部来自 collector
@@ -299,7 +298,7 @@ struct OnboardingView: View {
     }
 
     /// 进度指示。补了三件事:
-    ///  ① **一个"第几步/共几步"的数字** —— 步数按所选播放器动态算,最多能到 9 个点,光靠
+    ///  ① **一个"第几步/共几步"的数字** —— 步数按所选播放器动态算,最多能到 10 个点,光靠
     ///     数点数不出来自己走到哪了。
     ///  ② **走过的点可以点回去**。只允许回到 `furthestStep` 以内:往前跳会绕过必需步骤
     ///     那道锁(`nextIsLocked`),而 `furthestStep` 只由「下一步」/「暂时跳过」推进,
@@ -308,11 +307,10 @@ struct OnboardingView: View {
     ///     圆点。
     private var stepDots: some View {
         HStack(spacing: 8) {
-            // ⚠️ 命中区靠**外扩一层等大的 frame**做,不是 `.contentShape(Rectangle().size(…))`。
+            // 命中区靠**外扩一层 frame**做,不是 `.contentShape(Rectangle().size(…))`。
             // 后者构造的矩形从这个视图的原点(圆点左上角)往右下铺,而不是以圆点为中心 ——
-            // 6pt 的点配 14pt 的矩形,命中区整体偏移 4pt 并盖到相邻那个点头上,几个点的
-            // 命中区互相重叠之后"点第 N 个却跳到第 N±1 步"。12pt 的居中 frame + spacing 0
-            // 之后视觉间距仍是 6pt,跟改动前一模一样,但每个点的命中区互不重叠。
+            // 命中区整体偏移并盖到相邻那个点头上,几个点的命中区互相重叠之后"点第 N 个却跳到
+            // 第 N±1 步"。外层 frame 比圆点宽 6pt + spacing 0:视觉间距 6pt,命中区互不重叠。
             HStack(spacing: 0) {
                 ForEach(0..<steps.count, id: \.self) { i in
                     Circle()
@@ -333,6 +331,9 @@ struct OnboardingView: View {
             format: L10n.t("第 %1$d 步，共 %2$d 步"), step + 1, steps.count))
     }
 
+    ///
+    /// 当前这一步拉长成 16pt 的胶囊,走过的点是淡强调色、没走到的是灰 —— 不数点也看得出位置。
+    /// 数字写成紧凑的「2/8」(不带空格,斜杠两侧的空隙会让它看起来跟圆点脱节),跟圆点之间只隔 8pt。
     // 语言选择并在这一页,不再是后面单独的一步。`L10n.t` 每次调用都重新解析
     // 语言(见 L10n.swift 里"不缓存"那段),所以在这里一改,**从下一步开始整个向导都是新
     // 语言** —— 而它原来排在第 6 步,前 5 步早就用错的语言讲完了。
@@ -408,6 +409,9 @@ struct OnboardingView: View {
                     // 「这个引导页面之前调整了播放器的多选逻辑这里没改过来」)。此前这里
                     // 刻意留着单选、注释里写着"不是遗漏",那条取舍被这次要求推翻了。
                     //
+    /// 标题问句 + 一句交代 Lyrimuse 跟着谁显示歌词;下面是装在一张淡玻璃卡里的 `PlayerPicker`
+    /// (设置页那边包的是 `SettingsCard`,两处卡里的内容是同一个组件)。这一页不放设置页底下那行
+    /// 「自动识别」说明:卡片上指向就能读到同一句提示。
                     // 切换和"最后一个不能取消"的判断走 `features.togglePlayer` —— 跟设置页
                     // 共用同一份,见那个方法的头注(选中集合的非空不变量在那里)。
                     //
@@ -454,13 +458,9 @@ struct OnboardingView: View {
         }
     }
 
-    // PlayerChoiceCard/MorePlayersComingCard 挪进独立文件
-    // (Settings/PlayerChoiceCard.swift)——设置页"播放器"那张卡后来也换成了同一套图标
-    // 网格,两处共用同一个组件,不重复维护。
-
     /// 勾/取消「YouTube Music」那一格。**取消是非破坏性的:只收起后面那一步,不动任何配对。**
     ///
-    /// ⚠️ 取消勾选时**绝不能**把这个平台
+    /// 取消勾选时**绝不能**把这个平台
     /// **已配对的浏览器全部 unpair 掉**。"否则格子看着没选、配对还在,状态说
     /// 不通"。那个理由本身没错,但代价完全不对等 —— 那是一次**看不见的**破坏性耦合:站在
     /// 播放器网格前面,你无从得知点一下这个格子会把设置页里配好的一整份浏览器配对删掉,
@@ -489,20 +489,17 @@ struct OnboardingView: View {
     /// 实现(那个函数体里的顺序是好几轮实测结论,见它的头注)。这一步不传 `revealPairing`:
     /// 设置页用它展开权限气泡,而这里两道门的说明本来就摊在页面上,没有气泡要开。
     ///
-    /// ⚠️ 这一步**不**代劳授权。`trustAndPair` 只在那个浏览器已经在跑时顺手问一次系统
+    /// 这一步**不**代劳授权。`trustAndPair` 只在那个浏览器已经在跑时顺手问一次系统
     /// 自动化授权(理由见它的头注),没在跑就留给用户之后自己处理 —— 引导里不该为了"把
     /// 流程走完"去后台拉起用户的浏览器抢焦点。所以这一步也**不锁下一步按钮**(跟
     /// `.lastfm` 同一档:介绍 + 可选动作,不是必需步骤),配不配得成都能往下走。
     private var browserPairingStep: some View {
         let platformID = Self.youTubeMusicPlatformID
-        // ⚠️ **一份顺序固定的候选列表,不按"已配对/未配对"分两组渲染**(修)。
+        // **一份顺序固定的候选列表,不按"已配对/未配对"分两组渲染**。
         //
-        // ⚠️ **别分两组**(`ForEach(paired)` 在前、`ForEach(addable)` 在后)。现象是
-        // 「这里我怎么点了没反应」,而实测坐实**点击一直是生效的** —— 挂监视器盯
-        // `np:browserPlatformPairsJSON`,抓到每点一次就少一个配对(基线四个 → 点完只剩
-        // Arc)。问题全在反馈上:分两组时点一下会让那张卡**从一组跳到另一组、在网格里换
-        // 位置**(用户第二次的原话:「点了以后图标会切换位置」),而"位置变了 + 边框变了"
-        // 混在一起,反而读不出"我刚把它取消了"。
+        // 分两组渲染(`ForEach(paired)` 在前、`ForEach(addable)` 在后)的问题:点一下会让
+        // 那张卡**从一组跳到另一组、在网格里换位置**,跟选中态的视觉变化混在一起,反而看不出
+        // 点击本身有没有生效。
         //
         // 改成一份稳定列表之后,点击的唯一视觉变化就是那张卡自己的选中态,位置不动。
         let candidates = BrowserPairing.candidateBrowsers(platformID: platformID)
@@ -515,7 +512,7 @@ struct OnboardingView: View {
                 // 默认候选一个都没有。实践中几乎进不来这个分支(macOS 上 Safari 恒存在,
                 // 而 `candidateBrowsers` 只过滤"装没装"),留着是因为它比一个空网格诚实。
                 //
-                // ⚠️ 这句原来写的是「Safari、Chrome、Edge、**Arc** 这类」—— 那跟
+                // 这句原来写的是「Safari、Chrome、Edge、**Arc** 这类」—— 那跟
                 // 的产品决定正好相反:Arc 被有意从 `knownBrowserBundleIDs` 里拿掉了(适配
                 // 全留着,只是不默认展示,见那边头注),点名它等于承诺一个这里不会出现的选项。
                 // 改成如实说明"默认只列这几个,别的自己挑",正好接上下面那个按钮。
@@ -528,7 +525,7 @@ struct OnboardingView: View {
                         browserCard(bundleID: bundleID, platformID: platformID)
                     }
                 }
-                // ⚠️ 这里**曾经**有一行小字「亮起来的就是已经配好的；再点一下取消」,
+                // 这里**曾经**有一行小字「亮起来的就是已经配好的；再点一下取消」,
                 // 同日加上又被去掉("去掉这个文案")。加它的理由是:点一张
                 // 已经亮着的卡做的是取消配对,而正文邀请的是"选",怕用户误删(那天确实误删过
                 // 一次,配对被删空、靠会话记录恢复的)。不要,取舍归他 —— 记在这里是
@@ -537,7 +534,7 @@ struct OnboardingView: View {
                 // 这行小字只是补充说明,不是那个 bug 的修复本体。
             }
             // 「从应用程序中选择…」。在此之前引导页只铺得出
-            // `knownBrowserBundleIDs` 里装了的那三个(Chrome / Edge / Safari),而 Brave /
+            // `knownBrowserBundleIDs` 里装了的那几个(Chrome / Edge / Brave / Safari),而
             // Vivaldi / Opera / Chromium 各分支、以及被有意拿出默认名单的 Arc 都驱得动 ——
             // 这批用户在引导里**完全走不通**,只能靠正文那句"随时可以在设置里再改"兜底。
             // 设置页早就有这条路,引导页缺它没有道理。
@@ -567,6 +564,12 @@ struct OnboardingView: View {
         // 自己先把候选分成两组,正是"点一下换位置"那个问题的来源。
         let isPaired = BrowserPairing.isPaired(bundleID, platformID: platformID)
         return WebPlatformChoiceCard(
+    /// 上一步选中的播放器里,有 AppleScript 字典的那几家各要一份「自动化」权限 ——
+    /// 一家一行,跟设置页那张卡列的是同一份列表(`automationTargets`)。
+    ///
+    /// 走到这一步时多半**已经有结果了**:上一步点中播放器的那一下就主动请求过
+    /// (`PlayerPicker` → `requestOnSelect`)。这一页因此更多是"核对 + 补救"——
+    /// 当时点了「不允许」、或者选的是「自动识别」而某家当时没在跑没能弹窗,在这里还能再点一次。
             icon: AppIconResolver.icon(forBundleID: bundleID),
             title: FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID,
             isSelected: isPaired
@@ -636,7 +639,7 @@ struct OnboardingView: View {
     /// (`LoginItemManager`,见 AppSettings.launchAtLoginEnabled 的 didSet)。两者互不拉起:
     /// App 退出后 collector 照常采集(见 01 章)。
     ///
-    /// ⚠️ 这条区别**刻意不写进界面文案**("去掉括号里面的文案")。原来
+    /// 这条区别**刻意不写进界面文案**("去掉括号里面的文案")。原来
     /// 副标题后面挂着一句"(后台采集服务是独立的,装上之后本来就会开机自启)",两行小字塞不下、
     /// 在窗口里撑出去了,而且它解释的是一个用户根本没问的区别 —— 上面那张卡已经说清 collector
     /// 自己会常驻。这里记着是给改代码的人看的,不是给用户看的。
@@ -680,15 +683,18 @@ struct OnboardingView: View {
 
     /// 「译文与罗马音」这一步。
     ///
-    /// 为什么值得单独占一步:这是这个 App 对中日韩听众最核心的能力之一(设置里「歌词 →
+    /// 为什么值得单独占一步:这是这个 App 对中日韩听众最核心的能力之一(设置里「歌词 到
     /// 译文/效果」整整两卡),而在此之前引导里**一个字都没提** —— 新用户只有自己摸到设置
     /// 里折叠着的那几行才会发现。跟 `.lastfm` 同一档:介绍性质、不锁「下一步」。
     ///
-    /// ⚠️ 这里只放**两个总开关**,不放"标注哪些语言"那一排。那几个走的是
+    /// 这里只放**两个总开关**,不放"标注哪些语言"那一排。那几个走的是
     /// `romanizationScripts` 的**双写**(AppSettings 持久化 + LocalPlaybackSource 让当前这首
     /// 歌立刻重新解析,见 SettingsView.romanizationToggle 的头注),只写一边就会出"改了要等
     /// 下一首才生效"这种错位 —— 引导页照抄一份等于给那条约束开第二个漂移点。默认值
-    /// (日/韩开、中文关)对绝大多数人本来就是对的,细调留给设置页。
+    /// (`RomanizationScripts.default`:日 / 韩 / 中 / 粤全开)对绝大多数人本来就是对的,细调留给设置页。
+    ///
+    /// 两个总开关只管悬浮歌词和歌词窗口;灵动岛和菜单栏的译文 / 罗马音走各自的「副行」
+    /// (`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写。
     private var lyricsExtrasStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("译文与罗马音"))
@@ -719,7 +725,7 @@ struct OnboardingView: View {
     // 刻意不放进来:它没有任何持久化开关,在向导里打开只会弹一扇窗盖住向导本身,而且下次
     // 启动不保留 —— 在这里承诺它等于承诺一个不存在的偏好。
     //
-    // ⚠️ 三条必须守住的写法约束:
+    // 三条必须守住的写法约束:
     // 1) 关着的那个形态,渲染路径上连 `.shared` 都不能碰 —— 两个窗口控制器都是
     //    `static let shared`,init() 里订阅 PlaybackCoordinator.$isPlayingNow 的那个
     //    Combine sink 在订阅的一瞬间就会把窗口建出来并显示(NotchLyricsWindowController
@@ -737,7 +743,7 @@ struct OnboardingView: View {
     //    选择(而且绕过 setVisible,改完窗口还不动)。这一步只读不写,唯一的写入路径是
     //    实测拨动开关。
     //
-    // ⚠️ 还有一条口味上的约束(**不再是安全前提**):`steps` 的长度由 `features.players`
+    // 还有一条口味上的约束(**不再是安全前提**):`steps` 的长度由 `features.players`
     // 和 `wantsBrowserYouTubeMusic` 两个值决定,所以能改它们的控件最好只留在 index 1
     // (playerChoiceStep),否则用户会看到进度点在脚下变长变短。
     //
@@ -777,7 +783,7 @@ struct OnboardingView: View {
             }
 
             // 这两条提示**互斥**,任何时候最多出现一条 —— 整个向导没有 ScrollView、窗口
-            // 固定 480×420,超出部分既不滚动也不撑大窗口,只会被静默裁掉/压成省略号;两条
+            // 固定 480×440,超出部分既不滚动也不撑大窗口,只会被静默裁掉/压成省略号;两条
             // 同时出现正好会顶破这一步的高度预算。全关时"等播起来才看得到"也没意义了,
             // 所以警告优先。
             if noDisplayModeEnabled {
@@ -819,7 +825,7 @@ struct OnboardingView: View {
 
             Spacer(minLength: 12)
 
-            // ⚠️ 必须显式 .toggleStyle(.switch):macOS 上 Toggle 默认画成**复选框**,只有
+            // 必须显式 .toggleStyle(.switch):macOS 上 Toggle 默认画成**复选框**,只有
             // 放在 Form/List 里才会自动变成右侧胶囊开关。设置页是靠 SettingsRow 统一挂了
             // 这一句(Settings/SettingsDesignSystem.swift:346),向导里没有那个祖先,不写
             // 就是一排复选框,不报错也不崩,只是长得跟设置页对不上。
@@ -833,7 +839,7 @@ struct OnboardingView: View {
     /// "灵动岛"光靠一枚符号解释不了它会出现在屏幕的哪个位置;这一批(开机启动、译文、罗马音)
     /// 没有那个问题,用符号就够了。
     ///
-    /// ⚠️ 同样必须显式 `.toggleStyle(.switch)`:macOS 上 Toggle 默认画成**复选框**,只有放在
+    /// 同样必须显式 `.toggleStyle(.switch)`:macOS 上 Toggle 默认画成**复选框**,只有放在
     /// Form/List 里才会自动变成右侧胶囊开关,而向导里没有那个祖先(完整理由见 displayModeRow)。
     private func toggleRow(
         icon: String, title: String, subtitle: String, isOn: Binding<Bool>
@@ -975,7 +981,7 @@ struct OnboardingView: View {
             // 是整个向导唯一适合把这个双关点破的地方 —— 前面每一步都在讲权限/服务/开关,
             // 只有这里是"配完了,去听歌吧"。两种状态各一句:全绿是送别,没全绿是"再等等你"。
             //
-            // ⚠️ 文案里点名了「开始使用」这个按钮,英文那版对应 "Get Started"(catalog 里
+            // 文案里点名了「开始使用」这个按钮,英文那版对应 "Get Started"(catalog 里
             // 「开始使用」的既有译法)—— 以后改按钮文案要连这句一起改,别让它指向一个不存在
             // 的按钮。
             Text(allOK ? L10n.t("缪斯已经就位——接下来交给音乐。按下「开始使用」，让每一句歌词都跟着旋律亮起来")
@@ -988,7 +994,7 @@ struct OnboardingView: View {
             // 四行清一色的绿勾,信息量约等于零;换成"歌词会跟着这些走"之后,这一页才真的
             // 在说"你配好了什么"。
             chosenPlayersStrip
-            // ⚠️ **清单没有被删掉,只是全绿时不出现**。它是 `automation` 从「下一步」那道锁里
+            // **清单没有被删掉,只是全绿时不出现**。它是 `automation` 从「下一步」那道锁里
             // 移出去之后**唯一如实报告缺什么**的地方(见 nextIsLocked / doneStep 的头注) ——
             // 整条删掉就又回到治过的那个病:用户误点「不允许」还能一路走完,这一页
             // 却无条件说"一切就绪"。折中是只列**没就绪**的那几行:全绿时页面干净,出问题时
@@ -1039,13 +1045,13 @@ struct OnboardingView: View {
 
     /// 这一轮选中的东西,**顺序即展示顺序**。
     ///
-    /// ⚠️ 图标那一行和名字那一行**必须共用这一个数组**。两处各拼一遍的话(图标一个
+    /// 图标那一行和名字那一行**必须共用这一个数组**。两处各拼一遍的话(图标一个
     /// `ForEach` + `if`,名字一个 `map` + 三元),两串顺序靠人肉对齐 —— 那正是会漂的写法,
     /// 而且真漂过:图标排到最后的是 YouTube Music,名字里排到最后的也是它,但两处
     /// 都把「自动识别」放在了 YouTube Music **前面**,跟选播放器那一步的网格顺序相反。
     ///
     /// 顺序跟 `playerChoiceStep` 的网格逐项一致:具体播放器(按 `PlaybackPlayer.displayOrder`,
-    /// 那份顺序本身按系统语言算)→ YouTube Music → 「自动识别」垫底。「自动识别」排在
+    /// 那份顺序本身按系统语言算)到 YouTube Music 到 「自动识别」垫底。「自动识别」排在
     /// YouTube Music 之后是对调后的顺序,收尾这一页也要跟上
     /// (「自动识别和 youtubemusic 的顺序是不是应该换一下」)—— 两处顺序不一致,读的人会以为
     /// 其中一处是错的。
@@ -1213,7 +1219,7 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        // ⚠️ **后台服务没起来就不算"引导过了"**(跟同日新增的「暂时跳过」配套)。
+        // **后台服务没起来就不算"引导过了"**(跟同日新增的「暂时跳过」配套)。
         //
         // `hasCompletedOnboarding` 一旦置真,这扇窗口再也不会自动出现,而它是把 collector
         // 服务装起来的主要入口 —— 15 章记着的那条不可自愈的死路正是这么形成的:服务没装、
@@ -1237,9 +1243,9 @@ struct OnboardingView: View {
 // 在哪儿 —— 三行摆在一起才对照得出"灵动岛"到底跟另外两种差在哪。
 //
 // 尺寸全部写成固定常量、**不用 GeometryReader**:示意图必须是可预测的固定高度,不能跟着
-// 容器变(这一步没有 ScrollView,窗口固定 480×420,溢出是静默裁切)。
+// 容器变(这一步没有 ScrollView,窗口固定 480×440,溢出是静默裁切)。
 //
-// ⚠️ 示意图**不跟着开关变灰**。做成"关掉就 saturation(0)+opacity(0.45)"是反效果:
+// 示意图**不跟着开关变灰**。做成"关掉就 saturation(0)+opacity(0.45)"是反效果:
 // 灵动岛和菜单栏歌词默认都是关的,于是最需要被解释的那两张恰好被洗成
 // 两团灰斑,而这张图存在的唯一理由就是"让没见过的人看懂它会出现在屏幕哪儿"。开关状态由右
 // 边的 Toggle 表达,图只负责解释位置。

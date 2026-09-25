@@ -1,6 +1,6 @@
 import Foundation
 
-/// App ⇄ collector 的「客户端缓存被系统挡住了」状态通道(见 collector/localcachefs.go 头注)。
+/// App 与 collector 的「客户端缓存被系统挡住了」状态通道(见 collector/localcachefs.go 头注)。
 ///
 /// ## 为什么需要这条通道
 ///
@@ -9,14 +9,15 @@ import Foundation
 /// 这三条本地快速路径**整条哑掉**,而它们全程 fail-soft —— 表现与"用户压根没装那个播放器"
 /// 逐字节相同,界面上没有任何迹象。这条通道就是为了让设置页能把这件事说出来。
 ///
-/// ⚠️ **这个状态只能由 collector 发布,App 绝不能自己去探测**。两者是两个进程,TCC 授权
+/// **这个状态只能由 collector 发布,App 绝不能自己去探测**。两者是两个进程,TCC 授权
 /// 各自独立:App 探得到不代表 collector 探得到(反之亦然),而真正走这条快速路径的是
 /// collector,所以只有它的结论算数。App 自测一遍再显示,等于把一个与事实无关的结论摆给用户。
 /// 同 `LyricsFullScan.scoringVersion` 不能在 Swift 侧硬编码是一个道理。
 ///
-/// ⚠️ 名单里**只有尝试过且被拒的**来源。没听过那个播放器的用户这里是空的,界面因此什么都
-/// 不显示 —— 而不是显示一排"未知"。collector 每次启动会清掉这份文件,授权状态可能在两次
-/// 运行之间被改过,留着旧结论会让界面显示一个已经不成立的提示。
+/// `denied` 只有**尝试过且被拒的**来源,`readable` 只有**确认读得到的**,两者互斥;都不在 =
+/// 还没试过。collector 每次启动先清掉这份文件、再把装了的那几家容器探一遍重新发布
+/// (localcacheprobe.go),授权状态可能在两次运行之间被改过,留着旧结论会让界面显示一个
+/// 已经不成立的提示。
 ///
 /// 只读通道:App 从不写这份文件。
 public enum LocalCacheAccess {
@@ -71,7 +72,7 @@ public enum LocalCacheAccess {
 
     /// 「完全磁盘访问」那一页的系统设置深链。
     ///
-    /// ⚠️ 这个锚点(`Privacy_AllFiles`)是 macOS 13 起的写法,跟 `com.apple.settings.PrivacySecurity.extension`
+    /// 这个锚点(`Privacy_AllFiles`)是 macOS 13 起的写法,跟 `com.apple.settings.PrivacySecurity.extension`
     /// 这个新 bundle id 配套。打不开时系统会退回设置 App 的首页 —— 那不理想但不致命,
     /// 所以调用方不必自己判断版本。
     public static let fullDiskAccessSettingsURL = URL(

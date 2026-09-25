@@ -27,7 +27,7 @@ _app_name = os.path.basename(application)
 # (那是另一套机制,这次没做)。
 icon = os.path.join(application, "Contents/Resources/AppIcon.icns")
 
-# ⚠️ dmgbuild 的 `filesystem`/`format` 必须跟 hdiutil 那条路径一致,否则同一个版本
+# dmgbuild 的 `filesystem`/`format` 必须跟 hdiutil 那条路径一致,否则同一个版本
 # 用不用 dmgbuild 出来的产物特性不同(兼容性、体积),那种差异排查起来很费劲。
 filesystem = "HFS+"
 format = "UDZO"

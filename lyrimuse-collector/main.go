@@ -21,14 +21,14 @@ import (
 // ListenBrainz 的 submission_client_version、以及 musicbrainz/lrclib 两处 User-Agent
 // 都用它。
 //
-// ⚠️ **构建时由 -ldflags 注入,不要在这里手写版本号**。两个构建脚本都注入同一个值:
+// **构建时由 -ldflags 注入,不要在这里手写版本号**。两个构建脚本都注入同一个值:
 // lyrimuse/build.sh(打包 App 时构建这份 collector,CI 发版也走它)和
 // lyrimuse-collector/build.sh(本地只重建 collector 时用),注入的都是跟 App 的
 // CFBundleShortVersionString **同一个来源**的版本号(LYRIMUSE_VERSION 环境变量,
 // 没有就取最近一个 git tag)。
 //
-// ⚠️ **必须是 var,不能是 const** —— Go 的 `-ldflags -X` 只能写 var,对 const
-// **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动。实测坐实
+// **必须是 var,不能是 const** —— Go 的 `-ldflags -X` 只能写 var,对 const
+// **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动
 // (`go build -ldflags "-X main.clientVersion=9.9.9"` 之后 `collector version`
 // 仍然打印旧值)。谁要是哪天顺手把它改回 const,注入就会无声无息地失效,回到下面
 // 说的那个老毛病——`versioninjection_test.go` 有一条断言专门钉住这件事。
@@ -73,7 +73,7 @@ const (
 	// Standard scrobble rule: half the track or 4 minutes, whichever is less.
 	listenCapSecs = 240.0
 	// Tracks shorter than this are not submitted as listens unless the user opts in
-	// (features.ScrobbleShortTracks; see tooShortToScrobble in poller.go). Last.fm's
+	// (features().ScrobbleShortTracks; see tooShortToScrobble in poller.go). Last.fm's
 	// scrobbling guidelines: "The track must be longer than 30 seconds."
 	minTrackSecs = 30.0
 	// LB rejects any single listen larger than 10240 bytes. Lyrics (esp. word-level
@@ -91,11 +91,9 @@ func main() {
 	installLogSink(isDaemonInvocation(os.Args))
 	// `collector version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的 collector 版本"
-	// 是否一致。起因是 main.go 里 clientVersion 这个字面量一直是手动
-	// 同步的,发布时忘记同步过至少一次(v1.3.0 那次漏了,见 clientVersion 声明处注释,
-	// User-Agent/ListenBrainz submission_client 因此谎报了一整个发布周期)——当时没有
-	// 任何机制能让用户/开发者自己发现这个不一致,这条子命令就是补上这道自检。跟
-	// search-lyrics 一样,检查要放在 flag.Parse() 之前。
+	// 是否一致。 别小看这道自检:clientVersion(见其声明处注释)手动同步漏掉一次,
+	// User-Agent/ListenBrainz submission_client 就会谎报,而且没有别的机制能让
+	// 用户/开发者自己发现这个不一致。跟 search-lyrics 一样,检查要放在 flag.Parse() 之前。
 	if len(os.Args) > 1 && os.Args[1] == "version" {
 		fmt.Println(clientVersion)
 		return
@@ -227,7 +225,7 @@ func main() {
 	}
 	// desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector 启动时读一次
 	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在
-	// loadEnrichCache 之前——下面读 features.LyricsDir 要用到。
+	// loadEnrichCache 之前——下面读 features().LyricsDir 要用到。
 	// 常驻路径才加单实例锁(上面的一次性子命令都在更早的分支里 return 了,不受影响)。
 	// 拿不到锁说明已有实例在跑:退出码 0,launchd 的 KeepAlive 会按自己的节流重试,
 	// 等旧实例真退了再接管。
@@ -242,7 +240,7 @@ func main() {
 	// 把它们展开进包级变量),改了要重启才算数。
 	setLastfmExcludePath(featureFlagsPath)
 	setLyricSourcesPath(featureFlagsPath)
-	// (删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features.Players)`。
+	// (删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features().Players)`。
 	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
 	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
 	//  顺带,原注释那句"换播放器本来就要重启 collector"对多选年代也不成立了。)
@@ -254,15 +252,15 @@ func main() {
 	// 用户校准过歌词时间轴的曲目名单(App 侧写、这边只读),见 lyricspins.go。刻意不在
 	// 这里读一次就完 —— lyricsPinned 每次按 mtime 自己判断要不要重读。
 	lyricsPinsPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lyrics-pins.json")
-	// MB 主名(本名 ↔ 艺名)那份缓存,见 musicBrainzPrimaryArtistName。
+	// MB 主名(本名 与 艺名)那份缓存,见 musicBrainzPrimaryArtistName。
 	loadMBPrimaryNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-primary-cache.json"))
-	// Apple 目录曲目 ID → 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
+	// Apple 目录曲目 ID 到 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
 	// 条目,见 applecatalog.go。
 	loadAppleCatalogCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-catalog-cache.json"))
 	loadMotionCoverCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-motion-cover-cache.json"))
-	// "艺人|专辑" → Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
+	// "艺人|专辑" 到 Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
 	loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-artist-cache.json"))
-	// "艺人|专辑|曲名" → 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
+	// "艺人|专辑|曲名" 到 这一条录音在原产地商店的曲名,见 appleStorefrontCanonicalTitle。
 	loadAppleStorefrontTitleCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-title-cache.json"))
 	// 播放器没报专辑名时从 Apple 目录反查到的专辑(key = 署名|曲名|整秒时长),见 albumhint.go appleAlbumHint。
 	loadAppleAlbumHintCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-album-hint-cache.json"))
@@ -291,14 +289,14 @@ func main() {
 	// 暴露成一项用户配置。
 	deviceArtworkDir = filepath.Join(filepath.Dir(*cfgPath), "artwork")
 	// 这些设备封面同时要托管到状态中继上,否则推给网页/ListenBrainz 的是别的机器
-	// 根本读不到的 file:// 本地路径(现象是「网页上没有封面了」)。
+	// 根本读不到的 file:// 本地路径,网页上就会没有封面。
 	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
 	artworkRelayURL, artworkRelayToken = cfg.StateRelayURL, cfg.StateRelayToken
 	// 只为网页算的东西(封面主色)据此整体跳过,见 relay.go 的 webRelayURL 头注。
 	webRelayURL = cfg.StateRelayURL
 	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
-	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
+	// 又要在 lyricsDir() 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
 	// 「配置搬家」带过来的决策数据(enrich 缓存的非歌词字段),见 enrichrestore.go 头注。
 	// 位置有三条硬约束:要在 loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
 	// migrateEnrichKeys 之前(备份里的 key 是导出那台机器当时的写法,得跟着一起归一化)、
@@ -345,12 +343,12 @@ func main() {
 	// 「智能」档的编目判定缓存(见 lastfmcatalog.go)。必须在 lastfmScrobblerIfEnabled
 	// 之前设好 —— 匹配器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
 	lastfmCatalogPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-catalog.json")
-	// collector→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
+	// collector到App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
 	// recenttracks 落盘,App 读它代替自己直连轮询。
 	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")
-	// 回填子命令→常驻进程的"feed 提前拉一次"信号文件(见 lastfmfeed.go lastfmFeedNudgePath)。
+	// 回填子命令到常驻进程的"feed 提前拉一次"信号文件(见 lastfmfeed.go lastfmFeedNudgePath)。
 	lastfmFeedNudgePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-feed-nudge")
-	// collector→App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
+	// collector到App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边

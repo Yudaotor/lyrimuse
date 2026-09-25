@@ -4,9 +4,9 @@ import Foundation
 /// 测试按钮(`LyricSourceTestService`/`SettingsView.sourceAccessoryTooltip`)、"联网搜索
 /// 候选歌词"弹窗的"歌词源可用情况"明细(`LyricsSearchService`/`LyricsSearchSheet`)。
 ///
-/// 从**自然语言文案**改成**稳定代码**(现象是"英文界面下这段提示还是中文"
-/// 才发现的:collector 那几个 `xxxSetLastFailureReason` 原来写的是硬编码中文句子,经
-/// 共享 JSON 原样传到这里直接显示,完全绕开了这个仓库统一走的 `L10n.t()` 本地化机制)。
+/// 从**自然语言文案**改成**稳定代码**:collector 那几个 `xxxSetLastFailureReason` 原来
+/// 写的是硬编码中文句子,经共享 JSON 原样传到这里直接显示,绕开了这个仓库统一走的
+/// `L10n.t()` 本地化机制。
 /// collector 只负责识别"是哪一种已知失败模式"、吐出一个稳定代码(见 collector 侧
 /// `lyricsourcefailure.go`),这里负责把代码翻成人话——两侧必须同步维护:collector 加一个
 /// 新代码,这个 `switch` 也要补一个 case,漏了的后果是界面显示一串谁都看不懂的代码本身
@@ -23,12 +23,12 @@ enum LyricSourceFailureReason {
         case "deezer_auth_failed":
             // Deezer 取词要先从 auth.deezer.com 换一张匿名 JWT(不需要账号),这一步没换到。
             // 这是这一路目前**唯一**实测见过的失败模式——"这首歌没有歌词"是正常结果、
-            // 不会报到这里来。⚠️ 这个 case 曾经是 deezer_region_restricted,那是误判:
+            // 不会报到这里来。 这个 case 曾经是 deezer_region_restricted,那是误判:
             // 当时走的旧接口对任何歌都回 "No lyrics id ... and country XX",换出口到别的
             // 国家照样如此,真因是那条接口废了,见 collector/deezer.go 头注。
             return L10n.t("Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）")
         case "applemusic_not_connected":
-            // ⚠️ 这一条不是故障:Apple Music 的歌词端点只认订阅用户的 media-user-token,
+            // 这一条不是故障:Apple Music 的歌词端点只认订阅用户的 media-user-token,
             // 用户还没在设置里连过账号时就是这个码。文案要指路,不要像别的码那样报"失败"。
             return L10n.t("还没有连接 Apple Music——在「歌词来源」卡片底部点「连接」登录一次即可（需要 Apple Music 订阅）")
         case "applemusic_token_rejected":
@@ -37,14 +37,14 @@ enum LyricSourceFailureReason {
         case "applemusic_no_developer_token":
             return L10n.t("取不到 Apple Music 接口的公共访问令牌（music.apple.com 拉不通）——多半是网络问题，稍后重试通常会恢复")
         case "soda_endpoint_changed":
-            // ⚠️ 这一条报的是**接口本身变了**,不是"这首歌没词"。汽水的取词走的是给搜索
+            // 这一条报的是**接口本身变了**,不是"这首歌没词"。汽水的取词走的是给搜索
             // 引擎爬的 SEO 端点、不是稳定契约(同一客户端的 PC 接口已经整个下线过一次),
             // 所以它改了形状要能说出来,而不是退化成"汽水一直没有歌词"。
             // 另外两种结局都不会走到这里:曲库里有这首歌但没给词(正常结果)、这首没用汽水
             // 放过所以取不到曲目 id(这一路的常态)。
             return L10n.t("汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好")
         case "musixmatch_direct_blocked":
-            // ⚠️ 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
+            // 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
             // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。实测
             // 这台机器直连 apic-appmobile.musixmatch.com 那两个 AWS 地址 100% ICMP 丢包、
             // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
@@ -52,9 +52,8 @@ enum LyricSourceFailureReason {
             return L10n.t("Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复")
         // 下面四个是传输层通用代码(collector 侧 sourcebreaker.go 最后一节的
         // classifyLyricSourceTransportFailure + searchcli.go 派生的 upstream_unreachable),任何源都
-        // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"。起因是现象是「派对后派对
-        // 搜不到」:公司 VPN 下发的 DNS 对六个歌词源的域名一律不答、请求 2ms 内就死在解析这一步,
-        // 弹窗却说「九个源都没找到可用的候选」。这四个只在具体代码(上面四个)都没命中时才会出现,
+        // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"——跟"曲库里确实
+        // 没有这首歌"是两回事,不能把"连不上"报成"没收录"。这四个只在具体代码(上面四个)都没命中时才会出现,
         // 见 searchcli.go 的 lyricSourceFailureReasons。
         case "dns_failed":
             return L10n.t("域名解析失败（DNS），请求根本没发出去——常见于 VPN / 公司网络接管了 DNS；浏览器能开网页不代表这里能通")

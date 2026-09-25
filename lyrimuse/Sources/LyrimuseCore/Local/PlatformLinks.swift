@@ -11,7 +11,7 @@ import Foundation
 /// 加 Spotify 曲目页(`spotify_track_id`,见 `spotifySong`),同时简介面板那行改成只显示
 /// **当前播放器自己那个平台**的歌曲页(`songLink(forPlayerBundleID:webPlatformID:)`),不再全铺。
 ///
-/// ⚠️ 落地位置不一样,文案必须分开写:
+/// 落地位置不一样,文案必须分开写:
 /// - Apple Music 那条能改写成 `music://`,**在 Music.app 里原生打开**;
 /// - Spotify 给的是 `open.spotify.com` 网页链接(进 App 的深链是菜单里「在 Spotify 中显示」那条,
 ///   `SpotifyReveal`),这里不抢它的活;
@@ -55,12 +55,12 @@ public struct PlatformLinks: Sendable, Equatable {
     /// **当前播放器自己那个平台**上这首歌的歌曲页(规则:简介面板的「网页」行
     /// 只显示对应播放器的,不再把三个平台全铺开)。
     ///
-    /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →
-    ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)→ Spotify 曲目页。
-    /// - 酷狗 / YouTube Music / 认不出来的播放器 → nil:collector 没存酷狗歌曲页(酷狗网页版能开的只有
+    /// - Apple Music 播放 到 Apple Music 曲目页(`music://`,进 App);QQ 音乐 到 QQ 歌曲页;网易云 到
+    ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)到 Spotify 曲目页。
+    /// - 酷狗 / YouTube Music / 认不出来的播放器 到 nil:collector 没存酷狗歌曲页(酷狗网页版能开的只有
     ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),YouTube
     ///   Music 压根没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
-    /// - 播放器认得出但这首歌在它那个平台上没链接(网易云版权下架的周杰伦、QQ 只有搜索兜底)→ 同样 nil。
+    /// - 播放器认得出但这首歌在它那个平台上没链接(网易云版权下架的周杰伦、QQ 只有搜索兜底)到 同样 nil。
     ///
     /// `webPlatformID` 是 `BrowserPositionProbe.playingPlatformID(forBundleID:)` 的结果(浏览器在放哪个
     /// 网页音乐平台),优先于 bundle id 判 —— 浏览器的 bundle id 本身不对应任何平台。
@@ -90,7 +90,7 @@ public struct PlatformLinks: Sendable, Equatable {
     /// `qq_music_url` 有两档:真·歌曲页 `…/n/ryqq/songDetail/<mid>`,和 smartbox 查不到
     /// 时拼的**搜索页兜底**。判据与 collector 的 `isQQSearchFallbackURL` 同源(qq.go:49-54)。
     ///
-    /// ⚠️ 必须区分:把兜底链接当"这首歌的页面"给出去,用户点了会被丢到一个搜索结果页,
+    /// 必须区分:把兜底链接当"这首歌的页面"给出去,用户点了会被丢到一个搜索结果页,
     /// 还得自己再点一次 —— 那不该叫「歌曲页」。本机实测 565 条里有 40 条是这一档。
     public static func isQQSearchFallback(_ raw: String) -> Bool {
         raw.hasPrefix("https://y.qq.com/n/ryqq/search?")

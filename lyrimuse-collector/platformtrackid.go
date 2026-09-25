@@ -26,7 +26,7 @@ import (
 // `kMRMediaRemoteNowPlayingInfoUniqueIdentifier`,Spotify 的来自换曲那一拍本来就要跑的
 // 那次 AppleScript(见 spotifytrack.go)。
 //
-// ⚠️ **Apple 那个 ID 必须先过校验**。`UniqueIdentifier` 只有在放 Apple Music **目录**曲目时
+// **Apple 那个 ID 必须先过校验**。`UniqueIdentifier` 只有在放 Apple Music **目录**曲目时
 // 才是目录 ID,本地导入的文件放的是任意 64 位持久 ID(可以是负数)。不校验就拿去查,最好的
 // 结果是白发一个 404,最坏是撞上某个真实目录 ID、把**别人的歌词**安到这首歌上。所以写入点
 // 只有一处:system.go 里 `appleCatalogAnchor` 判定通过之后(那道守卫要求曲目名逐字同名、
@@ -36,7 +36,7 @@ import (
 //
 // 读侧在 `fetchScoredLyricCandidatesStreaming` 的 amll goroutine 里,那条路径不持 enrichMu;
 // 写侧一个在 system.go(不持)、一个在 noteSpotifyTrackID 里(持)。自带锁之后锁序只可能是
-// enrichMu → 这把,不存在反向,不会成环。
+// enrichMu 到 这把,不存在反向,不会成环。
 type playbackTrackIDs struct {
 	appleCatalogID string
 	spotifyTrackID string
@@ -53,7 +53,7 @@ const playbackTrackIDHintCap = 512
 
 // notePlayingAppleCatalogID 记下「正在播的这首歌是 Apple 目录里的哪一条」。
 //
-// ⚠️ 调用方必须**已经过 appleCatalogAnchor 校验**,理由见文件头注。trackID <= 0 一律不记:
+// 调用方必须**已经过 appleCatalogAnchor 校验**,理由见文件头注。trackID <= 0 一律不记:
 // 本地导入文件的持久 ID 可以是负数,那不是目录 ID。
 func notePlayingAppleCatalogID(artist, title, album string, trackID int64) {
 	if title == "" || trackID <= 0 {
@@ -94,7 +94,7 @@ func notePlaybackTrackID(key string, set func(*playbackTrackIDs)) {
 
 // playbackTrackIDsFor 读回这首歌的两个 ID。没记过就给两个空串,调用方据此跳过对应的直取。
 //
-// ⚠️ 别名轮 / 拆分身份轮拿**改写过的**署名或曲名来调用(见 enrich.go 那几轮),那时这里
+// 别名轮 / 拆分身份轮拿**改写过的**署名或曲名来调用(见 enrich.go 那几轮),那时这里
 // 必然落空、退回只用 ncm/qq 的老行为 —— 这是有意的:提示说的是「系统报的这一条录音」,
 // 换了身份之后它就不再对应同一条了,宁可不给也不能给错。
 func playbackTrackIDsFor(artist, title, album string) (appleCatalogID, spotifyTrackID string) {

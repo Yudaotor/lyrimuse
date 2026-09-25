@@ -47,7 +47,7 @@ func TestLyricsEmptyInCacheFile(t *testing.T) {
 		}
 	}
 
-	// 读不出来 / 解析不动 → known=false,调用方按最保守的那一支走(等同改动之前)
+	// 读不出来 / 解析不动 到 known=false,调用方按最保守的那一支走(等同改动之前)
 	if _, known := lyricsEmptyInCacheFile(filepath.Join(dir, "nope.json"), "a", "b", "c"); known {
 		t.Errorf("文件不存在时 known 必须为 false")
 	}
@@ -58,7 +58,7 @@ func TestLyricsEmptyInCacheFile(t *testing.T) {
 	if _, known := lyricsEmptyInCacheFile(broken, "a", "b", "c"); known {
 		t.Errorf("解析不动时 known 必须为 false")
 	}
-	// ⚠️ 只读:不许把坏文件挪成 .corrupt(loadEnrichCache 会那么做,这条路径绝不能)
+	// 只读:不许把坏文件挪成 .corrupt(loadEnrichCache 会那么做,这条路径绝不能)
 	if _, err := os.Stat(broken + ".corrupt"); err == nil {
 		t.Errorf("lyricsEmptyInCacheFile 不得有任何副作用,却把文件挪成了 .corrupt")
 	}

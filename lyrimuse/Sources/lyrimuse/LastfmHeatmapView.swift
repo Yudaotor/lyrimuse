@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Last.fm 播放热力图(GitHub 贡献图风格):列=周、行=周一到周日、色深=当日播放量。
-/// 挂在「档案卡」右上角日历按钮的 popover 里(见 LastfmStatsSection.statsCard)。
+/// 画在「足迹」段第一张卡的卡身里(见 LastfmStatsSection.heatmapCard),卡头那颗年份
+/// 选择器改的就是 `year`。
 ///
 /// 数据是 LastfmStatsService.dailyCounts(本地时区的天粒度桶,全量历史缓存+增量同步,
 /// 见 refreshDailyCounts 注释)。这里只做展示:按年切片、算色阶、排格子。
@@ -77,8 +78,8 @@ struct LastfmHeatmapView: View {
         let weeks = weekColumns(year: year)
         let thresholds = levelThresholds(year: year)
         return VStack(alignment: .leading, spacing: 3) {
-            // 月份标签行:在包含每月 1 号的那一列上方标注。标签宽度超出 11pt 列宽,靠
-            // fixedSize 溢出绘制、不推挤布局;相邻月至少隔 4 列(28pt),不会叠字。
+            // 月份标签行:在包含每月 1 号的那一列上方标注。标签宽度超出列宽,靠
+            // fixedSize 溢出绘制、不推挤布局;相邻月至少隔 4 列,不会叠字。
             HStack(spacing: Self.cellGap) {
                 ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
                     Text(week.monthLabel ?? " ")

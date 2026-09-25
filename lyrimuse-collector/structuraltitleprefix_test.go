@@ -26,7 +26,7 @@ func TestStripStructuralTitlePrefix(t *testing.T) {
 		{"组曲：流沙 / 天天 (Live)", "流沙 / 天天 (Live)"},         // 全角冒号
 		{"Medley：Full-width colon", "Full-width colon"}, // 全角冒号对拉丁标签同样生效
 
-		// ⚠️ 不在白名单里的一律原样返回 —— 否则 "Foo: Bar" 会被切成 "Bar"、
+		// 不在白名单里的一律原样返回 —— 否则 "Foo: Bar" 会被切成 "Bar"、
 		// 跟另一首真叫 "Bar" 的歌混为一谈。
 		{"Foo: Bar", "Foo: Bar"},
 		{"Medleys: X", "Medleys: X"}, // 要求整段相等，不是前缀
@@ -53,7 +53,7 @@ func TestSearchTitleVariantsStructuralPrefix(t *testing.T) {
 		// 本次新增:裸曲名优先,原样标题留作兜底。
 		{medleyLocal, []string{"Greatdayndamornin' / Booty", medleyLocal}},
 
-		// 陶喆串烧:带 (Live) 这个版本限定词 → 原样标题优先(见 searchTitleVariants
+		// 陶喆串烧:带 (Live) 这个版本限定词 到 原样标题优先(见 searchTitleVariants
 		// 注释的①档),去前缀的裸名紧跟在后 —— 网易云曲库里就叫那个、时长 329.0s 对
 		// 本地 328.992s。没这个变体的话十个源全 0 条。
 		{"组曲: 火鸟功 / 我太傻 / Melody (Live)", []string{
@@ -62,11 +62,11 @@ func TestSearchTitleVariantsStructuralPrefix(t *testing.T) {
 			"组曲: 火鸟功 / 我太傻 / Melody",
 		}},
 
-		// ⚠️ 下面这些是改动前就有的行为,不能被改坏。
+		// 下面这些是改动前就有的行为,不能被改坏。
 		{"Automatic (Remastered 2014)", []string{"Automatic", "Automatic (Remastered 2014)"}},
-		// 版本限定词(另一次录音)→ 原样标题优先,见 searchTitleVariants 注释。
+		// 版本限定词(另一次录音)到 原样标题优先,见 searchTitleVariants 注释。
 		{"Billie Jean (Single Version)", []string{"Billie Jean (Single Version)", "Billie Jean"}},
-		// 没有任何装饰 → 只有一个变体,不多打请求。
+		// 没有任何装饰 到 只有一个变体,不多打请求。
 		{"Voodoo", []string{"Voodoo"}},
 		{"Foo: Bar", []string{"Foo: Bar"}},
 	}
@@ -88,7 +88,7 @@ func TestLyricTitleAcceptedStructuralPrefix(t *testing.T) {
 		{"Greatdayndamornin' / Booty", medleyLocal, true, "斜杠两边带空格的写法"},
 		{medleyLocal, "Greatdayndamornin'/Booty", true, "反向(前缀在候选那一侧)"},
 
-		// ⚠️ 最关键的回归守卫:这一条**不能**变成子串包含。
+		// 最关键的回归守卫:这一条**不能**变成子串包含。
 		// lyricTitleAccepted 的注释把这个定时炸弹写得很清楚。
 		{"Real Love", "Real Love Baby", false, "子串,但两边都没有结构性前缀可砍"},
 		{"Booty", medleyLocal, false, "串烧里的半首歌不算这首歌"},

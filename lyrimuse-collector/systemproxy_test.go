@@ -38,7 +38,7 @@ func TestParseSCUtilProxyRealSample(t *testing.T) {
 	if u.Host != "127.0.0.1:7897" {
 		t.Errorf("Host = %q, 期望 127.0.0.1:7897", u.Host)
 	}
-	// ⚠️ 这一条是这个解析器最容易写错的地方:HTTPSProxy 说的是"给 https 流量用的代理",
+	// 这一条是这个解析器最容易写错的地方:HTTPSProxy 说的是"给 https 流量用的代理",
 	// 不是"用 https 连代理"。写成 https:// 会让 Go 先去跟本机 Clash 做一次 TLS,而那个
 	// 端口不说 TLS,整条兜底路径直接握手失败 —— 而且失败得很像"代理本身坏了"。
 	if u.Scheme != "http" {

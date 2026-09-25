@@ -105,7 +105,7 @@ func TestQQLocalMatchRejectsDurationMismatch(t *testing.T) {
 	if m, ok := qqLocalMatch(context.Background(), "周杰伦", "西西里", "", 300); ok {
 		t.Fatalf("时长差 >12%% 不该命中,却给了 %+v", m)
 	}
-	// 播放器没报时长(0)时 sourceDurationFits 不下结论 → 照常命中。
+	// 播放器没报时长(0)时 sourceDurationFits 不下结论 到 照常命中。
 	if _, ok := qqLocalMatch(context.Background(), "周杰伦", "西西里", "", 0); !ok {
 		t.Fatal("时长未知时应当命中")
 	}
@@ -147,7 +147,7 @@ func TestQQLocalMatchNeedsArtist(t *testing.T) {
 func TestQueryQQLocalSongsEmptyResultIsNotAnError(t *testing.T) {
 	path := writeTestQQDB(t, nil) // 建了表但一行没有
 	rows, err := queryQQLocalSongs(context.Background(), path)
-	// ⚠️ sqlite3 -json 对零行输出的是**空串**不是 "[]";当成 JSON 错误的话,"库里没这首歌"
+	// sqlite3 -json 对零行输出的是**空串**不是 "[]";当成 JSON 错误的话,"库里没这首歌"
 	// 会被错记成"读库失败",进而让 refresh 保留陈旧索引。
 	if err != nil {
 		t.Fatalf("零行结果不该报错: %v", err)

@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-// 上送写法由三个布尔决定(features.LastfmMatchArtist / Track / FirstArtistOnly,
+// 上送写法由三个布尔决定(features().LastfmMatchArtist / Track / FirstArtistOnly,
 // 档位在 resolveLastfmMatch 那边就摊平了)。这里用 nil 匹配器跑,只考察**不联网的那一半**:
 //
-//  1. 三个布尔全 false(「原始」档)→ 歌手曲名一个字都不动。
-//  2. 只开截断 → 纯字符串取第一位(firstCreditedArtist),结果可复现、不打网络。
+//  1. 三个布尔全 false(「原始」档)到 歌手曲名一个字都不动。
+//  2. 只开截断 到 纯字符串取第一位(firstCreditedArtist),结果可复现、不打网络。
 //  3. **曲名永远不会被截断那一路碰**。
 //  4. 匹配器为 nil(没配只读 api_key)时开着匹配也不能 panic,退化成原样。
 func TestResolveScrobbleTags(t *testing.T) {
@@ -31,7 +31,7 @@ func TestResolveScrobbleTags(t *testing.T) {
 		// 这里确认截断那一路仍然走的是那套带守卫的判断,不是裸切。
 		{"只发第一位:K/DA 不能被劈成 K", false, false, true, "K/DA", "K/DA"},
 		{"匹配器为 nil:开着匹配也原样发", true, true, false, "Khalil Fong & Fiona Sit", "Khalil Fong & Fiona Sit"},
-		// 匹配器为 nil 时匹配不成立 ⇒ 截断照样兜底(它本来就只在没匹配到时应用)。
+		// 匹配器为 nil 时匹配不成立 到 截断照样兜底(它本来就只在没匹配到时应用)。
 		{"匹配器为 nil + 只发第一位:仍截断", true, true, true, "Khalil Fong & Fiona Sit", "Khalil Fong"},
 		{"空串原样返回", false, false, true, "", ""},
 	}
@@ -52,8 +52,8 @@ func TestResolveScrobbleTags(t *testing.T) {
 // 和**两级遗留迁移链**一起钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和
 // LastfmMatchMode 的 rawValue(那边最容易漏)。
 //
-// ⚠️ 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
-// 旧 first → 自定义且只开截断(⇒ 照旧不打网络)。这几条错一条,就是在老用户不知情的
+// 迁移表的承诺是**行为逐字不变**:旧 smart 到 智能、旧 all 到 原始、
+// 旧 first 到 自定义且只开截断(到 照旧不打网络)。这几条错一条,就是在老用户不知情的
 // 情况下改了往 Last.fm 写的内容,而 scrobble 落进去基本删不掉。
 func TestLastfmMatchModeFlagRoundTrip(t *testing.T) {
 	const key = "lastfm_match_mode"
@@ -161,7 +161,7 @@ func TestCleanMediaTagScope(t *testing.T) {
 }
 
 // 短曲目闸:Last.fm 官方规则 "longer than 30 seconds" 默认照做,用户显式打开
-// features.ScrobbleShortTracks 才放行。三条不变量:曲长未知不拦;放行不影响半程规则(那在
+// features().ScrobbleShortTracks 才放行。三条不变量:曲长未知不拦;放行不影响半程规则(那在
 // listenThreshold);恰好 30 秒按既有口径放行(跟官方 "> 30" 差这一秒,历史行为,别顺手改)。
 func TestTooShortToScrobble(t *testing.T) {
 	saved := features.ScrobbleShortTracks

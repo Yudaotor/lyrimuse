@@ -44,7 +44,7 @@ final class ImageMemoryCache {
     private static let failureTTL: TimeInterval = 10 * 60
     private static let failureCap = 512
 
-    /// 正在下载中的 URL → 共享的加载任务。没有它的话同一个 URL 出现在 N 行就是 N 个
+    /// 正在下载中的 URL 到 共享的加载任务。没有它的话同一个 URL 出现在 N 行就是 N 个
     /// 并发请求 + N 次解码:URLCache 不合并并发的同 URL 请求(第一个还没写回,后面全 miss),
     /// 冷缓存时是真发 N 次网络(审阅坐实)。
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
@@ -58,7 +58,7 @@ final class ImageMemoryCache {
     }
 
     func store(_ image: NSImage, for url: URL, variant: Variant = .thumbnail) {
-        // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰。⚠️ 按**像素**算,不是
+        // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰。 按**像素**算,不是
         // NSImage.size 的点数:带 DPI 标签的 JPEG(Spotify 图床原图是 797 dpi)2000² 像素的图 size 只有
         // 181 点,按点算会把一张 16MB 的解码图记成 131KB,整个 48MB 预算形同虚设。
         let cost = max(1, image.pixelWidth * image.pixelHeight * 4)
@@ -157,7 +157,7 @@ struct CachedImage<Placeholder: View>: View {
             }
             // init 已经用缓存值做过初值:命中时这里再赋一次同样的对象,只会白白多触发
             // 一次 body 求值(@State 的 setter 不比较引用),所以先看有没有必要。
-            // ⚠️ 早退前必须把缓存值写回 @State(对抗核实抓出的既有 bug):同一
+            // 早退前必须把缓存值写回 @State(对抗核实抓出的既有 bug):同一
             // 视图身份下 url 变化且新 url 恰好已在缓存时,image 里还是旧 url 的图——直接
             // return 会把错图一直挂到视图身份重建。同引用赋值的那次多余 body 求值靠下面
             // 的 !== 判断挡住。
@@ -184,7 +184,7 @@ struct CachedImage<Placeholder: View>: View {
     /// 尺寸,不把原图整张解出来再缩(那样峰值内存/CPU 还是原图的);拿不到缩略图
     /// (罕见格式)退回整图解码,行为不变。
     private static func load(_ url: URL, maxPixel: CGFloat?) async -> NSImage? {
-        // ⚠️ 这里记的是"这个函数被调用了几次",不是"真的上网发了几次请求"——命中
+        // 这里记的是"这个函数被调用了几次",不是"真的上网发了几次请求"——命中
         // URLCache.shared 时字节从本地缓存出、根本不上网,而 URLSession 的这个便捷 API
         // 不暴露"这次是不是缓存命中"的信号(要拿到得换成带 URLSessionTaskDelegate 的
         // session,收 URLSessionTaskMetrics.resourceFetchType,对这一个调用点不值得

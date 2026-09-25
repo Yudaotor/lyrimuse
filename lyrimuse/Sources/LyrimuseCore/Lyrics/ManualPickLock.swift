@@ -12,14 +12,16 @@ public enum ManualPickLock {
     /// 把一份 LRC 归一化成"只剩词"的形态:逐行剥掉开头所有 `[...]` 方括号组(行时间戳、
     /// `[ti:]/[ar:]/[al:]/[by:]/[offset:]` 这些元数据标签)、去掉首尾空白、丢掉空行。
     ///
-    /// ⚠️ 这一步是整个指纹的要害,不是"顺手清理一下"。见 fingerprint 的头注。
+    /// 这一步是整个指纹的要害,不是"顺手清理一下"。见 fingerprint 的头注。
     ///
     /// Go 侧 manualPickCanonicalLyrics 必须逐字节一致(TestManualPickFingerprintMatchesSwift
-    /// ↔ selftest 的金标准断言把两边钉在一起)。空白判定两边都取 Unicode 全集(Go 的
-    /// strings.TrimSpace / Swift 的 .whitespacesAndNewlines),这样 CRLF、NBSP 这些也一致。
+    /// 与 selftest 的金标准断言把两边钉在一起)。整段按 Unicode 标量处理、去空白用
+    /// `GoStringSemantics.trimSpace`(Go `strings.TrimSpace` 口径):`.whitespacesAndNewlines` 会把
+    /// U+200B 也裁掉,`hasPrefix("[")` / `firstIndex(of: "]")` 按字素簇走、括号后面跟组合符就匹配不上,
+    /// 两边指纹会因此漂开。
     public static func canonicalLyrics(_ lyrics: String) -> String {
         var out: [String] = []
-        // ⚠️ 必须按 **Unicode 标量** 切,不能用 `lyrics.split(separator: "\n")`。Swift 的
+        // 必须按 **Unicode 标量** 切,不能用 `lyrics.split(separator: "\n")`。Swift 的
         // Character 是字素簇,而 **`\r\n` 是单个字素簇**,跟 `"\n"` 不相等 —— 按 Character
         // 切的话 CRLF 歌词整段不分行,Go 侧(按字节 0x0A 切)却分得好好的,两边指纹当场漂开。
         // 金标准断言当场逮住的就是这个;而这类源里 CRLF 一点都不罕见(见
@@ -43,7 +45,7 @@ public enum ManualPickLock {
     ///
     /// # 只对"词"取指纹,不含时间戳、不含 YRC
     ///
-    /// ⚠️ 指纹**不能**取 `SHA256(lyrics + "\x01" + yrc)` 这种整份原始字节 —— 用真实
+    /// 指纹**不能**取 `SHA256(lyrics + "\x01" + yrc)` 这种整份原始字节 —— 用真实
     /// 使用数据抓到它**根本不成立**:采纳完 saveEdit 会立刻重启 collector,而 collector 启动
     /// 时那几道规范化会重写内容 ——
     ///   - `migrateYRCWhitespaceTokens` 重排逐字词条,**没有 ManualLyrics 闸**,锁没锁都跑;
@@ -54,9 +56,9 @@ public enum ManualPickLock {
     ///
     /// 根因是把问题定义错了:要回答的是**"自动路径有没有把用户选的那份换掉"**,而不是
     /// "字节有没有变"。**规范化不是替换** —— 词一个没动,只是格式被重排了。所以指纹只取词:
-    ///   - 重排时间轴 / 合并空白词条 / 补出 YRC → 词不变 → 仍算"还是他选的那份"(而这些
+    ///   - 重排时间轴 / 合并空白词条 / 补出 YRC 到 词不变 到 仍算"还是他选的那份"(而这些
     ///     恰恰是用户会想连着一起锁住的改进);
-    ///   - 换成另一个源、或同源给了一份词不一样的版本 → 词变了 → 正确判成"已被换掉"。
+    ///   - 换成另一个源、或同源给了一份词不一样的版本 到 词变了 到 正确判成"已被换掉"。
     /// 代价(接受):另一个源恰好给出**逐字相同**的词时也会算匹配 —— 但那种情况下当前内容
     /// 跟他选的那份逐字一样,锁住它没有任何坏处。
     ///
@@ -71,7 +73,7 @@ public enum ManualPickLock {
     /// **需要**能改。
     public static func fingerprint(lyrics: String) -> String {
         let canonical = canonicalLyrics(lyrics)
-        // 空 → 没有内容可指纹。返回空串而不是空串的哈希:空串在调用方那里就是"没有留痕",
+        // 空 到 没有内容可指纹。返回空串而不是空串的哈希:空串在调用方那里就是"没有留痕",
         // 不能让"这首歌根本没歌词"意外匹配上另一首同样没歌词的。
         guard !canonical.isEmpty else { return "" }
         let digest = SHA256.hash(data: Data(canonical.utf8))

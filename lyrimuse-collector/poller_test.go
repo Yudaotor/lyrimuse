@@ -117,7 +117,7 @@ func TestNaturalAdvanceCorrection(t *testing.T) {
 		wantOK             bool
 		wantSeed, wantBias float64
 	}{
-		// 实测样本(Forever Love→在那遙遠的地方):元数据提前 0.837s,首笔读数 0.048,
+		// 实测样本(Forever Love到在那遙遠的地方):元数据提前 0.837s,首笔读数 0.048,
 		// 整曲恒定偏置 +0.885s。
 		{"measured real transition", 0.048, -0.837, true, -0.837, 0.885},
 		// 元数据晚于真声切换(overrun 为正)同样成立:真值=越界量。
@@ -151,7 +151,7 @@ func TestNaturalAdvanceCorrection(t *testing.T) {
 
 // 端到端走 updatePosition:自然切歌按旧曲连续性播种(允许负值,发布口钳 0),之后稳定
 // 播放不再超前;真实 seek 清偏置改信原始读数。时间线:旧曲时长 293s,t=10 时跟踪到
-// 290s → 真声应在 t=13 结束;Spotify 在 t=12.1 提前切元数据并打锚(超前 0.9s),采集器
+// 290s 到 真声应在 t=13 结束;Spotify 在 t=12.1 提前切元数据并打锚(超前 0.9s),采集器
 // t=12.5 发现换歌,此刻原始读数=锚点年龄 0.4s、连续性真值=-0.5s(旧曲还剩 0.5s)。
 func TestUpdatePosition_NaturalAdvanceSeedsFromContinuity(t *testing.T) {
 	p := &poller{}
@@ -236,7 +236,7 @@ func TestUpdatePosition_PauseSubtractsNaturalAdvanceBias(t *testing.T) {
 	}
 }
 
-// 暂停→恢复(同曲)必须继承偏置:恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,
+// 暂停到恢复(同曲)必须继承偏置:恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,
 // 走 seek 分支清偏置会让恢复后整段重新偏快、且与 App 侧语义相反(对抗审查 high)。
 func TestUpdatePosition_ResumeKeepsNaturalAdvanceBias(t *testing.T) {
 	p := &poller{}

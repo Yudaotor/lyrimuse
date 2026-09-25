@@ -25,8 +25,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// ## 权限
 ///
-/// 要用户在「系统设置 → 隐私与安全性 → 辅助功能」里勾上 Lyrimuse。`isTrusted` 为 false 时不动手、回 `.notTrusted`,
-/// 由调用方 `promptForTrust()` 弹系统那个"想要控制这台电脑"的对话框 + 横幅说明。⚠️ **ad-hoc 签名的构建(build.sh
+/// 要用户在「系统设置 到 隐私与安全性 到 辅助功能」里勾上 Lyrimuse。`isTrusted` 为 false 时不动手、回 `.notTrusted`,
+/// 由调用方 `promptForTrust()` 弹系统那个"想要控制这台电脑"的对话框 + 横幅说明。 **ad-hoc 签名的构建(build.sh
 /// `codesign --sign -`)每次重装 cdhash 都变**,TCC 存的是按 cdhash 的 designated requirement —— 重装之后设置里那个勾
 /// 还在,但 `AXIsProcessTrusted()` 回 false,要用户把勾**取消再勾上**。发布包同样是 ad-hoc(这台机器没有签名证书),
 /// 所以每次升级之后第一次按「跳过广告」都会再提示一次。这是签名方式的限制,不是 bug;换 Developer ID 签名才能根治。
@@ -57,7 +57,7 @@ public enum AccessibilitySkipPress {
     /// 按标题兜底(class 读不到时)。只列实测见过的几种界面语言。
     public static let skipButtonTitles = ["跳过", "略過", "Skip", "スキップ", "건너뛰기"]
 
-    /// 一组 DOM class 里有没有跳过键的(纯函数,selftest 钉着)。⚠️ 排除 `…-slot` / `…-container` / `…-text` /
+    /// 一组 DOM class 里有没有跳过键的(纯函数,selftest 钉着)。 排除 `…-slot` / `…-container` / `…-text` /
     /// `…-icon` 这些包裹 / 子元素 —— 它们的 class 同样以那个前缀开头,但不是 `<button>`;AX 树里它们多半不是 AXButton,
     /// 这里再挡一道。
     public static func matchesSkipClass(_ classes: [String]) -> Bool {
@@ -108,7 +108,7 @@ public enum AccessibilitySkipPress {
             webArea = locateWebArea(appElement, hostMarker: hostMarker)
         }
         guard let webArea else {
-            // ⚠️ 失败时把**看到了什么**记下来 —— 此前只有一句"没找到",而这条链路上"没找到"至少有四种
+            // 失败时把**看到了什么**记下来 —— 此前只有一句"没找到",而这条链路上"没找到"至少有四种
             // 成因(后台标签页 / Chromium 不挂网页树 / AX 查询超时 / 折错了浏览器),一句话里看不出是哪种。
             let windows = children(appElement).filter { role($0) == "AXWindow" }
             var urls: [String] = []

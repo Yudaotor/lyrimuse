@@ -41,7 +41,7 @@ enum MusicAutomationPermission {
     /// `BrowserPositionProbe` 靠 Apple Event 让浏览器执行 JS,跟读 Music.app 播放头是
     /// **同一个** TCC 类别,只是目标换成了 Chrome/Edge/Arc/Safari)。
     ///
-    /// ⚠️ **目标 App 没在运行时问不出来** —— 见 `requestWithTimeout` 上那段的
+    /// **目标 App 没在运行时问不出来** —— 见 `requestWithTimeout` 上那段的
     /// 实测记录:那时 `AECreateDesc` 按 bundle id 解析不到进程,落进下面的 `procNotFound`
     /// 分支被当成"还没问过"静默返回,**系统弹窗压根不出现**。所以 `.notDetermined` 有两种
     /// 完全不同的含义(真没问过 / 目标没跑),调用方要自己用 `isRunning` 区分,别把后者
@@ -79,7 +79,7 @@ enum MusicAutomationPermission {
         }
     }
 
-    // 系统设置里"隐私与安全性 → 自动化"面板——被拒绝后官方没有 API 能再触发一次
+    // 系统设置里"隐私与安全性 到 自动化"面板——被拒绝后官方没有 API 能再触发一次
     // 系统弹窗,只能引导用户自己去这里手动打开;跟 collector 那份权限共用同一个
     // 面板,一个跳转按钮足够覆盖两边的"去看看"需求。
     static var systemSettingsURL: URL {
@@ -139,14 +139,12 @@ enum MusicAutomationPermission {
     // Michael Tsai 博客记录),官方建议是挪到后台线程调,并且要接受"结果可能压根
     // 不会来"这个现实,不能让 UI 死等。
     //
-    // 这里用 withTaskGroup 做"真正的检查 vs 超时"两个子任务的竞速:谁先完成就用谁
-    // 的结果,超时分支赢的话返回 nil(代表"还不确定",不是"已拒绝",不能瞎猜)。
-    // group.cancelAll() 对赢了比赛的另一个任务是"尽力而为"——如果是那个真正卡在
-    // C API 里的检查任务被取消,Swift 的协作式取消对不认取消信号的同步 C 调用没有
-    // 意义,那个线程依然会在后台陪跑下去,只是这次调用不再等它,调用方应该在后续别的
-    // 时机(比如.onAppear、App重新变为前台)用 askIfNeeded:false 再读一次最新状态，
+    // 检查经 `status(...)` 走专用线程,超时返回 nil(代表"还不确定",不是"已拒绝")。
+    // 超时不取消那次系统调用,它可能一直在后台挂着;调用方应该在后续别的时机
+    // (.onAppear、App 重新变为前台)用 askIfNeeded:false 再读一次最新状态,
     // 覆盖"用户后来自己去系统设置手动开了、但这次请求已经放弃等待"这种情况。
     // launchMusicAppIfNeeded 默认 true(SettingsView/OnboardingView 这两个"用户显式点
+    /// 读现状超时(返回 nil)时直接当没权限,不再去请求:那一刻系统查询已经卡住,再请求只会一起卡。
     // 请求权限按钮"的场景需要——不然 Music.app 没在运行时权限弹窗根本不出现,见下面
     // ensureMusicAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
     // 按钮专用)传 false,理由见那边的注释。
@@ -170,6 +168,8 @@ enum MusicAutomationPermission {
         if launchIfNeeded {
             await ensureAppRunning(bundleID: bundleID)
         }
+    // 别换回 withTaskGroup 做超时赛跑:任务组退出前要等所有子任务结束,卡住的检查不返回,
+    // 超时分支赢了也出不来。
         return await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
             group.addTask { check(bundleID: bundleID, askIfNeeded: true) }
             group.addTask {
@@ -198,7 +198,7 @@ enum MusicAutomationPermission {
 
     /// 同 `ensureMusicAppRunning`,目标任意。
     ///
-    /// ⚠️ 这一步会**后台启动别人的 App**(`activates = false`,不抢焦点)。只在用户**显式点了
+    /// 这一步会**后台启动别人的 App**(`activates = false`,不抢焦点)。只在用户**显式点了
     /// "请求授权"**时才调 —— 别把它挂在"配对成功"这种顺带的路径上:用户点的是"把这个浏览器
     /// 加进列表",不是"现在把我的浏览器打开"。
     static func ensureAppRunning(bundleID: String) async {

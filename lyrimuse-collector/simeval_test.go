@@ -252,7 +252,7 @@ func linesTermPoints(terms []scoreTerm) int {
 // `[id:]/[hash:]/[sign:]` 之类的头,加上同一句被逐字断点切成两行(「轻轻敲着」/「黑键和
 // 白键」 vs 「轻轻敲着黑键和白键」),而 netease 在 duration 上是真的更好(243 vs 221)。
 //
-// 量尺照旧(contentMajority → durationVerdict),**不构成自证**:内容多数派是字符 3-gram
+// 量尺照旧(contentMajority 到 durationVerdict),**不构成自证**:内容多数派是字符 3-gram
 // 集合的 Jaccard,`lyricGram3Set` 的头注就写着它"对各源的行切分差异鲁棒",跟行数项量的
 // 东西正交。
 
@@ -353,7 +353,7 @@ type simevalReport struct {
 	// 而后者会让整份报告变成一句空话。加(行数项消融时撞上全 neutral)。
 	YardstickLiveness map[string]int `json:"yardstick_liveness"`
 	// LinesFlipPairs:行数项消融翻盘时,那两条候选**到底差在哪**。三把量尺只有
-	// right/wrong/fit/mismatch 这种粗档,全 right→right 时答不出"是不是其实一份更完整"。
+	// right/wrong/fit/mismatch 这种粗档,全 right到right 时答不出"是不是其实一份更完整"。
 	// 这里逐对量正文规模:原始行数 / 正文行数 / 归一化正文字符数 / 两份正文的 3-gram
 	// Jaccard。复用包内真 helper(lyricConsensusBody / lyricGram3Set / gramJaccard /
 	// contentLineCount),不另写一套归一化。
@@ -398,7 +398,7 @@ func TestSimEval(t *testing.T) {
 
 	// 黄金参照:发货集合算出的每首冠军(见文件头注释)。
 	//
-	// ⚠️ 参照与**这一份样本快照**绑定:fingerprint 记着样本的曲目/候选构成,重采数据后
+	// 参照与**这一份样本快照**绑定:fingerprint 记着样本的曲目/候选构成,重采数据后
 	// 各源返回的候选文本必然漂移,拿旧参照比对会成批报"引擎漂移"的假阳性。指纹对不上
 	// 就只提示、不断言;确认引擎正确后用 SIMEVAL_WRITE_GOLDEN=1 重生成一份新参照。
 	type goldenChamp struct {
@@ -482,7 +482,7 @@ func TestSimEval(t *testing.T) {
 		}
 		tr.canonicalArtist = canonByAT[at]
 
-		// 候选 → lyricCandidate(与 enrich.go 构造方式一致:hasWordTiming = yrc 非空,
+		// 候选 到 lyricCandidate(与 enrich.go 构造方式一致:hasWordTiming = yrc 非空,
 		// usable 标志同 enrich.go 用生产 usableValueAdd 算——netease 的社区译文固定 zh,
 		// 样本里 lyrics_tr_lang 字段就是采集时记下的语言)
 		var batch []lyricCandidate
@@ -660,7 +660,7 @@ func TestSimEval(t *testing.T) {
 		{"creditRatioPenalty", deltaCreditRatioPenalty},
 		{"independentAlbumCorroboration", deltaIndependentAlbumCorroboration},
 		// 追加(《Rumour Has It》案,实现与来龙去脉见 simevaltimeline_test.go):
-		// LRC↔YRC 双向自洽闸。两种判据分开消融、各自扫阈值——endpointGate 是
+		// LRC与YRC 双向自洽闸。两种判据分开消融、各自扫阈值——endpointGate 是
 		// deltaWordTimingCoverage 自洽闸(b)拆出来的单独版本(原维度是组合体,混着测
 		// 答不出"单独接这道闸值不值"),skewGate 是逐行中位偏差的更准判据。
 		{"timelineEndpointGate@10s", deltaTimelineEndpointGate(10)},
@@ -1005,8 +1005,8 @@ func runAblation(tracks []*evalTrack, name string, fn func(tr *evalTrack, i int)
 // ---------- 12 维度 delta 实现(catalog definition 逐条对应) ----------
 
 // rank1 durationAsymmetry 的**剩余**部分(欠覆盖档细分)。overshoot −700 已随 v3 入引擎,
-// 这里只评还没上的③/④档:0.25<r<=0.45 → corroborated?+50:−200;r>0.45 → corroborated?−100:−500。
-// ⚠️ 轮结论:③档减罚对温和截断货过仁慈(In My Room 案),等收窄参数后再评。
+// 这里只评还没上的③/④档:0.25<r<=0.45 到 corroborated?+50:−200;r>0.45 到 corroborated?−100:−500。
+// 轮结论:③档减罚对温和截断货过仁慈(In My Room 案),等收窄参数后再评。
 // delta = 新时长项 − v3 时长项。
 func deltaDurationAsymmetry(tr *evalTrack, i int) int {
 	ec := tr.cands[i]
@@ -1070,7 +1070,7 @@ func deltaWordTimingCoverage(tr *evalTrack, i int) int {
 		if coverage > 1 {
 			coverage = 1
 		}
-		// 自洽闸 (a): 全部词段 start 序列单调率<0.95 → 作废逐字加分资格
+		// 自洽闸 (a): 全部词段 start 序列单调率<0.95 到 作废逐字加分资格
 		if monotonicRatio(st.starts) < 0.95 {
 			coverage = 0
 		}
@@ -1235,7 +1235,7 @@ func deltaArtistIdentityAlignment(tr *evalTrack, i int) int {
 	return -250
 }
 
-// rank8 unverifiableVersionPenalty: 本地带版本限定词 × 候选零元数据 → −150。
+// rank8 unverifiableVersionPenalty: 本地带版本限定词 × 候选零元数据 到 −150。
 func deltaUnverifiableVersionPenalty(tr *evalTrack, i int) int {
 	ec := tr.cands[i]
 	if len(versionTagsIn(tr.lt, tr.lal)) > 0 &&
@@ -1297,7 +1297,7 @@ func deltaCreditRatioPenalty(tr *evalTrack, i int) int {
 }
 
 // rank11 independentAlbumCorroboration: albumAffinity==0 且候选专辑非空时,池内(其它源
-// 非空专辑候选)任一成员 albumScore>=100 → +50(命中即封顶;apple 半边样本无字段不测)。
+// 非空专辑候选)任一成员 albumScore>=100 到 +50(命中即封顶;apple 半边样本无字段不测)。
 func deltaIndependentAlbumCorroboration(tr *evalTrack, i int) int {
 	ec := tr.cands[i]
 	if strings.TrimSpace(ec.c.album) == "" {

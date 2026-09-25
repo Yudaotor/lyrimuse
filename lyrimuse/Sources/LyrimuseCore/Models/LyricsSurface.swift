@@ -16,12 +16,15 @@ public enum LyricsSurface: String, CaseIterable, Hashable, Sendable {
 
     /// 「歌词显示」页当前停在哪一段。写它 = 下次打开设置窗口就停在这一段;设置窗口已经
     /// 开着时也会立刻跟着翻页 —— 那边的 @AppStorage 观察的就是 UserDefaults 本身。
+    ///
+    /// 这个键里的字符串**不止三种形态**:那一页还有第四段「歌词窗口」(rawValue `lyricsWindow`),
+    /// 它不是一个形态,`init(rawValue:)` 对它返回 nil。拿这个键的值往回认形态时要接住 nil。
     public static let appearanceSectionStorageKey = "settings:appearanceSection"
 
     /// 这个形态在「歌词显示」页里对应的分段取值。
     ///
-    /// ⚠️ 必须跟 SettingsView.swift 里 `AppearanceSettingsTab.Section` 的 rawValue 一字
-    /// 不差(那边是 `case overlay, notch, menuBar` 的自动 rawValue)。对不上不会编译报错,
-    /// 只会表现成"长按灵动岛,设置窗口却停在悬浮歌词那一段"。
+    /// 必须跟 SettingsView.swift 里 `AppearanceSettingsTab.Section` 前三个 case 的 rawValue
+    /// 一字不差(那边是 `case overlay, notch, menuBar, lyricsWindow` 的自动 rawValue)。对不上
+    /// 不会编译报错,只会表现成"长按灵动岛,设置窗口却停在悬浮歌词那一段"。
     public var appearanceSectionRawValue: String { rawValue }
 }

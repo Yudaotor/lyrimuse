@@ -1,6 +1,6 @@
 import Foundation
 
-// 缓存 key ↔ lyrics/ 导出文件名之间的换算,以及"这批选中的 key 里哪些真的该删"这类纯逻辑。
+// 缓存 key 与 lyrics/ 导出文件名之间的换算,以及"这批选中的 key 里哪些真的该删"这类纯逻辑。
 //
 // 为什么单独放在 LyrimuseCore 而不是留在 EnrichCacheStore 里:EnrichCacheStore 在 app
 // target(lyrimuse)里、是 @MainActor 单例、构造函数 private,还依赖 FeatureSettingsStore/
@@ -60,17 +60,21 @@ public enum EnrichCacheKeys {
         "reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
         "unplugged", "acappella", "a cappella",
         "interlude", "intro", "outro", "skit", "prelude", "overture",
-        // 真实故障(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"),见
-        // enrichkey.go 的 enrichKeyVersionWords 头注。
+        // "慢板"/"快板"是古典/影视配乐里常见的乐章速度标记,标的是**另一个录音版本**
+        // (跟上面 remix/live/acoustic 同类),不是译名噪音,见 enrichkey.go 的
+        // enrichKeyVersionWords 头注。
         "慢板", "快板",
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
     ]
 
     private static let openBrackets: Set<Character> = ["（", "(", "[", "【"]
+    ///
+    /// 跟 Go 那条正则 `\s*[（(\[【]([^）)\]】]*)[）)\]】]\s*$` 的最左匹配等价:结尾闭括号往前、
+    /// 一直到上一个闭括号为止,取**最靠左**的开括号(括号不配对时不是离结尾最近的那个)。
     private static let closeBrackets: Set<Character> = ["）", ")", "]", "】"]
 
     /// collector 的 cleanMediaTag 的 Swift 版:各种不换行/全角空格折成普通空格,零宽字符
-    /// 删掉,连续空白折成一个并去掉首尾。
+    /// 删掉,连续空白(Go `unicode.IsSpace` 口径)折成一个并去掉首尾。
     public static func cleanTag(_ s: String) -> String {
         let mapped = s.map { c -> Character? in
             switch c {
@@ -135,7 +139,7 @@ public enum EnrichCacheKeys {
 
     /// 文件名 base(不含 .lrc 等后缀)的字节上限。
     ///
-    /// ⚠️ 必须跟 collector/lyricsexport.go 的 `lyricsFilenameMaxBytes` 同值,两边同时改。
+    /// 必须跟 collector/lyricsexport.go 的 `lyricsFilenameMaxBytes` 同值,两边同时改。
     /// 推导在 Go 那边的注释里(255 字节硬上限,减去原子写临时文件的 14 字节和最长后缀
     /// .roma.lrc 的 9 字节,再减去碰撞消歧的 7 字节,取余量到 200)。算不一致的后果是
     /// 删除条目时漏删导出文件,collector 重启跑 importLyricsFromFiles 会按文件头部标签
@@ -231,15 +235,17 @@ public enum EnrichCacheKeys {
 
     /// 把 key 压成"用来判断是不是同一首歌"的宽松形态。跟 collector 的 loosenEnrichKey 对应。
     ///
-    /// ⚠️ 结果**只用于查询兜底**,绝不用来构造 key、绝不用于显示、绝不用于文件名。
+    /// 结果**只用于查询兜底**,绝不用来构造 key、绝不用于显示、绝不用于文件名。
     ///
     /// 这条边界是整套设计的关键。归一化如果写进 **key**,Go 和 Swift 两侧就必须逐字节算出
     /// 同一个结果,否则 collector 按一个 key 写盘、这边按另一个 key 查,表现是「悬浮窗整首歌
-    /// 没词」(lookup 是纯精确命中)。而繁简这一档两侧**本来就做不到一致** —— collector 用
-    /// 内嵌的 OpenCC 词典,这边用 CFStringTransform(ICU),对部分字的取舍不同。
+    /// 没词」(lookup 是纯精确命中)。
     ///
-    /// 放在兜底这一层,不一致的后果就温和得多:某个字没折对,这次兜不到,退化成
-    /// 之前的行为(多一条重复条目),而不是查不到歌词。
+    /// 兜底这一层同样必须与 collector 逐字节一致:collector 按它的宽松 key 复用已有条目、不另建
+    /// 新条目(日志 `reusing existing entry … (loose match)`),这边折不到同一个结果就是整首歌查不到
+    /// 歌词。所以繁简走 `OpenCCT2S`(collector toSimplifiedT2S 的移植,同一份词典),不走 ICU:
+    /// ICU 按上下文取舍,单字层面跟 OpenCC 有上千个字结果不同。步骤同 loosenEnrichKey:繁转简、
+    /// 分隔符折成 `&`、去掉 ASCII 空格、逐标量转小写。
     /// 合 credit 的分隔符,跟 collector 的 `isArtistCreditSep`(match.go)同一份。
     /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 实测:
     /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。

@@ -61,36 +61,39 @@ func cjkRatio(s string) float64 {
 // 原文传错了。本地标签本身就是中文时不适用这条判断(中文歌配中文"原文"歌词完全正常，
 // 不该被当成异常拦下来)。
 //
-// ⚠️ 两道豁免都是补的,起因是同一个真实案例但对症的信号不一样:
-// 现象是「搜索候选歌词」把方大同《南音》的正确候选判成"语言跟这首歌对不上"——Apple
-// Music 本地标签罗马化写成 artist="Khalil Fong" / title="Nanyin",两者都不含汉字。
+// 两道豁免对症的信号不一样。举例:方大同《南音》的正确候选曾被判成"语言跟这首歌
+// 对不上"——Apple Music 本地标签罗马化写成 artist="Khalil Fong" / title="Nanyin",两者都不含汉字。
 // 这首歌本来就是中文歌,只是标签用了罗马化/英文转写,localArtist/localTitle 天生测不出
 // "这首歌是不是中文歌",只能测出"标签写法用的是什么字符集"。
 //
 //   - candidateArtist:候选源自己确认匹配到的那位歌手的名字(qq/kugou/lrclib 等报的是
 //     各源曲库里的写法,候选进打分之前已经过了各源自己的歌手身份闸,见第 09 章"歌手闸
 //     三档")。它本身含汉字,说明候选源认得这位歌手的中文名,这条候选大概率是"这位歌手
-//     的中文歌"而不是"传错语言的翻译"。⚠️ 这道豁免对方大同这个真实案例本身**没有**
-//     生效——LRCLIB 索引这首歌的元数据同样是罗马化写法("Khalil Fong"/"Nanyin"),它没有
-//     中文数据可给,candidateArtist 也是拉丁字母。留着这道豁免是因为它能覆盖另一类更
-//     常见的场景:候选来自 qq/kugou/netease 这类天然用中文曲库索引的源,即使本地标签是
-//     罗马化写法,它们报出来的歌手名往往就是中文。
-//   - knownArtistAlias(localArtist):手工登记表(下面 artistAliasTable)里如果恰好
-//     登记了这个罗马化写法对应哪个中文名,就不该让语言闸凭字符集猜错语言——方大同这个
-//     案例当时就是这么救回来的。⚠️ "Khalil Fong"→"方大同"
-//     这条已经从表里删掉了(下面 resolvedArtistCJKHint 这道通用豁免已经能查到,不需要
-//     手工登记),表现在只剩两条通用机制都覆盖不了的真实残留案例(见 artistAliasTable
-//     头注)——这道豁免的存在意义没变,只是覆盖面从"手工登记过的几十个"缩到了"这两个"。
-//   - resolvedArtistCJKHint(localArtist):补,通用替代——那英《微笑着离去》
-//     真实案例:本地标签罗马化成"Na Ying",LRCLIB 报的 candidateArtist 同样是罗马化
-//     写法,手工表也没登记(不是每个知名歌手都恰好被人工录入过),真实的中文歌词被误判
-//     拒收。手工表不该靠"一个个补"来堵这类缺口——canonicalArtistViaMusicBrainz/
-//     musicBrainzArtistAliases 这两条 resolve 流程里本来就在跑的通用 MusicBrainz 查询,
-//     只要为了别的目的(CanonicalArtist 解析/retryArtistIdentities 别名重试)查过这位
-//     歌手一次,答案就已经缓存在 artistAliasCache/mbPrimaryNameCache 里,这里直接
-//     只读窥探(不主动发起新请求,不把这个纯函数变成隐性网络调用),命中就跟手工表
-//     同等对待。覆盖面从"手工登记过的几十个"变成"MusicBrainz 认识、且本次 resolve
-//     链路里其它步骤已经查过的所有歌手"。
+//
+// 的中文歌"而不是"传错语言的翻译"。 这道豁免对上面《南音》这个例子本身**没有**
+//
+//	  生效——LRCLIB 索引这首歌的元数据同样是罗马化写法("Khalil Fong"/"Nanyin"),它没有
+//	  中文数据可给,candidateArtist 也是拉丁字母。留着这道豁免是因为它能覆盖另一类更
+//	  常见的场景:候选来自 qq/kugou/netease 这类天然用中文曲库索引的源,即使本地标签是
+//	  罗马化写法,它们报出来的歌手名往往就是中文。
+//	- knownArtistAlias(localArtist):手工登记表(下面 artistAliasTable)里如果恰好
+//
+// 登记了这个罗马化写法对应哪个中文名,就不该让语言闸凭字符集猜错语言。提醒 "Khalil
+//
+//	  Fong"到"方大同" 这条已经从表里删掉了(下面 resolvedArtistCJKHint 这道通用豁免
+//	  已经能查到,不需要手工登记),表现在只剩两条通用机制都覆盖不了的残留案例(见
+//	  artistAliasTable 头注)——这道豁免的存在意义没变,只是覆盖面从"手工登记过的
+//	  几十个"缩到了"这两个"。
+//	- resolvedArtistCJKHint(localArtist):通用替代,处理手工表没登记的情况——举例
+//	  (那英《微笑着离去》):本地标签罗马化成"Na Ying",LRCLIB 报的 candidateArtist 同样是罗马化
+//	  写法,手工表也没登记(不是每个知名歌手都恰好被人工录入过),真实的中文歌词被误判
+//	  拒收。手工表不该靠"一个个补"来堵这类缺口——canonicalArtistViaMusicBrainz/
+//	  musicBrainzArtistAliases 这两条 resolve 流程里本来就在跑的通用 MusicBrainz 查询,
+//	  只要为了别的目的(CanonicalArtist 解析/retryArtistIdentities 别名重试)查过这位
+//	  歌手一次,答案就已经缓存在 artistAliasCache/mbPrimaryNameCache 里,这里直接
+//	  只读窥探(不主动发起新请求,不把这个纯函数变成隐性网络调用),命中就跟手工表
+//	  同等对待。覆盖面从"手工登记过的几十个"变成"MusicBrainz 认识、且本次 resolve
+//	  链路里其它步骤已经查过的所有歌手"。
 //
 // 三道豁免任一成立即可,都基于 cjkRatio 恒等式:空字符串(旧调用点/测试没传
 // candidateArtist,或者 localArtist 不在表里/缓存里)的 cjkRatio 恒为 0,不触发豁免,
@@ -111,7 +114,7 @@ func isProbablyWrongLanguageLyrics(localArtist, localTitle, candidateArtist, lyr
 // 中间的情况(那种情况极罕见,但宁可放过也不误杀真歌词)。
 var creditLineRe = regexp.MustCompile(`(?i)^(作词|作曲|编曲|制作人|演唱|混音|录音|lyrics by|composed by|written by|produced by|arranged by)\s*[:：]`)
 
-// genericHanCreditLineRe 是 creditLineRe 的结构化补充——实测坐实:网易云对
+// genericHanCreditLineRe 是 creditLineRe 的结构化补充:网易云对
 // 纯音乐/配乐类曲目偶尔会把完整制作人员名单当"歌词"返回,每行都带真实时间戳(能通过
 // isTimedLRC),但角色名(指挥/混音师/贝斯/中提琴/吉他/大提琴/母带工程师……)远超
 // creditLineRe 手工枚举的那几个词,枚举法天然堵不完。改成认"短中文标签+冒号+人名"这个
@@ -139,7 +142,7 @@ var copyrightLabelRe = regexp.MustCompile(`(?i)^(OP|SP|OA|SA)[\s\x{3000}]*[:：]
 
 // isRelaxedCreditLine 是 isCreditLineWithSpeakers 多认上面两种排版的版本。
 //
-// ⚠️ 两套判据是**故意**分开的,别合并成一套:
+// 两套判据是**故意**分开的,别合并成一套:
 //   - 严格版(isCreditLine / isCreditLineWithSpeakers)喂着**共识比对**、纯音乐判定、内嵌
 //     译文对齐 —— 那几处误判的代价是整份歌词被判废或对错行,宁可漏也不能多杀。
 //   - 宽松版只喂**翻译选行**和**曲长端点**,这两处误判的代价小得多:多跳一行 = 少翻一句 /
@@ -189,7 +192,7 @@ func isCreditOnlyLRC(lrc string) bool {
 // lastLRCTimestampSecs 取 LRC 里最后一个"真的带歌词正文"的 [mm:ss.xx] 时间戳、换算成
 // 秒——不能简单取整份文本里最后一个时间戳:有些 LRC 会在真正唱完之后再补一行空白时间戳
 // 单独标记"这首歌到这里才算完"(常见于给尾奏占位),这种行没有对应的歌词正文,选它当
-// "最后一句歌词的时间"纯属巧合对上时长,不能算数(实测坐实:某候选正是靠着
+// "最后一句歌词的时间"纯属巧合对上时长,不能算数(有候选正是靠着
 // 这样一行空白尾行,巧合命中时长评分的最高档,反而反超了末尾真的有歌词、但差了几个百分
 // 点的候选)。逐行从后往前找,跳过"去掉时间戳后剩余文本为空"的行。frac 部分可能是两位
 // (百分之几秒)或三位(毫秒),按其实际代表的小数位数换算,不假设固定是哪一种。
@@ -230,7 +233,7 @@ type lyricCandidate struct {
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
-	// timelineRemap:行级时间轴被重挂到逐字轴上时留下的"旧毫秒→新毫秒"映射(见
+	// timelineRemap:行级时间轴被重挂到逐字轴上时留下的"旧毫秒到新毫秒"映射(见
 	// lyricstimeline.go)。译文/罗马音的时间戳是照原文 LRC 抄的,附着到冠军上时要用
 	// 这份映射一起搬过去,否则相对正文错位。没重挂过就是 nil。
 	timelineRemap map[int]int
@@ -251,10 +254,10 @@ type lyricCandidate struct {
 	// (不同专辑/live/合集),各自如实展示,不做跨源统一。
 	//
 	// title **参与打分**:只用来判"版本限定词对不对得上"(见
-	// versionTagsMismatch)。改动前它完全不参与,而 scoreLyricCandidate 的其余信号
-	// (时长吻合度/有无逐字/来源/行数)对"同一首歌的两个不同录音"几乎无区分力——同一首歌的
-	// demo/original version/live 版时长接近、歌词字面还一样,于是自报标题明明写着
-	// "(Original Version)" 的候选也能压过标题完全吻合的候选(实测坐实:Michael Jackson
+	// versionTagsMismatch)。scoreLyricCandidate 的其余信号(时长吻合度/有无逐字/来源/
+	// 行数)对"同一首歌的两个不同录音"几乎无区分力——同一首歌的 demo/original
+	// version/live 版时长接近、歌词字面还一样,若不看标题,自报标题明明写着
+	// "(Original Version)" 的候选也能压过标题完全吻合的候选(如 Michael Jackson
 	// 的 "Blue Gangsta" 被匹配成酷狗的 "Blue Gangsta (Original Version)",播放时展示的
 	// 第一句就是 "Michael Jackson - Blue Gangsta(Original Version)",时间轴也是原始版
 	// 那一套)。
@@ -293,7 +296,7 @@ type lyricCandidate struct {
 	// 唯一的用途是同源加权的准入(见 scoreLyricCandidateDetailed 里那一段):v21 起
 	// "跟当前播放器同源"不再单独成立,必须同时是本地给定身份的那一份。
 	//
-	// ⚠️ 各源的进程内结果缓存(kugouCache / qqURLCache / sodaCache …)按
+	// 各源的进程内结果缓存(kugouCache / qqURLCache / sodaCache …)按
 	// (artist,title,album) 存,标记**跟着首次解析那一次**:先用别的播放器听过、走网络存了
 	// 缓存,之后改用同源播放器听同一首,这一轮会漏标记、少拿 250 分。方向是保守的
 	// (漏加,不会多加),且 collector 重启后缓存清空会重新走本地,故不为它再加一层旁路。
@@ -343,7 +346,7 @@ func durationFits(lastSecs, durationSecs float64) bool {
 // 歌词也完全正常,若只按时长差距判断会被误杀;而内容确实被串到别的曲目/版本的候选,
 // 不会凑巧跟别的源落在同一个时间点上。
 //
-// ⚠️ 但"互相独立"这个前提是有条件的,实测抓到它翻车:
+// 但"互相独立"这个前提是有条件的,实测抓到它翻车:
 // "Valentina (feat. Rick Ross) [Bonus]"(237s)——QQ 和酷狗都抓到了**普通版**(都停在
 // 2:23),于是互相"印证"成功、各拿 +100 豁免掉时长惩罚,而真正抓到 bonus 版、末句 3:46
 // 几乎正好压着曲长的 LRCLIB 反倒分数低一截,冠军判给了 QQ。根子在于:各源拿的是同一个
@@ -391,11 +394,9 @@ func corroboratedEndings(candidates []lyricCandidate, durationSecs float64) map[
 // (返回 true)。
 //
 // 提出来给**检索层挑选**用(kugou pickKugouSearchCandidate / qq qqPickCandidate*):
-// 现象是 PRINCE《319》(The VERSACE Experience 那张里 88 秒的 X-cerpt 节选版)"搜不到"——四个源里
-// 酷狗和 QQ 的搜索结果**都有**「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD)」88s 这条,
-// 却都挑了《The Gold Experience》185 秒的完整版「319」:两边的挑选都是"标题精确同名"压倒一切,
-// 专辑分和时长只在同名档内部才比。挑回来的候选到打分层立刻吃 durationOvershoot -700 +
-// sourceDurationOff -400 变成 1 分,而 1 分 ≥ 0 照样被采用——88 秒的曲目挂着 185 秒版的词。
+// 检索时若"标题精确同名"压倒一切、专辑分和时长只在同名档内部才比,会挑到同名但
+// 完全不同版本(如完整版 vs 节选版)的候选,挑回来的候选到打分层立刻吃
+// durationOvershoot -700 + sourceDurationOff -400 变成 1 分,而 1 分 ≥ 0 照样被采用。
 // 网易云的 pick 早在 v8 就有"时长 ≤1% + 专辑亲和"的锚定档,所以它选对了;这里把"自报曲长偏差
 // >12%"直接当**第一排序键**(对不上的排到所有对得上的后面,标题档只在同一组内部再比):打分层
 // 既然已经把 >12% 判成另一次录音,检索层还把这样的候选挑回来就是白跑一趟。
@@ -419,11 +420,13 @@ func sourceDurationFits(localSecs, sourceSecs float64) bool {
 //     逐字扫过,故权重较高(400)。这一档**高于**时长匹配的封顶(300):逐字
 //     是歌词质量的直接证据,时长吻合只是间接代理,后者还会被前奏/尾奏系统性带偏,不该
 //     压过前者(理由和实测例子见下面时长那段注释)。
-//  3. 来源优先级:网易云能带翻译/罗马音这类其它源没有的增值内容,同等时长可信度下优先
-//     选它，其次QQ,再其次酷狗/Musixmatch/LRCLIB——避免"纯按行数比大小"让内容切分方式
-//     恰好更碎的源意外挤掉本来完全合格、还带增值内容的网易云结果。Musixmatch 排在酷狗
-//     之后、LRCLIB 之前:它是非官方逆向接口(不如酷狗这个已用了很久的既有源稳定),但
-//     能带逐字时间轴+可选语言译文,比只有纯逐行歌词的 LRCLIB 更有信息量。
+//  3. **来源本身不加分**。同一份歌词换任何一个源,分数完全一样 —— 守卫测试
+//     `TestScoringAfter20260809Review/来源不再加分` 钉着这条,别再往回加。
+//     `scoreTermSource` 这个常量留着只为给那条断言当标的,生产代码一处都不调用
+//     (全库 4.2 万条候选打分记录里 `source` 这个 kind 出现 0 次)。
+//     网易云这类源的优势由**候选自己实际带了什么**直接体现:带译文进 scoreTermTranslation、
+//     带罗马音进 scoreTermRoma、跟别家正文互证进 scoreTermConsensus。判据是"这份候选
+//     带了增值内容",不是"它出自哪一家"——后者会让一份**没带**译文的网易云结果白拿加分。
 //  4. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
 //     可信的候选)。
 //
@@ -689,7 +692,7 @@ func lyricScoreTermKinds() []string {
 
 // durationMismatchPenalty:时长明显对不上时扣多少。
 //
-// ⚠️ 别判 -1(一票否决):被一票否决的候选里 83%(5/6)
+// 别判 -1(一票否决):被一票否决的候选里 83%(5/6)
 // 内容其实跟多数派完全一致 —— 它们是对的词,只是尾奏长、或者版本时长标注有出入。同一批
 // 样本里还有 4 首歌是「有候选但全被判 -1」,最后一条歌词都没有。
 //
@@ -704,24 +707,23 @@ const durationMismatchPenalty = 500
 // sourceDurationMismatchPenalty / sourceDurationMismatchTolerance:候选**自报的曲目时长**
 // 跟本地明显对不上时扣多少。
 //
-// ⚠️ 跟上面那一项量的**不是同一样东西**,别混为一谈:
+// 跟上面那一项量的**不是同一样东西**,别混为一谈:
 //   - durationMismatchPenalty 量的是「LRC 末句时间戳 vs 曲长」,是个**代理**指标,被前奏/
 //     尾奏系统性带偏(尾奏越长,越是完整正确的歌词越"不吻合");
 //   - 这一项量的是两个**曲目时长**的直接比对,回答的是「这份歌词挂在哪一次录音上」。
 //
-// 落地的实测依据(现象是「Stranger in Moscow (Tee's In-House Club Mix) 配了
-// 正常版歌词」):本地是 414.32s 的俱乐部混音,冠军 qq 那条自报 **344s**(偏 17%)——它自己
-// 的元数据就写着"我是另一次录音",而代理指标反而给了它 +147(它的 LRC 末句在 335s、偏 19%,
-// 落在 25% 容差内);真正对版的酷狗混音版末句在 304.9s、偏 26.4%,**刚好越线吃 -500**。
-// 也就是说错的那份在时长项上赢了对的那份,纯粹因为 335 比 304.9 离 414 近一点 —— 这个代理
+// 落地依据:代理指标(LRC 末句时间戳)会被前奏/尾奏系统性带偏——本地是 414.32s 的
+// 俱乐部混音,错误候选自报 **344s**(偏 17%,元数据已写明是另一次录音),但它的 LRC 末句
+// 落在 25% 容差内反而拿到 +147;真正对版的候选末句偏 26.4%,刚好越线吃 -500。错的那份
+// 在时长项上赢了对的那份,纯粹因为代理
 // 在带长尾奏的混音/加长版上就是噪声,而直接测量一直躺在同一条决策记录里没人用
 // (sourceReportedDurationSecs 自就在透传,注释写着"先攒评测数据")。
 //
 // **只扣分、不加分**,这是消融实验选出来的:对 202 条真实缓存条目里 34 条可评样本
 // (有 ≥2 个候选 + 至少一个源自报了时长)跑参数网格 ——
 //
-//	只扣 -400 @>12% → 冠军变化 **1** 处;只扣 -400 @>15%/>20% → 0 处;
-//	只加 +300 @<=2% → 2 处;加分+扣分 → 2 处。
+//	只扣 -400 @>12% 到 冠军变化 **1** 处;只扣 -400 @>15%/>20% 到 0 处;
+//	只加 +300 @<=2% 到 2 处;加分+扣分 到 2 处。
 //
 // 唯一那处变化是同专辑的「Earth Song」(本地 475.55s 的 Hani's Club Experience 混音),
 // 老冠军是 405s 的正常版、新冠军是对版专辑那条 475s 的混音版 —— **改对了**,是同一个 bug
@@ -731,7 +733,7 @@ const durationMismatchPenalty = 500
 // 阈值 12% 复用 enrich.go:wrongDuration 那条既有口径(「差超 12% 就当作给另一个版本选的」),
 // 分母同样取两者中较大的那个,不新造一个数。
 //
-// ⚠️ 用陈奕迅《活着多好 (Live)》案复查过一遍"收窄阈值是不是就安全了"——
+// 用陈奕迅《活着多好 (Live)》案复查过一遍"收窄阈值是不是就安全了"——
 // 结论是**收窄阈值不是变安全,是变更危险**。诊断脚本(反事实回放全部 3198 条真实
 // 缓存条目、其中 2261 条带 duration_secs)对比几档"只加分"方案的冠军改变数:
 //
@@ -783,7 +785,7 @@ const (
 // "kugou"/"applemusic"/"soda")。正在播的播放器没有原生歌词源(Spotify)或者认不出来时是
 // 空集,谁都不加分。
 //
-// ⚠️ 它只是同源加权的**两个条件之一**,v21 起单独成立已经不够了:候选还必须
+// 它只是同源加权的**两个条件之一**,v21 起单独成立已经不够了:候选还必须
 // identityFromLocalClient(身份由那个播放器自己的本地数据给定)。这里回答的是"哪个源跟
 // 当前播放器同源",那里回答的是"这一份是不是真的来自它"——搜出来的同源候选过不了第二关。
 //
@@ -791,23 +793,22 @@ const (
 // 一个成员 —— 一次只可能有一个播放器在放。留着集合形状是为了不动 scoreLyricCandidate
 // 和 nativeMissedOut 两处的读法。
 //
-// ⚠️ **修的真实 bug:输入从「用户勾选了哪些播放器」换成「现在在放的是哪个」。**
-// 此前它是 `resolveNativeLyricSources(features.Players)`,也就是**设置里勾了哪些播放器**。
+// **修的真实 bug:输入从「用户勾选了哪些播放器」换成「现在在放的是哪个」。**
+// 此前它是 `resolveNativeLyricSources(features().Players)`,也就是**设置里勾了哪些播放器**。
 // 加多选时那个函数的注释写着「选了多个播放器时,同源加权理应对它们各自的原生源
 // 都生效,不能只挑其中一个」—— 这句话对**别的**按播放器分叉的功能成立,对这一项不成立:
 // 它的立论是「时间轴对着同一份音频母版」(见下面 scoreLyricCandidateDetailed 里那段),
 // 那是**正在播的那个播放器**的属性,跟"我允许哪些播放器"没有关系。
 //
-// 现象是的形状:六个播放器全勾(apple_music/auto/kugou/netease/qq/spotify),于是
-// nativeLyricSources = {kugou, netease, qq},**三个源同时拿 +250**;而他实际在用
-// Apple Music 听(np:lastPlayerBundleID = com.apple.Music),按定义这三条一条都不该给,
-// 该给的是 applemusic 那一条。
+// 多选播放器时的错配形状:六个播放器全勾(apple_music/auto/kugou/netease/qq/spotify),
+// nativeLyricSources = {kugou, netease, qq} 会**三个源同时拿 +250**——而实际在用的
+// 只是其中一个播放器,按定义只有那一个该给,其余不该给。
 // 后果有两层:①「解析决策」面板上「这个源就是你正在用的播放器」对三个源都是假话;
 // ② 这一项的**区分力被自己抵消**——三个中文源都 +250,它没法在三者之间区分,只剩
 // "系统性地把它们抬到 Musixmatch / LRCLIB 之上"这一个效果。
 //
 // 跟 features 同款的包级变量而不是打分函数的参数:打分函数已经有 7 个参数,再加一个
-// 会让每个调用点都得关心一件跟它无关的事。⚠️ 但它现在是**运行期按曲目变的**(换播放器
+// 会让每个调用点都得关心一件跟它无关的事。 但它现在是**运行期按曲目变的**(换播放器
 // 就变),不再是启动时设一次的常量,所以读写都要过下面那把锁;测试里直接赋值仍然可以
 // (单 goroutine)。
 var (
@@ -848,12 +849,12 @@ func hasNativeLyricSource() bool {
 // playerForBundleID 是 playerBundleID(system.go)的逆向:把播放器上报的 bundle id 映射
 // 回播放器常量,认不出就返回空串。
 //
-// ⚠️ **不能拿 playerBundleID 反推**:那个函数的 default 分支把一切未知都映射成 Apple
+// **不能拿 playerBundleID 反推**:那个函数的 default 分支把一切未知都映射成 Apple
 // Music(对它的用途是对的 —— 调用方已经先排除了 playerAuto),反过来用会把任何不认识的
 // bundle id 都当成 Apple Music。这里认不出必须是"不知道",不是"就当是 Apple Music"。
 func playerForBundleID(bundleID string) string {
 	// 反查生成表(players_generated.go,生成自 shared/players.json),不手写 switch。
-	// ⚠️ 这里原本是一份**平行维护的 case 清单**,汽水音乐内置化时漏了它 —— 那之前没有
+	// 这里原本是一份**平行维护的 case 清单**,汽水音乐内置化时漏了它 —— 那之前没有
 	// soda 歌词源,漏了也看不出来;接上之后表现为"用汽水听歌却永远拿不到同源加权",
 	// 一个字都不报错。反查表就不可能再漏,代价是六个元素的遍历。
 	if bundleID == "" {
@@ -908,7 +909,7 @@ func scoreLyricCandidateDetailed(
 	if !isTimedLRC(c.lyrics) {
 		return reject(scoreRejectNotTimed)
 	}
-	// consensusPeers>=1 兜底:真实故障(Gareth.T《before you》= 网易云/QQ/酷狗/
+	// consensusPeers>=1 兜底:光靠前两道豁免仍会全部漏判(如 Gareth.T《before you》= 网易云/QQ/酷狗/
 	// LRCLIB 一致收录的《遇上你之前的我》,四个源全被语言闸判废)。isProbablyWrongLanguageLyrics
 	// 现有的两道豁免(candidateArtist 含汉字 / knownArtistAlias 手工表)都基于"能不能确认
 	// 这位歌手是中文歌手"——但 Gareth.T 是真实存在、只是从没起过中文艺名的粤语歌手,
@@ -949,7 +950,7 @@ func scoreLyricCandidateDetailed(
 		switch {
 		case durationFits(last, durationSecs):
 			// 连续衰减,而不是硬分档——原来 3%/8%/25% 三级硬边界会让"差一点点"的候选
-			// 骤然掉一整档。⚠️ 把封顶从 1000 压到 300:时长吻合只是正确性的
+			// 骤然掉一整档。 把封顶从 1000 压到 300:时长吻合只是正确性的
 			// **间接代理**,而且被前奏/尾奏系统性带偏(尾奏越长,越是完整正确的歌词越
 			// "不吻合");逐字时间轴则是歌词质量的**直接**证据。
 			add(scoreTermDuration, 100+int(200*(1-ratio/durationFitTolerance)))
@@ -960,10 +961,10 @@ func scoreLyricCandidateDetailed(
 			// 跨源印证豁免:两个源一起抓到同一个错版本恰恰是印证的已知翻车形态(Valentina)。
 			add(scoreTermDurationOvershoot, -700)
 		case corroborated:
-			// 时长差超阈值,但有别的独立源印证末尾时间点。⚠️ 只有在**没有任何一条候选
+			// 时长差超阈值,但有别的独立源印证末尾时间点。 只有在**没有任何一条候选
 			// 时长吻合**时才可能走到这里,见 corroboratedEndings 里那段注释。
 			//
-			// ⚠️ 试过在这里加一道"欠覆盖比例上限"(印证只能证明这几份歌词
+			// 试过在这里加一道"欠覆盖比例上限"(印证只能证明这几份歌词
 			// **彼此**是同一份真实歌词,证明不了它对得上**本地这次录音**;本地是连播/
 			// 加长/混音版时全世界只存在原版那一份词,于是"没有任何候选吻合"这个前提必然
 			// 成立、豁免必然发放)——**被真实数据否掉了,别再试**:
@@ -997,7 +998,7 @@ func scoreLyricCandidateDetailed(
 	if isNativeLyricSource(c.source) && c.identityFromLocalClient {
 		// 跟当前播放器同源、**且身份由那个播放器的本地数据给定**的歌词加分。
 		//
-		// ⚠️ v21 收窄了准入:在此之前只要"源 == 当前播放器的原生源"就加,搜索出来的那条
+		// v21 收窄了准入:在此之前只要"源 == 当前播放器的原生源"就加,搜索出来的那条
 		// 一样拿满分。收窄的理由是这一项的立论只对"同一版录音"成立 —— 搜索给出的是
 		// "名字对得上的某一条",同名的 live / 重录 / 翻唱版轴根本不是一回事,给它 +250
 		// 等于拿一个关于**平台**的事实去担保一件关于**这一版录音**的事。本地路径没有这个
@@ -1009,7 +1010,7 @@ func scoreLyricCandidateDetailed(
 		// 实测:用户放着 QQ 音乐听周杰伦《太阳之子》,这套打分给他配了酷狗那份
 		// (酷狗有逐字 +400 直接压过 QQ),整行比 QQ 自己的歌词界面慢半个字左右。
 		//
-		// ⚠️ 这**不是**在把删掉的那个"按来源加 10~50 分"改头换面加回来。
+		// 这**不是**在把删掉的那个"按来源加 10~50 分"改头换面加回来。
 		// 那一个是**静态**来源偏好(网易云一律加分),跟用户在放什么无关;这一个是**动态**的
 		// (放 QQ 音乐才偏向 QQ)。更要紧的是两者衡量的维度不同:那次消融实验的判据是
 		// 「跨源内容一致性」,测的是歌词**文本**对不对,而这一项修的是**时间轴对不对齐音频**
@@ -1021,11 +1022,11 @@ func scoreLyricCandidateDetailed(
 		// 不是碾压质量差距。
 		add(scoreTermNativeSource, 250)
 	}
-	// ⚠️ 这里曾经按来源加 10~50 分。实测把它删掉了 —— 250 首抽样、751 条候选、
+	// 这里曾经按来源加 10~50 分。实测把它删掉了 —— 250 首抽样、751 条候选、
 	// 以「跨源内容一致性」为准的消融实验结论:
 	//
 	//   它改变了 69/206 首歌的冠军,其中 0 次让结果变对、6 次让结果变错。
-	//   去掉之后准确率 93% → 96%。
+	//   去掉之后准确率 93% 到 96%。
 	//
 	// 而且它并不是「平手时的决胜项」——冠亚军分差中位只有 22 分、74% 的歌 ≤40 分,正好落在
 	// 它的跨度里,也就是说它在大多数歌里都是决定性的。它排的是我们对来源的先入之见,不是
@@ -1039,7 +1040,7 @@ func scoreLyricCandidateDetailed(
 		lines = 200
 	}
 	add(scoreTermLines, lines)
-	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
+	// 版本限定词对不上 到 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
 	// 理由见 versionTagsMismatch。v8 加一道窄豁免:时长逐位吻合+专辑亲和+多出的限定词
 	// 只是演奏方式(acoustic 家族)时,是同一次录音的命名差异,不是版本差异 —— 见
 	// sameRecordingDespiteVersionTags(全库回放:现存 433 个吃 -600 的候选 0 个被豁免,
@@ -1057,7 +1058,7 @@ func scoreLyricCandidateDetailed(
 			c.title, c.album, c.sourceReportedDurationSecs, c.languageVersionAgrees):
 		add(scoreTermVersionTags, -versionMismatchPenalty)
 	}
-	// v7:两场不同命名的演出 → 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
+	// v7:两场不同命名的演出 到 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
 	// 集合相等、必然静默,这一档接住它够不到的那半边。判据和四道防误伤的门见
 	// liveAlbumIdentityConflict 的注释。
 	if liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, c.title, c.album) {
@@ -1119,11 +1120,11 @@ func scoreTermPoints(terms []scoreTerm, kind string) int {
 	return 0
 }
 
-// applyWordTimingTitleOverride 是 v5新增的收尾一步:全部候选打完分、
+// applyWordTimingTitleOverride 是收尾一步:全部候选打完分、
 // **排序之前**,检查"逐字时间轴的 +400 是不是唯一让这个候选赢的理由,而另一个候选的
 // 标题明显更吻合"。
 //
-// 起因是真实误配案例(方大同《公园 (Live版)》,收在专辑「大事发声·录音棚现场:
+// 举例(方大同《公园 (Live版)》,收在专辑「大事发声·录音棚现场:
 // 方大同专场」):酷狗那份歌词标题是「公园 (Live)」、专辑是「Timeless演唱会」——是**另一场
 // 演出**的逐字版本,时间轴是按那场演出对的轴,套在这次实际播放的录音上大概率跟不上字;
 // 网易云那份标题「公园 (Live版)」跟查询词逐字相同、专辑也部分对得上,但没有逐字数据,
@@ -1226,7 +1227,7 @@ func looseContains(a, b string) bool {
 // 调用方按"len<2 就当成单一人名"处理,不能被这种情况悄悄吃掉。
 // 顺带先过一遍 toSimplified,理由跟 normLoose 完全一样——候选的艺人字段有时是简体、
 // 有的源(如 YouTube Music/LyricFind)给的是繁体,不折算就会把同一个人判成两个人
-// (实测坐实:"周杰伦"查不到候选,因为召回的正确结果署名"周杰倫")。下沉到
+// (比如"周杰伦"查不到候选,因为召回的正确结果署名"周杰倫")。下沉到
 // 这个函数本身而不是在每个调用点各自补,是因为 artistCreditParts 本来就已经在这里做了
 // 一次 ToLower——同一个理由、同一个下沉位置。只转字符形式,不做 normLoose 那样的标点
 // 剥离,不影响下面的防仿冒判定(尾随分隔符等仍然原样保留)。
@@ -1244,20 +1245,20 @@ func artistCreditParts(s string) []string {
 // 之间的中文"和"换成"&"，换算之后复用现成的 isArtistCreditSep/isArtistCreditPrimarySep,
 // 不需要把"和"直接加进那两个分隔符字符集。
 //
-// 真实故障(方大同 & Fiona Sit《Four Tour》案,「搜索候选歌词」弹窗"七个源都
+// 举例(方大同 & Fiona Sit《Four Tour》,「搜索候选歌词」弹窗"七个源都
 // 没找到"):同一首歌在库里有两份标签——"Khalil Fong & Fiona Sit"(能拆开,首歌手变体轮
 // 正常触发,已经解析成功)和"Khalil Fong和Fiona Sit"(拆不开,变体轮从未触发,一直没
 // 解析出来)。原因是"和"压根不在 isArtistCreditSep/isArtistCreditPrimarySep 认的分隔符
 // 集合里(只有 `/、&,，`),整串被当成一个谁都不认识的艺人名。
 //
-// ⚠️ 不能直接把 '和' 塞进那两个分隔符字符集:那两个字符集里的成员全是纯标点,几乎不可能
+// 不能直接把 '和' 塞进那两个分隔符字符集:那两个字符集里的成员全是纯标点,几乎不可能
 // 出现在真实人名/乐队名内部;"和"是常见汉字,真实存在"李和平"这类名字本身就含"和"的情况,
 // 不加限制地把它当分隔符会把这类名字切碎——这正是 isArtistCreditSep 头注记录的那次真实
 // 教训(分隔符加错,播放记录写去了无关歌手名下,Last.fm 上删不掉)想要避免重演的那类错误。
 // 最初收紧成"仅当两侧都紧邻 ASCII 字母时才算连接词",精确对应"中文'和'
 // 连接两个拉丁书写艺人名"这一种写法。
 //
-// 补第二档——两侧都是中文时也可能是连接词。真实故障:陶喆《再見你好嗎》专辑
+// 补第二档——两侧都是中文时也可能是连接词。举例:陶喆《再見你好嗎》专辑
 // 第8首"那個女孩(feat. 盧廣仲)",本地标签联合署名成"陶喆和盧廣仲",没有一个歌词源是
 // 按这个联合写法索引的(各自写的是"陶喆、卢广仲"或单独"陶喆")——「搜索候选歌词」弹窗
 // 八个源全部搜不到,而单独查"陶喆"四个源立刻找到、分数都在800+。ASCII 那道判据在这里
@@ -1334,7 +1335,7 @@ func isASCIILetter(r rune) bool {
 
 // isArtistCreditSep 是"多人合credit"字符串的分隔符集合。
 //
-// ⚠️ **只有 artistCreditParts 用它**。原注释写的是"artistCreditParts/firstCreditedArtist
+// **只有 artistCreditParts 用它**。原注释写的是"artistCreditParts/firstCreditedArtist
 // 共用同一份,避免以后加分隔符漏改一处"—— 那是错的:取第一位艺人的
 // firstCreditedArtist 走的是下面的 isArtistCreditPrimarySep + firstSlashCredit,从不调
 // 本函数,两处需求相反、早已分家(理由见下一个函数的注释)。
@@ -1379,7 +1380,7 @@ func firstCreditedField(s string, sep func(rune) bool) (string, bool) {
 // 两个字就是完整名字,纯拉丁两个字母几乎只可能是缩写的前半截,要求 ≥3。判不准时**不切**
 // —— 少归并一次只是维持现状,切错是往 Last.fm 写错数据、不可逆。
 //
-// ⚠️ 与 Swift 侧 LyrimuseCore/Models/ArtistCredit.swift 的 slashHeadIsPlausible
+// 与 Swift 侧 LyrimuseCore/Models/ArtistCredit.swift 的 slashHeadIsPlausible
 // **必须逐字同规则**,两边一起改。修的正是"只修了一半"造成的事故:那道守卫
 // 只加在 Swift 侧(只管显示),而 Go 侧这条路径才是真正改写
 // scrobble 歌手名的写侧 —— 实测把 `K/DA/Madison Beer/i-dle/Jaira Burns` 折成了 `K`,
@@ -1433,7 +1434,7 @@ func firstCreditedArtist(s string) string {
 // 光靠"头部判不准就整串不切"是**不够**的:`K/DA/Madison Beer/i-dle/Jaira Burns` 确实
 // 是个合credit 串,第一位是 `K/DA` —— 整串不切会让它跟榜上的 `K/DA` 条目合不到一起
 // (topartistsdisplay_test 那两条正是这个期望:30 + 12 要并成 42、显示 `K/DA`)。
-// 所以头部判不准时**往后再吃一段**再判:`K` ✗ → `K/DA` ✓。
+// 所以头部判不准时**往后再吃一段**再判:`K` 不对,`K/DA` 才对。
 //
 // 吃到整串仍不成立 = 整串大概本来就是一个名字(`AC/DC`),返回不切。
 //
@@ -1473,7 +1474,7 @@ func firstSlashCredit(s string) (string, bool) {
 // order) without accepting a name that merely starts with/contains the real one.
 //
 // na/nb 先过一遍 toSimplified 再小写——跟 normLoose 同一个理由、同一个函数复用
-// (实测坐实:YouTube Music/LyricFind 给的艺人字段是繁体"周杰倫",本地查询是
+// (比如 YouTube Music/LyricFind 给的艺人字段是繁体"周杰倫",本地查询是
 // 简体"周杰伦",不折算就判成两个不同的人,一条确认有效的候选被整条拒收)。只转字符形式,
 // 不做 normLoose 那样的标点剥离,防仿冒精度不受影响——"周杰伦-"折算后仍是"周杰伦-",
 // 跟"周杰伦"依旧不相等。
@@ -1507,7 +1508,7 @@ func artistMatches(a, b string) bool {
 			return true
 		}
 	}
-	// 去括号别名兜底(「聪明不聪明」实测坐实):YouTube Music 给的艺人字段是
+	// 去括号别名兜底(举例「聪明不聪明」):YouTube Music 给的艺人字段是
 	// "丁世光(Dean Ting)"——主名字后面括号里跟一个外文别名/罗马字/艺名,本地标签只有
 	// "丁世光",逐段比较(上面两档)永远对不上,因为这整串根本没有 artistCreditParts 认的
 	// 分隔符、切不开。lyricTitleAccepted 早就对标题做同样的事(stripParens 再比),这里补
@@ -1536,20 +1537,20 @@ func artistMatches(a, b string) bool {
 // 任何一段,于是 artistMatches("K/DA", 那一串) 是 false:**真正的歌手过不了闸,而一个
 // 根本不存在的"K"反而能过**。
 //
-// 现象是的现象就是这个:「联网搜索候选歌词」用播放器给的完整歌手串只搜到
-// 两条候选,把歌手手工截短成 "K/DA" 之后变成三条 —— Musixmatch 的采纳条件里有
-// artistMatches(它返回的 artist_name 正是 "K/DA"),哪怕 API 把正确那条返回了也会被
-// 原地拒掉;而且 netease/lrclib 两条本来就找得到的候选也因为歌手项没拿到分、各低了整
-// 100 分,导致 app 退而用了没有逐字时间轴的那份。
+// 实际后果:「联网搜索候选歌词」用播放器给的完整歌手串只搜到两条候选,手工截短成
+// "K/DA" 之后变成三条——Musixmatch 的采纳条件里有 artistMatches(它返回的 artist_name
+// 正是 "K/DA"),哪怕 API 把正确那条返回了也会被原地拒掉;而且 netease/lrclib 两条本来
+// 就找得到的候选也因为歌手项没拿到分、各低了整 100 分,导致 app 退而用了没有逐字
+// 时间轴的那份。
 //
 // 把"连续若干段拼回去"也算一种匹配就补上了这个洞:`k/da` 正是 [k, da] 这两段按原分隔符
 // 拼回去的结果,也就是 hay 里一个分隔符界定的片段。
 //
-// ⚠️ 判据**不能**退化成任意子串匹配:那样 "an" 会命中 "anna"、"da" 会命中 "dave"。
+// 判据**不能**退化成任意子串匹配:那样 "an" 会命中 "anna"、"da" 会命中 "dave"。
 // 要求命中处两侧要么是字符串边界、要么(跳过空白之后)紧邻一个分隔符 —— 这正是
 // "整段或整几段"的含义。
 //
-// ⚠️ 调用方必须保留 `len(parts) >= 2` 那道守卫,不能把这个函数单独拿出来用:
+// 调用方必须保留 `len(parts) >= 2` 那道守卫,不能把这个函数单独拿出来用:
 // artistMatches("周杰伦", "周杰伦、") 现在是 false,而那是**故意的** —— 网易云出现过
 // 艺人字段就是 "周杰伦、" 的仿冒条目,尾随分隔符本身就是仿冒特征(见 artistCreditParts
 // 和 neteaseImpersonatorRiddenArtists 的注释)。少了那道守卫,这条防线会被顺手拆掉。
@@ -1595,11 +1596,11 @@ func artistCreditBoundaryAfter(s string) bool {
 // lyricSourceArtistMatches 是**歌词源候选采纳闸**专用的歌手匹配:在 artistMatches 之上
 // 多放一档"两侧都是多人合credit 时,拆段后有任意一段相等即通过"。
 //
-// 为什么需要它(「wherever u r」实测坐实):本地标签 "UMI & 金泰亨" 查酷狗,
+// 为什么需要它——举例(「wherever u r」):本地标签 "UMI & 金泰亨" 查酷狗,
 // 服务端召回其实是成功的——正主排第 1、署名 "UMI、V"——却被 artistMatches 原地拒掉:
 // 它只做"一方的段 == 另一方整串"和连续段拼回,两侧**各自**拆段后的交集(umi 明明两边
 // 都有)永远不被比较;连纯英文 "UMI & V" 对 "UMI、V" 都过不了(分隔符不同,整串不等、
-// 段对整串也不等)。跨服务的合唱署名本来就会换分隔符、换合作者的语言写法(V ↔ 金泰亨),
+// 段对整串也不等)。跨服务的合唱署名本来就会换分隔符、换合作者的语言写法(V 与 金泰亨),
 // 要求整串对上等于要求两边曲库用同一套署名习惯。
 //
 // 只用在歌词候选的采纳闸(kugou/qq strict 档/lrclib search/musixmatch),**不替换**
@@ -1648,7 +1649,7 @@ const (
 //
 // 为什么需要它:歌手署名的跨平台分歧不止"换分隔符 / 换合作者语言
 // 写法"那两类(它们已由 lyricSourceArtistMatches 的段集交集档吃掉),还有一类是**同一个人
-// 的不同称呼**——艺名↔本名、乐队名↔成员名,而且中文署名经常连分隔符都没有。案例:Apple
+// 的不同称呼**——艺名与本名、乐队名与成员名,而且中文署名经常连分隔符都没有。案例:Apple
 // Music 把《周杰伦地表最强世界巡回演唱会 (Live)》第 14 首「枫+退后+搁浅 (Live)」署名成
 // 「南拳妈妈弹头」(乐队名和成员名直接粘在一起),而网易云/QQ/酷狗三家都署名「宋健彰」
 // (弹头的本名)。artistCreditParts 对这两串都只切出 1 段(isArtistCreditSep 只认
@@ -1670,11 +1671,11 @@ const (
 // 版本限定词 -600 + 时长 -700/-500 + 语言闸 + creditOnly 闸 + 跨源共识),错版本在打分层
 // 就会掉下去。
 //
-// ⚠️ 绝不可用于 netease 的 pick() / nameOnlyMatch / qqCoverFallback —— 那三处判的是
+// 绝不可用于 netease 的 pick() / nameOnlyMatch / qqCoverFallback —— 那三处判的是
 // **身份**(封面给谁、canonical_artist 写谁、链接指向谁),在那里放宽等于直接采信仿冒号的
 // 署名,正是当年删掉 byAlbum 兜底要防的东西。
 //
-// ⚠️ 也不参与打分:artist 从来不是 scoreLyricCandidateDetailed 的输入项(14 个 scoreTerm
+// 也不参与打分:artist 从来不是 scoreLyricCandidateDetailed 的输入项(14 个 scoreTerm
 // 里没有歌手项),所以放宽歌手闸不需要 lyricsScoringVersion +1。
 func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs float64,
 	localTitle, localAlbum string, localDurationSecs float64) bool {
@@ -1698,7 +1699,7 @@ func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs
 	switch sc := albumScore(candAlbum, localAlbum); {
 	case sc >= 200: // 归一后逐字相等,最强证据
 	case sc >= 100: // 宽松包含 → 追加长度可比性要求
-		// ⚠️ 必须**双向**比(对抗性复核订正)。原来写的是
+		// 必须**双向**比(对抗性复核订正)。原来写的是
 		// `nca < ratio*nla`,只约束了「本地 ⊇ 候选」那半边;一旦是「候选 ⊇ 本地」
 		// (nca ≥ nla),判据恒真、一件东西都拦不掉 —— 而那半边恰恰是巡演/合辑/精选/Live
 		// 专辑那一整类。实测:本地专辑 "Editorial"(9 rune)对候选
@@ -1721,7 +1722,7 @@ func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs
 // featCreditSepRe 匹配歌手串里词级的 feat 类分隔("feat."/"feat"/"ft."/"ft"/
 // "featuring",大小写不敏感,可带一个左括号)。只收这几个词:它们作为艺名成分几乎
 // 不存在,而 "with"/"x" 都是真实艺名的常见组成部分(Sleeping With Sirens、Charli xcx),
-// 收进来会把单一乐队名错砍成半截。⚠️ 这套词级切分**只用于生成检索变体**
+// 收进来会把单一乐队名错砍成半截。 这套词级切分**只用于生成检索变体**
 // (lyricPrimaryQueryArtist),不并入 isArtistCreditSep——那份 rune 级分隔符集被
 // artistMatches/防仿冒判定共用,动它会改变身份判定语义。
 var featCreditSepRe = regexp.MustCompile(`(?i)\s*[(（]?\s*\b(?:feat\.|feat\b|ft\.|ft\b|featuring\b)`)
@@ -1736,23 +1737,23 @@ func isCJKScriptRune(r rune) bool {
 // cjkSpaceStripped 把**两侧都是 CJK 字符**的空白去掉,别处的空白原样保留;整串没有这种
 // 空白时返回空串(= 没有变体可言,跟 lyricPrimaryQueryArtist 的既有口径一致)。
 //
-// 真实案例:伊藤美奈子《雨のメヌエット》(专辑 TENDERLY),**九个源零候选**;
+// 举例:伊藤美奈子《雨のメヌエット》(专辑 TENDERLY),带空格时**九个源零候选**;
 // 把歌手名的空格去掉成「伊藤美奈子」再搜,网易云立刻给出完整候选 —— 日文原词 + 中文译文
 // + 逐行罗马音,score 379(行数 29 + 专辑精确 150 + 标题精确 120 + 译文 50 + 罗马音 30),
 // 自报时长 208.027 对本地 207。**Apple Music 对日文人名普遍写「姓 名」(带空格),而中文
 // 平台曲库写「姓名」(无空格)** —— 跟「中文平台的现场专辑普遍叫 XX演唱会 而不加括号」
 // (albumHasCJKLiveMarker)是同一类系统性命名形态差异,不是版本差异、也不是身份差异。
 //
-// ⚠️ **只去 CJK↔CJK 之间的空白,不动别处**:拉丁名的词间空格是分词必需的("The Beatles"
+// **只去 CJK与CJK 之间的空白,不动别处**:拉丁名的词间空格是分词必需的("The Beatles"
 // 去掉空格就没人认了),而 CJK 本来没有词间空格 —— 依据跟 segmentVersionTags 头注里那句
 // 「中文词本来就没有词间空格可去」是同一条。首尾空白也不动(prev/next 取不到字符时是
 // 零值 rune,不是 CJK),那是 TrimSpace 的活。
 //
-// ⚠️ **为什么不复用 hanOnlyPortion**:那条第一道闸是「整串必须**同时**含拉丁字母和汉字」
+// **为什么不复用 hanOnlyPortion**:那条第一道闸是「整串必须**同时**含拉丁字母和汉字」
 // (它治的是 "Gary 曹格" 这种英文名+中文名拼接),「伊藤 美奈子」没有拉丁字母、当场返回空;
 // 而且它取「最长连续汉字段」,对这个形态会返回「美奈子」(3 字 > 伊藤的 2 字)、**把姓丢掉**。
 //
-// ⚠️ **为什么不能挂进 retryArtistIdentities**:那条路的去重是 `normLoose` 口径,而
+// **为什么不能挂进 retryArtistIdentities**:那条路的去重是 `normLoose` 口径,而
 // normLoose 只保留字母和数字、**空格本来就被它丢掉**(实测 `normLoose("伊藤 美奈子")` 与
 // `normLoose("伊藤美奈子")` 逐字节相同),所以去空格变体在那套去重里跟原名完全同形、会被
 // seen 直接吞掉;dedupeArtistIdentities 同一个口径,吞第二遍。这个变体只能落在**构造检索
@@ -1828,45 +1829,41 @@ func lyricPrimaryQueryArtist(artist string) string {
 	return primary
 }
 
-// artistAliasTable 曾经是"已知英文/罗马化艺名 → 本库常用中文名"的手工对照表,
-// 到 08-30 之间从 5 条批量扩到过 23 条(用户逐条核对 Last.fm Top100 导出坐实的同人异名)。
+// artistAliasTable 是"已知英文/罗马化艺名 到 本库常用中文名"的手工对照表。
 //
-// ⚠️ 缩到只剩下面六条真实残留案例。起因是用户当面质疑"怎么还在维护手工表,
-// 不能通用处理吗"——逐条拿掉表、用通用机制(canonicalArtistViaMusicBrainz/
-// cachedQQArtistCanonicalName,见 resolveGenericArtistCanonicalName 头注)重新查了一遍
-// 原来 23 条,结果:
-//   - 17 条通用机制能查到且结果正确,直接删表交给通用机制处理。
-//   - 剩下这 6 条,两条通用机制(MusicBrainz + QQ)有的查不到/帮不上,有的更危险——
-//     会**直接给出错误答案**(david tao 一度被 MusicBrainz 排到一个无关的德国音乐人
-//     头上,不过那条本身返回空、QQ 能正常接手;真正会让 resolveGenericArtistCanonicalName
-//     提前止步于错误答案的是 lexie liu 和 wanting,见各自条目注释)——只能继续手工登记,
-//     而且这张表必须排在通用机制**前面**查,不能只当兜底:
+// 只保留通用机制(canonicalArtistViaMusicBrainz/cachedQQArtistCanonicalName,见
+// resolveGenericArtistCanonicalName 头注)覆盖不了、或会给出错误答案的六条残留案例——
+// 能靠通用机制查到且结果正确的都已删表交给通用机制处理。这两条通用机制(MusicBrainz +
+// QQ)对这六条有的查不到/帮不上,有的更危险——会**直接给出错误答案**(david tao 一度被
+// MusicBrainz 排到一个无关的德国音乐人头上,不过那条本身返回空、QQ 能正常接手;真正会让
+// resolveGenericArtistCanonicalName 提前止步于错误答案的是 lexie liu 和 wanting,见各自
+// 条目注释)——只能继续手工登记,而且这张表必须排在通用机制**前面**查,不能只当兜底:
 var artistAliasTable = map[string]string{
 	// 洪佩瑜是相对小众的歌手,MusicBrainz 搜不到、QQ 歌手搜索建议对"Pei-yu Hung"/
 	// "Pei Yu Hung"这几种写法也都是空结果——不是查错,是两边索引都没有这个人。
 	"pei-yu hung": "洪佩瑜",
-	// 这条不是"罗马化→中文"问题,是同一个日本歌手两种**都合法**的汉字/片假名写法要折成
+	// 这条不是"罗马化到中文"问题,是同一个日本歌手两种**都合法**的汉字/片假名写法要折成
 	// 项目里统一用的那个:QQ 的歌手搜索建议原样把"宇多田光"这四个字弹回来,不会主动
 	// 帮忙换成"宇多田ヒカル"(项目里唱片/曲目标签实际用的写法)——这本来就不是"查一个
 	// 不认识的名字",通用查询天然不适用。
 	"宇多田光": "宇多田ヒカル",
-	// ⚠️ 危险案例,不是"查不到"这么简单:QQ 歌手搜索建议对"Wanting"给出的第一条是
+	// 危险案例,不是"查不到"这么简单:QQ 歌手搜索建议对"Wanting"给出的第一条是
 	// "婉婷"——查证过是**另一个人**(QQ 上一位跟"婉婷/杨炆"合唱的无关歌手),真正的
 	// 曲婉婷反而是第二条。qqArtistCanonicalName 只信第一条建议(理由见其头注,躲另一个
 	// 更危险的反例),所以这条必须靠手工表**在通用机制之前**拦下来,否则会把错误答案
 	// 当成确定结果。
 	"wanting": "曲婉婷",
 	// "utada"/"hikaru utada" 这两种写法 MusicBrainz 的 canonicalArtistViaMusicBrainz 都
-	// 查不到——country=JP,不在 chineseSpeakingCountries 白名单里(这道门槛是
-	// 那个 Michael Jackson 真实故障修的,不能为了这一个人放松,见
+	// 查不到——country=JP,不在 chineseSpeakingCountries 白名单里(这道门槛不能为了
+	// 这一个人放松,否则会重新放行 Michael Jackson 那个误判,见
 	// pickChineseAlias 头注)。musicBrainzArtistAliases(retryArtistIdentities 用的那条
 	// 更宽松的查询)倒是查得到完整别名列表,但那份返回值没有 country/locale 信息,不能
-	// 直接拿来当展示名用(会重新引入 Michael Jackson 那个bug,见
+	// 直接拿来当展示名用(会重新引入 Michael Jackson 那个误判,见
 	// resolveGenericArtistCanonicalName 头注)。QQ 音乐这边,"Hikaru Utada"第一条建议是
 	// "Utada"本身(不含汉字,查不到),"utada"独立查也是同样结果。两种写法都要手工登记。
 	"utada":        "宇多田ヒカル",
 	"hikaru utada": "宇多田ヒカル",
-	// ⚠️ 危险案例,跟"wanting"同一类问题但**发生在更前面的一步**:
+	// 危险案例,跟"wanting"同一类问题但**发生在更前面的一步**:
 	// canonicalArtistViaMusicBrainz("Lexie Liu") 直接返回非空的"刘昱妤"——跟刘柏辛完全
 	// 是两个人(MB 对这个查询词的身份识别本身查错了,不是置信度不够查不到)。
 	// resolveGenericArtistCanonicalName 一旦 MusicBrainz 给出非空结果就直接采纳、不会
@@ -1933,22 +1930,22 @@ func hanOnlyPortion(s string) string {
 // enrich.go 里那一处赋值)。也就是说:我们手上明明有"这位歌手在中文曲库里叫什么",却还是
 // 拿英文名去网易云/QQ 搜,搜不到就算了。
 //
-// ⚠️ 不再额外查 knownArtistAlias(artistAliasTable 那张手工表)。退休
-// 理由:它在这里只是"方大同 ↔ Khalil Fong"这类问题的**单向**(英文 → 常用名)手工
+// 不再额外查 knownArtistAlias(artistAliasTable 那张手工表)。退休
+// 理由:它在这里只是"方大同 与 Khalil Fong"这类问题的**单向**(英文 到 常用名)手工
 // 补丁,而 musicBrainzArtistAliases(下面这条)双向通用、对任何歌手都生效(实测验证
 // 过,不是推断),这张表在这条路径上纯属冗余。
 //
 // 补充第三条(cachedQQArtistCanonicalName):MusicBrainz 两条路径合起来仍有
 // 真实缺口——查不到(李荣浩/窦靖童等十余位)或者查错成另一个同名艺人(david tao 被排到
 // 一个无关的德国音乐人头上、lexie liu 被认成"刘昱妤")。QQ 音乐自己的歌手搜索建议对
-// "罗马化名字→中文艺人"这个场景本来就是量身做的,实测同一批人绝大多数都能查对,包括
+// "罗马化名字到中文艺人"这个场景本来就是量身做的,实测同一批人绝大多数都能查对,包括
 // 上面两个 MusicBrainz 查错人的案例——加上它之后,artistAliasTable 这张手工表在
 // canonical_artist 展示名解析链路(resolveTrackEnrichment)和 Top 歌手榜身份归并两处
 // 也不再需要,已经改成统一走 resolveGenericArtistCanonicalName(musicbrainz.go),表
 // 本身缩到只剩两条通用机制都覆盖不了的真实残留案例,见 artistAliasTable 头注。
 //
-// 退休/改用通用机制的代价:对这批歌手,重试第一次会比查表多打几次真实网络请求(以前是
-// 零延迟查表)。musicBrainzArtistAliases/cachedQQArtistCanonicalName 各自按歌手持久化
+// 退休/改用通用机制的代价:对这批歌手,重试第一次会比查表多打几次真实网络请求。
+// musicBrainzArtistAliases/cachedQQArtistCanonicalName 各自按歌手持久化
 // 缓存(mbPrimaryNameCache/qqArtistNameCache,查到即落盘、跨进程重启依然命中),所以
 // 这个代价只在**每台机器第一次**真正撞上这位歌手时付一次,此后是零网络请求——包括
 // "歌词管理"手动搜索这种每次都是全新进程的场景。
@@ -1967,26 +1964,25 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 		seen[k] = true
 		out = append(out, s)
 	}
-	// 第零条(加,纯本地字符串操作、不发网络请求,排最前面):"英文名+中文名"
-	// 拼接的混合标签(如 Apple Music 常见的"Gary 曹格")——真实故障:曹格《Superman》专辑
+	// 第零条(纯本地字符串操作、不发网络请求,排最前面):"英文名+中文名"
+	// 拼接的混合标签(如 Apple Music 常见的"Gary 曹格")——举例:曹格《Superman》专辑
 	// "妳是我的寶貝",本地标签"Gary 曹格"八个源全部搜不到;单独查"曹格"四个源立刻命中,
 	// 分数都在 1100+。这类标签是"一个人的英文名+中文名拼在一起",不是"和/、/&这类合唱
 	// 连接词"(那些已经由 normalizeArtistCreditHanAnd 处理),歌词源通常只按纯中文名或
 	// 纯英文艺名索引,两种都不认这种拼接写法。见 hanOnlyPortion 头注。
 	add(hanOnlyPortion(artist))
-	// 第零点五条(加,同样是纯本地、零请求,所以跟上一条一起排在所有网络
-	// 查询前面):这台机器上同一个歌手的**别的**歌成功解析时,源那边把他署成什么名。
-	// 起因是王子(=Prince)《1999 (Edit)》九个源零候选,而下面三条在线来源对「王子」
-	// 全部落空 —— 答案其实早就躺在本机缓存里(同一个「王子」的另外两首歌,采纳候选的
-	// 署名都是 "Prince")。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注。
+	// 第零点五条(同样是纯本地、零请求,所以跟上一条一起排在所有网络
+	// 查询前面):这台机器上同一个歌手的**别的**歌成功解析时,源那边把他署成什么名——
+	// 覆盖"这位歌手在线上全部落空,但本机缓存里同一个人的另一首歌已经采纳过候选"的场景
+	// (如王子(=Prince)《1999 (Edit)》,答案就躺在同一个「王子」另外两首歌的候选署名
+	// "Prince" 里)。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注。
 	add(learnedSourceArtistAlias(artist))
 	add(canonicalArtistViaMusicBrainz(ctx, artist))
-	// 第二条(加,从"只给一个主名"扩成"给全部已登记写法"):
-	// MB 上这位歌手的其它写法。第一条是"中文名"取向 —— 只在中文圈艺人身上出结果 ——
-	// 而"本名 ↔ 艺名"(Abel Tesfaye ↔ The Weeknd)、"国际艺名 ↔ 中文常用名反过来查"
-	// (方大同 ↔ Khalil Fong)跟中文与否无关,靠这条通用查询兜底,不需要事先手工登记——
-	// 见 musicBrainzArtistAliases 头注,里面详细写了方大同这个真实案例踩过的坑(搜到的
-	// "主名"字面上跟本地标签相同不代表没有别的候选)。
+	// 第二条:MB 上这位歌手的其它已登记写法(不只给一个主名)。第一条是"中文名"取向
+	// —— 只在中文圈艺人身上出结果 —— 而"本名 与 艺名"(Abel Tesfaye 与 The Weeknd)、
+	// "国际艺名 与 中文常用名反过来查"(方大同 与 Khalil Fong)跟中文与否无关,靠这条
+	// 通用查询兜底,不需要事先手工登记——见 musicBrainzArtistAliases 头注,里面详细
+	// 写了方大同这一例踩过的坑(搜到的"主名"字面上跟本地标签相同不代表没有别的候选)。
 	for _, alt := range musicBrainzArtistAliases(ctx, artist) {
 		add(alt)
 	}
@@ -2041,17 +2037,17 @@ var albumStop = map[string]bool{
 	"i": true, "ii": true, "iii": true, "iv": true,
 }
 
-// albumTokens 除了在非字母数字处断词,还在"数字↔字母"和"拉丁字母↔CJK"的交界处断词——
+// albumTokens 除了在非字母数字处断词,还在"数字与字母"和"拉丁字母与CJK"的交界处断词——
 // 中文演唱会专辑名常见"2011Live"/"2020巡演"这种年份和后缀之间不留空格的写法,原来整段被
 // strings.FieldsFunc 当成一个词,导致跟本地(通常是英文、年份和单词之间有空格)标签的
 // "2011"+"live"两个独立词对不上、白白丢掉本该有的匹配分,容易在多个候选打平时选错。
 // 拆开后能对上"2011"+"live"这两个独立词,分数明显领先,不再靠运气打平。
 //
-// 拉丁↔CJK 交界断词是 v9 加的(周杰伦《The One 周杰伦演唱会》案):QQ 音乐把
+// 拉丁与CJK 交界断词是 v9 加的(周杰伦《The One 周杰伦演唱会》案):QQ 音乐把
 // 这张专辑写成"The One演唱会"——One 和 演唱会 之间不留空格,unicode.IsLetter 对汉字为真,
 // 原来整段粘成一个词元"one演唱会",跟本地标签的"one"+"周杰伦演唱会"零共享词、
 // albumScore=0,同一张专辑被判成"毫无亲和"。中文平台的专辑名里拉丁词与中文后缀粘连是
-// 常态,这个交界跟"2011Live"的数字↔字母交界是同一性质。⚠️ CJK **内部**仍不分词
+// 常态,这个交界跟"2011Live"的数字与字母交界是同一性质。 CJK **内部**仍不分词
 // (汉字之间没有词边界信号,"周杰伦演唱会"照旧是一个词元),所以 cjkLiveAlbumMarkers
 // 的子串匹配仍然必要,见那边注释。
 func albumTokens(s string) map[string]bool {
@@ -2167,13 +2163,13 @@ func stripParens(s string) string {
 // 顺序取决于**括号里装的是什么**,这是一整轮实测定下来的:
 //
 //	① 括号里是"另一次录音"的限定词(live/demo/original version/single version…,
-//	   titleVersionTags 认的就是这些)→ **原样标题优先**。这类括号不是噪音、是身份的
+//	   titleVersionTags 认的就是这些)到 **原样标题优先**。这类括号不是噪音、是身份的
 //	   一部分:去掉它搜回来的是另一版录音,歌词字面可能一模一样,时间轴却是另一套。
 //	   实测把裸标题无条件提前之后,"Billie Jean (Single Version)" 的酷狗候选从 806 分
 //	   掉到 207(拿回普通版,被 versionMismatchPenalty 那 600 分打下去),
 //	   "Blue Gangsta (Original Version)" 从 611 掉到 10。
 //	② 其余(remaster/deluxe/feat./bonus/Taylor's Version… —— 同一次录音的不同发行,
-//	   **故意不在** distinctRecordingVersionTags 里,见那边注释)→ **裸标题优先**。
+//	   **故意不在** distinctRecordingVersionTags 里,见那边注释)到 **裸标题优先**。
 //	   这一档才是收益来源,见下面两条实测。
 //
 // 另一种写法始终保留作**兜底**,只在前一条一无所获时才发第二次请求,所以两个方向的
@@ -2187,9 +2183,9 @@ func stripParens(s string) string {
 //   - 原样标题的必要性:LRCLIB 搜 "Automatic (Remastered 2014)" 直接回两条同名重制版,
 //     搜 "Automatic" 回的 20 条全是普通版。
 //
-// ⚠️ 搜回来的候选照旧要过 lyricTitleAccepted 那一关,判定用的始终是**本地原样标题**。
+// 搜回来的候选照旧要过 lyricTitleAccepted 那一关,判定用的始终是**本地原样标题**。
 // 放宽的只是"拿什么去搜",不是"什么算匹配" —— 换了搜索词不会让另一个版本混进来。
-// ⚠️ 去装饰有**两种**形态(去括号 + 去结构性前缀,见
+// 去装饰有**两种**形态(去括号 + 去结构性前缀,见
 // stripStructuralTitlePrefix),不再只有去括号一种。两者都只是"拿什么去搜",判定照旧
 // 走 lyricTitleAccepted。刻意**不**把两种去装饰叠起来再多加一个变体:那是没有实测依据的
 // 推测,而每多一个变体就是每个源在"一无所获"那条路上多打一次请求 —— 按这个仓库一贯的
@@ -2220,24 +2216,20 @@ func searchTitleVariants(title string) []string {
 // structuralTitlePrefixes 是曲目名前面那种**结构性标签**:Apple Music 这类平台会给串烧/
 // 间奏曲加上 "Medley: " / "Interlude: " 前缀,而歌词源的曲库里通常只有裸曲名。
 //
-// 实测(现象是「这首歌找不到歌词」):D'Angelo 的 Voodoo 专辑里那首,Apple
-// Music 报的标题是 "Medley: Greatdayndamornin' / Booty",而各源曲库里就叫
-// "Greatdayndamornin'/Booty"。带前缀去搜 **五个源全部 0 条**;去掉前缀(歌手和专辑一个字
-// 不动)**五个源全部命中**,最高分 1270。
+// 平台加的这类前缀,歌词源曲库通常没有:带前缀去搜容易全部 0 命中,去掉前缀
+// (歌手和专辑一个字不动)命中率大幅回升。
 //
 // 白名单而不是"冒号前面一律砍掉":后者会把 "Foo: Bar" 这种本来就带冒号的正常曲名切掉半截,
 // 跟另一首叫 "Bar" 的歌混为一谈。跟这个仓库里 distinctRecordingVersionTags /
 // neteaseImpersonatorRiddenArtists 一个路子 —— 只收歧义极小的,新的按实际踩坑追加。
-// 补中文写法「组曲」(现象是陶喆两首串烧「搜出来不对」/「一条都搜不到」):
-// Apple Music 中文区把同一种标签写成「组曲: 火鸟功 / 我太傻 / Melody (Live)」,而网易云曲库
-// 里就叫「火鸟功 / 我太傻 / Melody (Live)」、自报 329.0s 对本地 328.992s 分毫不差。词表原来全是
-// 拉丁词,于是带着前缀整串去搜十个源全 0 条 —— 跟上面 D'Angelo 那次逐字同型,只是换了语言。
+// 补中文写法「组曲」:Apple Music 中文区把这类标签写成「组曲: A / B / C」,词表原来
+// 只有拉丁词,带前缀整串去搜就会全 0 命中,跟上面同一种形状,只是换了语言。
 //
 // 召回落空还会往下踩一脚:首轮空触发标题反查,Apple 原产地商店那条路在同一张 31 首的现场
 // 专辑里按时长挑,挑中了另一首歌(见 appleStorefrontPickTrack 头注),把 Run Away 的词当成这首
 // 落了盘。两处各自都是真 bug、分开修 —— 这里是治本的那处:前缀剥掉就能首轮命中,压根走不到反查。
 //
-// ⚠️ 只认**整段**等于「组曲」的标签,所以「胡桃夹子组曲: 花之圆舞曲」这类 "X组曲: Y" 的古典乐
+// 只认**整段**等于「组曲」的标签,所以「胡桃夹子组曲: 花之圆舞曲」这类 "X组曲: Y" 的古典乐
 // 写法砍不掉(label 是「胡桃夹子组曲」、不等于「组曲」),跟 "Medleys: X" 被挡在门外是同一条判据。
 var structuralTitlePrefixes = []string{"medley", "interlude", "组曲"}
 
@@ -2287,7 +2279,7 @@ func structuralTitlePrefixColon(title string) (int, int) {
 // 这一类:它们指的是同一次录音的不同发行/母带,时间轴基本一致,拿来用没问题,收进来只会
 // 制造大量假不匹配(本地标签和各源标签在这类后缀上本来就经常不一致)。
 //
-// ⚠️ **"album version" 同理移出**(v17):它命名的是**默认那一版**("专辑上那一版",
+// **"album version" 同理移出**(v17):它命名的是**默认那一版**("专辑上那一版",
 // 相对于电台剪辑/单曲版而言),一侧写了、另一侧沉默时,沉默的那一侧多半就是同一版 —— 这跟
 // live/demo 相反(那些词沉默=录音室默认版=另一次录音,所以不对称本身就是证据)。全库自报时长
 // 当地面真相:这个键"一侧独有"的 49 条罚分候选里,时长差 ≤3% 的 44 条、**>12% 的 0 条**
@@ -2301,7 +2293,7 @@ func structuralTitlePrefixColon(title string) (int, int) {
 // 也故意只收多词短语或歧义极小的单词:单独一个 "edit"/"mix"/"version"/"dub"/"club" 太
 // 容易命中正常曲目名,所以只认 "radio edit"/"extended"/"club mix" 这类完整说法。
 //
-// ⚠️ **别跟 Swift 侧 HanScript.swift 的 versionMarkerWords / cjkVersionWords /
+// **别跟 Swift 侧 HanScript.swift 的 versionMarkerWords / cjkVersionWords /
 // ambiguousConcertMarkers 对齐**(反向排查时确认):那三张表回答的是**另一个问题**
 // ——"这两条 Last.fm 记录该不该算同一首歌"(PlayCountFold 的分隔符归一),所以它们**故意收**
 // remaster / version / mix / dub / session 这些词(播放次数合并里"有版本标记"就该谨慎),
@@ -2310,7 +2302,7 @@ func structuralTitlePrefixColon(title string) (int, int) {
 // 搜索面板那几组(lyricsourceregistry_test.go / lyricsourcefailure_test.go 的 TestSwift*),
 // 不含这张词表。
 //
-// ⚠️ 「club」这个裸词有一个**实测过的**反例,别手滑加进来:同一张专辑上的「Earth Song」,
+// 「club」这个裸词有一个**实测过的**反例,别手滑加进来:同一张专辑上的「Earth Song」,
 // 本地标题就叫 "Earth Song"(Apple 没给它任何混音标记)、抽不出限定词,而正确候选是
 // "Earth Song (Hani's club experience)"。收了裸「club」的话,正确的那条反而会被判成
 // 「本地没标记 / 候选有标记」的版本不符,吃 -600 —— 把唯一对的答案打下去。
@@ -2319,22 +2311,18 @@ var distinctRecordingVersionTags = []string{
 	"live", "unplugged", "acoustic", "instrumental", "karaoke",
 	"remix", "extended", "radio edit", "alternate", "alternative version",
 	"rehearsal", "reprise", "a cappella", "acapella",
-	// 补的「…mix」家族(现象是「Stranger in Moscow (Tee's In-House Club Mix)
-	// 配了正常版的歌词」)。这些是舞曲混音的标准叫法,跟 remix 是一回事、只是不带 re-。
+	// 补的「…mix」家族。这些是舞曲混音的标准叫法,跟 remix 是一回事、只是不带 re-。
 	// 词表漏掉它们的后果是**两处**、不是一处:titleVersionTags 抽不出限定词,于是
-	// ①searchTitleVariants 走「裸标题优先」——酷狗第一条查询 "Michael Jackson Stranger
-	// in Moscow" 拿回正常版、通过校验就 break,而**排在第 1 位的混音版原样条目从没被看到**;
+	// ①searchTitleVariants 走「裸标题优先」,混音版原样条目可能从没被看到;
 	// ②versionTagsMismatch 判两边都是空集、-600 不触发,正常版稳稳留在榜首。
 	"club mix", "radio mix", "house mix", "dub mix", "dance mix", "vocal mix", "club edit",
-	// 补中文版本限定词(实测坐实:「周杰伦 - 蜗牛 (伴奏)」查 lyricfind,YouTube
-	// Music 召回的是正常演唱版,versionTagsMismatch 因为词表只认英文、判两边都是空集、
-	// 该扣的 -600 没触发,伴奏版被当成正常版收了)。这个词表此前全是拉丁词,任何本地标签用
-	// 中文标注"另一次录音"的场景对全部七个源一视同仁地失效——不是 lyricfind 专属,只是被
-	// 它先撞上。只收歧义低、在标题括号/破折号位置里基本只作版本限定词讲的词(跟上面拉丁词
-	// 一样的收词标准),不收"翻唱"/"改编版"这类含义太宽、容易连累正常标题的词。
-	// ⚠️ 这些中文词进限定词集合时会经 canonicalVersionTag 折成对应的英文键(现场→live、
-	// 不插电→unplugged……见 versionTagAliases),集合比对才不会把「(Live)」和「(现场)」
-	// 当成两个版本(陶喆《今天没回家 (Live)》案)。
+	// 补中文版本限定词——不然本地标签用中文标注"另一次录音"的场景对全部七个源一视同仁
+	// 地失效(词表只认英文时,该扣的 -600 不会触发,伴奏版会被当成正常版收了)。只收歧义
+	// 低、在标题括号/破折号位置里基本只作版本限定词讲的词(跟上面拉丁词一样的收词标准),
+	// 不收"翻唱"/"改编版"这类含义太宽、容易连累正常标题的词。
+	// 这些中文词进限定词集合时会经 canonicalVersionTag 折成对应的英文键(现场到live、
+	// 不插电到unplugged……见 versionTagAliases),集合比对才不会把「(Live)」和「(现场)」
+	// 当成两个版本。
 	"现场", "不插电", "伴奏", "纯音乐", "清唱", "混音", "加长版", "阿卡贝拉", "排练",
 	// 粤语/国语/cantonese/mandarin **不在这张表里**(收进来、v15 移出):
 	// 同名"(粵語)"/"(國語)"两版确是两次不同录音(跟 HanScript.swift 里 PlayCountVariants 对
@@ -2344,30 +2332,22 @@ var distinctRecordingVersionTags = []string{
 	// segmentVersionTags 并进同一个集合(v14 的纯标签比对形态原样保留),再由批级语种判决
 	// (applyLanguageVersionVerdicts)决定要不要把它当版本差异——见那边头注。
 	//
-	// 补 "day version"/"night version":陈奕迅《K歌之王 AIR》(2025 年 AIR Studios
-	// 管弦重录,Day Version=粤语 / Night Version=国语)这类"昼夜双生"命名。裸 "version" 仍然
-	// 刻意不收(见上),这两个是完整短语。"AIR" 本身在括号外、titleVersionTags 扫不到,收进
-	// 词表也没用,不收。
+	// 补 "day version"/"night version":AIR Studios 管弦重录专辑常见的"昼夜双生"命名
+	// (Day Version=粤语 / Night Version=国语这类)。裸 "version" 仍然刻意不收(见上),
+	// 这两个是完整短语。"AIR" 本身在括号外、titleVersionTags 扫不到,收进词表也没用,不收。
 	"day version", "night version",
-	// 补裸 "edit"(现象是 PRINCE《Diamonds and Pearls (2023 Remaster)》配了酷狗
-	// 《Diamonds And Pearls (Edit)》的词——单曲剪辑版,自报 260s 对本地 283s,8% 的差距够不到
-	// sourceDurationOff 的 12% 门槛,末句时刻又恰好落在容差里,于是 +400 逐字 +250 共识 + 120
-	// 标题精确 一路绿灯 1122 分,压过 2023 Remaster 精确同名、专辑同名的 QQ 1079)。词表原来只有
-	// "radio edit"/"club edit" 两个带前缀的写法,"(Edit)"/"(2003 Edit)"/"(Single Edit)" 这种最常见
-	// 的剪辑版标法一条都不认——它跟 remaster 不同:remaster 是同一次录音的另一次母带(刻意不收),
-	// edit 是剪短了的另一个版本,时间轴对不上。全库 2652 条决策扫过:受影响的另 20 条候选全是
-	// Michael Jackson《Number Ones》"(2003 Edit)"/"(Radio Edit)" 系的,方向一致(本地是 edit 时
-	// 非 edit 候选该扣、反之亦然),没有一条反向。
+	// 补裸 "edit":词表原来只有 "radio edit"/"club edit" 两个带前缀的写法,
+	// "(Edit)"/"(2003 Edit)"/"(Single Edit)" 这种最常见的剪辑版标法一条都不认——它跟
+	// remaster 不同:remaster 是同一次录音的另一次母带(刻意不收),edit 是剪短了的
+	// 另一个版本,时间轴对不上。全库 2652 条决策扫过:受影响的另 20 条候选方向一致
+	// (本地是 edit 时非 edit 候选该扣、反之亦然),没有一条反向。
 	//
-	// ⚠️ 这个词**只按词元匹配、不按子串**(见 wordOnlyVersionTags):子串匹配会把 "(Deluxe Edition)"
+	// 这个词**只按词元匹配、不按子串**(见 wordOnlyVersionTags):子串匹配会把 "(Deluxe Edition)"
 	// "(Expanded Edition)" 里的 edition 当成 edit,整个 Deluxe 系专辑跟原版之间凭空多出 -600。
 	"edit",
-	// 补 Apple Music「DJ Mix」专辑那一套命名(现象是 Fred again..《Winnie
-	// (end of me) [Mixed]》/ 专辑「Live from Mexico City, Mexico, Dec 12, 2025 (DJ Mix)」
-	// 配了录音室原版《Winnie (end of me)》的词——本地 410s,那份词末句停在 3:51、源自报
-	// 242s,时间轴整段错位)。这类专辑是**一场演出的连续混音**:每条曲目都是从上一首淡入
-	// 淡出里剪出来的一段,前后带过渡、长度跟原版对不上,原版时间轴永远套不准,而且没有
-	// 任何歌词源存有这个版本的轴——正确结果是不配词,不是换一条候选。
+	// 补 Apple Music「DJ Mix」专辑那一套命名。这类专辑是**一场演出的连续混音**:每条
+	// 曲目都是从上一首淡入淡出里剪出来的一段,前后带过渡、长度跟原版对不上,原版时间轴
+	// 永远套不准,而且没有任何歌词源存有这个版本的轴——正确结果是不配词,不是换一条候选。
 	//
 	// 词表原来只有 "club mix"/"radio mix"/"house mix"/"dub mix"/"dance mix"/"vocal mix"
 	// 这些**带前缀**的写法,Apple 用的裸 "(DJ Mix)" 一条都不认;曲名后缀「[Mixed]」另走
@@ -2381,7 +2361,7 @@ var distinctRecordingVersionTags = []string{
 // 词元级的,这里复用它。
 var wordOnlyVersionTags = map[string]bool{"edit": true}
 
-// versionTagAliases:同一种版本声明的不同写法 → 规范键。
+// versionTagAliases:同一种版本声明的不同写法 到 规范键。
 //
 // 起因:陶喆《今天没回家 (Live)》,本地专辑「Soul Power (现场原音专辑)」,酷狗候选「今天没回家
 // (Live)」/ 专辑「Soul Power (Live Concert)」—— 两边写的明明是同一件事(一场演唱会的现场版),
@@ -2425,12 +2405,12 @@ func canonicalVersionTag(tag string) string {
 // 王小龙/凯西……这些都是不同 DJ 各自的艺名,列不完,不能像上面那样按固定字符串收进
 // distinctRecordingVersionTags,只能按模式认)。
 //
-// 加 kuwo 时全库扫描实测坐实:酷我上有多个 DJ 把周杰伦/王力宏/林俊杰/方大同/
+// 全库扫描发现:酷我上有多个 DJ 把周杰伦/王力宏/林俊杰/方大同/
 // 孙燕姿等一大批歌手的热门曲目重新混音上传成"歌名 (DJ 阿若版)"这类命名,candidateArtist
 // 字段仍然写的是原唱歌手名——扫描出的 125 首"命中"里有 94 首(75%)其实是靠这个漏洞才
 // 顶着原唱名义混进候选列表,不是真的搜到了原版。
 //
-// ⚠️ DJ 名字不能只认中文:用 [\p{Han}0-9.]* 会漏掉"稻香 (完整版|DJ Ray版)"
+// DJ 名字不能只认中文:用 [\p{Han}0-9.]* 会漏掉"稻香 (完整版|DJ Ray版)"
 // ——"Ray"是拉丁字母,不在那个字符类里,导致这条候选完全没被认出带 DJ 标记,原样通过。
 // 改用 \p{L}(任意 Unicode 字母,中文/拉丁/其它文字都算)才能不管 DJ 艺名用什么文字都认得出。
 var djRemixTagPattern = regexp.MustCompile(`(?i)dj[\p{L}0-9.]*版`)
@@ -2549,7 +2529,7 @@ func parentheticalSegments(s string) []string {
 // 双向判定:本地是正式版而候选是 demo/live(会展示错版本的时间轴),以及本地是 demo 而候选
 // 是正式版(同理),都算不匹配。
 //
-// **歌名和专辑名一起看**。实测坐实这一点非做不可:PRINCE 的 "1999"
+// **歌名和专辑名一起看**,举例说明为什么非做不可:PRINCE 的 "1999"
 // (本地专辑 The Hits/The B-Sides)匹配到了 Musixmatch 的一条现场版,而那条候选的
 // **歌名就是干净的 "1999"**,"Live" 藏在它的专辑名里
 // ("Nude Tour, 1990 (Remastered, Live On Broadcasting)")——只看歌名的话这道闸门
@@ -2710,11 +2690,10 @@ func recordingVersionTagsIn(title, album string) map[string]bool {
 const (
 	languageVersionTagCantonese = "粤语"
 	languageVersionTagMandarin  = "国语"
-	// 补的三个跨语言键(现象是「为什么这首歌匹配错版本了,匹配成英文版本了」——
-	// 优里《ドライフラワー》被酷狗/QQ 的「Dried flower (English ver.)」顶掉)。原来这套只认
-	// 粤语/国语,是按中文圈双版本的形状做的;而「英文版/日文版/韩文版」同样是**另一次录音**,
-	// 判据完全一样,只是当初没进表 —— 于是「(English ver.)」压根没被认成限定词,两边集合都是
-	// 空集、不算版本不符,那 600 分一分没扣。两版时长还常常几乎相同(这次 285.6s 对 285.7s,
+	// 补的三个跨语言键:这套只认粤语/国语,是按中文圈双版本的形状做的;而
+	// 「英文版/日文版/韩文版」同样是**另一次录音**,判据完全一样,只是原来没进表——
+	// 于是「(English ver.)」压根没被认成限定词,两边集合都是
+	// 空集、不算版本不符,那 600 分一分没扣。两版时长还常常几乎相同(如 285.6s 对 285.7s,
 	// 差 0.1 秒),时长判据救不了,只能靠这里认出来。
 	languageVersionTagEnglish  = "英语"
 	languageVersionTagJapanese = "日语"
@@ -2746,7 +2725,7 @@ func languageVersionTagOfSegment(seg string) string {
 	switch {
 	case strings.Contains(n, "粤语") || strings.Contains(n, "cantonese"):
 		return languageVersionTagCantonese
-	// ⚠️「中文版 / chinese / 华语」**归到国语这同一个键**,不另开一个。它们说的是同一件事,
+	// 提醒「中文版 / chinese / 华语」**归到国语这同一个键**,不另开一个。它们说的是同一件事,
 	// 分成两个键的后果是:本地标「国语」、候选标「中文版」会被判成两个不同的版本,凭空造出
 	// 一批新的错配 —— 比现在漏判更糟。
 	case strings.Contains(n, "国语") || strings.Contains(n, "mandarin") ||
@@ -2780,7 +2759,7 @@ func withoutLanguageVersionTags(tags map[string]bool) map[string]bool {
 // (经 titleVersionTags,跟版本限定词同一套抽取位置)。没写返回空串;两个键同时出现(理论上
 // 不该有)按"说不清"返回空串。
 //
-// ⚠️ **刻意不看专辑名**——不看专辑括号段,也不看「国语精选」这类不带括号的专辑名子串。两个都看的话,
+// **刻意不看专辑名**——不看专辑括号段,也不看「国语精选」这类不带括号的专辑名子串。两个都看的话,
 // 金标集当场抓到反例:陈奕迅《Shall We Talk》是粤语歌,本地却收在《陈奕迅 国语精选》
 // 合辑里(酷狗/QQ 自报 yue),按专辑名推成国语就把两条正确的粤语候选各罚了 -600、反把 LRCLIB
 // 那条(专辑「七(国语新歌+精选)」)抬成冠军;同一张《七》里 K歌之王 是国语版而 Shall We Talk 是
@@ -2841,12 +2820,12 @@ const (
 //	  理由见 declaredLanguageVersion;
 //	②候选里有专辑**精确同名**、自报时长与本地 ≤0.5% 吻合、且声明了语种的:那一张专辑收的就是这个版本
 //	  (QQ 的「K歌之王 (粤语)」挂在《打得火热》上、自报 222s 对本地 222.351s,本地专辑也是《打得火热》
-//	  → 粤语)。时长门是防"同一张专辑收了两个语种版本"(张继聪《To Be Or Not To Be》案,见函数体
-//	  注释);多条合格候选声明不一致 → 说不清;
+//	  到 粤语)。时长门是防"同一张专辑收了两个语种版本"(张继聪《To Be Or Not To Be》案,见函数体
+//	  注释);多条合格候选声明不一致 到 说不清;
 //	③候选自报时长能把两个语种版本分开:两种语种都有候选自报了时长,其中一种最接近的差 ≤0.5%、另一种
-//	  最接近的也 ≥1.5%(阈值理由见常量注释)→ 本地是接近的那种。只有一种语种在场时**不推**——
+//	  最接近的也 ≥1.5%(阈值理由见常量注释)到 本地是接近的那种。只有一种语种在场时**不推**——
 //	  "它的时长对得上"对两版同时长的歌毫无区分力,推错的代价正是这套机制要防的那种错配。也**不做**
-//	  反向推断("声明了粤语的都对不上时长、某条没声明的对得上 → 本地是国语"):同一次录音跨发行的
+//	  反向推断("声明了粤语的都对不上时长、某条没声明的对得上 到 本地是国语"):同一次录音跨发行的
 //	  自报时长就见过 1.7~2% 的漂移,会把同语种的再版候选误判成另一语种。代价是《七 (新歌+精選)》
 //	  那两条(国语音轨、候选池里唯一的国语候选没有任何语种声明)这一轮仍救不回来,如实记在 09 章。
 //
@@ -2926,7 +2905,7 @@ func inferLocalLanguageVersion(localTitle, localAlbum string, durationSecs float
 // 候选的 languageVersionMismatch / languageVersionAgrees 写好。跟 corroboratedEndings /
 // contentConsensusPeers 一样是批级步骤,必须在 scoreLyricCandidateDetailed 之前跑(两条打分
 // 流水线各调一次,见 enrich.go);直接构造 lyricCandidate 的调用点不调它,两个字段保持 false,
-// 行为等于 v14。两边任一不知道语种 → 两个字段都 false。
+// 行为等于 v14。两边任一不知道语种 到 两个字段都 false。
 func applyLanguageVersionVerdicts(localTitle, localAlbum string, durationSecs float64, candidates []lyricCandidate) {
 	local := inferLocalLanguageVersion(localTitle, localAlbum, durationSecs, candidates)
 	for i := range candidates {
@@ -2974,7 +2953,7 @@ var sameRecordingExtraTagWhitelist = map[string]bool{
 // 实测:11 条误罚因此取消(Jackson 5《Never Can Say Goodbye (Single Version)》对 QQ 裸标题
 // 同专辑 180s vs 180.8s、逐字、共识 250 那一类),3 首冠军换成带逐字的同一录音。
 //
-// ⚠️ acoustic 家族**刻意不进**这张表(只留在第④门):本地标了 acoustic 而候选没标时,候选
+// acoustic 家族**刻意不进**这张表(只留在第④门):本地标了 acoustic 而候选没标时,候选
 // 可能就是普通录音室版,而不插电版跟原版时长常常差不多 —— 时长吻合替它作保不住。方向不对称
 // 是有意的,见 sameRecordingDespiteVersionTags 第③门的注释。
 var sameRecordingNamingOnlyTags = map[string]bool{
@@ -2986,17 +2965,13 @@ var sameRecordingNamingOnlyTags = map[string]bool{
 // 这里回答的是它的姊妹问题 —— 限定词的**命名不对称**(源平台标了演奏方式、本地曲名没标)
 // 该不该当版本差异罚 -600。
 //
-// 起因(现象是「陈奕迅《孤独探戈 (Live)》匹配错了」):本地专辑
-// 《The Easy Ride 演唱会 (Live)》,网易云库里**有**正确版本
-// 「孤独探戈(Acoustic Piano)(Live)」(专辑 The Easy Ride Live 陈奕迅演唱会,自报时长
-// 215.4s 与本地 215.373s 逐位吻合 —— 同一次录音的铁证),但它比本地曲名多一节
-// "(Acoustic Piano)",versionTagsMismatch 判两边限定词集合不等、-600 —— 即便召回也
-// 打不过错场次/录音室版的候选。这场演出本来就是钢琴伴奏演绎,"acoustic"描述的是
-// **这场演出本身**,不是另一个版本;Apple 只是没把这层写进曲名。
+// 起因:限定词的**命名不对称**(源平台标了演奏方式、本地曲名没标)该不该当版本差异罚
+// -600——比如候选自报时长与本地逐位吻合、显然是同一次录音,却因为多写了一节
+// "(Acoustic Piano)"这类描述性词被判限定词集合不等,即便召回也打不过错场次的候选。
 //
 // 四道门全过才豁免:①双方都自报了时长且相差 ≤1%(与第 14 条同一档 —— 比打分层那个
 // 25% 严 25 倍,同一次录音跨平台只差在取整);②专辑有亲和(albumScore ≥1,两边都非空);
-// ③候选**不缺**本地已有的任何限定词(本地标 Live 候选没标 → 时长再吻合也可能是录音室版,
+// ③候选**不缺**本地已有的任何限定词(本地标 Live 候选没标 到 时长再吻合也可能是录音室版,
 // 不豁免);④候选**多出**的限定词全部在 sameRecordingExtraTagWhitelist 里(见上)。
 func sameRecordingDespiteVersionTags(
 	localTitle, localAlbum string, localDurationSecs float64,
@@ -3072,7 +3047,7 @@ var liveAlbumMarkerTokens = map[string]bool{
 
 // cjkLiveAlbumMarkers 是上面那张表里需要按**子串**匹配的中文词:albumTokens 对 CJK
 // **内部**不分词(汉字之间没有词边界信号,"录音棚现场"/"周杰伦演唱会"整段是一个词元),
-// 粘连词元里的标记词只能靠子串认。(v9 起拉丁↔CJK 交界会分词,"Timeless演唱会"这类
+// 粘连词元里的标记词只能靠子串认。(v9 起拉丁与CJK 交界会分词,"Timeless演唱会"这类
 // 混排粘连已经能拆出独立的"演唱会"词元,但纯中文粘连仍然只有子串一条路。)拉丁词
 // **不做**子串匹配——"Alive"/"Deliver" 含 "live",子串判会把录音室专辑误判成现场专辑。
 var cjkLiveAlbumMarkers = []string{"现场", "演唱会", "音乐会"}
@@ -3164,7 +3139,7 @@ func liveIdentityTokens(artist, title, album string) map[string]bool {
 //	③ 两边剥掉歌手名和 live 类通用词后**各自还有身份词**(全是通用词的一边等于没有做身份
 //	   声明,构不成矛盾)。身份词的来源 v16 起是 `liveIdentityTokens`:专辑名 ∪ 曲名里自带
 //	   现场标记的限定段 —— 候选专辑为空、场次只写在曲名括号里(酷狗常态)也算做了声明;
-//	   本地侧同一口径,曲名括号里的场馆/年份也算进本地身份词(只会让"共享词元→放过"更容易)。
+//	   本地侧同一口径,曲名括号里的场馆/年份也算进本地身份词(只会让"共享词元到放过"更容易)。
 //	   v16 之前只看专辑名、候选专辑为空直接放行,见 liveIdentityTokens 注释里的稻香案;
 //	④ 两个身份词集合**完全不相交**(共享哪怕一个词元——年份、场馆、巡演名——都当同一场
 //	   演出的不同写法放过:方大同《15 (Live in Hong Kong 2011)》vs 网易云《15 香港演唱会
@@ -3219,7 +3194,7 @@ func liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, candTitle, c
 // 收紧的代价实测为**零**:250 首全量候选数据里,「旧规则(子串)认、新规则不认」的候选
 // 一条都没有 —— 那个分支从来没有真正起过作用,只是在攒风险。
 //
-// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜"(那是 searchTitleVariants 的事)。
+// 这只管"接不接受这个候选",不管"拿什么去搜"(那是 searchTitleVariants 的事)。
 // 判定对象**始终是本地原样标题**,跟这条候选是用哪个搜索词搜到的无关。
 //
 // 真正的"版本差异"(live/demo/original version 这类另一次录音)不在这里拦,由
@@ -3246,7 +3221,7 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	// ④ 结构性前缀:本地标签给串烧/间奏曲加了 "Medley: " 这类前缀,歌词源曲库里是裸曲名
 	// (见 stripStructuralTitlePrefix 的实测记录)。
 	//
-	// ⚠️ 这一条**没有**违反上面那句"绝不认任意的双向子串包含":去掉一个白名单里的结构性
+	// 这一条**没有**违反上面那句"绝不认任意的双向子串包含":去掉一个白名单里的结构性
 	// 前缀之后做的仍然是**相等**判定,不是包含。"Real Love" 依旧不会命中 "Real Love Baby"
 	// —— 那两个串谁都没有这种前缀,砍不掉任何东西,相等判定照旧不成立。
 	fc := normLoose(stripStructuralTitlePrefix(stripParens(candidateTitle)))
@@ -3349,13 +3324,13 @@ const (
 )
 
 // contentConsensusPeers 对整批候选统一计算"每个源的正文被**哪些其它源**印证"。
-// 打分侧只看 len(peers):>=2 → +250 / ==1 → +150 —— 判据一个字没变。
+// 打分侧只看 len(peers):>=2 到 +250 / ==1 到 +150 —— 判据一个字没变。
 //
-// ⚠️ 返回**名单**而不是计数:两两 Jaccard 本来就在下面这个双重
+// 返回**名单**而不是计数:两两 Jaccard 本来就在下面这个双重
 // 循环里算过了,只是原来当场折成一个 int 扔掉了配对关系。而"跟谁一致"恰恰是事后复盘
 // 唯一缺的那一环:全库 4110 场真实竞争里 55.9% 是"冠亚军分差<=40 且双方都拿到共识分",
 // 这时决策存档答不出"这两份到底是不是同一份词"——是"同一份词的两个副本、选谁都行"
-// (决策 49 的消融实测:行数项翻盘 57/57 都是 right→right、60% 的翻盘对 Jaccard>=0.90),
+// (决策 49 的消融实测:行数项翻盘 57/57 都是 right到right、60% 的翻盘对 Jaccard>=0.90),
 // 还是"两份不同的词、被 23 分的分差抛硬币选中了一份"。名单一存,这个问题就地可答。
 // 名单只进决策留痕(只写不读),**不参与任何判据** —— 所以不 bump lyricsScoringVersion。
 //
@@ -3385,7 +3360,7 @@ const (
 // 那只有 1 家独立印证。所以 agree 列表按家族去重,列表长度直接就是"独立信源数",
 // len(consensusPeers[源]) 那两个消费点(enrich.go)不用各自再去重一遍。
 //
-// ⚠️ 留痕里因此只会看到同家族的**第一个**代表(名单进 lyricsDecision 的 consensus_peers)。
+// 留痕里因此只会看到同家族的**第一个**代表(名单进 lyricsDecision 的 consensus_peers)。
 // 这是有意的:那个字段回答的是"有几家独立信源跟它一致、分别是谁",不是"哪些源的正文长得像"。
 //
 // Deezer 的**时间轴**其实是它自己做的(LyricFind 只供词),所以严格说两条管道只有正文同源;
@@ -3421,7 +3396,7 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 		}
 	}
 	for _, c := range candidates {
-		// ⚠️ 真实故障修复的一部分:这里**不再**把 isProbablyWrongLanguageLyrics
+		// 这里**不再**把 isProbablyWrongLanguageLyrics
 		// 也算进排除条件——那样会跟 scoreLyricCandidateDetailed 新增的
 		// "consensusPeers>=1 时豁免语言闸"互相咬死:如果判定语言不对就先被排除出统计,
 		// 永远不可能有 consensusPeers>=1,豁免条件永远打不开(见那边的头注,Gareth.T
@@ -3495,7 +3470,7 @@ func titleMatchTierPoints(candidateTitle, localTitle string) int {
 // (批级语种判决说两边同一语种版本)时,括号里只有语种标签的候选按"纯噪音括号"升回精确档——
 // 「K歌之王 (粤语)」对本地「K歌之王」拿 120 而不是 60。没有这一步,光免掉 versionTags -600 也
 // 救不回带逐字时间轴的正确候选:applyWordTimingTitleOverride 会因为亚军标题档更高(120>60)把
-// 它的 +400 撤掉(K歌之王案实测:免罚后 1123→723,仍输给 867 的网易云)。false 时等于 v14。
+// 它的 +400 撤掉(K歌之王案实测:免罚后 1123到723,仍输给 867 的网易云)。false 时等于 v14。
 func titleMatchTierPointsIgnoringLanguage(candidateTitle, localTitle string, ignoreLanguage bool) int {
 	nct, nlt := normLoose(candidateTitle), normLoose(localTitle)
 	if nct == "" || nlt == "" {
@@ -3536,7 +3511,7 @@ func parenOnlyVersionTags(title string) map[string]bool {
 // segmentVersionTags 在一个段落里找版本限定词,按**词**匹配而不是子串匹配。
 //
 // 子串匹配在这里是实打实的坑:normLoose 会把空格标点全挤掉,"feat. Oliver Tree" 变成
-// "featolivertree" —— 里面凭空出现 "live";"feat. Demons" → "featdemons" 命中 "demo"
+// "featolivertree" —— 里面凭空出现 "live";"feat. Demons" 到 "featdemons" 命中 "demo"
 // (审阅实测)。而 feat. 名单恰恰是 titleMatchTierPoints 最该判成"纯噪音括号、
 // 升回精确档"的形态,子串匹配把这个升档逻辑对着它自己的主场用例关掉了。
 // distinctRecordingVersionTags 里的拉丁词按非字母数字切词后比对连续词序列即可。

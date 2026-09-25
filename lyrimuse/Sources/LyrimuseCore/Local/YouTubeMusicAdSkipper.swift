@@ -18,7 +18,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// ## JS 这一侧能做的都试过了(一天五版,真机日志 `ytmusic-skip` 类别)
 ///
-/// ⚠️ 这些点法**全部无效**,别再试:裸 `.click()`;完整指针事件序列;四种 DOM 点法(mousemove 唤出控件 +
+/// 这些点法**全部无效**,别再试:裸 `.click()`;完整指针事件序列;四种 DOM 点法(mousemove 唤出控件 +
 /// `pointerType: mouse` 序列 / 发给文字节点 / `focus()+click()` / 键盘 Enter);播放器自己的 API
 /// `onAdUxClicked('skip-button', <id>)` —— **全部** `verify=STILL`,广告视频时间逐秒照走(20:07、20:15、20:25
 /// 三条广告)。结论:这个播放器的跳过键只认真实用户输入(`isTrusted` 那一类检查)。另一条死路是
@@ -34,11 +34,11 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 /// YT Music 标签页、注入一段 JS、拿回返回值(那段 AppleScript 模板里每一行的来历见那个文件的头注)。
 /// 一次往返 ~0.2s、会阻塞,调用方自己放到后台线程。
 ///
-/// ⚠️ **JS 里不许出现双引号,也别用反斜杠**(它整段要嵌进 AppleScript 的双引号字符串,双引号的问题见
+/// **JS 里不许出现双引号,也别用反斜杠**(它整段要嵌进 AppleScript 的双引号字符串,双引号的问题见
 /// `BrowserTabProbeScript` 头注;反斜杠会先被 AppleScript 当转义序列吃掉,`\\s` `\\d` 这类正则写不出来 ——
 /// 用 `[0-9]` / `String.fromCharCode` 绕),selftest 钉着。
 ///
-/// ⚠️ 多标签页:模板对每个匹配域名的标签页依次执行,返回值**不含** `NOTFOUND` 就停下来。所以这段 JS
+/// 多标签页:模板对每个匹配域名的标签页依次执行,返回值**不含** `NOTFOUND` 就停下来。所以这段 JS
 /// 对"有播放器但此刻不在广告态"的标签页也回 `NOTFOUND`,让搜索继续到真正在放广告的那一页 ——
 /// 代价是分不清"广告刚结束"和"没有标签页",两种情况对用户的反馈是同一句(见 `Outcome.notFound`)。
 ///
@@ -52,8 +52,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusi
 ///
 /// ## 做完要复核
 ///
-/// 动完等 `verifyDelay` 再探一次(`verifyJS`):播放器离开广告态、或徽章翻页(1/2 → 2/2)→ `.skipped`;
-/// 同一条广告还在走 → `.clickedNoEffect`,用户看到「没能跳过这条广告」而不是一片安静。每一步记日志。
+/// 动完等 `verifyDelay` 再探一次(`verifyJS`):播放器离开广告态、或徽章翻页(1/2 到 2/2)到 `.skipped`;
+/// 同一条广告还在走 到 `.clickedNoEffect`,用户看到「没能跳过这条广告」而不是一片安静。每一步记日志。
 public enum YouTubeMusicAdSkipper {
     public enum Outcome: Equatable, Sendable {
         /// 按下去了,而且复核时广告已经走了(播放器离开广告态,或翻到了插播里的下一条)。
@@ -93,7 +93,7 @@ public enum YouTubeMusicAdSkipper {
     ///   `SKIPPABLE|<tag>.<class>|<徽章文字>|<视频整秒>` / `NOTYET|<秒数或空>` / `NOTFOUND`。
     /// 找**有尺寸**的跳过键(选择器按 YouTube 播放器近几年的几套命名都列上,真机抓到的是 `.ytp-ad-skip-button-modern`;
     /// 按钮在 DOM 里提前就存在、只是 0×0,光 `querySelector` 命中不等于平台允许了),找不到就回 NOTYET。
-    /// ⚠️ 这段脚本不派事件、不碰 `video.currentTime`(前五版试过的都在这儿,见类头注),selftest 钉着;选择器列表
+    /// 这段脚本不派事件、不碰 `video.currentTime`(前五版试过的都在这儿,见类头注),selftest 钉着;选择器列表
     /// 跟 `AccessibilitySkipPress.skipButtonClassPrefixes` 同源。
     public static let skipJS = """
     (function(){\
@@ -169,7 +169,7 @@ public enum YouTubeMusicAdSkipper {
     }
 
     /// 「按了之后广告走了没」的判据(纯函数,selftest 钉着):播放器离开广告态算走了;仍在广告态但**徽章文字变了**
-    /// (「1/2」→「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。⚠️ **视频时间倒回不算**:
+    /// (「1/2」到「2/2」)也算 —— 那是跳过了这一条、插播里的下一条接上了。 **视频时间倒回不算**:
     /// 真机坐实,YouTube 对被 seek 的广告是从头重放(时间归 0、徽章不变),按"倒回 = 下一条了"会把重放误报成跳过。
     /// 徽章为空时只认离开广告态。`videoTime` 仍带着,只为日志。
     public static func adAdvanced(afterClick click: ClickResult, verify: VerifyResult) -> Bool {
@@ -204,7 +204,7 @@ public enum YouTubeMusicAdSkipper {
         return YouTubeMusicAdProbe.shared.cachedBadgeVerdict(forKey: key, now: now) == .ad
     }
 
-    /// 跑一次:门槛 → AXPress → 复核。同步、会阻塞(两次 AppleEvent 往返 + 一次 AX 遍历 + `verifyDelay`,正常 ~1.2s,
+    /// 跑一次:门槛 到 AXPress 到 复核。同步、会阻塞(两次 AppleEvent 往返 + 一次 AX 遍历 + `verifyDelay`,正常 ~1.2s,
     /// 极端 6s 超时),调用方放后台;调用方自己保证**同一时刻只跑一份**(`NotchPlayback.skipAdInFlight`)—— 真机日志里
     /// 用户连按几下,几份并行的 run 交错,各自的复核读到的是别人按完的页面。nil = 连门槛脚本都没跑成(不是浏览器 /
     /// 没有自动化权限 / osascript 超时或非零退出)。
@@ -278,9 +278,9 @@ public enum YouTubeMusicAdSkipper {
         case notInAd
     }
 
-    /// 门槛脚本的返回 → `Skippability`。纯映射,selftest 钉着。
+    /// 门槛脚本的返回 到 `Skippability`。纯映射,selftest 钉着。
     ///
-    /// ⚠️ `notYet(nil)` 才是「不给跳」:页面上那句「你可以在 N 秒后 跳转到视频」是**可跳过广告独有**的,
+    /// `notYet(nil)` 才是「不给跳」:页面上那句「你可以在 N 秒后 跳转到视频」是**可跳过广告独有**的,
     /// 不可跳过的广告压根没有这个元素(真机抓过 DOM,见头注)。所以"读不到秒数"不是"读失败",
     /// 是"这条广告没有跳过这回事"。
     public static func skippability(from click: ClickResult) -> Skippability {
@@ -291,13 +291,11 @@ public enum YouTubeMusicAdSkipper {
         }
     }
 
-    /// UI 该不该画那颗键。
+    /// UI 该不该画那颗键:**只有页面确认跳过键已经放出来(`.ready`)才画**。
     ///
-    /// ⚠️ **nil(门槛脚本压根没跑成)按"画"处理** —— 这是刻意的 fail-**open**,跟这个文件里其它地方的
-    /// fail-closed 纪律相反,理由:脚本跑不成的原因(不是浏览器 / 没有自动化权限 / osascript 超时)对用户
-    /// 是**不可见**的,这时候把键也藏了,用户看到的是"这个功能没了",连一句可诊断的话都拿不到;画出来、
-    /// 按下去至少会得到「没能跳过这条广告」并走那条既有的反馈路径。真正要藏的是"页面明确告诉我们不给跳"
-    /// 这一种(`.never`),以及"还没到点"(`.after`)和"广告已经结束"(`.notInAd`)。
+    /// nil(门槛脚本没跑成:osascript 超时 / 失败、那一拍没解析出浏览器)也不画 —— 没确认能跳就不给键,
+    /// 一颗按下去只换来「还不能跳过」的键比没有更糟。调用方在 nil 之后照常重试(见 `gateRetryDelay`),
+    /// 偶发的一次失败不会让这条广告剩下的时间都没有键。
     public static func showsSkipButton(_ state: Skippability?) -> Bool {
         guard let state else { return true }
         return state == .ready
@@ -305,7 +303,7 @@ public enum YouTubeMusicAdSkipper {
 
     /// 广告刚开头**先快探几拍**的轮数与间隔。
     ///
-    /// 真机时间线(只读抓的,用户没碰鼠标):`t+0.2 never` → `t+5.4 after(1)` → `t+8.4 ready`。
+    /// 真机时间线(只读抓的,用户没碰鼠标):`t+0.2 never` 到 `t+5.4 after(1)` 到 `t+8.4 ready`。
     /// 第一拍的 `never` 不是"这条广告不给跳",是**页面那一刻还没渲染出**跳过键 / 「N 秒后可跳过」
     /// 那个预览元素;而按 5 秒心跳等下一拍,白白把提示推迟到第 8 秒之后 —— YouTube 通常第 5 秒就把
     /// 键放出来,用户在前 8 秒看到的是"没反应"(「还没有展开时,它并没有实时更新
@@ -324,7 +322,7 @@ public enum YouTubeMusicAdSkipper {
     /// 一条 5 秒倒计时的广告最坏要到第 10 秒键才出现,而整条广告可能就 15 秒。`.never` 分两段:
     /// 开头 `fastStartRounds` 拍按 `fastStartDelay` 快探(见上),之后退回 5 秒心跳,跟
     /// `YouTubeMusicAdProbe.adRefreshInterval` 同一个节奏。`.ready` 也继续心跳 —— 一次插播可能连放
-    /// 两条(徽章 1/2 → 2/2),第一条给跳、第二条不给,不盯着就会留一枚指向不存在的键的提示。
+    /// 两条(徽章 1/2 到 2/2),第一条给跳、第二条不给,不盯着就会留一枚指向不存在的键的提示。
     /// 上限 20 秒挡住页面给出离谱数字。
     public static func gateRetryDelay(after state: Skippability, round: Int = .max) -> TimeInterval {
         switch state {

@@ -117,11 +117,11 @@ public enum MenuBarHoverControls {
         // 之间 23pt,而方块图标到我们这枚 ♪≡ 是 29.5pt,多出来的正是它。
         //
         // 贴前缘之后那点余量全部落到尾部,这一项跟左邻居的间距就跟别的项一样了。
-        // ⚠️ 同日晚些时候查清楚了「18pt 是谁要的」:打日志对账 `requested`/`button.bounds.width`
+        // 同日晚些时候查清楚了「18pt 是谁要的」:打日志对账 `requested`/`button.bounds.width`
         // /`item.length` 三个数,按钮宽恒等于我们申请的槽宽 —— **AppKit 一点都没多要**,那 18pt
         // 全是我们自己留的。于是歌词态的内边距降到 4pt(只防裁边),图标态保留 18pt(那一态靠
         // AppKit 居中 `button.image`,左右各 9pt 才跟别的状态栏图标观感一致)。
-        // 见 `MenuBarStatusItem.fixedSlotPadding` / `lyricsSlotPadding`。⚠️ 这跟「歌词在格子里怎么对齐」(`plan.alignment`)是两回事:
+        // 见 `MenuBarStatusItem.fixedSlotPadding` / `lyricsSlotPadding`。 这跟「歌词在格子里怎么对齐」(`plan.alignment`)是两回事:
         // 那个管的是文字在**歌词格内**的位置,这里管的是**整块内容在按钮内**的位置。
         let left: CGFloat = 0
         let clipW = max(0, contentW - reservedIconWidth)

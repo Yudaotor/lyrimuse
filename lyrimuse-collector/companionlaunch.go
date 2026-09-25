@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// companionLaunch 是"打开当前选定的播放器(features.Players)时顺带唤起 Lyrimuse"这个
+// companionLaunch 是"打开当前选定的播放器(features().Players)时顺带唤起 Lyrimuse"这个
 // 联动的另一半——反方向("打开 Lyrimuse 时唤起播放器")触发点就是 Lyrimuse.app 自己的
 // 启动流程,直接在 Swift 那边(AppDelegate.swift)实现即可,不需要 collector 插手。但
 // 这个方向不一样:必须有一个不依赖 Lyrimuse.app 主进程是否在运行的东西,持续盯着目标
@@ -21,7 +21,7 @@ import (
 // 检测方式故意不复用 getState()/appleMusicPosition() 那套走 AppleScript 问 Music.app
 // 播放状态的逻辑(而且 QQ 音乐压根没有对应的 AppleScript 支持)——那条路径对"没有可
 // 报告的正在播放"这几种情况(没运行/已停止/没有曲目在加载/自动化权限被拒绝)完全无法
-// 区分(见 system.go 顶部注释),没法单独判断"进程到底在不在跑"。改用 pgrep 直接查
+// 区分(见 system.go 顶部注释),没法单独判断"进程到底在不在跑"。改用 ps 直接读
 // 进程表,纯粹是否存在这个可执行文件对应的进程,不依赖任何 Apple Event/自动化权限,
 // 也不会跟"读取播放状态"那条路径的权限请求产生任何交集——这也是为什么这个方向能够
 // 对 QQ 音乐同样生效。
@@ -57,11 +57,9 @@ func startCompanionLaunchWatcher(ctx context.Context) {
 	}
 }
 
-// checkCompanionLaunch 检测目标播放器(手动选定时只有一个;playerAuto 下是全部四个
-// 已知播放器)里有没有谁发生了"从没运行变成运行"这个状态跳变,跳变发生、用户开着这个
-// 开关、而且 Lyrimuse.app 当前**没有**在跑时,启动它。多个进程在同一轮里都从"没跑"变
-// "在跑"的极端情况下(概率很低,但不是不可能——比如用户同时点开了两个播放器)只按第一个
-// 检测到的触发一次启动。
+// checkCompanionLaunch 检测目标播放器里有没有谁刚启动(见 lastPIDsByName),有、用户开着这个
+// 开关、而且 Lyrimuse.app 当前**没有**在跑时,启动它。同一轮里有两个都刚启动(用户同时点开了
+// 两个播放器)只按第一个触发一次。
 func checkCompanionLaunch() {
 	// 不管开关开没开,每一轮都要照跑下面这个循环维护 lastRunningByName——开关关着的
 	// 时候如果直接跳过,关闭期间的真实状态变化不会被记录,开关重新打开的瞬间会凭空把
@@ -75,7 +73,7 @@ func checkCompanionLaunch() {
 		lastRunningByName[name] = running
 	}
 	// alreadyRunning 只为了把"跳过"这一种否决单独记一条日志——这是唯一需要事后能核实的
-	// 分支(开关关着/没有跳变都不值得记,每秒一轮会刷爆日志)。判断本身仍然全在
+	// 分支(开关关着/没有跳变都不值得记,每轮都记会刷爆日志)。判断本身仍然全在
 	// shouldCompanionLaunch 里,这里不重复一遍条件。
 	alreadyRunning := false
 	if !shouldCompanionLaunch(justStarted, features.LaunchLyrimuseOnMusicOpen, func() bool {
@@ -99,10 +97,10 @@ const lyrimuseAppProcessName = "lyrimuse"
 // shouldCompanionLaunch 把"这一轮到底要不要去启动 Lyrimuse.app"收成一个纯函数,便于
 // 单测覆盖三个否决条件。
 //
-// lyrimuseRunning 传的是函数而不是 bool,为的是保住短路:前两个条件绝大多数轮次就已经
-// 否决了,而查 Lyrimuse 在不在跑要 fork 一次 pgrep,没必要每秒都白跑一次。
+// lyrimuseRunning 传的是函数而不是 bool:前两个条件绝大多数轮次就已经否决了,只有真要启动时
+// 才需要问 Lyrimuse 在不在跑。
 //
-// ⚠️ 第三个条件(已在运行就跳过)是补的,之前这里和 launchLyrimuseApp 的注释
+// 第三个条件(已在运行就跳过)是补的,之前这里和 launchLyrimuseApp 的注释
 // 都断言"已经在运行时 open 是空操作、不需要提前判断",这个前提是错的,当天日志里有两种
 // 反例:
 //
@@ -124,7 +122,7 @@ func shouldCompanionLaunch(justStarted string, enabled bool, lyrimuseRunning fun
 }
 
 // isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
-// Apple Event。
+// Apple Event。只剩 launchLyrimuseApp 真要启动前那一次自查在用。
 func isProcessRunning(name string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -132,7 +130,7 @@ func isProcessRunning(name string) bool {
 }
 
 // companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定播放器时盯
-// features.Players 里的每一个(可多选;单选年代只有一个 key,行为跟合并
+// features().Players 里的每一个(可多选;单选年代只有一个 key,行为跟合并
 // 前完全一致,不会因为多了 playerAuto 而误报别的播放器启动);「自动识别」在选中集合里
 // (不管是否同时还勾了别的具体播放器,都按超集处理)时没有唯一确定的目标,同时盯着
 // 全部五个已知播放器,任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的
@@ -147,7 +145,7 @@ func companionLaunchProcessNames() []string {
 			candidates = append(candidates, playerProcessNameFor(player))
 		}
 	}
-	// 「跟随播放器启动」按播放器逐个勾选(features.LaunchLyrimuseOnPlayers):键在就
+	// 「跟随播放器启动」按播放器逐个勾选(features().LaunchLyrimuseOnPlayers):键在就
 	// 只盯勾了的、且仍在候选(选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧
 	// PlayerLinkage.effective 同一条规则;键缺失是布尔年代的老配置,退回盯整个候选集合。
 	if features.LaunchLyrimuseOnPlayers == nil {
@@ -169,21 +167,21 @@ func companionLaunchProcessNames() []string {
 // knownPlayerProcessNames 是全部五个已知播放器的可执行文件名——QQ音乐.app 是
 // QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify、酷狗音乐.app 是
 // **中文的**「酷狗音乐」(都用 PlistBuddy 读 CFBundleExecutable 核实过),Music.app 是
-// Music。playerProcessNameFor() 给 features.Players 里手动选定的每个成员各查一个出来;
+// Music。playerProcessNameFor() 给 features().Players 里手动选定的每个成员各查一个出来;
 // playerAuto 在选中集合里时直接用整份列表。
 //
-// ⚠️ 酷狗那一项是非 ASCII 的,实测确认两件事都成立才敢这么写:
+// 酷狗那一项是非 ASCII 的,实测确认两件事都成立才敢这么写:
 //  1. `pgrep -x 酷狗音乐` 能匹配到 comm 为中文的进程(拿一个中文名符号链接起进程验过);
 //  2. UTF-8 下「酷狗音乐」是 12 字节,没超过内核 p_comm 的 16 字节上限(pgrep 比的就是
 //     这个被截断过的名字)——再长两个汉字就会被截断、`-x` 精确匹配当场失效。往这份列表
 //     里加新播放器时这条限制要一起核。
-// ⚠️ knownPlayerProcessNames 与逐播放器的进程名都在 players_generated.go
+// knownPlayerProcessNames 与逐播放器的进程名都在 players_generated.go
 // (生成自 shared/players.json)——上面那两条限制(p_comm 16 字节、-x 精确匹配)在那份
 // JSON 的 processName 字段旁边也记着一份。
 
 // playerProcessNameFor 是某个具体播放器常量的可执行文件名,给手动选定的场景用,见
-// knownPlayerProcessNames 注释。从读包级 features.Player 的 playerProcessName
-// 改成纯函数——多选之后 companionLaunchProcessNames 要对 features.Players 里的每个
+// knownPlayerProcessNames 注释。从读包级 features().Player 的 playerProcessName
+// 改成纯函数——多选之后 companionLaunchProcessNames 要对 features().Players 里的每个
 // 成员分别求进程名,不能再读一个包级单值。
 func playerProcessNameFor(player string) string {
 	// 查不到(auto / 认不出来)退回 Music,跟 playerBundleID 的兜底方向一致。
@@ -198,7 +196,7 @@ func playerProcessNameFor(player string) string {
 // 抢用户当前的焦点(跟 AppDelegate.swift 里 launchMusicOnLyrimuseOpen 那半用
 // config.activates=false 的用意一致)。
 //
-// ⚠️ 调用方必须先确认 Lyrimuse.app 没在跑(见 shouldCompanionLaunch 的注释)。这里再自查
+// 调用方必须先确认 Lyrimuse.app 没在跑(见 shouldCompanionLaunch 的注释)。这里再自查
 // 一次是纵深防御:对已运行的实例 `open` **不是**空操作,会弹设置窗口、甚至起第二个实例。
 func launchLyrimuseApp() {
 	if isProcessRunning(lyrimuseAppProcessName) {

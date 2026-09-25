@@ -7,7 +7,7 @@ import SwiftUI
 /// ```
 /// ┌───────────────┬───────────────┐
 /// │ 收听总览       │               │
-/// ├───────────────┤  最近听过      │  ← 右列通高
+/// ├───────────────┤  最近听过      │  —— 右列通高
 /// │ 上次那首       │               │
 /// │ + 一句歌词     │               │
 /// └───────────────┴───────────────┘
@@ -29,9 +29,9 @@ struct IdleStandbyView: View {
     /// LyricsWindowView(与原欢迎态同一份),这里只负责按钮。
     let onResume: () -> Void
     let onOpenPlayer: () -> Void
-    /// (歌名, 歌手) → 经 iTunes Search 解析后 music:// 打开那张专辑页。
+    /// (歌名, 歌手) 到 经 iTunes Search 解析后 music:// 打开那张专辑页。
     let onOpenAlbum: (String, String) -> Void
-    /// (歌名, 歌手) → 打开这首歌在 Apple Music 的曲目页。
+    /// (歌名, 歌手) 到 打开这首歌在 Apple Music 的曲目页。
     let onOpenTrack: (String, String) -> Void
 
     @ObservedObject private var stats = LastfmStatsService.shared
@@ -76,7 +76,7 @@ struct IdleStandbyView: View {
             var tick = 0
             while !Task.isCancelled {
                 // 守卫放在**循环里**而不是循环外:放外面的话,页面开着期间在设置里连上/断开
-                // 账号都要等视图重建才生效(连上→永远不开始轮询,断开→白轮但拉不到)。
+                // 账号都要等视图重建才生效(连上到永远不开始轮询,断开到白轮但拉不到)。
                 // 服务侧那几个 refresh 自己也 guard credentials,所以断开后这里是空转。
                 if stats.isConnected {
                     stats.refreshBaseline()
@@ -99,7 +99,7 @@ struct IdleStandbyView: View {
 /// 不必再做「量亮度反算黑罩」的闭环(随机封面抽到亮的会让文字读不了)、以及浅色外观下
 /// **不用切固定白字**(系统语义色继续可用,省掉一次全窗配色重构)。
 ///
-/// ⚠️ 深浅两套**显式钉死**,刻意不用 `Color.primary.opacity()` 那种「自动适配」的写法:
+/// 深浅两套**显式钉死**,刻意不用 `Color.primary.opacity()` 那种「自动适配」的写法:
 /// 它在深色下会把压暗层变成**提亮**层、方向正好相反(深色下四角 0.232、中心 0.071,
 /// 角比中心亮三倍多,跟「四周压暗」的意图完全反了)。压暗层一律用黑色。
 ///
@@ -150,9 +150,9 @@ private struct IdleOverviewCard: View {
     private static let sparkHeight: CGFloat = 52
     /// 悬停在走势图第几天上(nil = 没悬停)。读数换到图下面那行说明里,不叠浮层。
     @State private var hoverIndex: Int?
-    // 悬停读数跟着游标走所需的三个量。原来读数固定在左下角:鼠标在图右侧
-    // 时视线要横跨整条图去找那行小灰字,加上样式悬停前后完全一样,现象是"以为移上去
-    // 没反应"。hoverX 存的是**吸附后那一天的点位**(不是鼠标裸坐标),读数才会跟竖线对齐。
+    // 悬停读数跟着游标走所需的三个量。 读数不能固定在左下角:鼠标在图右侧
+    // 时视线要横跨整条图去找那行小灰字,加上样式悬停前后完全一样,会让人以为移上去
+    // 没反应。hoverX 存的是**吸附后那一天的点位**(不是鼠标裸坐标),读数才会跟竖线对齐。
     @State private var hoverX: CGFloat?
     @State private var chartWidth: CGFloat = 0
     @State private var captionWidth: CGFloat = 0
@@ -168,20 +168,18 @@ private struct IdleOverviewCard: View {
             // ——前者是"这个账号第一次连接",用户需要知道这是一次性的、会自己好;后者
             // 通常一闪而过,不用强调"首次"。
             //
-            // ⚠️ 顺手修复:这里原来是
-            // `String(format: "正在同步历史（%@）", stats.dailySyncProgress)`,而
+            // 不能再包一层 `String(format: "正在同步历史（%@）", stats.dailySyncProgress)`:
             // dailySyncProgress 自己已经是 LastfmStatsService 格式化好的完整句子
             // "正在同步历史（N/M 页）"——两层格式化叠在一起会显示成"正在同步历史（正在
-            // 同步历史（N/M 页）」"。直接显示 dailySyncProgress 本身即可,不用再包一层。
-            // 走势区。⚠️ 这里的**三种状态高度必须一致**,否则窗口会在数据到位的那一刻
+            // 同步历史（N/M 页）」"。直接显示 dailySyncProgress 本身即可。
+            // 走势区。 这里的**三种状态高度必须一致**,否则窗口会在数据到位的那一刻
             // 往下弹一格。这张卡本身只在 `stats.isConnected` 时才渲染(见 body 里的
             // 调用处),也就是说进到这里就意味着"迟早会有数据",所以没数据/还在同步都
             // 该先把图的位置占住,而不是等数据到了再撑开。
             if let note = syncNote {
-                // ⚠️ 这里必须**把走势图的位置预留出来**(现象是"首次进入这个页面
-                // 时上面折线图区域会加载一下,加载完窗口会抖动一下")。同步中原来只渲染一行
+                // 这里必须**把走势图的位置预留出来**:同步中若只渲染一行
                 // 11pt 文字(≈13pt 高),数据一到就换成 52pt 图 + 13 spacing + 13 说明
-                // (≈78pt),整个窗口当场往下弹一格。占位骨架跟数据态用同一套结构:
+                // (≈78pt),整个窗口会当场往下弹一格。占位骨架跟数据态用同一套结构:
                 // sparkHeight 的图位 + 一行说明,数据到了在**原地**换上,高度不变。
                 //
                 // 空白之外补一条基线:跟图里那条(primary 0.10、1pt)同款,让这块在加载时
@@ -306,8 +304,8 @@ private struct IdleOverviewCard: View {
 
     /// 近 30 天走势。
     ///
-    /// 从「30 根柱子」改成**面积 + 折线**(现象是「可读性不好以及不好看」)。
-    /// 柱子在这个尺寸下必然难看:左栏约 660pt 宽、30 个点,每根摊到 22pt 却只有 40pt 高 ——
+    /// **面积 + 折线**,不用柱状图:柱子在这个尺寸下必然难看——左栏约 660pt 宽、30 个点,
+    /// 每根摊到 22pt 却只有 40pt 高,
     /// 宽高相当,读出来是一排色块而不是趋势。按「数据的职责挑图形」:这里的职责是
     /// **时间上的走势**,单序列的默认形式就是面积图;柱子适合的是「比大小」。
     ///
@@ -325,7 +323,7 @@ private struct IdleOverviewCard: View {
         // 左右各留 7pt:「今天」那个端点(8pt 直径 + 2pt 描边)正好压在最右边一个点上,
         // 不留边它会贴着边缘、描边糊成一团。
         let inset: CGFloat = 7
-        // ⚠️ 绘制放在独立方法里而不是直接写在 GeometryReader 的闭包中:ViewBuilder 闭包
+        // 绘制放在独立方法里而不是直接写在 GeometryReader 的闭包中:ViewBuilder 闭包
         // 里不允许声明 func(算点位要一个),硬塞会报 "closure containing a declaration"。
         return GeometryReader { geo in
             plot(size: geo.size, series: s, peak: peak, inset: inset)
@@ -438,7 +436,7 @@ private struct IdleOverviewCard: View {
             return String(format: L10n.t("首次同步历史中（%1$@/%2$@ 页）"), "\(page)", "\(total)")
         }
         if stats.dailySyncing {
-            // ⚠️ dailySyncProgress 自己已经是格式化好的完整句子("正在同步历史（N/M 页）"),
+            // dailySyncProgress 自己已经是格式化好的完整句子("正在同步历史（N/M 页）"),
             // 再包一层 format 会显示成"正在同步历史（正在同步历史（N/M 页））"(修过)。
             return stats.dailySyncProgress ?? L10n.t("正在同步历史")
         }
@@ -466,10 +464,10 @@ private struct IdleOverviewCard: View {
 /// 下面挂一句从这首歌歌词里挑出来的话。
 ///
 /// 三级空态:
-/// 1. 有上次那首、缓存里有封面 → 唱片;
-/// 2. 有上次那首、没有封面 → 同尺寸的色块 + 大号首字母(封面存的是**远端** URL,
+/// 1. 有上次那首、缓存里有封面 到 唱片;
+/// 2. 有上次那首、没有封面 到 同尺寸的色块 + 大号首字母(封面存的是**远端** URL,
 ///    断网/冷启动拿不到图是常态而不是意外,所以这一级是常客);
-/// 3. 连 UserDefaults 都没有(全新用户/清过 defaults)→ 退回呼吸音符 + 原来那句提示。
+/// 3. 连 UserDefaults 都没有(全新用户/清过 defaults)到 退回呼吸音符 + 原来那句提示。
 private struct IdleLastTrackHero: View {
     let player: PlaybackPlayer
     let onResume: () -> Void
@@ -479,7 +477,7 @@ private struct IdleLastTrackHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverURL: URL?
     /// 候选乐句。每条是 1~3 行原文 —— **不是单行**:LRC 的行是打轴单位不是句子单位,
-    /// 一句话常被拆到两三行上,只摆一行就是半句(现象是)。
+    /// 一句话常被拆到两三行上,只摆一行就是半句。
     @State private var quotes: [[String]] = []
     @State private var quoteIndex = 0
     @State private var breath = false
@@ -682,7 +680,7 @@ private struct IdleLastTrackHero: View {
             var picked: [[String]] = []
             if let entry = EnrichCacheReader.lookup(artist: a, title: t, album: al),
                !entry.lyrics.isEmpty {
-                // ⚠️ 必须走 LRCParser:酷狗那批 CRLF 歌词自己 split("\n") 切不开,会把整首歌
+                // 必须走 LRCParser:酷狗那批 CRLF 歌词自己 split("\n") 切不开,会把整首歌
                 // 当成一行(「整个桌面都是歌词」那个 bug 的同一个坑)。
                 //
                 // 排序 / 剥对唱标记 / 挡署名 / **把被拆成多行的碎片并回整句** / 收尾复验,

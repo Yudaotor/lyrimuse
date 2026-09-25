@@ -11,7 +11,7 @@ import LyrimuseCore
 // 只要在"经典"样式生效期间碰一下 `.shared`,就会凭空冒出一个胶囊)。把单例改造成
 // 集合等于同时改动那四处路由和那条不变量,风险远大于这个功能本身的价值。
 //
-// ⚠️ 这个管理器**只在用户主动打开"所有屏幕"开关时才碰 `.shared`** —— refresh() 里读
+// 这个管理器**只在用户主动打开"所有屏幕"开关时才碰 `.shared`** —— refresh() 里读
 // `.shared` 是为了知道主实例占了哪块屏(那块屏不能再建副本)。开关默认关闭,关闭时
 // disabled 分支在读 `.shared` 之前就 return 了,不会破坏上面那条不变量。
 @MainActor
@@ -28,7 +28,7 @@ enum NotchMirrorManager {
         started = true
 
         let settings = AppSettings.shared
-        // ⚠️ 每个 sink 都用**参数值**,不在闭包里回头读 AppSettings:@Published 在 willSet
+        // 每个 sink 都用**参数值**,不在闭包里回头读 AppSettings:@Published 在 willSet
         // 时机发布,那一刻属性还是旧值(本项目已实测踩过)。所以下面不是简单地
         // `.sink { _ in refresh() }`,而是把新值显式传给 refresh(enabled:)。
         settings.$notchAllScreens
@@ -43,12 +43,12 @@ enum NotchMirrorManager {
         // 这几项副本没有自己的设置入口,变化时统一重新同步一遍。它们不影响"该不该有副本",
         // 只影响副本的状态,所以不参与上面那个 enabled 的计算。
         //
-        // ⚠️ 四个参数值都必须显式传下去,不能 `.sink { _, _, _, _ in syncAll() }` 让下游回读
+        // 四个参数值都必须显式传下去,不能 `.sink { _, _, _, _ in syncAll() }` 让下游回读
         // AppSettings —— 顶上那段 willSet 注释警告的坑,这个 sink 原来就原样踩着
         //:@Published 在 willSet 时机同步派发,sink 执行时存储属性还是
         // 旧值,于是镜像的宽度恒滞后一档、隐藏开关同步到翻转前的状态,直到下一次任一设置
         // 再变才追上。
-        // ⚠️ 订的是 `notchHide*` —— 灵动岛有自己独立的一份「自动隐藏」设置,
+        // 订的是 `notchHide*` —— 灵动岛有自己独立的一份「自动隐藏」设置,
         // 订到悬浮歌词那一份上,表现会是"在悬浮歌词页面拨开关,副屏的灵动岛镜像跟着变"。
         // 宽度是一对(稳态 / 展开),两个键都订;任一个变都是同一次 syncAll。
         settings.$notchHideWhenNotPlaying

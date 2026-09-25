@@ -88,7 +88,7 @@ func runRomanizationTests() {
     // Last.fm 统计页「第 N 次听」的前提:scrobble 是本机播放的原样镜像,同一首歌从不同
     // 播放器放、报的歌名一繁一简,Last.fm 就记成两个曲目实体、两本分开的账(《我不是农人》
     // 11 次/《我不是農人》3 次,对拍坐实)。显示端拿孪生写法再查一次求和,
-    // 这里锁死孪生写法的推导规则。⚠️ 它只用于发起查询,绝不用于显示或构造 key。
+    // 这里锁死孪生写法的推导规则。 它只用于发起查询,绝不用于显示或构造 key。
     do {
         typealias H = HanScript
         let t = H.siblingPair(artist: "方大同", title: "我不是農人")
@@ -347,7 +347,7 @@ func runRomanizationTests() {
         expectEqual(ChineseVariant.off.converted("这是一首简单的小情歌"),
                     "这是一首简单的小情歌", "关掉时原样返回")
 
-        // ⚠️ 日文汉字里有大量新字体(学/国/条),简繁转换会把它们改错 —— 带假名就一律不碰
+        // 日文汉字里有大量新字体(学/国/条),简繁转换会把它们改错 —— 带假名就一律不碰
         let jp = "明日の今頃には"
         expectEqual(ChineseVariant.traditional.converted(jp), jp, "日文行必须原样返回")
         let jp2 = "新しい歌 うたえるまで"
@@ -369,7 +369,7 @@ func runRomanizationTests() {
         // 厂牌/平台的宣传出品语(无冒号),见 LyricsSyncEngine.matchesPromoCreditLine。
     // 用户在歌曲末尾看到「网易云音乐特别企划“星辰集”出品」被当成一句歌词。
     //
-    // ⚠️ 这一组里**真歌词那半边比命中那半边重要**。判据是拿这台机器上 156433 行真实歌词量的:
+    // 这一组里**真歌词那半边比命中那半边重要**。判据是拿这台机器上 156433 行真实歌词量的:
     // 只要求"以出品/呈现这类角色词结尾"会命中 8 条,其中 6 条是真歌词、全部栽在「呈现」上;
     // 加上"整行含平台/厂牌词"才收敛到 2 条、0 误杀。下面把那 6 条真歌词逐条钉住 —— 谁要是
     // 以后把平台词那道闸去掉(它对出品/出版/发行/企划确实是多余的),这 6 条会立刻失败。
@@ -406,7 +406,7 @@ func runRomanizationTests() {
                     "韩文里的简体汉字确实会被转成繁体(所以菜单不能按 songScript 藏)")
 
         // 不变量:**affects 为假 ⟹ converted 一定不动它**。
-        // ⚠️ 反方向不成立,别写成双向 —— 「漢字」本来就是繁体,affects 为真但转繁是空操作。
+        // 反方向不成立,别写成双向 —— 「漢字」本来就是繁体,affects 为真但转繁是空操作。
         // (写成双向会被这条用例当场打回,如实记在这里免得以后有人又"修正"回去。)
         for sample in ["这是一首简单的小情歌", "First Love", "君の名は", "사랑 头发 노래",
                        "头发", "漢字", ""] {
@@ -421,7 +421,7 @@ func runRomanizationTests() {
         // 加:「简繁转换」这一项的显隐判据。不变量从「菜单显示 ⟺ 转换真的会发生」
         // 收紧成「⟺ 转换真的会发生、**而且看得见**」—— 译文那一支必须乘上"译文正在显示"。
         //
-        // 起因是真实一首:米津玄师《Petrichor》,正文纯日文(带假名,affects 判 false,
+        // 例如米津玄师《Petrichor》,正文纯日文(带假名,affects 判 false,
         // 对的),但 enrich 缓存里带一份中文机翻 lyrics_tr(lyrics_tr_source: machine),
         // 老判据无条件把译文算进来,于是一首日文歌的悬浮窗菜单里出现了「简繁转换」。
         typealias CV = LocalPlaybackSource
@@ -491,7 +491,7 @@ func runRomanizationTests() {
                     "dataless 占位(真名路径在、但还没下载)→ 先下载")
         expectEqual(R.isReadyToRead(downloadingStatus: .downloaded, realPathExists: true), false,
                     "本地有旧副本、云端有更新 → 仍然先等最新那份")
-        // ↓ 这条就是修的那一档。`.<真名>.icloud` 形态下真名路径压根不存在,查状态会抛错,
+        // 下一条就是修的那一档。`.<真名>.icloud` 形态下真名路径压根不存在,查状态会抛错,
         //   原来无条件当"能读",于是跳过 startDownloadingUbiquitousItem、读一个不存在的路径。
         expectEqual(R.isReadyToRead(downloadingStatus: nil, realPathExists: false), false,
                     "查不到状态且真名路径不存在 = iCloud 占位符,必须先下载")
@@ -506,7 +506,7 @@ func runRomanizationTests() {
         expectEqual(Romanizer.script(of: "안녕하세요"), .korean, "Script: 谚文 → 韩文")
         expectEqual(Romanizer.script(of: "你对我笑一次"), .chinese, "Script: 纯汉字 → 中文")
         expectEqual(Romanizer.script(of: "Hello world"), .other, "Script: 拉丁 → other")
-        // ⚠️ 日文歌里大量夹汉字。假名必须先判，否则整首日文歌会被判成中文 —— 那正是
+        // 日文歌里大量夹汉字。假名必须先判，否则整首日文歌会被判成中文 —— 那正是
         // 修过的那个 bug 的形状。
         expectEqual(Romanizer.script(of: "受話器を取った君"), .japanese,
                     "Script: 汉字+假名混排 → 日文,不能判成中文")
@@ -535,7 +535,7 @@ func runRomanizationTests() {
         expectEqual(romanization(lyrics: jaLyrics, roma: "", scripts: [.korean, .chinese]), nil,
                     "开关: 日文关 → 没有罗马音")
 
-        // ⚠️ 最要紧的一条：服务端给了 lyrics_roma 时，开关同样要管得住。
+        // 最要紧的一条：服务端给了 lyrics_roma 时，开关同样要管得住。
         // 只拦客户端兜底的话，恰好有服务端罗马音的歌照样会显示，开关就成了看运气的东西。
         let zhLyrics = "[00:01.00]你对我笑一次"
         let zhRoma = "[00:01.00]ni dui wo xiao yi ci"
@@ -544,7 +544,7 @@ func runRomanizationTests() {
         expectEqual(romanization(lyrics: zhLyrics, roma: zhRoma, scripts: [.japanese, .korean]), nil,
                     "开关: 中文关 → 连服务端给的罗马音也不显示")
 
-        // ⚠️ 绝大多数中文歌**没有**服务端 lyrics_roma（网易云不给中文歌算），所以"打开中文"
+        // 绝大多数中文歌**没有**服务端 lyrics_roma（网易云不给中文歌算），所以"打开中文"
         // 能不能出拼音，全看客户端兜底放不放行。真机验证时就栽在这儿：开关打开了，
         // 但引擎里另有一道硬编码的闸把中文兜底挡死，用户看到的是"开了等于没开"。
         let zhFallback = romanization(lyrics: zhLyrics, roma: "", scripts: [.chinese])
@@ -576,9 +576,9 @@ func runRomanizationTests() {
 
         // ---- 「整首歌 vs 一行」:中文歌引用日文词不该让整首歌都出日文注音 ----
         //
-        // 现象是「怎么中文也注音了」:《这样吧》是中文歌,但引用了三次「サヨナラ」。原来的
-        // 判据是"整首歌出现过一个假名就算日文",于是每行汉字都走日语形态分析 ——
-        // 「就从明天开始吧」出成了「就从 mei ten 开始 吧」(mei ten = 明天的日文音读)。
+        // 例子:《这样吧》是中文歌,但引用了三次「サヨナラ」。 判据不能是"整首歌出现过
+        // 一个假名就算日文"——那会让每行汉字都走日语形态分析,「就从明天开始吧」出成了
+        // 「就从 mei ten 开始 吧」(mei ten = 明天的日文音读)。
 
         // 判据本身:含假名的**行**占比。
         expectEqual(Romanizer.kanaLineRatio("你好\n世界"), 0, "行占比: 纯中文 0%")
@@ -587,7 +587,7 @@ func runRomanizationTests() {
         expectEqual(Romanizer.kanaLineRatio("你好\n\n   \nサヨナラ"), 0.5, "行占比: 空行不进分母")
         expectEqual(Romanizer.kanaLineRatio(""), 0, "行占比: 空文本 0,不除零")
 
-        // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)→ 不是日文歌。
+        // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)到 不是日文歌。
         let zhWithJa = (Array(repeating: "就从明天开始吧", count: 72) + Array(repeating: "サヨナラ", count: 3))
             .joined(separator: "\n")
         expectEqual(Romanizer.looksJapanese(zhWithJa), true, "旧判据: 出现过假名 → 会误判成日文")
@@ -603,12 +603,12 @@ func runRomanizationTests() {
         expectEqual(Romanizer.looksJapaneseSong(jaSong), true, "整首: 日文歌行行有假名 → 是日文歌")
         expectEqual(Romanizer.songScript(of: jaSong), .japanese, "整首: 日文歌 → japanese")
 
-        // ---- 行内中日无缝拼接(陶喆《My Anata》实测坐实) ----
+        // ---- 行内中日无缝拼接 ----
         //
         // 上面那条只验了"整首歌不算日文歌",没验**这一行本身**读音对不对——而这正是漏洞
         // 所在:"我的あなた"这一行本身含假名,looksJapanese(line) 会确证它是日文行,
         // 于是不管 songLooksJapanese 是不是 false,整行(含"我的"两个纯汉字)都会被扔进
-        // 日语分词器。用户实报的真实歌词坐实了这个具体形状(《my-anata-...roma.lrc》缓存):
+        // 日语分词器,举例(《my-anata-...roma.lrc》缓存):
         // "三更半夜 さびし的我" 被读成 "sankou han'ya sabishi teki ware"——"三更半夜"
         // "的我"这两段纯中文被读出了音读/训读,而不是拼音。
         do {
@@ -626,7 +626,7 @@ func runRomanizationTests() {
             expectEqual(r1.lowercased().contains("gèng") || r1.lowercased().contains("geng"), true,
                         "行内拼接: 「更」该出拼音 geng,实际 \(r1)")
 
-            // 中间没有任何空格(用户实报的另一行,更严苛的形状):日文假名段前后的纯汉字段
+            // 中间没有任何空格(更严苛的形状):日文假名段前后的纯汉字段
             // 也要能分别拆成拼音,不能因为"整行没有空格"就放弃。
             let r2 = reading("只听见おじさん骑着单车卖着馒头") ?? ""
             expectEqual(r2.contains("ojisan") || r2.contains("oji"), true,
@@ -661,7 +661,7 @@ func runRomanizationTests() {
         // `.original` 是展示层对这件事的表达:同一批片段(同一份区间判据)换回原文,
         // 只留日文片段的罗马字。
         do {
-            // 片段之间 joinLatin 会插空格("三更半夜"被分词器切成两个片段 → "三更 半夜"),
+            // 片段之间 joinLatin 会插空格("三更半夜"被分词器切成两个片段 到 "三更 半夜"),
             // 所以"原样穿透"这件事比的是**汉字本身**,不是整串相等。
             func hanOnly(_ s: String) -> String {
                 String(s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }
@@ -686,7 +686,7 @@ func runRomanizationTests() {
             expectEqual(m1.contains("sankou") || m1.contains("teki"), false,
                         "换回原文: 中文段也不该退回日语音读,实际 \(m1)")
 
-            // 用户实报的那两行:整行读音里一个带声调拼音都不该剩 —— 这条是这个开关
+            // 下面这两行:整行读音里一个带声调拼音都不该剩 —— 这条是这个开关
             // 到底有没有生效的判据,单看"某个词没了"会被别的变化蒙混过去。
             let toneMarks = CharacterSet(charactersIn: "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ")
             func hasToneMark(_ s: String) -> Bool {
@@ -746,12 +746,12 @@ func runRomanizationTests() {
         }
         songLines.append("[00:30.00]サヨナラ")
         let zhSongWithJa = songLines.joined(separator: "\n")
-        // 中文行:关掉拼音 → 一个字都不该注音(改动前它会出「就从 mei ten 开始 吧」)。这里
+        // 中文行:关掉拼音 到 一个字都不该注音(改动前它会出「就从 mei ten 开始 吧」)。这里
         // 刻意用显式 scripts 而不是 .default(默认全开,不能再靠默认值测"关"的
         // 行为),验证的是"按行判"本身,不是默认值。
         expectEqual(romanizationAt(1_000, lyrics: zhSongWithJa, scripts: [.japanese, .korean]), nil,
                     "端到端: 关掉拼音后中文歌的中文行不注音(哪怕歌里引用了日文词)")
-        // 同一首歌的日文行:日文开 → 照样出罗马字。这是「按行判」相对「按整首歌判」的全部价值。
+        // 同一首歌的日文行:日文开 到 照样出罗马字。这是「按行判」相对「按整首歌判」的全部价值。
         let jaLineRoma = romanizationAt(30_000, lyrics: zhSongWithJa, scripts: [.japanese, .korean])
         expectEqual(jaLineRoma != nil, true, "端到端: 同一首歌里引用的日文行仍出罗马字")
         expectEqual(jaLineRoma?.contains("sayonara") ?? false, true,
@@ -779,7 +779,7 @@ func runRomanizationTests() {
         }
         expectEqual(yueRomanization(scripts: [.cantonese], isCantonese: true), "nei5 hou2",
                     "开关: 粤语歌 + 粤拼开 → 显示粤拼")
-        // 同一首粤语歌,只开拼音、不开粤拼 → 不该显示(两个开关必须独立,不能"是中文字就通用")。
+        // 同一首粤语歌,只开拼音、不开粤拼 到 不该显示(两个开关必须独立,不能"是中文字就通用")。
         expectEqual(yueRomanization(scripts: [.chinese], isCantonese: true), nil,
                     "开关: 粤语歌只开拼音不开粤拼 → 不显示")
         // 反过来:同样的汉字,不是粤语歌(isCantonese=false)时按拼音开关走,粤拼开关管不着它——
@@ -810,11 +810,11 @@ func runRomanizationTests() {
 
         // ---- 逐字数据把句中空格切成独立的零时长词时,仍要逐字对齐 ----
         //
-        // 真实数据:《喜欢你 (G.E.M.重生版)》的酷狗逐字,"随处荡 多冰冷 Wooh" 这一行里两个
+        // 例子:《喜欢你 (G.E.M.重生版)》的酷狗逐字,"随处荡 多冰冷 Wooh" 这一行里两个
         // 空格各自是一个**零时长的词**(共 9 个词),而粤拼行只有 7 个音节(空格在那边只是
-        // 音节分隔符)。旧版按 words.count 直接比 → 9 != 7 → 整行退回整行罗马音,用户
-        // 截图坐实"粤拼堆成一行、没落在字底下";这首歌 36 行正文里 12 行如此,
-        // 全库 199 首粤拼歌 8395 行里 28 行如此。
+        // 音节分隔符)。 判据不能直接比 words.count(9 != 7 会让整行退回整行罗马音,
+        // 粤拼堆成一行、没落在字底下);这首歌 36 行正文里 12 行是这个形状,
+        // 全库 199 首粤拼歌 8395 行里 28 行是这个形状。
         do {
             let yrc = "[149664,8560](149664,768,0)随(150432,760,0)处(151192,1496,0)荡"
                 + "(152688,0,0) (152688,792,0)多(153480,736,0)冰(154216,2289,0)冷"
@@ -861,7 +861,7 @@ func runRomanizationTests() {
 
     // MARK: - HanVariants:繁简转换之外的异体字规范化
     //
-    // 新增。现象是「明明开了简体,歌词里还是看到繁体」——实例《开不了口 (Live)》:
+    // 例子《开不了口 (Live)》:
     // ICU 把 37 种字符全转对了,只剩「妳」没动而它出现 21 次。「妳」不是「你」的繁体,是异体字,
     // ICU 和 OpenCC 的繁简表里都没有它(gocc 三张字典全库 grep 过,零条目)。
     do {
@@ -912,7 +912,7 @@ func runRomanizationTests() {
             if k == v { selfMapped += 1 }
             if HanVariants.toSimplified[v] != nil { chained += 1 }
         }
-        // ⚠️ 表是**生成**的(681 条,见 HanVariants 头注),所以这两条从"逐条
+        // 表是**生成**的(681 条,见 HanVariants 头注),所以这两条从"逐条
         // 断言"改成"计数断言" —— 逐条会往输出里灌一千多行 ok,而要守的东西一个数字就够:
         // 映射到自己 = 无意义条目;成链 = 逐字替换只跑一遍、结果取决于遍历顺序。
         expectEqual(selfMapped, 0, "异体字表: 没有映射到自己的条目")
@@ -937,7 +937,7 @@ func runRomanizationTests() {
         expectEqual(icuGapChecked > 50, true,
                     "异体字表: ICU 缺口那一批有被真的核过(\(icuGapChecked) 条)")
 
-        // ⑩ ⚠️ 跨语言防漂:collector(Go)侧 `//go:embed` 读的是同一次生成写出的
+        // ⑩ 跨语言防漂:collector(Go)侧 `//go:embed` 读的是同一次生成写出的
         //    dictionary/HanVariants.txt。这里直接读那份产物逐字对账 —— 两侧数据不一致的后果
         //    很隐蔽:搜索词按一套折、界面显示按另一套折,同一首歌"搜得到但显示还是繁体"
         //    (或反过来),而两边代码各自看着都对。漏跑生成器同样会在这里露馅。
@@ -970,7 +970,7 @@ func runRomanizationTests() {
     // `Romanizer.lineReading`(见 SourceContractTests 里那条闸)。这里测的是外面那层:
     // 时间戳保不保得住、元信息行滤不滤得掉、什么时候该返回 nil。
     do {
-        // 日文:汉字必须按**日语**读,不能落成拼音。「轍」→ tetsu(拼音是 zhé)。
+        // 日文:汉字必须按**日语**读,不能落成拼音。「轍」到 tetsu(拼音是 zhé)。
         let ja = LyricsRomanization.romanizeLRC(
             "[00:17.88]雨と風の吹く\n[00:21.97]轍が続いて")
         expectEqual(ja?.contains("ame") ?? false, true,
@@ -985,13 +985,13 @@ func runRomanizationTests() {
         // 中文:走 ICU 拼音。
         let zh = LyricsRomanization.romanizeLRC("[00:01.00]我爱你")
         expectEqual(zh?.contains("[00:01.00]") ?? false, true, "整份罗马音: 中文行保留时间戳")
-        // ⚠️ 断言里必须**带声调符号**。写成 contains("ai") 会红:ICU 出的是
+        // 断言里必须**带声调符号**。写成 contains("ai") 会红:ICU 出的是
         // 带调拼音 "wǒ ài nǐ",裸 "ai" 根本不在里面。这不是实现的问题,是断言写错了,记下来
         // 免得下次有人看到红以为要去改 Romanizer。
         expectEqual(zh, "[00:01.00]wǒ ài nǐ", "整份罗马音: 中文行出带声调的拼音")
 
         // 纯拉丁:没有任何信息增量,整份返回 nil。
-        // ⚠️ 必须是 nil 而不是空串 —— 空的 lyrics_roma 会让 LyricsSyncEngine 的
+        // 必须是 nil 而不是空串 —— 空的 lyrics_roma 会让 LyricsSyncEngine 的
         // `romaLines.isEmpty` 判据失真,反而**关掉**客户端兜底那条路,比没有更糟。
         expectEqual(LyricsRomanization.romanizeLRC("[00:01.00]I'll be there") == nil, true,
                     "整份罗马音: 纯拉丁歌词返回 nil,不是空串")
@@ -1014,8 +1014,8 @@ func runRomanizationTests() {
                     "整份罗马音: CRLF 两行要切得开(不然整份被当成一行)")
     }
 
-    // 日文汉字修回(JapaneseKanjiRepair)。不维护任何表:「不能用 JIS X 0208 编码的汉字 →
-    // ICU 简→繁 → 转出来的字能编码才换」,两道守卫(整首日文歌 + 该行含假名)。样例是本机缓存里
+    // 日文汉字修回(JapaneseKanjiRepair)。不维护任何表:「不能用 JIS X 0208 编码的汉字 到
+    // ICU 简到繁 到 转出来的字能编码才换」,两道守卫(整首日文歌 + 该行含假名)。样例是本机缓存里
     // 神山羊《journey》酷狗版的真实受害行。
     do {
         typealias JK = JapaneseKanjiRepair

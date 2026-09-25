@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」那几张卡里的**设置行本体**,从 SettingsView 抽出来的唯一一份实现。
+// 「歌词显示 到 悬浮歌词」那几张卡里的**设置行本体**,从 SettingsView 抽出来的唯一一份实现。
 //
 // 为什么抽(编辑台第二步):这一段现在有**两个**宿主 ——
 //   ① 内容区里原有的卡片列(overlayColorCard / overlayThemesCard / overlayTextCard /
@@ -16,7 +16,7 @@ import SwiftUI
 // 只会变成"在浮层里改了有用、在卡片里改了没用"。所以这里一律只留一份,宿主只负责外壳
 // (卡片背景 / 浮层外壳)。
 //
-// ⚠️ 两个宿主绑的是同一个 AppSettings.shared,所以"浮层里改"和"卡片里改"天然同步,不需要
+// 两个宿主绑的是同一个 AppSettings.shared,所以"浮层里改"和"卡片里改"天然同步,不需要
 // 任何双向绑定代码 —— 这也是不把设置值往上提成 @State 的理由:一提就多出一份要同步的真相。
 
 // MARK: - 文字
@@ -35,12 +35,12 @@ import SwiftUI
 ///   - 减:「跟随封面」搬去了 `OverlayThemeSettingsRows`(整页按"不要这一个
 ///     那一个"重排)。它虽然只接管文字色,但它跟「配色主题」是同一个问题的两个答案——文字色从哪来:
 ///     封面主色,还是某一套主题;开关在这边、被它顶成「—」的主题行在那边,用户在「主题」浮层里看到
-///     一个破折号却找不到原因。悬浮窗右键的「更改配色」子菜单(`OverlayQuickSettingsMenu`)一直是
-///     「跟随封面 → 内置主题 → 自存主题」一列,设置页这次跟它取齐。
+///     一个破折号却找不到原因。悬浮窗右键的「配色主题」子菜单(`OverlayQuickSettingsMenu`)现在也
+///     只列主题、不放跟随封面。
 /// 三次用的是同一条判据 —— 按"这个字段改的是哪一层 / 回答的是哪个问题"归组,不按"都跟文字有关"
 /// 这种最粗的相关性(那条相关性把整页设置都能装进去)。
 ///
-/// ⚠️ 「文字颜色」那一行**任何时候都在**:跟随封面开着时尾部不放取色器、改成一句
+/// 「文字颜色」那一行**任何时候都在**:跟随封面开着时尾部不放取色器、改成一句
 /// 灰字「跟随封面」—— 取色模式的开关已经不在这个浮层里,再把整行藏掉就成了"文字颜色去哪了"。
 /// `if textStrokeEnabled` 那处条件显示是搬过来时**原样保留**的既有行为,理由写在那一行上面。
 @MainActor
@@ -54,8 +54,7 @@ struct OverlayTextSettingsRows: View {
         // 这种"容器成员变了"的动画就没人负责)。
         VStack(spacing: 0) {
             SettingsRow(icon: "character", title: L10n.t("字体")) {
-                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染)。原来是一个只有 7 款的
-                // 精选下拉,想用别的字体完全没出路,见 FontFamilyPicker 顶部注释。
+                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染),见 FontFamilyPicker 顶部注释。
                 FontFamilyPicker(selection: $settings.fontFamilyName)
             }
             CardDivider()
@@ -64,17 +63,17 @@ struct OverlayTextSettingsRows: View {
             // 排在字体和字号**之间**:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,
             // 中间隔着字号会把它读成一个独立维度。
             //
-            // ⚠️ 这一行叫「粗细」不叫「字重」(改的,「这个命名为字重是不是
+            // 这一行叫「粗细」不叫「字重」(改的,「这个命名为字重是不是
             // 不太合适啊」)。「字重」是排版行话,而用户提这个需求时自己的原话就是"控制字体粗细"
             // —— 用户已经说出口的那个词,就是这一行该有的名字。**代码里的标识符仍然叫
             // `overlayFontWeight` / `OverlayFontWeight`**,那是给写代码的人看的,行业术语在那边
             // 反而更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
             //
-            // ⚠️ 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定档位差自动跟着细
+            // 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定档位差自动跟着细
             // (见 `OverlayFontWeight`)。刻意不做成四行各自可调:那是四个滑杆的复杂度,换来的是
             // 用户可以把译文调得比主歌词还粗——一个没人想要、却要用界面去防的状态。
             //
-            // ⚠️ `.fixedSize` 不能省(已知坑第 15 条):`SettingsRow` 的 HStack 有三个
+            // `.fixedSize` 不能省(已知坑第 15 条):`SettingsRow` 的 HStack 有三个
             // 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",不加这一句时下拉会在
             // 行里还空着一大截的情况下被压到自己的下限、把最长的那个选项截掉。
             SettingsRow(icon: "bold", title: L10n.t("粗细")) {
@@ -113,10 +112,9 @@ struct OverlayTextSettingsRows: View {
                 }
             }
             CardDivider()
-            // 从「歌词」页的「效果」段拆过来的悬浮歌词那一份(原来是一颗全局开关,关掉在
-            // 引擎里丢弃逐字数据、四个展示面一起退成整行;而"卡拉OK是某个面怎么画的问题,跟
-            // 繁简 / 罗马音那些改歌词内容本身的不是一类")。判据跟 「双行显示」挪进「排版」
-            // 那次同一条:只对这一种展示方式生效的就归到这一段。灵动岛 / 菜单栏各有自己那颗,歌词窗口
+            // 从「歌词」页的「效果」段拆过来的悬浮歌词那一份——"卡拉OK是某个展示面怎么画的
+            // 问题,跟繁简 / 罗马音那些改歌词内容本身的不是一类"。判据跟 「双行显示」挪进
+            // 「排版」那次同一条:只对这一种展示方式生效的就归到这一段。灵动岛 / 菜单栏各有自己那颗,歌词窗口
             // 始终逐字。
             //
             // 排在字号之后、颜色那几行之前:它讲的是"字怎么被点亮",介于字形和颜色之间,放在两组的
@@ -130,14 +128,12 @@ struct OverlayTextSettingsRows: View {
             }
             // ── 以下两行从原「配色」组并过来 ──
             //
-            // 「跟随封面 / 自定义颜色」这两行共用的取色控件几次改版都没选对形状,记一下弯路
-            // 免得再绕回去:①「主题」浮层里一颗独立开关,要跨两个浮层才能切模式,现象是
-            // "体验割裂";② 挪进这一行、用 `Toggle(带文字标签, isOn:)` 内联——**macOS 上
-            // 这个标签实测不渲染**,行里只剩一颗光秃秃的开关,完全看不出是什么(对拍报告
-            // "现在这样肯定有问题");③(现在)换成下拉菜单(`colorModeMenu`,照抄"配色主题"
-            // 那颗 `Menu` 的写法,这个仓库里唯一验证过好用的下拉形态,见 themeItem 上方注释里
-            // "为什么不继续试哪一样能用")——下拉本身就是**当前模式的文字**,不依赖 Toggle
-            // 的标签渲染,选"自定义颜色"才在旁边露出取色器。
+            // 「跟随封面 / 自定义颜色」这两行共用的取色控件用下拉菜单(`colorModeMenu`,照抄
+            // "配色主题"那颗 `Menu` 的写法,这个仓库里唯一验证过好用的下拉形态,见 themeItem
+            // 上方注释)——下拉本身就是**当前模式的文字**,不依赖 Toggle 的标签渲染,选
+            // "自定义颜色"才在旁边露出取色器。 别退回独立开关(切模式要跨两个浮层,体验
+            // 割裂)或带文字标签的 `Toggle`(那个文字标签在 macOS 上不渲染,行里只剩一颗
+            // 看不出意义的光秃秃开关)。
             //
             // 两行共用 `colorModeMenu(follows:color:supportsOpacity:)`(定义在这个 struct
             // 底部)——避免各写一遍、以后漏改一处。
@@ -208,7 +204,7 @@ struct OverlayTextSettingsRows: View {
     /// 好用的下拉形态,`Menu` 条目里塞 `Toggle`/`Image` 会整个菜单画成空白(见 themeItem
     /// 上方那段"为什么不继续试哪一样能用")。
     ///
-    /// ⚠️ 这里**不用** `Toggle(带文字标签, isOn:)`:macOS 上这个标签
+    /// 这里**不用** `Toggle(带文字标签, isOn:)`:macOS 上这个标签
     /// 实测不渲染,行里只剩一颗光秃秃看不出含义的开关。
     @ViewBuilder
     private func colorModeMenu(follows: Binding<Bool>, color: Binding<Color>, supportsOpacity: Bool) -> some View {
@@ -235,9 +231,9 @@ struct OverlayTextSettingsRows: View {
 /// 两者是版面不是字形 —— 挤在「文字」里靠的只是"都跟文字有关"这种最粗的相关性,那条相关性
 /// 把整页设置都能装进去。
 ///
-/// ⚠️ 两项**平级**,都用 `SettingsRow`。「对齐方式」原来是缩进的 `SettingsSubRow`(视觉上
-/// 从属于上面那一行),那是**假的**从属关系:对齐对单行同样生效,关掉双行显示之后它照旧起
-/// 作用。子行的缩进本身就是一句话("这是上一行的子选项"),这里没有这层关系就不该说。
+/// 两项**平级**,都用 `SettingsRow`,不用 `SettingsSubRow`(缩进的子行样式)——对齐
+/// 对单行同样生效,关掉双行显示之后它照旧起作用,不是双行显示的从属选项。子行的缩进本身
+/// 就是一句话("这是上一行的子选项"),这里没有这层关系就不该用。
 @MainActor
 struct OverlayLayoutSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -276,7 +272,7 @@ struct OverlayLayoutSettingsRows: View {
                 title: L10n.t("对齐方式"),
                 help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中间切换。\n其余：忽略声部，固定在一个位置。")
             ) {
-                // ⚠️ 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
+                // 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
                 // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见
                 // docs/features/04-desktop-overlay.md 对应决策记录)。改用纯 SwiftUI 手搭的
                 // OverlayAlignmentSegmentedControl——每个选项固定 minWidth,尺寸完全由自己
@@ -316,7 +312,7 @@ struct OverlayAlignmentSegmentedControl: View {
     /// View。两处必须同一份口径 —— 控件里写着「左对齐」、摘要里写成「左」,是同一个值的
     /// 两种叫法。
     ///
-    /// ⚠️ 不能存成 `static let`:`L10n.t` 要在每次取值时现算,存进 static let 等于把首次
+    /// 不能存成 `static let`:`L10n.t` 要在每次取值时现算,存进 static let 等于把首次
     /// 访问时的语言冻在里面(切了语言之后这四个标签不跟着变)。
     static func label(for option: OverlayDuetAlignmentOverride) -> String {
         switch option {
@@ -355,7 +351,7 @@ struct OverlayAlignmentSegmentedControl: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.06))
         )
-        // ⚠️ `.fixedSize` 是必需的,不是保险(离屏渲染查出来的)。这个控件放在
+        // `.fixedSize` 是必需的,不是保险(离屏渲染查出来的)。这个控件放在
         // `SettingsRow` 的尾部插槽里,那一行的 HStack 有三个可伸缩成员(标题列、Spacer、
         // 这个控件),SwiftUI 给它们**均分**剩余宽度、而不是"先按各自的理想宽度发、多的给
         // Spacer";均分的份额小于本控件理想宽度时,它就被压到自己的下限(4×minWidth)。
@@ -381,9 +377,9 @@ struct OverlayAlignmentSegmentedControl: View {
 /// 共性太粗:改文字色和改背景色是两件互不相干的事,挤在一个入口里要先在七行里找。
 ///
 /// 拆分判据是**这个字段改的是哪一层**:
-///   - 文字层(字形 + 字色 + 描边)→ `OverlayTextSettingsRows`
-///   - 背景层(底色 + 底的材质)→ 本组
-///   - 一键套一整套配色 → `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
+///   - 文字层(字形 + 字色 + 描边)到 `OverlayTextSettingsRows`
+///   - 背景层(底色 + 底的材质)到 本组
+///   - 一键套一整套配色 到 `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
 /// 「跟随封面」归了文字(它接管的只有文字颜色),又归了主题 —— 它跟「配色主题」
 /// 回答的是同一个问题(文字色从哪来),见 `OverlayThemeSettingsRows` 头注。
 @MainActor
@@ -440,20 +436,19 @@ struct OverlayBackgroundSettingsRows: View {
 /// 单独立成第三个入口。它本来跟文字色、背景色挤在「配色」里,而按"改的是哪一层"
 /// 这条判据它**两层都改** —— 塞进「文字」或「背景」任何一边都是错的分类。
 ///
-/// ⚠️ 下面这段是「跟随封面」曾经住在这一组时的记录 —— **它又搬回「文字」浮层**、
+/// 下面这段是「跟随封面」曾经住在这一组时的记录 —— **它又搬回「文字」浮层**、
 /// 内联成「文字颜色」那一行的一个取值(跟随封面 / 自定义颜色),这一组从此只剩选配色主题
-/// 这一件事。留着这段是因为那次改动(见下面第二条 ⚠️)正是冲着它的前提去的。
+/// 这一件事。留着这段是因为那次改动(见下面第二条 提醒)正是冲着它的前提去的。
 ///
 /// **「跟随封面」从「文字」搬到这一组的第一行**(整页按"不要这一个那一个"
 /// 重排)。09-02 把它归「文字」的理由是"它接管的只有文字色";但从用户这一侧看,它跟「配色主题」
 /// 是**同一个问题的两个答案**——文字色从哪来:封面主色,还是某一套主题。两个答案拆在两个浮层里,
-/// 结果是「主题」浮层顶着一个「—」、原因却在别处;而悬浮窗右键的「更改配色」子菜单
-/// (`OverlayQuickSettingsMenu.colorThemeMenu`)一直就是「跟随封面 → 内置主题 → 自存主题」一列,
-/// 设置页这次跟它取齐。09-02 那条"别搬"的警告因此撤销;「文字」组那边「文字颜色」一行改成常显、
+/// 结果是「主题」浮层顶着一个「—」、原因却在别处;右键快捷菜单那份子菜单后来也去掉了
+/// 跟随封面,只列主题(`OverlayQuickSettingsMenu.colorThemeMenu`)。09-02 那条"别搬"的警告因此撤销;「文字」组那边「文字颜色」一行改成常显、
 /// 跟随时尾部写「跟随封面」指回这里。工具栏「主题」按钮的摘要也随之在跟随时报「跟随封面」
 /// (见 `OverlayStyleSummary.theme`)—— 现在那颗按钮管的浮层里就有这个开关,报它就是报真实状态。
 ///
-/// ⚠️ **「配色主题」那一行任何时候都显示,不再被「跟随封面」收起**(
+/// **「配色主题」那一行任何时候都显示,不再被「跟随封面」收起**(
 /// 「勾选了跟随封面之后依然可以选择主题,但是你去选了主题之后跟随封面就自动取消勾选」)。
 ///
 /// 在此之前它的显隐条件是 `!followsCoverArt`,理由是"文字颜色被封面主色接管时,留着它只会
@@ -462,7 +457,7 @@ struct OverlayBackgroundSettingsRows: View {
 /// 字段当场生效。所以它不是"选了没用",而是"选了就切过去",藏起来反而把一步的操作变成两步
 /// (先去「文字」浮层关掉跟随封面,再回这一组选)。
 ///
-/// ⚠️ **跟随封面开着时这一行照常报主题名/「自定义」,不再报占位符「—」**。
+/// **跟随封面开着时这一行照常报主题名/「自定义」,不再报占位符「—」**。
 ///
 /// 占位符是加的(「当我跟随封面开着的时候,主题这边摘要和详情都指向一个
 /// 占位符」),成立的前提是「跟随封面」跟「配色主题」同处这一组、是同一个问题的两个答案 ——
@@ -474,10 +469,8 @@ struct OverlayBackgroundSettingsRows: View {
 /// **另一个浮层**里,站在这里看不出来;② 跟随封面开着时点「存为新主题…」,主题确实存下来了、
 /// 这一格却仍是「—」,看起来像没存进去 —— 表现就是这个。
 ///
-/// ⚠️ 悬浮窗右键的「更改配色」子菜单**不跟着改**,两边现在合理地不一样。那份菜单里「跟随封面」
-/// 跟主题列表同处一级(见 `OverlayQuickSettingsMenu.colorThemeMenu`),跟随开着时再给某个主题
-/// 打勾,就是「跟随封面 ✓」+「黑字描边 ✓」两个互相矛盾的"正在生效" —— 那正是现象是过的那个
-/// bug。设置页这边没有这个问题:整组里根本没有跟随封面这个选项。
+/// 悬浮窗右键的「配色主题」子菜单(`OverlayQuickSettingsMenu.colorThemeMenu`)跟这里同一张清单、
+/// 同一条判据:没有跟随封面这一项,当前配色等于哪套就是哪套。
 ///
 @MainActor
 struct OverlayThemeSettingsRows: View {
@@ -486,7 +479,7 @@ struct OverlayThemeSettingsRows: View {
     var body: some View {
         VStack(spacing: 0) {
             // 「跟随封面」(文字颜色/未唱颜色各一颗)从这里挪进了「文字」浮层、
-            // 内联在各自的颜色行里(现象是"要跨两个浮层才能切换取色模式,体验割裂")。这张
+            // 内联在各自的颜色行里——独立开关切模式要跨两个浮层,体验割裂。这张
             // 卡现在只剩"选一套配色主题预设"这一件事,见 OverlayTextSettingsRows 里那两行的
             // 头注——「配色主题」选中某个预设时仍然会调 ColorTheme.apply(to:) 把 followsCoverArt
             // 关掉(互斥逻辑没变,只是操作它的开关搬了地方)。
@@ -514,8 +507,8 @@ struct OverlayThemeSettingsRows: View {
 
     /// 下拉里的一项。**只有名字,没有色条也没有勾**。
     ///
-    /// ⚠️ **别再往这个 `Menu` 的条目里塞 `Toggle` 或 `Image`**(实测回归,现象是
-    /// 「点开是一片空白」)。当天为了给下拉项加三段色条 + 原生勾,这里一度写成
+    /// **别再往这个 `Menu` 的条目里塞 `Toggle` 或 `Image`**——会让菜单面板正常弹出、
+    /// 尺寸正常,但**一个条目都画不出来**(连文字都没有,不是只丢图标),例如:
     ///
     /// ```swift
     /// Toggle(isOn: Binding(get: …, set: …)) {
@@ -523,19 +516,10 @@ struct OverlayThemeSettingsRows: View {
     /// }
     /// ```
     ///
-    /// 结果是菜单面板照常弹出、尺寸也对,**里面一个条目都画不出来 —— 连主题名都没有**(不是只丢了
-    /// 图标)。也就是说失败发生在"条目"这一层,不是"图标"这一层,加再多兜底图也救不回来。
-    ///
-    /// 为什么不继续试哪一样能用:① 这个仓库里**每一个正常工作的 SwiftUI `Menu` 都是 `Button(标题)`**
-    /// (`NotchEditorStage` / `MenuBarEditorStage` / `SettingsView` 的浏览器与备份菜单、`LyricsManagerView`
-    /// 的缓存菜单),`Toggle` 条目和 `Image(nsImage:)` 图标在本仓**一个先例都没有**;② 它没法离屏验证 ——
-    /// SwiftUI 的 `Menu` 在 `NSHostingView` 的视图树里**根本不产生 `NSPopUpButton`**(实测只有
-    /// `KeyViewProxy` / `_FocusRingView` 两层壳),NSMenu 是**打开那一刻**才建的,摸不到 `menu.items`,
-    /// 只能靠真人点开看。在一个"改错了用户就看到空白菜单"的位置上,不值得拿没有先例的写法去赌。
-    ///
-    /// 真要在下拉里显示色条 + 勾,走 AppKit:`OverlayQuickSettingsMenu.colorThemeMenu` 已经证明
-    /// `NSMenu` + `NSMenuItem.image` + `.state` 这条路在本仓是通的,把这一格换成包一层
-    /// `NSViewRepresentable` 的 `NSPopUpButton` 即可 —— 那条路的条目内容能离屏 dump 出来核对。
+    /// 本仓所有正常工作的 SwiftUI `Menu` 条目都是纯 `Button(标题)`;SwiftUI 的 `Menu` 也不产生
+    /// 可离屏检查的 `NSPopUpButton`(`NSMenu` 要点开那一刻才建),改错了只能真人点开才发现。
+    /// 真要显示色条 + 勾,走 AppKit:`OverlayQuickSettingsMenu.colorThemeMenu` 已经证明
+    /// `NSMenu` + `NSMenuItem.image` + `.state` 这条路在本仓是通的。
     ///
     /// 色条本身(`ThemeSwatch` / `ColorTheme.swatchImage()`)**保留**:它在「我的配色主题」那些
     /// **子行**里是普通 SwiftUI 视图、渲染正常,不受这条限制影响。
@@ -558,7 +542,7 @@ struct OverlayThemeSettingsRows: View {
     /// (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是「配色主题」那个
     /// Menu 唯一的选中反馈来源。
     ///
-    /// ⚠️ **跟随封面开着时也照常算**。这一档来回改过三次,理由都记下来:
+    /// **跟随封面开着时也照常算**。这一档来回改过三次,理由都记下来:
     ///  - **去掉**过"followsCoverArt 开着就直接显示「跟随封面」"这个短路,理由是
     ///    "否则开着跟随封面时,用户完全看不出自己的备用色到底是哪个主题"。
     ///  - **换一种形式加回来**:不是显示「跟随封面」(那是模式名、不是主题),而是
@@ -588,7 +572,7 @@ struct OverlayThemeSettingsRows: View {
 ///
 /// 「我的配色主题」那两行**内联确认**(命名 / 删除确认)专用的行容器。
 ///
-/// ⚠️ 这两行刻意**不用** `SettingsSubRow`,这是修一个真 bug 换来的结论。
+/// 这两行刻意**不用** `SettingsSubRow`,这是修一个真 bug 换来的结论。
 /// `SettingsSubRow` 是"左边一句说明、右边一组控件"的单行结构,说明和控件在同一个 HStack 里
 /// 分同一份宽度;而这两行的控件特别宽(命名行是 130pt 输入框 + 两颗按钮),配色浮层又只有
 /// 380pt —— SwiftUI 把不够的宽度按弹性摊给双方,输入框那 130pt 是写死的,整份亏空于是全压在
@@ -633,7 +617,7 @@ private struct OverlayInlineConfirmRow<Content: View>: View {
     }
 }
 
-/// ⚠️ 命名和删除确认都是**内联**的,不再用 `.alert`。理由:这个组件现在
+/// 命名和删除确认都是**内联**的,不再用 `.alert`。理由:这个组件现在
 /// 有两个宿主,其中一个是 `.popover`。SwiftUI 在 macOS 上把 `.alert` 呈现成挂在窗口上的
 /// sheet,而 NSPopover 是 transient 语义(点到浮层外面就关) —— 用户去点 sheet 里的输入框
 /// 时,承载 alert 状态的那棵视图树很可能已经随浮层一起销毁了。内联做法两个宿主一模一样,
@@ -794,7 +778,7 @@ enum OverlayStyleDefaults {
 /// 来自方案 B 的一点:把设置收进浮层之后丢掉的"全貌感",靠按钮上这一截补回来 ——
 /// 不点开也知道现在是什么字体、什么配色。
 ///
-/// ⚠️ 它是**纯派生值**,跟着同一份 AppSettings 走,不新增任何状态。别为了"少算一次"
+/// 它是**纯派生值**,跟着同一份 AppSettings 走,不新增任何状态。别为了"少算一次"
 /// 把它缓存成 @State:那就又多了一份要跟设置同步的真相,正是这次抽取要消灭的东西。
 @MainActor
 enum OverlayStyleSummary {
@@ -803,7 +787,7 @@ enum OverlayStyleSummary {
     ///
     /// 加了中间那截字重。**三项全报**,跟 `layout` 那条同一个理由:这个浮层里总共就
     /// 这三项,少报一项等于让人为了确认它再点开一次浮层,那这截摘要就白给了。代价是长字体名
-    /// 下更容易触发截断 —— 那本来就有兜底(`toolbarButton` 里 140pt 限宽 + `.layoutPriority(-1)`,
+    /// 下更容易触发截断 —— 那本来就有兜底(`EditorToolbarButtonLabel` 里 140pt 限宽 + `.layoutPriority(-1)`,
     /// 摘要先被压、标题始终完整),不为多这一截另写一套。
     static var text: String {
         let settings = AppSettings.shared
@@ -836,10 +820,10 @@ enum OverlayStyleSummary {
     /// 一串 hex 或者 rgb 数字在按钮上没人读得出来是什么样,而"毛玻璃/纯色/透明"这三档正好
     /// 覆盖了这一组两个字段的全部有意义组合。
     ///
-    /// ⚠️ 「透明」这一档不能省:背景色的 ColorPicker 是 `supportsOpacity: true`,把 alpha 拖到 0
+    /// 「透明」这一档不能省:背景色的 ColorPicker 是 `supportsOpacity: true`,把 alpha 拖到 0
     /// (歌词直接浮在桌面上、没有底板)是个常用配置,而那种状态报「纯色」是错的。
     ///
-    /// ⚠️ 阈值**不在这里重写一遍**:直接借 `AppSettings.backgroundVisible(hex:glass:)`,`glass`
+    /// 阈值**不在这里重写一遍**:直接借 `AppSettings.backgroundVisible(hex:glass:)`,`glass`
     /// 传 false 之后它正好退化成"背景色本身看得见吗"(alpha > 0.02)。那个函数已经是窗口阴影 /
     /// 拖拽捕获层 / 编辑台虚线边界三处联动共用的判据,再抄一份 0.02 就是第四个会漂的地方。
     /// (`settings.backgroundIsVisible` 那个缓存属性不能直接用 —— 它把毛玻璃也算成"可见",
@@ -907,7 +891,7 @@ struct OverlayThemePopover: View {
 
 /// 「背景」浮层(同上)。
 ///
-/// ⚠️ **宽度 420 现在没有依据了,是个待重量的遗留值**。
+/// **宽度 420 现在没有依据了,是个待重量的遗留值**。
 ///
 /// 它当初是量出来的:内容自然宽中文 298pt / **英文 386pt**(离屏 `NSHostingView.fittingSize`,
 /// 1pt 步进的换行探测给出的英文硬下限就是 386),420 按同族浮层的既有余量取
@@ -934,7 +918,7 @@ struct OverlayBackgroundPopover: View {
 
 /// 「≣ 排版…」浮层。内容就是抽屉里那一组,没有第二份实现。
 ///
-/// ⚠️ 宽度 460、不是另外两个浮层的 380,这是**量出来的**,别顺手拉平:
+/// 宽度 460、不是另外两个浮层的 380,这是**量出来的**,别顺手拉平:
 ///   - 「对齐方式」那一行的理想宽度(离屏测 `fittingSize`)中文 377pt、英文 428pt ——
 ///     四选一控件本身中文 234pt / 英文 275pt,加上图标列、标题、`Spacer(minLength: 12)`
 ///     和左右内边距;

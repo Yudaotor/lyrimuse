@@ -61,7 +61,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 }
 
 // playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。
-// ⚠️ pgrep 比的是内核 p_comm(16 字节上限,UTF-8 下中文名要数字节),加新播放器时要核。
+// pgrep 比的是内核 p_comm(16 字节上限,UTF-8 下中文名要数字节),加新播放器时要核。
 var playerProcessNames = map[string]string{
 	playerAppleMusic: "Music",
 	playerQQMusic:    "QQMusic",
@@ -98,7 +98,7 @@ var playerNativeLyricSources = map[string]string{
 }
 
 // playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样
-// 重发一次」。⚠️ 只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反
+// 重发一次」。只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反
 // (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
 // 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。
 var playerRepublishesZeroAnchor = map[string]bool{

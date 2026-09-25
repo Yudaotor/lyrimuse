@@ -16,8 +16,9 @@ public struct EnrichCacheEntry: Decodable {
     // 没人用 —— 直到「最近播放」列表需要一个 Last.fm 之外的兜底,见 coverURL(artist:...)。
     let coverURL: String?
     /// 这张**专辑**的 Apple Music 动态封面(motion artwork)master m3u8,由 collector 的
-    /// motioncover.go 按已校验的目录专辑 ID 查出来(空 = 没有 / 不是 Apple 目录曲目)。
-    /// 选档、下载、播放在 `MotionCoverManifest` / `MotionCoverStore` / `MotionCoverLayer`。
+    /// motioncover.go 查出来、并且已经过图像校验(首帧比对或专辑身份核验,见 `decideMotionCover`)。
+    /// 空 = 没有 / 核对没过。选档、下载、播放在 `MotionCoverManifest` / `MotionCoverStore` /
+    /// `MotionCoverLayer`。
     let motionCoverURL: String?
     /// 同一份资源的静态首帧模板(尾部 `{w}x{h}bb.{f}`)。动态封面还没下好时先铺它;它本身也是
     /// 一张按专辑 ID 精确定位的高清静态图(实测 3840²),比按歌名匹配来的更权威。
@@ -61,7 +62,7 @@ public struct EnrichCacheEntry: Decodable {
     // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。collector 侧
     // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
     let plainLyrics: String?
-    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。解码,给「英文歌名 →
+    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。解码,给「英文歌名 到
     // 中文歌名」的本机别名推断当第二道闸(见 EnrichTitleAliases),此前 Swift 侧没人读它。
     let durationSecs: Double?
     // 所配歌词候选在来源上的时长(秒,collector 的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
@@ -161,7 +162,7 @@ public enum EnrichCacheReader {
     private static var cachedEntries: [String: EnrichCacheEntry]?
     // 忽略专辑的封面索引,跟 cachedEntries 同寿命 —— 见 coverByArtistTitle()。
     private static var cachedCoverIndex: [String: String]?
-    // 宽松匹配索引(looseKey → 组内字典序最小的原 key),跟 cachedEntries 同寿命、惰性
+    // 宽松匹配索引(looseKey 到 组内字典序最小的原 key),跟 cachedEntries 同寿命、惰性
     // 构建 —— 见 looseMatch(性能审计:原来每次精确 miss 都对全部 ~900 个 key
     // 逐个现算 ICU 繁简 transform,~7ms 主线程,新歌未解析窗口内每 2s 重复一遍)。
     private static var cachedLooseIndex: [String: String]?
@@ -177,7 +178,7 @@ public enum EnrichCacheReader {
     /// 的歌词,在这一侧唯一的外部体现就是这个文件被重写 —— collector 那边的重推通知只走
     /// relay,本地模式压根不看。一次 stat,比重新解析几 MB 的 JSON 便宜得多。
     /// 当前曲目的歌词/封面来源(歌词窗口「显示简介」面板)。entry 里这两个
-    /// 字段一直解码着但没往外传,这里补一个只读口;沿用 lookup 同款的 精确 key → 宽松
+    /// 字段一直解码着但没往外传,这里补一个只读口;沿用 lookup 同款的 精确 key 到 宽松
     /// key 两级匹配。首次调用要解析整份缓存 JSON,别在主线程调。
     public struct SourceInfo: Sendable {
         public let lyricsSource: String?
@@ -198,7 +199,7 @@ public enum EnrichCacheReader {
     /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
     /// 这首歌在各平台的跳转目标。**零网络** —— 全是 collector 早就存好的字段,
     /// 首次调用要解析整份缓存 JSON(之后靠 mtime 缓存是 µs 级),别在主线程调。
-    /// 沿用 lookup/sourceInfo 同款的 精确 key → 宽松 key 两级匹配。
+    /// 沿用 lookup/sourceInfo 同款的 精确 key 到 宽松 key 两级匹配。
     public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -208,7 +209,7 @@ public enum EnrichCacheReader {
         let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
             ? URL(string: rawQQ) : nil
         let links = PlatformLinks(
-            // https://music.apple.com/… → music://(进 App)。非 AM 链接会被这个函数拒掉。
+            // https://music.apple.com/… 到 music://(进 App)。非 AM 链接会被这个函数拒掉。
             appleMusic: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL),
             qqSong: qqSong,
             qqAlbum: PlatformLinks.qqAlbumURL(mid: entry.qqAlbumMid ?? ""),
@@ -220,7 +221,7 @@ public enum EnrichCacheReader {
     }
 
     /// 这首歌的**真实曲长**(秒),来自 collector 写进缓存的那份。零网络,沿用 lookup/sourceInfo
-    /// 同款的 精确 key → 宽松 key 两级匹配;查不到或值非正返回 nil。
+    /// 同款的 精确 key 到 宽松 key 两级匹配;查不到或值非正返回 nil。
     ///
     /// 唯一的用处是电台:Apple Music 电台的系统快照里 `duration` 报的是**整档节目**
     /// (实测 3390.122s = 56 分半),拿它当分母,进度条和时间读数就永远是「2:29 / 56:30」这种自相
@@ -282,7 +283,7 @@ public enum EnrichCacheReader {
     /// QQ 音乐报 `Susan说`、网易云报 `Susan 说`,缓存里现在只剩后者。没有这层兜底,前者就
     /// 精确 miss,用户看到的是「这首歌整首没有歌词」,而不是「歌词不太对」,更难归因。
     ///
-    /// ⚠️ 多条候选时必须挑**确定的**那一条:Swift 的 Dictionary 遍历顺序不保证稳定,撞见谁
+    /// 多条候选时必须挑**确定的**那一条:Swift 的 Dictionary 遍历顺序不保证稳定,撞见谁
     /// 用谁的话,同一首歌这次读到 A 的歌词、下次读到 B 的。按 key 字典序取最小,跟 collector
     /// 侧合并后只剩一条的常态也不冲突(那时候本来就只有一个候选)。
     ///
@@ -327,7 +328,7 @@ public enum EnrichCacheReader {
     /// 两级查找同 coverURL:精确 key 命中,或退到"忽略空格/大小写/繁简"但**仍然认专辑**
     /// 的 looseMatch。
     ///
-    /// ⚠️ 不要在这里加回 coverByArtistTitle() 那级兜底:换新专辑名的歌,collector 解析
+    /// 不要在这里加回 coverByArtistTitle() 那级兜底:换新专辑名的歌,collector 解析
     /// 完精确条目前的那几秒查空是**预期行为**,交给 refreshHighResCover 的
     /// enrichContentVersion 补查路在解析完后自动纠正 —— 那条路径的
     /// `onlyIfMissing: true` 只在"已经拿到精确匹配的图"时才安全跳过;一旦这里退到
@@ -344,7 +345,7 @@ public enum EnrichCacheReader {
 
     /// 这一行的**动态封面**:master m3u8 + 静态首帧模板,两个都可能为空。
     ///
-    /// 查法跟 `albumMatchedCoverURL` 逐字一致(精确 key → 仍然认专辑的 looseMatch),连
+    /// 查法跟 `albumMatchedCoverURL` 逐字一致(精确 key 到 仍然认专辑的 looseMatch),连
     /// "不要退到忽略专辑那一级"这条也一样,而且在这里更严重:退一步拿到的会是**另一张专辑的
     /// 动态画面**,而动态的东西比一张静态错图扎眼得多。collector 侧同样只按已校验的目录专辑 ID
     /// 查,不做文字猜测(motioncover.go 文件头 ⚠️ 1)—— 两侧一致地宁缺毋滥。
@@ -386,7 +387,7 @@ public enum EnrichCacheReader {
     /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张)。
     ///
     /// 给「最近播放」列表当 Last.fm 之外的兜底用:那个列表的封面本来**全部**来自 Last.fm
-    /// (scrobble 自带图 → track.getInfo → 同专辑兄弟),而 Last.fm 对中文曲库缺图非常
+    /// (scrobble 自带图 到 track.getInfo 到 同专辑兄弟),而 Last.fm 对中文曲库缺图非常
     /// 常见 —— 现象是「陶喆 - 聖誕之吻」就是三级全空(Last.fm 只给它那张所有
     /// 缺图实体共用的白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云是有图的。
     ///
@@ -399,7 +400,7 @@ public enum EnrichCacheReader {
     /// 刻意不做繁简折叠:本机播放写进缓存的和上报给 Last.fm 的是**同一批字符串**,折了也
     /// 不多命中一条,反而可能把两首真的不同名的歌并到一起。
     ///
-    /// ⚠️ 这一级"忽略专辑"的兜底只适合"专辑名本来就不可信/拿不到精确对照"的消费方
+    /// 这一级"忽略专辑"的兜底只适合"专辑名本来就不可信/拿不到精确对照"的消费方
     /// (这里,以及 IdleStandbyView 的"上一首"占位图)。当前正在播的这首歌请用
     /// albumMatchedCoverURL——原因见它的注释。
     public static func coverURL(artist: String, title: String, album: String) -> URL? {
@@ -522,7 +523,7 @@ public enum EnrichCacheReader {
         let ext = last.hasSuffix(".png") ? "png" : "jpg"
         let bumped = "\(appleCoverTargetEdge)x\(appleCoverTargetEdge)bb.\(ext)"
         // 用字面量倒查末段再替换,而不是 deletingLastPathComponent()+append ——
-        // 后者对带查询串的 URL 行为没实测过。⚠️ .backwards 不能跟 .regularExpression
+        // 后者对带查询串的 URL 行为没实测过。提醒 .backwards 不能跟 .regularExpression
         // 同用(会被静默忽略),这里是纯字面量查找,所以是对的。
         let s = url.absoluteString
         guard let r = s.range(of: last, options: .backwards) else { return nil }
@@ -550,7 +551,7 @@ public enum EnrichCacheReader {
         return index
     }
 
-    /// 从「缓存 key → 封面 URL」建出忽略专辑的封面索引。纯函数,selftest 直接覆盖。
+    /// 从「缓存 key 到 封面 URL」建出忽略专辑的封面索引。纯函数,selftest 直接覆盖。
     ///
     /// 每个条目进**两个**键:歌手写法原样的精确键,以及合唱 credit 归并到主歌手之后的别名键
     /// (见 coverURLString 里为什么需要它)。别名只填精确键没占的位置 —— 精确写法永远优先,
@@ -577,7 +578,7 @@ public enum EnrichCacheReader {
     }
 
     /// 本机推断的两张别名表:歌手写法归并(LocalArtistAliases.derive,证据 = collector 的
-    /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 → 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
+    /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 到 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
     /// id / 时长 + 歌词)。歌手表先推、歌名表按新歌手表分桶 —— 两张表之间有依赖,必须一起算。
     public struct LocalAliasTables: Equatable {
         public var artists: [String: String]
@@ -642,7 +643,7 @@ public enum EnrichCacheReader {
     // 陈旧窗口 ≈ 解码时长(几十 ms)+一次 poll 往返,不是被动等下一拍。调用方
     // (LocalPlaybackSource.apply)据 decodedContentVersion(**已解码代**的 mtime,不是
     // 文件即时 mtime)判断"要不要重灌引擎"——后台解码完成让版本推进,下一拍自然触发
-    // reload 并命中新缓存。⚠️ 不能拿文件 mtime 当触发键:stale 返回窗口里 mtime 已变而
+    // reload 并命中新缓存。 不能拿文件 mtime 当触发键:stale 返回窗口里 mtime 已变而
     // 内容未换,拿它触发会把 lastEnrichMTime 提前推进,后台解码完成后再没有任何东西触发
     // reload,新歌词永远不上屏。
     //
@@ -735,12 +736,12 @@ public enum EnrichCacheReader {
     }
 
     /// 内存压力时把全量缓存让出去(解码后的全曲库歌词字符串常驻 ~21MB,而稳态消费只有
-    /// 当前 1 个 key)。清空 = 回到冷启动态,下一拍 poll 同步重建。⚠️ 如实说明让出的
+    /// 当前 1 个 key)。清空 = 回到冷启动态,下一拍 poll 同步重建。 如实说明让出的
     /// 时效(对抗核实订正):**有快照在轮询**的状态下,下一拍(2-10s)就会冷启动式重建,
     /// 让出只有一拍;真正长效的让出发生在**空闲态**(无播放时 poll 是 10s 档且 lookup
     /// 不消费)。压力事件罕见,一次 ~40ms 重建换周期性让出仍是划算的。
     /// 世代号必须一并推进:不推进的话,清空瞬间还在飞的后台解码回来会把刚让出的缓存
-    /// 原样灌回,极端时序(清空→冷路径同步解到新版→更旧的在飞结果后到)还会把内容
+    /// 原样灌回,极端时序(清空到冷路径同步解到新版到更旧的在飞结果后到)还会把内容
     /// 倒退一版(对抗核实抓出的竞态)。
     public static func installMemoryPressureRelief() {
         guard memoryPressureSource == nil else { return }

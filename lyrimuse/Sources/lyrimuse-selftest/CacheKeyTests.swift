@@ -60,12 +60,12 @@ func runCacheKeyTests() {
                     "前缀优化: 跳过指纹计算给的 0,要跟老逻辑无条件查表查不到的结果一致")
     }
 
-    // ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名 ----
+    // ---- EnrichCacheKeys: 缓存 key 与 lyrics/ 导出文件名 ----
     //
     // 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
     // 大小写"的碰撞组成员改用带 crc32 后缀的文件名(lyricsexport.go:105-141),而 Swift 侧原来
-    // 一律只认普通名——删除时漏删 → collector 重启后 importLyricsFromFiles 从残留文件把条目
-    // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 → 同一个 key 对应两组
+    // 一律只认普通名——删除时漏删 到 collector 重启后 importLyricsFromFiles 从残留文件把条目
+    // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 到 同一个 key 对应两组
     // 文件、导入时各写一次、生效哪份取决于 Go map 的随机遍历顺序。
     // crc32 必须跟 Go 的 hash/crc32.ChecksumIEEE 逐位一致,否则算出来的文件名对不上。
 
@@ -110,8 +110,8 @@ func runCacheKeyTests() {
     }
 
     do {
-        // 文件名字节上限。⚠️ 必须跟 collector/lyricsexport.go 的 lyricsFilenameMaxBytes
-        // 同值、同截断规则,否则删除时算出的文件名对不上 → 漏删 → 条目复活。
+        // 文件名字节上限。 必须跟 collector/lyricsexport.go 的 lyricsFilenameMaxBytes
+        // 同值、同截断规则,否则删除时算出的文件名对不上 到 漏删 到 条目复活。
         expectEqual(EnrichCacheKeys.filenameMaxBytes, 200, "EnrichCacheKeys: 文件名字节上限跟 Go 侧同值")
 
         // 没超限的名字一个字节都不该动。
@@ -151,7 +151,7 @@ func runCacheKeyTests() {
     }
 
     do {
-        // 选中集合 → 实际删除计划:交集 + 排序。
+        // 选中集合 到 实际删除计划:交集 + 排序。
         let existing: Set<String> = ["B|b|al2", "A|a|al1", "C|c|al3"]
         expectEqual(
             EnrichCacheKeys.deletionPlan(selected: ["A|a|al1", "已经没了|x|y"], existing: existing),
@@ -190,7 +190,7 @@ func runCacheKeyTests() {
             ("instrumental 保留", "Song (Instrumental)", "Song (Instrumental)"),
             ("interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"),
             ("中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"),
-            // 真实故障(周杰伦《不能说的秘密》电影原声带),见 collector 侧
+            // "慢板"/"快板"是录音版本标记,不是译名噪音,见 collector 侧
             // enrichkey.go 的 enrichKeyVersionWords 头注。
             ("慢板保留", "Secret (慢板)", "Secret (慢板)"),
             ("快板保留", "第二圆舞曲 (快板)", "第二圆舞曲 (快板)"),
@@ -223,7 +223,7 @@ func runCacheKeyTests() {
         // ---- looseKey:只用于查询兜底的宽松形态 ----
         //
         // collector 把"其实是同一首歌"的重复条目合并成一条后,缓存里只剩最适合显示的那个写法;
-        // 播放器报的可能是另一个写法,靠这一层才查得到。⚠️ 它**只能**用于兜底,绝不能拿去构造
+        // 播放器报的可能是另一个写法,靠这一层才查得到。 它**只能**用于兜底,绝不能拿去构造
         // key —— 繁简这一档两侧本来就不一致(collector 用 OpenCC 词典、这边用 ICU),写进 key
         // 就是「悬浮窗整首歌没词」。理由完整版见 EnrichCacheKeys.looseKey 的注释。
         let loosePairs: [(String, String, String)] = [
@@ -281,10 +281,9 @@ func runCacheKeyTests() {
 
     // ---- 按日历天定义的缓存:跨零点必须作废 ----
     //
-    // 现象是「那年今日」昨天和今天显示同一份。根因是那张卡用 6 小时 TTL 判缓存,而 TTL 只
-    // 知道过了多少秒、不知道跨没跨过零点 —— 22:00 取到 8/16 那份,次日 02:00 再看 TTL 还没
-    // 到期,昨天那份就被挂在"今天"上。App 是常驻服务、跨天不重启,缓存时间戳又只在内存里,
-    // 所以这条一定会发生。这里盯住的就是"跨天优先于 TTL"这一点。
+    // 那张卡的 6 小时 TTL 只知道过了多少秒,不知道跨没跨过零点 —— 22:00 取到的那份,
+    // 次日 02:00 时 TTL 还没到期,会被继续显示成"今天"的内容。App 常驻不重启、缓存
+    // 时间戳只在内存里,所以这里必须"跨天优先于 TTL"。
     do {
         var cal = Calendar(identifier: .gregorian)
         // 固定时区,否则这组断言的结果会跟跑测试的机器在哪个时区有关。
@@ -312,7 +311,7 @@ func runCacheKeyTests() {
         // 本次修的就是这一条:只差 4 小时、TTL 远没到期,但已经是第二天了。
         expectEqual(needs(fetched: at(8, 16, 22), day: at(8, 16, 22), now: at(8, 17, 2)), true,
                     "跨天缓存: 跨过零点即使 TTL 没到期也要拉")
-        // 边界:同一天的 23:59 → 次日 00:00,只隔一分钟也算跨天。
+        // 边界:同一天的 23:59 到 次日 00:00,只隔一分钟也算跨天。
         expectEqual(needs(fetched: at(8, 16, 23, 59), day: at(8, 16, 23, 59), now: at(8, 17, 0, 0)),
                     true, "跨天缓存: 零点前后只差一分钟也算跨天")
         // 反向边界:同一天最早和最晚,不算跨天(只由 TTL 说了算)。
@@ -329,7 +328,7 @@ func runCacheKeyTests() {
     // MARK: - 合唱 credit 归并(ArtistCredit)
     //
     // 起因:同一首《Toronto 2014》两次收听在 Last.fm 上成了两个实体 —— Mac 照抄 Apple Music
-    // 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone→Last.fm→桥接)报的是主歌手
+    // 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone到Last.fm到桥接)报的是主歌手
     // 「Daniel Caesar」。后果是次数各记一本(两行都「第 1 次听」)、封面各挂一张(合唱实体挂
     // 单曲封面)。这两组断言钉住用来归并的两条口径。
     do {
@@ -393,7 +392,7 @@ func runCacheKeyTests() {
         let consensus = ArtistCredit.albumConsensusCovers(rows: rows)
         expectEqual(consensus[ArtistCredit.albumConsensusKey(artist: "Daniel Caesar", album: album)!],
                     albumArt, "共识封面: 少数派(单曲封面)那一行被多数派纠正")
-        // 每行各一张(合辑/逐曲封面)→ 没有共识,不许乱纠正
+        // 每行各一张(合辑/逐曲封面)到 没有共识,不许乱纠正
         let noConsensus = ArtistCredit.albumConsensusCovers(rows: [
             ("V.A.", "Compilation", URL(string: "https://lastfm.example/a.jpg")!),
             ("V.A.", "Compilation", URL(string: "https://lastfm.example/b.jpg")!),
@@ -413,11 +412,11 @@ func runCacheKeyTests() {
 
     // MARK: - 缓存 key:结尾副题必须被剥掉(「歌词管理不自动定位」的根因)
     //
-    // 现象是「进歌词管理不会自动定位到正在播的曲目」。实测:Apple Music 把这首报成
-    // 「Dynasties and Dystopia (from the series Arcane League of Legends)」,而缓存里那条 key
-    // 是剥掉副题的「Dynasties and Dystopia」(collector 的 enrichKey 剥的)。定位函数当时手拼
-    // "artist|title|album",精确匹配落空;而 looseKey 只折大小写/空格/繁简,**折不掉**这段副题,
-    // 兜底也接不住 —— 于是静默返回。这两条断言把"镜像函数必须剥、looseKey 必须剥不掉"钉住。
+    // 副题形态举例:Apple Music 报的曲名带完整副题(如「Dynasties and Dystopia (from
+    // the series Arcane League of Legends)」),而缓存里的 key 是剥掉副题的写法(collector
+    // 的 enrichKey 剥的)。定位函数必须同样剥掉副题再拼 "artist|title|album" 比对;
+    // looseKey 只折大小写/空格/繁简,**折不掉**副题,兜底也接不住 —— 于是静默返回。
+    // 这两条断言把"镜像函数必须剥、looseKey 必须剥不掉"钉住。
     do {
         let artist = "Denzel Curry/GIZZLE/Bren Joy"
         let title = "Dynasties and Dystopia (from the series Arcane League of Legends)"
@@ -439,8 +438,8 @@ func runCacheKeyTests() {
 
     // MARK: - looseKey 必须折平合 credit 分隔符(跟 collector 的 loosenEnrichKey 同步)
     //
-    // 现象是「歌词管理里同一首歌有两条」。根因:同一次播放里两条路径对多歌手串的
-    // 写法系统性不同 —— 播放器报 `A/B/C`,专辑预取从 Apple Music 曲目表拿到 `A & B & C`。
+    // 同一次播放里两条路径对多歌手串的写法可能系统性不同 —— 播放器报 `A/B/C`,
+    // 专辑预取从 Apple Music 曲目表拿到 `A & B & C`。
     // 两侧的宽松键都得折平这一档,否则 collector 那边不再长重复条目,而这边(EnrichCacheReader
     // 的兜底、歌词管理的定位)仍然对不上存量里的另一种写法。
     do {

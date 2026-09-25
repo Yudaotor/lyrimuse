@@ -51,7 +51,7 @@ type lastfmScrobbler struct {
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
 	// catalog 是「智能」档的编目匹配器(见 lastfmcatalog.go),只在
-	// features.LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleTags
+	// features().LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleTags
 	// 调用;nil(没配只读 api_key)时该档整体退化成原样提交。
 	catalog *lastfmCatalogMatcher
 }
@@ -65,7 +65,7 @@ func newLastfmScrobbler(apiKey, secret, sk string) *lastfmScrobbler {
 }
 
 // lastfmScrobblerIfEnabled 是 newLastfmScrobbler 的唯一调用点(run() 里)，多包一层
-// features.LastfmMirrorScrobble 开关——跟凭据判断是 AND 关系,任一为否都返回 nil。
+// features().LastfmMirrorScrobble 开关——跟凭据判断是 AND 关系,任一为否都返回 nil。
 func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	if !features.LastfmMirrorScrobble {
 		return nil
@@ -208,7 +208,7 @@ func ignoredReason(raw json.RawMessage) string {
 // 不可误判)—— 尤其 `context deadline exceeded`,不管卡在 dial 还是等回执,错误链里都
 // **没有** *net.OpError(只有 http 自己的 timeoutError),自然落到 false 这边,正是想要的。
 //
-// ⚠️ 必须用类型断言,不能用 strings.Contains 匹配错误文案:networkobs.go 会重写
+// 必须用类型断言,不能用 strings.Contains 匹配错误文案:networkobs.go 会重写
 // 出网错误的文案,按字符串判会在它改写之后静默失效。
 func provablyNeverSent(err error) bool {
 	var dnsErr *net.DNSError
@@ -295,15 +295,15 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 	}
 }
 
-// resolveScrobbleTags 决定这条提交实际发哪个歌手名 + 曲名。设置里是三档(账号 → Last.fm →
-// 设置 → Scrobble 卡 →「匹配模式」:智能 / 自定义 / 原始),但档位在 features 那边已经
+// resolveScrobbleTags 决定这条提交实际发哪个歌手名 + 曲名。设置里是三档(账号 到 Last.fm 到
+// 设置 到 Scrobble 卡 到「匹配模式」:智能 / 自定义 / 原始),但档位在 features 那边已经
 // **摊平成三个布尔**了(resolveLastfmMatch),这里只按布尔办事:
 //
 //   - LastfmMatchArtist / LastfmMatchTrack:允许把歌手 / 曲名改写成 Last.fm 编目条目的
 //     写法(lastfmcatalog.go)。两个都 false 就不打网络。智能档 = 两个都 true。
 //   - LastfmMatchFirstArtistOnly:合唱串截成第一位(firstCreditedArtist,纯字符串、不联网)。
 //
-// ## ⚠️ 截断只在**没匹配到**编目条目时应用
+// ## 截断只在**没匹配到**编目条目时应用
 //
 // 匹配到的写法已经是 Last.fm 编目认的那一条,再截一刀就把它变成一个不存在的条目 ——
 // `Hall & Oates / Maneater`(80 万听众的正规合体条目)会被截成 `Hall`,比不改还糟。
@@ -319,7 +319,7 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 //     而不截断最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。匹配不是
 //     无条件截断:它只在编目里真有更多人听的同一首歌时才改写。
 //
-// ⚠️ now-playing、scrobble、回填三条路径必须调**同一个**函数:否则会出现 "now playing 显示 A、
+// now-playing、scrobble、回填三条路径必须调**同一个**函数:否则会出现 "now playing 显示 A、
 // 落库却是 A & B" 的自相矛盾状态。匹配下唯一允许的分歧见 lastfmcatalog.go「一致性」一节。
 func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, track string, durationSecs float64) (string, string) {
 	scope := matchScope{artist: features.LastfmMatchArtist, track: features.LastfmMatchTrack}
@@ -334,7 +334,7 @@ func resolveScrobbleTags(ctx context.Context, c *lastfmCatalogMatcher, artist, t
 }
 
 // mirrorTimeout 是 mirrorAsync 给一次 Last.fm 写入的总窗口。会联网匹配时多给判定那份
-// 预算(最多四个请求),免得判定把真正的写入挤掉;不匹配就维持 8 秒。
+// 预算(lastfmCatalogBudget,含扩展搜索),免得判定把真正的写入挤掉;不匹配就维持 8 秒。
 func mirrorTimeout() time.Duration {
 	const write = 8 * time.Second
 	if features.LastfmMatchArtist || features.LastfmMatchTrack {
@@ -378,17 +378,18 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 // 超时上限,不会泄露(同 resolveEnrichAsync 的模式)。s==nil(未配置镜像凭证)时整体
 // 跳过,call 不会被执行。
 //
-// onFail(可为 nil)在**除熔断以外**的失败分支上被调用,让调用方决定这一条要不要留痕。
+// onFail(可为 nil)在每一个失败分支上都被调用(包括入口处已熔断的短路、以及触发熔断的
+// 这一次),让调用方决定这一条要不要留痕。
 // 加它的理由(实测排查):
 //
 //	原来失败只打一行日志就完事,注释写的是"下一次 poll/scrobble 自然会覆盖"——那句话
 //	对 now-playing 成立(瞬时状态,下一拍就盖掉),对 **scrobble 不成立**:一次收听只提交
 //	这一次。而 mirrorScrobbleTracked 在发请求**之前**就把 uts 记进 lfmMirrored 并落盘
 //	(防 bridge 抢跑),幂等守卫从此永久挡死这条;p.lfm != nil 时 appendListen 又被跳过。
-//	三处同时不兜底 ⇒ 一次网络抖动 = 永久少一条 scrobble,且无处可查。用户真实日志里
+//	三处同时不兜底 到 一次网络抖动 = 永久少一条 scrobble,且无处可查。用户真实日志里
 //	2618 次成功收听对应 13 条这样的真丢失。
 //
-// ⚠️ onFail 跑在这个 goroutine 里,**只准碰自带锁的 listen log**(appendListen /
+// onFail 跑在这个 goroutine 里,**只准碰自带锁的 listen log**(appendListen /
 // markQuarantined,它们持 listenLogMu)。**绝不能碰 poller 的任何字段** —— 尤其
 // p.lfmMirrored 是裸 map,主循环会经 persistedTTLSet.save 整个 range 它,并发写就是
 // `fatal error: concurrent map iteration and map write`,recover 都救不回来;
@@ -492,7 +493,7 @@ type lastfmRecentPage struct {
 
 // lastfmRecent fetches a user's recent Last.fm tracks: the currently-playing one
 // (if any) and completed scrobbles with timestamps (newest first). Bridges iPhone
-// playback (FastScrobbler→Last.fm) into ListenBrainz — now-playing mirrors the
+// playback (FastScrobbler到Last.fm) into ListenBrainz — now-playing mirrors the
 // live track, completed scrobbles are forwarded as listens so "last played" and
 // history reflect the phone on any device. 同一份响应也落成 App 读的
 // recent feed(lastfmfeed.go),所以顺手多解 image / @attr.total。
@@ -569,7 +570,7 @@ func parseLastfmRecent(body []byte) (lastfmRecentPage, error) {
 			continue
 		}
 		tr := lastfmTrack{Title: t.Name, Artist: t.Artist.Text, Album: t.Album.Text}
-		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large → extralarge → 最后一档)。
+		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large 到 extralarge 到 最后一档)。
 		pick := func(size string) string {
 			for _, im := range t.Image {
 				if im.Size == size {

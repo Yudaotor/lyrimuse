@@ -14,7 +14,7 @@ import LyrimuseCore
 // menuNeedsUpdate 里整棵 removeAllItems() 重建(保证勾选态永远是最新的,菜单项十几个、重建
 // 代价可以忽略)、autoenablesItems = false(这里每一项都常驻可点,没有需要变灰的场景)。
 //
-// ⚠️ 同 MenuBarStatusMenu 的那条不变量:构建菜单时只读 AppSettings/PlaybackCoordinator,
+// 同 MenuBarStatusMenu 的那条不变量:构建菜单时只读 AppSettings/PlaybackCoordinator,
 // 不碰其它 `static let shared` 单例的构造路径——不过这个类本身就是
 // LyricsOverlayWindowController 的属性,被弹出这一刻悬浮窗控制器早已存在,不存在"构建菜单时
 // 意外把窗口建出来"这个风险,跟菜单栏那边要专门绕的坑不是同一个场景。
@@ -53,7 +53,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         // 时才出现这个选项")。跟下面「搜索歌词…」按当前曲目决定显隐是同一个模式 —— 右键菜单
         // 本来就是上下文菜单,每次弹出都重建(见 menuNeedsUpdate)。
         //
-        // ⚠️ 判据故意**不是**"这首歌是不是中文歌"(`Romanizer.songScript`),而是
+        // 判据故意**不是**"这首歌是不是中文歌"(`Romanizer.songScript`),而是
         // `ChineseVariant.affects` —— 也就是 `converted(_:)` 自己用的那一个。理由见它的
         // 注释:按 songScript 判会在韩文歌含汉字时"隐藏了菜单、汉字却照转",而那正是
         // SettingsView 那条「只要它还在起作用,就一定看得见」要防的最坏状态。共用判据之后
@@ -113,24 +113,11 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         return m
     }
 
-    /// 「更改配色」子菜单:跟随封面 → 6 个内置主题 → 用户自存主题。
+    /// 「配色主题」子菜单:6 个内置主题 到 用户自存主题。跟设置页「主题」浮层那份下拉同一张清单、
+    /// 同一条打勾判据:四个配色字段等于哪套就勾哪套,跟「跟随封面」开没开无关。
     ///
-    /// ⚠️ **跟随封面开着时,主题照常列出,但一个都不打勾**(跟设置页取齐)。
-    ///
-    /// 这一档来回改过三次,三次的取舍都记在这里,免得下一个人把它转回去:
-    ///  1. 最初:主题照常列出、按颜色字段打勾。**现象是的 bug**——跟随封面开着时四个颜色字段
-    ///     仍然等于某个主题,于是「跟随封面 ✓」和「黑字描边 ✓」**同时打勾**,读起来是两个
-    ///     互相矛盾的"正在生效"。
-    ///  2. 整段主题列表干脆不展示(中间试过第三态 `.mixed` 渲染成短横
-    ///     表示"这是备用色、没在生效",被否掉了)。这修掉了矛盾,但代价是从跟随封面切到某个
-    ///     固定主题要**两步**(先取消跟随封面、再打开菜单选)。
-    ///  3. (现在):「勾选了跟随封面之后依然可以选择主题,但是你去选了主题
-    ///     之后跟随封面就自动取消勾选」。于是列表回来了,**而第 1 条那个矛盾靠"不打勾"消除**——
-    ///     矛盾的来源是给一个"没在生效"的主题**打勾**,不是把它**列出来**。跟随封面开着时
-    ///     整段列表无勾选 = "现在生效的只有跟随封面",点任意一个主题会
-    ///     `ColorTheme.apply(to:)` 把跟随封面关掉、那个主题当场生效并打上勾。一步到位。
-    ///
-    /// ⚠️ 不打勾**只在跟随封面开着时**,关着时照常按颜色字段打勾——那才是"现在生效的是哪套"。
+    /// 这里不放「跟随封面」:它是「文字颜色」「未唱颜色」各自的取值(设置页「文字」浮层),一个菜单项
+    /// 表达不了两处各自的开关。选主题时 `ColorTheme.apply(to:)` 会顺手关掉文字颜色的跟随封面。
     private func colorThemeMenu(_ settings: AppSettings) -> NSMenu {
         let m = NSMenu()
         m.autoenablesItems = false
@@ -164,10 +151,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     private func colorThemeItem(_ theme: ColorTheme, checked: Bool) -> NSMenuItem {
         let item = makeItem(theme.name, symbol: "", selector: #selector(applyColorTheme(_:)))
         item.representedObject = theme
-        // 两态就够。之前的理由是"跟随封面开着时这些条目压根不会被建出来";
-        // 现在它们会被建出来了,但调用方在那种状态下一律传 checked=false(见 colorThemeMenu
-        // 里的 showsCheckmarks),所以仍然不存在"打着勾但其实没生效"那种状态 —— 依旧不需要
-        // 第三态(`.mixed` 那个短横是明确不要的)。
+        // 两态就够,不用第三态(`.mixed` 那个短横是明确不要的)。
         item.state = checked ? .on : .off
         return item
     }

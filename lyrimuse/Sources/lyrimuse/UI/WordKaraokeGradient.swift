@@ -6,7 +6,7 @@ import LyrimuseCore
 // LinearGradient。悬浮歌词(LyricsOverlayView)、灵动岛(NotchLyricsView)、歌词窗口
 // (LyricsWindowView)三处共用同一份,不再各自维护、也不会有观感不一致的问题。
 //
-// 算法本体在 LyrimuseCore/Lyrics/KaraokeFill.swift —— 这里只剩"分段 → 颜色"的映射,
+// 算法本体在 LyrimuseCore/Lyrics/KaraokeFill.swift —— 这里只剩"分段 到 颜色"的映射,
 // 薄到没有任何判断逻辑,所以它是**故意不测**的那一层(能测的都在 Core 那边被 selftest
 // 钉住了)。外层容器/描边这些跟具体窗口形态相关的处理各自留在各自的 View 里。
 enum WordKaraokeGradient {
@@ -29,7 +29,7 @@ enum WordKaraokeGradient {
     /// 30Hz 对一道横向扫过的填色边缘完全够看(电影是 24),但把这一块的成本直接砍到 1/4,
     /// 换来的是滚动/淡入淡出这些**整页**动画重新流畅。这是一笔明确的取舍,不是抠细节。
     ///
-    /// ⚠️ 补:这个上限原本只加在歌词窗口上,悬浮歌词和灵动岛漏掉了整整一天 ——
+    /// 补:这个上限原本只加在歌词窗口上,悬浮歌词和灵动岛漏掉了整整一天 ——
     /// 而常驻显示的恰恰是悬浮窗。补齐时**只改帧率、没有下沉 TimelineView**,理由见
     /// LyricsOverlayView.mainLine 里对应的那段注释。
     static let refreshInterval: Double = 1.0 / 30.0
@@ -37,7 +37,7 @@ enum WordKaraokeGradient {
     /// 歌词窗口专用档:60Hz(五轮定稿)。这台面板 60Hz,窗口字号大(~50pt),
     /// 30Hz 下扫色边缘每步 ~10px 可感知;窗口的失效面经多轮审计已收窄到单个活跃词的叶子
     /// (见 LyricsWindowView.KaraokeWordText),60Hz 的代价约为悬浮窗整行 30Hz 的一小部分。
-    /// ⚠️ 排程式(withAnimation 交给渲染管线插值)在 macOS 上实测**不可用**:SCK 逐帧探针
+    /// 排程式(withAnimation 交给渲染管线插值)在 macOS 上实测**不可用**:SCK 逐帧探针
     /// 量得窗口只以 ~20Hz 提交(系统对长时程慢动画自动降档,无 API 干预;对照组悬浮窗
     /// TimelineView 30Hz 准点)——20Hz×14px 步进正是"卡顿感"本体。TimelineView 的频率
     /// 受控、实测准点,所以窗口回到逐帧重算,只是档位开到面板满刷新率。

@@ -14,7 +14,7 @@ import (
 
 // 每个用例都得把这一组进程级状态复位——它们是包级变量,用例之间会互相串。
 //
-// ⚠️ 退出前必须**等后台上传排空**。scheduleArtworkUpload 起的 goroutine 是在自己跑起来
+// 退出前必须**等后台上传排空**。scheduleArtworkUpload 起的 goroutine 是在自己跑起来
 // 之后才去读包级的 artworkRelayURL 的,所以上一个用例排下的上传,可能等到下一个用例把
 // artworkRelayURL 指向**它自己的** httptest 服务器之后才发出请求 —— 表现就是下一个用例
 // 平白多收到一次 HEAD(`-count=25` 压出来的:heads = 2)。
@@ -98,7 +98,7 @@ func TestDeviceArtworkRef(t *testing.T) {
 // 这个函数是整条修复的闸门:任何情况下都不许把 file:// 原样放出去。
 func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	resetArtworkRelayState(t)
-	// ⚠️ 指向本地 httptest 而不是一个真实域名:这个用例会真的排一次后台上传,打到外网
+	// 指向本地 httptest 而不是一个真实域名:这个用例会真的排一次后台上传,打到外网
 	// 域名上要等 DNS 超时(还可能真把用户本机的封面 POST 出去)。同理下面的本地路径也
 	// 用临时目录,不用 ~/.config 里那份真文件。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +123,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	}
 	local := deviceArtworkURLPrefix + path
 
-	// 还没确认传上去 → 空串(而不是 file://)。网页据此走自己的 iTunes 兜底。
+	// 还没确认传上去 到 空串(而不是 file://)。网页据此走自己的 iTunes 兜底。
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("未上传时应返回空串,绝不能透传本地路径, got %q", got)
 	}
@@ -131,7 +131,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	// 才真正发请求)。
 	waitArtworkIdle(t)
 
-	// 确认传上去之后 → 中继上的 https 地址。
+	// 确认传上去之后 到 中继上的 https 地址。
 	artworkMu.Lock()
 	artworkUploaded[testSHA] = true
 	artworkMu.Unlock()
@@ -140,7 +140,7 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 		t.Errorf("已上传时 = %q, want %q", got, want)
 	}
 
-	// 没配中继(用户没搭中继、只用 LB)→ 依然不能透传本地路径。
+	// 没配中继(用户没搭中继、只用 LB)到 依然不能透传本地路径。
 	artworkRelayURL = ""
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("没配中继时应返回空串, got %q", got)

@@ -10,7 +10,7 @@ import OSLog
 // 而真正的原因在最底层且根本修不了(只能等上游适配)。`media-control test` 专门回答这一件事:
 // 它不看有没有歌在放,只验通道本身通不通,非零退出即"这台机器上用不了"。
 //
-// ⚠️ 别以为「Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,不受影响」
+// 别以为「Apple Music 和 Spotify 走 AppleScript,压根不经过这条通道,不受影响」
 // —— **那是错的**,而且它正好会把排查带偏。默认配置是
 // `[.auto]`,那条路上 **Apple Music 的快照基座也是 media-control**(AppleScript 只在
 // `adaptedSnapshot` 里把位置与曲目信息整份换成 AppleScript 那份);只有「恰好只勾
@@ -35,7 +35,7 @@ public final class MediaControlHealth: ObservableObject {
 
     /// 此刻正跑着一次自检。
     ///
-    /// ⚠️ **必须跟 `state` 分开记**:重试期间 `state` 还停在 `.unknown`(失败还没落成
+    /// **必须跟 `state` 分开记**:重试期间 `state` 还停在 `.unknown`(失败还没落成
     /// "不可用"),光靠 `state` 那道 guard 挡不住第二个调用方进来,会多 fork 一个子进程。
     private var isChecking = false
 
@@ -44,7 +44,7 @@ public final class MediaControlHealth: ObservableObject {
     /// 不影响任何播放路径。
     private static let timeout: TimeInterval = 8
 
-    /// ⚠️ **启动那一下失败不算数,要再试**。
+    /// **启动那一下失败不算数,要再试**。
     ///
     /// 实测:安装脚本刚换掉 App 包、重新拉起的那零点几秒里跑的自检回了 4(stdout 全空),
     /// 而同一台机器上手动跑五次 `test` 全是 0、下一次启动的自检也是 healthy。启动瞬间
@@ -66,7 +66,7 @@ public final class MediaControlHealth: ObservableObject {
 
     /// 界面上正挂着「不可用」的时候再验一次(设置页「播放器」那页 onAppear 调)。
     ///
-    /// ⚠️ 只在 `.unavailable` 时才真跑:healthy / unknown 进来什么都不做 —— 别让"打开一次
+    /// 只在 `.unavailable` 时才真跑:healthy / unknown 进来什么都不做 —— 别让"打开一次
     /// 设置页"变成"白 fork 一个子进程"。这条路覆盖的是重试也救不回来的那种抖动(通道在自检
     /// 跑完之后才恢复),用户看到那句警告时的自然动作就是回设置页看看,正好借这一下复查。
     public func recheckIfUnavailable() {
@@ -83,11 +83,11 @@ public final class MediaControlHealth: ObservableObject {
             return
         }
         isChecking = true
-        // ⚠️ 超时值先取到本地再进 detached task:`Self.timeout` 是 MainActor 隔离的,
+        // 超时值先取到本地再进 detached task:`Self.timeout` 是 MainActor 隔离的,
         // 在那条任务里直接读它在 Swift 6 语言模式下是错误。
         let timeout = Self.timeout
         Task.detached(priority: .utility) {
-            // ⚠️ `captureStderr: true` 不能省:失败原因只写在 stderr 上(适配框架那句
+            // `captureStderr: true` 不能省:失败原因只写在 stderr 上(适配框架那句
             // "The test client did not signal setup_done within …"),stdout 是空的。
             // 不接那根管子,用户看到的就只有一句没有任何信息量的「exit status 4」。
             let result = ProcessRunner.run(binary, ["test"], timeout: timeout, captureStderr: true)
@@ -122,7 +122,7 @@ public final class MediaControlHealth: ObservableObject {
 
     /// 给用户看的失败原因。
     ///
-    /// ⚠️ **stderr 排在 stdout 前面**:那个适配框架把真正的原因写在 stderr 上,stdout 是空的。
+    /// **stderr 排在 stdout 前面**:那个适配框架把真正的原因写在 stderr 上,stdout 是空的。
     /// 两边都空才退回退出码 —— 「exit status 4」是最后的兜底,不是常态。
     private static func failureMessage(_ result: ProcessRunner.Result?) -> String {
         // nil = 进程根本没起来(文件不在/没有执行权限),跟"跑了但失败"是两回事,见

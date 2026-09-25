@@ -20,7 +20,7 @@ struct LyricsSearchSheet: View {
     let originalTitle: String
     let originalAlbum: String
     // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
-    // 默认选中它,而不是"搜索结果里谁先到就选谁":现象是,默认选中的
+    // 默认选中它,而不是"搜索结果里谁先到就选谁":默认选中的
     // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
     // 打开这个弹窗却默认高亮着完全不相关的 kugou,容易误导成"当前用的就是这个"。
     let currentSource: String?
@@ -34,12 +34,12 @@ struct LyricsSearchSheet: View {
     // 而当初胜出的 Musixmatch 拿的是 962 —— 用户看着"分最高的没被选",其实看的是另一套数。
     let durationSecs: Double
     /// 采纳后面板留着不关。三个入口里只有悬浮窗 ⚙ 的独立小窗传 true —— 那是"边听边换词"的
-    /// 入口,换一个源听两句不对再换,原来要关窗→重开→再等九个源重搜(最坏 20 秒);留着的话
+    /// 入口,换一个源听两句不对再换,原来要关窗到重开到再等九个源重搜(最坏 20 秒);留着的话
     /// 同一批候选还在,点即切。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)和歌词窗口
     /// 的 sheet(关了才看得到背后的歌词)维持关窗。
     let keepsOpenAfterApply: Bool
-    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标,
-    /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
+    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 到 挪「当前使用」徽标,
+    /// 留着的话给一条回声、关窗模式直接关;失败 到 关窗模式照旧关(调用方那边的 lastError 红字
     /// 负责说明),留着的话在标题栏说一句、让人直接重试。
     let onApply: (LyricsSearchService.Candidate) async -> Bool
 
@@ -102,7 +102,7 @@ struct LyricsSearchSheet: View {
     // 传输层就没打通的源:collector 对"这一轮一个 HTTP 响应都没拿到"的源报
     // dns_failed / connect_failed / server_error(sourcebreaker.go 最后一节的传输层分类),对"上游
     // 死了、根本没法查"的 AMLL 报 upstream_unreachable(searchcli.go 派生),经 sourceFailureReasonCodes
-    // 传到这里。空状态据此把「连不上」和「未返回候选」分开说 —— 起因是现象是「派对后派对搜不到」:
+    // 传到这里。空状态据此把「连不上」和「未返回候选」分开说 —— 现象:
     // 公司 VPN 下发的 DNS 对六个源的域名一律不答,而 networkLooksDown 却是 false(它要求进程内
     // **所有**请求全失败,Apple / YouTube 的域名同一台 DNS 能答),弹窗照实显示「九个源都没找到
     // 可用的候选」,把"连不上"报成了"没收录"。
@@ -128,14 +128,14 @@ struct LyricsSearchSheet: View {
     /// 情况」明细用的整句解释是两个场合,这里只要一个名词短语。源名用「、」拼,跟
     /// LyricsDecisionSheet「本轮应答的源：%@」那处同一写法。
     ///
-    /// ⚠️ 为什么绕哨兵这一圈,而不是把模板拆成「理由」和「源名」两个 key:拆了要新增四条
+    /// 为什么绕哨兵这一圈,而不是把模板拆成「理由」和「源名」两个 key:拆了要新增四条
     /// 本地化字符串 × 三种语言,而**需要的信息模板里已经有了** —— `%@` 的位置就是源名的位置,
     /// 除它以外的部分就是理由。所以拿 U+FFFC(对象替换符,正文里永远不会出现)当占位符格式化
     /// 一次,再按它切开、照原顺序拼回去:即使某种语言把 `%@` 挪到句首或句中,加粗的仍然只是
     /// "非源名"那部分,顺序也不会乱 —— 这是按标点(「：」/「:」)切分做不到的。
     private static func transportFailureLine(_ code: String, sources: [String]) -> Text {
         let names = sources.map(sourceDisplayName).joined(separator: "、")
-        // ⚠️ `case "<code>":` 这几个字面量是跨语言契约的锚点,lyricsourcefailure_test.go 的
+        // `case "<code>":` 这几个字面量是跨语言契约的锚点,lyricsourcefailure_test.go 的
         // TestSwiftSearchSheetTransportCodesMatchGo 直接在源码里搜它们 —— 改写法前先改那个测试。
         let template: String
         switch code {
@@ -160,7 +160,7 @@ struct LyricsSearchSheet: View {
     /// 设置里开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
     /// 也就是 collector 这一轮**真正发了请求**的那几个:fetchScoredLyricCandidatesStreaming
     /// 的 skipSource 对关掉的源直接回空结果、不发请求(enrich.go,口径是「没启用肯定就不查」)。
-    /// ⚠️ 改 collector 那边的行为时,这条注释和 .help 的措辞要跟着走 —— 「没有查它」和
+    /// 改 collector 那边的行为时,这条注释和 .help 的措辞要跟着走 —— 「没有查它」和
     /// 「不采用它的结果」之间来回改过一次——以后再改 collector 那边的行为,记得这里的措辞跟着走。
     /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未返回候选」(
     /// "加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
@@ -353,13 +353,12 @@ struct LyricsSearchSheet: View {
     // 补上——SearchUpdate.instrumental 这个信号早就算出来、也早就传到这里了
     // (见其声明处注释:"用来把'一个候选都没有'这个结局分成'这首歌本来就没词'和'真的
     // 谁都没搜到'"),但下面 content 的空状态分支只认 isSearching/networkLooksDown 两种,
-    // 从没读过它——实测案例(蛋堡《收敛水》第 1 轨「关键字: Intro」,QQ 明确回过"此歌曲
-    // 为没有填词的纯音乐"占位)真的搜出了 instrumental=true,弹窗却仍然显示笼统的
+    // 从没读过它——即使某个源真的搜出了 instrumental=true(如 QQ 明确回过"此歌曲
+    // 为没有填词的纯音乐"占位的情况),弹窗却仍然显示笼统的
     // "七个源都没找到可用的候选",跟真没搜到的情况没有任何区别,等于白算了这个信号。
     @State private var instrumental = false
     // 加——"曲库里有这首歌、但平台上没有歌词文本"的那几个源(语义见
-    // LyricsSearchService.SearchUpdate.tracksFoundNoLyrics)。起因是现象是「为什么这首歌
-    // 搜不到歌词」(Iris / OLORUNNS):网易云和 QQ 都精准命中了曲目(歌名/歌手/专辑/时长
+    // LyricsSearchService.SearchUpdate.tracksFoundNoLyrics)。现象:网易云和 QQ 都精准命中了曲目(歌名/歌手/专辑/时长
     // 四项全中)、只是平台没有词,而弹窗显示的跟"十二个源都没搜到这首歌"是同一句话——
     // 匹配明明是对的,用户完全看不出来,也无从判断该等还是该自己贴一份。
     @State private var tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics] = []
@@ -451,7 +450,7 @@ struct LyricsSearchSheet: View {
         // (同 WindowDragHandle 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 同时
         // 从"只有下限"改成"下限 + 可无限撑大",不然窗口拖大了内容仍停在 720×480。
         .background(WindowResizeEnabler(minWidth: 720, minHeight: 480))
-        // ⚠️ 真实故障修复(悬浮窗 ⚙「搜索歌词…」小窗切歌后串 key):那扇窗口是
+        // 悬浮窗 ⚙「搜索歌词…」小窗切歌后会串 key:那扇窗口是
         // `if let context { LyricsSearchSheet(...) }`,让它再点一次就重查曲目、把新
         // context 喂进来——但 SwiftUI 里 Optional 从 A 换成 B 是**同一个视图身份**:上面三个
         // 查询词 @State 只在首次创建时取 initialValue,`.task {}` 也只跑首次挂载那一遍,于是
@@ -487,10 +486,10 @@ struct LyricsSearchSheet: View {
     // 才会真的重新发起查询,不会敲一个字就发一次网络请求。
     private var queryFieldsBar: some View {
         HStack(spacing: 10) {
-            // 三栏**按内容长度分宽**,不等分(现象是"输入框放不下内容")。
-            // 等分那版最常见的一幕:歌手栏「PRINCE」六个字母后面空着大半格,旁边歌名
-            // 「Around the World in a Day (2025 Remaster)」和专辑双双被截断——三栏的
-            // 内容长度天然不对等,均分等于把宽度分给了最不需要的那栏。分法(含放不下时
+            // 三栏**按内容长度分宽**,不等分——三栏的内容长度天然不对等,均分等于把宽度
+            // 分给了最不需要的那栏,常见形状是歌手栏「PRINCE」六个字母后面空着大半格、
+            // 旁边歌名「Around the World in a Day (2025 Remaster)」和专辑双双被截断。
+            // 分法(含放不下时
             // 的下限保护)在 LyricsQueryFieldLayout,这里只负责按实际字体把"想要多宽"量
             // 出来。挂 help:再怎么分也有装不下的时候,悬停能看全文。
             ProportionalFieldsLayout(
@@ -633,11 +632,8 @@ struct LyricsSearchSheet: View {
                 // 可能有超时的、403 的、被 20 秒截止砍掉的,跟「歌词源可用情况」那里的
                 // 「未返回候选」同一口径(评审时抓到过更强的措辞说过头)。
                 //
-                // 改文案("太啰嗦,也不太符合专业软件应有的文案水平,需要更严谨、
-                // 有格式的话术,而不是像正常人说出来的话")。原来是三句陈述句 + 一句
-                // 「新发行的歌常要过一阵才补上词」的建议 —— 那句建议整个删掉:它是聊天不是产品
-                // 文案,而且"过一阵"这种话我们根本无从保证。改成标题给结论、正文给**标签-值对**:
-                // 不成句子就没有语气,信息还更密。
+                // 文案原则:标题给结论、正文给**标签-值对**,不写成句子——不成句子就没有
+                // 语气,信息还更密;"新发行的歌常要过一阵才补上词"这类无法保证的建议不写。
                 let sources = tracksFoundNoLyrics.map { sourceDisplayName($0.source) }
                     .joined(separator: "、")
                 let otherCount = max(0, sourcesTotal - tracksFoundNoLyrics.count)
@@ -690,7 +686,7 @@ struct LyricsSearchSheet: View {
                     List(candidates, selection: selectedSourceBinding) { c in
                         candidateRow(c)
                     }
-                    // 把理想/上限各放宽一档(280→300、320→380):这一列要放
+                    // 把理想/上限各放宽一档(280到300、320到380):这一列要放
                     // 歌名/歌手/专辑三行,长专辑名在 280pt 下必换行甚至截断;右侧预览
                     // 有 minWidth 380 兜着,拖不塌。
                     .frame(minWidth: 250, idealWidth: 300, maxWidth: 380)
@@ -753,7 +749,7 @@ struct LyricsSearchSheet: View {
             currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
     }
 
-    /// source → 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
+    /// source 到 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
     /// 每次 body 算一遍不贵;指纹本身在 Candidate 构造时算好了。
     private var duplicateAnchors: [String: String] {
         LyricsCandidateDuplicates.firstMatches(candidates.map { (source: $0.source, fingerprint: $0.fingerprint) })
@@ -766,11 +762,11 @@ struct LyricsSearchSheet: View {
         return c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")
     }
 
-    /// 「采用此候选」的整条流程(等调用方写完再收尾,原来是 `onApply(c); dismiss`
-    /// 一把关掉、写盘在背后跑、面板上什么反馈都没有):
+    /// 「采用此候选」的整条流程(等调用方写完再收尾,而不是 `onApply(c); dismiss`
+    /// 一把关掉——那样写盘在背后跑、面板上什么反馈都没有):
     /// ① 防重入 —— 写盘 + 排 collector 重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
     /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
-    /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
+    /// ③ 成功 到 `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
     ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
     private func apply(_ c: LyricsSearchService.Candidate) async {
         guard applyingSource == nil else { return }

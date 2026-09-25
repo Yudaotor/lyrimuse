@@ -5,13 +5,11 @@ import (
 	"time"
 )
 
-// 封面选源的专辑感知。
-//
-// 起因是一次真实反馈:"最近记录"里蔡徐坤《KUN》连播 11 首,其中 Deadman / Jasmine /
-// What a Day 三首的封面跟其它 8 首不是同一张。查下来是**网易云上没有 KUN 这张专辑、
-// 只有这三首先行单曲**:pick() 那条"唯一精确同名候选、专辑名对不上也认"的规则命中了
-// 单曲版,而网易云在封面选源里排在 Apple 前面(为了国内加载得出来),于是这三首拿到
-// 单曲封面;其余 8 首网易云一条候选都没有、退到 Apple 拿到 KUN 专辑封面。
+// 封面选源的专辑感知:网易云没有整张专辑、只有先行单曲时,pick() 那条"唯一精确同名
+// 候选、专辑名对不上也认"的规则会命中单曲版,而网易云在封面选源里排在 Apple 前面
+// (为了国内加载得出来)—— 于是这些曲目拿到单曲封面,同专辑其它曲目因为网易云一条
+// 候选都没有,退到 Apple 拿专辑封面,两者就不一致(如蔡徐坤《KUN》连播 11 首、其中
+// Deadman / Jasmine / What a Day 三首封面跟其它 8 首不同这一例)。
 func TestPreferAppleCoverOverNetease(t *testing.T) {
 	const cover = "https://is1-ssl.mzstatic.com/…/600x600bb.jpg"
 	cases := []struct {
@@ -80,7 +78,7 @@ func TestCoverNeedsAlbumCheck(t *testing.T) {
 		{
 			// 收严:albumScore 的 100 分档("宽松包含"——本地专辑名的基础部分
 			// 是候选专辑名的超集,比如带了"(Gold) [Explicit]"这类版本后缀)不等于真的对上
-			// 版,得补查。方大同「很不低调」实测坐实:网易云那张《JTW西游记》是本地
+			// 版,得补查。方大同「很不低调」:网易云那张《JTW西游记》是本地
 			// 《JTW 西游记 (Gold) [Explicit]》的子串、算 100 分,但两版封面完全不同。
 			name:  "只是宽松包含(100 分,版本后缀被当成子串忽略):也要补查,不是真的对上版",
 			e:     enrichEntry{CoverSource: "netease", CoverURL: "u", CoverAlbum: "JTW西游记"},
@@ -193,8 +191,7 @@ func TestCoverSwapAllowed(t *testing.T) {
 			album: "KUN", want: false,
 		},
 		{
-			// 方大同「很不低调」/「烦」——网易云、Apple 都只收录了旧版
-			// 《JTW西游记》,新版《JTW 西游记 (Gold) [Explicit]》只有 QQ 音乐有。QQ 那档
+			// 例子:一张专辑网易云/Apple 都只收录旧版封面,新版封面只有 QQ 音乐有。QQ 那档
 			// 从不回传 CoverAlbum,不能套"网易云应答过 + albumScore > 0"那条正面证据,
 			// 得单独放行,否则永远换不进去。
 			name:  "跨源到 QQ:即使没有 NeteaseURL/CoverAlbum 也换(qqCoverFallback 自己已经把关)",
@@ -203,14 +200,14 @@ func TestCoverSwapAllowed(t *testing.T) {
 			album: "JTW 西游记 (Gold) [Explicit]", want: true,
 		},
 		{
-			// 真实故障(Michael Jackson《Workin' Day and Night (Immortal
-			// Version)》):device 一旦定案就不该再被 backfillPeripheralFields 的外围自愈
+			// device 一旦定案就不该再被 backfillPeripheralFields 的外围自愈
 			// 换掉——即使 fresh 命中的是上面那条"QQ 无条件放行"。这类不需要中文别名的
-			// 外国歌手,canonical_artist 永远解不出来,needsPeripheralBackfill 因此每隔
+			// 外国歌手(如 Michael Jackson《Workin' Day and Night (Immortal Version)》),
+			// canonical_artist 永远解不出来,needsPeripheralBackfill 因此每隔
 			// enrichPeripheralRetryInterval 就重新判"缺",反复触发这条外围自愈,每次都会把
 			// 刚定案的正确设备封面换成网易云/Apple/QQ 这次又猜错的某个结果——原封面来源
 			// 一直换,表现为封面在几次重试之间来回变。
-			// ⚠️ 这两条的语义变了:device 分支改成"问一次能不能升级"
+			// 这两条的语义变了:device 分支改成"问一次能不能升级"
 			// (见 coverquality.go)。它们现在验的是**判据说不能升级时,一律不换** ——
 			// 上面那段《Immortal》的保护正是靠这一档(那张 QQ 高清图不是同一张图,
 			// 判据会拒绝升级)。下面用桩把判据固定成"不能升级",不发真实网络请求。
@@ -285,8 +282,7 @@ func TestSiblingAlbumCover(t *testing.T) {
 	}
 }
 
-// 现象是《Michael》/「Hold My Hand (with Akon)」封面不对:显示的是 QQ 的
-// 《The Ultimate Collection》,而同一张专辑另外三首在本机播过、拿到的是设备直送的正确
+// 例子:同一张专辑另外三首在本机播过、拿到设备直送的正确封面,这一首却显示 QQ 的错误
 // 封面。第一档就是为这种形态加的 —— 归属由播放时刻本身保证的那张图,可以连归属一起借走。
 func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
 	savedCache := enrichCache
@@ -295,7 +291,7 @@ func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
 	const album = "Michael"
 	deviceCover := "file:///Users/x/.config/lyrimuse/artwork/abc.jpg"
 	enrichCache = map[string]enrichEntry{
-		// 本机播过、cover_album 已经逐字对上这张专辑 → 归属可外借。
+		// 本机播过、cover_album 已经逐字对上这张专辑 到 归属可外借。
 		"Michael Jackson|Hollywood Tonight|" + album: {CoverURL: deviceCover, CoverSource: "device", CoverAlbum: album},
 		// QQ 那张精选集图也在,但排在第二档。
 		"Michael Jackson|Much Too Soon|" + album: {CoverURL: "https://qq/ultimate.jpg", CoverSource: "qq"},
@@ -329,7 +325,7 @@ func TestSiblingAlbumCoverPrefersDeviceSibling(t *testing.T) {
 }
 
 // 同专辑有多条可借邻居时,借到哪一张必须是**确定的**:Go 的 map 迭代顺序随机,不定序的话
-// 每次启动可能借到不同的图,表现是"封面偶尔自己变了"且复现不出来。
+// 每次启动可能借到不同的图。
 func TestSiblingAlbumCoverIsDeterministic(t *testing.T) {
 	savedCache := enrichCache
 	defer func() { enrichCache = savedCache }()

@@ -60,7 +60,7 @@ func runCoverArtTests() {
                     "封面兜底: K/DA 不会被斜杠劈成 K")
 
         // ---- coverAlbumVerified:「最近记录」第①级纠错的资格判定 ----
-        // 真实案例:陈奕迅《不如这样 (Live)》,Last.fm 行侧专辑写法与缓存 cover_album 在
+        // 例如陈奕迅《不如这样 (Live)》,Last.fm 行侧专辑写法与缓存 cover_album 在
         // 繁简/空格上系统性不一致,必须按 looseKey 口径比;而 cover_album 是错场次
         // (Get A Life)时绝不能给资格 —— 那正是这道闸要挡的东西。
         expectEqual(R.coverAlbumVerified(coverAlbum: "The Easy Ride 演唱会 (Live)",
@@ -86,7 +86,7 @@ func runCoverArtTests() {
     // 本机播过才有数据 —— iPhone 听的歌、翻历史页看到的老歌天生在盲区里(实测抽样 205 首里
     // 25% 缺图,getinfo 只救回 20%、同专辑兄弟一张都救不到)。第⑤级去 iTunes Search 补。
     //
-    // ⚠️ 这一组断言守的是「宁可留空位,也不挂错图」。实测:裸用搜索结果第一条会给
+    // 这一组断言守的是「宁可留空位,也不挂错图」。实测:裸用搜索结果第一条会给
     // 《微醺卡带 - 情非得已 (微醺版)》配上《鱼翅Fin - 无声的告别是对往事的礼赞》的封面。
     do {
         typealias M = MusicCatalogSearch
@@ -97,14 +97,14 @@ func runCoverArtTests() {
         }
         let 地表最强 = "周杰伦地表最强世界巡回演唱会 (Live)"
 
-        // 100pt → 600pt;认不出尺寸段就原样(用小图也比没有强)
+        // 100pt 到 600pt;认不出尺寸段就原样(用小图也比没有强)
         expectEqual(M.upscaleArtwork("https://is1.mzstatic.com/x/100x100bb.jpg")?.absoluteString,
                     "https://is1.mzstatic.com/x/600x600bb.jpg", "封面⑤: 升到 600pt")
         expectEqual(M.upscaleArtwork("https://is1.mzstatic.com/x/64x64.jpg")?.absoluteString,
                     "https://is1.mzstatic.com/x/64x64.jpg", "封面⑤: 认不出尺寸段就原样")
         expectEqual(M.upscaleArtwork(nil) == nil, true, "封面⑤: 没有图就是 nil")
 
-        // 歌手+歌名+专辑全对 → 高置信
+        // 歌手+歌名+专辑全对 到 高置信
         expectEqual(M.pickArtwork([item("周杰伦", "床边故事 (Live)", 地表最强)],
                                   title: "床边故事 (Live)", artist: "周杰伦", album: 地表最强)?.confidence,
                     .albumMatch, "封面⑤: 三项全对 = 高置信")
@@ -117,7 +117,7 @@ func runCoverArtTests() {
                                   title: "我要夏天 (Live)", artist: "周杰伦", album: 地表最强)?.confidence,
                     .albumMatch, "封面⑤: 合唱 credit 归首位后对得上")
 
-        // ⚠️ 挑选必须扫完候选、不能只看第一条。实测 30 首里有 5 首靠这一步纠正回正确那张
+        // 挑选必须扫完候选、不能只看第一条。实测 30 首里有 5 首靠这一步纠正回正确那张
         //(《NOW YOU SEE ME (Live)》第一条是录音室版、《青花瓷 (Live)》第一条是魔天伦演唱会)。
         let mixed = [item("周杰伦", "青花瓷 (Live)", "魔天伦世界巡回演唱会 (Live)"),
                      item("周杰伦", "青花瓷 (Live)", 地表最强)]
@@ -125,12 +125,12 @@ func runCoverArtTests() {
         expectEqual(picked?.confidence, .albumMatch, "封面⑤: 越过第一条去找专辑也对上的")
         expectEqual(picked?.matchedAlbum, 地表最强, "封面⑤: 挑中的确实是同一张专辑")
 
-        // 专辑对不上但同曲 → 中置信(比空位强,但同屏可能不一致)
+        // 专辑对不上但同曲 到 中置信(比空位强,但同屏可能不一致)
         expectEqual(M.pickArtwork([item("Beyond", "光辉岁月", "Beyond - 25th Anniversary")],
                                   title: "光辉岁月", artist: "Beyond", album: "BEYOND音乐大全 101")?.confidence,
                     .trackOnly, "封面⑤: 只有歌名歌手对上 = 中置信")
 
-        // ⚠️ 这条是这一级存在的底线:匹配不上必须留空位,绝不退回搜索结果第一条
+        // 这条是这一级存在的底线:匹配不上必须留空位,绝不退回搜索结果第一条
         expectEqual(M.pickArtwork([item("鱼翅Fin", "无声的告别是对往事的礼赞", "工作札记 - EP")],
                                   title: "情非得已 (微醺版)", artist: "微醺卡带",
                                   album: "情非得已（微醺版）") == nil,
@@ -322,7 +322,7 @@ func runCoverArtTests() {
 
         // 两侧都够不到时取端点里更好的那个,而不是返回一个"差一点点"的中间值。
         //
-        // ⚠️ 默认的 3.0 **触发不到**这条分支:要两侧都够不到得同时满足 sl < 0.05(mc−1) 和
+        // 默认的 3.0 **触发不到**这条分支:要两侧都够不到得同时满足 sl < 0.05(mc−1) 和
         // sl > 1.05/mc − 0.05,有解的条件是 mc > √21 ≈ 4.58。所以这里显式传 7.0 去测那条
         // 分支,别改回默认值——改回去这个断言会退化成在测另一条路径。
         let midStroke = (0.5, 0.5, 0.5)
@@ -386,7 +386,7 @@ func runCoverArtTests() {
         // 《Run From Your Love》所在专辑)量出来的均值色,CIAreaAverage 口径(全图算术平均)。
         let realCoverRGB = (r: 0.734, g: 0.646, b: 0.372) // #BBA45E
 
-        // 回归的起点:走完 brightenedAccent → accentForDarkBackdrop 这两步"假设背景永远暗"
+        // 回归的起点:走完 brightenedAccent 到 accentForDarkBackdrop 这两步"假设背景永远暗"
         // 的旧逻辑,均值本来就够亮,两步都是无操作,candidateBeforeFix 就是原始均值色本身。
         let step1 = LocalPlaybackSource.brightenedAccent(
             r: realCoverRGB.r, g: realCoverRGB.g, b: realCoverRGB.b)
@@ -622,7 +622,7 @@ func runCoverArtTests() {
         expectEqual(G.isCoverShaped(width: 1000, height: 850), true, "高清替代: 15% 偏差仍算封面形状")
         expectEqual(G.isCoverShaped(width: 1000, height: 849), false, "高清替代: 超过 15% 不算封面形状")
         expectEqual(G.maxAspectSkew, 0.15, "高清替代: 形状容差与 collector 逐字一致")
-        // 带留白边框那类小幅不规则的封面落在容差内、且够大 → 不替(权威图不动)。
+        // 带留白边框那类小幅不规则的封面落在容差内、且够大 到 不替(权威图不动)。
         expectEqual(G.reason(width: 600, height: 520, lowResThreshold: t), nil,
                     "高清替代: 容差内的非严格方形大图不替")
         // 下载回来之后值不值得换:太小那条要比系统那份宽;形状那条只看替代图自己是不是方形。
@@ -677,7 +677,7 @@ func runCoverArtTests() {
                            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
                            provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
         }
-        // 1px 黑白棋盘格 600×600 → 46px
+        // 1px 黑白棋盘格 600×600 到 46px
         if let board = synthesize(width: 600, height: 600, fill: { x, y in (x + y) % 2 == 0 ? (0, 0, 0) : (255, 255, 255) }) {
             if let thumb = T.squareBitmap(from: board, pixelSide: 46) {
                 expectEqual(thumb.width, 46, "小封面重采样: 输出像素宽 = 目标边长")
@@ -705,7 +705,7 @@ func runCoverArtTests() {
         } else {
             expectEqual(false, true, "小封面重采样: 合成棋盘格失败")
         }
-        // aspect-fill 居中裁方:横图 600×300 三段竖带(左红 150 / 中绿 300 / 右蓝 150)→ 裁出来正好是绿带。
+        // aspect-fill 居中裁方:横图 600×300 三段竖带(左红 150 / 中绿 300 / 右蓝 150)到 裁出来正好是绿带。
         if let wide = synthesize(width: 600, height: 300, fill: { x, _ in x < 150 ? (255, 0, 0) : (x < 450 ? (0, 255, 0) : (0, 0, 255)) }),
            let thumb = T.squareBitmap(from: wide, pixelSide: 32) {
             let px = rgba(thumb)
@@ -715,7 +715,7 @@ func runCoverArtTests() {
         } else {
             expectEqual(false, true, "小封面重采样: 横图缩图建不出来")
         }
-        // 竖图 300×600 三段横带(上红 / 中绿 / 下蓝)→ 同样只剩绿带。
+        // 竖图 300×600 三段横带(上红 / 中绿 / 下蓝)到 同样只剩绿带。
         if let tall = synthesize(width: 300, height: 600, fill: { _, y in y < 150 ? (255, 0, 0) : (y < 450 ? (0, 255, 0) : (0, 0, 255)) }),
            let thumb = T.squareBitmap(from: tall, pixelSide: 32) {
             let px = rgba(thumb)
@@ -725,7 +725,7 @@ func runCoverArtTests() {
         } else {
             expectEqual(false, true, "小封面重采样: 竖图缩图建不出来")
         }
-        // 非法边长 → nil(调用方退回运行期缩放)。
+        // 非法边长 到 nil(调用方退回运行期缩放)。
         if let board = synthesize(width: 8, height: 8, fill: { _, _ in (0, 0, 0) }) {
             expectEqual(T.squareBitmap(from: board, pixelSide: 0) == nil, true, "小封面重采样: 边长 0 → nil")
         }
@@ -826,7 +826,7 @@ func runCoverArtTests() {
         expectEqual(vs.filter(\.isHEVC).count, 1, "动态封面: CODECS 里的 hvc1 认得出来")
         expectEqual(vs[0].bandwidth, 265893, "动态封面: 取 AVERAGE-BANDWIDTH,不被 _AVG-/BANDWIDTH 串台")
 
-        // 选档:够用的最小那一档。歌词窗口封面卡是 460pt@2x = 920px → 该选 960²。
+        // 选档:够用的最小那一档。歌词窗口封面卡是 460pt@2x = 920px 到 该选 960²。
         expectEqual(M.pick(vs, minimumWidth: 920)?.width, 960, "动态封面: 920px 要求 → 选 960²")
         expectEqual(M.pick(vs, minimumWidth: 920)?.isHEVC, false, "动态封面: 选中的档是 H.264")
         // 灵动岛那 32pt@2x = 64px,最小档就够。
@@ -835,11 +835,11 @@ func runCoverArtTests() {
         expectEqual(M.pick(vs, minimumWidth: 400)?.bandwidth, 771275, "动态封面: 同尺寸取低码率")
         // 同尺寸 H.264 与 HEVC 并存(768²)时优先 H.264 —— 实测 HEVC 那档的 variant 清单连不上。
         expectEqual(M.pick(vs, minimumWidth: 500)?.isHEVC, false, "动态封面: 同尺寸优先 H.264")
-        // 一档都不够宽 → 退回最大档,宁可放大也别不动。
+        // 一档都不够宽 到 退回最大档,宁可放大也别不动。
         expectEqual(M.pick(vs, minimumWidth: 4096)?.width, 960, "动态封面: 都不够宽 → 退最大档")
         expectEqual(M.pick([], minimumWidth: 920) == nil, true, "动态封面: 空清单 → nil")
 
-        // variant 清单 → 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
+        // variant 清单 到 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
         let variant = """
         #EXTM3U
         #EXT-X-TARGETDURATION:4

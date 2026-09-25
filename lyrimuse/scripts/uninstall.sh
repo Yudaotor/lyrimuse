@@ -57,7 +57,7 @@ human_size() {
 
 # 这个 domain 里还有没有东西。
 #
-# ⚠️ 不能用 `defaults read "$1" >/dev/null 2>&1` 的退出码当判据 —— 实测：
+# 不能用 `defaults read "$1" >/dev/null 2>&1` 的退出码当判据 —— 实测：
 # `defaults delete <domain>` 成功之后，`defaults read <domain>` **仍然退出 0**，只是打印
 # 一个空字典 `{}`（cfprefsd 里那个 domain 的空壳还挂着）。拿退出码判等于恒为真，表现是
 # 删干净了却报"❌ 仍然存在"。判据只能看读出来有没有内容。
@@ -99,7 +99,7 @@ fi
 
 # 「开机启动」自是系统登录项(SMAppService.mainApp,不再是 LaunchAgent plist),
 # shell 里没有对应的注销命令,只能请 App 自己来:`lyrimuse --unregister-login-item` 只注销
-# 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 → 登录项」里留一条指向不存在
+# 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 到 登录项」里留一条指向不存在
 # 路径的死项,所以要在用户把 App 拖进废纸篓**之前**做。测试(uninstall_test.sh)用 PREFIX
 # 指向临时目录时这一步不该碰真 App,所以按 PREFIX 是否为 $HOME 门控。
 unregister_login_item() {
@@ -204,7 +204,7 @@ done
 # 整个 domain 一起删而不是挑几个 key：purge 的语义就是"这台机器上当它没装过"，挑 key
 # 删既不完整(np:* 之外还有 KeyboardShortcuts_*)，又要跟着代码里的 key 表走样。
 #
-# ⚠️ domain 用 $APP_LABEL 而不是硬编码：uninstall_test.sh 把它覆盖成一次性的 probe
+# domain 用 $APP_LABEL 而不是硬编码：uninstall_test.sh 把它覆盖成一次性的 probe
 # label，于是测试跑 --purge 时删的是那个不存在的 domain，碰不到真实偏好——跟两个
 # launchd label 可覆盖是同一个理由(测试要走完全相同的代码路径，不开旁路)。
 echo

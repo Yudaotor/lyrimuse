@@ -40,7 +40,7 @@ public struct ColorTheme: Codable, Identifiable, Hashable {
     // 一条的新数组整体编码回写,旧 JSON 被覆盖 —— 那才是真的不可恢复。所以这不只是显示
     // 问题,是一条数据丢失路径。
     //
-    // 实测复现(用户机器上真实存着的那串 JSON):
+    // 实测复现:
     //   DecodingError.keyNotFound: Key 'textStrokeEnabled' not found …
     //
     // 只写 init(from:) 不写 encode(to:):编码继续用合成的那份,也就是**只写新名字**,旧名
@@ -124,7 +124,7 @@ extension ColorTheme {
         )
     }
 
-    // ⚠️ 必须是**计算属性**(`{ ... }`,每次读都重新求值)。
+    // 必须是**计算属性**(`{ ... }`,每次读都重新求值)。
     //
     // 预设名走 L10n.t,而整个设置树靠 .id(L10n.current) 支持不重启切换语言;一旦这里被
     // 求值一次就定死,名字会冻结在**进程内第一次访问**时的语言上——先用中文打开过一次
@@ -132,7 +132,7 @@ extension ColorTheme {
     // 重启 App 才恢复。L10n.swift 顶部对 current/bundle 定的是同一条规则:"每次读都重新
     // 解析,不用 static let 一次性缓存"。
     //
-    // ⚠️ 别把它从 `static let` 改成带初始值的 `static var builtInPresets
+    // 别把它从 `static let` 改成带初始值的 `static var builtInPresets
     // = [...]` 并注释成"每次读都重新求值" —— 那是错的:Swift 里带初始值的 `static var` 是
     // **惰性初始化的存储属性**,只在第一次访问时求值一次(swift_once),跟 `static let`
     // 一样会冻结,改动等于没生效,还白搭了一个可变全局状态。只有计算属性才真的重新求值。
@@ -179,7 +179,7 @@ extension ColorTheme {
     // 见那边注释)。
     /// 首次安装、以及任何没有显式配过色的用户看到的配色。
     ///
-    /// ⚠️ 历史上这几个候选的可读性策略完全不同,换的时候要知道自己在换什么:
+    /// 历史上这几个候选的可读性策略完全不同,换的时候要知道自己在换什么:
     ///   darkCard            白字 + 70% 黑底 —— 自带底衬,任何壁纸上都读得清
     ///   classicBlack         纯黑字 + **全透明**背景、不描边 —— 完全依赖桌面本身够浅,
     ///                       深色壁纸上会看不见
@@ -201,9 +201,8 @@ extension ColorTheme {
             && (!textStrokeEnabled || textStrokeColorHex == other.textStrokeColorHex)
     }
 
-    /// 套用这个主题——原来是 `SettingsView.AppearanceSettingsTab` 的私有方法
-    /// `applyColorTheme(_)`,悬浮窗新增的快捷设置菜单(`OverlayQuickSettingsMenu`)
-    /// 要套用同一批内置/自定义主题,提到这里当唯一实现,两处调用点都改成调这个方法,行为不变。
+    /// 套用这个主题——`SettingsView.AppearanceSettingsTab` 和悬浮窗快捷设置菜单
+    /// (`OverlayQuickSettingsMenu`)套用同一批内置/自定义主题,唯一实现,两处调用点都调这个方法。
     @MainActor
     func apply(to settings: AppSettings) {
         // 套用一个具体命名主题就是在明确表态"我要固定色,不要动态色"——顺手关掉

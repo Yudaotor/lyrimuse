@@ -16,7 +16,7 @@ import Foundation
 // 于是分三层:判词回答「为什么是它」、差值分解回答「其它几个差在哪」、共有项把那 32%
 // 的冗余折成一行说一次。
 //
-// ⚠️ **判词刻意不做归因。** 此前实测否掉过一版「用一句自然语言解释胜者凭什么赢」——
+// **判词刻意不做归因。** 此前实测否掉过一版「用一句自然语言解释胜者凭什么赢」——
 // 只有 13.2% 的对局存在单一强势维度能真的解释分差,其余都是七八项的合力,硬写一句就是编。
 // 这里的判词只说**可以直接量出来**的三件事:是不是同一份词(consensus 项)、差多少(相减)、
 // 有没有吃到否决性负分。差在多项上时 separator 就是 `.multiple`,不挑一项出来当理由。
@@ -42,9 +42,9 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
     public let source: String
     public let score: Int
     public let terms: [LyricsScoreTermValue]
-    /// 存档里的 `instrumental`。老存档没有这个字段 → nil。
+    /// 存档里的 `instrumental`。老存档没有这个字段 到 nil。
     public let instrumental: Bool?
-    /// 存档里的 `consensus_peers`。老存档没有 → 空。
+    /// 存档里的 `consensus_peers`。老存档没有 到 空。
     public let consensusPeers: [String]
 
     public init(source: String, score: Int, terms: [LyricsScoreTermValue],
@@ -112,7 +112,7 @@ public enum LyricsVerdict: Sendable, Equatable {
     case decisiveNegative(term: LyricsScoreTermValue, loser: String, gap: Int)
     /// 分差极小,但**不是每条候选**都拿到了内容印证。
     ///
-    /// ⚠️ 带上 contenders / corroborated 两个计数,是因为只说「不是每条候选都有印证」时,
+    /// 带上 contenders / corroborated 两个计数,是因为只说「不是每条候选都有印证」时,
     /// 读的人眼睛正盯着冠亚两行,很容易读成"这两份不是同一份词"——而它们往往恰恰是
     /// 同一份(实测:陶喆《说走就走》冠亚都有 +150 印证,没有的是第三名)。给出数字就不会误读。
     case tooClose(contenders: Int, corroborated: Int, gap: Int, gapPercent: Double?,
@@ -205,7 +205,7 @@ public enum LyricsVerdictBuilder {
         }
 
         // ① 全员内容一致 —— 每条参赛候选都拿到了 consensus 项。
-        //    ⚠️ 判的是「有没有这一项」,不是「分值多少」:2 家以上 250、1 家 150,
+        // 判的是「有没有这一项」,不是「分值多少」:2 家以上 250、1 家 150,
         //    两档都算「有别的源印证」。老存档同样有这一项,所以这条判词不依赖 V2 新加的
         //    consensus_peers 字段(那个只有新存档才有)。
         if contenders.allSatisfy({ c in c.terms.contains { $0.kind == "consensus" } }) {

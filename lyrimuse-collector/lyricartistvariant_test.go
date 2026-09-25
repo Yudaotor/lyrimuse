@@ -26,13 +26,13 @@ func TestLyricSourceArtistMatches(t *testing.T) {
 		{"周杰伦、", "周杰伦", false},
 		// 加符号仿冒:段级字节相等,不做 normLoose/子串,老洞不重开。
 		{"周杰伦-", "周杰伦 & 王力宏", false},
-		// 实测坐实的真实 bug:LyricFind(经 YouTube Music 检索)给的艺人字段是
+		// LyricFind(经 YouTube Music 检索)给的艺人字段是
 		// 繁体"周杰倫",本地查询是简体"周杰伦"——不折算就整条候选被拒收(见「彩虹」案例,
 		// match.go artistCreditParts/artistMatches 注释)。
 		{"周杰倫", "周杰伦", true},
 		// 繁简 + 仿冒同时出现,仿冒防线仍然要挡住。
 		{"周杰倫-", "周杰伦", false},
-		// 实测坐实的真实 bug:候选艺人带括号外文别名"丁世光(Dean Ting)",
+		// 候选艺人带括号外文别名"丁世光(Dean Ting)",
 		// 本地标签只有中文名,靠 artistMatches 新加的去括号兜底才能过(见 match.go 注释)。
 		{"丁世光(Dean Ting)", "丁世光", true},
 		// 两侧多credit但没有任何一段相等。
@@ -66,7 +66,7 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"Taylor Swift", ""},
 		{"周杰伦", ""},
 		{"", ""},
-		// 尾随分隔符的仿冒形态:只切出 1 段,规整后与原串无差别 → 无变体。
+		// 尾随分隔符的仿冒形态:只切出 1 段,规整后与原串无差别 到 无变体。
 		{"周杰伦、", ""},
 		// "with"/"x" 刻意不当作分隔词:真实艺名的常见组成部分。
 		{"Sleeping With Sirens", ""},
@@ -139,7 +139,7 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	if got := bySource["netease"].Title; got != "base-netease" {
 		t.Errorf("netease candidate = %q, want base round's (base-netease)", got)
 	}
-	// 原串轮判废、变体轮可用 → 顶替。
+	// 原串轮判废、变体轮可用 到 顶替。
 	if got := bySource["qq"].Title; got != "extra-qq" {
 		t.Errorf("qq candidate = %q, want extra round's (extra-qq)", got)
 	}
@@ -156,7 +156,7 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 			t.Errorf("%s missing rescored ScoreTerms", s)
 		}
 	}
-	// 合并后没有真实 lrclib 候选 → Instrumental 标记保留。
+	// 合并后没有真实 lrclib 候选 到 Instrumental 标记保留。
 	if !instrumentalKept {
 		t.Errorf("lrclib instrumental marker dropped, want kept")
 	}
@@ -177,7 +177,7 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	}
 }
 
-// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》真实案例——musixmatch+lrclib
+// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》案例——musixmatch+lrclib
 // 已经凑够可用源数,但两者都不会给语种/罗马音信号,只有 QQ/酷狗(粤语)、网易云(日语罗马字)
 // 才给,而它们要靠换艺人名重搜才有机会被问到正确的名字。
 func TestNeedsRomanizationRetry(t *testing.T) {
@@ -196,7 +196,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			false,
 		},
 		{
-			// 側田《Erica》真实案例:歌词主体是汉字,两个源都没给语种/罗马音信号。
+			// 側田《Erica》:歌词主体是汉字,两个源都没给语种/罗马音信号。
 			"汉字歌词_没有语种信号_需要重试",
 			[]scoredLyricCandidateResult{
 				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},

@@ -85,7 +85,7 @@ func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
 // 文本全部解一遍,返回**新** map、不改调用方那份。两个理由:
 //   - fetchScoredLyricCandidatesStreaming 每来一个源就拿**同一份** raw 全量重跑一次 rank,原地
 //     改的话同一段文本会被解好几遍(`&amp;apos;` 第二遍就变成 `'`,不再是"只解一层");
-//   - 回归金标集(lyricSourceResultTap → testdata/lyricsgolden)固化的是各源**原始**应答,回放
+//   - 回归金标集(lyricSourceResultTap 到 testdata/lyricsgolden)固化的是各源**原始**应答,回放
 //     时同样走 rank、在这里解——跟生产同一条路,而不是把解过的文本当原始应答存进样本。
 //
 // 放在 rank 这一个门口而不是九个源各自的适配器里:候选、决策存档、「搜索候选歌词」弹窗的预览、
@@ -136,7 +136,7 @@ func migrateLyricEntities() {
 	}
 	if fixed > 0 {
 		// 必须显式置脏,否则 saveEnrichCache 是空操作——同 migrateLyricTimelines 里那条
-		// 实测坐实的潜伏 bug。
+		// 一样的坑。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

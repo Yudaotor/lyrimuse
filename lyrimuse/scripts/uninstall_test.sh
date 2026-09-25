@@ -52,7 +52,7 @@ setup_fake_home() {
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
   # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
   # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
-  # ⚠️ defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
+  # defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
   # cfprefs），所以这里种的必须是 probe label 而不是真实 bundle id，cleanup 里也要删掉。
   /usr/bin/defaults write "$PROBE_B" probeKey -string probeValue 2>/dev/null
   for l in "$PROBE_A" "$PROBE_B"; do

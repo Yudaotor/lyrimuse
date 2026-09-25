@@ -2,9 +2,10 @@ package main
 
 import "testing"
 
-// 守的是"Spotify 插播广告被当成一次收听上送"这个真实故障:用户在网页
-// 「最近播放」和 App「最近记录」里看到了 "Now Streaming on Hulu." / "BLIZZARD® Double
-// Flip Deal BOGO for 99¢"。广告当时已经被挡住不去搜歌词,但上送路径完全没设防。
+// 守的是"Spotify 插播广告被当成一次收听上送"这个问题:用户在网页
+// 「最近播放」和 App「最近记录」里会看到 "Now Streaming on Hulu." / "BLIZZARD® Double
+// Flip Deal BOGO for 99¢" 这类广告文案被当成了曲目名。广告当时已经被挡住不去搜歌词,
+// 但上送路径完全没设防。
 func TestIsAdBreak(t *testing.T) {
 	cases := []struct {
 		name, bundle, artist, title, album string

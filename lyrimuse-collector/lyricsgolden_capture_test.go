@@ -115,7 +115,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	// 装完内存就把路径清掉,新查到的别名只活在这个进程里。
 	artistAliasPath, mbPrimaryNamePath, qqArtistNamePath, appleStorefrontArtistPath, appleCatalogPath = "", "", "", "", ""
 	setNativeLyricSourcesForPlayer(player)
-	// ⚠️ 采集器要的是**真实环境**,所以把 externaldata_test.go 那层隔离解开。
+	// 采集器要的是**真实环境**,所以把 externaldata_test.go 那层隔离解开。
 	// 那层隔离(TestMain 把"读其它 App 本地数据"的路径统一指到一个不存在的位置)守的是
 	// **回放类**测试:它们的结论不该取决于跑测试的人在酷狗 / QQ 里听过什么歌。这条理由对
 	// 采集器不成立 —— 它本来就在联网采这一刻的真实应答,而 identity_from_local_client

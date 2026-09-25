@@ -15,11 +15,10 @@ import (
 //
 // 为什么不能直接等自动路径自愈:rescoreLyrics 只在 `picked.Lyrics != e.Lyrics` 时才更新
 // LyricsTr/LyricsRoma/LyricsYRC(见 enrich.go 那段注释——避免正文没变时白白重写、白白导出
-// 一遍文件)。真实故障复现(ROSÉ & Bruno Mars《APT.》):amll 候选构造那一步早就
-// 在读 amll.tr,但转成最终结果那个 switch 一直没有 case "amll",分数算对了、译文内容却从来
-// 没被抄进去。修好那个 switch 之后,这首歌"歌词正文"这次不会再变(上一轮自动 rescore 已经
-// 拿到修过间距的版本),但"译文"从空变成有内容——`picked.Lyrics == e.Lyrics` 恒成立,等
-// 下次自动 rescore 也不会触发更新,只能靠这条命令主动补一次。
+// 一遍文件)。当某个字段的取值逻辑改了、但"歌词正文"本身没变时,`picked.Lyrics == e.Lyrics`
+// 恒成立,自动路径永远不会再触发更新(例如 ROSÉ & Bruno Mars《APT.》:某次改动修好了一处
+// "分数算对但译文没被抄进最终结果"的问题,这首歌正文不变、译文从空变成有内容,自动路径
+// 看不到这个差异),只能靠这条命令主动补一次。
 //
 // 顺带查了一遍库里全部 4 条 amll 来源:另外 3 条已经有译文,但来源标的是 "machine"(机翻
 // 兜底当年凑巧成功、掩盖了 amll 自带译文从没被读到这个事实)。重新解析一次能把这 3 条也换
@@ -48,9 +47,8 @@ func runResyncLyricsCLI(args []string) {
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// 跟 searchcli.go 同一个理由(那边有详细注释):这条 CLI 每次都是新进程,不读这几份
 	// 持久化缓存的话,scoredLyricCandidates 内部的 retryArtistIdentities/艺人别名重试/
-	// 标题反查轮每次都要现查一遍 MusicBrainz——实测坐实:这个缺口导致
-	// resync-lyrics 对同一批歌手反复触发 12 秒的 MusicBrainz 超时(两次查询、每次 6 秒),
-	// 白白拖慢重新匹配,且拿不到已经缓存过的别名结果。
+	// 标题反查轮每次都要现查一遍 MusicBrainz,对同一批歌手反复触发 12 秒的 MusicBrainz
+	// 超时(两次查询、每次 6 秒),白白拖慢重新匹配,且拿不到已经缓存过的别名结果。
 	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
 	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
 	loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
@@ -94,12 +92,11 @@ func runResyncLyrics(keys []string, apply bool) int {
 		if duration <= 0 {
 			duration = e.DurationSecs
 		}
-		// 真实故障(温岚《夏日の風》,本地标签是繁体"溫嵐 (Landy Wen)"/"溫式效應"):
 		// resolveTrackEnrichment(自动路径)和 search-lyrics(searchcli.go)在发起搜索前都会
 		// 先转一遍简体——网易云/QQ/酷狗/LRCLIB 的搜索索引是简体中文,繁体原文直接发search
-		// 请求经常直接查不到候选(不是匹配质量差,是搜索接口本身没命中)。这条 CLI 一直漏了
-		// 这一步,直接拿 splitEnrichKey 出来的原始繁体去查——同一首歌 search-lyrics 稳定能
-		// 搜到、resync-lyrics 稳定搜不到,分毫不差地复现了三次,查到就是这个漏转换。
+		// 请求经常查不到候选(不是匹配质量差,是搜索接口本身没命中,如本地标签是繁体
+		// "溫嵐 (Landy Wen)"/"溫式效應"这类)。这条 CLI 同样要走这一步,不能直接拿
+		// splitEnrichKey 出来的原始繁体去查。
 		// 原地覆盖(不新开变量名)跟 resolveTrackEnrichment 头部那段是同一个写法、同一个理由:
 		// 下面 buildLyricsDecision 存档也该记这次真正拿去搜索的(简体)那一版,不是原始繁体。
 		// enrichCache 的 key(未拆解前的那个字符串)不受影响,依旧是原始繁体,查缓存/写缓存
@@ -107,12 +104,12 @@ func runResyncLyrics(keys []string, apply bool) int {
 		artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 		_, scored := scoredLyricCandidates(context.Background(), artist, title, album, duration)
 		picked := pickLyricCandidatePreferring(scored, e.LyricsSourceChoice)
-		// 实测坐实(陶喆《Airport in 10:30》):这条 CLI 手上就攥着 enrichCache
-		// 里的 e,不像 searchcli.go 那样要另开一次文件读来猜"现在有没有歌词" —— 之前这里
-		// 图省事硬编码 false,等于永远按"手上有一份好歌词"那套更严格的闸走(rescoreDecidable
-		// 见其头注:要求全部启用的源都应答)。这首歌当时 0 条候选、Musixmatch/YTMusic 这类
-		// 慢源没能在 20 秒内应答,decidable 恒为 false,resync 死活"跳过",即便新一轮已经
-		// 搜到 4 个可用源也写不进去 —— 保护的是一份根本不存在的"旧歌词"。
+		// 这条 CLI 手上就攥着 enrichCache 里的 e,不像 searchcli.go 那样要另开一次文件读来
+		// 猜"现在有没有歌词" —— 如果这里图省事硬编码 false,等于永远按"手上有一份好歌词"
+		// 那套更严格的闸走(rescoreDecidable 见其头注:要求全部启用的源都应答)。0 条候选、
+		// 慢源(Musixmatch/YTMusic 这类)没能在 20 秒内应答时 decidable 恒为 false,即便
+		// 新一轮已经搜到可用源也会被当成"跳过"——保护的是一份根本不存在的"旧歌词"
+		// (如陶喆《Airport in 10:30》这类曾撞上这个坑的例子)。
 		decidable := rescoreDecidable(scored, e.LyricsSource, e.Lyrics == "")
 		seen := lyricSourcesWithCandidates(scored)
 		responded := lyricSourcesResponded(scored)

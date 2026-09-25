@@ -33,12 +33,11 @@ type lrclibResult struct {
 	// durationSecs:LRCLIB 自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
 	instrumental bool
-	// plainOnly:加,"只有纯文本歌词,没有带时间戳的版本"这个明确结论——真实案例
-	// 海龟先生《Porn Star》,网易云/QQ 的搜索接口把标题里的敏感词整体过滤掉(HTTP 200 但
-	// body 是空结果,不是真的没收录),LRCLIB 却精确命中、内容和时长都对得上,只是这首歌
-	// 在 LRCLIB 自己库里就只有 plainLyrics、没有 syncedLyrics。以前遇到这种情况直接判定
-	// "没查到"整个丢弃(lyrics 留空),没人能看到内容,哪怕是不能同步显示的纯文本也比什么
-	// 都没有强(见"歌词窗口"新增的纯文本静态展示、"搜索候选歌词"弹窗新增的"无时间戳"标签)。
+	// plainOnly:"只有纯文本歌词,没有带时间戳的版本"这个结论——LRCLIB 有时精确命中、
+	// 内容和时长都对得上,但库里只有 plainLyrics、没有 syncedLyrics(常见于网易云/QQ
+	// 搜索接口把标题里的敏感词过滤掉、返回空结果的歌,如海龟先生《Porn Star》)。这种
+	// 情况不整个丢弃判定"没查到":纯文本也比什么都没有强(见"歌词窗口"的纯文本静态
+	// 展示、"搜索候选歌词"弹窗的"无时间戳"标签)。
 	// true 时 lyrics 装的是**纯文本**(没有 [mm:ss] 前缀),不是 isTimedLRC 判定链路能吃的
 	// 东西——调用方(match.go 的 scoreLyricCandidateDetailed)看到这个标记要绕开"不是带
 	// 时间戳的歌词就判废"那条闸,改判一个专门的、明确写着"仅纯文本"的理由,但**分数依旧
@@ -75,14 +74,14 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 	return r
 }
 
-// resolveLRCLIBLyric 三级降级,越往后越宽松。改动之前只有第一级,一失败就整源判"没收录"。
+// resolveLRCLIBLyric 三级降级,越往后越宽松,一级失败才试下一级(比"整源判没收录"更宽松)。
 //
 // ① /api/get 带 album_name(原有行为,最严)
-// ② /api/get 去掉 album_name —— **实测坐实的真实盲区**:album_name 是参与
+// ② /api/get 去掉 album_name —— album_name 是参与
 //
-//	匹配的,传一个 LRCLIB 那边没有的专辑名会直接 404,哪怕这首歌其实收录了。实测同一首
-//	Michael Jackson - Blue Gangsta:album_name=XSCAPE → 200、=XSCAPE (Deluxe) → 200
-//	(它库里恰好两条都有)、=一个瞎写的专辑名 → **404**、完全不传 → 200。而 Music.app
+//	匹配的,传一个 LRCLIB 那边没有的专辑名会直接 404,哪怕这首歌其实收录了。同一首
+//	Michael Jackson - Blue Gangsta:album_name=XSCAPE 到 200、=XSCAPE (Deluxe) 到 200
+//	(它库里恰好两条都有)、=一个瞎写的专辑名 到 **404**、完全不传 到 200。而 Music.app
 //	的专辑标签跟 LRCLIB 的写法经常对不上(本地化名、(Deluxe Edition) vs (Deluxe)、
 //	大小写),所以这一级是纯赚:仍然是 artist+track 精确匹配,没有任何"挑候选"的风险。
 //
@@ -94,7 +93,7 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 //
 // 超时预算:8s + 5s + 5s = 最坏 18s,卡在 enrich 的 20s 搜索截止之内并留一点余量。
 //
-// ⚠️ 这个截止是**硬**的,不是软的:enrich.go 的 collect 循环 `case <-deadline: break collect`
+// 这个截止是**硬**的,不是软的:enrich.go 的 collect 循环 `case <-deadline: break collect`
 // 之后就不再读 resultsCh、也不再调 onUpdate,晚到的结果整轮丢弃。所以三级串行的总预算必须
 // 塞进 20s 里——超出去等于这一源白跑,前两级的收益也一起没了。(第一级从 10s 收到 8s 是为了
 // 给后两级腾时间;lrclib.net 慢,但 8s 仍然远超它的正常响应。)
@@ -274,7 +273,7 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album strin
 // 第二个返回值标出选中的这条究竟是不是靠纯文本兜底选出来的,调用方据此决定要不要给
 // lrclibResult 打上 plainOnly 标记。
 //
-// ⚠️ allowPlainOnly 只放宽"要不要带时间戳"这一道门,其余判定(曲名/歌手/版本限定词/
+// allowPlainOnly 只放宽"要不要带时间戳"这一道门,其余判定(曲名/歌手/版本限定词/
 // 时长容差)原样保留——纯文本候选跟带时间戳的候选面对的是同一套"这条到底是不是这首歌"
 // 的身份核验,没有理由放松,松了就是在瞎猜。
 func pickLRCLIBSearchResultDetailed(items []lrclibSearchItem, artist, title, album string, durationSecs float64, allowPlainOnly bool) (best *lrclibSearchItem, plainOnly bool) {

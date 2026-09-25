@@ -27,7 +27,7 @@ type probeResp struct {
 }
 
 // catalogServer 起一个假 Last.fm,并记下每个请求。应答按键分发:
-// track.getInfo 用 "artist\ntrack",artist.getTopTracks 用 "top:artist"。
+// track.getInfo 用 "artist\ntrack",artist.getTopTracks 用 "top:artist",track.search 用 "search:track"。
 type catalogServer struct {
 	srv   *httptest.Server
 	mu    sync.Mutex
@@ -53,7 +53,7 @@ func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmCata
 	cs := &catalogServer{calls: map[string]int{}}
 	cs.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		// ⚠️ 照着真实端点**多解一次码**:Last.fm 的 GET 端点先做标准 percent-decode
+		// 照着真实端点**多解一次码**:Last.fm 的 GET 端点先做标准 percent-decode
 		// (这一遍就是 r.URL.Query()),再对结果做一遍 form-urlencoded 解码。假服务器不模拟
 		// 第二遍的话,少编一层的 bug 在这里反而"测得过"——而那正是含 `+`/`%` 的歌名
 		// 一律 error 6 的真实事故(见 lastfmGetQuery)。
@@ -350,7 +350,8 @@ func TestCatalogDoesNotSplitUnsplittableNames(t *testing.T) {
 			infoKey(artist, "某首歌"): {body: notFoundJSON},
 		})
 		col.resolve(context.Background(), artist, "某首歌", 0, scopeAll)
-		// 只该有:原样 getInfo + 整串的曲目表。任何对切出来的头部的查询都是 bug。
+		// 只该有:原样 getInfo + 整串的曲目表 + 扩展搜索的一次 track.search。任何对切出来的
+		// 头部的查询都是 bug。
 		if n := cs.count(infoKey(artist, "某首歌")); n != 1 {
 			t.Errorf("%q: 原样应查 1 次,实际 %d", artist, n)
 		}
@@ -560,7 +561,7 @@ func TestCatalogRequestShape(t *testing.T) {
 				t.Errorf("请求 %d 缺 %q: %s", i, want, raw)
 			}
 		}
-		// `+` → %252B、`%` → %2525(双重编码);绝不能出现裸的 %2B。
+		// `+` 到 %252B、`%` 到 %2525(双重编码);绝不能出现裸的 %2B。
 		if !strings.Contains(raw, "%252B") || !strings.Contains(raw, "%2525") {
 			t.Errorf("请求 %d 的歌名没有按 Last.fm GET 口径双重编码: %s", i, raw)
 		}
@@ -694,7 +695,7 @@ func TestCustomFirstOnlyNeverHitsNetwork(t *testing.T) {
 	}
 }
 
-// ⚠️ 截断只在**没匹配到**时应用。匹配到的写法已经是编目认的那条,再截一刀就把它变成一个
+// 截断只在**没匹配到**时应用。匹配到的写法已经是编目认的那条,再截一刀就把它变成一个
 // 不存在的条目(Hall & Oates / Maneater 是 80 万听众的正规条目,截成 Hall 就毁了)。
 func TestFirstOnlyDoesNotTruncateAMatchedEntry(t *testing.T) {
 	col, _ := newCatalogServer(t, map[string]probeResp{

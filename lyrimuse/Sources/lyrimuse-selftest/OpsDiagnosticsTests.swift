@@ -161,8 +161,8 @@ func runOpsDiagnosticsTests() {
 
     // ---- JSONConfigDocument(共享配置文件三态读写)----
     //
-    // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)→ 加载判 corrupt、保存
-    // **拒绝**、文件字节一字不动;② 写盘失败 → 内存里的字典和状态**不变**。都拿真实的临时目录跑。
+    // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)到 加载判 corrupt、保存
+    // **拒绝**、文件字节一字不动;② 写盘失败 到 内存里的字典和状态**不变**。都拿真实的临时目录跑。
     // 原来 ConfigStore 把「不存在」和「坏了」混成一回事,一个 JSON 语法错误之后任何一次保存都会用 14 个空串
     // 覆盖 config.json(凭据全丢)——这一组断言就是不让它回来。
     do {
@@ -182,7 +182,7 @@ func runOpsDiagnosticsTests() {
             return false
         }
 
-        // ① 不存在 → missing;首次保存允许创建;写完状态推进到 loaded、凭据模式落成 0600。
+        // ① 不存在 到 missing;首次保存允许创建;写完状态推进到 loaded、凭据模式落成 0600。
         let fresh = dir.appendingPathComponent("fresh.json")
         var d1 = D.load(url: fresh)
         expectEqual(d1.state, .missing, "三态: 文件不存在 → missing")
@@ -207,7 +207,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(d2.raw["listenbrainz_token"] as? String, "new", "合并: 写成功后内存镜像同步")
         expectEqual(d2.merging(fields: ["a": 1]).count, 3, "合并: knownKeys 缺省 = 只覆盖给的键,其余全留")
 
-        // ③ 坏 JSON → corrupt;保存抛 refusedCorruptFile;文件字节一字不动;原因里不带文件内容。
+        // ③ 坏 JSON 到 corrupt;保存抛 refusedCorruptFile;文件字节一字不动;原因里不带文件内容。
         let bad = dir.appendingPathComponent("bad.json")
         let badBytes = Data(#"{"listenbrainz_token": "SECRETTOKENVALUE", oops"#.utf8)
         try? badBytes.write(to: bad)
@@ -241,7 +241,7 @@ func runOpsDiagnosticsTests() {
         case .failure: expectEqual(true, false, "parseObject: {} 必须成功")
         }
 
-        // ④ 写失败不污染内存:目标路径的父目录不存在 → 写盘抛错 → raw / state 不变。secure 与否都要成立。
+        // ④ 写失败不污染内存:目标路径的父目录不存在 到 写盘抛错 到 raw / state 不变。secure 与否都要成立。
         for secure in [true, false] {
             let orphan = dir.appendingPathComponent("no-such-dir/orphan.json")
             var d4 = D(url: orphan, raw: ["keep": "me"], state: .loaded)
@@ -258,7 +258,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(threw4b, true, "写失败不污染内存: 目标路径是目录 → 写盘抛错")
         expectEqual(d4b.raw["keep"] as? String, "me", "写失败不污染内存: 目录占位时字典不变")
 
-        // 序列化不了(字典里混进 Date)→ notSerializable,文件与内存都不动。
+        // 序列化不了(字典里混进 Date)到 notSerializable,文件与内存都不动。
         var d4c = D.load(url: normal)
         var err4c: Error?
         do { try d4c.save(fields: ["when": Date()], secure: false) } catch { err4c = error }
@@ -266,7 +266,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(D.load(url: normal).raw["when"] == nil, true, "写失败不污染内存: notSerializable 时文件没动")
         expectEqual(d4c.raw["when"] == nil, true, "写失败不污染内存: notSerializable 时字典没动")
 
-        // ⑤ markCorrupt:对象层面之上判定不可用(字段类型对不上)→ 一样拒绝保存。
+        // ⑤ markCorrupt:对象层面之上判定不可用(字段类型对不上)到 一样拒绝保存。
         var d5 = D.load(url: normal)
         d5.markCorrupt(reason: "fields do not decode")
         expectEqual(d5.isCorrupt, true, "markCorrupt: loaded → corrupt")
@@ -335,7 +335,7 @@ func runOpsDiagnosticsTests() {
         print("  脱敏前出现在导出窗口里的: \(before.count) 项 -> \(before.keys.sorted())")
         expectEqual(after.count, 0, "脱敏后不得有任何真实凭据残留(残留项: \(after.keys.sorted()))")
 
-        // ⚠️ 上面那条如今多半是**空转**的:collector 侧的 logscrub 已经把凭据挡在日志之外,
+        // 上面那条如今多半是**空转**的:collector 侧的 logscrub 已经把凭据挡在日志之外,
         // 实测整份 3MB 日志里 0 项真实凭据。输入里本来就没有,它答不了"脱敏到底生没生效"。
         //
         // 所以再注入一次。LogRedactor 是纵深的第二道(见它的头注),不能因为第一道目前有效
@@ -464,7 +464,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(loud?.stderrText, "oops\n", "ProcessRunner: captureStderr 真的把 stderr 接出来了")
         expectEqual(loud?.status, 4, "ProcessRunner: 接了 stderr 不影响退出码")
 
-        // ⚠️ 两根管子必须并发读空。这一句往 stderr 灌 256KB(远超 64KB 管道缓冲区):
+        // 两根管子必须并发读空。这一句往 stderr 灌 256KB(远超 64KB 管道缓冲区):
         // 串行读的写法会在这里死锁,超时杀进程之后 stderr 也收不全。
         let flood = ProcessRunner.run(
             "/bin/sh", ["-c", "/usr/bin/head -c 262144 /dev/zero | /usr/bin/tr '\\0' 'x' >&2; echo done"],
@@ -473,7 +473,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(flood?.stdoutText, "done\n", "ProcessRunner: stderr 灌满时 stdout 照样完整")
         expectEqual(flood?.stderr.count, 262144, "ProcessRunner: 大块 stderr 一字节不少")
 
-        // 可执行文件不存在 → nil（"根本没起来"），不是 status 非零。
+        // 可执行文件不存在 到 nil（"根本没起来"），不是 status 非零。
         expectEqual(ProcessRunner.run("/nonexistent/binary", [], timeout: 5) == nil, true,
                     "ProcessRunner: 起不来的命令返回 nil")
 
@@ -775,7 +775,7 @@ func runOpsDiagnosticsTests() {
             .deletingLastPathComponent()
             .appendingPathComponent("build.sh")
         if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
-            // ⚠️ 先把注释行剥掉再扫 —— 上面那段注释里就复述了 "running, pid" 和
+            // 先把注释行剥掉再扫 —— 上面那段注释里就复述了 "running, pid" 和
             // "modal sheet",整份 contains 会命中注释、让守卫变成假通过(顺序那条第一次
             // 就是这么红的:注释排在校验之前)。同签名守卫那条踩过的坑。
             let code = text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -808,7 +808,7 @@ func runOpsDiagnosticsTests() {
     // —— 761df77 就这么把一条 "added a commit that references this issue" 永久留在了
     // issue timeline 上,而 GitHub 那条事件记录**删不掉**(force push 也未必能让它消失)。
     //
-    // 这一组盯的是 hook 本身别被删掉或掏空。⚠️ 只查文件,**不查 core.hooksPath** ——
+    // 这一组盯的是 hook 本身别被删掉或掏空。 只查文件,**不查 core.hooksPath** ——
     // 那是本机 git config、不在仓里,CI 上必然没配,查了就是稳定红。新克隆要启用得自己跑
     // 一次 `git config core.hooksPath .githooks`。
     do {
@@ -821,7 +821,7 @@ func runOpsDiagnosticsTests() {
         if let text = try? String(contentsOfFile: hook.path, encoding: .utf8) {
             expectEqual(FileManager.default.isExecutableFile(atPath: hook.path), true,
                         "提交闸: .githooks/commit-msg 必须是可执行的(丢了执行位 = hook 静默失效)")
-            // ⚠️ 剥注释行再扫 —— hook 自己的说明里就写着 `#123` / `GH-123` 这些样例,
+            // 剥注释行再扫 —— hook 自己的说明里就写着 `#123` / `GH-123` 这些样例,
             // 整份 contains 会被自己的注释骗过去(build.sh 那条守卫踩过同一个坑)。
             let code = text.split(separator: "\n", omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespaces) }
@@ -843,9 +843,9 @@ func runOpsDiagnosticsTests() {
     }
 
     // 提交前的两道闸(.githooks/pre-commit):gofmt 保证暂存的 .go 文件已格式化(CI 第一步
-    // 就是它),注释卫生(→ scripts/check-comment-hygiene.py)保证注释只写现状与约束、过程性
+    // 就是它),注释卫生(到 scripts/check-comment-hygiene.py)保证注释只写现状与约束、过程性
     // 内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
-    // ⚠️ 失效是静默的:丢了执行位、检查器被挪走、或者哪一道闸被删掉,hook 直接放行,
+    // 失效是静默的:丢了执行位、检查器被挪走、或者哪一道闸被删掉,hook 直接放行,
     // 谁都看不出来 —— 所以这里逐条钉住每道闸的存在。
     do {
         let root = URL(fileURLWithPath: #filePath)
@@ -879,7 +879,7 @@ func runOpsDiagnosticsTests() {
             // 只改 shared/players.json 的提交里一个源码文件都没有,那道 early exit 会先返回 0。
             // 闸排在它后面 = 恰好对最需要它的那种提交失效。
             if let gate = code.range(of: "gen-players.py"),
-               // ⚠️ 要找的是 files 那道 early exit,不能只搜 "|| exit 0" —— 开头
+               // 要找的是 files 那道 early exit,不能只搜 "|| exit 0" —— 开头
                // `root=$(git rev-parse …) || exit 0` 会先命中,判据当场失真(实测 FAIL 过)。
                let earlyExit = code.range(of: #"[ -n "$files" ] || exit 0"#) {
                 expectEqual(gate.lowerBound < earlyExit.lowerBound, true,

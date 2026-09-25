@@ -86,8 +86,7 @@ func TestSpotifyLocalISRCHit(t *testing.T) {
 			t.Errorf("%s: 期望 %q,得到 ok=%v %q", id, want, ok, got)
 		}
 	}
-	// ⚠️ 有记录但记录里没 ISRC 的,必须报没命中 —— 不能把**下一条**记录的 ISRC 串给它。
-	// 切段逻辑写错(比如往后多扫一截)就会在这里露馅。
+	// 有记录但记录里没 ISRC 的必须报没命中 —— 不能把别的记录的 ISRC 串给它。
 	if got, ok := spotifyLocalISRC(testSpotifyID3); ok {
 		t.Errorf("无 ISRC 的记录不该命中,却给了 %q", got)
 	}
@@ -153,6 +152,7 @@ func TestSpotifyISRCMultiAccount(t *testing.T) {
 		{testSpotifyID2, "USCA20801738"},
 	} {
 		dir := filepath.Join(root, fmt.Sprintf("acct%d-user", i), "primary.ldb")
+// 登录过多个账号时每个账号一份 primary.ldb,都要查。
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}

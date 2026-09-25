@@ -140,8 +140,8 @@ func TestRetryArtistIdentitiesEmptyForUnknownChineseArtist(t *testing.T) {
 }
 
 // 加第三条 QQ 音乐来源(cachedQQArtistCanonicalName)——MusicBrainz 两条都
-// 查空时,QQ 歌手搜索建议应该能顶上,成为重试列表里唯一的候选(那英真实案例:MusicBrainz
-// 对"Na Ying"排第一的是查不到中文别名的结果,QQ 反而查得到"那英")。
+// 查空时,QQ 歌手搜索建议应该能顶上,成为重试列表里唯一的候选(例如"Na Ying":MusicBrainz
+// 排第一的是查不到中文别名的结果,QQ 反而查得到"那英")。
 func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 	withEnrichCache(t, nil)
 	withCachedAliases(t, map[string]string{"Na Ying": ""})
@@ -154,7 +154,7 @@ func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 	}
 }
 
-// 本地标签恰好已经是常用名(方大同)时，knownArtistAlias 单方向查(只认"英文 → 常用名")
+// 本地标签恰好已经是常用名(方大同)时，knownArtistAlias 单方向查(只认"英文 到 常用名")
 // 找不到——这条不该再靠手工登记反向表救回来，musicBrainzArtistAliases 这条通用查询
 // 本身就该够用，对任何歌手都成立，不需要事先登记。实测案例见 musicBrainzArtistAliases
 // 头注：方大同《Lovers Policy》(专辑《15》，五源真实标题是《情胜策略》)本地标签是
@@ -168,7 +168,7 @@ func TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection(t *testing.T) {
 	// 先把这条真实查询单独跑一遍、拿它**自己**的 error —— 这是"MB 没答"和"MB 答了但
 	// 没登记这个写法"唯一分得开的地方(改成这样)。
 	//
-	// ⚠️ 别用"断言即将失败时另发一个探针请求问 MB 答不答话、探针 200 就判回归"那种守卫。
+	// 别用"断言即将失败时另发一个探针请求问 MB 答不答话、探针 200 就判回归"那种守卫。
 	// 探针跟真查询是两条请求,而 MB 对共享出口 IP 的 503 是间歇的,于是
 	// "探针 200 + 真查询 503"这个组合在 CI(GitHub macOS runner,出口 IP 跟所有人共用)上
 	// 反复出现:到 09-12 之间六次 CI 全红都是这一条,每次都报成"MB 这一刻是

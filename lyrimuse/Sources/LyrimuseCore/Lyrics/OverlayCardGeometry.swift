@@ -2,8 +2,7 @@ import CoreGraphics
 
 /// 悬浮窗里**卡片内容块**和它上方那排**控制按钮**的横向落点 —— 两者必须贴同一条边。
 ///
-/// 为什么要单独一个类型(用户实机反馈:「在对唱模式下,这个悬浮菜单不是显示
-/// 对应歌词上面的,看起来是在整个窗口的居中位置」):
+/// 为什么要单独一个类型:
 ///
 /// 控制排原来挂在 `LyricsOverlayView` 最外层那个 `VStack(spacing: 0)` 上,吃的是 VStack
 /// 默认的 `.center` 对齐;而歌词卡片是 `.frame(maxWidth: .infinity, alignment: duetFrameAlignment)`
@@ -16,7 +15,7 @@ import CoreGraphics
 /// "卡片贴哪条边、按钮贴哪条边",而不是等下一次视觉回归被对拍抓出来 —— 跟
 /// `LyricDuetLayout` / `WrapLayoutMath` 摆在 core 而不是 View 里是同一条理由。
 ///
-/// ⚠️ 这里收的 `side` 是**装饰声部**(`OverlayDuetAlignmentOverride.effectiveDecorationSide`
+/// 这里收的 `side` 是**装饰声部**(`OverlayDuetAlignmentOverride.effectiveDecorationSide`
 /// 的结果,`nil` = 当成没有对唱信息的普通歌),不是对齐方向。两者在非自动的「对齐方式」
 /// 覆盖下会分叉:那时对齐方向是用户选的那一边,而内缩必须整个归零。
 public enum OverlayCardGeometry {
@@ -80,3 +79,7 @@ public enum OverlayCardGeometry {
         return (card.leading + cardHorizontalPadding, card.trailing + cardHorizontalPadding)
     }
 }
+    ///
+    /// `scale` 是歌词块那边**真的用上了**的那份弹性系数(见 `elasticInsetScale`):留白让开
+    /// 多少,按钮排就得跟着让开多少,否则又是一次"按钮跟歌词不对齐"。调用方从歌词块实际
+    /// 被摆出来的宽度反推它,而不是自己再算一遍试探。

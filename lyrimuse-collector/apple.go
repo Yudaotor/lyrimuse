@@ -48,7 +48,7 @@ func appleMatchInMissWindow(key string, now time.Time) bool {
 
 // noteAppleMatchMiss 记下一次"问成了、但 Apple 确实没有这首歌"。
 //
-// ⚠️ reached 为假时**什么都不记**:那只是这次没问成(退避中/限流/超时),不是结论。
+// reached 为假时**什么都不记**:那只是这次没问成(退避中/限流/超时),不是结论。
 // iTunes Search 的失败有 98.4% 是限流,不做这道区分的话,一次限流就会把那段时间里
 // 解析过的每一首歌都错记成"Apple 没有"。同一道区分见 musicbrainz.go 的 noteMBLookupFailure。
 func noteAppleMatchMiss(key string, reached bool, now time.Time) {
@@ -83,9 +83,9 @@ type appleMusicMatch struct {
 // 实测验证换尺寸后能正常访问。查不到"100x100"这个子串(理论上不会发生,防御性
 // 处理)就原样返回,好歹还有张小图,不是没有。
 //
-// 从 600 提到 1200:悬浮歌词窗口那张满幅封面卡是 820px(@2x,QQ 那次
-// 修复时量出来的),600px 拉到 820px 是 1.37 倍放大,跟 QQ 音乐当初被
-// 现象是"很模糊"那次同一个问题——只是没人在 Apple 这条上报过。实测过 mzstatic
+// 1200:悬浮歌词窗口那张满幅封面卡是 820px(@2x,QQ 那次
+// 修复时量出来的),600px 拉到 820px 是 1.37 倍放大,跟 QQ 音乐同样会模糊
+// ——只是没人在 Apple 这条上报过。实测过 mzstatic
 // 这个 CDN 对同一张封面 600/1000/1200/2000/3000 全部原样给图(文件大小随分辨率
 // 同步涨,不是被裁剪成同一张),天花板至少到 3000,选 1200 是留出黑胶模式/背景
 // 模糊这类会把封面放得更大的场景的余量,不是这个 CDN 的实际上限。
@@ -159,7 +159,7 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (a
 	// 可信:全文搜索排序会把这首歌在别的发行版(合辑/精选)上的版本排到前面,写词标题
 	// (如 Prince "Partyup")也会被同名热门曲目挤出排名靠前的结果。
 	//
-	// 实测坐实:方大同「Three Tour」全文搜索命中的是完全不相关的另一张合辑
+	// 举例:方大同「Three Tour」全文搜索命中的是完全不相关的另一张合辑
 	// 《EMO Market 心碎雜貨店》/《00s & 10s C-Pop》,而按专辑名能精确定位到真正的原专辑
 	// 《橙月》——resolveAppleMusicMatchViaAlbum 内部还有一层"专辑对上但曲名对不上就退到
 	// 专辑封面"的兜底(那张专辑自己把这首歌收录成繁体曲名「三人遊」,跟本地报的英文
@@ -198,13 +198,13 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (a
 // 歌手对不上时留一条旁路:**专辑名归一后逐字相等**(albumScore>=200)也放行。它兜的是
 // iTunes 自己按商店改写署名这个已知现象(同一首歌 CN 商店署"方大同"、US 商店署
 // "Khalil Fong",appleStorefrontArtistIdentities 整套机制就是为它而存在)——署名写法可以
-// 跨商店变,专辑名逐字相等则足以确认是同一张发行。⚠️ 只认 200 那一档,**不接受
+// 跨商店变,专辑名逐字相等则足以确认是同一张发行。 只认 200 那一档,**不接受
 // albumScore=100 的宽松包含档**:包含档对短通用串几乎免检
 // (lyricRecordingTriangleMatches 头注里记过实测——"周杰伦"正好是"周杰伦地表最强世界
 // 巡回演唱会live"的子串),放进来等于这道闸白加。本案 Pie Kei 那条的专辑是
 // 《Danke für Nichts - Single》、本地是《sunny side up/:down》,albumScore=0,两条都不成立。
 //
-// ⚠️ **已知边界**(实测清单见 TestAppleResultIdentityOKKnownBoundary):合作署名不用担心
+// **已知边界**(实测清单见 TestAppleResultIdentityOKKnownBoundary):合作署名不用担心
 // ——段集交集档只要有一段对上就放行,顺序颠倒 / 少写一位 / 其中一位换语言写法统统能过。
 // 过不去的是**单人署名换了写法**:跨语言(宇多田ヒカル / Utada Hikaru)、艺名与本名
 // (方大同 / Khalil Fong),以及用 "featuring" 这类 isArtistCreditSep 不认的连接词写的合作
@@ -324,7 +324,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// 精确对上,这张专辑的封面就是可信的——同一张专辑的所有曲目共用同一张封面,不需要
 		// 靠曲名再验一遍,好过因为曲名比不上就整条放弃、任由上面 searchAppleMusicMatch
 		// 那个"没有专辑证据的第一个标题匹配"顶替成挂到别的发行版(合辑/精选)上的封面。
-		// ⚠️ 只给 cover/album,不给 url:没找到这首歌具体的曲目页,不能假装有一个能跳转
+		// 只给 cover/album,不给 url:没找到这首歌具体的曲目页,不能假装有一个能跳转
 		// 过去的链接。
 		if bestScore >= 200 && bestAlbumCover.cover != "" {
 			return bestAlbumCover, reached
@@ -411,13 +411,13 @@ type itunesResult struct {
 // 里没有 itunes.apple.com(返回 ""),observe 见到空源名直接 return,于是限流了也不退避,
 // 继续猛打、越打越被限。
 //
-// ⚠️ 为什么不干脆把 itunes.apple.com 加进那张表:表里的 "applemusic" 是
+// 为什么不干脆把 itunes.apple.com 加进那张表:表里的 "applemusic" 是
 // amp-api.music.apple.com 那条**歌词源**(要 media-user-token)。itunes.apple.com/search
 // 是公开的目录检索,给专辑提示 / 封面 / storefront 标题反查 / 目录 id 用,跟歌词正文无关。
 // 归到一起的话,目录检索被限流会把真正的 Apple Music 歌词源一起跳过 —— 拿外围补全的故障
 // 去停掉一个能出歌词的源,不划算。
 //
-// ⚠️ 也不能按**主机**退避:同一个 host 上的 /lookup 端点实测 64 次请求 0 失败,健康得很,
+// 也不能按**主机**退避:同一个 host 上的 /lookup 端点实测 64 次请求 0 失败,健康得很,
 // 不该被 /search 的限流连累。所以退避只挂在 /search 这一个端点上。
 //
 // 403 跟 429 一起算:实测这两个状态码交错出现(429 之后紧跟一串 403,同一波限流的两种表现),
@@ -448,6 +448,8 @@ func itunesSearchCoolingDown(now time.Time) bool {
 // noteITunesSearchStatus 按一次响应的状态码更新退避窗口。非限流状态码立即清掉窗口 ——
 // 跟 lyricSourceBreaker 的 default 分支同一条规矩:拿到一次正常响应就说明限流过去了。
 func noteITunesSearchStatus(status int, retryAfter string, now time.Time) {
+// status 传 0 表示没拿到响应(超时 / 连不上),按 403 那一档退避:限流时这个端点也会
+// 直接拖到超时,跟 403 一样拿不到 Retry-After。
 	itunesSearchMu.Lock()
 	defer itunesSearchMu.Unlock()
 	switch status {
@@ -478,7 +480,7 @@ var itunesSearchBaseURL = "https://itunes.apple.com/search"
 // 响应体)。false 表示退避中 / 限流 / 超时 / DNS 失败 —— 此时空结果只说明"没问成",
 // 绝不能读成"Apple 没有这首歌"。
 //
-// ⚠️ 这个区分是 appleMusicMatchCached 那条查空负缓存的前提:iTunes Search 的失败有
+// 这个区分是 appleMusicMatchCached 那条查空负缓存的前提:iTunes Search 的失败有
 // 98.4% 是限流(403+429),不区分的话,一次限流会把那段时间里解析过的每一首歌都错记成
 // "Apple 没有",在 TTL 内连封面和跳转链接一起丢掉。同一道区分在 MusicBrainz 那边也有
 // (musicbrainz.go:err != nil 与 resolved 为空分开处置)。

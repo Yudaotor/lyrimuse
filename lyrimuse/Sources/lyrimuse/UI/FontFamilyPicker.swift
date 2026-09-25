@@ -39,7 +39,7 @@ struct FontFamilyPicker: View {
     private static let localizedNames: [String: String] = {
         var map: [String: String] = [:]
         for family in families {
-            // ⚠️ localizedName(forFamily:face:) 返回的是非可选 String,拿不到本地化名时
+            // localizedName(forFamily:face:) 返回的是非可选 String,拿不到本地化名时
             // 直接回族名本身,所以判据是"跟族名不同"而不是"有没有值"。
             let localized = NSFontManager.shared.localizedName(forFamily: family, face: nil)
             if localized != family { map[family] = localized }

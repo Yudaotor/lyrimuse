@@ -68,9 +68,10 @@ public enum CollectorServiceManager {
     ///   4. KeepAlive 一直重试一直失败(实测抓到时 runs 已 127 次),collector 就此永久躺平
     ///      —— 歌词解析、scrobble、relay 全停,而 App 本身活得好好的,表现成"这首歌一直
     ///      没歌词",极难联想到是"刚才那次自动更新"。
-    /// build.sh 为本地构建做了这个自愈(bootout+bootstrap),但 Sparkle / Homebrew cask /
-    /// 手动拖 .app 覆盖这三条路都不经过 build.sh。`install()` 本身就是完整的
-    /// bootout→写 plist→bootstrap 三级自愈,这里缺的只是一个启动时的触发点。
+    /// 本地 build.sh 装机也靠这里:开着后台服务时 build.sh 不再自己重装 collector,只等这次对账
+    /// 装完(两边同时 bootout/bootstrap 同一个 label 会互相杀掉对方刚拉起的进程)。Sparkle /
+    /// Homebrew cask / 手动拖 .app 覆盖这三条路同样只有这里兜底。`install()` 本身就是完整的
+    /// bootout到写 plist到bootstrap 三级自愈,这里缺的只是一个启动时的触发点。
     ///
     /// 判据用**二进制指纹**而不是"服务在不在跑":更新之后老进程往往还活着(要等下一次缺页
     /// 才被 SIGKILL),那一刻 isRunning 仍是 true,只看运行状态会整个错过这次更新,而等它
@@ -110,11 +111,11 @@ public enum CollectorServiceManager {
     // 服务的真实状态——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
     // Settings 页面和引导页面的状态展示都靠这个。
     //
-    // ⚠️ 修:这里原来是 `run("/bin/launchctl", ["print", …]) == 0`,而那个退出码
-    // 表示的是"**这个 job 注册过**",不是"进程在跑"——实测三态见 LaunchdJobState 的注释。
-    // 后果是 collector 在 KeepAlive 下崩溃重启循环时,设置页一直显示绿勾"运行中"。更糟的
-    // 是下面 install() 的自愈重试也用它当判据(`if !isRunning`),bootstrap 一成功就认为大功
-    // 告成,那段专门为"kickstart 静默失败"写的 LWCR 重试根本轮不到执行。
+    // 不能用 `run("/bin/launchctl", ["print", …]) == 0` 判断:那个退出码表示的是
+    // "**这个 job 注册过**",不是"进程在跑"——实测三态见 LaunchdJobState 的注释。用退出码
+    // 判断会让 collector 在 KeepAlive 下崩溃重启循环时,设置页一直显示绿勾"运行中";
+    // 下面 install() 的自愈重试也用它当判据(`if !isRunning`)的话,bootstrap 一成功就认为
+    // 大功告成,那段专门为"kickstart 静默失败"写的 LWCR 重试根本轮不到执行。
     public static var state: LaunchdJobState {
         let (status, output) = runCapturing("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"])
         return LaunchdPrintParser.parse(printExitCode: status, printOutput: output)
@@ -126,10 +127,9 @@ public enum CollectorServiceManager {
     /// 对应 Go 侧 main.go 的 clientVersion)——加,给设置页"后台采集服务"卡片
     /// 检测"App 本体版本"跟"这份 App 实际打包的 collector 版本"是否一致用。
     ///
-    /// 起因是 clientVersion 那个字面量一直是手动同步的,发布时忘记同步过至少一次
-    /// (v1.3.0 那次漏了,见 clientVersion 声明处注释),当时没有任何机制能让人自己发现
-    /// 这个不一致。这里直接运行一次打包好的二进制拿它自己报的版本号,不是猜/不是解析
-    /// 文件名——跟"这个二进制到底是哪个版本"这件事只有它自己说了算。
+    /// clientVersion 那个字面量是手动同步的(见 clientVersion 声明处注释),同步有可能漏。
+    /// 这里直接运行一次打包好的二进制拿它自己报的版本号,不是猜/不是解析文件名——跟"这个
+    /// 二进制到底是哪个版本"这件事只有它自己说了算。
     ///
     /// 独立于上面那份 currentBinaryFingerprint/installedFingerprintKey 机制:那一套解决
     /// 的是"运行中的旧进程 vs 磁盘上被换掉的新二进制"(自动更新之后的自愈重装),这里解决
@@ -156,7 +156,7 @@ public enum CollectorServiceManager {
     // 做 old==new 短路),而 SettingsView.toggleCollectorService/OnboardingView.
     // enableCollectorService 在 setEnabledAndWait 完成后都会回写一次
     // settings.collectorServiceEnabled = enabling——这次赋值会再触发一次
-    // didSet→setEnabled(_:),派生出一个完全独立、不等待的冗余调用。如果用户在这次冗余
+    // didSet到setEnabled(_:),派生出一个完全独立、不等待的冗余调用。如果用户在这次冗余
     // 调用还没跑完(install() 内部失败重试路径最坏可达 2-3 秒)之前就快速切换开关,足以
     // 让 install()/uninstall() 真的并发执行,其中一个的 bootstrap 用到另一个已经删除的
     // plist 路径而静默失败,最终 launchd 实际状态跟 collectorServiceEnabled 显示的对不
@@ -277,7 +277,7 @@ public enum CollectorServiceManager {
 
     /// 跑一条命令,拿到退出码和 stdout。
     ///
-    /// ⚠️ 读管道必须在 `waitUntilExit()` **之前**:管道缓冲区(64KB)写满之后子进程会阻塞在
+    /// 读管道必须在 `waitUntilExit()` **之前**:管道缓冲区(64KB)写满之后子进程会阻塞在
     /// write 上永远不退出,而父进程正卡在 waitUntilExit 等它退出 —— 互相等死。原来的写法
     /// 是设了 Pipe 却从不读、直接 waitUntilExit,只是因为 launchctl 的输出一直很小才没炸
     /// (print 一份 job 约 1.6KB)。`readDataToEndOfFile()` 会一直读到子进程关闭 stdout,

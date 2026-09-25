@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 真实故障复现:Khalil Fong《Revisited》= 网易云《回留》,同一张专辑
+// Khalil Fong《Revisited》= 网易云《回留》,同一张专辑
 // 《梦想家 The Dreamer》,时长精确到毫秒吻合(236.344s vs 236.343s),标题文字层面毫无
 // 关联,是这套"标题反查"兜底唯一的判据来源。断言用的时长数字都是从真实接口核对过的。
 func TestBestAlbumTrackByDuration(t *testing.T) {

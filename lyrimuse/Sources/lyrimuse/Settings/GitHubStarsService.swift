@@ -11,12 +11,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "github
 /// 退避到什么时候)全在 `LyrimuseCore.GitHubStars` 里,被 selftest 钉住 —— 这边只剩
 /// URLSession 和 `@Published`。
 ///
-/// ⚠️ **取不到就什么都不显示**,不显示 0、不显示占位符、不显示错误态。0 是个**看起来很确定
+/// **取不到就什么都不显示**,不显示 0、不显示占位符、不显示错误态。0 是个**看起来很确定
 /// 的错数字**,而这一行的语境是"你的 ⭐ 是最大的鼓励",显示成 0 star 比不显示糟得多;
 /// 转圈或者感叹号则是拿一个装饰性数字去打扰用户。首次成功之后数字落进 UserDefaults,
 /// 之后每次开页先显示存量、后台再决定要不要更新,不会闪。
 ///
-/// ⚠️ **单例**:这一页是 `@ObservedObject` 引用它。做成每个视图各自 `@StateObject` 的话,
+/// **单例**:这一页是 `@ObservedObject` 引用它。做成每个视图各自 `@StateObject` 的话,
 /// 离开设置页再回来就是个新实例、缓存要重读、还可能重复发请求 —— ListenBrainz 那边
 /// "切进去还在转圈"就是这个坑(见 `ListenBrainzTokenCheck.tokenChanged` 的注释)。
 @MainActor

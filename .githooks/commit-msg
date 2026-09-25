@@ -2,7 +2,7 @@
 # 拦住任何会在 GitHub 上产生 issue / PR 引用的写法。规则:提交一律不引用任何 issue。
 #
 # 为什么是 hook 而不是写进文档:这个仓的 AGENTS.md / CLAUDE.md 都在 .gitignore 里,
-# 约定只对读过它的人生效。⚠️ 而这件事不可逆 —— 一条 "added a commit that references
+# 约定只对读过它的人生效。 而这件事不可逆 —— 一条 "added a commit that references
 # this issue" 推上去就永久留在 issue timeline 上,GitHub 那条事件记录删不掉,
 # force push 也未必能让它消失。
 #

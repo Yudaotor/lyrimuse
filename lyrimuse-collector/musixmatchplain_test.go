@@ -52,7 +52,7 @@ func TestSanitizeMusixmatchPlainLyricsStripsNotice(t *testing.T) {
 	}
 }
 
-// ⚠️ 剥离规则不能放宽:歌词正文里 `(2)`、`(x3)`、星号强调这类写法很常见,
+// 剥离规则不能放宽:歌词正文里 `(2)`、`(x3)`、星号强调这类写法很常见,
 // 误伤等于把真歌词吃掉。这组反例专门钉住"不该被当成水印"的形态。
 func TestMusixmatchNoticeDetectionDoesNotOverreach(t *testing.T) {
 	notNotice := []string{
@@ -92,7 +92,7 @@ func TestMusixmatchNoticeDetectionDoesNotOverreach(t *testing.T) {
 
 // 搜索阶段那道 has_subtitles 闸门的放宽。
 //
-// ⚠️ 这组才是真正会回归的那段。纯文本回退只加在 resolveMusixmatchLyric 里是不够的:
+// 这组才是真正会回归的那段。纯文本回退只加在 resolveMusixmatchLyric 里是不够的:
 // 而 musixmatchSearchTrackOnce 有一道 `if HasSubtitles != 1 { continue }` —— 目标曲目在
 // **搜索阶段**就被跳过,回退是死代码。抽成 pickMusixmatchTrackRow 就是为了让这道闸门
 // 能脱离网络被钉住。
@@ -138,7 +138,7 @@ func TestPickMusixmatchTrackRow(t *testing.T) {
 		t.Error("歌手对不上的候选不该被采纳")
 	}
 
-	// 两个字段都是 0、而且**没有 instrumental 标记** → 没有可取的东西,不要。
+	// 两个字段都是 0、而且**没有 instrumental 标记** 到 没有可取的东西,不要。
 	// (补的第三趟只认显式 Instrumental==1,这一条正是它不能放宽到的那一侧:
 	//  "这个源没收录"跟"这首本来就没有词"是两回事。)
 	neither := []musixmatchTrackRow{

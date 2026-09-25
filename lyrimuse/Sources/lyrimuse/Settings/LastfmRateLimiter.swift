@@ -39,7 +39,7 @@ actor LastfmRateLimiter {
 
     /// 排队取一个"可以发请求了"的通行证。
     ///
-    /// ⚠️ 正确性关键:预约时间片必须在 acquire 这一次 actor 方法调用的**同步前缀**内
+    /// 正确性关键:预约时间片必须在 acquire 这一次 actor 方法调用的**同步前缀**内
     /// 完成(入队这一步没有 await,天然在 actor 隔离内串行,不会有两个调用者同时读到
     /// 同一个"当前时间片"抢跑)。真正的等待发生在 pump() 循环里,由它一个一个 resume——
     /// 不能写成"调用者各自算出该等多久再自己 sleep",那样算的时候大家看到的都是同一个
@@ -79,8 +79,9 @@ actor LastfmRateLimiter {
         pumpTask = Task { [weak self] in await self?.pump() }
     }
 
-    /// 单循环、单点放行。每轮:先睡完冷却期(如果有),前台队列优先,取不到前台再取
-    /// 后台,两条队列都空就退出循环(下次 acquire 重新拉起,没有常驻空转的任务)。
+    /// 单循环、单点放行。每轮:先睡完冷却期(如果有,含 collector 写进共享文件的 Last.fm 窗口),
+    /// 前台队列优先,取不到前台再取后台,两条队列都空就退出循环(下次 acquire 重新拉起,没有常驻
+    /// 空转的任务)。
     private func pump() async {
         while true {
             let now = Date()

@@ -36,7 +36,7 @@ final class LanguagePackStatusStore: ObservableObject {
     /// 归一成菜单里用的语言代码。
     ///
     /// 中文**保留 script**:简繁是两个独立的语言包,状态确实会不同(实测
-    /// zh-Hans→en 已装、zh-Hant→en 只是"支持未装")。其余语言的 script 没有区分意义,
+    /// zh-Hans到en 已装、zh-Hant到en 只是"支持未装")。其余语言的 script 没有区分意义,
     /// `en-Latn-US` 和 `en-Latn-GB` 是同一种英语,合成一条,否则菜单里会并排两个"英语"。
     private static func canonical(_ lang: Locale.Language) -> String? {
         guard let base = lang.languageCode?.identifier else { return nil }
@@ -61,7 +61,7 @@ final class LanguagePackStatusStore: ObservableObject {
             var seen = Set<String>()
             var list: [String] = []
             // 清单由系统给,不再硬编码。硬编码那一版漏掉了**中文本身** —— 目标语言换成英语
-            // 之后,中文歌要的正是 zh→en 这个包,而菜单里根本没有它可点;顺带还漏了荷兰语/
+            // 之后,中文歌要的正是 zh到en 这个包,而菜单里根本没有它可点;顺带还漏了荷兰语/
             // 波兰语/土耳其语/乌克兰语,以及以后系统新增的任何语言。
             for lang in await availability.supportedLanguages {
                 guard let code = Self.canonical(lang) else { continue }
@@ -110,11 +110,11 @@ final class LanguagePackStatusStore: ObservableObject {
             }
             // 系统说这一对压根不支持的,直接不列 —— 列出来也点不动,只会让人以为坏了。
             //
-            // 上面按"规范代码相等"排除目标语言只挡住了 en→en 这种同码的情况。
+            // 上面按"规范代码相等"排除目标语言只挡住了 en到en 这种同码的情况。
             // 现象是「繁体中文 · 不支持」,查下来是**系统把中文当作一种语言**:简体和繁体
             // 之间不构成翻译对,所以目标是中文时 zh-Hant 和 zh-Hans 都会报 unsupported
-            // (实测表:zh-Hant→zh-Hans / zh-Hant→zh-Hant / zh-Hans→zh 全是 unsupported,
-            // 而 zh-Hant→en、zh-Hant→ja 都是已下载)。目标写成 zh-Hans 时 zh-Hans 被排除、
+            // (实测表:zh-Hant到zh-Hans / zh-Hant到zh-Hant / zh-Hans到zh 全是 unsupported,
+            // 而 zh-Hant到en、zh-Hant到ja 都是已下载)。目标写成 zh-Hans 时 zh-Hans 被排除、
             // zh-Hant 却因为字符串不等留了下来,就露出了这一行。
             //
             // 不特判中文而是按**系统给的状态**过滤:同语言、中文简繁、以及以后任何一种
@@ -154,11 +154,11 @@ final class LanguagePackStatusStore: ObservableObject {
 /// 格子,不用再靠一串菜单文字去猜。
 ///
 /// 展开而不是 popover:下载确认是系统弹在**设置窗口**上的 sheet,popover 在它弹出时会被
-/// 收掉,用户下载完还得再点开一次才看得到结果;留在卡里就没有这层折腾。⚠️ 展开状态是
+/// 收掉,用户下载完还得再点开一次才看得到结果;留在卡里就没有这层折腾。 展开状态是
 /// @State 不是 @AppStorage:默认折叠(跟「全部设置」抽屉同一条理由),不把上次展开的样子
 /// 带到下次打开设置。
 ///
-/// ⚠️ 读数「已下载 6 / 18」按**当前译文语言**统计"能翻成它的语言对",不是系统设置里
+/// 读数「已下载 6 / 18」按**当前译文语言**统计"能翻成它的语言对",不是系统设置里
 /// "下载了几种语言"——译文语言自己(简体中文)和同语系的繁体中文在这一对里是 unsupported,
 /// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(用户觉得
 /// "感觉有 bug",进程外探针对过:系统真值就是这 6 个)。help 气泡里把这条写明了。
@@ -208,7 +208,7 @@ struct LanguagePackRow: View {
     }
 
     var body: some View {
-        // ⚠️ 外面必须是 VStack 而不是 Group:下面挂的 .task / .onReceive / .translationTask
+        // 外面必须是 VStack 而不是 Group:下面挂的 .task / .onReceive / .translationTask
         // 要是套在 Group 上,会被转发给**每一个**子视图 —— 刷新跑两遍还只是浪费,
         // translationTask 跑两遍就是弹两张下载 sheet。VStack(spacing: 0) 嵌在 SettingsCard
         // 自己那个 VStack(spacing: 0) 里,对布局是透明的。
@@ -261,7 +261,7 @@ struct LanguagePackRow: View {
             store.refresh(target: target)
         }
         // 每次窗口重新变成前台再查一次。这一行的内容不是 App 自己的状态,而是**系统当下**
-        // 的语言包情况 —— 用户完全可能刚去"系统设置 → 翻译"里装了或删了一个包,回来时
+        // 的语言包情况 —— 用户完全可能刚去"系统设置 到 翻译"里装了或删了一个包,回来时
         // 这里该是新的。顺带也给一次坏读数一条自愈的路:用户截到过一次
         // "已下载 0 / 19",而同一份代码事后连查四轮(含三次冷启动)都是正确的 5 / 19 ——
         // 原因没能复现,但至少点开别处再回来就能纠正,而不是一直卡着。
@@ -324,13 +324,13 @@ struct LanguagePackRow: View {
 
     /// 发起一次语言包下载。
     ///
-    /// ⚠️ 「点第二次同一个语言一直转圈」的正解是**下面那个隐形 carrier 的 `.id(downloadNonce)`**,
+    /// 「点第二次同一个语言一直转圈」的正解是**下面那个隐形 carrier 的 `.id(downloadNonce)`**,
     /// 这里只要把 nonce 抬一下就行。原理:`.translationTask(pending)` 只在配置**变化**时重跑
     /// 它的 action(苹果文档原话:view 出现或配置变化时运行),而 `TranslationSession
     /// .Configuration` 是 Equatable —— 同源同目标两次点击给的是**等值**配置,直接赋值它判定
     /// "没变"、不重跑,spinner 亮着(`downloading == code`)、底下却没任务在跑,永远转圈。
     ///
-    /// ⚠️ 曾经试过「先把 pending 清成 nil、下一拍 Task 里再赋值」想凑出 nil→config 的跳变,
+    /// 曾经试过「先把 pending 清成 nil、下一拍 Task 里再赋值」想凑出 nil到config 的跳变,
     /// **实测无效**(一次性 harness translationtask_probe.swift 坐实:两次等值请求 action 只跑
     /// 一次)—— SwiftUI 把同一轮里的 `nil` 和随后的 `config` 合并成一次更新,translationTask
     /// 看到的仍是"没变"。真正可靠的是给挂 translationTask 的那段视图一个每次都变的 `.id`:

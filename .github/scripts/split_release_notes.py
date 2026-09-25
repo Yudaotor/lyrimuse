@@ -193,7 +193,7 @@ def render_html(lines: list[str], lang: str) -> str:
     def flush_li():
         nonlocal li
         if li:
-            # ⚠️ 条目是 <p class="item">,**不是 <li>**。「软件更新」页不走 WebView,它用
+            # 条目是 <p class="item">,**不是 <li>**。「软件更新」页不走 WebView,它用
             # NSAttributedString(html:) 解析(SoftwareUpdatePage.render),那个解析器把 <ul><li>
             # 转成 NSTextList —— 自带 • 标记和一大段固定缩进,而且不认 list-style 之类的 CSS,
             # 改样式表是拦不住它的。换成段落,标记和缩进就从根上不存在。
@@ -228,7 +228,7 @@ def render_html(lines: list[str], lang: str) -> str:
             flush_table()
             continue
         if stripped.startswith("|"):
-            # ⚠️ 表格是「正文」与「网页页脚」的分界,到这里就收尾,后面的整段都不渲染。
+            # 表格是「正文」与「网页页脚」的分界,到这里就收尾,后面的整段都不渲染。
             # 每节末尾那张按芯片分的下载表、「不确定该下哪个」、提交数、Full Changelog
             # 链接都是给 GitHub Release 页看的:应用内的更新说明里点一下就装了,不需要
             # 自己挑包下载。而且 NSAttributedString 不渲染 HTML 表格,它会把表格摊成
@@ -268,7 +268,7 @@ def render_html(lines: list[str], lang: str) -> str:
         "body{font:13px -apple-system,'PingFang SC',sans-serif;line-height:1.55;margin:14px;color:#333}\n"
         "@media(prefers-color-scheme:dark){body{color:#ddd;background:#1e1e1e}a{color:#6cf}}\n"
         "h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:16px 0 6px}\n"
-        # ⚠️ 不要项目符号、也不要缩进:条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
+        # 不要项目符号、也不要缩进:条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
         # 在 Sparkle 那扇窄弹窗里会把每条推进去一截,点和文字之间还空着一大段,而换行后的续行
         # 又顶回左边,一条条读起来是散的。
         "p.item{margin:3px 0}\n"

@@ -32,7 +32,7 @@ enum MenuBarProgressIcon {
 
     /// 开着这个功能时,这一项要在歌词之外**额外**占多宽(图标宽 + 间距)。关着是 0。
     ///
-    /// ⚠️ 槽宽公式的**唯一**一份:菜单栏本体的三条路径(fixed / adaptive / 几何推迟期的
+    /// 槽宽公式的**唯一**一份:菜单栏本体的三条路径(fixed / adaptive / 几何推迟期的
     /// 过渡渲染)和设置页预览都从这里取。macOS 26 起菜单栏项的宽度必须在**出生那一刻**
     /// 就是对的(事后改宽邻居不让位,见 `MenuBarStatusItem.present` 头注),各写一遍
     /// 算漏一处的后果不是"差几个点",是歌词压到邻居图标头上、而且不自愈。
@@ -64,7 +64,7 @@ enum MenuBarProgressIcon {
     /// `.sourceAtop` 把颜色压上去 —— 只在字形覆盖到的地方上色,边缘的半透明像素保持原样,
     /// 不会长出一圈硬边。
     ///
-    /// ⚠️ 调用方负责在正确的 appearance 下解析动态颜色(labelColor / controlAccentColor
+    /// 调用方负责在正确的 appearance 下解析动态颜色(labelColor / controlAccentColor
     /// 都是动态色,深色菜单栏上解析错就是画出一枚几乎看不见的图标)。做法见
     /// `MenuBarScrollingLabel.rebuildImage` 外面那层 `performAsCurrentDrawingAppearance`。
     /// - Parameter scale: 栅格化比例,调用方传图层所在窗口的 `menuBarBitmapScale`(不在这里猜屏)。

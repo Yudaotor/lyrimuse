@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 真实故障:陈奕迅《爱是怀疑 (Live)》和 Michael Jackson《Can't Let Her Get
+// 举例:陈奕迅《爱是怀疑 (Live)》和 Michael Jackson《Can't Let Her Get
 // Away》这两首网易云缓存的歌词里,英文撇号前带着字面反斜杠(`It\'s`、`Can\'t`)直接显示
 // 在悬浮歌词/歌词窗口里。核实过是网易云 lyric/tlyric/romalrc/yrc 接口自己数据库里的脏
 // 数据(json.Unmarshal 已经正常解码,不是我们转义链路的 bug——本地缓存全量按来源分组

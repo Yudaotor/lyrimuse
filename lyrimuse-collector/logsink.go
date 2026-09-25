@@ -22,7 +22,7 @@ package main
 //   - **等级默认 info**,`config.json` 的 `log_level`(debug/info/warn/error)调,环境变量
 //     `LYRIMUSE_LOG_LEVEL` 优先(手动在终端跑子命令排查时不用改配置文件)。审计日志的逐次
 //     成功行在 Debug —— 默认不落盘,但**不是丢了**:同一目标一分钟一行汇总(见 networkobs.go
-//     `recordAPICall`),失败行仍逐条 Warn。用户的要求是"所有对外请求全部记录",
+//     `recordAPICall`),失败行仍逐条 Warn。设计要求是"所有对外请求全部记录",
 //     汇总里的 count 就是那份记录,只是不再一行一次。
 //   - **连续重复行折叠**(`repeatSquelcher`)走 syslog / journald 那套"last message repeated N
 //     times":只折**连续**且模板相同的行(去掉 time= 与数字后一致),第一条原样立即写出、
@@ -30,8 +30,8 @@ package main
 //     syslog 的语义,要更聪明的折叠留给诊断导出的 collapseRepeatedLines(它是离线全局的)。
 //   - **常驻模式自己打开日志文件**,不再只依赖 launchd 把 stderr 指到文件:运行期按大小轮转
 //     必须能换掉自己手里的 fd(rename 不会让 launchd 打开的那个 fd 转向新文件,见
-//     logrotate.go 头注)。stderr 仍由 launchd 指着同一个文件,Go 运行时的 panic 输出照旧
-//     落在那里。子命令(healthcheck 等)日志留在 stderr,终端里直接看。
+//     logrotate.go 头注)。fd 2 也由这里指到当前文件、每次轮转后跟着换(redirectStderrTo),
+//     Go 运行时的 panic 输出总落在当前日志里。子命令(healthcheck 等)日志留在 stderr,终端里直接看。
 //
 // 退出前必须 `flushLogSink()`(exitreason.go 的 logExit 里调):折叠器里攒着的
 // "repeated N times" 和审计汇总窗口里没到点的计数都在那一刻放出来。

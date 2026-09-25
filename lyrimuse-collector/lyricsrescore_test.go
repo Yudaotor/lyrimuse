@@ -62,8 +62,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			want: true,
 		},
 		{
-			// 此前 LyricsRescoreCount 是终身上限,打分版本 6 天连升三次(15→17→18)后
-			// 本机 37 条已被永久冻结、112 条只剩一次。上限改成按版本计:旧版本下用掉的次数不算。
+			// 次数按打分版本计:旧版本下用掉的次数不算,版本再升就解冻,不是终身上限。
 			name: "次数是旧版本下用掉的:版本再升就解冻(上限按版本计,不是终身)",
 			e: func() enrichEntry {
 				e := stale
@@ -208,7 +207,7 @@ func TestRescoreDecidable(t *testing.T) {
 // 永远不会出现在 responded 里,于是 Decidable 恒为 false、这颗按钮永远不可能成功,
 // 文案还渲染成主语为空的「这一轮「」没应答」。
 //
-// ⚠️ 同时钉住**另一半**:自动 rescore 那条路(noCurrentLyrics=false)的口径一字未动 ——
+// 同时钉住**另一半**:自动 rescore 那条路(noCurrentLyrics=false)的口径一字未动 ——
 // 那条路的前置 needsLyricsRescore 要求 e.Lyrics != "",空串在那边只可能是"老条目有歌词
 // 但没记来源",必须保持严格。同一个空串在两条路径上语义不同,所以做成参数而不是就地推断。
 func TestRescoreDecidableNoCurrentLyrics(t *testing.T) {

@@ -12,7 +12,6 @@ func TestLoosenEnrichKey(t *testing.T) {
 		a, b string
 		same bool
 	}{
-		// 用户实际报的那两组
 		{"半角空格", "陶喆|Susan 说|太平盛世", "陶喆|Susan说|太平盛世", true},
 		{"中英之间空格", "陶喆|Sula 与 Lampa 的寓言|太平盛世", "陶喆|Sula 与 Lampa的寓言|太平盛世", true},
 		// 繁简(12 组里的代表),歌名和歌手名两处都要能折
@@ -20,7 +19,7 @@ func TestLoosenEnrichKey(t *testing.T) {
 		{"歌手名繁简", "孙燕姿|我懷念的|逆光", "孫燕姿|我懷念的|逆光", true},
 		{"大小写", "PRINCE|Kiss|Parade", "Prince|Kiss|Parade", true},
 
-		// ⚠️ 下面这些**必须**判为不同。宽松键是纯减法(删空格/统一大小写字形),
+		// 下面这些**必须**判为不同。宽松键是纯减法(删空格/统一大小写字形),
 		// 删不掉任何区分版本的字符,所以结构上不可能把"一首歌"和"它+额外内容"并到一起。
 		{"版本括号", "陶喆|Susan 说|太平盛世", "陶喆|Susan 说(Music鉴赏版)|太平盛世", false},
 		{"不同专辑", "陶喆|Susan 说|太平盛世", "陶喆|Susan 说|黑色柳丁", false},

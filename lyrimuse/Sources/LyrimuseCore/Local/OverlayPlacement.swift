@@ -139,7 +139,7 @@ public enum OverlayPlacement {
 
     // MARK: - 位置预设(OverlayPlacementMode)
 
-    /// 「顶部居中」离可见区顶边(= 菜单栏底)的距离,跟底部同为 12。⚠️ 别照搬"没存过位置时那个
+    /// 「顶部居中」离可见区顶边(= 菜单栏底)的距离,跟底部同为 12。 别照搬"没存过位置时那个
     /// 默认落点"的 40 —— 预设的意图是"贴着菜单栏",跟"新装 App 随手
     /// 丢一个好抓的位置"不是一回事。默认落点那个 40 不动。
     public static let presetTopMargin: CGFloat = 12

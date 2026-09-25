@@ -113,7 +113,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 //  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
 //     不单独占一个歌手名额;
 //  2. resolveGenericArtistCanonicalName(musicbrainz.go):已知的英文/罗马化艺名换成
-//     本库常用中文名(比如"Dean Ting"→"丁世光")——从只查
+//     本库常用中文名(比如"Dean Ting"到"丁世光")——从只查
 //     knownArtistAlias(match.go 的 artistAliasTable)改成先试 MusicBrainz/QQ 音乐
 //     两条通用机制,只有两条都查不到才落到手工表那两条真实残留案例,见其头注;
 //  3. toSimplified:繁体折成简体(比如"周杰倫"和"周杰伦"折成同一个键);
@@ -121,7 +121,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 //
 // 四步做完算出的字符串一致就判定是同一个人。
 //
-// ⚠️ 这是一次性批处理脚本(一天跑一次),不是打分热路径,可以放心让
+// 这是一次性批处理脚本(一天跑一次),不是打分热路径,可以放心让
 // resolveGenericArtistCanonicalName 在缓存不命中时发起真实网络请求——不像
 // isProbablyWrongLanguageLyrics 那样需要 resolvedArtistCJKHint 的纯读缓存约束。
 func artistMergeNameKey(name string) string {
@@ -136,7 +136,7 @@ func artistMergeNameKey(name string) string {
 // toSimplified/大小写折叠:那两步只是"判断是否同一个人"内部用的归一化,不代表要悄悄篡改
 // 这个人在库里原本的书写(繁体来源就展示繁体,不强制转简体)。
 //
-// ⚠️ 去掉了原来第一步的 firstCreditedArtist(从合credit 串里猜第一个歌手)。
+// 去掉了原来第一步的 firstCreditedArtist(从合credit 串里猜第一个歌手)。
 // 那一步会**凭空造出一个数据里根本没出现过的名字**:`firstCreditedArtist` 按分隔符切段,
 // 而 `/` 既是常见分隔符、又可能是人名自身的一部分,于是 "K/DA" 被切成 ["K","DA"]、
 // 显示成 **"K"** —— 一个不存在的歌手。实测:Top 榜里 "K/DA" 和
@@ -171,7 +171,7 @@ func artistMergeDisplayName(name string) string {
 type artistIdentityFn func(name, knownMbid string) mbArtistIdentity
 
 // cacheOnlyArtistIdentity 只读缓存、绝不联网——给所有对延迟敏感的调用方
-// (poll 循环里的 topArtistsDigest、App 统计页背后的 CLI 默认档)。缓存由
+// (后台定时的 topArtistsDigest、App 统计页背后的 CLI 默认档)。缓存由
 // warmArtistIdentityCache / 带预算的手动导出慢慢填,归并逐日收敛。
 func cacheOnlyArtistIdentity(name, _ string) mbArtistIdentity {
 	id, _ := cachedArtistIdentity(strings.TrimSpace(name))
@@ -203,10 +203,10 @@ func budgetedArtistIdentity(budget int) artistIdentityFn {
 	}
 }
 
-// warmArtistIdentityCache 后台预热身份缓存:按榜单顺序(播放次数降序,高频歌手优先)
-// 解析前 budget 个未缓存的名字并落盘。给 topArtistsDigest 用——它在 poll 循环里同步跑,
-// 绝不能被 MusicBrainz 限速卡住(每个名字最多 2×1.1s),所以归并本体只读缓存,预热放
-// goroutine 里慢慢做,次日的归并自然吃到。
+// warmArtistIdentityCache 后台预热归并要读的两份缓存:按榜单顺序(播放次数降序,高频歌手优先)
+// 解析前 budget 个未缓存名字的身份并落盘,再把每个名字的别名(名字键、展示名那一步)查一遍。
+// 给 topArtistsDigest 用——归并本体只读缓存(mergeAliasedArtists),不能被 MusicBrainz 限速卡住,
+// 预热放 goroutine 里慢慢做,次日的归并自然吃到。
 func warmArtistIdentityCache(entries []lastfmChartEntry, budget int) {
 	resolve := budgetedArtistIdentity(budget)
 	for _, e := range entries {
@@ -242,6 +242,10 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 
 	parent := make([]int, n)
 	for i := range parent {
+// mergeAliasedArtists 是只读缓存的归并:身份、名字键、展示名三样都只读本地缓存,一个请求都不发。
+// 给后台定时任务用(Top 歌手榜、四档听歌报告):歌手榜有几十到几百位,名字键逐个联网
+// (MusicBrainz 全局 1.1 s 限速,查空的结果不落盘、每次进程重启都要重查)会一跑几十秒到几分钟。
+// 联网版是 mergeAliasedArtistsResolved,只给 collector top-artists 命令行用。见 15 章 §4。
 		parent[i] = i
 	}
 	var find func(int) int
@@ -293,7 +297,7 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 	// ("K/DA" 和 "K/DA/Madison Beer/(G)I-DLE/Jaira Burns"),段数最少的那个就是本名。
 	// 段数相同就保持先遇到的那个 —— 输入按播放次数降序,等于取次数更多的那份写法。
 	//
-	// ⚠️ 刻意**不**从字符串里猜第一个歌手(原来 artistMergeDisplayName 干的事,见那边
+	// 刻意**不**从字符串里猜第一个歌手(原来 artistMergeDisplayName 干的事,见那边
 	// 注释):`/` 既是分隔符又可能是人名的一部分,猜出来的 "K" 是个数据里不存在的名字。
 	// 从成员里挑最坏情况也只是显示一个完整的合credit 串(那一桶里恰好没有本名条目时),
 	// 而那至少是真实出现过的写法。
@@ -320,7 +324,7 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 		}
 		// 中文成员名单独一条挑选轨:这个库的主体是华语音乐,同一个人有中文写法时
 		// 中文就是"本库常用名"(用户核对 Top100 的直接反馈——"窦靖童"和
-		// "Leah Dou"合并后该显示前者)。⚠️ 只认**单人**写法(credit 段数 1):不加这个
+		// "Leah Dou"合并后该显示前者)。 只认**单人**写法(credit 段数 1):不加这个
 		// 限制,"Michael Jackson"会被桶里一条 2 次播放的"Michael Jackson & 克里夫兰
 		// 管弦乐团"顶掉——含汉字的合唱串说明不了这个人常用中文名,只说明某张发行的
 		// 合作方是中文写法(实测翻车过)。平手先到者(=播放多的写法)优先。
@@ -338,7 +342,7 @@ func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdent
 		b := buckets[root]
 		name := b.name
 		// 显示名优先级:桶里真实出现过的中文成员名 > 身份解析的中文名(桶里全是罗马
-		// 写法时,如 "Ronghao Li"→"李荣浩") > 主轨挑出的名字。
+		// 写法时,如 "Ronghao Li"到"李荣浩") > 主轨挑出的名字。
 		if b.hanName != "" {
 			name = b.hanName
 		} else if b.zh != "" {
@@ -410,8 +414,8 @@ func deezerArtistAvatar(ctx context.Context, name string) (string, bool) {
 }
 
 // topArtistsDigest 检查(至多每 topArtistsCheckInterval 一次)要不要重新计算"历史播放
-// Top10歌手"并推给状态中继——这块内容不需要实时,所以挂在跟 weeklyDigest 同样的
-// poll() 尾部、但用一个大得多的检查间隔,不会增加正常轮询的开销。复用跟 weeklyDigest
+// Top10歌手"并推给状态中继——这块内容不需要实时,跟 weeklyDigest 一起在后台任务里跑
+// (runDigestsAsync),检查间隔大得多。复用跟 weeklyDigest
 // 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置(数据要推给网页读
 // 的中继,没配这个推了也没地方读)。
 func (p *poller) topArtistsDigest(now time.Time) {
@@ -438,17 +442,13 @@ func (p *poller) topArtistsDigest(now time.Time) {
 	if len(merged) > topArtistsN {
 		merged = merged[:topArtistsN]
 	}
-	// 头像并发取,不要串行。topArtistsDigest 是在轮询循环里**同步**调用的
-	// (见 poller.go 里 p.topArtistsDigest(now) 那一行),而 resolveArtistAvatar 每次都是
-	// 真实网络请求(先 QQ 音乐、失败再 Deezer)。串行 10 个的话,这一轮 poll 会被卡住十次
-	// 网络往返的总时长 —— 期间这个 collector 什么都察觉不到:换歌、暂停、seek 都发现不了,
-	// 刚开始播的那首也补不上元数据。(歌词行本身不会停:App 侧有自己的 20Hz fastTick,网页
-	// 那边按最后一个锚点外推,所以这是"检测停摆"而不是"画面冻住"。)
+	// 头像并发取,不要串行。resolveArtistAvatar 每次都是真实网络请求(先 QQ 音乐、失败再
+	// Deezer),串行 10 个就是十次网络往返的总时长;这一轮跑完之前,后台的其余报告任务都排在
+	// 它后面(见 runDigestsAsync)。
 	//
 	// 成功路径下它至多一天跑一次:进程内的 topArtistsLastCheckedAt 是主节流,topArtistsState
 	// 只是重启后的兜底。而 save() 只在 postRelay 成功之后才写(见下面),推送失败就没有时间戳
-	// 落盘 —— 同一天再重启一次(每次保存 features 都会 kickstart collector,很常见)就会把这
-	// 十次取头像重跑一遍。哪条路径下,那一次卡顿都是用户能直接感觉到的。
+	// 落盘,同一天再重启一次就会把这十次取头像重跑一遍。
 	//
 	// 并发度压到 4 而不是全放开:这两个都是别人的公开接口,10 个请求同时砸过去没有必要,
 	// 4 路已经把总耗时压到约四分之一。顺序必须保持(展示的是 Top10 排名),所以按下标写回

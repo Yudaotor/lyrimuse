@@ -43,10 +43,13 @@ final class MotionCoverNSView: NSView {
     /// 必须**强持有** —— `AVPlayerLooper` 一旦被释放,循环就停在第一遍结束的地方。
     private var looper: AVPlayerLooper?
     private let playerLayer = AVPlayerLayer()
+    // `desiredFile` 和 `wantsPlaying` 是**调用方的意图**,离屏时一个都不能清 —— 清掉
+    // 就是伪造意图。只有 `player` / `looper` / `loadedFile` 那三个"播放器实例的现状"才跟着
+    // 离屏一起放掉。
     /// SwiftUI 要求播的那份(离屏期间也记着)。
     private var desiredFile: URL?
     /// 播放器**实际**加载的那份。离屏时连播放器一起放掉,所以它会回到 nil,而 `desiredFile` 不会 ——
-    /// 重新入窗时靠后者恢复。⚠️ 两者**不能**合成一个字段:那样离屏再入窗就恢复不出来、画面空着。
+    /// 重新入窗时靠后者恢复。 两者**不能**合成一个字段:那样离屏再入窗就恢复不出来、画面空着。
     private var loadedFile: URL?
     private var wantsPlaying = false
 
@@ -75,7 +78,7 @@ final class MotionCoverNSView: NSView {
         let item = AVPlayerItem(url: file)
         let queue = AVQueuePlayer()
         queue.isMuted = true
-        // ⚠️ 不碰 `actionAtItemEnd` / `items`:队列由 `AVPlayerLooper` 自己接管(它靠往队列里
+        // 不碰 `actionAtItemEnd` / `items`:队列由 `AVPlayerLooper` 自己接管(它靠往队列里
         // 续 item 实现无缝循环),外面再去调度会跟它打架。
         looper = AVPlayerLooper(player: queue, templateItem: item)
         playerLayer.player = queue
@@ -91,6 +94,11 @@ final class MotionCoverNSView: NSView {
 
     /// 真正离屏(切屏幕镜像、关灵动岛、歌词窗口关掉)时把播放器整个放掉 —— 只 pause 的话
     /// 解码器和那 7 MB 的映射还挂在进程里。
+    ///
+    /// **不要在这里把 `wantsPlaying` 归零**:重新入窗时 `load` 靠它决定要不要开播,归零
+    /// 之后画面会停在首帧、直到 SwiftUI 恰好因为别的原因再调一次 `setPlaying` 才动起来
+    /// (`setPlaying` 自己还有一道 `wantsPlaying != playing` 的去重,状态没变时是空操作)。
+    /// 表现就是"封面在,但它不动"。
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil {

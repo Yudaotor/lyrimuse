@@ -25,7 +25,7 @@ import Foundation
 /// 该有的行为:进了名单的行连 `···` 占位都不画(见 `PlayCountBadge`),看起来就是"这行天生没有
 /// 次数",而实际上只要一次重问就能拿到。
 ///
-/// ⚠️ **error 6(Track not found)仍然是定论**。调用方在那条路上传 `reportedCount: 0`:
+/// **error 6(Track not found)仍然是定论**。调用方在那条路上传 `reportedCount: 0`:
 /// Last.fm 说"压根没有这个实体"跟它说"0 次"是同一个答案,不能跟"没答上来"混在一起 ——
 /// 否则本机那 7 首有声书章节(Last.fm 确实没有)会每轮重问、永不收敛,那正是
 /// 引入 `notFound` 要解决的问题。
@@ -45,14 +45,14 @@ public enum PlayCountOutcome: Equatable {
     ///   - requestSucceeded: 请求本身成不成功。超时/限流是 false;error 6 算 true
     ///     (那是一个明确答案,见头注)。
     ///   - reportedCount: 响应里**真的带回来**的 `userplaycount`;没带这个字段就传 nil。
-    ///     ⚠️ 别把"没带字段"折成 0 传进来 —— 那就是本次修复要消掉的那个混淆。
+    /// 别把"没带字段"折成 0 传进来 —— 那就是本次修复要消掉的那个混淆。
     ///   - rowIsOldEnough: 这一行的 scrobble 是否已经超过宽限期
     ///     (`LastfmStatsService.playCountZeroGraceSecs`,15 分钟)。刚 scrobble 完拿到 0
     ///     是"还没并账",不是答案。
     public static func classify(requestSucceeded: Bool, reportedCount: Int?,
                                rowIsOldEnough: Bool) -> PlayCountOutcome {
         guard requestSucceeded else { return .unanswered }
-        // ⚠️ 这一行就是本次修复的全部:字段缺失 ≠ 那边是 0。
+        // 这一行就是本次修复的全部:字段缺失 ≠ 那边是 0。
         guard let n = reportedCount else { return .unanswered }
         if n > 0 { return .counted(n) }
         return rowIsOldEnough ? .definitivelyNone : .unanswered

@@ -27,7 +27,7 @@ func TestNoLyricsVerdictOnRealWorldBodies(t *testing.T) {
 			want: true,
 		},
 		{
-			// QQ 实测形态:retcode -1901,响应里压根没有 lyric 字段 → 空串。
+			// QQ 实测形态:retcode -1901,响应里压根没有 lyric 字段 到 空串。
 			name: "空正文",
 			lrc:  "",
 			want: true,

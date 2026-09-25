@@ -33,7 +33,7 @@ enum SpotifyReveal {
         }
     }
 
-    /// 深链交给正在跑的那份 Spotify.app。⚠️ 不按 scheme 的默认处理器开:lsregister 里 `spotify:` 有两份注册
+    /// 深链交给正在跑的那份 Spotify.app。 不按 scheme 的默认处理器开:lsregister 里 `spotify:` 有两份注册
     /// (/Applications 那份,以及 ~/Library/Application Support/Spotify/PersistentCache/Update 里自更新留下的
     /// 那份),默认处理器可能落到后者、把另一个 Spotify 实例拉起来;用户眼前正在播的那个进程才是要跳页的对象。
     /// `activates = true` 与 openResolvedPlayerApp 同款 —— accessory App 请求把别的 App 带到前台,

@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 func runPlaybackPositionTests() {
     // ---- MediaControlClient.livePositionSeconds: rate 缺失时别信 elapsedTimeNow ----
-    // (实测坐实:Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
+    // (Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
     // media-control 的 --now 外推是 elapsed + (now-ts)*rate —— rate 缺失时增量为 0,
     // elapsedTimeNow 15 秒纹丝不动。那个恒定值喂进伺服会把位置一路拽回去、歌词冻在一行。)
 
@@ -73,7 +73,7 @@ func runPlaybackPositionTests() {
                 let v = est(gap)
                 expectEqual(v >= 0 && v <= 0.5, true, "相位订正: 订正量恒在 [0,0.5](间隔 \(gap))")
             }
-            // 首见时刻早于时间戳(时钟回拨/解析异常)→ 不猜,原样返回
+            // 首见时刻早于时间戳(时钟回拨/解析异常)到 不猜,原样返回
             expectEqual(MC.estimatedAnchorInstant(timestamp: ts, firstSeenAt: ts.addingTimeInterval(-3)),
                         ts, "相位订正: 首见早于时间戳时原样返回,不倒推")
 
@@ -82,10 +82,10 @@ func runPlaybackPositionTests() {
                 playing: true, elapsedTime: 100, elapsedTimeNow: 130.0,
                 playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(30),
                 lastPlayingPosition: nil, firstSeenAt: ts.addingTimeInterval(0.4))
-            // 订正后基准 = ts+0.2 → 位置 = 100 + (30 − 0.2) = 129.8(比 130 慢 0.2,正是订正量)
+            // 订正后基准 = ts+0.2 到 位置 = 100 + (30 − 0.2) = 129.8(比 130 慢 0.2,正是订正量)
             expectEqual(frozen.map { (($0) * 1000).rounded() / 1000 }, 129.8,
                         "相位订正: 冻结锚点按订正后的基准自己外推")
-            // 锚点还新鲜(age ≤ 门槛)→ 不接手,仍然用 elapsedTimeNow(QQ/网易云那条路不受影响)
+            // 锚点还新鲜(age ≤ 门槛)到 不接手,仍然用 elapsedTimeNow(QQ/网易云那条路不受影响)
             let fresh = MC.livePositionSeconds(
                 playing: true, elapsedTime: 100, elapsedTimeNow: 100.9,
                 playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(0.9),
@@ -112,14 +112,14 @@ func runPlaybackPositionTests() {
             func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
             expectEqual(MC.parseTimestamp(tsString), ts, "钉锚点: 测试用的整秒字符串对得上 ts")
 
-            // tight:到达 ts+0.585(实测 00:40:25.580 对整秒 :25)→ 锚点 ≈ ts+0.560
+            // tight:到达 ts+0.585(实测 00:40:25.580 对整秒 :25)到 锚点 ≈ ts+0.560
             let tight = MC.AnchorSighting(at: ts.addingTimeInterval(0.585), tight: true)
             expectEqual(ms(MC.estimatedAnchorInstant(timestamp: ts, sighting: tight).timeIntervalSince(ts)), 0.56,
                         "钉锚点: tight 目击 = 到达时刻回退典型延迟")
-            // 夹逼下界:到达只比整秒晚 10ms(锚点打在整秒边界上)→ 不倒推到上一秒
+            // 夹逼下界:到达只比整秒晚 10ms(锚点打在整秒边界上)到 不倒推到上一秒
             let early = MC.AnchorSighting(at: ts.addingTimeInterval(0.010), tight: true)
             expectEqual(MC.estimatedAnchorInstant(timestamp: ts, sighting: early), ts, "钉锚点: tight 目击不早于整秒时间戳")
-            // 夹逼上界:到达 ts+1.3(事件迟到)→ 夹在 ts+0.999,不越过下一秒
+            // 夹逼上界:到达 ts+1.3(事件迟到)到 夹在 ts+0.999,不越过下一秒
             let late = MC.AnchorSighting(at: ts.addingTimeInterval(1.3), tight: true)
             expectEqual(ms(MC.estimatedAnchorInstant(timestamp: ts, sighting: late).timeIntervalSince(ts)), 0.999,
                         "钉锚点: tight 目击不越过 ts+1")
@@ -136,12 +136,12 @@ func runPlaybackPositionTests() {
                 playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647),
                 lastPlayingPosition: nil, sighting: tight)
             expectEqual(resumed.map(ms), 215.081, "钉锚点: rate 缺失 + tight 目击对上 Spotify 自己的钟(实测样本)")
-            // 没有目击(watcher 挂了 / 既有调用方)→ 行为跟改动前逐字相同(仍偏快 frac,但不更差)
+            // 没有目击(watcher 挂了 / 既有调用方)到 行为跟改动前逐字相同(仍偏快 frac,但不更差)
             let noSighting = MC.livePositionSeconds(
                 playing: true, elapsedTime: 172.994, elapsedTimeNow: 172.994,
                 playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647))
             expectEqual(noSighting.map(ms), 215.641, "钉锚点: rate 缺失、无目击时行为跟改动前相同")
-            // loose 目击(只有轮询看到,首见 ts+0.4)→ 中点 ts+0.2
+            // loose 目击(只有轮询看到,首见 ts+0.4)到 中点 ts+0.2
             let looseResumed = MC.livePositionSeconds(
                 playing: true, elapsedTime: 172.994, elapsedTimeNow: 172.994,
                 playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647),
@@ -184,7 +184,7 @@ func runPlaybackPositionTests() {
             let playingOnly = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playing\":false}}".utf8)
             expectEqual(MediaControlStreamWatcher.digest(line: playingOnly, merged: d1.merged, arrivedAt: arrival).anchorKey, nil,
                         "digest: 只翻 playing 不算锚点目击")
-            // watcher 重启时整份吐出的旧锚点:到达时时间戳已经 30s 老 → loose
+            // watcher 重启时整份吐出的旧锚点:到达时时间戳已经 30s 老 到 loose
             let stale = MediaControlStreamWatcher.digest(line: full, merged: [:], arrivedAt: ts.addingTimeInterval(30))
             expectEqual(stale.anchorKey != nil && stale.tight == false, true, "digest: 重启时看到的旧锚点只算 loose")
             // 空 payload(没人在报)/ 非 JSON 行:不崩、不产生目击;空 payload 还要清掉合并状态
@@ -205,16 +205,16 @@ func runPlaybackPositionTests() {
             func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
             let last = MC.PlayingAnchor(track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", instant: ts.addingTimeInterval(0.555))
             let later = ts.addingTimeInterval(34.5)
-            // 同曲、elapsed 逐 ms 相等、时间戳变了、旧锚点外推 44s 远没到 268s 曲长 → 陈旧重发
+            // 同曲、elapsed 逐 ms 相等、时间戳变了、旧锚点外推 44s 远没到 268s 曲长 到 陈旧重发
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         true, "陈旧重发: 同 elapsed 换时间戳判为重发(实测样本)")
-            // elapsed 变了(真实 seek / 恢复)→ 不是
+            // elapsed 变了(真实 seek / 恢复)到 不是
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 44.2, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: elapsed 变了就是真锚点")
-            // 时间戳没变(同一个锚点被轮询多次看到)→ 不是
+            // 时间戳没变(同一个锚点被轮询多次看到)到 不是
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 同一个锚点不算重发")
-            // 换歌 → 不是
+            // 换歌 到 不是
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         false, "陈旧重发: 换歌不算")
             // elapsed == 0:跟「上一曲」重头播放签名相同,只按**时间**分(zeroAnchorRepublishWindowSecs)。
@@ -224,7 +224,7 @@ func runPlaybackPositionTests() {
                         false, "陈旧重发: elapsed=0 隔得太久(44s)不算重发")
             expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T02", duration: 268.92, bundleID: PlaybackPlayer.soda.bundleIdentifier, now: ts.addingTimeInterval(2)),
                         true, "陈旧重发: elapsed=0 开播 2 秒内重发算重发(时间戳解不出时按墙钟)")
-            // 带真时间戳的实测样本(讨厌红楼梦:0.000@10:19:58 → 0.000@10:20:00,整首歌因此慢 1.93s)
+            // 带真时间戳的实测样本(讨厌红楼梦:0.000@10:19:58 到 0.000@10:20:00,整首歌因此慢 1.93s)
             let zeroTS = "2026-09-18T10:19:58Z"
             let zeroInstant = MC.parseTimestamp(zeroTS) ?? ts
             let zeroAnchor = MC.PlayingAnchor(track: "陶喆|讨厌红楼梦", elapsed: 0, timestamp: zeroTS, instant: zeroInstant)
@@ -245,10 +245,10 @@ func runPlaybackPositionTests() {
                                                   bundleID: PlaybackPlayer.soda.bundleIdentifier,
                                                   now: zeroInstant.addingTimeInterval(175)),
                         false, "陈旧重发: 隔 175 秒的 0 锚点是真的回到 0")
-            // 旧锚点外推已越过曲长(单曲循环回绕 / 曲末)→ 旧锚点已死,新的是真的
+            // 旧锚点外推已越过曲长(单曲循环回绕 / 曲末)到 旧锚点已死,新的是真的
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T99", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: ts.addingTimeInterval(270)),
                         false, "陈旧重发: 旧锚点外推越过曲长就信新锚点")
-            // 没有时长信息 → 只看签名
+            // 没有时长信息 到 只看签名
             expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: nil, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
                         true, "陈旧重发: 无时长时只看签名")
             expectEqual(MC.isStaleAnchorRepublish(last: nil, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, bundleID: PlaybackPlayer.spotify.bundleIdentifier, now: later),
@@ -340,7 +340,7 @@ func runPlaybackPositionTests() {
                         "spotify 探针活性: 墙钟间隔为 0 无法判定 → 不采")
         }
         // ---- Spotify 探针钟领先量的学习(现象是「有一点点偏快」;同日晚订正:残差是增量) ----
-        // 真机:蓝牙 AirPods 先验 0.5 下第一次暂停量到残差 0.07 → 真值 0.57;内建输出 0.06~0.14。
+        // 真机:蓝牙 AirPods 先验 0.5 下第一次暂停量到残差 0.07 到 真值 0.57;内建输出 0.06~0.14。
         do {
             func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
             expectEqual(r3(LocalPlaybackSource.learnedProbeLead(current: 0.5, residual: 0.07, hasPrior: false)), 0.57,
@@ -362,7 +362,7 @@ func runPlaybackPositionTests() {
         }
         // ---- 锚点滞后的学习(现象是「汽水音乐歌词滞后」) ----
         // 真机(09-19 汽水音乐,com.soda.music):三次假暂停量到 0.443 / 0.443 / 0.444,
-        // 四首歌用「开播锚点 → 歌尾真实上报」独立反推 0.435 / 0.430 / 0.405 / 0.399。
+        // 四首歌用「开播锚点 到 歌尾真实上报」独立反推 0.435 / 0.430 / 0.405 / 0.399。
         do {
             func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
             expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 0, residual: 0.443, hasPrior: false)), 0.443,
@@ -380,7 +380,7 @@ func runPlaybackPositionTests() {
             expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 1.4, residual: 0.9, hasPrior: false)), 1.5,
                         "锚点滞后: 夹在上限,别把别的毛病当滞后补成偏快")
         }
-        // ---- App → collector 的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
+        // ---- App 到 collector 的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
         do {
             let rec = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
                                          anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 1_789_002_067_341)
@@ -391,7 +391,7 @@ func runPlaybackPositionTests() {
             let cleared = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
                                              anchorElapsed: nil, biasSecs: 0, writtenAtMs: 1)
             let clearedJSON = (try? PositionBiasFile.encode(cleared)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            // 合成的 Codable 对 nil 可选项是**省略键**而不是写 null;Go 侧 *float64 两种都解成 nil → 不扣。
+            // 合成的 Codable 对 nil 可选项是**省略键**而不是写 null;Go 侧 *float64 两种都解成 nil 到 不扣。
             expectEqual(clearedJSON.contains(#""anchor_elapsed""#), false,
                         "位置偏置文件: 清零记录不带 anchor_elapsed 键(Go 侧 *float64 解成 nil → 不扣)")
             expectEqual(clearedJSON.contains(#""bias_secs":0"#), true, "位置偏置文件: 清零记录显式写 bias_secs: 0")
@@ -413,26 +413,26 @@ func runPlaybackPositionTests() {
             let pauseAt = ts.addingTimeInterval(7.05)                 // playing:false 到达
             let now = ts.addingTimeInterval(7.35)                     // 暂停后那一拍轮询
             func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
-            // 锚点(开播时)早于暂停事件 7s → 不是暂停锚点 → 外推:5.225 + 1.75 = 6.975
+            // 锚点(开播时)早于暂停事件 7s 到 不是暂停锚点 到 外推:5.225 + 1.75 = 6.975
             let extrapolated = MC.pausedPositionSeconds(
                 elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: pauseAt, now: now)
             expectEqual(extrapolated.map(ms), 6.975, "暂停外推: 锚点早于暂停事件 → 上一拍外推到暂停时刻")
-            // 暂停锚点(Spotify 界面里按暂停,带新时间戳 = 暂停那一秒)→ 原样用冻结值
+            // 暂停锚点(Spotify 界面里按暂停,带新时间戳 = 暂停那一秒)到 原样用冻结值
             let frozen = MC.pausedPositionSeconds(
                 elapsedTime: 6.858, anchorTimestamp: ts.addingTimeInterval(7), lastPlaying: (5.225, sampled), pauseObservedAt: pauseAt, now: now)
             expectEqual(frozen, 6.858, "暂停外推: 锚点是暂停时发布的 → 用冻结值")
-            // 暂停事件早于上一拍(watcher 记的是上一次暂停)→ 退回旧规则(陈旧 + 掉得离谱 → 记住的值)
+            // 暂停事件早于上一拍(watcher 记的是上一次暂停)到 退回旧规则(陈旧 + 掉得离谱 到 记住的值)
             let stalePause = MC.pausedPositionSeconds(
                 elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: ts.addingTimeInterval(1), now: now)
             expectEqual(stalePause, 5.225, "暂停外推: 暂停事件不在上一拍之后 → 退回旧规则")
-            // 没有暂停事件时刻 → 旧规则
+            // 没有暂停事件时刻 到 旧规则
             let noEvent = MC.pausedPositionSeconds(
                 elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: nil, now: now)
             expectEqual(noEvent, 5.225, "暂停外推: 无事件时刻 → 旧规则")
-            // 没有记住的播放位置 → 冻结值原样
+            // 没有记住的播放位置 到 冻结值原样
             expectEqual(MC.pausedPositionSeconds(elapsedTime: 12, anchorTimestamp: ts, lastPlaying: nil, pauseObservedAt: pauseAt, now: now),
                         12, "暂停外推: 没有上一拍 → 冻结值")
-            // 暂停事件早于上一拍不到 0.5s(轮询在事件之后才落定)→ 仍认,外推量为 0
+            // 暂停事件早于上一拍不到 0.5s(轮询在事件之后才落定)到 仍认,外推量为 0
             let justBefore = MC.pausedPositionSeconds(
                 elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: sampled.addingTimeInterval(-0.2), now: now)
             expectEqual(justBefore, 5.225, "暂停外推: 事件略早于上一拍 → 外推量 0")
@@ -483,10 +483,10 @@ func runPlaybackPositionTests() {
         // 那一刻,于是"暂停时用原始 elapsedTime"这条既有规则会让位置**直接归零** —— 用户视角
         // 是"在浏览器里一按暂停,歌词跳回第一句"。
         typealias MC = MediaControlClient
-        // ① Arc 形态:锚点 187 秒没刷新 + 报告值 0 → 用播放中最后一次位置
+        // ① Arc 形态:锚点 187 秒没刷新 + 报告值 0 到 用播放中最后一次位置
         expectEqual(MC.pausedPositionSeconds(elapsedTime: 0, anchorAge: 187, lastPlayingPosition: 187),
                     187, "暂停位置: 锚点冻结的源用最后已知位置,不归零")
-        // ② 会刷新锚点的源:时间戳新鲜 → 原样用报告值,哪怕它比最后位置低得多
+        // ② 会刷新锚点的源:时间戳新鲜 到 原样用报告值,哪怕它比最后位置低得多
         //    (向后 seek 之后暂停就是这个形状,这一条保住它不被误改)
         expectEqual(MC.pausedPositionSeconds(elapsedTime: 12, anchorAge: 0.3, lastPlayingPosition: 100),
                     12, "暂停位置: 锚点新鲜时原样用报告值(向后 seek 后暂停)")
@@ -651,7 +651,7 @@ func runPlaybackPositionTests() {
     // isStaleAnchorRepublish 的"elapsed 逐 ms 相等",两道闸都不管,伺服几拍后把它当新真相 ——
     // 整首歌恒定落后,暂停才纠得回来。机制见 LocalPlaybackSource.shouldProbeLateAnchor。
     do {
-        // 日志里的四个真实样本(真实位置 → 锚点报的值)。
+        // 日志里的四个真实样本(真实位置 到 锚点报的值)。
         let samples: [(String, Double, Double)] = [
             ("Ed Sheeran|Castle on the Hill", 25.8, 23.8),
             ("Olivia Rodrigo|vampire", 71.3, 69.6),
@@ -715,7 +715,7 @@ func runPlaybackPositionTests() {
 
     // ---- 自然切歌锚点超前校正:Spotify gapless 整曲偏快的根修 ----
     //
-    // 实测(Forever Love→在那遙遠的地方,0.25s 采样):自然切歌时元数据/新锚点先于真声
+    // 实测(Forever Love到在那遙遠的地方,0.25s 采样):自然切歌时元数据/新锚点先于真声
     // 0.837s 打好,整曲 elapsedTimeNow 恒定超前 +0.888s±0.009 且锚点从不重打——伺服对
     // "每笔读数与外推步调一致的常量偏置"结构性失明,必须在换歌那拍用旧曲连续外推当真值
     // 把偏置量出来、之后逐笔扣除。机制详见 LocalPlaybackSource.naturalAdvanceCorrection。
@@ -784,13 +784,13 @@ func runPlaybackPositionTests() {
 
     do {
         let f = LocalPlaybackSource.shouldRejectStalePositionAfterSeek
-        // 从 30s 拖到 120s,读数还是 30s → 更靠近旧位置 → 丢弃
+        // 从 30s 拖到 120s,读数还是 30s 到 更靠近旧位置 到 丢弃
         expectEqual(f(30.2, 120, 30, 0.1), true, "seek 静默窗: 读数还在旧位置附近 → 丢弃")
-        // 读数已经跟上目标 → 接受
+        // 读数已经跟上目标 到 接受
         expectEqual(f(120.3, 120, 30, 0.1), false, "seek 静默窗: 读数已跟上目标 → 接受")
         // 窗口过了就一律接受,不能永久拒收(否则真的 seek 到别处就再也纠正不回来)
         expectEqual(f(30.2, 120, 30, 5.0), false, "seek 静默窗: 超出窗口后不再拦")
-        // 小幅拖动:从 100s 拖到 100.5s,读数 100.0 更靠近旧位置 → 丢弃
+        // 小幅拖动:从 100s 拖到 100.5s,读数 100.0 更靠近旧位置 到 丢弃
         // (这一支很重要:Apple Music 是 preciseSource,servo 门槛只有 0.15s,不拦就会被
         //  snap 回旧位置,根本用不着超过 2s 的 seek 容差)
         expectEqual(f(100.0, 100.5, 100, 0.1), true, "seek 静默窗: 小幅拖动同样要拦")
@@ -841,7 +841,7 @@ func runPlaybackPositionTests() {
 
         let engine = LyricsSyncEngine()
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
-        // 3 行逐字 vs 10 行整行 → 覆盖率不足,退回整行;45 秒处应命中第 9 句
+        // 3 行逐字 vs 10 行整行 到 覆盖率不足,退回整行;45 秒处应命中第 9 句
         expectEqual(engine.activeLine(atMs: 45_000)?.plainText, "第 9 句歌词", "逐字数据退化时退回整行歌词")
 
         // 没有整行歌词可退时仍然用逐字数据(不能因为覆盖率判据把唯一的内容也否掉)
@@ -888,17 +888,16 @@ func runPlaybackPositionTests() {
                     "浏览器探针解析: 脚本自己判定找不到播放进度元素")
         expectEqual(P.parseSeconds(fromOsascriptOutput: "\"\""), nil, "浏览器探针解析: 空字符串")
         expectEqual(P.parseSeconds(fromOsascriptOutput: ""), nil, "浏览器探针解析: 真空输入")
-        // ⚠️ 实测坐实的真实回归:早期版本让 JS 直接 return JSON.stringify(...),
-        // 而 `execute … javascript` 会把返回字符串里已有的双引号**真的**转义成反斜杠字符
-        // (不是打印时的显示转义),等于整段 JSON 被二次转义——旧的"脱一层引号再反转义"解析
-        // 逻辑在这种输入下会静默解析出错误结果,而不是干脆地失败。这里固定住新格式(裸文本
-        // 竖线分隔、不含任何引号)绝不会撞上这个坑,并且钉住一条"就算某处不小心传回带引号的
-        // JSON 残留,也不能被误判成合法数据"的回归用例。
+        // 别让 JS 直接 return JSON.stringify(...):`execute … javascript` 会把返回
+        // 字符串里已有的双引号**真的**转义成反斜杠字符(不是打印时的显示转义),等于整段
+        // JSON 被二次转义,解析会静默出错而不是干脆地失败。固定住裸文本竖线分隔、不含任何
+        // 引号的格式绝不会撞上这个坑,并且钉住一条"就算某处不小心传回带引号的 JSON 残留,
+        // 也不能被误判成合法数据"的回归用例。
         expectEqual(P.parseSeconds(fromOsascriptOutput: "\"{\\\"found\\\":true,\\\"seconds\\\":168}\""),
                     nil, "浏览器探针解析: 万一混进 JSON 残留也不能误判成合法数据(2026-08-30 回归)")
     }
 
-    // ---- BrowserPositionProbe:平台↔浏览器配对门禁 ----
+    // ---- BrowserPositionProbe:平台与浏览器配对门禁 ----
     // 只测"没配对就不探测"这道门禁本身——它在 kickIfNeeded 内部、发起任何 AppleScript
     // 调用之前就短路返回,不依赖真实 Arc,能在 CI/无 GUI 环境里稳定跑。真正的探测行为
     // (配对过之后)依赖真实浏览器,已手动验证过(见该文件头注)。
@@ -907,7 +906,7 @@ func runPlaybackPositionTests() {
                     "浏览器歌词同步: YouTube Music 在受支持平台列表里")
         expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == "spotifyWeb" }, true,
                     "浏览器歌词同步: Spotify 网页版在受支持平台列表里")
-        // ⚠️ **滚轮兜底转发的判定必须能被同一次手势复用**(真机 sample 抓栈坐实)。
+        // **滚轮兜底转发的判定必须能被同一次手势复用**(真机 sample 抓栈坐实)。
         // 那个判定里有一次全窗口递归命中测试,装在全局滚轮监视器里 = 每秒几十上百次压主线程;
         // 抓到的栈里它占了主线程 74/1439 个采样。下面四条钉住复用条件,少一条都会退回逐事件重算。
         do {
@@ -928,20 +927,11 @@ func runPlaybackPositionTests() {
                                                  window: 7, point: p, now: t0.addingTimeInterval(5)),
                         false, "滚轮判定复用: 过期 → 必须重算")
         }
-        // ⚠️ **读到"错的标签页"要被挡住,但判据不能拿 MediaRemote 的位置当参照物。**
+        // **读到"错的标签页"要被挡住,但判据不能拿 MediaRemote 的位置当参照物。**
         //
-        // 这里原来是一张五行表,测的是当天加的 `isPlausibleCorrection(probed:reference:)`。
-        // 那道守卫当天就被真机抓出来删了(原委见 `BrowserPositionProbe.pageClockIsRunning`
-        // 头注):它拿 `snapshot.elapsedTime` 当参照,而网页播放器的这个字段**恒为 0**,守卫
-        // 直接退化成"只有页面放在前 8 秒内的修正才采纳";消费又是每首歌一次性的,于是整首歌
-        // 都跑在错锚点上,现象是「歌词进度不准」。
-        //
-        // ⚠️ **这张表当初不但没抓到那次退化,还把它固化成了断言** —— 三行放行用例写的是
-        // `(0.23, 0.0, true)` / `(1.60, 0.0, true)` / `(8.0, 0.0, true)`,reference 一律填 0,
-        // 等于把"锚点误差 0.23s"顺手写成了"reference=0, probed=0.23"。真实场景里 reference
-        // 恒为 0 而 probed 是歌曲当前位置(几十上百秒),这三行断言的其实是 `probed <= 8`。
-        // **教训:把参照物写死成一个常数的用例,证明不了任何跟参照物有关的判据** —— 它只是把
-        // 你写用例时的那个假设复述了一遍(跟"用同一假设写的单测自证阈值"是同一个坑)。
+        // **把参照物写死成一个常数的用例,证明不了任何跟参照物有关的判据** —— 它只是把
+        // 写用例时的那个假设复述了一遍(跟"用同一假设写的单测自证阈值"是同一个坑)。下面
+        // 这些用例的 first/second 都是真实会变化的读数,不固定参照值。
         for (first, second, want, why) in [
             (7.0, 8.0, true, "正常播放:整秒读数 +1 就是钟在走"),
             (7.0, 9.0, true, "间隔跨了两个整秒边界(+2)同样算在走"),
@@ -952,7 +942,7 @@ func runPlaybackPositionTests() {
             expectEqual(BrowserPositionProbe.pageClockIsRunning(first: first, second: second), want,
                         "探针活性: \(why)")
         }
-        // ⚠️ 采样间隔必须**大于**读数本身的量化步长(整秒),否则"没前进"分不出是钟停了
+        // 采样间隔必须**大于**读数本身的量化步长(整秒),否则"没前进"分不出是钟停了
         // 还是还没跨过整秒边界 —— 这条一破,活性判据就退化成随机噪声。
         expectEqual(BrowserPositionProbe.livenessGapSeconds > 1.0, true,
                     "探针活性: 采样间隔必须大于整秒读数的量化步长")
@@ -962,14 +952,14 @@ func runPlaybackPositionTests() {
                     "探针重试: 至少要给瞬时失败一次重试机会")
         expectEqual(BrowserPositionProbe.probeRetryBackoffSecs > BrowserPositionProbe.livenessGapSeconds, true,
                     "探针重试: 退避必须比一次探测本身(两次采样+间隔)更长")
-        // ⚠️ 广告是这套判据**认不出来**的那一类,靠时长对不上兜:YouTube Music 插广告时页面那
+        // 广告是这套判据**认不出来**的那一类,靠时长对不上兜:YouTube Music 插广告时页面那
         // 行进度文字是**广告自己的**,而且**是在走的** —— `pageClockIsRunning` 对它一路放行。
         // 容差必须留得住"页面显示 floor(总时长)、MediaRemote 给小数"这点固有差(实测
         // duration=218.781 对页面 3:38=218),又不能大到把一首歌和一段广告混为一谈。
         expectEqual(BrowserPositionProbe.pageDurationToleranceSecs >= 1
                     && BrowserPositionProbe.pageDurationToleranceSecs <= 5, true,
                     "探针同曲判据: 时长容差要够吃下 floor 偏置又不至于放过广告")
-        // ⚠️ **一次性地面真值不能走周期性噪声源那套 EMA 闸门**(真机日志坐实的 bug)。
+        // **一次性地面真值不能走周期性噪声源那套 EMA 闸门**(真机日志坐实的 bug)。
         // 探针每首歌只给一个样本,而 servoDecision 对 noisyFloored 是 alpha 0.3 / 门槛 1.0 ——
         // 单样本最多把 EMA 推到 0.3×误差,要误差 >3.33s 才可能触发。实测这档偏差是 0.7~0.9s,
         // 于是纠偏连着三首歌全部 snap=false。这两条断言把"为什么必须另开一条路径"钉住。
@@ -987,12 +977,12 @@ func runPlaybackPositionTests() {
                     "company.thebrowser.Browser", "浏览器歌词同步: 非代理进程原样返回")
         expectEqual(BrowserPositionProbe.probeTargetBundleID(forReported: nil), nil,
                     "浏览器歌词同步: nil 原样返回")
-        // ⚠️ **每个摆出来的平台都必须真有一条站点规则**,反之亦然。对不上不会编译报错,只表现成
+        // **每个摆出来的平台都必须真有一条站点规则**,反之亦然。对不上不会编译报错,只表现成
         // "卡片在、配对得上、却永远不探测"。
         expectEqual(BrowserPositionProbe.platformIDsWithSiteRules,
                     Set(BrowserPositionProbe.supportedPlatforms.map(\.id)),
                     "浏览器歌词同步: 受支持平台与站点规则一一对应")
-        // ⚠️ 平台 id 必须唯一:`platformBrowserPairs` 用它当键,撞了就是两个平台共用一份配对。
+        // 平台 id 必须唯一:`platformBrowserPairs` 用它当键,撞了就是两个平台共用一份配对。
         expectEqual(Set(BrowserPositionProbe.supportedPlatforms.map(\.id)).count,
                     BrowserPositionProbe.supportedPlatforms.count,
                     "浏览器歌词同步: 平台 id 不重复")
@@ -1006,7 +996,7 @@ func runPlaybackPositionTests() {
         // 而是 nil,也会因为跑完了拿到真实值而非 nil,两种情况这条断言都盖不住;门禁生效
         // 时唯一保证的是"从头到尾都不会有值"——所以额外拉长等待,给"万一门禁失效"的探测
         // 留够时间跑完,这样"仍是 nil"才是门禁生效的可靠证据)。
-        // ⚠️ 探测改成"两次采样 + 中间等 `livenessGapSeconds`"之后这 2 秒仍然够:
+        // 探测改成"两次采样 + 中间等 `livenessGapSeconds`"之后这 2 秒仍然够:
         // 这个用例把配对表清空了,门禁**万一**失效,`probeOnce` 也会因为没有任何规则匹配得上
         // 而立刻返回 nil、根本走不到那次等待。盖不住的只有"门禁失效**且**真有配对"的组合,
         // 而那不是这条用例要证明的东西。
@@ -1015,7 +1005,7 @@ func runPlaybackPositionTests() {
                     "浏览器歌词同步: 没配对任何平台时 kickIfNeeded 不应该发起探测")
         probe.trackChanged()
         probe.platformBrowserPairs = [:]
-        // ⚠️ Spotify 网页版广告识别:LocalPlaybackSource
+        // Spotify 网页版广告识别:LocalPlaybackSource
         // 判断"这是不是 Spotify"时,除了原生客户端的 bundleIdentifier,还要认"这个浏览器
         // 有没有被用户配对给 spotifyWeb 平台"——`isPaired` 就是那道判断,复用同一份
         // `platformBrowserPairs`,不是另起一份状态。
@@ -1041,7 +1031,7 @@ func runPlaybackPositionTests() {
         typealias P = BrowserPositionProbe
         let both: Set<String> = ["youtubeMusic", "spotifyWeb"]
 
-        // ① 探测真命中过 → 就是它。这是硬证据:探测成功意味着我们刚从那个站点自己的 DOM
+        // ① 探测真命中过 到 就是它。这是硬证据:探测成功意味着我们刚从那个站点自己的 DOM
         //    里读到了一个**在走**的进度。一个浏览器同时配对了两个平台时(这台机器上
         //    Safari / Arc 就是),只有这一档答得上来。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: both, recentMatch: "youtubeMusic"),
@@ -1050,22 +1040,22 @@ func runPlaybackPositionTests() {
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: both, recentMatch: "spotifyWeb"),
                     "spotifyWeb", "来源角标: 探测命中 Spotify 网页版 → 认它")
 
-        // ② 只配对了一个平台 → 推断成它,**不用等探测成功**。这一档覆盖绝大多数人的实际
+        // ② 只配对了一个平台 到 推断成它,**不用等探测成功**。这一档覆盖绝大多数人的实际
         //    配置(一个浏览器只配一个平台),也是这台机器上 Edge/Chrome 的形状 —— 对拍
         //    里那枚 Edge 角标就是靠这一档立刻变成 YouTube Music 的。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: ["youtubeMusic"], recentMatch: nil),
                     "youtubeMusic", "来源角标: 只配了一个平台 → 直接推断成它,不必等探测")
 
-        // ③ 配了两个、又还没探到 → **不猜**,退回浏览器图标。对一半错一半的猜测,不如
+        // ③ 配了两个、又还没探到 到 **不猜**,退回浏览器图标。对一半错一半的猜测,不如
         //    如实显示浏览器。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: both, recentMatch: nil), nil,
                     "来源角标: 配了两个又没探到 → 不猜,退回浏览器图标")
 
-        // ④ 一个都没配对 → 压根不是网页播放器那条路,照常显示浏览器。
+        // ④ 一个都没配对 到 压根不是网页播放器那条路,照常显示浏览器。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: [], recentMatch: nil), nil,
                     "来源角标: 没配对过任何平台 → 显示浏览器图标")
 
-        // ⑤ ⚠️ 旧证据必须**仍在配对表里**才作数:用户后来取消配对了,探测就不跑了、那条旧
+        // ⑤ 旧证据必须**仍在配对表里**才作数:用户后来取消配对了,探测就不跑了、那条旧
         //    证据再也刷新不掉 —— 认它的话角标会永远挂着一个已经被取消的平台。
         expectEqual(P.resolvePlayingPlatformID(pairedPlatformIDs: ["spotifyWeb"],
                                                recentMatch: "youtubeMusic"),
@@ -1098,14 +1088,14 @@ func runPlaybackPositionTests() {
         // 换歌归零 —— 系统那块表恰恰不做这件事,这条就是整个改动的要害。
         let changed = R.advance(t10, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(11))
         expectEqual(changed.position, 0, "电台时钟: 换歌必须归零(系统的位置不复位,偏差就是从这来的)")
-        // 暂停:上一拍还在播 → 那段算数(基本都在播);之后每一拍冻结。
+        // 暂停:上一拍还在播 到 那段算数(基本都在播);之后每一拍冻结。
         let played = R.advance(changed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(21))
         expectEqual(played.position, 10, "电台时钟: 暂停前走了 10 秒")
         let pausing = R.advance(played, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(23))
         expectEqual(pausing.position, 12, "电台时钟: 以暂停收尾的那一段基本都在播,照算")
         let paused = R.advance(pausing, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(120))
         expectEqual(paused.position, 12, "电台时钟: 暂停期间位置冻结")
-        // ⚠️ 回归守卫(现象是「暂停久一点再恢复,歌词进度就不正常」):恢复那一拍绝不能把整段
+        // 回归守卫(现象是「暂停久一点再恢复,歌词进度就不正常」):恢复那一拍绝不能把整段
         // 暂停间隔算成播放时间。按"这一拍在播"累加的老写法在这里会跳到 109 —— 日志实测前跳 3.5~5.8 秒。
         let resumed = R.advance(paused, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125))
         expectEqual(resumed.position, 12, "电台时钟: 恢复那一拍不把暂停那段算进来")
@@ -1121,7 +1111,7 @@ func runPlaybackPositionTests() {
 
     // ---- 起表时刻:用观察到换歌的那一刻,不是轮询那一拍(现象是「歌词进度偏慢」)----
     // 实测同一晚开台那次:锚点说播放头 0.000 是 23:18:22,标题到达事件流 23:18:23.425,App 应用新曲目
-    // 23:18:23.816。老写法在应用那一拍归零 → 整首歌恒慢 1.8 秒。
+    // 23:18:23.816。老写法在应用那一拍归零 到 整首歌恒慢 1.8 秒。
     do {
         typealias R = RadioTrackClock
         typealias W = MediaControlStreamWatcher
@@ -1233,7 +1223,7 @@ func runPlaybackPositionTests() {
     }
 
     // ---- 台卡:开台那一刻是唯一能拿到台名台标的时机----
-    // 实测两次:23:18:15 → title 空 / artist `NCT 127`;09-11 00:26:50 → title 空 /
+    // 实测两次:23:18:15 到 title 空 / artist `NCT 127`;09-11 00:26:50 到 title 空 /
     // artist `petal radio`。09-10 早先还见过反过来的形态(title 是台名、artist 空)。
     // 口白期间系统一个字段都不变(抓了整段 61 秒坐实),所以只能靠这一刻记下来。
     do {
@@ -1304,7 +1294,7 @@ func runPlaybackPositionTests() {
         // 哪些播放器有"绕开 media-control 直接问它自己"的通路。
         expectEqual(M.directQueryPlayer(forBundleID: am), .appleMusic, "直查名单: Apple Music 有 JXA 通路")
         expectEqual(M.directQueryPlayer(forBundleID: sp), .spotify, "直查名单: Spotify 有 JXA 通路")
-        // ⚠️ 没有 AppleScript 字典的几家**也在名单里**:NowPlayingClientsProbe 是按 bundle id 直接
+        // 没有 AppleScript 字典的几家**也在名单里**:NowPlayingClientsProbe 是按 bundle id 直接
         // 问系统的,不挑播放器。它们只是少了 JXA 那一级兜底(见 snapshotAfterFocusLost 的两级顺序)。
         expectEqual(M.directQueryPlayer(forBundleID: "com.tencent.QQMusicMac"), .qqMusic,
                     "直查名单: QQ 音乐没有 AppleScript 字典,但探针按 bundle id 照样问得到")
@@ -1332,7 +1322,7 @@ func runPlaybackPositionTests() {
         expectEqual(M.nextFocusFallbackPlayer(current: .appleMusic, acceptedBundleID: "com.example.unknown",
                                               fallbackSucceeded: nil), nil,
                     "回退开关: 切到没适配过的 App 当场关掉")
-        // ⚠️ "不给不相关用户弹自动化权限框"这条保证现在**不靠开关**,靠的是 snapshotAfterFocusLost
+        // "不给不相关用户弹自动化权限框"这条保证现在**不靠开关**,靠的是 snapshotAfterFocusLost
         // 里那个 switch 只对 Apple Music / Spotify 调 JXA:只听 QQ 音乐的人开关虽然是 .qqMusic,
         // 走的却是 per-client 探针(一个 perl 子进程),一个 Apple Event 都不会发。
         expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: "com.netease.163music",
@@ -1372,7 +1362,7 @@ func runPlaybackPositionTests() {
         expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.nilSnapshotGrace + 5, failure: nil,
                                              nilStreakSeconds: 20), true,
                     "nil 宽限: 超过门槛当然也清")
-        // ⚠️ 门槛必须 ≥2,否则这条宽限等于没有;也不该大到让"播放列表放完"明显拖着。
+        // 门槛必须 ≥2,否则这条宽限等于没有;也不该大到让"播放列表放完"明显拖着。
         expectEqual(M.nilSnapshotGrace >= 2 && M.nilSnapshotGrace <= 3, true,
                     "nil 宽限: 门槛钉在 2~3 拍(播放档 2s 轮询 ≈ 4~6 秒)")
 
@@ -1399,7 +1389,7 @@ func runPlaybackPositionTests() {
                                              failure: .focusHeldByOtherApp,
                                              nilStreakSeconds: M.focusHeldGraceSeconds), true,
                     "焦点档: 到了秒门槛就收手 —— 不能无限期挂着一份可能早就不成立的状态")
-        // ⚠️ 这一档必须明显长于普通 nil 宽限,否则"看个视频回来歌词还是断的",等于没改。
+        // 这一档必须明显长于普通 nil 宽限,否则"看个视频回来歌词还是断的",等于没改。
         expectEqual(M.focusHeldGraceSeconds >= 60, true,
                     "焦点档: 宽限要够长,至少覆盖一段短视频")
     }

@@ -16,11 +16,11 @@ import (
 // ---- 直连优先、直连被打掉就改走系统代理 ----
 //
 // 加,配套 systemproxy.go(那边记着完整的实测数据和"为什么不全局走代理")。
-// 一句话:代理在这台机器上是**更差**的通道(Last.fm 实测 p50 0.4s→1.2s、失败率 1%→16%,
+// 一句话:代理在这台机器上是**更差**的通道(Last.fm 实测 p50 0.4s到1.2s、失败率 1%到16%,
 // 见 docs/features/12 章),所以它只能是兜底 —— 直连正常时一个包都不该经过它。
 //
-// 生效范围严格等于 doh.go 的 dohHostSuffixes(当前只有 .musixmatch.com):dohHTTPClient
-// 是全仓唯一用这套 Transport 的地方。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
+// 生效范围只有两处:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com),
+// 和 alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
 // lyricfind)走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
 // DoH,**没有**代理兜底),Last.fm / ListenBrainz / iTunes 等仍是 http.DefaultTransport。
 const (
@@ -33,7 +33,7 @@ const (
 	proxyFallbackProxyBudget = 10 * time.Second
 	// proxyFallbackSticky:代理救回来之后,接下来多久直接走代理、不再重新探直连。
 	//
-	// ⚠️ 粘性不是优化,是必需项。AGENTS.md 里 Musixmatch DNS 事故的原话是
+	// 粘性不是优化,是必需项。AGENTS.md 里 Musixmatch DNS 事故的原话是
 	// 「每首歌都要把 DNS/TLS 超时白等一遍」,healthcheck 探两首歌从 7s 涨到 29s。没有粘性
 	// 的话这里会原样重演:每个请求先白等 3s 直连再走代理。10 分钟之后重新探一次直连,
 	// 网络恢复了就自动回到直连,不需要重启。
@@ -97,7 +97,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	resp, proxyErr := t.attempt(t.viaProxy, req, proxyFallbackProxyBudget)
 	if proxyErr != nil {
 		t.reportBlocked()
-		// ⚠️ 这一行不能省。返回值里只会带**直连**那次的错(上层真正关心的是我们本来想走
+		// 这一行不能省。返回值里只会带**直连**那次的错(上层真正关心的是我们本来想走
 		// 的那条路怎么了),代理那次的错在返回值里是拿不到的 —— 不在这里记一行,"兜底为什么
 		// 也没兜住"就彻底不可观测。装机验证时正是缺了它,才没法一眼看出第一首
 		// 探测曲的代理那半边是超时还是被代理拒了。
@@ -115,7 +115,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 
 // attempt 跑一次 RoundTrip,并给它单独一份预算。
 //
-// ⚠️ 预算必须落在**每次尝试**上,不能靠 http.Client.Timeout —— 那是把直连和代理两次尝试
+// 预算必须落在**每次尝试**上,不能靠 http.Client.Timeout —— 那是把直连和代理两次尝试
 // 算进同一个预算里,直连一超时就没钱给代理重试了,fallback 等于没加。dohHTTPClient 因此
 // 刻意不设 Client.Timeout,头注里也写着别加回去。
 func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request, budget time.Duration) (*http.Response, error) {
@@ -125,7 +125,7 @@ func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request
 		cancel()
 		return nil, err
 	}
-	// ⚠️ cancel 不能在这里调:ctx 一取消,还没读的 resp.Body 立刻断流(表现是调用方
+	// cancel 不能在这里调:ctx 一取消,还没读的 resp.Body 立刻断流(表现是调用方
 	// io.ReadAll 拿到 "context canceled",看起来像服务器提前关了连接)。挂到 Body 上,
 	// 等调用方 Close 了再释放 —— 这是 net/http 自己对付 Client.Timeout 的办法
 	// (cancelTimerBody),不是这里发明的写法。

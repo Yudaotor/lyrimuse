@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// 从"四张卡顺序平铺"改成"AccountLinkingTab 那个 tab 选择器里的三段"
 /// (「连接」不是 tab,常驻在 AccountLinkingTab 那边的选择器外面,见那边 LastfmSection
-/// 头注)。⚠️ **这个 View 本身必须始终挂载,不能塞进外层按 tab 切换的 switch/if 分支
+/// 头注)。 **这个 View 本身必须始终挂载,不能塞进外层按 tab 切换的 switch/if 分支
 /// 里**——`selected` 只决定 `body` 画哪张卡,下面那段 onAppear/.task 常驻刷新逻辑
 /// (数字/榜单/最近记录/那年今日共用同一轮拉取)靠的正是这个 View **从不因为切 tab 被
 /// 卸载重建**——AccountLinkingTab 侧因此让它跟三段 tab 选择器同级、自己不套任何条件
@@ -16,8 +16,7 @@ import SwiftUI
 /// 拆 tab 之后同一个前提("这个锚点不会被拆掉重建")改由整个 View 的挂载/卸载来保证,
 /// 不能再指望"其中一张卡"。
 ///
-/// 「统计」段同时画 statsCard + recentCard(现象是拆开后这两个数字/列表
-/// 本来就是连着看的一件事,合回一段;原来的长滚动里它们也确实紧挨着)。
+/// 「统计」段同时画 statsCard + recentCard——这两个数字/列表本来就是连着看的一件事,合回一段。
 struct LastfmStatsSection: View {
     /// 各段的 tab 标识,跟 AccountLinkingTab.LastfmSection 一一对应。
     enum Tab: String, CaseIterable, Identifiable {
@@ -26,7 +25,7 @@ struct LastfmStatsSection: View {
         /// `AccountLinkingTab` 自己画(那些设置读的是 FeatureSettingsStore,跟统计数据
         /// 没关系)。这里加一个 case 只为了让这个 View 在那一段被选中时画**空**。
         ///
-        /// ⚠️ 为什么不干脆在那一段不挂载这个 View:它的整套刷新逻辑建立在"从不因为切 tab
+        /// 为什么不干脆在那一段不挂载这个 View:它的整套刷新逻辑建立在"从不因为切 tab
         /// 被卸载重建"上(见类型头注),卸载一次就会把已拉到的统计丢掉、回来重拉一轮。
         /// 所以照旧常驻,只是这一段什么都不画。
         case settings
@@ -134,7 +133,7 @@ struct LastfmStatsSection: View {
                 guard !Task.isCancelled else { break }
                 // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
                 // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
-                // 就会一直挂着昨天那份(现象是)。放在 recentPage 那道
+                // 就会一直挂着昨天那份。放在 recentPage 那道
                 // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
                 //
                 // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
@@ -144,7 +143,7 @@ struct LastfmStatsSection: View {
                 // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
                 // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
                 stats.refreshLocalCoversIfCacheChanged()
-                // ⚠️ **这里原来有一道 `guard stats.recentPage == 1 else { continue }`,
+                // **这里原来有一道 `guard stats.recentPage == 1 else { continue }`,
                 // 删掉了。** 原注释的理由是"只自动刷第一页:后面几页是历史,内容
                 // 不会变,重拉一遍纯属打扰(正看着的那一屏被替换掉)"。那句话对**最近记录那
                 // 一列**成立,但它把整条 `refreshBaseline` 一起早退了 —— 而那一次调用同时还
@@ -452,7 +451,7 @@ struct LastfmStatsSection: View {
                 // 手动刷新。轮询最慢要等两分钟,而"刚听完一首歌想立刻看到它"正是这张卡
                 // 最常见的用法 —— 干等不如给一颗按钮。
                 //
-                // ⚠️ 必须传 force:true。refreshBaseline 开头就是 `guard fresh(...) == false`,
+                // 必须传 force:true。refreshBaseline 开头就是 `guard fresh(...) == false`,
                 // 不传的话"刚拉过"会让它直接早退,按了等于没按 —— 而这恰恰是手动刷新最常
                 // 发生的情形(用户就是因为刚才那次没带出新内容才来点它)。
                 if recentRefreshing {
@@ -602,7 +601,7 @@ struct LastfmStatsSection: View {
     ///
     /// 正在播放那条不参与:它还没被 scrobble,不在 userplaycount 里(实时行自己 +1)。
     ///
-    /// ⚠️ 换算本体 **下沉到 Core**(`RecentPlayOrdinal.ordinals`):停播页的
+    /// 换算本体 **下沉到 Core**(`RecentPlayOrdinal.ordinals`):停播页的
     /// 「最近听过」是第二个消费方,而这段里有两把不同的尺子(取总数用 playCountKey、数
     /// 「更新的同曲收听」用 PlayCountFold.familyKey 的折叠族),复制一份就等于把用户
     /// 报的「第 15 次听下面紧跟第 21 次听」的成因复制一份。细节与理由见那边的注释。
@@ -636,8 +635,8 @@ struct LastfmStatsSection: View {
     /// Button 会把控件的点击吞掉)。这里手搭,但尺寸全部取自 SettingsRowMetrics,跟同一页
     /// 其它卡的图标列/文字起点/内边距严格对齐。
     /// 粗到分钟的相对时间。不到一分钟一律说"刚刚" —— 这行字每次刷新都会重算,秒级
-    /// 精度会让它一直跳数字(28 秒→45 秒→刚过 1 分…),而"上次刷新是多久以前"本来也
-    /// 不需要精确到秒(现象是)。要精确时刻的话 tooltip 里有。
+    /// 精度会让它一直跳数字(28 秒到45 秒到刚过 1 分…),而"上次刷新是多久以前"本来也
+    /// 不需要精确到秒。要精确时刻的话 tooltip 里有。
     private static func coarseRelative(_ date: Date) -> String {
         Date().timeIntervalSince(date) < 60 ? L10n.t("刚刚") : relative(date)
     }
@@ -765,9 +764,8 @@ struct LastfmStatsSection: View {
 
     // MARK: - 那年今日
 
-    /// ⚠️ **这里必须有 else** —— 现象是「那年今日有时候点进去是会空白」的根因就是
-    /// 没有:原来整段是 `Group { if let o = stats.onThisDay { ... } }`,而 `onThisDay == nil`
-    /// 有四种完全不同的成因(还没取 / 取到了但那几天没听歌 / 请求全挂 / 未连接),全渲染成
+    /// **这里必须有 else** —— 没有的话,`onThisDay == nil`
+    /// 有四种完全不同的成因(还没取 / 取到了但那几天没听歌 / 请求全挂 / 未连接),会全渲染成
     /// **一片什么都没有的空白**,连个"为什么"都没有。
     ///
     /// 其中"请求全挂"那支最毒:`fetchedAt["onthisday"]` 在发请求**之前**就写(刻意的,否则
@@ -876,7 +874,7 @@ struct LastfmStatsSection: View {
                                       systemImage: "exclamationmark.triangle")
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                // ⚠️ 必须 force:失败已经占住 6 小时 TTL,不绕过的话这颗按钮
+                                // 必须 force:失败已经占住 6 小时 TTL,不绕过的话这颗按钮
                                 // 点下去会被那道闸直接早退,什么都不发生。
                                 Button(L10n.t("重试")) { stats.refreshOnThisDay(force: true) }
                             }
@@ -963,7 +961,7 @@ struct LastfmStatsSection: View {
         .padding(.vertical, 10)
     }
 
-    /// 日桶键 "yyyy-MM-dd" → 按 App 语言格式化的日期(不带时间)。
+    /// 日桶键 "yyyy-MM-dd" 到 按 App 语言格式化的日期(不带时间)。
     private static func dayLabel(_ key: String) -> String {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3,
@@ -999,7 +997,7 @@ private let lastfmBrandRed = Color(nsColor: NSColor(name: "LastfmBrandRed") { ap
 /// 每句歌词一次。这里只转发去重后的所需字段,行的重渲染频率降到"换歌/播放态翻转/
 /// 封面到货"。同款教训见「歌词管理 20Hz 过度重渲染」那次。
 ///
-/// ⚠️ assign 的是 publisher 发出的**元素值**(新值),不是回头读属性 —— @Published 在
+/// assign 的是 publisher 发出的**元素值**(新值),不是回头读属性 —— @Published 在
 /// willSet 发射,回读属性拿到的是旧值(项目里实测踩过的坑,见 MenuBarStatusItem 订阅注释)。
 @MainActor
 private final class LiveRowPlayback: ObservableObject {
@@ -1037,7 +1035,7 @@ private final class LiveRowPlayback: ObservableObject {
 
 /// 「最近记录」每行**尾部那一格**(历史行的相对时间 / 实时行的「正在播放」「正在记录」)的保底宽度。
 ///
-/// ⚠️ 两种行必须用**同一个**值。这一列是右对齐贴着行尾的,它有多宽,就把左边的「第 N 次听」
+/// 两种行必须用**同一个**值。这一列是右对齐贴着行尾的,它有多宽,就把左边的「第 N 次听」
 /// 顶到哪里 —— 两种行给的宽度不一样,「第 N 次听」这一列就在实时行上单独错开。
 /// 现象是的正是这个:实时行的状态 Label 当时**完全没有宽度约束**,离屏实测
 /// 中文下 `Label(正在播放, circle.dotted)` 理想宽度 58pt,而历史行的时间列被这个 62 兜着
@@ -1156,7 +1154,7 @@ private struct LiveScrobbleRow: View {
     ///
     /// 不能只看"此刻有没有 nowplaying":换歌的空档、手机侧桥接偶尔漏发 now-playing,都会让
     /// 它瞬间为 nil,而刷新恰好落在那一刻的话,快轮询就把自己关掉了 —— 接下来只能等父视图
-    /// 两分钟那一拍,期间恢复播放也看不到实时行(现象是"怎么不更新了")。
+    /// 两分钟那一拍,期间恢复播放也看不到实时行。
     /// 补上"最近十分钟内有过 scrobble"这条:刚听过就说明这个会话还在,值得继续盯着。
     private var remoteSessionLikelyActive: Bool {
         if stats.apiNowPlaying != nil { return true }
@@ -1164,7 +1162,7 @@ private struct LiveScrobbleRow: View {
         return Date().timeIntervalSince(newest) < 10 * 60
     }
 
-    /// 给 onChange 用的身份串:本机换歌、远端换歌、本机↔远端来源切换都算变化。
+    /// 给 onChange 用的身份串:本机换歌、远端换歌、本机与远端来源切换都算变化。
     private var liveKey: String {
         guard let live else { return "" }
         return "\(live.remote ? "r" : "l")|\(live.artist)|\(live.title)"
@@ -1330,7 +1328,7 @@ private struct LiveScrobbleRow: View {
 
 /// 行级悬停高亮。
 ///
-/// ⚠️ 刻意做成**每行自己持有 @State**,而不是父视图存一个"当前悬停的是哪一行"的字符串:
+/// 刻意做成**每行自己持有 @State**,而不是父视图存一个"当前悬停的是哪一行"的字符串:
 /// 那样任何一次 hover 进/出都会让整个 Section(三张卡、三十多行)的 body 重算 —— 鼠标从
 /// 列表顶划到底就是四十次整段重渲染,换来的可见变化只有一行背景色(性能审阅
 /// 坐实)。行内化之后,hover 只让这一行的这层包装重画,顺带也省掉了每帧为每行拼

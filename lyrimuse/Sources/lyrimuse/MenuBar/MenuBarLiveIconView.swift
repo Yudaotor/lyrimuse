@@ -227,7 +227,7 @@ final class MenuBarLiveIconView: NSView {
         imageView.isHidden = false
         imageView.image = MenuBarIconStyle.cachedImage(for: .waveform)
         applyColor()
-        // SF 原生的 variable-color 流动。⚠️ 必须显式给 repeat 选项:variableColor 同时
+        // SF 原生的 variable-color 流动。 必须显式给 repeat 选项:variableColor 同时
         // 是 Discrete/Indefinite 两种效果,addSymbolEffect 默认按"播一轮就停"处理 ——
         // 实测:不带选项时流动一轮之后就冻住了。
         if #available(macOS 15.0, *) {
@@ -279,7 +279,7 @@ final class MenuBarLiveIconView: NSView {
             let key = pressKeys[keyIndex]
             key.isHidden = false
             key.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.pianoPressRects[keyIndex].size)
-            // 每键在自己的时隙里快起慢落:0→1(按下)保持一拍→0(抬起)。
+            // 每键在自己的时隙里快起慢落:0到1(按下)保持一拍到0(抬起)。
             let s0 = Double(slot) * 0.25
             let animation = CAKeyframeAnimation(keyPath: "opacity")
             animation.values = [0, 0, 1, 1, 0, 0]

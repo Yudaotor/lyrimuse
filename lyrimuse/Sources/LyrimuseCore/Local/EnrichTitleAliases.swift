@@ -1,6 +1,6 @@
 import Foundation
 
-/// 从本机 enrich 缓存推「英文/罗马字歌名 → 中文歌名」别名。纯函数;读缓存、灌进
+/// 从本机 enrich 缓存推「英文/罗马字歌名 到 中文歌名」别名。纯函数;读缓存、灌进
 /// PlayCountFold 的那两步在 EnrichCacheReader / LastfmStatsService。背景见
 /// `PlayCountFold.setLocalTitleAliases` 的注释。同日下午起它是歌名维度**唯一**的推断来源之一
 /// (手写的 `titleAliasesByArtist` 静态表已删,「一切由通用逻辑覆盖,不要特殊化」),所以
@@ -20,7 +20,7 @@ import Foundation
 /// 空白,NFKC + 繁简 + 小写)的词元三元组 Jaccard ≥ 0.6(见 lyricsSimilarity,字符二元组对英文歌词
 /// 完全不管用)。三个条件缺一不可:时长相等在整秒精度下 40%
 /// 的歌都能撞上同歌手的另一首,歌词相同挡不住"配错词",各自单独都不够。满足的写法连边、并查集成类,
-/// 类里选代表(含汉字优先 → 本机条目多 → 字典序),其余都指向它。连边的脚本规则:英文 ↔ 中文随便连;
+/// 类里选代表(含汉字优先 到 本机条目多 到 字典序),其余都指向它。连边的脚本规则:英文 与 中文随便连;
 /// 同脚本的两个折叠键只在"等长且恰好一个字不同"时连(`为你写的歌` / `为妳写的歌`,你/妳 不在繁简表里;
 /// `无敌铁金刚` / `无敌铁金钢`),别的同脚本组合(`阿拉斯加海湾` vs `阿拉斯加海湾伴奏`)不连 —— 于是
 /// `为你写的歌` / `为妳写的歌` / `Write A Song For You` 三种写法成一类(旧规则下英文名对上两个中文名
@@ -33,14 +33,14 @@ import Foundation
 /// 折叠后不带版本尾缀(`foldTitle(title) == foldTitle(coreTitle)`)—— 别把英文录音室版并进中文 Live 版。
 ///
 /// 四道保守闸(错合并比不合并更糟,沿用发现表那边的取舍):
-///  1. E1 里任一侧折叠后出现 ≥ 2 种歌名 → 这个 id 整组不采纳。中文侧不唯一 = 同一个 id 被匹配给了
+///  1. E1 里任一侧折叠后出现 ≥ 2 种歌名 到 这个 id 整组不采纳。中文侧不唯一 = 同一个 id 被匹配给了
 ///     两首不同的中文歌;英文侧不唯一(实测 陶喆 名下 `I Like It (Ballad Version)` 与 `What Is Love`
 ///     落到同一个网易云 id)= 至少有一条解析配错了,而分不清是哪条;
-///  2. E1 里两条都带播放器时长时相差 > 3 s → 不采纳;
-///  3. 同一个英文折叠键从不同来源推出了**不同的**中文歌名 → 两条都撤(分不清哪条对);
-///  4. 两侧折叠键本来就相等的不产出(空转的别名,`All for Joy` ↔ `All for Joy (feat. X)` 那种)。
+///  2. E1 里两条都带播放器时长时相差 > 3 s 到 不采纳;
+///  3. 同一个英文折叠键从不同来源推出了**不同的**中文歌名 到 两条都撤(分不清哪条对);
+///  4. 两侧折叠键本来就相等的不产出(空转的别名,`All for Joy` 与 `All for Joy (feat. X)` 那种)。
 ///
-/// E1 只认「英文 → 中文」这个方向(同 id 的中文 ↔ 中文分裂——繁简/括号——本来就由折叠键管,剩下的
+/// E1 只认「英文 到 中文」这个方向(同 id 的中文 与 中文分裂——繁简/括号——本来就由折叠键管,剩下的
 /// 交给 E2);E2 不限方向,见上。搜索页地址(`y.qq.com/n/ryqq/search?w=…`)不是身份,不算 id。
 public enum EnrichTitleAliases {
     public struct Entry {
@@ -89,14 +89,14 @@ public enum EnrichTitleAliases {
         return out
     }
 
-    /// `https://music.163.com/song?id=2635125902`(也接受 `/#/song?id=`)→ "2635125902"。
+    /// `https://music.163.com/song?id=2635125902`(也接受 `/#/song?id=`)到 "2635125902"。
     static func neteaseSongID(_ url: String) -> String? {
         guard url.contains("music.163.com"), let range = url.range(of: "id=") else { return nil }
         let digits = url[range.upperBound...].prefix { $0.isNumber }
         return digits.isEmpty ? nil : String(digits)
     }
 
-    /// `https://y.qq.com/n/ryqq/songDetail/002lChJY23SXj7` → "002lChJY23SXj7";搜索页地址 → nil。
+    /// `https://y.qq.com/n/ryqq/songDetail/002lChJY23SXj7` 到 "002lChJY23SXj7";搜索页地址 到 nil。
     static func qqSongMid(_ url: String) -> String? {
         guard url.contains("y.qq.com"), let range = url.range(of: "/songDetail/") else { return nil }
         let mid = url[range.upperBound...].prefix { $0.isLetter || $0.isNumber }
@@ -115,14 +115,14 @@ public enum EnrichTitleAliases {
         return t
     }
 
-    /// 主标题含汉字/假名 → 中文(或日文)名;否则算英文/罗马字名。
+    /// 主标题含汉字/假名 到 中文(或日文)名;否则算英文/罗马字名。
     public static func isHanTitled(_ title: String) -> Bool {
         !PlayCountFold.hasNoHanLikeChars(coreTitle(title))
     }
 
     // MARK: 歌词正文相似度(E2)
 
-    /// LRC → 可比对的正文:去掉 `[…]` 时间戳/头标签、`<…>` 逐字标签、署名行,再 NFKC + 繁简 + 小写、
+    /// LRC 到 可比对的正文:去掉 `[…]` 时间戳/头标签、`<…>` 逐字标签、署名行,再 NFKC + 繁简 + 小写、
     /// 只留字母数字(含汉字),拼成一串。
     public static func lyricsBody(_ lrc: String) -> String {
         var out = ""
@@ -162,7 +162,7 @@ public enum EnrichTitleAliases {
 
     /// 歌词正文的相似度:词元三元组(shingle)集合的 Jaccard。
     ///
-    /// 词元:汉字/假名每个字一个词元,拉丁字母/数字一段连续串一个词元。⚠️ 不能用字符二元组:字母表
+    /// 词元:汉字/假名每个字一个词元,拉丁字母/数字一段连续串一个词元。 不能用字符二元组:字母表
     /// 只有 26 个字母,两首**不同**的英文歌的字母二元组集合几乎必然大面积重合(实测 MJ《Keep the Faith》
     /// 与《Thriller》0.65、时长又都是 5:57,直接被并成一首);按词切了再取三元组,不同的歌几乎没有
     /// 共同的三词短语,同一首歌的两份歌词(行切分不同、繁简不同、少数字形差异)三元组仍大面积重合。
@@ -246,7 +246,7 @@ public enum EnrichTitleAliases {
 
     // MARK: 推表
 
-    /// 推别名表。结构同旧静态表:`canonicalArtistKey → foldTitle(英文歌名) → 中文歌名原始写法`。
+    /// 推别名表。结构同旧静态表:`canonicalArtistKey 到 foldTitle(英文歌名) 到 中文歌名原始写法`。
     /// - Parameter artistKey: 歌手分桶用的键函数。默认走 `PlayCountFold.canonicalArtistKey`(读全局的本机
     ///   歌手别名表);EnrichCacheReader 同一轮刚推完歌手表、还没灌进全局时,把基于新表的键函数传进来。
     public static func derive(_ entries: [Entry],
@@ -260,7 +260,7 @@ public enum EnrichTitleAliases {
         }
         struct Bucket { var han: [String: Item] = [:]; var nonHan: [String: Item] = [:] }
         var buckets: [String: Bucket] = [:]
-        // E1 分组:(歌手键, id) → 两侧 折叠键 → 原始写法,以及两侧的时长
+        // E1 分组:(歌手键, id) 到 两侧 折叠键 到 原始写法,以及两侧的时长
         struct IDGroup { var han: [String: String] = [:]; var nonHan: [String: String] = [:]
                          var hanDur: [Double] = []; var nonHanDur: [Double] = [] }
         var idGroups: [String: [String: IDGroup]] = [:]
@@ -306,7 +306,7 @@ public enum EnrichTitleAliases {
             }
         }
 
-        // 候选:歌手键 → 英文折叠键 → (中文折叠键 → 中文原始写法)。同一英文键攒出 ≥ 2 个不同中文键 → 闸 3 撤。
+        // 候选:歌手键 到 英文折叠键 到 (中文折叠键 到 中文原始写法)。同一英文键攒出 ≥ 2 个不同中文键 到 闸 3 撤。
         var proposals: [String: [String: [String: String]]] = [:]
         func propose(_ artistKey: String, _ engFolded: String, _ hanFolded: String, _ hanRaw: String) {
             guard engFolded != hanFolded else { return } // 闸 4
@@ -330,7 +330,7 @@ public enum EnrichTitleAliases {
 
         // E2:同一歌手名下,凡「播放器时长差 ≤ 0.6 s 且歌词正文相似 ≥ 0.6」的两种写法连一条边,并查集成类;
         // 一个类 = 同一份录音的若干写法(英文名 / 中文名 / 中文的你妳之类折叠键并不到一起的字形差异),
-        // 类里选一个代表(含汉字优先 → 本机条目多 → 字典序),其余写法都指向它。不参与:没时长、
+        // 类里选一个代表(含汉字优先 到 本机条目多 到 字典序),其余写法都指向它。不参与:没时长、
         // 没可信歌词、折叠后带版本尾缀(Live/Remix 之类是另一份录音,别被卷进来)。
         for artistKey in buckets.keys.sorted() {
             let bucket = buckets[artistKey]!
@@ -344,7 +344,7 @@ public enum EnrichTitleAliases {
                 uf.add(members[i].folded)
                 for j in (i + 1)..<members.count {
                     let x = members[i], y = members[j]
-                    // 跨脚本(英文 ↔ 中文)随便连;同脚本只连单字差异,见 oneCharVariant
+                    // 跨脚本(英文 与 中文)随便连;同脚本只连单字差异,见 oneCharVariant
                     guard x.han != y.han || oneCharVariant(x.folded, y.folded) else { continue }
                     guard durationsClose(x.item.durations, y.item.durations, tolerance: e2DurationTolerance) else { continue }
                     var best = 0.0

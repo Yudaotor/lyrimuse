@@ -128,7 +128,7 @@ func runMenuBarTests() {
         expectEqual(worstGap < 0.001, true,
                     "关键帧: 与逐帧采样处处一致(最大偏差 \(worstGap) 出现在 t=\(worstAt)s)")
 
-        // 装得下 / 速度非正 → 没有可滚的东西，必须是 nil 而不是一条跑不起来的空动画。
+        // 装得下 / 速度非正 到 没有可滚的东西，必须是 nil 而不是一条跑不起来的空动画。
         expectEqual(
             MenuBarMarquee.scrollKeyframes(maxOffset: 0, pointsPerSecond: 50, holdSeconds: 1) == nil,
             true, "关键帧: 装得下就没有动画")
@@ -245,14 +245,14 @@ func runMenuBarTests() {
         expectEqual(reading[2].x, 30, "跟唱阅读位置: 第三个词起唱时在第二个词末端")
         expectEqual(reading[3].ms, 1500, "跟唱阅读位置: 末词唱完的时刻")
         expectEqual(reading[3].x, 60, "跟唱阅读位置: 末词唱完到整句末端")
-        // 词间空隙(1000~1200ms)不停顿:阅读位置在 10 → 30 之间连续走,而填色边界那条此刻是停在 30 的。
+        // 词间空隙(1000~1200ms)不停顿:阅读位置在 10 到 30 之间连续走,而填色边界那条此刻是停在 30 的。
         let midGap = MenuBarMarquee.karaokeFillX(atMs: 1100, path: reading)
         expectEqual(midGap > 10 && midGap < 30, true, "跟唱阅读位置: 词间空隙被吸收进运动,不停顿(\(midGap))")
         expectEqual(abs(midGap - (10 + 20 * 600 / 700)) < 0.01, true, "跟唱阅读位置: 空隙里按词起点连线线性插值")
         expectEqual(MenuBarMarquee.followReadingPath(words: words, wordEndXs: [10]).isEmpty, true,
                     "跟唱阅读位置: 词数与宽度数不一致返回空")
 
-        // 偏移路径:格子宽 40、整句宽 60 → maxOffset 20;锚点 40 × 0.45 = 18。
+        // 偏移路径:格子宽 40、整句宽 60 到 maxOffset 20;锚点 40 × 0.45 = 18。
         let path = MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 40, textWidth: 60)
         expectEqual(path.isEmpty, false, "跟唱偏移: 放不下就有路径")
         expectEqual(path[0].ms, 0, "跟唱偏移: 从句首开始")
@@ -263,8 +263,8 @@ func runMenuBarTests() {
             pathMonotonic = false
         }
         expectEqual(pathMonotonic, true, "跟唱偏移: 时间严格递增、偏移单调不减")
-        // 钳位折点:阅读位置 18 落在 500~1200ms 那段(10→30),t = 0.4 → 780ms;38 落在 1200~1500ms
-        // (30→60),t = 8/30 → 1280ms。补了折点之后,线性插值必须逐点等于 clamp(阅读位置 − 18, 0, 20)。
+        // 钳位折点:阅读位置 18 落在 500~1200ms 那段(10到30),t = 0.4 到 780ms;38 落在 1200~1500ms
+        // (30到60),t = 8/30 到 1280ms。补了折点之后,线性插值必须逐点等于 clamp(阅读位置 − 18, 0, 20)。
         expectEqual(path.contains { $0.ms == 780 && $0.x == 0 }, true, "跟唱偏移: 穿过下钳位处补折点(780ms)")
         expectEqual(path.contains { $0.ms == 1280 && $0.x == 20 }, true, "跟唱偏移: 穿过上钳位处补折点(1280ms)")
         var worst: CGFloat = 0
@@ -277,14 +277,14 @@ func runMenuBarTests() {
         expectEqual(path.filter { $0.x == 0 }.count, 2, "跟唱偏移: 偏移为 0 的一段只留首尾两点")
         expectEqual(MenuBarMarquee.followScrollOffset(atMs: 1000, path: path) > 0, true,
                     "跟唱偏移: 唱过锚点之后开始滚")
-        // 装得下 / 输入无效 → 空。
+        // 装得下 / 输入无效 到 空。
         expectEqual(MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 60, textWidth: 60).isEmpty,
                     true, "跟唱偏移: 装得下不滚")
         expectEqual(MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 0, textWidth: 60).isEmpty,
                     true, "跟唱偏移: 格子宽 0 不滚")
         expectEqual(MenuBarMarquee.followScrollPath(reading: [], windowWidth: 40, textWidth: 60).isEmpty,
                     true, "跟唱偏移: 没有阅读位置不滚")
-        // 锚点比例越界被钳到 [0, 1]:比例 5 → 锚点就是格子右缘,阅读位置到 40 才开始滚。
+        // 锚点比例越界被钳到 [0, 1]:比例 5 到 锚点就是格子右缘,阅读位置到 40 才开始滚。
         let farAnchor = MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 40, textWidth: 60,
                                                         anchorFraction: 5)
         expectEqual(MenuBarMarquee.followScrollOffset(atMs: 1200, path: farAnchor), 0,
@@ -334,7 +334,7 @@ func runMenuBarTests() {
                                                       fullLength: h),
                     0, "进度取值: 位置为负夹在 0")
 
-        // ② 曲长未知/非正 → 0(整枚基础色,不假装有进度),而不是崩或者除零。
+        // ② 曲长未知/非正 到 0(整枚基础色,不假装有进度),而不是崩或者除零。
         expectEqual(MenuBarMarquee.progressFillLength(positionMs: 50_000, durationMs: 0,
                                                       fullLength: h),
                     0, "进度取值: 曲长为 0 时不染")
@@ -389,7 +389,7 @@ func runMenuBarTests() {
         /// 用户设的显示宽度（默认档位附近）。
         let windowWidth: CGFloat = 80
 
-        /// 这一句画出来有多宽 → 要滚多远。
+        /// 这一句画出来有多宽 到 要滚多远。
         func maxOffset(chars: Int) -> CGFloat { CGFloat(chars) * charWidth - windowWidth }
 
         /// **滚到末尾**要多久（首停 + 走完全程）。这才是"看不看得到整句"的判据 ——
@@ -406,7 +406,7 @@ func runMenuBarTests() {
             Double(maxOffset(chars: chars) / (MenuBarMarquee.maxCharsPerSecond * charWidth))
         }
 
-        // 不知道停留多久 → 完全维持改动之前的行为（这条是防回归：菜单栏歌词在拿不到
+        // 不知道停留多久 到 完全维持改动之前的行为（这条是防回归：菜单栏歌词在拿不到
         // 歌词时间轴的场景下不该突然变快）。
         let unknown = MenuBarMarquee.pacing(
             maxOffset: 300, averageCharWidth: charWidth, dwellSeconds: nil)
@@ -766,7 +766,7 @@ func runMenuBarTests() {
             expectEqual(prev.minX, 13, "悬停三键: 98pt 槽里整块居中 → 左边距 (98-72)/2")
             expectEqual(nxt.maxX, 85, "悬停三键: 右边距与左边距对称")
 
-            // ③ 左→右必须是 上一曲 / 播放暂停 / 下一曲 —— 画的顺序和测的顺序是同一份表,
+            // ③ 左到右必须是 上一曲 / 播放暂停 / 下一曲 —— 画的顺序和测的顺序是同一份表,
             //    顺序反了就是"看着点下一曲、实际切上一曲"。
             expectEqual(prev.minX < mid.minX && mid.minX < nxt.minX, true,
                         "悬停三键: 左→右 = 上一曲 / 播放暂停 / 下一曲")
@@ -834,14 +834,14 @@ func runMenuBarTests() {
         //    真机那套配置(固定宽度 100 + 经典款图标在左 20.5+5 + 歌词态内边距 = 槽宽),
         //    真机日志(**改动前**)实测歌词格 {34.5, 100}、三个键 48.5/72.5/96.5。
         //
-        // ⚠️ 整块内容改成**贴按钮前缘**(原来居中),上面那组真机值整体左移 9pt ——
+        // 整块内容改成**贴按钮前缘**(原来居中),上面那组真机值整体左移 9pt ——
         //    那 9pt 是 18pt 系统内边距补偿被平分到左边的一半,实测它让这一项跟左邻居的间距
         //    比别的项宽出一截(对拍逐列量:相邻系统图标之间 23pt,方块图标到我们这枚 29.5pt)。
         //    下面这组是改动后的算式值;真机那组留在上面一行作为**改动前**的历史记录,别把它
         //    当成现值去对 —— 改动后没有重新在真机上量过三键坐标。
         let iconReserved: CGFloat = 20.5 + 5
         // 歌词态内边距从 18 降到 4(见 MenuBarStatusItem.lyricsSlotPadding),
-        // 槽宽随之 143.5 → 129.5。下面用的就是改后的这组数。
+        // 槽宽随之 143.5 到 129.5。下面用的就是改后的这组数。
         let lyricsPad: CGFloat = 4
         let slotW: CGFloat = 100 + iconReserved + lyricsPad          // = 129.5
         if let slot = H.lyricsSlot(buttonWidth: slotW, contentWidth: slotW - lyricsPad,
@@ -849,7 +849,7 @@ func runMenuBarTests() {
             expectEqual(slot.x, 25.5, "歌词格: 图标在左时从图标块之后起算(贴前缘,不再加左边距)")
             expectEqual(slot.width, 100, "歌词格: 宽度 = 整块内容 - 图标块 = 用户设的最大宽度")
             // 两个入口必须算出同一格:歌词层那边喂的是 plan.windowWidth + reserved,
-            // 状态栏项那边喂的是 item.length - 系统内边距,数值相等 → 结果必须逐点相同。
+            // 状态栏项那边喂的是 item.length - 系统内边距,数值相等 到 结果必须逐点相同。
             if let viaLabel = H.lyricsSlot(buttonWidth: slotW, contentWidth: 100 + iconReserved,
                                            reservedIconWidth: iconReserved, iconLeading: true) {
                 expectEqual(viaLabel.x, slot.x, "歌词格: 两个入口(按 plan / 按槽宽)算出同一个 x")
@@ -863,9 +863,9 @@ func runMenuBarTests() {
                 expectEqual(prev.minX, 39.5, "那套配置: 上一曲格(= 改动前 48.5 − 9)")
                 expectEqual(mid.minX, 63.5, "那套配置: 播放暂停格")
                 expectEqual(nxt.minX, 87.5, "那套配置: 下一曲格")
-                // ⚠️ 回归钉子:退回"把三个键在整个按钮里居中"会得到 36/60/84 —— 那是
+                // 回归钉子:退回"把三个键在整个按钮里居中"会得到 36/60/84 —— 那是
                 //    那个"点暂停生效上一首"的形状。
-                //    ⚠️ 这条钉子在之后**变钝了**:内容贴前缘后正确值 39.5 跟
+                // 这条钉子在之后**变钝了**:内容贴前缘后正确值 39.5 跟
                 //    错误值 36 只差 3.5pt(改动前差 12.5pt)。差得少 = 真踩上去危害也小,
                 //    但别再拿"差得远"当这条的说服力。
                 expectNotEqual(prev.minX, 36, "上一曲格不能退回按整个按钮居中的 36")
@@ -900,17 +900,17 @@ func runMenuBarTests() {
     // 钉的是那条不变式:只有"活得比静默窗长"的行才有资格改几何 —— 于是下一行的换行时刻
     // 必然已经离上次重建 ≥ 静默窗,它的槽宽变化一定在换行那一刻当场落地,不会拖到句中。
     //
-    // ⚠️ 这条不变式 ~09-11 之间**是不成立的**:那时只有收缩过时长判据,加宽豁免,
+    // 这条不变式 ~09-11 之间**是不成立的**:那时只有收缩过时长判据,加宽豁免,
     // 于是短命行照样能靠加宽烧掉配额。复采 39 次重建里 14 次落在静默窗地板上(必然在句中),
     // 其中 11 次是加宽。实测现行、两组统计和取舍理由都在 MenuBarSlotPolicy 的声明处。
     do {
         let P = MenuBarSlotPolicy.self
         let quiet: Double = 3
 
-        // ⚠️ / 09-11 这两条实测样本的期望在 **翻回 false**:偏差
+        // / 09-11 这两条实测样本的期望在 **翻回 false**:偏差
         // (64.49pt / 77.39pt)双双越过 `shortLineDriftCeiling`。时长判据本身没变,只是
         // 不再无条件 —— 理由、实测时间线见 MenuBarSlotPolicy.shortLineDriftCeiling。
-        // ⚠️ 这两条的期望 **又翻回 true** —— 上限从 30 提到 120 之后
+        // 这两条的期望 **又翻回 true** —— 上限从 30 提到 120 之后
         // 64pt / 77pt 都落在上限之内了。翻转的依据是闪烁的实测代价(一次重建 = 250ms
         // 内容空窗),完整数据见 shortLineDriftCeiling。
         expectEqual(P.skipsResize(currentLength: 121.19, targetLength: 56.70,
@@ -944,7 +944,7 @@ func runMenuBarTests() {
         expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
                                   dwellSeconds: quiet, quietSecs: quiet), false,
                     "短命行不改槽: 恰好等于静默窗的行不算短命(加宽)")
-        // ⚠️ 幅度刻意压在偏差上限之内(±20pt),否则上限会抢先放行、时长边界根本测不到。
+        // 幅度刻意压在偏差上限之内(±20pt),否则上限会抢先放行、时长边界根本测不到。
         expectEqual(P.skipsResize(currentLength: 200, targetLength: 180,
                                   dwellSeconds: quiet - 0.001, quietSecs: quiet), true,
                     "短命行不改槽: 差一点点没到静默窗就算短命(收缩)")
@@ -958,8 +958,8 @@ func runMenuBarTests() {
         expectEqual(P.skipsResize(currentLength: 100, targetLength: 200,
                                   dwellSeconds: nil, quietSecs: quiet), false,
                     "短命行不改槽: 算不出这一句会显示多久时照旧加宽")
-        // ⚠️ 宽度**完全没变**必须返回 false 而不是 true:那是"形态翻转、槽宽不动"
-        // (text(223.5) ↔ fixed(223.5)),要交给 present 的 needsRebuild 走 `render` 把新形态
+        // 宽度**完全没变**必须返回 false 而不是 true:那是"形态翻转、槽宽不动"
+        // (text(223.5) 与 fixed(223.5)),要交给 present 的 needsRebuild 走 `render` 把新形态
         // 画对;返回 true 会改走 interim,丢掉逐字染色 / 进度图标 / 双排。
         expectEqual(P.skipsResize(currentLength: 150, targetLength: 150,
                                   dwellSeconds: 0.2, quietSecs: quiet), false,
@@ -981,22 +981,22 @@ func runMenuBarTests() {
         // 现场回归(01:01:23.463):189.19 的槽卡着不缩,这一句只要 113.21,
         // 右边空 76pt —— 用户当天圈图问过这一幕。
         //
-        // ⚠️ **这条钉的期望当晚就翻了**,必须说清楚翻在哪:加上限那天它钉的是"必须放行"
+        // **这条钉的期望当晚就翻了**,必须说清楚翻在哪:加上限那天它钉的是"必须放行"
         // (76 > 30);上限提到 120 之后 76 < 120,**这一幕不再被立刻修正**,槽会保持到下一次
         // 真正值得重建时。这是"闪烁 vs 留白"那笔交易里让出去的部分 —— 但让出去的是留白的
-        // **持续时长**,不是幅度:37 拍模拟里留白最大值反而从 124pt 降到 111pt、均值 58→62pt,
+        // **持续时长**,不是幅度:37 拍模拟里留白最大值反而从 124pt 降到 111pt、均值 58到62pt,
         // 而重建从 17 次降到 6 次。要换掉的正是「每次重建都闪一下、时间有点长」这个观感,
         // 拿这一档换的就是那个。要退回去只改 shortLineDriftCeiling 一个数。
         expectEqual(P.skipsResize(currentLength: 189.192383, targetLength: 113.209375,
                                   dwellSeconds: 1.774, quietSecs: quiet), true,
                     "上限 120: 用户圈图那一幕现在暂缓 —— 换的是闪烁次数减 65%")
-        // ⚠️ **推翻**了这里原来那条哨兵(原文:「偏差上限 = 地板收缩容差,
+        // **推翻**了这里原来那条哨兵(原文:「偏差上限 = 地板收缩容差,
         // 两处必须同源」,理由是"地板判了该缩、执行层不许否决它")。推翻它的是闪烁的实测:
         // 逐帧截图量到**一次重建 = 约 250ms 的内容空窗**,而其中我们自己只占 4~12ms
         // (removeCreate + render),其余全是系统 MenuBarAgent 在重排 —— 少闪的唯一办法
         // 是少重建。两个常量回答的根本不是同一个问题:地板容差管**留白**(目标宽度该不该缩),
-        // 这条上限管**闪烁**(一次改动值不值一次重建)。37 拍真实序列模拟:上限 30→120 时
-        // 重建从 17 次降到 6 次(闪烁占比 4.6%→1.6%),而留白只从均值 58 动到 62pt。
+        // 这条上限管**闪烁**(一次改动值不值一次重建)。37 拍真实序列模拟:上限 30到120 时
+        // 重建从 17 次降到 6 次(闪烁占比 4.6%到1.6%),而留白只从均值 58 动到 62pt。
         // 完整数据见 MenuBarSlotPolicy.shortLineDriftCeiling 的声明处。
         expectEqual(P.shortLineDriftCeiling > MenuBarSlotFloor.shrinkTolerance, true,
                     "偏差上限与地板容差**已解绑**:上限管闪烁(重建次数)、容差管留白,别再合并")
@@ -1014,7 +1014,7 @@ func runMenuBarTests() {
         expectEqual(P.skipsResize(currentLength: 200, targetLength: 200 - P.minimumShrinkPoints,
                                   dwellSeconds: 12, quietSecs: quiet), false,
                     "死区: 收缩恰好等于门槛就照常收缩")
-        // ⚠️ 加宽侧 **也有死区**(原来这条断言的期望是 false)。实测原样:
+        // 加宽侧 **也有死区**(原来这条断言的期望是 false)。实测原样:
         // text(222.909180) -> fixed(223.500000),0.59pt 的加宽也在重建。
         expectEqual(P.skipsResize(currentLength: 222.909180, targetLength: 223.5,
                                   dwellSeconds: 12, quietSecs: quiet), true,
@@ -1045,7 +1045,7 @@ func runMenuBarTests() {
         let P = MenuBarSlotPolicy.self
         let maxW: CGFloat = 205.5
 
-        // 实测那一幕:占位「♪ 歌名」自己只要 94.42,下一句要 205.5 → 现在就开到 205.5。
+        // 实测那一幕:占位「♪ 歌名」自己只要 94.42,下一句要 205.5 到 现在就开到 205.5。
         expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 205.5,
                                 isPlaceholder: true, maxWidth: maxW), 205.5,
                     "占位定宽: 占位态按下一句撑宽")
@@ -1053,15 +1053,15 @@ func runMenuBarTests() {
         expectEqual(P.slotWidth(naturalWidth: 120, upcomingWidth: 60,
                                 isPlaceholder: true, maxWidth: maxW), 120,
                     "占位定宽: 下一句更窄时保住占位文字自己的宽度")
-        // 下一句超上限 → 夹到上限,跟它到时候那个 .fixed 槽算出同一个数。
+        // 下一句超上限 到 夹到上限,跟它到时候那个 .fixed 槽算出同一个数。
         expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 400,
                                 isPlaceholder: true, maxWidth: maxW), maxW,
                     "占位定宽: 下一句超上限就等于最大宽度(与 .fixed 槽同一个数)")
-        // 歌词还没解析出来(拿不到下一句,调用方传 0)→ 退化成占位文字自己的宽度。
+        // 歌词还没解析出来(拿不到下一句,调用方传 0)到 退化成占位文字自己的宽度。
         expectEqual(P.slotWidth(naturalWidth: 94.42, upcomingWidth: 0,
                                 isPlaceholder: true, maxWidth: maxW), 94.42,
                     "占位定宽: 取不到下一句时退化成占位文字自己的宽度")
-        // ⚠️ 非占位态**原样返回**,连上限都不夹 —— 正常歌词句的槽宽口径一个字不动。
+        // 非占位态**原样返回**,连上限都不夹 —— 正常歌词句的槽宽口径一个字不动。
         expectEqual(P.slotWidth(naturalWidth: 187.03, upcomingWidth: 400,
                                 isPlaceholder: false, maxWidth: maxW), 187.03,
                     "占位定宽: 非占位态不受这条影响(下一句再宽也不管)")
@@ -1130,7 +1130,7 @@ func runMenuBarTests() {
             // 而 resume 那行的 `delta` 显示播放位置按墙钟**照样前进了** = 音乐从头到尾没停过。
             // 12 小时日志抓到 5 次:1.88 / 1.92 / 4.11 / 6.46 / 6.53 秒。
             // 两个数共用 3 秒时,后三次必然「缩一次再弹回来」—— 那正是用户看到的「消失又回来」。
-            // 拉开之后:槽宽 8 秒不缩 → 恢复那一刻目标宽度跟原来相同 → needsRebuild 为假 →
+            // 拉开之后:槽宽 8 秒不缩 到 恢复那一刻目标宽度跟原来相同 到 needsRebuild 为假 到
             // 整个假暂停期间**零重建**,邻居一个像素都不动。
             expectEqual(text.contains("static let slotReleaseSecs: TimeInterval = 8"), true,
                         "内容/几何分离: 槽宽保持 8s(覆盖实测最长那次假暂停 6.53s 还有余量)")
@@ -1144,7 +1144,7 @@ func runMenuBarTests() {
                         "内容/几何分离: 重建静默节流仍是 3s(它管的是另一件事 —— 邻居重排)")
             // 反例哨兵:判据一旦从 observeRemaining 滑成 delay,上面那条源码串就不在了,
             // 而"无条件画图标"这个老形状也不许回来。
-            // ⚠️ 结束锚点必须**从起点之后**再找:加「离开图标槽的落定窗」时,
+            // 结束锚点必须**从起点之后**再找:加「离开图标槽的落定窗」时,
             // 那里也有一句 `let work = DispatchWorkItem`,而它在文件里排在前面 ——
             // 不限定搜索范围的话 end < start,`text[start..<end]` 当场崩(实测)。
             if let start = text.range(of: "let delay = max(observeRemaining"),
@@ -1178,7 +1178,7 @@ func runMenuBarTests() {
                         "内边距: 图标态仍是 18(AppKit 居中 → 左右各 9,跟别的状态栏图标齐)")
             expectEqual(text.contains("static let lyricsSlotPadding: CGFloat = 4"), true,
                         "内边距: 歌词态只留 4pt 防裁边")
-            // ⚠️ 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
+            // 反推内容宽的两处必须跟申请用**同一个**常量,差一截就是
             // 「点暂停生效上一首」的形状。
             let lyricsUses = text.components(separatedBy: "Self.lyricsSlotPadding").count - 1
             expectEqual(lyricsUses, 4,
@@ -1192,7 +1192,7 @@ func runMenuBarTests() {
 
     // ---- 离开图标槽前先让行落定(查「句中重建」查出来的)----
     //
-    // 边界(图标槽 ↔ 歌词槽)上,播放状态和歌词引擎是两条链路:前者一变 refresh() 立刻跑,
+    // 边界(图标槽 与 歌词槽)上,播放状态和歌词引擎是两条链路:前者一变 refresh() 立刻跑,
     // 后者要等 20Hz fastTick 下一拍。实测那次抢跑只差 **17ms**,却让正确的宽度推迟 2.97s
     // 才落地、正好落在句中,还会级联(推迟落地把节流起点往后拖,连累后面本来合格的几次)。
     do {
@@ -1205,20 +1205,20 @@ func runMenuBarTests() {
             expectEqual(text.contains("displayClass == \"icon\" || targetIsProvisional"), true,
                         "落定窗: 两处赛跑都盖住 —— 离开图标槽 + 目标还不作数(占位)")
             // 换歌那一下:「♪ 歌名」占位先按自己的宽建一次,22ms 后下一句的宽才知道,
-            // 于是第二次撞进节流窗、3 秒后才跳到位(实测 21:49:01 → 21:49:04)。
+            // 于是第二次撞进节流窗、3 秒后才跳到位(实测 21:49:01 到 21:49:04)。
             // 占位内容同样等落定窗,就只建一次。
             expectEqual(text.contains("let provisional = placeholderNow || slotFloor.didResetOnLastCall"), true,
                         "落定窗: 占位内容**和换歌重置**都算「目标还不作数」")
             let provisional = text.components(separatedBy: "targetIsProvisional: provisional").count - 1
             expectEqual(provisional, 2, "落定窗: 自适应那两条 present 调用都传了,实际 \(provisional)")
-            // ⚠️ 窗口一旦开了就得粘住:开窗那一拍目标不作数,下一拍往往已经作数,
+            // 窗口一旦开了就得粘住:开窗那一拍目标不作数,下一拍往往已经作数,
             // 只看当拍的 provisional 会让窗口第二拍就失效、立刻建一次 = 等于没等。
             // 实测那一幕:14.980 建、14.996 开窗、15.132 就又建了。
             expectEqual(text.contains("let settleOpen = iconExitSettleBegan != nil"), true,
                         "落定窗: 开了就粘住,不看当拍的 provisional")
             expectEqual(text.contains("|| targetIsProvisional || settleOpen"), true,
                         "落定窗: 粘性条件接进判据")
-            // ⚠️ 收进图标槽那条**不许**也标成 provisional —— 它有自己的收缩观察窗,
+            // 收进图标槽那条**不许**也标成 provisional —— 它有自己的收缩观察窗,
             // 两个窗叠上去会让"暂停后多久收回图标"变得没法解释。
             expectEqual(text.contains("collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0,\n                    targetIsProvisional"), false,
                         "落定窗(反例): 图标那条不叠落定窗")
@@ -1227,7 +1227,7 @@ func runMenuBarTests() {
                         "落定窗(反例): 起点取既有值,不是每次调用都重置")
             expectEqual(text.contains("iconExitSettleBegan = now\n"), false,
                         "落定窗(反例): 不许写成无条件重置起点(那会饿死,目标一变就永远到不了点)")
-            // ⚠️ 记录一条**被否掉的**修法:把 lastRebuildAt 改成「原本该重建的时刻」。
+            // 记录一条**被否掉的**修法:把 lastRebuildAt 改成「原本该重建的时刻」。
             // 那样两次**真实重建**就可能落在 3 秒以内,而 3 秒静默窗存在的唯一理由正是
             // 「两次重建相隔 ~1s 会把邻居像素晾在旧位置且不自愈」那个 AppKit bug
             // (见 present 头注铁律 2)。为了修抖动去捅那个洞不划算,何况落定窗修好之后
@@ -1242,7 +1242,7 @@ func runMenuBarTests() {
     // ---- 同一首歌内只涨不缩(用户要「视觉效果也要好,不能跳来跳去」)----
     //
     // 自适应模式每次槽宽变化都是一次整项重建、左边所有图标跟着挪一次。实测 25 分钟仍有 94 次
-    // 放行(平均 16 秒一次),而且方向来回摆 —— 抓到过 106.1 → 113.1 → 106.1 三秒内一个来回。
+    // 放行(平均 16 秒一次),而且方向来回摆 —— 抓到过 106.1 到 113.1 到 106.1 三秒内一个来回。
     // 只涨不缩之后「缩了又扩」从根上不存在,重建只剩"出现了更长的句子"那几次,永远同一个方向。
     do {
         typealias F = MenuBarSlotFloor
@@ -1251,12 +1251,12 @@ func runMenuBarTests() {
         expectEqual(f.width(target: 80, trackKey: "A"), 100, "地板: 小幅变窄不缩(差 20 < 容差 30)")
         expectEqual(f.width(target: 130, trackKey: "A"), 130, "地板: 更宽就涨")
         expectEqual(f.width(target: 110, trackKey: "A"), 130, "地板: 涨上去之后小幅回缩仍不缩(差 20)")
-        // ⚠️ 被实际使用打回:一律不缩会让某一句顶满「最大宽度」之后
+        // 被实际使用打回:一律不缩会让某一句顶满「最大宽度」之后
         // **整首歌都顶满**(双排模式槽宽取 max(当前句, 下一句),下一句长就占满),
         // 主行短的时候中间空一大片。超过容差的收缩必须照缩。
         expectEqual(f.width(target: 95, trackKey: "A"), 95,
                     "地板: 明显变窄照缩(差 35 > 容差 30)——不然就是占着不放")
-        // 这一条正是实测抓到的那个乒乓:106 → 113 → 106,改后第三步不再重建。
+        // 这一条正是实测抓到的那个乒乓:106 到 113 到 106,改后第三步不再重建。
         var pingpong = F()
         _ = pingpong.width(target: 106.1, trackKey: "S")
         _ = pingpong.width(target: 113.1, trackKey: "S")
@@ -1283,11 +1283,11 @@ func runMenuBarTests() {
         expectEqual(r.didResetOnLastCall, false, "地板: 同曲内被地板挡住也不算重置")
         _ = r.width(target: 90, trackKey: "Y")
         expectEqual(r.didResetOnLastCall, true, "地板: 换歌才算重置")
-        // ⚠️ 重置判的是**换歌**不是换行:同一首歌里任何时候都不缩,包括间奏 / 暂停回来 /
+        // 重置判的是**换歌**不是换行:同一首歌里任何时候都不缩,包括间奏 / 暂停回来 /
         // 「♪ 歌名」占位 —— 那几档正是老写法里"缩了又扩"的来源。
         var gap = F()
         _ = gap.width(target: 150, trackKey: "T")
-        // ⚠️ 这一条随容差一起改了口径:目标缩到图标宽(150 → 38.5,差 111)**远超容差**,
+        // 这一条随容差一起改了口径:目标缩到图标宽(150 到 38.5,差 111)**远超容差**,
         // 现在会缩。「暂停/间隙期间零重建」不再靠地板兜,靠的是 slotReleaseSecs 那 8 秒
         // (歌词消失后槽宽先不动)——两条各管一段,别再指望地板替它挡。
         expectEqual(gap.width(target: 38.5, trackKey: "T"), 38.5,
@@ -1318,7 +1318,7 @@ func runMenuBarTests() {
         expectEqual(Rows.mainPointSize, 10, "双排: 主行 10pt(B 方案)")
         expectEqual(Rows.secondaryPointSize, 9, "双排: 副行 9pt(B 方案)")
         expectEqual(Rows.mainPointSize > Rows.secondaryPointSize, true, "双排: 主副有别,主行更大")
-        // 本机实测 10pt 字面高取整 12、9pt 取整 11:两行 23 > 22 → 主行贴顶、副行贴底、中间重叠 1pt
+        // 本机实测 10pt 字面高取整 12、9pt 取整 11:两行 23 > 22 到 主行贴顶、副行贴底、中间重叠 1pt
         let tight = Rows.layout(mainHeight: 12, secondaryHeight: 11, buttonHeight: 22)
         expectEqual(tight.mainY + tight.mainHeight, 22, "双排: 装不下时主行贴顶")
         expectEqual(tight.secondaryY, 0, "双排: 装不下时副行贴底")

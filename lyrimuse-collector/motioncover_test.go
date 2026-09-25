@@ -40,7 +40,7 @@ func TestParseMotionCover(t *testing.T) {
 	}
 }
 
-// 这是 motioncover.go 文件头 ⚠️ 2 那道防线:页面里的 videoArtwork 必须属于我们要的那张专辑。
+// 这是 motioncover.go 文件头 2 那道防线:页面里的 videoArtwork 必须属于我们要的那张专辑。
 // 拿错专辑的动态封面比没有动态封面糟得多——那会给这首歌配上另一张专辑的画面。
 func TestParseMotionCoverRejectsForeignAlbum(t *testing.T) {
 	if mc, ok := parseMotionCover([]byte(motionCoverPage("1111111111")), "6773830957"); ok || mc.Master != "" {
@@ -82,7 +82,7 @@ func TestMotionCoverForRejectsBadID(t *testing.T) {
 }
 
 // 缓存里"查过了但没有"这条要能命中,不然同一张专辑的每首歌都会重抓一次页面
-// (motioncover.go 文件头 ⚠️ 3)。
+// (motioncover.go 文件头 3)。
 func TestMotionCoverCacheHitForCheckedEmpty(t *testing.T) {
 	const id = 424242
 	motionCoverMu.Lock()
@@ -147,26 +147,26 @@ func TestMotionCoverWorthBackfill(t *testing.T) {
 	empty := enrichEntry{}
 	filled := enrichEntry{MotionCoverURL: "https://mvod/x.m3u8"}
 
-	// ① 已经有了 → 不用补(连锚点都不查)。
+	// ① 已经有了 到 不用补(连锚点都不查)。
 	setMotion(nil)
 	if motionCoverWorthBackfill(filled, title, album) {
 		t.Error("已经有 master 的条目不该再算缺")
 	}
-	// ② 没查过 + 有锚点 → 值得补一次。
+	// ② 没查过 + 有锚点 到 值得补一次。
 	if !motionCoverWorthBackfill(empty, title, album) {
 		t.Error("还没查过这张专辑时该算缺,给它一次机会")
 	}
-	// ③ 查过了、这张有 → 算缺(等着被写进这条记录)。
+	// ③ 查过了、这张有 到 算缺(等着被写进这条记录)。
 	setMotion(&motionCover{Master: "https://mvod/x.m3u8", Checked: true})
 	if !motionCoverWorthBackfill(empty, title, album) {
 		t.Error("缓存里确认这张有动态封面时该算缺")
 	}
-	// ④ 查过了、这张没有 → **不算缺**,这是防白重试的那一半。
+	// ④ 查过了、这张没有 到 **不算缺**,这是防白重试的那一半。
 	setMotion(&motionCover{Checked: true})
 	if motionCoverWorthBackfill(empty, title, album) {
 		t.Error(`缓存里标着"查过了没有"时不该算缺,否则七成条目白重试 5 轮`)
 	}
-	// ⑤ 没有已校验的目录锚点(不是 Apple Music 目录曲目)→ 补也补不出来,不算缺。
+	// ⑤ 没有已校验的目录锚点(不是 Apple Music 目录曲目)到 补也补不出来,不算缺。
 	setMotion(nil)
 	if motionCoverWorthBackfill(empty, "查无此歌", "查无此辑") {
 		t.Error("没有目录锚点时不该算缺")
@@ -226,7 +226,7 @@ func TestMotionCoverWorthBackfillCheckedAndAppleURL(t *testing.T) {
 	}
 	defer setMotion(nil)
 
-	// ① 已核对过(不论结论)→ 不再算缺,免得每轮重下首帧算指纹。
+	// ① 已核对过(不论结论)到 不再算缺,免得每轮重下首帧算指纹。
 	setMotion(&motionCover{Master: "https://mvod/x.m3u8", Checked: true})
 	checked := enrichEntry{
 		MotionCoverChecked: true,
@@ -236,20 +236,20 @@ func TestMotionCoverWorthBackfillCheckedAndAppleURL(t *testing.T) {
 		t.Error("已核对过的记录不该再算缺")
 	}
 
-	// ② 没有目录锚点,但 apple_music_url 里有专辑 ID → 该算缺(这是非 Apple Music 播放器
+	// ② 没有目录锚点,但 apple_music_url 里有专辑 ID 到 该算缺(这是非 Apple Music 播放器
 	//    唯一的入口)。
 	viaURL := enrichEntry{AppleURL: "https://music.apple.com/cn/album/aim-high/" + albumID + "?i=1"}
 	if !motionCoverWorthBackfill(viaURL, "查无此歌", "查无此辑") {
 		t.Error("apple_music_url 带专辑 ID 且缓存里确认这张有动态封面时,该算缺")
 	}
 
-	// ③ 同上,但缓存里标着这张没有 → 不算缺(防七成条目白重试)。
+	// ③ 同上,但缓存里标着这张没有 到 不算缺(防七成条目白重试)。
 	setMotion(&motionCover{Checked: true})
 	if motionCoverWorthBackfill(viaURL, "查无此歌", "查无此辑") {
 		t.Error(`缓存里"查过了没有"时不该算缺`)
 	}
 
-	// ④ 两条来路都没有 → 不算缺。
+	// ④ 两条来路都没有 到 不算缺。
 	setMotion(nil)
 	if motionCoverWorthBackfill(enrichEntry{}, "查无此歌", "查无此辑") {
 		t.Error("既无锚点也无 apple_music_url 时不该算缺")
@@ -279,7 +279,7 @@ func TestMotionCoverAcceptsViaAnchor(t *testing.T) {
 
 // fresh 的动态封面核对结论只对它自己解析出来的那张封面(fresh.CoverURL)有效——
 // coverSwapAllowed 判定"不换封面"时,不能把这个结论错配到记录实际留用的旧封面上。
-// 真实案例:M!LK《Bakuretsu Aishiteru》就是这样被永久卡成"核对过、没有动态封面"的,
+// 错配的后果:被永久卡成"核对过、没有动态封面"(如 M!LK《Bakuretsu Aishiteru》一例),
 // 见 backfillPeripheralFields 调用点的注释。
 func TestMotionCoverFreshResultAppliesTo(t *testing.T) {
 	const retained = "https://is1-ssl.mzstatic.com/.../VEATP-45199.jpg/1200x1200bb.jpg"

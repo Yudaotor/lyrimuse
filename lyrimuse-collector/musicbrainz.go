@@ -19,7 +19,7 @@ import (
 
 // canonical_artist 原来完全靠 resolveTrackEnrichment 里"按这一首曲目去
 // 网易云/QQ 搜、用搜索结果自带的歌手名"这条路径——问题是这是按曲目独立匹配的,同一个
-// 歌手的不同曲目可能各自匹配成功或失败(实测坐实:卢广仲《100種生活》专辑 6 首歌,
+// 歌手的不同曲目可能各自匹配成功或失败(例如卢广仲《100種生活》专辑 6 首歌,
 // 5 首通过网易云匹配成功统一成了"卢广仲",唯独"无敌铁金刚"这一首匹配失败,原始标签
 // "Crowd Lu"就漏网了)。MusicBrainz 是按"这个人是谁"直接查、不依赖某一首具体曲目搜不
 // 搜得到,能从根上解决"同一歌手的曲目各自独立匹配、有成有败"这个问题——这里作为
@@ -27,20 +27,18 @@ import (
 // 网易云/QQ 按曲目匹配、以及最后手工登记的 artistAliasTable,依次接棒兜底,不会因为
 // MusicBrainz 覆盖不到某个冷门歌手就比现状更差。
 
-// artistAliasCache 是"原始歌手标签(本地播放器给的标签,英文/罗马化)→ MusicBrainz 查到
+// artistAliasCache 是"原始歌手标签(本地播放器给的标签,英文/罗马化)到 MusicBrainz 查到
 // 的中文别名"的持久化缓存,按歌手整体缓存,不按曲目——同一个歌手不管有多少首歌,只需要
 // 成功查一次 MusicBrainz 就够了。空字符串是内存里的合法值,代表"这次查了,没有可用的
 // 中文别名",避免同一进程内对同一个歌手反复重新查询。
 //
-// ⚠️ 订正:空字符串**不再落盘持久化**。原设计(查一次永久生效,查空也当成
-// "确认没有"写进文件)在 mbPrimaryNameCache 加的时候就已经指出过风险(见那边的头注),
-// 当时没有回头改这份更老的缓存——这次真的撞上了:那英《微笑着离去》本地标签罗马化成
-// "Na Ying",查询当口 MusicBrainz 恰好限速返回 503,lookupMusicBrainzChineseAlias 拿到
-// 的是"这次没查到"而不是"这个人真的没有中文别名",却被原样当成确定结果永久写进了
-// lyrimuse-artist-alias-cache.json,之后不管 MusicBrainz 是否恢复,这个歌手都被钉死在
-// "没有别名"上,只能手动删缓存文件里的 key 才能重查。现在跟 mbPrimaryNameCache 用同一条
-// 规则:只有查到非空结果才落盘,查空的只留在内存里(同一进程内不重复打这次请求,但下一次
-// 进程启动/重跑会有机会用一次新的 MusicBrainz 请求重新确认)。
+// 订正:空字符串**不再落盘持久化**。查空(比如 MusicBrainz 偶发限速返回 503)如果
+// 被当成"确认没有中文别名"永久写进 lyrimuse-artist-alias-cache.json,这个歌手会被
+// 钉死在"没有别名"上,不管 MusicBrainz 后续是否恢复,只能手动删缓存文件里的 key 才能重查
+// (风险在 mbPrimaryNameCache 加的时候就指出过,见那边的头注,但没有回头改这份更老的缓存)。
+// 现在跟 mbPrimaryNameCache 用同一条规则:只有查到非空结果才落盘,查空的只留在内存里
+// (同一进程内不重复打这次请求,但下一次进程启动/重跑会有机会用一次新的 MusicBrainz 请求
+// 重新确认)。
 var (
 	artistAliasMu    sync.Mutex
 	artistAliasCache = map[string]string{}
@@ -73,7 +71,7 @@ func saveArtistAliasCache() {
 		artistAliasMu.Unlock()
 		return
 	}
-	// 只序列化非空值 —— 见上面那段 ⚠️,空值不该把一次偶发的 MusicBrainz 限速/失败
+	// 只序列化非空值 —— 见上面那段 提醒,空值不该把一次偶发的 MusicBrainz 限速/失败
 	// 永久钉死成"确认没有别名"。
 	keep := make(map[string]string, len(artistAliasCache))
 	for k, v := range artistAliasCache {
@@ -135,7 +133,7 @@ func musicbrainzThrottle(ctx context.Context) error {
 // 背后那条 CLI)的默认档用——实测:artistMergeNameKey 走
 // resolveGenericArtistCanonicalName,而 CLI 进程既没加载别名缓存、又对 4 个时段 × 30 条里每个
 // 非中文歌手名都真查 MusicBrainz(全局 1.1 s 限速)+ QQ,一次跑 1 分 49 秒,App 侧 25 s 看门狗必然
-// 把它杀掉 → 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
+// 把它杀掉 到 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
 // 这里让 canonical 名那一步也遵守同一个承诺;归并仍有 mbid 身份缓存 + 名字键两路信号。
 var artistCanonicalCacheOnly bool
 
@@ -160,7 +158,7 @@ func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string
 	artistAliasMu.Lock()
 	artistAliasCache[rawArtist] = resolved
 	// 查空不算脏 —— 空值不落盘,下一次进程还能再试一次(见上面 saveArtistAliasCache 前的
-	// ⚠️ 说明)。
+	// 说明)。
 	if resolved != "" {
 		artistAliasDirty = true
 	}
@@ -248,7 +246,7 @@ func cachedArtistIdentity(name string) (mbArtistIdentity, bool) {
 // 条目去查——已是中文名的,归并展示直接用它,不必多花一次请求。
 // 每次调用最多 2 个 MusicBrainz 请求,受 musicbrainzThrottle 全局限速。
 //
-// ⚠️ 这个函数由 topartists.go(Top 歌手榜的一次性归并脚本)调用,不在 enrich.go 那条
+// 这个函数由 topartists.go(Top 歌手榜的一次性归并脚本)调用,不在 enrich.go 那条
 // "可手动取消的 searching 占位"解析链路上——那条链路的 ctx 只从 canonicalArtistViaMusicBrainz/
 // musicBrainzPrimaryArtistName 两个入口往下穿,topartists.go 那边没有、也不需要 ctx 可传,
 // 所以这里的签名不变,内部对 musicbrainzThrottle/mbGetJSON 的调用用 context.Background()
@@ -324,13 +322,12 @@ var chineseSpeakingCountries = map[string]bool{
 
 // pickChineseAlias 从别名列表里挑出该采用的中文名,挑不到返回空串。纯函数,有单测。
 //
-// ⚠️ 修的真实 bug:原来这里只要"含汉字且 locale 不是 ja"就直接采纳第一条,
-// 结果把欧美艺人的中文译名也当成了规范名——实测 Michael Jackson 在 MusicBrainz 上就有
-// 一条 `迈克尔·杰克逊`(locale=yue_Hans_CN、type=Artist name、primary=true),于是所有
-// 新解析的 MJ 曲目历史里都显示成"迈克尔·杰克逊",跟同一批老缓存里的英文名不一致。
+// 不能只看"含汉字且 locale 不是 ja"就直接采纳第一条:这会把欧美艺人面向中文
+// 市场的译名也当成规范名——Michael Jackson 在 MusicBrainz 上就有一条 `迈克尔·杰克逊`
+// (locale=yue_Hans_CN、type=Artist name、primary=true),按这条判据会被误采纳。
 //
-// 判据只能用艺人所属地区(country),不能用别名自己的 type/primary:实测坐实
-// Michael Jackson 那条中文别名的 type 同样是 "Artist name"、primary 同样是 true,跟
+// 判据只能用艺人所属地区(country),不能用别名自己的 type/primary:Michael Jackson
+// 那条中文别名的 type 同样是 "Artist name"、primary 同样是 true,跟
 // 陈柏宇(HK,中文名确实是本名)那条一模一样,靠别名自身字段完全区分不开。
 //
 // country 缺失时一律不采纳——保守选择,代价很小:canonical_artist 是一条四层解析链,
@@ -362,7 +359,7 @@ func pickChineseAlias(aliases []mbAlias, country string) string {
 const musicbrainzMinScore = 90
 
 // lookupMusicBrainzChineseAlias 查一次 MusicBrainz 的 artist 搜索(按原始标签整体做
-// 全文搜索,不加 artist:"..." 这种字段限定语法——实测坐实全文搜索比字段
+// 全文搜索,不加 artist:"..." 这种字段限定语法——全文搜索比字段
 // 限定搜索召回率更高,后者对夹杂罗马化拼音/英文艺名的搜索词经常一个都搜不到),命中且
 // 置信度够高时再取一次这个艺人的别名列表,从别名里挑一个中文名(优先跳过明确标了日文
 // locale 的别名,防止把日文汉字别名误当中文——实测这份别名列表里"卢广仲"
@@ -394,12 +391,12 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) string
 	return pickChineseAlias(withAliases.Aliases, withAliases.Country)
 }
 
-// ---- MB 主名:本名 ↔ 艺名互换的通用解法 ----
+// ---- MB 主名:本名 与 艺名互换的通用解法 ----
 
 var (
 	mbPrimaryNameMu    sync.Mutex
 	mbPrimaryNameCache = map[string][]string{}
-	// mbLookupFailedUntil:"这位歌手刚刚没查成"的负缓存,歌手原始标签 → 退避到期时刻。
+	// mbLookupFailedUntil:"这位歌手刚刚没查成"的负缓存,歌手原始标签 到 退避到期时刻。
 	// 跟 mbPrimaryNameCache 共用 mbPrimaryNameMu,不另开一把锁。
 	mbLookupFailedUntil = map[string]time.Time{}
 	mbPrimaryNamePath   string // 空 = 只用内存不持久化(单测/一次性子命令)
@@ -409,7 +406,7 @@ var (
 // loadMBPrimaryNameCache/saveMBPrimaryNameCache 跟 loadArtistAliasCache 同一套持久化
 // 模式(整份 map 序列化、临时文件+原子改名),但有一条**关键差别**:
 //
-// ⚠️ 只落盘**查到了**的条目,查空的一律只留在内存里。
+// 只落盘**查到了**的条目,查空的一律只留在内存里。
 //
 // 理由是这条路径的失败几乎都是暂时性的:MusicBrainz 限速是按 IP、1 req/s,而
 // musicbrainzThrottle() 是**进程内**的节流 —— 常驻 collector、手动搜索那个一次性 CLI、
@@ -420,7 +417,7 @@ var (
 //
 // 实测反馈坐实了这个形态:同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条。
 //
-// ⚠️ 值的类型从单个 string 改成 []string(见 musicBrainzArtistAliases 头注,
+// 值的类型从单个 string 改成 []string(见 musicBrainzArtistAliases 头注,
 // 一个歌手现在可能有不止一个候选写法)。磁盘上已有的旧格式文件(值是裸字符串,比如
 // `{"Khalil Fong":"方大同"}`)解码成新类型会直接失败——不能让用户已经攒下的缓存
 // 因为一次格式升级就整份作废,加一段兜底:新格式解码失败时退回旧格式尝试一次,查到的
@@ -461,7 +458,7 @@ func saveMBPrimaryNameCache() {
 		mbPrimaryNameMu.Unlock()
 		return
 	}
-	// 只序列化非空值 —— 见上面那段 ⚠️。
+	// 只序列化非空值 —— 见上面那段 提醒。
 	keep := make(map[string][]string, len(mbPrimaryNameCache))
 	for k, v := range mbPrimaryNameCache {
 		if len(v) > 0 {
@@ -494,10 +491,10 @@ func saveMBPrimaryNameCache() {
 // 现有两条兜底都够不到:artistAliasTable 是手工表(没登记就没有);
 // canonicalArtistViaMusicBrainz 走的是**同一次** MB 查询,却只从别名里挑中文名、而且
 // 要求 country ∈ CN/TW/HK/MO/SG(The Weeknd 是 CA)—— 那条规则是给"中文歌手的罗马化
-// 写法"准备的,跟"本名 ↔ 艺名"是两件事。而那次查询本来就已经把主名拿回来了(搜索首条
+// 写法"准备的,跟"本名 与 艺名"是两件事。而那次查询本来就已经把主名拿回来了(搜索首条
 // name="The Weeknd"、score=100),只是被丢掉没用。
 //
-// ⚠️ 订正:原来"搜到的主名跟本地标签相同就直接返回空、省掉第二次请求"这条
+// 订正:原来"搜到的主名跟本地标签相同就直接返回空、省掉第二次请求"这条
 // 优化本身问错了问题。实测案例:方大同《Lovers Policy》(专辑《15》,五源真实标题是
 // 《情胜策略》)。MusicBrainz 上这位歌手的**主名本身登记的就是"方大同"**(不是
 // "Khalil Fong")——本地标签恰好已经是"方大同"时,旧逻辑一看"主名==本地标签"就地
@@ -516,8 +513,8 @@ func saveMBPrimaryNameCache() {
 //
 // 缓存:查到的落盘(自己一份 artist-primary-cache.json,不挤进 artist-alias-cache.json
 // 的 map[string]string 或 artist-identity-cache.json 的语义里),查空的只留在内存,
-// 而"这次根本没查成"(限速/5xx/超时/ctx 取消)连内存都不写,见下面函数体里的 ⚠️。
-// 为什么这么分,见 loadMBPrimaryNameCache 上面那段 ⚠️ —— 一次偶发的 MusicBrainz 限速
+// 而"这次根本没查成"(限速/5xx/超时/ctx 取消)连内存都不写,见下面函数体里的 提醒。
+// 为什么这么分,见 loadMBPrimaryNameCache 上面那段 提醒 —— 一次偶发的 MusicBrainz 限速
 // 不该把一位歌手永久钉死在"没有别名"上。
 // mbLookupFailureTTL 是"刚刚没查成"的退避时长。
 //
@@ -525,10 +522,10 @@ func saveMBPrimaryNameCache() {
 // 长了又违背这条路径的原则 —— 一次偶发的 MusicBrainz 限速不该把一位歌手长时间钉死在
 // "没有别名"上,而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。
 //
-// ⚠️ 跟"查空"要分开看,两者处置不同:
-//   - 查成了、但 MB 确实没登记别名(err == nil、resolved 为空)→ 写进内存缓存,
+// 跟"查空"要分开看,两者处置不同:
+//   - 查成了、但 MB 确实没登记别名(err == nil、resolved 为空)到 写进内存缓存,
 //     本进程内不再查;不落盘,换个进程还能再试(见 saveMBPrimaryNameCache 头注)。
-//   - 根本没查成(限速/5xx/超时)→ 内存缓存一个字都不写,只记这里的退避到期时刻。
+//   - 根本没查成(限速/5xx/超时)到 内存缓存一个字都不写,只记这里的退避到期时刻。
 const mbLookupFailureTTL = 10 * time.Minute
 
 // mbLookupInFailureBackoff 报告这位歌手是不是还在"刚刚没查成"的退避窗口里。
@@ -540,7 +537,7 @@ func mbLookupInFailureBackoff(raw string, now time.Time) bool {
 
 // noteMBLookupFailure 记下一次"没查成"。
 //
-// ⚠️ ctx 取消不算:那是用户主动取消了这次解析(enrichcancel.go),不是 MusicBrainz 的
+// ctx 取消不算:那是用户主动取消了这次解析(enrichcancel.go),不是 MusicBrainz 的
 // 毛病 —— 跟 lyricSourceBreaker.observeWith 里对 context.Canceled 的处理同一条理由。
 // 记了的话,用户取消一次就让这位歌手白白退避 10 分钟。
 func noteMBLookupFailure(raw string, err error, now time.Time) {
@@ -565,7 +562,7 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	mbPrimaryNameMu.Unlock()
 
 	// 刚刚没查成的,一段时间内直接放弃 —— 不发请求,也不去排 musicbrainzThrottle 那把
-	// 1.1 秒的全局锁。下面 ⚠️ 里"由全局限速兜住,打不成风暴"那句只说对了一半:它确实
+	// 1.1 秒的全局锁。下面 里"由全局限速兜住,打不成风暴"那句只说对了一半:它确实
 	// 不会并发轰炸,但会变成**持续的串行拖累** —— 实测 9531 次调用只攒下 311 条缓存、
 	// 其中 1743 次是限速 503,而且均匀铺在每个小时(每小时 250~300 次)。这条路径又挂在
 	// 别名轮的构造阶段(enrich.go 的 retryArtistIdentities),于是每一轮别名都可能卡在
@@ -576,14 +573,14 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 
 	resolved, err := lookupMusicBrainzArtistAliases(ctx, raw)
 	if err != nil {
-		// ⚠️ 对方没答(限速/5xx/超时/ctx 取消)时**连内存缓存都不写**:那只说明"这一刻没
+		// 对方没答(限速/5xx/超时/ctx 取消)时**连内存缓存都不写**:那只说明"这一刻没
 		// 查成",不是"这位歌手没有别的写法"。写了的话一次偶发 503 就把他在**本进程剩下的
 		// 生命周期里**钉死成"无别名" —— collector 是常驻进程,这一钉可能是好几天,跟
 		// loadMBPrimaryNameCache 头注里"空值不落盘"想避免的是同一件事,只是作用域从跨
 		// 进程缩到进程内。代价是 MB 挂着的时候同一位歌手下一轮还会再查一次,由全局 1.1s
 		// 限速(musicbrainzThrottle)兜住,打不成风暴。
 		//
-		// ⚠️ 上面这段是改动前的原注释,末句"打不成风暴"经实测要打个折扣(见上面入口处
+		// 上面这段是改动前的原注释,末句"打不成风暴"经实测要打个折扣(见上面入口处
 		// 那段)。现在"下一轮还会再查一次"被 mbLookupFailureTTL 的负缓存收敛成"最多每
 		// TTL 再查一次",内存缓存仍然不写 —— 原意(一次偶发 503 不该把歌手钉死成"无别名")
 		// 完全保留,只是重试的节奏从"每一轮别名"降到"每 TTL 一次"。
@@ -606,11 +603,11 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 // resolvedArtistCJKHint 给 isProbablyWrongLanguageLyrics 用,只读窥探
 // artistAliasCache/mbPrimaryNameCache/qqArtistNameCache 这三份缓存——本次 resolve
 // 链路里别的步骤(CanonicalArtist 解析走 canonicalArtistViaMusicBrainz/
-// cachedQQArtistCanonicalName;别名重试走 retryArtistIdentities→
+// cachedQQArtistCanonicalName;别名重试走 retryArtistIdentities到
 // musicBrainzArtistAliases/cachedQQArtistCanonicalName)有没有已经查到过这位歌手的
 // 中文写法。
 //
-// ⚠️ 刻意不发起新的网络请求(不接受 ctx)——这个函数被 isProbablyWrongLanguageLyrics
+// 刻意不发起新的网络请求(不接受 ctx)——这个函数被 isProbablyWrongLanguageLyrics
 // 在打分的热路径上同步调用,不该让一次打分变成一次隐性网络请求。命中与否取决于"运气":
 // 如果这位歌手在本次 resolve 里因为别的原因已经查过,这里就能用上;第一次见到、后面
 // 也没有别的步骤触发查询,这里只能返回空。三份缓存都命中不了时,mergeLyricCandidateRounds
@@ -648,15 +645,15 @@ func resolvedArtistCJKHint(rawArtist string) string {
 // 的写法:
 //
 //  1. canonicalArtistViaMusicBrainz:MusicBrainz 的中文别名(country 门槛收紧过,
-//     不会把欧美艺人的中文译名误当规范名——那个 Michael Jackson 展示成
-//     "迈克尔·杰克逊"的真实故障就是这道门槛修的,见 pickChineseAlias 头注)。
+//     不会把欧美艺人的中文译名误当规范名——Michael Jackson 会被误展示成
+//     "迈克尔·杰克逊"就是这道门槛挡住的场景,见 pickChineseAlias 头注)。
 //  2. cachedQQArtistCanonicalName:QQ 音乐自己的歌手搜索建议——覆盖 MusicBrainz 查不到、
-//     或者查错成另一个同名艺人的场景(实测坐实:david tao 被 MB 排到一个无关的德国
+//     或者查错成另一个同名艺人的场景(例如 david tao 被 MB 排到一个无关的德国
 //     音乐人头上,lexie liu 被 MB 认成"刘昱妤",QQ 两个都查对)。
 //
-// ⚠️ 刻意不用 musicBrainzArtistAliases(retryArtistIdentities 用的那条通用查询)—— 那份
+// 刻意不用 musicBrainzArtistAliases(retryArtistIdentities 用的那条通用查询)—— 那份
 // 返回值没有 country/locale 信息,没法在这一层补 pickChineseAlias 那道门槛,直接拿来当
-// 展示名会把 Michael Jackson 那个的真实故障重新引入(她的 MusicBrainz 别名
+// 展示名会把 Michael Jackson 那种误判重新引入(他的 MusicBrainz 别名
 // 列表里确实登记着"迈克尔·杰克逊",type="Artist name",不区分 country 的话会被当成
 // 规范名)。retryArtistIdentities 场景下这种误差可以接受(只是多打一轮不会命中的搜索,
 // 后面 mergeLyricCandidateRounds 的打分会把不对版的候选筛掉),但这里是**直接写进展示
@@ -685,7 +682,7 @@ func resolveGenericArtistCanonicalName(ctx context.Context, rawArtist string) st
 // lookupMusicBrainzArtistAliases 的 error 专门回答"这一次到底查成没有":ctx 被取消、
 // MB 超时/限速/5xx 都算**没查成**,跟"查成了、MB 那边确实没登记别的写法"(返回 nil, nil)
 // 不是一回事。以前两者都只是一个 nil,谁都分不出来,代价是两处:上层
-// musicBrainzArtistAliases 把没查成也当成"没有别名"缓存起来(见那边的 ⚠️);
+// musicBrainzArtistAliases 把没查成也当成"没有别名"缓存起来(见那边的 提醒);
 // TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection 只好事后另发一个探针
 // 请求去猜 MB 活没活着,而探针和真查询各有各的运气,CI 上连红六次(见那条测试的头注)。
 func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) ([]string, error) {
@@ -704,7 +701,7 @@ func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) ([]string, 
 	if top.Score < musicbrainzMinScore {
 		return nil, nil // 查成了,但首条命中不够可信
 	}
-	// ⚠️ 不再在这里因为"主名==本地标签"就提前返回,理由见函数头注——那个短路会让
+	// 不再在这里因为"主名==本地标签"就提前返回,理由见函数头注——那个短路会让
 	// 方大同这类"MB 主名本身就是本地标签"的歌手永远够不到下面的别名列表。
 	if err := musicbrainzThrottle(ctx); err != nil {
 		return nil, err
@@ -733,8 +730,8 @@ func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) ([]string, 
 //     artistMatches 拦不住"换成另一个人的名字、于是收下另一个人的同名歌"。
 //  2. 命中之后,把**除 raw 自己以外**、Type 是 "Artist name" 的主名 + 别名全部收集
 //     成候选返回(不止一个,顺着别名列表原有顺序,去重)——这一步**不**再要求
-//     `alias.Primary`:实测方大同/The Weeknd 两个真实案例都证明这个字段不可靠
-//     (The Weeknd 本人那条 "The Weeknd" 别名 primary=false,反而是从没用过的
+//     `alias.Primary`:这个字段不可靠(The Weeknd 本人那条 "The Weeknd" 别名
+//     primary=false,反而是从没用过的
 //     日文别名 primary=true;硬按 primary 过滤会把真正该换的名字滤掉)。只排除
 //     Legal name/Search hint:那两类不太可能是音乐平台索引用的写法,收进来大概率
 //     白跑一轮网络请求,而 retryArtistIdentities 的上游调用方会对每个候选各发起一次

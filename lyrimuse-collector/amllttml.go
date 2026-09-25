@@ -18,17 +18,17 @@ import (
 // 它是社区维护的 Apple Music 风格 TTML 歌词库(CC0、免登录、raw 直取),跟其余源
 // 最大的不同是**歌词格式本身能携带结构化信息**:
 //
-//	<ttm:agent type="person" xml:id="v1"/>      ← 演唱者在 head 里声明
-//	<p begin="00:26.510" ttm:agent="v1">        ← 每一行明确归属
-//	  <span begin="00:26.510" end="00:26.740">没</span>   ← 逐字
-//	  <span ttm:role="x-translation" xml:lang="zh-CN">…</span>  ← 内嵌译文
+//	<ttm:agent type="person" xml:id="v1"/>      —— 演唱者在 head 里声明
+//	<p begin="00:26.510" ttm:agent="v1">        —— 每一行明确归属
+//	  <span begin="00:26.510" end="00:26.740">没</span>   —— 逐字
+//	  <span ttm:role="x-translation" xml:lang="zh-CN">…</span>  —— 内嵌译文
 //
 // LRC / Enhanced LRC(A2) / 网易云 YRC / QQ QRC 四种格式在**规范层面**都装不下演唱者
 // 信息(AMLL 官方格式对照表里 "Native background/duet" 一列只有 TTML 和 .lys 是 Yes),
 // 所以其余源的对唱标注全是歌词上传者用行首前缀夹带的民间写法。这个源是唯一能拿到
 // 真·结构化对唱的路子。
 //
-// ⚠️ 覆盖率有限:实测对用户 439 首曲库严格命中 **17 首(3.9%)** ——
+// 覆盖率有限:实测对用户 439 首曲库严格命中 **17 首(3.9%)** ——
 // 口径是"歌名一字不差 + 只算 ncm/qq 两个平台"(只有这两个平台的音乐 ID 我们拿得到)。
 // 别用"去掉括号后缀再比"的宽松口径去估这个数:那样会把《告白气球 (Live)》算成录音室版
 // 的命中,而按 ID 直取时 Live 版有自己的 songID、amll 里并没有,实测就是 404。
@@ -79,17 +79,17 @@ type ttmlDiv struct {
 	Lines []ttmlLine `xml:"p"`
 }
 
-// ⚠️ 一行/一个 span 的孩子必须按**文档顺序**读,不能用声明式 tag。对拍
+// 一行/一个 span 的孩子必须按**文档顺序**读,不能用声明式 tag。对拍
 // 报「这些歌词没有翻译」,根因就在这里:原来 ttmlLine/ttmlSpan 写的是一个 Spans []ttmlSpan
 // 加一个 xml:",chardata" 字段,而 Go 的 encoding/xml 会把一个元素的**全部**直接文本合并成
 // 一个字符串 —— 位置信息全丢。而位置就是全部要点,因为
 // amll-ttml-db 里两种写法并存:
 //
-//	<span>What</span> <span>a</span> <span>ride</span>   ← 空格在 span **之间**(父节点 chardata)
-//	<span>How </span><span>it </span><span>goes</span>   ← 空格在 span **内部**
+//	<span>What</span> <span>a</span> <span>ride</span>   —— 空格在 span **之间**(父节点 chardata)
+//	<span>How </span><span>it </span><span>goes</span>   —— 空格在 span **内部**
 //
 // 前者的空白收不到,拼出来就是 "Whataride"。往下的连锁反应:粘住的假词翻译器原样返回,
-// translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 → 用户看到的
+// translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 到 用户看到的
 // 「没有翻译」。实测用户库 4 首 amll 来源的歌全中,每首 26~42 行粘连。
 // 中文那种逐字写法(<span>没</span><span>有</span>)span 之间本来就没有空白,不受影响。
 const ttmMetadataNS = "http://www.w3.org/ns/ttml#metadata"
@@ -225,7 +225,7 @@ func parseTTMLTime(s string) int {
 	//   clock-time  "1:01.240" / "0:00:07.439"  —— amll-ttml-db 一律用这种
 	//   offset-time "7.439" / "7.439s"          —— Apple 官方歌词用这种
 	//
-	// ⚠️ 漏掉 offset-time 这一支的后果不是"解析失败"这么显眼,而是**静默丢行**:
+	// 漏掉 offset-time 这一支的后果不是"解析失败"这么显眼,而是**静默丢行**:
 	// parseAMLLTTML 对 start<0 的行直接 continue,于是一首歌只剩时间戳恰好跨过 1 分钟
 	// (那才会被写成 "1:01.240")的那部分,前一分钟凭空消失、还一声不吭。接 Apple Music
 	// 源时实测复现过:ALOISIO《BESO DE ESOS》47 行的歌只解析出 1026 字节,第一行直接是
@@ -498,7 +498,8 @@ func buildYRCLine(startMs, endMs int, prefix string, words []ttmlWord) string {
 	return b.String()
 }
 
-// amllFetch 按平台目录 + 音乐 ID 直取 TTML。404 = 这首歌不在库里,不是错误。
+// amllFetch 按平台目录 + 音乐 ID 直取 TTML。404 = 这首歌不在库里,不是错误。按 amllBases 的顺序试,
+// 只有没问成(传输失败 / 5xx 等非 200、非 404)才换镜像;404 是答了,不换。
 func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) {
 	if platformDir == "" || musicID == "" {
 		return "", false
@@ -545,7 +546,7 @@ func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load()
 // 2,108),也要把两个精确 ID 排在前面:先拿到**对的那一份**,比先拿到**某一份**重要。
 // 这跟本仓「一个已知错误的证据比没有证据更糟」是同一条立场。
 //
-// ⚠️ 纯覆盖率上这两条几乎不多拿:实测 3,281 条里「ncm/qq 都没有、只有 apple 或
+// 纯覆盖率上这两条几乎不多拿:实测 3,281 条里「ncm/qq 都没有、只有 apple 或
 // spotify」的仅 34 条(1%)。真正的收益是**解开一处耦合** —— 此前 amll 的 ID 全部
 // 来自网易云 / QQ 两个源,用户在「歌词来源」里把这两个一关,amll 就静默空手而归,
 // 哪怕库里有这首歌。

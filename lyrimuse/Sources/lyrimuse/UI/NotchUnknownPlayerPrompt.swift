@@ -25,7 +25,7 @@ import OSLog
 /// 只在灵动岛开着时有内容(`AppSettings.notchOverlayEnabled`,由 notifier 那侧判);关着时 `offer` 恒 nil、
 /// alert 不触发,只剩系统通知那条路 —— 这是刻意划的边界,不是漏做。
 ///
-/// ⚠️ 这个类**不引用** `NotchLyricsWindowController.shared`(是控制器来订阅它,不是反过来):引用 `.shared` 会
+/// 这个类**不引用** `NotchLyricsWindowController.shared`(是控制器来订阅它,不是反过来):引用 `.shared` 会
 /// 执行 init 建窗口并立刻 orderFront,经典悬浮窗用户会凭空多出一个胶囊,见控制器文件头那条不变量。
 @MainActor
 final class NotchUnknownPlayerPrompt: ObservableObject {

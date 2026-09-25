@@ -18,18 +18,21 @@ import (
 // "正在播放"推送整个停摆;而设置页那句「正在应用到后台服务…」只转 1~3 秒就收起(它把"launchd 报出
 // 了一个新 pid"当成完成)。两者相差半分多钟,勾一下源看起来像"提示说应用完了、实际很久才生效"。
 //
-// ⚠️ 只热读 lyrics_sources 这一个键,不是整份 featureFlags。同一张卡片上的「匹配算法」
-// (lyrics_source_mode)和拖拽出来的顺序(lyrics_source_order)仍然要重启才生效:它们在启动时就被
-// 展开进包级变量、决定了走哪条取词路径,中途换掉是没人验证过的行为。App 侧对称的判据见
-// CollectorRestartPolicy.hotReloadedKeys,加键前两边都要改。
+// **这个模块如今是冗余的**:features() 已经整体按 mtime 热重读(featuresreload.go),改任何键
+// 都不必重启了 —— 包括这里老注释说"仍然要重启"的 lyrics_source_mode / lyrics_source_order。
+// 那句话本身也不准确:核实下来它们只在 enrich.go 取词时现读,并没有在启动时被展开进包级变量。
 //
-// ⚠️ 刻意**不**在"一轮搜索"上做快照(与 lastfmExcluded 挂在开会话那一拍不同):同一轮里
+// 留着不删是因为 lyricSourceEnabled 这条判定链上的调用点还都走 currentLyricSources():它读的是
+// 同一个文件、结论与 features().LyricsSources 必然一致,重复但无害。合并要动那条链上的每个调用点,
+// 风险与收益不成比例,等后续清理时连同这段注释一起删。
+//
+// 刻意**不**在"一轮搜索"上做快照(与 lastfmExcluded 挂在开会话那一拍不同):同一轮里
 // planRound 与收结果各自调 lyricSourceEnabled,中途改设置会让两次判定不一致。后果封顶是这一轮
 // 多查一个源、或某个源的候选不被采用,下一轮自然恢复,不写坏任何缓存 —— 比为它停摆 40 秒轻得多。
 
 var (
 	// 由 main() 跟其余路径一起登记。为空(一次性 CLI 子命令那些提前返回的分支)时退回启动时
-	// 解析好的 features.LyricsSources —— 那些子命令不长跑,没有"中途被改"这回事。
+	// 解析好的 features().LyricsSources —— 那些子命令不长跑,没有"中途被改"这回事。
 	lyricSourcesPath  string
 	lyricSourcesMu    sync.Mutex
 	lyricSourcesSet   map[string]bool
@@ -47,8 +50,8 @@ func setLyricSourcesPath(path string) {
 }
 
 // currentLyricSources 取这一刻启用的源集合。路径没登记、文件读不到、解析失败三种情况一律退回
-// 启动时那份 features.LyricsSources —— 那是用户最后一次成功保存的意图,比任何默认都准。
-// ⚠️ 别把失败分支改成"返回空集合":lyricSourceEnabled 把空集合当全开,用户刻意关掉的源会悄悄复活。
+// 启动时那份 features().LyricsSources —— 那是用户最后一次成功保存的意图,比任何默认都准。
+// 别把失败分支改成"返回空集合":lyricSourceEnabled 把空集合当全开,用户刻意关掉的源会悄悄复活。
 func currentLyricSources() map[string]bool {
 	lyricSourcesMu.Lock()
 	defer lyricSourcesMu.Unlock()
@@ -88,7 +91,7 @@ func readLyricSources(path string) map[string]bool {
 		return nil
 	}
 	// 六个迁移标记必须跟着列表一起读、一起交给 resolveLyricsSources:少读一个,老配置(那个源
-	// 还不存在的年代写的)就会被白名单静默关掉 —— 这正是 resolveLyricsSources 里那段 ⚠️ 讲的坑。
+	// 还不存在的年代写的)就会被白名单静默关掉 —— 这正是 resolveLyricsSources 里那段 讲的坑。
 	var f struct {
 		LyricsSources    []string `json:"lyrics_sources"`
 		AMLLLyrics       *bool    `json:"amll_lyrics"`

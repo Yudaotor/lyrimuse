@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// foldDiacritics 把拉丁字母上的变音符号折掉:Beyoncé → Beyonce、Sigur Rós → Sigur Ros。
+// foldDiacritics 把拉丁字母上的变音符号折掉:Beyoncé 到 Beyonce、Sigur Rós 到 Sigur Ros。
 //
 // 为什么需要:歌词源的曲库对同一个艺人/曲名的写法并不统一(播放器标签带变音、某个源的
 // 库里是无变音的 ASCII 写法,或反过来),normLoose 只做小写化+去标点,'é' 和 'e' 在它眼里
@@ -13,7 +13,7 @@ import (
 // (toSimplified 下沉进 normLoose 之前,繁体艺人名四个源全查不到候选),修法也照它:在
 // normLoose 里下沉一次,全部源的匹配同时受益。
 //
-// ⚠️ 手写映射表而不是引 golang.org/x/text/unicode/norm:这个 collector 是**零依赖**的,
+// 手写映射表而不是引 golang.org/x/text/unicode/norm:这个 collector 是**零依赖**的,
 // 而且是有意为之 —— 当初正是因为 gocc 间接依赖 GPL-2.0-only 的 cedar-go 跟本项目
 // GPL-3.0 不兼容才把它换成自带词典的实现(见 t2s.go)。为一个字符折叠拉回一整棵
 // x/text 依赖树不划算。
@@ -51,7 +51,7 @@ var diacriticFoldsUpper = func() map[rune]string {
 		if upper == r {
 			continue // 没有大写形态(比如 ß 的大写在实践中仍写作 ss)
 		}
-		// 折叠结果也跟着变大写:Æ → AE 而不是 ae,保持原文的大小写观感。
+		// 折叠结果也跟着变大写:Æ 到 AE 而不是 ae,保持原文的大小写观感。
 		m[upper] = strings.ToUpper(folded)
 	}
 	return m

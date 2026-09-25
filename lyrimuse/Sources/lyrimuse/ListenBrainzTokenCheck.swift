@@ -45,7 +45,7 @@ final class ListenBrainzTokenCheck: ObservableObject {
 
         // 新实例 + 手上已经有存好的用户名:先当它有效,页面立刻是"已连接:xxx"。
         //
-        // ⚠️ 只在 lastChecked 为空(= 这个实例还没查过任何东西)时才走这条快速路径。用户在
+        // 只在 lastChecked 为空(= 这个实例还没查过任何东西)时才走这条快速路径。用户在
         // 输入框里改 Token 时 lastChecked 早就被设成旧 Token 了,不会命中,照常走校验 ——
         // 否则改完 Token 会一直显示旧用户名。
         if lastChecked.isEmpty, !knownUser.isEmpty {
@@ -89,7 +89,7 @@ final class ListenBrainzTokenCheck: ObservableObject {
             let status = (response as? HTTPURLResponse)?.statusCode
             NetworkAuditLog.record(service: "listenbrainz", operation: "validate-token", host: url.host ?? "api.listenbrainz.org",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-            // ⚠️ 实测(直接打这个接口核对过):Token 不对时服务端回的是
+            // 实测(直接打这个接口核对过):Token 不对时服务端回的是
             // **HTTP 200 + {"valid":false}**,不是 401。所以真正的判据是下面那个 valid 字段,
             // 这一行只是兜底 —— 万一哪天它改成标准的鉴权失败,也别把 401 当成"网络没问到"。
             if status == 401 { return .invalid }

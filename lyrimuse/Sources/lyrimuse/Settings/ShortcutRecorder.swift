@@ -28,7 +28,7 @@ final class ShortcutRecorderButton: NSButton {
     // refreshTitle 里同一时刻一起刷新——曾经改成用 SwiftUI
     // @State + NotificationCenter 广播驱动清除按钮的显隐,结果在这个 Form
     // (.formStyle(.grouped) 在 macOS 上是拿 List 实现的,行会被复用)里触发
-    // 了行视图被错误复用:实测坐实"打开歌词管理"往后几行的 NSButton 全部
+    // 了行视图被错误复用:"打开歌词管理"往后几行的 NSButton 全部
     // 报出同一个(是前一行的)位置,点哪一行都可能点到别的快捷键上,原来已经
     // 录好的组合还被误清空。根源是这个文件最上面就选定的思路——纯 NSView
     // 命令式控件,不吃 SwiftUI 那套响应式重渲染——清除按钮也必须照这个思路
@@ -136,7 +136,7 @@ final class ShortcutRecorderButton: NSButton {
         // 冲突检查(加,见 ShortcutConflict)。在这之前录一个被系统占用的组合
         // 会"录制成功"但永远不触发,两个动作绑同一组合也不会被拦。
         //
-        // ⚠️ 顺序:先 stopRecording()(把本地事件监听摘掉)再弹窗。反过来的话是在事件
+        // 顺序:先 stopRecording()(把本地事件监听摘掉)再弹窗。反过来的话是在事件
         // 监听闭包里起模态会话,重入。present 内部还会再推迟一个 runloop 回合,双重保证。
         if let conflict = ShortcutConflict.check(shortcut, event: event, recording: shortcutName) {
             let window = self.window

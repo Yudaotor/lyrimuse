@@ -26,11 +26,11 @@ enum LyricsLibraryStats {
         var byKind: [String: Int] = [:]
         /// 歌词源自带的社区译文(网易云 / Musixmatch)。
         var communityTranslation = 0
-        /// collector 机翻补的译文(端上 Apple 翻译 helper 或 MyMemory 兜底)。
+        /// collector 机翻补的译文(端上 Apple 翻译 helper,或网络兜底 Google / MyMemory)。
         var machineTranslation = 0
         /// **缓存里带 `lyrics_roma` 字段**的条目数。
         ///
-        /// ⚠️ 这**不是**"有多少首歌看得到罗马音"。App 侧 `Romanizer` 有客户端现算兜底
+        /// 这**不是**"有多少首歌看得到罗马音"。App 侧 `Romanizer` 有客户端现算兜底
         /// (日文形态分析 / 中文拼音 / 韩文,见第 10 章),缓存里没有的照样会在渲染时现算。
         /// 所以文案必须是「N 首**已缓存**罗马音」并挂 help 说明,不能写成「N 首有罗马音」。
         ///
@@ -89,7 +89,7 @@ extension LyricsKind {
 
     /// 比例条上这一段(以及图例里那个色点)的颜色。跟上面 `tint` 是两回事:数字仍然只有「暂无」
     /// 染色;条和点没颜色就没法对应,所以这里必须有色 —— 但仍守着"别一片彩灯"那条:三个"有词"
-    /// 的桶用**同一个** accent 色相、只变明度(逐字 → 逐行 → 纯文本读作时间轴精细度递减),
+    /// 的桶用**同一个** accent 色相、只变明度(逐字 到 逐行 到 纯文本读作时间轴精细度递减),
     /// 「纯音乐」既不是好也不是坏,给中性灰;整条只有「暂无」一处异色,眼睛自然落在它上面。
     var barColor: Color {
         switch self {
@@ -109,7 +109,7 @@ extension LyricsKind {
 /// (lyrics/ 权威源文件夹 + 缓存 JSON 本身),没有新增任何磁盘扫描。渲染口径也共用
 /// `EnrichCacheStore.byteText`,免得同一个数在两扇窗口里写法不一样。
 ///
-/// ⚠️ **算不出来就什么都不显示,绝不显示「零字节」**。`totalSizeBytes` 的初值是 0,而
+/// **算不出来就什么都不显示,绝不显示「零字节」**。`totalSizeBytes` 的初值是 0,而
 /// `refreshSizeBytes()` 是个 detached task —— 首次打开这一页时有一小段窗口期值还是 0;
 /// 另外 `clearAll()` 也会把它硬置 0。这两种情况下摆一个"0 字节"是在报一个假数字,而空库
 /// 本来就有面板那句「还没有缓存任何歌词」在说话,这里再补一个 0 只会互相打架。
@@ -146,13 +146,12 @@ struct LyricsLibrarySizeLabel: View {
 ///      一个待办数、一颗「开始」,结构逐项对称 —— 它们是同一条通道(`LyricsFillSweep`)的
 ///      窄档和宽档。
 ///
-/// ⚠️ **别把只读的数字做成第三条行**。译文 / 罗马音曾经是两条 `SettingsSubRow`,跟上面两条
-/// 动作行用同一种「标题在左、值在右」的语法排在一起,四条行只靠"有没有按钮"区分两族 ——
-/// 现象是"需要操作的两个和纯显示的两个并排,设计语言不统一";右端也对不齐(动作行的数字被
-/// 按钮推着左移,数据行顶到卡片右缘,四行没有共同的右边界)。只读的数字归统计块,可操作的
+/// **别把只读的数字做成第三条行**。可操作的行(动作行)和纯显示的数字混在一起、
+/// 只靠"有没有按钮"区分,会让设计语言不统一,右端也对不齐(动作行的数字被
+/// 按钮推着左移,数据行顶到卡片右缘,没有共同的右边界)。只读的数字归统计块,可操作的
 /// 归主行,这条界线别再跨回去。
 ///
-/// ⚠️ 这个 View 自己持 `@ObservedObject EnrichCacheStore.shared`,而**不是**把它挂到
+/// 这个 View 自己持 `@ObservedObject EnrichCacheStore.shared`,而**不是**把它挂到
 /// `LyricsSettingsTab` 上:`EnrichCacheStore` 是个有七八个 `@Published` 的单例,整页订阅它意味着
 /// 任何一次 reload / 体积重算都要重画整张设置页。这个仓库为"@ObservedObject 订阅整个单例"踩过
 /// 真实的过度重渲染 bug(见 OnboardingView 里 isPlayingNow 那段注释),把订阅面收在这一块里 ——
@@ -184,7 +183,7 @@ struct LyricsLibraryStatsPanel: View {
 
     var body: some View {
         let counts = LyricsLibraryStats.counts(store.summaries)
-        // ⚠️ 用 VStack(spacing: 0) 而不是 Group 装这几行:修饰符挂在 Group 上会**逐个**作用到每个
+        // 用 VStack(spacing: 0) 而不是 Group 装这几行:修饰符挂在 Group 上会**逐个**作用到每个
         // 子视图 —— 下面那个 .task 就会跑出三份轮询循环。外层卡片本身就是 VStack(spacing: 0),
         // 这里再套一层对布局零影响。
         VStack(spacing: 0) {
@@ -256,9 +255,9 @@ struct LyricsLibraryStatsPanel: View {
 
     // MARK: 统计块
 
-    /// 「共 N 首 ／ 191 MB」→ 分段比例条 → 五桶图例 → 一排叠加指标。
+    /// 「共 N 首 ／ 191 MB」到 分段比例条 到 五桶图例 到 一排叠加指标。
     ///
-    /// 读法照系统设置「通用 → 储存空间」:一个大数 + 一条条 + 两排指标。整块**全是只读的**
+    /// 读法照系统设置「通用 到 储存空间」:一个大数 + 一条条 + 两排指标。整块**全是只读的**
     /// —— 卡里凡是能点的都在下面那两条动作主行上,一块面板里不掺按钮,两族才不会串味。
     ///
     /// 四条约束:
@@ -315,7 +314,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 第二排的一项:标签 + 数字 + ⓘ。跟 `legendItem` 同一种读法(标签 secondary、数字 semibold
     /// 等宽),**不带色板** —— 理由见 `statsBlock` 的第三条约束。
     ///
-    /// ⚠️ ⓘ 必须留在 `accessibilityElement(children: .combine)` **外面**:合并会把它一起吞掉,
+    /// ⓘ 必须留在 `accessibilityElement(children: .combine)` **外面**:合并会把它一起吞掉,
     /// 旁白用户就再也够不到那段说明了(而这两项的说明恰恰是数字本身讲不清的那部分)。
     private func metricItem(label: String, value: Int, help: String) -> some View {
         HStack(spacing: 4) {
@@ -372,19 +371,19 @@ struct LyricsLibraryStatsPanel: View {
 
     // MARK: 补搜缺失歌词
 
-    /// 让 collector 现在就把没有歌词的条目重搜一遍 —— 跟「歌词管理」工具栏那颗「重试无歌词」
+    /// 让 collector 现在就把没有歌词的条目重搜一遍 —— 跟「歌词管理」工具栏那颗「补搜歌词」
     /// 是同一条通道(`LyricsFillSweep`,见第 09 章「补空扫描」)。
     ///
     /// 跟下面「全量重新扫库」**逐项对称**(标题 + ⓘ + 待办数 + 「开始」)。两者是同一件事的窄档
     /// 和宽档 —— 让采集服务跑一轮扫描,区别只在范围,而范围本身是包含关系:待搜那批正是待跟进
     /// 那批的第 0 层。两行长得一样,这层关系才读得出来。
     ///
-    /// ⚠️ 别把这个入口挪进图例里「暂无」那个数字旁边。待搜数按 `EnrichCacheStore.isFillSweepRetryable`
+    /// 别把这个入口挪进图例里「暂无」那个数字旁边。待搜数按 `EnrichCacheStore.isFillSweepRetryable`
     /// 算(「暂无」+ 只有纯文本兜底的,人工修正过的除外),跟「暂无」那个数**就是**对不上的
     /// (本机 65 vs 74);两个口径不同的数并排摆着只会让人以为其中一个是错的,再拿 ⓘ 去解释也救不回来。
     /// 按钮上的口径是"真会被搜的条数",这一点别为了让两个数一致去改。
     ///
-    /// ⚠️ 进度和收据都必须先判 `isFullScan`:「全量重新扫库」为了跨重启续跑复用了这条通道
+    /// 进度和收据都必须先判 `isFullScan`:「全量重新扫库」为了跨重启续跑复用了这条通道
     /// (见 collector/lyricsfullscan.go 头注),两轮共用**同一份** `lyrimuse-lyrics-fill-status.json`。
     /// 不判的话,全量在跑时这一行会照着那份状态画出跟下面那行逐字重复的「扫描中 42/5318 + 停止」。
     private func fillSweepRow() -> some View {
@@ -445,7 +444,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 补空那一轮的收据,挂在标题下面当副标题。没跑过、正在跑、或者那份状态属于全量那一轮的,
     /// 一律不给 —— 全量跑完那句「过了 N 首」归它自己那一行,两轮共用同一份状态文件。
     ///
-    /// ⚠️ 一首都没搜的那一轮**也不给**。「上次:搜了 0 首,补出 0 首」两个数都是 0,占着一行
+    /// 一首都没搜的那一轮**也不给**。「上次:搜了 0 首,补出 0 首」两个数都是 0,占着一行
     /// 副标题却一个字的信息都没有(库里当时没有可搜的条目,或者刚点下就被停了);这一行本来
     /// 就该跟「全量重新扫库」等高,凭空多出来的那一行还把两行的对称打破了。
     private static func sweepReceipt(_ status: LyricsFillSweep.Info?) -> String? {
@@ -461,7 +460,7 @@ struct LyricsLibraryStatsPanel: View {
     /// = lyricsFullScanGap + 一轮全源搜索的估计)。这里只留一个兜底值,给老 collector
     /// 或状态文件还没写出来的那一拍用。
     ///
-    /// ⚠️ 别把它改回写死一份:之前这里是 `25.0`、注释还写着「15 秒固定间隔
+    /// 别把它改回写死一份:之前这里是 `25.0`、注释还写着「15 秒固定间隔
     /// (lyricsFillSweepGap)」,而那天 collector 把全量那一档换成 lyricsFullScanGap(5 秒),
     /// 这个数和那句话当场都成了错的 —— 界面凭空多报一倍时长,没有任何东西会报错。
     /// 这跟 `scoringVersion` 不能硬编码是同一条理由,走的也是同一份状态文件。
@@ -585,7 +584,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 「大约还要 N 小时」——用这一轮**已经跑出来的**速度外推,不用那个固定估计值。
     /// 还没跑完一首时没有速度可言,退回按常量估。
     ///
-    /// ⚠️ 剩余条数按 `total - done`(整场的累计值),而速度按 `roundDoneOrDone / (now-startedAt)`
+    /// 剩余条数按 `total - done`(整场的累计值),而速度按 `roundDoneOrDone / (now-startedAt)`
     /// (这一轮自己的)—— 两个分子不是同一个口径,别图省事合成一个。`startedAt` 是这一轮开工的
     /// 时刻,拿累计的 `done` 除它会得出"一开工就跑了三千首"的假速度。
     private static func remainingText(_ status: LyricsFillSweep.Info,

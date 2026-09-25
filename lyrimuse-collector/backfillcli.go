@@ -54,7 +54,7 @@ func runBackfillLastfmCLI(args []string) {
 	// 跨进程的"feed 提前拉一次"信号文件,跟常驻进程 main.go 设的是同一个路径(见 lastfmfeed.go)。
 	lastfmFeedNudgePath = filepath.Join(cfgDir, clientName+"-lastfm-feed-nudge")
 
-	// 刻意**不**走 lastfmScrobblerIfEnabled:那个多包了一层 features.LastfmMirrorScrobble
+	// 刻意**不**走 lastfmScrobblerIfEnabled:那个多包了一层 features().LastfmMirrorScrobble
 	// 开关。回填是用户在界面上显式点的一次性动作,不该被"要不要持续镜像"这个偏好否决 ——
 	// 一个只想补历史、不想让它持续跟着 scrobble 的人,是个成立的选择。
 	scrobbler := newLastfmScrobbler(

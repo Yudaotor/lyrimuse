@@ -29,17 +29,17 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 //
 // 现场抓的对照样本(Safari + open.spotify.com,同一张专辑连播):
 //
-//     4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調)  → 0|0|0|0
-//     6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」)  → 1|1|1|1
+//     4 次歌曲态(三年二班 / 東風破 / 妳聽得到 / 同一種調調)  到 0|0|0|0
+//     6 次广告态(跨 3 条连续广告,Uber「第 1 个,共 3 个」)  到 1|1|1|1
 //
 // 用 `data-testid` 而不是文字,因为**跟语言无关** —— 页面上那些「广告 • 第 1 个,共 3 个」
 // 是跟着界面语言走的,英文界面下就成了 "Advertisement"。
 //
-// ⚠️ **不能用 `[data-testid*=ad]` 这种子串匹配**:歌曲态里就有 `add-button`(里面含 "ad"),
+// **不能用 `[data-testid*=ad]` 这种子串匹配**:歌曲态里就有 `add-button`(里面含 "ad"),
 // 会稳定误判成广告。必须逐个精确匹配。同理别把页脚那个 `Tailored Advertising Opt-out`
 // (aria-label)算进来 —— 它在歌曲态也一直在。
 //
-// ⚠️ **判据只用"广告在场"这种正向标记**,不用"标题里没有 ` • `"或"曲目链接缺失"这类**缺失**
+// **判据只用"广告在场"这种正向标记**,不用"标题里没有 ` • `"或"曲目链接缺失"这类**缺失**
 // 型信号:页面加载/切歌的一瞬间它们同样成立,会在真歌上闪出「广告中」。这跟 YT Music 那边
 // 刻意保留一条"裸标题"兜底不同 —— 那边的调用语境是"拿不准就丢掉"(fail-closed,误判只损失
 // 这一轮),这里的调用语境是"拿不准就维持现状(丢掉)",而误判的代价是**在真歌上贴广告标签**。
@@ -74,7 +74,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
         case reject
     }
 
-    /// ⚠️ 判定**缺失**(还没探到 / 超时 / 页面上找不到播放器)一律 reject —— 刻意的
+    /// 判定**缺失**(还没探到 / 超时 / 页面上找不到播放器)一律 reject —— 刻意的
     /// fail-closed:最坏情况是"Spotify 网页广告仍然让 UI 塌一下",也就是改动前的样子,
     /// 而不是"在一首真歌上贴了广告标签"。
     public static func gate(verdict: Verdict?) -> Gate {
@@ -84,12 +84,12 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     /// 值不值得为这条播放去问一次页面。**只有 artist 为空这一档**才问 —— 那正是下面那道
     /// 短路要丢掉、而 Spotify 网页广告恰好落在的形状。
     ///
-    /// ⚠️ 这个门槛不是"省一点性能"的优化,是**避免跟 YT Music 那条探针互相踩**:artist 非空、
+    /// 这个门槛不是"省一点性能"的优化,是**避免跟 YT Music 那条探针互相踩**:artist 非空、
     /// album 为空那一档是 YT Music 探针的领地(`trustedPlaybackRejected` 里那一段),两条探针
     /// 都对同一个浏览器发 AppleEvent 会让配对了两个平台的浏览器(这台机器上 Safari / Arc)
     /// 每一轮多背一次 osascript 往返。
     ///
-    /// ⚠️ 如果哪天 Spotify 改成"广告也报歌手名",这一档就不会命中、广告会退回被丢掉的老样子
+    /// 如果哪天 Spotify 改成"广告也报歌手名",这一档就不会命中、广告会退回被丢掉的老样子
     /// (不会误判,只是没修好)。下面 selftest 钉着当前这个形状,真变了会有断言先红。
     public static func fieldShapeNeedsProbe(title: String?, artist: String?) -> Bool {
         let t = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -97,7 +97,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
         return !t.isEmpty && a.isEmpty
     }
 
-    /// ⚠️ JS 源码里**不许出现双引号**(理由见 `BrowserTabProbeScript` 头注),也别用反斜杠 ——
+    /// JS 源码里**不许出现双引号**(理由见 `BrowserTabProbeScript` 头注),也别用反斜杠 ——
     /// 它整段要嵌进 AppleScript 的双引号字符串,而反斜杠是 AppleScript 那边的转义字符。
     ///
     /// 返回 `a|b|c|d`(各为 0/1),顺序即下面 `parse` 的顺序。判定不在 JS 里做 —— 放在
@@ -127,7 +127,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
 
     /// 距上次探测多久之后才**再探一次**(`kickIfNeeded` 的跳过条件)。
     ///
-    /// ⚠️ **必须严格小于 `verdictMaxAge`**,selftest 钉着。之前 `kickIfNeeded`
+    /// **必须严格小于 `verdictMaxAge`**,selftest 钉着。之前 `kickIfNeeded`
     /// 直接拿 `verdictMaxAge` 当跳过条件(两个 60),跟 `YouTubeMusicAdProbe` 当时是同一个洞:
     /// 可读期与再探间隔同时到点,age 跨过 60 的那一拍必然「刚过期读到 nil + 这一拍才开始异步
     /// 重探」,`gate` fail-closed 把快照整条丢掉,三个展示面一起塌成"没有在播放"。
@@ -205,7 +205,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
             lock.unlock()
             return
         }
-        // ⚠️ 这里是 `refreshInterval`(45s)不是 `verdictMaxAge`(60s) —— 两者必须留出重叠窗,
+        // 这里是 `refreshInterval`(45s)不是 `verdictMaxAge`(60s) —— 两者必须留出重叠窗,
         // 否则判定过期那一拍必然 fail-closed。理由见 `refreshInterval` 的注释。
         if cachedKey == key, let at = cachedAt, Date().timeIntervalSince(at) <= Self.refreshInterval,
            cachedVerdictValue != nil {

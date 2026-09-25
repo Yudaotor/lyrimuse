@@ -1,6 +1,6 @@
 import Foundation
 
-/// 版本号的纯逻辑:tag → 展示版本 / 构建号 / 大小比较。跟 `lyrimuse/scripts/build-version.sh` 是同一套映射的两种
+/// 版本号的纯逻辑:tag 到 展示版本 / 构建号 / 大小比较。跟 `lyrimuse/scripts/build-version.sh` 是同一套映射的两种
 /// 语言 —— 那份 shell 是**构建时的真源**(build.sh 写 Info.plist、release.yml 生成 appcast 都调它),这里是 App 运行时
 /// (「接收测试版更新」挑最高版本)用的镜像;selftest update-channel 组拿一张表交叉校验两边逐字一致。
 ///

@@ -1,4 +1,4 @@
-// simevaltimeline_test.go — simeval 的追加维度:LRC↔YRC 时间轴自洽。
+// simevaltimeline_test.go — simeval 的追加维度:LRC与YRC 时间轴自洽。
 //
 // 起因(《Rumour Has It》案)与完整机理见生产实现 lyricstimeline.go 的文件头。
 // 这里只放**消融维度**,判据实现一律复用包内真实函数,不重抄(README 三条纪律之一:
@@ -30,7 +30,7 @@ import (
 
 // timelineSkewMedian: LRC 与 YRC 按归一化文本**唯一配对**后的逐行 |Δ| 中位数(秒)。
 //
-// ⚠️ 只用两侧各自都只出现一次的文本 —— 「Rumour has it」这种整首重复 20 次的句子根本
+// 只用两侧各自都只出现一次的文本 —— 「Rumour has it」这种整首重复 20 次的句子根本
 // 无法定位到具体是哪一句,计进去只是噪音。也正因如此不依赖两侧行数相等(署名行/空行/
 // 合并行的存在使行数天然不等,按下标对齐会整体错位一格)。
 //

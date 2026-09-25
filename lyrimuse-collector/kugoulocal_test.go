@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// 合成一个跟酷狗客户端落盘形态一致的 .krc:zlib 压缩 → 逐字节异或 krcXORKey → 前面加
+// 合成一个跟酷狗客户端落盘形态一致的 .krc:zlib 压缩 到 逐字节异或 krcXORKey 到 前面加
 // "krc1" 魔数。用合成数据而不是拷一份真文件:真文件是用户自己的听歌记录,不该进仓库,
 // 而格式契约("krc1"+xor+zlib)本身就是这里要钉住的东西。
 func writeTestKRC(t *testing.T, dir, name, body string) string {
@@ -232,7 +232,7 @@ func TestKugouLocalLyricLooseTitle(t *testing.T) {
 		t.Error("播放器报的标题带后缀时也该命中干净的那份")
 	}
 
-	// ⚠️ 歌手**不放宽**:合唱版是另一个录音,不能拿单人版的歌词顶上。
+	// 歌手**不放宽**:合唱版是另一个录音,不能拿单人版的歌词顶上。
 	dir3 := t.TempDir()
 	writeTestKRC(t, dir3, "duet.krc", strings.NewReplacer("[ar:周杰伦]", "[ar:周杰伦、杨瑞代]").Replace(testKRCGeLian))
 	resetKugouLocalIndex(t, dir3)
@@ -247,7 +247,7 @@ func TestKugouLocalLyricLooseTitle(t *testing.T) {
 	}
 }
 
-// 宽松标题判据的边界。真实误配案例在表里标着 —— 它是这条判据存在的理由。
+// 宽松标题判据的边界,误配案例在表里标着 —— 它是这条判据存在的理由。
 func TestKugouLocalTitleMatches(t *testing.T) {
 	for _, c := range []struct {
 		cached, want string

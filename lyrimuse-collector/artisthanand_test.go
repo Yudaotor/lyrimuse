@@ -16,7 +16,7 @@ func TestNormalizeArtistCreditHanAnd(t *testing.T) {
 		{"陶喆、卢广仲", "陶喆、卢广仲", "完全不含'和',原样返回(走快速路径)"},
 		{"", "", "空串"},
 		{"周杰伦 & 派伟俊", "周杰伦 & 派伟俊", "不含'和'时原样返回,不误伤已有的'&'分隔符"},
-		// 真实故障(陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"案,见头注):
+		// 举例(陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"案,见头注):
 		// 两侧都是中文、且各自≥2字时也当连接词。
 		{"陶喆和盧廣仲", "陶喆&盧廣仲", "两侧都是≥2字的中文段,当分隔符"},
 		{"陶喆和盧廣仲和蔡健雅", "陶喆&盧廣仲&蔡健雅", "连续多个中文'和'同样要各自独立判断"},
@@ -51,7 +51,7 @@ func TestLyricPrimaryQueryArtistHanAnd(t *testing.T) {
 	if got := lyricPrimaryQueryArtist("Khalil Fong和Fiona Sit"); got != "Khalil Fong" {
 		t.Errorf("lyricPrimaryQueryArtist(%q) = %q, want %q", "Khalil Fong和Fiona Sit", got, "Khalil Fong")
 	}
-	// 陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"真实案例:本地标签"陶喆和盧廣仲"
+	// 陶喆《再見你好嗎》专辑"那個女孩(feat. 盧廣仲)"案例:本地标签"陶喆和盧廣仲"
 	// 之前恒取不出首歌手(整串被当成一个谁都不认识的艺人名),七个源全部搜不到;单独查
 	// "陶喆"四个源立刻命中、分数都在 800 分以上。
 	if got := lyricPrimaryQueryArtist("陶喆和盧廣仲"); got != "陶喆" {

@@ -22,7 +22,7 @@ import OSLog
 // 2. **注册瞬间不能当成一次"变化"**。刚挂上监听时读到的那个值是当前音量,不是用户刚调的;
 //    不把它记成基线直接就报,插上耳机就会无缘无故弹一次音量提示。
 //
-// ⚠️ CoreAudio 的回调在它自己的队列上跑,不在主线程。所有回调都先跳回主线程再碰
+// CoreAudio 的回调在它自己的队列上跑,不在主线程。所有回调都先跳回主线程再碰
 // 任何 UI/@Published 状态。
 @MainActor
 final class VolumeMonitor {
@@ -206,7 +206,7 @@ final class VolumeMonitor {
 extension VolumeMonitor {
     /// 按设置启停,并把变化渲染成灵动岛上的一条提示。
     ///
-    /// ⚠️ 参数是显式传进来的,不在函数体里读 AppSettings —— 这个方法的调用方是 Combine 的
+    /// 参数是显式传进来的,不在函数体里读 AppSettings —— 这个方法的调用方是 Combine 的
     /// sink,而 @Published 是在 willSet 时机发的,那一刻属性还是旧值,函数体里再读一次
     /// 会拿到上一轮的状态(这个坑在本项目"暂停/无播放时隐藏悬浮窗"那次已经实测踩过)。
     static func apply(enabled: Bool) {

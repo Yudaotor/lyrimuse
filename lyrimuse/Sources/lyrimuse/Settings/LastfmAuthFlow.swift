@@ -37,10 +37,7 @@ enum LastfmAuthError: Error, LocalizedError {
 enum LastfmAuthFlow {
     private static let apiRoot = "https://ws.audioscrobbler.com/2.0/"
 
-    // 跟 collector/lastfm.go:51-65 的 sign() 逐字节对应(两处各自独立实现,理由跟
-    // EnrichCacheStore 的 sanitizeLyricsFilename 一样——纯确定性算法,不属于必须收敛
-    // 成一份代码的逻辑):参数(不含 format/callback)按 key 字母序排序、拼成 key+value,
-    // 末尾接 shared secret,取 MD5 十六进制。
+    // 算法在 LyrimuseCore.LastfmSignature(selftest 覆盖,跟 collector lastfm.go 的 sign() 用同一组向量)。
     static func signParams(_ params: [String: String], secret: String) -> String {
         let sorted = params.sorted { $0.key < $1.key }
         var s = ""

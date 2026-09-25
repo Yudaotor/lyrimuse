@@ -57,7 +57,7 @@ final class PlayCountBreakdownLoader: ObservableObject {
         for (i, member) in family.enumerated() {
             let isSelf = i == 0
             guard let page = pages[i] else {
-                // 本尊都没拿到 → 整个弹框失败态(没有主体可展示);孪生失败 → 留一行标出来。
+                // 本尊都没拿到 到 整个弹框失败态(没有主体可展示);孪生失败 到 留一行标出来。
                 if isSelf {
                     logger.error("breakdown: self fetch failed for \(member.artist, privacy: .public) - \(member.title, privacy: .public)")
                     state = .failed

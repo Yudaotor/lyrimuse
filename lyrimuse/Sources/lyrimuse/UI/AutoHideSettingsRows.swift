@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「自动隐藏」两项(截屏/录屏时隐藏 / 暂停·无播放时隐藏)的唯一一份实现,。
+// 「自动隐藏」两项(截屏时隐藏 / 暂停时隐藏)的唯一一份实现。
 //
 // **搬家史**(两次,一天之隔,方向不同,别把后一次读成前一次的回退):
 //   ① 原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
@@ -18,19 +18,19 @@ import SwiftUI
 // (见 OverlayBehaviorSettingsRows.swift 顶部),截屏隐藏/暂停隐藏落进同一组是那条判据的
 // 延伸,不是新规矩。
 //
-// **⚠️ 拆成两份值这一步没有回退,而且不能回退。** 一旦按形态分栏展示,用户就会**按形态去
+// ** 拆成两份值这一步没有回退,而且不能回退。** 一旦按形态分栏展示,用户就会**按形态去
 // 理解**这两个开关(「我在灵动岛页面关掉的,当然只关灵动岛」)。本文件里 `AutoHideSurface`
 // 这个新抽象最大的诱惑正是"共用一份值、按 surface 只换文案" —— 那是刚被推翻
 // 的方案。**共用的是渲染与文案,不是值**:改文案两个形态一起变是预期的;Binding 必须按
 // surface 分流到各自的 AppSettings 键和各自的 WindowController。
 //
-// ⚠️ 同理**别把 AutoHideItem 并进 `OverlayBehaviorItem` 或 `NotchBehaviorItem`**:那两个
+// 同理**别把 AutoHideItem 并进 `OverlayBehaviorItem` 或 `NotchBehaviorItem`**:那两个
 // 枚举都是单形态的(Binding 里写死了自己那一个控制器),合并会立刻需要一个 surface 参数。
 // (之前这里还有第二条理由:`OverlayBehaviorItem` 当时的宿主之一是三列小格,
 //  格子版式不画副标题和 ⓘ 气泡,并进 `allCases` 会静默丢掉文案。那张卡当天就被换成浮层了,
 //  这条不再成立;**上面那条按形态分流的理由没变**。)
 //
-// ⚠️ **宿主有两处(每个形态一份分组视图),增删内容必须一起对**(漏一处不会编译报错,只会表现成
+// **宿主有两处(每个形态一份分组视图),增删内容必须一起对**(漏一处不会编译报错,只会表现成
 // "在这个入口改了有用、在那个入口找不到"):
 //   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)——
 //      工具栏「行为」浮层和「全部设置」抽屉「行为」组(此前叫「窗口」组)调的是这同一份视图
@@ -45,7 +45,7 @@ import SwiftUI
 // 算进去 —— 漏了就会出现"浮层里两个开关都开着、按钮摘要仍然写着「全部关闭」"这种会撒谎的
 // 派生值。
 //
-// ⚠️ **分隔线的分工**(同 OverlayBehaviorSettingsRows / NotchBehaviorSettingsRows 的约定):
+// **分隔线的分工**(同 OverlayBehaviorSettingsRows / NotchBehaviorSettingsRows 的约定):
 // 本组件只在**自己两行之间**插一条 `CardDivider()`,首尾都不插;"本组之前"那一条由宿主插。
 // `SettingsCard` 只是 `VStack(spacing: 0)`,不会替谁补分隔线。
 
@@ -92,13 +92,8 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         }
     }
 
-    /// ⚠️ 措辞刻意**不写死是哪个形态**:同一份文案两个形态各渲染一次,改版前那句
-    /// 「…都不会拍到悬浮歌词」摆在灵动岛那一段上就是错的。
-    ///
-    /// (`SettingsRow` 的声明处注释写着 subtitle 和 help「两者只用其一」,但它的 body 实际
-    ///  两个都画:help 是标题右边那个 ⓘ 气泡、subtitle 是下面那行 11pt 小字。截屏这一行
-    ///  改版前就是**同时**带这两样的,搬家时逐字保留 —— 别在这里"顺手规范化"成只留一个,
-    ///  那会改掉用户看到的文案。)
+    /// 截屏那一项的覆盖范围放在 ⓘ 气泡里。措辞**不写死是哪个形态**:同一份文案
+    /// 悬浮歌词和灵动岛各渲染一次。
     var help: String? {
         switch self {
         case .duringScreenCapture: return L10n.t("截图、录屏、视频会议共享屏幕都拍不到它")
@@ -108,7 +103,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
 
     /// 开关本体。
     ///
-    /// ⚠️ **`.shared` 只准出现在 `set:` 闭包里,而且必须带 `if settings.xxxEnabled` 守卫。**
+    /// **`.shared` 只准出现在 `set:` 闭包里,而且必须带 `if settings.xxxEnabled` 守卫。**
     /// 两个控制器都是 `static let shared`,**读一下就把整扇窗建出来**(含鼠标监听器和一堆
     /// 观察者,见 `NotchLyricsWindowController` 顶部那条不变量)。关着的那个形态一行都不能碰,
     /// 否则表现成"用户没开灵动岛,在设置页拨一下开关,屏幕顶上凭空冒出一个胶囊"。
@@ -117,12 +112,12 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     /// 现在控制器被请进了枚举内部(四个宿主各传一份 Binding 会变成四份重复的守卫逻辑,那是
     /// 更大的漂移风险),防线因此退化成"靠这条注释" —— 所以它写在这里,别删。
     ///
-    /// ⚠️ `get:` 分支必须是**纯 AppSettings 读**,一个 `.shared` 都不许有。两条路径会在形态
+    /// `get:` 分支必须是**纯 AppSettings 读**,一个 `.shared` 都不许有。两条路径会在形态
     /// **关着**的时候求值 get:① 四个宿主的 body(设置项刻意不跟总开关联动,关着也照样渲染);
     /// ② 两个编辑台工具栏按钮上那句摘要(`OverlayEditorStage.behaviorSummary` /
     /// `NotchEditorStage.behaviorSummary`)为了拼串会读 `wrappedValue`。
     ///
-    /// ⚠️ 顺序必须是**先写 AppSettings、再调控制器**,不能只调控制器:副屏镜像走的是
+    /// 顺序必须是**先写 AppSettings、再调控制器**,不能只调控制器:副屏镜像走的是
     /// `AppSettings.$notchHide*` 的 Combine 广播(`NotchMirrorManager`),跳过写入会让副屏
     /// 静默不同步。
     ///
@@ -160,7 +155,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
                         NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
                     }
                 })
-        // ⚠️ 开着这一项,灵动岛暂停后是整个 orderOut,**看不到"歌词行卷回顶行"那段收起动画**
+        // 开着这一项,灵动岛暂停后是整个 orderOut,**看不到"歌词行卷回顶行"那段收起动画**
         // (窗口都没了)。关掉才看得到。这是设置本身的语义,不写进 UI —— 用户试一下就知道。
         // 同一个「行为」入口里还有一项「暂停缩回」,两者都以"暂停"起头但不是一回事:那个是
         // 缩回、这个是整扇窗消失,而这一项开着会盖住那个的效果。
@@ -179,7 +174,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
 
 /// 两行标准设置行。四个宿主都调这一份,只把 `surface` 换掉。
 ///
-/// ⚠️ `@ObservedObject` 是**必需**的,不是照抄的样板:四个宿主里 `OverlayBehaviorPopover` 和
+/// `@ObservedObject` 是**必需**的,不是照抄的样板:四个宿主里 `OverlayBehaviorPopover` 和
 /// `NotchBehaviorPopover` 自己都不观察 `AppSettings`,现在只靠父层(`AppearanceSettingsTab` /
 /// `NotchEditorStage`)的对象级失效顺带刷新。新组件继续吃这个隐式依赖的话,哪天它被放进第五个
 /// 不观察 AppSettings 的宿主,开关就会显示陈旧值("在另一个入口改完再回来看,还是旧的")。

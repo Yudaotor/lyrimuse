@@ -37,7 +37,7 @@ import (
 // 用的 `seo_track` 端点按 track id 就能取到全文,**不需要签名、不需要 Cookie、不需要登录**。
 // 响应里 `lyric.content` 是全文,`seo_track.track` 带曲名/歌手/专辑/时长(毫秒)。
 //
-// ⚠️ 这是给爬虫用的 SEO 端点,不是稳定契约:同一份客户端的 PC `track_v2` 接口已经下线过
+// 这是给爬虫用的 SEO 端点,不是稳定契约:同一份客户端的 PC `track_v2` 接口已经下线过
 // 一次。域名还带着 `beta-` 前缀。所以全程 fail-soft——取不到就当没有候选,不影响别的源。
 //
 // # 正文格式跟酷狗 KRC 逐字节同构
@@ -68,14 +68,14 @@ type sodaResult struct {
 	durationSecs float64
 	// fromLocalClient:这条曲目的 id 取自汽水客户端的播放队列缓存(sodaLocalTrackID),
 	// 不是搜索挑出来的。透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入
-	// 条件之一。⚠️ **不进 sodaCache** —— 那份缓存按 track id 存,同一个 id 两条路都可能
+	// 条件之一。 **不进 sodaCache** —— 那份缓存按 track id 存,同一个 id 两条路都可能
 	// 取到;标记是"这一次怎么拿到的",由 sodaLyric 在缓存之外置位(值拷贝,不污染缓存)。
 	fromLocalClient bool
 }
 
 func (r sodaResult) empty() bool { return r.lyrics == "" && r.yrc == "" }
 
-// sodaSeoTrackResponse 只摘用得上的字段。⚠️ 歌词在**顶层** lyric.content;
+// sodaSeoTrackResponse 只摘用得上的字段。 歌词在**顶层** lyric.content;
 // seo_track.lyric 实测恒为空,两处都留着是因为 music-lib 那边两处都读(接口两种形态都出现过)。
 type sodaSeoTrackResponse struct {
 	Lyric struct {
@@ -123,7 +123,7 @@ func sodaSetLastFailureReason(reason string) {
 
 // sodaLastFailureReasonNow 供 search-lyrics / test-lyric-sources 用。
 //
-// ⚠️ 只有一种会往这里记的模式:**响应不再是我们认识的形状**(soda_endpoint_changed)。
+// 只有一种会往这里记的模式:**响应不再是我们认识的形状**(soda_endpoint_changed)。
 // 取词走的是给搜索引擎爬的 SEO 端点、不是稳定契约,同一客户端的 PC track_v2 已经整个
 // 下线过一次(实测现在回 200 + 0 字节),所以"哪天它变了"要能被说出来,而不是退化成
 // "这首歌没歌词"。反过来,"曲库里有这首歌但没词"和"这首没用汽水放过所以没有 id"都是
@@ -251,7 +251,7 @@ func sodaFetchSeoTrack(ctx context.Context, trackID string) (res sodaResult, tra
 
 // sodaParseSeoTrack 把响应归一化成候选,并分出这一路的**三种结局**。纯函数,单测直接喂结构体。
 //
-// ⚠️ 正文取**顶层** lyric.content 优先、seo_track.lyric.content 兜底,理由见那个结构体的注释。
+// 正文取**顶层** lyric.content 优先、seo_track.lyric.content 兜底,理由见那个结构体的注释。
 //
 // 三种结局必须分开,否则端点变化会伪装成"这首歌没歌词"静默退化(这是 SEO 端点最可能的
 // 失效形态:改了结构照样回 200,JSON 解得动、字段缺失变零值):
@@ -312,12 +312,12 @@ func sodaCoverURL(uri string) string {
 // 本地队列缓存只有"用汽水放过的歌"(见文件头注),而 `seo_track` 只认 track id、不吃歌名。
 // 所以用别的播放器听歌时,这一路要先把歌名搜成 id。
 //
-// ⚠️ 搜索**不需要伪装成客户端**:实测 `q` / `cursor` / `count` / `aid` 四个参数就够,
+// 搜索**不需要伪装成客户端**:实测 `q` / `cursor` / `count` / `aid` 四个参数就够,
 // 普通桌面 UA、甚至完全不带 UA 都照样 200。music-lib 那份实现里带着几十个 Android 设备
 // 参数(含固定的 device_id / iid / cdid),那是别人某台真机的标识 —— 照抄只会平添被识别
 // 的风险,这里一个都不带。
 //
-// ⚠️ 排序不能直接信:实测搜"方大同 Sorry",第 2 条是 Live 版、第 5 条是 Justin Bieber
+// 排序不能直接信:实测搜"方大同 Sorry",第 2 条是 Live 版、第 5 条是 Justin Bieber
 // 的同名歌。所以跟酷我那套一样**自己重新打分**,身份闸用跟别的源完全一致的判定函数
 // (lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch),不为这一个源
 // 另起一套更松的规则。

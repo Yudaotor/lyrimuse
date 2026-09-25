@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// App → collector 的「位置偏置」文件(「collector 复用 App 量出的偏置」)。
+/// App 到 collector 的「位置偏置」文件(「collector 复用 App 量出的偏置」)。
 ///
 /// `LocalPlaybackSource` 给 Spotify 量出的锚点偏置(`posReportedBiasSecs`,见那边 resolvePositionSeconds
 /// 的地面真值分支)只修了本机这几扇窗口;collector 推给状态中继(网页 / 飞书预览)的 progress 走的是
@@ -38,7 +38,7 @@ public struct PositionBiasRecord: Codable, Equatable, Sendable {
         self.writtenAtMs = writtenAtMs
     }
 
-    /// 除写入时刻外全同 —— 决定"要不要再写一次"。
+    /// 除写入时刻与那一刻的位置外全同 —— 决定"要不要再写一次"。
     public func sameContent(as other: PositionBiasRecord) -> Bool {
         artist == other.artist && title == other.title && bundleID == other.bundleID
             && anchorElapsed == other.anchorElapsed && biasSecs == other.biasSecs

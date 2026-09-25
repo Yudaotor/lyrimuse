@@ -25,7 +25,7 @@ type lbClient struct {
 	dryRun  bool
 	alerter *alerter
 
-	// 429 的跨调用退避(实测坐实的缺口)。submit 内部的 tries/退避(见下)
+	// 429 的跨调用退避——这道闸补的缺口。submit 内部的 tries/退避(见下)
 	// 只管**一次调用内**的几次重试,治不了"LB 持续 429 几个小时"这种情况——poller.go
 	// 有 4 个调用点(Mac 原生 single/playing_now、桥接 iPhone single/playing_now)各自
 	// 独立按自己的节奏(桥接 15s 一轮、Mac 侧每次 poll tick ~5s 只要歌还在放就重试)发起
@@ -116,7 +116,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
-			// ⚠️ 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,
+			// 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,
 			// 以及 relay.go relayState 推给网页的 artwork —— 它读的就是这里的 ai)。
 			// 而 cover_url 可能是设备直送封面的 file:// 本地路径,别的
 			// 机器根本读不到,发出去只会得到一张加载失败的图 + 把本机用户名公开出去。
@@ -148,7 +148,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// 歌手/歌名/专辑一律**原样上送播放器报的标签**,不做任何替换。
 	//
-	// ⚠️ 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
+	// 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
 	// "官方写法")**替换掉**播放器的标签,理由是"避免同一个人时而中文时而英文"。撤销
 	// 它的依据有三条:
 	//
@@ -164,7 +164,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	//     要填联系邮箱、文档还警告 free text search 是 "unconstrained"。
 	//     (Pano 反而拿 MusicBrainz 名单当 allowlist **保护**合唱串不被切,方向相反。)
 	//  3. **实测有真错**。本机 2514 条缓存审计:194 条被改写,其中
-	//     `USA for Africa`→`Xtc Planet`、`LBI利比`→`Safehse` 明确错误。而写进 Last.fm
+	//     `USA for Africa`到`Xtc Planet`、`LBI利比`到`Safehse` 明确错误。而写进 Last.fm
 	//     公共 artist 页的东西基本收不回来(纠错库已冻结)。
 	//
 	// 归一没有被放弃,只是挪了位置:**显示/统计层**照旧合并(App 侧 PlayCountFold.
@@ -174,7 +174,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// canonical_artist 字段本身**保留**——它还在给「歌词管理」窗口当展示名
 	// (EnrichCacheStore.swift),只是不再参与上送。
 	//
-	// ⚠️ ListenBrainz 支持 additional_info.artist_mbids(数组)来表达"这是谁"而不改
+	// ListenBrainz 支持 additional_info.artist_mbids(数组)来表达"这是谁"而不改
 	// 显示串,那是这条路的正解;暂未接,因为现有缓存对**原始串**的 mbid 覆盖率只有 16%
 	// (那份缓存的键是归一后的名字,给榜单用的)。Last.fm 侧则根本没有艺人 mbid 字段
 	// (它的 mbid 参数是 **Track** ID),所以对 Last.fm 而言"原样上送"就是唯一正解。

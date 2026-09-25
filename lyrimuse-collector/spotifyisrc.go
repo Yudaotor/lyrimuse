@@ -20,32 +20,36 @@ import (
 //
 // kugoulocal / qqlocal / neteaselocal 读的是「客户端曲库」,用来省掉一次搜索;这条读的是
 // **身份**:换曲那一拍 AppleScript 已经拿到了 22 位 Spotify 曲目 ID(spotifytrack.go,零
-// 额外开销),而 Spotify 的缓存里 `k:<那个ID>#` 记录里就躺着这条录音的 ISRC。整条链路
-// **不经过任何名称匹配** —— 不是搜出来最像的那条,是系统正在播的那一条本身。
+// 额外开销),而 Spotify 的元数据缓存里,这个 ID 对应的 spotify.metadata.Track 记录就带着
+// 这条录音的 ISRC。整条链路**不经过任何名称匹配** —— 不是搜出来最像的那条,是系统正在播的
+// 那一条本身。
 //
 // 实测收益(Katy Perry《I Kissed A Girl》,本地 ISRC USCA20801738):
 //   - Deezer **按名字**搜,第一条是 251 秒的 Live 日文版「キス・ア・ガール ライヴ」;
 //   - 按 ISRC 查,直接是 180 秒的原版。MusicBrainz 独立确认 180 秒。
 //
-// # 两个必须知道的限制
+// # 取数方式
 //
-//  1. **命中率约三分之一**。实测样本:55 首确实用 Spotify 放过的歌(取自 enrich 缓存里
-//     带 spotify_track_id 的条目),47 首在缓存里有记录,其中 18 首(33%)查得到 ISRC。
-//     命中与否跟歌手/专辑无关(同一张 SOUR 里 deja vu 有、good 4 u 没有),只跟客户端
-//     当时写没写完整曲目详情有关。查不到就照常走搜索,零损失。
-//  2. **取数方式是脆的**。这是 LevelDB 里的 protobuf,没有公开 schema;这里直接在原始
-//     字节上按 `k:<22位>#` 切段、正则捞 ISRC,靠的是"这些块恰好没启用压缩"。Spotify 换
-//     一版就可能**静默**失效(不报错,只是再也捞不到)。所以命中时会记一行日志 —— 那是
-//     唯一能发现它失效的凭据。
+// 用 leveldbread.go 按格式读 primary.ldb:key 是 `!xmeta#cache#` + 类型 01 2a + 长度前缀的曲目 uri,
+// 值是 spotify.metadata.Track,ISRC 在它的 external_id(第 10 个字段,{1: "isrc", 2: 码})里。
 //
-// ⚠️ 只认 ISRC 的标准形状(2 位国家码 + 3 位注册码 + 2 位年份 + 5 位流水 = 12 位)。
+// 原来的做法是把整个库读进来、在**原始字节**上按 `k:<22位>#` 切段再正则捞,注释里自己写着
+// 「靠的是这些块恰好没启用压缩」—— 而实际上有一部分数据块是 Snappy 压缩的,原样看不见。拿本机
+// enrich 缓存里 237 个 Spotify 曲目 ID 对比:原始字节正则命中 43 个(18%),按格式解析命中 233 个
+// (98%),两边都命中的结果逐个一致,剩下 4 个是本地压根没有这首的元数据。原来注释里「命中率约
+// 三分之一、跟客户端写没写完整曲目详情有关」的结论,真正的原因是压缩块被漏掉了。
+//
+// 换成按 key 精确查之后也不再需要后台全量索引:一次查询只读每个 .ldb 的尾部、索引块和命中的那一个
+// 数据块,几毫秒,可以当场查 —— 原来第一次播到的歌必然查不到,要等下一轮(最多 15 分钟)重扫。
+//
+// 只认 ISRC 的标准形状(2 位国家码 + 3 位注册码 + 2 位年份 + 5 位流水 = 12 位)。
 // 捞错了不会静默出错:拿一个不存在的 ISRC 去 Deezer/Musixmatch 查只会得到"没这首",
 // 于是回落搜索。
 
 // spotifyISRCUsersDirOverride 让单测把目录指到临时路径。空 = 用真实路径。
 var spotifyISRCUsersDirOverride string
 
-// spotifyISRCUsersDir 是 Spotify 客户端按账号分的缓存根。⚠️ 外部 App 的路径,不走 paths.go。
+// spotifyISRCUsersDir 是 Spotify 客户端按账号分的缓存根。 外部 App 的路径,不走 paths.go。
 func spotifyISRCUsersDir() string {
 	if spotifyISRCUsersDirOverride != "" {
 		return spotifyISRCUsersDirOverride

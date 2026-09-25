@@ -14,7 +14,7 @@ import (
 // 126 听众的影子条目。`track.getInfo` 的 autocorrect 对繁简不做映射(实测简体串纠不到
 // 繁体条目),所以只能靠自己把两种写法折到同一个键上再比。
 //
-// 方向是**繁 → 简**(normLoose 里的 toSimplified),不是反向:简体只有「你」,转过去时无从
+// 方向是**繁 到 简**(normLoose 里的 toSimplified),不是反向:简体只有「你」,转过去时无从
 // 判断该写「你」还是「妳」。编目候选来自 Last.fm、可能是任意写法,折过来比就够了。
 //
 // # 与 enrichKey 那层的区别(别把两者混用)
@@ -48,14 +48,14 @@ var (
 	catalogNoiseExplicitRe = regexp.MustCompile(`^explicit(\s+version)?$`)
 )
 
-// 客串署名前缀。⚠️ 前缀后必须跟点或空格、且署名非空 —— 这道守卫挡的是
+// 客串署名前缀。 前缀后必须跟点或空格、且署名非空 —— 这道守卫挡的是
 // `(Feathers)` / `(Without You)` / `(Within Temptation)` 这类只是巧合同头的词组。
 var catalogCreditPrefixes = []string{"featuring", "feat", "ft", "with"}
 
 // stripCatalogNoiseSubtitle 反复剥掉尾部括号里的「目录学噪音」副题:同一份录音在不同
 // 曲库间的写法差异,不是真版本。
 //
-// ⚠️ 只认**完整**命中。`(Live)` / `(Remix)` / `(Acoustic)` 是真的另一份录音,照旧留着;
+// 只认**完整**命中。`(Live)` / `(Remix)` / `(Acoustic)` 是真的另一份录音,照旧留着;
 // 混着别的词的副题(`(Live 2014 Remaster)`)也不动 —— 宁可漏合,也不能把两份不同的
 // 音频折成一首后把收听记到错的条目上(写进 Last.fm 的 scrobble 基本删不掉)。
 //

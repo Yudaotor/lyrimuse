@@ -249,7 +249,7 @@ func runLyricsParsingTests() {
         expectEqual(r2.report.degradedLines[.wordBeforeLine], 1, "时间轴归一化: 退化原因 word_before_line")
         expectEqual(r2.lines[1], far[1], "时间轴归一化: 退化只影响那一行")
 
-        // 起点正好等于下一行开始(网易云行尾标点、时长 0):拉到 next - W,终点不动 → 时长变成 W
+        // 起点正好等于下一行开始(网易云行尾标点、时长 0):拉到 next - W,终点不动 到 时长变成 W
         let punct = [line(1000, [(1000, 300, "a"), (2000, 0, "?")]), line(2000, [(2000, 500, "c")])]
         let r3 = LyricTimelineNormalizer.normalize(punct)
         expectEqual(r3.lines[0].words[1], LyricWord(startMs: 2000 - W, durationMs: W, text: "?"),
@@ -389,7 +389,7 @@ func runLyricsParsingTests() {
         expectEqual(LyricsBodyEdit(lyrics: "[00:20.50]a\n[00:24.25]b").body, "[00:20.50]a\n[00:24.25]b", "正文编辑: 没有可摘的行时正文 = 原文")
         // 跟预览同一套判据 —— 两处必须同源。
         expectEqual(LyricsPreviewText.forPreview(raw, title: "One Last Kiss", artist: "宇多田光"), edit.body, "正文编辑: 与预览框摘的行完全一致")
-        // 纯元信息 → 正文为空,全部留底在前缀,拼回空正文 = 原文。
+        // 纯元信息 到 正文为空,全部留底在前缀,拼回空正文 = 原文。
         let metaOnly = LyricsBodyEdit(lyrics: "[ti:]\n[ar:]\n")
         expectEqual(metaOnly.body, "", "正文编辑: 整份只有元信息 → 正文空")
         expectEqual(metaOnly.reassembled(body: ""), "[ti:]\n[ar:]\n", "正文编辑: 整份只有元信息 → 拼回原文")
@@ -399,7 +399,7 @@ func runLyricsParsingTests() {
     //
     // 「搜索候选歌词」那排查询词输入框按内容长度分宽。三条规则各钉边界。
     do {
-        // 规则 2:放得下 → 每栏拿满自己想要的,多出来的**平均**分(而不是全给最长那栏)
+        // 规则 2:放得下 到 每栏拿满自己想要的,多出来的**平均**分(而不是全给最长那栏)
         let roomy = LyricsQueryFieldLayout.widths(desired: [100, 90, 170], available: 390, minWidth: 88)
         expectEqual(roomy, [110, 100, 180], "查询词分宽: 放得下时各拿所需 + 余量平均分")
         expectEqual(roomy.reduce(0, +), 390, "查询词分宽: 放得下时正好铺满")
@@ -411,14 +411,14 @@ func runLyricsParsingTests() {
             "查询词分宽: 短到低于下限的栏先托到下限"
         )
 
-        // 规则 3:放不下 → 按比例,但谁都不低于下限;被托住的钉死,其余再按比例分
+        // 规则 3:放不下 到 按比例,但谁都不低于下限;被托住的钉死,其余再按比例分
         let tight = LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 500, minWidth: 88)
         expectEqual(tight[1], 88, "查询词分宽: 挤的时候短栏被下限托住,不会压成几像素")
         expectEqual(tight[0], tight[2], "查询词分宽: 同样长的两栏分到一样宽")
         expectEqual(tight.reduce(0, +), 500, "查询词分宽: 挤的时候也正好铺满")
         expectEqual(tight[0] > 88, true, "查询词分宽: 长栏拿到的比下限多")
 
-        // 规则 1:连下限都给不到 → 平均分(可预测优先)
+        // 规则 1:连下限都给不到 到 平均分(可预测优先)
         expectEqual(
             LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 120, minWidth: 88),
             [40, 40, 40],

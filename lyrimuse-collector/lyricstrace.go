@@ -20,7 +20,7 @@ import (
 // scoreTerm(kind/points),序列化成文本再让人肉眼解析回去是白扔结构 —— search-lyrics
 // 的 NDJSON 契约(searchcli.go)是先例。要人读,`jq` 一行就够。
 //
-// ⚠️ search-lyrics(「歌词管理」的手动重搜)**不会**写这里:它是用户发起的重跑,不是
+// search-lyrics(「歌词管理」的手动重搜)**不会**写这里:它是用户发起的重跑,不是
 // 决策 —— 结构上也进不来:那条 CLI 路径从不调 loadFeatureFlags,features 是零值,
 // 开关恒为 false(跟 pickLyricCandidate 对 LyricsSources 的既有约定同一个机制)。
 //

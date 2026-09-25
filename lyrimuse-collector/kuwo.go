@@ -16,12 +16,12 @@ import (
 	"time"
 )
 
-// kuwoLyric 是歌词第八个候选来源(酷我音乐,非官方接口:搜索→按元数据重新打分排序→
-// 并发拉前几条歌词→挑第一份真同步的)。接口契约从一份公开的第三方开源实现
+// kuwoLyric 是歌词第八个候选来源(酷我音乐,非官方接口:搜索到按元数据重新打分排序到
+// 并发拉前几条歌词到挑第一份真同步的)。接口契约从一份公开的第三方开源实现
 // 逆向出来,用 curl 实测两个端点全部验证过——
 // 不是照抄一份没验证过的第三方代码,是照抄一份**验证过真能用**的接口契约。
 //
-// ⚠️ 这个源的搜索排序完全不可信,这是接入前实测坐实的,不是猜测:兰亭序/周杰伦、
+// 这个源的搜索排序完全不可信(实测,不是猜测):兰亭序/周杰伦、
 // 海阔天空/BEYOND、起风了/买辣椒也用券、平凡之路/朴树 四首歌各跑一遍,**原版录音室
 // 版本一次都没进 top10**,返回的全是 DJ 版/翻唱/Live 片段/伴奏/用户上传。排除过两个
 // 容易走偏的解释:① rn 从 10 提到 30 没用(周杰伦国内是 QQ 音乐独占,酷我曲库本来就
@@ -86,7 +86,7 @@ type kuwoSearchItem struct {
 	Artist   string `json:"ARTIST"`
 	Album    string `json:"ALBUM"`    // 经常为空串
 	Duration string `json:"DURATION"` // 字符串秒数,偶尔是 "m:ss"(见 kuwoDurationSecs)
-	// WebAlbumPicShort:实测坐实的封面字段,形如 "120/38/70/3416909732.jpg"——
+	// WebAlbumPicShort:封面字段,形如 "120/38/70/3416909732.jpg"——
 	// 首段是尺寸,见 kuwoCoverURL。
 	WebAlbumPicShort string `json:"web_albumpic_short"`
 }
@@ -106,7 +106,7 @@ func kuwoCoverURL(short string) string {
 }
 
 // kuwoSearch 请求搜索端点(Referer 必须是 www.kuwo.cn,跟歌词端点的 Referer 不同,
-// 见 kuwoFetchLyric 那边——实测坐实,写错会被拒)。
+// 见 kuwoFetchLyric 那边——写错会被拒)。
 func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, error) {
 	q := strings.TrimSpace(title + " " + artist)
 	u := "https://search.kuwo.cn/r.s?all=" + neturl.QueryEscape(q) +

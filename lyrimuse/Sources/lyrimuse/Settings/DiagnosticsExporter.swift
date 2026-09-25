@@ -14,7 +14,7 @@ import Darwin
 //
 //  1. 结构化那一段(== State ==)只复用 ConfigStore 已有的 isXConfigured/xMissingHint()
 //     这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
-//  2. 附在报告末尾的日志正文统一过 redacted() → LogRedactor 脱敏。
+//  2. 附在报告末尾的日志正文统一过 redacted() 到 LogRedactor 脱敏。
 //
 // 第 2 条是补的,补之前这条约束实际上是**破的**:第 1 条只管结构化字段,而
 // 报告末尾把 ~/Library/Logs/lyrimuse.log 的最后 200 行原样附上,凭据从日志正文里漏出去。
@@ -30,9 +30,8 @@ import Darwin
 //     是给"改不到源头"的重复日志(比如例行的网络审计成功调用)兜底用的第二道防线。
 //   - Collector Log 固定"最后 200 行"在网络审计日志接入之后被例行轮询快速填满,实测
 //     一份导出里这 200 行只覆盖了 45 分钟——改成按时间窗口取。
-//   - App 侧日志用 os.Logger,自带 UTC(+0000);Collector 日志原来是 Go `log.LstdFlags`
-//     的本地墙钟、不带时区标记,两段日志的时间轴对不上(collector 侧已经加 log.LUTC 修掉,
-//     这里的写法照旧,顺手把段落标题写清楚是 UTC,省得读的人自己心算)。
+//   - App 侧日志用 os.Logger,自带 UTC(+0000);Collector 侧也用 UTC(log.LUTC)。段落
+//     标题写清楚是 UTC,省得读的人自己心算。
 enum DiagnosticsExporter {
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
@@ -44,12 +43,11 @@ enum DiagnosticsExporter {
     // NSSavePanel)。写入路径由用户自己在系统存储面板里确认,天然不会撞上桌面/文稿/
     // 下载三个目录可能存在的 TCC 保护,也跟这个项目里选歌词文件夹用 NSOpenPanel 是
     // 同一个思路。
-    /// 弹保存面板 → 后台生成内容 → 写盘 → 在访达里选中它。
+    /// 弹保存面板 到 后台生成内容 到 写盘 到 在访达里选中它。
     ///
-    /// **顺序是刻意的**:面板先弹,内容后生成。以前是反过来的(先 buildReport 再弹面板),
-    /// 而 buildReport 里的 OSLogStore 查询实测要 **4.4 秒**(扫 24 小时、拉回一万多行),
-    /// 又整个跑在主线程上 —— 于是点下"导出…"之后界面冻四秒多才看到保存面板,像是卡死。
-    /// 现在面板立刻出现,重活在用户挑完位置之后于后台线程跑。新加的 collector
+    /// **顺序是刻意的**:面板先弹,内容后生成。buildReport 里的 OSLogStore 查询要
+    /// **4.4 秒**(扫 24 小时、拉回一万多行),又整个跑在主线程上 —— 面板先弹能让界面立刻
+    /// 有反应,重活挪到用户挑完位置之后于后台线程跑,不会看起来像卡死。新加的 collector
     /// healthcheck 子进程(带真实网络探测)和收听记录解析也都挂在这同一段后台任务里——
     /// 导出整体可能因此再多等几秒,但用户此时已经看不到主界面被卡住,跟原有取舍一致。
     ///
@@ -82,8 +80,8 @@ enum DiagnosticsExporter {
         }
     }
 
-    /// 同步全量生成。留着给"就是要一次拿到整份文本"的场景;交互式导出请用
-    /// `exportInteractively()`,别在主线程上等这个。
+    /// 一次拿到整份文本(日志段在主 actor 上读)。留着给"就是要一次拿到整份文本"的场景;
+    /// 交互式导出请用 `exportInteractively()`,别在主线程上等这个。
     @MainActor
     static func buildReport() -> String {
         return (stateLines() + logLines(secrets: ConfigStore.shared.secretsForRedaction,
@@ -91,7 +89,7 @@ enum DiagnosticsExporter {
             .joined(separator: "\n")
     }
 
-    /// 配置文件三态 → 报告里的一个词。纯函数,不需要 actor。
+    /// 配置文件三态 到 报告里的一个词。纯函数,不需要 actor。
     private static func describe(_ state: JSONConfigDocument.LoadState) -> String {
         switch state {
         case .missing: return "missing"
@@ -180,7 +178,7 @@ enum DiagnosticsExporter {
         // Sparkle 自己的这两个字段(是否开着周期检查、上一次真的检查是什么时候)足够
         // 回答大半——不用再让用户去猜"是不是它压根没在检查"。lastUpdateCheckDate 是
         // Sparkle 自己维护的只读字段,读取本身零成本,不涉及联网。
-        // ⚠️ 读管理器自己的转发属性,不要够到 `SparkleUpdaterManager.shared.updater` ——
+        // 读管理器自己的转发属性,不要够到 `SparkleUpdaterManager.shared.updater` ——
         // 那是 Sparkle 的类型,无 Sparkle 构建(LYRIMUSE_NO_SPARKLE)下它根本不存在。
         let updates = SparkleUpdaterManager.shared
         if SparkleUpdaterManager.isSupported {
@@ -226,9 +224,9 @@ enum DiagnosticsExporter {
 
         // ---- 播放时钟----
         //
-        // 「歌词慢半拍」是最常被报、也最难复现的一类问题,而它至少有四种成因、修法完全不同:
-        // 帧率掉了 / positionSourceTier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前这一段
-        // 完全不存在,报告里没有任何一项能把这四种区分开,只能靠猜加翻 collector 日志。
+        // 「歌词慢半拍」这类问题至少有四种成因、修法完全不同:帧率掉了 / positionSourceTier
+        // 判错 / 伺服在反复 snap / 自然切歌偏置估歪。这里把四种从数据上区分开,不用靠猜或
+        // 翻 collector 日志。
         //
         // 全是内存里已有的字段(LocalPlaybackSource.clockSnapshot),读一次的成本可以忽略;
         // 不含任何用户内容(没有曲名/歌手/歌词),天然不需要过 LogRedactor。
@@ -248,8 +246,8 @@ enum DiagnosticsExporter {
         } else {
             lines.append("Anchor: none (paused or no track)")
         }
-        // 两层分开报:总偏移里有多少是用户自己调的、有多少是歌词文件自带的 [offset:]。
-        // 现象是"歌词偏了"时,这两个数直接指向该去改哪一个。
+        // 两层分开报:总偏移里有多少是用户自己调的、有多少是歌词文件自带的 [offset:]——
+        // 歌词偏了时,这两个数直接指向该去改哪一个。
         lines.append("Lyrics offset (effective): \(clock.effectiveLyricsOffsetMs)ms"
                      + "  |  from LRC [offset:]: \(clock.lrcOffsetMs)ms")
         // 当前行填色是否已定格 —— 四个展示面 TimelineView 的停表条件,恒为 false 意味着

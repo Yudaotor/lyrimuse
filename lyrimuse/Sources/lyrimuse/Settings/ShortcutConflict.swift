@@ -4,7 +4,7 @@ import KeyboardShortcuts
 
 // 录制全局快捷键时的冲突检查。
 //
-// ⚠️ 加。在这之前 `ShortcutRecorderButton.handle(_)` 只校验了"必须含
+// 加。在这之前 `ShortcutRecorderButton.handle(_)` 只校验了"必须含
 // ⌘/⌥/⌃ 之一",校验完直接 `setShortcut` 写入,于是有两个静默失败:
 //
 //  1. **录一个被 macOS 占用的组合(⌘Space、⌃↑ 这类)会"成功"**,按钮上正常显示出那个
@@ -16,7 +16,7 @@ import KeyboardShortcuts
 //     `CarbonKeyboardShortcuts.unregister(_:)` 按 shortcut 删**所有**匹配项,事后清掉
 //     其中一个会连带把另一个的注册也拆了。
 //
-// ⚠️ 库自己的 Recorder(`RecorderCocoa`)本来做了前两类检查(`shortcut.isTakenBySystem` /
+// 库自己的 Recorder(`RecorderCocoa`)本来做了前两类检查(`shortcut.isTakenBySystem` /
 // `shortcut.takenByMainMenu`),但这个项目因为输入法问题换成了自己的 NSButton 实现
 // (理由见 ShortcutRecorder.swift 顶部),换的时候只抄了 modifier 那一条。**那两个 API 是
 // 库的 internal 成员,跨模块调不到**,所以这里不是"把它们接回来",而是照同样的口径自己
@@ -117,7 +117,7 @@ enum ShortcutConflict {
 
     /// macOS 自己占用的组合(⌘Space 切输入法、⌃↑ 调度中心……)。
     ///
-    /// 每次录制现算一遍、不缓存:用户随时可能去「系统设置 → 键盘快捷键」里改,缓存下来
+    /// 每次录制现算一遍、不缓存:用户随时可能去「系统设置 到 键盘快捷键」里改,缓存下来
     /// 就会拿着一份过期的表拒绝一个其实已经空出来的组合。这个调用很轻(一次
     /// `CopySymbolicHotKeys`),而录制是低频操作。
     private static func isTakenBySystem(_ shortcut: KeyboardShortcuts.Shortcut) -> Bool {
@@ -147,7 +147,7 @@ enum ShortcutConflict {
 
     /// 弹一条说明并放弃这次录制。
     ///
-    /// ⚠️ 必须异步弹:调用点在 `NSEvent.addLocalMonitorForEvents` 的回调里,在事件监听
+    /// 必须异步弹:调用点在 `NSEvent.addLocalMonitorForEvents` 的回调里,在事件监听
     /// 闭包内部起模态会话是重入,轻则弹窗吃不到键盘、重则卡住。先让这一轮事件处理结束
     /// (调用方已经 stopRecording、把监听摘掉了),下一个 runloop 回合再弹。
     @MainActor

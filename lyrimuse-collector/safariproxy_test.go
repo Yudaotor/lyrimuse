@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// 真实故障(王力宏《你不知道的事》Safari 网页播放,「歌词管理」占位行永远停在
-// "搜索歌词中…"):Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,
-// 信任表里存的是宿主 com.apple.Safari——system.go 里三处**裸查** features.TrustedPlayers[
+// Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,
+// 信任表里存的是宿主 com.apple.Safari——system.go 里三处**裸查** features().TrustedPlayers[
 // bundleID] 的地方对 Safari 全部落空(getAutoDetectedState 把播放整条丢掉、
 // trustedPlaybackNotASong 守卫恒不生效、mediaPlayerLabel 谎报成 Apple Music),而 Swift 侧
 // TrustedPlayers.isTrusted 做了代理解析、App 认了这首歌,于是 App 一直等一个 collector
@@ -28,11 +27,11 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	})
 
 	t.Run("notASong 守卫对代理进程同样生效", func(t *testing.T) {
-		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)→ 该被守卫丢掉。
+		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)到 该被守卫丢掉。
 		if !trustedPlaybackNotASong(proxy, "某个频道名", "") {
 			t.Error("Safari(代理进程)播 album 为空的内容,该判成不是一首歌")
 		}
-		// 真歌两个字段齐全 → 放行。
+		// 真歌两个字段齐全 到 放行。
 		if trustedPlaybackNotASong(proxy, "王力宏", "十八般武藝") {
 			t.Error("字段齐全的真歌不该被丢掉")
 		}
@@ -56,7 +55,7 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	})
 }
 
-// 源码级守卫:system.go 里对 features.TrustedPlayers 用 bundleID 直接下标的裸查,只允许
+// 源码级守卫:system.go 里对 features().TrustedPlayers 用 bundleID 直接下标的裸查,只允许
 // 存在于 isTrustedPlayerBundleID 内部那一处(它是唯一被授权直查的地方,别名解析就在它
 // 身上)。这次三处同型 bug 说明这个坑非常容易再挖——新代码要判信任,一律调
 // isTrustedPlayerBundleID / isAcceptedPlayerBundleID,别自己查表。

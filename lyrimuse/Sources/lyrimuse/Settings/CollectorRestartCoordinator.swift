@@ -22,7 +22,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collec
 /// 两次间隔极近,第二次几乎必然撞上 launchd 的节流,阻塞约 10 秒 —— 而这正是当初加去抖
 /// 想消灭的场景,只是当时没料到另一个 store 也会重启。
 ///
-/// ⚠️ 历史包袱:两个 store 里都还留着"'推送账号'tab 底部的保存栏会把两处 persistFile()
+/// 历史包袱:两个 store 里都还留着"'推送账号'tab 底部的保存栏会把两处 persistFile()
 /// 一起调用、之后统一重启一次"这类注释。**那个保存栏已经不存在了**(现在是
 /// AccountLinkingTab 的只读 `autosaveStatusBar` + 1.2s 防抖自动保存),它描述的正是本类
 /// 现在负责的这件事 —— 那些注释已经订正过,别再照着更早的版本推断行为。

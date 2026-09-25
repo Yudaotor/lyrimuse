@@ -60,15 +60,15 @@ type neteaseInfo struct {
 	// TrackFoundNoLyrics:网易云**曲库里有这首歌**(pick 选中了一条曲目),但歌词接口
 	// 回的正文是空的 —— 平台上还没有歌词文本。
 	//
-	// ⚠️ 跟 PureMusic 是**两个不同的结论**,别合并:PureMusic 是"这首歌本来就没有词"
+	// 跟 PureMusic 是**两个不同的结论**,别合并:PureMusic 是"这首歌本来就没有词"
 	// (纯音乐,以后也不会有);这个是"这首歌有词,只是平台还没收录"(新歌很常见,过阵子
 	// 往往就补上了)。两者对用户意味着完全不同的下一步 —— 一个是别等了,一个是可以等、
 	// 或者自己往 lyrics/ 放一份。判据里因此写死了 `!PureMusic`,两者互斥。
 	//
-	// 起因是现象是「为什么这首歌搜不到歌词」(Iris / OLORUNNS,发行的新歌):
-	// 网易云和 QQ **都精准命中了曲目**(歌名/歌手/专辑/时长四项全中),但两家都没有歌词
-	// 文本,而弹窗显示的是跟"十个源都没搜到这首歌"一模一样的那句话 —— 匹配明明是对的,
-	// 用户却完全看不出来,也无从判断该等还是该自己贴。见 enrich.go 的 noLyricsMarkers。
+	// 现象:网易云和 QQ 有时**都精准命中了曲目**(歌名/歌手/专辑/时长四项全中,如新发行
+	// 曲目 Iris / OLORUNNS 这类),但两家都没有歌词文本,而弹窗显示的是跟"十个源都没搜到
+	// 这首歌"一模一样的那句话 —— 匹配明明是对的,用户却完全看不出来,也无从判断该等还是
+	// 该自己贴。见 enrich.go 的 noLyricsMarkers。
 	TrackFoundNoLyrics bool
 }
 
@@ -96,18 +96,18 @@ var (
 	// neteaseLastFailureMu/neteaseLastFailureReason:诊断用的只读旁路(跟
 	// ytmusic.go 的 ytmusicLastFailureReason 同一个思路——不改 neteaseLookup 的返回值
 	// 形状,自动解析路径从来不需要"为什么没查到"这个原因,只给设置页"测试这个源"功能多开
-	// 一条只读旁路)。⚠️ 网易云对 405 限流本来就有备用接口兜底(见下面 get 闭包的注释),
+	// 一条只读旁路)。 网易云对 405 限流本来就有备用接口兜底(见下面 get 闭包的注释),
 	// 这条旁路只在**两个接口同一拍都被限流**这种少见情况下才有机会被读到——多数时候
 	// 405 会被兜底吸收,压根不会走到"这个源整体没查到"这一步。
 	neteaseLastFailureMu     sync.Mutex
 	neteaseLastFailureReason string
 )
 
-// neteaseMinIntervalBetweenCalls:加——网易云是按接口端点分桶、按短时间内
+// neteaseMinIntervalBetweenCalls:网易云是按接口端点分桶、按短时间内
 // 请求量触发限流的(见 resolveNeteaseInfo 里那段实测记录:"短时间内连发几十次搜索之后"
-// 才会触发),之前完全没有任何节流。真实案例:陶喆和盧廣仲《那個女孩》这首本地匹配不到
-// 的歌,"换个身份再搜"(别名重试轮)+ "按标题反查"(标题反查轮)两轮兜底加起来在 13
-// 秒内连发了 16 次网易云请求,把自己先打成限流——表现是"这首歌搜不到"其实是"被自己的
+// 才会触发)。没有全局节流时,难匹配的歌会触发更多重试轮、也更容易自己先撞上限流(例如
+// 陶喆和盧廣仲《那個女孩》这首本地匹配不到的歌,"换个身份再搜"+"按标题反查"两轮兜底
+// 加起来在 13 秒内连发了 16 次网易云请求)——表现是"这首歌搜不到"其实是"被自己的
 // 重试轮打限流了",而且越是难匹配的歌触发的重试轮越多、越容易自己撞限流,跟"歌好不好搜"
 // 反向关联。这里加一道全局节流,所有网易云请求共享同一个最小间隔,跟
 // musicbrainzThrottle(musicbrainz.go)同一个模式。间隔选得比 MB 的 1.1s 短很多——网易云
@@ -129,11 +129,11 @@ const neteaseMinIntervalBetweenCalls = 250 * time.Millisecond
 // 立刻换备用端点试"的兜底会被这里新加的退避直接废掉(备用端点的请求同样要过
 // neteaseThrottle,退避要是全局的,它也得跟着傻等)。
 //
-// ⚠️ **从固定 30 秒改成按"这个桶连续被拒几次"指数递增**(base → ×2 → … →
+// **从固定 30 秒改成按"这个桶连续被拒几次"指数递增**(base 到 ×2 到 … 到
 // 上限,该桶有一次请求成功就清零,见 neteaseReportSuccess)。固定 30 秒是没有实测依据的
 // 保守起步值,而实际观察到的是退避期一过又立刻再被拒 —— 数出来的证据:
 //
-// 拿 ~25 小时的真实日志(~/Library/Logs/lyrimuse.log.old,18:47 → 09-02 19:12
+// 拿 ~25 小时的真实日志(~/Library/Logs/lyrimuse.log.old,18:47 到 09-02 19:12
 // UTC)统计 171 次拒绝(164× code 405 / 7× 406,**全部落在 /api/search/get/web 一个桶**):
 //   - 相邻两次拒绝间隔 **≤35 秒的有 89 次(52%)** —— 也就是"退避刚满就再撞一次";
 //   - 这种"满了就撞"最长**连成 21 次一串**(≈10.5 分钟一直在敲同一扇关着的门);
@@ -161,7 +161,7 @@ var (
 	neteaseAnySuccess bool
 )
 
-// 网易云搜索的两个端点桶。⚠️ **主备对调**:原来 /api/search/get/web 是首选、
+// 网易云搜索的两个端点桶。 **主备对调**:原来 /api/search/get/web 是首选、
 // /api/search/get 是被限流时的兜底,现在反过来。
 //
 // 依据是同一份 25 小时日志里的对照:两个端点的请求量同一量级(/web 10029 次、/get 8537 次),
@@ -221,7 +221,7 @@ func neteaseReportRejected(rawURL string) (time.Duration, int) {
 }
 
 // neteaseCooldownForStreak:连撞第 streak 次该退避多久。base × 2^(streak-1),封顶。
-// ⚠️ 移位前必须先卡住 streak:`time.Duration` 是 int64,base(2min=1.2e11ns)左移 30 位
+// 移位前必须先卡住 streak:`time.Duration` 是 int64,base(2min=1.2e11ns)左移 30 位
 // 就溢出成负数,而负的退避会被 neteaseReportBlocked 算成"已经过期",等于**没有退避**——
 // 连撞越多反而越不退避,正好反了。streak ≥ 4 时 base<<3 = 16min 已经超过上限,直接封顶。
 func neteaseCooldownForStreak(streak int) time.Duration {
@@ -255,12 +255,12 @@ func neteaseReportSuccess(rawURL string) {
 // 可用情况」)和 `test-lyric-sources` 在决定"要不要把限流当成这个源没给出候选的原因"
 // 时先问一下这里。
 //
-// ⚠️ 病根是实测坐实的**张冠李戴**:`neteaseLastFailureReason` 只要进程里出现过一次
+// 病根是**张冠李戴**:`neteaseLastFailureReason` 只要进程里出现过一次
 // code 405 就会被贴上,而只要该源这一轮没给出候选就会显示出来 —— 两件独立的事被显示成
 // 因果。对照实验(同一分钟内跑两次 `collector search-lyrics`):
-//   - 《妳聽得到》:首个网易云请求吃 405 → 换备用端点 10 次全 200 → 仍然零候选,
+//   - 《妳聽得到》:首个网易云请求吃 405 到 换备用端点 10 次全 200 到 仍然零候选,
 //     面板显示"未给出候选 + 接口限流";
-//   - 《白发》:**同样**吃 405 → 走备用端点 → netease **给出 4 条候选**,最终
+//   - 《白发》:**同样**吃 405 到 走备用端点 到 netease **给出 4 条候选**,最终
 //     failureCodes 里根本没有 netease。
 //
 // 后者证明"吃过 405"跟"没给出候选"根本不是同一件事。加这道判据之后,只有该源这一轮
@@ -275,7 +275,7 @@ func neteaseSawSuccessNow() bool {
 // 间隔,ctx 取消时提前退出等待(不占用这次调用名额,不更新 neteaseLastCall)。
 //
 // 加了第二层等待:rawURL 对应的端点桶如果最近被 neteaseReportBlocked 标记过
-// 退避,还要多等到那个退避期满。⚠️ 两层等待都**不持锁 sleep**——这一点故意跟
+// 退避,还要多等到那个退避期满。 两层等待都**不持锁 sleep**——这一点故意跟
 // musicbrainzThrottle"锁一直拿着睡"不一样:退避可能长达 30 秒,如果也锁着睡,会把
 // **所有**端点(包括没被限流的备用端点、其它完全不相干的接口)一起卡住 30 秒,直接废掉
 // neteaseSearch"主端点被拒立刻换备用端点试"这条兜底,也会让同时在解析别的曲目、命中
@@ -283,7 +283,7 @@ func neteaseSawSuccessNow() bool {
 // 重新排队"的轮询式设计,任何一个端点桶的长退避都不会挡住其它桶或全局最小间隔的正常节奏。
 // errNeteaseBucketCooling:这个端点桶正在退避期内。**立刻返回,不睡**。
 //
-// ⚠️ 改的语义(此前是睡满整个退避期再放行),连带改掉了
+// 改的语义(此前是睡满整个退避期再放行),连带改掉了
 // neteasethrottle_test.go 里那两条断言。实测依据(「搜索候选歌词」搜
 // DAOKO×米津玄師《打上花火》,逐条打时间戳):**整次搜索 150 秒以上,其中约 120 秒
 // 是在这里睡掉的**,而且睡出来的是一条等差数列 —— 30 / 60 / 90 / 120 / 150 秒。
@@ -303,7 +303,7 @@ func neteaseSawSuccessNow() bool {
 // 立刻返回错误对"被限流就别继续敲门"这个原始意图其实**更强**:退避期内一个请求都不
 // 发(旧写法是睡完再发一个去试),同时调用方能立刻改走备用桶。
 //
-// ⚠️ 别把这条读成"退避变宽松了"。250ms 最小间隔那一层照旧**睡**(它管的是"发得太快",
+// 别把这条读成"退避变宽松了"。250ms 最小间隔那一层照旧**睡**(它管的是"发得太快",
 // 不是"这个桶被拒了"),两层的语义不一样,不能一起改。
 var errNeteaseBucketCooling = errors.New("netease: endpoint bucket cooling down")
 
@@ -360,9 +360,9 @@ func neteaseLookup(ctx context.Context, artist, title, album string, durationSec
 
 // withholdImpersonatorRiddenIdentity 对"版权整体下架、曲库里只剩仿冒号"的艺人
 // (见 isNeteaseImpersonatorRidden)只保留**歌词族**字段,把身份/封面/跳转链接/专辑 id
-// 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 → 不写
-// CoverSource/CoverAlbum;AlbumID=0 → 专辑预取早退;SongURL 空 → 不写 NeteaseURL;
-// Artist 空 → canonical_artist 走其它链路),唯一的差别是歌词照常进入全源打分。
+// 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 到 不写
+// CoverSource/CoverAlbum;AlbumID=0 到 专辑预取早退;SongURL 空 到 不写 NeteaseURL;
+// Artist 空 到 canonical_artist 走其它链路),唯一的差别是歌词照常进入全源打分。
 //
 // 为什么身份/封面照旧不信:仿冒号能把歌名、专辑名、时长一字不差地抄成目标曲目,
 // pick() 的标题/歌手名校验对这类艺人天然拦不住(见 isNeteaseImpersonatorRidden 注释)。
@@ -375,17 +375,9 @@ func neteaseLookup(ctx context.Context, artist, title, album string, durationSec
 // 的每一首歌都**先天少一个源**,而网易云恰好是少数同时供逐字 YRC、社区译文和
 // 罗马音的那个。
 //
-// 实测(现象是「开不了口 (Live) 歌词不准」):本地在放《周杰伦地表最强世界
-// 巡回演唱会 (Live)》里的「开不了口 (Live)」(272.973s)。整源跳过之下,各源里 QQ 的
-// smartbox 首个查询只回一条署名"周杰伦微博台"的仿冒条目(被歌手闸拒)、酷狗只有 2010
-// 超时代演唱会那版(399s,错版本)、musixmatch 空,只剩 LRCLIB 一条 509 分的候选,而那份
-// 的时间轴相对录音室版从 +1.0s 一路漂到 +11.5s、只有 34 行、末句比录音室版还早,根本
-// 不是这次现场的时间轴。网易云上**有**对版的那份:歌名「开不了口 (Live)」、专辑
-// 「周杰伦地表最强世界巡回演唱会」、自报时长 272.973 与本地逐位一致、正文带这次现场
-// 特有的返场段(「我就是开不了口 / 我只能够远远的看着你 / 开不了口」),逐行比对相对
-// 录音室版是**恒定** -10.7s 偏移(前奏短了 10.7 秒,之后每一句都严丝合缝),而且带 YRC
-// 逐字。它经 pick() 的严格档(标题精确 + artistMatches + 多候选要求专辑分>0)能被唯一
-// 锁定 —— 唯一挡住它的就是这里的整源跳过。
+// 实测(周杰伦「开不了口 (Live)」案,详见 docs/features/09-lyrics-resolution.md 决策日志):
+// 整源跳过会连歌词一起挡掉,而网易云那份对版候选(专辑亲和、自报时长与本地逐位一致、
+// 带 YRC 逐字)本可以被 pick() 的严格档唯一锁定——只有放开歌词族字段才拿得到它。
 func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) neteaseInfo {
 	if !isNeteaseImpersonatorRidden(artist) {
 		return info
@@ -472,7 +464,7 @@ func neteaseSearch(get func(string, any) error, q string, out any) error {
 
 // isInstrumentalPlaceholderLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
 //
-// ⚠️ 从 isNeteasePureMusicLyric 改名成来源中立:它对 **QQ 音乐**的占位文案
+// 从 isNeteasePureMusicLyric 改名成来源中立:它对 **QQ 音乐**的占位文案
 // 逐字适用 —— QQ 对纯音乐曲目回的是单行 `[00:00:00]此歌曲为没有填词的纯音乐,请您欣赏`,
 // 正文含 neteaseInstrumentalPlaceholderMarker、除它之外没有别的正文行,这个函数直接判 true。
 // 同一个事实两处别各写一份判定。
@@ -509,12 +501,10 @@ func isInstrumentalPlaceholderLyric(lrc string) bool {
 
 // stripNeteaseEscapedApostrophes 清掉网易云 lyric/tlyric/romalrc/yrc 接口里一小撮曲目
 // 自带的字面 `\'`(反斜杠+英文引号两个字符,不是 JSON 转义——json.Unmarshal 早就完成了
-// 正常解码,这是网易云自己数据库里躺着的脏数据)。现象是"陈奕迅《爱是怀疑
-// (Live)》里 It\'s / Can\'t 这种反斜杠直接显示在歌词里",实测抓了本地缓存的
-// ~/.config/lyrimuse/lyrics/*.lrc 全量按来源分组核实过:1669 条网易云缓存里只有这 2 条
-// 命中(且都是英文歌词行,反斜杠只出现在撇号前面),QQ/酷狗/musixmatch/lrclib/amll 缓存
-// 里零命中——是网易云这一个源的孤立脏数据,不是我们自己转义/反转义链路的 bug,所以固定
-// 替换反斜杠+撇号这一种组合就够,不用做成通用的转义清洗器。
+// 正常解码,这是网易云自己数据库里躺着的脏数据),避免反斜杠直接显示在歌词里(如
+// It\'s / Can\'t 这类撇号)。全量按来源分组核实过:是网易云这一个源的孤立脏数据
+// (只出现在英文歌词行、反斜杠紧贴撇号),其它源零命中,不是本仓转义/反转义链路的
+// bug,所以固定替换反斜杠+撇号这一种组合就够,不用做成通用的转义清洗器。
 func stripNeteaseEscapedApostrophes(s string) string {
 	if !strings.Contains(s, `\'`) {
 		return s
@@ -588,7 +578,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 	// 专辑亲和 + 不缺本地限定词 + 多出的词全在 acoustic 家族白名单 —— 伴奏/粤语/国语
 	// 这类"时长相同但确是另一次录音"的词永不锚定,见 match.go 那边的注释);
 	// ②它的专辑分**严格高于**其它全部已通过校验的候选(证据必须是"唯独它对得上",
-	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
+	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 到 有歧义,放弃)。
 	// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
 	if durationSecs > 0 {
 		all := append(append([]cand{}, exactCands...), looseCands...)
@@ -625,7 +615,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 		if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
 			return cands[0].s // 唯一候选,没有歧义,直接信
 		}
-		// 多条候选(有歧义)→ 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
+		// 多条候选(有歧义)到 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
 		var best *neSearchSong
 		bestSc := 0
 		for _, c := range cands {
@@ -708,7 +698,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
 			if probe.Code == 405 {
-				// 实测坐实的具体原因,见 neteaseLastFailureReason 声明处注释。
+				// 具体原因,见 neteaseLastFailureReason 声明处注释。
 				// 只在确认是这个 code 时才记**具体原因**——其它非零 code 目前没有验证过
 				// 具体含义,不编一个没核实过的理由。存的是稳定代码不是文案,见
 				// lyricsourcefailure.go 头注,两侧必须同步维护。（上面的退避不受这条限制,
@@ -726,19 +716,19 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// NetEase 搜索对词序/括号噪声敏感:带一堆 (feat.)/(with) 的完整标题常搜不到真曲、
 	// 只回一堆热门歌兜底。用去括号标题查,不中再换一个词序(实测 "标题 歌手" 召回更好)。
 	//
-	// ⚠️ 这里**故意不走 searchTitleVariants**,是唯一一个不走的源 —— 别把它"顺手统一"过去。
-	// 那个函数里的"版本限定词 → 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
+	// 这里**故意不走 searchTitleVariants**,是唯一一个不走的源 —— 别把它"顺手统一"过去。
+	// 那个函数里的"版本限定词 到 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
 	// 那三个源是**取第一条通过校验的候选就收工**,搜索词一偏就直接定死在错版本上。而下面
 	// 的 pick() 是**扫完 10 条结果再排序挑**(精确同名 exactCands 优先于宽松 looseCands,
 	// 再按专辑分),版本选择由排序负责,不依赖搜索词的写法。
 	//
-	// 实测坐实:把这里也改成"版本限定词原样优先"之后,14 首带 (Live)/
+	// 把这里也改成"版本限定词原样优先"之后,14 首带 (Live)/
 	// (Original Version)/(reprise) 的歌,网易云拿到的候选曲名**一条都没变**(分数的整齐
 	// -50 是另一次改动删掉来源加分造成的,与此无关),白白多打最多 2 次请求 —— 而网易云
 	// 恰恰是各源里最容易被限流的那个(HTTP 200 + body code 405)。所以改回来。
 	ct := stripParens(title)
-	// ca:去掉艺人标签自带的括号别名再拼进搜索词——真实故障(温岚《夏日の風》):
-	// 本地艺人字段有时是"主名 (罗马化别名)"(YouTube Music 桥接给的常见形态,如
+	// ca:去掉艺人标签自带的括号别名再拼进搜索词——本地艺人字段有时是"主名 (罗马化别名)"
+	// (YouTube Music 桥接给的常见形态,如
 	// "溫嵐 (Landy Wen)"),整串原样拼进网易云的模糊搜索会把召回带偏、搜不到任何候选。
 	// 跟 ct 去标题括号是同一个坑、同一个修法。下面 pick() 里的 artistMatches 仍然拿
 	// **原始** artist 去核验身份(它自己有 stripParens 的兜底分支,核验不受影响),这里
@@ -761,7 +751,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	type neSong = neSearchSong
 	// 选谁的封面/链接:同名歌里混着别歌手的翻唱/演奏/卡拉OK/同名他人歌。优先级:
 	// ①歌名+歌手都匹配、且专辑分最高(专辑名 loose 相等=100 直接锁定正确专辑版本);
-	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 → 返回空,不串错歌手。
+	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 到 返回空,不串错歌手。
 	// 只信 byArtist(歌手名精确对上),不再有"歌手对不上、专辑名对上就认"的 byAlbum 兜底——
 	// 专辑名字段能被仿冒号无成本抄成任意值(比 artistMatches 要防的"歌手名加个符号"更难防),
 	// 官方曲库缺失时宁可 pick() 返回空,让 resolveTrackEnrichment 退到 QQ 音乐兜底(QQ 侧
@@ -857,7 +847,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 搜索排名里彻底挤出窗口(实测四条查询词各自的前 30 条里,官方 The One 版一次都没出现,
 	// 而 /api/album/18906 的曲目列表里它就躺着,id=186043、自报 273.0s 与本地 273.227s
 	// 相差 0.227s,还带 52 行 LRC)。本地专辑名 + 真实时长都已知时,改走"搜专辑
-	// (neteaseAlbumIDByName,artistMatches + albumScore>=100 双闸)→ 浏览曲目 → 标题/
+	// (neteaseAlbumIDByName,artistMatches + albumScore>=100 双闸)到 浏览曲目 到 标题/
 	// 歌手闸 + 时长唯一锚定"这条不依赖曲目搜索排名的入口,拿曲目 ID 接回既有的取词/取封面
 	// 流程。闸门与 pick() 同强度(见 anchorAlbumTrackForLocalTitle 头注),不是放宽。
 	//
@@ -1012,7 +1002,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 
 // neteaseAlbumTracks 按专辑 id 列出这张专辑的全部曲目,给"提前解析同专辑其它曲目"用。
 //
-// ⚠️ 必须带 Cookie: os=pc。实测:不带 cookie 时这个端点会**间歇性**返回
+// 必须带 Cookie: os=pc。实测:不带 cookie 时这个端点会**间歇性**返回
 // HTTP 200 + body {"code":-462,"message":"请绑定手机后再试哦~"}(9 次里中 5 次,同一个
 // 专辑 id 有时通有时不通,是反爬闸门不是"这张专辑要登录");带上之后 9/9 全通。HTTP 状态
 // 码始终是 200,所以只看 status 会把拒绝解成"这张专辑零首歌" —— 跟本文件 resolveNeteaseInfo
@@ -1056,7 +1046,7 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 		// 这个函数没有 ctx 参数(调用方目前都不需要取消),context.Background() 只用来
 		// 让 neteaseThrottle 复用同一套等待/退出逻辑——不可取消。
 		//
-		// ⚠️ **更正(实测证伪)**:这里原来写着「这个端点桶如果刚被
+		// **更正(实测证伪)**:这里原来写着「这个端点桶如果刚被
 		// neteaseReportBlocked 标记过退避,最长可能等到 neteaseBlockCooldown(30s)——这条
 		// 路径本来就是后台预取/兜底重试(调用方 retryTitleFromAlbumDetailed 等不阻塞任何
 		// 用户可见的同步等待),偶尔多等几十秒不影响体验」。**那个前提是错的**:
@@ -1156,13 +1146,12 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 // 在平台间是意译、文字层面完全无法互认"这种场景,这一步不能像 resolveNeteaseInfo 那样
 // 靠曲目搜索间接带出专辑,必须直接搜专辑本身。
 //
-// 跟 resolveNeteaseInfo 的 get 闭包同一个理由,同一个修法(实测坐实:开发这个
-// 函数当天就把自己测出了限流——网易云限流照样回 HTTP 200,拒绝写在 body 的 code 字段里,
-// 只看 HTTP 状态码会把"这次被限流了"解成"这张专辑网易云真的没有",而且是**按端点分桶**
-// 限流,同一时刻换 /api/search/get 往往还通):按端点分桶重试一次,body code 非
-// 200/0 一律当失败,不当"零张专辑"。
+// 跟 resolveNeteaseInfo 的 get 闭包同一个理由,同一个修法:网易云限流照样回 HTTP 200,
+// 拒绝写在 body 的 code 字段里,只看 HTTP 状态码会把"这次被限流了"解成"这张专辑网易云
+// 真的没有",而且是**按端点分桶**限流,同一时刻换 /api/search/get 往往还通——按端点
+// 分桶重试一次,body code 非 200/0 一律当失败,不当"零张专辑"。
 func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, bool) {
-	// 真实故障(温岚《夏日の風》= 网易云《夏天的风》):本地艺人标签有时自带
+	// 本地艺人标签有时自带
 	// 括号里的罗马化别名(如 YouTube Music 给的"溫嵐 (Landy Wen)"),整串原样拼进搜索词
 	// 会把网易云的模糊搜索带偏、专辑一条都搜不到——跟 retryTitleFromArtistSearch 早就在
 	// 用的"stripParens(title)"是同一个坑、同一个修法,只是这里之前漏了对 artist 也做。
@@ -1220,15 +1209,13 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		if err := json.Unmarshal(body, &out); err != nil {
 			return 0, false, false
 		}
-		// 真实故障(方大同「Lovers Policy」专辑"15"案):以前是"扫到第一条满足
-		// 门槛(>=100)的专辑就收工",而网易云的搜索排名不保证精确同名的排在前面——搜"方大同
+		// 扫完这一页全部结果、取 albumScore **最高**的那个,而不是"扫到第一条满足门槛
+		// (>=100)的专辑就收工"——网易云的搜索排名不保证精确同名的排在前面。例如搜"方大同
 		// 15"时,《15 香港演唱会(2011Live)》排在了正好叫《15》的录音室专辑前面,两者的
 		// albumScore 都够门槛(前者是"字符串包含"档 100,后者是"完全同名"档 200,但"第一条
-		// 满足门槛就收工"从不比较、只看谁先出现),于是浏览曲目时进的是演唱会专辑,配出来的
-		// 是那首歌的 Live 版而不是录音室版(分数因此长期偏低,287 分——这个异常偏低本身就是
-		// 信号,只是这里第一次真正查到根子上)。改成扫完这一页全部结果、取 albumScore **最高**
-		// 的那个,同分才按到达顺序决胜——跟 bestAlbumTrackByDuration"不是谁先到就信谁,而是
-		// 比谁更贴切"是同一个原则。
+		// 满足门槛就收工"从不比较、只看谁先出现),会导致浏览曲目时进的是演唱会专辑,配出来的
+		// 是 Live 版而不是录音室版。同分才按到达顺序决胜——跟 bestAlbumTrackByDuration
+		// "不是谁先到就信谁,而是比谁更贴切"是同一个原则。
 		bestID := int64(0)
 		bestScore := -1
 		for _, a := range out.Result.Albums {
@@ -1260,7 +1247,7 @@ const retryTitleFromAlbumMaxDurationDiffSecs = 2.0
 
 // retryTitleFromAlbum 是"标题彻底搜不到、但本地专辑名已知"时的最后一道兜底——有些歌在
 // 不同平台间是**意译**标题(不是音译/直译/加括号注释这类常见的写法差异),文字层面完全
-// 无法互认。真实案例:Khalil Fong《Revisited》= 网易云《回留》,同一张专辑
+// 无法互认,例如 Khalil Fong《Revisited》= 网易云《回留》,同一张专辑
 // 《梦想家 The Dreamer》,时长精确到毫秒吻合(236.344s vs 236.343s),但两个标题连一个
 // 字都不共享,任何基于文字的匹配(含 searchTitleVariants/知名艺人别名表那类思路)都碰不到。
 //
@@ -1296,7 +1283,7 @@ func retryTitleFromAlbumDetailed(ctx context.Context, artist, album string, dura
 }
 
 // retryTitleFromArtistSearch 是 retryTitleFromAlbum 找不到时的第二道兜底——专救"本地专辑名
-// 对应的网易云专辑,收的不是目标那次录音"的情况。真实案例:陶喆《Airport in
+// 对应的网易云专辑,收的不是目标那次录音"的情况,例如陶喆《Airport in
 // 10:30》,本地专辑标"乐之路",网易云上名字对得上的是精选集《Ultrasound 乐之路
 // 1997-2003》(albumScore 判定为同一张不成问题),但精选集里收录的《飞机场的10:30》是
 // 295.314s 的重制/精选版,跟本地文件真正对应的原版录音(280.773s,收在同名专辑《陶喆》
@@ -1414,7 +1401,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 }
 
 // retryTitleFromArtistSearchMaxRank:泛搜回来的 30 条里,只有**排名最靠前的这几条**够格
-// 交给纯时长判据。修的真实 bug(打上花火 → 春雷案)。
+// 交给纯时长判据。修的真实 bug(打上花火 到 春雷案)。
 //
 // 病灶:这条兜底刻意不看标题文字(理由见 retryTitleFromArtistSearch 头注),判据只剩
 // "歌手对得上 + 时长差 < 2s"。而搜索词是"歌手 + 本地标题",标题一个字都没命中时,搜索
@@ -1428,20 +1415,20 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 // 排名恰好是这里缺的那个信号,实测三个案例分得干干净净(各真查一次网易云):
 //
 //	查询                        纯时长会选的        它的排名   对错
-//	米津玄师 Uchiagehanabi       春雷               第 12 名   ✗ 错(另一首歌)
-//	方大同 Love Love Love        爱爱爱             第  2 名   ✓ 对
-//	陶喆 Airport in 10:30        飞机场的10:30      第  1 名   ✓ 对
+//	米津玄师 Uchiagehanabi       春雷               第 12 名   错(另一首歌)
+//	方大同 Love Love Love        爱爱爱             第  2 名   对
+//	陶喆 Airport in 10:30        飞机场的10:30      第  1 名   对
 //
 // 后两个正是这条兜底存在的理由(见 retryTitleFromArtistSearch 头注和 enrich.go 里那段
 // "两条兜底谁更可信"),它们都靠**搜索引擎认得那个标题**才排到最前面;而排到第 12 名
 // 说明引擎压根没把它跟标题关联起来,那一条纯粹是"同歌手 + 时长撞车"。取 5 是给已知的
 // 最差正例(第 2 名)留一倍余量,同时离错例(第 12 名)还差得远。
 //
-// ⚠️ 只对这条**泛搜**路径生效,不能下放进 bestAlbumTrackByDurationDetailed:另一个调用方
+// 只对这条**泛搜**路径生效,不能下放进 bestAlbumTrackByDurationDetailed:另一个调用方
 // retryTitleFromAlbum 喂进去的是"某张专辑的完整曲目表",那里的顺序是曲序、不是相关性
 // 排名,截断前几条等于随机丢掉后半张专辑。
 //
-// ⚠️ 排名是**过滤掉非本歌手之后**的名次(get 里的 artistMatches 那道闸先跑)。这只会让
+// 排名是**过滤掉非本歌手之后**的名次(get 里的 artistMatches 那道闸先跑)。这只会让
 // 名次更靠前、不会更靠后,对上面那张表的结论只增不减。
 //
 // 另外核实过、但**没有**采用的一条修法:把网易云搜索结果里的 alias/transNames 取回来当
@@ -1461,7 +1448,7 @@ func topSearchRanked(tracks []albumTrack, n int) []albumTrack {
 // 请求就对这条纯时长匹配逻辑写断言(跟 t2s.go/musicbrainz.go 里同类"网络函数拆出纯判据"
 // 的做法一致)。两首**不同**歌时长同样接近、分不出该是哪首时返回空,宁可不给也不猜。
 //
-// ⚠️ 修的真实 bug(方大同「Love Love Love」= 「爱爱爱」案):retryTitleFromArtistSearch
+// 修的真实 bug(方大同「Love Love Love」= 「爱爱爱」案):retryTitleFromArtistSearch
 // 是泛搜"歌手+本地标题",同一首歌被不同专辑/合辑重复收录是常态——"爱爱爱"这首歌当时就在
 // 候选列表里出现了两次(专辑《爱爱爱》和合辑《The Soulboy Collection》各一条),时长分毫不差
 // (213.266s,本地时长 213s)。旧逻辑一见到"第二条一样近"就无条件判 ambiguous、整体弃权,

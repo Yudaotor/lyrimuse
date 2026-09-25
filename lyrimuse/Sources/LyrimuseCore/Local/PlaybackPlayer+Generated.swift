@@ -8,17 +8,17 @@
 import Foundation
 
 public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashable {
-    /// 系统自带,走 AppleScript(JXA)直问 Music.app;scrobbleLabel 同时是 mediaPlayerLabel 认不出来源时的兜底值。
+    /// 系统自带,走 AppleScript(JXA)直问 Music.app,因此要一份「自动化」权限;scrobbleLabel 同时是 mediaPlayerLabel 认不出来源时的兜底值。
     case appleMusic = "apple_music"
     /// 无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。
     case qqMusic = "qq_music"
     /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。
     case netease = "netease_music"
-    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。⚠️ processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
+    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
     case kugou = "kugou_music"
-    /// Electron 应用,走 media-control。⚠️ 只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。
+    /// Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。
     case soda = "soda_music"
-    /// 自己有 AppleScript 字典,但位置直查路线已移除,现在全程 media-control。
+    /// 自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。
     case spotify = "spotify"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
     case auto = "auto"
@@ -67,7 +67,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     }
 
     /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。
-    /// ⚠️ 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反
+    /// 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反
     /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
     /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。
     public var republishesZeroAnchor: Bool {

@@ -37,7 +37,7 @@ func runOnboardingTests() {
 
     // ---- 撒花:两头都在画面外(整阵能自己收干净)----
     //
-    // ⚠️ 这一组是这份几何存在的理由,别删。View 层是靠"`duration` 到点把整个 TimelineView
+    // 这一组是这份几何存在的理由,别删。View 层是靠"`duration` 到点把整个 TimelineView
     // 摘掉"来停掉逐帧刷新的(`ConfettiOverlay`),所以:
     //  ① 到 `duration` 那一刻还有纸片停在画面里 = 用户看到"撒花撒了一半被整块抹掉";
     //  ② `elapsed == 0` 那一刻就有纸片在画面里 = 纸片凭空出现在画面中间,不是"落下来"。

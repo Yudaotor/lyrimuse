@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// 实测坐实:ListenBrainz 持续 429(收听记录已经过了 2.5 小时都是同一个错)
+// ListenBrainz 持续 429(收听记录已经过了 2.5 小时都是同一个错)
 // 时,submit() 原来的 tries/退避只管一次调用内的几次重试——poller.go 四个调用点(Mac
 // 原生 single/playing_now、桥接 iPhone single/playing_now)各自独立按自己的节奏发起
 // 新一轮 submit,互相不知道对方也在被拒,合起来对一个持续故障的服务器反而在加压,
@@ -67,7 +67,7 @@ func TestLbCooldownClearsOnSuccess(t *testing.T) {
 	}
 }
 
-// ⚠️ 非 429 的失败(超时/5xx/网络错误)不该升级这套专用冷却——那是另一类问题,
+// 非 429 的失败(超时/5xx/网络错误)不该升级这套专用冷却——那是另一类问题,
 // 用 429 的退避去惩罚它治不了,也不该让"网络抖了一下"连累后面正常的请求。
 func TestLbCooldownIgnoresNon429Failures(t *testing.T) {
 	c := &lbClient{}

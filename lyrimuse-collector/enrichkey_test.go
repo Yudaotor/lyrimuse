@@ -26,7 +26,7 @@ func TestNormEnrichTitle(t *testing.T) {
 		// `The Girl In Red`,而那可能是另一首完整曲目。
 		{"interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"},
 		{"中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"},
-		// 真实故障(周杰伦《不能说的秘密》电影原声带):"慢板"版是电影原声带里
+		// 举例(周杰伦《不能说的秘密》电影原声带):"慢板"版是电影原声带里
 		// 单独收录的钢琴慢版重奏,时长只有 68 秒,跟正式完整版《Secret》是两个不同的录音,
 		// 剥掉会跟正式版撞成同一个 key。
 		{"慢板保留", "Secret (慢板)", "Secret (慢板)"},
@@ -103,7 +103,7 @@ func TestPlanEnrichKeyMigrationGroups(t *testing.T) {
 
 func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 两个译名括号(都不等于归一化后的 nk 本身)时长差太多,不该被合并 —— 模拟
-	// "慢板/快板"那次真实故障的下一次翻版:关键词清单没漏词(两个都是译名,理应剥括号),
+	// 跟上面「慢板/快板」这一类同理:关键词清单没漏词(两个都是译名,理应剥括号),
 	// 但时长说明这其实是两个不同的录音。时长兼容的那条仍按原逻辑重命名到 nk,
 	// 只有真正冲突的那条被排除、保留在自己原来的 key 下。
 	t.Run("时长差太多不合并", func(t *testing.T) {
@@ -182,7 +182,7 @@ func TestEnrichKeyDurationVariant(t *testing.T) {
 	}
 }
 
-// resolveEnrichKeyForDuration 是"慢板/快板"真实故障的第二道兜底(splitByDuration 挡的是
+// resolveEnrichKeyForDuration 是"慢板/快板"这一类的第二道兜底(splitByDuration 挡的是
 // 启动迁移合并,这个挡的是实时首次撞车)——见其声明处头注。
 func TestResolveEnrichKeyForDuration(t *testing.T) {
 	key := "周杰倫|Secret|不能說的秘密 電影原聲帶"
@@ -329,7 +329,7 @@ func TestStaleExportKeysAlwaysDropsLosers(t *testing.T) {
 		}
 	}
 
-	// 反过来:胜出的那条本来就叫归一化后的名字 → 它的文件留着,只删落选那条。
+	// 反过来:胜出的那条本来就叫归一化后的名字 到 它的文件留着,只删落选那条。
 	got = staleExportKeys(plain, plain, olds)
 	if len(got) != 1 || got[0] != subtitled {
 		t.Errorf("want only the loser stale, got %v", got)

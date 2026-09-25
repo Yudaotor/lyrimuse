@@ -24,7 +24,7 @@ import (
 // 报上来的专辑名为空,就按「署名 + 曲名 + 时长」去 Apple 目录反查(iTunes Search 公开接口,纯 HTTPS,不依赖
 // 本机装 iTunes / Apple Music)。
 //
-// ⚠️ 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint → relay 网页、Last.fm album、LB release_name、
+// 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint 到 relay 网页、Last.fm album、LB release_name、
 // 本地收听日志),**绝不进 enrich 缓存 key**:App 侧 EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,
 // 这边若把 album 改掉,两边 key 对不上、App 拿不到词;广告判据 isAdBreak(Spotify 原生 album 为空即广告)、
 // 专辑预取、会话 key 也继续看 Album 本身。见 snapshot.albumForUpload。
@@ -40,7 +40,7 @@ import (
 //     但网络不通那一轮的空结果不算查空(fetchAppleAlbumHintCandidatesTracked / appleAlbumHintQueryConcluded)。主查询
 //     零候选时把曲名按第一个破折号拆成「署名 - 曲名」再问一次(albumHintTitleSplit,搬运频道把歌手写进曲名的形态)。
 //   - 挑(pickAppleAlbumHint,纯函数、单测钉着;每拍从缓存里重挑,零网络):署名分两档 —— 0 档:归一相等,或
-//     拆开 credit 后一方是另一方的子集(「Prince」↔「Prince & The Revolution」);1 档:**歌词链路核实过的署名**
+//     拆开 credit 后一方是另一方的子集(「Prince」与「Prince & The Revolution」);1 档:**歌词链路核实过的署名**
 //     (lyricResolvedArtists:enrich 条目的 CanonicalArtist,或已采纳歌词决策里胜出候选所报的 artist ——
 //     王子 那首 kugou 候选报「Prince」)。两档都不中的一律不采:实测裸按"跨文字系统就认"会把 周杰伦《七里香》
 //     配到一位拉丁名艺人的「Jay - Piano Cover (Piano Version)」上 —— 同名同时长的翻唱 / 钢琴版比想象多,
@@ -170,7 +170,7 @@ const appleAlbumHintSyncWait = 8 * time.Second
 // 选源这一步一旦过去就不会再来(王子那首 MV 首次解析时没有专辑名可用,Apple 第一条合集封面就此冻结了一天)。
 // 后台那次还在飞就等它,不重复发同一份请求。
 //
-// ⚠️ 会阻塞、且内部取 appleAlbumHintMu:绝不能在 poll 主循环里调,也不能在持有 enrichMu 时调。
+// 会阻塞、且内部取 appleAlbumHintMu:绝不能在 poll 主循环里调,也不能在持有 enrichMu 时调。
 func appleAlbumHintSync(ctx context.Context, artist, title string, durationSecs float64, resolvedArtists []string) string {
 	if !appleAlbumHintEligible(artist, title, durationSecs) {
 		return ""
@@ -252,10 +252,10 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 // 另外一个吗」,见 03 章决策 16)—— 播放器报了专辑就是它;没报就用 Apple 目录回填的那个(只读缓存、不等网络,没命中
 // 就后台补一次、这一轮按空处理)。回填名只进**挑选过程**(Apple 匹配打分 / 网易云 vs Apple 对版 / QQ、同专辑邻居两道
 // guard / coverSwapAllowed / coverNeedsHintCheck),**绝不落盘成 cover_album**:那个字段是"归属已核实"的凭据(App 侧
-// 越过 Last.fm 自带图、collector 侧不再复查都靠它,见 03 章决策 13 的 ⚠️),而回填是按曲名 + 时长猜的,合集 / 重录版
+// 越过 Last.fm 自带图、collector 侧不再复查都靠它,见 03 章决策 13 的 提醒),而回填是按曲名 + 时长猜的,合集 / 重录版
 // 撞车不是小概率,猜错一次就两边一起骗过、且永不自愈。
 //
-// ⚠️ 内部经 lyricResolvedArtists 取 enrichMu:持有 enrichMu 时不能调(trackEnrichment 要在取锁之前算好)。
+// 内部经 lyricResolvedArtists 取 enrichMu:持有 enrichMu 时不能调(trackEnrichment 要在取锁之前算好)。
 func coverAlbumForTrack(ctx context.Context, artist, title, album string, durationSecs float64) string {
 	if album != "" {
 		return album

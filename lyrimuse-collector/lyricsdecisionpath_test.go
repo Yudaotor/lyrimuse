@@ -23,7 +23,7 @@ func TestLyricsDecisionPathsHaveChineseLabels(t *testing.T) {
 		t.Fatalf("读不到 %s: %v(路径变了就跟着改,别把这个测试删掉)", sheet, err)
 	}
 	src := string(data)
-	// ⚠️ 反方向那一段(下面)必须只看 **pathLabel 自己的函数体**。加查询词留痕
+	// 反方向那一段(下面)必须只看 **pathLabel 自己的函数体**。加查询词留痕
 	// 时同一个文件里多了个 queryReasonLabel,里面也是一串 `case "…":`,
 	// 全文件扫的话它们会被当成"没登记的决策路径"报错 —— 两份清单互相顶替对方的缺口。
 	const fnMarker = "private func pathLabel("

@@ -1,7 +1,7 @@
 import SwiftUI
 import LyrimuseCore
 
-/// 「歌词显示 → 菜单栏」分段的编辑台("改成和悬浮歌词/灵动岛一样的
+/// 「歌词显示 到 菜单栏」分段的编辑台("改成和悬浮歌词/灵动岛一样的
 /// 风格"——照 `OverlayEditorStage`/`NotchEditorStage` 的范式改)。
 ///
 /// 跟另外两段编辑台的**关键不同**:菜单栏歌词的预览不需要另画一套"模拟屏幕/模拟刘海"的
@@ -11,7 +11,7 @@ import LyrimuseCore
 /// 一圈工具栏(浮层入口 + 重置)和宽度调整条,不重新实现预览本身。
 ///
 /// 工具栏两行(跟另外两段取齐):第一行「布局」「配色」「字体」+「重置 ▾」(第三个
-/// 入口是加的),横向预算离屏量过(见 `toolbar` 上面那条⚠️):中文在 499pt 窄档下
+/// 入口是加的),横向预算离屏量过(见 `toolbar` 上面那条提醒):中文在 499pt 窄档下
 /// 也放得下,英文在 600pt 宽档放得下、窄档只压摘要不压标题。第二行只有「行为」一颗 —— 两个行为开关
 /// (悬停显示播放控制 / 无歌词时显示歌名)此前因为第一行装不下而寄住在「布局」里,`MenuBarHoverControlsRow`
 /// 头注当时就写着"真要再来第二个行为开关,那时候一起拆一个「行为」浮层出来";第二个 09-04 就来了,
@@ -37,7 +37,7 @@ struct MenuBarEditorStage: View {
             // 外面 —— 「这里帮我把预览背景部分扩展到这下面,把下面的滑条包在里面,
             // 和灵动岛和悬浮歌词设置一样」。三块编辑台的舞台到此是同一个模型。
             //
-            // ⚠️ 调整条现在**注入给预览条**、不再由这里 overlay 在外面:壁纸底一旦要包住它,
+            // 调整条现在**注入给预览条**、不再由这里 overlay 在外面:壁纸底一旦要包住它,
             // 背景/高度/圆角就必须由同一个人算(见 MenuBarPreviewBar.lane 的注释)。这里
             // 在外面 overlay 的话,那一层会落在"舞台 + caption"整块上,胶囊掉到 caption 下面。
             MenuBarPreviewBar(reservesWidthLane: true) {
@@ -53,13 +53,13 @@ struct MenuBarEditorStage: View {
 
     /// 「布局」「配色」「字体」三个浮层入口 + 「重置 ▾」。
     ///
-    /// ⚠️ 横向够不够:离屏 `NSHostingView.fittingSize`(方法论同 `NotchEditorStage.toolbar`
-    /// 那条⚠️,复刻了 `.bordered` + `.controlSize(.small)` + 摘要 `.layoutPriority(-1)`)。
+    /// 横向够不够:离屏 `NSHostingView.fittingSize`(方法论同 `NotchEditorStage.toolbar`
+    /// 那条提醒,复刻了 `.bordered` + `.controlSize(.small)` + 摘要 `.layoutPriority(-1)`)。
     /// 两个入口时(最坏摘要"自适应"/"卡拉OK效果",09-06 前叫"卡拉OK染色"、等长)+ 重置菜单是中文 398.0pt / 英文 458.0pt。
     /// 加第三个入口「粗细」前重量了一遍:同一份复刻在这次的宿主里量出两入口
     /// 348.0 / 394.0(比记录值系统性少 50 / 64,是重置菜单在离屏宿主里渲染得更窄,按差值校准),
-    /// 三入口 中文 450.0 → 校准 ≈500;英文标题若沿用 "Font Weight" 565.0 → ≈629,**改成 "Weight"**
-    /// 后 538.0 → ≈602(最坏摘要 Semibold)。对照舞台宽度区间 499(窄档)~600(卡片列上限):
+    /// 三入口 中文 450.0 到 校准 ≈500;英文标题若沿用 "Font Weight" 565.0 到 ≈629,**改成 "Weight"**
+    /// 后 538.0 到 ≈602(最坏摘要 Semibold)。对照舞台宽度区间 499(窄档)~600(卡片列上限):
     /// 中文全区间标题、摘要都完整(窄档差 1pt 落在摘要上,看不出);英文在 600 宽档差 2pt、
     /// 窄档差约 100pt,亏空全由三个摘要的 `.layoutPriority(-1)` 吃掉,标题不截 —— 跟灵动岛
     /// 第一行现在的状态一样。所以「粗细」的英文词条特意是 "Weight" 不是 "Font Weight"
@@ -271,20 +271,18 @@ struct MenuBarEditorStage: View {
     ///
     /// 浮在预览框那条通道里的宽度调整条。
     ///
-    /// ⚠️ 这里原来是 `MenuBarWidthRow()`(设置页原生行样式),当时的理由是"菜单栏这段的预览
-    /// 只是一小条,下面是设置页普通背景、不是一张可以浮在上面的场景图,硬套黑底胶囊只会变成
-    /// 一块突兀的黑条"。**这个理由被**:他连着三次要求「和之前两个页面一样」,
-    /// 而原生行样式在舞台那块近白底上跟页面里一条普通设置行几乎无从区分 —— 它没能传达
-    /// "这是预览框自己的控件",反而正是他一直觉得"还没做"的原因。
+    /// 用跟 `NotchEditorStage.widthBar` 一致的黑底胶囊样式,不用设置页原生行样式
+    /// (`MenuBarWidthRow()`)——原生行样式在舞台那块近白底上跟页面里一条普通设置行
+    /// 几乎无从区分,传达不出"这是预览框自己的控件"。
     ///
     /// 样式照 `NotchEditorStage.widthBar` 逐项抄:黑底胶囊 + 白色描边 + 投影、白色小号
     /// Slider、等宽读数。固定黑白**不跟深浅色模式走** —— 跟另外两条同一个理由,它压在
     /// 预览那块壁纸/材质合成出来的底上,语义色在浅色壁纸上会读不出来。
     ///
-    /// ⚠️ **不要给这根 Slider 传 `step:`**。macOS 的 Slider 一旦有 step 就会画刻度线,
+    /// **不要给这根 Slider 传 `step:`**。macOS 的 Slider 一旦有 step 就会画刻度线,
     /// 80...600 / step 10 是 52 个刻度、密到连成一条实线,看着像轨道下面平白多一条白杠
-    /// (悬浮歌词那根为此被现象是过一次,见 NotchEditorStage.widthBar 同款注释)。量化不必
-    /// 靠它:下面 set 里自己 round 到 10 的整数倍。
+    /// (见 NotchEditorStage.widthBar 同款注释)。量化不必靠它:下面 set 里自己 round 到
+    /// 10 的整数倍。
     private var stageWidthBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.and.right")
@@ -371,7 +369,7 @@ extension MenuBarLyricsWidthMode {
 }
 
 extension MenuBarLyricsIconPosition {
-    /// 三个选项名直接复用灵动岛「歌词行 → 封面位置」那组现成词条(不显示/左/右)——
+    /// 三个选项名直接复用灵动岛「歌词行 到 封面位置」那组现成词条(不显示/左/右)——
     /// 那也是一个"要不要显示、显示在哪一侧"的三选一,语义逐字相同,没必要另造一套说法。
     var displayName: String {
         switch self {
@@ -465,7 +463,7 @@ struct MenuBarTitleFallbackRow: View {
 ///    而且一颗样式重置按钮顺手把整个功能关掉是危险且反直觉的。两个排除跟悬浮歌词/灵动岛
 ///    那两颗「重置」的取舍一致,菜单里那句"不含宽度和总开关"说的就是这两样。
 ///
-/// ⚠️ **新增设置项时记得同步加进来**:这个函数漏一项不会报错,表现是"点了重置有一项没变",
+/// **新增设置项时记得同步加进来**:这个函数漏一项不会报错,表现是"点了重置有一项没变",
 /// 用户很难判断是漏了还是本来就不该变。就漏过两项(歌词旁的图标、悬停显示播放
 /// 控制)——它们加进「布局」浮层时没同步这里,被用户当场看出来。
 /// 默认值只在 `AppSettings.defaultMenuBarXxx` 里出现一次,`AppSettings.init()` 的 fallback
@@ -495,7 +493,7 @@ enum MenuBarStyleDefaults {
 
 // MARK: - 「布局」浮层
 
-/// 「布局」组的行(浮层与抽屉同一份):宽度模式(固定宽度下的对齐方式)→ 副行 → 歌词旁的图标。
+/// 「布局」组的行(浮层与抽屉同一份):宽度模式(固定宽度下的对齐方式)到 副行 到 歌词旁的图标。
 /// 三样都是"这一格怎么占位":占多宽、排几行、旁边有没有图标。「副行」从「字体」搬过来 —— 悬浮歌词的
 /// 「双行显示」在「排版」、灵动岛的「副行」在「歌词行」,三个面上"排几行"都归版面,不归字形;它顺带让
 /// 「字号」失效这件事由「字号」那一行自己说(`MenuBarFontSizeRow`)。悬停 / 无歌词两颗行为开关同日
@@ -514,7 +512,7 @@ struct MenuBarLayoutRows: View {
 
 /// 「布局」浮层 —— 内容就是 `MenuBarLayoutRows`。
 ///
-/// ⚠️ 宽度从 430 放宽到 470。430 是当初为**宽度模式那一行**离屏量出来的
+/// 宽度从 430 放宽到 470。430 是当初为**宽度模式那一行**离屏量出来的
 /// (中文 370.0 / 英文 414.0),而新加的「歌词旁的图标」行标题更长、尾部是个三段选择器 ——
 /// 按同样的字数比例估英文大约 460pt,压着 430 会重演当时那个坑:`SettingsRow` 的尾部控件
 /// `.fixedSize()` 之后容器一窄,SwiftUI 把亏空全摊给**标题**,标题被压没只剩一个 "?"。
@@ -542,7 +540,7 @@ struct MenuBarBehaviorRows: View {
 
 /// 工具栏第二行「行为」浮层。
 ///
-/// ⚠️ 宽度 420 跟另外两段的「行为」浮层同宽(三个形态的「行为」看起来是一件东西),也够用:最宽一行
+/// 宽度 420 跟另外两段的「行为」浮层同宽(三个形态的「行为」看起来是一件东西),也够用:最宽一行
 /// 是英文 "Show Title When No Lyrics" 161.3pt + ⓘ 19 + `SettingsRow` 固定开销 150(2×14 内边距 + 20 图标列
 /// + 3×12 间距 + 12 Spacer + 54 开关)= 330(中文「悬停显示播放控制」103.2 + 19 + 150 = 272),13pt 系统字
 /// 实测文字宽算的。
@@ -557,15 +555,13 @@ struct MenuBarBehaviorPopover: View {
 /// 「宽度模式」行——文案/help 一字不改自旧 `menuBarCard`。单独抽成一个 View 是因为浮层和
 /// 「全部设置」抽屉都要渲染这一行,只留一份实现。
 ///
-/// ⚠️ **两处踩过的坑,均系对拍报的**:
-///   ① 原来用 `SettingsSubRow`(标题左边带一条"子项"竖线),现象是"没必要加这个子项的
-///      竖线"——这一行(以及「配色」那三行)在浮层/抽屉里本来就是**顶层**设置项,不是挂在
-///      某个「主行」下面的从属选项,`SettingsSubRow` 那条竖线是给真正的主从关系准备的
-///      (参见该组件文档:"标题缩进到跟主行标题同一列"),这里没有主行可对齐,套上去就是
-///      多余的装饰。改用 `SettingsRow(icon:)`——跟 `NotchBehaviorItem`/`NotchBehaviorToggleRow`
-///      那套"每项一个图标、不用竖线"的既有惯例对齐,顺带跟「全部设置」抽屉里已经在用
-///      `SettingsRow` 的「最大宽度」行取得一致(改之前二者一个有竖线一个有图标,风格对不上,
-///      用户在「全部设置」截图里也点出了这一点)。
+/// **两处要注意**:
+///   ① 这一行(以及「配色」那三行)在浮层/抽屉里是**顶层**设置项,不是挂在某个「主行」
+///      下面的从属选项,所以用 `SettingsRow(icon:)` 不用 `SettingsSubRow`——后者标题左边
+///      带一条"子项"竖线,是给真正的主从关系准备的(标题缩进到跟主行标题同一列),这里
+///      没有主行可对齐,套上去就是多余的装饰。跟 `NotchBehaviorItem`/`NotchBehaviorToggleRow`
+///      那套"每项一个图标、不用竖线"的既有惯例对齐,也跟「全部设置」抽屉里已经在用
+///      `SettingsRow` 的「最大宽度」行取得一致。
 ///   ② 浮层宽度 280 是**没有离屏量过、凭感觉给的数**,而这一行的分段选择器
 ///      `.fixedSize()` 不肯让步——`SettingsRow`/`SettingsSubRow` 的尾部控件一旦
 ///      `.fixedSize()`、又赶上容器太窄,SwiftUI 会把全部宽度亏空摊给**标题**那一侧
@@ -581,7 +577,7 @@ struct MenuBarWidthModeRow: View {
         SettingsRow(
             icon: "arrow.left.and.right.circle",
             title: L10n.t("宽度模式"),
-            // ⚠️ 这行 help **只描述两种模式各自的最终效果,不给建议**(用户:
+            // 这行 help **只描述两种模式各自的最终效果,不给建议**(用户:
             // "这里只需要说明最终的效果是什么就好,不需要说不建议")。原文里的
             // 「自适应（不建议）」、「想稳定就用固定」以及那整段机制解释都去掉了。
             //
@@ -622,7 +618,7 @@ struct MenuBarAlignmentRow: View {
         SettingsRow(
             icon: "text.alignleft",
             // 用「对齐方式」而不是「对齐模式」:悬浮歌词那个同名设置就叫「对齐方式」
-            // (OverlayStyleSettingsRows),用户上一轮的要求正是"和软件其他地方对齐"。
+            // (OverlayStyleSettingsRows),统一措辞正是为了"和软件其他地方对齐"。
             // 顺带复用已有词条(含 Left-Aligned/Center/Right-Aligned 三个选项名)。
             title: L10n.t("对齐方式"),
             help: L10n.t("只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
@@ -695,7 +691,7 @@ struct MenuBarFontPopover: View {
 }
 
 /// 「副行」行(用户在五档 HTML 对比里选 B 方案:主 10pt / 副 9pt)—— 主歌词下面
-/// 再放一行,内容四选一(不显示 / 下一句 / 译文 / 罗马音),跟灵动岛「歌词行 → 副行」同一个枚举、同一套
+/// 再放一行,内容四选一(不显示 / 下一句 / 译文 / 罗马音),跟灵动岛「歌词行 到 副行」同一个枚举、同一套
 /// 显示名(`LyricSecondaryLine.displayName`)、同一个控件形态(`Picker(.menu)`),只是各存各的键,默认不显示。
 ///
 /// 放在「字体」浮层(它让字号失效,想让因果同屏);搬到「布局」—— 它首先是
@@ -802,9 +798,9 @@ struct MenuBarFontWeightRow: View {
 /// 「逐字染色」+「文字颜色」+「染色颜色」(条件显示)三行——文案/help 一字不改自旧
 /// `menuBarCard`,浮层和抽屉共用同一份。
 ///
-/// ⚠️ 跟 `MenuBarWidthModeRow` 同一天的同一条修正:改用 `SettingsRow(icon:)`
+/// 跟 `MenuBarWidthModeRow` 同一天的同一条修正:改用 `SettingsRow(icon:)`
 /// 而不是 `SettingsSubRow`——这三行在浮层/抽屉里都是顶层设置项,不该带"子项"竖线,理由
-/// 详见 `MenuBarWidthModeRow` 上面那条⚠️。浮层宽度也一并离屏量过(实测这三行最宽一条
+/// 详见 `MenuBarWidthModeRow` 上面那条提醒。浮层宽度也一并离屏量过(实测这三行最宽一条
 /// 中文 288.0pt / 英文 308.0pt,原来的 280 连中文都不够),改成 330 留出余量。
 struct MenuBarColorRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -833,7 +829,7 @@ struct MenuBarColorRows: View {
                 // 它只管未唱到那半截。
                 //
                 // 两个都是既有说法:关态复用「文字颜色」(跟悬浮歌词那行同一个键,
-                // OverlayStyleSettingsRows),开态用下面那行的对称说法。⚠️ 正因为共用,
+                // OverlayStyleSettingsRows),开态用下面那行的对称说法。 正因为共用,
                 // **别去改「文字颜色」那个键的值** —— 那会连带把悬浮歌词那一行也改掉。
                 title: settings.menuBarLyricsKaraoke
                     ? L10n.t("未唱到的颜色") : L10n.t("文字颜色"),
@@ -843,9 +839,9 @@ struct MenuBarColorRows: View {
                     if !settings.menuBarLyricsTextColorHex.isEmpty {
                         Button(L10n.t("跟随系统")) { settings.menuBarLyricsTextColorHex = "" }
                     }
-                    // ⚠️ 色块必须画**菜单栏上那个颜色**,不是设置窗口里解析出来的那个
-                    // (现象是:菜单栏上明明是白字,这个块是黑的)。`labelColor`
-                    // 是动态色,在浅色的设置窗口里求值就是黑 —— 所以取值走
+                    // 色块必须画**菜单栏上那个颜色**,不是设置窗口里解析出来的那个——
+                    // `labelColor` 是动态色,在浅色的设置窗口里求值就是黑,而菜单栏上
+                    // 实际显示的可能是白字。所以取值走
                     // `MenuBarScrollingLabel.textColor`(跟真正渲染同一份口径)再
                     // `resolved(in: 菜单栏的 appearance)` 定型。详见 MenuBarAppearanceStore。
                     AppColorPicker(selection: Binding(
@@ -859,14 +855,14 @@ struct MenuBarColorRows: View {
                     ), supportsOpacity: false)
                 }
             }
-            // ⚠️ 显示条件加了后半句:这个色**还**是歌词旁那枚进度图标上"涨上来"
+            // 显示条件加了后半句:这个色**还**是歌词旁那枚进度图标上"涨上来"
             // 那一截的颜色。只看卡拉OK染色开关的话,"染色关掉 + 图标开着"的用户会看不到这一行,
             // 却又确实被它影响 —— 一个在起作用、却在设置里找不到的颜色。
             if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {
                 CardDivider()
                 SettingsRow(
                     icon: "paintpalette.fill",
-                    // 「染色颜色」→「已唱到的颜色」:原来那个词组自己打结("染色"已经含"色"),
+                    // 「染色颜色」到「已唱到的颜色」:原来那个词组自己打结("染色"已经含"色"),
                     // 而且没说清染的是哪一半。它的 help 一直写着"已唱到部分的颜色" —— 标题
                     // 直接用 help 里那句话,跟上面「未唱到的颜色」成对。
                     title: L10n.t("已唱到的颜色"),
@@ -898,7 +894,7 @@ struct MenuBarColorRows: View {
 // MARK: - 「全部设置」抽屉
 
 /// 菜单栏歌词的「全部设置」抽屉。**分组、顺序、标题跟工具栏四个入口一一对应**(
-/// 起:布局 → 配色 → 字体 → 最大宽度 → 行为 → 恢复默认;每一组调的是浮层背后同一份 `MenuBarXxxRows`)。
+/// 起:布局 到 配色 到 字体 到 最大宽度 到 行为 到 恢复默认;每一组调的是浮层背后同一份 `MenuBarXxxRows`)。
 /// ~09-07 之间是十一项单组平铺、顺序跟工具栏也对不上("项数少,分组反而是多余的层级"),
 /// 用户按工具栏的记忆到抽屉里找会落空 —— 三段编辑台的抽屉这次统一成"工具栏的镜像"。「最大宽度」不属于
 /// 任何一组(舞台上那条常驻调整条的兜底副本,跟灵动岛 / 悬浮歌词抽屉里的宽度滑杆同一个摆法)。

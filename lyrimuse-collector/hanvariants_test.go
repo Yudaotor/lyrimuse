@@ -2,12 +2,12 @@ package main
 
 import "testing"
 
-// 真实故障:周杰伦《妳聽得到》在「搜索候选歌词」里只出 1 个候选(LRCLIB),
+// 举例:周杰伦《妳聽得到》在「搜索候选歌词」里只出 1 个候选(LRCLIB),
 // 网易云/QQ/酷狗一条都没有 —— 转换后的搜索词是「妳听得到」而它们曲库里叫「你听得到」。
 // 单字隔离实测(见 hanvariants.go 头注的 A/B 表)坐实了病根就是「妳」这一个字。
 func TestHanVariantsFoldsSearchTerms(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// 这一条就是那个真实故障:繁体 + 异体字混在一起,两层都要生效
+		// 上面这个例子:繁体 + 异体字混在一起,两层都要生效
 		{"妳聽得到", "你听得到"},
 		// 异体字在纯简体语境里同样要折(艺人/专辑已经是简体时也不能漏)
 		{"妳听得到", "你听得到"},
@@ -27,7 +27,7 @@ func TestHanVariantsFoldsSearchTerms(t *testing.T) {
 	}
 }
 
-// 表本身的不变量。⚠️ 这些断言守的是"生成器别产出会互相打架的条目",不是抽查几个字:
+// 表本身的不变量。 这些断言守的是"生成器别产出会互相打架的条目",不是抽查几个字:
 // 表是 scripts/gen-han-variants.py 从 Unihan + OpenCC 推出来的,改了推导规则要能在这里露馅。
 func TestHanVariantsTableInvariants(t *testing.T) {
 	if len(hanVariantMap) < 100 {
@@ -37,7 +37,7 @@ func TestHanVariantsTableInvariants(t *testing.T) {
 		if src == dst {
 			t.Errorf("%c → 自己,这条没有意义", src)
 		}
-		// 不许成链(A→B 且 B→C):逐字替换只跑一遍,成链就意味着结果取决于遍历顺序。
+		// 不许成链(A到B 且 B到C):逐字替换只跑一遍,成链就意味着结果取决于遍历顺序。
 		if next, ok := hanVariantMap[dst]; ok {
 			t.Errorf("%c → %c → %c 成链了,逐字替换只跑一遍,结果会不确定", src, dst, next)
 		}

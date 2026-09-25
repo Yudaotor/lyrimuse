@@ -18,7 +18,7 @@ import (
 // 输入差异;这里把**决策本身**存下来,堵掉整类问题:哪些源应答了、各自得了多少分、
 // 为什么被拒,几个月后离线也能一字不差地复盘。
 //
-// ⚠️ 三条铁律:
+// 三条铁律:
 //  1. **只存元数据,绝不存歌词正文** —— 每条候选 ~200-400 字节,全缓存也就 ~0.3MB;
 //     带上正文就是把缓存文件翻倍。
 //  2. **只写不读** —— 解析逻辑的任何分支都不许读这个字段拿它当输入,否则"记录行为"
@@ -66,10 +66,10 @@ type lyricsDecision struct {
 	//
 	// 起因是一次事后无法审计的错配(打上花火被反查成《春雷》):存档里
 	// 只有 winner/candidates 时,想知道"库里还有多少条是走这条高风险路径来的"完全无从
-	// 下手——光看标题分不出对错,Uchiagehanabi→春雷(错)和 Black Hole→黑洞里(对)在
+	// 下手——光看标题分不出对错,Uchiagehanabi到春雷(错)和 Black Hole到黑洞里(对)在
 	// 标题层面是同一个形状。这两个字段把"走没走那条路径"变成可 grep 的事实。
 	//
-	// ⚠️ 仍然服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。
+	// 仍然服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。
 	RetryMethod    string `json:"retry_method,omitempty"`
 	CorrectedTitle string `json:"corrected_title,omitempty"`
 	// QueriesTried:这一轮**实际问出去的每一组查询词**,以及那一组只问了哪几个源
@@ -80,7 +80,7 @@ type lyricsDecision struct {
 	// 来自反查轮时才有值 —— 实测全库 4390 条存档里它非空的只有 9 条(0.2%),所以"我到底
 	// 拿哪些词问的"此前基本无从查起,而 09 章五条真实的"搜不到 / 配错了"根因全是问错了词。
 	//
-	// ⚠️ 同样服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。由三处写缓存点 +
+	// 同样服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。由三处写缓存点 +
 	// 手动搜索 CLI 在 buildLyricsDecision **之后**填(跟 SourcesSkipped 同一个位置、
 	// 同一个理由:不给这个函数再加参数)。
 	QueriesTried []lyricQueryRecord `json:"queries_tried,omitempty"`
@@ -105,7 +105,7 @@ type lyricsDecisionCandidate struct {
 	// 候选也有。不过仍然当"可能为空"处理 —— 某个源某次没查到是正常的。
 	// 存档里的 URL 还可能随时间失效 —— App 侧按"取不到就当没有"处理。
 	//
-	// ⚠️ 存量存档里没有这个字段,老的决策记录一律显示不出封面,这是预期行为(存档是
+	// 存量存档里没有这个字段,老的决策记录一律显示不出封面,这是预期行为(存档是
 	// "当时那一刻的固化",不能事后补 —— 现在再去查一次封面,拿到的不是当时那个)。
 	CoverURL                   string  `json:"cover_url,omitempty"`
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
@@ -125,7 +125,7 @@ type lyricsDecisionCandidate struct {
 // applied 表示这次评估的胜者有没有真的写进缓存(见 lyricsDecision.Applied)。
 // 决策存档的 path 取值全集。
 //
-// ⚠️ 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.pathLabel 那个 switch 里补中文译名 ——
+// 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.pathLabel 那个 switch 里补中文译名 ——
 // 那边 default 分支是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看。
 // 加 manual-rematch 时就这么漏过一次(对拍反馈「这里的文案是否没做好中文的」)。
 // lyricsDecisionPaths 那个测试守着这份清单,改了要一起改。

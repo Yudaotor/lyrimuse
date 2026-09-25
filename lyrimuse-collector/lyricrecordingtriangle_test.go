@@ -124,16 +124,16 @@ func TestLyricRecordingTriangleGuards(t *testing.T) {
 //
 // 本地专辑刻意选一个**不含版本限定词、也不含中文现场标记**的串:否则 versionTagsMismatch
 // 会先一步否决(v9 起"演唱会/现场/音乐会"字样的专辑名视同声明了 live——原夹具
-// "周杰伦地表最强世界巡回演唱会"被截短的候选丢掉"演唱会"后两边 tag 集合不等 → mismatch),
+// "周杰伦地表最强世界巡回演唱会"被截短的候选丢掉"演唱会"后两边 tag 集合不等 到 mismatch),
 // 测不到长度这一闸。这个交互是版本闸的既有职责:候选专辑名被截短到丢掉版本声明时,拦住它
 // 的是版本闸而不是长度闸 —— 两道闸叠着,不是替代。
 func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
 	const local = "周杰伦地表最强世界巡回纪念集" // normLoose → 14 rune,无版本限定词/现场标记
-	// 9 字 / 14 = 0.643 >= 0.6 → 通过
+	// 9 字 / 14 = 0.643 >= 0.6 到 通过
 	if !lyricRecordingTriangleMatches("X", "周杰伦地表最强世界", 100, "X", local, 100) {
 		t.Errorf("9/14=0.643 应通过长度可比性")
 	}
-	// 8 字 / 14 = 0.571 < 0.6 → 拒
+	// 8 字 / 14 = 0.571 < 0.6 到 拒
 	if lyricRecordingTriangleMatches("X", "周杰伦地表最强世", 100, "X", local, 100) {
 		t.Errorf("8/14=0.571 应被长度可比性拒掉")
 	}
@@ -144,7 +144,7 @@ func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
 // 封面和 canonical_artist、qq.go 的 qqCoverFallback 决定封面)。在那三处放宽等于直接采信
 // 仿冒号的署名 —— 正是 netease.go 里当年删掉 byAlbum 兜底要防的东西。
 //
-// 这个测试用扫源码的方式守它:比起注释里的一句 ⚠️,它能真的在 CI 里拦住。
+// 这个测试用扫源码的方式守它:比起注释里的一句 提醒,它能真的在 CI 里拦住。
 func TestLyricRecordingTriangleNotUsedForIdentity(t *testing.T) {
 	for _, f := range []string{"netease.go", "qq.go"} {
 		b, err := os.ReadFile(f)

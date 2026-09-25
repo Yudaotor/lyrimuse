@@ -22,8 +22,8 @@ final class MotionCoverStore {
     static let shared = MotionCoverStore()
 
     /// 歌词窗口那张封面卡是 460pt,Retina 下 920px —— 按它选档(实测会落到 960² 那一档)。
-    /// 灵动岛那 32pt 的小图和「跟随封面」背景**共用同一份文件**,不为它们再下一档小的:
-    /// 同一张专辑存两份视频换不来什么,而用户随时可能把歌词窗口打开。
+    /// 那张卡是**唯一**的消费面(灵动岛那份已撤,见 `NotchLyricsView` 顶上那条注释),所以
+    /// 这个数就照它一个来定,不必为别的尺寸再存一档。
     static let targetPixelWidth = 920
 
     /// 磁盘上限。一份 ~7 MB,400 MB 约合 55 张专辑;超了按访问时间删最旧的。
@@ -31,7 +31,7 @@ final class MotionCoverStore {
     private static let diskBudgetBytes: Int64 = 400 << 20
 
     private let fm = FileManager.default
-    /// 正在下的 key → 任务。同一个 key 并发只跑一次(同 `ImageMemoryCache` 的做法)。
+    /// 正在下的 key 到 任务。同一个 key 并发只跑一次(同 `ImageMemoryCache` 的做法)。
     private var inflight: [String: Task<URL?, Never>] = [:]
     /// 这一次运行里已经失败过的 key —— 失败多半是"Apple 改了结构 / 这档拿不到",反复重试
     /// 只是白发请求。刻意**不落盘**:进程重启后再给一次机会。
@@ -40,6 +40,11 @@ final class MotionCoverStore {
     private var directory: URL { LyrimusePaths.configFile("motion-covers") }
 
     // MARK: - 对外
+    ///
+    /// **终审没过不算失败,别往这里塞**。那是"此刻拿来比对的封面不对",不是"这份资源
+    /// 取不到" —— 换歌那几秒里参照图完全可能还是上一首的(播放器推自带占位图时更是如此,
+    /// 见 `KnownPlaceholderArtwork`:那种情况下我们会刻意留着上一首的封面)。记进这里就等于
+    /// 拿一次时序上的巧合,把整张专辑的动态封面封杀到进程重启。它归 `referenceRejected`。
 
     /// 已经在盘上的那份;没有就 nil(调用方据此决定要不要 `prepare`)。
     func cachedFile(master: URL) -> URL? {
@@ -55,7 +60,7 @@ final class MotionCoverStore {
     /// (见 `failed`)。**任何一步失败都只是"这首没有动态封面"**,不往上抛错(理由见
     /// `MotionCoverManifest` 头注最后一段:这是在解析公开网页里的非公开字段,必须优雅失效)。
     ///
-    /// - Parameter referenceHash: 当前显示的那张封面的 `CoverFingerprint.hash`。下载完成后
+    /// - Parameter reference: 当前显示的那张封面的 `CoverFingerprint.Reference`。下载完成后
     ///   会拿视频**中段**的真实一帧跟它比一次,理由见 `verifyMatchesReference` 的注释。传
     ///   nil(拿不到当前封面,比如刚换歌那一瞬)就跳过这道终审,不因为一时缺参照而白白拒了。
     func prepare(master: URL, referenceHash: UInt64?) async -> URL? {
@@ -81,7 +86,7 @@ final class MotionCoverStore {
 
     private nonisolated func download(master: URL, referenceHash: UInt64?) async -> URL? {
         do {
-            // ① master → 选一档。
+            // ① master 到 选一档。
             let masterText = try await text(from: master)
             let variants = MotionCoverManifest.parseVariants(master: masterText)
             guard let picked = MotionCoverManifest.pick(variants, minimumWidth: Self.targetPixelWidth),
@@ -89,7 +94,7 @@ final class MotionCoverStore {
                 logger.notice("motion cover: no usable variant in master playlist")
                 return nil
             }
-            // ② variant → 那个承载全部分片的单文件。
+            // ② variant 到 那个承载全部分片的单文件。
             let variantText = try await text(from: variantURL)
             guard let name = MotionCoverManifest.mediaFileName(fromVariant: variantText),
                   let mediaURL = MotionCoverManifest.absolute(name, relativeTo: variantURL) else {

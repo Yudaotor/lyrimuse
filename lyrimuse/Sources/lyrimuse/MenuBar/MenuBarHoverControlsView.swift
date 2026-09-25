@@ -75,7 +75,7 @@ final class MenuBarHoverControlsView: NSView {
         // 顺带把"菜单栏此刻是深是浅"的观察点登记成这颗按钮:这一层只存在于**真**菜单栏上
         // (预览里没有),是这个 App 里唯一能可靠回答这个问题的地方。设置页的色块和预览都按它
         // 解析「跟随系统」,见 MenuBarAppearanceStore 头注。
-        // ⚠️ 只**登记**、不当场读:刚建出来的按钮 appearance 是错的(App 自己那一档),要等状态栏
+        // 只**登记**、不当场读:刚建出来的按钮 appearance 是错的(App 自己那一档),要等状态栏
         // 给它排完版才可信 —— 什么时候读由 store 决定(预览"重建时闪一下"的根因)。
         MenuBarAppearanceStore.shared.observe(host)
     }
@@ -127,7 +127,7 @@ final class MenuBarHoverControlsView: NSView {
     }
 
     /// 当前槽宽装不装得下三个键。MenuBarStatusItem 用它决定要不要接管。
-    /// 当前这一块装不装得下三个键。⚠️ 判的是 `slotRect` 不是整个按钮:开着「歌词旁的图标」时
+    /// 当前这一块装不装得下三个键。 判的是 `slotRect` 不是整个按钮:开着「歌词旁的图标」时
     /// 歌词那一格要窄一截(图标 + 5pt 间距),门槛必须按窄的那个算,不然会接管出一排画到
     /// 图标上的键。
     var fitsControls: Bool { MenuBarHoverControls.layout(in: slotRect) != nil }
@@ -153,7 +153,7 @@ final class MenuBarHoverControlsView: NSView {
 
     private func updateHovered(with event: NSEvent) {
         guard engaged, let window else { return }
-        // ⚠️ 跟点击那一侧同一条纪律:**从屏幕坐标换算**,不能用 `event.locationInWindow`。
+        // 跟点击那一侧同一条纪律:**从屏幕坐标换算**,不能用 `event.locationInWindow`。
         // 状态栏这个宿主上后者给出的点跟真实指针差约 11.5pt(实测,见 MenuBarStatusItem
         // 里那段注释),而每个键只有 24pt 宽 —— 用错了准星会亮在隔壁那个键上,跟点击结果
         // 也对不上。两侧必须用同一条换算,否则"看着高亮哪个"和"点下去是哪个"会分家。
@@ -176,7 +176,7 @@ final class MenuBarHoverControlsView: NSView {
         super.viewDidChangeEffectiveAppearance()
         // 菜单栏由亮转暗(或反过来)时,设置页那两个色块和预览要跟着重画 —— 它们按这个值
         // 解析「跟随系统」。这一层是真菜单栏上的常驻视图,拿它当唯一的观察点。
-        // ⚠️ 只报信、不当场读:状态栏项重建时这个回调在 6ms 内连发七次、其中六次是错的
+        // 只报信、不当场读:状态栏项重建时这个回调在 6ms 内连发七次、其中六次是错的
         // (时间线见 MenuBarAppearanceStore 头注),store 会等它坐稳再读。
         MenuBarAppearanceStore.shared.hostAppearanceDidChange()
         if engaged { needsDisplay = true }
@@ -186,7 +186,7 @@ final class MenuBarHoverControlsView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard engaged, let rects = MenuBarHoverControls.layout(in: slotRect) else { return }
-        // ⚠️ labelColor / selectedMenuItemTextColor 是**动态**色,真正解析成 RGB 是在绘制
+        // labelColor / selectedMenuItemTextColor 是**动态**色,真正解析成 RGB 是在绘制
         // 那一刻按"当前绘制 appearance"决定的。不套这一层的话,深色菜单栏上会画出几乎
         // 看不见的深色字形(取决于 App 自己的 appearance,而不是菜单栏的)。同
         // MenuBarScrollingLabel.rebuildImage。
@@ -202,7 +202,7 @@ final class MenuBarHoverControlsView: NSView {
                 glyph.box(centeredIn: hit).fill(using: .sourceAtop)
             }
             // 准星那层浅底**最后**画,而且用 `.destinationOver` 垫到字形**下面**。
-            // ⚠️ 顺序不是随便定的:上面那一步的 `.sourceAtop` 会把这一层视图里已经画过的
+            // 顺序不是随便定的:上面那一步的 `.sourceAtop` 会把这一层视图里已经画过的
             // 任何有 alpha 的像素一起染上 tint 色 —— 先画浅底的话,浅底会被染成字形色。
             if let hovered = hoveredControl, let hit = rects[hovered] {
                 let base = highlighted ? NSColor.selectedMenuItemTextColor : NSColor.labelColor
@@ -307,7 +307,7 @@ final class MenuBarHoverControlsView: NSView {
             }
         }
         guard maxX >= 0, maxY >= 0 else { return nil }
-        // ⚠️ y 要翻过来:NSBitmapImageRep 的 colorAt 是**左上原点、y 向下**,而画的时候用的是
+        // y 要翻过来:NSBitmapImageRep 的 colorAt 是**左上原点、y 向下**,而画的时候用的是
         // AppKit 的左下原点坐标系。不翻的话对上下不对称的字形会得到一个上下颠倒的墨迹盒
         // (这四个符号纵向恰好对称,所以翻不翻都对 —— 正因为看不出来才更要写对)。
         let x0 = CGFloat(minX) / scale, x1 = CGFloat(maxX + 1) / scale

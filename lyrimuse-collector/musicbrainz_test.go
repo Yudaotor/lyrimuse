@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// 实测排查坐实的真实 bug 的回归测试:欧美艺人在 MusicBrainz 上的中文别名
-// 只是面向中文市场的译名,不该被当成 canonical_artist —— 现象是"历史里 Michael
-// Jackson 显示成迈克尔·杰克逊,跟之前的英文名不一致"。详见 pickChineseAlias 的注释。
+// 回归测试:欧美艺人在 MusicBrainz 上的中文别名只是面向中文市场的译名,不该被当成
+// canonical_artist(如 Michael Jackson 不该显示成迈克尔·杰克逊)。详见 pickChineseAlias 的注释。
 func TestPickChineseAlias(t *testing.T) {
 	// 下面每组别名/地区都是照真实 MusicBrainz API 返回抄的(实测查过这三个艺人)。
 	mjAliases := []mbAlias{
@@ -30,7 +29,7 @@ func TestPickChineseAlias(t *testing.T) {
 		want    string
 	}{
 		// 核心回归:美国艺人的中文译名必须被拒绝。注意它的 type/primary 跟下面港台
-		// 艺人完全一样(实测坐实),所以只能靠 country 区分,见 pickChineseAlias 注释。
+		// 艺人完全一样,所以只能靠 country 区分,见 pickChineseAlias 注释。
 		{"美国艺人(Michael Jackson)的中文译名不采纳", mjAliases, "US", ""},
 		{"英国艺人同理", mjAliases, "GB", ""},
 		// 中文圈艺人:中文名确实是本人的名字,照常采纳。
@@ -67,9 +66,9 @@ func TestPickChineseAlias(t *testing.T) {
 }
 
 // 查空**不落盘**、查到才落盘——跟 mbPrimaryNameCache 那条同一条规则、同一个
-// 理由(见 TestMBPrimaryNameCachePersistsOnlyHits 的注释)。这份缓存原来是"查一次永久
-// 生效,空值也当确定结果落盘",那英《微笑着离去》真撞上了:MusicBrainz 恰好限速 503,
-// 空结果被永久钉在 "Na Ying" 名下,之后不管 MusicBrainz 是否恢复都不会再重查。
+// 理由(见 TestMBPrimaryNameCachePersistsOnlyHits 的注释):查空(比如 MusicBrainz 偶发
+// 限速 503)如果当确定结果永久落盘,这个歌手会被钉死在查空的结果上,不管 MusicBrainz
+// 后续是否恢复都不会再重查。
 func TestArtistAliasCachePersistsOnlyHits(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/alias.json"
@@ -123,7 +122,7 @@ func TestCanonicalArtistViaMusicBrainzCacheHitSkipsNetwork(t *testing.T) {
 }
 
 // resolveGenericArtistCanonicalName 必须先查 artistAliasTable 再试通用机制,不能反过来
-// ——真实故障:"Wanting"的 QQ 歌手搜索建议第一条是"婉婷"(查证过是另一个人,
+// ——例如"Wanting"的 QQ 歌手搜索建议第一条是"婉婷"(查证过是另一个人,
 // 见 qqArtistCanonicalName 头注),如果通用机制排在手工表前面,会先给出这个错误答案、
 // 手工表里登记的"曲婉婷"根本没有机会生效。这里用缓存直接模拟"QQ 查到了(错误的)结果"
 // 这个状态,断言手工表登记过的名字仍然赢。

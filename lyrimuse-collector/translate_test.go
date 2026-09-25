@@ -87,7 +87,7 @@ func TestLineNeedsTranslation(t *testing.T) {
 		{"中文行 + 目标中文:不用翻", "我们的时光 一起走过的日子", "zh-CN", false},
 		// 行内混排:这一行主体是汉字,翻它只会把已经看得懂的一行再抄一遍
 		{"行内混排、主体中文:不用翻", "我们的时光 baby 一起走过", "zh-CN", false},
-		// ⚠️ 这条是这次修的那个 bug 的核心:整行英文必须翻。原来的整首判定看的是
+		// 这条是这次修的那个 bug 的核心:整行英文必须翻。原来的整首判定看的是
 		// "汉字占全曲多数",于是华语歌里这样的副歌整首被跳过。
 		{"整行英文:要翻", "It represent my heart!", "zh-CN", true},
 		{"纯英文行:要翻", "The painful youth I've had", "zh-CN", true},
@@ -127,7 +127,7 @@ func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
 	if anyLineNeedsTranslation(inline, "zh-CN") {
 		t.Error("行内混排(每行汉字仍占多数)不该触发翻译")
 	}
-	// ⚠️ 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
+	// 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
 	// 会被判成需要翻,比如「说好不哭 oh yeah」(4 汉字 vs 6 字母)。翻出来是把已经看得懂的
 	// 中文再抄一遍,略显冗余但不影响原文;要治得给 dominantScript 换更细的判据(比如按
 	// 词而不是按字符计权),那是另一件事。这里把行为钉住,免得以后当成回归改错方向。
@@ -209,13 +209,13 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 三行全部回退成原文 → 每行译文都等于原文 → 全被跳过 → 没有译文,而不是错位的译文
+	// 三行全部回退成原文 到 每行译文都等于原文 到 全被跳过 到 没有译文,而不是错位的译文
 	if res.lrc != "" {
 		t.Errorf("行数对不上时应该没有译文,实际得到:\n%s", res.lrc)
 	}
 }
 
-// 真实故障复现(Michael Jackson《Beat It》):副歌反复的歌逐行独立发翻译请求,
+// 副歌反复的歌(如 Michael Jackson《Beat It》)逐行独立发翻译请求,
 // 同一句话在原文里出现好几次,以前会分别各发一次、结果各自独立(可能一次翻了、另一次原样
 // 吐回来被当"没翻动"丢掉),同一句台词的译文因此在歌词里断断续续、时有时无。
 // 现在按原文去重再发,断言两件事:①重复的那句话只应该出现在**一次**请求里(不是发几次就
@@ -404,7 +404,7 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
 	// 拼一首长到必须切成多块的歌,才能验证"每块一个新邮箱"。
-	// ⚠️ 每行的文本必须互不相同:加了按原文去重再送翻(见
+	// 每行的文本必须互不相同:加了按原文去重再送翻(见
 	// machineTranslateLRCWithBase 头注释),60 行完全同一句话会被去重成 1 句、
 	// 落不进多块,这条测试就验证不了"逐块换邮箱"了。
 	var b strings.Builder

@@ -4,12 +4,9 @@ import "testing"
 
 // 网易云的纯音乐信号。
 //
-// 现象是「歌词管理里一堆条目显示无歌词,其实都是纯音乐」——LoL 原声带
-// 《The Music of League of Legends Vol. 1》十几首。查下来:lrclib 压根没有这批曲目
-// (五源全空、lyrics_sources_responded 是空的),而网易云**匹配上了歌**(封面、单曲链接
-// 都给了)、歌词接口顶层也明确回了 pureMusic=true、正文是「作曲 : X」+「纯音乐,请欣赏」
-// 两行占位。那两行过不了 isTimedLRC 的三行门槛,于是网易云连一条候选都不产生,
-// 而"纯音乐"这个明确结论在 JSON 解码那一步就被丢了(结构体里没这个字段)。
+// 网易云对纯音乐曲目会在歌词接口顶层给出 pureMusic=true,正文是「作曲 : X」+
+// 「纯音乐,请欣赏」两行占位——这两行过不了 isTimedLRC 的三行门槛,网易云连一条候选
+// 都不产生,而"纯音乐"这个明确结论在 JSON 解码那一步就被丢了(结构体里没这个字段)。
 func TestIsNeteasePureMusicLyric(t *testing.T) {
 	cases := []struct {
 		name string
@@ -64,7 +61,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 		Source: "kugou", Score: 100,
 		Lyrics: "[00:01.00]a\n[00:02.00]b\n[00:03.00]c\n",
 	}
-	// 只有标记 + 另一个源的真候选 → 标记要留着(网易云自己没有真候选)
+	// 只有标记 + 另一个源的真候选 到 标记要留着(网易云自己没有真候选)
 	out := mergeLyricCandidateRounds("A", "T", "AL", 0, []scoredLyricCandidateResult{marker, real}, nil)
 	kept := false
 	for _, r := range out {
@@ -76,7 +73,7 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 		t.Error("网易云的纯音乐标记该留下(它自己没有真候选)")
 	}
 
-	// 网易云既有真候选、又带标记 → 标记必须被丢掉(自相矛盾)
+	// 网易云既有真候选、又带标记 到 标记必须被丢掉(自相矛盾)
 	neReal := real
 	neReal.Source = "netease"
 	out2 := mergeLyricCandidateRounds("A", "T", "AL", 0, []scoredLyricCandidateResult{marker, neReal}, nil)
@@ -87,10 +84,10 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 	}
 }
 
-// TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter 是那个 bug 的回归测试:
-// QQ 对纯音乐曲目回的占位文案只有**一行**带时间戳,过不了 isTimedLRC 的「≥3 行且过半」,
-// 而 resolveQQLyric 原来是先过 isTimedLRC 再返回 —— 于是这个**明确结论**在那一步就被当成
-// 「没歌词」扔掉,曲目落在「无歌词」而不是「纯音乐」,界面上像失败,还要每 24 小时
+// TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter 锁的是同一类丢失:
+// QQ 对纯音乐曲目回的占位文案只有**一行**带时间戳,过不了 isTimedLRC 的「≥3 行且过半」——
+// resolveQQLyric 必须在这一步之前先拦住纯音乐结论,不能让它被当成「没歌词」直接扔掉,
+// 否则曲目会落在「无歌词」而不是「纯音乐」,界面上像失败,还要每 24 小时
 // (退避后翻倍)白搜一轮五个源。
 //
 // 实测案例:蛋堡《收敛水》第 1 轨「关键字: Intro」(114s)。五源口径 ——

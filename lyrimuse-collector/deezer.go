@@ -36,8 +36,7 @@ import (
 //	   响应 data.track.lyrics 里 synchronizedLines[] 是逐行(lrcTimestamp 形如
 //	   "[00:01.41]" + line),text 是整份纯文本。
 //
-// ⚠️ **别再走 gw-light.php 的 song.getLyrics —— 那条路已经废了**(实测坐实,
-// 这个源最初就是按它写的,错了一版)。它对**任何**歌都回
+// **别再走 gw-light.php 的 song.getLyrics —— 那条路已经废了**。它对**任何**歌都回
 // `{"DATA_ERROR":"No lyrics id for <id> and country XX"}`,错误文案里的国家极具误导性
 // ——第一眼会读成"这个国家没有歌词授权"。对照实验推翻了这个解读:换出口到 US 之后,
 // 同一首歌照样回 "No lyrics id ... and country US";直接查 song.getData 更是一目了然:
@@ -53,7 +52,7 @@ import (
 // 逐行(走 plainOnly 通道);Jungeli《Juste un peu》、Suzane《SLT》回
 // LyricsNotFoundError(真没收录,不是失败)。
 //
-// ⚠️ **它跟 lyricfind 不是两个独立信源**(正文层面)。两条管道的接口、曲库、匹配、故障面
+// **它跟 lyricfind 不是两个独立信源**(正文层面)。两条管道的接口、曲库、匹配、故障面
 // 都各走各的,时间轴也不同源(Deezer 的同步是它自己做的,LyricFind 只供词)——但**正文**
 // 出自同一家。打分层的"跨源正文共识"按独立信源数给分,所以必须按**供词方**归组而不是按
 // 源名:见 match.go 的 lyricSourceConsensusFamily(deezer 与 lyricfind 归同一家)。不归组的
@@ -140,7 +139,7 @@ func deezerSetLastFailureReason(reason string) {
 }
 
 // deezerLastFailureReasonNow 供 search-lyrics / test-lyric-sources 用——本次进程里最近
-// 一次识别出的具体失败原因,识别不出就是空串。⚠️ 目前**只有一种**已实测的失败模式:
+// 一次识别出的具体失败原因,识别不出就是空串。 目前**只有一种**已实测的失败模式:
 // 匿名 JWT 换不到(auth 端点不答或改了形状)。"这首歌没有歌词"(LyricsNotFoundError)
 // 不算失败,不往这里记 —— 那是正常结果,报上去会让用户以为源坏了。
 func deezerLastFailureReasonNow() string {
@@ -155,7 +154,7 @@ func deezerLyric(ctx context.Context, artist, title, album string, durationSecs 
 	if title == "" {
 		return deezerResult{}
 	}
-	// ⚠️ isrc 必须进缓存键。首播那一拍 ISRC 索引往往还没建好(它是后台异步建的),
+	// isrc 必须进缓存键。首播那一拍 ISRC 索引往往还没建好(它是后台异步建的),
 	// 那次拿到的是"按名字搜"的结果;不区分的话这条缓存会把后面所有次都挡住,
 	// ISRC 这条路永远轮不到。
 	key := artist + "|" + title + "|" + album + "|" + isrc
@@ -234,7 +233,7 @@ func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, err
 const deezerISRCDirectScore = 1 << 20
 
 // deezerTrackByISRC 按 ISRC 直取一条录音。Deezer 有官方端点 /track/isrc:<ISRC>
-// (实测:HKA351401008 → Special Person / Khalil Fong / 259s)。
+// (实测:HKA351401008 到 Special Person / Khalil Fong / 259s)。
 //
 // 查不到时 Deezer 回 200 + {"error":{...}}(不是 4xx),所以跟 deezerSearch 一样要过
 // deezerHasError,不能只看状态码。
@@ -516,14 +515,14 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 
 	// ISRC 直取:拿到的是**这条录音本身**,不是搜出来最像的那条。
 	//
-	// ⚠️ 这条候选**故意不过 deezerCandidateScore**。Deezer 对同一条录音给的常是本地化
+	// 这条候选**故意不过 deezerCandidateScore**。Deezer 对同一条录音给的常是本地化
 	// 标题——实测 USCA20801738(Katy Perry《I Kissed A Girl》原版)回的是日文
 	// 「キス・ア・ガール」,拿去过名称闸会被自己淘汰掉。而名称闸要防的事(串到同名的
 	// 另一首/另一版录音)在这里根本不成立:ISRC 就是录音级身份。
 	//
 	// 对照实测:同一首歌按名字搜,第一条是 251 秒的 Live 日文版;按 ISRC 直取是 180 秒的原版。
 	//
-	// ⚠️ 但**时长闸仍然要过**。ISRC 理论上是录音身份,现实里却存在垃圾值:实测
+	// 但**时长闸仍然要过**。ISRC 理论上是录音身份,现实里却存在垃圾值:实测
 	// "ZZZZZ9999999"(一眼占位符)在 Deezer 和 Musixmatch 上**都查得到歌**,各自是一首
 	// 完全不相干的曲子。名称对不上可能只是本地化写法,时长差一大截就说明拿到的根本不是
 	// 这首 —— 这是唯一一道对"ISRC 本身是脏数据"还有效的防线。

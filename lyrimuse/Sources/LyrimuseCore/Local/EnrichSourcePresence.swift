@@ -24,7 +24,7 @@ public enum EnrichSourcePresence {
     /// 重搜一下也许就有了。所以显示时这一档要**排在 `knownOnSources` 之前**,不然界面会拿
     /// 一条更早那轮的证据,去替这一轮下"不用管"的结论(09 章决策 48 修的就是同一类口径问题)。
     ///
-    /// ⚠️ **判据必须用「决策存档在不在」而不是顶层 `lyrics_sources_responded` 是不是空**:
+    /// **判据必须用「决策存档在不在」而不是顶层 `lyrics_sources_responded` 是不是空**:
     /// 那个字段在 collector 侧带 `omitempty`(enrich.go),空数组根本不会被序列化出来,于是
     /// 「老条目压根没有这个字段」和「真的零个源应答」在顶层字段上**完全不可区分**。
     /// 决策存档则是只要评估过就一定写,所以「有存档 + 存档里 sources_responded 为空」才是准的。

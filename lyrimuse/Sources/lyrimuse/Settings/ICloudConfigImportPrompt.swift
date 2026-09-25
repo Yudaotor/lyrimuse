@@ -5,7 +5,7 @@ import LyrimuseCore
 /// 新电脑第一次启动时,如果 iCloud 里已经有一份配置,问一句要不要导入。
 ///
 /// 这是"换电脑"这条路的另一半:旧机器把配置存进 iCloud Drive 的 Lyrimuse 文件夹
-/// (设置 → 通用 → iCloud 配置),新机器装好后自己发现它。
+/// (设置 到 通用 到 iCloud 配置),新机器装好后自己发现它。
 ///
 /// ## 刻意问一句,而不是静默导入
 ///
@@ -17,10 +17,10 @@ import LyrimuseCore
 ///
 /// 挂在"决定要不要弹引导向导"那一步之前(MenuBarMenu 里),两条路互斥地接下去:
 ///
-///   - 用户选导入 → 写配置 → 重启。重启后 hasCompletedOnboarding 仍是 false(它刻意
+///   - 用户选导入 到 写配置 到 重启。重启后 hasCompletedOnboarding 仍是 false(它刻意
 ///     不跟着导出走,见 ConfigPortability),所以引导照样会走 —— 新机器的自动化权限、
 ///     常驻服务本来就得各自重新授权/重新装,这是对的。
-///   - 用户跳过 / iCloud 里没有 / 文件还没下载下来 → 原样走引导。
+///   - 用户跳过 / iCloud 里没有 / 文件还没下载下来 到 原样走引导。
 enum ICloudConfigImportPrompt {
     /// 需要的话问一句;不管走哪条路,最后都会调一次 `continuation`(除了"导入并重启"那条,
     /// 那条会直接重启进程,后面没有"接下去"了)。
@@ -82,7 +82,7 @@ enum ICloudConfigImportPrompt {
                 return
             }
             await ConfigPortability.importData(data)
-            // ⚠️ 必须排在 importData 之后:歌词落点是 features.lyricsDir,而那个文件是
+            // 必须排在 importData 之后:歌词落点是 features.lyricsDir,而那个文件是
             // importData 刚写的(见 LyricsBackupStore.restore 的注释)。
             if let lyricsData {
                 await LyricsBackupStore.restore(from: lyricsData)

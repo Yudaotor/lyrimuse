@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "settin
 /// 包,所以那条路是完整的;但"打开配置文件夹、把它拷到另一台机器"这条路只覆盖了 collector
 /// 那半 —— 外观、快捷键、歌词源排序会**静默丢掉**,而用户看不出少了什么。
 ///
-/// 用户直接指出了这个裂缝:配置文件夹的预期就是"除了机器专属的,其余都在里面"。
+/// 这道裂缝违背了配置文件夹的预期:"除了机器专属的,其余都在里面"。
 /// 这个类补上那一半:偏好一变就写一份镜像进同一个目录,于是"整个文件夹"真的等于"整份配置"。
 ///
 /// ## 谁是权威
@@ -90,7 +90,7 @@ enum AppSettingsMirror {
 
     /// 全新机器上从配置文件夹里那份镜像恢复偏好。返回是否真的恢复了。
     ///
-    /// ⚠️ 必须在**任何代码读 UserDefaults 之前**调用 —— AppSettings 是在 init 里一次性把
+    /// 必须在**任何代码读 UserDefaults 之前**调用 —— AppSettings 是在 init 里一次性把
     /// 所有属性从 UserDefaults 读进内存的,恢复晚了就只写进了盘、这次启动的内存态还是空的
     /// (界面上看不出变化,要等下次启动)。目前的调用点是
     /// AppDelegate.applicationDidFinishLaunching 的**第一行**,而 AppSettings.shared 在

@@ -34,11 +34,11 @@ import (
 //
 // 走的是 InnerTube——YouTube 内部用的私有协议,没有公开文档,`search`/`next`/`browse`
 // 三个端点(见下面 resolveYTMusicLyric)全部**不需要登录/cookie**。参考实现是
-// github.com/sigma67/ytmusicapi(Python,2959★,这个领域事实标准),但没有照抄它的库,
+// github.com/sigma67/ytmusicapi(Python,2959 星,这个领域事实标准),但没有照抄它的库,
 // 是逐字段读它的源码 + 自己发裸 HTTP 请求实测核实过一遍才落的这份实现,
 // 下面每个端点/字段路径都是核实过的真实结构,不是照抄文档假设。
 //
-// ⚠️ 跟 amll-ttml-db/musixmatch 同一类风险:未公开协议,随时可能改结构或限流,没有 SLA。
+// 跟 amll-ttml-db/musixmatch 同一类风险:未公开协议,随时可能改结构或限流,没有 SLA。
 // 这个仓库已经接过两个这一类的源(见 musixmatch.go/amllttml.go 头注),不是新引入一种
 // 风险类别,是这类风险的第三个实例。
 //
@@ -70,8 +70,8 @@ const (
 	ytmusicUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0"
 	// filter=songs 的 search params——照抄 ytmusicapi get_search_params("songs", nil, false)
 	// 的算法手算出这一个常量(filtered_param1"EgWKAQ" + filter_params["songs"]"II" +
-	// "AWoMEA4QChADEAQQCRAF")。⚠️ **不能不传这个参数**:实测坐实,不带过滤器
-	// 的默认搜索"Top result"经常命中的是演唱会直拍/翻唱视频而不是录音室曲目(Taylor Swift
+	// "AWoMEA4QChADEAQQCRAF")。 **不能不传这个参数**:不带过滤器
+	// 的默认搜索"Top result"经常命中的是演唱会直拍/翻唱视频而不是录音室曲目(如 Taylor Swift
 	// "Anti-Hero" 命中过一条 Eras Tour 现场版),那条视频往往没有歌词、或者歌词挂在错的
 	// 版本上。加上这个过滤器之后同一批查询 20 条结果全部是 MUSIC_VIDEO_TYPE_ATV
 	// (InnerTube 对"真·录音室曲目"的标记),没再命中过现场/翻唱。
@@ -80,9 +80,9 @@ const (
 	// 不需要手动跟着 YouTube Music 网页版更新——这是 ytmusicapi 的做法,日期串永远"够新"。
 	ytmusicWebClientName = "WEB_REMIX"
 	// **带时间戳**的歌词只有切成 Android 客户端身份才拿得到(ytmusicapi 原话"mobile
-	// only",实测坐实:同一个 browseId,WEB_REMIX 身份下 browse 只会返回
+	// only":同一个 browseId,WEB_REMIX 身份下 browse 只会返回
 	// "Lyrics not available" 那条静态文案,换成 ANDROID_MUSIC 才会带 timedLyricsData)。
-	// ⚠️ 已知的过期风险,跟 web 客户端不一样:这个版本号是**硬编码**的,不会随时间自动
+	// 已知的过期风险,跟 web 客户端不一样:这个版本号是**硬编码**的,不会随时间自动
 	// "看起来永远最新"——真实 Android 客户端版本升级到足够新之后,这个值迟早会被服务端
 	// 拒绝。这一路一旦开始整体失效(搜索/next 都正常、browse timed 总是 404 或不再返回
 	// timedLyricsData),第一件事就是查 ytmusicapi 最新版这个常量有没有变,跟着更新。
@@ -194,7 +194,7 @@ func ytmusicFetchVisitorID(ctx context.Context) string {
 	html := string(body)
 	v := ytmusicExtractVisitorID(html)
 	if v == "" {
-		// 实测坐实的一种具体失败原因:YouTube Music 按 IP 地理位置限定可用
+		// 一种具体失败原因:YouTube Music 按 IP 地理位置限定可用
 		// 区域,拿不到 VISITOR_DATA 时,首页返回的不是真正的首页,而是一个几 KB 的
 		// 静态提示页("YouTube Music is not available in your area")——跟 youtube.com/
 		// google.com 同时能正常访问对照过,不是整体网络问题,是这一个服务本身的地区限制。
@@ -241,7 +241,7 @@ func ytmusicWebClientVersion() string {
 	return "1." + time.Now().UTC().Format("20060102") + ".01.00"
 }
 
-// ytmusicPost 是三个端点共用的请求执行。⚠️ 故意不设 Accept-Encoding:Go 的
+// ytmusicPost 是三个端点共用的请求执行。 故意不设 Accept-Encoding:Go 的
 // http.Transport 只在**自己**加上 `Accept-Encoding: gzip` 时才会透明解压响应体,
 // 调用方一旦显式设置这个头就必须自己手动解压——用真实裸 HTTP 请求测过,
 // 不设这个头、让标准库全权处理,响应体拿到的就是解压好的干净 JSON,没有理由为了
@@ -272,7 +272,7 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 }
 
-// ---- ① search:歌名+歌手 → videoId ----
+// ---- ① search:歌名+歌手 到 videoId ----
 
 // ytmusicSearchItem 只挑了 search 响应里这一路真正用得上的字段(flexColumns 的两段
 // 文字 = 歌名 / "歌手 • 专辑 • 时长"、封面缩略图、以及能确认"这是不是真录音室曲目"的
@@ -427,7 +427,7 @@ func ytmusicPickSearchItem(items []ytmusicParsedSearchItem, artist, title, album
 			}
 			continue
 		}
-		// 已经选中的是真录音室曲目、这条不是 → 不换(ATV 优先级最高)。
+		// 已经选中的是真录音室曲目、这条不是 到 不换(ATV 优先级最高)。
 		if bestATV && !it.isATV {
 			continue
 		}
@@ -523,7 +523,7 @@ func ytmusicWalkJSON(node any, visit func(map[string]any)) {
 	}
 }
 
-// ---- ② next:videoId → 歌词的 browseId ----
+// ---- ② next:videoId 到 歌词的 browseId ----
 
 // ytmusicLyricsBrowseID 从 "next"(播放这首歌时 YouTube Music 侧边栏那套 tab 列表,
 // ytmusicapi 叫 get_watch_playlist)的响应里找 pageType 是
@@ -577,7 +577,7 @@ func ytmusicFetchLyricsBrowseID(ctx context.Context, videoID, visitorID string) 
 	return ytmusicLyricsBrowseID(raw)
 }
 
-// ---- ③ browse:browseId → 带时间戳的逐行歌词 ----
+// ---- ③ browse:browseId 到 带时间戳的逐行歌词 ----
 
 // ytmusicLyricLine 是一行歌词(毫秒精度),字段来自 timedLyricsData 数组元素的
 // lyricLine/cueRange.{start,end}TimeMilliseconds(拿真实响应核实过,
@@ -691,7 +691,7 @@ func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs
 // 逐行歌词,并且**只在 sourceMessage 标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,
 // 理由见文件头注)——查到的是 Musixmatch 换个管道重发时,当"这一源没查到"处理。
 //
-// ⚠️ 刻意**不**另外调一次"不带时间戳"的 browse:这个项目的引擎只认真的带时间戳的
+// 刻意**不**另外调一次"不带时间戳"的 browse:这个项目的引擎只认真的带时间戳的
 // 逐行 LRC(isTimedLRC 要求至少 3 行、过半带 [mm:ss.xx]),纯文本歌词对它毫无用处,
 // 调这一路纯属浪费一次网络请求和这首歌 20 秒搜索预算里的时间。
 //
@@ -715,7 +715,7 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 	if !isTimedLRC(lrc) {
 		return ytmusicResult{}
 	}
-	// ⚠️ 用户追问坐实:只在真是 LyricFind 时才接受这份候选,是 Musixmatch
+	// 用户追问坐实:只在真是 LyricFind 时才接受这份候选,是 Musixmatch
 	// 换个管道重发的一律当"这一源没查到"。理由是两件事的叠加:
 	//   ① 打分层的"跨源正文共识"(contentConsensusPeers)按**来源数**算独立印证——
 	//      如果这份其实是 Musixmatch 的内容,而现有 musixmatch 源也查到了同一首歌,

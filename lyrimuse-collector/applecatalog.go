@@ -20,11 +20,11 @@ import (
 // ---- Apple 目录锚点 ----
 //
 // media-control 的 now-playing 快照里有一个一直被丢掉的字段 `uniqueIdentifier`
-// (MediaRemote 的 kMRMediaRemoteNowPlayingInfoUniqueIdentifier)。实测坐实:
+// (MediaRemote 的 kMRMediaRemoteNowPlayingInfoUniqueIdentifier)。
 // 放 **Apple Music 目录曲目**(流媒体/加进资料库的目录条目)时,它就是 **Apple 的目录
 // 曲目 ID**——
 //
-//	uniqueIdentifier=1485220325 → iTunes lookup 回 trackNumber=18 的「印地安老斑鸠 (Live)」、
+//	uniqueIdentifier=1485220325 到 iTunes lookup 回 trackNumber=18 的「印地安老斑鸠 (Live)」、
 //	collectionId=1485220306、trackTimeMillis=208293,而同一份快照的 duration 是 208.293,
 //	逐位一致。
 //
@@ -32,7 +32,7 @@ import (
 // (collectionArtistName,只在它与曲目署名不同时才出现——正好是"客串/群星/演唱会嘉宾"
 // 这类曲目)、专辑 ID、以及权威时长。
 //
-// ⚠️ 两个必须守住的边界,都是实测出来的:
+// 两个必须守住的边界,都是实测出来的:
 //
 //  1. **只对 Apple Music 目录曲目成立**。用户自己导入/购买的文件,uniqueIdentifier 是一个
 //     任意的 64 位本地持久 ID,可以是负数——实测同一台机器上一首本地导入的 Michael
@@ -44,8 +44,8 @@ import (
 //
 // 自校验顺带解决了 media-control 的"脏快照"(见 enrich.go 的 observeWrongDuration:换曲
 // 预载窗口里它会把**下一首**的时长和当前曲目的标题拼进同一份快照)。两种情形都安全:
-// uniqueIdentifier 跟着当前曲目 → 校验通过 → 用它的权威时长把脏时长顶掉;跟着下一首 →
-// 曲目名对不上 → 锚点作废、退回现状(30 秒去抖那条防线照旧)。不会更差。
+// uniqueIdentifier 跟着当前曲目 到 校验通过 到 用它的权威时长把脏时长顶掉;跟着下一首 到
+// 曲目名对不上 到 锚点作废、退回现状(30 秒去抖那条防线照旧)。不会更差。
 const (
 	// appleCatalogMaxPlausibleID:目录 ID 的合理上界。现役 ID 是 10 位数量级,留三个数量级
 	// 余量。本地持久 ID 是满量程 64 位,正数那一半靠这条挡掉绝大部分。
@@ -62,7 +62,7 @@ const (
 // appleCatalogTrack 是一条 Apple 目录曲目的权威元数据。字段名对齐 iTunes Search API 的
 // 语义,不是我们自己的抽象。
 //
-// ⚠️ 跟 apple.go 的 itunesResult **刻意分开**,不是重复实现:那个是"封面 + 跳转链接"的匹配
+// 跟 apple.go 的 itunesResult **刻意分开**,不是重复实现:那个是"封面 + 跳转链接"的匹配
 // 结果(TrackViewURL/ArtworkURL100),来自**全文搜索**(itunesSearch)或**专辑曲目表**
 // (itunesLookupTracks,entity=song),身份靠 artist/title/album 文本模糊对齐;这个是"这次
 // 播放的到底是目录里哪一条"的**按 ID 精确查**结果,多带 ArtistName/AlbumArtist/DurationSecs
@@ -107,7 +107,7 @@ func appleCatalogIndexKey(title, album string) string {
 // 两级查找跟 appleCatalogSearchIdentities 一样:先查播放路径填的索引,再退回扫落盘缓存
 // (一次性子命令里索引是空的,理由见那边注释)。**只认已校验过的锚点**——索引与缓存里的条目
 // 都经过 appleCatalogAnchor 的曲目名/专辑名自校验,所以这里拿到的 ID 是可信的;刻意不提供
-// "拿 artist/album 去搜一个专辑 ID"的退路,理由见 motioncover.go 文件头 ⚠️ 1。
+// "拿 artist/album 去搜一个专辑 ID"的退路,理由见 motioncover.go 文件头 1。
 func appleCatalogAlbumIDFor(title, album string) (int64, bool) {
 	appleCatalogMu.Lock()
 	defer appleCatalogMu.Unlock()
@@ -124,7 +124,7 @@ func appleCatalogAlbumIDFor(title, album string) (int64, bool) {
 }
 
 // loadAppleCatalogCache/saveAppleCatalogCache:整份 map 序列化 + 临时文件原子改名,跟
-// loadMBPrimaryNameCache 同一套。目录 ID → 元数据是**不变映射**(ID 一旦发布就不会改指
+// loadMBPrimaryNameCache 同一套。目录 ID 到 元数据是**不变映射**(ID 一旦发布就不会改指
 // 别的曲目),所以这份缓存永久有效、没有 TTL;只落盘查到了的条目。
 func loadAppleCatalogCache(path string) {
 	appleCatalogMu.Lock()
@@ -165,7 +165,7 @@ func saveAppleCatalogCache() {
 	}
 }
 
-// appleCatalogPlausibleID:这个 uniqueIdentifier 值有没有可能是目录 ID。见文件头 ⚠️ 1。
+// appleCatalogPlausibleID:这个 uniqueIdentifier 值有没有可能是目录 ID。见文件头 1。
 func appleCatalogPlausibleID(trackID int64) bool {
 	return trackID > 0 && trackID < appleCatalogMaxPlausibleID
 }
@@ -268,7 +268,7 @@ func prefetchAppleCatalogTrack(trackID int64) {
 // appleCatalogAnchor 给出"这次播放的到底是 Apple 目录里哪一条"的**已校验**锚点。
 // 缓存没命中时不阻塞:发一次后台补取、本轮返回 ok=false。
 //
-// 校验(见文件头 ⚠️ 2)要求曲目名和专辑名都对上本地标签。本地没有专辑标签时只校曲目名
+// 校验(见文件头 2)要求曲目名和专辑名都对上本地标签。本地没有专辑标签时只校曲目名
 // ——Apple Music 走这条路径时专辑标签为空极罕见,不值得为它整条作废。
 func appleCatalogAnchor(bundleID string, trackID int64, localTrackNumber int, localTitle, localAlbum string) (appleCatalogTrack, bool) {
 	if bundleID != appleMusicBundleID || localTitle == "" || !appleCatalogPlausibleID(trackID) {
@@ -279,12 +279,12 @@ func appleCatalogAnchor(bundleID string, trackID int64, localTrackNumber int, lo
 		prefetchAppleCatalogTrack(trackID)
 		return appleCatalogTrack{}, false
 	}
-	// ⚠️ 曲目名用**逐字同名**,不是 lyricTitleAccepted(对抗性复核改)。
+	// 曲目名用**逐字同名**,不是 lyricTitleAccepted(对抗性复核改)。
 	// 那个函数的第二档会把双方各自 stripParens 之后再比相等 —— 于是同一张专辑上的括号
 	// 兄弟轨互相判等,而专辑名又必然相同,锚点照样"成立",把差 40~47% 的时长当成权威值:
 	//   XSCAPE (Deluxe) #8「Xscape」244.9s  vs #16「Xscape (Original Version)」344.4s
 	//   BADモード      #13「Face My Fears (English Version)」219.1s vs #14「(A. G. Cook Remix)」322.0s
-	// (两组都来自用户自己的资料库,不是构造的)。这正好推翻了原来那句"曲目名对不上 →
+	// (两组都来自用户自己的资料库,不是构造的)。这正好推翻了原来那句"曲目名对不上 到
 	// 锚点作废、不会更差"——只要下一首是同专辑的括号兄弟轨,曲目名就是"对得上"的。
 	// 锚点是**按 ID 认身份**的,压根不需要歌词检索那套宽松匹配。
 	if normLoose(t.TrackName) == "" || normLoose(t.TrackName) != normLoose(localTitle) {
@@ -315,7 +315,7 @@ func appleCatalogAnchor(bundleID string, trackID int64, localTrackNumber int, lo
 //     召回不到目标,换专辑署名「周杰伦」查,目标排第 1。
 //   - ArtistName(曲目署名)放后面,只在它跟本地标签写法不同时才算一个变体。
 //
-// ⚠️ 只当**检索身份**用,绝不回写 canonical_artist / 展示字段——跟 lyricPrimaryQueryArtist
+// 只当**检索身份**用,绝不回写 canonical_artist / 展示字段——跟 lyricPrimaryQueryArtist
 // 同一条纪律(把署名换成别人正是那次回归的形态)。
 func appleCatalogSearchIdentities(artist, title, album string) []string {
 	appleCatalogMu.Lock()
@@ -354,7 +354,7 @@ func appleCatalogSearchIdentities(artist, title, album string) []string {
 // appleStorefrontArtistCache 按"艺人|专辑"缓存 appleStorefrontArtistIdentities 的结果——
 // 跟 mbPrimaryNameCache(musicbrainz.go)同一套持久化模式和同一条设计取舍:只落盘
 // **查到了**的条目,查空的只留在内存里(避免一次偶发的网络抖动/超时把这张专辑永久钉死
-// 在"没有别的署名"上,下个进程还有机会重试)。加,起因是把 retryArtistIdentities
+// 在"没有别的署名"上,下个进程还有机会重试)。retryArtistIdentities
 // 里 knownArtistAlias 那条手工表退休之后,原来"零网络请求"的那批已知歌手(方大同等)
 // 每次搜索候选歌词都要多打 1~4 次 iTunes 请求——这份缓存让**同一首歌第二次起**恢复到
 // 零网络请求,含"歌词管理"手动搜索这种每次都是全新进程、内存缓存跨不过去的场景
@@ -368,7 +368,7 @@ var (
 
 // appleStorefrontArtistCacheVersion:落盘格式版本。v1 是裸 map(~ 09-12),里面的署名**没有经过
 // 「这首歌确实在那张专辑里」的核对**(见 appleStorefrontTrackMatches),已实测装进过错人(back number《Happy End - EP》
-// → 韩国歌手 Rothy);v2 起整份换成 {"version":2,"entries":{…}},读到 v1 一律丢掉重查 —— 重查每张专辑只花一次,
+// 到 韩国歌手 Rothy);v2 起整份换成 {"version":2,"entries":{…}},读到 v1 一律丢掉重查 —— 重查每张专辑只花一次,
 // 比逐条甄别哪条是错的划算,也比只删已知那一条彻底。
 const appleStorefrontArtistCacheVersion = 2
 
@@ -497,25 +497,24 @@ func saveAppleStorefrontTitleCache() {
 // 不一样——国际艺名歌手最典型(方大同/Khalil Fong)——这条直接复用 iTunes Search 本来
 // 就会回、只是一直没被解码的 artistName 字段,通用地对**任何**歌手生效。
 //
-// 加,实测验证过(curl 直接打 iTunes Search API,不是猜的):查询词全程用
-// 同一个字符串"方大同 15"(艺人+专辑名,不需要预先知道换成什么名字去查),country=CN
-// 时曲目署名回"方大同",country=US 时回"Khalil Fong"——iTunes 自己按商店把这个字段
-// 本地化了。跟 resolveAppleMusicMatchViaAlbum 同一套"按专辑名搜、精确定位到
+// 查询词全程用同一个字符串"方大同 15"(艺人+专辑名,不需要预先知道换成什么名字去查),
+// country=CN 时曲目署名回"方大同",country=US 时回"Khalil Fong"——iTunes 自己按商店把这个
+// 字段本地化了。跟 resolveAppleMusicMatchViaAlbum 同一套"按专辑名搜、精确定位到
 // collectionId 后拿完整曲目表"技巧(比按标题全文搜索准——见那边注释里方大同「Three
-// Tour」那个真实案例),但目的不同,刻意不合并:那边要的是"这首歌"的封面/链接,这边要
+// Tour」那一例),但目的不同,刻意不合并:那边要的是"这首歌"的封面/链接,这边要
 // 的是"这张专辑在各商店的署名怎么写",不需要定位到具体某一首曲目,专辑里随便一首曲目
 // 的署名都能作数,反而更省一次逐曲比对。
 //
 // 只在 album 非空时生效(跟 resolveAppleMusicMatchViaAlbum 一样)——这条技巧的核心就是
 // 靠专辑名精确定位,没有专辑名没法做这件事。
 //
-// ⚠️ 两道门,挡住「日文歌匹配到同名 EP 的韩国歌手」这类错配:
+// 两道门,挡住「日文歌匹配到同名 EP 的韩国歌手」这类错配:
 //   - **挑中的专辑里必须真的有这首歌**(appleStorefrontTrackMatches:时长在容差内,且曲名归一相等或跨文字系统)。
 //     原来只按专辑名挑最像的那张、从不核对歌手或曲目,于是 back number《Happy End - EP》在 US 商店(日文 EP 不上架)
 //     对上了韩国歌手 Rothy 的同名 EP,「Rothy」被当成 back number 的别名落盘、整张 EP 每首歌的别名轮都拿它白查四个源。
 //     只取**对上的那一首**的署名,不再把专辑里随便一首的署名都收进来。
 //   - **问哪些商店按文字系统定**(appleStorefrontsFor):基线 CN / US,署名 / 曲名 / 专辑名或首轮歌词正文里出现假名
-//     → JP、谚文 → KR、西里尔 → RU、泰文 → TH、繁体汉字 → TW。日文歌只问 CN / US 是永远找不到原专辑的。
+//     到 JP、谚文 到 KR、西里尔 到 RU、泰文 到 TH、繁体汉字 到 TW。日文歌只问 CN / US 是永远找不到原专辑的。
 func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) []string {
 	names, _ := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
 	return names
@@ -524,18 +523,17 @@ func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album s
 // appleStorefrontCanonicalTitle:同一次商店遍历的**第二个产物** —— 这一条录音在原产地商店的曲名。
 // 空 = 本地写法就是规范写法(绝大多数歌),或者压根没定位到这张专辑。
 //
-// 加,真实病根(现象是「为什么这首歌只搜出这一个结果」,Mrs. GREEN APPLE《クスシキ》):
-// Apple Music 国际区把这首日文歌的标签写成罗马字「KUSUSHIKI」,而 QQ / 酷狗 / 网易云收录的都是
-// 日文原名「クスシキ」—— 九个源全应答,却只有 LRCLIB(库里恰好有一条罗马字标题的记录)给得出候选。
-// 而三条已有的标题反查路(title-from-album / title-from-artist-search / 「署名 - 曲名」拆分重入)
-// **全都拿本地标题当输入**,本地标题正是坏掉的那个东西 —— 死结:要先有日文名才查得到日文名。
+// Apple Music 国际区有时把日文歌的标签写成罗马字(例如「クスシキ」写成「KUSUSHIKI」),
+// 而歌词源收录的是日文原名。已有的三条标题反查路(title-from-album / title-from-artist-search /
+// 「署名 - 曲名」拆分重入)**全都拿本地标题当输入**,本地标题正是坏掉的那个东西 —— 死结:
+// 要先有日文名才查得到日文名。
 //
 // 出口本来就在手上:appleStorefrontIdentitiesAndTitle 为了找署名,会按"专辑名 + 时长 + 跨文字系统
 // 曲名"(appleStorefrontTrackMatches)逐个商店定位到**这一条录音**,JP 那一轮早就把「クスシキ」
 // 取到了 —— 只是那个函数从头到尾只看 ArtistName,曲名用完即弃。把它带出来,一次额外请求都不用多打
 // 就能解开死结。消费方见 enrich.go 标题反查那段的第三条路。
 //
-// ⚠️ **前提(已知边界)**:问哪些商店由 appleStorefrontsFor 按文字系统定,而这类歌的三项标签
+// **前提(已知边界)**:问哪些商店由 appleStorefrontsFor 按文字系统定,而这类歌的三项标签
 // 全是罗马字 —— 把原产地商店带进来的,是**首轮某个源给回来的正文**(lyricSamples)。所以这条
 // 修复救得了"九个源里至少有一个给出了正文"的形状(那次是 LRCLIB 给了日文正文);**九源全空时
 // 手上没有任何原产地信号,这个死结仍然解不开**。真要覆盖那一档得穷举更多商店(每多一个就多一次
@@ -562,7 +560,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	appleStorefrontTitleMu.Lock()
 	cachedTitle, titleOK := appleStorefrontTitleCache[titleKey]
 	appleStorefrontTitleMu.Unlock()
-	// ⚠️ **两样都命中**才能直接回。只有署名缓存(之前存下的,或同专辑另一首歌留下的)
+	// **两样都命中**才能直接回。只有署名缓存(之前存下的,或同专辑另一首歌留下的)
 	// 是不够的 —— 这一首的曲名还没查过,直接回等于把死结原样留着。
 	if namesOK && titleOK {
 		return cachedNames, cachedTitle
@@ -590,7 +588,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 			log.Printf("lyrics: storefront %s: album %q matched %q by name only, none of its %d tracks is %q (%.0fs) — treated as a different album", country, album, artist, len(tracks), title, durationSecs)
 			continue
 		}
-		// ⚠️ 规范曲名必须在下面那道**署名去重之前**取。本地署名本来就对时(日文歌最常见的形状 ——
+		// 规范曲名必须在下面那道**署名去重之前**取。本地署名本来就对时(日文歌最常见的形状 ——
 		// 「Mrs. GREEN APPLE」在哪个商店都这么写),`seen[n]` 那条 continue 会把整条 hit 跳过,
 		// 曲名跟着一起丢 —— 之前正是这么丢的,见 appleStorefrontCanonicalTitle 头注。
 		// 取第一个与本地写法不同的:商店按 appleStorefrontsFor 的顺序问,原产地排在基线 CN/US
@@ -629,7 +627,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 // (同名不同歌很难恰好一样长:Rothy 那首 232s 对 back number 314s),曲名要么归一相等、要么跨文字系统(同一录音
 // 在 JP 商店叫「ハッピーエンド」、在 US 商店叫「情勝策略」这类本地化写法);没有时长时只能要求曲名归一相等。
 //
-// ⚠️ 两档的时长容差**故意不同**:
+// 两档的时长容差**故意不同**:
 //   - 同名那一档手里有曲名证据,时长只是除重用的,继续用 appleTitleSearchDurationTolerance
 //     (max(4s, 3%)) —— 一字不改,绝大多数歌走的就是这一档。
 //   - 跨文字系统那一档**没有任何曲名证据**(artistScriptDiffers 对"中文本地标签 vs 英文商店标签"
@@ -674,26 +672,16 @@ const appleStorefrontTrackAmbiguityMarginSecs = 0.5
 // appleStorefrontPickTrack:从这张专辑的曲目表里挑出"本地正在放的那一条录音"。挑不出返回 nil,
 // 调用方把这张专辑当成"同名的另一张"跳过。
 //
-// 真实 bug(现象是陶喆《组曲: 火鸟功 / 我太傻 / Melody (Live)》配了《Run Away (Live)》的词):
-// 这里原来是**扫到第一条过闸的就 break**。在"同名"那一档下这没毛病(曲名已经把人认出来了),
-// 但跨文字系统那一档没有曲名证据、完全靠时长 —— "第一条落在容差内"跟"最像的那一条"是两回事,
-// 而专辑曲目表是按**曲序**排的、跟像不像毫无关系。实测:《Live Again: 陶喆 小人物狂想曲》31 首里,
-// 本地 328.99s 的串烧在 US 商店叫《Medley: Zero to Hero / Summer Love Triangle / Melody (Live)》、
-// 时长 **328.99s 分毫不差**,却排在第 28 位;排第 1 的《Run Away (Live)》321.60s 差 7.39s,落在当时
-// ±9.87s 的容差里,于是它先 break、正确答案永远轮不到。另一首《组曲: 流沙 / 天天 (Live)》同理。
+// 两档判据,跟 netease.go 的 bestAlbumTrackByDurationDetailed 同一套(同一件事两条路径
+// 不该一严一松):
 //
-// 改成两档,跟 netease.go 的 bestAlbumTrackByDurationDetailed 同一套判据(那边早就是"取最近 + 歧义
-// 弃权",同一件事两条路径不该一严一松):
+//	① 曲名归一相等且过时长闸 到 铁证,直接取第一条。
+//	② 只剩跨文字系统一档(没有曲名证据、完全靠时长)到 扫完全表取时长最近的;若有一条
+//	  **曲名不同**的亚军咬得太紧(差距 ≤ appleStorefrontTrackAmbiguityMarginSecs),就弃权 ——
+//	  专辑曲目表按**曲序**排列、跟像不像无关,不能只看"第一条落在容差内"。
 //
-//	① 曲名归一相等且过时长闸 → 铁证,直接取第一条。这一档行为跟改动前**逐字一致**。
-//	② 只剩跨文字系统一档 → 扫完全表取时长最近的;若有一条**曲名不同**的亚军咬得太紧
-//	  (差距 ≤ appleStorefrontTrackAmbiguityMarginSecs),就弃权。
-//
-// 同名重复(同一首歌在一张专辑里出现两次)不算歧义 —— 跟 netease 那边一样,它们给出的
-// 规范曲名本就是同一个,选哪条都一样。
-//
-// ⚠️ 只有**≥ 2 条曲目同时过闸**时这个函数的结论才可能跟旧的 break 写法不同;只有一条过闸时
-// 两者逐字相同。而"≥ 2 条过闸"下旧写法选的是**曲序靠前的那一条**,本来就是个任意值。
+// 同名重复(同一首歌在一张专辑里出现两次)不算歧义 —— 它们给出的规范曲名本就是同一个,
+// 选哪条都一样。
 func appleStorefrontPickTrack(localTitle string, durationSecs float64, tracks []itunesResult) *itunesResult {
 	want := normLoose(localTitle)
 	if want == "" {
@@ -734,8 +722,8 @@ func appleStorefrontPickTrack(localTitle string, durationSecs float64, tracks []
 }
 
 // appleStorefrontsFor:按文字系统决定问哪些商店。
-// 基线 CN / US;样本(署名 / 曲名 / 专辑名 + 首轮歌词正文片段)里假名 → JP、谚文 → KR、西里尔 → RU、泰文 → TH、
-// 繁体汉字(toSimplified 会改动) → TW。最多再加两个商店:每多一个就多一次 Search(命中再一次 lookup),按专辑只算一次。
+// 基线 CN / US;样本(署名 / 曲名 / 专辑名 + 首轮歌词正文片段)里假名 到 JP、谚文 到 KR、西里尔 到 RU、泰文 到 TH、
+// 繁体汉字(toSimplified 会改动) 到 TW。最多再加两个商店:每多一个就多一次 Search(命中再一次 lookup),按专辑只算一次。
 // 这是**全仓唯一**的商店列表来源:apple.go 的两条匹配路径、albumhint.go 的候选查询、
 // appleTitleSearchIdentities 原本各自写死 CN/US,现已统一走这里(各调用点按自己手上的样本各算一次),
 // 免得"同一首歌在这条路径上问了 JP、在那条路径上没问"这种不一致。代价是非拉丁文字系统的歌请求数
@@ -793,9 +781,8 @@ func lyricSamplesForStorefront(results []scoredLyricCandidateResult) []string {
 //   - appleCatalogSearchIdentities 要**锚点**(本地是从 Apple Music 播放、带 uniqueIdentifier);
 //   - appleStorefrontArtistIdentities 要**专辑名**(靠专辑名精确定位到 collectionId);
 //   - 这一条两样都不要,只要曲名 —— 正是浏览器播 YouTube Music 那条路的形状:MV 常常不报
-//     专辑名,而 YT Music 的 zh-HK 界面把艺人名**本地化**了(现象是王子
-//     《Why You Wanna Treat Me So Bad?》九个源全空:MediaSession 报的 artist 是「王子」,
-//     六个源的曲库里这首歌都署「Prince」,换成 Prince 查六个源当场全中)。
+//     专辑名,而 YT Music 的 zh-HK 界面会把艺人名**本地化**(例如把 Prince 报成「王子」,
+//     而歌词源的曲库都按「Prince」收录,本地化名字全部查不到)。
 //
 // 怎么防"同名不同歌"把别人的署名塞进来(这条没有专辑证据,是三条里最弱的,所以门最严):
 //   - 曲名**归一后必须完全相等**(normLoose),不是 looseContains 那种包含关系;
@@ -803,7 +790,7 @@ func lyricSamplesForStorefront(results []scoredLyricCandidateResult) []string {
 //     —— 同名的另一首歌很难恰好也是这个长度;本地没时长时只信搜索结果里**第一条**同名的;
 //   - 最多两个署名(appleTitleSearchMaxIdentities),跟本地写法 normLoose 相同的剔掉;
 //   - **本地署名与 iTunes 署名必须一个含 CJK、一个不含**(artistScriptDiffers):这条来源要救的
-//     形状是"平台把艺人名翻译/本地化了"(王子 ↔ Prince),跨文字系统正是这种情形的签名;同一文字
+//     形状是"平台把艺人名翻译/本地化了"(王子 与 Prince),跨文字系统正是这种情形的签名;同一文字
 //     系统里名字对不上,更可能是**另一位艺人的同名歌**(尤其 Outro / Intro / 序曲 这类通用曲名的
 //     器乐段,本地本来就没有歌词,别名轮再拿别人的同名歌去查只会把错的词安上去)。
 //
@@ -911,7 +898,7 @@ func pickAppleTitleSearchIdentities(results []itunesResult, artist, title string
 }
 
 // artistScriptDiffers:两个署名是否一个含 CJK(汉字 / 假名 / 谚文)、一个完全不含。这是
-// "平台把艺人名本地化了"的签名(王子 ↔ Prince、迈克尔·杰克逊 ↔ Michael Jackson),也是
+// "平台把艺人名本地化了"的签名(王子 与 Prince、迈克尔·杰克逊 与 Michael Jackson),也是
 // appleTitleSearchIdentities 敢采用一个字面上毫无关系的署名的唯一理由;同文字系统内的不同
 // 名字不采(多半是另一位艺人的同名歌)。本地署名为空时按"不同"处理 —— 那时没有可比的对象,
 // 交给调用方前面的守卫。

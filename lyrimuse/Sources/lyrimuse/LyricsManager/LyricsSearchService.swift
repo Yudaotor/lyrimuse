@@ -136,9 +136,8 @@ final class LyricsSearchService {
         var isRejection: Bool { kind.hasPrefix("reject") }
 
         /// 分数说明整段文案。一项一行、按贡献绝对值从大到小排 —— 用户真正在问的是
-        /// "它凭什么排第一",答案该第一行就出现。原来是 LyricsSearchSheet 的私有方法,
-        /// 抽到这里跟"解析决策"弹窗共用:两处要是各写一份,措辞和排序规则
-        /// 迟早漂开。
+        /// "它凭什么排第一",答案该第一行就出现。跟"解析决策"弹窗共用同一份实现:
+        /// 两处要是各写一份,措辞和排序规则迟早漂开。
         static func explanation(score: Int, terms: [ScoreTerm]) -> String {
             guard let first = terms.first else { return "" }
             if first.isRejection {
@@ -191,10 +190,10 @@ final class LyricsSearchService {
         // 文本当一整行切不开——见 YRCParser/LRCParser.parse 同一处注释,这里先归一化成
         // 纯 "\n" 再切,否则这类候选会显示成"1 行"这种明显错误的行数。
         //
-        // 存储属性、构造时算一次:原来是计算属性,每次行渲染/
-        // 预览重算都对整首歌词(2-10KB)完整跑两遍 replacingOccurrences + 一遍 split,
-        // 而 lyrics 自构造起不可变,纯属重复计算(sheet 的 body 重算入口很多:三个查询
-        // 输入框每敲一键、每批 NDJSON 到达都整数组替换)。
+        // 存储属性、构造时算一次:lyrics 自构造起不可变,做成计算属性会让每次行渲染/
+        // 预览重算都对整首歌词(2-10KB)重新跑两遍 replacingOccurrences + 一遍 split,
+        // 纯属重复计算(sheet 的 body 重算入口很多:三个查询输入框每敲一键、每批
+        // NDJSON 到达都整数组替换)。
         let lineCount: Int
         /// 「只取词」的内容指纹(ManualPickLock.fingerprint:不含时间戳/YRC/译文),构造时算一次
         /// (理由同 lineCount)。跨源同词标注与「当前使用」双判据都读它;空串 = 没有词。
@@ -297,7 +296,7 @@ final class LyricsSearchService {
         /// 还没收录歌词。这两种结局对用户意味着完全不同的下一步 —— 一个是"搜索词可能有问题,
         /// 改改再搜",另一个是"等平台补词,或者自己往 lyrics/ 放一份"。
         ///
-        /// ⚠️ 别跟 `sourceFailureReasonCodes` 混为一谈:那个是"源坏了",这个是**查成功了**
+        /// 别跟 `sourceFailureReasonCodes` 混为一谈:那个是"源坏了",这个是**查成功了**
         /// 的结论,所以 collector 侧特意走了独立字段(见 searchcli.go 的 TracksFoundNoLyrics)。
         let tracksFoundNoLyrics: [TrackFoundNoLyrics]
         /// 只有 pickWinner: true 且只有最后那行才非 nil,见 Pick。
@@ -424,7 +423,7 @@ final class LyricsSearchService {
             // 区分力被自己抵消掉了。详见 collector 侧 match.go 里 nativeLyricSources 的注释。
             //
             // 取值沿用 `LyricsWindowView.idlePlayer` 那条既有先例:LocalPlaybackSource 把
-            // 当前播放器 bundle id 落在这个键上(停播时快照清空、只有它还记得)。⚠️ 取不到
+            // 当前播放器 bundle id 落在这个键上(停播时快照清空、只有它还记得)。 取不到
             // 就**不传**,collector 那边认不出会让这一项不加分 —— 宁可少加一项也不要加错。
             if let playerBundleID = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
                !playerBundleID.isEmpty
@@ -644,7 +643,7 @@ extension LyricsSearchService {
     /// 被丢),而 `DiagnosticsExporter.recentAppLogLines()` 是按 subsystem 事后查询的 ——
     /// 用 debug 等于白记。也正因为会落盘,这里必须限量:只捞匹配标记的行、最多 12 行。
     ///
-    /// ⚠️ 只在**退出码 0** 那条路径上调它。非 0 时 terminationHandler 已经把整段 stderr
+    /// 只在**退出码 0** 那条路径上调它。非 0 时 terminationHandler 已经把整段 stderr
     /// 原样打进 `logger.error` 了,再捞一遍就是重复。
     fileprivate static func logSourceHealthSignals(_ stderr: Data) {
         guard !stderr.isEmpty, let text = String(data: stderr, encoding: .utf8) else { return }

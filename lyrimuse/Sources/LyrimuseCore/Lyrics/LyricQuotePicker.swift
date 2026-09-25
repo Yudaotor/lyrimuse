@@ -2,7 +2,7 @@ import Foundation
 
 /// 从整份歌词里挑「摆得出来的一句话」——停播页 hero 下面那条静默字幕带用。
 ///
-/// ⚠️ **不能直接拿单行 LRC 当一句话**(现象是:「经常只显示半句,没有什么含义」)。
+/// **不能直接拿单行 LRC 当一句话**(现象是:「经常只显示半句,没有什么含义」)。
 /// 根因:LRC 的行是**打轴单位、不是句子单位** —— 一句完整的话经常被拆到两三行上
 /// (`我们` / `都有难忘的回忆`),单独摆出任何一半都不成话。本机全库实测:31,492 行里
 /// 8.7% 是 ≤5 字的短行、2.0% 以悬挂词结尾,这些单摆出来都是半句。
@@ -146,7 +146,7 @@ public enum LyricQuotePicker {
         if terminalPunctuation.contains(last) { return false }
         if text.count <= 5 { return true }
         if danglesAtEnd(text) { return true }
-        // 下一行以附着成分开头 → 它是这一行的尾巴
+        // 下一行以附着成分开头 到 它是这一行的尾巴
         if let head = next.first, encliticHeads.contains(head) { return true }
         return false
     }

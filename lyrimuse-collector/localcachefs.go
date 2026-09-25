@@ -21,7 +21,7 @@ import (
 // 没登录过、客户端换了目录、客户端正在写导致这一拍读失败,全是常态,而这段代码**每首歌
 // 都会走一遍**,无条件记日志就是每首刷一行。
 //
-// ⚠️ **但"被系统拒了"不在常态之列,它必须留下痕迹**。macOS 只让有「完全磁盘访问」的进程
+// **但"被系统拒了"不在常态之列,它必须留下痕迹**。macOS 只让有「完全磁盘访问」的进程
 // 读别的 App 的私有容器(`~/Library/Containers/<bundle id>/Data`),没有授权时这里恒返回
 // EPERM。这种情况下快速路径是**装好了却一直哑着**,而 fail-soft 让它跟"用户压根没装那个
 // 播放器"在日志里逐字节相同,没有任何东西提示该去授权 —— 实测某台机器上酷狗 / QQ 音乐 /
@@ -30,17 +30,17 @@ import (
 // 所以判据收得很窄:**只认 `fs.ErrPermission`**,其余一概静默。窄是有意的 —— 这里要抓的是
 // 那个"永远不会自己好、且只能靠授权解决"的状态,把偶发读失败也报出来会让这行诊断失去信噪比。
 //
-// ⚠️ 每个读取入口都要接:`os.Stat` 过了不代表 `os.ReadDir` 也过 —— TCC 允许 stat 一个目录
+// 每个读取入口都要接:`os.Stat` 过了不代表 `os.ReadDir` 也过 —— TCC 允许 stat 一个目录
 // 却拒绝列它的内容是**实际发生过的形态**(实测那行诊断里的错误是 `open …: operation not
 // permitted`,来自 ReadDir 而非 Stat),只在 stat 那一支记日志会让这类拒绝继续无声无息。
 //
-// ⚠️ 哪几条需要授权由**路径在不在 `~/Library/Containers/` 下**决定,不是按播放器分:酷狗 /
+// 哪几条需要授权由**路径在不在 `~/Library/Containers/` 下**决定,不是按播放器分:酷狗 /
 // QQ 音乐 / 网易云在那底下(要授权),汽水(`Application Support/SodaMusic/`)与 Apple Music
 // (`Caches/com.apple.Music/`)不在(不要)。别把这个判断硬编码成来源名单。
 
 // localCacheAccessState 是设置页那三格「客户端缓存读不到」提示的数据源。
 //
-// ⚠️ 这个状态**必须由 collector 发布,App 不能自己去探测**:两者是两个进程,TCC 授权各自
+// 这个状态**必须由 collector 发布,App 不能自己去探测**:两者是两个进程,TCC 授权各自
 // 独立,App 探得到不代表 collector 探得到(反之亦然)。真正走这条快速路径的是 collector,
 // 所以只有它的结论算数。同 `scoringVersion` 不能在 Swift 侧硬编码是一个道理。
 type localCacheAccessState struct {
@@ -60,7 +60,7 @@ var (
 	localCacheAccessPath string
 )
 
-// setLocalCacheAccessPath 由 setLyricsFillPaths 调用。空路径 = 不发布状态(单测默认如此)。
+// setLocalCacheAccessPath 由 main() 在拿到单实例锁之后调用。空路径 = 不发布状态(单测默认如此)。
 func setLocalCacheAccessPath(path string) {
 	localCacheDeniedMu.Lock()
 	defer localCacheDeniedMu.Unlock()
@@ -96,7 +96,7 @@ func noteLocalCacheDenied(source, path string, err error) {
 		source, path, err)
 }
 
-// noteLocalCacheReadable 是上面那个的对偶:真的读到了就把这个来源从"被拒"里撤掉。
+// noteLocalCacheReadable 是上面那个的对偶:真的读到了就把这个来源从"被拒"挪到"读得到"。
 // 授权之后界面上的提示要能自己消失,靠的就是它。
 func noteLocalCacheReadable(source string) {
 	localCacheDeniedMu.Lock()

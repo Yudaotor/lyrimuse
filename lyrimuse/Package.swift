@@ -21,7 +21,7 @@ let package = Package(
     // 加多语言支持:defaultLocalization 是 SwiftPM 处理 .lproj 资源的硬性
     // 要求(不设的话打包本地化资源会直接报错)。这不代表真的用系统自带的"按语言自动选
     // 资源"机制——真机实测坐实:这台没装 Xcode 的机器上,SwiftPM 打包 .lproj 资源时会把
-    // 目录名强制转小写(zh-Hans.lproj → zh-hans.lproj),这会让 Bundle.preferredLocalizations
+    // 目录名强制转小写(zh-Hans.lproj 到 zh-hans.lproj),这会让 Bundle.preferredLocalizations
     // 的自动协商机制失效(不管系统语言/AppleLanguages 传什么,一律只认到 en)。实际的语言
     // 选择改由 lyrimuse/L10n.swift 自己读 Locale.preferredLanguages 手动判断+
     // 手动定位对应 .lproj 目录,详见那个文件的注释。
@@ -87,7 +87,7 @@ let package = Package(
         // 而日文读音必须走 CFStringTokenizer 形态分析、中韩走 ICU,都是 Apple 系统能力,
         // Go 里没有对应物。见 Sources/lyrics-romanize/main.swift 顶部注释。
         //
-        // ⚠️ 它**依赖 LyrimuseCore**(lyrics-translate 不依赖)—— 读音本体必须跟 App 播放时
+        // 它**依赖 LyrimuseCore**(lyrics-translate 不依赖)—— 读音本体必须跟 App 播放时
         // 的客户端兜底走同一个 `Romanizer.lineReading`,不能照抄一份。
         .executableTarget(
             name: "lyrics-romanize",

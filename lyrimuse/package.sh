@@ -21,7 +21,7 @@
 # (Sparkle 下载并解开这个 zip 完成自我升级),Homebrew cask 也从同一个 zip 安装。dmg 纯粹
 # 是给"去 Releases 页面手动下载"的人的,观感更像正经的 macOS 分发方式。
 #
-# ⚠️ appcast 里**主包那条 item 必须带这个子元素**:
+# appcast 里**主包那条 item 必须带这个子元素**:
 #
 #     <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
 #
@@ -107,7 +107,7 @@ for v in "${VARIANTS[@]}"; do
   # 决定给不给 App 上液态玻璃,写小了整个 App 被按改版前的外观渲染,**而且不报任何错** ——
   # `#available(macOS 26.0, *)` 照样为真、`.glassEffect` 照样调用,只是系统不给画。
   #
-  # ⚠️ 它跟部署目标是两回事:minos 仍然是 14.0,所以 macOS 14/15 上 #available 为假、自然
+  # 它跟部署目标是两回事:minos 仍然是 14.0,所以 macOS 14/15 上 #available 为假、自然
   # 退回改版前的外观。这道闸管的是"新系统上该有玻璃",不会把旧系统挡在门外。
   #
   # 为什么需要闸:SwiftPM 的新构建系统往这个字段写的是部署目标而不是真实 SDK 版本

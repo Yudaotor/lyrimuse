@@ -1,6 +1,6 @@
 import Foundation
 
-/// App ⇄ collector 的「全量重新扫库」状态通道(见 collector/lyricsfullscan.go 头注)。
+/// App 与 collector 的「全量重新扫库」状态通道(见 collector/lyricsfullscan.go 头注)。
 ///
 /// ## 这件事跟「补空扫描」的关系
 ///
@@ -86,7 +86,7 @@ public enum LyricsFullScan {
 
     /// 一条条目会不会被全量扫库拿去重跑,以及它落在哪一层。
     ///
-    /// ⚠️ 这是 collector 侧 `lyricsFullScanTier` 的**镜像**,两边必须逐条对得上 —— 界面上
+    /// 这是 collector 侧 `lyricsFullScanTier` 的**镜像**,两边必须逐条对得上 —— 界面上
     /// 那个「N 首待跟进」说的就是"真会被扫的条数",分歧会直接表现为"点了扫描,数字对不上"。
     /// 放在 LyrimuseCore 而不是 `EnrichCacheStore`(App target,selftest 引用不到)正是为了
     /// 让这份镜像能被单测钉住:层分错了扫描照样跑完,只是把该修的歌漏掉,完全不报错。
@@ -102,6 +102,11 @@ public enum LyricsFullScan {
         case staleVersion = 2
     }
 
+    ///
+    /// 后几个参数跟 collector 的另外两道筛选对齐:
+    ///   - `passStart`:这一场的起点(状态文件 `startedAt`,0 = 没有在跑的一场)。补空 / 重评的尝试时刻
+    ///     (`lastFillAt` / `lastRescoreAt`,Unix 秒)不早于它的,这一场已经跑过,续跑时不再挑;
+    ///   - `skipEmpty`:这条空条目属于「再搜也不会有」(见 `LyricsRetrySkip`),只对第 0 层生效。
     public static func tier(
         hasLyrics: Bool, hasWordTiming: Bool, scoringVersion: Int, currentScoringVersion: Int,
         isManual: Bool, isInstrumental: Bool, isPinned: Bool

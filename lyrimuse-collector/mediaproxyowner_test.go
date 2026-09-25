@@ -8,7 +8,7 @@ import "testing"
 // (Chromium 系报的是自己的 bundle id,只有 Safari 这样)。实测撞上:
 // 配对了 Safari 却整条播放不被采纳,同时还被要求再信任一个看不懂的 bundle id。
 //
-// ⚠️ 这份判据跟 Swift 侧 LyrimuseCore/Local/TrustedPlayers.swift 的 mediaProxyOwners
+// 这份判据跟 Swift 侧 LyrimuseCore/Local/TrustedPlayers.swift 的 mediaProxyOwners
 // 必须一致。两边各有一组对称的断言,单独改一边就会有一边红 —— 这正是要的效果。
 func TestMediaProxyOwnerAcceptance(t *testing.T) {
 	const webkit = "com.apple.WebKit.GPU"

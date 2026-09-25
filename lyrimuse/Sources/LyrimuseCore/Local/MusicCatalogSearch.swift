@@ -6,7 +6,7 @@ import Foundation
 /// 免密钥的解析途径 —— 按 歌名+歌手+店面 搜 song 实体,响应里直接带 trackViewUrl /
 /// artistViewUrl / collectionViewUrl(与 Music 自己分享菜单产出的链接同形)。
 ///
-/// ⚠️ 拿到链接后**必须**经 LaunchServices 打开(music:// scheme 或 NSWorkspace 指定
+/// 拿到链接后**必须**经 LaunchServices 打开(music:// scheme 或 NSWorkspace 指定
 /// Music.app):AppleScript 的 `open location` 会把 URL 当**音频流**加载、清掉整个
 /// 播放队列(实机踩雷验证,sdef 里它的语义就是 "audio stream URL")。
 ///
@@ -167,7 +167,7 @@ public enum MusicCatalogSearch {
         return pickArtwork(decoded.results, title: title, artist: artist, album: album)
     }
 
-    /// https://music.apple.com/… → music://…(注册给 Music.app 的 scheme,经
+    /// https://music.apple.com/… 到 music://…(注册给 Music.app 的 scheme,经
     /// LaunchServices 打开即原生跳页、不动播放队列,实机验证)。非 music.apple.com
     /// 的输入一律拒绝,不做泛化改写。
     public static func musicSchemeURL(_ httpsURL: String?) -> URL? {
@@ -175,7 +175,8 @@ public enum MusicCatalogSearch {
         return URL(string: "music" + httpsURL.dropFirst("https".count))
     }
 
-    /// 拉取并挑选(URLSession async,调用方自行放到非主线程上下文)。
+    /// 拉取并挑选(URLSession async,调用方自行放到非主线程上下文)。用户点一次发一次,
+    /// 不看 `ITunesSearchGate` 的退避,但响应照样记进去。
     public static func resolve(title: String, artist: String, storefront: String) async -> Item? {
         guard let url = searchURL(title: title, artist: artist, storefront: storefront) else { return nil }
         var req = URLRequest(url: url)

@@ -20,8 +20,8 @@ import (
 // Spotify 报 `不散的筵席（I Miss You）`,网易云/Apple Music 报 `不散的筵席`。于是同一首歌
 // 存成两条,各自独立跑一遍全源搜索、各自选中不同的源:
 //
-//	丁世光|不散的筵席|神經志 The Journal              → netease,43 行时间戳,score 1107
-//	丁世光|不散的筵席（I Miss You）|神經志 The Journal  → kugou, 83 行时间戳,score 1203
+//	丁世光|不散的筵席|神經志 The Journal              到 netease,43 行时间戳,score 1107
+//	丁世光|不散的筵席（I Miss You）|神經志 The Journal  到 kugou, 83 行时间戳,score 1203
 //
 // 后果不只是"歌词管理里多一行"。两份歌词的**断行和时间轴根本不是一份东西**(43 行 vs
 // 83 行,后者把每个短句单独成行),于是用哪个播放器听,歌词推进的节奏就不一样 ——
@@ -52,11 +52,11 @@ var enrichKeyVersionWords = []string{
 	"reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
 	"unplugged", "acappella", "a cappella",
 	"interlude", "intro", "outro", "skit", "prelude", "overture",
-	// 真实故障(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
-	// 这张表里,归一化把整段括号连着"慢板"一起剥掉,存进缓存的 key 变成"Secret"——跟
-	// 正式完整版的《Secret》撞成同一个 key,而"(慢板)"这版实际时长只有 68 秒,是电影原声带
-	// 里单独收录的钢琴慢版重奏,跟正式版是**两个不同的录音**(理由跟"版"字那条一致:剥掉
-	// 会把两首不同的音频当成同一首)。"快板"跟"慢板"是同一类曲速标注,顺带一起补上。
+	// "慢板"/"快板"必须留在这张表里:漏掉的话归一化会把整段括号连着这个词一起
+	// 剥掉,存进缓存的 key 变成不带曲速标注的裸标题——跟正式完整版撞成同一个 key
+	// (例:周杰伦《不能说的秘密》电影原声带"Secret (慢板)"会撞上正式版《Secret》,而
+	// "(慢板)"这版实际时长只有 68 秒,是电影原声带里单独收录的钢琴慢版重奏,跟正式版是
+	// **两个不同的录音**;理由跟"版"字那条一致:剥掉会把两首不同的音频当成同一首)。
 	"慢板", "快板",
 	"现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
 }
@@ -182,7 +182,7 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 // 名字、而且正是胜出的那条"能留着自己的文件;其余(改了名的胜者、以及所有落选者)一律删,
 // 由紧随其后的 exportLyricsFiles 用胜出条目重新写一份。
 //
-// ⚠️ 这个函数存在的全部理由:判据**不能**写成"k != newKey 才删",
+// 这个函数存在的全部理由:判据**不能**写成"k != newKey 才删",
 // 于是**落选**条目只要它的 key 恰好等于归一化后的 key(带译名的那条胜出时必然如此),它的
 // .lrc 就被留在盘上;紧接着 importLyricsFromFiles 按文件头部标签算出同一个 key,把落选那份
 // 正文又盖回胜出条目上 —— 得到一条 lyrics_score/lyrics_source 记着胜者、正文却是败者的
@@ -198,7 +198,7 @@ func staleExportKeys(newKey, winnerKey string, olds []string) []string {
 	return out
 }
 
-// planEnrichKeyMigration 把当前缓存里的 key 按归一化结果分组,返回"新 key → 这一组的旧
+// planEnrichKeyMigration 把当前缓存里的 key 按归一化结果分组,返回"新 key 到 这一组的旧
 // key(已排序)"。纯函数,好测;真正改内存/删文件的是下面的 migrateEnrichKeys。
 func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 	buckets := map[string][]string{}
@@ -228,7 +228,7 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 	return groups
 }
 
-// splitByDuration 是"慢板/快板"那次真实故障之后加的硬兜底。enrichKeyVersionWords
+// splitByDuration 是给"版本词清单必然漏词"这个问题加的硬兜底。enrichKeyVersionWords
 // 是个关键词清单,永远会漏词(下一次可能是"钢琴版"/"acoustic"/随便什么词,清单只能
 // 越补越长),但两个不同录音的时长几乎不可能碰巧一样 —— 拿时长再兜一道,清单漏词时
 // 也不至于把两首不同的歌合并成一条。
@@ -287,7 +287,7 @@ func enrichKeyDurationVariant(key string, n int) string {
 	return artist + "|" + fmt.Sprintf("%s~dur%d", title, n) + "|" + album
 }
 
-// resolveEnrichKeyForDuration 是"慢板/快板"那次真实故障的第二道兜底 —— splitByDuration
+// resolveEnrichKeyForDuration 是同一个问题的第二道兜底 —— splitByDuration
 // 挡的是"启动时合并存量 key",这里挡的是**实时**场景:第一次遇到某首歌时,它的标题
 // 就直接被(清单没收录的)版本词坑剥成了跟另一首歌相同的 key,而那首歌是 trackEnrichment
 // **首次**建条目,压根没有"合并"这一步可拦——单纯是 map 里已经有人占了这个 key。
@@ -314,7 +314,7 @@ func resolveEnrichKeyForDuration(cache map[string]enrichEntry, key string, durat
 
 // migrateEnrichKeys 把存量缓存迁到归一化 key 上,并清掉合并后不再对应任何条目的导出文件。
 //
-// ⚠️ 必须在 importLyricsFromFiles() **之前**跑。lyrics/ 里的文件是按文件**头部标签**反查
+// 必须在 importLyricsFromFiles() **之前**跑。lyrics/ 里的文件是按文件**头部标签**反查
 // key 的(不看文件名),合并之后同一个 key 会同时对应两份内容不同的文件,import 遍历 map
 // 的顺序又是随机的 —— 不先把落选的那份文件删掉,条目内容会在每次重启时随机在两份歌词之间
 // 反复横跳。删掉之后,紧跟其后的 exportLyricsFiles() 会用胜出条目重新写出新文件名那一份。

@@ -50,7 +50,7 @@ import (
 //	   返回 404 "No related resources"(不是 401,别被这个状态码带偏:实测,
 //	   同一个 id 不带 user token 回 404、带上就有数据)。
 //
-// ⚠️ **不要试图走官方 MusicKit 框架**。MusicKit 需要
+// **不要试图走官方 MusicKit 框架**。MusicKit 需要
 // com.apple.developer.musickit entitlement,而它只发给 Apple Developer Program 成员的
 // 正式证书;lyrimuse 是自签名(build.sh 的 "Lyrimuse Dev Signing"),强行把这条
 // entitlement 签进去的结果是**进程被 amfid 直接 SIGKILL**(退出码 137),连跑都跑不起来。
@@ -127,7 +127,7 @@ func applemusicSetLastFailureReason(reason string) {
 }
 
 // applemusicLastFailureReasonNow 供 search-lyrics / test-lyric-sources 用。
-// ⚠️ 最常见的"失败"其实是**用户压根没连过 Apple Music**(applemusic_not_connected),
+// 最常见的"失败"其实是**用户压根没连过 Apple Music**(applemusic_not_connected),
 // 它跟源坏了不是一回事 —— UI 侧据此提示"去设置里连接",不要报成源故障。
 func applemusicLastFailureReasonNow() string {
 	applemusicLastFailMu.Lock()
@@ -140,7 +140,7 @@ func applemusicLastFailureReasonNow() string {
 // applemusicUserTokenPath 是 media-user-token 的落点。写入方是 lyrimuse 设置里的
 // "连接 Apple Music"窗口(AppleMusicLoginWindow.swift),collector 只读。
 //
-// ⚠️ 这是用户 Apple Music 账号的访问凭据,跟 musixmatch token 一样只待在本机配置目录,
+// 这是用户 Apple Music 账号的访问凭据,跟 musixmatch token 一样只待在本机配置目录,
 // 不进仓库、不上传、不写日志(下面任何一处都不打印它的值,只打印长度)。
 func applemusicUserTokenPath() string {
 	if configDir() == "" {
@@ -158,7 +158,7 @@ type applemusicUserTokenFile struct {
 // applemusicLoadUserToken 读用户令牌与 storefront。不发网络请求。
 // storefront 读不出来时返回**空串**,调用方必须自己去 applemusicEnsureStorefront 问清楚。
 //
-// ⚠️ 这里以前会在拿不到时退到 "us",那是个会导致整源静默全灭的设计。
+// 这里以前会在拿不到时退到 "us",那是个会导致整源静默全灭的设计。
 // storefront 不只决定"查哪个区的曲库",它同时决定**取词那一趟的鉴权**:Apple 校验的是
 // URL 里的 storefront 段 == 用户订阅的区,跟歌属于哪个区无关。实测同一个 id 同一个令牌,
 // cn 路径 200、us/gb/es/jp/de 路径一律 404(对照组用各区都有的大热门,排除了"歌本身没有")。
@@ -447,7 +447,7 @@ func applemusicDevTokenWorks(ctx context.Context, devToken string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// applemusicEnsureDeveloperToken 拿(并缓存)developer token。内存 → 磁盘 → 网络,
+// applemusicEnsureDeveloperToken 拿(并缓存)developer token。内存 到 磁盘 到 网络,
 // 单飞锁保证同一时刻只有一个 goroutine 真的去抓 bundle。
 func applemusicEnsureDeveloperToken(ctx context.Context) string {
 	if tok := applemusicCachedDevToken(); tok != "" {
@@ -530,7 +530,7 @@ func (s applemusicSong) cover() string {
 	u = strings.ReplaceAll(u, "{w}", "1000")
 	u = strings.ReplaceAll(u, "{h}", "1000")
 	u = strings.ReplaceAll(u, "{f}", "jpg")
-	// ⚠️ {c} 是裁切/填充代码,Apple 的模板是 `{w}x{h}{c}.{f}` —— 漏掉它,URL 里会留下一个
+	// {c} 是裁切/填充代码,Apple 的模板是 `{w}x{h}{c}.{f}` —— 漏掉它,URL 里会留下一个
 	// 花括号占位符,整条链接直接 400(实测:同一张图 .../1000x1000{c}.jpg 回 400、
 	// .../1000x1000bb.jpg 回 200)。这一路的封面因此从来没成功加载过一次
 	// (本机 enrich 缓存里 mzstatic 封面 0 条)。bb = black background padding,
@@ -729,7 +729,7 @@ var (
 
 // applemusicSubtitleTranslation 从 Apple 的 TTML 里取译文,拼成一份跟正文同轴的 LRC。
 //
-// ⚠️ **只认 type="subtitle"**。Apple 的 <translations> 里有两种,实测分布是:
+// **只认 type="subtitle"**。Apple 的 <translations> 里有两种,实测分布是:
 //   - type="replacement":全是 `zh-Hant -> zh-Hans`,即**同一语言的字形替换**(繁转简)。
 //     那不是译文;而且这个仓库早有 toSimplified 在主链路上处理繁简,再把它当译文塞进来
 //     只会让"译文"这一栏名不副实,还会盖掉别处真正的翻译。
@@ -739,7 +739,7 @@ var (
 // 时间轴不从译文自己身上取:译文的 <text for="Lxxx"> 用 key 指回正文的
 // <p itunes:key="Lxxx">,所以时间戳一律以正文那边为准,两轨天然对齐。
 //
-// ⚠️ **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:实测 6 首
+// **key 对不上的行直接丢,不按顺序硬凑**。Apple 自己的数据偶尔就是错位的:实测 6 首
 // 带真翻译的歌里 5 首 key 完全对齐(69/69、54/54、102/102、65/65、89/89),剩下一首
 // (Michael Jackson《Butterflies》)译文用的是 L83274 起的一套编号、正文是 L1 起,交集为
 // 零,而且行数也不等(42 对 38)。那种情况下按顺序对齐必然错位 —— 错位的译文比没有译文糟,

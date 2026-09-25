@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
+// 「歌词显示 到 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
 //
 // 跟「排版」「行为」同一个模子:一份行组件(`OverlayPlacementSettingsRows`)给两个宿主 ——
 //   ① 编辑台工具栏第二行那颗「位置 ▾」点开的浮层(`OverlayPlacementPopover`);
@@ -34,13 +34,13 @@ struct OverlayPlacementSettingsRows: View {
 /// "选了哪档控件整体宽度就跟着变")。这是第三份同形状的控件(另一份是
 /// `LyricsAlignmentSegmentedControl`),各自绑不同的枚举;要改尺寸记得三处一起。
 ///
-/// ⚠️ `.fixedSize()`:同那两份 —— 在 `SettingsRow` 尾部插槽里,标题列 / Spacer / 本控件三个可伸缩
+/// `.fixedSize()`:同那两份 —— 在 `SettingsRow` 尾部插槽里,标题列 / Spacer / 本控件三个可伸缩
 /// 成员**均分**亏空,不钉住的话英文 "Bottom Center" 会在行里还剩空白时先被截成 "Bottom Ce…"。
 @MainActor
 struct OverlayPlacementSegmentedControl: View {
     @Binding var selection: OverlayPlacementMode
 
-    /// ⚠️ 不能存成 `static let`:`L10n.t` 要在每次取值时现算(切语言之后标签要跟着变)。
+    /// 不能存成 `static let`:`L10n.t` 要在每次取值时现算(切语言之后标签要跟着变)。
     /// 「行为」工具栏按钮的摘要(`OverlayEditorStage.behaviorSummary`)也读这份,两处一个口径。
     static func label(for mode: OverlayPlacementMode) -> String {
         switch mode {

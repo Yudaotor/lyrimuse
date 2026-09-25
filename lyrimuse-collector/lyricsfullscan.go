@@ -48,7 +48,7 @@ import (
 // 没词就没有校正值可作废。这里的第 2、3 层全是有词条目,换一份歌词就等于把用户一句句听出来
 // 的几百毫秒当场作废(见 lyricspins.go 头注),这道闸缺不得。
 //
-// 「自动跟进算法升级」那个开关(features.LyricsAutoUpgrade)**不管这条路径**:它管的是
+// 「自动跟进算法升级」那个开关(features().LyricsAutoUpgrade)**不管这条路径**:它管的是
 // needsLyricsRescore / needsLyricsRetry 这些自动路径,features.go 里那句"用户手动重搜都不受
 // 它管"是既定口径,全量扫库是用户点出来的,同理。
 //
@@ -111,14 +111,15 @@ type lyricsFullScanState struct {
 // lyricsFullScanProgressBase 纯函数:给定盘上记着的那一场(可能是空的)和这一轮还剩多少条,
 // 算出界面该显示的分母/分子/已更新数。
 //
-// 为什么需要它:候选集合是**单调收缩**的(每条跑完 lyrics_scoring_version 就追平,下一轮
-// 重新挑候选时它自然不在列表里)。所以每一轮开工时的 len(keys) 都比上一轮小 —— 直接拿它
+// 为什么需要它:候选集合是**单调收缩**的(第 2 层跑完 lyrics_scoring_version 就追平;第 0、1 层
+// 跑完留下的尝试时刻晚于这一场的起点,lyricsFullScanTier 不再挑它 —— 下一轮重新挑候选时它们都
+// 不在列表里)。所以每一轮开工时的 len(keys) 都比上一轮小 —— 直接拿它
 // 当分母、分子从 0 起,用户看到的就是"每续跑一次分母就缩水、进度永远从 0 开始"。
 //
 // 规则:
 //   - 盘上没有一场在记(Total<=0)= 新的一场,分母就是这一轮的候选数,分子归零;
 //   - 已经有一场,分母原样保留、分子接着累加;
-//   - ⚠️ 分母**只涨不缩**:库里新增条目会让"已跑 + 还剩"超过当初定下的总数,那时候按真实值
+//   - 分母**只涨不缩**:库里新增条目会让"已跑 + 还剩"超过当初定下的总数,那时候按真实值
 //     抬上去。截断分子会显示成 5122/5122 却还在跑,比分母变大更难懂。
 //
 // 清零只发生在两处:整份候选列表真的跑完(resetLyricsFullScanProgress),以及打分版本变了
@@ -166,7 +167,7 @@ func resetLyricsFullScanProgress() {
 //
 // 8 秒是换 gap 之后**实测修正过**的值,别按"搜索很快"的直觉往回调。
 //
-// ⚠️ 别按 5 秒估("gap 15 秒时每首 18 秒 → 搜索 3 秒"那种小样本、又恰好是简单的歌);
+// 别按 5 秒估("gap 15 秒时每首 18 秒 到 搜索 3 秒"那种小样本、又恰好是简单的歌);
 // gap 换成 5 秒后实测 **15.9 秒/首**,反推搜索约 11 秒 —— 差了三倍多。差距来自扫描的
 // 分层顺序:最先跑的 tier 0 是"一条歌词都没有"的那批,要把所有源加别名轮全遍历一遍,最慢;
 // 后面 tier 2(本机 4900+ 首,只是打分版本旧)会快得多。取 8 秒是这两端之间的一档。
@@ -183,7 +184,7 @@ func lyricsFullScanSecondsPerTrack() int {
 
 // setLyricsFullScanStatePath 由 setLyricsFillPaths 调用。
 //
-// ⚠️ 跟隔壁那两份不一样,这份文件**启动时绝不能删** —— 它整个存在的意义就是跨进程活着。
+// 跟隔壁那两份不一样,这份文件**启动时绝不能删** —— 它整个存在的意义就是跨进程活着。
 // 这里只把当前的打分版本号刷进去(Active 原样保留)。
 func setLyricsFullScanStatePath(path string) {
 	lyricsFullScanMu.Lock()
@@ -204,7 +205,7 @@ func setLyricsFullScanStatePath(path string) {
 // updateLyricsFullScanState 把「读—改—写」整个握在同一把锁里;mutate 返回 false 表示什么都没变,
 // 那就连写都省掉(别无谓刷 UpdatedAt 和文件 mtime —— App 侧按 mtime 判要不要重读)。
 //
-// ⚠️ 改这份状态**一律**走这条,别再写 read → 改 → write 三步。扫描 goroutine 每跑完一条就要
+// 改这份状态**一律**走这条,别再写 read 到 改 到 write 三步。扫描 goroutine 每跑完一条就要
 // 更新累计进度,而用户按「停止」是另一个 goroutine 在清 Active —— 两边各读一份旧快照、各写一次,
 // 后写的那次会把对方的改动整个盖掉。被盖掉的如果是 Active=false,下次启动就会自动续跑一轮
 // 用户明确停掉的全量扫描,而且没有任何东西会报错。

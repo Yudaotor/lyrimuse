@@ -58,7 +58,7 @@ func TestPickLyricCandidateModes(t *testing.T) {
 		t.Fatalf("关掉 qq 之后该取 kugou(500),得到 %v", got)
 	}
 
-	// 全被判废 → nil。调用方(CLI 的 -pick / 新按钮)必须按"一个能用的都没有"处理,
+	// 全被判废 到 nil。调用方(CLI 的 -pick / 新按钮)必须按"一个能用的都没有"处理,
 	// 绝不能退回"取第一条"。
 	features = featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart}
 	allRejected := []scoredLyricCandidateResult{
@@ -104,12 +104,12 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 	enabled := map[string]bool{"netease": true, "qq": true, "kugou": true, "lrclib": true}
 	features = featureFlags{LyricsSources: enabled, LyricsSourceMode: lyricsModeSmart}
 
-	// 没选过源 → 逐字等价于 pickLyricCandidate。
+	// 没选过源 到 逐字等价于 pickLyricCandidate。
 	if got := pickLyricCandidatePreferring(scored, ""); got == nil || got.Source != "qq" {
 		t.Fatalf("空 choice 该退化成普通挑选(qq 900),得到 %v", got)
 	}
 
-	// 选定了 kugou → 即使 qq 分更高也取 kugou。这正是"别把我选的源换掉"。
+	// 选定了 kugou 到 即使 qq 分更高也取 kugou。这正是"别把我选的源换掉"。
 	if got := pickLyricCandidatePreferring(scored, "kugou"); got == nil || got.Source != "kugou" {
 		t.Fatalf("选定 kugou 时该取 kugou(500)而不是最高分,得到 %v", got)
 	}
@@ -125,12 +125,12 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 		t.Fatalf("同源内该取最好的那条(800),得到 %v", got)
 	}
 
-	// 选定的源这一轮一条候选都没有 → 不换(nil),绝不退回全局最优。
+	// 选定的源这一轮一条候选都没有 到 不换(nil),绝不退回全局最优。
 	if got := pickLyricCandidatePreferring(scored, "musixmatch"); got != nil {
 		t.Fatalf("选定的源没有候选时该返回 nil(不换),得到 %v", got)
 	}
 
-	// 选定的源这一轮只给出不可用候选(Score<0)→ 同样不换。
+	// 选定的源这一轮只给出不可用候选(Score<0)到 同样不换。
 	rejected := []scoredLyricCandidateResult{
 		{Source: "kugou", Score: -1},
 		{Source: "qq", Score: 900},
@@ -139,7 +139,7 @@ func TestPickLyricCandidatePreferring(t *testing.T) {
 		t.Fatalf("选定的源只有不可用候选时该返回 nil,得到 %v", got)
 	}
 
-	// 用户后来在设置里禁用了那个源 → 落到"不换"。保守是对的:"我选了这个源"和"我不想再用
+	// 用户后来在设置里禁用了那个源 到 落到"不换"。保守是对的:"我选了这个源"和"我不想再用
 	// 这个源"是两个独立的意图,不该由这里替用户合并成"那就随便挑一个别的"。
 	features = featureFlags{
 		LyricsSources:    map[string]bool{"netease": true, "qq": true, "lrclib": true},

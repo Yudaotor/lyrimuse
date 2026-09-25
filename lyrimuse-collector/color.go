@@ -63,11 +63,11 @@ func resolveDominantColor(ctx context.Context, coverURL string) string {
 // (coverquality.go)也要取远程候选来比一次,而"哪个 CDN 该怎么降采样、要不要带
 // Referer"这套知识只该有一份。抽的时候行为一字未改。
 //
-// ⚠️ **返回的远程图是降采样过的**(网易云 64y64、QQ 300),因为唯一的原始调用方是取色。
+// **返回的远程图是降采样过的**(网易云 64y64、QQ 300),因为唯一的原始调用方是取色。
 // 所以**绝不能拿它的解码尺寸去判"这个候选有多清晰"** —— 那会把一张 800×800 的候选读成
 // 64px。清晰度判据(coverquality.go)因此改成从 URL 里读目标尺寸
 // (`coverURLIntendedEdge`),只把这里返回的小图用于 8×8 感知指纹(那个尺度上降采样
-// 无所谓)。⚠️ 别用 `minEdge(解码结果)` 比大小:那样判据恒成立、修复一次都不会触发。
+// 无所谓)。 别用 `minEdge(解码结果)` 比大小:那样判据恒成立、修复一次都不会触发。
 func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	if strings.HasPrefix(coverURL, deviceArtworkURLPrefix) {
 		data, err := os.ReadFile(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))

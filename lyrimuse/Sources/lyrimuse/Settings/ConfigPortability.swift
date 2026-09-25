@@ -257,7 +257,7 @@ enum ConfigPortability {
     // 触发一次,行为跟"刚装完/换了台新机器"完全一致,不用为导入这一件事单独维护一套
     // "热重载"逻辑。
     //
-    // ⚠️ 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
+    // 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
     // collector —— 它是独立的 launchd 进程,重启 App 完全不碰它,而它的配置是**启动时读
     // 进内存的那一份**(main.go 里没有任何文件监听)。所以在一台已经装过 collector 的
     // Mac 上导入(= 第二台机器保持同步、或本机从 iCloud 恢复),盘上和界面都换成新配置了,
@@ -351,13 +351,13 @@ enum ConfigPortability {
     // App 自己的状态清完交给调用方紧接着的 restartApp() 复位,原因跟 importData 那条
     // 注释一样。但**常驻服务必须在这里显式停掉**。
     //
-    // ⚠️ 这里原本写着一段推理:"collectorServiceEnabled 清空后读回来是 false,它的 didSet
-    // 会调 setEnabled(false)→uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
+    // 这里原本写着一段推理:"collectorServiceEnabled 清空后读回来是 false,它的 didSet
+    // 会调 setEnabled(false)到uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
     // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。用 swiftc
     // 实测,这段推理的前提是**错的**:
     //
-    //     声明时无默认值 + init 里首次赋值 → didSet 不触发
-    //     声明时有默认值 + init 里重新赋值 → didSet 触发
+    //     声明时无默认值 + init 里首次赋值 到 didSet 不触发
+    //     声明时有默认值 + init 里重新赋值 到 didSet 触发
     //
     // 而 AppSettings.collectorServiceEnabled / launchAtLoginEnabled 都是**无默认值**声明
     // (`@Published var x: Bool {` 直接跟 didSet),走的是不触发那一档。本文件 :60-64 解释
@@ -370,7 +370,7 @@ enum ConfigPortability {
     // Last.fm session key 往那个账号 scrobble**,直到机器重启。承诺没兑现,而且是隐私性质的。
     //
     // 用 setEnabledAndWait 而不是 setEnabled:后者是 operationQueue.async 的
-    // fire-and-forget,而调用方下一句就是 restartApp() → NSApp.terminate,卸载多半来不及跑完。
+    // fire-and-forget,而调用方下一句就是 restartApp() 到 NSApp.terminate,卸载多半来不及跑完。
     /// 导入前对 `config` 段做的最小净化,规则和理由见 `ImportPolicy`。
     ///
     /// 只在这一处做,不在 ConfigStore 里做:那边处理的是**用户自己在界面上敲进去的值**,

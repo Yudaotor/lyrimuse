@@ -39,7 +39,7 @@ struct WindowDragHandle: NSViewRepresentable {
 /// 内容被挤成一团"。所以两件事必须成对做:插标志的同时把下限写进 `contentMinSize`,
 /// 取值就用挂它那个视图 frame 里的那一对,别让两处各说各的。
 ///
-/// ⚠️ 光有下限还不够,**挂它的视图根部要留出长大的余地**:根 frame 只写 min 的话,窗口
+/// 光有下限还不够,**挂它的视图根部要留出长大的余地**:根 frame 只写 min 的话,窗口
 /// 拖大了内容仍停在原尺寸,得配 `maxWidth/maxHeight: .infinity`。
 /// 离屏探针实测(父窗口摆屏幕外、跑完即退):sheet 依附动画结束后 `.resizable`
 /// 仍在、`setContentSize` 到 980×700 生效、内部 `NSHostingView` 跟着变宽——这条路才敢用。

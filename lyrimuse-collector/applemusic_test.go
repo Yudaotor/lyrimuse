@@ -22,7 +22,7 @@ func TestApplemusicParseTTMLOffsetTime(t *testing.T) {
 	if !ok {
 		t.Fatal("解析失败")
 	}
-	// ⚠️ 这条断言守的是一个**静默丢行**的坑:parseTTMLTime 不认 offset-time 那版代码
+	// 这条断言守的是一个**静默丢行**的坑:parseTTMLTime 不认 offset-time 那版代码
 	// 会让 start<0、parseAMLLTTML 直接 continue,于是开头这些秒级时间戳的行全部消失,
 	// 而函数仍然返回 ok=true —— 接入时实测过一次,47 行的歌只剩下时间戳跨过 1 分钟的那半段。
 	if !strings.HasPrefix(lrc, "[00:07.43]De la rumba") {
@@ -59,7 +59,7 @@ func TestApplemusicJWTExpiry(t *testing.T) {
 
 func TestApplemusicExtractJWTsSkipsExpiredAndSortsByExp(t *testing.T) {
 	// 两张票:一张 2033 年到期、一张早已过期(2001 年)。混在一段 JS 文本里。
-	// ⚠️ payload 段必须够长:applemusicJWTRe 要求中段 ≥50 个字符(真 JWT 的 claims 本来
+	// payload 段必须够长:applemusicJWTRe 要求中段 ≥50 个字符(真 JWT 的 claims 本来
 	// 就远不止这点),拿一个最小化的 {"exp":…} 去测会连正则都匹配不上、测了个寂寞。
 	const future = "eyJhbGciOiJFUzI1NiJ9.eyJleHAiOjIwMDAwMDAwMDAsInBhZCI6Imx5cmltdXNlLXRlc3QtcGFkZGluZy12YWx1ZSJ9.aaaaaaaaaaaaaaaaaaaaaaaa"
 	const expired = "eyJhbGciOiJFUzI1NiJ9.eyJleHAiOjEwMDAwMDAwMDAsInBhZCI6Imx5cmltdXNlLXRlc3QtcGFkZGluZy12YWx1ZSJ9.bbbbbbbbbbbbbbbbbbbbbbbb"
@@ -166,7 +166,7 @@ func TestApplemusicDevTokenRenewMarginIsSane(t *testing.T) {
 // TestApplemusicNeverGuessesStorefront 钉死订正的那件事:
 // storefront 拿不到时**绝不能退回某个默认区**。
 //
-// 它同时决定取词那一趟的鉴权(URL 里的区 != 订阅区 → 一律 404),所以猜一个区的后果不是
+// 它同时决定取词那一趟的鉴权(URL 里的区 != 订阅区 到 一律 404),所以猜一个区的后果不是
 // "少查到几首区域独占曲目",而是整源静默全灭 —— 而且 applemusicFetchTTML 把 404 当正常
 // 结果返回 ("", nil),不报错不记原因,光看日志根本发现不了。改回 `sf = "us"` 这类兜底
 // 就会被这条拦住。

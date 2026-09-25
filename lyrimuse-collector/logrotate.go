@@ -16,10 +16,8 @@ import (
 // 项目"尽量不依赖需要管理员权限的官方机制"的取向不搭——ad-hoc 签名放弃 SMAppService 走
 // 文件系统方案是同一个理由,见第 14 章已知坑)。
 //
-// 只在**进程启动时**检查一次,不在运行期间定时轮询:collector 靠 scheduleCollectorRestart/
-// launchd kickstart 本来就会被相对频繁地重启(配置变更、App 重启都会触发),启动时检查
-// 已经足够把文件体量兜住,不需要为了"极端情况下几周不重启"这种边界场景多引入一个定时器
-// 和"运行期间重开文件描述符"的复杂度。
+// 两个检查点:进程启动时(rotateLogIfNeeded),以及常驻运行期间每次写日志前(logsink.go 的
+// rotatingLogFile,按自己累计的字节数判断)。两处归档动作都是 archiveAndReopen。
 //
 // # 为什么不能只 os.Rename 就完事
 //
@@ -28,6 +26,8 @@ import (
 // 后续写入还是会落进被改名的那份旧文件里。所以必须在 rename 之后显式 os.OpenFile 一份
 // 新文件,把它交给调用方去 log.SetOutput,而不能指望"改完名字日志就自动另起一份"。
 const logRotateMaxBytes int64 = 30 * 1024 * 1024
+// fd 2 同理:常驻模式下由 redirectStderrTo 把它也指到当前文件,Go 运行时的 panic 输出直接写
+// fd 2,不这样的话轮转过一次之后 panic 就落进 .old 归档,再轮转两次就被删掉。
 
 // logRotateKeepArchives:保留几份历史归档。最近的一份仍叫 `<path>.old`(App 侧诊断导出和
 // 用户的肌肉记忆都认这个名字),再往前是 `.old.1`、`.old.2`,数字越大越旧。

@@ -18,7 +18,7 @@
 //   swift lyrimuse/scripts/check-windows.swift | grep overlay
 //   screencapture -x -o -l <那个 id> /tmp/shot.png
 //
-// ⚠️ 这里印的 bounds 是 CGWindowList 的读数,**不等于 NSWindow.frame**:窗口在非主显示器
+// 这里印的 bounds 是 CGWindowList 的读数,**不等于 NSWindow.frame**:窗口在非主显示器
 // 上时会有系统级的缩放/取整偏差。实测(本机外接 LS27B61x,NSScreen frame
 // (-526,956,2560,1440),1x):真实 frame 恰好 (849,1082,900,120) 的窗口在这里被报成
 // x=858 y=-245 w=882 h=118 —— 宽度差 18pt、x 差 9pt(等于宽度差的一半,看起来极像一次

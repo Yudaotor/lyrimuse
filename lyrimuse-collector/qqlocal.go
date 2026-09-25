@@ -18,7 +18,7 @@ import (
 
 // QQ 音乐客户端自己的本地曲库 —— QQ 源"拿 songmid"这一步的快速路径。
 //
-// 现有链路拿 mid 要走 qqMusicMatchCached → resolveQQMusicMatch:一次 smartbox /
+// 现有链路拿 mid 要走 qqMusicMatchCached 到 resolveQQMusicMatch:一次 smartbox /
 // client_search 搜索(6 秒超时)外加一整套候选打分挑选。那一步正是"挑错版本"的来源——
 // 同名曲、live/remix 变体、翻唱与仿冒账号,全靠打分去分辨(见 match.go 里 PRINCE《319》
 // X-cerpt 那桩)。
@@ -27,7 +27,7 @@ import (
 // (本机实测 508 行,K_SONG_RESERVE1 就是 songmid,508/508 非空)。命中时这一跳网络连同它
 // 的挑选风险一起省掉:拿到的是客户端为这首歌记下的那个 mid,不是搜出来最像的那个。
 //
-// ⚠️ 跟酷狗的本地 KRC(kugoulocal.go)**不是**一回事,差别必须说清:
+// 跟酷狗的本地 KRC(kugoulocal.go)**不是**一回事,差别必须说清:
 //   - 酷狗那条是**零网络** —— 歌词正文就在盘上;这条只省"搜索"那一跳,歌词正文
 //     (qqLyric / qqQRCLyric)照旧联网取。
 //   - 所以熔断口径也不同:酷狗那条在源冷却时仍要查本地(熔断挡的是网络、不该挡读盘),
@@ -41,13 +41,13 @@ import (
 // 都不划算;而 exec 系统自带命令本来就是这个仓库的既有做法(osascript / scutil /
 // defaults / pgrep)。
 //
-// ⚠️ 全程 fail-soft:没装 QQ 音乐 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,
+// 全程 fail-soft:没装 QQ 音乐 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,
 // 照常回落 resolveQQMusicMatch。它读的是**另一个 App 的数据库**,对方升级随时可能改表。
 
 // qqLocalDBOverride 让单测把库指到临时路径。空 = 用真实路径。
 var qqLocalDBOverride string
 
-// qqLocalDBPath 是 QQ 音乐客户端的曲库。⚠️ 这是**外部 App** 的路径,不是这个项目自己的
+// qqLocalDBPath 是 QQ 音乐客户端的曲库。 这是**外部 App** 的路径,不是这个项目自己的
 // 数据位置,所以不走 paths.go 那套身份口径。
 func qqLocalDBPath() string {
 	if qqLocalDBOverride != "" {
@@ -76,7 +76,7 @@ const qqLocalMaxRows = 20000
 
 // K_SONG_RESERVE1 / K_SONG_RESERVE12 是 QQ 自己的保留字段名(整张表 83 列里有 60 多个
 // K_SONG_RESERVE*),含义靠实测对出来:RESERVE1 是 14 位 base62 的 songmid、RESERVE12 是
-// 毫秒时长(与 media-control 报的秒数逐首吻合)。⚠️ 保留字段的语义**没有任何兼容承诺**,
+// 毫秒时长(与 media-control 报的秒数逐首吻合)。 保留字段的语义**没有任何兼容承诺**,
 // 客户端换版可能挪位置 —— 所以下游一律有守卫:mid 拿去查歌词,查不到就是没命中;时长
 // 只作挑选判据,离谱了顶多让这条候选落选,不会把错的歌词喂上去。
 const qqLocalSongsSQL = `SELECT K_SONG_RESERVE1 AS mid, name, singer, album,
@@ -132,7 +132,7 @@ func queryQQLocalSongs(ctx context.Context, dbPath string) ([]qqLocalRow, error)
 		return nil, err
 	}
 	trimmed := bytes.TrimSpace(out)
-	// ⚠️ sqlite3 -json 对**零行**结果输出的是空串,不是 "[]" —— 直接喂给 Unmarshal 会报
+	// sqlite3 -json 对**零行**结果输出的是空串,不是 "[]" —— 直接喂给 Unmarshal 会报
 	// "unexpected end of JSON input",把"这库里没这首歌"错当成"读库失败"。
 	if len(trimmed) == 0 {
 		return nil, nil
@@ -158,7 +158,7 @@ func refreshQQLocalIndexLocked(ctx context.Context) {
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
 		// 没装 QQ 音乐 / 没登录过 / 路径变了 —— 都是正常情况,静默退回网络解析。
-		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
 		noteLocalCacheDenied("qq", path, err)
 		qqLocalIndex, qqLocalReady = nil, true
 		return

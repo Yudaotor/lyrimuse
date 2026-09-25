@@ -13,7 +13,7 @@ import SwiftUI
 // 所以需要一个新的挂载点。这里的做法:建一扇**永远不显示**的 1×1 窗口,里面挂一个空的
 // SwiftUI 视图,专门用来把这几个环境 action 捕获进 AppActions。
 //
-// ⚠️ "场景树之外的 NSHostingView 里,openWindow 还灵不灵" 这件事是**实测**过的,不是
+// "场景树之外的 NSHostingView 里,openWindow 还灵不灵" 这件事是**实测**过的,不是
 // 想当然(探针):窗口从头到尾没有 orderFront、isVisible 一直是 false,
 // 视图的 onAppear 照常触发,openWindow(id:) 也确实把目标窗口开了出来。
 //
@@ -25,7 +25,7 @@ enum MenuBarSceneActions {
 
     /// 主菜单「Lyrimuse ▸ 设置…」那一条(SwiftUI 见到 Settings 场景自动装上去的)。
     ///
-    /// ⚠️ 为什么打开设置窗口非得绕这一圈,不能跟另外三扇窗一样直接用环境 action:
+    /// 为什么打开设置窗口非得绕这一圈,不能跟另外三扇窗一样直接用环境 action:
     /// 实测坐实,`openWindow(id)` 从场景树外的锚点视图里调**有效**,而
     /// `openSettings()` 在同样的位置是个**静默空操作** —— 而且它的失败方式很有欺骗性:
     /// 设置窗口**已经开着**时它能把窗口带到前台(看起来一切正常),只有窗口被关掉之后

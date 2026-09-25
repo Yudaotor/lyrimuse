@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 → 悬浮歌词」那几个**行为**项(锁定位置 / 拖动前先长按 / 划过让开 / 悬停控制条)
+// 「歌词显示 到 悬浮歌词」那几个**行为**项(锁定位置 / 拖动前先长按 / 划过让开 / 悬停控制条)
 // 的唯一一份实现,(编辑台第三步)从 SettingsView 的「窗口」卡里抽出来。
 // (加第四项「悬停控制条」;在那之前这里一直是三项,下面几处注释里的"三项"
 //  已随之改口 —— `allCases` 的项数不是不变量,"自动隐藏那两行不进这个枚举"才是。)
@@ -36,9 +36,9 @@ import SwiftUI
 // 「宽度」**不在这一栏**:它已经能在编辑台里那条宽度调整条上直接改(看得见),抽屉里那根
 // 滑杆只是兜底,不属于"设一次就不动"的行为项。
 //
-// ⚠️ **这一组末尾多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
-// 时隐藏」和「暂停/无播放时隐藏」原来是设置页上一张独立的「自动隐藏」卡,"不要单独
-// 放在外面,要遵循设计理念,放到行为卡片里面去",于是并进了「行为」这一组。
+// **这一组末尾多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
+// 时隐藏」和「暂停/无播放时隐藏」跟"行为"这一组一起展示,遵循"同一类设置归同一张卡"
+// 的分组原则,不单独开一张「自动隐藏」卡。
 // 它们的真源在 `UI/AutoHideSettingsRows.swift`(`AutoHideItem`),**不在** `OverlayBehaviorItem.allCases`
 // 里;`OverlayBehaviorSettingsRows` 只是把 `AutoHideSettingsRows(surface: .desktopOverlay)`
 // 接在这个枚举的各项后面。
@@ -93,17 +93,17 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     // (第十步之前这里还有一个 `barCaption`:行为栏那一格底下的小字。两项直接返回 `subtitle`,
     //  「锁定位置」另配一句「锁上后编辑台左下角会出现锁标」——它在卡片里本来就没有副标题,
     //  行为栏那一格空着会显得像漏了一句。把那句和「拖动前先长按」的副标题一起删掉,
-    //  剩下的两项直接读 `subtitle` 就够了,这个属性没有存在理由了。⚠️ 锁标本身**保留**,
+    // 剩下的两项直接读 `subtitle` 就够了,这个属性没有存在理由了。 锁标本身**保留**,
     //  见 OverlayEditorStage.lockBadge。)
 
     /// 开关本体。
     ///
-    /// ⚠️ `set` 里那句 WindowController 调用是**必须**的,不是顺手写的:AppSettings 里这几个
+    /// `set` 里那句 WindowController 调用是**必须**的,不是顺手写的:AppSettings 里这几个
     /// @Published 的 didSet **只负责写 UserDefaults**("生效"这一步刻意留在 View 层,见
     /// AppSettings.lockPosition 声明处的注释),真窗口的点击穿透、鼠标监听器装卸都在
     /// LyricsOverlayWindowController 那边。丢掉就是"开关变了、真窗口纹丝不动"。
     ///
-    /// ⚠️ 这两句**都套着** `if settings.classicOverlayEnabled` 守卫(补的,逐条理由
+    /// 这两句**都套着** `if settings.classicOverlayEnabled` 守卫(补的,逐条理由
     /// 写在下面各自的行内注释里)。
     /// (这段话拆文件时写的是"这两句**没有**套守卫、是原样搬过来的既有行为",守卫
     ///  补上之后就过期了,更正。特意留一句而不是直接删:它正好会把
@@ -121,7 +121,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
                 get: { settings.lockPosition },
                 set: { newValue in
                     settings.lockPosition = newValue
-                    // ⚠️ 必须套 classicOverlayEnabled 守卫。
+                    // 必须套 classicOverlayEnabled 守卫。
                     // `LyricsOverlayWindowController.shared` 是 `static let`,**光是读一下**
                     // 就会执行 init() 把窗口建出来 —— 悬浮歌词关着的用户点一下这个开关,
                     // 屏幕上会凭空多出一扇窗。改造前设置页这里一直是裸调的(菜单栏面板那个
@@ -176,7 +176,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 /// 不该知道它内部有几行(同 OverlayTextSettingsRows 的做法)。`AutoHideSettingsRows` 自己只在
 /// 它两行之间插一条,"本组之前"那一条在这里插(见那个文件头的约定)。
 ///
-/// ⚠️ `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
+/// `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
 /// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图一个存储属性都没有 —— 宿主刷新时 SwiftUI 判等
 /// 相等就跳过它的 body,开关会画着陈旧值(表现与 `NotchBehaviorToggleRow` 那条一字不差)。
 @MainActor
@@ -215,7 +215,7 @@ struct OverlayBehaviorSettingsRows: View {
 /// 三列格子**外面**、走另一套版式,一张卡里两种行长相。浮层里全是标准 `SettingsRow`,五项
 /// 长相一致。
 ///
-/// ⚠️ **宽度 420 是实测值,别拍脑袋改**:瓶颈是英文标题 "Hide During Screenshots/Recording"
+/// **宽度 420 是实测值,别拍脑袋改**:瓶颈是英文标题 "Hide During Screenshots/Recording"
 /// (216pt) + ⓘ(19pt),自动隐藏那两行的内容自然宽 271pt(中文)/ 385pt(英文),1pt 步进探出的
 /// 英文不折行硬下限是 **386**;`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**不是
 /// 截断,而 ⓘ 跟标题同处一个 HStack 会垂直居中、尾部开关是 `.top` 对齐,三者当场错位。420 的
@@ -223,7 +223,7 @@ struct OverlayBehaviorSettingsRows: View {
 /// 同一档。上面那三项(锁定位置/长按拖动/悬浮淡化)都比它短,瓶颈不变。
 /// 跟 `NotchBehaviorPopover` 同宽也让两个形态的「行为」浮层看起来是一件东西。
 ///
-/// ⚠️ 内容就是 `OverlayBehaviorSettingsRows`(跟抽屉「行为」组同一份视图);工具栏按钮的摘要
+/// 内容就是 `OverlayBehaviorSettingsRows`(跟抽屉「行为」组同一份视图);工具栏按钮的摘要
 /// `OverlayEditorStage.behaviorSummary` 要跟它算同一批五项 —— 抽屉那一组是这五项**不用点开浮层**
 /// 就能摸到的兜底入口(键盘 / VoiceOver),别顺手把它也收进浮层。
 @MainActor

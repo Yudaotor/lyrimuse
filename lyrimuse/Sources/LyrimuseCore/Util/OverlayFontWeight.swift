@@ -7,7 +7,7 @@ import Foundation
 /// 规则(见 `lighter(by:)` 和下面那三个档位差)是纯逻辑,而且带一条必须钉住的不变量:
 /// **`.bold` 这一档推出来的四个 AppKit 权重必须逐个等于加这个设置之前硬编码的那四个**
 /// (9 / 6 / 5 / 6)——它锚的是"阶梯顺序和三个档位差没被人悄悄重排",破了它,**停在 bold 档**的
-/// 用户的悬浮歌词会在升级后当场变样,而且没有任何报错。⚠️ 之前这句写的是"默认档位
+/// 用户的悬浮歌词会在升级后当场变样,而且没有任何报错。 之前这句写的是"默认档位
 /// `.bold`":那天 `AppSettings.defaultOverlayFontWeight` 按改成了 `.semibold`(把他自己
 /// 在用的那一版定为默认),不变量本身没动,只是它锚的那一档不再是默认档。
 /// selftest 只依赖 LyrimuseCore(见 Package.swift),判据下沉到这里才能被它覆盖,同
@@ -17,7 +17,7 @@ import Foundation
 /// `Settings/AppearanceHelpers.swift` —— 这个 target 只 `import Foundation`,不认识 SwiftUI/AppKit,
 /// 也不该认识 `L10n`。
 ///
-/// ⚠️ **`allCases` 的顺序就是从细到粗的阶梯本身**,`lighter(by:)` 直接按下标走。重排 = 静默
+/// **`allCases` 的顺序就是从细到粗的阶梯本身**,`lighter(by:)` 直接按下标走。重排 = 静默
 /// 改掉所有推导结果,加档位只能往两头加、不能往中间插(往中间插会把"细几档"的含义整体挪位)。
 public enum OverlayFontWeight: String, CaseIterable, Sendable {
     case light
@@ -29,9 +29,9 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
 
     /// AppKit 的 0...15 权重刻度,5 是标准 regular。
     ///
-    /// ⚠️ 这是 `NSFontManager.font(withFamily:traits:weight:size:)` 认的那一套整数刻度,跟
-    /// `NSFont.Weight` 那套浮点刻度**不是一回事**,别混用。刻度不是等距的(semibold 8 → bold 9,
-    /// 但 medium 6 → semibold 8 跳了 2),这也正是推导要走**档位下标**而不是"权重减 N"的原因。
+    /// 这是 `NSFontManager.font(withFamily:traits:weight:size:)` 认的那一套整数刻度,跟
+    /// `NSFont.Weight` 那套浮点刻度**不是一回事**,别混用。刻度不是等距的(semibold 8 到 bold 9,
+    /// 但 medium 6 到 semibold 8 跳了 2),这也正是推导要走**档位下标**而不是"权重减 N"的原因。
     public var appKitWeight: Int {
         switch self {
         case .light: return 4
@@ -67,7 +67,7 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
     // 之前四行硬编码权重的实际关系:主 bold(9) / 罗马音 medium(6) / 译文 regular(5) /
     // 下一句 medium(6),在上面这个阶梯上正好是 0 / -2 / -3 / -2。
     //
-    // ⚠️ 这几个数不是"看着差不多",它们是**兼容性契约**:`.bold` 档下推导结果必须逐个等于
+    // 这几个数不是"看着差不多",它们是**兼容性契约**:`.bold` 档下推导结果必须逐个等于
     // 改动前那四个硬编码值,selftest 有一组断言钉着(见 `OverlayFontWeight` 那一段)。
 
     /// 罗马音行比主歌词细几档。

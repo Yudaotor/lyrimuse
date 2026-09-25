@@ -39,7 +39,7 @@ enum AuxiliaryWindowActivation {
     // 「在 Dock 中显示」,图标却还在",而当时手上只有 reopen 那条"计数器说有窗开着、枚举却一扇
     // 都没找到"的日志,分不清是哪一扇窗加的这一笔 —— 加减两头都记名字,下次一眼能对上账。
     //
-    // ⚠️ 这里**不许**碰 activationPolicy(理由见文件头)。加回一句
+    // 这里**不许**碰 activationPolicy(理由见文件头)。加回一句
     // `setActivationPolicy(.regular)` 就等于让「在 Dock 中显示」这个开关重新失灵,
     // 而它失灵的样子恰好是"关了图标还在" —— 用户为此报过两次。
     static func windowDidAppear(_ who: String) {
@@ -59,13 +59,13 @@ enum AuxiliaryWindowActivation {
             return
         }
         // 计数器还没归零,但它只是个代理值 —— 关窗这一刻跟真实窗口列表对一次账。
-        // ⚠️ 必须排到下一轮 runloop:隔离探针实测,`.onDisappear` 触发的**同一拍**里,
+        // 必须排到下一轮 runloop:隔离探针实测,`.onDisappear` 触发的**同一拍**里,
         // 正在关的那扇窗 `isVisible` 仍然是 true(下一轮才从列表里消失),当场核会永远认为
         // "还有窗开着",这道对账就成了摆设。
         DispatchQueue.main.async { MainActor.assumeIsolated { reconcile(reason: "after closing \(who)") } }
     }
 
-    /// 计数器 ↔ 真实窗口列表对账:真实列表说一扇都没开着,就按"一扇都没开"处理(计数器清零、
+    /// 计数器 与 真实窗口列表对账:真实列表说一扇都没开着,就按"一扇都没开"处理(计数器清零、
     /// 还原 .accessory)。
     ///
     /// 为什么需要它:openCount 是"有没有辅助窗口开着"的**代理值**,靠 SwiftUI 的
@@ -76,7 +76,7 @@ enum AuxiliaryWindowActivation {
     /// 图标时去捞一扇根本不存在的窗)。加这道对账之后,漏加的那一笔在下一次关窗 / 下一次点
     /// Dock 图标时就被抹平。
     ///
-    /// ⚠️ `NSApp.isHidden` 那道闸不能省:Cmd+H 把 App 整个隐藏时,窗口只是 orderOut、**没关**,
+    /// `NSApp.isHidden` 那道闸不能省:Cmd+H 把 App 整个隐藏时,窗口只是 orderOut、**没关**,
     /// 但真实列表里它们 `isVisible=false`(探针实测),不挡住就会把"隐藏着的开着的窗"
     /// 误判成"一扇都没开"。
     static func reconcile(reason: String) {
@@ -140,7 +140,7 @@ enum AuxiliaryWindowActivation {
         let open = openAuxiliaryWindows()
         guard !open.isEmpty else { return result }
 
-        // orderedWindows 是前→后;最小化的窗口不一定在里面,所以可见那扇找不到时退回枚举顺序。
+        // orderedWindows 是前到后;最小化的窗口不一定在里面,所以可见那扇找不到时退回枚举顺序。
         let frontVisible = NSApp.orderedWindows.first { w in open.contains(w) && w.isVisible }
             ?? open.first { $0.isVisible }
         let minimized = open.filter(\.isMiniaturized)
@@ -169,7 +169,7 @@ enum AuxiliaryWindowActivation {
     /// 设置 / 歌词管理 / 歌词窗口 / 欢迎使用 / 搜索歌词… 这类"正经"窗口的形态判据。悬浮歌词和
     /// 灵动岛是 NSPanel,状态栏项、菜单栏面板、场景 action 的隐藏锚点都是无标题栏窗口,全部排除。
     ///
-    /// ⚠️ `canBecomeMain` 不能单独用:**窗口一最小化它就变 false**(隔离探针实测,
+    /// `canBecomeMain` 不能单独用:**窗口一最小化它就变 false**(隔离探针实测,
     /// 同一扇窗 `isVisible=false isMiniaturized=true canBecomeMain=false`;AppKit 对这个属性的
     /// 定义里本来就含"窗口可见"这一条)。原来只写 canBecomeMain,于是上面那句
     /// `($0.isVisible || $0.isMiniaturized)` 的 isMiniaturized 分支是**死代码** ——

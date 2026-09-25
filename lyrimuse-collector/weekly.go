@@ -177,7 +177,7 @@ func mostRecentMonday(t time.Time) time.Time {
 }
 
 // weeklyDigest 检查(至多每 weeklyDigestCheckInterval 一次)是否有一个还没推送过的、
-// 已经收官的新周，有就拉统计推一条通知。数据源按 features.WeeklyDigestSource 解析
+// 已经收官的新周，有就拉统计推一条通知。数据源按 features().WeeklyDigestSource 解析
 // (见 digest.go 的 resolveDigestSource)：
 //   - Last.fm：周边界用它自己的图表周(lastfmWeeklyChartList，按首次 scrobble 日期定，
 //     不一定是周一)。

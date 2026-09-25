@@ -36,7 +36,7 @@ struct RecentListensPanel: View {
     /// 文字/图标颜色要不要走"有封面背景就固定白色系"那套(跟整扇歌词窗口同一个判据
     /// `hasArtworkBackground`)。默认 false——停播页背景是统一柔光,不是铺满的封面模糊图,
     /// 系统语义色(`.primary`/`.secondary`/`.tertiary`)本来就够用;歌词窗口传 true。
-    /// ⚠️ 主要跟 `showsCard=false` 搭配用:卡片自带的磨砂材质本来就能保证系统语义色在
+    /// 主要跟 `showsCard=false` 搭配用:卡片自带的磨砂材质本来就能保证系统语义色在
     /// 任意背景上可读,`onArtwork` 是给"直接铺在背景上、没有材质垫底"这种情况准备的。
     var onArtwork = false
 
@@ -63,7 +63,7 @@ struct RecentListensPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            // ⚠️ 这里**不能**再跟一个 Spacer:ScrollView 和 Spacer 都是可伸缩的,同在一个
+            // 这里**不能**再跟一个 Spacer:ScrollView 和 Spacer 都是可伸缩的,同在一个
             // VStack 里会平分剩余高度,把列表压成半截。让 content 自己吃满,翻页条靠
             // VStack 自然排在它下面。
             content
@@ -303,7 +303,7 @@ enum RelativeDayFormat {
 
 /// 没连 Last.fm 时,「播放记录」类面板显示的内容:本地静默记的、还没提交的收听
 /// (collector 不管连没连账号都在往本地记,见 ScrobbleBackfillService 类头注释)。
-/// 跟设置页「账号 → Last.fm」标签的 pendingListensRow 共用同一个数据源、同一套
+/// 跟设置页「账号 到 Last.fm」标签的 pendingListensRow 共用同一个数据源、同一套
 /// "多久算太旧"的规则,不在这里另起一份判定;比那边多了一段 5 秒 mtime 轮询——那边
 /// 挂在整张设置卡上跟着卡的生命周期走,这里没有更外层的卡可挂,自己管自己的。
 ///

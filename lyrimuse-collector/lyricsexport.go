@@ -76,6 +76,9 @@ func exportLyricsFiles() {
 		manual               bool
 		variants             [4]string // 对应 lyricsFileSuffixes,空串表示这个变体没有内容
 	}
+//
+// 全量导出要对每个条目逐个读比 4 个文件,条目上千时是秒级的磁盘 IO;运行期只改了个别条目的
+// 路径用 exportLyricsFilesFor。启动与 CLI 仍用这个全量版本。
 	enrichMu.Lock()
 	jobs := make([]entryJob, 0, len(enrichCache))
 	for key, e := range enrichCache {
@@ -257,7 +260,7 @@ func sanitizeLyricsFilenameUntruncated(key string) string {
 // 占 14 字节,最长的后缀 .roma.lrc 占 9 字节,所以 base 的硬上限是 255-14-9 = 232;
 // 碰撞消歧还要再接 `~xxxxxx` 7 字节,于是 225。取 200 是留余量。
 //
-// ⚠️ 这个常量在 Swift 侧 EnrichCacheKeys.filenameMaxBytes 有一份对应值,两边必须同时改:
+// 这个常量在 Swift 侧 EnrichCacheKeys.filenameMaxBytes 有一份对应值,两边必须同时改:
 // Swift 按同样的规则算出文件名去删除条目的导出文件,算不一致就会漏删,而 collector 重启
 // 时 importLyricsFromFiles 会按**文件头部标签**把残留文件重新导回缓存 —— 表现是"删掉的
 // 条目过一会儿自己回来了"。

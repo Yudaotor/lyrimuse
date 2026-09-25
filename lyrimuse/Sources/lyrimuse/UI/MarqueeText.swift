@@ -4,7 +4,7 @@ import SwiftUI
 // 超长文字(歌名/歌词)靠自动滚动展示全部内容,而不是硬截断/省略号。测量内容真实宽度
 // vs 容器宽度,只有真的溢出容器时才滚动,没溢出的短文字保持静止不动、不产生任何动画。
 //
-// 一轮是"停在开头→匀速滚到底→停在末尾→**瞬时**回到开头",不是无限单向卷动,不需要为了
+// 一轮是"停在开头到匀速滚到底到停在末尾到**瞬时**回到开头",不是无限单向卷动,不需要为了
 // 卷动无缝衔接去复制一份内容拼接。回到开头这一步刻意不做补间 —— 那不只是观感取舍,
 // 是换句时不出错的前提,理由写在 restart() 和滚动循环里那两段。
 //
@@ -20,9 +20,9 @@ struct MarqueeText<Content: View>: View {
     /// **没溢出时**内容靠容器哪一边。溢出时一律 .leading,不受这个参数影响 —— 滚动是
     /// "从头开始往左推",内容比容器宽时靠右摆等于一上来就把开头几个字挂在容器外面。
     ///
-    /// 灵动岛右耳的歌手名原来是 `Spacer + Text`(靠右贴着音浪),换成
-    /// 跑马灯之后 GeometryReader 会占满可用宽度,短名字(绝大多数情况)就从右边跳到了
-    /// 左边、跟音浪之间空出一大段。默认值保持 .leading,已有调用点行为不变。
+    /// 跑马灯的 GeometryReader 会占满可用宽度,默认值若是 .trailing,短名字(绝大多数
+    /// 情况)会从右边跳到左边、跟音浪之间空出一大段。默认值保持 .leading,已有调用点行为
+    /// 不变。
     var restingAlignment: Alignment = .leading
     /// 内容溢出、而且此刻**停在开头**时,右端渐隐带的宽度(0 = 不渐隐,默认)。
     ///
@@ -125,7 +125,7 @@ struct MarqueeText<Content: View>: View {
                                       offset: offset)
     }
 
-    /// 遮罩:左边一整块不透明 + 右端一条 black→clear 的渐隐带。渐隐带是 `.frame(width:)`
+    /// 遮罩:左边一整块不透明 + 右端一条 black到clear 的渐隐带。渐隐带是 `.frame(width:)`
     /// 而不是 gradient 的 stop 位置,这样宽度变化可动画(理由见 MarqueeMath)。
     private var fadeMask: some View {
         HStack(spacing: 0) {
@@ -145,9 +145,9 @@ struct MarqueeText<Content: View>: View {
         let midScroll = offset != 0
         contentWidth = content
         containerWidth = container
-        // ⚠️ 只有容器宽度在变、内容没换、溢出与否也没翻转、而且此刻停在开头时,**不**重启
+        // 只有容器宽度在变、内容没换、溢出与否也没翻转、而且此刻停在开头时,**不**重启
         // (灵动岛动画性能专项)。容器宽度在 hover 展开/收起、拖宽度滑块期间是
-        // **每帧**变一次的(灵动岛 257→482pt 一次展开约 16 帧、收起约 24 帧),原来每帧都
+        // **每帧**变一次的(灵动岛 257到482pt 一次展开约 16 帧、收起约 24 帧),原来每帧都
         // 走一遍 restart:cancel 掉旧 Task、新分配一个、再在事务里写两次 @State —— 对没溢出
         // 的短句(绝大多数歌词行 / 耳朵里的歌名)这全是白做,对正溢出、还在 1.1s 起步等待里
         // 的长句也只是把等待重新计时;两种情况画面上都看不出任何区别,却让每帧多一轮
@@ -198,7 +198,7 @@ struct MarqueeText<Content: View>: View {
                 withAnimation(.linear(duration: travelDuration)) { offset = distance }
                 try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000) + UInt64(marqueeHoldDuration * 1_000_000_000))
                 if Task.isCancelled { return }
-                // ⚠️ 回程是**瞬时**的,不是滑回去 —— 这一条不是审美选择,是正确性要求。
+                // 回程是**瞬时**的,不是滑回去 —— 这一条不是审美选择,是正确性要求。
                 //
                 // 实测(灵动岛换句瞬间连拍):老写法这里是
                 // `withAnimation(.linear(duration: travelDuration)) { offset = 0 }`,
@@ -220,3 +220,7 @@ struct MarqueeText<Content: View>: View {
         }
     }
 }
+    ///
+    /// 跟唱模式下 offset 恒为 0(偏移由 `MarqueeFollowOffset` 现算),这里改喂 `followAtStart`:渐隐带只有
+    /// "0 / 非 0"两种状态,为它每帧写一次 @State 不划算,所以由 `scheduleFollowFade()` 在
+    /// 越过锚点那一刻翻一次。判据本体仍是同一个 `trailingFadeWidth`,两条路口径一致。

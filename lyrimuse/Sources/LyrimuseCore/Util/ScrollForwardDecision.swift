@@ -8,15 +8,15 @@ import Foundation
 /// `AppDelegate.forwardScrollIfStranded` 是装在**全局滚轮监视器**里的:每个进到本 App 的
 /// 滚轮事件都要先判一次"这一下本来有没有人会处理",而那个判断里有一句
 /// `root?.hitTest(loc)` —— 抓到的主线程栈显示它下面是一整条
-/// `-[NSThemeFrame _performHitTestForContext:]` → `NSHostingView.hitTest` →
-/// `PlatformHitTestingManager.hitTest` → `MultiViewResponder.containsGlobalPoints` 的**深度
+/// `-[NSThemeFrame _performHitTestForContext:]` 到 `NSHostingView.hitTest` 到
+/// `PlatformHitTestingManager.hitTest` 到 `MultiViewResponder.containsGlobalPoints` 的**深度
 /// 递归**,等于把整个窗口的 SwiftUI 视图树走一遍。
 ///
 /// 触控板惯性滚动每秒发几十到上百个事件,于是每秒就有几十到上百次全窗口递归命中测试压在
 /// 主线程上。现象是的是「设置页 Last.fm 那一段往下滑就卡、严重时整个 App 无响应要强制
 /// 退出」,两台机器都遇到;那份 sample 里这个函数占了主线程 **74/1439 个采样**。
 ///
-/// ⚠️ 排查时曾经一路怀疑 Last.fm 的数据链路(冷缓存、逐行播放次数请求、封面兜底、简繁写法
+/// 排查时曾经一路怀疑 Last.fm 的数据链路(冷缓存、逐行播放次数请求、封面兜底、简繁写法
 /// 索引…),**全部是错的方向**。这跟 Last.fm 一点关系都没有,是个**全局的、任何窗口任何
 /// 页面都在付的成本**,只是那一页最长最深、把它放大到了看得见。别再顺着数据层查。
 ///

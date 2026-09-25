@@ -23,7 +23,7 @@ import (
 // 一致就是"很多歌没有对唱"里唯一由我们自己造成的那部分。
 
 // 明确的声部词。本身没有别的意思,单独出现就算数,不用过下面那道整份闸。
-// ⚠️ 必须与 Swift 侧 LyricDuet.soloMarkers / groupMarkers 逐字一致。
+// 必须与 Swift 侧 LyricDuet.soloMarkers / groupMarkers 逐字一致。
 var lyricSoloMarkers = []string{
 	"男声", "女声", "男合", "女合", "男", "女", "Male", "Female", "M", "F",
 }
@@ -69,7 +69,7 @@ func lyricSplitLabel(text string) (label, rest string, ok bool) {
 	rs := []rune(strings.TrimLeft(text, " \t　"))
 	// 标签与冒号之间允许有空白(`男 : 第一句` 跟 `男：第一句` 是同一种东西),但标签**内部**
 	// 不允许 —— 一旦空白后面又来了别的字,这行就是带冒号的歌词句子而不是标签。
-	// ⚠️ 别把空白整个当成 lyricLabelBreakers 里的普通中断字符:那样 `男 : …` 会在空格处
+	// 别把空白整个当成 lyricLabelBreakers 里的普通中断字符:那样 `男 : …` 会在空格处
 	// 直接判成"不是标签",于是署名行过滤那边的演唱者豁免拿不到标签、把对唱行当职员表剔掉。
 	sawSpace := false
 	for i, r := range rs {
@@ -183,7 +183,7 @@ func lyricSpeakerLabels(lyrics string) map[string]bool {
 		if lyricKnownSpeakerSet[label] {
 			speakers[label] = true
 		} else if lyricPlausibleSpeakerName(label) {
-			// ⚠️ 这里**不能**用 isCreditLine 兜一道:它的 genericHanCreditLineRe 是
+			// 这里**不能**用 isCreditLine 兜一道:它的 genericHanCreditLineRe 是
 			// "1~8 个汉字 + 冒号"的纯结构判定,「周杰伦：」自己就命中,加上去等于把所有
 			// 中文人名标签全排掉。署名的排除由 lyricPlausibleSpeakerName 那两张表负责。
 			unknown[label]++
@@ -210,7 +210,7 @@ func lyricSpeakerLabels(lyrics string) map[string]bool {
 
 // splitLyricLines 按 CRLF/CR/LF 三种换行切行。
 //
-// ⚠️ 不能只 strings.Split(s, "\n"):酷狗那一支歌词是 CRLF,行尾会残留 \r,让
+// 不能只 strings.Split(s, "\n"):酷狗那一支歌词是 CRLF,行尾会残留 \r,让
 // 「男：」变成「男：\r」这类尾部带控制符的串,后续 trim 之外的比较全部对不上。
 // 这跟 Swift 侧那个"CRLF 被当成一个扩展字形簇"的坑同源。
 func splitLyricLines(s string) []string {

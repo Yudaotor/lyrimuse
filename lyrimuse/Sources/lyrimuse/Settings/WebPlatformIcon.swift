@@ -19,7 +19,7 @@ enum WebPlatformIcon {
     /// Contents/Resources/,用 Bundle.main(不是 Bundle.module)加载——理由见 L10n.swift
     /// 顶部注释、AccountLinkingTab.swift 里 lastfmBadgeImage 的同款写法。以后新增别的网页
     /// 平台,照这个模式再加一份资源 + 一个 case 就行。
-    /// ⚠️ 这里的 key 必须跟 `BrowserPositionProbe.supportedPlatforms` 里的 `id` 一字不差 ——
+    /// 这里的 key 必须跟 `BrowserPositionProbe.supportedPlatforms` 里的 `id` 一字不差 ——
     /// 对不上不会编译报错,只表现成"那张平台卡的图标位空着"。
     static func image(_ platformID: String) -> NSImage? {
         switch platformID {
@@ -29,7 +29,7 @@ enum WebPlatformIcon {
         }
     }
 
-    /// ⚠️ 图片取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(用 sips 转成
+    /// 图片取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(用 sips 转成
     /// 1024×1024 PNG),跟 `YouTubeMusicIcon.png` 同规格同来路 —— 不去网上抓品牌资源。
     private static let spotifyIcon: NSImage = {
         guard let path = Bundle.main.path(forResource: "SpotifyIcon", ofType: "png"),
@@ -63,15 +63,15 @@ enum WebPlatformIcon {
     /// 模板图(`isTemplate`)、`.foregroundStyle` 都无关,**改视图那一侧改不掉**。
     ///
     /// 做法:在图标下面垫一个纯白圆,红圆自己会把多余的白盖住,只剩镂空处透出白色。
-    /// ⚠️ 白圆必须**小于红圆、大于镂空**,两头都有实测的窗口(1024×1024 源图,原点在中心):
+    /// 白圆必须**小于红圆、大于镂空**,两头都有实测的窗口(1024×1024 源图,原点在中心):
     ///   - 红圆是满幅内切圆,半径 512(四条中线上第一个不透明像素分别在 0 / 1023);
     ///   - 所有镂空像素离中心最远 303(细白环的外沿,不是三角——三角更靠里)。
     /// 所以白圆半径的安全区间是 (303, 508];取 inset 8%(半径 430)落在正中间,离两头各有
     /// 一百多像素的余量,26pt 显示尺寸下红边仍有约 2pt,不会因为边缘抗锯齿漏出白圈。
-    /// ⚠️ 别改成"在视图里垫一层 `Circle().fill(.white)`":那样只有这一个调用点是对的,换个
+    /// 别改成"在视图里垫一层 `Circle().fill(.white)`":那样只有这一个调用点是对的,换个
     /// 地方用 `platformIcon("youtubeMusic")` 又会退回镂空。垫白这件事属于这张图本身。
     ///
-    /// ⚠️ **不改磁盘上那份 PNG**,保持素材跟 Simple Icons 原样一致(来路可查,同
+    /// **不改磁盘上那份 PNG**,保持素材跟 Simple Icons 原样一致(来路可查,同
     /// `SpotifyIcon.png` 的纪律);垫白只发生在运行时。用 `NSImage(size:flipped:drawingHandler:)`
     /// 而不是 `lockFocus()` 烤成位图:前者保持分辨率无关(按实际需要的尺寸重画),后者会把
     /// 图钉死在一个像素尺寸上。`NSColor.white` 是固定的白,不是 `labelColor` 那种会跟外观翻转的

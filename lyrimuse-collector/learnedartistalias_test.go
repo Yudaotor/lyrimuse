@@ -27,7 +27,7 @@ func TestLearnedSourceArtistAliasLearnsFromSiblingTracks(t *testing.T) {
 	}
 }
 
-// 同一个本地歌手名指向两个不同的人(「王子」既是 Prince 又是邱胜翊)→ 一律不猜。
+// 同一个本地歌手名指向两个不同的人(「王子」既是 Prince 又是邱胜翊)到 一律不猜。
 func TestLearnedSourceArtistAliasRefusesWhenAmbiguous(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),

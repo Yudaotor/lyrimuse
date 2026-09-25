@@ -3,7 +3,7 @@ import LyrimuseCore
 
 // 歌词罗马音预生成小助手。collector(Go)算不了这一步 —— 日文**必须**走 CFStringTokenizer
 // 形态分析(不能用 ICU 通用音译:汉字是中日共用的,Any-Latin 会一律按普通话读,
-// 「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU `applyingTransform(.toLatin)`,
+// 「火曜日の朝は」到"huǒ yào rìno cháoha"),中文/韩文走 ICU `applyingTransform(.toLatin)`,
 // 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成一个独立的 Swift 可执行文件打包进
 // Contents/Resources/,由 collector 按相对路径调用 —— 跟 lyrics-translate / media-control
 // 完全同一个形态。
@@ -16,7 +16,7 @@ import LyrimuseCore
 //     拷到别处、或用别的播放器读,罗马音就丢了。这是唯一真正值得为它动手的理由。
 //  ② 省掉换歌那一下整首现算的主线程开销(20Hz 热路径本来就有按行记忆化,不是瓶颈)。
 //
-// ⚠️ 读音本体走 `LyricsRomanization.romanizeLRC` → `Romanizer.lineReading`,跟 App 播放时
+// 读音本体走 `LyricsRomanization.romanizeLRC` 到 `Romanizer.lineReading`,跟 App 播放时
 // 的客户端兜底**是同一个函数**。预生成的产物必须跟现算逐字一致,否则同一首歌"装了缓存"和
 // "现算"读音不一样 —— 那种不一致不报错,只表现成用户偶尔觉得"某句罗马音怎么变了"。
 //

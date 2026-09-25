@@ -58,16 +58,18 @@ extension EnvironmentValues {
     /// 宿主是否已经替卡片裁好了外形。`NotchWindowRoot` 设 true:它挂在卡片外面的那道
     /// `NotchRevealShape` 终态就是 `NotchHangingShape(20)`,`NotchLyricsView` 再裁一遍是重复的一层 mask,
     /// 尺寸动画期间每帧多重设一次路径。默认 false —— 设置页编辑台等没有这层壳的宿主,卡片自己裁。
-    /// ⚠️ 这个值对某个宿主是**常量**,不要在运行期切换:`NotchLyricsView` 按它选 clipShape 分支,切换会
+    /// 这个值对某个宿主是**常量**,不要在运行期切换:`NotchLyricsView` 按它选 clipShape 分支,切换会
     /// 重建子树、丢掉跑马灯等 @State。
     var notchHostClipsCard: Bool {
         get { self[NotchHostClipsCardKey.self] }
         set { self[NotchHostClipsCardKey.self] = newValue }
     }
 
-    /// 灵动岛顶行以下的某一块内容(曲目头部 / 两份歌词行变体 / 展开区)此刻是不是可见的那份
-    /// (`NotchLyricsView.cardBodyLayer`)。藏着的那份按它停掉逐字填色 / 迷你进度条的 TimelineView。
-    /// 默认 true —— 别的宿主 / 单份渲染时不受影响。
+    /// 这一块内容此刻是不是真的看得见:根上 = 窗口可见(`NotchWindowRoot` 按 occlusionState 给),
+    /// `cardBodyLayer` 里每一层再与「是不是可见的那份」取与(`NotchCardLayerActive`)。
+    /// 逐字填色 / 跟唱滚动 / 迷你进度条 / 倒计时 / 音浪 / 时间模块按它停表。
+    /// 只能在**层内的子视图**里读才拿得到层的值(`NotchLayerActiveReader`),在 `NotchLyricsView`
+    /// 自己的属性上读到的永远是根上的值。默认 true —— 编辑台等别的宿主不受影响。
     var notchCardLayerActive: Bool {
         get { self[NotchCardLayerActiveKey.self] }
         set { self[NotchCardLayerActiveKey.self] = newValue }

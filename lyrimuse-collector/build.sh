@@ -2,7 +2,7 @@
 # 重建并重启 now-playing 采集器。重建时务必用本脚本，别直接 `go build`。
 #
 # 为什么：系统 Go 是 1.21（工作项目锁定，别动），它的内部链接器在这台 macOS 27 上
-# 产出的二进制缺 LC_UUID / 签名不被 AMFI 接受 → launchd 会静默拒启（报误导性的
+# 产出的二进制缺 LC_UUID / 签名不被 AMFI 接受 到 launchd 会静默拒启（报误导性的
 # "dyld: missing LC_UUID" / 退出原因 OS_REASON_CODESIGNING），采集器起不来、网页停更。
 # 解法：用 GOTOOLCHAIN 临时拉 go1.24 工具链重编，它原生就发 LC_UUID + 合规签名，
 # 不用任何 -ldflags 花招、也不用手动 codesign。系统 Go 仍留 1.21、不受影响。
@@ -21,8 +21,8 @@ TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 # 注入版本号,让这份 collector 自报的版本跟它将要替换掉的那份保持一致。
 #
 # 加(同 lyrimuse/build.sh 那处,理由见 main.go 的 clientVersion 注释):
-# collector 版本号以前是 main.go 里的手写字面量,发版时靠人记得改,v1.3.0 和 v1.5.0
-# 各漏过一次。现在两个构建脚本统一用 -ldflags 注入。
+# collector 版本号不再是 main.go 里的手写字面量(手动同步容易发版时忘记更新)。
+# 现在两个构建脚本统一用 -ldflags 注入。
 #
 # 取值优先级刻意跟 lyrimuse/build.sh **不完全相同**,因为这个脚本的用途不一样:它把
 # 产物直接拷进**已经装好的** /Applications/Lyrimuse.app(见下面那段注释),所以第一
@@ -42,7 +42,7 @@ fi
 [ -z "$COLLECTOR_VERSION" ] && COLLECTOR_VERSION="dev"
 
 echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature), version $COLLECTOR_VERSION"
-# ⚠️ -X 只能注入 var,对 const 静默失败——见 main.go clientVersion 那段注释。
+# -X 只能注入 var,对 const 静默失败——见 main.go clientVersion 那段注释。
 GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-X main.clientVersion=$COLLECTOR_VERSION" -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
 

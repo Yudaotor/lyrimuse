@@ -17,7 +17,7 @@ import Foundation
 /// 所以 stderr **默认**丢 nullDevice:绝大多数调用点要的信息退出码和 stdout 已经给全了。
 /// `captureStderr: true` 才另开一根管子 —— 有些子进程把唯一有用的那句话只写在 stderr 上
 /// (media-control 的 `test` 就是:失败时 stdout 全空,原因在 stderr,不捕获就只剩一句
-/// 「exit status 4」)。⚠️ 开了之后**两根管子必须并发读空**,理由跟上面那条互相等死一模一样。
+/// 「exit status 4」)。 开了之后**两根管子必须并发读空**,理由跟上面那条互相等死一模一样。
 public enum ProcessRunner {
     public struct Result: Sendable {
         public let status: Int32
@@ -80,11 +80,11 @@ public enum ProcessRunner {
         }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: killer)
 
-        // ⚠️ 顺序:先把管道读空,再 waitUntilExit()。反过来的话,子进程写满 64KB 缓冲区
+        // 顺序:先把管道读空,再 waitUntilExit()。反过来的话,子进程写满 64KB 缓冲区
         // 之后会阻塞在 write 上永远不退出,而我们正等着它退出。被 terminate 杀掉时管道
         // 关闭,这里的读也会正常返回,不会挂住。
         //
-        // ⚠️ 接了 stderr 的话两根管子必须**并发**读:在这条线程上串行读完 stdout 再读 stderr,
+        // 接了 stderr 的话两根管子必须**并发**读:在这条线程上串行读完 stdout 再读 stderr,
         // 子进程写满 stderr 缓冲区就会卡在 write 上,而它不写完 stdout 我们这边也读不完 ——
         // 同一个死锁换一根管子照样成立。
         let errBox = DataBox()

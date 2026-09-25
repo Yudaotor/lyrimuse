@@ -8,7 +8,7 @@ import "testing"
 // 一部分。原来 artistMergeDisplayName 第一步用 firstCreditedArtist 从串里"猜第一个歌手",
 // 于是 "K/DA" 被切成 ["K","DA"]、显示成一个**数据里根本没出现过的** "K"。
 //
-// ⚠️ 合并本身一直是对的(两者的 nameKey 都塌缩成 "k",次数正确相加)—— 所以这一组用例
+// 合并本身一直是对的(两者的 nameKey 都塌缩成 "k",次数正确相加)—— 所以这一组用例
 // 的重点是"次数别改坏 + 显示名从真实出现过的写法里挑"。
 func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	const kdaCollab = "K/DA/Madison Beer/(G)I-DLE/Jaira Burns"
@@ -68,7 +68,7 @@ func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	})
 
 	t.Run("已知别名仍然换成中文名", func(t *testing.T) {
-		// artistAliasTable 里登记了 "dean ting" → "丁世光"。这一步不能弄丢。
+		// artistAliasTable 里登记了 "dean ting" 到 "丁世光"。这一步不能弄丢。
 		got := mergeAliasedArtists([]lastfmChartEntry{
 			{Name: "Dean Ting", PlayCount: 11},
 			{Name: "丁世光", PlayCount: 4},

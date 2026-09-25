@@ -2,7 +2,7 @@ import AppKit
 
 /// 灵动岛没有曲目时左耳那枚 App 图标的**位图缓存**(现象是「左边那个图标很有锯齿感」)。
 ///
-/// ⚠️ 别直接 `Image(nsImage: NSApp.applicationIconImage).resizable().scaledToFit()` 缩到 26pt:
+/// 别直接 `Image(nsImage: NSApp.applicationIconImage).resizable().scaledToFit()` 缩到 26pt:
 /// `.icns` 里最大那张 1024px 位图被 SwiftUI 一步缩到 ~52px,走的是普通线性采样 —— 二十倍的
 /// 缩放没有面积平均,圆角与音符边缘就是一圈台阶。这里改成**按目标像素尺寸预先光栅化一次**:
 /// 在 px×px 的 CoreGraphics 位图上用 `.high` 插值把源图画进去(AppKit 会按目标像素挑最合适的

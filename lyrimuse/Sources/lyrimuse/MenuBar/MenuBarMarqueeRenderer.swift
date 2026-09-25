@@ -11,7 +11,7 @@ import LyrimuseCore
 // 每跳一次这段文字的像素宽度也在变,菜单栏项跟着伸缩,把右边其它 App 的图标一起顶得左右晃。
 // 图片这条路两个问题一起解决:宽度由我们钉死,偏移可以是任意小数。
 //
-// ⚠️ 之前这里画的是**模板图**(isTemplate = true),靠系统按浅色/深色/反白
+// 之前这里画的是**模板图**(isTemplate = true),靠系统按浅色/深色/反白
 // 自动上色。改成自建 NSStatusItem 之后我们自己拿着图层,没有系统的模板处理这一层了,
 // 所以颜色改由调用方显式传进来(见 MenuBarScrollingLabel.tintColor:平时 labelColor、
 // 菜单打开时 selectedMenuItemTextColor,都在按钮当前的 effectiveAppearance 下解析)。
@@ -22,11 +22,11 @@ enum MenuBarMarqueeRenderer {
     /// 跟随系统时字号取 `menuBarFont(ofSize: 0)` 的 pointSize,不要写死数字,否则系统字号变了
     /// 这行歌词会跟旁边的菜单项不齐。
     ///
-    /// ⚠️ 字体族原先(06 章)是刻意不放开的一维,理由是"跟隔壁时钟/电量等系统菜单项字体不搭";
-    /// 用户显式要求放开后才加的这一项,选自定义字体就是接受这份不一致,不做任何"提醒会不搭"的
+    /// 字体族原先(06 章)是刻意不放开的一维,理由是"跟隔壁时钟/电量等系统菜单项字体不搭";
+    /// 后来放开的这一项,选自定义字体就是接受这份不一致,不做任何"提醒会不搭"的
     /// UI——那属于产品判断,不是这里该拦的事。
     ///
-    /// 实测(本机 SF 13pt,字体族仍是系统默认时):六档字重的 ascender/descender 完全相同 →
+    /// 实测(本机 SF 13pt,字体族仍是系统默认时):六档字重的 ascender/descender 完全相同 到
     /// `lineHeight` 不随字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),
     /// 拉丁字随字重变宽(medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下
     /// 换档那一刻槽宽变一次。默认档(系统字体 / `.regular`)与 `menuBarFont(ofSize: 0)` 逐点同宽
@@ -41,7 +41,7 @@ enum MenuBarMarqueeRenderer {
 
     /// 字号可选的合法区间(加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
     /// .thickness` 恒 22pt(带刘海的机器菜单栏本身 33pt 高,按钮仍是 22),而 `lineHeight` 逐字号实测
-    /// 13→18 / 14→19 / 15→20 / 16→21 / 17→23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
+    /// 13到18 / 14到19 / 15到20 / 16到21 / 17到23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
     /// 缩小、槽宽跟着失真。下限 10pt 之下在菜单栏里已经读不清。存量配置越界时夹回区间,不崩不留空白。
     static let fontSizeRange: ClosedRange<CGFloat> = 10...16
 
@@ -106,7 +106,12 @@ enum MenuBarMarqueeRenderer {
         ceil(font.ascender - font.descender)
     }
 
-    /// 长间奏 / 唱完等待时占位的那个音符。MenuBarStatusItem.refresh 与这里共用这一份,别各写一个字面量。
+    /// 整首没歌词 / 还在搜时「♪ 歌名」那个前缀音符。`MenuBarSlotPolicy.displayText` 与这里
+    /// 共用这一份,别各写一个字面量。
+    ///
+    /// **它跟前奏/间奏的占位不是一回事**,别合并:这个说的是"这首歌没词",那个说的是
+    /// "有词、只是此刻在间奏"。前奏/间奏那一档已经是三颗呼吸圆点(`gapDotsToken`),
+    /// 而「••• 歌名」读起来会变成在报间奏。
     static let placeholderGlyph = "♪"
 
     /// 画**这段文字**用的字体。占位符 ♪ 恒用系统默认字重(字号仍跟设置走,行高才对得上):实测 U+266A 在
@@ -134,7 +139,7 @@ enum MenuBarMarqueeRenderer {
     }
 
     /// 逐字染色用:第 i 个词画完时的累计宽度(点)。
-    /// ⚠️ 必须按**前缀整段**测宽,不能各词单测再累加 —— 词边界处的 kerning/连字会让
+    /// 必须按**前缀整段**测宽,不能各词单测再累加 —— 词边界处的 kerning/连字会让
     /// "部分之和"跟整句渲染对不上,填色边界就会逐词漂移。prepare() 画的是 words 拼接后的
     /// plainText(引擎侧保证 plainText = words.map(\.text).joined()),同一份字符串、
     /// 同一个字体,这里量出来的前缀宽度天然落在长图的同一坐标系上。
@@ -160,8 +165,8 @@ enum MenuBarMarqueeRenderer {
         guard width(of: text) > limit else { return text }
         let ellipsis = "…"
         let ellipsisWidth = width(of: ellipsis)
-        // 按前缀长度二分,每个探针整段测一次宽(kerning/连字与最终显示完全一致)——原来是
-        // 逐字符累加、每次全量重测前缀,O(n²) 文本排版(性能审计;此函数目前只在
+        // 按前缀长度二分,每个探针整段测一次宽(kerning/连字与最终显示完全一致)—— 别改回
+        // 逐字符累加、每次全量重测前缀,那是 O(n²) 文本排版(性能审计;此函数目前只在
         // windowWidth<=0 的退化路径被调、上面第一行 guard 就挡掉了,这是防御性收口:将来
         // 谁把它用在正常宽度上,一句长歌词就不再是几毫秒级主线程排版)。
         let chars = Array(text)
@@ -183,10 +188,8 @@ enum MenuBarMarqueeRenderer {
 
     /// 一行歌词在菜单栏上的两种形态。
     ///
-    /// ⚠️ 这个判定**必须**只有一份:菜单栏本体(MenuBarStatusItem)和设置页里那条预览
-    /// (MenuBarPreviewBar)都走它。之前预览是自己另写的一套(自己判断截断、
-    /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 现象是"预览里要真实模拟
-    /// 实际的菜单栏"就是这个。两份实现必然漂,唯一的解法是让它们共用同一个函数。
+    /// 这个判定**必须**只有一份:菜单栏本体(MenuBarStatusItem)和设置页里那条预览
+    /// (MenuBarPreviewBar)都走它——两份独立实现必然会漂,唯一的解法是共用同一个函数。
     enum Presentation: Equatable {
         /// 让按钮自己画这段文字 —— 这一项的宽度跟着文字走。两种来源:
         ///  * 自适应模式下这一句装得下(正常路径);
@@ -203,11 +206,11 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter leadInSeconds: 这一句**出现之后、开唱之前**那段还没染色的提前量
     ///   (`PlaybackCoordinator.compactLeadInSeconds`)。传下去让滚动在开唱之后才起步,
     ///   见 MenuBarMarquee.pacing 约束 4。
-    ///   ⚠️ **故意不给默认值**:三个调用方(菜单栏本体、几何推迟期的过渡渲染、设置页预览)
+    /// **故意不给默认值**:三个调用方(菜单栏本体、几何推迟期的过渡渲染、设置页预览)
     ///   都得自己交代"这一句到底开唱了没有",漏掉一个就又是"还没染色却已经在滚"。
     /// - Parameter widthMode: 装得下的句子占多宽,见 MenuBarLyricsWidthMode。
     ///
-    /// ⚠️ 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
+    /// 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
     /// 宽度占位,长短句来回切时菜单栏项一直伸缩,右边其它 App 的图标跟着左右晃 —— 用户
     /// 反馈"动来动去,观感不太好"),当天又把它改成**可选**:有人更在意"别占用不需要的
     /// 空间",那正是被固定宽度换掉的东西。
@@ -291,7 +294,7 @@ enum MenuBarMarqueeRenderer {
         let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ns
-        // flipped: false → 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
+        // flipped: false 到 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
         // 所以 y 给 1 就是"底部留 1pt 内边距"(双排 exactBox 不留,贴 0)。
         (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: attributes)
         NSGraphicsContext.restoreGraphicsState()

@@ -26,8 +26,7 @@ final class NotchLyricsWindow: NSPanel {
         hasShadow = false
         // 磨砂玻璃背景(.thickMaterial)本身会跟随当前 NSAppearance 在浅色/深色两套
         // 材质之间切换——这个悬浮窗设计上任何时候都该是深色磨砂(白字), 不该因为用户
-        // 系统外观是浅色模式就跟着变成一块刺眼的白色玻璃。固定成 .darkAqua,跟 boring.
-        // notch 真机实现的做法一致(真实开源"贴刘海"项目也这么处理materialBackground)。
+        // 系统外观是浅色模式就跟着变成一块刺眼的白色玻璃。固定成 .darkAqua。
         appearance = NSAppearance(named: .darkAqua)
         // 经典悬浮窗用 .floating 就够了,因为它平时待在屏幕中段,从没需要跟系统菜单栏
         // 抢那一条像素。这个新样式恰恰要贴到菜单栏/刘海所在的那一整条——.floating(3)和
@@ -36,10 +35,8 @@ final class NotchLyricsWindow: NSPanel {
         // 不显示"——CGWindowListCopyWindowInfo 的 layer 只反映请求的 window level,不
         // 代表真的绕过了系统菜单栏/刘海自己那条专属渲染层,同 level 或更低的东西会被
         // 那条专属层直接盖住,截图工具目前也测不出这层遮挡关系(截图能看到但肉眼看
-        // 不到)。对照三个真实开源"贴刘海"实现(boring.notch/NotchDrop/DynamicNotchKit)
-        // 交叉验证:跟这里同样是 NSPanel+.nonactivatingPanel 技术方案的 DynamicNotchKit,
-        // 用的是 .screenSaver(比 .statusBar 还高好几级),不用任何私有 API 就能正常贴
-        // 刘海——换成这个级别。
+        // 不到)。要用 .screenSaver(比 .statusBar 还高好几级)才贴得进刘海那一条,
+        // NSPanel + .nonactivatingPanel 在这个级别不需要任何私有 API。
         level = .screenSaver
         // 跟 LyricsOverlayWindow 同一套 flag,含义见那个文件的注释:.fullScreenAuxiliary
         // 让它能显示在"某个 App 已全屏"那个 Space 上面,.canJoinAllSpaces 跟着切 Space
@@ -60,10 +57,7 @@ final class NotchLyricsWindow: NSPanel {
     }
 
     // 经典悬浮窗(LyricsOverlayWindow)把这两个都锁 false,因为它没有必要跟系统菜单栏
-    // 抢渲染层级。这个新样式对照的三个真实开源实现里,唯二两个"不用私有 API 就能贴到
-    // 刘海"的(NotchDrop 用真正的 NSWindow 且两个都是 true,DynamicNotchKit 跟这里一样
-    // 是 .nonactivatingPanel 但 canBecomeKey 也是 true)都让 canBecomeKey 返回 true——
-    // 只有依赖私有 CGS Space 技巧的 boring.notch 才继续锁 false。.nonactivatingPanel
+    // 抢渲染层级。这个样式要贴进刘海那一条,canBecomeKey 放开成 true。.nonactivatingPanel
     // 本身已经保证"能变成 key 窗口"这件事不会连带激活/抢占整个 App(不会有 Dock 图标
     // 跳动、不会切菜单栏),所以放开 canBecomeKey 不等于开始抢别的 App 的焦点。
     override var canBecomeKey: Bool { true }

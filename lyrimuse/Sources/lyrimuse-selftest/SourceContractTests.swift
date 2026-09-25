@@ -10,9 +10,9 @@ func runSourceContractTests() {
     // ---- 「歌词显示」页分段的跨文件契约 ----
     //
     // 菜单栏面板的「全部设置…」靠往一个 UserDefaults 键写这几个字符串,把设置窗口直接翻到
-    // 对应那一段。键名和取值必须跟 SettingsView 里 AppearanceSettingsTab.Section 的 rawValue
-    // 对得上 —— 对不上不会编译报错,只会表现成"长按灵动岛、设置窗口却停在悬浮歌词那一段"。
-    // 这里能钉住的是本侧这一半;另一半在那个 enum 上留了 ⚠️ 注释。
+    // 对应那一段。键名和取值必须跟 SettingsView 里 AppearanceSettingsTab.Section 前三个 case 的
+    // rawValue 对得上 —— 对不上不会编译报错,只会表现成"长按灵动岛、设置窗口却停在悬浮歌词那一段"。
+    // 这里能钉住的是本侧这一半;另一半在那个 enum 上留了 注释。
 
     expectEqual(LyricsSurface.allCases.map(\.rawValue), ["overlay", "notch", "menuBar"],
                 "形态: 三个取值与设置页分段一致")
@@ -24,7 +24,7 @@ func runSourceContractTests() {
 
     // ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
     //
-    // 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
+    // String Catalog:词条只在
     // Localization/Localizable.xcstrings 里维护,两份 .lproj/Localizable.strings 是
     // generate-strings.py 的生成物、随仓库一起提交 —— 终端用户 `swift build`/build.sh
     // 完全不需要 Xcode(xcstringstool 只在完整 Xcode 里,CLT 没有)。
@@ -116,7 +116,7 @@ func runSourceContractTests() {
             diff(catalog.hant, hantGen, "zh-hant")
             diff(catalog.en, enGen, "en")
 
-            // ---- 语言协商(加繁体):系统语言标签 → 语言包目录名,规则见 UILanguage ----
+            // ---- 语言协商(加繁体):系统语言标签 到 语言包目录名,规则见 UILanguage ----
             expectEqual(UILanguage.resolve(preferred: "zh-Hans-CN"), "zh-hans", "本地化: zh-Hans-CN → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh"), "zh-hans", "本地化: 裸 zh → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh-SG"), "zh-hans", "本地化: zh-SG → 简体包")
@@ -133,16 +133,16 @@ func runSourceContractTests() {
 
             // ---- 第三条:源码里每一个 L10n.t("字面量") 都必须在 catalog 里 ----
             //
-            // 上面两条只对账 catalog ↔ 生成物,**从不看源码**,于是"加了个 L10n.t 却忘了往 catalog
+            // 上面两条只对账 catalog 与 生成物,**从不看源码**,于是"加了个 L10n.t 却忘了往 catalog
             // 补词条"这类漏网全绿。而 L10n.t 的兜底是 `bundle.localizedString(forKey:value:key)`
             // —— 找不到就**静默返回键本身**(也就是原始中文),不崩、不空白。表现是英文界面下同一行
             // 中英混排(隔壁「来源」已经是 "Source"、这一格「偏移」还是汉字),极不显眼。
             // 一次性核出 31 个这样的键,分布在歌词管理/歌词窗口/Last.fm 面板/关于页
             // —— 全都是"写代码时顺手 L10n.t 了一下"留下的,没有任何守卫拦得住,故补这一条。
             //
-            // ⚠️ 只认**字面量**入参。`L10n.t(someVariable)` 这种拿不到键,自然扫不到,那是接受的
+            // 只认**字面量**入参。`L10n.t(someVariable)` 这种拿不到键,自然扫不到,那是接受的
             // 盲区(真要覆盖得做全量语义分析);反过来说,新增文案时别绕开字面量写法。
-            // ⚠️ 这是**纯文本扫描**,不区分代码和注释:注释里把一次调用整句写出来,同样算数。
+            // 这是**纯文本扫描**,不区分代码和注释:注释里把一次调用整句写出来,同样算数。
             //    所以注释里引用调用点时别写全(写成「那个 L10n 键」即可),或者干脆把那个键留在
             //    catalog 里 —— 真撞上时红灯信息里会直接点名是哪个键,不难查。
             // 只扫 Sources/lyrimuse(全部调用点都在这个 target;LyrimuseCore 是纯逻辑库、不碰 UI 文案),
@@ -188,9 +188,9 @@ func runSourceContractTests() {
     // 自己记得别传"根本挡不住后来新写的滑杆,五处里有四处是那之后新加的。所以改成:量化一律
     // 走 SteppedSlider(它内部那次调用本身不带步长入参,天然不会被算进来),这里盯着别复发。
     //
-    // ⚠️ 纯文本扫描,不区分代码和注释(同上面 L10n 那条守卫的盲区)。注释里提到"带步长的那个
+    // 纯文本扫描,不区分代码和注释(同上面 L10n 那条守卫的盲区)。注释里提到"带步长的那个
     //    构造器"时用中文描述,别把那句调用整句写全,否则会被当成一次真调用。
-    // ⚠️ 只看**第一层**参数区:嵌套调用里的同名参数标签(比如 SteppedSlider 自己 body 里
+    // 只看**第一层**参数区:嵌套调用里的同名参数标签(比如 SteppedSlider 自己 body 里
     //    那句 snap 调用)不算,不然它会把自己判红。
     do {
         let uiSources = URL(fileURLWithPath: #filePath)    // …/Sources/lyrimuse-selftest/SourceContractTests.swift
@@ -270,7 +270,7 @@ func runSourceContractTests() {
     // 漏了**不会编译报错、也不会崩**,只表现成"两个地方的封面不一样",而新增一个消费面时
     // 最容易忘的就是这一句。
     //
-    // ⚠️ 纯文本扫描,同 L10n / 滑杆刻度那两条守卫的盲区:注释里写 `playback.artworkImage`
+    // 纯文本扫描,同 L10n / 滑杆刻度那两条守卫的盲区:注释里写 `playback.artworkImage`
     // 时**不要**写成 `if let image = playback.artworkImage {` 这种完整取值形态。
     do {
         let uiSources = URL(fileURLWithPath: #filePath)
@@ -469,7 +469,7 @@ func runSourceContractTests() {
             if let mcc = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc.contains("radioStationHash"), true, "电台: RawPayload 要解 radioStationHash 这个判据字段")
                 expectEqual(mcc.contains("RadioTrackClock.advance("), true, "电台: 位置要走 RadioTrackClock(纯算术在 Core,selftest 钉住)")
-                // ⚠️ 反向守卫:电台的 duration **必须原样传**,置成 nil 的话,
+                // 反向守卫:电台的 duration **必须原样传**,置成 nil 的话,
                 // 结果 LocalPlaybackSource 建进度锚点那一支的闸 `duration > 0` 不成立、锚点建不起来,
                 // 电台放到歌也没有歌词。这一侧的 duration 只影响进度条分母,不写歌词缓存。
                 expectEqual(mcc.contains("duration: isRadio ? nil"), false,
@@ -541,7 +541,7 @@ func runSourceContractTests() {
             }
             // 三个展示面在口白期间都要把歌词那一格换成「口白」。少一个不会编译失败,只会那一面
             // 继续显示「搜索歌词中…」——元数据在口白期间还停在上一首,拦不住就是这个后果。
-            // ⚠️ 四个面,不是三个(对拍报的就是漏掉的那一个:歌词窗口的**空状态**
+            // 四个面,不是三个(对拍报的就是漏掉的那一个:歌词窗口的**空状态**
             // 那一格,跟它的元数据行是两条独立分支)。菜单栏面板走的是共用判定链 LyricsLineDisplay。
             for (rel, face) in [("lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift", "灵动岛"),
                                 ("lyrimuse/Sources/lyrimuse/UI/LyricsOverlayView.swift", "桌面悬浮歌词"),
@@ -551,8 +551,8 @@ func runSourceContractTests() {
                     expectEqual(face_text.contains("L10n.t(\"口白\")"), true, "电台: \(face)要显示「口白」")
                     // 歌词窗口有**三条**独立分支:元数据行(lyricsKind)、空状态(emptyStateSpec),
                     // 以及整段歌词列表那一栏(rightPane)。每漏一条都出过一次现象是障:
-                    // 只补元数据行 → 标题对了、中间那格还在转圈搜(第一次截图);
-                    // 再补空状态仍不够 → 口白期间上一首的 allLines 原样留着,走不到空状态,
+                    // 只补元数据行 到 标题对了、中间那格还在转圈搜(第一次截图);
+                    // 再补空状态仍不够 到 口白期间上一首的 allLines 原样留着,走不到空状态,
                     // 那一栏继续滚上一首的词(第二次截图)。灵动岛 / 悬浮窗只显示
                     // "当前这一行",各自的 isRadioTalkBreak 分支天然盖住,唯独这里是整段列表。
                     if rel.hasSuffix("LyricsWindowView.swift") {
@@ -606,8 +606,8 @@ func runSourceContractTests() {
                 expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
                 // 电台不借 AppleScript 那份播放头。App 侧同义的闸就有了
                 // (上面那条 `guard snapshot.isRadio != true`),collector 漏了整整一天 —— 后果不是
-                // "位置不准"这么轻:整档节目的位置写进 trackPos → 每拍都命中单曲循环判定 → 会话每
-                // 5 秒重建、playedSecs 归零 → 电台上一条收听都提交不了(实测 4.5 小时 2397 次
+                // "位置不准"这么轻:整档节目的位置写进 trackPos 到 每拍都命中单曲循环判定 到 会话每
+                // 5 秒重建、playedSecs 归零 到 电台上一条收听都提交不了(实测 4.5 小时 2397 次
                 // loop restart、只有 4 条 listen recorded)。两侧必须同时成立,少一边就是这个形态。
                 expectEqual(poller.contains("playing, tracked, radio bool) bool {"), true,
                             "电台: collector 借不借 AppleScript 位置要走 borrowAppleScriptPosition(纯函数,Go 单测钉住)")
@@ -671,7 +671,7 @@ func runSourceContractTests() {
                 expectEqual(true, false, "适配优先: 读不到 MediaControlClient.swift(路径挪了?)")
             }
             // collector 侧同一口径:AppleScript 那份整份顶替,只把 MediaRemote 独有的键合并回去。
-            // ⚠️ 两侧口径不一致时的表现是「打卡的位置对、界面上的歌词偏」,很难往这里想,所以两边都钉。
+            // 两侧口径不一致时的表现是「打卡的位置对、界面上的歌词偏」,很难往这里想,所以两边都钉。
             if let sys = text("lyrimuse-collector/system.go") {
                 expectEqual(sys.contains("mergeRadioKeys(state, raw)"), true,
                             "适配优先: collector 侧也要整份顶替 + 只合并电台键")
@@ -719,12 +719,12 @@ func runSourceContractTests() {
             }
         }
 
-        // ---- 配置热重读:白名单两侧都要真的接上----
+        // ---- 配置热重读:改设置不再需要重启 collector ----
         //
-        // `CollectorRestartPolicy.hotReloadedKeys` 里每一个键,都必须 ① 真是 features.json 的键(App 侧
-        // FeatureFlagsFile 的 CodingKey),② collector 侧真有按 mtime 的热重读。少任一边,用户看到的都是
-        // "改了没反应、要重启才生效" —— 而这条路存在的全部意义就是不重启(重启一次实测 37~68 秒)。
-        // 跨 target(Core / App / Go)三处,只能靠源码扫描钉。
+        // collector 侧 features.json(featuresreload.go)与 config.json(configreload.go)都按 mtime 热重读,
+        // lyrics_dir 也在运行中切换(lyricsdirswitch.go),所以 App 侧保存路径一律不重启。
+        // 这套契约横跨 App / Go 两处,任何一处脱节的表现都是"改了没反应、重启才生效"
+        // 或者反过来"白白停摆 40 秒",两种都不报错,只能靠源码扫描钉。
         do {
             let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -1154,7 +1154,7 @@ func runSourceContractTests() {
                         "引导页一份实现: 「配对浏览器」那一步要走 BrowserPairing.trustAndPair(那个函数体里的顺序是实测结论)")
             // 引导页不该自己碰 browserPlatformPairs —— 那是 BrowserPairing 的地盘。
             //
-            // ⚠️ 必须**过滤注释行**。整份 `contains` 会被自己打红:引导页的注释里
+            // 必须**过滤注释行**。整份 `contains` 会被自己打红:引导页的注释里
             // 两处提到这个符号名(讲"探针按它跑""真正落盘的是它"),而那正是应该写在注释里的
             // 说明。这个文件里另外几条源码扫描守卫本来就都跳 `//`/`///`,这条漏了。
             let offenders = onboarding.split(separator: "\n", omittingEmptySubsequences: false)
@@ -1185,10 +1185,10 @@ func runSourceContractTests() {
             expectEqual(true, false, "引导页一份实现: 读不到 SettingsView.swift(路径挪了?)")
         }
 
-        // ④ **平台 → 图标那张查表**只允许一份(从 SettingsView 的 private 类型里
+        // ④ **平台 到 图标那张查表**只允许一份(从 SettingsView 的 private 类型里
         //    搬出来的原因就是引导页够不着)。
         //
-        // ⚠️ 判据容易写错,记下来:别断言"`YouTubeMusicIcon`/`SpotifyIcon`
+        // 判据容易写错,记下来:别断言"`YouTubeMusicIcon`/`SpotifyIcon`
         // 这两个资源名只该出现在 WebPlatformIcon.swift 里" —— 那个**前提本身就是错的**,
         // 不是漏改:`FeatureSettingsStore.swift` 里 `case .spotify: return "SpotifyIcon"` 是真
         // 代码且完全合理(Spotify **桌面版**那张播放器卡复用同一张 PNG,`AppIconResolver` 的
@@ -1225,6 +1225,10 @@ func runSourceContractTests() {
                         "引导页只删一个: BrowserPairing.unpair( 在引导页只该有一处调用(每张卡自己那次);批量删配对属于设置页那种能逐个确认的粒度")
 
             // ⑥ 浏览器候选必须**一份稳定列表**渲染,不准再按"已配对/未配对"分两组 —— 分组时
+    //
+    // 第二排的「歌词窗口」那一格后来也能翻面(⑦⑧):它是这块面板里唯一一个**不是** LyricsSurface
+    // 的去处,而且它缺的两项(颜色 / 字体)是被控件形态挡住的、不是被判据排除的 —— 两件事都容易
+    // 在下一次改动里被"顺手统一"掉,所以一并钉住。
             //    点一下会让那张卡从一组跳到另一组、在网格里换位置(「点了以后图标会
             //    切换位置」),而"位置变了 + 边框变了"混在一起读不出"我刚取消了它"。
             expectEqual(onboarding.contains("BrowserPairing.candidateBrowsers("), true,
@@ -1245,7 +1249,7 @@ func runSourceContractTests() {
         // 原来的论证是"能让 steps 变短的控件全都在 index 1,所以安全",而它默认"引导页是
         // 唯一宿主":`features.players` 是 @Published,设置窗口能同时开着改它,引导页自己的
         // `.lastfm` 那一步还有个按钮专门去打开设置窗。走到最后一步再去设置里取消勾选
-        // Apple Music,`steps` 少一项 → `steps[count]` 数组越界。守卫是 `currentStep`
+        // Apple Music,`steps` 少一项 到 `steps[count]` 数组越界。守卫是 `currentStep`
         // (夹住下标)+ `.onChange(of: steps.count)`(把存储值本身拉回来)那一对。
         if let onboarding = read("OnboardingView.swift") {
             let rawIndexing = onboarding.split(separator: "\n", omittingEmptySubsequences: false)
@@ -1353,7 +1357,7 @@ func runSourceContractTests() {
             expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
         }
 
-        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
+        // ⑭b **App 到 collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
         // Swift 侧 PositionBiasFile 写、Go 侧 positionbias.go 读;改了一边不改另一边,collector 会安静地
         // 读不到 / 解不出,网页那边 Spotify 歌词就悄悄回到慢 2 秒。
         let biasGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/positionbias.go").path
@@ -1432,7 +1436,7 @@ func runSourceContractTests() {
             .deletingLastPathComponent()   // lyrimuse(包目录)
             .deletingLastPathComponent()   // 仓库根
         let docPath = repoRoot.appendingPathComponent("docs/features/08-lyrics-engine.md").path
-        /// 「十六」→ 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
+        /// 「十六」到 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
         func chineseNumeral(_ s: String) -> Int? {
             let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
                                             "六": 6, "七": 7, "八": 8, "九": 9]
@@ -1574,9 +1578,9 @@ func runSourceContractTests() {
     //
     // 真机 `sample` 抓栈坐实的卡顿(现象是「设置页切分页有延迟、不跟手」):「播放器」页的
     // body 里直接调了 `MusicAutomationPermission.check`(底下是 AEDeterminePermissionToAutomateTarget
-    // → semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
+    // 到 semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
     // .status`(读 Chromium Preferences 文件)、`CollectorServiceManager.state`(起 launchctl 子进程
-    // 并 waitUntilExit)。4 个浏览器 × 每次 body 重算 → 主线程一次阻塞 20–380ms;60 秒切分页采样
+    // 并 waitUntilExit)。4 个浏览器 × 每次 body 重算 到 主线程一次阻塞 20–380ms;60 秒切分页采样
     // 主线程 70% 在忙、其中 `browserAvatarButton` 一条路径 524 个采样。PlayerHealthMonitor 同款。
     //
     // 修法是"查在后台、画只读缓存"。这条闸钉住的不是"别调这些函数",而是**只能在这几个
@@ -1642,12 +1646,12 @@ func runSourceContractTests() {
     // 可机械检查的规律:仓库纪律本来就是"进重置范围的项必须有 `AppSettings.defaultXxx` 命名
     // 常量"(init() 的兜底和重置按钮读同一份,不各自硬编码);反过来 —— **有常量就该在重置里**。
     //
-    // ⚠️ 只覆盖 Notch / MenuBar 两族。悬浮歌词那边的常量不带形态前缀(defaultFollowsCoverArt /
+    // 只覆盖 Notch / MenuBar 两族。悬浮歌词那边的常量不带形态前缀(defaultFollowsCoverArt /
     // defaultFontFamilyName / defaultFontSize / defaultOverlayFontWeight),而且它有几项默认值
     // 来自 `ColorTheme.defaultTheme` 而不是常量,按名字归类只能靠猜 —— 与其写一条似是而非的
     // 闸,不如只钉住规律确实成立的那两族。
     //
-    // ⚠️ 扫的是 **restoreDefaults() 的函数体**(靠大括号配平截出来)、并且**剔掉注释行**,不是
+    // 扫的是 **restoreDefaults() 的函数体**(靠大括号配平截出来)、并且**剔掉注释行**,不是
     // 整文件扫。那两个文件的注释里都写着"默认值只在 AppSettings.defaultMenuBarXxx 里出现一次"
     // 这类句子,整文件扫会把注释当成赋值放过去 —— 这个仓库的源码扫描守卫已经吃过好几次
     // "纯文本扫描不区分代码与注释"的亏(本地化那条、滑杆那条的头注都记着)。
@@ -1888,7 +1892,7 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 → 退出路径」)----
+    // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 到 退出路径」)----
     //
     // 两侧的退出路径都要打 `exiting reason=<code>`:App 侧所有主动 terminate 只准经 AppExit.request
     // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),collector 常驻路径(main.go)不准再出现裸
@@ -2031,10 +2035,10 @@ func runSourceContractTests() {
             expectEqual(source.contains("&& !(found?.searchIncomplete ?? false)"), true,
                         "没跑完整: currentTrackHasNoLyrics 要把这一位算进去")
             // ④ 熔断阶梯按「熔断了几轮」升档,不是按「失败了几个请求」——后者正是这次事故里
-            //    一次 2 秒抖动换来五分钟停摆的原因(见 sourcebreaker.go 那段 ⚠️)。
+            // 一次 2 秒抖动换来五分钟停摆的原因(见 sourcebreaker.go 那段 提醒)。
             expectEqual(breakerGo.contains("idx := st.trips"), true,
                         "熔断阶梯: 档位取自 trips(熔断轮次)")
-            //    ⚠️ 只看非注释行:那段 ⚠️ 注释里原样引着旧写法当反面教材,连注释一起扫会永远红。
+            // 只看非注释行:那段 注释里原样引着旧写法当反面教材,连注释一起扫会永远红。
             let breakerCode = breakerGo.split(separator: "\n").filter {
                 !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//")
             }.joined(separator: "\n")
@@ -2394,12 +2398,12 @@ func runSourceContractTests() {
     // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
     // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
     skillGuard: do {
-        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift → 上 4 层到仓库根
+        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift 到 上 4 层到仓库根
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let skillsDir = repoRoot.appendingPathComponent(".claude/skills")
-        // ⚠️ **这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(AI 协作文件只留
+        // **这三份 skill 与 AGENTS.md / CLAUDE.md 不进版本库**(AI 协作文件只留
         // 作者本地)。所以在别人的 clone 和 CI 上它们**根本不存在** —— 那时整段跳过,不是失败。
         // 本地有就照旧全查(锚点腐烂、超长、发版 skill 漏 disable-model-invocation 都还是红)。
         // 别把这个 guard 改成 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
@@ -2518,7 +2522,7 @@ func runSourceContractTests() {
         expectEqual(yml.contains("steps.changelog."), false, "tag 校验: 旧的 Extract tag changelog 步已并入校验步")
         expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
                     "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
-        // ⚠️ docs/releasing.md 跟 AGENTS.md 一样**不进版本库**(理由同下一段),别人的 clone 和 CI 上
+        // docs/releasing.md 跟 AGENTS.md 一样**不进版本库**(理由同下一段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过,别改回无条件 expectEqual。
         let releasingDoc = read("docs/releasing.md")
         if !releasingDoc.isEmpty {
@@ -2528,9 +2532,9 @@ func runSourceContractTests() {
             expectEqual(releasingDoc.contains("ping-indexnow.py"), true,
                         "IndexNow: releasing.md 走 scripts/ping-indexnow.py(URL 列表从 sitemap 读),别退回手写名单")
         }
-        // ⚠️ **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
+        // **AGENTS.md 不进版本库**(理由见本文件「项目级 skill」那段),别人的 clone 和 CI 上
         // `read` 返回空串 —— 有就查,没有就跳过。这一条守的是「作者本地那份写清了 CI 会拒什么」,对使用者
-        // 和贡献者没有意义。⚠️ 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
+        // 和贡献者没有意义。 别改回无条件 expectEqual:CI 会因为「文件缺失」红,而那不是缺陷,是刻意不发布。
         // (实测:第一次只给 .claude/skills 那段加了跳过、漏了这一条,在模拟 clone 里当场红。
         //  同类读点共 6 处,其余 5 处都在上面那个 skillGuard 块里、已被整段跳过覆盖。)
         let agentsDoc = read("AGENTS.md")
@@ -2589,7 +2593,7 @@ func runSourceContractTests() {
         // QQ 音乐 / 汽水音乐 / Spotify 的容器目录)只能从家目录拼,`configDir()` 表达不了别人家的
         // 路径,那些函数头上也都写着"外部 App 的路径,不走 paths.go 那套身份口径"。这条守的是
         // 「别自己拼**这个项目**的目录」——所以只在同一个函数里拼出自家字样时才算违规。
-        // ⚠️ 别改回"见到 os.UserHomeDir() 就红":那样每加一个读本地客户端数据的源都要来改闸,
+        // 别改回"见到 os.UserHomeDir() 就红":那样每加一个读本地客户端数据的源都要来改闸,
         // 而闸想防的(改目录/改名时漏改一处)跟外部路径毫无关系。
         let ownPathMarkers = [".config", "library/logs", "lyrimuse", "clientname"]
         var externalHomeUses = 0
@@ -2633,11 +2637,11 @@ func runSourceContractTests() {
             // 一个用 ProcessRunner 的 collector 子命令,而那个函数当时连环境参数都没有,于是
             // 这道守卫按 executableURL 数根本数不到它。配置目录一旦不是默认值,App 读的是一处、
             // delete-listen 删的却是默认目录,deleted:0,界面上就是"点了没反应")。
-            // ⚠️ 两处都在收紧,起因是这道守卫**两次**都靠巧合成立:
+            // 两处都在收紧,起因是这道守卫**两次**都靠巧合成立:
             //
             // 一、匹配**不带**变量名前缀。原来数的是 `process.executableURL = …`,于是
             //    `CollectorServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
-            //    它是**真的在 spawn collector**(bundledCollectorVersion → collector version)、
+            //    它是**真的在 spawn collector**(bundledCollectorVersion 到 collector version)、
             //    且当时不带环境,却因为 execs=0/envs=0 恰好"配平"蒙混过关:守卫当时成立靠的是
             //    "那个文件的变量恰好叫 p 不叫 process"。放宽后它红了,已给那处补上环境。
             //
@@ -2678,12 +2682,12 @@ func runSourceContractTests() {
         expectEqual(swatch.contains("if strokeEnabled {"), true, "主题色条: 描边开关决定第三段是颜色还是斜线(经典白字 vs 白字描边靠它区分)")
         expectEqual(code("Settings/ColorTheme.swift").contains("func swatchImage() -> NSImage"), true, "主题色条: ColorTheme.swatchImage() 转发到 ThemeSwatch")
         let rows = code("UI/OverlayStyleSettingsRows.swift")
-        // ⚠️ 改口径:色条**只在「我的配色主题」子行**出现,下拉项里不能有。
+        // 改口径:色条**只在「我的配色主题」子行**出现,下拉项里不能有。
         // 原断言要求"下拉项与子行都带色条",而为了给下拉项加色条把条目写成
         // `Toggle { Label { Text } icon: { Image(nsImage:) } }` 之后,整份菜单**一个条目都画不出来**
         // (实测,连主题名都没有 —— 失败在条目这一层,不是图标那一层)。理由、实测现象与
         // 「真要加就走 AppKit」的替代方案,全在 OverlayStyleSettingsRows.themeItem 的注释里。
-        // ⚠️ 扫源码的守卫必须**先剥掉注释行**:`themeItem` 的文档注释里**故意**贴着那段写坏了的
+        // 扫源码的守卫必须**先剥掉注释行**:`themeItem` 的文档注释里**故意**贴着那段写坏了的
         // 代码(`Toggle { Label { Text } icon: { Image(nsImage:) } }`)当反面教材,不剥的话下面
         // 每一条"不许出现 X"的断言都会被这段反面教材自己打红(实测踩到:数
         // `theme.swatchImage()` 的出现次数,被注释里的示例多算了一次)。
@@ -2818,11 +2822,11 @@ func runSourceContractTests() {
     // 而 Go 的 `omitempty` 恰恰让零值字段整个不出现。两边一撞,一行完全正常的输出会**整行**
     // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
     //
-    // 两次事故,同一条 Go→Swift 边界:
-    //  ① searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
+    // 两次事故,同一条 Go到Swift 边界:
+    //  ① searchLyricsPick 到 LyricsSearchService.Pick:decidable==false 这条完全
     //     正常的分支里 collector 不写 decisionJSON,于是那一行解码失败、pick 恒为 nil,好几种
     //     该有专属文案的正常结局被吞成兜底那一句;
-    //  ② backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
+    //  ② backfillOutcome 到 ScrobbleBackfillService.Outcome:Go 的 Items 只在
     //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
     //     功能上线那天起就这样(两侧一个字没改过),只是 lastRunFailed 那天才把它从"一声不吭"
     //     变成"界面报一句失败" —— 用户那趟 26 条全补进了 Last.fm、markBackfilled 的回执也落了
@@ -2905,7 +2909,7 @@ func runSourceContractTests() {
 
     // ---- 日志规范----
     //
-    // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
+    // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 到 日志」:正文一律英文、`component: message key=value`;
     // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
     // 绕开 Logger 的日志进不了导出);collector 走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
     // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、Logger 的 subsystem 只有一个。

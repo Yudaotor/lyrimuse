@@ -21,7 +21,7 @@ import Foundation
 /// `compactLine`(唱完就切、提前亮出下一句)—— 副行的译文 / 罗马音是"这一句"的、下一句是"这一句的下一
 /// 句",主行若还按提前量抢跑,副行就跟主行对不上号。
 ///
-/// ⚠️ rawValue 直接落 UserDefaults,改名就是改存量用户的配置,别动。
+/// rawValue 直接落 UserDefaults,改名就是改存量用户的配置,别动。
 public enum LyricSecondaryLine: String, CaseIterable, Sendable {
     case off
     case nextLine
@@ -74,7 +74,7 @@ public enum NotchLyricRowMetrics {
     public static let rowHeight: CGFloat = 44
     /// 主行字号。用户可调(设置页灵动岛「字体」组,`AppSettings.notchFontSize`):默认 13 = 加这组
     /// 设置之前的硬编码,范围 11…17。**上限是倒推出来的,不是拍的**:最大字号下两行 + 间距仍要塞进 `rowHeight`
-    /// 且上下各留 ≥ 4pt(17 → 19 + 3 + 13 = 35,余 4.5),selftest 钉着这条不变量;想放宽范围先过那条闸。
+    /// 且上下各留 ≥ 4pt(17 到 19 + 3 + 13 = 35,余 4.5),selftest 钉着这条不变量;想放宽范围先过那条闸。
     public static let defaultMainFontSize: CGFloat = 13
     public static let mainFontSizeRange: ClosedRange<CGFloat> = 11...17
     /// 副行(以及展开区那行「下一句」预览)的字号,**不随主行字号变**。不跟着放大是为了让主行的字号范围不依赖

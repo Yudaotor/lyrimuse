@@ -11,7 +11,7 @@ import (
 // 每一个歌词源都必须有主机映射到它 —— 没有的话 observe 拿到空源名直接 return,
 // 那个源的失败一次都不会被记录,熔断对它永远不触发。
 //
-// 实测坐实过这个缺口:applemusic 曾是唯一一个从未被熔断过的源(另外十个累计触发
+// applemusic 曾是唯一一个从未被熔断过的源(另外十个累计触发
 // 1000+ 次,它 0 次),不是因为它稳,是因为 amp-api.music.apple.com 不在表里。
 // 这条用例按 lyricSourceNames 逐个反查,再添新源时漏掉映射会立刻失败。
 func TestEveryLyricSourceHasAHostMapping(t *testing.T) {

@@ -115,10 +115,11 @@ func TestRotateLogIfNeeded_OverwritesPreviousOldFile(t *testing.T) {
 // 轮转保留多代:最近一份仍叫 .old,上一份挪到 .old.1、再上一份 .old.2,超出保留份数的
 // 最老那份删掉。
 //
-// 原来是覆盖式、只留一份 —— 按实测产量(5~8.5 万行/天、约 11MB/天,30MB 阈值)那意味着
-// 两三天就轮转一次、能回溯的窗口只有两到五天,"上周那次是怎么回事"根本查不了。
+// 不能只留一份(覆盖式):按实测产量(5~8.5 万行/天、约 11MB/天,30MB 阈值)算,
+// 两三天就轮转一次,只留一份的话能回溯的窗口只有两到五天,"上周那次是怎么回事"
+// 根本查不了。
 func TestRotateLogIfNeeded_KeepsMultipleGenerations(t *testing.T) {
-	// ⚠️ 下面的断言都是拿 logRotateKeepArchives 参数化的,所以它们抓不到"把这个常量悄悄
+	// 下面的断言都是拿 logRotateKeepArchives 参数化的,所以它们抓不到"把这个常量悄悄
 	// 改小"——变异测试实测:改成 1 时整条用例照样全绿。具体留几份是可调的策略,但
 	// "不止一份"是这次修复本身,单独钉死。
 	if logRotateKeepArchives < 2 {
@@ -145,7 +146,7 @@ func TestRotateLogIfNeeded_KeepsMultipleGenerations(t *testing.T) {
 		written = append(written, content)
 	}
 
-	// 最近的几份按新→旧排在 .old / .old.1 / .old.2 上,一份都不能串位。
+	// 最近的几份按新到旧排在 .old / .old.1 / .old.2 上,一份都不能串位。
 	for i := 0; i < logRotateKeepArchives; i++ {
 		want := written[len(written)-1-i]
 		got, err := os.ReadFile(logArchiveName(path, i))

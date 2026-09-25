@@ -18,7 +18,7 @@ import Foundation
 ///     保存等于把它整个覆盖 —— 所以 `save` **拒绝**,直到用户修好文件、或明确放弃它
 ///     (`quarantineCorruptFile`:挪到旁边而不是删掉,里面可能还有能手工抢救的凭据)。
 ///
-/// 「写失败不污染内存」:`save(fields:)` 是合并 → 序列化 → 写盘 → **成功之后**才把合并结果记为 `raw`、
+/// 「写失败不污染内存」:`save(fields:)` 是合并 到 序列化 到 写盘 到 **成功之后**才把合并结果记为 `raw`、
 /// 把状态推进到 `loaded`;任何一步抛错 self 原样不动,调用方的「已保存快照」自然也不推进,下一次保存
 /// 重试整份。原来 ConfigStore.persistFile 是先改字典再写盘 —— 那时字典只是写缓冲、没造成实害,但这个
 /// 顺序一旦被哪次重构当成「内存已同步」就是坑,这里把顺序钉死。
@@ -96,7 +96,7 @@ public struct JSONConfigDocument {
         }
     }
 
-    /// 字节 → 顶层 JSON 对象。空文件、非法 JSON、顶层是数组 / 标量都算失败。
+    /// 字节 到 顶层 JSON 对象。空文件、非法 JSON、顶层是数组 / 标量都算失败。
     public static func parseObject(_ data: Data) -> Result<[String: Any], ParseFailure> {
         if data.isEmpty { return .failure(ParseFailure(reason: "empty file")) }
         let any: Any
@@ -123,13 +123,13 @@ public struct JSONConfigDocument {
         return merged
     }
 
-    /// 字典 → 带缩进、键排序的字节。键排序是为了两次保存之间 diff 干净(iCloud 备份 / 手工比对都受益)。
+    /// 字典 到 带缩进、键排序的字节。键排序是为了两次保存之间 diff 干净(iCloud 备份 / 手工比对都受益)。
     public static func serialize(_ object: [String: Any]) throws -> Data {
         guard JSONSerialization.isValidJSONObject(object) else { throw Failure.notSerializable }
         return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
 
-    /// 合并 → 序列化 → 写盘 → 成功后才更新 `raw` / `state`。
+    /// 合并 到 序列化 到 写盘 到 成功后才更新 `raw` / `state`。
     ///
     /// - `secure`:true 走 `writeSecurely`(原子写 + 0600,凭据文件必须);false 普通原子写。
     /// - 抛 `Failure.refusedCorruptFile`:磁盘上那份是坏的,一个字节都没碰。
@@ -179,7 +179,7 @@ public struct JSONConfigDocument {
         return destination
     }
 
-    /// 错误 → 一句话。优先 `NSDebugDescription`(JSONSerialization 把「第几行第几列遇到什么字符」放在这里,
+    /// 错误 到 一句话。优先 `NSDebugDescription`(JSONSerialization 把「第几行第几列遇到什么字符」放在这里,
     /// 比 localizedDescription 那句「格式不正确」有用得多),它只含一个字符和位置,不会把文件内容带出来。
     private static func describe(_ error: Error) -> String {
         let ns = error as NSError

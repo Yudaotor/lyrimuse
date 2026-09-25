@@ -13,26 +13,26 @@ import (
 // 网易云/QQ/酷狗的搜索词是「妳听得到」,而它们曲库里这首叫「你听得到」,三家一条都匹配
 // 不上。实测 A/B(同一时刻、同一 duration,只改标题写法):
 //
-//	妳聽得到 / 周杰倫 / 葉惠美  → 只有 LRCLIB 给出候选
-//	你听得到 / 周杰伦 / 叶惠美  → 酷狗 + 网易云 + QQ + LRCLIB
-//	妳听得到 / 周杰伦 / 叶惠美  → 只有 LRCLIB   ← 单字隔离:艺人专辑全简体也没用
+//	妳聽得到 / 周杰倫 / 葉惠美  到 只有 LRCLIB 给出候选
+//	你听得到 / 周杰伦 / 叶惠美  到 酷狗 + 网易云 + QQ + LRCLIB
+//	妳听得到 / 周杰伦 / 叶惠美  到 只有 LRCLIB   —— 单字隔离:艺人专辑全简体也没用
 //
-// ⚠️ 表是**推出来的,不是手工维护的**(「做成通用逻辑,后续遇到这种字的问题都要
+// 表是**推出来的,不是手工维护的**(「做成通用逻辑,后续遇到这种字的问题都要
 // 可以解决,不要通过手动维护一个表的方式」)。数据来自 Unicode Unihan 的区域集/变体关系
 // 字段 + OpenCC 词库,推导规则和"为什么不手工列字"写在 scripts/gen-han-variants.py 的头注
 // 里;产出的 dictionary/HanVariants.txt 同时也被 App 侧编译进去(见
 // LyrimuseCore/Lyrics/HanVariantsTable.swift),**两侧是同一份数据**。
 //
-// ⚠️ 只做"异体 → 大陆规范"这一个方向。反向(简 → 繁/异体)绝不做:简体只有「你」,转过去
+// 只做"异体 到 大陆规范"这一个方向。反向(简 到 繁/异体)绝不做:简体只有「你」,转过去
 // 时无从判断该写「你」还是「妳」——那要猜被称呼者的性别,猜错就是改写歌词。
 //
-// ⚠️ 这一层挂在 `toSimplifiedT2S` 的**单字兜底分支**上(见那边),也就是只处理"OpenCC 词组
+// 这一层挂在 `toSimplifiedT2S` 的**单字兜底分支**上(见那边),也就是只处理"OpenCC 词组
 // 表和单字表都没管的字"。所以它永远不会覆盖 OpenCC 的判断,只填它留下的空。
 
 //go:embed dictionary/HanVariants.txt
 var hanVariantsFS embed.FS
 
-// hanVariantMap:变体字 → 大陆规范字。空表是可接受的降级(等于这一层不存在),不 panic。
+// hanVariantMap:变体字 到 大陆规范字。空表是可接受的降级(等于这一层不存在),不 panic。
 var hanVariantMap = loadHanVariants()
 
 func loadHanVariants() map[rune]rune {

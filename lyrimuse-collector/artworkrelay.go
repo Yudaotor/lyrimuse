@@ -29,7 +29,7 @@ import (
 // 问题在于这个值被**原样带出了这台机器**:
 //
 //   - relay.go 的 relayState 把它当 artwork 推给网页。浏览器不可能读别人机器上的本地
-//     文件,表现是网页封面整个空白(现象是「为什么我的网页上没有封面了」)。
+//     文件,表现是网页封面整个空白。
 //     更隐蔽的是网页那条 iTunes 兜底的闸写的是 `if (!art)` —— `file://…` 是个**非空**
 //     字符串,顺利绕过这道闸,于是兜底根本不触发,直接把 file:// 塞进 <img src>。
 //   - lb.go 把它写进提交给 ListenBrainz 的 `additional_info.cover_url`。既是彻头彻尾的
@@ -46,7 +46,7 @@ import (
 // (核过那 90 条,剩下的 http 链接全是歌曲**页面**链接,一个封面图 URL 都没留)。
 //
 // 而且就算留着也不该退:设备直送这张才是对版的那张,退回去等于让网页显示一张可能挂错的
-// 封面(deviceartwork.go 头注记着 QQ 那张挂错封面的真实案例)。所以走"托管原图":网页和
+// 封面(deviceartwork.go 头注记着 QQ 那次挂错封面的例子)。所以走"托管原图":网页和
 // App 看到的是同一张,且一定对。
 //
 // ## 省 KV 写额度是这套设计的硬约束
@@ -74,8 +74,9 @@ const (
 	artworkSweepGap = 300 * time.Millisecond
 )
 
-// 中继地址/令牌。跟 deviceArtworkDir / enrichPath 一样在 main.go 里一次性设好
-// (这个仓库里"进程级单例配置"的既有写法),空串 = 这条功能整体关闭。
+// 中继地址/令牌,空串 = 这条功能整体关闭。main.go 启动时经 setStateRelay 设好,常驻进程里随
+// config.json 热切换(switchStateRelay)。读一律经 artworkRelayTarget / artworkRelayConfigured,
+// 别直接碰这两个变量:上传跑在别的 goroutine 里。
 var (
 	artworkRelayURL   string
 	artworkRelayToken string
@@ -144,11 +145,11 @@ func artworkPublicURL(sha, path string) string {
 // webSafeCoverURL 把一个要**离开这台机器**的 cover_url 换成外面真能加载的形态。
 //
 // 三条出口,都是刻意的:
-//   - 不是 file:// → 原样返回(网易云/Apple/QQ 的远程封面本来就能加载)。
-//   - 设备封面且已确认传上去了 → 换成中继上的 https 地址。
-//   - 其余一切情况 → **返回空串**。包括"还没传上去"和"认不出的 file://"。
+//   - 不是 file:// 到 原样返回(网易云/Apple/QQ 的远程封面本来就能加载)。
+//   - 设备封面且已确认传上去了 到 换成中继上的 https 地址。
+//   - 其余一切情况 到 **返回空串**。包括"还没传上去"和"认不出的 file://"。
 //
-// ⚠️ 最后这条是这次修复的核心:宁可让网页暂时没有封面(它自己会退回 iTunes 兜底,
+// 最后这条是这次修复的核心:宁可让网页暂时没有封面(它自己会退回 iTunes 兜底,
 // 见 web/index.html 的 artworkFor),也**绝不能把 file:// 原样透传出去** —— 那正是
 // 这个 bug 本身,而且它还会绕过网页那条 `if (!art)` 的兜底闸。
 //
@@ -192,7 +193,7 @@ func scheduleArtworkUpload(sha, path string) {
 			artworkNextRetry[sha] = time.Now().Add(artworkUploadRetryAfter)
 		}
 		artworkMu.Unlock()
-		// ⚠️ 必须在 artworkMu 之外调:markArtworkConfirmed 要拿 artworkConfirmMu,而
+		// 必须在 artworkMu 之外调:markArtworkConfirmed 要拿 artworkConfirmMu,而
 		// loadArtworkConfirmed 是先 artworkConfirmMu 再 artworkMu —— 两处反着拿就是死锁。
 		// 现在靠"load 在 run() 之前跑完、那时还没有上传 goroutine"侥幸不撞上,但那是调用
 		// 顺序撑着的,不是锁本身保证的。统一成"这两把锁不嵌套"。
@@ -207,7 +208,7 @@ func scheduleArtworkUpload(sha, path string) {
 
 // ensureArtworkUploaded 确保这张图在中继上存在。先 HEAD 后 POST。
 //
-// ⚠️ HEAD 这一步不是可有可无的优化:artworkUploaded 只活在内存里,重启后是空的,没有
+// HEAD 这一步不是可有可无的优化:artworkUploaded 只活在内存里,重启后是空的,没有
 // 这一问的话每次 collector 重启都会把整个 artwork/ 目录重传一遍 —— 而 KV 免费版只有
 // 1000 写/天,读却有 100k/天。
 func ensureArtworkUploaded(ctx context.Context, sha, path string) error {

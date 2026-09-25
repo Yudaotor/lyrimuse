@@ -62,7 +62,7 @@ fi
 # 拿什么身份签。默认仍然是 ad-hoc(`-`),**CI 和别人的机器上一个字节都不会变**。
 #
 # 为什么要这个:ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash
-# (`codesign -d -r-` → `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
+# (`codesign -d -r-` 到 `designated => cdhash H"..."`),而 TCC 授权(辅助功能/自动化)存的正是这条要求。
 # 二进制一重编 cdhash 就变,存的那条再也对不上 —— 用户看到的是「设置里的勾还亮着,App 却说没授权」,
 # 每次 build.sh 之后都要手动把勾取消再勾上一遍(用户第 N 次撞上:「为什么我明明已经有授权了,
 # 每次点击跳过广告还是会说让我去授权?」)。换成一张固定的自签名证书之后,要求变成
@@ -73,7 +73,7 @@ fi
 # Gatekeeper 那一关本来就不靠它,这个 App 从来就没公证过)。没有这张证书(CI、别人的机器、证书被删)时
 # 自动退回 `-`,行为跟改动前逐字相同。`LYRIMUSE_SIGN_ID=-` 可以显式强制 ad-hoc。
 #
-# ⚠️ 代价说清楚:换成证书之后,**任何**用这张证书签、且 identifier 相同的二进制都会继承已有的 TCC 授权
+# 代价说清楚:换成证书之后,**任何**用这张证书签、且 identifier 相同的二进制都会继承已有的 TCC 授权
 # (ad-hoc 那条是钉死到某一个二进制的)。这张私钥待在 login 钥匙串里、由系统按 ACL 管,只有 codesign
 # 用得到;要更严格就把证书删掉,下次构建自动退回 ad-hoc。
 DEV_SIGN_NAME="Lyrimuse Dev Signing"
@@ -95,7 +95,7 @@ fi
 # 单架构时直接拷,不套一层只含一个架构的 fat 文件(那种文件能跑,但没必要)。
 # LC_BUILD_VERSION 的 sdk 字段必须是**真实的 SDK 版本**,不是部署目标。
 #
-# ⚠️ 这一步不能省,漏了不会报错,只会让整个 App 变回改版前的外观:macOS 26 起系统按这个
+# 这一步不能省,漏了不会报错,只会让整个 App 变回改版前的外观:macOS 26 起系统按这个
 # 字段决定给不给 App 上液态玻璃,写成部署目标(14.0)就等于声明"我是按 macOS 14 SDK 编的",
 # 于是设置页的玻璃卡片、玻璃按钮、GlassEffectContainer 全部按兼容模式渲染成普通控件 ——
 # 代码里的 `#available(macOS 26.0, *)` 仍然为真、`.glassEffect` 照样调用,只是画不出来。
@@ -142,7 +142,7 @@ LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # scripts/build-version.sh 另算成四段纯数字(原因见那个脚本头注)。CI(release.yml)在真正打 tag 触发时会
 # 传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量。
 #
-# ⚠️ 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
+# 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
 # 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
 # 就是本地 `./build.sh`(见 repo CLAUDE.md),诊断导出的「App version」这一行因此
 # 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里 collector
@@ -166,7 +166,7 @@ BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
 # 发现。/Applications/ 才是这个 App 实际使用的位置,以后 build.sh 直接装到这里，不再
 # 留一份 bin/ 下的拷贝，避免"到底哪份是真的在跑"这种混乱再发生一次)。
 # 默认装到 /Applications;--dest 让 package.sh 把包组装到暂存目录,好一次产出多种架构。
-# ⚠️ 不再**就地**组装 /Applications 里那个包。
+# 不再**就地**组装 /Applications 里那个包。
 #
 # 起因是多会话协作时反复撞车:两个会话同时跑 build.sh,一个正往 /Applications/Lyrimuse.app
 # 里增删改签、另一个同时在改同一个包,实测撞出过两种表现——
@@ -181,7 +181,7 @@ BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
 # 暂存目录刻意不用 `mktemp -d`:TMPDIR 可以被指到别的卷,而跨卷 rename 会 EXDEV;
 # 放在 $APP_DIR 的同级目录,同卷由构造保证。
 #
-# ⚠️ --dest(package.sh 用)**不套暂存**:它本来就装到自己的 mktemp 暂存目录、随后自己打包,
+# --dest(package.sh 用)**不套暂存**:它本来就装到自己的 mktemp 暂存目录、随后自己打包,
 # 不存在"替换一个正在被使用的安装"这回事,再套一层只会绕。package.sh 的行为逐字不变。
 FINAL_APP_DIR="${DEST:-/Applications/${APP_NAME}.app}"
 if [ -n "$DEST" ]; then
@@ -197,7 +197,7 @@ else
   rm -rf "$STAGE"
   mkdir -p "$STAGE"
   # 这个脚本原来一个 trap 都没有(package.sh 有)。装配中途失败/被 Ctrl-C 时必须把暂存包
-  # 收走,否则 /Applications 下会慢慢攒垃圾。⚠️ swap 之后 $STAGE 指向的是**旧包**,
+  # 收走,否则 /Applications 下会慢慢攒垃圾。 swap 之后 $STAGE 指向的是**旧包**,
   # 这个 trap 同时也就是"装完把旧包删掉"那一步,不用另写。
   trap 'rm -rf "$STAGE"' EXIT
   APP_DIR="$STAGE"
@@ -206,7 +206,7 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
 # Label,TCC 自动化权限按这个认)和 Info.plist 的 CFBundleIdentifier(UserDefaults
 # 偏好域按这个认)一起统一改成同一个反向域名式字符串——早先(打包成 .app
-# 那次)特意把这两者分开,是因为那次只是"裸可执行文件→.app 包"的格式迁移,需要
+# 那次)特意把这两者分开,是因为那次只是"裸可执行文件到.app 包"的格式迁移,需要
 # CFBundleIdentifier 继续等于旧的裸可执行文件隐式落的偏好域名"desktop-lyrics"、才能
 # 无缝接上已有设置;这次是主动做一次完整改名+一次性数据迁移(见下方 UserDefaults
 # 迁移步骤),不再需要保留那个历史包袱,直接统一成标准写法更清爽。副作用:改这两个
@@ -217,7 +217,7 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(实测:
 # 跑完一次 `swift build --arch x86_64` 之后 .build/release 就指向
 # x86_64-apple-macosx/release 了)。
-# ⚠️ 从固定的 ".build/fat" 改成 per-run 临时目录。原来是所有会话共用同一个
+# 从固定的 ".build/fat" 改成 per-run 临时目录。原来是所有会话共用同一个
 # 路径,而下面这句 `rm -rf` 会把**另一个会话刚 lipo 出来的切片**一起删掉,那边随后 cp 到
 # 空气(或者拷到一个只写了一半的文件)。SwiftPM 的 .build/.lock 只锁 `swift build` 本身,
 # 管不到这里。跟上面的暂存包是同一族问题(共享可写路径),顺手一并修掉。
@@ -247,10 +247,10 @@ SPM_PATH_ARGS=()
 for arch in $ARCHES; do
   swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
-  # ⚠️ 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
+  # 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
   BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
   stamp_sdk_version "$BIN_PATH/lyrimuse" "$BIN_PATH/lyrics-translate" "$BIN_PATH/lyrics-romanize"
-  # ⚠️ **把这一轮的切片拷走再编下一个架构**,别把 $BIN_PATH 直接攒进 *_SLICES。
+  # **把这一轮的切片拷走再编下一个架构**,别把 $BIN_PATH 直接攒进 *_SLICES。
   #
   # SwiftPM 从 Swift 6.4 起默认走 swiftbuild 构建系统,它对**不同 --arch 返回同一个**
   # --show-bin-path(.build/out/Products/Release),于是后一个架构原地覆盖前一个,两个
@@ -287,7 +287,7 @@ for arch in $ARCHES; do
     x86_64) goarch=amd64 ;;
     *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
   esac
-  # ⚠️ 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-collector`),
+  # 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-collector`),
   # 所以 -o 的落点必须是绝对路径 —— 当 FAT_DIR 还是相对的 ".build/fat" 时,靠 "$PWD/"
   # 补齐正是必需的。把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
   # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
@@ -302,7 +302,7 @@ for arch in $ARCHES; do
   # 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。注入之后这两个版本号
   # 由构造保证一致,不再依赖任何人的记性。
   #
-  # ⚠️ 注入的目标必须是 **var**(main.go 里 clientVersion 就是 var,那里有详细注释)。
+  # 注入的目标必须是 **var**(main.go 里 clientVersion 就是 var,那里有详细注释)。
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
   # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
   # 之后那道 collector/App 版本一致性校验。
@@ -531,13 +531,13 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   fi
   echo "    media-control bundled (QQ 音乐支持)"
 else
-  # ⚠️ 暂存化连带出来的一个坑,不补会**静默降级用户已经装好的包**:
+  # 暂存化连带出来的一个坑,不补会**静默降级用户已经装好的包**:
   # 就地组装的年代,brew 里找不到 media-control 时上面那句 `rm -rf` 在 if 内、不会执行,
   # 旧的 media-control 原样留在包里,这次构建等于"没动它"。换成暂存包之后,整个
   # Contents/Resources/media-control 子树压根不存在,swap 就会拿一个**丢了 QQ 音乐支持的
   # 包**覆盖掉本来完好的安装,而且只有一句 warning、退出码还是 0。
   # 所以这里显式从现装包继承一份,把那层隐性兜底补回来。
-  # ⚠️ 必须在下面 codesign 之前做 —— 签完再往包里塞文件会破坏签名封印。
+  # 必须在下面 codesign 之前做 —— 签完再往包里塞文件会破坏签名封印。
   if [ -n "$STAGE" ] && [ -d "$FINAL_APP_DIR/Contents/Resources/media-control" ]; then
     ditto "$FINAL_APP_DIR/Contents/Resources/media-control" "$APP_DIR/Contents/Resources/media-control"
     echo "    media-control 从现装包继承(brew 里没找到,保持已装版本不被降级)"
@@ -629,9 +629,9 @@ rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-hant.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
-# ⚠️ **遍历,不要再逐个文件写 cp**。这里原来是一行一个图标的 cp 清单,
+# **遍历,不要再逐个文件写 cp**。这里原来是一行一个图标的 cp 清单,
 # 而 `Bundle.main.path(forResource:)` 找不到资源时各调用点都有 SF Symbol 兜底 —— 于是
-# "加了一张图 → 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
+# "加了一张图 到 忘了往这个清单里补一行"的表现是**图标悄悄变成一个通用符号**,不报错、
 # 不崩溃,极难发现(当天新增 Spotify 平台图标时当场踩到)。遍历之后这类漏拷不可能再发生。
 # Resources/ 下的 PNG 全都是要随包分发的,没有"只用于开发"的例外;.lproj 目录和
 # THIRD_PARTY_LICENSES 各有各的拷贝方式,不走这里。
@@ -800,7 +800,7 @@ fi
 # 采集服务 1.4.0」。同上面 -ldflags 注入那段注释:注入本身**不会**在失败时报错
 # (-X 对 const 静默失效),所以光有注入不够,必须有一道验产物的闸。
 #
-# ⚠️ 这道闸和 App 内设置页那张卡(CollectorServiceManager.bundledCollectorVersion)
+# 这道闸和 App 内设置页那张卡(CollectorServiceManager.bundledCollectorVersion)
 # 问的是同一个问题,区别只在时机:那张卡是装到用户机器上之后才告警——它确实抓到了
 # v1.5.0 这次,但那时 dmg 已经发出去了。这道闸把同一个检查提前到构建期。
 VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/collector"
@@ -830,7 +830,7 @@ fi
 #      表现是"装完了但行为没变",比直接报错难查得多。`set -euo pipefail` 拦不住。
 #   2. RENAME_SWAP 是**单次原子 vfs 操作**,没有"App 短暂不存在"的窗口 —— 并发的 launchd /
 #      Finder / 正在跑的进程任一时刻看到的要么是完整旧包、要么是完整新包。两步 mv
-#      (旧挪走→新挪上)做不到这点,中间那一瞬 /Applications 下没有这个 App。
+#      (旧挪走到新挪上)做不到这点,中间那一瞬 /Applications 下没有这个 App。
 # 换完之后 $STAGE 指向的是**旧包**,交给上面那个 EXIT trap 删 —— 顺带等于装完才删旧包,
 # 老进程在被重启之前一直有完整的一份可用。
 # 首装(目标还不存在)时 renamex_np 返回 ENOENT,回退 mv;那条路径上目标不存在,没有嵌套风险。
@@ -848,7 +848,7 @@ SWAP
   else
     mv "$STAGE" "$FINAL_APP_DIR"
   fi
-  # ⚠️ 必须重指回真实路径。下面 restart 段的 `pgrep -f "$BIN"`(三处)和
+  # 必须重指回真实路径。下面 restart 段的 `pgrep -f "$BIN"`(三处)和
   # `pgrep -f "$APP_DIR/Contents/Resources/collector"` 匹配的是进程命令行,那是
   # /Applications/... —— 忘了这两行就会永远判定"没起来"然后 exit 1。
   # `open "$APP_DIR"` 同理,不重指就会去打开那个暂存包。
@@ -944,8 +944,18 @@ echo "==> $APP_NAME running, pid ${pid% }"
 #      collector 就此永久躺平 —— 歌词解析、scrobble、relay 全停，而 App 本身活得好好的，
 #      表现成"这首歌一直没歌词、歌词管理也没条目"，极难联想到是构建脚本干的。
 #
-# 所以这里不先试 kickstart:App 那边 kickstart 只是"有时"失败，collector 这边是**每次构建
-# 必然**失效，直接走完整的卸载重装。中间那个 sleep 跟上面同理 —— bootout 是异步的。
+# 所以 collector 的 job 每次构建都必须完整卸载重装(bootout + bootstrap)。
+#
+# 谁来做:用户开着后台服务(np:collectorServiceEnabled = 1)时,**交给 App**。App 一启动就跑
+# CollectorServiceManager.reconcileAfterLaunch,看到 collector 二进制的指纹变了,会自己
+# bootout → 写 plist → bootstrap,并记下新指纹。这里再动一遍就是两边同时对同一个 label
+# 停止 / 装回,互相把对方刚拉起的进程杀掉(刚起的 collector 还在加载缓存、没装信号处理,
+# 被杀连退出日志都没有),脚本这边 sleep 两秒再看自然常常是「没在跑」。
+# 服务开关不是 1(plist 是手动装的)时 App 不管它,才由这里重装。两条路都**不**跟
+# `kickstart -k`:bootstrap 按 RunAtLoad 已经拉起了进程,-k 杀的正是它,还要白等 10 秒宽限。
+#
+# 最后确认新 collector 起来了:pid 不在 open 之前记下的那组里。等 60 秒:App 的对账排在它启动
+# 流程之后,collector 自己加载缓存也要十几秒。
 # COLLECTOR_LABEL 在上面跟 APP_NAME 一起定义。
 COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
 if [ -f "$COLLECTOR_PLIST" ]; then

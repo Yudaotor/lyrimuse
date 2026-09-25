@@ -10,8 +10,7 @@ import (
 // 背景:resolveTrackEnrichment 里缓存命中之后只可能触发四种后台任务,而 needsLyricsRescore
 // 和 needsLyricsRetry **两个的第一行都是 `if e.Lyrics == "" 就 return false`**,另两个只管
 // 外围字段和译文 —— 于是"条目已存在但歌词为空"落在所有路径之外,一首歌解析失败过一次就
-// **永久卡住**。实测坐实过:修好 `Medley: ` 前缀那个搜索 bug 之后,已经在缓存里的那首歌
-// 盯了 48 秒仍然是 0 字。
+// **永久卡住**,即使触发首次解析失败的那个根因后来被修好,也不会自动重试。
 //
 // 这一组用例守两件事:该重试的会重试(而且退避正确),不该重试的一次都不碰。
 func TestNeedsLyricsFirstFill(t *testing.T) {
@@ -103,7 +102,7 @@ func TestLyricsFillBackoff(t *testing.T) {
 	}
 }
 
-// ⚠️ 这一条是"白跑一轮网络"的守卫:空歌词条目必须 comparable=true、baseline=0,
+// 这一条是"白跑一轮网络"的守卫:空歌词条目必须 comparable=true、baseline=0,
 // 否则 retryLyricsUpgrade 里 upgraded 恒为 false,搜出来的歌词一个字都写不回去。
 func TestLyricsUpgradeBaselineEmptyEntry(t *testing.T) {
 	// 空条目:两个字段都是空串、LyricsScoringVersion 是 0,下面两条退路都走不通。
@@ -111,7 +110,7 @@ func TestLyricsUpgradeBaselineEmptyEntry(t *testing.T) {
 	if baseline != 0 || !comparable {
 		t.Errorf("空歌词条目: baseline=%d comparable=%v, want 0/true", baseline, comparable)
 	}
-	// 有歌词、版本又是当前版本 → 照旧用它自己的分数当基准(不能被上面那一支吃掉)。
+	// 有歌词、版本又是当前版本 到 照旧用它自己的分数当基准(不能被上面那一支吃掉)。
 	e := enrichEntry{Lyrics: "[00:01.00]x", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion}
 	if baseline, comparable = lyricsUpgradeBaseline(e, nil); baseline != 900 || !comparable {
 		t.Errorf("有歌词同版本: baseline=%d comparable=%v, want 900/true", baseline, comparable)

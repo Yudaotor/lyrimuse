@@ -10,7 +10,7 @@ import "testing"
 // 是同一首歌的两个版本(实测《火山灰》《变色龙》两条 mid 取回的歌词逐字节相同),不是
 // "两个不同的东西分不清"。
 //
-// ⚠️ 这组用例的重点不是"并列能通过",而是**放宽没有放过头**:每一条正例都配了一条
+// 这组用例的重点不是"并列能通过",而是**放宽没有放过头**:每一条正例都配了一条
 // 只差一个维度的反例(改歌名 / 改歌手 / 拉开时长 / 抹掉时长),证明三道判据各自都在生效。
 func TestQQAlbumTiedSongsAreSameTrack(t *testing.T) {
 	cases := []struct {
@@ -73,7 +73,7 @@ func TestQQAlbumTiedSongsAreSameTrack(t *testing.T) {
 			false,
 		},
 		{
-			// ⚠️ 只让**第一条**缺时长。原来只有"两条都缺"那一条用例,而循环里对 tied[1:]
+			// 只让**第一条**缺时长。原来只有"两条都缺"那一条用例,而循环里对 tied[1:]
 			// 的检查会把它拦下 —— 于是 first.interval 那道守卫删掉也照样全绿(变异测试
 			// 当场抓出这个盲点)。两条守卫要各自被覆盖。
 			// 第二条故意取 8 秒:跨度 8≤10,**去掉守卫就会返回 true**。原来写 200 秒时
@@ -101,10 +101,10 @@ func TestQQAlbumTiedSongsAreSameTrack(t *testing.T) {
 
 // 用**真实抓下来的**《离开银色荒原》曲目单钉住整段挑选逻辑。
 //
-// 这张专辑在 QQ 上整个上架了两遍:GetAlbumSongList 回 20 条 = 同样 10 首各一条。改之前
-// 「最优档并列就放弃」让这张专辑的每一首都挑不出来,整张专辑的歌词全军覆没。
+// 这张专辑在 QQ 上整个上架了两遍:GetAlbumSongList 回 20 条 = 同样 10 首各一条。 判据
+// 不能是"最优档并列就放弃"——那会让这张专辑的每一首都挑不出来,整张专辑的歌词全军覆没。
 //
-// ⚠️ 测 pickQQAlbumTrack 而不是只测 qqAlbumTiedSongsAreSameTrack:后者是判据,前者才是
+// 测 pickQQAlbumTrack 而不是只测 qqAlbumTiedSongsAreSameTrack:后者是判据,前者才是
 // 真正会回归的那段。变异测试实测——把调用点改回「并列一律放弃」,只测判据的用例全绿。
 func TestPickQQAlbumTrackHandlesDoubleListedAlbum(t *testing.T) {
 	// 实测数据,mid/时长原样照抄。

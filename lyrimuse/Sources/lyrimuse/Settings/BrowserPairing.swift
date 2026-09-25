@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-/// 「平台 ↔ 浏览器」配对的**逻辑本体** —— 设置页「网页播放器」卡和引导页「配对浏览器」
+/// 「平台 与 浏览器」配对的**逻辑本体** —— 设置页「网页播放器」卡和引导页「配对浏览器」
 /// 那一步共用这一份。
 ///
 /// 从 `SettingsView.swift` 抽出来(原来是那个 View 上的一组 private 方法)。
@@ -30,7 +30,7 @@ enum BrowserPairing {
         BrowserAutomationPermission.manuallyAddedFamilies[bundleID] = family
     }
 
-    /// 纯写配对关系(平台 → 一组浏览器 bundle id),顺带同步给探针。
+    /// 纯写配对关系(平台 到 一组浏览器 bundle id),顺带同步给探针。
     static func pair(_ bundleID: String, platformID: String) {
         let settings = AppSettings.shared
         var pairs = settings.browserPlatformPairs
@@ -50,22 +50,21 @@ enum BrowserPairing {
     ///   - automationDidResolve: 系统自动化授权那一问有结果之后调用,宿主用它强制重算
     ///     同步现读的权限状态(设置页那个 `automationRefreshTick`)。
     ///
-    /// ⚠️ **配对先写,信任后跑,两件事互不等待**(修,现象是「我在加了新浏览器
-    /// 之后过了很久才在这边出现图标」)。
+    /// **配对先写,信任后跑,两件事互不等待**。
     ///
     /// 头像那一行铺的是 `settings.browserPlatformPairs`,写它是纯本地、瞬时的。而
     /// `features.trust` 里那句 `save()` 会走一整套 **collector 重启**:
-    /// `CollectorRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个
+    /// `CollectorRestartCoordinator` 0.5 秒去抖 到 `launchctl kickstart -k` 到 轮询到一个
     /// **新 pid** 才返回,确认超时 3 秒(`CollectorControl.restartConfirmTimeout`)。也就是说
-    /// 最坏情况要 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。原来的顺序把这套重启**夹在**
-    /// "用户在菜单里点了那个浏览器"和"头像出现"之间,连带那个自动展开的气泡也一起被推后
-    /// —— 用户看到的就是"点完什么都没发生,过一会儿才蹦出来"。
+    /// 最坏情况要 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。 别把这套重启**夹在**
+    /// "用户在菜单里点了那个浏览器"和"头像出现"之间去等——那会连带把自动展开的气泡也
+    /// 推后,表现成"点完什么都没发生,过一会儿才蹦出来"。
     ///
     /// 两者之间没有依赖:信任写的是 features.json(给 collector 看,决定它采不采纳这个
     /// App 上报的播放),配对写的是 AppSettings(给这张卡和探针看)。谁先谁后都不改变最终
     /// 状态;失败处理也一样 —— `trust` 的返回值本来就没人接,重启失败时配对照样成立。
     ///
-    /// ⚠️ **先把引擎族落盘再配对**。候选里可能有一个"已信任、引擎族是那次
+    /// **先把引擎族落盘再配对**。候选里可能有一个"已信任、引擎族是那次
     /// 渲染现场判出来的"条目(见 `addableBrowsers` 第②路)—— 那个判定结果只活在内存缓存里,
     /// 不落盘的话配对之后 `family(...)` 仍然返回 nil,探针(`kickIfNeeded`)和自检
     /// (`runBrowserSelfTest`)都会在第一道 guard 上直接返回,表现是"配上了、头像也有了,
@@ -86,7 +85,7 @@ enum BrowserPairing {
             }
         }
         Task {
-            // ⚠️ 配对成功后**直接把那个浏览器的权限入口摊开**。
+            // 配对成功后**直接把那个浏览器的权限入口摊开**。
             //
             // 在此之前,选完一个浏览器界面上只有两处变化:头像那一行多一个 22pt 的小图标、
             // 下面「已信任的其它播放器」多一行 —— 而真正要做的两件事(开浏览器自己那道 JS
@@ -98,7 +97,7 @@ enum BrowserPairing {
             // 会后台拉起那个浏览器、「打开该浏览器」会抢焦点 —— 都不该在"我只是把它加进
             // 列表"这个动作里顺带发生。
             //
-            // ⚠️ **必须让出一拍再回调**,不能紧跟着 `pair` 同步调:
+            // **必须让出一拍再回调**,不能紧跟着 `pair` 同步调:
             //   ① 设置页承载那个 `.popover` 的头像按钮是**这次配对才出现**的(它来自
             //      `pairedBundleIDs`,而那份数据正是上一句 `pair` 刚写的)。同一次 SwiftUI
             //      更新里"视图刚被插入"+"要求它呈现 popover"是 macOS 上经典的呈现不出来。
@@ -107,15 +106,14 @@ enum BrowserPairing {
             // 250ms 覆盖菜单收起那一下,肉眼上仍然是"选完就弹出来"。
             try? await Task.sleep(nanoseconds: 250_000_000)
             revealPairing()
-            // 现象是:「并不是点击自动信任之后就弹出授权框的,是在我实际通过这个
-            // 浏览器播放音乐的时候才弹出」。原因是这里一共有**三道门**,而"信任+配对"只走完
-            // 前两道 —— ①Lyrimuse 自己的信任列表(features.json)、②浏览器自己那道"允许
-            // Apple Events 里的 JavaScript"开关、③**系统的自动化(TCC)授权**。第③道以前
-            // 完全没人主动触发,只能等 `BrowserPositionProbe` 第一次真的发 Apple Event 时由
-            // 系统弹出 —— 而那要等到用户真的用这个浏览器放歌。
+            // 自动信任+配对不会立刻弹出系统授权框,要等用户实际通过这个浏览器播放音乐时才弹——
+            // 这里一共有**三道门**,而"信任+配对"只走完前两道 —— ①Lyrimuse 自己的信任列表
+            // (features.json)、②浏览器自己那道"允许 Apple Events 里的 JavaScript"开关、
+            // ③**系统的自动化(TCC)授权**。第③道没有主动触发的入口,只能等
+            // `BrowserPositionProbe` 第一次真的发 Apple Event 时由系统弹出。
             //
-            // ⚠️ **只在浏览器已经在跑时才问**。目标 App 没在运行时系统弹窗压根不出现
-            // (实测坐实,见 MusicAutomationPermission.requestWithTimeout 上那段),
+            // **只在浏览器已经在跑时才问**。目标 App 没在运行时系统弹窗压根不出现
+            // (见 MusicAutomationPermission.requestWithTimeout 上那段),
             // 要弹就得先后台把它启动起来 —— 而用户点的是"把这个浏览器加进列表",不是"现在
             // 把我的浏览器打开"。没在跑的那条路交给显式的「请求系统授权」按钮。
             guard MusicAutomationPermission.isRunning(bundleID: bundleID) else { return }
@@ -140,7 +138,7 @@ enum BrowserPairing {
     ///
     /// - Returns: `nil` = 配好了,或者用户自己取消了选择;非 `nil` = 要给用户看的错误文案。
     ///
-    /// ⚠️ **挑中的 App 必须真的驱得动才收下**,判据是它的脚本定义里有没有"执行 JavaScript"
+    /// **挑中的 App 必须真的驱得动才收下**,判据是它的脚本定义里有没有"执行 JavaScript"
     /// 那条命令(`BrowserAutomationPermission.detectedFamily`,认 AppleScript 四字码不认名字)。
     /// 判不出来就**拒收并说清理由**,不能放进去一个永远不会工作的配对 —— 那比列表里没有它
     /// 更糟:用户会以为配好了,然后花时间去查"为什么歌词进度还是不同步"。
@@ -190,7 +188,7 @@ enum BrowserPairing {
     /// 某个平台还能新配对的浏览器:这台机器上**装了**(`BrowserAutomationPermission.
     /// isInstalled`)+ 引擎受支持 + 还没配过这个平台。
     ///
-    /// ⚠️ **信任是候选的一个来源,不是候选的前提** —— 这两件事和 09-01 各定过
+    /// **信任是候选的一个来源,不是候选的前提** —— 这两件事和 09-01 各定过
     /// 一半,别再把其中一半当成全部:没信任过的已安装内置浏览器**照样列出来**(选中时
     /// `trustAndPair` 一步自动信任+配对,不逼用户先去那个浏览器里放首歌被动等检测);
     /// 而**已经信任过的浏览器也一定要列出来**,哪怕它不在内置名单、也没被手动加过。按
@@ -208,8 +206,7 @@ enum BrowserPairing {
     /// 从 `addableBrowsers` 里下沉出来。为什么需要"含已配对"的这一份:引导页
     /// 「配对浏览器」那一步原来把候选拆成「已配对」+「可添加」两个 `ForEach` 分组渲染,
     /// 于是点一下某张卡(配对/取消配对)会让它**从一组跳到另一组、在网格里换位置** ——
-    /// 现象是「这里我怎么点了没反应」,实测坐实点击一直是生效的(监视配置键抓到每点一次
-    /// 就少一个配对),但"边框变化 + 卡片换位"这个反馈太弱,看起来像什么都没发生。
+    /// 跟选中态的视觉变化混在一起,反而看不出点击本身有没有生效。
     /// 改成**一份稳定列表 + 每张卡自己的选中态**之后,点击的唯一视觉变化就是那张卡自己
     /// 的选中态,位置不动。
     static func candidateBrowsers(platformID: String) -> [String] {
@@ -258,7 +255,7 @@ enum BrowserPairing {
 
     /// 用户手动挑进来的浏览器,**最后一个配对也被移除时一起忘掉**。
     ///
-    /// ⚠️ 不忘的话它会**永远**留在候选里:`manualBrowserFamilies` 除了
+    /// 不忘的话它会**永远**留在候选里:`manualBrowserFamilies` 除了
     /// `chooseBrowserFromApplications` 那一处写入之外**零处删除**,用户试着加过一个浏览器
     /// 就再也拿不掉了。「剩下的只有用户自己选了新的浏览器才会显示在这里」——
     /// 一个已经被他移除干净的浏览器,不该继续占着那份"用户自己选的"名额。
@@ -274,7 +271,7 @@ enum BrowserPairing {
 
     /// 取消这个浏览器在**某一个平台**上的配对。
     ///
-    /// ⚠️ 只动配对关系,**不动信任列表** —— 信任是一次独立的显式动作(设置页「已信任的
+    /// 只动配对关系,**不动信任列表** —— 信任是一次独立的显式动作(设置页「已信任的
     /// 其它播放器」那一段管它),在这里顺手撤掉会把用户在别处配好的东西替他删了。
     static func unpair(_ bundleID: String, platformID: String) {
         let settings = AppSettings.shared
@@ -288,7 +285,7 @@ enum BrowserPairing {
 
     /// 这个平台此刻已经配好的浏览器(装了的才算)。
     ///
-    /// ⚠️ 已配对的也要过 `isInstalled` 这道门:"配对过、后来把那个
+    /// 已配对的也要过 `isInstalled` 这道门:"配对过、后来把那个
     /// 浏览器卸载了"不该一直留一个取不到图标的虚线方框。**只是不显示,配对记录原样留着**
     /// —— 装回来自动恢复,不要顺手 `unpair` 去"清理",那会把用户的配置替他删掉(同「指定的
     /// 屏幕拔掉后自动回落、偏好保留」那个口径)。

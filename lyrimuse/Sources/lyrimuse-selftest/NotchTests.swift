@@ -46,9 +46,9 @@ func runNotchTests() {
     do {
         typealias M = NotchExpandedMetrics
 
-        // trackInfoHeight 本身:0 = 四个开关全关,不占地方(⚠️ 封面并回歌词行过
+        // trackInfoHeight 本身:0 = 四个开关全关,不占地方( 封面并回歌词行过
         // 一轮、后来又被要求重新加回头部自己一枚——现在**参与**这个函数的算术,固定贴文字块
-        // 左边,不是"并排/堆叠"两选一那种复杂度,见 trackInfoHeight 的⚠️)
+        // 左边,不是"并排/堆叠"两选一那种复杂度,见 trackInfoHeight 的提醒)
         expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: false, showsArtist: false, showsAlbum: false), 0,
                     "曲目信息头部: 四个开关全关 = 0")
         expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: false, showsAlbum: false),
@@ -92,7 +92,7 @@ func runNotchTests() {
         // height(...) 把 trackInfoHeight 原样加一整块(含它自己的间距),0 = 完全不影响原有契约
         expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: 0), 76,
                     "展开区高度: trackInfoHeight 传 0 必须跟原有契约逐字相等")
-        // ⚠️ 两份间距(现象是"标题首行贴到上面边"):一份贴头部上边(离
+        // 两份间距(现象是"标题首行贴到上面边"):一份贴头部上边(离
         // topRow 的间距)、一份贴下边(离歌词行的间距),不是原来的一份。
         expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: threeLines),
                     76 + threeLines + M.trackInfoTopSpacing + M.trackInfoSpacing,
@@ -150,7 +150,7 @@ func runNotchTests() {
     // ---- 没有曲目时的空闲面板(05 章决策 #31)----
     //
     // 窗口恒按「顶行 + 歌词行 + maxHeight」开,而空闲面板是 !hasTrack 时展开唯一长出的一块。它必须
-    // 放得进**最省配置**(下一句预览关、控制键关、头部全关 → maxHeight 只剩进度条 24pt)下的窗口,
+    // 放得进**最省配置**(下一句预览关、控制键关、头部全关 到 maxHeight 只剩进度条 24pt)下的窗口,
     // 否则关了那几个开关的用户 hover 上去面板底部会被窗口边界硬裁。
     do {
         typealias M = NotchExpandedMetrics
@@ -200,7 +200,7 @@ func runNotchTests() {
         expectEqual(VocalEnvelope.attackMs < VocalEnvelope.releaseMs, true, "人声包络: 上升快于回落")
     }
 
-    // ---- EqualizerBarCurve:音浪柱高的 smoothstep 对比曲线(取舍后的版本) ----
+    // ---- EqualizerBarCurve:音浪柱高曲线(每根条子各走各的、平滑、不塌底) ----
     do {
         let c = EqualizerBarCurve.contrast
         expectEqual(c(0), 0, "音浪曲线: 端点 0 不动(地板那条线永远在)")
@@ -400,11 +400,11 @@ func runNotchTests() {
         expectEqual(AccessibilitySkipPress.matchesSkipTitle("跳过广告设置"), false, "AX 认键(标题兜底): 只认整词")
 
         // 「不可跳过的广告不画那颗键」(「如果当前广告不支持跳过的话就不要显示那个
-        // 跳过的按钮」)。门槛脚本的三种返回 → 该不该画,是纯映射,钉在这里。
+        // 跳过的按钮」)。门槛脚本的三种返回 到 该不该画,是纯映射,钉在这里。
         expectEqual(S.skippability(from: .skippable(desc: "BUTTON.ytp-ad-skip-button-modern", badge: "赞助商广告 1/2 ·", videoTime: 6)),
                     .ready, "跳过键门槛: 键有尺寸 = 现在就能跳")
         expectEqual(S.skippability(from: .notYet(seconds: 5)), .after(seconds: 5), "跳过键门槛: 读到倒计时 = 可跳,还没到点")
-        // ⚠️ 这一条是**核心判据**:页面那句「N 秒后可跳过」是可跳过广告独有的,
+        // 这一条是**核心判据**:页面那句「N 秒后可跳过」是可跳过广告独有的,
         // 读不到不是"读失败"、是"这条广告没有跳过这回事"。
         expectEqual(S.skippability(from: .notYet(seconds: nil)), .never, "跳过键门槛: 没键也没倒计时 = 这条广告不给跳")
         expectEqual(S.skippability(from: .notFound), .notInAd, "跳过键门槛: 没有标签页在放广告")
@@ -424,7 +424,7 @@ func runNotchTests() {
         expectEqual(S.gateRetryDelay(after: .never), YouTubeMusicAdProbe.adRefreshInterval,
                     "门槛节奏: 问出「不给跳」也继续心跳 —— 下一条可能就给跳")
         // 广告开头那几拍的 `never` 是"页面还没渲染出来",不是"这条不给跳"(真机时间线:
-        // t+0.2 never → 按 5s 心跳等 → t+8.4 才 ready,而页面第 5 秒就放出了键)。
+        // t+0.2 never 到 按 5s 心跳等 到 t+8.4 才 ready,而页面第 5 秒就放出了键)。
         expectEqual(S.gateRetryDelay(after: .never, round: 0), S.fastStartDelay, "门槛节奏: 开头第一拍的「不给跳」快探")
         expectEqual(S.gateRetryDelay(after: .never, round: S.fastStartRounds - 1), S.fastStartDelay,
                     "门槛节奏: 快探窗口内都按快节奏")
@@ -493,13 +493,13 @@ func runNotchTests() {
                     "广告态契约: canSkipAd 读的是 YT Music 探针的强信号判定")
         expectEqual(view.contains("&& adSkipAvailable"), true,
                     "广告态契约: canSkipAd 还要过「页面此刻真的放出跳过键了」这道门槛(2026-09-11)")
-        // ⚠️ 必须是 @Published。倒计时过完、键刚放出来的那一刻,广告态这一格没有任何别的东西在变
+        // 必须是 @Published。倒计时过完、键刚放出来的那一刻,广告态这一格没有任何别的东西在变
         // (「还剩 0:21」那截自己排了一张 TimelineView、只重画它自己),做成计算属性就永远不会被重估。
         expectEqual(view.contains("@Published private(set) var adSkipAvailable"), true,
                     "广告态契约: adSkipAvailable 是 @Published(计算属性不会在键放出来那一刻被重估)")
         expectEqual(view.contains("YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)"), true,
                     "广告态契约: 门槛走 Core 那份只读探测,不在 View 里另拼一套")
-        // ⚠️ 门槛轮询**必须**挂 chrome 的 isAdBreakNow(预览恒 false),不准挂回 playback 那条订阅 ——
+        // 门槛轮询**必须**挂 chrome 的 isAdBreakNow(预览恒 false),不准挂回 playback 那条订阅 ——
         // 挂回去的后果是设置页开着时,编辑台预览跟着真广告每 5 秒对用户的浏览器发一次 AppleScript
         // (真机日志坐实:每行打两遍)。这跟"预览不产生副作用"是同一条纪律。
         expectEqual(view.contains(".onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }"), true,
@@ -545,8 +545,8 @@ func runNotchTests() {
         expectEqual(view.contains("Image(systemName: \"megaphone.fill\")"), true,
                     "广告态契约: 左耳与状态行共用同一枚 megaphone.fill")
         // 全 App 一共四个「当前曲目封面」位,广告期间都让位给同一枚喇叭。第四个(灵动岛展开
-        // 头部 trackInfoArtwork)不在这里钉 —— 广告期间整块头部本来就不画
-        // (`showsExpandedTrackInfo` 含 `!isAdBreakNow`,上面已有断言),它是被那条覆盖的。
+        // 头部 trackInfoArtwork)不在这里钉 —— 广告期间头部四项曲目字段一律不画
+        // (`trackInfoShowsTrackFields`,上面已有断言),它是被那条覆盖的。
         expectEqual(view.contains("adBreakArtworkTile(side:"), true,
                     "广告态契约: 灵动岛歌词行末尾那枚封面在广告期间换成替代方块")
         expectEqual(view.contains("controller.isAdBreakNow || (playback.highResArtworkImage ?? playback.artworkImage) != nil"),
@@ -572,12 +572,14 @@ func runNotchTests() {
 
     // ---- 音浪独占一只耳朵时的位置:非展开贴外缘,仅卡片顶在宽度下限(最小宽)时居中 ----
     //
-    // 居中那组实测几何(截图逐列亮度):卡片 258 / 刘海 179 → earWidth = (258 − 179 − 20) / 2 = 29.5。
+    // 居中那组实测几何(截图逐列亮度):卡片 258 / 刘海 179 到 earWidth = (258 − 179 − 20) / 2 = 29.5。
+    // 音浪宽后来从 15 改到 16(条宽对齐整物理像素,见 EqualizerBars.barWidth),下面的
+    // 推入量跟着从 2.25 变成 1.75 —— 公式没变,变的是代进去的那个宽度。
     // 那正是卡片顶在下限上的状态 —— 居中修的就是彼时 2.25pt 的偏心;宽度一放开,居中就成了
     // 「飘在中间」,一律贴外缘。
     do {
         typealias B = NotchWidthBounds
-        // ⚠️ 这两个数住在 app target(NotchMetrics / EqualizerBars),selftest 够不着,所以这里
+        // 这两个数住在 app target(NotchMetrics / EqualizerBars),selftest 够不着,所以这里
         // 抄一份**并在下面用源码契约钉住它们没被改** —— 只抄不钉的话,哪天常量动了这一组会
         // 悄悄变成在测一组不存在的几何。
         let barsWidth: CGFloat = 15      // EqualizerBars.width = 5×1.8 + 4×1.5
@@ -590,14 +592,14 @@ func runNotchTests() {
             expanded: false, atMinimumWidth: true)
         expectEqual(inset, 2.25, "音浪(最小宽): 实测那组几何要往里推 2.25pt")
 
-        // 这条才是目的:推完之后音浪中心必须落在「刘海边沿 → 卡片外沿」正中。
+        // 这条才是目的:推完之后音浪中心必须落在「刘海边沿 到 卡片外沿」正中。
         // 以耳朵容器左沿(= 刘海边沿)为原点。
         let leadingAfter = earWidth - barsWidth - inset
         let visibleCenter = (earWidth + cardPadding) / 2
         expectEqual(leadingAfter + barsWidth / 2, visibleCenter,
                     "音浪(最小宽): 推完之后音浪中心 == 可视耳朵中心")
 
-        // ⚠️ 反例哨兵:不能图省事把 alignment 换成 .center —— 那是居中于 earWidth,会偏**内**
+        // 反例哨兵:不能图省事把 alignment 换成 .center —— 那是居中于 earWidth,会偏**内**
         // cardPadding/2,比原来错得更多。这两条钉住"居中于容器"不是答案。
         let centerInContainer = (earWidth - barsWidth) / 2 + barsWidth / 2
         expectNotEqual(centerInContainer, visibleCenter,
@@ -634,7 +636,7 @@ func runNotchTests() {
 
         // ---- hover 展开态贴外缘(「展开要在最边上」) ----
         //
-        // 展开态耳朵宽出一大截(默认稳态 252 / 展开 482,单耳 26.5 → 141.5),居中就是
+        // 展开态耳朵宽出一大截(默认稳态 252 / 展开 482,单耳 26.5 到 141.5),居中就是
         // 飘在中间。稳态顶在下限的用户 hover 展开时 atMinimumWidth 仍为 true,展开这条
         // guard 排在最前,保证那种情形也贴外缘。
         let expandedEarWidth = (482 - 179 - 20) / 2.0        // 展开默认宽 482,实测刘海 179

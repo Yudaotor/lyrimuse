@@ -4,7 +4,7 @@ import OSLog
 // 常驻订阅 media-control 的 Now Playing 变化事件,让"歌换了/暂停了"这类状态不必等下一次
 // 2 秒轮询才被发现。
 //
-// ⚠️ 跟 LocalPlaybackSource 的分布式通知订阅完全同一个设计取舍(见那边
+// 跟 LocalPlaybackSource 的分布式通知订阅完全同一个设计取舍(见那边
 // startObservingPlayerInfoNotification 上那段长注释,这里不重复论证):事件**只当作
 // "提前触发一次 poll()"的信号**,一个字段的**数值**都不从 payload 里取来直接喂状态。这个类
 // 因此只暴露一个"有动静了"的回调,payload 不往外传。
@@ -21,7 +21,7 @@ import OSLog
 //
 // 为什么值得常驻一个子进程:实测(稳定播放 20 秒)stream 只在**状态变化**时
 // 输出,稳定播放期间一行都不推 —— 也就是说它平时不消耗 CPU,却把 QQ 音乐/网易云的换歌
-// 感知从最坏 2 秒降到亚秒。⚠️ 它**没有**省掉轮询那边的 fork:事件只用来"提前触发一次
+// 感知从最坏 2 秒降到亚秒。 它**没有**省掉轮询那边的 fork:事件只用来"提前触发一次
 // poll()",轮询 Timer 每一拍照样 fork(这行注释原来声称"稳定播放期 fork 开销也省掉了",
 // 性能审计核实与实现不符,已订正)——轮询的降频靠的是 LocalPlaybackSource
 // 的按播放态分档(见 PollInterval),事件唤醒是分档敢降下去的安全网。
@@ -96,7 +96,7 @@ public final class MediaControlStreamWatcher {
     private func teardownProcess() {
         guard let process else { return }
         self.process = nil
-        // ⚠️ 先摘掉两个回调再终止:否则终止本身会触发 readabilityHandler(EOF)和
+        // 先摘掉两个回调再终止:否则终止本身会触发 readabilityHandler(EOF)和
         // terminationHandler,而那两个闭包会把已经被我们主动停掉的进程当成"意外退出"
         // 重新拉起来,stop() 就变成了"重启"。
         (process.standardOutput as? Pipe)?.fileHandleForReading.readabilityHandler = nil
@@ -145,8 +145,9 @@ public final class MediaControlStreamWatcher {
     }
 
     /// stream 输出里"当前 Now Playing"的合并状态:`diff:false` 的行整份替换,`diff:true` 的行
-    /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),别的
-    /// 字段一概不存 —— 见文件头那段"唯一的例外"。
+    /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),外加判暂停
+    /// 信号要用的 bundleIdentifier(见 `digest` 里的 `playingFromRate`),别的字段一概不存 —— 见文件头
+    /// 那段"唯一的例外"。
     private var mergedPayload: [String: Any] = [:]
 
     private func consume(_ chunk: Data, arrivedAt: Date) {

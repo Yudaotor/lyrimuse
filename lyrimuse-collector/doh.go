@@ -15,12 +15,12 @@ import (
 
 // DoH(DNS over HTTPS)解析,只给那些**本地 DNS 会把它解析歪**的域名用。
 //
-// 实测坐实的问题:这台机器上
+// 这台机器上
 //
-//	apic-appmobile.musixmatch.com  系统 DNS → 31.13.91.6（Facebook 的地址段）
-//	                               DoH 查询 → 44.212.146.46 / 52.5.55.223（AWS）
-//	apic-desktop.musixmatch.com    系统 DNS → 98.159.108.57
-//	                               DoH 查询 → 18.154.206.x
+//	apic-appmobile.musixmatch.com  系统 DNS 到 31.13.91.6（Facebook 的地址段）
+//	                               DoH 查询 到 44.212.146.46 / 52.5.55.223（AWS）
+//	apic-desktop.musixmatch.com    系统 DNS 到 98.159.108.57
+//	                               DoH 查询 到 18.154.206.x
 //
 // 连过去的结果是 TLS 握手直接失败(`SSL: no alternative certificate subject name
 // matches target host name`)—— 证书当然对不上,那台机器根本不是 Musixmatch。
@@ -186,7 +186,7 @@ func dohDialer() *net.Dialer {
 // dohDialRace 对 DoH 查到的每个地址**同时**发起拨号,第一个连上的胜出,慢一步也连上的
 // 当场关掉。ips 为空时返回 (nil, nil),由调用方退回系统解析。
 //
-// ⚠️ 修的真 bug。原来这里是串行的:
+// 修的真 bug。原来这里是串行的:
 //
 //	for _, ip := range ips { conn, err := dialer.DialContext(ctx, ...); if err == nil { return } }
 //
@@ -265,7 +265,7 @@ func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, str
 // onBlocked 透传给 proxyFallbackTransport:直连不通、代理也救不回来时回调一次,让调用方
 // 记一个具体的失败原因。可以为 nil。
 //
-// ⚠️ **刻意不设 http.Client.Timeout。** 那是把直连和代理两次尝试算进同一个预算里,直连一
+// **刻意不设 http.Client.Timeout。** 那是把直连和代理两次尝试算进同一个预算里,直连一
 // 超时就没钱给代理重试了,fallback 等于没加。预算落在 proxyFallbackTransport.attempt 的
 // 每次尝试上(3s 直连 / 10s 代理),调用方自己 ctx 上的 deadline 照常生效。
 func dohHTTPClient(onBlocked func()) *http.Client {

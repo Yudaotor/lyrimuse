@@ -49,7 +49,7 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 		{Source: "qq", Score: -1, Instrumental: true}, // 纯音乐标记不是候选 → 仍算缺
 	}
 	got := lyricSourcesWorthAliasRetry(results)
-	// ⚠️ soda 在名单里是对的:它有自己的搜索(本地队列缓存拿不到曲目 id 时的兜底),
+	// soda 在名单里是对的:它有自己的搜索(本地队列缓存拿不到曲目 id 时的兜底),
 	// 别名确实会影响命中。接它的时候一度把它排除掉,理由是"它不搜索"——那个理由只对
 	// 本地那条路成立,搜索那条路正是别名要救的场景。
 	want := []string{"qq", "kugou", "lrclib", "amll", "soda"}
@@ -57,7 +57,7 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 		t.Fatalf("got %v want %v", got, want)
 	}
 
-	// 都齐了 → 空
+	// 都齐了 到 空
 	full := []scoredLyricCandidateResult{}
 	for _, s := range lyricSourceNames {
 		full = append(full, scoredLyricCandidateResult{Source: s, Score: 100})

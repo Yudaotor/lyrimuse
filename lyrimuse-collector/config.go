@@ -22,7 +22,7 @@ type config struct {
 	// 早已下线,见 state-worker/src/index.js 顶部注释)。
 	StateRelayURL   string `json:"state_relay_url,omitempty"`
 	StateRelayToken string `json:"state_relay_token,omitempty"`
-	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler→Last.fm)的
+	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler到Last.fm)的
 	// "正在播放"转发进 LB，让网页也显示手机上的播放。LastfmUser 留空则不启用桥接;
 	// 只读用的 API Key 现在跟下面的 LastfmScrobbleAPIKey 是同一套凭据(见
 	// lastfmBridgeAPIKey())——LastfmAPIKey 是合并前的独立只读 Key 字段,只为了让
@@ -77,9 +77,10 @@ func (c *config) lastfmBridgeAPIKey() string {
 
 // loadConfig 读配置。**除了文件真的读不出来,它不会因为内容有问题而失败**。
 //
-// 原来这里是一次严格的 json.Unmarshal,任何一个字段类型写错(手改配置、旧版本写下的
-// 老格式、导入了别的机器的配置)都会让 main.go 的 log.Fatalf 把进程打死;而 collector
-// 挂的是 KeepAlive 的 LaunchAgent,于是变成起来就死的崩溃循环。代价完全不成比例:
+// 不能改回严格的 json.Unmarshal:任何一个字段类型写错(手改配置、旧版本写下的
+// 老格式、导入了别的机器的配置)都会让整份配置解析失败,而 collector 挂的是
+// KeepAlive 的 LaunchAgent,解析失败按 main.go 别处的 log.Fatalf 处理就会变成
+// 起来就死的崩溃循环。代价完全不成比例:
 // 采集播放状态、解析歌词、写本地缓存这些**核心功能一个字段都不需要**(main.go 里那句
 // "no listenbrainz_token configured ... still work" 说的就是这件事),坏掉的往往只是
 // 一个通知 webhook。一个字段的格式问题不该让悬浮歌词整个不显示。
@@ -120,7 +121,7 @@ func loadConfig(path string) (*config, error) {
 // 都不该出现在日志里)。
 //
 // 单独解的做法是"把这个 key 重新包成只含它的一份 JSON,再 Unmarshal 进 cfg 的副本",
-// 而不是用反射按 tag 找字段:让 encoding/json 自己去做 key→字段 的映射,大小写规则、
+// 而不是用反射按 tag 找字段:让 encoding/json 自己去做 key到字段 的映射,大小写规则、
 // 内嵌类型、omitempty 这些全都跟一次性解出来时**完全一致**,不会因为手写映射而产生
 // 第二套语义。副本成功了才写回 cfg,失败的那次不会留下半解析的痕迹。
 func decodeConfigPerField(data []byte, cfg *config) []string {

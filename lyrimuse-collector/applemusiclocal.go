@@ -31,8 +31,8 @@ import (
 //
 //  1. **官方人工译文**。现在的译文是 translate.go 的机器翻译(条目里
 //     lyrics_tr_source=machine);Apple 的 type="subtitle" 那种是官方人工版。
-//     ⚠️ 覆盖有限:实测 26 份带 <translations> 的里只有 6 份是真翻译,其余 20 份是
-//     zh-Hant→zh-Hans 的繁简替换(见 applemusicSubtitleTranslation)。
+// 覆盖有限:实测 26 份带 <translations> 的里只有 6 份是真翻译,其余 20 份是
+//     zh-Hant到zh-Hans 的繁简替换(见 applemusicSubtitleTranslation)。
 //  2. **catalog id 权威**。网络那条要先用歌名去 amp-api 搜索,搜出来的候选未必是正在播
 //     的这一版(那 5 首在 lyrimuse 的 apple catalog 缓存里一条都没有);这里的身份是
 //     Music.app 自己认定的,零搜索、零歧义。
@@ -52,13 +52,13 @@ import (
 //   - **只留最近的**。实测缓存里的歌词文件都是最近两天的,更早的被清掉了。对"解析正在
 //     播放的这首歌"这个场景正好够 —— 那份歌词是刚播时才写的。
 //
-// ⚠️ 全程 fail-soft:目录不在 / 读不动 / 格式变了,一律当没命中,照常走
+// 全程 fail-soft:目录不在 / 读不动 / 格式变了,一律当没命中,照常走
 // resolveApplemusicLyric。
 
 // applemusicLocalDirOverride 让单测把目录指到临时路径。空 = 用真实路径。
 var applemusicLocalDirOverride string
 
-// applemusicLocalCacheDir 是 Music.app 的 HTTP 响应缓存目录。⚠️ 外部 App 的路径。
+// applemusicLocalCacheDir 是 Music.app 的 HTTP 响应缓存目录。 外部 App 的路径。
 func applemusicLocalCacheDir() string {
 	if applemusicLocalDirOverride != "" {
 		return applemusicLocalDirOverride
@@ -114,7 +114,7 @@ var (
 	applemusicLocalIndex map[string]applemusicLocalEntry // catalog id -> 歌词
 	// applemusicLocalByName:normLoose(歌手)|normLoose(曲名) -> 歌词。
 	//
-	// ⚠️ 为什么光有 catalog id 那份不够(实测坐实):**从资料库播放时 MediaRemote 给的
+	// 为什么光有 catalog id 那份不够:**从资料库播放时 MediaRemote 给的
 	// uniqueIdentifier 是负数持久 ID,不是目录 ID** —— 订阅曲目也一样(实测「四人游」
 	// -4948493007864231856、「Just Friends (Sunny)」-401989708068864810)。
 	// appleCatalogPlausibleID 要求 >0,于是 appleCatalogAnchor 必然不成立、
@@ -193,7 +193,7 @@ func refreshApplemusicLocalIndexLocked() {
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
 		// 没装 / 没用过 Apple Music —— 正常情况,静默退回网络解析。
-		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
 		noteLocalCacheDenied("applemusic", dir, err)
 		applemusicLocalIndex, applemusicLocalReady = nil, true
 		return
@@ -209,7 +209,7 @@ func refreshApplemusicLocalIndexLocked() {
 
 	ents, err := os.ReadDir(dir)
 	if err != nil {
-		// ⚠️ stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
+		// stat 过了不代表这一步也过:TCC 允许 stat 一个目录却拒绝列它的内容。
 		noteLocalCacheDenied("applemusic", dir, err)
 		return // 保留上一次的索引
 	}

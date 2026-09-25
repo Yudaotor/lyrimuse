@@ -17,7 +17,7 @@ import (
 )
 
 // 上送 Last.fm 之前,在它自己的编目里找这首歌对应的条目 —— 找到就按**那个条目的写法**
-// 提交(features.LastfmScrobbleArtistMode == scrobbleArtistSmart)。
+// 提交(features().LastfmScrobbleArtistMode == scrobbleArtistSmart)。
 //
 // # 要解决的是什么
 //
@@ -25,23 +25,26 @@ import (
 // 条目:没有 mbid、没有专辑、时长 0、听众只有你一个。结果不是「记得不够好看」,而是这次
 // 收听跟这首歌真正的条目、跟你自己以前的收听全都对不上。实测陶喆《那个女孩》:
 //
-//	陶喆, 卢广仲 / 那个女孩   → track.getInfo 查无此条(我们自己发过去的那几次造出来的)
-//	陶喆 / 那个女孩(简体)    → 126 听众、无 mbid、无编目时长 —— 也是影子
-//	陶喆 / 那個女孩(繁体)    → 889 听众、编目时长 267 s —— 这才是这首歌的条目
+//	陶喆, 卢广仲 / 那个女孩   到 track.getInfo 查无此条(我们自己发过去的那几次造出来的)
+//	陶喆 / 那个女孩(简体)    到 126 听众、无 mbid、无编目时长 —— 也是影子
+//	陶喆 / 那個女孩(繁体)    到 889 听众、编目时长 267 s —— 这才是这首歌的条目
 //
 // 同一首歌在这台机器的历史里已经裂成三本账(`陶喆/那個女孩` 8 次、`David Tao/那个女孩
 // (feat. 卢广仲)` 2 次、`陶喆, 卢广仲/那个女孩` 1 次)。
 //
 // # 判定
 //
-//  1. 按原样查一次 track.getInfo。**有 mbid** → 原样发,永久。mbid 是编目正规身份最硬的
+//  1. 按原样查一次 track.getInfo。**有 mbid** 到 原样发,永久。mbid 是编目正规身份最硬的
 //     信号(影子条目不会有),有它就说明播放器报的写法本身已经是编目认的那条 ——
 //     Hall & Oates、`Michael Jackson & Janet Jackson / Scream` 这类正规合体署名靠这一步
 //     保住,不会被下面的「听众更多」挪到单人页上去。
 //  2. 收集候选:原样、第一位歌手(firstCreditedArtist)、以及该歌手在编目里曲名折到同一个
 //     键上的条目(artist.getTopTracks,见 lastfmtoptracks.go)。
 //  3. 在**已被编目收录**(catalogued)的候选里取听众最多的一条,拿它复核一次时长;过闸
-//     就按它的歌手 + 曲名提交,永久。一条够格的都没有 → defer,原样发,过一段时间可重判。
+//     就按它的歌手 + 曲名提交,永久。
+//  4. 一条够格的都没有 到 扩展搜索(lastfmcatalogext.go):去合唱各位、MusicBrainz 别名、
+//     双语名两半名下找,再按曲名搜全站(只收歌手对得上的)。还找不到才 defer,原样发,
+//     过一段时间可重判。
 //
 // # 为什么这里可以改写歌手名和曲名
 //
@@ -53,9 +56,10 @@ import (
 //
 // 安全边界靠的不是「不动」,而是下面这几道:
 //
-//   - 候选**只**来自「原样」「第一位歌手」「该歌手名下曲名折叠等值的条目」三处。
-//     绝不用 track.search:它按字面串搜全网,既找不到繁体那条,又会把 `张泽熙 / 那个女孩`
-//     这种同名不同歌带进来(实测),拿它决定一条不可逆的 scrobble 就是永久记错。
+//   - 基础判定的候选**只**来自「原样」「第一位歌手」「该歌手名下曲名折叠等值的条目」三处。
+//     扩展搜索用到 track.search,但只收歌手名折叠后跟这首歌的署名 / MB 别名对得上的结果:
+//     它按字面串搜全网,会把 `张泽熙 / 那个女孩` 这种同名不同歌带进来(实测),不按歌手
+//     过滤就拿它决定一条不可逆的 scrobble,是永久记错。
 //   - 曲名折叠只折「同一份录音的写法差异」(繁简/异体/变音/客串署名/再版标记),
 //     Live / Remix / 伴奏 这类真版本标记一律保留(lastfmcatalogkey.go)。
 //   - 选中的候选要过**时长闸**:两边都有时长且差超过 lastfmCatalogDurationTolerance 就
@@ -82,8 +86,9 @@ import (
 //
 // # 预算
 //
-// 一次判定最多 4 个 GET(原样 / 第一位歌手 / 该歌手曲目表 / 选中候选的复核),合计
-// lastfmCatalogBudget;mirrorAsync 在智能档下把总窗口加大同样的量(mirrorTimeout),
+// 基础判定最多 4 个 GET(原样 / 第一位歌手 / 该歌手曲目表 / 选中候选的复核);扩展搜索
+// 每个名字两个 GET、外加一次 track.search,并发发出,另有没缓存时的 MusicBrainz 别名查询。
+// 合计 lastfmCatalogBudget;mirrorAsync 在智能档下把总窗口加大同样的量(mirrorTimeout),
 // 写入那 8 秒不被挤占。结论永久缓存,同一首歌反复播放不再打网络;曲目表按歌手在进程内
 // 复用,同一个歌手连播几首只拉一次。
 const (
@@ -184,7 +189,7 @@ type lastfmCatalogMatcher struct {
 
 	mu    sync.Mutex
 	cache map[string]lastfmCatalogDecision
-	// 歌手 → 编目曲目表,进程内复用,不落盘(见 topTracks)。
+	// 歌手 到 编目曲目表,进程内复用,不落盘(见 topTracks)。
 	tops map[string][]lastfmTopTrack
 }
 
@@ -204,7 +209,7 @@ func newLastfmCatalogMatcher(apiKey string) *lastfmCatalogMatcher {
 
 // matchScope 说明这次判定允许改写哪些字段(「自定义」档可以只放开一个)。
 //
-// ⚠️ 不许改的那个字段必须**与原样一致**才采纳候选(见 candidates)。否则「只改曲名」会拼出
+// 不许改的那个字段必须**与原样一致**才采纳候选(见 candidates)。否则「只改曲名」会拼出
 // `陶喆, 卢广仲 / 那個女孩` 这种编目里根本不存在的组合 —— 又落回影子条目,比不改还糟。
 type matchScope struct {
 	artist, track bool
@@ -288,7 +293,7 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 		return lastfmCatalogDecision{}, err
 	}
 	// 按听众降序逐个复核,第一个过时长闸的就是结论。排序稳定:同听众时保持收集顺序
-	// (原样 → 第一位歌手 → 曲目表自带的降序),免得同分候选每次判出不同的写法。
+	// (原样 到 第一位歌手 到 曲目表自带的降序),免得同分候选每次判出不同的写法。
 	sortCandidatesByListeners(cands)
 	for _, cand := range cands {
 		if !cand.probe.catalogued() {
@@ -408,7 +413,7 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	q.Set("track", track)
 	// autocorrect=1 让 Last.fm 先套一遍它自己的纠错表再查 —— 纠错后能命中正规条目的就不该
 	// 被我们再改写一次(提交时 Last.fm 会套同一张表,落点一样)。
-	// ⚠️ 它**不管繁简**:实测简体串纠不到繁体条目,那一层归 lastfmcatalogkey.go。
+	// 它**不管繁简**:实测简体串纠不到繁体条目,那一层归 lastfmcatalogkey.go。
 	q.Set("autocorrect", "1")
 
 	base := c.baseURL
@@ -417,8 +422,8 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, lastfmCatalogProbeTimeout)
 	defer cancel()
-	// ⚠️ 不用 q.Encode():Last.fm 的 GET 端点会对 query value 多解一次码,含加号的歌名走标准
-	// 编码必然 error 6 —— 而这里 error 6 的语义是"没收录 → 可以改写",查错了就是把正规条目
+	// 不用 q.Encode():Last.fm 的 GET 端点会对 query value 多解一次码,含加号的歌名走标准
+	// 编码必然 error 6 —— 而这里 error 6 的语义是"没收录 到 可以改写",查错了就是把正规条目
 	// 判成影子(真实事故,见 lastfmGetQuery)。
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+lastfmGetQuery(q), nil)
 	if err != nil {
@@ -467,7 +472,7 @@ func (c *lastfmCatalogMatcher) probe(ctx context.Context, artist, track string) 
 	return p, nil
 }
 
-// atoiOrZero:空串 → 0,nil;其余必须是整数。
+// atoiOrZero:空串 到 0,nil;其余必须是整数。
 func atoiOrZero(s string) (int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -477,7 +482,8 @@ func atoiOrZero(s string) (int, error) {
 }
 
 // lookup 只认当前口径版本、且作用域相同的三个 verdict;defer 到期、旧口径、换过设置、
-// 老格式/损坏条目都当未命中重查。
+// 老格式/损坏条目都当未命中重查。没跑过当前扩展搜索的 defer(Ext 旧)也重查 ——
+// keep / match 不受 Ext 影响,永不重查。
 func (c *lastfmCatalogMatcher) lookup(key string, now time.Time, scope matchScope) (lastfmCatalogDecision, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

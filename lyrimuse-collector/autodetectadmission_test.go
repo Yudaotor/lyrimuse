@@ -2,13 +2,12 @@ package main
 
 import "testing"
 
-// 真实故障(汽水音乐播放时「搜索歌词中…」永远转圈):getAutoDetectedState 的准入判断
-// 曾经是一份**手抄**的 bundle id 列表(QQ / 网易云 / Spotify / 酷狗),players.json 后来
-// 加进来的汽水音乐没人记得同步过去,于是汽水的播放落进 default 分支、又不在信任列表
-// (内置播放器本来就不该出现在那儿),被当成"不相关 App"整条丢掉 —— collector 认为什么
-// 都没在放、永远不去解析,而 App 侧照常显示曲目并挂着「搜索歌词中…」占位。
+// getAutoDetectedState 的准入判断不能是一份**手抄**的 bundle id 列表——新播放器
+// 加进 players.json 后,若准入判断没有同步跟上,它的播放会落进 default 分支、又不在
+// 信任列表(内置播放器本来就不该出现在那儿),被当成"不相关 App"整条丢掉:collector
+// 认为什么都没在放、永远不去解析,而 App 侧照常显示曲目并挂着「搜索歌词中…」占位。
 //
-// 这组测试钉的不是"汽水能被认出来"这一条,而是**准入判断与 players.json 不许脱节**:
+// 这组测试钉的不是"某个播放器能被认出来"这一条,而是**准入判断与 players.json 不许脱节**:
 // 逐个遍历生成的 playerBundleIDs,任何一个内置播放器被 classifyAutoDetected 判成
 // autoDetectReject 都失败。谁再手抄一份列表,下一个新增的播放器会立刻把它打回来。
 func TestAutoDetectAdmitsEveryBuiltinPlayer(t *testing.T) {

@@ -83,7 +83,7 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 		t.Errorf("中日文/长专辑名解析不对: %+v ok=%v", p2, ok)
 	}
 
-	// videoId 缺失(没有可播放的曲目)→ 不接受这条。
+	// videoId 缺失(没有可播放的曲目)到 不接受这条。
 	raw3 := ytmusicSearchItemJSON("Foo", "Bar • Baz • 3:00", "", "MUSIC_VIDEO_TYPE_ATV")
 	var item3 ytmusicSearchItem
 	_ = json.Unmarshal([]byte(raw3), &item3)
@@ -92,8 +92,8 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 	}
 }
 
-// 实测坐实:不带 songs 过滤器的默认搜索"Top result"经常命中演唱会直拍/
-// 翻唱视频而不是录音室曲目(Taylor Swift "Anti-Hero" 命中过 Eras Tour 现场版)。
+// 不带 songs 过滤器的默认搜索"Top result"经常命中演唱会直拍/
+// 翻唱视频而不是录音室曲目(例如 Taylor Swift "Anti-Hero" 命中过 Eras Tour 现场版)。
 // 这组测试钉住挑选逻辑本身:曲名/歌手门 + 版本限定词门 + ATV 优先 + 时长最接近。
 func TestYtmusicPickSearchItem(t *testing.T) {
 	atv := func(title, artist, album string, dur float64) ytmusicParsedSearchItem {

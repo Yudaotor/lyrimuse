@@ -55,7 +55,7 @@ func (s snapshot) key() string {
 }
 
 // albumForUpload:对外呈现 / 上送用的专辑名 —— 播放器报了就用它,没报就用 Apple 目录反查的 AlbumHint。
-// ⚠️ 只在「呈现 / 上送」的出口用(relay 网页、Last.fm album、LB release_name、本地收听日志);歌词缓存 key
+// 只在「呈现 / 上送」的出口用(relay 网页、Last.fm album、LB release_name、本地收听日志);歌词缓存 key
 // (trackEnrichment)、广告判据(isAdBreak 看 Spotify 原生 album 为空)、专辑预取、会话 key 都继续用 Album 本身 ——
 // 否则 App 侧按播放器原始标签查歌词会对不上 key,或者一首歌中途回填出专辑就被当成换了歌。
 func (s snapshot) albumForUpload() string {
@@ -97,11 +97,11 @@ const mediaTypeMusic = "MRMediaRemoteMediaTypeMusic"
 // getAppleMusicOnlyState。JXA 读不到时(没有"自动化"权限)退回 raw、这条判据不生效,
 // 是降级不是错误:行为跟改动前逐字相同。
 //
-// # ⚠️ MediaRemote 的 mediaType 认不出 MV,别再试
+// # MediaRemote 的 mediaType 认不出 MV,别再试
 //
 // 实测(用户当场放了陶喆《In the Morning》的 MV):media-control 载荷里
 // `mediaType` 仍是 `MRMediaRemoteMediaTypeMusic`,**跟放普通曲目时逐字相同** ——
-// MediaRemote 这一层根本不区分 MV。⚠️ 别拿它做反判("不是 Music 就不信这个时长") ——
+// MediaRemote 这一层根本不区分 MV。 别拿它做反判("不是 Music 就不信这个时长") ——
 // 对这个场景永远不会触发。
 //
 // 而且反判对**别的播放器**是净风险:Safari 放 YouTube Music 本来就是个视频站,它要是报
@@ -132,7 +132,7 @@ func extract(state map[string]any) snapshot {
 	// 每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
 	radio := str("radioStationHash") != ""
 	// MV / 视频:时长里带着歌外内容,当"未知"比当曲长诚实。理由与三处受害点见 notAudioMedia。
-	// ⚠️ 跟电台那条不同,这里**不**退回 Apple 目录 —— 实测目录根本不给 MV 时长:
+	// 跟电台那条不同,这里**不**退回 Apple 目录 —— 实测目录根本不给 MV 时长:
 	// 按 MV 的 trackId 反查 lookup 返回 kind=music-video、wrapperType=track、trackTimeMillis 缺失。
 	// 想改查"歌曲"那一条来拿真实曲长也不保险(entity=song 在有的 storefront 上整个返回空)。
 	notAudio := notAudioMedia(state)

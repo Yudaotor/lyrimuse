@@ -1,6 +1,6 @@
 import Foundation
 
-/// 分段比例条的几何(设置页「歌词 → 管理」歌词库统计的 `SettingsProportionBar` 用)。
+/// 分段比例条的几何(设置页「歌词 到 管理」歌词库统计的 `SettingsProportionBar` 用)。
 ///
 /// 放 Core 而不是跟 View 放一起:App target 不可被 selftest 引用,而这个算法改错了**完全不报错**
 /// —— 只是某一段凭空消失、或者整条比可用宽度长出几 pt 被裁掉尾巴,肉眼都未必看得出。

@@ -11,7 +11,7 @@ import os
 /// 的那一个(`MRMediaRemoteGetNowPlayingInfo`)。这条路取的是指定的那一个,所以**不受焦点影响**,
 /// 而且对**没有 AppleScript 字典的播放器一样有效**(QQ 音乐 / 网易云 / 酷狗 / 汽水音乐)。
 ///
-/// ⚠️ 别指望 `MRMediaRemoteGetActivePlayerPathsForOrigin`:那里的 "active" 就是"当选的那一个",
+/// 别指望 `MRMediaRemoteGetActivePlayerPathsForOrigin`:那里的 "active" 就是"当选的那一个",
 /// 焦点被占时它只返回占用者,目标播放器的 path 从列表里直接消失。能用的是
 /// `MRMediaRemoteGetNowPlayingClients` + `MRMediaRemoteGetNowPlayingInfoForClient`,
 /// 签名与"为什么必须让 /usr/bin/perl 加载"都写在 `native/nowplaying-clients/nowplaying-clients.m`。
@@ -20,7 +20,7 @@ import os
 ///
 /// 正常情况下(焦点在目标播放器手里)照旧走 media-control —— 那条有 stream 常驻、有电台判据、
 /// 有各播放器的适配,不该为这条新路推翻。这里只在**焦点被别人占走、media-control 这一拍什么都
-/// 拿不到**时用。⚠️ 私有接口 + 逆向出来的调用约定,系统升级可能变,所以**任何失败都必须静默退回**,
+/// 拿不到**时用。 私有接口 + 逆向出来的调用约定,系统升级可能变,所以**任何失败都必须静默退回**,
 /// 绝不能让它把主链路带崩。
 public enum NowPlayingClientsProbe {
     private static let logger = Logger(subsystem: LyrimuseIdentity.bundleIdentifier, category: "nowplaying-clients")
@@ -42,10 +42,10 @@ public enum NowPlayingClientsProbe {
 
     /// 问某个 bundle id 此刻的封面。拿不到一律 nil。
     ///
-    /// ⚠️ 单独一条路、**不跟状态查询合并**:带封面那一趟要把一张 JPEG 走 base64 过 JSON,明显更贵,
+    /// 单独一条路、**不跟状态查询合并**:带封面那一趟要把一张 JPEG 走 base64 过 JSON,明显更贵,
     /// 而状态是每拍都要问的。封面只在换歌时取一次(调用方按 trackKey 缓存)。
     ///
-    /// ⚠️ **给不给取决于这一刻在放什么**:实测五家都给(汽水音乐 9KB、QQ音乐 113KB、Spotify 107KB、
+    /// **给不给取决于这一刻在放什么**:实测五家都给(汽水音乐 9KB、QQ音乐 113KB、Spotify 107KB、
     /// Apple Music 113KB),但 Spotify **放广告时不给**,浏览器里的视频也不给。拿不到就是拿不到,
     /// 调用方照旧退回既有来源(目录高清图等)。
     public static func artwork(forBundleID bundleID: String) -> (data: Data, mimeType: String, trackKey: String)? {

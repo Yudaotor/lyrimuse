@@ -8,7 +8,7 @@ import SwiftUI
 // 计时器到点就把第三次的提示也一起关掉了(经典的 "cancel-rearm" 缺失)。这里每次 show
 // 都先取消上一个待执行的隐藏任务再挂一个新的,连按多少次都以最后一次为准。
 //
-// ⚠️ Task.sleep 被取消时抛 CancellationError,`try?` 会把它吞成 nil 然后继续往下执行 ——
+// Task.sleep 被取消时抛 CancellationError,`try?` 会把它吞成 nil 然后继续往下执行 ——
 // 也就是说**光靠 try? 挡不住被取消的任务去清空 banner**,清空前必须再查一次
 // Task.isCancelled。这正是上面那个连按场景真正会踩的那一脚。
 @MainActor

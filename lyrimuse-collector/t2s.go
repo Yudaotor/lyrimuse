@@ -13,7 +13,7 @@ import (
 // (https://github.com/BYVoid/OpenCC,Apache-2.0 许可)项目的原始繁转简词典数据
 // (单字级 + 词组级各一份),原样搬过来,不是这里重新编的。这两份数据文件之前是通过
 // github.com/liuzl/gocc 这个 Go 移植版间接引入的(gocc 本身也是 Apache-2.0,只是转述了
-// 同一份 OpenCC 数据),但 gocc 底层用来做前缀匹配的 github.com/liuzl/da →
+// 同一份 OpenCC 数据),但 gocc 底层用来做前缀匹配的 github.com/liuzl/da 到
 // github.com/liuzl/cedar-go 这条依赖链是 GPL-2.0-only,跟本项目 GPLv3 的许可证不兼容
 // (FSF 相容矩阵里两个"-only"版本的 GPL 互不相容)。这里直接内嵌同一份数据、自己实现
 // 一个不需要 trie 加速的最长前缀匹配(下面 toSimplifiedT2S),彻底去掉这三个有问题的
@@ -21,7 +21,7 @@ import (
 // 4000+ 条词典数据 + 混合句子的验证过程),不是"看起来差不多"的近似替代。
 //
 // 追加 dictionary/STCharacters.txt——同一个 OpenCC 项目、同一份许可证的
-// 简→繁单字词典(方向相反),给 jyutping.go 的粤拼查表当兜底用(JyutpingChars.txt 主体
+// 简到繁单字词典(方向相反),给 jyutping.go 的粤拼查表当兜底用(JyutpingChars.txt 主体
 // 是繁体收字,简体歌词逐字查不到读音时先转一次繁体再查一次)。见 s2tCharMap 的注释。
 //
 //go:embed dictionary/TSCharacters.txt dictionary/TSPhrases.txt dictionary/STCharacters.txt
@@ -34,8 +34,8 @@ var (
 	t2sCharMap      map[string]string
 	t2sPhraseMap    map[string]string
 	t2sMaxPhraseLen int // TSPhrases.txt 里最长词条的 rune 长度,限定每个位置的搜索窗口
-	// s2tCharMap:STCharacters.txt 的简→繁单字映射,同样只取每个键的第一个候选。
-	// ⚠️ 简→繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
+	// s2tCharMap:STCharacters.txt 的简到繁单字映射,同样只取每个键的第一个候选。
+	// 简到繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
 	// 挑的未必是具体这个字在这句里真正想要的那个繁体字——跟 App 侧 HanScript.swift 的
 	// PlayCountVariants 处理同一类问题时的取舍一致,唯一消费方 jyutping.go 只拿它当"查不到
 	// 读音时的兜底猜测",挑错的代价可接受,好过完全不转写。
@@ -116,7 +116,7 @@ func toSimplifiedT2S(s string) string {
 			b.WriteString(repl)
 		} else if std, ok := hanVariantMap[r]; ok {
 			// 加的第三层:OpenCC 词组表和单字表都没管的字,再问一次**异体字表**
-			// (「妳」→「你」这类)。挂在这个兜底分支上是刻意的 —— 它永远不会覆盖 OpenCC 的
+			// (「妳」到「你」这类)。挂在这个兜底分支上是刻意的 —— 它永远不会覆盖 OpenCC 的
 			// 判断,只填它留下的空。来龙去脉见 hanvariants.go 头注。
 			b.WriteRune(std)
 		} else {

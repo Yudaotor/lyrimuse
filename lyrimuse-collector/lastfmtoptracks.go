@@ -24,6 +24,9 @@ import (
 // 那条」就是它排在前面的那条,不用另算。`autocorrect=1` 还顺带把罗马字写法归位
 // (实测 `David Tao` 与 `陶喆` 返回同一份榜)。
 //
+// 扩展搜索(lastfmcatalogext.go)用到 track.search,但只收歌手名折叠后跟这首歌的署名 /
+// MusicBrainz 别名对得上的结果 —— 上面那类同名不同歌手的一条都进不来。
+//
 // # 为什么只拉一页
 //
 // 我们只关心够得上 lastfmCatalogListenersMin 的条目(影子条目不参与匹配)。实测陶喆名下

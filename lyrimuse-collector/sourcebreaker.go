@@ -79,9 +79,9 @@ type lyricSourceBreakerState struct {
 	until       time.Time
 	consecutive int
 	// trips:这个源**熔断过几轮**(不是失败过几个请求)。冷却档位按它取,见 observeWith
-	// 里那段 ⚠️。归零看的是离 lastTrip 多久,不是"中间有没有拿到过一次正常响应"。
+	// 里那段 提醒。归零看的是离 lastTrip 多久,不是"中间有没有拿到过一次正常响应"。
 	trips int
-	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(default 分支那段 ⚠️)。
+	// lastTrip:最近一次跳闸的时刻,只用来让 trips 随时间衰减(default 分支那段 提醒)。
 	lastTrip time.Time
 	reason   string
 }
@@ -140,7 +140,7 @@ func lyricSourceForHost(host string) string {
 	case h == "amp-api.music.apple.com":
 		// Apple Music 的 catalog API —— applemusic 这个歌词源真正发请求的地方。
 		//
-		// ⚠️ 只认这**一个**主机,别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
+		// 只认这**一个**主机,别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
 		// 卷进来、让它们的故障去停掉一个能出歌词的源:
 		//   - itunes.apple.com:公开的目录检索(专辑提示/封面/标题反查/目录 id),跟歌词
 		//     正文无关,而且被限流得最狠(实测 49.8% 失败)。它有自己的端点级退避,
@@ -156,7 +156,7 @@ func lyricSourceForHost(host string) string {
 		return "applemusic"
 	case h == sodaSeoTrackHost || h == sodaSearchHost:
 		// 汽水的两个端点:取词的 SEO 曲目页(beta-luna.douyin.com)与搜索(api.qishui.com)。
-		// ⚠️ 取词那个只认这一个主机,别扩成 `*.douyin.com`:那个域名下还有抖音自己的一大
+		// 取词那个只认这一个主机,别扩成 `*.douyin.com`:那个域名下还有抖音自己的一大
 		// 堆服务,跟歌词无关的故障会连带停掉这个源。
 		return "soda"
 	}
@@ -199,13 +199,13 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 		if st.consecutive < lyricSourceBreakerTripAfter {
 			return
 		}
-		// ⚠️ 已经在冷却里就到此为止:不升档、也不续期(修)。
+		// 已经在冷却里就到此为止:不升档、也不续期(修)。
 		//
 		// 原来这里是 `idx := st.consecutive - lyricSourceBreakerTripAfter` —— 拿**失败请求
 		// 数**当档位。可 consecutive 是按请求数涨的,而一轮搜索里同一个源要发好几个请求
 		// (网易云 4 个歌手别名变体、QQ 的 smartbox + client_search 加起来更多),源整个挂掉
 		// 时它们在同一瞬间一起失败,于是一次抖动就能把阶梯从头走到尾。实测日志:
-		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s→30s→1m→2m→5m 五档,网易云 0.8 秒内到顶
+		// QQ 在 14:38:19.804 这**同一毫秒**里连跳 15s到30s到1m到2m到5m 五档,网易云 0.8 秒内到顶
 		// 并一路涨到 consecutive=22;整份日志里冷却到顶 5 分钟发生过 331 次,可配对的 35 例
 		// 里有 14 例是"第一档 15 秒都还没过完就到顶"。用户看得见的后果:一次 2 秒的 DNS 抖动
 		// 换来 7 个源停摆 5 分钟,期间播到的歌被判"暂无歌词"(《One Last Kiss》那一例)。
@@ -247,7 +247,7 @@ func (b *lyricSourceBreaker) observeWith(host string, err error, status int, ret
 			st.until = time.Time{}
 			st.reason = ""
 		}
-		// ⚠️ 档位(trips)**不跟着这一次正常响应归零**,改由离上次跳闸的时间归零(修)。
+		// 档位(trips)**不跟着这一次正常响应归零**,改由离上次跳闸的时间归零(修)。
 		//
 		// 原来这里是 `delete(b.state, source)` —— 整条 state 抹掉,trips 跟着没了。对
 		// "正常响应里本来就混着失败"的源,那等于阶梯永远升不上去:lrclib 用 503 做限流,
@@ -279,7 +279,7 @@ func parseLyricSourceRetryAfter(v string) time.Duration {
 	return d
 }
 
-// lyricSourceRoundPlan:这一轮该跳过的源 → 剩余冷却时长。
+// lyricSourceRoundPlan:这一轮该跳过的源 到 剩余冷却时长。
 type lyricSourceRoundPlan map[string]time.Duration
 
 // planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
@@ -434,19 +434,19 @@ func (r *lyricSourceRound) skippedSources() []string {
 // IP 直连立刻 200,网易云 / QQ 的第一条结果就是这首(标题 / 专辑 / 歌手三项精确命中)。
 //
 // 判据是**这个源在本进程里有没有拿到过任何一个 HTTP 响应**(状态码 < 500 即算 —— 4xx 也是
-// 服务器在说话,404 = 没这首、403 = 反爬,跟上面熔断的口径一致):一次都没有、且失败过 → 报
+// 服务器在说话,404 = 没这首、403 = 反爬,跟上面熔断的口径一致):一次都没有、且失败过 到 报
 // 最多见的那一类失败(dns_failed / connect_failed / server_error,见 lyricsourcefailure.go)。
 // 拿到过响应的源**不报** —— "响应了但没这首歌"跟"连不上"必须分开,这正是这次要修的混淆。
 //
-// ⚠️ DNS 失败怎么认(评审时抓到的坑):不能只靠 errors.As(err, *net.DNSError)。各源的 client 都
+// DNS 失败怎么认(评审时抓到的坑):不能只靠 errors.As(err, *net.DNSError)。各源的 client 都
 // 设了 http.Client.Timeout(4–8 秒),DNS **挂住不答**(而不是秒答 NXDOMAIN)时是这个 Timeout 先
 // 到:Transport.getConn 直接返回 ctx.Err()、丢掉拨号 goroutine 里那条带 DNSError 的错误,
 // Client.do 再把它整体换成 *http.timeoutError(纯字符串,没有 Unwrap)—— 类型链彻底没了,
 // 只看错误链会把"DNS 不答"归成 connect_failed,界面再说一句"域名能解析",正好说反。所以
 // doHTTPTracked 给每个请求挂 httptrace.ClientTrace 记 DNSStart / DNSDone(net 包在系统解析器
 // 与纯 Go 解析器两条路上都会调这两个钩子,ctx 被取消时 DNSDone 也会带 err 调一次),
-// 分类时**先看轨迹**:DNS 阶段开始了却没结束、或结束时带错 → dns_failed;错误链里有 DNSError
-// → dns_failed;其余才是 connect_failed。复用连接(没有 DNS 阶段)与 DoH 自定义拨号(musixmatch,
+// 分类时**先看轨迹**:DNS 阶段开始了却没结束、或结束时带错 到 dns_failed;错误链里有 DNSError
+// 到 dns_failed;其余才是 connect_failed。复用连接(没有 DNS 阶段)与 DoH 自定义拨号(musixmatch,
 // 没有 net 包的 DNS 钩子)拿不到轨迹,退回错误链判定 —— 后者今天被 musixmatch_direct_blocked
 // 这个具体代码盖住,看不出差别;若日后把 DoH 扩到别的源,dohDialContext 用 %w 包住的系统解析
 // NXDOMAIN 会让"DoH 解析成功但拨不通"被归成 dns_failed,到那时要一并改。
@@ -510,7 +510,7 @@ func (b *lyricSourceBreaker) noteTransport(source string, err error, status int,
 
 // lyricSourceTransportFailureOrder:并列时的取舍顺序。DNS 失败是最靠前、最能解释其它现象的那
 // 一层(解析都不通,别的更谈不上),其次是连不上,最后才是"连上了但服务器报错"。
-// ⚠️ 这份顺序也是 Swift 侧空状态分组的顺序(LyricsSearchSheet.transportFailureCodes,那边多一个
+// 这份顺序也是 Swift 侧空状态分组的顺序(LyricsSearchSheet.transportFailureCodes,那边多一个
 // 只由 searchcli 派生、不经这里的 upstream_unreachable),lyricsourcefailure_test.go 钉着两边一致。
 var lyricSourceTransportFailureOrder = []string{
 	lyricFailureReasonDNSFailed, lyricFailureReasonConnectFailed, lyricFailureReasonServerError,
@@ -526,7 +526,7 @@ func dominantLyricSourceTransportFailure(failures map[string]int) string {
 	return best
 }
 
-// transportFailureCodes:本进程里一个响应都没拿到过、又确实失败过的源 → 最多见的那类失败代码。
+// transportFailureCodes:本进程里一个响应都没拿到过、又确实失败过的源 到 最多见的那类失败代码。
 // 没有这样的源返回 nil。
 func (b *lyricSourceBreaker) transportFailureCodes() map[string]string {
 	b.mu.Lock()

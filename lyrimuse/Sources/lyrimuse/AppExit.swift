@@ -6,7 +6,7 @@ import OSLog
 ///     exiting reason=<code>
 ///
 /// 形态固定、原因码英文 snake_case、可 grep(collector 侧同款前缀见 exitreason.go;规则在 AGENTS.md
-/// 「容易踩的具体坑 → 退出路径」)。排「App 为什么自己退了」时,诊断导出里 grep 这个前缀就够,不用再
+/// 「容易踩的具体坑 到 退出路径」)。排「App 为什么自己退了」时,诊断导出里 grep 这个前缀就够,不用再
 /// 对着 launchd 状态和崩溃报告猜。
 ///
 /// 三条路都汇到 `applicationShouldTerminate`,所以日志在那里打、只打一次:

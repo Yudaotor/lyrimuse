@@ -10,13 +10,15 @@ import LyrimuseCore
 /// Core 的 `PlayerHealth`(纯函数,selftest 钉住),这里只负责读值。
 ///
 /// 成本:两项都**不能在主线程同步做**,一律下到后台线程,同一时刻最多一次在飞。
-///  - 自动化权限查询是一次 `AEDeterminePermissionToAutomateTarget`(不弹窗)。⚠️ 这里原来写的
-///    是「微秒级」—— **错的**。真机 `sample` 抓栈:主线程在它底下的
-///    `semaphore_wait_trap` 上等(跨进程问 tccd),设置窗开着 60 秒里 116 个采样、关着时 0 个;
+/// - 自动化权限查询是一次 `AEDeterminePermissionToAutomateTarget`(不弹窗)。 它不是微秒级:
+///    真机 `sample` 抓栈,主线程在它底下的 `semaphore_wait_trap` 上等(跨进程问 tccd),
 ///    独立脚本量 10 次:min 3.25ms / 中位 4.2ms / 首次 47.5ms。每 2s 一次、任何分页都在跑,
-///    正好撞上用户点击那一下就是一帧掉帧 —— 对应现象是「切分页**有时候**卡」。
-///  - collector 状态要起一个 `launchctl print` 子进程——播放器页可见时本来就每 2s 起一次,
-///    这里沿用同一节拍。
+///    正好撞上用户点击那一下就会掉一帧。
+///  - collector 状态要起一个 `launchctl print` 子进程。播放器页原来自己也每 2s 起一次、查的是同一件事;
+///    现在页面直接用这里发布的 `collectorState`,整个设置窗口只剩这一路。
+///
+/// 只在设置窗口**看得见**时跑:`SettingsView` 按窗口可见性启停(被挡住 / 最小化时 stop,重新看得见时
+/// start,start 会先补查一次)。计时器带误差,让系统合并唤醒。
 /// 刻意不进监视器的两项:collector 版本比对(要起 collector 子进程)、通知权限(不是播放器健康)。
 @MainActor
 final class PlayerHealthMonitor: ObservableObject {
@@ -54,8 +56,9 @@ final class PlayerHealthMonitor: ObservableObject {
         // 主线程能直接读的两项先读好(纯内存)。
         let appleMusicSelected = FeatureSettingsStore.shared.players.contains(.appleMusic)
         let collectorEnabled = AppSettings.shared.collectorServiceEnabled
-        // 两次跨进程的查询(AE 权限 + launchctl)都下到后台;结果回到主 actor 再碰 self。
-        // askIfNeeded 必须是 false——这里绝不能弹系统授权框。
+        // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
+        // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
+        // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
         // Task { } 继承本类的 @MainActor 隔离,weak self 在这里解包不算"并发代码里引用捕获变量"
         // (原来整段包在 Task.detached 里、在 MainActor.run 闭包内解包,编译器会告警,Swift 6 是 error)。
         Task { [weak self] in

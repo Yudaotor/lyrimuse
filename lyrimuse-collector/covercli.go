@@ -25,11 +25,11 @@ import (
 //  3. **只动封面四件套**(cover_url / cover_source / cover_album / accent_color),
 //     歌词、译文、人工修正标记一个字都不碰 —— 那些删了就找不回来。
 //
-// ⚠️:cover_source=="device" 的条目,coverSwapAllowed 会无条件拒绝换掉
-// (见其注释)——这条 CLI 走的是同一个判定,所以也换不掉设备直送的封面。真遇到设备封面
-// 本身就是错的这种(理论上)情况,唯一的办法是直接手改 enrich-cache.json(先
-// launchctl bootout 停 collector,改完再 bootstrap 拉起来,这仓库其它几处手工缓存修复
-// 都是这个流程)。
+// 提醒:cover_source=="device" 的条目走 coverSwapAllowed 的 device 分支,只在
+// deviceCoverDecision 判定"设备图该让位"时才会被换掉(同一张图的高清远程版、或设备图是补边
+// 补出来的长方形图,见 coverquality.go 头注)。其余情况这条 CLI 也换不掉;设备封面本身就是错的
+// 那种,只能直接手改 enrich-cache.json(先 launchctl bootout 停 collector,改完再 bootstrap
+// 拉起来,这仓库其它几处手工缓存修复都是这个流程)。
 func runRecheckCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
@@ -58,7 +58,7 @@ func runRecheckCoverCLI(args []string) {
 	if ccfg, err := loadConfig(filepath.Join(cfgDir, "config.json")); err == nil {
 		webRelayURL = ccfg.StateRelayURL
 	}
-	// ⚠️ 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
+	// 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
 	// path 留空就是"只用内存不持久化"(见 musicbrainz.go),否则这个进程会拿一份空 map
 	// 把常驻实例攒下来的整份歌手身份缓存盖掉。
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {

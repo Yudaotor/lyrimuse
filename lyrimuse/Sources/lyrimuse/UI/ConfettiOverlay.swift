@@ -87,7 +87,7 @@ struct ConfettiOverlay: View {
         let field = ConfettiField(seed: Self.baseSeed &+ UInt64(burst))
         run = Run(field: field, start: Date())
         try? await Task.sleep(for: .seconds(field.duration))
-        // ⚠️ 这道 guard 不能省。`.task(id:)` 换 id 时是"先取消旧任务、再起新任务",而被取消的
+        // 这道 guard 不能省。`.task(id:)` 换 id 时是"先取消旧任务、再起新任务",而被取消的
         // `Task.sleep` 只是抛错、`try?` 把它吞了,后面这行照样会跑 —— 于是旧任务的收尾把
         // 新任务刚设上的 `run` 清掉,表现成"退回去再翻到最后一页,撒花闪一下就没了"。
         guard !Task.isCancelled else { return }

@@ -24,19 +24,21 @@ import (
 // 那处判断 —— `!lyric.content ? (vocal === 2 ? "纯音乐" : "暂无歌词")`,跟
 // enrichEntry.Instrumental 是同一个区分。
 //
-// ⚠️ 这条**比另外四条本地路径薄**。那四条各自省掉一整跳网络或一整轮挑选(酷狗歌词正文
+// 这条**比另外四条本地路径薄**。那四条各自省掉一整跳网络或一整轮挑选(酷狗歌词正文
 // 在盘上、QQ/网易云拿权威 songmid/songID、Apple Music 官方 TTML 全文);这条出两样东西:
 // 纯音乐标记,以及 soda 歌词源唯一的身份入口 —— 曲目 id(见 sodaLocalTrackID)。
 // 那个 id 经 notePlayingSodaTrackID 落进 playbackTrackIDs,soda 源据此直取歌词,
 // 跟 amll 按 Apple/Spotify ID 直取是同一条路子。
 //
 // 关于汽水这几条路的结论,记在这里免得日后重挖:
-//   - 歌词不落盘,随 track_player 播放接口下发、只在内存 —— 但 web 端的 SEO 接口
-//     (`seo_track`,无签名无 Cookie)按 track id 就能取到全文,见 soda.go。
+//   - 歌词随播放接口下发,QueueCache 里没有;但客户端的音频缓存库 `LunaCacheV2/entries.db`
+//     每条记录的 mediaDetail.lyrics.content 带着逐字正文(格式同 soda.go 头注),只覆盖缓存过的歌,
+//     目前没有读。取词走 web 端的 SEO 接口(`seo_track`,无签名无 Cookie),按 track id 取全文,
+//     见 soda.go。那份缓存库现在只用来看预载了哪几首(sodapreload.go)。
 //   - 曲名/歌手/专辑/时长与 MediaRemote 逐字节一致(含毫秒),零增量。
 //   - 服务端不下发 ISRC;缓存的音频是 CENC 加密的 M4A,ilst 只有 ©too。
 //
-// ⚠️ 全程 fail-soft:没装汽水 / 文件不在 / 魔数变了 / gzip 解不开 / JSON 结构改了,
+// 全程 fail-soft:没装汽水 / 文件不在 / 魔数变了 / gzip 解不开 / JSON 结构改了,
 // 一律当没命中。读的是另一个 App 的缓存,对方升级随时可能改格式。
 
 // sodaLocalQueueOverride 让单测把队列文件指到临时路径。空 = 用真实路径。
@@ -55,7 +57,7 @@ const (
 	sodaLocalVocalInstrumental = 2
 )
 
-// sodaLocalQueuePath 是汽水音乐客户端的播放队列缓存。⚠️ 这是**外部 App** 的路径,
+// sodaLocalQueuePath 是汽水音乐客户端的播放队列缓存。 这是**外部 App** 的路径,
 // 不是这个项目自己的数据位置,所以不走 paths.go 那套身份口径。
 func sodaLocalQueuePath() string {
 	if sodaLocalQueueOverride != "" {
@@ -103,7 +105,7 @@ func sodaLocalContradictsInstrumental(t sodaLocalTrack) bool {
 	return t.FirstVocal != nil && t.FirstVocal.Start > 0
 }
 
-// sodaLocalQueueFile 的顶层是「队列 key → 队列」。⚠️ **不止一个 key**:推荐流是
+// sodaLocalQueueFile 的顶层是「队列 key 到 队列」。 **不止一个 key**:推荐流是
 // "u_<uid>:feed",而每个「听歌模式」各有自己的 key(如
 // "u_<uid>:feedMode:feedMode_scene_mode_focus"),互不覆盖、一起留在文件里。
 // 所以按 map 遍历全部,别认死 "feed" 那一个。
@@ -132,7 +134,7 @@ func sodaLocalKey(artist, title string) string {
 	return na + "|" + nt
 }
 
-// decodeSodaLocalQueue 把 LUNA+gzip 的字节解成曲目表。魔数对不上就当不认识 ——
+// decodeSodaLocalQueueFile 把 LUNA+gzip 的字节解成文件里的全部队列。魔数对不上就当不认识 ——
 // 不去猜"也许没有魔数、直接是 gzip",格式判断保持严格,宁可不命中。
 func decodeSodaLocalQueue(raw []byte) ([]sodaLocalTrack, error) {
 	if !bytes.HasPrefix(raw, sodaLocalMagic) {
@@ -175,7 +177,7 @@ func refreshSodaLocalIndexLocked() {
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
 		// 没装汽水 / 没登录过 / 路径变了 —— 正常情况,静默退回网络解析。
-		// ⚠️ 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
+		// 被 TCC 拒了**不是**常态,那一种由 noteLocalCacheDenied 记一行,理由见它的头注。
 		noteLocalCacheDenied("soda", path, err)
 		sodaLocalIndex, sodaLocalReady = nil, true
 		return
@@ -193,7 +195,7 @@ func refreshSodaLocalIndexLocked() {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		// 保留上一次的索引,理由同 qqlocal.go:重建失败是常态化的偶发(客户端正在写)。
-		// ⚠️ 但 stat 过了不代表这一步也过,被拒那一种要留痕。
+		// 但 stat 过了不代表这一步也过,被拒那一种要留痕。
 		noteLocalCacheDenied("soda", path, err)
 		return
 	}

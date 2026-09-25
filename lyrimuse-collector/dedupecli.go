@@ -52,7 +52,7 @@ type dedupeGroup struct {
 
 // planDedupe 只读 enrichCache,算出"哪些条目要并成哪一条"。不改任何状态。
 //
-// ⚠️ 调用方必须已经持有 enrichMu。
+// 调用方必须已经持有 enrichMu。
 func planDedupe(cache map[string]enrichEntry) dedupePlan {
 	byLoose := map[string][]string{}
 	for k := range cache {
@@ -103,12 +103,14 @@ func planDedupe(cache map[string]enrichEntry) dedupePlan {
 //
 // 优先级:
 //  1. **离简体更近的**优先(转简之后需要改动的字符更少)。这个库面向简体用户。
-//     ⚠️ 不能用"整串是不是纯简体"这个布尔判据 —— 专辑名本身就是繁体的情况很常见
-//     (`回到未來`/`神經志 The Journal` 是官方专辑名),那会让整串**恒**判为非简体,
-//     歌名那一段的繁简差异就完全失去作用,退化成按字典序挑,实测反而挑中繁体那条。
-//  2. 同档时**更长的**优先。等价 key 之间的长度差只可能来自空格,所以"更长"就等于
-//     "中英文之间有空格"那个写法(`Susan 说` 胜过 `Susan说`),排版上更好看。
-//  3. 再并列取字典序最小,纯粹为了确定性。
+//
+// 不能用"整串是不是纯简体"这个布尔判据 —— 专辑名本身就是繁体的情况很常见
+//
+//	   (`回到未來`/`神經志 The Journal` 是官方专辑名),那会让整串**恒**判为非简体,
+//	   歌名那一段的繁简差异就完全失去作用,退化成按字典序挑,实测反而挑中繁体那条。
+//	2. 同档时**更长的**优先。等价 key 之间的长度差只可能来自空格,所以"更长"就等于
+//	   "中英文之间有空格"那个写法(`Susan 说` 胜过 `Susan说`),排版上更好看。
+//	3. 再并列取字典序最小,纯粹为了确定性。
 func pickDisplayKey(keys []string) string {
 	rank := func(k string) (int, int, string) {
 		return simplifiedDistance(k), -len([]rune(k)), k
@@ -147,7 +149,7 @@ func simplifiedDistance(k string) int {
 
 // resolveStaleFiles 把每个落败 key 在磁盘上真实存在的导出文件列出来。
 //
-// ⚠️ 只列**确实存在**的,而且只列 enrichExportedFileNames 给出的那 8 个候选名 —— 不做任何
+// 只列**确实存在**的,而且只列 enrichExportedFileNames 给出的那 8 个候选名 —— 不做任何
 // 模式匹配/前缀匹配。胜者的文件名绝不会出现在这里:enrichExportedFileNames 是按 key 逐字节
 // 算出来的,而胜者和落败者的 key 不同(它们的差异正是空格/大小写/字形,而 sanitizeLyricsFilename
 // 只替换 `|` 和几个非法字符,不折叠空格也不折叠字形)。这里仍然显式再核一遍,不靠推理。
@@ -169,7 +171,7 @@ func resolveStaleFiles(plan dedupePlan) []string {
 	for _, g := range plan.groups {
 		stale := append([]string{}, g.losers...)
 		if g.winner != g.source {
-			// ⚠️ 显示 key 跟内容来源不是同一条时,winner **自己**磁盘上那份文件装的还是它
+			// 显示 key 跟内容来源不是同一条时,winner **自己**磁盘上那份文件装的还是它
 			// 原来那条(质量较低)的正文。不删的话,下次启动 importLyricsFromFiles 会拿文件
 			// 覆盖内存(lyrics/ 是权威源),把刚合并掉的差正文原样读回来 —— 这正是
 			// enrichkey.go:174-180 记着的坑。删掉,由随后的 exportLyricsFiles 用新内容重建。
@@ -277,7 +279,7 @@ func runDedupeEntries(apply bool) int {
 // runDedupeEntriesCLI 是 `collector dedupe-entries [-apply]` 的入口。
 //
 // 跟其它一次性子命令一样走 main() 里 flag.Parse() 之前的提前分支,所以 features /
-// enrichCache / lyricsDir 这几个包级变量在这里都还是零值,必须按跟 main() 完全一致的
+// enrichCache / lyricsDir() 这几个包级变量在这里都还是零值,必须按跟 main() 完全一致的
 // 默认路径规则自己加载一遍(searchcli.go 里有同样的说明)。
 func runDedupeEntriesCLI(args []string) {
 	fs := flag.NewFlagSet("dedupe-entries", flag.ExitOnError)
@@ -296,7 +298,7 @@ func runDedupeEntriesCLI(args []string) {
 		lyricsDir = filepath.Join(cfgDir, "lyrics")
 	}
 
-	// ⚠️ 严格的单实例检查,而且**只对 -apply 生效前必须过**。
+	// 严格的单实例检查,而且**只对 -apply 生效前必须过**。
 	//
 	// 常驻 collector 内存里持有一整份 enrichCache,并且会在自己的节奏上整份写回磁盘。
 	// 我们在它跑着的时候删掉磁盘上的条目,它下一次保存就会把删掉的原样盖回来 —— 而

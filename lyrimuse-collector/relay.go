@@ -20,7 +20,7 @@ import (
 // 目前唯一的消费点是封面主色(dominantColor,见 enrich.go 两处调用与
 // needsPeripheralBackfill 的 missing 判定)。
 //
-// ⚠️ **刻意跟 artworkRelayURL 分成两个变量**,尽管两者都来自 cfg.StateRelayURL:
+// **刻意跟 artworkRelayURL 分成两个变量**,尽管两者都来自 cfg.StateRelayURL:
 // 那个管"设备封面要不要上传托管到中继"(还要配套 artworkRelayToken),这个只管
 // "要不要算给网页看的东西"。子命令(recheck-cover)需要后者、不需要前者——
 // 共用一个变量会逼它为了拿到取色而连带打开封面上传。

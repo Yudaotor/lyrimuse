@@ -65,7 +65,7 @@ final class LyricSourceTestService {
 
     private init() {}
 
-    /// - source: nil = 测试所有已启用的源;非 nil = 只测这一个源。⚠️ 即便只测一个源,
+    /// - source: nil = 测试所有已启用的源;非 nil = 只测这一个源。 即便只测一个源,
     ///   底层探测仍然会把全部已启用的源一起并发打一遍(collector 侧 scoredLyricCandidates
     ///   本来就是这么设计的——AMLL 需要先从网易云/QQ 拿到平台 ID,拆开单独测反而更复杂),
     ///   所以"测一个"和"测全部"的实际等待时间没有区别,只是显示上只关心那一行——跟这个

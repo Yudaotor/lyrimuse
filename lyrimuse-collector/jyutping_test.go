@@ -62,7 +62,7 @@ func TestToJyutpingLine(t *testing.T) {
 		{"空串", "", ""},
 		// 加:词级多音字消歧(JyutpingWords.txt,同一个 rime-cantonese 项目)。
 		// "重"单字表只给得出一个固定读音,"重要"该读 zung6 jiu3、"重量"该读
-		// cung5 loeng6——这是多音字消歧要处理的真实案例,不消歧两个词会被拼成同一个错的。
+		// cung5 loeng6——这正是多音字消歧要处理的情况,不消歧两个词会被拼成同一个错的。
 		{"多音字消歧: 重要", "重要", "zung6 jiu3"},
 		{"多音字消歧: 重量(同一个字,不同词,不同读音)", "重量", "cung5 loeng6"},
 		{"多音字消歧在整句里也生效", "呢件事好重要", "nei1 gin6 si6 hou2 zung6 jiu3"},
@@ -78,7 +78,7 @@ func TestToJyutpingLine(t *testing.T) {
 		{"最长匹配优先: 唔該晒不能被短词唔該截断", "唔該晒", "m4 goi1 saai3"},
 		// 修的真 bug:拉丁/数字**紧接**汉字(中间没有空格)时,读音会被粘在
 		// 拉丁串尾巴上。上面那条 "Baby 我爱你" 因为输入自带空格,恰好绕开了这个洞。
-		// 真实缓存里的原样输出:《从何唱起》"Do re mi当中找我道理" → "Do re midong1 …"。
+		// 真实缓存里的原样输出:《从何唱起》"Do re mi当中找我道理" 到 "Do re midong1 …"。
 		{"拉丁紧接汉字要分隔(修前粘成 babyngo5)", "baby我爱你", "baby ngo5 oi3 nei5"},
 		{"大写同理(修前粘成 OKlaa1)", "OK啦", "OK laa1"},
 		{"汉字—拉丁—汉字两侧都要分隔(修前粘成 lovenei5)", "我love你", "ngo5 love nei5"},

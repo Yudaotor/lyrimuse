@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 写一份待采纳文件到临时目录,返回路径。fields 是 key → 字段名 → 已经是 JSON 的值。
+// 写一份待采纳文件到临时目录,返回路径。fields 是 key 到 字段名 到 已经是 JSON 的值。
 func writeRestoreFile(t *testing.T, dir string, blob map[string]map[string]any) string {
 	t.Helper()
 	data, err := json.Marshal(blob)

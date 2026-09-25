@@ -41,7 +41,7 @@ import (
 
 // enrichRestoreSuffix 是采纳完之后给这份文件改的名。
 //
-// ⚠️ 刻意**不删**:这是用户换机器时唯一一份"决策数据"的落地副本,而 saveEnrichCache 没有
+// 刻意**不删**:这是用户换机器时唯一一份"决策数据"的落地副本,而 saveEnrichCache 没有
 // 错误返回(内部只 log),这里无法确证"已经安全落盘"。改名既保证不会被下次启动重复采纳
 // (下面只认精确文件名),又留一条人工找回的路 —— 9.7 MB 躺在 43 MB 的缓存旁边,代价可以忽略。
 // 同名会被覆盖,所以最多只留一份。
@@ -49,7 +49,7 @@ const enrichRestoreSuffix = ".applied"
 
 // adoptEnrichRestore 把待采纳文件合并进 enrichCache。
 //
-// ⚠️ 调用时机(见 main.go 的调用点):必须排在 loadEnrichCache **之后**(要有 enrichPath 才
+// 调用时机(见 main.go 的调用点):必须排在 loadEnrichCache **之后**(要有 enrichPath 才
 // 落得了盘)、migrateEnrichKeys **之前**(备份里的 key 是导出那台机器当时的写法,得跟着一起
 // 归一化)、importLyricsFromFiles **之前**(那一步负责让 lyrics/ 文件族赢下六个歌词字段)。
 //
@@ -78,7 +78,7 @@ func adoptEnrichRestore(path string) {
 			skipped++
 			continue
 		}
-		// 本机那条(可能不存在)→ 字段 map。json tag 上普遍带 omitempty,所以零值字段
+		// 本机那条(可能不存在)到 字段 map。json tag 上普遍带 omitempty,所以零值字段
 		// 压根不会出现在这份 map 里,下面的覆盖天然是"并集,备份优先"。
 		base := map[string]json.RawMessage{}
 		if old, ok := enrichCache[key]; ok {
@@ -92,7 +92,7 @@ func adoptEnrichRestore(path string) {
 		for field, raw := range fields {
 			base[field] = raw
 		}
-		// 回到结构体。⚠️ 结构体里没声明的字段在这一步被 encoding/json 丢掉 —— 跟缓存本身
+		// 回到结构体。 结构体里没声明的字段在这一步被 encoding/json 丢掉 —— 跟缓存本身
 		// 每次落盘的行为完全一致(见 enrich.go 里 PlainLyrics 那段注释),不是这里新引入的
 		// 损耗:备份是从同一个结构体序列化出来的,除非两台机器版本差着字段。
 		merged, err := json.Marshal(base)

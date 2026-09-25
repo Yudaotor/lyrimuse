@@ -12,7 +12,7 @@ import Foundation
 /// 这个函数是给 `lyrics-romanize` helper 用的(collector 是 Go,调不了 CFStringTokenizer /
 /// ICU,只能起一个 Swift 子进程 —— 跟 `lyrics-translate` 完全同一个形态)。
 ///
-/// ⚠️ **逐行读音走 `Romanizer.lineReading`,跟播放引擎的客户端兜底是同一个函数**。这一点是
+/// **逐行读音走 `Romanizer.lineReading`,跟播放引擎的客户端兜底是同一个函数**。这一点是
 /// 这条特性能不能成立的前提:预生成的产物必须跟现算结果逐字一致,否则同一首歌"装了缓存"和
 /// "现算"读音不一样,而且不报错、只表现成用户偶尔觉得"某句罗马音怎么变了"。
 public enum LyricsRomanization {

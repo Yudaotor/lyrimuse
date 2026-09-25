@@ -5,18 +5,15 @@ import os
 ///
 /// ## 为什么需要它
 ///
-/// 这个症状排查到现在,**所有既有日志都是空的** —— 用户复现的那一刻 App 一条日志都没打。
-/// 已经用只读手段排除掉的:不是灵动岛、不是经典悬浮歌词(用户分别单独关掉后仍复现)、
-/// 不是 `applicationShouldHandleReopen`(复现时段内一次都没触发)、不是 App 被重启
-/// (pid 全程未变)、也**不是 Lyrimuse 抢焦点**(用 `lsappinfo front` 每 120ms 采样,
-/// 整段时间它一次都没成为最前台)。唯一确定的必要条件是:**设置/歌词管理/歌词窗口这类
-/// 普通窗口开着**;用户把它们全关掉之后就不弹了。
+/// 触发路径不在任何已有日志的覆盖范围内。已知的必要条件是:**设置/歌词管理/歌词窗口
+/// 这类普通窗口开着**——这些窗口都关掉就不会触发;已排除的原因是灵动岛、经典悬浮歌词、
+/// `applicationShouldHandleReopen`、App 被重启、以及 Lyrimuse 抢焦点。
 ///
 /// 也就是说,拽 Space 的动作发生在一条**不打日志的路径**上。这个类就是去补那条日志:
 /// 把「Space 变了」「App 活跃态变了」「窗口成了 key」「窗口的 collectionBehavior 被重写」
 /// 这四类事件按同一条时间线记下来,复现一次就能看出是谁先动的。
 ///
-/// ⚠️ **这是临时诊断代码,定位到根因之后应当整个删掉**(连同 `AppDelegate` 里那行
+/// **这是临时诊断代码,定位到根因之后应当整个删掉**(连同 `AppDelegate` 里那行
 /// `SpaceDiagnostics.start()` 和 `LyricsWindowController.enforceFullScreenCapability`
 /// 里那行计数)。留着的成本不只是噪声:`report` 里会遍历所有窗口读 `isOnActiveSpace`,
 /// 那是一次 WindowServer 往返。
@@ -25,7 +22,7 @@ enum SpaceDiagnostics {
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spacediag")
     private static var started = false
 
-    /// `enforceFullScreenCapability` 的写入计数。⚠️ **不逐次打日志**:那个函数挂在
+    /// `enforceFullScreenCapability` 的写入计数。 **不逐次打日志**:那个函数挂在
     /// `NSWindow.didUpdateNotification` 上,歌词窗口跟着播放滚动时更新周期一刻不停,
     /// 逐次打会把日志淹掉、也会自己变成性能问题。改成计数 + 由 Space/激活事件顺带报出来,
     /// 这样看到的是「上一次事件到这一次之间写了多少回」,正是要判的那个量。
@@ -61,8 +58,8 @@ enum SpaceDiagnostics {
             nc.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated {
                     report(label)
-                    // ⚠️ **调用栈是这一轮的核心证据**:真机日志坐实
-                    // 「切到飞书全屏 → 1.8 秒后 Lyrimuse 自己被激活 → Space 被拽回」,
+                    // **调用栈是这一轮的核心证据**:真机日志坐实
+                    // 「切到飞书全屏 到 1.8 秒后 Lyrimuse 自己被激活 到 Space 被拽回」,
                     // 而那一刻既没有 reopen、也没有点击。先 App 激活、再窗口成 key,是
                     // `NSApp.activate(ignoringOtherApps:)` 的签名动作 —— 但全仓十几个调用点
                     // 逐个读代码判「需不需要用户点击」已经漏过一次,所以改成让它自报家门。
@@ -89,7 +86,7 @@ enum SpaceDiagnostics {
     }
 
     /// 把当下的窗口分布整个拍一张:每扇窗在不在当前 Space、可不可见、collectionBehavior
-    /// 是什么。⚠️ 一行一扇窗会太长,压成一行紧凑串。
+    /// 是什么。 一行一扇窗会太长,压成一行紧凑串。
     private static func report(_ reason: String) {
         let writes = fullScreenCapabilityWrites
         fullScreenCapabilityWrites = 0

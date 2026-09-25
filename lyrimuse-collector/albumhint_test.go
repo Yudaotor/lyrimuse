@@ -59,15 +59,15 @@ func TestPickAppleAlbumHint(t *testing.T) {
 	for i := range cands {
 		cands[i].AlbumRelease = releases[cands[i].CollectionID]
 	}
-	// 用户那首:本地署名「王子」跟谁都不相等,只有歌词链路核实过的「Prince」能当旁证 → 「Prince」(专辑级最早、非精选)。
+	// 用户那首:本地署名「王子」跟谁都不相等,只有歌词链路核实过的「Prince」能当旁证 到 「Prince」(专辑级最早、非精选)。
 	if got := pickAppleAlbumHint(cands, "王子", []string{"Prince"}); got != "Prince" {
 		t.Fatalf("旁证 Prince:want Prince, got %q", got)
 	}
-	// 旁证还没到(歌词还在解析)→ 不猜,先空着;下一拍再挑。
+	// 旁证还没到(歌词还在解析)到 不猜,先空着;下一拍再挑。
 	if got := pickAppleAlbumHint(cands, "王子", nil); got != "" {
 		t.Fatalf("没有旁证不采跨文字系统的候选, got %q", got)
 	}
-	// 旁证是别人(翻唱者)→ 就认那个人的专辑,不会错配到 Prince。
+	// 旁证是别人(翻唱者)到 就认那个人的专辑,不会错配到 Prince。
 	if got := pickAppleAlbumHint(cands, "王子", []string{"Tuesday Knight"}); got != "Tuesday Knight (2018 Remaster)" {
 		t.Fatalf("旁证 Tuesday Knight:got %q", got)
 	}
@@ -75,11 +75,11 @@ func TestPickAppleAlbumHint(t *testing.T) {
 	if got := pickAppleAlbumHint(cands, "Prince", nil); got != "Prince" {
 		t.Fatalf("署名相等:want Prince, got %q", got)
 	}
-	// 0 档永远排在 1 档前面:本地署名是 Tuesday Knight、旁证却说 Prince → 仍取 Tuesday Knight 自己的专辑。
+	// 0 档永远排在 1 档前面:本地署名是 Tuesday Knight、旁证却说 Prince 到 仍取 Tuesday Knight 自己的专辑。
 	if got := pickAppleAlbumHint(cands, "Tuesday Knight", []string{"Prince"}); got != "Tuesday Knight (2018 Remaster)" {
 		t.Fatalf("0 档优先于 1 档:got %q", got)
 	}
-	// 没有专辑级日期时退回曲目级日期(两张 Prince 专辑都是 1979-10-19 → 平手 → Apple 顺序,精选在前)。
+	// 没有专辑级日期时退回曲目级日期(两张 Prince 专辑都是 1979-10-19 到 平手 到 Apple 顺序,精选在前)。
 	noAlbumDates := albumHintCandidatesFromResults(princeResults(), "Why You Wanna Treat Me So Bad?", 230.121)
 	if got := pickAppleAlbumHint(noAlbumDates, "Prince", nil); got != "The Hits/The B-Sides" {
 		t.Fatalf("无专辑级日期时按曲目级日期再按顺序:got %q", got)
@@ -125,7 +125,7 @@ func TestPickAppleAlbumHintRanking(t *testing.T) {
 	if got := pickAppleAlbumHint(noDate, "X", nil); got != "Dated" {
 		t.Fatalf("缺日期排后:want Dated, got %q", got)
 	}
-	// credit 子集:本地只报主唱,Apple 记「Prince & The Revolution」;顺序不同也算;繁简折叠(周杰伦 ↔ 周杰倫)也算 0 档。
+	// credit 子集:本地只报主唱,Apple 记「Prince & The Revolution」;顺序不同也算;繁简折叠(周杰伦 与 周杰倫)也算 0 档。
 	credit := []albumHintCandidate{{Artist: "Prince & The Revolution", Album: "Around the World in a Day", AlbumRelease: "1985-04-22T07:00:00Z"}}
 	if got := pickAppleAlbumHint(credit, "Prince", nil); got != "Around the World in a Day" {
 		t.Fatalf("credit 子集:got %q", got)
@@ -136,7 +136,7 @@ func TestPickAppleAlbumHintRanking(t *testing.T) {
 	if got := pickAppleAlbumHint([]albumHintCandidate{{Artist: "周杰倫", Album: "七里香", AlbumRelease: "2004-08-03T00:00:00Z"}}, "周杰伦", nil); got != "七里香" {
 		t.Fatalf("繁简折叠算 0 档:got %q", got)
 	}
-	// 周杰伦《七里香》在 US 商店的真实形状:只有别人的同名歌和一张拉丁名艺人的钢琴翻唱专辑 —— 都不是他、也没有旁证 → 空。
+	// 周杰伦《七里香》在 US 商店的真实形状:只有别人的同名歌和一张拉丁名艺人的钢琴翻唱专辑 —— 都不是他、也没有旁证 到 空。
 	// 这条正是不再"跨文字系统就认"的理由:裸按文字系统判,会把「Jay - Piano Cover (Piano Version)」安到周杰伦头上。
 	jay := []albumHintCandidate{
 		{Artist: "阿紫", Album: "船歌", AlbumRelease: "2005-06-01T07:00:00Z", Order: 0},
@@ -202,7 +202,7 @@ func TestAppleAlbumHintHelpers(t *testing.T) {
 		relayAlbumHintSuffix(snapshot{}) != "" {
 		t.Fatalf("relayAlbumHintSuffix 标记规则不对")
 	}
-	// 缓存里已有候选时当场挑、不发请求;旁证晚到也能在下一次调用时挑出来(Path 为空 → 只用内存,永不落盘)。
+	// 缓存里已有候选时当场挑、不发请求;旁证晚到也能在下一次调用时挑出来(Path 为空 到 只用内存,永不落盘)。
 	appleAlbumHintMu.Lock()
 	appleAlbumHintPath = ""
 	key := appleAlbumHintKey("王子", "Why You Wanna Treat Me So Bad?", 230.121)
@@ -284,11 +284,11 @@ func TestCoverAlbumForTrack(t *testing.T) {
 	if got := coverAlbumForTrack(ctx, "Prince", "Sexy Dancer", "Prince", 258); got != "Prince" {
 		t.Fatalf("album given: got %q", got)
 	}
-	// 没报专辑、候选已缓存、缓存条目里胜出候选报「Prince」→ 回填原版专辑(只读缓存,不发请求)。
+	// 没报专辑、候选已缓存、缓存条目里胜出候选报「Prince」到 回填原版专辑(只读缓存,不发请求)。
 	if got := coverAlbumForTrack(ctx, "王子", title, "", 230.121); got != "Prince" {
 		t.Fatalf("album-less MV: got %q want Prince", got)
 	}
-	// 缓存条目还没有(首次解析前),旁证为空 → 不猜。
+	// 缓存条目还没有(首次解析前),旁证为空 到 不猜。
 	enrichCache = map[string]enrichEntry{}
 	if got := coverAlbumForTrack(ctx, "王子", title, "", 230.121); got != "" {
 		t.Fatalf("no corroboration yet: got %q want empty", got)
@@ -488,7 +488,7 @@ func TestPickAppleAlbumHintTitleArtist(t *testing.T) {
 	if got := pickAppleAlbumHint(cands, "音樂頑童", nil); got != "Luvanmusiq" {
 		t.Fatalf("TitleArtist 当 0 档:want Luvanmusiq, got %q", got)
 	}
-	// 同样的候选抹掉 TitleArtist 就回到老规矩:频道名对不上、没旁证 → 不采。
+	// 同样的候选抹掉 TitleArtist 就回到老规矩:频道名对不上、没旁证 到 不采。
 	for i := range cands {
 		cands[i].TitleArtist = ""
 	}

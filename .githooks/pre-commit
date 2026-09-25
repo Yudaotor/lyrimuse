@@ -8,7 +8,7 @@
 #   1. gofmt:暂存的 .go 文件必须已格式化。CI 的第一步就是 `gofmt -l lyrimuse-collector`,
 #      本地不拦一道就得推上去才知道,而且一路红下去很容易没人注意。
 #   2. 注释卫生:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
-#      工单引用、排查叙述、临时状态标记)。规则全文在 scripts/check-comment-hygiene.py 的
+#      工单引用、排查叙述、临时状态、emoji 标记)。规则全文在 scripts/check-comment-hygiene.py 的
 #      文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
 #
 # 为什么是 hook 而不是只写进文档:这个仓的 AGENTS.md / CLAUDE.md 都在 .gitignore 里,
@@ -25,7 +25,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 #
 # 两侧十几张"每播放器一行"的表由 shared/players.json 生成。生成物过期(改了 JSON 忘了跑
 # 生成器)或被手改时**编译照样过** —— 它本身是合法代码,只有对账查得出来。
-# ⚠️ 必须排在下面那个 early exit 前面:只改 JSON 的提交里一个源码文件都没有,放到后面就漏了。
+# 必须排在下面那个 early exit 前面:只改 JSON 的提交里一个源码文件都没有,放到后面就漏了。
 # 只在这次提交真碰了这几个文件时才跑,别的提交不受影响。
 case "$staged" in
     *shared/players.json*|*players_generated.go*|*PlaybackPlayer+Generated.swift*|*PlaybackPlayerMeta+Generated.swift*)
@@ -46,9 +46,9 @@ files=$(printf '%s\n' "$staged" | grep -E '\.(swift|go|js|mjs|ts|py|sh)$')
 
 # ---- 闸 1:gofmt ----
 #
-# ⚠️ gofmt 读的是**工作区**那份、不是暂存那份(注释检查器同口径)。只暂存了一个文件的
+# gofmt 读的是**工作区**那份、不是暂存那份(注释检查器同口径)。只暂存了一个文件的
 # 一部分时,它报的是磁盘上的内容,不是将要提交的内容。
-# ⚠️ 机器上没有 gofmt 就直接放行 —— 这道闸不该把没装 Go 工具链的人挡在提交外面;
+# 机器上没有 gofmt 就直接放行 —— 这道闸不该把没装 Go 工具链的人挡在提交外面;
 # CI 那边照样会拦,漏报的代价有兜底,误拦没有。
 gofiles=$(printf '%s\n' "$files" | grep '\.go$')
 if [ -n "$gofiles" ] && command -v gofmt >/dev/null 2>&1; then

@@ -32,10 +32,10 @@ extension KeyboardShortcuts.Name {
     /// 全部全局快捷键。撞键检查(见 ShortcutConflict)要遍历它——`KeyboardShortcuts.Name`
     /// 是个 struct 不是 enum,拿不到自动的 allCases,只能手工维护。
     ///
-    /// ⚠️ 新增快捷键时**必须**同时加进这里和下面的 `title(for:)`,否则:漏了这里 =
+    /// 新增快捷键时**必须**同时加进这里和下面的 `title(for:)`,否则:漏了这里 =
     /// 新键跟别人撞了不会被发现;漏了 title = 撞键提示里显示成一个原始标识符。
     ///
-    /// ⚠️ **这两条没有自动化测试兜底**,只能靠这段注释 + 下面 `registerAll()` 末尾那条
+    /// **这两条没有自动化测试兜底**,只能靠这段注释 + 下面 `registerAll()` 末尾那条
     /// debug 断言(它只能查出"登记了但没写标题",查不出"压根没登记")。原因:
     /// lyrimuse-selftest 只依赖 LyrimuseCore(见 Package.swift),而这个文件在 app target
     /// 里、还要 import KeyboardShortcuts,selftest 够不着;而 `KeyboardShortcuts.Name`
@@ -51,7 +51,7 @@ extension KeyboardShortcuts.Name {
     /// 给用户看的动作名。撞键提示要说"这个组合已经给了『歌词提前』",光报
     /// `lyricsAdvanceHotkey` 这种内部标识符等于没说。
     ///
-    /// ⚠️ 文案必须跟 `SettingsView` 里那三张快捷键卡的 `SettingsRow(title:)` 一字不差 ——
+    /// 文案必须跟 `SettingsView` 里那三张快捷键卡的 `SettingsRow(title:)` 一字不差 ——
     /// 提示里说的名字跟他在设置页看到的对不上,就得自己去猜是哪一行。
     /// (没有做成"从设置页反查"是因为那边的标题跟图标/副标题写在一起、还分三张卡,
     /// 抽出来要动 10 行 UI;这里只登记名字,由上面那条 selftest 保证不漏。)
@@ -81,7 +81,7 @@ extension KeyboardShortcuts.Name {
 @MainActor
 enum GlobalHotkeys {
     static func registerAll() {
-        // ⚠️ 必须先判断 settings.classicOverlayEnabled 再碰 LyricsOverlayWindowController
+        // 必须先判断 settings.classicOverlayEnabled 再碰 LyricsOverlayWindowController
         // .shared——实测排查坐实:这里早先漏掉了这层判断,是
         // NotchLyricsWindowController.swift 顶部注释点名的"三处外部路由代码"(AppDelegate/
         // SettingsView/MenuBarMenu)之外被漏判的第 4 处。真正引用到 `.shared` 才会执行
@@ -98,7 +98,7 @@ enum GlobalHotkeys {
             LyricsOverlayWindowController.shared.setVisible(!AppSettings.shared.classicOverlayEnabled)
         }
         KeyboardShortcuts.onKeyUp(for: .toggleLockPosition) {
-            // ⚠️ 这个键只对桌面悬浮歌词有意义(灵动岛贴着刘海,没有"位置"可锁)。原来
+            // 这个键只对桌面悬浮歌词有意义(灵动岛贴着刘海,没有"位置"可锁)。原来
             // 这里是**静默** return —— 只开灵动岛的用户按下去什么都不发生,分不清是没
             // 按中还是不适用。补一条说明,理由跟下面偏移那两个键一样:全局
             // 快捷键最忌讳"按了没动静"。
@@ -134,7 +134,7 @@ enum GlobalHotkeys {
         // 分不清是没按中快捷键还是权限问题。只有选了 Apple Music 才真的会走到这个
         // 权限检查,见 MusicAutomationPermission.checkForCurrentPlayer 注释。
         //
-        // ⚠️ 必须用 checkForCurrentPlayerSafely(异步)而不是 checkForCurrentPlayer
+        // 必须用 checkForCurrentPlayerSafely(异步)而不是 checkForCurrentPlayer
         // (同步)——实测排查坐实:同步版本在还没问过时会直接触达
         // AEDeterminePermissionToAutomateTarget,这个 API 在主线程调用有据可查地
         // 可能永久挂起,详见 checkForCurrentPlayerSafely 定义处的注释。KeyboardShortcuts
@@ -173,7 +173,7 @@ enum GlobalHotkeys {
         // 同一个值,菜单/快捷键两条路径调出来的手感一致。
         // 改完偏移在灵动岛上闪一条"歌词 +0.5s"。在这之前按这两个键是**完全无反馈**的:
         // 偏移是否生效只能靠盯着歌词自己感觉,连按几下更是数不清累计到了多少。
-        // ⚠️ 只有灵动岛这一种展示形态会显示(提示条挂在那张卡片上);只开桌面悬浮歌词的
+        // 只有灵动岛这一种展示形态会显示(提示条挂在那张卡片上);只开桌面悬浮歌词的
         // 用户仍然没有反馈,那边没有可以借用的稳态区域,要做得单开一个 HUD 窗口。
         KeyboardShortcuts.onKeyUp(for: .lyricsAdvanceHotkey) {
             showOffsetBanner(PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs))
@@ -200,7 +200,7 @@ enum GlobalHotkeys {
             flashHint(icon: on ? "character.book.closed" : "character.book.closed.fill",
                       text: on ? L10n.t("已显示译文") : L10n.t("已隐藏译文"))
         }
-        // ⚠️ 绑的是**总开关** `showRomanization`,不是在 拼音/粤拼/日文/韩文 之间轮换
+        // 绑的是**总开关** `showRomanization`,不是在 拼音/粤拼/日文/韩文 之间轮换
         // (「应该改为开关罗马音的功能而不是切换」)。
         // 分语言那四个勾选留在设置页,它们是"配置",不是随手按的东西。
         KeyboardShortcuts.onKeyUp(for: .toggleRomanizationHotkey) {
@@ -212,7 +212,7 @@ enum GlobalHotkeys {
         // 灵动岛/菜单栏歌词的显隐。跟「显示/隐藏悬浮歌词」凑齐三种形态 —— 原来只有悬浮
         // 那一个有键,另外两个没有,不对称。
         //
-        // ⚠️ 灵动岛走 setVisible(_:) 而不是直接翻 AppSettings 那个布尔值:那个方法是
+        // 灵动岛走 setVisible(_:) 而不是直接翻 AppSettings 那个布尔值:那个方法是
         // 打开/关闭一种悬浮歌词的**唯一入口**,连"顺手把已配置好的隐藏偏好也应用上"
         // 这一步都在里面(照抄 MenuBarStatusMenu.toggleNotchOverlay 的注释与做法,
         // 菜单/设置页/快捷键三处不各自复制一遍)。
@@ -250,12 +250,12 @@ enum GlobalHotkeys {
 
     /// 把一条操作回声送到**用户实际开着的那个展示形态**上。
     ///
-    /// ⚠️ 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
+    /// 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
     /// 渲染(`NotchLyricsView` 里的 `NotchTransientHost` 是它全仓唯一的消费者)——于是
     /// **只开桌面悬浮歌词的用户按快捷键是完全没有反馈的**,偏移调到哪了只能靠盯着歌词
     /// 猜。两边都发、各自按自己开没开决定显不显示,不需要在这里判断"该给谁"。
     ///
-    /// ⚠️ 碰 `LyricsOverlayWindowController.shared` 之前**必须**先判
+    /// 碰 `LyricsOverlayWindowController.shared` 之前**必须**先判
     /// `classicOverlayEnabled`:那是个 static let,光读一下属性就会 init() 把窗口建出来
     /// 并常驻显示(这个坑本文件顶部 registerAll 的注释里已经记过一次,这里是同一条)。
     static func flashHint(icon: String, text: String) {

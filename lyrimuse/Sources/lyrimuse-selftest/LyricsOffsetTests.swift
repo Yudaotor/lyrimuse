@@ -76,7 +76,7 @@ func runLyricsOffsetTests() {
     //
     // 加全局偏移时补的,补上「按播放器」那层。
     //
-    // ⚠️ 播放器那层跟「全部」是**二选一、不相加**(改的语义:「不要和那个全部
+    // 播放器那层跟「全部」是**二选一、不相加**(改的语义:「不要和那个全部
     // 相加,只有要么全部,要么单个」)。零值不落盘,所以"配过"="非零",调回 0 就是撤掉单独设置、
     // 重新跟随「全部」。
     //
@@ -129,7 +129,7 @@ func runLyricsOffsetTests() {
         //
         // Arc 用真实 bundle id(它就是这个功能的动机);对照播放器用枚举而不是字面量,枚举漂了
         // 断言跟着漂。注意 **Arc 不在 PlaybackPlayer 里** —— 它靠 TrustedPlayers 那份
-        // bundleID→名字映射进来,所以这层的维度只能是 bundleID,换成枚举就把动机里那个 App
+        // bundleID到名字映射进来,所以这层的维度只能是 bundleID,换成枚举就把动机里那个 App
         // 挡在门外了。
         let arc = "company.thebrowser.Browser"
         let appleMusic = PlaybackPlayer.appleMusic.bundleIdentifier
@@ -143,7 +143,7 @@ func runLyricsOffsetTests() {
         store.setPlayerOffset(800, forBundleID: arc)
         store.setGlobalOffset(100)
         store.setOffset(-50, forKey: key, pinKey: "")
-        // 二选一:Arc 单独配过 → 只用它那档(800),「全部」那 100 完全不参与。
+        // 二选一:Arc 单独配过 到 只用它那档(800),「全部」那 100 完全不参与。
         expectEqual(store.baseOffsetMs(forBundleID: arc), 800, "按播放器: 配过就只用自己那档,不加全部")
         expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), 750,
                     "按播放器: 生效值 = 自己那档 + 单曲(800 - 50)")
@@ -254,7 +254,7 @@ func runLyricsOffsetTests() {
     //     "内容一换 pin 也失效",正好把这条闸要防的事情放过去;
     //  ③ 「清空全部时间轴校正」只清单曲这一层,全局基准**和按播放器那层**都不受连带。
     MainActor.assumeIsolated {
-        // ⚠️ 先把 pin 文件重定向到临时目录:它的真实路径跟正在运行的 App 共用同一份,而下面
+        // 先把 pin 文件重定向到临时目录:它的真实路径跟正在运行的 App 共用同一份,而下面
         // 要覆盖 clearAllTrackOffsets()(内部会 removeAll)—— 不隔离就是把用户真实的已校准
         // 名单抹掉。必须排在任何一次 LyricsPinStore.shared 访问之前。
         let tmp = FileManager.default.temporaryDirectory
@@ -275,7 +275,7 @@ func runLyricsOffsetTests() {
         store.nudge(by: 300, forKey: keyA, pinKey: pinKey)
         expectEqual(pins.isPinned(pinKey), true, "已校准: 调过偏移就自动钉住,不需要另外开开关")
 
-        // 关键一条:同一首歌换了一份歌词内容 → 旧校正值查不到(这是既有设计,内容指纹变了),
+        // 关键一条:同一首歌换了一份歌词内容 到 旧校正值查不到(这是既有设计,内容指纹变了),
         // 但 pin 仍然在 —— 它认的是"这首歌",不是"这一份内容"。pin 要是也跟着失效,后台就会
         // 继续换源、把用户下一次校准的成果再作废一次,这条闸等于没装。
         expectEqual(store.offset(forKey: keyB), 0, "已校准: 换内容后旧校正值查不到(既有设计)")
@@ -299,7 +299,7 @@ func runLyricsOffsetTests() {
         store.syncPinToOffset(forKey: keyA, pinKey: pinKey)
         expectEqual(pins.count, 0, "同步: 校正值为 0 不补钉")
 
-        // 真实故障复现:pin 曾经只会钉、不会解钉(原名 backfillPinIfNeeded),导致
+        // 钉住的是自愈能力:pin 只钉不解钉的话,
         // "校正值飘回 0、pin 却一直挂着"这种状态一旦出现就永远修不好——只有靠这个函数下次
         // 播放到时主动纠正。这里绕开 set()/reset() 直接摆出那个不一致状态(模拟"内容指纹变了、
         // 旧 key 下的非零值查不到了"那种真实成因,不用关心具体怎么飘出来的,只钉死"飘出来之后

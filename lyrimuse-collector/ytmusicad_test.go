@@ -23,13 +23,13 @@ func TestParseYTMusicAdVerdict(t *testing.T) {
 		{"只有 ad-showing 命中", "1|0|0", ytmusicAdIsAd},
 		{"只有广告徽章命中", "0|1|0", ytmusicAdIsAd},
 		{"只有裸标题命中", "0|0|1", ytmusicAdIsAd},
-		// 页面上找不到播放器 → 不知道,调用方 fail-closed。
+		// 页面上找不到播放器 到 不知道,调用方 fail-closed。
 		{"NOTFOUND", "NOTFOUND", ytmusicAdUnknown},
 		{"空输出", "", ytmusicAdUnknown},
 		{"只有空白", "   \n", ytmusicAdUnknown},
 		// 形状不认识一律不猜。
 		{"字段数不对(2 个)", "1|0", ytmusicAdUnknown},
-		// ⚠️ 第四段是**专辑名**(任意文本),所以 4 段是合法形状,不再 unknown。
+		// 第四段是**专辑名**(任意文本),所以 4 段是合法形状,不再 unknown。
 		// 专辑名那一半单独在 TestParseYTMusicAdProbeAlbum 里钉。
 		{"4 段:第四段是专辑名,不影响判定", "1|0|0|某专辑", ytmusicAdIsAd},
 		{"非 0/1", "1|x|0", ytmusicAdUnknown},
@@ -55,7 +55,7 @@ func TestBrowserScriptFamily(t *testing.T) {
 	if got := browserScriptFamily("com.apple.Safari"); got != "safari" {
 		t.Errorf("Safari 方言判错: %q", got)
 	}
-	// 没有提供脚本命令的浏览器(以及一切非浏览器)返回空串 → 调用方静默跳过,
+	// 没有提供脚本命令的浏览器(以及一切非浏览器)返回空串 到 调用方静默跳过,
 	// 跟 Swift 侧 family 返回 nil 的处理一致。
 	for _, id := range []string{"org.mozilla.firefox", "com.apple.Music", "", "com.whatever.app"} {
 		if got := browserScriptFamily(id); got != "" {
@@ -123,7 +123,7 @@ func TestBuildYTMusicAdAppleScript(t *testing.T) {
 	}
 }
 
-// ⚠️ 这一条守的是本仓库明确记过的坑:`execute … javascript` 会把 JS 返回值里已有的双引号
+// 这一条守的是本仓库明确记过的坑:`execute … javascript` 会把 JS 返回值里已有的双引号
 // **真的**转义成反斜杠,整段被二次转义,拿去比 contains 会稳定判 false。所以 JS 源码里
 // 不许出现双引号(它整段要嵌进 AppleScript 的双引号字符串),返回值也不含双引号。
 func TestYTMusicAdProbeJSHasNoDoubleQuotes(t *testing.T) {
@@ -157,7 +157,7 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Error("内置播放器不该被这条守卫拒掉")
 	}
 
-	// ② 两个字段都齐全 → 基础判据本来就放行,不该触发任何复核。
+	// ② 两个字段都齐全 到 基础判据本来就放行,不该触发任何复核。
 	rejected, patch := trustedPlaybackRejected(context.Background(), chrome, "周杰伦", "七里香", "枫")
 	if rejected {
 		t.Error("artist+album 齐全的不该被拒")
@@ -167,7 +167,7 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Errorf("上游有专辑名时不该给补丁, got %q", patch)
 	}
 
-	// ③ artist 为空 → 直接拒,**不做**复核(真曲目必有歌手;这一档也省掉一次 AppleScript
+	// ③ artist 为空 到 直接拒,**不做**复核(真曲目必有歌手;这一档也省掉一次 AppleScript
 	//    往返)。用一个会让复核必然超时的 ctx 来证明"没走复核":真去复核的话这里会慢。
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
@@ -179,8 +179,8 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Errorf("artist 为空这一档不该发起 AppleScript(耗时 %v)", el)
 	}
 
-	// ④ 只有 album 空、artist 非空 → 会去复核。已取消的 ctx ⇒ 复核必然失败 ⇒ unknown
-	//    ⇒ **fail-closed 拒掉**。这一条正是"读不到时不许放广告进来"的守卫。
+	// ④ 只有 album 空、artist 非空 到 会去复核。已取消的 ctx 到 复核必然失败 到 unknown
+	//    到 **fail-closed 拒掉**。这一条正是"读不到时不许放广告进来"的守卫。
 	rejected2, patch2 := trustedPlaybackRejected(ctx, chrome, "KAO Hong Kong", "", "Liese Jelly to Bubble 全新登場")
 	if !rejected2 {
 		t.Error("复核读不到时必须 fail-closed 拒掉,不能放行")
@@ -193,9 +193,9 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 
 // 第四段:页面上读到的专辑名。
 //
-// 起因是现象是「YouTube Music 播一张专辑时,第一首歌不上送专辑名」——实测坐实那是 YT Music
-// 自己的疏漏(队列第一首的 MediaSession 里 album 恒空,页面 byline 上却有),见
-// ytmusicAlbumPatch 的注释。⚠️ 跟 Swift 侧 selftest 那一组是同一批用例,两边同时改。
+// YouTube Music 播一张专辑时,第一首歌不上送专辑名——这是 YT Music 自己的疏漏
+// (队列第一首的 MediaSession 里 album 恒空,页面 byline 上却有),见
+// ytmusicAlbumPatch 的注释。 跟 Swift 侧 selftest 那一组是同一批用例,两边同时改。
 func TestParseYTMusicAdProbeAlbum(t *testing.T) {
 	cases := []struct {
 		name, raw, want string
@@ -203,11 +203,11 @@ func TestParseYTMusicAdProbeAlbum(t *testing.T) {
 		{"读到专辑名", "0|0|0||Already Gone", "Already Gone"},
 		{"页面上没读到 → 空串(不是解析失败)", "0|0|0||", ""},
 		{"只有三段(旧形状)也解得出", "0|0|0", ""},
-		// ⚠️ 专辑名是任意文本、可以自带分隔符。SplitN 保证第四段原样保留 —— 用普通 Split
+		// 专辑名是任意文本、可以自带分隔符。SplitN 保证第四段原样保留 —— 用普通 Split
 		// 的话这条会退化成"形状不对",连带把广告判定一起丢掉。
 		{"专辑名里自带 | 原样保留", "0|0|0||A|B", "A|B"},
 		{"最后一段是文本不是标志位", "1|0|0||0", "0"},
-		// ⚠️ 第四段是广告徽章计数、专辑名挪到第五段;这一条钉住"计数段坏了
+		// 第四段是广告徽章计数、专辑名挪到第五段;这一条钉住"计数段坏了
 		// 也不影响专辑名"(计数是装饰,不参与 fail-closed)。
 		{"计数段坏了不影响专辑名", "0|0|0|abc|Already Gone", "Already Gone"},
 		{"带计数时专辑名照常在最后一段", "1|1|0|1/2|Already Gone", "Already Gone"},
@@ -224,7 +224,7 @@ func TestParseYTMusicAdProbeAlbum(t *testing.T) {
 	}
 }
 
-// 补不补、补成什么。三条同时成立才补。⚠️ 跟 Swift 侧 YouTubeMusicAdProbe.albumPatch
+// 补不补、补成什么。三条同时成立才补。 跟 Swift 侧 YouTubeMusicAdProbe.albumPatch
 // 是同一套判据,两边同时改。
 func TestYTMusicAlbumPatch(t *testing.T) {
 	cases := []struct {
@@ -234,10 +234,10 @@ func TestYTMusicAlbumPatch(t *testing.T) {
 	}{
 		{"上游报空 + 是歌 + 探针有值 → 补", "", ytmusicAdIsSong, "Already Gone", "Already Gone"},
 		{"上游全是空白同样算空", "   ", ytmusicAdIsSong, "Already Gone", "Already Gone"},
-		// ⚠️ 上游报了就一律不动 —— 探针只补缺、不做纠正。第二首起 MediaSession 自己有
+		// 上游报了就一律不动 —— 探针只补缺、不做纠正。第二首起 MediaSession 自己有
 		// 专辑名,那份是权威(而页面 byline 在换歌那一瞬间可能还停在上一首)。
 		{"上游已有专辑名 → 一个字都不动", "The Essential Michael Jackson", ytmusicAdIsSong, "别的", ""},
-		// ⚠️ 广告不补:广告没有专辑,byline 上读到的多半是上一首歌的残留。
+		// 广告不补:广告没有专辑,byline 上读到的多半是上一首歌的残留。
 		{"判定是广告 → 不补", "", ytmusicAdIsAd, "Already Gone", ""},
 		{"还没探到 → 不补", "", ytmusicAdUnknown, "Already Gone", ""},
 		{"探针读到的是空白 → 不补", "", ytmusicAdIsSong, "   ", ""},
@@ -272,7 +272,7 @@ func TestYTMusicAdCacheKeyedByTrack(t *testing.T) {
 	if _, al := ytmusicAdProbe(shortCtx, "com.google.Chrome", "Queen\x00Another One Bites The Dust"); al != "A Night at the Opera" {
 		t.Errorf("命中缓存时该带回专辑名, got %q", al)
 	}
-	// 换成广告那条身份 → 缓存不命中 → 走真探测 → 这里必然失败成 unknown。
+	// 换成广告那条身份 到 缓存不命中 到 走真探测 到 这里必然失败成 unknown。
 	if got, _ := ytmusicAdProbe(shortCtx, "com.google.Chrome", "KAO Hong Kong\x00Liese"); got != ytmusicAdUnknown {
 		t.Errorf("换曲目该绕过缓存, got %v", got)
 	}

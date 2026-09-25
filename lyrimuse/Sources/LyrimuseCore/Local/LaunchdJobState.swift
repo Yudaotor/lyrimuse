@@ -54,11 +54,11 @@ extension LaunchdJobState: CustomStringConvertible {
 public enum LaunchdPrintParser {
     /// 解析 `launchctl print gui/<uid>/<label>` 的退出码 + stdout。
     ///
-    /// ⚠️ 缩进是判据的一部分,不能用 `contains`。真实输出里同时存在这三种行:
+    /// 缩进是判据的一部分,不能用 `contains`。真实输出里同时存在这三种行:
     ///
-    ///     \tstate = running          ← 顶层,要的就是这个
-    ///     \t\tstate = active         ← 嵌套在子结构里,不是 job 状态
-    ///     \tjob state = running      ← 同样一层缩进,但是**另一个字段**
+    ///     \tstate = running          —— 顶层,要的就是这个
+    ///     \t\tstate = active         —— 嵌套在子结构里,不是 job 状态
+    ///     \tjob state = running      —— 同样一层缩进,但是**另一个字段**
     ///
     /// 所以只认行首恰好一个 tab 且紧跟 `state = ` 的那一行。
     public static func parse(printExitCode: Int32, printOutput: String) -> LaunchdJobState {
@@ -98,7 +98,7 @@ public enum LaunchdPrintParser {
     /// 一次性 job)全部见过:
     ///
     ///     last exit code = 0
-    ///     last exit code = 78: EX_CONFIG      ← 带 sysexits 助记名
+    ///     last exit code = 78: EX_CONFIG      —— 带 sysexits 助记名
     ///     last exit code = (never exited)
     ///
     /// 第二种是这次差点漏掉的:直接 `Int32("78: EX_CONFIG")` 返回 nil,退出码会被静默吞掉,

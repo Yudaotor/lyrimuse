@@ -84,7 +84,7 @@ func TestNeteaseLocalSongHit(t *testing.T) {
 	if !ok {
 		t.Fatal("应当命中本地曲库")
 	}
-	// ⚠️ dbTrack 里 id 是字符串 "569213220";解不成 int64 的话这里会是 0,
+	// dbTrack 里 id 是字符串 "569213220";解不成 int64 的话这里会是 0,
 	// 上游会拿 id=0 去请求歌词、静默拿不到东西。
 	if s.ID != 569213220 {
 		t.Fatalf("songID 没解对: %d", s.ID)
