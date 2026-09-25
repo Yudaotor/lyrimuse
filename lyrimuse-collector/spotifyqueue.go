@@ -89,6 +89,9 @@ var spotifyShuffling = func() (on, ok bool) {
 // 在多久之内还能用。随机开关很少切换,沿用它比整轮退回同专辑预取好;太久没问到就不猜。
 const spotifyShuffleMemory = 30 * time.Minute
 
+// spotifyShuffleRetryDelay:一次都没问到过随机状态时,第一次问不到之后隔多久再问。
+const spotifyShuffleRetryDelay = time.Second
+
 var (
 	spotifyShuffleMu   sync.Mutex
 	spotifyLastShuffle struct {
@@ -97,9 +100,19 @@ var (
 	}
 )
 
-// spotifyShufflingRemembered 先问 Spotify;问不到就用 spotifyShuffleMemory 之内最近一次的答案。
+// spotifyShufflingRemembered 先问 Spotify;问不到就用 spotifyShuffleMemory 之内最近一次的答案。一次都没问到过
+// (collector 刚启动)时隔 spotifyShuffleRetryDelay 再问一次 —— 超时多半是换歌那一拍 Spotify 正忙,过一秒就好。
 func spotifyShufflingRemembered(now time.Time) (on, ok bool) {
 	on, ok = spotifyShuffling()
+	if !ok {
+		spotifyShuffleMu.Lock()
+		never := spotifyLastShuffle.at.IsZero()
+		spotifyShuffleMu.Unlock()
+		if never {
+			spotifySleep(spotifyShuffleRetryDelay)
+			on, ok = spotifyShuffling()
+		}
+	}
 	spotifyShuffleMu.Lock()
 	defer spotifyShuffleMu.Unlock()
 	if ok {

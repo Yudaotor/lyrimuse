@@ -281,18 +281,32 @@ func TestSpotifyUpcomingFallsBackToTrackMetadata(t *testing.T) {
 // 换歌那一拍问不到随机状态:30 分钟内沿用最近一次问到的结果,再久就不猜、退回同专辑。
 func TestSpotifyShuffleRemembersLastAnswer(t *testing.T) {
 	newTestSpotifyEnv(t, testSpotifyState([][]int{{1}}, 1), nil)
+	oldSleep := spotifySleep
+	spotifySleep = func(time.Duration) {}
+	t.Cleanup(func() { spotifySleep = oldSleep })
 	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
-	spotifyShuffling = func() (bool, bool) { return false, false }
-	if _, ok := spotifyShufflingRemembered(now); ok {
-		t.Fatal("从没问到过时不该猜")
+	calls := 0
+	spotifyShuffling = func() (bool, bool) { calls++; return false, false }
+	if _, ok := spotifyShufflingRemembered(now); ok || calls != 2 {
+		t.Fatalf("从没问到过时再问一次、仍问不到就不猜,得到 ok=%v 问了 %d 次", ok, calls)
 	}
+	// 刚启动那一次问不到、隔一秒再问就问到了。
+	calls = 0
+	spotifyShuffling = func() (bool, bool) { calls++; return calls == 2, calls == 2 }
+	if on, ok := spotifyShufflingRemembered(now); !ok || !on || calls != 2 {
+		t.Fatalf("第二次问到了就用它,得到 on=%v ok=%v 问了 %d 次", on, ok, calls)
+	}
+	spotifyShuffleMu.Lock()
+	spotifyLastShuffle.at = time.Time{}
+	spotifyShuffleMu.Unlock()
 	spotifyShuffling = func() (bool, bool) { return true, true }
 	if on, ok := spotifyShufflingRemembered(now); !ok || !on {
 		t.Fatalf("问得到就用问到的,得到 on=%v ok=%v", on, ok)
 	}
-	spotifyShuffling = func() (bool, bool) { return false, false }
-	if on, ok := spotifyShufflingRemembered(now.Add(spotifyShuffleMemory)); !ok || !on {
-		t.Fatalf("记忆期内沿用上一次(随机开),得到 on=%v ok=%v", on, ok)
+	calls = 0
+	spotifyShuffling = func() (bool, bool) { calls++; return false, false }
+	if on, ok := spotifyShufflingRemembered(now.Add(spotifyShuffleMemory)); !ok || !on || calls != 1 {
+		t.Fatalf("记忆期内沿用上一次(随机开)、不再多问,得到 on=%v ok=%v 问了 %d 次", on, ok, calls)
 	}
 	if _, ok := spotifyShufflingRemembered(now.Add(spotifyShuffleMemory + time.Second)); ok {
 		t.Fatal("超过记忆期就不猜")
