@@ -238,4 +238,29 @@ func runLyricsWindowTests() {
         expectEqual(anchor(progress: 199_000, age: 0).extrapolatedPositionMs(now: t0.addingTimeInterval(5)), 200_000,
                     "进度外推: 不超过曲长")
     }
+
+    // ---- 窗口控制器的收尾与窗口不可见时停表(源码契约) ----
+    do {
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let view = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                encoding: .utf8)) ?? ""
+        let monitor = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/UI/WindowCoverageMonitor.swift"),
+                                   encoding: .utf8)) ?? ""
+        // LyricsWindowController 里每个 `private var xxxObserver: NSObjectProtocol?` 都要出现在 deinit 那张摘除表里。
+        let controller = view.components(separatedBy: "private final class LyricsWindowController").dropFirst().first
+            .flatMap { $0.components(separatedBy: "\nprivate struct LyricsWindowCapture").first } ?? ""
+        let declared = controller.matches(of: #/private var (\w+Observer): NSObjectProtocol\?/#).map { String($0.1) }
+        let deinitBody = controller.components(separatedBy: "deinit {").dropFirst().first ?? ""
+        let removeList = deinitBody.components(separatedBy: "].compactMap").first ?? ""
+        expectEqual(declared.count >= 10, true, "窗口收尾(契约): 扫到了控制器里的观察者声明(\(declared.count) 个)")
+        expectEqual(declared.filter { !removeList.contains($0) }, [],
+                    "窗口收尾(契约): attach 挂的观察者 deinit 都要摘掉")
+        expectEqual(view.contains("if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }"), true,
+                    "窗口收尾(契约): 同一扇窗关了再开,遮挡检测要重新挂上")
+        expectEqual(monitor.contains("deinit {") && monitor.contains("timer?.invalidate()"), true,
+                    "窗口收尾(契约): 遮挡检测被放手时自己停表")
+        expectEqual(view.contains("if let anchor, isVisible {")
+                    && view.contains("isVisible: windowController.isSurfaceVisible,"), true,
+                    "进度条(契约): 窗口面看不见时停掉每秒一次的推进")
+    }
 }

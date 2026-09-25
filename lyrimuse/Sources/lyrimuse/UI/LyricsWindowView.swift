@@ -601,7 +601,11 @@ private final class LyricsWindowController: ObservableObject {
     // 实例自己的属性,窗口一关就随实例一起没了,也不受切换焦点影响,不像 presentationOptions
     // 那样是进程级的全局状态、需要显式清理。
     func attach(_ window: NSWindow) {
-        guard self.window !== window else { return }
+        guard self.window !== window else {
+            // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
+            if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
+            return
+        }
         self.window = window
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
@@ -678,11 +682,7 @@ private final class LyricsWindowController: ObservableObject {
             }
         }
         // occlusionState 的盲区:几乎整扇被别的窗口盖住、只露一条缝时它仍报可见(见 occlusionVisible 注释)。
-        coverageMonitor?.stop()
-        coverageMonitor = WindowCoverageMonitor(window: window) { [weak self] covered in
-            self?.coveredByOthers = covered
-            self?.refreshSurfaceVisible()
-        }
+        startCoverageMonitor(window)
         if let fullScreenCapabilityObserver { NotificationCenter.default.removeObserver(fullScreenCapabilityObserver) }
         fullScreenCapabilityObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didUpdateNotification, object: window, queue: .main
@@ -754,6 +754,16 @@ private final class LyricsWindowController: ObservableObject {
                     self.nativeFullScreenEscapeMonitor = nil
                 }
             }
+        }
+    }
+
+    private func startCoverageMonitor(_ window: NSWindow) {
+        coverageMonitor?.stop()
+        coveredByOthers = false
+        refreshSurfaceVisible()
+        coverageMonitor = WindowCoverageMonitor(window: window) { [weak self] covered in
+            self?.coveredByOthers = covered
+            self?.refreshSurfaceVisible()
         }
     }
 
@@ -856,11 +866,14 @@ private final class LyricsWindowController: ObservableObject {
     deinit {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
         if let nativeFullScreenEscapeMonitor { NSEvent.removeMonitor(nativeFullScreenEscapeMonitor) }
-        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
-        if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
-        if let enterFullScreenObserver { NotificationCenter.default.removeObserver(enterFullScreenObserver) }
-        if let exitFullScreenObserver { NotificationCenter.default.removeObserver(exitFullScreenObserver) }
-        if let fullScreenCapabilityObserver { NotificationCenter.default.removeObserver(fullScreenCapabilityObserver) }
+        // attach 里挂的观察者一个不落地摘掉(新加观察者时这里同步加一行)。
+        for observer in [closeObserver, resignKeyObserver, becomeKeyObserver, enterFullScreenObserver,
+                         exitFullScreenObserver, fullScreenCapabilityObserver, frameObserver, resizeObserver,
+                         liveResizeStartObserver, liveResizeEndObserver, occlusionObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        // coverageMonitor 随本对象释放,自己的 deinit 会停表。
+        persistFrameTask?.cancel()
     }
 }
 
@@ -2679,6 +2692,7 @@ struct LyricsWindowView: View {
             // 拖动、悬停变粗的失效全部收敛在子树内,不再击穿整窗。
             WindowProgressSection(
                 anchor: playback.anchor,
+                isVisible: windowController.isSurfaceVisible,
                 pausedPositionMs: playback.pausedPositionMs,
                 durationMs: playback.currentDurationMs,
                 onArtwork: hasArtworkBackground,
@@ -5081,6 +5095,8 @@ private func amVibrantColor(layers: WindowBackgroundLayers?, satScale: Double, s
 
 private struct WindowProgressSection: View {
     let anchor: ProgressAnchor?
+    /// 窗口面看不看得见(`LyricsWindowController.isSurfaceVisible`)。看不见时停掉每秒一次的推进。
+    let isVisible: Bool
     let pausedPositionMs: Int?
     let durationMs: Int?
     let onArtwork: Bool
@@ -5110,7 +5126,7 @@ private struct WindowProgressSection: View {
 
     @ViewBuilder
     var body: some View {
-        if let anchor {
+        if let anchor, isVisible {
             // 播放中:1 秒一档从锚点外推——4pt 高的进度条上,秒级步进配 .linear 补间在
             // 视觉上已经连续,不值得为它再挂一个逐帧刷新的 TimelineView(.animation)。
             TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -5121,6 +5137,9 @@ private struct WindowProgressSection: View {
                     // 补间要用它把终点提前一秒,见 progressBar 里 onChange 的注释。
                     advancePerSecondMs: 1000 * anchor.rate)
             }
+        } else if let anchor {
+            // 窗口面看不见:画一次当下的位置就停。恢复可见时回到上面那支,进度条的 onAppear 直接对齐到真实位置。
+            progressBar(positionMs: anchor.extrapolatedPositionMs(now: Date()), durationMs: anchor.durationMs)
         } else if let paused = pausedPositionMs, let duration = durationMs, duration > 0 {
             // 暂停:显示冻结位置(anchor 此时是 nil,见 pausedPositionMs 定义处注释)。
             progressBar(positionMs: paused, durationMs: duration)

@@ -47,6 +47,13 @@ final class WindowCoverageMonitor {
         recompute()
     }
 
+    /// 持有方没调 stop 就放手时也得停:计时器挂在 RunLoop 上,不失效就一直每 2 秒空转。
+    deinit {
+        timer?.invalidate()
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
+    }
+
     func stop() {
         timer?.invalidate()
         timer = nil
