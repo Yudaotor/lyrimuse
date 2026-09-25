@@ -353,6 +353,8 @@ func main() {
 	// migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。跟歌词那条 import/export
 	// 链**没有**先后关系 —— 它一个歌词字段都不碰,只擦 cover_album。
 	startupStep("migrateBorrowedCoverAlbums", migrateBorrowedCoverAlbums)
+	// 已经存成设备封面的播放器占位图清掉(见 knownplaceholder.go),约束同上一条。
+	startupStep("migrateKnownPlaceholderCovers", migrateKnownPlaceholderCovers)
 	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
 	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)
 	// 用户手改 lyrics/ 里的文件同样是外来数据入口:改到了东西就作废水位,理由同上。

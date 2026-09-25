@@ -1508,6 +1508,12 @@ final class PlaybackCoordinator: ObservableObject {
         // 刻意重新从数据源读,而不是用订阅回调的参数:那几个值来自 willSet 时机,
         // 彼此可能不是同一首歌的(见调用点注释)。
         let s = LocalPlaybackSource.shared
+        // Spotify 原图档那条路挂上的图不归这里撤:它的身份由播放时刻保证(图床地址是这首的),系统封面
+        // 后到、被清掉或换了一份都不影响它。撤了再等那条路 350ms 后放回,中间背景会整块消失一下。
+        // 换歌时 spotifyArtworkURL 先被置空,这道闸自然不成立,上一首的原图照常撤掉。
+        if let applied = spotifyCoverAppliedURL, applied == s.spotifyArtworkURL, highResArtworkImage != nil {
+            return
+        }
         let (title, artist, album) = (s.title, s.artist, s.album)
         // @Published 是 willSet 语义,给已是 nil 的属性再赋 nil 照样广播——四条清空路径
         // 每次换歌至少走一条,不加闸就是每换歌 1-2 轮白广播,还会穿透下游按 === 去重的

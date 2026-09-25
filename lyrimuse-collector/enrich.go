@@ -2008,9 +2008,9 @@ func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bun
 // 网页中继和歌词管理里都会一直是那张唱片。「设备封面的身份由这一刻确实在播这首歌直接
 // 保证」这条前提仍然成立 —— 不成立的是「它已经是这首歌的最终封面」。
 //
-// 别改成「识破占位图」:那要么维护一份按播放器、按版本失效的图片哈希表,要么拿「多首歌
-// 共用同一张图」去猜(合辑封面本来就共用)。按时间多问几次是通用的 —— 没有这个行为的
-// 播放器只是多几次 sha256 比对,同一张图 saveDeviceArtwork 连盘都不会重写。
+// 登记在案的占位图(knownplaceholder.go)在 deviceCoverURLIfFresh 里直接拦下,但那张表按字节
+// 指纹认图、播放器换一版内置图就静默失效,所以不能替代这里:按时间多问几次是通用的 —— 没有这个
+// 行为的播放器只是多几次 sha256 比对,同一张图 saveDeviceArtwork 连盘都不会重写。
 var deviceCoverSettleDelays = []time.Duration{3 * time.Second, 5 * time.Second, 8 * time.Second}
 
 // settleDeviceCover 把上面那张间隔表跑完,换上一次就收工——占位图换成真封面是一次性事件。

@@ -19,13 +19,15 @@ final class ImageMemoryCache {
     /// 原来共用同一个"按原图存"的缓存 —— 一张网易云原生大图(3000² ≈ 36MB 解码后)
     /// 就能吃掉 48MB 预算的大半,把几百张列表缩略图挤出去,表现成列表滚动时缩略图
     /// 反复换入换出闪占位符。缩略档在解码时就降采样到 ≤256px(Retina 下 40pt 行高
-    /// 也远够),cost 直接小两个数量级;原图档留给真需要分辨率的消费方(高清封面替代,
-    /// 920pt@2x 需要 1840px,不能降)。
+    /// 也远够),cost 直接小两个数量级;原图档留给真需要分辨率的消费方(高清封面替代),
+    /// 同样在解码时封顶 2048px:最大的消费面是歌词窗口 460pt 的封面卡,2 倍屏 920px,
+    /// 放大到 1840pt@2x 也够。网易云图床去掉尺寸参数后原图最大 3000²(解码 36MB、占掉这里
+    /// 48MB 预算的四分之三),封顶后约 16MB;小于 2048 的图原样解码。
     enum Variant: String {
         case thumbnail // ≤256px,列表/头像/小封面
-        case original  // 原图,高清封面替代
+        case original  // ≤2048px,高清封面替代
 
-        var maxPixel: CGFloat? { self == .thumbnail ? 256 : nil }
+        var maxPixel: CGFloat { self == .thumbnail ? 256 : 2048 }
     }
 
     private let cache: NSCache<NSString, NSImage> = {

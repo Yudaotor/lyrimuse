@@ -661,10 +661,49 @@ func runSourceContractTests() {
                             "封面沉降: 二次确认要是一张间隔表,只确认一次会整首歌卡在占位图上")
                 expectEqual(lps3.contains("for delay in Self.artworkConfirmDelays {"), true,
                             "封面沉降: 间隔表要真的逐档跑")
-                expectEqual(lps3.contains("confirmData != self.artworkData else { continue }"), true,
-                            "封面沉降: 某一档读空要 continue 不能 return,否则撞上一次空载荷就没有第二次机会")
+                if let r = lps3.range(of: "confirmData != self.artworkData else {") {
+                    let tail = lps3[r.upperBound...].prefix(900)
+                    expectEqual(tail.contains("continue\n                }") && !tail.prefix(700).contains("return\n"), true,
+                                "封面沉降: 某一档读空要 continue 不能 return,否则撞上一次空载荷就没有第二次机会")
+                } else {
+                    expectEqual(true, false, "封面沉降: 找不到二次确认那道 guard")
+                }
+                // 首轮没等到这首的图(载荷仍是上一首的 / 是登记在案的占位图)不能当成"没有封面"清空:
+                // Spotify 换歌后系统侧常要 3~30 秒才切过来,清空会让歌词窗口整窗回落再闪回来。
+                expectEqual(lps3.components(separatedBy: "holdingPrevious = true").count - 1, 2,
+                            "封面沉降: 载荷仍是上一首的、以及认出占位图,两种都要留着旧封面等二次确认")
+                expectEqual(lps3.contains("expected=\\(expectedKey, privacy: .public), dropping"), false,
+                            "封面沉降: 重试打满仍是别的歌的图时别再把封面置空")
+                // 清旧封面在确认循环里做,别交给定时器:确认间隔和兜底期限都是 3 秒,必然撞在同一档上。
+                expectEqual(lps3.contains("if holdingPrevious, waited >= Self.artworkHoldLimit {"), true,
+                            "封面沉降: 等不到真图时要在确认循环里按期限清旧封面")
+                expectEqual(lps3.contains("after: Self.artworkConfirmDelays.first.map"), false,
+                            "封面沉降: 兜底期限别再按第一档确认去推,会跟第二档撞上")
+                // 二次确认换上真图时要撤兜底任务,不然留着旧封面那条路上它几秒后会把真封面清掉。
+                if let r = lps3.range(of: "artwork confirm pass replaced cover after") {
+                    let tail = lps3[r.upperBound...].prefix(500)
+                    expectEqual(tail.contains("self.artworkStaleTimeoutTask?.cancel()"), true,
+                                "封面沉降: 二次确认换上真图时要一起撤掉兜底任务")
+                } else {
+                    expectEqual(true, false, "封面沉降: 找不到二次确认换图那段")
+                }
             } else {
                 expectEqual(true, false, "封面沉降: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+            }
+            // 歌词窗口的"暗底"判定要跟实际画的背景同源:背景按「高清替代 ?? 系统那份」烘焙,
+            // Spotify 在系统那份还没有时会先挂原图档,只看系统那份的话暗背景上是深色字。
+            if let win = text("lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift") {
+                expectEqual(win.contains("return playback.artworkData != nil || playback.highResArtworkImage != nil"), true,
+                            "封面沉降: 歌词窗口判「有封面背景」要把高清替代算进去")
+            } else {
+                expectEqual(true, false, "封面沉降: 读不到 LyricsWindowView.swift(路径挪了?)")
+            }
+            // Spotify 原图档挂上之后,系统封面到货 / 被清掉都不该把它撤掉再放回(中间背景整块消失一下)。
+            if let pc = text("lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift") {
+                expectEqual(pc.contains("if let applied = spotifyCoverAppliedURL, applied == s.spotifyArtworkURL, highResArtworkImage != nil {"), true,
+                            "封面沉降: 高清替代那条路别撤当前这首的 Spotify 原图")
+            } else {
+                expectEqual(true, false, "封面沉降: 读不到 PlaybackCoordinator.swift(路径挪了?)")
             }
             if let enrich = text("lyrimuse-collector/enrich.go") {
                 expectEqual(enrich.components(separatedBy: "go settleDeviceCover(").count - 1, 2,

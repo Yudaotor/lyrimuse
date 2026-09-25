@@ -22,7 +22,8 @@ enum DirectFirstImageLoad {
     private static let directRetryAfter: TimeInterval = 10 * 60
     private static var directFailedAt: [String: Date] = [:]
 
-    /// 原图档(不降采样)。直连失败退回 ImageMemoryCache.shared.load(系统代理,不设总时长上限)。
+    /// 原图档。直连这条不降采样(Spotify 原图实测最大 2000²,本来就在原图档 2048 的封顶之内);
+    /// 直连失败退回 ImageMemoryCache.shared.load(系统代理,不设总时长上限)。
     static func loadOriginal(_ url: URL) async -> NSImage? {
         if let hit = ImageMemoryCache.shared.image(for: url, variant: .original) { return hit }
         let host = url.host ?? ""

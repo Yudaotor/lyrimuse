@@ -3886,9 +3886,11 @@ struct LyricsWindowView: View {
     private var hasArtworkBackground: Bool {
         switch activeBackgroundMode {
         case .artwork:
-            // 封面背景必然是暗的(烘焙压过 EV −1.9 + 0.15 黑遮罩),维持原判据;拿不到封面时
-            // 什么都不画、退回系统窗口底色,那就该跟随系统深浅色。
-            return playback.artworkData != nil
+            // 封面背景必然是暗的(烘焙压过 EV −1.9 + 0.15 黑遮罩);拿不到封面时什么都不画、退回系统
+            // 窗口底色,那就该跟随系统深浅色。两份封面都要看:背景按「高清替代 ?? 系统那份」烘焙,
+            // 而 Spotify 在系统那份还没有时会先挂原图档(见 PlaybackCoordinator.refreshSpotifyOriginalCover),
+            // 只看系统那份的话暗背景上会配深色字。
+            return playback.artworkData != nil || playback.highResArtworkImage != nil
         case .solid:
             return LyricsWindowBackgroundLuma.prefersLightText(
                 hexes: [activeBackgroundColorHex], darkAppearance: colorScheme == .dark)

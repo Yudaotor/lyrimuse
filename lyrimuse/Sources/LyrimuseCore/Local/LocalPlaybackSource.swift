@@ -3438,9 +3438,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 结果是**整首歌**都挂着播放器的占位图。它是一张合法的 600×600 JPEG,取图这条路上没有
     // 任何一道判据能识破它,日志里也不留痕迹——看起来完全像"封面取不到"。
     //
-    // 也别改成"识破占位图":那要么维护一份按播放器、按版本失效的图片哈希表,要么拿
-    // "多首歌共用同一张图"去猜(合辑封面本来就共用)。按时间多确认几次是通用的——没有这个
-    // 行为的播放器只是多几次字节比对,相同就原样丢弃。
+    // 登记在案的占位图(KnownPlaceholderArtwork)只是它的补充,不能替代它:那张表按字节指纹认图,
+    // 播放器换一版内置图就静默失效。按时间多确认几次是通用的——没有这个行为的播放器只是多几次
+    // 字节比对,相同就原样丢弃。
     //
     // 档位密在 3~16 秒之间,是按占位期的实测分布排的:同一个播放器上量到过 3.2 / 7 / 8 秒
     // 三种翻转时刻。稀疏排法(累计 3 / 8 / 16)在 8 秒那一档翻转的歌上最坏要等到第 16 秒才
@@ -3448,6 +3448,13 @@ public final class LocalPlaybackSource: ObservableObject {
     // 首尾两档不动:3 秒是"翻转最快的那种"能赶上的最早时机,31 秒是整条确认链的收尾。
     // 别为了省这两次取图把中间挖空——挖掉的正是占位期的众数所在。
     private static let artworkConfirmDelays: [TimeInterval] = [3, 3, 3, 3, 4, 15]
+
+    // 首轮留着旧封面等真图(见 fetchArtworkForCurrentTrack 里的 holdingPrevious)最多等到二次确认的
+    // 哪一档(累计秒数)。9 秒盖住实测的换图时刻(酷狗占位图 3.2 / 7 / 8 秒;Spotify 系统侧切到新歌
+    // 常见 3~9 秒),到这一档还没等到就当场清掉旧封面。清理必须在确认循环里做,别交给定时器:
+    // 确认间隔和 artworkStaleTimeout 都是 3 秒,定时器的期限必然跟某一档确认撞在一起,旧封面先被
+    // 清成灰底、下一拍真图才到。
+    private static let artworkHoldLimit: TimeInterval = 9
 
     /// 封面载荷的曲目标识和当前曲目是否算同一首。大小写不敏感:media-control 对同一首歌
     /// 报过大小写不一致的元数据(enrich 缓存那边为 "2 Bad"/"Scream" 踩过,见相应 memory),
@@ -3497,32 +3504,32 @@ public final class LocalPlaybackSource: ObservableObject {
                 round += 1
             }
             guard expectedKey == self.lastKey else { return }
+            // 首轮没等到这首歌能用的图,又不能断定它没有封面,就**留着当前挂着的旧封面**,交给下面的
+            // 二次确认换上(到 artworkHoldLimit 那一档还等不到才清)。两种情况:
+            //  - 重试打满载荷仍是别的歌的:系统侧还没切到这首(Spotify 实测常要 3~30 秒)。这张图绝不能
+            //    挂上,但它也不是"这首没有封面"的证据,清空会让歌词窗口整窗回落成无封面的样子再闪回来;
+            //  - 登记在案的播放器内置占位图(KnownPlaceholderArtwork):挂一张跟这首歌无关的唱片,比
+            //    "旧封面多留几秒"糟。
+            // 留一条日志:万一两条路径的元数据出现系统性偏差(同一首歌两个 key 恒不相等),前一条会对
+            // 每首歌都触发,靠日志能一眼定位;后一条用来确认占位图登记表还在生效。
+            var holdingPrevious = false
             if let payloadKey, data != nil, !Self.artworkKeyMatches(payloadKey, expectedKey) {
-                // 重试打满仍是别的歌的封面:宁可占位也不挂错图。留一条 info 日志——万一
-                // 两条路径的元数据出现系统性偏差(同一首歌两个 key 恒不相等),这里会对
-                // 每首歌都触发,靠日志能一眼定位。
-                logger.notice("artwork payload key mismatch after retries: payload=\(payloadKey, privacy: .public) expected=\(expectedKey, privacy: .public), dropping")
-                data = nil
-            }
-            // 结果定案了(data 仍为 nil = 重试完还是没有,判定这首歌确实没有封面),
-            // 兜底任务**先**撤掉再去取色 —— 取色那次 await 有几十毫秒,3s 兜底在最后
-            // 一次尝试逼近期限时可能正落在这个窗口里开火,把旧封面清掉又立刻被新封面
-            // 覆盖,白闪一跳(对抗核实抓出的时序窗)。
-            // 认得出的播放器内置占位图**不采纳**:留着上一首的封面,等下面那张间隔表把真图
-            // 换上 —— 挂一张跟这首歌无关的唱片,比"旧封面多留几秒"糟(见
-            // KnownPlaceholderArtwork,以及本文件 artworkRetryDelays 上面"换歌不立即清旧
-            // 封面"那段)。这一支**不撤**兜底任务:真图万一永远不来,它照常把旧封面清掉,
-            // 否则上一首的封面会一直挂着。
-            if let data, KnownPlaceholderArtwork.isPlaceholder(data) {
+                logger.notice("artwork payload key mismatch after retries: payload=\(payloadKey, privacy: .public) expected=\(expectedKey, privacy: .public), keeping previous cover")
+                holdingPrevious = true
+            } else if let data, KnownPlaceholderArtwork.isPlaceholder(data) {
                 logger.notice("artwork placeholder recognized: bytes=\(data.count), keeping previous cover")
-                // 兜底任务要**往后推过第一档确认**再挂上:它原来的期限是"最后一次取图 +3s",
-                // 而第一档确认也正好排在 +3s —— 两者撞在一起,旧封面先被清成灰底占位、下一拍
-                // 真封面才到,中间白闪一下,等于这道闸白拦。推到确认之后,认出占位图的这条路上
-                // 就是"旧封面 → 真封面"直接过渡;真图永远不来时它照常兜底,只是晚一档。
+                holdingPrevious = true
+            }
+            if holdingPrevious {
+                // 清旧封面由确认循环在 artworkHoldLimit 那一档做;兜底任务只防子进程卡死(确认循环跑不下去),
+                // 期限排在那一档之后。
                 self.scheduleArtworkStaleTimeout(
-                    forKey: expectedKey,
-                    after: Self.artworkConfirmDelays.first.map { $0 + Self.artworkStaleTimeout })
+                    forKey: expectedKey, after: Self.artworkHoldLimit + Self.artworkStaleTimeout)
             } else {
+                // 结果定案了(data 为 nil = 重试完还是没有,判定这首歌确实没有封面),
+                // 兜底任务**先**撤掉再去取色 —— 取色那次 await 有几十毫秒,3s 兜底在最后
+                // 一次尝试逼近期限时可能正落在这个窗口里开火,把旧封面清掉又立刻被新封面
+                // 覆盖,白闪一跳。
                 self.artworkStaleTimeoutTask?.cancel()
                 self.artworkStaleTimeoutTask = nil
                 // 定案才取色(后台),丢弃路径一次都不算。
@@ -3547,17 +3554,41 @@ public final class LocalPlaybackSource: ObservableObject {
                 guard expectedKey == self.lastKey else { return }
                 let confirm = await attempt()
                 guard expectedKey == self.lastKey else { return }
+                // 留着的旧封面恰好就是这首的(同一张专辑的下一首,字节相同):等到了,别再按期限清掉。
+                if holdingPrevious, let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
+                   Self.artworkKeyMatches(confirmKey, expectedKey), confirmData == self.artworkData {
+                    holdingPrevious = false
+                    self.artworkStaleTimeoutTask?.cancel()
+                    self.artworkStaleTimeoutTask = nil
+                    continue
+                }
                 guard let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
                       Self.artworkKeyMatches(confirmKey, expectedKey),
                       // 这一档又读到占位图:字节确实跟当前挂着的不一样,但它不是真封面,
                       // 换上去等于把上面那道闸白拦一次。
                       !KnownPlaceholderArtwork.isPlaceholder(confirmData),
-                      confirmData != self.artworkData else { continue }
+                      confirmData != self.artworkData else {
+                    // 留着旧封面等到了期限还没等到这首的图:当场清掉,理由见 artworkHoldLimit。
+                    if holdingPrevious, waited >= Self.artworkHoldLimit {
+                        holdingPrevious = false
+                        self.artworkStaleTimeoutTask?.cancel()
+                        self.artworkStaleTimeoutTask = nil
+                        if self.artworkData != nil {
+                            logger.notice("artwork: no cover for \(expectedKey, privacy: .public) \(waited, privacy: .public)s after the track change, clearing the previous one")
+                            self.artworkData = nil
+                            self.artworkAverageHex = nil
+                        }
+                    }
+                    continue
+                }
                 // 先比完字节确认真的要换,才算这一份的均值色(attempt 顺手预算的话,字节相同
                 // 丢弃的常态路径每次白算一遍取色)。
                 let confirmHex = await hexFor(confirmData)
                 guard expectedKey == self.lastKey else { return }
                 logger.notice("artwork confirm pass replaced cover after \(waited, privacy: .public)s: bytes=\(confirmData.count) hadCover=\(self.artworkData != nil)")
+                // 兜底任务要一起撤:留着旧封面那条路上它还在倒数,不撤的话几秒后会把刚换上的真封面清掉。
+                self.artworkStaleTimeoutTask?.cancel()
+                self.artworkStaleTimeoutTask = nil
                 self.artworkData = confirmData
                 self.artworkAverageHex = confirmHex
                 self.noteRadioStationArtwork(confirmData, forKey: expectedKey)

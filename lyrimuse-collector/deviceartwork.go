@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"image"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -84,6 +85,12 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 	}
 	data, mimeType, ok := fetchNowPlayingArtwork(ctx, bundleID, artist, title)
 	if !ok {
+		return ""
+	}
+	// 播放器的内置占位图不收:收下就是 device 封面、之后不再换源(见 knownplaceholder.go)。
+	// settleDeviceCover 后面几档会再问,真图到了照常换上。
+	if isKnownPlaceholderArtwork(data) {
+		log.Printf("device artwork: a player's built-in placeholder for %q - %q, not using it", artist, title)
 		return ""
 	}
 	if _, ok := decodeDeviceArtwork(data); !ok {
