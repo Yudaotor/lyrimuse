@@ -1713,6 +1713,11 @@ func runSourceContractTests() {
                         "图层滚动行: 静置位置按此刻的滚动偏移取")
             expectEqual(row.contains("restingX - offset"), true, "图层滚动行: 静置时减去此刻的偏移")
             // 停 / 走、显示窗口只影响动画,不重画长图。
+            // 控制排只在背景透明时跟着歌词块换边;有背景时落在窗口正中,落点和留白两处都要认这条。
+            expectEqual(view.contains("private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }"), true,
+                        "悬浮控制排: 跟不跟歌词块由背景是否可见决定")
+            expectEqual(view.components(separatedBy: "guard controlsFollowLyrics else").count - 1, 2,
+                        "悬浮控制排: controlsFrameAlignment 与 controlsInsets 都要在有背景时退回居中 / 零留白")
             expectEqual(row.contains("a.paused = b.paused") && row.contains("a.pacedWindow = b.pacedWindow"), true,
                         "图层滚动行: sameImages 忽略 paused / pacedWindow")
             // 暂停时外推要冻住,否则停着也会每 250ms 判一次漂移重装。

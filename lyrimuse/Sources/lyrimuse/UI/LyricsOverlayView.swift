@@ -636,6 +636,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句
     /// (例如《All Night》女声"U got to dance all night"被摆在
     /// 男声"All night"底下)。同样套过对齐方式覆盖,理由跟 duetSide 一致。
+        //
+        // 只在背景透明时跟:有背景(纯色 / 毛玻璃)时卡片本身就是一块看得见的底,按钮排
+        // 在整扇窗正中,见 `controlsFollowLyrics`。
     private var nextLineDuetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
@@ -667,7 +670,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 控制排该贴哪一边 —— 跟卡片 `duetFrameAlignment` 同一条推导,只是输入换成
     /// `controlsRealSide`(可能是冻住的那一份)。
     private var controlsFrameAlignment: Alignment {
-        frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
+        guard controlsFollowLyrics else { return .center }
+        return frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
     }
 
     /// 这张卡里最宽的那一行**不换行的话要多宽**(含声部圆点占掉的那一截)。
@@ -692,6 +696,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
             let previewFont = nextLinePreviewFont == playback.mainFont ? fonts.main : fonts.preview
             widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: previewFont))
+    /// 控制排横向跟不跟歌词块走。背景透明时跟(看得见的只有字,按钮排要落在字的上方);
+    /// 背景可见时不跟,固定在窗口正中、两侧不留白。`controlsFrameAlignment` 与
+    /// `controlsInsets` 两处都读它,别只改一处。
+    private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }
+
         }
         guard widest > 0 else { return 0 }
         return widest + indicator.leading + indicator.trailing
@@ -712,7 +721,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 留白让开时按钮排要跟着让开同样多(`scale`),否则长句把歌词块推到卡片边缘、按钮排
     /// 还钉在原来的缩进上 —— 又是一次"按钮不在歌词上方"。
     private var controlsInsets: (leading: CGFloat, trailing: CGFloat) {
-        OverlayCardGeometry.controlsInsets(
+        guard controlsFollowLyrics else { return (0, 0) }
+        return OverlayCardGeometry.controlsInsets(
             for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: controlsRealSide),
             unit: playback.duetInsetUnit,
             stageInset: playback.duetStageInset,
