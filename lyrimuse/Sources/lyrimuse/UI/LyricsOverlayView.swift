@@ -273,6 +273,8 @@ protocol OverlayChromeSource: ObservableObject {
     var hoveredControl: OverlayControlID? { get }
     /// 长按拖动已经"武装",画一圈跟前景色同色的高亮描边。
     var isDragArmed: Bool { get }
+    /// 「调整宽度」模式开着:控制排常驻、那颗键点亮,背景透明时虚线框出窗口边界。
+    var isAdjustingWidth: Bool { get }
     /// 第一次解锁「锁定位置」时短暂弹一次的手势提示。
     var showDragHint: Bool { get }
     /// 通用的瞬态提示文字(全局快捷键的操作回声:"歌词偏移 +0.50s"、"已锁定位置"…)。
@@ -410,6 +412,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private let overlayCoordSpaceName = "overlayContent"
     /// 控制排横向落点的"冻结"状态,见 `OverlayControlsSidePin`。
     @State private var controlsSidePin: OverlayControlsSidePin = .free
+    /// 控制排按钮的悬浮提示此刻显示的是哪一颗(nil = 不显示),以及气泡自己量出来的尺寸。
+    /// 见 `controlTooltipOverlay`。
+    @State private var shownControlTooltip: OverlayControlID?
+    @State private var controlTooltipSize: CGSize = .zero
 
     // 播放控制排该不该显示:开关开着、悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用
     // 同一个判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
@@ -422,7 +428,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         OverlayControlHitTest.controlsShown(
             hovering: overlayController.isHoveringForControls,
             positionLocked: playback.lockPosition,
-            hoverControlsEnabled: overlayController.showHoverControls)
+            hoverControlsEnabled: overlayController.showHoverControls,
+            adjustingWidth: overlayController.isAdjustingWidth)
     }
 
     /// 「指针划过时让开」的当前不透明度。
@@ -432,7 +439,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// "临时看一眼下面",不该跟那三个真正的可见性来源抢同一个开关。留 15% 也让用户知道
     /// 窗口还在那儿、不是消失了。
     private var hoverFadeOpacity: Double {
-        playback.fadeOnHover && overlayController.isHoveringLyrics ? 0.15 : 1
+        // 调宽度时指针就在窗口上来回,淡掉就看不清折行变成什么样了。
+        playback.fadeOnHover && overlayController.isHoveringLyrics && !overlayController.isAdjustingWidth ? 0.15 : 1
     }
 
     /// 这一屏实际要画的那一行。真窗口恒等于 `playback.currentLine`(`previewLine` 是 nil),
@@ -477,6 +485,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             if controlsSlotBelow { controlsSlot }
         }
         .coordinateSpace(name: overlayCoordSpaceName)
+        .modifier(controlTooltipOverlay)
         // 纯测量用,不影响视觉——把这次渲染真正需要的高度(按钮槽位+歌词卡片)报给窗口控制器
         // 去调整窗口高度,长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
         .background(
@@ -542,6 +551,19 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 它垂直居中,整块歌词上跳半个差值、等窗口长好再落回来。钉住 minHeight 后 frame 恒等于
         // 宿主高度,多出来的内容照 alignment 从锚边那一侧往外溢(先被裁掉几帧),锚边的字不动。
         .frame(minHeight: 0, maxHeight: .infinity, alignment: playback.placementMode.anchorsBottom ? .bottom : .top)
+        // 「调整宽度」模式下左右两条可拖的边从上到下垫一层几乎看不见的底:WindowServer 按像素 alpha
+        // 判指针落在哪扇窗,全透明的地方(卡片外、控制排槽位两侧)即使收回了点击穿透也会漏给下层
+        // App,光标和按下都归它。宽度跟 `OverlayWidthDrag.edgeBand` 一致;overlay 不参与布局。
+        .overlay {
+            if overlayController.isAdjustingWidth {
+                HStack(spacing: 0) {
+                    Color.black.opacity(0.001).frame(width: OverlayWidthDrag.edgeBand)
+                    Spacer(minLength: 0)
+                    Color.black.opacity(0.001).frame(width: OverlayWidthDrag.edgeBand)
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     /// 控制排槽位放在歌词卡片**下方**还是上方,判据见 `OverlayChromeSource.controlsBelowCard`
@@ -614,6 +636,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 故意**不加动画**:歌词换行本身就是纯属性跳变(见文件头),按钮排跟着一起
         // 硬切才对得上;而且动画途中 `ControlRectsPreferenceKey` 会逐帧上报中间位置,
         // 控制器按矩形分发的点击会落在"飞到一半"的按钮上。
+        //
+        // 只在背景透明时跟:有背景(纯色 / 毛玻璃)时卡片本身就是一块看得见的底,按钮排
+        // 在整扇窗正中,见 `controlsFollowLyrics`。
         .padding(.leading, controlsInsets.leading)
         .padding(.trailing, controlsInsets.trailing)
         .frame(maxWidth: .infinity, alignment: controlsFrameAlignment)
@@ -636,9 +661,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 换边;固定继承 duetSide 的话,视觉上会永远像是当前这位接着唱下一句
     /// (例如《All Night》女声"U got to dance all night"被摆在
     /// 男声"All night"底下)。同样套过对齐方式覆盖,理由跟 duetSide 一致。
-        //
-        // 只在背景透明时跟:有背景(纯色 / 毛玻璃)时卡片本身就是一块看得见的底,按钮排
-        // 在整扇窗正中,见 `controlsFollowLyrics`。
     private var nextLineDuetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
@@ -674,6 +696,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
     }
 
+    /// 控制排横向跟不跟歌词块走。背景透明时跟(看得见的只有字,按钮排要落在字的上方);
+    /// 背景可见时不跟,固定在窗口正中、两侧不留白。`controlsFrameAlignment` 与
+    /// `controlsInsets` 两处都读它,别只改一处。
+    private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }
+
     /// 这张卡里最宽的那一行**不换行的话要多宽**(含声部圆点占掉的那一截)。
     ///
     /// 直接量文字,不经过布局(见 `OverlayNaturalWidth` 头注:在自定义 `Layout` 里对整棵
@@ -696,11 +723,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
             let previewFont = nextLinePreviewFont == playback.mainFont ? fonts.main : fonts.preview
             widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: previewFont))
-    /// 控制排横向跟不跟歌词块走。背景透明时跟(看得见的只有字,按钮排要落在字的上方);
-    /// 背景可见时不跟,固定在窗口正中、两侧不留白。`controlsFrameAlignment` 与
-    /// `controlsInsets` 两处都读它,别只改一处。
-    private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }
-
         }
         guard widest > 0 else { return 0 }
         return widest + indicator.leading + indicator.trailing
@@ -1095,6 +1117,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .stroke(playback.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0),
                             lineWidth: 2)
             )
+            // 「调整宽度」模式下背景透明时,虚线框出窗口的左右边界(卡片撑满整宽,它的左右边就是
+            // 窗口的左右边)。背景看得见时卡片自己就是边界,不画。
+            .overlay {
+                if overlayController.isAdjustingWidth && !playback.backgroundIsVisible {
+                    RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                        .strokeBorder(playback.displayForegroundColor.opacity(0.7),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                }
+            }
             // 预设模式下想拖被拒:整张卡左右抖三下(照 macOS 密码框输错那一下的语义),
             // 配合槽位里那条「已固定」胶囊。tick 每次 +1,GeometryEffect 里 sin 走整数个周期、
             // 静止位精确归零。「减弱动态效果」开着时不抖(胶囊照样给)。纯位移、不改布局,
@@ -1436,6 +1467,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // (弹菜单,排还在)跟展开(开新窗,排还在)留在前面 —— 按"点完这排还在不在"分组,
             // 比原来照搬参考图更有道理。
             iconButton(.expandToLyricsWindow, "arrow.up.left.and.arrow.down.right")
+            // 点亮 = 「调整宽度」模式开着,再点一下退出。
+            iconButton(.adjustWidth, "arrow.left.and.right.square", active: overlayController.isAdjustingWidth)
             iconButton(.settingsMenu, "gearshape.fill")
             iconButton(.lock, "lock.open.fill")
             iconButton(.closeOverlay, "xmark")
@@ -1448,6 +1481,43 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 这排按钮挪到歌词卡片**上方**之后,隔开"按钮胶囊和歌词卡片之间"那道缝的 4pt
         // 曾写在这里(.bottom);槽位在「顶部居中」下会翻到卡片下方,那 4pt 挪到
         // controlsSlot 上按上下翻面,这里不再带。
+    }
+
+    /// 悬停在哪颗按钮上、且那颗按钮此刻看得见 —— 提示气泡的候选。按钮高亮用的 `hoveredControl`
+    /// 只管指针压在哪个矩形上,矩形是常驻上报的,控制排藏着时也可能命中,这里再过一道可见性。
+    private var controlTooltipCandidate: OverlayControlID? {
+        guard let id = overlayController.hoveredControl else { return nil }
+        return (id == .unlockPill ? unlockPillVisible : controlsVisible) ? id : nil
+    }
+
+    private func controlTooltipText(_ id: OverlayControlID) -> String {
+        switch id {
+        case .previous: return L10n.t("上一首")
+        case .playPause: return L10n.t("播放/暂停")
+        case .next: return L10n.t("下一首")
+        case .favorite: return playback.isFavorited == true ? L10n.t("取消喜欢") : L10n.t("喜欢")
+        case .expandToLyricsWindow: return L10n.t("打开歌词窗口")
+        case .adjustWidth: return overlayController.isAdjustingWidth ? L10n.t("完成调整宽度") : L10n.t("调整宽度")
+        case .settingsMenu: return L10n.t("设置")
+        case .lock: return L10n.t("锁定位置")
+        case .closeOverlay: return L10n.t("关闭悬浮歌词")
+        case .unlockPill: return L10n.t("解锁位置")
+        }
+    }
+
+    /// 控制排按钮的悬浮提示。**不能靠 `.help`**:窗口常年点击穿透,SwiftUI 连 hover 都收不到,系统
+    /// tooltip 永远不会弹(同灵动岛快捷操作那排,见 `QuickActionTooltipOverlay`,样式与手感照它)。
+    /// 悬停判据用控制器发布的 `hoveredControl`;位置取按钮上报的矩形(`ControlRectsPreferenceKey`,
+    /// 与根视图同一个命名坐标空间),对准按钮中心、夹在窗口内,弹在离卡片近的那一侧(槽位在上就往下
+    /// 弹、盖在歌词上)。首次悬停等 150ms 再弹(同 App 里系统 tooltip 的延迟),已经弹着时换键立即换字。
+    private var controlTooltipOverlay: ControlTooltipOverlay {
+        ControlTooltipOverlay(
+            candidate: controlTooltipCandidate,
+            text: controlTooltipCandidate.map(controlTooltipText),
+            shown: $shownControlTooltip,
+            size: $controlTooltipSize,
+            below: !controlsSlotBelow,
+            reduceMotion: reduceMotion)
     }
 
     /// 预设模式下拒绝拖动时占据控制排槽位的那条胶囊。
@@ -1514,7 +1584,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 会当场弹出一个跑自己事件循环的 NSMenu —— "按下变暗、松手复原"在那条路上很容易卡成
     /// 一个永远按着的按钮。真要补,得做成不依赖 mouseUp 的定时闪一下,不是这次的范围。
     private func iconButton(_ id: OverlayControlID, _ systemName: String,
-                            primary: Bool = false) -> some View {
+                            primary: Bool = false, active: Bool = false) -> some View {
         let hovered = overlayController.hoveredControl == id
         return Image(systemName: systemName)
             // 常驻按钮排要露出来才挡桌面,尽量小是这一排存在的前提,不是可以慢慢打磨的
@@ -1531,8 +1601,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 自己那层玻璃定的:再高就盖过图标,再低在浅色壁纸上看不见。
             .background {
                 Circle()
-                    .fill(Color.white.opacity(hovered ? 0.18 : 0))
-                    .scaleEffect(hovered ? 1 : 0.55)
+                    .fill(Color.white.opacity(active ? 0.3 : (hovered ? 0.18 : 0)))
+                    .scaleEffect(hovered || active ? 1 : 0.55)
             }
             // 弹一下再停(response 0.24 / damping 0.72),跟灵动岛那几处按压反馈同一手感;
             // reduceMotion 下不补间,但高亮照画(见 reduceMotion 声明处)。
@@ -2174,5 +2244,71 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// 悬浮歌词控制排按钮的悬浮提示气泡,见 `LyricsOverlayView.controlTooltipOverlay`。
+private struct ControlTooltipOverlay: ViewModifier {
+    let candidate: OverlayControlID?
+    let text: String?
+    @Binding var shown: OverlayControlID?
+    @Binding var size: CGSize
+    /// true = 弹在按钮下方(控制排在卡片上方时)。
+    let below: Bool
+    let reduceMotion: Bool
+
+    private static let initialDelayMs = 150
+    private static let gap: CGFloat = 5
+    /// 还没量到时的估算高度(11pt 字 + 上下各 3pt)。
+    private static let fallbackHeight: CGFloat = 20
+
+    func body(content: Content) -> some View {
+        content
+            .overlayPreferenceValue(ControlRectsPreferenceKey.self) { rects in
+                GeometryReader { proxy in
+                    if let shown, shown == candidate, let text, let rect = rects[shown] {
+                        let half = size.width / 2
+                        let height = size.height > 0 ? size.height : Self.fallbackHeight
+                        Text(text)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.black.opacity(0.78)))
+                            .fixedSize()
+                            .background(GeometryReader { g in
+                                Color.clear.preference(key: ControlTooltipSizeKey.self, value: g.size)
+                            })
+                            .position(
+                                x: min(max(rect.midX, half), max(half, proxy.size.width - half)),
+                                y: below ? rect.maxY + Self.gap + height / 2 : rect.minY - Self.gap - height / 2)
+                    }
+                }
+                .onPreferenceChange(ControlTooltipSizeKey.self) { size = $0 }
+                .allowsHitTesting(false)
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: shown)
+            .task(id: candidate) {
+                guard let candidate else {
+                    shown = nil
+                    return
+                }
+                if shown == nil {
+                    try? await Task.sleep(for: .milliseconds(Self.initialDelayMs))
+                    if Task.isCancelled { return }
+                }
+                shown = candidate
+            }
+    }
+}
+
+/// 提示气泡量出来的尺寸,只给 `ControlTooltipOverlay` 夹边用。
+private struct ControlTooltipSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
     }
 }

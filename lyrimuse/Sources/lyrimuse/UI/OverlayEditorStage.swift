@@ -56,6 +56,8 @@ final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
     /// 按钮是在骗人。
     let hoveredControl: OverlayControlID? = nil
     let isDragArmed = false
+    /// 恒 false:调宽度拖的是真窗口的边,编辑台有自己的宽度调整条。
+    let isAdjustingWidth = false
     let showDragHint = false
     /// 恒 nil,理由同上一条:编辑台里没有能触发它的全局快捷键,预览也不该有副作用。
     let transientHint: String? = nil

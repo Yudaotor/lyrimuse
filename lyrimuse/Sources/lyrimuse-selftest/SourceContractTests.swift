@@ -1707,6 +1707,37 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "悬浮滚动: 读不到 UI/LyricsOverlayView.swift(路径挪了?)")
         }
+        // 「调整宽度」模式在锁定、窗口藏起来、关掉「悬停控制条」时都得退出 —— 漏一处就会留下一圈
+        // 虚线,或者一条没人能收回的点击穿透缺口。
+        if let ctrl = read("UI/LyricsOverlayWindowController.swift") {
+            if let a = ctrl.range(of: "func setLocked("), let b = ctrl.range(of: "private func maybeShowDragHintOnFirstUnlock") {
+                expectEqual(String(ctrl[a.upperBound..<b.lowerBound]).contains("setAdjustingWidth(false)"), true,
+                            "悬浮调宽: 锁定时退出调整宽度模式")
+            } else {
+                expectEqual(true, false, "悬浮调宽: 找不到 setLocked(改名了?)")
+            }
+            if let a = ctrl.range(of: "private func removeMouseMonitors()"), let b = ctrl.range(of: "private func installMouseMonitors()") {
+                expectEqual(String(ctrl[a.upperBound..<b.lowerBound]).contains("setAdjustingWidth(false)"), true,
+                            "悬浮调宽: 窗口藏起来(卸监听器)时退出调整宽度模式")
+            } else {
+                expectEqual(true, false, "悬浮调宽: 找不到 removeMouseMonitors(改名了?)")
+            }
+            expectEqual(ctrl.contains("if !newValue { self.setAdjustingWidth(false) }"), true,
+                        "悬浮调宽: 关掉「悬停控制条」时退出调整宽度模式")
+            expectEqual(ctrl.components(separatedBy: "window?.ignoresMouseEvents = true").count - 1 >= 1
+                        && ctrl.contains("private func releaseEdgeCapture()"), true,
+                        "悬浮调宽: 边缘捕获有统一的还原入口")
+            // 后台光标开关与重设定时器只在压着边的那段时间开着,还原时一起收掉。
+            if let a = ctrl.range(of: "private func releaseEdgeCapture()"), let b = ctrl.range(of: "private func applyWidthDrag(") {
+                let body = String(ctrl[a.upperBound..<b.lowerBound])
+                expectEqual(body.contains("BackgroundCursor.setEnabled(false)") && body.contains("edgeCursorTimer?.invalidate()"), true,
+                            "悬浮调宽: 离开边缘时关掉后台光标并停掉重设定时器")
+            } else {
+                expectEqual(true, false, "悬浮调宽: 找不到 releaseEdgeCapture / applyWidthDrag(改名了?)")
+            }
+        } else {
+            expectEqual(true, false, "悬浮调宽: 读不到 UI/LyricsOverlayWindowController.swift")
+        }
         // 灵动岛展开区的随机 / 循环键只在 Apple Music 在播时出现;模式与它的来源播放器必须一起赋值。
         if let notch = read("UI/NotchLyricsView.swift"), let coordinator = read("PlaybackCoordinator.swift") {
             expectEqual(notch.contains(".map { mode, player in player == .appleMusic ? mode : nil }"), true,

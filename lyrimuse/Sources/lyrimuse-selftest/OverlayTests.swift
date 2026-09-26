@@ -1238,6 +1238,63 @@ func runOverlayTests() {
             }
         }
         expectEqual(bothTrue, 0, "控制排与解锁提示在 8 种组合下互斥(同一个槽位)")
+
+        // ④ 「调整宽度」模式:不悬停也显示;锁定、关掉「悬停控制条」时照样不显示。
+        expectEqual(H.controlsShown(hovering: false, positionLocked: false, hoverControlsEnabled: true, adjustingWidth: true),
+                    true, "控制排: 调整宽度模式下不悬停也显示")
+        expectEqual(H.controlsShown(hovering: false, positionLocked: true, hoverControlsEnabled: true, adjustingWidth: true),
+                    false, "控制排: 调整宽度模式也压不过锁定")
+        expectEqual(H.controlsShown(hovering: true, positionLocked: false, hoverControlsEnabled: false, adjustingWidth: true),
+                    false, "控制排: 调整宽度模式也压不过「悬停控制条」关掉")
+    }
+
+    // MARK: - 悬浮歌词:拖窗口边缘改宽度(OverlayWidthDrag)
+    do {
+        typealias D = OverlayWidthDrag
+        let size = CGSize(width: 400, height: 150)
+        expectEqual(D.edge(at: CGPoint(x: 3, y: 70), windowSize: size), .leading, "调宽: 左缘 10pt 内算左边")
+        expectEqual(D.edge(at: CGPoint(x: 395, y: 10), windowSize: size), .trailing, "调宽: 右缘 10pt 内算右边")
+        expectEqual(D.edge(at: CGPoint(x: 200, y: 70), windowSize: size), nil, "调宽: 中间不算边缘")
+        expectEqual(D.edge(at: CGPoint(x: 11, y: 70), windowSize: size), nil, "调宽: 离左缘 11pt 已经不算")
+        expectEqual(D.edge(at: CGPoint(x: -2, y: 70), windowSize: size), nil, "调宽: 窗口外不算(那是下层 App 的)")
+        expectEqual(D.edge(at: CGPoint(x: 3, y: 151), windowSize: size), nil, "调宽: 窗口上下之外不算")
+        expectEqual(D.edge(at: CGPoint(x: 9, y: 5), windowSize: CGSize(width: 24, height: 50)), nil,
+                    "调宽: 窗口很窄时每侧最多四分之一宽")
+
+        let start = CGRect(x: 100, y: 500, width: 400, height: 150)
+        let range: ClosedRange<CGFloat> = 300 ... 1400
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        // 自由位置:拖哪边动哪边。
+        var r = D.resizedFrame(start: start, edge: .trailing, deltaX: 60, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r, CGRect(x: 100, y: 500, width: 460, height: 150), "调宽: 拖右缘右移 60 → 左缘不动、宽 +60")
+        r = D.resizedFrame(start: start, edge: .leading, deltaX: -50, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r, CGRect(x: 50, y: 500, width: 450, height: 150), "调宽: 拖左缘左移 50 → 右缘不动、宽 +50")
+        r = D.resizedFrame(start: start, edge: .leading, deltaX: 30, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r.maxX, start.maxX, "调宽: 拖左缘右移时右缘仍不动")
+        // 宽度夹进区间。
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: -300, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r.width, 300, "调宽: 不窄于下限")
+        r = D.resizedFrame(start: start, edge: .leading, deltaX: 200, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r, CGRect(x: 200, y: 500, width: 300, height: 150), "调宽: 左缘拖到下限时右缘仍不动")
+        // 被拖的边不越过可见区。
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: 2000, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r.maxX, screen.maxX, "调宽: 右缘最多拖到可见区右边")
+        r = D.resizedFrame(start: start, edge: .leading, deltaX: -2000, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r.minX, screen.minX, "调宽: 左缘最多拖到可见区左边")
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: 2000, symmetric: false, widthRange: range, visibleFrame: nil)
+        expectEqual(r.width, 1400, "调宽: 不沾任何屏时只受区间上限")
+        // 预设位置:对称伸缩,中心不动。
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: 40, symmetric: true, widthRange: range, visibleFrame: screen)
+        expectEqual(r, CGRect(x: 60, y: 500, width: 480, height: 150), "调宽: 预设下拖右缘 40 → 两边各长 40")
+        r = D.resizedFrame(start: start, edge: .leading, deltaX: 40, symmetric: true, widthRange: range, visibleFrame: screen)
+        expectEqual(r.midX, start.midX, "调宽: 预设下拖左缘右移仍居中")
+        expectEqual(r.width, 320, "调宽: 预设下拖左缘右移 40 → 窄 80")
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: 5000, symmetric: true, widthRange: range, visibleFrame: screen)
+        expectEqual(r.width, 1400, "调宽: 预设下对称放大也受区间上限")
+        expectEqual(r.minX >= screen.minX && r.maxX <= screen.maxX, true, "调宽: 预设下对称放大不出可见区")
+        // 取整。
+        r = D.resizedFrame(start: start, edge: .trailing, deltaX: 10.4, symmetric: false, widthRange: range, visibleFrame: screen)
+        expectEqual(r.width, 410, "调宽: 宽度取整")
     }
 
     // MARK: - 歌词窗口:自定义背景色该配白字还是深色字(LyricsWindowBackgroundLuma)

@@ -162,6 +162,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     @Published private(set) var hoveredControl: OverlayControlID?
     // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
     @Published private(set) var isDragArmed: Bool = false
+    /// 「调整宽度」模式:控制排那颗键开 / 关。开着时拖窗口左右边缘改宽度(`OverlayWidthDrag`),
+    /// 背景透明时视图用虚线框出窗口边界,控制排一直露着。不持久化;锁定、窗口藏起来、
+    /// 关掉「悬停控制条」都会退出(见 `setAdjustingWidth`)。
+    @Published private(set) var isAdjustingWidth = false
+    /// 正在拖的那一下:哪条边、按下时指针的 x、按下时的窗口 frame。
+    private var widthDrag: (edge: OverlayWidthDrag.Edge, startX: CGFloat, startFrame: NSRect)?
+    /// 指针停在可拖的边上时,窗口临时收回点击穿透(`ignoresMouseEvents = false`)、换成左右
+    /// 箭头光标 —— 这样按下那一下直接落在窗口上,不会先漏给下层 App。离开边缘 / 拖完 /
+    /// 退出模式都要还原,统一走 `releaseEdgeCapture`。
+    private var edgeCaptured = false
+    private var edgeCursorTimer: Timer?
     // 见 hasShownDragHintKey 处的注释——只在第一次解锁时短暂为 true,几秒后自动收回。
     @Published private(set) var showDragHint: Bool = false
     /// 通用瞬态提示(全局快捷键的操作回声)。见 flashTransientHint。
@@ -311,6 +322,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             .dropFirst()
             .sink { [weak self] newValue in
                 guard let self else { return }
+                // 控制排没了就没有退出「调整宽度」的键,当场退出,不等悬停结束。
+                if !newValue { self.setAdjustingWidth(false) }
                 if self.isHoveringForControls {
                     self.pendingShowHoverControls = newValue
                 } else {
@@ -451,6 +464,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         if locked {
             // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
             cancelPendingPress()
+            setAdjustingWidth(false)
             clearControlsHoverState()
         } else {
             maybeShowDragHintOnFirstUnlock()
@@ -603,7 +617,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func setFrameAnimated(_ window: NSWindow, to frame: NSRect) {
         animatingTargetFrame = frame
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = window.animationResizeTime(frame)
+            // 拖边改宽期间折行会变、高度跟着变:这时的高度动画会跟下一帧直接设的宽度抢同一个
+            // frame,直接到位。
+            context.duration = widthDrag == nil ? window.animationResizeTime(frame) : 0
             window.animator().setFrame(frame, display: true)
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
@@ -687,6 +703,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 卸载这一刻可能正悬停/长按到一半 —— 跟 setLocked 的清理口径一致,不留残留状态。
         // 已武装的拖动不受影响:performDrag 是同步阻塞调用,跑着的时候到不了这里。
         cancelPendingPress()
+        setAdjustingWidth(false)
         clearControlsHoverState()
     }
 
@@ -771,6 +788,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 菜单栏/全局快捷键三处都必须走这里),这里同样不能绕开它自己再切一份状态。
         case .closeOverlay:
             setVisible(false)
+        case .adjustWidth:
+            setAdjustingWidth(!isAdjustingWidth)
         }
     }
 
@@ -930,7 +949,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let controlsShown = OverlayControlHitTest.controlsShown(
             hovering: isHoveringForControls,
             positionLocked: AppSettings.shared.lockPosition,
-            hoverControlsEnabled: showHoverControls)
+            hoverControlsEnabled: showHoverControls,
+            adjustingWidth: isAdjustingWidth)
         let insideHotZone = controlsShown && (controlsHotZoneLocal?.contains(localPoint) ?? false)
 
         switch type {
@@ -978,6 +998,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             if isHoveringLyrics != insideLyrics {
                 isHoveringLyrics = insideLyrics
             }
+            if isAdjustingWidth, widthDrag == nil {
+                let onEdge = hit == nil
+                    && OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) != nil
+                if onEdge { captureEdge(window) } else { releaseEdgeCapture() }
+            }
             // 这里**不再**碰 ignoresMouseEvents。它恒为 true,唯一例外是长按拖动武装期间
             // (armDragIfStillPressed 为 performDrag 临时收回 false)。胶囊上的点击改由下面
             // .leftMouseDown 分支按各按钮矩形自己分发 —— 理由见本节顶部那段:
@@ -992,6 +1017,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 必须排在下面那条 guard 之前 —— 那条会因为 insideHotZone 直接 return。
             if controlsShown, let id = OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) {
                 performControlAction(id)
+                return
+            }
+            if isAdjustingWidth, let edge = OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) {
+                cancelPendingPress()
+                widthDrag = (edge, loc.x, baseFrame(of: window))
+                captureEdge(window)
                 return
             }
             guard frame.contains(loc), !insideHotZone else { return }
@@ -1026,6 +1057,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             longPressTimer = timer
 
         case .leftMouseDragged:
+            if let drag = widthDrag {
+                applyWidthDrag(drag, mouseX: loc.x, window: window)
+                return
+            }
             // 武装之后整段拖动都交给 armDragIfStillPressed 里的 performDrag 原生处理
             // (那是一个同步阻塞调用,函数返回时拖动已经结束)——这里只需要在"还没
             // 武装"这段时间处理"移动太多就取消长按判定"。
@@ -1047,6 +1082,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
 
         case .leftMouseUp:
+            if widthDrag != nil {
+                widthDrag = nil
+                if OverlayWidthDrag.edge(at: localPoint, windowSize: window.frame.size) == nil {
+                    releaseEdgeCapture()
+                }
+                return
+            }
             // 已经武装的情况下,这个 mouseUp 早被 performDrag 内部的原生跟踪循环
             // 自己消费掉了,armDragIfStillPressed 会在 performDrag 返回后做收尾;
             // 这里只需要处理"还没到长按阈值就松手"这种提前取消的情况。
@@ -1132,6 +1174,68 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         placementLockNoticeTimer = Timer.scheduledTimer(withTimeInterval: 2.4, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.placementLockNotice = nil }
         }
+    }
+
+    /// 「调整宽度」模式开 / 关的唯一入口。锁定时开不了;关掉时把边缘捕获和拖到一半的状态都还原。
+    func setAdjustingWidth(_ on: Bool) {
+        let next = on && !isPositionLocked && (window?.isVisible ?? false)
+        if !next {
+            widthDrag = nil
+            releaseEdgeCapture()
+        }
+        if isAdjustingWidth != next { isAdjustingWidth = next }
+    }
+
+    private func captureEdge(_ window: NSWindow) {
+        if !edgeCaptured {
+            edgeCaptured = true
+            // 收回穿透之后指针事件由窗口自己收,本地监听器要靠它才看得到移动、判断何时离开边缘。
+            window.acceptsMouseMovedEvents = true
+            window.ignoresMouseEvents = false
+            // App 在后台,不开这个 `NSCursor.set()` 不生效,见 `BackgroundCursor`。
+            BackgroundCursor.setEnabled(true)
+            // 前台 App 重绘时会把光标换回它自己的(真机上是终端的 I 形),指针停着不动也会被改掉;
+            // 压在边上的这段时间定时重设。
+            let timer = Timer(timeInterval: 0.1, repeats: true) { _ in
+                MainActor.assumeIsolated { NSCursor.resizeLeftRight.set() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            edgeCursorTimer = timer
+        }
+        NSCursor.resizeLeftRight.set()
+    }
+
+    private func releaseEdgeCapture() {
+        guard edgeCaptured else { return }
+        edgeCaptured = false
+        edgeCursorTimer?.invalidate()
+        edgeCursorTimer = nil
+        window?.ignoresMouseEvents = true
+        NSCursor.arrow.set()
+        BackgroundCursor.setEnabled(false)
+    }
+
+    /// 拖动中每一帧:按 `OverlayWidthDrag.resizedFrame` 算新 frame,高度 / y 沿用此刻的窗口(拖的
+    /// 过程中折行变了,高度会跟着变),直接设上去(不走动画),宽度同步写回设置 —— 编辑台、抽屉、
+    /// 菜单栏面板那几根宽度滑杆读的都是它。预设位置下对称伸缩,中心不动。
+    private func applyWidthDrag(
+        _ drag: (edge: OverlayWidthDrag.Edge, startX: CGFloat, startFrame: NSRect),
+        mouseX: CGFloat, window: NSWindow
+    ) {
+        let range = CGFloat(OverlayEditorStage.widthRange.lowerBound)...CGFloat(OverlayEditorStage.widthRange.upperBound)
+        var next = OverlayWidthDrag.resizedFrame(
+            start: drag.startFrame, edge: drag.edge, deltaX: mouseX - drag.startX,
+            symmetric: placementMode.isPreset, widthRange: range,
+            visibleFrame: Self.hostVisibleFrame(of: drag.startFrame))
+        let current = baseFrame(of: window)
+        next.origin.y = current.origin.y
+        next.size.height = current.height
+        guard next != window.frame else { return }
+        window.setFrame(next, display: true)
+        NSCursor.resizeLeftRight.set()
+        let width = Double(next.width)
+        if AppSettings.shared.overlayWidth != width { AppSettings.shared.overlayWidth = width }
+        recomputeHitRegions()
     }
 
     private func cancelPendingPress() {

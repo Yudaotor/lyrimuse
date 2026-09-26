@@ -25,6 +25,8 @@ public enum OverlayControlID: String, Hashable, CaseIterable, Sendable {
     case settingsMenu
     case closeOverlay
     case unlockPill
+    /// 「调整宽度」模式开关(`LyricsOverlayWindowController.setAdjustingWidth`)。
+    case adjustWidth
 }
 
 public enum OverlayControlHitTest {
@@ -180,10 +182,13 @@ public enum OverlayControlHitTest {
     ///
     /// **解锁提示(`unlockPill`)不走这条判据**,它有自己的 `unlockPillShown`(见下)——
     /// 两者的条件互斥(`positionLocked` 取反),合并成一个分支容易写反。
+    ///
+    /// `adjustingWidth`:「调整宽度」模式开着时不看悬停、一直露出来 —— 指针要去拖窗口边缘,
+    /// 离开歌词之后按钮排还得在,那颗「调整宽度」键就是退出这个模式的地方。
     public static func controlsShown(
-        hovering: Bool, positionLocked: Bool, hoverControlsEnabled: Bool
+        hovering: Bool, positionLocked: Bool, hoverControlsEnabled: Bool, adjustingWidth: Bool = false
     ) -> Bool {
-        hoverControlsEnabled && hovering && !positionLocked
+        hoverControlsEnabled && (hovering || adjustingWidth) && !positionLocked
     }
 
     /// 锁定态 hover 时"解锁"提示该不该露出来:跟 `controlsShown` 一样接
