@@ -1189,4 +1189,23 @@ func runRomanizationTests() {
         expectEqual(ChineseVariant.traditional.converted(fixed), fixed, "日文修回: 修完的日文行简繁转换不碰")
         expectEqual(ChineseVariant.simplified.converted(fixed), fixed, "日文修回: 修完的日文行转简体也不碰")
     }
+
+    // ---- 罗马音默认值:新装跟界面语言走,升级上来的老用户保留四项全开 ----
+    do {
+        typealias R = RomanizationScripts
+        expectEqual(R.upgradeDefaultToPersist(storedRaw: nil, completedOnboarding: true, migrated: false), R.default,
+                    "罗马音默认值: 老用户(走完过引导、没手动改过)保留四项全开")
+        expectEqual(R.upgradeDefaultToPersist(storedRaw: nil, completedOnboarding: false, migrated: false), nil,
+                    "罗马音默认值: 新装的人按界面语言取默认值")
+        expectEqual(R.upgradeDefaultToPersist(storedRaw: R.japanese.rawValue, completedOnboarding: true, migrated: false), nil,
+                    "罗马音默认值: 手动改过的不动")
+        expectEqual(R.upgradeDefaultToPersist(storedRaw: nil, completedOnboarding: true, migrated: true), nil,
+                    "罗马音默认值: 只判一次,之后新装的人走完引导不会被当成老用户")
+        let settings = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/AppSettings.swift"), encoding: .utf8)) ?? ""
+        let migrateAt = settings.range(of: "RomanizationScripts.upgradeDefaultToPersist(")?.lowerBound
+        let readAt = settings.range(of: "romanizationScripts = (defaults.object(forKey: Keys.romanizationScripts) as? Int)")?.lowerBound
+        expectEqual(migrateAt != nil && readAt != nil && migrateAt! < readAt!, true,
+                    "罗马音默认值(契约): 迁移在读取设置之前")
+    }
 }

@@ -628,6 +628,15 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public static func defaultScripts(chineseUI: Bool) -> RomanizationScripts {
         chineseUI ? [.japanese, .korean, .cantonese] : .default
     }
+
+    /// 按界面语言取默认值只给新装的人:升级上来、从没手动改过(`storedRaw == nil`)、已经走完过引导的老用户,
+    /// 保留原来的四项全开,返回要落盘的值;其余情况返回 nil。App 只在第一次带这条逻辑启动时判一次
+    /// (`migrated` 为真后不再判),之后新装的人走完引导也不会被当成老用户。
+    public static func upgradeDefaultToPersist(storedRaw: Int?, completedOnboarding: Bool,
+                                               migrated: Bool) -> RomanizationScripts? {
+        guard !migrated, storedRaw == nil, completedOnboarding else { return nil }
+        return .default
+    }
 }
 
 extension Romanizer {
