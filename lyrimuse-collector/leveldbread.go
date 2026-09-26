@@ -76,7 +76,7 @@ func ldbGet(dir string, keys [][]byte) map[string][]byte {
 		case strings.HasSuffix(name, ".ldb") || strings.HasSuffix(name, ".sst"):
 			_ = ldbTableLookup(path, sorted, keep) // 读失败(被合并掉 / 格式不认识)就跳过这个文件
 		case strings.HasSuffix(name, ".log"):
-			_ = ldbLogScan(path, want, keep)
+			_ = ldbLogScan(path, func(k []byte) bool { return want[string(k)] }, keep)
 		}
 	}
 	out := make(map[string][]byte, len(best))
@@ -86,6 +86,37 @@ func ldbGet(dir string, keys [][]byte) map[string][]byte {
 		}
 	}
 	return out
+}
+
+// ldbScan 取 dir 里所有 user key 满足 match 的当前版本(带 sequence;已删除的不在结果里)。给 key 事先拼不全的场合用
+// (KKBOX 的 Local Storage key 里带着账号):每个数据块都要解一遍,只适合小库。
+func ldbScan(dir string, match func([]byte) bool) map[string]ldbValue {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	best := map[string]ldbValue{}
+	keep := func(k []byte, v ldbValue) {
+		if cur, ok := best[string(k)]; !ok || v.seq > cur.seq {
+			best[string(k)] = v
+		}
+	}
+	for _, e := range ents {
+		name := e.Name()
+		path := filepath.Join(dir, name)
+		switch {
+		case strings.HasSuffix(name, ".ldb") || strings.HasSuffix(name, ".sst"):
+			_ = ldbTableScan(path, match, keep)
+		case strings.HasSuffix(name, ".log"):
+			_ = ldbLogScan(path, match, keep)
+		}
+	}
+	for k, v := range best {
+		if v.deleted {
+			delete(best, k)
+		}
+	}
+	return best
 }
 
 func ldbReadFile(path string) ([]byte, error) {
@@ -192,6 +223,81 @@ func ldbSplitInternalKey(ik []byte) (user []byte, seq uint64, typ byte, ok bool)
 // 索引块的每一条是「≥ 该数据块最后一个 key 的分隔 key → 数据块位置」,按序排列。所以一个 key
 // 只可能落在第一个分隔 key ≥ 它的那个块里 —— 同一个 user key 的多个版本恰好跨块时,会接着落进
 // 后面的块,这里继续往后看,直到块的第一个 key 已经比它大为止。
+// ldbTableScan 把一个 SSTable 的数据块逐块解开,user key 满足 match 的都交给 keep(见 ldbScan)。
+func ldbTableScan(path string, match func([]byte) bool, keep func([]byte, ldbValue)) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	handles, err := ldbTableIndex(f, st.Size())
+	if err != nil {
+		return err
+	}
+	for _, h := range handles {
+		blk, err := ldbReadBlock(f, st.Size(), h.off, h.size)
+		if err != nil {
+			continue
+		}
+		_ = ldbBlockEntries(blk, func(k, v []byte) bool {
+			user, seq, typ, ok := ldbSplitInternalKey(k)
+			if ok && match(user) {
+				keep(append([]byte(nil), user...), ldbValue{seq: seq, value: append([]byte(nil), v...), deleted: typ == 0})
+			}
+			return true
+		})
+	}
+	return nil
+}
+
+// ldbIndexHandle 是索引块里的一条:这个数据块的分隔 key 与它在文件里的位置。
+type ldbIndexHandle struct {
+	sep       []byte
+	off, size uint64
+}
+
+// ldbTableIndex 读 SSTable 的尾部与索引块,交回全部数据块的位置(按 key 升序)。
+func ldbTableIndex(f *os.File, size int64) ([]ldbIndexHandle, error) {
+	if size < 48 {
+		return nil, errors.New("leveldb: short table")
+	}
+	footer := make([]byte, 48)
+	if _, err := f.ReadAt(footer, size-48); err != nil {
+		return nil, err
+	}
+	if binary.LittleEndian.Uint64(footer[40:]) != 0xdb4775248b80fb57 {
+		return nil, errors.New("leveldb: bad table magic")
+	}
+	_, _, rest, ok := ldbBlockHandle(footer) // metaindex,用不上
+	if !ok {
+		return nil, errors.New("leveldb: bad footer")
+	}
+	ioff, isize, _, ok := ldbBlockHandle(rest)
+	if !ok {
+		return nil, errors.New("leveldb: bad footer")
+	}
+	index, err := ldbReadBlock(f, size, ioff, isize)
+	if err != nil {
+		return nil, err
+	}
+	var handles []ldbIndexHandle
+	if err := ldbBlockEntries(index, func(k, v []byte) bool {
+		user, _, _, ok := ldbSplitInternalKey(k)
+		off, size, _, ok2 := ldbBlockHandle(v)
+		if ok && ok2 {
+			handles = append(handles, ldbIndexHandle{sep: append([]byte(nil), user...), off: off, size: size})
+		}
+		return true
+	}); err != nil {
+		return nil, err
+	}
+	return handles, nil
+}
+
 func ldbTableLookup(path string, sorted [][]byte, keep func([]byte, ldbValue)) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -203,41 +309,8 @@ func ldbTableLookup(path string, sorted [][]byte, keep func([]byte, ldbValue)) e
 		return err
 	}
 	size := st.Size()
-	if size < 48 {
-		return errors.New("leveldb: short table")
-	}
-	footer := make([]byte, 48)
-	if _, err := f.ReadAt(footer, size-48); err != nil {
-		return err
-	}
-	if binary.LittleEndian.Uint64(footer[40:]) != 0xdb4775248b80fb57 {
-		return errors.New("leveldb: bad table magic")
-	}
-	_, _, rest, ok := ldbBlockHandle(footer) // metaindex,用不上
-	if !ok {
-		return errors.New("leveldb: bad footer")
-	}
-	ioff, isize, _, ok := ldbBlockHandle(rest)
-	if !ok {
-		return errors.New("leveldb: bad footer")
-	}
-	index, err := ldbReadBlock(f, size, ioff, isize)
+	handles, err := ldbTableIndex(f, size)
 	if err != nil {
-		return err
-	}
-	type handle struct {
-		sep       []byte
-		off, size uint64
-	}
-	var handles []handle
-	if err := ldbBlockEntries(index, func(k, v []byte) bool {
-		user, _, _, ok := ldbSplitInternalKey(k)
-		off, size, _, ok2 := ldbBlockHandle(v)
-		if ok && ok2 {
-			handles = append(handles, handle{sep: append([]byte(nil), user...), off: off, size: size})
-		}
-		return true
-	}); err != nil {
 		return err
 	}
 	decoded := map[int][]byte{}
@@ -279,7 +352,7 @@ func ldbTableLookup(path string, sorted [][]byte, keep func([]byte, ldbValue)) e
 
 // ldbLogScan 读一个写前日志:32KB 一块,每条物理记录 7 字节头(CRC 4 + 长度 2 + 类型 1),
 // FULL / FIRST+MIDDLE*+LAST 拼成一条 WriteBatch,再拆出里面的 Put / Delete。
-func ldbLogScan(path string, want map[string]bool, keep func([]byte, ldbValue)) error {
+func ldbLogScan(path string, match func([]byte) bool, keep func([]byte, ldbValue)) error {
 	data, err := ldbReadFile(path)
 	if err != nil {
 		return err
@@ -300,14 +373,14 @@ func ldbLogScan(path string, want map[string]bool, keep func([]byte, ldbValue)) 
 		i += 7 + length
 		switch typ {
 		case 1: // FULL
-			ldbApplyBatch(payload, want, keep)
+			ldbApplyBatch(payload, match, keep)
 		case 2: // FIRST
 			rec = append(rec[:0], payload...)
 		case 3: // MIDDLE
 			rec = append(rec, payload...)
 		case 4: // LAST
 			rec = append(rec, payload...)
-			ldbApplyBatch(rec, want, keep)
+			ldbApplyBatch(rec, match, keep)
 			rec = rec[:0]
 		}
 	}
@@ -315,7 +388,7 @@ func ldbLogScan(path string, want map[string]bool, keep func([]byte, ldbValue)) 
 }
 
 // ldbApplyBatch 拆一条 WriteBatch:8 字节起始 sequence + 4 字节条数 + 若干 (type, key[, value])。
-func ldbApplyBatch(b []byte, want map[string]bool, keep func([]byte, ldbValue)) {
+func ldbApplyBatch(b []byte, match func([]byte) bool, keep func([]byte, ldbValue)) {
 	if len(b) < 12 {
 		return
 	}
@@ -344,8 +417,8 @@ func ldbApplyBatch(b []byte, want map[string]bool, keep func([]byte, ldbValue)) 
 				return
 			}
 		}
-		if want[string(k)] {
-			keep(k, ldbValue{seq: seq + uint64(c), value: append([]byte(nil), v...), deleted: typ == 0})
+		if match(k) {
+			keep(append([]byte(nil), k...), ldbValue{seq: seq + uint64(c), value: append([]byte(nil), v...), deleted: typ == 0})
 		}
 	}
 }

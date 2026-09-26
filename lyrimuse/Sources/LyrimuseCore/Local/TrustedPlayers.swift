@@ -128,7 +128,9 @@ public enum TrustedPlayers {
     /// 专辑名会被误挡 —— 接受(宁可漏认,不要把视频写进永久收听历史)。
     ///
     /// mediaType 这条路走不通,记下别再试:酷狗压根不报这个字段,Arc 也不报(不是报 Video,
-    /// 是没有这个键),只有 Apple Music 有。内置五个播放器不走这条(各有既有守卫)。
+    /// 是没有这个键),只有 Apple Music 有。内置播放器不走这条(各有既有守卫),只有一个例外:
+    /// `artistArrivesLate` 的播放器(KKBOX)开播先发一帧没有歌手的,那一帧照样拦 —— 它当信任播放器时
+    /// 本来就被这条挡着,内置化不能把它放进来。专辑名对内置播放器不作要求。
     ///
     /// 跟 collector 的 trustedPlaybackNotASong 是同一套语义,两侧必须同时改。
     public static func notASong(bundleID: String?, artist: String?, album: String?) -> Bool {
@@ -139,9 +141,12 @@ public enum TrustedPlayers {
     public static func notASong(bundleID: String?, artist: String?, album: String?,
                                 trusted: [String: String]) -> Bool {
         guard let bundleID, !bundleID.isEmpty else { return false }
-        // 内置播放器不受这条守卫约束。
-        if PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
-            return false
+        func blank(_ s: String?) -> Bool {
+            (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        // 内置播放器只拦 artistArrivesLate 那一帧(见上)。
+        if let player = PlaybackPlayer.builtin(forBundleID: bundleID) {
+            return player.artistArrivesLate && blank(artist)
         }
         // 走 isTrusted 而不是裸查 trusted[bundleID]:Safari 的播放报的是媒体代理进程
         // com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,裸查永远落空 →
@@ -149,10 +154,25 @@ public enum TrustedPlayers {
         // (修,collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修,
         // 见 system.go getAutoDetectedState 那处的完整案情)。
         guard isTrusted(bundleID, trusted: trusted) else { return false }
-        func blank(_ s: String?) -> Bool {
-            (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
         return blank(artist) || blank(album)
+    }
+
+    /// 信任列表里有 App 后来成了内置播放器(KKBOX 就是先被用户加进信任列表、后来才内置的):把它从信任列表
+    /// 挪进播放器选择。
+    ///
+    /// 不挪的后果:内置播放器会被剔出信任列表(collector `resolveTrustedPlayers`),而没勾「自动识别」的人
+    /// 又没勾它 —— 升级之后这个播放器悄无声息地不再被认。勾着「自动识别」的不用补勾,自动识别本来就认全部
+    /// 内置播放器。collector 侧 `promoteTrustedBuiltins` 同一条规则,两侧读同一份文件、得出同一个结果。
+    public static func promotingBuiltins(trusted: [String: String], players: Set<PlaybackPlayer>)
+        -> (trusted: [String: String], players: Set<PlaybackPlayer>) {
+        var trusted = trusted
+        var players = players
+        for id in trusted.keys {
+            guard let player = PlaybackPlayer.builtin(forBundleID: id.trimmingCharacters(in: .whitespaces)) else { continue }
+            trusted.removeValue(forKey: id)
+            if !players.contains(.auto) { players.insert(player) }
+        }
+        return (trusted, players)
     }
 
     // MARK: - 主动添加

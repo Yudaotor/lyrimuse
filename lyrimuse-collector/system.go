@@ -192,6 +192,15 @@ func getSpotifyState(ctx context.Context) (map[string]any, bool) {
 // Spotify 刻意**没有**对应的 getSpotifyOnlyState 短路:那会顺带废掉「网页播放器」卡
 // 配对的浏览器,而 Spotify Web 正是最常被配对的平台。
 func getState(ctx context.Context) (map[string]any, bool) {
+	state, ok := getStateUnheld(ctx)
+	if !ok {
+		return state, ok
+	}
+	// 切歌时先撤掉 Now Playing 的播放器(KKBOX),空档那几秒别换成别家暂停着的旧会话,见 playergaphold.go。
+	return holdAcrossPlayerGap(state, time.Now())
+}
+
+func getStateUnheld(ctx context.Context) (map[string]any, bool) {
 	if features().Players[playerAuto] {
 		return getAutoDetectedState(ctx)
 	}
@@ -436,8 +445,11 @@ func isKnownPlayerBundleID(bundleID string) bool {
 //
 // 内置五个播放器不走这条 —— 它们各有既有守卫(Spotify 广告走 isAdBreak),不在范围内。
 func trustedPlaybackNotASong(bundleID, artist, album string) bool {
+	// 内置播放器只拦一种:playerArtistArrivesLate 的(KKBOX)开播先发一帧没有歌手的,那一帧当作还没准备好。
+	// 它当信任播放器时本来就被下面那条挡着,内置化不能把它放进来。专辑名对内置播放器不作要求。
+	// Swift 侧 TrustedPlayers.notASong 同源。
 	if isKnownPlayerBundleID(bundleID) {
-		return false
+		return playerArtistArrivesLate[bundleID] && strings.TrimSpace(artist) == ""
 	}
 	// isTrustedPlayerBundleID 而不是裸查 features().TrustedPlayers[bundleID]:Safari 的
 	// 播放报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,
@@ -447,6 +459,13 @@ func trustedPlaybackNotASong(bundleID, artist, album string) bool {
 		return false
 	}
 	return strings.TrimSpace(artist) == "" || strings.TrimSpace(album) == ""
+}
+
+// builtinArtistNotReady:内置播放器这一拍还是开播那帧没有歌手的(见 trustedPlaybackNotASong)。
+func builtinArtistNotReady(bundleID string, raw map[string]any) bool {
+	artist, _ := raw["artist"].(string)
+	album, _ := raw["album"].(string)
+	return trustedPlaybackNotASong(bundleID, artist, album)
 }
 
 // isAcceptedPlayerBundleID 是"自动识别"下真正的成员判断:五个内置播放器,**加上**用户
@@ -739,6 +758,12 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		noteFocusAccepted(bundleID)
 		return refineSpotifyState(ctx, raw), true
 	case autoDetectBuiltin:
+		if builtinArtistNotReady(bundleID, raw) {
+			if state, ok := stateAfterFocusLost(ctx, nil); ok {
+				return state, true
+			}
+			return map[string]any{}, true
+		}
 		noteFocusAccepted(bundleID)
 		return raw, true
 	case autoDetectReject:
@@ -870,6 +895,11 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 		}
 		// 同 getAutoDetectedState 那处。
 		patch.apply(raw)
+	} else if builtinArtistNotReady(bundleID, raw) {
+		if state, ok := stateAfterFocusLost(ctx, accepted); ok {
+			return state, true
+		}
+		return map[string]any{}, true
 	}
 	noteFocusAccepted(bundleID)
 	if bundleID == appleMusicBundleID {

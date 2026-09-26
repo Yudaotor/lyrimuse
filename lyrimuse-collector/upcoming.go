@@ -24,6 +24,8 @@ import (
 //   YouTube Music(网页)—— 读页面上的播放队列(见 ytmusicqueue.go),名字按账号语言本地化的那部分
 //                   歌对不上播放器报的名字。
 //   Spotify 网页版 —— 读网页播放器自己的队列接口(见 spotifyweb.go),名字跟 MediaSession 同源。
+//   KKBOX        —— 打乱后的队列不落盘;落盘的是播放上下文和那个歌单 / 专辑的接口缓存,拼出整份曲目表
+//                   (见 kkboxqueue.go)。开着随机时按 shuffleCandidates 交一批。
 //
 // 所以队列路径拿不到时**退回同专辑预取**,而不是什么都不做:这些情况恰恰会从"有预取"
 // 退成"没有"。系统层面也没有兜底 —— MediaRemote 的导出符号里,队列相关的全是
@@ -73,6 +75,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return appleMusicUpcoming(artist, title, n)
 	case spotifyBundleID:
 		return spotifyUpcoming(artist, title, n)
+	case kkboxBundleID:
+		return kkboxUpcoming(artist, title, n)
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }

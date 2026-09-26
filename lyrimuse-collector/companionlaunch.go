@@ -188,7 +188,8 @@ func parseProcessList(out string) map[string][]int {
 }
 
 // isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
-// Apple Event。只剩 launchLyrimuseApp 真要启动前那一次自查在用。
+// Apple Event。launchLyrimuseApp 真要启动前那一次自查在用;切歌空档保持(playergaphold.go)在保持期间每拍问一次
+// 那个播放器还在不在。
 func isProcessRunning(name string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

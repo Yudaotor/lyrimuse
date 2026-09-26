@@ -38,6 +38,13 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - playingFromRate  这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播;auto 为 null
                 只给**实测见过**的播放器置 true(酷狗单曲循环回到开头时报 playing:false、rate 仍是 1,
                 真暂停时 rate 归 0)。判定本身在 MediaControlClient.effectivePlaying / effectivePlaying(Go)
+- artistArrivesLate  开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐;auto 为 null
+                只给**实测见过**的播放器置 true(KKBOX 约半秒后补齐)。这一帧当作还没准备好、不采纳,
+                跟信任播放器那道「歌手为空就丢」同一处判定:Swift 侧 TrustedPlayers.notASong,Go 侧
+                trustedPlaybackNotASong
+- dropsSessionBetweenTracks  切歌时先撤掉 Now Playing、隔几秒才发下一首;auto 为 null
+                只给**实测见过**的播放器置 true(KKBOX 约 4 秒)。上一首来自它时,这几秒里别的播放器暂停着的
+                旧会话不当成「换播放器了」,判定在 Swift 侧 PlayerGapHold / Go 侧 holdAcrossPlayerGap
 - needsAutomationPermission  这个播放器要不要 macOS 的「自动化」权限(我们向它发 Apple Event);auto 为 null
                 = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:collector 是独立
                 签名身份、TCC 里是另一条记录,那边没有 API 能查或触发它
@@ -206,6 +213,23 @@ def render_go(spec, players):
         if p.get("playingFromRate") and p.get("goBundleConst"):
             out.append("\t%s: true,\n" % p["goBundleConst"])
     out.append("}\n")
+
+    out.append("\n// playerArtistArrivesLate 是「bundle id → 开播先发一帧没有歌手的、过一会儿才补齐」。\n"
+               "// 只列**实测见过**的播放器。那一帧当作还没准备好,判定在 trustedPlaybackNotASong,\n"
+               "// Swift 侧 artistArrivesLate 同源。\n"
+               "var playerArtistArrivesLate = map[string]bool{\n")
+    for p in concrete:
+        if p.get("artistArrivesLate") and p.get("goBundleConst"):
+            out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
+
+    out.append("\n// playerDropsSessionBetweenTracks 是「bundle id → 切歌时先撤掉 Now Playing、隔几秒才发下一首」。\n"
+               "// 只列**实测见过**的播放器。判定在 holdAcrossPlayerGap,Swift 侧 dropsSessionBetweenTracks 同源。\n"
+               "var playerDropsSessionBetweenTracks = map[string]bool{\n")
+    for p in concrete:
+        if p.get("dropsSessionBetweenTracks") and p.get("goBundleConst"):
+            out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
     return "".join(out)
 
 
@@ -282,6 +306,22 @@ def render_core_swift(spec, players):
                "    public var playingFromRate: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("playingFromRate"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐。只有**实测见过**的播放器为 true。\n"
+               "    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`,Go 侧同源。\n"
+               "    public var artistArrivesLate: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("artistArrivesLate"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 切歌时先撤掉 Now Playing、隔几秒才发下一首。只有**实测见过**的播放器为 true。\n"
+               "    /// 判定在 `PlayerGapHold`,Go 侧同源。\n"
+               "    public var dropsSessionBetweenTracks: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("dropsSessionBetweenTracks"):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 

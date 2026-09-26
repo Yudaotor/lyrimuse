@@ -426,7 +426,7 @@ func readFeatureFlags(path string) (featureFlags, error) {
 func buildFeatureFlags(f featureFlagsFile) featureFlags {
 	match := resolveLastfmMatch(f)
 	return featureFlags{
-		Players:        resolvePlayers(f.Players, f.Player),
+		Players:        promoteTrustedBuiltins(resolvePlayers(f.Players, f.Player), f.TrustedPlayers),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
 		// 缺失 / 空 = 全部上送:跟 TrustedPlayers 一样"少一个键不改变现有行为"。
 		LastfmExcludedBundles: resolveLastfmExcludedBundles(f.LastfmExcludedBundles),
@@ -610,6 +610,24 @@ func resolvePlayers(list []string, legacy string) map[string]bool {
 		return map[string]bool{legacy: true}
 	}
 	return map[string]bool{playerAuto: true}
+}
+
+// promoteTrustedBuiltins:信任列表里有 App 后来成了内置播放器(KKBOX 就是先被加进信任列表、后来才内置的),
+// 没勾「自动识别」时把它补进选中集合 —— resolveTrustedPlayers 会把它剔出信任列表,不补就悄无声息地不认了。
+// 勾着自动识别的不用补,自动识别本来就认全部内置播放器。Swift 侧 TrustedPlayers.promotingBuiltins 同一条规则。
+func promoteTrustedBuiltins(players map[string]bool, trusted map[string]string) map[string]bool {
+	if players[playerAuto] {
+		return players
+	}
+	for id := range trusted {
+		id = strings.TrimSpace(id)
+		for player, bundleID := range playerBundleIDs {
+			if bundleID == id {
+				players[player] = true
+			}
+		}
+	}
+	return players
 }
 
 // resolveTrustedPlayers 清洗用户信任列表:去掉空 bundle id、去掉首尾空白、去掉五个

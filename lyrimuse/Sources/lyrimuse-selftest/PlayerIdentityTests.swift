@@ -228,8 +228,9 @@ func runPlayerIdentityTests() {
                         "非歌守卫: 两个字段都齐就放行(\(sample.0) / \(sample.1))")
         }
 
-        // 内置播放器不受这条约束 —— 它们各有既有守卫,卷进来等于偷偷改既有行为
-        for player in PlaybackPlayer.allCases where player != .auto {
+        // 内置播放器不受这条约束 —— 它们各有既有守卫,卷进来等于偷偷改既有行为。例外是 artistArrivesLate 的
+        // (KKBOX 开播那一帧没有歌手),单独测在「播放器契约」那段。
+        for player in PlaybackPlayer.allCases where player != .auto && !player.artistArrivesLate {
             expectEqual(T.notASong(bundleID: player.bundleIdentifier, artist: "", album: "", trusted: trusted),
                         false, "非歌守卫: 内置播放器 \(player) 不受影响")
         }
@@ -266,6 +267,7 @@ func runPlayerIdentityTests() {
             .netease: ("netease_music", "com.netease.163music"),
             .kugou: ("kugou_music", "com.kugou.mac.Music"),
             .soda: ("soda_music", "com.soda.music"),
+            .kkbox: ("kkbox", "com.kkbox.electron-app"),
             .spotify: ("spotify", "com.spotify.client"),
         ]
         for (player, want) in expected {
@@ -283,6 +285,56 @@ func runPlayerIdentityTests() {
         // bundle id 不能撞车:复制粘贴加播放器时最容易犯,而撞车的表现是"选了 A 却跟着 B 走"。
         let bundles = PlaybackPlayer.allCases.filter { $0 != .auto }.map(\.bundleIdentifier)
         expectEqual(Set(bundles).count, bundles.count, "播放器契约: bundle id 互不重复")
+
+        // KKBOX 开播先发一帧只有歌名的(歌手空),约半秒后补齐:那一帧不采纳,补齐之后照常;专辑名不作要求。
+        let kk = PlaybackPlayer.kkbox.bundleIdentifier
+        expectEqual(TrustedPlayers.notASong(bundleID: kk, artist: "", album: "", trusted: [:]), true,
+                    "KKBOX: 开播那一帧还没有歌手,不采纳")
+        expectEqual(TrustedPlayers.notASong(bundleID: kk, artist: "Taylor Swift (泰勒絲)", album: "", trusted: [:]),
+                    false, "KKBOX: 歌手补齐之后照常采纳,没有专辑名也认")
+        expectEqual(TrustedPlayers.notASong(bundleID: PlaybackPlayer.kugou.bundleIdentifier, artist: "", album: "",
+                                            trusted: [:]),
+                    false, "KKBOX: 这道闸只管 artistArrivesLate 的播放器,别的内置播放器不受影响")
+
+        // 信任列表里的 KKBOX 升级后挪进播放器选择;勾着自动识别的只从信任列表里拿掉。
+        let trustedKK = [kk: "KKBOX", "com.apple.Safari": "Safari"]
+        let noAuto = TrustedPlayers.promotingBuiltins(trusted: trustedKK, players: [.qqMusic])
+        expectEqual(noAuto.trusted, ["com.apple.Safari": "Safari"], "信任→内置: KKBOX 从信任列表里拿掉,别的留着")
+        expectEqual(noAuto.players, [.qqMusic, .kkbox], "信任→内置: 没勾自动识别的补勾 KKBOX,不然升级后就不认了")
+        let withAuto = TrustedPlayers.promotingBuiltins(trusted: trustedKK, players: [.auto, .appleMusic])
+        expectEqual(withAuto.players, [.auto, .appleMusic], "信任→内置: 勾着自动识别的不用补勾")
+        expectEqual(withAuto.trusted, ["com.apple.Safari": "Safari"], "信任→内置: 勾着自动识别也从信任列表里拿掉")
+        let untouched = TrustedPlayers.promotingBuiltins(trusted: ["com.apple.Safari": "Safari"], players: [.spotify])
+        expectEqual(untouched.trusted, ["com.apple.Safari": "Safari"], "信任→内置: 没有内置播放器就原样")
+        expectEqual(untouched.players, [.spotify], "信任→内置: 没有内置播放器就原样(选择)")
+
+        // 切歌间隙保持(PlayerGapHold):KKBOX 切歌时先撤掉 Now Playing(多数 4~5 秒,最长实测 19 秒),这段时间里
+        // Apple Music 暂停着的旧会话不算换播放器。
+        typealias H = PlayerGapHold
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let apple = PlaybackPlayer.appleMusic.bundleIdentifier
+        let up: () -> Bool = { true }
+        func hold(last: String? = kk, lastKey: String = "y|Song A", since: Date? = nil, new: String?, newKey: String? = "z|Old",
+                  playing: Bool = false, running: @escaping () -> Bool = up, at: TimeInterval) -> Bool {
+            H.shouldHold(lastBundleID: last, lastTrackKey: lastKey, lastSeenAt: last == nil ? nil : t0, holdingSince: since,
+                         newBundleID: new, newTrackKey: newKey, newPlaying: playing, lastPlayerRunning: running,
+                         now: t0.addingTimeInterval(at))
+        }
+        expectEqual(hold(new: apple, at: 4), true, "切歌间隙: KKBOX 撤会话、落到暂停的 Apple Music → 保持")
+        expectEqual(hold(new: nil, newKey: nil, at: 4), true, "切歌间隙: 谁都没在报 → 保持")
+        expectEqual(hold(new: apple, playing: true, at: 4), false, "切歌间隙: 接手的播放器在放 → 照常切(用户真的换了)")
+        expectEqual(hold(new: kk, newKey: "y|Song A", at: 4), false, "切歌间隙: 同一个播放器报同一首暂停 → 真暂停,不保持")
+        expectEqual(hold(new: kk, newKey: "z|Old", at: 4), true, "切歌间隙: 同一个播放器报别的歌暂停 → 撤会话那一瞬的撕裂快照,保持")
+        expectEqual(hold(new: apple, at: H.startWindow + 0.5), false, "切歌间隙: 离最后一次看到它太久才撤 → 不算切歌空档")
+        expectEqual(hold(since: t0.addingTimeInterval(5), new: apple, at: 5 + 19), true, "切歌间隙: 已在保持,按保持起点算(19 秒的空档)")
+        expectEqual(hold(since: t0.addingTimeInterval(5), new: apple, at: 5 + H.window + 0.5), false, "切歌间隙: 超过窗口就当它真的不放了")
+        expectEqual(hold(new: apple, running: { false }, at: 4), false, "切歌间隙: 播放器已经退出 → 不等")
+        expectEqual(hold(last: PlaybackPlayer.kugou.bundleIdentifier, new: apple, at: 4), false,
+                    "切歌间隙: 只对实测会撤会话的播放器生效(决策 41)")
+        expectEqual(hold(last: nil, new: apple, at: 0), false, "切歌间隙: 之前没有在放的就不保持")
+        expectEqual(H.heldElapsed(elapsed: 200, rate: 1, duration: 208, since: 4), 204, "切歌间隙: 位置照墙钟往前走")
+        expectEqual(H.heldElapsed(elapsed: 206, rate: 1, duration: 208, since: 4), 208, "切歌间隙: 不超过曲长")
+        expectEqual(H.heldElapsed(elapsed: 10, rate: 0, duration: nil, since: 2), 12, "切歌间隙: 速率报 0 按 1 算(它在放)")
     }
 
     // ---- 播放器多选:Set<PlaybackPlayer>.soleExplicitPlayer ----

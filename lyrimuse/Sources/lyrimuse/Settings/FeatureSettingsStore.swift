@@ -887,7 +887,10 @@ public final class FeatureSettingsStore: ObservableObject {
         // 也不是用户真实排过的四不像顺序。
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
-        trustedPlayers = f.trustedPlayers ?? [:]
+        // 信任列表里后来成了内置播放器的(KKBOX)挪进播放器选择,见 TrustedPlayers.promotingBuiltins。
+        let promoted = TrustedPlayers.promotingBuiltins(trusted: f.trustedPlayers ?? [:], players: players)
+        trustedPlayers = promoted.trusted
+        players = promoted.players
         lastfmExcludedBundles = Set((f.lastfmExcludedBundles ?? [])
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         lyricsDir = f.lyricsDir ?? ""

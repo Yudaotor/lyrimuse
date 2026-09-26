@@ -18,6 +18,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case kugou = "kugou_music"
     /// Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。
     case soda = "soda_music"
+    /// Electron 应用,走 media-control,没有 AppleScript 字典、没有沙盒。播放中约每 1.06 秒重发一次锚点,位置精确到微秒、跟墙钟一致(实测 92 秒累计偏差 0.8 毫秒),归 cleanExtrapolated —— 跟它此前作为信任播放器走的是同一档,内置化不改变位置行为。开播先发一帧只有歌名的(歌手空、时长 0、rate 0),约半秒后才补齐,所以 artistArrivesLate;开播那个 0 锚点没见过原样重发。切歌时会先撤掉 Now Playing(多数 4~5 秒,刚开播一张专辑后的第一次切歌实测有过 19 秒),暂停着点开新列表加载时也撤,所以 dropsSessionBetweenTracks。歌手名取每首歌自己的 artist_roles,同一个歌手也时有时无括号里的译名(`Taylor Swift` / `Taylor Swift (泰勒絲)`、`周杰倫` / `周杰倫 (Jay Chou)`)。processName 5 字节。
+    case kkbox = "kkbox"
     /// 自己有 AppleScript 字典,曲目与播放位置都走它直问 Spotify.app(跟 Apple Music 同一条路);media-control 只负责回答「现在是谁在放」,以及 AppleScript 不可达时兜底。duration 那边是毫秒,Music.app 是秒。
     case spotify = "spotify"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
@@ -34,6 +36,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return "com.netease.163music"
         case .kugou: return "com.kugou.mac.Music"
         case .soda: return "com.soda.music"
+        case .kkbox: return "com.kkbox.electron-app"
         case .spotify: return "com.spotify.client"
         case .auto: return ""
         }
@@ -61,6 +64,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .netease: return "noisyFloored"
         case .kugou: return "cleanExtrapolated"
         case .soda: return "cleanExtrapolated"
+        case .kkbox: return "cleanExtrapolated"
         case .spotify: return "precise"
         default: return nil
         }
@@ -108,6 +112,24 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     public var playingFromRate: Bool {
         switch self {
         case .kugou: return true
+        default: return false
+        }
+    }
+
+    /// 开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐。只有**实测见过**的播放器为 true。
+    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`,Go 侧同源。
+    public var artistArrivesLate: Bool {
+        switch self {
+        case .kkbox: return true
+        default: return false
+        }
+    }
+
+    /// 切歌时先撤掉 Now Playing、隔几秒才发下一首。只有**实测见过**的播放器为 true。
+    /// 判定在 `PlayerGapHold`,Go 侧同源。
+    public var dropsSessionBetweenTracks: Bool {
+        switch self {
+        case .kkbox: return true
         default: return false
         }
     }

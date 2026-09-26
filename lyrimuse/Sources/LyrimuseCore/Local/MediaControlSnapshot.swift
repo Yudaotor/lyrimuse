@@ -99,6 +99,17 @@ public struct MediaControlSnapshot: Decodable {
     ///
     /// 写成显式方法而不是就地用合成的 memberwise init:字段有十个,memberwise 调用点
     /// 长得看不出"只改了一个字段",而且以后加字段时那种调用点会静默漏改。
+    /// 换掉位置和读数时刻的副本。唯一的用处是切歌间隙保持(`PlayerGapHold`):那几秒交回的是上一首的最后一份快照,
+    /// 位置要外推到此刻。写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    public func withElapsed(_ newElapsed: Double?, capturedAt newCapturedAt: Date) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: newElapsed, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt,
+            anchorStartCorrection: anchorStartCorrection)
+    }
+
     public func withAlbum(_ newAlbum: String) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: newAlbum, duration: duration,

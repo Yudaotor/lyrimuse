@@ -13,6 +13,7 @@ const (
 	playerNetease    = "netease_music"
 	playerKugou      = "kugou_music"
 	playerSoda       = "soda_music"
+	playerKKBOX      = "kkbox"
 	playerSpotify    = "spotify"
 	playerAuto       = "auto"
 )
@@ -24,6 +25,7 @@ const (
 	neteaseMusicBundleID = "com.netease.163music"
 	kugouMusicBundleID   = "com.kugou.mac.Music"
 	sodaMusicBundleID    = "com.soda.music"
+	kkboxBundleID        = "com.kkbox.electron-app"
 	spotifyBundleID      = "com.spotify.client"
 )
 
@@ -34,6 +36,7 @@ var allPlayerIDs = []string{
 	playerNetease,
 	playerKugou,
 	playerSoda,
+	playerKKBOX,
 	playerSpotify,
 	playerAuto,
 }
@@ -46,6 +49,7 @@ var playerBundleIDs = map[string]string{
 	playerNetease:    neteaseMusicBundleID,
 	playerKugou:      kugouMusicBundleID,
 	playerSoda:       sodaMusicBundleID,
+	playerKKBOX:      kkboxBundleID,
 	playerSpotify:    spotifyBundleID,
 }
 
@@ -57,6 +61,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	neteaseMusicBundleID: true,
 	kugouMusicBundleID:   true,
 	sodaMusicBundleID:    true,
+	kkboxBundleID:        true,
 	spotifyBundleID:      true,
 }
 
@@ -68,11 +73,12 @@ var playerProcessNames = map[string]string{
 	playerNetease:    "NeteaseMusic",
 	playerKugou:      "酷狗音乐",
 	playerSoda:       "汽水音乐",
+	playerKKBOX:      "KKBOX",
 	playerSpotify:    "Spotify",
 }
 
 // knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "Spotify"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -81,6 +87,7 @@ var playerScrobbleLabels = map[string]string{
 	neteaseMusicBundleID: "NetEase Cloud Music (macOS)",
 	kugouMusicBundleID:   "Kugou Music (macOS)",
 	sodaMusicBundleID:    "Soda Music (macOS)",
+	kkboxBundleID:        "KKBOX (macOS)",
 	spotifyBundleID:      "Spotify (macOS)",
 }
 
@@ -121,4 +128,17 @@ var playerRepublishesZeroAnchor = map[string]bool{
 // 判定本身在 effectivePlaying,Swift 侧 playingFromRate 同源。
 var playerPlayingFromRate = map[string]bool{
 	kugouMusicBundleID: true,
+}
+
+// playerArtistArrivesLate 是「bundle id → 开播先发一帧没有歌手的、过一会儿才补齐」。
+// 只列**实测见过**的播放器。那一帧当作还没准备好,判定在 trustedPlaybackNotASong,
+// Swift 侧 artistArrivesLate 同源。
+var playerArtistArrivesLate = map[string]bool{
+	kkboxBundleID: true,
+}
+
+// playerDropsSessionBetweenTracks 是「bundle id → 切歌时先撤掉 Now Playing、隔几秒才发下一首」。
+// 只列**实测见过**的播放器。判定在 holdAcrossPlayerGap,Swift 侧 dropsSessionBetweenTracks 同源。
+var playerDropsSessionBetweenTracks = map[string]bool{
+	kkboxBundleID: true,
 }

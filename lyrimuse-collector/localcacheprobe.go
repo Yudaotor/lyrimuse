@@ -29,6 +29,7 @@ func localCacheClientPaths() map[string][]string {
 		"soda":       {sodaLocalQueuePath(), sodaPreloadPath()},
 		"applemusic": {applemusicLocalCacheDir()},
 		"spotify":    {spotifyISRCUsersDir()},
+		"kkbox":      {kkboxLocalStorageDir(), kkboxCacheDir()},
 	}
 }
 

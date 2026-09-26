@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -70,10 +71,71 @@ public enum MediaControlClient {
     }
 
     private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
-        if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
+        if players.contains(.auto) { return heldAcrossPlayerGap(fetchAutoDetectedSnapshot()) }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
-        return fetchMultiSelectedSnapshot(players)
+        return heldAcrossPlayerGap(fetchMultiSelectedSnapshot(players))
+    }
+
+    // MARK: - 切歌间隙保持(见 PlayerGapHold)
+
+    private static let gapHoldLock = NSLock()
+    /// 上一份被采纳的快照和它读到的时刻;保持期间不更新(在放的话,位置从它还在放的最后一刻往前推)。
+    private static var gapHoldLast: (snapshot: MediaControlSnapshot, at: Date)?
+    /// 这一轮保持从哪一拍开始;nil = 没在保持。
+    private static var gapHoldingSince: Date?
+    /// 会撤会话的那个播放器的进程号,保持期间拿它问内核「还在不在」。只在采纳它的快照时记:
+    /// NSRunningApplication 在后台线程上偶尔返回空(实测保持中有一拍说 KKBOX 不在、0.3 秒后又在),
+    /// 保持期间照它判就会提前放手。
+    private static var gapHoldPID: (bundleID: String, pid: pid_t)?
+
+    private static func processAlive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 || errno == EPERM }
+
+    private static func noteGapHoldPID(_ bundleID: String) {
+        if let cur = gapHoldPID, cur.bundleID == bundleID, processAlive(cur.pid) { return }
+        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            gapHoldPID = (bundleID, app.processIdentifier)
+        }
+    }
+
+    /// 没记下进程号的当它在。
+    private static func gapHoldPlayerRunning(_ bundleID: String?) -> Bool {
+        guard let bundleID, let cur = gapHoldPID, cur.bundleID == bundleID else { return true }
+        return processAlive(cur.pid)
+    }
+
+    private static func heldAcrossPlayerGap(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {
+        let now = Date()
+        gapHoldLock.lock()
+        defer { gapHoldLock.unlock() }
+        if let last = gapHoldLast,
+           PlayerGapHold.shouldHold(lastBundleID: last.snapshot.bundleIdentifier, lastTrackKey: last.snapshot.trackKey,
+                                    lastSeenAt: last.at, holdingSince: gapHoldingSince,
+                                    newBundleID: snapshot?.bundleIdentifier, newTrackKey: snapshot?.trackKey,
+                                    newPlaying: snapshot?.playing == true,
+                                    lastPlayerRunning: { gapHoldPlayerRunning(last.snapshot.bundleIdentifier) },
+                                    now: now) {
+            if gapHoldingSince == nil {
+                gapHoldingSince = now
+                logger.notice("now playing: \(last.snapshot.bundleIdentifier ?? "", privacy: .public) dropped out between tracks, holding its last track")
+            }
+            let s = last.snapshot
+            guard s.playing == true else { return s.withElapsed(s.elapsedTime, capturedAt: now) }
+            let elapsed = PlayerGapHold.heldElapsed(elapsed: s.elapsedTime, rate: s.playbackRate, duration: s.duration,
+                                                    since: now.timeIntervalSince(last.at))
+            return s.withElapsed(elapsed, capturedAt: now)
+        }
+        if let since = gapHoldingSince {
+            gapHoldingSince = nil
+            logger.notice("now playing: gap hold ended after \(Int(now.timeIntervalSince(since).rounded()), privacy: .public)s (next: \(snapshot?.bundleIdentifier ?? "none", privacy: .public) playing=\(snapshot?.playing == true, privacy: .public))")
+        }
+        if let snapshot, let id = snapshot.bundleIdentifier {
+            gapHoldLast = (snapshot, snapshot.capturedAt ?? now)
+            if PlaybackPlayer.builtin(forBundleID: id)?.dropsSessionBetweenTracks == true { noteGapHoldPID(id) }
+        } else {
+            gapHoldLast = nil
+        }
+        return snapshot
     }
 
     private static let script = """
@@ -467,6 +529,11 @@ public enum MediaControlClient {
             noteAccepted(bundleID: bundleID)
             return adaptedSnapshot(
                 bundleID: bundleID, mediaControl: snapshotWithProbedAlbum(snapshot))
+        }
+        // 勾选的内置播放器也过一次:`artistArrivesLate` 的(KKBOX)开播那一帧还没有歌手,当作还没准备好。
+        guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
+            setSnapshotFailure(.notASong)
+            return fallback()
         }
         noteAccepted(bundleID: bundleID)
         return adaptedSnapshot(bundleID: bundleID, mediaControl: snapshot)
