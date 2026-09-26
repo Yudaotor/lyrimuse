@@ -541,8 +541,8 @@ func runSourceContractTests() {
                             "电台: App 侧不能把 duration 置空 —— 进度锚点以 duration > 0 为闸,置空等于整档没歌词")
                 expectEqual(mcc.contains("elapsedTime: radioPosition ?? elapsed"), true,
                             "电台: 位置要用自己那块单曲表,取不到再退回原读数")
-                expectEqual(mcc.contains("guard mediaControl.isRadio != true else { return mediaControl }"), true,
-                            "电台: 不能借 AppleScript 那份位置(它同样是整档节目的)")
+                expectEqual(mcc.contains("guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }"), true,
+                            "电台: 整档节目口径的台不能借 AppleScript 那份位置(它同样是整档节目的);只有判成单曲位置的那首才借")
                 // 起表时刻(现象是「歌词进度偏慢」):必须用 stream watcher 观察到
                 // 换歌的那一刻,不是这一拍轮询的时刻。差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
                 // 而这条链路断了不会编译失败 —— 只是位置又从 0 起,表现成"整首歌恒慢一点"。
@@ -558,8 +558,8 @@ func runSourceContractTests() {
                 // 不会编译失败,只会让电台在那种配置下再次"安静地没有"。
                 expectEqual(mcc.contains("if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }"), true,
                             "电台: 只勾 Apple Music 那条路要过 radioAwareAppleMusicSnapshot,不能直接调 fetchAppleMusicSnapshot")
-                expectEqual(mcc.contains("snapshot.withRadio(position: position)"), true,
-                            "电台: 纯 JXA 那条路同样要把位置换成单曲表(否则判据补上了、位置还是整档节目的)")
+                expectEqual(mcc.contains("radio.perTrack ? snapshot.markedRadio() : snapshot.withRadio(position: radio.position)"), true,
+                            "电台: 纯 JXA 那条路同样要把位置换成单曲表(否则判据补上了、位置还是整档节目的);单曲位置的台保留 AppleScript 读数")
                 expectEqual(mcc.contains("guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }"), true,
                             "电台: 探针必须核对 Now Playing 焦点是 Apple Music —— 别人的台标哈希不能扣到 Music.app 头上")
             } else {
@@ -866,8 +866,8 @@ func runSourceContractTests() {
                             "电台: collector 借不借 AppleScript 位置要走 borrowAppleScriptPosition(纯函数,Go 单测钉住)")
                 expectEqual(poller.contains("&& playing && tracked && !radio"), true,
                             "电台: collector 一律不借 AppleScript 播放头 —— 那是整档节目的位置,借了会让会话每拍重建")
-                expectEqual(poller.contains("p.cur.Playing, p.isTracked(), p.cur.Radio)"), true,
-                            "电台: 那道闸要真的把 p.cur.Radio 传进去,不然纯函数写对了也没接上")
+                expectEqual(poller.contains("p.cur.Playing, p.isTracked(), radioWallClock(p.cur))"), true,
+                            "电台: 那道闸要真的把电台判定(radioWallClock:整档节目口径才算)传进去,不然纯函数写对了也没接上")
                 // 第二道闸(修完上面那道之后实测仍然一条都不打卡):电台真曲长由 Apple
                 // 目录**异步**给出,实测比会话起点晚 4.7 秒,而 sess.meta 是会话创建那一刻的快照 ——
                 // 不回填的话 listenThreshold 拿到 0、退回 240s 上限,2~4 分钟的电台曲目永远够不着。
@@ -915,7 +915,7 @@ func runSourceContractTests() {
                             "适配优先: 自动识别与多选的信任分支都要交给 adaptedSnapshot(现在 \(probed) 处)")
                 // 整份顶替,不是只借一个字段 —— 只借字段就得配一道"差多少以内才肯借"的闸,
                 // 而那道闸恰好会在锚点偏得最狠的时候把真值挡在门外。
-                expectEqual(mcc.contains("return fetchAppleMusicSnapshot() ?? mediaControl"), true,
+                expectEqual(mcc.contains("guard let apple = fetchAppleMusicSnapshot() else { return mediaControl }"), true,
                             "适配优先: Apple Music 那档要整份用 AppleScript 快照,拿不到才退回 media-control")
                 // 必须留的例外(电台那条钉在上面「电台」那一段里,不重复)。
                 expectEqual(mcc.contains("guard mediaControl.playing == true else { return mediaControl }"), true,

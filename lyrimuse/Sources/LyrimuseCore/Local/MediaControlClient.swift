@@ -241,10 +241,13 @@ public enum MediaControlClient {
         // 同样取 stream watcher 观察到换歌的那一刻:那个订阅**不按 features.players 挂载**
         // (见 LocalPlaybackSource.startObservingPlayerInfoNotification 上那段注释),所以这条
         // 路上照样查得到,那 0.4~1.8 秒的恒定滞后不会因为换了条路又回来。
-        let position = advanceRadioClock(
+        // AppleScript 的 player position 是这一刻现读的,没有锚点新旧问题,锚点年龄按 0 传。
+        let radio = advanceRadioClock(
             trackKey: snapshot.trackKey, playing: snapshot.playing == true, now: Date(),
-            startedAt: lastTrackChangeObserved(forKey: snapshot.trackKey))
-        return snapshot.withRadio(position: position)
+            startedAt: lastTrackChangeObserved(forKey: snapshot.trackKey),
+            systemPosition: snapshot.elapsedTime, reportedDuration: snapshot.duration, anchorAge: 0)
+        // 报单曲位置的台:AppleScript 那份位置就是真值,只标电台、不换成单曲表(见 RadioTrackClock.State.perTrack)。
+        return radio.perTrack ? snapshot.markedRadio() : snapshot.withRadio(position: radio.position)
     }
 
     /// 连续几次拿不到快照,才真的把播放状态清空。纯函数,selftest 覆盖。
@@ -811,7 +814,10 @@ public enum MediaControlClient {
         // 电台的适配方式**就是** media-control 的台标识 + RadioTrackClock 单曲表:
         // `player position` 在电台上报的同样是整档节目的位置,借过来会把
         // fetchRawMediaControlSnapshot 刚换好的那块单曲表覆盖回错的值。见 RadioTrackClock 头注。
-        guard mediaControl.isRadio != true else { return mediaControl }
+        // 例外是「系统报单曲位置」的台(RadioTrackClock.State.perTrack):那种台 player position 就是这首的
+        // 真值,跟普通曲目一样整份顶替,只把电台标记带过去。
+        let perTrackRadio = mediaControl.isRadio == true && radioTrackIsPerTrack(mediaControl.trackKey)
+        guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }
         // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个
         // 放弃 —— 跟 collector 侧 refineAppleMusicState / refineSpotifyState 的 `return raw` 同一条退路。
         switch bundleID {
@@ -819,7 +825,8 @@ public enum MediaControlClient {
             // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
             // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
             guard mediaControl.playing == true else { return mediaControl }
-            return fetchAppleMusicSnapshot() ?? mediaControl
+            guard let apple = fetchAppleMusicSnapshot() else { return mediaControl }
+            return perTrackRadio ? apple.markedRadio() : apple
         case PlaybackPlayer.spotify.bundleIdentifier:
             // 这里跟 Apple Music **不一样**:暂停态也问。Spotify 的两个钟不重合 ——
             // MediaRemote 那个冻结值是音频位置,`player position` 是它自己的钟,两者差一段输出
@@ -1700,10 +1707,14 @@ public enum MediaControlClient {
         // 事,见 lyrimuse-collector/snapshot.go),所以留着它是纯粹的止损,没有副作用。
         let isRadio = !(raw.radioStationHash ?? "").isEmpty
         Self.setRadioStationHash(isRadio ? raw.radioStationHash : nil)
-        let radioPosition: Double? = isRadio
+        let radioClock = isRadio
             ? Self.advanceRadioClock(trackKey: trackKey, playing: playing == true, now: sampledAt,
-                                     startedAt: Self.lastTrackChangeObserved(forKey: trackKey))
+                                     startedAt: Self.lastTrackChangeObserved(forKey: trackKey),
+                                     systemPosition: elapsed, reportedDuration: raw.duration,
+                                     anchorAge: timestampDate.map { sampledAt.timeIntervalSince($0) })
             : nil
+        // 报单曲位置的台不顶替:位置与锚点保留系统原值,下游按普通 Apple Music 曲目处理(见 RadioTrackClock.State.perTrack)。
+        let radioPosition: Double? = radioClock?.perTrack == true ? nil : radioClock?.position
         var snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
@@ -1768,11 +1779,24 @@ public enum MediaControlClient {
         radioClockLock.unlock()
     }
 
+    /// 上一拍电台快照里系统报的位置(按曲目 key 记),换歌那一拍拿它判「系统位置归零了没有」,见 RadioTrackClock.perTrackSeed。
+    private static var radioLastSystemPosition: (key: String, position: Double)?
+    /// 这首起表时记下的「上一首最后的系统位置」与起表时刻,补判单曲位置(perTrackDecisionWindow 内)用。
+    private static var radioTrackStartPrevious: Double?
+    private static var radioTrackStartedAt: Date?
+
     /// 推进电台那块曲内表并取当前位置。状态只有一块(系统同一时刻只有一个 Now Playing 会话)。
     /// 纯算术在 `RadioTrackClock.advance`(selftest 钉住),这里只管加锁存取。
-    private static func advanceRadioClock(trackKey: String, playing: Bool, now: Date, startedAt: Date?) -> Double {
+    /// `systemPosition` / `anchorAge` 是这一拍系统自己的读数,用来判这个台是不是报单曲位置(起表那一拍,
+    /// 以及 perTrackDecisionWindow 内还没判成时的每一拍)。
+    private static func advanceRadioClock(trackKey: String, playing: Bool, now: Date, startedAt: Date?,
+                                          systemPosition: Double?, reportedDuration: Double?,
+                                          anchorAge: TimeInterval?)
+        -> (position: Double, perTrack: Bool) {
         radioClockLock.lock()
         defer { radioClockLock.unlock() }
+        let previousSystem = radioLastSystemPosition
+        if let systemPosition { radioLastSystemPosition = (trackKey, systemPosition) }
         // 冷启动:内存里没有表,先看看上一个进程留下的账能不能接(判据见 RadioClockFile 头注)。
         // 接不上就是 nil,后面照旧按 startedAt 播种 —— 跟没有这份文件时逐字相同。
         if radioClockState == nil, !radioClockRestoreTried {
@@ -1782,22 +1806,45 @@ public enum MediaControlClient {
                 logger.notice("radio clock: restored key=\(trackKey, privacy: .public) position=\(restored.position, format: .fixed(precision: 3)) gap=\(now.timeIntervalSince(restored.tickedAt), format: .fixed(precision: 3))")
             }
         }
+        let starting = radioClockState?.trackKey != trackKey
+        if starting {
+            radioTrackStartPrevious = previousSystem?.key == trackKey ? nil : previousSystem?.position
+            radioTrackStartedAt = now
+        }
+        let deciding = starting || (radioClockState?.perTrack == false && radioTrackStartedAt.map {
+            now.timeIntervalSince($0) <= RadioTrackClock.perTrackDecisionWindow } == true)
+        let perTrack = deciding && playing
+            ? RadioTrackClock.perTrackSeed(
+                systemPosition: systemPosition, anchorAge: anchorAge, previousPosition: radioTrackStartPrevious,
+                reportedDuration: reportedDuration)
+            : nil
         let next = RadioTrackClock.advance(radioClockState, trackKey: trackKey, playing: playing, now: now,
-                                           startedAt: startedAt)
+                                           startedAt: startedAt, perTrackSeed: perTrack,
+                                           systemPosition: systemPosition)
         // 只在起表那一拍打一行:换歌是低频事件,而"播种了多少"是这套机制唯一看得见的产物 —— 没有它,
         // 链路断掉(startedAt 恒 nil、key 对不上)只会安静地退回从 0 起,表现成"整首歌恒慢一点"。
-        if radioClockState?.trackKey != trackKey {
-            logger.notice("radio clock: start key=\(trackKey, privacy: .public) seed=\(next.position, format: .fixed(precision: 3)) observed=\(startedAt == nil ? "no" : "yes", privacy: .public)")
+        if !starting, perTrack != nil, radioClockState?.perTrack == false {
+            logger.notice("radio clock: per-track upgrade key=\(trackKey, privacy: .public) system=\(systemPosition ?? -1, format: .fixed(precision: 3)) wallclock=\(radioClockState?.position ?? -1, format: .fixed(precision: 3)) prev=\(radioTrackStartPrevious ?? -1, format: .fixed(precision: 3))")
+        }
+        if starting {
+            logger.notice("radio clock: start key=\(trackKey, privacy: .public) seed=\(next.position, format: .fixed(precision: 3)) observed=\(startedAt == nil ? "no" : "yes", privacy: .public) perTrack=\(perTrack == nil ? "no" : "yes", privacy: .public) system=\(systemPosition ?? -1, format: .fixed(precision: 3)) duration=\(reportedDuration ?? -1, format: .fixed(precision: 1)) prev=\(previousSystem?.position ?? -1, format: .fixed(precision: 3))")
         }
         radioClockState = next
         // 落盘,好让下一个进程接得上。写不写由 shouldWrite 定(换歌/播放翻转立刻写,平凡推进 15 秒一次)。
         let record = RadioClockRecord(trackKey: next.trackKey, position: next.position,
                                       tickedAtMs: Int64(next.tickedAt.timeIntervalSince1970 * 1000),
-                                      playing: next.playing)
+                                      playing: next.playing, perTrack: next.perTrack ? true : nil)
         if RadioClockFile.shouldWrite(previous: radioClockWritten, next: record, now: now) {
             radioClockWritten = record
             RadioClockFile.write(record)
         }
-        return next.position
+        return (next.position, next.perTrack)
+    }
+
+    /// 这首歌的电台表是不是判成了「系统报单曲位置」。adaptedSnapshot 据此决定要不要整份换成 AppleScript 读数。
+    private static func radioTrackIsPerTrack(_ trackKey: String) -> Bool {
+        radioClockLock.lock()
+        defer { radioClockLock.unlock() }
+        return radioClockState?.trackKey == trackKey && radioClockState?.perTrack == true
     }
 }

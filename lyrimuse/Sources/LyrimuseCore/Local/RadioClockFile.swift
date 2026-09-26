@@ -30,19 +30,24 @@ public struct RadioClockRecord: Codable, Equatable, Sendable {
     public var position: Double
     public var tickedAtMs: Int64
     public var playing: Bool
+    /// 这首歌判成了「系统报单曲位置」(RadioTrackClock.State.perTrack)。只在为真时写出(nil 不落键),
+    /// 没有这个键的旧文件照旧能读。
+    public var perTrack: Bool?
 
     enum CodingKeys: String, CodingKey {
         case trackKey = "track_key"
         case position
         case tickedAtMs = "ticked_at_ms"
         case playing
+        case perTrack = "per_track"
     }
 
-    public init(trackKey: String, position: Double, tickedAtMs: Int64, playing: Bool) {
+    public init(trackKey: String, position: Double, tickedAtMs: Int64, playing: Bool, perTrack: Bool? = nil) {
         self.trackKey = trackKey
         self.position = position
         self.tickedAtMs = tickedAtMs
         self.playing = playing
+        self.perTrack = perTrack
     }
 }
 
@@ -77,7 +82,7 @@ public enum RadioClockFile {
         let gap = now.timeIntervalSince(tickedAt)
         guard gap >= 0, gap <= maxRestoreGap else { return nil }
         return RadioTrackClock.State(trackKey: record.trackKey, position: record.position,
-                                     tickedAt: tickedAt, playing: true)
+                                     tickedAt: tickedAt, playing: true, perTrack: record.perTrack == true)
     }
 
     /// 要不要现在写盘。纯函数,selftest 直接覆盖。
@@ -87,7 +92,9 @@ public enum RadioClockFile {
     /// 那段算成播放时间(判据 3 就是防它,但前提是暂停这件事真的写进去了)。
     public static func shouldWrite(previous: RadioClockRecord?, next: RadioClockRecord, now: Date) -> Bool {
         guard let previous else { return true }
-        if previous.trackKey != next.trackKey || previous.playing != next.playing { return true }
+        if previous.trackKey != next.trackKey || previous.playing != next.playing || previous.perTrack != next.perTrack {
+            return true
+        }
         let since = now.timeIntervalSince(Date(timeIntervalSince1970: Double(previous.tickedAtMs) / 1000))
         return since >= minWriteInterval || since < 0
     }

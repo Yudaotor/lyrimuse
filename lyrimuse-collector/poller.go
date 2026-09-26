@@ -1852,7 +1852,7 @@ func (p *poller) poll() {
 	// 补这次 AppleScript 精确定位——跟改动前 playerAuto 分支的道理完全一样,只是现在
 	// 多选/自动识别共用同一条判断,不需要再分两个 case。
 	if borrowAppleScriptPosition(features().Players[playerAppleMusic], p.cur.Bundle,
-		p.cur.Playing, p.isTracked(), p.cur.Radio) {
+		p.cur.Playing, p.isTracked(), radioWallClock(p.cur)) {
 		p.calibrateAppleMusicPosition(now)
 	}
 	p.handle(now, reanchored, loopRestart)

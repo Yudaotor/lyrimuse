@@ -1730,6 +1730,49 @@ func runPlaybackPositionTests() {
         let next = R.advance(seeded, trackKey: "NCT 127|英雄", playing: true, now: t0.addingTimeInterval(4.816),
                              startedAt: t0.addingTimeInterval(0.999))
         expectEqual((next.position * 1000).rounded(), 3817, "起表: 同一首歌后续拍只累加,不拿观察时刻再播种一次")
+        // 报单曲位置的电台 + 歌曲过渡:新歌从 13 秒切进来,系统位置 262.5 → 13.0。
+        expectEqual(R.perTrackSeed(systemPosition: 13.004, anchorAge: 0.07, previousPosition: 262.506), 13.004,
+                    "单曲口径: 换歌时系统位置归零到小值 → 用它起表")
+        expectEqual(R.perTrackSeed(systemPosition: 467, anchorAge: 0.07, previousPosition: 460), nil,
+                    "单曲口径: 整档节目口径换歌不归零 → 不采信")
+        expectEqual(R.perTrackSeed(systemPosition: 13, anchorAge: 0.07, previousPosition: nil), nil,
+                    "单曲口径: 冷启动没有上一首读数、也不知道时长 → 不判")
+        expectEqual(R.perTrackSeed(systemPosition: 0.423, anchorAge: 0.05, previousPosition: nil, reportedDuration: 255.181),
+                    0.423, "单曲口径: 开台第一首没有上一首读数,系统报的时长是单曲量级 → 判成单曲位置")
+        expectEqual(R.perTrackSeed(systemPosition: 33.4, anchorAge: 0.05, previousPosition: nil, reportedDuration: 3390.122),
+                    nil, "单曲口径: 整档节目口径的台报的是整档时长 → 冷启动也不判")
+        expectEqual(R.perTrackSeed(systemPosition: 0.4, anchorAge: 0.05, previousPosition: nil, reportedDuration: 0),
+                    nil, "单曲口径: 时长为 0(直播流读不到)不算单曲量级")
+        expectEqual(R.perTrackSeed(systemPosition: 13, anchorAge: 236, previousPosition: 262), nil,
+                    "单曲口径: 陈旧锚点 → 不采信")
+        expectEqual(R.perTrackSeed(systemPosition: 75, anchorAge: 0, previousPosition: 300), nil,
+                    "单曲口径: 超过上限 → 不采信")
+        expectEqual(R.perTrackSeed(systemPosition: 30, anchorAge: 0, previousPosition: 45), nil,
+                    "单曲口径: 归零幅度不够 → 不采信")
+        let perTrack = R.advance(seeded, trackKey: "MagnusTheMagnus|Area", playing: true,
+                                 now: t0.addingTimeInterval(10), startedAt: t0.addingTimeInterval(9.4),
+                                 perTrackSeed: 13.004)
+        expectEqual(perTrack.position, 13.004, "单曲口径: 给了 perTrackSeed 就优先于观察时刻播种")
+        expectEqual(perTrack.perTrack, true, "单曲口径: 用 perTrackSeed 起表就标 perTrack")
+        expectEqual(seeded.perTrack, false, "单曲口径: 按观察时刻起表的不标 perTrack")
+        let perTrackNext = R.advance(perTrack, trackKey: "MagnusTheMagnus|Area", playing: true,
+                                     now: t0.addingTimeInterval(12), perTrackSeed: 99)
+        expectEqual((perTrackNext.position * 1000).rounded(), 15004, "单曲口径: perTrackSeed 只在起表那一拍用")
+        // 起播缓冲时系统连报几次 0,最后一个才是真起点:标了 perTrack 的那首跟着系统位置走,不按墙钟累加。
+        let rebuffer = R.advance(perTrack, trackKey: "MagnusTheMagnus|Area", playing: true,
+                                 now: t0.addingTimeInterval(14), systemPosition: 0)
+        expectEqual(rebuffer.position, 0, "单曲口径: 同一首系统重报 0 → 跟着回到 0(不是墙钟累加的 17 秒)")
+        expectEqual(rebuffer.perTrack, true, "单曲口径: perTrack 一直带到这首结束")
+        let wall = R.advance(seeded, trackKey: "NCT 127|英雄", playing: true, now: t0.addingTimeInterval(6.816),
+                             systemPosition: 400)
+        expectEqual((wall.position * 1000).rounded(), 5817, "单曲口径: 没标 perTrack 的照旧按墙钟累加,不看系统位置")
+        // 交叉渐入渐出:起表那一拍读到的是上一首的位置(没判成),半秒后调用方补给 perTrackSeed → 从这一拍起跟系统位置。
+        let torn = R.advance(nil, trackKey: "橘子海|夏日漱石", playing: true, now: t0, startedAt: t0.addingTimeInterval(-0.5))
+        expectEqual(torn.perTrack, false, "单曲口径: 起表那一拍没判成就先按观察时刻起表")
+        let upgraded = R.advance(torn, trackKey: "橘子海|夏日漱石", playing: true, now: t0.addingTimeInterval(0.5),
+                                 perTrackSeed: 6.566)
+        expectEqual(upgraded.position, 6.566, "单曲口径: 同一首补判成单曲位置 → 改用系统位置")
+        expectEqual(upgraded.perTrack, true, "单曲口径: 补判之后标 perTrack")
         // 换歌判定:空标题(切台/加载中实测会先吐几行只有 artist 的载荷)不算换歌。
         expectEqual(W.changedTrackKey(before: ["artist": "NCT 127", "title": "英雄"],
                                       after: ["artist": "NCT 127", "title": "Fact Check (不可思议)"]),
@@ -1782,6 +1825,20 @@ func runPlaybackPositionTests() {
                     "落盘副本: 键名与顺序稳定(sortedKeys)")
         expectEqual(F.decode(data), saved, "落盘副本: 往返相等")
         expectEqual(F.decode(Data("not json".utf8)), nil, "落盘副本: 坏文件解不出来就当没有,不崩")
+        // perTrack 只在为真时落键,旧文件(没有这个键)照旧能读;接回来时带上它,重启后那首歌仍以系统位置为准。
+        let perTrackRec = RadioClockRecord(trackKey: "MagnusTheMagnus|Area", position: 40,
+                                           tickedAtMs: Int64(t0.timeIntervalSince1970 * 1000), playing: true, perTrack: true)
+        expectEqual(String(data: try! F.encode(perTrackRec), encoding: .utf8),
+                    "{\"per_track\":true,\"playing\":true,\"position\":40,\"ticked_at_ms\":1788000000000,\"track_key\":\"MagnusTheMagnus|Area\"}",
+                    "落盘副本: perTrack 落成 per_track")
+        expectEqual(F.decode(data)?.perTrack, nil, "落盘副本: 没有 per_track 的旧文件读出来是 nil")
+        expectEqual(F.shouldWrite(previous: rec("MagnusTheMagnus|Area", 3, t0, true), next: perTrackRec,
+                                  now: t0.addingTimeInterval(1)), true,
+                    "写盘: 补判成单曲位置那一拍立刻写(重启接回要带上它)")
+        expectEqual(F.restorable(perTrackRec, trackKey: "MagnusTheMagnus|Area", now: t0.addingTimeInterval(8))?.perTrack,
+                    true, "恢复: 接回时带上 perTrack")
+        expectEqual(F.restorable(saved, trackKey: "NCT 127|Step Up", now: t0.addingTimeInterval(8))?.perTrack,
+                    false, "恢复: 没标的记录接回来不是 perTrack")
         // 恢复判据三条。
         expectEqual(F.restorable(nil, trackKey: "NCT 127|Step Up", now: t0.addingTimeInterval(8)), nil,
                     "恢复: 没有记录就是没有")

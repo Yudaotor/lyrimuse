@@ -10,53 +10,53 @@ import (
 func TestAdvanceRadioClock(t *testing.T) {
 	base := time.Date(2026, 9, 10, 7, 15, 35, 0, time.UTC)
 	// 第一次见:归零起表。
-	s := advanceRadioClock(radioClockState{}, "Daniel Caesar|Who Knows", true, base)
+	s := advanceRadioClock(radioClockState{}, "Daniel Caesar|Who Knows", true, base, 0)
 	if s.position != 0 || s.trackKey != "Daniel Caesar|Who Knows" {
 		t.Fatalf("first sight should start at 0, got %+v", s)
 	}
 	// 播放中按墙钟累加。
-	s = advanceRadioClock(s, "Daniel Caesar|Who Knows", true, base.Add(5*time.Second))
-	s = advanceRadioClock(s, "Daniel Caesar|Who Knows", true, base.Add(10*time.Second))
+	s = advanceRadioClock(s, "Daniel Caesar|Who Knows", true, base.Add(5*time.Second), 0)
+	s = advanceRadioClock(s, "Daniel Caesar|Who Knows", true, base.Add(10*time.Second), 0)
 	if s.position != 10 {
 		t.Fatalf("playing should accumulate wall clock, got %.3f want 10", s.position)
 	}
 	// 换歌:归零 —— 这正是系统那块表不做的事(实测 07:20:39 换歌位置照旧往上走)。
-	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(11*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(11*time.Second), 0)
 	if s.position != 0 || s.trackKey != "Clairo|Juna" {
 		t.Fatalf("track change must reset to 0, got %+v", s)
 	}
 	// 暂停:上一拍还在播 → 那段算数(基本都在播);之后每一拍都冻结。
-	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(21*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(21*time.Second), 0)
 	if s.position != 10 {
 		t.Fatalf("want 10 before pause, got %.3f", s.position)
 	}
-	s = advanceRadioClock(s, "Clairo|Juna", false, base.Add(23*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", false, base.Add(23*time.Second), 0)
 	if s.position != 12 {
 		t.Fatalf("the interval that ended in a pause was still mostly playing, got %.3f want 12", s.position)
 	}
-	s = advanceRadioClock(s, "Clairo|Juna", false, base.Add(120*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", false, base.Add(120*time.Second), 0)
 	if s.position != 12 {
 		t.Fatalf("pause must freeze the position, got %.3f", s.position)
 	}
 	// 回归守卫:恢复那一拍**绝不能**把整段暂停间隔算成播放时间。按"这一拍在播"累加的老写法
 	// 会在这里跳到 12+97=109 —— 实测的 3.5~5.8 秒前跳就是这么来的。
-	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(125*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(125*time.Second), 0)
 	if s.position != 12 {
 		t.Fatalf("resume must not count the paused span, got %.3f want 12", s.position)
 	}
 	// 恢复之后照常走。
-	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(128*time.Second))
+	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(128*time.Second), 0)
 	if s.position != 15 {
 		t.Fatalf("after resuming the clock should run again, got %.3f want 15", s.position)
 	}
 	// 单拍上限:休眠 / 长卡顿之后墙钟差不再等于"播了多久"。
-	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(128*time.Second+2*time.Hour))
+	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(128*time.Second+2*time.Hour), 0)
 	if s.position != 15+radioMaxAdvancePerTick.Seconds() {
 		t.Fatalf("a huge gap must be clamped, got %.3f", s.position)
 	}
 	// 时钟倒退(NTP 校时)不减位置。
 	before := s.position
-	s = advanceRadioClock(s, "Clairo|Juna", true, base)
+	s = advanceRadioClock(s, "Clairo|Juna", true, base, 0)
 	if s.position != before {
 		t.Fatalf("a backwards clock must not move the position, got %.3f want %.3f", s.position, before)
 	}
@@ -227,5 +227,117 @@ func TestNeedsRadioDurationBackfill(t *testing.T) {
 			t.Errorf("%s: needsRadioDurationBackfill(%v, %v, %v, %v) = %v, 期望 %v",
 				c.name, c.sameTrack, c.radio, c.sessDur, c.curDur, got, c.expect)
 		}
+	}
+}
+
+// 报单曲位置的电台:换歌时系统位置归零到小值才用它起表;整档节目口径(不归零)、冷启动、位置太大一律不采信。
+func TestRadioPerTrackSeed(t *testing.T) {
+	cases := []struct {
+		name     string
+		pos      float64
+		age      time.Duration
+		prev     float64
+		hasPrev  bool
+		dur      float64
+		want     float64
+		wantSeed bool
+	}{
+		{"过渡跳过前奏:262.5 → 13.0", 13.004, 0, 262.506, true, 0, 13.004, true},
+		{"没跳前奏:从 0 起", 0.4, 0, 216.2, true, 0, 0.4, true},
+		{"整档节目口径:换歌不归零", 467, 0, 460, true, 3390.122, 0, false},
+		{"冷启动:没有上一首读数、也不知道时长", 13, 0, 0, false, 0, 0, false},
+		{"冷启动:开台第一首,时长是单曲量级", 0.423, 0, 0, false, 255.181, 0.423, true},
+		{"冷启动:整档节目时长不算单曲量级", 33.4, 0, 0, false, 3390.122, 0, false},
+		{"位置超过上限", 75, 0, 300, true, 255, 0, false},
+		{"归零幅度不够、时长未知", 30, 0, 45, true, 0, 0, false},
+		{"锚点太旧", 13, 6 * time.Second, 262, true, 255, 0, false},
+		{"负位置", -1, 0, 200, true, 255, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := radioPerTrackSeed(c.pos, c.age, c.prev, c.hasPrev, c.dur)
+		if ok != c.wantSeed || got != c.want {
+			t.Errorf("%s: got (%v, %v), want (%v, %v)", c.name, got, ok, c.want, c.wantSeed)
+		}
+	}
+}
+
+// applyRadioClock 端到端:上一首系统位置 262 秒,换歌那一拍系统报 13 秒 → 表从 13 秒起,而不是 0。
+func TestApplyRadioClockSeedsFromPerTrackPosition(t *testing.T) {
+	radioClockMu.Lock()
+	savedClock, savedKey, savedPos := radioClockValue, radioLastSystemKey, radioLastSystemPos
+	radioClockValue, radioLastSystemKey, radioLastSystemPos = radioClockState{}, "", 0
+	radioClockMu.Unlock()
+	t.Cleanup(func() {
+		radioClockMu.Lock()
+		radioClockValue, radioLastSystemKey, radioLastSystemPos = savedClock, savedKey, savedPos
+		radioClockMu.Unlock()
+	})
+	now := time.Now()
+	prev := snapshot{Title: "龙拳", Artist: "周杰伦", Playing: true, Radio: true, Elapsed: 262.5, McTS: now}
+	applyRadioClock(&prev, now)
+	next := snapshot{Title: "Area", Artist: "MagnusTheMagnus", Playing: true, Radio: true, Elapsed: 13.0, McTS: now.Add(time.Second)}
+	applyRadioClock(&next, now.Add(time.Second))
+	if next.Elapsed != 13.0 {
+		t.Fatalf("换歌时系统位置归零到 13 秒,表该从 13 秒起, got %v", next.Elapsed)
+	}
+	if radioWallClock(next) {
+		t.Fatal("判成单曲位置的这首不该再走墙钟表(poller 要照常借 Music.app 播放头)")
+	}
+	// 同一首里系统重报 0(起播缓冲):快照保留系统值,不被表顶替成墙钟累加的 14 秒。
+	rebuffer := snapshot{Title: "Area", Artist: "MagnusTheMagnus", Playing: true, Radio: true, Elapsed: 0, McTS: now.Add(2 * time.Second)}
+	applyRadioClock(&rebuffer, now.Add(2*time.Second))
+	if rebuffer.Elapsed != 0 {
+		t.Fatalf("单曲位置的台:同一首后续拍保留系统位置, got %v", rebuffer.Elapsed)
+	}
+	whole := snapshot{Title: "Juna", Artist: "Clairo", Playing: true, Radio: true, Elapsed: 480, McTS: now.Add(2 * time.Second)}
+	applyRadioClock(&whole, now.Add(2*time.Second))
+	if whole.Elapsed != 0 {
+		t.Fatalf("系统位置没归零(整档节目口径)时照旧从 0 起, got %v", whole.Elapsed)
+	}
+	if !radioWallClock(whole) {
+		t.Fatal("整档节目口径的台照旧走墙钟表、不借 AppleScript 播放头")
+	}
+	whole2 := snapshot{Title: "Juna", Artist: "Clairo", Playing: true, Radio: true, Elapsed: 485, McTS: now.Add(7 * time.Second)}
+	applyRadioClock(&whole2, now.Add(7*time.Second))
+	if whole2.Elapsed != 5 {
+		t.Fatalf("整档节目口径的台:同一首按墙钟累加, got %v", whole2.Elapsed)
+	}
+}
+
+// 「交叉渐入渐出」换歌:起表那一拍读到的还是上一首的位置(新标题 + 旧进度),半秒后系统才推新歌自己的进度。
+// 起表后 radioPerTrackDecisionWindow 内补判成单曲位置;窗口过了不再补判。
+func TestApplyRadioClockUpgradesToPerTrackWithinWindow(t *testing.T) {
+	radioClockMu.Lock()
+	savedClock, savedKey, savedPos := radioClockValue, radioLastSystemKey, radioLastSystemPos
+	savedPrev, savedHas, savedAt := radioStartPrevPos, radioStartHasPrev, radioStartStartedAt
+	radioClockValue, radioLastSystemKey, radioLastSystemPos = radioClockState{}, "", 0
+	radioClockMu.Unlock()
+	t.Cleanup(func() {
+		radioClockMu.Lock()
+		radioClockValue, radioLastSystemKey, radioLastSystemPos = savedClock, savedKey, savedPos
+		radioStartPrevPos, radioStartHasPrev, radioStartStartedAt = savedPrev, savedHas, savedAt
+		radioClockMu.Unlock()
+	})
+	now := time.Now()
+	prev := snapshot{Title: "缘分一道桥", Artist: "王力宏", Playing: true, Radio: true, Elapsed: 245.5, McTS: now}
+	applyRadioClock(&prev, now)
+	torn := snapshot{Title: "夏日漱石", Artist: "橘子海", Playing: true, Radio: true, Elapsed: 246.7, McTS: now.Add(time.Second)}
+	applyRadioClock(&torn, now.Add(time.Second))
+	if torn.Elapsed != 0 || !radioWallClock(torn) {
+		t.Fatalf("起表那一拍读到上一首的位置:先按墙钟表从 0 起, got %v", torn.Elapsed)
+	}
+	fixed := snapshot{Title: "夏日漱石", Artist: "橘子海", Playing: true, Radio: true, Elapsed: 6.6, McTS: now.Add(1500 * time.Millisecond)}
+	applyRadioClock(&fixed, now.Add(1500*time.Millisecond))
+	if fixed.Elapsed != 6.6 || radioWallClock(fixed) {
+		t.Fatalf("窗口内系统推出新歌自己的进度:补判成单曲位置并保留系统值, got %v wall=%v", fixed.Elapsed, radioWallClock(fixed))
+	}
+
+	// 窗口过了:整档节目口径的台在窗口外即使读数变小也不补判。
+	whole := snapshot{Title: "Juna", Artist: "Clairo", Playing: true, Radio: true, Elapsed: 480, McTS: now.Add(3 * time.Second)}
+	applyRadioClock(&whole, now.Add(3*time.Second))
+	late := snapshot{Title: "Juna", Artist: "Clairo", Playing: true, Radio: true, Elapsed: 5, McTS: now.Add(20 * time.Second)}
+	applyRadioClock(&late, now.Add(20*time.Second))
+	if !radioWallClock(late) {
+		t.Fatal("起表超过 radioPerTrackDecisionWindow 之后不再补判成单曲位置")
 	}
 }

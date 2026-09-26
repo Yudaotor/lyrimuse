@@ -164,6 +164,17 @@ public struct MediaControlSnapshot: Decodable {
     /// `LocalPlaybackSource.apply` 建不起进度锚点、整档节目都没有歌词(真踩过)。
     /// 真曲长由 collector 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    /// 标成电台、位置和锚点原样保留。给「系统报单曲位置」的那种台用(RadioTrackClock.State.perTrack),
+    /// 那种台的位置以系统 / AppleScript 读数为准,不换成单曲表。
+    public func markedRadio() -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: true, capturedAt: capturedAt,
+            anchorStartCorrection: anchorStartCorrection)
+    }
+
     public func withRadio(position: Double) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: duration,

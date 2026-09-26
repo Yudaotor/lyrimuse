@@ -9,8 +9,9 @@ import Foundation
 /// `duration` 同样是整档节目(实测 3390.122s = 56 分半),它还会被写进歌词缓存的 resolved_duration,
 /// 之后正常播放同一首歌时跟真实时长差 94%、超过 12% 的 durationMismatch 阈值,触发变体键重解析。
 ///
-/// 系统这一层**没有**任何单曲级别的位置可取,唯一能标出曲目边界的信息就是"元数据换了"这一刻。
-/// 所以这里自己起表:曲目 key 一变就归零,之后只在播放中按墙钟累加。
+/// 这种台系统这一层**没有**任何单曲级别的位置可取,唯一能标出曲目边界的信息就是"元数据换了"这一刻。
+/// 所以这里自己起表:曲目 key 一变就归零,之后只在播放中按墙钟累加。也有报单曲位置的台,那种台换歌时
+/// 用系统位置起表,判据见 perTrackSeed(...)。
 ///
 /// ## 起表时刻要用"观察到换歌的那一刻",不是"我们轮询到的那一刻"(现象是「歌词进度偏慢」)
 ///
@@ -44,19 +45,25 @@ public enum RadioTrackClock {
         public let tickedAt: Date
         /// **上一拍**是不是在播。决定这一拍要不要把 [上一拍, 现在] 这段算成播放时间,见 advance。
         public let playing: Bool
+        /// 这首歌起表时判成了「系统报单曲位置」(见 perTrackSeed)。为真时这首余下的时间都以系统位置为准,
+        /// 调用方不再拿这块表的位置去顶替快照;表只跟着系统位置记账(落盘、重启接回用)。
+        public let perTrack: Bool
 
-        public init(trackKey: String, position: Double, tickedAt: Date, playing: Bool) {
+        public init(trackKey: String, position: Double, tickedAt: Date, playing: Bool, perTrack: Bool = false) {
             self.trackKey = trackKey
             self.position = position
             self.tickedAt = tickedAt
             self.playing = playing
+            self.perTrack = perTrack
         }
     }
 
     /// 推进一拍。纯函数,selftest 直接覆盖。
     ///
-    /// - 换歌(key 变了)或第一次见 → 重新起表,位置 = 从 `startedAt` 到现在这段(见 seedPosition);
-    ///   没给 `startedAt` 就是 0,跟这个参数加进来之前逐字相同。
+    /// - 换歌(key 变了)或第一次见 → 重新起表:给了 `perTrackSeed`(见 perTrackSeed(...))就用它并标 perTrack,
+    ///   否则位置 = 从 `startedAt` 到现在这段(见 seedPosition);两个都没给就是 0。
+    /// - 同一首、还没标 perTrack、给了 `perTrackSeed` → 改用它并标 perTrack(起表那一拍读到的还是上一首的位置时)。
+    /// - 同一首、已标 perTrack、给了 `systemPosition` → 位置直接取系统位置(缓冲时重报的 0、暂停、拖动都跟着走)。
     /// - 否则按 **上一拍** 的播放状态决定要不要累加 [上一拍, 现在] 这段(单拍夹在 [0, maxAdvancePerTick])。
     ///
     /// 判据是**上一拍**在不在播,不是这一拍(修一个真实回归)。按"这一拍在播"
@@ -66,17 +73,27 @@ public enum RadioTrackClock {
     /// 反过来「上一拍在播、这一拍暂停」照旧累加:那一段确实基本都在播,而暂停事件本身会立刻唤醒一次
     /// 轮询,过冲很小。两边都以"这段区间的多数状态"为准,方向对称。
     public static func advance(_ state: State?, trackKey: String, playing: Bool, now: Date,
-                               startedAt: Date? = nil) -> State {
+                               startedAt: Date? = nil, perTrackSeed: Double? = nil,
+                               systemPosition: Double? = nil) -> State {
         guard let state, state.trackKey == trackKey else {
-            return State(trackKey: trackKey, position: seedPosition(startedAt: startedAt, now: now),
-                         tickedAt: now, playing: playing)
+            return State(trackKey: trackKey, position: perTrackSeed ?? seedPosition(startedAt: startedAt, now: now),
+                         tickedAt: now, playing: playing, perTrack: perTrackSeed != nil)
+        }
+        // 起表之后才判成单曲位置(调用方只在 perTrackDecisionWindow 内给):从这一拍起改跟系统位置。
+        if !state.perTrack, let perTrackSeed {
+            return State(trackKey: trackKey, position: perTrackSeed, tickedAt: now, playing: playing, perTrack: true)
+        }
+        if state.perTrack, let systemPosition, systemPosition >= 0 {
+            return State(trackKey: trackKey, position: systemPosition, tickedAt: now, playing: playing, perTrack: true)
         }
         guard state.playing else {
-            return State(trackKey: trackKey, position: state.position, tickedAt: now, playing: playing)
+            return State(trackKey: trackKey, position: state.position, tickedAt: now, playing: playing,
+                         perTrack: state.perTrack)
         }
         let raw = now.timeIntervalSince(state.tickedAt)
         let step = min(max(raw, 0), maxAdvancePerTick)
-        return State(trackKey: trackKey, position: state.position + step, tickedAt: now, playing: playing)
+        return State(trackKey: trackKey, position: state.position + step, tickedAt: now, playing: playing,
+                     perTrack: state.perTrack)
     }
 
     /// 过了真曲长多久就认为"这首歌放完了"。电台在两首歌之间还有主持人说话(实测这个台
@@ -102,5 +119,42 @@ public enum RadioTrackClock {
         let gap = now.timeIntervalSince(startedAt)
         guard gap > 0 else { return 0 }
         return min(gap, maxStartSeed)
+    }
+
+    // MARK: - 报单曲位置的电台
+
+    /// 换歌那一拍系统锚点最多多旧还算「换歌时新打的」。整档节目口径的台换歌时常常不重打锚点(锚点是几百秒前的)。
+    public static let perTrackAnchorMaxAge: TimeInterval = 5
+    /// 换歌那一拍系统位置的上限。起播跳过的前奏落在这之内;更大的值当成整档节目口径,不采信。
+    public static let perTrackSeedMax: Double = 60
+    /// 换歌那一拍的系统位置至少要比上一首最后的系统位置小这么多,才算「换歌时归零了」。整档节目口径换歌不归零、只会接着往上涨。
+    public static let perTrackResetMargin: Double = 20
+    /// 系统报的时长不超过这个值算「单曲量级」。整档节目口径的台报的是整档节目长度(几十分钟起)。
+    public static let perTrackMaxDuration: Double = 900
+    /// 起表后多久之内还可以补判成单曲位置。「交叉渐入渐出」换歌时系统先推新标题、进度还是上一首的,
+    /// 约半秒后才推新歌自己的进度;起表那一拍可能正好读到前一份。比较对象固定是换歌前上一首最后的系统位置。
+    public static let perTrackDecisionWindow: TimeInterval = 10
+
+    /// 有的电台系统报的是**单曲**位置(换歌归零、每拍都对),「歌曲过渡」开着时新歌还会跳过前奏、
+    /// 从十几秒处切进来。这种台换歌时直接用系统位置起表,否则从 0 起的表会整首慢一段前奏的长度。
+    /// 判成之后这首余下的时间也都以系统位置为准(State.perTrack):起播缓冲时 Apple Music 会连报几次 0,
+    /// 最后一个才是真起点,只在起表那一拍取一次会整首快几秒。
+    /// 纯函数,selftest 直接覆盖;collector 的 radioPerTrackSeed 同一套判据、同一组常量,两边一起改。
+    ///
+    /// 前两条必须成立、后两条至少成立一条,才返回 `systemPosition`,否则 nil(调用方照旧按 seedPosition 起表):
+    /// - 读数来自换歌时新打的锚点:`anchorAge` 在 [0, perTrackAnchorMaxAge](现读的 AppleScript 位置传 0);
+    /// - `systemPosition` 在 [0, perTrackSeedMax];
+    /// - 相对上一首最后的系统位置归零了:`previousPosition − systemPosition ≥ perTrackResetMargin`;
+    /// - 系统报的时长是单曲量级:`reportedDuration` 在 (0, perTrackMaxDuration]。开台第一首、App 重启后的
+    ///   第一首没有上一首的读数,靠这一条判。
+    public static func perTrackSeed(systemPosition: Double?, anchorAge: TimeInterval?,
+                                    previousPosition: Double?, reportedDuration: Double? = nil) -> Double? {
+        guard let systemPosition, let anchorAge else { return nil }
+        guard anchorAge >= 0, anchorAge <= perTrackAnchorMaxAge else { return nil }
+        guard systemPosition >= 0, systemPosition <= perTrackSeedMax else { return nil }
+        let reset = previousPosition.map { $0 - systemPosition >= perTrackResetMargin } ?? false
+        let trackScale = reportedDuration.map { $0 > 0 && $0 <= perTrackMaxDuration } ?? false
+        guard reset || trackScale else { return nil }
+        return systemPosition
     }
 }

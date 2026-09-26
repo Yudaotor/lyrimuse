@@ -19,7 +19,9 @@ type snapshot struct {
 	AlbumHint string
 	Bundle    string
 	Duration  float64
-	Playing   bool
+	// ReportedDuration:系统原样报的时长。电台时 Duration 换成了目录曲长,这里留原值给 radioPerTrackSeed 判单曲量级。
+	ReportedDuration float64
+	Playing          bool
 	// media-control's own reading: at McTS the position was Elapsed, advancing at
 	// Rate (1 playing, 0 paused). media-control freezes Elapsed/McTS during steady
 	// play (only refreshed on events) and McTS drifts stale across sleep/idle, so
@@ -158,18 +160,19 @@ func extract(state map[string]any) snapshot {
 		duration = 0
 	}
 	return snapshot{
-		Title:         str("title"),
-		Artist:        str("artist"),
-		Album:         str("album"),
-		Bundle:        str("bundleIdentifier"),
-		Duration:      duration,
-		Playing:       playing,
-		Elapsed:       num("elapsedTime"),
-		Rate:          num("playbackRate"),
-		McTS:          mcTS,
-		AnchorElapsed: num("anchorElapsedTime"),
-		Radio:         radio,
-		NotAudio:      notAudio,
+		Title:            str("title"),
+		Artist:           str("artist"),
+		Album:            str("album"),
+		Bundle:           str("bundleIdentifier"),
+		Duration:         duration,
+		ReportedDuration: num("duration"),
+		Playing:          playing,
+		Elapsed:          num("elapsedTime"),
+		Rate:             num("playbackRate"),
+		McTS:             mcTS,
+		AnchorElapsed:    num("anchorElapsedTime"),
+		Radio:            radio,
+		NotAudio:         notAudio,
 		PositionFromPlayerClock: func() bool {
 			v, _ := state["positionFromPlayerClock"].(bool)
 			return v
