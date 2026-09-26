@@ -2844,6 +2844,9 @@ public final class LocalPlaybackSource: ObservableObject {
     private func applyPosition(snapshot: MediaControlSnapshot, key: String, trackChanged: Bool, previousKey: String,
                                isSpotifyNative: Bool, isAdBreak: Bool, now: Date) {
         let playing = snapshot.playing == true
+        // 网页探针的每首额度换歌就重开,不管这一拍在不在播、有没有时长。别挪进下面 `if playing, let duration` 那支:
+        // 页面内换歌的头一拍常常还没有时长,跳过这一步,探针就还记着上一次探过的 key,A → B → A 切回来时一次都不探。
+        if trackChanged { env.browserProbeTrackChanged(previousKey, key) }
         // 暂停/恢复那一拍的诊断:用户看到"一按暂停歌词进度变一下",要量的就是
         // "暂停前一刻屏上外推到哪"与"冻结值"之差、以及"冻结值"与"恢复后第一笔"之差。两个
         // 变量只在状态翻转的那一拍非 nil,日志也只在那一拍打一行。
@@ -2933,7 +2936,6 @@ public final class LocalPlaybackSource: ObservableObject {
             // 本来就更准的 .cleanExtrapolated 连续外推,不会被整秒精度的探针值持续覆盖
             // 导致周期性回退。
             if trackChanged {
-                env.browserProbeTrackChanged(previousKey, key)
                 // Spotify 原生客户端:开播 2.5s 后问一次。它带回两样东西 —— `artwork url`
                 // (图床 640 档地址,任何档位都要,见 spotifyArtworkURL)和 player position
                 // (只有 cleanExtrapolated 档消费,见下面那处闸门)。

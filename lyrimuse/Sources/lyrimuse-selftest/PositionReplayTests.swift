@@ -15,6 +15,8 @@ private final class ReplayRig {
     /// 网页探针下一次交出的读数:从 `readyAt` 起可消费一次,值按消费时刻算。
     var browserCorrection: (key: String, readyAt: Date, isPrecise: Bool, value: (Date) -> Double)?
     var browserReopened: [String] = []
+    /// 网页探针收到的「换歌」通知(新 key),见 BrowserPositionProbe.trackChanged。
+    var browserTrackChanges: [String] = []
     var route: AudioOutputRoute.Current?
     private(set) var source: LocalPlaybackSource!
 
@@ -27,7 +29,7 @@ private final class ReplayRig {
             readPositionBias: { nil },
             writePositionBias: { [unowned self] in self.biasWrites.append($0) },
             outputRoute: { [unowned self] in self.route },
-            browserProbeTrackChanged: { _, _ in },
+            browserProbeTrackChanged: { [unowned self] _, to in self.browserTrackChanges.append(to) },
             browserProbeKick: { _, _, _ in },
             browserProbeConsume: { [unowned self] key, _, now in
                 guard let c = self.browserCorrection, c.key == key, now >= c.readyAt else { return nil }
@@ -92,6 +94,23 @@ func runPositionReplayTests() {
     replayCaptureLag()
     replayKugouStartCorrectionPublished()
     replaySodaAnchorLag()
+    replayBrowserProbeReopensOnEveryTrackChange()
+}
+
+/// 页面内换歌(YouTube Music 在同一个标签页里切到下一首):新曲头一拍常常还没有时长。
+/// 这一拍也要通知探针换歌,否则 A → B → A 切回来时探针还记着「A 已经探过」,一次都不探。
+@MainActor
+private func replayBrowserProbeReopensOnEveryTrackChange() {
+    let rig = ReplayRig("browser-probe-reopen")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(safariMediaID, "My Universe", anchor: 0, elapsed: 40, duration: 282.181), at: at(0))
+    rig.tick(.forReplay(title: "Dynamite", artist: "Fujii Kaze", album: "Prema", duration: nil, elapsedTime: 0,
+                        playing: true, bundleIdentifier: safariMediaID, anchorElapsedTime: 0), at: at(2))
+    rig.tick(.forReplay(title: "My Universe", artist: "Fujii Kaze", album: "Prema", duration: nil, elapsedTime: 0,
+                        playing: false, bundleIdentifier: safariMediaID, anchorElapsedTime: 0), at: at(4))
+    rig.tick(mediaControl(safariMediaID, "My Universe", anchor: 0, elapsed: 2, duration: 282.181), at: at(6))
+    expectEqual(rig.browserTrackChanges, ["Fujii Kaze|My Universe", "Fujii Kaze|Dynamite", "Fujii Kaze|My Universe"],
+                "回放·网页探针: 没有时长 / 没在播的换歌那一拍也重开额度")
 }
 
 /// 手动点播:上一首放到一半时点了另一首 → fresh 档。真实领先 0.271,
