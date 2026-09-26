@@ -3910,6 +3910,21 @@ func runSourceContractTests() {
         }
         expectEqual(stats.contains("!avatarRequested.contains($0)"), true,
                     "Last.fm 榜单: 同一次运行里问过的歌手名不再起 collector 查头像")
+        // 今天 / 近 7 天:feed 派生的「今天」只收精确值;日桶靠页面主刷新和过零点补增量,增量至少重扫 14 天。
+        expectEqual(stats.contains("mergeOverview(total: feed.total, today: today.count, week: nil)"), false,
+                    "Last.fm 今天: 不精确的下界不拿去盖界面上的数字")
+        if let fn = stats.range(of: "func ensureFirstSyncBootstrap() {"),
+           let done = stats.range(of: "bootstrapState = .done", range: fn.upperBound..<stats.endIndex),
+           let ret = stats.range(of: "return\n", range: done.upperBound..<stats.endIndex) {
+            expectEqual(stats[done.upperBound..<ret.lowerBound].contains("syncHistoryIfNeeded()"), true,
+                        "Last.fm 日桶: 老账号的页面主刷新也补增量")
+        } else {
+            expectEqual(false, true, "Last.fm 日桶: 找不到 ensureFirstSyncBootstrap 的 .done 分支")
+        }
+        expectEqual(stats.contains("private static let dailyRescanDays: TimeInterval = 14"), true,
+                    "Last.fm 日桶: 增量至少重扫 14 天(Last.fm 收补交的上限)")
+        expectEqual(stats.contains("syncStartedAt - Self.dailyRescanDays * 86400"), true,
+                    "Last.fm 日桶: 增量起点取水位那天和 14 天前里更早的")
         let icloud = code("Settings/ICloudConfigStore.swift")
         expectEqual(icloud.contains("ConfigExportMetadata.read(data)"), true, "设置判定走 Core: 配置包自报信息的读取")
         expectEqual(portability.contains("ConfigExportMetadata.exportedAtString("), true, "设置判定走 Core: 导出时间跟读取同一个格式")

@@ -891,25 +891,37 @@ func runLastfmTests() {
         // 今天的派生:todayStart=1000。
         // ① 窗口盖住整天(最旧一行 900 < 1000):数窗口里 ≥1000 的行,精确。
         let r1 = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200, 1100, 900, 800], todayStart: 1000,
-                                             bucketToday: 99, syncedThrough: 0)
+                                             countedToday: 99, countedThrough: 0)
         expectEqual(r1.count, 3, "today: 窗口盖住整天 → 数窗口")
         expectEqual(r1.exact, true, "today: 窗口盖住整天 → 精确")
         // ② 窗口盖不住(全是今天的 50 首),但日桶今天同步到 1150:桶 40 + 晚于 1150 的 2 行。
         let r2 = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200, 1100, 1050], todayStart: 1000,
-                                             bucketToday: 40, syncedThrough: 1150)
+                                             countedToday: 40, countedThrough: 1150)
         expectEqual(r2.count, 42, "today: 日桶 + 同步后新行")
         expectEqual(r2.exact, true, "today: 日桶今天同步过 → 精确")
-        // ②' 日桶今天没有条目(nil 当 0)但同步过:只算同步后的行。
+        // ②' 日桶今天没有条目(nil 当 0)但同步过:同步后的 1 行,不低于窗口里今天的 2 行。
         let r2b = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200], todayStart: 1000,
-                                              bucketToday: nil, syncedThrough: 1100)
-        expectEqual(r2b.count, 2, "today: 桶为 nil 当 0")
+                                              countedToday: nil, countedThrough: 1200)
+        expectEqual(r2b.count, 2, "today: 桶为 nil 当 0,不低于窗口里今天的行数")
+        expectEqual(r2b.exact, true, "today: 桶为 nil 但窗口够得着 → 精确")
+        // ②'' 日桶同步到 1100 记了 10 首,窗口最旧一行是 1200:1100~1200 之间谁都没数到,
+        //      不能当成 10 + 窗口行数的精确值。
+        let r2c = LastfmRecentFeed.todayCount(rowUTS: [1400, 1300, 1200], todayStart: 1000,
+                                              countedToday: 10, countedThrough: 1100)
+        expectEqual(r2c.exact, false, "today: 窗口跟已知计数之间有空档 → 不精确")
+        expectEqual(r2c.count, 3, "today: 有空档时只给窗口里的下界")
+        // ②''' 最旧一行正好落在 countedThrough 上:没有空档,那一行已经算在已知计数里。
+        let r2d = LastfmRecentFeed.todayCount(rowUTS: [1400, 1300, 1200], todayStart: 1000,
+                                              countedToday: 10, countedThrough: 1200)
+        expectEqual(r2d.count, 12, "today: 边界那一行不重复计")
+        expectEqual(r2d.exact, true, "today: 窗口够得着已知计数 → 精确")
         // ③ 两者都不行:窗口全是今天、日桶停在昨天 → 只给下界、不精确。
         let r3 = LastfmRecentFeed.todayCount(rowUTS: [1300, 1200, 1100, 1050], todayStart: 1000,
-                                             bucketToday: nil, syncedThrough: 500)
+                                             countedToday: nil, countedThrough: 500)
         expectEqual(r3.count, 4, "today: 退化成下界")
         expectEqual(r3.exact, false, "today: 日桶停在昨天 → 不精确,调用方补一个请求")
         // ④ 空 feed(新账号)+ 今天同步过:0。
-        let r4 = LastfmRecentFeed.todayCount(rowUTS: [], todayStart: 1000, bucketToday: nil, syncedThrough: 1200)
+        let r4 = LastfmRecentFeed.todayCount(rowUTS: [], todayStart: 1000, countedToday: nil, countedThrough: 1200)
         expectEqual(r4.count, 0, "today: 空窗口")
         expectEqual(r4.exact, true, "today: 空窗口但今天同步过 → 精确 0")
     }

@@ -149,12 +149,10 @@ final class ScrobbleBackfillService: ObservableObject {
                 """)
             // 真的有条目补进了 Last.fm → 统计页手里的缓存全过时了(现象是
             // "补提交后最近记录没刷新"):最近记录/今天/近7天立刻强刷,不等 2 分钟 TTL
-            // 或下次换歌;热力图的增量水位拨回回填窗口起点,不拨的话补进历史那些天会被
-            // 增量同步永远漏掉(见 rewindDailySyncForBackfill 注释)。accepted == 0
-            // (全被忽略/隔离)时 Last.fm 侧什么都没变,不白发请求。
+            // 或下次换歌。补进过去那些天的条数由热力图增量同步收进来(每次重扫最近 14 天,
+            // 盖住回填窗口)。accepted == 0(全被忽略/隔离)时 Last.fm 侧什么都没变,不白发请求。
             if let out, out.accepted > 0 {
                 LastfmStatsService.shared.refreshBaseline(force: true)
-                LastfmStatsService.shared.rewindDailySyncForBackfill()
                 // 补,更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
                 // 一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源
                 // 是 collector 落盘的 feed(每 15 s/60 s 一拉)—— 现象是「补提交之后最近记录没刷新」。

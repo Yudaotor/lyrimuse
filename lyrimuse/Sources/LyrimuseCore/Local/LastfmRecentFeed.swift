@@ -69,24 +69,29 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
 
     /// 「今天听了几首」的派生(替代此前每轮刷新单发的 `from=今日0点&limit=1` 请求)。
     ///
-    /// 两份数据凑:热力图日桶 `bucketToday`(截至 `syncedThrough` 为止今天的条数,只存非零天,
-    /// 所以 nil 可能是 0)+ feed 里的行。三种情形:
+    /// 两份数据凑:一个已知计数 `countedToday`(截至 `countedThrough` 为止今天的条数:热力图日桶,
+    /// 或单独请求拿回的真值;日桶只存非零天,所以 nil 可能是 0)+ feed 里的行。三种情形:
     ///  - feed 的 50 行窗口**盖住了整天**(最旧一行早于今日零点)→ 直接数窗口里今天的行,精确;
-    ///  - 窗口盖不住整天,但日桶今天同步过(`syncedThrough >= todayStart`)→ 桶 + 窗口里晚于
-    ///    `syncedThrough` 的行,精确到"同步收尾那几秒内多算一条"的量级(下次 top-up 归正);
-    ///  - 两者都不行(今天听了 >50 首、日桶又还停在昨天)→ 只能给下界(窗口里今天的行数),
-    ///    `exact == false`,调用方可以补一个 `limit=1` 请求把真值拿回来。
+    ///  - 已知计数是今天的(`countedThrough >= todayStart`),而且窗口往回够得着它(最旧一行不晚于
+    ///    `countedThrough`,两者之间没有空档)→ 已知计数 + 窗口里晚于 `countedThrough` 的行,精确;
+    ///  - 其余情形只能给下界(窗口里今天的行数),`exact == false`,调用方补一个 `limit=1` 请求。
+    ///    空档那一段谁都没数到,当成精确会把它整段漏掉。
+    ///
+    /// 已知计数之后才提交、时间戳却早于 `countedThrough` 的那一首(取数那一刻正在放的)两边都不算,
+    /// 会少一首,直到下一次拿到新的已知计数。晚于 `countedThrough` 的行不可能已经算在里面
+    /// (scrobble 的时间戳是开播时刻,不晚于提交时刻),所以不会重复计。
     public static func todayCount(
         rowUTS: [TimeInterval], todayStart: TimeInterval,
-        bucketToday: Int?, syncedThrough: TimeInterval
+        countedToday: Int?, countedThrough: TimeInterval
     ) -> (count: Int, exact: Bool) {
         let todayRows = rowUTS.filter { $0 >= todayStart }.count
-        if let oldest = rowUTS.min(), oldest < todayStart {
+        let oldest = rowUTS.min()
+        if let oldest, oldest < todayStart {
             return (todayRows, true)
         }
-        if syncedThrough >= todayStart {
-            let afterSync = rowUTS.filter { $0 > syncedThrough }.count
-            return (max((bucketToday ?? 0) + afterSync, todayRows), true)
+        if countedThrough >= todayStart, oldest.map({ $0 <= countedThrough }) ?? true {
+            let afterCounted = rowUTS.filter { $0 > countedThrough }.count
+            return (max((countedToday ?? 0) + afterCounted, todayRows), true)
         }
         return (todayRows, false)
     }

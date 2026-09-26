@@ -140,7 +140,7 @@ struct IdleStandbyBackground: View {
 /// - **「近 7 天」是滚动 7 天**,不是自然周(`overview.week` 取的是 now − 7×86400)。原来
 ///   界面上写的是「本周」,那句话本身在撒谎,这里改成「近 7 天」。
 /// - **环比与日均都只在桶里算**,跟上面那两个大数字不同源;而且桶没同步完时算出来是假的,
-///   所以 `dailySyncing` 期间这两行整体缺席、宁可不显示。
+///   所以 `dailyFullSyncing`(首次全量)期间这两行整体缺席、宁可不显示。
 private struct IdleOverviewCard: View {
     @ObservedObject private var stats = LastfmStatsService.shared
 
@@ -164,9 +164,7 @@ private struct IdleOverviewCard: View {
                 bigStat(value: weekValue, label: weekLabel)
                 bigStat(value: stats.overview?.total, label: totalLabel)
             }
-            // 首次同步(bootstrapState)跟日常 top-up(dailySyncing)分开措辞
-            // ——前者是"这个账号第一次连接",用户需要知道这是一次性的、会自己好;后者
-            // 通常一闪而过,不用强调"首次"。
+            // 只有首次全量同步时才换成占位骨架(syncNote);日常增量同步不动日桶,走势图照常显示。
             //
             // 不能再包一层 `String(format: "正在同步历史（%@）", stats.dailySyncProgress)`:
             // dailySyncProgress 自己已经是 LastfmStatsService 格式化好的完整句子
@@ -258,11 +256,11 @@ private struct IdleOverviewCard: View {
     }
 
     /// 「近 7 天」的数值 —— 跟紧挨着的那个环比百分比**同源**(见 lastSevenDays 的注释)。
-    /// 桶还没同步完时退回 API 值:那时候桶是残缺的,拿它算只会给出一个偏低的假数字,
-    /// 而这一档下面那个百分比本来也不显示(weekLabel 的 dailySyncing 守卫),不存在
+    /// 首次全量同步期间退回 API 值:那时候桶是残缺的,拿它算只会给出一个偏低的假数字,
+    /// 而这一档下面那个百分比本来也不显示(weekLabel 的 dailyFullSyncing 守卫),不存在
     /// "数值和百分比不同源"的问题。
     private var weekValue: Int? {
-        guard !stats.dailySyncing else { return stats.overview?.week }
+        guard !stats.dailyFullSyncing else { return stats.overview?.week }
         return IdleListeningStats.lastSevenDays(
             dailyCounts: stats.dailyCounts, today: Date(),
             todayCount: stats.overview?.today,
@@ -271,7 +269,7 @@ private struct IdleOverviewCard: View {
 
     private var weekLabel: String {
         let base = L10n.t("近 7 天")
-        guard !stats.dailySyncing,
+        guard !stats.dailyFullSyncing,
               let d = IdleListeningStats.weekOverWeekDelta(
                 dailyCounts: stats.dailyCounts, today: Date(),
                 // 跟上面 series 里那句 `s[s.count-1] = today` 补的是同一格:桶同步到
@@ -287,7 +285,7 @@ private struct IdleOverviewCard: View {
 
     private var totalLabel: String {
         let base = L10n.t("累计")
-        guard !stats.dailySyncing,
+        guard !stats.dailyFullSyncing,
               let avg = IdleListeningStats.dailyAverage(dailyCounts: stats.dailyCounts)
         else { return base }
         return base + " · " + String(format: L10n.t("日均 %1$@ · %2$@ 天"),
@@ -427,15 +425,14 @@ private struct IdleOverviewCard: View {
                       Self.dayFormatter.string(from: dates[idx]))
     }
 
-    /// 同步中要显示的那行说明(nil = 没在同步)。首次同步(bootstrapState)跟日常 top-up
-    /// (dailySyncing)分开措辞 —— 前者是"这个账号第一次连接",用户需要知道这是一次性的、
-    /// 会自己好;后者通常一闪而过,不用强调"首次"。合成一个属性是为了让上面那段能用
-    /// `if let` 一次判完,占位骨架只写一份。
+    /// 首次全量同步中要显示的那行说明(nil = 不需要占位)。有页数(bootstrapState)时报页数,
+    /// 第一页还没回来时只说「正在同步历史」。日常增量同步不走这里:日桶那时完整,图照常画。
+    /// 合成一个属性是为了让上面那段能用 `if let` 一次判完,占位骨架只写一份。
     private var syncNote: String? {
         if case .syncing(let page, let total) = stats.bootstrapState {
             return String(format: L10n.t("首次同步历史中（%1$@/%2$@ 页）"), "\(page)", "\(total)")
         }
-        if stats.dailySyncing {
+        if stats.dailyFullSyncing {
             // dailySyncProgress 自己已经是格式化好的完整句子("正在同步历史（N/M 页）"),
             // 再包一层 format 会显示成"正在同步历史（正在同步历史（N/M 页））"(修过)。
             return stats.dailySyncProgress ?? L10n.t("正在同步历史")

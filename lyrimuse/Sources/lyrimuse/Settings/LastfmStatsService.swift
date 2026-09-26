@@ -115,13 +115,21 @@ final class LastfmStatsService: ObservableObject {
         if !dailyLoaded { loadDailySnapshot() }
         let now = Date()
         let todayStart = Calendar.current.startOfDay(for: now).timeIntervalSince1970
+        let counted = todayCountedBase(todayStart: todayStart, now: now)
         let today = LastfmRecentFeed.todayCount(
             rowUTS: feed.tracks.compactMap(\.uts), todayStart: todayStart,
-            bucketToday: dailyCounts[Self.dayKey(now)], syncedThrough: dailySyncedThrough)
+            countedToday: counted.count, countedThrough: counted.through)
+        // 过了零点、日桶还停在昨天:补一轮增量(自带 15 分钟节流和单飞),不然「近 7 天」里昨天那格
+        // 一直是半截。
+        if dailySyncedThrough > 0, dailySyncedThrough < todayStart { syncHistoryIfNeeded() }
         if let prev = lastFeed, prev.total == feed.total, prev.nowPlaying == feed.nowPlaying,
            prev.tracks == feed.tracks {
             lastFeed = feed
-            mergeOverview(total: nil, today: today.exact ? today.count : nil, week: nil)
+            if today.exact {
+                mergeOverview(total: nil, today: today.count, week: nil)
+            } else {
+                refreshTodayCountIfNeeded()
+            }
             if fresh, overview != nil { fetchedAt["baseline"] = Date() }
             return
         }
@@ -156,8 +164,9 @@ final class LastfmStatsService: ObservableObject {
         }
 
         // 总数/总页数/今天:总数直接来自响应 @attr.total;总页数按 20/页换算(此前要等一次
-        // page=1 网络响应才有,冷启动那一屏翻页控件因此空窗);今天已在上面从日桶 + feed 派生。
-        mergeOverview(total: feed.total, today: today.count, week: nil)
+        // page=1 网络响应才有,冷启动那一屏翻页控件因此空窗);今天已在上面从日桶 + feed 派生,
+        // 只收精确值:下界拿去盖会把界面上的数字压低,真值由 refreshTodayCountIfNeeded 取回。
+        mergeOverview(total: feed.total, today: today.exact ? today.count : nil, week: nil)
         recentTotalPages = LastfmRecentFeed.totalPages(total: feed.total, pageSize: Self.recentPageSize)
         if !today.exact { refreshTodayCountIfNeeded() }
 
@@ -175,8 +184,25 @@ final class LastfmStatsService: ObservableObject {
         scheduleRecentPageCacheSave()
     }
 
-    /// feed 派生不出精确的"今天"(今天已听 >50 首且日桶还停在昨天,罕见)时,补一个最小
-    /// 请求把真值拿回来。走 baselineTTL 节流,后台优先级。
+    /// 单独请求拿回的「今天」真值和拿到的时刻。之后 feed 只要往回够得着这个时刻,就在它上面
+    /// 加新行(`todayCountedBase`),不必每来一首都再请求一次。
+    private var todayFetched: (dayStart: TimeInterval, count: Int, at: TimeInterval)?
+
+    /// 给 `LastfmRecentFeed.todayCount` 的已知计数:日桶和 `todayFetched` 里取时刻更晚的那个
+    /// (不是今天的不算)。
+    private func todayCountedBase(todayStart: TimeInterval, now: Date) -> (count: Int?, through: TimeInterval) {
+        if let f = todayFetched, f.dayStart == todayStart, f.at > dailySyncedThrough {
+            return (f.count, f.at)
+        }
+        return (dailyCounts[Self.dayKey(now)], dailySyncedThrough)
+    }
+
+    private func recordTodayFetched(dayStart: Date, count: Int) {
+        todayFetched = (dayStart.timeIntervalSince1970, count, Date().timeIntervalSince1970)
+    }
+
+    /// feed 派生不出精确的"今天"(今天已听 >50 首,而且已知计数跟 feed 窗口之间有空档)时,
+    /// 补一个最小请求把真值拿回来。走 baselineTTL 节流,后台优先级。
     private func refreshTodayCountIfNeeded() {
         guard !fresh("todaycount", ttl: baselineTTL), let cred = credentials else { return }
         fetchedAt["todaycount"] = Date()
@@ -189,7 +215,9 @@ final class LastfmStatsService: ObservableObject {
                 fetchedAt["todaycount"] = nil
                 return
             }
-            mergeOverview(total: nil, today: attrTotal(json), week: nil)
+            let count = attrTotal(json)
+            recordTodayFetched(dayStart: dayStart, count: count)
+            mergeOverview(total: nil, today: count, week: nil)
         }
     }
 
@@ -834,10 +862,11 @@ final class LastfmStatsService: ObservableObject {
         dailySyncedThrough = 0
         dailyLoaded = false
         dailySyncing = false
+        dailyFullSyncing = false
         historySyncGeneration += 1 // 在飞的那轮扫描作废,见声明处
         dailySyncFailed = false
         dailySyncProgress = nil
-        pendingDailyRewind = nil
+        todayFetched = nil
         try? FileManager.default.removeItem(at: Self.dailyURL)
         historyCheckpoint = nil
         historyCheckpointLoaded = false
@@ -1244,15 +1273,21 @@ final class LastfmStatsService: ObservableObject {
     // MARK: - 播放热力图(每日计数)
 
     /// "yyyy-MM-dd"(本地时区) → 当日 scrobble 数。数据来自 user.getRecentTracks 全量
-    /// 分页聚合:首次同步整个历史(两万条 ≈ 110 页,只跑一次),之后按 dailySyncedThrough
-    /// 增量,通常一页就完。独立缓存文件,删了无损、下次重建。
+    /// 分页聚合:首次同步整个历史(两万条 ≈ 110 页,只跑一次),之后增量重扫最近
+    /// `dailyRescanDays` 天(几页到十几页)。独立缓存文件,删了无损、下次重建。
     @Published private(set) var dailyCounts: [String: Int] = [:]
     @Published private(set) var dailySyncing = false
-    /// 首次全量同步的进度文案;增量同步一闪而过,保持 nil 不占界面。
+    /// 正在跑的是首次全量(含截断自愈重扫):这时 dailyCounts 残缺,按天算的数(近 7 天、环比、
+    /// 日均、走势图、收听足迹)都不能用。增量同步期间 dailyCounts 原样保留、收尾才整体替换,
+    /// 照常可用,那些地方看这个而不是 `dailySyncing`,免得每轮增量都闪一下。
+    @Published private(set) var dailyFullSyncing = false
+    /// 首次全量同步的进度文案;增量同步保持 nil 不占界面。
     @Published private(set) var dailySyncProgress: String?
     @Published private(set) var dailySyncFailed = false
     private var dailySyncedThrough: TimeInterval = 0
     private var dailyLoaded = false
+    /// 增量同步每次至少重扫的天数,见 syncHistoryIfNeeded。
+    private static let dailyRescanDays: TimeInterval = 14
     /// 历史扫描的世代号。`resetAll` 每次 +1;正在飞的那一轮扫描每次 await 回来都比对,
     /// 对不上就整轮作废、**一个字节都不写**。
     ///
@@ -1299,10 +1334,6 @@ final class LastfmStatsService: ObservableObject {
             try? data.write(to: Self.dailyURL, options: .atomic)
         }
     }
-
-    /// 回填在热力图同步**进行中**到达时的挂起回拨——立刻改水位会被同步收尾那句
-    /// `dailySyncedThrough = syncStartedAt` 盖回去,记下来等收尾时应用。
-    private var pendingDailyRewind: TimeInterval?
 
     // MARK: - 历史全量扫描断点
     //
@@ -1378,39 +1409,12 @@ final class LastfmStatsService: ObservableObject {
             // 永远缺这一块。prefetchRecentPagesIfNeeded 内部按"缺哪页补
             // 哪页"幂等,重复调用无害。
             prefetchRecentPagesIfNeeded()
+            // 页面主刷新顺带补增量(15 分钟节流):「近 7 天」读的是日桶,只靠热力图 / 待机页
+            // 触发的话,不开那两处时日桶可以停在好几天前。
+            syncHistoryIfNeeded()
             return
         }
         syncHistoryIfNeeded()
-    }
-
-    /// 回填(补提交)成功后调用:把每日计数的增量水位拨回回填窗口起点。
-    ///
-    /// 为什么必须拨:回填把
-    /// scrobble 塞进**过去最多 13 天**(collector backfill.go 的回溯窗口),而增量同步
-    /// 只从"最后已同步那天的零点"往后扫 —— 不回拨的话,补进历史的那些天会被增量同步
-    /// **永远**漏掉,热力图永久少计。拨 14 天带一天余量;重扫 14 天 ≈ 一两页请求,开销
-    /// 可忽略。只动水位不动 dailyCounts:下次打开热力图时那段区间整体重算,重算前旧
-    /// 数据照常显示,跟 refreshDailyCounts"全部成功才合并替换"的口径一致。
-    func rewindDailySyncForBackfill() {
-        if !dailyLoaded { loadDailySnapshot() }
-        let target = Date().timeIntervalSince1970 - 14 * 86400
-        guard dailySyncedThrough > target else { return } // 从没同步过/水位本就更早
-        if dailySyncing {
-            pendingDailyRewind = target
-            return
-        }
-        dailySyncedThrough = target
-        saveDailySnapshot()
-    }
-
-    /// 见 pendingDailyRewind。同步收尾(成功或失败)时调,有挂起的回拨就应用。
-    private func applyPendingDailyRewind() {
-        guard let target = pendingDailyRewind else { return }
-        pendingDailyRewind = nil
-        if dailySyncedThrough > target {
-            dailySyncedThrough = target
-            saveDailySnapshot()
-        }
     }
 
     /// 热力图的按天计数加起来比 Last.fm 报的总 scrobble 数少三成以上 → 判为截断(见 syncHistoryIfNeeded
@@ -1440,7 +1444,7 @@ final class LastfmStatsService: ObservableObject {
     ///   落一次断点(historyCheckpoint),网络抖动/App 被杀之后从断点续跑,不用从头重来
     ///   ——这是解决"卡、失败要反复刷新"的核心,110+ 页的扫描经不起从头重来。
     /// - **增量 top-up**(水位 > 0):保留原有"全部页成功才合并替换,失败原样保留旧数据"
-    ///   的策略。这条路径通常只有 1-3 页,重跑成本低,不值得为它引入检查点复杂度;
+    ///   的策略。这条路径重扫最近 14 天(几页到十几页),重跑成本低,不值得为它引入检查点复杂度;
     ///   更重要的是这条策略对热力图"绝不展示不完整数据"的语义很关键,别顺手把它也
     ///   改成断点续传那一套(会重新引入"半途失败导致热力图缺最近几天数据却不报错"
     ///   的隐患)。15 分钟节流,复用原 ensureTitleFormsIndex 的 titleFormsLastTopUp。
@@ -1474,14 +1478,21 @@ final class LastfmStatsService: ObservableObject {
         if !full, let last = titleFormsLastTopUp, Date().timeIntervalSince(last) < 15 * 60 { return }
 
         dailySyncing = true
+        dailyFullSyncing = full
         dailySyncFailed = false
         titleFormsLastTopUp = Date()
         let syncStartedAt = Date().timeIntervalSince1970
         var from: TimeInterval = 1
         var wipeFromDay: String?
         if !full {
-            let lastDayStart = Calendar.current.startOfDay(
-                for: Date(timeIntervalSince1970: priorWatermark))
+            // 增量至少重扫最近 14 天,不能只从水位那天扫起:水位之后才到、时间戳落在更早日子的
+            // scrobble(别的设备离线补交、回填)只能靠重扫收进来。Last.fm 不收 14 天以前的时间戳,
+            // 所以这个窗口盖得住所有晚到的记录。
+            let rescanStart = Calendar.current.startOfDay(
+                for: Date(timeIntervalSince1970: syncStartedAt - Self.dailyRescanDays * 86400))
+            let lastDayStart = min(
+                Calendar.current.startOfDay(for: Date(timeIntervalSince1970: priorWatermark)),
+                rescanStart)
             from = lastDayStart.timeIntervalSince1970
             wipeFromDay = Self.dayKey(lastDayStart)
         } else if let cp = historyCheckpoint, cp.username == cred.user {
@@ -1493,7 +1504,12 @@ final class LastfmStatsService: ObservableObject {
         Task {
             // 只在这一轮还是"当前世代"时才清忙标志:被 resetAll 作废之后新一轮可能已经起飞,
             // 这里再把 dailySyncing 置 false 会让第三轮插进来跟新一轮并跑。
-            defer { if generation == historySyncGeneration { dailySyncing = false } }
+            defer {
+                if generation == historySyncGeneration {
+                    dailySyncing = false
+                    dailyFullSyncing = false
+                }
+            }
             var page = (full ? historyCheckpoint?.page : nil).map { $0 + 1 } ?? 1
             var totalPages = 1
             var failed = false
@@ -1528,7 +1544,7 @@ final class LastfmStatsService: ObservableObject {
                 } else {
                     for (k, v) in pageCounts { fresh[k, default: 0] += v }
                 }
-                if totalPages > 3 {
+                if full && totalPages > 3 {
                     dailySyncProgress = String(
                         format: L10n.t("正在同步历史（%1$@/%2$@ 页）"), "\(page)", "\(totalPages)")
                 }
@@ -1566,7 +1582,6 @@ final class LastfmStatsService: ObservableObject {
                     saveDailySnapshot()
                     bootstrapState = .failed
                 }
-                applyPendingDailyRewind() // 同步期间来过回填:失败也要把水位拨回去
                 return
             }
             if !full {
@@ -1584,7 +1599,6 @@ final class LastfmStatsService: ObservableObject {
             // 写法索引刚刷新完,顺手扫一批跨文字写法别名候选——见
             // discoverTitleAliasesIfNeeded 声明处注释。
             discoverTitleAliasesIfNeeded()
-            applyPendingDailyRewind() // 同步期间来过回填:水位不能停在 syncStartedAt
             saveDailySnapshot()
             if full {
                 historyCheckpoint = nil
@@ -2554,6 +2568,7 @@ final class LastfmStatsService: ObservableObject {
                 storeFetchedPage(requestedPage, rows: rows, json: r)
             }
             mergeOverview(total: r.map(attrTotal), today: t.map(attrTotal), week: w.map(attrTotal))
+            if let t { recordTodayFetched(dayStart: dayStart, count: attrTotal(t)) }
             if r == nil || t == nil || w == nil {
                 fetchedAt["baseline"] = nil // 有失败就不占 TTL,下一拍能补
                 logger.warning("refreshBaseline partially failed: recent=\(r != nil, privacy: .public) today=\(t != nil, privacy: .public) week=\(w != nil, privacy: .public)")

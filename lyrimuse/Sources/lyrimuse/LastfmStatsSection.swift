@@ -215,9 +215,9 @@ struct LastfmStatsSection: View {
     /// 「近 7 天」的数值。跟待机页 `IdleStandbyView.weekValue` 是同一份逻辑 —— 两处显示
     /// 同一个名字的数字,口径必须一致(见 IdleListeningStats.lastSevenDays 的注释:
     /// 从 API 的滚动 168 小时改成自然日对齐,为的是跟环比百分比同源)。
-    /// 桶还没同步完时退回 API 值。
+    /// 首次全量同步期间(桶残缺)退回 API 值。
     private var weekValue: Int? {
-        guard !stats.dailySyncing else { return stats.overview?.week }
+        guard !stats.dailyFullSyncing else { return stats.overview?.week }
         return IdleListeningStats.lastSevenDays(
             dailyCounts: stats.dailyCounts, today: Date(),
             todayCount: stats.overview?.today,
@@ -1056,11 +1056,11 @@ struct LastfmStatsSection: View {
     /// 全量同步时不算——那时算出来的"日均/连续"都是残缺数据上的假数。
     @ViewBuilder
     private var listeningFootprintCard: some View {
-        if stats.dailySyncing || stats.dailyCounts.isEmpty {
+        if stats.dailyFullSyncing || stats.dailyCounts.isEmpty {
             SettingsCard {
                 SettingsRawRow(insetToText: true) {
                     HStack(spacing: 8) {
-                        if stats.dailySyncing { ProgressView().controlSize(.small) }
+                        if stats.dailyFullSyncing { ProgressView().controlSize(.small) }
                         Text(L10n.t("首次同步历史之后，这里会出现你的收听足迹"))
                             .foregroundStyle(.secondary)
                         Spacer()
