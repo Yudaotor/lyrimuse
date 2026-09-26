@@ -554,15 +554,22 @@ public final class EnrichCacheStore: ObservableObject {
     @discardableResult
     private func hydrate(_ key: String, fallbackToMainCache: Bool = true) -> Bool {
         guard let entry = raw[key], EnrichCacheSlim.isSlim(entry) else { return true }
-        if let body = Self.loadBody(forKey: key), let full = EnrichCacheSlim.hydrate(entry, body: body) {
+        if let body = Self.loadBody(forKey: key),
+           let full = EnrichCacheSlim.hydrate(entry, body: body) ?? EnrichCacheSlim.adoptNewerBody(entry, body: body) {
             raw[key] = full
             return true
         }
         guard fallbackToMainCache else { return false }
-        logger.notice("hydrate: lyrics body file missing or stale, reading the main cache")
+        logger.notice("hydrate: lyrics body file missing or damaged, reading the main cache")
         guard let data = try? Data(contentsOf: Self.cacheURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             lastError = L10n.t("读取本地记录文件失败")
+            return false
+        }
+        // 主缓存里这一条也是精简的(新版 collector 就这么写):正文只在那个读不到的小文件里,补不回来。
+        // 如实返回 false,别让调用方拿缺正文的条目当完整的用。
+        if let fromMain = obj[key], EnrichCacheSlim.isSlim(fromMain) {
+            logger.notice("hydrate: main cache entry is lean too, lyrics body unavailable")
             return false
         }
         raw[key] = EnrichCacheSlim.restoreBodies(entry, from: obj[key])

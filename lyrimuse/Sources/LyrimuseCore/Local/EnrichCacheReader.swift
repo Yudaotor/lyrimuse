@@ -339,13 +339,14 @@ public enum EnrichCacheReader {
         return (cacheURL, main, false)
     }
 
-    /// 读一首的正文小文件,校验值对得上才返回。
+    /// 读一首的正文小文件。校验值对得上才用;对不上但文件自洽,说明手上这一版比小文件旧(collector 先写
+    /// 小文件、再写主缓存),小文件是新的那份,也用(见 `EnrichCacheSlim.adoptNewerBody`)。
     private static func body(forKey key: String, crc: UInt32) -> EnrichCacheBody? {
         if let c = cachedBody, c.key == key, c.crc == crc { return c.body }
         let url = bodiesDir.appendingPathComponent(DecisionSidecar.fileName(forKey: key))
         guard let data = try? Data(contentsOf: url),
               let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: data),
-              body.crc == crc else { return nil }
+              body.crc == crc || EnrichCacheSlim.isSelfConsistent(body) else { return nil }
         cachedBody = (key, crc, body)
         return body
     }
@@ -374,11 +375,11 @@ public enum EnrichCacheReader {
         guard let all = loadEntries() else { return nil }
         let matchedKey = all[key] != nil ? key : looseIndex(in: all)[EnrichCacheKeys.looseKey(key)]
         guard let matchedKey, let entry = all[matchedKey] else { return nil }
-        // 读的是精简索引时,四块大正文在这首的正文小文件里(见 cachedFromIndex)。对不上就先用索引里的
-        // 主歌词顶着,同时作废这一版索引、后台改读主缓存 —— 绝不拿别的版本的正文拼进来。
+        // 精简条目(索引,以及新版 collector 写的主缓存都是)的四块大正文在这首的正文小文件里。读不到就先用
+        // 条目里的主歌词顶着;读的是索引时同时作废这一版索引、后台改读主缓存 —— 绝不拿不自洽的正文拼进来。
         var lyrics = entry.lyrics ?? "", tr = entry.lyricsTr ?? "", roma = entry.lyricsRoma ?? ""
         var yrc = entry.lyricsYRC ?? "", plain = entry.plainLyrics ?? ""
-        if cachedFromIndex, let crc = entry.bodyCRC, crc != 0 {
+        if let crc = entry.bodyCRC, crc != 0 {
             if let b = body(forKey: matchedKey, crc: crc) {
                 lyrics = b.lyrics ?? ""; tr = b.lyricsTr ?? ""; roma = b.lyricsRoma ?? ""
                 yrc = b.lyricsYRC ?? ""; plain = b.plainLyrics ?? ""

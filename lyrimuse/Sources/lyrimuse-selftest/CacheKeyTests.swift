@@ -49,6 +49,20 @@ func runCacheKeyTests() {
         let stale = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(#"{"crc":1,"lyrics_tr":"旧"}"#.utf8))
         expectEqual(EnrichCacheSlim.hydrate(slim, body: stale) == nil, true, "精简条目: 校验值对不上不补")
 
+        // 小文件比条目新(collector 先写小文件、再写主缓存):自洽就用它,主歌词一起换;不自洽不用。
+        expectEqual(EnrichCacheSlim.isSelfConsistent(body), true, "精简条目: collector 写的小文件自洽")
+        expectEqual(EnrichCacheSlim.isSelfConsistent(stale), false, "精简条目: 校验值对不上内容的小文件不自洽")
+        let newerJSON = #"{"crc":2260255535,"lyrics":"[00:01.00]x"}"#
+        let newer = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(newerJSON.utf8))
+        let adopted = EnrichCacheSlim.adoptNewerBody(slim, body: newer)
+        expectEqual(adopted?["lyrics"] as? String, "[00:01.00]x", "精简条目: 用更新的小文件,主歌词也换成它的")
+        expectEqual(adopted.map { a in EnrichCacheSlim.strippedFields.allSatisfy { a[$0] == nil } }, true,
+                    "精简条目: 更新的小文件里没有的正文就是没有,不留旧的")
+        expectEqual(adopted.map { EnrichCacheSlim.isSlim($0) }, false, "精简条目: 补完去掉校验值标记")
+        expectEqual(adopted?["cover_url"] as? String, "https://x/c.jpg", "精简条目: 元数据以条目为准")
+        expectEqual(EnrichCacheSlim.adoptNewerBody(slim, body: stale) == nil, true, "精简条目: 不自洽的小文件不用")
+        expectEqual(EnrichCacheSlim.adoptNewerBody(full, body: newer) == nil, true, "精简条目: 完整条目不需要补")
+
         // JSONSerialization 吞掉开头一个 U+FEFF:从主缓存解出来的条目按去掉 BOM 的内容算校验值,正文小文件里是原样。
         do {
             let bomJSON = Data("{\"lyrics_yrc\":\"\u{FEFF}[ti:x]\",\"lyrics\":\"[00:01.00]x\"}".utf8)

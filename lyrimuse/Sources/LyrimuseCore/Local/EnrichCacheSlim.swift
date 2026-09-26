@@ -103,6 +103,32 @@ public enum EnrichCacheSlim {
         return out
     }
 
+    /// 正文小文件本身自洽:按内容重算的校验值 = 文件里记的。JSONDecoder 解出来的是原样内容(开头的 U+FEFF
+    /// 也在),跟 collector 写文件时算的是同一份字节。
+    public static func isSelfConsistent(_ body: EnrichCacheBody) -> Bool {
+        body.crc != 0 && bodyCRC(["lyrics": body.lyrics ?? "", "lyrics_tr": body.lyricsTr ?? "",
+                                  "lyrics_roma": body.lyricsRoma ?? "", "lyrics_yrc": body.lyricsYRC ?? "",
+                                  "plain_lyrics": body.plainLyrics ?? ""]) == body.crc
+    }
+
+    /// 正文小文件跟精简条目记的校验值对不上、但文件自洽:条目那一版比小文件旧 —— collector 先写小文件、再写
+    /// 主缓存,手上这份快照正好是中间那一刻之前的。小文件是新的那份,拿它补,主歌词也换成小文件里的。
+    /// 不自洽(没写完 / 坏了)是 nil。
+    ///
+    /// 主缓存现在也是精简格式(见 collector enrichindex.go),「对不上就回主缓存取完整那条」这条退路已经取不到
+    /// 正文了,所以这一步要在它前面。
+    public static func adoptNewerBody(_ entry: [String: Any], body: EnrichCacheBody) -> [String: Any]? {
+        guard isSlim(entry), isSelfConsistent(body) else { return nil }
+        var out = stripMarkers(entry)
+        let pairs: [(String, String?)] = [("lyrics", body.lyrics), ("lyrics_yrc", body.lyricsYRC),
+                                          ("lyrics_tr", body.lyricsTr), ("lyrics_roma", body.lyricsRoma),
+                                          ("plain_lyrics", body.plainLyrics)]
+        for (k, v) in pairs {
+            if let v, !v.isEmpty { out[k] = v } else { out.removeValue(forKey: k) }
+        }
+        return out
+    }
+
     /// 精简条目的四块正文从另一份完整条目(盘上 / 主缓存里的那一条)取;其余字段一律以精简条目为准。
     /// 已经是完整条目的原样返回。
     public static func restoreBodies(_ entry: [String: Any], from full: [String: Any]?) -> [String: Any] {
