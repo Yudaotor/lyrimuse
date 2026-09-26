@@ -238,6 +238,10 @@
           {
             "kind": "timelineOffset",
             "points": -600
+          },
+          {
+            "kind": "timelineIntrusion",
+            "points": -600
           }
         ],
         "has_word_timing": true

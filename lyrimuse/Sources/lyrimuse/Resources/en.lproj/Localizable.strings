@@ -293,8 +293,8 @@
 "关闭" = "Close";
 "关闭后只保留菜单栏图标，不占 Dock 位置" = "Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock";
 "关闭后按在歌词文字上的那一次点击会被悬浮窗接住、不再穿到下层；歌词四周的空白处不受影响" = "When off, a click on the lyrics text is caught by the overlay instead of passing through; the empty space around the lyrics is unaffected";
-"关闭时按住歌词就能拖；打开则要长按 0.35 秒" = "Off: hold the lyrics to drag. On: long-press for 0.35s";
 "关闭悬浮歌词" = "Close Floating Lyrics";
+"关闭时按住歌词就能拖；打开则要长按 0.35 秒" = "Off: hold the lyrics to drag. On: long-press for 0.35s";
 "关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透" = "Off: hold the lyrics to drag. On: long-press for 0.35s, and clicks pass through until then";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
 "关（默认）：只换这一次，以后自动重搜或打分变化仍可能换掉\n开：锁住这首歌的歌词，自动匹配不再碰它\n打开时，之前手动选过的歌一并锁定（已被自动换掉的除外）" = "Off (default): swaps in this version now — later auto re-searches or scoring changes can still replace it\nOn: locks this song’s lyrics; automatic matching won’t touch it again\nTurning it on also locks songs you picked earlier (except those already replaced automatically)";
@@ -514,9 +514,9 @@
 "完全磁盘访问权限" = "Full Disk Access";
 "完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列" = "Full Disk Access lets %@ use lyrics already on this Mac — it only reads their own lyrics cache and play queue";
 "完成" = "Done";
+"完成调整宽度" = "Done Adjusting Width";
 "完整尺寸" = "Full Size";
 "完整尺寸和迷你尺寸都生效" = "Applies to both the full and mini size";
-"完成调整宽度" = "Done Adjusting Width";
 "实验室功能" = "Lab Features";
 "实验性 Beta 功能" = "Experimental beta features";
 "宽度" = "Width";
@@ -1303,6 +1303,7 @@
 "自适应" = "Adaptive";
 "至少 %@ 次" = "At least %@";
 "至少两家自报曲长跟本地一致、时间轴彼此对齐的来源都显示，这份歌词整首提前或延后了 2.5 秒以上——多半是按前奏长短不同的另一个母带做的轴，套在这次播放上会整首错位" = "At least two sources whose reported length matches this track, and whose timings agree with each other, show this lyric running more than 2.5 seconds early or late throughout — it was most likely synced to another master with a different intro length, so it will be off for the whole song here";
+"至少两家自报曲长跟本地一致的来源在这段都是间奏、没有歌词，这份却在里面放了一段别处的歌词——时间轴排错了，套在这次播放上中段会乱" = "At least two sources whose reported length matches this track have no lyrics here — it is an instrumental break — yet this one places lines copied from elsewhere in the song inside it. Its timing is wrong, so the middle of the song will be out of step here";
 "节拍器" = "Metronome";
 "获取" = "Sources";
 "获取 Token →" = "Get a token →";
@@ -1332,11 +1333,11 @@
 "解析 Last.fm 响应失败" = "Couldn't read the response from Last.fm";
 "解析决策" = "Resolution decision";
 "解析本地记录文件失败" = "Couldn't read the lyrics cache — the file looks damaged";
+"解锁位置" = "Unlock Position";
 "解锁后可点击穿透" = "Unlocked: clicks pass through";
 "解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' below";
 "解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' in Settings";
 "认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息" = "Recognizes songs and finds lyrics and artwork. Runs only on this Mac; looking up lyrics sends nothing but track info such as title and artist";
-"解锁位置" = "Unlock Position";
 "让它跑起来" = "Get It Running";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "许可与版权" = "License & Copyright";
@@ -1376,11 +1377,11 @@
 "读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步" = "Can’t read this backup — iCloud Drive may be off, or this folder isn’t syncing";
 "读取播放状态、抓歌词和封面" = "Reads playback state and fetches lyrics and artwork";
 "读取本地记录文件失败" = "Couldn't read the lyrics cache";
+"调整宽度" = "Adjust Width";
 "账号" = "Account";
 "账号 Token" = "Account Token";
 "账号信息" = "Account Info";
 "贴哪只耳朵" = "Which Ear";
-"调整宽度" = "Adjust Width";
 "贴在桌面上" = "Sits on your desktop";
 "贴在桌面上，支持逐字高亮" = "Sits on your desktop, with word-by-word highlighting";
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
@@ -1586,6 +1587,7 @@
 "长按即可拖动位置" = "Click and hold to drag";
 "长按或右键打开设置" = "Click and hold or right-click for settings";
 "长按拖动" = "Long-press to drag";
+"间奏里多出一段歌词" = "Extra lyrics in an instrumental break";
 "陆续支持中" = "More coming";
 "随播放律动" = "Move with the Music";
 "随机播放" = "Shuffle";

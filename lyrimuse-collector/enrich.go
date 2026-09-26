@@ -3469,6 +3469,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	// 的注释。变体轮合并出来的这批候选一样要过这道闸,不然同一首歌走没走变体轮,判定标准会不一致。
 	// 时间轴平移扣分同理,且排在它前面(见 applyTimelineOffsetPenalty)。
 	applyTimelineOffsetPenalty(out, durationSecs)
+	applyTimelineIntrusionPenalty(out, durationSecs)
 	applyWordTimingTitleOverride(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	return out
@@ -3905,6 +3906,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
 	// 时间轴整体平移的扣分排在它前面:那一步要看的是扣完之后谁赢(见 applyTimelineOffsetPenalty)。
 	applyTimelineOffsetPenalty(results, durationSecs)
+	applyTimelineIntrusionPenalty(results, durationSecs)
 	applyWordTimingTitleOverride(results)
 	// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
 	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。

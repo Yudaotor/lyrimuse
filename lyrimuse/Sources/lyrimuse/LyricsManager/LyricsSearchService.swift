@@ -74,6 +74,8 @@ final class LyricsSearchService {
             case "liveAlbumConflict": return L10n.t("现场版场次不符")
             // v23:见 collector 侧 lyrictimelineoffset.go。
             case "timelineOffset": return L10n.t("时间轴整体偏移")
+            // v24:见 collector 侧 lyrictimelineintrusion.go。
+            case "timelineIntrusion": return L10n.t("间奏里多出一段歌词")
             // v3新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -125,6 +127,8 @@ final class LyricsSearchService {
                 return L10n.t("两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上")
             case "timelineOffset":
                 return L10n.t("至少两家自报曲长跟本地一致、时间轴彼此对齐的来源都显示，这份歌词整首提前或延后了 2.5 秒以上——多半是按前奏长短不同的另一个母带做的轴，套在这次播放上会整首错位")
+            case "timelineIntrusion":
+                return L10n.t("至少两家自报曲长跟本地一致的来源在这段都是间奏、没有歌词，这份却在里面放了一段别处的歌词——时间轴排错了，套在这次播放上中段会乱")
             case "durationOff":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":

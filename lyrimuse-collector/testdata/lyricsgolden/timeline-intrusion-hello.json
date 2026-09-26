@@ -1,0 +1,415 @@
+{
+  "id": "timeline-intrusion-hello",
+  "category": "timeline-intrusion",
+  "note": "Musixmatch 那份把副歌复制进了 2:32~2:51 的吉他间奏(另外几家时长对得上的在那段都空着),只比酷狗高 10 分;v24 扣 timelineIntrusion,冠军交给酷狗",
+  "label_evidence": {
+    "consensus_peers": 7,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0.2305157840956208,
+    "lyrics_end_secs": 226.73,
+    "coverage_pct": 91.21264175916129,
+    "ending_corroborated": false,
+    "album_score": 200,
+    "live_mismatch": false,
+    "cache_agreement": "similar=0.95"
+  },
+  "track": {
+    "artist": "Lionel Richie",
+    "title": "Hello",
+    "album": "Can't Slow Down (Deluxe Edition)"
+  },
+  "captured_at": "2026-09-26",
+  "scoring_version_at_capture": 24,
+  "query": {
+    "artist": "Lionel Richie",
+    "title": "Hello",
+    "album": "Can't Slow Down (Deluxe Edition)",
+    "duration_secs": 248.573
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "applemusic": true,
+      "deezer": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "migu": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true,
+      "soda": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "kugou",
+      "netease",
+      "qq",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo",
+      "migu",
+      "deezer",
+      "applemusic",
+      "soda"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applemusic": {
+      "lyrics": "[00:15.79]U'gv pvvn xjrnv huak ori unludv so sund\n[00:23.54]Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:31.29]U lrsvausvl lvv ori mxll rialudv so drrc\n[00:38.96]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[00:46.55]U txn lvv ua un oric vovl\n[00:50.46]U txn lvv ua un oric lsujv\n[00:54.34]Ori'cv xjj U'gv vgvc hxnavd\n[00:58.22]Xnd so xcsl xcv rmvn hudv\n[01:02.15]'Txilv ori wnrh eila hkxa ar lxo\n[01:06.06]Xnd ori wnrh eila hkxa ar dr\n[01:09.86]Xnd U hxna ar avjj ori lr sitk\n[01:15.49]U jrgv ori\n[01:31.40]U jrnf ar lvv akv linjufka un oric kxuc\n[01:39.15]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:46.74]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:54.47]Kvjjr, U'gv eila fra ar jva ori wnrh\n[02:02.08]'Txilv U hrndvc hkvcv ori xcv\n[02:05.91]Xnd U hrndvc hkxa ori dr\n[02:09.70]Xcv ori lrsvhkvcv qvvjunf jrnvjo?\n[02:13.37]Rc ul lrsvrnv jrgunf ori?\n[02:17.37]Avjj sv krh ar hun oric kvxca\n[02:21.29]Qrc U kxgvn'a fra x tjiv\n[02:25.11]Pia jva sv laxca po lxounf\n[02:30.55]U jrgv ori\n[03:09.73]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:17.40]'Txilv U hrndvc hkvcv ori xcv\n[03:21.26]Xnd U hrndvc hkxa ori dr\n[03:25.33]Xcv ori lrsvhkvcv qvvjunf jrnvjo?\n[03:29.51]Rc ul lrsvrnv jrgunf ori?\n[03:32.97]Avjj sv krh ar hun oric kvxca\n[03:36.82]Qrc U kxgvn'a fra x tjiv\n[03:41.43]Pia jva sv laxca po lxounf\n[03:46.27]U jrgv ori\n",
+      "yrc": "[15793,5805](15793,389,0)U'gv (16182,401,0)pvvn (16583,935,0)xjrnv (17518,232,0)huak (17750,699,0)ori (18449,851,0)unludv (19300,1100,0)so (20400,1198,0)sund\n[23544,6452](23544,337,0)Xnd (23881,262,0)un (24143,226,0)so (24369,536,0)dcvxsl (24905,678,0)U'gv (25583,440,0)wullvd (26023,334,0)oric (26357,755,0)juml (27879,286,0)x (28165,750,0)akrilxnd (28915,1081,0)ausvl\n[31292,6009](31292,261,0)U (31553,815,0)lrsvausvl (32368,375,0)lvv (32743,380,0)ori (33123,792,0)mxll (33915,940,0)rialudv (34855,969,0)so (35824,1477,0)drrc\n[38964,6659](38964,1179,0)Kvjjr, (42404,232,0)ul (42636,262,0)ua (42898,481,0)sv (43379,691,0)ori'cv (44070,511,0)jrrwunf (44581,1042,0)qrc?\n[46556,2483](46556,244,0)U (46800,172,0)txn (46972,289,0)lvv (47261,289,0)ua (47550,172,0)un (47722,268,0)oric (47990,1049,0)vovl\n[50461,2804](50461,125,0)U (50586,178,0)txn (50764,411,0)lvv (51175,125,0)ua (51300,190,0)un (51490,381,0)oric (51871,1394,0)lsujv\n[54348,3276](54348,323,0)Ori'cv (54671,601,0)xjj (55272,685,0)U'gv (55957,447,0)vgvc (56404,1220,0)hxnavd\n[58224,2647](58224,100,0)Xnd (58324,221,0)so (58545,446,0)xcsl (58991,304,0)xcv (59295,506,0)rmvn (59801,1070,0)hudv\n[62157,2389](62157,292,0)'Txilv (62449,184,0)ori (62633,434,0)wnrh (63067,345,0)eila (63412,203,0)hkxa (63615,148,0)ar (63763,783,0)lxo\n[66060,2829](66060,100,0)Xnd (66160,203,0)ori (66363,470,0)wnrh (66833,363,0)eila (67196,357,0)hkxa (67553,220,0)ar (67773,1116,0)dr\n[69868,4519](69868,250,0)Xnd (70118,100,0)U (70218,584,0)hxna (70802,154,0)ar (70956,531,0)avjj (71487,499,0)ori (71986,659,0)lr (72645,1742,0)sitk\n[75499,2202](75499,282,0)U (75781,316,0)jrgv (76097,1604,0)ori\n[91409,5762](91409,219,0)U (91628,524,0)jrnf (92152,113,0)ar (92265,811,0)lvv (93076,297,0)akv (93373,1450,0)linjufka (94823,250,0)un (95073,609,0)oric (95682,1489,0)kxuc\n[99155,6617](99155,256,0)Xnd (99411,404,0)avjj (99815,316,0)ori (100131,404,0)ausv (100535,298,0)xnd (100833,410,0)ausv (101243,1029,0)xfxun (103406,466,0)krh (103872,281,0)sitk (104153,285,0)U (104438,1334,0)txcv\n[106747,5907](106747,860,0)Lrsvausvl (107607,334,0)U (107941,583,0)qvvj (108524,363,0)so (108887,517,0)kvxca (109404,887,0)hujj (110291,565,0)rgvc(110856,1798,0)qjrh\n[114476,6553](114476,1654,0)Kvjjr, (118013,357,0)U'gv (118370,374,0)eila (118744,345,0)fra (119089,244,0)ar (119333,298,0)jva (119631,196,0)ori (119827,1202,0)wnrh\n[122082,2680](122082,315,0)'Txilv (122397,100,0)U (122497,573,0)hrndvc (123070,363,0)hkvcv (123433,202,0)ori (123635,1127,0)xcv\n[125919,2957](125919,173,0)Xnd (126092,255,0)U (126347,667,0)hrndvc (127014,428,0)hkxa (127442,357,0)ori (127799,1077,0)dr\n[129707,3271](129707,200,0)Xcv (129907,100,0)ori (130007,1145,0)lrsvhkvcv (131152,487,0)qvvjunf (131639,1339,0)jrnvjo?\n[133378,3298](133378,238,0)Rc (133616,280,0)ul (133896,535,0)lrsvrnv (134431,845,0)jrgunf (135276,1400,0)ori?\n[137376,3154](137376,208,0)Avjj (137584,304,0)sv (137888,452,0)krh (138340,220,0)ar (138560,321,0)hun (138881,595,0)oric (139476,1054,0)kvxca\n[141290,3549](141290,240,0)Qrc (141530,310,0)U (141840,743,0)kxgvn'a (142583,697,0)fra (143280,303,0)x (143583,1256,0)tjiv\n[145119,4514](145119,220,0)Pia (145339,435,0)jva (145774,215,0)sv (145989,821,0)laxca (146810,624,0)po (147434,2199,0)lxounf\n[150558,2262](150558,237,0)U (150795,327,0)jrgv (151122,1698,0)ori\n[189733,6970](189733,1382,0)Kvjjr, (193279,219,0)ul (193498,283,0)ua (193781,400,0)sv (194181,621,0)ori'cv (194802,563,0)jrrwunf (195365,1338,0)qrc?\n[197403,3161](197403,178,0)'Txilv (197581,238,0)U (197819,584,0)hrndvc (198403,690,0)hkvcv (199093,339,0)ori (199432,1132,0)xcv\n[201264,3374](201264,333,0)Xnd (201597,100,0)U (201697,543,0)hrndvc (202240,601,0)hkxa (202841,380,0)ori (203221,1417,0)dr\n[205338,3078](205338,219,0)Xcv (205557,161,0)ori (205718,1124,0)lrsvhkvcv (206842,458,0)qvvjunf (207300,1116,0)jrnvjo?\n[209516,2060](209516,200,0)Rc (209716,100,0)ul (209816,377,0)lrsvrnv (210193,369,0)jrgunf (210562,1014,0)ori?\n[212976,3546](212976,220,0)Avjj (213196,274,0)sv (213470,279,0)krh (213749,256,0)ar (214005,357,0)hun (214362,1083,0)oric (215445,1077,0)kvxca\n[216822,4013](216822,332,0)Qrc (217154,286,0)U (217440,487,0)kxgvn'a (217927,1232,0)fra (219159,196,0)x (219355,1480,0)tjiv\n[221435,3663](221435,243,0)Pia (221678,273,0)jva (221951,155,0)sv (222106,577,0)laxca (222683,405,0)po (223088,2010,0)lxounf\n[226279,3456](226279,184,0)U (226463,441,0)jrgv (226904,2831,0)ori\n",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Can't Slow Down (Deluxe Edition)",
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/c8/5e/ce/c85ece5d-e44a-50c0-135f-30ca1f31c1d8/06UMGIM14183.rgb.jpg/1000x1000bb.jpg",
+      "duration_secs": 248.573
+    },
+    "deezer": {
+      "lyrics": "[00:15.79]U'gv pvvn xjrnv huak ori unludv so sund\n[00:22.90]Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:30.55]U lrsvausvl lvv ori mxll rialudv so drrc\n[00:38.38]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[00:46.01]U txn lvv ua un oric vovl\n[00:49.73]U txn lvv ua un oric lsujv\n[00:53.68]Ori'cv xjj U'gv vgvc hxnavd, xnd so xcsl xcv rmvn hudv\n[01:01.31]'Txilv ori wnrh eila hkxa ar lxo\n[01:05.38]Xnd ori wnrh eila hkxa ar dr\n[01:09.54]Xnd U hxna ar avjj ori lr sitk\n[01:14.99]U jrgv ori\n[01:31.14]U jrnf ar lvv akv linjufka un oric kxuc\n[01:38.78]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:46.51]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:54.02]Kvjjr, U'gv eila fra ar jva ori wnrh\n[02:01.83]'Txilv U hrndvc hkvcv ori xcv\n[02:05.18]Xnd U hrndvc hkxa ori dr\n[02:09.33]Xcv ori lrsvhkvcv qvvjunf jrnvjo, rc ul lrsvrnv jrgunf ori?\n[02:16.75]Avjj sv krh ar hun oric kvxca\n[02:20.74]Qrc U kxgvn'a fra x tjiv\n[02:25.00]Pia jva sv laxca po lxounf\n[02:29.84]U jrgv ori\n[03:08.98]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:16.78]'Txilv U hrndvc hkvcv ori xcv\n[03:20.86]Xnd U hrndvc hkxa ori dr\n[03:24.71]Xcv ori lrsvhkvcv qvvjunf jrnvjo, rc ul lrsvrnv jrgunf ori?\n[03:31.93]Avjj sv krh ar hun oric kvxca\n[03:36.38]Qrc U kxgvn'a fra x tjiv\n[03:40.56]Pia jva sv laxca po lxounf\n[03:45.57]U jrgv ori\n",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Gold",
+      "cover": "https://cdn-images.dzcdn.net/images/cover/3c8e66cb596759e815f12848a26c719c/1000x1000-000000-80-0-0.jpg",
+      "duration_secs": 249
+    },
+    "kugou": {
+      "lyrics": "[ti:Hello]\r\n[ar:Lionel Richie]\r\n[al:Gold]\r\n[by:]\r\n[offset:0]\r\n[00:00.00]Kvjjr - Jurnvj Cutkuv (䈻䡣䭎㪙·䄣䧏)\r\n[00:16.40]U'gv pvvn xjrnv huak ori unludv so sund\r\n[00:23.99]Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\r\n[00:31.81]U lrsvausvl lvv ori mxll rialudv so drrc\r\n[00:39.39]Kvjjr ul ua sv ori'cv jrrwunf qrc\r\n[00:47.00]U txn lvv ua un oric vovl\r\n[00:50.91]U txn lvv ua un oric lsujv\r\n[00:54.81]Ori'cv xjj U'gv vgvc hxnavd\r\n[00:58.54]Xnd so xcsl xcv rmvn hudv\r\n[01:02.60]Txilv ori wnrh eila hkxa ar lxo\r\n[01:06.08]Xnd ori wnrh eila hkxa ar dr\r\n[01:10.35]Xnd U hxna ar avjj ori lr sitk U jrgv ori\r\n[01:31.90]U jrnf ar lvv akv linjufka un oric kxuc\r\n[01:39.51]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\r\n[01:47.16]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\r\n[01:54.95]Kvjjr U'gv eila fra ar jva ori wnrh\r\n[02:02.51]Txilv U hrndvc hkvcv ori xcv\r\n[02:06.30]Xnd U hrndvc hkxa ori dr\r\n[02:10.10]Xcv ori lrsvhkvcv qvvjunf\r\n[02:12.04]Jrnvjo rc ul lrsvrnv jrgunf ori\r\n[02:17.83]Avjj sv krh ar hun oric kvxca\r\n[02:21.37]Qrc U kxgvn'a fra x tjiv\r\n[02:25.55]Pia jva sv laxca po lxounf U jrgv ori\r\n[03:10.56]Kvjjr ul ua sv ori'cv jrrwunf qrc\r\n[03:17.83]Txilv U hrndvc hkvcv ori xcv\r\n[03:21.55]Xnd U hrndvc hkxa ori dr\r\n[03:25.78]Xcv ori lrsvhkvcv qvvjunf jrnvjo\r\n[03:30.14]Rc ul lrsvrnv jrgunf ori\r\n[03:33.37]Avjj sv krh ar hun oric kvxca\r\n[03:37.15]Qrc U kxgvn'a fra x tjiv\r\n[03:41.80]Pia jva sv laxca po lxounf\r\n[03:46.73]U jrgv ori\r\n",
+      "yrc": "[ti:Hello]\n[ar:Lionel Richie]\n[al:Gold]\n[by:]\n[offset:0]\n[0,16400](0,1928,0)Kvjjr (1928,1928,0)- (3856,1928,0)Jurnvj (5784,1928,0)Cutkuv (7712,964,0)((8676,964,0)䈻(9640,964,0)䡣(10604,964,0)䭎(11568,964,0)㪙(12532,964,0)·(13496,964,0)䄣(14460,964,0)䧏(15424,964,0))\n[16400,5540](16400,220,0)U'gv (16620,200,0)pvvn (16820,900,0)xjrnv (17720,240,0)huak (17960,640,0)ori (18600,1030,0)unludv (19630,990,0)so (20620,1320,0)sund\n[23990,6169](23990,160,0)Xnd (24150,250,0)un (24400,230,0)so (24630,500,0)dcvxsl (25130,600,0)U'gv (25730,420,0)wullvd (26150,500,0)oric (26650,1629,0)juml (28279,160,0)x (28439,670,0)akrilxnd (29109,1050,0)ausvl\n[31819,5830](31819,320,0)U (32139,550,0)lrsvausvl (32689,230,0)lvv (32919,570,0)ori (33489,650,0)mxll (34139,960,0)rialudv (35099,880,0)so (35979,1670,0)drrc\n[39399,6760](39399,3430,0)Kvjjr (42829,180,0)ul (43009,190,0)ua (43199,640,0)sv (43839,550,0)ori'cv (44389,280,0)jrrwunf (44669,1490,0)qrc \n[47009,2439](47009,150,0)U (47159,150,0)txn (47309,310,0)lvv (47619,229,0)ua (47848,160,0)un (48008,160,0)oric (48168,1280,0)vovl\n[50918,2540](50918,200,0)U (51118,150,0)txn (51268,160,0)lvv (51428,260,0)ua (51688,170,0)un (51858,200,0)oric (52058,1400,0)lsujv\n[54818,2720](54818,0,0)Ori'cv (55388,320,0)xjj (55708,360,0)U'gv (56068,390,0)vgvc (56458,1080,0)hxnavd\n[58548,2570](58548,200,0)Xnd (58748,160,0)so (58908,470,0)xcsl (59378,220,0)xcv (59598,610,0)rmvn (60208,910,0)hudv\n[62608,2330](62608,160,0)Txilv (62768,180,0)ori (62948,310,0)wnrh (63258,210,0)eila (63468,350,0)hkxa (63818,220,0)ar (64038,900,0)lxo\n[66088,2970](66088,260,0)Xnd (66348,160,0)ori (66508,240,0)wnrh (66748,580,0)eila (67328,270,0)hkxa (67598,240,0)ar (67838,1220,0)dr\n[70358,7740](70358,170,0)Xnd (70528,130,0)U (70658,260,0)hxna (70918,230,0)ar (71148,470,0)avjj (71618,490,0)ori (72108,380,0)lr (72488,3470,0)sitk (75958,180,0)U (76138,210,0)jrgv (76348,1750,0)ori\n[91908,5610](91908,170,0)U (92078,240,0)jrnf (92318,150,0)ar (92468,720,0)lvv (93188,200,0)akv (93388,1720,0)linjufka (95108,180,0)un (95288,570,0)oric (95858,1660,0)kxuc\n[99518,6660](99518,170,0)Xnd (99688,170,0)avjj (99858,370,0)ori (100228,440,0)ausv (100668,260,0)xnd (100928,430,0)ausv (101358,2510,0)xfxun (103868,230,0)krh (104098,330,0)sitk (104428,470,0)U (104898,1280,0)txcv\n[107168,5700](107168,550,0)Lrsvausvl (107718,200,0)U (107918,730,0)qvvj (108648,250,0)so (108898,690,0)kvxca (109588,950,0)hujj (110538,2330,0)rgvcqjrh\n[114958,6300](114958,3400,0)Kvjjr (118358,200,0)U'gv (118558,290,0)eila (118848,350,0)fra (119198,220,0)ar (119418,290,0)jva (119708,200,0)ori (119908,1350,0)wnrh\n[122518,2460](122518,170,0)Txilv (122688,150,0)U (122838,490,0)hrndvc (123328,270,0)hkvcv (123598,310,0)ori (123908,1070,0)xcv\n[126308,2780](126308,160,0)Xnd (126468,130,0)U (126598,510,0)hrndvc (127108,440,0)hkxa (127548,240,0)ori (127788,1300,0)dr\n[130108,1940](130108,170,0)Xcv (130278,160,0)ori (130438,610,0)lrsvhkvcv (131048,1000,0)qvvjunf\n[132048,4720](132048,1520,0)Jrnvjo (133568,330,0)rc (133898,220,0)ul (134118,530,0)lrsvrnv (134648,840,0)jrgunf (135488,1280,0)ori \n[137838,2820](137838,130,0)Avjj (137968,180,0)sv (138148,450,0)krh (138598,280,0)ar (138878,270,0)hun (139148,390,0)oric (139538,1120,0)kvxca\n[141378,3380](141378,290,0)Qrc (141668,160,0)U (141828,920,0)kxgvn'a (142748,680,0)fra (143428,200,0)x (143628,1130,0)tjiv\n[145558,7630](145558,170,0)Pia (145728,180,0)jva (145908,370,0)sv (146278,730,0)laxca (147008,390,0)po (147398,3660,0)lxounf (151058,210,0)U (151268,180,0)jrgv (151448,1740,0)ori\n[190568,6100](190568,3120,0)Kvjjr (193688,200,0)ul (193888,170,0)ua (194058,380,0)sv (194438,290,0)ori'cv (194728,820,0)jrrwunf (195548,1120,0)qrc \n[197838,3720](197838,190,0)Txilv (198028,130,0)U (198158,450,0)hrndvc (198608,730,0)hkvcv (199338,220,0)ori (199558,2000,0)xcv\n[201558,3240](201558,220,0)Xnd (201778,170,0)U (201948,590,0)hrndvc (202538,610,0)hkxa (203148,320,0)ori (203468,1330,0)dr\n[205788,2730](205788,170,0)Xcv (205958,250,0)ori (206208,900,0)lrsvhkvcv (207108,330,0)qvvjunf (207438,1080,0)jrnvjo\n[210148,1698](210148,170,0)Rc (210318,119,0)ul (210437,129,0)lrsvrnv (210566,150,0)jrgunf (210716,1130,0)ori \n[213376,3780](213376,190,0)Avjj (213566,290,0)sv (213856,260,0)krh (214116,210,0)ar (214326,280,0)hun (214606,440,0)oric (215046,2110,0)kvxca\n[217156,4649](217156,230,0)Qrc (217386,160,0)U (217546,630,0)kxgvn'a (218176,1389,0)fra (219565,150,0)x (219715,2090,0)tjiv\n[221805,3500](221805,170,0)Pia (221975,200,0)jva (222175,220,0)sv (222395,430,0)laxca (222825,250,0)po (223075,2230,0)lxounf\n[226735,3380](226735,160,0)U (226895,330,0)jrgv (227225,2890,0)ori",
+      "tr": "[00:16.400]㩽䓯㼱䅘䂾䄣，㼱㤔䯓㒫\n[00:23.990]䓯䱘㕁，㼱㤡㩽䄶䭗䊶\n[00:31.819]䎧䄁㼱䟖䝵㩽㤩䤛㿣䪔䙅\n[00:39.399]㩽㳣，䔘䓯䅊㼱䵍\n[00:47.009]䓯㩽䡧㕁㼱䇁䟖䝵\n[00:50.918]䓯㩽㧚䛑㕶㕁㼱䇁䟖䝵\n[00:54.818]㩽䔘㼱㸉㤆㧔㧚㨶䄸\n[00:58.548]㼱㾸㹮㔏㰜\n[01:02.608]㶛㧁㩽䤿㨁㾗㗔㿟䵡㩻\n[01:06.088]㩽䤿㨁㾗㼑㿟䵡㩻\n[01:10.358]㼱㤆㓸䚜㩽㼱㤔㬺㩽\n[01:31.908]㼱㓊䋟䓯㩽㧚䲇㷟㕁䟖㜫㵎㵑\n[01:39.518]㓸䚜㩽䶝䄁䶝䀁㼱䥝㩽㧚㕙㶸\n[01:47.168]䎧䄁䬖㼱䝖㨋㼱㧚㶸䢛䙂㱁㫑\n[01:54.958]㩽㳣，㼱䶳䔘㤆䦾㩽䤿㨁\n[02:02.518]㶛㧁㼱㳣䧏㩽䓯㱪\n[02:06.308]䓯㼑䵡㩻\n[02:10.108]㩽䔘䌠䔲䝖㨋\n[02:12.048]䯓㒫㼳䔘䎧䌵䓯㬺㦘㩽\n[02:17.838]㓸䚜㼱㘨㩻㰮䀼㩽㧚㶸\n[02:21.378]㶛㧁㼱䙧䎧㘠㛮\n[02:25.558]䦾㼱㹮㻐㓸䚜㩽㼱㬺㩽㸁\n[03:10.568]㩽㳣，䔘䓯㑭䅊㼱䵍\n[03:17.838]㶛㧁㼱㳣䧏㩽䓯㱪\n[03:21.558]䓯㼑䵡㩻\n[03:25.788]㩽䔘䌠䔲䝖㨋䯓㒫\n[03:30.148]㼳䔘䎧䌵䓯㬺㦘㩽\n[03:33.376]㓸䚜㼱㘨㩻㰮䀼㩽㧚㶸\n[03:37.156]㶛㧁㼱䙧䎧㘠㛮\n[03:41.805]䦾㼱㹮㻐㓸䚜㩽\n[03:46.735]㼱㬺㩽㸁",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Can't Slow Down (Deluxe Edition)",
+      "cover": "https://imge.kugou.com/stdmusic/480/20241206/20241206102502581358.jpg",
+      "duration_secs": 248
+    },
+    "kuwo": {},
+    "lrclib": {
+      "lyrics": "[00:16.38] U'gv pvvn xjrnv huak ori unludv so sund\n[00:24.02] Xnd un so dcvxsl, U'gv wullvd oric juml x akrilxnd ausvl\n[00:31.72] U lrsvausvl lvv ori mxll rialudv so drrc\n[00:39.43] Kvjjr\n[00:42.88] Ul ua sv ori'cv jrrwunf qrc?\n[00:47.03] U txn lvv ua un oric vovl\n[00:50.90] U txn lvv ua un oric lsujv\n[00:54.82] Ori'cv xjj U'gv vgvc hxnavd\n[00:58.83] Xnd so xcsl xcv rmvn hudv\n[01:02.58] 'Txilv ori wnrh eila hkxa ar lxo\n[01:06.57] Xnd ori wnrh eila hkxa ar dr\n[01:10.35] Xnd U hxna ar avjj ori lr sitk\n[01:16.09] U jrgv ori\n[01:17.83] U jrnf ar lvv akv linjufka un oric kxuc\n[01:39.67] Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:47.16] Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:54.95] Kvjjr\n[01:58.33] U'gv eila fra ar jva ori wnrh\n[02:02.55] 'Txilv U hrndvc hkvcv ori xcv\n[02:06.34] Xnd U hrndvc hkxa ori dr\n[02:10.11] Xcv ori lrsvhkvcv qvvjunf jrnvjo?\n[02:13.87] Rc ul lrsvrnv jrgunf ori?\n[02:17.77] Avjj sv krh ar hun oric kvxca\n[02:21.71] Qrc U kxgvn'a fra x tjiv\n[02:25.58] Pia jva sv laxca po lxounf\n[02:31.05] U jrgv ori\n[02:34.87] \n[03:10.21] Kvjjr\n[03:13.73] Ul ua sv ori'cv jrrwunf qrc?\n[03:17.81] 'Txilv U hrndvc hkvcv ori xcv\n[03:21.77] Xnd U hrndvc hkxa ori dr\n[03:25.89] Xcv ori lrsvhkvcv qvvjunf jrnvjo?\n[03:30.09] Rc ul lrsvrnv jrgunf ori?\n[03:33.39] Avjj sv krh ar hun oric kvxca\n[03:37.22] Qrc U kxgvn'a fra x tjiv\n[03:41.83] Pia jva sv laxca po lxounf\n[03:46.88] U jrgv ori\n[03:47.65] ",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Can't Slow Down (Deluxe Edition)",
+      "duration_secs": 249
+    },
+    "lyricfind": {},
+    "migu": {
+      "lyrics": "[00:01.00]作词：Jurnvj Cutkuv\n[00:02.00]作曲：Jurnvj Cutkuv\n[00:46.74]U'gv pvvn xjrnv huak ori unludv so sund\n[00:54.45]Xnd un so dcvxsl\n[00:55.65]U'gv wullvd oric juml x akrilxnd ausvl\n[01:01.25]U lrsvausvl lvv ori mxll rialudv so drrc\n[01:08.40]Kvjjr ul ua sv ori'cv jrrwunf qrc\n[01:15.30]U txn lvv ua un oric vovl\n[01:18.80]U txn lvv ua un oric lsujv\n[01:22.25]Ori'cv xjj U'gv vgvc hxnavd\n[01:25.90]xnd so xcsl xcv rmvn hudv\n[01:29.35]Txilv ori wnrh eila hkxa ar lxo\n[01:32.85]xnd ori wnrh eila hkxa ar dr\n[01:36.40]Xnd U hxna ar avjj ori lr sitk\n[01:41.95]U jrgv ori\n[01:57.26]U jrnf ar lvv akv linjufka un oric kxuc\n[02:05.58]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[02:12.36]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[02:19.86]Kvjjr U'gv eila fra ar jva ori wnrh\n[02:27.11]Txilv U hrndvc hkvcv ori xcv\n[02:30.66]Xnd U hrndvc hkxa ori dr\n[02:34.26]Xcv ori lrsvhkvcv qvvjunf jrnvjo\n[02:38.93]rc ul lrsvrnv jrgunf ori\n[02:41.78]Avjj sv krh ar hun oric kvxca\n[02:45.48]qrc U kxgvn'a fra x tjiv\n[02:50.03]Pia jva sv laxca po lxounf\n[02:55.08]U jrgv ori\n[03:33.44]Kvjjr U'gv eila fra ar jva ori wnrh\n[03:41.04]Txilv U hrndvc hkvcv ori xcv\n[03:44.59]Xnd U hrndvc hkxa ori dr\n[03:48.24]Xcv ori lrsvhkvcv qvvjunf jrnvjo\n[03:53.14]rc ul lrsvrnv jrgunf ori\n[03:55.89]Avjj sv krh ar hun oric kvxca\n[03:59.54]qrc U kxgvn'a fra x tjiv\n[04:04.29]Pia jva sv laxca po lxounf\n[04:09.24]U jrgv ori\n",
+      "tr": "﻿[ti:Hello (Symphonica In Rosso)]\n[ar:Lionel Richie]\n[00:01.00]作词：Jurnvj Cutkuv\n[00:02.00]作曲：Jurnvj Cutkuv\n[00:46.74]䓯㼱㶸䄣，㼱䏲㚕㩽㒫䃢㐯䄁\n[00:54.45]䓯㼱䱘䗲，\n[00:55.65]㼱䏲㤡䙅㩽㧚㔏䍴䄶㘤䊶\n[01:01.25]䎧䄁㼱䟖䝵㩽䓤䙅䤛㿣\n[01:08.40]䎀䚫!㩽䓯㑭䅊㧚䲔䔘㼱䵍?\n[01:15.30]㤩㩽㧚䡧㕁，㼱㽭㒈\n[01:18.80]㤩㩽㧚㕶㪼䄣，㼱㽭㒈\n[01:22.25]㩽䲔䔘㼱㤆㧔㧚，\n[01:25.90]䎖㼱㧚㰜䬱䔘㬈㹮㧚\n[01:29.35]䦾㩽䤿㨁㾗㗔㿟䵡㩻,\n[01:32.85]㩽䤿㨁㾗㼑䵡㩻\n[01:36.40]我多麼想对你说:\n[01:41.95]㼱㬺㩽\n[01:57.26]㼱㨶䟽㤆䟖䟖㩽䲇㽙㑊䈷㧚㵎㵑\n[02:05.58]㴮䗛㨶䊶䛌㨶䊶㧚㓸䚜㩽，㼱䔘㐯㩻䓯䥣㩽\n[02:12.36]䎧䄁㼱㨋䀼䁯㶸䝖䵗䏲䓤䖻䙂\n[02:19.86]䎀䚫!㼱䲔䔘㧔䦾㩽㽭㒈\n[02:27.11]㶛㧁㼱㤆䤿㨁㩽䓯䡯䃢\n[02:30.66]㶛㧁㼱㤆䤿㨁㩽䓯䡯䃢\n[02:34.26]㩽䓯㹍䳊㗻䦠䔘䌠䝖䝵䯓㒫\n[02:38.93]㼳䑒䎧䌵㬺㩽䵍\n[02:41.78]㓸䚜㼱㑲䡯㰮䀼㩽㧚㶸,\n[02:45.48]㶛㧁㼱䙧䎧㨶䳊㝚䧋\n[02:50.03]但让我从这一句开始:\n[02:55.08]㼱㬺㩽\n[03:33.44]䎀䚫!㼱䲔䔘㧔䦾㩽㽭㒈\n[03:41.04]䓯㹍㿟㗻䦠㩽䔘䌠䢛㨩㖠? 㝙䔘䎧䲼䌵䰙㬺䝛㩽?\n[03:44.59]㶛㧁㼱㤆䤿㨁㩽䓯䡯䃢\n[03:48.24]㩽䓯㹍䳊㗻䦠䔘䌠䝖䝵䯓㒫\n[03:53.14]㼳䑒䎧䌵㬺㩽䵍\n[03:55.89]㓸䚜㼱㧔㘨㐠䇺䇁㰮䀼㩽㧚㗇㶸\n[03:59.54]㶛㧁㼱䙧䎧㨶䳊㝚䧋\n[04:04.29]但让我从这一句开始:\n[04:09.24]㼱㬺㩽\n",
+      "title": "Hello (Symphonica In Rosso)",
+      "artist": "Lionel Richie",
+      "album": "Symphonica In Rosso 2008",
+      "cover": "https://d.musicapp.migu.cn/data/oss/resource/00/27/3n/9v"
+    },
+    "musixmatch": {
+      "lyrics": "[00:15.42] U'gv pvvn xjrnv huak ori unludv so sund\n[00:23.52] Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:29.47] U lrsvausvl lvv ori mxll rialudv so drrc\n[00:38.66] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[00:46.24] U txn lvv ua un oric vovl, U txn lvv ua un oric lsujv\n[00:54.06] Ori'cv xjj U'gv vgvc hxnavd xnd so xcsl xcv rmvn hudv\n[01:01.71] 'Txilv ori wnrh eila hkxa ar lxo, xnd ori wnrh eila hkxa ar dr\n[01:09.56] Xnd U hxna ar avjj ori lr sitk, U jrgv ori\n[01:18.16] \n[01:28.98] U jrnf ar lvv akv linjufka un oric kxuc\n[01:38.66] Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:45.75] Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:53.63] Kvjjr, U'gv eila fra ar jva ori wnrh\n[02:01.74] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[02:09.50] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[02:16.78] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[02:25.04] Pia jva sv laxca po lxounf, U jrgv ori\n[02:32.49] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[02:38.03] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[02:41.58] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[02:45.11] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[02:50.06] Pia jva sv laxca po lxounf, U jrgv ori\n[02:51.05] U jrgv ori\n[02:51.26] U jrgv ori\n[02:51.42] Ul ua sv ori'cv jrrwunf qrc?\n[02:53.55] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:01.73] 'Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[03:09.62] Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[03:16.24] Avjj sv krh ar hun oric kvxca, qrc U kxgvn'a fra x tjiv\n[03:25.00] Pia jva sv laxca po lxounf, U jrgv ori\n[03:34.70] U jrgv ori\n[03:36.11] U jrgv ori\n[03:41.77] \n[03:43.82] Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:56.03] Ul ua sv, ul ua sv, ul ua sv\n[04:01.39] Ul ua sv ori'cv jrrwunf qrc?\n[04:05.28] Ul ua sv, ul ua sv\n[04:08.57] ",
+      "yrc": "[15420,4830](15420,150,0)U'gv (15570,510,0)pvvn (16080,870,0)xjrnv (16950,240,0)huak (17190,600,0)ori (17790,1380,0)unludv (19170,360,0)so (19530,720,0)sund\n[23520,5820](23520,120,0)Xnd (23640,120,0)un (23760,300,0)so (24060,599,0)dcvxsl (24659,781,0)U'gv (25440,450,0)wullvd (25890,240,0)oric (26130,1290,0)juml (27420,90,0)x (27510,840,0)akrilxnd (28350,990,0)ausvl\n[29470,7230](29470,1560,0)U (31030,930,0)lrsvausvl (31960,390,0)lvv (32350,240,0)ori (32590,1170,0)mxll (33760,1530,0)rialudv (35290,390,0)so (35680,1020,0)drrc\n[38659,6091](38659,3390,0)Kvjjr, (42049,210,0)ul (42259,90,0)ua (42349,510,0)sv (42859,870,0)ori'cv (43729,420,0)jrrwunf (44149,601,0)qrc?\n[46240,6510](46240,90,0)U (46330,180,0)txn (46510,480,0)lvv (46990,90,0)ua (47080,120,0)un (47200,330,0)oric (47530,2610,0)vovl, (50140,30,0)U (50170,180,0)txn (50350,480,0)lvv (50830,90,0)ua (50920,150,0)un (51070,420,0)oric (51490,1260,0)lsujv\n[54060,6570](54060,300,0)Ori'cv (54360,420,0)xjj (54780,810,0)U'gv (55590,390,0)vgvc (55980,2040,0)hxnavd (58020,90,0)xnd (58110,210,0)so (58320,509,0)xcsl (58829,31,0)xcv (58860,480,0)rmvn (59340,1290,0)hudv\n[61710,5999](61710,270,0)'Txilv (61980,180,0)ori (62160,390,0)wnrh (62550,299,0)eila (62849,301,0)hkxa (63150,150,0)ar (63300,2310,0)lxo, (65610,180,0)xnd (65790,150,0)ori (65940,390,0)wnrh (66330,360,0)eila (66690,300,0)hkxa (66990,210,0)ar (67200,509,0)dr\n[69560,6600](69560,120,0)Xnd (69680,180,0)U (69860,480,0)hxna (70340,150,0)ar (70490,810,0)avjj (71300,150,0)ori (71450,540,0)lr (71990,3330,0)sitk, (75320,120,0)U (75440,330,0)jrgv (75770,390,0)ori\n[88980,7770](88980,2070,0)U (91050,510,0)jrnf (91560,150,0)ar (91710,810,0)lvv (92520,120,0)akv (92640,1649,0)linjufka (94289,301,0)un (94590,420,0)oric (95010,1740,0)kxuc\n[98660,5580](98660,180,0)Xnd (98840,570,0)avjj (99410,120,0)ori (99530,810,0)ausv (100340,180,0)xnd (100520,600,0)ausv (101120,1800,0)xfxun (102920,210,0)krh (103130,510,0)sitk (103640,240,0)U (103880,360,0)txcv\n[105750,6660](105750,1379,0)Lrsvausvl (107129,181,0)U (107310,690,0)qvvj (108000,300,0)so (108300,510,0)kvxca (108810,990,0)hujj (109800,2610,0)rgvcqjrh\n[113630,7950](113630,3870,0)Kvjjr, (117500,300,0)U'gv (117800,389,0)eila (118189,361,0)fra (118550,240,0)ar (118790,480,0)jva (119270,210,0)ori (119480,2100,0)wnrh\n[121740,6000](121740,210,0)'Txilv (121950,180,0)U (122130,600,0)hrndvc (122730,540,0)hkvcv (123270,330,0)ori (123600,2100,0)xcv (125700,150,0)xnd (125850,180,0)U (126030,660,0)hrndvc (126690,540,0)hkxa (127230,210,0)ori (127440,300,0)dr\n[129500,6840](129500,90,0)Xcv (129590,210,0)ori (129800,1140,0)lrsvhkvcv (130940,450,0)qvvjunf (131390,1800,0)jrnvjo (133190,240,0)rc (133430,120,0)ul (133550,750,0)lrsvrnv (134300,780,0)jrgunf (135080,1260,0)ori?\n[136780,7590](136780,330,0)Avjj (137110,420,0)sv (137530,540,0)krh (138070,210,0)ar (138280,420,0)hun (138700,540,0)oric (139240,1860,0)kvxca, (141100,300,0)qrc (141400,240,0)U (141640,720,0)kxgvn'a (142360,810,0)fra (143170,120,0)x (143290,1080,0)tjiv\n[145040,7410](145040,150,0)Pia (145190,539,0)jva (145729,151,0)sv (145880,780,0)laxca (146660,659,0)po (147319,3091,0)lxounf, (150410,180,0)U (150590,480,0)jrgv (151070,1380,0)ori\n[152490,5540](152490,119,0)Kvjjr, (152609,60,0)ul (152669,417,0)ua (153086,4110,0)sv (157196,417,0)ori'cv (157613,357,0)jrrwunf (157970,60,0)qrc?\n[158030,3540](158030,90,0)'Txilv (158120,30,0)U (158150,210,0)hrndvc (158360,180,0)hkvcv (158540,1320,0)ori (159860,30,0)xcv (159890,120,0)xnd (160010,29,0)U (160039,211,0)hrndvc (160250,1080,0)hkxa (161330,180,0)ori (161510,60,0)dr\n[161580,3530](161580,29,0)Xcv (161609,442,0)ori (162051,793,0)lrsvhkvcv (162844,177,0)qvvjunf (163021,206,0)jrnvjo (163227,30,0)rc (163257,59,0)ul (163316,206,0)lrsvrnv (163522,1529,0)jrgunf (165051,59,0)ori?\n[165110,4830](165110,240,0)Avjj (165350,180,0)sv (165530,60,0)krh (165590,2160,0)ar (167750,540,0)hun (168290,660,0)oric (168950,480,0)kvxca, (169430,90,0)qrc (169520,30,0)U (169550,180,0)kxgvn'a (169730,90,0)fra (169820,30,0)x (169850,90,0)tjiv\n[170060,990](170060,82,0)Pia (170142,303,0)jva (170445,55,0)sv (170500,220,0)laxca (170720,55,0)po (170775,110,0)lxounf, (170885,27,0)U (170912,83,0)jrgv (170995,55,0)ori\n[171050,180](171050,30,0)U (171080,90,0)jrgv (171170,60,0)ori\n[171260,159](171260,23,0)U (171283,91,0)jrgv (171374,45,0)ori\n[171419,691](171419,60,0)Ul (171479,60,0)ua (171539,60,0)sv (171599,90,0)ori'cv (171689,360,0)jrrwunf (172049,61,0)qrc?\n[173550,7860](173550,3930,0)Kvjjr, (177480,240,0)ul (177720,150,0)ua (177870,540,0)sv (178410,720,0)ori'cv (179130,450,0)jrrwunf (179580,1830,0)qrc?\n[181730,6630](181730,180,0)'Txilv (181910,180,0)U (182090,570,0)hrndvc (182660,540,0)hkvcv (183200,360,0)ori (183560,2070,0)xcv (185630,180,0)xnd (185810,180,0)U (185990,600,0)hrndvc (186590,750,0)hkxa (187340,180,0)ori (187520,840,0)dr\n[189620,6420](189620,180,0)Xcv (189800,270,0)ori (190070,900,0)lrsvhkvcv (190970,480,0)qvvjunf (191450,1500,0)jrnvjo (192950,240,0)rc (193190,300,0)ul (193490,840,0)lrsvrnv (194330,720,0)jrgunf (195050,990,0)ori?\n[196240,8520](196240,540,0)Avjj (196780,510,0)sv (197290,750,0)krh (198040,180,0)ar (198220,420,0)hun (198640,450,0)oric (199090,2010,0)kvxca, (201100,300,0)qrc (201400,240,0)U (201640,690,0)kxgvn'a (202330,1290,0)fra (203620,90,0)x (203710,1050,0)tjiv\n[205000,8040](205000,120,0)Pia (205120,569,0)jva (205689,151,0)sv (205840,840,0)laxca (206680,690,0)po (207370,3060,0)lxounf, (210430,300,0)U (210730,360,0)jrgv (211090,1950,0)ori\n[214700,1140](214700,180,0)U (214880,240,0)jrgv (215120,720,0)ori\n[216110,3660](216110,210,0)U (216320,300,0)jrgv (216620,3150,0)ori\n[223820,12150](223820,9720,0)Kvjjr, (233540,270,0)ul (233810,180,0)ua (233990,540,0)sv (234530,659,0)ori'cv (235189,451,0)jrrwunf (235640,330,0)qrc?\n[236030,4230](236030,2700,0)Ul (238730,150,0)ua (238880,360,0)sv, (239240,60,0)ul (239300,60,0)ua (239360,90,0)sv, (239450,210,0)ul (239660,120,0)ua (239780,480,0)sv\n[241390,3660](241390,270,0)Ul (241660,180,0)ua (241840,630,0)sv (242470,510,0)ori'cv (242980,150,0)jrrwunf (243130,1920,0)qrc?\n[245280,3290](245280,235,0)Ul (245515,206,0)ua (245721,1439,0)sv, (247160,235,0)ul (247395,206,0)ua (247601,969,0)sv\n",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Can't Slow Down (Deluxe Edition)",
+      "cover": "https://s.mxmcdn.net/images-storage/albums2/2/9/4/4/9/2/32294492_500_500.jpg",
+      "duration_secs": 249
+    },
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/qzB9AAW5p2cZi8a_WqidgQ==/109951169965483614.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=16423334",
+        "lyrics": "[00:00.000] 作词 : Jurnvj Cutkuv\n[00:01.000] 作曲 : Jurnvj Cutkuv\n[00:15.990]U'gv pvvn xjrnv huak ori unludv so sund\n[00:23.430]Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:31.380]U lrsvausvl lvv ori mxll rialudv so drrc\n[00:38.810]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[00:46.210]U txn lvv ua un oric vovl\n[00:49.890]U txn lvv ua un oric lsujv\n[00:54.310]Ori'cv xjj U'gv vgvc hxnavd, （xnd） so xcsl xcv rmvn hudv\n[01:01.780]'Txilv ori wnrh eila hkxa ar lxo\n[01:05.560]Xnd ori wnrh eila hkxa ar dr\n[01:09.620]Xnd U hxna ar avjj ori lr sitk, U jrgv ori ...\n[01:31.710]U jrnf ar lvv akv linjufka un oric kxuc\n[01:38.460]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:46.710]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:54.250]Kvjjr, U'gv eila fra ar jva ori wnrh\n[02:01.560]'Txilv U hrndvc hkvcv ori xcv\n[02:05.250]Xnd U hrndvc hkxa ori dr\n[02:09.510]Xcv ori lrsvhkvcv qvvjunf jrnvjo, rc ul lrsvrnv jrgunf ori?\n[02:17.180]Avjj sv krh ar hun oric kvxca\n[02:21.070]Qrc U kxgvn'a fra x tjiv\n[02:25.010]Pia jva sv laxca po lxounf, U jrgv ori ...\n[03:09.570]Kvjjr, ul ua sv ori'cv jrrwunf qrc?\n[03:16.750]'Txilv U hrndvc hkvcv ori xcv\n[03:20.660]Xnd U hrndvc hkxa ori dr\n[03:24.800]Xcv ori lrsvhkvcv qvvjunf jrnvjo rc ul lrsvrnv jrgunf ori?\n[03:32.160]Avjj sv krh ar hun oric kvxca\n[03:36.530]Qrc U kxgvn'a fra x tjiv\n[03:41.160]Pia jva sv laxca po lxounf ... U jrgv ori\n",
+        "trans": "[00:15.990]䓯㼱㶸䄣，㼱䏲㚕㩽㒫䃢㐯䄁\n[00:23.430]䓯㼱䱘䗲，㼱䏲㤡䙅㩽㧚㔏䍴䄶㘤䊶\n[00:31.380]䎧䄁㼱䟖䝵㩽䓤䙅䤛㿣\n[00:38.810]䎀䚫!㩽䓯㑭䅊㧚䲔䔘㼱䵍?\n[00:46.210]㤩㩽㧚䡧㕁，㼱㽭㒈\n[00:49.890]㤩㩽㧚䛑㕶㕁，㼱㽭㒈 \n[00:54.310]㩽䲔䔘㼱㤆㧔㧚，䎖㼱㧚㰜䬱䔘㬈㹮㧚\n[01:01.780]㶛㧁㩽㽭㒈㾗㗔䵡㩻\n[01:05.560]㩽㽭㒈㾗㼑䵡㩻 \n[01:09.620]我多麼想对你说:㼱㬺㩽\n[01:31.710]㼱㨶䟽㤆䟖䟖㩽䲇㽙㑊䈷㧚㵎㵑\n[01:38.460]㴮䗛㨶䊶䛌㨶䊶㧚㓸䚜㩽，㼱䔘㐯㩻䓯䥣㩽\n[01:46.710]䎧䄁㼱㨋䀼䁯㶸䝖䵗䏲䓤䖻䙂\n[01:54.250]䎀䚫!㼱䲔䔘㧔䦾㩽㽭㒈\n[02:01.560]㶛㧁㼱㤆䤿㨁㩽䓯䡯䃢\n[02:05.250]㤆䤿㨁㩽䓯㼑䵡㩻 \n[02:09.510]䓯㹍㿟㗻䦠㩽䔘䌠䢛㨩㖠? 㝙䔘䎧䲼䌵䰙㬺䝛㩽?\n[02:17.180]㓸䚜㼱㧔㘨㐠䇺䇁㰮䀼㩽㧚㗇㶸\n[02:21.070]㶛㧁㼱䭍㚀㐟㲉\n[02:25.010]让我从这一句开始:㼱㬺㩽......\n[03:09.570]䎀䚫!㩽䓯㑭䅊㧚䲔䔘㼱䵍?\n[03:16.750]㶛㧁㼱㤆䤿㨁㩽䓯䡯䃢\n[03:20.660]㩽䓯㼑䵡㩻\n[03:24.800]䓯㹍㿟㗻䦠㩽䔘䌠䢛㨩㖠? 㝙䔘䎧䲼䌵䰙㬺䝛㩽?\n[03:32.160]㓸䚜㼱㧔㘨㐠䇺䇁㰮䀼㩽㧚㗇㶸\n[03:36.530]㶛㧁㼱䭍㚀㐟㲉\n[03:41.160]让我从这一句开始:㼱㬺㩽......",
+        "yrc": "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"Lionel Richie\"}]}\n{\"t\":1000,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"Lionel Richie\"}]}\n[15850,6030](15850,270,0)U'gv (16120,540,0)pvvn (16660,870,0)xjrnv (17530,240,0)huak (17770,750,0)ori (18520,840,0)unludv (19360,930,0)so (20290,1590,0)sund\n[23530,6450](23530,300,0)Xnd (23830,180,0)un (24010,300,0)so (24310,720,0)dcvxsl (25030,570,0)U'gv (25600,480,0)wullvd (26080,300,0)oric (26380,1470,0)juml (27850,180,0)x (28030,810,0)akrilxnd (28840,1140,0)ausvl\n[31270,6180](31270,210,0)U (31480,960,0)lrsvausvl (32440,360,0)lvv (32800,330,0)ori (33130,870,0)mxll (34000,840,0)rialudv (34840,930,0)so (35770,1680,0)drrc\n[38920,7680](38920,1980,0)Kvjjr(40900,1470,0), (42370,360,0)ul (42730,150,0)ua (42880,480,0)sv (43360,690,0)ori'cv (44050,480,0)jrrwunf (44530,1650,0)qrc(46180,420,0)?\n[46600,2880](46600,150,0)U (46750,180,0)txn (46930,420,0)lvv (47350,180,0)ua (47530,120,0)un (47650,360,0)oric (48010,1470,0)vovl\n[50470,3120](50470,150,0)U (50620,210,0)txn (50830,390,0)lvv (51220,150,0)ua (51370,150,0)un (51520,390,0)oric (51910,1680,0)lsujv\n[54340,7080](54340,420,0)Ori'cv (54760,660,0)xjj (55420,510,0)U'gv (55930,330,0)vgvc (56260,1860,0)hxnavd(58120,30,0), (58150,30,0)（(58180,210,0)xnd(58390,0,0)） (58390,270,0)so (58660,420,0)xcsl (59080,210,0)xcv (59290,480,0)rmvn (59770,1650,0)hudv\n[62080,3060](62080,330,0)'Txilv (62410,150,0)ori (62560,390,0)wnrh (62950,360,0)eila (63310,270,0)hkxa (63580,120,0)ar (63700,1440,0)lxo\n[66040,3300](66040,210,0)Xnd (66250,150,0)ori (66400,420,0)wnrh (66820,390,0)eila (67210,360,0)hkxa (67570,180,0)ar (67750,1590,0)dr\n[69910,21480](69910,180,0)Xnd (70090,120,0)U (70210,540,0)hxna (70750,150,0)ar (70900,720,0)avjj (71620,270,0)ori (71890,630,0)lr (72520,1980,0)sitk(74500,1020,0), (75520,240,0)U (75760,450,0)jrgv (76210,1800,0)ori (78010,4460,0).(82470,4460,0).(86930,4460,0).\n[91390,6120](91390,210,0)U (91600,540,0)jrnf (92140,180,0)ar (92320,810,0)lvv (93130,150,0)akv (93280,1560,0)linjufka (94840,180,0)un (95020,750,0)oric (95770,1740,0)kxuc\n[99130,7110](99130,300,0)Xnd (99430,360,0)avjj (99790,300,0)ori (100090,480,0)ausv (100570,240,0)xnd (100810,480,0)ausv (101290,2160,0)xfxun (103450,390,0)krh (103840,480,0)sitk (104320,270,0)U (104590,1650,0)txcv\n[106720,6450](106720,960,0)Lrsvausvl (107680,210,0)U (107890,630,0)qvvj (108520,330,0)so (108850,510,0)kvxca (109360,870,0)hujj (110230,2940,0)rgvcqjrh\n[114430,7200](114430,2370,0)Kvjjr(116800,1110,0), (117910,390,0)U'gv (118300,360,0)eila (118660,360,0)fra (119020,210,0)ar (119230,360,0)jva (119590,150,0)ori (119740,1890,0)wnrh\n[121990,3330](121990,360,0)'Txilv (122350,150,0)U (122500,540,0)hrndvc (123040,390,0)hkvcv (123430,300,0)ori (123730,1590,0)xcv\n[125890,3210](125890,240,0)Xnd (126130,120,0)U (126250,660,0)hrndvc (126910,480,0)hkxa (127390,300,0)ori (127690,1410,0)dr\n[129670,7650](129670,210,0)Xcv (129880,180,0)ori (130060,1110,0)lrsvhkvcv (131170,510,0)qvvjunf (131680,1680,0)jrnvjo(133360,60,0), (133420,240,0)rc (133660,150,0)ul (133810,570,0)lrsvrnv (134380,870,0)jrgunf (135250,1620,0)ori(136870,450,0)?\n[137320,3900](137320,360,0)Avjj (137680,210,0)sv (137890,540,0)krh (138430,150,0)ar (138580,330,0)hun (138910,570,0)oric (139480,1740,0)kvxca\n[141250,3750](141250,330,0)Qrc (141580,210,0)U (141790,750,0)kxgvn'a (142540,750,0)fra (143290,90,0)x (143380,1620,0)tjiv\n[145120,44610](145120,270,0)Pia (145390,450,0)jva (145840,240,0)sv (146080,780,0)laxca (146860,600,0)po (147460,2850,0)lxounf(150310,240,0), (150550,270,0)U (150820,300,0)jrgv (151120,1770,0)ori (152890,12280,0).(165170,12280,0).(177450,12280,0).\n[189730,7620](189730,1860,0)Kvjjr(191590,1650,0), (193240,300,0)ul (193540,150,0)ua (193690,480,0)sv (194170,690,0)ori'cv (194860,480,0)jrrwunf (195340,1590,0)qrc(196930,420,0)?\n[197350,3870](197350,270,0)'Txilv (197620,180,0)U (197800,510,0)hrndvc (198310,720,0)hkvcv (199030,420,0)ori (199450,1770,0)xcv\n[201280,3360](201280,270,0)Xnd (201550,150,0)U (201700,570,0)hrndvc (202270,660,0)hkxa (202930,330,0)ori (203260,1380,0)dr\n[205360,7500](205360,210,0)Xcv (205570,180,0)ori (205750,1050,0)lrsvhkvcv (206800,450,0)qvvjunf (207250,2280,0)jrnvjo (209530,180,0)rc (209710,90,0)ul (209800,480,0)lrsvrnv (210280,360,0)jrgunf (210640,1050,0)ori(211690,1170,0)?\n[212860,3930](212860,330,0)Avjj (213190,210,0)sv (213400,360,0)krh (213760,150,0)ar (213910,420,0)hun (214330,1050,0)oric (215380,1410,0)kvxca\n[216820,3660](216820,330,0)Qrc (217150,180,0)U (217330,660,0)kxgvn'a (217990,1290,0)fra (219280,90,0)x (219370,1110,0)tjiv\n[221380,8670](221380,270,0)Pia (221650,300,0)jva (221950,150,0)sv (222100,570,0)laxca (222670,390,0)po (223060,2760,0)lxounf (225820,140,0).(225960,140,0).(226100,140,0). (226240,270,0)U (226510,450,0)jrgv (226960,3090,0)ori\n",
+        "duration_secs": 248.573,
+        "artist": "Lionel Richie",
+        "title": "Hello",
+        "album": "Can't Slow Down (Deluxe Edition)",
+        "song_id": 16423334,
+        "album_id": 1507958
+      }
+    },
+    "qq": {
+      "lyrics": "[ti:Hello]\n[ar:Lionel Richie]\n[al:Can't Slow Down - Deluxe Edition]\n[by:]\n[offset:0]\n[00:00.00]Kvjjr - Jurnvj Cutkuv (䈻䡣䭎㪙·䄣䧏)\n[00:09.74]Written by：Jurnvj Cutkuv\n[00:19.49]U'gv pvvn xjrnv huak ori unludv so sund\n[00:26.96]Xnd un so dcvxsl U'gv wullvd oric juml x akrilxnd ausvl\n[00:34.66]U lrsvausvl lvv ori mxll rialudv so drrc\n[00:42.35]Kvjjr ul ua sv ori'cv jrrwunf qrc\n[00:49.84]U txn lvv ua un oric vovl\n[00:53.70]U txn lvv ua un oric lsujv\n[00:57.57]Ori'cv xjj U'gv vgvc hxnavd xnd so xcsl xcv rmvn hudv\n[01:05.28]Txilv ori wnrh eila hkxa ar lxo xnd ori wnrh eila hkxa ar dr\n[01:13.02]Xnd U hxna ar avjj ori lr sitk U jrgv ori\n[01:34.40]U jrnf ar lvv akv linjufka un oric kxuc\n[01:41.88]Xnd avjj ori ausv xnd ausv xfxun krh sitk U txcv\n[01:49.49]Lrsvausvl U qvvj so kvxca hujj rgvcqjrh\n[01:57.18]Kvjjr U'gv eila fra ar jva ori wnrh\n[02:04.68]Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[02:12.19]Xcv ori lrsvhkvcv qvvjunf jrnvjo\n[02:15.92]Rc ul lrsvrnv jrgunf ori\n[02:19.86]Avjj sv krh ar hun oric kvxca\n[02:23.64]Qrc U kxgvn'a fra x tjiv\n[02:27.58]Pia jva sv laxca po lxounf U jrgv ori\n[03:11.90]Kvjjr\n[03:15.22]Ul ua sv ori'cv jrrwunf qrc\n[03:19.35]Txilv U hrndvc hkvcv ori xcv xnd U hrndvc hkxa ori dr\n[03:27.24]Xcv ori lrsvhkvcv qvvjunf jrnvjo\n[03:31.53]Rc ul lrsvrnv jrgunf ori\n[03:34.76]Avjj sv krh ar hun oric kvxca\n[03:38.66]Qrc U kxgvn'a fra x tjiv\n[03:43.12]Pia jva sv laxca po lxounf U jrgv ori",
+      "yrc": "[ti:Hello]\n[ar:Lionel Richie]\n[al:Can't Slow Down - Deluxe Edition]\n[by:]\n[offset:0]\n[0,9740](0,1144,0)Kvjjr (1144,1144,0)- (2288,1144,0)Jurnvj (3432,1144,0)Cutkuv (4576,572,0)((5148,572,0)䈻(5720,572,0)䡣(6292,572,0)䭎(6864,572,0)㪙(7436,572,0)·(8008,572,0)䄣(8580,572,0)䧏(9152,572,0))\n[9740,9750](9740,2784,0)Hcuaavn (12524,1392,0)po(13916,1392,0)：(15308,2784,0)Jurnvj (18092,1392,0)Cutkuv\n[19499,5223](19499,180,0)U'gv (19679,429,0)pvvn (20108,858,0)xjrnv (20966,182,0)huak (21148,843,0)ori (21991,742,0)unludv (22733,944,0)so (23677,1045,0)sund\n[26966,5933](26966,166,0)Xnd (27132,280,0)un (27412,255,0)so (27667,528,0)dcvxsl (28195,679,0)U'gv (28874,389,0)wullvd (29263,533,0)oric (29796,1429,0)juml (31225,204,0)x (31429,758,0)akrilxnd (32187,712,0)ausvl\n[34667,5104](34667,171,0)U (34838,860,0)lrsvausvl (35698,326,0)lvv (36024,502,0)ori (36526,747,0)mxll (37273,779,0)rialudv (38052,878,0)so (38930,841,0)drrc\n[42350,5825](42350,3305,0)Kvjjr (45655,233,0)ul (45888,227,0)ua (46115,490,0)sv (46605,637,0)ori'cv (47242,361,0)jrrwunf (47603,572,0)qrc\n[49845,1581](49845,188,0)U (50033,176,0)txn (50209,321,0)lvv (50530,244,0)ua (50774,155,0)un (50929,255,0)oric (51184,242,0)vovl\n[53700,1854](53700,177,0)U (53877,194,0)txn (54071,178,0)lvv (54249,201,0)ua (54450,189,0)un (54639,347,0)oric (54986,568,0)lsujv\n[57577,5742](57577,207,0)Ori'cv (57784,656,0)xjj (58440,626,0)U'gv (59066,324,0)vgvc (59390,2001,0)hxnavd (61391,181,0)xnd (61572,214,0)so (61786,414,0)xcsl (62200,355,0)xcv (62555,396,0)rmvn (62951,368,0)hudv\n[65286,5730](65286,190,0)Txilv (65476,254,0)ori (65730,246,0)wnrh (65976,203,0)eila (66179,249,0)hkxa (66428,202,0)ar (66630,2461,0)lxo (69091,200,0)xnd (69291,175,0)ori (69466,274,0)wnrh (69740,307,0)eila (70047,384,0)hkxa (70431,254,0)ar (70685,331,0)dr\n[73023,6530](73023,194,0)Xnd (73217,172,0)U (73389,264,0)hxna (73653,206,0)ar (73859,649,0)avjj (74508,279,0)ori (74787,662,0)lr (75449,3138,0)sitk (78587,181,0)U (78768,284,0)jrgv (79052,501,0)ori\n[94406,4618](94406,166,0)U (94572,285,0)jrnf (94857,176,0)ar (95033,778,0)lvv (95811,213,0)akv (96024,1558,0)linjufka (97582,180,0)un (97762,691,0)oric (98453,571,0)kxuc\n[101888,5824](101888,178,0)Xnd (102066,330,0)avjj (102396,249,0)ori (102645,552,0)ausv (103197,272,0)xnd (103469,405,0)ausv (103874,2379,0)xfxun (106253,238,0)krh (106491,283,0)sitk (106774,421,0)U (107195,517,0)txcv\n[109497,4373](109497,605,0)Lrsvausvl (110102,258,0)U (110360,679,0)qvvj (111039,390,0)so (111429,518,0)kvxca (111947,834,0)hujj (112781,1089,0)rgvcqjrh\n[117183,5582](117183,3369,0)Kvjjr (120552,249,0)U'gv (120801,332,0)eila (121133,303,0)fra (121436,306,0)ar (121742,255,0)jva (121997,255,0)ori (122252,513,0)wnrh\n[124686,5886](124686,216,0)Txilv (124902,165,0)U (125067,421,0)hrndvc (125488,395,0)hkvcv (125883,197,0)ori (126080,2413,0)xcv (128493,189,0)xnd (128682,148,0)U (128830,298,0)hrndvc (129128,556,0)hkxa (129684,431,0)ori (130115,457,0)dr\n[132193,2530](132193,211,0)Xcv (132404,184,0)ori (132588,1063,0)lrsvhkvcv (133651,367,0)qvvjunf (134018,705,0)jrnvjo\n[135923,2322](135923,208,0)Rc (136131,148,0)ul (136279,463,0)lrsvrnv (136742,837,0)jrgunf (137579,666,0)ori\n[139867,2489](139867,200,0)Avjj (140067,163,0)sv (140230,547,0)krh (140777,218,0)ar (140995,227,0)hun (141222,407,0)oric (141629,727,0)kvxca\n[143643,2872](143643,238,0)Qrc (143881,183,0)U (144064,682,0)kxgvn'a (144746,773,0)fra (145519,181,0)x (145700,815,0)tjiv\n[147587,6514](147587,198,0)Pia (147785,192,0)jva (147977,366,0)sv (148343,808,0)laxca (149151,631,0)po (149782,3264,0)lxounf (153046,197,0)U (153243,156,0)jrgv (153399,702,0)ori\n[191902,436](191902,436,0)Kvjjr\n[195228,2519](195228,211,0)Ul (195439,163,0)ua (195602,430,0)sv (196032,670,0)ori'cv (196702,302,0)jrrwunf (197004,743,0)qrc\n[199357,6259](199357,210,0)Txilv (199567,169,0)U (199736,417,0)hrndvc (200153,612,0)hkvcv (200765,353,0)ori (201118,2048,0)xcv (203166,196,0)xnd (203362,185,0)U (203547,437,0)hrndvc (203984,605,0)hkxa (204589,430,0)ori (205019,597,0)dr\n[207245,2379](207245,246,0)Xcv (207491,175,0)ori (207666,892,0)lrsvhkvcv (208558,384,0)qvvjunf (208942,682,0)jrnvjo\n[211533,1415](211533,221,0)Rc (211754,159,0)ul (211913,269,0)lrsvrnv (212182,202,0)jrgunf (212384,564,0)ori\n[214764,2813](214764,194,0)Avjj (214958,230,0)sv (215188,276,0)krh (215464,196,0)ar (215660,297,0)hun (215957,984,0)oric (216941,636,0)kvxca\n[218662,3009](218662,226,0)Qrc (218888,170,0)U (219058,532,0)kxgvn'a (219590,1290,0)fra (220880,166,0)x (221046,625,0)tjiv\n[223129,7032](223129,189,0)Pia (223318,192,0)jva (223510,224,0)sv (223734,552,0)laxca (224286,390,0)po (224676,3327,0)lxounf (228003,200,0)U (228203,297,0)jrgv (228500,1661,0)ori\n",
+      "tr": "[offset:0]\n[00:19.49]㨶䟽㔥㫑㼱㢷䔘䯓㒫㧚㤆㩽\n[00:26.96]䓯䱘䄣㼱㶂㤡㩽㧚㔏䍴䄶㘤䬅\n[00:34.66]䎧䄁䟖㩽䀣䙅㼱㧚䤛㷐\n[00:42.35]㜇 㩽䔘䙾䔘㫑䅊㼱㧚？\n[00:49.84]㼱䇁㤩㩽㧚㔏䡧䄣䟖㱁㫑\n[00:53.70]㼱䇁㤩㩽㧚䛑㕶䄣䟖㱁㫑\n[00:57.57]㩽䔘㼱㨶䟽㔥㫑㧚㓊䋟 㝙䎧㼱㧚䶍㻋㑡㽩㧁㩽㬈㹮\n[01:05.28]㶛㧁㩽䤿㨁㧔㗔㿟䵡㩻 㩽䔲䤿㨁㩽㧔㼑㿟䵡㩻\n[01:13.02]㼱㧔㓸䚜㩽 㼱䔘䤥㧚㬺㩽\n[01:34.40]㼱㐯㤆䟖䝵㩽㧚㵎㵑㱃㧚䮘䲇\n[01:41.88]㨶䬅䬅㓸䚜㩽㼱㐯䓯䥣㩽\n[01:49.49]䎧䄁㨋䀼㶸䄣㧚㬺㙞㧔䖻䙂\n[01:57.18]㜇 㼱㾋㧔䦾㩽䤿㨁\n[02:04.68]㼱㤆䤿㨁㩽䓯㱪 㼱㤆䤿㨁㩽䓯䡴㲣\n[02:12.19]㩽䔘䌠㨋䀼䯓䟣\n[02:15.92]㝙䔘䏲䓤䎧䌵㬺㦘㩽\n[02:19.86]㓸䚜㼱㘨㐠䇺䇁㰮䀼㩽㧚㶸\n[02:23.64]㶛㧁㼱䙧䎧㨶㧅㝚䧋\n[02:27.58]䙾䙅㼱䲔㜴\"㼱㬺㩽“㹮㻐䧬㨶䄸㸁\n[03:11.90]㜇\n[03:15.22]㼱䔘㩽㑭䅊㧚䌵㩻？\n[03:19.35]䎖㼱㤆䤿㨁㩽䓯㱪 㤆䤿㨁㩽䓯䡴㲣\n[03:27.24]㩽䔘䌠㨋䀼䯓䟣\n[03:31.53]㝙䔘䏲䓤䎧䌵㬺㦘㩽\n[03:34.76]㓸䚜㼱㘨㐠䇺䇁㰮䀼㩽㧚㶸\n[03:38.66]㶛㧁㼱䙧䎧㨶㧅㝚䧋\n[03:43.12]䙾䙅㼱䲔㜴\"㼱㬺㩽“㹮㻐䧬㨶䄸㸁！",
+      "title": "Hello",
+      "artist": "Lionel Richie",
+      "album": "Can't Slow Down",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000000nuQh32VfdiB.jpg",
+      "duration_secs": 248
+    },
+    "soda": {}
+  },
+  "expect": {
+    "winner": "kugou",
+    "verdicts": {
+      "applemusic": "accepted",
+      "deezer": "accepted",
+      "kugou": "accepted",
+      "lrclib": "accepted",
+      "migu": "accepted",
+      "musixmatch": "accepted",
+      "netease": "accepted",
+      "qq": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "kugou",
+        "score": 1237,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 229
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 38
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "netease",
+        "score": 1211,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 211
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 30
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "applemusic",
+        "score": 1182,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 228
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 34
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_word_timing": true
+      },
+      {
+        "source": "qq",
+        "score": 1147,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 218
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 34
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "lrclib",
+        "score": 788,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 230
+          },
+          {
+            "kind": "lines",
+            "points": 38
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "migu",
+        "score": 754,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 297
+          },
+          {
+            "kind": "lines",
+            "points": 37
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "musixmatch",
+        "score": 647,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 289
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 38
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "timelineIntrusion",
+            "points": -600
+          }
+        ],
+        "has_word_timing": true
+      },
+      {
+        "source": "deezer",
+        "score": 626,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 225
+          },
+          {
+            "kind": "lines",
+            "points": 31
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      }
+    ],
+    "winner_fingerprint": "1b53a80ed6f45a7f"
+  }
+}

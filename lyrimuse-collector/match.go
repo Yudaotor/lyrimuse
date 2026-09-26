@@ -445,7 +445,7 @@ const lyricOvershootToleranceSecs = 5.0
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
-const lyricsScoringVersion = 23
+const lyricsScoringVersion = 24
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -482,6 +482,8 @@ const (
 	scoreTermLiveAlbumConflict = "liveAlbumConflict" // 本地和候选是两场不同命名的演出(现场专辑身份词矛盾),重扣
 	// v23 新增:
 	scoreTermTimelineOffset = "timelineOffset" // 时间轴相对时长对得上的几家整体平移,挂在另一个母带上,重扣(lyrictimelineoffset.go)
+	// v24 新增:
+	scoreTermTimelineIntrusion = "timelineIntrusion" // 时长对得上的几家都空着的间奏里多出一段复制来的歌词,重扣(lyrictimelineintrusion.go)
 )
 
 // lyricScoreTermKinds 是**会出现在 score_terms 里**的全部 kind。存在的唯一理由是给
@@ -497,7 +499,7 @@ func lyricScoreTermKinds() []string {
 		scoreTermDurationOff, scoreTermDurationOvershoot, scoreTermAlbum,
 		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
 		scoreTermRoma, scoreTermSourceDurationOff, scoreTermWordTimingOverride,
-		scoreTermLiveAlbumConflict, scoreTermTimelineOffset,
+		scoreTermLiveAlbumConflict, scoreTermTimelineOffset, scoreTermTimelineIntrusion,
 	}
 }
 

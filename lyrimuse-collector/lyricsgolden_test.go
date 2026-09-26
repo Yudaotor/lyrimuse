@@ -366,6 +366,7 @@ var goldenRequiredCategories = map[string]string{
 	"live-same-concert":     "现场版,候选与本地是同一场演出(live 标记双向对称,不吃 versionTags)",
 	"live-other-concert":    "现场版,另一场演出的候选吃 liveAlbumConflict",
 	"timeline-offset":       "时间轴相对时长对得上的几家整体平移的候选吃 timelineOffset,冠军交给对齐的那份(v23)",
+	"timeline-intrusion":    "时长对得上的几家都空着的间奏里多出一段复制来的歌词的候选吃 timelineIntrusion,冠军交给参照组那份(v24)",
 	"version-tag-mismatch":  "版本限定词错配的候选吃 versionTags -600",
 	"version-tag-edit":      "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
 	"language-version":      "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
@@ -934,6 +935,18 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 			return c.Source != e.Winner && hasTerm(c, scoreTermTimelineOffset)
 		}) {
 			return fmt.Errorf("要求:有非冠军候选吃到 timelineOffset")
+		}
+	case "timeline-intrusion":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		if hasTerm(*winner, scoreTermTimelineIntrusion) {
+			return fmt.Errorf("要求:冠军不吃 timelineIntrusion")
+		}
+		if !anyCand(func(c goldenRankedCandidate) bool {
+			return c.Source != e.Winner && hasTerm(c, scoreTermTimelineIntrusion)
+		}) {
+			return fmt.Errorf("要求:有非冠军候选吃到 timelineIntrusion")
 		}
 	case "live-other-concert":
 		if err := needWinner(); err != nil {

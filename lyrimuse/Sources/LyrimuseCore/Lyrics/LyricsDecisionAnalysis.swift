@@ -127,6 +127,7 @@ public enum LyricsVerdictBuilder {
     public static let vetoKinds: Set<String> = [
         "versionTags", "durationOff", "durationOvershoot",
         "sourceDurationOff", "liveAlbumConflict", "wordTimingOverride", "timelineOffset",
+        "timelineIntrusion",
     ]
 
     /// 「接近平分」的判据:分差 ≤1 分,或不到冠军分的 1%。

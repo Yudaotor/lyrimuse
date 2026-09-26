@@ -35614,6 +35614,52 @@
           }
         }
       }
+    },
+    "间奏里多出一段歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extra lyrics in an instrumental break"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "间奏里多出一段歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "間奏裡多出一段歌詞"
+          }
+        }
+      }
+    },
+    "至少两家自报曲长跟本地一致的来源在这段都是间奏、没有歌词，这份却在里面放了一段别处的歌词——时间轴排错了，套在这次播放上中段会乱" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At least two sources whose reported length matches this track have no lyrics here — it is an instrumental break — yet this one places lines copied from elsewhere in the song inside it. Its timing is wrong, so the middle of the song will be out of step here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "至少两家自报曲长跟本地一致的来源在这段都是间奏、没有歌词，这份却在里面放了一段别处的歌词——时间轴排错了，套在这次播放上中段会乱"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "至少兩家自報曲長跟本地一致的來源在這段都是間奏、沒有歌詞，這份卻在裡面放了一段別處的歌詞——時間軸排錯了，套在這次播放上中段會亂"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
