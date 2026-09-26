@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Mac 上的桌面悬浮歌词：逐字同步、常驻置顶，也可以放进菜单栏、灵动岛胶囊或完整歌词窗口——支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify，以及浏览器里的网页版 YouTube Music / Spotify。外加 Last.fm 听歌档案和端上机器翻译。**
+**Mac 上的桌面悬浮歌词：逐字同步、常驻置顶，也可以放进菜单栏、灵动岛胶囊或完整歌词窗口——支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Spotify，以及浏览器里的网页版 YouTube Music / Spotify。外加 Last.fm 听歌档案和端上机器翻译。**
 
 **语言 / Language:** [English](README.md) | **简体中文** | [繁體中文](README.zh-Hant.md)
 
@@ -16,9 +16,9 @@
 
 </div>
 
-Lyrimuse 常驻在菜单栏里，跟着当前播放把悬浮歌词钉在屏幕上——Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify，以及浏览器里的网页版 YouTube Music / Spotify，任选几个组合（也可以交给自动识别）——像卡拉 OK 一样逐字染色、常驻置顶、跨 Space 显示。想低调一点，也可以只在菜单栏显示当前这句歌词，或者收进刘海下的灵动岛胶囊。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
+Lyrimuse 常驻在菜单栏里，跟着当前播放把悬浮歌词钉在屏幕上——Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Spotify，以及浏览器里的网页版 YouTube Music / Spotify，任选几个组合（也可以交给自动识别）——像卡拉 OK 一样逐字染色、常驻置顶、跨 Space 显示。想低调一点，也可以只在菜单栏显示当前这句歌词，或者收进刘海下的灵动岛胶囊。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
-**从 LyricsX 过来的？** LyricsX 自 2022 年 4 月起再没发过新版本。Lyrimuse 是一个持续维护的开源替代，**所有歌词源的候选统一打分、择优胜出，专治匹配错版本**，还额外覆盖 QQ 音乐 / 网易云 / 酷狗 / 汽水音乐和浏览器网页播放器——这里有一份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
+**从 LyricsX 过来的？** LyricsX 自 2022 年 4 月起再没发过新版本。Lyrimuse 是一个持续维护的开源替代，**所有歌词源的候选统一打分、择优胜出，专治匹配错版本**，还额外覆盖 QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX 和浏览器网页播放器——这里有一份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
 
 **安装：** 用 Homebrew（Apple Silicon 与 Intel 都支持；自动清掉一次性的 Gatekeeper 拦截）——或者去 [最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手动下载，详见[快速开始](#快速开始)：
 
@@ -59,7 +59,7 @@ brew install --cask lyrimuse
 - **这份本地历史同样会出现在歌词窗口里**——没有歌在放的时候，它会变成一块听歌总览面板，而不是一片空白（下面还会细说）
 
 ### 桌面悬浮歌词、菜单栏歌词、灵动岛、完整歌词窗口
-- **播放器可多选，或者交给自动识别**：读 Apple Music（走「自动化」权限）、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐或 Spotify（都走 macOS 系统级 MediaRemote，不需要任何权限）的播放状态——在设置里任意组合勾选，也可以直接留在自动识别，跟随 macOS 当前系统级 Now Playing 焦点
+- **播放器可多选，或者交给自动识别**：读 Apple Music（走「自动化」权限）、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX 或 Spotify（都走 macOS 系统级 MediaRemote，不需要任何权限）的播放状态——在设置里任意组合勾选，也可以直接留在自动识别，跟随 macOS 当前系统级 Now Playing 焦点
 - **Apple Music 电台也当正经播放源**——电台里每首歌的歌词都跟得上，不会越走越偏；主播说话的时候显示电台名和台标，而不是停在上一首歌；电台歌词还有独立的时间偏移，常听的台校一次就一直对
 - **网页播放器也是正经播放器**：配对一次你常用的浏览器，网页版 YouTube Music 或 Spotify 就能当播放器用——歌词按页面自己的进度条精确同步，还有一键自检告诉你浏览器到底能不能被驱动；放广告的时候灵动岛整卡变黑，写出还剩多久、这是第几条广告，YouTube Music 网页广告还多一颗跳过的按钮
 - **三种展示方式**：经典桌面悬浮窗（想拖哪儿拖哪儿，也可以钉在顶部居中、或 Dock 之上的底部居中）、贴着屏幕顶部刘海的灵动岛胶囊（可选显示专辑封面，背景也能跟着封面模糊），或者一个仿 Apple Music 歌词页的可缩放「歌词窗口」——双栏布局、封面模糊铺底、完整歌词自动滚动到当前行，Apple Music 提供动态封面的专辑那张大封面还会动起来——任意组合开启，或者都不开
@@ -181,18 +181,18 @@ cd lyrimuse/lyrimuse
 
 `build.sh` 最后会把包里每个二进制的架构列出来，跟目标不符（缺一半、或多带了一份）都会报出来。发布资产不要手工打——用 `./package.sh`，它自己会把两种架构各构建一次、各出一套 zip + sha256 + dmg，架构不符直接拒绝打包。
 
-QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
+QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
 ## 常见问题
 
 **Mac 上怎么让 Apple Music 的歌词悬浮在桌面、一直置顶？**
-在设置里打开桌面悬浮歌词即可。它浮在所有窗口之上、跨 Space 显示，可以拖到任意位置，也可以钉在屏幕顶部居中，或 Dock 之上的底部居中；歌词带逐字时间轴时，唱到哪个字就染到哪个字。截屏、录屏、共享屏幕时可以让它只对你自己可见，暂停时还能自动隐藏。QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、Spotify 和网页播放器也是一样用。
+在设置里打开桌面悬浮歌词即可。它浮在所有窗口之上、跨 Space 显示，可以拖到任意位置，也可以钉在屏幕顶部居中，或 Dock 之上的底部居中；歌词带逐字时间轴时，唱到哪个字就染到哪个字。截屏、录屏、共享屏幕时可以让它只对你自己可见，暂停时还能自动隐藏。QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Spotify 和网页播放器也是一样用。
 
 **Spotify 的歌词能显示在 Mac 菜单栏上吗？**
 能——打开菜单栏文字模式，当前这句歌词就直接显示在菜单栏里，Spotify 和其它支持的播放器都行。太长的句子会横向滚动，不会截成半句；还可以加开一行副行，显示下一句、译文或罗马音。Spotify 走的是 macOS 的 MediaRemote，不用给任何权限，也不用登录 Spotify 账号。
@@ -204,7 +204,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/Spotify/自动识别这几�
 不需要。Lyrimuse 一直都是 ad-hoc 签名——你不需要开发者账号，这个项目本身也没有。上面「快速开始」里那个一次性的 Gatekeeper 解锁步骤就是这个原因。
 
 **只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？**
-都支持，外加酷狗音乐和汽水音乐，一共六个播放器，也可以交给自动识别，跟随 macOS 当前认为的「正在播放」。Apple Music 走「自动化」权限读取；其它五个完全不需要任何额外权限，走的是 macOS 系统级 MediaRemote。
+都支持，外加酷狗音乐、汽水音乐和 KKBOX，一共七个播放器，也可以交给自动识别，跟随 macOS 当前认为的「正在播放」。Apple Music 走「自动化」权限读取；其它六个完全不需要任何额外权限，走的是 macOS 系统级 MediaRemote。
 
 **这跟网易云音乐自带的桌面歌词是一回事吗？**
 思路一样，不是同一个 App——Lyrimuse 把「桌面悬浮歌词」这套体验带给六个播放器（不只是网易云自己的客户端），原生 macOS，还多了灵动岛样式和一个仿 Apple Music 的完整歌词窗口，不只是经典悬浮窗一种形态。
@@ -228,13 +228,13 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/Spotify/自动识别这几�
 所有源返回的全部候选放在同一套标准下打分——歌名、歌手、专辑、上报时长的吻合度，再加逐字时间轴这类质量信号——分最高的胜出，而不是哪个源先返回就用哪个。决策全程可查：每首歌都有一个「解析决策」面板，列出各候选的得分和赢家胜出的原因。之后某个源出现更干净、更完整的版本时还能自动升级换上；而你手动选定的歌词会被锁定，绝不会被自动覆盖。手动搜索界面也带同样的打分和标注，选错版本一眼就能看出来。
 
 **LyricsX 还在维护吗？Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？**
-LyricsX 最后一个发布版是 2022 年 4 月的 v1.6.3。它支持 macOS 10.11+，覆盖 Apple Music、Spotify 等几个经典播放器；Lyric Fever 专注 Spotify + Apple Music，要求 macOS 15+。Lyrimuse（macOS 14+）额外原生支持 QQ 音乐 / 网易云音乐 / 酷狗 / 汽水音乐，支持浏览器网页播放器，逐行判定的拼音 / 粤拼 / 注音假名，以及 Last.fm / ListenBrainz 打卡加本地听歌统计。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
+LyricsX 最后一个发布版是 2022 年 4 月的 v1.6.3。它支持 macOS 10.11+，覆盖 Apple Music、Spotify 等几个经典播放器；Lyric Fever 专注 Spotify + Apple Music，要求 macOS 15+。Lyrimuse（macOS 14+）额外原生支持 QQ 音乐 / 网易云音乐 / 酷狗 / 汽水音乐 / KKBOX，支持浏览器网页播放器，逐行判定的拼音 / 粤拼 / 注音假名，以及 Last.fm / ListenBrainz 打卡加本地听歌统计。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
 
 ## 许可与版权说明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。
 - **歌词、封面与曲目信息的版权归各自的权利人所有。** Lyrimuse 只做检索、缓存与展示：公开歌词接口返回什么，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 里给你自己看，不托管、不转发、不再分发任何歌词或封面；缓存随时可以在「歌词管理」里删，或者直接删掉那个文件夹。
-- **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、抖音（汽水音乐）、中国移动（咪咕音乐）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器和歌词来源。
+- **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、抖音（汽水音乐）、KKBOX、中国移动（咪咕音乐）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器和歌词来源。
 - **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面十二个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名。封面与空闲页把歌手加歌名发给 iTunes Search。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块发给 MyMemory，附一个随机生成的邮箱参数，不是你的。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「关于」页最多每 6 小时向 GitHub API 查一次 Star 数，打开「测试版更新」后最多每小时查一次 Release 列表；检查更新只拉 GitHub Releases 上的 appcast，不上报系统信息。除此之外只有你主动连接的 Last.fm、ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
 
 ## 排查
