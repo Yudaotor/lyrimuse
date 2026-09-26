@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -328,5 +329,31 @@ func TestEnrichLyricsWinnerArtists(t *testing.T) {
 	enrichMu.Unlock()
 	if names, pending := enrichLyricsWinnerArtists("防弹少年团", "NORMAL"); pending || names != nil {
 		t.Error("没加载歌词缓存的进程(回填子命令)不算 pending")
+	}
+}
+
+// 名字缓存有上限:常驻进程跑几天也不会无限长。
+func TestCatalogLinkedCacheIsCapped(t *testing.T) {
+	catalogLinkedNameMu.Lock()
+	saved := catalogLinkedNameCache
+	catalogLinkedNameCache = map[string][]string{}
+	catalogLinkedNameMu.Unlock()
+	t.Cleanup(func() {
+		catalogLinkedNameMu.Lock()
+		catalogLinkedNameCache = saved
+		catalogLinkedNameMu.Unlock()
+	})
+	for i := 0; i < catalogLinkedNameMax+50; i++ {
+		key := fmt.Sprintf("apple|artist|song %d", i)
+		if _, err := catalogLinkedCached(key, func() ([]string, error) { return []string{"x"}, nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalogLinkedNameMu.Lock()
+	n := len(catalogLinkedNameCache)
+	_, newest := catalogLinkedNameCache[fmt.Sprintf("apple|artist|song %d", catalogLinkedNameMax+49)]
+	catalogLinkedNameMu.Unlock()
+	if n > catalogLinkedNameMax || !newest {
+		t.Fatalf("缓存该封顶在 %d 条且保留最新那条: len=%d newest=%v", catalogLinkedNameMax, n, newest)
 	}
 }

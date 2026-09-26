@@ -57,7 +57,9 @@ func storefrontArtistAliasesCached(artist string) []string {
 
 // enrichLyricsWinnerArtists 取这首歌歌词解析时胜出候选报的署名(决策留痕里的 WinnerArtist),按歌手 + 曲名
 // 在缓存里找(不管专辑)。pending = 这首歌的歌词还没解析完 —— 开播那一刻就判的话多半如此,调用方据此只记
-// 一条短期结论,等到打卡时再判一次。没加载歌词缓存的进程(回填子命令)不算 pending,也没有名字。
+// 一条短期结论,等到打卡时再判一次。缓存里还没有这首歌也算 pending:新歌开播时条目往往还没建好,这时当成「没有
+// 这一路名字」会在缺歌词署名的情况下下长期结论。没加载歌词缓存的进程(回填子命令)不算 pending,也没有名字。
+// 按前缀扫一遍缓存,8000 条约 0.2 ms,只在编目匹配时调用。
 func enrichLyricsWinnerArtists(artist, title string) (names []string, pending bool) {
 	if enrichPath == "" {
 		return nil, false
@@ -90,7 +92,10 @@ func enrichLyricsWinnerArtists(artist, title string) (names []string, pending bo
 }
 
 // catalogLinkedNameCache:按「来源|歌手|曲名」缓存两路 id 对应查询的结果(含查空),只在内存。短期结论
-// (Provisional)几分钟后会重判,不缓存就要重复打同一组搜索。查询失败不缓存。
+// (Provisional)几分钟后会重判,不缓存就要重复打同一组搜索。查询失败不缓存。常驻进程一跑好几天,条数封顶
+// catalogLinkedNameMax,满了随手丢一条(map 遍历顺序不定)再放新的:丢掉的只是一次能重查的搜索结果。
+const catalogLinkedNameMax = 2048
+
 var (
 	catalogLinkedNameMu    sync.Mutex
 	catalogLinkedNameCache = map[string][]string{}
@@ -108,6 +113,12 @@ func catalogLinkedCached(key string, fetch func() ([]string, error)) ([]string, 
 		return nil, err
 	}
 	catalogLinkedNameMu.Lock()
+	if _, exists := catalogLinkedNameCache[key]; !exists && len(catalogLinkedNameCache) >= catalogLinkedNameMax {
+		for old := range catalogLinkedNameCache {
+			delete(catalogLinkedNameCache, old)
+			break
+		}
+	}
 	catalogLinkedNameCache[key] = v
 	catalogLinkedNameMu.Unlock()
 	return v, nil
