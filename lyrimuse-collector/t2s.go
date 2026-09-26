@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"strings"
+	"unicode/utf8"
 )
 
 // dictionary/TSCharacters.txt 和 dictionary/TSPhrases.txt 是 OpenCC
@@ -33,7 +34,10 @@ var (
 	// 完全一致——不是随便挑一个,是复刻原实现"总取第一候选"这个具体行为。
 	t2sCharMap      map[string]string
 	t2sPhraseMap    map[string]string
-	t2sMaxPhraseLen int // TSPhrases.txt 里最长词条的 rune 长度,限定每个位置的搜索窗口
+	t2sMaxPhraseLen int // TSPhrases.txt 里最长词条的 rune 长度
+	// t2sPhraseMaxLenByFirst:以某个字开头的词组最长几个字。不在表里 = 没有词组以它开头,
+	// 这个位置直接查单字表。见 toSimplifiedT2S。
+	t2sPhraseMaxLenByFirst map[rune]int
 	// s2tCharMap:STCharacters.txt 的简→繁单字映射,同样只取每个键的第一个候选。
 	// 简→繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
 	// 挑的未必是具体这个字在这句里真正想要的那个繁体字——跟 App 侧 HanScript.swift 的
@@ -46,9 +50,18 @@ func init() {
 	t2sCharMap = loadT2SDict("dictionary/TSCharacters.txt")
 	t2sPhraseMap = loadT2SDict("dictionary/TSPhrases.txt")
 	s2tCharMap = loadT2SDict("dictionary/STCharacters.txt")
+	t2sPhraseMaxLenByFirst = map[rune]int{}
 	for k := range t2sPhraseMap {
-		if n := len([]rune(k)); n > t2sMaxPhraseLen {
+		rs := []rune(k)
+		n := len(rs)
+		if n == 0 {
+			continue
+		}
+		if n > t2sMaxPhraseLen {
 			t2sMaxPhraseLen = n
+		}
+		if n > t2sPhraseMaxLenByFirst[rs[0]] {
+			t2sPhraseMaxLenByFirst[rs[0]] = n
 		}
 	}
 }
@@ -88,14 +101,25 @@ func loadT2SDict(path string) map[string]string {
 // 才试下一个字典"逻辑等价:gocc 里 TSPhrases 优先于 TSCharacters(数组顺序决定),这里
 // 用"先试词组、词组完全没命中才退到单字"复刻同一个优先级,不是巧合写对,是照着
 // opencc.go 的 Convert() 实现逐行对应写的。
+//
+// 词组窗口按**这个位置的字**取(`t2sPhraseMaxLenByFirst`),不是一律从全表最长往下试:每试一个
+// 长度就要切一次子串、分配一个新字符串,而绝大多数字根本不是任何词组的开头。宽松 key 比对
+// 会对整个 enrich 缓存逐条调这里(几千条),一律按全表最长试时一次全表比对要两百多毫秒。
+// 结果跟一律试全表最长逐字相同 —— 比这个窗口更长的、以这个字开头的词组不存在(对拍见测试)。
+// ASCII 字符三张表都没有,直接原样写出。
 func toSimplifiedT2S(s string) string {
 	runes := []rune(s)
 	var b strings.Builder
 	b.Grow(len(s))
 	i := 0
 	for i < len(runes) {
+		if runes[i] < utf8.RuneSelf {
+			b.WriteRune(runes[i])
+			i++
+			continue
+		}
 		matched := false
-		maxLen := t2sMaxPhraseLen
+		maxLen := t2sPhraseMaxLenByFirst[runes[i]]
 		if remain := len(runes) - i; remain < maxLen {
 			maxLen = remain
 		}

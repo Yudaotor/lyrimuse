@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"sort"
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
 
 // 固定样本回归测试——覆盖 toSimplifiedT2S 几个容易被改坏的规则点。等价性本身(相对
 // gocc.OpenCC("t2s") 逐条比对全部 4189+273 条词典数据)已经在切换时验证过一次,不必
@@ -32,6 +37,78 @@ func TestToSimplifiedT2S(t *testing.T) {
 	for _, c := range cases {
 		if got := toSimplifiedT2S(c.in); got != c.want {
 			t.Errorf("toSimplifiedT2S(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// toSimplifiedT2SFullWindow 是按首字限定词组窗口之前的写法:每个位置一律从全表最长词组往下试。
+// 只给下面的对拍用。
+func toSimplifiedT2SFullWindow(s string) string {
+	runes := []rune(s)
+	var b strings.Builder
+	i := 0
+	for i < len(runes) {
+		matched := false
+		maxLen := t2sMaxPhraseLen
+		if remain := len(runes) - i; remain < maxLen {
+			maxLen = remain
+		}
+		for l := maxLen; l >= 2; l-- {
+			if repl, ok := t2sPhraseMap[string(runes[i:i+l])]; ok {
+				b.WriteString(repl)
+				i += l
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+		r := runes[i]
+		if repl, ok := t2sCharMap[string(r)]; ok {
+			b.WriteString(repl)
+		} else if std, ok := hanVariantMap[r]; ok {
+			b.WriteRune(std)
+		} else {
+			b.WriteRune(r)
+		}
+		i++
+	}
+	return b.String()
+}
+
+// 按首字限定窗口 + ASCII 直通,结果必须跟一律试全表最长逐字相同。用词典自己的全部词条
+// (单独、首尾夹 ASCII、两两相接)对拍,覆盖「词组套词组」「词组被 ASCII 打断」这些边界。
+func TestToSimplifiedT2SMatchesFullWindow(t *testing.T) {
+	for k := range t2sCharMap {
+		if r, _ := utf8.DecodeRuneInString(k); r < utf8.RuneSelf {
+			t.Fatalf("单字表里有 ASCII 条目 %q,ASCII 直通不再安全", k)
+		}
+	}
+	for r := range hanVariantMap {
+		if r < utf8.RuneSelf {
+			t.Fatalf("异体字表里有 ASCII 条目 %q,ASCII 直通不再安全", r)
+		}
+	}
+	phrases := make([]string, 0, len(t2sPhraseMap))
+	for k := range t2sPhraseMap {
+		phrases = append(phrases, k)
+	}
+	sort.Strings(phrases)
+	chars := make([]string, 0, len(t2sCharMap))
+	for k := range t2sCharMap {
+		chars = append(chars, k)
+	}
+	sort.Strings(chars)
+	var inputs []string
+	for i, p := range phrases {
+		next := phrases[(i+1)%len(phrases)]
+		c := chars[i%len(chars)]
+		inputs = append(inputs, p, "a"+p+"b", p+next, c+p, p+c+next, "Jay|"+p+" (Live)|"+next)
+	}
+	for _, in := range inputs {
+		if got, want := toSimplifiedT2S(in), toSimplifiedT2SFullWindow(in); got != want {
+			t.Fatalf("toSimplifiedT2S(%q) = %q, 全窗口写法 %q", in, got, want)
 		}
 	}
 }

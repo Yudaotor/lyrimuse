@@ -430,8 +430,9 @@ var (
 // **连续**空白(单个半角空格既不删也不插),而单纯 ToLower 不动任何空白、更不动字形。
 //
 // 线性扫而不是维护一份小写索引:写入点分散在四条补全路径里,维护索引得每处都记得同步
-// (这个仓库里已经有过几次"漏同步一处"的教训),而这里的规模是几百条、每轮轮询扫一遍
-// 也就几十微秒。
+// (这个仓库里已经有过几次"漏同步一处"的教训)。缓存涨到几千条之后,扫一遍的成本全在
+// 每条现算一次 loosenEnrichKey(繁转简)上,所以那一步按输入记忆化了(见 loosekey.go),
+// 扫描本身只剩几千次查表和比较。
 //
 // 调用方必须已经持有 enrichMu。
 //
@@ -495,7 +496,9 @@ func looseInflightKey(key string) (string, bool) {
 //     行为(多一条重复),而不是查不到歌词。
 //
 // 所以:key 一个字节不改,宽松只活在比对这一层。
-func loosenEnrichKey(key string) string {
+//
+// 调用方走 loosenEnrichKey(loosekey.go,记忆化的那一层),不直接调这里。
+func loosenEnrichKeyUncached(key string) string {
 	// 合 credit 的分隔符也折平:同一次播放里两条路径对多歌手串的写法
 	// 系统性不同 —— 播放器(media-control)报 `VALORANT/Grabbitz/bbno$`,而专辑预取从
 	// Apple Music 自己的曲目表(AppleScript `artist of t`)拿到的是
