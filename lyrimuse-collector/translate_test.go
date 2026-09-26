@@ -573,6 +573,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	if err := json.Unmarshal(raw, &onDisk); err != nil {
 		t.Fatal(err)
 	}
+	hydrateEnrichBodies(onDisk, enrichBodiesDirFor(enrichPath)) // 译文在正文小文件里,见 enrichbodyload.go
 	got := onDisk[key]
 	if got.LyricsTr == "" {
 		t.Fatal("译文没有落盘 —— App 读的是这个文件,界面上就会一直没有翻译")

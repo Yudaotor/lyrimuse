@@ -4341,6 +4341,7 @@ func loadEnrichCache(path string) {
 	}
 	// 正文在小文件里的条目补回正文,见 enrichbodyload.go。
 	bodies := hydrateEnrichBodies(m, enrichBodiesDirFor(path))
+	enrichDiskFullFormat = bodies.full > 0
 	shared := shareIdenticalDecisions(m) // 内存里两槽相同的判决记录共用一个对象,见 enrichdedupe.go
 	enrichMu.Lock()
 	enrichCache = m
@@ -4387,16 +4388,20 @@ func saveEnrichCache() {
 	enrichMu.Unlock()
 	// 先写旁路文件、再写主缓存:主缓存里那一槽一旦落盘,读的一方就会去找它的明细。
 	writeDecisionSidecars(sidecars)
-	// 给 App 的正文小文件也在主缓存之前(只写变了的那几首);精简索引在主缓存之后、最后落盘
-	// (App 按「索引不比主缓存旧」判断能不能用它,见 enrichindex.go)。
+	// 正文小文件也在主缓存之前(只写变了的那几首):主缓存里正文已经写好的条目只存精简那一条,正文只在
+	// 小文件里(见 enrichbodyload.go)。索引在主缓存之后、最后落盘,是指向主缓存的硬链接(见 enrichindex.go)。
 	bodyCRCs := writeEnrichBodies(snapshot)
+	disk := snapshot
+	if backupFullEnrichCacheOnce() {
+		disk = leanEnrichSnapshot(snapshot, bodyCRCs)
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(enrichPath), filepath.Base(enrichPath)+".tmp.*")
 	if err != nil {
 		slog.Error("save enrich cache", "err", err)
 		return
 	}
 	// 流式写,不再先 Marshal 出整份再一次写入(一次保存临时分配约 680 MB,见 enrichsave.go 头注)。
-	if err := writeEnrichSnapshot(tmp, snapshot); err != nil {
+	if err := writeEnrichSnapshot(tmp, disk); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		slog.Error("save enrich cache", "err", err)
@@ -4412,5 +4417,5 @@ func saveEnrichCache() {
 		slog.Error("save enrich cache", "err", err)
 		return
 	}
-	writeEnrichIndex(snapshot, bodyCRCs)
+	linkEnrichIndex(snapshot, bodyCRCs)
 }

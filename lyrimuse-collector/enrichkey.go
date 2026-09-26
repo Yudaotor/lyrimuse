@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"log"
@@ -351,7 +352,9 @@ func applyEnrichKeyMigration() bool {
 	if enrichPath != "" {
 		backup := enrichPath + ".pre-keynorm.bak"
 		if _, err := os.Stat(backup); os.IsNotExist(err) {
-			if data, err := os.ReadFile(enrichPath); err == nil {
+			// 从内存导出,不复制盘上那份:盘上的主缓存是精简格式,落选那条的正文只在它的正文小文件里,
+			// 而没有对应条目的小文件会在启动时被清掉 —— 复制出来的备份就缺了正是要留的那部分。
+			if data, err := json.Marshal(enrichCache); err == nil {
 				if err := os.WriteFile(backup, data, 0o644); err != nil {
 					log.Printf("enrich key migration: backup failed (%v), aborting", err)
 					return false

@@ -67,9 +67,6 @@ func TestSaveWritesLeanIndexAndBodies(t *testing.T) {
 	if idx["empty|t|b"].BodyCRC != 0 || idx["empty|t|b"].BodyFields != 0 {
 		t.Fatal("entry without lyrics has no body_crc / body_fields")
 	}
-	if strings.Contains(string(mustRead(t, enrichPath)), "body_fields") {
-		t.Fatal("main cache must not carry body_fields")
-	}
 	body, _ := readBodyForTest(t, "a|t|b")
 	if body.CRC != got.BodyCRC || body.LyricsYRC != "[0,100](0,100,0)hi" || body.LyricsTr != "[00:01.00]你好" || body.PlainLyrics != "hi" {
 		t.Fatalf("body = %+v", body)
@@ -77,14 +74,11 @@ func TestSaveWritesLeanIndexAndBodies(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(enrichBodiesDir(), decisionSidecarName("empty|t|b"))); !os.IsNotExist(err) {
 		t.Fatal("no body file for an entry without lyrics")
 	}
-	main, _ := os.ReadFile(enrichPath)
-	if strings.Contains(string(main), "body_crc") {
-		t.Fatal("main cache must not carry body_crc")
-	}
+	// 主缓存跟索引是同一份精简文件(硬链接)。
 	mi, _ := os.Stat(enrichPath)
 	ii, _ := os.Stat(enrichIndexPath())
-	if ii.ModTime().Before(mi.ModTime()) {
-		t.Fatal("index must be written after the main cache")
+	if !os.SameFile(mi, ii) {
+		t.Fatal("index must be a hard link to the main cache")
 	}
 }
 

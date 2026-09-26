@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"hash/crc32"
+	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -31,6 +33,15 @@ import (
 //     `body_crc` 对不上就不用(退回整份主缓存),绝不拼出一份错的歌词。只在正文变了时重写(上次写出的
 //     校验值记在 `enrichBodyCRCs`,启动时从磁盘上的旧索引种回来)。
 //
+// ## 主缓存也是精简形态
+//
+// 主缓存跟索引写的是**同一种**精简条目(正文小文件确认写好了的那些,见 `leanEnrichSnapshot`),四块正文
+// 只在正文小文件里,加载时补回(enrichbodyload.go)。于是索引跟主缓存内容一样,不再单独编码、单独写一遍,
+// 而是主缓存落盘之后做一个指向它的硬链接(`linkEnrichIndex`)。App 读哪一份都一样。
+//
+// 第一次把老格式(正文整块在主缓存里)改写成精简格式之前,原样留一份 `.full-format.bak`
+// (`backupFullEnrichCacheOnce`)。
+//
 // ## 顺序与新鲜度
 //
 // 每次保存:判决旁路 → 正文小文件 → 主缓存 → 索引(索引**最后**落盘)。App 只在「索引存在、且不比主缓存
@@ -41,6 +52,11 @@ import (
 // enrichBodyCRCs:上次写出的正文校验值(key → crc,0 = 没有正文、不写文件)。enrichSaveMu 保护;
 // nil = 还没从磁盘上的索引种过。
 var enrichBodyCRCs map[string]uint32
+
+// enrichBodyCRCsDir:enrichBodyCRCs 记的是哪个目录里的文件。主缓存只在「小文件确认写好了」时才写精简条目
+// (leanEnrichSnapshot),而这份记录就是那个「确认」:目录换了(测试 / 换了配置目录)还拿旧目录的记录,
+// 新目录里一个文件都没写,主缓存却会写成精简条目,正文就丢了。所以目录一变就重新种。
+var enrichBodyCRCsDir string
 
 func enrichIndexPath() string {
 	if enrichPath == "" {
@@ -156,8 +172,9 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	if dir == "" {
 		return crcs
 	}
-	if enrichBodyCRCs == nil {
+	if enrichBodyCRCs == nil || enrichBodyCRCsDir != dir {
 		seedEnrichBodyCRCs()
+		enrichBodyCRCsDir = dir
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		slog.Error("lyrics bodies: mkdir", "err", err)
@@ -190,7 +207,94 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	return crcs
 }
 
+// leanEnrichSnapshot 主缓存落盘的那一份:正文小文件确认写好了的条目(`enrichBodyCRCs` 记的正是这一次的
+// 校验值)换成精简条目,其余(没有正文 / 小文件这次没写成)原样整块写 —— 正文绝不能只落在一个没写成的地方。
+// 调用方持 enrichSaveMu,在 writeEnrichBodies 之后调。
+func leanEnrichSnapshot(snapshot map[string]enrichEntry, crcs map[string]uint32) map[string]enrichEntry {
+	out := make(map[string]enrichEntry, len(snapshot))
+	for k, e := range snapshot {
+		if crc := crcs[k]; crc != 0 && enrichBodyCRCs != nil && enrichBodyCRCs[k] == crc {
+			e = leanForIndex(e, crc)
+		}
+		out[k] = e
+	}
+	return out
+}
+
+// enrichDiskFullFormat:这次加载时盘上的主缓存还有条目把正文整块写在里面(老格式)。enrichSaveMu 保护
+// (加载时进程里还没有保存在跑)。
+var enrichDiskFullFormat bool
+
+// backupFullEnrichCacheOnce 第一次把老格式改写成精简格式之前,把盘上那份原样复制成 `.full-format.bak`
+// (已经有了就不再写,不覆盖最早那一份)。返回 false = 备份没做成,这一次仍写完整格式,下次保存再试。
+// 调用方持 enrichSaveMu。
+func backupFullEnrichCacheOnce() bool {
+	if !enrichDiskFullFormat {
+		return true
+	}
+	backup := enrichPath + ".full-format.bak"
+	if _, err := os.Stat(backup); err != nil {
+		if !os.IsNotExist(err) {
+			slog.Error("enrich cache: cannot check the full-format backup, keeping the full format", "err", err)
+			return false
+		}
+		if err := copyFileAtomic(enrichPath, backup); err != nil {
+			slog.Error("enrich cache: full-format backup failed, keeping the full format", "err", err)
+			return false
+		}
+		log.Printf("enrich cache: backed up the full-format cache to %s before switching to lean entries", filepath.Base(backup))
+	}
+	enrichDiskFullFormat = false
+	return true
+}
+
+// copyFileAtomic 流式复制到临时文件再改名,中途失败不留半份。
+func copyFileAtomic(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp.*")
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return nil
+}
+
+// linkEnrichIndex 让索引成为主缓存的硬链接:主缓存已经是精简形态,两份内容一样,不必再编码、再写一遍。
+// 同一个 inode,mtime 天然一致,App 照旧按「索引不比主缓存旧」读它。文件系统不支持硬链接(或出了错)就
+// 照旧单独写一份(`writeEnrichIndex`)。调用方持 enrichSaveMu,在主缓存改名落盘之后调。
+func linkEnrichIndex(snapshot map[string]enrichEntry, crcs map[string]uint32) {
+	path := enrichIndexPath()
+	if path == "" {
+		return
+	}
+	tmp := fmt.Sprintf("%s.tmp.link-%d-%d", path, os.Getpid(), time.Now().UnixNano())
+	if err := os.Link(enrichPath, tmp); err == nil {
+		if err := os.Rename(tmp, path); err == nil {
+			return
+		}
+		os.Remove(tmp)
+	}
+	writeEnrichIndex(snapshot, crcs)
+}
+
 // writeEnrichIndex 写精简索引(流式,同 writeEnrichSnapshot 的格式)。调用方持 enrichSaveMu。
+// 只在做不了硬链接时用(见 linkEnrichIndex)。
 func writeEnrichIndex(snapshot map[string]enrichEntry, crcs map[string]uint32) {
 	path := enrichIndexPath()
 	if path == "" {

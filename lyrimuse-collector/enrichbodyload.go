@@ -37,6 +37,8 @@ const enrichBodyLoadWorkers = 8
 type bodyHydrateStats struct {
 	lean, restored, newer, missing int
 	missingKeys                    []string // 最多记 3 条,日志里点名
+	// full:正文还整块写在主缓存里的条目(老格式)。非零时第一次改写成精简格式之前要先留一份备份。
+	full int
 }
 
 func (s bodyHydrateStats) log() {
@@ -53,12 +55,16 @@ func (s bodyHydrateStats) log() {
 // hydrateEnrichBodies 把 m 里的精简条目补回正文(原地改 m),dir 是正文小文件目录。
 func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats {
 	var keys []string
+	full := 0
 	for k, e := range m {
-		if e.BodyCRC != 0 {
+		switch {
+		case e.BodyCRC != 0:
 			keys = append(keys, k)
+		case e.LyricsYRC != "" || e.LyricsTr != "" || e.LyricsRoma != "" || e.PlainLyrics != "":
+			full++
 		}
 	}
-	st := bodyHydrateStats{lean: len(keys)}
+	st := bodyHydrateStats{lean: len(keys), full: full}
 	if len(keys) == 0 {
 		return st
 	}
