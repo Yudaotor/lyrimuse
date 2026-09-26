@@ -80,6 +80,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 的机器上,提醒发生的那一刻窗口本来是隐藏的(没有曲目),得把它叫回来、到点再照常隐藏。
     private var hoverExpanded = false
     private var alertHold = false
+    /// 「全屏时收起歌词」的两种结果(`NotchVisibility.fullScreenTreatment`),由 `applyFullScreenCover` 写入。
+    /// 主实例和镜像副本各看自己那块屏,别的屏全屏不算。
+    /// `coveredByFullScreen`:没有刘海的屏幕,整卡隐藏,进 updateActualVisibility 的判据。
+    /// `lyricsOffByFullScreen`:刘海屏,只把 `showsLyrics` 按关掉算。
+    private var coveredByFullScreen = false
+    private var lyricsOffByFullScreen = false
     /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
     /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
     /// 旧值(本项目已实测踩过两次,见下面 isPlayingObserver 处的注释)。
@@ -141,7 +147,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 用户要不要看歌词行,真值在 `AppSettings.notchShowLyrics`(见那边的注释)。
     /// 镜像到这里是因为 `NotchWindowRoot` 只观察这个控制器、不观察 AppSettings ——
     /// 那是性能审计定的纪律,别为了这一个开关把整卡挂回去观察全部设置。
+    /// 生效值 = 用户开关 且 没在刘海屏的全屏 Space 里(见 `lyricsOffByFullScreen`);开关本身在 `showsLyricsSetting`。
     @Published private(set) var showsLyrics: Bool = AppSettings.shared.notchShowLyrics
+    @Published private(set) var showsLyricsSetting: Bool = AppSettings.shared.notchShowLyrics
     /// 展开区要不要给迷你进度条留高度(= 这首歌有没有时长)。同上。
     @Published private(set) var expandedShowsScrubber: Bool = false
 
@@ -310,6 +318,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
     private var unknownPlayerAlertObserver: AnyCancellable?
+    private var fullScreenObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
@@ -387,7 +396,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             screenParamsObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.recomputeGeometry(animate: false) }
+                Task { @MainActor in
+                    self?.recomputeGeometry(animate: false)
+                    self?.refreshFullScreenCover()
+                }
             }
         }
 
@@ -431,6 +443,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.setAlertHold(alerting)
         }
 
+        // 「全屏时隐藏」:开关和全屏表两个输入同时从参数拿(同一个 willSet 坑)。每个实例各自订阅,
+        // 镜像副本不经 NotchMirrorManager 转发。
+        fullScreenObserver = AppSettings.shared.$notchHideInFullScreen
+            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
+            .sink { [weak self] enabled, displays in
+                self?.applyFullScreenCover(enabled: enabled, displays: displays)
+            }
+
         // 展开区的两个"要不要留高度"标志(修"没歌词时展开卡一大片空白")。
         // 刻意订阅**曲目级**信号而不是"此刻有没有下一句"——理由见
         // NotchMetrics.expandedExtraHeight 的注释(后者会让最后一句唱完时卡片抽动)。
@@ -445,7 +465,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 「显示歌词」开关。同上:存 sink 参数值(@Published 是 willSet 时机,回读拿到旧值);
         // 只改卡片内容和高度,窗口尺寸不用重算(窗口恒为最大形态)。
         showLyricsObserver = AppSettings.shared.$notchShowLyrics.removeDuplicates().sink { [weak self] show in
-            self?.showsLyrics = show
+            guard let self else { return }
+            showsLyricsSetting = show
+            let effective = show && !lyricsOffByFullScreen
+            if showsLyrics != effective { showsLyrics = effective }
         }
         // 「暂停时缩到最小」开关。同一个 willSet 坑同一个修法:存 sink 参数值。写入
         // @Published 即生效——isCollapsed 是计算属性,靠这次 objectWillChange 让依赖它的
@@ -757,7 +780,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func updateActualVisibility(isPlayingNow: Bool) {
         // 该做哪一步由 Core 的 NotchVisibility 决定(selftest 覆盖),这里只执行。
         let shouldShow = NotchVisibility.shouldShow(isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
-                                                    isPlaying: isPlayingNow, alertHold: alertHold)
+                                                    isPlaying: isPlayingNow, alertHold: alertHold,
+                                                    coveredByFullScreen: coveredByFullScreen)
         let step = NotchVisibility.step(shouldShow: shouldShow, isVisible: isVisible,
                                         lastApplied: lastAppliedShouldShow, isVanished: isVanished,
                                         reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
@@ -809,7 +833,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 guard generation == self.hideGeneration else { return }
                 let stillShow = NotchVisibility.shouldShow(
                     isVisible: self.isVisible, hideWhenNotPlaying: self.hideWhenNotPlaying,
-                    isPlaying: PlaybackCoordinator.shared.isPlayingSmoothed, alertHold: self.alertHold)
+                    isPlaying: PlaybackCoordinator.shared.isPlayingSmoothed, alertHold: self.alertHold,
+                    coveredByFullScreen: self.coveredByFullScreen)
                 if stillShow {
                     // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
                     if self.isVanished { self.isVanished = false }
@@ -940,6 +965,36 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 设置页改完"显示在哪块屏幕"后调这个立刻生效(跟 applyContentWidthSetting 同一个模式)。
     func applyScreenSetting() {
         recomputeGeometry(animate: false)
+        refreshFullScreenCover()
+    }
+
+    /// 窗口换了屏(设置里改屏幕、插拔显示器)时按现值重判一次;开关或全屏表变化走 `fullScreenObserver`。
+    /// 这几个时机开关不在变化中,读存储值是稳定的。
+    private func refreshFullScreenCover() {
+        applyFullScreenCover(enabled: AppSettings.shared.notchHideInFullScreen,
+                             displays: FullScreenSpaceMonitor.shared.fullScreenDisplays)
+    }
+
+    private func applyFullScreenCover(enabled: Bool, displays: Set<String>) {
+        let screen = resolvedScreen()
+        let covered = FullScreenSpaces.covers(
+            screenID: screen.flatMap(ScreenIdentity.id(of:)),
+            isMainScreen: screen != nil && screen == NSScreen.screens.first,
+            fullScreenDisplays: displays)
+        let treatment = NotchVisibility.fullScreenTreatment(
+            enabled: enabled, coveredByFullScreenApp: covered,
+            screenHasNotch: (screen?.safeAreaInsets.top ?? 0) > 0)
+        let lyricsOff = treatment == .lyricsOff
+        if lyricsOff != lyricsOffByFullScreen {
+            lyricsOffByFullScreen = lyricsOff
+            // 只改卡片内容和高度,窗口尺寸不用重算(窗口恒为最大形态),同「显示歌词」开关。
+            let effective = showsLyricsSetting && !lyricsOff
+            if showsLyrics != effective { showsLyrics = effective }
+        }
+        let hide = treatment == .hide
+        guard hide != coveredByFullScreen else { return }
+        coveredByFullScreen = hide
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     /// 这个实例贴哪块屏:副本贴它被钉的那块,主实例走全局的 targetScreen()。
@@ -981,6 +1036,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
         recomputeGeometry(animate: false, contentWidth: contentWidth,
                           expandedContentWidth: expandedContentWidth)
+        refreshFullScreenCover()
     }
 
     /// 副本销毁前调:先把窗口收走,再断掉订阅,最后**破掉保留环**。
@@ -1040,6 +1096,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         trackPresenceObserver = nil
         unknownPlayerAlertObserver?.cancel()
         unknownPlayerAlertObserver = nil
+        fullScreenObserver?.cancel()
+        fullScreenObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil

@@ -35745,6 +35745,52 @@
           }
         }
       }
+    },
+    "全屏时收起歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Lyrics in Full Screen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全屏时收起歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全螢幕時收起歌詞"
+          }
+        }
+      }
+    },
+    "灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When the screen it is on is showing a full-screen app, the lyric row below folds away and only the strip level with the notch stays. On screens without a notch, the whole Dynamic Island hides. It comes back when you return to the desktop or exit full screen."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "靈動島所在的螢幕正在顯示全螢幕 App 時，收起下面那行歌詞，只留和瀏海齊平的那一條；沒有瀏海的螢幕上整個靈動島隱藏。切回桌面或離開全螢幕後恢復。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

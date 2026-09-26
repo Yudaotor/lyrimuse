@@ -264,6 +264,7 @@
 "停止补搜" = "Stop Searching";
 "光盘" = "Disc";
 "全局时间轴偏移" = "Global Timing Offset";
+"全屏时收起歌词" = "Hide Lyrics in Full Screen";
 "全角/半角" = "Full-width/half-width";
 "全选 %@ 首" = "Select All (%@)";
 "全部" = "All";
@@ -1153,6 +1154,7 @@
 "灵动岛" = "Notch";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
+"灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。" = "When the screen it is on is showing a full-screen app, the lyric row below folds away and only the strip level with the notch stays. On screens without a notch, the whole Dynamic Island hides. It comes back when you return to the desktop or exit full screen.";
 "灵动岛歌词" = "Notch Lyrics";
 "点击下载" = "Click to download";
 "点击归零" = "Click to reset";

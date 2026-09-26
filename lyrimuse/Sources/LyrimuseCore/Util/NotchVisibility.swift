@@ -5,9 +5,28 @@
 public enum NotchVisibility {
     /// 窗口该不该在屏上:灵动岛开着,且没开「暂停/无播放时隐藏」、或正在播、或「发现新播放器」的提醒挂着
     /// (提醒那一刻按定义没有曲目、也没在播,开着隐藏的机器上窗口正藏着)。延迟隐藏到点时的复核也用这一份。
+    ///
+    /// `coveredByFullScreen`:`fullScreenTreatment` 给出 `.hide`(没有刘海的屏幕上的全屏 Space)。它压过提醒挂起 ——
+    /// 全屏期间什么都不露,切回桌面后照常显示。
     public static func shouldShow(isVisible: Bool, hideWhenNotPlaying: Bool,
-                                  isPlaying: Bool, alertHold: Bool) -> Bool {
-        isVisible && (!hideWhenNotPlaying || isPlaying || alertHold)
+                                  isPlaying: Bool, alertHold: Bool, coveredByFullScreen: Bool) -> Bool {
+        isVisible && !coveredByFullScreen && (!hideWhenNotPlaying || isPlaying || alertHold)
+    }
+
+    /// 「全屏时收起歌词」开着、窗口所在屏幕的当前 Space 是全屏 App 时怎么处理。
+    public enum FullScreenTreatment: Equatable, Sendable {
+        case none
+        /// 刘海屏:全屏 App 的内容从刘海下沿开始画,刘海两侧那条黑边空着,顶行留在里面不挡东西;
+        /// 只收掉下沿以下那行歌词(等同临时关掉「显示歌词」,悬停展开照常)。
+        case lyricsOff
+        /// 没有刘海的屏幕:全屏 App 从屏幕顶边就开始画,顶行本身也会盖住画面,整卡隐藏。
+        case hide
+    }
+
+    public static func fullScreenTreatment(enabled: Bool, coveredByFullScreenApp: Bool,
+                                           screenHasNotch: Bool) -> FullScreenTreatment {
+        guard enabled, coveredByFullScreenApp else { return .none }
+        return screenHasNotch ? .lyricsOff : .hide
     }
 
     public enum Step: Equatable, Sendable {

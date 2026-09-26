@@ -253,6 +253,7 @@ final class AppSettings: ObservableObject {
         // 必须是无感的。
         static let notchHideDuringScreenCapture = "np:notchHideDuringScreenCapture"
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
+        static let notchHideInFullScreen = "np:notchHideInFullScreen"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         // 悬停时露不露出那排播放控制按钮。默认 true = 改动前的行为。
@@ -411,6 +412,9 @@ final class AppSettings: ObservableObject {
     /// 这里的常量只回答前者(= 重置按钮该恢复成什么)。
     static let defaultNotchHideDuringScreenCapture = false
     static let defaultNotchHideWhenNotPlaying = false
+    /// 默认开:稳态那行歌词在刘海下沿以下,全屏 App 的内容从刘海下沿开始画,不收会压在它顶部正中。
+    /// 刘海屏只收歌词行、无刘海屏整卡隐藏,见 `NotchVisibility.fullScreenTreatment`。
+    static let defaultNotchHideInFullScreen = true
     static let defaultNotchShowLyrics = true
     /// 动态封面(Apple Music 的 motion artwork)默认**开**。
     ///
@@ -847,6 +851,11 @@ final class AppSettings: ObservableObject {
     }
     @Published var notchHideWhenNotPlaying: Bool {
         didSet { defaults.set(notchHideWhenNotPlaying, forKey: Keys.notchHideWhenNotPlaying) }
+    }
+    /// 灵动岛所在屏幕的当前 Space 是全屏 App 时收起歌词行(无刘海屏整卡隐藏)。只管灵动岛;生效不经设置页调控制器,
+    /// 每个灵动岛实例(含镜像副本)自己订阅这个值(`NotchLyricsWindowController.fullScreenObserver`)。
+    @Published var notchHideInFullScreen: Bool {
+        didSet { defaults.set(notchHideInFullScreen, forKey: Keys.notchHideInFullScreen) }
     }
     // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
     // 上、hover 是它展开的手势,让开会互相打架)。
@@ -1778,6 +1787,8 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.notchHideDuringScreenCapture) as? Bool) ?? legacyHideDuringCapture
         notchHideWhenNotPlaying =
             (defaults.object(forKey: Keys.notchHideWhenNotPlaying) as? Bool) ?? legacyHideWhenNotPlaying
+        notchHideInFullScreen = (defaults.object(forKey: Keys.notchHideInFullScreen) as? Bool)
+            ?? Self.defaultNotchHideInFullScreen
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false

@@ -95,6 +95,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
     /// 不用 @Published 镜像:编辑台自己观察 AppSettings,设置一变整块重画,读到的必然是新值。
     var showsLyrics: Bool { AppSettings.shared.notchShowLyrics }
+    var showsLyricsSetting: Bool { AppSettings.shared.notchShowLyrics }
     /// 音浪开关/贴哪只耳朵,同上现读设置——预览要如实反映用户正在配的效果。
     ///
     /// 这两项比「显示歌词」更不能钉成常量:它们**同时**决定顶行怎么排
@@ -716,9 +717,9 @@ struct NotchEditorStage: View {
         SettingsToggleSummary.text(entries)
     }
 
-    /// 「行为」浮层现在有三项,而且**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
+    /// 「行为」浮层现在有四项,而且**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
     /// (`.showLyrics` 搬去了「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
-    /// 那两项(从撤掉的独立「自动隐藏」卡并进来的)。
+    /// 那两项(从撤掉的独立「自动隐藏」卡并进来的)+ `NotchBehaviorItem.hideInFullScreen`。
     ///
     /// **两个来源必须都算,而且要跟 `NotchBehaviorPopover` /
     /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
@@ -733,7 +734,9 @@ struct NotchEditorStage: View {
               isOn: NotchBehaviorItem.collapseWhenPaused.binding.wrappedValue)]
                 + AutoHideItem.allCases.map {
                     (title: $0.title, isOn: $0.binding(for: .notch).wrappedValue)
-                })
+                }
+                + [(title: NotchBehaviorItem.hideInFullScreen.title,
+                    isOn: NotchBehaviorItem.hideInFullScreen.binding.wrappedValue)])
     }
 
     /// 「展开态」浮层里的七项(「展开时预览下一句」归「歌词行」,不在这里算;同日加「快捷操作」)。曲目信息
@@ -1612,6 +1615,7 @@ enum NotchStyleDefaults {
         // (同一天菜单栏那颗也因为同样的原因漏了两项,见 MenuBarStyleDefaults 的头注。)
         settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
+        settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
     }
 }
 

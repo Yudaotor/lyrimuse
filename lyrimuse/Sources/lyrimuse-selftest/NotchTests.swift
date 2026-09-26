@@ -992,6 +992,20 @@ func runNotchTests() {
         expectEqual(controller.contains("(!hideWhenNotPlaying || isPlayingNow || alertHold)")
                     || controller.contains("(!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed"), false,
                     "显隐契约: 控制器里不许再内联写一份「该不该显示」的判据")
+        expectEqual(controller.components(separatedBy: "coveredByFullScreen: coveredByFullScreen)").count - 1
+                    + controller.components(separatedBy: "coveredByFullScreen: self.coveredByFullScreen)").count - 1, 2,
+                    "全屏契约: 立刻判定与延迟隐藏到点的复核都带上全屏条件")
+        expectEqual(controller.contains("AppSettings.shared.$notchHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"), true,
+                    "全屏契约: 每个实例(含镜像副本)自己订阅开关与全屏表,值从 sink 参数拿")
+        expectEqual(controller.contains("let screen = resolvedScreen()\n        let covered = FullScreenSpaces.covers("), true,
+                    "全屏契约: 按这扇窗自己所在的屏判,不看别的屏")
+        expectEqual(controller.contains("screenHasNotch: (screen?.safeAreaInsets.top ?? 0) > 0)"), true,
+                    "全屏契约: 刘海屏 / 无刘海屏按这扇窗所在屏幕的刘海判")
+        expectEqual(controller.contains("let effective = showsLyricsSetting && !lyricsOff"), true,
+                    "全屏契约: 刘海屏全屏时 showsLyrics 按关掉算,用户开关本身不动")
+        expectEqual(view.contains("label: controller.showsLyricsSetting ? L10n.t(\"隐藏歌词\") : L10n.t(\"显示歌词\")"), true,
+                    "全屏契约: 快捷操作「显示歌词」键读用户开关,不读叠加了全屏的生效值")
+        expectEqual(controller.contains("fullScreenObserver?.cancel()"), true, "全屏契约: teardown 摘掉订阅")
         expectEqual(view.contains("isPlaying: playback.isPlayingNow && surfaceVisible"), true,
                     "可见性契约: 顶行音浪看不见时按暂停处理")
         expectEqual(view.contains("if let anchor = playback.anchor, surfaceVisible {"), true,
@@ -1032,16 +1046,60 @@ func runNotchTests() {
     do {
         typealias V = NotchVisibility
         // 该不该在屏上
-        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: true), false,
+        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: true, coveredByFullScreen: false), false,
                     "显隐: 灵动岛关着,什么都不显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: false, alertHold: false), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: false, alertHold: false, coveredByFullScreen: false), true,
                     "显隐: 没开「暂停时隐藏」时暂停也显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: false), false,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: false, coveredByFullScreen: false), false,
                     "显隐: 开了「暂停时隐藏」且没在播 = 藏")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: true, alertHold: false), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: true, alertHold: false, coveredByFullScreen: false), true,
                     "显隐: 开了「暂停时隐藏」但在播 = 显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true, coveredByFullScreen: false), true,
                     "显隐: 「发现新播放器」提醒挂着时即使没在播也要显示")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: true, alertHold: false,
+                                 coveredByFullScreen: true), false,
+                    "显隐: 无刘海屏的全屏 Space = 藏,在播也藏")
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true,
+                                 coveredByFullScreen: true), false,
+                    "显隐: 全屏压过「发现新播放器」提醒")
+
+        typealias T = V.FullScreenTreatment
+        expectEqual(V.fullScreenTreatment(enabled: true, coveredByFullScreenApp: true, screenHasNotch: true), T.lyricsOff,
+                    "全屏处理: 刘海屏只收歌词行,顶行留在刘海两侧的黑边里")
+        expectEqual(V.fullScreenTreatment(enabled: true, coveredByFullScreenApp: true, screenHasNotch: false), T.hide,
+                    "全屏处理: 无刘海屏整卡隐藏(顶行也会盖住画面)")
+        expectEqual(V.fullScreenTreatment(enabled: false, coveredByFullScreenApp: true, screenHasNotch: false), T.none,
+                    "全屏处理: 开关关着不处理")
+        expectEqual(V.fullScreenTreatment(enabled: true, coveredByFullScreenApp: false, screenHasNotch: true), T.none,
+                    "全屏处理: 不在全屏 Space 不处理")
+
+        // 哪块屏的当前 Space 是全屏(CGSCopyManagedDisplaySpaces 的形状)
+        typealias F = FullScreenSpaces
+        func space(_ id: Int, full: Bool) -> [String: Any] {
+            full ? ["ManagedSpaceID": id, "TileLayoutManager": ["TileSpaces": []]] : ["ManagedSpaceID": id]
+        }
+        func display(_ id: String, current: Int, _ spaces: [[String: Any]]) -> [String: Any] {
+            ["Display Identifier": id, "Current Space": ["ManagedSpaceID": current], "Spaces": spaces]
+        }
+        let spaces = [space(1, full: false), space(1124, full: true), space(14, full: false)]
+        expectEqual(F.fullScreenDisplays(in: [display("abcd-1", current: 1, spaces)]), [],
+                    "全屏判定: 当前是普通桌面,别的 Space 里有全屏 App 不算")
+        expectEqual(F.fullScreenDisplays(in: [display("abcd-1", current: 1124, spaces)]), ["ABCD-1"],
+                    "全屏判定: 当前 Space 带 TileLayoutManager = 全屏,标识转大写")
+        expectEqual(F.fullScreenDisplays(in: [display("A", current: 1124, spaces), display("B", current: 14, spaces)]), ["A"],
+                    "全屏判定: 各屏各算,只收当前是全屏的那块")
+        expectEqual(F.fullScreenDisplays(in: [["Display Identifier": "A"], display("B", current: 99, spaces)]), [],
+                    "全屏判定: 字段缺失 / 当前 Space 不在列表里 = 不算全屏")
+        expectEqual(F.covers(screenID: "a", isMainScreen: false, fullScreenDisplays: ["A"]), true,
+                    "全屏判定: 屏幕 UUID 大小写不敏感")
+        expectEqual(F.covers(screenID: "B", isMainScreen: true, fullScreenDisplays: ["A"]), false,
+                    "全屏判定: 别的屏全屏,这块屏照常显示")
+        expectEqual(F.covers(screenID: "B", isMainScreen: true, fullScreenDisplays: ["MAIN"]), true,
+                    "全屏判定: 不分屏幕 Space 时的 Main 对应主屏")
+        expectEqual(F.covers(screenID: "B", isMainScreen: false, fullScreenDisplays: ["MAIN"]), false,
+                    "全屏判定: Main 只对应主屏")
+        expectEqual(F.covers(screenID: nil, isMainScreen: false, fullScreenDisplays: ["A"]), false,
+                    "全屏判定: 取不到屏幕标识 = 不隐藏")
 
         func step(_ show: Bool, visible: Bool = true, last: Bool?, vanished: Bool = false,
                   reduce: Bool = false, pending: Bool = false) -> V.Step {

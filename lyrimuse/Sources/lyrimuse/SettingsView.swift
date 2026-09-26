@@ -2934,6 +2934,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     /// 归「歌词行」:它讲的是这一行**怎么画**。
     case karaoke
     case collapseWhenPaused
+    /// 灵动岛所在屏幕的当前 Space 是全屏 App 时收起歌词行,无刘海屏整卡隐藏(`AppSettings.notchHideInFullScreen`)。归「行为」。
+    case hideInFullScreen
     case lyricRowArtwork
     case expandedNextLine
     case expandedShowsControls
@@ -2952,6 +2954,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .showLyrics: return "text.alignleft"
         case .karaoke: return "sparkles"
         case .collapseWhenPaused: return "arrow.down.right.and.arrow.up.left"
+        case .hideInFullScreen: return "arrow.up.left.and.arrow.down.right"
         case .lyricRowArtwork: return "photo"
         case .expandedNextLine: return "text.bubble"
         case .expandedShowsControls: return "playpause.fill"
@@ -2969,6 +2972,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .showLyrics: return L10n.t("显示歌词")
         case .karaoke: return L10n.t("卡拉OK效果")
         case .collapseWhenPaused: return L10n.t("暂停缩回")
+        case .hideInFullScreen: return L10n.t("全屏时收起歌词")
         case .lyricRowArtwork: return L10n.t("显示封面")
         // 标题里要把"只在展开时"说出来,否则跟上一行「副行 · 下一句」读起来像同一个开关的两种写法。
         case .expandedNextLine: return L10n.t("展开时预览下一句")
@@ -2990,6 +2994,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         switch self {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
         case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+        case .hideInFullScreen: return L10n.t("灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。")
         case .expandedShowsQuickActions:
             return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
         default: return nil
@@ -3007,6 +3012,9 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .collapseWhenPaused:
             return Binding(get: { settings.notchCollapsesWhenPaused },
                             set: { settings.notchCollapsesWhenPaused = $0 })
+        case .hideInFullScreen:
+            return Binding(get: { settings.notchHideInFullScreen },
+                            set: { settings.notchHideInFullScreen = $0 })
         case .lyricRowArtwork:
             return Binding(get: { settings.notchLyricRowShowsArtwork },
                             set: { settings.notchLyricRowShowsArtwork = $0 })
@@ -3306,10 +3314,10 @@ struct NotchExpandedSettingsRows: View {
 
 /// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
 /// 「暂停缩回」+ 两行自动隐藏(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
-/// 分流到 `notchHide*`)。
+/// 分流到 `notchHide*`)+「全屏时收起歌词」(只有灵动岛有,所以不进 `AutoHideItem`)。
 ///
-/// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这三项都算进去 ——
-/// 少算自动隐藏那两项不会编译报错,只会让按钮在它们开着时照旧显示「全部关闭」。
+/// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这四项都算进去 ——
+/// 少算不会编译报错,只会让按钮在漏掉的那项开着时照旧显示「全部关闭」。
 @MainActor
 struct NotchBehaviorSettingsRows: View {
     var body: some View {
@@ -3318,6 +3326,8 @@ struct NotchBehaviorSettingsRows: View {
             // "本组之前"那条分隔线由宿主插,`AutoHideSettingsRows` 只在自己两行之间插一条(见那个文件头)。
             CardDivider()
             AutoHideSettingsRows(surface: .notch)
+            CardDivider()
+            NotchBehaviorToggleRow(item: .hideInFullScreen)
         }
     }
 }

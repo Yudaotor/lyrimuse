@@ -278,6 +278,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "暂停缩回", kw: ["暂停", "收起", "缩回"], group: "行为"),
         surface(.notch, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
         surface(.notch, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
+        surface(.notch, "全屏时收起歌词", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "fullscreen"], group: "行为"),
         surface(.notch, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
         // ---- 歌词显示 › 菜单栏 ----
