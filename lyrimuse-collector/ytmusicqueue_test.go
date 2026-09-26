@@ -184,3 +184,28 @@ func TestBrowserUpcomingRetriesOnceOnMismatch(t *testing.T) {
 		t.Fatalf("没有这个网站的标签页时不该重读,得到 ok=%v calls=%d", ok, calls)
 	}
 }
+
+// 队列第七段是视频类型(实测 Safari 里一份 MV 队列 51 条,每条都带 MUSIC_VIDEO_TYPE_OMV)。MV 那首交给预取的时长是 0
+// = 未知,跟真播到时一致;歌曲版(ATV)与读不到类型的照报 lengthText。
+func TestYTMusicUpcomingMusicVideoDurationUnknown(t *testing.T) {
+	items := parseYTMusicQueue(ytmusicQueueRaw(
+		[]string{"1", "Dynamite", "BTS", "", "3:44", "gdZLi9oWNZg", "MUSIC_VIDEO_TYPE_OMV"},
+		[]string{"0", "My Universe", "Coldplay和BTS", "", "4:43", "3YqPKLZF_WU", "MUSIC_VIDEO_TYPE_OMV"},
+		[]string{"0", "Butter", "BTS", "Butter", "2:45", "a", "MUSIC_VIDEO_TYPE_ATV"},
+		[]string{"0", "Seven", "Jung Kook", "Seven", "3:04", "b", ""},
+		[]string{"0", "Lemon", "Kenshi Yonezu", "STRAY SHEEP", "4:17", "c"},
+	))
+	got, ok := pickYTMusicUpcoming(items, "BTS", "Dynamite", 0, 5)
+	if !ok || len(got) != 4 {
+		t.Fatalf("该取到 4 首,得到 ok=%v %+v", ok, got)
+	}
+	want := []float64{0, 165, 184, 257}
+	for i, w := range want {
+		if got[i].duration != w {
+			t.Errorf("第 %d 首(%s)时长该是 %v,得到 %v", i, got[i].title, w, got[i].duration)
+		}
+	}
+	if !strings.Contains(ytmusicQueueJS, "watchEndpointMusicConfig") || !strings.Contains(ytmusicQueueJS, "musicVideoType") {
+		t.Error("队列脚本要读出每一首的 musicVideoType")
+	}
+}

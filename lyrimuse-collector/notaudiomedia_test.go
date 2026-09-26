@@ -43,12 +43,12 @@ func TestNotAudioMedia(t *testing.T) {
 	}
 }
 
-// extract:认出 MV 之后时长必须变成"未知"(0),而不是换成别的数。
+// extract:认出 MV 之后,交给歌词解析的时长必须是"未知"(0),而 Duration 本身原样保留。
 //
-// 跟电台那条不同,这里**不**退回 Apple 目录:实测目录根本不给 MV 时长
-// (按 MV 的 trackId 反查 lookup 返回 kind=music-video、trackTimeMillis 缺失)。
-// 0 之所以是对的,是因为下游全都按"未知"处理:match.go 的时长打分整段挂在
+// 0 之所以是对的,是因为歌词解析那边全都按"未知"处理:match.go 的时长打分整段挂在
 // `durationSecs > 0` 下,enrich.go 的 durationMismatch 任一方为 0 也不触发。
+// Duration 不能跟着置 0:打卡门槛读它,置 0 就退成 240 秒 —— 真机坐实过,方大同《黑洞里》
+// MV 214.6 秒完整看完,Last.fm 和 ListenBrainz 都没记上(02 章决策 49)。
 func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
 	// 载荷逐字来自的真实现场(用户当场放的 MV)。注意 mediaType 是 Music ——
 	// 拦住它的是 mediaKind。
@@ -62,12 +62,18 @@ func TestExtractMusicVideoDurationIsUnknown(t *testing.T) {
 	if !s.NotAudio {
 		t.Fatal("mediaKind=music video → NotAudio 必须为真")
 	}
-	if s.Duration != 0 {
-		t.Fatalf("MV 时长必须按未知(0)处理,得到 %.3f", s.Duration)
+	if s.lyricsDurationSecs() != 0 {
+		t.Fatalf("MV 交给歌词解析的时长必须按未知(0)处理,得到 %.3f", s.lyricsDurationSecs())
 	}
-	// 其余字段一个都不受影响 —— 这条闸只碰时长。
+	if s.Duration != 232.857 {
+		t.Fatalf("MV 的 Duration 本身必须原样保留(打卡门槛读它),得到 %.3f", s.Duration)
+	}
+	if listenThreshold(s.Duration) != 232.857/2 {
+		t.Fatalf("MV 的打卡门槛不该退成缺时长的 %v 秒", listenCapSecs)
+	}
+	// 其余字段一个都不受影响。
 	if s.Title != "In the Morning" || s.Artist != "陶喆" || !s.Playing || s.Elapsed != 12.0 {
-		t.Fatalf("只该动时长,得到 %+v", s)
+		t.Fatalf("其余字段不该动,得到 %+v", s)
 	}
 
 	// 真实曲目载荷(同一天同一台机器,PRINCE《Annie Christian》):时长原样,一个字都不动。

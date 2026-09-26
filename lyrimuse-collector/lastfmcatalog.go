@@ -340,7 +340,11 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 			va = artist
 		}
 		if va != artist || v.Song != track {
-			vd, err := c.decide(ctx, va, v.Song, 0, scope)
+			vDuration := durationSecs
+			if v.DurationUnknown {
+				vDuration = 0
+			}
+			vd, err := c.decide(ctx, va, v.Song, vDuration, scope)
 			if err != nil {
 				return lastfmCatalogDecision{}, err
 			}

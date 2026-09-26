@@ -163,8 +163,8 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 		t.Error("artist+album 齐全的不该被拒")
 	}
 	// 上游已经报了专辑名,这条路一个字都不该补(而且它根本没去复核)。
-	if patch != "" {
-		t.Errorf("上游有专辑名时不该给补丁, got %q", patch)
+	if patch != (ytmusicPagePatch{}) {
+		t.Errorf("上游有专辑名时不该给补丁, got %+v", patch)
 	}
 
 	// ③ artist 为空 → 直接拒,**不做**复核(真曲目必有歌手;这一档也省掉一次 AppleScript
@@ -185,9 +185,9 @@ func TestTrustedPlaybackRejectedShortCircuits(t *testing.T) {
 	if !rejected2 {
 		t.Error("复核读不到时必须 fail-closed 拒掉,不能放行")
 	}
-	// 被拒的那条不该顺带给出专辑名补丁 —— 它压根不会被采纳。
-	if patch2 != "" {
-		t.Errorf("被拒时不该给补丁, got %q", patch2)
+	// 被拒的那条不该顺带给出任何补丁 —— 它压根不会被采纳。
+	if patch2 != (ytmusicPagePatch{}) {
+		t.Errorf("被拒时不该给补丁, got %+v", patch2)
 	}
 }
 

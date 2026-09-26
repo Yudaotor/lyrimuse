@@ -513,26 +513,48 @@ func runBrowserTabScript(ctx context.Context, bundleID, family, host, js string)
 //   - 复核结果 isSong → 放行(这就是 YouTube Music 终于能被识别的那一步)。
 //   - isAd 或 unknown → 拒。**unknown 也拒**是刻意的 fail-closed,见文件头注。
 //
-// 第二个返回值是**要补给上游的专辑名**(空串 = 不用补),见 ytmusicAlbumPatch。这条复核
-// 本来就只在"album 为空"时才发生,正好是需要补的那一刻,顺路带回来不多花一次 AppleScript。
-func trustedPlaybackRejected(ctx context.Context, bundleID, artist, album, title string) (bool, string) {
+// 第二个返回值是要补进上游那份的东西(见 ytmusicPagePatch)。这条复核本来就只在"album 为空"时
+// 才发生,正好是需要补专辑名的那一刻;MV 也一律不报专辑名,所以认 MV 挂在同一处。
+func trustedPlaybackRejected(ctx context.Context, bundleID, artist, album, title string) (bool, ytmusicPagePatch) {
 	if !trustedPlaybackNotASong(bundleID, artist, album) {
-		return false, ""
+		return false, ytmusicPagePatch{}
 	}
 	if strings.TrimSpace(artist) == "" {
-		return true, ""
+		return true, ytmusicPagePatch{}
 	}
 	trackKey := strings.TrimSpace(artist) + "\x00" + strings.TrimSpace(title)
 	verdict, probedAlbum := ytmusicAdProbe(ctx, bundleID, trackKey)
 	switch verdict {
 	case ytmusicAdIsSong:
-		return false, ytmusicAlbumPatch(album, verdict, probedAlbum)
+		return false, ytmusicPagePatch{
+			album:      ytmusicAlbumPatch(album, verdict, probedAlbum),
+			musicVideo: ytmusicMusicVideo(ctx, bundleID, trackKey),
+		}
 	case ytmusicAdIsAd:
 		// 值得记一句:这是"我们主动挡掉了一条广告",跟"读不到"不是一回事,
 		// 排查"为什么这首没被识别"时这一行能直接分开两种情况。
 		log.Printf("ytmusic: rejected as advertisement (%s - %s)", artist, title)
-		return true, ""
+		return true, ytmusicPagePatch{}
 	default:
-		return true, ""
+		return true, ytmusicPagePatch{}
 	}
 }
+
+// ytmusicPagePatch:页面复核顺路带回、要写进上游快照的东西。零值 = 什么都不补。
+type ytmusicPagePatch struct {
+	album      string // 要补的专辑名,空串 = 不补(见 ytmusicAlbumPatch)
+	musicVideo bool   // 页面报这是 MV(见 ytmusicMusicVideo),写成 stateKeyYTMusicVideo
+}
+
+// apply 把补丁写进上游那份 state。system.go 两条读取路径共用,两处必须一致。
+func (p ytmusicPagePatch) apply(raw map[string]any) {
+	if p.album != "" {
+		raw["album"] = p.album
+	}
+	if p.musicVideo {
+		raw[stateKeyYTMusicVideo] = true
+	}
+}
+
+// stateKeyYTMusicVideo:state 里标记"这是 YouTube Music 的 MV"的键,由 extract() 读成 snapshot.YTMusicVideo。
+const stateKeyYTMusicVideo = "ytmusicMusicVideo"

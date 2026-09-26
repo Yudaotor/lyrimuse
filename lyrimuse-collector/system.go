@@ -770,19 +770,16 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		// trustedPlaybackRejected 而不是裸的 trustedPlaybackNotASong:后者只看字段,
 		// 会把 YouTube Music 里"没报专辑名"的那些歌挡在门外(它的 album 常常是空的)。前者在"仅因 album 空
 		// 被拒"时去问一次页面本身是广告还是歌,读不到就退回原判据。见 ytmusicad.go 头注。
-		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
+		rejected, patch := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
 		if rejected {
 			if state, ok := stateAfterFocusLost(ctx, nil); ok {
 				return state, true
 			}
 			return map[string]any{}, true
 		}
-		// YouTube Music 每条队列的**第一首**在 MediaSession 里没有专辑名(YT Music
-		// 自己的疏漏,页面上其实有),复核那一趟顺路读回来了就补上 —— 补的是空缺,
-		// 上游报了就一个字不动。见 ytmusicAlbumPatch。
-		if patchAlbum != "" {
-			raw["album"] = patchAlbum
-		}
+		// 复核那一趟顺路读回来的:YouTube Music 队列第一首缺的专辑名(见 ytmusicAlbumPatch,
+		// 上游报了就一个字不动)、以及"这是 MV"(见 ytmusicMusicVideo)。
+		patch.apply(raw)
 		noteFocusAccepted(bundleID)
 		return raw, true
 	}
@@ -864,17 +861,15 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 		title, _ := raw["title"].(string)
 		// 同 getAutoDetectedState 那处:走 trustedPlaybackRejected,好让 YouTube Music 里
 		// 没报专辑名的那些歌(album 常常是空的)能靠"页面是不是在放广告"这道复核进来。见 ytmusicad.go 头注。
-		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
+		rejected, patch := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
 		if rejected {
 			if state, ok := stateAfterFocusLost(ctx, accepted); ok {
 				return state, true
 			}
 			return map[string]any{}, true
 		}
-		// 同 getAutoDetectedState 那处:补上 YouTube Music 队列第一首缺的专辑名。
-		if patchAlbum != "" {
-			raw["album"] = patchAlbum
-		}
+		// 同 getAutoDetectedState 那处。
+		patch.apply(raw)
 	}
 	noteFocusAccepted(bundleID)
 	if bundleID == appleMusicBundleID {

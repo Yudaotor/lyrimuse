@@ -58,7 +58,7 @@ func TestParseVideoTitle(t *testing.T) {
 	}
 }
 
-// 查歌词、补专辑共用的入口:MV 标题走 parseVideoTitle 并标 isMusicVideo(调用方把时长当未知);
+// 查歌词、补专辑共用的入口:MV 标题走 parseVideoTitle,真正的视频标记才标 durationUnknown(调用方把时长当未知);
 // 别的标题跟接入之前一样按第一个破折号拆。
 func TestTitleSplitIdentity(t *testing.T) {
 	cases := []struct {
@@ -68,11 +68,16 @@ func TestTitleSplitIdentity(t *testing.T) {
 		wantMV, ok    bool
 	}{
 		{"防弹少年团", "BTS (방탄소년단) ‘Merry Go Round’ Official MV", "BTS", "Merry Go Round", true, true},
-		{"The Rose", "The Rose (더로즈) - Utopia | Official Audio", "The Rose", "Utopia", true, true},
+		{"The Rose", "The Rose (더로즈) - Utopia | Official Audio", "The Rose", "Utopia", false, true},
 		{"The Kid LAROI", "Stay (Official Video)", "The Kid LAROI", "Stay", true, true},
 		{"音樂頑童", "Musiq Soulchild - Buddy", "Musiq Soulchild", "Buddy", false, true},
 		{"陶喆", "Overture-找自己 - Live", "Overture-找自己", "Live", false, true},
 		{"BTS", "Dynamite", "", "", false, false},
+		// 翻唱不拆:按破折号拆出来的是原唱,会拿原唱的词和封面顶翻唱
+		{"某频道", "Adele - Hello (Cover by 某某)", "", "", false, false},
+		{"某频道", "Adele - Hello Covered by 某某", "", "", false, false},
+		// 特辑照拆:常常用的就是正式版音频
+		{"Seventeen", "[SPECIAL VIDEO] 부석순 (SEVENTEEN) - 7시에 들어줘 (feat. Peder Elias)", "[SPECIAL VIDEO] 부석순 (SEVENTEEN)", "7시에 들어줘 (feat. Peder Elias)", false, true},
 	}
 	for _, c := range cases {
 		a, s, mv, ok := titleSplitIdentity(c.artist, c.title)
@@ -87,14 +92,14 @@ func TestTitleSplitIdentity(t *testing.T) {
 func TestVideoTitleWiredIntoLyricsAlbumAndCover(t *testing.T) {
 	for file, needles := range map[string][]string{
 		"enrich.go": {
-			"if splitArtist, splitTitle, isMV, ok := titleSplitIdentity(artist, title); ok {",
+			"if splitArtist, splitTitle, durationUnknown, ok := titleSplitIdentity(artist, title); ok {",
 			"splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)",
-			"if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {\n\t\tcoverArtist, coverTitle, coverDuration = v.Artist, v.Song, 0",
+			"if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {\n\t\tcoverArtist, coverTitle = v.Artist, v.Song\n\t\tif v.DurationUnknown {\n\t\t\tcoverDuration = 0",
 			"appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum)",
 			"qqCover, _ := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)",
 		},
 		"albumhint.go": {
-			"if titleArtist, song, isMV, ok := titleSplitIdentity(artist, title); ok {",
+			"if titleArtist, song, durationUnknown, ok := titleSplitIdentity(artist, title); ok {",
 			"cands = albumHintCandidatesFromTitleSplit(alt, titleArtist, song, splitDuration)",
 		},
 		"poller.go": {
@@ -111,6 +116,54 @@ func TestVideoTitleWiredIntoLyricsAlbumAndCover(t *testing.T) {
 			if !strings.Contains(string(data), needle) {
 				t.Errorf("%s 缺 %q", file, needle)
 			}
+		}
+	}
+}
+
+// 只有真正的视频标记才把时长当未知;录音室音频配画面的几种(Official Audio / Lyric Video / Visualizer / Audio)
+// 长度跟正式版一致,时长照用。
+func TestVideoTitleDurationUnknownOnlyForRealVideos(t *testing.T) {
+	cases := []struct {
+		artist, title string
+		unknown       bool
+	}{
+		{"Prince", "Prince - 1999 (Official Music Video)", true},
+		{"The Kid LAROI", "Stay (Official Video)", true},
+		{"IU", "IU(아이유) _ 'Blueming' MV", true},
+		{"Artist", "Song 【Official MV】", true},
+		{"The Rose", "The Rose (더로즈) - Utopia | Official Audio", false},
+		{"Artist", "Song (Lyric Video)", false},
+		{"Artist", "Song (Official Visualizer)", false},
+		{"Michael Jackson", "Michael Jackson x Mark Ronson: Diamonds are Invincible (Audio)", false},
+		// 同时带两种标记时按视频算
+		{"Artist", "Song (Official Audio) [MV]", true},
+	}
+	for _, c := range cases {
+		got := parseVideoTitle(c.artist, c.title)
+		if got.Kind != videoTitleMusicVideo || got.DurationUnknown != c.unknown {
+			t.Errorf("parseVideoTitle(%q, %q) = %+v, want DurationUnknown=%v", c.artist, c.title, got, c.unknown)
+		}
+	}
+}
+
+// 「Track Video」算 MV 标记;演唱者段是空格隔开的双语署名时只留前一个(不同文字系统才拆)。
+func TestVideoTitleTrackVideoAndDualNamePerformer(t *testing.T) {
+	cases := []struct {
+		artist, title    string
+		kind             videoTitleKind
+		wantArtist, song string
+	}{
+		{"NCT", "TEN 텐 'Lie With You' Track Video", videoTitleMusicVideo, "TEN", "Lie With You"},
+		{"BTS", "Jung Kook 정국 'Seven' Official MV", videoTitleMusicVideo, "Jung Kook", "Seven"},
+		{"SMTOWN", "태연 TAEYEON 'To. X' MV", videoTitleMusicVideo, "태연", "To. X"},
+		{"NCT", "NCT 127 'Fact Check' MV", videoTitleMusicVideo, "NCT 127", "Fact Check"},
+		{"IVE", "IVE GAEUL&LIZ 'To.X' MV", videoTitleMusicVideo, "IVE GAEUL&LIZ", "To.X"},
+		{"防弹少年团", "BTS (방탄소년단) ‘Merry Go Round’ Official MV", videoTitleMusicVideo, "BTS", "Merry Go Round"},
+	}
+	for _, c := range cases {
+		got := parseVideoTitle(c.artist, c.title)
+		if got.Kind != c.kind || got.Artist != c.wantArtist || got.Song != c.song {
+			t.Errorf("parseVideoTitle(%q, %q) = %+v, want kind=%d %q / %q", c.artist, c.title, got, c.kind, c.wantArtist, c.song)
 		}
 	}
 }

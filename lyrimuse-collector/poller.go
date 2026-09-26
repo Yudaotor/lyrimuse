@@ -1043,7 +1043,7 @@ func (p *poller) albumHintFor(s snapshot) string {
 	if s.Album != "" || s.Title == "" || s.Artist == "" || isAdBreak(s.Bundle, s.Artist, s.Title, s.Album) {
 		return ""
 	}
-	return appleAlbumHint(p.ctx, s.Artist, s.Title, s.Duration, lyricResolvedArtists(s.Artist, s.Title, s.Album))
+	return appleAlbumHint(p.ctx, s.Artist, s.Title, albumHintDurationSecs(s), lyricResolvedArtists(s.Artist, s.Title, s.Album))
 }
 
 // relayAlbumHintSuffix:Apple 目录回填的专辑名到位后(通常比换歌晚一拍),同一首歌的 relay 负载里 album 会从空
@@ -1360,7 +1360,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
 		// 汽水试听段还在搜:这一拍的时长是试听段长度,先不解析歌词,挂起等下一拍(见 SodaPreviewPending)。
 		if !p.cur.SodaPreviewPending &&
-			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
+			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -1383,7 +1383,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.isAd = p.detectAdAtSessionStart()
 		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true, p.cur.Radio)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 {
 			p.announce(now, "loop restart")
 		} else {
 			p.sess.pnPending = true
@@ -1408,7 +1408,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 开始播放的那一刻,不该再问一次 media-control 要设备封面(那一刻已经在上面
 		// "New track" 分支问过了)。
 		resolved := !p.cur.SodaPreviewPending &&
-			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false, p.cur.Radio)) > 0
+			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), false, p.cur.Radio)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
@@ -1822,6 +1822,10 @@ func (p *poller) poll() {
 				// 每拍都记 —— 换曲那一拍目录通常还没命中,几秒后才有值。
 				if p.cur.Radio {
 					noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+				}
+				// MV:视频时长记成提示,缓存里那份歌词要是当初按它选的就重选一次(见 musicvideolyrics.go)。
+				if p.cur.NotAudio {
+					noteMusicVideoDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
 				}
 				// 播放器没报专辑名 → 从 Apple 目录反查(只读缓存、后台补取,见 applecatalog.go appleAlbumHint)。
 				// 挂在 AlbumHint 上、不动 Album:它只给呈现 / 上送用,见 snapshot.albumForUpload。

@@ -228,6 +228,30 @@ func decisionWinnerArtist(d *lyricsDecision) string {
 	return ""
 }
 
+// decisionSongDurationSecs:这份判决里「歌曲版」的时长 —— 胜出候选的来源自报的曲长,没有就取全部候选的中位数,
+// 都没有返回 0。给 MV 用:MV 的时长带着片头片尾,不是这首歌的长度。App 侧 MusicVideoTimeline.songDurationSecs
+// 同一套取法,两边一起改。
+func decisionSongDurationSecs(d *lyricsDecision) float64 {
+	if d == nil {
+		return 0
+	}
+	var all []float64
+	for _, c := range d.Candidates {
+		if c.SourceReportedDurationSecs <= 0 {
+			continue
+		}
+		if d.Winner != "" && c.Source == d.Winner {
+			return c.SourceReportedDurationSecs
+		}
+		all = append(all, c.SourceReportedDurationSecs)
+	}
+	if len(all) == 0 {
+		return 0
+	}
+	sort.Float64s(all)
+	return all[len(all)/2]
+}
+
 // lyricsDecisionLogMaxCandidates:一行日志里最多列几个候选,多出来的折成 "+N"。
 // 源本身有十一个,别名轮还会给同一个源带回好几条,不封顶单行能冲到几百字节。
 const lyricsDecisionLogMaxCandidates = 12

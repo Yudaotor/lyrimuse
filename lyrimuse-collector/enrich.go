@@ -615,6 +615,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 的观察,它负责清零),所以放在分支链外面。
 		wrongDuration := observeWrongDuration(key,
 			durationMismatch(e.ResolvedDurationSecs, durationSecs), durationSecs, time.Now().Unix())
+		// 正在播的是 MV、而这份歌词当初是按视频时长选的:跟 wrongDuration 同一个理由重来一次(见 musicvideolyrics.go)。
+		if musicVideoLyricsStaleLocked(hintKey, e) {
+			wrongDuration = true
+		}
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
 		// 起——后一条门槛避免同一首歌每次重播都重新问一遍 media-control(coverSource 一旦
@@ -1480,6 +1484,10 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
+	// 这一轮按「时长未知」打分(MV),现存那份的分数却带着时长那一项:换成它在这一轮里的分再比。
+	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
+		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
+	}
 	upgraded := picked != nil && comparable && picked.Score > baseline
 	path := lyricsDecisionPathUpgrade
 	if firstFill {
@@ -2446,7 +2454,10 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 录音室版长)。翻唱 / 特辑不拆:查不到就没有封面,不拿原唱的封面顶(03 章)。
 	coverArtist, coverTitle, coverDuration := artist, title, durationSecs
 	if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {
-		coverArtist, coverTitle, coverDuration = v.Artist, v.Song, 0
+		coverArtist, coverTitle = v.Artist, v.Song
+		if v.DurationUnknown {
+			coverDuration = 0
+		}
 	}
 	coverAlbum := album
 	if coverAlbum == "" {
@@ -2862,12 +2873,12 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 「Song - Remastered」这类被拆错的歌名最多白查一轮、候选过不了打分,不会多出错结果。
 	// 翻唱重入那一轮不拆(coverPerformerOnly):拆出来的是曲名里别的名字,不是翻唱者。
 	if !hasUsableLyricCandidate(results) && !coverPerformerOnly(ctx) {
-		if splitArtist, splitTitle, isMV, ok := titleSplitIdentity(artist, title); ok {
+		if splitArtist, splitTitle, durationUnknown, ok := titleSplitIdentity(artist, title); ok {
 			log.Printf("lyrics: %q - %q has no usable candidate, retrying as title-split identity %q - %q", artist, title, splitArtist, splitTitle)
 			splitCtx := withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)
 			// MV 的时长跟录音室版对不上,按未知打分(同 YouTube Music MV 的处理,02 章决策 33)。
 			splitDuration := durationSecs
-			if isMV {
+			if durationUnknown {
 				splitDuration = 0
 			}
 			splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)

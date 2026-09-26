@@ -41,7 +41,9 @@ import (
 const ytmusicSelectedDurationToleranceSecs = 2.0
 
 // ytmusicQueueJS 读队列。返回值:每首一条记录,记录之间用 RS(0x1e),字段之间用 US(0x1f),
-// 字段顺序 selected(0/1)、title、artist、album、lengthText、videoId。找不到队列返回 NOTFOUND。
+// 字段顺序 selected(0/1)、title、artist、album、lengthText、videoId、musicVideoType(读不到为空)。
+// 找不到队列返回 NOTFOUND。musicVideoType 取自 `navigationEndpoint.watchEndpoint` 的
+// `watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig`,认 MV 用的是跟正在播那首同一份白名单(ytmusicIsMusicVideoType)。
 //
 // 跟 ytmusicAdProbeJS 同样的纪律:不许有双引号(整段要嵌进 AppleScript 的双引号字符串),也不写反斜杠
 // (那是 AppleScript 字符串的转义字符)—— 分隔符因此用 String.fromCharCode 现造。歌名、专辑名是任意文本,
@@ -68,7 +70,10 @@ const ytmusicQueueJS = `(function(){` +
 	`if (!afterSep) artist.push(t);` +
 	`}` +
 	`var sel = (d.selected || el.hasAttribute('selected')) ? '1' : '0';` +
-	`out.push([sel, text(d.title), artist.join(''), album, text(d.lengthText), String(d.videoId || '')].join(US));` +
+	`var we = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;` +
+	`var mc = we && we.watchEndpointMusicSupportedConfigs && we.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig;` +
+	`var vt = (mc && mc.musicVideoType) ? String(mc.musicVideoType) : '';` +
+	`out.push([sel, text(d.title), artist.join(''), album, text(d.lengthText), String(d.videoId || ''), vt].join(US));` +
 	`}` +
 	`return out.length ? out.join(RS) : 'NOTFOUND';` +
 	`})()`
@@ -77,6 +82,8 @@ type ytmusicQueueItem struct {
 	selected                      bool
 	title, artist, album, videoID string
 	seconds                       float64
+	// musicVideo:这一首是 MV(OMV / UGC)。它的 lengthText 是视频长度,不是歌的长度。
+	musicVideo bool
 }
 
 // parseYTMusicQueue 解 ytmusicQueueJS 的输出。字段数不对、没有歌名的记录跳过。纯函数,可单测。
@@ -89,7 +96,7 @@ func parseYTMusicQueue(raw string) []ytmusicQueueItem {
 	var items []ytmusicQueueItem
 	for _, rec := range strings.Split(s, "\x1e") {
 		f := strings.Split(rec, "\x1f")
-		if len(f) != 6 {
+		if len(f) != 6 && len(f) != 7 {
 			continue
 		}
 		it := ytmusicQueueItem{
@@ -99,6 +106,9 @@ func parseYTMusicQueue(raw string) []ytmusicQueueItem {
 			album:    strings.TrimSpace(flat.Replace(f[3])),
 			seconds:  ytmusicParseDurationText(f[4]),
 			videoID:  strings.TrimSpace(f[5]),
+		}
+		if len(f) == 7 {
+			it.musicVideo = ytmusicIsMusicVideoType(strings.TrimSpace(f[6]))
 		}
 		if it.title == "" {
 			continue
@@ -158,7 +168,13 @@ func pickYTMusicUpcoming(items []ytmusicQueueItem, artist, title string, duratio
 		if it.artist == "" {
 			continue // 没有歌手的多半是视频 / 用户上传,真播到时也过不了 trustedPlaybackNotASong
 		}
-		res = append(res, upcomingTrack{artist: it.artist, title: it.title, album: it.album, duration: it.seconds})
+		// MV 的时长交给歌词解析按「未知」处理,跟真播到时一致(snapshot.lyricsDurationSecs)。拿视频长度去打分会把
+		// 长度相近的另一个版本(混音 / 加长版)选上、把原版判成负分,条目落盘后播放时缓存命中就换不回来。
+		duration := it.seconds
+		if it.musicVideo {
+			duration = 0
+		}
+		res = append(res, upcomingTrack{artist: it.artist, title: it.title, album: it.album, duration: duration})
 	}
 	return res, len(res) > 0
 }

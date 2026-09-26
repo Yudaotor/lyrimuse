@@ -304,9 +304,9 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 	if len(cands) == 0 {
 		// 搬运频道形态兜底:署名位是频道名、歌手写在曲名破折号前面(见 albumHintTitleSplit),或者是 MV 标题
 		// (见 titleSplitIdentity,MV 的时长跟录音室版对不上,按未知处理)。只发「前段 后段」一个查询。
-		if titleArtist, song, isMV, ok := titleSplitIdentity(artist, title); ok {
+		if titleArtist, song, durationUnknown, ok := titleSplitIdentity(artist, title); ok {
 			splitDuration := durationSecs
-			if isMV {
+			if durationUnknown {
 				splitDuration = 0
 			}
 			var alt []itunesResult
@@ -617,15 +617,7 @@ func albumHintHasEditionQualifier(album string) bool {
 //
 // 只读内存里的 enrich 缓存、不发请求;条目还没解析出来就返回空 —— appleAlbumHint 每拍重挑,晚几秒到也没事。
 func lyricResolvedArtists(artist, title, album string) []string {
-	key := enrichKey(artist, title, album)
-	enrichMu.Lock()
-	e, ok := enrichCache[key]
-	if !ok {
-		if alt, found := canonicalEnrichKey(key); found {
-			e, ok = enrichCache[alt]
-		}
-	}
-	enrichMu.Unlock()
+	e, ok := resolvedEnrichEntry(artist, title, album)
 	if !ok {
 		return nil
 	}
@@ -637,4 +629,32 @@ func lyricResolvedArtists(artist, title, album string) []string {
 		out = append(out, a)
 	}
 	return out
+}
+
+// resolvedEnrichEntry:这首歌在内存 enrich 缓存里的条目(先按原 key,再按归一后的 key)。只读、不发请求。
+func resolvedEnrichEntry(artist, title, album string) (enrichEntry, bool) {
+	key := enrichKey(artist, title, album)
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	e, ok := enrichCache[key]
+	if !ok {
+		if alt, found := canonicalEnrichKey(key); found {
+			e, ok = enrichCache[alt]
+		}
+	}
+	return e, ok
+}
+
+// albumHintDurationSecs:拿去 Apple 目录配专辑的时长。MV 的时长带着片头片尾、不是这首歌的长度,拿它配
+// max(4s, 3%) 的容差基本配不上;换成已采纳歌词判决里的歌曲版时长。判决还没出来就是 0 = 这一拍不问,
+// 歌词解析出来之后下一拍自然补上。别退回 MV 时长去凑(见 02 章决策 27)。
+func albumHintDurationSecs(s snapshot) float64 {
+	if !s.NotAudio {
+		return s.Duration
+	}
+	e, ok := resolvedEnrichEntry(s.Artist, s.Title, s.Album)
+	if !ok {
+		return 0
+	}
+	return decisionSongDurationSecs(e.LyricsDecisionApplied)
 }

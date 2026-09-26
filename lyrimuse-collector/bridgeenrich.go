@@ -22,7 +22,7 @@ func enrichmentFor(s snapshot) map[string]string {
 	}
 	// isNewTrack 传 false:这里只是再查一次已经解析好的缓存(或触发首次解析),不是
 	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
-	return trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
+	return trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.lyricsDurationSecs(), false, s.Radio)
 }
 
 // cachedTrackEnrichment 只查缓存:key 解析跟 trackEnrichment 一致(精确 key,再退到宽松等价的

@@ -43,9 +43,9 @@ type snapshot struct {
 	// 为真时 Duration 已在 extract() 里按"未知"处理、Elapsed/AnchorElapsed/McTS 由 applyRadioClock
 	// 换成单曲口径 —— 系统那几个值报的都是整档节目,见 radioclock.go 头注。
 	Radio bool
-	// NotAudio:这个载荷报的不是"音乐音频"——最常见的是 Apple Music 的 MV(判据见
-	// notAudioMedia)。为真时 Duration 已在 extract() 里按"未知"(0)处理:视频时长里
-	// 带着歌外内容(前导对白、尾字幕),它不是这首歌的长度。
+	// NotAudio:这个载荷报的不是"音乐音频"—— Apple Music 的 MV、YouTube Music 网页里的 MV(判据见
+	// notAudioMedia)。**Duration 不动**:它还是打卡门槛、上送时长、专辑回填和网页进度条的分母;
+	// 只有交给歌词解析时按"未知"处理,见 lyricsDurationSecs。
 	NotAudio bool
 	// PositionFromPlayerClock:Elapsed 是**播放器自己的钟**(AppleScript `player position`),
 	// 不是 MediaRemote 锚点外推出来的,AnchorElapsed 恒 0、没有"锚点重发"可看。
@@ -97,16 +97,20 @@ const mediaTypeMusic = "MRMediaRemoteMediaTypeMusic"
 // (MV 和音频版之间每切一次就触发一整轮十源重搜)。实测陶喆《In the Morning》歌曲
 // 212.1s,MV 只要多 30s 就跨过 12% 那道线。
 //
-// 认出来之后 extract() 把 Duration 置 0 = "未知",三处伤害一起消失:打分整段挂在
-// `durationSecs > 0` 下,durationMismatch 任一方为 0 也不触发。**一个已知错误的证据
+// 认出来之后交给歌词解析的时长是 0 = "未知"(snapshot.lyricsDurationSecs),三处伤害一起消失:
+// 打分整段挂在 `durationSecs > 0` 下,durationMismatch 任一方为 0 也不触发。**一个已知错误的证据
 // 比没有证据更糟**,这跟 durationMismatch 自己"任一方为 0 不触发"是同一个立场。
+// 别在 extract() 里把 Duration 本身置 0:listenThreshold 会退到 240 秒,短于 4 分钟的 MV 看完也记不上收听,
+// 专辑回填也不再触发(见 02 章决策 49)。
 //
-// # 判据只看 mediaKind
+// # Apple Music 看 mediaKind,YouTube Music 看页面探针的标记
 //
 // `mediaKind` 是 Music.app 自己对这条目的分类,由 AppleScript/JXA 那条路读(getStateScript)。
 // 走**白名单**,因为取值域是完整的:`sdef /System/Applications/Music.app` 里枚举 `eMdK` =
 // song / music video / movie / TV show / unknown。`unknown` 刻意**按音频处理** ——
 // 本地导入的文件报什么还没实测,宁可保持现状也不要误伤一整类曲目。
+//
+// 浏览器没有 mediaKind。YouTube Music 网页的 MV 由页面复核顺路打上 stateKeyYTMusicVideo(见 ytmusicvideo.go)。
 //
 // 覆盖面:Apple Music 的两条读取路径最终用的都是这份 JXA state —— auto / 多选走
 // refineAppleMusicState(拿 AppleScript 那份整份顶替 raw),只勾 Apple Music 走
@@ -128,7 +132,17 @@ func notAudioMedia(state map[string]any) bool {
 	case "music video", "movie", "TV show":
 		return true
 	}
-	return false
+	ytMV, _ := state[stateKeyYTMusicVideo].(bool)
+	return ytMV
+}
+
+// lyricsDurationSecs:交给歌词解析(trackEnrichment)的时长。MV 返回 0 = "未知",理由见 notAudioMedia;
+// 其余照报。凡是拿快照去解析歌词的地方都要走它,不要直接传 Duration。
+func (s snapshot) lyricsDurationSecs() float64 {
+	if s.NotAudio {
+		return 0
+	}
+	return s.Duration
 }
 
 func extract(state map[string]any) snapshot {
@@ -147,17 +161,13 @@ func extract(state map[string]any) snapshot {
 	// resolved_duration,之后正常播放同一首歌时两者差 94%、超过 durationMismatch 的 12% 阈值,
 	// 每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
 	radio := str("radioStationHash") != ""
-	// MV / 视频:时长里带着歌外内容,当"未知"比当曲长诚实。理由与三处受害点见 notAudioMedia。
-	// 跟电台那条不同,这里**不**退回 Apple 目录 —— 实测目录根本不给 MV 时长:
-	// 按 MV 的 trackId 反查 lookup 返回 kind=music-video、wrapperType=track、trackTimeMillis 缺失。
-	// 想改查"歌曲"那一条来拿真实曲长也不保险(entity=song 在有的 storefront 上整个返回空)。
+	// MV / 视频:Duration 保留视频时长,只标 NotAudio,歌词解析那边按"未知"处理(见 notAudioMedia)。
+	// 歌曲版的真实曲长拿不到:Apple 目录不给 MV 时长(lookup 返回 kind=music-video、trackTimeMillis 缺失),
+	// 改查"歌曲"那一条也不保险(entity=song 在有的 storefront 上整个返回空)。
 	notAudio := notAudioMedia(state)
 	duration := num("duration")
-	switch {
-	case radio:
+	if radio {
 		duration = num("catalogDurationSecs")
-	case notAudio:
-		duration = 0
 	}
 	return snapshot{
 		Title:            str("title"),

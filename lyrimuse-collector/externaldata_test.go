@@ -40,6 +40,7 @@ func TestMain(m *testing.M) {
 	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")
 	// YouTube Music 队列要去浏览器里跑 AppleScript;测试里一律"读不到",要测的用例自己换。
 	ytmusicQueueScript = func(string, string) (string, bool) { return "", false }
+	ytmusicVideoTypeScript = func(context.Context, string, string) (string, bool) { return "", false }
 	spotifyWebQueueScript = func(string, string) (string, bool) { return "", false }
 	browserQueueRetryDelay = 0
 	// 信任列表里的其他浏览器要去读本机 App 包判引擎族;测试里一律判不了,要测的用例自己换。
