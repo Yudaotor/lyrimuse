@@ -476,6 +476,9 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 用户动作序号,"喜欢"和"播放模式"各一份。
     ///
+    /// `playbackMode` 读自 / 写给哪个播放器(模式为 nil 时也是 nil)。灵动岛的随机 / 循环键只认
+    /// Apple Music,靠它区分。两者只经 `applyPlaybackMode` 一起赋值,别单独改其中一个。
+    @Published private(set) var playbackModePlayer: PlaybackPlayer?
     /// 回读是**异步**的(要起一个 osascript 子进程,实测约 125ms),而这期间用户完全可能已经
     /// 点了按钮。没有这道守卫的话,一次在途的旧读数会把刚点出来的新状态盖回去 —— 最容易撞上
     /// 的时机就是"点击窗口把 App 激活"本身:激活触发一次刷新,紧接着的那一下点击落在按钮上,
@@ -550,7 +553,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     private func clearExtendedControls() {
         if isFavorited != nil { isFavorited = nil }
-        if playbackMode != nil { playbackMode = nil }
+        applyPlaybackMode(nil, player: nil)
         if soundVolume != nil { soundVolume = nil }
     }
 
@@ -580,8 +583,8 @@ final class PlaybackCoordinator: ObservableObject {
                     let value = includeFavorited ? state.favorited : nil
                     if self.isFavorited != value { self.isFavorited = value }
                 }
-                if self.playbackModeActionSeq == modeSeq, self.playbackMode != state.mode {
-                    self.playbackMode = state.mode
+                if self.playbackModeActionSeq == modeSeq {
+                    self.applyPlaybackMode(state.mode, player: player)
                 }
                 if self.volumeActionSeq == volSeq, self.soundVolume != state.volume {
                     self.soundVolume = state.volume
@@ -619,7 +622,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
         guard let player = extendedControlPlayer else {
-            if playbackMode != nil { playbackMode = nil }
+            applyPlaybackMode(nil, player: nil)
             return
         }
         let seq = playbackModeActionSeq
@@ -628,8 +631,7 @@ final class PlaybackCoordinator: ObservableObject {
                 ? MusicPlaybackController.playbackMode(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.playbackModeActionSeq == seq else { return }
-                guard self.playbackMode != value else { return }
-                self.playbackMode = value
+                self.applyPlaybackMode(value, player: player)
             }
         }
     }
@@ -728,6 +730,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// 当前播放器够不够得到「单曲循环」档(Spotify 的脚本接口只有 repeating 布尔,够不到)。
     /// 歌词窗口的「循环」按钮读不到这一档时整颗不显示,别摆一个落不了地的开关。
     var playbackModeSupportsRepeatOne: Bool {
+    /// `playbackMode` 与 `playbackModePlayer` 的唯一写入点。判等再写,两个都是 @Published。
+    private func applyPlaybackMode(_ mode: MusicPlaybackController.MusicPlaybackMode?, player: PlaybackPlayer?) {
+        let owner = mode == nil ? nil : player
+        if playbackMode != mode { playbackMode = mode }
+        if playbackModePlayer != owner { playbackModePlayer = owner }
+    }
+
         guard let player = extendedControlPlayer else { return false }
         return MusicPlaybackController.supportsRepeatOne(player)
     }
@@ -743,7 +752,7 @@ final class PlaybackCoordinator: ObservableObject {
             ((target == .repeatOne || target == .repeatAll)
                 && !MusicPlaybackController.supportsRepeatOne(player))
             ? .list : target
-        playbackMode = resolved
+        applyPlaybackMode(resolved, player: player)
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
             if player == .appleMusic,

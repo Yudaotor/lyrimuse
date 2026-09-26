@@ -201,6 +201,9 @@ private final class NotchPlayback: ObservableObject {
             return
         }
         // 同一条广告已经在轮询就不重起(广告开始那一拍 isAdBreakNow 与标题两条 onChange 会前后脚到)。
+    /// 展开区随机 / 循环两颗键读的播放模式。只在模式读自 Apple Music 时非 nil,其它播放器
+    /// (含同样读得到模式的 Spotify)一律 nil,两颗键据此整个不画。
+    @Published private(set) var appleMusicPlaybackMode: MusicPlaybackController.MusicPlaybackMode?
         guard gatedAdTitle != title else { return }
         // 插播里换到了下一条:上一条的判定(尤其「能跳」)不能延续过来,先收键、清缓存,从快探重新判。
         let nextAdInBreak = gatedAdTitle != nil
@@ -239,6 +242,10 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var skipAdInFlight = false
 
     /// 去点 YT Music 页面自己的「跳过广告」按钮。点 + 复核两次 AppleEvent 往返加 0.8s 等页面切换(正常 ~1.2s,
+            Publishers.CombineLatest(p.$playbackMode, p.$playbackModePlayer)
+                .map { mode, player in player == .appleMusic ? mode : nil }
+                .removeDuplicates()
+                .sink { [weak self] in self?.appleMusicPlaybackMode = $0 },
     /// 极端 6s 超时),放后台线程;结果回主线程用歌词行上的瞬态横幅回报(跟音量提示同一条通道):
     ///   * 点到了且复核广告已走 → 只给一下触觉(页面随即切正片,灵动岛按换曲流程自己刷新);
     ///   * 按钮还没出现 → 页面上读得到「N 秒后可跳过」就说「N 秒后可跳过」,读不到(不可跳过的广告)说
@@ -2186,6 +2193,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 用的是 notchAccentColor 而不是 artworkAccentColor:后者只保了 HSB 亮度下限
     /// (brightenedAccent),饱和冷色(纯蓝 luma 0.07)能原样通过,贴在灵动岛永远深色的
     /// 背景上区分度差;前者在此之上又保了一道感知亮度下限,专为深色背景调的
+            //
+            // Apple Music 在播时左右两端再加随机 / 循环(歌词窗口同款排布),两颗等宽,三键仍居中。
     /// (见 LocalPlaybackSource.accentForDarkBackdrop)。提亮在数据层做完,这里直接用。
     ///
     /// 补完:此前只有歌词正文和进度条填充吃它,顶行歌名、五种状态占位文字、
@@ -2277,17 +2286,27 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // `NotchChromeSource.expandedShowsControls` 的注释(不是唯一入口,`NotchEarModule`
             // 本来就有「播放控制」这个选项)。
             if controller.expandedShowsControls {
-                HStack(spacing: 34) {
-                    controlButton("backward.fill", glyphSize: 11.5, hitSize: 22) {
-                        MusicPlaybackController.previousTrack()
+                HStack(spacing: 0) {
+                    if let mode = playback.appleMusicPlaybackMode {
+                        shuffleButton(mode)
+                        Spacer(minLength: 8)
                     }
-                    controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
-                                  glyphSize: 14, hitSize: 22) {
-                        // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-                        PlaybackCoordinator.shared.userTogglePlayPause()
+                    HStack(spacing: 34) {
+                        controlButton("backward.fill", glyphSize: 11.5, hitSize: 22) {
+                            MusicPlaybackController.previousTrack()
+                        }
+                        controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
+                                      glyphSize: 14, hitSize: 22) {
+                            // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                            PlaybackCoordinator.shared.userTogglePlayPause()
+                        }
+                        controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
+                            MusicPlaybackController.nextTrack()
+                        }
                     }
-                    controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
-                        MusicPlaybackController.nextTrack()
+                    if let mode = playback.appleMusicPlaybackMode {
+                        Spacer(minLength: 8)
+                        repeatButton(mode)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -2515,6 +2534,35 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 右侧那块空地要不要塞按钮",而这里的键是空闲面板存在的全部理由,关掉就只剩两行字。不放「搜索歌词」
     /// 「显示歌词」:没有曲目,两者都无物可指。左耳那枚 App 图标已经在顶行上,这里不再画第二枚。
     ///
+    /// 随机:点亮 = shuffle,再点回列表。跟循环键互斥(脚本接口只有三态,见
+    /// `LyricsWindowView.shuffleButton`)。权限检查在 `setPlaybackMode` 里。
+    private func shuffleButton(_ mode: MusicPlaybackController.MusicPlaybackMode) -> some View {
+        modeButton("shuffle", active: mode == .shuffle) {
+            PlaybackCoordinator.shared.setPlaybackMode(mode == .shuffle ? .list : .shuffle)
+        }
+    }
+
+    /// 循环:关 → 列表循环 → 单曲循环 → 关,跟歌词窗口 `repeatButton` 同一套三态。
+    private func repeatButton(_ mode: MusicPlaybackController.MusicPlaybackMode) -> some View {
+        modeButton(mode == .repeatOne ? "repeat.1" : "repeat",
+                   active: mode == .repeatOne || mode == .repeatAll) {
+            let next: MusicPlaybackController.MusicPlaybackMode
+            switch mode {
+            case .repeatAll: next = .repeatOne
+            case .repeatOne: next = .list
+            default: next = .repeatAll
+            }
+            PlaybackCoordinator.shared.setPlaybackMode(next)
+        }
+    }
+
+    /// 熄灭时字形半透明、没有底;点亮时字形全亮、垫一层淡底(歌词窗口 `modeToggleButton` 的样子)。
+    private func modeButton(_ systemName: String, active: Bool, action: @escaping () -> Void) -> some View {
+        NotchIconButton(systemName: systemName, glyphSize: 10.5, hitSize: 22,
+                        tint: accentOrWhite, glyphOpacity: active ? 1 : 0.45,
+                        restingLevel: active ? 0.16 : 0, action: action)
+    }
+
     /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:`IdlePlaybackActions.resume` 自己会查
     /// (AM 那条走 `checkAppleMusicSafely`),「打开 X」压根不需要权限。
     private var idleExpandedPanel: some View {
@@ -2710,6 +2758,8 @@ private struct QuickActionTooltipOverlay: ViewModifier {
                                 y: edge == .bottom
                                     ? key.maxY + Self.gap + height / 2
                                     : key.minY - Self.gap - height / 2)
+    /// 静止时底色的透明度,见 `NotchIconButtonStyle.restingLevel`。随机 / 循环点亮时给一档。
+    var restingLevel: Double = 0
                     }
                 }
                 // 收在 overlay 里面接:气泡的 preference 只要传到同一层的这个祖先,不用穿出
@@ -2813,7 +2863,7 @@ private struct NotchIconButton: View {
         }
         // 圆角按命中框的比例取(22 → 6,18 → 5,15 → 4),跟歌词窗口 22pt 高的 `OffsetNudgeButton` 用 6 一致。
         .buttonStyle(NotchIconButtonStyle(tint: tint, cornerRadius: (hitSize * 0.27).rounded(),
-                                          hovering: hovering))
+                                          hovering: hovering, restingLevel: restingLevel))
         .onHover { hovering = $0 }
     }
 }

@@ -702,7 +702,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 整卡白重估一次。
     private func refreshExpanded() {
         let next = hoverExpanded || alertHold
+        let opening = next && !isExpanded
         if next != isExpanded { isExpanded = next }
+        // 展开区的随机 / 循环键(Apple Music 专属)跟 Music.app 对一次表:用户可能在那边自己改过模式,
+        // 没有事件通知得到。只在模式确实来自 Apple Music 时读,别的播放器不为这次悬停起脚本子进程。
+        if opening, expandedShowsControls, PlaybackCoordinator.shared.playbackModePlayer == .appleMusic {
+            PlaybackCoordinator.shared.refreshPlaybackMode()
+        }
         if next {
             // 展开是「要看了」的时刻:换歌时还没对上专辑的曲目,collector 补上之后靠这一下变可点。
             if holdsEditorialDemand { EditorialNotesStore.shared.refreshCurrent() }
