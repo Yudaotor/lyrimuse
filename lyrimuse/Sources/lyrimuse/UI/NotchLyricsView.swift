@@ -160,127 +160,36 @@ private final class NotchPlayback: ObservableObject {
             && adSkipAvailable
     }
 
-    /// 页面上那颗「跳过」键此刻放出来没有(「如果当前广告不支持跳过的话就不要显示那个
-    /// 跳过的按钮」)。
-    ///
-    /// 在此之前 `canSkipAd` 只问"是不是 YT Music 的广告",于是**不可跳过**的广告上也挂着一颗键,按下去
-    /// 只换来一句「这条广告还不能跳过」—— 一颗永远按不动的键比没有更糟。这个值由 `adSkipGate()` 在广告
-    /// 期间探页面得到(`YouTubeMusicAdSkipper.probeSkippability`,只读、不按键)。
-    ///
-    /// 必须是 `@Published`,不能做成计算属性去读某份缓存:倒计时那 5 秒过完、键刚放出来的那一刻,
-    /// 广告态这一格**没有任何别的东西在变**(「还剩 0:21」那截自己排了一张 `TimelineView`,只重画它自己
-    /// 那一小块),计算属性不会被重估,键就一直不出现。
-    ///
-    /// 初值 false:只有页面确认跳过键已经放出来才翻 true;问不出来(脚本跑不成)同样不画。
+    /// 页面上那颗「跳过」键此刻放出来没有。镜像 `YouTubeMusicAdSkipCenter.adSkipAvailable` —— 门槛轮询在那边,
+    /// App 里只有一份,每块屏的灵动岛读同一个结果。必须是 `@Published`:倒计时过完、键刚放出来的那一刻,
+    /// 广告态这一格没有任何别的东西在变,计算属性不会被重估,键就一直不出现。
     @Published private(set) var adSkipAvailable = false
-
-    /// 这一轮广告的门槛轮询。广告结束 / 换歌就取消。
-    private var adSkipGateTask: Task<Void, Never>?
-
-    /// 广告开始时、以及插播里换到下一条广告时起一轮门槛轮询;广告结束时收摊。
-    ///
-    /// 节奏见 `YouTubeMusicAdSkipper.gateRetryDelay(after:)`:倒计时那一档等到点再问(否则最坏要等满
-    /// 一个 5 秒心跳,而整条广告可能就 15 秒),其余走 5 秒心跳 —— 一次插播可能连放两条(徽章 1/2 → 2/2),
-    /// 第一条不给跳、第二条给跳,所以问出 `.never` **也要**继续心跳,不能问出一次就收摊。
-    /// 门槛轮询自己的日志(跟 Core 那一侧同一个 category,时间线连得上)。
-    static let skipGateLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
-
-    /// **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动,不挂在上面那条 `$isCurrentTrackAdBreak`
-    /// 订阅上**。两者对真窗口是同一件事,但**预览 chrome 的 `isAdBreakNow` 恒 false**
-    /// (`NotchEditorStage`),而 `NotchPlayback` 在预览里照样订阅真的 `PlaybackCoordinator` —— 挂在订阅上
-    /// 的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对用户的浏览器发一次 AppleScript。
-    /// 真机日志坐实过(每一行都打了两遍),而"预览不该产生任何副作用"是这个仓库既有的纪律
-    /// (同 `controlsDidBecomeVisible` 在预览里是空实现)。
-    func syncAdSkipGate(adBreak: Bool) {
-        guard adBreak else {
-            NotchPlayback.skipGateLogger.notice("gate: adBreak false → stop")
-            adSkipGateTask?.cancel()
-            adSkipGateTask = nil
-            gatedAdTitle = nil
-            if adSkipAvailable { adSkipAvailable = false }
-            return
-        }
-        // 同一条广告已经在轮询就不重起(广告开始那一拍 isAdBreakNow 与标题两条 onChange 会前后脚到)。
-        guard gatedAdTitle != title else { return }
-        // 插播里换到了下一条:上一条的判定(尤其「能跳」)不能延续过来,先收键、清缓存,从快探重新判。
-        let nextAdInBreak = gatedAdTitle != nil
-        gatedAdTitle = title
-        NotchPlayback.skipGateLogger.notice("gate: adBreak true → start\(nextAdInBreak ? " (next ad in break)" : "", privacy: .public)")
-        if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }
-        adSkipGateTask?.cancel()
-        adSkipAvailable = false
-        adSkipGateTask = Task.detached(priority: .utility) { [weak self] in
-            for round in 0 ..< YouTubeMusicAdSkipper.gateMaxRounds {
-                if Task.isCancelled { return }
-                // 每一拍现读:广告刚开始那一拍播放源可能还没解析到浏览器,只读一次会让整条广告都探不到。
-                let bundleID = await MainActor.run { LocalPlaybackSource.shared.lastResolvedBundleID }
-                let state = YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)
-                let shows = YouTubeMusicAdSkipper.showsSkipButton(state)
-                await MainActor.run { [weak self] in
-                    guard let self, !Task.isCancelled else { return }
-                    if self.adSkipAvailable != shows {
-                        self.adSkipAvailable = shows
-                        NotchPlayback.skipGateLogger.notice(
-                            "gate: adSkipAvailable -> \(shows, privacy: .public) (state \(String(describing: state), privacy: .public))")
-                    }
-                }
-                // 脚本没跑成(nil)不画键、也不收摊:超时这类偶发失败下一拍就可能好。
-                if state == .notInAd { return }
-                try? await Task.sleep(for: .seconds(YouTubeMusicAdSkipper.gateRetryDelay(after: state, round: round)))
-            }
-        }
-    }
-
-    /// 正在轮询的是哪一条广告(按标题认)。nil = 没在广告里。
-    private var gatedAdTitle: String?
-
-    /// 一次「跳过广告」正在跑(点 + 复核,约 1～3s)。期间再点忽略、键压淡 —— 连按几下的话,
-    /// 几份并行的 run 交错,各自的复核读到的是别人点完的页面,横幅也叠着闪。
+    /// 一次跳过正在跑,镜像 `YouTubeMusicAdSkipCenter.skipInFlight`(手动与自动跳过共用那一把)。
     @Published private(set) var skipAdInFlight = false
 
-    /// 去点 YT Music 页面自己的「跳过广告」按钮。点 + 复核两次 AppleEvent 往返加 0.8s 等页面切换(正常 ~1.2s,
-    /// 极端 6s 超时),放后台线程;结果回主线程用歌词行上的瞬态横幅回报(跟音量提示同一条通道):
-    ///   * 点到了且复核广告已走 → 只给一下触觉(页面随即切正片,灵动岛按换曲流程自己刷新);
-    ///   * 按钮还没出现 → 页面上读得到「N 秒后可跳过」就说「N 秒后可跳过」,读不到(不可跳过的广告)说
-    ///     「这条广告还不能跳过」;
-    ///   * 点了没生效 / 没有标签页在放广告 / 脚本没跑成 → 「没能跳过这条广告」。
-    /// **每一种结果都有反馈**:只给触觉不够 —— 触觉在 Mac 上几乎察觉不到,一颗键按下去
-    /// 没有任何可见反应是最坏的交互(表现是"点了页面没动、灵动岛也一片安静")。
+    /// 这扇灵动岛在广告态时向 `YouTubeMusicAdSkipCenter` 登记要门槛结果,离开广告态撤销。
+    ///
+    /// **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动,不挂在 `$isCurrentTrackAdBreak`
+    /// 订阅上**。两者对真窗口是同一件事,但**预览 chrome 的 `isAdBreakNow` 恒 false**
+    /// (`NotchEditorStage`),而 `NotchPlayback` 在预览里照样订阅真的 `PlaybackCoordinator` —— 挂在订阅上
+    /// 的话,设置页只要开着,那块编辑台预览就会替轮询登记需求、跟着真广告对用户的浏览器发 AppleScript。
+    func syncAdSkipGate(adBreak: Bool) {
+        YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)
+    }
+
+    /// 去按 YT Music 页面自己的「跳过广告」键。每种结果的横幅见 `YouTubeMusicAdSkipCenter.reportManualOutcome`;
+    /// 同一时刻只跑一份由那边的 `skipInFlight` 管。
     /// 不套 `controlButton` 那层 Apple Music 自动化权限守卫:这是浏览器自动化,权限在 `BrowserAutomationPermission`
     /// 那一套里,没权限时 osascript 直接失败、走「没能跳过」那句。
     func skipAd() {
-        guard !skipAdInFlight else { return }
-        skipAdInFlight = true
-        let bundleID = LocalPlaybackSource.shared.lastResolvedBundleID
-        Task.detached(priority: .userInitiated) {
-            let outcome = YouTubeMusicAdSkipper.skip(reportedBundleID: bundleID)
-            await MainActor.run { [weak self] in
-                self?.skipAdInFlight = false
-                NotchPlayback.reportSkipOutcome(outcome)
-            }
-        }
+        YouTubeMusicAdSkipCenter.shared.skip(trigger: .manual)
     }
 
-    private static func reportSkipOutcome(_ outcome: YouTubeMusicAdSkipper.Outcome?) {
-        switch outcome {
-        case .skipped?:
-            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-        case .notYetSkippable(let seconds)?:
-            let text = seconds.map { String(format: L10n.t("%@ 秒后可跳过"), String($0)) } ?? L10n.t("这条广告还不能跳过")
-            NotchTransientCenter.shared.show(.init(icon: "forward.end", text: text, progress: nil))
-        case .needsAccessibility?:
-            // 系统自己那个"想要控制这台电脑"的对话框(带「打开系统设置」)+ 横幅说明为什么。ad-hoc 签名每次重装 cdhash
-            // 都变,设置里的勾会失效,这一句在每次升级后第一次按时都会再见一次,见 AccessibilitySkipPress 头注。
-            AccessibilitySkipPress.promptForTrust()
-            NotchTransientCenter.shared.show(.init(icon: "hand.raised", text: L10n.t("跳过广告需要「辅助功能」权限"), progress: nil),
-                                             for: 2.4)
-        case .tabNotFrontmost?:
-            NotchTransientCenter.shared.show(.init(icon: "macwindow", text: L10n.t("把 YouTube Music 标签页切到前面再试"), progress: nil),
-                                             for: 2.4)
-        case .clickedNoEffect?, .notFound?, nil:
-            NotchTransientCenter.shared.show(.init(icon: "megaphone", text: L10n.t("没能跳过这条广告"), progress: nil))
-        }
+    deinit {
+        let id = ObjectIdentifier(self)
+        Task { @MainActor in YouTubeMusicAdSkipCenter.shared.setNotchDemand(id, active: false) }
     }
+
     /// 展开区时间行中间要不要显示「歌词时间轴微调」。同上走这里现读——只影响
     /// `NotchScrubber` 内部时间行怎么排,不影响卡片高度,理由见
     /// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条提醒。
@@ -340,6 +249,8 @@ private final class NotchPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
+            YouTubeMusicAdSkipCenter.shared.$adSkipAvailable.removeDuplicates().sink { [weak self] in self?.adSkipAvailable = $0 },
+            YouTubeMusicAdSkipCenter.shared.$skipInFlight.removeDuplicates().sink { [weak self] in self?.skipAdInFlight = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
             p.$radioStationImage.removeDuplicates(by: { $0 === $1 })
@@ -993,31 +904,28 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
             .modifier(NotchCardClip(enabled: !hostClipsCard))
         }
-        // 「跳过广告」那颗键的门槛轮询,起停挂在这里。
+        // 这扇灵动岛向 `YouTubeMusicAdSkipCenter` 登记「广告态、要门槛结果」,挂在这里。
         //
         // 判据是 **chrome 的 `isAdBreakNow`**,不是 `playback.isCurrentTrackAdBreak` —— 两者对真窗口
         // 是同一件事,但预览 chrome 的 `isAdBreakNow` 恒 false,而 `NotchPlayback` 在预览里照样订阅真的
-        // `PlaybackCoordinator`:挂在后者上的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对
-        // 用户的浏览器发一次 AppleScript(真机日志坐实过 —— 每一行都打了两遍)。理由同
-        // `controlsDidBecomeVisible` 在预览里是空实现:预览不产生副作用。
+        // `PlaybackCoordinator`:挂在后者上的话,设置页只要开着,那块编辑台预览就会替轮询登记需求、
+        // 跟着真广告对用户的浏览器发 AppleScript。理由同 `controlsDidBecomeVisible` 在预览里是空实现:
+        // 预览不产生副作用。插播里换到下一条广告由 center 按标题自己认,不用在这里重调。
         //
         // `.onAppear` 那一下是为了"窗口刚出现时已经在放广告"这种情形 —— `onChange` 只在值变化时触发。
         .onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }
         .onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }
-        // 插播里连放两条广告时 isAdBreakNow 一直是 true,只有标题在变:按新一条重新判能不能跳。
-        .onChange(of: playback.title) { _, _ in
-            if controller.isAdBreakNow { playback.syncAdSkipGate(adBreak: true) }
-        }
+        .onDisappear { playback.syncAdSkipGate(adBreak: false) }
         // 一次性诊断(现象是「稳态那枚提示不实时更新,展开一次才出来」)。
         // 问题只可能落在两处:body 压根没被这次翻转叫醒(那 onChange 也不会响),或者 body 看见了、
         // 但三道门里有一条此刻是假的(那 canSkipAd 响、hint 不响)。两条探针正好把这两种分开。
         .onChange(of: playback.canSkipAd) { _, value in
-            NotchPlayback.skipGateLogger.notice("""
+            YouTubeMusicAdSkipCenter.logger.notice("""
                 view: canSkipAd=\(value, privacy: .public) expanded=\(controller.isExpanded, privacy: .public)                 showsLyrics=\(controller.showsLyrics, privacy: .public) hint=\(showsAdSkipHint, privacy: .public)
                 """)
         }
         .onChange(of: showsAdSkipHint) { _, value in
-            NotchPlayback.skipGateLogger.notice("view: adSkipHint=\(value, privacy: .public)")
+            YouTubeMusicAdSkipCenter.logger.notice("view: adSkipHint=\(value, privacy: .public)")
         }
         // 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
         // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过

@@ -35524,6 +35524,74 @@
         }
       }
     },
+    "自动跳过 YouTube Music 广告" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip YouTube Music Ads Automatically"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動略過 YouTube Music 廣告"
+          }
+        }
+      }
+    },
+    "出现「跳过」按钮时替你按下，不能跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 在后台标签页时会短暂切过去再切回，你正在用的浏览器窗口不受影响。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presses Skip as soon as it appears; ads that can't be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you're using."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出現「略過」按鈕時替你按下，無法略過的廣告照常播放。需要「輔助使用」權限。YouTube Music 在背景分頁時會短暫切過去再切回，你正在使用的瀏覽器視窗不受影響。"
+          }
+        }
+      }
+    },
+    "已自动跳过广告" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ad skipped automatically"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已自動略過廣告"
+          }
+        }
+      }
+    },
+    "还没有「辅助功能」权限，自动跳过不会生效。如果之前授权过、这里仍然出现，到系统设置里把 Lyrimuse 那一项取消再勾上。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission isn't granted yet, so automatic skipping won't work. If you granted it before and still see this, turn Lyrimuse off and back on in System Settings."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未取得「輔助使用」權限，自動略過不會生效。如果之前授權過、這裡仍然出現，請到系統設定裡把 Lyrimuse 那一項取消再勾選。"
+          }
+        }
+      }
+    },
     "Apple Music 登录已失效（过期或被吊销），需要重新连接" : {
       "extractionState" : "manual",
       "localizations" : {

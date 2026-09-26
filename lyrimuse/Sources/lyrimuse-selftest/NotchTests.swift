@@ -498,6 +498,79 @@ func runNotchTests() {
                     "门槛节奏: 快探窗口内都按快节奏")
         expectEqual(S.gateRetryDelay(after: .never, round: S.fastStartRounds), YouTubeMusicAdProbe.adRefreshInterval,
                     "门槛节奏: 出了快探窗口,「不给跳」才当真、退回心跳")
+
+        // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。
+        typealias A = YouTubeMusicAdAutoSkip
+        expectEqual(A.shouldAttempt(enabled: true, state: .ready, attempts: 0, stopped: false), true, "自动跳过: 开着 + 能跳 = 按")
+        expectEqual(A.shouldAttempt(enabled: false, state: .ready, attempts: 0, stopped: false), false, "自动跳过: 关着不按")
+        expectEqual(A.shouldAttempt(enabled: true, state: .after(seconds: 3), attempts: 0, stopped: false), false,
+                    "自动跳过: 倒计时期间不按(按了也只是「还不能跳过」)")
+        expectEqual(A.shouldAttempt(enabled: true, state: .never, attempts: 0, stopped: false), false, "自动跳过: 不可跳过的广告不按")
+        expectEqual(A.shouldAttempt(enabled: true, state: nil, attempts: 0, stopped: false), false, "自动跳过: 门槛没跑成不按")
+        expectEqual(A.shouldAttempt(enabled: true, state: .notInAd, attempts: 0, stopped: false), false, "自动跳过: 广告已结束不按")
+        expectEqual(A.shouldAttempt(enabled: true, state: .ready, attempts: A.maxAttemptsPerAd - 1, stopped: false), true,
+                    "自动跳过: 第一次没成还能再试一次")
+        expectEqual(A.shouldAttempt(enabled: true, state: .ready, attempts: A.maxAttemptsPerAd, stopped: false), false,
+                    "自动跳过: 一条广告按满次数就停(不对按不动的页面反复发 AppleEvent)")
+        expectEqual(A.shouldAttempt(enabled: true, state: .ready, attempts: 0, stopped: true), false, "自动跳过: 判定不必再试就不按")
+        expectEqual(A.stopsRetrying(after: .skipped), true, "自动跳过: 跳过了就不再试")
+        expectEqual(A.stopsRetrying(after: .needsAccessibility), true, "自动跳过: 缺辅助功能权限再按也一样,不再试")
+        expectEqual(A.stopsRetrying(after: .clickedNoEffect), false, "自动跳过: 按了没生效可以再试")
+        expectEqual(A.stopsRetrying(after: .tabNotFrontmost), false, "自动跳过: 标签页不在前面,用户切过去之后还能再试")
+        expectEqual(A.stopsRetrying(after: nil), false, "自动跳过: 脚本没跑成可以再试")
+        expectEqual(A.feedback(for: .skipped, alreadyPromptedAccessibility: false), .skipped, "自动跳过反馈: 跳过了要说一声")
+        expectEqual(A.feedback(for: .needsAccessibility, alreadyPromptedAccessibility: false), .needsAccessibility,
+                    "自动跳过反馈: 第一次缺权限提示授权")
+        expectEqual(A.feedback(for: .needsAccessibility, alreadyPromptedAccessibility: true), .none,
+                    "自动跳过反馈: 缺权限每段运行只提示一次,不每条广告弹一次框")
+        expectEqual(A.feedback(for: .clickedNoEffect, alreadyPromptedAccessibility: false), .none, "自动跳过反馈: 没按成不打扰")
+        expectEqual(A.feedback(for: .tabNotFrontmost, alreadyPromptedAccessibility: false), .none,
+                    "自动跳过反馈: 标签页不在前面不打扰(手动那颗键才提示切过去)")
+        expectEqual(A.feedback(for: .notYetSkippable(secondsUntilSkippable: 2), alreadyPromptedAccessibility: false), .none,
+                    "自动跳过反馈: 还不能跳不打扰")
+
+        // 后台标签页:临时切过去按、按完切回;用户正在看的那扇窗口不切。
+        typealias F = BrowserTabFocus
+        expectEqual(F.parse("ALREADY"), .alreadyCurrent, "切标签页: 本来就是当前页")
+        expectEqual(F.parse("\"FRONTWINDOW\"\n"), .frontWindow, "切标签页: 用户正在看的窗口(脱掉 AppleScript 的引号)")
+        expectEqual(F.parse("NOTFOUND"), .notFound, "切标签页: 没有标签页在放广告")
+        expectEqual(F.parse("SWITCHED|4127|2|5"), .switched(windowID: 4127, previousIndex: 2, tabIndex: 5), "切标签页: 切过去了,记下怎么切回")
+        expectEqual(F.parse("SWITCHED|x|2|5"), nil, "切标签页: 字段坏了不当成切过去(不然会拿垃圾值去切回)")
+        expectEqual(F.parse("garbage"), nil, "切标签页: 看不懂的返回是 nil")
+        expectEqual(F.adTabJS.contains("\"") || F.adTabJS.contains("\\"), false,
+                    "切标签页: JS 里没有双引号 / 反斜杠(要嵌进 AppleScript 双引号串)")
+        let safariFocus = F.focusScript(bundleID: "com.apple.Safari", family: .safari, hostMarker: "music.youtube.com",
+                                        avoidFrontWindow: true, eventTimeoutSeconds: 4)
+        let chromeFocus = F.focusScript(bundleID: "com.google.Chrome", family: .chromium, hostMarker: "music.youtube.com",
+                                        avoidFrontWindow: false, eventTimeoutSeconds: 4)
+        expectEqual(safariFocus.contains("if true and wi is 1 then return \"FRONTWINDOW\""), true,
+                    "切标签页: 浏览器在前台时,最前面那扇窗口不切")
+        expectEqual(chromeFocus.contains("if false and wi is 1 then return \"FRONTWINDOW\""), true,
+                    "切标签页: 浏览器在后台时哪扇窗口都能切")
+        expectEqual(safariFocus.contains("if curIdx is ti then return \"ALREADY\""), true, "切标签页: 已经是当前页就不动")
+        expectEqual(safariFocus.contains("set current tab of window wi to tab ti of window wi"), true, "切标签页: Safari 用 current tab")
+        expectEqual(chromeFocus.contains("set active tab index of window wi to ti"), true, "切标签页: Chromium 用 active tab index")
+        expectEqual(safariFocus.contains("activate") || chromeFocus.contains("activate"), false,
+                    "切标签页: 只换当前标签页,不激活浏览器")
+        let safariRestore = F.restoreScript(bundleID: "com.apple.Safari", family: .safari, windowID: 7, previousIndex: 2, tabIndex: 5)
+        let chromeRestore = F.restoreScript(bundleID: "com.google.Chrome", family: .chromium, windowID: 7, previousIndex: 2, tabIndex: 5)
+        expectEqual(safariRestore.contains("if (index of current tab of w) is 5 then set current tab of w to tab 2 of w"), true,
+                    "切回: 那扇窗口的当前页还是 YT Music 才切回(用户自己点走了就不管)")
+        expectEqual(chromeRestore.contains("if (active tab index of w) is 5 then set active tab index of w to 2"), true,
+                    "切回: Chromium 同一道判断")
+        let skipperSrc = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local/YouTubeMusicAdSkipper.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(skipperSrc.contains("let avoidFront = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == host"), true,
+                    "切标签页: 「用户正在用这个浏览器」按前台 App 判")
+        if let a = skipperSrc.range(of: "press = pressAfterFocus(browserBundleID: host)"),
+           let b = skipperSrc.range(of: "BrowserTabFocus.restore(bundleID: host"),
+           let c = skipperSrc.range(of: "Thread.sleep(forTimeInterval: verifyDelay)") {
+            expectEqual(a.lowerBound < b.lowerBound && b.lowerBound < c.lowerBound, true,
+                        "切标签页: 按完立刻切回,不等复核那 0.8s(用户看到的闪动越短越好)")
+        } else {
+            expectEqual(true, false, "切标签页: skip 里找不到切过去 / 切回 / 复核三处(改名了?)")
+        }
         expectEqual(S.fastStartDelay * Double(S.fastStartRounds) < YouTubeMusicAdProbe.adRefreshInterval, true,
                     "门槛节奏: 整个快探窗口要短于一个心跳,否则等于把心跳改快了")
         expectEqual(S.gateRetryDelay(after: .after(seconds: 5), round: 0), 5.4,
@@ -550,7 +623,10 @@ func runNotchTests() {
                                 encoding: .utf8)) ?? ""
         let stage = (try? String(contentsOfFile: ui.appendingPathComponent("NotchEditorStage.swift").path,
                                  encoding: .utf8)) ?? ""
+        let center = (try? String(contentsOfFile: ui.appendingPathComponent("YouTubeMusicAdSkipCenter.swift").path,
+                                  encoding: .utf8)) ?? ""
         expectEqual(view.isEmpty, false, "广告态契约: 读到 NotchLyricsView.swift")
+        expectEqual(center.isEmpty, false, "广告态契约: 读到 YouTubeMusicAdSkipCenter.swift")
         expectEqual(view.contains("var isAdBreakNow: Bool { get }"), true, "广告态契约: NotchChromeSource 声明 isAdBreakNow")
         // 广告期间头部只剩快捷操作那排键:四项曲目字段被 trackInfoShowsTrackFields 挡掉,快捷操作不受它管。
         // 高度算术与渲染两侧都得读这个值,漏一侧就是留一截空白或裁掉半截。
@@ -576,8 +652,10 @@ func runNotchTests() {
         // (「还剩 0:21」那截自己排了一张 TimelineView、只重画它自己),做成计算属性就永远不会被重估。
         expectEqual(view.contains("@Published private(set) var adSkipAvailable"), true,
                     "广告态契约: adSkipAvailable 是 @Published(计算属性不会在键放出来那一刻被重估)")
-        expectEqual(view.contains("YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)"), true,
-                    "广告态契约: 门槛走 Core 那份只读探测,不在 View 里另拼一套")
+        expectEqual(center.contains("YouTubeMusicAdSkipper.probeSkippability(reportedBundleID: bundleID)"), true,
+                    "广告态契约: 门槛走 Core 那份只读探测,不另拼一套")
+        expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.$adSkipAvailable"), true,
+                    "广告态契约: 灵动岛读 App 里唯一那份门槛结果(每块屏不再各跑一轮)")
         // 门槛轮询**必须**挂 chrome 的 isAdBreakNow(预览恒 false),不准挂回 playback 那条订阅 ——
         // 挂回去的后果是设置页开着时,编辑台预览跟着真广告每 5 秒对用户的浏览器发一次 AppleScript
         // (真机日志坐实:每行打两遍)。这跟"预览不产生副作用"是同一条纪律。
@@ -587,6 +665,19 @@ func runNotchTests() {
                     "广告态契约: 门槛轮询不准挂回 $isCurrentTrackAdBreak 订阅(预览会跟着对浏览器发 AppleScript)")
         expectEqual(view.contains(".onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }"), true,
                     "广告态契约: 窗口出现时已经在放广告也要起轮询(onChange 只认变化)")
+        expectEqual(view.contains(".onDisappear { playback.syncAdSkipGate(adBreak: false) }"), true,
+                    "广告态契约: 窗口没了要撤掉需求,不然灵动岛关了轮询还在跑")
+        expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)"), true,
+                    "广告态契约: 灵动岛只是登记需求,轮询在 center")
+        // 轮询只在「广告中」且有人要结果时跑:自动跳过开着,或至少一扇真灵动岛在广告态。
+        expectEqual(center.contains("let wanted = adBreak && (autoSkipEnabled || !notchDemand.isEmpty)"), true,
+                    "广告态契约: 灵动岛关着、自动跳过也关着时一次 AppleEvent 都不发")
+        expectEqual(center.contains("if !skipInFlight,\n           YouTubeMusicAdAutoSkip.shouldAttempt(enabled: autoSkipEnabled"), true,
+                    "自动跳过契约: 门槛读数走 Core 判据,且不跟正在跑的那次叠")
+        let appDelegate = (try? String(contentsOfFile: ui.deletingLastPathComponent().appendingPathComponent("AppDelegate.swift").path,
+                                       encoding: .utf8)) ?? ""
+        expectEqual(appDelegate.contains("_ = YouTubeMusicAdSkipCenter.shared"), true,
+                    "自动跳过契约: 启动就建 center(灵动岛没开过自动跳过也要生效)")
 
         // 稳态下那枚「可跳过」提示(「这个按钮目前只在展开状态有;帮我在灵动岛歌词行
         // 那里也加一个…可以起到提示可以跳过的作用」)。三道门缺一条就会变成"同一件事说两遍"。
@@ -603,10 +694,10 @@ func runNotchTests() {
         } else {
             expectEqual(true, false, "广告态契约: 找不到 adBreakEarIcon / showsAdSkipHint(改名了?)")
         }
-        expectEqual(view.contains("guard !skipAdInFlight else { return }"), true, "广告态契约: 跳过广告同一时刻只跑一份")
-        expectEqual(view.contains("case .needsAccessibility?:") && view.contains("AccessibilitySkipPress.promptForTrust()"), true,
+        expectEqual(center.contains("guard !skipInFlight else { return }"), true, "广告态契约: 跳过广告同一时刻只跑一份(手动与自动共用)")
+        expectEqual(center.contains("case .needsAccessibility?:") && center.contains("AccessibilitySkipPress.promptForTrust()"), true,
                     "广告态契约: 没有辅助功能权限时弹系统授权对话框")
-        expectEqual(view.contains("case .tabNotFrontmost?:"), true, "广告态契约: 标签页不在前面有专门的提示")
+        expectEqual(center.contains("case .tabNotFrontmost?:"), true, "广告态契约: 标签页不在前面有专门的提示")
         expectEqual(view.contains(".disabled(playback.skipAdInFlight)"), true, "广告态契约: 跑着的时候键不接第二下")
         expectEqual(stage.contains("var isAdBreakNow: Bool { false }"), true, "广告态契约: 预览 chrome 的 isAdBreakNow 恒 false")
         // 用户要的两件(圈图:「广告时候的灵动岛的配色帮我设置为和机器刘海一样的
@@ -907,17 +998,20 @@ func runNotchTests() {
                     "可见性契约: 顶行时间模块看不见时不排表")
 
         // 跳过广告:没确认能跳不给键;nil 之后不收摊;换条重判;bundle id 每拍现读。
-        expectEqual(view.contains("guard let state, state != .notInAd else { return }"), false,
+        let center = read("YouTubeMusicAdSkipCenter.swift")
+        expectEqual(center.contains("guard let state, state != .notInAd else { return }"), false,
                     "跳过门槛契约: 脚本没跑成(nil)不许收摊(偶发超时会让整条广告再也探不到)")
-        expectEqual(view.contains("if state == .notInAd { return }"), true, "跳过门槛契约: 只有广告结束才收摊")
-        expectEqual(view.contains("let bundleID = await MainActor.run { LocalPlaybackSource.shared.lastResolvedBundleID }"), true,
+        expectEqual(center.contains("if state == .notInAd { return }"), true, "跳过门槛契约: 只有广告结束才收摊")
+        expectEqual(center.contains("let bundleID = await MainActor.run { LocalPlaybackSource.shared.lastResolvedBundleID }"), true,
                     "跳过门槛契约: 浏览器 bundle id 每一拍现读")
-        expectEqual(view.contains(".onChange(of: playback.title) { _, _ in\n            if controller.isAdBreakNow { playback.syncAdSkipGate(adBreak: true) }"), true,
+        expectEqual(center.contains("p.$title.removeDuplicates().sink"), true,
                     "跳过门槛契约: 插播里换到下一条广告(只有标题在变)时重新判")
-        expectEqual(view.contains("guard gatedAdTitle != title else { return }"), true,
-                    "跳过门槛契约: 同一条广告不重起轮询(开始那一拍两条 onChange 前后脚到)")
-        expectEqual(view.contains("if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }"), true,
+        expectEqual(center.contains("guard gatedAdTitle != title else { return }"), true,
+                    "跳过门槛契约: 同一条广告不重起轮询(开始那一拍两条订阅前后脚到)")
+        expectEqual(center.contains("if nextAdInBreak { YouTubeMusicAdSkipper.invalidateGateCache() }"), true,
                     "跳过门槛契约: 换条时清掉上一条的缓存判定")
+        expectEqual(center.contains("autoAttempts = 0\n        autoStopped = false"), true,
+                    "自动跳过契约: 换到下一条广告时按键次数清零")
 
         // 快捷操作:Last.fm 那颗只在连着账号时出现,落点是设置 › Last.fm。
         expectEqual(view.contains("if LastfmStatsService.shared.isConnected {\n                    quickActionButton(\"chart.bar.fill\""), true,

@@ -314,6 +314,7 @@
 "写入本地记录文件失败：%@" = "Couldn't save to the lyrics cache: %@";
 "决定性差异：「%@」" = "Deciding difference: “%@”";
 "减少推荐" = "Suggest Less";
+"出现「跳过」按钮时替你按下，不能跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 在后台标签页时会短暂切过去再切回，你正在用的浏览器窗口不受影响。" = "Presses Skip as soon as it appears; ads that can't be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you're using.";
 "出生日期" = "Born";
 "分差 %1$d 分（%2$@）。" = "Score gap: %1$d (%2$@).";
 "分差 %d 分。" = "Score gap: %d.";
@@ -614,6 +615,7 @@
 "已添加" = "Added";
 "已经在放了还没反应？看看选的播放器对不对" = "Already playing and nothing shows? Check the player you picked";
 "已缓存罗马音" = "Cached Romanization";
+"已自动跳过广告" = "Ad skipped automatically";
 "已补 %@ 条" = "%@ backfilled";
 "已被手动停止" = "Stopped manually";
 "已解锁 %@ 首" = "Unlocked %@ songs";
@@ -1289,6 +1291,7 @@
 "自动识别" = "Auto-detect";
 "自动识别正在播放的 App" = "Whichever app is playing, detected automatically";
 "自动识别正在播放的 App，外加 %@" = "Whichever app is playing, plus %@";
+"自动跳过 YouTube Music 广告" = "Skip YouTube Music Ads Automatically";
 "自动选定歌词时的存档，现在重新搜索结果可能不同" = "Saved when the lyrics were picked automatically; searching again now may give different results";
 "自动隐藏" = "Auto-Hide";
 "自动（默认）：按对唱声部在左 / 右 / 居中间切换。\n其余：忽略声部，固定在一个位置。" = "Automatic (default): switches between left / right / center by duet vocal part.\nOthers: ignore vocal parts and stay fixed in one position.";
@@ -1427,6 +1430,7 @@
 "还没填机器人 Token" = "Bot token not set yet";
 "还没填访问令牌（可选）" = "Access token not set yet (optional)";
 "还没有 scrobble 记录" = "No scrobbles yet";
+"还没有「辅助功能」权限，自动跳过不会生效。如果之前授权过、这里仍然出现，到系统设置里把 Lyrimuse 那一项取消再勾上。" = "Accessibility permission isn't granted yet, so automatic skipping won't work. If you granted it before and still see this, turn Lyrimuse off and back on in System Settings.";
 "还没有手动选定过歌词；从现在起你选定的都会直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
 "还没有收听记录" = "No scrobbles yet";
 "还没有检查过更新" = "No update check yet";

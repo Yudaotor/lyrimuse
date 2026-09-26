@@ -339,6 +339,7 @@ final class AppSettings: ObservableObject {
         static let browserJSVerifiedAtJSON = "np:browserJSVerifiedAtJSON"
         /// 「接收测试版更新」。这台机器的偏好,不随配置搬家(见 ConfigPortability.machineLocalDefaultsKeys)。
         static let receiveBetaUpdates = "np:receiveBetaUpdates"
+        static let youTubeMusicAutoSkipAds = "np:youTubeMusicAutoSkipAds"
     }
 
     // 字体/字号的默认值,跟配色四项(见下方 init())一样单独给一个有名字的默认值:
@@ -539,6 +540,13 @@ final class AppSettings: ObservableObject {
             defaults.set(receiveBetaUpdates, forKey: Keys.receiveBetaUpdates)
             SparkleUpdaterManager.shared.betaChannelPreferenceChanged(enabled: receiveBetaUpdates)
         }
+    }
+
+    /// 「自动跳过 YouTube Music 广告」,默认关。开着时 YT Music 网页广告一放出「跳过」键就替用户按一次
+    /// (只按平台已经放出来的键,不可跳过的广告照常播),门槛轮询与按键在 `YouTubeMusicAdSkipCenter`,
+    /// 判据在 Core `YouTubeMusicAdAutoSkip`。要「辅助功能」权限。
+    @Published var youTubeMusicAutoSkipAds: Bool {
+        didSet { defaults.set(youTubeMusicAutoSkipAds, forKey: Keys.youTubeMusicAutoSkipAds) }
     }
 
     /// 这台机器的用户读不读中文 —— 用系统的**首选语言列表**判,不是只看 App 界面语言:
@@ -1665,6 +1673,7 @@ final class AppSettings: ObservableObject {
         // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
         receiveBetaUpdates = (defaults.object(forKey: Keys.receiveBetaUpdates) as? Bool) ?? false
+        youTubeMusicAutoSkipAds = (defaults.object(forKey: Keys.youTubeMusicAutoSkipAds) as? Bool) ?? false
         if let raw = defaults.array(forKey: Keys.launchPlayersOnLyrimuseOpen) as? [String] {
             launchPlayersOnLyrimuseOpen = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
         } else {

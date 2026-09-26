@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -67,7 +68,8 @@ public enum YouTubeMusicAdSkipper {
         case notFound
         /// 门槛过了,但 App 没有「辅助功能」权限,按不了。UI 层弹系统授权对话框 + 横幅。
         case needsAccessibility
-        /// 门槛过了、权限也有,但 YT Music 标签页不是它那扇窗口的**当前**标签页 —— 后台标签页不在 AX 树里,按不到。
+        /// 门槛过了、权限也有,但按不到 YT Music 那一页:它在用户正在看的那扇窗口里、又不是当前标签页
+        /// (不替用户切走,见 `BrowserTabFocus`),或者切过去之后网页仍没挂进 AX 树。
         case tabNotFrontmost
     }
 
@@ -236,7 +238,17 @@ public enum YouTubeMusicAdSkipper {
             logger.notice("skip: no ad-showing player")
             return .notFound
         case .skippable(let desc, let badge, let videoTime):
-            let press = AccessibilitySkipPress.press(browserBundleID: host, hostMarker: YouTubeMusicAdProbe.hostMarker)
+            var press = AccessibilitySkipPress.press(browserBundleID: host, hostMarker: YouTubeMusicAdProbe.hostMarker)
+            // 后台标签页不在 AX 树里:临时切过去再按,按完立刻切回(边界见 BrowserTabFocus 头注)。
+            if press == .webAreaNotFound {
+                let avoidFront = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == host
+                let focus = BrowserTabFocus.focusAdTab(bundleID: host, family: family, avoidFrontWindow: avoidFront)
+                if case .switched(let windowID, let previousIndex, let tabIndex)? = focus {
+                    press = pressAfterFocus(browserBundleID: host)
+                    BrowserTabFocus.restore(bundleID: host, family: family, windowID: windowID,
+                                            previousIndex: previousIndex, tabIndex: tabIndex)
+                }
+            }
             switch press {
             case .notTrusted:
                 logger.notice("skip: gate open (\(desc, privacy: .public)) but no accessibility trust")
@@ -258,6 +270,28 @@ public enum YouTubeMusicAdSkipper {
                 return .clickedNoEffect
             }
         }
+    }
+
+    /// 切过去之后 WebKit / Chromium 要一会儿才把新当前页的网页挂进 AX 树(异步建树),按不到就隔
+    /// `focusPressRetryDelay` 再试,最多 `focusPressAttempts` 次(每次 `press` 内部还有一次 0.25s 重试,
+    /// 最坏约 5s)。热的时候切过去 0.01～0.8s 就按得到;浏览器头一回被辅助功能客户端查询时要现建整棵树,
+    /// 实测 3s 还没挂上,预算按这个冷启动留。按到就切回,预算只在按不到时才用满。
+    public static let focusPressAttempts = 10
+    public static let focusPressRetryDelay: TimeInterval = 0.25
+
+    private static func pressAfterFocus(browserBundleID host: String) -> AccessibilitySkipPress.Outcome {
+        var last = AccessibilitySkipPress.Outcome.webAreaNotFound
+        for attempt in 0 ..< focusPressAttempts {
+            last = AccessibilitySkipPress.press(browserBundleID: host, hostMarker: YouTubeMusicAdProbe.hostMarker)
+            switch last {
+            case .webAreaNotFound, .buttonNotFound:
+                logger.notice("skip: after focus attempt \(attempt + 1) -> \(String(describing: last), privacy: .public)")
+                Thread.sleep(forTimeInterval: focusPressRetryDelay)
+            default:
+                return last
+            }
+        }
+        return last
     }
 
     // MARK: - 「那颗键该不该出现」
@@ -423,5 +457,51 @@ public enum YouTubeMusicAdSkipper {
             eventTimeoutSeconds: YouTubeMusicAdProbe.eventTimeoutSeconds,
             processTimeout: YouTubeMusicAdProbe.processTimeout,
             label: label)
+    }
+}
+
+/// 「自动跳过 YouTube Music 广告」的判定(纯函数,selftest 钉着)。动作本身跟灵动岛那颗键是同一个
+/// `YouTubeMusicAdSkipper.skip` —— 只替用户按页面上**已经放出来**的那颗「跳过」,不可跳过的广告照常播。
+public enum YouTubeMusicAdAutoSkip {
+    /// 一条广告最多自动按几次。第二次只为兜住偶发失败(按下去复核时页面还没切、osascript 超时);
+    /// 再多就是对着一个按不动的页面反复发 AppleEvent。
+    public static let maxAttemptsPerAd = 2
+
+    /// 这一拍门槛读数之后要不要自动按一次。只认 `.ready`(页面确认跳过键已经放出来),
+    /// 同一条广告按过 `maxAttemptsPerAd` 次或者已经判定不必再试(`stopped`)就不再按。
+    public static func shouldAttempt(enabled: Bool, state: YouTubeMusicAdSkipper.Skippability?,
+                                     attempts: Int, stopped: Bool) -> Bool {
+        enabled && state == .ready && !stopped && attempts < maxAttemptsPerAd
+    }
+
+    /// 自动按完之后,这条广告还要不要再试。跳过了自然不用;没有辅助功能权限时再按也是同一个结果,
+    /// 每条广告重复一遍只会反复弹授权框。其余(没生效、标签页不在前面、没找到、脚本没跑成)下一拍门槛
+    /// 仍是 `.ready` 时可以再试一次。
+    public static func stopsRetrying(after outcome: YouTubeMusicAdSkipper.Outcome?) -> Bool {
+        switch outcome {
+        case .skipped?, .needsAccessibility?: return true
+        default: return false
+        }
+    }
+
+    /// 自动按完给用户的反馈。
+    public enum Feedback: Equatable, Sendable {
+        /// 灵动岛闪一句「已自动跳过广告」——广告静默消失的话,用户分不清是跳过了还是自然结束。
+        case skipped
+        /// 弹系统授权对话框 + 说明。
+        case needsAccessibility
+        /// 什么都不显示:用户没有按任何键,失败了不打扰(手动那颗键才需要每种结果都有回音)。
+        case none
+    }
+
+    /// 没有辅助功能权限这一档**每段运行只提示一次**(`alreadyPromptedAccessibility`):
+    /// 自动跳过是后台自己触发的,每条广告弹一次系统授权框等于隔几分钟打断用户一次。
+    public static func feedback(for outcome: YouTubeMusicAdSkipper.Outcome?,
+                                alreadyPromptedAccessibility: Bool) -> Feedback {
+        switch outcome {
+        case .skipped?: return .skipped
+        case .needsAccessibility?: return alreadyPromptedAccessibility ? .none : .needsAccessibility
+        default: return .none
+        }
     }
 }

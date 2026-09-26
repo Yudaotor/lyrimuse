@@ -206,6 +206,7 @@ public enum SettingsSearchCatalog {
         // ---- 播放器 ----
         player("播放器", kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
         player("网页播放器", kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc"]),
+        player("自动跳过 YouTube Music 广告", kw: ["广告", "跳过", "YouTube Music", "辅助功能"], group: "网页播放器"),
         player("已信任的播放器", kw: ["信任列表", "其它播放器"]),
         player("添加播放器…", sub: "从「应用程序」里挑一个——不用等它正在播放",
                kw: ["信任列表", "手动添加", "第三方播放器", "应用程序"], group: "已信任的播放器"),

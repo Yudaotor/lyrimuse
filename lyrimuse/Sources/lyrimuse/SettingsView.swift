@@ -3770,6 +3770,43 @@ private final class PlayerTabStores: ObservableObject {
 
 }
 
+/// 「自动跳过 YouTube Music 广告」一行,开着却没有辅助功能权限时下面补一段说明。单独成一个视图:
+/// 只有它订阅 AppSettings,别的设置变化不打醒整个「播放器」页。
+private struct YouTubeMusicAutoSkipRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+    /// 回到 App 时 +1(`browserAutomationCard` 的 didBecomeActive),让「有没有辅助功能权限」重读一次:
+    /// TCC 状态没有通知可订阅,用户去系统设置勾完回来这里才会跟着变。
+    let refreshTick: Int
+
+    var body: some View {
+        let _ = refreshTick
+        SettingsRow(
+            icon: "forward.end",
+            title: L10n.t("自动跳过 YouTube Music 广告"),
+            help: L10n.t("出现「跳过」按钮时替你按下，不能跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 在后台标签页时会短暂切过去再切回，你正在用的浏览器窗口不受影响。")
+        ) {
+            Toggle("", isOn: Binding(
+                get: { settings.youTubeMusicAutoSkipAds },
+                set: { on in
+                    settings.youTubeMusicAutoSkipAds = on
+                    // 打开的那一下就把授权要到手,不等第一条广告来了才在后台弹框。已授权时什么都不弹。
+                    if on { AccessibilitySkipPress.promptForTrust() }
+                }
+            ))
+        }
+        if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
+            SettingsNote {
+                Text(L10n.t("还没有「辅助功能」权限，自动跳过不会生效。如果之前授权过、这里仍然出现，到系统设置里把 Lyrimuse 那一项取消再勾上。"))
+                Button(L10n.t("打开系统设置")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct PlayerSettingsTab: View {
     @StateObject private var stores = PlayerTabStores()
     /// SettingsView 根上注入的那一份,collector 服务状态从它这里拿(见 collector 卡片的 onReceive)。
@@ -4433,6 +4470,12 @@ private struct PlayerSettingsTab: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
+                }
+                // 只在 YouTube Music 配了(且装着)浏览器时出现:没配对就没有探针、也就没有广告可跳。
+                if !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
+                    .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty {
+                    CardDivider()
+                    YouTubeMusicAutoSkipRow(refreshTick: automationRefreshTick)
                 }
             }
             // 挂在整张卡上,不是挂在每个平台的小卡上:`browserPickerError` 只有一个,
