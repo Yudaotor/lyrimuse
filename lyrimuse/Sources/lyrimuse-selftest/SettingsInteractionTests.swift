@@ -438,6 +438,23 @@ func runSettingsInteractionTests() {
         expectEqual(conn.contains("expiresAt: tokenCookie.expiresDate"), true, "Apple Music 连接(契约): 记下 cookie 自带的过期时刻")
     }
 
+    // ---- Last.fm 响应在后台线程解析(源码契约) ----
+    // 上一期周榜不限条数,近一年能有几 MB;LastfmStatsService 在主线程上,解析不能留在 requestDetailed 里。
+    do {
+        let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift")
+        let service = (try? String(contentsOf: src, encoding: .utf8)) ?? ""
+        let body = service.components(separatedBy: "private func requestDetailed(method:").dropFirst().first?
+            .components(separatedBy: "\n    }\n").first ?? ""
+        expectEqual(body.isEmpty, false, "Last.fm 解析(契约): 读到 requestDetailed")
+        expectEqual(body.contains("try await Self.decodeJSONObject(data)")
+                    && !body.contains("JSONSerialization.jsonObject(with: data)"), true,
+                    "Last.fm 解析(契约): 响应交给后台线程解析,不在主线程上解")
+        expectEqual(service.contains("private nonisolated static func decodeJSONObject(_ data: Data) async throws")
+                    && service.contains("Task.detached(priority: .userInitiated)"), true,
+                    "Last.fm 解析(契约): decodeJSONObject 在 detached 任务里解")
+    }
+
     // ---- 配置包自报的导出时间 / 机器名(ConfigExportMetadata)----
     do {
         typealias M = ConfigExportMetadata

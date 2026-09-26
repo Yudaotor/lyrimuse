@@ -3887,6 +3887,14 @@ final class LastfmStatsService: ObservableObject {
     /// 瞬时失败每轮重问——本机实测 7 首有声书章节(Last.fm 根本没有)每次 applyRecent 都重发
     /// 7 个 getinfo、永不收敛;feed 时代 applyRecent 更频繁,这个洞放大了。"没有"是定论,
     /// 该跟"成功返回但为空"同等对待:记进 unavailable,不再问。
+    /// 在后台线程解 JSON。这个类在主线程上,而上一期周榜(`user.getweekly*chart`)这类不限条数的响应
+    /// 近一年能有几 MB,放主线程解会卡统计页。
+    private nonisolated static func decodeJSONObject(_ data: Data) async throws -> [String: Any]? {
+        try await Task.detached(priority: .userInitiated) {
+            JSONObjectBox(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }.value.object
+    }
+
     private func requestDetailed(method: String, cred: (user: String, key: String),
                                  extra: [String: String] = [:],
                                  priority: LastfmRateLimiter.Priority = .interactive)
@@ -3944,7 +3952,7 @@ final class LastfmStatsService: ObservableObject {
                     logger.notice("\(method, privacy: .public): http \(status)")
                     return (nil, false)
                 }
-                let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let obj = try await Self.decodeJSONObject(data)
                 // Last.fm 的错误多以 200 + {"error":N} 返回(API key 失效就是这形态)。不识别
                 // 它的话,失效的 key 会让页面显示"0 scrobble/还没有记录"——一套看起来很确定、
                 // 实际全错的数据,比失败态糟糕得多。
@@ -3970,3 +3978,10 @@ final class LastfmStatsService: ObservableObject {
         return (nil, false)
     }
 }
+
+/// 把后台解出来的 JSON 字典交回主线程。只在 `decodeJSONObject` 里用:解完就交出去、后台不再碰它。
+private struct JSONObjectBox: @unchecked Sendable {
+    let object: [String: Any]?
+    init(_ object: [String: Any]?) { self.object = object }
+}
+
