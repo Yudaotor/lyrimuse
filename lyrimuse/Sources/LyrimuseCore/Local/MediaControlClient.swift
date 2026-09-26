@@ -98,6 +98,8 @@ public enum MediaControlClient {
         } catch (e) {
             return JSON.stringify(null);
         }
+        let mediaKind = "";
+        try { mediaKind = String(track.mediaKind()); } catch (e) { mediaKind = ""; }
         try {
             return JSON.stringify({
                 title: track.name(),
@@ -108,7 +110,8 @@ public enum MediaControlClient {
                 playing: state === "playing",
                 playbackRate: state === "playing" ? 1 : 0,
                 isMusicApp: true,
-                bundleIdentifier: "com.apple.Music"
+                bundleIdentifier: "com.apple.Music",
+                isMusicVideo: mediaKind === "music video"
             });
         } catch (e) {
             return JSON.stringify(null);

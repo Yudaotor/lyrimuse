@@ -45,6 +45,10 @@ public struct MediaControlSnapshot: Decodable {
     /// 这份读数的位置比原始锚点外推多补了多少秒(酷狗自然切歌,见 `MediaControlClient.resetAnchorStartCorrection`)。
     /// `elapsedTime` 已经含着它,`anchorElapsedTime` 仍是原始值;App 据此把同一段修正写进偏置文件给 collector。
     public var anchorStartCorrection: Double? = nil
+    /// Music.app 把这一条归为 MV(JXA 读 `media kind` == "music video")。只有 Apple Music 的 JXA 快照填;
+    /// media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。只用来显示,见
+    /// `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台)都不经过 Apple Music 的 MV。
+    public var isMusicVideo: Bool? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 

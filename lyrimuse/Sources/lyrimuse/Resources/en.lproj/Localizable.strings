@@ -86,6 +86,7 @@
 "Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" = "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings";
 "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" = "Lyrimuse reads what's playing in Apple Music through this permission — without it, the floating lyrics have nothing to show. Click Request Access, then choose “Allow” when macOS asks. You can come back to this step in Settings at any time";
+"MV" = "Music Video";
 "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复" = "Musixmatch rejected the anonymous token request (anti-bot rate limiting, hint=captcha) — not a network fault, this usually recovers after a while";
 "Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复" = "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
 "QQ 音乐" = "QQ Music";

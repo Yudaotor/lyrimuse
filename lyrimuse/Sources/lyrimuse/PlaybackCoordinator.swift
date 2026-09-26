@@ -64,6 +64,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 纠正落地之前是空串。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
     @Published private(set) var displayArtist: String = ""
     @Published private(set) var album: String = ""
+    /// 界面上专辑位显示的字。MV 不属于任何专辑、播放器也不报,专辑为空时写「MV」,不留一块空白;
+    /// 播放器真报了专辑就照报。只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
+    @Published private(set) var displayAlbum: String = ""
     @Published private(set) var isPlayingNow: Bool = false
     // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
     //
@@ -827,6 +830,10 @@ final class PlaybackCoordinator: ObservableObject {
                 .removeDuplicates()
                 .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
+            s.$album.combineLatest(s.$isMusicVideo)
+                .map { album, isMusicVideo in album.isEmpty && isMusicVideo ? L10n.t("MV") : album }
+                .removeDuplicates()
+                .assign(to: \.displayAlbum, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
             s.$currentLine.sink { [weak self] line in

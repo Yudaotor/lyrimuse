@@ -20,6 +20,7 @@ private final class WindowPlayback: ObservableObject {
     /// `PlayerArtistFix.displayArtist`)。`artist` 留着给查缓存 / 拼链接那些拿它当 key 的地方。
     @Published private(set) var displayArtist = ""
     @Published private(set) var album = ""
+    @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var isPlayingSmoothed = false
     @Published private(set) var currentLineIndex: Int?
@@ -106,6 +107,7 @@ private final class WindowPlayback: ObservableObject {
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
+            p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$isPlayingSmoothed.removeDuplicates().sink { [weak self] in self?.isPlayingSmoothed = $0 },
             p.$currentLineIndex.removeDuplicates().sink { [weak self] in self?.currentLineIndex = $0 },
@@ -1470,7 +1472,7 @@ struct LyricsWindowView: View {
         // 口白换成台名:那不是广告,台名就是此刻"在放什么"的答案(同完整布局)。
         if let station = radioTalkStation { return [.init(field: .title, value: station.name)] }
         return playback.miniHeaderFields.visibleParts(
-            title: playback.title, artist: playback.artist, album: playback.album)
+            title: playback.title, artist: playback.artist, album: playback.displayAlbum)
     }
 
     /// 顶部文字最多两行:第一样独占第一行,其余几样用「 — 」合成第二行(Apple Music 迷你播放器
@@ -3467,8 +3469,8 @@ struct LyricsWindowView: View {
             if !playback.displayArtist.isEmpty {
                 InfoPanelRow(label: L10n.t("歌手"), value: playback.displayArtist, onArtwork: hasArtworkBackground)
             }
-            if !playback.album.isEmpty {
-                InfoPanelRow(label: L10n.t("专辑"), value: playback.album, onArtwork: hasArtworkBackground)
+            if !playback.displayAlbum.isEmpty {
+                InfoPanelRow(label: L10n.t("专辑"), value: playback.displayAlbum, onArtwork: hasArtworkBackground)
             }
             if let durationText {
                 InfoPanelRow(label: L10n.t("时长"), value: durationText, onArtwork: hasArtworkBackground)
@@ -3592,7 +3594,7 @@ struct LyricsWindowView: View {
     // 用 displayArtist 而不是 artist:署名不可信的播放器在纠正落地前歌手位会一直跳歌词,
     // 判据见 PlayerArtistFix.displayArtist。两边都空时整行为空串,不会剩一个孤零零的破折号。
     private var artistAlbumText: String {
-        [playback.displayArtist, playback.album].filter { !$0.isEmpty }.joined(separator: " — ")
+        [playback.displayArtist, playback.displayAlbum].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
     /// 广告插播时歌名位显示的文案。判据 isCurrentTrackAdBreak 由 LocalPlaybackSource 给
@@ -3619,8 +3621,8 @@ struct LyricsWindowView: View {
         } else {
             HStack(spacing: 0) {
                 if !playback.displayArtist.isEmpty { editorialSegment(playback.displayArtist, kind: .artist) }
-                if !playback.displayArtist.isEmpty && !playback.album.isEmpty { Text(verbatim: " — ") }
-                if !playback.album.isEmpty { editorialSegment(playback.album, kind: .album) }
+                if !playback.displayArtist.isEmpty && !playback.displayAlbum.isEmpty { Text(verbatim: " — ") }
+                if !playback.displayAlbum.isEmpty { editorialSegment(playback.displayAlbum, kind: .album) }
             }
         }
     }

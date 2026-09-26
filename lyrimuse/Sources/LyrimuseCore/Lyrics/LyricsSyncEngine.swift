@@ -2484,8 +2484,11 @@ public final class LyricsSyncEngine {
         let leadMs = applyMinimumDuration ? GapRule.leadMs : 0
         if index == -1 {
             guard let first = gapLineStartMs(at: 0) else { return nil }
-            if applyMinimumDuration { guard first >= GapRule.minIntroMs else { return nil } }
-            return (0, max(0, first - leadMs))
+            // 前奏从「播放位置 0 对应的歌词时间」算起:总偏移为负(MV 扣掉片头、用户往后调)时,
+            // 开头那段歌词时间是负的,窗口从 0 开始就接不住,悬浮窗会落到兜底的静态「♪」。
+            let start = min(0, effectiveOffsetMs)
+            if applyMinimumDuration { guard first - start >= GapRule.minIntroMs else { return nil } }
+            return (start, max(start, first - leadMs))
         }
         guard let start = gapLineStartMs(at: index),
               let next = gapLineStartMs(at: index + 1) else { return nil }

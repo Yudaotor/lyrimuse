@@ -1392,6 +1392,147 @@ func runPlaybackPositionTests() {
                     nil, "浏览器探针解析: 万一混进 JSON 残留也不能误判成合法数据(2026-08-30 回归)")
     }
 
+    // ---- MV 时间轴:探针第五段 / SponsorBlock 片段 / 换算 ----
+    // 数据取自真机与接口实测(见 02 章决策 50)。
+    do {
+        typealias P = BrowserPositionProbe
+        typealias T = MusicVideoTimeline
+        let omv = P.VideoIdentity(videoID: "e-ORhEE9VVg", musicVideoType: "MUSIC_VIDEO_TYPE_OMV")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|0|||#e-ORhEE9VVg,MUSIC_VIDEO_TYPE_OMV")?.video, omv,
+                    "MV 探针: 第五段解析出 videoId 与类型")
+        let withPrecise = P.parseReading(fromOsascriptOutput: "57|0||@57.123,1790000000000|#e-ORhEE9VVg,MUSIC_VIDEO_TYPE_OMV")
+        expectEqual(withPrecise?.video, omv, "MV 探针: 带精确读数时第五段照样解析")
+        expectEqual(withPrecise?.precise != nil, true, "MV 探针: 第五段不影响第四段")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|0||")?.video, nil, "MV 探针: 旧格式没有第五段")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|0|||")?.video, nil, "MV 探针: 第五段为空")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|0|||#short,MUSIC_VIDEO_TYPE_OMV")?.video, nil,
+                    "MV 探针: videoId 不是 11 位就整段作废")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|0|||#e-ORhEE9VVg,")?.video?.musicVideoType, nil,
+                    "MV 探针: 类型读不到时为 nil")
+        expectEqual(P.parseReading(fromOsascriptOutput: "57|1|||#e-ORhEE9VVg,MUSIC_VIDEO_TYPE_OMV"), nil,
+                    "MV 探针: 暂停中整条不采信")
+
+        expectEqual(T.isMusicVideoType("MUSIC_VIDEO_TYPE_OMV"), true, "MV 类型: 官方 MV")
+        expectEqual(T.isMusicVideoType("MUSIC_VIDEO_TYPE_UGC"), true, "MV 类型: 用户上传")
+        expectEqual(T.isMusicVideoType("MUSIC_VIDEO_TYPE_ATV"), false, "MV 类型: 歌曲版不算")
+        expectEqual(T.isMusicVideoType(nil), false, "MV 类型: 读不到不算")
+
+        // 专辑位写「MV」用的那一位:Apple Music 的 JXA 快照带 isMusicVideo,按曲目记住。
+        let decode = { (json: String) in try? JSONDecoder().decode(MediaControlSnapshot.self, from: Data(json.utf8)) }
+        expectEqual(decode(#"{"title":"黑白","artist":"方大同","album":"","isMusicVideo":true}"#)?.isMusicVideo, true,
+                    "MV 标记: JXA 快照里的 isMusicVideo 解得出来")
+        expectEqual(decode(#"{"title":"黑白","artist":"方大同","album":""}"#)?.isMusicVideo, nil,
+                    "MV 标记: media-control 载荷没有这一位")
+        let L = LocalPlaybackSource.self
+        expectEqual(L.musicVideoTrackKey(previous: nil, currentKey: "BTS|SWIM", markedMusicVideo: true), "BTS|SWIM",
+                    "MV 标记: 这一拍认出来就记下")
+        expectEqual(L.musicVideoTrackKey(previous: "BTS|SWIM", currentKey: "BTS|SWIM", markedMusicVideo: false), "BTS|SWIM",
+                    "MV 标记: 同一首后面几拍没带这一位(Apple Music 暂停不走 JXA)仍然是 MV")
+        expectEqual(L.musicVideoTrackKey(previous: "BTS|SWIM", currentKey: "TWICE|THIS IS FOR", markedMusicVideo: false), nil,
+                    "MV 标记: 换歌作废")
+        expectEqual(L.musicVideoTrackKey(previous: nil, currentKey: "TWICE|THIS IS FOR", markedMusicVideo: false), nil,
+                    "MV 标记: 普通歌不是 MV")
+
+        // 《Blank Space》MV:片头 0–3.112、片尾 233.808–272.441,歌曲版 231 秒。
+        let blank = T.make(cuts: [.init(start: 0, end: 3.112), .init(start: 233.808, end: 272.441)],
+                           videoDurationSecs: 272.441, songDurationSecs: 231)
+        expectEqual(blank?.isComplete, true, "MV 时间轴: 标全的 MV 用上全部片段")
+        expectEqual(blank?.offsetMs(atVideoMs: 0), -3112, "MV 时间轴: 片头里就整首扣掉片头")
+        expectEqual(blank?.offsetMs(atVideoMs: 100_000), -3112, "MV 时间轴: 正片里扣片头")
+        expectEqual(blank?.offsetMs(atVideoMs: 250_000), -3112, "MV 时间轴: 走进片尾不再停(已在最后一句之后)")
+        // 《Blinding Lights》MV 剪完 219 秒、歌曲版 200 秒:检查不过,只扣片头。
+        let blinding = T.make(cuts: [.init(start: 0, end: 23.1), .init(start: 241.7, end: 262.5)],
+                              videoDurationSecs: 263, songDurationSecs: 200)
+        expectEqual(blinding?.isComplete, false, "MV 时间轴: 剪完与歌曲版差太多时不用全部片段")
+        expectEqual(blinding?.offsetMs(atVideoMs: 100_000), -23100, "MV 时间轴: 检查不过仍扣片头")
+        // 还不知道歌曲版时长(歌词判决没出来):先只扣片头,《Super Shy》MV 片头 41.4 秒。
+        let early = T.make(cuts: [.init(start: 0, end: 41.4), .init(start: 195.4, end: 200.8)],
+                           videoDurationSecs: 200.9, songDurationSecs: nil)
+        expectEqual(early?.isComplete, false, "MV 时间轴: 不知道歌曲版时长时先只扣片头")
+        expectEqual(early?.offsetMs(atVideoMs: 10_000), -41400, "MV 时间轴: 片头先行,不等判决")
+        // 《Royals》MV 只标了片尾、检查也不过:没有片头可扣 → 不启用。
+        expectEqual(T.make(cuts: [.init(start: 199.2, end: 200.1)], videoDurationSecs: 201, songDurationSecs: 190.2) == nil, true,
+                    "MV 时间轴: 只标片尾且检查不过时不启用")
+        expectEqual(T.make(cuts: [], videoDurationSecs: 245, songDurationSecs: 231) == nil, true,
+                    "MV 时间轴: 没有片段不启用")
+        // BTS《SWIM》MV(b4iVv91Z6lY,244.221 秒):片头 + 中间插段 + 片尾,歌曲版 159 秒。剪完 155.85 秒,差 3.15 超过容差,
+        // 但片尾 49.8 秒盖住的歌曲尾音在弹性区间 [152.85, 208.65] 里 → 全部启用,2:12 之后连插段一起扣。
+        let swim = T.make(cuts: [.init(start: 0, end: 29.414), .init(start: 122.663, end: 131.823),
+                                 .init(start: 194.424, end: 244.221)],
+                          videoDurationSecs: 244.221, songDurationSecs: 159)
+        expectEqual(swim?.isComplete, true, "MV 时间轴: 片尾盖住歌曲尾音时放宽,片头 + 插段全部启用")
+        expectEqual(swim?.offsetMs(atVideoMs: 140_000), -38574, "MV 时间轴: 插段之后片头 + 插段一起扣(29.414 + 9.16)")
+        // 反方向不放宽:剪完比歌曲版长出容差以上(片段没标全),即使有片尾也只扣片头。
+        let longer = T.make(cuts: [.init(start: 0, end: 29.414), .init(start: 194.424, end: 244.221)],
+                            videoDurationSecs: 244.221, songDurationSecs: 159)
+        expectEqual(longer?.isComplete, false, "MV 时间轴: 剪完比歌曲版长出容差以上时照旧只扣片头")
+        // 没有片尾时 trailing = 0,退回 ±3 秒:差 3.15 不过、差 2.9 过。
+        let noTailFail = T.make(cuts: [.init(start: 0, end: 10), .init(start: 100, end: 110)],
+                                videoDurationSecs: 240, songDurationSecs: 216.85)
+        expectEqual(noTailFail?.isComplete, false, "MV 时间轴: 没有片尾时差 3.15 秒不放宽")
+        let noTailPass = T.make(cuts: [.init(start: 0, end: 10), .init(start: 100, end: 110)],
+                                videoDurationSecs: 240, songDurationSecs: 217.1)
+        expectEqual(noTailPass?.isComplete, true, "MV 时间轴: 没有片尾时差 2.9 秒照旧通过")
+        // 中间插段:进去之后停住,出来整段扣掉。
+        let interlude = T.make(cuts: [.init(start: 0, end: 5), .init(start: 100, end: 110)],
+                               videoDurationSecs: 245, songDurationSecs: 230)
+        expectEqual(interlude?.offsetMs(atVideoMs: 50_000), -5000, "MV 时间轴: 插段之前只扣片头")
+        expectEqual(interlude?.offsetMs(atVideoMs: 105_000), -10000, "MV 时间轴: 插段里歌词停在插段开始那一刻")
+        expectEqual(interlude?.offsetMs(atVideoMs: 120_000), -15000, "MV 时间轴: 插段之后整段扣掉")
+        // Tame Impala MV 的重叠片段合并。
+        expectEqual(T.merged([.init(start: 0, end: 78.5), .init(start: 0, end: 1.2), .init(start: 294.8, end: 342.8)],
+                             videoDurationSecs: 343).count, 2, "MV 时间轴: 重叠片段合并")
+        // 片段起点差零点几秒也按片头处理(《One More Time》MV 的 [0, 0.6] 那类)。
+        let nearZero = T.make(cuts: [.init(start: 0.6, end: 3)], videoDurationSecs: 233, songDurationSecs: 230)
+        expectEqual(nearZero?.offsetMs(atVideoMs: 1000), -2400, "MV 时间轴: 起点在 1 秒内按片头处理")
+
+        // 歌曲版时长:优先取显示的那份歌词的来源,否则取中位数(《黑白》的真实候选)。
+        let record: [String: Any] = ["latest": ["candidates": [
+            ["source": "kugou", "source_reported_duration_secs": 231],
+            ["source": "netease", "source_reported_duration_secs": 231.613],
+            ["source": "qq", "source_reported_duration_secs": 231],
+        ]]]
+        expectEqual(T.songDurationSecs(fromDecisionRecord: record, lyricsSource: "netease"), 231.613,
+                    "MV 歌曲时长: 取显示的那份歌词的来源")
+        expectEqual(T.songDurationSecs(fromDecisionRecord: record, lyricsSource: nil), 231,
+                    "MV 歌曲时长: 来源对不上时取中位数")
+        expectEqual(T.songDurationSecs(fromDecisionRecord: [:], lyricsSource: "kugou"), nil,
+                    "MV 歌曲时长: 没有候选明细")
+
+        // 总偏移为负时前奏窗口从播放位置 0 对应的歌词时间算起,不然 MV 片头那段会落到兜底的「♪」。
+        do {
+            let yrc = "[2000,1000](2000,500,0)aa (2500,500,0)bb \n"
+                + "[6000,1000](6000,500,0)cc (6500,500,0)dd \n"
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+            engine.offsetMs = -41400
+            expectEqual(engine.rawActiveGapWindow(atMs: 0), LyricsGapWindow(startMs: -41400, endMs: 2000),
+                        "MV 前奏: 负偏移下前奏窗口从视频开头就接住")
+            expectEqual(engine.rawActiveGapWindow(atMs: 30_000) != nil, true, "MV 前奏: 片头中段仍在前奏窗口里")
+            expectEqual(engine.gapMarkers().first?.index, -1, "MV 前奏: 前奏按实际长度过门槛,歌词窗口也标前奏点")
+            engine.offsetMs = 0
+            expectEqual(engine.rawActiveGapWindow(atMs: 500)?.startMs, 0, "MV 前奏: 偏移为 0 时前奏起点仍是 0")
+        }
+
+        typealias S = SponsorBlockSegments
+        expectEqual(S.hashPrefix(forVideoID: "e-ORhEE9VVg"), "037d", "SponsorBlock: 哈希前缀(接口实测值)")
+        let url = S.requestURL(forVideoID: "e-ORhEE9VVg")?.absoluteString ?? ""
+        expectEqual(url.contains("/api/skipSegments/037d?"), true, "SponsorBlock: 走哈希前缀接口,不带 videoID")
+        expectEqual(url.contains("e-ORhEE9VVg"), false, "SponsorBlock: 请求里不出现 videoID")
+        let body = Data("""
+        [{"videoID":"zzzzzzzzzzz","segments":[{"category":"music_offtopic","actionType":"skip","segment":[0,9],"videoDuration":100}]},
+         {"videoID":"e-ORhEE9VVg","segments":[
+           {"category":"music_offtopic","actionType":"skip","segment":[0,3.112],"videoDuration":272.441,"locked":1},
+           {"category":"sponsor","actionType":"skip","segment":[10,20],"videoDuration":272.441},
+           {"category":"music_offtopic","actionType":"skip","segment":[233.808,272.441],"videoDuration":272.441,"locked":1}]}]
+        """.utf8)
+        let parsed = S.parse(body, videoID: "e-ORhEE9VVg")
+        expectEqual(parsed?.cuts.count, 2, "SponsorBlock: 只取自己那支的 music_offtopic 片段")
+        expectEqual(parsed?.videoDurationSecs, 272.441, "SponsorBlock: 带回视频时长")
+        expectEqual(S.parse(body, videoID: "3UlcSiBruxg")?.cuts.isEmpty, true, "SponsorBlock: 前缀下没有自己那支 = 没有标注")
+        expectEqual(S.parse(Data("oops".utf8), videoID: "e-ORhEE9VVg") == nil, true, "SponsorBlock: 形状不对返回 nil")
+    }
+
     // ---- BrowserPositionProbe:平台与浏览器配对门禁 ----
     // 只测"没配对就不探测"这道门禁本身——它在 kickIfNeeded 内部、发起任何 AppleScript
     // 调用之前就短路返回,不依赖真实 Arc,能在 CI/无 GUI 环境里稳定跑。真正的探测行为

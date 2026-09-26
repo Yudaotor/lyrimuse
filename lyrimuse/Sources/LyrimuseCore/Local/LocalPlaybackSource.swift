@@ -16,6 +16,9 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var title: String = ""
     @Published public private(set) var artist: String = ""
     @Published public private(set) var album: String = ""
+    /// 这首是 MV。Apple Music 看 JXA 快照的 `isMusicVideo`,网页播放器看探针交出的视频类型(`noteBrowserVideo`)。
+    /// 只给界面在专辑位写「MV」用,不进任何缓存 key。判据见 `musicVideoTrackKey(...)`。
+    @Published public private(set) var isMusicVideo: Bool = false
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
@@ -262,6 +265,12 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot?
+    /// 这首是 MV 时按 SponsorBlock 片段换算出的时间轴(见 MusicVideoTimeline),连同它属于哪首歌。
+    private var musicVideoTimeline: (trackKey: String, timeline: MusicVideoTimeline)?
+    /// 已经为哪首歌发起过片段查询(同一首只查一次,换歌清掉)。
+    private var musicVideoLookupKey: String?
+    /// 此刻叠进引擎的 MV 偏移(≤ 0),由 20Hz tick 按播放位置刷新,见 refreshMusicVideoOffset。
+    private var musicVideoOffsetMs = 0
     /// 上一拍的播放器 bundle id —— 只为「按播放器偏移」那一层服务(见 apply() 里那处判断)。
     /// 不能靠 lastSnapshot 反推:apply() 第一行就把它换成新快照了,等走到判断处已经比不出来。
     private var lastAppliedBundleID: String?
@@ -1261,6 +1270,123 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
+    /// 网页播放器交出的视频身份。是 MV(`MusicVideoTimeline.isMusicVideoType`)时查 SponsorBlock 标注的
+    /// 非音乐片段,按「这份歌词的来源自报的歌曲版时长」建时间轴;检查不过就什么都不做。同一首只查一次。
+    ///
+    /// 片段一到先只扣片头(不需要歌曲版时长,见 MusicVideoTimeline 头注),再等歌词判决拿歌曲版时长升级成全部片段。
+    /// 第一次放的歌,判决要等全部歌词源应答(实测半分钟上下):每 `musicVideoSongDurationRetrySecs` 秒重读一次
+    /// 缓存键与判决明细,最多 `musicVideoSongDurationAttempts` 次,换歌即停。片段有缓存,重试不再联网。
+    public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
+        guard let snapshot = lastSnapshot, snapshot.trackKey == key else { return }
+        guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
+        musicVideoKey = key
+        if !isMusicVideo { isMusicVideo = true }
+        guard musicVideoLookupKey != key else { return }
+        musicVideoLookupKey = key
+        musicVideoLookupBasis = (key, video, musicVideoLyricsContext(forKey: key)?.lyricsSource)
+        let videoDuration = currentDurationMs.map { Double($0) / 1000 }
+        let videoID = video.videoID
+        let attempts = Self.musicVideoSongDurationAttempts
+        let retryNanos = UInt64(Self.musicVideoSongDurationRetrySecs * 1_000_000_000)
+        Task.detached(priority: .utility) { [weak self] in
+            guard let result = await SponsorBlockSegments.shared.segments(forVideoID: videoID) else { return }
+            guard !result.cuts.isEmpty else {
+                await self?.adoptMusicVideoTimeline(nil, forKey: key, videoID: videoID, cutCount: 0, songDuration: nil)
+                return
+            }
+            let duration = result.videoDurationSecs ?? videoDuration ?? 0
+            if let leadingOnly = MusicVideoTimeline.make(cuts: result.cuts, videoDurationSecs: duration, songDurationSecs: nil) {
+                await self?.adoptMusicVideoTimeline(leadingOnly, forKey: key, videoID: videoID,
+                                                    cutCount: result.cuts.count, songDuration: nil)
+            }
+            var songDuration: Double?
+            for attempt in 0..<attempts {
+                if attempt > 0 { try? await Task.sleep(nanoseconds: retryNanos) }
+                guard let context = await self?.musicVideoLyricsContext(forKey: key) else { return }
+                if let cacheKey = context.cacheKey,
+                   let record = DecisionSidecar.loadRecord(key: cacheKey,
+                                                           directory: LyrimusePaths.configFile(DecisionSidecar.directoryName)) {
+                    songDuration = MusicVideoTimeline.songDurationSecs(fromDecisionRecord: record,
+                                                                       lyricsSource: context.lyricsSource)
+                }
+                if songDuration != nil { break }
+            }
+            guard let songDuration else { return }
+            let timeline = MusicVideoTimeline.make(cuts: result.cuts, videoDurationSecs: duration, songDurationSecs: songDuration)
+            await self?.adoptMusicVideoTimeline(timeline, forKey: key, videoID: videoID,
+                                                cutCount: result.cuts.count, songDuration: songDuration)
+        }
+    }
+
+    /// 上一次查 MV 时间轴时用的视频身份与当时显示的歌词来源。歌曲版时长取自「显示的那份歌词」的判决,
+    /// 同一首歌的歌词换了来源(collector 播放中重选,见 02 章决策 49 追加)就要按新判决重查一次,见 recheckMusicVideoTimelineIfLyricsChanged。
+    private var musicVideoLookupBasis: (key: String, video: BrowserPositionProbe.VideoIdentity, lyricsSource: String?)?
+
+    /// 同一首歌的歌词缓存变了之后调:显示的歌词换了来源才重查,其余情况什么都不做。
+    private func recheckMusicVideoTimelineIfLyricsChanged(forKey key: String) {
+        guard let basis = musicVideoLookupBasis, basis.key == key, musicVideoLookupKey == key,
+              let source = musicVideoLyricsContext(forKey: key)?.lyricsSource, source != basis.lyricsSource else { return }
+        logger.notice("music video timeline: lyrics source changed \(basis.lyricsSource ?? "-", privacy: .public) -> \(source, privacy: .public), rechecking song duration")
+        musicVideoLookupKey = nil
+        noteBrowserVideo(basis.video, forKey: key)
+    }
+
+    static let musicVideoSongDurationAttempts = 10
+    static let musicVideoSongDurationRetrySecs: Double = 4
+
+    /// 这首歌此刻在歌词缓存里的键与歌词来源;已经换歌返回 nil。缓存读取要在主线程。
+    private func musicVideoLyricsContext(forKey key: String) -> (cacheKey: String?, lyricsSource: String?)? {
+        guard let snapshot = lastSnapshot, snapshot.trackKey == key else { return nil }
+        let artist = snapshot.artist ?? "", title = snapshot.title ?? "", album = snapshot.album ?? ""
+        return (EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album),
+                EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource)
+    }
+
+    private func adoptMusicVideoTimeline(_ timeline: MusicVideoTimeline?, forKey key: String, videoID: String,
+                                         cutCount: Int, songDuration: Double?) {
+        guard lastSnapshot?.trackKey == key else { return }
+        guard let timeline else {
+            logger.notice("music video timeline: not applied for \(videoID, privacy: .public) (cuts=\(cutCount, privacy: .public) songDuration=\(songDuration ?? -1, privacy: .public))")
+            return
+        }
+        musicVideoTimeline = (key, timeline)
+        logger.notice("music video timeline: applied for \(videoID, privacy: .public) (cuts=\(timeline.cuts.count, privacy: .public) complete=\(timeline.isComplete, privacy: .public) songDuration=\(songDuration ?? -1, privacy: .public))")
+        if let anchor {
+            refreshMusicVideoOffset(atRawMs: anchor.extrapolatedPositionMs())
+        } else if let frozen = pausedPositionMs {
+            refreshMusicVideoOffset(atRawMs: frozen)
+        }
+    }
+
+    /// 按此刻的播放位置刷新 MV 偏移,变了才重灌引擎。不是 MV / 时间轴不属于这首歌时归零。
+    private func refreshMusicVideoOffset(atRawMs rawMs: Int) {
+        var next = 0
+        if let mv = musicVideoTimeline, mv.trackKey == lastSnapshot?.trackKey {
+            next = mv.timeline.offsetMs(atVideoMs: rawMs)
+        }
+        guard next != musicVideoOffsetMs else { return }
+        musicVideoOffsetMs = next
+        applyOffsets()
+    }
+
+    /// 认成 MV 的那首歌的 trackKey(见 isMusicVideo)。
+    private var musicVideoKey: String?
+
+    /// 这一拍之后「认成 MV 的那首」是哪首。按曲目记住、换歌作废:Apple Music 暂停时不走 JXA
+    /// (`MediaControlClient.adaptedSnapshot`),快照里没有这一位;网页那一位要等探针,也不是每拍都有。纯函数,selftest 覆盖。
+    public nonisolated static func musicVideoTrackKey(previous: String?, currentKey: String, markedMusicVideo: Bool) -> String? {
+        if markedMusicVideo { return currentKey }
+        return previous == currentKey ? previous : nil
+    }
+
+    /// 换歌 / 停播时清掉 MV 时间轴(偏移随下一次 applyOffsets 归零)。
+    private func clearMusicVideoTimeline() {
+        musicVideoTimeline = nil
+        musicVideoLookupKey = nil
+        musicVideoLookupBasis = nil
+        musicVideoOffsetMs = 0
+    }
+
     /// 权威广告判据:AppleScript 的 `spotify url` 对广告返回 "spotify:ad:…"。
     /// 每次换曲最多一次、后台异步,失败静默退回字段启发式(不劣于旧状)。结果回来时先核对
     /// 还是不是同一首 —— 广告只有二三十秒,晚到的 true 不能扣在下一首真歌头上。
@@ -1779,6 +1905,10 @@ public final class LocalPlaybackSource: ObservableObject {
         BrowserPositionProbe.shared.setArtworkSink { [weak self] key, url in
             Task { @MainActor [weak self] in self?.noteSpotifyArtwork(url: url, forKey: key) }
         }
+        // 同一次探针顺带读到的视频身份:是 MV 时按 SponsorBlock 片段换算时间轴(见 noteBrowserVideo)。
+        BrowserPositionProbe.shared.setVideoSink { [weak self] key, video in
+            Task { @MainActor [weak self] in self?.noteBrowserVideo(video, forKey: key) }
+        }
         // 探针结果一落地就补查一次,不等下一拍 2s 轮询来消费:poll() 自己会核对曲目,
         // 消费那边还有 posWasPlaying / key 两道门,多这一次查询完全无害。
         SpotifyPositionProbe.shared.setResultSink { [weak self] _ in
@@ -2088,6 +2218,7 @@ public final class LocalPlaybackSource: ObservableObject {
             clearLineDisplay()
             return
         }
+        refreshMusicVideoOffset(atRawMs: frozen)
         // 打包查询:四个值要的是同一个 posMs 的同一次定位,原来四个入口各自从头扫一遍
         // (性能审计,见 LyricsSyncEngine.tickQuery)。
         let r = syncEngine.tickQuery(atMs: frozen, trackEndMs: currentDurationMs)
@@ -2121,6 +2252,7 @@ public final class LocalPlaybackSource: ObservableObject {
             return
         }
         let pos = anchor.extrapolatedPositionMs()
+        refreshMusicVideoOffset(atRawMs: pos)
         // 只在真的换了行/换了下一句预览时才赋值——这两个是 @Published,SwiftUI 不管
         // 新旧值是否相等,只要赋值就会通知订阅者重新渲染。逐字填色已经交给
         // TimelineView 按渲染帧频现算(不经过这两个属性),这里 20Hz 只是为了判断当前
@@ -2224,6 +2356,7 @@ public final class LocalPlaybackSource: ObservableObject {
             artworkData = nil
             artworkAverageHex = nil
             if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
+            clearMusicVideoTimeline()
             pausedPositionMs = nil
             currentDurationMs = nil
             // 曲目本身也清掉,理由见上面那段。跟着一起清的还有"这首歌"的几个判定 ——
@@ -2231,6 +2364,8 @@ public final class LocalPlaybackSource: ObservableObject {
             if !title.isEmpty { title = "" }
             if !artist.isEmpty { artist = "" }
             if !album.isEmpty { album = "" }
+            musicVideoKey = nil
+            if isMusicVideo { isMusicVideo = false }
             if hasLyricsContent { hasLyricsContent = false }
             if isCurrentTrackInstrumental { isCurrentTrackInstrumental = false }
             if currentTrackHasNoLyrics { currentTrackHasNoLyrics = false }
@@ -2444,6 +2579,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if newArtist != artist { artist = newArtist }
         let newAlbum = snapshot.album ?? ""
         if newAlbum != album { album = newAlbum }
+        musicVideoKey = Self.musicVideoTrackKey(previous: musicVideoKey, currentKey: snapshot.trackKey,
+                                                markedMusicVideo: snapshot.isMusicVideo == true)
+        let newIsMusicVideo = musicVideoKey == snapshot.trackKey
+        if newIsMusicVideo != isMusicVideo { isMusicVideo = newIsMusicVideo }
         let newIsPlayingNow = snapshot.playing == true
         if newIsPlayingNow != isPlayingNow { isPlayingNow = newIsPlayingNow }
         // 停播欢迎态的「继续播放/打开 XX」要知道停播前在用谁、放的什么 —— 停播时快照
@@ -2624,10 +2763,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 logger.notice("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
+                clearMusicVideoTimeline()
             }
             lastKey = key
             lastEnrichMTime = enrichMTime
             reloadCurrentLyrics()
+            if !trackChanged { recheckMusicVideoTimelineIfLyricsChanged(forKey: snapshot.trackKey) }
         }
         // 换了播放器也要重算偏移 —— 上面那个 reload 的触发条件是「换歌 / 没内容 / 缓存变了」,
         // **不含**"播放器变了"。而 trackKey 只由 歌手|歌名 决定:.auto 档下焦点在两个 App 之间
@@ -3170,7 +3311,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let effective = LyricsOffsetStore.shared.effectiveOffset(
             forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier, radioKey: radioKey
         )
-        syncEngine.offsetMs = effective
+        // MV 偏移只进引擎与 currentLyricsOffsetMs(歌词对齐用),不进 trackLyricsOffsetMs(「你调了多少」)。
+        syncEngine.offsetMs = effective + musicVideoOffsetMs
         // 对外报的是**引擎真正在用的那个数**,含这份歌词自己带的 `[offset:]`
         // (`syncEngine.lrcOffsetMs`,见 LRCParser.parseOffsetMs)。
         //
@@ -3179,7 +3321,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 非零 offset 的歌点行会跳到隔壁行 —— 正是这个属性当初存在的理由(注释见上面)。
         // 用户可见的那两个数(设置页的基准、菜单里的单曲值)都不含它,那是对的:LRC offset
         // 不是用户调出来的,不该出现在"你调了多少"里。
-        let effectiveWithLRC = effective + syncEngine.lrcOffsetMs
+        let effectiveWithLRC = effective + musicVideoOffsetMs + syncEngine.lrcOffsetMs
         // 只在真的变了时才赋值:这两个都是 @Published,每次赋值都会推着订阅者重渲染,
         // 而 reloadCurrentLyrics 在"歌词还没解析出来"时会被反复调用(见那边的注释)。
         if currentLyricsOffsetMs != effectiveWithLRC { currentLyricsOffsetMs = effectiveWithLRC }
@@ -3187,6 +3329,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 显示另一个数会让人以为没生效。不是电台时逐字同改动前。
         let shown = radioKey.isEmpty ? track : LyricsOffsetStore.shared.radioOffset(forKey: radioKey)
         if trackLyricsOffsetMs != shown { trackLyricsOffsetMs = shown }
+        // 前奏那个间奏点的起点跟着总偏移走(见 LyricsSyncEngine.gapWindow),偏移变了要重算。
+        let newMarkers = syncEngine.gapMarkers()
+        if newMarkers != lyricsGapMarkers { lyricsGapMarkers = newMarkers }
     }
 
     // 供"歌词管理"窗口的偏移输入框用——那边直接写 LyricsOffsetStore(不经过

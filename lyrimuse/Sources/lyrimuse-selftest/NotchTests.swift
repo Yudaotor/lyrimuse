@@ -1115,7 +1115,7 @@ func runNotchTests() {
                     && window.contains(".popover(isPresented: Binding(get: { miniEditorialKind != nil },"), true,
                     "简介契约: 迷你尺寸顶部的歌手 / 专辑也能点开简介")
         expectEqual(window.contains("editorialSegment(playback.displayArtist, kind: .artist)")
-                    && window.contains("editorialSegment(playback.album, kind: .album)"), true,
+                    && window.contains("editorialSegment(playback.displayAlbum, kind: .album)"), true,
                     "简介契约: 歌词窗口点歌手看歌手简介、点专辑看专辑简介")
         expectEqual(window.contains(".onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }")
                     && window.contains(".onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }"), true,

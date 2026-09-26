@@ -27,6 +27,7 @@ private final class NotchPlayback: ObservableObject {
     /// 只有「专辑」这个耳朵模块读它。窄订阅的纪律没变:多订一个字段是因为
     /// 真的有人读,不是"顺手都订上"。
     @Published private(set) var album = ""
+    @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
     /// 歌词行**主行**画哪一句(是合成值,不再直接等于 PlaybackCoordinator 的
@@ -213,6 +214,7 @@ private final class NotchPlayback: ObservableObject {
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
+            p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
             // 主行画哪一句(见 displayLine 的注释):副行关着取 compactLine(唱完就切),副行开着取
@@ -1428,7 +1430,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             if let station { return station.name }
             return playback.title.isEmpty ? "♪" : playback.title
         case .artist: return (isAd || station != nil) ? "" : playback.displayArtist
-        case .album: return (isAd || station != nil) ? "" : playback.album
+        case .album: return (isAd || station != nil) ? "" : playback.displayAlbum
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
         case .artwork, .controls, .elapsed, .remaining, .none: return ""
         }

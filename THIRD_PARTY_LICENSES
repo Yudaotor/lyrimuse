@@ -16,6 +16,10 @@ Contents/Resources/。
   4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector 与 App,见 t2s.go / OpenCCT2STable.swift)
   5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
 
+运行时联网取用、不随包分发的数据:
+
+  6. SponsorBlock 片段数据                  — CC-BY-NC-SA-4.0 (App 运行时按需查询,只在本机使用)
+
 ================================================================================
 1. media-control / mediaremote-adapter
    https://github.com/ungive/media-control
@@ -306,3 +310,16 @@ https://creativecommons.org/licenses/by/4.0/legalcode
 CC BY 4.0 的合规要求是署名 + 注明许可证 + 提供许可证链接(不要求像 BSD/MIT 那样
 在分发物里逐字重印完整法律文本),上面这段属名声明连同许可证链接即满足该要求。
 
+================================================================================
+6. SponsorBlock
+   https://sponsor.ajay.app/
+   Uses SponsorBlock data licensed used under CC BY-NC-SA 4.0 from https://sponsor.ajay.app/.
+   (署名文字照 SponsorBlock 作者提供的模板。)
+   YouTube Music 网页里放 MV 时,App 查询这支视频被标注的「非音乐片段」(music_offtopic),
+   把 MV 时间换算回歌曲时间,让歌词跟上画面(见 LyrimuseCore/Local/SponsorBlockSegments.swift)。
+   走哈希前缀接口,只发视频 ID 哈希值的前 4 位。数据只在运行时按需取、只在本机使用:
+   不打包进 .app、不存进仓库、不经任何 Lyrimuse 自己的服务转发。
+================================================================================
+
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode

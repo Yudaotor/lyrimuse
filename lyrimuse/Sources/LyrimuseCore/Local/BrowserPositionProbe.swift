@@ -292,6 +292,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// (`0 ≤ currentTime − 文字秒数 < currentTimeSlackSecs`)时才交出 —— 电台 / 续播那种累计时间差着
     /// 整首歌长,落不进这个窗口,自动退回整秒读数。时间戳在 JS 里取,是读数那一刻的墙钟:osascript 的
     /// 往返时间不再算进读数的年龄。第三段(封面)留空。
+    ///
+    /// **第五段:视频身份 `#<videoId>,<musicVideoType>`**(读不到就空)。取自 `#movie_player.getPlayerResponse()`,
+    /// 给 MV 时间轴换算用(`LocalPlaybackSource.noteBrowserVideo`)。前缀 `#` 同样是为了不让 AppleScript
+    /// 那层的 `|1` 暂停判据撞上以 1 开头的 videoId。
     private static let youtubeMusicScript = """
     (function(){
       var el = document.querySelector('.time-info');
@@ -322,7 +326,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         var lead = ct - cur;
         if (lead >= 0 && lead < __CT_SLACK__) precise = '@' + ct.toFixed(3) + ',' + Date.now();
       }
-      return cur + '|' + (paused ? '1' : '0') + '||' + precise;
+      var ident = '';
+      try {
+        var mp = document.querySelector('#movie_player');
+        var pr = (mp && mp.getPlayerResponse) ? mp.getPlayerResponse() : null;
+        var vd = pr && pr.videoDetails;
+        if (vd && vd.videoId) ident = '#' + vd.videoId + ',' + (vd.musicVideoType || '');
+      } catch (e) {}
+      return cur + '|' + (paused ? '1' : '0') + '||' + precise + '|' + ident;
     })()
     """
 
@@ -468,6 +479,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     public func setArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
         lock.lock()
         artworkSink = sink
+        lock.unlock()
+    }
+
+    /// 页面顺带交出的视频身份的去向(见 youtubeMusicScript 第五段)。同 artworkSink:由 LocalPlaybackSource
+    /// 启动时挂上,没挂就丢掉,同一把锁下读写。
+    private var videoSink: (@Sendable (_ key: String, _ video: VideoIdentity) -> Void)?
+
+    public func setVideoSink(_ sink: @escaping @Sendable (_ key: String, _ video: VideoIdentity) -> Void) {
+        lock.lock()
+        videoSink = sink
         lock.unlock()
     }
 
@@ -863,6 +884,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 封面地址只在这次读数被采信(同一首、页面的钟在走)时交出去 —— 跟位置那份读数同一道可信度门。
         // sink 自己只是派一个 Task,不阻塞,在锁下调无妨。
         if let art = hit.artworkURL { artworkSink?(key, art) }
+        if let video = hit.video { videoSink?(key, video) }
     }
 
     // MARK: - 探测实现(全程跑在后台线程,调用方必须走 Task.detached)
@@ -1003,6 +1025,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         /// 页面顺带交出的封面地址(目前只有 Spotify 网页版规则给,见 spotifyWebScript 头注)。
         let artworkURL: URL?
         let precise: PreciseReading?
+        let video: VideoIdentity?
     }
 
     private static func probeAdvancing(
@@ -1041,7 +1064,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         for rule in siteRules where platformIDs.contains(rule.platformID) {
             if let reading = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
                 return ProbeHit(seconds: reading.seconds, platformID: rule.platformID,
-                                artworkURL: reading.artworkURL, precise: reading.precise)
+                                artworkURL: reading.artworkURL, precise: reading.precise, video: reading.video)
             }
         }
         return nil
@@ -1239,11 +1262,34 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         public let seconds: Double
         public let artworkURL: URL?
         public let precise: PreciseReading?
-        public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil) {
+        public let video: VideoIdentity?
+        public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil, video: VideoIdentity? = nil) {
             self.seconds = seconds
             self.artworkURL = artworkURL
             self.precise = precise
+            self.video = video
         }
+    }
+
+    /// 页面正在放的那支视频(YouTube Music 规则的第五段)。`musicVideoType` 读不到时为 nil。
+    public struct VideoIdentity: Equatable, Sendable {
+        public let videoID: String
+        public let musicVideoType: String?
+        public init(videoID: String, musicVideoType: String?) {
+            self.videoID = videoID
+            self.musicVideoType = musicVideoType
+        }
+    }
+
+    /// 解析第五段 `#<videoId>,<musicVideoType>`。videoId 必须是 YouTube 的 11 位 ID 形状,否则整段作废。
+    public static func parseVideoIdentity(_ raw: Substring) -> VideoIdentity? {
+        guard raw.hasPrefix("#") else { return nil }
+        let fields = raw.dropFirst().split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let id = fields.first.map(String.init), id.count == 11,
+              id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+        else { return nil }
+        let type = fields.count == 2 && !fields[1].isEmpty ? String(fields[1]) : nil
+        return VideoIdentity(videoID: id, musicVideoType: type)
     }
 
     /// 页面媒体元素的 `currentTime` 和读它那一刻的墙钟(见 youtubeMusicScript 第四段)。
@@ -1256,7 +1302,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         }
     }
 
-    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>]]`。
+    /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>[|#<videoId>,<type>]]]`。
     /// 第二段非 "0"(暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址
     /// (`SpotifyArtworkURL.parse`),别的一律 nil;第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
     /// 整秒读数照旧成立。纯函数,selftest 直接覆盖。
@@ -1277,6 +1323,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
                 precise = PreciseReading(seconds: ct, readAt: Date(timeIntervalSince1970: ms / 1000))
             }
         }
-        return Reading(seconds: seconds, artworkURL: artwork, precise: precise)
+        let video = parts.count >= 5 ? parseVideoIdentity(parts[4]) : nil
+        return Reading(seconds: seconds, artworkURL: artwork, precise: precise, video: video)
     }
 }

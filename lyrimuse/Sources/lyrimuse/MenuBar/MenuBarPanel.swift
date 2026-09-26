@@ -23,6 +23,7 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var artist = ""
     @Published private(set) var displayArtist = ""
     @Published private(set) var album = ""
+    @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
     /// 单行展示面取这一行,见 CompactLyricLead。面板那一格也是**定高单行**,跟灵动岛/
@@ -79,6 +80,7 @@ private final class PanelPlayback: ObservableObject {
             // `displayArtist` 只画在卡片上。判据见 `PlayerArtistFix.displayArtist`。
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
+            p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
             // 面板里那一行歌词跟状态栏项是同一个展示面(菜单栏),吃同一颗「卡拉OK效果」
@@ -457,7 +459,7 @@ private struct MenuBarPanelView: View {
     }
 
     private var displayAlbum: String {
-        playback.isCurrentTrackAdBreak ? "" : playback.album
+        playback.isCurrentTrackAdBreak ? "" : playback.displayAlbum
     }
 
     /// 压根没有曲目(不是"没有封面"):没歌名、没歌手,而且不是广告插播。

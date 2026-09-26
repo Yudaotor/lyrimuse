@@ -35615,6 +35615,23 @@
         }
       }
     },
+    "MV" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music Video"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MV"
+          }
+        }
+      }
+    },
     "调整宽度" : {
       "extractionState" : "manual",
       "localizations" : {
