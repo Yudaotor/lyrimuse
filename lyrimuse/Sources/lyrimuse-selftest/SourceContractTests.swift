@@ -1696,6 +1696,13 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "悬浮滚动: 找不到 nextLinePreviewContent / upcomingGroupColumns(改名了?)")
             }
+            // 截断的那一行先撑满再描边,否则描边剪影在另一个宽度上截断、轮廓对不上字。
+            if let a = view.range(of: "private func stillUpcomingText"), let b = view.range(of: "/// 按显示时长配速的图层行") {
+                expectEqual(String(view[a.upperBound..<b.lowerBound]).contains(".frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)\n                .lyricsTextStroke("), true,
+                            "描边: 不滚的那一行截断时先撑满整行再描边")
+            } else {
+                expectEqual(true, false, "描边: 找不到 stillUpcomingText(改名了?)")
+            }
             // 换行模式那条 SwiftUI 描边跟滚动模式的图层描边同一组参数。
             expectEqual(view.contains("private let width = LyricsTextStrokeMetrics.width"), true,
                         "描边: SwiftUI 那条的粗细读共享常量")

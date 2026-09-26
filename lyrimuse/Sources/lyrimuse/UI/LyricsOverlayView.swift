@@ -1055,13 +1055,23 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var pacedWindow: OverlayScrollingLyricRow.PacedWindow? { playback.currentLineWindow }
 
     /// 不滚的那一行。`lineLimit(1)` 不配 `fixedSize`:要让容器把宽度压下来,才会出「…」。
+    ///
+    /// 放不下、要截断时先撑满整行再描边:描边剪影那份副本按描边画布的宽度重排,而截断后的
+    /// Text 实际宽度比拿到的提议窄一点,副本在这个宽度上截断的位置不同,轮廓对不上字、在字旁边
+    /// 留下一块块描边色。撑满之后正文和副本拿到同一个宽度。放得下时照旧按自然宽度,对齐交给外层。
     private func stillUpcomingText(_ text: String, font: Font, color: Color) -> some View {
-        Text(text)
+        let base = Text(text)
             .font(font)
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(.tail)
-            .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        return ViewThatFits(in: .horizontal) {
+            base
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+            base
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        }
     }
 
     /// 按显示时长配速的图层行。不填色(整行一个颜色),描边、对齐、停走跟跟唱那条同一套。
