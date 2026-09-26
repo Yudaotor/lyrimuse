@@ -473,12 +473,12 @@ final class PlaybackCoordinator: ObservableObject {
     /// 按钮据此整个不显示。刷新时机也跟"喜欢"共用(换歌 / 窗口出现 / App 回到前台):
     /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
-
-    /// 用户动作序号,"喜欢"和"播放模式"各一份。
-    ///
     /// `playbackMode` 读自 / 写给哪个播放器(模式为 nil 时也是 nil)。灵动岛的随机 / 循环键只认
     /// Apple Music,靠它区分。两者只经 `applyPlaybackMode` 一起赋值,别单独改其中一个。
     @Published private(set) var playbackModePlayer: PlaybackPlayer?
+
+    /// 用户动作序号,"喜欢"和"播放模式"各一份。
+    ///
     /// 回读是**异步**的(要起一个 osascript 子进程,实测约 125ms),而这期间用户完全可能已经
     /// 点了按钮。没有这道守卫的话,一次在途的旧读数会把刚点出来的新状态盖回去 —— 最容易撞上
     /// 的时机就是"点击窗口把 App 激活"本身:激活触发一次刷新,紧接着的那一下点击落在按钮上,
@@ -727,9 +727,6 @@ final class PlaybackCoordinator: ObservableObject {
         setPlaybackMode(target)
     }
 
-    /// 当前播放器够不够得到「单曲循环」档(Spotify 的脚本接口只有 repeating 布尔,够不到)。
-    /// 歌词窗口的「循环」按钮读不到这一档时整颗不显示,别摆一个落不了地的开关。
-    var playbackModeSupportsRepeatOne: Bool {
     /// `playbackMode` 与 `playbackModePlayer` 的唯一写入点。判等再写,两个都是 @Published。
     private func applyPlaybackMode(_ mode: MusicPlaybackController.MusicPlaybackMode?, player: PlaybackPlayer?) {
         let owner = mode == nil ? nil : player
@@ -737,6 +734,9 @@ final class PlaybackCoordinator: ObservableObject {
         if playbackModePlayer != owner { playbackModePlayer = owner }
     }
 
+    /// 当前播放器够不够得到「单曲循环」档(Spotify 的脚本接口只有 repeating 布尔,够不到)。
+    /// 歌词窗口的「循环」按钮读不到这一档时整颗不显示,别摆一个落不了地的开关。
+    var playbackModeSupportsRepeatOne: Bool {
         guard let player = extendedControlPlayer else { return false }
         return MusicPlaybackController.supportsRepeatOne(player)
     }
