@@ -70,6 +70,24 @@ func runSyncEngineTests() {
                     "间奏窗口: applyMinimumDuration=false 时前奏窗口不扣 leadMs")
     }
 
+    // ---- 够格的间奏(LyricsGapWindow.isMarked):悬浮歌词在句间空档里换不换成「•••」 ----
+    do {
+        // 第一句唱完(3000)到第二句(12000)静默 9s,够格;第二句唱完(13000)到第三句(16000)只有 3s。
+        let yrc = "[2000,1000](2000,500,0)aa (2500,500,0)bb \n"
+            + "[12000,1000](12000,500,0)cc (12500,500,0)dd \n"
+            + "[16000,1000](16000,500,0)ee (16500,500,0)ff \n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+        let markers = engine.gapMarkers()
+        let long = engine.rawActiveGapWindow(atMs: 8000)
+        expectEqual(long?.isMarked(in: markers), true, "够格间奏: 9s 静默的原始窗口认得出门槛版标记")
+        expectEqual(engine.tickQuery(atMs: 8000).index, 0, "够格间奏: 引擎在间奏里仍把上一句当当前行(悬浮歌词自己换)")
+        // 门槛版终点提前熄灭,原始窗口一直开到下一句开始 —— 熄灭余量那段里也得认得出。
+        expectEqual(engine.rawActiveGapWindow(atMs: 11950)?.isMarked(in: markers), true, "够格间奏: 下一句开始前一刻仍算")
+        expectEqual(engine.rawActiveGapWindow(atMs: 14500)?.isMarked(in: markers), false, "够格间奏: 3s 的句间停顿不算")
+        expectEqual(engine.rawActiveGapWindow(atMs: 2500), nil, "够格间奏: 正在唱时没有窗口")
+    }
+
     // ---- 一行歌词的显示窗口(LyricDisplayWindow):按时长配速的滚动都读它 ----
     do {
         let W = LyricDisplayWindow.self

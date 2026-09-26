@@ -57,6 +57,10 @@ private final class OverlayPlayback: ObservableObject {
     /// (5s 前奏 / 6s 间奏起标)会把没达标的那几秒晾成静态「♪」,而没达标的短前奏/短间奏
     /// 比达标的场景常见得多。
     @Published private(set) var rawGapWindow: LyricsGapWindow?
+    /// 此刻在一段**够格**的间奏里(歌词窗口会插「•••」的那种,`LyricsGapWindow.isMarked`)。
+    /// 间奏里同步引擎的当前行仍停在上一句,这时视图把当前行当作没有,跟前奏一样画「•••」+
+    /// 接下来那句;不够格的句间空档照旧留着上一句,不然每两句之间都闪一下圆点。
+    @Published private(set) var inMarkedInterlude = false
     /// 悬浮歌词实际显示用的前景色 —— 语义同 PlaybackCoordinator.displayForegroundColor
     /// (那份保留给设置页预览等别处),这里预组合成单个去重值:三个输入(动态高亮色/
     /// "跟随封面"开关/手选前景色)任何一个变了才发一次。
@@ -171,6 +175,10 @@ private final class OverlayPlayback: ObservableObject {
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$rawGapWindow.removeDuplicates().sink { [weak self] in self?.rawGapWindow = $0 },
+            p.$rawGapWindow.combineLatest(p.$lyricsGapMarkers)
+                .map { raw, markers in raw?.isMarked(in: markers) ?? false }
+                .removeDuplicates()
+                .sink { [weak self] in self?.inMarkedInterlude = $0 },
             Publishers.CombineLatest3(p.$artworkAccentColor, s.$followsCoverArt, s.$foregroundColor)
                 .map { accent, follows, fg in (follows ? accent : nil) ?? fg }
                 .removeDuplicates()
@@ -449,7 +457,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 收在这**一个**计算属性里,而不是只在 `mainLine` 里挑一次:译文、罗马音、逐词
     /// 分组、对唱声部、换行缓存 key 读的都得是同一行,漏掉任何一处就会变成"示例句显示
     /// 出来了、译文却按空行算"。
-    private var line: SyncedLyricLine? { playback.currentLine ?? previewLine?.line }
+    ///
+    /// 够格的间奏里恒为 nil(见 `OverlayPlayback.inMarkedInterlude`)。
+    private var line: SyncedLyricLine? {
+        playback.inMarkedInterlude ? nil : (playback.currentLine ?? previewLine?.line)
+    }
 
     /// 这一屏画的是不是示例行。
     private var showingPreviewLine: Bool { playback.currentLine == nil && previewLine != nil }

@@ -153,6 +153,13 @@ public struct LyricsGapWindow: Equatable {
         self.startMs = startMs
         self.endMs = endMs
     }
+
+    /// 这段窗口够不够格算「间奏」—— 歌词窗口的门槛版标记(`gapMarkers()`)里有没有同一段。
+    /// 两版窗口的起点是同一个式子(`gapWindow(after:applyMinimumDuration:)`,只有终点差一段
+    /// 熄灭余量),按起点认。悬浮歌词拿它决定句间空档要不要把上一句换成「•••」。
+    public func isMarked(in markers: [LyricsGapMarker]) -> Bool {
+        markers.contains { $0.startMs == startMs }
+    }
 }
 
 // 按当前歌曲的四个歌词字段选基准 + 按外推位置算当前应该展示哪一行,算法照抄
