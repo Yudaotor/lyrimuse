@@ -130,6 +130,7 @@ func loadEnrichCacheReadOnly(path string) {
 	if err := json.Unmarshal(data, &m); err != nil || m == nil {
 		return
 	}
+	hydrateEnrichBodies(m, enrichBodiesDirFor(path)) // 只读正文小文件,不动它们
 	enrichMu.Lock()
 	enrichCache = m
 	enrichMu.Unlock()

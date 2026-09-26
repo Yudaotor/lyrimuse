@@ -4339,11 +4339,14 @@ func loadEnrichCache(path string) {
 		}
 		return
 	}
+	// 正文在小文件里的条目补回正文,见 enrichbodyload.go。
+	bodies := hydrateEnrichBodies(m, enrichBodiesDirFor(path))
 	shared := shareIdenticalDecisions(m) // 内存里两槽相同的判决记录共用一个对象,见 enrichdedupe.go
 	enrichMu.Lock()
 	enrichCache = m
 	enrichMu.Unlock()
 	log.Printf("cache: loaded %d track enrichments from %s (%d identical decision pairs shared)", len(m), path, shared)
+	bodies.log()
 	warnEnrichUnknownKeys(m) // 见 enrichjson.go:非零 = 这个构建比缓存文件老
 }
 

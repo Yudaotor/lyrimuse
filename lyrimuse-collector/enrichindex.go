@@ -53,7 +53,12 @@ func enrichBodiesDir() string {
 	if enrichPath == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(enrichPath), clientName+"-lyrics-bodies")
+	return enrichBodiesDirFor(enrichPath)
+}
+
+// enrichBodiesDirFor 跟主缓存 cachePath 同目录的正文小文件目录。只读加载(没有设 enrichPath)也要用。
+func enrichBodiesDirFor(cachePath string) string {
+	return filepath.Join(filepath.Dir(cachePath), clientName+"-lyrics-bodies")
 }
 
 // enrichBodyCRC 五个正文字段的校验值;全空为 0(没有正文就不写文件)。字段之间用 0x00 隔开,
