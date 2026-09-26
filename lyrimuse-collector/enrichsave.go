@@ -26,7 +26,12 @@ import (
 //
 // `writeEnrichSnapshot` 按 key 排序后逐条编码、经 bufio 直接写进临时文件,峰值只剩一条条目的编码
 // 缓冲。输出跟 `json.Marshal(map)` **逐字节一致**(同样按 key 排序、同样的 HTML 转义、条目各自
-// 走同一个 Marshal),单测钉住 —— App 那边的读取、备份比对都不受影响。
+// 走同一个 MarshalJSON),单测钉住 —— App 那边的读取、备份比对都不受影响。
+//
+// 条目直接调 `enrichEntry.MarshalJSON`,不经 `json.Marshal(entry)`:后者拿到 Marshaler 的输出后还要
+// 整段再校验、压缩一遍,而 MarshalJSON 的输出本来就是 json.Marshal 编出来的(已压缩、已做 HTML 转义),
+// 那一遍一个字节都不改。8600 多条的缓存上,那一遍占了一次保存的四分之三(0.7~0.9 秒 → 0.16~0.22 秒),
+// 切歌前后连着保存十来次时 collector 就一直顶在 60%~100%。
 //
 // ## 合并连续保存
 //
@@ -152,7 +157,7 @@ func writeEnrichSnapshot(w io.Writer, snapshot map[string]enrichEntry) error {
 		if err != nil {
 			return err
 		}
-		vb, err := json.Marshal(snapshot[k])
+		vb, err := snapshot[k].MarshalJSON()
 		if err != nil {
 			return err
 		}
