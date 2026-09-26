@@ -358,6 +358,9 @@ private final class LyricsWindowController: ObservableObject {
     // 存两个键:frame(绝对屏幕坐标)+ 所在屏幕的稳定 ID。恢复时**先认屏幕**:那块屏还接着
     // 就按存的 frame 放,不在了就整个放弃、交回系统默认 —— 绝不拿旧坐标往现有屏幕上硬摆。
     private static let frameKey = "np:lyricsWindowFrame"
+    /// 系统替这扇窗存 frame 用的名字 = Window 场景 id(App.swift 里 `Window(..., id: "lyrics-window")`),
+    /// 两处必须一致。
+    private static let sceneFrameAutosaveName = "lyrics-window"
     private static let screenKey = "np:lyricsWindowScreenID"
 
     /// 拖动/缩放停下来之后再落盘。
@@ -418,6 +421,11 @@ private final class LyricsWindowController: ObservableObject {
         // 夹进那块屏的可见区。存的时候屏幕分辨率可能跟现在不同(接同一块屏但改了缩放),
         // 不夹的话窗口会有一部分挂在屏幕外 —— 跟悬浮窗 `repositionIfOffscreen` 同一个理由。
         window.setFrame(WindowFrameFit.clamp(saved, into: screen.visibleFrame), display: false)
+        // 系统自己也按场景 id 存了一份 frame(`NSWindow Frame lyrics-window`),而且在我们恢复之后才
+        // 套用 —— 它不分迷你与否,迷你期间照存。App 重启后「是否迷你」不保留,不改写它的话窗口会先被
+        // 我们摆成完整尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 55)。
+        // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样。
+        window.saveFrame(usingName: Self.sceneFrameAutosaveName)
         return true
     }
 
