@@ -106,6 +106,9 @@ type extCandidate struct {
 func (c *lastfmCatalogMatcher) decideExtended(ctx context.Context, artist, track string, durationSecs float64,
 	scope matchScope, own lastfmCatalogProbe, base []catalogCandidate) (lastfmCatalogDecision, error) {
 	deferred := lastfmCatalogDecision{Verdict: verdictDefer, Artist: artist, Track: track, Own: &own, Scope: scope.id()}
+	if catalogBaseOnly(ctx) {
+		return deferred, nil
+	}
 	// 不许改歌手时,别的名字下的条目一条都用不上,只剩 track.search 里歌手折叠后跟原样相等
 	// 的那几条(繁简不同的同一个写法,跟基础判定 candidates 的 allowed 同一口径)。
 	var names []extName

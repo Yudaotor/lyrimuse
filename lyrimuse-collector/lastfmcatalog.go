@@ -35,6 +35,8 @@ import (
 //
 // # 判定
 //
+//  0. 曲名结尾带再版 / 分级尾巴(`(Remastered 2014)`、` - 2012 Remaster`、`(Explicit)`)→ 先按去掉尾巴的
+//     写法整个判一遍,判出编目条目就发它(lastfmcatalogtail.go)。这一步排在下面的 mbid 前面。
 //  1. 按原样查一次 track.getInfo。**有 mbid** → 原样发,永久。mbid 是编目正规身份最硬的
 //     信号(影子条目不会有),有它就说明播放器报的写法本身已经是编目认的那条 ——
 //     Hall & Oates、`Michael Jackson & Janet Jackson / Scream` 这类正规合体署名靠这一步
@@ -65,7 +67,8 @@ import (
 //     Live / Remix / 伴奏 这类真版本标记一律保留(lastfmcatalogkey.go)。
 //   - 选中的候选要过**时长闸**:两边都有时长且差超过 lastfmCatalogDurationTolerance 就
 //     不认 —— 挡的是同一歌手名下同名不同曲。
-//   - 原样已有 mbid 就完全不动(第 1 步)。
+//   - 原样已有 mbid 就完全不动(第 1 步)。唯一例外是第 0 步的再版 / 分级尾巴:去掉尾巴的写法要自己
+//     在编目里判得出来才换。
 //
 // # 为什么每首歌只判一次、结论永久
 //
@@ -200,6 +203,8 @@ type lastfmCatalogDecision struct {
 	// Provisional:这条 defer 是在候选名字来源不全时判的(见 decideExtended),只在
 	// lastfmCatalogProvisionalRecheck 之内有效。
 	Provisional bool `json:"provisional,omitempty"`
+	// Tail 是得出这条结论时的尾巴判定口径(lastfmCatalogTailVersion)。曲名带尾巴、口径更旧的要重判(见 lookup)。
+	Tail int `json:"tail,omitempty"`
 }
 
 // lastfmCatalogMatcher 按上面的判据决定一条 scrobble 该用哪个歌手名 + 曲名。
@@ -318,6 +323,10 @@ func (c *lastfmCatalogMatcher) decide(ctx context.Context, artist, track string,
 		return lastfmCatalogDecision{}, err
 	}
 	keep := lastfmCatalogDecision{Verdict: verdictKeep, Artist: artist, Track: track, Own: &own, Scope: scope.id()}
+	// 曲名带再版 / 分级尾巴:先按去掉尾巴的写法判(lastfmcatalogtail.go),要排在 mbid 那一步前面。
+	if d, done, err := c.decideReleaseTail(ctx, artist, track, durationSecs, scope, own); err != nil || done {
+		return d, err
+	}
 	// 原样已经是编目认的那条:一个字节都不动。这一步保住正规合体署名不被「听众更多」
 	// 挪到单人页上去。
 	if own.MBID != "" {
@@ -562,6 +571,9 @@ func (c *lastfmCatalogMatcher) lookup(key string, now time.Time, scope matchScop
 	if !ok || d.V != lastfmCatalogDecisionVersion || d.Scope != scope.id() {
 		return d, false
 	}
+	if d.Tail < lastfmCatalogTailVersion && catalogKeyHasReleaseTail(key) {
+		return d, false
+	}
 	switch d.Verdict {
 	case verdictKeep, verdictMatch:
 		return d, true
@@ -580,6 +592,7 @@ func (c *lastfmCatalogMatcher) store(key string, d lastfmCatalogDecision) {
 	d.TS = time.Now().Unix()
 	d.V = lastfmCatalogDecisionVersion
 	d.Ext = lastfmCatalogExtVersion
+	d.Tail = lastfmCatalogTailVersion
 	c.mu.Lock()
 	c.cache[key] = d
 	snapshot := make(map[string]lastfmCatalogDecision, len(c.cache))
