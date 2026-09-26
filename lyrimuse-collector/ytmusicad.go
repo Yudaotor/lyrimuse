@@ -337,6 +337,24 @@ func ytmusicAdReuseWindow(v ytmusicAdVerdict) time.Duration {
 	return ytmusicAdMaxAge
 }
 
+// ytmusicAdRecheckFirstAd:一个曲目身份第一次被判成广告后,隔这么久再问一次页面,两次都是广告才按
+// ytmusicAdRefreshWhenAd 缓存。切歌那一瞬页面信号会短暂误报广告(不到 1 秒),单次读数直接缓存 5 秒、
+// 再等下一轮 5 秒轮询,这首歌要晚十来秒才被认出来。复查不等轮询:到点经 nudgeEnrichPush 补一拍(见 02 章决策 55)。
+const ytmusicAdRecheckFirstAd = 1500 * time.Millisecond
+
+// ytmusicAdCacheWindow 在 ytmusicAdReuseWindow 之上区分「未复查的首次广告判定」。
+func ytmusicAdCacheWindow(v ytmusicAdVerdict, confirmed bool) time.Duration {
+	if v == ytmusicAdIsAd && !confirmed {
+		return ytmusicAdRecheckFirstAd
+	}
+	return ytmusicAdReuseWindow(v)
+}
+
+// ytmusicAdScheduleRecheck 到点让主循环补一拍轮询。单测换成记录调用的假函数。
+var ytmusicAdScheduleRecheck = func(d time.Duration) {
+	time.AfterFunc(d, nudgeEnrichPush)
+}
+
 // ytmusicAdNotFoundRetry:这个浏览器里没有 YouTube Music 标签页(脚本回 NOTFOUND)时,同一个 key 多久内
 // 不再探。信任的浏览器放普通视频(有频道名、没有专辑名)会一直走到这道复核;不记的话整段视频每拍都遍历
 // 一遍所有窗口和标签页,Arc 没开 JS 开关时每次还要挂到超时、卡住主循环。超时 / 读失败不记。
@@ -349,6 +367,8 @@ var (
 	ytmusicAdVal   ytmusicAdVerdict
 	ytmusicAdAlbum string
 	ytmusicAdAt    time.Time
+	// 缓存里的广告判定是否已经复查过,见 ytmusicAdRecheckFirstAd。判定是歌时无意义。
+	ytmusicAdConfirmed bool
 	// 最近一次回 NOTFOUND 的 key 与时刻,见 ytmusicAdNotFoundRetry。
 	ytmusicAdNotFoundKey string
 	ytmusicAdNotFoundAt  time.Time
@@ -375,7 +395,7 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 
 	cacheKey := target + "\x00" + trackKey
 	ytmusicAdMu.Lock()
-	if ytmusicAdKey == cacheKey && time.Since(ytmusicAdAt) < ytmusicAdReuseWindow(ytmusicAdVal) {
+	if ytmusicAdKey == cacheKey && time.Since(ytmusicAdAt) < ytmusicAdCacheWindow(ytmusicAdVal, ytmusicAdConfirmed) {
 		v, al := ytmusicAdVal, ytmusicAdAlbum
 		ytmusicAdMu.Unlock()
 		return v, al
@@ -386,13 +406,18 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 	}
 	ytmusicAdMu.Unlock()
 
-	v, album, notFound := runYTMusicAdProbe(ctx, target, family)
+	v, album, notFound, signals := runYTMusicAdProbe(ctx, target, family)
 
 	ytmusicAdMu.Lock()
+	recheck := false
 	// unknown 不进缓存:那多半是"这一下没读到"(超时/标签页刚好在切),下一轮该重试,
 	// 缓存住它等于把一次偶发失败按整首歌的时长放大。NOTFOUND 另记,见 ytmusicAdNotFoundRetry。
 	if v != ytmusicAdUnknown {
+		// 同一个 key 上一次也是广告 = 这是复查(或已确认后的续判),否则是首次判成广告。
+		confirmed := v == ytmusicAdIsAd && ytmusicAdKey == cacheKey && ytmusicAdVal == ytmusicAdIsAd
+		recheck = v == ytmusicAdIsAd && !confirmed
 		ytmusicAdKey, ytmusicAdVal, ytmusicAdAlbum, ytmusicAdAt = cacheKey, v, album, time.Now()
+		ytmusicAdConfirmed = confirmed
 		if ytmusicAdNotFoundKey == cacheKey {
 			ytmusicAdNotFoundKey = ""
 		}
@@ -400,7 +425,29 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 		ytmusicAdNotFoundKey, ytmusicAdNotFoundAt = cacheKey, time.Now()
 	}
 	ytmusicAdMu.Unlock()
+	if v == ytmusicAdIsAd {
+		stage := "confirmed"
+		if recheck {
+			stage = "first, recheck in " + ytmusicAdRecheckFirstAd.String()
+		}
+		log.Printf("ytmusic: advertisement signals %s (%s; %s)", signals, stage, strings.ReplaceAll(trackKey, "\x00", " - "))
+	}
+	if recheck {
+		ytmusicAdScheduleRecheck(ytmusicAdRecheckFirstAd)
+	}
 	return v, album
+}
+
+// ytmusicAdSignals 把探针前三段写成日志里读得懂的样子,形状不对返回 "?"。
+func ytmusicAdSignals(raw string) string {
+	s := strings.TrimSpace(strings.Trim(strings.TrimSpace(raw), "\""))
+	parts := strings.SplitN(s, "|", 5)
+	if len(parts) < 3 {
+		return "?"
+	}
+	return "ad-showing=" + strings.TrimSpace(parts[0]) +
+		" badge=" + strings.TrimSpace(parts[1]) +
+		" bare-title=" + strings.TrimSpace(parts[2])
 }
 
 // runYTMusicAdProbe 真正起 osascript。
@@ -409,16 +456,17 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 // JS 里又有单引号和逗号,拿 -e 传要在 shell/exec 层再套一层引号,是本仓库明确记过的
 // "多层引号把 payload 打坏"那类坑。写文件是零转义的。
 //
-// 第三个值:脚本回的是 NOTFOUND(见 ytmusicAdNotFoundRetry)。单测替换它。
-var runYTMusicAdProbe = func(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string, bool) {
+// 第三个值:脚本回的是 NOTFOUND(见 ytmusicAdNotFoundRetry);第四个值:三个信号的读数(ytmusicAdSignals),
+// 只进日志。单测替换它。
+var runYTMusicAdProbe = func(ctx context.Context, bundleID, family string) (ytmusicAdVerdict, string, bool, string) {
 	out, ok := runBrowserTabScript(ctx, bundleID, family, ytmusicHostMarker, ytmusicAdProbeJS)
 	if !ok {
 		// 失败原因很多(开关没开、TCC 没给权限、超时、浏览器没在跑),一律 unknown。
 		// 这条路径每首歌都会走,失败时不该刷屏。
-		return ytmusicAdUnknown, "", false
+		return ytmusicAdUnknown, "", false, ""
 	}
 	v, album := parseYTMusicAdProbe(out)
-	return v, album, ytmusicAdProbeNotFound(out)
+	return v, album, ytmusicAdProbeNotFound(out), ytmusicAdSignals(out)
 }
 
 // runBrowserTabScript 在这个浏览器里找到 URL 含 host 的标签页、跑一段 JS,返回 osascript 的原始输出。

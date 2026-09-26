@@ -317,6 +317,7 @@ func resetYTMusicAdCacheForTest(t *testing.T) {
 	clear := func() {
 		ytmusicAdMu.Lock()
 		ytmusicAdKey, ytmusicAdVal, ytmusicAdAlbum, ytmusicAdAt = "", ytmusicAdUnknown, "", time.Time{}
+		ytmusicAdConfirmed = false
 		ytmusicAdMu.Unlock()
 	}
 	clear()
@@ -343,5 +344,99 @@ func TestYTMusicAdReuseWindow(t *testing.T) {
 	// unknown 本来就不进缓存(见 ytmusicAdProbe),这里只钉它不会拿到比歌更长的窗口。
 	if ytmusicAdReuseWindow(ytmusicAdUnknown) > ytmusicAdMaxAge {
 		t.Error("unknown 的复用窗口不该超过歌档")
+	}
+}
+
+// 首次判成广告只缓存 ytmusicAdRecheckFirstAd 并安排一次复查;复查仍是广告才转成 5 秒缓存,复查是歌就放行。
+func TestYTMusicAdFirstAdIsRechecked(t *testing.T) {
+	resetYTMusicAdCacheForTest(t)
+	savedProbe, savedSchedule := runYTMusicAdProbe, ytmusicAdScheduleRecheck
+	t.Cleanup(func() { runYTMusicAdProbe, ytmusicAdScheduleRecheck = savedProbe, savedSchedule })
+	var answers []ytmusicAdVerdict
+	calls := 0
+	runYTMusicAdProbe = func(context.Context, string, string) (ytmusicAdVerdict, string, bool, string) {
+		v := answers[calls]
+		calls++
+		return v, "", false, "ad-showing=1 badge=0 bare-title=0"
+	}
+	var scheduled []time.Duration
+	ytmusicAdScheduleRecheck = func(d time.Duration) { scheduled = append(scheduled, d) }
+	ageCache := func(d time.Duration) {
+		ytmusicAdMu.Lock()
+		ytmusicAdAt = time.Now().Add(-d)
+		ytmusicAdMu.Unlock()
+	}
+	ctx := context.Background()
+	const chrome = "com.google.Chrome"
+
+	answers = []ytmusicAdVerdict{ytmusicAdIsAd, ytmusicAdIsAd, ytmusicAdIsAd}
+	if v, _ := ytmusicAdProbe(ctx, chrome, "A\x00Song"); v != ytmusicAdIsAd {
+		t.Fatalf("首判 = %v, want ad", v)
+	}
+	if len(scheduled) != 1 || scheduled[0] != ytmusicAdRecheckFirstAd {
+		t.Fatalf("首判广告该安排一次复查, got %v", scheduled)
+	}
+	ytmusicAdProbe(ctx, chrome, "A\x00Song")
+	if calls != 1 {
+		t.Fatalf("复查时刻之前该复用首判, calls = %d", calls)
+	}
+	ageCache(ytmusicAdRecheckFirstAd + 100*time.Millisecond)
+	ytmusicAdProbe(ctx, chrome, "A\x00Song")
+	if calls != 2 || len(scheduled) != 1 {
+		t.Fatalf("到点该复查且不再安排, calls = %d scheduled = %v", calls, scheduled)
+	}
+	ageCache(ytmusicAdRecheckFirstAd + 500*time.Millisecond)
+	ytmusicAdProbe(ctx, chrome, "A\x00Song")
+	if calls != 2 {
+		t.Fatalf("复查确认后按 %v 复用, calls = %d", ytmusicAdRefreshWhenAd, calls)
+	}
+	ageCache(ytmusicAdRefreshWhenAd + 100*time.Millisecond)
+	ytmusicAdProbe(ctx, chrome, "A\x00Song")
+	if calls != 3 || len(scheduled) != 1 {
+		t.Fatalf("已确认的广告续判不再安排复查, calls = %d scheduled = %v", calls, scheduled)
+	}
+
+	resetYTMusicAdCacheForTest(t)
+	calls, scheduled = 0, nil
+	answers = []ytmusicAdVerdict{ytmusicAdIsAd, ytmusicAdIsSong}
+	ytmusicAdProbe(ctx, chrome, "B\x00Song")
+	ageCache(ytmusicAdRecheckFirstAd + 100*time.Millisecond)
+	if v, _ := ytmusicAdProbe(ctx, chrome, "B\x00Song"); v != ytmusicAdIsSong {
+		t.Fatalf("复查是歌该放行, got %v", v)
+	}
+	ageCache(ytmusicAdMaxAge - time.Second)
+	ytmusicAdProbe(ctx, chrome, "B\x00Song")
+	if calls != 2 {
+		t.Fatalf("复查成歌之后按歌缓存, calls = %d", calls)
+	}
+}
+
+func TestYTMusicAdCacheWindow(t *testing.T) {
+	if got := ytmusicAdCacheWindow(ytmusicAdIsAd, false); got != ytmusicAdRecheckFirstAd {
+		t.Errorf("未复查的广告 = %v", got)
+	}
+	if got := ytmusicAdCacheWindow(ytmusicAdIsAd, true); got != ytmusicAdRefreshWhenAd {
+		t.Errorf("已确认的广告 = %v", got)
+	}
+	if got := ytmusicAdCacheWindow(ytmusicAdIsSong, false); got != ytmusicAdMaxAge {
+		t.Errorf("歌 = %v", got)
+	}
+	if ytmusicAdRecheckFirstAd >= ytmusicAdRefreshWhenAd || ytmusicAdRecheckFirstAd < time.Second {
+		t.Errorf("复查间隔 %v 要比广告缓存短,也不能短到还在切歌那一瞬里", ytmusicAdRecheckFirstAd)
+	}
+}
+
+func TestYTMusicAdSignals(t *testing.T) {
+	cases := map[string]string{
+		"1|0|1||":           "ad-showing=1 badge=0 bare-title=1",
+		"\"0|1|0|1/2|Alb\"": "ad-showing=0 badge=1 bare-title=0",
+		"0|0|0|a|b|c":       "ad-showing=0 badge=0 bare-title=0",
+		"NOTFOUND":          "?",
+		"":                  "?",
+	}
+	for in, want := range cases {
+		if got := ytmusicAdSignals(in); got != want {
+			t.Errorf("ytmusicAdSignals(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

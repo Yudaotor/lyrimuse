@@ -155,9 +155,9 @@ func TestYTMusicAdNotFoundSuppressesRetry(t *testing.T) {
 	t.Cleanup(func() { runYTMusicAdProbe = saved; clearNotFound() })
 	calls := 0
 	notFound := true
-	runYTMusicAdProbe = func(context.Context, string, string) (ytmusicAdVerdict, string, bool) {
+	runYTMusicAdProbe = func(context.Context, string, string) (ytmusicAdVerdict, string, bool, string) {
 		calls++
-		return ytmusicAdUnknown, "", notFound
+		return ytmusicAdUnknown, "", notFound, ""
 	}
 	ctx := context.Background()
 	key := "Some Channel\x00Some Video"
