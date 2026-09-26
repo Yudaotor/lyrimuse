@@ -83,11 +83,12 @@ final class WrappedKaraokeRowsView: NSView {
             self.pitch = pitch
             let widths: [CGFloat]
             if let groups = spec.groups {
-                // 列宽 = 上下两行更宽的那个;读音左右各留 2pt、没有读音的组按一个空格占位 ——
-                // 跟 `OverlayLyricScrollView.layOut` 逐项一致,两边量出来的行宽才对得上。
+                // 列宽 = 上下两行更宽的那个;读音两侧留白、没有读音的组按一个空格占位 ——
+                // 跟 `OverlayRowLayout.layOut` 逐项一致,两边量出来的行宽才对得上。
+                let pad = OverlayRowLayout.romaSidePadding(strokeInset: inset)
                 widths = groups.map { g in
                     let words = g.words.reduce(CGFloat(0)) { $0 + MenuBarMarqueeRenderer.width(of: $1.text, font: spec.font) }
-                    let r = MenuBarMarqueeRenderer.width(of: g.romanization ?? " ", font: spec.romaFont) + 4
+                    let r = MenuBarMarqueeRenderer.width(of: g.romanization ?? " ", font: spec.romaFont) + pad * 2
                     return max(words, r)
                 }
             } else {

@@ -1378,14 +1378,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 Text(g.words.map(\.text).joined())
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
-                // 列宽规则跟图层行同一套(`OverlayRowLayout`:读音左右各留 romaSidePadding),
+                // 列宽规则跟图层行同一套(`OverlayRowLayout.romaSidePadding(strokeInset:)`),
                 // 开唱那一刻列宽不变。
                 Text(g.romanization ?? " ")
                     .font(playback.romanizationFont)
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .fixedSize()
-                    .padding(.horizontal, OverlayRowLayout.romaSidePadding)
+                    .padding(.horizontal, OverlayRowLayout.romaSidePadding(
+                        strokeInset: playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0))
                     .opacity(g.romanization == nil ? 0 : 1)
             }
             .fixedSize()

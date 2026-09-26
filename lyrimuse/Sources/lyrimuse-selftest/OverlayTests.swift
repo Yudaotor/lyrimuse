@@ -724,6 +724,16 @@ func runOverlayTests() {
                              inset: 0, measureMain: main, measureRoma: roma)
         let firstEnd = tight.romaPlacements[0].x + roma("tung3")
         expectEqual(tight.romaPlacements[1].x - firstEnd, 2 * pad, "图层排版: 相邻读音之间隔两份留白")
+
+        // 描边开着:每侧再让一份描边外扩,描边之外看到的字缝跟不描边时一样宽。
+        let stroke: CGFloat = 2.4
+        expectEqual(L.romaSidePadding(strokeInset: 0), pad, "图层排版: 不描边时留白就是基础值")
+        expectEqual(L.romaSidePadding(strokeInset: stroke), pad + stroke, "图层排版: 描边时每侧多让一份描边外扩")
+        let stroked = L.layOut(words: [], groups: [g1, SyncedLyricWordGroup(id: 1, words: [w("到")], romanization: "dou2")],
+                               inset: 0, strokeInset: stroke, measureMain: main, measureRoma: roma)
+        let strokedGap = stroked.romaPlacements[1].x - (stroked.romaPlacements[0].x + roma("tung3"))
+        expectEqual(abs(strokedGap - 2 * stroke - 2 * pad) < 0.001, true, "图层排版: 描边时扣掉两侧描边,看得见的字缝仍是两份基础留白")
+        expectEqual(abs(stroked.romaPlacements[0].x - (pad + stroke)) < 0.001, true, "图层排版: 描边时读音从列首 + 加宽后的留白起画")
     }
 
     // ---- WrapLayoutMath ----

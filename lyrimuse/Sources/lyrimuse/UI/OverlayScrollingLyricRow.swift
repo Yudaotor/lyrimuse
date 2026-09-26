@@ -277,6 +277,7 @@ final class OverlayLyricScrollView: NSView {
     private func layOut(spec: OverlayScrollingLyricRow.Spec) {
         let r = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset,
+            strokeInset: spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset,
             measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font) },
             measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
         wordStartXs = r.wordStartXs
