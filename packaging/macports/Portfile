@@ -3,7 +3,7 @@
 PortSystem          1.0
 PortGroup           github 1.0
 
-github.setup        Yudaotor lyrimuse 1.8.0 v
+github.setup        Yudaotor lyrimuse 1.9.0 v
 github.tarball_from archive
 revision            0
 
@@ -18,16 +18,16 @@ long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
                     overlay, a Dynamic-Island-style capsule, an \
                     Apple-Music-style lyrics window or right in the menu bar, \
                     for Apple Music, Spotify and YouTube Music / Spotify Web \
-                    playing in a browser. Lyrics are fetched from eleven \
+                    playing in a browser. Lyrics are fetched from twelve \
                     sources and every candidate is scored on one scale so the \
                     best match wins. Translation, per-line romanization \
                     (pinyin, Cantonese Jyutping, Japanese furigana) and \
                     Last.fm / ListenBrainz scrobbling are built in.
 
 checksums           ${distname}${extract.suffix} \
-                        rmd160  a5b0cc35709747284b811d0ed881174d2f68318b \
-                        sha256  731fb05d704b54053c9506b3ec67d27f3883b33348c790d6e22a8d00f5bffd9c \
-                        size    22798760
+                        rmd160  8bdce4577239273756d9d3c41107e5bb24f5f6d7 \
+                        sha256  d0d33d945461ded316e6c0b254935c84b576c1d02cd2bf315eaa6cb15dd27947 \
+                        size    25314079
 
 # The app builds with Command Line Tools alone (no full Xcode needed), but the
 # source requires the macOS 26 SDK (upstream CI builds on macos-26).
