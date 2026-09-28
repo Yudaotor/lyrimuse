@@ -61,7 +61,7 @@ brew install --cask lyrimuse
 - **這份本機記錄同樣會出現在歌詞視窗裡**——沒有歌曲播放的時候，它會變成一塊聆聽總覽面板，而不是一片空白（下面還會細說）
 
 ### 桌面浮動歌詞、選單列歌詞、動態島、完整歌詞視窗
-- **播放器可多選，或者交給自動偵測**：讀取 Apple Music（走「自動化」權限）、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music 或 Spotify（都走 macOS 系統級 MediaRemote，不需要任何權限）的播放狀態——在設定裡任意組合勾選，也可以直接留在自動偵測，跟隨 macOS 目前系統級 Now Playing 焦點
+- **播放器可多選，或者交給自動偵測**：讀取 Apple Music 和 Spotify（走「自動化」權限），或者 QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music（都走 macOS 系統級 MediaRemote，不需要任何權限）的播放狀態——在設定裡任意組合勾選，也可以直接留在自動偵測，跟隨 macOS 目前系統級 Now Playing 焦點
 - **Apple Music 電台也當正規播放來源**——電台裡每首歌的歌詞都跟得上，不會越走越偏；主持人說話的時候顯示電台名稱和台標，而不是停在上一首歌；電台歌詞還有獨立的時間偏移，常聽的電台校一次就一直對
 - **網頁播放器也是正規播放器**：配對一次你常用的瀏覽器，網頁版 YouTube Music 或 Spotify 就能當播放器用——歌詞按頁面自己的進度列精確同步，還有一鍵自我檢測告訴你瀏覽器到底能不能被驅動；播廣告的時候動態島整張卡變黑，寫出還剩多久、這是第幾則廣告，YouTube Music 網頁廣告還多一顆跳過的按鈕，也可以設成自動略過
 - **三種展示方式**：經典桌面浮動視窗（想拖哪兒拖哪兒，也可以釘在頂部置中、或 Dock 之上的底部置中）、貼著螢幕頂部瀏海的動態島膠囊（可選顯示專輯封面，背景也能跟著封面模糊），或者一個仿 Apple Music 歌詞頁、可縮放的「歌詞視窗」——雙欄版面、封面模糊鋪底、完整歌詞自動捲動到目前這一行，Apple Music 提供動態封面的專輯那張大封面還會動起來——任意組合開啟，或者都不開
@@ -122,7 +122,7 @@ Lyrimuse 的發布包用專案自己的憑證簽章，不是 Apple 開發者 ID�
 4. 除非我明確要求，不要從原始碼建置。
 5. 啟動它（`open -a Lyrimuse`），並確認在執行（`pgrep -x Lyrimuse` 能印出 PID）。
 6. 首次啟動會彈出設定引導——那部分由我自己按：告訴我它會讓我選播放器、
-   （只在選 Apple Music 時）授權對 Music.app 的「自動化」取用、以及啟用背景
+   （只在選了 Apple Music 或 Spotify 時）授權對它們的「自動化」取用、以及啟用背景
    擷取服務，然後把控制權交還給我。
 最後用中文回報你做了什麼、有沒有失敗的步驟。
 ```
@@ -187,7 +187,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 
 ### 不管選哪種方案
 
-從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify，或者自動偵測），選了 Apple Music 的話再允許它以「自動化」方式讀取 Music.app 目前播放的歌曲資訊（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
+從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify，或者自動偵測），選了 Apple Music 或 Spotify 的話再授予對它的「自動化」權限（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再調整任何其它東西才能看到歌詞——上面提到的所有附加功能都是後續在設定裡按需開啟的。
 
@@ -197,7 +197,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 在設定裡打開桌面浮動歌詞就行。它浮在所有視窗之上、跨 Space 顯示，可以拖到任何位置，也可以釘在螢幕頂部置中，或 Dock 之上的底部置中；歌詞帶逐字時間軸時，唱到哪個字就填色到哪個字。螢幕快照、螢幕錄製、螢幕分享時可以讓它只有你自己看得見，暫停時還能自動收起。QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify 和網頁播放器也是一樣用。
 
 **Spotify 的歌詞能顯示在 Mac 選單列上嗎？**
-可以——打開選單列文字模式，目前這句歌詞就直接顯示在選單列裡，Spotify 和其他支援的播放器都行。太長的句子會橫向捲動，不會截成半句；還可以加開一行副行，顯示下一句、譯文或讀音。Spotify 走的是 macOS 的 MediaRemote，不需要任何權限，也不用登入 Spotify 帳號。
+可以——打開選單列文字模式，目前這句歌詞就直接顯示在選單列裡，Spotify 和其他支援的播放器都行。太長的句子會橫向捲動，不會截成半句；還可以加開一行副行，顯示下一句、譯文或讀音。不用登入 Spotify 帳號；Lyrimuse 會請求一次對 Spotify 的「自動化」權限，用來取得精確的播放進度、讓播放控制按鈕能用——拒絕的話歌詞照樣顯示，只是進度改從 macOS 的 MediaRemote 讀，會差一秒左右。
 
 **QQ 音樂、網易雲、酷狗、汽水音樂能顯示逐字歌詞嗎？**
 可以，只要歌詞本身帶逐字時間軸——網易雲、QQ 音樂、酷狗、汽水音樂、Musixmatch、AMLL 和 Apple Music 自己的歌詞通常都有，這些行會逐字填色；只有逐行時間軸的歌詞就整行高亮。在哪個播放器裡聽，並不限制去哪些來源查歌詞：在汽水音樂裡播放的歌，如果 QQ 音樂那份逐字歌詞分數最高，最後用的就是它。
@@ -206,7 +206,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 不需要。Lyrimuse 的發布包用專案自己的憑證簽章，不是 Apple 開發者 ID——你不需要開發者帳號，這個專案本身也沒有。上面「快速開始」裡那個一次性的 Gatekeeper 解鎖步驟就是這個原因。
 
 **只支援 Apple Music 嗎，Spotify、QQ 音樂、網易雲音樂能用嗎？**
-都支援，外加酷狗音樂、汽水音樂、KKBOX 和 Amazon Music，一共八個播放器（用 KKBOX 或 Amazon Music 播放時，它們自己存在本機快取裡的這首歌詞也會一起參加挑選，不向它們請求任何東西），還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，跟隨 macOS 目前認為的「正在播放」。Apple Music 走「自動化」權限讀取；其它七個完全不需要任何額外權限，走的是 macOS 系統級 MediaRemote。
+都支援，外加酷狗音樂、汽水音樂、KKBOX 和 Amazon Music，一共八個播放器（用 KKBOX 或 Amazon Music 播放時，它們自己存在本機快取裡的這首歌詞也會一起參加挑選，不向它們請求任何東西），還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，跟隨 macOS 目前認為的「正在播放」。Apple Music 和 Spotify 要「自動化」權限（Spotify 用它取得精確進度、做播放控制）；其它六個完全不需要任何額外權限，走的是 macOS 系統級 MediaRemote。
 
 **這跟網易雲音樂自帶的桌面歌詞是一回事嗎？**
 思路一樣，不是同一個 App——Lyrimuse 把「桌面浮動歌詞」這套體驗帶給多個播放器（不只是網易雲自己的用戶端），原生 macOS，還多了動態島樣式和一個仿 Apple Music 的完整歌詞視窗，不只是經典浮動視窗一種形態。
@@ -215,7 +215,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 一首歌的歌詞只要解析過一次，之後就能——本機模式直接顯示已快取的歌詞，不用連線。第一次查詢（以及需要機器翻譯的時候）還是要連線的。
 
 **我的資料會傳到外面嗎？**
-解析歌詞要查公開的歌詞介面（網易雲、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、AMLL），封面要查 iTunes Search——這是這個功能本身決定的。翻譯預設走裝置端（Apple 系統翻譯），只有退到網路翻譯時才會把歌詞內文發給 MyMemory。其餘的——本機聆聽記錄、快取的歌詞、設定——都只存在你 Mac 本機的檔案裡，除非你主動去連 Last.fm、ListenBrainz，或者那個可選的網頁中繼。逐項清單見下面「[授權與版權說明](#授權與版權說明)」。
+解析歌詞要查十二個歌詞來源（網易雲、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音樂，以及你連了帳號時的 Apple Music），封面要查 iTunes Search——這是這個功能本身決定的。翻譯預設走裝置端（Apple 系統翻譯），只有退到網路翻譯時才會把歌詞內文送出去（先 Google 網頁翻譯，再 MyMemory）。其餘的——本機聆聽記錄、快取的歌詞、設定——都只存在你 Mac 本機的檔案裡，除非你主動去連 Last.fm、ListenBrainz，或者那個可選的網頁中繼。逐項清單見下面「[授權與版權說明](#授權與版權說明)」。
 
 **能標日文／韓文讀音，或者翻中文嗎？**
 可以——讀音按行判斷（中日雙語混唱的歌不會整首被判錯），粵語歌還會標粵拼；翻譯來自歌詞來源自帶的社群翻譯，或者裝置端／線上機器翻譯，譯文語言可選 18 種。
@@ -236,8 +236,8 @@ LyricsX 最後一個發布版是 2022 年 4 月的 v1.6.3。它支援 macOS 10.1
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
-- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、抖音（汽水音樂）、KKBOX、Amazon（Amazon Music）、中國移動（咪咕音樂）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
-- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名。封面與閒置頁把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
+- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、抖音（汽水音樂）、KKBOX、Amazon（Amazon Music）、中國移動（咪咕音樂）、Spotify、Google（YouTube Music、Google 翻譯）、Last.fm、ListenBrainz、MusicBrainz、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、SponsorBlock 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器、歌詞來源和用到的服務。
+- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名；排行榜裡的歌手也會按 MusicBrainz ID 去那裡查國家／地區和相關連結。封面與閒置頁把歌手加歌名發給 iTunes Search。專輯介紹和歌手簡介按 Apple Music 的專輯 ID、歌手 ID 請求它們的公開頁面，不需要登入 Apple 帳號。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊先送給 Google 網頁翻譯，還沒翻出來的再送給 MyMemory；送給 MyMemory 的請求附一個隨機產生的電子郵件參數，不是你的。YouTube Music 播放 MV 時，會把影片 ID 的 SHA-256 雜湊前 4 碼送給 SponsorBlock，查出 MV 裡不是音樂的片段、讓歌詞對上畫面——SponsorBlock 憑這幾碼分辨不出是哪支影片。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解
 
