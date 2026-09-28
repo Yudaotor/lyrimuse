@@ -361,8 +361,9 @@ jobs:
           python3 .github/scripts/check_appcast.py appcast.xml --tag "$TAG" --display-version "$VERSION" --build-version "$BUILD_VERSION" --prerelease "${{ steps.version.outputs.is_prerelease }}"
 
       # Created as a draft: nothing is visible to users (and releases/latest does not move) until
-      # the asset check below passes. An explicit body is required -- without it
-      # generate_release_notes replaces the body with GitHub's compare link instead of appending.
+      # the asset check below passes. The body is the tag annotation verbatim, which already ends
+      # with the Full Changelog compare link; do not turn on generate_release_notes -- it appends
+      # GitHub's own compare link after the body, so the page shows that line twice.
       - name: Create GitHub Release (draft)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -370,7 +371,6 @@ jobs:
           # Category words in the title: release titles are what search surfaces first.
           name: Lyrimuse ${{ steps.version.outputs.version }} — macOS Desktop Lyrics for Apple Music & Spotify
           body: ${{ needs.tag.outputs.body }}
-          generate_release_notes: true
           draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           # The unsuffixed zip is arm64-only (what Sparkle and the Homebrew cask use); -intel is
