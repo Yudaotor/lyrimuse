@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"os"
 	"strings"
 	"testing"
@@ -82,5 +84,24 @@ func TestProvisionalLyricsIsWired(t *testing.T) {
 		if !strings.Contains(src, needle) {
 			t.Errorf("enrich.go 缺 %q", needle)
 		}
+	}
+}
+
+// 「歌词先上屏」一首只记一行 Info:第一次记;同一来源的第二次落 Debug;来源换了照样记,带上首轮那份的来源。
+func TestEarlyCommitLogOneInfoLinePerSource(t *testing.T) {
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	var l earlyCommitLog
+	l.note("A|T|Al", "qq")
+	l.note("A|T|Al", "qq")
+	if n := strings.Count(buf.String(), "committed early"); n != 1 {
+		t.Fatalf("同一来源两次只该落一行 Info,got %d: %q", n, buf.String())
+	}
+	l.note("A|T|Al", "kugou")
+	if !strings.Contains(buf.String(), "(source=kugou, replacing the first-round qq)") {
+		t.Fatalf("来源换了要记下来、带上首轮那份的来源: %q", buf.String())
 	}
 }

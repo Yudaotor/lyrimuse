@@ -2085,6 +2085,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	}
 	// 歌词先上屏:resolveTrackEnrichment 选定歌词后、补外围信息之前回调一次,先提交一份只带
 	// 歌词与网易云封面的条目;下面拿到完整结果后再提交一次,整条覆盖它。
+	var earlyLog earlyCommitLog
 	early := func(p enrichEntry) {
 		if ctx.Err() != nil {
 			return
@@ -2095,7 +2096,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		enrichMu.Unlock()
 		p.TS = time.Now().Unix()
 		commitEnrichEntrySince(key, p, stamp)
-		log.Printf("lyrics: committed early for %q (source=%s), peripheral fields still resolving", key, p.LyricsSource)
+		earlyLog.note(key, p.LyricsSource)
 	}
 	// Amazon Music 开播前就把这首的歌词拉进了本机缓存(按 ASIN 认,见 amazonlibrary.go):先把这份上屏,不等各歌词源 ——
 	// 待播曲目常常认不出歌名、预取不到(见 amazonUpcoming),不垫这一份,开头要空到网络那份回来。选定的那份照常经

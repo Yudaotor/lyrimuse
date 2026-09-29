@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -101,4 +103,27 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 	e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 	return e, picked
+}
+
+// earlyCommitLog 给「歌词先上屏」那个回调记日志。首轮先上屏也走同一个回调,一首歌通常回调两次、两次多半是
+// 同一份:第一次、或来源换了的那一次落 Info,同一来源的第二次落 Debug。回调可能来自检索的并发协程,加锁。
+type earlyCommitLog struct {
+	mu     sync.Mutex
+	source string
+}
+
+func (l *earlyCommitLog) note(key, source string) {
+	l.mu.Lock()
+	prev := l.source
+	l.source = source
+	l.mu.Unlock()
+	switch {
+	case prev == "":
+		log.Printf("lyrics: committed early for %q (source=%s), peripheral fields still resolving", key, source)
+	case prev != source:
+		log.Printf("lyrics: committed early for %q (source=%s, replacing the first-round %s), peripheral fields still resolving",
+			key, source, prev)
+	default:
+		slog.Debug("lyrics: committed early again, same source", "key", key, "source", source)
+	}
 }
