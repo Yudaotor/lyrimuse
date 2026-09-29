@@ -12,7 +12,8 @@ import os
 /// - 文件变短(Amazon Music 重启后重写)或被换掉就从头读。
 /// - 自动连播开头的那首(`AmazonMusicPlayhead.needsLeadCalibration`)开播 `calibrationDelay` 之后,在后台读一次 Amazon 界面上的
 ///   播放时间校准提前量(`AmazonMusicUIProbe`);没有辅助功能权限就不校准。读不到隔 `calibrationRetry` 再试,最多
-///   `calibrationMaxAttempts` 次。校准结果写进 `AmazonMusicLeadFile` 给 collector。
+///   `calibrationMaxAttempts` 次。校准过的一段隔 `AmazonMusicPlayhead.leadRefineDelay` 再对一次,两次的区间叠窄
+///   (`needsLeadRefinement`)。校准结果写进 `AmazonMusicLeadFile` 给 collector。
 ///
 /// 规则本身在 `AmazonMusicPlayhead`(纯函数),这里只管读文件和记账。
 public final class AmazonMusicLogWatcher: @unchecked Sendable {
@@ -148,7 +149,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
             lock.lock()
             calibrating = false
             let now = Date()
-            guard case .success(let origin) = result, timer?.trackKey == trackKey, timer?.since != nil,
+            guard case .success(let range) = result, timer?.trackKey == trackKey, timer?.since != nil,
                   state.lastStallAt == stallBefore else {
                 lock.unlock()
                 if case .failure(let f) = result {
@@ -156,7 +157,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
                 }
                 return
             }
-            let position = max(0, now.timeIntervalSince1970 - origin)
+            let position = max(0, now.timeIntervalSince1970 - (range.lowerBound + range.upperBound) / 2)
             let before = timer?.position(at: now) ?? 0
             timer = AmazonMusicPlayhead.SelfTimer(trackKey: trackKey, base: position, since: now)
             timerCalibratedKey = key
@@ -174,11 +175,13 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     // MARK: - 自动连播提前量的界面校准(lock 里调)
 
     private func scheduleCalibrationLocked(pid: pid_t, duration: Double?, metadataTimestamp: Date?, now: Date) {
-        guard !calibrating, AmazonMusicPlayhead.needsLeadCalibration(state), let id = state.trackID,
+        let refining = AmazonMusicPlayhead.needsLeadRefinement(state, now: now)
+        guard !calibrating, AmazonMusicPlayhead.needsLeadCalibration(state) || refining, let id = state.trackID,
               let startedAt = state.trackStartedAt, now.timeIntervalSince(startedAt) >= Self.calibrationDelay,
               state.lastStallAt.map({ now.timeIntervalSince($0) >= Self.stallSettleDelay }) ?? true else { return }
-        // 卡顿之后的那次重新校准另算次数(键带上最近一次卡顿的时刻)。
+        // 卡顿之后的那次重新校准、首次校准之后再叠的那次,都另算次数(键带上最近一次卡顿的时刻、叠到第几次)。
         let key = id + "@" + String(startedAt.timeIntervalSince1970) + "#" + String(state.lastStallAt?.timeIntervalSince1970 ?? 0)
+            + (refining ? "+" + String(state.leadRefinements + 1) : "")
         guard mayAttemptLocked(key, now: now) else { return }
         calibrating = true
         let stallBefore = state.lastStallAt
@@ -202,31 +205,30 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
                 Self.logger.notice("amazon music lead: calibration discarded: playback stalled or paused while reading the screen")
                 return
             }
-            // 起点换算成「某一刻界面该显示的整秒」,交给纯函数算提前量:取现在这一刻、真实位置向下取整的那个秒边界。
-            let now = Date().timeIntervalSince1970
-            let edge = origin.map { o -> (Date, Int) in
-                let secs = Int((now - o).rounded(.down))
-                return (Date(timeIntervalSince1970: o + Double(secs)), secs)
-            }
-            guard let edge,
+            let now = Date()
+            guard let origin,
                   let done = AmazonMusicPlayhead.calibratingLead(
-                    AmazonMusicPlayhead.calibrated(state, metadataTimestamp: metadataTimestamp),
-                    edgeAt: edge.0, displaySeconds: edge.1) else {
+                    AmazonMusicPlayhead.calibrated(state, metadataTimestamp: metadataTimestamp), origin: origin, at: now) else {
                 lock.unlock()
                 let why: String
                 switch result {
                 case .failure(let f): why = "\(f.reason.rawValue) after \(f.samples) readings" + (f.detail.map { " (\($0))" } ?? "")
-                case .success(let o): why = String(format: "lead out of range (origin %.3f)", o)
+                case .success(let o): why = String(format: "lead out of range (origin %.3f)", (o.lowerBound + o.upperBound) / 2)
                 }
                 Self.logger.notice("amazon music lead: calibration failed: \(why, privacy: .public)")
                 return
             }
             state.audibleLead = done.audibleLead
+            state.leadRange = done.leadRange
+            state.leadCalibratedAt = done.leadCalibratedAt
+            state.leadRefinements = done.leadRefinements
             state.leadCalibrated = true
             state.stalledSinceCalibration = false
             let lead = done.audibleLead
+            let width = done.leadRange.map { $0.upperBound - $0.lowerBound } ?? 0
+            let ui = Int((now.timeIntervalSince1970 - (origin.lowerBound + origin.upperBound) / 2).rounded(.down))
             lock.unlock()
-            Self.logger.notice("amazon music lead: log clock is \(lead, format: .fixed(precision: 2))s ahead of the audio, subtracting it (ui=\(edge.1, privacy: .public)s natural=\(done.startedNaturally, privacy: .public) origin=\(edge.0.timeIntervalSince1970 - Double(edge.1), format: .fixed(precision: 3)))")
+            Self.logger.notice("amazon music lead: log clock is \(lead, format: .fixed(precision: 2))s ahead of the audio, subtracting it (ui=\(ui, privacy: .public)s natural=\(done.startedNaturally, privacy: .public) origin=\((origin.lowerBound + origin.upperBound) / 2, format: .fixed(precision: 3)) width=\(width, format: .fixed(precision: 2)) pass=\(done.leadRefinements + 1, privacy: .public))")
             AmazonMusicLeadFile.write(.init(trackID: id, startedAtMs: Int64(startedAt.timeIntervalSince1970 * 1000),
                                             leadSecs: lead, writtenAtMs: Int64(Date().timeIntervalSince1970 * 1000)))
             Self.onPlaybackEvent?(false)

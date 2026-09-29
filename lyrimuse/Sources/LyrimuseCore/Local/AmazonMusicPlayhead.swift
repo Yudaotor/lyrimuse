@@ -23,6 +23,9 @@ import Foundation
 ///
 /// **缓冲卡顿之后也要重新校准**:日志里卡顿常是同一秒里起止,真正断音却有一截(实测一次卡顿后真实出声又晚了约 1.5 秒),
 /// 所以卡过的曲目(不论怎么开的头)在卡顿平息后再对一次界面(`needsLeadCalibration`),校准出的量可正可负。
+///
+/// **一次校准不够准**:界面时间只到整秒,一次校准只能把起点圈进 0.45 秒宽的区间、取中点。校准过的一段隔 `leadRefineDelay`
+/// 再对一次界面,两次的区间取交集(`needsLeadRefinement` / `calibratingLead`)。
 public enum AmazonMusicPlayhead {
     /// 日志里认得的事件。
     public enum Event: Equatable, Sendable {
@@ -144,6 +147,11 @@ public enum AmazonMusicPlayhead {
         public var audibleLead: Double = 0
         /// `audibleLead` 已经按界面校准过。
         public var leadCalibrated = false
+        /// 提前量所在的区间(这一段几次校准的交集),`audibleLead` 取它的中点。nil = 还没校准,或者暂停之后不再拿来叠。
+        public var leadRange: ClosedRange<Double>?
+        /// 最近一次校准的时刻,以及这一段在首次校准之后又叠过几次(见 `needsLeadRefinement`)。
+        public var leadCalibratedAt: Date?
+        public var leadRefinements = 0
         /// 这首卡顿过,要重新对一次界面。
         public var stalledSinceCalibration = false
         /// 最近一次卡顿事件的时刻(调用方等它平息再校准)。
@@ -166,6 +174,7 @@ public enum AmazonMusicPlayhead {
             s.lastEndOfStreamAt = nil
             s.audibleLead = 0
             s.leadCalibrated = false
+            s.leadRange = nil
             s.stalledSinceCalibration = false
             s.lastStallAt = nil
             s.since = s.stalled ? nil : t
@@ -177,6 +186,8 @@ public enum AmazonMusicPlayhead {
             s.since = nil
             s.awaitingStartUntil = nil
             s.pristine = false
+            // 暂停后 `calibrated` 不再把起点换成系统时间戳,日志时钟的零点可能挪了不到一秒,暂停前量的区间不能再叠。
+            s.leadRange = nil
         case .resumed:
             s.paused = false
             if !s.stalled { s.since = t }
@@ -190,6 +201,7 @@ public enum AmazonMusicPlayhead {
                 s.startedNaturally = false
                 s.audibleLead = 0
                 s.leadCalibrated = false
+                s.leadRange = nil
                 s.stalledSinceCalibration = false
             }
         case .starting:
@@ -238,17 +250,48 @@ public enum AmazonMusicPlayhead {
         s.trackID != nil && ((s.startedNaturally && !s.leadCalibrated) || s.stalledSinceCalibration)
     }
 
-    /// 界面上的播放时间在 `edgeAt` 那一刻跳到了 `displaySeconds` 秒(整秒边界 = 真正出声位置)。算出这首的提前量并记上;
-    /// 不在 `audibleLeadRange` 里返回 nil(原样不动)。
-    public static func calibratingLead(_ s: State, edgeAt: Date, displaySeconds: Int) -> State? {
-        guard needsLeadCalibration(s), let engine = engineTimelinePosition(s, at: edgeAt) else { return nil }
-        let lead = engine - Double(displaySeconds)
+    /// 首次校准之后隔多久再对一次界面,把两次的区间叠起来。一次校准只把起点收到 `AmazonMusicUIProbe.targetWidth`(0.45 秒)
+    /// 以内、取中点,误差可到 ±0.2 秒;同一段(没卡顿、没拖动、没暂停)的真实起点不变,两次区间的交集更窄。
+    public static let leadRefineDelay: TimeInterval = 20
+    /// 每段最多再叠几次。每次都要开关几次辅助功能树,让 Amazon 重建界面。
+    public static let maxLeadRefinements = 1
+    /// 区间已经窄到这个宽度就不再叠。
+    public static let leadRefineWidth: Double = 0.2
+
+    /// 这一段要不要再对一次界面、把区间叠窄:首次校准过了 `leadRefineDelay`、之后没卡顿没暂停、区间还不够窄。
+    public static func needsLeadRefinement(_ s: State, now: Date) -> Bool {
+        guard s.trackID != nil, s.leadCalibrated, !s.stalledSinceCalibration, !s.paused, !s.stalled,
+              s.leadRefinements < maxLeadRefinements, let range = s.leadRange, let at = s.leadCalibratedAt else { return false }
+        return now.timeIntervalSince(at) >= leadRefineDelay && range.upperBound - range.lowerBound > leadRefineWidth
+    }
+
+    /// 界面读出这首的真实起点落在 `origin`(epoch 秒,位置 = 时刻 − 起点)里,`t` 是算的这一刻。换成提前量的区间
+    /// (日志时钟 − 真实位置),要叠就跟之前的区间取交集(交集为空说明之前那次读错了,只信这次),提前量取中点记上。
+    /// 中点不在 `audibleLeadRange` 里返回 nil(原样不动)。
+    public static func calibratingLead(_ s: State, origin: ClosedRange<Double>, at t: Date) -> State? {
+        let refining = needsLeadRefinement(s, now: t)
+        guard needsLeadCalibration(s) || refining, let engine = engineTimelinePosition(s, at: t) else { return nil }
+        let shift = engine - t.timeIntervalSince1970
+        let measured = (origin.lowerBound + shift)...(origin.upperBound + shift)
+        let range = refining ? intersectedLeadRange(s.leadRange, measured) : measured
+        let lead = (range.lowerBound + range.upperBound) / 2
         guard audibleLeadRange.contains(lead) else { return nil }
         var out = s
         out.audibleLead = lead
+        out.leadRange = range
         out.leadCalibrated = true
+        out.leadCalibratedAt = t
+        out.leadRefinements = refining ? s.leadRefinements + 1 : 0
         out.stalledSinceCalibration = false
         return out
+    }
+
+    /// 两次校准的提前量区间取交集;不相交(之前那次读错了)只信新的。纯函数。
+    public static func intersectedLeadRange(_ previous: ClosedRange<Double>?, _ measured: ClosedRange<Double>) -> ClosedRange<Double> {
+        guard let previous else { return measured }
+        let lo = max(previous.lowerBound, measured.lowerBound)
+        let hi = min(previous.upperBound, measured.upperBound)
+        return lo <= hi ? lo...hi : measured
     }
 
     /// 拖动之后最多等 `kStarting` 这么久。等不到(措辞改了)就按拖动时刻加这么多起表,不让表一直停着。

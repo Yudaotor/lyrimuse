@@ -77,9 +77,14 @@ public enum AmazonMusicUIProbe {
     /// 一组读数收得住就给起点(区间中点):交集窄到 `targetWidth`,而且读数里至少跨过一次整秒跳变 —— 界面时间停着
     /// (刚恢复、刚切歌还没出声)时几次同样的读数也能把区间收窄,但收出的起点是错的。收不住返回 nil。纯函数。
     public static func settledOrigin(_ samples: [Sample]) -> Double? {
+        settledInterval(samples).map { ($0.lowerBound + $0.upperBound) / 2 }
+    }
+
+    /// 同 `settledOrigin`,给出整个区间(调用方要跟下一次校准的区间叠)。纯函数。
+    public static func settledInterval(_ samples: [Sample]) -> ClosedRange<Double>? {
         guard let range = originInterval(samples), range.upperBound - range.lowerBound <= targetWidth,
               Set(samples.map(\.seconds)).count >= 2 else { return nil }
-        return (range.lowerBound + range.upperBound) / 2
+        return range
     }
 
     /// 解析界面上的时间:`02:24` / `1:02:03`;带负号的是剩余时间。认不出返回 nil。纯函数,selftest 直接覆盖。
@@ -125,11 +130,11 @@ public enum AmazonMusicUIProbe {
         case timedOut = "did not narrow down in time"
     }
 
-    /// 同步读,阻塞最多 `startWait` + `timeout`,返回这首的真实起点(epoch 秒)。别在主线程调。
+    /// 同步读,阻塞最多 `startWait` + `timeout`,返回这首真实起点(epoch 秒)所在的区间,见 `settledInterval`。别在主线程调。
     /// `timelineOrigin`:日志位置的零点(当前时刻 − `engineTimelinePosition`),给 `plausibleElapsed` 用。`isCurrent`
     /// 每读一次问一下,返回 false(已经换歌)就不读了。
     public static func sampleOrigin(pid: pid_t, duration: Double?, timelineOrigin: Date? = nil,
-                                    isCurrent: () -> Bool = { true }) -> Result<Double, FailureBox> {
+                                    isCurrent: () -> Bool = { true }) -> Result<ClosedRange<Double>, FailureBox> {
         guard AXIsProcessTrusted() else { return .failure(.init(.notTrusted, samples: 0)) }
         let durationText = duration.map { String(Int($0)) } ?? "?"
         let app = AXUIElementCreateApplication(pid)
@@ -179,7 +184,7 @@ public enum AmazonMusicUIProbe {
                 restarts += 1
                 samples = [samples.last!]
             }
-            if let origin = settledOrigin(samples) { return .success(origin) }
+            if let origin = settledInterval(samples) { return .success(origin) }
             if let range = originInterval(samples), let deadline {
                 let next = nextToggleTime(origin: range, notBefore: Date().timeIntervalSince1970 + 0.05)
                 let wait = min(next, deadline.timeIntervalSince1970) - Date().timeIntervalSince1970

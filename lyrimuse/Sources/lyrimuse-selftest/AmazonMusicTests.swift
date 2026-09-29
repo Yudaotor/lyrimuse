@@ -120,13 +120,18 @@ func runAmazonMusicTests() {
         expectEqual(P.needsLeadCalibration(s), true, "Amazon 连播: 自然连播的要校准")
         let clicked = P.apply(.trackStarted("asin://B0TESTAAA1"), at: at("025131", 0.5), to: P.State())
         expectEqual(P.needsLeadCalibration(clicked), false, "Amazon 连播: 点播开头不用校准")
+        // 界面在 `edge` 那一刻跳到 `secs` 秒 = 真实起点就是 edge − secs(退化成一个点的区间)。
+        func calibrating(_ s: P.State, edge: Date, secs: Int) -> P.State? {
+            let o = edge.timeIntervalSince1970 - Double(secs)
+            return P.calibratingLead(s, origin: o...o, at: edge)
+        }
         // 界面在 02:56:30.3 跳到 9 秒,日志时钟那一刻是 11.8 → 提前 2.8 秒。
-        let cal = P.calibratingLead(s, edgeAt: at("025630", 0.3), displaySeconds: 9)
+        let cal = calibrating(s, edge: at("025630", 0.3), secs: 9)
         expectEqual(cal.map { abs($0.audibleLead - 2.8) < 0.001 }, true, "Amazon 连播: 提前量 = 日志时钟 − 界面秒数")
         expectEqual(cal.flatMap { P.position($0, at: at("025630", 0.3)) }.map { abs($0 - 9) < 0.001 }, true,
                     "Amazon 连播: 校准后位置对上界面")
         expectEqual(cal.map { P.needsLeadCalibration($0) }, false, "Amazon 连播: 校准过不再校准")
-        expectEqual(P.calibratingLead(s, edgeAt: at("025630", 0.3), displaySeconds: 0) == nil, true,
+        expectEqual(calibrating(s, edge: at("025630", 0.3), secs: 0) == nil, true,
                     "Amazon 连播: 提前量离谱(读错 / 读到别的曲目)不采信")
         let seeked = P.apply(.seek(30), at: at("025700"), to: cal!)
         expectEqual(seeked.audibleLead, 0, "Amazon 连播: 拖动清空缓冲,提前量归零")
@@ -146,9 +151,39 @@ func runAmazonMusicTests() {
         var clickedStall = P.apply(.stall(true), at: at("025200"), to: clicked)
         clickedStall = P.apply(.stall(false), at: at("025200"), to: clickedStall)
         expectEqual(P.needsLeadCalibration(clickedStall), true, "Amazon 卡顿: 卡过就要重新校准")
-        let behind = P.calibratingLead(clickedStall, edgeAt: at("025210"), displaySeconds: 40)
+        let behind = calibrating(clickedStall, edge: at("025210"), secs: 40)
         expectEqual(behind.map { abs($0.audibleLead - (-1.5)) < 0.001 }, true, "Amazon 卡顿: 模型慢了 1.5 秒,提前量 −1.5")
         expectEqual(behind.map { P.needsLeadCalibration($0) }, false, "Amazon 卡顿: 校准过就不再校准")
+
+        // 一次校准只收到 0.45 秒宽的区间,隔 leadRefineDelay 再对一次、两次区间取交集。
+        // 自然连播 02:56:18.5 开播,02:56:30.3 那一刻日志时钟 11.8;真实起点区间 [..., ...] 换成提前量区间 [2.5, 2.9]。
+        let t1 = at("025630", 0.3)
+        let o1 = t1.timeIntervalSince1970 - 11.8
+        let first = P.calibratingLead(s, origin: (o1 + 2.5)...(o1 + 2.9), at: t1)
+        expectEqual(first.map { abs($0.audibleLead - 2.7) < 0.001 }, true, "Amazon 叠窄: 首次取区间中点")
+        expectEqual(first.map { P.needsLeadRefinement($0, now: t1.addingTimeInterval(P.leadRefineDelay - 1)) }, false,
+                    "Amazon 叠窄: 没到 leadRefineDelay 不叠")
+        let t2 = t1.addingTimeInterval(P.leadRefineDelay)
+        expectEqual(first.map { P.needsLeadRefinement($0, now: t2) }, true, "Amazon 叠窄: 到点且区间比 leadRefineWidth 宽就再对一次")
+        // 第二次量到提前量区间 [2.75, 3.15],与 [2.5, 2.9] 交出 [2.75, 2.9] → 2.825。起点区间按 t2 那一刻的日志时钟换算。
+        let o2 = t2.timeIntervalSince1970 - (11.8 + P.leadRefineDelay)
+        let second = first.flatMap { P.calibratingLead($0, origin: (o2 + 2.75)...(o2 + 3.15), at: t2) }
+        expectEqual(second.map { abs($0.audibleLead - 2.825) < 0.001 }, true, "Amazon 叠窄: 两次区间取交集再取中点")
+        expectEqual(second.flatMap { $0.leadRange }.map { abs($0.upperBound - $0.lowerBound - 0.15) < 0.001 }, true,
+                    "Amazon 叠窄: 叠完区间变窄")
+        expectEqual(second.map { P.needsLeadRefinement($0, now: t2.addingTimeInterval(60)) }, false,
+                    "Amazon 叠窄: 每段只叠 maxLeadRefinements 次")
+        let disjoint = first.flatMap { P.calibratingLead($0, origin: (o2 + 3.5)...(o2 + 3.9), at: t2) }
+        expectEqual(disjoint.map { abs($0.audibleLead - 3.7) < 0.001 }, true, "Amazon 叠窄: 两次不相交只信新的")
+        let pausedFirst = first.map { P.apply(.resumed, at: t1.addingTimeInterval(5), to: P.apply(.paused, at: t1.addingTimeInterval(2), to: $0)) }
+        expectEqual(pausedFirst.map { P.needsLeadRefinement($0, now: t2.addingTimeInterval(10)) }, false,
+                    "Amazon 叠窄: 暂停过的不再叠(日志时钟零点可能挪了)")
+        var stalledFirst = first.map { P.apply(.stall(true), at: t1.addingTimeInterval(3), to: $0) }!
+        stalledFirst = P.apply(.stall(false), at: t1.addingTimeInterval(4), to: stalledFirst)
+        expectEqual(P.needsLeadRefinement(stalledFirst, now: t2), false, "Amazon 叠窄: 卡顿过的走重新校准,不叠")
+        let recal = P.calibratingLead(stalledFirst, origin: (o2 + 3.5)...(o2 + 3.9), at: t2)
+        expectEqual(recal.map { $0.leadRefinements == 0 && $0.leadRange.map { abs($0.upperBound - $0.lowerBound - 0.4) < 0.001 } == true },
+                    true, "Amazon 叠窄: 卡顿后的重新校准从头量,不跟卡顿前的区间叠")
 
         typealias U = AmazonMusicUIProbe
         expectEqual(U.parseClock("02:24").map { $0.seconds }, 144, "Amazon 界面: 已播 mm:ss")
