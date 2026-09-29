@@ -155,7 +155,23 @@ func miguPickImg(items []miguImgItem) string {
 // miguSearch 请求搜索端点。searchSwitch 只开 song 一类,pageSize=10——身份闸淘汰后剩下
 // 的够挑;isCorrect=1 让咪咕自己纠一次错别字(实测不影响原版排第一)。
 func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, error) {
-	q := strings.TrimSpace(artist + " " + title)
+	return miguSearchQuery(ctx, miguSearchQueries(artist, title)[0])
+}
+
+// miguSearchQueries:咪咕的搜索词,按顺序试,前一个挑不出候选才用下一个。「歌手 歌名」一起搜时咪咕优先排这位
+// 歌手的热门歌,歌名比较普通、又是新歌时,这首会被挤出前 20 条(Ariana Grande《oh well》:「Ariana Grande
+// oh well」20 条全是她的旧歌,单搜「oh well」第二条就是它),所以再补一次只用歌名。补搜的结果照样过
+// miguCandidateScore 的歌名 / 歌手 / 专辑闸。见 09 章决策 127。
+func miguSearchQueries(artist, title string) []string {
+	title = strings.TrimSpace(title)
+	combined := strings.TrimSpace(artist + " " + title)
+	if combined == title || title == "" {
+		return []string{combined}
+	}
+	return []string{combined, title}
+}
+
+func miguSearchQuery(ctx context.Context, q string) ([]miguSearchItem, error) {
 	var items []miguSearchItem
 	err := tryEach(ctx, miguSearchHosts, func(host string) error {
 		got, err := miguSearchAt(ctx, host, q)
@@ -278,19 +294,24 @@ const miguMaxCandidatesToFetch = 3
 // ⑥选中那条有 trcUrl 就再拉译文(同样剥头、同样要求同步;拉不到只是没有译文,不影响
 // 正文)。
 func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float64) miguResult {
-	items, err := miguSearch(ctx, artist, title)
-	if err != nil || len(items) == 0 {
-		return miguResult{}
-	}
-
 	type scoredItem struct {
 		item  miguSearchItem
 		score int
 	}
 	var candidates []scoredItem
-	for _, it := range items {
-		if s := miguCandidateScore(it, artist, title, album); s >= 0 {
-			candidates = append(candidates, scoredItem{it, s})
+	for _, q := range miguSearchQueries(artist, title) {
+		items, err := miguSearchQuery(ctx, q)
+		if err != nil {
+			// 请求没成(所有备用主机都失败)就别换搜索词再打一遍:换词救不了连不上。
+			return miguResult{}
+		}
+		for _, it := range items {
+			if s := miguCandidateScore(it, artist, title, album); s >= 0 {
+				candidates = append(candidates, scoredItem{it, s})
+			}
+		}
+		if len(candidates) > 0 {
+			break
 		}
 	}
 	if len(candidates) == 0 {
