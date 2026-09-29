@@ -104,14 +104,40 @@ func TestRescueFanoutIsWired(t *testing.T) {
 	src := string(data)
 	for _, n := range []string{
 		"fan := newAliasFanout(ctx)",
-		"if rescue {\n\t\t\t\tfan.ensure(i, len(altIdentities), rescueBranch)\n\t\t\t}",
-		"if bNe, bRes, ok := fan.take(i); ok {",
+		"case rescue:\n\t\t\t\tfan.ensure(i, len(altIdentities), rescueBranch)",
+		// 手动搜索时补缺席源的别名轮也并发,只起到 lyricAliasMissingMaxTries 为止;补罗马音那一轮不开、也不采用预开的支线。
+		"case missingParallel && !romaRetry:\n\t\t\t\tfan.ensure(i, min(len(altIdentities), lyricAliasMissingMaxTries), missingBranch(only))",
+		"missingParallel := manualLyricSearch(ctx)",
+		"if bNe, bRes, ok := fan.take(i); ok && (rescue || !romaRetry) {",
 		"altResults = keepLyricSources(altResults, only)",
 		"notifyProvisionalLyrics(ctx, bNe, mergeLyricCandidateRounds(artist, title, album, durationSecs, rescueBase, bRes))",
 		"\t\tfan.stop()\n\t}",
 	} {
 		if !strings.Contains(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
+		}
+	}
+}
+
+// 手动搜索的标记只由 search-lyrics 挂上;播放时的解析没有它,补缺席源的别名轮照旧串行。
+func TestManualLyricSearchMark(t *testing.T) {
+	if manualLyricSearch(context.Background()) || !manualLyricSearch(withLyricQueryReason(withManualLyricSearch(context.Background()), lyricQueryReasonAliasMissing)) {
+		t.Fatal("标记要能穿过别的 ctx 包装读出来,没挂的读成 false")
+	}
+	data, err := os.ReadFile("searchcli.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "withLyricQueryLog(withManualLyricSearch(context.Background()))") {
+		t.Error("search-lyrics 没挂手动搜索的标记")
+	}
+	for _, f := range []string{"enrich.go", "upcoming.go", "albumprefetch.go", "lyricsfillsweep.go", "lyricsfullscan.go"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "withManualLyricSearch(") {
+			t.Errorf("%s 不该挂手动搜索的标记:播放和批量路径的补缺别名轮要串行", f)
 		}
 	}
 }

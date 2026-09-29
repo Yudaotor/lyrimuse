@@ -3290,6 +3290,15 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			}
 			return bNe, bRes
 		}
+		// 手动搜索时补缺席源的别名轮也并发(见 rescuefanout.go 的 withManualLyricSearch)。支线按开查那一刻缺着的源问,
+		// 取用时再按当时还缺着的源筛(下面 take 那一支)。
+		missingParallel := manualLyricSearch(ctx)
+		missingBranch := func(only []string) func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
+			return func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
+				bctx = withLyricQueryReason(withLyricSourceOnly(bctx, only), lyricQueryReasonAliasMissing)
+				return fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j], title, album, durationSecs, nil)
+			}
+		}
 		for i, alt := range altIdentities {
 			// 只为补缺席的源跑的那几轮(首轮已经有可用候选、也不缺罗马音)有上限,见 lyricAliasMissingMaxTries。
 			if !rescue && !romaRetry && i >= lyricAliasMissingMaxTries {
@@ -3323,10 +3332,14 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			aliasUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
 			var altNe neteaseInfo
 			var altResults []scoredLyricCandidateResult
-			if rescue {
+			switch {
+			case rescue:
 				fan.ensure(i, len(altIdentities), rescueBranch)
+			case missingParallel && !romaRetry:
+				fan.ensure(i, min(len(altIdentities), lyricAliasMissingMaxTries), missingBranch(only))
 			}
-			if bNe, bRes, ok := fan.take(i); ok {
+			// 补罗马音那一轮要全源重查:提前按「补缺席的源」开的那一支只问了缺着的源,不能拿来顶,走下面串行那条。
+			if bNe, bRes, ok := fan.take(i); ok && (rescue || !romaRetry) {
 				altNe, altResults = bNe, bRes
 				if !rescue && !romaRetry {
 					altResults = keepLyricSources(altResults, only)

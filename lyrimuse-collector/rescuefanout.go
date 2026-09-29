@@ -17,8 +17,23 @@ import "context"
 // 请求量:只有首轮全空的歌(约 4%)会并发,出站由 hostguard.go 的令牌桶与在途上限管着(见那边的补查档)。
 // 见 09 章决策 102 第七批。
 
-// lyricRescueParallel:救急时同时在跑的别名支线最多几支。
+// lyricRescueParallel:救急时同时在跑的别名支线最多几支。手动搜索补缺席的源时用同一个窗口。
 const lyricRescueParallel = 3
+
+// 手动搜索(「搜索候选歌词」弹窗,searchcli.go)的标记。只为补缺席的源跑的别名轮(首轮已有可用候选)在播放时
+// 串行、一位位来;手动搜索时用户对着弹窗等,这几轮也按上面的窗口并发开查,采用顺序不变。出站同样受
+// hostguard.go 的令牌桶(补查档给首轮留余量)、lyricsourceinflight.go 的在途上限、sourcebreaker.go 的冷却管着,
+// 支线只问还缺着的源。见 09 章决策 125。
+type manualLyricSearchKey struct{}
+
+func withManualLyricSearch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, manualLyricSearchKey{}, true)
+}
+
+func manualLyricSearch(ctx context.Context) bool {
+	v, _ := ctx.Value(manualLyricSearchKey{}).(bool)
+	return v
+}
 
 type aliasBranch struct {
 	done    chan struct{}
