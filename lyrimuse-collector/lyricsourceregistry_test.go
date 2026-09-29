@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -377,10 +378,6 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		t.Fatalf("源数量是 %d,没有对应的中英数字——请在两张表里补上再跑这个测试", n)
 	}
 	checks := []struct{ path, needle string }{
-		{"../README.md", en + " lyrics sources checked automatically"},
-		{"../README.md", "to the " + strings.ToLower(en) + " lyric sources above"},
-		{"../README.zh-CN.md", "自动查" + zh + "个歌词源"},
-		{"../README.zh-CN.md", "发给上面" + zh + "个歌词源"},
 		{"../docs/features/01-overview.md", zh + "个歌词源:`music.163.com`"},
 		{"../docs/features/01-overview.md", zh + "个歌词源(网易云/QQ/酷狗/"},
 		{"../docs/features/09-lyrics-resolution.md", "### 3. " + zh + "源并发收集"},
@@ -406,6 +403,41 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 		}
 		if !strings.Contains(string(raw), c.needle) {
 			t.Errorf("%s 里没找到 %q——源数量是 %d,这处的数字要跟着改", c.path, c.needle, n)
+		}
+	}
+
+	// README 的文案常改,改措辞不该碰到测试,所以这里不找固定句子:扫出每一处「数字 + 歌词源」,要求每一处都是
+	// 现在的数量,且每份至少两处(简介、功能列表、隐私说明里各写了一次)。「一个歌词源都没启用」「no lyric
+	// sources enabled」这类不是在报数量:英文那句正则不收,中文单独一个「一」跳过(字符集里得留着「一」,
+	// 不然「十一个歌词源」整个认不出来)。
+	readmes := []struct {
+		path string
+		re   *regexp.Regexp
+		want string
+	}{
+		{"../README.md", regexp.MustCompile(`(?i)\b(five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|\d+) lyrics? sources?\b`), strings.ToLower(en)},
+		{"../README.zh-CN.md", regexp.MustCompile(`([一二三四五六七八九十]+|\d+)个歌词源`), zh},
+		{"../README.zh-Hant.md", regexp.MustCompile(`([一二三四五六七八九十]+|\d+)個歌詞來?源`), zh},
+	}
+	for _, r := range readmes {
+		raw, err := os.ReadFile(r.path)
+		if err != nil {
+			t.Errorf("读不到 %s: %v", r.path, err)
+			continue
+		}
+		var found [][]string
+		for _, m := range r.re.FindAllStringSubmatch(string(raw), -1) {
+			if m[1] != "一" {
+				found = append(found, m)
+			}
+		}
+		if len(found) < 2 {
+			t.Errorf("%s 里只认出 %d 处写着歌词源数量的地方(至少该有 2 处)——措辞改得认不出来了,调这里的正则", r.path, len(found))
+		}
+		for _, m := range found {
+			if got := strings.ToLower(m[1]); got != r.want && got != strconv.Itoa(n) {
+				t.Errorf("%s 里的 %q 写的是 %s,源数量是 %d——这处的数字要跟着改", r.path, m[0], m[1], n)
+			}
 		}
 	}
 }
