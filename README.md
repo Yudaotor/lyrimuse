@@ -87,6 +87,10 @@ brew install --cask lyrimuse
 - **Moving to a new Mac?** Export your whole setup and import it there. If something goes wrong, there's also a one-click diagnostics export.
 
 ### Optional extras
+
+<details>
+<summary>ListenBrainz, a shareable now-playing page, and weekly / monthly / yearly digests</summary>
+
 All of these are off until you turn them on in Settings:
 
 - **Scrobble to [ListenBrainz](https://listenbrainz.org) as well.** Every play goes to both services from the same read of your player, so the two histories stay in step. Plays from your iPhone (recorded through Last.fm) get copied into ListenBrainz too, so you end up with one history across both devices instead of two.
@@ -94,6 +98,8 @@ All of these are off until you turn them on in Settings:
 - **Weekly, monthly and yearly listening digests**, sent as a push notification (Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram).
 
 You'll find them all under Settings → **Add-on Features**, and each card comes with its own setup steps: where to get an API key or token, how to connect an account, how to get a webhook URL for your push service. The web page is the only one with a separate guide, and you don't need all of it. With just ListenBrainz set up, the page already shows live playback and history, no Cloudflare Worker needed. Deploy one if you also want the guestbook, reactions, visitor counter, top-10 board and faster updates; the guide covers that.
+
+</details>
 
 ## Getting Started
 
@@ -269,7 +275,12 @@ LyricsX's last release was v1.6.3, in April 2022. It runs on macOS 10.11 and lat
 
 ## Troubleshooting
 
-If lyrics stop appearing, ask the collector what is wrong:
+If lyrics don't show up, open **Lyrics Sources** in Settings and click **Test** to see which source can't be reached. If that doesn't sort it out, use **Export Diagnostics** and attach the file to an [issue](https://github.com/Yudaotor/lyrimuse/issues); it already includes the full self-check of the background service.
+
+<details>
+<summary>Command-line self-check</summary>
+
+The same check, run from Terminal:
 
 ```sh
 /Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
@@ -277,12 +288,7 @@ If lyrics stop appearing, ask the collector what is wrong:
 /Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
 ```
 
-It checks the things that silently break the pipeline — a config field that
-failed to parse, no lyric sources enabled, an unreadable cache, a lyrics export
-directory that is not writable — and then probes the enabled lyric sources with
-two real lookups (one Chinese, one English, so that neither catalogue's blind
-spot looks like an outage). A single dead source is a warning; only all of them
-failing is an error, because the others still produce lyrics.
+</details>
 
 ## Uninstalling
 
@@ -313,6 +319,9 @@ This repo is the app:
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
 - [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
 
+<details>
+<summary>The optional web page: two sibling repos</summary>
+
 The optional web experience lives in two sibling repos, so you can fork either without touching the app:
 
 | Repo | Role |
@@ -324,6 +333,24 @@ The optional web experience lives in two sibling repos, so you can fork either w
 this repo (app + collector)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
 ```
 
+</details>
+
 ## Credits
 
-The desktop-lyrics concept owes a debt to [LyricsX](https://github.com/ddddxxx/LyricsX).
+Thanks to [LyricsX](https://github.com/ddddxxx/LyricsX), which showed what desktop lyrics on the Mac could be.
+
+<details>
+<summary>Open-source projects and community data Lyrimuse is built on</summary>
+
+- [media-control](https://github.com/ungive/media-control) and [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter): reading what's playing on macOS
+- [Sparkle](https://github.com/sparkle-project/Sparkle): in-app updates
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts): global shortcuts
+- [OpenCC](https://github.com/BYVoid/OpenCC): Simplified / Traditional Chinese conversion
+- [rime-cantonese](https://github.com/rime/rime-cantonese): Cantonese Jyutping
+- [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db): community-made word-by-word lyrics
+- [LRCLIB](https://lrclib.net): open synced-lyrics database
+- [SponsorBlock](https://sponsor.ajay.app): non-music segments in music videos
+
+</details>
+
+License texts are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).

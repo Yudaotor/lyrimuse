@@ -87,6 +87,10 @@ brew install --cask lyrimuse
 - **换新 Mac**：把整套设置导出，再到新机器上导入就行。出了问题还能一键导出诊断信息。
 
 ### 附加功能（可选）
+
+<details>
+<summary>ListenBrainz 同步、可分享的「正在听什么」网页、周报 / 月报 / 年度小结</summary>
+
 下面这些默认都关着，想用哪个就在设置里打开哪个：
 
 - **同时同步到 [ListenBrainz](https://listenbrainz.org)**。每次播放都用同一份读到的播放状态，分别发给 Last.fm 和 ListenBrainz，两边的记录不会对不上。iPhone 上经 Last.fm 记下的播放也会自动转进 ListenBrainz，Mac 和 iPhone 的记录就合成了一份。
@@ -94,6 +98,8 @@ brew install --cask lyrimuse
 - **周报、月报和年度听歌小结**，通过推送发给你（Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 都支持）。
 
 这些都在设置的「附加功能」里，每张卡片都带分步说明：去哪申请 API Key 或 Token、怎么连账号、怎么拿到推送平台的 Webhook 地址。只有网页那项单独写了一份教程，而且也不是非搭不可：只配好 ListenBrainz，网页就已经能显示实时播放和历史，不用部署 Cloudflare Worker。想要留言墙、表情回应、访客计数、Top10 歌手榜和更快的刷新，再照着教程部署一个。
+
+</details>
 
 ## 快速开始
 
@@ -268,7 +274,12 @@ LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及�
 
 ## 排查
 
-歌词不出来时，直接问 collector：
+歌词不出来时，先在设置的「歌词来源」里点「测试」，看看是哪个源连不上。还解决不了的话，用「导出诊断」导出一份诊断信息，附在 [issue](https://github.com/Yudaotor/lyrimuse/issues) 里。诊断里已经带上了后台服务的完整自检结果。
+
+<details>
+<summary>命令行自检</summary>
+
+同样的自检，也可以在终端里跑：
 
 ```sh
 /Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
@@ -276,10 +287,7 @@ LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及�
 /Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
 ```
 
-它会检查那些**会静默地把链路搞坏**的东西——某个配置字段没解析成功、一个歌词源都没启用、
-缓存文件读不了、歌词导出目录写不进去——然后拿两首真实曲目（一中一英，避免把某个曲库的
-盲区误报成故障）去探当前启用的每个歌词源。单个源挂掉只报 warn，只有全部挂掉才算 error：
-还有其它源照样能出歌词。
+</details>
 
 ## 卸载
 
@@ -307,6 +315,9 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
 - [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
 
+<details>
+<summary>可选的网页体验：两个兄弟仓库</summary>
+
 可选的网页体验拆在两个独立的兄弟仓库里，想 fork 哪个都不用碰 App：
 
 | 仓库 | 角色 |
@@ -318,6 +329,24 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 本仓库 (App + 采集器)  ──推送──▶  nowplaying-workers (中继)  ◀──读取──  nowplaying (网页)
 ```
 
+</details>
+
 ## 致谢
 
-桌面歌词这个概念要归功于 [LyricsX](https://github.com/ddddxxx/LyricsX)。
+感谢 [LyricsX](https://github.com/ddddxxx/LyricsX)，它让人看到了 Mac 上的桌面歌词可以做成什么样。
+
+<details>
+<summary>Lyrimuse 用到的开源项目和社区数据</summary>
+
+- [media-control](https://github.com/ungive/media-control) 与 [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter)：读取 macOS 的「正在播放」
+- [Sparkle](https://github.com/sparkle-project/Sparkle)：App 内更新
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)：全局快捷键
+- [OpenCC](https://github.com/BYVoid/OpenCC)：简繁转换
+- [rime-cantonese](https://github.com/rime/rime-cantonese)：粤拼
+- [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)：社区校对的逐字歌词
+- [LRCLIB](https://lrclib.net)：开放的同步歌词库
+- [SponsorBlock](https://sponsor.ajay.app)：MV 里非音乐片段的标注
+
+</details>
+
+各自的许可证全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)。
