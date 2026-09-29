@@ -281,6 +281,8 @@ type lyricCandidate struct {
 	// **参与打分**——它是"源报版本同一性"的干净信号(不被长尾奏带偏),消融评测的结论见
 	// sourceDurationMismatchPenalty 的注释。
 	sourceReportedDurationSecs float64
+	// isrc:源报的这条录音的 ISRC,没有时为空。只透传,不参与打分,见 isrcretry.go。
+	isrc string
 	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面,给"搜索候选歌词"
 	// 弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能匹配到同一首歌的不同版本
 	// (不同专辑/live/合集),各自如实展示,不做跨源统一。

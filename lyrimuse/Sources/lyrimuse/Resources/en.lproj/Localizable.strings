@@ -781,6 +781,7 @@
 "指针划过时让开" = "Move Aside on Hover";
 "按 %@ 秒校验" = "Validated against %@s";
 "按 %@ 秒的曲目时长校验" = "Validated against a track length of %@s";
+"按 ISRC 补查未应答的源" = "By ISRC: sources that did not answer";
 "按 MusicBrainz 登记的所属国家或地区统计，不是出生地" = "Counted by the country or region each artist is associated with on MusicBrainz, not where they were born";
 "按「署名 - 歌名」拆分" = "Split as “artist - title”";
 "按下「开始使用」，让每一句歌词都跟着旋律亮起来" = "Click “Get Started” and let every line light up with the music";

@@ -3045,6 +3045,8 @@ type scoredLyricCandidateResult struct {
 	// SourceReportedDurationSecs:源自己声明的曲长(秒),0=该源没给。只透传、不参与打分
 	// ——给下一轮维度评测攒"源报版本同一性"数据(见 lyricCandidate 同名字段)。
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
+	// ISRC:源报的这条录音的 ISRC(目前只有 applemusic 给),不参与打分。按 ISRC 补取未应答的源用,见 isrcretry.go。
+	ISRC string `json:"isrc,omitempty"`
 	// Language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 透传,不参与打分,见 lyricCandidate.language。
 	Language string `json:"language,omitempty"`
@@ -3538,6 +3540,19 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			}
 		}
 	}
+	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
+	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
+	if isrc, sources := isrcRetryPlan(results, durationSecs); isrc != "" {
+		isrcUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
+		isrcCtx := withLyricQueryReason(withLyricSourceOnly(withRecordingISRC(ctx, isrc), sources), lyricQueryReasonISRC)
+		_, isrcResults := fetchScoredLyricCandidatesStreaming(isrcCtx, artist, title, album, durationSecs, isrcUpdate)
+		merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, isrcResults)
+		if usableLyricSourceCount(merged) > usableLyricSourceCount(results) {
+			log.Printf("lyrics: isrc %s from applemusic added candidates for %q - %q: usable_sources=%d->%d",
+				isrc, artist, title, usableLyricSourceCount(results), usableLyricSourceCount(merged))
+		}
+		results = merged
+	}
 	return ne, results
 }
 
@@ -3667,6 +3682,7 @@ func lyricCandidateFromScored(r scoredLyricCandidateResult) lyricCandidate {
 		hasUsableTranslation:       tr,
 		hasUsableRomanization:      roma,
 		sourceReportedDurationSecs: r.SourceReportedDurationSecs,
+		isrc:                       r.ISRC,
 		title:                      r.Title,
 		artist:                     r.Artist,
 		album:                      r.Album,
@@ -3878,6 +3894,7 @@ type lyricSourceResult struct {
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
+	isrc                    string  // 源报的这条录音的 ISRC,目前只有 applemusic 填,见 isrcretry.go
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
@@ -4046,6 +4063,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			hasUsableTranslation:       amUsableTr,
 			hasUsableRomanization:      amUsableRoma,
 			sourceReportedDurationSecs: amDur,
+			isrc:                       am.isrc,
 			title:                      amTitle, artist: amArtist, album: amAlbum,
 			cover: amCover, plainTextOnly: amPlainOnly,
 			identityFromLocalClient: am.identityFromLocalClient,
@@ -4174,6 +4192,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			LyricsYRC:                  c.wordTimingYRC,
 			HasWordTiming:              c.hasWordTiming,
 			SourceReportedDurationSecs: c.sourceReportedDurationSecs,
+			ISRC:                       c.isrc,
 			Title:                      c.title,
 			Artist:                     c.artist,
 			Album:                      c.album,
@@ -4610,7 +4629,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// isrc 同 deezer 那路:有值时走 track.get?track_isrc= 直取,绕开这个源最松的那套
 		// 名称搜索(见 musixmatch.go)。
-		r := musixmatchLyric(ctx, artist, title, durationSecs, features().LyricsTranslationLanguage, playbackISRC(artist, title, album))
+		r := musixmatchLyric(ctx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental}
 	}()
 	go func() {
@@ -4650,7 +4669,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		//
 		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
 		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
-		r := deezerLyric(ctx, artist, title, album, durationSecs, playbackISRC(artist, title, album))
+		r := deezerLyric(ctx, artist, title, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
@@ -4665,7 +4684,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
 		appleID, _ := playbackTrackIDsFor(artist, title, album)
 		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID)
-		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
+		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
 		if skipSource("soda") {

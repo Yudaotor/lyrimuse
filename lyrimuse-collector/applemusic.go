@@ -80,6 +80,8 @@ type applemusicResult struct {
 	cover string
 	// durationSecs:Apple 自报的曲长(秒),透传给打分的 sourceReportedDurationSecs。
 	durationSecs float64
+	// isrc:这条录音的 ISRC(曲库 song attributes),没有时为空。见 isrcretry.go。
+	isrc string
 	// plainOnly:只拿到没有时间戳的正文 —— 语义同 deezer/lrclib 的同名字段(分数钉死 -1,
 	// 只有用户在弹窗里手点才会采用)。
 	plainOnly bool
@@ -609,9 +611,11 @@ type applemusicSong struct {
 		ArtistName       string `json:"artistName"`
 		AlbumName        string `json:"albumName"`
 		DurationInMillis int    `json:"durationInMillis"`
-		HasLyrics        bool   `json:"hasLyrics"`
-		HasTimeSynced    bool   `json:"hasTimeSyncedLyrics"`
-		Artwork          struct {
+		// Isrc:这条录音的 ISRC。按 ISRC 补取未应答的 deezer / musixmatch 用,见 isrcretry.go。
+		Isrc          string `json:"isrc"`
+		HasLyrics     bool   `json:"hasLyrics"`
+		HasTimeSynced bool   `json:"hasTimeSyncedLyrics"`
+		Artwork       struct {
 			URL string `json:"url"`
 		} `json:"artwork"`
 	} `json:"attributes"`
@@ -1032,7 +1036,7 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 		lyrics: p.lrc, yrc: p.yrc, tr: p.tr, roma: p.roma, bg: p.bg,
 		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
 		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-		plainOnly: plainOnly,
+		isrc: s.Attributes.Isrc, plainOnly: plainOnly,
 	}
 }
 
