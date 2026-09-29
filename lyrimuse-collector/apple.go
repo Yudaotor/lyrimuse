@@ -334,13 +334,16 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 	return appleMusicMatch{}, reached
 }
 
+// itunesLookupTracksURL 只为单测可改。
+var itunesLookupTracksURL = "https://itunes.apple.com/lookup"
+
 // itunesLookupTracks returns the full tracklist of an album via the lookup
 // endpoint (not full-text search, so no relevance-ranking gap). The album
 // itself is also returned as a "collection" entry — filtered out here.
 func itunesLookupTracks(ctx context.Context, collectionID int64, country string) []itunesResult {
 	cli := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("https://itunes.apple.com/lookup?id=%d&entity=song&limit=50&country=%s", collectionID, country), nil)
+		fmt.Sprintf("%s?id=%d&entity=song&limit=50&country=%s", itunesLookupTracksURL, collectionID, country), nil)
 	if err != nil {
 		return nil
 	}

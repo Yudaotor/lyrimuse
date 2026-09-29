@@ -12,6 +12,7 @@ func runPlaybackSourceHardeningTests() {
     browserProbeTests()
     libraryAndCacheTests()
     replayNoDurationFirstTick()
+    wiringContracts()
 }
 
 // ---- 轮询单飞 ----
@@ -230,4 +231,131 @@ private func libraryAndCacheTests() {
     """
     expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: spawnScheduled), .registeredNotRunning(lastExitCode: 2),
                 "launchd: 崩溃后排着重启(spawn scheduled)= 注册着、此刻没在跑")
+}
+
+// ---- 私有接线的契约(扫源码文本):单飞 / 焦点回退 / 广告撤回 / 拖动作废读数 / 深页缓存 / 信任名单 ----
+//
+// 上面几节覆盖的是纯函数;这些修复的另一半是把它们接进 private 的调用点,行为测试够不着(要真起 media-control、
+// 真驱动浏览器或真连 Last.fm)。接线被挪走或删掉时纯函数照样全绿,所以在这里把调用点本身钉住。
+
+@MainActor
+private func wiringContracts() {
+    let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    func code(_ path: String) -> String {
+        guard let text = try? String(contentsOfFile: sourcesRoot.appendingPathComponent(path).path, encoding: .utf8) else { return "" }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+    }
+    /// `signature` 起到与它第一个 `{` 配对的 `}` 为止;找不到返回空串(断言随之失败)。
+    func body(_ signature: String, in text: String) -> String {
+        guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
+        var depth = 0
+        var i = open
+        while i < text.endIndex {
+            if text[i] == "{" { depth += 1 } else if text[i] == "}" {
+                depth -= 1
+                if depth == 0 { return String(text[start.lowerBound...i]) }
+            }
+            i = text.index(after: i)
+        }
+        return ""
+    }
+    /// `a` 在 `text` 里出现、且第一次出现在 `b` 第一次出现之前。
+    func before(_ a: String, _ b: String, in text: String) -> Bool {
+        guard let ra = text.range(of: a), let rb = text.range(of: b) else { return false }
+        return ra.lowerBound < rb.lowerBound
+    }
+
+    let source = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+    let poll = body("private func poll() {", in: source)
+    expectEqual(poll.split(separator: "\n").dropFirst().first?.trimmingCharacters(in: .whitespaces),
+                "guard pollFlight.begin() else { return }", "单飞接线: poll() 第一句就过单飞闸,在飞时不再起第二轮")
+    expectEqual(poll.contains("defer { self.finishPoll() }"), true, "单飞接线: 每一轮(含被丢弃的)收尾都放开单飞")
+    expectEqual(poll.contains("await Self.runOffPool(Self.pollQueue)"), true, "单飞接线: 阻塞取数挪到专用队列,不占协作线程池")
+    expectEqual(poll.contains("(MediaControlClient.fetchSnapshot(), MediaControlClient.lastSnapshotFailure)"), true,
+                "单飞接线: 失败原因跟快照在同一条队列上一起取,回主线程再读可能已是别一轮的")
+    expectEqual(body("private func finishPoll() {", in: source).contains("if pollFlight.finish() { poll() }"), true,
+                "单飞接线: 收尾时期间有人要过就补跑")
+    let seek = body("public func seek(toMs targetMs: Int) {", in: source)
+    expectEqual(seek.contains("pollFlight.invalidateInFlight()"), true, "单飞接线: 拖动作废在飞那一轮、回来后补跑")
+    expectEqual(seek.contains("env.browserProbeSeeked(now)"), true, "拖动作废读数: 拖动时通知浏览器探针")
+
+    let client = code("LyrimuseCore/Local/MediaControlClient.swift")
+    let focus = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
+    let stateUpdate = "lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer("
+    expectEqual(before("artistlessContentNotMusic(bundleID: player.bundleIdentifier, snapshot: s)", stateUpdate, in: focus), true,
+                "焦点回退: 回退问到的无歌手非音乐内容先挡下,再动回退开关")
+    expectEqual(before("trustedPlaybackRejected(bundleID: player.bundleIdentifier, snapshot: s)", stateUpdate, in: focus), true,
+                "焦点回退: 信任播放器的非歌曲内容先挡下,再动回退开关")
+    if let r = focus.range(of: "trustedPlaybackRejected(bundleID: player.bundleIdentifier, snapshot: s)") {
+        expectEqual(focus[r.upperBound...].prefix(120).contains("setSnapshotFailure(.notASong)"), true,
+                    "焦点回退: 信任播放器挡下时记成「不是歌」")
+    }
+    expectEqual(focus.contains("failureWithoutFallbackTarget(targetConfirmedGone: targetGone)"), true,
+                "焦点回退: 没有回退目标时按「目标确认不在」改失败原因")
+    expectEqual(focus.contains("fallbackTargetGone = snapshot == nil"), true, "焦点回退: 回退问不到就记下目标不在")
+
+    let verifyAd = body("private func verifySpotifyAdViaAppleScript(forKey key: String) {", in: source)
+    expectEqual(verifyAd.contains("self.revertLastTrackAfterAd(key: key)"), true, "广告撤回: AppleScript 晚到确认是广告 → 撤回「上次在听」")
+    let revert = body("private func revertLastTrackAfterAd(key: String) {", in: source)
+    expectEqual(revert.contains("prev.key == key"), true, "广告撤回: 只撤回同一首写进去的那一次")
+    for k in ["np:lastTrackTitle", "np:lastTrackArtist", "np:lastTrackAlbum"] {
+        expectEqual(revert.contains("\"\(k)\""), true, "广告撤回: \(k) 还原成写之前的值")
+    }
+    expectEqual(revert.contains("lastPersistedTrackTitle = prev.persistedTitle"), true, "广告撤回: 去重用的上次写入标题一起还原")
+    expectEqual(source.contains("!adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack,"), true,
+                "广告撤回: 通知已说是广告 / 同曲已确认是广告时不写「上次在听」")
+    expectEqual(before("lastTrackBeforeWrite = (key: snapshot.trackKey,", "UserDefaults.standard.set(newTitle, forKey: \"np:lastTrackTitle\")", in: source), true,
+                "广告撤回: 写之前先记下原值")
+
+    let env = code("LyrimuseCore/Local/PlaybackPositionEnvironment.swift")
+    expectEqual(env.contains("browserProbeSeeked: { BrowserPositionProbe.shared.discardReadings(before: $0) }"), true,
+                "拖动作废读数: 真实环境把拖动接到浏览器探针的 discardReadings")
+    let probe = code("LyrimuseCore/Local/BrowserPositionProbe.swift")
+    let discard = body("public func discardReadings(before moment: Date) {", in: probe)
+    expectEqual(discard.contains("seekBarrier = moment"), true, "拖动作废读数: 记下拖动时刻,在飞的那次回来也不采信")
+    expectEqual(discard.contains("snapshot.capturedAt < moment { cached = nil }"), true, "拖动作废读数: 拖动之前抓到的缓存读数丢掉")
+    let apply = body("private func applyProbeResult(", in: probe)
+    expectEqual(before("if let barrier = seekBarrier, startedAt < barrier { return }", "cached = CachedResult(", in: apply), true,
+                "拖动作废读数: 拖动之前发起的探测结果不进缓存")
+    expectEqual(before("guard myGeneration == generation else { return }", "lastAttemptEndedAt = Date()", in: apply), true,
+                "探针退避: 上一首晚到的结果不给新歌记退避")
+    expectEqual(probe.contains("bundleID: hostBundleID, startedAt: startedAt)"), true, "拖动作废读数: 探测把发起时刻带回来比对")
+
+    let stats = code("lyrimuse/Settings/LastfmStatsService.swift")
+    if let r = stats.range(of: "LastfmPageComposer.lateInsertDetected(") {
+        let after = stats[r.upperBound...]
+        expectEqual(after.prefix(300).contains("dropDeepRecentPageCache(reason:"), true, "深页缓存: 检测到记录插进中间就作废深页")
+        expectEqual(before("dropDeepRecentPageCache(reason:", "feedCompletedRows = completed", in: String(after)), true,
+                    "深页缓存: 拿旧 feed 比完再换成新 feed")
+    } else {
+        expectEqual(true, false, "深页缓存(契约): 读不到 lateInsertDetected 调用点(改名了?)")
+    }
+    let drop = body("func dropDeepRecentPageCache(reason: String) {", in: stats)
+    expectEqual(drop.contains("filter { $0 >= 3 }"), true, "深页缓存: 只作废第 3 页起(第 1、2 页由 feed 每次重写)")
+    for m in ["recentPageCache[p] = nil", "recentPageCacheTotal[p] = nil", "fetchedAt[Self.recentPageCacheKey(p)] = nil"] {
+        expectEqual(drop.contains(m), true, "深页缓存: 作废时一并清 \(m)")
+    }
+    if let r = stats.range(of: "if let exact {") {
+        let composed = String(stats[r.lowerBound...].prefix(600))
+        let block = composed.components(separatedBy: "return\n").first ?? composed
+        expectEqual(block.contains("recentPageCache[") || block.contains("storeFetchedPage("), false,
+                    "深页缓存: 拼出来的页不写回成抓取态缓存")
+    } else {
+        expectEqual(true, false, "深页缓存(契约): 读不到拼页那段(改名了?)")
+    }
+    let backfill = code("lyrimuse/Settings/ScrobbleBackfillService.swift")
+    if let r = backfill.range(of: "if let out, out.accepted > 0 {") {
+        expectEqual(backfill[r.upperBound...].prefix(300).contains("LastfmStatsService.shared.dropDeepRecentPageCache("), true,
+                    "深页缓存: 回填真的补进了记录就作废深页")
+    } else {
+        expectEqual(true, false, "深页缓存(契约): 读不到回填成功那段(改名了?)")
+    }
+
+    let trusted = code("LyrimuseCore/Local/TrustedPlayers.swift")
+    let accepted = body("public static func isAccepted(_ bundleID: String?) -> Bool {", in: trusted)
+    expectEqual(before("PlaybackPlayer.allCases.contains(", "trusted: current)", in: accepted), true,
+                "信任名单: 内置播放器先判掉,不在轮询热路径上每次读盘解码 features.json")
+    expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.spotify.bundleIdentifier), true, "信任名单: 内置播放器直接认")
+    expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.auto.bundleIdentifier, trusted: [:]), false, "信任名单: 自动识别那一项不是播放器")
 }
