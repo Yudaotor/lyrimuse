@@ -190,7 +190,8 @@ func runHealthcheckCLI(args []string) {
 		answered := map[string]int{}
 		start := time.Now()
 		for _, p := range probes {
-			_, scored := scoredLyricCandidates(context.Background(), toSimplified(p.artist), toSimplified(p.title), toSimplified(p.album), 0)
+			qa, qt, qal := searchQueryFields(p.artist, p.title, p.album)
+			_, scored := scoredLyricCandidates(context.Background(), qa, qt, qal, 0)
 			for _, src := range distinctLyricSources(scored, false) {
 				answered[src]++
 			}

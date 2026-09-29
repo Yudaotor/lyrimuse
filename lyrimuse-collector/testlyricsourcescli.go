@@ -122,8 +122,8 @@ func runTestLyricSourcesCLI(args []string) {
 		onUpdate := func(_ neteaseInfo, results []scoredLyricCandidateResult, _ int, _ int) {
 			scanForPositives(results)
 		}
-		_, results := scoredLyricCandidatesStreaming(
-			ctx, toSimplified(artist), toSimplified(title), toSimplified(album), 0, onUpdate)
+		qa, qt, qal := searchQueryFields(artist, title, album)
+		_, results := scoredLyricCandidatesStreaming(ctx, qa, qt, qal, 0, onUpdate)
 		scanForPositives(results)
 	}
 

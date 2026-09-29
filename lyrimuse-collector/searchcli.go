@@ -127,7 +127,7 @@ func runSearchLyricsCLI(args []string) {
 	// 发起搜索请求会查不到任何候选——这个 CLI 子命令是 desktop-lyrics"联网搜索候选
 	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
 	// 指望那边的修复覆盖到这里。
-	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
+	sArtist, sTitle, sAlbum := searchQueryFields(*artist, *title, *album)
 	// 举例(方大同《Lovers Policy》案):这条 CLI 拿到的 -duration 来自
 	// 调用方(Swift 侧「歌词管理」列表的 Summary.durationSecs),而那个值只在**这首歌
 	// 已经成功解析过一次**时才有——一首从来没成功过的歌(比如这首,「关键字」反查轮几次

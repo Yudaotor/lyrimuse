@@ -104,7 +104,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		// 下面 buildLyricsDecision 存档也该记这次真正拿去搜索的(简体)那一版,不是原始繁体。
 		// enrichCache 的 key(未拆解前的那个字符串)不受影响,依旧是原始繁体,查缓存/写缓存
 		// 两头对得上号。
-		artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
+		artist, title, album = searchQueryFields(artist, title, album)
 		_, scored := scoredLyricCandidates(context.Background(), artist, title, album, duration)
 		picked := pickLyricCandidatePreferring(scored, e.LyricsSourceChoice)
 		// 这条 CLI 手上就攥着 enrichCache 里的 e,不像 searchcli.go 那样要另开一次文件读来
