@@ -74,3 +74,43 @@ func TestMiguFallsBackToTitleOnlySearch(t *testing.T) {
 		})
 	}
 }
+
+// 前几条都只有纯文本时退回第一份纯文本、标 plainOnly;有一份同步的就用同步的,哪怕它名次靠后。
+func TestMiguFallsBackToPlainText(t *testing.T) {
+	const plain = "@migu music@\n@migu music@\nline one\nline two\n"
+	const search = `{"code":"000000","songResultData":{"result":[` +
+		`{"name":"Hit the Wall","singers":[{"name":"Gracie Abrams"}],"lyricUrl":"https://d.musicapp.migu.cn/l/p.lrc","trcUrl":"https://d.musicapp.migu.cn/l/tr.lrc"},` +
+		`{"name":"Hit the Wall","singers":[{"name":"Gracie Abrams"}],"lyricUrl":"https://d.musicapp.migu.cn/l/SECOND.lrc"}]}}`
+	cases := []struct {
+		name, second string
+		wantLyrics   string
+		wantPlain    bool
+	}{
+		{"只有纯文本", plain, "line one\nline two\n", true},
+		{"名次靠后的同步歌词优先", miguFakeLRC, miguFakeLRC, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			withKugouFake(t, func(target string) (int, string) {
+				switch {
+				case strings.HasSuffix(target, "/content/search_all.do"):
+					return http.StatusOK, search
+				case strings.HasSuffix(target, "/l/p.lrc"):
+					return http.StatusOK, plain
+				case strings.HasSuffix(target, "/l/SECOND.lrc"):
+					return http.StatusOK, c.second
+				case strings.HasSuffix(target, "/l/tr.lrc"):
+					return http.StatusOK, miguFakeLRC
+				}
+				return http.StatusNotFound, ""
+			})
+			r := resolveMiguLyric(qqRoundCtx(), "Gracie Abrams", "Hit the Wall", "", 0)
+			if r.lyrics != c.wantLyrics || r.plainOnly != c.wantPlain {
+				t.Fatalf("lyrics=%q plainOnly=%v, want %q %v", r.lyrics, r.plainOnly, c.wantLyrics, c.wantPlain)
+			}
+			if c.wantPlain && r.tr != "" {
+				t.Errorf("纯文本不带译文,got tr=%q", r.tr)
+			}
+		})
+	}
+}

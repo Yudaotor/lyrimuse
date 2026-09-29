@@ -3907,8 +3907,8 @@ type lyricSourceResult struct {
 	// 网易云的 pureMusic/占位正文、QQ 的占位正文(见 qqLyricResult)、musixmatch 每行都带的
 	// instrumental 字段(见 pickMusixmatchTrackRow 第三趟)。
 	instrumental bool
-	// plainOnly:lrclib 与 musixmatch 两个源会给(musixmatch 见 resolveMusixmatchLyric 里的
-	// 纯文本回退)——语义见 lrclibResult.plainOnly 头注。
+	// plainOnly:lrclib / musixmatch / deezer / applemusic / migu 会给(musixmatch 见
+	// resolveMusixmatchLyric 里的纯文本回退)——语义见 lrclibResult.plainOnly 头注。
 	plainOnly bool
 	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
@@ -3964,6 +3964,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	kuwoLyr, kuwoYRC, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.yrc, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
 	migu := raw["migu"]
 	miguLyr, miguYRC, miguTr, miguTitle, miguArtist, miguAlbum, miguCover := migu.lyr, migu.yrc, migu.tr, migu.matchTitle, migu.matchArtist, migu.matchAlbum, migu.matchCover
+	miguPlainOnly := migu.plainOnly
 	dz := raw["deezer"]
 	dzLyr, dzYRC, dzTr, dzTitle, dzArtist, dzAlbum, dzCover, dzDur, dzPlainOnly := dz.lyr, dz.yrc, dz.tr, dz.matchTitle, dz.matchArtist, dz.matchAlbum, dz.matchCover, dz.srcDur, dz.plainOnly
 	am := raw["applemusic"]
@@ -4039,8 +4040,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 封面用搜索结果自带的 imgItems(见 migu.go 头注)。译文固定中文、标 "zh",可用性同网易云/QQ/酷狗
 		// 走 usableValueAdd,逐字同样走 usableYRC / usableWordTiming。
 		// 没有时长字段,sourceReportedDurationSecs 留 0(= 该项不参与打分,同 amll)。
+		// plainOnly 直通打分层那道恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
 		miguUsableTr, _ := usableValueAdd(miguLyr, miguTr, "zh", "", features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "migu", lyrics: miguLyr, wordTimingYRC: usableYRC(miguLyr, miguYRC), hasWordTiming: usableWordTiming(miguLyr, miguYRC), hasUsableTranslation: miguUsableTr, title: miguTitle, artist: miguArtist, album: miguAlbum, cover: miguCover})
+		candidates = append(candidates, lyricCandidate{source: "migu", lyrics: miguLyr, wordTimingYRC: usableYRC(miguLyr, miguYRC), hasWordTiming: usableWordTiming(miguLyr, miguYRC), hasUsableTranslation: miguUsableTr, title: miguTitle, artist: miguArtist, album: miguAlbum, cover: miguCover, plainTextOnly: miguPlainOnly})
 	}
 	if dzLyr != "" {
 		// 逐行正文 + 可选的逐字轨 + 可选的译文(语言跟译文语言设置走),没有罗马音;封面用搜索
@@ -4657,7 +4659,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// 独立检索(不等任何其它源的 ID),同 kuwo;tr 是 trcUrl 拉回来的中文译文,多数曲目为空。
 		r := miguLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "migu", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
+		resultsCh <- lyricSourceResult{source: "migu", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("deezer") {

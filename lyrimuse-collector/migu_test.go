@@ -32,6 +32,12 @@ func TestMiguStripMetaLines(t *testing.T) {
 	if got := miguStripMetaLines(in2); got != want2 {
 		t.Fatalf("带冒号的元数据行没剥干净:\n got=%q\nwant=%q", got, want2)
 	}
+	// 纯文本版本开头的水印行剥掉;正文里恰好含这几个字的行不受影响。
+	in3 := "@migu music@\r\n@migu music@\r\nHit the Wall - Gracie Abrams\r\nI heard @migu music@ once\r\n"
+	want3 := "Hit the Wall - Gracie Abrams\nI heard @migu music@ once\n"
+	if got := miguStripMetaLines(in3); got != want3 {
+		t.Fatalf("水印行没剥干净:\n got=%q\nwant=%q", got, want3)
+	}
 }
 
 // 身份闸:原版通过;歌手对不上(用户上传的翻唱把歌手名写成别人)、Live 版本限定词对不上、

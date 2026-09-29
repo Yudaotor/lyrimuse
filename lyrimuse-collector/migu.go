@@ -52,6 +52,9 @@ type miguResult struct {
 	// cover:搜索结果自带 imgItems(三档尺寸),不用再多发请求——见 miguCoverURL。拿不到
 	// 就留空,交给 enrich.go 的 coverOrFallback 退到 Apple 封面。
 	cover string
+	// plainOnly:选中的那条只有纯文本、没有时间戳,lyrics 装的就是纯文本。语义同
+	// deezerResult.plainOnly:分数恒 -1,只有用户在弹窗里手点才采用;这时不带译文和逐字轨。
+	plainOnly bool
 }
 
 var (
@@ -244,9 +247,10 @@ func miguFetchLRC(ctx context.Context, url string) (string, error) {
 
 // miguMetaLineRe 认咪咕 LRC 顶部那两行没有冒号的元数据——"歌曲名 稻香"/"歌手名 周杰伦"
 // (偶尔也见到带冒号的写法,一并收)。只认这两个词打头:它们不可能是真歌词的开头。
+// 纯文本版本开头的 "@migu music@" 水印行同样剥掉,只认整行恰好是它。
 // 作词/作曲那两行不在这里剥——别的源同样带这两行,交给下游既有的署名处理,不为一个源
 // 另起一套口径。
-var miguMetaLineRe = regexp.MustCompile(`^(歌曲名|歌手名)(\s|[:：]|$)`)
+var miguMetaLineRe = regexp.MustCompile(`^(歌曲名|歌手名)(\s|[:：]|$)|^@migu music@$`)
 
 // miguStripMetaLines 把 CRLF 归一成 LF,剥掉元数据行和去掉时间戳后为空的行。纯函数,
 // 便于单测。
@@ -290,9 +294,9 @@ func miguCandidateScore(item miguSearchItem, artist, title, album string) int {
 const miguMaxCandidatesToFetch = 3
 
 // resolveMiguLyric:①搜索(单次请求,10 条);②身份闸淘汰、保持原序;③取前几条**并发**拉
-// LRC;④丢弃剥完头之后不是真同步的(isTimedLRC);⑤按名次(不是"谁先拉完")挑第一份;
-// ⑥选中那条有 trcUrl 就再拉译文(同样剥头、同样要求同步;拉不到只是没有译文,不影响
-// 正文)。
+// LRC;④剥完头之后不是真同步的(isTimedLRC)先放一边;⑤按名次(不是"谁先拉完")挑第一份
+// 同步的;⑥选中那条有 trcUrl 就再拉译文(同样剥头、同样要求同步;拉不到只是没有译文,不影响
+// 正文);⑦一份同步的都没有时,按名次退回第一份纯文本(plainOnly),口径同 deezer 的纯文本回退。
 func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float64) miguResult {
 	type scoredItem struct {
 		item  miguSearchItem
@@ -322,34 +326,42 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 		candidates = candidates[:miguMaxCandidatesToFetch]
 	}
 
-	fetchedByRank := make([]string, len(candidates))
+	type fetched struct{ lrc, plain string }
+	fetchedByRank := make([]fetched, len(candidates))
 	var wg sync.WaitGroup
 	for i, c := range candidates {
 		wg.Add(1)
 		go func(rank int, item miguSearchItem) {
 			defer wg.Done()
 			lrc, err := miguFetchLRC(ctx, item.LyricURL)
-			if err != nil || !isTimedLRC(lrc) {
+			if err != nil {
 				return
 			}
-			fetchedByRank[rank] = lrc
+			if isTimedLRC(lrc) {
+				fetchedByRank[rank].lrc = lrc
+			} else if strings.TrimSpace(lrc) != "" {
+				fetchedByRank[rank].plain = lrc
+			}
 		}(i, c.item)
 	}
 	wg.Wait()
 
-	for rank, lrc := range fetchedByRank {
-		if lrc == "" {
-			continue
-		}
-		it := candidates[rank].item
+	build := func(it miguSearchItem, lyrics string, plainOnly bool) miguResult {
 		cover := miguCoverURL(it)
 		if c := miguAlbumCover(ctx, it.albumID()); c != "" {
 			cover = c
 		}
-		r := miguResult{
-			lyrics: lrc, title: it.Name, artist: it.artistName(), album: it.albumName(),
-			cover: cover,
+		return miguResult{
+			lyrics: lyrics, title: it.Name, artist: it.artistName(), album: it.albumName(),
+			cover: cover, plainOnly: plainOnly,
 		}
+	}
+	for rank, f := range fetchedByRank {
+		if f.lrc == "" {
+			continue
+		}
+		it := candidates[rank].item
+		r := build(it, f.lrc, false)
 		if u := strings.TrimSpace(it.TrcURL); u != "" {
 			tr, err := miguFetchLRC(ctx, u)
 			if err != nil {
@@ -360,6 +372,11 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 		}
 		r.yrc = miguFetchMRCYRC(ctx, it.MrcURL)
 		return r
+	}
+	for rank, f := range fetchedByRank {
+		if f.plain != "" {
+			return build(candidates[rank].item, f.plain, true)
+		}
 	}
 	return miguResult{}
 }
