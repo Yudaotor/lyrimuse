@@ -18,6 +18,14 @@ public enum PlayerLinkage {
         return selectedPlayers.subtracting([.auto])
     }
 
+    /// 设置页那排芯片列哪几个:选中的具体播放器;选了「自动识别」时再加上这台 Mac 装了的。只管显示,
+    /// 生效仍按 `candidates` —— 没列出来的只会是既没选、也没装的播放器,它起不来也谈不上退出,藏起来不改变行为。
+    public static func listed(selectedPlayers: Set<PlaybackPlayer>, installed: Set<PlaybackPlayer>) -> Set<PlaybackPlayer> {
+        let chosen = selectedPlayers.subtracting([.auto])
+        guard selectedPlayers.contains(.auto) else { return chosen }
+        return chosen.union(installed.subtracting([.auto]))
+    }
+
     /// 一项联动实际生效的集合 = 用户勾的 ∩ 候选。取消选中某个播放器后它在联动里就不再算数,但勾选记录
     /// 保留 —— 重新选回来时联动自动恢复,不用再勾一遍。
     public static func effective(_ chosen: Set<PlaybackPlayer>, selectedPlayers: Set<PlaybackPlayer>) -> Set<PlaybackPlayer> {

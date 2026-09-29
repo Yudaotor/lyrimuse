@@ -155,7 +155,7 @@ struct MorePlayersCard: View {
 
 /// 已安装播放器的查询结果,几秒内复用(泛型结构体不能有静态存储属性,所以放在文件级)。
 @MainActor
-private enum InstalledPlayersCache {
+enum InstalledPlayersCache {
     private static var value: Set<PlaybackPlayer>?
     private static var at = Date.distantPast
     private static let ttl: TimeInterval = 5

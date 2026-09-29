@@ -5332,11 +5332,11 @@ private struct PlayerSettingsTab: View {
     }
 
     // 「与播放器联动」卡:三项联动各一行,尾部一排播放器图标芯片,点图标勾选 / 取消。
-    // 候选 = 选中集合里的具体播放器,选了「自动识别」时所有播放器都可勾
-    // (LyrimuseCore.PlayerLinkage.candidates)。按播放器逐个勾选,而不是拿一个布尔盯整个
+    // 列出来的 = 选中集合里的具体播放器,选了「自动识别」时再加上这台 Mac 装了的
+    // (LyrimuseCore.PlayerLinkage.listed,跟「播放器」卡主网格同一口径)。按播放器逐个勾选,而不是拿一个布尔盯整个
     // 集合 —— 多选之下"跟哪个绑定"必须答得出来。
     private var linkageCandidates: [PlaybackPlayer] {
-        let set = PlayerLinkage.candidates(selectedPlayers: stores.players)
+        let set = PlayerLinkage.listed(selectedPlayers: stores.players, installed: InstalledPlayersCache.current())
         return PlaybackPlayer.displayOrder.filter { set.contains($0) }
     }
 
@@ -5344,7 +5344,7 @@ private struct PlayerSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(
                 title: L10n.t("播放器联动"),
-                help: L10n.t("每一项都按播放器单独勾选；选了「自动识别」时所有播放器都可勾"))
+                help: L10n.t("每一项都按播放器单独勾选，只列出选了的播放器；选了「自动识别」时再加上这台 Mac 上装了的"))
             CardDivider()
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",

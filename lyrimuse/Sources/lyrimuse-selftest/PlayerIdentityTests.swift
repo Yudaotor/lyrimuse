@@ -1343,6 +1343,13 @@ func runPlayerIdentityTests() {
         expectEqual(PL.candidates(selectedPlayers: [.qqMusic, .kugou]), [.qqMusic, .kugou], "联动候选: 多选 → 就是选中的那几个")
         expectEqual(PL.candidates(selectedPlayers: [.qqMusic, .auto]), explicitAll, "联动候选: 具体播放器 + 自动识别 → auto 是超集")
         expectEqual(PL.candidates(selectedPlayers: []), [], "联动候选: 空集合(理论到不了)→ 空,不崩")
+        expectEqual(PL.listed(selectedPlayers: [.qqMusic, .auto], installed: [.appleMusic, .qqMusic, .spotify]),
+                    [.qqMusic, .appleMusic, .spotify], "联动列表: 自动识别 → 选中的 + 装了的,没选也没装的不列")
+        expectEqual(PL.listed(selectedPlayers: [.soda, .auto], installed: [.appleMusic]), [.soda, .appleMusic],
+                    "联动列表: 选了但没装的照样列(选中集合优先)")
+        expectEqual(PL.listed(selectedPlayers: [.qqMusic, .kugou], installed: [.appleMusic, .qqMusic]), [.qqMusic, .kugou],
+                    "联动列表: 没选自动识别 → 就是选中的那几个,跟装没装无关")
+        expectEqual(PL.listed(selectedPlayers: [.auto], installed: []), [], "联动列表: 只选自动识别、一个都没装 → 空")
         expectEqual(PL.effective([.spotify, .qqMusic], selectedPlayers: [.qqMusic]), [.qqMusic],
                     "联动生效集: 勾了但没选中的播放器不算,勾选记录保留")
         expectEqual(PL.shouldQuit(terminatedBundleID: "com.apple.Music", boundBundleIDs: ["com.apple.Music"],

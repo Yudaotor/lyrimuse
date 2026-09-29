@@ -27781,25 +27781,25 @@
         }
       }
     },
-    "每一项都按播放器单独勾选；选了「自动识别」时所有播放器都可勾" : {
+    "每一项都按播放器单独勾选，只列出选了的播放器；选了「自动识别」时再加上这台 Mac 上装了的" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each item is checked per player; with Auto-detect selected, every player is available"
+            "value" : "Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "每一项都按播放器单独勾选；选了「自动识别」时所有播放器都可勾"
+            "value" : "每一项都按播放器单独勾选，只列出选了的播放器；选了「自动识别」时再加上这台 Mac 上装了的"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "每一項都按播放器分別勾選；選了「自動識別」時所有播放器都可勾"
+            "value" : "每一項都按播放器分別勾選，只列出選了的播放器；選了「自動識別」時再加上這台 Mac 上已安裝的"
           }
         }
       }

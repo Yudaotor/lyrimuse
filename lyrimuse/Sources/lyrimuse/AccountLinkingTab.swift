@@ -1194,11 +1194,11 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「Scrobble 的播放器」那一排芯片的候选:内置播放器跟「播放器联动」卡同一套(选中集合,选了 auto 时
-    /// 所有内置播放器都可勾),后面接上信任列表里的 App / 浏览器(按 bundle id 排序,别让顺序随 Dictionary 遍历乱跳)。
+    /// 「Scrobble 的播放器」那一排芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
+    /// 选了 auto 时再加上装了的),后面接上信任列表里的 App / 浏览器(按 bundle id 排序,别让顺序随 Dictionary 遍历乱跳)。
     /// 两类摆在同一排是 「收拢到一起」——此前信任项一人一行、四个浏览器吃掉五行。
     private var lastfmPlayerChoices: [PlayerBundleChoice] {
-        let set = PlayerLinkage.candidates(selectedPlayers: features.players)
+        let set = PlayerLinkage.listed(selectedPlayers: features.players, installed: InstalledPlayersCache.current())
         let builtIn = PlaybackPlayer.displayOrder.filter { set.contains($0) }
             .map { PlayerBundleChoice(id: $0.bundleIdentifier, name: $0.displayName, player: $0) }
         let trusted = features.trustedPlayers.keys.sorted()
