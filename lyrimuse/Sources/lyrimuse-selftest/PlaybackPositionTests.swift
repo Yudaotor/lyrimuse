@@ -661,6 +661,8 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .cleanExtrapolated, bundleID: PlaybackPlayer.soda.bundleIdentifier), true,
                     "gapless 领先: cleanExtrapolated 档照旧校正")
         // 酷狗的钟在单曲循环回绕与自然切歌处都连续(实测差 0.04~0.08s),不按越界量估。
+        expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .cleanExtrapolated, bundleID: PlaybackPlayer.amazonMusic.bundleIdentifier), false,
+                    "Amazon Music 自然连播的出声延迟由它自己的钟扣掉,连续性估计再扣一次就整首慢一个偏置")
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .cleanExtrapolated, bundleID: PlaybackPlayer.kugou.bundleIdentifier), false,
                     "gapless 领先: 酷狗不估")
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .noisyFloored, bundleID: PlaybackPlayer.qqMusic.bundleIdentifier), false,

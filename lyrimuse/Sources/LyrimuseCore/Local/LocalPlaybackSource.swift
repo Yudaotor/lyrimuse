@@ -678,8 +678,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 酷狗不开:它的钟在单曲循环回绕与自然切歌处都是连续的(实测差 0.04~0.08s),按旧曲外推越界量估出来的
     /// 只是我们自己外推的误差,而那个偏置一暂停也清不掉。自然切歌晚打的锚点另由
     /// `MediaControlClient.resetAnchorStartCorrection` 按先到的归零锚点补。数据见 02 章「酷狗单曲循环报暂停」「酷狗自然切歌」。
+    ///
+    /// Amazon Music 不开:它的位置是 `AmazonMusicPlayhead` 自己的钟,自然连播的出声延迟由界面校准
+    /// (`AmazonMusicUIProbe`)量出来扣掉;这里再按连续性估一遍就是扣两次,整首慢一个偏置。见 02 章决策 68。
     public nonisolated static func carriesGaplessLead(tier: PositionSourceTier, bundleID: String?) -> Bool {
         if bundleID == PlaybackPlayer.kugou.bundleIdentifier { return false }
+        if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier { return false }
         return tier == .cleanExtrapolated || bundleID == PlaybackPlayer.spotify.bundleIdentifier
     }
 
