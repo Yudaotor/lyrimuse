@@ -28,16 +28,16 @@ brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time: Homebrew asks you to 
 brew install --cask lyrimuse
 ```
 
-<img src="docs/images/hero-surfaces.png" alt="Lyrimuse lyrics surfaces — Apple-Music-style lyrics window, Dynamic-Island-style capsule, floating overlay with word-by-word highlight, menu-bar lyrics">
+<img src="docs/images/hero-surfaces.jpg" alt="Lyrimuse lyrics surfaces — Apple-Music-style lyrics window, Dynamic-Island-style capsule, floating overlay with word-by-word highlight, menu-bar lyrics">
 <p align="center"><sub>Four ways to show lyrics: the Lyrics Window, the Dynamic-Island-style capsule, the floating overlay with word-by-word highlight, and the menu bar</sub></p>
 
-<img src="docs/images/hero-engine.png" alt="Lyrimuse lyrics engine — Lyrics Manager, scored manual search, per-track resolution decision panel">
+<img src="docs/images/hero-engine.jpg" alt="Lyrimuse lyrics engine — Lyrics Manager, scored manual search, per-track resolution decision panel">
 <p align="center"><sub>Lyrics Manager, manual search with a score on every result, and the panel that shows why a song got the lyrics it got</sub></p>
 
-<img src="docs/images/hero-profile.png" alt="Lyrimuse listening profile — Last.fm stats, top charts, idle listening overview, yearly listening heatmap">
+<img src="docs/images/hero-profile.jpg" alt="Lyrimuse listening profile — Last.fm stats, top charts, idle listening overview, yearly listening heatmap">
 <p align="center"><sub>Your Last.fm numbers and charts, the overview you see when nothing's playing, and a GitHub-style heatmap of your year</sub></p>
 
-<img src="docs/images/hero-customize.png" alt="Lyrimuse settings — live-preview editors, multi-select player picker with web players, menu-bar dropdown">
+<img src="docs/images/hero-customize.jpg" alt="Lyrimuse settings — live-preview editors, multi-select player picker with web players, menu-bar dropdown">
 <p align="center"><sub>Every settings page has a live preview, you can pick more than one player (web players too), and the menu bar dropdown has the rest</sub></p>
 
 ## Features
