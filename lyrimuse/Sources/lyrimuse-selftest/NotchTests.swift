@@ -530,6 +530,9 @@ func runNotchTests() {
             let v = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"), encoding: .utf8)) ?? ""
             expectEqual(v.contains("NotchCrossfadeBackdrop(image: image, size: size)"), true, "封面背景契约: 模糊图走两层交叉淡入")
+            expectEqual(v.contains("case .solidBlack, .coverArt:\n            return AnyShapeStyle(Color.black)"), true,
+                        "封面背景契约: 跟随封面没有封面时是纯黑,跟机器刘海融成一块")
+            expectEqual(v.contains("case .darkGradient, .coverArt:"), false, "封面背景契约: 没有封面时不再退回深色渐变")
             expectEqual(v.contains(".animation(.easeInOut(duration: 0.5), value: playback.blurredArtworkImage)"), false,
                         "封面背景契约: 不再直接换 Image 内容做过渡(会露出打底色)")
             expectEqual(v.contains("if let back { layer(back) }\n            if let front { layer(front).opacity(frontOpacity) }"), true,
@@ -538,27 +541,36 @@ func runNotchTests() {
                         "封面背景契约: 淡完才撤旧图,而且只撤最新那一次的(连着换两次不暗闪)")
         }
 
-        // 卡片外轮廓:照机器刘海 —— 跟刘海一样高时底部圆角 = 高 × 0.25,展开封顶 20;顶边两侧 4pt 内凹肩膀。
+        // 卡片外轮廓:照机器刘海 —— 跟刘海一样高时底部圆角 = 高 × 0.25,展开封顶 20;顶边两侧内凹肩膀 = 刘海高 × 0.125。
         typealias O = NotchOutline
         expectEqual(O.bottomRadius(height: 32, bodyWidth: 300), 8, "外轮廓: 32pt 高(14 寸刘海)底部圆角 8pt")
         expectEqual(O.bottomRadius(height: 38, bodyWidth: 300), 9.5, "外轮廓: 38pt 高(16 寸刘海)按比例 9.5pt")
         expectEqual(O.bottomRadius(height: 190, bodyWidth: 460), O.maxBottomRadius, "外轮廓: 展开态封顶 20pt")
         expectEqual(O.bottomRadius(height: 60, bodyWidth: 300), 15, "外轮廓: 介于两者之间按高度连续变,展开/收起动画里不跳")
         expectEqual(O.bottomRadius(height: 32, bodyWidth: 10), 5, "外轮廓: 主体太窄时半径不超过半宽(出场动画起始那条缝)")
-        expectEqual(O.shoulder(width: 256, height: 32), O.shoulderRadius, "外轮廓: 常规尺寸肩膀 4pt")
-        expectEqual(O.shoulder(width: 8, height: 32), 2, "外轮廓: 太窄时肩膀收小,不把主体吃没")
-        expectEqual(O.shoulder(width: 256, height: 4), 2, "外轮廓: 太矮时肩膀收小")
-        expectEqual(O.shoulder(width: 0, height: 0), 0, "外轮廓: 零尺寸不出负数")
+        expectEqual(O.shoulderRadius(notchHeight: 32), 4, "外轮廓: 32pt 刘海(14 寸)肩膀 4pt")
+        expectEqual(O.shoulderRadius(notchHeight: 38), 4.75, "外轮廓: 38pt 刘海(16 寸)肩膀按比例 4.75pt")
+        expectEqual(O.shoulder(width: 256, height: 32, notchHeight: 32), 4, "外轮廓: 常规尺寸用标称肩膀")
+        expectEqual(O.shoulder(width: 468, height: 190, notchHeight: 38), 4.75, "外轮廓: 展开态肩膀不随卡片变大,只看刘海高度")
+        expectEqual(O.shoulder(width: 8, height: 32, notchHeight: 32), 2, "外轮廓: 太窄时肩膀收小,不把主体吃没")
+        expectEqual(O.shoulder(width: 256, height: 4, notchHeight: 32), 2, "外轮廓: 太矮时肩膀收小")
+        expectEqual(O.shoulder(width: 0, height: 0, notchHeight: 32), 0, "外轮廓: 零尺寸不出负数")
+        expectEqual(O.shoulder(width: 256, height: 32, notchHeight: 0), 0, "外轮廓: 刘海高度未知(0)时没有肩膀")
         do {
             let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI")
             func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
             let v = src("NotchLyricsView.swift"), reveal = src("NotchRevealShape.swift"), stageSrc = src("NotchEditorStage.swift")
-            expectEqual(v.contains("content.clipShape(NotchHangingShape.card)"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
-            expectEqual(v.contains("NotchHangingShape.card\n                .fill(playback.notchCardStyle.fill)"), true, "外轮廓契约: 纯色底用 .card")
-            expectEqual(reveal.contains("return NotchHangingShape.card.path(in: visible)"), true,
+            let rootSrc = src("NotchWindowRoot.swift")
+            expectEqual(v.contains("content.clipShape(NotchHangingShape.card(notchHeight: notchHeight))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
+            expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, notchHeight: controller.contentTopInset)"), true,
+                        "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度")
+            expectEqual(v.contains("NotchHangingShape.card(notchHeight: controller.contentTopInset)\n                .fill(playback.notchCardStyle.fill)"), true, "外轮廓契约: 纯色底用 .card")
+            expectEqual(reveal.contains("return NotchHangingShape.card(notchHeight: notchHeight).path(in: visible)"), true,
                         "外轮廓契约: 出场裁剪终态与卡片同形(真窗口里只留这一道)")
-            expectEqual(stageSrc.contains("NotchHangingShape.card\n            .stroke("), true, "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
+            expectEqual(rootSrc.contains("notchHeight: controller.contentTopInset))"), true,
+                        "外轮廓契约: 出场裁剪传的是同一个刘海高度")
+            expectEqual(stageSrc.contains("NotchHangingShape.card(notchHeight: chrome.contentTopInset)\n            .stroke("), true, "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
             expectEqual(v.contains("NotchHangingShape(bottomCornerRadius: 20)") || reveal.contains("NotchHangingShape(bottomCornerRadius: 20)")
                         || stageSrc.contains("NotchHangingShape(bottomCornerRadius: 20)"), false,
                         "外轮廓契约: 卡片不再有写死 20pt 圆角的那一份")
@@ -851,7 +863,7 @@ func runNotchTests() {
         let barsWidth: CGFloat = 16      // EqualizerBars.width = 5×2.0 + 4×1.5
         let cardPadding: CGFloat = 10    // NotchMetrics.cardHorizontalPadding
         let earWidth: CGFloat = 29.5
-        let shoulder = NotchOutline.shoulderRadius   // 卡片主体两侧各收的那一截,可视耳朵外沿跟着往里 4pt
+        let shoulder = NotchOutline.shoulderRadius(notchHeight: 32)   // 卡片主体两侧各收的那一截,可视耳朵外沿跟着往里 4pt
 
         // 宽度下限(最小宽):保持居中,往里推 (earWidth − barsWidth − cardPadding + shoulder) / 2。
         let inset = B.soloEqualizerInset(
@@ -944,7 +956,7 @@ func runNotchTests() {
         expectEqual(viewSrc.contains("&& leftModule == .none")
                     && viewSrc.contains("equalizerOnRight && rightModule == .none"), true,
                     "音浪居中(契约): 边界是「这只耳朵没有模块」——有模块时仍跟模块一起贴外缘")
-        expectEqual(viewSrc.contains("shoulder: NotchOutline.shoulderRadius,"), true,
+        expectEqual(viewSrc.contains("shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),"), true,
                     "音浪居中(契约): 顶行把卡片肩膀传进公式(漏传 = 最小宽时音浪偏外 2pt)")
         expectEqual(viewSrc.contains("atMinimumWidth: controller.isCardAtMinimumWidth"), true,
                     "音浪居中(契约): 「顶在下限」判据确实从 chrome 传进来了 —— 漏传等于最小宽那档也贴外缘")

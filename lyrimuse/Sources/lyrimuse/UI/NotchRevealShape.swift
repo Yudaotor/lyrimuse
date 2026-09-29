@@ -12,7 +12,8 @@ struct NotchRevealState {
 }
 
 /// 出场动画用的裁剪形状:卡片顶部居中的一块「挂着的胶囊」—— 宽 = 卡宽 × widthFraction、高 = 卡高 ×
-/// heightFraction、顶边贴刘海,外形就是 `NotchHangingShape.card`(圆角与肩膀按可见矩形的尺寸算)。
+/// heightFraction、顶边贴刘海,外形就是 `NotchHangingShape.card`(圆角按可见矩形的尺寸算,肩膀按刘海高度、
+/// 可见矩形太小时收小)。
 /// 终态 (1, 1) 与 `NotchLyricsView` 自己那道 `NotchHangingShape.card` 完全重合 —— 所以
 /// 真窗口里**只留这一道**:`NotchWindowRoot` 通过环境值 `notchHostClipsCard` 让卡片自己那道
 /// 不再裁(两层同形状的 mask 在尺寸动画里每帧各重设一次路径,是白付的),平时这道裁剪就是卡片的外形。
@@ -23,12 +24,13 @@ struct NotchRevealState {
 struct NotchRevealShape: Shape {
     var widthFraction: CGFloat
     var heightFraction: CGFloat
+    var notchHeight: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let width = rect.width * min(1, max(0, widthFraction))
         let height = rect.height * min(1, max(0, heightFraction))
         let visible = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
-        return NotchHangingShape.card.path(in: visible)
+        return NotchHangingShape.card(notchHeight: notchHeight).path(in: visible)
     }
 }
 

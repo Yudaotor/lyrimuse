@@ -1290,7 +1290,7 @@ struct NotchEditorStage: View {
         // NotchHangingShape 是手写的普通 Shape(顶边带肩膀、底圆角,UnevenRoundedRectangle
         // 画不出肩膀)。代价是这条线**骑在**卡片边界上、各半个像素在内外,而不是完全
         // 描在里侧 —— 1pt 的虚线看不出区别,不值得为此给那个共用形状加一层 inset 实现。
-        NotchHangingShape.card
+        NotchHangingShape.card(notchHeight: chrome.contentTopInset)
             .stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
             .shadow(color: .black.opacity(0.55), radius: 1)
             .frame(width: cardWidth, height: cardHeight)

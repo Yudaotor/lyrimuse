@@ -418,16 +418,15 @@ extension NotchCardStyle {
 
     // .coverArt 的真实渲染(封面模糊图)是在 NotchLyricsView.backgroundLayer 里单独
     // 处理的(ShapeStyle 表达不了 .blur()/.overlay() 这类 View 修饰符,没法塞进这个
-    // AnyShapeStyle 里),这里给它的返回值只是"没有封面数据时的兜底"/"万一有别处意外
-    // 读到这个属性"的合理默认——跟 darkGradient 用同一个值,不代表 .coverArt 的
-    // 实际效果,不要在其它地方依赖这条分支来渲染 .coverArt。
+    // AnyShapeStyle 里),这里给它的返回值只是"没有封面数据时的兜底":纯黑,跟机器刘海
+    // 融成一块。不代表 .coverArt 的实际效果,不要在其它地方依赖这条分支来渲染 .coverArt。
     var fill: AnyShapeStyle {
         switch self {
-        case .solidBlack:
+        case .solidBlack, .coverArt:
             return AnyShapeStyle(Color.black)
         case .frostedGlass:
             return AnyShapeStyle(.thickMaterial)
-        case .darkGradient, .coverArt:
+        case .darkGradient:
             // 从左上到右下过渡,比纯黑多一点点冷色调层次感,又不像磨砂玻璃那样会透出
             // 桌面背景色。
             return AnyShapeStyle(
@@ -931,7 +930,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot,那道 NotchRevealShape
             // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
             // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
-            .modifier(NotchCardClip(enabled: !hostClipsCard))
+            .modifier(NotchCardClip(enabled: !hostClipsCard, notchHeight: controller.contentTopInset))
         }
         // 这扇灵动岛向 `YouTubeMusicAdSkipCenter` 登记「广告态、要门槛结果」,挂在这里。
         //
@@ -994,9 +993,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 尺寸(GeometryReader 的 proxy.size,从 body 传进来),`.clipShape` 才会在正确的
     // 边界上计算圆角。
     //
-    // 没有封面数据(这首歌还没解析出封面/collector 还没查到/本来就没有)时退回
-    // NotchCardStyle.darkGradient 的固定渐变——不会露出空白背景,也不需要用户在"没有
-    // 封面"和"其它三个固定风格"之间多做一次选择。
+    // 没有封面数据(这首歌还没解析出封面/collector 还没查到/本来就没有)时退回纯黑
+    // (`NotchCardStyle.coverArt.fill`),跟机器刘海融成一块。
     //
     // 模糊半径比"歌词窗口"artworkBackground 的 60 小得多——那边画布常年好几百 pt 高,
     // 60pt 模糊半径只占画布的一小部分,还能看出封面本身的色块层次;灵动岛稳态高度只有
@@ -1027,15 +1025,15 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 24% 的忙时是 CoreGraphics 在给这道看不见的渐变做 rgba64 轴向着色
                 // (`ripc_DrawShading` → `rgba64_shade_axial_RGB`,964×382px 每帧一遍)。纯色的
                 // `Color` 视图落成一个只有 backgroundColor 的 CALayer,尺寸变化零重画;底部圆角由
-                // 外层 ZStack 那道统一的 clipShape 负责,这里不必再裁。颜色取渐变的中间一档。
-                Color(hexWithAlpha: "#14212AFF", fallback: .black)
+                // 外层 ZStack 那道统一的 clipShape 负责,这里不必再裁。颜色跟没有封面时的兜底一样是纯黑。
+                Color.black
                 // 两层交叉淡入(`NotchCrossfadeBackdrop`):换图时旧图留在下面、新图从透明淡到不透明。
                 // 别换回 `.animation(value:)` 直接换 Image 内容 —— 那样旧图当场消失、新图从透明淡入,
                 // 中间露出上面那块打底色,同一首歌换上高清封面(两张模糊图几乎一样)时表现为整卡暗一下再亮回来。
                 NotchCrossfadeBackdrop(image: image, size: size)
             }
         } else {
-            NotchHangingShape.card
+            NotchHangingShape.card(notchHeight: controller.contentTopInset)
                 .fill(playback.notchCardStyle.fill)
         }
     }
@@ -1168,7 +1166,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         let soloInset = NotchWidthBounds.soloEqualizerInset(
             earWidth: earWidth, barsWidth: EqualizerBars.width,
             cardPadding: NotchMetrics.cardHorizontalPadding,
-            shoulder: NotchOutline.shoulderRadius,
+            shoulder: NotchOutline.shoulderRadius(notchHeight: controller.contentTopInset),
             expanded: controller.isExpanded,
             atMinimumWidth: controller.isCardAtMinimumWidth)
         return HStack(spacing: 0) {
@@ -3278,11 +3276,12 @@ struct NotchCardLayerActive: ViewModifier {
 /// `enabled` 对某个宿主是常量;运行期切换会换分支、重建 content 子树。
 struct NotchCardClip: ViewModifier {
     var enabled: Bool
+    var notchHeight: CGFloat
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
-            content.clipShape(NotchHangingShape.card)
+            content.clipShape(NotchHangingShape.card(notchHeight: notchHeight))
         } else {
             content
         }
@@ -3292,24 +3291,27 @@ struct NotchCardClip: ViewModifier {
 /// 挂在屏幕上沿的卡片外形:顶边贴死屏幕顶、底部两角圆角。
 ///
 /// 两种用法:
-///  - `.card`:灵动岛卡片本身,尺寸照机器刘海走 —— 底部圆角随高度(`NotchOutline.bottomRadius`),顶边两侧
-///    各一道内凹的「肩膀」(`NotchOutline.shoulder`),轮廓不越出矩形。卡片、出场裁剪、编辑台里拖宽度时
+///  - `.card(notchHeight:)`:灵动岛卡片本身,尺寸照机器刘海走 —— 底部圆角随高度(`NotchOutline.bottomRadius`),
+///    顶边两侧各一道内凹的「肩膀」(`NotchOutline.shoulder`,按刘海高度),轮廓不越出矩形。卡片、出场裁剪、编辑台里拖宽度时
 ///    那圈虚线**都用这一个**,三处各写一份迟早会对不上。
 ///  - `NotchHangingShape(bottomCornerRadius:)`:固定圆角、没有肩膀,给设置页里缩小画的示意图用。
 struct NotchHangingShape: Shape {
     /// nil = 按高度自适应(`.card`)。
     var bottomCornerRadius: CGFloat?
-    var shoulders = false
+    /// 肩膀按哪个刘海高度算;nil = 没有肩膀。
+    var notchHeight: CGFloat?
 
-    static let card = NotchHangingShape(bottomCornerRadius: nil, shoulders: true)
+    static func card(notchHeight: CGFloat) -> NotchHangingShape {
+        NotchHangingShape(bottomCornerRadius: nil, notchHeight: notchHeight)
+    }
 
-    init(bottomCornerRadius: CGFloat?, shoulders: Bool = false) {
+    init(bottomCornerRadius: CGFloat?, notchHeight: CGFloat? = nil) {
         self.bottomCornerRadius = bottomCornerRadius
-        self.shoulders = shoulders
+        self.notchHeight = notchHeight
     }
 
     func path(in rect: CGRect) -> Path {
-        let s = shoulders ? NotchOutline.shoulder(width: rect.width, height: rect.height) : 0
+        let s = notchHeight.map { NotchOutline.shoulder(width: rect.width, height: rect.height, notchHeight: $0) } ?? 0
         let bodyWidth = rect.width - 2 * s
         let r = bottomCornerRadius.map { min($0, bodyWidth / 2, rect.height / 2) }
             ?? NotchOutline.bottomRadius(height: rect.height, bodyWidth: bodyWidth)

@@ -163,7 +163,8 @@ struct NotchWindowRoot: View {
                 card
                     .environment(\.notchRevealContentOpacity, state.contentOpacity)
                     .clipShape(NotchRevealShape(widthFraction: state.widthFraction,
-                                                heightFraction: state.heightFraction))
+                                                heightFraction: state.heightFraction,
+                                                notchHeight: controller.contentTopInset))
             } keyframes: { _ in
                 KeyframeTrack(\.widthFraction) {
                     MoveKeyframe(revealStartWidth)
