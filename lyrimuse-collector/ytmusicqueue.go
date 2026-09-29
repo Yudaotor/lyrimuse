@@ -233,7 +233,7 @@ func ytmusicUpcoming(artist, title, bundleID string, durationSecs float64, n int
 		target = owner
 	}
 	family := browserScriptFamily(target)
-	if family == "" {
+	if family == "" || !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
 		return browserQueueResult{}
 	}
 	out, ok := ytmusicQueueScript(target, family)

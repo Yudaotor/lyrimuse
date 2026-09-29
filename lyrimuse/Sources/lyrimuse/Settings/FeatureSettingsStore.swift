@@ -329,6 +329,10 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与 collector 的
     /// featureFlagsFile.LastfmExcludedBundles 一一对应,语义见那边 lastfmexclude.go 头注。
     var lastfmExcludedBundles: [String]?
+    /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
+    /// 这里只为让 collector 知道 —— 它那几路网页平台探针只对配对过的浏览器跑(collector browserpairs.go)。
+    /// 缺失 = 还没写过,collector 沿用所有浏览器都探;空对象 = 一个都没配。
+    var browserPlatformPairs: [String: [String]]?
 
     /// CaseIterable 是为了让 `knownFileKeys` 能自动跟着字段增删走 —— 手工维护第二份
     /// 键名清单迟早会跟这里对不上,而对不上的后果正是下面要修的那种静默丢数据。
@@ -371,6 +375,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
         case trustedPlayers = "trusted_players"
         case lastfmExcludedBundles = "lastfm_excluded_bundles"
+        case browserPlatformPairs = "browser_platform_pairs"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -547,6 +552,8 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 见 FeatureFlagsFile.lastfmExcludedBundles。改它一律走 updateLastfmExclusion(立刻落盘 + 重启 collector,
     /// 跟 trust/untrust 同一条路 —— collector 只在启动时读一次这份文件)。
     @Published public private(set) var lastfmExcludedBundles: Set<String> = []
+    /// 见 FeatureFlagsFile.browserPlatformPairs。只经 syncBrowserPlatformPairs 改。
+    public private(set) var browserPlatformPairs: [String: [String]]?
 
     @Published public private(set) var lastError: String?
     /// 上一次保存落盘成功、但 collector 没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
@@ -649,8 +656,18 @@ public final class FeatureSettingsStore: ObservableObject {
             launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
             launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
-            lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted()
+            lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted(),
+            browserPlatformPairs: browserPlatformPairs
         )
+    }
+
+    /// 把 AppSettings 里的配对关系镜像进 features.json(AppDelegate 订阅着推过来)。跟上次写下的一样就什么都不做,
+    /// 所以只有第一次启动和真改了配对时才落盘。
+    public func syncBrowserPlatformPairs(_ pairs: [String: Set<String>]) async {
+        let next = BrowserPositionProbe.mirroredPairs(pairs)
+        guard next != browserPlatformPairs else { return }
+        browserPlatformPairs = next
+        _ = await save()
     }
 
     /// 把一个未知播放器加进信任列表。
@@ -911,6 +928,7 @@ public final class FeatureSettingsStore: ObservableObject {
         players = promoted.players
         lastfmExcludedBundles = Set((f.lastfmExcludedBundles ?? [])
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        browserPlatformPairs = f.browserPlatformPairs
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {

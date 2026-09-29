@@ -519,6 +519,17 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// `LocalPlaybackSource` 判断"网页版 Spotify 广告"用:调用方需要传已经过
     /// `probeTargetBundleID` 解析的 host bundle id,跟 `kickIfNeeded`/`pairedPlatformIDs`
     /// 是同一份配对数据、同一把锁,不是另起一份判断逻辑。
+    /// 配对关系写进 features.json 的样子(给 collector 看,见 FeatureFlagsFile.browserPlatformPairs):没有浏览器的平台
+    /// 不写、浏览器按字母排,同一份配对每次编码都一样,没变就不会白写一次盘。纯函数,selftest 覆盖。
+    public static func mirroredPairs(_ pairs: [String: Set<String>]) -> [String: [String]] {
+        var out: [String: [String]] = [:]
+        for (platformID, bundleIDs) in pairs where !platformID.isEmpty {
+            let list = bundleIDs.filter { !$0.isEmpty }.sorted()
+            if !list.isEmpty { out[platformID] = list }
+        }
+        return out
+    }
+
     public func isPaired(bundleID: String?, platformID: String) -> Bool {
         guard let bundleID, !bundleID.isEmpty else { return false }
         return pairedPlatformIDs(forBundleID: bundleID).contains(platformID)

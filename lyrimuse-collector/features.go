@@ -269,6 +269,10 @@ type featureFlagsFile struct {
 	// ScrobbleShortTracks / LastfmScrobblePoint 同一口径。与 Swift 侧 FeatureFlagsFile.lastfmExcludedBundles
 	// 一一对应。语义、出口与粒度见 lastfmexclude.go 头注。
 	LastfmExcludedBundles []string `json:"lastfm_excluded_bundles,omitempty"`
+	// BrowserPlatformPairs:「网页播放器」里的配对关系,平台 id → 浏览器 bundle id 列表(Swift 侧
+	// FeatureFlagsFile.browserPlatformPairs,App 从 AppSettings 镜像过来)。只决定网页平台探针对哪些浏览器跑,
+	// 见 browserpairs.go;键缺失 = 老配置,所有浏览器都探。
+	BrowserPlatformPairs map[string][]string `json:"browser_platform_pairs,omitempty"`
 	// LyricsDecisionTrace:歌词解析决策的 append-only NDJSON 流水账,见 lyricstrace.go。
 	// **默认关** —— 纯诊断旁路,平时不该往磁盘攒文件;要排查"为什么选了这份歌词"的
 	// 历史过程时才开。缓存内的决策记录(decision.go)不受这个开关影响,始终会写。
@@ -354,6 +358,9 @@ type featureFlags struct {
 	// LastfmExcludedBundles 是已清洗的集合(见 resolveLastfmExcludedBundles),空 map 而不是 nil。
 	// 只被 lastfmexclude.go 的 lastfmExcluded 读取;poller 在开会话那一拍算一次存进 playSession。
 	LastfmExcludedBundles map[string]bool
+	// BrowserPlatformPairs:平台 id → 配对过的浏览器集合。nil = 文件里没有这个键(沿用所有浏览器都探),
+	// 空 map = App 写过、一个都没配。只被 browserpairs.go 的 browserPlatformPaired 读取。
+	BrowserPlatformPairs map[string]map[string]bool
 }
 
 // 这里原本是 `var features featureFlags` —— 启动时赋值一次、运行期再也不变,于是设置页
@@ -435,6 +442,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
 		// 缺失 / 空 = 全部上送:跟 TrustedPlayers 一样"少一个键不改变现有行为"。
 		LastfmExcludedBundles: resolveLastfmExcludedBundles(f.LastfmExcludedBundles),
+		BrowserPlatformPairs:  resolveBrowserPlatformPairs(f.BrowserPlatformPairs),
 		AlbumPrefetch:         boolOr(f.AlbumPrefetch, true),
 		// 默认 true = 保持这个能力上线以来的行为;Swift 侧 `lyricsAutoUpgrade` 的属性初值
 		// 必须跟这里一致(两侧默认值对齐那条老规矩,见上面 AlbumPrefetch 的注释)。
@@ -893,6 +901,7 @@ func logFeatureSnapshot() {
 		"launch_on_music_open", features().LaunchLyrimuseOnMusicOpen,
 		"launch_on_players", launchOnPlayers,
 		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
+		"browser_platform_pairs", browserPlatformPairsSummary(features().BrowserPlatformPairs),
 	)
 }
 

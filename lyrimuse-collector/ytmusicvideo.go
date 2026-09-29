@@ -74,7 +74,7 @@ func ytmusicMusicVideo(ctx context.Context, bundleID, trackKey string) bool {
 		target = owner
 	}
 	family := browserScriptFamily(target)
-	if family == "" {
+	if family == "" || !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
 		return false
 	}
 	cacheKey := target + "\x00" + trackKey

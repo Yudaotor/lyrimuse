@@ -358,4 +358,36 @@ private func wiringContracts() {
                 "信任名单: 内置播放器先判掉,不在轮询热路径上每次读盘解码 features.json")
     expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.spotify.bundleIdentifier), true, "信任名单: 内置播放器直接认")
     expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.auto.bundleIdentifier, trusted: [:]), false, "信任名单: 自动识别那一项不是播放器")
+
+    // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给 collector。
+    let ytAd = code("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
+    let kick = body("public func kickIfNeeded(bundleIdentifier: String?, key: String) {", in: ytAd)
+    expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
+                "网页探针配对: YouTube Music 广告探针没配对就不发起")
+    let store = code("lyrimuse/Settings/FeatureSettingsStore.swift")
+    expectEqual(store.contains("case browserPlatformPairs = \"browser_platform_pairs\""), true, "网页探针配对: features.json 键名跟 collector 一致")
+    expectEqual(store.contains("browserPlatformPairs: browserPlatformPairs\n"), true, "网页探针配对: 写盘快照带上配对镜像")
+    expectEqual(store.contains("browserPlatformPairs = f.browserPlatformPairs"), true, "网页探针配对: 读盘时认回已写的镜像(没变就不重写)")
+    let sync = body("public func syncBrowserPlatformPairs(_ pairs: [String: Set<String>]) async {", in: store)
+    expectEqual(before("guard next != browserPlatformPairs else { return }", "await save()", in: sync) && sync.contains("BrowserPositionProbe.mirroredPairs(pairs)"), true,
+                "网页探针配对: 同步时先规整、没变就不落盘")
+    let delegate = code("lyrimuse/AppDelegate.swift")
+    if let r = delegate.range(of: "settings.$browserPlatformPairs") {
+        expectEqual(delegate[r.upperBound...].prefix(300).contains("FeatureSettingsStore.shared.syncBrowserPlatformPairs(pairs)"), true,
+                    "网页探针配对: 配对一改(含启动那一次)就镜像进 features.json")
+    } else {
+        expectEqual(true, false, "网页探针配对(契约): AppDelegate 里读不到对 browserPlatformPairs 的订阅")
+    }
+    let goPairs = code("../../lyrimuse-collector/browserpairs.go")
+    for (goName, id) in [("browserPlatformYouTubeMusic", "youtubeMusic"), ("browserPlatformSpotifyWeb", "spotifyWeb")] {
+        expectEqual(goPairs.range(of: goName + #" += "\#(id)""#, options: .regularExpression) != nil, true, "网页探针配对: collector 的 \(goName) 跟 App 的平台 id \(id) 一致")
+        expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == id }, true, "网页探针配对: \(id) 是 App 支持的平台")
+    }
+
+    let mirrored = BrowserPositionProbe.mirroredPairs([
+        "youtubeMusic": ["com.google.Chrome", "com.apple.Safari", ""], "spotifyWeb": [], "": ["company.thebrowser.Browser"],
+    ])
+    expectEqual(mirrored, ["youtubeMusic": ["com.apple.Safari", "com.google.Chrome"]],
+                "网页探针配对: 镜像去掉空平台 / 空 id,浏览器按字母排(同一份配对每次写出来一样)")
+    expectEqual(BrowserPositionProbe.mirroredPairs([:]), [:], "网页探针配对: 一个都没配写成空对象,不是缺键")
 }

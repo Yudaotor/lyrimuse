@@ -137,7 +137,7 @@ func spotifyWebUpcoming(artist, title, bundleID string, n int) browserQueueResul
 		target = owner
 	}
 	family := browserScriptFamily(target)
-	if family == "" {
+	if family == "" || !browserPlatformPaired(browserPlatformSpotifyWeb, target) {
 		return browserQueueResult{}
 	}
 	out, ok := spotifyWebQueueScript(target, family)

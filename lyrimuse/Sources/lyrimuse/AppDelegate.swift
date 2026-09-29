@@ -249,6 +249,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 启动时不推一次的话"浏览器歌词同步"卡片里配好的配对要等用户重新打开设置页
         // 才会生效。
         BrowserPositionProbe.shared.platformBrowserPairs = settings.browserPlatformPairs
+        // collector 那几路网页平台探针也只对配对过的浏览器跑(collector browserpairs.go),配对关系得镜像进
+        // features.json。用订阅:写配对的地方有好几处(设置页、配对 / 取消配对),订阅那一刻先发的当前值顺带把
+        // 启动时那一次也写了(没变就不落盘)。闭包里用参数,理由同上面 showTranslation。
+        settings.$browserPlatformPairs
+            .removeDuplicates()
+            .sink { pairs in
+                Task { @MainActor in await FeatureSettingsStore.shared.syncBrowserPlatformPairs(pairs) }
+            }
+            .store(in: &cancellables)
         // 同上:用户手动挑进来的浏览器,它们的引擎族判定结果存在 AppSettings 里,而
         // BrowserAutomationPermission 在 LyrimuseCore 里够不到。不灌这一次的话,重启之后
         // `family(...)` 对这些浏览器返回 nil —— 表现是"我加过的浏览器重启后从配对列表里

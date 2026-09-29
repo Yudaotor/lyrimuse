@@ -411,6 +411,10 @@ func ytmusicAdProbe(ctx context.Context, bundleID, trackKey string) (ytmusicAdVe
 	if family == "" {
 		return ytmusicAdUnknown, ""
 	}
+	// 没配对 YouTube Music 的浏览器不探(见 browserpairs.go):判定缺失,trustedPlaybackRejected 照旧按拒处理。
+	if !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
+		return ytmusicAdUnknown, ""
+	}
 
 	cacheKey := target + "\x00" + trackKey
 	ytmusicAdMu.Lock()

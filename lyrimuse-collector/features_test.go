@@ -59,6 +59,8 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		"lastfm_excluded_bundles=1",
 		// nil 集合 = 布尔年代的老配置,跟"一个都不选"含义不同,不能都印成空。
 		"launch_on_players=legacy",
+		// 同理:没有配对键 = 所有浏览器都探,跟「一个都没配」不同。
+		"browser_platform_pairs=legacy",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("启动快照缺 %s,实际: %q", want, out)

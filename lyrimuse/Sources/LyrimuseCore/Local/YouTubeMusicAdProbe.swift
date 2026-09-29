@@ -491,11 +491,15 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 不支持脚本命令的浏览器(Firefox 等)、非浏览器、以及 Safari 的媒体代理进程解析不出
     /// 宿主时,一次 AppleEvent 都不发起 —— 跟 `BrowserPositionProbe.kickIfNeeded` 的准入
     /// 判据一致(含那步"先把媒体代理进程解析成宿主 App"的别名解析,Safari 少了它会静默
-    /// 一次都不探)。
+    /// 一次都不探)。没在「网页播放器」里配对 YouTube Music 的浏览器同样不发起。
     public func kickIfNeeded(bundleIdentifier: String?, key: String) {
         guard let hostBundleID = BrowserPositionProbe.probeTargetBundleID(forReported: bundleIdentifier),
               let family = BrowserAutomationPermission.family(forBundleID: hostBundleID)
         else { return }
+        // 没在「网页播放器」里配对 YouTube Music 的浏览器不探:多半没开 JavaScript 开关,探了也必然失败,
+        // 受信任浏览器里没有专辑名的普通视频却每首都会踢到这里。判定缺失,gate 照旧按拒处理;同 SpotifyWebAdProbe 入口
+        // 和 collector 的 browserpairs.go。
+        guard BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: "youtubeMusic") else { return }
         lock.lock()
         if inFlightKey == key {
             lock.unlock()
