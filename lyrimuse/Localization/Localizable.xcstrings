@@ -2748,6 +2748,52 @@
         }
       }
     },
+    "没有完全磁盘访问权限，读不到 %@ 本机的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Full Disk Access; %@’s local lyrics cannot be read"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有完全磁盘访问权限，读不到 %@ 本机的歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有完整磁碟取用權限，讀不到 %@ 本機的歌詞"
+          }
+        }
+      }
+    },
+    "没有辅助功能权限，%@ 的进度没法校准" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Accessibility permission; %@’s progress cannot be calibrated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有辅助功能权限，%@ 的进度没法校准"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有輔助使用權限，%@ 的進度無法校準"
+          }
+        }
+      }
+    },
     "Apple Music 自动化权限（必需）" : {
       "extractionState" : "manual",
       "localizations" : {

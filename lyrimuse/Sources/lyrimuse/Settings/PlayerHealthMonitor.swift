@@ -6,6 +6,8 @@ import LyrimuseCore
 ///
 /// 播放器页(`PlayerSettingsTab`)自己维护着四个异常态,但都是页面私有 @State、只在那一页可见
 /// 时刷新——用户停在「歌词」页时对"collector 挂了"毫无感知。这里把其中两条**硬故障**提出来,
+/// 外加权限卡里那两项(完全磁盘访问被拒、缺辅助功能),状态源跟权限卡同一份(`FullDiskAccessPermission` /
+/// `AccessibilityPermission`,读的是 collector 发布的文件与一次系统调用,主线程直接读),
 /// 设置窗口开着的整个期间都盯着(`SettingsView` 的 onAppear/onDisappear 启停),判定规则在
 /// Core 的 `PlayerHealth`(纯函数,selftest 钉住),这里只负责读值。
 ///
@@ -25,6 +27,9 @@ final class PlayerHealthMonitor: ObservableObject {
     @Published private(set) var warnings: [PlayerHealth.Warning] = []
     /// 自动化权限被拒的那几家,徽标说明里点名用。
     @Published private(set) var automationDeniedPlayers: [PlaybackPlayer] = []
+    /// 完全磁盘访问被拒 / 缺辅助功能的那几家,同上。
+    @Published private(set) var fullDiskAccessDeniedPlayers: [PlaybackPlayer] = []
+    @Published private(set) var accessibilityMissingPlayers: [PlaybackPlayer] = []
     /// 最近一次读到的 collector 服务状态;nil = 还没读过。播放器页那张卡片直接用它。
     @Published private(set) var collectorState: LaunchdJobState?
 
@@ -65,6 +70,14 @@ final class PlayerHealthMonitor: ObservableObject {
         let targets = PlayerHealth.automationDeniedPlayers(
             selection: selection, isInstalled: permissions.isInstalled, isDenied: { _ in true })
         let collectorEnabled = AppSettings.shared.collectorServiceEnabled
+        let fullDisk = FullDiskAccessPermission.shared
+        fullDisk.refresh()
+        let fullDiskVisible = fullDisk.visiblePlayers(for: selection)
+        let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
+        let accessibility = AccessibilityPermission.shared
+        accessibility.refresh()
+        let accessibilityMissing = PlayerHealth.accessibilityMissingPlayers(
+            visible: accessibility.visiblePlayers(for: selection), trusted: accessibility.trusted)
         // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
         // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
         // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
@@ -85,9 +98,12 @@ final class PlayerHealthMonitor: ObservableObject {
             if collector != self.collectorState { self.collectorState = collector }
             let deniedPlayers = targets.filter { denied.contains($0) }
             if deniedPlayers != self.automationDeniedPlayers { self.automationDeniedPlayers = deniedPlayers }
+            if fullDiskDenied != self.fullDiskAccessDeniedPlayers { self.fullDiskAccessDeniedPlayers = fullDiskDenied }
+            if accessibilityMissing != self.accessibilityMissingPlayers { self.accessibilityMissingPlayers = accessibilityMissing }
             let latest = PlayerHealth.warnings(.init(
                 automationDeniedPlayers: deniedPlayers,
-                collectorServiceEnabled: collectorEnabled, collectorRunning: collector.isRunning))
+                collectorServiceEnabled: collectorEnabled, collectorRunning: collector.isRunning,
+                fullDiskAccessDeniedPlayers: fullDiskDenied, accessibilityMissingPlayers: accessibilityMissing))
             if latest != self.warnings { self.warnings = latest }
         }
     }
@@ -95,11 +111,18 @@ final class PlayerHealthMonitor: ObservableObject {
     func description(_ warning: PlayerHealth.Warning) -> String {
         switch warning {
         case .automationDenied:
-            let names = ListFormatter()
-            names.locale = L10n.locale
-            let list = names.string(from: automationDeniedPlayers.map(\.displayName)) ?? ""
-            return String(format: L10n.t("%@ 的自动化权限被拒，读不到播放状态"), list)
+            return String(format: L10n.t("%@ 的自动化权限被拒，读不到播放状态"), names(automationDeniedPlayers))
         case .collectorNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
+        case .fullDiskAccessDenied:
+            return String(format: L10n.t("没有完全磁盘访问权限，读不到 %@ 本机的歌词"), names(fullDiskAccessDeniedPlayers))
+        case .accessibilityMissing:
+            return String(format: L10n.t("没有辅助功能权限，%@ 的进度没法校准"), names(accessibilityMissingPlayers))
         }
+    }
+
+    private func names(_ players: [PlaybackPlayer]) -> String {
+        let formatter = ListFormatter()
+        formatter.locale = L10n.locale
+        return formatter.string(from: players.map(\.displayName)) ?? ""
     }
 }

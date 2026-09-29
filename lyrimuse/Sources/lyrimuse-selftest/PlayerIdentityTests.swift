@@ -1307,6 +1307,29 @@ func runPlayerIdentityTests() {
                     [.appleMusic], "PlayerHealth: 没装的播放器不报(它给不出权限)")
         expectEqual(PH.automationDeniedPlayers(selection: [.appleMusic], isInstalled: allInstalled, isDenied: { _ in false }),
                     [], "PlayerHealth: 没被拒不报")
+
+        // 完全磁盘访问 / 辅助功能:只替权限卡摆出来的那几家(需要 ∩ 装了)报;完全磁盘访问只认明确被拒。
+        expectEqual(PH.fullDiskAccessDeniedPlayers(visible: [.qqMusic], grant: .denied), [.qqMusic],
+                    "PlayerHealth: 完全磁盘访问被拒 → 报这几家")
+        expectEqual(PH.fullDiskAccessDeniedPlayers(visible: [.qqMusic], grant: .unknown), [],
+                    "PlayerHealth: 完全磁盘访问还没探到不报")
+        expectEqual(PH.fullDiskAccessDeniedPlayers(visible: [.qqMusic], grant: .granted), [], "PlayerHealth: 完全磁盘访问已授权不报")
+        expectEqual(PH.accessibilityMissingPlayers(visible: [.amazonMusic], trusted: false), [.amazonMusic],
+                    "PlayerHealth: 用着 Amazon Music、没有辅助功能权限 → 报")
+        expectEqual(PH.accessibilityMissingPlayers(visible: [.amazonMusic], trusted: true), [], "PlayerHealth: 有辅助功能权限不报")
+        expectEqual(PH.accessibilityMissingPlayers(visible: [], trusted: false), [],
+                    "PlayerHealth: 没有要读界面的播放器,缺辅助功能也不报")
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify], collectorServiceEnabled: true, collectorRunning: false,
+                                      fullDiskAccessDeniedPlayers: [.qqMusic], accessibilityMissingPlayers: [.amazonMusic])),
+                    [.collectorNotRunning, .automationDenied, .fullDiskAccessDenied, .accessibilityMissing],
+                    "PlayerHealth: 四条都中时按严重程度排")
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [], collectorServiceEnabled: true, collectorRunning: true,
+                                      accessibilityMissingPlayers: [.amazonMusic])),
+                    [.accessibilityMissing], "PlayerHealth: 只缺辅助功能时也亮徽标")
+        expectEqual([PlaybackPlayer.qqMusic, .netease, .kugou].allSatisfy(\.needsFullDiskAccess)
+                    && [PlaybackPlayer.amazonMusic].allSatisfy(\.needsAccessibilityPermission)
+                    && !PlaybackPlayer.appleMusic.needsAccessibilityPermission, true,
+                    "PlayerHealth: 哪几家要这两项权限,跟播放器目录一致")
     }
 
     // ---- 与播放器联动:逐播放器多选----
