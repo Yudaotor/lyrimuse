@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Floating, word-by-word lyrics for your Mac, always on top. Or put them in the menu bar, in a Dynamic-Island-style capsule, or in a full lyrics window. Works with Apple Music, Spotify, Amazon Music, YouTube Music and Spotify in a browser, and the Chinese-language players QQ Music, NetEase Cloud Music, Kugou Music, Soda Music and KKBOX. It also keeps a Last.fm listening profile and translates lyrics right on your Mac.**
+**Word-by-word floating lyrics for macOS, always on top.**
 
 **Language / 语言 / 語言:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md)
 
@@ -12,14 +12,11 @@
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
-[![Downloads](https://img.shields.io/github/downloads/Yudaotor/lyrimuse/total)](https://github.com/Yudaotor/lyrimuse/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
 
-Lyrimuse is an open-source desktop lyrics app for macOS. It lives in your menu bar. When a song starts, the lyrics appear on screen and light up word by word, karaoke style. They stay on top of your other windows and follow you to every Space. If that's too much, read the current line in the menu bar instead, or keep it in a small capsule under the notch.
-
-It works with Apple Music, Spotify, Amazon Music, YouTube Music or Spotify in a browser, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music and KKBOX. Turn on the ones you use, or let it follow whatever macOS says is playing.
+Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating above your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, or in a full lyrics window. It works with eight players, including Apple Music, Spotify and Amazon Music, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
 
 **Coming from LyricsX?** Its last release came out in April 2022. Lyrimuse does what it did and is still being worked on. The biggest difference is how it picks lyrics: it asks every source, gives every result a score, and uses the best one instead of whichever came back first, so it's much less likely to land on the wrong version. It also supports QQ Music, NetEase, Kugou, Soda Music, KKBOX, Amazon Music and web players. For the details, here's a [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md); every row in it was checked.
 

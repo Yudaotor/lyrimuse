@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Mac 上的桌面悬浮歌词，逐字同步，常驻置顶。也可以放进菜单栏、刘海下的灵动岛胶囊，或者打开一个完整的歌词窗口。支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify，以及浏览器里的 YouTube Music / Spotify 网页版。另外还有 Last.fm 听歌档案，歌词也能直接在本机翻译。**
+**Mac 上的桌面悬浮歌词，逐字同步，常驻置顶。**
 
 **语言 / Language:** [English](README.md) | **简体中文** | [繁體中文](README.zh-Hant.md)
 
@@ -12,14 +12,11 @@
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
-[![Downloads](https://img.shields.io/github/downloads/Yudaotor/lyrimuse/total)](https://github.com/Yudaotor/lyrimuse/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
 
-Lyrimuse 是一款开源的 Mac 桌面歌词软件。它平时待在菜单栏里，一有歌开始放，歌词就浮到屏幕上，像卡拉 OK 那样一个字一个字亮起来。它压在所有窗口上面，切到别的桌面（Space）也跟着走。嫌太显眼的话，可以只在菜单栏里显示当前这句，或者收进刘海下面的灵动岛胶囊。
-
-Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify，还有浏览器里的 YouTube Music / Spotify 网页版都能用。平时用哪几个就勾哪几个，懒得选就交给自动识别。
+Lyrimuse 是一款开源的 Mac 桌面歌词软件。它常驻菜单栏，跟随播放逐字高亮歌词，可以悬浮在所有窗口之上，也可以放进菜单栏、刘海下的灵动岛胶囊或完整的歌词窗口。支持 Apple Music、Spotify、QQ 音乐、网易云音乐等八款播放器和浏览器里的网页播放器，并从十二个歌词源中打分挑选最合适的版本，还能显示翻译和读音。另外还内置 Last.fm 听歌档案和打卡。
 
 **从 LyricsX 过来的？** LyricsX 最后一次发版是 2022 年 4 月，之后就没再更新。它能做的 Lyrimuse 都能做，而且一直在更新。最大的不同在挑歌词的方式：Lyrimuse 会把每个歌词源的结果都拿来打分，用分最高的那份，而不是谁先返回就用谁，所以不容易配成别的版本。它还支持 QQ 音乐、网易云、酷狗、汽水音乐、KKBOX、Amazon Music 和浏览器里的播放器。想细看的话，这里有一份[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)，每一项都核实过。
 
