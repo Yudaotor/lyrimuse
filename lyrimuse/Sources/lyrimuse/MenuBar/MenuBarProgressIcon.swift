@@ -50,7 +50,7 @@ enum MenuBarProgressIcon {
     /// 染好色的一枚图标。
     struct Prepared {
         /// 把图标画进图层的上下文(`MenuBarDrawnLayer.painter`),理由见那个类型。
-        let paint: (CGContext) -> Void
+        let paint: MenuBarPainting
         /// 像素/点比例,图层的 `contentsScale` 要用它,不能猜。
         let scale: CGFloat
         let size: CGSize
@@ -75,7 +75,7 @@ enum MenuBarProgressIcon {
         guard Int((size.width * scale).rounded()) > 0, Int((size.height * scale).rounded()) > 0 else { return nil }
         // 动态色在这里解析成定值,理由同 `MenuBarMarqueeRenderer.prepare`。
         let resolved = NSColor(cgColor: color.cgColor) ?? color
-        let paint: (CGContext) -> Void = { ctx in
+        let paint = MenuBarPainting { ctx in
             // 图层的上下文里还有别的内容时 .sourceAtop 会连它一起染;先开一层透明层,只染这枚图标。
             ctx.beginTransparencyLayer(auxiliaryInfo: nil)
             NSGraphicsContext.saveGraphicsState()

@@ -285,7 +285,7 @@ enum MenuBarMarqueeRenderer {
     /// 删掉了:现在没有任何一方需要"某一帧长什么样"这个概念 —— 那正是逐帧驱动才需要的东西。
     struct PreparedLine {
         /// 把这一句画进图层的上下文(`MenuBarDrawnLayer.painter`)。颜色已按排版那一刻的外观解析成定值。
-        let paint: (CGContext) -> Void
+        let paint: MenuBarPainting
         /// 排版时按的像素/点比例。图层的 contentsScale 要用它,不能猜。
         let scale: CGFloat
         /// 整条长图的点宽 = 这句话画出来有多宽。
@@ -325,7 +325,7 @@ enum MenuBarMarqueeRenderer {
         // 已经不在那层 performAsCurrentDrawingAppearance 里了。
         var drawAttributes = attributes
         drawAttributes[.foregroundColor] = NSColor(cgColor: color.cgColor) ?? color
-        let paint: (CGContext) -> Void = { ctx in
+        let paint = MenuBarPainting { ctx in
             guard !isGapDots else { return }
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
@@ -339,15 +339,22 @@ enum MenuBarMarqueeRenderer {
     }
 }
 
+/// 一份画法。按引用判同:缓存里取出的是同一个对象,图层据此跳过重画。
+final class MenuBarPainting {
+    let draw: (CGContext) -> Void
+    init(_ draw: @escaping (CGContext) -> Void) { self.draw = draw }
+}
+
 /// 菜单栏里画文字 / 图标的图层:内容在 `draw(in:)` 里现画,不塞现成的 CGImage。
 ///
 /// 外接屏的菜单栏上显示的是 AppKit 给每块屏做的复制品(replicant)。现画的内容会按那块屏
 /// 自己的比例重画一遍;塞进 `contents` 的位图只能原样搬过去 —— 状态项的窗口挂在 2x 屏上时,
 /// 1x 屏上看到的就是 2x 位图硬缩一半,整行发软。别改回 `contents = CGImage`。
 final class MenuBarDrawnLayer: CALayer {
-    /// nil = 不画、立刻清掉旧内容。
-    var painter: ((CGContext) -> Void)? {
+    /// nil = 不画、立刻清掉旧内容。交回同一个对象(`bitmapCache` 命中、外观回调连发)不重画。
+    var painter: MenuBarPainting? {
         didSet {
+            guard painter !== oldValue else { return }
             if painter == nil { contents = nil } else { setNeedsDisplay() }
         }
     }
@@ -371,7 +378,7 @@ final class MenuBarDrawnLayer: CALayer {
             ctx.translateBy(x: 0, y: bounds.height)
             ctx.scaleBy(x: 1, y: -1)
         }
-        painter?(ctx)
+        painter?.draw(ctx)
     }
 }
 

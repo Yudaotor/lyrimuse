@@ -3284,6 +3284,10 @@ func runSourceContractTests() {
                         "菜单栏现画: \(name) 是 MenuBarDrawnLayer")
             expectEqual(label.contains("\(name).contents = "), false, "菜单栏现画: \(name) 不塞位图")
         }
+        // 缓存命中 / 外观回调连发时交回的是同一份画法,不重画。
+        let renderer = (try? String(contentsOfFile: menuBarDir.appendingPathComponent("MenuBarMarqueeRenderer.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(renderer.contains("guard painter !== oldValue else { return }"), true,
+                    "菜单栏现画: 同一份画法不重画")
     }
 
     // ---- 菜单栏明暗观察点:只登记 / 报信,不当场读(预览"重建时闪一下")----
