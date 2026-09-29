@@ -28,7 +28,7 @@ brew trust --cask yudaotor/lyrimuse/lyrimuse   # 只需一次：Homebrew 要求�
 brew install --cask lyrimuse
 ```
 
-<img src="docs/images/hero-surfaces.jpg" alt="Lyrimuse 歌詞顯示形態——歌詞視窗、動態島膠囊、桌面浮動歌詞（逐字填色）、選單列歌詞">
+<img src="docs/images/hero-surfaces.zh-Hant.jpg" alt="Lyrimuse 歌詞顯示形態——歌詞視窗、動態島膠囊、桌面浮動歌詞（逐字填色）、選單列歌詞">
 <p align="center"><sub>四種顯示方式：歌詞視窗、動態島膠囊、逐字填色的桌面浮動歌詞、選單列歌詞</sub></p>
 
 <img src="docs/images/hero-engine.jpg" alt="Lyrimuse 歌詞引擎——歌詞管理、帶評分的手動搜尋、逐首歌的解析決策面板">
