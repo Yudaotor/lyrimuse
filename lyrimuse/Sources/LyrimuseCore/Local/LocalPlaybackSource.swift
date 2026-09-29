@@ -498,10 +498,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 0.5 秒的下沿:稳态抖动 ±0.05s、暂停/切换瞬间的单发陈旧读数实测 -1.27s。取 0.5 能把稳态
     /// 噪声挡在外面,又接得住实测幅度最小的那一档(-1.0s);单发陈旧读数多问一次探针无害 ——
     /// 它与新锚点一致时探针什么都不改。纯函数,selftest 直接覆盖。
+    ///
+    /// Amazon Music 不问:它的读数往回退一截是界面校准扣掉出声延迟(`AmazonMusicUIProbe`),
+    /// 不是晚锚点,伺服按 `snapsToReportedPosition` 直接吸附过去;这里再问 Spotify 探针是白问。见 02 章决策 68。
     public nonisolated static func shouldProbeLateAnchor(
-        reported: Double, predicted: Double, tier: PositionSourceTier
+        reported: Double, predicted: Double, tier: PositionSourceTier, bundleID: String? = nil
     ) -> Bool {
-        guard tier == .cleanExtrapolated else { return false }
+        guard tier == .cleanExtrapolated, bundleID != PlaybackPlayer.amazonMusic.bundleIdentifier else { return false }
         let backwards = predicted - reported
         return backwards > lateAnchorProbeToleranceSecs && backwards <= seekJumpToleranceSecs
     }
@@ -1860,7 +1863,8 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         // 跳变够不着 seek 容差、但读数相对外推**向后**退了半秒以上:Spotify 中途重发的晚锚点
         // 长这个样子,机制与取值见 shouldProbeLateAnchor。只问探针,位置照旧往下走伺服。
-        if Self.shouldProbeLateAnchor(reported: reported, predicted: predicted, tier: tier),
+        if Self.shouldProbeLateAnchor(reported: reported, predicted: predicted, tier: tier,
+                                      bundleID: lastSnapshot?.bundleIdentifier),
            anchorElapsedTime != posLateAnchorProbedElapsed {
             posLateAnchorProbedElapsed = anchorElapsedTime
             logger.notice("late anchor suspected: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) behind=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")

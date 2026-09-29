@@ -1136,6 +1136,18 @@ func runPlaybackPositionTests() {
         expectEqual(
             LocalPlaybackSource.shouldProbeLateAnchor(reported: 100.0, predicted: 101.5, tier: .noisyFloored),
             false, "shouldProbeLateAnchor: 地板量化源不问")
+        // Amazon Music 同在 cleanExtrapolated 档,但往回退的是界面校准扣掉的出声延迟,不问探针。
+        let amazon = PlaybackPlayer.amazonMusic.bundleIdentifier
+        expectEqual(LocalPlaybackSource.positionSourceTier(forBundleID: amazon) == .cleanExtrapolated, true,
+                    "shouldProbeLateAnchor: Amazon Music 与晚锚点样本同一档(下一条的前提)")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 2.409, predicted: 4.153, tier: .cleanExtrapolated,
+                                                      bundleID: amazon),
+            false, "shouldProbeLateAnchor: Amazon Music 校准后读数退回 1.7s 不问")
+        expectEqual(
+            LocalPlaybackSource.shouldProbeLateAnchor(reported: 69.6, predicted: 71.3, tier: .cleanExtrapolated,
+                                                      bundleID: "company.thebrowser.Browser"),
+            true, "shouldProbeLateAnchor: 同一档的其他来源带上 bundle id 照旧问")
     }
 
     // ---- probeMeasuredBias: 两个数必须同域,连着两次探针不许叠加偏置 ----
