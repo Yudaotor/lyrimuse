@@ -1,5 +1,5 @@
 #!/bin/sh
-# 提交前的三道闸,顺序跟 CI 一致:
+# 提交前的几道闸,顺序跟 CI 一致:
 #
 #   0. 内置播放器生成物对账:碰了 shared/players.json 或它的生成物时,两侧生成物必须是
 #      重新生成过的。只有这道闸查得出"改了 JSON 忘了跑生成器"——生成物本身是合法代码,
@@ -10,6 +10,9 @@
 #   2. 注释卫生:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
 #      工单引用、排查叙述、临时状态、emoji 标记)。规则全文在 scripts/check-comment-hygiene.py 的
 #      文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
+#
+#   另有一道 README 闸:改了 README 就跑 collector 里核对「歌词源数量」的那条测试。只改文案的提交
+#   没有源码文件,下面三道都不跑,措辞改掉了测试认的写法要推到 CI 才发现。
 #
 # 为什么是 hook 而不是只写进文档:这个仓的 AGENTS.md / CLAUDE.md 都在 .gitignore 里,
 # 约定只对读过它的人生效,而注释是最容易顺手写脏的地方 —— 一次全仓清理要动 500+ 个文件,
@@ -51,6 +54,32 @@ case "$staged" in
             echo "" >&2
             exit 1
         }
+        ;;
+esac
+
+# ---- README 闸:歌词源数量 ----
+#
+# 三份 README 各有几处写着「一共几个歌词源」,由 TestDocsSourceCountMatchesSourceCount 跟常量表对账。
+# 必须排在下面那个 early exit 前面:只改 README 的提交一个源码文件都没有。读的是工作区那份(同 gofmt)。
+# 没装 Go 就放行,理由同闸 1。
+case "$staged" in
+    *README.md*|*README.zh-CN.md*|*README.zh-Hant.md*)
+        if command -v go >/dev/null 2>&1; then
+            out=$(cd "$root/lyrimuse-collector" && go test -count=1 -run '^TestDocsSourceCountMatchesSourceCount$' . 2>&1) || {
+                echo "" >&2
+                if printf '%s\n' "$out" | grep -q 'lyricsourceregistry_test.go'; then
+                    printf '%s\n' "$out" | grep 'lyricsourceregistry_test.go' | sed 's/^ */    /' >&2
+                    echo "  README 里写的歌词源数量跟代码对不上(或写法认不出来了),CI 的 go test 那步会挂。" >&2
+                else
+                    # 测试没跑起来(多半是 collector 此刻编译不过):原样给出末尾几行。
+                    printf '%s\n' "$out" | tail -n 8 | sed 's/^/    /' >&2
+                    echo "  核对歌词源数量的测试没跑起来,见上面的输出。" >&2
+                fi
+                echo "  确实要放行:git commit --no-verify" >&2
+                echo "" >&2
+                exit 1
+            }
+        fi
         ;;
 esac
 
