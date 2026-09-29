@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Mac 上的桌面浮動歌詞，逐字同步，常駐最上層。**
+**桌面歌詞，為 Mac 全新構想。**
 
 **語言 / Language:** [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 
@@ -16,15 +16,15 @@
 
 </div>
 
-Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它常駐選單列，跟著播放逐字標亮歌詞，可以浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music 等八款播放器和瀏覽器裡的網頁播放器，並從十二個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
+Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它待在選單列裡，跟著播放逐字標亮歌詞，可以常駐最上層、浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music 等八款播放器和瀏覽器裡的網頁播放器，並從十二個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
 
-**從 LyricsX 過來的？** LyricsX 最後一次發布是 2022 年 4 月，之後就沒再更新。它能做的 Lyrimuse 都能做，而且一直在更新。最大的不同在挑歌詞的方式：Lyrimuse 會把每個歌詞來源的結果都拿來評分，用分數最高的那份，而不是誰先回傳就用誰，所以不容易配到別的版本。它還支援 QQ 音樂、網易雲、酷狗、汽水音樂、KKBOX、Amazon Music 和瀏覽器裡的播放器。想細看的話，這裡有一份[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文），每一項都查證過。
+**從 LyricsX 過來？** LyricsX 自 2022 年 4 月後就沒有再發布新版本。Lyrimuse 涵蓋了它的核心功能並持續更新，還補上了華語播放器、KKBOX、Amazon Music 和網頁播放器的支援。詳細差異見這份逐項查證過的[與 LyricsX、Lyric Fever 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
-**安裝：** 用 Homebrew 最省事，Apple Silicon 和 Intel 都能裝，第一次打開時的 Gatekeeper 攔截也會順手處理掉。也可以到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 自己下載（見[快速開始](#快速開始)）。用 Homebrew 的話是這三行：
+**安裝：** 推薦用 Homebrew，Apple Silicon 和 Intel 通用，還會順手處理第一次打開時的 Gatekeeper 攔截。想手動安裝，可以從[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 下載，步驟見[快速開始](#快速開始)。
 
 ```bash
 brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse   # 一次性操作——Homebrew 要求任何非官方 tap 都得先信任
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # 只需一次：Homebrew 要求先信任非官方 tap
 brew install --cask lyrimuse
 ```
 
@@ -139,7 +139,7 @@ Lyrimuse 的發布包用的是專案自己的簽章憑證，不是 Apple 開發�
 
 ```bash
 brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse   # 一次性操作——Homebrew 要求任何非官方 tap 都得先信任
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # 只需一次：Homebrew 要求先信任非官方 tap
 brew install --cask lyrimuse
 ```
 

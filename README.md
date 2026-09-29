@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Word-by-word floating lyrics for macOS, always on top.**
+**Desktop lyrics, reimagined for the Mac.**
 
 **Language / 语言 / 語言:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md)
 
@@ -16,15 +16,15 @@
 
 </div>
 
-Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating above your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, or in a full lyrics window. It works with eight players, including Apple Music, Spotify and Amazon Music, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
+Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating always on top of your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, or in a full lyrics window. It works with eight players, including Apple Music, Spotify and Amazon Music, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
 
-**Coming from LyricsX?** Its last release came out in April 2022. Lyrimuse does what it did and is still being worked on. The biggest difference is how it picks lyrics: it asks every source, gives every result a score, and uses the best one instead of whichever came back first, so it's much less likely to land on the wrong version. It also supports QQ Music, NetEase, Kugou, Soda Music, KKBOX, Amazon Music and web players. For the details, here's a [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md); every row in it was checked.
+**Coming from LyricsX?** It hasn't had a new release since April 2022. Lyrimuse covers what it did, keeps getting updates, and adds support for Chinese-language players, KKBOX, Amazon Music and web players. For the details, see the fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
-**Install** with Homebrew, on Apple Silicon or Intel; it takes care of the Gatekeeper warning for you. You can also download the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) yourself (see [Getting Started](#getting-started)). With Homebrew it's three commands:
+**Install** with Homebrew, on Apple Silicon or Intel. It also clears the first-launch Gatekeeper warning for you. Prefer to download it yourself? Grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started).
 
 ```bash
 brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time -- Homebrew requires this for any non-official tap
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time: Homebrew asks you to trust non-official taps
 brew install --cask lyrimuse
 ```
 
@@ -142,7 +142,7 @@ Finally, report what you did and anything that failed.
 
 ```bash
 brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time -- Homebrew requires this for any non-official tap
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time: Homebrew asks you to trust non-official taps
 brew install --cask lyrimuse
 ```
 
