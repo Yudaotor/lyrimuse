@@ -12,7 +12,7 @@
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
-![No Apple Developer account needed](https://img.shields.io/badge/Apple%20Developer%20account-not%20required-success)
+[![Downloads](https://img.shields.io/github/downloads/Yudaotor/lyrimuse/total)](https://github.com/Yudaotor/lyrimuse/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
