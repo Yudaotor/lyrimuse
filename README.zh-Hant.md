@@ -45,7 +45,7 @@ brew install --cask lyrimuse
 ### 逐字同步歌詞，自動配對正確的版本
 - **逐字填色**，跟著歌一起走。
 - **十二個歌詞來源，自動幫你查**：網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（經 YouTube Music）、Deezer、AMLL（人工校對的逐字歌詞庫）、汽水音樂（官方逐字）、Apple Music 自己的歌詞（在設定裡連上帳號才有）。Apple Music 是其中唯一的官方來源，很多歌還帶逐字時間軸。你不用自己去搜尋。
-- **翻譯和讀音**顯示在原文下面。歌詞來源自帶社群翻譯就用它的；沒有的話，由你的 Mac 用 Apple 系統翻譯來翻，歌詞不出本機，本機翻不了再用線上翻譯備用。譯文有 18 種語言可選。讀音是一行一行判斷的：中文歌裡夾了一句日文，就只給那一句標讀音，不會給整首歌標上拼音；粵語歌會按詞標粵拼。
+- **翻譯和讀音**顯示在原文下面。歌詞來源自帶社群翻譯就用它的；沒有的話，由你的 Mac 用 Apple 系統翻譯來翻，歌詞不出本機，本機翻不了再用線上翻譯備用。譯文有 17 種語言可選。讀音是一行一行判斷的：中文歌裡夾了一句日文，就只給那一句標讀音，不會給整首歌標上拼音；粵語歌會按詞標粵拼。
 - **對唱按歌手分開顯示**。只要歌詞來源（或 AMLL）標了哪句是誰唱的，兩個人的詞就不會擠成一團。
 - **歌詞視窗裡有 Apple Music 那些細節**：和聲單獨一行放在主句下方，對唱裡重疊的兩句一起亮到唱完，英文拖長音的字會像 Apple Music 那樣放大、發光。
 - **歌詞可以單獨切換簡體或繁體**，跟 App 介面用什麼語言無關。
@@ -53,7 +53,7 @@ brew install --cask lyrimuse
 - **離線也能看**：快取過的歌詞不連線也能顯示。
 
 ### Last.fm 聆聽檔案與播放記錄
-- **一份完整的聆聽檔案**。在設定的「帳號」裡一鍵連上 Last.fm（不用自己複製權杖），就能看到今天、近 7 天和總共聽了多少，一行即時的「正在記錄」提示，還有帶封面的最近播放，每一首都能點愛心，在 Last.fm 上標喜歡或者取消。播放器回報什麼，Lyrimuse 就原樣送出什麼，不會在送出前改歌手名或歌名（[Scrobble 規則詳解](docs/scrobbling.zh-CN.md)）。
+- **一份完整的聆聽檔案**。在設定的「帳號」裡一鍵連上 Last.fm（不用自己複製權杖），就能看到今天、近 7 天和總共聽了多少，一行即時的「正在記錄」提示，還有帶封面的最近播放，每一首都能點愛心，在 Last.fm 上標喜歡或者取消。預設按 Last.fm 曲庫裡的正式條目送出，合唱署名、簡繁寫法、「- Single」「(Remastered)」這類尾巴都會對齊到真正的歌曲頁；想完全原樣送出，可以在設定裡切到「原始」。ListenBrainz 一律原樣送出（[Scrobble 規則詳解](docs/scrobbling.zh-CN.md)）。
 - **歌手、專輯、歌曲排行榜**，可以看近 7 天、近 30 天、近一年或全部，每一項都標出比上一期升了還是降了。點開一位歌手，能看到你最常聽他的哪幾首。
 - **「足跡」**，單獨一個分頁。最上面是一本總帳：從第一次記錄算起的第幾天、有記錄的天數和日均、單日最多、目前和最長的連續天數、今年到現在跟往年同期比，還有離下一個整數里程碑差多少。下面依序是 GitHub 那樣的全年熱力圖、按小時和星期幾統計的聆聽時段、常聽歌手來自哪些國家和地區，最後是「那年今日」，看看往年的今天你在聽什麼。
 - **每次播放都先記在本機**，還沒連 Last.fm 也照記。之後連上，中間這段會自動補傳。
@@ -89,13 +89,13 @@ brew install --cask lyrimuse
 ### 附加功能（可選）
 
 <details>
-<summary>ListenBrainz 同步、可分享的「正在聽什麼」網頁、週報 / 月報 / 年度小結</summary>
+<summary>ListenBrainz 同步、可分享的「正在聽什麼」網頁、日報 / 週報 / 月報 / 年度小結</summary>
 
 下面這些預設都關著，想用哪個就在設定裡打開哪個：
 
 - **同時同步到 [ListenBrainz](https://listenbrainz.org)**。每次播放都用同一份讀到的播放狀態，分別送給 Last.fm 和 ListenBrainz，兩邊的記錄不會對不上。iPhone 上經 Last.fm 記下的播放也會自動轉進 ListenBrainz，Mac 和 iPhone 的記錄就合成了一份。
 - **一個能分享出去的「正在聽什麼」網頁**：即時播放、歷史記錄、留言牆、表情回應、訪客計數、Top10 歌手排行榜、黑膠唱片效果、深淺色主題，傳到聊天軟體裡還會展開成預覽卡片。效果展示和從零搭建的步驟見 **[網頁玩法教學](https://github.com/Yudaotor/nowplaying-workers#readme)**。
-- **週報、月報和年度聆聽小結**，透過推播通知發給你（Bark、釘釘、企業微信、Discord、飛書、Server酱、Telegram 都支援）。
+- **日報、週報、月報和年度聆聽小結**，透過推播通知發給你（Bark、釘釘、企業微信、Discord、飛書、Server酱、Telegram 都支援）。
 
 這些都在設定的「附加功能」裡，每張卡片都附有分步說明：去哪申請 API Key 或權杖、怎麼連線帳號、怎麼拿到推播平台的 Webhook 位址。只有網頁那項單獨寫了一份教學，而且也不是非架不可：只設定好 ListenBrainz，網頁就已經能顯示即時播放和歷史記錄，不用部署 Cloudflare Worker。想要留言牆、表情回應、訪客計數、Top10 歌手排行榜和更快的更新，再照著教學部署一個。
 
@@ -119,8 +119,8 @@ Lyrimuse 的發布包用的是專案自己的簽章憑證，不是 Apple 開發�
    如果這台機器的 Homebrew 沒有 trust 子指令，跳過那一行——舊版本不需要。
 2. 沒裝 Homebrew 的話，不要替我安裝 Homebrew。改走手動路徑：先用 `uname -m`
    確認晶片架構，去 https://github.com/Yudaotor/lyrimuse/releases 下載最新版本
-   對應的檔案——arm64 下載 `Lyrimuse-<版本>-macos.zip`，x86_64 下載
-   `Lyrimuse-<版本>-macos-intel.zip`——用同處提供的 `.sha256` 檔案驗證
+   對應的檔案——arm64 下載 `Lyrimuse-v<版本>-macos.zip`，x86_64 下載
+   `Lyrimuse-v<版本>-macos-intel.zip`——用同處提供的 `.sha256` 檔案驗證
    （`shasum -c`），解壓後把 `Lyrimuse.app` 移進 /Applications，然後只對這
    一個 App 清除 Gatekeeper 隔離標記：
      xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
@@ -238,7 +238,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 找歌詞時，得把正在播的這首歌拿去問各個歌詞來源：網易雲、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音樂，連了帳號的話還有 Apple Music。封面從 iTunes Search 查。翻譯預設在本機完成，只有本機翻不了時，才會把歌詞文字送給線上翻譯（先 Google 網頁翻譯，再 MyMemory）。你的聆聽記錄、快取的歌詞和設定都存在你 Mac 上的檔案裡，除非你自己連上 Last.fm、ListenBrainz 或那個可選的網頁中繼。完整清單見下面的「[授權與版權說明](#授權與版權說明)」。
 
 ### 能標日文／韓文讀音，或者翻中文嗎？
-可以。讀音是一行一行判斷的，幾種語言混著唱的歌，只會在該標的行上標，粵語歌還會標粵拼。翻譯優先用歌詞來源自帶的社群翻譯，沒有就用本機或線上的機器翻譯，可以翻成 18 種語言。
+可以。讀音是一行一行判斷的，幾種語言混著唱的歌，只會在該標的行上標，粵語歌還會標粵拼。翻譯優先用歌詞來源自帶的社群翻譯，沒有就用本機或線上的機器翻譯，可以翻成 17 種語言。
 
 ### 支援哪些 macOS 版本？
 macOS 14 Sonoma 以上（Sequoia、Tahoe 以及更新的版本都可以），Apple Silicon 和 Intel 都支援。要在本機翻譯，需要 macOS 15 Sequoia 以上，更早的系統只能用線上翻譯。
@@ -268,7 +268,7 @@ LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以�
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
 - **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、抖音（汽水音樂）、KKBOX、Amazon（Amazon Music）、中國移動（咪咕音樂）、Spotify、Google（YouTube Music、Google 翻譯）、Last.fm、ListenBrainz、MusicBrainz、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、SponsorBlock 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器、歌詞來源和用到的服務。
-- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名；排行榜裡的歌手也會按 MusicBrainz ID 去那裡查國家／地區和相關連結。封面與閒置頁把歌手加歌名發給 iTunes Search。專輯介紹和歌手簡介按 Apple Music 的專輯 ID、歌手 ID 請求它們的公開頁面，不需要登入 Apple 帳號。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊先送給 Google 網頁翻譯，還沒翻出來的再送給 MyMemory；送給 MyMemory 的請求附一個隨機產生的電子郵件參數，不是你的。YouTube Music 播放 MV 時，會把影片 ID 的 SHA-256 雜湊前 4 碼送給 SponsorBlock，查出 MV 裡不是音樂的片段、讓歌詞對上畫面——SponsorBlock 憑這幾碼分辨不出是哪支影片。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
+- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名（Last.fm 智慧比對遇到沒見過的歌手時也會這樣查）；排行榜裡的歌手也會按 MusicBrainz ID 去那裡查國家／地區和相關連結。封面與閒置頁把歌手加歌名發給 iTunes Search。專輯介紹和歌手簡介按 Apple Music 的專輯 ID、歌手 ID 請求它們的公開頁面，不需要登入 Apple 帳號。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊先送給 Google 網頁翻譯，還沒翻出來的再送給 MyMemory；送給 MyMemory 的請求附一個隨機產生的電子郵件參數，不是你的。YouTube Music 播放 MV 時，會把影片 ID 的 SHA-256 雜湊前 4 碼送給 SponsorBlock，查出 MV 裡不是音樂的片段、讓歌詞對上畫面——SponsorBlock 憑這幾碼分辨不出是哪支影片。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解
 

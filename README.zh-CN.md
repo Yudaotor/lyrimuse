@@ -45,7 +45,7 @@ brew install --cask lyrimuse
 ### 逐字同步歌词，自动匹配对的版本
 - **逐字高亮**，跟着歌一起走。
 - **十二个歌词源，自动帮你查**：网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（经 YouTube Music）、Deezer、AMLL（人工校对的逐字歌词库）、汽水音乐（官方逐字）、Apple Music 自己的歌词（在设置里连上账号才有）。Apple Music 是其中唯一的官方来源，很多歌还带逐字时间轴。你不用自己去搜。
-- **翻译和读音**显示在原文下面。歌词源自带社区翻译就用它的；没有的话，由你的 Mac 用 Apple 系统翻译来翻，歌词不出本机，本机翻不了再用联网翻译兜底。译文有 18 种语言可选。读音是一行一行判断的：中文歌里夹了一句日文，就只给那一句标读音，不会给整首歌标上拼音；粤语歌会按词标粤拼。
+- **翻译和读音**显示在原文下面。歌词源自带社区翻译就用它的；没有的话，由你的 Mac 用 Apple 系统翻译来翻，歌词不出本机，本机翻不了再用联网翻译兜底。译文有 17 种语言可选。读音是一行一行判断的：中文歌里夹了一句日文，就只给那一句标读音，不会给整首歌标上拼音；粤语歌会按词标粤拼。
 - **对唱按歌手分开显示**。只要歌词源（或 AMLL）标了哪句是谁唱的，两个人的词就不会挤成一团。
 - **歌词窗口里有 Apple Music 那些细节**：和声单独一行放在主句下面，对唱里重叠的两句一起亮到唱完，英文拖长音的词会像 Apple Music 那样放大、发光。
 - **歌词可以单独切简体或繁体**，跟 App 界面用什么语言无关。
@@ -53,7 +53,7 @@ brew install --cask lyrimuse
 - **离线也能看**：缓存过的歌词不联网也能显示。
 
 ### Last.fm 听歌档案与打卡
-- **一份完整的听歌档案**。在设置的「账号」里一键连上 Last.fm（不用自己复制 token），就能看到今天、近 7 天和一共听了多少，一行实时的「正在记录」提示，还有带封面的最近播放，每一首都能点红心，在 Last.fm 上标喜欢或者取消。播放器报上来什么，Lyrimuse 就原样发什么，不会在发送前改歌手名或歌名（[打卡规则详解](docs/scrobbling.zh-CN.md)）。
+- **一份完整的听歌档案**。在设置的「账号」里一键连上 Last.fm（不用自己复制 token），就能看到今天、近 7 天和一共听了多少，一行实时的「正在记录」提示，还有带封面的最近播放，每一首都能点红心，在 Last.fm 上标喜欢或者取消。默认按 Last.fm 曲库里的正式条目上送，合唱署名、简繁写法、「- Single」「(Remastered)」这类尾巴都会对齐到真实的歌曲页；想完全原样发送，可以在设置里切到「原始」。ListenBrainz 始终原样发送（[打卡规则详解](docs/scrobbling.zh-CN.md)）。
 - **歌手、专辑、歌曲榜单**，可以看近 7 天、近 30 天、近一年或全部，每一项都标出比上一期升了还是降了。点开一个歌手，能看到你最常听他的哪几首。
 - **「足迹」**，单独一个分页。最上面是一本总账：从第一次打卡算起的第几天、有记录的天数和日均、单日最多、当前和最长的连续天数、今年到现在跟往年同期比，还有离下一个整数里程碑差多少。下面依次是 GitHub 那样的全年热力图、按小时和星期几统计的收听时段、常听歌手来自哪些国家和地区，最后是「那年今日」，看看往年的今天你在听什么。
 - **每次播放都先记在本地**，还没连 Last.fm 也照记。以后连上，中间这段会自动补传。
@@ -89,13 +89,13 @@ brew install --cask lyrimuse
 ### 附加功能（可选）
 
 <details>
-<summary>ListenBrainz 同步、可分享的「正在听什么」网页、周报 / 月报 / 年度小结</summary>
+<summary>ListenBrainz 同步、可分享的「正在听什么」网页、日报 / 周报 / 月报 / 年度小结</summary>
 
 下面这些默认都关着，想用哪个就在设置里打开哪个：
 
 - **同时同步到 [ListenBrainz](https://listenbrainz.org)**。每次播放都用同一份读到的播放状态，分别发给 Last.fm 和 ListenBrainz，两边的记录不会对不上。iPhone 上经 Last.fm 记下的播放也会自动转进 ListenBrainz，Mac 和 iPhone 的记录就合成了一份。
 - **一个能分享出去的「正在听什么」网页**：实时播放、历史记录、留言墙、表情回应、访客计数、Top10 歌手榜、黑胶唱片效果、深浅色主题，发到聊天软件里还会展开成预览卡片。效果展示和从零搭建的步骤见 **[网页玩法教程](https://github.com/Yudaotor/nowplaying-workers#readme)**。
-- **周报、月报和年度听歌小结**，通过推送发给你（Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 都支持）。
+- **日报、周报、月报和年度听歌小结**，通过推送发给你（Bark、钉钉、企业微信、Discord、飞书、Server酱、Telegram 都支持）。
 
 这些都在设置的「附加功能」里，每张卡片都带分步说明：去哪申请 API Key 或 Token、怎么连账号、怎么拿到推送平台的 Webhook 地址。只有网页那项单独写了一份教程，而且也不是非搭不可：只配好 ListenBrainz，网页就已经能显示实时播放和历史，不用部署 Cloudflare Worker。想要留言墙、表情回应、访客计数、Top10 歌手榜和更快的刷新，再照着教程部署一个。
 
@@ -119,8 +119,8 @@ Lyrimuse 的发布包用的是项目自己的签名证书，不是 Apple 开发�
    如果这台机器的 Homebrew 没有 trust 子命令，跳过那一行——旧版本不需要。
 2. 没装 Homebrew 的话，不要替我安装 Homebrew。改走手动路径：先用 `uname -m`
    确认芯片架构，去 https://github.com/Yudaotor/lyrimuse/releases 下载最新版本
-   对应的文件——arm64 下 `Lyrimuse-<版本>-macos.zip`，x86_64 下
-   `Lyrimuse-<版本>-macos-intel.zip`——用同处提供的 `.sha256` 文件校验
+   对应的文件——arm64 下 `Lyrimuse-v<版本>-macos.zip`，x86_64 下
+   `Lyrimuse-v<版本>-macos-intel.zip`——用同处提供的 `.sha256` 文件校验
    （`shasum -c`），解压后把 `Lyrimuse.app` 移进 /Applications，然后只对这
    一个 app 清除 Gatekeeper 隔离标记：
      xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
@@ -240,7 +240,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/�
 找歌词时，得把正在放的这首歌拿去问各个歌词源：网易云、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐，连了账号的话还有 Apple Music。封面从 iTunes Search 查。翻译默认在本机完成，只有本机翻不了时，才会把歌词文本发给联网翻译（先 Google 网页翻译，再 MyMemory）。你的听歌记录、缓存的歌词和设置都存在你 Mac 上的文件里，除非你自己连上 Last.fm、ListenBrainz 或那个可选的网页中继。完整清单见下面的「[许可与版权说明](#许可与版权说明)」。
 
 ### 能标日语/韩语读音，或者翻中文吗？
-能。读音是一行一行判断的，几种语言混着唱的歌，只会在该标的行上标。翻译优先用歌词源自带的社区翻译，没有就用本机或联网的机器翻译，可以翻成 18 种语言。
+能。读音是一行一行判断的，几种语言混着唱的歌，只会在该标的行上标。翻译优先用歌词源自带的社区翻译，没有就用本机或联网的机器翻译，可以翻成 17 种语言。
 
 ### 支持哪些 macOS 版本？
 macOS 14 Sonoma 及以上（Sequoia、Tahoe 以及更新的版本都行），Apple Silicon 和 Intel 都支持。要在本机翻译，需要 macOS 15 Sequoia 及以上，更早的系统只能用联网翻译。
@@ -270,7 +270,7 @@ LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及�
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。
 - **歌词、封面与曲目信息的版权归各自的权利人所有。** Lyrimuse 只做检索、缓存与展示：公开歌词接口返回什么，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 里给你自己看，不托管、不转发、不再分发任何歌词或封面；缓存随时可以在「歌词管理」里删，或者直接删掉那个文件夹。
 - **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、抖音（汽水音乐）、KKBOX、Amazon（Amazon Music）、中国移动（咪咕音乐）、Spotify、Google（YouTube Music、Google 翻译）、Last.fm、ListenBrainz、MusicBrainz、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、SponsorBlock 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器、歌词来源和用到的服务。
-- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面十二个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名；榜单里的歌手也会按 MusicBrainz ID 去那里查国家/地区和相关链接。封面与空闲页把歌手加歌名发给 iTunes Search。专辑介绍和歌手简介按 Apple Music 的专辑 ID、歌手 ID 请求它们的公开页面，不需要登录 Apple 账号。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块先发给 Google 网页翻译，还没翻出来的再发给 MyMemory；发给 MyMemory 的请求附一个随机生成的邮箱参数，不是你的。YouTube Music 播 MV 时，会把视频 ID 的 SHA-256 哈希前 4 位发给 SponsorBlock，查出 MV 里不是音乐的片段、让歌词对上画面——SponsorBlock 凭这几位分辨不出是哪支视频。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「关于」页最多每 6 小时向 GitHub API 查一次 Star 数，打开「测试版更新」后最多每小时查一次 Release 列表；检查更新只拉 GitHub Releases 上的 appcast，不上报系统信息。除此之外只有你主动连接的 Last.fm、ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
+- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面十二个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名（Last.fm 智能匹配遇到没见过的歌手时也会这样查）；榜单里的歌手也会按 MusicBrainz ID 去那里查国家/地区和相关链接。封面与空闲页把歌手加歌名发给 iTunes Search。专辑介绍和歌手简介按 Apple Music 的专辑 ID、歌手 ID 请求它们的公开页面，不需要登录 Apple 账号。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块先发给 Google 网页翻译，还没翻出来的再发给 MyMemory；发给 MyMemory 的请求附一个随机生成的邮箱参数，不是你的。YouTube Music 播 MV 时，会把视频 ID 的 SHA-256 哈希前 4 位发给 SponsorBlock，查出 MV 里不是音乐的片段、让歌词对上画面——SponsorBlock 凭这几位分辨不出是哪支视频。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「关于」页最多每 6 小时向 GitHub API 查一次 Star 数，打开「测试版更新」后最多每小时查一次 Release 列表；检查更新只拉 GitHub Releases 上的 appcast，不上报系统信息。除此之外只有你主动连接的 Last.fm、ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
 
 ## 排查
 
