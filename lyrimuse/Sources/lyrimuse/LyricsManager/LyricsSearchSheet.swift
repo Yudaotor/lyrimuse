@@ -515,7 +515,8 @@ struct LyricsSearchSheet: View {
     // 拿这三个初始值发起搜索;改了之后要显式点"重新搜索"(或者在任一输入框按下 Enter)
     // 才会真的重新发起查询,不会敲一个字就发一次网络请求。
     private var queryFieldsBar: some View {
-        HStack(spacing: 10) {
+        // 底边对齐:三栏上面各有一行标题,右边的按钮要跟输入框齐平,不跟标题 + 输入框的整体居中。
+        HStack(alignment: .bottom, spacing: 10) {
             // 三栏**按内容长度分宽**,不等分——三栏的内容长度天然不对等,均分等于把宽度
             // 分给了最不需要的那栏,常见形状是歌手栏「PRINCE」六个字母后面空着大半格、
             // 旁边歌名「Around the World in a Day (2025 Remaster)」和专辑双双被截断。
@@ -530,9 +531,9 @@ struct LyricsSearchSheet: View {
                 ],
                 spacing: 10, minWidth: 88
             ) {
-                TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder).help(title)
-                TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder).help(artist)
-                TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder).help(album)
+                Self.labeledQueryField(L10n.t("歌名"), text: $title)
+                Self.labeledQueryField(L10n.t("歌手"), text: $artist)
+                Self.labeledQueryField(L10n.t("专辑"), text: $album)
             }
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
@@ -551,6 +552,17 @@ struct LyricsSearchSheet: View {
         .onSubmit { Task { await load() } }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// 查询栏的一栏:上面一行标题(输入框里有内容时占位文字就看不见了,单看内容分不清哪栏是歌名哪栏是专辑),
+    /// 下面是输入框。宽度由外层 ProportionalFieldsLayout 分。
+    private static func labeledQueryField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(label, text: text).textFieldStyle(.roundedBorder).help(text.wrappedValue)
+        }
     }
 
     // candidates 陆续到达、isSearching 才是"是否还没结束"的唯一依据——不能用
