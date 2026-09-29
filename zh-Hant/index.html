@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyrimuse｜Mac 桌面歌詞，逐字同步</title>
+<meta name="description" content="開源的 Mac 桌面歌詞軟體，支援 Apple Music、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂，以及瀏覽器裡的 YouTube Music / Spotify 網頁版。逐字同步、評分挑選歌詞、翻譯與讀音、Last.fm 聆聽檔案。macOS 14 以上，Apple Silicon 與 Intel 皆可。">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
+<link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
+<link rel="icon" href="../assets/img/app-icon.png">
+<link rel="stylesheet" href="../assets/style.css">
+<meta property="og:title" content="Lyrimuse｜Mac 桌面歌詞，逐字同步">
+<meta property="og:description" content="開源的 Mac 桌面歌詞：Apple Music、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲、酷狗、汽水音樂和瀏覽器裡的網頁播放器都能用，歌詞跟著歌聲一個字一個字亮起來。">
+<meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh-Hant.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Lyrimuse：Mac 逐字同步桌面歌詞，動態島、桌面浮動歌詞、選單列歌詞、歌詞視窗">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh-Hant/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_TW">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Lyrimuse",
+  "operatingSystem": "macOS 14.0 or later",
+  "applicationCategory": "MultimediaApplication",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
+  "softwareVersion": "1.9.0",
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "url": "https://yudaotor.github.io/lyrimuse/zh-Hant/",
+  "inLanguage": "zh-Hant",
+  "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh-Hant.jpg",
+  "author": { "@type": "Person", "name": "Yudaotor", "url": "https://github.com/Yudaotor" }
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/img/app-icon.png" alt="Lyrimuse 圖示">
+  <span class="name">Lyrimuse</span>
+  <nav>
+    <a href="#features">功能</a>
+    <a href="#matching">歌詞配對</a>
+    <a href="../zh/compare/">對比 LyricsX</a>
+    <a href="#faq">常見問題</a>
+    <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub</a>
+    <a href="../" lang="en">English</a>
+    <a href="../zh/" lang="zh-Hans">简体</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>桌面歌詞，為 Mac 全新構想</h1>
+  <p class="sub">Lyrimuse 是一款開源的 Mac 桌面歌詞軟體，跟著播放逐字標亮歌詞。支援 <strong>Apple Music、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂</strong>，<strong>瀏覽器裡的 YouTube Music 和 Spotify 網頁版</strong>也能用。介面有完整的繁體中文。macOS 14 以上，Apple Silicon 與 Intel 皆可。</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/Yudaotor/lyrimuse/releases/latest">下載</a>
+    <a class="btn ghost" href="https://github.com/Yudaotor/lyrimuse">到 GitHub 按個 Star</a>
+  </div>
+  <pre class="brew">brew tap yudaotor/lyrimuse
+brew trust --cask yudaotor/lyrimuse/lyrimuse
+brew install --cask lyrimuse</pre>
+</div>
+
+<div class="shots">
+  <figure><img src="../assets/img/app-desktop-lyrics.png" alt="Mac 桌面浮動歌詞" loading="lazy"><figcaption>桌面浮動歌詞</figcaption></figure>
+  <figure><img src="../assets/img/app-dynamic-island.png" alt="瀏海下的動態島歌詞膠囊" loading="lazy"><figcaption>動態島膠囊</figcaption></figure>
+  <figure><img src="../assets/img/zh-Hant/app-lyrics-window.jpg" alt="仿 Apple Music 歌詞頁的完整歌詞視窗，繁體中文介面" loading="lazy"><figcaption>仿 Apple Music 的歌詞視窗</figcaption></figure>
+</div>
+
+<section id="features">
+  <h2>功能</h2>
+  <div class="grid">
+    <div class="card"><h3>播放器隨你選，可以多選</h3><p>Apple Music（含電台）、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂，隨意組合，或交給自動偵測。瀏覽器配對一次，YouTube Music 和 Spotify 網頁版也能用，歌詞按網頁自己的進度列走。</p></div>
+    <div class="card"><h3>評分挑選歌詞</h3><p>十二個歌詞來源的結果放在一起，按同一套標準評分，分數最高的勝出。每首歌都看得到為什麼用了這份歌詞，你手動選的會被鎖定，不會被自動換掉。<a href="#matching">配對機制 ↓</a></p></div>
+    <div class="card"><h3>翻譯與讀音</h3><p>優先用歌詞來源自帶的社群翻譯，沒有就用機器翻譯，譯文有 17 種語言可選。讀音一行一行判斷：日文歌標假名，粵語歌按詞標粵拼，中文歌裡夾的那一句日文也只標那一句。</p></div>
+    <div class="card"><h3>四種顯示方式</h3><p>桌面浮動歌詞、瀏海下的動態島膠囊、選單列歌詞、仿 Apple Music 的完整歌詞視窗，可以同時開好幾種。字體、顏色、寬度都能調，文字顏色還能跟著專輯封面變。</p></div>
+    <div class="card"><h3>Last.fm 聆聽檔案</h3><p>一鍵連上 Last.fm，每次播放都自動記錄，沒連之前聽的也會補傳。歌手、專輯、歌曲排行榜，「足跡」分頁裡有全年熱力圖和聆聽時段。也能同步到 ListenBrainz。</p></div>
+    <div class="card"><h3>開源，看得到它做了什麼</h3><p>GPL-3.0 開源，沒有遙測。每一筆對外請求都記進本機稽核記錄檔，想自己編譯也可以，不需要 Apple 開發者帳號。</p></div>
+  </div>
+</section>
+
+<section id="matching">
+  <h2>挑對歌詞，也把理由擺給你看</h2>
+  <p>用過多來源歌詞軟體的人，大概都碰過配到錯誤版本的情況。Lyrimuse 不會哪個來源先回傳就用哪個，而是把<strong>所有來源的候選放在同一套標準下評分</strong>：歌名、歌手、專輯、時長對不對得上，再加上有沒有逐字時間軸這類品質因素，分數最高的勝出。每首歌都有一個解析決策面板，列出每份候選的分數和贏家勝出的原因。之後要是某個來源出了更乾淨的版本，Lyrimuse 可以自動換過去；你親手選的歌詞會被鎖定，不會被自動替換。</p>
+  <figure class="feature-img"><img src="../assets/img/app-resolution-decision.png" width="620" alt="Lyrimuse 解析決策面板：各份候選歌詞的分數" loading="lazy"><figcaption>每首歌的解析決策面板：每份候選的得分逐項列出，贏家為什麼贏一看就懂。</figcaption></figure>
+</section>
+
+<section id="faq">
+  <h2>常見問題</h2>
+  <div class="faq">
+    <div><h3>KKBOX、Amazon Music 在 Mac 上能顯示桌面歌詞嗎？</h3><p>可以。這兩家都透過 macOS 的 MediaRemote 讀取，不用給權限，歌詞一樣能顯示在桌面浮動視窗、選單列、動態島膠囊和歌詞視窗裡。如果 KKBOX 或 Amazon Music 自己已經存了這首歌的歌詞，也會拿來一起比較。Lyrimuse 不登入這兩家的帳號，也不向它們發出請求。</p></div>
+    <div><h3>Mac 桌面歌詞是什麼效果？</h3><p>就像桌面上的卡拉 OK。目前這句浮在所有視窗上面，歌詞帶逐字時間軸的話，唱到哪個字就亮到哪個字，需要的話譯文或讀音跟在原文旁邊。同樣的歌詞也能放進選單列、瀏海下的動態島膠囊，或者完整的歌詞視窗。</p></div>
+    <div><h3>Spotify 的歌詞能顯示在 Mac 選單列上嗎？</h3><p>可以。打開選單列文字模式，目前這句就顯示在選單列上，句子太長會捲動，還能多加一行顯示下一句、譯文或讀音。不用登入 Spotify 帳號。</p></div>
+    <div><h3>瀏覽器裡播放的 YouTube Music / Spotify 網頁版能顯示歌詞嗎？</h3><p>可以。在設定裡把慣用的瀏覽器配對一次，網頁播放器就能像別的播放器一樣用，歌詞跟著網頁自己的進度列走。配對之前還能一鍵自我檢測，先看看這個瀏覽器能不能被控制。</p></div>
+    <div><h3>Lyrimuse 和 LyricsX 有什麼差別？</h3><p>LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援的系統比較舊（macOS 10.11 起）。Lyrimuse 需要 macOS 14 以上，另外支援 KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂和瀏覽器裡的播放器，有評分挑選的歌詞配對、粵拼和日文假名，還能記錄到 Last.fm。見<a href="../zh/compare/">逐項查證過的對比</a>（簡體中文）。</p></div>
+    <div><h3>支援哪些 Mac？</h3><p>macOS 14 Sonoma 以上，Apple Silicon 和 Intel 都支援。Intel 用單獨的 universal 包，App 內的自動更新一樣有效。</p></div>
+    <div><h3>沒有網路能看歌詞嗎？</h3><p>找過一次歌詞的歌就能看，歌詞已經快取在你的 Mac 上了。</p></div>
+  </div>
+</section>
+
+<footer>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+  <a href="../zh/compare/">與 LyricsX、Lyric Fever 對比（簡體中文）</a>
+  <a href="../zh/privacy/">隱私政策（簡體中文）</a>
+  <a href="../zh/terms/">使用條款（簡體中文）</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+  <a href="../" lang="en">English</a>
+  <a href="../zh/" lang="zh-Hans">简体中文</a>
+</footer>
+
+</div>
+</body>
+</html>
