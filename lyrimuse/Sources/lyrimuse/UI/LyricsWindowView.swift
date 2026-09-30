@@ -229,6 +229,17 @@ enum LyricsWindowMiniMetrics {
     static let retiredSizes = [CGSize(width: 420, height: 250)]
 }
 
+/// 歌词窗口跨重启要接着的两件事:退出时开着没有、是不是迷你。位置尺寸不在这里(LyricsWindowController 自己存)。
+enum LyricsWindowSession {
+    /// 窗口此刻开着没有:打开写 true,用户关窗写 false,退出 App 途中的关窗不算(那是"开着退出")。
+    /// 启动时据它把窗口重新开出来(见 SceneActionRegistrar)。
+    static let openKey = "np:lyricsWindowOpen"
+    /// 上次是不是迷你:每次切换都写,启动后第一次打开时照这个进(见 LyricsWindowController.attach)。
+    static let miniModeKey = "np:lyricsWindowMiniMode"
+
+    static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
+}
+
 // 全屏:macOS 15+ 走**真原生全屏**,老系统用下面那套伪全屏兜底。
 //
 // 根因是 **SwiftUI Window 默认禁全屏**,不是这扇窗自己的代码问题:同一进程里开一扇纯
@@ -456,9 +467,9 @@ private final class LyricsWindowController: ObservableObject {
         // 不夹的话窗口会有一部分挂在屏幕外 —— 跟悬浮窗 `repositionIfOffscreen` 同一个理由。
         window.setFrame(WindowFrameFit.clamp(saved, into: screen.visibleFrame), display: false)
         // 系统自己也按场景 id 存了一份 frame(`NSWindow Frame lyrics-window`),而且在我们恢复之后才
-        // 套用 —— 它不分迷你与否,迷你期间照存。App 重启后「是否迷你」不保留,不改写它的话窗口会先被
-        // 我们摆成完整尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 55)。
-        // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样。
+        // 套用 —— 它不分迷你与否,迷你期间照存。不改写它的话,完整布局打开时窗口会先被我们摆成完整
+        // 尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 55)。
+        // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样;要进迷你由调用方随后再切(决策 72)。
         window.saveFrame(usingName: Self.sceneFrameAutosaveName)
         return true
     }
@@ -491,11 +502,13 @@ private final class LyricsWindowController: ObservableObject {
                 window.setFrame(target, display: false, animate: false)
             }
             isMini = false
+            UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
             updateTrafficLightVisibility()
             DispatchQueue.main.async { [weak self] in self?.isSwitchingForm = false }
         } else {
             frameBeforeMini = window.frame
             isMini = true
+            UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
             updateTrafficLightVisibility()
             // 迷你**默认置顶**:这一档就是"缩成一条放在旁边看"的形态,被别的窗口一盖就等于没开。
             // 进之前的状态记下来,退出时原样还回去 —— 完整尺寸那扇窗默认仍不置顶。
@@ -660,9 +673,11 @@ private final class LyricsWindowController: ObservableObject {
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
             if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
+            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
             return
         }
         self.window = window
+        UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
         // 原生全屏:.windowFullScreenBehavior(.enabled) 在这版 SwiftUI 上
@@ -682,6 +697,9 @@ private final class LyricsWindowController: ObservableObject {
         // setFrame 会立刻触发 didMove/didResize、把刚读出来的值原样再写一遍(无害但没意义),
         // 更糟的是恢复失败(屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
         restorePersistedFrame(window)
+        // 上次是迷你就直接进迷你。放在恢复完整 frame 之后:进迷你记下的"退出迷你时回到哪"
+        // 就是刚恢复的那份完整 frame,迷你窗自己的位置尺寸由 toggleMini 按迷你那两个键摆。
+        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }
         if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
         // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
         // 产生这两个通知 —— 分开挂只会写两遍。
@@ -755,6 +773,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 self?.flushPendingPersistFrame()
+                if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
                 self?.forceExit()
                 self?.coverageMonitor?.stop()
                 self?.coverageMonitor = nil

@@ -134,6 +134,13 @@ private struct SceneActionRegistrar: View {
                 // 立刻被吞掉,肉眼看不到。"设置…"/"歌词管理…"这两个菜单项没踩到这个坑,
                 // 是因为它们永远是用户手动点出来的、那时候 App 早已完全启动稳定。加一个
                 // 不长的延迟,让启动流程先跑完再发起,就能稳定弹出来。
+                // 上次退出时歌词窗口开着,就照原样再开出来(迷你与否由窗口自己接着,见 LyricsWindowSession)。
+                // 同一个启动时序坑,同样等 0.5 秒;引导没走完时不开,别跟引导窗抢。
+                if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        AppActions.shared.openLyricsWindow?()
+                    }
+                }
                 if !settings.hasCompletedOnboarding {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         // 换电脑这条路先走一步:iCloud 里已经有配置就先问要不要导入,导入了

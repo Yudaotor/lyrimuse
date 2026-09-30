@@ -99,6 +99,10 @@ enum ConfigPortability {
         // 它只是一个大小,换台机器照样是用户想要的样子。
         "np:lyricsWindowMiniOrigin",
         "np:lyricsWindowMiniScreenID",
+        // 歌词窗口退出时开着没有、是不是迷你(LyricsWindowSession):这台机器上次用到哪一步的状态,
+        // 不是偏好。带去新机器等于一导入完重启就弹出一扇窗。
+        "np:lyricsWindowOpen",
+        "np:lyricsWindowMiniMode",
         "np:launchAtLoginEnabled",
         // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
         // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector

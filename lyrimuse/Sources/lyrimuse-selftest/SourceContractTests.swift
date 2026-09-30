@@ -2031,6 +2031,28 @@ func runSourceContractTests() {
                             "歌词窗口拖动: 暂停时模糊为 0")
                 expectEqual(view.contains("&& a.suspendsBlur == b.suspendsBlur"), true,
                             "歌词窗口拖动: 行的 Equatable 比较带上 suspendsBlur")
+                // 歌词窗口跨重启接着上次:开着没有、是不是迷你(07 章决策 72)。
+                expectEqual(view.contains("if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }"), true,
+                            "歌词窗口重开: 退出 App 途中的关窗不清「开着」标记")
+                expectEqual(view.contains("if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }"), true,
+                            "歌词窗口重开: 首次 attach 按上次状态进迷你")
+                if let restore = view.range(of: "restorePersistedFrame(window)\n"),
+                   let enterMini = view.range(of: "LyricsWindowSession.miniModeKey) { toggleMini() }") {
+                    expectEqual(restore.lowerBound < enterMini.lowerBound, true,
+                                "歌词窗口重开: 先恢复完整 frame 再进迷你(退出迷你要回到那份 frame)")
+                }
+                if let actions = read("MenuBar/MenuBarSceneActions.swift") {
+                    expectEqual(actions.contains("if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {"), true,
+                                "歌词窗口重开: 启动时上次开着就再开,引导没走完不开")
+                }
+                if let exit = read("AppExit.swift") {
+                    expectEqual(exit.contains("isTerminating = true\n        let reason = pendingReason"), true,
+                                "歌词窗口重开: 进退出流程第一件事就置 isTerminating")
+                }
+                if let portability = read("Settings/ConfigPortability.swift") {
+                    expectEqual(portability.contains("\"np:lyricsWindowOpen\",") && portability.contains("\"np:lyricsWindowMiniMode\","), true,
+                                "歌词窗口重开: 两个会话状态键不进配置备份")
+                }
                 if let mini = read("UI/MiniIdleStandby.swift") {
                     expectEqual(mini.contains("在 %@ 播放任意歌曲"), false,
                                 "迷你停播页: 不用一句话点名某家播放器(用户往往勾了好几家)")

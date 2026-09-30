@@ -48,8 +48,13 @@ enum AppExit {
         NSApp.terminate(nil)
     }
 
+    /// 已经进了退出流程(`applicationShouldTerminate` 走过)。这之后窗口收到的 willClose 是退出带走的,
+    /// 不是用户关的窗 —— 记"下次启动要不要重开"的地方靠它分辨(见 LyricsWindowSession.openKey)。
+    @MainActor private(set) static var isTerminating = false
+
     /// `applicationShouldTerminate` 的第一件事。登记过的原因优先;没有就按信号推断。
     @MainActor static func logTermination(sparkleInstalling: Bool) {
+        isTerminating = true
         let reason = pendingReason ?? (sparkleInstalling ? .sparkleInstall : .externalRequest)
         pendingReason = nil
         logger.notice("exiting reason=\(reason.rawValue, privacy: .public)")
