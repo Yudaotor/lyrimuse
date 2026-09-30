@@ -105,6 +105,16 @@ func TestUsableLyricSourceCount(t *testing.T) {
 	if got := usableLyricSourceCount(nil); got != 0 {
 		t.Errorf("usableLyricSourceCount(nil) = %d, want 0", got)
 	}
+	// 播放器本地歌词不算歌词源:一份 Amazon 本地 + 一条 lrclib 只算 1 个,后面的别名 / 标题反查轮照常跑。
+	local := []scoredLyricCandidateResult{
+		{Source: amazonLocalLyricsSource, Score: 1021},
+		{Source: kkboxLocalLyricsSource, Score: 900},
+		{Source: spotifyLocalLyricsSource, Score: 800},
+		{Source: "lrclib", Score: 768},
+	}
+	if got := usableLyricSourceCount(local); got != 1 {
+		t.Errorf("usableLyricSourceCount(本地歌词 + lrclib) = %d, want 1", got)
+	}
 }
 
 // mergeLyricCandidateRounds:按源去重(原串轮优先/判废才顶替)+ 合并后统一重打分。
@@ -173,6 +183,26 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	for _, r := range merged2 {
 		if r.Instrumental {
 			t.Errorf("instrumental marker kept although a real lrclib candidate exists")
+		}
+	}
+}
+
+// 合并重打分要保住「身份由播放器本地数据给定」:否则跑过补救轮的歌全部丢掉同源加权。
+func TestMergeLyricCandidateRoundsKeepsNativeIdentity(t *testing.T) {
+	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	timed := "[00:01.00] line one\n[00:05.00] line two\n[00:09.00] line three"
+	base := []scoredLyricCandidateResult{{Source: amazonLocalLyricsSource, Lyrics: timed, Score: 500, IdentityFromLocalClient: true}}
+	extra := []scoredLyricCandidateResult{{Source: "kugou", Lyrics: timed, Score: 500}}
+	for _, r := range mergeLyricCandidateRounds("someone", "song", "album", 0, base, extra) {
+		native := false
+		for _, term := range r.ScoreTerms {
+			if term.Kind == scoreTermNativeSource {
+				native = true
+			}
+		}
+		if want := r.Source == amazonLocalLyricsSource; native != want || r.IdentityFromLocalClient != want {
+			t.Errorf("%s: 同源加权 %v、IdentityFromLocalClient %v,want %v", r.Source, native, r.IdentityFromLocalClient, want)
 		}
 	}
 }

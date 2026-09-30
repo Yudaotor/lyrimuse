@@ -3098,6 +3098,9 @@ type scoredLyricCandidateResult struct {
 	// 的选项展示出来,只是要在旁边标出"无时间戳",不能让用户误以为会像其它候选一样逐字/
 	// 逐行同步。
 	PlainTextOnly bool `json:"plain_text_only,omitempty"`
+	// IdentityFromLocalClient:见 lyricCandidate.identityFromLocalClient(同源加权的准入条件)。合并各轮候选重打分时
+	// 靠它还原(lyricCandidateFromScored),漏了的话跑过补救轮的歌全部丢掉同源那 250 分。
+	IdentityFromLocalClient bool `json:"identity_from_local_client,omitempty"`
 	// BakedTranslationLines:候选装配时从正文里摘掉、改挂到译文轨的"烘进正文的逐行中文译文"行数
 	// (bakedtranslation.go)。0 = 这条候选没有这种形态。透传进决策留痕,让"这条候选行数
 	// 怎么比另一个源少了一半 / 译文哪来的"能事后回答。不参与打分。
@@ -3396,14 +3399,17 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 首歌手变体轮(「wherever u r」案):本地标签是多人合credit("UMI & 金泰亨")时,
 	// LRCLIB 的结构化 artist_name 参数在服务端就查不到(404),网易云对不同歌手串还会选中
 	// 不同版本的条目——这类**召回层**的失败,闸门放宽(lyricSourceArtistMatches)救不了,
-	// 只能换检索词再查一轮。触发条件是"可用候选的来源数 < 2"而不是"全空":网易云一条 462 分
+	// 只能换检索词再查一轮。触发条件是"可用候选的来源数 < targetSources"而不是"全空":网易云一条 462 分
 	// 候选就能把上面的别名重试短路,酷狗/QQ 的逐字候选永远没机会被看见。变体轮的结果**合并**
 	// 进原串轮(按源去重、原串轮优先、统一按原串重打分),不是整体替换——见
 	// mergeLyricCandidateRounds。
-	// 触发阈值按**启用源数**封顶:只启用 1 个歌词源时可用源数上限就是 1,写死 <2 会让多人
-	// 合credit的歌每次都白跑最多 3 轮全源抓取(merged 计数永远追不上 2,采纳门槛每次都把
+	// 阈值 3:只有两个源给出候选时,常见的是一条原标签查到的弱候选加一份播放器自带的,正是标题意译、
+	// 艺名罗马化这类要靠后面几轮才救得回来的歌(阈值取值的影响面见 09 章决策)。计数不含播放器本地歌词
+	// (见 usableLyricSourceCount)。
+	// 触发阈值按**启用源数**封顶:只启用 1 个歌词源时可用源数上限就是 1,写死阈值会让多人
+	// 合credit的歌每次都白跑最多 3 轮全源抓取(merged 计数永远追不上阈值,采纳门槛每次都把
 	// 结果丢掉,网络却已经打出去了)。
-	targetSources := 2
+	targetSources := 3
 	if n := enabledLyricSourceCount(); n < targetSources {
 		targetSources = n
 	}
@@ -3648,10 +3654,13 @@ func dropAMLLWithoutIDSource(sources []string) []string {
 	return out
 }
 
+// usableLyricSourceCount:给出可用候选的歌词源有几个(同源多条只算一个)。
+// KKBOX / Spotify / Amazon Music 的本地歌词不算:它们读的是播放器自己的缓存,不是歌词源,也不随换检索词变多;
+// 算进去的话一份本地歌词加一条弱候选就凑够门槛,后面的别名 / 标题反查轮全被跳过。
 func usableLyricSourceCount(scored []scoredLyricCandidateResult) int {
 	seen := map[string]bool{}
 	for _, c := range scored {
-		if c.Score >= 0 && !c.Instrumental &&
+		if c.Score >= 0 && !c.Instrumental && !isPlayerLocalLyricSource(c.Source) &&
 			lyricSourceEnabled(c.Source) {
 			seen[c.Source] = true
 		}
@@ -3689,6 +3698,7 @@ func lyricCandidateFromScored(r scoredLyricCandidateResult) lyricCandidate {
 		cover:                      r.CoverURL,
 		language:                   r.Language,
 		plainTextOnly:              r.PlainTextOnly,
+		identityFromLocalClient:    r.IdentityFromLocalClient,
 	}
 }
 
@@ -4201,6 +4211,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			CoverURL:                   c.cover,
 			Language:                   c.language,
 			PlainTextOnly:              c.plainTextOnly,
+			IdentityFromLocalClient:    c.identityFromLocalClient,
 			BakedTranslationLines:      bakedLines[c.source],
 		}
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(

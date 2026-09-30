@@ -186,7 +186,8 @@ func amazonTrackIdentity(artist, title string) string {
 }
 
 // amazonASINFor:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ASIN。当前这首取时钟那一拍记下的,队列里的取
-// amazonUpcoming 记下的。认不出返回 ""。
+// amazonUpcoming 记下的,都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。认不出返回 ""。
+// 会取 enrichMu(经 amazonCachedASIN):调用方不能持着它。
 func amazonASINFor(artist, title string) string {
 	amazonClockMu.Lock()
 	cur := amazonCurrentTrack
@@ -197,8 +198,51 @@ func amazonASINFor(artist, title string) string {
 		}
 	}
 	amazonQueueMu.Lock()
-	defer amazonQueueMu.Unlock()
-	return amazonQueueASINs[amazonTrackIdentity(artist, title)]
+	asin := amazonQueueASINs[amazonTrackIdentity(artist, title)]
+	amazonQueueMu.Unlock()
+	if asin != "" {
+		return asin
+	}
+	return amazonCachedASIN(artist, title)
+}
+
+// amazonCachedASINs:用 Amazon Music 放过的歌,歌词缓存里记着它的曲目页(AmazonURL),从中认出的 ASIN,按
+// amazonTrackIdentity 索引。手动搜索(另起的进程,没有常驻进程的时钟和队列)和补空 / 全量扫库(扫到的多半不是
+// 在放的那首)只能靠它认出这首。最多每 amazonCachedASINsTTL 从缓存重建一次。
+var (
+	amazonCachedASINsMu    sync.Mutex
+	amazonCachedASINs      map[string]string
+	amazonCachedASINsBuilt time.Time
+)
+
+const amazonCachedASINsTTL = 30 * time.Second
+
+func amazonCachedASIN(artist, title string) string {
+	now := time.Now()
+	amazonCachedASINsMu.Lock()
+	defer amazonCachedASINsMu.Unlock()
+	if amazonCachedASINs == nil || now.Sub(amazonCachedASINsBuilt) >= amazonCachedASINsTTL {
+		index := map[string]string{}
+		enrichMu.Lock()
+		for key, e := range enrichCache {
+			if asin := amazonASINFromTrackURL(e.AmazonURL); asin != "" {
+				a, t, _ := splitEnrichKey(key)
+				index[amazonTrackIdentity(a, t)] = asin
+			}
+		}
+		enrichMu.Unlock()
+		amazonCachedASINs, amazonCachedASINsBuilt = index, now
+	}
+	return amazonCachedASINs[amazonTrackIdentity(artist, title)]
+}
+
+// amazonASINFromTrackURL:amazonTrackURL 的反向,不是那个形状返回 ""。
+func amazonASINFromTrackURL(u string) string {
+	asin, ok := strings.CutPrefix(u, "https://music.amazon.com/tracks/")
+	if !ok || amazonTrackURL("asin://"+asin) != u {
+		return ""
+	}
+	return asin
 }
 
 // amazonLocalLyricsFor 给歌词检索用:正在用 Amazon Music 放歌时才读,换成一份跟各歌词源同形的原始应答。

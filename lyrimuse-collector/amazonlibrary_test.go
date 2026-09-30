@@ -210,3 +210,58 @@ func TestAmazonLogTailCloudQueueFromHead(t *testing.T) {
 		t.Error("之后换成普通开播就不再算电台")
 	}
 }
+
+// 不是在放、也不在队列里的那首(手动搜索另起的进程、补空 / 全量扫库),靠歌词缓存里记着的曲目页认出 ASIN。
+func TestAmazonCachedASIN(t *testing.T) {
+	useTempAmazonData(t)
+	amazonClockMu.Lock()
+	savedCur := amazonCurrentTrack
+	amazonCurrentTrack.artist, amazonCurrentTrack.title, amazonCurrentTrack.trackID = "", "", ""
+	amazonClockMu.Unlock()
+	amazonQueueMu.Lock()
+	savedQueue := amazonQueueASINs
+	amazonQueueASINs = map[string]string{}
+	amazonQueueMu.Unlock()
+	enrichMu.Lock()
+	savedCache := enrichCache
+	enrichCache = map[string]enrichEntry{
+		"Ella Langley & Morgan Wallen|I Can't Love You Anymore|Dandelion": {AmazonURL: "https://music.amazon.com/tracks/B0TESTAAA2"},
+		"Someone|Broken Link|": {AmazonURL: "https://music.amazon.com/albums/B0TESTAAA1"},
+	}
+	enrichMu.Unlock()
+	resetIndex := func() {
+		amazonCachedASINsMu.Lock()
+		amazonCachedASINs = nil
+		amazonCachedASINsMu.Unlock()
+	}
+	resetIndex()
+	t.Cleanup(func() {
+		amazonClockMu.Lock()
+		amazonCurrentTrack = savedCur
+		amazonClockMu.Unlock()
+		amazonQueueMu.Lock()
+		amazonQueueASINs = savedQueue
+		amazonQueueMu.Unlock()
+		enrichMu.Lock()
+		enrichCache = savedCache
+		enrichMu.Unlock()
+		resetIndex()
+		setNativeLyricSourcesForPlayer("")
+	})
+
+	if got := amazonASINFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore [Explicit]"); got != "B0TESTAAA2" {
+		t.Errorf("缓存里记着曲目页的那首认得出(歌名尾巴照常剥): %q", got)
+	}
+	if got := amazonASINFor("Someone", "Broken Link"); got != "" {
+		t.Errorf("不是曲目页形状的链接不认: %q", got)
+	}
+	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
+	if r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); !ok || r.source != amazonLocalLyricsSource {
+		t.Errorf("不在放的那首也读得到本地歌词: %+v ok=%v", r, ok)
+	}
+	for _, u := range []string{"", "https://music.amazon.com/tracks/", "https://music.amazon.com/tracks/b0lower0000", "https://music.amazon.com/tracks/B0TESTAAA2x"} {
+		if got := amazonASINFromTrackURL(u); got != "" {
+			t.Errorf("amazonASINFromTrackURL(%q) = %q, want 空", u, got)
+		}
+	}
+}
