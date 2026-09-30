@@ -337,6 +337,10 @@ type lyricCandidate struct {
 	// 缓存,之后改用同源播放器听同一首,这一轮会漏标记、少拿 250 分。方向是保守的
 	// (漏加,不会多加),且 collector 重启后缓存清空会重新走本地,故不为它再加一层旁路。
 	identityFromLocalClient bool
+	// inheritedAlbumPoints / inheritedTitlePoints:正文互证的伙伴补给它的这两项(条件见 inheritIdentityTerms,
+	// 批级算好)。打分时这两项取自己的和继承的里较大的那个。
+	inheritedAlbumPoints int
+	inheritedTitlePoints int
 }
 
 // songLanguageCantonese/songLanguageMandarin:lyricCandidate.language 与
@@ -481,7 +485,7 @@ const lyricOvershootToleranceSecs = 5.0
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
-const lyricsScoringVersion = 25
+const lyricsScoringVersion = 26
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -914,24 +918,14 @@ func scoreLyricCandidateDetailed(
 		add(scoreTermLiveAlbumConflict, -liveAlbumConflictPenalty)
 	}
 	// ---- v3 新维度(分值全部来自 201 首反事实消融,见 lyricsScoringVersion 注释) ----
-	// 专辑亲和:只加不减——专辑名缺失/对不上是"零证据",不是负证据(中英互译专辑名、
-	// single 发行 vs 专辑收录都是合法的"对不上");各源内部挑歌时算过的专辑锁定,在这里
-	// 终于反映到跨源排序上。复用 albumScore 的档位(normLoose 相等=200/词元子集=100/…)。
-	if strings.TrimSpace(localAlbum) != "" && strings.TrimSpace(c.album) != "" {
-		switch s := albumScore(c.album, localAlbum); {
-		case s >= 200:
-			add(scoreTermAlbum, 150)
-		case s >= 100:
-			add(scoreTermAlbum, 75)
-		case s >= 1:
-			add(scoreTermAlbum, 40)
-		}
+	// 专辑亲和、标题吻合两项见 identityTermPoints。v26:两项各取自己的和正文互证伙伴里最高的那一档
+	// (inheritIdentityTerms)。
+	albumPts, titlePts := identityTermPoints(localTitle, localAlbum, c)
+	if albumPts = max(albumPts, c.inheritedAlbumPoints); albumPts > 0 {
+		add(scoreTermAlbum, albumPts)
 	}
-	// 标题吻合梯度:②层的 lyricTitleAccepted 是道布尔门,过了门"精确同名"与"剥括号后
-	// 才相等"在打分层完全平权——18 词版本表之外的限定词(sped up/TV size)全靠它区分。
-	// v15:语种判决一致时,「(粤语)」这类标签不再把精确同名压到括号档(理由同上)。
-	if p := titleMatchTierPointsIgnoringLanguage(c.title, localTitle, c.languageVersionAgrees); p > 0 {
-		add(scoreTermTitleMatch, p)
+	if titlePts = max(titlePts, c.inheritedTitlePoints); titlePts > 0 {
+		add(scoreTermTitleMatch, titlePts)
 	}
 	// 跨源正文共识:与其它源的歌词**内容**互证(3-gram Jaccard),比 corroboratedEndings
 	// 只比末尾时间戳一个标量强得多——串到别的歌/版本的候选不会凑巧和别的源正文一致。
@@ -3335,6 +3329,70 @@ func lyricSourceConsensusFamily(source string) string {
 		return lyricSourceLyricFind
 	}
 	return source
+}
+
+// identityTermPoints:这条候选**自己**在专辑亲和、标题吻合两项上该拿多少(不含继承)。
+//
+// 专辑亲和:只加不减——专辑名缺失/对不上是"零证据",不是负证据(中英互译专辑名、
+// single 发行 vs 专辑收录都是合法的"对不上");各源内部挑歌时算过的专辑锁定,在这里
+// 终于反映到跨源排序上。复用 albumScore 的档位(normLoose 相等=200/词元子集=100/…)。
+//
+// 标题吻合梯度:②层的 lyricTitleAccepted 是道布尔门,过了门"精确同名"与"剥括号后
+// 才相等"在打分层完全平权——18 词版本表之外的限定词(sped up/TV size)全靠它区分。
+// v15:语种判决一致时,「(粤语)」这类标签不再把精确同名压到括号档。
+func identityTermPoints(localTitle, localAlbum string, c lyricCandidate) (album, title int) {
+	if strings.TrimSpace(localAlbum) != "" && strings.TrimSpace(c.album) != "" {
+		switch s := albumScore(c.album, localAlbum); {
+		case s >= 200:
+			album = 150
+		case s >= 100:
+			album = 75
+		case s >= 1:
+			album = 40
+		}
+	}
+	title = max(titleMatchTierPointsIgnoringLanguage(c.title, localTitle, c.languageVersionAgrees), 0)
+	return album, title
+}
+
+// inheritIdentityTerms 给每条候选填上 inheritedAlbumPoints / inheritedTitlePoints,取自它的正文互证伙伴
+// (contentConsensusPeers 的名单,已过时长闸)里这一项最高的那一档。只在这条候选**歌名一个字都对不上**时补:
+// 歌名 0 分就补歌名;歌名 0 分、专辑也报了却 0 分,专辑一起补。
+//
+// 正文互证、时长吻合,歌名却完全对不上,是平台把整首歌的元数据换成了另一种语言(中文平台的中文歌名、专辑名
+// 对播放器报的英文元数据):不补的话排序比的就成了元数据用哪种文字,不是歌词本身 —— 逐字的中文平台候选会输给
+// 同一份逐行歌词。其余情况一律不补:
+//   - 部分吻合是平台写法里带着的版本信息(另一场 Live、另一个专辑版本:正文一样、时间轴不一样),
+//     抹平它会选错录音;
+//   - 歌名对得上、只有专辑对不上,多半就是另一张专辑(精选集、演唱会实录),不是另一种写法;
+//   - 源没报专辑名是没有说法,补了等于在整组候选里抹掉专辑这一项。
+//
+// 继承只看伙伴**自己**那一档,不传递。各条取舍的金标依据见 09 章决策。
+// 两个调用点(rankLyricSourceResults / mergeLyricCandidateRounds)必须在 contentConsensusPeers 之后、
+// 打分之前调它。
+func inheritIdentityTerms(localTitle, localAlbum string, candidates []lyricCandidate, peers map[string][]string) {
+	own := make(map[string][2]int, len(candidates))
+	for _, c := range candidates {
+		a, t := identityTermPoints(localTitle, localAlbum, c)
+		own[c.source] = [2]int{a, t}
+	}
+	for i := range candidates {
+		c := &candidates[i]
+		c.inheritedAlbumPoints, c.inheritedTitlePoints = 0, 0
+		self := own[c.source]
+		if self[1] != 0 || strings.TrimSpace(c.title) == "" {
+			continue
+		}
+		albumToo := self[0] == 0 && strings.TrimSpace(c.album) != ""
+		for _, p := range peers[c.source] {
+			if pts, ok := own[p]; ok {
+				c.inheritedTitlePoints = max(c.inheritedTitlePoints, pts[1])
+				if albumToo {
+					c.inheritedAlbumPoints = max(c.inheritedAlbumPoints, pts[0])
+				}
+			}
+		}
+	}
 }
 
 func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCandidate, durationSecs float64) map[string][]string {
