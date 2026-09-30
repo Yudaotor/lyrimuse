@@ -48,7 +48,7 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 		{Source: "lrclib", Score: -1},                 // 给了但被判废 → 仍算缺
 		{Source: "qq", Score: -1, Instrumental: true}, // 纯音乐标记不是候选 → 仍算缺
 	}
-	got := lyricSourcesWorthAliasRetry(results)
+	got := lyricSourcesWorthAliasRetry(context.Background(), results)
 	// soda 在名单里是对的:它有自己的搜索(本地队列缓存拿不到曲目 id 时的兜底),
 	// 别名确实会影响命中。接它的时候一度把它排除掉,理由是"它不搜索"——那个理由只对
 	// 本地那条路成立,搜索那条路正是别名要救的场景。
@@ -62,14 +62,14 @@ func TestLyricSourcesWorthAliasRetry(t *testing.T) {
 	for _, s := range lyricSourceNames {
 		full = append(full, scoredLyricCandidateResult{Source: s, Score: 100})
 	}
-	if got := lyricSourcesWorthAliasRetry(full); len(got) != 0 {
+	if got := lyricSourcesWorthAliasRetry(context.Background(), full); len(got) != 0 {
 		t.Fatalf("全部可用时应为空,得到 %v", got)
 	}
 	// 具体原因清掉后 lyricfind / musixmatch / deezer 重新算缺
 	ytmusicSetLastFailureReason("")
 	musixmatchSetLastFailureReason("")
 	deezerSetLastFailureReason("")
-	got = lyricSourcesWorthAliasRetry(results)
+	got = lyricSourcesWorthAliasRetry(context.Background(), results)
 	if !containsString(got, "lyricfind") || !containsString(got, "musixmatch") || !containsString(got, "deezer") {
 		t.Fatalf("没有具体失败原因时 lyricfind / musixmatch / deezer 应算缺,得到 %v", got)
 	}
@@ -113,7 +113,7 @@ func TestAliasRoundTargetingIsWired(t *testing.T) {
 		// 一层 withLyricQueryReason,所以只钉内层这一段。
 		"withLyricSourceOnly(ctx, only)",
 		"fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)",
-		"missing := lyricSourcesWorthAliasRetry(results)",
+		"missing := lyricSourcesWorthAliasRetry(ctx, results)",
 		// 别名轮的三个触发理由必须各自标注到查询留痕里,否则存档只知道"换了个名字查",
 		// 分不出这一轮是救急、缺罗马音、还是只补缺席的那几个源(处置完全不同)。
 		"aliasReason := lyricQueryReasonAliasMissing",

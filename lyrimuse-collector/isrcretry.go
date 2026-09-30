@@ -38,9 +38,9 @@ var isrcRetryableSources = []string{"deezer", "musixmatch"}
 // isrcRetryPlan:拿哪个 ISRC、去问哪几个源。源:能按 ISRC 直取、启用着、这一轮没给出可用候选、换个身份还
 // 值得再问(lyricSourcesWorthAliasRetry 剔掉连不上的、地区受限的)。ISRC:分数最高的那条已被认可(Score >= 0)、
 // 带 ISRC、自报时长跟本地对得上的 applemusic 候选。任何一样没有就返回空。
-func isrcRetryPlan(results []scoredLyricCandidateResult, durationSecs float64) (string, []string) {
+func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, durationSecs float64) (string, []string) {
 	var sources []string
-	for _, s := range lyricSourcesWorthAliasRetry(results) {
+	for _, s := range lyricSourcesWorthAliasRetry(ctx, results) {
 		if slices.Contains(isrcRetryableSources, s) {
 			sources = append(sources, s)
 		}

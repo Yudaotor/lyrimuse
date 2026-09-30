@@ -15,18 +15,18 @@ func TestISRCRetryPlan(t *testing.T) {
 
 	apple := scoredLyricCandidateResult{Source: "applemusic", Score: 1169, ISRC: "JPU902104759", SourceReportedDurationSecs: 257, Lyrics: "[00:01.00]a"}
 	kugou := scoredLyricCandidateResult{Source: "kugou", Score: 1087, Lyrics: "[00:01.00]a"}
-	isrc, sources := isrcRetryPlan([]scoredLyricCandidateResult{kugou, apple}, 258)
+	isrc, sources := isrcRetryPlan(context.Background(), []scoredLyricCandidateResult{kugou, apple}, 258)
 	if isrc != "JPU902104759" || strings.Join(sources, ",") != "deezer,musixmatch" {
 		t.Fatalf("got %q %v", isrc, sources)
 	}
 	// 两家都已经有可用候选:不补。
 	dz := scoredLyricCandidateResult{Source: "deezer", Score: 900, Lyrics: "[00:01.00]a"}
 	mx := scoredLyricCandidateResult{Source: "musixmatch", Score: 900, Lyrics: "[00:01.00]a"}
-	if isrc, _ := isrcRetryPlan([]scoredLyricCandidateResult{apple, dz, mx}, 258); isrc != "" {
+	if isrc, _ := isrcRetryPlan(context.Background(), []scoredLyricCandidateResult{apple, dz, mx}, 258); isrc != "" {
 		t.Errorf("两家都有候选时不该补取,got %q", isrc)
 	}
 	// 只缺一家:只问那一家。
-	if _, s := isrcRetryPlan([]scoredLyricCandidateResult{apple, dz}, 258); strings.Join(s, ",") != "musixmatch" {
+	if _, s := isrcRetryPlan(context.Background(), []scoredLyricCandidateResult{apple, dz}, 258); strings.Join(s, ",") != "musixmatch" {
 		t.Errorf("只该问还缺着的 musixmatch,got %v", s)
 	}
 	// applemusic 被判废、没报 ISRC、时长对不上(Live 版):都不拿来用。
@@ -35,7 +35,7 @@ func TestISRCRetryPlan(t *testing.T) {
 		{Source: "applemusic", Score: 1169, SourceReportedDurationSecs: 257},
 		{Source: "applemusic", Score: 1169, ISRC: "JPU902403905", SourceReportedDurationSecs: 330},
 	} {
-		if isrc, _ := isrcRetryPlan([]scoredLyricCandidateResult{kugou, bad}, 258); isrc != "" {
+		if isrc, _ := isrcRetryPlan(context.Background(), []scoredLyricCandidateResult{kugou, bad}, 258); isrc != "" {
 			t.Errorf("%+v 不该拿来补取,got %q", bad, isrc)
 		}
 	}
@@ -95,7 +95,7 @@ func TestISRCRetryIsWired(t *testing.T) {
 		"isrc:                       r.ISRC,",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"musixmatch\"",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"deezer\"",
-		"if isrc, sources := isrcRetryPlan(results, durationSecs); isrc != \"\" {",
+		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",
 	} {
 		if !strings.Contains(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)

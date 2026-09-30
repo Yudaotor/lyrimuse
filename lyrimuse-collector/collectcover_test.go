@@ -98,7 +98,7 @@ func TestAliasRetryListDropsAMLLWhenIDSourcesAnswered(t *testing.T) {
 	deezerSetLastFailureReason("")
 	applemusicSetLastFailureReason("")
 
-	got := lyricSourcesWorthAliasRetry([]scoredLyricCandidateResult{
+	got := lyricSourcesWorthAliasRetry(context.Background(), []scoredLyricCandidateResult{
 		{Source: "netease", Score: 600}, {Source: "qq", Score: 580},
 	})
 	for _, s := range got {

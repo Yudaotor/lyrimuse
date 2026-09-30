@@ -1800,8 +1800,9 @@ func needsLyricsRescore(e enrichEntry, pinned, autoUpgrade bool) bool {
 //  2. 只有这一轮的结果够格推翻旧决定才认并盖版本号(见 rescoreDecidable);不够格就只记
 //     一次尝试、隔一段时间再来。
 //
-// 返回 true = 走到了"不够格"那一支:当前歌词的来源这一轮没应答,什么都没改。全量扫库靠它把这首
-// 留到整份候选跑完后再试一次(见 lyricsFullScanState.Deferred)。条目被删 / 被手改、ctx 被取消都返回 false。
+// 返回 true = 这一轮没能给出这一版规则下的最终结论:当前歌词的来源没应答(什么都没改),或有源被跳过
+// (照常重选,但不追平打分版本)。全量扫库靠它把这首留到整份候选跑完后再试一次(见
+// lyricsFullScanState.Deferred)。条目被删 / 被手改、ctx 被取消都返回 false。
 //
 // ctx 同 retryLyricsUpgrade。
 func rescoreLyrics(ctx context.Context, key, artist, title, album string, durationSecs float64) (deferred bool) {
@@ -1892,15 +1893,23 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 		e.LyricsRescoreCount++
 	}
 	e.LyricsRescoreTS = time.Now().Unix()
-	if len(seen) > 0 {
-		e.LyricsSourcesSeen = seen
+	// 不可判(当前源这轮没应答)时这一轮没有做出任何决定:不写决策记录,出现过 / 应答 / 跳过三份
+	// 名单也不盖 —— 它们跟决策记录一起描述当前这份歌词是哪一轮选出来的,只盖名单会让两者对不上、
+	// 应答源数被一轮残缺的搜索压低。可判的两个分支都写(见 decision.go 的 Applied 语义)。
+	skipped := round.skippedSources()
+	if decidable {
+		if len(seen) > 0 {
+			e.LyricsSourcesSeen = seen
+		}
+		if responded := lyricSourcesResponded(scored); len(responded) > 0 {
+			e.LyricsSourcesResponded = responded
+		}
+		e.LyricsSourcesSkipped = skipped
 	}
-	if responded := lyricSourcesResponded(scored); len(responded) > 0 {
-		e.LyricsSourcesResponded = responded
-	}
-	e.LyricsSourcesSkipped = round.skippedSources()
-	// 不可判(当前源这轮没应答)时不写决策记录 —— 那一轮没有做出任何决定,盖掉上一份
-	// 完整评估的证据反而是损失。可判的两个分支都写(见 decision.go 的 Applied 语义)。
+	// 有源被跳过(熔断冷却 / 后台暂停)的一轮只算这一版规则下的阶段性结论:照常重选,但不把打分
+	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
+	complete := len(skipped) == 0
+	deferred = !decidable || !complete
 	// 冠军换词之前先看当前这份有没有真的参与比较,见 rescoreKeepsCurrent。
 	keep := decidable && picked != nil && rescoreKeepsCurrent(e, scored, picked)
 	if decidable {
@@ -1918,19 +1927,22 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	}
 	switch {
 	case !decidable:
-		deferred = true
 		log.Printf("lyrics rescore deferred: %s  current source %q did not answer this round (responded: %v)",
 			key, currentSource, lyricSourcesResponded(scored))
 	case picked == nil:
 		// 够格判断、但新规则下一个能用的候选都没有(比如全被"超出曲目时长"判掉)。
 		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经
 		// 在完整信息下得出过了,再重搜一次也是同样的结果。
-		e.LyricsScoringVersion = lyricsScoringVersion
+		if complete {
+			e.LyricsScoringVersion = lyricsScoringVersion
+		}
 		e.ResolvedDurationSecs = durationSecs
 		log.Printf("lyrics rescore: %s  no valid candidate under v%d, keeping %s", key, lyricsScoringVersion, e.LyricsSource)
 	case keep:
 		// 当前这份没进这一轮的比较,而它已经是这一版规则打的分、冠军又不比它高:留着,只记这一轮做过。
-		e.LyricsScoringVersion = lyricsScoringVersion
+		if complete {
+			e.LyricsScoringVersion = lyricsScoringVersion
+		}
 		e.ResolvedDurationSecs = durationSecs
 		log.Printf("lyrics rescore: %s  keeping %s(%d), current lyrics not among candidates and %s(%d) is no better",
 			key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
@@ -1967,7 +1979,9 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 		}
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
-		e.LyricsScoringVersion = lyricsScoringVersion
+		if complete {
+			e.LyricsScoringVersion = lyricsScoringVersion
+		}
 		e.ResolvedDurationSecs = durationSecs
 	}
 	// 跟首次解析同一条「同一段录音、评分高的兄弟赢」(判据见 crossalbum.go),不挂的话
@@ -3220,7 +3234,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	defer func() { titleSpec.stop() }()
 	rescue := !hasUsableLyricCandidate(results)
 	romaRetry := needsRomanizationRetry(results)
-	missing := lyricSourcesWorthAliasRetry(results)
+	missing := lyricSourcesWorthAliasRetry(ctx, results)
 	if rescue || romaRetry || len(missing) > 0 {
 		notifyProvisionalLyrics(ctx, ne, results)
 		// Apple 目录锚点给的权威署名排在手工别名表/MusicBrainz **前面**:它是这首歌
@@ -3286,7 +3300,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// 救急时接下来几位别名并发开查,采用仍按顺序(见 rescuefanout.go)。支线问的源跟串行救急一样按
 		// lyricSourcesWorthAliasRetry 剔掉换名字也救不回来的(连不上的、地区限制的……)。
 		fan := newAliasFanout(ctx)
-		rescueBase, rescueOnly := results, lyricSourcesWorthAliasRetry(results)
+		rescueBase, rescueOnly := results, lyricSourcesWorthAliasRetry(ctx, results)
 		rescueBranch := func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
 			bctx = withLyricQueryReason(withLyricSourceOnly(bctx, rescueOnly), lyricQueryReasonAliasRescue)
 			bNe, bRes := fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j], title, album, durationSecs, nil)
@@ -3389,7 +3403,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			// 缺罗马音这个理由只驱动一轮,不然信号一直不来会把每位别名都全源重查一遍。
 			rescue = !hasUsableLyricCandidate(results)
 			romaRetry = !romaTried && needsRomanizationRetry(results)
-			missing = lyricSourcesWorthAliasRetry(results)
+			missing = lyricSourcesWorthAliasRetry(ctx, results)
 			if !rescue && !romaRetry && len(missing) == 0 {
 				break
 			}
@@ -3548,7 +3562,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	}
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
-	if isrc, sources := isrcRetryPlan(results, durationSecs); isrc != "" {
+	if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != "" {
 		isrcUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
 		isrcCtx := withLyricQueryReason(withLyricSourceOnly(withRecordingISRC(ctx, isrc), sources), lyricQueryReasonISRC)
 		_, isrcResults := fetchScoredLyricCandidatesStreaming(isrcCtx, artist, title, album, durationSecs, isrcUpdate)
@@ -3592,8 +3606,10 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
 // 会影响命中 —— 本地那条路在别名轮里查空是预期的(署名换了就不再对应同一条录音),搜索
 // 那条路则正是别名要救的场景。
+// 这一轮因熔断冷却 / 后台暂停被跳过的源(ctx 上 lyricSourceRound 的跳过名单)也剔掉:补查轮里它照样
+// 被跳过,为它去查别名只是白打别名解析那几次请求;这一轮会因此不追平打分版本,之后整首重来。
 // 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按 lyricSourceNames。
-func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
+func lyricSourcesWorthAliasRetry(ctx context.Context, scored []scoredLyricCandidateResult) []string {
 	usable := map[string]bool{}
 	for _, c := range scored {
 		if c.Score >= 0 && !c.Instrumental {
@@ -3601,9 +3617,10 @@ func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
 		}
 	}
 	transport := sharedLyricSourceBreaker().transportFailureCodes()
+	skipped := lyricSourceRoundFrom(ctx).skippedSources()
 	var out []string
 	for _, s := range lyricSourceNames {
-		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" {
+		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" || slices.Contains(skipped, s) {
 			continue
 		}
 		switch s {
