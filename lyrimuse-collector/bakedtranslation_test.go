@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -125,5 +126,42 @@ func TestAdoptBakedTranslationKeepsSourceTranslation(t *testing.T) {
 	}
 	if clean, tr, _, n := adoptBakedTranslation(lrc, "", yrc, true, false); n != 10 || tr != "" || strings.Contains(clean, "占位中文译文") {
 		t.Errorf("acceptTr=false 应只摘不接: n=%d tr=%q", n, tr)
+	}
+}
+
+// 译文行紧挨着下一句原文(相差 60ms,落在 ±80ms 窗口里):逐字轨只能删译文行,原文行必须留着。
+func TestStripBakedYRCKeepsOriginalRightAfterTranslation(t *testing.T) {
+	var lrc, yrc strings.Builder
+	en := make([]string, 10)
+	zh := make([]string, 10)
+	for i := range en {
+		en[i] = fmt.Sprintf("placeholder original line number %d", i)
+		zh[i] = fmt.Sprintf("占位译文第%d行", i)
+	}
+	ms := 15000
+	for i := range en {
+		trMs := ms + 1940
+		fmt.Fprintf(&lrc, "%s%s\n%s%s\n", formatLRCStamp(ms), en[i], formatLRCStamp(trMs), zh[i])
+		fmt.Fprintf(&yrc, "[%d,1900](%d,1900,0)%s\n[%d,60](%d,60,0)%s\n", ms, ms, en[i], trMs, trMs, zh[i])
+		ms = trMs + 60
+	}
+	cleanLRC, _, cleanYRC, n := splitBakedTranslation(lrc.String(), yrc.String(), true)
+	if n != len(zh) {
+		t.Fatalf("baked lines = %d, want %d", n, len(zh))
+	}
+	heads := yrcLineHeads(cleanYRC)
+	if len(heads) != len(en) {
+		t.Fatalf("clean yrc has %d lines, want all %d original lines:\n%s", len(heads), len(en), cleanYRC)
+	}
+	for i, h := range heads {
+		if h.text != en[i] {
+			t.Fatalf("yrc line %d = %q, want %q", i, h.text, en[i])
+		}
+	}
+	if got := len(yrcLineHeads(cleanLRC)); got != 0 {
+		t.Fatalf("clean LRC should not parse as YRC, got %d", got)
+	}
+	if strings.Contains(cleanLRC, zh[2]) || !strings.Contains(cleanLRC, en[2]) {
+		t.Fatalf("clean LRC wrong:\n%s", cleanLRC)
 	}
 }

@@ -28,7 +28,7 @@ import (
 // 要求常驻实例已停;只处理指定的 key,不做启动时全量扫;人工修正过的(ManualLyrics)一律
 // 跳过。字段写法跟 rescoreLyrics 同一套(decision/rescore 计数/来源名单都一起补,语种、台语 / 粤语的
 // 罗马音规则、锁外先算好的罗马音兜底也照做),只是把"要不要更新歌词族字段"这道闸从"正文变了"放宽成
-// "正文/译文/罗马音有任意一个变了,或者多出了缓存里原本没有的逐字"(gainsWordTiming),见 planResync。
+// "正文/译文/罗马音有任意一个变了,或者逐字的句子变了(多出、少了、文字不同)",见 planResync。
 // 刻意**不**做跨专辑对齐(adoptCrossAlbumSiblingLyrics):这条命令就是要把指定的这条按这一轮重新解析,
 // 对齐回兄弟那份等于白跑。
 func runResyncLyricsCLI(args []string) {
@@ -135,7 +135,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		}
 		fmt.Printf("   %s(%d) -> %s(%d)  歌词%s 译文%s 罗马音%s 逐字%s\n",
 			e.LyricsSource, e.LyricsScore, picked.Source, picked.Score,
-			changedMark(!plan.lyricsSame), changedMark(!plan.trSame), changedMark(!plan.romaSame), changedMark(plan.yrcGained))
+			changedMark(!plan.lyricsSame), changedMark(!plan.trSame), changedMark(!plan.romaSame), changedMark(!plan.yrcSame))
 		changed++
 		if !apply {
 			continue
@@ -201,22 +201,38 @@ func runResyncLyrics(keys []string, apply bool) int {
 // 原来逐字比,这类条目每次都被报成改动,-apply 之后罗马音和机翻就没了。逐字同理:正文没变、这一轮的冠军没带
 // 逐字时留着缓存里那份(keepYRC)。
 type resyncPlan struct {
-	lyricsSame, trSame, romaSame, yrcGained bool
-	keepMachineTr, keepLocalRoma, keepYRC   bool
+	lyricsSame, trSame, romaSame, yrcSame bool
+	keepMachineTr, keepLocalRoma, keepYRC bool
 }
 
 func (p resyncPlan) changed() bool {
-	return !p.lyricsSame || !p.trSame || !p.romaSame || p.yrcGained
+	return !p.lyricsSame || !p.trSame || !p.romaSame || !p.yrcSame
 }
 
 func planResync(e enrichEntry, picked *scoredLyricCandidateResult) resyncPlan {
-	p := resyncPlan{lyricsSame: picked.Lyrics == e.Lyrics, yrcGained: gainsWordTiming(e, picked)}
+	p := resyncPlan{lyricsSame: picked.Lyrics == e.Lyrics}
 	p.keepLocalRoma = p.lyricsSame && picked.LyricsRoma == "" && e.LyricsRoma != ""
 	p.keepMachineTr = p.lyricsSame && picked.LyricsTr == "" && e.LyricsTr != "" && e.LyricsTrSource == lyricsTrSourceMachine
 	p.keepYRC = p.lyricsSame && picked.LyricsYRC == "" && e.LyricsYRC != ""
 	p.trSame = picked.LyricsTr == e.LyricsTr || p.keepMachineTr
 	p.romaSame = picked.LyricsRoma == e.LyricsRoma || p.keepLocalRoma
+	p.yrcSame = p.keepYRC || sameYRCLines(e.LyricsYRC, picked.LyricsYRC)
 	return p
+}
+
+// sameYRCLines:两份逐字的句子一样(行数相同、逐行文字归一后相同)。只比句子不比字节:缓存里那份做过
+// 空白 / 残缺词条的迁移,跟新取回来的原始写法逐字节比会恒报改动。
+func sameYRCLines(a, b string) bool {
+	ha, hb := yrcLineHeads(a), yrcLineHeads(b)
+	if len(ha) != len(hb) {
+		return false
+	}
+	for i := range ha {
+		if normTimelineText(ha[i].text) != normTimelineText(hb[i].text) {
+			return false
+		}
+	}
+	return true
 }
 
 // applyResync 把冠军写进这一条,口径同 rescoreLyrics 换词那一支。preparedRoma 是锁外按 generatedRomaFor 算好的

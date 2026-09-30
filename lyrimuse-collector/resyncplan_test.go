@@ -39,3 +39,29 @@ func TestPlanResyncKeepsLocallyGeneratedFields(t *testing.T) {
 		t.Fatalf("got %+v", got3)
 	}
 }
+
+// 正文没变、逐字的句子变了(缓存里那份缺句):算改动,逐字换成新的;只是写法不同(词标记之间的空白)不算。
+func TestPlanResyncCountsChangedWordTimingLines(t *testing.T) {
+	e := enrichEntry{Lyrics: "[00:01.00]一\n[00:02.00]二\n[00:03.00]三", LyricsSource: "kugou",
+		LyricsYRC: "[1000,500](1000,500,0)一\n[3000,500](3000,500,0)三"}
+	full := "[1000,500](1000,500,0)一\n[2000,500](2000,500,0)二\n[3000,500](3000,500,0)三"
+	picked := &scoredLyricCandidateResult{Source: "kugou", Lyrics: e.Lyrics, LyricsYRC: full, Score: 900}
+	p := planResync(e, picked)
+	if p.yrcSame || !p.changed() || p.keepYRC {
+		t.Fatalf("逐字补回了缺的句子就是改动: %+v", p)
+	}
+	if got := applyResync(e, picked, p, "zh", ""); got.LyricsYRC != full {
+		t.Fatalf("逐字应当换成完整的那份: %q", got.LyricsYRC)
+	}
+
+	respaced := &scoredLyricCandidateResult{Source: "kugou", Lyrics: e.Lyrics, Score: 900,
+		LyricsYRC: "[1000,500](1000,500,0)一 \n[3000,500](3000,500,0) 三"}
+	if p2 := planResync(e, respaced); !p2.yrcSame || p2.changed() {
+		t.Fatalf("句子相同、只是空白写法不同,不算改动: %+v", p2)
+	}
+
+	gained := enrichEntry{Lyrics: e.Lyrics, LyricsSource: "kugou"}
+	if p3 := planResync(gained, picked); p3.yrcSame || !p3.changed() {
+		t.Fatalf("缓存里原来没有逐字、这一轮带了:算改动: %+v", p3)
+	}
+}

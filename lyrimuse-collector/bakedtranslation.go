@@ -106,8 +106,15 @@ func classifyBakedLine(line string) bakedLine {
 		bl.class = bakedLineSkip
 		return bl
 	}
+	bl.class, bl.jk = classifyBakedText(bl.text)
+	return bl
+}
+
+// classifyBakedText 按一行文字的字符构成分类(见 bakedLineClass),返回类别与是否含假名/谚文。
+// 正文与逐字轨摘译文都按它认译文行,两边必须同一个口径。
+func classifyBakedText(text string) (bakedLineClass, bool) {
 	han, latin, jk := 0, 0, 0
-	for _, r := range bl.text {
+	for _, r := range text {
 		switch {
 		case unicode.Is(unicode.Han, r):
 			han++
@@ -119,15 +126,14 @@ func classifyBakedLine(line string) bakedLine {
 	}
 	switch {
 	case jk > 0:
-		bl.class, bl.jk = bakedLineForeign, true
+		return bakedLineForeign, true
 	case latin >= 2 && han == 0:
-		bl.class = bakedLineForeign
+		return bakedLineForeign, false
 	case han >= 2 && latin == 0:
-		bl.class = bakedLineHan
+		return bakedLineHan, false
 	default:
-		bl.class = bakedLineMixed
+		return bakedLineMixed, false
 	}
-	return bl
 }
 
 // splitBakedTranslation 识别"外文原文 + 逐行中文译文烘在一起"的正文。命中时返回摘掉译文的正文、
@@ -214,8 +220,9 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 	return cleanLRC, trLRC, cleanYRC, n
 }
 
-// stripBakedYRCLines 把逐字轨里对应被摘掉的译文行删掉:先按行起始毫秒对(±80ms),对不上再按
-// 词文本拼接后的归一形态对。
+// stripBakedYRCLines 把逐字轨里对应被摘掉的译文行删掉:按行起始毫秒对(±80ms)且这一行自己也是
+// 纯汉字行,或者词文本拼接后的归一形态对上。只按时间对不行:译文行紧挨着下一句原文(实测相差 60ms),
+// 原文行也落在窗口里(见 09 章决策 129)。
 func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[string]bool) string {
 	if yrc == "" || (len(removedMs) == 0 && len(removedText) == 0) {
 		return yrc
@@ -229,15 +236,18 @@ func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[stri
 			continue
 		}
 		start, _ := strconv.Atoi(m[1])
+		raw := strings.TrimSpace(yrcWordTimingRe.ReplaceAllString(l[len(m[0]):], ""))
 		drop := false
-		for ms := range removedMs {
-			if d := ms - start; d <= bakedTranslationYRCSlackMs && d >= -bakedTranslationYRCSlackMs {
-				drop = true
-				break
+		if class, _ := classifyBakedText(raw); class == bakedLineHan {
+			for ms := range removedMs {
+				if d := ms - start; d <= bakedTranslationYRCSlackMs && d >= -bakedTranslationYRCSlackMs {
+					drop = true
+					break
+				}
 			}
 		}
 		if !drop {
-			text := normLoose(yrcWordTimingRe.ReplaceAllString(l[len(m[0]):], ""))
+			text := normLoose(raw)
 			if text != "" && removedText[text] {
 				drop = true
 			}
