@@ -100,10 +100,16 @@ enum MenuBarMarqueeRenderer {
             ? NSFont.menuBarFont(ofSize: MenuBarLyricRows.mainPointSize) : doubleRowMainFont
     }
 
-    /// 双排下一行位图的点高 = 字面高向上取整,**不带**单行那 +2 的富余(22pt 里塞两行,富余给不起;
-    /// 两行的重叠 / 居中由 `MenuBarLyricRows.layout` 处理)。
+    /// 双排下一行位图的点高与基线,按**同字号的系统菜单栏字体**算、不按 `font` 自己的上伸 / 下伸
+    /// (为什么见 `MenuBarLyricRows.rowMetrics`)。点高 = 字面高向上取整,**不带**单行那 +2 的富余
+    /// (22pt 里塞两行,富余给不起;两行的重叠 / 居中由 `MenuBarLyricRows.layout` 处理)。
+    static func doubleRowMetrics(for font: NSFont) -> (height: CGFloat, baseline: CGFloat) {
+        let system = NSFont.menuBarFont(ofSize: font.pointSize)
+        return MenuBarLyricRows.rowMetrics(ascender: system.ascender, descender: system.descender)
+    }
+
     static func boxHeight(for font: NSFont) -> CGFloat {
-        ceil(font.ascender - font.descender)
+        doubleRowMetrics(for: font).height
     }
 
     /// 整首没歌词 / 还在搜时「♪ 歌名」那个前缀音符。`MenuBarSlotPolicy.displayText` 与这里
@@ -304,14 +310,15 @@ enum MenuBarMarqueeRenderer {
     ///   `menuBarBitmapScale`,不在这里猜屏)。返回值的 `scale` 原样带回给图层的
     ///   contentsScale 用。
     /// - Parameter font: 用哪个字体画;nil = 单行那套 `font(for:)`。
-    /// - Parameter exactBox: 双排用 —— 位图高 = 字面高取整、文字底边贴 0,不留单行那上下各 1pt 的富余
-    ///   (见 `boxHeight(for:)`)。false = 单行老口径,逐像素不变。
+    /// - Parameter exactBox: 双排用 —— 位图高与基线按 `doubleRowMetrics(for:)`,不留单行那上下各 1pt 的富余。
+    ///   false = 单行老口径,逐像素不变。
     /// - Parameter translation: 这段是译文(排字语言按译文判,见 `LyricTypesetting`)。
     static func prepare(text: String, color: NSColor, scale: CGFloat,
                         font: NSFont? = nil, exactBox: Bool = false, translation: Bool = false) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
         let lineFont = font ?? Self.font(for: text)
-        let box = exactBox ? boxHeight(for: lineFont) : ceil(lineFont.ascender - lineFont.descender) + 2
+        let rowMetrics = exactBox ? doubleRowMetrics(for: lineFont) : nil
+        let box = rowMetrics?.height ?? ceil(lineFont.ascender - lineFont.descender) + 2
         let attributes = LyricTypesetting.attributes([.font: lineFont, .foregroundColor: color],
                                                      for: text, translation: translation)
         // 前奏/间奏那三颗点**不走文字这条路**:这里只出一张**空白**位图占住正确的尺寸,
@@ -333,9 +340,15 @@ enum MenuBarMarqueeRenderer {
             guard !isGapDots else { return }
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-            // flipped: false → 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
-            // 所以 y 给 1 就是"底部留 1pt 内边距"(双排 exactBox 不留,贴 0)。
-            (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: drawAttributes)
+            // flipped: false → 原点在左下、y 向上。
+            if let rowMetrics {
+                // 双排:不带 usesLineFragmentOrigin 时 rect 的原点就是基线,文字按系统字体的基线落位。
+                (text as NSString).draw(with: NSRect(x: 0, y: rowMetrics.baseline, width: textWidth, height: box),
+                                        options: [], attributes: drawAttributes)
+            } else {
+                // 单行:NSString.draw(at:) 收的是文本框左下角,y 给 1 就是"底部留 1pt 内边距"。
+                (text as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: drawAttributes)
+            }
             NSGraphicsContext.restoreGraphicsState()
         }
         return PreparedLine(paint: paint, scale: scale, textWidth: textWidth,

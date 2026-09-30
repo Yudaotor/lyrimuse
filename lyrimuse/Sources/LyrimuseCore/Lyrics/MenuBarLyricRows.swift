@@ -15,7 +15,7 @@ import Foundation
 /// 同一条约束在双排下把每行压到 ≤10)。粗细仍听用户的。
 ///
 /// 纯函数、无状态,selftest 覆盖。渲染侧(`MenuBarScrollingLabel.contentGeometry`)按这里的布局摆
-/// 两个图层,位图高度就是各自字体的 ceil(字面高)。
+/// 两个图层,位图高度与基线见 `rowMetrics`(恒按同字号的系统字体)。
 public enum MenuBarLyricRows {
     /// 状态栏项按钮的高度。渲染侧实际传的是 `bounds.height`(它就是这个数),这里的常量给 selftest 和
     /// 设置页预览(那条仿菜单栏里 Representable 的 frame 高)用。
@@ -28,6 +28,18 @@ public enum MenuBarLyricRows {
     /// 尾部看不全可以接受(跟灵动岛副行同一条规则)。
     public static let tailFadeWidth: CGFloat = 14
 
+    /// 一行位图的高度与基线(基线 = 离位图底边多高)。
+    ///
+    /// **两个数都按系统字体算,不按用户选的字体**:字体自报的上伸 / 下伸差别很大(10pt 下 SF 12pt,
+    /// 苹方 / 宋体 / 楷体 / 圆体 14～15pt,冬青黑体 11pt,留白多少各不相同),照它排,字高大的两行叠在一起、
+    /// 字高小的下伸被裁;而同一字号下各字体真正的墨迹落在基线上下差不多的位置。所以两行的格子和基线恒按
+    /// 系统字体摆,用户字体只管画在这条基线上。系统字体下跟按它自己排逐像素相同。见 06 章决策 36。
+    ///
+    /// - Parameters: ascender / descender 取同字号系统菜单栏字体的(descender 为负)。
+    public static func rowMetrics(ascender: CGFloat, descender: CGFloat) -> (height: CGFloat, baseline: CGFloat) {
+        (ceil(ascender - descender), ceil(-descender))
+    }
+
     /// 两行在按钮里的纵向落点(视图坐标,原点左下、y 向上)。主行在上、副行在下。
     public struct Layout: Equatable, Sendable {
         public let mainY: CGFloat
@@ -37,7 +49,7 @@ public enum MenuBarLyricRows {
     }
 
     /// - Parameters:
-    ///   - mainHeight / secondaryHeight: 两行位图的点高(= 各自字体 ceil(ascender − descender))。
+    ///   - mainHeight / secondaryHeight: 两行位图的点高(= `rowMetrics` 的 height)。
     ///   - buttonHeight: 按钮高(22)。
     ///
     /// 装得下(两行合计 ≤ 按钮高):整块垂直居中(余量取整到整点,跟单行那条 `((h − lineHeight) / 2).rounded()`

@@ -1341,6 +1341,13 @@ func runSourceContractTests() {
             expectEqual(label.contains("secondaryKind.showsSecondaryRow == next.secondaryKind.showsSecondaryRow"), true,
                         "菜单栏双排: 单双排切换算滚动参数变化(主行字体变了,滚动距离也变),只换副行文字不算")
         }
+        if let renderer = read("MenuBar/MenuBarMarqueeRenderer.swift") {
+            expectEqual(renderer.contains("let system = NSFont.menuBarFont(ofSize: font.pointSize)")
+                        && renderer.contains("MenuBarLyricRows.rowMetrics(ascender: system.ascender, descender: system.descender)"), true,
+                        "菜单栏双排: 行高 / 基线按同字号系统字体算,不按用户字体自报的上伸下伸(字高大的会叠、小的会裁)")
+            expectEqual(renderer.contains("draw(with: NSRect(x: 0, y: rowMetrics.baseline"), true,
+                        "菜单栏双排: 文字画在系统字体的基线上,不用 draw(at:) 按字体自己的文本框落位")
+        }
         if let preview = read("UI/SectionPreviewBars.swift") {
             expectEqual(preview.components(separatedBy: "secondaryKind: secondaryKind)").count - 1, 2,
                         "菜单栏双排: 预览两条 Representable 都要把副行传进去")

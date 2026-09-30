@@ -1428,6 +1428,17 @@ func runMenuBarTests() {
             expectEqual(l.mainHeight, m, "双排: 主行位图高原样带回 \(m)")
             expectEqual(l.secondaryHeight, s, "双排: 副行位图高原样带回 \(s)")
         }
+        // 行高与基线(按系统字体的上伸 / 下伸):本机 SF 10pt 9.67 / -2.11 → 12 / 3,9pt 8.70 / -1.90 → 11 / 2
+        // (系统字体 draw(at:) 的实际落点,逐字节比对过)
+        let main = Rows.rowMetrics(ascender: 9.67, descender: -2.11)
+        expectEqual(main.height, 12, "双排行高: SF 10pt 取整 12")
+        expectEqual(main.baseline, 3, "双排基线: SF 10pt 离底 3")
+        let sec = Rows.rowMetrics(ascender: 8.70, descender: -1.90)
+        expectEqual(sec.height, 11, "双排行高: SF 9pt 取整 11")
+        expectEqual(sec.baseline, 2, "双排基线: SF 9pt 离底 2")
+        expectEqual(Rows.rowMetrics(ascender: 10, descender: -2).height, 12, "双排行高: 整数不多进一")
+        expectEqual(Rows.rowMetrics(ascender: 10, descender: -2).baseline, 2, "双排基线: 整数不多进一")
+
         // 副行透明度:译文最清楚、罗马音次之、下一句最淡、不显示为 0
         expectEqual(Rows.secondaryOpacity(for: .off), 0, "双排: 不显示 → 0")
         expectEqual(Rows.secondaryOpacity(for: .translation) > Rows.secondaryOpacity(for: .romanization), true,
