@@ -772,7 +772,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             romanizationRowText ?? (usesPerWordRomanization ? line?.romanization : nil)
                 ?? (upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
             font: fonts.romanization))
-        widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation))
+        widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation, translation: true))
         if playback.showNextLinePreview {
             // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
             let previewFont = nextLinePreviewFont == playback.mainFont ? fonts.main : fonts.preview
@@ -1109,12 +1109,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 放不下、要截断时先撑满整行再描边:描边剪影那份副本按描边画布的宽度重排,而截断后的
     /// Text 实际宽度比拿到的提议窄一点,副本在这个宽度上截断的位置不同,轮廓对不上字、在字旁边
     /// 留下一块块描边色。撑满之后正文和副本拿到同一个宽度。放得下时照旧按自然宽度,对齐交给外层。
-    private func stillUpcomingText(_ text: String, font: Font, color: Color) -> some View {
+    private func stillUpcomingText(_ text: String, font: Font, color: Color, translation: Bool = false) -> some View {
         let base = Text(text)
             .font(font)
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(.tail)
+            .lyricTypesetting(text, translation: translation)
         return ViewThatFits(in: .horizontal) {
             base
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
@@ -1127,7 +1128,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 按显示时长配速的图层行。不填色(整行一个颜色),描边、对齐、停走跟跟唱那条同一套。
     private func pacedLayerRow(
         key: String, text: String, font: NSFont, color: Color,
-        alignment: LyricDuet.Side, height: CGFloat, window: OverlayScrollingLyricRow.PacedWindow
+        alignment: LyricDuet.Side, height: CGFloat, window: OverlayScrollingLyricRow.PacedWindow,
+        translation: Bool = false
     ) -> some View {
         let ns = NSColor(color)
         return OverlayScrollingLyricRow(
@@ -1143,7 +1145,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 paused: !playback.isPlayingNow || !surfaceVisible,
                 pacedWindow: window,
                 timingEpoch: playback.timingEpoch,
-                rate: playback.playbackRate),
+                rate: playback.playbackRate,
+                translation: translation),
             nowMs: Self.lyricsNowMs)
         .frame(maxWidth: .infinity)
         .frame(height: height)
@@ -1338,12 +1341,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 pacedLayerRow(key: tr, text: tr, font: playback.overlayNSFonts.translation,
                               color: playback.displayForegroundColor.opacity(0.75), alignment: duetSide,
                               height: playback.scrollRowHeight(playback.overlayNSFonts.translation),
-                              window: window))
+                              window: window, translation: true))
                 .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
                 .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let tr = translationRowText, rowPlan.translation?.motion == .still {
             reportingTextRect(stillUpcomingText(tr, font: playback.translationFont,
-                                                color: playback.displayForegroundColor.opacity(0.75)))
+                                                color: playback.displayForegroundColor.opacity(0.75),
+                                                translation: true))
                 .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
                 .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let tr = translationRowText {
@@ -1351,6 +1355,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 Text(tr)
                     .font(playback.translationFont)
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.75))
+                    .lyricTypesetting(tr, translation: true)
                     .overlayLineFit(playback.lineOverflow)
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .overlayScroll(playback.lineOverflow == .scroll, id: tr, alignment: marqueeRestingAlignment,
@@ -1415,6 +1420,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(next)
                 .font(nextLinePreviewFont)
                 .foregroundStyle(color)
+                .lyricTypesetting(next)
                 .overlayLineFit(playback.lineOverflow)
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
         }
@@ -1430,6 +1436,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 Text(g.words.map(\.text).joined())
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
+                    .lyricTypesetting(g.words.map(\.text).joined())
                 // 列宽规则跟图层行同一套(`OverlayRowLayout.romaSidePadding(strokeInset:)`),
                 // 开唱那一刻列宽不变。
                 Text(g.romanization ?? " ")
@@ -1745,6 +1752,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Text(text)
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor)
+                .lyricTypesetting(text)
                 .overlayLineFit(playback.lineOverflow)
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                 // 整行歌词(没有逐字时间轴)没有跟唱路径可走,退回时间配速的「首停到匀速到尾停」。

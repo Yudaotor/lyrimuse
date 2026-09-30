@@ -57,8 +57,9 @@ final class LineLayoutBudgets {
         notchWidth.send((width * 2).rounded() / 2)
     }
 
-    private static func measurer(_ font: NSFont) -> (String) -> CGFloat {
-        { OverlayNaturalWidth.width($0, font: font) }
+    /// `translation`:量的是译文行(排字语言按译文判,见 `LyricTypesetting`)。
+    private static func measurer(_ font: NSFont, translation: Bool = false) -> (String) -> CGFloat {
+        { OverlayNaturalWidth.width($0, font: font, translation: translation) }
     }
 
     private static func fontKey(_ font: NSFont) -> [AnyHashable] { [font.fontName, font.pointSize] }
@@ -79,7 +80,7 @@ final class LineLayoutBudgets {
             main: .init(maxWidth: rowWidth, measure: main),
             sidedInset: sided ? OverlayMetrics.speakerIndicatorWidth : 0,
             preview: preview ? .init(maxWidth: rowWidth, measure: { max(main($0), previewMeasure($0)) }) : nil,
-            translation: translation ? .init(maxWidth: rowWidth, measure: measurer(fonts.translation)) : nil,
+            translation: translation ? .init(maxWidth: rowWidth, measure: measurer(fonts.translation, translation: true)) : nil,
             romanization: romanization ? .init(maxWidth: rowWidth, measure: measurer(fonts.romanization)) : nil,
             wordRomanization: romanization
                 ? .init(measure: measurer(fonts.romanization),
@@ -100,13 +101,15 @@ final class LineLayoutBudgets {
         let main: (String) -> CGFloat = { MenuBarMarqueeRenderer.width(of: $0, font: mainFont) }
         let second = LineLayoutBudget.Row(
             maxWidth: width, measure: { MenuBarMarqueeRenderer.width(of: $0, font: secondaryFont) })
+        let secondTranslation = LineLayoutBudget.Row(
+            maxWidth: width, measure: { MenuBarMarqueeRenderer.width(of: $0, font: secondaryFont, translation: true) })
         let key: [AnyHashable] = [LyricsSurface.menuBar, (width * 2).rounded(), fontKey(mainFont),
                                   fontKey(secondaryFont), secondary.rawValue]
         report(.menuBar, LineLayoutBudget(
             key: key,
             main: .init(maxWidth: width, measure: main),
             preview: secondary == .nextLine ? second : nil,
-            translation: secondary == .translation ? second : nil,
+            translation: secondary == .translation ? secondTranslation : nil,
             romanization: secondary == .romanization ? second : nil))
     }
 
@@ -115,13 +118,14 @@ final class LineLayoutBudgets {
         guard width > 0 else { return }
         let rowWidth = width - safety
         let second = LineLayoutBudget.Row(maxWidth: rowWidth, measure: measurer(secondary))
+        let secondTranslation = LineLayoutBudget.Row(maxWidth: rowWidth, measure: measurer(secondary, translation: true))
         let key: [AnyHashable] = [LyricsSurface.notch, (rowWidth * 2).rounded(), fontKey(main),
                                   fontKey(secondary), kind.rawValue]
         report(.notch, LineLayoutBudget(
             key: key,
             main: .init(maxWidth: rowWidth, measure: measurer(main)),
             preview: kind == .nextLine ? second : nil,
-            translation: kind == .translation ? second : nil,
+            translation: kind == .translation ? secondTranslation : nil,
             romanization: kind == .romanization ? second : nil))
     }
 

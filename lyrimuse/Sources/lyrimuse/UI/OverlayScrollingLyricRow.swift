@@ -55,6 +55,8 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
         /// 播放速率(锚点的 rate,倍速播放时不是 1)。关键帧按「歌词毫秒 ÷ 速率 = 墙钟秒」排,
         /// 写死 1 的话倍速时填色和滚动越走越偏,只能靠漂移超过阈值时一次次重装去追。
         var rate: Double = 1
+        /// 这一行是译文(排字语言按译文判,见 `LyricTypesetting`)。
+        var translation: Bool = false
     }
 
     /// 整行阴影。`offsetY` 取 SwiftUI 的口径(正 = 往下)。
@@ -309,7 +311,7 @@ final class OverlayLyricScrollView: NSView {
         let r = OverlayRowLayout.layOut(
             words: spec.words, groups: spec.groups, inset: inset,
             strokeInset: spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset,
-            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font) },
+            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
             measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
         wordStartXs = r.wordStartXs
         wordEndXs = r.wordEndXs
@@ -354,8 +356,11 @@ final class OverlayLyricScrollView: NSView {
             mainAttrs[.shadow] = shadow
             romaAttrs[.shadow] = shadow
         }
+        // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
         for (i, w) in flatWords.enumerated() where i < wordStartXs.count {
-            (w.text as NSString).draw(at: NSPoint(x: wordStartXs[i], y: mainY), withAttributes: mainAttrs)
+            (w.text as NSString).draw(at: NSPoint(x: wordStartXs[i], y: mainY),
+                                      withAttributes: LyricTypesetting.attributes(mainAttrs, for: w.text,
+                                                                                  translation: spec.translation))
         }
         for r in romaPlacements {
             (r.text as NSString).draw(at: NSPoint(x: r.x, y: romaY), withAttributes: romaAttrs)

@@ -4237,6 +4237,29 @@ func runSourceContractTests() {
         expectEqual(fonts.contains("CTFontManagerCreateFontDescriptorsFromURL"), false, "设置判定走 Core: 族名读取不在 App 里另写一份")
         expectEqual(code("UI/FontFamilyPicker.swift").contains("CustomFontFile.importSummary("), true, "设置判定走 Core: 导入字体的失败提示")
     }
+
+    // ---- 歌词排字语言:量宽度与画字同一口径(见 LyricTypesetting 头注)----
+    //
+    // 标了 `ja` 之后同一行的宽度会变,按宽度断句「放得下」靠量宽度 —— 量宽度的入口少标一处,就跟画出来的对不上。
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let renderer = src("lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift")
+        expectEqual(renderer.contains("withAttributes: LyricTypesetting.attributes([.font: font], for: text, translation: translation)).width")
+                    && renderer.contains("let attributes = LyricTypesetting.attributes([.font: lineFont, .foregroundColor: color],"),
+                    true, "排字语言(契约): 菜单栏量宽度与画字都标语言")
+        expectEqual(src("lyrimuse/UI/OverlayNaturalWidth.swift").contains("LyricTypesetting.language(for: text, translation: translation)"),
+                    true, "排字语言(契约): 悬浮歌词 / 灵动岛量宽度标语言")
+        expectEqual(src("lyrimuse/UI/OverlayScrollingLyricRow.swift").contains("withAttributes: LyricTypesetting.attributes(mainAttrs, for: w.text,"),
+                    true, "排字语言(契约): 图层行逐词画字标语言")
+        let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        let setAt = source.range(of: "LyricTypesetting.setJapaneseSong(japaneseSong)")?.lowerBound
+        let loadAt = source.range(of: "syncEngine.load(")?.lowerBound
+        expectEqual(setAt != nil && loadAt != nil && setAt! < loadAt!, true,
+                    "排字语言(契约): 加载引擎之前设好日文歌标记(加载时就按宽度断句、量宽度)")
+    }
 }
 
 /// 整个源文件里有没有这段文字,按 UTF-8 字节找。拿来先筛掉不相干的文件:`String.contains` 对整个文件

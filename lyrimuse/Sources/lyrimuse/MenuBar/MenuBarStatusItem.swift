@@ -1282,7 +1282,8 @@ final class MenuBarStatusItem: NSObject {
             // 双排:格宽取两行里宽的那个(副行比主行宽是常态 —— 译文往往更长),上限仍是「最大宽度」;
             // 超过上限的副行在格里尾部渐隐。单行:就是主行宽,跟改动前逐点相同。
             let secondaryW = rowState.secondaryText.map {
-                MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
+                MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont,
+                                             translation: secondaryKind == .translation)
             } ?? 0
             // 副行是「下一句」时不许它撑宽槽位,译文 / 罗马音照旧撑 —— 取舍见 `MenuBarSlotPolicy.naturalWidth`,
             // 设置页预览调的是同一个函数。装不下就走尾部渐隐,那条路本来就有。
@@ -1484,14 +1485,17 @@ final class MenuBarStatusItem: NSObject {
         let textHex = AppSettings.shared.menuBarLyricsTextColorHex
         // 右键菜单 / 面板开着(按钮反白)时交给 AppKit 画选中色,跟图层那条路「高亮优先」同一口径 ——
         // 富文本里写死的自定义色在蓝底上不会自己换。
-        if textHex.isEmpty || buttonHighlighted {
+        // 要标排字语言(`LyricTypesetting`)时也得走富文本:纯文字标题带不了语言,日文会画成中文字形。
+        // 反白时仍交给 AppKit 画选中色,这一刻的字形不纠。
+        let language = LyricTypesetting.language(for: visible)
+        if buttonHighlighted || (textHex.isEmpty && language == nil) {
             button.title = visible
         } else {
-            button.attributedTitle = NSAttributedString(string: visible, attributes: [
-                .font: MenuBarMarqueeRenderer.font(for: visible),
-                .foregroundColor: NSColor(Color(hexWithAlpha: textHex,
-                                                fallback: Color(nsColor: .labelColor))),
-            ])
+            let color = textHex.isEmpty
+                ? NSColor.labelColor
+                : NSColor(Color(hexWithAlpha: textHex, fallback: Color(nsColor: .labelColor)))
+            button.attributedTitle = NSAttributedString(string: visible, attributes: LyricTypesetting.attributes(
+                [.font: MenuBarMarqueeRenderer.font(for: visible), .foregroundColor: color], for: visible))
         }
         // tooltip 始终给完整这一行:"想看全文就悬停"这条出路在三种模式下都在。
         button.toolTip = full

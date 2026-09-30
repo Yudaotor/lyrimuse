@@ -25,10 +25,14 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
         let romanization: (font: NSFont, width: CGFloat)?
         let wordRomanizationPadding: CGFloat?
     }
-    func width(_ s: String, _ f: NSFont) -> CGFloat {
-        s.isEmpty ? 0 : ceil((s as NSString).size(withAttributes: [.font: f]).width * 2) / 2
+    // 排字语言跟 App 同一口径(`LyricTypesetting`):日文歌标 `ja` 后宽度会变。
+    func width(_ s: String, _ f: NSFont, translation: Bool = false) -> CGFloat {
+        s.isEmpty ? 0 : ceil((s as NSString).size(
+            withAttributes: LyricTypesetting.attributes([.font: f], for: s, translation: translation)).width * 2) / 2
     }
-    func row(_ w: CGFloat, _ f: NSFont) -> LineLayoutBudget.Row { .init(maxWidth: w, measure: { width($0, f) }) }
+    func row(_ w: CGFloat, _ f: NSFont, translation: Bool = false) -> LineLayoutBudget.Row {
+        .init(maxWidth: w, measure: { width($0, f, translation: translation) })
+    }
 
     // 悬浮歌词:34pt 粗体、描边开、译文 / 罗马音 / 下一句都显示;窗宽 652 与 480。
     func overlay(_ window: CGFloat) -> Config {
@@ -70,6 +74,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
         let lyrics = body.lyrics ?? "", yrc = body.lyricsYRC ?? ""
         guard !lyrics.isEmpty || !yrc.isEmpty else { continue }
         songs += 1
+        LyricTypesetting.setJapaneseSong(Romanizer.looksJapaneseSong(lyrics.isEmpty ? yrc : lyrics))
         if songs % 1000 == 0 { print("resegment library: 已跑 \(songs) 首,放不下 \(failures) 段") }
         for c in configs {
             let engine = LyricsSyncEngine()
@@ -78,7 +83,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
             engine.setLayoutBudget(LineLayoutBudget(
                 key: c.name, main: row(c.mainWidth, c.main), sidedInset: c.sidedInset,
                 preview: c.preview.map { row($0.width, $0.font) },
-                translation: c.translation.map { row($0.width, $0.font) },
+                translation: c.translation.map { row($0.width, $0.font, translation: true) },
                 romanization: c.romanization.map { row($0.width, $0.font) },
                 wordRomanization: c.wordRomanizationPadding.map { pad in
                     .init(measure: { width($0, c.romanization!.font) }, sidePadding: pad)
@@ -116,7 +121,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
                 var bad: [String] = []
                 if mainW > c.mainWidth - inset + 0.5 { bad.append("主行 \(Int(mainW))") }
                 if let p = c.preview, width(text, p.font) > p.width - inset + 0.5 { bad.append("下一句") }
-                if let t = c.translation, let tr = line.translation, width(tr, t.font) > t.width - inset + 0.5 {
+                if let t = c.translation, let tr = line.translation, width(tr, t.font, translation: true) > t.width - inset + 0.5 {
                     bad.append("译文「\(tr)」")
                 }
                 if let r = c.romanization, line.wordGroups == nil || c.wordRomanizationPadding == nil,

@@ -3730,6 +3730,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 译文是中文、罗马音是拉丁字母,都不进修回。
         let rawYRC = found?.lyricsYRC ?? ""
         let japaneseSong = Romanizer.looksJapaneseSong(raw.isEmpty ? rawYRC : raw)
+        // 排字语言要在引擎加载之前设好:加载时就会按各面宽度断句、量宽度,量宽度要跟画字同一口径。
+        LyricTypesetting.setJapaneseSong(japaneseSong)
+        LyricTypesetting.setTraditionalChinese(variant == .traditional)
         // 引擎侧还有第二道指纹早退(见 LyricsSyncEngine.load 注释),两道闸各管一层:这里
         // 管"连转换都别做",那里兜"其它调用方/清过发布状态后的重灌"。
         syncEngine.load(

@@ -870,7 +870,8 @@ final class MenuBarScrollingLabel: NSView {
             if twoRows, let secondary = plan.secondaryText {
                 secondaryBuilt = MenuBarMarqueeRenderer.prepare(
                     text: secondary, color: color, scale: scale,
-                    font: MenuBarMarqueeRenderer.doubleRowSecondaryFont, exactBox: true)
+                    font: MenuBarMarqueeRenderer.doubleRowSecondaryFont, exactBox: true,
+                    translation: plan.secondaryKind == .translation)
             }
             // 图标跟歌词共用**同两个颜色**(未唱到的 / 已唱到的),所以它跟旁边的字永远
             // 是一套配色 —— 深浅色菜单栏、菜单反白、用户自定义色三件事一次都不用另写。

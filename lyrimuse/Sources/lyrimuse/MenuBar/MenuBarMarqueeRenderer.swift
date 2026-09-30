@@ -157,9 +157,11 @@ enum MenuBarMarqueeRenderer {
         return width(of: text, font: font(for: text))
     }
 
-    static func width(of text: String, font: NSFont) -> CGFloat {
+    /// 带上排字语言量(`LyricTypesetting`,跟画字同一口径)。`translation`:这段是译文。
+    static func width(of text: String, font: NSFont, translation: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-        return (text as NSString).size(withAttributes: [.font: font]).width
+        return (text as NSString).size(
+            withAttributes: LyricTypesetting.attributes([.font: font], for: text, translation: translation)).width
     }
 
     /// 一行文字的高度(含上下各 1pt 的富余,避免 'g'/'q' 的下伸部分被裁掉一丝)。
@@ -304,12 +306,14 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter font: 用哪个字体画;nil = 单行那套 `font(for:)`。
     /// - Parameter exactBox: 双排用 —— 位图高 = 字面高取整、文字底边贴 0,不留单行那上下各 1pt 的富余
     ///   (见 `boxHeight(for:)`)。false = 单行老口径,逐像素不变。
+    /// - Parameter translation: 这段是译文(排字语言按译文判,见 `LyricTypesetting`)。
     static func prepare(text: String, color: NSColor, scale: CGFloat,
-                        font: NSFont? = nil, exactBox: Bool = false) -> PreparedLine? {
+                        font: NSFont? = nil, exactBox: Bool = false, translation: Bool = false) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
         let lineFont = font ?? Self.font(for: text)
         let box = exactBox ? boxHeight(for: lineFont) : ceil(lineFont.ascender - lineFont.descender) + 2
-        let attributes: [NSAttributedString.Key: Any] = [.font: lineFont, .foregroundColor: color]
+        let attributes = LyricTypesetting.attributes([.font: lineFont, .foregroundColor: color],
+                                                     for: text, translation: translation)
         // 前奏/间奏那三颗点**不走文字这条路**:这里只出一张**空白**位图占住正确的尺寸,
         // 圆点由 `MenuBarScrollingLabel` 用 CALayer 画在同一块地方 —— 每颗要单独改不透明度、
         // 整组还要缩放呼吸,烘进位图就全动不了了。尺寸照常产出,是为了让下游(几何、静止落位、

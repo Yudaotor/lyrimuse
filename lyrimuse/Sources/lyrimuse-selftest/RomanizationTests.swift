@@ -1250,4 +1250,22 @@ func runRomanizationTests() {
         expectEqual(migrateAt != nil && readAt != nil && migrateAt! < readAt!, true,
                     "罗马音默认值(契约): 迁移在读取设置之前")
     }
+
+    // ---- 歌词排字语言(缺字时系统挑哪一地区的字形)----
+    do {
+        func lang(_ text: String, translation: Bool = false, ja: Bool = false, hant: Bool = false) -> String? {
+            LyricTypesetting.language(for: text, translation: translation, japaneseSong: ja, traditionalChinese: hant)
+        }
+        expectEqual(lang("君に夢中"), "ja", "排字语言: 含假名 → 日文")
+        expectEqual(lang("夢中"), nil, "排字语言: 只有汉字、不是日文歌 → 不标")
+        expectEqual(lang("夢中", ja: true), "ja", "排字语言: 日文歌里只有汉字的词也按日文(逐词量宽度时看不出语言)")
+        expectEqual(lang("我们都是追梦人", translation: true, ja: true), nil, "排字语言: 日文歌的译文是中文,不按日文")
+        expectEqual(lang("カタカナ", translation: true), nil, "排字语言: 译文行不认假名")
+        expectEqual(lang("我們都是追夢人", hant: true), "zh-Hant", "排字语言: 显示设成繁体 → 繁体")
+        expectEqual(lang("我們都是追夢人", translation: true, hant: true), "zh-Hant", "排字语言: 繁体设置也管译文")
+        expectEqual(lang("米津・玄師"), nil, "排字语言: 中点「・」不算假名")
+        expectEqual(lang("사랑해 Love you", ja: true, hant: true), nil, "排字语言: 没有汉字和假名 → 不标")
+        let attrs = LyricTypesetting.attributes([:], for: "日本")
+        expectEqual(attrs[LyricTypesetting.attributeKey] == nil, true, "排字语言: 不用标时属性原样返回")
+    }
 }

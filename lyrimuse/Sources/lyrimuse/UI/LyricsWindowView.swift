@@ -4401,6 +4401,7 @@ struct LyricsWindowView: View {
                     .foregroundStyle(hasArtworkBackground ? .white.opacity(0.75) : Color.orange)
                 Text(playback.currentTrackPlainLyrics)
                     .font(.system(size: lyricFontSize * 0.62))
+                    .lyricTypesetting(playback.currentTrackPlainLyrics)
                     .lineSpacing(lyricFontSize * 0.32)
                     .foregroundStyle(hasArtworkBackground ? .white.opacity(0.92) : Color.primary)
                     .textSelection(.enabled)
@@ -4663,6 +4664,7 @@ private struct LyricsLineRow: View, Equatable {
             if showTranslation, let tr = item.line.translation {
                 Text(tr)
                     .font(.overlayFont(familyName: fontFamily, size: translationFontSize, weight: .semibold))
+                    .lyricTypesetting(tr, translation: true)
                     .foregroundStyle(secondaryTextColor)
             }
         }
@@ -4752,6 +4754,7 @@ private struct LyricsLineRow: View, Equatable {
             Text(item.line.plainText ?? "")
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
                 .foregroundStyle(base)
+                .lyricTypesetting(item.line.plainText)
         }
     }
 }
@@ -4863,7 +4866,7 @@ private struct MiniLyricsReel: View, Equatable {
                 }
                 if row.role == .current, showTranslation,
                    let tr = row.line.line.translation, !tr.isEmpty {
-                    subLine(tr, size: fontSize * 0.61, weight: .semibold)
+                    subLine(tr, size: fontSize * 0.61, weight: .semibold, translation: true)
                 }
             }
             .scaleEffect(scale, anchor: .top)
@@ -4873,10 +4876,12 @@ private struct MiniLyricsReel: View, Equatable {
 
     /// 译文 / 罗马音那一行。滚动时钉成一行、放不下就跑马灯(滚一遍停在句尾,换句才归零)。
     @ViewBuilder
-    private func subLine(_ text: String, size: CGFloat, weight: OverlayFontWeight) -> some View {
+    private func subLine(_ text: String, size: CGFloat, weight: OverlayFontWeight,
+                         translation: Bool = false) -> some View {
         let label = Text(text)
             .font(.overlayFont(familyName: fontFamily, size: size, weight: weight))
             .foregroundStyle(secondaryColor)
+            .lyricTypesetting(text, translation: translation)
         if lineOverflow == .scroll {
             label
                 .overlayLineFit(.scroll)
@@ -4945,6 +4950,7 @@ private struct MiniLyricsReel: View, Equatable {
             Text(row.line.line.plainText ?? "")
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
                 .foregroundStyle(color)
+                .lyricTypesetting(row.line.line.plainText)
                 .overlayLineFit(.scroll)
                 .overlayScroll(true, id: row.line.id, alignment: .center, height: height)
         }
@@ -4976,6 +4982,7 @@ private struct MiniLyricsReel: View, Equatable {
             Text(row.line.line.plainText ?? "")
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
                 .foregroundStyle(color)
+                .lyricTypesetting(row.line.line.plainText)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
@@ -5295,15 +5302,18 @@ private struct KaraokeWordText: View {
         // fullStyle、零上浮),却省掉一半 Text 和整个 TimelineView。整张列表几百个字,建树 / 换字号
         // 时这两样的解析和测量就是大头(07 章决策 53)。行激活时这里换分支,换在行级
         // `.animation(nil, value: distance)` 屏障之下,不会淡入淡出。
+        // 排字语言逐词判,跟 KaraokeLineText 折行时逐词量宽度同一口径(见 `LyricTypesetting`)。
         if forceFilled {
             Text(word.text)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .foregroundStyle(WordKaraokeGradient.palette(fg: base).fullStyle)
+                .lyricTypesetting(word.text)
         } else {
             Text(word.text)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .opacity(0)
                 .overlay { animatedGlyph }
+                .lyricTypesetting(word.text)
         }
     }
 

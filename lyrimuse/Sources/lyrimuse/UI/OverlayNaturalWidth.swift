@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 /// 悬浮窗歌词卡片四行字体的 AppKit 孪生(见 `AppSettings.overlayNSFonts`)。
@@ -33,13 +34,18 @@ enum OverlayNaturalWidth {
     private struct Key: Hashable {
         let text: String
         let font: NSFont
+        let language: String?
     }
 
-    static func width(_ text: String?, font: NSFont) -> CGFloat {
+    /// 带上排字语言量(`LyricTypesetting`,跟画字同一口径)。`translation`:这段是译文。
+    static func width(_ text: String?, font: NSFont, translation: Bool = false) -> CGFloat {
         guard let text, !text.isEmpty else { return 0 }
-        let key = Key(text: text, font: font)
+        let language = LyricTypesetting.language(for: text, translation: translation)
+        let key = Key(text: text, font: font, language: language)
         if let hit = cache[key] { return hit }
-        let w = (text as NSString).size(withAttributes: [.font: font]).width
+        var attributes: [NSAttributedString.Key: Any] = [.font: font]
+        if let language { attributes[LyricTypesetting.attributeKey] = language }
+        let w = (text as NSString).size(withAttributes: attributes).width
         // 换歌换字号都会长新条目,粗暴清空即可 —— 它只是省重复测量,不是正确性依赖。
         if cache.count >= cacheLimit { cache.removeAll(keepingCapacity: true) }
         cache[key] = w

@@ -1948,6 +1948,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         Text(playback.secondaryText ?? "")
             // 固定 11pt、比主行细一档,只跟主行的字体族与粗细(理由见 NotchLyricRowMetrics.secondaryFontSize)。
             .font(playback.secondaryFont)
+            .lyricTypesetting(playback.secondaryText, translation: playback.secondaryLine == .translation)
             .foregroundStyle(accentOrWhite.opacity(secondaryLineOpacity))
             .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             .lineLimit(1)
@@ -2065,6 +2066,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if let plainText = playback.displayLine?.plainText {
                     Text(plainText)
                         .foregroundStyle(accentOrWhite)
+                        .lyricTypesetting(plainText)
                         .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
                 } else if !isIdleNoTrack, let raw = playback.rawGapWindow {
                     let window = playback.secondaryLine.gapDotsWindow(raw, compactPlaceholder: playback.compactShowsPlaceholder)
@@ -2164,6 +2166,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 Text(nextLineDisplayText)
                     // 跟副行同一个派生字体:它俩是同一类"辅助的下一句",字号不随主行变、粗细细一档。
                     .font(playback.secondaryFont)
+                    .lyricTypesetting(nextLineDisplayText)
                     .foregroundStyle(accentOrWhite.opacity(0.5))
                     .lineLimit(1)
                     .truncationMode(.tail)
