@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	neturl "net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,20 +23,16 @@ import (
 // 逆向出来,用 curl 实测两个端点全部验证过——
 // 不是照抄一份没验证过的第三方代码,是照抄一份**验证过真能用**的接口契约。
 //
-// 这个源的搜索排序完全不可信(实测,不是猜测):兰亭序/周杰伦、
-// 海阔天空/BEYOND、起风了/买辣椒也用券、平凡之路/朴树 四首歌各跑一遍,**原版录音室
-// 版本一次都没进 top10**,返回的全是 DJ 版/翻唱/Live 片段/伴奏/用户上传。排除过两个
-// 容易走偏的解释:① rn 从 10 提到 30 没用(周杰伦国内是 QQ 音乐独占,酷我曲库本来就
-// 没有原版);② 不是地理限制(美国出口/香港出口各打一次,TOTAL 和 top3 完全一致)。
-// 所以不能像 kugou/lrclib 那样"搜到第一条通过身份校验的就收工"——必须先给全部候选
-// 按标题/歌手/时长重新打分排序(kuwoCandidateScore),再挑分数最高的几条**并发**拉
-// 歌词,第一份真的带同步时间戳的才采纳。按这套流程实测的产出率:海阔天空 5 中 4、
-// 平凡之路 5 中 3、起风了 5 中 1——"有歌词"跟"是对的那首歌词"是两件事,能不能真的
-// 采纳最终仍由 enrich.go 的 scoreLyricCandidateDetailed 把关,这里只负责"尽力挑一份
-// 靠谱候选给下游"。
+// 搜索请求必须带 `vipver=1`:不带时接口把需要会员的曲目整批滤掉,原版录音室版本几乎都在其中,
+// 剩下的只有 DJ 版 / 翻唱 / Live 片段 / 伴奏 / 用户上传(见 09 章决策 131)。带上之后原版通常排第一,
+// 但同一批结果里照样夹着 Live / 伴奏 / 翻唱,所以不能像 kugou/lrclib 那样"搜到第一条通过身份校验的
+// 就收工"——先给全部候选按标题/歌手/时长重新打分排序(kuwoCandidateScore),再挑分数最高的几条
+// **并发**拉歌词,第一份真的带同步时间戳的才采纳。能不能真的采纳最终仍由 enrich.go 的
+// scoreLyricCandidateDetailed 把关,这里只负责"尽力挑一份靠谱候选给下游"。
 //
-// 网页端 lyric 接口只回 {time, lineLyric} 的逐行歌词,没有社区译文;逐字另走客户端的
-// lrcx 接口,只给选中的那一条拉(kuwolrcx.go)。定位跟 amll/lyricfind 一样,是覆盖率有限的
+// 网页端 lyric 接口只回 {time, lineLyric} 的逐行歌词;外文歌的中文译文烘在这份正文里(译文行挂在
+// 下一句原文的时间戳上),由 enrich.go 候选装配前的 adoptBakedTranslation 摘出来接到译文轨。逐字另走
+// 客户端的 lrcx 接口,只给选中的那一条拉(kuwolrcx.go)。定位跟 amll/lyricfind 一样,是覆盖率有限的
 // "锦上添花"兜底档,不是主力源,建议排在 lyricsSourceDefaultOrder 末尾(见 features.go)。
 //
 // 合规提醒:`search.kuwo.cn/r.s` 和 `kuwo.cn/openapi/...` 都是网页端
@@ -111,12 +108,12 @@ func kuwoCoverURL(short string) string {
 }
 
 // kuwoSearch 请求搜索端点(Referer 必须是 www.kuwo.cn,跟歌词端点的 Referer 不同,
-// 见 kuwoFetchLyric 那边——写错会被拒)。
+// 见 kuwoFetchLyric 那边——写错会被拒)。`vipver=1` 不能去掉,见文件头注。
 func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, error) {
 	q := strings.TrimSpace(title + " " + artist)
 	var items []kuwoSearchItem
-	err := tryEach(ctx, kuwoSearchBases, func(base string) error {
-		got, err := kuwoSearchAt(ctx, base, q)
+	err := tryEach(ctx, kuwoSearchEndpoints, func(endpoint string) error {
+		got, err := kuwoSearchAt(ctx, endpoint, q)
 		if err == nil {
 			items = got
 		}
@@ -125,9 +122,9 @@ func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, er
 	return items, err
 }
 
-func kuwoSearchAt(ctx context.Context, base, q string) ([]kuwoSearchItem, error) {
-	u := base + "/r.s?all=" + neturl.QueryEscape(q) +
-		"&ft=music&itemset=web_2013&client=kt&pn=0&rn=10&rformat=json&encoding=utf8&pcjson=1"
+func kuwoSearchAt(ctx context.Context, endpoint, q string) ([]kuwoSearchItem, error) {
+	u := endpoint + "?all=" + neturl.QueryEscape(q) +
+		"&ft=music&itemset=web_2013&client=kt&pn=0&rn=10&rformat=json&encoding=utf8&pcjson=1&vipver=1"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -194,6 +191,8 @@ type kuwoLyricLine struct {
 // 各自要求不同的 Referer,写死同一个会被其中一个拒掉)。
 // lrclist 可能是空数组(纯音乐/伴奏/无歌词),这种情况 HTTP 状态码仍是 200、`code`
 // 字段仍是 200,不是错误,调用方按"空列表"处理即可,不需要单独判 code。
+// 三个主机都没问成时退到 mlyric.kuwo.cn 的 lrcx=0(另一个主机上的同一份逐行歌词,见 kuwoFetchMobiLRC);
+// 查无(空列表)不退。
 func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error) {
 	var lines []kuwoLyricLine
 	err := tryEach(ctx, kuwoLyricBases, func(base string) error {
@@ -203,7 +202,40 @@ func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error
 		}
 		return err
 	})
+	if err != nil && ctx.Err() == nil {
+		if lrc, mobiErr := kuwoFetchMobiLRC(ctx, musicID); mobiErr == nil {
+			return kuwoLyricLinesFromLRC(lrc), nil
+		}
+	}
 	return lines, err
+}
+
+// kuwoLyricLinesFromLRC 把 mlyric 给的标准 LRC 拆回 {time, lineLyric},好跟网页端那份走同一个
+// kuwoBuildLRC。没有时间戳的行([ti:] 这类标签)丢掉;一行多个时间戳的按每个时间戳各出一行。纯函数,便于单测。
+func kuwoLyricLinesFromLRC(lrc string) []kuwoLyricLine {
+	var out []kuwoLyricLine
+	for _, line := range splitLyricLines(lrc) {
+		stamps := lrcTimestampCaptureRe.FindAllStringSubmatchIndex(line, -1)
+		end := 0
+		var secs []float64
+		for _, m := range stamps {
+			if strings.TrimSpace(line[end:m[0]]) != "" {
+				break
+			}
+			mm, _ := strconv.Atoi(line[m[2]:m[3]])
+			ss, _ := strconv.Atoi(line[m[4]:m[5]])
+			frac := 0.0
+			if m[6] >= 0 {
+				frac, _ = strconv.ParseFloat("0."+line[m[6]:m[7]], 64)
+			}
+			secs = append(secs, float64(mm*60+ss)+frac)
+			end = m[1]
+		}
+		for _, s := range secs {
+			out = append(out, kuwoLyricLine{Time: strconv.FormatFloat(s, 'f', 3, 64), LineLyric: line[end:]})
+		}
+	}
+	return out
 }
 
 // kuwoFetchLyricAt 的 Referer 跟着主机走(kuwo.cn 配 kuwo.cn、www 配 www,实测各自都通)。
@@ -277,13 +309,14 @@ const kuwoScoreDurationTolerance = 0.25
 // (lyricTitleAccepted/lyricSourceArtistMatches/versionTagsMismatch),不为这一个源
 // 另起一套更松的规则。纯函数,便于单测。
 func kuwoCandidateScore(item kuwoSearchItem, artist, title, album string, durationSecs float64) int {
-	if !lyricTitleAccepted(item.SongName, title) {
+	name := kuwoSongTitle(item.SongName)
+	if !lyricTitleAccepted(name, title) {
 		return -1
 	}
 	if !lyricSourceArtistMatches(item.Artist, artist) {
 		return -1
 	}
-	if versionTagsMismatch(title, album, item.SongName, item.Album) {
+	if versionTagsMismatch(title, album, name, item.Album) {
 		return -1
 	}
 	score := 100
@@ -299,6 +332,18 @@ func kuwoCandidateScore(item kuwoSearchItem, artist, title, album string, durati
 		score += int((1 - diff) * 50)
 	}
 	return score
+}
+
+// kuwoPromoSuffixRe:酷我歌名后面拼的宣传后缀「-《作品名》用途」(「抓狂-《最后一战3》XBOX360游戏主题曲」
+// 「能不能勇敢说爱-《公主小妹》电视剧插曲」),别的源把这类信息放在括号里或干脆不写。
+var kuwoPromoSuffixRe = regexp.MustCompile(`^(.*\S)\s*-\s*《[^》]+》.*$`)
+
+// kuwoSongTitle 去掉 kuwoPromoSuffixRe 那种后缀,打分与返回的歌名都用它。纯函数,便于单测。
+func kuwoSongTitle(name string) string {
+	if m := kuwoPromoSuffixRe.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return name
 }
 
 // kuwoMaxCandidatesToFetch 是通过身份校验后最多并发拉歌词的候选数——交接文档建议
@@ -375,7 +420,7 @@ func resolveKuwoLyric(ctx context.Context, artist, title, album string, duration
 			continue
 		}
 		return kuwoResult{
-			lyrics: f.lrc, title: f.it.SongName, artist: f.it.Artist, album: f.it.Album,
+			lyrics: f.lrc, title: kuwoSongTitle(f.it.SongName), artist: f.it.Artist, album: f.it.Album,
 			durationSecs: kuwoDurationSecs(f.it.Duration), cover: kuwoCoverURL(f.it.WebAlbumPicShort),
 			yrc: kuwoFetchLrcxYRC(ctx, kuwoMusicID(f.it.MusicRID)),
 		}

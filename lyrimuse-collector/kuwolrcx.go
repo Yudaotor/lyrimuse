@@ -75,7 +75,30 @@ func kuwoFetchLrcxYRC(ctx context.Context, musicID string) string {
 }
 
 func kuwoFetchLrcxAt(ctx context.Context, base, musicID string) ([]byte, error) {
-	u := base + "/mobi.s?f=web&type=lyric&lrcx=1&encode=utf8&rid=" + neturl.QueryEscape(musicID)
+	return kuwoFetchMobiLyricAt(ctx, base, musicID, "1")
+}
+
+// kuwoFetchMobiLRC 拉 mlyric 的 lrcx=0:同一个接口不带逐字的那一档,响应体的封装与 lrcx=1 相同(kuwoDecodeLrcx),
+// 解开是标准逐行 LRC,跟网页端 getlyric 同一份、同样的时间戳与烘入译文。给 kuwoFetchLyric 在网页端几个主机都没问成时兜底。
+func kuwoFetchMobiLRC(ctx context.Context, musicID string) (string, error) {
+	var lrc string
+	err := tryEach(ctx, kuwoLrcxBases, func(base string) error {
+		raw, err := kuwoFetchMobiLyricAt(ctx, base, musicID, "0")
+		if err != nil {
+			return err
+		}
+		text, err := kuwoDecodeLrcx(raw)
+		if err != nil {
+			return err
+		}
+		lrc = text
+		return nil
+	})
+	return lrc, err
+}
+
+func kuwoFetchMobiLyricAt(ctx context.Context, base, musicID, lrcx string) ([]byte, error) {
+	u := base + "/mobi.s?f=web&type=lyric&lrcx=" + lrcx + "&encode=utf8&rid=" + neturl.QueryEscape(musicID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -92,7 +115,7 @@ func kuwoFetchLrcxAt(ctx context.Context, base, musicID string) ([]byte, error) 
 	return io.ReadAll(io.LimitReader(resp.Body, kuwoLrcxBodyMaxSize))
 }
 
-// kuwoDecodeLrcx 解开 lrcx 响应体:去掉 `tp=content` 头 → zlib → base64 → 与 `yeelion` 逐字节异或。
+// kuwoDecodeLrcx 解开 mlyric 响应体(lrcx=0 / 1 同一种封装):去掉 `tp=content` 头 → zlib → base64 → 与 `yeelion` 逐字节异或。
 func kuwoDecodeLrcx(raw []byte) (string, error) {
 	if len(raw) < 10 || !strings.EqualFold(string(raw[:10]), "tp=content") {
 		return "", fmt.Errorf("unexpected lrcx header")

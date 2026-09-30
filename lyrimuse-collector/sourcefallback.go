@@ -11,7 +11,9 @@ import (
 // 其余几个源的备用都是「同一个接口换一个主机或协议」,集中在这里。规矩跟那三个一样:只有没问成
 // (传输失败 / 非 200 / 解不开 / 拒绝码)才换下一个,接口正常答了(包括查无结果)就停。
 //
-//   - 酷我:搜索 https → http;歌词 kuwo.cn → www.kuwo.cn → http://kuwo.cn(Referer 跟着主机走)
+//   - 酷我:搜索 search.kuwo.cn/r.s(https → http)→ kuwo.cn / www.kuwo.cn 的 /search/searchMusicBykeyWord(同一套参数、
+//     同一份 JSON);逐行歌词 kuwo.cn → www.kuwo.cn → http://kuwo.cn(Referer 跟着主机走),都没问成再退到
+//     mlyric.kuwo.cn 的 lrcx=0(kuwolrcx.go kuwoFetchMobiLRC)
 //   - 咪咕:搜索与专辑信息都在 pd.musicapp / app.c.nf / c.musicapp 三个主机上
 //   - 汽水:歌词 beta-luna.douyin.com → api.qishui.com(同一个 /luna/h5/seo_track)
 //   - YouTube Music:music.youtube.com → youtubei.googleapis.com → www.youtube.com(同一套 InnerTube)
@@ -23,7 +25,10 @@ import (
 // 主机都逐个实测过,实测记录见 docs/features/09 第 90 条。
 
 var (
-	kuwoSearchBases = []string{"https://search.kuwo.cn", "http://search.kuwo.cn"}
+	kuwoSearchEndpoints = []string{
+		"https://search.kuwo.cn/r.s", "http://search.kuwo.cn/r.s",
+		"https://kuwo.cn/search/searchMusicBykeyWord", "https://www.kuwo.cn/search/searchMusicBykeyWord",
+	}
 	kuwoLyricBases  = []string{"https://kuwo.cn", "https://www.kuwo.cn", "http://kuwo.cn"}
 	miguSearchHosts = []string{"pd.musicapp.migu.cn", "app.c.nf.migu.cn", "c.musicapp.migu.cn"}
 	miguAlbumHosts  = []string{"app.c.nf.migu.cn", "pd.musicapp.migu.cn", "c.musicapp.migu.cn"}
