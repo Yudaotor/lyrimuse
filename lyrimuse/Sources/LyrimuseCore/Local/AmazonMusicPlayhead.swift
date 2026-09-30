@@ -258,6 +258,12 @@ public enum AmazonMusicPlayhead {
     /// 区间已经窄到这个宽度就不再叠。
     public static let leadRefineWidth: Double = 0.2
 
+    /// 现在能不能开始读界面:卡顿还没结束时界面时间停着,读了必然失败,还让播放器在缓冲见底、最吃力的时候重建整棵
+    /// 辅助功能树;卡顿结束后再等 `settle`。只看最近一次卡顿事件的时刻不够,卡顿开始那一行过了 `settle` 也还在卡。
+    public static func mayStartCalibration(_ s: State, now: Date, settle: TimeInterval) -> Bool {
+        !s.stalled && (s.lastStallAt.map { now.timeIntervalSince($0) >= settle } ?? true)
+    }
+
     /// 这一段要不要再对一次界面、把区间叠窄:首次校准过了 `leadRefineDelay`、之后没卡顿没暂停、区间还不够窄。
     public static func needsLeadRefinement(_ s: State, now: Date) -> Bool {
         guard s.trackID != nil, s.leadCalibrated, !s.stalledSinceCalibration, !s.paused, !s.stalled,

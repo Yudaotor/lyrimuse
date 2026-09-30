@@ -154,6 +154,16 @@ func runAmazonMusicTests() {
         let behind = calibrating(clickedStall, edge: at("025210"), secs: 40)
         expectEqual(behind.map { abs($0.audibleLead - (-1.5)) < 0.001 }, true, "Amazon 卡顿: 模型慢了 1.5 秒,提前量 −1.5")
         expectEqual(behind.map { P.needsLeadCalibration($0) }, false, "Amazon 卡顿: 校准过就不再校准")
+        // 缓冲见底卡了 47 秒:卡着的时候不读界面(界面时间停着,读了必失败),结束后再等 settle。
+        let longStall = P.apply(.stall(true), at: at("072333"), to: clicked)
+        expectEqual(P.mayStartCalibration(longStall, now: at("072351"), settle: 0.5), false,
+                    "Amazon 卡顿: 卡顿开始过了 settle 但还没结束,不读界面")
+        let recovered = P.apply(.stall(false), at: at("072420"), to: longStall)
+        expectEqual(P.mayStartCalibration(recovered, now: at("072420", 0.2), settle: 0.5), false,
+                    "Amazon 卡顿: 刚结束、没过 settle 不读")
+        expectEqual(P.mayStartCalibration(recovered, now: at("072421"), settle: 0.5), true,
+                    "Amazon 卡顿: 结束过了 settle 就读")
+        expectEqual(P.mayStartCalibration(clicked, now: at("025140"), settle: 0.5), true, "Amazon 卡顿: 没卡过随时能读")
 
         // 一次校准只收到 0.45 秒宽的区间,隔 leadRefineDelay 再对一次、两次区间取交集。
         // 自然连播 02:56:18.5 开播,02:56:30.3 那一刻日志时钟 11.8;真实起点区间 [..., ...] 换成提前量区间 [2.5, 2.9]。

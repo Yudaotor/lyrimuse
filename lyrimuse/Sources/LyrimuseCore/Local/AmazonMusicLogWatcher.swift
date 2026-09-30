@@ -27,7 +27,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     /// 开播后隔多久开始校准。自动连播时开播后头几秒还在放上一首的尾巴,界面停在 `00:00`,探针自己等它走起来
     /// (`AmazonMusicUIProbe.startWait`);这里只让界面先换到这一首。没有前奏的歌开口就唱,别把它调回几秒。
     static let calibrationDelay: TimeInterval = 1
-    /// 卡顿(含暂停后恢复跟着的那次)平息后隔多久重新校准。探针自己会丢掉界面停住那几次的读数,不用等太久。
+    /// 卡顿(含暂停后恢复跟着的那次)结束后隔多久重新校准,卡着的时候不读(`AmazonMusicPlayhead.mayStartCalibration`)。
     static let stallSettleDelay: TimeInterval = 0.5
     static let calibrationRetry: TimeInterval = 5
     static let calibrationMaxAttempts = 3
@@ -135,7 +135,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     private func scheduleTimerCalibrationLocked(pid: pid_t, duration: Double?, trackKey: String, artist: String?, title: String?, now: Date) {
         if timerSeen?.key != trackKey { timerSeen = (trackKey, now) }
         guard !calibrating, let seen = timerSeen, now.timeIntervalSince(seen.at) >= Self.calibrationDelay,
-              state.lastStallAt.map({ now.timeIntervalSince($0) >= Self.stallSettleDelay }) ?? true else { return }
+              AmazonMusicPlayhead.mayStartCalibration(state, now: now, settle: Self.stallSettleDelay) else { return }
         let key = "timer:" + trackKey + "#" + String(max(state.lastStallAt?.timeIntervalSince1970 ?? 0, seen.at.timeIntervalSince1970))
         guard timerCalibratedKey != key, mayAttemptLocked(key, now: now) else { return }
         calibrating = true
@@ -178,7 +178,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
         let refining = AmazonMusicPlayhead.needsLeadRefinement(state, now: now)
         guard !calibrating, AmazonMusicPlayhead.needsLeadCalibration(state) || refining, let id = state.trackID,
               let startedAt = state.trackStartedAt, now.timeIntervalSince(startedAt) >= Self.calibrationDelay,
-              state.lastStallAt.map({ now.timeIntervalSince($0) >= Self.stallSettleDelay }) ?? true else { return }
+              AmazonMusicPlayhead.mayStartCalibration(state, now: now, settle: Self.stallSettleDelay) else { return }
         // 卡顿之后的那次重新校准、首次校准之后再叠的那次,都另算次数(键带上最近一次卡顿的时刻、叠到第几次)。
         let key = id + "@" + String(startedAt.timeIntervalSince1970) + "#" + String(state.lastStallAt?.timeIntervalSince1970 ?? 0)
             + (refining ? "+" + String(state.leadRefinements + 1) : "")
