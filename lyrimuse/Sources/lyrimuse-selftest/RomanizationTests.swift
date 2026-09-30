@@ -1268,4 +1268,40 @@ func runRomanizationTests() {
         let attrs = LyricTypesetting.attributes([:], for: "日本")
         expectEqual(attrs[LyricTypesetting.attributeKey] == nil, true, "排字语言: 不用标时属性原样返回")
     }
+
+    // ---- 同形异码字(康熙部首 / 部首补充 / 兼容表意文字)换回标准字 ----
+    do {
+        let n = HanCompatibility.normalized
+        expectEqual(n("我看⾒這裡有⼈"), "我看見這裡有人", "同形异码字: 康熙部首换回标准字")
+        expectEqual(n("如果⻘春"), "如果青春", "同形异码字: 部首补充换回标准字(NFKC 管不到这一段)")
+        expectEqual(n("溺れて"), "溺れて", "同形异码字: 兼容表意文字换回标准字")
+        expectEqual(n("[00:01.00]没有这类字 plain"), "[00:01.00]没有这类字 plain", "同形异码字: 不含时原样返回")
+        // 换回之后下游才认得出:署名过滤、繁转简、拼音
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions([n("制作⼈：陶喆"), "第一句歌词", "第二句歌词"]),
+                    [true, false, false], "同形异码字: 换回后「制作⼈：」按署名滤掉")
+        expectEqual(OpenCCT2S.toSimplified(n("我看⾒這裡有⼈")), "我看见这里有人", "同形异码字: 换回后繁转简不漏字")
+        expectEqual(Romanizer.romanize(n("如果⻘春")), "rú guǒ qīng chūn", "同形异码字: 换回后拼音不粘连")
+        // 表本身:一个字换一个字(注音按字数对齐);康熙部首与兼容表意两段跟系统 NFKC 一致
+        let scalars = Array(HanCompatibility.pairs.unicodeScalars)
+        expectEqual(scalars.count % 2, 0, "同形异码字表: 两两成对")
+        var nfkcMismatch: [String] = []
+        for i in stride(from: 0, to: scalars.count - 1, by: 2) where scalars[i].value >= 0x2F00 {
+            let nfkc = String(Character(scalars[i])).precomposedStringWithCompatibilityMapping
+            if nfkc != String(Character(scalars[i + 1])) { nfkcMismatch.append(String(format: "U+%04X", scalars[i].value)) }
+        }
+        expectEqual(nfkcMismatch, [], "同形异码字表: 康熙部首 / 兼容表意两段跟 NFKC 一致")
+        // 契约:collector 的署名判定用同一份表
+        let goSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse-collector/hancompat.go"), encoding: .utf8)) ?? ""
+        let goPairs = goSource.components(separatedBy: "const hanCompatPairs = `").dropFirst().first?
+            .components(separatedBy: "`").first
+        expectEqual(goPairs == HanCompatibility.pairs, true, "同形异码字表(契约): collector hancompat.go 与 App 逐字相同")
+        let source = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        let normalizeAt = source.range(of: "let text = HanCompatibility.normalized(raw)")?.lowerBound
+        let repairAt = source.range(of: "JapaneseKanjiRepair.repair(text, japaneseSong: japaneseSong)")?.lowerBound
+        expectEqual(normalizeAt != nil && repairAt != nil && normalizeAt! < repairAt!, true,
+                    "同形异码字(契约): 载入歌词时先换回标准字,再做日文汉字修复与简繁转换")
+    }
 }

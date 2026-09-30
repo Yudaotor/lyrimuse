@@ -3728,19 +3728,22 @@ public final class LocalPlaybackSource: ObservableObject {
         // 用户的简繁偏好。顺序无所谓 —— `converted` 见到假名就整份放过,对日文歌本来就是空操作 ——
         // 但概念上先修源的错、再套用户的偏好。整首判定用正文,正文为空(只有逐字)才看逐字串;
         // 译文是中文、罗马音是拉丁字母,都不进修回。
-        let rawYRC = found?.lyricsYRC ?? ""
-        let japaneseSong = Romanizer.looksJapaneseSong(raw.isEmpty ? rawYRC : raw)
+        // 同形异码字(康熙部首等)最先换回标准字,署名过滤、日文汉字修复、简繁转换、罗马音都按标准字认。
+        // 只换送进引擎的文本;下面算校正值 key 的仍用缓存原文。
+        let text = HanCompatibility.normalized(raw)
+        let rawYRC = HanCompatibility.normalized(found?.lyricsYRC ?? "")
+        let japaneseSong = Romanizer.looksJapaneseSong(text.isEmpty ? rawYRC : text)
         // 排字语言要在引擎加载之前设好:加载时就会按各面宽度断句、量宽度,量宽度要跟画字同一口径。
         LyricTypesetting.setJapaneseSong(japaneseSong)
         LyricTypesetting.setTraditionalChinese(variant == .traditional)
         // 引擎侧还有第二道指纹早退(见 LyricsSyncEngine.load 注释),两道闸各管一层:这里
         // 管"连转换都别做",那里兜"其它调用方/清过发布状态后的重灌"。
         syncEngine.load(
-            lyrics: variant.converted(JapaneseKanjiRepair.repair(raw, japaneseSong: japaneseSong)),
-            lyricsTr: variant.converted(found?.lyricsTr ?? ""),
+            lyrics: variant.converted(JapaneseKanjiRepair.repair(text, japaneseSong: japaneseSong)),
+            lyricsTr: variant.converted(HanCompatibility.normalized(found?.lyricsTr ?? "")),
             lyricsRoma: found?.lyricsRoma ?? "",
             lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong)),
-            lyricsBG: variant.converted(found?.lyricsBG ?? ""),
+            lyricsBG: variant.converted(HanCompatibility.normalized(found?.lyricsBG ?? "")),
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",
@@ -3792,7 +3795,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 纯文本兜底只在"确实没有能同步显示的版本"时才有展示意义——newHasContent 为 true
         // 时(不管是不是这首歌待会儿又补出了带时间戳的版本)优先用那份,不显示纯文本,
         // 避免"歌词窗口"同时收到两份内容不一定完全一致的候选、不知道信哪个。
-        let newPlainLyrics = newHasContent ? "" : (found?.plainLyrics ?? "")
+        let newPlainLyrics = newHasContent ? "" : HanCompatibility.normalized(found?.plainLyrics ?? "")
         if newPlainLyrics != currentTrackPlainLyrics { currentTrackPlainLyrics = newPlainLyrics }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
         // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是

@@ -148,8 +148,9 @@ var genericHanCreditLineRe = regexp.MustCompile(`^\p{Han}{1,8}[:：]`)
 
 // isCreditLine 判断去掉时间戳/trim 过的一行文本是不是"角色: 人名"这种职员表格式——
 // creditLineRe(手工枚举的中英文关键词)和 genericHanCreditLineRe(结构化兜底)两条规则
-// 任一命中即算,理由分别见各自的注释。
+// 任一命中即算,理由分别见各自的注释。同形异码字(「制作⼈」)先换回标准字再比(hancompat.go)。
 func isCreditLine(text string) bool {
+	text = normalizeHanCompat(text)
 	return creditLineRe.MatchString(text) || genericHanCreditLineRe.MatchString(text)
 }
 
@@ -173,6 +174,7 @@ var copyrightLabelRe = regexp.MustCompile(`(?i)^(OP|SP|OA|SA)[\s\x{3000}]*[:：]
 //
 // 演唱者标签(男：/女：)的豁免两套都走,理由见 lyricspeaker.go。
 func isRelaxedCreditLine(text string, speakers map[string]bool) bool {
+	text = normalizeHanCompat(text)
 	if isCreditLineWithSpeakers(text, speakers) {
 		return true
 	}

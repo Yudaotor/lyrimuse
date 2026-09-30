@@ -1928,13 +1928,13 @@ func runSourceContractTests() {
             .deletingLastPathComponent().deletingLastPathComponent()
         let path = sources.appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift").path
         if let text = try? String(contentsOfFile: path, encoding: .utf8) {
-            expectEqual(text.contains("lyrics: variant.converted(JapaneseKanjiRepair.repair(raw, japaneseSong: japaneseSong))"), true,
+            expectEqual(text.contains("lyrics: variant.converted(JapaneseKanjiRepair.repair(text, japaneseSong: japaneseSong))"), true,
                         "日文修回接线: 正文要先过 JapaneseKanjiRepair 再过简繁转换")
             expectEqual(text.contains("lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong))"), true,
                         "日文修回接线: 逐字数据也要过 JapaneseKanjiRepair")
-            expectEqual(text.contains("lyricsTr: variant.converted(found?.lyricsTr ?? \"\")"), true,
+            expectEqual(text.contains("lyricsTr: variant.converted(HanCompatibility.normalized(found?.lyricsTr ?? \"\"))"), true,
                         "日文修回接线: 译文是中文,不许过 JapaneseKanjiRepair")
-            expectEqual(text.contains("Romanizer.looksJapaneseSong(raw.isEmpty ? rawYRC : raw)"), true,
+            expectEqual(text.contains("Romanizer.looksJapaneseSong(text.isEmpty ? rawYRC : text)"), true,
                         "日文修回接线: 整首判定按正文(正文为空才看逐字串)")
         } else {
             expectEqual(true, false, "日文修回接线: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
