@@ -1165,6 +1165,17 @@ func runCreditLineTests() {
             ("合作艺人：(G)I-DLE/Bea Miller/Wolftyla", "表外角色 + 多个英文名"),
             ("主唱：SOYEON of (G)I-DLE/MIYEON of (G)I-DLE/Bea Miller/Wolftyla", "表外角色 + 超长名单"),
             ("Additional Vocal Production by：Oscar Free", "英文角色短语 + by"),
+            ("和音：邓紫棋", "角色词以分隔符字「和」开头"),
+            ("Rap词：Mike Chang", "拉丁前缀 + 单字「词」"),
+            ("说唱词：某某某", "说唱词"),
+            ("宣发：杨文杰/奕心/牛淼淼", "制作宣发职务"),
+            ("造型：曹伟康", "制作宣发职务"),
+            ("特别感谢：王治平Bing Wang/李振权Jim Lee", "特别感谢"),
+            ("ＯＰ：千和世纪", "全角拉丁字母"),
+            ("原唱︰Ritchie Valens", "竖排形式的冒号 U+FE30"),
+            ("制作⼈ Producer：米奇林MCKY/剃刀蒋RAZOR", "康熙部首「⼈」"),
+            ("Bass：Cass Love", "白名单拉丁标签 + 全角冒号,人名里有停用词 Love"),
+            ("Background Vocals by：원호/이난 (ENAN)/Sun Ahn", "白名单拉丁标签 + 全角冒号,韩文名带空格"),
         ]
         for (line, family) in mustDrop {
             expectEqual(verdict(line), true, "语料回归(必须删掉, \(family)): \(line)")
@@ -1177,6 +1188,32 @@ func runCreditLineTests() {
         let notHeaderDoc = fillers + ["成都 - 赵雷"]
         expectEqual(E.creditLineDropDecisions(notHeaderDoc, trackTitle: "成都", trackArtist: "赵雷").last,
                     false, "语料回归: 同样的字样出现在中间不当抬头(多半是真歌词)")
+        // 半角冒号的拉丁标签仍按停用词否决(英文歌词里会出现),全角冒号那条放宽不外溢
+        expectEqual(verdict("Vocals: I love you"), false, "语料回归: 半角冒号 + 英文句子不当署名")
+        /// 抬头行:返回指定那一行删不删。
+        func header(_ doc: [String], _ index: Int, title: String, artist: String) -> Bool {
+            E.creditLineDropDecisions(doc + fillers, trackTitle: title, trackArtist: artist)[index]
+        }
+        expectEqual(header(["作词：陈家丽", "张学友 - 谁想轻轻偷走我的吻"], 1, title: "谁想轻轻偷走我的吻", artist: "张学友"),
+                    true, "抬头行: 排在开头那段署名后面也认")
+        expectEqual(header(["作词：某某", "让我掉下眼泪的人", "成都 - 赵雷"], 2, title: "成都", artist: "赵雷"),
+                    false, "抬头行: 正文开始之后不再认")
+        expectEqual(header(["月を見ていた - Moongazing - 米津玄師 (よねづ けんし)"], 0,
+                           title: "月を見ていた - Moongazing", artist: "米津玄師"), true, "抬头行: 歌名自带「 - 」")
+        expectEqual(header(["夜钟－南拳妈妈"], 0, title: "夜钟", artist: "南拳妈妈"), true, "抬头行: 全角连接号")
+        expectEqual(header(["北京东路的日子（对唱版）——汪源/张家旺"], 0, title: "北京东路的日子", artist: "汪源"),
+                    true, "抬头行: 「——」分隔")
+        expectEqual(header(["南钧儿 - 毛不易《给你给我》"], 0, title: "给你给我", artist: "毛不易"), true, "抬头行: 书名号里是歌名")
+        expectEqual(header(["가위바위보 (Rock Paper Scissors) - B1A4 (비원에이포)"], 0,
+                           title: "Rock Paper Scissors", artist: "B1A4"), true, "抬头行: 括号里才是本地歌名")
+        expectEqual(header(["日出君 Sunrise again - 没有才能"], 0, title: "日出君", artist: "没有才能"),
+                    true, "抬头行: 歌名后缀外文译名")
+        expectEqual(header(["作词：某某", "Artist: Queen", "Songs Title：Dancer"], 1, title: "Dancer", artist: "Queen"),
+                    true, "抬头行: 带标签的「Artist:」")
+        expectEqual(header(["作词：某某", "Artist: Queen", "Songs Title：Dancer"], 2, title: "Dancer", artist: "Queen"),
+                    true, "抬头行: 带标签的「Songs Title：」")
+        expectEqual(header(["动力火车 - 再会吧！ 我的心上人"], 0, title: "再会吧!心上人", artist: "动力火车"),
+                    false, "抬头行: 只共有一段(「再会吧」)不算等于歌名")
 
         // ④ 永不删空:整份都长成署名的极端输入,一行都不许删(宁可漏治,不可整片空白)
         let allCredits = ["词：某某", "曲：某某", "编曲：某某", "制作人：某某"]

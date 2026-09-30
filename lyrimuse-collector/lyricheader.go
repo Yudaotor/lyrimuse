@@ -24,6 +24,19 @@ func looksLikeLyricHeaderLine(text, title, artist string) bool {
 	}
 	titles := headerKeySet(headerTitleForms(title))
 	artists := headerKeyList(headerMatchVariants(artist))
+	// 「翻唱者 - 原唱《歌名》」:书名号里等于歌名、书名号外含歌手。
+	if open := strings.Index(text, "《"); open >= 0 {
+		if n := strings.Index(text[open:], "》"); n > 0 {
+			inside := headerKey(text[open+len("《") : open+n])
+			outside := headerKey(text[:open] + text[open+n+len("》"):])
+			if titles[inside] && headerContainsAny(outside, artists) {
+				return true
+			}
+		}
+	}
+	// 括号里的、按字形切出的写法(headerExtraTitleForms)只跟完整歌名比,不跟歌名按字形切出的段比:
+	// 两边都切段再比,共有一段(「再会吧」)就算,太松。
+	fullTitles := headerKeySet([]string{title, stripHeaderBrackets(title)})
 	for _, sp := range headerSplitCandidates(text) {
 		leftRaw, rightRaw := headerKey(sp[0]), headerKey(sp[1])
 		if leftRaw == "" || rightRaw == "" {
@@ -31,8 +44,10 @@ func looksLikeLyricHeaderLine(text, title, artist string) bool {
 		}
 		// 歌名侧去括号、不去括号各比一次:抬头写裸歌名时本地标签常带「(Remastered)」,反过来抬头也会把
 		// 歌名的一部分写进括号(「达尔文 II (进化版)」配「达尔文 II 进化版」)。
-		leftTitle := titles[headerKey(stripHeaderBrackets(sp[0]))] || titles[leftRaw]
-		rightTitle := titles[headerKey(stripHeaderBrackets(sp[1]))] || titles[rightRaw]
+		leftTitle := titles[headerKey(stripHeaderBrackets(sp[0]))] || titles[leftRaw] ||
+			headerAnyIn(headerExtraTitleForms(sp[0]), fullTitles)
+		rightTitle := titles[headerKey(stripHeaderBrackets(sp[1]))] || titles[rightRaw] ||
+			headerAnyIn(headerExtraTitleForms(sp[1]), fullTitles)
 		if leftTitle && headerContainsAny(rightRaw, artists) {
 			return true
 		}
@@ -43,18 +58,27 @@ func looksLikeLyricHeaderLine(text, title, artist string) bool {
 	return false
 }
 
-// headerSplitCandidates 把一行切成抬头的两段:先认带空格的 " - " / " – " / " — ",只有它唯一出现时才用
+// headerSplitCandidates 把一行切成抬头的两段:先认带空格的 " - " / " – " / " — " / " － " 和「——」,只有一处时直接用
 // (「W-H-Y - 王力宏」这种歌名自带连字符的也能切开);都没有时退回"整行只有一个裸连字符"
 // (「陳柏宇-最後的擁抱」)。切不开返回 nil。
 func headerSplitCandidates(text string) [][2]string {
-	for _, sep := range []string{" - ", " – ", " — "} {
-		if parts := strings.Split(text, sep); len(parts) == 2 {
+	for _, sep := range []string{" - ", " – ", " — ", " － ", "——"} {
+		parts := strings.Split(text, sep)
+		if len(parts) == 2 {
 			return [][2]string{{parts[0], parts[1]}}
+		}
+		// 歌名自己带分隔符(「月を見ていた - Moongazing - 米津玄師」):每个分隔处都切一次。
+		if len(parts) > 2 {
+			var out [][2]string
+			for k := 1; k < len(parts); k++ {
+				out = append(out, [2]string{strings.Join(parts[:k], sep), strings.Join(parts[k:], sep)})
+			}
+			return out
 		}
 	}
 	idx, n := -1, 0
 	for i, r := range text {
-		if r == '-' || r == '–' || r == '—' {
+		if r == '-' || r == '–' || r == '—' || r == '－' {
 			if idx < 0 {
 				idx = i
 			}
@@ -66,6 +90,44 @@ func headerSplitCandidates(text string) [][2]string {
 	}
 	_, size := utf8.DecodeRuneInString(text[idx:])
 	return [][2]string{{text[:idx], text[idx+size:]}}
+}
+
+// headerExtraTitleForms 一段里还能再拆出来的歌名写法:括号里的(「가위바위보 (Rock Paper Scissors)」)、
+// 按字形切开的(「日出君 Sunrise again」)。返回比对用的 key。
+func headerExtraTitleForms(side string) []string {
+	forms := headerScriptRuns(stripHeaderBrackets(side))
+	depth := 0
+	var inner strings.Builder
+	for _, r := range side {
+		switch r {
+		case '(', '[', '（', '［':
+			depth++
+			if depth == 1 {
+				inner.Reset()
+			}
+		case ')', ']', '）', '］':
+			if depth == 1 {
+				forms = append(forms, inner.String())
+			}
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth > 0 {
+				inner.WriteRune(r)
+			}
+		}
+	}
+	return headerKeyList(forms)
+}
+
+func headerAnyIn(keys []string, set map[string]bool) bool {
+	for _, k := range keys {
+		if set[k] {
+			return true
+		}
+	}
+	return false
 }
 
 // headerTitleForms 歌名可以长成的样子:原样、去括号、去掉「 - 版本」尾巴(Apple Music 的

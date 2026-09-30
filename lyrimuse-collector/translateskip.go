@@ -28,7 +28,12 @@ func looksLikeTranslationHeaderLine(text, title, artist string) bool {
 		forms = append(forms, parts[0])
 	}
 	titles := headerKeySet(forms)
-	for _, sp := range headerSplitCandidates(text) {
+	// 只认切法唯一的行:「我 - 你 - 他都在等」这种多处分隔每处都切的话,总有一段碰巧等于短歌名。
+	splits := headerSplitCandidates(text)
+	if len(splits) != 1 {
+		return false
+	}
+	for _, sp := range splits {
 		if headerKey(sp[0]) == "" || headerKey(sp[1]) == "" {
 			continue
 		}

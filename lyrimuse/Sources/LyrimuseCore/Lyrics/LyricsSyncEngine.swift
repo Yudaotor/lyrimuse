@@ -333,6 +333,9 @@ public final class LyricsSyncEngine {
         // 这句里含「著作」二字但没有冒号)——matchesRoleWordCredit 要求标签后必须紧跟冒号,
         // 所以收这个词不会误伤它,这条真歌词已经进 selftest 当反向哨兵钉着。
         "著作", "推广",
+        // 制作、宣发一侧的职务;「说唱」管「说唱词：」。「伴唱」刻意不收:它跟「男声 / 女声」一样是
+        // `LyricDuet` 的声部标记,单独出现就按演唱者豁免。见 08 章决策 29。
+        "合声", "人声", "剪辑", "厂牌", "感谢", "造型", "灯光", "宣发", "营销", "渠道", "说唱",
         // 「指导」「总监」「策划」「导演」这类词带冒号时几乎全是署名,不带冒号的多是真歌词
         // (如「进入你梦里 指导你演戏」)——正好被"标签后必须紧跟冒号"这道门分开。
         // 刻意**不收**「顾问」:它在本仓语料里只在真歌词中出现过(「当你的时尚顾问」),
@@ -470,6 +473,8 @@ public final class LyricsSyncEngine {
         let label = text[text.startIndex..<colon].trimmingCharacters(in: .whitespaces)
         // 冒号后必须有内容 —— 纯粹以冒号结尾的句子是真歌词里的语气停顿,不算。
         let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        // 「Rap词：」:拉丁前缀 + 单字「词」,下面按汉字判的路径只剩一个「词」,认不出来。
+        if !rest.isEmpty, label.lowercased().filter({ !$0.isWhitespace }) == "rap词" { return true }
         // 「汉字角色词 + 英文对照」的双语标签(酷狗/QQ 的中文曲库很常见):
         // 「制作人 Producer：陶喆」「鼓 Drums：Ash Soan」。
         //
@@ -505,7 +510,9 @@ public final class LyricsSyncEngine {
         // 繁体标签(「作詞」「編曲」「主題歌」)不再需要在表里双写一份 —— 转成孪生写法再比
         // 一次就行。加:调研同类工具时看到的做法是把繁简两种写法都手工列进默认表,
         // 那份表因此长了一倍还容易漏(有「作詞」也有「作词」,但「録音」就只有「录音」)。
-        let forms = [core, HanScript.sibling(core)].compactMap { $0 }
+        // 分隔符里有「和 / 与 / 及」,切完「和音」只剩「音」:不切的原标签也比一次。
+        let unsplit = String(hanLabel.unicodeScalars.filter { $0.properties.isIdeographic }.map(Character.init))
+        let forms = [core, HanScript.sibling(core), unsplit, HanScript.sibling(unsplit)].compactMap { $0 }
         if creditRoleWords.contains(where: { word in forms.contains { $0.contains(word) } }) {
             return true
         }
@@ -694,7 +701,7 @@ public final class LyricsSyncEngine {
     ]
     private static let latinRoleModifierWords: Set<String> = [
         "lead", "background", "backing", "additional", "rhythm", "electric", "acoustic", "upright",
-        "digital", "audio", "drum", "solo", "fx", "noise", "assistant", "executive", "co", "by",
+        "digital", "audio", "drum", "solo", "fx", "noise", "assistant", "executive", "co", "by", "slide",
     ]
 
     public static func matchesLatinRoleWordLabel(_ text: String) -> Bool {
@@ -724,6 +731,13 @@ public final class LyricsSyncEngine {
         // 形状命中之后再看右边像不像一句话 —— 见 latinCreditRestLooksLikeSentence。
         guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
         let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        // 白名单角色标签(Bass / Background Vocals by)+ 全角冒号:全角冒号只出自中日文源的署名块,
+        // 右边是名单。这时只按虚词和句末标点否决,不按英文停用词、韩文空格 —— 人名里的
+        // 「Cass Love」、韩文名字「원호/이난 (ENAN)」会被那两道闸当成句子。
+        if text[colon] == "：", matchesLatinRoleWordLabel(text) {
+            let sentenceEnd = rest.last.map { "，。！？!?…；;".contains($0) } ?? false
+            return !rest.contains(where: { nonNameChars.contains($0) }) && !sentenceEnd
+        }
         return !latinCreditRestLooksLikeSentence(rest)
     }
 
@@ -761,6 +775,29 @@ public final class LyricsSyncEngine {
         // 换成等值判定之后,真歌词天然不成立(句子里总有别的词),而抬头这个格式本身就是
         // 「歌名 - 歌手」两段结构。代价是少数写法抓不到(歌名里自带多个连字符、或者压根
         // 没有分隔符的抬头),那是刻意的:宁可漏治,不可删空。
+        let titles = Set(headerTitleForms(trackTitle).map(norm)).subtracting([""])
+        let artists = headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
+        // 「翻唱者 - 原唱《歌名》」:书名号里等于歌名、书名号外含歌手。
+        if let open = text.firstIndex(of: "《"), let close = text[open...].firstIndex(of: "》") {
+            let inside = norm(String(text[text.index(after: open)..<close]))
+            let outside = norm(String(text[..<open]) + String(text[text.index(after: close)...]))
+            if titles.contains(inside), artists.contains(where: { outside.contains($0) }) { return true }
+        }
+        // 一段里还能再拆出来的歌名写法:括号里的(「가위바위보 (Rock Paper Scissors)」,本地记的是英文名)、
+        // 按字形切开的(「日出君 Sunrise again」,本地记的是中文名)。只跟**完整**歌名比
+        // (`fullTitles`,不含歌名按字形切出的段):两边都切段再比,只要共有一段(「再会吧」)就算,太松。
+        let fullTitles = Set([trackTitle, stripBracketsForHeaderMatch(trackTitle)]
+            .flatMap { [$0, HanScript.sibling($0)].compactMap { $0 } }.map(norm)).subtracting([""])
+        func extraTitleForms(_ side: String) -> [String] {
+            var out = scriptRuns(stripBracketsForHeaderMatch(side))
+            var depth = 0, inner = ""
+            for c in side {
+                if "(（[［".contains(c) { depth += 1; if depth == 1 { inner = "" }; continue }
+                if ")）]］".contains(c) { if depth == 1 { out.append(inner) }; depth = max(0, depth - 1); continue }
+                if depth > 0 { inner.append(c) }
+            }
+            return out.map(norm).filter { !$0.isEmpty }
+        }
         for (lhs, rhs) in headerSplitCandidates(text) {
             // 歌名侧要**去括号后等值**(抬头写裸歌名,本地标签常带 "(Remastered)" 后缀);
             // 歌手侧只做 contains,而且**用原文不去括号** —— 抬头里歌手名经常就写在括号里
@@ -770,12 +807,12 @@ public final class LyricsSyncEngine {
             let rightTitle = norm(stripBracketsForHeaderMatch(rhs))
             let leftRaw = norm(lhs), rightRaw = norm(rhs)
             guard !leftRaw.isEmpty, !rightRaw.isEmpty else { continue }
-            let titles = Set(headerTitleForms(trackTitle).map(norm)).subtracting([""])
-            let artists = headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
             // 歌名侧去括号、不去括号各比一次:反过来的情形也有 —— 抬头把歌名的一部分写进括号
             // (「达尔文 II (进化版)」配本地「达尔文 II 进化版」)。
             let leftIsTitle = titles.contains(leftTitle) || titles.contains(leftRaw)
+                || extraTitleForms(lhs).contains(where: fullTitles.contains)
             let rightIsTitle = titles.contains(rightTitle) || titles.contains(rightRaw)
+                || extraTitleForms(rhs).contains(where: fullTitles.contains)
             // 两种摆法都有:「歌名 - 歌手」和「歌手 - 歌名」。
             if leftIsTitle, artists.contains(where: { rightRaw.contains($0) }) { return true }
             if rightIsTitle, artists.contains(where: { leftRaw.contains($0) }) { return true }
@@ -783,17 +820,65 @@ public final class LyricsSyncEngine {
         return false
     }
 
+    /// 带标签的抬头(「Artist: Queen」「Songs Title：teach me」):标签后的值**等于**歌名的某种写法,
+    /// 或**含**歌手名的某种写法。值可以是任意词,不能交给署名规则的"右边像不像句子"那道闸判,
+    /// 所以按歌名 / 歌手等值来认;只在开头那段署名里用(见 strippingCreditLines)。
+    static func looksLikeLabeledHeaderLine(_ text: String, trackTitle: String, trackArtist: String) -> Bool {
+        guard !trackTitle.isEmpty, !trackArtist.isEmpty,
+              let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" })
+        else { return false }
+        func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let label = norm(String(text[..<colon]))
+        let value = String(text[text.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+        guard !norm(value).isEmpty else { return false }
+        switch label {
+        case "title", "songtitle", "songstitle":
+            let titles = Set(headerTitleForms(trackTitle).map(norm)).subtracting([""])
+            return titles.contains(norm(value)) || titles.contains(norm(stripBracketsForHeaderMatch(value)))
+        case "artist", "artists":
+            return headerMatchVariants(of: trackArtist).map(norm).filter { !$0.isEmpty }
+                .contains { norm(value).contains($0) }
+        default:
+            return false
+        }
+    }
+
+    /// 署名判定之前把等价写法换成同一种,只用于判定、不改显示:同形异码字换回标准字
+    /// (`HanCompatibility`)、冒号的竖排 / 小号变体换成「：」、全角拉丁字母与数字换成半角(「ＯＰ：」)。
+    static func creditProbeText(_ text: String) -> String {
+        let han = HanCompatibility.normalized(text)
+        func mapped(_ scalar: Unicode.Scalar) -> Unicode.Scalar? {
+            switch scalar.value {
+            case 0xFE13, 0xFE30, 0xFE55: return "："
+            case 0xFF10...0xFF19, 0xFF21...0xFF3A, 0xFF41...0xFF5A: return Unicode.Scalar(scalar.value - 0xFEE0)
+            default: return nil
+            }
+        }
+        guard han.unicodeScalars.contains(where: { mapped($0) != nil }) else { return han }
+        var out = String.UnicodeScalarView()
+        for scalar in han.unicodeScalars { out.append(mapped(scalar) ?? scalar) }
+        return String(out)
+    }
+
     /// 把一行切成"抬头的两段"的所有候选切法。
     ///
-    /// 先试**带空格的** " - "(抬头最常见的写法);只有它唯一出现时才用,这样
-    /// 「W-H-Y - 王力宏」这种歌名自带连字符的也能正确切开。带空格的没有或不唯一时,
-    /// 退回"整行只有一个裸连字符"的情形(「陳柏宇-最後的擁抱」)。
+    /// 先试**带空格的** " - "(抬头最常见的写法,另有 " – " " — " " － " 和「——」),这样
+    /// 「W-H-Y - 王力宏」这种歌名自带连字符的也能正确切开;出现多处时每个分隔处各切一次。
+    /// 带空格的都没有时,退回"整行只有一个裸连字符"的情形(「陳柏宇-最後的擁抱」)。
+    /// collector `lyricheader.go` 有逐条镜像,改一边必须同步改另一边。
     private static func headerSplitCandidates(_ text: String) -> [(String, String)] {
-        for sep in [" - ", " – ", " — "] {
+        for sep in [" - ", " – ", " — ", " － ", "——"] {
             let parts = text.components(separatedBy: sep)
             if parts.count == 2 { return [(parts[0], parts[1])] }
+            // 歌名自己带分隔符(「月を見ていた - Moongazing - 米津玄師」):每个分隔处都切一次,
+            // 判据仍是一段等于歌名、另一段含歌手,切法多了也不会放进真歌词。
+            if parts.count > 2 {
+                return (1..<parts.count).map {
+                    (parts[..<$0].joined(separator: sep), parts[$0...].joined(separator: sep))
+                }
+            }
         }
-        let dashes: Set<Character> = ["-", "–", "—"]
+        let dashes: Set<Character> = ["-", "–", "—", "－"]
         guard text.filter({ dashes.contains($0) }).count == 1,
               let idx = text.firstIndex(where: { dashes.contains($0) })
         else { return [] }
@@ -1307,6 +1392,7 @@ public final class LyricsSyncEngine {
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
         speakerExemptions: Set<String> = []
     ) -> [Bool] {
+        let texts = texts.map(creditProbeText)
         let useStructural = shouldApplyStructuralCreditFilter(texts, exemptions: speakerExemptions)
         // 免词表的双语形状:整份 ≥2 行才认(理由见 matchesBilingualCreditShape)。
         let bilingualHits = texts.filter(matchesBilingualCreditShape).count
@@ -1377,6 +1463,16 @@ public final class LyricsSyncEngine {
             if i + 1 < texts.count, !base[i + 1], looksLikeCreditValueLine(texts[i + 1]) {
                 base[i + 1] = true
             }
+        }
+        // 抬头也会排在开头那段署名后面(「作词：陈家丽」下一行才是「张学友 - 谁想轻轻偷走我的吻」)。
+        // 从头往下,前面全是署名的那一行也按抬头认;碰到第一句不是署名、也不是抬头的就停 ——
+        // 进了正文再出现同样字样的多半是真歌词。
+        for i in texts.indices {
+            if base[i] { continue }
+            guard looksLikeHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist)
+                || looksLikeLabeledHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist)
+            else { break }
+            base[i] = true
         }
         // 夹心补漏:**前后都**被上面那些规则判成署名的那一行,自己也是署名 —— 哪怕它的标签
         // 一张表都没收。治的是"逐词枚举收不住"这个根问题:单字乐器(「箫：水玥儿」,双字角色词
