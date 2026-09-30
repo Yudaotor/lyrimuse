@@ -181,14 +181,30 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 	}
 
 	// 摘译文:每个 H 行挂到它前面最近那个 F 行的时间戳上;同一 F 行下连续多行译文合成一行。
+	// 上面的判定只数纯汉字行;判定成立之后,紧跟在 F 行后面、夹着照搬原文专名的混合行
+	// (bakedMixedTranslationOf)同样按译文摘,译文轨的版权 / 译者声明(isTranslationNotice)直接丢掉。
 	var clean, tr []string
 	removedMs := map[int]bool{}
 	removedText := map[string]bool{}
-	lastStamps := ""
+	lastStamps, lastForeign := "", ""
+	prevClass = bakedLineSkip
 	trText := map[string]string{} // stamps -> 译文
 	var trOrder []string
 	for _, bl := range parsed {
-		switch bl.class {
+		class := bl.class
+		if class == bakedLineMixed {
+			if isTranslationNotice(bl.text) {
+				removedText[normLoose(bl.text)] = true
+				continue
+			}
+			if prevClass == bakedLineForeign && bakedMixedTranslationOf(bl.text, lastForeign) {
+				class = bakedLineHan
+			}
+		}
+		if class != bakedLineSkip {
+			prevClass = class
+		}
+		switch class {
 		case bakedLineHan:
 			n++
 			if bl.startMs >= 0 {
@@ -207,7 +223,7 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 			}
 			continue
 		case bakedLineForeign:
-			lastStamps = bl.stamps
+			lastStamps, lastForeign = bl.stamps, bl.text
 		}
 		clean = append(clean, bl.raw)
 	}
@@ -218,6 +234,30 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 	trLRC = strings.Join(tr, "\n")
 	cleanYRC = stripBakedYRCLines(yrc, removedMs, removedText)
 	return cleanLRC, trLRC, cleanYRC, n
+}
+
+// bakedLatinWordRe:译文里夹着的拉丁字母词(歌名、人名这类照搬原文的专名)。
+var bakedLatinWordRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9'’]*`)
+
+// bakedMixedTranslationOf:一行中英混杂的文字是不是 foreign 这句原文的译文 —— 夹着的拉丁字母词全都
+// 出现在这句原文里(不区分大小写),去掉它们之后剩下的是纯汉字行。只在整首已经判定为烘入译文之后用,
+// 不参与判定本身的计数。
+func bakedMixedTranslationOf(text, foreign string) bool {
+	words := bakedLatinWordRe.FindAllString(text, -1)
+	if len(words) == 0 || foreign == "" {
+		return false
+	}
+	have := map[string]bool{}
+	for _, w := range bakedLatinWordRe.FindAllString(foreign, -1) {
+		have[strings.ToLower(w)] = true
+	}
+	for _, w := range words {
+		if !have[strings.ToLower(w)] {
+			return false
+		}
+	}
+	class, _ := classifyBakedText(bakedLatinWordRe.ReplaceAllString(text, ""))
+	return class == bakedLineHan
 }
 
 // stripBakedYRCLines 把逐字轨里对应被摘掉的译文行删掉:按行起始毫秒对(±80ms)且这一行自己也是

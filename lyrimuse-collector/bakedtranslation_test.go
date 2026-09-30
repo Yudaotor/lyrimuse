@@ -165,3 +165,42 @@ func TestStripBakedYRCKeepsOriginalRightAfterTranslation(t *testing.T) {
 		t.Fatalf("clean LRC wrong:\n%s", cleanLRC)
 	}
 }
+
+// 酷我形态(占位文本):译文行挂在下一句原文的时间戳上,开头夹一行译文轨版权声明。判定成立之后:声明行从正文里丢掉;
+// 夹着照搬原文专名的混合译文行照样按译文摘、挂回它那句原文的时间;专名不在上一句原文里的混合行不动。
+func TestSplitBakedTranslationTakesMixedTranslationAndDropsNotice(t *testing.T) {
+	l := []string{"[00:00.15]Placeholder Song - Someone", "[00:01.42]TME享有本翻译作品的著作权", "[00:01.42]Lyrics by：Someone"}
+	for i := 0; i < 10; i++ {
+		start, next := 8000+i*4000, 8000+(i+1)*4000
+		switch i {
+		case 4:
+			l = append(l, formatLRCStamp(start)+`"Blue Moon" playing in the hall`, formatLRCStamp(next)+"走廊里回荡着《Blue Moon》的音乐声")
+		case 7:
+			l = append(l, formatLRCStamp(start)+"placeholder english line seven", formatLRCStamp(next)+"占位的第七行提到了 Tokyo")
+		default:
+			l = append(l, formatLRCStamp(start)+"placeholder english line "+string(rune('a'+i)), formatLRCStamp(next)+"占位中文译文第"+string(rune('一'+i))+"行")
+		}
+	}
+	clean, tr, _, n := splitBakedTranslation(strings.Join(l, "\n"), "", true)
+	if n != 9 {
+		t.Fatalf("应摘掉 9 行译文(含夹专名的那行),实际 %d\n%s", n, clean)
+	}
+	if strings.Contains(clean, "著作权") {
+		t.Error("译文轨的版权声明应从正文里丢掉")
+	}
+	if strings.Contains(clean, "走廊里") || !strings.Contains(tr, formatLRCStamp(8000+4*4000)+"走廊里回荡着《Blue Moon》的音乐声") {
+		t.Errorf("夹专名的译文行应挂回它那句原文的时间:\nclean=%s\ntr=%s", clean, tr)
+	}
+	if !strings.Contains(clean, "提到了 Tokyo") || strings.Contains(tr, "Tokyo") {
+		t.Errorf("专名不在上一句原文里的混合行应留在正文:\nclean=%s\ntr=%s", clean, tr)
+	}
+}
+
+// 判定不成立(不是烘入译文)时,声明行与混合行都原样留着。
+func TestSplitBakedTranslationLeavesNoticeWhenNotBaked(t *testing.T) {
+	lrc := "[00:01.42]TME享有本翻译作品的著作权\n[00:05.00]only english here\n[00:09.00]走廊里回荡着《only》的音乐声"
+	clean, _, _, n := splitBakedTranslation(lrc, "", true)
+	if n != 0 || clean != lrc {
+		t.Errorf("没判定为烘入译文时不该动正文: n=%d clean=%q", n, clean)
+	}
+}
