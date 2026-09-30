@@ -2023,6 +2023,14 @@ func runSourceContractTests() {
                             "迷你停播页: 停播时悬停控制条不出来")
                 expectEqual(view.contains("return MiniIdleStandby("), true,
                             "迷你停播页: 版式在 MiniIdleStandby(上次那首 + 一句歌词)")
+                // 拖窗口边角期间关掉行模糊(07 章决策 71):模糊是这扇窗拖动时渲染服务的大头,
+                // 漏进比较函数的话,拖动开始 / 结束时行不重画,模糊关不掉也回不来。
+                expectEqual(view.contains("suspendsBlur: windowController.isLiveResizing,"), true,
+                            "歌词窗口拖动: 行模糊跟着 isLiveResizing 暂停")
+                expectEqual(view.contains(".blur(radius: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur)"), true,
+                            "歌词窗口拖动: 暂停时模糊为 0")
+                expectEqual(view.contains("&& a.suspendsBlur == b.suspendsBlur"), true,
+                            "歌词窗口拖动: 行的 Equatable 比较带上 suspendsBlur")
                 if let mini = read("UI/MiniIdleStandby.swift") {
                     expectEqual(mini.contains("在 %@ 播放任意歌曲"), false,
                                 "迷你停播页: 不用一句话点名某家播放器(用户往往勾了好几家)")

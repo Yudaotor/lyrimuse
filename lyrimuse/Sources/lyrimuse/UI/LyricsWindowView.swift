@@ -2742,6 +2742,7 @@ struct LyricsWindowView: View {
                             showRomanization: playback.showRomanization,
                             showTranslation: playback.showTranslation,
                             reduceMotion: reduceMotion,
+                            suspendsBlur: windowController.isLiveResizing,
                             displayScale: displayScale,
                             onHover: { inside in
                                 if inside { hoveredLineID = item.id }
@@ -4506,6 +4507,9 @@ private struct LyricsLineRow: View, Equatable {
     let showRomanization: Bool
     let showTranslation: Bool
     let reduceMotion: Bool
+    /// 拖窗口边角期间关掉行模糊:行一变宽窄,渲染服务要把每一行的模糊按新尺寸重做一遍,窗口越变
+    /// 越跟不上鼠标;松手即恢复。见 07 章决策 71。
+    var suspendsBlur: Bool = false
     let displayScale: CGFloat
     let onHover: (Bool) -> Void
     let onTap: () -> Void
@@ -4528,6 +4532,7 @@ private struct LyricsLineRow: View, Equatable {
             // 漏掉它 = 换字体后这一行不重画(整表行都挂着 Equatable 跳过重绘),表现是
             // "改了字体没反应、要滚一下或换首歌才生效"。
             && a.fontFamily == b.fontFamily
+            && a.suspendsBlur == b.suspendsBlur
             && a.duetInsetUnit == b.duetInsetUnit
             && a.centered == b.centered
             && a.wordRise == b.wordRise
@@ -4699,7 +4704,7 @@ private struct LyricsLineRow: View, Equatable {
         // 也不想要这层模糊,统一用同一个开关关掉,不单独加一个新设置项。
         // 鼠标悬在哪一行,哪一行就恢复清晰 —— 跟 Apple Music 一样,让你能看清要跳去的是
         // 哪一句,再决定点不点。
-        .blur(radius: (reduceMotion || isHovered) ? 0 : lineBlur)
+        .blur(radius: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur)
         // 别给当前行挂 .scaleEffect(1.02)。.scaleEffect 是**渲染后**的仿射变换:文字先按
         // 原字号栅格化,再整体拉大 1.02 倍,是个非整数倍重采样。在 Retina 上看不太出来,在 1x
         // 外接屏上直接把**最该看清的那一行**糊掉 —— 同一张截图里当前行的字形边缘平均过渡宽度
