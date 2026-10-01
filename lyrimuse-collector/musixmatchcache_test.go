@@ -71,9 +71,9 @@ func TestMusixmatchSubRequestsReportFailures(t *testing.T) {
 		w.Write([]byte(`{"message":{"header":{"status_code":` + code + `},"body":{}}}`))
 	}))
 	defer srv.Close()
-	savedURL := musixmatchBaseURL
-	musixmatchBaseURL = srv.URL + "/"
-	t.Cleanup(func() { musixmatchBaseURL = savedURL })
+	savedBases := musixmatchBases
+	musixmatchBases = []string{srv.URL + "/"}
+	t.Cleanup(func() { musixmatchBases = savedBases })
 	musixmatchTokenMu.Lock()
 	savedTok, savedExp := musixmatchToken, musixmatchTokenExpiry
 	musixmatchToken, musixmatchTokenExpiry = "tok", time.Now().Add(time.Hour)
@@ -175,9 +175,9 @@ func TestMusixmatchPlaceholderTokenRejected(t *testing.T) {
 		w.Write([]byte(`{"message":{"header":{"status_code":200},"body":{"user_token":"UpgradeOnlyUpgradeOnlyUpgradeOnlyUpgradeOnly"}}}`))
 	}))
 	defer srv.Close()
-	savedURL := musixmatchBaseURL
-	musixmatchBaseURL = srv.URL + "/"
-	t.Cleanup(func() { musixmatchBaseURL = savedURL })
+	savedBases := musixmatchBases
+	musixmatchBases = []string{srv.URL + "/"}
+	t.Cleanup(func() { musixmatchBases = savedBases })
 	musixmatchTokenMu.Lock()
 	savedTok, savedExp := musixmatchToken, musixmatchTokenExpiry
 	musixmatchToken, musixmatchTokenExpiry = "", time.Time{}

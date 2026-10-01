@@ -21,7 +21,7 @@ func TestEveryLyricSourceHasAHostMapping(t *testing.T) {
 		"qq":         {"c.y.qq.com", "u.y.qq.com"},
 		"kugou":      {"mobilecdn.kugou.com", "lyrics.kugou.com", "krcs.kugou.com"},
 		"lrclib":     {"lrclib.net"},
-		"musixmatch": {"apic-appmobile.musixmatch.com"},
+		"musixmatch": {"apic-appmobile.musixmatch.com", "apic.musixmatch.com"},
 		"amll":       {"raw.githubusercontent.com"},
 		"lyricfind":  {"music.youtube.com"},
 		"kuwo":       {"search.kuwo.cn"},

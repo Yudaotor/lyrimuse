@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,10 +56,9 @@ import (
 //
 // 顺带一提,当时的表现不只是"少一个源":每首歌它都要把 DNS/TLS 超时白等一遍,
 // healthcheck 探两首歌要 29s;修好之后 7s。
+//
+// 主机清单是 sourcefallback.go 的 musixmatchBases:apic-appmobile 主用,apic 备用,两个用同一个 app_id、token 互认。
 const musixmatchAppID = "mac-ios-v2.0"
-
-// musixmatchBaseURL 是变量只为单测能指到本地假服务器;生产路径永远是这个值。
-var musixmatchBaseURL = "https://apic-appmobile.musixmatch.com/ws/1.1/"
 
 type musixmatchResult struct {
 	lrc string
@@ -673,6 +674,9 @@ func musixmatchHTTPClient() *http.Client {
 // musixmatchDo 发起一次带统一身份参数(app_id/usertoken/t)的请求。action=="token.get"
 // 时不附带 usertoken(避免 musixmatchEnsureToken→musixmatchDo→musixmatchEnsureToken
 // 递归),其余 action 都需要先有一个可用 token。
+//
+// 主机按 musixmatchHostOrder 的顺序试:这台没问成(musixmatchDoAt 报错,且 musixmatchHostFailed)才换下一台,
+// 答了就停 —— 包括答 404、答 captcha。
 func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]byte, error) {
 	var usedToken string
 	if action != "token.get" {
@@ -685,7 +689,46 @@ func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]b
 	// 防缓存参数取到秒:取毫秒的话同一首歌并发的几个请求 URL 几乎总不一样,同 URL 合并(httpcoalesce.go)
 	// 合并不了,救急并发时白占 musixmatch 仅有的几个在途名额。
 	params.Set("t", strconv.FormatInt(time.Now().Unix(), 10))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, musixmatchBaseURL+action+"?"+params.Encode(), nil)
+	query := params.Encode()
+	order := musixmatchHostOrder()
+	var body []byte
+	var firstErr error
+	answered := -1
+	for i, base := range order {
+		b, err := musixmatchDoAt(ctx, base, action, query)
+		if err == nil {
+			body, answered = b, i
+			break
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		if !musixmatchHostFailed(ctx, err) {
+			return nil, err
+		}
+	}
+	if answered < 0 {
+		musixmatchNoteHostsFailed(order, firstErr)
+		return nil, firstErr
+	}
+	if answered > 0 {
+		musixmatchNoteHostSwitched(order[0], order[answered], firstErr)
+	}
+	if usedToken != "" && musixmatchRejectsToken(body) {
+		musixmatchRejectToken(usedToken)
+	}
+	if action != "token.get" && musixmatchHeaderStatus(body) == 200 {
+		musixmatchAnySuccess.Store(true)
+		// 答上来了就撤掉早先记下的失败原因:它在常驻进程里别无清除之处,留着会让别名重查
+		// (lyricSourcesWorthAliasRetry)在进程余下的生命周期里一直跳过这个源 —— 一次限流、一次断网就够了。
+		musixmatchSetLastFailureReason("")
+	}
+	return body, nil
+}
+
+// musixmatchDoAt 向一台主机发这次请求。没问成(传输失败、HTTP 非 200、读不完、答的不是 Musixmatch 的应答格式)返回错误。
+func musixmatchDoAt(ctx context.Context, base, action, query string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+action+"?"+query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -702,16 +745,112 @@ func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]b
 		return nil, fmt.Errorf("musixmatch %s: status %d", action, resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
-	if err == nil && usedToken != "" && musixmatchRejectsToken(body) {
-		musixmatchRejectToken(usedToken)
+	if err != nil {
+		return nil, err
 	}
-	if err == nil && action != "token.get" && musixmatchHeaderStatus(body) == 200 {
-		musixmatchAnySuccess.Store(true)
-		// 答上来了就撤掉早先记下的失败原因:它在常驻进程里别无清除之处,留着会让别名重查
-		// (lyricSourcesWorthAliasRetry)在进程余下的生命周期里一直跳过这个源 —— 一次限流、一次断网就够了。
-		musixmatchSetLastFailureReason("")
+	// 业务结果(查无、限流、token 失效)都在 HTTP 200 的 message.header.status_code 里;解不出这个字段的
+	// 200(维护页、网关错误页)是这台主机没答上来。
+	if musixmatchHeaderStatus(body) == 0 {
+		return nil, fmt.Errorf("musixmatch %s: response is not a musixmatch envelope", action)
 	}
-	return body, err
+	return body, nil
+}
+
+// musixmatchHostFailed:这次没问成该不该换下一台主机。调用方取消 / 到期、被本地出站闸拦下(hostguard.go)都不换 ——
+// 前者问哪台都一样,后者换主机等于绕过本地限速。
+func musixmatchHostFailed(ctx context.Context, err error) bool {
+	return ctx.Err() == nil && !errors.Is(err, errHostGuarded)
+}
+
+// 主机选择的状态。主用没问成、备用问成之后的 musixmatchPreferBackupFor 里先问备用,到期再从主用试起;
+// 全部主机都没问成之后的 musixmatchSwitchHoldFor 里只问排第一的那台 —— 用户这边整个连不上 Musixmatch 时,
+// 每个请求的等待不因为多一台主机翻倍。只在进程内存里,一次性子进程每次从主用试起。
+const (
+	musixmatchPreferBackupFor = 30 * time.Minute
+	musixmatchSwitchHoldFor   = 10 * time.Minute
+)
+
+var (
+	musixmatchHostMu          sync.Mutex
+	musixmatchPreferBase      string
+	musixmatchPreferUntil     time.Time
+	musixmatchSwitchHeldUntil time.Time
+	// musixmatchHostNow 可换,只为单测;生产路径永远是 time.Now。
+	musixmatchHostNow = time.Now
+)
+
+// musixmatchHostOrder 返回这次请求依次要试的主机。
+func musixmatchHostOrder() []string {
+	bases := musixmatchBases
+	musixmatchHostMu.Lock()
+	now := musixmatchHostNow()
+	prefer := ""
+	if now.Before(musixmatchPreferUntil) && slices.Contains(bases, musixmatchPreferBase) {
+		prefer = musixmatchPreferBase
+	}
+	held := now.Before(musixmatchSwitchHeldUntil)
+	musixmatchHostMu.Unlock()
+	order := make([]string, 0, len(bases))
+	if prefer != "" {
+		order = append(order, prefer)
+	}
+	for _, b := range bases {
+		if b != prefer {
+			order = append(order, b)
+		}
+	}
+	if held && len(order) > 1 {
+		order = order[:1]
+	}
+	return order
+}
+
+// musixmatchNoteHostSwitched:排第一的 from 没问成,to 答上来了。
+func musixmatchNoteHostSwitched(from, to string, cause error) {
+	musixmatchHostMu.Lock()
+	defer musixmatchHostMu.Unlock()
+	musixmatchSwitchHeldUntil = time.Time{}
+	if len(musixmatchBases) > 0 && to == musixmatchBases[0] {
+		musixmatchPreferBase, musixmatchPreferUntil = "", time.Time{}
+		return
+	}
+	if musixmatchPreferBase == to && musixmatchHostNow().Before(musixmatchPreferUntil) {
+		return
+	}
+	musixmatchPreferBase, musixmatchPreferUntil = to, musixmatchHostNow().Add(musixmatchPreferBackupFor)
+	log.Printf("musixmatch: %s failed (%v); %s answered, asking it first for the next %s",
+		musixmatchBaseHost(from), musixmatchLogCause(cause), musixmatchBaseHost(to), musixmatchPreferBackupFor)
+}
+
+// musixmatchNoteHostsFailed:order 里每台都试过、都没问成。
+func musixmatchNoteHostsFailed(order []string, cause error) {
+	if len(order) < 2 {
+		return
+	}
+	musixmatchHostMu.Lock()
+	defer musixmatchHostMu.Unlock()
+	if musixmatchHostNow().Before(musixmatchSwitchHeldUntil) {
+		return
+	}
+	musixmatchSwitchHeldUntil = musixmatchHostNow().Add(musixmatchSwitchHoldFor)
+	log.Printf("musixmatch: all %d API hosts failed (%v); trying only %s for the next %s",
+		len(order), musixmatchLogCause(cause), musixmatchBaseHost(order[0]), musixmatchSwitchHoldFor)
+}
+
+// musixmatchLogCause 给日志用:*url.Error 只取下层错误。它的 Error() 带完整请求 URL,URL 里有 usertoken(同 networkobs.go)。
+func musixmatchLogCause(err error) error {
+	var ue *neturl.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
+}
+
+func musixmatchBaseHost(base string) string {
+	if u, err := neturl.Parse(base); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return base
 }
 
 // musixmatchTrackMatch 是 musixmatchSearchTrack 选中的候选——title/artist/album/cover

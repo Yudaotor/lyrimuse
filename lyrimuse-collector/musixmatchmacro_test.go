@@ -89,7 +89,7 @@ func (f *mxmFakeServer) called(action string) []string {
 	return out
 }
 
-// withMxmFake 把 musixmatchBaseURL 指到本地假服务器,token 直接放进内存(不申请、不落盘)。
+// withMxmFake 把 musixmatchBases 换成本地假服务器,token 直接放进内存(不申请、不落盘)。
 func withMxmFake(t *testing.T, handle func(action string, r *http.Request) string) *mxmFakeServer {
 	t.Helper()
 	resetMusixmatchTokenStateForTest(t)
@@ -106,9 +106,9 @@ func withMxmFake(t *testing.T, handle func(action string, r *http.Request) strin
 		fmt.Fprint(w, handle(action, r))
 	}))
 	t.Cleanup(srv.Close)
-	saved := musixmatchBaseURL
-	musixmatchBaseURL = srv.URL + "/ws/1.1/"
-	t.Cleanup(func() { musixmatchBaseURL = saved })
+	saved := musixmatchBases
+	musixmatchBases = []string{srv.URL + "/ws/1.1/"}
+	t.Cleanup(func() { musixmatchBases = saved })
 	return f
 }
 
