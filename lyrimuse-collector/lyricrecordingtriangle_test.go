@@ -144,14 +144,28 @@ func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
 // 封面和 canonical_artist、qq.go 的 qqCoverFallback 决定封面)。在那三处放宽等于直接采信
 // 仿冒号的署名 —— 正是 netease.go 里当年删掉 byAlbum 兜底要防的东西。
 //
-// 这个测试用扫源码的方式守它:比起注释里的一句 提醒,它能真的在 CI 里拦住。
+// 这个测试用扫源码的方式守它:比起注释里的一句 提醒,它能真的在 CI 里拦住。netease.go 里唯一允许的是
+// 只给歌词的 neteaseLyricOnlyPick(那条路不给封面、链接、歌手名、专辑 id,行为由
+// TestResolveNeteaseInfoLyricOnlyWhenIdentityAmbiguous 钉住),扫之前先把它连同文档注释一起去掉。
 func TestLyricRecordingTriangleNotUsedForIdentity(t *testing.T) {
 	for _, f := range []string{"netease.go", "qq.go"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatalf("读 %s: %v", f, err)
 		}
-		if strings.Contains(string(b), "lyricRecordingTriangleMatches") {
+		src := string(b)
+		if f == "netease.go" {
+			start := strings.Index(src, "// neteaseLyricOnlyPick:")
+			if start < 0 {
+				t.Fatal("netease.go 里找不到 neteaseLyricOnlyPick —— 守卫的豁免对不上了")
+			}
+			end := strings.Index(src[start:], "\n}\n")
+			if end < 0 {
+				t.Fatal("neteaseLyricOnlyPick 的函数体界定不出来")
+			}
+			src = src[:start] + src[start+end:]
+		}
+		if strings.Contains(src, "lyricRecordingTriangleMatches") {
 			t.Errorf("%s 里出现了 lyricRecordingTriangleMatches —— 这条档位只放行歌词候选,"+
 				"不得用于封面/canonical_artist/链接指向这类身份判定,见该函数注释", f)
 		}

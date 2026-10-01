@@ -71,15 +71,12 @@ func TestNeteaseLookupSkipsCacheWhenLyricFetchFails(t *testing.T) {
 			return http.StatusOK, `{"code":200,"result":{"songs":[{"id":66282,"name":"浮夸","artists":[{"name":"陈奕迅"}],"album":{"id":6491,"name":"U87"},"duration":283520}]}}`
 		case strings.HasSuffix(target, "/api/song/detail"):
 			return http.StatusOK, `{"code":200,"songs":[{"album":{"picUrl":"http://p1.music.126.net/x.jpg"}}]}`
-		case strings.HasSuffix(target, "/api/song/lyric"):
-			if lyricOK {
-				return http.StatusOK, `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest(neV1Lyric) + `}}`
-			}
-			return http.StatusInternalServerError, ""
 		case strings.HasSuffix(target, "/api/song/lyric/v1"):
 			if lyricOK {
-				return http.StatusOK, `{"code":200,"yrc":{"lyric":""}}`
+				return http.StatusOK, `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest(neV1Lyric) + `},"yrc":{"lyric":""}}`
 			}
+			return http.StatusInternalServerError, ""
+		case strings.HasSuffix(target, "/api/song/lyric"):
 			return http.StatusInternalServerError, ""
 		}
 		return http.StatusNotFound, ""
@@ -99,6 +96,33 @@ func TestNeteaseLookupSkipsCacheWhenLyricFetchFails(t *testing.T) {
 	got := neteaseLookupAll(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
 	if got.Lyrics == "" || f.count("music.163.com/api/search/get") != searches {
 		t.Fatalf("完整的结果应当缓存: lyrics=%q", got.Lyrics)
+	}
+}
+
+// 网易云:v1 没问成、退到老歌词接口拿到了整行,但这次缺的逐字是故障造成的,这份结果不进缓存。
+func TestNeteaseLookupSkipsCacheWhenOnlyOldLyricEndpointAnswers(t *testing.T) {
+	resetSourceCachesForTest(t)
+	f := withNeteaseFake(t, func(target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/api/search/get"):
+			return http.StatusOK, `{"code":200,"result":{"songs":[{"id":66282,"name":"浮夸","artists":[{"name":"陈奕迅"}],"album":{"id":6491,"name":"U87"},"duration":283520}]}}`
+		case strings.HasSuffix(target, "/api/song/detail"):
+			return http.StatusOK, `{"code":200,"songs":[{"album":{"picUrl":"http://p1.music.126.net/x.jpg"}}]}`
+		case strings.HasSuffix(target, "/api/song/lyric/v1"):
+			return http.StatusInternalServerError, ""
+		case strings.HasSuffix(target, "/api/song/lyric"):
+			return http.StatusOK, `{"code":200,"lrc":{"lyric":"[00:28.948]有人问我\n[00:36.141]我期待\n[00:44.000]第三句\n[00:52.000]第四句"}}`
+		}
+		return http.StatusNotFound, ""
+	})
+	first := neteaseLookupAll(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
+	if first.Lyrics == "" || first.YRC != "" {
+		t.Fatalf("前提:老接口给了整行、没有逐字: %+v", first)
+	}
+	searches := f.count("music.163.com/api/search/get")
+	neteaseLookupAll(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
+	if f.count("music.163.com/api/search/get") == searches {
+		t.Fatal("缺逐字是因为 v1 没问成,这份结果不该进缓存")
 	}
 }
 
@@ -229,5 +253,32 @@ func TestDecryptKRCBytesCapsDecompressedSize(t *testing.T) {
 	}
 	if got := decryptKRCBytes(encode(make([]byte, krcDecompressedMaxBytes+1))); got != "" {
 		t.Fatalf("超过上限的不该解: %d 字节", len(got))
+	}
+}
+
+// 网易云:v1 没问成、它的 eapi 写法答了(带逐字),这份结果是完整的,进缓存。
+func TestNeteaseLookupCachesWhenEapiLyricAnswers(t *testing.T) {
+	resetSourceCachesForTest(t)
+	f := withNeteaseFake(t, func(target string) (int, string) {
+		switch {
+		case strings.HasSuffix(target, "/api/search/get"):
+			return http.StatusOK, `{"code":200,"result":{"songs":[{"id":66282,"name":"浮夸","artists":[{"name":"陈奕迅"}],"album":{"id":6491,"name":"U87"},"duration":283520}]}}`
+		case strings.HasSuffix(target, "/api/song/detail"):
+			return http.StatusOK, `{"code":200,"songs":[{"album":{"picUrl":"http://p1.music.126.net/x.jpg"}}]}`
+		case strings.HasSuffix(target, "/api/song/lyric/v1"):
+			return http.StatusInternalServerError, ""
+		case target == "music.163.com/eapi/song/lyric/v1":
+			return http.StatusOK, `{"code":200,"lrc":{"lyric":"[00:28.948]有人问我\n[00:36.141]我期待\n[00:44.000]第三句\n[00:52.000]第四句"},"yrc":{"lyric":"[28948,2000](28948,500,0)有(29448,500,0)人"}}`
+		}
+		return http.StatusNotFound, ""
+	})
+	first := neteaseLookupAll(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
+	if first.Lyrics == "" || first.YRC == "" {
+		t.Fatalf("前提:eapi 给了整行和逐字: %+v", first)
+	}
+	searches := f.count("music.163.com/api/search/get")
+	neteaseLookupAll(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
+	if f.count("music.163.com/api/search/get") != searches {
+		t.Fatal("eapi 答了、结果完整,第二次该命中缓存")
 	}
 }

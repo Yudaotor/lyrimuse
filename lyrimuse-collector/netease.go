@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -169,9 +171,13 @@ var (
 //
 // 兜底那一条**保留不删**:分桶限流的意义就是"一条路堵了还有另一条",把 /web 删掉等于把
 // 冗余也删了。只是它现在排第二 —— 平时压根不会被用到,真轮到它时也说明首选那条出事了。
+//
+// 第三条是首选那个接口的 eapi 写法(另一条路径,返回结构相同,见 neteasefallback.go 头注)。三处搜索调用点都按
+// 这三条的顺序试。
 const (
 	neteaseSearchEndpointPrimary  = "https://music.163.com/api/search/get"
 	neteaseSearchEndpointFallback = "https://music.163.com/api/search/get/web"
+	neteaseSearchEndpointEapi     = "https://music.163.com/eapi/search/get"
 )
 
 // neteaseEndpointBucket 把请求 URL 归到"网易云按端点分桶限流"的那个桶——只取路径,
@@ -542,6 +548,9 @@ type neSearchSong struct {
 		// (实测搜 "Michael Jackson Bad",前三条全是套装:King of Pop 48 首、
 		// The Collection 76 首,原专辑排到第 13 条)。
 		ID int64 `json:"id"`
+		// PicID / PicURL:专辑封面。search/get 只给 picId(地址由 neteasePicURL 算),cloudsearch 直接给 picUrl。
+		PicID  int64  `json:"picId"`
+		PicURL string `json:"picUrl"`
 	} `json:"album"`
 	// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
 	Duration float64 `json:"duration"`
@@ -664,6 +673,54 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 		return bestOf(looseCands, true)
 	}
 	return nil
+}
+
+// neteaseLyricOnlyDurationTolerance:只给歌词的候选(neteaseLyricOnlyPick)自报时长跟本地差多少以内才收。比打分层
+// 的 12% 严得多:没有专辑佐证时只剩时长能分出剪辑版和专辑版,两者歌词相同、行时间却会错开。
+const neteaseLyricOnlyDurationTolerance = 0.03
+
+// neteaseLyricOnlyPick:neteasePickSong 挑不出(同名候选都对不上专辑、身份有歧义,或歌手写法对不上)时,给歌词用的
+// 候选。只放行歌词:调用方不拿它给封面、链接、歌手名、专辑 id,那几样判的是身份,照旧宁缺毋滥。判据:歌名闸 +
+// (歌手对得上,或收紧版三角验证 lyricRecordingTriangleMatchesGuarded)+ 版本闸 + 自报时长差在
+// neteaseLyricOnlyDurationTolerance 以内;时长最贴近的胜出,打平取搜索排在前面的。本地时长未知时不给。
+// 见 09 章决策 143。
+func neteaseLyricOnlyPick(songs []neSearchSong, artist, title, album string, durationSecs float64) *neSearchSong {
+	if durationSecs <= 0 {
+		return nil
+	}
+	// 本地歌名「X - 宣传语」(「X - 电影《Y》主题曲」)在网易云上常只叫 X:歌名闸也认去掉最后一个「 - 」尾段的写法。
+	// 版本闸仍按完整的本地歌名判,尾段里的 Live 之类照样拦。
+	head := title
+	if i := strings.LastIndex(title, " - "); i > 0 {
+		head = strings.TrimSpace(title[:i])
+	}
+	var best *neSearchSong
+	bestDiff := math.Inf(1)
+	for i := range songs {
+		s := &songs[i]
+		d := s.Duration / 1000
+		titleOK := lyricTitleAccepted(s.Name, title) || (head != title && lyricTitleAccepted(s.Name, head))
+		if d <= 0 || !titleOK || versionTagsMismatch(title, album, s.Name, s.Album.Name) {
+			continue
+		}
+		diff := math.Abs(d-durationSecs) / durationSecs
+		if diff > neteaseLyricOnlyDurationTolerance {
+			continue
+		}
+		names := make([]string, 0, len(s.Artists))
+		matched := false
+		for _, a := range s.Artists {
+			names = append(names, a.Name)
+			matched = matched || artistMatches(a.Name, artist)
+		}
+		if !matched && !lyricRecordingTriangleMatchesGuarded(s.Name, s.Album.Name, strings.Join(names, "/"), d, title, album, artist, durationSecs) {
+			continue
+		}
+		if diff < bestDiff {
+			best, bestDiff = s, diff
+		}
+	}
+	return best
 }
 
 func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
@@ -812,11 +869,14 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		// 置空查询词让下面的循环整个跳过 —— queries 在该循环之后不再被使用。
 		queries = nil
 	}
+	// allSongs:各条查询词搜回来的全部结果,身份挑不出时给 neteaseLyricOnlyPick 用。
+	var allSongs []neSong
 	for _, q := range queries {
 		songs, err := neteaseSearchSongs(get, q)
 		if err != nil {
 			continue
 		}
+		allSongs = append(allSongs, songs...)
 		if c := pick(songs); c != nil {
 			// 专辑名完全相等(albumScore=200)已是最优,直接采用;否则继续尝试下个查询看能否
 			// 更好——注意 100 分只是"宽松包含"(可能是重发/纪念版),不能当作已经够好而提前退出。
@@ -874,6 +934,13 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			}
 		}
 	}
+	// 身份挑不出时只给歌词(neteaseLyricOnlyPick):不给封面、链接、歌手名、专辑 id。满是仿冒号的歌手不走这条。
+	lyricOnly := false
+	if chosen == nil && !isNeteaseImpersonatorRidden(artist) {
+		if c := neteaseLyricOnlyPick(allSongs, artist, title, album, durationSecs); c != nil {
+			chosen, lyricOnly = c, true
+		}
+	}
 	if chosen == nil {
 		if nameOnlyArtist != "" {
 			return neteaseInfo{Artist: nameOnlyArtist} // 只拿到统一歌手名用的信号,不给封面/歌词
@@ -889,6 +956,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		DurationSecs:    chosen.Duration / 1000,
 		FromLocalClient: fromLocalClient,
 	}
+	if lyricOnly {
+		info.SongURL, info.AlbumID, info.Artist = "", 0, nameOnlyArtist
+	}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
 	// NetEase 这条数据统一拼写:pick() 选中候选已经证明其中恰好一位通过 artistMatches 核实
 	// 等于本地这唯一一人,复用那次核实结果统一这一位的写法即可。
@@ -896,7 +966,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 让 lbMeta 原样用本地标签——NetEase 对同一张专辑不同曲目的"合credit拆分"口径本就
 	// 不统一(有的单曲只记其中一位),拿这种残缺的单曲级别数据去顶替本地已经写全的多人
 	// credit,会悄悄丢人。
-	if len(artistCreditParts(artist)) < 2 {
+	if !lyricOnly && len(artistCreditParts(artist)) < 2 {
 		for _, a := range chosen.Artists {
 			if artistMatches(a.Name, artist) {
 				info.Artist = a.Name
@@ -912,82 +982,90 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		} `json:"songs"`
 	}
 	picURL := ""
-	if err := get(fmt.Sprintf("https://music.163.com/api/song/detail?ids=[%d]", id), &dr); err == nil {
-		if len(dr.Songs) > 0 {
-			picURL = dr.Songs[0].Album.PicURL
+	// 只给歌词时不取封面。搜索结果自带封面的(cloudsearch 的 picUrl、search/get 的 picId)不再为它问详情接口。
+	if !lyricOnly {
+		if picURL = chosen.Album.PicURL; picURL == "" {
+			picURL = neteasePicURL(chosen.Album.PicID)
 		}
-	} else {
-		// 老详情接口没问成(或这个桶被拒):退到 v3 详情接口,另一个桶,字段名是 al / ar / dt。
-		var v3 struct {
-			Songs []struct {
-				Al struct {
-					PicURL string `json:"picUrl"`
-				} `json:"al"`
-			} `json:"songs"`
-		}
-		if err := get("https://music.163.com/api/v3/song/detail?c="+neturl.QueryEscape(fmt.Sprintf(`[{"id":%d}]`, id)), &v3); err == nil && len(v3.Songs) > 0 {
-			picURL = v3.Songs[0].Al.PicURL
+	}
+	if !lyricOnly && picURL == "" {
+		if err := get(fmt.Sprintf("https://music.163.com/api/song/detail?ids=[%d]", id), &dr); err == nil {
+			if len(dr.Songs) > 0 {
+				picURL = dr.Songs[0].Album.PicURL
+			}
+		} else {
+			// 老详情接口没问成(或这个桶被拒):退到 v3 详情接口,另一个桶,字段名是 al / ar / dt;
+			// 它也没问成时问老详情接口的 eapi 写法(返回结构同 dr)。
+			var v3 struct {
+				Songs []struct {
+					Al struct {
+						PicURL string `json:"picUrl"`
+					} `json:"al"`
+				} `json:"songs"`
+			}
+			if err := get("https://music.163.com/api/v3/song/detail?c="+neturl.QueryEscape(fmt.Sprintf(`[{"id":%d}]`, id)), &v3); err == nil {
+				if len(v3.Songs) > 0 {
+					picURL = v3.Songs[0].Al.PicURL
+				}
+			} else if get(fmt.Sprintf("https://music.163.com/eapi/song/detail?ids=[%d]", id), &dr) == nil && len(dr.Songs) > 0 {
+				picURL = dr.Songs[0].Album.PicURL
+			}
 		}
 	}
 	if picURL != "" {
 		info.Cover = picURL + neteaseCoverQuery
 	}
-	// 带时间轴的 LRC 歌词，网页跟实时进度条同步高亮滚动。一次老接口就能拿齐原文(lrc)+
-	// 中文翻译(tlyric)+罗马音(romalrc)，三者时间轴对齐；逐字(yrc，词级)走 v1 接口、只有
-	// 部分歌有。只在确有时间戳时带上；同一首歌各版本歌词相同，选中版本无词时退到其它同名版本。
+	// 取词:一个 v1 请求拿齐整行(lrc)+ 中文翻译(tlyric)+ 罗马音(romalrc)+ 逐字(yrc,词级,只有部分歌有),
+	// 纯音乐标记也在;署名行换回老接口写法(neteaseV1LyricLines)。整行、译文、罗马音三者时间轴对齐;逐字是另一套轴,
+	// 断行也不同,不能按时间戳跟整行配对。v1 没问成(或这个桶被拒)时先问 v1 的 eapi 写法(同一份返回),
+	// 再不行退到老接口 /api/song/lyric(另一个桶,同一套整行 / 译文 / 罗马音,没有逐字)。见 09 章决策 143。
 	// ok=false 表示这次取词请求**根本没成功**(限流/超时/非 200)。必须跟"成功拿到响应、
 	// 但正文是空的"分开:后者才是 TrackFoundNoLyrics 说的"平台没有歌词",前者是源故障,
 	// 报成"这首歌没词"就是把网络问题栽赃给曲库(deezer.go 头注踩过同型的坑)。
-	// authoritative=false:这份是从 v1 接口退回来的,不拿它下「这首没词」的结论(见下面 TrackFoundNoLyrics)。
-	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic, ok, authoritative bool) {
-		var r struct {
-			Lrc struct {
-				Lyric string `json:"lyric"`
-			} `json:"lrc"`
-			Tlyric struct {
-				Lyric string `json:"lyric"`
-			} `json:"tlyric"`
-			Romalrc struct {
-				Lyric string `json:"lyric"`
-			} `json:"romalrc"`
-			// 纯音乐标记,见 neteaseInfo.PureMusic。补上 —— 在此之前这个字段
-			// 压根不在结构体里,信号在解码那一步就丢了。
-			PureMusic bool `json:"pureMusic"`
-		}
-		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err == nil {
-			return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
-				stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
-				stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
-				r.PureMusic, true, true
-		}
-		// 老歌词接口没问成(或这个桶被拒):退到 v1 接口(另一个桶)取同一套整行 / 译文 / 罗马音。
-		// v1 没有 pureMusic 字段,纯音乐只能靠正文占位判(isInstrumentalPlaceholderLyric)。
-		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric/v1?id=%d&lv=-1&tv=-1&rv=-1", songID), &r); err != nil {
-			noteLyricSubFetchFailure(ctx)
-			return "", "", "", false, false, false
-		}
-		return stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Lrc.Lyric)),
-			stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Tlyric.Lyric)),
-			stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Romalrc.Lyric)),
-			false, true, false
+	type neLyricResp struct {
+		Lrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"lrc"`
+		Tlyric struct {
+			Lyric string `json:"lyric"`
+		} `json:"tlyric"`
+		Romalrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"romalrc"`
+		Yrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"yrc"`
+		// 纯音乐标记,见 neteaseInfo.PureMusic。
+		PureMusic bool `json:"pureMusic"`
 	}
-	fetchYRC := func(songID int64) string {
-		var r struct {
-			Yrc struct {
-				Lyric string `json:"lyric"`
-			} `json:"yrc"`
+	fetchBundle := func(songID int64) (lrc, tr, roma, yrc string, pureMusic, ok bool) {
+		for _, base := range []string{"https://music.163.com/api/song/lyric/v1", "https://music.163.com/eapi/song/lyric/v1"} {
+			var r neLyricResp
+			if err := get(fmt.Sprintf("%s?id=%d&lv=-1&tv=-1&rv=-1&yv=-1", base, songID), &r); err != nil {
+				continue
+			}
+			if y := stripNeteaseEscapedApostrophes(r.Yrc.Lyric); strings.Contains(y, "[") && len(y) < 40000 {
+				yrc = y
+			}
+			return stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Lrc.Lyric)),
+				stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Tlyric.Lyric)),
+				stripNeteaseEscapedApostrophes(neteaseV1LyricLines(r.Romalrc.Lyric)),
+				yrc, r.PureMusic, true
 		}
-		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric/v1?id=%d&yv=-1", songID), &r); err != nil {
+		var r neLyricResp
+		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err != nil {
 			noteLyricSubFetchFailure(ctx)
-			return ""
+			return "", "", "", "", false, false
 		}
-		if y := stripNeteaseEscapedApostrophes(r.Yrc.Lyric); strings.Contains(y, "[") && len(y) < 40000 {
-			return y
-		}
-		return ""
+		// 老接口没有逐字:这次的逐字是因为 v1 没问成才缺的,这份结果不进缓存,下次重取。
+		noteLyricSubFetchFailure(ctx)
+		return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
+			stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
+			stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
+			"", r.PureMusic, true
 	}
 	info.SongID = id
-	lrc, tr, roma, pureMusic, lyricFetchOK, lyricAuthoritative := fetchBundle(id)
+	lrc, tr, roma, yrc, pureMusic, lyricFetchOK := fetchBundle(id)
 	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
 	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。
 	info.PureMusic = pureMusic || isInstrumentalPlaceholderLyric(lrc)
@@ -1005,8 +1083,8 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	//
 	// !info.PureMusic:纯音乐是另一个更强的结论,由 instrumentalMarker 那条路负责,两者互斥。
 	//
-	// lyricAuthoritative:只认老接口的答复。v1 接口的「没词」长什么样没实测过,退到它时不下这个结论。
-	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && lyricAuthoritative && isCreditOnlyLRC(lrc) && !info.PureMusic
+	// 两个接口对没词的曲目给的都是只有署名的正文(v1 是 JSON 署名行,换回老接口写法之后同形,实测)。
+	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic
 	if isTimedLRC(lrc) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {
@@ -1015,7 +1093,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		if isTimedLRC(roma) {
 			info.Roma = roma
 		}
-		info.YRC = fetchYRC(id) // 逐字，无则空串，前端退回行级
+		info.YRC = yrc // 逐字，无则空串，前端退回行级
 	}
 	return info
 }
@@ -1101,10 +1179,11 @@ func neteaseAlbumTracks(ctx context.Context, albumID int64) ([]albumTrack, bool)
 		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
 		return true
 	}
-	if !fetch(fmt.Sprintf("https://music.163.com/api/album/%d", albumID)) {
-		if !fetch(fmt.Sprintf("https://music.163.com/api/v1/album/%d", albumID)) {
-			return nil, false
-		}
+	// 第三条是老专辑接口的 eapi 写法(返回结构同老接口,cookie 照样带)。
+	if !fetch(fmt.Sprintf("https://music.163.com/api/album/%d", albumID)) &&
+		!fetch(fmt.Sprintf("https://music.163.com/api/v1/album/%d", albumID)) &&
+		!fetch(fmt.Sprintf("https://music.163.com/eapi/album/%d", albumID)) {
+		return nil, false
 	}
 	songs := payload.Album.Songs
 	if len(songs) == 0 {
@@ -1223,11 +1302,12 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		return 0, false, true // 请求成功、确实没有匹配的专辑
 	}
 	const query = "?type=10&limit=5&s="
-	if id, ok, succeeded := get(neteaseSearchEndpointPrimary + query + neturl.QueryEscape(q)); succeeded {
-		return id, ok
+	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
+		if id, ok, succeeded := get(endpoint + query + neturl.QueryEscape(q)); succeeded {
+			return id, ok
+		}
 	}
-	id, ok, _ := get(neteaseSearchEndpointFallback + query + neturl.QueryEscape(q))
-	return id, ok
+	return 0, false
 }
 
 // retryTitleFromAlbumMaxDurationDiffSecs 故意卡得很紧:这是**唯一**一处纯粹依赖时长做
@@ -1470,12 +1550,15 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		return tracks, true
 	}
 	const query = "?type=1&limit=30&s="
-	tracks, reqOK := get(neteaseSearchEndpointPrimary + query + neturl.QueryEscape(q))
-	if !reqOK {
-		tracks, reqOK = get(neteaseSearchEndpointFallback + query + neturl.QueryEscape(q))
-		if !reqOK {
-			return "", 0, false
+	var tracks []albumTrack
+	reqOK := false
+	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
+		if tracks, reqOK = get(endpoint + query + neturl.QueryEscape(q)); reqOK {
+			break
 		}
+	}
+	if !reqOK {
+		return "", 0, false
 	}
 	return bestAlbumTrackByDurationDetailed(topSearchRanked(tracks, retryTitleFromArtistSearchMaxRank), durationSecs)
 }
@@ -1652,6 +1735,22 @@ func bestAlbumTrackByDurationDetailed(tracks []albumTrack, durationSecs float64)
 // 不带参数的原图地址:那样 PNG 原图照原样下发。取色(loadCoverImage)和清晰度判定
 // (coverURLIntendedEdge)都认这个形状,改写法时三处一起改。
 const neteaseCoverQuery = "?imageView&thumbnail=3000y3000&type=jpg&quality=90"
+
+// neteasePicURL 由专辑的 picId 算出封面地址:网易云图床的路径段是 picId 的十进制串逐字节跟固定串异或、取 md5、
+// URL 安全的 base64,跟详情接口给的 picUrl 逐字节相同(实测)。picId<=0 返回空串。
+func neteasePicURL(picID int64) string {
+	if picID <= 0 {
+		return ""
+	}
+	magic := []byte("3go8&$8*3*3h0k(2)2")
+	id := []byte(strconv.FormatInt(picID, 10))
+	for i := range id {
+		id[i] ^= magic[i%len(magic)]
+	}
+	sum := md5.Sum(id)
+	seg := strings.NewReplacer("/", "_", "+", "-").Replace(base64.StdEncoding.EncodeToString(sum[:]))
+	return "https://p1.music.126.net/" + seg + "/" + strconv.FormatInt(picID, 10) + ".jpg"
+}
 
 // neteaseCoverUpgrade 把存量的 `?param=WxH` 网易云封面地址换成 neteaseCoverQuery:同一张图的另一档,
 // 不是换封面。不是网易云图床、或已经是这个形状的,原样返回。
