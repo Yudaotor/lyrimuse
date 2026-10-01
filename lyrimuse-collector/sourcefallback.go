@@ -16,7 +16,8 @@ import (
 //     mlyric.kuwo.cn 的 lrcx=0(kuwolrcx.go kuwoFetchMobiLRC)
 //   - 咪咕:搜索与专辑信息都在 pd.musicapp / app.c.nf / c.musicapp 三个主机上;搜索三个主机都没问成再问 jadeite 的
 //     另一套搜索服务(migu.go miguJadeiteSearch);歌词文件 https 没取到按 http 再取一次(miguFetchFile)
-//   - 汽水:歌词 beta-luna.douyin.com → api.qishui.com(同一个 /luna/h5/seo_track)
+//   - 汽水:搜索 api.qishui.com → beta-luna.douyin.com(同一个 /luna/search/track);歌词 beta-luna.douyin.com →
+//     api.qishui.com(同一个 /luna/h5/seo_track),两个都没问成或应答认不出形状时取曲目分享页(soda.go sodaFetchSharePage)
 //   - YouTube Music:music.youtube.com → youtubei.googleapis.com → www.youtube.com(同一套 InnerTube)
 //   - AMLL:raw.githubusercontent.com → jsDelivr 的两个镜像;404 是「库里没有这首」,不换镜像
 //   - Musixmatch:apic-appmobile → apic(同一个 app_id,token 互认,同一请求答的内容一致)。换不换、先问哪个
@@ -37,6 +38,7 @@ var (
 	miguSearchHosts = []string{"pd.musicapp.migu.cn", "app.c.nf.migu.cn", "c.musicapp.migu.cn"}
 	miguAlbumHosts  = []string{"app.c.nf.migu.cn", "pd.musicapp.migu.cn", "c.musicapp.migu.cn"}
 	sodaSeoHosts    = []string{sodaSeoTrackHost, sodaSearchHost}
+	sodaSearchHosts = []string{sodaSearchHost, sodaSeoTrackHost}
 	ytmusicAPIBases = []string{ytmusicDomain, "https://youtubei.googleapis.com", "https://www.youtube.com"}
 	amllBases       = []string{
 		amllRawBase,

@@ -85,6 +85,87 @@ func TestSodaSeoTrackFallsBackToQishui(t *testing.T) {
 	}
 }
 
+// 搜索:api.qishui.com 没问成换 beta-luna;答了(哪怕没有结果)就停。
+func TestSodaSearchFallsBackToBetaLuna(t *testing.T) {
+	f := withKugouFake(t, func(target string) (int, string) {
+		switch target {
+		case "https://api.qishui.com/luna/search/track":
+			return http.StatusBadGateway, ""
+		case "https://beta-luna.douyin.com/luna/search/track":
+			return http.StatusOK, `{"result_groups":[{"id":"tracks","data":[{"entity":{"track":{"id":"1","name":"Sorry"}}}]}]}`
+		}
+		return http.StatusNotFound, ""
+	})
+	items, err := sodaSearch(qqRoundCtx(), "方大同", "Sorry")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("该从 beta-luna 拿到: %+v %v", items, err)
+	}
+	if f.count("https://api.qishui.com/luna/search/track") != 1 {
+		t.Error("主用主机该先问一次")
+	}
+
+	f2 := withKugouFake(t, func(target string) (int, string) {
+		if target == "https://api.qishui.com/luna/search/track" {
+			return http.StatusOK, `{"result_groups":[]}`
+		}
+		return http.StatusOK, `{"result_groups":[{"id":"tracks","data":[{"entity":{"track":{"id":"1","name":"Sorry"}}}]}]}`
+	})
+	if items, err := sodaSearch(qqRoundCtx(), "方大同", "Sorry"); err != nil || len(items) != 0 {
+		t.Fatalf("主机答了没有结果就是没有: %+v %v", items, err)
+	}
+	if f2.count("https://beta-luna.douyin.com/luna/search/track") != 0 {
+		t.Error("答了就停,不该再问 beta-luna")
+	}
+}
+
+// 取词:两个主机都没问成、或应答认不出形状时取分享页;分享页也不行时原来的结局照旧交出去。
+func TestSodaSeoTrackFallsBackToSharePage(t *testing.T) {
+	sharePage := string(sodaTestSharePage(`{` + sodaTestShareTrackInfo + `,"lyrics":{"lyricType":"krc","sentences":[` +
+		`{"startMs":19650,"endMs":26500,"text":"当我","words":[{"startMs":19650,"endMs":20020,"text":"当"},{"startMs":20330,"endMs":20700,"text":"我"}]},` +
+		`{"startMs":27410,"endMs":34380,"text":"伤你","words":[{"startMs":27410,"endMs":27780,"text":"伤"},{"startMs":28130,"endMs":28500,"text":"你"}]},` +
+		`{"startMs":50050,"endMs":52450,"text":"so","words":[{"startMs":50050,"endMs":52450,"text":"so"}]}]}}`))
+	for _, c := range []struct {
+		name       string
+		seo        func() (int, string)
+		shareUp    bool
+		wantLyrics bool
+		wantBroken bool
+	}{
+		{"两个主机都没问成", func() (int, string) { return http.StatusBadGateway, "" }, true, true, false},
+		{"应答认不出形状", func() (int, string) { return http.StatusOK, `{"lyric":{"content":"x"}}` }, true, true, false},
+		{"认不出形状、分享页也不行", func() (int, string) { return http.StatusOK, `{"lyric":{"content":"x"}}` }, false, false, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			withKugouFake(t, func(target string) (int, string) {
+				switch target {
+				case "https://beta-luna.douyin.com/luna/h5/seo_track", "https://api.qishui.com/luna/h5/seo_track":
+					return c.seo()
+				case "https://music.douyin.com/qishui/share/track":
+					if c.shareUp {
+						return http.StatusOK, sharePage
+					}
+					return http.StatusBadGateway, ""
+				}
+				return http.StatusNotFound, ""
+			})
+			r, _, broken, _ := sodaFetchSeoTrack(qqRoundCtx(), "6705555863068739585")
+			if r.empty() == c.wantLyrics || broken != c.wantBroken {
+				t.Fatalf("lyrics=%q yrc=%q broken=%v", r.lyrics, r.yrc, broken)
+			}
+			if c.wantLyrics && r.yrc == "" {
+				t.Error("分享页的逐字应当带出来")
+			}
+		})
+	}
+}
+
+// 分享页主机不进汽水的熔断映射:专辑预取也取它,那边的故障不该停掉歌词源。
+func TestSodaSharePageHostStaysUnmapped(t *testing.T) {
+	if got := lyricSourceForHost("music.douyin.com"); got != "" {
+		t.Errorf("lyricSourceForHost(music.douyin.com) = %q, 应为空", got)
+	}
+}
+
 func TestYTMusicPostFallsBackAcrossInnerTubeHosts(t *testing.T) {
 	f := withKugouFake(t, func(target string) (int, string) {
 		switch target {

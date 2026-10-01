@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // 汽水音乐(Soda Music)歌词源 —— 全部源里第二个能给出**官方逐字**时间轴的(另一个是
@@ -38,12 +40,15 @@ import (
 //
 // 这是给爬虫用的 SEO 端点,不是稳定契约:同一份客户端的 PC `track_v2` 接口已经下线过
 // 一次。域名还带着 `beta-` 前缀。所以全程 fail-soft——取不到就当没有候选,不影响别的源。
+// 两个主机都没问成、或应答不再是认得出的形状时,改取网页版的曲目分享页(sodaFetchSharePage):
+// 同一份歌词和逐字时间轴嵌在页面里,只是没有译文。
 //
 // # 正文格式跟酷狗 KRC 逐字节同构
 //
 // `[行始ms,行长ms]<字内偏移ms,字长ms,0>字` —— 跟解密后的酷狗 KRC 正文**完全一样**,所以
 // 归一化直接复用 krcToLRC / krcToYRC 两个现成函数(krcWordRegex 连尖括号都对得上),
 // 不另写解析器。逐字数据因此天然是 YRCParser 语法,跟 netease/qq/kugou 同一口径。
+// 少数曲目的 `lyric.type` 是 "lrc",正文是普通逐行 LRC、没有逐字,按逐行歌词收下。
 
 const (
 	// sodaSeoTrackPath 是 web 端的 SEO 曲目端点路径,主机按 sodaSeoHosts 的顺序试(sourcefallback.go)。
@@ -51,6 +56,11 @@ const (
 	sodaSeoTrackPath = "/luna/h5/seo_track"
 	// sodaSeoTrackHost 单独列出来给熔断的主机映射用(sourcebreaker.go)。
 	sodaSeoTrackHost = "beta-luna.douyin.com"
+	// sodaSharePageURL:网页版曲目分享页,取词的最后一级备用(sodaFetchSharePage)。这个主机不进
+	// 熔断映射:专辑预取也取它(sodaalbum.go),那边的故障不该停掉歌词源。
+	sodaSharePageURL = "https://music.douyin.com/qishui/share/track"
+	// sodaTrackPageParserName:parserdrift.go 里分享页取词这条路径的名字。
+	sodaTrackPageParserName = "soda-track-share-page"
 	// sodaImageBase / sodaImageTemplate:接口没带 url_cover.urls / template_prefix 时的兜底值。
 	// 图片地址是「前缀 + uri + ~模板-处理参数.格式」,缺了 `~模板-...` 那段图片服务回 400。
 	sodaImageBase     = "https://p3-luna.douyinpic.com/img/"
@@ -250,15 +260,128 @@ func sodaLyricByID(ctx context.Context, trackID, artist, title string) (sodaResu
 	return r, false
 }
 
-// sodaFetchSeoTrack 发一次 seo_track 请求并归一化。分出来是为了让单测能直接喂响应体
-// (见 sodaParseSeoTrack)。
+// sodaFetchSeoTrack 按 sodaSeoHosts 逐个主机问 seo_track 并归一化(响应体的解析见 sodaParseSeoTrack)。
+// 都没问成(而且不是调用方取消)或应答认不出形状时改取曲目分享页,分享页也不行才把原来的结局交出去。
 func sodaFetchSeoTrack(ctx context.Context, trackID string) (res sodaResult, trackFoundNoLyrics, broken bool, err error) {
 	err = tryEach(ctx, sodaSeoHosts, func(host string) error {
 		var e error
 		res, trackFoundNoLyrics, broken, e = sodaFetchSeoTrackAt(ctx, host, trackID)
 		return e
 	})
+	if (err == nil && !broken) || ctx.Err() != nil {
+		return res, trackFoundNoLyrics, broken, err
+	}
+	if r, noLyrics, ok := sodaFetchSharePage(ctx, trackID); ok {
+		if broken {
+			log.Printf("soda: seo_track for id %s answered without a track id; used the share page", trackID)
+		} else {
+			log.Printf("soda: seo_track for id %s failed (%v); used the share page", trackID, err)
+		}
+		return r, noLyrics, false, nil
+	}
 	return res, trackFoundNoLyrics, broken, err
+}
+
+// sodaFetchSharePage 取曲目分享页里嵌着的歌词。ok=false:页面没取到,或不是认得的形状。
+func sodaFetchSharePage(ctx context.Context, trackID string) (res sodaResult, trackFoundNoLyrics, ok bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sodaSharePageURL+"?track_id="+neturl.QueryEscape(trackID), nil)
+	if err != nil {
+		return sodaResult{}, false, false
+	}
+	req.Header.Set("User-Agent", sodaUserAgent)
+	resp, err := doHTTPTracked(lyricHTTPClient(sodaLyricTimeout), req)
+	if err != nil {
+		return sodaResult{}, false, false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return sodaResult{}, false, false
+	}
+	page, err := io.ReadAll(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes))
+	if err != nil {
+		return sodaResult{}, false, false
+	}
+	body, found := sodaParseSharePage(page, trackID)
+	if !found {
+		noteParserUnrecognized(sodaTrackPageParserName, "_ROUTER_DATA loaderData.track_page.audioWithLyricsOption missing or track id differs")
+		return sodaResult{}, false, false
+	}
+	noteParserRecognized(sodaTrackPageParserName)
+	r, noLyrics, _ := sodaParseSeoTrack(body)
+	return r, noLyrics, true
+}
+
+// sodaParseSharePage 把分享页 `_ROUTER_DATA = {…}` 里的曲目与歌词换成 seo_track 的应答形状,归一化
+// 交给 sodaParseSeoTrack。页面上的曲目 id 必须等于要的那个,否则不认。纯函数,单测直接喂页面。
+//
+// 歌词每句有两种形状:带逐字 words 的(lyricType krc),拼回 KRC 正文;只有 start(秒)的(lyricType
+// lrc),拼成逐行 LRC。页面在正文前插了 songMakerTeamSentences 那几句作词作曲,seo_track 的正文里没有,
+// 跳过。页面上第一句的起点恒为 0、最后一句的终点是个极大的占位值,所以 KRC 那种的行起止取首字的起点、
+// 末字的终点(跟 seo_track 正文一致);逐行那种没有字可取,首句起点只能是 0。
+func sodaParseSharePage(page []byte, trackID string) (sodaSeoTrackResponse, bool) {
+	marker := []byte("_ROUTER_DATA = ")
+	i := bytes.Index(page, marker)
+	if i < 0 {
+		return sodaSeoTrackResponse{}, false
+	}
+	var data struct {
+		LoaderData struct {
+			TrackPage struct {
+				Option struct {
+					// trackInfo 跟 seo_track.track 同一个结构,直接解进 sodaSeoTrackResponse。
+					TrackInfo json.RawMessage `json:"trackInfo"`
+					Credits   []string        `json:"songMakerTeamSentences"`
+					Lyrics    struct {
+						Sentences []struct {
+							Start *float64 `json:"start"` // 秒
+							Text  string   `json:"text"`
+							Words []struct {
+								StartMs int64  `json:"startMs"`
+								EndMs   int64  `json:"endMs"`
+								Text    string `json:"text"`
+							} `json:"words"`
+						} `json:"sentences"`
+					} `json:"lyrics"`
+				} `json:"audioWithLyricsOption"`
+			} `json:"track_page"`
+		} `json:"loaderData"`
+	}
+	// 只解第一个 JSON 值,后面紧跟着的是页面脚本。
+	if err := json.NewDecoder(bytes.NewReader(page[i+len(marker):])).Decode(&data); err != nil {
+		return sodaSeoTrackResponse{}, false
+	}
+	opt := data.LoaderData.TrackPage.Option
+	var body sodaSeoTrackResponse
+	if len(opt.TrackInfo) == 0 || json.Unmarshal(opt.TrackInfo, &body.SeoTrack.Track) != nil || body.SeoTrack.Track.ID != trackID {
+		return sodaSeoTrackResponse{}, false
+	}
+	credits := make(map[string]bool, len(opt.Credits))
+	for _, c := range opt.Credits {
+		credits[strings.TrimSpace(c)] = true
+	}
+	oneLine := strings.NewReplacer("\r", "", "\n", "")
+	var lines []string
+	for _, s := range opt.Lyrics.Sentences {
+		text := strings.TrimSpace(s.Text)
+		if credits[text] {
+			continue
+		}
+		if n := len(s.Words); n > 0 {
+			start := s.Words[0].StartMs
+			var b strings.Builder
+			fmt.Fprintf(&b, "[%d,%d]", start, max(s.Words[n-1].EndMs-start, 0))
+			for _, w := range s.Words {
+				fmt.Fprintf(&b, "<%d,%d,0>%s", max(w.StartMs-start, 0), max(w.EndMs-w.StartMs, 0), oneLine.Replace(w.Text))
+			}
+			lines = append(lines, b.String())
+			continue
+		}
+		if s.Start != nil && text != "" {
+			lines = append(lines, lrcTimestamp(int(math.Round(*s.Start*1000)))+oneLine.Replace(text))
+		}
+	}
+	body.Lyric.Content = strings.Join(lines, "\n")
+	return body, true
 }
 
 // sodaFetchSeoTrackAt 打一个主机上的 seo_track;两个主机同一个路径、同一个响应结构(实测)。
@@ -313,7 +436,11 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 		return sodaResult{}, true, false
 	}
 	// 跟酷狗 KRC 正文同构,两个现成函数直接用,见头注。
-	lrc := krcToLRC(content)
+	lrc, yrc := krcToLRC(content), krcToYRC(content)
+	if lrc == "" && isTimedLRC(content) {
+		// 普通逐行 LRC(lyric.type 为 "lrc"),没有逐字。
+		lrc, yrc = strings.TrimSpace(content), ""
+	}
 	if lrc == "" {
 		// 没有计时行 = 拿到的是个没法用的壳,口径同 krcToLRC 里那条守卫。曲目本身是在的,
 		// 所以归"有这首歌、没有可用歌词",不是端点坏了。
@@ -332,9 +459,9 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 	}
 	return sodaResult{
 		lyrics:       lrc,
-		yrc:          krcToYRC(content),
+		yrc:          yrc,
 		tr:           tr,
-		title:        strings.TrimSpace(t.Name),
+		title:        sodaTrackTitle(t.Name),
 		artist:       strings.Join(names, "/"),
 		album:        strings.TrimSpace(t.Album.Name),
 		cover:        sodaCoverURL(t.Album.URLCover.URI, t.Album.URLCover.URLs, t.Album.URLCover.TemplatePrefix),
@@ -382,11 +509,13 @@ func sodaCoverNeedsTransform(u string) bool {
 //
 // 排序不能直接信:实测搜"方大同 Sorry",第 2 条是 Live 版、第 5 条是 Justin Bieber
 // 的同名歌。所以跟酷我那套一样**自己重新打分**,身份闸用跟别的源完全一致的判定函数
-// (lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch),不为这一个源
-// 另起一套更松的规则。
+// (lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch,歌手对不上时加酷狗
+// 那条三角验证并收紧一道,见 sodaRecordingTriangleMatches),不为这一个源另起一套更松的规则;只把
+// 汽水自己的歌名写法先归一(sodaTrackTitle,同酷我的 kuwoSongTitle)。
 const (
-	sodaSearchBase = "https://api.qishui.com/luna/search/track"
-	// sodaSearchHost 给熔断的主机映射用(sourcebreaker.go),跟取词端点不是同一个主机。
+	// sodaSearchPath:搜索端点的路径,主机按 sodaSearchHosts 的顺序试(sourcefallback.go)。
+	sodaSearchPath = "/luna/search/track"
+	// sodaSearchHost 给熔断的主机映射用(sourcebreaker.go)。
 	sodaSearchHost = "api.qishui.com"
 	// sodaSearchAID:汽水 web 端的固定应用号,跟设备无关。
 	sodaSearchAID = "386088"
@@ -458,7 +587,7 @@ func sodaParseSearch(body sodaSearchResponse) []sodaSearchItem {
 			}
 			out = append(out, sodaSearchItem{
 				ID:       strings.TrimSpace(t.ID),
-				Name:     strings.TrimSpace(t.Name),
+				Name:     sodaTrackTitle(t.Name),
 				Artist:   strings.Join(names, "/"),
 				Album:    strings.TrimSpace(t.Album.Name),
 				Duration: float64(t.Duration) / 1000,
@@ -471,19 +600,40 @@ func sodaParseSearch(body sodaSearchResponse) []sodaSearchItem {
 	return out
 }
 
+// sodaTrackTitle 把汽水「歌名 - 限定词」的写法(「X - Album Version」「X - 录音室版本」)
+// 改成别的源通用的「歌名 (限定词)」:共用的歌名闸按去括号那一档认得出它,限定词留在括号里照样
+// 给版本闸判(两种位置版本闸本来就都认,见 titleQualifierSegments)。只改最后一个「 - 」。
+func sodaTrackTitle(name string) string {
+	name = strings.TrimSpace(name)
+	i := strings.LastIndex(name, " - ")
+	if i <= 0 {
+		return name
+	}
+	head, tail := strings.TrimSpace(name[:i]), strings.TrimSpace(name[i+len(" - "):])
+	if head == "" || tail == "" {
+		return name
+	}
+	return head + " (" + tail + ")"
+}
+
 // sodaCandidateScore 给一条搜索结果打分:分数越高越像本地这首歌,负数 = 淘汰。
 // 判据与取值口径同 kuwoCandidateScore,见那边的注释。纯函数,便于单测。
+//
+// 歌手对不上时还有第二条依据 sodaRecordingTriangleMatches。这样收下的从 0 分起算,排在歌手对得上的后面。
 func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durationSecs float64) int {
 	if !lyricTitleAccepted(item.Name, title) {
 		return -1
 	}
+	score := 100
 	if !lyricSourceArtistMatches(item.Artist, artist) {
-		return -1
+		if !sodaRecordingTriangleMatches(item, artist, title, album, durationSecs) {
+			return -1
+		}
+		score = 0
 	}
 	if versionTagsMismatch(title, album, item.Name, item.Album) {
 		return -1
 	}
-	score := 100
 	if durationSecs > 0 {
 		if item.Duration <= 0 {
 			return score // 时长未知,不额外加分也不扣分
@@ -497,19 +647,50 @@ func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durati
 	return score
 }
 
-// sodaSearch 发一次搜索请求。
+// sodaRecordingTriangleMatches:歌名逐字同名 + 专辑对得上 + 时长差在 1% 以内算同一次录音(口径同酷狗,
+// lyricRecordingTriangleMatches),外加一道:候选的专辑名就是歌名(单曲)时,专辑对得上证明不了是同一张
+// 发行,汽水曲库里用户上传的同名翻唱多、专辑名常就是歌名,时长碰巧在 1% 以内就会混进来;这时还要两边
+// 歌手名归一后一个包含另一个(「A B」对「AB」、「前缀A」对「A」)。见 09 章决策 141。
+func sodaRecordingTriangleMatches(item sodaSearchItem, artist, title, album string, durationSecs float64) bool {
+	if !lyricRecordingTriangleMatches(item.Name, item.Album, item.Duration, title, album, durationSecs) {
+		return false
+	}
+	if normLoose(item.Album) != normLoose(item.Name) {
+		return true
+	}
+	short, long := normLoose(item.Artist), normLoose(artist)
+	if utf8.RuneCountInString(short) > utf8.RuneCountInString(long) {
+		short, long = long, short
+	}
+	return utf8.RuneCountInString(short) >= 2 && strings.Contains(long, short)
+}
+
+// sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。
 func sodaSearch(ctx context.Context, artist, title string) ([]sodaSearchItem, error) {
 	q := strings.TrimSpace(strings.TrimSpace(artist) + " " + strings.TrimSpace(title))
 	if q == "" {
 		return nil, nil
 	}
+	var items []sodaSearchItem
+	err := tryEach(ctx, sodaSearchHosts, func(host string) error {
+		got, err := sodaSearchAt(ctx, host, q)
+		if err == nil {
+			items = got
+		}
+		return err
+	})
+	return items, err
+}
+
+// sodaSearchAt 打一个主机上的搜索;两个主机同一个路径、同一个响应结构(实测)。
+func sodaSearchAt(ctx context.Context, host, q string) ([]sodaSearchItem, error) {
 	params := neturl.Values{}
 	params.Set("q", q)
 	params.Set("cursor", "0")
 	params.Set("count", strconv.Itoa(sodaSearchCount))
 	params.Set("aid", sodaSearchAID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sodaSearchBase+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host+sodaSearchPath+"?"+params.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}

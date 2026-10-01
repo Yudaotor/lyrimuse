@@ -224,3 +224,146 @@ func TestSodaParseSearchTakesTracksGroupOnly(t *testing.T) {
 		t.Errorf("试听段要带出来(sodapreview.go 用), got %+v", got[0])
 	}
 }
+
+// 汽水把限定词写在「 - 」后面,改成括号写法之后共用的歌名闸认得出;限定词仍在,版本闸照样判。
+func TestSodaTrackTitle(t *testing.T) {
+	for in, want := range map[string]string{
+		"Wild Child - Album Version":          "Wild Child (Album Version)",
+		"如今 - 录音室版本":                          "如今 (录音室版本)",
+		"Interlude - Twisted Elegance - Live": "Interlude - Twisted Elegance (Live)",
+		"  Sorry  ":                           "Sorry",
+		"- Album Version":                     "- Album Version",
+		"Wild Child - ":                       "Wild Child -",
+	} {
+		if got := sodaTrackTitle(in); got != want {
+			t.Errorf("sodaTrackTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if !lyricTitleAccepted(sodaTrackTitle("right where you left me - bonus track"), "right where you left me") {
+		t.Error("改写后应当过歌名闸")
+	}
+	if !versionTagsMismatch("Sorry", "", sodaTrackTitle("Sorry - Live"), "") {
+		t.Error("改写后 Live 仍应被版本闸认出")
+	}
+}
+
+// 歌手写法对不上时,歌名逐字同名 + 专辑对得上 + 时长差 1% 以内照样收下,但排在歌手对得上的后面。
+func TestSodaCandidateScoreRecordingTriangle(t *testing.T) {
+	const (
+		artist = "G.E.M.邓紫棋"
+		title  = "摩天动物园"
+		album  = "摩天动物园"
+		dur    = 271.0
+	)
+	tri := sodaSearchItem{ID: "1", Name: "摩天动物园", Artist: "G.E.M. 邓紫棋", Album: "摩天动物园", Duration: 271.4}
+	got := sodaCandidateScore(tri, artist, title, album, dur)
+	if got < 0 || got > 50 {
+		t.Fatalf("三角验证收下的候选应在 0~50 分, got %d", got)
+	}
+	exact := sodaSearchItem{ID: "2", Name: "摩天动物园", Artist: "G.E.M.邓紫棋", Album: "另一张", Duration: 320}
+	if s := sodaCandidateScore(exact, artist, title, album, dur); s <= got {
+		t.Errorf("歌手对得上的(%d)应排在三角验证收下的(%d)前面", s, got)
+	}
+	otherAlbum := tri
+	otherAlbum.Album = "另一张"
+	farDur := tri
+	farDur.Duration = dur * 1.03
+	retitled := tri
+	retitled.Name = "摩天动物园 (Live)"
+	for name, it := range map[string]sodaSearchItem{"专辑对不上": otherAlbum, "时长差 3%": farDur, "歌名不逐字同名": retitled} {
+		if s := sodaCandidateScore(it, artist, title, album, dur); s != -1 {
+			t.Errorf("%s: 歌手对不上又过不了三角验证,应淘汰, got %d", name, s)
+		}
+	}
+	if ids := sodaRankCandidates([]sodaSearchItem{tri, exact}, artist, title, album, dur); len(ids) != 2 || ids[0] != "2" {
+		t.Errorf("名次表应先试歌手对得上的, got %v", ids)
+	}
+	// 专辑名就是歌名(单曲)时,歌手名还得一个包含另一个:同名翻唱单曲时长碰巧对得上也不收。
+	cover := sodaSearchItem{ID: "3", Name: "街角的晚风", Artist: "某翻唱", Album: "街角的晚风", Duration: 155}
+	if s := sodaCandidateScore(cover, "原唱", "街角的晚风", "街角的晚风", 155); s != -1 {
+		t.Errorf("单曲、歌手毫无交集应淘汰, got %d", s)
+	}
+	// 专辑名带着独立信息时,歌手写法完全不同(本名对艺名)照样收下。
+	alias := sodaSearchItem{ID: "4", Name: "Die For You", Artist: "The Weeknd", Album: "Starboy", Duration: 260.2}
+	if s := sodaCandidateScore(alias, "Abel Tesfaye", "Die For You", "Starboy", 260); s < 0 {
+		t.Errorf("专辑对得上的本名/艺名应收下, got %d", s)
+	}
+}
+
+// lyric.type 为 "lrc" 的曲目正文是普通逐行 LRC:收下逐行,不出逐字。
+func TestSodaParseSeoTrackAcceptsPlainLRC(t *testing.T) {
+	got, noLyrics, broken := sodaParseSeoTrack(sodaTestResponse("[00:22.02]あぁ君に近付いた分だけ\n[00:30.43]あぁ吸い取られるんだ\n[00:39.00]また潤んだ声で唱える\n"))
+	if noLyrics || broken || got.empty() {
+		t.Fatalf("逐行 LRC 应当收下: noLyrics=%v broken=%v", noLyrics, broken)
+	}
+	if firstLine(got.lyrics) != "[00:22.02]あぁ君に近付いた分だけ" || got.yrc != "" {
+		t.Errorf("lyrics 首句 %q, yrc %q", firstLine(got.lyrics), got.yrc)
+	}
+}
+
+func sodaTestSharePage(option string) []byte {
+	return []byte(`<html><script nonce="x">_ROUTER_DATA = {"loaderData":{"track_layout":null,"track_page":{"track_id":"6705555863068739585",` +
+		`"audioWithLyricsOption":` + option + `}}};
+function runWindowFn(){window._x = {"a":1};}</script></html>`)
+}
+
+const sodaTestShareTrackInfo = `"trackInfo":{"id":"6705555863068739585","name":"Sorry","duration":222653,"artists":[{"name":"方大同"}],` +
+	`"album":{"name":"未来","url_cover":{"uri":"tos-cn-v-2774c002/abc","urls":["https://p3-luna.douyinpic.com/img/"],"template_prefix":"tplv-b829550vbb"}}}`
+
+// 分享页逐字那种形状拼回 KRC 后,跟 seo_track 同一份正文解析结果一致:插在前面的作词作曲跳过,行起止取首字
+// 起点、末字终点(页面上首句 startMs 是 0、末句 endMs 是占位的极大值)。
+func TestSodaParseSharePageWordTimed(t *testing.T) {
+	page := sodaTestSharePage(`{` + sodaTestShareTrackInfo + `,"songMakerTeamSentences":["作曲：Khalil Fong"],"lyrics":{"lyricType":"krc","sentences":[` +
+		`{"startMs":0,"endMs":19650,"text":"作曲：Khalil Fong","words":[{"text":"作曲：Khalil Fong","startMs":0,"endMs":19650}],"type":"lrc"},` +
+		`{"startMs":0,"endMs":20700,"text":"当我","words":[{"startMs":19650,"endMs":20020,"text":"当"},{"startMs":20330,"endMs":20700,"text":"我"}]},` +
+		`{"startMs":27410,"endMs":28500,"text":"伤你","words":[{"startMs":27410,"endMs":27780,"text":"伤"},{"startMs":28130,"endMs":28500,"text":"你"}]},` +
+		`{"startMs":50050,"endMs":9007199254740991,"text":"I'm so","words":[{"startMs":50050,"endMs":50370,"text":"I'm "},{"startMs":50370,"endMs":50660,"text":"so"}]}]}}`)
+	body, ok := sodaParseSharePage(page, "6705555863068739585")
+	if !ok {
+		t.Fatal("认得出的分享页应当解析成功")
+	}
+	got, noLyrics, broken := sodaParseSeoTrack(body)
+	want, _, _ := sodaParseSeoTrack(sodaTestResponse("[19650,1050]<0,370,0>当<680,370,0>我\n[27410,1090]<0,370,0>伤<720,370,0>你\n[50050,610]<0,320,0>I'm <320,290,0>so"))
+	if noLyrics || broken || got.lyrics != want.lyrics || got.yrc != want.yrc {
+		t.Fatalf("分享页 = %q / %q, seo_track 同内容 = %q / %q", got.lyrics, got.yrc, want.lyrics, want.yrc)
+	}
+	if got.title != "Sorry" || got.artist != "方大同" || got.album != "未来" || got.durationSecs != 222.653 || got.cover == "" {
+		t.Errorf("元信息 = %q/%q/%q/%v/%q", got.title, got.artist, got.album, got.durationSecs, got.cover)
+	}
+}
+
+// 逐行那种形状:start 是秒,拼成逐行 LRC;作词作曲那几句(start 为 0 或 null)跳过。
+func TestSodaParseSharePageLineTimed(t *testing.T) {
+	page := sodaTestSharePage(`{` + sodaTestShareTrackInfo + `,"songMakerTeamSentences":["作曲：A","作词：B"],"lyrics":{"lyricType":"lrc","sentences":[` +
+		`{"start":0,"end":null,"text":"作曲：A"},{"start":null,"end":null,"text":"作词：B"},` +
+		`{"start":9.75,"end":12.14,"text":"first line\n"},{"start":12.14,"end":14.39,"text":"second line\n"},{"start":14.39,"end":16.98,"text":"third line\n"}]}}`)
+	body, ok := sodaParseSharePage(page, "6705555863068739585")
+	if !ok {
+		t.Fatal("认得出的分享页应当解析成功")
+	}
+	got, noLyrics, _ := sodaParseSeoTrack(body)
+	if noLyrics || got.lyrics != "[00:09.75]first line\n[00:12.14]second line\n[00:14.39]third line" || got.yrc != "" {
+		t.Fatalf("逐行 = %q, yrc = %q, noLyrics=%v", got.lyrics, got.yrc, noLyrics)
+	}
+}
+
+func TestSodaParseSharePageRejectsUnrecognized(t *testing.T) {
+	for name, page := range map[string][]byte{
+		"没有内嵌数据":   []byte("<html>no data</html>"),
+		"曲目 id 不同": sodaTestSharePage(`{"trackInfo":{"id":"1","name":"x"},"lyrics":{"sentences":[]}}`),
+		"没有曲目":     sodaTestSharePage(`{"lyrics":{"sentences":[]}}`),
+		"JSON 坏了":  []byte(`_ROUTER_DATA = {"loaderData":`),
+	} {
+		if _, ok := sodaParseSharePage(page, "6705555863068739585"); ok {
+			t.Errorf("%s: 不该认", name)
+		}
+	}
+	// 曲目在、没有歌词:认得出,归一化后是「有这首歌、没给词」。
+	body, ok := sodaParseSharePage(sodaTestSharePage(`{`+sodaTestShareTrackInfo+`,"lyrics":{"lyricType":"lrc","sentences":[]}}`), "6705555863068739585")
+	if !ok {
+		t.Fatal("曲目在就该认")
+	}
+	if got, noLyrics, broken := sodaParseSeoTrack(body); !got.empty() || !noLyrics || broken {
+		t.Errorf("没有歌词应判 trackFoundNoLyrics: noLyrics=%v broken=%v", noLyrics, broken)
+	}
+}
