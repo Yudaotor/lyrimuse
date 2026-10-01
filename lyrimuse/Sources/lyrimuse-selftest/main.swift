@@ -49,6 +49,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "position-replay", summary: "位置状态机回放:一串快照 + 暂停 / 恢复通知 → 屏上位置 / 暂停残差 / 偏置 / 学习表", run: runPositionReplayTests),
     TestGroup(name: "players", summary: "播放器身份 / 信任列表 / 播放模式 / 多选 / 广告判据 / 健康徽标", run: runPlayerIdentityTests),
     TestGroup(name: "amazon-music", summary: "Amazon Music 位置:日志重放 / 自记时 / 开播校准 / 陈旧元数据(样例与 collector 共用)", run: runAmazonMusicTests),
+    TestGroup(name: "playback-state", summary: "播放状态文件(App 写、collector 读):契约样例(与 collector 共用)/ 序号与位置 / 撕裂快照守卫 / 封面标识", run: runPlaybackStateTests),
     TestGroup(name: "player-picker", summary: "选择播放器网格:摆哪几张卡 / 「更多播放器」", run: runPlayerPickerTests),
     TestGroup(name: "lastfm", summary: "Last.fm:第 N 次听 / 写法族 / 分页 / 计次规则 / 最近记录 feed", run: runLastfmTests),
     TestGroup(name: "cover-art", summary: "封面取图 / 取色 / 专辑简介", run: runCoverArtTests),

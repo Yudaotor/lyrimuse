@@ -1,0 +1,31 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "holding": true,
+  "player": "com.tencent.QQMusicMac",
+  "position": {
+    "anchor_seq": 3,
+    "at_ms": 1790000040000,
+    "rate": 1,
+    "secs": 60
+  },
+  "schema": 1,
+  "seq": 20,
+  "state": "playing",
+  "track": {
+    "ad": false,
+    "album": "爱爱爱",
+    "applied_fix_rev": 0,
+    "artist": "方大同",
+    "duration_secs": 245,
+    "music_video": false,
+    "play_seq": 2,
+    "raw": {
+      "album": "爱爱爱",
+      "artist": "方大同",
+      "title": "爱爱爱"
+    },
+    "title": "爱爱爱"
+  },
+  "written_at_ms": 1790000045000
+}

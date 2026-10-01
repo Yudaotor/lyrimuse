@@ -1,0 +1,9 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "player": "com.spotify.client",
+  "schema": 2,
+  "seq": 1,
+  "state": "playing",
+  "written_at_ms": 1790000000500
+}

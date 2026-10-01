@@ -162,7 +162,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // LyrimuseCore 这一层刻意不引入 AppKit/SwiftUI(见 Package.swift 的单向依赖注释),
     // 解码成 NSImage/Image 交给 lyrimuse 主 App target 的 View 自己做。只在换歌那一刻
     // 异步取一次(见 apply()/fetchArtworkForCurrentTrack()),不是每 2 秒轮询的一部分。
-    @Published public private(set) var artworkData: Data?
+    // 换上 / 清掉都交给播放状态文件(collector 用它定封面,不再自己取),同一张图不重复落盘。
+    @Published public private(set) var artworkData: Data? {
+        didSet { PlaybackStatePublisher.shared.noteArtwork(artworkData) }
+    }
     // 从 artworkData 里算出来的单一平均色(十六进制 #RRGGBBAA)——供"跟随封面"外观模式
     // 用作悬浮歌词的动态高亮色。跟 artworkData 同一时刻算好、同一套 expectedKey 换歌
     // 校验(见 fetchArtworkForCurrentTrack()),不是每次渲染都现算。只存十六进制字符串
@@ -312,6 +315,11 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot?
+    /// `lastSnapshot` 是怎么来的(原始标签、套用的署名纠正版本、系统原始标识),写播放状态文件用。
+    private var lastProvenance: MediaControlClient.SnapshotProvenance?
+    private var tornHold = TornTrackHold()
+    /// 这一拍系统推的是不是电台的台名卡片(见 RadioStationCard),写播放状态文件用。
+    private var radioStationCardActive = false
     /// 这首是 MV 时按 SponsorBlock 片段换算出的时间轴(见 MusicVideoTimeline),连同它属于哪首歌。
     private var musicVideoTimeline: (trackKey: String, timeline: MusicVideoTimeline)?
     /// 已经为哪首歌发起过片段查询(同一首只查一次,换歌清掉)。
@@ -2486,6 +2494,36 @@ public final class LocalPlaybackSource: ObservableObject {
         isPlaying || !title.isEmpty || !lastKey.isEmpty || pausedPositionMs != nil || hasAnchor
     }
 
+    /// 把这一拍认定的播放状态交给 `PlaybackStatePublisher`(写 `lyrimuse-playback-state.json`,collector 读)。
+    /// 每拍轮询的出口与拖动之后各调一次;保活由发布方自己的计时器做,不走这里。
+    /// 身份按 collector 的口径清洗(`EnrichCacheKeys.cleanTag`),位置不含歌词偏移。
+    private func publishPlaybackState(now: Date = Date()) {
+        guard !title.isEmpty, let snapshot = lastSnapshot else {
+            PlaybackStatePublisher.shared.publish(.idle(), now: now)
+            return
+        }
+        let clean = EnrichCacheKeys.cleanTag
+        let bundleID = snapshot.bundleIdentifier ?? ""
+        let provenance = lastProvenance.flatMap { $0.bundleID == bundleID ? $0 : nil }
+        let positionSecs: Double? = isPlayingNow
+            ? anchor.map { Double($0.extrapolatedPositionMs(now: now)) / 1000 }
+            : pausedPositionMs.map { Double($0) / 1000 }
+        let radio = snapshot.isRadio == true
+            ? PlaybackStateFile.Radio(stationHash: currentStationHash ?? "", stationName: radioStationName,
+                                      talkBreak: isRadioTalkBreak, stationCard: radioStationCardActive)
+            : nil
+        let tags = PlaybackStateFile.Tags(title: clean(title), artist: clean(artist), album: clean(album))
+        let input = PlaybackStateFile.Input(
+            player: bundleID, title: tags.title, artist: tags.artist, album: tags.album,
+            raw: provenance?.raw ?? tags, appliedFixRev: provenance?.appliedFixRev ?? 0,
+            playing: isPlayingNow, durationSecs: snapshot.duration,
+            catalogTrackID: provenance?.identifiers?.catalogTrackID,
+            trackNumber: provenance?.identifiers?.trackNumber,
+            mediaType: provenance?.identifiers?.mediaType,
+            musicVideo: isMusicVideo, radio: radio, ad: isCurrentTrackAdBreak, positionSecs: positionSecs)
+        PlaybackStatePublisher.shared.publish(input, now: now)
+    }
+
     // nil 快照(真的没有任何曲目在加载)和"有曲目但不是 Apple Music"共用同一套清理。
     //
     // 改:title/artist/album 以前**故意不清**,理由写的是"保留最近一次播放
@@ -2656,8 +2694,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 失败原因跟快照在同一条队列上一起取:它是 MediaControlClient 的全局量,回到主线程再读就可能已经不是这一轮的。
         Task {
             defer { self.finishPoll() }
-            let (snapshot, snapshotFailure) = await Self.runOffPool(Self.pollQueue) {
-                (MediaControlClient.fetchSnapshot(), MediaControlClient.lastSnapshotFailure)
+            let (snapshot, provenance, snapshotFailure) = await Self.runOffPool(Self.pollQueue) {
+                let fetched = MediaControlClient.fetchSnapshotWithProvenance()
+                return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)
             }
             guard Self.pollResultIsCurrent(generation: generation, appliedGeneration: self.pollAppliedGeneration,
                                            invalidatedThrough: self.pollInvalidatedThrough) else {
@@ -2696,11 +2735,14 @@ public final class LocalPlaybackSource: ObservableObject {
                     consecutiveNilCount: self.consecutiveNilSnapshots,
                     failure: failure, nilStreakSeconds: nilStreakSeconds) {
                     clearIfWasPlaying()
-                } else if MediaControlClient.isFocusHeldElsewhere(failure),
-                          self.consecutiveNilSnapshots == 1 {
-                    // 进入这一档时打一次(不是每拍),口径同 MediaControlClient 那条 fallback notice。
-                    let grace = Int(MediaControlClient.focusHeldGraceSeconds)
-                    logger.notice("focus held by another app; holding playback state (grace \(grace, privacy: .public)s)")
+                    self.publishPlaybackState()
+                } else {
+                    if MediaControlClient.isFocusHeldElsewhere(failure), self.consecutiveNilSnapshots == 1 {
+                        // 进入这一档时打一次(不是每拍),口径同 MediaControlClient 那条 fallback notice。
+                        let grace = Int(MediaControlClient.focusHeldGraceSeconds)
+                        logger.notice("focus held by another app; holding playback state (grace \(grace, privacy: .public)s)")
+                    }
+                    PlaybackStatePublisher.shared.setHolding(true)
                 }
                 self.adjustPollCadence()
                 return
@@ -2716,11 +2758,29 @@ public final class LocalPlaybackSource: ObservableObject {
             guard snapshot.isMusicApp == true else {
                 logger.debug("snapshot ignored: not Apple Music (isMusicApp=\(String(describing: snapshot.isMusicApp)))")
                 clearIfWasPlaying()
+                self.publishPlaybackState()
                 self.adjustPollCadence()
                 return
             }
+            // 撕裂快照按住:这一拍整份不采纳,屏上、发布状态都停在上一首(见 TornTrackHold)。
+            let tornCurrent = self.title.isEmpty ? nil : self.lastSnapshot.map(TornTrackHold.Fields.init)
+            switch self.tornHold.decide(current: tornCurrent, next: TornTrackHold.Fields(snapshot), now: Date()) {
+            case .holdStarted:
+                logger.notice("now playing: holding \(snapshot.title ?? "", privacy: .public) — only the title changed (artist/album/duration unchanged)")
+                self.adjustPollCadence()
+                return
+            case .holding:
+                self.adjustPollCadence()
+                return
+            case .released:
+                logger.notice("now playing: releasing \(snapshot.title ?? "", privacy: .public) after \(Int(TornTrackHold.maxHold))s — the title-only change persisted")
+            case .accept:
+                break
+            }
             logger.debug("snapshot ok: playing=\(snapshot.playing == true)")
+            self.lastProvenance = provenance
             self.apply(snapshot)
+            self.publishPlaybackState()
             // 状态落定后按播放态调轮询档位(播放 2s/暂停 6s/空闲 10s,见 PollInterval)。
             self.adjustPollCadence()
         }
@@ -2788,6 +2848,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if station?.name != radioStationName { radioStationName = station?.name }
         if station?.artwork != radioStationArtwork { radioStationArtwork = station?.artwork }
         if finished != isRadioTalkBreak { isRadioTalkBreak = finished }
+        radioStationCardActive = stationCardName != nil
         if finished != radioTrackFinished {
             radioTrackFinished = finished
             // 只在翻转时打一行。这个判定要靠歌词缓存里的真曲长,缓存没命中时 duration 还是整档
@@ -3508,6 +3569,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 歌词高亮跟着立刻走到新位置,不等 20Hz 的下一拍(它本来也会跟上,但那一拍之前
         // 屏幕上仍是旧的一句,拖动时看着像没反应)。
         fastTick()
+        publishPlaybackState(now: now)
     }
 
     // 单曲歌词时间轴微调——只对"当前正在播的这首歌"生效,立即体现在下一次 fastTick()

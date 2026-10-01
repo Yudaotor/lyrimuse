@@ -1,0 +1,36 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "artwork": {
+    "bytes": 184320,
+    "mime": "image/jpeg",
+    "play_seq": 3,
+    "sha256": "5f2b7c1e0a9d4e6b8c3f1a2d7e9b0c4a6f8e2d1c3b5a7e9f0d2c4b6a8e1f3d5c"
+  },
+  "player": "com.spotify.client",
+  "position": {
+    "anchor_seq": 7,
+    "at_ms": 1790000081200,
+    "rate": 1,
+    "secs": 81.234
+  },
+  "schema": 1,
+  "seq": 42,
+  "state": "playing",
+  "track": {
+    "ad": false,
+    "album": "you seem pretty sad for a girl so in love",
+    "applied_fix_rev": 0,
+    "artist": "Olivia Rodrigo",
+    "duration_secs": 223.5,
+    "music_video": false,
+    "play_seq": 3,
+    "raw": {
+      "album": "you seem pretty sad for a girl so in love",
+      "artist": "Olivia Rodrigo",
+      "title": "honeybee"
+    },
+    "title": "honeybee"
+  },
+  "written_at_ms": 1790000081234
+}

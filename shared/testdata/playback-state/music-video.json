@@ -1,0 +1,30 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "player": "com.apple.Safari",
+  "position": {
+    "anchor_seq": 1,
+    "at_ms": 1790000030000,
+    "rate": 1,
+    "secs": 12
+  },
+  "schema": 1,
+  "seq": 5,
+  "state": "playing",
+  "track": {
+    "ad": false,
+    "album": "",
+    "applied_fix_rev": 0,
+    "artist": "Prince",
+    "duration_secs": 287,
+    "music_video": true,
+    "play_seq": 2,
+    "raw": {
+      "album": "",
+      "artist": "Prince",
+      "title": "Why You Wanna Treat Me So Bad?"
+    },
+    "title": "Why You Wanna Treat Me So Bad?"
+  },
+  "written_at_ms": 1790000030500
+}

@@ -60,14 +60,46 @@ public enum MediaControlClient {
     /// 回答"现在是谁在放",识别出来的播放器有自己的适配方式就换那条读(见 `adaptedSnapshot`)
     /// —— 勾没勾「自动识别」不改变这一点。
     public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
+        fetchSnapshotWithProvenance(players: players).snapshot
+    }
+
+    /// 快照是怎么来的:播放器原样报的标签(清洗后、套用 collector 结论之前)、套用的是哪一版署名纠正、
+    /// 以及系统信息里的三个原始标识。写播放状态文件用(见 `PlaybackStateFile`),collector 靠它们做署名纠正、
+    /// 目录锚点这类判定。
+    public struct SnapshotProvenance: Equatable, Sendable {
+        public let bundleID: String
+        public let raw: PlaybackStateFile.Tags
+        public let appliedFixRev: Int64
+        public let identifiers: NowPlayingIdentifiers?
+    }
+
+    /// 跟 `fetchSnapshot` 同一条路,另外交回这份快照的来源。两者在同一次调用里取,不会串到别的轮询。
+    public static func fetchSnapshotWithProvenance(
+        players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected
+    ) -> (snapshot: MediaControlSnapshot?, provenance: SnapshotProvenance?) {
         // 这一拍的归因从零开始记(只影响日志,不影响行为)。见 SnapshotFailure。
         setSnapshotFailure(nil)
+        let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
         // collector 那边已经换成真署名了 —— 两边不一致的话,歌词缓存的 key 就对不上。
         // 套在这个唯一的公开出口上,下游(trackKey、缓存查询、界面)一处都不用改。
         // 见 PlayerArtistFix。
         // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与 collector 发布时一致。
-        return PlayerPreviewFix.applied(to: PlayerArtistFix.applied(to: rawSnapshot(players: players)))
+        let fixState = PlayerArtistFix.current
+        let snapshot = PlayerPreviewFix.applied(to: PlayerArtistFix.applied(to: raw, state: fixState))
+        guard let raw else { return (snapshot, nil) }
+        let bundleID = raw.bundleIdentifier ?? ""
+        let rawTitle = raw.title ?? "", rawArtist = raw.artist ?? ""
+        let identifiers = currentNowPlayingIdentifiers().flatMap {
+            $0.bundleID == bundleID && $0.title == rawTitle && $0.artist == rawArtist ? $0 : nil
+        }
+        let provenance = SnapshotProvenance(
+            bundleID: bundleID,
+            raw: PlaybackStateFile.Tags(title: EnrichCacheKeys.cleanTag(rawTitle),
+                                        artist: EnrichCacheKeys.cleanTag(rawArtist),
+                                        album: EnrichCacheKeys.cleanTag(raw.album ?? "")),
+            appliedFixRev: fixState?.updatedAt ?? 0, identifiers: identifiers)
+        return (snapshot, provenance)
     }
 
     private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
@@ -427,6 +459,9 @@ public enum MediaControlClient {
         // 系统 Now Playing 焦点不是 Apple Music 时,这个 hash 属于**别人**(网页视频/另一个
         // 播放器),不能扣到 Music.app 头上 —— 跟 matchMediaControlState 那道核对同一条理由。
         guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
+        setNowPlayingIdentifiers(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, title: raw.title, artist: raw.artist,
+                                 uniqueIdentifier: raw.uniqueIdentifier, trackNumber: raw.trackNumber,
+                                 mediaType: raw.mediaType)
         let hash = raw.radioStationHash ?? ""
         return hash.isEmpty ? nil : hash
     }
@@ -453,9 +488,15 @@ public enum MediaControlClient {
         let radioStationHash: String?
         /// 发布这份 Now Playing 的进程号。Amazon Music 的界面校准要它(见 AmazonMusicUIProbe)。
         let processIdentifier: Int?
+        /// 放 Apple Music 目录曲目时是 Apple 的目录曲目 ID;本地文件是任意持久 ID。只原样转交 collector,
+        /// 由它过目录锚点的守卫再用(见 `NowPlayingIdentifiers`)。
+        let uniqueIdentifier: Int64?
+        let trackNumber: Int?
+        let mediaType: String?
 
         private enum CodingKeys: String, CodingKey {
             case title, artist, album, bundleIdentifier, playing, playbackRate, radioStationHash, processIdentifier
+            case uniqueIdentifier, trackNumber, mediaType
         }
 
         /// 带 `--micros` 调用时四个时间键会被**替换**成微秒版,交给 `MediaControlMicros.TimeFields`
@@ -470,6 +511,15 @@ public enum MediaControlClient {
             playbackRate = try c.decodeIfPresent(Double.self, forKey: .playbackRate)
             processIdentifier = try? c.decodeIfPresent(Int.self, forKey: .processIdentifier)
             radioStationHash = try c.decodeIfPresent(String.self, forKey: .radioStationHash)
+            if let id = try? c.decodeIfPresent(Int64.self, forKey: .uniqueIdentifier) {
+                uniqueIdentifier = id
+            } else if let id = try? c.decodeIfPresent(Double.self, forKey: .uniqueIdentifier) {
+                uniqueIdentifier = Int64(exactly: id)
+            } else {
+                uniqueIdentifier = nil
+            }
+            trackNumber = try? c.decodeIfPresent(Int.self, forKey: .trackNumber)
+            mediaType = try? c.decodeIfPresent(String.self, forKey: .mediaType)
             let times = try MediaControlMicros.TimeFields(from: decoder)
             duration = times.duration
             elapsedTime = times.elapsedTime
@@ -1875,6 +1925,9 @@ public enum MediaControlClient {
         }
         // 真读到了一份快照:通道是好的,自检留下的「坏了」也作废。
         noteChannelReadSnapshot()
+        setNowPlayingIdentifiers(bundleID: bundleID, title: raw.title, artist: raw.artist,
+                                 uniqueIdentifier: raw.uniqueIdentifier, trackNumber: raw.trackNumber,
+                                 mediaType: raw.mediaType)
         // 把"此刻系统在报谁"原样记一笔 —— **在过闸之前**。设置页那张"检测到未知播放器"
         // 的卡片要的正是被闸挡掉的那些:过了闸的本来就能看见,挡掉的才需要提示用户。
         //
@@ -2099,6 +2152,39 @@ public enum MediaControlClient {
     private static func setRadioStationHash(_ hash: String?) {
         radioClockLock.lock()
         radioStationHashValue = hash
+        radioClockLock.unlock()
+    }
+
+    /// 系统信息里跟这首歌一起报的三个原始标识,带着它们所属的播放器与原始曲名 / 歌手。
+    /// 走静态旁路而不是加进 `MediaControlSnapshot`,理由同 `radioStationHashValue`;
+    /// 读方(`fetchSnapshotWithProvenance`)按播放器 + 曲名 + 歌手核对,对不上当没有。
+    public struct NowPlayingIdentifiers: Equatable, Sendable {
+        public let bundleID: String
+        public let title: String
+        public let artist: String
+        public let catalogTrackID: Int64?
+        public let trackNumber: Int?
+        public let mediaType: String?
+    }
+
+    nonisolated(unsafe) private static var nowPlayingIdentifiersValue: NowPlayingIdentifiers?
+
+    public nonisolated static func currentNowPlayingIdentifiers() -> NowPlayingIdentifiers? {
+        radioClockLock.lock()
+        defer { radioClockLock.unlock() }
+        return nowPlayingIdentifiersValue
+    }
+
+    /// 写入点同 `setRadioStationHash`:轮询的 fetchRawMediaControlSnapshot 每拍写,只勾 Apple Music 时按曲目探的那次写。
+    private static func setNowPlayingIdentifiers(bundleID: String, title: String?, artist: String?,
+                                                 uniqueIdentifier: Int64?, trackNumber: Int?, mediaType: String?) {
+        let value = NowPlayingIdentifiers(
+            bundleID: bundleID, title: title ?? "", artist: artist ?? "",
+            catalogTrackID: uniqueIdentifier.flatMap { $0 == 0 ? nil : $0 },
+            trackNumber: trackNumber.flatMap { $0 > 0 ? $0 : nil },
+            mediaType: mediaType.flatMap { $0.isEmpty ? nil : $0 })
+        radioClockLock.lock()
+        nowPlayingIdentifiersValue = value
         radioClockLock.unlock()
     }
 

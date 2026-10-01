@@ -1,0 +1,30 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "player": "com.kugou.mac.Music",
+  "position": {
+    "anchor_seq": 1,
+    "at_ms": 1790000020000,
+    "rate": 1,
+    "secs": 40.5
+  },
+  "schema": 1,
+  "seq": 12,
+  "state": "playing",
+  "track": {
+    "ad": false,
+    "album": "",
+    "applied_fix_rev": 1790000015,
+    "artist": "谈柒柒",
+    "duration_secs": 210,
+    "music_video": false,
+    "play_seq": 6,
+    "raw": {
+      "album": "",
+      "artist": "墙上的合照剩一半",
+      "title": "甲乙丙丁 (你我怎么两清)"
+    },
+    "title": "甲乙丙丁 (你我怎么两清)"
+  },
+  "written_at_ms": 1790000020100
+}

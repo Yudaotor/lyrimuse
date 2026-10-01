@@ -1,0 +1,30 @@
+{
+  "app_pid": 4321,
+  "app_started_at_ms": 1790000000000,
+  "player": "com.spotify.client",
+  "position": {
+    "anchor_seq": 1,
+    "at_ms": 1790000010000,
+    "rate": 1,
+    "secs": 3
+  },
+  "schema": 1,
+  "seq": 3,
+  "state": "playing",
+  "track": {
+    "ad": true,
+    "album": "",
+    "applied_fix_rev": 0,
+    "artist": "Blinds.com",
+    "duration_secs": 30,
+    "music_video": false,
+    "play_seq": 4,
+    "raw": {
+      "album": "",
+      "artist": "Blinds.com",
+      "title": "Advertisement"
+    },
+    "title": "Advertisement"
+  },
+  "written_at_ms": 1790000010100
+}

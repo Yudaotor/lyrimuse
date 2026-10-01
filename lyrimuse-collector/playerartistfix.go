@@ -70,6 +70,9 @@ var (
 	// 失败后隔 playerArtistFixRetryAfter 才再试,不然每拍一条警告。
 	playerArtistFixFailed   playerArtistFixState
 	playerArtistFixFailedAt time.Time
+	// playerArtistFixWrittenAt:这个进程最近一次写出的 updatedAt(Unix 秒)。App 在播放状态里报它套用的是哪一版
+	// (applied_fix_rev),影子对比据此认出「纠正刚发布、App 还没读到」的那一两拍,见 shadowcompare.go。
+	playerArtistFixWrittenAt int64
 )
 
 const playerArtistFixRetryAfter = time.Minute
@@ -207,6 +210,7 @@ func writePlayerArtistFixLocked(next playerArtistFixState) bool {
 		return false
 	}
 	playerArtistFixLast = next
+	playerArtistFixWrittenAt = stamped.UpdatedAt
 	playerArtistFixFailedAt = time.Time{}
 	if next.Unreliable {
 		rememberPlayerVerdictLocked(next.Bundle, playerVerdict{StableField: next.StableField, Order: next.Order})
@@ -247,4 +251,11 @@ func publishPlayerTrackFix(next playerArtistFixState) {
 	}
 	slog.Info("player artist fix: published", "bundle", next.Bundle, "title", next.Title, "artist", next.Artist,
 		"fixed_title", next.FixedTitle, "stable_field", next.StableField, "raw_artist", next.RawArtist)
+}
+
+// currentPlayerArtistFixRev:这个进程最近一次写出的署名纠正版本(Unix 秒);还没写过为 0。
+func currentPlayerArtistFixRev() int64 {
+	playerArtistFixMu.Lock()
+	defer playerArtistFixMu.Unlock()
+	return playerArtistFixWrittenAt
 }

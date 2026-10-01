@@ -272,8 +272,9 @@ private func wiringContracts() {
                 "guard pollFlight.begin() else { return }", "单飞接线: poll() 第一句就过单飞闸,在飞时不再起第二轮")
     expectEqual(poll.contains("defer { self.finishPoll() }"), true, "单飞接线: 每一轮(含被丢弃的)收尾都放开单飞")
     expectEqual(poll.contains("await Self.runOffPool(Self.pollQueue)"), true, "单飞接线: 阻塞取数挪到专用队列,不占协作线程池")
-    expectEqual(poll.contains("(MediaControlClient.fetchSnapshot(), MediaControlClient.lastSnapshotFailure)"), true,
-                "单飞接线: 失败原因跟快照在同一条队列上一起取,回主线程再读可能已是别一轮的")
+    expectEqual(poll.contains("let fetched = MediaControlClient.fetchSnapshotWithProvenance()")
+                    && poll.contains("return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)"), true,
+                "单飞接线: 失败原因、快照与它的来源在同一条队列上一起取,回主线程再读可能已是别一轮的")
     expectEqual(body("private func finishPoll() {", in: source).contains("if pollFlight.finish() { poll() }"), true,
                 "单飞接线: 收尾时期间有人要过就补跑")
     let seek = body("public func seek(toMs targetMs: Int) {", in: source)

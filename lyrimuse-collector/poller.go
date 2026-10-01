@@ -287,6 +287,8 @@ type poller struct {
 	// 正在被按住的撕裂快照的 key 与开始按住的时刻,见 holdTornTrackChange。
 	tornHoldKey   string
 	tornHoldSince time.Time
+	// 影子对比:同时读 App 写的播放状态逐拍比对,不改变任何行为,见 shadowcompare.go。
+	shadow *shadowCompare
 
 	// Position tracking. media-control freezes elapsedTime during steady play and
 	// its timestamp drifts stale across sleep/idle, so we can't just extrapolate
@@ -1169,6 +1171,7 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true
 		return
 	}
+	p.shadow.noteActualListen(sess.key, sess.startedAt, time.Now())
 	if shortTrackLastfmOnly(meta.Duration) {
 		// 短曲目只发 Last.fm(见 shortTrackLastfmOnly):不打 LB,直接把一个"成功"结果送回
 		// 主循环,让 applySubmitOutcome 走 Last.fm 镜像 / 本地日志 / 会话收尾那条既有路径——
@@ -2014,10 +2017,14 @@ func (p *poller) poll() {
 		p.cur.Playing, p.isTracked(), radioWallClock(p.cur)) {
 		p.calibrateAppleMusicPosition(now)
 	}
+	curAd := isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) ||
+		(p.sess != nil && p.sess.key == p.cur.key() && p.sess.isAd)
+	p.shadow.observe(now, p.cur, p.isTracked(), curAd)
 	p.handle(now, reanchored, loopRestart)
 	p.bridge(now)
 	p.pushRelayState(now, reanchored)
 	p.runDigestsAsync(now)
+	p.shadow.flush(now)
 }
 
 // appleMusicPositionQuery 单独问一次 Music.app 的播放头;单测替换它。
@@ -2082,6 +2089,8 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	lfmRetryTarget.Store(p.lfm)
+	p.shadow = newShadowCompare(configFilePath(clientName+"-shadow-compare.json"),
+		newAppStateReader(configFilePath(clientName+"-playback-state.json")), time.Now())
 	p.poll() // render immediately, don't wait a full interval on startup
 	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
