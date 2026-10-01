@@ -6,13 +6,14 @@ import (
 	"strings"
 )
 
-// 浏览器里那几路网页平台探针(YouTube Music 的广告 / 视频类型 / 播放队列,Spotify 网页版的播放队列)只对
-// **用户在「网页播放器」里配对过这个平台**的浏览器跑。配对关系由 App 镜像进 features.json 的
+// 两家网页版的播放队列(YouTube Music、Spotify 网页版,由 App 代跑)只对 **用户在「网页播放器」里配对过
+// 这个平台** 的浏览器去读。配对关系由 App 镜像进 features.json 的
 // browser_platform_pairs:平台 id → 浏览器 bundle id 列表,平台 id 跟 Swift 侧 BrowserPositionProbe.supportedPlatforms
 // 同一套。
 //
 // 没配对就不跑:没配对的浏览器多半没打开「允许 Apple 事件中的 JavaScript」,每换一首都让 App 跑一次注定失败的
-// 脚本。App 侧 YouTubeMusicAdProbe / SpotifyWebAdProbe 的入口与 PlayerQueryServer 判的是同一件事。
+// 脚本。App 侧 YouTubeMusicAdProbe / SpotifyWebAdProbe 的入口与 PlayerQueryServer 判的是同一件事。这道门是
+// collector 发请求前唯一的筛选:浏览器能不能驱动、用哪种脚本方言由 App 判。
 //
 // 键缺失(App 还没写过这个键的配置)时沿用原来的行为:所有浏览器都探。
 const (

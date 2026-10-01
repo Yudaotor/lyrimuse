@@ -195,9 +195,9 @@ func unwrapBrowserScriptOutput(raw string) string {
 
 var ytmusicQueueLogOnce sync.Once
 
-// ytmusicQueueScript 读这个浏览器里 YouTube Music 页面的队列,由 App 代跑(askApp)。family 只用于调用方先判能不能驱动。
-// 单测换成假的(TestMain 默认"读不到")。
-var ytmusicQueueScript = func(bundleID, _ string) (string, bool) {
+// ytmusicQueueScript 读这个浏览器里 YouTube Music 页面的队列,由 App 代跑(askApp):这个浏览器能不能驱动、用哪种
+// 脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
+var ytmusicQueueScript = func(bundleID string) (string, bool) {
 	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformYouTubeMusic}, appQueryScriptTimeout)
 }
 
@@ -208,11 +208,10 @@ func ytmusicUpcoming(artist, title, bundleID string, durationSecs float64, n int
 	if owner, ok := mediaProxyOwners[bundleID]; ok {
 		target = owner
 	}
-	family := browserScriptFamily(target)
-	if family == "" || !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
+	if !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
 		return browserQueueResult{}
 	}
-	out, ok := ytmusicQueueScript(target, family)
+	out, ok := ytmusicQueueScript(target)
 	if !ok {
 		log.Printf("ytmusic upcoming: browser script failed (%s)", target)
 		return browserQueueResult{}

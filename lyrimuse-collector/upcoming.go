@@ -88,7 +88,7 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 type browserQueueStatus int
 
 const (
-	browserQueueUnavailable browserQueueStatus = iota // 不是能驱动的浏览器、没有这个网站的标签页、脚本失败、后面没有曲目
+	browserQueueUnavailable browserQueueStatus = iota // 没配对这个平台、没有这个网站的标签页、App 没跑成、后面没有曲目
 	browserQueueMismatch                              // 读到了队列,但页面上的当前这首跟播放器报的对不上
 	browserQueueOK
 )
@@ -105,7 +105,7 @@ var browserQueueRetryDelay = 2 * time.Second
 
 // browserUpcoming 是浏览器里的网页播放器那一支:YouTube Music(页面 DOM,见 ytmusicqueue.go)、Spotify
 // 网页版(网页播放器自己的队列接口,见 spotifyweb.go)。两边都要「当前这首」对得上播放器报的才认,同时开着
-// 两个标签页也不会读错;不是能驱动的浏览器(Firefox 等)时直接 ok=false。只要有一路是"对不上",隔
+// 两个标签页也不会读错;没配对这个平台的浏览器直接 ok=false。只要有一路是"对不上",隔
 // browserQueueRetryDelay 重读一次;第二次仍对不上才记日志,换歌那一拍的时差不刷屏。
 func browserUpcoming(artist, title, bundleID string, durationSecs float64, n int) ([]upcomingTrack, bool) {
 	for attempt := 0; ; attempt++ {

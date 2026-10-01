@@ -98,9 +98,9 @@ func spotifyWebCurrentMatches(current spotifyWebTrack, artist, title string) boo
 
 var spotifyWebLogOnce sync.Once
 
-// spotifyWebQueueScript 读这个浏览器里 Spotify 网页播放器的队列,由 App 代跑(askApp)。family 只用于调用方先判能不能驱动。
-// 单测换成假的(TestMain 默认"读不到")。
-var spotifyWebQueueScript = func(bundleID, _ string) (string, bool) {
+// spotifyWebQueueScript 读这个浏览器里 Spotify 网页播放器的队列,由 App 代跑(askApp):这个浏览器能不能驱动、用哪种
+// 脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
+var spotifyWebQueueScript = func(bundleID string) (string, bool) {
 	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformSpotifyWeb}, appQueryScriptTimeout)
 }
 
@@ -110,11 +110,10 @@ func spotifyWebUpcoming(artist, title, bundleID string, n int) browserQueueResul
 	if owner, ok := mediaProxyOwners[bundleID]; ok {
 		target = owner
 	}
-	family := browserScriptFamily(target)
-	if family == "" || !browserPlatformPaired(browserPlatformSpotifyWeb, target) {
+	if !browserPlatformPaired(browserPlatformSpotifyWeb, target) {
 		return browserQueueResult{}
 	}
-	out, ok := spotifyWebQueueScript(target, family)
+	out, ok := spotifyWebQueueScript(target)
 	if !ok {
 		log.Printf("spotify web upcoming: browser script failed (%s)", target)
 		return browserQueueResult{}

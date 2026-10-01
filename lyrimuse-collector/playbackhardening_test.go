@@ -34,44 +34,6 @@ func TestParseVideoTitlePipeKeepsTitleSegment(t *testing.T) {
 	}
 }
 
-// 「判不了」可能只是这一次没找到(Spotlight 没索引好、超时):只记一阵,过了再判;判出来的照旧缓存到进程结束。
-func TestTrustedBrowserFamilyRetriesMisses(t *testing.T) {
-	saved := features()
-	savedDetect := detectBrowserScriptFamily
-	t.Cleanup(func() {
-		setFeatures(saved)
-		detectBrowserScriptFamily = savedDetect
-		browserFamilyMu.Lock()
-		browserFamilyCache, browserFamilyMissAt = map[string]string{}, map[string]time.Time{}
-		browserFamilyMu.Unlock()
-	})
-	browserFamilyMu.Lock()
-	browserFamilyCache, browserFamilyMissAt = map[string]string{}, map[string]time.Time{}
-	browserFamilyMu.Unlock()
-	featuresRef().TrustedPlayers = map[string]string{"com.example.Browser": "Browser"}
-	calls, result := 0, ""
-	detectBrowserScriptFamily = func(string) string {
-		calls++
-		return result
-	}
-	if got := trustedBrowserScriptFamily("com.example.Browser"); got != "" || calls != 1 {
-		t.Fatalf("第一次判不了: %q calls=%d", got, calls)
-	}
-	result = "chromium"
-	if got := trustedBrowserScriptFamily("com.example.Browser"); got != "" || calls != 1 {
-		t.Fatalf("判不了之后的一阵里不再重判: %q calls=%d", got, calls)
-	}
-	browserFamilyMu.Lock()
-	browserFamilyMissAt["com.example.Browser"] = time.Now().Add(-browserFamilyRetryAfter - time.Second)
-	browserFamilyMu.Unlock()
-	if got := trustedBrowserScriptFamily("com.example.Browser"); got != "chromium" || calls != 2 {
-		t.Fatalf("过了重试间隔应当再判: %q calls=%d", got, calls)
-	}
-	if got := trustedBrowserScriptFamily("com.example.Browser"); got != "chromium" || calls != 2 {
-		t.Fatalf("判出来的缓存到进程结束: %q calls=%d", got, calls)
-	}
-}
-
 // 配置目录写不了时:同一份纠正每拍都会再来,失败后隔一阵才再试,不每 5 秒一条警告;换了一份照常试。
 func TestPlayerArtistFixWriteFailureIsThrottled(t *testing.T) {
 	var buf bytes.Buffer

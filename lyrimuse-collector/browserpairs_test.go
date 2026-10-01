@@ -41,16 +41,16 @@ func TestResolveBrowserPlatformPairs(t *testing.T) {
 	}
 }
 
-// 两家网页版的待播队列探针只对配对过对应平台的浏览器起 osascript;Safari 报的媒体代理进程按宿主算。
+// 两家网页版的待播队列只对配对过对应平台的浏览器请 App 读;Safari 报的媒体代理进程按宿主算。
 func TestBrowserPageProbesSkipUnpairedBrowsers(t *testing.T) {
 	calls := map[string]int{}
 	oldYT, oldSP := ytmusicQueueScript, spotifyWebQueueScript
 	t.Cleanup(func() { ytmusicQueueScript, spotifyWebQueueScript = oldYT, oldSP })
-	ytmusicQueueScript = func(bundleID, _ string) (string, bool) {
+	ytmusicQueueScript = func(bundleID string) (string, bool) {
 		calls["ytqueue "+bundleID]++
 		return "", false
 	}
-	spotifyWebQueueScript = func(bundleID, _ string) (string, bool) {
+	spotifyWebQueueScript = func(bundleID string) (string, bool) {
 		calls["spqueue "+bundleID]++
 		return "", false
 	}

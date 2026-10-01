@@ -64,13 +64,14 @@ func TestParseYTMusicQueueRejectsMalformed(t *testing.T) {
 	}
 }
 
-// 分发:Safari 报的是媒体代理进程(com.apple.WebKit.GPU),要换回 Safari 去跑探针;不能驱动的浏览器不跑。
+// 分发:Safari 报的是媒体代理进程(com.apple.WebKit.GPU),要换回 Safari 去问(配对那道门见
+// TestBrowserPageProbesSkipUnpairedBrowsers)。
 func TestUpcomingFromQueueRoutesBrowsersToYTMusic(t *testing.T) {
 	old := ytmusicQueueScript
 	t.Cleanup(func() { ytmusicQueueScript = old })
 	var asked []string
-	ytmusicQueueScript = func(bundleID, family string) (string, bool) {
-		asked = append(asked, bundleID+"/"+family)
+	ytmusicQueueScript = func(bundleID string) (string, bool) {
+		asked = append(asked, bundleID)
 		return ytmusicQueueRaw(
 			[]string{"1", "Miree", "Suchmos", "THE BAY", "4:03", "a"},
 			[]string{"0", "Lemon", "Kenshi Yonezu", "STRAY SHEEP", "4:17", "c"},
@@ -80,12 +81,8 @@ func TestUpcomingFromQueueRoutesBrowsersToYTMusic(t *testing.T) {
 	if !ok || len(got) != 1 || got[0].title != "Lemon" {
 		t.Fatalf("Safari 播放该读到 YouTube Music 队列,得到 ok=%v %+v", ok, got)
 	}
-	if len(asked) != 1 || asked[0] != "com.apple.Safari/safari" {
-		t.Errorf("该换回宿主 Safari、用 safari 方言,实际 %v", asked)
-	}
-	asked = nil
-	if _, ok := upcomingFromQueue("Suchmos", "Miree", "THE BAY", "org.mozilla.firefox", 0, 5); ok || len(asked) != 0 {
-		t.Errorf("驱动不了的浏览器不该跑探针,ok=%v asked=%v", ok, asked)
+	if len(asked) != 1 || asked[0] != "com.apple.Safari" {
+		t.Errorf("该换回宿主 Safari,实际 %v", asked)
 	}
 }
 
@@ -123,7 +120,7 @@ func TestBrowserUpcomingRetriesOnceOnMismatch(t *testing.T) {
 	old := ytmusicQueueScript
 	t.Cleanup(func() { ytmusicQueueScript = old })
 	calls := 0
-	ytmusicQueueScript = func(string, string) (string, bool) {
+	ytmusicQueueScript = func(string) (string, bool) {
 		calls++
 		if calls == 1 {
 			return ytmusicQueueRaw(
@@ -148,7 +145,7 @@ func TestBrowserUpcomingRetriesOnceOnMismatch(t *testing.T) {
 	}
 
 	calls = 0
-	ytmusicQueueScript = func(string, string) (string, bool) {
+	ytmusicQueueScript = func(string) (string, bool) {
 		calls++
 		sel := map[bool]string{true: "1", false: "0"}
 		return ytmusicQueueRaw(
@@ -163,7 +160,7 @@ func TestBrowserUpcomingRetriesOnceOnMismatch(t *testing.T) {
 	}
 
 	calls = 0
-	ytmusicQueueScript = func(string, string) (string, bool) {
+	ytmusicQueueScript = func(string) (string, bool) {
 		calls++
 		return ytmusicQueueRaw([]string{"1", "停着的另一首", "甲", "专辑", "3:00", "a"}, []string{"0", "x", "乙", "专辑", "3:00", "b"}), true
 	}
@@ -172,7 +169,7 @@ func TestBrowserUpcomingRetriesOnceOnMismatch(t *testing.T) {
 	}
 
 	calls = 0
-	ytmusicQueueScript = func(string, string) (string, bool) { calls++; return "NOTFOUND", true }
+	ytmusicQueueScript = func(string) (string, bool) { calls++; return "NOTFOUND", true }
 	if _, ok := browserUpcoming("B", "Localized", "com.apple.WebKit.GPU", 280.8, 5); ok || calls != 1 {
 		t.Fatalf("没有这个网站的标签页时不该重读,得到 ok=%v calls=%d", ok, calls)
 	}

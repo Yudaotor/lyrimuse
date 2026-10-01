@@ -70,12 +70,12 @@ func TestParseSpotifyWebQueueRejectsMalformed(t *testing.T) {
 func TestUpcomingFromQueueFallsThroughToSpotifyWeb(t *testing.T) {
 	oldYT, oldSP := ytmusicQueueScript, spotifyWebQueueScript
 	t.Cleanup(func() { ytmusicQueueScript, spotifyWebQueueScript = oldYT, oldSP })
-	ytmusicQueueScript = func(string, string) (string, bool) {
+	ytmusicQueueScript = func(string) (string, bool) {
 		return ytmusicQueueRaw([]string{"1", "Miree", "Suchmos", "THE BAY", "4:03", "a"}), true // 停着的另一个标签页
 	}
 	var asked string
-	spotifyWebQueueScript = func(bundleID, family string) (string, bool) {
-		asked = bundleID + "/" + family
+	spotifyWebQueueScript = func(bundleID string) (string, bool) {
+		asked = bundleID
 		return spotifyWebRaw(
 			[]string{"Boston", "STELLA LEFTY", "Boston", "170859", "a"},
 			[]string{"Been By Now", "Morgan Wallen", "Been By Now", "213805", "b"},
@@ -85,7 +85,7 @@ func TestUpcomingFromQueueFallsThroughToSpotifyWeb(t *testing.T) {
 	if !ok || len(got) != 1 || got[0].title != "Been By Now" {
 		t.Fatalf("该从 Spotify 网页版取到队列,得到 ok=%v %+v", ok, got)
 	}
-	if asked != "com.apple.Safari/safari" {
+	if asked != "com.apple.Safari" {
 		t.Errorf("该换回宿主 Safari,实际 %q", asked)
 	}
 }
@@ -122,7 +122,7 @@ func TestSpotifyWebUpcomingSingleNextFromState(t *testing.T) {
 func TestSpotifyWebUpcomingMatchedButNothingNext(t *testing.T) {
 	old := spotifyWebQueueScript
 	t.Cleanup(func() { spotifyWebQueueScript = old })
-	spotifyWebQueueScript = func(string, string) (string, bool) {
+	spotifyWebQueueScript = func(string) (string, bool) {
 		return spotifyWebRaw([]string{"Cowgirl", "Shaboozey", "Cowgirl", "175764", "spotify:track:a"}), true
 	}
 	if got := spotifyWebUpcoming("Shaboozey", "Cowgirl", "com.apple.WebKit.GPU", 5); got.status != browserQueueUnavailable {
