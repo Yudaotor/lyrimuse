@@ -208,3 +208,69 @@ func TestLRCLIBOverloadRetryIsBounded(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchQueryOriginal(t *testing.T) {
+	if _, _, _, ok := searchQueryOriginalFrom(withSearchQueryOriginal(context.Background(), "Adele", "Hello", "25")); ok {
+		t.Fatal("归一化没改动时不该记")
+	}
+	if _, _, _, ok := searchQueryOriginalFrom(withSearchQueryOriginal(context.Background(), "YOASOBI", "夜に駆ける", "THE BOOK")); ok {
+		t.Fatal("带假名的日文歌原样送出,不该记")
+	}
+	a, ti, al, ok := searchQueryOriginalFrom(withSearchQueryOriginal(context.Background(), "蘇打綠", "無與倫比的美麗", "小宇宙"))
+	if !ok || a != "蘇打綠" || ti != "無與倫比的美麗" || al != "小宇宙" {
+		t.Fatalf("繁体标签应记下原样写法: %q %q %q %v", a, ti, al, ok)
+	}
+}
+
+// 归一化改过写法:先按原样写法查;原样查到带时间轴的就不再按简体查。
+func TestLRCLIBTriesOriginalFormFirst(t *testing.T) {
+	f := withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		if r.URL.Query().Get("artist_name") == "蘇打綠" {
+			return http.StatusOK, nil, `{"trackName":"無與倫比的美麗","artistName":"蘇打綠","duration":200,"syncedLyrics":"` + lrclibSyncedFixture + `"}`
+		}
+		return http.StatusNotFound, nil, `{}`
+	})
+	ctx := withSearchQueryOriginal(qqRoundCtx(), "蘇打綠", "無與倫比的美麗", "小宇宙")
+	r := lrclibLyric(ctx, "苏打绿", "无与伦比的美丽", "小宇宙", 200)
+	if r.lyrics == "" || r.plainOnly {
+		t.Fatalf("原样写法查得到,应当用上: %+v", r)
+	}
+	for _, u := range f.requests() {
+		if u.Query().Get("artist_name") != "蘇打綠" {
+			t.Fatalf("原样写法已经查到,不该再按简体查: %s", u.RawQuery)
+		}
+	}
+}
+
+// 原样写法没有、简体有:用简体那份;原样只有纯文本、简体有时间轴:用简体那份。
+func TestLRCLIBFallsBackToNormalizedForm(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		original string
+	}{
+		{"原样没收录", ""},
+		{"原样只有纯文本", `{"trackName":"無與倫比的美麗","artistName":"蘇打綠","duration":200,"plainLyrics":"a\nb"}`},
+	} {
+		withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+			switch r.URL.Query().Get("artist_name") {
+			case "苏打绿":
+				if r.URL.Path == "/api/get" {
+					return http.StatusOK, nil, `{"trackName":"无与伦比的美丽","artistName":"苏打绿","duration":200,"syncedLyrics":"` + lrclibSyncedFixture + `"}`
+				}
+			case "蘇打綠":
+				if c.original != "" && r.URL.Path == "/api/get" {
+					return http.StatusOK, nil, c.original
+				}
+			}
+			if r.URL.Path == "/api/search" {
+				return http.StatusOK, nil, `[]`
+			}
+			return http.StatusNotFound, nil, `{}`
+		})
+		ctx := withSearchQueryOriginal(qqRoundCtx(), "蘇打綠", "無與倫比的美麗", "小宇宙")
+		r := lrclibLyric(ctx, "苏打绿", "无与伦比的美丽", "小宇宙", 200)
+		if r.lyrics == "" || r.plainOnly || r.artist != "苏打绿" {
+			t.Errorf("%s: 应当用简体查到的带时间轴版本: %+v", c.name, r)
+		}
+	}
+}

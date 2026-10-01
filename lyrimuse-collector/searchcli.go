@@ -219,6 +219,7 @@ func runSearchLyricsCLI(args []string) {
 	// 就是下面这一份,不挂收集器的话它会是唯一一条没有 queries_tried 的路径。
 	// 这个一次性进程没有熔断态(见 sourcebreaker.go 头注),所以只挂 query log、不挂 round。
 	searchCtx, queries := withLyricQueryLog(withManualLyricSearch(context.Background()))
+	searchCtx = withSearchQueryOriginal(searchCtx, *artist, *title, *album)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在

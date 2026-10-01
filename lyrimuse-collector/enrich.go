@@ -2618,6 +2618,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 本函数内部用来发起搜索请求的局部变量,不改 enrichCache 的 key(那个在更上层的
 	// trackEnrichment 里用原始、未转换的 artist/title/album 构造,必须跟 Apple Music
 	// 原始标签保持逐字节一致,否则同一首歌反复播放会对不上同一条缓存记录)。
+	ctx = withSearchQueryOriginal(ctx, artist, title, album)
 	artist, title, album = searchQueryFields(artist, title, album)
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。

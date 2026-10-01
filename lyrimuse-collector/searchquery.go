@@ -1,6 +1,9 @@
 package main
 
-import "unicode"
+import (
+	"context"
+	"unicode"
+)
 
 // searchQueryFields 把歌手 / 歌名 / 专辑转成发给各歌词源的查询词:繁体转简体(国内几家的曲库与搜索索引是简体,
 // 拿繁体标签去搜整个查不到)。三栏里任何一栏带假名就当日文歌,三栏都原样送出:日文汉字不是繁体中文,
@@ -13,6 +16,25 @@ func searchQueryFields(artist, title, album string) (string, string, string) {
 		return composeNFC(artist), composeNFC(title), composeNFC(album)
 	}
 	return toSimplified(artist), toSimplified(title), toSimplified(album)
+}
+
+type searchQueryOriginalKey struct{}
+
+// withSearchQueryOriginal 记下 searchQueryFields 归一化之前的写法(NFC 组合后),给按原样收录的源多试一种写法(lrclib.go
+// resolveLRCLIBLyricForms)。归一化没改动任何一栏时原样返回 ctx。调用方传的是归一化之前的三栏。
+func withSearchQueryOriginal(ctx context.Context, artist, title, album string) context.Context {
+	oa, ot, oal := composeNFC(artist), composeNFC(title), composeNFC(album)
+	qa, qt, qal := searchQueryFields(artist, title, album)
+	if oa == qa && ot == qt && oal == qal {
+		return ctx
+	}
+	return context.WithValue(ctx, searchQueryOriginalKey{}, [3]string{oa, ot, oal})
+}
+
+// searchQueryOriginalFrom:withSearchQueryOriginal 记下的写法;没记(归一化没改动)时 ok 为 false。
+func searchQueryOriginalFrom(ctx context.Context) (artist, title, album string, ok bool) {
+	v, ok := ctx.Value(searchQueryOriginalKey{}).([3]string)
+	return v[0], v[1], v[2], ok
 }
 
 // containsKana:有没有平假名或片假名。按 Unicode 文字系统认,中文人名里常见的间隔号「・」(U+30FB)和长音符

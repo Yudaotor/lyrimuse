@@ -67,7 +67,7 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 	}
 	lrclibMu.Unlock()
 
-	r := resolveLRCLIBLyric(ctx, artist, title, album, durationSecs)
+	r := resolveLRCLIBLyricForms(ctx, artist, title, album, durationSecs)
 	if r.lyrics != "" || r.instrumental {
 		lrclibMu.Lock()
 		lrclibCache[key] = r
@@ -75,6 +75,41 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 	}
 	return r
 }
+
+// resolveLRCLIBLyricForms:查询词被 searchQueryFields 改过写法(繁体转简体)时,先按原样写法(searchQueryOriginalFrom)
+// 走完整三级,没拿到带时间轴、时长对得上的,再按归一后的写法查一遍(不带专辑的 get + search),两份取好的那份,
+// 同样好时原样写法优先。LRCLIB 是各地用户上传的,繁体与日文汉字的歌按哪种写法收录的都有,只按简体查会漏,
+// 见 09 章决策 137。
+func resolveLRCLIBLyricForms(ctx context.Context, artist, title, album string, durationSecs float64) lrclibResult {
+	oa, ot, oal, ok := searchQueryOriginalFrom(ctx)
+	if !ok {
+		return resolveLRCLIBLyric(ctx, artist, title, album, durationSecs)
+	}
+	first := resolveLRCLIBLyric(ctx, oa, ot, oal, durationSecs)
+	if lrclibResultRank(first, durationSecs) == lrclibRankSettled || (oa == artist && ot == title) {
+		return first
+	}
+	second := resolveLRCLIBLyric(ctx, artist, title, "", durationSecs)
+	if lrclibResultRank(second, durationSecs) > lrclibResultRank(first, durationSecs) {
+		return second
+	}
+	return first
+}
+
+// lrclibResultRank 给 resolveLRCLIBLyric 的结果排个高低:带时间轴且时长对得上(或明说纯音乐)> 带时间轴 > 纯文本 > 没有。
+func lrclibResultRank(r lrclibResult, durationSecs float64) int {
+	switch {
+	case r.instrumental || (r.lyrics != "" && !r.plainOnly && sourceDurationFits(durationSecs, r.durationSecs)):
+		return lrclibRankSettled
+	case r.lyrics != "" && !r.plainOnly:
+		return 2
+	case r.lyrics != "":
+		return 1
+	}
+	return 0
+}
+
+const lrclibRankSettled = 3
 
 // resolveLRCLIBLyric 三级降级,越往后越宽松,一级失败才试下一级(比"整源判没收录"更宽松)。
 //
@@ -102,7 +137,8 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 // 之后就不再读 resultsCh、也不再调 onUpdate,晚到的结果整轮丢弃。所以三级串行的总预算必须
 // 塞进 20s 里——超出去等于这一源白跑,前两级的收益也一起没了。(第一级从 10s 收到 8s 是为了
 // 给后两级腾时间;lrclib.net 慢,但 8s 仍然远超它的正常响应。)
-// 503 重试(lrclibRequest)不在这份预算里,同样受 20s 截止约束:503 当场就回(约 0.6s),重试只多 1～2s。
+// 503 重试(lrclibRequest)与第二种写法那一遍(resolveLRCLIBLyricForms)不在这份预算里,同样受 20s 截止约束:
+// 503 当场就回(约 0.6s),重试只多 1～2s;第二种写法只在查询词被繁转简改过时才查。
 //
 // get 层只在拿到**带时间轴、时长也对得上**(sourceDurationFits;本地或它自报的时长未知时不看)的版本时提前收工,
 // 或者它明说这首是纯音乐。只有纯文本、或者时长明显不对的,先记下来当兜底、照常往下走:search 层可能有同名的
