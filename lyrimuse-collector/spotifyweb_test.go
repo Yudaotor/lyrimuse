@@ -90,12 +90,6 @@ func TestUpcomingFromQueueFallsThroughToSpotifyWeb(t *testing.T) {
 	}
 }
 
-func TestSpotifyWebQueueJSSafeForAppleScript(t *testing.T) {
-	if strings.Contains(spotifyWebQueueJS, `"`) || strings.Contains(spotifyWebQueueJS, `\`) {
-		t.Fatal("spotifyWebQueueJS 里不能有双引号或反斜杠")
-	}
-}
-
 // 歌名里的双引号原样保留(Safari);Chromium 系整段包一层引号、里面转义过的,剥掉外层并还原。
 func TestUnwrapBrowserScriptOutputKeepsQuotesInNames(t *testing.T) {
 	rec := spotifyWebRaw([]string{`"Heroes"`, "David Bowie", `"Heroes"`, "371000", "u"})

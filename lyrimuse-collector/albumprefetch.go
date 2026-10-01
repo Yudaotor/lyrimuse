@@ -4,9 +4,7 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +18,7 @@ import (
 //
 // 曲目表从哪来:播放器本机有这张专辑的曲目表就用它自己的,没有才问歌词平台:
 //
-//   Apple Music → AppleScript 问 Music.app 的本地资料库。最准,因为曲目字符串跟播放器
+//   Apple Music → 问 Music.app 的本地资料库(由 App 代跑,见 appquery.go)。最准,因为曲目字符串跟播放器
 //                 上报的逐字节一致,算出来的 enrich key 必然对得上。资料库里没收全的,按目录锚点
 //                 的专辑 id 从 Apple 目录补(applemusicalbum.go)。
 //   Spotify     到 客户端自己的元数据缓存(spotifyalbum.go),同样是播放器自己的写法;
@@ -35,8 +33,7 @@ import (
 // Spotify 只走本地缓存、不走 Web API:在线接口要 OAuth 凭据,仓库里没有也不该硬编码。
 // 网易云那条对任何播放器通用 —— 要的只是"这张专辑有哪些歌"。
 //
-// 每条来源都必须按 bundleID 挑:拿别家的专辑名去查 Music.app 资料库必然查不到,还会白跑一次
-// osascript(那段脚本没有 running 守卫,会把没开的 Music.app 拉起来)。
+// 每条来源都必须按 bundleID 挑:拿别家的专辑名去查 Music.app 资料库必然查不到,还白让 App 问一次 Music.app。
 
 // albumPrefetchMaxTracks 是安全阀——防止专辑名字段被打上"整个作品集"这类离谱大合集
 // (几十上百首)时,一次性炸出上百个并发解析请求。正常专辑几首到二十来首都远低于这个数,
@@ -260,40 +257,15 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	return tracks, ok
 }
 
-// albumTracksFromMusicApp 用 AppleScript 问 Music.app 本地库里这张专辑都有哪些曲目
-// (名字/歌手/时长)——本地 AppleScript,不联网,只有 Music.app 在跑才有意义。任何一步失败
-// 都返回 ok=false,调用方直接放弃这次预取,不影响正常播放/解析路径。
+// albumTracksFromMusicApp 问 Music.app 本地资料库里这张专辑都有哪些曲目(名字 / 歌手 / 时长)。由 App 代跑
+// (askApp;脚本与它的守卫在 App 侧 PlayerQueryServer.appleMusicAlbumTracksScript),不联网,Music.app 没在跑时
+// 那段脚本直接返回空。任何一步失败都返回 ok=false,调用方直接放弃这次预取,不影响正常播放 / 解析路径。
 func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-	defer cancel()
-	// tab/linefeed 是 AppleScript 内置常量(制表符/换行符),用它们而不是手动往脚本字符串里
-	// 塞转义序列——更不容易写错,也不用担心 Go/AppleScript 两层转义规则互相打架。
-	// 先判 running 再 tell:`tell application "Music"` 只要发出任何命令就会**启动**
-	// Music.app —— 一个只用 Spotify/QQ 音乐的用户会被每换一张专辑就静默拉起一次 Apple
-	// Music。本仓其它问 Music / Spotify 的脚本开头都有同样的守卫,同一个理由。
-	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
-	// 纪录片)挡在 AppleScript 这一层——例如 Michael Jackson《XSCAPE
-	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
-	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
-	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部歌词源,注定全军覆没,
-	// 还会占满 needsLyricsFirstFill 的重试配额、白白拖长退避周期。用 `is song` 白名单
-	// 而不是拉黑名单排除 video/podcast/audiobook 等——防的是"漏收一种没想到的非歌曲媒体
-	// 类型",而不是"漏挡一种已知的"。
-	script := fmt.Sprintf(`if application "Music" is not running then
-	return ""
-end if
-tell application "Music"
-	set output to ""
-	repeat with t in (every track of library playlist 1 whose album is %s and media kind is song)
-		set output to output & (name of t) & tab & (artist of t) & tab & (duration of t) & linefeed
-	end repeat
-	return output
-end tell`, appleScriptQuote(album))
-	out, err := exec.CommandContext(ctx, "osascript", "-e", script).Output()
-	if err != nil {
+	out, ok := askApp(appQueryRequest{Kind: appQueryAppleMusicAlbumTracks, Album: album}, appQueryScriptTimeout)
+	if !ok {
 		return nil, false
 	}
-	return parseMusicAppAlbumTracks(string(out)), true
+	return parseMusicAppAlbumTracks(out), true
 }
 
 // parseMusicAppAlbumTracks 解 albumTracksFromMusicApp 那段脚本的输出:每行 名\t歌手\t时长(秒)。
@@ -315,14 +287,6 @@ func parseMusicAppAlbumTracks(out string) []albumTrack {
 	return tracks
 }
 
-// appleScriptQuote 把一个字符串安全地嵌进 AppleScript 双引号字符串字面量里——转义反斜杠
-// 和双引号,防止专辑名里恰好带这两种字符时破坏脚本语法。
-func appleScriptQuote(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return `"` + s + `"`
-}
-
 // parseAppleScriptReal 解析 AppleScript 里实数转成的文本(`x as text`、或拼进字符串)。
 // 这个转换跟随系统地区的小数分隔符:德 / 法 / 俄等地区下 243.826 输出 "243,826"、
 // 12345.5 输出 "1,23455E+4",直接交给 ParseFloat 会失败。实数文本不带千分位,
@@ -334,48 +298,10 @@ func parseAppleScriptReal(s string) (float64, error) {
 
 // ---- 播放队列:接下来会播的几首(见 upcoming.go)----
 
-// appleMusicUpcomingScript 是那段只读脚本,提出来只为让单测能照着它核对守卫还在。
+// appleMusicUpcoming 从 Music.app 取接下来会播的几首:先问系统待播队列,取不到再请 App 跑那段 AppleScript
+// (PlayerQueryServer.appleMusicUpcomingScript,三道守卫与云端内容读不到的原因写在那边)。
 //
-// 三道守卫,少一道都会出事:
-//   - `is not running` —— `tell application "Music"` 只要发出任何命令就会**启动**它,
-//     一个只用 Spotify 的用户会被每换一首歌静默拉起一次 Apple Music(同
-//     albumTracksFromMusicApp 那段)。
-//   - `player state is stopped` —— 停着时 current track 还留着上一次的值,照着它预取
-//     等于拿一批过期的歌去占解析带宽。
-//   - `shuffle enabled` —— 开着随机播放时,Music.app **不暴露乱序后的顺序**,index+1
-//     指的是资料库里的下一首、不是接下来会播的那首。直接放弃,退回同专辑预取。
-//
-// 还有一种拿不到的情况守卫不了、只能靠 try 兜:播 **Apple Music 目录**的内容(云端
-// 歌单/电台/推荐)时 `current playlist` 直接报 -1728(对象不存在),而且那个歌单根本不在
-// `playlists` 列表里 —— 脚本接口看不见云端内容。实测:播本地资料库的专辑时曲目 class 是
-// `shared track`、current playlist 是「资料库」;播云端歌单时 class 变成 `URL track`、
-// current playlist 直接没有。这一半覆盖不到,是 Apple Music 这条路的固有上限。
-const appleMusicUpcomingScript = `if application "Music" is not running then
-	return ""
-end if
-tell application "Music"
-	if player state is stopped then return ""
-	if shuffle enabled then return ""
-	try
-		set pl to current playlist
-		set t to current track
-		set i to index of t
-	on error
-		return ""
-	end try
-	set output to (name of t) & tab & (artist of t) & linefeed
-	repeat with k from (i + 1) to (i + %d)
-		try
-			set tk to track k of pl
-			set output to output & (name of tk) & tab & (artist of tk) & tab & (album of tk) & tab & (duration of tk) & linefeed
-		end try
-	end repeat
-	return output
-end tell`
-
-// appleMusicUpcoming 从 Music.app 取接下来会播的几首:先问系统待播队列,取不到再走下面这段 AppleScript。
-//
-// AppleScript 这段不是真正的播放队列 —— Music.app 的脚本字典里**没有 Up Next**。这里是拿
+// 那段 AppleScript 不是真正的播放队列 —— Music.app 的脚本字典里**没有 Up Next**。它是拿
 // 「包含当前曲目的播放列表」+ 当前曲目的 index 往后数。两种情况都实测过:
 //
 //	从**本地歌单**播 —— current playlist 就是那个歌单(实测「米糕」5 首 user playlist、
@@ -386,21 +312,19 @@ end tell`
 //	自然切歌后 index 也确实递增);到专辑最后一首会跨去同艺人的下一张专辑,而 Music.app
 //	实际多半是停止或转 Autoplay 推荐。猜错的代价只是白解析几首,不会出错,不为它再加判断。
 func appleMusicUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	// 先读系统待播队列(applemusicqueue.go):真实播放顺序,开着随机也对。读不到才走下面的 AppleScript。
+	// 先读系统待播队列(applemusicqueue.go):真实播放顺序,开着随机也对。读不到才请 App 跑那段 AppleScript。
 	if res, ok := appleMusicUpcomingFromSystemQueue(artist, title, n); ok {
 		return res, true
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "osascript", "-e", fmt.Sprintf(appleMusicUpcomingScript, n)).Output()
-	if err != nil {
+	out, ok := askApp(appQueryRequest{Kind: appQueryAppleMusicUpcoming, Count: n}, appQueryScriptTimeout)
+	if !ok {
 		return nil, false
 	}
-	return parseAppleMusicUpcoming(string(out), artist, title, n)
+	return parseAppleMusicUpcoming(out, artist, title, n)
 }
 
-// parseAppleMusicUpcoming 解脚本的输出。跟 exec 那半分开是为了能测 —— AppleScript 那边
-// 依赖真机上 Music.app 此刻的状态,单测里跑不了,而这半全是纯粹的字符串处理。
+// parseAppleMusicUpcoming 解 App 回来的那段脚本输出:第一行是它认为正在播的那首(名\t歌手),其余每行
+// 名\t歌手\t专辑\t时长(秒)。纯字符串处理,单测直接覆盖。
 func parseAppleMusicUpcoming(out, artist, title string, n int) ([]upcomingTrack, bool) {
 	lines := strings.Split(strings.ReplaceAll(out, "\r", ""), "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {

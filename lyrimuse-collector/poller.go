@@ -960,10 +960,8 @@ func (p *poller) finalize(now time.Time) {
 // 歌词,未就绪时挂起等 enrich(见 handle)。同一个 session 在结果返回前重复调用会被
 // 去重(sess.announcing)；lastPN/pnPending 的变更挪到 applyAnnounceOutcome,调用方
 // 不再能同步拿到"是否成功"。
-// detectAdAtSessionStart 开播时的广告判定:字段启发式(isAdBreak)先行;是 Spotify 且
-// 字段没判中时,再向 Spotify 本尊要一次权威判据 —— AppleScript 的 `spotify url` 对广告
-// 返回 "spotify:ad:…"(字段启发式打不完地鼠:广告可以带全 artist/title/album)。
-// 每次换曲最多一次 osascript(~50ms),失败静默退回字段启发式,不劣于旧状。
+// detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论与字段启发式取或)。不是广告的 Spotify
+// 原生播放顺带记下这次的曲目 ID(App 带来的那个),给歌词缓存的真曲目链接与 LB 上送用。
 func (p *poller) detectAdAtSessionStart() bool {
 	if isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return true
@@ -1617,6 +1615,9 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	appState := newAppStateReader(configFilePath(clientName + "-playback-state.json"))
 	p.app = &appPlayback{reader: appState, judge: liveAppPlaybackJudge}
 	setAppPlaybackArtworkSource(appState, configFilePath(clientName+"-now-playing-artwork"))
+	// 预解析要问播放器的那几样请 App 代跑(见 appquery.go);文件名与 App 侧 PlayerQueryServer 逐字一致。
+	setAppQueryChannel(configFilePath(clientName+"-player-query-request.json"), configFilePath(clientName+"-player-query-reply.json"),
+		func() bool { _, avail := appState.read(time.Now()); return avail == appStateAvailable })
 	p.poll() // render immediately, don't wait a full interval on startup
 	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)

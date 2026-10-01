@@ -889,7 +889,7 @@ func runOpsDiagnosticsTests() {
             expectEqual(pkg.contains("*\"certificate root\"*"), true,
                         "发布签名: package.sh 的闸按签名要求里的 certificate root 判")
             expectEqual(pkg.contains("\"$app/Contents/Resources/collector\""), true,
-                        "发布签名: collector 也过闸(它自己持有完全磁盘访问 / 自动化授权)")
+                        "发布签名: collector 也过闸(它自己持有完全磁盘访问授权)")
             expectEqual(wf.contains("echo \"LYRIMUSE_SIGN_ID=$SHA\" >> \"$GITHUB_ENV\""), true,
                         "发布签名: release.yml 把导入的证书交给 build.sh")
             expectEqual(wf.contains("set-key-partition-list"), true,

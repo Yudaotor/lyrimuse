@@ -171,7 +171,7 @@ struct OnboardingView: View {
     /// 「下一步」现在被锁住了没有。
     ///
     /// 只剩 `.background` 一条。`.automation` 从这里**移出去**了,理由是它的
-    /// 前提本身站不住:基础的"在播什么"来自 media-control 通道(collector),自动化权限管的是
+    /// 前提本身站不住:基础的"在播什么"来自 media-control 通道,自动化权限管的是
     /// 进度精度和整套播放/资料库控制 —— 没有它歌词照样显示。多选之后更明显:勾了
     /// Apple Music + Spotify 的人,被一个只对其中一个播放器有意义的权限挡在原地。
     ///

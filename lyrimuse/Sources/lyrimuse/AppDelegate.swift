@@ -206,6 +206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 拉不起来(完整机理见 CollectorServiceManager.reconcileAfterLaunch 的注释)。
         // 内部自己判断该不该动、并且整段跑在后台串行队列上,这里不会阻塞启动。
         CollectorServiceManager.reconcileAfterLaunch()
+        // collector 预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
+        // collector 自己不发 AppleEvent(见 PlayerQueryServer)。
+        PlayerQueryServer.shared.start()
 
         // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。
         //

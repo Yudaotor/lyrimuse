@@ -89,13 +89,6 @@ func TestUpcomingFromQueueRoutesBrowsersToYTMusic(t *testing.T) {
 	}
 }
 
-// JS 要嵌进 AppleScript 的双引号字符串:不许有双引号,也不许有反斜杠(AppleScript 的转义字符)。
-func TestYTMusicQueueJSSafeForAppleScript(t *testing.T) {
-	if strings.Contains(ytmusicQueueJS, `"`) || strings.Contains(ytmusicQueueJS, `\`) {
-		t.Fatal("ytmusicQueueJS 里不能有双引号或反斜杠")
-	}
-}
-
 // 队列按账号语言本地化、名字对不上时:唯一那条 selected 的时长跟播放器报的相差 2s 内也认。
 func TestYTMusicQueueCurrentFallsBackToSelectedDuration(t *testing.T) {
 	items := parseYTMusicQueue(ytmusicQueueRaw(
@@ -204,8 +197,5 @@ func TestYTMusicUpcomingMusicVideoDurationUnknown(t *testing.T) {
 		if got[i].duration != w {
 			t.Errorf("第 %d 首(%s)时长该是 %v,得到 %v", i, got[i].title, w, got[i].duration)
 		}
-	}
-	if !strings.Contains(ytmusicQueueJS, "watchEndpointMusicConfig") || !strings.Contains(ytmusicQueueJS, "musicVideoType") {
-		t.Error("队列脚本要读出每一首的 musicVideoType")
 	}
 }

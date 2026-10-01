@@ -2,14 +2,12 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -68,16 +66,13 @@ const spotifyStateMaxBytes = 16 << 20
 // spotifyMetaCacheCap 防无界增长。元数据按曲目 id 缓存(一首歌的名字不会变)。
 const spotifyMetaCacheCap = 4096
 
-// spotifyShuffling 问 Spotify 此刻开没开随机。单测替换它,不去真跑 osascript。
+// spotifyShuffling 问 Spotify 此刻开没开随机,由 App 代跑(askApp,脚本在 App 侧 PlayerQueryServer)。单测替换它。
 var spotifyShuffling = func() (on, ok bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "osascript", "-e",
-		`if application "Spotify" is running then tell application "Spotify" to return shuffling`).Output()
-	if err != nil {
+	out, ok := askApp(appQueryRequest{Kind: appQuerySpotifyShuffle}, appQueryShuffleTimeout)
+	if !ok {
 		return false, false
 	}
-	switch strings.TrimSpace(string(out)) {
+	switch strings.TrimSpace(out) {
 	case "true":
 		return true, true
 	case "false":
@@ -86,7 +81,7 @@ var spotifyShuffling = func() (on, ok bool) {
 	return false, false
 }
 
-// spotifyShuffleMemory:问不到随机状态(换歌那一拍 osascript 偶尔 2 秒内回不来)时,最近一次问到的结果
+// spotifyShuffleMemory:问不到随机状态(换歌那一拍 Spotify 偶尔 2 秒内回不来)时,最近一次问到的结果
 // 在多久之内还能用。随机开关很少切换,沿用它比整轮退回同专辑预取好;太久没问到就不猜。
 const spotifyShuffleMemory = 30 * time.Minute
 

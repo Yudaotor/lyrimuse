@@ -23,7 +23,7 @@ import (
 // 只对信任列表里的 bundle 做:这条路要起子进程读别人的 bundle,不能对任意报上来的 bundle id 都跑一遍。
 // 判出来的引擎族按 bundle id 缓存到进程结束,换装同 bundle id 的另一个版本要重启 collector 才认。「判不了」
 // 只记 browserFamilyRetryAfter:它可能只是这一次没找到 —— Spotlight 没建好索引、系统正忙时 mdfind 加逐个
-// plutil 会超时,装在别处的 App 也可能过一阵才被索引到。缓存到进程结束的话,网页探针会一直跳过这个浏览器。
+// plutil 会超时,装在别处的 App 也可能过一阵才被索引到。缓存到进程结束的话,网页队列预取会一直跳过这个浏览器。
 
 const (
 	chromiumScriptCommandCode = "CrSuExJa"
@@ -52,6 +52,24 @@ var detectBrowserScriptFamily = func(bundleID string) string {
 		return ""
 	}
 	return scriptFamilyForApp(app)
+}
+
+// browserScriptFamily 回答"这个 bundle id 该用哪种 AppleScript 方言"。collector 只拿它在请 App 代跑网页队列之前
+// 先筛掉驱动不了的浏览器,脚本由 App 按它自己那份判断去跑(PlayerQueryServer)。
+//
+// 写死的清单与 Swift 侧 BrowserAutomationPermission 保持一致(Chromium 系四家 + Safari);信任列表里的
+// 其他浏览器现场读脚本定义判(trustedBrowserScriptFamily,口径同 Swift 侧 detectedFamily)。判不了的
+// (Firefox 等没有提供脚本命令的)返回空串,调用方静默跳过。
+func browserScriptFamily(bundleID string) string {
+	switch bundleID {
+	case "com.google.Chrome", "com.microsoft.edgemac", "company.thebrowser.Browser", "com.brave.Browser":
+		return "chromium"
+	case "com.apple.Safari":
+		return "safari"
+	default:
+		// 用户自己加进信任列表的浏览器:现场读它的脚本定义判。
+		return trustedBrowserScriptFamily(bundleID)
+	}
 }
 
 // trustedBrowserScriptFamily 是 browserScriptFamily 写死名单之外的那一步。

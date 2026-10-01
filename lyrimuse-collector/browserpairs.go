@@ -11,9 +11,8 @@ import (
 // browser_platform_pairs:平台 id → 浏览器 bundle id 列表,平台 id 跟 Swift 侧 BrowserPositionProbe.supportedPlatforms
 // 同一套。
 //
-// 没配对就不跑:没配对的浏览器多半没打开「允许 Apple 事件中的 JavaScript」,探针每换一首都要起一次 osascript、
-// 必然失败;而受信任的浏览器里放的常常是没有专辑名的普通视频,每一首都会走到广告复核这一步。App 侧
-// YouTubeMusicAdProbe / SpotifyWebAdProbe 的入口判的是同一件事。
+// 没配对就不跑:没配对的浏览器多半没打开「允许 Apple 事件中的 JavaScript」,每换一首都让 App 跑一次注定失败的
+// 脚本。App 侧 YouTubeMusicAdProbe / SpotifyWebAdProbe 的入口与 PlayerQueryServer 判的是同一件事。
 //
 // 键缺失(App 还没写过这个键的配置)时沿用原来的行为:所有浏览器都探。
 const (

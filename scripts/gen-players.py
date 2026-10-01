@@ -51,8 +51,8 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
                 只给**实测见过**的播放器置 true(Amazon Music:界面上也没有可设值的进度条)。这类播放器上
                 进度条只显示不能拖、点歌词不跳,`LocalPlaybackSource.seek` 直接不动
 - needsAutomationPermission  这个播放器要不要 macOS 的「自动化」权限(我们向它发 Apple Event);auto 为 null
-                = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:collector 是独立
-                签名身份、TCC 里是另一条记录,那边没有 API 能查或触发它
+                = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:Apple Event 都由 App 发,
+                collector 预解析要问播放器的那几样也由 App 代跑(PlayerQueryServer)
 - needsFullDiskAccess  collector 读它的客户端文件要不要「完全磁盘访问」;auto 为 null
                 = 那些文件在 `~/Library/Containers/` 下(App 带沙盒)。collector 侧
                 TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账,填错会红
@@ -254,7 +254,7 @@ def render_core_swift(spec, players):
 
     out.append("\n    /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。\n"
                "    /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。\n"
-               "    /// 只覆盖 Lyrimuse 自己这一份身份:collector 是独立签名身份,TCC 里是另一条记录。\n"
+               "    /// 只覆盖 Lyrimuse 自己这一份身份;collector 不向播放器发 Apple Event(预解析那几样由 App 代跑)。\n"
                "    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。\n"
                "    public var needsAutomationPermission: Bool {\n        switch self {\n")
     for p in concrete:

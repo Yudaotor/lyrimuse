@@ -78,7 +78,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
 
     /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。
     /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。
-    /// 只覆盖 Lyrimuse 自己这一份身份:collector 是独立签名身份,TCC 里是另一条记录。
+    /// 只覆盖 Lyrimuse 自己这一份身份;collector 不向播放器发 Apple Event(预解析那几样由 App 代跑)。
     /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。
     public var needsAutomationPermission: Bool {
         switch self {

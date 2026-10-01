@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"strconv"
 	"strings"
@@ -25,6 +24,7 @@ import (
 // `getQueue()` 的整份队列,不同就改用 `getState()` 的 item + nextItems。
 //
 // 只读:不点任何按钮、不改界面,读完即走。这是网页内部结构,改版了读不到就 ok=false,退回同专辑预取。
+// 读页面这一步由 App 代跑(往标签页注入一段只读 JS,见 appquery.go 与 App 侧 PlayerQueryServer.spotifyWebQueueJS)。
 //
 // ## 名字对得上
 //
@@ -33,40 +33,14 @@ import (
 // 波斯语都是 ", "(中文界面也是)。队列项正好是同一份数据,所以这里拼出来的 key 跟真播到时逐字一致 ——
 // 不像 YouTube Music 那样有本地化名字对不上的歌。
 
-const spotifyWebHostMarker = "open.spotify.com"
-
-// spotifyWebQueueJS:第一条记录是当前这首,之后按播放顺序(队列新鲜时是 queued、nextUp,快照过期时是
-// getState().nextItems,取舍见文件头注)。记录之间 RS(0x1e),字段之间 US(0x1f),字段顺序 title、artist、
-// album、毫秒、uri。只收曲目(uri 以 spotify:track: 开头)。找不到播放器接口返回 NOTFOUND。纪律同
-// ytmusicQueueJS:不许双引号、不写反斜杠。
-const spotifyWebQueueJS = `(function(){` +
-	`var US = String.fromCharCode(31), RS = String.fromCharCode(30);` +
-	`var el = document.querySelector('[data-testid=now-playing-widget]');` +
-	`if (!el) return 'NOTFOUND';` +
-	`var fk = Object.keys(el).filter(function(k){ return k.indexOf('__reactFiber') === 0; })[0];` +
-	`var f = fk ? el[fk] : null, api = null;` +
-	`while (f) { var p = f.memoizedProps; if (p && p.playerAPI && (typeof p.playerAPI.getQueue === 'function' || typeof p.playerAPI.getState === 'function')) { api = p.playerAPI; break; } f = f.return; }` +
-	`if (!api) return 'NOTFOUND';` +
-	`var s = typeof api.getState === 'function' ? api.getState() : null;` +
-	`var live = s && s.item && String(s.item.uri || '').indexOf('spotify:track:') === 0 ? s.item : null;` +
-	`var q = typeof api.getQueue === 'function' ? api.getQueue() : null;` +
-	`var cur = null, rest = [];` +
-	`if (q && q.current && (!live || String(q.current.uri || '') === String(live.uri))) { cur = q.current; rest = (q.queued || []).concat(q.nextUp || []); }` +
-	`else if (live) { cur = live; rest = s.nextItems || []; }` +
-	`if (!cur) return 'NOTFOUND';` +
-	`var rec = function(t){ var arts = (t.artists || []).map(function(a){ return String(a.name || ''); }).join(', ');` +
-	`return [String(t.name || ''), arts, String((t.album && t.album.name) || ''), String((t.duration && t.duration.milliseconds) || 0), String(t.uri || '')].join(US); };` +
-	`var out = [rec(cur)];` +
-	`rest.forEach(function(t){ if (t && String(t.uri || '').indexOf('spotify:track:') === 0) out.push(rec(t)); });` +
-	`return out.join(RS);` +
-	`})()`
-
 type spotifyWebTrack struct {
 	title, artist, album, uri string
 	seconds                   float64
 }
 
-// parseSpotifyWebQueue 解 spotifyWebQueueJS 的输出:第一条是当前这首,其余按播放顺序。纯函数,可单测。
+// parseSpotifyWebQueue 解那段队列 JS 的输出:第一条记录是当前这首,之后按播放顺序(队列新鲜时是 queued、nextUp,
+// 快照过期时是 getState().nextItems,取舍见文件头注)。记录之间 RS(0x1e),字段之间 US(0x1f),字段顺序 title、
+// artist、album、毫秒、uri,只收曲目(uri 以 spotify:track: 开头);找不到播放器接口是 NOTFOUND。纯函数,可单测。
 func parseSpotifyWebQueue(raw string) (current spotifyWebTrack, next []spotifyWebTrack, ok bool) {
 	s := unwrapBrowserScriptOutput(raw)
 	if s == "" || strings.Contains(s, "NOTFOUND") {
@@ -124,10 +98,10 @@ func spotifyWebCurrentMatches(current spotifyWebTrack, artist, title string) boo
 
 var spotifyWebLogOnce sync.Once
 
-// spotifyWebQueueScript 真正去浏览器里跑队列探针的那一步。单测换成假的(TestMain 默认"读不到"),
-// 测试进程绝不能去驱动本机真实的浏览器。
-var spotifyWebQueueScript = func(bundleID, family string) (string, bool) {
-	return runBrowserTabScript(context.Background(), bundleID, family, spotifyWebHostMarker, spotifyWebQueueJS)
+// spotifyWebQueueScript 读这个浏览器里 Spotify 网页播放器的队列,由 App 代跑(askApp)。family 只用于调用方先判能不能驱动。
+// 单测换成假的(TestMain 默认"读不到")。
+var spotifyWebQueueScript = func(bundleID, _ string) (string, bool) {
+	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformSpotifyWeb}, appQueryScriptTimeout)
 }
 
 // spotifyWebUpcoming 是 browserUpcoming 的一路,规则见文件头注。

@@ -40,7 +40,7 @@ import (
 //
 // 为什么 exec /usr/bin/sqlite3 而不是引一个 SQLite 驱动:这个 module 至今**零外部依赖**
 // (go.mod 里一条 require 都没有),为读 5 个字段引入 cgo 驱动或一个纯 Go 的 SQLite 实现
-// 都不划算;而 exec 系统自带命令本来就是这个仓库的既有做法(osascript / scutil /
+// 都不划算;而 exec 系统自带命令本来就是这个仓库的既有做法(plutil / scutil /
 // defaults / pgrep)。
 //
 // 全程 fail-soft:没装 QQ 音乐 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,

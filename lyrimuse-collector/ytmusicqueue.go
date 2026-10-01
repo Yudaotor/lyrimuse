@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"math"
 	"strings"
@@ -15,7 +14,8 @@ import (
 // 队列面板(`ytmusic-player-queue`)里每一首是一个 `ytmusic-player-queue-item`,它的 `data` 属性就是
 // InnerTube 下发的 playlistPanelVideoRenderer:videoId、title、lengthText、`selected`(此刻在播的那首),
 // 以及 longBylineText「歌手 • 专辑 • 年份」—— 专辑那一段带 `MPREb_` 开头的 browseId,跟语言无关地认得出来。
-// 面板收着的时候这份 DOM 也在,实测 50 首的队列全部读得到。
+// 面板收着的时候这份 DOM 也在,实测 50 首的队列全部读得到。读页面这一步由 App 代跑(往标签页注入一段只读 JS,
+// 见 appquery.go 与 App 侧 PlayerQueryServer.youTubeMusicQueueJS)。
 // 页面里开了随机,YouTube Music 是把这份列表**本身**打乱,所以按页面顺序往后取就是真实的下一首。
 //
 // 同一首歌有「歌曲版 / 视频版」两份时,替身那份包在 `#counterpart-renderer` 里、不在播放顺序上,跳过。
@@ -40,44 +40,6 @@ import (
 // lengthText 只到秒,MediaSession 带小数。
 const ytmusicSelectedDurationToleranceSecs = 2.0
 
-// ytmusicQueueJS 读队列。返回值:每首一条记录,记录之间用 RS(0x1e),字段之间用 US(0x1f),
-// 字段顺序 selected(0/1)、title、artist、album、lengthText、videoId、musicVideoType(读不到为空)。
-// 找不到队列返回 NOTFOUND。musicVideoType 取自 `navigationEndpoint.watchEndpoint` 的
-// `watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig`,认 MV 的白名单见 ytmusicIsMusicVideoType。
-//
-// 纪律同 browsertab.go 头注:不许有双引号(整段要嵌进 AppleScript 的双引号字符串),也不写反斜杠
-// (那是 AppleScript 字符串的转义字符)—— 分隔符因此用 String.fromCharCode 现造。歌名、专辑名是任意文本,
-// 用控制字符分隔才不会撞上。
-const ytmusicQueueJS = `(function(){` +
-	`var US = String.fromCharCode(31), RS = String.fromCharCode(30);` +
-	`var items = document.querySelectorAll('ytmusic-player-queue-item');` +
-	`if (!items.length) return 'NOTFOUND';` +
-	`var text = function(o){ return (o && o.runs) ? o.runs.map(function(r){ return String(r.text || ''); }).join('') : ''; };` +
-	`var out = [];` +
-	`for (var i = 0; i < items.length; i++) {` +
-	`var el = items[i];` +
-	`if (el.closest('#counterpart-renderer')) continue;` +
-	`var d = el.data;` +
-	`if (!d) continue;` +
-	`var runs = (d.longBylineText && d.longBylineText.runs) || [];` +
-	`var artist = [], album = '', afterSep = false;` +
-	`for (var j = 0; j < runs.length; j++) {` +
-	`var t = String(runs[j].text || '');` +
-	`var be = runs[j].navigationEndpoint && runs[j].navigationEndpoint.browseEndpoint;` +
-	`var id = be ? String(be.browseId || '') : '';` +
-	`if (id.indexOf('MPREb') === 0) { album = t; }` +
-	`if (t.trim() === '•') { afterSep = true; continue; }` +
-	`if (!afterSep) artist.push(t);` +
-	`}` +
-	`var sel = (d.selected || el.hasAttribute('selected')) ? '1' : '0';` +
-	`var we = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;` +
-	`var mc = we && we.watchEndpointMusicSupportedConfigs && we.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig;` +
-	`var vt = (mc && mc.musicVideoType) ? String(mc.musicVideoType) : '';` +
-	`out.push([sel, text(d.title), artist.join(''), album, text(d.lengthText), String(d.videoId || ''), vt].join(US));` +
-	`}` +
-	`return out.length ? out.join(RS) : 'NOTFOUND';` +
-	`})()`
-
 type ytmusicQueueItem struct {
 	selected                      bool
 	title, artist, album, videoID string
@@ -97,7 +59,10 @@ func ytmusicIsMusicVideoType(vt string) bool {
 	return false
 }
 
-// parseYTMusicQueue 解 ytmusicQueueJS 的输出。字段数不对、没有歌名的记录跳过。纯函数,可单测。
+// parseYTMusicQueue 解那段队列 JS 的输出:每首一条记录,记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序
+// selected(0/1)、title、artist、album、lengthText、videoId、musicVideoType(读不到为空,认 MV 的白名单见
+// ytmusicIsMusicVideoType);找不到队列是 NOTFOUND。歌名、专辑名是任意文本,所以用控制字符分隔。
+// 字段数不对、没有歌名的记录跳过。纯函数,可单测。
 func parseYTMusicQueue(raw string) []ytmusicQueueItem {
 	s := unwrapBrowserScriptOutput(raw)
 	if s == "" || strings.Contains(s, "NOTFOUND") {
@@ -217,7 +182,7 @@ func pickYTMusicUpcoming(items []ytmusicQueueItem, artist, title string, duratio
 // unwrapBrowserScriptOutput 处理浏览器 JS 探针的原始输出(两个队列探针共用)。
 //
 // Chromium 系的 `execute … javascript` 有时把返回的字符串再包一层双引号、并把里面的双引号转义成真的反斜杠
-// (见 browsertab.go 头注);Safari 的 `do JavaScript` 原样返回。歌名、专辑名里带双引号很常见
+// (见 App 侧 BrowserTabProbeScript 头注);Safari 的 `do JavaScript` 原样返回。歌名、专辑名里带双引号很常见
 // (实测「I Knew It, I Knew You - From "Toy Story 5"」),所以**只在整段首尾都是双引号时**才当成被包了一层:
 // 去掉外层、把 `\"` 还原。不能无条件 Trim 掉首尾引号 —— 那会把以引号开头的歌名削掉一个字符。
 func unwrapBrowserScriptOutput(raw string) string {
@@ -230,10 +195,10 @@ func unwrapBrowserScriptOutput(raw string) string {
 
 var ytmusicQueueLogOnce sync.Once
 
-// ytmusicQueueScript 真正去浏览器里跑队列探针的那一步。单测换成假的:测试进程绝不能去驱动本机真实的浏览器
-// (TestMain 默认就把它换成"读不到")。
-var ytmusicQueueScript = func(bundleID, family string) (string, bool) {
-	return runBrowserTabScript(context.Background(), bundleID, family, ytmusicHostMarker, ytmusicQueueJS)
+// ytmusicQueueScript 读这个浏览器里 YouTube Music 页面的队列,由 App 代跑(askApp)。family 只用于调用方先判能不能驱动。
+// 单测换成假的(TestMain 默认"读不到")。
+var ytmusicQueueScript = func(bundleID, _ string) (string, bool) {
+	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformYouTubeMusic}, appQueryScriptTimeout)
 }
 
 // ytmusicUpcoming 是 browserUpcoming 的一路:在这个浏览器里找 YouTube Music 标签页读队列。

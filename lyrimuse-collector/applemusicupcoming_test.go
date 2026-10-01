@@ -5,23 +5,6 @@ import (
 	"testing"
 )
 
-// 脚本那半依赖真机上 Music.app 此刻的状态,单测里跑不了 —— 三道守卫只能靠扫源码钉住。
-// 少任意一道的后果都写在 appleMusicUpcomingScript 的头注里(拉起没开的 App / 拿停着时
-// 的陈旧曲目 / 随机播放时按资料库顺序瞎猜)。
-func TestAppleMusicUpcomingScriptKeepsItsGuards(t *testing.T) {
-	guards := []struct{ needle, why string }{
-		{`if application "Music" is not running then`, "没有 running 守卫会把没开的 Music.app 静默拉起来"},
-		{"if player state is stopped then return", "停着时 current track 还留着上一次的值"},
-		{"if shuffle enabled then return", "随机播放时 index+1 指的不是接下来会播的那首"},
-		{"on error", "播云端歌单时 current playlist 直接报 -1728,得兜住"},
-	}
-	for _, g := range guards {
-		if !strings.Contains(appleMusicUpcomingScript, g.needle) {
-			t.Errorf("脚本里少了守卫 %q —— %s", g.needle, g.why)
-		}
-	}
-}
-
 func TestParseAppleMusicUpcoming(t *testing.T) {
 	// 第一行是脚本报回来的"它认为正在播的那首",其余每行是 名\t歌手\t专辑\t时长(秒)。
 	out := "Earth Song\tMichael Jackson\n" +
