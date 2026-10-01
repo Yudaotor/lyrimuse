@@ -787,7 +787,7 @@ private struct LyricsSettingsTab: View {
     /// 高底色/`.help` 提示仍由 hoveredSource 驱动,两者不合并。
     @State private var hoveredRow: LyricsSource?
     // collector 发布的「哪几家的客户端缓存被系统挡住了」。 只认它的结论,别在 App 里
-    // 自己探一遍 —— 两个进程的 TCC 授权各自独立,理由见 LocalCacheAccess 头注。
+    // 自己探一遍 —— 授权在每个进程里各自生效,理由见 LocalCacheAccess 头注。
     @State private var localCacheAccess: LocalCacheAccess.State?
     /// 哪一格的「客户端缓存读不到」说明正开着(`LocalCacheAccessHelp`)。同时最多一个。
     @State private var localCacheHelpSource: LyricsSource?

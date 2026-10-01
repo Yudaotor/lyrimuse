@@ -112,7 +112,8 @@ for v in "${VARIANTS[@]}"; do
   # 用户每次更新后 TCC 里的辅助功能 / 自动化 / 完全磁盘访问授权都对不上、勾亮着却失效;而证书那头
   # 缺了(Secret 过期、导入失败)build.sh 会静默退回 ad-hoc,所以只能在这里拦。
   # LYRIMUSE_REQUIRE_STABLE_SIGNATURE=1 时硬失败(release.yml 打 tag 时设),否则只警告。
-  # App 本体和 collector 都查:两者各自持有 TCC 授权。
+  # App 本体和 collector 都查,两者的签名要求保持一致:collector 读播放器容器用的完全磁盘访问记在 App 名下
+  # (系统按它所在的 App 包认)。
   for signed in "$app" "$app/Contents/Resources/collector"; do
     req="$(codesign -d -r- "$signed" 2>&1 | awk '/designated =>/{sub(/.*designated => /,""); print; exit}')"
     case "$req" in

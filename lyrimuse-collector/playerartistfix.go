@@ -26,9 +26,9 @@ import (
 // # 为什么由 collector 发布
 //
 // 真署名要从播放器自己的私有容器里读(见 kugoulyricartist.go),而**读播放器容器是
-// collector 的活** —— App 侧一处都没有,那是一条既有的分层边界。两个进程的 TCC 授权
-// 也各自独立,让 App 自己去读会得出跟 collector 不同的结论,而"两边一致"正是这条通道
-// 存在的全部理由。同 localcachefs.go 那份状态只能由 collector 发布是同一个道理。
+// collector 的活** —— App 侧一处都没有,那是一条既有的分层边界。授权虽然两个进程共用
+// 一份,却在每个进程里各自生效,让 App 自己去读可能得出跟 collector 不同的结论,而"两边一致"正是
+// 这条通道存在的全部理由。同 localcachefs.go 那份状态只能由 collector 发布是同一个道理。
 //
 // 只读通道:collector 只写,App 只读。
 type playerArtistFixState struct {

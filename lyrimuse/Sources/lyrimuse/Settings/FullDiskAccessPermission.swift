@@ -6,7 +6,7 @@ import SwiftUI
 
 /// 「完全磁盘访问」的**唯一状态源**,设置页「播放器」那张卡和引导页那一步共用。
 ///
-/// 结论只认 collector 发布的 `LocalCacheAccess`:App 与 collector 是两个进程、TCC 授权各自独立,
+/// 结论只认 collector 发布的 `LocalCacheAccess`:授权两个进程共用一份,却在每个进程里各自生效,
 /// 真正去读客户端容器的是 collector(见 `LocalCacheAccess` 头注)。这里只做三件事:
 /// 哪几家要摆出来(`visiblePlayers`)、把这几家合成一个结论(`grant`)、「重启后台服务」之后
 /// 一直等到 collector 发布了新结论才算完(`restartCollector`)。

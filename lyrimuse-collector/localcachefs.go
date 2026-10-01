@@ -40,9 +40,10 @@ import (
 
 // localCacheAccessState 是设置页那三格「客户端缓存读不到」提示的数据源。
 //
-// 这个状态**必须由 collector 发布,App 不能自己去探测**:两者是两个进程,TCC 授权各自
-// 独立,App 探得到不代表 collector 探得到(反之亦然)。真正走这条快速路径的是 collector,
-// 所以只有它的结论算数。同 `scoringVersion` 不能在 Swift 侧硬编码是一个道理。
+// 这个状态**必须由 collector 发布,App 不能自己去探测**:授权只有一份(系统把 App 包里的 collector 算在
+// Lyrimuse 名下,两个进程共用),但在每个进程里各自生效 —— 授权之后正在跑的 collector 要重启才拿到,
+// App 探得到不代表 collector 探得到(反之亦然)。真正走这条快速路径的是 collector,所以只有它的结论算数。
+// 同 `scoringVersion` 不能在 Swift 侧硬编码是一个道理。
 type localCacheAccessState struct {
 	UpdatedAt int64 `json:"updatedAt"`
 	// 当前被系统挡住的来源名。**只列尝试过的** —— 没听过那个播放器的用户这里是空的,
