@@ -3986,6 +3986,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur := lrclib.lyr, lrclib.matchTitle, lrclib.matchArtist, lrclib.matchAlbum, lrclib.srcDur
 	lrclibInstrumental := lrclib.instrumental
 	lrclibPlainOnly := lrclib.plainOnly
+	lrclibYRC, lrclibRoma := lrclib.yrc, lrclib.roma
 	mxLyr, mxYRC, mxTr, mxRoma, mxTitle, mxArtist, mxAlbum, mxCover, mxDur := mx.lyr, mx.yrc, mx.tr, mx.roma, mx.matchTitle, mx.matchArtist, mx.matchAlbum, mx.matchCover, mx.srcDur
 	mxPlainOnly := mx.plainOnly
 	mxInstrumental := mx.instrumental
@@ -4017,7 +4018,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	qqLyr, qqTr, qqYRC, bakedLines["qq"] = adoptBakedTranslation(qqLyr, qqTr, qqYRC, foreignSong, true)
 	kugouLyr, kugouTr, kugouYRC, bakedLines["kugou"] = adoptBakedTranslation(kugouLyr, kugouTr, kugouYRC, foreignSong, true)
 	mxLyr, _, mxYRC, bakedLines["musixmatch"] = adoptBakedTranslation(mxLyr, "", mxYRC, foreignSong, false)
-	lrclibLyr, _, _, bakedLines["lrclib"] = adoptBakedTranslation(lrclibLyr, "", "", foreignSong, false)
+	lrclibLyr, _, lrclibYRC, bakedLines["lrclib"] = adoptBakedTranslation(lrclibLyr, "", lrclibYRC, foreignSong, false)
 	lfLyr, _, _, bakedLines["lyricfind"] = adoptBakedTranslation(lfLyr, "", "", foreignSong, false)
 	// 酷我对外文歌**系统性**地把中文译文烘在正文里(金标 ko-fallen-angel / latin-purple-rain 里的酷我候选
 	// 128→67 行、71→37 行),摘出来的译文照 qq/kugou 的口径接到译文轨(中文)。
@@ -4052,7 +4053,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, hasUsableRomanization: mxUsableRoma, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover, plainTextOnly: mxPlainOnly})
 	}
 	if lrclibLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: "", plainTextOnly: lrclibPlainOnly})
+		// 罗马音来自 lyricsfile 的音译(lyricsfile.go),可用性跟别的源同一道 usableValueAdd;没有译文。
+		_, lrclibUsableRoma := usableValueAdd(lrclibLyr, "", "", lrclibRoma, features().LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, wordTimingYRC: usableYRC(lrclibLyr, lrclibYRC), hasWordTiming: usableWordTiming(lrclibLyr, lrclibYRC), hasUsableRomanization: lrclibUsableRoma, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: "", plainTextOnly: lrclibPlainOnly})
 	}
 	if lfLyr != "" {
 		// 只有逐行,没有逐字/译文/罗马音——跟 lrclib 同一个形状(见 ytmusic.go 头注)。
@@ -4258,6 +4261,10 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			if usableRomaForResult(c.lyrics, ne.Roma) {
 				r.LyricsRoma = ne.Roma
+			}
+		case "lrclib":
+			if usableRomaForResult(c.lyrics, lrclibRoma) {
+				r.LyricsRoma = lrclibRoma
 			}
 		case "musixmatch":
 			// Musixmatch 的译文语言是用户在"歌词"设置里配的
@@ -4653,7 +4660,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			return
 		}
 		r := lrclibLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, yrc: r.yrc, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("musixmatch") {

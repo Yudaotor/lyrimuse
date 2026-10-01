@@ -12,6 +12,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,6 +33,9 @@ import (
 // 一路传到 enrichEntry.Instrumental。
 type lrclibResult struct {
 	lyrics, title, artist, album string
+	// yrc / roma:条目 lyricsfile 里的逐字时间转成的 YRC、逐行罗马音(lrclibItemExtras),没有时为空。只跟带时间轴的
+	// lyrics 一起出现;lyricsfile 带假名读音时 lyrics 前面还拼了一行 `[kana:…]`(attachKanaLine)。
+	yrc, roma string
 	// durationSecs:LRCLIB 自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
 	instrumental bool
@@ -252,7 +256,8 @@ func lrclibGet(ctx context.Context, artist, title, album string, durationSecs fl
 		return lrclibResult{instrumental: true}
 	}
 	if isTimedLRC(out.SyncedLyrics) {
-		return lrclibResult{lyrics: out.SyncedLyrics, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
+		ex := lrclibItemExtras(out)
+		return lrclibResult{lyrics: attachKanaLine(out.SyncedLyrics, ex.kana), yrc: ex.yrc, roma: ex.roma, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
 	}
 	// 没有带时间戳的版本——退而求其次看有没有纯文本(plainOnly 的头注)。仍然要求非空,
 	// 空字符串谈不上"有份纯文本",跟"整个没查到"没区别。
@@ -275,6 +280,18 @@ type lrclibSearchItem struct {
 	// PlainLyrics:才读——见 lrclibResult.plainOnly 头注,只在没有 syncedLyrics
 	// 时当兜底用,不参与任何"这条候选算不算数"的正常判定。
 	PlainLyrics string `json:"plainLyrics"`
+	// HasWordSync / Lyricsfile:服务端标的「有逐字」与整份 lyricsfile(YAML,见 lyricsfile.go),只用来取逐字、罗马音与假名标注。
+	HasWordSync bool   `json:"hasWordSync"`
+	Lyricsfile  string `json:"lyricsfile"`
+}
+
+// lrclibItemExtras 从条目的 lyricsfile 取逐字、罗马音、假名标注(lyricsfileExtrasFrom)。服务端标了 hasWordSync、
+// 或者文档里出现 words / transliteration 才去解析。
+func lrclibItemExtras(it lrclibSearchItem) lyricsfileExtras {
+	if it.Lyricsfile == "" || (!it.HasWordSync && !strings.Contains(it.Lyricsfile, "words:") && !strings.Contains(it.Lyricsfile, "transliteration")) {
+		return lyricsfileExtras{}
+	}
+	return lyricsfileExtrasFrom(it.Lyricsfile, it.SyncedLyrics)
 }
 
 // lrclibSearchItems 只取一次 /api/search 的候选数组,不做挑选。
@@ -331,11 +348,11 @@ func lrclibSearch(ctx context.Context, artist, title, album string, durationSecs
 	if best == nil {
 		return lrclibResult{}
 	}
-	lyrics := best.SyncedLyrics
 	if plainOnly {
-		lyrics = best.PlainLyrics
+		return lrclibResult{lyrics: best.PlainLyrics, plainOnly: true, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
 	}
-	return lrclibResult{lyrics: lyrics, plainOnly: plainOnly, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
+	ex := lrclibItemExtras(*best)
+	return lrclibResult{lyrics: attachKanaLine(best.SyncedLyrics, ex.kana), yrc: ex.yrc, roma: ex.roma, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
 }
 
 // 曲名判定统一走 match.go 的 lyricTitleAccepted。
