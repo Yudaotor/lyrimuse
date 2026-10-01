@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 SP = os.environ.get('SIMEVAL_DATA') or os.path.dirname(os.path.abspath(__file__))
 OUT = SP + '/simruns'
 os.makedirs(OUT, exist_ok=True)
-BIN = '/Applications/Lyrimuse.app/Contents/Resources/collector'
+BIN = '/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine'
 tracks = json.load(io.open(SP + '/dataset.json'))
 
 def safe(s):

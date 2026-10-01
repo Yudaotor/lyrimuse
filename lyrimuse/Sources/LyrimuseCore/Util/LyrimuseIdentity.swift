@@ -1,7 +1,7 @@
 import Foundation
 
 /// 这个 App 的一整套名字:显示名、bundle id(= App 自己那个 LaunchAgent 的 label)、配置目录名、collector 的 launchd
-/// label、两份日志文件名、默认安装位置、URL scheme。所有随之变化的路径都从这里派生,别处不许再写字面量(selftest
+/// label 与可执行文件名、两份日志文件名、默认安装位置、URL scheme。所有随之变化的路径都从这里派生,别处不许再写字面量(selftest
 /// contracts 组「身份与路径收口」守着;Go 侧的对应口径是 paths.go,经环境变量拿到同一套值)。
 ///
 /// 加(纯重构,行为一个字节不变)。同日第二步曾按 Info.plist 的 `LyrimuseVariant` 派生出
@@ -17,6 +17,9 @@ public enum LyrimuseIdentity {
         /// `~/.config/<这个>`。
         public let configDirName: String
         public let collectorLaunchdLabel: String
+        /// 歌词引擎(collector)在包里的可执行文件名,也就是活动监视器 / `ps` 里看到的进程名。内核记的进程名(p_comm)
+        /// 最多 16 字节,超了 `pgrep -x` 就对不上。
+        public let engineExecutableName: String
         /// `~/Library/Logs/<这个>`:collector 常驻进程的日志。
         public let logFileName: String
         /// `~/Library/Logs/<这个>`:App 进程由 launchd 拉起时的 stdout / stderr。
@@ -35,6 +38,7 @@ public enum LyrimuseIdentity {
         bundleIdentifier: "me.yudaotor.lyrimuse",
         configDirName: "lyrimuse",
         collectorLaunchdLabel: "com.lyrimuse.collector",
+        engineExecutableName: "lyrimuse-engine",
         logFileName: "lyrimuse.log",
         appLogFileName: "lyrimuse-app.log",
         defaultAppBundlePath: "/Applications/Lyrimuse.app",
@@ -45,6 +49,10 @@ public enum LyrimuseIdentity {
     public static var bundleIdentifier: String { current.bundleIdentifier }
     public static var configDirName: String { current.configDirName }
     public static var collectorLaunchdLabel: String { current.collectorLaunchdLabel }
+    public static var engineExecutableName: String { current.engineExecutableName }
+    /// 认引擎进程的名字:现在的可执行文件名,加上旧名 `collector`。磁盘上的崩溃报告、换包时还没退出的旧进程都可能
+    /// 带着旧名,按进程名认引擎的地方两个都要认。
+    public static var engineProcessNames: [String] { [current.engineExecutableName, "collector"] }
     public static var appLaunchdLabel: String { current.appLaunchdLabel }
     public static var urlScheme: String { current.urlScheme }
 }
@@ -66,6 +74,11 @@ public enum LyrimusePaths {
 
     /// build.sh 默认安装位置的 .app。
     public static var defaultAppBundleURL: URL { URL(fileURLWithPath: LyrimuseIdentity.current.defaultAppBundlePath) }
+
+    /// 包里那份歌词引擎(collector)二进制。App 装常驻 job、spawn 每一个一次性子命令都从这里取。
+    public static var bundledEnginePath: String {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(LyrimuseIdentity.engineExecutableName)").path
+    }
 
     /// 传给 collector 的环境变量 —— 常驻 job 的 plist(`EnvironmentVariables`)和 App spawn 的每一个一次性子命令
     /// (search-lyrics / healthcheck / backfill…)都要带上,否则子命令会落回 collector 自己的默认目录、跟本 App 不是同一份数据。

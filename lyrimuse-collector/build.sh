@@ -14,7 +14,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse-collector/
 BIN="../bin/collector"
-BUNDLED_BIN="/Applications/Lyrimuse.app/Contents/Resources/collector"
+# 包里的引擎叫 lyrimuse-engine;已装的是旧版本时还叫 collector。按实际存在的那个拷,launchd 指着的就是它。
+BUNDLED_BIN="/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine"
+if [ ! -e "$BUNDLED_BIN" ] && [ -e /Applications/Lyrimuse.app/Contents/Resources/collector ]; then
+  BUNDLED_BIN="/Applications/Lyrimuse.app/Contents/Resources/collector"
+fi
 LABEL="com.lyrimuse.collector"
 TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
@@ -46,8 +50,8 @@ echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature), version $
 GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-X main.clientVersion=$COLLECTOR_VERSION" -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
 
-# collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的
-# Contents/Resources/collector(见 CollectorServiceManager.swift)，不再是仓库自己的
+# collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的那份引擎
+# (见 LyrimusePaths.bundledEnginePath)，不再是仓库自己的
 # bin/collector——这里额外拷贝一份进已安装的 .app 包，这样改 collector 代码不用重新
 # swift build 整个 App 就能验证到"真正在跑的那份"。bin/collector 这份继续保留，纯粹
 # 方便手动 -dry-run 调试，不再是生产上跑的那份。

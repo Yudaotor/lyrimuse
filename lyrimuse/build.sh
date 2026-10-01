@@ -167,6 +167,10 @@ APP_NAME="Lyrimuse"
 # LyrimuseCore/Util/LyrimuseIdentity.swift 里那一套逐字一致。
 LABEL="me.yudaotor.lyrimuse"
 COLLECTOR_LABEL="com.lyrimuse.collector"
+# 歌词引擎在包里的可执行文件名(= 进程名),跟 LyrimuseIdentity.engineExecutableName 逐字一致。换包时正在跑的
+# 旧进程可能还叫 collector:等旧进程退出、记旧 pid 这两处按 ENGINE_PATH_PATTERN 两个名字都认。
+ENGINE_NAME="lyrimuse-engine"
+ENGINE_PATH_PATTERN="Contents/Resources/(collector|$ENGINE_NAME)"
 LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # 展示版本(CFBundleShortVersionString)= tag 去掉 v:X.Y.Z 或 X.Y.Z-alpha|beta|rc.N。更新检查走 Sparkle
 # (SparkleUpdaterManager.swift;旧的 UpdateChecker.swift 已删),它比大小用的是 CFBundleVersion,由下面的
@@ -310,12 +314,12 @@ merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
-# collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
+# collector 打包进 .app 里(Contents/Resources/$ENGINE_NAME),不要求
 # 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
 # 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-collector/build.sh 同款
 # GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
-echo "==> building collector [$ARCHES]"
+echo "==> building $ENGINE_NAME [$ARCHES]"
 # collector 是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
 # 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
 # 叫 amd64。
@@ -332,7 +336,7 @@ for arch in $ARCHES; do
   # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
   # `lyrimuse/var/folders/…/collector-arm64`,每次构建往仓库里丢一份产物 —— 提交前
   # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
-  out="$FAT_DIR/collector-$arch"
+  out="$FAT_DIR/$ENGINE_NAME-$arch"
   # -ldflags -X:把版本号注入 collector,让它跟 App 的 CFBundleShortVersionString
   # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值)。
   #
@@ -352,7 +356,7 @@ for arch in $ARCHES; do
     go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
   COLLECTOR_SLICES+=("$out")
 done
-merge_slices "$FAT_DIR/collector" "${COLLECTOR_SLICES[@]}"
+merge_slices "$FAT_DIR/$ENGINE_NAME" "${COLLECTOR_SLICES[@]}"
 
 echo "==> assembling .app bundle"
 # CFBundleIdentifier 这次(改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
@@ -379,13 +383,14 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # inode 更容易踩中这个内核侧缓存陈旧的坑。先删再拷，让每次构建都是一个全新的
 # inode，从根源避开这个问题(跟上面这次会话另外给 media-control 加的 rm -f 是
 # 同一类修法，那边最初是为了绕开只读权限，这里主要是为了这个签名信任缓存问题)。
-rm -f "$APP_DIR/Contents/Resources/collector"
-cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
+# 旧名 collector 也一起删:--dest 重复装进同一个目录时,留下的旧文件会被最外层签名一起封进包里。
+rm -f "$APP_DIR/Contents/Resources/collector" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
+cp "$FAT_DIR/$ENGINE_NAME" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
 # 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
-codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/collector"
+codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 
 # 端上歌词翻译小助手。collector(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
 # Swift 可执行文件,由 collector 按自身可执行文件的相对路径调起 —— 跟 media-control 同一
@@ -798,7 +803,7 @@ codesign -v "$APP_DIR" && echo "    signature valid"
 # 产物自带的那份签名失效,所以不能再像以前那样只验证不签)——最外层这行 codesign 没加
 # --deep，只签 .app 这一个代码对象，不会动内层这个独立二进制自己的签名；这里显式验证
 # 一遍，而不是假设。
-codesign -v "$APP_DIR/Contents/Resources/collector" && echo "    collector signature valid"
+codesign -v "$APP_DIR/Contents/Resources/$ENGINE_NAME" && echo "    $ENGINE_NAME signature valid"
 
 # 架构自检:把包里每个 Mach-O 的架构列出来,并在"要求 universal 却有文件只剩一个架构"时
 # 明确报出来。加这一步的直接原因是 v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了
@@ -840,7 +845,7 @@ fi
 # 这道闸和 App 内设置页那张卡(CollectorServiceManager.bundledCollectorVersion)
 # 问的是同一个问题,区别只在时机:那张卡是装到用户机器上之后才告警——它确实抓到了
 # v1.5.0 这次,但那时 dmg 已经发出去了。这道闸把同一个检查提前到构建期。
-VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/collector"
+VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # 交叉编译出的包可能不含本机架构(比如在 arm64 上只构 x86_64),那样跑不起来,
 # 只能跳过 —— 但要说清楚是"没验",不能让人误以为验过了。
 HOST_ARCH="$(uname -m)"
@@ -881,7 +886,7 @@ if [ -n "$STAGE" ]; then
   if [ "$NO_RESTART" != 1 ] && [ -e "$FINAL_APP_DIR" ] && launchctl list "$COLLECTOR_LABEL" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
     for _ in $(seq 1 20); do
-      pgrep -f "$FINAL_APP_DIR/Contents/Resources/collector" >/dev/null 2>&1 || break
+      pgrep -f "$FINAL_APP_DIR/$ENGINE_PATH_PATTERN" >/dev/null 2>&1 || break
       sleep 0.5
     done
   fi
@@ -899,7 +904,7 @@ SWAP
     mv "$STAGE" "$FINAL_APP_DIR"
   fi
   # 必须重指回真实路径。下面 restart 段的 `pgrep -f "$BIN"`(三处)和
-  # `pgrep -f "$APP_DIR/Contents/Resources/collector"` 匹配的是进程命令行,那是
+  # `pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN"` 匹配的是进程命令行,那是
   # /Applications/... —— 忘了这两行就会永远判定"没起来"然后 exit 1。
   # `open "$APP_DIR"` 同理,不重指就会去打开那个暂存包。
   APP_DIR="$FINAL_APP_DIR"
@@ -946,8 +951,8 @@ if [ -n "$OLD_PIDS" ]; then
 fi
 # 记下旧 collector 的 pid,给末尾「新 collector 起来了没有」那道确认用。必须在 open 之前取:
 # App 一起来就会自己重装 collector(见末尾那段)。
-COLLECTOR_BIN="$APP_DIR/Contents/Resources/collector"
-OLD_COLLECTOR_PIDS="$(pgrep -f "$COLLECTOR_BIN" 2>/dev/null | tr '\n' ' ' || true)"
+COLLECTOR_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
+OLD_COLLECTOR_PIDS="$(pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
 echo "==> launching via LaunchServices (open -g)"
 open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
@@ -985,7 +990,7 @@ echo "==> $APP_NAME running, pid ${pid% }"
 
 # collector 是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
 # bootout 只管 $LABEL 这个 App job，从来没管过它 —— 而这个脚本每跑一次，都会把
-# Resources/collector 删掉重拷、再 `codesign --force --sign -` 重签一遍(见上面那一步)，
+# 包里的引擎删掉重拷、再 `codesign --force --sign -` 重签一遍(见上面那一步)，
 # cdhash 必然变。于是:
 #
 #   1. 正在跑的老 collector 因为二进制被换掉，下次缺页时被 SIGKILL;
@@ -1033,10 +1038,10 @@ if [ -f "$COLLECTOR_PLIST" ]; then
     sleep 1
   done
   if [ -n "$cpid" ]; then
-    echo "==> collector running, pid $cpid"
+    echo "==> $ENGINE_NAME running, pid $cpid"
   else
     # 不 exit 1:App 本身已经起来了，collector 没起来是个独立故障，值得刺眼但不该让
     # 整个构建被判失败(而且这条分支真出现时，多半要人去看崩溃报告)。
-    echo "!! collector not running (no new process within 60s) — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
+    echo "!! $ENGINE_NAME not running (no new process within 60s) — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
   fi
 fi

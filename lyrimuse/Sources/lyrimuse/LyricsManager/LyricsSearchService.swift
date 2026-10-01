@@ -410,14 +410,8 @@ final class LyricsSearchService {
         }
     }
 
-    // 修正:原来硬编码的是 ~/applemusic-nowplaying/bin/collector——这是
-    // 项目改名前遗留的路径,压根不是 build.sh 实际维护的产物(build.sh 只往
-    // Lyrimuse.app/Contents/Resources/collector 里装新构建),这个路径下的二进制早就
-    // 没人更新过,"联网搜索候选歌词"用的实际上是一份过时的旧构建。改用
-    // CollectorServiceManager.bundledCollectorPath 同一条规则(Bundle.main.bundleURL
-    // 拼 Contents/Resources/collector),这样每次 build.sh 重新打包都会跟着更新。
-    private static let collectorPath = Bundle.main.bundleURL
-        .appendingPathComponent("Contents/Resources/collector").path
+    // 用包里那份引擎(LyrimusePaths.bundledEnginePath),每次 build.sh 重新打包都会跟着更新。
+    private static let collectorPath = LyrimusePaths.bundledEnginePath
 
     private init() {}
 

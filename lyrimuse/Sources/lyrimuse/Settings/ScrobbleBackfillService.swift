@@ -102,9 +102,8 @@ final class ScrobbleBackfillService: ObservableObject {
     private init() {}
 
     private static var collectorPath: String {
-        // 跟 LyricsSearchService/LastfmStatsService 同一个取法:从 Bundle 现拼,
-        // 每次 build.sh 重新打包都会跟着更新。
-        Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/collector").path
+        // 用包里那份引擎(LyrimusePaths.bundledEnginePath),每次 build.sh 重新打包都会跟着更新。
+        LyrimusePaths.bundledEnginePath
     }
 
     /// collector 那份本地收听日志被写过的时刻。nil = 文件还不存在(从来没攒过)。

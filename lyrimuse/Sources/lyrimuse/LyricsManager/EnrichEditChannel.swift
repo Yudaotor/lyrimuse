@@ -32,8 +32,7 @@ enum EnrichEditChannel {
     static let executingTimeout: TimeInterval = 120
     private static let pollInterval: Duration = .milliseconds(100)
 
-    private static let collectorPath = Bundle.main.bundleURL
-        .appendingPathComponent("Contents/Resources/collector").path
+    private static let collectorPath = LyrimusePaths.bundledEnginePath
 
     /// 执行一个 op。`fields` 的键名跟 collector 侧 enrichEditRequest 的 json tag 一致。
     static func send(_ op: String, _ fields: [String: Any] = [:]) async -> Result {

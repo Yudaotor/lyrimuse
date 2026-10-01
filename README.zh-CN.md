@@ -282,16 +282,16 @@ LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及�
 同样的自检，也可以在终端里跑：
 
 ```sh
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 不联网
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck -local-only  # 不联网
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck -json
 ```
 
 </details>
 
 ## 卸载
 
-把 `Lyrimuse.app` 拖进废纸篓**是不够的**。歌词引擎（进程名 `collector`）在 launchd 里注册的是 `KeepAlive`
+把 `Lyrimuse.app` 拖进废纸篓**是不够的**。歌词引擎（进程名 `lyrimuse-engine`）在 launchd 里注册的是 `KeepAlive`
 类型的 job，它的 LaunchAgent 会留下来，于是 launchd 会一直去启动一个已经不存在的二进制。
 
 ```sh
@@ -304,7 +304,7 @@ lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志、偏�
 逐个列出来、提醒你其中有多少个已导出的歌词文件，并且要求手动输入 `yes` 才继续。
 
 `--services` 不碰偏好设置；`--purge` 会连偏好设置一起删（`defaults delete
-me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent 已经删了、collector
+me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent 已经删了、歌词引擎
 没装，而 App 仍然认为引导走完过——于是那扇能把服务装回去的引导页永远不出现，桌面就
 一直停在「搜索歌词中…」。
 

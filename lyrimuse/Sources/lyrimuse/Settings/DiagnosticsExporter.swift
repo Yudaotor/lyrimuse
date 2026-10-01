@@ -368,7 +368,7 @@ enum DiagnosticsExporter {
     }
 
     /// 最近 `days` 天内本 App 家族(App 本体 + 包内 collector)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份
-    ///。文件名前缀粗筛(`<可执行名>-*.ips` / `collector-*.ips`),正文再按 bundle id /
+    ///。文件名前缀粗筛(`<可执行名>-*.ips` / 引擎的新旧两个名字 `-*.ips`),正文再按 bundle id /
     /// 包路径确认是本变体的(别的 App 也可能有叫 collector 的进程;Dev 与正式版互不混入)。目录列不出、单个文件
     /// 读不到或解不开都只留一行,不抛、不让整份导出失败;「没有匹配」也写出来。家目录改写成 ~。
     private static func recentCrashReportLines(days: Int = 7, perProcessLimit: Int = 3) -> [String] {
@@ -388,7 +388,7 @@ enum DiagnosticsExporter {
         var matched: [CrashReportSummary] = []
         var scanned = 0
         var problems: [String] = []
-        for name in names where name.hasSuffix(".ips") && (name.hasPrefix("\(executable)-") || name.hasPrefix("collector-")) {
+        for name in names where name.hasSuffix(".ips") && (name.hasPrefix("\(executable)-") || LyrimuseIdentity.engineProcessNames.contains { name.hasPrefix("\($0)-") }) {
             let url = dir.appendingPathComponent(name)
             guard let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
                   modified >= cutoff else { continue }
@@ -560,15 +560,14 @@ enum DiagnosticsExporter {
     }
 
     /// 跑一次 `collector healthcheck`(不带 -json,输出本身就是给人看的格式;不带
-    /// -local-only,接受多等几秒换真实网络探测结果)。跟 LyricsSearchService 用同一套
-    /// "Bundle.main 拼 Contents/Resources/collector"规则定位二进制。
+    /// -local-only,接受多等几秒换真实网络探测结果)。二进制取包里那份
+    /// (LyrimusePaths.bundledEnginePath)。
     ///
     /// 这个操作本身对"排查为什么坏了"这件事天然健壮很重要——用户导出诊断信息往往正是
     /// 因为某处坏了,healthcheck 子进程本身启动失败/超时/空输出都必须体现成报告里的一行
     /// 文字,不能让整个导出因此崩掉或者悄悄漏掉这一段。
     private static func collectorHealthCheckLines() -> [String] {
-        let collectorPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Resources/collector").path
+        let collectorPath = LyrimusePaths.bundledEnginePath
         guard FileManager.default.isExecutableFile(atPath: collectorPath) else {
             return ["(collector binary not found at \(collectorPath))"]
         }

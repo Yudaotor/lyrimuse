@@ -774,6 +774,12 @@ func runOpsDiagnosticsTests() {
         let foreign = CrashReportSummary.parse(fileName: "collector-2026-09-06-010500.ips", data: ips("{\"app_name\":\"collector\"}", foreignBody))
         expectEqual(foreign?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), false,
                     "崩溃报告归属: 别家叫 collector 的进程被排除")
+        let engineBody = """
+        {"procName":"lyrimuse-engine","procPath":"/Applications/\(prod.displayName).app/Contents/Resources/lyrimuse-engine","termination":{"namespace":"SIGNAL","indicator":"Abort trap: 6"}}
+        """
+        let engine = CrashReportSummary.parse(fileName: "lyrimuse-engine-2026-10-01-010000.ips", data: ips("{\"app_name\":\"lyrimuse-engine\"}", engineBody))
+        expectEqual(engine?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), true,
+                    "崩溃报告归属: 包里的引擎(lyrimuse-engine)算本 App")
 
         // 宽容解析的边界
         let headerOnly = CrashReportSummary.parse(fileName: "x.ips", data: ips(dyldHeader, "garbage {"))
@@ -888,8 +894,8 @@ func runOpsDiagnosticsTests() {
                         "发布签名: package.sh 还有「必须固定证书」那道闸")
             expectEqual(pkg.contains("*\"certificate root\"*"), true,
                         "发布签名: package.sh 的闸按签名要求里的 certificate root 判")
-            expectEqual(pkg.contains("\"$app/Contents/Resources/collector\""), true,
-                        "发布签名: collector 也过闸(签名要求跟 App 本体一致)")
+            expectEqual(pkg.contains("\"$app/Contents/Resources/lyrimuse-engine\""), true,
+                        "发布签名: 引擎(lyrimuse-engine)也过闸(签名要求跟 App 本体一致)")
             expectEqual(wf.contains("echo \"LYRIMUSE_SIGN_ID=$SHA\" >> \"$GITHUB_ENV\""), true,
                         "发布签名: release.yml 把导入的证书交给 build.sh")
             expectEqual(wf.contains("set-key-partition-list"), true,

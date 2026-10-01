@@ -60,8 +60,7 @@ final class LyricSourceTestService {
         }
     }
 
-    private static let collectorPath = Bundle.main.bundleURL
-        .appendingPathComponent("Contents/Resources/collector").path
+    private static let collectorPath = LyrimusePaths.bundledEnginePath
 
     private init() {}
 

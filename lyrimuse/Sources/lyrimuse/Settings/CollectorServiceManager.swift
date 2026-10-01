@@ -9,8 +9,8 @@ import OSLog
 // 悬浮歌词/灵动岛什么都显示不出来，所以 KeepAlive=true（崩了自动拉起）。
 //
 // collector 二进制打包进 .app 里（build.sh 在 swift build 之后额外 go build 一份，
-// 拷进 Contents/Resources/collector）——这样才能像 LoginItemManager 认自己一样，通过
-// Bundle.main.bundleURL 精确知道它在哪，不需要用户手动 clone 到哪都要自己拼路径。
+// 拷进 Contents/Resources/lyrimuse-engine，见 LyrimusePaths.bundledEnginePath）——这样才能像 LoginItemManager
+// 认自己一样，通过 Bundle.main.bundleURL 精确知道它在哪，不需要用户手动 clone 到哪都要自己拼路径。
 //
 // 不用 @MainActor（跟 CollectorControl 一样，只是 Process/FileManager 操作，没有碰任何
 // UI 状态）——install() 内部可能因为 kickstart 失败重试而 sleep 一两秒，必须能在
@@ -19,7 +19,7 @@ public enum CollectorServiceManager {
     public static let label = CollectorControl.label
 
     private static var bundledCollectorPath: String {
-        Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/collector").path
+        LyrimusePaths.bundledEnginePath
     }
     private static var plistURL: URL {
         LyrimusePaths.launchAgentPlist(label: label)
@@ -59,7 +59,7 @@ public enum CollectorServiceManager {
     ///
     /// **这是 Sparkle 自动更新之后唯一的兜底。** 没有它的后果是坐实过的(记录在
     /// `lyrimuse/build.sh` 里 COLLECTOR_LABEL 那段注释):
-    ///   1. 更新把 `Contents/Resources/collector` 换成新的 ad-hoc 签名二进制,cdhash 必变;
+    ///   1. 更新把包里的引擎二进制换成新的 ad-hoc 签名二进制,cdhash 必变;
     ///   2. 正在跑的老 collector 因为二进制被换掉,下次缺页时被 SIGKILL;
     ///   3. launchd(KeepAlive=true)想拉起新的,但它给这个 job 缓存的 LWCR(Lightweight
     ///      Code Requirement)还绑在**旧** cdhash 上 —— 新二进制被内核直接拒绝,崩溃报告写

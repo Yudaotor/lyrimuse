@@ -3533,7 +3533,8 @@ func runSourceContractTests() {
             if name == "LyrimuseIdentity.swift" { continue }
             // 整个文件一个字面量都没有就不用逐行切(下面每一条都要求行里含其中之一)。
             let markers = [".config/lyrimuse", "Library/Logs/lyrimuse", "\"com.lyrimuse.collector",
-                           "\"me.yudaotor.lyrimuse\"", "/Applications/Lyrimuse.app"]
+                           "\"me.yudaotor.lyrimuse\"", "/Applications/Lyrimuse.app",
+                           "Contents/Resources/collector", "Contents/Resources/lyrimuse-engine"]
             guard let whole = try? String(contentsOfFile: path, encoding: .utf8),
                   markers.contains(where: { sourceBytes(whole, contain: $0) }) else { continue }
             for (n, code) in codeLines(path) {
@@ -3545,9 +3546,12 @@ func runSourceContractTests() {
                     offenders.append("\(name):\(n) bundle id 字面量(只许 Logger subsystem / 队列名用)")
                 }
                 if code.contains("/Applications/Lyrimuse.app") { offenders.append("\(name):\(n) 安装路径字面量") }
+                if code.contains("Contents/Resources/collector") || code.contains("Contents/Resources/lyrimuse-engine") {
+                    offenders.append("\(name):\(n) 引擎路径字面量(走 LyrimusePaths.bundledEnginePath)")
+                }
             }
         }
-        expectEqual(offenders, [], "身份收口(Swift): 配置目录 / 日志 / label / 安装路径只许在 LyrimuseIdentity.swift 里写字面量")
+        expectEqual(offenders, [], "身份收口(Swift): 配置目录 / 日志 / label / 安装路径 / 引擎路径只许在 LyrimuseIdentity.swift 里写字面量")
 
         var goOffenders: [String] = []
         let goDir = repoRoot.appendingPathComponent("lyrimuse-collector").path
@@ -3595,9 +3599,11 @@ func runSourceContractTests() {
 
         // App spawn collector 子命令的每一处都带环境变量
         var spawnOffenders: [String] = []
+        var spawnFiles = 0
         for path in swiftFiles(under: "lyrimuse/Sources/lyrimuse") {
             let src = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
-            guard src.contains("Contents/Resources/collector") else { continue }
+            guard src.contains("LyrimusePaths.bundledEnginePath") else { continue }
+            spawnFiles += 1
             // spawn 有两种形状:自己 new Process 设 executableURL,以及走 ProcessRunner.run
             // (补上后一种 —— 「待补提交」清单的删除叉就是漏在那条路上:它是唯一
             // 一个用 ProcessRunner 的 collector 子命令,而那个函数当时连环境参数都没有,于是
@@ -3625,6 +3631,8 @@ func runSourceContractTests() {
             }
         }
         expectEqual(spawnOffenders, [], "身份收口: App spawn 的 collector 子命令每一处都传 collectorProcessEnvironment()")
+        expectEqual(spawnFiles >= 7, true,
+                    "身份收口: 用 LyrimusePaths.bundledEnginePath 的文件至少 7 个(少了 = 有人绕开它自己拼路径,上面那条就数不到),实际 \(spawnFiles)")
         let csm = (try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/CollectorServiceManager.swift").path, encoding: .utf8)) ?? ""
         expectEqual(csm.contains("\"EnvironmentVariables\": LyrimusePaths.collectorEnvironment"), true, "身份收口: collector 的 launchd plist 带 EnvironmentVariables")
     }

@@ -15,6 +15,9 @@ func runIdentityTests() {
         expectEqual(id.appLaunchdLabel, id.bundleIdentifier, "身份: App 的 launchd label 就是 bundle id")
         expectEqual(id.configDirName, "lyrimuse", "身份: 配置目录名")
         expectEqual(id.collectorLaunchdLabel, "com.lyrimuse.collector", "身份: collector label(build.sh / uninstall.sh 里的字面量要跟它一致)")
+        expectEqual(id.engineExecutableName, "lyrimuse-engine", "身份: 引擎的可执行文件名(build.sh / package.sh 里的字面量要跟它一致)")
+        expectEqual(id.engineExecutableName.utf8.count <= 16, true, "身份: 引擎进程名不超过 16 字节(内核 p_comm 上限,超了 pgrep -x 对不上)")
+        expectEqual(LyrimuseIdentity.engineProcessNames, ["lyrimuse-engine", "collector"], "身份: 认引擎进程的名字,新名在前、旧名留着认旧崩溃报告")
         expectEqual(id.logFileName, "lyrimuse.log", "身份: collector 日志名")
         expectEqual(id.appLogFileName, "lyrimuse-app.log", "身份: App stderr 日志名")
         expectEqual(id.defaultAppBundlePath, "/Applications/Lyrimuse.app", "身份: 默认装到 /Applications")
@@ -23,6 +26,8 @@ func runIdentityTests() {
         expectEqual(id.appLogFileName, id.configDirName + "-app.log", "身份: App 日志名 = 目录名 + -app.log")
         expectEqual(LyrimuseIdentity.displayName, id.displayName, "身份: 便捷静态属性与 current 一致")
         expectEqual(LyrimuseIdentity.collectorLaunchdLabel, id.collectorLaunchdLabel, "身份: 便捷静态属性与 current 一致(label)")
+        expectEqual(LyrimuseIdentity.engineExecutableName, id.engineExecutableName, "身份: 便捷静态属性与 current 一致(引擎名)")
+        expectEqual(LyrimusePaths.bundledEnginePath.hasSuffix("/Contents/Resources/lyrimuse-engine"), true, "路径: 包里的引擎二进制")
 
         let homePath = FileManager.default.homeDirectoryForCurrentUser.path
         expectEqual(LyrimusePaths.configDir.path, homePath + "/.config/lyrimuse", "路径: 配置目录 = ~/.config/lyrimuse")

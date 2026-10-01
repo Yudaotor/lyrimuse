@@ -134,7 +134,7 @@ Please install Lyrimuse — an open-source macOS menu-bar lyrics app
 6. A first-run wizard will appear — that part is mine to click through. Tell me
    it will ask me to pick a music player, to grant Automation access to
    Music.app and/or Spotify (only if I pick them), and to enable the background
-   collector service — then hand control back to me.
+   lyrics engine — then hand control back to me.
 Finally, report what you did and anything that failed.
 ```
 
@@ -183,7 +183,7 @@ xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swif
 brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
 ```
 
-Then `build.sh` builds both the app and its lyrics engine (the background process named `collector`) in one shot:
+Then `build.sh` builds both the app and its lyrics engine (the background process named `lyrimuse-engine`) in one shot:
 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
@@ -283,16 +283,16 @@ If lyrics don't show up, open **Lyrics Sources** in Settings and click **Test** 
 The same check, run from Terminal:
 
 ```sh
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # no network
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck -local-only  # no network
+/Applications/Lyrimuse.app/Contents/Resources/lyrimuse-engine healthcheck -json
 ```
 
 </details>
 
 ## Uninstalling
 
-Dragging `Lyrimuse.app` to the Trash is **not** enough. The lyrics engine (process name `collector`) is
+Dragging `Lyrimuse.app` to the Trash is **not** enough. The lyrics engine (process name `lyrimuse-engine`) is
 registered with launchd as a `KeepAlive` job, so its LaunchAgent stays behind and
 launchd keeps trying to start a binary that is no longer there.
 
@@ -308,7 +308,7 @@ lyrics files are among them, and requires you to type `yes`.
 
 `--services` leaves your settings alone. `--purge` also removes them
 (`defaults delete me.yudaotor.lyrimuse`), because leaving them behind puts a
-reinstall into a dead end: the LaunchAgent is gone, so the collector is not
+reinstall into a dead end: the LaunchAgent is gone, so the lyrics engine is not
 installed, but the app still thinks onboarding is done — so the wizard that would
 install it never appears, and the desktop just sits at "searching for lyrics".
 

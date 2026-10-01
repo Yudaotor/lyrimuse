@@ -170,12 +170,12 @@ public struct CrashReportSummary: Equatable {
     /// 是不是本 App 家族(App 本体或它包里的 collector)的报告。
     ///
     /// 文件名前缀只能粗筛(别的 App 也可能有叫 collector 的进程),这里按正文再确认:进程名是 App 可执行名或
-    /// "collector";正文带 bundle id 的(App 本体)必须等于本变体;正文带 procPath 的,路径必须落在
+    /// 引擎的名字(`LyrimuseIdentity.engineProcessNames`,新旧两个);正文带 bundle id 的(App 本体)必须等于本变体;正文带 procPath 的,路径必须落在
     /// 「<显示名>.app/Contents/」里 —— 正式版与 Dev 的显示名不同,互不混入(macOS 会把家目录里的路径改写成
     /// `/Users/USER/*/…`,包名那一段仍然在)。
     public func belongsToApp(executableName: String, bundleIdentifier: String, appDisplayName: String) -> Bool {
         guard let name = processName?.lowercased(),
-              name == executableName.lowercased() || name == "collector" else { return false }
+              name == executableName.lowercased() || LyrimuseIdentity.engineProcessNames.contains(name) else { return false }
         if let id = self.bundleIdentifier, id != bundleIdentifier { return false }
         if let path = processPath, !path.contains("/\(appDisplayName).app/Contents/") { return false }
         return true

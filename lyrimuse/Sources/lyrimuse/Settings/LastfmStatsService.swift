@@ -4110,8 +4110,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     private func refreshMergedArtistChart(cacheKey: String, period: Period) {
-        let collectorPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Resources/collector").path
+        let collectorPath = LyrimusePaths.bundledEnginePath
         chartLoadingKeys.insert(cacheKey)
         chartFailedKeys.remove(cacheKey)
         Task.detached(priority: .userInitiated) {
@@ -4263,8 +4262,7 @@ final class LastfmStatsService: ObservableObject {
 
     private func startArtistTracks(period p: String, names: [String], full: Bool) {
         let gen = artistTracksGen
-        let collectorPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Resources/collector").path
+        let collectorPath = LyrimusePaths.bundledEnginePath
         Task.detached(priority: .utility) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: collectorPath)
@@ -4339,8 +4337,7 @@ final class LastfmStatsService: ObservableObject {
         let batches = stride(from: 0, to: missing.count, by: 10).map {
             Array(missing[$0..<min($0 + 10, missing.count)])
         }
-        let collectorPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Resources/collector").path
+        let collectorPath = LyrimusePaths.bundledEnginePath
         Task.detached(priority: .utility) {
             for batch in batches { await Self.runAvatarLookup(batch, collectorPath: collectorPath) }
         }
