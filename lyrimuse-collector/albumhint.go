@@ -20,7 +20,7 @@ import (
 //
 // 起因:用户在 YouTube Music 里放王子(Prince)《Why You Wanna Treat Me So Bad?》的 **MV**,网页和上送都
 // 没有专辑。两个来源都是空的:MediaSession 报的 album 就是空串;页面 byline 是「王子 • 501万次观看 • 5万 人赞」,
-// 只有频道链接、没有 `browse/MPREb` 专辑链接(ytmusicAlbumPatch 无从补起)—— MV 在 YT Music 里是独立的
+// 只有频道链接、没有 `browse/MPREb` 专辑链接(按页面补专辑也无从补起)—— MV 在 YT Music 里是独立的
 // 「视频」实体,不挂专辑,同专辑的音频版都带 album「Prince」。作为**通用逻辑**加上:任何播放器,只要
 // 报上来的专辑名为空,就按「署名 + 曲名 + 时长」去 Apple 目录反查(iTunes Search 公开接口,纯 HTTPS,不依赖
 // 本机装 iTunes / Apple Music)。

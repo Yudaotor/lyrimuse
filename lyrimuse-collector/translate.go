@@ -1030,9 +1030,8 @@ var onDeviceTranslator = onDeviceTranslate
 // onDeviceTranslate 调打包在 Contents/Resources/ 里的 Swift 小助手做端上翻译。
 //
 // 为什么要起子进程:Apple 的 Translation 框架只有 Swift/ObjC 接口,Go 调不了。helper 的
-// 位置按自己的可执行文件相对定位,跟 media-control 完全一样(见 system.go 的
-// mediaControlBinaryPath)。开发时直接跑 collector 二进制不在 .app 里,找不到 helper 会
-// 返回 errOnDeviceUnavailable,自动退回网络翻译。
+// 位置按自己的可执行文件相对定位(collector 与 helper 同在 .app 包里)。开发时直接跑 collector
+// 二进制不在 .app 里,找不到 helper 会返回 errOnDeviceUnavailable,自动退回网络翻译。
 func onDeviceTranslate(ctx context.Context, target string, lines []string) ([]string, error) {
 	if target == "" || len(lines) == 0 {
 		return nil, errOnDeviceUnavailable

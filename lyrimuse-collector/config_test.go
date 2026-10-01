@@ -13,11 +13,12 @@ import (
 func TestLoadConfigSkipsOnlyTheBadField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	// bundle_ids 本该是数组,这里写成字符串。
+	// api_root 本该是字符串,这里写成数字。旧版本留下的 bundle_ids 已不再读,留着也不算问题。
 	body := `{
 	  "listenbrainz_token": "tok",
 	  "listenbrainz_user": "someone",
-	  "bundle_ids": "com.apple.Music",
+	  "api_root": 123,
+	  "bundle_ids": ["com.apple.Music"],
 	  "bark_url": "https://example.invalid/push"
 	}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
@@ -35,13 +36,13 @@ func TestLoadConfigSkipsOnlyTheBadField(t *testing.T) {
 		t.Errorf("坏字段之后的字段也要生效, got %q", cfg.NotificationWebhookURL)
 	}
 	// 坏字段退回默认值,而不是留下半解析的状态。
-	if len(cfg.BundleIDs) != 1 || cfg.BundleIDs[0] != "com.apple.Music" {
-		t.Errorf("bundle_ids 应该回落到默认值, got %v", cfg.BundleIDs)
+	if cfg.APIRoot != "https://api.listenbrainz.org" {
+		t.Errorf("api_root 应该回落到默认值, got %q", cfg.APIRoot)
 	}
 	if len(cfg.loadIssues) != 1 {
 		t.Fatalf("应该正好记下一条问题, got %v", cfg.loadIssues)
 	}
-	if !strings.Contains(cfg.loadIssues[0], "bundle_ids") {
+	if !strings.Contains(cfg.loadIssues[0], "api_root") {
 		t.Errorf("问题描述要点名是哪个字段, got %q", cfg.loadIssues[0])
 	}
 }
@@ -61,9 +62,8 @@ func TestLoadConfigSurvivesBrokenSyntax(t *testing.T) {
 		t.Error("必须留下一条问题说明,否则用户无从知道配置没生效")
 	}
 	// 默认值仍然要填好,collector 才跑得起来。
-	if cfg.APIRoot == "" || len(cfg.BundleIDs) == 0 || cfg.NotificationPlatform == "" {
-		t.Errorf("默认值没填: apiRoot=%q bundleIDs=%v platform=%q",
-			cfg.APIRoot, cfg.BundleIDs, cfg.NotificationPlatform)
+	if cfg.APIRoot == "" || cfg.NotificationPlatform == "" {
+		t.Errorf("默认值没填: apiRoot=%q platform=%q", cfg.APIRoot, cfg.NotificationPlatform)
 	}
 }
 

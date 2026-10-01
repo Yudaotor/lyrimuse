@@ -21,13 +21,10 @@ import (
 // Cmd-Q 退出 Lyrimuse.app 完全不影响它继续跑,见 CollectorServiceManager.swift 顶部
 // 注释)。
 //
-// 检测方式故意不复用 getState()/appleMusicPosition() 那套走 AppleScript 问 Music.app
-// 播放状态的逻辑(而且 QQ 音乐压根没有对应的 AppleScript 支持)——那条路径对"没有可
-// 报告的正在播放"这几种情况(没运行/已停止/没有曲目在加载/自动化权限被拒绝)完全无法
-// 区分(见 system.go 顶部注释),没法单独判断"进程到底在不在跑"。改用 ps 直接读
-// 进程表,纯粹是否存在这个可执行文件对应的进程,不依赖任何 Apple Event/自动化权限,
-// 也不会跟"读取播放状态"那条路径的权限请求产生任何交集——这也是为什么这个方向能够
-// 对 QQ 音乐同样生效。
+// 检测方式是用 ps 直接读进程表,不问播放器的播放状态:"没有可报告的正在播放"这几种情况
+// (没运行/已停止/没有曲目在加载/自动化权限被拒绝)从播放状态上分不出来,判断不了"进程到底
+// 在不在跑"。读进程表只看这个可执行文件对应的进程在不在,不依赖任何 Apple Event/自动化权限,
+// 所以对没有 AppleScript 支持的 QQ 音乐同样生效。
 //
 // 每一轮只起**一个** `ps -axco pid=,comm=`,一次拿到全部进程的名字和 PID。原来是每个盯着的
 // 播放器各跑一次 `pgrep -x`、每秒一轮:勾满五个就是每秒五次 fork,实测每次约 4ms CPU,
@@ -188,8 +185,7 @@ func parseProcessList(out string) map[string][]int {
 }
 
 // isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
-// Apple Event。launchLyrimuseApp 真要启动前那一次自查在用;切歌空档保持(playergaphold.go)在保持期间每拍问一次
-// 那个播放器还在不在。
+// Apple Event。launchLyrimuseApp 真要启动前那一次自查在用。
 func isProcessRunning(name string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

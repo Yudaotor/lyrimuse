@@ -99,7 +99,7 @@ func TestMusicVideoLyricsWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(poller), "if p.cur.NotAudio {\n\t\t\t\t\tnoteMusicVideoDuration(") {
+	if !strings.Contains(string(poller), "if p.cur.NotAudio {\n\t\tnoteMusicVideoDuration(") {
 		t.Error("poller 要把正在播的 MV 的视频时长记成提示")
 	}
 }

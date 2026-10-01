@@ -214,11 +214,8 @@ var (
 // kugouFixedArtist 判定这一拍的署名是不是被歌词顶掉了,是就给出该用的那个。
 // ok=false 表示不必改(不是这个播放器 / 还没判定成立 / 什么都问不出来)。
 //
-// 换在**原始载荷刚解析出来**那一层(fetchRawMediaControlState),不是等 extract 出
-// snapshot 之后 —— 那之前还有两处拿原始署名算 key:播放锚点表 / 位置记忆的
-// `raw.Artist + "|" + raw.Title`,以及 `currentPositionBias` 查 App 写来的偏置记录
-// (App 那边写的是**纠正后**的署名)。在 snapshot 层换,这两处会静默地对不上,
-// 表现是位置每唱一句歌词重置一次、锚点滞后补偿查不到。
+// 入参是播放器原样报的标签(App 播放状态里的 track.raw.*,见 appPlaybackTickFor),不是纠正后的那份:
+// 判定要逐拍看见署名在变。
 func kugouFixedArtist(bundle, title, artist string, duration float64) (string, bool) {
 	kugouLyricArtistMu.Lock()
 	defer kugouLyricArtistMu.Unlock()
@@ -272,31 +269,6 @@ func restoreKugouArtistPoisonConfirmed() {
 	kugouLyricArtistMu.Lock()
 	kugouArtistPoisonConfirmed = true
 	kugouLyricArtistMu.Unlock()
-}
-
-// kugouKnownArtistFix 只查已经判定下来的结论,自己不判定。
-//
-// 给**另外再问一次 media-control** 的调用点对齐用(封面就是这么一条:fetchNowPlayingArtwork
-// 会重新 exec 一次拿 artworkData,再拿载荷里的署名跟当前曲目核对)。那种调用一首歌只发生
-// 一次,看不到署名在变,让它参与判定只会把状态机搅乱;它要的也只是"主路径此刻用的是哪个
-// 署名",好让两边用同一把尺子。
-//
-// 漏了这一步的后果很隐蔽:核对恒不相等 → 系统直送封面每次都被丢掉 → 悄悄退回网络
-// 检索,没有任何错误日志。
-func kugouKnownArtistFix(bundle, title string) (string, bool) {
-	kugouLyricArtistMu.Lock()
-	defer kugouLyricArtistMu.Unlock()
-	st := kugouLyricArtistValue
-	if !st.poisoned || st.bundle != bundle || st.title != title {
-		return "", false
-	}
-	if st.hasResolved && st.resolved.artist != "" {
-		return st.resolved.artist, true
-	}
-	if st.first != "" {
-		return st.first, true
-	}
-	return "", false
 }
 
 // resolveKugouLocalTrack 查本地 plist 要这首歌,查不到返回 ok=false。

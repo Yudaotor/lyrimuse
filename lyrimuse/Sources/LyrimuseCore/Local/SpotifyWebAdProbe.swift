@@ -50,11 +50,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 // 进缓存;`cachedVerdict` 只读缓存。代价是新曲目的第一轮拿不到判定 —— 那一轮按 fail-closed
 // 丢掉(也就是维持改动前的行为),下一轮就好。
 //
-// ---- 为什么 collector(Go)侧没有对应实现 ----
+// ---- collector(Go)侧 ----
 //
-// 跟 YT Music 那次一样、方向相同:Go 那一侧的职责是"别把广告打卡上去",而它**现在就已经拒**
-// (`trustedPlaybackNotASong` 见 artist 为空直接拒,连复核都不用)。给它加一份探针只会多一次
-// AppleScript 往返、得到同一个"拒"。**Swift 放行并标记、Go 照旧拒**,这条不对称是有意的。
+// collector 不读播放器,认的是 App 播放状态里的 ad 标记(appReportedAd 并进 isAdBreak),广告不打卡。
 public final class SpotifyWebAdProbe: @unchecked Sendable {
     public static let shared = SpotifyWebAdProbe()
 

@@ -6,8 +6,8 @@ import "strings"
 
 // Spotify 原生客户端这一次播放的**真曲目 ID**。
 //
-// 来路:换曲那一拍 detectAdAtSessionStart 本来就要 fork 一次 osascript 问 `spotify url` 判广告,
-// 拿到的 `spotify:track:<22 位 ID>` 以前判完前缀就丢了。现在留下来,做两件事:
+// 来路:App 播放状态里的 `track.spotify_track_id`(App 按歌名歌手核对过),换曲那一拍由 detectAdAtSessionStart
+// 记下。做两件事:
 //
 //  1. 歌词缓存条目的 spotify_url 从本地拼的**搜索页**链接(open.spotify.com/search/歌手 歌名)换成
 //     真曲目链接 open.spotify.com/track/<id> —— 网页中继那排「平台跳转」里的 Spotify 按钮点开就是这首;
@@ -53,12 +53,6 @@ func spotifyTrackIDFromURI(uri string) string {
 	return id
 }
 
-// spotifyURIIsAd:AppleScript `spotify url` 对广告返回 `spotify:ad:…`,这是唯一的权威分类(字段启发式
-// 打不完地鼠:广告可以带全 artist/title/album)。
-func spotifyURIIsAd(uri string) bool {
-	return strings.HasPrefix(strings.TrimSpace(uri), "spotify:ad")
-}
-
 // spotifyTrackURL 拼真曲目链接;没有 ID 给空串,让调用方退回搜索链接。
 func spotifyTrackURL(id string) string {
 	if id == "" {
@@ -75,29 +69,6 @@ func (e enrichEntry) spotifyLink() string {
 		return u
 	}
 	return e.SpotifyURL
-}
-
-// spotifyTrackIDForSession 决定这次开会话时要不要把 AppleScript 给的曲目 ID 记到 curTitle 名下。
-//
-// 必须核对曲目名:一首歌播完那一刻,Spotify 已经开始放下一首、位置归零,而 media-control 报的元数据
-// 还停在上一首,要再过 5 秒左右才跟上。poller 这时看到「key 没变、位置从结尾跳回开头」,会把它当成
-// 单曲循环重新起播、另开一个会话(loopRestart),于是这里拿到的是**下一首**的 ID,却记到了上一首名下。
-// 实测:本机 enrich 缓存里曾有 22 条 spotify_track_id 挂错了歌,日志覆盖得到的每一条都是
-// 「loop restart: 上一首」之后约 5 秒才「now playing: 下一首」,挂上去的正是下一首的 ID;90 次 loop
-// restart 里 39 次是这种误判。挂错的 ID 会一路流到 relay 的 Spotify 链接、ListenBrainz 的 spotify_id、
-// 按 Spotify ID 取歌词的 amll 源。
-//
-// 名字对不上就不记:宁可这一首这次没有 ID(下次播到再记),不能记一个别的歌的 ID。拿不到名字(老脚本 /
-// 输出格式变了)时同样不记。
-func spotifyTrackIDForSession(curTitle, uri, spotifyName string) string {
-	id := spotifyTrackIDFromURI(uri)
-	if id == "" || spotifyName == "" {
-		return ""
-	}
-	if loosenEnrichKey(normEnrichTitle(spotifyName)) != loosenEnrichKey(normEnrichTitle(curTitle)) {
-		return ""
-	}
-	return id
 }
 
 // noteSpotifyTrackID 由 poller 在换曲那一拍调用(不持 enrichMu)。

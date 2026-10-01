@@ -139,7 +139,7 @@ public enum RadioTrackClock {
     /// 从十几秒处切进来。这种台换歌时直接用系统位置起表,否则从 0 起的表会整首慢一段前奏的长度。
     /// 判成之后这首余下的时间也都以系统位置为准(State.perTrack):起播缓冲时 Apple Music 会连报几次 0,
     /// 最后一个才是真起点,只在起表那一拍取一次会整首快几秒。
-    /// 纯函数,selftest 直接覆盖;collector 的 radioPerTrackSeed 同一套判据、同一组常量,两边一起改。
+    /// 纯函数,selftest 直接覆盖。
     ///
     /// 前两条必须成立、后两条至少成立一条,才返回 `systemPosition`,否则 nil(调用方照旧按 seedPosition 起表):
     /// - 读数来自换歌时新打的锚点:`anchorAge` 在 [0, perTrackAnchorMaxAge](现读的 AppleScript 位置传 0);

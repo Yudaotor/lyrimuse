@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -54,6 +53,7 @@ func TestAppleCatalogPlausibleID(t *testing.T) {
 		{1485220325, true, "真实目录 ID"},
 		{-3446272063698972557, false, "本地导入曲目的持久 ID(实测负数,lookup 直接 400)"},
 		{3446272063698972557, false, "上面那个取绝对值——防'顺手 abs 一下'的错误实现"},
+		{2764576100379992737, false, "本地导入曲目的持久 ID 也可能是正数,远超目录 ID 量级"},
 		{0, false, "字段缺省"},
 		{-1, false, "负数"},
 	}
@@ -284,47 +284,6 @@ func TestDedupeArtistIdentities(t *testing.T) {
 	}
 	if got := dedupeArtistIdentities(nil, nil); got != nil {
 		t.Errorf("全空应返回 nil,得到 %#v", got)
-	}
-}
-
-// TestMediaControlRawStateParsesUniqueIdentifier 用**真实的 media-control 输出**
-// (抓的,只去掉了体积巨大的 artworkData/artworkMimeType)钉住这个字段真的解出来了。
-//
-// 为什么值得有这个测试:JSON tag 拼错是**静默**失败——字段恒为零值,
-// appleCatalogPlausibleID(0) 直接 false,整条 Apple 目录锚点会安静地永不生效,
-// 而 build/vet/其它测试一个都不会响。
-func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
-	// 本地导入曲目:uniqueIdentifier 是任意 64 位持久 ID(这条是正数、但远超目录 ID 量级)
-	const localImport = `{"album":"BLOOD ON THE DANCE FLOOR/ HIStory In The Mix",` +
-		`"artist":"Michael Jackson","bundleIdentifier":"com.apple.Music",` +
-		`"duration":336.1733229166667,"elapsedTime":0.024432084,"playing":true,` +
-		`"playbackRate":1,"timestamp":"2026-08-22T09:56:13Z","title":"Is It Scary",` +
-		`"trackNumber":5,"uniqueIdentifier":2764576100379992737}`
-	var raw mediaControlRawState
-	if err := json.Unmarshal([]byte(localImport), &raw); err != nil {
-		t.Fatalf("解析真实 media-control 输出失败: %v", err)
-	}
-	if raw.UniqueIdentifier != 2764576100379992737 {
-		t.Errorf("UniqueIdentifier = %d, want 2764576100379992737(JSON tag 是不是拼错了?)", raw.UniqueIdentifier)
-	}
-	// 这条**必须**被上界守卫挡掉:否则每首本地导入曲目都会白发一次 iTunes 请求
-	if appleCatalogPlausibleID(raw.UniqueIdentifier) {
-		t.Errorf("本地导入曲目的持久 ID %d 不该被当成目录 ID", raw.UniqueIdentifier)
-	}
-	if raw.Duration != 336.1733229166667 || raw.Title != "Is It Scary" {
-		t.Errorf("同一份 payload 的其它字段也该照常解出来,得到 title=%q duration=%v", raw.Title, raw.Duration)
-	}
-
-	// Apple Music 目录曲目:同一个字段位置放的是目录 ID(实测 1485220325 = 演唱会专辑第 18 首)
-	const catalog = `{"album":"周杰伦地表最强世界巡回演唱会 (Live)","artist":"周杰伦",` +
-		`"bundleIdentifier":"com.apple.Music","duration":208.293,"playing":true,` +
-		`"title":"印地安老斑鸠 (Live)","uniqueIdentifier":1485220325}`
-	var raw2 mediaControlRawState
-	if err := json.Unmarshal([]byte(catalog), &raw2); err != nil {
-		t.Fatalf("解析目录曲目 payload 失败: %v", err)
-	}
-	if raw2.UniqueIdentifier != 1485220325 || !appleCatalogPlausibleID(raw2.UniqueIdentifier) {
-		t.Errorf("目录曲目 ID 应解出 1485220325 且通过 plausible 闸,得到 %d", raw2.UniqueIdentifier)
 	}
 }
 

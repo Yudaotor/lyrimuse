@@ -112,7 +112,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。
     /// 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反
     /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
-    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。
+    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`。
     public var republishesZeroAnchor: Bool {
         switch self {
         case .netease: return true
@@ -123,7 +123,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     }
 
     /// 这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播。
-    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`,Go 侧同源。
+    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`。
     public var playingFromRate: Bool {
         switch self {
         case .kugou: return true
@@ -132,7 +132,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     }
 
     /// 开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐。只有**实测见过**的播放器为 true。
-    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`,Go 侧同源。
+    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`。
     public var artistArrivesLate: Bool {
         switch self {
         case .kkbox: return true
@@ -141,7 +141,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     }
 
     /// 歌手空、时长 > 0、在放的快照是非歌曲内容(播客单集)。只有**实测见过**的播放器为 true。
-    /// 判定在 `TrustedPlayers.artistlessContent`,Go 侧同源。
+    /// 判定在 `TrustedPlayers.artistlessContent`;Go 侧 playerArtistlessNotMusic 同源(歌词解析入口用)。
     public var artistlessNotMusic: Bool {
         switch self {
         case .kkbox: return true
@@ -160,7 +160,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     }
 
     /// 切歌时先撤掉 Now Playing、隔几秒才发下一首。只有**实测见过**的播放器为 true。
-    /// 判定在 `PlayerGapHold`,Go 侧同源。
+    /// 判定在 `PlayerGapHold`。
     public var dropsSessionBetweenTracks: Bool {
         switch self {
         case .kkbox: return true

@@ -44,7 +44,4 @@ func TestLogClockIsUTC(t *testing.T) {
 	if got := logClock(at); got != "12:01:15Z" {
 		t.Errorf("logClock = %q", got)
 	}
-	if got := logClockMillis(at); got != "12:01:15.250Z" {
-		t.Errorf("logClockMillis = %q", got)
-	}
 }

@@ -79,10 +79,10 @@ private let safariMediaID = "com.apple.WebKit.GPU"
 
 /// media-control 那份读数:`elapsed` 是按锚点外推到读数那一刻的值,`anchor` 是原始锚点 elapsed。
 private func mediaControl(_ bundle: String, _ title: String, anchor: Double, elapsed: Double, duration: Double,
-                          playing: Bool = true, capturedAt: Date? = nil, startCorrection: Double? = nil) -> MediaControlSnapshot {
+                          playing: Bool = true, capturedAt: Date? = nil) -> MediaControlSnapshot {
     .forReplay(title: title, artist: "Fujii Kaze", album: "Prema", duration: duration, elapsedTime: elapsed,
                playing: playing, playbackRate: playing ? 1 : 0, bundleIdentifier: bundle, anchorElapsedTime: anchor,
-               capturedAt: capturedAt, anchorStartCorrection: startCorrection)
+               capturedAt: capturedAt)
 }
 
 @MainActor
@@ -95,7 +95,6 @@ func runPositionReplayTests() {
     replaySafariFloorReadingIgnored()
     replaySafariPreciseReadingOverNaturalBias()
     replayCaptureLag()
-    replayKugouStartCorrectionPublished()
     replaySodaAnchorLag()
     replayBrowserProbeReopensOnEveryTrackChange()
     replayKKBOXFollowsRepublishedAnchor()
@@ -279,15 +278,13 @@ private func replaySafariResumeStall() {
     expectEqual(near(rig.source.replayReportedBiasSecs, stall, 0.005), true,
                 "回放·Safari 恢复卡顿: 精确读数量出锚点领先 0.27 折进偏置(实际 \(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
     expectEqual(near(rig.shown(at: at(24.33)), page(24.33)), true, "回放·Safari 恢复卡顿: 重锚到页面的钟")
-    expectEqual(rig.biasWrites.last.map { near($0.biasSecs, stall, 0.005) && $0.bundleID == safariMediaID && $0.anchorElapsed == 205 }, true,
-                "回放·Safari 恢复卡顿: 偏置对着恢复锚点写给 collector")
+    expectEqual(rig.biasWrites.isEmpty, true, "回放·Safari 恢复卡顿: 网页的偏置不落盘(只有 Spotify 的会在重启后接回)")
     rig.tick(mediaControl(safariMediaID, title, anchor: 205, elapsed: stream(26.33), duration: 231, capturedAt: at(26.33)), at: at(26.33))
     expectEqual(near(rig.shown(at: at(26.33)), page(26.33)), true, "回放·Safari 恢复卡顿: 下一拍流读数扣偏置后不被伺服拽回")
     // Safari 因时长微调重发锚点(真值):偏置作废,屏上仍在页面的钟上。
     rig.tick(mediaControl(safariMediaID, title, anchor: page(40), elapsed: page(40), duration: 230.91, capturedAt: at(40)), at: at(40))
     expectEqual(rig.source.replayReportedBiasSecs, 0, "回放·Safari 恢复卡顿: Safari 重发锚点即作废偏置")
     expectEqual(near(rig.shown(at: at(40)), page(40)), true, "回放·Safari 恢复卡顿: 重发之后仍对齐")
-    expectEqual(rig.biasWrites.last?.biasSecs, 0, "回放·Safari 恢复卡顿: 作废也通知 collector")
     rig.source.replayPlayerStateEvent(at: at(45), freeze: true)
     let shownAtPause = rig.shown(at: at(45))
     rig.tick(mediaControl(safariMediaID, title, anchor: page(45), elapsed: page(45), duration: 230.91, playing: false, capturedAt: at(45.3)), at: at(45.3))
@@ -324,21 +321,6 @@ private func replayCaptureLag() {
     defer { late.tearDown() }
     late.tick(mediaControl(safariMediaID, "Miree", anchor: 120.431, elapsed: 160.0, duration: 242.61, capturedAt: at(-3)), at: at(0))
     expectEqual(near(late.shown(at: at(0)), 160.0), true, "回放·读数时刻: 超过 2s 当读数不可信,不补")
-}
-
-/// 酷狗自然切歌的起播修正在读数层补过(快照已含),collector 读的是原始锚点:要按"对着原始锚点的负偏置"写给它;
-/// 下一首没有修正时写一条 0 把它作废。
-@MainActor
-private func replayKugouStartCorrectionPublished() {
-    let rig = ReplayRig("kugou-start")
-    defer { rig.tearDown() }
-    let kugou = PlaybackPlayer.kugou.bundleIdentifier
-    rig.tick(mediaControl(kugou, "GABBA GABBA", anchor: 0.02, elapsed: 1.5, duration: 180, startCorrection: 0.548), at: at(0))
-    let record = rig.biasWrites.last
-    expectEqual(record.map { near($0.biasSecs, -0.548, 0.0005) && $0.anchorElapsed == 0.02 && $0.bundleID == kugou }, true,
-                "回放·酷狗起播修正: 写给 collector 的是对着原始锚点 0.02 的 −0.548")
-    rig.tick(mediaControl(kugou, "天际", anchor: 0.01, elapsed: 0.3, duration: 200), at: at(2))
-    expectEqual(rig.biasWrites.last?.biasSecs, 0, "回放·酷狗起播修正: 下一首没有修正就写 0 作废")
 }
 
 /// 汽水音乐:开播锚点晚打、整首恒定落后;播放器曲中重发一次真值锚点时学到滞后量(第一份直接采信),

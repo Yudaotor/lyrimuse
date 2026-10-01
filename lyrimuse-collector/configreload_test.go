@@ -250,7 +250,7 @@ func TestSwitchStateRelayResetsConfirmations(t *testing.T) {
 func TestMainReadsConfigOnlyAtKnownSites(t *testing.T) {
 	allowed := map[string]bool{
 		"LogLevel": true, "loadIssues": true, "Token": true, "StateRelayURL": true,
-		"StateRelayToken": true, "APIRoot": true, "BundleIDs": true,
+		"StateRelayToken": true, "APIRoot": true,
 	}
 	src, err := os.ReadFile("main.go")
 	if err != nil {

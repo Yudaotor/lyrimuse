@@ -8,7 +8,7 @@ tintColor、fallbackSymbolName、bundledIconResourceName、displayOrder、位置
 playerXxx 常量、xxxBundleID 常量、isValidPlayerValue、isKnownPlayerBundleID、
 resolveTrustedPlayers 的内置表、playerBundleID、mediaPlayerLabel、knownPlayerProcessNames、
 playerProcessNameFor、playerNativeLyricSource。每一处都写着「两侧必须同步维护」——
-而注释拦不住漏改(ytmusicad.go 那条逐字比对守卫就是被同一类漏改逼出来的)。
+而注释拦不住漏改。
 
 现在这些表全部从 shared/players.json 生成,接一个播放器 = 加一条 JSON + 一张品牌图标。
 CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
@@ -34,20 +34,19 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - nativeLyricSource  它自家的歌词源(同源加权 +250);没有就 null
 - positionTier  precise / cleanExtrapolated / noisyFloored;auto 为 null
 - republishesZeroAnchor  开播那个 elapsed=0 锚点会不会被这个播放器原样重发一次;auto 为 null
-                只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移
+                只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移。只生成 Swift 侧(collector 不推算位置)
 - playingFromRate  这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播;auto 为 null
                 只给**实测见过**的播放器置 true(酷狗单曲循环回到开头时报 playing:false、rate 仍是 1,
-                真暂停时 rate 归 0)。判定本身在 MediaControlClient.effectivePlaying / effectivePlaying(Go)
+                真暂停时 rate 归 0)。判定在 MediaControlClient.effectivePlaying。只生成 Swift 侧
 - artistArrivesLate  开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX 约半秒后补齐)。这一帧当作还没准备好、不采纳,
-                跟信任播放器那道「歌手为空就丢」同一处判定:Swift 侧 TrustedPlayers.notASong,Go 侧
-                trustedPlaybackNotASong
+                跟信任播放器那道「歌手为空就丢」同一处判定:TrustedPlayers.notASong。只生成 Swift 侧
 - artistlessNotMusic  歌手空、时长 > 0、在放的快照是非歌曲内容(播客单集),不当成一首歌;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX、Amazon Music 放播客都是这样)。判定在 Swift 侧
-                TrustedPlayers.artistlessContent / Go 侧 builtinArtistlessContent
+                TrustedPlayers.artistlessContent;Go 侧只在歌词解析入口挡掉这类内容(enrich.go)
 - dropsSessionBetweenTracks  切歌时先撤掉 Now Playing、隔几秒才发下一首;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX 约 4 秒)。上一首来自它时,这几秒里别的播放器暂停着的
-                旧会话不当成「换播放器了」,判定在 Swift 侧 PlayerGapHold / Go 侧 holdAcrossPlayerGap
+                旧会话不当成「换播放器了」,判定在 PlayerGapHold。只生成 Swift 侧
 - ignoresSeekCommand  外部的跳转指令(media-control `seek`)它不响应;auto 为 null。只生成 Swift 侧(collector 不发跳转)。
                 只给**实测见过**的播放器置 true(Amazon Music:界面上也没有可设值的进度条)。这类播放器上
                 进度条只显示不能拖、点歌词不跳,`LocalPlaybackSource.seek` 直接不动
@@ -204,47 +203,11 @@ def render_go(spec, players):
             out.append("\t%s: true,\n" % p["goConst"])
     out.append("}\n")
 
-    out.append("\n// playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样\n"
-               "// 重发一次」。只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反\n"
-               "// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
-               "// 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。\n"
-               "var playerRepublishesZeroAnchor = map[string]bool{\n")
-    for p in concrete:
-        if p.get("republishesZeroAnchor") and p.get("goBundleConst"):
-            out.append("\t%s: true,\n" % p["goBundleConst"])
-    out.append("}\n")
-
-    out.append("\n// playerPlayingFromRate 是「bundle id → 这个播放器报的 playing:false 不可信、要按\n"
-               "// playbackRate > 0 判在不在播」。只列**实测见过**的播放器。\n"
-               "// 判定本身在 effectivePlaying,Swift 侧 playingFromRate 同源。\n"
-               "var playerPlayingFromRate = map[string]bool{\n")
-    for p in concrete:
-        if p.get("playingFromRate") and p.get("goBundleConst"):
-            out.append("\t%s: true,\n" % p["goBundleConst"])
-    out.append("}\n")
-
-    out.append("\n// playerArtistArrivesLate 是「bundle id → 开播先发一帧没有歌手的、过一会儿才补齐」。\n"
-               "// 只列**实测见过**的播放器。那一帧当作还没准备好,判定在 trustedPlaybackNotASong,\n"
-               "// Swift 侧 artistArrivesLate 同源。\n"
-               "var playerArtistArrivesLate = map[string]bool{\n")
-    for p in concrete:
-        if p.get("artistArrivesLate") and p.get("goBundleConst"):
-            out.append("\t%s: true,\n" % p["goBundleConst"])
-    out.append("}\n")
-
     out.append("\n// playerArtistlessNotMusic 是「bundle id → 歌手空、时长 > 0、在放的是非歌曲内容(播客单集)」。\n"
-               "// 只列**实测见过**的播放器。判定在 builtinArtistlessContent,Swift 侧 artistlessNotMusic 同源。\n"
+               "// 只列**实测见过**的播放器。歌词解析入口据此不解析这类内容;判定在 App 侧 TrustedPlayers.artistlessContent。\n"
                "var playerArtistlessNotMusic = map[string]bool{\n")
     for p in concrete:
         if p.get("artistlessNotMusic") and p.get("goBundleConst"):
-            out.append("\t%s: true,\n" % p["goBundleConst"])
-    out.append("}\n")
-
-    out.append("\n// playerDropsSessionBetweenTracks 是「bundle id → 切歌时先撤掉 Now Playing、隔几秒才发下一首」。\n"
-               "// 只列**实测见过**的播放器。判定在 holdAcrossPlayerGap,Swift 侧 dropsSessionBetweenTracks 同源。\n"
-               "var playerDropsSessionBetweenTracks = map[string]bool{\n")
-    for p in concrete:
-        if p.get("dropsSessionBetweenTracks") and p.get("goBundleConst"):
             out.append("\t%s: true,\n" % p["goBundleConst"])
     out.append("}\n")
     return "".join(out)
@@ -319,7 +282,7 @@ def render_core_swift(spec, players):
     out.append("\n    /// 开播那个 `elapsed == 0` 的锚点会不会被这个播放器原样重发一次。\n"
                "    /// 只有**实测见过**的播放器为 true:真起播点是连发里的哪一个,各家相反\n"
                "    /// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。\n"
-               "    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`,Go 侧同源。\n"
+               "    /// 判定本身在 `MediaControlClient.isStaleAnchorRepublish`。\n"
                "    public var republishesZeroAnchor: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("republishesZeroAnchor"):
@@ -327,7 +290,7 @@ def render_core_swift(spec, players):
     out.append("        default: return false\n        }\n    }\n")
 
     out.append("\n    /// 这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播。\n"
-               "    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`,Go 侧同源。\n"
+               "    /// 只有**实测见过**的播放器为 true。判定本身在 `MediaControlClient.effectivePlaying`。\n"
                "    public var playingFromRate: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("playingFromRate"):
@@ -335,7 +298,7 @@ def render_core_swift(spec, players):
     out.append("        default: return false\n        }\n    }\n")
 
     out.append("\n    /// 开播先发一帧只有歌名、歌手还空着的,过一会儿才补齐。只有**实测见过**的播放器为 true。\n"
-               "    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`,Go 侧同源。\n"
+               "    /// 那一帧当作还没准备好,判定在 `TrustedPlayers.notASong`。\n"
                "    public var artistArrivesLate: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("artistArrivesLate"):
@@ -343,7 +306,7 @@ def render_core_swift(spec, players):
     out.append("        default: return false\n        }\n    }\n")
 
     out.append("\n    /// 歌手空、时长 > 0、在放的快照是非歌曲内容(播客单集)。只有**实测见过**的播放器为 true。\n"
-               "    /// 判定在 `TrustedPlayers.artistlessContent`,Go 侧同源。\n"
+               "    /// 判定在 `TrustedPlayers.artistlessContent`;Go 侧 playerArtistlessNotMusic 同源(歌词解析入口用)。\n"
                "    public var artistlessNotMusic: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("artistlessNotMusic"):
@@ -359,7 +322,7 @@ def render_core_swift(spec, players):
     out.append("        default: return false\n        }\n    }\n")
 
     out.append("\n    /// 切歌时先撤掉 Now Playing、隔几秒才发下一首。只有**实测见过**的播放器为 true。\n"
-               "    /// 判定在 `PlayerGapHold`,Go 侧同源。\n"
+               "    /// 判定在 `PlayerGapHold`。\n"
                "    public var dropsSessionBetweenTracks: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("dropsSessionBetweenTracks"):

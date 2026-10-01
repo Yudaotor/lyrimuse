@@ -14,8 +14,8 @@ import (
 //
 // # 为什么需要它
 //
-// 两个进程各自读 media-control(collector 走 getState、App 走 MediaControlClient),
-// 所以同一份脏署名两边都会拿到。而歌词缓存的 key 是 `artist|title|album`:collector
+// App 读 media-control 拿到的是播放器报的脏署名,collector 从 App 的播放状态里也拿到同一份(track.raw.*)。
+// 而歌词缓存的 key 是 `artist|title|album`:collector
 // 用纠正后的署名写进去,App 用播放器报的脏署名去查,`EnrichCacheReader.looseMatch`
 // 只折平空格 / 大小写 / 繁简 —— 折不平两个**完全不同**的署名,于是 App 再也查不到
 // collector 刚写好的那条歌词。
@@ -71,7 +71,7 @@ var (
 	playerArtistFixFailed   playerArtistFixState
 	playerArtistFixFailedAt time.Time
 	// playerArtistFixWrittenAt:这个进程最近一次写出的 updatedAt(Unix 秒)。App 在播放状态里报它套用的是哪一版
-	// (applied_fix_rev),影子对比据此认出「纠正刚发布、App 还没读到」的那一两拍,见 shadowcompare.go。
+	// (applied_fix_rev),collector 据此认出「纠正刚发布、App 还没读到」的那一两拍,见 appPlaybackTickFor。
 	playerArtistFixWrittenAt int64
 )
 

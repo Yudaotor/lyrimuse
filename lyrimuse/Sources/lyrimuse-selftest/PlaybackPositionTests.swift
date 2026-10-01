@@ -527,7 +527,7 @@ func runPlaybackPositionTests() {
                                                                 anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 9)), true,
                         "位置偏置文件: 只有写入时刻不同不算内容变化(不重写)")
             expectEqual(rec.sameContent(as: cleared), false, "位置偏置文件: 偏置变了要重写")
-            expectEqual(PositionBiasFile.fileName, "lyrimuse-position-bias.json", "位置偏置文件: 文件名与 Go 侧 main.go 逐字节一致")
+            expectEqual(PositionBiasFile.fileName, "lyrimuse-position-bias.json", "位置偏置文件: 文件名不变(App 重启后要读回上一个进程写的那份)")
         }
 
         // ---- 暂停时刻外推:MediaRemote 指令暂停时 Spotify 不发布冻结值 ----

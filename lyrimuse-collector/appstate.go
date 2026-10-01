@@ -52,9 +52,10 @@ type appStateTrack struct {
 	Ad             bool           `json:"ad"`
 	// SpotifyTrackID:Spotify 原生播放时 `spotify:track:` 之后那段,App 按歌名歌手核对过;没有为空。
 	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
+	// AmazonTrackID:Amazon Music 这首在它日志里的曲目标识(`asin://<ASIN>`,播客是 `podcast://…`)。App 这一拍的位置
+	// 是从日志认出这首时才有;没有为空。
+	AmazonTrackID string `json:"amazon_track_id,omitempty"`
 }
-
-func (t *appStateTrack) key() string { return t.Title + "|" + t.Artist + "|" + t.Album }
 
 type appStatePosition struct {
 	Secs      float64 `json:"secs"`

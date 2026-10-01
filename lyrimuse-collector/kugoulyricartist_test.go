@@ -422,36 +422,6 @@ func TestKugouFixedArtistPublishesForTheApp(t *testing.T) {
 	}
 }
 
-// 封面走的是**另一次**独立的 media-control 调用,载荷里是播放器原样报的署名。那道
-// 「这份封面属于哪首歌」的核对必须跟主路径用同一把尺子 —— 否则恒不相等,系统直送封面
-// 被无声无息地全部丢掉、悄悄退回网络检索,日志里一个字都没有。
-func TestKugouKnownArtistFixAlignsTheArtworkCheck(t *testing.T) {
-	resetKugouLyricArtist(t)
-	useKugouNowPlaying(t, kugouNowPlayingPlist(t, "队列里的歌", "Stake、TwoP - 爱情慢慢来", "Stake"))
-
-	if _, ok := kugouKnownArtistFix(kugouMusicBundleID, "爱情慢慢来"); ok {
-		t.Error("还没判定就给出了纠正 —— 那会把没被污染的播放器的封面核对也改坏")
-	}
-	kugouFixedArtist(kugouMusicBundleID, "爱情慢慢来", "真的并不是我太过见外", 195)
-
-	got, ok := kugouKnownArtistFix(kugouMusicBundleID, "爱情慢慢来")
-	if !ok || got != "Stake" {
-		t.Errorf("= (%q, %v),应给出主路径此刻用的那个署名", got, ok)
-	}
-	// 查询自己不判定:连查几次都不该把状态机推向别处(它一首歌只被调一次,看不到署名在变)。
-	for i := 0; i < 3; i++ {
-		if a, _ := kugouKnownArtistFix(kugouMusicBundleID, "爱情慢慢来"); a != "Stake" {
-			t.Fatalf("第 %d 次查询给出了 %q", i+1, a)
-		}
-	}
-	if _, ok := kugouKnownArtistFix(kugouMusicBundleID, "别的歌"); ok {
-		t.Error("曲名对不上也给出了纠正")
-	}
-	if _, ok := kugouKnownArtistFix(qqMusicBundleID, "爱情慢慢来"); ok {
-		t.Error("别的播放器也给出了纠正")
-	}
-}
-
 // 本地那份说署名就长这样时,一个字都不许动 —— 原生 macOS 版走的正是这条路,
 // 判错的代价是把一个正确的多人署名换成主歌手、悄悄丢掉合唱者。
 func TestKugouFixedArtistTrustsMatchingLocalCredit(t *testing.T) {

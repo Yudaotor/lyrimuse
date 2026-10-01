@@ -88,20 +88,11 @@ const (
 	lyricsModePriority = "priority"
 )
 
-// 本地播放状态读取哪个 App——跟 lyrimuse 侧 PlaybackPlayer(LyrimuseCore/Local/
-// PlaybackPlayer.swift)的 rawValue 逐字对应,共享文件里 "player" 字段的取值。
-// Apple Music 走 AppleScript;QQ 音乐/网易云音乐都没有 AppleScript 支持(用
-// sdef/PlistBuddy 核实过,两者都没有 .sdef、也没开 NSAppleScriptEnabled),共用同一条
-// 系统级 MediaRemote(media-control)读取路径,只是 bundle id 不同——见 system.go 的
-// getState()/appleMusicPosition() 注释。Spotify 自己虽然有 AppleScript 支持,但它同样
-// 会把播放状态发布进系统级 MediaRemote(`media-control get`/控制指令都正常),没必要
-// 单独写一套 AppleScript 集成,归到跟 QQ/网易云一样的路径。
-// playerAuto("自动识别")不对应固定的某个 App——问 media-control 当前系统级 Now
-// Playing 焦点是谁,核对是不是这四个已知播放器之一,见 system.go 的 getSpotifyMediaControlState
-// 附近 getAutoDetectedState 的注释。
-// playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
-// players_generated.go —— 接一个新播放器改那份 JSON,Swift 侧的 rawValue 跟着同一份走,
-// 两边不可能再漂。上面这段讲的是读取路径差异,不随播放器清单变动,留在这里。
+// 播放器标识——跟 lyrimuse 侧 PlaybackPlayer(LyrimuseCore/Local/PlaybackPlayer.swift)的 rawValue
+// 逐字对应,共享文件里 "player" 字段的取值。各家怎么读由 App 决定;collector 只拿它判这一拍的播放器是不是
+// 选中的那几个(poller.isTracked)。playerAuto("自动识别")不对应固定的某个 App:任一内置播放器或信任列表里的
+// 播放器都算。playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
+// players_generated.go —— 接一个新播放器改那份 JSON,Swift 侧的 rawValue 跟着同一份走,两边不可能再漂。
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序。
 // 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
@@ -229,9 +220,6 @@ type featureFlagsFile struct {
 	// LyricsSourceOrder：只有 LyricsSourceMode == "priority" 时才生效。缺失时按
 	// lyricsSourceDefaultOrder 兜底。
 	LyricsSourceOrder []string `json:"lyrics_source_order,omitempty"`
-	// CollectorPlaybackSource:collector 认「此刻在放什么」用哪一份(见 appsource.go)。缺省 / 不认识的值 = "app",
-	// 读 App 写的播放状态;"own" = 一直自己读播放器。界面不暴露,手改即热重读生效。
-	CollectorPlaybackSource string `json:"collector_playback_source,omitempty"`
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
@@ -295,8 +283,7 @@ type featureFlagsFile struct {
 type featureFlags struct {
 	// Players 是已经解析/校验过的播放器集合(键是 playerAppleMusic/playerQQMusic 等
 	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——从单选的 Player
-	// 改成可多选。system.go 的 getState()/mediaPlayerLabel()、poller.go 的 isTracked()、
-	// companionlaunch.go、match.go 的同源加权都读它。
+	// 改成可多选。poller.go 的 isTracked()、companionlaunch.go、match.go 的同源加权都读它。
 	Players       map[string]bool
 	AlbumPrefetch bool
 	// 见 featureFlagsFile.LyricsAutoUpgrade。默认 true(现状)。
@@ -337,8 +324,6 @@ type featureFlags struct {
 	LyricsSources     map[string]bool
 	LyricsSourceMode  string
 	LyricsSourceOrder []string
-	// CollectorPlaybackSource:已解析,恒为 playbackSourceApp / playbackSourceOwn(见 resolveCollectorPlaybackSource)。
-	CollectorPlaybackSource string
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir() 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
@@ -474,7 +459,6 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		CollectorPlaybackSource:   resolveCollectorPlaybackSource(f.CollectorPlaybackSource),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
@@ -886,7 +870,6 @@ func logFeatureSnapshot() {
 		"lyrics_sources", sortedEnabledKeys(features().LyricsSources),
 		"lyrics_source_mode", orDash(features().LyricsSourceMode),
 		"lyrics_source_order", orDash(strings.Join(features().LyricsSourceOrder, ",")),
-		"collector_playback_source", features().CollectorPlaybackSource,
 		"lyrics_dir", lyricsDirMode,
 		"lyrics_translation_language", orDash(features().LyricsTranslationLanguage),
 		"lyrics_machine_translation", features().LyricsMachineTranslation,

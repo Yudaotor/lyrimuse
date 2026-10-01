@@ -567,7 +567,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	if radioStationCard(radio, artist, title) {
 		return nil
 	}
-	// artistlessNotMusic 的播放器(KKBOX、Amazon Music)歌手空的只可能是非歌曲内容(播客单集,见 builtinArtistlessContent):
+	// artistlessNotMusic 的播放器(KKBOX、Amazon Music)歌手空的只可能是非歌曲内容(播客单集,见 App 侧 TrustedPlayers.artistlessContent):
 	// 同上一个理由,不拿去搜歌词、不写进缓存。
 	if artist == "" && playerArtistlessNotMusic[bundleID] {
 		return nil

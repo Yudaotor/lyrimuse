@@ -53,6 +53,17 @@ func TestAppStateFixturesDecode(t *testing.T) {
 	if playing.Track.SpotifyTrackID != "4iJyoBOLtHqaGxP12qzhQI" {
 		t.Fatalf("spotify track id should decode, got %q", playing.Track.SpotifyTrackID)
 	}
+	if playing.Track.AmazonTrackID != "" {
+		t.Fatalf("amazon track id is only set for Amazon Music, got %q", playing.Track.AmazonTrackID)
+	}
+
+	amazon := loadAppStateFixture(t, "playing-amazon.json")
+	if amazon.Track.AmazonTrackID != "asin://B09GYHYMRR" || amazon.Player != amazonMusicBundleID {
+		t.Fatalf("amazon track id should decode, got %q (%s)", amazon.Track.AmazonTrackID, amazon.Player)
+	}
+	if as := appStateSnapshot(amazon, time.UnixMilli(amazon.Position.AtMs)); as.Title != "Ring Finger" || as.Position != 24.5 {
+		t.Fatalf("amazon snapshot wrong: %+v", as)
+	}
 
 	paused := loadAppStateFixture(t, "paused-apple-music.json")
 	ps := appStateSnapshot(paused, time.UnixMilli(paused.Position.AtMs).Add(time.Minute))
@@ -76,6 +87,9 @@ func TestAppStateFixturesDecode(t *testing.T) {
 	mv := loadAppStateFixture(t, "music-video.json")
 	if ms := appStateSnapshot(mv, time.UnixMilli(mv.WrittenAtMs)); !ms.NotAudio {
 		t.Fatal("music video fixture should map to NotAudio=true")
+	} else if ms.Duration <= 0 || ms.lyricsDurationSecs() != 0 {
+		// 视频时长照旧是打卡门槛与进度条的分母,只是不交给歌词解析(02 章决策 33、49)。
+		t.Fatalf("music video keeps its duration but hides it from lyrics: duration=%v lyrics=%v", ms.Duration, ms.lyricsDurationSecs())
 	}
 
 	if ad := loadAppStateFixture(t, "ad.json"); !ad.Track.Ad {

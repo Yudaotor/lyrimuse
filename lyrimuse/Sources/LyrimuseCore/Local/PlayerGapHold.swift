@@ -9,9 +9,8 @@ import Foundation
 /// 真的换了播放器。同一个播放器报同一首暂停也照常:那是真暂停。那个播放器已经退出了也不等。
 ///
 /// 只对标了 `dropsSessionBetweenTracks` 的播放器生效:位置链路上的判据按播放器收窄(见 02 章决策 41)。
-/// collector 侧 `holdAcrossPlayerGap` 同一套判据。
 public enum PlayerGapHold {
-    /// 撤会话那一拍离最后一次看到它不超过这么久,才当是切歌空档(collector 5 秒一拍,两边用同一个数)。
+    /// 撤会话那一拍离最后一次看到它不超过这么久,才当是切歌空档。
     public static let startWindow: TimeInterval = 8
     /// 从撤会话那一拍起最多保持多久,再久就当它真的不放了。
     public static let window: TimeInterval = 25

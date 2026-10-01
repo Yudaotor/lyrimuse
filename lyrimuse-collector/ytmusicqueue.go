@@ -14,8 +14,8 @@ import (
 //
 // 队列面板(`ytmusic-player-queue`)里每一首是一个 `ytmusic-player-queue-item`,它的 `data` 属性就是
 // InnerTube 下发的 playlistPanelVideoRenderer:videoId、title、lengthText、`selected`(此刻在播的那首),
-// 以及 longBylineText「歌手 • 专辑 • 年份」—— 专辑那一段带 `MPREb_` 开头的 browseId,跟语言无关地认得出来
-// (同 ytmusicAdProbeJS 找专辑的办法)。面板收着的时候这份 DOM 也在,实测 50 首的队列全部读得到。
+// 以及 longBylineText「歌手 • 专辑 • 年份」—— 专辑那一段带 `MPREb_` 开头的 browseId,跟语言无关地认得出来。
+// 面板收着的时候这份 DOM 也在,实测 50 首的队列全部读得到。
 // 页面里开了随机,YouTube Music 是把这份列表**本身**打乱,所以按页面顺序往后取就是真实的下一首。
 //
 // 同一首歌有「歌曲版 / 视频版」两份时,替身那份包在 `#counterpart-renderer` 里、不在播放顺序上,跳过。
@@ -43,9 +43,9 @@ const ytmusicSelectedDurationToleranceSecs = 2.0
 // ytmusicQueueJS 读队列。返回值:每首一条记录,记录之间用 RS(0x1e),字段之间用 US(0x1f),
 // 字段顺序 selected(0/1)、title、artist、album、lengthText、videoId、musicVideoType(读不到为空)。
 // 找不到队列返回 NOTFOUND。musicVideoType 取自 `navigationEndpoint.watchEndpoint` 的
-// `watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig`,认 MV 用的是跟正在播那首同一份白名单(ytmusicIsMusicVideoType)。
+// `watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig`,认 MV 的白名单见 ytmusicIsMusicVideoType。
 //
-// 跟 ytmusicAdProbeJS 同样的纪律:不许有双引号(整段要嵌进 AppleScript 的双引号字符串),也不写反斜杠
+// 纪律同 browsertab.go 头注:不许有双引号(整段要嵌进 AppleScript 的双引号字符串),也不写反斜杠
 // (那是 AppleScript 字符串的转义字符)—— 分隔符因此用 String.fromCharCode 现造。歌名、专辑名是任意文本,
 // 用控制字符分隔才不会撞上。
 const ytmusicQueueJS = `(function(){` +
@@ -84,6 +84,17 @@ type ytmusicQueueItem struct {
 	seconds                       float64
 	// musicVideo:这一首是 MV(OMV / UGC)。它的 lengthText 是视频长度,不是歌的长度。
 	musicVideo bool
+}
+
+// ytmusicIsMusicVideoType:这个类型的时长算不算"视频的长度"而不是"歌的长度"。
+// 白名单:OMV = 官方 MV,UGC = 用户上传(现场、翻唱、带画面的搬运,时长同样不是录音室版的)。
+// ATV(歌曲版)、空串(读不到)和其余类型一律按歌处理 —— 认不准时保持现状,不误伤。
+func ytmusicIsMusicVideoType(vt string) bool {
+	switch vt {
+	case "MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC":
+		return true
+	}
+	return false
 }
 
 // parseYTMusicQueue 解 ytmusicQueueJS 的输出。字段数不对、没有歌名的记录跳过。纯函数,可单测。
@@ -190,7 +201,7 @@ func pickYTMusicUpcoming(items []ytmusicQueueItem, artist, title string, duratio
 	for i := pos + 1; i < len(items) && len(res) < n; i++ {
 		it := items[i]
 		if it.artist == "" {
-			continue // 没有歌手的多半是视频 / 用户上传,真播到时也过不了 trustedPlaybackNotASong
+			continue // 没有歌手的多半是视频 / 用户上传,真播到时 App 也不认它是歌(TrustedPlayers.notASong)
 		}
 		// MV 的时长交给歌词解析按「未知」处理,跟真播到时一致(snapshot.lyricsDurationSecs)。拿视频长度去打分会把
 		// 长度相近的另一个版本(混音 / 加长版)选上、把原版判成负分,条目落盘后播放时缓存命中就换不回来。
@@ -206,9 +217,9 @@ func pickYTMusicUpcoming(items []ytmusicQueueItem, artist, title string, duratio
 // unwrapBrowserScriptOutput 处理浏览器 JS 探针的原始输出(两个队列探针共用)。
 //
 // Chromium 系的 `execute … javascript` 有时把返回的字符串再包一层双引号、并把里面的双引号转义成真的反斜杠
-// (见 ytmusicAdProbeJS 的注释);Safari 的 `do JavaScript` 原样返回。歌名、专辑名里带双引号很常见
+// (见 browsertab.go 头注);Safari 的 `do JavaScript` 原样返回。歌名、专辑名里带双引号很常见
 // (实测「I Knew It, I Knew You - From "Toy Story 5"」),所以**只在整段首尾都是双引号时**才当成被包了一层:
-// 去掉外层、把 `\"` 还原。不能像广告探针那样无条件 Trim 掉首尾引号 —— 那会把以引号开头的歌名削掉一个字符。
+// 去掉外层、把 `\"` 还原。不能无条件 Trim 掉首尾引号 —— 那会把以引号开头的歌名削掉一个字符。
 func unwrapBrowserScriptOutput(raw string) string {
 	s := strings.TrimSpace(raw)
 	if len(s) >= 2 && strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) {

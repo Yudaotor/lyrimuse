@@ -2,78 +2,59 @@ package main
 
 import "testing"
 
-// getAutoDetectedState 的准入判断不能是一份**手抄**的 bundle id 列表——新播放器
-// 加进 players.json 后,若准入判断没有同步跟上,它的播放会落进 default 分支、又不在
-// 信任列表(内置播放器本来就不该出现在那儿),被当成"不相关 App"整条丢掉:collector
-// 认为什么都没在放、永远不去解析,而 App 侧照常显示曲目并挂着「搜索歌词中…」占位。
-//
-// 这组测试钉的不是"某个播放器能被认出来"这一条,而是**准入判断与 players.json 不许脱节**:
-// 逐个遍历生成的 playerBundleIDs,任何一个内置播放器被 classifyAutoDetected 判成
-// autoDetectReject 都失败。谁再手抄一份列表,下一个新增的播放器会立刻把它打回来。
-func TestAutoDetectAdmitsEveryBuiltinPlayer(t *testing.T) {
+func trackedWith(t *testing.T, players map[string]bool, trusted map[string]string, bundleID string) bool {
+	t.Helper()
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().TrustedPlayers = map[string]string{} // 确保命中的是"内置"那一档,不是信任列表
+	featuresRef().Players = players
+	featuresRef().TrustedPlayers = trusted
+	p := &poller{cur: snapshot{Title: "Song", Artist: "Singer", Bundle: bundleID}}
+	return p.isTracked()
+}
 
+// 选了自动识别时,isTracked 的准入不能是一份**手抄**的 bundle id 列表:新播放器加进 players.json 后若这里没跟上,
+// 它的播放会被当成"不相关 App"整条丢掉 —— collector 认为什么都没在放、永远不去解析,App 侧照常显示曲目并挂着
+// 「搜索歌词中…」占位。所以逐个遍历生成的 playerBundleIDs,任何一个内置播放器不被认下都失败。
+func TestAutoDetectAdmitsEveryBuiltinPlayer(t *testing.T) {
 	if len(playerBundleIDs) == 0 {
 		t.Fatal("playerBundleIDs 是空的,generate 那步没跑?")
 	}
 	for player, bundleID := range playerBundleIDs {
-		got := classifyAutoDetected(bundleID)
-		if got == autoDetectReject {
-			t.Errorf("内置播放器 %q(%s)被自动识别拒了 —— 准入判断又跟 players.json 脱节了",
-				player, bundleID)
-		}
-		// 有自己 AppleScript 字典的两家各走各的 refine 档;其余内置播放器 raw 直接采纳。
-		switch player {
-		case playerAppleMusic:
-			if got != autoDetectAppleMusic {
-				t.Errorf("Apple Music 该走 refine 那一档,得到 %v", got)
-			}
-		case playerSpotify:
-			if got != autoDetectSpotify {
-				t.Errorf("Spotify 该走 refine 那一档(AppleScript 整份顶替),得到 %v", got)
-			}
-		default:
-			if got != autoDetectBuiltin {
-				t.Errorf("内置播放器 %q(%s)该判成 autoDetectBuiltin,得到 %v", player, bundleID, got)
-			}
+		if !trackedWith(t, map[string]bool{playerAuto: true}, map[string]string{}, bundleID) {
+			t.Errorf("内置播放器 %q(%s)没被自动识别认下 —— 准入判断又跟 players.json 脱节了", player, bundleID)
 		}
 	}
 }
 
-// 汽水音乐单独点名 —— 它是这次故障的当事人,值得一条不依赖表遍历的直接断言。
-func TestAutoDetectAdmitsSodaMusic(t *testing.T) {
-	saved := features()
-	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().TrustedPlayers = map[string]string{}
-
-	if got := classifyAutoDetected(sodaMusicBundleID); got != autoDetectBuiltin {
-		t.Fatalf("汽水音乐(%s)该被自动识别当成内置播放器采纳,得到 %v", sodaMusicBundleID, got)
+// 信任列表里的播放器(配对过的浏览器)在自动识别和具体选中两种模式下都认;Safari 报的媒体代理进程按宿主算。
+func TestTrackedAdmitsTrustedPlayers(t *testing.T) {
+	trusted := map[string]string{"com.google.Chrome": "Chrome", "com.apple.Safari": "Safari"}
+	for _, players := range []map[string]bool{{playerAuto: true}, {playerAppleMusic: true}} {
+		if !trackedWith(t, players, trusted, "com.google.Chrome") || !trackedWith(t, players, trusted, "com.apple.WebKit.GPU") {
+			t.Errorf("%v: 信任过的浏览器要认", players)
+		}
 	}
 }
 
-// 信任列表那一档要判成 autoDetectTrusted(还得过"是不是一首歌"的守卫),不能跟内置混。
-func TestAutoDetectClassifiesTrustedSeparately(t *testing.T) {
-	saved := features()
-	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().TrustedPlayers = map[string]string{"com.google.Chrome": "Chrome"}
-
-	if got := classifyAutoDetected("com.google.Chrome"); got != autoDetectTrusted {
-		t.Errorf("被信任的浏览器该判成 autoDetectTrusted,得到 %v", got)
+// 具体选中了几个播放器时只认这几个(加上信任列表);没选的内置播放器不认。
+func TestTrackedSelectedPlayersOnly(t *testing.T) {
+	selected := map[string]bool{playerAppleMusic: true, playerSpotify: true}
+	if !trackedWith(t, selected, map[string]string{}, appleMusicBundleID) || !trackedWith(t, selected, map[string]string{}, spotifyBundleID) {
+		t.Error("选中的播放器要认")
+	}
+	if trackedWith(t, selected, map[string]string{}, sodaMusicBundleID) {
+		t.Error("没选中的内置播放器不认")
 	}
 }
 
-// 反面:不在名单里、也没被信任过的 App 仍要被挡住 —— 准入放宽之后,这条保证它没有宽到
-// "谁报 Now Playing 就认谁"。
+// 反面:不在名单里、也没被信任过的 App 仍要被挡住 —— 准入没有宽到"谁报 Now Playing 就认谁"。
 func TestAutoDetectStillRejectsUnrelatedApps(t *testing.T) {
-	saved := features()
-	t.Cleanup(func() { setFeatures(saved) })
-	featuresRef().TrustedPlayers = map[string]string{}
-
 	for _, bundleID := range []string{"com.apple.QuickTimePlayerX", "com.google.Chrome", ""} {
-		if got := classifyAutoDetected(bundleID); got != autoDetectReject {
-			t.Errorf("%q 既不是内置播放器也没被信任过,该被拒,得到 %v", bundleID, got)
+		if trackedWith(t, map[string]bool{playerAuto: true}, map[string]string{}, bundleID) {
+			t.Errorf("%q 既不是内置播放器也没被信任过,该被拒", bundleID)
 		}
+	}
+	if (&poller{}).isTracked() {
+		t.Error("没在放就不算")
 	}
 }

@@ -468,14 +468,12 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- Spotify 走 AppleScript 整份顶替:两侧接线 + 毫秒换算 ----
+    // ---- Spotify 走 AppleScript 整份顶替:接线 + 毫秒换算 ----
     //
-    // 三处接线漏一处都不编译失败,表现各不相同:App 侧漏了 → 悬浮歌词还在走 media-control;
-    // collector 侧漏了 → 网页/中继的进度跟 App 各走各的钟;
-    // 毫秒换算漏了 → duration 大 1000 倍,进度条分母、口白判据、歌词时长匹配全废。
+    // 接线漏了不编译失败:悬浮歌词还在走 media-control;毫秒换算漏了 → duration 大 1000 倍,
+    // 进度条分母、口白判据、歌词时长匹配全废。collector 的位置取自 App 的播放状态,没有自己的一份。
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let repo = sourcesRoot.deletingLastPathComponent().deletingLastPathComponent()
         func code(_ url: URL) -> String? {
             guard let text = try? String(contentsOfFile: url.path, encoding: .utf8) else { return nil }
             return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
@@ -491,40 +489,6 @@ func runSourceContractTests() {
                         "Spotify/AppleScript: Spotify 的 duration 是毫秒,脚本里必须除 1000")
         } else {
             expectEqual(true, false, "Spotify/AppleScript: 读不到 LyrimuseCore/Local/MediaControlClient.swift(路径挪了?)")
-        }
-        if let system = code(repo.appendingPathComponent("lyrimuse-collector/system.go")) {
-            expectEqual(system.contains("func refineSpotifyState("), true,
-                        "Spotify/AppleScript: collector 要有 refineSpotifyState(与 refineAppleMusicState 对称)")
-            expectEqual(count(system, "return refineSpotifyState(ctx, raw), true"), 2,
-                        "Spotify/AppleScript: 自动识别与多选两条路都要接上(现 \(count(system, "return refineSpotifyState(ctx, raw), true")) 处)")
-            expectEqual(system.contains("duration: track.duration() / 1000"), true,
-                        "Spotify/AppleScript: collector 那份脚本同样要把毫秒换成秒")
-            expectEqual(system.contains("positionFromPlayerClock: true"), true,
-                        "Spotify/AppleScript: 脚本要标出位置来自播放器自己的钟,poller 据此在暂停时作废偏置")
-            expectEqual(system.contains("currentPlayerClockBias(artist, title, el, time.Now())"), true,
-                        "Spotify/AppleScript: getSpotifyState 要扣 App 按起播方式给的领先量,否则网页 / 飞书预览整首偏快")
-        } else {
-            expectEqual(true, false, "Spotify/AppleScript: 读不到 lyrimuse-collector/system.go(路径挪了?)")
-        }
-        if let poller = code(repo.appendingPathComponent("lyrimuse-collector/poller.go")) {
-            // 这个钟在 gapless 自然切歌后同样领先真声:自然切歌播种 / repeat-one 回绕都不能按它跳过,
-            // 它只决定"暂停即作废偏置"(与 Swift 侧 biasSurvivesAnchor 的 playing 参数同一条规则)。
-            expectEqual(count(poller, "p.cur.PositionFromPlayerClock && !p.cur.Playing && p.posBias != 0"), 1,
-                        "Spotify/AppleScript: 播放器自己的钟一暂停就对回出声位置,偏置要在暂停那一拍作废")
-            // 这个钟的领先量在 getSpotifyState 里已经扣掉了 App 给的那一段(currentPlayerClockBias):
-            // 自然切歌 / 回绕两处必须对它跳过,否则扣两次;而且连续性对这个钟本来就估不准(交界处声音不连续)。
-            expectEqual(count(poller, "!p.cur.PositionFromPlayerClock {"), 2,
-                        "Spotify/AppleScript: 自然切歌与回绕两处都要按 PositionFromPlayerClock 跳过(现 \(count(poller, "!p.cur.PositionFromPlayerClock {")) 处),否则 App 的偏置被扣两次")
-            expectEqual(count(poller, "case foreignClockBeat:"), 1,
-                        "Spotify/AppleScript: 夹在 AppleScript 中间的一拍 media-control 要挡住,不能走 seek 分支(与 Swift 侧 spotifyClockAction 对称)")
-        } else {
-            expectEqual(true, false, "Spotify/AppleScript: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
-        }
-        if let snap = code(repo.appendingPathComponent("lyrimuse-collector/snapshot.go")) {
-            expectEqual(snap.contains("state[\"positionFromPlayerClock\"]"), true,
-                        "Spotify/AppleScript: extract() 要把这个键读进 snapshot,否则标记到不了 poller")
-        } else {
-            expectEqual(true, false, "Spotify/AppleScript: 读不到 lyrimuse-collector/snapshot.go(路径挪了?)")
         }
     }
 
@@ -700,13 +664,11 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "署名纠正: 读不到 LyrimuseCore/Local/NowPlayingClientsProbe.swift(路径挪了?)")
             }
-            if let sys = text("lyrimuse-collector/system.go") {
-                expectEqual(sys.contains("kugouFixedArtist(raw.BundleID"), true,
-                            "署名纠正: collector 要在原始载荷刚解析出来那一层换,晚一层就轮不到锚点表和偏置查询")
-                expectEqual(sys.contains("kugouKnownArtistFix(raw.BundleID"), true,
-                            "署名纠正: collector 的封面核对要跟主路径用同一把尺子")
+            if let src = text("lyrimuse-collector/appsource.go") {
+                expectEqual(src.contains("j.fixedTrack(rec.Player, t.Raw.Title, t.Raw.Artist"), true,
+                            "署名纠正: collector 要拿 App 状态里的原始标签判,纠正后的署名看不见署名在变")
             } else {
-                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-collector/system.go(路径挪了?)")
+                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-collector/appsource.go(路径挪了?)")
             }
             // ---- 播放器先推占位图、真封面晚几秒才推 ----
             //
@@ -900,53 +862,28 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
             }
-            if let sys2 = text("lyrimuse-collector/system.go") {
-                expectEqual(sys2.contains("\"catalogDurationSecs\": catalogDuration"), true,
-                            "电台: 目录查到的权威曲长要透传出来")
-                expectEqual(sys2.contains("state[\"catalogDurationSecs\"] = d"), true,
-                            "电台: AppleScript 整份顶替时也要把它带过去(否则电台的分母又回到整档节目)")
+            if let src = text("lyrimuse-collector/appsource.go") {
+                expectEqual(src.contains("if s.Radio || catalogDuration > 0 {"), true,
+                            "电台: collector 侧电台的曲长只认目录查到的真曲长(查不到是 0 = 未知),绝不留整档节目那个数")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/system.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/appsource.go(路径挪了?)")
             }
             if let poller = text("lyrimuse-collector/poller.go") {
-                expectEqual(poller.contains("applyRadioClock(&p.cur,"), true, "电台: collector 取到快照后要换成单曲口径")
                 expectEqual(poller.contains("if p.cur.Artist == \"\" {"), true,
                             "电台台标: 没有歌手不宣布正在播放(两个平台都把 artist 当必填,发过去只会 400)")
                 expectEqual(poller.contains("if lm.ArtistName == \"\" {"), true, "电台台标: 没有歌手不提交收听")
                 expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
-                // 电台不借 AppleScript 那份播放头。App 侧同义的闸就有了
-                // (上面那条 `guard snapshot.isRadio != true`),collector 漏了整整一天 —— 后果不是
-                // "位置不准"这么轻:整档节目的位置写进 trackPos → 每拍都命中单曲循环判定 → 会话每
-                // 5 秒重建、playedSecs 归零 → 电台上一条收听都提交不了(实测 4.5 小时 2397 次
-                // loop restart、只有 4 条 listen recorded)。两侧必须同时成立,少一边就是这个形态。
-                expectEqual(poller.contains("playing, tracked, radio bool) bool {"), true,
-                            "电台: collector 借不借 AppleScript 位置要走 borrowAppleScriptPosition(纯函数,Go 单测钉住)")
-                expectEqual(poller.contains("&& playing && tracked && !radio"), true,
-                            "电台: collector 一律不借 AppleScript 播放头 —— 那是整档节目的位置,借了会让会话每拍重建")
-                expectEqual(poller.contains("p.cur.Playing, p.isTracked(), radioWallClock(p.cur))"), true,
-                            "电台: 那道闸要真的把电台判定(radioWallClock:整档节目口径才算)传进去,不然纯函数写对了也没接上")
-                // 第二道闸(修完上面那道之后实测仍然一条都不打卡):电台真曲长由 Apple
-                // 目录**异步**给出,实测比会话起点晚 4.7 秒,而 sess.meta 是会话创建那一刻的快照 ——
+                // 电台真曲长由 Apple 目录**异步**给出,实测比会话起点晚 4.7 秒,而 sess.meta 是会话创建那一刻的快照 ——
                 // 不回填的话 listenThreshold 拿到 0、退回 240s 上限,2~4 分钟的电台曲目永远够不着。
                 expectEqual(poller.contains("needsRadioDurationBackfill("), true,
                             "电台: 真曲长晚到时要补进会话元数据,否则打卡阈值退回 240s、电台一条都记不上")
             } else {
                 expectEqual(true, false, "电台: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
             }
-            if let sys = text("lyrimuse-collector/system.go") {
-                expectEqual(sys.contains("\"radioStationHash\": raw.RadioStationHash"), true,
-                            "电台: fetchRawMediaControlState 要把判据字段透传出来")
-                expectEqual(sys.contains("state[\"radioStationHash\"] = hash"), true,
-                            "电台: Apple Music 走 AppleScript 整份顶替时要把判据带过去 —— 不带就等于在最常见的配置下不生效")
+            if let st = text("lyrimuse-collector/appstate.go") {
+                expectEqual(st.contains("Radio: t.Radio != nil"), true, "电台: collector 的电台判据取 App 状态里的 track.radio")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/system.go(路径挪了?)")
-            }
-            if let snap = text("lyrimuse-collector/snapshot.go") {
-                expectEqual(snap.contains("str(\"radioStationHash\") != \"\""), true, "电台: collector 侧同一个判据字段")
-                expectEqual(snap.contains("duration = num(\"catalogDurationSecs\")"), true,
-                            "电台: collector 侧的时长换成目录查到的真曲长(查不到自然是 0 = 未知),绝不留整档节目那个数")
-            } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/snapshot.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/appstate.go(路径挪了?)")
             }
         }
 
@@ -980,23 +917,12 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "适配优先: 读不到 MediaControlClient.swift(路径挪了?)")
             }
-            // collector 侧同一口径:AppleScript 那份整份顶替,只把 MediaRemote 独有的键合并回去。
-            // 两侧口径不一致时的表现是「打卡的位置对、界面上的歌词偏」,很难往这里想,所以两边都钉。
-            if let sys = text("lyrimuse-collector/system.go") {
-                expectEqual(sys.contains("mergeRadioKeys(state, raw)"), true,
-                            "适配优先: collector 侧也要整份顶替 + 只合并电台键")
-            } else {
-                expectEqual(true, false, "适配优先: 读不到 lyrimuse-collector/system.go(路径挪了?)")
-            }
         }
 
-        // ---- Spotify 自然切歌(gapless)锚点偏置:两侧算法必须同一套判据 ----
+        // ---- Spotify 自然切歌(gapless)锚点偏置:公式与可信区间钉住 ----
         //
-        // App 侧 LocalPlaybackSource.naturalAdvanceCorrection 与 collector 侧 poller.go 的
-        // 同名函数是两套独立实现(Swift/Go 各写一遍)。窗口常量(naturalAdvanceWindowSecs)
-        // 本来就该不同——collector 5s 轮询、没有事件通知,App 2s 轮询 + 事件,两边各自的
-        // poll 头注都写着这一条,不钉在这里。但偏置公式与可信区间的上下限必须逐字一致——
-        // 漏改一边的表现是"打卡的位置对、悬浮窗还是偏快/偏慢",跟"适配优先"那组一样隐蔽。
+        // LocalPlaybackSource.naturalAdvanceCorrection 的偏置公式与可信区间上下限。位置只有 App 这一份,
+        // collector 推给网页的进度也取自 App 的播放状态。
         do {
             let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -1014,18 +940,6 @@ func runSourceContractTests() {
                             "自然切歌偏置: App 侧可信区间判据要 > 下限、<= 上限")
             } else {
                 expectEqual(true, false, "自然切歌偏置: 读不到 LocalPlaybackSource.swift(路径挪了?)")
-            }
-            if let goSrc = text("lyrimuse-collector/poller.go") {
-                expectEqual(goSrc.contains("naturalAdvanceMaxBiasSecs = 2.5"), true,
-                            "自然切歌偏置: collector 侧可信上限该是 2.5")
-                expectEqual(goSrc.contains("naturalAdvanceMinBiasSecs = 0.05"), true,
-                            "自然切歌偏置: collector 侧可信下限该是 0.05")
-                expectEqual(goSrc.contains("bias = reported - overrun"), true,
-                            "自然切歌偏置: collector 侧公式要是 reported - overrun")
-                expectEqual(goSrc.contains("if bias <= naturalAdvanceMinBiasSecs || bias > naturalAdvanceMaxBiasSecs {"), true,
-                            "自然切歌偏置: collector 侧可信区间判据要同一开闭区间(取反写法,数学等价)")
-            } else {
-                expectEqual(true, false, "自然切歌偏置: 读不到 poller.go(路径挪了?)")
             }
         }
 
@@ -2300,23 +2214,6 @@ func runSourceContractTests() {
                         "译文来源哨兵: collector translate.go 的 lyricsTrSourceMachine 必须逐字节等于 Swift 的 LyricsTranslationSource.machineSentinel(改一边不改另一边会静默把机翻全算成社区译文)")
         } else {
             expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
-        }
-
-        // ⑭b **App → collector 的位置偏置文件,文件名与 JSON 键两边逐字节一致**。
-        // Swift 侧 PositionBiasFile 写、Go 侧 positionbias.go 读;改了一边不改另一边,collector 会安静地
-        // 读不到 / 解不出,网页那边 Spotify 歌词就悄悄回到慢 2 秒。
-        let biasGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/positionbias.go").path
-        let biasMainPath = repoRoot.appendingPathComponent("lyrimuse-collector/main.go").path
-        if let goSource = try? String(contentsOfFile: biasGoPath, encoding: .utf8),
-           let mainSource = try? String(contentsOfFile: biasMainPath, encoding: .utf8) {
-            for tag in ["\"artist\"", "\"title\"", "\"bundle_id\"", "\"anchor_elapsed\"", "\"bias_secs\"", "\"written_at_ms\""] {
-                expectEqual(goSource.contains("json:\(tag)"), true, "位置偏置文件: Go 侧 positionBiasRecord 要有 json:\(tag) 字段")
-            }
-            let suffix = PositionBiasFile.fileName.replacingOccurrences(of: "lyrimuse", with: "")
-            expectEqual(mainSource.contains("clientName+\"\(suffix)\""), true,
-                        "位置偏置文件: Go 侧 main.go 要用 clientName+\"\(suffix)\" 拼出与 Swift 相同的文件名")
-        } else {
-            expectEqual(true, false, "位置偏置文件: 读不到 lyrimuse-collector/positionbias.go 或 main.go(路径挪了?)")
         }
 
         // ⑮ **整行罗马音的判定阶梯只允许有一份**。

@@ -6,17 +6,15 @@ import (
 	"log"
 	"math"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
 
-// collector 认「此刻在放什么」有两条路:读 App 写的播放状态(契约见 appstate.go),或者自己读播放器(system.go
-// 的 getState)。lyrimuse-features.json 的 collector_playback_source 缺省为 "app";App 状态不可用(退出中、
-// 进程不在、15 秒没写、契约版本不认识)的那几拍临时自己读,可用了自动回来;"own" = 一直自己读。
+// collector 认「此刻在放什么」只读 App 写的播放状态(契约见 appstate.go),自己不读播放器、不推算位置,
+// 也不为此向播放器发 AppleEvent。身份、播放暂停、位置以 App 为准。App 状态不可用(退出中、进程不在、15 秒没写、
+// 契约版本不认识)时待机:当读空处理,连着几拍按停播清掉当前曲目(nullStreakMeansStopped),可用了自动接上。
 //
-// 用 App 状态时,身份、播放暂停、位置以 App 为准,collector 的位置推算、偏置、电台时钟、Amazon 时钟、撕裂快照按住
-// 都不参与,也不向播放器发 AppleEvent。仍由 collector 做的判定照旧跑,输入换成状态里的字段(appPlaybackJudge):
+// 仍由 collector 做的判定照旧跑,输入是状态里的字段(appPlaybackJudge):
 //   - 署名纠正:App 报的原始标签照样逐拍喂给 kugouFixedArtist / trustedFixedTrack;collector 发布的纠正比 App
 //     套用的新(applied_fix_rev 落后)时,身份用 collector 这一拍的结论,其余时候用 App 的。
 //   - 汽水试听段:照样查、照样发布;已经查到而 App 报的仍是试听段长度时,本地先换回整首口径。
@@ -26,25 +24,10 @@ import (
 // 起播与重新对齐看序号,只在同一个 App 进程里比:play_seq 增加且身份不变 = 重新起播(单曲循环);
 // anchor_seq 变了、或换了 App 进程 = 位置重新对齐,立即重推网页进度。
 
-const (
-	playbackSourceApp = "app"
-	playbackSourceOwn = "own"
-	// appStateCheckInterval:快速通道多久看一次状态文件(一次 stat,变了才读)。
-	appStateCheckInterval = time.Second
-)
+// appStateCheckInterval:快速通道多久看一次状态文件(一次 stat,变了才读)。
+const appStateCheckInterval = time.Second
 
-func resolveCollectorPlaybackSource(s string) string {
-	if strings.EqualFold(strings.TrimSpace(s), playbackSourceOwn) {
-		return playbackSourceOwn
-	}
-	return playbackSourceApp
-}
-
-func usesAppPlaybackState() bool {
-	return features().CollectorPlaybackSource != playbackSourceOwn
-}
-
-// appPlaybackJudge:用 App 状态时仍由 collector 做的判定。单测替换。
+// appPlaybackJudge:读 App 状态时仍由 collector 做的判定。单测替换。
 type appPlaybackJudge struct {
 	// fixedTrack:署名纠正,入参是原始标签与时长;ok=false = 不必改。
 	fixedTrack func(bundle, title, artist, album string, duration float64) (fixedArtist, fixedTitle string, ok bool)
@@ -63,7 +46,7 @@ var liveAppPlaybackJudge = appPlaybackJudge{
 	catalog:     liveAppCatalog,
 }
 
-// liveAppFixedTrack 同 fetchRawMediaControlState 里那一步:酷狗与信任播放器两套按 bundle 互斥。
+// liveAppFixedTrack:署名纠正,酷狗与信任播放器两套按 bundle 互斥。
 func liveAppFixedTrack(bundle, title, artist, album string, duration float64) (string, string, bool) {
 	if fixed, ok := kugouFixedArtist(bundle, title, artist, duration); ok {
 		return fixed, title, true
@@ -71,22 +54,26 @@ func liveAppFixedTrack(bundle, title, artist, album string, duration float64) (s
 	return trustedFixedTrack(bundle, title, artist, album, duration)
 }
 
-// liveAppSodaPreview 同 applySodaPreview,只是不改载荷:换算交给调用方。
-func liveAppSodaPreview(bundle, title, artist, album string, duration float64) (float64, float64, bool, bool) {
+// liveAppSodaPreview:汽水试听段。查到就记下(会话时长补正要认,见 noteSodaPreviewKnown)并发布给 App
+// (publishPlayerPreviewFix,按原始标签);查找按洗过的标签。换算交给调用方。
+func liveAppSodaPreview(bundle, rawTitle, rawArtist, rawAlbum string, duration float64) (float64, float64, bool, bool) {
 	if bundle != sodaMusicBundleID {
 		return 0, 0, false, false
 	}
-	p, ok := sodaPreviewFor(artist, title, album, duration, func(found sodaPreview) {
-		publishPlayerPreviewFix(bundle, title, artist, found)
+	title, artist := cleanMediaTag(rawTitle), cleanMediaTag(rawArtist)
+	p, ok := sodaPreviewFor(artist, title, cleanMediaTag(rawAlbum), duration, func(found sodaPreview) {
+		noteSodaPreviewKnown(artist, title, found)
+		publishPlayerPreviewFix(bundle, rawTitle, rawArtist, found)
 	})
 	if !ok {
 		return 0, 0, false, sodaPreviewLookupPending(artist, title)
 	}
-	publishPlayerPreviewFix(bundle, title, artist, p)
+	noteSodaPreviewKnown(artist, title, p)
+	publishPlayerPreviewFix(bundle, rawTitle, rawArtist, p)
 	return p.StartSecs, p.FullSecs, true, false
 }
 
-// liveAppCatalog 同 fetchRawMediaControlState 里的目录锚点:核对通过就记下目录 ID(amll 按它直取歌词)。
+// liveAppCatalog:Apple 目录锚点,核对通过就记下目录 ID(amll 按它直取歌词)。
 func liveAppCatalog(bundle string, trackID int64, trackNumber int, artist, title, album string) (float64, bool) {
 	anchor, ok := appleCatalogAnchor(bundle, trackID, trackNumber, title, album)
 	if !ok {
@@ -110,6 +97,7 @@ type appPlaybackTick struct {
 	tracked        bool
 	ad             bool
 	spotifyTrackID string
+	amazonTrackID  string
 	loopRestart    bool
 	reanchor       bool
 }
@@ -154,14 +142,13 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 	if s.Duration > 0 && s.Position > s.Duration {
 		s.Position = s.Duration
 	}
-	s.Elapsed, s.McTS = s.Position, now
 	key := s.key()
 	anchorSeq := int64(0)
 	if rec.Position != nil {
 		anchorSeq = rec.Position.AnchorSeq
 	}
 	samePID := rec.AppPID == prev.pid
-	tick := appPlaybackTick{snap: s, tracked: true, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID}
+	tick := appPlaybackTick{snap: s, tracked: true, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID, amazonTrackID: t.AmazonTrackID}
 	tick.loopRestart = samePID && key == prev.key && t.PlaySeq > prev.playSeq
 	tick.reanchor = !samePID || tick.loopRestart || anchorSeq != prev.anchorSeq
 	marks.playSeq, marks.anchorSeq, marks.key = t.PlaySeq, anchorSeq, key
@@ -174,7 +161,7 @@ var (
 	appAdKey string
 )
 
-// noteAppReportedAd 记下 App 此刻是不是把这一首判成了广告。不用 App 状态的那几拍传空快照清掉。
+// noteAppReportedAd 记下 App 此刻是不是把这一首判成了广告。App 没认下歌的那几拍传空快照清掉。
 func noteAppReportedAd(s snapshot, ad bool) {
 	k := ""
 	if ad && s.key() != "" {
@@ -201,14 +188,13 @@ type appPlayback struct {
 	usedPID   int
 	usedSeq   int64
 	usedAvail appStateAvailability
-	// active:上一拍用的是 App 状态。path:上一拍走的哪条路,变了才记一行日志。
-	active bool
-	path   string
+	// path:上一拍是在用 App 状态还是在待机,变了才记一行日志。
+	path string
 }
 
 // changed:状态文件自上一拍以来有没有新内容、可用性有没有变。快速通道用。
 func (a *appPlayback) changed(now time.Time) bool {
-	if a == nil || !usesAppPlaybackState() {
+	if a == nil {
 		return false
 	}
 	rec, avail := a.reader.read(now)
@@ -224,7 +210,7 @@ func (a *appPlayback) notePath(path, detail string) {
 	log.Printf("playback source: %s", detail)
 }
 
-// appPlaybackArtworkReader:设备封面改读 App 写的当前封面文件时用的读取器(run() 登记;nil = 不经 App 状态)。
+// appPlaybackArtworkReader:设备封面读 App 写的当前封面文件时用的读取器(run() 登记;nil = 没有封面来源)。
 var (
 	appPlaybackArtworkMu     sync.Mutex
 	appPlaybackArtworkReader *appStateReader
@@ -237,34 +223,33 @@ func setAppPlaybackArtworkSource(r *appStateReader, artworkPath string) {
 	appPlaybackArtworkReader, appPlaybackArtworkPath = r, artworkPath
 }
 
-// appPlaybackArtwork:用 App 状态时这一首的设备封面,取自 App 写的当前封面文件。handled=false = 没在用 App 状态,
-// 调用方照旧问 media-control;handled=true 而 ok=false = App 此刻没有这首的封面(换歌那一拍封面常晚到,
-// settleDeviceCover 之后还会再问),不另起子进程。封面要属于这首(play_seq 相同)、文件校验和与状态里记的一致。
-func appPlaybackArtwork(bundleID, artist, title string) (data []byte, mimeType string, ok, handled bool) {
+// appPlaybackArtwork:这一首的设备封面,取自 App 写的当前封面文件。ok=false = App 此刻没有这首的封面(换歌那一拍
+// 封面常晚到,settleDeviceCover 之后还会再问)。封面要属于这首(play_seq 相同)、文件校验和与状态里记的一致。
+func appPlaybackArtwork(bundleID, artist, title string) (data []byte, mimeType string, ok bool) {
 	appPlaybackArtworkMu.Lock()
 	r, path := appPlaybackArtworkReader, appPlaybackArtworkPath
 	appPlaybackArtworkMu.Unlock()
-	if r == nil || path == "" || !usesAppPlaybackState() {
-		return nil, "", false, false
+	if r == nil || path == "" {
+		return nil, "", false
 	}
 	rec, avail := r.read(time.Now())
 	if avail != appStateAvailable {
-		return nil, "", false, false
+		return nil, "", false
 	}
 	if !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist || rec.Track.Title != title {
-		return nil, "", false, true
+		return nil, "", false
 	}
 	a := rec.Artwork
 	if a == nil || a.PlaySeq != rec.Track.PlaySeq {
-		return nil, "", false, true
+		return nil, "", false
 	}
 	b, err := os.ReadFile(path)
 	if err != nil || len(b) != a.Bytes {
-		return nil, "", false, true
+		return nil, "", false
 	}
 	sum := sha256.Sum256(b)
 	if hex.EncodeToString(sum[:]) != a.SHA256 {
-		return nil, "", false, true
+		return nil, "", false
 	}
-	return b, a.Mime, true, true
+	return b, a.Mime, true
 }

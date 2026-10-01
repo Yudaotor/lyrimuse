@@ -333,7 +333,7 @@ public enum MediaControlClient {
     /// 一处 bundleID 都不认(谁报 `radioStationHash` 就算谁),**只勾 Apple Music 反而是唯一
     /// 不生效的配置**;默认勾着「自动识别」,走 media-control,一直是好的。
     ///
-    /// 补法跟 collector 侧 `refineAppleMusicState` 同义:AppleScript 那份快照整份留着(位置
+    /// 补法:AppleScript 那份快照整份留着(位置
     /// 精度更高,实测 289.7659912109375 vs 目录 289.766),只把那**一个判据字段**补进来。
     ///
     /// # 为什么按曲目探一次,而不是每拍都问
@@ -811,7 +811,7 @@ public enum MediaControlClient {
         if snapshot == nil {
             snapshot = NowPlayingClientsProbe.snapshot(forBundleID: player.bundleIdentifier)
         }
-        // 回退问到的这一份跟主路径过同一道闸(collector 的 focusfallback.go 同样这么做):KKBOX / Amazon 在放播客单集、
+        // 回退问到的这一份跟主路径过同一道闸:KKBOX / Amazon 在放播客单集、
         // 开播那一帧还没有歌手的,主路径会挡下,从这里绕进来的却会被当成一首歌去查歌词、换一次曲目身份丢一次封面。
         // 挡下时不动回退开关:播放器还是那一个,只是这一拍没有可报的歌。
         if let s = snapshot {
@@ -901,7 +901,7 @@ public enum MediaControlClient {
     /// 第一个暂停着的。没开着的不问(不 fork osascript,也不会对从不用它的人弹自动化授权)。
     ///
     /// `snapshotAfterFocusLost` 那条回退只在「上一份被接受的快照」存在时才走,通道一启动就坏的话开关永远点不亮,
-    /// 播放器停一次也会关掉,这条补的是它。collector 侧同一件事在 mediacontrolchannel.go,两侧口径一致。
+    /// 播放器停一次也会关掉,这条补的是它。
     private static func snapshotWhileChannelBroken(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
         appleMusicFocusLock.lock()
         let broken = channelLooksBroken(execFailures: channelExecFailures, testFailed: channelTestFailed)
@@ -1082,8 +1082,7 @@ public enum MediaControlClient {
     /// 网易云 / 酷狗 / 汽水音乐都没有字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),继续走
     /// media-control,这里原样放行。
     ///
-    /// 跟 collector 侧 `refineAppleMusicState` / `refineSpotifyState` 必须同一口径:
-    /// **AppleScript 那份整份顶替**,只有 MediaRemote 独有的键留给 media-control。
+    /// 口径:**AppleScript 那份整份顶替**,只有 MediaRemote 独有的键留给 media-control。
     ///
     /// 别改回"只借 `elapsedTime`、且要跟 media-control 差 2 秒以内才肯借":media-control
     /// 的锚点整体偏掉 2 秒以上时,真值会被那道闸自己挡在门外,而伺服同时也看不见误差
@@ -1101,8 +1100,7 @@ public enum MediaControlClient {
         // 真值,跟普通曲目一样整份顶替,只把电台标记带过去。
         let perTrackRadio = mediaControl.isRadio == true && radioTrackIsPerTrack(mediaControl.trackKey)
         guard mediaControl.isRadio != true || perTrackRadio else { return mediaControl }
-        // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个
-        // 放弃 —— 跟 collector 侧 refineAppleMusicState / refineSpotifyState 的 `return raw` 同一条退路。
+        // 拿不到(没授「自动化」权限 / 播放器不可达 / 超时)一律退回 media-control 这份,不整个放弃。
         switch bundleID {
         case PlaybackPlayer.appleMusic.bundleIdentifier:
             // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
@@ -1588,7 +1586,7 @@ public enum MediaControlClient {
     /// 按锚点外推超过曲长多少还当它在播。循环每一遍都会重发锚点,超出曲长还没新锚点就是停了。
     public nonisolated static let rateOnlyPlayingOverrunSecs: TimeInterval = 2
 
-    /// 这一份读数算不算在播。纯函数,selftest 直接覆盖;Go 侧 `effectivePlaying` 同一套规则。
+    /// 这一份读数算不算在播。纯函数,selftest 直接覆盖。
     public nonisolated static func effectivePlaying(
         bundleID: String?, playing: Bool?, playbackRate: Double?,
         elapsedTime: Double?, timestamp: Date?, duration: Double?, now: Date
@@ -2029,7 +2027,7 @@ public enum MediaControlClient {
             let reading = watcher.reading(
                 trackKey: trackKey, metadataTimestamp: timestampDate, playing: playing == true,
                 pauseObservedAt: Self.lastPauseObservedAt(), now: sampledAt,
-                pid: raw.processIdentifier.map { pid_t($0) }, duration: raw.duration, artist: raw.artist, title: raw.title)
+                pid: raw.processIdentifier.map { pid_t($0) }, duration: raw.duration)
             if reading.staleMetadata {
                 setSnapshotFailure(.targetNotPlayingMusic)
                 return nil
@@ -2053,8 +2051,7 @@ public enum MediaControlClient {
             // 电台把锚点也换成自己那块表:留着原始值会让下游"锚点是不是开播那个"的判定
             // (anchorElapsedTime == 0)按整档节目的钟去解读,自相矛盾。
             anchorElapsedTime: amazonPosition ?? radioPosition ?? raw.elapsedTime,
-            isRadio: isRadio ? true : nil,
-            anchorStartCorrection: startCorrection
+            isRadio: isRadio ? true : nil
         )
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(决策 41)。
@@ -2100,7 +2097,7 @@ public enum MediaControlClient {
             elapsedTime: position + now.timeIntervalSince(notice.receivedAt) * rate,
             playing: true, playbackRate: mediaControl.playbackRate, isMusicApp: mediaControl.isMusicApp,
             bundleIdentifier: mediaControl.bundleIdentifier, anchorElapsedTime: nil, isRadio: mediaControl.isRadio,
-            capturedAt: now, anchorStartCorrection: nil)
+            capturedAt: now)
     }
 
     /// 开播时通知比 MediaRemote 的锚点先到(实测早约 1s),这点提前量仍算同一段播放。

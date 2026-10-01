@@ -128,12 +128,9 @@ func loadFeatureFlagsFromJSON(t *testing.T, body string) featureFlags {
 	return loadFeatureFlags(path)
 }
 
-// Apple Music 那条路径(getAppleMusicState,JXA 直接 unmarshal)原来绕过了
-// cleanMediaTag —— 标签里的 NBSP/零宽字符会原样进 Last.fm,在那边建出一个跟正常写法
-// 肉眼完全一样、实际却是另一个实体的条目;而 enrichKey 那边又洗过,两边口径不一致。
-//
-// 这里直接测 cleanMediaTag 本身(getAppleMusicState 要跑 osascript,测不了),钉住
-// "洗什么、不洗什么"——**洗 ≠ 改写**:只规范化不可见字符,绝不动可见内容。
+// 标签里的 NBSP/零宽字符要是原样进 Last.fm,会在那边建出一个跟正常写法肉眼完全一样、实际却是另一个实体的
+// 条目;而 enrichKey 那边又洗过,两边口径不一致。这里钉住 cleanMediaTag "洗什么、不洗什么"——
+// **洗 ≠ 改写**:只规范化不可见字符,绝不动可见内容。
 func TestCleanMediaTagScope(t *testing.T) {
 	cases := []struct {
 		name string

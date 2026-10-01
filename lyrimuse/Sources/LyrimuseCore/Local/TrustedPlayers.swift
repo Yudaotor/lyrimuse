@@ -135,8 +135,6 @@ public enum TrustedPlayers {
     /// 是没有这个键),只有 Apple Music 有。内置播放器不走这条(各有既有守卫),只有一个例外:
     /// `artistArrivesLate` 的播放器(KKBOX)开播先发一帧没有歌手的,那一帧照样拦 —— 它当信任播放器时
     /// 本来就被这条挡着,内置化不能把它放进来。专辑名对内置播放器不作要求。
-    ///
-    /// 跟 collector 的 trustedPlaybackNotASong 是同一套语义,两侧必须同时改。
     public static func notASong(bundleID: String?, artist: String?, album: String?) -> Bool {
         notASong(bundleID: bundleID, artist: artist, album: album, trusted: current)
     }
@@ -154,9 +152,7 @@ public enum TrustedPlayers {
         }
         // 走 isTrusted 而不是裸查 trusted[bundleID]:Safari 的播放报的是媒体代理进程
         // com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,裸查永远落空 →
-        // 这道守卫对 Safari 恒不生效,Safari 播非歌曲视频(album 为空)会被当成一首歌
-        // (修,collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修,
-        // 见 system.go getAutoDetectedState 那处的完整案情)。
+        // 这道守卫对 Safari 恒不生效,Safari 播非歌曲视频(album 为空)会被当成一首歌。
         guard isTrusted(bundleID, trusted: trusted) else { return false }
         return blank(artist) || blank(album)
     }
@@ -164,7 +160,7 @@ public enum TrustedPlayers {
     /// `artistlessNotMusic` 的内置播放器报了一份歌手空、但时长已经有了而且在放的快照:不是开播那一帧(那一帧时长 0、
     /// 没在放),是本来就没有歌手的非歌曲内容(KKBOX、Amazon Music 的播客单集)。KKBOX 的 title 是 Chromium 拿窗口标题凑的,
     /// 不能当曲名(见 02 章决策 62)。调用方当成「没在放音乐」(`MediaControlClient.artistlessContentNotMusic`)。
-    /// 跟 collector 的 builtinArtistlessContent 同一套语义。纯函数,selftest 直接覆盖。
+    /// 纯函数,selftest 直接覆盖。
     public static func artistlessContent(bundleID: String?, artist: String?, duration: Double?, playing: Bool?) -> Bool {
         guard let bundleID, PlaybackPlayer.builtin(forBundleID: bundleID)?.artistlessNotMusic == true else { return false }
         guard (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }

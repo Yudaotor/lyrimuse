@@ -13,8 +13,7 @@ import NaturalLanguage
 
 // 端上歌词翻译小助手。collector(Go)没法调 Apple 的 Translation 框架,所以把这一步拆成
 // 一个独立的 Swift 可执行文件打包进 Contents/Resources/,由 collector 按相对路径调用 ——
-// 跟已有的 media-control 完全同一个形态(见 lyrimuse-collector/system.go 的
-// mediaControlBinaryPath)。
+// 跟 App 包里的 media-control 同一个形态。
 //
 // 为什么值得这么绕:系统翻译是**端上**的,不联网、无配额、歌词根本不出这台机器。相比之下
 // MyMemory 那条网络兜底路匿名只有约 5000 字符/天(实测翻三四首歌就用光了),而且要把歌词

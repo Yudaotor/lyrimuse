@@ -32,23 +32,6 @@ func appSourceRec(pid int, playSeq, anchorSeq int64, title string, at time.Time)
 	}
 }
 
-func withPlaybackSource(t *testing.T, source string) {
-	t.Helper()
-	old := features()
-	f := old
-	f.CollectorPlaybackSource = source
-	setFeatures(f)
-	t.Cleanup(func() { setFeatures(old) })
-}
-
-func TestResolveCollectorPlaybackSource(t *testing.T) {
-	for in, want := range map[string]string{"": "app", "app": "app", "own": "own", " OWN ": "own", "whatever": "app"} {
-		if got := resolveCollectorPlaybackSource(in); got != want {
-			t.Fatalf("resolveCollectorPlaybackSource(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // 契约样例换成的快照:身份、播放器、在播、曲长、外推到此刻的位置、Spotify 曲目 ID;第一份状态算重新对齐。
 func TestAppPlaybackTickMapsAppState(t *testing.T) {
 	rec := loadAppStateFixture(t, "playing-spotify.json")
@@ -268,10 +251,8 @@ func writeAppStateFile(t *testing.T, path string, rec appStateRecord) {
 	}
 }
 
-// 设备封面改读 App 写的当前封面文件:属于这首、校验和对得上才给;不是这首 / 对不上 → 没有,但不再问 media-control;
-// 没登记读取器 → 交回 media-control。
+// 设备封面读 App 写的当前封面文件:属于这首、校验和对得上才给;不是这首 / 对不上 / 没登记读取器 → 没有。
 func TestAppPlaybackArtwork(t *testing.T) {
-	withPlaybackSource(t, playbackSourceApp)
 	dir := t.TempDir()
 	statePath, artPath := filepath.Join(dir, "state.json"), filepath.Join(dir, "artwork")
 	art := []byte("fake jpeg bytes")
@@ -285,33 +266,33 @@ func TestAppPlaybackArtwork(t *testing.T) {
 	writeAppStateFile(t, statePath, rec)
 	setAppPlaybackArtworkSource(nil, "")
 	t.Cleanup(func() { setAppPlaybackArtworkSource(nil, "") })
-	if _, _, _, handled := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); handled {
-		t.Fatal("no reader registered: leave it to media-control")
+	if _, _, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); ok {
+		t.Fatal("no reader registered: no artwork")
 	}
 	setAppPlaybackArtworkSource(newAppStateReader(statePath), artPath)
-	data, mime, ok, handled := appPlaybackArtwork("com.apple.Music", "Singer", "Song")
-	if !handled || !ok || mime != "image/jpeg" || string(data) != string(art) {
-		t.Fatalf("matching track and checksum: got ok=%v handled=%v mime=%q", ok, handled, mime)
+	data, mime, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Song")
+	if !ok || mime != "image/jpeg" || string(data) != string(art) {
+		t.Fatalf("matching track and checksum: got ok=%v mime=%q", ok, mime)
 	}
-	if _, _, ok, handled := appPlaybackArtwork("com.apple.Music", "Singer", "Other"); ok || !handled {
-		t.Fatalf("another track: no artwork, no media-control: ok=%v handled=%v", ok, handled)
+	if _, _, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Other"); ok {
+		t.Fatal("another track: no artwork")
 	}
 	rec.Artwork.PlaySeq = 3
 	rec.Seq = 2
 	writeAppStateFile(t, statePath, rec)
-	if _, _, ok, _ := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); ok {
+	if _, _, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); ok {
 		t.Fatal("artwork of an earlier play is not this one")
 	}
 	rec.Artwork.PlaySeq, rec.Artwork.SHA256, rec.Seq = 4, "00", 3
 	writeAppStateFile(t, statePath, rec)
-	if _, _, ok, _ := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); ok {
+	if _, _, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); ok {
 		t.Fatal("checksum mismatch: not used")
 	}
 }
 
-// poller 先试 App 状态:可用就用;文件没了 / 开关为 own 就交回自己读。快速通道只在有新东西时跑一轮。
-func TestReadAppPlaybackAndFallback(t *testing.T) {
-	withPlaybackSource(t, playbackSourceApp)
+// poller 只读 App 状态:可用就用;不可用就待机 —— 当读空,连着几拍、持续够久才按停播清掉,可用了接上。
+// 快速通道只在有新东西时跑一轮。
+func TestReadAppPlaybackAndStandby(t *testing.T) {
 	t.Cleanup(func() { noteAppReportedAd(snapshot{}, false) })
 	path := filepath.Join(t.TempDir(), "state.json")
 	writeAppStateFile(t, path, appSourceRec(os.Getpid(), 1, 1, "Song", time.Now()))
@@ -320,8 +301,8 @@ func TestReadAppPlaybackAndFallback(t *testing.T) {
 	if !p.app.changed(time.Now()) {
 		t.Fatal("a state nobody has used yet is new")
 	}
-	if _, re, _, ok := p.readAppPlayback(); !ok || !re || p.cur.Title != "Song" || !p.app.active {
-		t.Fatalf("usable App state should be used: ok=%v cur=%+v", ok, p.cur)
+	if _, re, _ := p.readAppPlayback(); !re || p.cur.Title != "Song" || p.app.path != "app" {
+		t.Fatalf("usable App state should be used: re=%v cur=%+v path=%q", re, p.cur, p.app.path)
 	}
 	if p.app.changed(time.Now()) {
 		t.Fatal("nothing new since the last tick")
@@ -335,16 +316,25 @@ func TestReadAppPlaybackAndFallback(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, ok := p.readAppPlayback(); ok || p.app.active {
-		t.Fatal("missing state: read the players directly")
+	if !p.app.changed(time.Now()) {
+		t.Fatal("availability changed: the fast path runs a tick")
+	}
+	if _, re, loop := p.readAppPlayback(); re || loop || p.cur.Title != "Song" || p.app.path != "standby:missing" {
+		t.Fatalf("first standby tick keeps the track: re=%v loop=%v cur=%+v path=%q", re, loop, p.cur, p.app.path)
+	}
+	p.readAppPlayback()
+	p.readAppPlayback()
+	if p.cur.Title != "Song" {
+		t.Fatal("three empty ticks inside nullClearMinWait still keep the track")
+	}
+	p.nullSince = time.Now().Add(-nullClearMinWait)
+	p.readAppPlayback()
+	if p.cur.key() != "" {
+		t.Fatalf("standby long enough: stopped, got %+v", p.cur)
 	}
 	writeAppStateFile(t, path, appSourceRec(os.Getpid(), 1, 1, "Song", time.Now()))
-	withPlaybackSource(t, playbackSourceOwn)
-	if _, _, _, ok := p.readAppPlayback(); ok {
-		t.Fatal("collector_playback_source=own: read the players directly")
-	}
-	if p.app.changed(time.Now()) {
-		t.Fatal("own mode never asks for a fast-path poll")
+	if _, _, _ = p.readAppPlayback(); p.cur.Title != "Song" || p.app.path != "app" || p.nullStreak != 0 {
+		t.Fatalf("App state usable again: picked up, cur=%+v path=%q streak=%d", p.cur, p.app.path, p.nullStreak)
 	}
 	var nilApp *appPlayback
 	if nilApp.changed(time.Now()) {

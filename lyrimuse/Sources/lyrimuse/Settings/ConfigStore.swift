@@ -95,9 +95,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // "推送账号"tab 管理 collector 推送目的地凭据的数据层——读写 collector 自己的
 // ~/.config/lyrimuse/config.json(见 collector/config.go 的 `config`
 // struct)。照抄 EnrichCacheStore.swift 的模式:用 JSONSerialization 读写整份原始
-// 字典而不是用 Codable 精确建模——这份文件里还有 api_root/media_control_path/
-// bundle_ids 这几个这次 UI 不管的字段,整字典读写才能保证保存时原样保留它们,不会
-// 被这里没声明的字段悄悄丢掉。
+// 字典而不是用 Codable 精确建模——这份文件里还有 api_root 这类 UI 不管的字段,整字典读写
+// 才能保证保存时原样保留它们,不会被这里没声明的字段悄悄丢掉。
 //
 // 文本字段不走 Toggle 那种"改了立刻存盘+重启"的即时保存——不能每敲一个字符就重启一次
 // collector,所以持久化是一个显式调用点。

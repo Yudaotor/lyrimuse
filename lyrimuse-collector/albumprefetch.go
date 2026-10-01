@@ -261,9 +261,8 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 }
 
 // albumTracksFromMusicApp 用 AppleScript 问 Music.app 本地库里这张专辑都有哪些曲目
-// (名字/歌手/时长)——跟 system.go 的 appleMusicPosition 同一个手法(本地 AppleScript,
-// 不联网,只有 Music.app 在跑才有意义)。任何一步失败都返回 ok=false,调用方直接放弃
-// 这次预取,不影响正常播放/解析路径。
+// (名字/歌手/时长)——本地 AppleScript,不联网,只有 Music.app 在跑才有意义。任何一步失败
+// 都返回 ok=false,调用方直接放弃这次预取,不影响正常播放/解析路径。
 func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
@@ -271,8 +270,7 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	// 塞转义序列——更不容易写错,也不用担心 Go/AppleScript 两层转义规则互相打架。
 	// 先判 running 再 tell:`tell application "Music"` 只要发出任何命令就会**启动**
 	// Music.app —— 一个只用 Spotify/QQ 音乐的用户会被每换一张专辑就静默拉起一次 Apple
-	// Music。本仓其它几段 Music/Spotify 脚本(getStateScript、spotifyPositionScript)
-	// 开头都有同样的守卫,同一个理由。
+	// Music。本仓其它问 Music / Spotify 的脚本开头都有同样的守卫,同一个理由。
 	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
 	// 纪录片)挡在 AppleScript 这一层——例如 Michael Jackson《XSCAPE
 	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的

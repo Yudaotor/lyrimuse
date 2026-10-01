@@ -105,8 +105,6 @@ type trustedLyricArtistState struct {
 	// 改之前先复制(状态按值传递,别让两份状态共用底层数组 / map)。
 	adopted   []trustedIdentity
 	retracted map[trustedIdentity]bool
-	// fix:判定成立后这一拍给出的纠正,trustedKnownFix 读。
-	fix trustedIdentity
 }
 
 // advanceTrustedLyricArtist 推进一拍并返回新状态。纯函数。
@@ -361,7 +359,6 @@ func trustedFixedTrack(bundle, title, artist, album string, duration float64) (f
 		retract = noteTrustedAdoptedLocked(&next, id, album)
 	}
 	if next.poisoned && valid {
-		next.fix = id
 		publishTrustedFixLocked(bundle, next, id)
 	}
 	trustedLyricArtistValue = next
@@ -521,24 +518,6 @@ func publishTrustedFixLocked(bundle string, st trustedLyricArtistState, id trust
 		}
 	}
 	publishPlayerTrackFix(fix)
-}
-
-// trustedKnownFix 只查已经判定下来的结论,自己不判定。给另外再问一次 media-control 的调用点(封面)
-// 对齐署名与曲名用,理由同 kugouKnownArtistFix。传播放器原样报的两个字段。
-func trustedKnownFix(bundle, rawArtist, rawTitle string) (fixedArtist, fixedTitle string, ok bool) {
-	trustedLyricArtistMu.Lock()
-	defer trustedLyricArtistMu.Unlock()
-	st := trustedLyricArtistValue
-	if !st.poisoned || st.bundle != bundle || st.fix.artist == "" {
-		return "", "", false
-	}
-	if st.rot == rotTitle && st.refArtist != rawArtist {
-		return "", "", false
-	}
-	if st.rot != rotTitle && st.refTitle != rawTitle {
-		return "", "", false
-	}
-	return st.fix.artist, st.fix.title, true
 }
 
 // restoreTrustedLyricArtistConfirmed 把上一个进程留在 lyrimuse-player-artist-fix.json 里的播放器级

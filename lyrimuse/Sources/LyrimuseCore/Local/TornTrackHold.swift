@@ -2,7 +2,7 @@ import Foundation
 
 /// 换曲时系统先发布新标题、歌手 / 专辑 / 时长 / 播放器还停在上一首的那种快照(「撕裂快照」),按住不采纳。
 ///
-/// 判据与 collector 的 `tornTrackChange` / `holdTornTrackChange` 逐字一致:只换了标题,其余逐位不变,
+/// 判据:只换了标题,其余逐位不变,
 /// 不是电台(电台的时长是整档节目,不参与判定)。按住最多 `maxHold`;形态解除(身份变了或时长跟上来了)立即放行。
 /// 见 09 章决策 69。
 public struct TornTrackHold: Sendable {

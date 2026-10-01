@@ -46,6 +46,11 @@ func runPlaybackStateTests() {
     withSpotifyID.spotifyTrackID = "4iJyoBOLtHqaGxP12qzhQI"
     expectEqual(spotifyTracker.advance(withSpotifyID, now: t0).track?.spotifyTrackID, "4iJyoBOLtHqaGxP12qzhQI",
                 "播放状态: Spotify 曲目 ID 原样写进 track")
+    var amazonTracker = F.Tracker()
+    var withAmazonID = input(pos: 0.5, player: "com.amazon.music")
+    withAmazonID.amazonTrackID = "asin://B09GYHYMRR"
+    expectEqual(amazonTracker.advance(withAmazonID, now: t0).track?.amazonTrackID, "asin://B09GYHYMRR",
+                "播放状态: Amazon 日志曲目标识原样写进 track")
     let c2 = tracker.advance(input(pos: 2.5), now: t0.addingTimeInterval(2))
     expectEqual(c2, c1, "播放状态: 连续播放不重写位置(读方外推),整份内容不变")
     let c3 = tracker.advance(input(pos: 2.6), now: t0.addingTimeInterval(2))
@@ -120,7 +125,7 @@ func runPlaybackStateTests() {
     expectEqual(exitJSON["state"] as? String, "exiting", "播放状态: 退出写 exiting")
     expectEqual(exitJSON["track"] == nil, true, "播放状态: 退出不带曲目")
 
-    // ---- 撕裂快照守卫(判据与 collector tornTrackChange 逐字一致) ----
+    // ---- 撕裂快照守卫 ----
     typealias T = TornTrackHold
     let cur = T.Fields(title: "Song A", artist: "Singer", album: "Album", bundle: "com.apple.Music", duration: 200, isRadio: false)
     var torn = cur

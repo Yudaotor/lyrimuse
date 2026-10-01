@@ -447,17 +447,11 @@ func main() {
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 	setParserDriftPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-parser-drift.json"))
-	// 启动时先验一次 media-control 通道:系统更新弄坏它之后,开机第一拍就得知道该直问播放器。
-	maybeTestMediaControlChannel(true)
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
 	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
 	// App 侧改歌词缓存的请求目录(见 enrichedit.go)——跟 Swift 那边 EnrichEditChannel 的目录名逐字节一致。
 	setEnrichEditDir(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-requests"))
-	// App 量出的 Spotify 锚点偏置(见 positionbias.go)——跟 Swift 那边 PositionBiasFile.fileName 逐字节一致。
-	setPositionBiasPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-position-bias.json"))
-	// Amazon Music 自动连播的提前量(App 读界面校准,见 amazonmusic.go amazonLeadFor)。
-	setAmazonLeadPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-amazon-lead.json"))
 	// 「歌词管理」的「重试无歌词条目」请求文件 + 进度状态文件(见 lyricsfillsweep.go)。
 	setLyricsFillPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
@@ -479,8 +473,7 @@ func main() {
 		stop()
 	}()
 
-	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
-		clientName, clientVersion, cfg.BundleIDs, *dryRun)
+	log.Printf("%s %s starting (dry-run: %v)", clientName, clientVersion, *dryRun)
 	// 紧跟在版本行后面:排查任何行为差异之前,先把"配置不一样"这个变量排除掉。
 	logFeatureSnapshot()
 	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。

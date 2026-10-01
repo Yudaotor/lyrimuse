@@ -68,8 +68,8 @@ func TestSodaPickPreview(t *testing.T) {
 	}
 }
 
-// 本地队列里有这首(推荐流里的歌):同步命中,原始载荷被换成原曲口径,并发布给 App。
-func TestApplySodaPreviewFromLocalQueue(t *testing.T) {
+// 本地队列里有这首(推荐流里的歌):同步命中,交回试听段起点与整首时长,并发布给 App(按原始标签)。
+func TestLiveAppSodaPreviewFromLocalQueue(t *testing.T) {
 	tr := sodaTestTrack("一分之二", "HUSH|孙盛希", "出没地带", 282801, 1, 0)
 	tr["preview"] = map[string]any{"start": 240000, "duration": 30001}
 	path := writeTestSodaQueue(t, []map[string]any{tr})
@@ -78,13 +78,9 @@ func TestApplySodaPreviewFromLocalQueue(t *testing.T) {
 	setPlayerPreviewFixPath(fix)
 	t.Cleanup(func() { setPlayerPreviewFixPath("") })
 
-	raw := mediaControlRawState{Title: "一分之二", Artist: "HUSH, 孙盛希", Album: "出没地带",
-		BundleID: sodaMusicBundleID, Duration: 30, ElapsedTime: 6, Playing: true}
-	if ok, _ := applySodaPreview(&raw); !ok {
-		t.Fatalf("本地队列里有这首的试听段,应该换算")
-	}
-	if raw.Duration != 282.801 || raw.ElapsedTime != 246 {
-		t.Fatalf("换算结果不对: duration %v elapsed %v", raw.Duration, raw.ElapsedTime)
+	start, full, known, _ := liveAppSodaPreview(sodaMusicBundleID, "一分之二", "HUSH, 孙盛希", "出没地带", 30)
+	if !known || start != 240 || full != 282.801 {
+		t.Fatalf("本地队列里有这首的试听段: start %v full %v known %v", start, full, known)
 	}
 	data, err := os.ReadFile(fix)
 	if err != nil {
@@ -95,11 +91,10 @@ func TestApplySodaPreviewFromLocalQueue(t *testing.T) {
 		t.Fatalf("发布内容不对: %s", data)
 	}
 
-	other := mediaControlRawState{Title: "一分之二", Artist: "HUSH, 孙盛希", BundleID: "com.netease.163music", Duration: 30, ElapsedTime: 6}
-	if ok, _ := applySodaPreview(&other); ok {
-		t.Errorf("别的播放器不动")
+	if _, _, known, _ := liveAppSodaPreview("com.netease.163music", "一分之二", "HUSH, 孙盛希", "", 30); known {
+		t.Errorf("别的播放器不查")
 	}
-	// 会话开在还没换算的那一拍(记的是试听段 30s),这一拍已是整首:补成整首,否则试听 30 秒就算收听。
+	// 会话开在还没查到的那一拍(记的是试听段 30s),这一拍已是整首:补成整首,否则试听 30 秒就算收听。
 	if !sodaPreviewSessionBackfill(sodaMusicBundleID, "HUSH, 孙盛希", "一分之二", 30, 282.801) {
 		t.Errorf("会话时长应补成整首")
 	}
@@ -107,20 +102,16 @@ func TestApplySodaPreviewFromLocalQueue(t *testing.T) {
 		t.Errorf("会话时长不是试听段长度的不碰(换曲预载窗口里的脏时长)")
 	}
 	if sodaPreviewSessionBackfill(sodaMusicBundleID, "别人", "别的歌", 30, 282.801) {
-		t.Errorf("不是刚换算过的那一首不碰")
+		t.Errorf("不是刚查到试听段的那一首不碰")
 	}
 }
 
-// 本地没有:先在后台搜,这一拍原样不动;搜到之后下一拍换算。
-func TestApplySodaPreviewViaSearch(t *testing.T) {
+// 本地没有:先在后台搜,这一拍报「还在搜」;搜到那一刻就发布、记下(App 可能先于下一拍换成整首),之后交回换算参数。
+func TestLiveAppSodaPreviewViaSearch(t *testing.T) {
 	path := writeTestSodaQueue(t, nil)
 	resetSodaLocalIndex(t, path)
 	calls := 0
 	old := sodaPreviewSearchFn
-	sodaPreviewSearchFn = func(ctx context.Context, artist, title, album string, mr float64) (sodaPreview, bool) {
-		calls++
-		return sodaPreview{StartSecs: 120.96, DurSecs: 60.001, FullSecs: 228.023}, true
-	}
 	t.Cleanup(func() {
 		sodaPreviewSearchFn = old
 		sodaPreviewMu.Lock()
@@ -137,9 +128,8 @@ func TestApplySodaPreviewViaSearch(t *testing.T) {
 		<-release
 		return sodaPreview{StartSecs: 120.96, DurSecs: 60.001, FullSecs: 228.023}, true
 	}
-	raw := mediaControlRawState{Title: "花田错", Artist: "王力宏", Album: "盖世英雄", BundleID: sodaMusicBundleID, Duration: 60, ElapsedTime: 3}
-	if ok, pending := applySodaPreview(&raw); ok || !pending {
-		t.Fatalf("第一拍还没搜到:不换算,但要报「还在搜」(先别解析歌词), ok=%v pending=%v", ok, pending)
+	if _, _, known, pending := liveAppSodaPreview(sodaMusicBundleID, "花田错", "王力宏", "盖世英雄", 60); known || !pending {
+		t.Fatalf("第一拍还没搜到:不换算,但要报「还在搜」(先别解析歌词), known=%v pending=%v", known, pending)
 	}
 	close(release)
 	deadline := time.Now().Add(2 * time.Second)
@@ -152,7 +142,6 @@ func TestApplySodaPreviewViaSearch(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	raw = mediaControlRawState{Title: "花田错", Artist: "王力宏", Album: "盖世英雄", BundleID: sodaMusicBundleID, Duration: 60, ElapsedTime: 5}
 	// 搜到的那一刻就该已经发布给 App,不等这一拍。
 	data, err := os.ReadFile(fix)
 	if err != nil {
@@ -162,22 +151,15 @@ func TestApplySodaPreviewViaSearch(t *testing.T) {
 	if err := json.Unmarshal(data, &st); err != nil || st.PreviewStart != 120.96 || st.Title != "花田错" {
 		t.Fatalf("发布内容不对: %s", data)
 	}
-	if ok, _ := applySodaPreview(&raw); !ok || math.Abs(raw.ElapsedTime-125.96) > 1e-9 || raw.Duration != 228.023 {
-		t.Fatalf("搜到之后应该换算: %+v", raw)
+	// App 抢在下一拍之前套上纠正、直接报整首:会话时长照样补得上。
+	if !sodaPreviewSessionBackfill(sodaMusicBundleID, "王力宏", "花田错", 60.001, 228.023) {
+		t.Error("搜到即记下,App 先换成整首时会话时长也要补")
+	}
+	start, full, known, _ := liveAppSodaPreview(sodaMusicBundleID, "花田错", "王力宏", "盖世英雄", 60)
+	if !known || math.Abs(start-120.96) > 1e-9 || full != 228.023 {
+		t.Fatalf("搜到之后交回换算参数: start %v full %v known %v", start, full, known)
 	}
 	if calls != 1 {
 		t.Errorf("同一首只搜一次,实际 %d 次", calls)
-	}
-}
-
-// 「试听段还在搜」要一路带到 snapshot,poller 靠它先不解析歌词。
-func TestExtractCarriesSodaPreviewPending(t *testing.T) {
-	s := extract(map[string]any{"title": "花田错", "artist": "王力宏", "bundleIdentifier": sodaMusicBundleID,
-		"duration": 60.0, "elapsedTime": 3.0, "playing": true, "sodaPreviewPending": true})
-	if !s.SodaPreviewPending {
-		t.Fatalf("SodaPreviewPending 没带到 snapshot")
-	}
-	if extract(map[string]any{"title": "x", "artist": "y"}).SodaPreviewPending {
-		t.Fatalf("缺字段时应为 false")
 	}
 }

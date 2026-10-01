@@ -24,7 +24,7 @@ public enum PlaybackStateFile {
 
     /// 位置跟上一份写出的外推值差出这么多才重写位置(并让 `anchor_seq` 加一)。
     public static let positionRepublishToleranceSecs = 0.25
-    /// 单曲循环判据,与 collector 的 `loopRestartMinElapsedFrac` / `loopRestartMaxNewElapsedSecs` 一致。
+    /// 单曲循环判据:上一拍放到曲长的这个比例之后、这一拍回到开头这么多秒以内,算同一首重新起播(play_seq 加一)。
     public static let loopRestartMinElapsedFrac = 0.9
     public static let loopRestartMaxNewElapsedSecs = 10.0
 
@@ -82,6 +82,8 @@ public enum PlaybackStateFile {
         /// Spotify 原生播放时这首的曲目 ID(`spotify:track:` 之后那段),来自 Spotify 自己的播放通知、按歌名歌手核对过;
         /// 别的播放器 / 没收到通知为 nil。
         public var spotifyTrackID: String? = nil
+        /// Amazon Music 时这首在它日志里的曲目标识(`asin://…`),位置是按日志算出来的那一拍才有。
+        public var amazonTrackID: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -94,6 +96,7 @@ public enum PlaybackStateFile {
             case musicVideo = "music_video"
             case radio, ad
             case spotifyTrackID = "spotify_track_id"
+            case amazonTrackID = "amazon_track_id"
         }
     }
 
@@ -203,12 +206,13 @@ public enum PlaybackStateFile {
         /// 此刻的播放位置(秒);没有位置(播着但还没有时长的那一拍)为 nil。
         public var positionSecs: Double?
         public var spotifyTrackID: String?
+        public var amazonTrackID: String?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
                     musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
-                    spotifyTrackID: String? = nil) {
+                    spotifyTrackID: String? = nil, amazonTrackID: String? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -225,6 +229,7 @@ public enum PlaybackStateFile {
             self.ad = ad
             self.positionSecs = positionSecs
             self.spotifyTrackID = spotifyTrackID
+            self.amazonTrackID = amazonTrackID
         }
 
         public static func idle() -> Input {
@@ -281,7 +286,8 @@ public enum PlaybackStateFile {
                 playSeq: playSeq, title: input.title, artist: input.artist, album: input.album, raw: input.raw,
                 appliedFixRev: input.appliedFixRev, durationSecs: input.durationSecs,
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
-                musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID)
+                musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID,
+                amazonTrackID: input.amazonTrackID)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }

@@ -26,7 +26,7 @@ import (
 //
 // 本地歌词**不是歌词源**(同 KKBOX 本地歌词,见 kkboxlyrics.go 头注):不能按歌名搜,只在正用 Amazon Music 放歌时读,
 // 不进源清单、没有开关。players.json 里 Amazon Music 的 nativeLyricSource 填 amazonLocalLyricsSource,享受同源加权。
-// 身份靠 ASIN(当前这首来自日志,队列里的来自 amazonUpcoming 记下的对照),不靠歌名猜。
+// 身份靠 ASIN(当前这首来自 App 读日志认出的曲目标识,队列里的来自 amazonUpcoming 记下的对照),不靠歌名猜。
 
 // amazonLocalLyricsSource:Amazon Music 本地歌词那份候选的来源名。
 const amazonLocalLyricsSource = "amazon"
@@ -185,13 +185,13 @@ func amazonTrackIdentity(artist, title string) string {
 	return loosenEnrichKey(artist) + "\x00" + loosenEnrichKey(normEnrichTitle(title))
 }
 
-// amazonASINFor:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ASIN。当前这首取时钟那一拍记下的,队列里的取
-// amazonUpcoming 记下的,都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。认不出返回 ""。
+// amazonASINFor:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ASIN。当前这首取 App 报的(noteAmazonCurrentTrack),
+// 队列里的取 amazonUpcoming 记下的,都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。认不出返回 ""。
 // 会取 enrichMu(经 amazonCachedASIN):调用方不能持着它。
 func amazonASINFor(artist, title string) string {
-	amazonClockMu.Lock()
+	amazonCurrentMu.Lock()
 	cur := amazonCurrentTrack
-	amazonClockMu.Unlock()
+	amazonCurrentMu.Unlock()
 	if cur.trackID != "" && amazonTrackIdentity(cur.artist, cur.title) == amazonTrackIdentity(artist, title) {
 		if asin, ok := strings.CutPrefix(cur.trackID, "asin://"); ok {
 			return asin
@@ -381,19 +381,14 @@ func parseAmazonQueueLine(line string) ([]string, bool) {
 // 一首都查不到时:放的是电台(云端队列)就不预取 —— 同专辑的歌放不到,整张专辑解析一遍只会跟正在放的那首抢歌词源;
 // 歌单 / 专辑才退回同专辑预取。
 func amazonUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	amazonClockMu.Lock()
+	amazonCurrentMu.Lock()
 	cur := amazonCurrentTrack
-	var queue []string
-	cloudQueue := false
-	if amazonClockTail != nil {
-		queue = slices.Clone(amazonClockTail.queue)
-		cloudQueue = amazonClockTail.cloudQueue
-	}
-	amazonClockMu.Unlock()
+	amazonCurrentMu.Unlock()
 	if cur.artist != artist || cur.title != title || cur.trackID == "" {
 		log.Printf("amazon music upcoming: the log does not confirm the current track; falling back to album prefetch")
 		return nil, false
 	}
+	queue, cloudQueue := amazonQueueWindow()
 	if len(queue) < 2 || queue[0] != cur.trackID {
 		log.Printf("amazon music upcoming: the queue window does not start at the current track; falling back to album prefetch")
 		return nil, false

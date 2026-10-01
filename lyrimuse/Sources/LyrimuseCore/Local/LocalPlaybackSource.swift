@@ -360,7 +360,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // ~0.1s。过去不管哪个播放器,每次轮询(2 秒一次)都无条件把这次读数直接当成新锚点
     // ——QQ 音乐下逐字歌词填色因此每 2 秒就带着这份噪声跳一下,肉眼可见"歌词时间不准"。
     //
-    // 改成跟 collector/poller.go 的 updatePosition() 同一套思路:只在真的发生"不
+    // 做法:只在真的发生"不
     // 连续"(换歌、暂停与播放切换、或者这次读数跟"按上一次锚点+经过的真实时间外推"的
     // 预测值差太多,说明真的 seek/跳曲了)时才信任这次读数重新锚定;平稳播放期间改成
     // 按真实 wall-clock 经过的时间累加,不理会每次读数自身的抖动。这套逻辑对 Apple
@@ -1124,7 +1124,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 开播第一个却晚约 0.18s。按 cleanExtrapolated 那档 0.4s 的伺服门槛,这 0.18s 整首纠不回来,所以这类播放器
     /// 偏差过了 `republishedAnchorSnapSecs` 就对齐读数(读数盖了读到的时刻,见 `MediaControlClient.stampsCaptureTime`);
     /// 暂停那一拍的快照还带着播放时最后那个锚点、真正的暂停锚点晚约 0.2s 才到,见 `pauseAnchorIsStale`。
-    /// 与 collector 的 followsRepublishedAnchors 同一份名单,两边一起改(见 02 章决策 61)。纯函数,selftest 直接覆盖。
+    /// 见 02 章决策 61。纯函数,selftest 直接覆盖。
     public nonisolated static func followsRepublishedAnchors(bundleID: String?) -> Bool {
         bundleID == PlaybackPlayer.kkbox.bundleIdentifier
     }
@@ -1132,12 +1132,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 稳定播放时偏差过了 `republishedAnchorSnapSecs` 就直接对齐读数、不走 EMA 慢慢收的播放器:跟随重发锚点的(KKBOX),
     /// 加上位置是按它自己的日志算出来的 Amazon Music(读数就是干净的时钟,界面校准改提前量时一步到位,别被 EMA 拆成
     /// 每拍半秒的几次小跳)。只管伺服这一处;暂停锚点判旧等 KKBOX 专属的规则仍只看 `followsRepublishedAnchors`。
-    /// 与 collector 的 snapsToReading 同一份名单,两边一起改。纯函数,selftest 直接覆盖。
+    /// 纯函数,selftest 直接覆盖。
     public nonisolated static func snapsToReportedPosition(bundleID: String?) -> Bool {
         followsRepublishedAnchors(bundleID: bundleID) || bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
     }
 
-    /// 跟随重发锚点的播放器,偏差 EMA 过了这个值就对齐读数(collector 同名常量 followsAnchorSnapSecs)。
+    /// 跟随重发锚点的播放器,偏差 EMA 过了这个值就对齐读数。
     public nonisolated static let republishedAnchorSnapSecs: Double = 0.1
 
     /// 播放翻暂停那一拍的冻结值是不是陈旧的:跟随重发锚点的播放器,最近到达的锚点还是播放中发的(播放时最后那个,
@@ -1208,26 +1208,20 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    /// 上一次写给 collector 的偏置记录(见 PositionBiasFile)。
+    /// 上一次写下的偏置记录(见 PositionBiasFile)。
     private var lastPublishedBias: PositionBiasRecord?
 
-    /// 把当前偏置告诉 collector(网页 / 飞书预览那条链路走它自己的 media-control 外推,见
-    /// PositionBiasFile 头注)。只在内容变了才写;只有 Spotify 与网页探针精确读数量出的偏置要发布,其余只在需要
+    /// 把 Spotify 的偏置记下来,App 重启后接回(见 restorablePlayerClockBias)。只在内容变了才写;别的播放器只在需要
     /// 把上一条非零记录作废时才写一条 0 —— 免得 Apple Music 每换一首歌都落一次盘。
     private func publishPositionBiasIfChanged(snapshot: MediaControlSnapshot, isSpotifyNative: Bool, now: Date) {
-        // 读数层补过的切歌修正(酷狗,见 MediaControlSnapshot.anchorStartCorrection)不经过偏置,但 collector
-        // 读的是原始锚点,同一段修正要按"对着原始锚点的负偏置"写给它。
-        let startCorrection = posReportedBiasSecs == 0 ? snapshot.anchorStartCorrection : nil
         let record = PositionBiasRecord(
             artist: snapshot.artist ?? "", title: snapshot.title ?? "",
             bundleID: snapshot.bundleIdentifier ?? "",
-            anchorElapsed: startCorrection != nil ? snapshot.anchorElapsedTime : posBiasAnchorElapsed,
-            biasSecs: startCorrection.map { -$0 } ?? posReportedBiasSecs,
+            anchorElapsed: posBiasAnchorElapsed, biasSecs: posReportedBiasSecs,
             writtenAtMs: Int64(now.timeIntervalSince1970 * 1000),
             positionSecs: trackPosSeconds)
         if let last = lastPublishedBias, last.sameContent(as: record) { return }
-        guard isSpotifyNative || posBiasFromBrowserProbe || startCorrection != nil
-                || (lastPublishedBias?.biasSecs ?? 0) != 0 else { return }
+        guard isSpotifyNative || (lastPublishedBias?.biasSecs ?? 0) != 0 else { return }
         lastPublishedBias = record
         env.writePositionBias(record)
     }
@@ -1856,7 +1850,7 @@ public final class LocalPlaybackSource: ObservableObject {
             logger.notice("player clock started late: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) raw=\(rawReported, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3))")
             trackPosSeconds = reported
             posErrEMA = 0
-            // 偏置文件里那一份的位置已经对不上了,下一拍按新位置重写(collector 靠它核连续性)。
+            // 偏置文件里那一份的位置已经对不上了,下一拍按新位置重写(重启后接回时靠它核连续性)。
             lastPublishedBias = nil
             return (trackPosSeconds, true)
         }
@@ -2529,7 +2523,11 @@ public final class LocalPlaybackSource: ObservableObject {
             trackNumber: provenance?.identifiers?.trackNumber,
             mediaType: provenance?.identifiers?.mediaType,
             musicVideo: isMusicVideo, radio: radio, ad: isCurrentTrackAdBreak, positionSecs: positionSecs,
-            spotifyTrackID: spotifyTrackID)
+            spotifyTrackID: spotifyTrackID,
+            amazonTrackID: bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
+                ? AmazonMusicLogWatcher.shared.logTrackID(
+                    forTrackKey: MediaControlSnapshot.trackKey(artist: snapshot.artist, title: snapshot.title))
+                : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 

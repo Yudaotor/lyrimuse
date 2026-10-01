@@ -20,11 +20,9 @@ import os
 /// 三条都过就把它当"上一拍"喂给 `RadioTrackClock.advance`,追上的量由那边既有的
 /// `maxAdvancePerTick` 夹住(宁可少算),这里不另开一套算法。
 ///
-/// # 只有 App 写这份文件
+/// # 只有 App 读写这份文件
 ///
-/// collector 那边有一块同样的表(`radioclock.go`),但**不共用这个文件** —— 两个进程各写各的会
-/// 互相覆盖,而 collector 的位置只喂状态中继(网页/预览)那条路,重启后从 0 起的代价远小于
-/// 引入一个跨进程写冲突。真要给 collector 也接上,得先定谁是唯一写方。
+/// collector 不推算电台位置,它用的是 App 播放状态里已经换成单曲口径的位置。
 public struct RadioClockRecord: Codable, Equatable, Sendable {
     public var trackKey: String
     public var position: Double

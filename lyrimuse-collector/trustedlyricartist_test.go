@@ -373,9 +373,6 @@ func TestTrustedFixedTrackArtistRotationEndToEnd(t *testing.T) {
 		st.FixedTitle != "漫步人生路" || st.StableField != "" || st.Order != "songFirst" || !st.Unreliable {
 		t.Errorf("App 侧没收到同一个身份: %+v", st)
 	}
-	if a, tt, ok := trustedKnownFix(trustedLyricTestBundle, "随便一句歌词", title); !ok || a != "邓丽君" || tt != "漫步人生路" {
-		t.Errorf("封面核对该拿到同一个身份: (%q, %q, %v)", a, tt, ok)
-	}
 
 	// 换歌:已判定、排列已知,第一拍就拆,不再问曲库。
 	if a, tt, ok := trustedFixedTrack(trustedLyricTestBundle, "伤心太平洋 - 任贤齐", "第一句歌词", "爱像太平洋", 290); !ok || a != "任贤齐" || tt != "伤心太平洋" {
@@ -411,9 +408,6 @@ func TestTrustedFixedTrackTitleRotationEndToEnd(t *testing.T) {
 	if st.StableField != "artist" || st.RawArtist != artist || st.Title != "" ||
 		st.Artist != "邓丽君" || st.FixedTitle != "漫步人生路" || st.Order != "artistFirst" {
 		t.Errorf("歌词在 title 里时适用范围该按原样的 artist: %+v", st)
-	}
-	if a, tt, ok := trustedKnownFix(trustedLyricTestBundle, artist, "另一句歌词"); !ok || a != "邓丽君" || tt != "漫步人生路" {
-		t.Errorf("封面核对按原样的 artist 对齐: (%q, %q, %v)", a, tt, ok)
 	}
 }
 

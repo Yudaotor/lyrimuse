@@ -122,39 +122,9 @@ var playerNeedsFullDiskAccess = map[string]bool{
 	playerKugou:   true,
 }
 
-// playerRepublishesZeroAnchor 是「bundle id → 开播那个 elapsed=0 锚点会不会被原样
-// 重发一次」。只列**实测见过**的播放器:真起播点是连发里的哪一个,各家相反
-// (汽水音乐/网易云是第一个,Apple Music 是最后一个),判反 = 整首歌恒定偏移。
-// 判定本身在 isStaleAnchorRepublish,Swift 侧 republishesZeroAnchor 同源。
-var playerRepublishesZeroAnchor = map[string]bool{
-	neteaseMusicBundleID: true,
-	sodaMusicBundleID:    true,
-	spotifyBundleID:      true,
-}
-
-// playerPlayingFromRate 是「bundle id → 这个播放器报的 playing:false 不可信、要按
-// playbackRate > 0 判在不在播」。只列**实测见过**的播放器。
-// 判定本身在 effectivePlaying,Swift 侧 playingFromRate 同源。
-var playerPlayingFromRate = map[string]bool{
-	kugouMusicBundleID: true,
-}
-
-// playerArtistArrivesLate 是「bundle id → 开播先发一帧没有歌手的、过一会儿才补齐」。
-// 只列**实测见过**的播放器。那一帧当作还没准备好,判定在 trustedPlaybackNotASong,
-// Swift 侧 artistArrivesLate 同源。
-var playerArtistArrivesLate = map[string]bool{
-	kkboxBundleID: true,
-}
-
 // playerArtistlessNotMusic 是「bundle id → 歌手空、时长 > 0、在放的是非歌曲内容(播客单集)」。
-// 只列**实测见过**的播放器。判定在 builtinArtistlessContent,Swift 侧 artistlessNotMusic 同源。
+// 只列**实测见过**的播放器。歌词解析入口据此不解析这类内容;判定在 App 侧 TrustedPlayers.artistlessContent。
 var playerArtistlessNotMusic = map[string]bool{
 	kkboxBundleID:       true,
 	amazonMusicBundleID: true,
-}
-
-// playerDropsSessionBetweenTracks 是「bundle id → 切歌时先撤掉 Now Playing、隔几秒才发下一首」。
-// 只列**实测见过**的播放器。判定在 holdAcrossPlayerGap,Swift 侧 dropsSessionBetweenTracks 同源。
-var playerDropsSessionBetweenTracks = map[string]bool{
-	kkboxBundleID: true,
 }

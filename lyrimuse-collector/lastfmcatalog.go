@@ -669,7 +669,7 @@ func catalogRetryable(err error) bool {
 }
 
 // catalogDurationUnknownKey:ctx 上标记「这一条的时长是视频的长度」(Music.app 的 music video、
-// YouTube Music 页面认出的 MV,见 snapshot.notAudioMedia)。编目匹配按未知时长判 —— MV 比录音室版长,
+// YouTube Music 页面认出的 MV,App 报 music_video,见 snapshot.NotAudio)。编目匹配按未知时长判 —— MV 比录音室版长,
 // 拿它比时长会把正规条目挡掉(实测 JISOO《FLOWER》174 s 的条目被 MV 时长挡下);发给 Last.fm 的
 // duration 参数照报真实长度。
 type catalogDurationUnknownKey struct{}

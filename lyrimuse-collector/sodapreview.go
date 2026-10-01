@@ -22,10 +22,10 @@ import (
 // 认定「正在试听」只看一件事:播放器报的时长 ≈ 这首歌的 preview.duration,且比整首短得多
 // (sodaPreviewMatches)。会员 / 限免时报的是整首,不命中,原样不动。
 //
-// 纠正在 fetchRawMediaControlState 里做(与酷狗署名纠正同一个位置),之后整条链路(歌词匹配、
-// 网页进度、收听记录)拿到的都是原曲口径;同一份结论发布给 App(lyrimuse-player-preview.json),
-// App 在 MediaControlClient.fetchSnapshot 出口做同样的换算。两边必须同时换,否则歌词缓存按
-// 时长挑出来的版本和 App 显示的进度各说各话。
+// 查找与发布在 collector(读播放状态那一拍,见 liveAppSodaPreview):结论发布给 App
+// (lyrimuse-player-preview.json),App 在 MediaControlClient.fetchSnapshot 出口换成原曲口径再写进播放状态;
+// App 还没跟上的那一两拍由 appPlaybackTickFor 本地先换。之后整条链路(歌词匹配、网页进度、收听记录)拿到的
+// 都是原曲口径。两边必须同一个口径,否则歌词缓存按时长挑出来的版本和 App 显示的进度各说各话。
 
 type sodaPreview struct {
 	StartSecs float64
@@ -117,7 +117,7 @@ var (
 
 // sodaPreviewFor 给这一拍找试听段。本地命中同步返回;本地没有就查搜索结果缓存,缓存也没有就在
 // 后台发一次搜索、这一拍先按没找到处理(下一拍拿到)。onSearchFound 在后台搜到的那一刻调用 ——
-// 给 App 的发布不必等下一拍轮询(5s),见 applySodaPreview。
+// 给 App 的发布不必等下一拍,见 liveAppSodaPreview。
 func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFound func(sodaPreview)) (sodaPreview, bool) {
 	if mrDuration <= 0 || strings.TrimSpace(title) == "" {
 		return sodaPreview{}, false
@@ -262,25 +262,31 @@ func publishPlayerPreviewFix(bundle, title, artist string, p sodaPreview) {
 		"start", p.StartSecs, "preview", p.DurSecs, "full", p.FullSecs)
 }
 
-// sodaPreviewApplied 记最近一次换算的是哪一首、换成了什么 —— 会话时长补正要认它
-// (见 sodaPreviewSessionBackfill)。
+// sodaPreviewKnown 记最近一次查到试听段的是哪一首、试听段与整首多长 —— 会话时长补正要认它
+// (见 sodaPreviewSessionBackfill)。查到就记,不等换算:App 可能先于下一拍套上发布的纠正、直接报整首。
 var (
-	sodaPreviewAppliedMu  sync.Mutex
-	sodaPreviewAppliedKey string
-	sodaPreviewAppliedP   sodaPreview
+	sodaPreviewKnownMu  sync.Mutex
+	sodaPreviewKnownKey string
+	sodaPreviewKnownP   sodaPreview
 )
 
+func noteSodaPreviewKnown(artist, title string, p sodaPreview) {
+	sodaPreviewKnownMu.Lock()
+	sodaPreviewKnownKey, sodaPreviewKnownP = normLoose(artist)+"|"+normLoose(title), p
+	sodaPreviewKnownMu.Unlock()
+}
+
 // sodaPreviewSessionBackfill 判这次播放的会话时长要不要补成整首:会话开在试听段还没查到的那一拍,
-// 记下的是试听段长度(30 / 60s);按它算「听满一半」,试听 30 秒就会被记成一次收听。只认刚换算过的
+// 记下的是试听段长度(30 / 60s);按它算「听满一半」,试听 30 秒就会被记成一次收听。只认最近查到试听段的
 // 这一首、且会话时长正好是它的试听段长度、这一拍已是整首 —— 别的时长跳变(换曲预载窗口里拼进来的
 // 下一首时长)一概不碰。
 func sodaPreviewSessionBackfill(bundle, artist, title string, sessDur, curDur float64) bool {
 	if bundle != sodaMusicBundleID {
 		return false
 	}
-	sodaPreviewAppliedMu.Lock()
-	key, p := sodaPreviewAppliedKey, sodaPreviewAppliedP
-	sodaPreviewAppliedMu.Unlock()
+	sodaPreviewKnownMu.Lock()
+	key, p := sodaPreviewKnownKey, sodaPreviewKnownP
+	sodaPreviewKnownMu.Unlock()
 	if key == "" || key != normLoose(artist)+"|"+normLoose(title) {
 		return false
 	}
@@ -294,30 +300,4 @@ func sodaPreviewLookupPending(artist, title string) bool {
 	sodaPreviewMu.Lock()
 	defer sodaPreviewMu.Unlock()
 	return sodaPreviewInflight[normLoose(artist)+"|"+normLoose(title)]
-}
-
-// applySodaPreview 在原始载荷上做换算:时长换成整首,位置(含 elapsedTimeNow)加上试听段起点。
-// 只动汽水的载荷。返回是否换算了;没换算时 pending 表示试听段还在后台搜。
-func applySodaPreview(raw *mediaControlRawState) (applied, pending bool) {
-	if raw.BundleID != sodaMusicBundleID {
-		return false, false
-	}
-	title, artist := cleanMediaTag(raw.Title), cleanMediaTag(raw.Artist)
-	bundle, rawTitle, rawArtist := raw.BundleID, raw.Title, raw.Artist
-	p, ok := sodaPreviewFor(artist, title, cleanMediaTag(raw.Album), raw.Duration, func(found sodaPreview) {
-		publishPlayerPreviewFix(bundle, rawTitle, rawArtist, found)
-	})
-	if !ok {
-		return false, sodaPreviewLookupPending(artist, title)
-	}
-	raw.Duration = p.FullSecs
-	raw.ElapsedTime += p.StartSecs
-	if raw.ElapsedTimeNow > 0 {
-		raw.ElapsedTimeNow += p.StartSecs
-	}
-	sodaPreviewAppliedMu.Lock()
-	sodaPreviewAppliedKey, sodaPreviewAppliedP = normLoose(artist)+"|"+normLoose(title), p
-	sodaPreviewAppliedMu.Unlock()
-	publishPlayerPreviewFix(raw.BundleID, raw.Title, raw.Artist, p)
-	return true, false
 }

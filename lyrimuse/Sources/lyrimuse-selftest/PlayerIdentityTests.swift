@@ -255,8 +255,7 @@ func runPlayerIdentityTests() {
         // ---- Safari 媒体代理进程(王力宏《你不知道的事》Safari 网页播放案) ----
         // Safari 播网页音频报的是 com.apple.WebKit.GPU,信任表存的是宿主 com.apple.Safari。
         // 原来这里裸查 trusted[bundleID],对代理进程恒落空 → Safari 播非歌视频这道守卫恒不
-        // 生效。collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修(那边还多两处:
-        // getAutoDetectedState 整条丢播放、mediaPlayerLabel 谎报 Apple Music)。
+        // 生效。
         let safariTrusted = ["com.apple.Safari": "Safari"]
         let webkitGPU = "com.apple.WebKit.GPU"
         expectEqual(T.notASong(bundleID: webkitGPU, artist: "某频道", album: "", trusted: safariTrusted), true,
@@ -574,7 +573,7 @@ func runPlayerIdentityTests() {
         //    YT Music 的广告也像 Spotify 那样显示「广告中」)。丢弃的话 UI 拿不到任何东西,
         //    30 秒广告期间灵动岛/悬浮窗会整个塌成"没有在播放"再弹回来。
         // 放行**不等于**会被记录:Swift 侧一行 scrobble 都不发,提交 listen 全在
-        //    collector(lastfm.go / lb.go),那边由 ytmusicad.go 自己拦。
+        //    collector(lastfm.go / lb.go),它按 App 播放状态里的 ad 标记(appReportedAd)拦。
         expectEqual(P.gate(artist: "Michael Jackson", verdict: .song), .acceptAsSong,
                     "广告闸: 判定是歌 → 放行当歌")
         expectEqual(P.gate(artist: "KAO Hong Kong", verdict: .ad), .acceptAsAd,
@@ -848,52 +847,6 @@ func runPlayerIdentityTests() {
         expectEqual(chromium.contains("do JavaScript"), false, "广告判据: chromium 不该出现 Safari 方言")
         expectEqual(safari.contains("do JavaScript"), true, "广告判据: safari 用 do JavaScript")
         expectEqual(safari.contains("execute ("), false, "广告判据: safari 不该出现 Chromium 方言")
-
-        // ⑤ 跨语言防漂:同一份判据在 collector(Go)里还有一份,两边必须同时改
-        //    (跟 TrustedPlayers.notASong / trustedPlaybackNotASong 那一对是同样的关系)。
-        //    这里直接读 Go 源码对账 —— 光靠注释里那句"两边必须同时改"拦不住漏改。
-        let goSource = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // …/Sources/lyrimuse-selftest
-            .deletingLastPathComponent()   // …/Sources
-            .deletingLastPathComponent()   // …/lyrimuse
-            .deletingLastPathComponent()   // 仓库根
-            .appendingPathComponent("lyrimuse-collector/ytmusicad.go")
-        if let go = try? String(contentsOf: goSource, encoding: .utf8) {
-            // `browse/MPREb` / `ytmusic-player-bar` 是加的专辑名读取(两侧同一份 JS,
-            // 漏改一边的后果是:Swift 侧 UI 上有专辑名、collector 侧拿不到,于是歌词匹配和
-            // 打卡到 Last.fm 的专辑字段仍然是空的 —— 两边行为不一致,查起来极难对上。
-            for marker in ["ad-showing", "ytp-ad-badge", "YouTube Music", "NOTFOUND",
-                           "browse/MPREb", "ytmusic-player-bar", P.hostMarker] {
-                expectEqual(go.contains(marker), true,
-                            "广告判据/跨语言: collector 侧 ytmusicad.go 也必须有 \(marker)(两边同时改)")
-            }
-            // 超时秒数两边对齐 —— 不一致会让两侧在"浏览器不回"时表现不一样,排查时极难对上。
-            expectEqual(go.contains("ytmusicAdProbeEventTimeout = \(P.eventTimeoutSeconds)"), true,
-                        "广告判据/跨语言: AppleScript 事件超时两边同值")
-            // 加:上面那串 marker 只能保证"关键字都在",保证不了两边的 JS **真的
-            // 一样** —— 少一个分号、选择器顺序不同、少读一个字段,marker 全过、行为却已经漂了。
-            // 这一条直接把两段 JS 拼出来逐字比。Go 侧是反引号串用 `+` 拼的,取出所有反引号里的
-            // 片段接起来就是最终那串。
-            //
-            // 这条守卫是有代价的:两边的 JS 从此**一个字符都不许差**(连注释性的空格都不行)。
-            // 那正是想要的 —— 它们本来就该是同一段代码,只是被两种语言各抄了一份。
-            if let start = go.range(of: "const ytmusicAdProbeJS = "),
-               let end = go.range(of: "\n\n", range: start.upperBound ..< go.endIndex) {
-                let block = String(go[start.upperBound ..< end.lowerBound])
-                // 反引号成对:奇数下标的片段就是字符串内容。
-                let chunks = block.components(separatedBy: "`")
-                let goJS = chunks.enumerated()
-                    .filter { $0.offset % 2 == 1 }
-                    .map(\.element)
-                    .joined()
-                expectEqual(goJS, P.probeJS,
-                            "广告判据/跨语言: 两侧的探针 JS 必须逐字相同(两边同时改)")
-            } else {
-                expectEqual(true, false, "广告判据/跨语言: 在 ytmusicad.go 里找不到 ytmusicAdProbeJS")
-            }
-        } else {
-            expectEqual(true, false, "广告判据/跨语言: 读不到 lyrimuse-collector/ytmusicad.go(路径挪了?)")
-        }
     }
 
 

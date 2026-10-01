@@ -13,10 +13,9 @@ import (
 )
 
 type config struct {
-	Token     string   `json:"listenbrainz_token"`
-	User      string   `json:"listenbrainz_user,omitempty"`
-	APIRoot   string   `json:"api_root,omitempty"`
-	BundleIDs []string `json:"bundle_ids,omitempty"`
+	Token   string `json:"listenbrainz_token"`
+	User    string `json:"listenbrainz_user,omitempty"`
+	APIRoot string `json:"api_root,omitempty"`
 	// 自建状态中继(Cloudflare Worker+KV,取代 LB 作网页主数据源)。留空则不推。
 	// StateRelayURL 形如 https://np.yudaotor.me;/push 写当前状态。历史现在完全走
 	// state-worker 的 /history 端点读 LB 合并,采集器不再往这里写 /scrobble(旧端点
@@ -128,9 +127,6 @@ func configFromBytes(data []byte) *config {
 	cfg.trimCredentials()
 	if cfg.APIRoot == "" {
 		cfg.APIRoot = "https://api.listenbrainz.org"
-	}
-	if len(cfg.BundleIDs) == 0 {
-		cfg.BundleIDs = []string{"com.apple.Music"}
 	}
 	if cfg.NotificationPlatform == "" {
 		// 旧配置文件没有这个字段(是这次新加的),默认按最早唯一支持过的 Bark 处理,

@@ -82,46 +82,87 @@ func TestParseAmazonQueueLine(t *testing.T) {
 	}
 }
 
-// 队列预解析:窗口第一首要是日志里正在放的、也是播放器报的这首;交出后两首,并记下 ASIN 给歌词用。
+// useTempAmazonLog 把 Amazon Music 日志指到一份临时文件,读到一半的状态清掉重来。
+func useTempAmazonLog(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "AmazonMusic.log")
+	amazonLogMu.Lock()
+	savedOverride, savedLog := amazonMusicLogOverride, amazonLog
+	amazonMusicLogOverride, amazonLog = path, nil
+	amazonLogMu.Unlock()
+	t.Cleanup(func() {
+		amazonLogMu.Lock()
+		amazonMusicLogOverride, amazonLog = savedOverride, savedLog
+		amazonLogMu.Unlock()
+	})
+	return path
+}
+
+func appendAmazonLog(t *testing.T, path string, lines ...string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, l := range lines {
+		if _, err := f.WriteString(l + "\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func amazonTestQueueLine(uris ...string) string {
+	return "260928:025618 MorphoBrowser : I HarleyPlayerController : PlayerFlow : Playables : UriList = " +
+		strings.Join(uris, ", ") + " , function = updateQueue : line 571, "
+}
+
+const (
+	amazonTestCQStart    = "260928:082218 MorphoBrowser : I CQPlaybackRequestImpl : PlayerFlow : StartingCQPlayback : function = startPlayback , identifierType = TRACK_LIST_SEED , identifiers = B0TESTAAA1 : line 58, "
+	amazonTestPlainStart = "260928:090000 MorphoBrowser : I BasePlaybackRequest : PlayerFlow : StartPlaybackLookupCompleted : function = startPlaybackCallback : line 115, "
+)
+
+// 队列预解析:窗口(日志里最近一行 updateQueue)第一首要是 App 认出的、也是播放器报的这首;交出后两首,
+// 并记下 ASIN 给歌词用。
 func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 	useTempAmazonData(t)
-	amazonClockMu.Lock()
-	savedCur, savedTail := amazonCurrentTrack, amazonClockTail
-	amazonCurrentTrack.artist, amazonCurrentTrack.title, amazonCurrentTrack.trackID = "Morgan Wallen", "Been By Now", "asin://B0TESTAAA1"
-	amazonClockTail = &amazonLogTail{queue: []string{"asin://B0TESTAAA1", "asin://B0TESTAAA2", "asin://B0MISSING0"}}
-	amazonClockMu.Unlock()
+	logPath := useTempAmazonLog(t)
+	amazonCurrentMu.Lock()
+	savedCur := amazonCurrentTrack
+	amazonCurrentMu.Unlock()
 	t.Cleanup(func() {
-		amazonClockMu.Lock()
-		amazonCurrentTrack, amazonClockTail = savedCur, savedTail
-		amazonClockMu.Unlock()
+		amazonCurrentMu.Lock()
+		amazonCurrentTrack = savedCur
+		amazonCurrentMu.Unlock()
 	})
+	noteAmazonCurrentTrack(amazonMusicBundleID, "Morgan Wallen", "Been By Now", "asin://B0TESTAAA1")
+	appendAmazonLog(t, logPath, amazonTestPlainStart, amazonTestQueueLine("asin-//B0TESTAAA1", "asin-//B0TESTAAA2", "asin-//B0MISSING0"))
 
 	got, ok := amazonUpcoming("Morgan Wallen", "Been By Now", 5)
 	if !ok || len(got) != 1 || got[0].title != "I Can't Love You Anymore [Explicit]" || got[0].artist != "Ella Langley & Morgan Wallen" || got[0].duration != 229 {
 		t.Fatalf("交出后面那首(目录里查不到的不交): %+v ok=%v", got, ok)
 	}
 	if _, ok := amazonUpcoming("Someone Else", "Other", 5); ok {
-		t.Error("播放器报的不是日志里那首,退回同专辑预取")
+		t.Error("播放器报的不是 App 认出的那首,退回同专辑预取")
 	}
-	amazonClockMu.Lock()
-	amazonClockTail.queue = []string{"asin://B0OTHER000", "asin://B0TESTAAA2"}
-	amazonClockMu.Unlock()
+	appendAmazonLog(t, logPath, amazonTestQueueLine("asin-//B0OTHER000", "asin-//B0TESTAAA2"))
 	if _, ok := amazonUpcoming("Morgan Wallen", "Been By Now", 5); ok {
 		t.Error("窗口第一首不是当前这首,退回")
 	}
 	// 窗口里的都查不到名字:电台不预取(ok、零首),歌单 / 专辑退回同专辑预取。
-	amazonClockMu.Lock()
-	amazonClockTail.queue = []string{"asin://B0TESTAAA1", "asin://B0MISSING0"}
-	amazonClockTail.cloudQueue = true
-	amazonClockMu.Unlock()
+	appendAmazonLog(t, logPath, amazonTestCQStart, amazonTestQueueLine("asin-//B0TESTAAA1", "asin-//B0MISSING0"))
 	if got, ok := amazonUpcoming("Morgan Wallen", "Been By Now", 5); !ok || len(got) != 0 {
 		t.Errorf("电台里认不出名字就不预取,也不退回同专辑: %+v ok=%v", got, ok)
 	}
-	amazonClockMu.Lock()
-	amazonClockTail.cloudQueue = false
-	amazonClockMu.Unlock()
+	appendAmazonLog(t, logPath, amazonTestPlainStart)
 	if _, ok := amazonUpcoming("Morgan Wallen", "Been By Now", 5); ok {
 		t.Error("歌单 / 专辑认不出名字,退回同专辑预取")
+	}
+	// App 没从日志认出这首(没带曲目标识):拿不准,退回同专辑预取。
+	appendAmazonLog(t, logPath, amazonTestQueueLine("asin-//B0TESTAAA1", "asin-//B0TESTAAA2"))
+	noteAmazonCurrentTrack(amazonMusicBundleID, "Morgan Wallen", "Been By Now", "")
+	if _, ok := amazonUpcoming("Morgan Wallen", "Been By Now", 5); ok {
+		t.Error("App 没带曲目标识,退回同专辑预取")
 	}
 
 	// 队列里那首解析歌词时按记下的 ASIN 认身份(歌名是剥过 [Explicit] 的);只在正用 Amazon Music 放时读。
@@ -214,10 +255,10 @@ func TestAmazonLogTailCloudQueueFromHead(t *testing.T) {
 // 不是在放、也不在队列里的那首(手动搜索另起的进程、补空 / 全量扫库),靠歌词缓存里记着的曲目页认出 ASIN。
 func TestAmazonCachedASIN(t *testing.T) {
 	useTempAmazonData(t)
-	amazonClockMu.Lock()
+	amazonCurrentMu.Lock()
 	savedCur := amazonCurrentTrack
 	amazonCurrentTrack.artist, amazonCurrentTrack.title, amazonCurrentTrack.trackID = "", "", ""
-	amazonClockMu.Unlock()
+	amazonCurrentMu.Unlock()
 	amazonQueueMu.Lock()
 	savedQueue := amazonQueueASINs
 	amazonQueueASINs = map[string]string{}
@@ -236,9 +277,9 @@ func TestAmazonCachedASIN(t *testing.T) {
 	}
 	resetIndex()
 	t.Cleanup(func() {
-		amazonClockMu.Lock()
+		amazonCurrentMu.Lock()
 		amazonCurrentTrack = savedCur
-		amazonClockMu.Unlock()
+		amazonCurrentMu.Unlock()
 		amazonQueueMu.Lock()
 		amazonQueueASINs = savedQueue
 		amazonQueueMu.Unlock()

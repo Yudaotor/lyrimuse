@@ -42,9 +42,6 @@ public struct MediaControlSnapshot: Decodable {
     /// 读数在后台读到、`LocalPlaybackSource.apply` 在主线程处理,主线程卡半秒多时读数会被记成"半秒前的位置",
     /// 精确档伺服一拍就往回拽。apply 按它把读数补到处理那一刻。nil = 按处理时刻算(其它来源)。
     public var capturedAt: Date? = nil
-    /// 这份读数的位置比原始锚点外推多补了多少秒(酷狗自然切歌,见 `MediaControlClient.resetAnchorStartCorrection`)。
-    /// `elapsedTime` 已经含着它,`anchorElapsedTime` 仍是原始值;App 据此把同一段修正写进偏置文件给 collector。
-    public var anchorStartCorrection: Double? = nil
     /// Music.app 把这一条归为 MV(JXA 读 `media kind` == "music video")。只有 Apple Music 的 JXA 快照填;
     /// media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。只用来显示,见
     /// `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台)都不经过 Apple Music 的 MV。
@@ -83,14 +80,13 @@ public struct MediaControlSnapshot: Decodable {
     public static func forReplay(
         title: String?, artist: String?, album: String? = nil, duration: Double?, elapsedTime: Double?,
         playing: Bool?, playbackRate: Double? = 1, bundleIdentifier: String?, anchorElapsedTime: Double?,
-        isRadio: Bool? = nil, capturedAt: Date? = nil, anchorStartCorrection: Double? = nil
+        isRadio: Bool? = nil, capturedAt: Date? = nil
     ) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: true, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 换掉专辑名的副本。唯一的用处是给 YouTube Music **每条队列第一首**
@@ -106,8 +102,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: newElapsed, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
     }
 
     public func withAlbum(_ newAlbum: String) -> MediaControlSnapshot {
@@ -115,8 +110,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: newAlbum, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 换掉署名的副本。唯一的用处是酷狗 3.3.2 把**当前这一句歌词**发布成 artist —— 真署名
@@ -128,8 +122,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: newArtist, album: album, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 换掉曲名的副本。唯一的用处是信任进来的其他播放器把歌词写进 artist、把「歌名 - 歌手」
@@ -140,8 +133,7 @@ public struct MediaControlSnapshot: Decodable {
             title: newTitle, artist: artist, album: album, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 换掉时长的副本。唯一的用处是电台:系统报的 `duration` 是**整档节目**的
@@ -153,8 +145,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: newDuration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 汽水非会员试听换回原曲口径的副本:时长换成整首,位置与原始锚点都加上试听段起点。
@@ -164,8 +155,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: fullDuration,
             elapsedTime: elapsedTime.map { $0 + start }, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime.map { $0 + start }, isRadio: isRadio, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime.map { $0 + start }, isRadio: isRadio, capturedAt: capturedAt)
     }
 
     /// 换成电台口径的副本。位置**和锚点**都换成 `RadioTrackClock` 那块按曲目边界
@@ -186,8 +176,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: true, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: anchorElapsedTime, isRadio: true, capturedAt: capturedAt)
     }
 
     public func withRadio(position: Double) -> MediaControlSnapshot {
@@ -195,7 +184,6 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: position, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: position, isRadio: true, capturedAt: capturedAt,
-            anchorStartCorrection: anchorStartCorrection)
+            anchorElapsedTime: position, isRadio: true, capturedAt: capturedAt)
     }
 }

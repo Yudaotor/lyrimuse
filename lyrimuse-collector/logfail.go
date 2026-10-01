@@ -34,8 +34,6 @@ func isCanceledErr(err error) bool {
 	return errors.Is(err, context.Canceled) || strings.HasSuffix(err.Error(), context.Canceled.Error())
 }
 
-// logClock / logClockMillis:日志正文里的时刻一律按 UTC 写、带 Z,跟行首的 time= 同一口径。写成本地时间
+// logClock:日志正文里的时刻一律按 UTC 写、带 Z,跟行首的 time= 同一口径。写成本地时间
 // 又不标时区的话,跟行首差着时区,读日志时要自己换算。
 func logClock(t time.Time) string { return t.UTC().Format("15:04:05Z") }
-
-func logClockMillis(t time.Time) string { return t.UTC().Format("15:04:05.000Z") }

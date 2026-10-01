@@ -322,18 +322,6 @@ func runAmazonMusicTests() {
         expectEqual(W.mayRetryCalibration(count: 7, lastAt: t0, now: t0.addingTimeInterval(30)), true, "Amazon 校准: 之后每 30 秒还试,不放弃")
     }
 
-    // ---- 写给 collector 的记录:字段名同 Go 侧 amazonLeadRecord 的 json tag ----
-    do {
-        let rec = AmazonMusicLeadRecord(trackID: "", startedAtMs: 0, leadSecs: 0, writtenAtMs: 5,
-                                        artist: "Benson Boone", title: "Beautiful Things", positionSecs: 42)
-        let obj = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(rec))) as? [String: Any]
-        expectEqual(Set(obj?.keys.map { $0 } ?? []), Set(["track_id", "started_at_ms", "lead_secs", "written_at_ms", "artist", "title", "position_secs"]),
-                    "Amazon 记录: 自记时对表那种带上歌手 / 歌名 / 位置,字段名同 Go 侧")
-        let lead = AmazonMusicLeadRecord(trackID: "asin://B0TESTAAA1", startedAtMs: 1, leadSecs: 1.5, writtenAtMs: 2)
-        let leadObj = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(lead))) as? [String: Any]
-        expectEqual(leadObj?["position_secs"] == nil && leadObj?["artist"] == nil, true, "Amazon 记录: 提前量那种不带这几项")
-    }
-
     // ---- 重放起点:开播后暂停得久,开播行被推到末尾那段之前 ----
     do {
         let start = "260928:122914      Browser INFO in Harley : DT:M [Filter.cpp:157] End of stream reached\n" +

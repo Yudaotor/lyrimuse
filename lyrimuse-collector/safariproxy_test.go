@@ -6,13 +6,10 @@ import (
 	"testing"
 )
 
-// Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,
-// 信任表里存的是宿主 com.apple.Safari——system.go 里三处**裸查** features().TrustedPlayers[
-// bundleID] 的地方对 Safari 全部落空(getAutoDetectedState 把播放整条丢掉、
-// trustedPlaybackNotASong 守卫恒不生效、mediaPlayerLabel 谎报成 Apple Music),而 Swift 侧
-// TrustedPlayers.isTrusted 做了代理解析、App 认了这首歌,于是 App 一直等一个 collector
-// 永远不会去做的解析。Chrome/Arc 报浏览器自己的 bundle id、直接在表里,所以从来没暴露。
-// 这组测试钉住三处修复对代理进程的行为。
+// Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
+// com.apple.Safari。按 bundle id **裸查** features().TrustedPlayers 对 Safari 恒落空:播放被当成不相关 App
+// 丢掉、media_player 谎报成 Apple Music。Chrome/Arc 报浏览器自己的 bundle id、直接在表里,不受影响。
+// 这组测试钉住代理进程的信任判定与标签。
 func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
@@ -23,17 +20,6 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	t.Run("信任判定经代理别名解析", func(t *testing.T) {
 		if !isTrustedPlayerBundleID(proxy) {
 			t.Error("WebKit.GPU 该按宿主 Safari 算成受信任")
-		}
-	})
-
-	t.Run("notASong 守卫对代理进程同样生效", func(t *testing.T) {
-		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)→ 该被守卫丢掉。
-		if !trustedPlaybackNotASong(proxy, "某个频道名", "") {
-			t.Error("Safari(代理进程)播 album 为空的内容,该判成不是一首歌")
-		}
-		// 真歌两个字段齐全 → 放行。
-		if trustedPlaybackNotASong(proxy, "王力宏", "十八般武藝") {
-			t.Error("字段齐全的真歌不该被丢掉")
 		}
 	})
 
@@ -49,16 +35,12 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 		if isTrustedPlayerBundleID(proxy) {
 			t.Error("宿主不在信任表里时代理进程也不该被信任")
 		}
-		if trustedPlaybackNotASong(proxy, "", "") {
-			t.Error("没信任过的由准入层负责挡,这条守卫该返回 false")
-		}
 	})
 }
 
 // 源码级守卫:system.go 里对 features().TrustedPlayers 用 bundleID 直接下标的裸查,只允许
 // 存在于 isTrustedPlayerBundleID 内部那一处(它是唯一被授权直查的地方,别名解析就在它
-// 身上)。这次三处同型 bug 说明这个坑非常容易再挖——新代码要判信任,一律调
-// isTrustedPlayerBundleID / isAcceptedPlayerBundleID,别自己查表。
+// 身上)。新代码要判信任,一律调 isTrustedPlayerBundleID / isAcceptedPlayerBundleID,别自己查表。
 func TestNoNakedTrustedPlayersLookupInSystemGo(t *testing.T) {
 	src, err := os.ReadFile("system.go")
 	if err != nil {

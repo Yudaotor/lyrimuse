@@ -13,7 +13,7 @@ import os
 /// - 自动连播开头的那首(`AmazonMusicPlayhead.needsLeadCalibration`)开播 `calibrationDelay` 之后,在后台读一次 Amazon 界面上的
 ///   播放时间校准提前量(`AmazonMusicUIProbe`);没有辅助功能权限就不校准。读不到隔 `calibrationRetry` 再试,最多
 ///   `calibrationMaxAttempts` 次。校准过的一段隔 `AmazonMusicPlayhead.leadRefineDelay` 再对一次,两次的区间叠窄
-///   (`needsLeadRefinement`)。校准结果写进 `AmazonMusicLeadFile` 给 collector。
+///   (`needsLeadRefinement`)。
 ///
 /// 规则本身在 `AmazonMusicPlayhead`(纯函数),这里只管读文件和记账。
 public final class AmazonMusicLogWatcher: @unchecked Sendable {
@@ -54,6 +54,8 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     private var fileAvailable = false
     private var timer: AmazonMusicPlayhead.SelfTimer?
     private var lastSource: AmazonMusicPlayhead.Source?
+    /// 最近一拍按日志算出位置的那首:读数时的曲目键,以及它在日志里的曲目标识(`asin://…`);那一拍用的是自记时为 nil。
+    private var lastLogTrack: (key: String, id: String)?
     private var calibrating = false
     /// 这首(曲目 + 开播时刻)试过几次、上次是什么时候。
     private var calibrationAttempts: (key: String, count: Int, lastAt: Date)?
@@ -83,8 +85,7 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
     /// 这一拍的位置。`pauseObservedAt` 是 stream watcher 记下的最近一次暂停时刻(自记时层用它把暂停落在
     /// 真正发生的那一刻,而不是这一拍轮询的时刻)。
     public func reading(trackKey: String, metadataTimestamp: Date?, playing: Bool, pauseObservedAt: Date?,
-                        now: Date, pid: pid_t? = nil, duration: Double? = nil,
-                        artist: String? = nil, title: String? = nil) -> AmazonMusicPlayhead.Reading {
+                        now: Date, pid: pid_t? = nil, duration: Double? = nil) -> AmazonMusicPlayhead.Reading {
         queue.sync { drain(live: true) }
         lock.lock()
         defer { lock.unlock() }
@@ -100,15 +101,24 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
                                             playing: playing, observedAt: observedAt)
         let log = fileAvailable && seenEvent ? state : nil
         let r = AmazonMusicPlayhead.reading(log: log, timer: timer!, metadataTimestamp: metadataTimestamp, now: now)
+        lastLogTrack = r.source == .log && !r.staleMetadata ? state.trackID.map { (trackKey, $0) } : nil
         if !r.staleMetadata, r.source != lastSource {
             lastSource = r.source
             Self.logger.notice("amazon music clock: position from \(r.source.rawValue, privacy: .public)")
         }
         if r.source == .log, playing, let pid { scheduleCalibrationLocked(pid: pid, duration: duration, metadataTimestamp: metadataTimestamp, now: now) }
         if r.source == .selfTimer, playing, let pid {
-            scheduleTimerCalibrationLocked(pid: pid, duration: duration, trackKey: trackKey, artist: artist, title: title, now: now)
+            scheduleTimerCalibrationLocked(pid: pid, duration: duration, trackKey: trackKey, now: now)
         }
         return r
+    }
+
+    /// 这一首(读数时的曲目键)在日志里的曲目标识(`asin://…`):最近一拍是按日志算的位置、而且是这首才有。
+    public func logTrackID(forTrackKey trackKey: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let t = lastLogTrack, t.key == trackKey else { return nil }
+        return t.id
     }
 
     /// 同一件事已经试了 `count` 次、上次在 `lastAt`,现在能不能再试:前 `calibrationMaxAttempts` 次隔 `calibrationRetry`,
@@ -131,8 +141,8 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
 
     /// 日志对不上这首(Amazon 重写 / 轮转了日志、它自己重启过)时位置落到自记时,自记时看不见卡顿,也不知道这之前的暂停,
     /// 最容易错。界面上的播放时间就是真值:落到自记时 `calibrationDelay` 之后对一次表,之后每次卡顿平息再对一次
-    /// (卡顿行照样出现在日志里,只是认不出是哪一首)。对上就把自记时整个换成界面给的位置,并写给 collector。
-    private func scheduleTimerCalibrationLocked(pid: pid_t, duration: Double?, trackKey: String, artist: String?, title: String?, now: Date) {
+    /// (卡顿行照样出现在日志里,只是认不出是哪一首)。对上就把自记时整个换成界面给的位置。
+    private func scheduleTimerCalibrationLocked(pid: pid_t, duration: Double?, trackKey: String, now: Date) {
         if timerSeen?.key != trackKey { timerSeen = (trackKey, now) }
         guard !calibrating, let seen = timerSeen, now.timeIntervalSince(seen.at) >= Self.calibrationDelay,
               AmazonMusicPlayhead.mayStartCalibration(state, now: now, settle: Self.stallSettleDelay) else { return }
@@ -163,11 +173,6 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
             timerCalibratedKey = key
             lock.unlock()
             Self.logger.notice("amazon music clock: self-timer set from the screen: \(before, format: .fixed(precision: 2))s -> \(position, format: .fixed(precision: 2))s")
-            if let artist, let title {
-                AmazonMusicLeadFile.write(.init(trackID: "", startedAtMs: 0, leadSecs: 0,
-                                                writtenAtMs: Int64(now.timeIntervalSince1970 * 1000),
-                                                artist: artist, title: title, positionSecs: position))
-            }
             Self.onPlaybackEvent?(false)
         }
     }
@@ -229,8 +234,6 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
             let ui = Int((now.timeIntervalSince1970 - (origin.lowerBound + origin.upperBound) / 2).rounded(.down))
             lock.unlock()
             Self.logger.notice("amazon music lead: log clock is \(lead, format: .fixed(precision: 2))s ahead of the audio, subtracting it (ui=\(ui, privacy: .public)s natural=\(done.startedNaturally, privacy: .public) origin=\((origin.lowerBound + origin.upperBound) / 2, format: .fixed(precision: 3)) width=\(width, format: .fixed(precision: 2)) pass=\(done.leadRefinements + 1, privacy: .public))")
-            AmazonMusicLeadFile.write(.init(trackID: id, startedAtMs: Int64(startedAt.timeIntervalSince1970 * 1000),
-                                            leadSecs: lead, writtenAtMs: Int64(Date().timeIntervalSince1970 * 1000)))
             Self.onPlaybackEvent?(false)
         }
     }
@@ -326,50 +329,5 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
         lock.unlock()
         guard live, !events.isEmpty, let onPlaybackEvent = Self.onPlaybackEvent else { return }
         onPlaybackEvent(events.contains(.paused) || events.contains(.stall(true)))
-    }
-}
-
-/// App → collector:自动连播那首校准出的提前量(collector 读不了界面,见 AmazonMusicUIProbe)。跟 Go 侧 amazonmusic.go
-/// `amazonLeadFileName` 逐字节一致,字段名同 json tag。只对同一首(日志曲目标识 + 开播时刻)生效。
-public struct AmazonMusicLeadRecord: Codable, Equatable, Sendable {
-    public var trackID: String
-    public var startedAtMs: Int64
-    public var leadSecs: Double
-    public var writtenAtMs: Int64
-    /// 自记时层按界面对的表:这一首(歌手 + 歌名,collector 按它认)在 `writtenAtMs` 那一刻的真实位置。提前量那种记录不带。
-    public var artist: String?
-    public var title: String?
-    public var positionSecs: Double?
-
-    public init(trackID: String, startedAtMs: Int64, leadSecs: Double, writtenAtMs: Int64,
-                artist: String? = nil, title: String? = nil, positionSecs: Double? = nil) {
-        self.trackID = trackID
-        self.startedAtMs = startedAtMs
-        self.leadSecs = leadSecs
-        self.writtenAtMs = writtenAtMs
-        self.artist = artist
-        self.title = title
-        self.positionSecs = positionSecs
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case trackID = "track_id"
-        case startedAtMs = "started_at_ms"
-        case leadSecs = "lead_secs"
-        case writtenAtMs = "written_at_ms"
-        case artist, title
-        case positionSecs = "position_secs"
-    }
-}
-
-public enum AmazonMusicLeadFile {
-    public static let fileName = "lyrimuse-amazon-lead.json"
-    public static var url: URL { LyrimusePaths.configFile(fileName) }
-
-    public static func write(_ record: AmazonMusicLeadRecord) {
-        let enc = JSONEncoder()
-        enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        guard let data = try? enc.encode(record) else { return }
-        try? data.write(to: url, options: .atomic)
     }
 }

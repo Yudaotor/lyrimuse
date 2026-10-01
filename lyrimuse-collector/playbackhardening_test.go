@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// 播放采集主循环与周边的加固:视频标题按竖线分段、暂停位置、浏览器族「判不了」的重试、焦点回退的闸、
-// 署名纠正写盘失败的节流、停播判定的最短持续时间、退出时在飞的提交与镜像、Last.fm now-playing 的节流、
-// 已镜像集合的修剪、scutil 的嵌套字典、-config 的目录口径。
+// 播放采集主循环与周边的加固:视频标题按竖线分段、浏览器族「判不了」的重试、署名纠正写盘失败的节流、
+// 停播判定的最短持续时间、退出时在飞的提交与镜像、Last.fm now-playing 的节流、已镜像集合的修剪、
+// scutil 的嵌套字典、-config 的目录口径。
 
 // 标记跟歌名同在一段时歌名就在这一段:整段丢掉的话频道名、「4K」会被当成歌名。
 func TestParseVideoTitlePipeKeepsTitleSegment(t *testing.T) {
@@ -31,53 +31,6 @@ func TestParseVideoTitlePipeKeepsTitleSegment(t *testing.T) {
 		if v.Kind != videoTitleMusicVideo || v.Artist != c.wantArtist || v.Song != c.wantSong {
 			t.Errorf("parseVideoTitle(%q, %q) = %+v, want %s / %s", c.artist, c.title, v, c.wantArtist, c.wantSong)
 		}
-	}
-}
-
-// collector 5 秒一拍:暂停时带新时间戳重发的锚点,下一拍看到时往往已经三四秒老。锚点晚于最后一次在播采样,
-// 就是暂停(或暂停前那次拖动)重发的冻结值,原样信它;锚点冻结的源仍由旧规则兜住。
-func TestPausedPositionSecsAtTrustsAnchorAfterLastSample(t *testing.T) {
-	lastAt := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	pauseAnchor := lastAt.Add(2 * time.Second)
-	for _, now := range []time.Time{lastAt.Add(5 * time.Second), lastAt.Add(60 * time.Second)} {
-		// 往回拖到 10s 后马上暂停:报告 11,记住的播放位置还是拖之前的 100。
-		if got := pausedPositionSecsAt(11, pauseAnchor, true, 100, lastAt, true, now); got != 11 {
-			t.Errorf("now=%v: 暂停锚点在最后一次在播之后,应当信报告值 11,得到 %v", now.Sub(lastAt), got)
-		}
-	}
-	// Arc 那种冻结锚点:时间戳是开播那一刻、报告值恒 0 —— 回退到最后一次播放位置。
-	frozen := lastAt.Add(-3 * time.Minute)
-	if got := pausedPositionSecsAt(0, frozen, true, 187.5, lastAt, true, lastAt.Add(5*time.Second)); got != 187.5 {
-		t.Errorf("冻结锚点应当回退到最后一次播放位置,得到 %v", got)
-	}
-	// 没有记住的播放位置:原样。
-	if got := pausedPositionSecsAt(42, frozen, true, 0, time.Time{}, false, lastAt); got != 42 {
-		t.Errorf("没有播放位置可参照时原样,得到 %v", got)
-	}
-	// 整秒时间戳的锚点时刻是估出来的中点,比最后一次采样早不到半秒也算「之后」。
-	if got := pausedPositionSecsAt(11, lastAt.Add(-400*time.Millisecond), true, 100, lastAt, true, lastAt.Add(8*time.Second)); got != 11 {
-		t.Errorf("半秒以内的估算误差应当放过,得到 %v", got)
-	}
-}
-
-// 位置记忆要带上算出这个位置的时刻,暂停那一支拿它比锚点。
-func TestRememberedPlayingSampleCarriesTime(t *testing.T) {
-	playingPositionMu.Lock()
-	savedTrack, savedVal, savedAt, savedKnown := playingPositionTrack, playingPositionValue, playingPositionAt, playingPositionKnown
-	playingPositionMu.Unlock()
-	t.Cleanup(func() {
-		playingPositionMu.Lock()
-		playingPositionTrack, playingPositionValue, playingPositionAt, playingPositionKnown = savedTrack, savedVal, savedAt, savedKnown
-		playingPositionMu.Unlock()
-	})
-	at := time.Date(2026, 9, 28, 1, 2, 3, 0, time.UTC)
-	rememberPlayingPositionAt("甲|歌", 12.5, at)
-	pos, gotAt, ok := rememberedPlayingSample("甲|歌")
-	if !ok || pos != 12.5 || !gotAt.Equal(at) {
-		t.Fatalf("got pos=%v at=%v ok=%v", pos, gotAt, ok)
-	}
-	if _, _, ok := rememberedPlayingSample("乙|歌"); ok {
-		t.Error("换了曲目不该拿到上一首的位置")
 	}
 }
 
@@ -116,29 +69,6 @@ func TestTrustedBrowserFamilyRetriesMisses(t *testing.T) {
 	}
 	if got := trustedBrowserScriptFamily("com.example.Browser"); got != "chromium" || calls != 2 {
 		t.Fatalf("判出来的缓存到进程结束: %q calls=%d", got, calls)
-	}
-}
-
-// 焦点回退问到的这一份跟主路径过同一道闸:KKBOX 的播客单集(歌手空、有时长、在放)和开播那一帧
-// 都不能当成一首歌交出去;回退状态不动,播放器还是那一个。
-func TestFocusFallbackAppliesNotASongGates(t *testing.T) {
-	podcast := map[string]any{"title": "某播客 第 12 集", "artist": "", "album": "", "duration": 1800.0, "playing": true, "bundleIdentifier": kkboxBundleID}
-	opening := map[string]any{"title": "某首歌", "artist": "", "album": "", "duration": 0.0, "playing": false, "bundleIdentifier": kkboxBundleID}
-	for name, st := range map[string]map[string]any{"播客单集": podcast, "开播那一帧": opening} {
-		as, _ := focusFallbackStubs(t, "com.google.Chrome", true, map[string]map[string]any{kkboxBundleID: st}, nil)
-		noteFocusAccepted(kkboxBundleID)
-		if got, ok := stateAfterFocusLost(context.Background(), nil); ok {
-			t.Errorf("%s:不该当成一首歌交出去,得到 %v", name, got)
-		}
-		if *as != 1 {
-			t.Errorf("%s:应当问过播放器一次,问了 %d 次", name, *as)
-		}
-		focusFallbackMu.Lock()
-		bundle := focusFallbackBundle
-		focusFallbackMu.Unlock()
-		if bundle != kkboxBundleID {
-			t.Errorf("%s:挡下时不动回退状态,得到 %q", name, bundle)
-		}
 	}
 }
 

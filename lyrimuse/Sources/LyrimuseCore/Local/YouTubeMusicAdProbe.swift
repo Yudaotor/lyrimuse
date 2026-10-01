@@ -47,9 +47,7 @@ import Foundation
 /// "任一命中即广告"只用于 `gate`(拿不准就丢这一轮,下一轮自愈);**界面上写「广告中」**只认强信号
 /// (ad-showing / 徽章),见 `badgeVerdict` / `cachedBadgeVerdict`。
 ///
-/// **这套判据跟 collector 侧 `ytmusicad.go` 是同一份,两边必须同时改** —— 跟
-/// `TrustedPlayers.notASong` / `trustedPlaybackNotASong` 那一对是同样的关系(Go 和 Swift
-/// 各跑一份、共享同一条语义)。selftest 里有断言钉住 JS 里那几个标志串。
+/// 判据只有 App 这一份:collector 认的是 App 播放状态里的 ad 标记。selftest 里有断言钉住 JS 里那几个标志串。
 ///
 /// ## 为什么是「异步 kick + 读缓存」,不是同步问一次
 ///
@@ -83,13 +81,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         /// 塌成"没有在播放",广告完了再弹回来,而不是像 Spotify 那样安静地显示「广告中」。
         ///
         /// **放行不等于会被记录**:Swift 侧一行 scrobble 都不发(`track.scrobble` /
-        /// `submit-listens` 全在 collector 的 lastfm.go / lb.go),提交 listen 是 collector
-        /// 独立那条路的事,那边由 `ytmusicad.go` + `system.go` 自己拦着,不受这里影响。
-        /// 这也正是 Spotify 广告一直以来的形态:快照照常流进来、由
-        /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI,打卡在别处拦。
-        /// 于是 Swift 与 Go 在**这一层**上是**故意不对称**的(Go 拒、Swift 放行标记),
-        /// 跟基础判据 `notASong` / `trustedPlaybackNotASong` 那对"必须逐字一致"不同 ——
-        /// 改这里之前先读懂这个区别。
+        /// `submit-listens` 全在 collector 的 lastfm.go / lb.go)。判定写进播放状态的 ad 标记,
+        /// collector 据此不打卡(appReportedAd)。这也正是 Spotify 广告一直以来的形态:快照照常流进来、由
+        /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI,打卡在 collector 那边拦。
         case acceptAsAd
         /// 丢掉。
         case reject
@@ -124,8 +118,6 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         }
     }
 
-    /// 跟 `ytmusicad.go` 的 `ytmusicAdProbeJS` 是**同一份判据**,改一边必须改另一边。
-    ///
     /// JS 源码里**不许出现双引号**:它整段要嵌进 AppleScript 的双引号字符串,而
     /// `execute … javascript` 会把返回值里已有的双引号**真的**转义成反斜杠(不是显示
     /// 转义,是字符串本身多了真实的 `\`),整段被二次转义之后拿去比 `contains` 会稳定判
@@ -238,11 +230,6 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     ///
     /// 45 秒留出 15 秒重叠窗:一次探测往返实测 ~187ms,15 秒足够它落地续期,稳态播放期间
     /// 判定因此**永不为 nil**。代价是一首 4 分钟的歌从 4 次 AppleEvent 变成 5 次。
-    ///
-    /// Go 侧(`ytmusicad.go`)**没有**这个问题、也不需要跟着改:那边 `ytmusicAdProbe` 是
-    /// **同步**的,缓存过期就当场 `runYTMusicAdProbe` 阻塞探一次再返回,不存在"过期了但结果
-    /// 还没到"的那一拍。这是 Swift 为了不卡住 UI 轮询而选择异步换来的副作用 —— 两边在
-    /// **判据**上仍逐字一致(那才是必须同步改的),缓存/节流策略本来就各按各的执行模型。
     public static let songRefreshInterval: TimeInterval = 45
 
     /// 同一个 key 上距上次探测多久之后才**再探一次**(`kickIfNeeded` 的跳过条件)。跟
@@ -379,7 +366,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         // AppleScript 有时把返回值再包一层双引号,只脱**两头恰好一对**,再把里面被转义的 `\"` / `\\` 还原
         // (Chromium 的 `execute … javascript` 会把返回值里的双引号真的转义成 `\"`,见 BrowserTabProbeScript 头注)。
         // 原来把首尾所有双引号都剥掉:专辑名以引号结尾时末尾那个被吃掉,中间的还带着反斜杠,这个脏值会被补进快照、
-        // 当成歌词缓存 key 的专辑段。collector 的 parseYTMusicAdProbe 同一套。
+        // 当成歌词缓存 key 的专辑段。
         if s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\"") {
             s = String(s.dropFirst().dropLast())
                 .replacingOccurrences(of: "\\\"", with: "\"")
@@ -595,8 +582,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
                                     js: probeJS, eventTimeoutSeconds: eventTimeoutSeconds)
     }
 
-    /// 曲目身份 —— 跟 collector 侧 `trustedPlaybackRejected` 用的 key 同一个构造方式
-    /// (`artist \0 title`),两边都按"广告是独立的 now-playing 条目"这条来失效缓存。
+    /// 曲目身份(`artist \0 title`):按"广告是独立的 now-playing 条目"这条来失效缓存。
     public static func trackKey(artist: String?, title: String?) -> String {
         let a = (artist ?? "").trimmingCharacters(in: .whitespaces)
         let t = (title ?? "").trimmingCharacters(in: .whitespaces)

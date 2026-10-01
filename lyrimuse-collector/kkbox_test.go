@@ -5,37 +5,6 @@ import (
 	"testing"
 )
 
-// KKBOX 开播先发一帧只有歌名的(歌手空、时长 0),约半秒后补齐:那一帧不采纳,补齐之后照常;专辑名不作要求。
-func TestKKBOXArtistArrivesLate(t *testing.T) {
-	if !trustedPlaybackNotASong(kkboxBundleID, "", "") {
-		t.Error("开播那一帧还没有歌手,不该采纳")
-	}
-	if trustedPlaybackNotASong(kkboxBundleID, "Taylor Swift (泰勒絲)", "") {
-		t.Error("歌手补齐之后照常采纳,没有专辑名也认")
-	}
-	if trustedPlaybackNotASong(kugouMusicBundleID, "", "") {
-		t.Error("只管 artistArrivesLate 的播放器,别的内置播放器不受影响")
-	}
-	raw := map[string]any{"title": "Opalite", "artist": "", "duration": 0.0, "playing": false}
-	if !builtinArtistNotReady(kkboxBundleID, raw) {
-		t.Error("开播那一帧(歌手空、时长 0、没在放):还没准备好")
-	}
-	podcast := map[string]any{"title": "1989 - Deluxe - KKBOX", "artist": "", "album": "", "duration": 2143.19, "playing": true}
-	if builtinArtistNotReady(kkboxBundleID, podcast) || !builtinArtistlessContent(kkboxBundleID, podcast) {
-		t.Error("播客单集(歌手空、有时长、在放):不是开播那一帧,是非歌曲内容")
-	}
-	if builtinArtistlessContent(kkboxBundleID, raw) {
-		t.Error("开播那一帧不是非歌曲内容")
-	}
-	if builtinArtistlessContent(kugouMusicBundleID, podcast) {
-		t.Error("只管 artistArrivesLate 的播放器(决策 41)")
-	}
-	paused := map[string]any{"title": "1989 - Deluxe - KKBOX", "artist": "", "duration": 2143.19, "playing": false}
-	if !builtinArtistNotReady(kkboxBundleID, paused) {
-		t.Error("歌手空又没在放:分不出是不是开播那一帧,照旧当还没准备好")
-	}
-}
-
 // KKBOX 歌手空的(播客单集)不拿去搜歌词。
 func TestKKBOXArtistlessNotEnriched(t *testing.T) {
 	if got := trackEnrichment("", "1989 - Deluxe - KKBOX", "", kkboxBundleID, 2143, true, false); got != nil {

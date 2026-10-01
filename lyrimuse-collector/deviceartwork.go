@@ -13,10 +13,9 @@ import (
 	"path/filepath"
 )
 
-// media-control 能直接给出正在播放这首歌的封面(playing app 自己经
-// MediaRemote 上送的,浏览器网页播放器也会给——例如 Arc 播 Apple Music 网页版时
-// media-control 能读到跟这首歌逐字节对应的封面)。这份数据本来就在,只是
-// fetchRawMediaControlState 一直传 --no-artwork 把它丢在门外(省几百 KB 的轮询开销)。
+// 正在播放的 App 自己经 MediaRemote 上送这首歌的封面(浏览器网页播放器也会给——例如 Arc 播
+// Apple Music 网页版时能读到跟这首歌逐字节对应的封面)。App 换歌时把它写进当前封面文件,
+// collector 从那里取(见 appPlaybackArtwork)。
 //
 // 举例(Michael Jackson《Workin' Day and Night (Immortal Version)》,专辑《Immortal
 // (Deluxe Edition) [Original Motion Picture Soundtrack]》):网易云自己搜到的封面本来是

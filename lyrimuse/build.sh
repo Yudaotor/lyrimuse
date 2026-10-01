@@ -434,10 +434,8 @@ codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
 # 会报 "Can't open perl script ... No such file or directory")。因此这里把 Homebrew
 # Cellar 里 bin/+lib/+Frameworks/ 这一整棵相对路径子树原样搬进
 # Contents/Resources/media-control/(排除 INSTALL_RECEIPT.json 等安装元数据),保持它
-# 内部的相对路径结构不变——collector 常驻进程按跟自己同目录的固定子路径找
-# media-control/bin/media-control(见 lyrimuse-collector/system.go 的
-# mediaControlBinaryPath),Swift 侧走 Bundle.main.resourcePath 拼同一条路径——两边都
-# 不需要用户自己额外 brew install 任何东西。
+# 内部的相对路径结构不变——App 走 Bundle.main.resourcePath 拼 media-control/bin/media-control
+# 这条路径,不需要用户自己额外 brew install 任何东西。
 #
 # 本地开发机上不要求提前手动 `brew install media-control`——下面检测到没装会自动装一次
 # (CI 见 release.yml,跑在 GitHub Actions 的 macOS runner 上,提前显式装过,这里的自动

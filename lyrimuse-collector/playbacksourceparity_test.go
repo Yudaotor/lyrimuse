@@ -5,8 +5,7 @@ import (
 	"testing"
 )
 
-// App 侧播放源加固里跟 collector 同一套判据的那几处:最近记录只有一条时的对象形状、YT Music 探针的专辑名引号、
-// 多标签页时暂停的那页排后。
+// App 侧播放源加固里跟 collector 同一套判据的那几处:最近记录只有一条时的对象形状、多标签页时暂停的那页排后。
 
 // Last.fm 的 recenttracks.track 只有一条时是对象不是数组:照样解出这一条,不整份解失败(feed 永远写不出来)。
 func TestParseLastfmRecentSingleTrackObject(t *testing.T) {
@@ -23,30 +22,18 @@ func TestParseLastfmRecentSingleTrackObject(t *testing.T) {
 	}
 }
 
-// 专辑名里有双引号:只脱两头一对,里面被 Chromium 转义的 `\"` 还原(跟 Swift 侧 YouTubeMusicAdProbe.parse 一致)。
-func TestParseYTMusicAdProbeQuotedAlbum(t *testing.T) {
-	raw := `"0|0|0||Live at \"Budokan\""`
-	verdict, album := parseYTMusicAdProbe(raw)
-	if verdict == ytmusicAdUnknown || album != `Live at "Budokan"` {
-		t.Fatalf("verdict=%v album=%q", verdict, album)
-	}
-	if _, album := parseYTMusicAdProbe(`0|0|0||Title"`); album != `Title"` {
-		t.Errorf("没被包引号时末尾的引号要留着,got %q", album)
-	}
-}
-
 // 多标签页:暂停的那页(JS 给结果加 PAUSED: 前缀)先记成备选,都找完了才交回;数标签页那一步包在 try 里。
-func TestYTMusicAdAppleScriptPrefersPlayingTab(t *testing.T) {
-	if !strings.Contains(ytmusicAdProbeJS, "PAUSED:") {
-		t.Fatal("探针 JS 要给暂停的标签页加 PAUSED: 前缀")
-	}
+func TestBrowserTabAppleScriptPrefersPlayingTab(t *testing.T) {
 	for _, family := range []string{"chromium", "safari"} {
-		s := buildYTMusicAdAppleScript("com.google.Chrome", family)
+		s := buildBrowserTabAppleScript("com.google.Chrome", family, ytmusicHostMarker, "1")
 		for _, want := range []string{`if r starts with "PAUSED:" then`, `if fallback is not "" then return fallback`,
 			"\t\ttry\n\t\t\tset tabCount to count of tabs of window wi\n\t\ton error\n"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("%s: AppleScript 缺 %q", family, want)
 			}
 		}
+	}
+	if buildBrowserTabAppleScript("org.mozilla.firefox", "", ytmusicHostMarker, "1") != "" {
+		t.Error("认不出脚本方言的浏览器不出脚本")
 	}
 }
