@@ -2621,8 +2621,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // "上一首还在播"这份陈旧状态会一直活着,中断(焦点被抢/退出/stopped)之后
             // 另起的一首歌若恰好落进自然切歌窗口(|overrun|≤4 且假偏置落 (0.05,2.5]),
             // 会被伪判成 gapless 自然切歌、种下最多 2.5s 的假偏置且整曲不自愈——改动前
-            // 换歌分支无条件采信读数,这份陈旧状态才是无害的。与 collector 侧
-            // updatePosition 的 key=="" 分支清理对齐。
+            // 换歌分支无条件采信读数,这份陈旧状态才是无害的。
             posWasPlaying = false
             posPrevWall = nil
             posPrevDurationSecs = 0

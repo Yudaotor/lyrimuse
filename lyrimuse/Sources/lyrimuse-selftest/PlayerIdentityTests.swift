@@ -268,9 +268,9 @@ func runPlayerIdentityTests() {
 
     // ---- 播放器身份契约:rawValue / bundle id 必须跟 collector 逐字对应 ----
     //
-    // rawValue 是两侧通过共享 features.json 的 "player" 字段交换的字符串(Go 侧 features.go 的
-    // playerXxx 常量);bundle id 是核对"系统级 Now Playing 是谁在报"的唯一依据(Go 侧 system.go
-    // 的 xxxBundleID 常量)。这两组字符串任一侧改了名而另一侧没跟上,表现都是**静默失效**:
+    // rawValue 是两侧通过共享 features.json 的 "player" 字段交换的字符串(Go 侧 players_generated.go 的
+    // playerXxx 常量);bundle id 是核对"系统级 Now Playing 是谁在报"的唯一依据(同一个文件里的
+    // xxxBundleID 常量)。这两组字符串任一侧改了名而另一侧没跟上,表现都是**静默失效**:
     // 用户在设置里选了某个播放器,collector 认不出这个值就默默兜底成"自动识别",界面一切正常、
     // 只是选择没生效 —— 所以这里把它们钉成断言,而不是靠"记得两边一起改"。
     do {

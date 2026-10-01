@@ -42,8 +42,7 @@ public enum MediaControlClient {
 
 
     /// players 是当前选中的播放器集合(可多选,取代原来的单值 `player:`
-    /// 参数)。三条路径,按优先级(跟 collector 侧 system.go 的 getState() 是同一套设计,
-    /// 两侧必须同步维护):
+    /// 参数)。三条路径,按优先级(引擎不读播放器,这套读取只此一份):
     ///   - 选了「自动识别」(不管是否同时还勾了别的具体播放器,auto 是超集)→
     ///     fetchAutoDetectedSnapshot;
     ///   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走

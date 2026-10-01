@@ -3,7 +3,7 @@ import Foundation
 // Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 跟 collector 侧的 playerXxx 常量
 // 逐字对应(两侧现在都由 shared/players.json 生成,不再靠人守),这是两侧通过共享 json
 // 文件("player" 字段)交换的字符串。四个
-// 具体 App 对应两条完全不同的读取路径(见 MediaControlClient.swift/collector/system.go
+// 具体 App 对应两条完全不同的读取路径(见 MediaControlClient.swift
 // 的注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐/网易云音乐/酷狗音乐都没有
 // AppleScript 支持(用 `sdef`/PlistBuddy 核实过,两者都压根没有 .sdef、也没开
 // NSAppleScriptEnabled),共用同一条系统级 MediaRemote 路径(经内置的 media-control
@@ -20,8 +20,8 @@ import Foundation
 // MediaRemote/Control Center)本来就只会有一个"当前正在播放"焦点,不是这个 App 自己在
 // 猜。.auto 因此不对应任何单一固定的 bundle id(bundleIdentifier 返回空字符串,调用方
 // 按"没有唯一确定的目标 App"处理,比如"打开 Lyrimuse 时唤起播放器"这类需要一个具体
-// App 才有意义的联动直接跳过),真正的检测逻辑在 MediaControlClient.fetchSnapshot/
-// collector 的 getState() 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
+// App 才有意义的联动直接跳过),真正的检测逻辑在 MediaControlClient.fetchSnapshot
+// 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
 // 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
 // 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
 //

@@ -1,7 +1,6 @@
 import Foundation
 
-// 镜像 `media-control get` 的 JSON 输出,只取本地播放数据源需要的那几个字段——
-// collector/system.go 的 getState() 用的是同一条命令,同样只关心这几个字段。
+// 镜像 `media-control get` 的 JSON 输出,只取本地播放数据源需要的那几个字段。
 public struct MediaControlSnapshot: Decodable {
     public let title: String?
     public let artist: String?
