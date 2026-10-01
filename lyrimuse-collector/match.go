@@ -697,12 +697,8 @@ func hasNativeLyricSource() bool {
 	return len(nativeLyricSources) > 0
 }
 
-// playerForBundleID 是 playerBundleID(system.go)的逆向:把播放器上报的 bundle id 映射
-// 回播放器常量,认不出就返回空串。
-//
-// **不能拿 playerBundleID 反推**:那个函数的 default 分支把一切未知都映射成 Apple
-// Music(对它的用途是对的 —— 调用方已经先排除了 playerAuto),反过来用会把任何不认识的
-// bundle id 都当成 Apple Music。这里认不出必须是"不知道",不是"就当是 Apple Music"。
+// playerForBundleID 把播放器上报的 bundle id 映射回播放器常量(反查 playerBundleIDs),认不出就返回空串:
+// 认不出必须是"不知道",别兜底成 Apple Music。
 func playerForBundleID(bundleID string) string {
 	// 反查生成表(players_generated.go,生成自 shared/players.json),不手写 switch。
 	// 这里原本是一份**平行维护的 case 清单**,汽水音乐内置化时漏了它 —— 那之前没有

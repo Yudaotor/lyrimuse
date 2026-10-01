@@ -58,7 +58,7 @@ var playerBundleIDs = map[string]string{
 }
 
 // builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID
-// (自动识别的准入名单)和 resolveTrustedPlayers(把内置的从信任列表里剔掉)共用。
+// (是不是内置播放器)和 resolveTrustedPlayers(把内置的从信任列表里剔掉)共用。
 var builtinPlayerBundleIDs = map[string]bool{
 	appleMusicBundleID:   true,
 	qqMusicBundleID:      true,
@@ -127,4 +127,11 @@ var playerNeedsFullDiskAccess = map[string]bool{
 var playerArtistlessNotMusic = map[string]bool{
 	kkboxBundleID:       true,
 	amazonMusicBundleID: true,
+}
+
+// mediaProxyOwners 是「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是
+// WebKit GPU 进程,查信任列表、Last.fm 排除名单、网页播放器配对之前先换回宿主。
+// Swift 侧 TrustedPlayers.mediaProxyOwners 同源。
+var mediaProxyOwners = map[string]string{
+	"com.apple.WebKit.GPU": "com.apple.Safari",
 }

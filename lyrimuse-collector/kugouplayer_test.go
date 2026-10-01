@@ -17,17 +17,16 @@ func TestKugouPlayerWiring(t *testing.T) {
 	}
 
 	featuresRef().Players = map[string]bool{playerKugou: true}
-	if got := playerBundleID(playerKugou); got != kugouMusicBundleID {
-		t.Errorf("playerBundleID(kugou) = %q，期望 %q", got, kugouMusicBundleID)
+	if got := playerBundleIDs[playerKugou]; got != kugouMusicBundleID {
+		t.Errorf("playerBundleIDs[kugou] = %q，期望 %q", got, kugouMusicBundleID)
 	}
 	if got := mediaPlayerLabel(kugouMusicBundleID); got != "Kugou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(固定播放器分支) = %q", got)
 	}
 
-	// 「自动识别」下靠 bundle id 认成员,漏登记的话酷狗在 auto 模式下会被当成"不是我们
-	// 认识的播放器"整条丢掉。
+	// 内置播放器要认得出:信任播放器那套署名纠正按它把内置的排除掉,酷狗走自己那一套。
 	if !isKnownPlayerBundleID(kugouMusicBundleID) {
-		t.Error("自动识别模式认不出酷狗的 bundle id")
+		t.Error("认不出酷狗是内置播放器")
 	}
 	featuresRef().Players = map[string]bool{playerAuto: true}
 	if got := mediaPlayerLabel(kugouMusicBundleID); got != "Kugou Music (macOS)" {
@@ -56,8 +55,9 @@ func TestKugouPlayerWiring(t *testing.T) {
 	}
 }
 
-// 「自动识别」放开到任意 App:口径是"用户显式信任",不是"一律接受"。
-// 白名单同时挡着显示和打卡(isTracked),一律接受等于让视频/播客写进永久收听历史。
+// 「自动识别」放开到任意 App:口径是"用户显式信任",不是"一律接受"。白名单在 App 那边同时挡着显示和打卡
+// (引擎只记 App 认下的播放),一律接受等于让视频/播客写进永久收听历史。这里钉引擎这一侧:信任列表的清洗、
+// 内置 / 信任两种身份的判定、上报标签。
 func TestTrustedPlayersWiring(t *testing.T) {
 	saved := features()
 	t.Cleanup(func() { setFeatures(saved) })
@@ -87,20 +87,20 @@ func TestTrustedPlayersWiring(t *testing.T) {
 
 	featuresRef().TrustedPlayers = got
 
-	// 准入:内置永远认、信任过的认、陌生的一律不认。
+	// 身份:内置的认作内置、信任过的认作信任、陌生的两样都不是。
 	for _, id := range []string{"com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID} {
-		if !isAcceptedPlayerBundleID(id) {
-			t.Errorf("内置播放器 %q 该被接受", id)
+		if !isKnownPlayerBundleID(id) {
+			t.Errorf("内置播放器 %q 该被认作内置", id)
 		}
 	}
-	if !isAcceptedPlayerBundleID("com.foobar.mac") {
-		t.Error("信任过的 App 该被接受")
+	if !isTrustedPlayerBundleID("com.foobar.mac") {
+		t.Error("信任过的 App 该被认作信任")
 	}
-	if !isAcceptedPlayerBundleID("com.some.player") {
-		t.Error("名字为空不影响准入")
+	if !isTrustedPlayerBundleID("com.some.player") {
+		t.Error("名字为空不影响信任")
 	}
-	if isAcceptedPlayerBundleID("com.apple.Safari") {
-		t.Error("陌生 App 默认不该被接受(这条就是「一条垃圾都进不来」)")
+	if isKnownPlayerBundleID("com.apple.Safari") || isTrustedPlayerBundleID("com.apple.Safari") {
+		t.Error("陌生 App 既不是内置的也不是信任的")
 	}
 	// isKnownPlayerBundleID 回答的是另一个问题(是不是**内置**),不该被信任列表污染
 	if isKnownPlayerBundleID("com.foobar.mac") {

@@ -5,7 +5,7 @@ import Foundation
 /// ## 为什么是"信任列表"而不是"一律接受"
 ///
 /// 「自动识别」原来只认写死的内置播放器。那道白名单不只挡显示,**也挡打卡**
-/// (collector 的 `poller.isTracked`):一律接受等于让 YouTube 视频、播客、网课被当成
+/// (collector 只记 App 认下的播放):一律接受等于让 YouTube 视频、播客、网课被当成
 /// 收听写进用户的 Last.fm / ListenBrainz **永久历史**,还会往"设计上永不清理"的歌词
 /// 缓存里灌垃圾条目、白烧全部歌词源的查询。
 ///
@@ -48,7 +48,8 @@ public enum TrustedPlayers {
     /// 在"选中了具体播放器但没勾自动识别"这条路径上也会被查(见
     /// `MediaControlClient.fetchMultiSelectedSnapshot`)——最典型场景是「网页播放器」卡
     /// "配对浏览器"这个动作(一步自动信任+配对),用户没有理由因为没勾自动识别就让配对
-    /// 形同虚设。collector 侧对应的是 `isTrustedPlayerBundleID`,两侧必须同步维护。
+    /// 形同虚设。collector 侧对应的是 `isTrustedPlayerBundleID`(署名纠正、上报标签用),判法要一致;
+    /// 别名表两侧都由 shared/players.json 生成。
     public static func isTrusted(_ bundleID: String?) -> Bool {
         isTrusted(bundleID, trusted: current)
     }
@@ -62,8 +63,8 @@ public enum TrustedPlayers {
         return false
     }
 
-    /// 「自动识别」下真正的成员判断:内置播放器 + 用户信任的。跟 collector 的
-    /// `isAcceptedPlayerBundleID` 是同一套语义,两侧必须同时改。
+    /// 「自动识别」下真正的成员判断:内置播放器 + 用户信任的。准入只在 App 判:collector 不复核,
+    /// 只记 App 写进播放状态的播放器。
     public static func isAccepted(_ bundleID: String?) -> Bool {
         // 内置播放器是编译期常量,先判掉:`current` 每次都读盘解码 features.json,这条在轮询热路径上。
         if let bundleID, PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
@@ -84,18 +85,18 @@ public enum TrustedPlayers {
 
     // MARK: - 媒体代理进程
 
-    /// 「媒体进程 bundle id → 真正的宿主 App bundle id」。
+    /// 这个 bundle id 是某个 App 的媒体代理进程吗 —— 是就返回宿主的 bundle id。表在 `mediaProxyOwners`
+    /// (由 scripts/gen-players.py 从 shared/players.json 生成,Go 侧同名同源)。
     ///
     /// Safari 播网页音视频时,解码/播放跑在一个**独立的 WebKit GPU 进程**里,而 MediaRemote
     /// 报"现在谁在放"时报的是**那个进程**(`com.apple.WebKit.GPU`),不是 `com.apple.Safari`。
     /// Chromium 系(Arc/Chrome/Edge)不这样 —— 它们报浏览器自己的 bundle id,所以只有 Safari
     /// 需要这层映射。
     ///
-    /// 不加这层的后果是**用户看得见的断层**(实测撞上,原话「为什么这里又
-    /// 出现了一个 webkit 啥玩意」):在设置页「网页播放器」卡里配对了 Safari,配对动作也确实
+    /// 不加这层的后果是**用户看得见的断层**:在设置页「网页播放器」卡里配对了 Safari,配对动作也确实
     /// 把 `com.apple.Safari` 写进了信任列表,可真播起来上报方是 `com.apple.WebKit.GPU` ——
     /// 不在名单里 → 整条播放不被采纳,同时"发现未知播放器"那张卡还会跳出来要用户再信任一个
-    /// 看不懂的 bundle id。两个身份、两套机制,中间没人搭桥。
+    /// 看不懂的 bundle id。
     ///
     /// **选择"别名"而不是"配对时连带把代理进程也写进信任列表"**:后者会在设置页
     /// 「已信任的其它播放器」里留下一条用户看不懂的 `com.apple.WebKit.GPU`,而且撤销配对时
@@ -103,12 +104,8 @@ public enum TrustedPlayers {
     /// 没有需要同步维护的第二份状态。
     ///
     /// **只登记实测见过的**。`com.apple.WebKit.WebContent` 这类同族进程没有实测到它报过
-    /// Now Playing,不凭猜测往里加 —— 真遇到了在这张表里补一行就行,其余逻辑不用动。
-    public static let mediaProxyOwners: [String: String] = [
-        "com.apple.WebKit.GPU": "com.apple.Safari",
-    ]
-
-    /// 这个 bundle id 是某个 App 的媒体代理进程吗 —— 是就返回宿主的 bundle id。
+    /// Now Playing,不凭猜测往里加 —— 真遇到了在 shared/players.json 的 mediaProxyOwners 里补一行、
+    /// 重新生成就行,其余逻辑不用动。
     public static func mediaProxyOwner(of bundleID: String?) -> String? {
         guard let bundleID else { return nil }
         return mediaProxyOwners[bundleID]

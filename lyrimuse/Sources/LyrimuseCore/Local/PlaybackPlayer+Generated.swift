@@ -175,3 +175,11 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         return allCases.first { $0 != .auto && $0.bundleIdentifier == bundleID }
     }
 }
+
+extension TrustedPlayers {
+    /// 「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是 WebKit GPU 进程,
+    /// 查信任列表之前先换回宿主(判法见 `mediaProxyOwner(of:)`)。Go 侧 mediaProxyOwners 同源。
+    public static let mediaProxyOwners: [String: String] = [
+        "com.apple.WebKit.GPU": "com.apple.Safari",
+    ]
+}

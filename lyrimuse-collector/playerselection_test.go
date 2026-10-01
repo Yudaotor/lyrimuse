@@ -4,8 +4,8 @@ import "testing"
 
 // 播放器多选——设置页"播放器"卡从单选改成多选,用户可以同时勾
 // 好几个具体播放器(高亮显示),也可以额外勾"自动识别"。这一串盯的是共享 JSON 的
-// 迁移路径 + isTracked() 的多选/自动识别组合判定,跟 Swift 侧 lyrimuse-selftest
-// 的「播放器多选」块守的是同一份契约。
+// 迁移路径,跟 Swift 侧 lyrimuse-selftest 的「播放器多选」块守的是同一份契约。这一拍算不算数只在 App 判,
+// 见 TestIsTrackedTrustsTheAppsPlayer。
 
 func TestResolvePlayersMigratesLegacySingleValue(t *testing.T) {
 	// 老配置(升级前只写了 "player" 单值,从没写过 "players")：迁移成对应的单元素集合。
@@ -42,76 +42,22 @@ func TestResolvePlayersAcceptsMultiSelect(t *testing.T) {
 	}
 }
 
-// isTracked() 的多选/自动识别组合判定——跟 Swift 侧 MediaControlClient.fetchSnapshot
-// 的多选解析是同一份设计:auto 是超集,选了 auto 就按"内置+信任列表"整套准入判断,
-// 不管有没有额外勾了别的具体播放器；没有 auto 时按选中集合逐个比对 bundle id。
-func TestIsTrackedMultiSelect(t *testing.T) {
-	saved := features().Players
-	t.Cleanup(func() { featuresRef().Players = saved })
-
-	newPoller := func(bundle string) *poller {
-		return &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Bundle: bundle}}
-	}
-
-	// 单选 qq_music：只认它自己的 bundle id，别的一律不认。
-	featuresRef().Players = map[string]bool{playerQQMusic: true}
-	if !newPoller(qqMusicBundleID).isTracked() {
-		t.Error("单选 qq_music 时,qq 自己的 bundle 该被认")
-	}
-	if newPoller(neteaseMusicBundleID).isTracked() {
-		t.Error("单选 qq_music 时,网易云的 bundle 不该被认")
-	}
-
-	// 多选 {qq_music, kugou_music}：两个都认,其它仍不认。
-	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
-	if !newPoller(qqMusicBundleID).isTracked() {
-		t.Error("多选 {qq,kugou} 时,qq 该被认")
-	}
-	if !newPoller(kugouMusicBundleID).isTracked() {
-		t.Error("多选 {qq,kugou} 时,kugou 该被认")
-	}
-	if newPoller(spotifyBundleID).isTracked() {
-		t.Error("多选 {qq,kugou} 时,没选中的 spotify 不该被认")
-	}
-
-	// 多选 {qq_music, auto}：auto 是超集,内置播放器全认（不局限于 qq 一个）,
-	// 陌生 App 仍然不认(除非进了信任列表,这里没配)。
-	featuresRef().Players = map[string]bool{playerQQMusic: true, playerAuto: true}
-	if !newPoller(spotifyBundleID).isTracked() {
-		t.Error("多选 {qq,auto} 时,auto 该把内置的 spotify 也认下来(超集语义)")
-	}
-	if newPoller("com.apple.Safari").isTracked() {
-		t.Error("多选 {qq,auto} 时,没信任过的陌生 App 仍不该被认")
-	}
-}
-
-// 补:信任列表(最典型场景是「网页播放器」卡配对的浏览器)必须在**没有勾
-// 自动识别**时也生效——配对浏览器这个动作跟"选没选自动识别"是两件独立的事,用户没有
-// 理由因为只选了具体播放器就让配对形同虚设。
-func TestIsTrackedMultiSelectHonorsTrustedPlayersWithoutAuto(t *testing.T) {
+// 这一拍算不算数只在 App 判:App 只把它认下的播放器写进播放状态,引擎不再按选中集合复核。选中集合、信任列表
+// 之外的播放器只要出现在 App 状态里就算数;没有曲目才不算。
+func TestIsTrackedTrustsTheAppsPlayer(t *testing.T) {
 	savedPlayers, savedTrusted := features().Players, features().TrustedPlayers
 	t.Cleanup(func() { featuresRef().Players, featuresRef().TrustedPlayers = savedPlayers, savedTrusted })
+	featuresRef().Players = map[string]bool{playerQQMusic: true}
+	featuresRef().TrustedPlayers = nil
 
-	const chrome = "com.google.Chrome"
-	featuresRef().Players = map[string]bool{playerQQMusic: true} // 没有 auto
-	featuresRef().TrustedPlayers = map[string]string{chrome: "Chrome"}
-
-	trusted := &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Album: "专辑", Bundle: chrome}}
-	if !trusted.isTracked() {
-		t.Error("没勾自动识别时,信任列表里的浏览器(网页播放器卡配对)仍应被认")
+	for _, bundle := range []string{qqMusicBundleID, spotifyBundleID, "com.apple.WebKit.GPU", "com.example.player"} {
+		p := &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Bundle: bundle}}
+		if !p.isTracked() {
+			t.Errorf("%s 出现在 App 状态里就该算数", bundle)
+		}
 	}
-
-	untrusted := &poller{cfg: &config{}, cur: snapshot{Title: "曲目", Artist: "歌手", Album: "专辑", Bundle: "com.apple.Safari"}}
-	if untrusted.isTracked() {
-		t.Error("没被信任过的 App 不该因为这条新路径被放行")
-	}
-
-	// Safari 走媒体代理别名(报告方是 com.apple.WebKit.GPU,信任的是 com.apple.Safari)。
-	featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}
-	viaProxy := &poller{cfg: &config{}, cur: snapshot{
-		Title: "曲目", Artist: "歌手", Album: "专辑", Bundle: "com.apple.WebKit.GPU"}}
-	if !viaProxy.isTracked() {
-		t.Error("信任了 Safari 之后,它的媒体代理进程 com.apple.WebKit.GPU 也该被认")
+	if (&poller{cfg: &config{}}).isTracked() {
+		t.Error("没有曲目不算")
 	}
 }
 
@@ -128,7 +74,7 @@ func TestIsTrustedPlayerBundleID(t *testing.T) {
 	}
 	if isTrustedPlayerBundleID(qqMusicBundleID) {
 		t.Error("isTrustedPlayerBundleID 只回答信任这一半,内置播放器不该被它认下来" +
-			"(那是 isAcceptedPlayerBundleID/isKnownPlayerBundleID 的职责)")
+			"(那是 isKnownPlayerBundleID 的职责)")
 	}
 
 	featuresRef().TrustedPlayers = map[string]string{"com.apple.Safari": "Safari"}

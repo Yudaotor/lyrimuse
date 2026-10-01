@@ -62,6 +62,13 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - tint          {"rgb": [r,g,b]} / {"source": "…"}(复用歌词来源配色) / {"secondary": true}
 - fallbackSymbol      没装这个 App、也没有随包图标时的 SF Symbol
 - bundledIcon   随包打包的品牌图资源名;没有就 null
+
+# 媒体进程别名
+
+顶层的 mediaProxyOwners 是「媒体进程 bundle id → 宿主 App bundle id」:MediaRemote 报"谁在放"时 Safari
+报的是 com.apple.WebKit.GPU,查信任列表、Last.fm 排除名单、网页播放器配对之前要先换回宿主。两侧各生成
+一张同名的表(Go 的 mediaProxyOwners、Swift 的 TrustedPlayers.mediaProxyOwners),先查本体、再查宿主
+的判法留在手写文件里。键以 $ 开头的是注释。
 """
 import json
 import shutil
@@ -100,7 +107,19 @@ def load():
         extra = [p["id"] for p in players if p["id"] not in order]
         if missing or extra:
             sys.exit(f"displayOrder.{group} 与 players 对不上: 多出 {missing} / 漏了 {extra}")
+    builtin = {p["bundleID"] for p in players if p["bundleID"]}
+    for proxy, owner in media_proxy_owners(spec).items():
+        if not proxy or not isinstance(owner, str) or not owner:
+            sys.exit(f"mediaProxyOwners: {proxy!r} → {owner!r} 不能为空")
+        if proxy in builtin:
+            sys.exit(f"mediaProxyOwners: {proxy} 是内置播放器,不是媒体进程")
     return spec, players, by_id
+
+
+def media_proxy_owners(spec):
+    """mediaProxyOwners 去掉 $ 开头的注释键,按键排好序。"""
+    table = spec.get("mediaProxyOwners", {})
+    return {k: table[k] for k in sorted(table) if not k.startswith("$")}
 
 
 def gofmt(text):
@@ -157,7 +176,7 @@ def render_go(spec, players):
     out.append("}\n")
 
     out.append("\n// builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID\n"
-               "// (自动识别的准入名单)和 resolveTrustedPlayers(把内置的从信任列表里剔掉)共用。\n"
+               "// (是不是内置播放器)和 resolveTrustedPlayers(把内置的从信任列表里剔掉)共用。\n"
                "var builtinPlayerBundleIDs = map[string]bool{\n")
     for p in concrete:
         out.append("\t%s: true,\n" % p["goBundleConst"])
@@ -209,6 +228,14 @@ def render_go(spec, players):
     for p in concrete:
         if p.get("artistlessNotMusic") and p.get("goBundleConst"):
             out.append("\t%s: true,\n" % p["goBundleConst"])
+    out.append("}\n")
+
+    out.append("\n// mediaProxyOwners 是「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是\n"
+               "// WebKit GPU 进程,查信任列表、Last.fm 排除名单、网页播放器配对之前先换回宿主。\n"
+               "// Swift 侧 TrustedPlayers.mediaProxyOwners 同源。\n"
+               "var mediaProxyOwners = map[string]string{\n")
+    for proxy, owner in media_proxy_owners(spec).items():
+        out.append("\t%s: %s,\n" % (go_quote(proxy), go_quote(owner)))
     out.append("}\n")
     return "".join(out)
 
@@ -336,6 +363,14 @@ def render_core_swift(spec, players):
                "        return allCases.first { $0 != .auto && $0.bundleIdentifier == bundleID }\n"
                "    }\n")
     out.append("}\n")
+
+    out.append("\nextension TrustedPlayers {\n"
+               "    /// 「媒体进程 bundle id → 宿主 App bundle id」:Safari 报 Now Playing 用的是 WebKit GPU 进程,\n"
+               "    /// 查信任列表之前先换回宿主(判法见 `mediaProxyOwner(of:)`)。Go 侧 mediaProxyOwners 同源。\n"
+               "    public static let mediaProxyOwners: [String: String] = [\n")
+    for proxy, owner in media_proxy_owners(spec).items():
+        out.append('        "%s": "%s",\n' % (proxy, owner))
+    out.append("    ]\n}\n")
     return "".join(out)
 
 
@@ -425,7 +460,8 @@ def main():
     if check and stale:
         print("\n✗ 生成物过期或被手改。跑 `python3 scripts/gen-players.py` 重新生成后再提交。")
         return 1
-    print("\n✓ %d 个内置播放器,两侧生成物与 shared/players.json 一致" % len(players))
+    print("\n✓ %d 个内置播放器、%d 条媒体进程别名,两侧生成物与 shared/players.json 一致"
+          % (len(players), len(media_proxy_owners(spec))))
     return 0
 
 

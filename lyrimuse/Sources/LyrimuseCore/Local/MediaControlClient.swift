@@ -943,8 +943,8 @@ public enum MediaControlClient {
     }
 
     private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
-        // 闸门 = 内置播放器 + 用户显式信任的未知播放器(见 TrustedPlayers)。
-        // 跟 collector 的 isAcceptedPlayerBundleID 是同一套语义,两侧必须同时改。
+        // 闸门 = 内置播放器 + 用户显式信任的未知播放器(见 TrustedPlayers)。准入只在这里判:
+        // collector 不复核,只记这里认下、写进播放状态的播放器。
         //
         // 三条 nil 出口都先过一次 `appleMusicSnapshotAfterFocusLost`:
         // 「系统 Now Playing 焦点被别的 App 占走」跟「真的没人在放歌」在这里长得一模一样,
@@ -960,7 +960,7 @@ public enum MediaControlClient {
         // KKBOX 在放播客:没在放音乐,不退回去问别家(见 TrustedPlayers.artistlessContent)。
         if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
-        // (浏览器视频/播客)。见 TrustedPlayers.notASong —— 跟 collector 侧同一套语义。
+        // (浏览器视频/播客)。见 TrustedPlayers.notASong。
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
             setSnapshotFailure(.notASong)
             return snapshotAfterFocusLost()

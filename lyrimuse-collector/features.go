@@ -614,7 +614,7 @@ func resolvePlayers(list []string, legacy string) map[string]bool {
 }
 
 // promoteTrustedBuiltins:信任列表里有 App 后来成了内置播放器(KKBOX 就是先被加进信任列表、后来才内置的),
-// 没勾「自动识别」时把它补进选中集合 —— resolveTrustedPlayers 会把它剔出信任列表,不补就悄无声息地不认了。
+// 没勾「自动识别」时把它补进选中集合 —— resolveTrustedPlayers 会把它剔出信任列表,不补的话「跟随播放器启动」就不再盯它。
 // 勾着自动识别的不用补,自动识别本来就认全部内置播放器。Swift 侧 TrustedPlayers.promotingBuiltins 同一条规则。
 func promoteTrustedBuiltins(players map[string]bool, trusted map[string]string) map[string]bool {
 	if players[playerAuto] {

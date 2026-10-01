@@ -7,19 +7,8 @@ import (
 	"strings"
 )
 
-// 播放器身份(哪些 bundle id 算我们认的播放器、显示成什么名字)、广告字段判据、标签清洗等工具。
+// 播放器身份(内置的还是信任的、上报时显示成什么名字)、广告字段判据、标签清洗等工具。
 // 「此刻在放什么」由 App 写的播放状态给出(见 appsource.go),collector 不再自己读播放器的实时状态。
-
-// playerBundleID 把一个具体播放器常量(playerQQMusic 等)映射成它自己会报告的 bundle id。不接受 playerAuto:
-// 它没有唯一固定的目标,调用方先排除(见 poller.isTracked)。多选时对 features().Players 的每个成员分别求。
-func playerBundleID(player string) string {
-	// 表在 players_generated.go(生成自 shared/players.json)。查不到一律退回 Apple Music:
-	// 调用方在"选了 auto / 认不出来"时要的就是这个既有兜底,不是空字符串。
-	if id, ok := playerBundleIDs[player]; ok {
-		return id
-	}
-	return appleMusicBundleID
-}
 
 func isAdBreak(bundleID, artist, title, album string) bool {
 	// App 的广告结论与下面的字段判据取或(见 appsource.go)。
@@ -32,27 +21,15 @@ func isAdBreak(bundleID, artist, title, album string) bool {
 	return album == "" || artist == "" || title == "—"
 }
 
-// isKnownPlayerBundleID:这是不是内置播放器(players.json 里那几家)。自动识别下 poller.isTracked 经
-// isAcceptedPlayerBundleID 用它。
+// isKnownPlayerBundleID:这是不是内置播放器(players.json 里那几家)。信任播放器的署名纠正
+// (trustedlyricartist.go)用它把内置的排除掉。
 func isKnownPlayerBundleID(bundleID string) bool {
 	return builtinPlayerBundleIDs[bundleID]
 }
 
-// isAcceptedPlayerBundleID 是"自动识别"下真正的成员判断:内置播放器,**加上**用户显式信任的未知播放器
-// (features().TrustedPlayers,见那个字段的注释)。
-//
-// 内置和信任两者同权 —— 一旦用户点过"加入信任列表",这个 App 的播放就跟 QQ 音乐一样
-// 参与显示**和**打卡。两者分开成两个函数而不是塞进一个:isKnownPlayerBundleID 回答的是
-// "这是这个项目内置支持的播放器吗"(mediaPlayerLabel 那类固定映射要它),这个回答的是
-// "这一条播放该不该被采纳"。
-func isAcceptedPlayerBundleID(bundleID string) bool {
-	return isKnownPlayerBundleID(bundleID) || isTrustedPlayerBundleID(bundleID)
-}
-
-// isTrustedPlayerBundleID 只回答"信任"这一半(不含内置播放器,跟 Swift 侧 TrustedPlayers.isTrusted 对应——
-// 两者都要处理 Safari 的媒体代理进程别名,见 mediaProxyOwners 的注释)。具体选中了哪几个播放器(非 auto)
-// 时也要认信任列表:「网页播放器」卡的"配对浏览器"一步自动信任 + 配对(SettingsView.trustAndPairBrowser),
-// 没勾"自动识别"也不能让这份配对失效。见 poller.isTracked。
+// isTrustedPlayerBundleID 只回答"信任"这一半(不含内置播放器),跟 Swift 侧 TrustedPlayers.isTrusted 同一套判法:
+// 先查本体,再按 mediaProxyOwners(生成自 shared/players.json)换成宿主查。信任播放器的署名纠正用它。
+// 这一拍算不算数不在这里判:App 只把它认下的播放器写进播放状态(见 poller.isTracked)。
 func isTrustedPlayerBundleID(bundleID string) bool {
 	if _, trusted := features().TrustedPlayers[bundleID]; trusted {
 		return true
@@ -63,20 +40,6 @@ func isTrustedPlayerBundleID(bundleID string) bool {
 		return trusted
 	}
 	return false
-}
-
-// mediaProxyOwners 是「媒体进程 bundle id → 真正的宿主 App bundle id」。
-//
-// Safari 播网页音视频时解码/播放跑在独立的 WebKit GPU 进程里,MediaRemote 报"现在谁在放"
-// 报的是那个进程(com.apple.WebKit.GPU)而不是 com.apple.Safari。Chromium 系(Arc/Chrome/
-// Edge)报的是浏览器自己的 bundle id,所以只有 Safari 需要这层映射。
-//
-// 跟 Swift 侧 LyrimuseCore/Local/TrustedPlayers.swift 的 mediaProxyOwners 是**同一张
-// 表**,两侧必须同时改 —— 跟 isAcceptedPlayerBundleID / TrustedPlayers.isAccepted 这对
-// 本来就得同步的道理一样。完整推导(为什么用别名而不是把代理进程写进信任列表、为什么只
-// 登记实测见过的)写在 Swift 那边,不在这里重复一遍。
-var mediaProxyOwners = map[string]string{
-	"com.apple.WebKit.GPU": "com.apple.Safari",
 }
 
 // mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)

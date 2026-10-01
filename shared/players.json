@@ -242,5 +242,9 @@
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
     "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "kkbox", "spotify", "amazon_music", "auto"],
     "default": ["apple_music", "spotify", "amazon_music", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "auto"]
+  },
+  "mediaProxyOwners": {
+    "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",
+    "com.apple.WebKit.GPU": "com.apple.Safari"
   }
 }

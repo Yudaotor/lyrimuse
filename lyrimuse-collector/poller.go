@@ -446,22 +446,11 @@ func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 	return false
 }
 
-// isTracked:这一拍的曲目来自用户选中的播放器(选了自动识别 = 任一已知播放器),或者信任列表里的播放器
-// (最典型的是「网页播放器」卡配对的浏览器)。App 只发布它认下的播放器,这里是同一套口径的复核,
-// pushRelayState / handle / bridge 共用。
+// isTracked:这一拍 Mac 上有一首在算的歌(App 播放状态里认下的那首)。选中了哪些播放器、自动识别认哪些、
+// 信任列表,都只在 App 判:App 只把它认下的播放器写进播放状态。别在这里按选中集合再复核一遍,两份规则一旦
+// 漂开,App 认下的歌会在这里被静默丢掉(不记收听、不推网页)。pushRelayState / handle / bridge 共用。
 func (p *poller) isTracked() bool {
-	if p.cur.key() == "" {
-		return false
-	}
-	if features().Players[playerAuto] {
-		return isAcceptedPlayerBundleID(p.cur.Bundle)
-	}
-	for player := range features().Players {
-		if p.cur.Bundle == playerBundleID(player) {
-			return true
-		}
-	}
-	return isTrustedPlayerBundleID(p.cur.Bundle)
+	return p.cur.key() != ""
 }
 
 // mirrorScrobbleTracked 先同步记入"已镜像"集合并落盘,再异步镜像写入 Last.fm——见
