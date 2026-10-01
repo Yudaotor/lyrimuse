@@ -15,7 +15,7 @@ func TestWriteEnrichSnapshotMatchesMarshal(t *testing.T) {
 	snap := map[string]enrichEntry{
 		"周杰伦|晴天|叶惠美":           {Lyrics: "[00:01.00]故事的小黄花\n", CoverURL: "https://example.com/a.jpg?x=1&y=2"},
 		"AC/DC|Back In Black|": {LyricsYRC: `[0,1000](0,500,0)Back (500,500,0)<in>`},
-		`Tom "T" & Jerry|<b>|`: {Lyrics: "a b"},
+		`Tom "T" & Jerry|<b>|`: {Lyrics: "a\u2028b"},
 		"":                     {},
 		"ゆず|夏色|":               {Unknown: map[string]json.RawMessage{"future_field": json.RawMessage(`{"n":1}`)}},
 	}

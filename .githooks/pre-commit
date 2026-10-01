@@ -8,8 +8,9 @@
 #   1. gofmt:暂存的 .go 文件必须已格式化。CI 的第一步就是 `gofmt -l lyrimuse-collector`,
 #      本地不拦一道就得推上去才知道,而且一路红下去很容易没人注意。
 #   2. 注释卫生:拦住把过程性内容写进代码注释的提交(日期戳、迭代编号、人物归因、
-#      工单引用、排查叙述、临时状态、emoji 标记)。规则全文在 scripts/check-comment-hygiene.py 的
-#      文档字符串里,那份是唯一真源,这里只负责在提交那一刻跑它。
+#      工单引用、排查叙述、临时状态、emoji 标记),以及源码里真的不可见字符(不换行空格、零宽字符、
+#      BOM 等,要写成转义)。规则全文在 scripts/check-comment-hygiene.py 的文档字符串里,那份是唯一真源,
+#      这里只负责在提交那一刻跑它。
 #
 #   另有一道 README 闸:改了 README 就跑 collector 里核对「歌词源数量」的那条测试。只改文案的提交
 #   没有源码文件,下面三道都不跑,措辞改掉了测试认的写法要推到 CI 才发现。
@@ -114,7 +115,8 @@ checker="$root/scripts/check-comment-hygiene.py"
 # shellcheck disable=SC2086
 printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 python3 "$checker" || {
     echo "" >&2
-    echo "  ↑ 注释里出现了过程性内容。注释只写现状与约束,过程归 git 和 docs/。" >&2
+    echo "  ↑ 注释里出现了过程性内容,或源码里有真的不可见字符。注释只写现状与约束,过程归 git 和 docs/;" >&2
+    echo "    不可见字符写成转义(反斜杠 u 加码点)。" >&2
     echo "  规则与改法见 scripts/check-comment-hygiene.py 开头。" >&2
     echo "  确实要放行:git commit --no-verify" >&2
     echo "" >&2

@@ -194,7 +194,7 @@ func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
 	// 三项标签全是罗马字 —— 只有首轮某个源给回来的日文正文能把 JP 商店带进来(真实调用点
 	// enrich.go 传的就是 lyricSamplesForStorefront(results))。这也是这条修复的**前提**:
 	// 九个源一条正文都没给出来时,手上没有任何日文信号,这个死结仍然解不开。
-	samples := []string{"摩訶不思議だ　言霊は誠か\n偽ってる彼奴は　天に堕ちていった"}
+	samples := []string{"摩訶不思議だ\u3000言霊は誠か\n偽ってる彼奴は\u3000天に堕ちていった"}
 	got := appleStorefrontCanonicalTitle(context.Background(),
 		"Mrs. GREEN APPLE", "KUSUSHIKI", "KUSUSHIKI - Single", 188.348, samples)
 	if normLoose(got) != normLoose(wantTitle) {

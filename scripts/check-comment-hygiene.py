@@ -19,6 +19,8 @@
   - 排查叙述       试了三种方案都不行 / 跑了 30+ 轮 / 实测推翻了…
   - 临时状态       TODO / 待定 / 先这样 / 回头再改;真要留就开 issue
   - emoji 标记     ⚠️;要提醒就直接写约束句「别写成 X」「必须…」
+  - 不可见字符     源码任何位置(不只注释)出现真的不换行空格 / 全角空格 / 零宽字符 / BOM / 行分隔符 /
+                   控制字符;写成转义(反斜杠 u 加码点),真字符看不见,grep / diff / 评审都发现不了
   - (注释掉的旧代码:直接删,git 里有。这条机器判不了,靠评审。)
 
 应该写:调用时序与并发约束、反直觉的取舍、量出来的常数及其出处、字段语义与外部系统的
@@ -30,7 +32,8 @@
 # 范围
 
 只看**注释行**(整行以 // /// # * /* 开头);行尾注释和字符串字面量不扫 —— 误报的代价比
-漏报大,规则宁可窄。命中任何一条即非零退出并打印 `file:line`。
+漏报大,规则宁可窄。不可见字符那一条例外:扫整行,字符串和 rune 字面量里的同样算(这类字符
+最常藏在那里);允许的空白只有普通空格、tab、回车。命中任何一条即非零退出并打印 `file:line`。
 
 易误伤:注释里的「用户」多数指 **App 的最终用户**(正当语义),「这一轮 / 上一轮」在本仓
 多指**一轮歌词源查询**(领域词) —— 所以人物归因那条只匹配「用户+要求/反馈/拍板…」这类
@@ -40,6 +43,7 @@
 import os
 import re
 import sys
+import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -79,6 +83,18 @@ RULES = [
      re.compile(u'\u26a0'),
      u'删掉 ⚠️,要提醒就直接写约束句「别写成 X」「必须…」'),
 ]
+
+# 不可见字符:整行都扫。允许的空白只有普通空格、tab、回车。
+INVISIBLE_OK = {chr(32), chr(9), chr(13)}
+INVISIBLE_CATEGORIES = ('Zs', 'Zl', 'Zp', 'Cf', 'Cc')
+INVISIBLE_HINT = u'写成转义(反斜杠 u 加码点),真字符看不见,grep / diff / 评审都发现不了'
+
+
+def invisible_char(line):
+    for ch in line:
+        if ch not in INVISIBLE_OK and unicodedata.category(ch) in INVISIBLE_CATEGORIES:
+            return ch
+    return None
 
 
 def wanted(path):
@@ -124,6 +140,10 @@ def main(argv):
         except (UnicodeDecodeError, OSError):
             continue
         for i, line in enumerate(lines, 1):
+            ch = invisible_char(line)
+            if ch is not None:
+                frag = u'U+%04X %s' % (ord(ch), unicodedata.name(ch, ''))
+                hits.append((os.path.relpath(fp, ROOT), i, u'不可见字符', frag, INVISIBLE_HINT, line.strip()))
             if not COMMENT_LINE.match(line):
                 continue
             for name, pat, hint in RULES:

@@ -57,7 +57,7 @@ var lyricKnownSpeakerSet = func() map[string]bool {
 // 冒号左边不允许出现的字符 —— "标签"和"带冒号的歌词句子"之间唯一的形状差别。
 var lyricLabelBreakers = func() map[rune]bool {
 	m := map[rune]bool{}
-	for _, r := range " \t　，,。.！!？?；;（()）[]【】「」、…—-\"'“”‘’" {
+	for _, r := range " \t\u3000，,。.！!？?；;（()）[]【】「」、…—-\"'“”‘’" {
 		m[r] = true
 	}
 	return m
@@ -68,7 +68,7 @@ const lyricMaxLabelRunes = 10
 // lyricSplitLabel 剥出行首的「标签 + 冒号」。只认形状,不判断它是不是演唱者。
 // 第二个返回值是冒号后的正文(已 trim),第三个表示这一行到底有没有标签。
 func lyricSplitLabel(text string) (label, rest string, ok bool) {
-	rs := []rune(strings.TrimLeft(text, " \t　"))
+	rs := []rune(strings.TrimLeft(text, " \t\u3000"))
 	// 标签与冒号之间允许有空白(`男 : 第一句` 跟 `男：第一句` 是同一种东西),但标签**内部**
 	// 不允许 —— 一旦空白后面又来了别的字,这行就是带冒号的歌词句子而不是标签。
 	// 别把空白整个当成 lyricLabelBreakers 里的普通中断字符:那样 `男 : …` 会在空格处
@@ -79,9 +79,9 @@ func lyricSplitLabel(text string) (label, rest string, ok bool) {
 			if i == 0 {
 				return "", "", false
 			}
-			return strings.TrimRight(string(rs[:i]), " \t　"), strings.TrimSpace(string(rs[i+1:])), true
+			return strings.TrimRight(string(rs[:i]), " \t\u3000"), strings.TrimSpace(string(rs[i+1:])), true
 		}
-		if r == ' ' || r == '\t' || r == '　' {
+		if r == ' ' || r == '\t' || r == '\u3000' {
 			sawSpace = true
 			continue
 		}
