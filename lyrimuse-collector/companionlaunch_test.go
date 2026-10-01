@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 // 现象是坐实的真实 bug 的回归测试:「打开 Music 时顺带启动 Lyrimuse」在
 // Lyrimuse 已经在跑的情况下仍然去 `open`,而那不是空操作 —— 会让设置窗口自己弹出来,
@@ -181,6 +185,23 @@ func TestParseProcessList(t *testing.T) {
 	}
 	if _, ok := got["line"]; ok {
 		t.Error("PID 不是数字的行该跳过")
+	}
+}
+
+// 引擎自己叫 lyrimuse-engine,以 App 的进程名开头:只有引擎在跑时不能当成 App 在跑。
+func TestEngineProcessIsNotTheApp(t *testing.T) {
+	if got := parseProcessList("  101 lyrimuse-engine\n"); len(got[lyrimuseAppProcessName]) != 0 {
+		t.Fatalf("只有引擎在跑,不该认成 App 在跑: %v", got)
+	}
+	if got := parseProcessList("  101 lyrimuse-engine\n  102 lyrimuse\n"); len(got[lyrimuseAppProcessName]) != 1 {
+		t.Fatalf("App 也在跑时要认得出来: %v", got)
+	}
+	src, err := os.ReadFile("companionlaunch.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `exec.CommandContext(ctx, "pgrep", "-x", name)`) {
+		t.Error("isProcessRunning 要用 pgrep -x 精确匹配,不然 lyrimuse 会命中 lyrimuse-engine")
 	}
 }
 

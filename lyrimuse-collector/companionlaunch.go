@@ -90,8 +90,8 @@ func checkCompanionLaunch() {
 }
 
 // lyrimuseAppProcessName 是 Lyrimuse.app 的可执行文件名(/Applications/Lyrimuse.app/
-// Contents/MacOS/lyrimuse),给 pgrep -x 用。collector 自己的可执行名是 collector,
-// 两者不会互相误命中(实测核实过)。
+// Contents/MacOS/lyrimuse)。引擎自己的可执行名是 lyrimuse-engine,以它开头,所以认 App 只能按名字
+// 精确匹配(pgrep -x、按进程名取 processSnapshot 的结果),别改成前缀或子串匹配。
 const lyrimuseAppProcessName = "lyrimuse"
 
 // shouldCompanionLaunch 把"这一轮到底要不要去启动 Lyrimuse.app"收成一个纯函数,便于
