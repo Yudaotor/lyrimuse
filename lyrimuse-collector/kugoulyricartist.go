@@ -256,7 +256,7 @@ func kugouFixedArtist(bundle, title, artist string, duration float64) (string, b
 	default:
 		return "", false
 	}
-	// App 侧**必须**用同一个署名:它自己也读 media-control,而歌词缓存的 key 是
+	// App 侧**必须**用同一个署名:它从播放器读到的是原样的署名,而歌词缓存的 key 是
 	// `artist|title|album`。这边换了、那边没换,App 就再也查不到 collector 刚写进去的
 	// 那条歌词。见 playerartistfix.go。
 	publishPlayerArtistFix(bundle, title, fixed, kugouArtistPoisonConfirmed)

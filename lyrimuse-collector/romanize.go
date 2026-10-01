@@ -26,7 +26,7 @@ import (
 // 而日文读音**必须**走 CFStringTokenizer 形态分析(不能用 ICU 通用音译:汉字是中日共用的,
 // Any-Latin 会一律按普通话读,「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU
 // applyingTransform(.toLatin) —— 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成
-// lyrics-romanize 这个 Swift 子进程,跟 lyrics-translate / media-control 同一个形态。
+// lyrics-romanize 这个 Swift 子进程,跟 lyrics-translate 同一个形态。
 //
 // helper 内部走的是 `Romanizer.lineReading`,跟 App 播放时的客户端兜底**是同一个函数**。
 // 这一点是这条特性能不能成立的前提:预生成的产物必须跟现算逐字一致,否则同一首歌"装了

@@ -38,7 +38,7 @@ import (
 // **三个必须守住的边界**:
 //
 //  1. **只按目录专辑 ID 查,不按文字匹配**。ID 来自已校验的 Apple 目录锚点
-//     (`appleCatalogAlbumIDFor`,即 media-control 那个 uniqueIdentifier 经 iTunes lookup 拿到的
+//     (`appleCatalogAlbumIDFor`,即 App 状态里的目录曲目 ID 经 iTunes lookup 拿到的
 //     collectionId)。刻意**不**退到"用 artist/album 去 iTunes search 猜一个专辑 ID"——那正是
 //     03 章反复踩过的"同名不同版本"坑,而这里猜错的后果是**给这首歌配上另一张专辑的动态封面**,
 //     比没有动态封面糟得多。代价是覆盖面收在"Apple Music 播放目录曲目"这一档,这是刻意的。
@@ -585,7 +585,7 @@ func motionCoverFreshResultAppliesTo(retainedCoverURL string, fresh enrichEntry)
 //	https://music.apple.com/cn/album/aim-high/1474635060?i=1474635079&uo=4
 //	                                          ^^^^^^^^^^ collectionId
 //
-// 这条路是给**非 Apple Music 播放器**用的:那些歌拿不到 media-control 的 uniqueIdentifier
+// 这条路是给**非 Apple Music 播放器**用的:那些歌拿不到目录曲目 ID
 // 锚点,但只要 collector 解析歌词时给它匹配上了 Apple 条目,这个链接就在。它的可信度不如
 // 目录锚点(来自 searchAppleMusicMatch 的文字匹配,03 章决策 #16 那次错位就是它),所以
 // **必须**配 motionCoverMatchesCover 那道图像校验才能用 —— 单独用它会把错配带进动画。

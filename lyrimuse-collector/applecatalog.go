@@ -19,8 +19,8 @@ import (
 
 // ---- Apple 目录锚点 ----
 //
-// media-control 的 now-playing 快照里有一个一直被丢掉的字段 `uniqueIdentifier`
-// (MediaRemote 的 kMRMediaRemoteNowPlayingInfoUniqueIdentifier)。
+// 系统「正在播放」信息里有一个字段 `uniqueIdentifier`(MediaRemote 的
+// kMRMediaRemoteNowPlayingInfoUniqueIdentifier),App 读出来写进播放状态的 `track.catalog_track_id`。
 // 放 **Apple Music 目录曲目**(流媒体/加进资料库的目录条目)时,它就是 **Apple 的目录
 // 曲目 ID**——
 //
@@ -42,7 +42,7 @@ import (
 //     一个真实的 Apple 目录 ID。所以除了 bundle id 必须是 Apple Music,拿回来的结果还要
 //     **自校验**:曲目名和专辑名都得对上本地标签,对不上就当没有这个锚点。
 //
-// 自校验顺带解决了 media-control 的"脏快照"(见 enrich.go 的 observeWrongDuration:换曲
+// 自校验顺带解决了系统信息的"脏快照"(见 enrich.go 的 observeWrongDuration:换曲
 // 预载窗口里它会把**下一首**的时长和当前曲目的标题拼进同一份快照)。两种情形都安全:
 // uniqueIdentifier 跟着当前曲目 → 校验通过 → 用它的权威时长把脏时长顶掉;跟着下一首 →
 // 曲目名对不上 → 锚点作废、退回现状(30 秒去抖那条防线照旧)。不会更差。
@@ -54,7 +54,7 @@ const (
 	// 目录 ID"(永远查不到)也可能是网络抖动,给几次机会就够。刻意**不落盘**这个计数——
 	// 跟 mbPrimaryNameCache 只落盘查到了的条目同一个理由(见那边注释)。
 	appleCatalogMaxMisses = 3
-	// appleCatalogDurationLogThreshold:权威时长跟 media-control 报的差多少才值得打日志。
+	// appleCatalogDurationLogThreshold:权威时长跟播放器报的(App 状态里的曲长)差多少才值得打日志。
 	// 正常情况两者逐位相等,只有撞上脏快照才会差开,所以这条日志天然稀疏。
 	appleCatalogDurationLogThreshold = 0.5
 )

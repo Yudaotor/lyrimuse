@@ -115,12 +115,10 @@ func lbMeta(s snapshot) lbTrackMeta {
 	if s.Duration > 0 {
 		info["duration_ms"] = int64(s.Duration * 1000)
 	}
-	// 进度条锚点：发布采集器自跟踪的 Position + AnchorTS(=提交时刻)，网页据
+	// 进度条锚点：发布这一拍的 Position + AnchorTS(App 播放状态外推到这一拍的位置与时刻)，网页据
 	// progress_ms + (now - progress_ts) * playback_rate 只外推很短一段(到下次刷新)。
-	// 不用 media-control 的 timestamp——它连播时冻结、跨休眠会漂，外推会跑超前。
 	if !s.AnchorTS.IsZero() {
-		// 以 playing 为语义真相：切歌加载瞬间 media-control 会短暂报 playing=true 但
-		// playbackRate=0，此时应按播放(1)计；仅 playing=false 才是真正暂停(0)。
+		// rate 以 playing 为准：在播按 1，暂停按 0。
 		rate := s.Rate
 		if s.Playing && rate == 0 {
 			rate = 1

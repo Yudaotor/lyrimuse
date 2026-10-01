@@ -72,7 +72,7 @@ func decodeDeviceArtwork(data []byte) (image.Image, bool) {
 }
 
 // deviceCoverURLIfFresh 是 resolveEnrichAsync/applyDeviceCoverUpgrade(enrich.go)共用的
-// 入口:只在 isNewTrack 时才问 media-control 要封面(理由见 trackEnrichment 参数注释),
+// 入口:只在 isNewTrack 时才去取封面(读 App 写的当前封面文件,理由见 trackEnrichment 参数注释),
 // 问到之后依次过质量检查、落盘,任何一步没通过都返回空串——调用方据此照常退回原有的
 // 封面检索链路(网易云/Apple/QQ),这不是错误,是"这一刻没能拿到设备封面"的正常结果。
 func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artist, title string) string {

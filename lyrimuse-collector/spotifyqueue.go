@@ -199,7 +199,7 @@ func spotifyUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 // (这几种情况重试都没有意义)。ok=false 的每一种都记一行原因:这几条路原来是静默的,Spotify 换了 uid 格式时
 // 日志里只剩一行同专辑预取,看不出预解析为什么没起。
 //
-// 核对优先比换曲时 AppleScript 记下的曲目 id(录音级身份,最硬);没有这个提示时退回比名字。
+// 核对优先比换曲时记下的曲目 id(App 播放状态带来的,录音级身份,最硬);没有这个提示时退回比名字。
 func spotifyReadCurrentState(userDir, artist, title string, shuffled bool) (upcoming []string, current, ok bool) {
 	raw, err := ldbReadFile(filepath.Join(userDir, "context_player_state_restore"))
 	if err == nil && len(raw) > spotifyStateMaxBytes {

@@ -30,7 +30,7 @@ type playSession struct {
 	// 返回时(LB 慢时 single 类型最长可达约 24s)被下一轮 5s poll 重复触发一次提交。
 	submitting bool
 	announcing bool
-	// 会话级广告标记:开播时判一次(字段启发式 + Spotify AppleScript 权威,
+	// 会话级广告标记:开播时判一次(App 的广告结论与字段启发式取或,
 	// 见 detectAdAtSessionStart),同曲期间字段任一拍判中就往 true 棘轮、绝不回落。
 	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 坐实漏成
 	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
@@ -162,11 +162,11 @@ func trackEndSlack(duration float64) float64 {
 // recordLastfmListen 是 Last.fm 那一路的入口:官方阈值一到(applySubmitOutcome),把这条挂到会话上,
 // 再问一次 settleLastfmPending——默认档当场就发,更严的 scrobble 时点则留着等。挂起的条目跟着会话走:
 // 播放中每拍(handle)、会话结束(finalize)、进程退出(run 的 flush)三处都会再问;会话就此消亡
-// (被别的会话顶掉、或 null-glitch 续接窗口过期)则这条对 Last.fm 永远不发 —— 这正是用户选更严
+// (被别的会话顶掉、或读空续接窗口过期)则这条对 Last.fm 永远不发 —— 这正是用户选更严
 // 时点想要的效果,不是丢失,所以也**不**写本地收听日志(那份日志只给 Last.fm 回填兜底)。
 //
-// 不在 finalize 里"没到点就丢弃":finalize 也会因为 media-control 瞬时假死被调用,60 s 内同一首
-// 歌复现会续接旧会话(handle 里 recentFinalized 那段),丢早了续接回来就再也发不出去了。
+// 不在 finalize 里"没到点就丢弃":finalize 也会因为短暂读空被调用(比如 App 重启、更新那几秒),60 s 内
+// 同一首歌复现会续接旧会话(handle 里 recentFinalized 那段),丢早了续接回来就再也发不出去了。
 //
 // 幂等:LB 失败后重试成功会再次走到这里,lastfmSettled / 已有 pending 都直接返回——原来这种情况下
 // appendListen 会重复追加一行(mirrorScrobbleTracked 有 uts 守卫,本地日志没有),现在不会了。
@@ -1085,9 +1085,9 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if p.sess == nil || p.sess.key != key {
 		p.finalize(now)
 		if p.recentFinalized != nil && p.recentFinalized.key == key && now.Sub(p.recentFinalizedAt) < nullResumeGraceWindow {
-			// media-control 短暂假死(null-glitch)误判停播后同一首歌很快复现:续接旧
+			// 短暂读空(比如 App 重启、更新那几秒)误判停播后同一首歌很快复现:续接旧
 			// session(播放进度/是否已提交过 listen 都带过去),不清零重开——否则这次
-			// 收听会被假死切成两段,各自达到阈值时向 LB 提交两条重复的 listen。
+			// 收听会被切成两段,各自达到阈值时向 LB 提交两条重复的 listen。
 			p.sess = p.recentFinalized
 			p.sess.pnPending = false // 即将重新走一遍"是否需要挂起等歌词"的判定
 			p.sess.ended = false     // 会话还没完;挂着的 Last.fm 收听(lastfmPending)继续跟着它等到点
@@ -1167,8 +1167,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// pnPendingMax 再作为"换曲那条"发出。挂起期间不发状态切换/刷新提交(会锁死无歌词的换曲那条)。
 	if p.sess.pnPending {
 		// isNewTrack 传 false:这是同一个 session 里等 enrich 完成的轮询重试,不是新曲目
-		// 开始播放的那一刻,不该再问一次 media-control 要设备封面(那一刻已经在上面
-		// "New track" 分支问过了)。
+		// 开始播放的那一刻,不该再取一次设备封面(那一刻已经在上面 "New track" 分支取过了)。
 		resolved := !p.cur.SodaPreviewPending &&
 			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), false, p.cur.Radio)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {

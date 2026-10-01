@@ -545,11 +545,10 @@ func loosenEnrichKeyUncached(key string) string {
 
 // isNewTrack:poller.go 的 handle() 只在"确认这是一次全新的曲目开始播放"(换曲/单曲循环
 // 重新起播)那两处传 true,其余调用方(pnPending 重试、lb.go/relay.go 的缓存读取)传
-// false。true 时,才会去问 media-control 要设备直送封面(fetchNowPlayingArtwork,见
-// deviceartwork.go 头注)——这次调用发生在**触发它的那次轮询之后紧接着的一个新
-// goroutine 里**,不是先在 handle() 里同步拿到封面再传进来:media-control 这次调用要
-// 发一次子进程(哪怕命中缓存也有 fork/exec 开销),同步等它会让轮询主循环卡住,跟"不阻塞
-// poll 循环"这条贯穿全仓库的约束冲突。异步调用的代价:曲目可能在这几百毫秒内又换了——
+// false。true 时才去取设备直送封面(fetchNowPlayingArtwork:读 App 写的当前封面文件,见
+// deviceartwork.go 头注)——这一步放在**触发它的那次轮询之后紧接着的一个新 goroutine 里**,
+// 不是先在 handle() 里同步拿到封面再传进来:读文件、校验、解码、落盘都不该让轮询主循环等着,
+// 跟"不阻塞 poll 循环"这条贯穿全仓库的约束一致。异步调用的代价:曲目可能在这几百毫秒内又换了——
 // fetchNowPlayingArtwork 自己会核对 bundleID/artist/title 还对不对得上,对不上就当没读到,
 // 不会把封面错配到别的曲目上。
 func trackEnrichment(artist, title, album, bundleID string, durationSecs float64, isNewTrack, radio bool) map[string]string {
@@ -633,7 +632,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 	}
 	if ok {
-		// Spotify 曲目 ID 提示:换曲那一拍 poller 刚从 AppleScript 拿到的真 ID,写进条目就落盘。
+		// Spotify 曲目 ID 提示:换曲那一拍 poller 从 App 播放状态记下的真 ID,写进条目就落盘。
 		// 只在变化时写 —— 同一首歌每几秒进来一次,不能每次都 save;落盘放在锁外(见函数末尾)。
 		spotifyHintDirty := applySpotifyTrackIDHintLocked(hintKey, &e)
 		// 电台真曲长提示(同一套模式):目录锚点是异步的,条目写下那一拍通常还没有,几秒后
@@ -674,7 +673,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
-		// 起——后一条门槛避免同一首歌每次重播都重新问一遍 media-control(coverSource 一旦
+		// 起——后一条门槛避免同一首歌每次重播都重新取一遍设备封面(coverSource 一旦
 		// 变成 "device" 就此定案,不再需要每次播放都重新验证,见 applyDeviceCoverUpgrade
 		// 头注)。
 		if isNewTrack && e.CoverSource != "device" && !enrichInflight[key] {
@@ -2056,7 +2055,7 @@ func gainsWordTiming(e enrichEntry, picked *scoredLyricCandidateResult) bool {
 // 对应的 cancel —— 真正让下面 resolveTrackEnrichment 内部还在飞的网络请求中断,不是
 // "隔着进程装个样子"。
 //
-// isNewTrack:透传自 trackEnrichment,true 时才会问 media-control 要设备直送封面——
+// isNewTrack:透传自 trackEnrichment,true 时才去取设备直送封面——
 // 见 trackEnrichment 参数注释。albumprefetch.go 直接调这个函数解析同专辑里没在播的
 // 曲目,恒传 false(那些曲目此刻并不是设备正在播的这首,见该调用点注释)。
 func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID string, durationSecs float64, isNewTrack bool) {
@@ -2267,7 +2266,7 @@ func commitEnrichEntrySince(key string, e enrichEntry, stamp uint64) {
 // 封面这一件事,其余外围字段仍由 needsPeripheralBackfill 那条既有路径负责。
 //
 // 调用方(trackEnrichment 的缓存命中分支)已经把 isNewTrack 判过了,这里恒传 true 给
-// deviceCoverURLIfFresh——真正现场问 media-control 要封面的动作就发生在这个 goroutine
+// deviceCoverURLIfFresh——真正去取设备封面(读 App 写的当前封面文件)的动作就发生在这个 goroutine
 // 里,不是同步拿到值才起这个 goroutine(那会阻塞 poll 循环,见 trackEnrichment 参数注释)。
 func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bundleID string) {
 	defer func() {
@@ -2282,8 +2281,8 @@ func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bun
 	go settleDeviceCover(ctx, key, artist, title, album, bundleID)
 }
 
-// deviceCoverSettleDelays:头一张设备封面拿到之后,再隔这些间隔各问一次 media-control
-// (累计 3 / 8 / 16 秒),拿到不一样的图就换上。
+// deviceCoverSettleDelays:头一张设备封面拿到之后,再隔这些间隔各取一次(累计 3 / 8 / 16 秒),
+// 拿到不一样的图就换上。App 换歌后自己也会复核封面,播放器换上真图时它会重写当前封面文件,这里才取得到新图。
 //
 // 播放器会**先推自己的占位图、真封面晚几秒才推**:酷狗 3.3.2 实测换歌后头 8 秒推的是它
 // 内置的那张蓝底黑胶唱片(同一张图被本机十几首歌共用),之后才换成真封面;网易云「先给
@@ -2906,7 +2905,7 @@ func (e *enrichEntry) fillMotionCover(ctx context.Context, artist, title, album 
 		return
 	}
 	// 专辑 ID 两条来路,按可信度排:
-	//   ① 已校验的目录锚点(media-control 的 uniqueIdentifier → iTunes lookup),ID 是精确的,
+	//   ① 已校验的目录锚点(App 状态里的目录曲目 ID → iTunes lookup),ID 是精确的,
 	//      但只有 Apple Music 播的目录曲目才有;
 	//   ② enrich 自己记下的 apple_music_url 里那个 ID —— 覆盖**所有播放器**(QQ / 网易云 /
 	//      Spotify 播的歌,只要 collector 给它匹配上了 Apple 条目就有),但它来自文字匹配,

@@ -60,9 +60,9 @@ const (
 	// 未缓存新歌:开播时挂起首条 playing_now,最多等这么久让 enrich 解析出歌词再发
 	// (LB 只认换曲那条,歌词须在首条;enrichNotify 通常更早触发)。
 	pnPendingMax = 8 * time.Second
-	// media-control 连续读空(nullStreak≥3)会被当作"停播"清空当前曲目、终结 session；若这其实
-	// 只是短暂假死、同一首歌很快又重新读到,在这个宽限期内续接旧 session(而非清零重开),避免
-	// 一次连续收听被假死切成两段、各自达到阈值后向 LB 提交两条 listen。
+	// 连续读空(nullStreak≥3:App 状态不可用、或 App 报没在放)会被当作"停播"清空当前曲目、终结 session；
+	// 若这其实只是短暂中断(比如 App 重启、更新)、同一首歌很快又重新读到,在这个宽限期内续接旧 session
+	// (而非清零重开),避免一次连续收听被切成两段、各自达到阈值后向 LB 提交两条 listen。
 	nullResumeGraceWindow = 60 * time.Second
 	// nullClearMinWait:连续读空至少持续这么久才当停播(见 poller.nullSince)。两个 ticker 间隔再让出一秒,
 	// 正常节奏下第三拍读空恰好满足,不会因为定时器的毫秒级抖动被推迟到第四拍。
@@ -240,10 +240,10 @@ func main() {
 		log.Printf("config: %s", issue)
 	}
 	// listenbrainz_token 是可选的:没填也能正常启动,只是不会提交到 ListenBrainz(见
-	// lbClient.submit 里的空 token 直接跳过网络调用)——media-control 采集、歌词/封面
-	// 解析、写本地缓存(desktop-lyrics 悬浮窗要用的那份)全都照常工作,不依赖这个 token。
+	// lbClient.submit 里的空 token 直接跳过网络调用)——读 App 的播放状态、歌词/封面
+	// 解析、写本地缓存(悬浮歌词要用的那份)全都照常工作,不依赖这个 token。
 	if cfg.Token == "" {
-		log.Printf("no listenbrainz_token configured: ListenBrainz submission disabled, running locally only (media-control + lyrics/cover enrichment still work)")
+		log.Printf("no listenbrainz_token configured: ListenBrainz submission disabled, running locally only (playback tracking and lyrics/cover enrichment still work)")
 	}
 	// desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector 启动时读一次
 	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在

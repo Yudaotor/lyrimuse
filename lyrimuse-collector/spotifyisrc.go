@@ -17,7 +17,7 @@ import (
 // # 为什么这条跟别的本地路径不是一回事
 //
 // kugoulocal / qqlocal / neteaselocal 读的是「客户端曲库」,用来省掉一次搜索;这条读的是
-// **身份**:换曲那一拍 AppleScript 已经拿到了 22 位 Spotify 曲目 ID(spotifytrack.go,零
+// **身份**:换曲那一拍 App 的播放状态已经带来了 22 位 Spotify 曲目 ID(spotifytrack.go,零
 // 额外开销),而 Spotify 的元数据缓存里,这个 ID 对应的 spotify.metadata.Track 记录就带着
 // 这条录音的 ISRC。整条链路**不经过任何名称匹配** —— 不是搜出来最像的那条,是系统正在播的
 // 那一条本身。

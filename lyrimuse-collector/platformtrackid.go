@@ -22,20 +22,20 @@ import (
 //     头注记过这个坑:Live 版有自己的 songID);而 Apple / Spotify 的 ID 是**系统在播放时
 //     直接给的**,就是用户耳朵里那一条录音本身。
 //
-// 两个 ID 都是**零请求**的顺带品:Apple 的来自 MediaRemote 的
-// `kMRMediaRemoteNowPlayingInfoUniqueIdentifier`,Spotify 的来自换曲那一拍本来就要跑的
-// 那次 AppleScript(见 spotifytrack.go)。
+// 两个 ID 都是**零请求**的顺带品,都由 App 写在播放状态里:Apple 的来自 MediaRemote 的
+// `kMRMediaRemoteNowPlayingInfoUniqueIdentifier`(`track.catalog_track_id`),Spotify 的是
+// `track.spotify_track_id`(见 spotifytrack.go)。
 //
 // **Apple 那个 ID 必须先过校验**。`UniqueIdentifier` 只有在放 Apple Music **目录**曲目时
 // 才是目录 ID,本地导入的文件放的是任意 64 位持久 ID(可以是负数)。不校验就拿去查,最好的
 // 结果是白发一个 404,最坏是撞上某个真实目录 ID、把**别人的歌词**安到这首歌上。所以写入点
-// 只有一处:system.go 里 `appleCatalogAnchor` 判定通过之后(那道守卫要求曲目名逐字同名、
+// 只有一处:appsource.go 的 liveAppCatalog 里 `appleCatalogAnchor` 判定通过之后(那道守卫要求曲目名逐字同名、
 // 专辑名对得上、音轨号不冲突,见 applecatalog.go)。
 //
 // # 为什么自带一把锁,不复用 enrichMu
 //
 // 读侧在 `fetchScoredLyricCandidatesStreaming` 的 amll goroutine 里,那条路径不持 enrichMu;
-// 写侧一个在 system.go(不持)、一个在 noteSpotifyTrackID 里(持)。自带锁之后锁序只可能是
+// 写侧一个在 appsource.go(不持)、一个在 noteSpotifyTrackID 里(持)。自带锁之后锁序只可能是
 // enrichMu → 这把,不存在反向,不会成环。
 type playbackTrackIDs struct {
 	appleCatalogID string
