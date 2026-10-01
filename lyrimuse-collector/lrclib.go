@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -77,6 +78,9 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 
 // resolveLRCLIBLyric 三级降级,越往后越宽松,一级失败才试下一级(比"整源判没收录"更宽松)。
 //
+// 两级 get 都带 duration(lrclibDurationParam):服务端只认时长在 ±2 秒内的记录。不带时它按名字
+// 取最早入库的那一条(ORDER BY id),常是旧的纯文本条目或别的版本,见 09 章决策 137。
+//
 // ① /api/get 带 album_name(原有行为,最严)
 // ② /api/get 去掉 album_name —— album_name 是参与
 //
@@ -98,6 +102,7 @@ func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs 
 // 之后就不再读 resultsCh、也不再调 onUpdate,晚到的结果整轮丢弃。所以三级串行的总预算必须
 // 塞进 20s 里——超出去等于这一源白跑,前两级的收益也一起没了。(第一级从 10s 收到 8s 是为了
 // 给后两级腾时间;lrclib.net 慢,但 8s 仍然远超它的正常响应。)
+// 503 重试(lrclibRequest)不在这份预算里,同样受 20s 截止约束:503 当场就回(约 0.6s),重试只多 1～2s。
 //
 // get 层只在拿到**带时间轴、时长也对得上**(sourceDurationFits;本地或它自报的时长未知时不看)的版本时提前收工,
 // 或者它明说这首是纯音乐。只有纯文本、或者时长明显不对的,先记下来当兜底、照常往下走:search 层可能有同名的
@@ -114,11 +119,11 @@ func resolveLRCLIBLyric(ctx context.Context, artist, title, album string, durati
 		}
 		return false
 	}
-	if r := lrclibGet(ctx, artist, title, album, 8*time.Second); settled(r) {
+	if r := lrclibGet(ctx, artist, title, album, durationSecs, 8*time.Second); settled(r) {
 		return r
 	}
 	if album != "" {
-		if r := lrclibGet(ctx, artist, title, "", 5*time.Second); settled(r) {
+		if r := lrclibGet(ctx, artist, title, "", durationSecs, 5*time.Second); settled(r) {
 			return r
 		}
 	}
@@ -130,29 +135,78 @@ func resolveLRCLIBLyric(ctx context.Context, artist, title, album string, durati
 }
 
 // lrclibRequest 是三级共用的请求执行 + JSON 解码,out 传指针。
+//
+// 服务端同时只处理有限个请求,排不上队就回 503(ServerOverloaded + Retry-After: 1),不是在限我们的流:按
+// Retry-After 等一下再发一次(lrclibOverloadWait),只重试这一次。见 09 章决策 137。
 func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out any) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return false
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return false
+		}
+		// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
+		req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
+		resp, err := doHTTPTracked(lyricHTTPClient(timeout), req)
+		if err != nil {
+			return false
+		}
+		if resp.StatusCode == http.StatusOK {
+			ok := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out) == nil
+			resp.Body.Close()
+			return ok
+		}
+		wait, retry := lrclibOverloadWait(resp.StatusCode, resp.Header.Get("Retry-After"))
+		resp.Body.Close()
+		if !retry || attempt > 0 {
+			return false // 404(未收录)或其它错误放弃;下次 enrich 短 TTL 到期自然再试
+		}
+		if !lrclibOverloadPause(ctx, wait) {
+			return false
+		}
 	}
-	// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
-	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
-	resp, err := doHTTPTracked(lyricHTTPClient(timeout), req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false // 404(未收录)或其它错误一律放弃,不重试;下次 enrich 短 TTL 到期自然再试
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(out) == nil
 }
 
-func lrclibGet(ctx context.Context, artist, title, album string, timeout time.Duration) lrclibResult {
+// lrclibOverloadPause 等 d,ctx 先结束就返回 false。可换,只为单测;生产路径永远是这个实现。
+var lrclibOverloadPause = func(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-time.After(d):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// lrclibOverloadRetryMax:503 的 Retry-After 不超过这么久才等着重试,更久的当这一次没问成。
+const lrclibOverloadRetryMax = 2 * time.Second
+
+// lrclibOverloadWait:这次应答要不要等一下再发一次、等多久。只认 503 + 秒数写法、不超过 lrclibOverloadRetryMax 的 Retry-After。
+func lrclibOverloadWait(status int, retryAfter string) (time.Duration, bool) {
+	if status != http.StatusServiceUnavailable {
+		return 0, false
+	}
+	d, ok := retryAfterSeconds(retryAfter)
+	if !ok || d > lrclibOverloadRetryMax {
+		return 0, false
+	}
+	return d, true
+}
+
+// lrclibDurationParam:/api/get 的 duration 参数值。服务端只收 1～3600 秒(超出范围回 400),本地时长不在这个范围里就不带。
+func lrclibDurationParam(durationSecs float64) string {
+	if durationSecs < 1 || durationSecs > 3600 {
+		return ""
+	}
+	return strconv.FormatFloat(durationSecs, 'f', 2, 64)
+}
+
+func lrclibGet(ctx context.Context, artist, title, album string, durationSecs float64, timeout time.Duration) lrclibResult {
 	u := "https://lrclib.net/api/get?artist_name=" + neturl.QueryEscape(artist) +
 		"&track_name=" + neturl.QueryEscape(title)
 	if album != "" {
 		u += "&album_name=" + neturl.QueryEscape(album)
+	}
+	if d := lrclibDurationParam(durationSecs); d != "" {
+		u += "&duration=" + d
 	}
 	var out lrclibSearchItem
 	if !lrclibRequest(ctx, u, timeout, &out) {

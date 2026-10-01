@@ -758,3 +758,40 @@ func TestHostGuardLyricSourceThrottlePausesBackground(t *testing.T) {
 		t.Fatal("没被限流的主机不暂停")
 	}
 }
+
+// 应答带 Retry-After 时后台按它停;上一次暂停结束后很快又被拒才翻倍,隔久了回到 Retry-After 本身;封顶在阶梯最长一档。
+func TestHostGuardThrottlePauseFollowsRetryAfter(t *testing.T) {
+	g, c := newTestGuard(hostRate{perSec: 100, burst: 100})
+	observe := func(retryAfter string) {
+		g.observe(mustReq(t, context.Background(), http.MethodGet, "https://lrclib.net/api/get"), http.StatusServiceUnavailable, retryAfter)
+	}
+	pausedFor := func() time.Duration {
+		until, paused := g.backgroundPausedUntil("lrclib.net")
+		if !paused {
+			return 0
+		}
+		return until.Sub(c.now())
+	}
+	observe("1")
+	if got := pausedFor(); got != time.Second {
+		t.Fatalf("Retry-After: 1 应只停 1 秒,实际 %v", got)
+	}
+	c.add(1500 * time.Millisecond)
+	if got := pausedFor(); got != 0 {
+		t.Fatalf("1 秒过后后台照发,还剩 %v", got)
+	}
+	observe("1")
+	if got := pausedFor(); got != 2*time.Second {
+		t.Fatalf("暂停刚结束又被拒,翻倍到 2 秒,实际 %v", got)
+	}
+	c.add(2*time.Second + lyricSourceRetryAfterStreakWindow + time.Second)
+	observe("1")
+	if got := pausedFor(); got != time.Second {
+		t.Fatalf("隔了 %v 才再被拒,回到 1 秒,实际 %v", lyricSourceRetryAfterStreakWindow, got)
+	}
+	c.add(time.Hour)
+	observe("86400")
+	if got, longest := pausedFor(), lyricSourceBackgroundPauseSchedule[len(lyricSourceBackgroundPauseSchedule)-1]; got != longest {
+		t.Fatalf("Retry-After 很长时封顶在 %v,实际 %v", longest, got)
+	}
+}

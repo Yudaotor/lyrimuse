@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -495,7 +496,7 @@ func (g *hostGuard) observe(req *http.Request, status int, retryAfter string) {
 	}
 	if lyricSourceForHost(guardHost(req.URL)) != "" {
 		if status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests {
-			g.noteLyricSourceThrottled(guardHost(req.URL))
+			g.noteLyricSourceThrottled(guardHost(req.URL), retryAfter)
 		}
 		return
 	}
@@ -511,7 +512,11 @@ func (g *hostGuard) observe(req *http.Request, status int, retryAfter string) {
 
 // noteLyricSourceThrottled:歌词源主机回了 503 / 429,暂停它的后台请求一档(见 lyricSourceBackgroundPauseSchedule)。
 // 已经在暂停期里就不动(同一批在途请求一起被拒只算一次);上一次暂停结束后又安静了超过最长一档,从第一档重新算。
-func (g *hostGuard) noteLyricSourceThrottled(host string) {
+//
+// 应答带了 Retry-After(秒数)就按它停,不走阶梯:lrclib 忙不过来时回 503 + Retry-After: 1,停整分钟等于扫库时
+// 这个源长时间缺席,见 09 章决策 137。上一次暂停结束后 lyricSourceRetryAfterStreakWindow 之内又被拒,停的时间逐次翻倍,
+// 封顶在阶梯最长一档。
+func (g *hostGuard) noteLyricSourceThrottled(host, retryAfter string) {
 	now := g.now()
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -528,9 +533,27 @@ func (g *hostGuard) noteLyricSourceThrottled(host string) {
 		p.level = 0
 	}
 	d := lyricSourceBackgroundPauseSchedule[min(p.level, len(lyricSourceBackgroundPauseSchedule)-1)]
+	if ra, ok := retryAfterSeconds(retryAfter); ok {
+		if !p.until.IsZero() && now.Sub(p.until) > lyricSourceRetryAfterStreakWindow {
+			p.level = 0
+		}
+		d = min(ra<<min(p.level, 16), longest)
+	}
 	p.level++
 	p.until = now.Add(d)
 	slog.Warn("lyric source rate-limited, pausing background requests", "host", host, "for", d.String())
+}
+
+// lyricSourceRetryAfterStreakWindow:按 Retry-After 暂停时,上一次暂停结束后多久之内再被拒算「接着被拒」(停的时间翻倍)。
+const lyricSourceRetryAfterStreakWindow = 30 * time.Second
+
+// retryAfterSeconds 只认秒数写法的 Retry-After;没给、写成日期或不是正数时 ok 为 false。
+func retryAfterSeconds(v string) (time.Duration, bool) {
+	secs, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || secs <= 0 {
+		return 0, false
+	}
+	return time.Duration(secs) * time.Second, true
 }
 
 // backgroundPausedUntil:这个主机的后台请求此刻是不是在暂停期里。
