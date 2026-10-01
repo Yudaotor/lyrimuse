@@ -1613,9 +1613,9 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	appState := newAppStateReader(configFilePath(clientName + "-playback-state.json"))
 	p.app = &appPlayback{reader: appState, judge: liveAppPlaybackJudge}
 	setAppPlaybackArtworkSource(appState, configFilePath(clientName+"-now-playing-artwork"))
+	appAvailable := func() bool { _, avail := appState.read(time.Now()); return avail == appStateAvailable }
 	// 预解析要问播放器的那几样请 App 代跑(见 appquery.go);文件名与 App 侧 PlayerQueryServer 逐字一致。
-	setAppQueryChannel(configFilePath(clientName+"-player-query-request.json"), configFilePath(clientName+"-player-query-reply.json"),
-		func() bool { _, avail := appState.read(time.Now()); return avail == appStateAvailable })
+	setAppQueryChannel(configFilePath(clientName+"-player-query-request.json"), configFilePath(clientName+"-player-query-reply.json"), appAvailable)
 	p.poll() // render immediately, don't wait a full interval on startup
 	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
@@ -1624,11 +1624,11 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		// 不看启动时有没有令牌:令牌可能是之后热重读才填上的。没有令牌的那几轮由循环自己跳过(见 startLBRetryLoop)。
 		go startLBRetryLoop(ctx, lb) // 会话结束后才失败的收听,后台重发,见 lbretry.go
 	}
-	go startLfmRetryLoop(ctx)           // 确定没写进 Last.fm 的收听,后台重发,见 lfmretry.go
-	go startCompanionLaunchWatcher(ctx) // 独立节奏,见 companionlaunch.go 顶部注释
-	go startEnrichCancelWatcher(ctx)    // 独立节奏,见 enrichcancel.go 顶部注释
-	go startEnrichEditWatcher(ctx)      // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
-	go startLyricsFillSweeper(ctx)      // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
+	go startLfmRetryLoop(ctx)                         // 确定没写进 Last.fm 的收听,后台重发,见 lfmretry.go
+	go startCompanionLaunchWatcher(ctx, appAvailable) // App 可用时不读进程表,见 companionlaunch.go 顶部注释
+	go startEnrichCancelWatcher(ctx)                  // 独立节奏,见 enrichcancel.go 顶部注释
+	go startEnrichEditWatcher(ctx)                    // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
+	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

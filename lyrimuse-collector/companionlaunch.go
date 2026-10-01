@@ -24,59 +24,65 @@ import (
 // 在不在跑"。读进程表只看这个可执行文件对应的进程在不在,不依赖任何 Apple Event/自动化权限,
 // 所以对没有 AppleScript 支持的 QQ 音乐同样生效。
 //
-// 每一轮只起**一个** `ps -axco pid=,comm=`,一次拿到全部进程的名字和 PID。原来是每个盯着的
-// 播放器各跑一次 `pgrep -x`、每秒一轮:勾满五个就是每秒五次 fork,实测每次约 4ms CPU,
-// 合计常驻约 2% 单核,而且记在临时子进程头上,活动监视器里的 collector 看不出来。
-// 名字取 `-c` 那一列(内核 p_comm),跟原来 `pgrep -x` 比的是同一个东西:16 字节上限照旧
+// 只在有必要盯的时候读进程表(companionWatchNeeded):App 可用(在跑、在写播放状态)时它本来就在,
+// 开关关着、没有要盯的播放器时读到了也不会去拉起,这几种情况一个子进程都不起。要盯时每
+// companionLaunchInterval 起**一个** `ps -axco pid=,comm=`,一次拿到全部进程的名字和 PID;别改成每个
+// 盯着的播放器各跑一次 `pgrep -x`:勾满五个就是每轮五次 fork,而且记在临时子进程头上,活动监视器里的
+// 引擎看不出来。名字取 `-c` 那一列(内核 p_comm),跟 `pgrep -x` 比的是同一个东西:16 字节上限照旧
 // (见 knownPlayerProcessNames),中文的「酷狗音乐」实测能对上。别换成 `pgrep -l`:它打印的
 // 名字跟匹配用的不是同一个来源(拿符号链接起的进程实测,按「酷狗音乐」匹配上、打印出来却是
 // 链接目标的名字)。
-//
-// lastPIDsByName 按进程名记"上一轮看到的 PID"。「刚启动」= 这一轮出现了上一轮没有的 PID ——
-// 比"上一轮不在跑、这一轮在跑"多认出一种:两次采样之间退出又重开(PID 换了)。原来靠 1 秒轮询
-// 去赌能采到中间那一下"不在跑"(Cmd-Q 再重开,进程只消失 1 秒左右),现在不用赌,间隔可以放宽。
-// playerAuto("自动识别")下同时盯全部已知播放器,任意一个刚启动都算数。记的是全部已知播放器,
-// 不只是这一轮盯着的那几个:用户新勾上一个正在跑的播放器,不该被当成"它刚启动"。
-// nil = 进程刚起、还没有上一轮(见 companionObserve)。
-var lastPIDsByName map[string][]int
 
-// companionLaunchInterval 是检测目标播放器启动用的轮询间隔。PID 比对认得出"两次采样之间重启过",
+// companionLaunchInterval 是要盯的时候多久读一次进程表。PID 比对认得出"两次采样之间重启过",
 // 间隔只决定 Lyrimuse 最多晚几秒被拉起,3 秒够用;不复用 poller.go 的 pollInterval(5 秒)只是
 // 为了让这个延迟再短一点。
 const companionLaunchInterval = 3 * time.Second
 
+// companionCheckInterval 是多久判一次要不要盯(问一次 App 状态,不起进程)。比读进程表的间隔短:App 一变成
+// 不可用,下一次判断就取基准,之后才开的播放器都认得出来。
+const companionCheckInterval = time.Second
+
+// companionWatch 是盯播放器启动的状态,只在 startCompanionLaunchWatcher 那一个 goroutine 里用。
+type companionWatch struct {
+	// prev 按进程名记"上一轮看到的 PID"。「刚启动」= 这一轮出现了上一轮没有的 PID,两次采样之间
+	// 退出又重开(PID 换了)也认得出。playerAuto("自动识别")下同时盯全部已知播放器,任意一个刚启动
+	// 都算数。记的是全部已知播放器,不只是这一轮盯着的那几个:用户新勾上一个正在跑的播放器,不该被
+	// 当成"它刚启动"。
+	// nil = 还没有基准:引擎刚起,或刚从「不必盯」变成「要盯」(App 刚退出、开关刚打开),这一轮只记录
+	// 不判断(见 companionObserve)。
+	prev map[string][]int
+	// sampledAt:上一次读进程表的时刻;零值 = 下一次判断就读。
+	sampledAt time.Time
+}
+
 // startCompanionLaunchWatcher 独立于 poller.go 的主轮询跑,由 run() 用单独的
-// goroutine 启动,ctx 取消时退出。
-func startCompanionLaunchWatcher(ctx context.Context) {
-	ticker := time.NewTicker(companionLaunchInterval)
+// goroutine 启动,ctx 取消时退出。appAvailable 回答 App 此刻可不可用(跟 poller 读的是同一份播放状态)。
+func startCompanionLaunchWatcher(ctx context.Context, appAvailable func() bool) {
+	ticker := time.NewTicker(companionCheckInterval)
 	defer ticker.Stop()
+	var w companionWatch
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			checkCompanionLaunch()
+		case now := <-ticker.C:
+			w.check(now, appAvailable())
 		}
 	}
 }
 
-// checkCompanionLaunch 检测目标播放器里有没有谁刚启动(见 lastPIDsByName),有、用户开着这个
-// 开关、而且 Lyrimuse.app 当前**没有**在跑时,启动它。同一轮里有两个都刚启动(用户同时点开了
-// 两个播放器)只按第一个触发一次。
-func checkCompanionLaunch() {
-	procs, ok := processSnapshot()
-	if !ok {
-		return // ps 这一轮没跑成:不动上一轮的记录,下一轮接着比
-	}
-	// 不管开关开没开、这一轮盯不盯它,每一轮都要更新记录——关着的时候跳过的话,关闭期间的
-	// 真实状态变化不会被记下,开关重新打开的瞬间会把"早就在跑"误判成"刚刚启动"。
-	var justStarted string
-	justStarted, lastPIDsByName = companionObserve(companionLaunchProcessNames(), lastPIDsByName, procs)
+// check 判这一轮要不要盯、要盯就按节奏读进程表(见 step),有播放器刚启动、用户开着这个开关、而且
+// Lyrimuse.app 当前**没有**在跑时启动它。同一轮里有两个都刚启动(用户同时点开了两个播放器)只按
+// 第一个触发一次。
+func (w *companionWatch) check(now time.Time, appAvailable bool) {
+	enabled := features().LaunchLyrimuseOnMusicOpen
+	names := companionLaunchProcessNames()
+	justStarted, procs := w.step(now, companionWatchNeeded(appAvailable, enabled, names), names, processSnapshot)
 	// alreadyRunning 只为了把"跳过"这一种否决单独记一条日志——这是唯一需要事后能核实的
 	// 分支(开关关着/没有跳变都不值得记,每轮都记会刷爆日志)。判断本身仍然全在
 	// shouldCompanionLaunch 里,这里不重复一遍条件。
 	alreadyRunning := false
-	if !shouldCompanionLaunch(justStarted, features().LaunchLyrimuseOnMusicOpen, func() bool {
+	if !shouldCompanionLaunch(justStarted, enabled, func() bool {
 		alreadyRunning = len(procs[lyrimuseAppProcessName]) > 0
 		return alreadyRunning
 	}) {
@@ -87,6 +93,33 @@ func checkCompanionLaunch() {
 	}
 	log.Printf("companion launch: %s just started, launching Lyrimuse.app", justStarted)
 	launchLyrimuseApp()
+}
+
+// companionWatchNeeded:这一轮有没有必要读进程表。App 可用时它此刻就在跑,无从拉起;开关关着、没有要盯的
+// 播放器时,读到了也不会去拉起。纯函数,测试覆盖。
+func companionWatchNeeded(appAvailable, enabled bool, names []string) bool {
+	return !appAvailable && enabled && len(names) > 0
+}
+
+// step 走一次判断:不必盯时把记录作废、不起进程;刚开始要盯时马上读进程表(这一轮只当基准),之后距上次读
+// 满 companionLaunchInterval 才读。返回刚启动的播放器名与这一轮的进程快照(没读就是 nil)。sample 读进程表,
+// 单测替换。
+func (w *companionWatch) step(now time.Time, needed bool, names []string, sample func() (map[string][]int, bool)) (string, map[string][]int) {
+	if !needed {
+		w.prev, w.sampledAt = nil, time.Time{}
+		return "", nil
+	}
+	if now.Sub(w.sampledAt) < companionLaunchInterval {
+		return "", nil
+	}
+	w.sampledAt = now
+	procs, ok := sample()
+	if !ok {
+		return "", nil // ps 这一轮没跑成:不动上一轮的记录,隔满间隔再读
+	}
+	var justStarted string
+	justStarted, w.prev = companionObserve(names, w.prev, procs)
+	return justStarted, procs
 }
 
 // lyrimuseAppProcessName 是 Lyrimuse.app 的可执行文件名(/Applications/Lyrimuse.app/
@@ -122,8 +155,8 @@ func shouldCompanionLaunch(justStarted string, enabled bool, lyrimuseRunning fun
 }
 
 // companionObserve 用这一轮的进程快照算出新的记录,并返回刚启动的播放器名(没有就是空串)。
-// prev 为 nil(collector 刚起、还没有上一轮)时只记录不判断:那一刻已经在跑的播放器是早就开着的。
-// 不这样的话 collector 每次重启(改设置、崩溃被 KeepAlive 拉起、自动更新)的第一轮,都会把开着的
+// prev 为 nil(还没有基准,见 companionWatch.prev)时只记录不判断:那一刻已经在跑的播放器是早就开着的。
+// 不这样的话引擎每次重启(崩溃被 KeepAlive 拉起、自动更新)、App 每次退出之后的第一轮,都会把开着的
 // 播放器当成刚启动;用户这时已经退出了 Lyrimuse,就会被违背意愿拉起来。
 func companionObserve(names []string, prev, procs map[string][]int) (string, map[string][]int) {
 	next := make(map[string][]int, len(knownPlayerProcessNames))

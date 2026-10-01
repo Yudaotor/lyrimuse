@@ -1,9 +1,11 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 现象是坐实的真实 bug 的回归测试:「打开 Music 时顺带启动 Lyrimuse」在
@@ -247,5 +249,86 @@ func TestCompanionObserveSeedsOnFirstRound(t *testing.T) {
 	}
 	if got, _ := companionObserve(watch, map[string][]int{}, map[string][]int{"Spotify": {20}}); got != "Spotify" {
 		t.Errorf("上一轮记录为空(不是 nil)时照常判, got %q", got)
+	}
+}
+
+// 不必盯的时候一个进程都不起:App 可用(它就在跑)、开关关着、没有要盯的播放器。
+func TestCompanionWatchNeeded(t *testing.T) {
+	watch := []string{"Music"}
+	cases := []struct {
+		label        string
+		appAvailable bool
+		enabled      bool
+		names        []string
+		want         bool
+	}{
+		{"App 不可用、开关开、有要盯的 → 盯", false, true, watch, true},
+		{"App 可用 → 不盯", true, true, watch, false},
+		{"开关关着 → 不盯", false, false, watch, false},
+		{"没有要盯的播放器 → 不盯", false, true, nil, false},
+	}
+	for _, c := range cases {
+		if got := companionWatchNeeded(c.appAvailable, c.enabled, c.names); got != c.want {
+			t.Errorf("%s: 得到 %v", c.label, got)
+		}
+	}
+}
+
+// App 开着时不读进程表;App 一退出马上取基准,退出前就开着的播放器不算刚启动,之后重开的照常认出来。
+func TestCompanionWatchSkipsWhileAppAvailable(t *testing.T) {
+	watch := []string{"Music"}
+	running := map[string][]int{}
+	calls := 0
+	sample := func() (map[string][]int, bool) {
+		calls++
+		return maps.Clone(running), true
+	}
+	base := time.Unix(1_000_000, 0)
+	at := func(sec int) time.Time { return base.Add(time.Duration(sec) * time.Second) }
+	var w companionWatch
+
+	if got, _ := w.step(at(0), true, watch, sample); got != "" || calls != 1 {
+		t.Fatalf("App 不在时第一轮马上读、只当基准: got %q, calls %d", got, calls)
+	}
+	if w.step(at(1), true, watch, sample); calls != 1 {
+		t.Fatalf("不到间隔不该读, calls %d", calls)
+	}
+	running["Music"] = []int{10} // App 开着的时候打开了 Music
+	for s := 2; s <= 30; s++ {
+		w.step(at(s), false, watch, sample)
+	}
+	if calls != 1 || w.prev != nil {
+		t.Fatalf("App 可用期间不该读、记录要作废: calls %d, prev %v", calls, w.prev)
+	}
+	if got, _ := w.step(at(31), true, watch, sample); got != "" || calls != 2 {
+		t.Fatalf("App 刚退出马上取基准,开着的 Music 不算刚启动: got %q, calls %d", got, calls)
+	}
+	running["Music"] = []int{11}
+	if got, _ := w.step(at(32), true, watch, sample); got != "" || calls != 2 {
+		t.Fatalf("不到间隔不该读: got %q, calls %d", got, calls)
+	}
+	if got, _ := w.step(at(34), true, watch, sample); got != "Music" || calls != 3 {
+		t.Errorf("重开的 Music 要认出来: got %q, calls %d", got, calls)
+	}
+}
+
+// ps 没跑成:不动记录,隔满间隔再读,不会每秒起一次。
+func TestCompanionWatchRetriesAfterInterval(t *testing.T) {
+	calls := 0
+	fail := func() (map[string][]int, bool) {
+		calls++
+		return nil, false
+	}
+	base := time.Unix(1_000_000, 0)
+	var w companionWatch
+	for s := 0; s < 3; s++ {
+		w.step(base.Add(time.Duration(s)*time.Second), true, []string{"Music"}, fail)
+	}
+	if calls != 1 {
+		t.Fatalf("失败后不到间隔不该再读, calls %d", calls)
+	}
+	w.step(base.Add(companionLaunchInterval), true, []string{"Music"}, fail)
+	if calls != 2 {
+		t.Errorf("满间隔要再读一次, calls %d", calls)
 	}
 }
