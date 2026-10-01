@@ -50,6 +50,9 @@ func TestAppStateFixturesDecode(t *testing.T) {
 	if playing.Artwork == nil || playing.Artwork.PlaySeq != playing.Track.PlaySeq {
 		t.Fatalf("artwork should belong to the current play: %+v", playing.Artwork)
 	}
+	if playing.Track.SpotifyTrackID != "4iJyoBOLtHqaGxP12qzhQI" {
+		t.Fatalf("spotify track id should decode, got %q", playing.Track.SpotifyTrackID)
+	}
 
 	paused := loadAppStateFixture(t, "paused-apple-music.json")
 	ps := appStateSnapshot(paused, time.UnixMilli(paused.Position.AtMs).Add(time.Minute))

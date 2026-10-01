@@ -109,6 +109,20 @@ func runHealthcheckCLI(args []string) {
 		}
 	}
 
+	// 播放状态:collector 认「此刻在放什么」走哪条路(见 appsource.go)。
+	stateRec, stateAvail := newAppStateReader(filepath.Join(configDir, clientName+"-playback-state.json")).read(time.Now())
+	switch {
+	case !usesAppPlaybackState():
+		add("播放状态", healthOK, "collector 自己读播放器(collector_playback_source=own)")
+	case stateAvail == appStateAvailable:
+		add("播放状态", healthOK, "读 App 写的播放状态(%.1f 秒前写入,%s)",
+			time.Since(time.UnixMilli(stateRec.WrittenAtMs)).Seconds(), stateRec.State)
+	case stateAvail == appStateMissing:
+		add("播放状态", healthWarn, "App 还没写过播放状态,collector 暂时自己读播放器")
+	default:
+		add("播放状态", healthWarn, "App 的播放状态不可用(%s),collector 暂时自己读播放器", stateAvail)
+	}
+
 	// 靠解析网页 / 客户端本地文件取数的路径:常驻实例把连续认不出的记在这份文件里(parserdrift.go)。
 	// 这些路径坏了会安静地退回备用,只有这里看得出上游改了版。
 	if drift := loadParserDriftFile(filepath.Join(configDir, clientName+"-parser-drift.json")); len(drift) == 0 {

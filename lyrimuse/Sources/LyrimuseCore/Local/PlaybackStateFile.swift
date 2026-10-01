@@ -79,6 +79,9 @@ public enum PlaybackStateFile {
         public var musicVideo: Bool
         public var radio: Radio?
         public var ad: Bool
+        /// Spotify 原生播放时这首的曲目 ID(`spotify:track:` 之后那段),来自 Spotify 自己的播放通知、按歌名歌手核对过;
+        /// 别的播放器 / 没收到通知为 nil。
+        public var spotifyTrackID: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -90,6 +93,7 @@ public enum PlaybackStateFile {
             case mediaType = "media_type"
             case musicVideo = "music_video"
             case radio, ad
+            case spotifyTrackID = "spotify_track_id"
         }
     }
 
@@ -198,11 +202,13 @@ public enum PlaybackStateFile {
         public var ad: Bool
         /// 此刻的播放位置(秒);没有位置(播着但还没有时长的那一拍)为 nil。
         public var positionSecs: Double?
+        public var spotifyTrackID: String?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
-                    musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?) {
+                    musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
+                    spotifyTrackID: String? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -218,6 +224,7 @@ public enum PlaybackStateFile {
             self.radio = radio
             self.ad = ad
             self.positionSecs = positionSecs
+            self.spotifyTrackID = spotifyTrackID
         }
 
         public static func idle() -> Input {
@@ -274,7 +281,7 @@ public enum PlaybackStateFile {
                 playSeq: playSeq, title: input.title, artist: input.artist, album: input.album, raw: input.raw,
                 appliedFixRev: input.appliedFixRev, durationSecs: input.durationSecs,
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
-                musicVideo: input.musicVideo, radio: input.radio, ad: input.ad)
+                musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }
@@ -286,10 +293,11 @@ public enum PlaybackStateFile {
 
         public var currentArtwork: Artwork? { artwork }
 
+        /// 上一拍已过 90%、这一拍回到开头 10 秒内才算重新起播。位置停在 / 越过曲长不算:那是这首还没结束、或位置读数卡在了曲末,
+        /// 按它判会每拍都加一。
         public static func loopRestarted(previous: Double?, current: Double?, durationSecs: Double?, playing: Bool) -> Bool {
             guard playing, let previous, let current, let duration = durationSecs, duration > 0 else { return false }
-            return previous >= duration * loopRestartMinElapsedFrac
-                && (current >= duration || current <= loopRestartMaxNewElapsedSecs)
+            return previous >= duration * loopRestartMinElapsedFrac && current <= loopRestartMaxNewElapsedSecs
         }
 
         static func needsRepublish(_ published: Position?, secs: Double, rate: Double, now: Date) -> Bool {

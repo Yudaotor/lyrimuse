@@ -1419,6 +1419,8 @@ func runPlayerIdentityTests() {
                     "署名纠正: 换了个播放器就不适用")
         expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "我不难过", state: fix), nil,
                     "署名纠正: 曲名对不上不用 —— 换歌那一刻两个进程不同步是常态,别把上一首的署名按上来")
+        expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来 \u{200b}", state: fix), "Stake",
+                    "署名纠正: 快照曲名带零宽字符 / 尾空格,清洗后与发布的那份(清洗过)相同 → 照样适用")
         expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来", state: nil), nil,
                     "署名纠正: 没有发布过纠正时什么都不做")
         expectEqual(F.artist(forBundle: nil, title: "爱情慢慢来", state: fix), nil,

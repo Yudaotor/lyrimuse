@@ -34,6 +34,8 @@ func runPlaybackPositionTests() {
                     "试听换算: 换歌了 → 不动")
         expectEqual(PlayerPreviewFix.applied(to: snap(30, bundle: "com.netease.163music"), state: state)?.elapsedTime, 6,
                     "试听换算: 别的播放器 → 不动")
+        expectEqual(PlayerPreviewFix.applied(to: snap(30, title: " 一分之二\u{200b} "), state: state)?.elapsedTime, 246,
+                    "试听换算: 播放器报的曲名带首尾空白 / 零宽字符,清洗后与发布的那份相同 → 照样换算")
         expectEqual(PlayerPreviewFix.stateURL.lastPathComponent, "lyrimuse-player-preview.json",
                     "试听换算: 文件名与 collector 的 clientName+\"-player-preview.json\" 一致")
     }

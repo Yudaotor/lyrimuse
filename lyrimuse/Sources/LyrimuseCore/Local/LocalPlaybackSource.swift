@@ -2513,6 +2513,14 @@ public final class LocalPlaybackSource: ObservableObject {
                                       talkBreak: isRadioTalkBreak, stationCard: radioStationCardActive)
             : nil
         let tags = PlaybackStateFile.Tags(title: clean(title), artist: clean(artist), album: clean(album))
+        let trackPrefix = "spotify:track:"
+        let spotifyTrackID = spotifyNotificationHint.flatMap { hint -> String? in
+            guard bundleID == PlaybackPlayer.spotify.bundleIdentifier,
+                  hint.matches(title: snapshot.title, artist: snapshot.artist),
+                  hint.trackID.hasPrefix(trackPrefix) else { return nil }
+            let id = String(hint.trackID.dropFirst(trackPrefix.count))
+            return id.isEmpty ? nil : id
+        }
         let input = PlaybackStateFile.Input(
             player: bundleID, title: tags.title, artist: tags.artist, album: tags.album,
             raw: provenance?.raw ?? tags, appliedFixRev: provenance?.appliedFixRev ?? 0,
@@ -2520,7 +2528,8 @@ public final class LocalPlaybackSource: ObservableObject {
             catalogTrackID: provenance?.identifiers?.catalogTrackID,
             trackNumber: provenance?.identifiers?.trackNumber,
             mediaType: provenance?.identifiers?.mediaType,
-            musicVideo: isMusicVideo, radio: radio, ad: isCurrentTrackAdBreak, positionSecs: positionSecs)
+            musicVideo: isMusicVideo, radio: radio, ad: isCurrentTrackAdBreak, positionSecs: positionSecs,
+            spotifyTrackID: spotifyTrackID)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 

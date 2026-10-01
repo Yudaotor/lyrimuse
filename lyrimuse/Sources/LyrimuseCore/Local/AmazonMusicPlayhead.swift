@@ -51,8 +51,10 @@ public enum AmazonMusicPlayhead {
             guard let id = trackID(fromURI: uri) else { return nil }
             return (lineTime, .trackStarted(id))
         }
-        // 暂停在日志里有两行(控制层的 `setPaused , paused = true` 和引擎的 `setPaused(1)`),只认引擎那一行。
-        if line.contains("setPaused(1)") { return (lineTime, .paused) }
+        // 暂停认引擎的 `setPaused(1)`(控制层那行 `setPaused , paused = true` 不认),外加播放回调
+        // `Received callback with paused state: 1`:起播失败(Track Initialization Failed)后引擎自己停下时只有回调这一行。
+        // 重复的暂停不改状态;回调里的 0 不当恢复(重复的恢复会把计时起点挪后),恢复只认 `setPaused(0)`。
+        if line.contains("setPaused(1)") || line.contains("Received callback with paused state: 1") { return (lineTime, .paused) }
         if line.contains("Entering kStarting state") { return (lineTime, .starting) }
         if line.contains("End of stream reached") { return (lineTime, .endOfStream) }
         if line.contains("setPaused(0)") { return (lineTime, .resumed) }

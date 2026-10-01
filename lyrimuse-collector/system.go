@@ -405,6 +405,10 @@ func spotifyCurrentTrackURI(ctx context.Context) (uri, name string, ok bool) {
 }
 
 func isAdBreak(bundleID, artist, title, album string) bool {
+	// 用 App 状态时 App 的广告结论与下面的字段判据取或(见 appsource.go)。
+	if appReportedAd(bundleID, artist, title, album) {
+		return true
+	}
 	if bundleID != spotifyBundleID {
 		return false
 	}
@@ -1084,6 +1088,10 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 // 装作没读到比装错更安全(呼应 deviceartwork.go 头注:这份数据可信的前提正是"身份由
 // 读取时刻本身保证",一旦时刻对不上,这个前提就不成立了)。
 func fetchNowPlayingArtwork(ctx context.Context, expectedBundleID, expectedArtist, expectedTitle string) (data []byte, mimeType string, ok bool) {
+	// 用 App 状态时读 App 写的当前封面文件,不另起 media-control(见 appPlaybackArtwork)。
+	if data, mimeType, ok, handled := appPlaybackArtwork(expectedBundleID, expectedArtist, expectedTitle); handled {
+		return data, mimeType, ok
+	}
 	bin := mediaControlBinaryPath()
 	if bin == "" {
 		return nil, "", false

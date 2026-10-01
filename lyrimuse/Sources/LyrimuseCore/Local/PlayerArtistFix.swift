@@ -124,15 +124,18 @@ public enum PlayerArtistFix {
         return state.fixedTitle
     }
 
+    /// 曲名 / 歌手按 `EnrichCacheKeys.cleanTag` 清洗后比:collector 发布的是清洗过的标签,快照里是播放器原样报的。
     private static func matches(_ state: State, bundle: String?, title: String?, artist: String?) -> Bool {
         guard let bundle, !bundle.isEmpty, bundle == state.bundle else { return false }
+        let clean = EnrichCacheKeys.cleanTag
+        let title = title.map(clean), artist = artist.map(clean)
         if state.stableField == "artist" {
             guard let artist, !artist.isEmpty, !state.rawArtist.isEmpty else { return false }
             // 原样的快照按原样的 artist 认;换过的快照(`applied` 之后)两个字段都是纠正后的。
-            return artist == state.rawArtist || (artist == state.artist && title == state.fixedTitle)
+            return artist == clean(state.rawArtist) || (artist == clean(state.artist) && title == clean(state.fixedTitle))
         }
         guard let title, !title.isEmpty else { return false }
-        return title == state.title || (!state.fixedTitle.isEmpty && title == state.fixedTitle)
+        return title == clean(state.title) || (!state.fixedTitle.isEmpty && title == clean(state.fixedTitle))
     }
 
     /// 这个播放器报的署名可不可信。

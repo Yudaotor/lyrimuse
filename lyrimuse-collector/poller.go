@@ -287,8 +287,12 @@ type poller struct {
 	// 正在被按住的撕裂快照的 key 与开始按住的时刻,见 holdTornTrackChange。
 	tornHoldKey   string
 	tornHoldSince time.Time
-	// 影子对比:同时读 App 写的播放状态逐拍比对,不改变任何行为,见 shadowcompare.go。
+	// 影子对比:自己读播放器时同时读 App 写的播放状态逐拍比对,不改变任何行为,见 shadowcompare.go。
 	shadow *shadowCompare
+	// app:读 App 写的播放状态当这一拍的快照(见 appsource.go);nil = 只自己读。
+	app *appPlayback
+	// appSpotifyTrackID:这一拍 App 带来的 Spotify 曲目 ID,开会话时用(见 detectAdAtSessionStart);不用 App 状态时为空。
+	appSpotifyTrackID string
 
 	// Position tracking. media-control freezes elapsedTime during steady play and
 	// its timestamp drifts stale across sleep/idle, so we can't just extrapolate
@@ -1171,7 +1175,9 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true
 		return
 	}
-	p.shadow.noteActualListen(sess.key, sess.startedAt, time.Now())
+	if !usesAppPlaybackState() {
+		p.shadow.noteActualListen(sess.key, sess.startedAt, time.Now())
+	}
 	if shortTrackLastfmOnly(meta.Duration) {
 		// 短曲目只发 Last.fm(见 shortTrackLastfmOnly):不打 LB,直接把一个"成功"结果送回
 		// 主循环,让 applySubmitOutcome 走 Last.fm 镜像 / 本地日志 / 会话收尾那条既有路径——
@@ -1307,6 +1313,11 @@ func (p *poller) finalize(now time.Time) {
 func (p *poller) detectAdAtSessionStart() bool {
 	if isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return true
+	}
+	// 用 App 状态时广告已经按 App 的结论并进 isAdBreak;它带来了曲目 ID 就直接记下,不再问 Spotify。
+	if p.cur.Bundle == spotifyBundleID && p.appSpotifyTrackID != "" {
+		noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, p.appSpotifyTrackID)
+		return false
 	}
 	if p.cur.Bundle == spotifyBundleID {
 		uri, name, ok := spotifyCurrentTrackURI(p.ctx)
@@ -1943,6 +1954,21 @@ func nullStreakMeansStopped(streak int, since, now time.Time) bool {
 
 func (p *poller) poll() {
 	p.syncLiveConfig()
+	now, reanchored, loopRestart, fromApp := p.readAppPlayback()
+	if !fromApp {
+		now, reanchored, loopRestart = p.readOwnPlayback()
+	}
+	p.handle(now, reanchored, loopRestart)
+	p.bridge(now)
+	p.pushRelayState(now, reanchored)
+	p.runDigestsAsync(now)
+	p.shadow.flush(now)
+}
+
+// readOwnPlayback:自己读播放器得出这一拍(开关为 own,或 App 状态不可用时)。
+func (p *poller) readOwnPlayback() (now time.Time, reanchored, loopRestart bool) {
+	noteAppReportedAd(snapshot{}, false)
+	p.appSpotifyTrackID = ""
 	// snapshotStale:这一轮 p.cur 是否还是上一轮的陈旧残留——getState 直接失败,或
 	// 瞬时 null 未达 3 连清空门槛时,p.cur 原样保留,但它的 Elapsed 已经落后墙钟一整拍,
 	// updatePosition 不能把它当新鲜读数用(会误判 seek、清掉自然切歌偏置,
@@ -1992,8 +2018,8 @@ func (p *poller) poll() {
 			}
 		}
 	}
-	now := time.Now()
-	reanchored, loopRestart := p.updatePosition(now)
+	now = time.Now()
+	reanchored, loopRestart = p.updatePosition(now)
 	// Mac 本地放 Apple Music 时,用 AppleScript 的权威播放头覆盖推算位置(精确到 ~0.1s,
 	// 消除 media-control 推算的 ~1-2s 偏差,让网页进度条/逐字歌词严格对齐)。拿不到就沿用
 	// updatePosition 的结果。
@@ -2017,14 +2043,72 @@ func (p *poller) poll() {
 		p.cur.Playing, p.isTracked(), radioWallClock(p.cur)) {
 		p.calibrateAppleMusicPosition(now)
 	}
-	curAd := isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) ||
-		(p.sess != nil && p.sess.key == p.cur.key() && p.sess.isAd)
-	p.shadow.observe(now, p.cur, p.isTracked(), curAd)
-	p.handle(now, reanchored, loopRestart)
-	p.bridge(now)
-	p.pushRelayState(now, reanchored)
-	p.runDigestsAsync(now)
-	p.shadow.flush(now)
+	if !usesAppPlaybackState() {
+		curAd := isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) ||
+			(p.sess != nil && p.sess.key == p.cur.key() && p.sess.isAd)
+		p.shadow.observe(now, p.cur, p.isTracked(), curAd)
+	}
+	return now, reanchored, loopRestart
+}
+
+// readAppPlayback:用 App 写的播放状态得出这一拍(见 appsource.go)。ok=false = 这一拍要自己读播放器:
+// 开关为 own,或者 App 状态此刻不可用。
+func (p *poller) readAppPlayback() (now time.Time, reanchored, loopRestart, ok bool) {
+	a := p.app
+	if a == nil {
+		return time.Time{}, false, false, false
+	}
+	now = time.Now()
+	if !usesAppPlaybackState() {
+		a.active = false
+		a.notePath("own", "reading the players directly (collector_playback_source="+playbackSourceOwn+")")
+		return now, false, false, false
+	}
+	rec, avail := a.reader.read(now)
+	a.usedPID, a.usedSeq, a.usedAvail = rec.AppPID, rec.Seq, avail
+	if avail != appStateAvailable {
+		a.active = false
+		a.notePath("fallback:"+string(avail), "App playback state "+string(avail)+", reading the players directly until it is back")
+		return now, false, false, false
+	}
+	a.active = true
+	a.notePath("app", "using the App's playback state")
+	var tick appPlaybackTick
+	tick, a.marks = appPlaybackTickFor(rec, a.marks, now, a.judge)
+	reanchored, loopRestart = p.applyAppPlaybackTick(now, tick)
+	return now, reanchored, loopRestart, true
+}
+
+// applyAppPlaybackTick 把 App 状态得出的这一拍落到 p.cur。App 没在放时沿用自己读那条路的停播确认
+// (nullStreakMeansStopped):连续够三拍、满 nullClearMinWait 才清空,之前 p.cur 原样保留。
+func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reanchored, loopRestart bool) {
+	// 自己读那条路的位置状态作废:退回那条路时按首次见到重新播种(updatePosition 的 key != p.trackKey 分支)。
+	p.trackKey, p.prevWall, p.posBias = "", time.Time{}, 0
+	p.snapshotStale = false
+	if !t.tracked {
+		noteAppReportedAd(snapshot{}, false)
+		p.appSpotifyTrackID = ""
+		if p.nullStreak == 0 {
+			p.nullSince = now
+		}
+		p.nullStreak++
+		if nullStreakMeansStopped(p.nullStreak, p.nullSince, now) {
+			p.cur = snapshot{}
+		}
+		return false, false
+	}
+	p.nullStreak = 0
+	p.cur = t.snap
+	p.appSpotifyTrackID = t.spotifyTrackID
+	noteAppReportedAd(p.cur, t.ad)
+	if p.cur.Radio {
+		noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+	}
+	if p.cur.NotAudio {
+		noteMusicVideoDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
+	}
+	p.cur.AlbumHint = p.albumHintFor(p.cur)
+	return t.reanchor, t.loopRestart
 }
 
 // appleMusicPositionQuery 单独问一次 Music.app 的播放头;单测替换它。
@@ -2089,8 +2173,10 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	lfmRetryTarget.Store(p.lfm)
-	p.shadow = newShadowCompare(configFilePath(clientName+"-shadow-compare.json"),
-		newAppStateReader(configFilePath(clientName+"-playback-state.json")), time.Now())
+	appState := newAppStateReader(configFilePath(clientName + "-playback-state.json"))
+	p.app = &appPlayback{reader: appState, judge: liveAppPlaybackJudge}
+	setAppPlaybackArtworkSource(appState, configFilePath(clientName+"-now-playing-artwork"))
+	p.shadow = newShadowCompare(configFilePath(clientName+"-shadow-compare.json"), appState, time.Now())
 	p.poll() // render immediately, don't wait a full interval on startup
 	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
@@ -2107,6 +2193,9 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
+	// 快速通道:App 状态一变就跑一轮,不等主节拍(见 appsource.go)。
+	appTicker := time.NewTicker(appStateCheckInterval)
+	defer appTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -2171,6 +2260,10 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.poll() // 后台 enrichment 完成,立刻带完整封面/歌词重推一轮
 		case <-ticker.C:
 			p.poll()
+		case <-appTicker.C:
+			if p.app.changed(time.Now()) {
+				p.poll()
+			}
 		case r := <-p.submitDoneCh:
 			p.applySubmitOutcome(r)
 		case r := <-p.announceDoneCh:

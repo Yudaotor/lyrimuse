@@ -56,11 +56,13 @@ public enum PlayerPreviewFix {
 
     /// 这份快照能不能套这条换算。纯函数,selftest 直接覆盖。
     ///
-    /// 同一个播放器、同一首(曲名 + 歌手逐字相等,两边读的是同一份载荷),并且这一拍报的时长**还是**
+    /// 同一个播放器、同一首(曲名 + 歌手按 `EnrichCacheKeys.cleanTag` 清洗后相等:collector 发布时用的
+    /// 可能是原样的标签,也可能是播放状态里清洗过的那份),并且这一拍报的时长**还是**
     /// 试听段长度 —— 换歌、转成整首播放(开了会员 / 限免)都自然失效。
     public static func applies(_ state: State, to snapshot: MediaControlSnapshot) -> Bool {
-        guard snapshot.bundleIdentifier == state.bundle, snapshot.title == state.title,
-              snapshot.artist == state.artist, let duration = snapshot.duration,
+        let clean = EnrichCacheKeys.cleanTag
+        guard snapshot.bundleIdentifier == state.bundle, clean(snapshot.title ?? "") == clean(state.title),
+              clean(snapshot.artist ?? "") == clean(state.artist), let duration = snapshot.duration,
               state.fullDuration > state.previewDuration
         else { return false }
         return abs(duration - state.previewDuration) <= durationTolerance

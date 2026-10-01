@@ -40,6 +40,12 @@ func runPlaybackStateTests() {
     expectEqual(c1.position?.anchorSeq, 1, "播放状态: 第一份位置 anchor_seq = 1")
     expectEqual(c1.position?.secs, 0.5, "播放状态: 位置原样写出")
     expectEqual(c1.position?.rate, 1, "播放状态: 在播 rate = 1")
+    expectEqual(c1.track?.spotifyTrackID, nil, "播放状态: 没有 Spotify 曲目 ID 时不写")
+    var spotifyTracker = F.Tracker()
+    var withSpotifyID = input(pos: 0.5)
+    withSpotifyID.spotifyTrackID = "4iJyoBOLtHqaGxP12qzhQI"
+    expectEqual(spotifyTracker.advance(withSpotifyID, now: t0).track?.spotifyTrackID, "4iJyoBOLtHqaGxP12qzhQI",
+                "播放状态: Spotify 曲目 ID 原样写进 track")
     let c2 = tracker.advance(input(pos: 2.5), now: t0.addingTimeInterval(2))
     expectEqual(c2, c1, "播放状态: 连续播放不重写位置(读方外推),整份内容不变")
     let c3 = tracker.advance(input(pos: 2.6), now: t0.addingTimeInterval(2))
@@ -68,8 +74,14 @@ func runPlaybackStateTests() {
     expectEqual(seekBack.track?.playSeq, 3, "播放状态: 起播之后再往回拖一点不算重新起播")
     expectEqual(F.Tracker.loopRestarted(previous: 100, current: 3, durationSecs: 210, playing: true), false,
                 "播放状态: 从中段拖回开头不算单曲循环")
-    expectEqual(F.Tracker.loopRestarted(previous: 200, current: 210, durationSecs: 210, playing: true), true,
-                "播放状态: 位置越过曲长也算重新起播(同 collector)")
+    expectEqual(F.Tracker.loopRestarted(previous: 200, current: 210, durationSecs: 210, playing: true), false,
+                "播放状态: 位置到了 / 越过曲长不算重新起播,要真回到开头")
+    var stuck = F.Tracker()
+    _ = stuck.advance(input("ring finger", pos: 270, duration: 284), now: t0)
+    let stuckSeqs = (1...5).map { i in
+        stuck.advance(input("ring finger", pos: 284 + Double(i), duration: 284), now: t0.addingTimeInterval(Double(i) * 2)).track?.playSeq
+    }
+    expectEqual(Set(stuckSeqs), [1], "播放状态: 位置读数卡在曲末连着几拍,play_seq 不动")
     expectEqual(F.Tracker.loopRestarted(previous: 200, current: 2, durationSecs: 210, playing: false), false,
                 "播放状态: 暂停中不判单曲循环")
     expectEqual(F.Tracker.loopRestarted(previous: 200, current: 2, durationSecs: nil, playing: true), false,

@@ -21,6 +21,10 @@ func runAmazonMusicTests() {
                     .paused, "Amazon 日志: 引擎那行 setPaused(1) 是暂停")
         expectEqual(P.parse(line: "260928:025218 MorphoBrowser : I HarleyPlayerController : PlayerFlow : PausingPlayer : function = setPaused , paused = true : line 391, ") == nil,
                     true, "Amazon 日志: 控制层那行暂停不认,免得算两次")
+        expectEqual(P.parse(line: "260930:223829      Browser INFO in PlaybackListener line 133, function playbackPaused : Received callback with paused state: 1")?.event,
+                    .paused, "Amazon 日志: 播放回调说暂停了也是暂停(起播失败后引擎自己停下时只有这一行)")
+        expectEqual(P.parse(line: "260930:223829      Browser INFO in PlaybackListener line 133, function playbackPaused : Received callback with paused state: 0") == nil,
+                    true, "Amazon 日志: 回调里的 0 不当恢复,恢复只认 setPaused(0)")
         expectEqual(P.parse(line: "260928:025456      Browser INFO in HarleyPlayerController : PlayerFlow line 878, function seek : Seeking to: 127990")?.event,
                     .seek(127.99), "Amazon 日志: 拖动目标毫秒换成秒")
         expectEqual(P.parse(line: "260928:025456      Browser INFO in Harley : 0x3151c8000 [PlaybackEngine.cpp:1193] seek ( id: 14 uri: asin://B0X, seek_time: 127990 )") == nil,
@@ -30,6 +34,24 @@ func runAmazonMusicTests() {
         expectEqual(P.parse(line: "[SystemInfo]") == nil, true, "Amazon 日志: 没有行首时刻的不认")
         expectEqual(P.parse(line: "260928:025132      Browser INFO in Harley : DT:M [DASHRangeFragmentLoader.cpp:100] Fetching fragment: <Track: asin://B0TESTAAA1:13:87015, FragmentIndex: 0>") == nil,
                     true, "Amazon 日志: 预读分片不是播放事件")
+    }
+
+    // ---- 起播失败后引擎自己停下(暂停只有回调那一行),两个多小时后恢复:位置从 0 起算 ----
+    do {
+        let failed = [
+            "260930:223829      Browser INFO in Harley : 0x312861000 [PlaybackEngine.cpp:1127] setPaused(0)",
+            "260930:223829      Browser INFO in Harley : DT:M [TrackPreFetcher.cpp:74] new track playing : asin://B09GYHYMRR:45:1958",
+            "260930:223829     Browser ERROR in Harley : DT:M [AudioPipeline.cpp:832] Track Initialization Failed: asin://B09GYHYMRR:45:1958",
+            "260930:223829      Browser INFO in PlaybackListener line 133, function playbackPaused : Received callback with paused state: 1",
+            "261001:010337      Browser INFO in Harley : 0x312861000 [PlaybackEngine.cpp:1127] setPaused(0)",
+        ]
+        var s = P.State()
+        for line in failed {
+            if let (t, e) = P.parse(line: line) { s = P.apply(e, at: t, to: s) }
+        }
+        let resumedAt = P.lineTimestamp("261001:010337")!
+        expectEqual(near(P.position(s, at: resumedAt.addingTimeInterval(10)), 10), true,
+                    "Amazon 重放: 起播失败自己停下的那首,恢复后从 0 起算,停着的那段不算进去")
     }
 
     // ---- 整份样例重放(历史行取该秒 + 0.5) ----

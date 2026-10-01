@@ -229,6 +229,9 @@ type featureFlagsFile struct {
 	// LyricsSourceOrder：只有 LyricsSourceMode == "priority" 时才生效。缺失时按
 	// lyricsSourceDefaultOrder 兜底。
 	LyricsSourceOrder []string `json:"lyrics_source_order,omitempty"`
+	// CollectorPlaybackSource:collector 认「此刻在放什么」用哪一份(见 appsource.go)。缺省 / 不认识的值 = "app",
+	// 读 App 写的播放状态;"own" = 一直自己读播放器。界面不暴露,手改即热重读生效。
+	CollectorPlaybackSource string `json:"collector_playback_source,omitempty"`
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
@@ -334,6 +337,8 @@ type featureFlags struct {
 	LyricsSources     map[string]bool
 	LyricsSourceMode  string
 	LyricsSourceOrder []string
+	// CollectorPlaybackSource:已解析,恒为 playbackSourceApp / playbackSourceOwn(见 resolveCollectorPlaybackSource)。
+	CollectorPlaybackSource string
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir() 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
@@ -469,6 +474,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		CollectorPlaybackSource:   resolveCollectorPlaybackSource(f.CollectorPlaybackSource),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
@@ -880,6 +886,7 @@ func logFeatureSnapshot() {
 		"lyrics_sources", sortedEnabledKeys(features().LyricsSources),
 		"lyrics_source_mode", orDash(features().LyricsSourceMode),
 		"lyrics_source_order", orDash(strings.Join(features().LyricsSourceOrder, ",")),
+		"collector_playback_source", features().CollectorPlaybackSource,
 		"lyrics_dir", lyricsDirMode,
 		"lyrics_translation_language", orDash(features().LyricsTranslationLanguage),
 		"lyrics_machine_translation", features().LyricsMachineTranslation,

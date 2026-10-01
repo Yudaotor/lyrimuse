@@ -50,6 +50,8 @@ type appStateTrack struct {
 	MusicVideo     bool           `json:"music_video"`
 	Radio          *appStateRadio `json:"radio,omitempty"`
 	Ad             bool           `json:"ad"`
+	// SpotifyTrackID:Spotify 原生播放时 `spotify:track:` 之后那段,App 按歌名歌手核对过;没有为空。
+	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
 }
 
 func (t *appStateTrack) key() string { return t.Title + "|" + t.Artist + "|" + t.Album }
