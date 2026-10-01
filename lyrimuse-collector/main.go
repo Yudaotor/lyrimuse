@@ -1,5 +1,7 @@
-// Command collector watches the macOS system now-playing state via
-// AppleScript and submits playing_now / listen events to ListenBrainz.
+// Command collector is the Lyrimuse background process. It follows the playback state that the
+// Lyrimuse app writes, resolves lyrics, artwork and platform links for what is playing, and
+// submits listens to ListenBrainz and Last.fm. It also runs the one-off subcommands the app
+// calls, such as search-lyrics.
 package main
 
 import (
