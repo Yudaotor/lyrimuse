@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	neturl "net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"encoding/json"
 )
 
 // miguLyric 是歌词第九个候选来源(咪咕音乐,非官方接口:搜索→按元数据校验重排→并发拉
@@ -36,8 +38,9 @@ import (
 // 都认不出来,所以在 miguStripMetaLines 里专门剥(作词/作曲那两行跟别的源一样留给
 // 下游既有的署名处理);② 译文 LRC 顶着同一套元数据头,同样要剥。
 //
-// 没有时长字段(搜索结果只有码率/文件大小),sourceReportedDurationSecs 留 0 = 该项不
-// 参与打分,跟 amll 一样;`albums` 对不少曲目为空,专辑参与身份闸时按空处理。逐字轨来自
+// 搜索结果没有时长字段,时长用恒定码率 MP3 的文件大小估(miguSearchItem.durationSecs):通过身份闸的候选里
+// 时长对得上的排前面(sourceDurationFits,同酷狗 / QQ),选中那条的时长交给打分层。`albums` 对不少曲目为空,
+// 专辑参与身份闸时按空处理。逐字轨来自
 // 搜索结果里的 `mrcurl`(加密的 MRC 文件),只给选中的那一条拉,解密与转换见 migumrc.go。
 //
 // 合规提醒:这是网页/客户端接口、非公开 API 文档,"可能随时失效、要求验证码或发生变更"
@@ -50,6 +53,8 @@ type miguResult struct {
 	// cover:搜索结果自带 imgItems(三档尺寸),不用再多发请求——见 miguCoverURL。拿不到
 	// 就留空,交给 enrich.go 的 coverOrFallback 退到 Apple 封面。
 	cover string
+	// durationSecs:选中那条估出来的时长(秒),0 = 估不出来。见 miguSearchItem.durationSecs。
+	durationSecs float64
 	// plainOnly:选中的那条只有纯文本、没有时间戳,lyrics 装的就是纯文本。语义同
 	// deezerResult.plainOnly:分数恒 -1,只有用户在弹窗里手点才采用;这时不带译文和逐字轨。
 	plainOnly bool
@@ -99,6 +104,41 @@ type miguSearchItem struct {
 		Name string `json:"name"`
 	} `json:"albums"` // 经常缺失
 	ImgItems []miguImgItem `json:"imgItems"`
+	// RateFormats / NewRateFormats:各档音质的文件信息,只用来估时长(durationSecs)。
+	RateFormats    []miguRateFormat `json:"rateFormats"`
+	NewRateFormats []miguRateFormat `json:"newRateFormats"`
+	// duration:备用搜索(miguJadeiteSearch)那边直接给的时长(秒);search_all.do 的结果没有,为 0。
+	duration float64
+}
+
+type miguRateFormat struct {
+	Format   string `json:"format"`
+	Size     string `json:"size"`
+	FileType string `json:"fileType"`
+}
+
+// miguMP3Kbps:恒定码率 MP3 的格式码 → 码率(kbps)。PQ 020007 = 128k、HQ 020010 = 320k、LQ 000019 = 64k,按这个顺序取。
+var miguMP3Kbps = []struct {
+	format string
+	kbps   float64
+}{{"020007", 128}, {"020010", 320}, {"000019", 64}}
+
+// durationSecs 估这条录音的时长:恒定码率 MP3 的文件大小 × 8 ÷ 码率(三档算出来彼此一致,跟实际时长差零点几秒);
+// 没有 MP3 档时用备用搜索给的 duration,都没有是 0。见 09 章决策 140。
+func (it miguSearchItem) durationSecs() float64 {
+	for _, k := range miguMP3Kbps {
+		for _, list := range [][]miguRateFormat{it.NewRateFormats, it.RateFormats} {
+			for _, f := range list {
+				if f.Format != k.format || !strings.EqualFold(f.FileType, "mp3") {
+					continue
+				}
+				if n, err := strconv.ParseFloat(f.Size, 64); err == nil && n > 0 {
+					return n * 8 / (k.kbps * 1000)
+				}
+			}
+		}
+	}
+	return it.duration
 }
 
 type miguImgItem struct {
@@ -172,6 +212,8 @@ func miguSearchQueries(artist, title string) []string {
 	return []string{combined, title}
 }
 
+// miguSearchQuery 按 miguSearchHosts 逐个主机问 search_all.do;都没问成(而且不是调用方取消)再问另一套搜索服务
+// miguJadeiteSearch。
 func miguSearchQuery(ctx context.Context, q string) ([]miguSearchItem, error) {
 	var items []miguSearchItem
 	err := tryEach(ctx, miguSearchHosts, func(host string) error {
@@ -181,6 +223,11 @@ func miguSearchQuery(ctx context.Context, q string) ([]miguSearchItem, error) {
 		}
 		return err
 	})
+	if err != nil && ctx.Err() == nil {
+		if got, jerr := miguJadeiteSearch(ctx, q); jerr == nil {
+			return got, nil
+		}
+	}
 	return items, err
 }
 
@@ -223,24 +270,43 @@ func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error)
 // 顶着咪咕的元数据头——统一在这里归一化换行并剥头,调用方拿到的就是能直接过
 // isTimedLRC 的正文。
 func miguFetchLRC(ctx context.Context, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+	body, err := miguFetchFile(ctx, url, 512<<10)
 	if err != nil {
 		return "", err
 	}
 	return miguStripMetaLines(string(body)), nil
+}
+
+// miguFetchFile 下载一份歌词文件(lrc / trc / mrc)。https 没问成(连接被重置、超时、非 200)按 http 再取一次:
+// d.musicapp.migu.cn 两种协议给的是同一个文件,别的主机没有这些文件。
+func miguFetchFile(ctx context.Context, url string, maxBytes int64) ([]byte, error) {
+	urls := []string{url}
+	if rest, ok := strings.CutPrefix(url, "https://"); ok {
+		urls = append(urls, "http://"+rest)
+	}
+	var body []byte
+	err := tryEach(ctx, urls, func(u string) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("status %d", resp.StatusCode)
+		}
+		b, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
+		if err != nil {
+			return err
+		}
+		body = b
+		return nil
+	})
+	return body, err
 }
 
 // miguMetaLineRe 认咪咕 LRC 顶部那两行没有冒号的元数据——"歌曲名 稻香"/"歌手名 周杰伦"
@@ -295,7 +361,7 @@ const miguMaxCandidatesToFetch = 3
 // LRC;④剥完头之后不是真同步的(isTimedLRC)先放一边;⑤按名次(不是"谁先拉完")挑第一份
 // 同步的;⑥选中那条有 trcUrl 就再拉译文(同样剥头、同样要求同步;拉不到只是没有译文,不影响
 // 正文);⑦一份同步的都没有时,按名次退回第一份纯文本(plainOnly),口径同 deezer 的纯文本回退。
-func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float64) miguResult {
+func resolveMiguLyric(ctx context.Context, artist, title, album string, durationSecs float64) miguResult {
 	type scoredItem struct {
 		item  miguSearchItem
 		score int
@@ -319,7 +385,15 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 	if len(candidates) == 0 {
 		return miguResult{}
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
+	// 估出来的时长对不上(>12%,同打分层 sourceDurationOff)的排到对得上的后面,组内保持咪咕原有顺序。
+	sort.SliceStable(candidates, func(i, j int) bool {
+		fi := sourceDurationFits(durationSecs, candidates[i].item.durationSecs())
+		fj := sourceDurationFits(durationSecs, candidates[j].item.durationSecs())
+		if fi != fj {
+			return fi
+		}
+		return candidates[i].score > candidates[j].score
+	})
 	if len(candidates) > miguMaxCandidatesToFetch {
 		candidates = candidates[:miguMaxCandidatesToFetch]
 	}
@@ -351,7 +425,7 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 		}
 		return miguResult{
 			lyrics: lyrics, title: it.Name, artist: it.artistName(), album: it.albumName(),
-			cover: cover, plainOnly: plainOnly,
+			cover: cover, plainOnly: plainOnly, durationSecs: it.durationSecs(),
 		}
 	}
 	for rank, f := range fetchedByRank {
@@ -377,6 +451,107 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, _ float6
 		}
 	}
 	return miguResult{}
+}
+
+// ---- 备用搜索:jadeite 的另一套搜索服务 ----
+//
+// 咪咕客户端现在用的搜索(jadeite.migu.cn/music_search/v3/search/searchAll),跟 search_all.do 不是同一个服务:
+// search_all.do 的几个主机都没问成时才问它。请求要带客户端的签名头 —— md5(查询词 + miguJadeiteSignKey +
+// miguJadeiteSignSalt + 设备号 + 毫秒时间戳),参数取自 lx-music 的咪咕源。结果的歌词地址跟 search_all.do 指向同一批
+// 文件,但不给逐字(mrcurl 恒空),时长直接给(duration,秒)。实测见 09 章决策 140。
+
+const (
+	miguJadeiteURL      = "https://jadeite.migu.cn/music_search/v3/search/searchAll"
+	miguJadeiteDeviceID = "963B7AA0D21511ED807EE5846EC87D20"
+	miguJadeiteSignKey  = "6cdc72a439cef99a3418d2a78aa28c73"
+	miguJadeiteSignSalt = "yyapp2d16148780a1dcc7408e06336b98cfd50"
+	miguJadeiteSwitch   = `{"song":1,"album":0,"singer":0,"tagSong":1,"mvSong":0,"bestShow":1,"songlist":0,"lyricSong":0}`
+	miguJadeiteUA       = "Mozilla/5.0 (Linux; U; Android 11.0.0; zh-cn; MI 11 Build/OPR1.170623.032) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
+)
+
+// miguJadeiteSign 算签名头:md5(查询词 + 密钥 + 盐 + 设备号 + 毫秒时间戳)的十六进制小写。
+func miguJadeiteSign(q, ts string) string {
+	sum := md5.Sum([]byte(q + miguJadeiteSignKey + miguJadeiteSignSalt + miguJadeiteDeviceID + ts))
+	return hex.EncodeToString(sum[:])
+}
+
+type miguJadeiteItem struct {
+	Name       string  `json:"name"`
+	Album      string  `json:"album"`
+	AlbumID    string  `json:"albumId"`
+	Duration   float64 `json:"duration"`
+	LrcURL     string  `json:"lrcUrl"`
+	TrcURL     string  `json:"trcUrl"`
+	MrcURL     string  `json:"mrcurl"`
+	Img3       string  `json:"img3"`
+	SingerList []struct {
+		Name string `json:"name"`
+	} `json:"singerList"`
+}
+
+// item 换成 search_all.do 那边的形状,后面的身份闸、取词照旧走同一套。
+func (j miguJadeiteItem) item() miguSearchItem {
+	it := miguSearchItem{Name: j.Name, LyricURL: j.LrcURL, TrcURL: j.TrcURL, MrcURL: j.MrcURL, duration: j.Duration}
+	for _, s := range j.SingerList {
+		it.Singers = append(it.Singers, struct {
+			Name string `json:"name"`
+		}{s.Name})
+	}
+	if j.Album != "" || j.AlbumID != "" {
+		it.Albums = append(it.Albums, struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}{j.AlbumID, j.Album})
+	}
+	if strings.HasPrefix(j.Img3, "http") {
+		it.ImgItems = []miguImgItem{{Img: j.Img3, ImgSizeType: "03"}}
+	}
+	return it
+}
+
+func miguJadeiteSearch(ctx context.Context, q string) ([]miguSearchItem, error) {
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	u := miguJadeiteURL + "?isCorrect=0&isCopyright=1&searchSwitch=" + neturl.QueryEscape(miguJadeiteSwitch) +
+		"&pageSize=10&text=" + neturl.QueryEscape(q) + "&pageNo=1&sort=0&sid=USS"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("uiVersion", "A_music_3.6.1")
+	req.Header.Set("deviceId", miguJadeiteDeviceID)
+	req.Header.Set("timestamp", ts)
+	req.Header.Set("sign", miguJadeiteSign(q, ts))
+	req.Header.Set("channel", "0146921")
+	req.Header.Set("User-Agent", miguJadeiteUA)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var out struct {
+		Code           string `json:"code"`
+		SongResultData struct {
+			ResultList [][]miguJadeiteItem `json:"resultList"`
+		} `json:"songResultData"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+		return nil, err
+	}
+	if out.Code != "000000" {
+		reportEndpointRejected(req.URL)
+		return nil, fmt.Errorf("code %s", out.Code)
+	}
+	reportEndpointAccepted(req.URL)
+	var items []miguSearchItem
+	for _, group := range out.SongResultData.ResultList {
+		for _, j := range group {
+			items = append(items, j.item())
+		}
+	}
+	return items, nil
 }
 
 // ---- 专辑封面:按专辑 id 另问一次 ----

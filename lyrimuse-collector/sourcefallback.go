@@ -14,7 +14,8 @@ import (
 //   - 酷我:搜索 search.kuwo.cn/r.s(https → http)→ kuwo.cn / www.kuwo.cn 的 /search/searchMusicBykeyWord(同一套参数、
 //     同一份 JSON);逐行歌词 kuwo.cn → www.kuwo.cn → http://kuwo.cn(Referer 跟着主机走),都没问成再退到
 //     mlyric.kuwo.cn 的 lrcx=0(kuwolrcx.go kuwoFetchMobiLRC)
-//   - 咪咕:搜索与专辑信息都在 pd.musicapp / app.c.nf / c.musicapp 三个主机上
+//   - 咪咕:搜索与专辑信息都在 pd.musicapp / app.c.nf / c.musicapp 三个主机上;搜索三个主机都没问成再问 jadeite 的
+//     另一套搜索服务(migu.go miguJadeiteSearch);歌词文件 https 没取到按 http 再取一次(miguFetchFile)
 //   - 汽水:歌词 beta-luna.douyin.com → api.qishui.com(同一个 /luna/h5/seo_track)
 //   - YouTube Music:music.youtube.com → youtubei.googleapis.com → www.youtube.com(同一套 InnerTube)
 //   - AMLL:raw.githubusercontent.com → jsDelivr 的两个镜像;404 是「库里没有这首」,不换镜像

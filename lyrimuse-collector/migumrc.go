@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf16"
 )
 
@@ -40,22 +37,7 @@ func miguFetchMRCYRC(ctx context.Context, url string) string {
 	if url == "" {
 		return ""
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
-	if err != nil {
-		noteLyricSubFetchFailure(ctx)
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		noteLyricSubFetchFailure(ctx)
-		return ""
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, miguMRCMaxSize))
+	body, err := miguFetchFile(ctx, url, miguMRCMaxSize)
 	if err != nil {
 		noteLyricSubFetchFailure(ctx)
 		return ""
