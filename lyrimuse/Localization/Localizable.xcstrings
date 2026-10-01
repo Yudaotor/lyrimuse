@@ -415,23 +415,6 @@
         }
       }
     },
-    "简洁" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compact"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "簡潔"
-          }
-        }
-      }
-    },
     "多行" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -466,36 +449,36 @@
         }
       }
     },
-    "简洁：只显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。" : {
+    "单行：只显示当前句。\n双行：显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compact: only the current line and the next one.\nFull: a scrolling page of lyrics, like the full size."
+            "value" : "One Line: only the current line.\nTwo Lines: the current line and the next one.\nFull: a scrolling page of lyrics, like the full size."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "簡潔：只顯示目前這句和下一句。\n多行：像完整尺寸那樣整頁捲動顯示歌詞。"
+            "value" : "單行：只顯示目前這句。\n雙行：顯示目前這句和下一句。\n多行：像完整尺寸那樣整頁捲動顯示歌詞。"
           }
         }
       }
     },
-    "迷你尺寸只显示当前句和下一句，还是像完整尺寸那样整页滚动" : {
+    "迷你尺寸只显示当前句、当前句加下一句，还是像完整尺寸那样整页滚动" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Whether the mini size shows just the current and next line, or a scrolling page like the full size"
+            "value" : "Whether the mini size shows just the current line, the current and next line, or a scrolling page like the full size"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "迷你尺寸只顯示目前這句和下一句，還是像完整尺寸那樣整頁捲動"
+            "value" : "迷你尺寸只顯示目前這句、目前這句加下一句，還是像完整尺寸那樣整頁捲動"
           }
         }
       }

@@ -2562,9 +2562,9 @@ private struct AppearanceSettingsTab: View {
             }
             return EditorToolbarButtonLabel(icon: "textformat", title: L10n.t("字体"), summary: summary)
         case .layout:
-            // 「简洁」档下长句处理改成了滚动才追加 —— 默认值不报,跟菜单栏「布局」摘要同一条规则。
+            // 「单行 / 双行」档下长句处理改成了滚动才追加 —— 默认值不报,跟菜单栏「布局」摘要同一条规则。
             var summary = LyricsWindowMiniLyricsLayoutLabel.text(for: settings.lyricsWindowMiniLyricsLayout)
-            if settings.lyricsWindowMiniLyricsLayout == .compact, settings.lyricsWindowMiniLineOverflow == .scroll {
+            if settings.lyricsWindowMiniLyricsLayout != .list, settings.lyricsWindowMiniLineOverflow == .scroll {
                 summary += " · " + OverlayLineOverflowLabel.text(for: .scroll)
             }
             return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
@@ -2905,7 +2905,7 @@ private struct AppearanceSettingsTab: View {
                 SettingsRow(
                     icon: "rectangle.split.1x2",
                     title: L10n.t("歌词布局"),
-                    help: L10n.t("简洁：只显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。")
+                    help: L10n.t("单行：只显示当前句。\n双行：显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。")
                 ) {
                     SettingsSegmentedControl(
                         selection: miniLyricsLayout,
@@ -2913,9 +2913,9 @@ private struct AppearanceSettingsTab: View {
                         label: LyricsWindowMiniLyricsLayoutLabel.text(for:)
                     )
                 }
-                // 长句处理只管「简洁」那两行;「多行」是完整布局那份列表,恒换行。选了多行就不摆这一行,
+                // 长句处理只管「单行 / 双行」那套;「多行」是完整布局那份列表,恒换行。选了多行就不摆这一行,
                 // 摆着一颗改了没反应的开关只会让人以为坏了。
-                if miniLyricsLayout.wrappedValue == .compact, let lineOverflow {
+                if miniLyricsLayout.wrappedValue != .list, let lineOverflow {
                     CardDivider()
                     SettingsRow(
                         icon: "arrow.left.and.right.text.vertical",
@@ -3488,15 +3488,16 @@ enum LyricsWindowAppearancePart {
     case background
     case textColor
     case font
-    /// 迷你专有:歌词布局(简洁 / 多行)+ 长句处理。完整尺寸没有这一块。
+    /// 迷你专有:歌词布局(单行 / 双行 / 多行)+ 长句处理。完整尺寸没有这一块。
     case layout
 }
 
-/// 「歌词布局」两档的显示名(枚举本体在 Core、不带界面文案)。
+/// 「歌词布局」三档的显示名(枚举本体在 Core、不带界面文案)。
 enum LyricsWindowMiniLyricsLayoutLabel {
     static func text(for value: LyricsWindowMiniLyricsLayout) -> String {
         switch value {
-        case .compact: return L10n.t("简洁")
+        case .oneLine: return L10n.t("单行")
+        case .twoLines: return L10n.t("双行")
         case .list: return L10n.t("多行")
         }
     }
@@ -3519,7 +3520,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniFontFamily = ""
             s.lyricsWindowMiniFontSize = AppSettings.defaultLyricsWindowMiniFontSize
             s.lyricsWindowMiniLineOverflow = .wrap
-            s.lyricsWindowMiniLyricsLayout = .compact
+            s.lyricsWindowMiniLyricsLayout = .twoLines
             s.lyricsWindowMiniHeaderFields = .default
             s.lyricsWindowMiniShowsCover = true
             s.lyricsWindowMiniShowsTime = true

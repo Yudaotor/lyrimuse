@@ -100,7 +100,7 @@ public enum LyricsWindowTypography {
         return min(size, cap)
     }
 
-    /// 迷你「简洁」两行那套的正文字号:跟着窗口长,但比列表比例大得多(只排一行半)。
+    /// 迷你「单行 / 双行」那套的正文字号:跟着窗口长,但比列表比例大得多(只排一行半)。
     /// `cap` 是用户设的上限,不是定值;窗口被拖小时仍由宽高压下来。下限 12 保证认得出字。
     public static func miniFontSize(_ size: CGSize, cap: CGFloat) -> CGFloat {
         max(12, min(cap, size.height * 0.17, size.width * 0.075))
@@ -135,7 +135,7 @@ public enum LyricsWindowDepth {
     }
 }
 
-/// 迷你「简洁」两行那套显示哪两句。
+/// 迷你「单行 / 双行」那套显示哪几句。
 public enum MiniLyricsSelection {
     /// 当前行:引擎给的下标有效才有。
     public static func currentIndex(currentLineIndex: Int?, lineCount: Int) -> Int? {
@@ -148,6 +148,19 @@ public enum MiniLyricsSelection {
         guard let i = currentLineIndex else { return lineCount > 0 ? 0 : nil }
         let j = i + 1
         return j >= 0 && j < lineCount ? j : nil
+    }
+
+    /// 这一刻要不要画下一句。
+    ///
+    /// 「单行」只在那一格空着时才让下一句顶上:有当前句就只画当前句;间奏 / 前奏里那一格是三颗点,
+    /// 也不再补一句。剩下"还没唱到第一句、前奏又短到不配三颗点"那几秒,不补的话整块歌词区是空的。
+    /// 「多行」走到这里说明退回了两行那套(没有同步歌词 / 电台口白),照两行画。
+    public static func showsNextLine(layout: LyricsWindowMiniLyricsLayout,
+                                     hasCurrentLine: Bool, inGap: Bool) -> Bool {
+        switch layout {
+        case .oneLine: return !hasCurrentLine && !inGap
+        case .twoLines, .list: return true
+        }
     }
 }
 

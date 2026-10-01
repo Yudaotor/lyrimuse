@@ -83,7 +83,7 @@ private final class WindowPlayback: ObservableObject {
     /// 迷你顶部信息那一组左边要不要摆封面小图。
     @Published private(set) var miniShowsCover = true
     @Published private(set) var miniLineOverflow: OverlayLineOverflow = .wrap
-    @Published private(set) var miniLyricsLayout: LyricsWindowMiniLyricsLayout = .compact
+    @Published private(set) var miniLyricsLayout: LyricsWindowMiniLyricsLayout = .twoLines
     /// 歌词文字色(完整 / 迷你各一套)。`.auto` 之外的三档不再问背景亮度,见 LyricsWindowTextColorMode。
     @Published private(set) var textColorMode: LyricsWindowTextColorMode = .auto
     @Published private(set) var miniTextColorMode: LyricsWindowTextColorMode = .auto
@@ -1358,7 +1358,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 迷你布局:上面歌名歌手 + 时间、中间当前行 + 下一行、底边一条贴合的进度条;
+    /// 迷你布局:上面歌名歌手 + 时间、中间当前行(「双行」再加下一行)、底边一条贴合的进度条;
     /// 鼠标移进来时,歌词和进度条之间预留的那一格浮出控制条(走带三键 / 音量 / 歌词时间轴)。
     ///
     /// **这是为小尺寸重排的一版,不是把完整布局挤窄。**完整布局那条"窗口窄于 640 就退化成单列"
@@ -1782,12 +1782,13 @@ struct LyricsWindowView: View {
                                        size: fontSize * 0.62, weight: .medium))
                     .foregroundStyle(miniSecondaryColor)
             }
-            // 当前行 + 下一行。控制条浮出来时下一行**照常显示**(它下面那格已经给控制条预留好了,
+            // 当前行 + 下一行(「单行」只在当前那一格空着时才补下一句,见 miniReelNextLine)。
+            // 控制条浮出来时下一行**照常显示**(它下面那格已经给控制条预留好了,
             // 见 miniDeckReserve);悬停进出不许摘掉或挪动它 —— 摘掉是一次真重排,当前行会上下弹。
             // 口白期间 allLines 还是上一首的,当前行 / 下一行都不给(完整布局的同款闸见 rightPane)。
             MiniLyricsReel(
                 current: miniCurrentGap == nil && !playback.isRadioTalkBreak ? miniCurrentLine : nil,
-                next: playback.isRadioTalkBreak ? nil : miniNextLine,
+                next: playback.isRadioTalkBreak ? nil : miniReelNextLine,
                 fontSize: fontSize,
                 fontFamily: activeFontFamily,
                 color: miniPrimaryColor,
@@ -2092,6 +2093,15 @@ struct LyricsWindowView: View {
         MiniLyricsSelection.nextIndex(currentLineIndex: playback.currentLineIndex,
                                       lineCount: playback.allLines.count)
             .map { playback.allLines[$0] }
+    }
+
+    /// 交给 reel 的下一句:按「歌词布局」那一档筛过的 `miniNextLine`。
+    private var miniReelNextLine: LyricsWindowLine? {
+        guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout,
+                                                hasCurrentLine: miniCurrentLine != nil,
+                                                inGap: miniCurrentGap != nil)
+        else { return nil }
+        return miniNextLine
     }
 
     /// 文字色跟完整布局同一条判据(`lyricTextColor` / `lyricSecondaryTextColor`,它们自己会先看

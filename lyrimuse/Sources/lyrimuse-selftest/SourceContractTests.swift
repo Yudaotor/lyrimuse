@@ -1551,6 +1551,19 @@ func runSourceContractTests() {
                         "迷你多行: 完整布局和迷你多行共用同一个 lyricsScrollReader(自动滚动只有一份)")
             expectEqual(lwv.contains("playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !playback.isRadioTalkBreak"), true,
                         "迷你多行: 没有同步歌词 / 电台口白时退回两行那套(列表的占位按大窗口尺寸画)")
+            // 迷你「单行」:下一句按布局筛过再交给 reel(判据在 MiniLyricsSelection.showsNextLine)。
+            expectEqual(lwv.contains("next: playback.isRadioTalkBreak ? nil : miniReelNextLine,"), true,
+                        "迷你单行: reel 的下一句走 miniReelNextLine,不直接用 miniNextLine")
+            expectEqual(lwv.contains("guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout,"), true,
+                        "迷你单行: miniReelNextLine 按当前布局判要不要画下一句")
+            if let settingsView = read("SettingsView.swift") {
+                expectEqual(settingsView.contains("if miniLyricsLayout.wrappedValue != .list, let lineOverflow {"), true,
+                            "迷你单行: 长句处理在单行 / 双行两档都摆,只有多行不摆")
+                expectEqual(settingsView.contains("if settings.lyricsWindowMiniLyricsLayout != .list, settings.lyricsWindowMiniLineOverflow == .scroll {"), true,
+                            "迷你单行: 工具栏「布局」摘要在单行 / 双行两档都报滚动")
+            } else {
+                expectEqual(true, false, "迷你单行: 读不到 SettingsView.swift(路径挪了?)")
+            }
             // 打开 / 关闭 / 进出迷你都不做动画(07 章决策 51)。
             // 窗口一放进视图树就同步 attach(恢复尺寸、关动画都得赶在首次显示之前),不等下一拍
             // —— 等下一拍的话窗口先按默认尺寸显示、再一闪跳成上次的大小(07 章决策 52)。

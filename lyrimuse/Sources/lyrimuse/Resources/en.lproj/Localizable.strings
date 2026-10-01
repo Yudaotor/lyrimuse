@@ -392,6 +392,7 @@
 "单日最高 · %@" = "Busiest day · %@";
 "单曲循环" = "Repeat One";
 "单行" = "One Line";
+"单行：只显示当前句。\n双行：显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。" = "One Line: only the current line.\nTwo Lines: the current line and the next one.\nFull: a scrolling page of lyrics, like the full size.";
 "占用空间：%@" = "Storage used: %@";
 "卡拉OK" = "Karaoke";
 "卡拉OK效果" = "Karaoke Effect";
@@ -1289,8 +1290,6 @@
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "简体" = "Simplified";
 "简体中文" = "简体中文";
-"简洁" = "Compact";
-"简洁：只显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。" = "Compact: only the current line and the next one.\nFull: a scrolling page of lyrics, like the full size.";
 "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文" = "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation in their own “Second Line” setting";
 "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择读音" = "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick romanization in their own “Second Line” setting";
 "管理" = "Library";
@@ -1623,7 +1622,7 @@
 "连续混音版，与原版编排不同" = "Continuous mix, arranged differently from the original";
 "迷你尺寸" = "Mini Size";
 "迷你尺寸一行放不下时换行还是滚动" = "Whether long lines wrap or scroll in the mini size";
-"迷你尺寸只显示当前句和下一句，还是像完整尺寸那样整页滚动" = "Whether the mini size shows just the current and next line, or a scrolling page like the full size";
+"迷你尺寸只显示当前句、当前句加下一句，还是像完整尺寸那样整页滚动" = "Whether the mini size shows just the current line, the current and next line, or a scrolling page like the full size";
 "迷你尺寸的歌词字号上限" = "Ceiling for the mini size's lyrics font size";
 "迷你尺寸顶部信息左边那枚封面小图" = "The small artwork thumbnail beside the mini size's top info";
 "迷你尺寸顶部显示「已播到哪 / 这首多长」" = "Shows elapsed time and track length at the top of the mini size";

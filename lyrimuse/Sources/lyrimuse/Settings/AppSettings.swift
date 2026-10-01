@@ -1161,7 +1161,7 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniLineOverflow: OverlayLineOverflow {
         didSet { defaults.set(lyricsWindowMiniLineOverflow.rawValue, forKey: Keys.lyricsWindowMiniLineOverflow) }
     }
-    /// 迷你窗中间的歌词排成两行(简洁)还是整页列表(多行),见 `LyricsWindowMiniLyricsLayout`。
+    /// 迷你窗中间的歌词排成单行、双行还是整页列表(多行),见 `LyricsWindowMiniLyricsLayout`。
     @Published var lyricsWindowMiniLyricsLayout: LyricsWindowMiniLyricsLayout {
         didSet { defaults.set(lyricsWindowMiniLyricsLayout.rawValue, forKey: Keys.lyricsWindowMiniLyricsLayout) }
     }
@@ -1892,7 +1892,7 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
         // 默认 .compact:两行是迷你窗一直以来的样子,升级上来的人不变。
         lyricsWindowMiniLyricsLayout = defaults.string(forKey: Keys.lyricsWindowMiniLyricsLayout)
-            .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .compact
+            .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .twoLines
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
         lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)

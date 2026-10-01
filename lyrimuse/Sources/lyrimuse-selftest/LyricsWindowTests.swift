@@ -96,6 +96,32 @@ func runLyricsWindowTests() {
         expectEqual(M.nextIndex(currentLineIndex: nil, lineCount: 0), nil, "迷你两行: 没有歌词时两行都空")
     }
 
+    // MARK: - 迷你歌词布局:单行 / 双行 / 多行
+    do {
+        typealias L = LyricsWindowMiniLyricsLayout
+        typealias M = MiniLyricsSelection
+        expectEqual(L.allCases, [.oneLine, .twoLines, .list], "迷你布局: 分段顺序 单行 → 双行 → 多行")
+        expectEqual(L.twoLines.rawValue, "compact", "迷你布局: 双行的存盘值固定是 compact")
+        expectEqual(L(rawValue: "compact"), .twoLines, "迷你布局: 已存的 compact 读出来是双行")
+        expectEqual(L(rawValue: "list"), .list, "迷你布局: 已存的 list 读出来还是多行")
+        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: true, inGap: false), false,
+                    "迷你单行: 有当前句就只画当前句")
+        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: false, inGap: true), false,
+                    "迷你单行: 前奏 / 间奏那一格是三颗点,不补下一句")
+        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: true, inGap: true), false,
+                    "迷你单行: 句间间奏也不补")
+        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: false, inGap: false), true,
+                    "迷你单行: 还没唱到第一句、又没有前奏三点时用下一句顶上,不留空白")
+        for current in [true, false] {
+            for gap in [true, false] {
+                expectEqual(M.showsNextLine(layout: .twoLines, hasCurrentLine: current, inGap: gap), true,
+                            "迷你双行: 下一句恒画(current=\(current) gap=\(gap))")
+                expectEqual(M.showsNextLine(layout: .list, hasCurrentLine: current, inGap: gap), true,
+                            "迷你多行退回两行那套时照两行画(current=\(current) gap=\(gap))")
+            }
+        }
+    }
+
     // MARK: - 窗口位置恢复
     do {
         let visible = CGRect(x: 0, y: 25, width: 1440, height: 875)
