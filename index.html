@@ -3,24 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lyrimuse — Word-Synced Desktop Lyrics for macOS</title>
-<meta name="description" content="Free, open-source desktop lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music — and YouTube Music / Spotify Web in any browser. Word-by-word sync, scored lyric matching, translation, Cantonese Jyutping, Last.fm stats. macOS 14+, Apple Silicon & Intel.">
+<script>(function(){try{
+var saved=null;try{saved=localStorage.getItem('lyrimuse.lang')}catch(e){}
+var base=location.pathname.replace(/[^\/]*$/,'');
+if(document.referrer&&document.referrer.indexOf(location.origin+base)===0)return;
+var want=saved;
+if(want!=='en'&&want!=='zh-Hans'&&want!=='zh-Hant'){want='en';
+var list=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];
+for(var i=0;i<list.length;i++){var l=String(list[i]).toLowerCase();
+if(l==='en'||l.indexOf('en-')===0)break;
+if(l==='zh'||l.indexOf('zh-')===0){want=/-hant\b|-(tw|hk|mo)\b/.test(l)&&!/-hans\b/.test(l)?'zh-Hant':'zh-Hans';break}}}
+if(want==='zh-Hans')location.replace('zh/'+location.search+location.hash);
+else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.hash);
+}catch(e){}})()</script>
+<title>Lyrimuse | Word-synced desktop lyrics for macOS</title>
+<meta name="description" content="Open-source desktop lyrics for Mac. Word-by-word lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music and YouTube Music, with scored lyric matching, translation, readings and Last.fm stats. macOS 14 or later, Apple Silicon and Intel.">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/">
-<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="icon" href="assets/img/app-icon.png">
-<link rel="stylesheet" href="assets/style.css">
-<meta property="og:title" content="Lyrimuse — Word-Synced Desktop Lyrics for macOS">
-<meta property="og:description" content="Free, open-source desktop lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase, Kugou, Soda Music and browser web players. Actively maintained LyricsX alternative.">
+<link rel="apple-touch-icon" href="assets/img/app-icon.png">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="assets/lp.css?v=202610011816">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Lyrimuse | Word-synced desktop lyrics for macOS">
+<meta property="og:description" content="Desktop lyrics, reimagined for the Mac. Word-synced lyrics for Apple Music, Spotify, KKBOX, Amazon Music and more, floating on your desktop, in the notch and in the menu bar.">
 <meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Lyrimuse — word-synced desktop lyrics for macOS: Dynamic Island, floating overlay, menu bar and lyrics window">
+<meta property="og:image:alt" content="Lyrimuse: word-synced desktop lyrics for macOS, in the notch, on the desktop, in the menu bar and in a lyrics window">
 <meta name="twitter:card" content="summary_large_image">
-<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/">
-<meta property="og:type" content="website">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -28,91 +46,663 @@
   "name": "Lyrimuse",
   "operatingSystem": "macOS 14.0 or later",
   "applicationCategory": "MultimediaApplication",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
   "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
   "softwareVersion": "1.9.0",
   "license": "https://www.gnu.org/licenses/gpl-3.0.html",
   "url": "https://yudaotor.github.io/lyrimuse/",
+  "inLanguage": "en",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg",
-  "author": { "@type": "Person", "name": "Yudaotor", "url": "https://github.com/Yudaotor" }
+  "description": "Open-source desktop lyrics for Mac. Word-by-word lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music and YouTube Music, with scored lyric matching, translation, readings and Last.fm stats. macOS 14 or later, Apple Silicon and Intel.",
+  "author": {
+    "@type": "Person",
+    "name": "Yudaotor",
+    "url": "https://github.com/Yudaotor"
+  }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "en",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Which Macs does it support?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "macOS 14 Sonoma or later, on Apple Silicon and Intel; Intel Macs use a separate build. Translating lyrics on your Mac needs macOS 15 or later."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I install it?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. You can also download the DMG from GitHub; the README has the steps. Updates come through the app after that."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which permissions does it need?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The first time it reads Apple Music or Spotify, macOS asks whether Lyrimuse may control it (Automation); allow it. QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX and Amazon Music need nothing extra."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does any of my data leave my Mac?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The privacy policy lists every server it talks to."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do lyrics work offline?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Lyrics it has found once are cached on your Mac and show without a connection. The first lookup for a song needs one, and so does online translation."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does the Dynamic Island capsule work on a Mac without a notch?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. On a screen without a notch, like an older MacBook or an external display, the capsule sits at the top center, as tall as the menu bar. You pick the screen in Settings."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if the lyrics are wrong or out of sync?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "If the timing's off, shift it for that song and it's remembered. If it's the wrong version, open manual search and pick another one; your pick stays locked. You can also edit any song's lyrics in Lyrics Manager."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is it different from LyricsX?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and furigana, and Last.fm scrobbling. See the fact-checked comparison."
+      }
+    }
+  ]
+}
+</script>
+<script>document.documentElement.classList.add('js');setTimeout(function(){if(!window.lpReady)document.documentElement.classList.remove('js')},4000)</script>
+<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[lang]');if(a)try{localStorage.setItem('lyrimuse.lang',a.getAttribute('lang'))}catch(x){}})</script>
 </head>
 <body>
-<div class="wrap">
-
-<header>
-  <img src="assets/img/app-icon.png" alt="Lyrimuse icon">
-  <span class="name">Lyrimuse</span>
-  <nav>
-    <a href="#features">Features</a>
-    <a href="#matching">Lyric matching</a>
-    <a href="compare/">vs LyricsX</a>
-    <a href="#faq">FAQ</a>
-    <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
-    <a href="zh/" lang="zh-Hans">简体中文</a>
-    <a href="zh-Hant/" lang="zh-Hant">繁體中文</a>
-  </nav>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><img src="assets/img/app-icon.png" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <nav class="links">
+      <a href="#display">Features</a>
+      <a href="#matching">Lyric matching</a>
+      <a href="compare/">vs LyricsX</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+    </nav>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl-menu" role="menu">
+      <a class="dl-item" role="menuitem" lang="en" href="./" aria-current="page">English</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hans" href="zh/">简体中文</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hant" href="zh-Hant/">繁體中文</a>
+    </div></div>
+    <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">Latest version <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+    </div></div>
+  </div>
 </header>
 
-<div class="hero">
-  <h1>Word-synced desktop lyrics for macOS</h1>
-  <p class="sub">Real-time, word-by-word lyrics for <strong>Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music</strong> — and <strong>YouTube Music / Spotify Web playing in any browser</strong>. Free and open source (GPL-3.0), actively maintained. macOS 14+, Apple Silicon &amp; Intel.</p>
-  <div class="cta">
-    <a class="btn primary" href="https://github.com/Yudaotor/lyrimuse/releases/latest">Download</a>
-    <a class="btn ghost" href="https://github.com/Yudaotor/lyrimuse">Star on GitHub</a>
+<main id="top">
+
+<section class="hero">
+  <a class="eyebrow reveal" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dot"></span>New in 1.9.0: KKBOX and Amazon Music <span class="arrow">›</span></a>
+
+  <h1 class="reveal sing"><span>Desktop lyrics,</span> <span>reimagined for the Mac.</span></h1>
+  <p class="lede reveal">Lyric, meet Muse. <span>Hand the lyrics to your muse. You just listen.</span></p>
+
+  <div class="cta reveal">
+    <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">Latest version <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+    </div></div>
+    <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="Copied. Paste it into Terminal."><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">Copy Homebrew install</span></button>
   </div>
-  <pre class="brew">brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse
-brew install --cask lyrimuse</pre>
-</div>
+  <p class="fine reveal"><span class="nw">Open source</span> · <span class="nw">macOS 14 or later</span> · <span class="nw">Apple Silicon and Intel</span></p>
 
-<div class="shots">
-  <figure><img src="assets/img/app-desktop-lyrics.png" alt="Classic floating desktop lyrics overlay on macOS" loading="lazy"><figcaption>Classic floating overlay</figcaption></figure>
-  <figure><img src="assets/img/app-dynamic-island.png" alt="Dynamic-Island-style lyrics capsule on macOS" loading="lazy"><figcaption>Dynamic-Island-style capsule</figcaption></figure>
-  <figure><img src="assets/img/app-lyrics-window.png" alt="Full Apple-Music-style lyrics window" loading="lazy"><figcaption>Apple-Music-style lyrics window</figcaption></figure>
-</div>
+  <div class="stage hero-rise">
+    <p class="try-hint" aria-hidden="true"><span>↓</span> <em class="h-mouse">Hover over the notch to try it</em><em class="h-touch">Tap the notch to try it</em></p>
+    <div class="device">
+      <div class="lid">
+        <div class="mac live" role="img" aria-label="Lyrimuse on a Mac desktop: two-line lyrics in the menu bar, a lyrics card under the notch, and floating desktop lyrics lighting up word by word">
+          <div class="canvas">
+            <div class="wall"></div>
 
-<section id="features">
-  <h2>Features</h2>
-  <div class="grid">
-    <div class="card"><h3>Works with your players — plural</h3><p>Apple Music (radio included), Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music — pick any combination or let it auto-detect. Pair a browser once and YouTube Music / Spotify Web become first-class players, synced to the page's own progress bar.</p></div>
-    <div class="card"><h3>Picks the right lyrics</h3><p>Every candidate from 12 sources is scored on one scale; the decision is shown per track, wrong matches can self-heal, and your manual pick is locked. <a href="#matching">How matching works ↓</a></p></div>
-    <div class="card"><h3>Translation &amp; romanization</h3><p>Community translations when the source has them, otherwise on-device Apple translation in 17 target languages. Per-line pinyin, Cantonese Jyutping and Japanese furigana readings.</p></div>
-    <div class="card"><h3>Four ways to show it</h3><p>Floating overlay, Dynamic-Island-style capsule, menu-bar lyrics, or a full Apple-Music-style lyrics window — any combination, fully themeable, hidden during screen sharing.</p></div>
-    <div class="card"><h3>Last.fm &amp; ListenBrainz</h3><p>One-click scrobbling to both, offline backfill, local listening history, Top charts, on-this-day look-backs and a GitHub-style listening heatmap.</p></div>
-    <div class="card"><h3>Private &amp; open source</h3><p>GPL-3.0, no telemetry, translation on-device by default, every outbound request written to a local audit log. No Apple Developer account involved — build it from source if you like.</p></div>
+            <div class="menubar">
+          <div class="mb-left"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span></div>
+          <div class="mb-right">
+            <span class="mb-lyric"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span>
+            <svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">Wed 9:41</span>
+          </div>
+        </div>
+
+            <div class="notch-wrap" id="notchWrap">
+          <div class="island">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;Lyrics 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+            <div class="overlay">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div>
+          </div>
+        </div>
+      </div>
+      <div class="base" aria-hidden="true"></div>
+      <div class="floaters" aria-hidden="true">
+        <img class="fl fl-1" src="assets/img/players/AppleMusic.png" alt="" style="--k:0" data-d="1.2" data-fx="-1" data-fy="40" data-r="-8">
+        <img class="fl fl-2" src="assets/img/players/Spotify.png" alt="" style="--k:1" data-d="0.8" data-fx="-1" data-fy="20" data-r="0">
+        <img class="fl fl-3" src="assets/img/players/KKBOX.png" alt="" style="--k:2" data-d="1" data-fx="1" data-fy="40" data-r="0">
+        <img class="fl fl-4" src="assets/img/players/Netease.png" alt="" style="--k:3" data-d="1.3" data-fx="1" data-fy="25" data-r="0">
+        <img class="fl fl-5" src="assets/img/players/QQMusic.png" alt="" style="--k:4" data-d="0.9" data-fx="-0.4" data-fy="10" data-r="0">
+        <img class="fl fl-6" src="assets/img/players/YouTubeMusic.png" alt="" style="--k:5" data-d="1.1" data-fx="0.4" data-fy="10" data-r="0">
+        <img class="fl fl-8" src="assets/img/players/AmazonMusic.png" alt="" style="--k:6" data-d="0.7" data-fx="1" data-fy="30" data-r="-6">
+        <img class="fl fl-7" src="assets/img/players/Kugou.png" alt="" style="--k:7" data-d="0.6" data-fx="-1" data-fy="30" data-r="6">
+        <img class="fl fl-9" src="assets/img/players/SodaMusic.png" alt="" style="--k:8" data-d="0.7" data-fx="-0.1" data-fy="12" data-r="0">
+      </div>
+    </div>
   </div>
 </section>
 
-<section id="matching">
-  <h2>It picks the right lyrics — and shows you why</h2>
-  <p>Anyone who has used a multi-source lyrics app knows the pain of a wrong version getting matched. Lyrimuse scores <strong>every candidate from every source on one scale</strong> — title, artist, album and reported-duration fit, plus quality signals like word-level timing — and the highest score wins, instead of whichever source answered first. Each track has a resolution panel showing every candidate's score and why the winner won. When a source later offers a cleaner match, Lyrimuse can upgrade automatically; a lyric you picked by hand is locked and never overridden.</p>
-  <figure class="feature-img"><img src="assets/img/app-resolution-decision.png" width="620" alt="Lyrimuse resolution decision panel showing per-candidate lyric scores" loading="lazy"><figcaption>The per-track resolution panel: every candidate's score, and why the winner won.</figcaption></figure>
-</section>
-
-<section id="faq">
-  <h2>FAQ</h2>
-  <div class="faq">
-    <div><h3>Does it work with lyrics for YouTube Music playing in a browser?</h3><p>Yes — pair the browser of your choice once, and YouTube Music or Spotify Web becomes a first-class player. Lyrics sync to the page's own progress bar, and a one-click self-test tells you whether the browser can be driven before you commit.</p></div>
-    <div><h3>Is Lyrimuse an alternative to LyricsX?</h3><p>Yes — LyricsX hasn't shipped a release since April 2022. Lyrimuse is actively maintained, adds QQ Music / NetEase / Kugou / Soda Music / KKBOX / Amazon Music and browser web players, scored lyric matching, Jyutping/furigana romanization and Last.fm stats. See the <a href="compare/">fact-checked comparison</a>.</p></div>
-    <div><h3>Do lyrics work offline?</h3><p>Once a song's lyrics have been resolved once, yes — local mode shows cached lyrics with no network round-trip.</p></div>
-    <div><h3>Does it support Intel Macs?</h3><p>Yes — a separate universal build ships with every release, and in-app auto-update covers Intel too.</p></div>
-    <div><h3>Do I need an Apple Developer account?</h3><p>No — Lyrimuse ships ad-hoc signed. The Homebrew install clears the one-time Gatekeeper step automatically; the <a href="https://github.com/Yudaotor/lyrimuse#getting-started">README</a> covers manual options.</p></div>
+<section class="players reveal" aria-label="Supported players">
+  <p class="kicker">Works with the players you already use</p>
+  <div class="marquee">
+    <div class="track">
+      <span class="pl"><img src="assets/img/players/AppleMusic.png" alt="">Apple Music</span>
+      <span class="pl"><img src="assets/img/players/Spotify.png" alt="">Spotify</span>
+      <span class="pl"><img src="assets/img/players/KKBOX.png" alt="">KKBOX</span>
+      <span class="pl"><img src="assets/img/players/AmazonMusic.png" alt="">Amazon Music</span>
+      <span class="pl"><img src="assets/img/players/QQMusic.png" alt="">QQ Music</span>
+      <span class="pl"><img src="assets/img/players/Netease.png" alt="">NetEase Cloud Music</span>
+      <span class="pl"><img src="assets/img/players/Kugou.png" alt="">Kugou Music</span>
+      <span class="pl"><img src="assets/img/players/SodaMusic.png" alt="">Soda Music</span>
+      <span class="pl"><img src="assets/img/players/YouTubeMusic.png" alt="">YouTube Music</span>
+    </div>
   </div>
 </section>
 
-<footer>
-  <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
-  <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
-  <a href="compare/">Compare with LyricsX &amp; Lyric Fever</a>
-  <a href="privacy/">Privacy</a>
-  <a href="terms/">Terms</a>
-  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
-  <a href="zh/" lang="zh-Hans">简体中文</a>
-  <a href="zh-Hant/" lang="zh-Hant">繁體中文</a>
+<section class="ch" id="display">
+  <header class="ch-head reveal">
+    <p class="k">Display</p>
+    <h2><span class="hm">Four ways to show lyrics,</span> <span class="fx">use as many as you like.</span></h2>
+    <p class="ch-lede">A full Lyrics Window, a capsule under the notch, the menu bar, and an overlay that floats above every window.</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-lw on"><div class="lwx live" role="group" aria-label="The Lyrics Window in full and mini size: cover, track and controls with lyrics lighting up word by word"><div class="lw live" ><div class="lw-in">
+        <div class="lw-bg" data-blur="plain"></div><div class="lw-tint"></div>
+        <div class="lw-chrome"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V4h5M16 11v5h-5M4 4l5 5M16 16l-5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><button class="lw-pip" type="button" data-mini="1" aria-label="Enter Mini Size"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M5.6 6.8 8.6 9.8M8.6 7.2v2.6H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div>
+        <div class="lw-vol"><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 13.5a6 6 0 1 1 9 0M7.8 11.2a3 3 0 1 1 4.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12.5 6.5 17h7z" fill="currentColor"/></svg><i class="lw-slider"><b></b></i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lw-left">
+          <i class="lw-cover" data-cover></i>
+          <div class="lw-meta"><div class="lw-name"><b data-t="title"></b><span><span data-t="artist"></span> – <span data-t="album"></span></span></div>
+            <span class="lw-btns"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4 5.5 16.8l.9-5L2.8 8.3l5-.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg></i></span></div>
+          <div class="lw-prog"><i data-l="prog"></i></div>
+          <div class="lw-time"><span data-l="cur"></span><span>Plays: 38</span><span>3:21</span></div>
+          <div class="lw-ctrl"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3l7 8h4M3 14h3l2.2-2.5M11.8 8.5 14 6h3M15 4l2 2-2 2M15 12l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V7a2 2 0 0 1 2-2h9M13 3l2 2-2 2M16 11v2a2 2 0 0 1-2 2H5M7 17l-2-2 2-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="lw-list"><div class="lw-track"></div></div>
+        <div class="lw-tools"><i class="lw-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h7M6.5 2.5V4M4.5 4c.4 2.6 2 4.6 4.5 5.6M8.5 4c-.4 2.6-2 4.6-4.8 5.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="m10.5 17 3-7.5 3 7.5M11.6 14.5h3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="lw-cap2"><i class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="currentColor"/><circle cx="7" cy="9.3" r="1.1" fill="#000" opacity=".55"/><circle cx="10" cy="9.3" r="1.1" fill="#000" opacity=".55"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M4 10h12M4 14h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span></div>
+      </div></div><div class="mw"><div class="mw-in">
+        <div class="mw-bg" data-blur="plain"></div><div class="mw-tint"></div>
+        <div class="mw-lights"><i class="tl r"></i><i class="tl y"></i></div><div class="mw-acts"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.4 12.2h11.2v1.4a.8.8 0 0 1-.8.8H5.2a.8.8 0 0 1-.8-.8z" fill="currentColor"/></svg><button class="lw-pip" type="button" data-mini="0" aria-label="Exit Mini Size"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M8.6 9.8 5.6 6.8M5.6 9.4V6.8h2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+        <div class="mw-top"><i class="mw-cover" data-cover></i><span class="mw-meta"><b data-t="title"></b><span data-t="artist"></span><span class="mw-time"><span data-l="cur"></span> / 3:21</span></span><i class="mw-ph"></i></div>
+        <div class="mw-lyrics"><p class="mw-main" data-l="main"></p><p class="mw-next" data-l="next"></p></div>
+        <div class="mw-deck" aria-hidden="true"><span class="mw-pill"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></span><span class="mw-pill mw-vol"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><i class="mw-slider"><b></b></i></span><span class="mw-pill mw-off"><em>Lyrics</em>−<b>0.0s</b>+</span></div>
+        <div class="mw-bar"><i data-l="prog"></i></div>
+      </div></div></div></figure>
+      <figure class="view v-notch" data-dur="8200"><div class="nz live" role="group" aria-label="The notch capsule: lyrics under the notch, opening on hover to the track, progress and controls, or only a status bar with its lyrics turned off"><div class="nz-bar"></div><div class="notch-wrap">
+          <div class="island open">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts"><span class="ix-dec" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><button class="ix-lyr" type="button" aria-pressed="true" aria-label="Show Lyrics" title="Hide Lyrics" data-on="Hide Lyrics" data-off="Show Lyrics"><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><span class="ix-dec" aria-hidden="true"><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;Lyrics 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div></div></figure>
+      <figure class="view v-mb"><div class="mbz live" role="img" aria-label="Lyrics in the menu bar, and the panel that opens when you click it"><div class="mbz-in">
+        <div class="menubar">
+          <div class="mb-left"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span></div><span class="hw-notch"></span>
+          <div class="mb-right">
+            <span class="mb-lyric"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span>
+            <svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">Wed 9:41</span>
+          </div>
+        </div>
+        <div class="mbp">
+          <div class="mbp-card">
+            <div class="mbp-now"><i class="mbp-cover" data-cover></i>
+              <div class="mbp-meta"><b data-t="title"></b><span><span data-t="artist"></span><i class="mbp-rec" aria-hidden="true"></i></span><span class="dim" data-t="album"></span></div>
+              <img class="mbp-src" src="assets/img/players/Spotify.png" alt=""></div>
+            <p class="mbp-line" data-l="main" data-scroll></p>
+            <div class="mbp-prog"><i data-l="prog"></i></div>
+            <div class="mbp-time"><span data-l="cur"></span><span>−&nbsp;&nbsp;Lyrics 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+            <div class="mbp-ctrl"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+          </div>
+          <div class="mbp-row3"><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 8h8M6 10.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Floating Lyrics</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>Notch Lyrics</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>Menu Bar Lyrics</span></div></div>
+          <div class="mbp-row2"><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Lyrics Window</span></div><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>Lyrics Manager</span></div></div>
+          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>Settings…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Version 1.9.0</span></div>
+        </div>
+      </div></div></figure>
+      <figure class="view v-ov"><div class="ovz live" role="img" aria-label="Floating desktop lyrics with the controls that appear on hover"><div class="overlay ctrl-on">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="Display"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Window</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Notch</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Menu bar</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Overlay</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch ch-rd" id="reading">
+  <header class="ch-head reveal">
+    <p class="k">Translation and readings</p>
+    <h2><span class="hm">Sing along,</span> <span class="fx">in any language.</span></h2>
+    <p class="ch-lede">Translations sit under the line, and readings sit under the exact words they belong to.</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-rd on"><div class="rd" role="img" aria-label="The Lyrimuse overlay with a reading under each word"><div class="rd-lines"><div class="rd-row" lang="ja"><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">あの</span><span class="rd-fill">あの</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">ano</span><span class="rd-fill">ano</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">日</span><span class="rd-fill">日</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">hi</span><span class="rd-fill">hi</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">の</span><span class="rd-fill">の</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">no</span><span class="rd-fill">no</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">悲しみ</span><span class="rd-fill">悲しみ</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">kanashimi</span><span class="rd-fill">kanashimi</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">さえ</span><span class="rd-fill">さえ</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">sae</span><span class="rd-fill">sae</span></span></span></div><p class="rd-tr"><span class="rd-stroke" aria-hidden="true">Even the sadness of that day</span><span class="rd-fill">Even the sadness of that day</span></p></div><p class="rd-song">Kenshi Yonezu · Lemon</p></div></figure>
+      <div class="seg glass" role="tablist" aria-label="Translation and readings"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Japanese</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Korean</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Cantonese</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Mandarin</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="matching">
+  <header class="ch-head reveal">
+    <p class="k">Lyric matching</p>
+    <h2><span class="hm">Twelve lyric sources,</span> <span class="fx">one right answer.</span></h2>
+    <p class="ch-lede">Every result is scored the same way and the best one wins. Wrong one? Search or edit it, and your pick stays locked.</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-dp" role="img" aria-label="The resolution decision panel: every candidate&#x27;s score and why the winner won"><div class="pn-in dp">
+        <header class="dp-head"><b>Resolution decision</b><span class="dp-btns"><i>Copy</i><i class="pri">Done</i></span></header>
+        <div class="dp-info"><b>5 sources returned identical lyrics</b><span>Score gap: only 26 (2.0%).</span></div>
+        <div class="dp-chips"><span class="ok"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m7 10.2 2.1 2.1L13 8.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Applied</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5h14M7 3v3M13 3v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Sep 30, 2026 at 11:14 PM</span></div>
+        <ul class="dp-list"><li class="dp-row win" style="--i:0"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#6b55e0">Musixmatch</span><span class="dp-win"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5 6.5 9.5 10 4l3.5 5.5L17 6.5 15.5 15h-11z" fill="currentColor"/></svg>Winner</span><span class="dp-wt">Word-timed</span><b>1,288</b><i class="dp-bar" style="--c:#6b55e0;--w:100.0%"><s></s></i></div>
+            <p>Word timing +400 · Duration match +274 · Content corroborated +250 · Album match +150 · Title match +120 · Lines +94</p></li><li class="dp-row" style="--i:1"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#e0393e">NetEase Cloud Music</span><span class="dp-wt">Word-timed</span><b>1,262</b><em>-26</em><i class="dp-bar" style="--c:#e0393e;--w:98.0%"><s></s></i></div>
+            <p>Duration match -68 · Has translation +50 · Lines -8</p></li><li class="dp-row" style="--i:2"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1fa34a">QQ Music</span><span class="dp-wt">Word-timed</span><b>1,170</b><em>-118</em><i class="dp-bar" style="--c:#1fa34a;--w:90.8%"><s></s></i></div>
+            <p>Album match -150 · Duration match +40 · Lines -8</p></li><li class="dp-row" style="--i:3"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1593e0">Kugou Music</span><span class="dp-wt">Word-timed</span><b>1,150</b><em>-138</em><i class="dp-bar" style="--c:#1593e0;--w:89.3%"><s></s></i></div>
+            <p>Duration match -130 · Lines -8</p></li><li class="dp-row" style="--i:4"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#c23bb4">LRCLIB</span><b>903</b><em>-385</em><i class="dp-bar" style="--c:#c23bb4;--w:70.1%"><s></s></i></div>
+            <p>Word timing -400 · Duration match +20 · Lines -5</p></li></ul>
+        <p class="dp-tie">All 5 candidates scored identically on: Title match +120 · Content corroborated +250</p>
+        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5 of 12 sources answered</p>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ms" role="img" aria-label="Manual search: every result with its score, word timing and translation"><div class="pn-in ms"><ul><li class="ms-row sel" style="--i:0"><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="">
+            <div class="ms-txt"><b>Blinding Lights</b><span>The Weeknd</span><span>After Hours</span><span class="dim">Score 1288 · 41 lines <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#6b55e0">Musixmatch</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Word timing</span><span class="c-use"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="currentColor"/><path d="m6.5 10.2 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>In use</span></div></li><li class="ms-row" style="--i:1"><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="">
+            <div class="ms-txt"><b>Blinding Lights</b><span>The Weeknd</span><span>After Hours</span><span class="dim">Score 1262 · 41 lines <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#e0393e">NetEase Cloud Music</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Word timing</span><span class="c-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.5 6.5h5M10 6.5v6M8 9.5h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Translation</span></div></li><li class="ms-row" style="--i:2"><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="">
+            <div class="ms-txt"><b>Blinding Lights</b><span>The Weeknd</span><span>Blinding Lights - Single</span><span class="dim">Score 1170 · 40 lines <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#1fa34a">QQ Music</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Word timing</span></div></li><li class="ms-row" style="--i:3"><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="">
+            <div class="ms-txt"><b>Blinding Lights</b><span>The Weeknd</span><span>After Hours</span><span class="dim">Score 1150 · 40 lines <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#1593e0">Kugou Music</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Word timing</span></div></li></ul></div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lm" role="img" aria-label="Lyrics Manager: filter, edit and re-search your library"><div class="pn-in lm">
+        <div class="lm-bar"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i>
+          <span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M14.5 2.8V6.4h-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m17 3-6 14-1.8-6.2L3 9z" fill="currentColor"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 9a5.5 5.5 0 0 1 9.6-3.2M15.5 11a5.5 5.5 0 0 1-9.6 3.2M14.4 2.8v3.4H11M5.6 17.2v-3.4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="8" width="15" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8 6 4.5h8L15.5 8M5.5 11.3h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lm-title"><i class="lm-app"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><b>Lyrics Manager</b></div>
+        <div class="lm-search"><span class="lm-field"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.7 12.7 4.3 4.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><em>Search Artist/Title/Album</em></span><i class="lm-go"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.7 12.7 4.3 4.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></div>
+        <div class="lm-filters"><span class="lm-fi"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 8h7M7.8 10.5h4.4M9 13h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><label>Artist<i>All Artists<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>Album<i>All Albums<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>Sort<i>Default Order<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label></div>
+        <div class="lm-filters"><label>Source<i>All Sources<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>Timing<i>All<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><span class="lm-sep"></span><span class="lm-chips"><span>Manually Edited Only</span><span>Missing Lyrics Only</span><span>Instrumental Only</span><span>Thin evidence only</span></span></div>
+        <div class="lm-selbar"><span>1 selected</span><i>Deselect All</i></div>
+        <div class="lm-head"><span>Title</span><span>Artist</span><span>Album</span><span>Source</span><span>Offset</span></div>
+        <ul class="lm-rows"><li class=""><span class="lm-t"><b>Alone Again</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Too Late</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Hardest to Love</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><i class="ic-t"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.5 6.5h5M10 6.5v6M8 9.5h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#e0393e">NetEase Cloud Music</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Scared to Live</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Snowchild</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#1fa34a">QQ Music</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Escape from LA</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Heartless</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><i class="ic-t"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.5 6.5h5M10 6.5v6M8 9.5h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#e0393e">NetEase Cloud Music</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>Faith</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>0.0</span></li><li class="sel"><span class="lm-t"><b>Blinding Lights</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#6b55e0">Musixmatch</span></span><span>+0.2</span></li><li class=""><span class="lm-t"><b>In Your Eyes</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>The Weeknd</span><span>After Hours</span><span><span class="src" style="--c:#1fa34a">QQ Music</span></span><span>0.0</span></li></ul>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="Lyric matching"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Decision</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Search</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Manager</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="profile">
+  <header class="ch-head reveal">
+    <p class="k">Listening profile</p>
+    <h2><span class="hm">Every play,</span> <span class="fx">kept in your listening profile.</span></h2>
+    <p class="ch-lede">Scrobbles to Last.fm and ListenBrainz, with stats, charts and a year-long footprint.</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-lf" role="img" aria-label="Plays today, this week and in total, with recent scrobbles"><div class="pn-in lf">
+        <div class="lf-card lf-nums">
+          <div><b data-count="128">128</b><span>Today</span></div>
+          <div><b data-count="846">846</b><span>Past 7 days</span></div>
+          <div><b data-count="24420">24,420</b><span>Total scrobbles</span></div>
+        </div>
+        <div class="lf-card lf-recent">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6v4.3l2.8 1.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Recent Scrobbles</b><span class="dim lf-upd">Just updated<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M14.5 2.8V6.4h-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ul><li style="--i:0"><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Blinding Lights</b><span>The Weeknd</span></span><span class="lf-r"><span class="dim">Play #38</span><span class="lf-now"><i></i>Scrobbling now</span></span></li><li style="--i:1"><img class="cv" src="assets/img/demo/covers/taylor-lover.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Cruel Summer</b><span>Taylor Swift</span></span><span class="lf-r"><span class="dim">Play #21</span><span class="dim">4 min. ago</span></span></li><li style="--i:2"><img class="cv" src="assets/img/demo/covers/billie-hmhas.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Birds of a Feather</b><span>Billie Eilish</span></span><span class="lf-r"><span class="dim">Play #17</span><span class="dim">8 min. ago</span></span></li><li style="--i:3"><img class="cv" src="assets/img/demo/covers/harry-house.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>As It Was</b><span>Harry Styles</span></span><span class="lf-r"><span class="dim">Play #9</span><span class="dim">12 min. ago</span></span></li><li style="--i:4"><img class="cv" src="assets/img/demo/covers/coldplay-parachutes.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Yellow</b><span>Coldplay</span></span><span class="lf-r"><span class="dim">Play #12</span><span class="dim">16 min. ago</span></span></li><li style="--i:5"><img class="cv" src="assets/img/demo/covers/olivia-sour.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>drivers license</b><span>Olivia Rodrigo</span></span><span class="lf-r"><span class="dim">Play #30</span><span class="dim">20 min. ago</span></span></li></ul>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="Most played artists of the past 30 days, with how far each moved"><div class="pn-in lf">
+        <div class="lf-card lf-chart">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="9" width="3.4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.3" y="5" width="3.4" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="13.6" y="7" width="3.4" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><b>Most Played</b><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="lf-seg"><i class="on">Artist</i><i>Album</i><i>Track</i></span><span class="lf-pop">Past 30 days<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ol><li style="--i:0"><span class="rk">1</span><img class="cv round" src="assets/img/demo/artists/the-weeknd.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>The Weeknd</b></span>
+            <i class="ch-bar" style="--w:100.0%"><s></s></i><span class="ch-n">×486</span><span class="mv same">=</span></li><li style="--i:1"><span class="rk">2</span><img class="cv round" src="assets/img/demo/artists/taylor-swift.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Taylor Swift</b></span>
+            <i class="ch-bar" style="--w:72.4%"><s></s></i><span class="ch-n">×352</span><span class="mv up">▲1</span></li><li style="--i:2"><span class="rk">3</span><img class="cv round" src="assets/img/demo/artists/billie-eilish.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Billie Eilish</b></span>
+            <i class="ch-bar" style="--w:61.3%"><s></s></i><span class="ch-n">×298</span><span class="mv down">▼1</span></li><li style="--i:3"><span class="rk">4</span><img class="cv round" src="assets/img/demo/artists/harry-styles.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Harry Styles</b></span>
+            <i class="ch-bar" style="--w:47.5%"><s></s></i><span class="ch-n">×231</span><span class="mv up">▲2</span></li><li style="--i:4"><span class="rk">5</span><img class="cv round" src="assets/img/demo/artists/olivia-rodrigo.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Olivia Rodrigo</b></span>
+            <i class="ch-bar" style="--w:35.8%"><s></s></i><span class="ch-n">×174</span><span class="mv down">▼1</span></li><li style="--i:5"><span class="rk">6</span><img class="cv round" src="assets/img/demo/artists/coldplay.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Coldplay</b></span>
+            <i class="ch-bar" style="--w:25.9%"><s></s></i><span class="ch-n">×126</span><span class="mv new" title="Not in the previous chart"></span></li></ol>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="Most played albums of the past 30 days, with how far each moved"><div class="pn-in lf">
+        <div class="lf-card lf-chart">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="9" width="3.4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.3" y="5" width="3.4" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="13.6" y="7" width="3.4" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><b>Most Played</b><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="lf-seg"><i>Artist</i><i class="on">Album</i><i>Track</i></span><span class="lf-pop">Past 30 days<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ol><li style="--i:0"><span class="rk">1</span><img class="cv" src="assets/img/demo/covers/weeknd-after-hours.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>After Hours</b><span>The Weeknd</span></span>
+            <i class="ch-bar" style="--w:100.0%"><s></s></i><span class="ch-n">×312</span><span class="mv up">▲1</span></li><li style="--i:1"><span class="rk">2</span><img class="cv" src="assets/img/demo/covers/taylor-lover.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Lover</b><span>Taylor Swift</span></span>
+            <i class="ch-bar" style="--w:85.9%"><s></s></i><span class="ch-n">×268</span><span class="mv down">▼1</span></li><li style="--i:2"><span class="rk">3</span><img class="cv" src="assets/img/demo/covers/billie-hmhas.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>HIT ME HARD AND SOFT</b><span>Billie Eilish</span></span>
+            <i class="ch-bar" style="--w:65.7%"><s></s></i><span class="ch-n">×205</span><span class="mv up">▲3</span></li><li style="--i:3"><span class="rk">4</span><img class="cv" src="assets/img/demo/covers/harry-house.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Harry&#x27;s House</b><span>Harry Styles</span></span>
+            <i class="ch-bar" style="--w:59.0%"><s></s></i><span class="ch-n">×184</span><span class="mv same">=</span></li><li style="--i:4"><span class="rk">5</span><img class="cv" src="assets/img/demo/covers/olivia-sour.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>SOUR</b><span>Olivia Rodrigo</span></span>
+            <i class="ch-bar" style="--w:48.4%"><s></s></i><span class="ch-n">×151</span><span class="mv down">▼2</span></li><li style="--i:5"><span class="rk">6</span><img class="cv" src="assets/img/demo/covers/coldplay-parachutes.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>Parachutes</b><span>Coldplay</span></span>
+            <i class="ch-bar" style="--w:31.1%"><s></s></i><span class="ch-n">×97</span><span class="mv new" title="Not in the previous chart"></span></li></ol>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="Listening footprint: totals, listening hours, a year-long heatmap and on this day"><div class="pn-in lf lf-fp">
+        <div class="lf-card fp-ledger"><header><b>Listening Footprint</b></header><div class="fp-grid"><div style="--i:0"><b>986</b><span>Days with plays · 24.7 per day</span></div><div style="--i:1"><b>46</b><span>Current streak · longest 112 days</span></div><div style="--i:2"><b>214</b><span>Busiest day · Dec 31, 2025</span></div><div style="--i:3"><b>6,820</b><span>This year so far · 5,904 in the same span of 2025</span></div><div style="--i:4"><b>580 to go</b><span>Until scrobble #25,000</span></div></div></div>
+        <div class="lf-card fp-hours"><header><b>Listening Hours</b></header><div class="fp-bars"><i style="--h:21%;--i:0"></i><i style="--h:12%;--i:1"></i><i style="--h:6%;--i:2"></i><i style="--h:3%;--i:3"></i><i style="--h:2%;--i:4"></i><i style="--h:2%;--i:5"></i><i style="--h:5%;--i:6"></i><i style="--h:14%;--i:7"></i><i style="--h:27%;--i:8"></i><i style="--h:39%;--i:9"></i><i style="--h:45%;--i:10"></i><i style="--h:42%;--i:11"></i><i style="--h:52%;--i:12"></i><i style="--h:45%;--i:13"></i><i style="--h:41%;--i:14"></i><i style="--h:44%;--i:15"></i><i style="--h:50%;--i:16"></i><i style="--h:58%;--i:17"></i><i style="--h:67%;--i:18"></i><i style="--h:79%;--i:19"></i><i style="--h:91%;--i:20"></i><i style="--h:100%;--i:21"></i><i style="--h:88%;--i:22"></i><i style="--h:48%;--i:23"></i></div><div class="fp-axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div></div>
+        <div class="lf-card fp-heat"><header><b>Listening Heatmap</b><span class="fp-years"><i class="on">2026</i><i>2025</i><i>2024</i></span></header>
+          <div class="hm"><span style="--c:0"><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:1"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:2"><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:3"><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:4"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h0"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:5"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i></span><span style="--c:6"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:7"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:8"><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:9"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:10"><i class="h3"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:11"><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:12"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h1"></i><i class="h3"></i><i class="h4"></i></span><span style="--c:13"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:14"><i class="h2"></i><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h3"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:15"><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h0"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:16"><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:17"><i class="h3"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:18"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h4"></i><i class="h3"></i></span><span style="--c:19"><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i><i class="h1"></i></span><span style="--c:20"><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:21"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:22"><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:23"><i class="h0"></i><i class="h0"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:24"><i class="h2"></i><i class="h3"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:25"><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:26"><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:27"><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h3"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:28"><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:29"><i class="h0"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:30"><i class="h1"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:31"><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:32"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:33"><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:34"><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:35"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:36"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:37"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i></span><span style="--c:38"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:39"><i class="h0"></i><i class="h2"></i><i class="h2"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:40"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:41"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:42"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:43"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:44"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:45"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:46"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:47"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:48"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:49"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:50"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:51"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:52"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span></div><footer><span class="dim">6,820 plays in 2026</span><span class="hm-key"><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i></span></footer></div>
+        <div class="lf-card fp-otd"><header><b>On This Day</b><span class="dim">3 years ago today: 42 plays, most on repeat</span></header><ul><li><img class="cv" src="assets/img/demo/blinding-lights.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Blinding Lights</b><span>The Weeknd</span></span><span class="dim">×9</span></li><li><img class="cv" src="assets/img/demo/covers/taylor-lover.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Cruel Summer</b><span>Taylor Swift</span></span><span class="dim">×6</span></li><li><img class="cv" src="assets/img/demo/covers/coldplay-parachutes.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>Yellow</b><span>Coldplay</span></span><span class="dim">×5</span></li></ul></div>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="Listening profile"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Stats</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Top Artists</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Top Albums</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Footprint</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="custom">
+  <header class="ch-head reveal">
+    <p class="k">Make it yours</p>
+    <h2><span class="hm">Tune every detail,</span> <span class="fx">and watch it change as you do.</span></h2>
+    <p class="ch-lede">Fonts, colours, widths and positions, each page with a live preview. Drag the slider to try it.</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-ed" role="group" aria-label="The floating lyrics editor with a live preview"><div class="pn-in ed">
+        <b class="ed-title">Lyrics Display</b>
+        <span class="ed-seg"><i class="on">Floating Lyrics</i><i>Notch</i><i>Menu Bar</i><i>Lyrics Window</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3a7 7 0 0 0 0 14z" fill="currentColor"/></svg><b>Theme</b><em>· Follow Cover Art</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>Text</b><em>· System Font</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="2" fill="currentColor"/></svg><b>Background</b><em>· Transparent</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Layout</b><em>· Two Lines</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>Behavior</b><em>· All Off</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12.5h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Position</b><em>· Top Center</em></span></div></div>
+        <div class="ed-prev live"><div class="ed-wall"></div>
+          <div class="ed-box"><div class="overlay">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div></div>
+          <label class="ed-slider"><span aria-hidden="true">↔</span><input class="ed-range" type="range" min="320" max="600" step="2" value="488" aria-label="Width"><output>488pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5zM6 8h8M6 10.8h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Desktop Floating Lyrics</span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All Settings</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed" role="group" aria-label="The notch editor with a live preview"><div class="pn-in ed">
+        <b class="ed-title">Lyrics Display</b>
+        <span class="ed-seg"><i>Floating Lyrics</i><i class="on">Notch</i><i>Menu Bar</i><i>Lyrics Window</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 3 9 9.5M8.5 10.5c-2 0-3.5 1.4-3.5 3.3 0 1.2-.6 2-1.5 2.2 1 .8 2.3 1 3.5 1 2.3 0 3.6-1.6 3.6-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Style</b><em>· Follow Cover Art</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4v12M16 10H8M11 7l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Left Ear</b><em>· Artwork</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 4v12M4 10h8M9 7l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Right Ear</b><em>· Nothing</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>Font</b><em>· System Font</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H4v3M13 3h3v3M7 17H4v-3M13 17h3v-3M10 6v8M7.5 8.5 10 6l2.5 2.5M7.5 11.5 10 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Expanded State</b><em>· Track Info</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>Behavior</b><em>· All Off</em></span></div></div>
+        <div class="ed-prev ed-prev-n live"><div class="ed-wall"></div>
+          <div class="ed-mb"><span class="ed-apple"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg></span><span class="ed-mbr"><svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">Wed 9:41</span></span></div>
+          <div class="ed-notch"><div class="notch-wrap">
+          <div class="island">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;Lyrics 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div></div>
+          <label class="ed-slider ed-dual"><span aria-hidden="true">↔</span><span class="ed-dual-track"><input class="ed-range lo" type="range" min="200" max="600" step="2" value="258" aria-label="Width"><input class="ed-range hi" type="range" min="200" max="600" step="2" value="468" aria-label="Width"></span><output>258–468pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 4.5h6v1.8a1.2 1.2 0 0 1-1.2 1.2H8.2A1.2 1.2 0 0 1 7 6.3z" fill="currentColor"/></svg><span>Notch Lyrics<small>Tucked compactly beside the notch at the top of the screen</small></span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All Settings</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed" role="group" aria-label="The menu bar editor with a live preview"><div class="pn-in ed">
+        <b class="ed-title">Lyrics Display</b>
+        <span class="ed-seg"><i>Floating Lyrics</i><i>Notch</i><i class="on">Menu Bar</i><i>Lyrics Window</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Layout</b><em>· Adaptive</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg><b>Color</b><em>· Karaoke Effect</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>Font</b><em>· Regular</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>Behavior</b><em>· Show Title When No Lyrics</em></span></div></div>
+        <div class="ed-prev ed-prev-mb live"><div class="ed-wall"></div>
+          <div class="ed-mbar"><span class="ed-apple"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg></span><b>Finder</b><span>File</span>
+            <span class="ed-mbr"><span class="mb-lyric ed-mbl"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span><svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">Wed 9:41</span></span>
+          </div>
+          <label class="ed-slider"><span aria-hidden="true">↔</span><input class="ed-range mbw" type="range" min="120" max="320" step="10" value="250" aria-label="Max Width"><output>250pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Menu Bar Lyrics</span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All Settings</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed pn-ed-lw" role="group" aria-label="The Lyrics Window settings with a live preview in full and mini size"><div class="pn-in ed ed-lw">
+        <b class="ed-title">Lyrics Display</b>
+        <span class="ed-seg"><i>Floating Lyrics</i><i>Notch</i><i>Menu Bar</i><i class="on">Lyrics Window</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg><b>Background</b><em>· Follow Cover Art</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg><b>Text Color</b><em>· Automatic</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>Font</b><em>· System Font</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg><b>Artwork</b><em>· All On</em></span></div></div>
+        <div class="ed-prev ed-prev-lw live"><div class="ed-wall"></div>
+          <div class="lwx live lwx-preview" aria-hidden="true"><div class="lw live" ><div class="lw-in">
+        <div class="lw-bg" data-blur="plain"></div><div class="lw-tint"></div>
+        <div class="lw-chrome"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V4h5M16 11v5h-5M4 4l5 5M16 16l-5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><button class="lw-pip" type="button" data-mini="1" aria-label="Enter Mini Size"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M5.6 6.8 8.6 9.8M8.6 7.2v2.6H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div>
+        <div class="lw-vol"><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 13.5a6 6 0 1 1 9 0M7.8 11.2a3 3 0 1 1 4.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12.5 6.5 17h7z" fill="currentColor"/></svg><i class="lw-slider"><b></b></i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lw-left">
+          <i class="lw-cover" data-cover></i>
+          <div class="lw-meta"><div class="lw-name"><b data-t="title"></b><span><span data-t="artist"></span> – <span data-t="album"></span></span></div>
+            <span class="lw-btns"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4 5.5 16.8l.9-5L2.8 8.3l5-.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg></i></span></div>
+          <div class="lw-prog"><i data-l="prog"></i></div>
+          <div class="lw-time"><span data-l="cur"></span><span>Plays: 38</span><span>3:21</span></div>
+          <div class="lw-ctrl"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3l7 8h4M3 14h3l2.2-2.5M11.8 8.5 14 6h3M15 4l2 2-2 2M15 12l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V7a2 2 0 0 1 2-2h9M13 3l2 2-2 2M16 11v2a2 2 0 0 1-2 2H5M7 17l-2-2 2-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="lw-list"><div class="lw-track"></div></div>
+        <div class="lw-tools"><i class="lw-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h7M6.5 2.5V4M4.5 4c.4 2.6 2 4.6 4.5 5.6M8.5 4c-.4 2.6-2 4.6-4.8 5.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="m10.5 17 3-7.5 3 7.5M11.6 14.5h3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="lw-cap2"><i class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="currentColor"/><circle cx="7" cy="9.3" r="1.1" fill="#000" opacity=".55"/><circle cx="10" cy="9.3" r="1.1" fill="#000" opacity=".55"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M4 10h12M4 14h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span></div>
+      </div></div><div class="mw"><div class="mw-in">
+        <div class="mw-bg" data-blur="plain"></div><div class="mw-tint"></div>
+        <div class="mw-lights"><i class="tl r"></i><i class="tl y"></i></div>
+        <div class="mw-top"><i class="mw-cover" data-cover></i><span class="mw-meta"><b data-t="title"></b><span data-t="artist"></span><span class="mw-time"><span data-l="cur"></span> / 3:21</span></span><i class="mw-ph"></i></div>
+        <div class="mw-lyrics"><p class="mw-main" data-l="main"></p><p class="mw-next" data-l="next"></p></div>
+        
+        <div class="mw-bar"><i data-l="prog"></i></div>
+      </div></div></div>
+        </div>
+        <div class="ed-size" role="group"><button type="button" aria-pressed="true">Full Size</button><button type="button" aria-pressed="false">Mini Size</button></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Lyrics Window</span><i class="ed-open">Open</i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All Settings</span></div>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="Make it yours"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>Overlay</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Notch</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Menu bar</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>Window</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch ch-more" id="more">
+  <header class="ch-head reveal"><h2>And there&#x27;s more.</h2></header>
+  <div class="more-stage reveal">
+    <i class="spot" aria-hidden="true"></i>
+    <ul class="more-list">
+      <li class="pill glass" style="--i:0"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h5A2.5 2.5 0 0 1 13 5.5v2A2.5 2.5 0 0 1 10.5 10H7l-3 2.5V9.6A2.5 2.5 0 0 1 3 7.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7.5h.5A2.5 2.5 0 0 1 18 10v2a2.5 2.5 0 0 1-1 2v2.5L14 14h-3.5A2.5 2.5 0 0 1 8 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Duets side by side</span></li>
+      <li class="pill glass" style="--i:1"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7.5" y="2.8" width="5" height="9" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.8 9.8a5.2 5.2 0 0 0 10.4 0M10 15v2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Background vocals on their own line</span></li>
+      <li class="pill glass" style="--i:2"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 7.3v5.4l4.6-2.7z" fill="currentColor"/></svg></i><span>Motion album art</span></li>
+      <li class="pill glass" style="--i:3"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 5.5C8.4 4.2 6 3.7 3.5 4v11c2.5-.3 4.9.2 6.5 1.5 1.6-1.3 4-1.8 6.5-1.5V4c-2.5-.3-4.9.2-6.5 1.5zm0 0v11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Album notes and artist bios</span></li>
+      <li class="pill glass" style="--i:4"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7h12l-3.2-3.2M16.5 13h-12l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Lyrics in Simplified or Traditional</span></li>
+      <li class="pill glass" style="--i:5"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.8 10h3.4M13.8 10h3.4M15.5 8.3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.4" fill="currentColor"/></svg></i><span>Nudge lyric timing</span></li>
+      <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Upcoming tracks resolved in advance</span></li>
+      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5h8.2a3.3 3.3 0 0 0 .5-6.6A5 5 0 0 0 5 8.4a3.6 3.6 0 0 0 1 7.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m8 11.3 1.6 1.6L12.5 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Works offline</span></li>
+      <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>Missing lyrics retried automatically</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="faq-sec" id="faq">
+  <div class="faq-wrap">
+    <div class="faq-side reveal">
+      <h2>Questions.</h2>
+      <p>Can&#x27;t find yours?</p>
+      <a class="btn btn-light faq-ask" href="https://github.com/Yudaotor/lyrimuse/issues"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg>Ask on GitHub</a>
+    </div>
+    <div class="faq-list reveal">
+      <details class="qa" style="--i:0"><summary><span class="qa-q">Which Macs does it support?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma or later, on Apple Silicon and Intel; Intel Macs use a separate build. Translating lyrics on your Mac needs macOS 15 or later.</p></div></details>
+      <details class="qa" style="--i:1"><summary><span class="qa-q">How do I install it?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. You can also download the DMG from GitHub; the <a href="https://github.com/Yudaotor/lyrimuse">README</a> has the steps. Updates come through the app after that.</p></div></details>
+      <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music or Spotify, macOS asks whether Lyrimuse may control it (Automation); allow it. QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX and Amazon Music need nothing extra.</p></div></details>
+      <details class="qa" style="--i:3"><summary><span class="qa-q">Does any of my data leave my Mac?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The <a href="privacy/">privacy policy</a> lists every server it talks to.</p></div></details>
+      <details class="qa" style="--i:4"><summary><span class="qa-q">Do lyrics work offline?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. Lyrics it has found once are cached on your Mac and show without a connection. The first lookup for a song needs one, and so does online translation.</p></div></details>
+      <details class="qa" style="--i:5"><summary><span class="qa-q">Does the Dynamic Island capsule work on a Mac without a notch?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. On a screen without a notch, like an older MacBook or an external display, the capsule sits at the top center, as tall as the menu bar. You pick the screen in Settings.</p></div></details>
+      <details class="qa" style="--i:6"><summary><span class="qa-q">What if the lyrics are wrong or out of sync?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>If the timing's off, shift it for that song and it's remembered. If it's the wrong version, open manual search and pick another one; your pick stays locked. You can also edit any song's lyrics in Lyrics Manager.</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and furigana, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="final-card reveal">
+    <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
+    <span class="final-ico"><img class="final-icon" src="assets/img/app-icon.png" alt="" width="72" height="72"></span>
+    <h2 class="sing">Let the next song<br>light up.</h2>
+    <div class="cta">
+      <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <div class="dl-menu" role="menu">
+      <p class="dl-head">Latest version <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+    </div></div>
+      <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">View on GitHub</a>
+    </div>
+    <p class="final-fine"><span class="nw">macOS 14 or later</span> · <span class="nw">Apple Silicon and Intel</span> · <span class="nw">Open source, GPL-3.0</span></p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand"><img src="assets/img/app-icon.png" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+    <nav class="foot-links">
+      <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+      <a href="compare/">Compare with LyricsX and Lyric Fever</a>
+      <a href="privacy/">Privacy</a>
+      <a href="terms/">Terms</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+      <a href="zh/" lang="zh-Hans">简体中文</a> <a href="zh-Hant/" lang="zh-Hant">繁體中文</a>
+    </nav>
+    <p class="foot-note">Apple Music, Spotify, KKBOX and other names and icons belong to their owners. Lyrimuse is an independent open-source project and isn&#x27;t affiliated with any of them.</p>
+  </div>
 </footer>
 
-</div>
+<script type="application/json" id="demoData">
+{
+ "title": "Blinding Lights",
+ "artist": "The Weeknd",
+ "album": "Blinding Lights - Single",
+ "cover": "assets/img/demo/blinding-lights.jpg",
+ "blur": "assets/img/demo/blinding-lights-blur.jpg",
+ "notchAccent": "#BB997E",
+ "overlayText": "#7D4B25",
+ "startMs": 60960,
+ "songMs": 201000,
+ "lines": [
+  {
+   "text": "I said, ooh, I'm blinded by the lights",
+   "ms": 5900
+  },
+  {
+   "text": "No, I can't sleep until I feel your touch",
+   "ms": 5220
+  },
+  {
+   "text": "I said, ooh, I'm drowning in the night",
+   "ms": 6010
+  },
+  {
+   "text": "Oh, when I'm like this, you're the one I trust",
+   "ms": 4360
+  }
+ ]
+}
+</script>
+<script type="application/json" id="readData">
+[{"key": "ja", "label": "Japanese", "song": "Kenshi Yonezu · Lemon", "lang": "ja", "groups": [{"r": "ano", "t": "あの", "d": 336, "s": 0}, {"r": "hi", "t": "日", "d": 168, "s": 336}, {"s": 504, "t": "の", "d": 224, "r": "no"}, {"r": "kanashimi", "s": 728, "d": 1329, "t": "悲しみ"}, {"d": 463, "r": "sae", "t": "さえ", "s": 2057}], "tr": "Even the sadness of that day", "ms": 2520}, {"key": "ko", "label": "Korean", "song": "iKON · LOVE SCENARIO", "lang": "ko", "groups": [{"d": 305, "s": 0, "t": "나 ", "r": "na"}, {"r": "sal-agamyeonseo", "t": "살아가면서 ", "d": 2124, "s": 305}, {"s": 3088, "t": "가끔씩 ", "r": "gakkeumssig", "d": 1364}, {"t": "떠오를 ", "d": 1266, "r": "tteooleul", "s": 4452}, {"s": 5718, "r": "gieog", "d": 1112, "t": "기억"}], "tr": "Memories that come to mind from time to time in my life", "ms": 6830}, {"key": "yue", "label": "Cantonese", "song": "Eason Chan · 明年今日", "lang": "yue", "groups": [{"s": 0, "d": 240, "t": "若", "r": "joek6"}, {"t": "这", "d": 320, "r": "ze2", "s": 240}, {"s": 560, "t": "一", "d": 410, "r": "jat1"}, {"d": 530, "r": "hak1", "s": 970, "t": "刻"}, {"t": "我", "s": 1500, "r": "ngo5", "d": 460}, {"r": "ging2", "d": 540, "s": 1960, "t": "竟"}, {"r": "jim4", "d": 180, "s": 2500, "t": "严"}, {"d": 280, "s": 2680, "r": "zung6", "t": "重"}, {"r": "ci1", "s": 2960, "d": 330, "t": "痴"}, {"d": 500, "t": "呆", "r": "ngoi4", "s": 3290}], "tr": "", "ms": 3790}, {"key": "zh", "label": "Mandarin", "song": "Jay Chou · 晴天", "lang": "zh-Hans", "groups": [{"d": 176, "r": "wèi", "s": 0, "t": "为"}, {"t": "你", "s": 176, "d": 176, "r": "nǐ"}, {"t": "翘", "d": 195, "s": 352, "r": "qiào"}, {"t": "课", "r": "kè", "s": 547, "d": 197}, {"r": "de", "s": 744, "t": "的", "d": 256}, {"t": "那", "s": 1000, "d": 228, "r": "nà"}, {"t": "一", "d": 392, "r": "yī", "s": 1228}, {"s": 1620, "r": "tiān", "d": 292, "t": "天"}], "tr": "The day I skipped class for you", "ms": 2112}]
+</script>
+<script src="assets/lp.js?v=202610011816" defer></script>
 </body>
 </html>

@@ -3,24 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lyrimuse — macOS 桌面歌词（逐字同步）</title>
-<meta name="description" content="免费开源的 macOS 桌面歌词：Apple Music、Spotify、Amazon Music、KKBOX、QQ 音乐、网易云音乐、酷狗、汽水音乐，以及浏览器里的 YouTube Music / Spotify 网页版。逐字同步、打分选准歌词、翻译、粤拼、Last.fm 听歌统计。macOS 14+，Apple Silicon 与 Intel。">
+
+<title>Lyrimuse｜Mac 桌面歌词，逐字同步</title>
+<meta name="description" content="开源的 Mac 桌面歌词：Apple Music、Spotify、KKBOX、Amazon Music、QQ 音乐、网易云音乐、酷狗、汽水音乐、YouTube Music 都能用。逐字同步、打分挑选歌词、翻译与读音、Last.fm 听歌档案。macOS 14 以上，Apple Silicon 与 Intel。">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
 <link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
 <link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="icon" href="../assets/img/app-icon.png">
-<link rel="stylesheet" href="../assets/style.css">
-<meta property="og:title" content="Lyrimuse — macOS 桌面歌词（逐字同步）">
-<meta property="og:description" content="免费开源：Apple Music、Spotify、Amazon Music、KKBOX、QQ 音乐、网易云、酷狗、汽水音乐及浏览器网页播放器的桌面歌词。LyricsX 的活跃维护开源替代。">
+<link rel="apple-touch-icon" href="../assets/img/app-icon.png">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../assets/lp.css?v=202610011816">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh/">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="Lyrimuse｜Mac 桌面歌词，逐字同步">
+<meta property="og:description" content="桌面歌词，为 Mac 全新构想。Apple Music、Spotify、QQ 音乐、网易云音乐等九款播放器的逐字歌词，浮在桌面、收进刘海、挂在菜单栏。">
 <meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Lyrimuse — macOS 逐字同步桌面歌词：灵动岛、悬浮歌词、菜单栏、歌词窗口">
+<meta property="og:image:alt" content="Lyrimuse：Mac 逐字同步桌面歌词，动态岛、桌面浮动歌词、菜单栏歌词、歌词窗口">
 <meta name="twitter:card" content="summary_large_image">
-<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh/">
-<meta property="og:type" content="website">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -28,92 +34,663 @@
   "name": "Lyrimuse",
   "operatingSystem": "macOS 14.0 or later",
   "applicationCategory": "MultimediaApplication",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
   "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
   "softwareVersion": "1.9.0",
   "license": "https://www.gnu.org/licenses/gpl-3.0.html",
   "url": "https://yudaotor.github.io/lyrimuse/zh/",
   "inLanguage": "zh-Hans",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh.jpg",
-  "author": { "@type": "Person", "name": "Yudaotor", "url": "https://github.com/Yudaotor" }
+  "description": "开源的 Mac 桌面歌词：Apple Music、Spotify、KKBOX、Amazon Music、QQ 音乐、网易云音乐、酷狗、汽水音乐、YouTube Music 都能用。逐字同步、打分挑选歌词、翻译与读音、Last.fm 听歌档案。macOS 14 以上，Apple Silicon 与 Intel。",
+  "author": {
+    "@type": "Person",
+    "name": "Yudaotor",
+    "url": "https://github.com/Yudaotor"
+  }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "zh-Hans",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "支持哪些 Mac？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "macOS 14 Sonoma 及以上，Apple Silicon 和 Intel 都支持，Intel 用单独的安装包。想在本机翻译歌词，需要 macOS 15 及以上。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "怎么安装？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "推荐用 Homebrew：点上面的「复制 Homebrew 安装命令」，粘到终端运行，第一次打开时的 Gatekeeper 提示它会顺手处理，也不需要 Apple 开发者账号。也可以从 GitHub 下载 DMG 手动安装，步骤见 README。之后的更新都在 App 里完成。大陆下载慢的话，可以在下载地址前加 https://ghfast.top/ 这类加速前缀。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "需要给哪些权限？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Apple Music 和 Spotify 第一次使用时，macOS 会问你要不要允许 Lyrimuse 控制它们（「自动化」权限），同意就行；QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music 都不用额外授权。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "我的数据会上传吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "没有账号、没有遥测、没有统计，关于你和你听什么，不会有任何信息发到开发者那里。找歌词时会把正在放的这首歌拿去问各个歌词源，翻译默认在本机完成。完整清单见隐私政策。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "没有网络能看歌词吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "能。找过一次的歌词会存在本机，之后不联网也能显示；第一次找歌词和联网翻译需要网络。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "没有刘海的 Mac 能用灵动岛吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "能。在没有刘海的屏幕上（老款 MacBook 或外接显示器），胶囊贴在屏幕顶部居中，跟菜单栏一样高，放在哪块屏幕可以在设置里选。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "歌词不对或者不同步怎么办？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "时间对不上，就给这首歌调个偏移，之后会一直记住；版本不对，就打开手动搜索换一份，选中的那份会被锁定。也可以在「歌词管理」里直接改。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "和 LyricsX 有什么区别？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music 和 YouTube Music，歌词按打分挑选，有粤拼和日文假名，还能记录到 Last.fm。详见逐项核实的对比。"
+      }
+    }
+  ]
+}
+</script>
+<script>document.documentElement.classList.add('js');setTimeout(function(){if(!window.lpReady)document.documentElement.classList.remove('js')},4000)</script>
+<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[lang]');if(a)try{localStorage.setItem('lyrimuse.lang',a.getAttribute('lang'))}catch(x){}})</script>
 </head>
 <body>
-<div class="wrap">
-
-<header>
-  <img src="../assets/img/app-icon.png" alt="Lyrimuse 图标">
-  <span class="name">Lyrimuse</span>
-  <nav>
-    <a href="#features">功能</a>
-    <a href="#matching">歌词匹配</a>
-    <a href="compare/">对比 LyricsX</a>
-    <a href="#faq">常见问题</a>
-    <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub</a>
-    <a href="../" lang="en">English</a>
-    <a href="../zh-Hant/" lang="zh-Hant">繁體</a>
-  </nav>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><img src="../assets/img/app-icon.png" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <nav class="links">
+      <a href="#display">功能</a>
+      <a href="#matching">歌词匹配</a>
+      <a href="compare/">对比 LyricsX</a>
+      <a href="#faq">常见问题</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub</a>
+    </nav>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="语言"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>简体</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl-menu" role="menu">
+      <a class="dl-item" role="menuitem" lang="en" href="../">English</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hans" href="./" aria-current="page">简体中文</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hant" href="../zh-Hant/">繁體中文</a>
+    </div></div>
+    <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
+    </div></div>
+  </div>
 </header>
 
-<div class="hero">
-  <h1>macOS 桌面歌词，逐字同步</h1>
-  <p class="sub">给 <strong>Apple Music、Spotify、Amazon Music、KKBOX、QQ 音乐、网易云音乐、酷狗、汽水音乐</strong>——以及<strong>浏览器里播放的 YouTube Music / Spotify 网页版</strong>——配上实时逐字歌词。免费开源（GPL-3.0）、持续维护。macOS 14+，Apple Silicon 与 Intel。</p>
-  <div class="cta">
-    <a class="btn primary" href="https://github.com/Yudaotor/lyrimuse/releases/latest">下载</a>
-    <a class="btn ghost" href="https://github.com/Yudaotor/lyrimuse">GitHub 点个 Star</a>
+<main id="top">
+
+<section class="hero">
+  <a class="eyebrow reveal" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dot"></span>1.9.0 新增 KKBOX 与 Amazon Music <span class="arrow">›</span></a>
+
+  <h1 class="reveal sing"><span>桌面歌词，</span><span>为 Mac 全新构想。</span></h1>
+  <p class="lede reveal">Lyric 与 Muse，合而为一。<span>把歌词交给缪斯，你只管听歌。</span></p>
+
+  <div class="cta reveal">
+    <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>下载 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
+    </div></div>
+    <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="已复制，粘贴到终端运行"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">复制 Homebrew 安装命令</span></button>
   </div>
-  <pre class="brew">brew tap yudaotor/lyrimuse
-brew trust --cask yudaotor/lyrimuse/lyrimuse
-brew install --cask lyrimuse</pre>
-</div>
+  <p class="fine reveal"><span class="nw">开源</span> · <span class="nw">macOS 14 以上</span> · <span class="nw">Apple Silicon 与 Intel</span></p>
 
-<div class="shots">
-  <figure><img src="../assets/img/app-desktop-lyrics.png" alt="macOS 经典桌面悬浮歌词" loading="lazy"><figcaption>经典悬浮窗</figcaption></figure>
-  <figure><img src="../assets/img/app-dynamic-island.png" alt="macOS 灵动岛样式歌词胶囊" loading="lazy"><figcaption>灵动岛样式胶囊</figcaption></figure>
-  <figure><img src="../assets/img/app-lyrics-window.png" alt="仿 Apple Music 歌词页的完整歌词窗口" loading="lazy"><figcaption>仿 Apple Music 的歌词窗口</figcaption></figure>
-</div>
+  <div class="stage hero-rise">
+    <p class="try-hint" aria-hidden="true"><span>↓</span> <em class="h-mouse">把鼠标移到刘海上试试</em><em class="h-touch">点一下刘海试试</em></p>
+    <div class="device">
+      <div class="lid">
+        <div class="mac live" role="img" aria-label="Lyrimuse 在 Mac 桌面上：菜单栏双行歌词、刘海下的动态岛歌词、逐字点亮的桌面浮动歌词">
+          <div class="canvas">
+            <div class="wall"></div>
 
-<section id="features">
-  <h2>功能</h2>
-  <div class="grid">
-    <div class="card"><h3>播放器随你选，可多选</h3><p>Apple Music（含电台）、Spotify、Amazon Music、KKBOX、QQ 音乐、网易云音乐、酷狗、汽水音乐——任意组合，或交给自动识别。浏览器配对一次，网页版 YouTube Music / Spotify 就是正经播放器，按页面自己的进度条精确同步。</p></div>
-    <div class="card"><h3>打分选准歌词</h3><p>12 个歌词源的全部候选统一打分、择优胜出；每首歌的决策可查，匹配错了能自愈，手动选定的会被锁定。<a href="#matching">匹配机制 ↓</a></p></div>
-    <div class="card"><h3>翻译与罗马音</h3><p>优先源自带的社区翻译，否则设备端 Apple 翻译，17 种目标语言。逐行判定的拼音、粤拼、日语注音假名。</p></div>
-    <div class="card"><h3>四种展示形态</h3><p>桌面悬浮窗、灵动岛胶囊、菜单栏歌词、完整歌词窗口——任意组合，外观全可定制，共享屏幕时自动隐藏。</p></div>
-    <div class="card"><h3>Last.fm 与 ListenBrainz</h3><p>一键连接、双端同步打卡、离线补传，本地听歌历史、榜单、「足迹」分页和 GitHub 风格的听歌热力图。</p></div>
-    <div class="card"><h3>隐私与开源</h3><p>GPL-3.0，无遥测，翻译默认在设备端完成，每条对外请求都记进本地审计日志。不需要 Apple 开发者账号，想自己编译也行。</p></div>
+            <div class="menubar">
+          <div class="mb-left"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg><b>访达</b><span>文件</span><span>编辑</span><span>显示</span><span>前往</span><span>窗口</span></div>
+          <div class="mb-right">
+            <span class="mb-lyric"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span>
+            <svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">周三 9:41</span>
+          </div>
+        </div>
+
+            <div class="notch-wrap" id="notchWrap">
+          <div class="island">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;歌词 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+            <div class="overlay">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div>
+          </div>
+        </div>
+      </div>
+      <div class="base" aria-hidden="true"></div>
+      <div class="floaters" aria-hidden="true">
+        <img class="fl fl-1" src="../assets/img/players/AppleMusic.png" alt="" style="--k:0" data-d="1.2" data-fx="-1" data-fy="40" data-r="-8">
+        <img class="fl fl-2" src="../assets/img/players/Spotify.png" alt="" style="--k:1" data-d="0.8" data-fx="-1" data-fy="20" data-r="0">
+        <img class="fl fl-3" src="../assets/img/players/KKBOX.png" alt="" style="--k:2" data-d="1" data-fx="1" data-fy="40" data-r="0">
+        <img class="fl fl-4" src="../assets/img/players/Netease.png" alt="" style="--k:3" data-d="1.3" data-fx="1" data-fy="25" data-r="0">
+        <img class="fl fl-5" src="../assets/img/players/QQMusic.png" alt="" style="--k:4" data-d="0.9" data-fx="-0.4" data-fy="10" data-r="0">
+        <img class="fl fl-6" src="../assets/img/players/YouTubeMusic.png" alt="" style="--k:5" data-d="1.1" data-fx="0.4" data-fy="10" data-r="0">
+        <img class="fl fl-8" src="../assets/img/players/AmazonMusic.png" alt="" style="--k:6" data-d="0.7" data-fx="1" data-fy="30" data-r="-6">
+        <img class="fl fl-7" src="../assets/img/players/Kugou.png" alt="" style="--k:7" data-d="0.6" data-fx="-1" data-fy="30" data-r="6">
+        <img class="fl fl-9" src="../assets/img/players/SodaMusic.png" alt="" style="--k:8" data-d="0.7" data-fx="-0.1" data-fy="12" data-r="0">
+      </div>
+    </div>
   </div>
 </section>
 
-<section id="matching">
-  <h2>选准歌词，还把理由摆给你看</h2>
-  <p>用过多源歌词软件的人都体会过匹配到错误版本的痛。Lyrimuse 把<strong>所有源的全部候选放在同一套标准下打分</strong>——歌名、歌手、专辑、上报时长的吻合度，再加逐字时间轴这类质量信号——分最高的胜出，而不是哪个源先返回就用哪个。每首歌都有解析决策面板，列出各候选得分和赢家胜出的原因；之后某个源出现更干净的版本还能自动升级换上，而你手动选定的歌词会被锁定、绝不被自动覆盖。</p>
-  <figure class="feature-img"><img src="../assets/img/app-resolution-decision.png" width="620" alt="Lyrimuse 解析决策面板：各候选歌词的得分" loading="lazy"><figcaption>每首歌的解析决策面板：各候选得分逐项列出，赢家为什么赢一目了然。</figcaption></figure>
-</section>
-
-<section id="faq">
-  <h2>常见问题</h2>
-  <div class="faq">
-    <div><h3>浏览器里放的 YouTube Music / Spotify 网页版能出歌词吗？</h3><p>能——把常用浏览器配对一次，网页播放器就是正经播放器：歌词按页面自己的进度条精确同步，配对前有一键自检确认浏览器能否被驱动。</p></div>
-    <div><h3>Lyrimuse 是 LyricsX 的替代吗？</h3><p>是——LyricsX 自 2022 年 4 月起没有发布过新版本。Lyrimuse 持续维护，多了 QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX / Amazon Music 和浏览器网页播放器、打分选准的歌词匹配、粤拼/注音假名和 Last.fm 统计。见<a href="compare/">逐项核实的对比</a>。</p></div>
-    <div><h3>没有网络能看歌词吗？</h3><p>解析过一次的歌可以——本地模式直接显示已缓存的歌词，不用联网。</p></div>
-    <div><h3>支持 Intel Mac 吗？</h3><p>支持——每个版本都附带单独的 universal 包，App 内自动更新对 Intel 同样生效。</p></div>
-    <div><h3>大陆下载慢怎么办？</h3><p>给下载地址加公共加速前缀即可，例如 <code>https://ghfast.top/</code> + 原下载链接；用 Homebrew 安装则无此问题。</p></div>
+<section class="players reveal" aria-label="支持的播放器">
+  <p class="kicker">这些播放器都能用</p>
+  <div class="marquee">
+    <div class="track">
+      <span class="pl"><img src="../assets/img/players/AppleMusic.png" alt="">Apple Music</span>
+      <span class="pl"><img src="../assets/img/players/Spotify.png" alt="">Spotify</span>
+      <span class="pl"><img src="../assets/img/players/KKBOX.png" alt="">KKBOX</span>
+      <span class="pl"><img src="../assets/img/players/AmazonMusic.png" alt="">Amazon Music</span>
+      <span class="pl"><img src="../assets/img/players/QQMusic.png" alt="">QQ 音乐</span>
+      <span class="pl"><img src="../assets/img/players/Netease.png" alt="">网易云音乐</span>
+      <span class="pl"><img src="../assets/img/players/Kugou.png" alt="">酷狗音乐</span>
+      <span class="pl"><img src="../assets/img/players/SodaMusic.png" alt="">汽水音乐</span>
+      <span class="pl"><img src="../assets/img/players/YouTubeMusic.png" alt="">YouTube Music</span>
+    </div>
   </div>
 </section>
 
-<footer>
-  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a>
-  <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
-  <a href="compare/">与 LyricsX、Lyric Fever 对比</a>
-  <a href="privacy/">隐私政策</a>
-  <a href="terms/">使用条款</a>
-  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
-  <a href="../" lang="en">English</a>
-  <a href="../zh-Hant/" lang="zh-Hant">繁體中文</a>
+<section class="ch" id="display">
+  <header class="ch-head reveal">
+    <p class="k">显示方式</p>
+    <h2><span class="hm">四种显示方式，</span><span class="fx">想开几个开几个。</span></h2>
+    <p class="ch-lede">完整的歌词窗口、刘海下的灵动岛、菜单栏，还有浮在所有窗口上面的桌面歌词。</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-lw on"><div class="lwx live" role="group" aria-label="歌词窗口的完整尺寸与迷你尺寸：封面、曲目、播放控制，歌词逐字点亮"><div class="lw live" ><div class="lw-in">
+        <div class="lw-bg" data-blur="plain"></div><div class="lw-tint"></div>
+        <div class="lw-chrome"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V4h5M16 11v5h-5M4 4l5 5M16 16l-5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><button class="lw-pip" type="button" data-mini="1" aria-label="进入迷你尺寸"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M5.6 6.8 8.6 9.8M8.6 7.2v2.6H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div>
+        <div class="lw-vol"><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 13.5a6 6 0 1 1 9 0M7.8 11.2a3 3 0 1 1 4.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12.5 6.5 17h7z" fill="currentColor"/></svg><i class="lw-slider"><b></b></i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lw-left">
+          <i class="lw-cover" data-cover></i>
+          <div class="lw-meta"><div class="lw-name"><b data-t="title"></b><span><span data-t="artist"></span> – <span data-t="album"></span></span></div>
+            <span class="lw-btns"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4 5.5 16.8l.9-5L2.8 8.3l5-.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg></i></span></div>
+          <div class="lw-prog"><i data-l="prog"></i></div>
+          <div class="lw-time"><span data-l="cur"></span><span>收听次数：38</span><span>4:29</span></div>
+          <div class="lw-ctrl"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3l7 8h4M3 14h3l2.2-2.5M11.8 8.5 14 6h3M15 4l2 2-2 2M15 12l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V7a2 2 0 0 1 2-2h9M13 3l2 2-2 2M16 11v2a2 2 0 0 1-2 2H5M7 17l-2-2 2-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="lw-list"><div class="lw-track"></div></div>
+        <div class="lw-tools"><i class="lw-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h7M6.5 2.5V4M4.5 4c.4 2.6 2 4.6 4.5 5.6M8.5 4c-.4 2.6-2 4.6-4.8 5.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="m10.5 17 3-7.5 3 7.5M11.6 14.5h3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="lw-cap2"><i class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="currentColor"/><circle cx="7" cy="9.3" r="1.1" fill="#000" opacity=".55"/><circle cx="10" cy="9.3" r="1.1" fill="#000" opacity=".55"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M4 10h12M4 14h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span></div>
+      </div></div><div class="mw"><div class="mw-in">
+        <div class="mw-bg" data-blur="plain"></div><div class="mw-tint"></div>
+        <div class="mw-lights"><i class="tl r"></i><i class="tl y"></i></div><div class="mw-acts"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.4 12.2h11.2v1.4a.8.8 0 0 1-.8.8H5.2a.8.8 0 0 1-.8-.8z" fill="currentColor"/></svg><button class="lw-pip" type="button" data-mini="0" aria-label="退出迷你尺寸"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M8.6 9.8 5.6 6.8M5.6 9.4V6.8h2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+        <div class="mw-top"><i class="mw-cover" data-cover></i><span class="mw-meta"><b data-t="title"></b><span data-t="artist"></span><span class="mw-time"><span data-l="cur"></span> / 4:29</span></span><i class="mw-ph"></i></div>
+        <div class="mw-lyrics"><p class="mw-main" data-l="main"></p><p class="mw-next" data-l="next"></p></div>
+        <div class="mw-deck" aria-hidden="true"><span class="mw-pill"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></span><span class="mw-pill mw-vol"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><i class="mw-slider"><b></b></i></span><span class="mw-pill mw-off"><em>歌词</em>−<b>0.0s</b>+</span></div>
+        <div class="mw-bar"><i data-l="prog"></i></div>
+      </div></div></div></figure>
+      <figure class="view v-notch" data-dur="8200"><div class="nz live" role="group" aria-label="灵动岛：刘海下的歌词，悬停展开曲目、进度和播放控制；关掉歌词时只留一条状态栏"><div class="nz-bar"></div><div class="notch-wrap">
+          <div class="island open">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts"><span class="ix-dec" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><button class="ix-lyr" type="button" aria-pressed="true" aria-label="显示歌词" title="隐藏歌词" data-on="隐藏歌词" data-off="显示歌词"><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><span class="ix-dec" aria-hidden="true"><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;歌词 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div></div></figure>
+      <figure class="view v-mb"><div class="mbz live" role="img" aria-label="菜单栏里的歌词，以及点开后的控制面板"><div class="mbz-in">
+        <div class="menubar">
+          <div class="mb-left"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg><b>访达</b><span>文件</span><span>编辑</span><span>显示</span><span>前往</span><span>窗口</span></div><span class="hw-notch"></span>
+          <div class="mb-right">
+            <span class="mb-lyric"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span>
+            <svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">周三 9:41</span>
+          </div>
+        </div>
+        <div class="mbp">
+          <div class="mbp-card">
+            <div class="mbp-now"><i class="mbp-cover" data-cover></i>
+              <div class="mbp-meta"><b data-t="title"></b><span><span data-t="artist"></span><i class="mbp-rec" aria-hidden="true"></i></span><span class="dim" data-t="album"></span></div>
+              <img class="mbp-src" src="../assets/img/players/QQMusic.png" alt=""></div>
+            <p class="mbp-line" data-l="main" data-scroll></p>
+            <div class="mbp-prog"><i data-l="prog"></i></div>
+            <div class="mbp-time"><span data-l="cur"></span><span>−&nbsp;&nbsp;歌词 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+            <div class="mbp-ctrl"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+          </div>
+          <div class="mbp-row3"><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 8h8M6 10.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>悬浮歌词</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>灵动岛歌词</span></div><div class="mbp-tile"><i class="mbp-dot on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></i><span>菜单栏歌词</span></div></div>
+          <div class="mbp-row2"><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>歌词窗口</span></div><div class="mbp-tile"><i class="mbp-dot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><span>歌词管理</span></div></div>
+          <div class="mbp-foot"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg>设置…</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>版本 1.9.0</span></div>
+        </div>
+      </div></div></figure>
+      <figure class="view v-ov"><div class="ovz live" role="img" aria-label="桌面悬浮歌词，以及悬停时出现的控制条"><div class="overlay ctrl-on">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="显示方式"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>歌词窗口</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>灵动岛</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>菜单栏</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>桌面悬浮</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch ch-rd" id="reading">
+  <header class="ch-head reveal">
+    <p class="k">翻译与读音</p>
+    <h2><span class="hm">外语歌，</span><span class="fx">也能跟着唱。</span></h2>
+    <p class="ch-lede">译文跟在原文下面，读音逐词标在对应的字下面。</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-rd on"><div class="rd" role="img" aria-label="Lyrimuse 悬浮歌词：每个词下面标着它的读音"><div class="rd-lines"><div class="rd-row" lang="ja"><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">あの</span><span class="rd-fill">あの</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">ano</span><span class="rd-fill">ano</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">日</span><span class="rd-fill">日</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">hi</span><span class="rd-fill">hi</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">の</span><span class="rd-fill">の</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">no</span><span class="rd-fill">no</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">悲しみ</span><span class="rd-fill">悲しみ</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">kanashimi</span><span class="rd-fill">kanashimi</span></span></span><span class="rg"><span class="rg-t"><span class="rd-stroke" aria-hidden="true">さえ</span><span class="rd-fill">さえ</span></span><span class="rg-r"><span class="rd-stroke" aria-hidden="true">sae</span><span class="rd-fill">sae</span></span></span></div><p class="rd-tr"><span class="rd-stroke" aria-hidden="true">连那一天的悲伤</span><span class="rd-fill">连那一天的悲伤</span></p></div><p class="rd-song">米津玄師《Lemon》</p></div></figure>
+      <div class="seg glass" role="tablist" aria-label="翻译与读音"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>日语</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>韩语</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>粤语</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="matching">
+  <header class="ch-head reveal">
+    <p class="k">歌词匹配</p>
+    <h2><span class="hm">十二个歌词源，</span><span class="fx">挑最对的那份。</span></h2>
+    <p class="ch-lede">所有结果统一打分，分最高的胜出；找错了就手动搜、手动改，选中的那份会被锁定。</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-dp" role="img" aria-label="解析决策面板：每份候选的得分和胜出的理由"><div class="pn-in dp">
+        <header class="dp-head"><b>解析决策</b><span class="dp-btns"><i>拷贝</i><i class="pri">完成</i></span></header>
+        <div class="dp-info"><b>5 个源的歌词正文相同</b><span>分差只有 11 分（0.9%）。</span></div>
+        <div class="dp-chips"><span class="ok"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m7 10.2 2.1 2.1L13 8.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>已采用</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5h14M7 3v3M13 3v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>2026年9月30日 23:14</span></div>
+        <ul class="dp-list"><li class="dp-row win" style="--i:0"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1fa34a">QQ音乐</span><span class="dp-win"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5 6.5 9.5 10 4l3.5 5.5L17 6.5 15.5 15h-11z" fill="currentColor"/></svg>胜者</span><span class="dp-wt">逐字</span><b>1,254</b><i class="dp-bar" style="--c:#1fa34a;--w:100.0%"><s></s></i></div>
+            <p>逐字时间轴 +400 · 时长吻合 +268 · 内容获印证 +250 · 专辑吻合 +150 · 标题吻合 +120 · 行数 +66</p></li><li class="dp-row" style="--i:1"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1593e0">酷狗音乐</span><span class="dp-wt">逐字</span><b>1,243</b><em>-11</em><i class="dp-bar" style="--c:#1593e0;--w:99.1%"><s></s></i></div>
+            <p>时长吻合 -15 · 行数 +4</p></li><li class="dp-row" style="--i:2"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#e0393e">网易云音乐</span><span class="dp-wt">逐字</span><b>1,200</b><em>-54</em><i class="dp-bar" style="--c:#e0393e;--w:95.7%"><s></s></i></div>
+            <p>时长吻合 -62 · 行数 +8</p></li><li class="dp-row" style="--i:3"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#6b55e0">Musixmatch</span><span class="dp-wt">逐字</span><b>1,111</b><em>-143</em><i class="dp-bar" style="--c:#6b55e0;--w:88.6%"><s></s></i></div>
+            <p>时长吻合 -108 · 专辑吻合 -75 · 自带译文 +50 · 行数 -10</p></li><li class="dp-row" style="--i:4"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#c23bb4">LRCLIB</span><b>876</b><em>-378</em><i class="dp-bar" style="--c:#c23bb4;--w:69.9%"><s></s></i></div>
+            <p>逐字时间轴 -400 · 时长吻合 +12 · 行数 +10</p></li></ul>
+        <p class="dp-tie">5 条候选在这些项上完全相同：标题吻合 +120 · 内容获印证 +250</p>
+        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5/12 个源应答</p>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ms" role="img" aria-label="手动搜索：每个结果的分数、逐字和译文标记"><div class="pn-in ms"><ul><li class="ms-row sel" style="--i:0"><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="">
+            <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1254 · 63 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#1fa34a">QQ音乐</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span><span class="c-use"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="currentColor"/><path d="m6.5 10.2 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>当前使用</span></div></li><li class="ms-row" style="--i:1"><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="">
+            <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1243 · 63 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#1593e0">酷狗音乐</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span></div></li><li class="ms-row" style="--i:2"><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="">
+            <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1200 · 64 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#e0393e">网易云音乐</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span></div></li><li class="ms-row" style="--i:3"><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="">
+            <div class="ms-txt"><b>晴天</b><span>周杰伦</span><span>叶惠美</span><span class="dim">分数 1111 · 62 行 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 9v4.5M10 6.4v.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <span class="src" style="--c:#6b55e0">Musixmatch</span><div class="ms-chips"><span class="c-word"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>逐字时间轴</span><span class="c-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.5 6.5h5M10 6.5v6M8 9.5h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>译文</span></div></li></ul></div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lm" role="img" aria-label="歌词管理：筛选、修改、重搜整个曲库"><div class="pn-in lm">
+        <div class="lm-bar"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i>
+          <span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M14.5 2.8V6.4h-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m17 3-6 14-1.8-6.2L3 9z" fill="currentColor"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 9a5.5 5.5 0 0 1 9.6-3.2M15.5 11a5.5 5.5 0 0 1-9.6 3.2M14.4 2.8v3.4H11M5.6 17.2v-3.4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="lm-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="8" width="15" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8 6 4.5h8L15.5 8M5.5 11.3h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lm-title"><i class="lm-app"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h7M3.5 9.5h7M3.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 4v8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12.4" cy="13.2" r="2.2" fill="currentColor"/><path d="M14 4c1.6.3 2.6 1.3 3 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i><b>歌词管理</b></div>
+        <div class="lm-search"><span class="lm-field"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.7 12.7 4.3 4.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><em>搜索歌手/歌名/专辑</em></span><i class="lm-go"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.7 12.7 4.3 4.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></div>
+        <div class="lm-filters"><span class="lm-fi"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 8h7M7.8 10.5h4.4M9 13h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><label>歌手<i>全部歌手<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>专辑<i>全部专辑<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>排序<i>默认排序<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label></div>
+        <div class="lm-filters"><label>来源<i>全部来源<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><label>时间轴<i>全部<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></label><span class="lm-sep"></span><span class="lm-chips"><span>仅人工修正</span><span>仅无歌词</span><span>仅纯音乐</span><span>仅证据薄</span></span></div>
+        <div class="lm-selbar"><span>已选 1 首</span><i>取消选择</i></div>
+        <div class="lm-head"><span>歌名</span><span>歌手</span><span>专辑</span><span>来源</span><span>偏移</span></div>
+        <ul class="lm-rows"><li class=""><span class="lm-t"><b>以父之名</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>懦夫</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li><li class="sel"><span class="lm-t"><b>晴天</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>+0.2</span></li><li class=""><span class="lm-t"><b>三年二班</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#e0393e">网易云音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>东风破</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>你听得到</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1593e0">酷狗音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>同一种调调</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>她的睫毛</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>爱情悬崖</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#e0393e">网易云音乐</span></span><span>0.0</span></li><li class=""><span class="lm-t"><b>梯田</b><i class="ic-w"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M3 8.5h14M3 12h7M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i></span>
+            <span>周杰伦</span><span>叶惠美</span><span><span class="src" style="--c:#1fa34a">QQ音乐</span></span><span>0.0</span></li></ul>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="歌词匹配"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>解析决策</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>手动搜索</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>歌词管理</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="profile">
+  <header class="ch-head reveal">
+    <p class="k">听歌档案</p>
+    <h2><span class="hm">每一次播放，</span><span class="fx">都记进你的听歌档案。</span></h2>
+    <p class="ch-lede">同步到 Last.fm 和 ListenBrainz，还有统计、榜单和收听足迹。</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-lf" role="img" aria-label="今天、近 7 天和累计的播放数，以及最近记录"><div class="pn-in lf">
+        <div class="lf-card lf-nums">
+          <div><b data-count="128">128</b><span>今天</span></div>
+          <div><b data-count="846">846</b><span>近 7 天</span></div>
+          <div><b data-count="24420">24,420</b><span>总 scrobble</span></div>
+        </div>
+        <div class="lf-card lf-recent">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6v4.3l2.8 1.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>最近记录</b><span class="dim lf-upd">刚刚更新<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M14.5 2.8V6.4h-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ul><li style="--i:0"><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>晴天</b><span>周杰伦</span></span><span class="lf-r"><span class="dim">第 38 次</span><span class="lf-now"><i></i>正在记录</span></span></li><li style="--i:1"><img class="cv" src="../assets/img/demo/covers/eason-whats-going-on.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>富士山下</b><span>陈奕迅</span></span><span class="lf-r"><span class="dim">第 21 次</span><span class="dim">4 分钟前</span></span></li><li style="--i:2"><img class="cv" src="../assets/img/demo/covers/jj-second-heaven.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>江南</b><span>林俊杰</span></span><span class="lf-r"><span class="dim">第 17 次</span><span class="dim">8 分钟前</span></span></li><li style="--i:3"><img class="cv" src="../assets/img/demo/covers/stefanie-the-moment.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>遇见</b><span>孙燕姿</span></span><span class="lf-r"><span class="dim">第 9 次</span><span class="dim">12 分钟前</span></span></li><li style="--i:4"><img class="cv" src="../assets/img/demo/covers/faye-sing-and-play.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>红豆</b><span>王菲</span></span><span class="lf-r"><span class="dim">第 12 次</span><span class="dim">16 分钟前</span></span></li><li style="--i:5"><img class="cv" src="../assets/img/demo/covers/mayday-gods-children.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>倔强</b><span>五月天</span></span><span class="lf-r"><span class="dim">第 30 次</span><span class="dim">20 分钟前</span></span></li></ul>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="近 30 天听得最多的歌手，以及每一项的升降"><div class="pn-in lf">
+        <div class="lf-card lf-chart">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="9" width="3.4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.3" y="5" width="3.4" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="13.6" y="7" width="3.4" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><b>听得最多</b><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="lf-seg"><i class="on">歌手</i><i>专辑</i><i>歌曲</i></span><span class="lf-pop">近 30 天<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ol><li style="--i:0"><span class="rk">1</span><img class="cv round" src="../assets/img/demo/artists/jay-chou.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>周杰伦</b></span>
+            <i class="ch-bar" style="--w:100.0%"><s></s></i><span class="ch-n">×486</span><span class="mv same">=</span></li><li style="--i:1"><span class="rk">2</span><img class="cv round" src="../assets/img/demo/artists/eason-chan.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>陈奕迅</b></span>
+            <i class="ch-bar" style="--w:72.4%"><s></s></i><span class="ch-n">×352</span><span class="mv up">▲1</span></li><li style="--i:2"><span class="rk">3</span><img class="cv round" src="../assets/img/demo/artists/mayday.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>五月天</b></span>
+            <i class="ch-bar" style="--w:61.3%"><s></s></i><span class="ch-n">×298</span><span class="mv down">▼1</span></li><li style="--i:3"><span class="rk">4</span><img class="cv round" src="../assets/img/demo/artists/jj-lin.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>林俊杰</b></span>
+            <i class="ch-bar" style="--w:47.5%"><s></s></i><span class="ch-n">×231</span><span class="mv up">▲2</span></li><li style="--i:4"><span class="rk">5</span><img class="cv round" src="../assets/img/demo/artists/stefanie-sun.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>孙燕姿</b></span>
+            <i class="ch-bar" style="--w:35.8%"><s></s></i><span class="ch-n">×174</span><span class="mv down">▼1</span></li><li style="--i:5"><span class="rk">6</span><img class="cv round" src="../assets/img/demo/artists/faye-wong.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>王菲</b></span>
+            <i class="ch-bar" style="--w:25.9%"><s></s></i><span class="ch-n">×126</span><span class="mv new" title="上一期没进榜"></span></li></ol>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="近 30 天听得最多的专辑，以及每一项的升降"><div class="pn-in lf">
+        <div class="lf-card lf-chart">
+          <header><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="9" width="3.4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="8.3" y="5" width="3.4" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="13.6" y="7" width="3.4" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><b>听得最多</b><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="lf-seg"><i>歌手</i><i class="on">专辑</i><i>歌曲</i></span><span class="lf-pop">近 30 天<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3-3 3 3M7 12l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></header>
+          <ol><li style="--i:0"><span class="rk">1</span><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>叶惠美</b><span>周杰伦</span></span>
+            <i class="ch-bar" style="--w:100.0%"><s></s></i><span class="ch-n">×312</span><span class="mv up">▲1</span></li><li style="--i:1"><span class="rk">2</span><img class="cv" src="../assets/img/demo/covers/eason-whats-going-on.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>What&#x27;s Going On...?</b><span>陈奕迅</span></span>
+            <i class="ch-bar" style="--w:85.9%"><s></s></i><span class="ch-n">×268</span><span class="mv down">▼1</span></li><li style="--i:2"><span class="rk">3</span><img class="cv" src="../assets/img/demo/covers/mayday-gods-children.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>神的孩子都在跳舞</b><span>五月天</span></span>
+            <i class="ch-bar" style="--w:65.7%"><s></s></i><span class="ch-n">×205</span><span class="mv up">▲3</span></li><li style="--i:3"><span class="rk">4</span><img class="cv" src="../assets/img/demo/covers/jj-second-heaven.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>第二天堂</b><span>林俊杰</span></span>
+            <i class="ch-bar" style="--w:59.0%"><s></s></i><span class="ch-n">×184</span><span class="mv same">=</span></li><li style="--i:4"><span class="rk">5</span><img class="cv" src="../assets/img/demo/covers/stefanie-the-moment.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>The Moment</b><span>孙燕姿</span></span>
+            <i class="ch-bar" style="--w:48.4%"><s></s></i><span class="ch-n">×151</span><span class="mv down">▼2</span></li><li style="--i:5"><span class="rk">6</span><img class="cv" src="../assets/img/demo/covers/faye-sing-and-play.jpg" alt="" loading="lazy" decoding="async">
+            <span class="lf-tt"><b>唱游</b><span>王菲</span></span>
+            <i class="ch-bar" style="--w:31.1%"><s></s></i><span class="ch-n">×97</span><span class="mv new" title="上一期没进榜"></span></li></ol>
+        </div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-lf" role="img" aria-label="收听足迹：总账、收听时段、全年热力图和那年今日"><div class="pn-in lf lf-fp">
+        <div class="lf-card fp-ledger"><header><b>收听足迹</b></header><div class="fp-grid"><div style="--i:0"><b>986 天</b><span>有记录 · 日均 24.7 首</span></div><div style="--i:1"><b>46 天</b><span>当前连续 · 最长 112 天</span></div><div style="--i:2"><b>214 首</b><span>单日最高 · 2025年12月31日</span></div><div style="--i:3"><b>6,820 首</b><span>今年至今 · 2025 年同期 5,904 首</span></div><div style="--i:4"><b>还差 580 首</b><span>到第 25,000 次 scrobble</span></div></div></div>
+        <div class="lf-card fp-hours"><header><b>收听时段</b></header><div class="fp-bars"><i style="--h:21%;--i:0"></i><i style="--h:12%;--i:1"></i><i style="--h:6%;--i:2"></i><i style="--h:3%;--i:3"></i><i style="--h:2%;--i:4"></i><i style="--h:2%;--i:5"></i><i style="--h:5%;--i:6"></i><i style="--h:14%;--i:7"></i><i style="--h:27%;--i:8"></i><i style="--h:39%;--i:9"></i><i style="--h:45%;--i:10"></i><i style="--h:42%;--i:11"></i><i style="--h:52%;--i:12"></i><i style="--h:45%;--i:13"></i><i style="--h:41%;--i:14"></i><i style="--h:44%;--i:15"></i><i style="--h:50%;--i:16"></i><i style="--h:58%;--i:17"></i><i style="--h:67%;--i:18"></i><i style="--h:79%;--i:19"></i><i style="--h:91%;--i:20"></i><i style="--h:100%;--i:21"></i><i style="--h:88%;--i:22"></i><i style="--h:48%;--i:23"></i></div><div class="fp-axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div></div>
+        <div class="lf-card fp-heat"><header><b>播放热力图</b><span class="fp-years"><i class="on">2026</i><i>2025</i><i>2024</i></span></header>
+          <div class="hm"><span style="--c:0"><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:1"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:2"><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:3"><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:4"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h0"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:5"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i></span><span style="--c:6"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:7"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:8"><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:9"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:10"><i class="h3"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:11"><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:12"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h1"></i><i class="h3"></i><i class="h4"></i></span><span style="--c:13"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:14"><i class="h2"></i><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h3"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:15"><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h0"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:16"><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:17"><i class="h3"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:18"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h4"></i><i class="h3"></i></span><span style="--c:19"><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h0"></i><i class="h2"></i><i class="h3"></i><i class="h1"></i></span><span style="--c:20"><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:21"><i class="h1"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:22"><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:23"><i class="h0"></i><i class="h0"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i><i class="h4"></i><i class="h2"></i></span><span style="--c:24"><i class="h2"></i><i class="h3"></i><i class="h2"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:25"><i class="h2"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:26"><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i></span><span style="--c:27"><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h3"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:28"><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:29"><i class="h0"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h4"></i><i class="h4"></i></span><span style="--c:30"><i class="h1"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i></span><span style="--c:31"><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i></span><span style="--c:32"><i class="h2"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h3"></i><i class="h2"></i></span><span style="--c:33"><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:34"><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:35"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i></span><span style="--c:36"><i class="h0"></i><i class="h0"></i><i class="h1"></i><i class="h0"></i><i class="h2"></i><i class="h1"></i><i class="h1"></i></span><span style="--c:37"><i class="h2"></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i><i class="h2"></i><i class="h1"></i></span><span style="--c:38"><i class="h1"></i><i class="h1"></i><i class="h1"></i><i class="h0"></i><i class="h0"></i><i class="h2"></i><i class="h2"></i></span><span style="--c:39"><i class="h0"></i><i class="h2"></i><i class="h2"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:40"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:41"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:42"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:43"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:44"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:45"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:46"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:47"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:48"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:49"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:50"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:51"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span><span style="--c:52"><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i><i class="hf"></i></span></div><footer><span class="dim">2026 年共 6,820 次</span><span class="hm-key"><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i></span></footer></div>
+        <div class="lf-card fp-otd"><header><b>那年今日</b><span class="dim">3 年前的今天听了 42 次，最常循环的是这几首</span></header><ul><li><img class="cv" src="../assets/img/demo/qingtian.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>晴天</b><span>周杰伦</span></span><span class="dim">×9</span></li><li><img class="cv" src="../assets/img/demo/covers/eason-whats-going-on.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>富士山下</b><span>陈奕迅</span></span><span class="dim">×6</span></li><li><img class="cv" src="../assets/img/demo/covers/jj-second-heaven.jpg" alt="" loading="lazy" decoding="async"><span class="lf-tt"><b>江南</b><span>林俊杰</span></span><span class="dim">×5</span></li></ul></div>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="听歌档案"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>统计</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>歌手榜</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>专辑榜</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>足迹</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch" id="custom">
+  <header class="ch-head reveal">
+    <p class="k">随你调</p>
+    <h2><span class="hm">每一处都能调，</span><span class="fx">改的时候就能看到效果。</span></h2>
+    <p class="ch-lede">字体、颜色、宽度、位置都能改，每一页设置都带实时预览。拖一下滑块试试。</p>
+  </header>
+  <div class="show reveal">
+    <div class="ch-stage">
+      <i class="ch-wall" aria-hidden="true"></i><i class="spot" aria-hidden="true"></i>
+      <figure class="view v-pn on"><div class="pn pn-ed" role="group" aria-label="悬浮歌词编辑台，带实时预览"><div class="pn-in ed">
+        <b class="ed-title">歌词显示</b>
+        <span class="ed-seg"><i class="on">悬浮歌词</i><i>灵动岛</i><i>菜单栏</i><i>歌词窗口</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3a7 7 0 0 0 0 14z" fill="currentColor"/></svg><b>主题</b><em>· 跟随封面</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>文字</b><em>· 系统字体</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="2" fill="currentColor"/></svg><b>背景</b><em>· 透明</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>重置<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>布局</b><em>· 双行</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>行为</b><em>· 全部关闭</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12.5h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>位置</b><em>· 顶部居中</em></span></div></div>
+        <div class="ed-prev live"><div class="ed-wall"></div>
+          <div class="ed-box"><div class="overlay">
+          <div class="ov-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 16 16"><path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 4.9a3 3 0 0 1 5.5 1.9C13.5 10.7 8 14 8 14z"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><rect x="3" y="7.2" width="10" height="7.3" rx="1.6" fill="currentColor"/><path d="M5.5 7.2V5a2.5 2.5 0 0 1 4.9-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <p class="ov-main"><span class="ov-stroke" data-l="main" data-paint="0" aria-hidden="true"></span><span class="ov-fill" data-l="main"></span></p>
+          <p class="ov-next"><span class="ov-stroke" data-l="next" aria-hidden="true"></span><span class="ov-fill" data-l="next"></span></p>
+        </div></div>
+          <label class="ed-slider"><span aria-hidden="true">↔</span><input class="ed-range" type="range" min="320" max="600" step="2" value="488" aria-label="宽度"><output>488pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5zM6 8h8M6 10.8h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>桌面悬浮歌词</span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>全部设置</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed" role="group" aria-label="灵动岛编辑台，带实时预览"><div class="pn-in ed">
+        <b class="ed-title">歌词显示</b>
+        <span class="ed-seg"><i>悬浮歌词</i><i class="on">灵动岛</i><i>菜单栏</i><i>歌词窗口</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 3 9 9.5M8.5 10.5c-2 0-3.5 1.4-3.5 3.3 0 1.2-.6 2-1.5 2.2 1 .8 2.3 1 3.5 1 2.3 0 3.6-1.6 3.6-3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>风格</b><em>· 跟随封面</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4v12M16 10H8M11 7l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>左耳</b><em>· 封面</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 4v12M4 10h8M9 7l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>右耳</b><em>· 不显示</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>重置<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>字体</b><em>· 系统字体</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H4v3M13 3h3v3M7 17H4v-3M13 17h3v-3M10 6v8M7.5 8.5 10 6l2.5 2.5M7.5 11.5 10 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>展开态</b><em>· 曲目信息</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>行为</b><em>· 全部关闭</em></span></div></div>
+        <div class="ed-prev ed-prev-n live"><div class="ed-wall"></div>
+          <div class="ed-mb"><span class="ed-apple"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg></span><span class="ed-mbr"><svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">周三 9:41</span></span></div>
+          <div class="ed-notch"><div class="notch-wrap">
+          <div class="island">
+            <div class="is-bg" data-blur></div>
+            <div class="is-top"><i class="art ear-art" data-cover></i><span class="hw-notch"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+            <div class="is-steady"><p class="is-main" data-l="main" data-scroll></p><p class="is-next" data-l="next"></p></div>
+            <div class="is-exp">
+              <div class="ix-head">
+                <div class="ix-meta"><b data-t="title"></b><span data-t="artist"></span><span class="dim" data-t="album"></span></div>
+                <div class="ix-acts" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.4 10.4 3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><i class="sep"></i><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.9 1h2.2l.4 1.9 1.3.6 1.7-1 1.5 1.5-1 1.7.6 1.3 1.9.4v2.2l-1.9.4-.6 1.3 1 1.7-1.5 1.5-1.7-1-1.3.6-.4 1.9H6.9l-.4-1.9-1.3-.6-1.7 1-1.5-1.5 1-1.7-.6-1.3L1 9.1V6.9l1.9-.4.6-1.3-1-1.7 1.5-1.5 1.7 1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill="currentColor"/></svg><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+              </div>
+              <p class="is-main" data-l="main" data-scroll></p>
+              <p class="is-next" data-l="next"></p>
+              <div class="ix-prog"><i data-l="prog"></i></div>
+              <div class="ix-time"><span data-l="cur"></span><span class="ix-off">−&nbsp;&nbsp;歌词 0.0s&nbsp;&nbsp;+</span><span data-l="rem"></span></div>
+              <div class="ix-ctrl" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg></div>
+            </div>
+          </div>
+        </div></div>
+          <label class="ed-slider ed-dual"><span aria-hidden="true">↔</span><span class="ed-dual-track"><input class="ed-range lo" type="range" min="200" max="600" step="2" value="258" aria-label="宽度"><input class="ed-range hi" type="range" min="200" max="600" step="2" value="468" aria-label="宽度"></span><output>258–468pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 4.5h6v1.8a1.2 1.2 0 0 1-1.2 1.2H8.2A1.2 1.2 0 0 1 7 6.3z" fill="currentColor"/></svg><span>灵动岛歌词<small>紧凑地贴着屏幕顶部的刘海显示</small></span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>全部设置</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed" role="group" aria-label="菜单栏编辑台，带实时预览"><div class="pn-in ed">
+        <b class="ed-title">歌词显示</b>
+        <span class="ed-seg"><i>悬浮歌词</i><i>灵动岛</i><i class="on">菜单栏</i><i>歌词窗口</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>布局</b><em>· 自适应</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg><b>配色</b><em>· 卡拉OK效果</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>字体</b><em>· 常规</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>重置<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.6" cy="6.25" r="1.6" fill="currentColor"/><rect x="2.5" y="11" width="15" height="5.5" rx="2.75" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.4" cy="13.75" r="1.6" fill="currentColor"/></svg><b>行为</b><em>· 无歌词时显示歌名</em></span></div></div>
+        <div class="ed-prev ed-prev-mb live"><div class="ed-wall"></div>
+          <div class="ed-mbar"><span class="ed-apple"><svg class="apple" viewBox="0 0 14 17" aria-hidden="true"><path d="M11.6 9c0-2 1.7-3 1.8-3.1-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.8-3.1.8-.7 0-1.6-.8-2.7-.7C3.2 4.4 1.9 5.2 1.2 6.5c-1.4 2.5-.4 6.1 1 8.1.7 1 1.5 2.1 2.5 2 1-.04 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.3zM9.6 3c.6-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.9 2.5.9.1 1.8-.5 2.5-1.2z"/></svg></span><b>访达</b><span>文件</span>
+            <span class="ed-mbr"><span class="mb-lyric ed-mbl"><svg class="mb-note" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.5 12.5V3.2l6-1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3.6" cy="12.6" r="2"/><rect x="13" y="4" width="7" height="1.6" rx=".8"/><rect x="13" y="8" width="7" height="1.6" rx=".8"/><rect x="11" y="12" width="9" height="1.6" rx=".8"/></svg><span class="mb-lines"><span class="mb-main" data-l="main" data-scroll></span><span class="mb-next" data-l="next"></span></span></span><svg class="mb-ico" viewBox="0 0 16 12" aria-hidden="true"><path d="M8 11.2 5.9 9a3 3 0 0 1 4.2 0zM3.8 6.9a6 6 0 0 1 8.4 0l-1.1 1.1a4.4 4.4 0 0 0-6.2 0zM1.6 4.7a9.1 9.1 0 0 1 12.8 0L13.3 5.8a7.5 7.5 0 0 0-10.6 0z"/></svg><svg class="mb-ico mb-batt" viewBox="0 0 24 12" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="8" rx="1.6"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" opacity=".5"/></svg><span class="clock">周三 9:41</span></span>
+          </div>
+          <label class="ed-slider"><span aria-hidden="true">↔</span><input class="ed-range mbw" type="range" min="120" max="320" step="10" value="250" aria-label="最大宽度"><output>250pt</output></label>
+        </div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>菜单栏歌词</span><i class="sw on"></i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>全部设置</span></div>
+      </div></div></figure>
+      <figure class="view v-pn"><div class="pn pn-ed pn-ed-lw" role="group" aria-label="歌词窗口设置，带实时预览，可切换完整和迷你尺寸"><div class="pn-in ed ed-lw">
+        <b class="ed-title">歌词显示</b>
+        <span class="ed-seg"><i>悬浮歌词</i><i>灵动岛</i><i>菜单栏</i><i class="on">歌词窗口</i></span>
+        <div class="ed-tools"><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg><b>背景</b><em>· 跟随封面</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 0 0 0 14.4c1 0 1.6-.6 1.6-1.4 0-.9-.8-1.2-.8-2 0-.7.6-1.3 1.3-1.3h1.6a3.5 3.5 0 0 0 3.5-3.5c0-3.4-3.2-6.2-7.2-6.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.4" cy="9" r="1" fill="currentColor"/><circle cx="8.6" cy="6" r="1" fill="currentColor"/><circle cx="12.4" cy="6.2" r="1" fill="currentColor"/></svg><b>文字颜色</b><em>· 自动</em></span><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2.5 15 4-10 4 10M4 11.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5a2.5 2.5 0 1 1 0 4.5M15 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>字体</b><em>· 系统字体</em></span><span class="ed-reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 8.5a6 6 0 1 1 1.3 5.6M4.5 4.5v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>重置<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div><span class="ed-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m4.5 14 4-4 3 3 2-2 2.5 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="13" cy="7.6" r="1.3" fill="currentColor"/></svg><b>封面</b><em>· 全部开启</em></span></div></div>
+        <div class="ed-prev ed-prev-lw live"><div class="ed-wall"></div>
+          <div class="lwx live lwx-preview" aria-hidden="true"><div class="lw live" ><div class="lw-in">
+        <div class="lw-bg" data-blur="plain"></div><div class="lw-tint"></div>
+        <div class="lw-chrome"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3h6M8 3v5l-3 3h10l-3-3V3M10 11v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V4h5M16 11v5h-5M4 4l5 5M16 16l-5-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><button class="lw-pip" type="button" data-mini="1" aria-label="进入迷你尺寸"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.2" y="10" width="5.3" height="4" rx="1" fill="currentColor"/><path d="M5.6 6.8 8.6 9.8M8.6 7.2v2.6H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div>
+        <div class="lw-vol"><span class="lw-cap"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 13.5a6 6 0 1 1 9 0M7.8 11.2a3 3 0 1 1 4.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12.5 6.5 17h7z" fill="currentColor"/></svg><i class="lw-slider"><b></b></i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="lw-left">
+          <i class="lw-cover" data-cover></i>
+          <div class="lw-meta"><div class="lw-name"><b data-t="title"></b><span><span data-t="artist"></span> – <span data-t="album"></span></span></div>
+            <span class="lw-btns"><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4 5.5 16.8l.9-5L2.8 8.3l5-.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M8.6 1.5h2.8l.5 2.3 1.6.7 2-1.2 2 2-1.3 2 .7 1.6 2.3.5v2.8l-2.3.5-.7 1.6 1.3 2-2 2-2-1.3-1.6.7-.5 2.3H8.6l-.5-2.3-1.6-.7-2 1.3-2-2 1.3-2-.7-1.6-2.3-.5V8.6l2.3-.5.7-1.6-1.3-2 2-2 2 1.2 1.6-.7zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor"/></svg></i></span></div>
+          <div class="lw-prog"><i data-l="prog"></i></div>
+          <div class="lw-time"><span data-l="cur"></span><span>收听次数：38</span><span>4:29</span></div>
+          <div class="lw-ctrl"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3l7 8h4M3 14h3l2.2-2.5M11.8 8.5 14 6h3M15 4l2 2-2 2M15 12l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 16"><path d="M11 2v12L3 8zM21 2v12l-8-6z"/></svg><svg viewBox="0 0 16 16"><rect x="3.5" y="2" width="3" height="12" rx="1"/><rect x="9.5" y="2" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 24 16"><path d="M3 2v12l8-6zM13 2v12l8-6z"/></svg><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9V7a2 2 0 0 1 2-2h9M13 3l2 2-2 2M16 11v2a2 2 0 0 1-2 2H5M7 17l-2-2 2-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="lw-list"><div class="lw-track"></div></div>
+        <div class="lw-tools"><i class="lw-tr"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h7M6.5 2.5V4M4.5 4c.4 2.6 2 4.6 4.5 5.6M8.5 4c-.4 2.6-2 4.6-4.8 5.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="m10.5 17 3-7.5 3 7.5M11.6 14.5h3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="lw-cap2"><i class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14h-6l-3.5 2.8V14H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5z" fill="currentColor"/><circle cx="7" cy="9.3" r="1.1" fill="#000" opacity=".55"/><circle cx="10" cy="9.3" r="1.1" fill="#000" opacity=".55"/></svg></i><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M4 10h12M4 14h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span></div>
+      </div></div><div class="mw"><div class="mw-in">
+        <div class="mw-bg" data-blur="plain"></div><div class="mw-tint"></div>
+        <div class="mw-lights"><i class="tl r"></i><i class="tl y"></i></div>
+        <div class="mw-top"><i class="mw-cover" data-cover></i><span class="mw-meta"><b data-t="title"></b><span data-t="artist"></span><span class="mw-time"><span data-l="cur"></span> / 4:29</span></span><i class="mw-ph"></i></div>
+        <div class="mw-lyrics"><p class="mw-main" data-l="main"></p><p class="mw-next" data-l="next"></p></div>
+        
+        <div class="mw-bar"><i data-l="prog"></i></div>
+      </div></div></div>
+        </div>
+        <div class="ed-size" role="group"><button type="button" aria-pressed="true">完整尺寸</button><button type="button" aria-pressed="false">迷你尺寸</button></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5h4.5M3.5 9h9M3.5 13h13M3.5 16.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 3.2c1.4 0 2.4.8 2.4 2s-1 2-2.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>歌词窗口</span><i class="ed-open">打开</i></div>
+        <div class="ed-row"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>全部设置</span></div>
+      </div></div></figure>
+      <div class="seg glass" role="tablist" aria-label="随你调"><span class="seg-thumb" aria-hidden="true"></span><button class="seg-btn" type="button" role="tab" aria-selected="true"><span>悬浮歌词</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>灵动岛</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>菜单栏</span><i class="seg-bar" aria-hidden="true"></i></button><button class="seg-btn" type="button" role="tab" aria-selected="false"><span>歌词窗口</span><i class="seg-bar" aria-hidden="true"></i></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="ch ch-more" id="more">
+  <header class="ch-head reveal"><h2>还有这些。</h2></header>
+  <div class="more-stage reveal">
+    <i class="spot" aria-hidden="true"></i>
+    <ul class="more-list">
+      <li class="pill glass" style="--i:0"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h5A2.5 2.5 0 0 1 13 5.5v2A2.5 2.5 0 0 1 10.5 10H7l-3 2.5V9.6A2.5 2.5 0 0 1 3 7.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7.5h.5A2.5 2.5 0 0 1 18 10v2a2.5 2.5 0 0 1-1 2v2.5L14 14h-3.5A2.5 2.5 0 0 1 8 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>对唱分开显示</span></li>
+      <li class="pill glass" style="--i:1"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7.5" y="2.8" width="5" height="9" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.8 9.8a5.2 5.2 0 0 0 10.4 0M10 15v2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>和声单独显示</span></li>
+      <li class="pill glass" style="--i:2"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 7.3v5.4l4.6-2.7z" fill="currentColor"/></svg></i><span>动态封面</span></li>
+      <li class="pill glass" style="--i:3"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 5.5C8.4 4.2 6 3.7 3.5 4v11c2.5-.3 4.9.2 6.5 1.5 1.6-1.3 4-1.8 6.5-1.5V4c-2.5-.3-4.9.2-6.5 1.5zm0 0v11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>专辑介绍与歌手简介</span></li>
+      <li class="pill glass" style="--i:4"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7h12l-3.2-3.2M16.5 13h-12l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>歌词简繁切换</span></li>
+      <li class="pill glass" style="--i:5"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.8 10h3.4M13.8 10h3.4M15.5 8.3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.4" fill="currentColor"/></svg></i><span>歌词时间轴微调</span></li>
+      <li class="pill glass" style="--i:6"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.4 3.7v5l4.2-2.5z" fill="currentColor"/><path d="M10.5 6.2h6.3M3.6 11.3h13.2M3.6 15.6h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>待播歌曲提前解析</span></li>
+      <li class="pill glass" style="--i:7"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5h8.2a3.3 3.3 0 0 0 .5-6.6A5 5 0 0 0 5 8.4a3.6 3.6 0 0 0 1 7.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m8 11.3 1.6 1.6L12.5 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>离线可用</span></li>
+      <li class="pill glass" style="--i:8"><i class="pill-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4.17A5 5 0 1 1 6 4.17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 3.9 6 4.17l-1.05 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.1 12.1 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span>缺失歌词自动补搜</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="faq-sec" id="faq">
+  <div class="faq-wrap">
+    <div class="faq-side reveal">
+      <h2>常见问题。</h2>
+      <p>没找到你想问的？</p>
+      <a class="btn btn-light faq-ask" href="https://github.com/Yudaotor/lyrimuse/issues"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg>到 GitHub 提问</a>
+    </div>
+    <div class="faq-list reveal">
+      <details class="qa" style="--i:0"><summary><span class="qa-q">支持哪些 Mac？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma 及以上，Apple Silicon 和 Intel 都支持，Intel 用单独的安装包。想在本机翻译歌词，需要 macOS 15 及以上。</p></div></details>
+      <details class="qa" style="--i:1"><summary><span class="qa-q">怎么安装？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>推荐用 Homebrew：点上面的「复制 Homebrew 安装命令」，粘到终端运行，第一次打开时的 Gatekeeper 提示它会顺手处理，也不需要 Apple 开发者账号。也可以从 GitHub 下载 DMG 手动安装，步骤见 <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">README</a>。之后的更新都在 App 里完成。大陆下载慢的话，可以在下载地址前加 <code>https://ghfast.top/</code> 这类加速前缀。</p></div></details>
+      <details class="qa" style="--i:2"><summary><span class="qa-q">需要给哪些权限？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Apple Music 和 Spotify 第一次使用时，macOS 会问你要不要允许 Lyrimuse 控制它们（「自动化」权限），同意就行；QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music 都不用额外授权。</p></div></details>
+      <details class="qa" style="--i:3"><summary><span class="qa-q">我的数据会上传吗？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>没有账号、没有遥测、没有统计，关于你和你听什么，不会有任何信息发到开发者那里。找歌词时会把正在放的这首歌拿去问各个歌词源，翻译默认在本机完成。完整清单见<a href="privacy/">隐私政策</a>。</p></div></details>
+      <details class="qa" style="--i:4"><summary><span class="qa-q">没有网络能看歌词吗？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>能。找过一次的歌词会存在本机，之后不联网也能显示；第一次找歌词和联网翻译需要网络。</p></div></details>
+      <details class="qa" style="--i:5"><summary><span class="qa-q">没有刘海的 Mac 能用灵动岛吗？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>能。在没有刘海的屏幕上（老款 MacBook 或外接显示器），胶囊贴在屏幕顶部居中，跟菜单栏一样高，放在哪块屏幕可以在设置里选。</p></div></details>
+      <details class="qa" style="--i:6"><summary><span class="qa-q">歌词不对或者不同步怎么办？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>时间对不上，就给这首歌调个偏移，之后会一直记住；版本不对，就打开手动搜索换一份，选中的那份会被锁定。也可以在「歌词管理」里直接改。</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什么区别？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支持了 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music 和 YouTube Music，歌词按打分挑选，有粤拼和日文假名，还能记录到 Last.fm。详见<a href="compare/">逐项核实的对比</a>。</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="final-card reveal">
+    <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
+    <span class="final-ico"><img class="final-icon" src="../assets/img/app-icon.png" alt="" width="72" height="72"></span>
+    <h2 class="sing">下一首歌，<br>就让歌词亮起来。</h2>
+    <div class="cta">
+      <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下载 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <div class="dl-menu" role="menu">
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推荐</span></b><em>M1 及更新的芯片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推荐</span></b><em>Intel 芯片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下载</b><em>全部版本、ZIP 与校验文件</em></span></a>
+    </div></div>
+      <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">在 GitHub 上查看</a>
+    </div>
+    <p class="final-fine"><span class="nw">macOS 14 以上</span> · <span class="nw">Apple Silicon 与 Intel</span> · <span class="nw">GPL-3.0 开源</span></p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand"><img src="../assets/img/app-icon.png" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+    <nav class="foot-links">
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+      <a href="compare/">与 LyricsX、Lyric Fever 对比</a>
+      <a href="privacy/">隐私政策</a>
+      <a href="terms/">使用条款</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+      <a href="../" lang="en">English</a> <a href="../zh-Hant/" lang="zh-Hant">繁體中文</a>
+    </nav>
+    <p class="foot-note">Apple Music、Spotify、KKBOX 等名称和图标归各自所有者，Lyrimuse 是独立的开源项目，与它们没有隶属或合作关系。</p>
+  </div>
 </footer>
 
-</div>
+<script type="application/json" id="demoData">
+{
+ "title": "晴天",
+ "artist": "周杰伦",
+ "album": "叶惠美",
+ "cover": "../assets/img/demo/qingtian.jpg",
+ "blur": "../assets/img/demo/qingtian-blur.jpg",
+ "notchAccent": "#9BA094",
+ "overlayText": "#53584C",
+ "startMs": 84910,
+ "songMs": 269747,
+ "lines": [
+  {
+   "text": "刮风这天我试过握着你手",
+   "ms": 5540
+  },
+  {
+   "text": "但偏偏雨渐渐大到我看你不见",
+   "ms": 8430
+  },
+  {
+   "text": "还要多久我才能在你身边",
+   "ms": 6560
+  },
+  {
+   "text": "等到放晴的那天也许我会比较好一点",
+   "ms": 7430
+  }
+ ]
+}
+</script>
+<script type="application/json" id="readData">
+[{"key": "ja", "label": "日语", "song": "米津玄師《Lemon》", "lang": "ja", "groups": [{"r": "ano", "t": "あの", "d": 336, "s": 0}, {"r": "hi", "t": "日", "d": 168, "s": 336}, {"s": 504, "t": "の", "d": 224, "r": "no"}, {"r": "kanashimi", "s": 728, "d": 1329, "t": "悲しみ"}, {"d": 463, "r": "sae", "t": "さえ", "s": 2057}], "tr": "连那一天的悲伤", "ms": 2520}, {"key": "ko", "label": "韩语", "song": "iKON《사랑을 했다》", "lang": "ko", "groups": [{"d": 305, "s": 0, "t": "나 ", "r": "na"}, {"r": "sal-agamyeonseo", "t": "살아가면서 ", "d": 2124, "s": 305}, {"s": 3088, "t": "가끔씩 ", "r": "gakkeumssig", "d": 1364}, {"t": "떠오를 ", "d": 1266, "r": "tteooleul", "s": 4452}, {"s": 5718, "r": "gieog", "d": 1112, "t": "기억"}], "tr": "我活着偶尔想起的记忆", "ms": 6830}, {"key": "yue", "label": "粤语", "song": "陈奕迅《明年今日》", "lang": "yue", "groups": [{"s": 0, "d": 240, "t": "若", "r": "joek6"}, {"t": "这", "d": 320, "r": "ze2", "s": 240}, {"s": 560, "t": "一", "d": 410, "r": "jat1"}, {"d": 530, "r": "hak1", "s": 970, "t": "刻"}, {"t": "我", "s": 1500, "r": "ngo5", "d": 460}, {"r": "ging2", "d": 540, "s": 1960, "t": "竟"}, {"r": "jim4", "d": 180, "s": 2500, "t": "严"}, {"d": 280, "s": 2680, "r": "zung6", "t": "重"}, {"r": "ci1", "s": 2960, "d": 330, "t": "痴"}, {"d": 500, "t": "呆", "r": "ngoi4", "s": 3290}], "tr": "", "ms": 3790}]
+</script>
+<script src="../assets/lp.js?v=202610011816" defer></script>
 </body>
 </html>
