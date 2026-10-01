@@ -28,12 +28,14 @@ import (
 //
 // 两段式(逐段实测):
 //
-//	① 搜索走**公开** api.deezer.com/search —— 不需要认证,返回的 track 对象自带
-//	   id / title / title_version / duration / isrc / artist.name / album.title /
-//	   album.cover_xl(1000x1000)。字段是实测 dump 出来的,不是照文档猜的。
-//	② 取词走 **pipe.deezer.com 的 GraphQL**,认证用 auth.deezer.com/login/anonymous
-//	   换来的**匿名 JWT**(不需要账号、不需要 ARL、不碰用户登录态)。JWT 自带 exp,
-//	   实测有效期约 8 小时,进程级缓存 + 单飞锁(同 musixmatch token / ytmusic visitor id)。
+//	① 搜索走 **pipe.deezer.com 的 GraphQL `search`**(deezerGraphQLSearch):一次拿 10 条,每条带
+//	   hasSynchronizedLyrics,没有同步歌词的不去取词。这个接口按 Accept-Language 把歌名 / 艺人名 / 专辑名
+//	   本地化,所以请求头按查询里的文字选(deezerSearchLanguage)。它没问成(网页客户端接口,可能随时变)
+//	   才退回**公开** api.deezer.com/search:不需要认证,但不管请求头一律给英文译名(周杰伦《稻香》回
+//	   「Rice Field / Jay Chou」),中文 / 日文歌几乎过不了名称闸(09 章决策 136 的实测)。
+//	② 取词也走 GraphQL,认证用 auth.deezer.com/login/anonymous 换来的**匿名 JWT**(不需要账号、不需要
+//	   ARL、不碰用户登录态)。JWT 自带 exp,实测 iat 到 exp 只有 6 分钟,过期后回 HTTP 200 +
+//	   JwtTokenExpiredError(不是 401);进程级缓存 + 单飞锁(同 musixmatch token / ytmusic visitor id)。
 //	   响应 data.track.lyrics 里 synchronizedLines[] 是逐行(lrcTimestamp 形如
 //	   "[00:01.41]" + line,lineTranslated 是这一行的译文),synchronizedWordByWordLines[]
 //	   是逐字({start,end,words:[{start,end,word}]},毫秒),text 是整份纯文本。
@@ -104,11 +106,12 @@ const (
 	// 就是第一条,3 条足够覆盖"第一条恰好没词"的情况——理由同 migu,不必像 kuwo 拉 5 条。
 	deezerMaxCandidatesToFetch = 3
 	deezerHTTPTimeout          = 6 * time.Second
-	// deezerJWTFallbackTTL:JWT 里解不出 exp 时的保守有效期。实测 exp 给的是 ~8 小时,
-	// 这里只在解析失败时兜底,宁可多换几次也不要拿着过期的票反复被拒。
-	deezerJWTFallbackTTL = time.Hour
-	// deezerJWTRenewMargin:提前这么久就当它过期,免得卡在边界上换票。
-	deezerJWTRenewMargin = 5 * time.Minute
+	// deezerJWTFallbackTTL:JWT 里解不出 exp 时的保守有效期。只在解析失败时兜底,宁可多换几次也不要
+	// 拿着过期的票反复被拒。
+	deezerJWTFallbackTTL = 5 * time.Minute
+	// deezerJWTRenewMargin:提前这么久就当它过期,免得卡在边界上换票。票只有 6 分钟,提前量别写成分钟级 ——
+	// 5 分钟的提前量等于每张票只用 1 分钟,几乎每首歌都要多换一次票。
+	deezerJWTRenewMargin = 30 * time.Second
 )
 
 // deezerLyricsQuery 是取词用的 GraphQL 查询。只要这一路真正用得上的字段:逐行与译文
@@ -254,6 +257,19 @@ func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, err
 		return nil, fmt.Errorf("api error %s", strings.TrimSpace(string(out.Error)))
 	}
 	return out.Data, nil
+}
+
+// deezerPublicSearchHits:公开搜索的结果包成 deezerSearchHit(不知道有没有同步歌词,noSync 恒 false)。
+func deezerPublicSearchHits(ctx context.Context, artist, title string) ([]deezerSearchHit, error) {
+	tracks, err := deezerSearch(ctx, artist, title)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]deezerSearchHit, len(tracks))
+	for i, t := range tracks {
+		hits[i] = deezerSearchHit{track: t}
+	}
+	return hits, nil
 }
 
 // deezerISRCDirectScore:ISRC 直取那条候选的排序分。只有它一条时排序本来就无意义,
@@ -434,6 +450,174 @@ func deezerFetchJWT(ctx context.Context) string {
 	// 换到了就撤掉早先的失败原因,理由同 musixmatch.go 那处。
 	deezerSetLastFailureReason("")
 	return strings.TrimSpace(out.JWT)
+}
+
+// deezerJWTRejected:GraphQL 错误是不是在说票不行(过期 / 没带)。这两种都回 HTTP 200,不是 401。纯函数,便于单测。
+func deezerJWTRejected(errs string) bool {
+	return strings.Contains(errs, "JwtTokenExpiredError") || strings.Contains(errs, "JwtTokenMissingError")
+}
+
+// deezerPipeQuery 发一次 GraphQL 请求,返回 data 与 errors 两段原文。lang 非空时作为 Accept-Language。
+// 票被拒(HTTP 401,或 deezerJWTRejected 认得的 GraphQL 错误)时清掉重换,只重试一次。
+func deezerPipeQuery(ctx context.Context, operation, query string, variables map[string]any, lang string) (data, errs json.RawMessage, err error) {
+	body, err := json.Marshal(map[string]any{"operationName": operation, "variables": variables, "query": query})
+	if err != nil {
+		return nil, nil, err
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		jwt := deezerEnsureJWT(ctx)
+		if jwt == "" {
+			return nil, nil, fmt.Errorf("no anonymous jwt")
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, deezerPipeAPI, strings.NewReader(string(body)))
+		if err != nil {
+			return nil, nil, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+jwt)
+		if lang != "" {
+			req.Header.Set("Accept-Language", lang)
+		}
+		resp, err := doHTTPTracked(lyricHTTPClient(deezerHTTPTimeout), req)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		status := resp.StatusCode
+		resp.Body.Close()
+		if status == http.StatusUnauthorized && attempt == 0 {
+			deezerClearJWT()
+			continue
+		}
+		if status != http.StatusOK {
+			return nil, nil, fmt.Errorf("status %d", status)
+		}
+		if readErr != nil {
+			return nil, nil, readErr
+		}
+		var out struct {
+			Errors json.RawMessage `json:"errors"`
+			Data   json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, nil, err
+		}
+		if deezerHasError(out.Errors) && deezerJWTRejected(string(out.Errors)) && attempt == 0 {
+			deezerClearJWT()
+			continue
+		}
+		return out.Data, out.Errors, nil
+	}
+	return nil, nil, fmt.Errorf("jwt refresh exhausted")
+}
+
+// deezerSearchQuery:GraphQL 搜索。只要名称闸、时长闸和封面用得上的字段,外加 hasSynchronizedLyrics;
+// 歌词本身不在这一步取 —— 取词要带译文的 Accept-Language,而这一步的请求头要留给名称本地化(见
+// deezerSearchLanguage)。封面按 1000x1000 要,形状跟公开 API 的 cover_xl 一样,deezerTrack.cover 照常换原图。
+const deezerSearchQuery = `query SearchTracks($query: String!, $first: Int!) {
+  search(query: $query) {
+    results {
+      tracks(first: $first) {
+        edges {
+          node {
+            id
+            title
+            duration
+            hasSynchronizedLyrics
+            contributors(first: 1) { edges { node { ... on Artist { name } } } }
+            album { displayTitle cover { urls(pictureRequest: {width: 1000, height: 1000}) } }
+          }
+        }
+      }
+    }
+  }
+}`
+
+// deezerSearchFirst:GraphQL 搜索取几条。20 条起出现部分 "Track media not found" 错误。
+const deezerSearchFirst = 10
+
+// deezerSearchHit:一条搜索结果。known = 这条来自 GraphQL 搜索、带了 hasSynchronizedLyrics(公开 API 的不带);
+// noSync = 搜索明确说它没有同步歌词。
+type deezerSearchHit struct {
+	track         deezerTrack
+	known, noSync bool
+}
+
+// deezerSearchLanguage:GraphQL 搜索的 Accept-Language。这个接口按请求头把歌名、艺人名、专辑名本地化 ——
+// 英文请求头下周杰伦《稻香》是「Rice Field / Jay Chou」,中文请求头下 Michael Jackson 是「麥可傑克森」——
+// 名称闸要拿原文比,所以按查询里的文字选:有假名用日文、有谚文用韩文、只有汉字用中文,其余用英文。纯函数,便于单测。
+func deezerSearchLanguage(s string) string {
+	switch {
+	case containsKana(s):
+		return "ja-JP"
+	case strings.ContainsFunc(s, func(r rune) bool { return unicode.Is(unicode.Hangul, r) }):
+		return "ko-KR"
+	case containsHan(s):
+		return "zh-CN"
+	}
+	return "en-US"
+}
+
+// deezerGraphQLSearch 用 GraphQL 搜索。请求没成 / 回了错误(除了部分结果带的零星错误)都返回 err,调用方退回公开搜索。
+func deezerGraphQLSearch(ctx context.Context, artist, title string) ([]deezerSearchHit, error) {
+	q := strings.TrimSpace(artist + " " + title)
+	data, errs, err := deezerPipeQuery(ctx, "SearchTracks", deezerSearchQuery, map[string]any{"query": q, "first": deezerSearchFirst}, deezerSearchLanguage(q))
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Search struct {
+			Results struct {
+				Tracks struct {
+					Edges []struct {
+						Node struct {
+							ID                    string `json:"id"`
+							Title                 string `json:"title"`
+							Duration              int    `json:"duration"`
+							HasSynchronizedLyrics bool   `json:"hasSynchronizedLyrics"`
+							Contributors          struct {
+								Edges []struct {
+									Node struct {
+										Name string `json:"name"`
+									} `json:"node"`
+								} `json:"edges"`
+							} `json:"contributors"`
+							Album struct {
+								DisplayTitle string `json:"displayTitle"`
+								Cover        struct {
+									URLs []string `json:"urls"`
+								} `json:"cover"`
+							} `json:"album"`
+						} `json:"node"`
+					} `json:"edges"`
+				} `json:"tracks"`
+			} `json:"results"`
+		} `json:"search"`
+	}
+	if len(data) == 0 || string(data) == "null" || json.Unmarshal(data, &out) != nil {
+		return nil, fmt.Errorf("graphql search: no data %s", strings.TrimSpace(string(errs)))
+	}
+	edges := out.Search.Results.Tracks.Edges
+	if len(edges) == 0 && deezerHasError(errs) {
+		return nil, fmt.Errorf("graphql search error %s", strings.TrimSpace(string(errs)))
+	}
+	hits := make([]deezerSearchHit, 0, len(edges))
+	for _, e := range edges {
+		n := e.Node
+		id, _ := strconv.ParseInt(n.ID, 10, 64)
+		var t deezerTrack
+		t.ID, t.Title, t.Duration = id, n.Title, n.Duration
+		if len(n.Contributors.Edges) > 0 {
+			t.Artist.Name = n.Contributors.Edges[0].Node.Name
+		}
+		t.Album.Title = n.Album.DisplayTitle
+		if len(n.Album.Cover.URLs) > 0 {
+			t.Album.CoverXL = n.Album.Cover.URLs[0]
+		}
+		hits = append(hits, deezerSearchHit{track: t, known: true, noSync: !n.HasSynchronizedLyrics})
+	}
+	return hits, nil
 }
 
 // deezerSyncLine 是 synchronizedLines 的一个元素(实测形状)。
@@ -649,95 +833,54 @@ func deezerIsLyricsNotFound(errs string) bool {
 	return strings.Contains(errs, "LyricsNotFoundError") || strings.Contains(errs, "Lyrics does not exists")
 }
 
-// deezerFetchLyrics 取一首歌的歌词,各项都可能为空(见 deezerLyricsPayload)。
-// JWT 被拒(401)时清掉重换一次,只重试一次。
+// deezerFetchLyrics 取一首歌的歌词,各项都可能为空(见 deezerLyricsPayload)。请求头按译文语言带(deezerAcceptLanguage)。
 func deezerFetchLyrics(ctx context.Context, trackID string) (deezerLyricsPayload, error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		jwt := deezerEnsureJWT(ctx)
-		if jwt == "" {
-			return deezerLyricsPayload{}, fmt.Errorf("no anonymous jwt")
-		}
-		body, err := json.Marshal(map[string]any{
-			"operationName": "SynchronizedTrackLyrics",
-			"variables":     map[string]any{"trackId": trackID},
-			"query":         deezerLyricsQuery,
-		})
-		if err != nil {
-			return deezerLyricsPayload{}, err
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, deezerPipeAPI, strings.NewReader(string(body)))
-		if err != nil {
-			return deezerLyricsPayload{}, err
-		}
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+jwt)
-		if lang := deezerAcceptLanguage(); lang != "" {
-			req.Header.Set("Accept-Language", lang)
-		}
-		resp, err := doHTTPTracked(lyricHTTPClient(deezerHTTPTimeout), req)
-		if err != nil {
-			return deezerLyricsPayload{}, err
-		}
-		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-		status := resp.StatusCode
-		resp.Body.Close()
-		if status == http.StatusUnauthorized && attempt == 0 {
-			deezerClearJWT()
-			continue
-		}
-		if status != http.StatusOK {
-			return deezerLyricsPayload{}, fmt.Errorf("status %d", status)
-		}
-		if readErr != nil {
-			return deezerLyricsPayload{}, readErr
-		}
-		var out struct {
-			Errors json.RawMessage `json:"errors"`
-			Data   struct {
-				Track struct {
-					Lyrics struct {
-						Text                        string           `json:"text"`
-						SynchronizedLines           []deezerSyncLine `json:"synchronizedLines"`
-						SynchronizedWordByWordLines []deezerWordLine `json:"synchronizedWordByWordLines"`
-					} `json:"lyrics"`
-				} `json:"track"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return deezerLyricsPayload{}, err
-		}
-		if deezerHasError(out.Errors) {
-			errs := string(out.Errors)
-			if deezerIsLyricsNotFound(errs) {
-				// 正常结果:这首歌 Deezer 没有词。安静返回空。
-				return deezerLyricsPayload{}, nil
-			}
-			return deezerLyricsPayload{}, fmt.Errorf("graphql error %s", strings.TrimSpace(errs))
-		}
-		ly := out.Data.Track.Lyrics
-		var words []deezerWordLine
-		if deezerWordTrackAgrees(ly.SynchronizedWordByWordLines, ly.SynchronizedLines) {
-			words = ly.SynchronizedWordByWordLines
-		}
-		return deezerLyricsPayload{
-			lrc:   deezerBuildLRC(ly.SynchronizedLines),
-			plain: strings.TrimSpace(ly.Text),
-			yrc:   deezerBuildYRC(words),
-			tr:    deezerBuildTranslation(ly.SynchronizedLines, words, features().LyricsTranslationLanguage),
-		}, nil
+	data, errs, err := deezerPipeQuery(ctx, "SynchronizedTrackLyrics", deezerLyricsQuery, map[string]any{"trackId": trackID}, deezerAcceptLanguage())
+	if err != nil {
+		return deezerLyricsPayload{}, err
 	}
-	return deezerLyricsPayload{}, fmt.Errorf("jwt refresh exhausted")
+	if deezerHasError(errs) {
+		if deezerIsLyricsNotFound(string(errs)) {
+			// 正常结果:这首歌 Deezer 没有词。安静返回空。
+			return deezerLyricsPayload{}, nil
+		}
+		return deezerLyricsPayload{}, fmt.Errorf("graphql error %s", strings.TrimSpace(string(errs)))
+	}
+	var out struct {
+		Track struct {
+			Lyrics struct {
+				Text                        string           `json:"text"`
+				SynchronizedLines           []deezerSyncLine `json:"synchronizedLines"`
+				SynchronizedWordByWordLines []deezerWordLine `json:"synchronizedWordByWordLines"`
+			} `json:"lyrics"`
+		} `json:"track"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return deezerLyricsPayload{}, err
+	}
+	ly := out.Track.Lyrics
+	var words []deezerWordLine
+	if deezerWordTrackAgrees(ly.SynchronizedWordByWordLines, ly.SynchronizedLines) {
+		words = ly.SynchronizedWordByWordLines
+	}
+	return deezerLyricsPayload{
+		lrc:   deezerBuildLRC(ly.SynchronizedLines),
+		plain: strings.TrimSpace(ly.Text),
+		yrc:   deezerBuildYRC(words),
+		tr:    deezerBuildTranslation(ly.SynchronizedLines, words, features().LyricsTranslationLanguage),
+	}, nil
 }
 
-// resolveDeezerLyric:①搜索(单次请求,10 条);②身份闸 + 时长闸淘汰、按分数稳定排序;
-// ③取前几条**并发**取词;④按名次(不是"谁先拉完")挑第一份真同步的;⑤一份同步的都没有
-// 时,退而求其次挑第一份纯文本(plainOnly,分数恒 -1,只有用户手点才会采用)——理由同
-// lrclib/musixmatch 那两路的纯文本回退:有词可看胜过没有,但绝不让它自动顶掉别的源。
+// resolveDeezerLyric:①搜索(单次请求,10 条;GraphQL 没问成才退回公开 API);②身份闸 + 时长闸淘汰、
+// 按分数稳定排序;③取前几条**并发**取词 —— 搜索明确说没有同步歌词的不在其列;④按名次(不是"谁先拉完")
+// 挑第一份真同步的;⑤一份同步的都没有时,退而求其次挑第一份纯文本(plainOnly,分数恒 -1,只有用户手点才会
+// 采用)——理由同 lrclib/musixmatch 那两路的纯文本回退:有词可看胜过没有,但绝不让它自动顶掉别的源。
+// 候选里全是「没有同步歌词」的,只取分数最高那条、为的是它的纯文本。
 func resolveDeezerLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) deezerResult {
 	type scoredTrack struct {
-		track deezerTrack
-		score int
+		track         deezerTrack
+		score         int
+		known, noSync bool
 	}
 	var candidates []scoredTrack
 
@@ -756,18 +899,21 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 	// 这首 —— 这是唯一一道对"ISRC 本身是脏数据"还有效的防线。
 	if isrc != "" {
 		if t, ok := deezerTrackByISRC(ctx, isrc); ok && sourceDurationFits(durationSecs, float64(t.Duration)) {
-			candidates = append(candidates, scoredTrack{t, deezerISRCDirectScore})
+			candidates = append(candidates, scoredTrack{track: t, score: deezerISRCDirectScore})
 		}
 	}
 
 	if len(candidates) == 0 {
-		tracks, err := deezerSearch(ctx, artist, title)
-		if err != nil || len(tracks) == 0 {
+		hits, err := deezerGraphQLSearch(ctx, artist, title)
+		if err != nil {
+			hits, err = deezerPublicSearchHits(ctx, artist, title)
+		}
+		if err != nil || len(hits) == 0 {
 			return deezerResult{}
 		}
-		for _, t := range tracks {
-			if s := deezerCandidateScore(t, artist, title, album, durationSecs); s >= 0 {
-				candidates = append(candidates, scoredTrack{t, s})
+		for _, h := range hits {
+			if s := deezerCandidateScore(h.track, artist, title, album, durationSecs); s >= 0 {
+				candidates = append(candidates, scoredTrack{track: h.track, score: s, known: h.known, noSync: h.noSync})
 			}
 		}
 	}
@@ -775,27 +921,48 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 		return deezerResult{}
 	}
 	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
-	if len(candidates) > deezerMaxCandidatesToFetch {
-		candidates = candidates[:deezerMaxCandidatesToFetch]
+	fetch := make([]scoredTrack, 0, deezerMaxCandidatesToFetch)
+	for _, c := range candidates {
+		if !c.noSync && len(fetch) < deezerMaxCandidatesToFetch {
+			fetch = append(fetch, c)
+		}
 	}
+	if len(fetch) == 0 {
+		fetch = candidates[:1]
+	}
+	candidates = fetch
 
 	got := make([]deezerLyricsPayload, len(candidates))
-	var wg sync.WaitGroup
-	for i, c := range candidates {
-		wg.Add(1)
-		go func(rank int, t deezerTrack) {
-			defer wg.Done()
-			p, err := deezerFetchLyrics(ctx, strconv.FormatInt(t.ID, 10))
-			if err != nil {
-				return
-			}
-			if !isTimedLRC(p.lrc) {
-				p = deezerLyricsPayload{plain: p.plain}
-			}
-			got[rank] = p
-		}(i, c.track)
+	fetchAt := func(rank int) {
+		p, err := deezerFetchLyrics(ctx, strconv.FormatInt(candidates[rank].track.ID, 10))
+		if err != nil {
+			return
+		}
+		if !isTimedLRC(p.lrc) {
+			p = deezerLyricsPayload{plain: p.plain}
+		}
+		got[rank] = p
 	}
-	wg.Wait()
+	if candidates[0].known {
+		// 搜索已经说了哪几条有同步歌词:按名次逐条取,取到就停。几条一起取是给「不知道哪条有词」的公开搜索用的,
+		// 这里照搬只会多打请求(实测同一批 40 首 71 对 90 个请求,找到的一首不差)。
+		for rank := range candidates {
+			fetchAt(rank)
+			if got[rank].lrc != "" {
+				break
+			}
+		}
+	} else {
+		var wg sync.WaitGroup
+		for i := range candidates {
+			wg.Add(1)
+			go func(rank int) {
+				defer wg.Done()
+				fetchAt(rank)
+			}(i)
+		}
+		wg.Wait()
+	}
 
 	build := func(rank int, lyrics string, plainOnly bool) deezerResult {
 		t := candidates[rank].track
