@@ -383,7 +383,8 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # inode 更容易踩中这个内核侧缓存陈旧的坑。先删再拷，让每次构建都是一个全新的
 # inode，从根源避开这个问题(跟上面这次会话另外给 media-control 加的 rm -f 是
 # 同一类修法，那边最初是为了绕开只读权限，这里主要是为了这个签名信任缓存问题)。
-# 旧名 collector 也一起删:--dest 重复装进同一个目录时,留下的旧文件会被最外层签名一起封进包里。
+# 旧名 collector 也一起删(下面重新建成指向引擎的符号链接):--dest 重复装进同一个目录时,留下的旧文件会被最外层签名
+# 一起封进包里。
 rm -f "$APP_DIR/Contents/Resources/collector" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 cp "$FAT_DIR/$ENGINE_NAME" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
@@ -391,6 +392,10 @@ cp "$FAT_DIR/$ENGINE_NAME" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
+# 旧名 collector 留一个指向引擎的相对符号链接,跟引擎一起被最外层签名封进包里。装过旧版本的机器上,launchd 的
+# plist 还写着 …/Resources/collector:更新装好、App 还没重新打开、对账还没改写 plist 的那段时间,launchd 靠它照常
+# 拉起引擎。删掉它之前要确认已经没人停在旧 plist 上(见 docs/features 15 章「歌词引擎的可执行文件改名」)。
+ln -s "$ENGINE_NAME" "$APP_DIR/Contents/Resources/collector"
 
 # 端上歌词翻译小助手。collector(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
 # Swift 可执行文件,由 collector 按自身可执行文件的相对路径调起 —— 跟 media-control 同一

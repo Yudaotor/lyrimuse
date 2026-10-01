@@ -869,6 +869,12 @@ func runOpsDiagnosticsTests() {
             let swap = code.range(of: "libc.renamex_np(sys.argv[1]")
             expectEqual(bootout != nil && swap != nil && bootout!.lowerBound < swap!.lowerBound, true,
                         "构建换包: collector 的 job 要在换包(renamex_np)之前卸掉,不然老进程在暂存路径里触发授权弹窗")
+            // 装过旧版本的机器上 launchd 的 plist 还写着 …/Resources/collector:更新装好、App 还没重新打开的那段时间
+            // 靠这个符号链接拉起引擎(15 章「歌词引擎的可执行文件改名」)。
+            let link = code.range(of: "ln -s \"$ENGINE_NAME\" \"$APP_DIR/Contents/Resources/collector\"")
+            let engineCopy = code.range(of: "cp \"$FAT_DIR/$ENGINE_NAME\" \"$APP_DIR/Contents/Resources/$ENGINE_NAME\"")
+            expectEqual(link != nil && engineCopy != nil && engineCopy!.lowerBound < link!.lowerBound, true,
+                        "构建换包: 包里留着旧名 collector → lyrimuse-engine 的符号链接(旧 plist 在 App 重开之前靠它拉起引擎)")
         } else {
             expectEqual(true, false, "构建签名: 读不到 build.sh(路径挪了?)")
         }
