@@ -2443,7 +2443,9 @@ private struct AppearanceSettingsTab: View {
             // 设置页只会误触真实播放。理由和做法见 LyricsWindowPreviewStage。
             // 工具栏在预览上面,跟另外三段编辑台同一个位置:先看到能调什么,再看效果。
             lyricsWindowToolbar
-            LyricsWindowPreviewStage { lyricsWindowPopoverContent(.info) }
+            LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info) {
+                lyricsWindowPopoverContent(.info)
+            }
             // 预览下面那张卡,位置同另外三段的总开关卡。歌词窗口没有"开不开"这件事,这里放的是
             // 打开那扇真窗口(走 `AppActions.openLyricsWindow`,跟菜单栏面板、快捷键同一个入口)。
             SettingsCard {
@@ -2681,6 +2683,29 @@ private struct AppearanceSettingsTab: View {
         // 那个键他们早就有值,新加的位一律是 0。
         SettingsRow(icon: "clock", title: L10n.t("时间")) {
             Toggle("", isOn: $settings.lyricsWindowMiniShowsTime)
+        }
+        CardDivider()
+        SettingsRow(
+            icon: "arrow.left.and.right",
+            title: L10n.t("宽度"),
+            help: L10n.t("顶部信息这一块占窗口宽度的百分比；文字放不下时末尾显示省略号")
+        ) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { settings.lyricsWindowMiniHeaderWidthPercent },
+                    // 相等守卫同「字号」那根:拖动中量化后的等值赋值不再广播。
+                    set: { v in
+                        guard v != settings.lyricsWindowMiniHeaderWidthPercent else { return }
+                        settings.lyricsWindowMiniHeaderWidthPercent = v
+                    }
+                ), in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep)
+                    .frame(width: 130)
+                Text(verbatim: "\(Int(settings.lyricsWindowMiniHeaderWidthPercent.rounded()))%")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    // 按最宽的「100%」留位,拖到两位数时滑杆不左右挪。
+                    .frame(width: 38, alignment: .trailing)
+            }
         }
     }
 
@@ -3524,6 +3549,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniHeaderFields = .default
             s.lyricsWindowMiniShowsCover = true
             s.lyricsWindowMiniShowsTime = true
+            s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent
         } else {
             s.lyricsWindowBackgroundMode = .artwork
             s.lyricsWindowBackgroundColorHex = AppSettings.defaultLyricsWindowBackgroundColorHex
@@ -4030,7 +4056,7 @@ private struct PlayerSettingsTab: View {
     // 「检测到未知播放器」——「自动识别」不再限死内置那几个 App 的入口。
     //
     // 为什么是"发现 + 一键信任"而不是"一律接受":那道白名单不只挡显示,**也挡打卡**
-    // (collector 的 poller.isTracked)。一律接受等于让 YouTube 视频、播客、网课被当成
+    // (collector 只记 App 认下的播放)。一律接受等于让 YouTube 视频、播客、网课被当成
     // 收听写进 Last.fm / ListenBrainz 的**永久历史**,还会往"设计上永不清理"的歌词缓存里
     // 灌垃圾条目。而靠内容形状分辨也不可靠 —— 浏览器里的网页播放器能用 MediaSession API
     // 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样。所以口径是
@@ -4655,7 +4681,7 @@ private struct PlayerSettingsTab: View {
     /// 配对了至少一个浏览器就按 `PlayerChoiceCard` 同款样式高亮(强调色描边+浅色底)——
     /// "选中"不是一个新的独立开关,而是直接复用既有的"配了/没配"这个状态,配对本身早就是
     /// 显式的用户动作(点「+」选浏览器)。配对的浏览器无论有没有勾"自动识别"都会被采纳
-    /// (见 MediaControlClient.fetchMultiSelectedSnapshot / collector isTrustedPlayerBundleID),
+    /// (见 MediaControlClient.fetchMultiSelectedSnapshot),
     /// 高亮因此如实反映"这确实是一个会生效的来源",不是纯装饰。整卡仍然不包一个 `Button`
     /// (配对的是一组浏览器,不是单选一个),只有头像和"+"各自可点。
     private func browserPlatformCard(platform: BrowserPositionProbe.BrowserMusicPlatform) -> some View {

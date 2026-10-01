@@ -636,6 +636,40 @@
         }
       }
     },
+    "顶部信息这一块占窗口宽度的百分比；文字放不下时末尾显示省略号" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How much of the window's width the header takes up; text that doesn't fit ends with an ellipsis"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頂部資訊這一塊佔視窗寬度的百分比；文字放不下時末尾顯示刪節號"
+          }
+        }
+      }
+    },
+    "迷你尺寸顶部信息占窗口宽度的百分比" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How much of the window's width the mini size's header takes up"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迷你尺寸頂部資訊佔視窗寬度的百分比"
+          }
+        }
+      }
+    },
     "浅色" : {
       "extractionState" : "manual",
       "localizations" : {

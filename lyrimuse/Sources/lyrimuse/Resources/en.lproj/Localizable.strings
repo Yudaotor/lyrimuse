@@ -1624,6 +1624,7 @@
 "迷你尺寸一行放不下时换行还是滚动" = "Whether long lines wrap or scroll in the mini size";
 "迷你尺寸只显示当前句、当前句加下一句，还是像完整尺寸那样整页滚动" = "Whether the mini size shows just the current line, the current and next line, or a scrolling page like the full size";
 "迷你尺寸的歌词字号上限" = "Ceiling for the mini size's lyrics font size";
+"迷你尺寸顶部信息占窗口宽度的百分比" = "How much of the window's width the mini size's header takes up";
 "迷你尺寸顶部信息左边那枚封面小图" = "The small artwork thumbnail beside the mini size's top info";
 "迷你尺寸顶部显示「已播到哪 / 这首多长」" = "Shows elapsed time and track length at the top of the mini size";
 "迷你尺寸顶部显示歌名／歌手／专辑" = "Show the title, artist, and album at the top of the mini size";
@@ -1707,6 +1708,7 @@
 "音符与歌词" = "Note and Lyrics";
 "音频输出" = "Audio Output";
 "顶部信息" = "Header";
+"顶部信息这一块占窗口宽度的百分比；文字放不下时末尾显示省略号" = "How much of the window's width the header takes up; text that doesn't fit ends with an ellipsis";
 "顶部居中" = "Top Center";
 "顶部颜色" = "Top Color";
 "顺序优先" = "Priority Order";

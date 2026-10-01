@@ -99,6 +99,7 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var glassIntensity: OverlayGlassIntensity = .default
     @Published private(set) var miniGlassIntensity: OverlayGlassIntensity = .default
     @Published private(set) var miniFontSizeCap = AppSettings.defaultLyricsWindowMiniFontSize
+    @Published private(set) var miniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent
     private(set) var miniBackgroundColor = AppSettings.defaultLyricsWindowBackgroundColorFallback
     private(set) var miniBackgroundColorEnd = AppSettings.defaultLyricsWindowBackgroundColorEndFallback
     private(set) var backgroundColor = AppSettings.defaultLyricsWindowBackgroundColorFallback
@@ -182,6 +183,8 @@ private final class WindowPlayback: ObservableObject {
             s.$lyricsWindowGlassIntensity.removeDuplicates().sink { [weak self] in self?.glassIntensity = $0 },
             s.$lyricsWindowMiniGlassIntensity.removeDuplicates().sink { [weak self] in self?.miniGlassIntensity = $0 },
             s.$lyricsWindowMiniFontSize.removeDuplicates().sink { [weak self] in self?.miniFontSizeCap = $0 },
+            s.$lyricsWindowMiniHeaderWidthPercent.removeDuplicates()
+                .sink { [weak self] in self?.miniHeaderWidthPercent = $0 },
             // Color 同样必须从**参数** hex 现算,不能回读 AppSettings 的缓存(@Published 是 willSet
             // 语义,那时 didSet 还没跑)—— 理由见上面完整那套同款注释。
             s.$lyricsWindowMiniBackgroundColorHex.removeDuplicates().sink { [weak self] hex in
@@ -1382,7 +1385,7 @@ struct LyricsWindowView: View {
                     miniIdleView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                miniTopInfo
+                miniTopInfo(windowWidth: geo.size.width)
                 if miniUsesLyricsList {
                     // 「多行」:完整布局那份整页列表原样搬进来(行、间奏点、自动滚动、点行跳转都是
                     // 同一份),字号由这块视口自己推(`lyricFontSize`,迷你档再夹一道字号上限)。
@@ -1485,13 +1488,16 @@ struct LyricsWindowView: View {
     /// 别改成 overlay + `alignmentGuide` 把封面挂到文字外面:封面不占布局就会压到文字上
     /// (见 07 章决策 33)。三块都参与布局,才不可能重叠。
     ///
-    /// 左右各留 76pt:左边是常显的红绿灯,右边是悬停才出现的窗口控件。代价是有封面时标题
-    /// 可用宽度少两个封面位,长标题会早一点被省略号截断。
+    /// 这一组定宽 = 窗口宽度 × 「顶部信息 › 宽度」那个百分比(`LyricsWindowMiniHeaderWidth`),
+    /// 在窗口里居中,内容再在这块里居中。有封面时标题可用宽度还要再减两个封面位,长标题会早一点
+    /// 被省略号截断。
     ///
     /// 三样全关(或选了的那几样这首歌恰好都没有值)就整组不摆 —— 空容器仍会吃掉 padding,
     /// 留一条莫名的空白。
     @ViewBuilder
-    private var miniTopInfo: some View {
+    private func miniTopInfo(windowWidth: CGFloat) -> some View {
+        let width = LyricsWindowMiniHeaderWidth.width(windowWidth: windowWidth,
+                                                      percent: playback.miniHeaderWidthPercent)
         let hasText = !miniHeaderParts.isEmpty || miniShowsTimeRow
         // 广告那一档没有图也要占位(画广告标识),所以不能只判 miniCoverImage。
         let hasCover = playback.miniShowsCover
@@ -1509,16 +1515,17 @@ struct LyricsWindowView: View {
                     Color.clear.frame(width: miniCoverSide, height: 1)
                 }
             }
+            .frame(width: width)
             // 预览里报出这一组的范围,设置页在上面叠一块可点区域(见 LyricsWindowPreviewStage)。
-            // 挂在 padding 之前:可点的是这组内容本身,不是两侧留给窗口控件的空。
+            // 挂在定宽那一层之后:虚线框画的就是这块宽度,拖「宽度」滑杆时跟着变宽变窄。
             .anchorPreference(key: LyricsWindowPreviewHeaderAnchorKey.self, value: .bounds) {
                 previewMode ? $0 : nil
             }
-            .padding(.horizontal, 76)
             .padding(.top, 12)
             .frame(maxWidth: .infinity)
         } else if hasCover {
             miniCover
+                .frame(width: width)
                 .anchorPreference(key: LyricsWindowPreviewHeaderAnchorKey.self, value: .bounds) {
                     previewMode ? $0 : nil
                 }

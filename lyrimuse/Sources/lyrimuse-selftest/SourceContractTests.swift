@@ -1696,6 +1696,28 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "迷你控制条: 读不到 Settings/AppSettings.swift(路径挪了?)")
         }
+        // 迷你顶部信息宽度 = 窗口宽度的百分比(07 章决策 74)。
+        if let settings = read("Settings/AppSettings.swift") {
+            expectEqual(settings.contains(
+                "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)\n            ?? LyricsWindowMiniHeaderWidth.defaultPercent"),
+                        true, "迷你顶部宽度: 没存过按 Core 里那个默认值读")
+        }
+        if let lwv = read("UI/LyricsWindowView.swift") {
+            expectEqual(lwv.contains("miniTopInfo(windowWidth: geo.size.width)"), true,
+                        "迷你顶部宽度: 按这扇窗此刻的宽度算")
+            expectEqual(lwv.contains(".frame(width: width)\n            // 预览里报出这一组的范围"), true,
+                        "迷你顶部宽度: 先定宽再报范围,预览虚线框画的就是这块宽度")
+            expectEqual(lwv.contains(".padding(.horizontal, 76)"), false,
+                        "迷你顶部宽度: 不再按两侧固定边距摆")
+        }
+        if let settingsView = read("SettingsView.swift") {
+            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderWidth.percentRange, step: LyricsWindowMiniHeaderWidth.percentStep)"), true,
+                        "迷你顶部宽度: 「顶部信息」浮层里那根滑杆的范围和步长读 Core")
+            expectEqual(settingsView.contains("s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent"), true,
+                        "迷你顶部宽度: 迷你「重置」把宽度一起还原")
+            expectEqual(settingsView.contains("LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info)"), true,
+                        "迷你顶部宽度: 工具栏「顶部信息」浮层开着时预览虚线框亮着")
+        }
     }
 
     // ---- 悬浮歌词:滚动模式 / 快捷菜单 / 描边与字号的接线 ----
@@ -1930,9 +1952,9 @@ func runSourceContractTests() {
         if let settings = read("SettingsView.swift") {
             // 「歌词窗口」设置段同另外三段:预览上面一排工具栏(浮层 + 重置)、预览下面一张卡(打开窗口)、
             // 默认折叠的全部设置抽屉,外观行只有一份、两处共用(07 章决策 44、45)。
-            expectEqual(settings.contains("lyricsWindowToolbar\n            LyricsWindowPreviewStage {"), true,
+            expectEqual(settings.contains("lyricsWindowToolbar\n            LyricsWindowPreviewStage("), true,
                         "歌词窗口设置: 工具栏在预览上面")
-            expectEqual(settings.contains("LyricsWindowPreviewStage { lyricsWindowPopoverContent(.info) }"), true,
+            expectEqual(settings.contains("LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info) {\n                lyricsWindowPopoverContent(.info)\n            }"), true,
                         "歌词窗口设置: 预览里顶部信息那块点开的浮层跟工具栏「顶部信息」是同一份")
             if let stage = read("UI/LyricsWindowPreviewStage.swift"), let view = read("UI/LyricsWindowView.swift") {
                 expectEqual(stage.contains("StrokeStyle(lineWidth: 1, dash: [4, 3])"), true,

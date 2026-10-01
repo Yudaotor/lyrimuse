@@ -57,3 +57,23 @@ public struct LyricsWindowMiniHeaderFields: OptionSet, Codable, Sendable, Hashab
         }
     }
 }
+
+/// 迷你顶部信息那一组占窗口宽度的百分之几(设置里「顶部信息 › 宽度」那根滑杆)。
+///
+/// 这一组按这个宽度摆、在窗口里居中,里面的内容再在这块里居中;放不下的那一行末尾省略号截断。
+/// 设置页预览里那圈虚线框画的就是这块范围,拖滑杆时框跟着变宽变窄。
+///
+/// 这一组的上沿必须低于红绿灯和右上角悬停胶囊那条横带:上限能放到 100% 靠的就是这一点,
+/// 把这一组往上挪就得把上限一起收回来。
+public enum LyricsWindowMiniHeaderWidth {
+    public static let percentRange: ClosedRange<Double> = 40...100
+    public static let percentStep: Double = 5
+    /// 默认 65%(默认 420 宽的迷你窗里约 273pt)。
+    public static let defaultPercent: Double = 65
+
+    /// 这一组实际给多宽。百分比先夹进范围:存坏的值、别的版本写进来的越界值都按边界算。
+    public static func width(windowWidth: CGFloat, percent: Double) -> CGFloat {
+        let p = min(max(percent, percentRange.lowerBound), percentRange.upperBound)
+        return max(0, windowWidth) * CGFloat(p / 100)
+    }
+}

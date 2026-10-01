@@ -41,8 +41,13 @@ struct LyricsWindowPreviewStage: View {
     /// 迷你顶部信息那一块可点区域点开的浮层内容。擦成 AnyView 而不是做成泛型:这个类型上有静态
     /// 存储属性(`showsMiniStorageKey` 等,设置页也读),泛型类型不支持。
     private let headerPopover: () -> AnyView
+    /// 外面(工具栏)打开了同一份「顶部信息」浮层:虚线框照悬停时那样亮着。浮层里有「宽度」,
+    /// 拖它时要看得见框跟着变宽变窄。
+    private let highlightsHeader: Bool
 
-    init<Popover: View>(@ViewBuilder headerPopover: @escaping () -> Popover) {
+    init<Popover: View>(highlightsHeader: Bool = false,
+                        @ViewBuilder headerPopover: @escaping () -> Popover) {
+        self.highlightsHeader = highlightsHeader
         self.headerPopover = { AnyView(headerPopover()) }
     }
 
@@ -148,7 +153,7 @@ struct LyricsWindowPreviewStage: View {
         let rect = CGRect(x: contentRect.minX * scale, y: contentRect.minY * scale,
                           width: contentRect.width * scale, height: contentRect.height * scale)
             .insetBy(dx: -6, dy: -6)
-        let lit = headerHovered || headerPopoverShown
+        let lit = headerHovered || headerPopoverShown || highlightsHeader
         return RoundedRectangle(cornerRadius: 6)
             .fill(Color.white.opacity(lit ? 0.07 : 0))
             .overlay(

@@ -255,6 +255,20 @@ func runLyricsWindowTests() {
         expectEqual(m1.overrides.count, 1, "喜欢列表合并: 窗口内的本机记录留着")
     }
 
+    // MARK: - 迷你顶部信息宽度(窗口宽度的百分比)
+    do {
+        typealias W = LyricsWindowMiniHeaderWidth
+        expectEqual(W.percentRange, 40...100, "迷你顶部宽度: 范围 40%…100%")
+        expectEqual(W.percentStep, 5, "迷你顶部宽度: 步长 5%")
+        expectEqual(W.percentRange.contains(W.defaultPercent), true, "迷你顶部宽度: 默认值在范围里")
+        expectEqual(W.width(windowWidth: 420, percent: W.defaultPercent), 273, "迷你顶部宽度: 默认 65% × 420 = 273pt")
+        expectEqual(W.width(windowWidth: 420, percent: 100), 420, "迷你顶部宽度: 100% = 整窗宽")
+        expectEqual(W.width(windowWidth: 600, percent: 50), 300, "迷你顶部宽度: 跟着窗口宽度走")
+        expectEqual(W.width(windowWidth: 420, percent: 10), 168, "迷你顶部宽度: 存坏的过小值按 40% 算")
+        expectEqual(W.width(windowWidth: 420, percent: 150), 420, "迷你顶部宽度: 越界的过大值按 100% 算")
+        expectEqual(W.width(windowWidth: -5, percent: 65), 0, "迷你顶部宽度: 量到负宽时给 0,不给负数 frame")
+    }
+
     // MARK: - 迷你顶部显示项
     do {
         typealias H = LyricsWindowMiniHeaderFields
