@@ -27,7 +27,7 @@ import (
 // apic-desktop.musixmatch.com 这个非官方逆向接口(没有官方文档,但被 syncedlyrics
 // 等大量开源项目复用,是"公开的秘密"),固定身份标识 app_id=web-desktop-app-v1.0。
 //
-// 三段式:①token.get 匿名拿一个临时 usertoken(10 分钟有效,不需要用户任何操作,
+// 三段式:①token.get 匿名拿一个 usertoken(按 musixmatchTokenFreshFor 复用,不需要用户任何操作,
 // 401 时按官方样例退避 10 秒重试一次);②track.search 按歌手+歌名搜出 track_id(挑
 // has_subtitles==1 的结果,没有逐行歌词的候选后面必然 404,不值得白跑一趟);
 // ③用 track_id 查 track.subtitle.get(逐行 LRC,当作候选正文)+ track.richsync.get
@@ -102,9 +102,9 @@ var (
 	// 再抢一次网络——16 个并发请求因此变成至多 1~2 次真实的 token.get。
 	musixmatchTokenFetchMu sync.Mutex
 
-	// musixmatchLastToken / musixmatchLastTokenAt:上一个拿到过的 token 和拿到的时刻,过了 9 分钟也留着。
-	// token.get 被拒时退回它(musixmatchStaleToken):实测匿名 usertoken 远不止 9 分钟,取到 30 分钟后
-	// search / subtitle 照常 200。数据接口明确说它失效(非 captcha 的 401)才丢,见 musixmatchRejectToken。
+	// musixmatchLastToken / musixmatchLastTokenAt:上一个拿到过的 token 和拿到的时刻,过了新鲜期也留着。
+	// token.get 被拒时退回它(musixmatchStaleToken),最多到 musixmatchStaleTokenMaxAge。数据接口明确说它
+	// 失效(非 captcha 的 401)才丢,见 musixmatchRejectToken。
 	// musixmatchFetchFailedAt:上次 token.get 没要到的时刻,musixmatchTokenFetchCooldown 内不再去要。
 	// 三个都受 musixmatchTokenMu 保护。
 	musixmatchLastToken     string
@@ -187,7 +187,8 @@ func musixmatchLyric(ctx context.Context, artist, title string, durationSecs flo
 	}
 	// isrc 进缓存键,理由同 deezerLyric:首播那一拍索引常还没建好,不区分的话那次
 	// "按名字搜"的结果会把后面每一次都挡住。
-	key := artist + "|" + title + "|" + trLang + "|" + isrc
+	// 播放器给的 Apple / Spotify ID 同理(见 musixmatchMacroByID)。
+	key := artist + "|" + title + "|" + trLang + "|" + isrc + "|" + musixmatchPlaybackIDsFrom(ctx).cacheKey()
 	musixmatchMu.Lock()
 	if v, ok := musixmatchCache[key]; ok {
 		musixmatchMu.Unlock()
@@ -221,6 +222,14 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	// ISRC 直取优先:那是录音级身份,不经过 q_artist/q_track 那套名称搜索,也就绕开了
 	// 这个源"各源里匹配最松"的老问题(见 musixmatchTrackRow.TrackLength 注释)。
 	// 查不到就照常走搜索。
+	// 先走 macro.subtitles.get(musixmatchmacro.go):一次请求拿齐匹配、逐行、逐字。按录音级身份
+	// (播放器给的 Apple / Spotify ID,或 ISRC)取在前,按歌名取在后;哪一步没成都退回下面原来的
+	// track.get / track.search 流程,那条路的结果与写回规则一字不改。
+	ids := musixmatchPlaybackIDsFrom(ctx)
+	ids.isrc = isrc
+	if m, ok := musixmatchMacroByID(ctx, ids, artist, title, durationSecs); ok {
+		return musixmatchFinishMacro(ctx, m, trLang)
+	}
 	var match musixmatchTrackMatch
 	var ok bool
 	if isrc != "" {
@@ -235,6 +244,9 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 		}
 	}
 	if !ok {
+		if m, hit := musixmatchMacroByName(ctx, artist, title, "", durationSecs); hit {
+			return musixmatchFinishMacro(ctx, m, trLang)
+		}
 		match, ok = musixmatchSearchTrack(ctx, artist, title)
 	}
 	if !ok {
@@ -347,8 +359,40 @@ func musixmatchRomanizationLRC(ctx context.Context, trackID int64, lrc string) s
 	return roma
 }
 
-// musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且未过期直接复用,否则重新
-// 获取。10 分钟官方有效期,提前 1 分钟当作过期主动换新,避免临界点上请求刚发出就失效。
+// musixmatchFinishMacro 在 macro 拿到的逐行 / 逐字之外补上罗马音与译文(这两样不能打包进 macro,
+// optional_calls 带上 crowd.track.translations 服务器也不给)。
+//
+// 译文语言是中文、按 zh 取回空、而 macro 的译文可用状态里列了 zht 时,再按 zht 取一次繁体、转成简体:
+// 两个是各自独立的社区译文,有的曲目只有繁体那份(实测 34 首里 2 首)。只在状态说有时才多发这一次;
+// 状态列表不全,不能反过来拿它跳过 zh 那一次。
+func musixmatchFinishMacro(ctx context.Context, m musixmatchMacro, trLang string) musixmatchResult {
+	if m.subFailed {
+		noteLyricSubFetchFailure(ctx)
+	}
+	var roma string
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		roma = musixmatchRomanizationLRC(ctx, m.match.trackID, m.lrc)
+	}()
+	tr := musixmatchTranslationLRC(ctx, m.match.trackID, m.lrc, trLang)
+	if tr == "" && trLang == "zh" && m.musixmatchHasTranslation("zht") {
+		if hant := musixmatchTranslationLRC(ctx, m.match.trackID, m.lrc, "zht"); hant != "" {
+			tr = toSimplified(hant)
+		}
+	}
+	wg.Wait()
+	dur := m.match.durationSecs
+	if dur <= 0 {
+		dur = m.subLength
+	}
+	return musixmatchResult{lrc: m.lrc, yrc: m.yrc, tr: tr, roma: roma, title: m.match.title, artist: m.match.artist,
+		album: m.match.album, cover: m.match.cover, durationSecs: dur}
+}
+
+// musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且还在新鲜期(musixmatchTokenFreshFor)内直接复用,
+// 否则重新获取。
 func musixmatchEnsureToken(ctx context.Context) string {
 	if t := musixmatchCachedToken(); t != "" {
 		return t
@@ -402,7 +446,7 @@ const musixmatchStaleTokenMaxAge = 24 * time.Hour
 // 每首歌都再要一遍只会被拦得更久。
 const musixmatchTokenFetchCooldown = 5 * time.Minute
 
-// musixmatchStaleToken 返回上一个拿到过的 token(不看 9 分钟那道有效期);没有、太旧或已被拒返回空。
+// musixmatchStaleToken 返回上一个拿到过的 token(不看新鲜期);没有、太旧或已被拒返回空。
 func musixmatchStaleToken() string {
 	musixmatchTokenMu.Lock()
 	defer musixmatchTokenMu.Unlock()
@@ -464,12 +508,12 @@ func musixmatchRejectsToken(body []byte) bool {
 //
 // 实测:250 首抽样里 Musixmatch 只在 5% 出现过,连 Billie Jean、Hello 这种它
 // 必然收录的歌都拿不到。原因不在匹配,在鉴权 —— 匿名 usertoken 只缓存在**进程内存**里、
-// 官方有效期 10 分钟,而"搜索候选歌词"走的是一次性子进程:每调一次都要重新 token.get,
+// 而"搜索候选歌词"走的是一次性子进程:每调一次都要重新 token.get,
 // 一密集就撞 401(官方样例的做法是退避 10 秒重试一次,再失败就放弃),于是这个源整个失效。
 // 常驻的采集器能复用那份内存缓存,一次性 CLI 不能 —— 这正是它在自动解析里勉强能用、在
 // 手动搜索里几乎从不出现的原因。
 //
-// 落盘之后两条路径共用同一个 token,10 分钟内不管起多少个进程都只取一次。
+// 落盘之后两条路径共用同一个 token,新鲜期内不管起多少个进程都只取一次。
 func musixmatchTokenPath() string {
 	if configDir() == "" {
 		return ""
@@ -484,8 +528,14 @@ type musixmatchTokenFile struct {
 	FetchedAt int64 `json:"fetched_at,omitempty"`
 }
 
-// musixmatchTokenFreshFor:拿到的 token 按这么久算新鲜(官方有效期 10 分钟,提前 1 分钟换)。
-const musixmatchTokenFreshFor = 9 * time.Minute
+// musixmatchTokenFreshFor:拿到的 token 按这么久算新鲜,过了才去 token.get 换新。匿名 usertoken 实际能用
+// 很久(实测一个 token 过了 13 小时照常 200;日志里旧 token 被重用 86 次、一次都没被拒),而 token.get
+// 是这个源最容易被按 IP 限流、最容易白等直连预算的一步,见 09 章决策 135。真失效了由数据接口的非 captcha
+// 401 触发 musixmatchRejectToken,当场丢掉重换。
+const musixmatchTokenFreshFor = 6 * time.Hour
+
+// musixmatchLegacyTokenFreshFor:没有 fetched_at 字段的旧 token 文件当初是按 9 分钟新鲜期写的,反推拿到时刻用它。
+const musixmatchLegacyTokenFreshFor = 9 * time.Minute
 
 func musixmatchLoadTokenFile() string {
 	path := musixmatchTokenPath()
@@ -502,7 +552,7 @@ func musixmatchLoadTokenFile() string {
 	}
 	fetchedAt := time.Unix(f.FetchedAt, 0)
 	if f.FetchedAt == 0 {
-		fetchedAt = time.Unix(f.Expiry, 0).Add(-musixmatchTokenFreshFor)
+		fetchedAt = time.Unix(f.Expiry, 0).Add(-musixmatchLegacyTokenFreshFor)
 	}
 	musixmatchTokenMu.Lock()
 	defer musixmatchTokenMu.Unlock()
@@ -585,7 +635,7 @@ func musixmatchFetchToken(ctx context.Context, retry int) string {
 
 // musixmatchPlaceholderToken:token.get 答了 200、给的却是占位值 —— 客户端标识被封时这个接口回的是
 // `UpgradeOnlyUpgradeOnly…`(开源同类项目碰到过;本机日志不记 token 内容,查不到有没有拿到过,也没法主动触发),
-// 或者整串都是同一个字符。当成没拿到:不缓存、不写盘、不当「上一个」留着(否则 9 分钟内每个数据请求都被拒,
+// 或者整串都是同一个字符。当成没拿到:不缓存、不写盘、不当「上一个」留着(否则新鲜期内每个数据请求都被拒,
 // 被拒之后又从磁盘读回同一个占位值)。真 token 不会长这样。
 func musixmatchPlaceholderToken(t string) bool {
 	if strings.Contains(strings.ToLower(t), "upgradeonly") {
@@ -1074,7 +1124,12 @@ func musixmatchRichsync(ctx context.Context, trackID int64) string {
 		}
 		return ""
 	}
-	raw := out.Message.Body.Richsync.RichsyncBody
+	return musixmatchRichsyncBodyToYRC(out.Message.Body.Richsync.RichsyncBody)
+}
+
+// musixmatchRichsyncBodyToYRC 把 richsync_body(一段 JSON 字符串)转成 YRC;空的、解不开的、只有行级
+// 时间的(musixmatchRichsyncIsLineLevel)返回空串。track.richsync.get 与 macro.subtitles.get 两处共用。
+func musixmatchRichsyncBodyToYRC(raw string) string {
 	if raw == "" {
 		return ""
 	}
@@ -1082,7 +1137,35 @@ func musixmatchRichsync(ctx context.Context, trackID int64) string {
 	if json.Unmarshal([]byte(raw), &lines) != nil || len(lines) == 0 {
 		return ""
 	}
+	if musixmatchRichsyncIsLineLevel(lines) {
+		return ""
+	}
 	return richsyncToYRC(lines)
+}
+
+// musixmatchRichsyncIsLineLevel:这份 richsync 其实只有行级时间 —— 八成以上的行整句只算一个「词」
+// (一个非空白元素、文字至少 4 个字)。中文 / 日文歌常见这种形状,转成 YRC 就是一行一个词、填色整行
+// 一起走,却照样拿逐字那一项加分、在界面上标成逐字(见 09 章决策 135)。不到 5 行有字的不判。
+// 「至少 4 个字」挡的是英文里本来就只有一个词的短行(「Yeah」「Oh-oh」)。纯函数,便于单测。
+func musixmatchRichsyncIsLineLevel(lines []musixmatchRichsyncLine) bool {
+	withText, wholeLine := 0, 0
+	for _, l := range lines {
+		words, runes := 0, 0
+		for _, w := range l.L {
+			if t := strings.TrimSpace(w.C); t != "" {
+				words++
+				runes += utf8.RuneCountInString(t)
+			}
+		}
+		if words == 0 {
+			continue
+		}
+		withText++
+		if words == 1 && runes >= 4 {
+			wholeLine++
+		}
+	}
+	return withText >= 5 && float64(wholeLine) > 0.8*float64(withText)
 }
 
 // richsyncToYRC 把 Musixmatch richsync 的行/词绝对时间戳(ts+o,单位秒)转换成

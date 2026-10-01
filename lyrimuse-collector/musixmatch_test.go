@@ -191,7 +191,7 @@ func TestMusixmatchExpiredFileTokenIsKeptUntilRejected(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(musixmatchTokenPath()), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fetched := time.Now().Add(-40 * time.Minute)
+	fetched := time.Now().Add(-musixmatchTokenFreshFor - 10*time.Minute)
 	musixmatchSaveTokenFile("tok-file", fetched, fetched.Add(musixmatchTokenFreshFor))
 	if got := musixmatchLoadTokenFile(); got != "" {
 		t.Fatalf("过了有效期的不该当新鲜的用,实际 %q", got)
@@ -229,7 +229,7 @@ func TestMusixmatchTokenFileWithoutFetchedAt(t *testing.T) {
 	musixmatchTokenMu.Lock()
 	at := musixmatchLastTokenAt
 	musixmatchTokenMu.Unlock()
-	if d := expiry.Add(-musixmatchTokenFreshFor).Sub(at); d > time.Second || d < -time.Second {
-		t.Fatalf("拿到时刻 = %s, want %s", at, expiry.Add(-musixmatchTokenFreshFor))
+	if d := expiry.Add(-musixmatchLegacyTokenFreshFor).Sub(at); d > time.Second || d < -time.Second {
+		t.Fatalf("拿到时刻 = %s, want %s", at, expiry.Add(-musixmatchLegacyTokenFreshFor))
 	}
 }

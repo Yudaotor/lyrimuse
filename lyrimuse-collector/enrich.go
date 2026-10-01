@@ -4661,7 +4661,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// isrc 同 deezer 那路:有值时走 track.get?track_isrc= 直取,绕开这个源最松的那套
 		// 名称搜索(见 musixmatch.go)。
-		r := musixmatchLyric(ctx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
+		// Apple / Spotify ID 让它按录音级身份一次取齐(musixmatchmacro.go):播放器这一拍给的优先,没有就取缓存里存的。
+		// 只在首轮取:补查轮换的是歌手别名,key 本来就对不上,按 ID 那一次首轮也已经试过。
+		mxCtx := ctx
+		if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
+			appleID, spotifyID := musixmatchTrackIDsFor(artist, title, album)
+			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
+		}
+		r := musixmatchLyric(mxCtx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental}
 	}()
 	go func() {
