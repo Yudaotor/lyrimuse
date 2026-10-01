@@ -154,10 +154,10 @@ func lyricSourceForHost(host string) string {
 		return "migu" // 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源
 	case h == "deezer.com" || strings.HasSuffix(h, ".deezer.com"):
 		return "deezer" // 搜索 api.deezer.com、取词 www.deezer.com 都归这一源
-	case h == "amp-api.music.apple.com":
+	case h == "amp-api.music.apple.com" || h == "amp-api-edge.music.apple.com" || h == "api.music.apple.com":
 		// Apple Music 的 catalog API —— applemusic 这个歌词源真正发请求的地方。
 		//
-		// 只认这**一个**主机,别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
+		// 只认这三个主机(主用加搜索、取词各一个备用,见 sourcefallback.go),别扩成 `*.apple.com`,那会把另外两个用途完全不同的主机
 		// 卷进来、让它们的故障去停掉一个能出歌词的源:
 		//   - itunes.apple.com:公开的目录检索(专辑提示/封面/标题反查/目录 id),跟歌词
 		//     正文无关,而且被限流得最狠(实测 49.8% 失败)。它有自己的端点级退避,

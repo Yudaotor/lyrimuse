@@ -1568,6 +1568,25 @@ func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs
 	return !versionTagsMismatch(localTitle, localAlbum, candTitle, candAlbum)
 }
 
+// lyricRecordingTriangleMatchesGuarded 是 lyricRecordingTriangleMatches 外加一道:候选的专辑名就是歌名
+// (单曲;去掉「 - Single」「 - EP」后比)时,专辑对得上证明不了是同一张发行,同名翻唱单曲时长碰巧在
+// 1% 以内就会混进来;这时还要两边歌手名归一后一个包含另一个(「A B」对「AB」、「前缀A」对「A」)。
+// 汽水与 Apple Music 的歌手闸兜底用它,酷狗用不带这道的那个。见 09 章决策 141。
+func lyricRecordingTriangleMatchesGuarded(candTitle, candAlbum, candArtist string, candDurationSecs float64,
+	localTitle, localAlbum, localArtist string, localDurationSecs float64) bool {
+	if !lyricRecordingTriangleMatches(candTitle, candAlbum, candDurationSecs, localTitle, localAlbum, localDurationSecs) {
+		return false
+	}
+	if normLoose(trimSingleOrEPSuffix(candAlbum)) != normLoose(candTitle) {
+		return true
+	}
+	short, long := normLoose(candArtist), normLoose(localArtist)
+	if utf8.RuneCountInString(short) > utf8.RuneCountInString(long) {
+		short, long = long, short
+	}
+	return utf8.RuneCountInString(short) >= 2 && strings.Contains(long, short)
+}
+
 // featCreditSepRe 匹配歌手串里词级的 feat 类分隔("feat."/"feat"/"ft."/"ft"/
 // "featuring",大小写不敏感,可带一个左括号)。只收这几个词:它们作为艺名成分几乎
 // 不存在,而 "with"/"x" 都是真实艺名的常见组成部分(Sleeping With Sirens、Charli xcx),

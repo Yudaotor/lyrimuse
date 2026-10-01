@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 )
 
 // 汽水音乐(Soda Music)歌词源 —— 全部源里第二个能给出**官方逐字**时间轴的(另一个是
@@ -510,7 +509,7 @@ func sodaCoverNeedsTransform(u string) bool {
 // 排序不能直接信:实测搜"方大同 Sorry",第 2 条是 Live 版、第 5 条是 Justin Bieber
 // 的同名歌。所以跟酷我那套一样**自己重新打分**,身份闸用跟别的源完全一致的判定函数
 // (lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch,歌手对不上时加酷狗
-// 那条三角验证并收紧一道,见 sodaRecordingTriangleMatches),不为这一个源另起一套更松的规则;只把
+// 那条三角验证并收紧一道,见 lyricRecordingTriangleMatchesGuarded),不为这一个源另起一套更松的规则;只把
 // 汽水自己的歌名写法先归一(sodaTrackTitle,同酷我的 kuwoSongTitle)。
 const (
 	// sodaSearchPath:搜索端点的路径,主机按 sodaSearchHosts 的顺序试(sourcefallback.go)。
@@ -619,14 +618,14 @@ func sodaTrackTitle(name string) string {
 // sodaCandidateScore 给一条搜索结果打分:分数越高越像本地这首歌,负数 = 淘汰。
 // 判据与取值口径同 kuwoCandidateScore,见那边的注释。纯函数,便于单测。
 //
-// 歌手对不上时还有第二条依据 sodaRecordingTriangleMatches。这样收下的从 0 分起算,排在歌手对得上的后面。
+// 歌手对不上时还有第二条依据 lyricRecordingTriangleMatchesGuarded。这样收下的从 0 分起算,排在歌手对得上的后面。
 func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durationSecs float64) int {
 	if !lyricTitleAccepted(item.Name, title) {
 		return -1
 	}
 	score := 100
 	if !lyricSourceArtistMatches(item.Artist, artist) {
-		if !sodaRecordingTriangleMatches(item, artist, title, album, durationSecs) {
+		if !lyricRecordingTriangleMatchesGuarded(item.Name, item.Album, item.Artist, item.Duration, title, album, artist, durationSecs) {
 			return -1
 		}
 		score = 0
@@ -645,24 +644,6 @@ func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durati
 		score += int((1 - diff) * 50)
 	}
 	return score
-}
-
-// sodaRecordingTriangleMatches:歌名逐字同名 + 专辑对得上 + 时长差在 1% 以内算同一次录音(口径同酷狗,
-// lyricRecordingTriangleMatches),外加一道:候选的专辑名就是歌名(单曲)时,专辑对得上证明不了是同一张
-// 发行,汽水曲库里用户上传的同名翻唱多、专辑名常就是歌名,时长碰巧在 1% 以内就会混进来;这时还要两边
-// 歌手名归一后一个包含另一个(「A B」对「AB」、「前缀A」对「A」)。见 09 章决策 141。
-func sodaRecordingTriangleMatches(item sodaSearchItem, artist, title, album string, durationSecs float64) bool {
-	if !lyricRecordingTriangleMatches(item.Name, item.Album, item.Duration, title, album, durationSecs) {
-		return false
-	}
-	if normLoose(item.Album) != normLoose(item.Name) {
-		return true
-	}
-	short, long := normLoose(item.Artist), normLoose(artist)
-	if utf8.RuneCountInString(short) > utf8.RuneCountInString(long) {
-		short, long = long, short
-	}
-	return utf8.RuneCountInString(short) >= 2 && strings.Contains(long, short)
 }
 
 // sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。

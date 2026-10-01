@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"html"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // applemusicLyric 是歌词第十一个候选来源(Apple Music 官方)。
@@ -99,7 +101,9 @@ const (
 	// applemusicMeStorefrontURL:账号所在区的权威来源。注意它不在 /v1/catalog/ 下,
 	// 所以不能走 applemusicAPIGet。
 	applemusicMeStorefrontURL = "https://amp-api.music.apple.com/v1/me/storefront"
-	applemusicHTTPTimeout     = 8 * time.Second
+	// applemusicStorefrontsURL:各区的元数据(默认语言、支持的语言),见 applemusicStorefrontEnglishTag。
+	applemusicStorefrontsURL = "https://amp-api.music.apple.com/v1/storefronts/"
+	applemusicHTTPTimeout    = 8 * time.Second
 	// applemusicScoreDurationTolerance 跟别的源的时长闸门(match.go 的 0.25)取同一个值。
 	applemusicScoreDurationTolerance = 0.25
 	// applemusicMaxCandidatesToFetch:通过身份闸后最多拉几条。Apple 的 catalog search
@@ -642,8 +646,33 @@ func (s applemusicSong) cover() string {
 // (搜索不带也能过)。401/403 时把 developer token 作废并重试一次 —— 但**只在没带
 // userToken 时**这么判:带了 userToken 的 401/403 更可能是用户令牌过期,重抓 developer
 // token 没有意义,直接把原因记成 applemusicTokenRejected 让 UI 去提示重连。
+//
+// 主机按 applemusicSearchBases(不带 userToken)或 applemusicLyricsBases(带)的顺序试,只在传输失败 / 5xx
+// 时换下一个;其余状态码是答了,原样交给调用方。
 func applemusicAPIGet(ctx context.Context, path, devToken, userToken string) ([]byte, int, error) {
-	u := applemusicAMPBase + path
+	bases := applemusicSearchBases
+	if userToken != "" {
+		bases = applemusicLyricsBases
+	}
+	var raw []byte
+	var status int
+	err := tryEach(ctx, bases, func(base string) error {
+		var e error
+		raw, status, e = applemusicAPIGetAt(ctx, base, path, devToken, userToken)
+		if e == nil && status >= 500 {
+			return fmt.Errorf("status %d", status)
+		}
+		return e
+	})
+	if err != nil && status >= 500 {
+		// 主机都回 5xx:状态码照样交出去,调用方按非 200 处理。
+		return raw, status, nil
+	}
+	return raw, status, err
+}
+
+func applemusicAPIGetAt(ctx context.Context, base, path, devToken, userToken string) ([]byte, int, error) {
+	u := base + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, 0, err
@@ -666,10 +695,14 @@ func applemusicAPIGet(ctx context.Context, path, devToken, userToken string) ([]
 	return raw, resp.StatusCode, nil
 }
 
-// applemusicSearch 搜候选。只需要 developer token。
-func applemusicSearch(ctx context.Context, storefront, artist, title, devToken string) ([]applemusicSong, error) {
+// applemusicSearch 在 storefront 这个区搜候选,lang 非空时按这种语言回名字(l 参数,必须是这个区支持的,
+// 不支持的 Apple 静默照默认语言答)。只需要 developer token。
+func applemusicSearch(ctx context.Context, storefront, lang, artist, title, devToken string) ([]applemusicSong, error) {
 	q := strings.TrimSpace(artist + " " + title)
 	path := neturl.PathEscape(storefront) + "/search?types=songs&limit=10&term=" + neturl.QueryEscape(q)
+	if lang != "" {
+		path += "&l=" + neturl.QueryEscape(lang)
+	}
 	raw, status, err := applemusicAPIGet(ctx, path, devToken, "")
 	if err != nil {
 		return nil, err
@@ -702,6 +735,92 @@ func applemusicSearch(ctx context.Context, storefront, artist, title, devToken s
 	return out.Results.Songs.Data, nil
 }
 
+// applemusicSearchVariant:再搜一次用的区和语言。
+type applemusicSearchVariant struct{ storefront, lang string }
+
+// applemusicFallbackSearches:用户所在区的搜索一条候选都挑不出时,还值得再搜的几种。取词仍走用户所在区
+// (曲目 id 各区通用)。见 09 章决策 142。
+//   - 本地歌手名不含中日韩文字:同一个区按这个区支持的英文再搜。cn 这类区把外国歌手名译成本地文字,
+//     英文下回原名。
+//   - 歌名或歌手带假名 / 谚文:到 jp / kr 区搜。cn 区给不少日韩歌登记的是英文或罗马字名。
+func applemusicFallbackSearches(ctx context.Context, storefront, artist, title, devToken string) []applemusicSearchVariant {
+	var out []applemusicSearchVariant
+	if !containsCJKScript(artist) {
+		if tag := applemusicStorefrontEnglishTag(ctx, storefront, devToken); tag != "" {
+			out = append(out, applemusicSearchVariant{storefront, tag})
+		}
+	}
+	if storefront != "jp" && containsKana(artist+title) {
+		out = append(out, applemusicSearchVariant{"jp", ""})
+	}
+	if storefront != "kr" && strings.ContainsFunc(artist+title, func(r rune) bool { return unicode.Is(unicode.Hangul, r) }) {
+		out = append(out, applemusicSearchVariant{"kr", ""})
+	}
+	return out
+}
+
+var (
+	applemusicEnglishTagMu sync.Mutex
+	// applemusicEnglishTags:storefront → 这个区支持的英文语言标签,默认语言就是英文或不支持英文时为空串。只存问成了的。
+	applemusicEnglishTags = map[string]string{}
+)
+
+// applemusicStorefrontEnglishTag:这个区支持的英文语言标签(实测 cn / kr / tw 是 en-GB,jp 是 en-US),
+// 默认语言本来就是英文或不支持英文时返回空串。每个区只问一次。
+func applemusicStorefrontEnglishTag(ctx context.Context, storefront, devToken string) string {
+	applemusicEnglishTagMu.Lock()
+	tag, ok := applemusicEnglishTags[storefront]
+	applemusicEnglishTagMu.Unlock()
+	if ok {
+		return tag
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, applemusicStorefrontsURL+neturl.PathEscape(storefront), nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+devToken)
+	req.Header.Set("Origin", applemusicWebOrigin)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := doHTTPTracked(lyricHTTPClient(applemusicHTTPTimeout), req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var out struct {
+		Data []struct {
+			Attributes struct {
+				DefaultLanguageTag    string   `json:"defaultLanguageTag"`
+				SupportedLanguageTags []string `json:"supportedLanguageTags"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out) != nil || len(out.Data) == 0 {
+		return ""
+	}
+	tag = applemusicEnglishTagFrom(out.Data[0].Attributes.DefaultLanguageTag, out.Data[0].Attributes.SupportedLanguageTags)
+	applemusicEnglishTagMu.Lock()
+	applemusicEnglishTags[storefront] = tag
+	applemusicEnglishTagMu.Unlock()
+	return tag
+}
+
+// applemusicEnglishTagFrom 从一个区的默认语言和支持的语言里挑英文标签。纯函数,便于单测。
+func applemusicEnglishTagFrom(defaultTag string, supported []string) string {
+	isEnglish := func(t string) bool { return t == "en" || strings.HasPrefix(t, "en-") }
+	if isEnglish(defaultTag) {
+		return ""
+	}
+	for _, t := range supported {
+		if isEnglish(t) {
+			return t
+		}
+	}
+	return ""
+}
+
 // applemusicCandidateScore 给一条搜索结果打分:负数 = 淘汰。身份闸用跟别的源完全一致的
 // 判定函数,不为这一个源另起一套更松的规则;时长闸与加分的口径跟 deezer/kuwo 一致。
 //
@@ -720,8 +839,13 @@ func applemusicCandidateScore(s applemusicSong, artist, title, album string, dur
 	if !lyricTitleAccepted(a.Name, title) {
 		return -1
 	}
+	// 歌手写法对不上时的第二条依据,口径同汽水。这样收下的分数压在 100 以下,排在歌手对得上的后面。
+	byTriangle := false
 	if !lyricSourceArtistMatches(a.ArtistName, artist) {
-		return -1
+		if !lyricRecordingTriangleMatchesGuarded(a.Name, a.AlbumName, a.ArtistName, float64(a.DurationInMillis)/1000, title, album, artist, durationSecs) {
+			return -1
+		}
+		byTriangle = true
 	}
 	if versionTagsMismatch(title, album, a.Name, a.AlbumName) {
 		return -1
@@ -730,6 +854,12 @@ func applemusicCandidateScore(s applemusicSong, artist, title, album string, dur
 	// 有时间轴的优先 —— 同分时先取它,省得挑到只有纯文本的那条。
 	if a.HasTimeSynced {
 		score += 200
+	}
+	if byTriangle {
+		score = 0
+		if a.HasTimeSynced {
+			score = 40
+		}
 	}
 	if durationSecs > 0 {
 		d := float64(a.DurationInMillis) / 1000
@@ -951,7 +1081,7 @@ func applemusicKeyedLRC(ttml, block string) string {
 // resolveApplemusicLyric:①确认用户令牌在手(没有就直接判 applemusic_not_connected,
 // 一个网络请求都不发);②搜索;③身份闸淘汰、按分数排序;④按名次逐条取词 ——
 // **先逐字后逐行**,逐字那份同时也能产出逐行(parseAMLLTTML 会一并给出 lrc),
-// 所以只有逐字不存在时才退到 /lyrics。
+// 所以只有逐字不存在时才退到 /lyrics;所有候选都没有带时间轴的,才交出第一份纯文本。
 //
 // 跟 deezer 那条路的一个刻意差别:这里**不并发**取词。Apple 对 amp-api 的限流比
 // Deezer 严,而搜索结果第一条几乎总是对的(hasTimeSynced 还额外加了 200 分把有时间轴的
@@ -974,55 +1104,95 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 		}
 	}
 
-	songs, err := applemusicSearch(ctx, storefront, artist, title, devToken)
-	if err != nil || len(songs) == 0 {
+	songs, err := applemusicSearch(ctx, storefront, "", artist, title, devToken)
+	if err != nil {
 		return applemusicResult{}
 	}
-
-	type scoredSong struct {
-		song  applemusicSong
-		score int
-	}
-	var candidates []scoredSong
-	for _, s := range songs {
-		if sc := applemusicCandidateScore(s, artist, title, album, durationSecs); sc >= 0 {
-			candidates = append(candidates, scoredSong{s, sc})
+	candidates := applemusicRankCandidates(songs, artist, title, album, durationSecs)
+	if len(candidates) == 0 {
+		for _, v := range applemusicFallbackSearches(ctx, storefront, artist, title, devToken) {
+			if songs, err := applemusicSearch(ctx, v.storefront, v.lang, artist, title, devToken); err == nil {
+				if candidates = applemusicRankCandidates(songs, artist, title, album, durationSecs); len(candidates) > 0 {
+					break
+				}
+			}
 		}
 	}
 	if len(candidates) == 0 {
 		return applemusicResult{}
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
-	if len(candidates) > applemusicMaxCandidatesToFetch {
-		candidates = candidates[:applemusicMaxCandidatesToFetch]
-	}
 
-	for _, c := range candidates {
-		id := c.song.ID
-		// 逐字优先:它同时给得出逐行,拿到就不用再打 /lyrics。
-		if c.song.Attributes.HasTimeSynced {
-			if ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken); err != nil {
-				return applemusicResult{} // 令牌被拒之类,继续试别的候选也是白试
-			} else if p, ok := applemusicParseTTML(ttml); ok && p.lrc != "" {
-				return applemusicResultFrom(c.song, p, false)
-			}
-			if ttml, err := applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
+	// 只有纯文本的候选先记下第一份,所有候选都没有带时间轴的才交出它(plainOnly,分数恒 -1,只有用户手点才采用)。
+	var plain applemusicResult
+	for _, song := range candidates {
+		if !plain.empty() && !song.Attributes.HasTimeSynced {
+			break // 已经有一份纯文本了,后面标着没有时间轴的不再试(候选按有没有时间轴排过序)
+		}
+		id := song.ID
+		// 一律先问逐字端点,不看搜索结果的 hasTimeSyncedLyrics:标着 false 的也可能在这里拿到逐行时间轴,
+		// 只有纯文本的歌这里回的是同一份不带时间的 TTML(见 09 章决策 142)。这个端点没有时才问 /lyrics。
+		ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken)
+		if err != nil {
+			return applemusicResult{} // 令牌被拒之类,继续试别的候选也是白试
+		}
+		if ttml == "" {
+			if ttml, err = applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
 				return applemusicResult{}
-			} else if p, ok := applemusicParseTTML(ttml); ok && p.lrc != "" {
-				return applemusicResultFrom(c.song, p, !isTimedLRC(p.lrc))
 			}
+		}
+		p, ok := applemusicParseTTML(ttml)
+		if ok && isTimedLRC(p.lrc) {
+			return applemusicResultFrom(song, p, false)
+		}
+		if !plain.empty() {
 			continue
 		}
-		// 只有纯文本的歌:仍然取回来走 plainOnly 通道(分数恒 -1,只有用户手点才采用)。
-		ttml, err := applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken)
-		if err != nil {
-			return applemusicResult{}
-		}
-		if p, ok := applemusicParseTTML(ttml); ok && p.lrc != "" {
-			return applemusicResultFrom(c.song, p, !isTimedLRC(p.lrc))
+		if txt := applemusicPlainLyrics(ttml); txt != "" {
+			plain = applemusicResultFrom(song, amllResult{lrc: txt}, true)
 		}
 	}
-	return applemusicResult{}
+	return plain
+}
+
+// applemusicPlainLyrics 把不带时间的 TTML(itunes:timing="None",<p> 没有 begin)按行取出正文,拼成纯文本。
+// 带时间的 TTML 也照样只取正文。
+func applemusicPlainLyrics(ttml string) string {
+	var doc ttmlDoc
+	if strings.TrimSpace(ttml) == "" || xml.Unmarshal([]byte(ttml), &doc) != nil {
+		return ""
+	}
+	var lines []string
+	for _, div := range doc.Divs {
+		for _, ln := range div.Lines {
+			if t := strings.TrimSpace(ttmlLiteralText(ln.Kids)); t != "" {
+				lines = append(lines, t)
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// applemusicRankCandidates 过身份闸、按分数排序,最多留 applemusicMaxCandidatesToFetch 条。纯函数,便于单测。
+func applemusicRankCandidates(songs []applemusicSong, artist, title, album string, durationSecs float64) []applemusicSong {
+	type scoredSong struct {
+		song  applemusicSong
+		score int
+	}
+	var kept []scoredSong
+	for _, s := range songs {
+		if sc := applemusicCandidateScore(s, artist, title, album, durationSecs); sc >= 0 {
+			kept = append(kept, scoredSong{s, sc})
+		}
+	}
+	sort.SliceStable(kept, func(i, j int) bool { return kept[i].score > kept[j].score })
+	out := make([]applemusicSong, 0, min(len(kept), applemusicMaxCandidatesToFetch))
+	for _, k := range kept {
+		if len(out) == applemusicMaxCandidatesToFetch {
+			break
+		}
+		out = append(out, k.song)
+	}
+	return out
 }
 
 // applemusicResultFrom 把一条 song + 解析好的歌词拼成结果。原是 resolveApplemusicLyric

@@ -20,14 +20,16 @@ import (
 //     api.qishui.com(同一个 /luna/h5/seo_track),两个都没问成或应答认不出形状时取曲目分享页(soda.go sodaFetchSharePage)
 //   - YouTube Music:music.youtube.com → youtubei.googleapis.com → www.youtube.com(同一套 InnerTube)
 //   - AMLL:raw.githubusercontent.com → jsDelivr 的两个镜像;404 是「库里没有这首」,不换镜像
+//   - Apple Music:搜索 amp-api → api.music.apple.com,取词 amp-api → amp-api-edge(api.music 搜得到同样的结果、
+//     取词回 400;amp-api-edge 取词逐字节相同、搜索回 200 却是空结果,所以两个端点各有各的备用)。只在传输失败 / 5xx
+//     时换:401 / 403 / 404 / 429 是答了,令牌、这首没词、限流都跟主机无关
 //   - Musixmatch:apic-appmobile → apic(同一个 app_id,token 互认,同一请求答的内容一致)。换不换、先问哪个
 //     见 musixmatchDo;答了 captcha 不换,token.get 的限流按 IP 算,两个主机共用
 //
-// 没有备用的:lrclib(只有 lrclib.net 一个公共实例)、Deezer(api / pipe / auth 各只有一个主机)、
-// Apple Music(amp-api 只有一个,还要登录)。Musixmatch 的 apic-desktop 不能当备用:换 token 只给全零的占位值,
-// macro 答 200 却是诱饵数据。
+// 没有备用的:lrclib(只有 lrclib.net 一个公共实例)、Deezer(api / pipe / auth 各只有一个主机)。
+// Musixmatch 的 apic-desktop 不能当备用:换 token 只给全零的占位值,macro 答 200 却是诱饵数据。
 //
-// 主机都逐个实测过,实测记录见 docs/features/09 第 90 条;Musixmatch 的备用主机见第 135 条。
+// 主机都逐个实测过,实测记录见 docs/features/09 第 90 条;Musixmatch 的备用主机见第 135 条,Apple Music 的见第 142 条。
 
 var (
 	kuwoSearchEndpoints = []string{
@@ -45,6 +47,9 @@ var (
 		"https://cdn.jsdelivr.net/gh/amll-dev/amll-ttml-db@main",
 		"https://fastly.jsdelivr.net/gh/amll-dev/amll-ttml-db@main",
 	}
+	// applemusicSearchBases / applemusicLyricsBases:主用在前,按请求带不带用户令牌选(applemusicAPIGet)。
+	applemusicSearchBases = []string{"https://amp-api.music.apple.com/v1/catalog/", "https://api.music.apple.com/v1/catalog/"}
+	applemusicLyricsBases = []string{"https://amp-api.music.apple.com/v1/catalog/", "https://amp-api-edge.music.apple.com/v1/catalog/"}
 	// musixmatchBases:主用在前。单测会把它整个换成本地假服务器。
 	musixmatchBases = []string{"https://apic-appmobile.musixmatch.com/ws/1.1/", "https://apic.musixmatch.com/ws/1.1/"}
 )
