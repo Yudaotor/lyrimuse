@@ -16,6 +16,8 @@
 
 </div>
 
+https://github.com/user-attachments/assets/9dd7fc53-a257-4a9b-bf03-01c583830b4d
+
 Lyrimuse 是一款开源的 Mac 桌面歌词软件。它待在菜单栏里，跟随播放逐字高亮歌词，可以常驻置顶、悬浮在所有窗口之上，也可以放进菜单栏、刘海下的灵动岛胶囊或完整的歌词窗口。支持 Apple Music、Spotify、QQ 音乐、网易云音乐等八款播放器和浏览器里的网页播放器，并从十二个歌词源中打分挑选最合适的版本，还能显示翻译和读音。另外还内置 Last.fm 听歌档案和打卡。
 
 **从 LyricsX 过来？** LyricsX 自 2022 年 4 月后就没有再发布新版本。Lyrimuse 覆盖了它的核心功能并持续更新，还补上了国内播放器、KKBOX、Amazon Music 和网页播放器的支持。详细差异见这份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
