@@ -5,6 +5,7 @@
 //   swift lyrimuse/scripts/check-windows.swift              # 列出全部窗口
 //   swift lyrimuse/scripts/check-windows.swift --require-overlay
 //   swift lyrimuse/scripts/check-windows.swift --owner Music
+//   swift lyrimuse/scripts/check-windows.swift --menubar-items   # 各 App 的菜单栏项位置(要辅助功能权限)
 //
 // 为什么要有这个脚本:验证"悬浮歌词到底有没有画出来"以前只有两条路 —— 肉眼看,或者用
 // AppleScript 去驱动界面。后者在这个项目上出过两次事故(盲发 Cmd+W 关掉了用户正在用的
@@ -27,11 +28,14 @@
 // 起一个已知 frame 的探针窗口先量出这块屏的偏差。本脚本适合回答的是"在没在屏、是哪块屏、
 // 大致多大"这类问题。
 //
+import AppKit
+import ApplicationServices
 import CoreGraphics
 import Foundation
 
 var owner = "Lyrimuse"
 var requireOverlay = false
+var menubarItems = false
 var args = Array(CommandLine.arguments.dropFirst())
 while let arg = args.first {
     args.removeFirst()
@@ -42,11 +46,16 @@ while let arg = args.first {
         args.removeFirst()
     case "--require-overlay":
         requireOverlay = true
+    case "--menubar-items":
+        menubarItems = true
     case "-h", "--help":
         print("""
-        用法: check-windows.swift [--owner <App名>] [--require-overlay]
+        用法: check-windows.swift [--owner <App名>] [--require-overlay | --menubar-items]
           --owner            要查的 App，默认 Lyrimuse
           --require-overlay  找不到可见的歌词悬浮窗就以非零码退出，可用作断言
+          --menubar-items    从左到右列出所有 App 的菜单栏项（位置、宽度），--owner 那个 App 的项前面标 *。
+                             菜单栏项不在窗口列表里，这一项改读辅助功能接口的只读属性（不点、不发动作），
+                             运行脚本的终端要有「辅助功能」权限；读到的是系统记的位置，像素有没有排坏仍要截图对照
 
         ⚠️ --require-overlay 的前提是**正在播放**。开着「暂停/无播放时隐藏悬浮窗」
            这个设置时，停播状态下悬浮窗 onscreen=false 是正确行为，不是故障。
@@ -55,6 +64,66 @@ while let arg = args.first {
     default:
         print("不认识的参数: \(arg)"); exit(2)
     }
+}
+
+// 菜单栏项（MenuBarExtra / NSStatusItem）不在 CGWindowList 里，只能读各 App 的 AXExtrasMenuBar。
+// 只读属性；每个 App 的消息超时设 0.5 秒，没响应的 App 不会把脚本挂住。
+func axRawValue(_ el: AXUIElement, _ attr: String) -> AXValue? {
+    var raw: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(el, attr as CFString, &raw) == .success, let raw,
+          CFGetTypeID(raw) == AXValueGetTypeID() else { return nil }
+    return (raw as! AXValue)
+}
+
+func axPoint(_ el: AXUIElement) -> CGPoint? {
+    guard let v = axRawValue(el, kAXPositionAttribute) else { return nil }
+    var out = CGPoint.zero
+    return AXValueGetValue(v, .cgPoint, &out) ? out : nil
+}
+
+func axSize(_ el: AXUIElement) -> CGSize? {
+    guard let v = axRawValue(el, kAXSizeAttribute) else { return nil }
+    var out = CGSize.zero
+    return AXValueGetValue(v, .cgSize, &out) ? out : nil
+}
+
+func axString(_ el: AXUIElement, _ attr: String) -> String {
+    var raw: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(el, attr as CFString, &raw) == .success else { return "" }
+    return raw as? String ?? ""
+}
+
+if menubarItems {
+    guard AXIsProcessTrusted() else {
+        print("读不到菜单栏项：运行这个脚本的终端没有「辅助功能」权限（系统设置 › 隐私与安全性 › 辅助功能）")
+        exit(1)
+    }
+    struct MenuBarItem { let app: String; let label: String; let frame: CGRect }
+    var items: [MenuBarItem] = []
+    for app in NSWorkspace.shared.runningApplications {
+        let el = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(el, 0.5)
+        var bar: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(el, "AXExtrasMenuBar" as CFString, &bar) == .success,
+              let bar else { continue }
+        var children: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(bar as! AXUIElement, kAXChildrenAttribute as CFString, &children) == .success,
+              let kids = children as? [AXUIElement] else { continue }
+        for kid in kids {
+            guard let pos = axPoint(kid), let size = axSize(kid) else { continue }
+            let label = [axString(kid, kAXTitleAttribute), axString(kid, kAXDescriptionAttribute),
+                         axString(kid, "AXIdentifier")].first { !$0.isEmpty } ?? ""
+            items.append(MenuBarItem(app: app.localizedName ?? app.bundleIdentifier ?? "pid \(app.processIdentifier)",
+                                     label: label, frame: CGRect(origin: pos, size: size)))
+        }
+    }
+    if items.isEmpty { print("一个菜单栏项都没读到"); exit(1) }
+    for item in items.sorted(by: { $0.frame.minX < $1.frame.minX }) {
+        let mark = item.app.localizedCaseInsensitiveContains(owner) ? "*" : " "
+        let label = item.label.isEmpty ? "(无标签)" : item.label
+        print("\(mark) x=\(Int(item.frame.minX)) w=\(Int(item.frame.width)) h=\(Int(item.frame.height)) \(item.app) · \(label)")
+    }
+    exit(0)
 }
 
 guard let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
@@ -93,11 +162,15 @@ if windows.isEmpty {
 
 // 窗口层级(kCGWindowLayer)在这个 App 里的实际取值,实测:
 //   0     普通窗口（设置 / 歌词窗口 / 歌词管理）
-//   3     歌词悬浮层（经典悬浮歌词、灵动岛卡片）
-//   ≥1000 菜单栏那一项（滚动歌词的 MenuBarExtra，实测 layer=1000、约 179x32）
-// 菜单栏项必须跟悬浮窗分开 —— 它常驻在屏，混进去会让"悬浮窗可见"这个断言永远为真。
+//   >0    歌词悬浮层（经典悬浮歌词等）
+//   ≥1000 高度不超过菜单栏的是菜单栏那一项（旧系统上 MenuBarExtra 约 179x32）；更高的是罩在刘海上的
+//         灵动岛卡片（macOS 27 实测 layer=1000、约 468x190，那一版菜单栏项本身不在窗口列表里，
+//         要看菜单栏项用 --menubar-items）
+// 菜单栏项和灵动岛卡片都不算悬浮窗 —— 混进去会让"悬浮窗可见"这个断言永远为真。
+let menuBarMaxHeight: CGFloat = 50
+
 func kind(of w: WindowInfo) -> String {
-    if w.layer >= 1000 { return "menubar" }
+    if w.layer >= 1000 { return w.bounds.height <= menuBarMaxHeight ? "menubar" : "notch  " }
     if w.layer > 0 { return "overlay" }
     return "window "
 }
