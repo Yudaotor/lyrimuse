@@ -266,6 +266,31 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
+# 编译读的是 .build/source-snapshot 里的源码副本,不是工作树。多个会话共用这棵工作树,一次构建
+# 要十几分钟,期间别的会话写源码会被编进这次构建(半截改动,或者 App 和引擎取到不同时刻的源码)。
+# 快照在拿到上面的排队锁之后一次拍完(rsync,几秒),之后工作树怎么改都不影响这次构建。
+# - 快照目录固定、rsync 保留 mtime,SwiftPM 与 go 的增量编译照常生效;快照有自己的 .build。
+# - 快照的 .build 第一次建时,从工作树 .build 克隆已下载的依赖(checkouts / repositories /
+#   artifacts),不用联网重拉。workspace-state.json 不复制:它记着工作树 .build 的绝对路径。
+# - 包管理器构建(设了 LYRIMUSE_SPM_SCRATCH_PATH / LYRIMUSE_SPM_CACHE_PATH)只许写自己那棵树、
+#   也没有别的写入者,直接编工作树;LYRIMUSE_NO_SOURCE_SNAPSHOT=1 同样直接编工作树(排查用)。
+if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] \
+    && [ -z "${LYRIMUSE_SPM_CACHE_PATH:-}" ]; then
+  SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
+  echo "==> snapshotting sources into $SNAPSHOT_ROOT"
+  mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-collector"
+  rsync -a --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
+  rsync -a --delete --exclude=/collector --exclude=.DS_Store ../lyrimuse-collector/ "$SNAPSHOT_ROOT/lyrimuse-collector/"
+  cp -p ../THIRD_PARTY_LICENSES "$SNAPSHOT_ROOT/THIRD_PARTY_LICENSES"
+  if [ ! -d "$SNAPSHOT_ROOT/lyrimuse/.build" ]; then
+    mkdir -p "$SNAPSHOT_ROOT/lyrimuse/.build"
+    for dep in checkouts repositories artifacts; do
+      if [ -d ".build/$dep" ]; then cp -cR ".build/$dep" "$SNAPSHOT_ROOT/lyrimuse/.build/"; fi
+    done
+  fi
+  cd "$SNAPSHOT_ROOT/lyrimuse"
+fi
+
 echo "==> building (release) [$ARCHES]"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
 # 出 universal —— 后者要走 xcbuild

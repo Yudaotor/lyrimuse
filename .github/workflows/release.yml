@@ -258,10 +258,12 @@ jobs:
           # and this step also holds SPARKLE_PRIVATE_KEY.
           NOTES_RAW: ${{ needs.tag.outputs.body }}
         run: |
-          # build.sh builds from lyrimuse/, so SwiftPM artifacts live under lyrimuse/.build/.
-          SIGN_UPDATE=$(find lyrimuse/.build/artifacts/sparkle -type f -name sign_update | head -1)
+          # build.sh compiles a source snapshot (lyrimuse/.build/source-snapshot/lyrimuse/), so the
+          # Sparkle artifacts land in that snapshot's own .build; search all of lyrimuse/.build.
+          # Pin bin/sign_update: the artifact also ships old_dsa_scripts/sign_update.
+          SIGN_UPDATE=$(find lyrimuse/.build -type f -name sign_update -path '*/artifacts/sparkle/Sparkle/bin/sign_update' | head -1)
           if [ -z "$SIGN_UPDATE" ]; then
-            echo "sign_update not found under lyrimuse/.build/artifacts/sparkle -- did the build step resolve the Sparkle SPM dependency?" >&2
+            echo "sign_update not found under lyrimuse/.build (*/artifacts/sparkle/Sparkle/bin/) -- did the build step resolve the Sparkle SPM dependency?" >&2
             exit 1
           fi
           chmod +x "$SIGN_UPDATE"
