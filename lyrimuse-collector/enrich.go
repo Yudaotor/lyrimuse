@@ -4746,8 +4746,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 用户没连过 Apple Music 时它安静返回空(applemusic_not_connected),不是故障。
 		// Apple 目录 id 由播放侧顺带记下(platformtrackid.go,同 amll 那路);有它就能先问
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
+		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
 		appleID, _ := playbackTrackIDsFor(artist, title, album)
-		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID)
+		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {

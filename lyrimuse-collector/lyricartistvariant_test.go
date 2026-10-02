@@ -40,6 +40,16 @@ func TestLyricSourceArtistMatches(t *testing.T) {
 		// 空串。
 		{"", "UMI & 金泰亨", false},
 		{"UMI、V", "", false},
+		// 冠词 The 一侧有、一侧没有:剩下至少两个词才认。
+		{"The Jackson 5", "Jackson 5", true},
+		{"Jackson 5", "The Jackson 5", true},
+		{"THE JACKSON 5", "jackson 5", true},
+		{"The Jackson 5/Michael Jackson", "Jackson 5", true},
+		{"The Red Clay Strays", "Red Clay Strays", true},
+		{"ROSÉ", "The Rose", false},
+		{"Weeknd", "The Weeknd", false},
+		{"Theodore Shapiro", "odore Shapiro", false},
+		{"The", "the", true},
 	}
 	for _, c := range cases {
 		if got := lyricSourceArtistMatches(c.candidate, c.query); got != c.want {

@@ -1438,6 +1438,19 @@ func artistCreditBoundaryAfter(s string) bool {
 	return isArtistCreditSep(r)
 }
 
+// lyricArtistWithoutThe 去掉歌手名开头的冠词「The 」,只在剩下的至少两个词时去(「The Jackson 5」→「Jackson 5」);
+// 剩一个词的不去:单个常见词去掉变音符号之后,容易跟别的歌手撞成同一个名字。别的原样返回。见 09 章决策 146。
+func lyricArtistWithoutThe(s string) string {
+	t := strings.TrimSpace(s)
+	if len(t) <= len("the ") || !strings.EqualFold(t[:len("the ")], "the ") {
+		return s
+	}
+	if rest := strings.TrimSpace(t[len("the "):]); len(strings.Fields(rest)) >= 2 {
+		return rest
+	}
+	return s
+}
+
 // lyricSourceArtistMatches 是**歌词源候选采纳闸**专用的歌手匹配:在 artistMatches 之上
 // 多放一档"两侧都是多人合credit 时,拆段后有任意一段相等即通过"。
 //
@@ -1457,6 +1470,10 @@ func artistCreditBoundaryAfter(s string) bool {
 // 被重新打开。
 func lyricSourceArtistMatches(candidate, query string) bool {
 	if artistMatches(candidate, query) {
+		return true
+	}
+	// 冠词「The」一侧有、一侧没有(本地「Jackson 5」对源里「The Jackson 5」),见 lyricArtistWithoutThe。
+	if c, q := lyricArtistWithoutThe(candidate), lyricArtistWithoutThe(query); (c != candidate || q != query) && artistMatches(c, q) {
 		return true
 	}
 	pc, pq := artistCreditParts(foldDiacritics(candidate)), artistCreditParts(foldDiacritics(query))

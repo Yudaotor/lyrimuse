@@ -1079,14 +1079,17 @@ func applemusicKeyedLRC(ttml, block string) string {
 }
 
 // resolveApplemusicLyric:①确认用户令牌在手(没有就直接判 applemusic_not_connected,
-// 一个网络请求都不发);②搜索;③身份闸淘汰、按分数排序;④按名次逐条取词 ——
-// **先逐字后逐行**,逐字那份同时也能产出逐行(parseAMLLTTML 会一并给出 lrc),
-// 所以只有逐字不存在时才退到 /lyrics;所有候选都没有带时间轴的,才交出第一份纯文本。
+// 一个网络请求都不发);②isrc 非空时按 ISRC 直取这条录音的各个上架条目(applemusicSongsByISRC),专辑跟本地对得上的
+// 先取词;③按名字搜索、身份闸淘汰、按分数排序(applemusicNameCandidates),按名次逐条取词;④还没有带时间轴的,
+// 再取 ISRC 条目里专辑对不上的那些。取词**先逐字后逐行**,逐字那份同时也能产出逐行(parseAMLLTTML 会一并给出 lrc),
+// 所以只有逐字不存在时才退到 /lyrics;所有候选都没有带时间轴的,才交出第一份纯文本(按上面的先后)。
 //
 // 跟 deezer 那条路的一个刻意差别:这里**不并发**取词。Apple 对 amp-api 的限流比
 // Deezer 严,而搜索结果第一条几乎总是对的(hasTimeSynced 还额外加了 200 分把有时间轴的
 // 顶到前面),顺序取到第一条有词的就停,通常只花一个往返。
-func resolveApplemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64) applemusicResult {
+//
+// isrc:这次播放的这条录音的 ISRC(lyricSourceISRC;只有 Spotify 原生客户端在播时有),没有时为空。
+func resolveApplemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, isrc string) applemusicResult {
 	userToken, storefront := applemusicLoadUserToken()
 	if userToken == "" {
 		applemusicSetLastFailureReason(lyricFailureReasonAppleMusicNotConnected)
@@ -1104,45 +1107,86 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 		}
 	}
 
+	tried := map[string]bool{}
+	var plain applemusicResult
+	// try 给一组候选取词:取到带时间轴的、或者令牌被拒(整路放弃)时 done。纯文本只记第一份。
+	try := func(candidates []applemusicSong) (r applemusicResult, done bool) {
+		timed, p, fatal := applemusicFetchCandidates(ctx, storefront, candidates, tried, devToken, userToken)
+		if fatal {
+			return applemusicResult{}, true
+		}
+		if plain.empty() {
+			plain = p
+		}
+		return timed, !timed.empty()
+	}
+
+	// 按 ISRC 直取:拿到的是正在播的这条录音本身,歌名 / 歌手写法跟本地对不上也取得到(Apple 上的名字常多带
+	// 「feat.」「(Live)」这类尾巴)。条目的专辑跟本地对不上(这条录音只挂在合辑下)时排到名字检索后面,
+	// 名字挑得中时用名字挑的那条。见 09 章决策 146。
+	var onAlbum, offAlbum []applemusicSong
+	if isrc != "" {
+		onAlbum, offAlbum = applemusicISRCCandidates(applemusicSongsByISRC(ctx, storefront, isrc, devToken), album, durationSecs)
+		if r, done := try(onAlbum); done {
+			return r
+		}
+	}
+	if r, done := try(applemusicNameCandidates(ctx, storefront, artist, title, album, durationSecs, devToken)); done {
+		return r
+	}
+	if r, done := try(offAlbum); done {
+		return r
+	}
+	return plain
+}
+
+// applemusicNameCandidates 按名字搜候选:用户所在区搜一次,一条都挑不出时按 applemusicFallbackSearches 再搜。
+// 搜索没问成或挑不出返回 nil。
+func applemusicNameCandidates(ctx context.Context, storefront, artist, title, album string, durationSecs float64, devToken string) []applemusicSong {
 	songs, err := applemusicSearch(ctx, storefront, "", artist, title, devToken)
 	if err != nil {
-		return applemusicResult{}
+		return nil
 	}
-	candidates := applemusicRankCandidates(songs, artist, title, album, durationSecs)
-	if len(candidates) == 0 {
-		for _, v := range applemusicFallbackSearches(ctx, storefront, artist, title, devToken) {
-			if songs, err := applemusicSearch(ctx, v.storefront, v.lang, artist, title, devToken); err == nil {
-				if candidates = applemusicRankCandidates(songs, artist, title, album, durationSecs); len(candidates) > 0 {
-					break
-				}
+	if candidates := applemusicRankCandidates(songs, artist, title, album, durationSecs); len(candidates) > 0 {
+		return candidates
+	}
+	for _, v := range applemusicFallbackSearches(ctx, storefront, artist, title, devToken) {
+		if songs, err := applemusicSearch(ctx, v.storefront, v.lang, artist, title, devToken); err == nil {
+			if candidates := applemusicRankCandidates(songs, artist, title, album, durationSecs); len(candidates) > 0 {
+				return candidates
 			}
 		}
 	}
-	if len(candidates) == 0 {
-		return applemusicResult{}
-	}
+	return nil
+}
 
-	// 只有纯文本的候选先记下第一份,所有候选都没有带时间轴的才交出它(plainOnly,分数恒 -1,只有用户手点才采用)。
-	var plain applemusicResult
+// applemusicFetchCandidates 按顺序给候选取词,取到第一份带时间轴的就停(timed)。只有纯文本的候选记下第一份
+// (plain,plainOnly,分数恒 -1,只有用户手点才采用),所有候选都没有带时间轴的才有用。tried 记着取过的曲目 id,
+// 取过的不再取。fatal:令牌被拒之类,继续试别的候选也是白试。
+func applemusicFetchCandidates(ctx context.Context, storefront string, candidates []applemusicSong, tried map[string]bool, devToken, userToken string) (timed, plain applemusicResult, fatal bool) {
 	for _, song := range candidates {
 		if !plain.empty() && !song.Attributes.HasTimeSynced {
 			break // 已经有一份纯文本了,后面标着没有时间轴的不再试(候选按有没有时间轴排过序)
 		}
 		id := song.ID
+		if tried[id] {
+			continue
+		}
+		tried[id] = true
 		// 一律先问逐字端点,不看搜索结果的 hasTimeSyncedLyrics:标着 false 的也可能在这里拿到逐行时间轴,
 		// 只有纯文本的歌这里回的是同一份不带时间的 TTML(见 09 章决策 142)。这个端点没有时才问 /lyrics。
 		ttml, err := applemusicFetchTTML(ctx, storefront, id, "syllable-lyrics", devToken, userToken)
 		if err != nil {
-			return applemusicResult{} // 令牌被拒之类,继续试别的候选也是白试
+			return applemusicResult{}, applemusicResult{}, true
 		}
 		if ttml == "" {
 			if ttml, err = applemusicFetchTTML(ctx, storefront, id, "lyrics", devToken, userToken); err != nil {
-				return applemusicResult{}
+				return applemusicResult{}, applemusicResult{}, true
 			}
 		}
 		p, ok := applemusicParseTTML(ttml)
 		if ok && isTimedLRC(p.lrc) {
-			return applemusicResultFrom(song, p, false)
+			return applemusicResultFrom(song, p, false), plain, false
 		}
 		if !plain.empty() {
 			continue
@@ -1151,7 +1195,52 @@ func resolveApplemusicLyric(ctx context.Context, artist, title, album string, du
 			plain = applemusicResultFrom(song, amllResult{lrc: txt}, true)
 		}
 	}
-	return plain
+	return applemusicResult{}, plain, false
+}
+
+// applemusicSongsByISRC 按 ISRC 直取这条录音在 storefront 这个区上架的条目(同一条录音常同时挂在单曲、专辑和
+// 各种合辑下)。只需要 developer token。没问成或没有返回 nil。
+func applemusicSongsByISRC(ctx context.Context, storefront, isrc, devToken string) []applemusicSong {
+	path := neturl.PathEscape(storefront) + "/songs?filter[isrc]=" + neturl.QueryEscape(isrc)
+	raw, status, err := applemusicAPIGet(ctx, path, devToken, "")
+	if err != nil || status != http.StatusOK {
+		return nil
+	}
+	var out struct {
+		Data []applemusicSong `json:"data"`
+	}
+	if json.Unmarshal(raw, &out) != nil {
+		return nil
+	}
+	return out.Data
+}
+
+// applemusicISRCCandidates 从按 ISRC 直取的条目里挑要取词的:不过歌名 / 歌手闸(ISRC 是录音级身份),只过
+// hasLyrics 和时长闸(ISRC 也有脏数据,口径同 deezer 的 ISRC 直取)。按专辑分两组:跟本地专辑相同或互相包含
+// (albumScore >= 100,本地没有专辑名时全算)的进 onAlbum,其余进 offAlbum(多是合辑:条目的专辑名和封面会交给
+// 下游)。组内有时间轴的排前面、同档专辑更像的排前面,每组最多 applemusicMaxCandidatesToFetch 条。纯函数,便于单测。
+func applemusicISRCCandidates(songs []applemusicSong, album string, durationSecs float64) (onAlbum, offAlbum []applemusicSong) {
+	for _, s := range songs {
+		a := s.Attributes
+		if strings.TrimSpace(s.ID) == "" || !a.HasLyrics || !sourceDurationFits(durationSecs, float64(a.DurationInMillis)/1000) {
+			continue
+		}
+		if strings.TrimSpace(album) == "" || albumScore(a.AlbumName, album) >= 100 {
+			onAlbum = append(onAlbum, s)
+		} else {
+			offAlbum = append(offAlbum, s)
+		}
+	}
+	rank := func(g []applemusicSong) []applemusicSong {
+		sort.SliceStable(g, func(i, j int) bool {
+			if ti, tj := g[i].Attributes.HasTimeSynced, g[j].Attributes.HasTimeSynced; ti != tj {
+				return ti
+			}
+			return albumScore(g[i].Attributes.AlbumName, album) > albumScore(g[j].Attributes.AlbumName, album)
+		})
+		return g[:min(len(g), applemusicMaxCandidatesToFetch)]
+	}
+	return rank(onAlbum), rank(offAlbum)
 }
 
 // applemusicPlainLyrics 把不带时间的 TTML(itunes:timing="None",<p> 没有 begin)按行取出正文,拼成纯文本。
@@ -1212,13 +1301,15 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 // catalogID:正在播的这首歌在 Apple 目录里的 id(platformtrackid.go 记的,已过
 // appleCatalogAnchor 校验)。非空时先问 Music.app 自己的缓存要官方歌词 —— 那份带
 // 词级时间轴和官方译文,是搜索那条拿不到的,见 applemusiclocal.go 头注。
-func applemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, catalogID string) applemusicResult {
+// isrc:这次播放的这条录音的 ISRC(lyricSourceISRC),非空时先按它直取,见 resolveApplemusicLyric。
+func applemusicLyric(ctx context.Context, artist, title, album string, durationSecs float64, catalogID, isrc string) applemusicResult {
 	if title == "" {
 		return applemusicResult{}
 	}
 	// catalogID 进缓存键:首播那一拍 Music.app 可能还没写完缓存(实测延迟 0.5~1 秒),
-	// 那次只拿得到搜索的结果;不区分的话这条缓存会把后面每一次都挡住。
-	key := artist + "|" + title + "|" + album + "|" + catalogID + "|" + features().LyricsTranslationLanguage
+	// 那次只拿得到搜索的结果;不区分的话这条缓存会把后面每一次都挡住。isrc 同理(Spotify 的 ISRC 索引是后台建的,
+	// 首播那一拍常还没有),同 deezer。
+	key := artist + "|" + title + "|" + album + "|" + catalogID + "|" + isrc + "|" + features().LyricsTranslationLanguage
 	applemusicMu.Lock()
 	if v, ok := applemusicCache[key]; ok {
 		applemusicMu.Unlock()
@@ -1235,7 +1326,7 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 		return r
 	}
 
-	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs)
+	r := resolveApplemusicLyric(ctx, artist, title, album, durationSecs, isrc)
 	if !r.empty() {
 		applemusicMu.Lock()
 		applemusicCache[key] = r

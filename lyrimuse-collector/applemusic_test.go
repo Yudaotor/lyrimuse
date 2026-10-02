@@ -148,7 +148,7 @@ func TestApplemusicResolveShortCircuitsWhenNotConnected(t *testing.T) {
 	applemusicSetLastFailureReason("")
 
 	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
-	r := resolveApplemusicLyric(t.Context(), "Aloisio", "BESO DE ESOS", "BESO DE ESOS - Single", 144)
+	r := resolveApplemusicLyric(t.Context(), "Aloisio", "BESO DE ESOS", "BESO DE ESOS - Single", 144, "")
 	if !r.empty() {
 		t.Error("没有用户令牌时应当返回空")
 	}

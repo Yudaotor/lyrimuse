@@ -72,7 +72,7 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 		}
 		bg = r.bg
 	case "applemusic":
-		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID)
+		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		if r.lyrics == "" {
 			log.Printf("bg backfill: %s  applemusic returned nothing", key)
 			return

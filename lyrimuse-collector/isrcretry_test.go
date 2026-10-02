@@ -81,7 +81,7 @@ func TestISRCRetryFetchesSourceMissedByName(t *testing.T) {
 	}
 }
 
-// 接线守卫:applemusic 结果把 ISRC 带进候选;补取轮排在所有轮次之后;deezer / musixmatch 两路读 lyricSourceISRC。
+// 接线守卫:applemusic 结果把 ISRC 带进候选;补取轮排在所有轮次之后;deezer / musixmatch / applemusic 三路读 lyricSourceISRC。
 func TestISRCRetryIsWired(t *testing.T) {
 	b, err := os.ReadFile("enrich.go")
 	if err != nil {
@@ -95,6 +95,7 @@ func TestISRCRetryIsWired(t *testing.T) {
 		"isrc:                       r.ISRC,",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"musixmatch\"",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"deezer\"",
+		"appleID, lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"applemusic\"",
 		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",
 	} {
 		if !strings.Contains(src, n) {

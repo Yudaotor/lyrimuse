@@ -121,7 +121,7 @@ func TestApplemusicAsksSyllableLyricsEvenWhenFlaggedUnsynced(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "James Arthur", "I Am", "Back from the Edge", 200)
+	r := resolveApplemusicLyric(qqRoundCtx(), "James Arthur", "I Am", "Back from the Edge", 200, "")
 	if r.plainOnly || !isTimedLRC(r.lyrics) {
 		t.Fatalf("逐字端点给了逐行时间轴,应当收下: plainOnly=%v lyrics=%q", r.plainOnly, r.lyrics)
 	}
@@ -158,7 +158,7 @@ func TestApplemusicPlainOnlyFromUntimedTTML(t *testing.T) {
 				}
 				return http.StatusNotFound, nil, ""
 			})
-			r := resolveApplemusicLyric(qqRoundCtx(), "范逸臣", "革命", "无乐不作", 240)
+			r := resolveApplemusicLyric(qqRoundCtx(), "范逸臣", "革命", "无乐不作", 240, "")
 			if !r.plainOnly || r.lyrics != "第一句\n第二句" {
 				t.Fatalf("应当交出纯文本候选: plainOnly=%v lyrics=%q", r.plainOnly, r.lyrics)
 			}
@@ -185,7 +185,7 @@ func TestApplemusicFallsBackToJPStorefrontForKana(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "椎名林檎", "モルヒネ", "無罪モラトリアム", 222)
+	r := resolveApplemusicLyric(qqRoundCtx(), "椎名林檎", "モルヒネ", "無罪モラトリアム", 222, "")
 	if r.empty() || r.title != "モルヒネ" {
 		t.Fatalf("应当从 jp 区搜到、在 cn 区取到: title=%q lyrics=%q", r.title, r.lyrics)
 	}
@@ -214,7 +214,7 @@ func TestApplemusicFallsBackToEnglishNames(t *testing.T) {
 		return http.StatusNotFound, nil, ""
 	})
 	// 本地没有专辑名:三角验证不成立,所在区那条中文署名的候选过不了歌手闸。
-	r := resolveApplemusicLyric(qqRoundCtx(), "Britney Spears", "Everytime", "", 230)
+	r := resolveApplemusicLyric(qqRoundCtx(), "Britney Spears", "Everytime", "", 230, "")
 	if r.empty() || r.artist != "Britney Spears" {
 		t.Fatalf("应当按英文再搜到: artist=%q lyrics=%q", r.artist, r.lyrics)
 	}
@@ -241,7 +241,7 @@ func TestApplemusicHostFallback(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "方大同", "Sorry", "未来", 222)
+	r := resolveApplemusicLyric(qqRoundCtx(), "方大同", "Sorry", "未来", 222, "")
 	if r.empty() {
 		t.Fatal("搜索与取词都应当从备用主机拿到")
 	}
@@ -348,7 +348,7 @@ func TestApplemusicStopsAfterPlainWhenRestUnsynced(t *testing.T) {
 		}
 		return http.StatusNotFound, nil, ""
 	})
-	r := resolveApplemusicLyric(qqRoundCtx(), "范逸臣", "革命", "无乐不作", 240)
+	r := resolveApplemusicLyric(qqRoundCtx(), "范逸臣", "革命", "无乐不作", 240, "")
 	if !r.plainOnly || r.lyrics == "" {
 		t.Fatalf("应当交出第一份纯文本: %+v", r)
 	}
