@@ -269,6 +269,18 @@ func runLyricsWindowTests() {
         expectEqual(W.width(windowWidth: -5, percent: 65), 0, "迷你顶部宽度: 量到负宽时给 0,不给负数 frame")
     }
 
+    // MARK: - 「设置 › 打开」按预览的形态开窗:请求只认刚发出的
+    do {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let request = LyricsWindowFormRequest(mini: true, issuedAt: t0)
+        expectEqual(LyricsWindowFormRequest.lifetime, 3, "开窗形态请求: 有效期 3 秒")
+        expectEqual(request.isFresh(now: t0), true, "开窗形态请求: 刚发出的算数")
+        expectEqual(request.isFresh(now: t0.addingTimeInterval(3)), true, "开窗形态请求: 3 秒整还算数")
+        expectEqual(request.isFresh(now: t0.addingTimeInterval(3.1)), false,
+                    "开窗形态请求: 过了 3 秒不算(那次没开成,之后别的入口打开不该被它带成迷你)")
+        expectEqual(request.isFresh(now: t0.addingTimeInterval(-1)), false, "开窗形态请求: 时钟往回拨过也不算")
+    }
+
     // MARK: - 迷你顶部信息高度(窗口高度的百分比,内容等比缩放)
     do {
         typealias S = LyricsWindowMiniHeaderSize

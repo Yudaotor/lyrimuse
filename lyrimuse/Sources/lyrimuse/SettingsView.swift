@@ -2450,7 +2450,11 @@ private struct AppearanceSettingsTab: View {
             // 打开那扇真窗口(走 `AppActions.openLyricsWindow`,跟菜单栏面板、快捷键同一个入口)。
             SettingsCard {
                 SettingsRow(icon: "macwindow", title: L10n.t("歌词窗口")) {
-                    Button(L10n.t("打开")) { AppActions.shared.openLyricsWindow?() }
+                    Button(L10n.t("打开")) {
+                        // 按预览停在哪个尺寸开:迷你预览开迷你窗,完整预览开完整窗口;窗口已经开着就当场切过去。
+                        LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)
+                        AppActions.shared.openLyricsWindow?()
+                    }
                 }
             }
             // 配置分**两套**:上面预览那个「完整 / 迷你」切到哪个,下面就配哪个。

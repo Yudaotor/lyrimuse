@@ -1998,6 +1998,24 @@ func runSourceContractTests() {
                             "歌词窗口重开: 退出 App 途中的关窗不清「开着」标记")
                 expectEqual(view.contains("if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }"), true,
                             "歌词窗口重开: 首次 attach 按上次状态进迷你")
+                // 「设置 › 打开」按预览的形态开窗(07 章决策 77)。
+                expectEqual(view.contains("if let requested = LyricsWindowSession.takeFormRequest() {\n            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)\n        }\n        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }"), true,
+                            "开窗形态: 首次 attach 先取「设置 › 打开」的请求,再按迷你那个键进不进迷你")
+                expectEqual(view.contains("guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }"), true,
+                            "开窗形态: 窗口上屏了才取请求(关着时取走了就切不过去)")
+                expectEqual(view.contains("if LyricsWindowSession.hasPendingFormRequest { self?.applyFormRequest() }"), true,
+                            "开窗形态: 关了再开同一扇窗时,上屏那一下补上请求的形态")
+                expectEqual(view.contains("forName: LyricsWindowSession.formRequestNotification, object: nil, queue: .main"), true,
+                            "开窗形态: 窗口已经开着时收通知当场切")
+                // attach 会被 updateNSView 反复调用:「开着」只在真的在屏上、而且值不一样时才写。
+                expectEqual(view.contains("guard window.isVisible, !UserDefaults.standard.bool(forKey: LyricsWindowSession.openKey) else { return }"), true,
+                            "歌词窗口重开: 记「开着」只在窗口在屏上、且原来不是 true 时写")
+                expectEqual(view.contains("            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
+                            "歌词窗口重开: 同一扇窗再次 attach 时别无条件写「开着」(关窗后保活的视图树一刷新就会写回去)")
+                if let settingsView = read("SettingsView.swift") {
+                    expectEqual(settingsView.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                        AppActions.shared.openLyricsWindow?()"), true,
+                                "开窗形态: 「打开」先按预览的形态发请求,再开窗")
+                }
                 if let restore = view.range(of: "restorePersistedFrame(window)\n"),
                    let enterMini = view.range(of: "LyricsWindowSession.miniModeKey) { toggleMini() }") {
                     expectEqual(restore.lowerBound < enterMini.lowerBound, true,
@@ -2030,8 +2048,9 @@ func runSourceContractTests() {
             }
             expectEqual(settings.contains("LyricsWindowAllSettingsDrawer {"), true,
                         "歌词窗口设置: 全量配置收进「全部设置」抽屉")
-            expectEqual(settings.contains("Button(L10n.t(\"打开\")) { AppActions.shared.openLyricsWindow?() }"), true,
-                        "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口")
+            expectEqual(settings.contains("Button(L10n.t(\"打开\")) {")
+                        && settings.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                        AppActions.shared.openLyricsWindow?()"), true,
+                        "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口(先按预览的形态发请求)")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")
             // 作用范围那句:工具栏那颗和抽屉那一行同一份,点名迷你 / 完整,别回到「当前预览的尺寸」

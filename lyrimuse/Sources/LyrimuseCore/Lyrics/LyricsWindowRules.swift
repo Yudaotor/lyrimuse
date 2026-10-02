@@ -184,3 +184,25 @@ public enum AMVibrancy {
         return max(0.22, bgV - 0.32)
     }
 }
+
+/// 「设置 › 歌词窗口 › 打开」要的形态:预览停在迷你就开迷你窗,停在完整就开完整窗口。
+///
+/// 只认刚发出的请求:那次没开成(比如启动太早、打开窗口的入口还没就位),之后从菜单栏、快捷键
+/// 打开时不该突然切成迷你。
+public struct LyricsWindowFormRequest: Equatable, Sendable {
+    public static let lifetime: TimeInterval = 3
+
+    public let mini: Bool
+    public let issuedAt: Date
+
+    public init(mini: Bool, issuedAt: Date) {
+        self.mini = mini
+        self.issuedAt = issuedAt
+    }
+
+    /// 还算不算数。时钟往回拨过(now 早于发出时刻)也不算。
+    public func isFresh(now: Date) -> Bool {
+        let age = now.timeIntervalSince(issuedAt)
+        return age >= 0 && age <= Self.lifetime
+    }
+}

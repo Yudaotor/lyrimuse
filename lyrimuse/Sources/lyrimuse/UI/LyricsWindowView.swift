@@ -244,6 +244,26 @@ enum LyricsWindowSession {
     static let miniModeKey = "np:lyricsWindowMiniMode"
 
     static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
+
+    /// 「设置 › 歌词窗口 › 打开」要的形态(时效见 `LyricsWindowFormRequest`)。窗口还没建出来时
+    /// 由首次 attach 取走;已经开着 / 关了再开时由窗口控制器收通知或等窗口上屏后取走。
+    @MainActor private static var formRequest: LyricsWindowFormRequest?
+    static let formRequestNotification = Notification.Name("LyricsWindowSession.formRequest")
+
+    /// 先调这个、再调 `AppActions.openLyricsWindow`。
+    @MainActor static func requestForm(mini: Bool) {
+        formRequest = LyricsWindowFormRequest(mini: mini, issuedAt: Date())
+        NotificationCenter.default.post(name: formRequestNotification, object: nil)
+    }
+
+    @MainActor static var hasPendingFormRequest: Bool { formRequest != nil }
+
+    /// 取走还算数的那个请求(取一次就清掉,过期的也一并清掉)。
+    @MainActor static func takeFormRequest(now: Date = Date()) -> Bool? {
+        guard let request = formRequest else { return nil }
+        formRequest = nil
+        return request.isFresh(now: now) ? request.mini : nil
+    }
 }
 
 // 全屏:macOS 15+ 走**真原生全屏**,老系统用下面那套伪全屏兜底。
@@ -386,6 +406,7 @@ private final class LyricsWindowController: ObservableObject {
     private var liveResizeStartObserver: NSObjectProtocol?
     private var liveResizeEndObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
+    private var formRequestObserver: NSObjectProtocol?
     /// 落盘去抖。拖动窗口期间 didMove 每帧都来,不去抖就是每帧一次 UserDefaults 写 ——
     /// 跟「歌词管理」列宽拖动那次(松手才落盘)同一个坑,同一个修法。
     private var persistFrameTask: Task<Void, Never>?
@@ -478,6 +499,20 @@ private final class LyricsWindowController: ObservableObject {
         // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样;要进迷你由调用方随后再切(决策 72)。
         window.saveFrame(usingName: Self.sceneFrameAutosaveName)
         return true
+    }
+
+    /// 记「窗口开着」(`LyricsWindowSession.openKey`)。只在窗口真的在屏上、而且记的不是 true 时才写:
+    /// attach 会被 updateNSView 反复调用,每次都写的话,全域的 UserDefaults 变更通知(AppSettingsMirror
+    /// 靠它防抖写镜像文件)会跟着一直响;关窗后保活的视图树刷新时,也不能把「开着」写回去。
+    private func markOpenIfVisible(_ window: NSWindow) {
+        guard window.isVisible, !UserDefaults.standard.bool(forKey: LyricsWindowSession.openKey) else { return }
+        UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
+    }
+
+    /// 「设置 › 打开」要的形态跟此刻不一样就切过去。窗口还没上屏就先不取(请求留着,等上屏再来)。
+    private func applyFormRequest() {
+        guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }
+        if requested != isMini { toggleMini() }
     }
 
     /// 进 / 出迷你**都不做动画**:窗口尺寸直接跳到位,布局同一拍换好(07 章决策 51)。
@@ -679,7 +714,10 @@ private final class LyricsWindowController: ObservableObject {
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
             if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
-            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
+            markOpenIfVisible(window)
+            if LyricsWindowSession.hasPendingFormRequest {
+                DispatchQueue.main.async { [weak self] in self?.applyFormRequest() }
+            }
             return
         }
         self.window = window
@@ -705,7 +743,18 @@ private final class LyricsWindowController: ObservableObject {
         restorePersistedFrame(window)
         // 上次是迷你就直接进迷你。放在恢复完整 frame 之后:进迷你记下的"退出迷你时回到哪"
         // 就是刚恢复的那份完整 frame,迷你窗自己的位置尺寸由 toggleMini 按迷你那两个键摆。
+        // 「设置 › 打开」指定了形态就按它来(写回同一个键,下次启动也照它)。
+        if let requested = LyricsWindowSession.takeFormRequest() {
+            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)
+        }
         if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }
+        if let formRequestObserver { NotificationCenter.default.removeObserver(formRequestObserver) }
+        // 窗口已经开着时点「设置 › 打开」:当场切到预览那个形态。没开着就留给上屏那一刻(见遮挡观察者)。
+        formRequestObserver = NotificationCenter.default.addObserver(
+            forName: LyricsWindowSession.formRequestNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyFormRequest() }
+        }
         if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
         // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
         // 产生这两个通知 —— 分开挂只会写两遍。
@@ -759,6 +808,11 @@ private final class LyricsWindowController: ObservableObject {
             MainActor.assumeIsolated {
                 self?.occlusionVisible = win.occlusionState.contains(.visible)
                 self?.refreshSurfaceVisible()
+                // 关了再开同一扇窗时 attach 不一定再走一遍,上屏这一下由这里补记「开着」、
+                // 补上「设置 › 打开」要的形态。
+                guard win.isVisible else { return }
+                self?.markOpenIfVisible(win)
+                if LyricsWindowSession.hasPendingFormRequest { self?.applyFormRequest() }
             }
         }
         // occlusionState 的盲区:几乎整扇被别的窗口盖住、只露一条缝时它仍报可见(见 occlusionVisible 注释)。
@@ -989,7 +1043,7 @@ private final class LyricsWindowController: ObservableObject {
         for observer in [closeObserver, resignKeyObserver, becomeKeyObserver, enterFullScreenObserver,
                          exitFullScreenObserver, fullScreenCapabilityObserver, frameObserver, resizeObserver,
                          liveResizeStartObserver, liveResizeEndObserver, occlusionObserver,
-                         terminateObserver].compactMap({ $0 }) + fullScreenTransitionObservers {
+                         terminateObserver, formRequestObserver].compactMap({ $0 }) + fullScreenTransitionObservers {
             NotificationCenter.default.removeObserver(observer)
         }
         // coverageMonitor 随本对象释放,自己的 deinit 会停表。
