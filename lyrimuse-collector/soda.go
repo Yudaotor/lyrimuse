@@ -460,7 +460,7 @@ func sodaParseSeoTrack(body sodaSeoTrackResponse) (res sodaResult, trackFoundNoL
 		lyrics:       lrc,
 		yrc:          yrc,
 		tr:           tr,
-		title:        sodaTrackTitle(t.Name),
+		title:        dashTailAsBracket(t.Name),
 		artist:       strings.Join(names, "/"),
 		album:        strings.TrimSpace(t.Album.Name),
 		cover:        sodaCoverURL(t.Album.URLCover.URI, t.Album.URLCover.URLs, t.Album.URLCover.TemplatePrefix),
@@ -510,7 +510,7 @@ func sodaCoverNeedsTransform(u string) bool {
 // 的同名歌。所以跟酷我那套一样**自己重新打分**,身份闸用跟别的源完全一致的判定函数
 // (lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch,歌手对不上时加酷狗
 // 那条三角验证并收紧一道,见 lyricRecordingTriangleMatchesGuarded),不为这一个源另起一套更松的规则;只把
-// 汽水自己的歌名写法先归一(sodaTrackTitle,同酷我的 kuwoSongTitle)。
+// 汽水自己的歌名写法先归一(dashTailAsBracket,同酷我的 kuwoSongTitle)。
 const (
 	// sodaSearchPath:搜索端点的路径,主机按 sodaSearchHosts 的顺序试(sourcefallback.go)。
 	sodaSearchPath = "/luna/search/track"
@@ -586,7 +586,7 @@ func sodaParseSearch(body sodaSearchResponse) []sodaSearchItem {
 			}
 			out = append(out, sodaSearchItem{
 				ID:       strings.TrimSpace(t.ID),
-				Name:     sodaTrackTitle(t.Name),
+				Name:     dashTailAsBracket(t.Name),
 				Artist:   strings.Join(names, "/"),
 				Album:    strings.TrimSpace(t.Album.Name),
 				Duration: float64(t.Duration) / 1000,
@@ -597,22 +597,6 @@ func sodaParseSearch(body sodaSearchResponse) []sodaSearchItem {
 		}
 	}
 	return out
-}
-
-// sodaTrackTitle 把汽水「歌名 - 限定词」的写法(「X - Album Version」「X - 录音室版本」)
-// 改成别的源通用的「歌名 (限定词)」:共用的歌名闸按去括号那一档认得出它,限定词留在括号里照样
-// 给版本闸判(两种位置版本闸本来就都认,见 titleQualifierSegments)。只改最后一个「 - 」。
-func sodaTrackTitle(name string) string {
-	name = strings.TrimSpace(name)
-	i := strings.LastIndex(name, " - ")
-	if i <= 0 {
-		return name
-	}
-	head, tail := strings.TrimSpace(name[:i]), strings.TrimSpace(name[i+len(" - "):])
-	if head == "" || tail == "" {
-		return name
-	}
-	return head + " (" + tail + ")"
 }
 
 // sodaCandidateScore 给一条搜索结果打分:分数越高越像本地这首歌,负数 = 淘汰。

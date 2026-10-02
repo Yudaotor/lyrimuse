@@ -225,28 +225,6 @@ func TestSodaParseSearchTakesTracksGroupOnly(t *testing.T) {
 	}
 }
 
-// 汽水把限定词写在「 - 」后面,改成括号写法之后共用的歌名闸认得出;限定词仍在,版本闸照样判。
-func TestSodaTrackTitle(t *testing.T) {
-	for in, want := range map[string]string{
-		"Wild Child - Album Version":          "Wild Child (Album Version)",
-		"如今 - 录音室版本":                          "如今 (录音室版本)",
-		"Interlude - Twisted Elegance - Live": "Interlude - Twisted Elegance (Live)",
-		"  Sorry  ":                           "Sorry",
-		"- Album Version":                     "- Album Version",
-		"Wild Child - ":                       "Wild Child -",
-	} {
-		if got := sodaTrackTitle(in); got != want {
-			t.Errorf("sodaTrackTitle(%q) = %q, want %q", in, got, want)
-		}
-	}
-	if !lyricTitleAccepted(sodaTrackTitle("right where you left me - bonus track"), "right where you left me") {
-		t.Error("改写后应当过歌名闸")
-	}
-	if !versionTagsMismatch("Sorry", "", sodaTrackTitle("Sorry - Live"), "") {
-		t.Error("改写后 Live 仍应被版本闸认出")
-	}
-}
-
 // 歌手写法对不上时,歌名逐字同名 + 专辑对得上 + 时长差 1% 以内照样收下,但排在歌手对得上的后面。
 func TestSodaCandidateScoreRecordingTriangle(t *testing.T) {
 	const (

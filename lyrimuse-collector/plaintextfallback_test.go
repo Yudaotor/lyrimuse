@@ -48,6 +48,30 @@ func TestPlainTextFallbackFromScored(t *testing.T) {
 			name: "空列表:不算数",
 			in:   nil, wantLyrics: "", wantSource: "",
 		},
+		{
+			name: "网易云的纯文本排在别家后面",
+			in: []scoredLyricCandidateResult{
+				{Source: "netease", Score: -1, PlainTextOnly: true, Lyrics: "网易云正文"},
+				{Source: "lrclib", Score: -1, PlainTextOnly: true, Lyrics: "LRCLIB 正文"},
+			},
+			wantLyrics: "LRCLIB 正文", wantSource: "lrclib",
+		},
+		{
+			name: "只有 QQ 的纯文本时用它",
+			in: []scoredLyricCandidateResult{
+				{Source: "lrclib", Score: -1},
+				{Source: "qq", Score: -1, PlainTextOnly: true, Lyrics: "QQ 正文"},
+			},
+			wantLyrics: "QQ 正文", wantSource: "qq",
+		},
+		{
+			name: "只有网易云和 QQ 的:按源序取第一条",
+			in: []scoredLyricCandidateResult{
+				{Source: "netease", Score: -1, PlainTextOnly: true, Lyrics: "网易云正文"},
+				{Source: "qq", Score: -1, PlainTextOnly: true, Lyrics: "QQ 正文"},
+			},
+			wantLyrics: "网易云正文", wantSource: "netease",
+		},
 	}
 	for _, c := range cases {
 		lyrics, source := plainTextFallbackFromScored(c.in)

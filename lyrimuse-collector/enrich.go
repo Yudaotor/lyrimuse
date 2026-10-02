@@ -1695,14 +1695,23 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 // 候选——纯函数,拆出来给 rescoreLyrics/resolveEnrichAsync 两个写入点共用+单测。调用方
 // 已经确认了 picked==nil(没有分数>=0 的候选)、!e.Instrumental、e.PlainLyrics==""
 // 这三个前提,这里只负责"scored 里有没有能用的 PlainTextOnly 候选、选哪一条"——按
-// scored 原有顺序(打分环节已按固定源序排过)取第一条,不存在多条时的优先级判断。
+// scored 原有顺序(打分环节已按固定源序排过)取第一条。网易云 / QQ 的纯文本排在别家后面,只在别家都没有纯文本时
+// 才用(QQ 的正文常带「歌名 - 歌手」那一行标题),有别家的时候取到的跟它们不交纯文本时一样。
 func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, source string) {
+	var last scoredLyricCandidateResult
 	for _, c := range scored {
-		if c.PlainTextOnly && c.Lyrics != "" {
-			return c.Lyrics, c.Source
+		if !c.PlainTextOnly || c.Lyrics == "" {
+			continue
 		}
+		if c.Source == "netease" || c.Source == "qq" {
+			if last.Lyrics == "" {
+				last = c
+			}
+			continue
+		}
+		return c.Lyrics, c.Source
 	}
-	return "", ""
+	return last.Lyrics, last.Source
 }
 
 // instrumentalFromScored 回答"这一轮有没有依据说这首歌是纯音乐",给 retryLyricsUpgrade
@@ -3933,8 +3942,8 @@ type lyricSourceResult struct {
 	// 网易云的 pureMusic/占位正文、QQ 的占位正文(见 qqLyricResult)、musixmatch 每行都带的
 	// instrumental 字段(见 pickMusixmatchTrackRow 第三趟)。
 	instrumental bool
-	// plainOnly:lrclib / musixmatch / deezer / applemusic / migu 会给(musixmatch 见
-	// resolveMusixmatchLyric 里的纯文本回退)——语义见 lrclibResult.plainOnly 头注。
+	// plainOnly:lrclib / musixmatch / deezer / applemusic / migu / qq 会给(musixmatch 见
+	// resolveMusixmatchLyric 里的纯文本回退;网易云的纯文本在 ne.PlainLyrics)——语义见 lrclibResult.plainOnly 头注。
 	plainOnly bool
 	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
@@ -3979,6 +3988,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	qq, kugou, lrclib, mx, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["musixmatch"], raw["lyricfind"], raw["kuwo"]
 	qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang := qq.lyr, qq.yrc, qq.tr, qq.roma, qq.matchTitle, qq.matchArtist, qq.matchAlbum, qq.matchCover, qq.srcDur, qq.language
 	qqInstrumental := qq.instrumental
+	qqPlainOnly := qq.plainOnly
 	kugouLyr, kugouYRC, kugouTr, kugouRoma, kugouTitle, kugouArtist, kugouAlbum, kugouCover, kugouDur, kugouLang := kugou.lyr, kugou.yrc, kugou.tr, kugou.roma, kugou.matchTitle, kugou.matchArtist, kugou.matchAlbum, kugou.matchCover, kugou.srcDur, kugou.language
 	lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur := lrclib.lyr, lrclib.matchTitle, lrclib.matchArtist, lrclib.matchAlbum, lrclib.srcDur
 	lrclibInstrumental := lrclib.instrumental
@@ -4031,13 +4041,16 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 不能等选完冠军再附着。
 		neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features().LyricsTranslationLanguage)
 		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover, identityFromLocalClient: ne.FromLocalClient})
+	} else if ne.PlainLyrics != "" {
+		// 只有不带时间戳的歌词:交成 plainOnly,直通打分层那道恒 -1 的闸,口径同 deezer / lrclib 的纯文本回退。
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.PlainLyrics, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover, identityFromLocalClient: ne.FromLocalClient, plainTextOnly: true})
 	}
 	if qqLyr != "" {
 		// QQ 的译文固定是中文(跟网易云 tlyric 同款),语言标 "zh";罗马音的可用判定
 		// (原文假名占比 > 5%)也沿用同一套 usableValueAdd——韩文歌的罗马音会跟网易云
 		// 一样被判不可用,这是既有口径,不是 QQ 这路新加的规则。
 		qqUsableTr, qqUsableRoma := usableValueAdd(qqLyr, qqTr, "zh", qqRoma, features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: qqCover, language: qqLang, identityFromLocalClient: qq.identityFromLocalClient})
+		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: qqCover, language: qqLang, identityFromLocalClient: qq.identityFromLocalClient, plainTextOnly: qqPlainOnly})
 	}
 	if kugouLyr != "" {
 		// 酷狗 KRC `[language:]` 轨的译文固定中文,标 "zh";罗马音的可用判定同样走
@@ -4564,7 +4577,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		qqIDCh <- qqMid
 		var lyr, yrc, tr, roma string
 		var qqDur float64
-		var qqInstrumental, qqNoLyrics bool
+		var qqInstrumental, qqNoLyrics, qqPlainOnly bool
 		var qqCover string
 		if qqMid != "" {
 			// 整行歌词与逐字(QRC)两套接口互不依赖,并发取。
@@ -4585,7 +4598,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			// 并发的话两边同时没命中缓存,同一个详情请求会发两次。
 			qqCover, _ = qqSongCoverAndSinger(ctx, qqMid)
 			<-lyricDone
-			lyr, qqInstrumental, qqNoLyrics = qqLyr.lrc, qqLyr.instrumental, qqLyr.trackFoundNoLyrics
+			// 整行接口没给词时用 QRC 压出来的整行,见 qqLineLyric。
+			lyr, qqInstrumental, qqNoLyrics = qqLineLyric(qqLyr, qrc), qqLyr.instrumental, qqLyr.trackFoundNoLyrics
+			// 只有不带时间戳的歌词时交成 plainOnly,见 qqPlainLyric。
+			if lyr == "" {
+				if lyr = qqPlainLyric(qqLyr, qrc); lyr != "" {
+					qqPlainOnly = true
+				}
+			}
 			yrc, tr, roma = qrc.yrc, qrc.tr, qrc.roma
 			// QRC 正文里的 `[kana:…]` 假名标注行拼到整行歌词开头,App 侧 KanaAnnotation 才
 			// 读得到(跟酷狗 LRC 自带的那一行同格式,见 qqQRCResult.kana 注释)。
@@ -4604,8 +4624,8 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		qqLang := qqCanonicalLanguage(qqSongMetaCachedOnly(qqMid).language)
 		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
 		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
-		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "", identityFromLocalClient: match.fromLocalLibrary}
+		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。交出了纯文本时同样不报。
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时

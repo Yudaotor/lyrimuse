@@ -83,6 +83,7 @@ func decodeLyricSourceResultEntities(r lyricSourceResult) lyricSourceResult {
 	r.roma = clean(r.roma)
 	r.bg = clean(r.bg)
 	r.ne.Lyrics = clean(r.ne.Lyrics)
+	r.ne.PlainLyrics = clean(r.ne.PlainLyrics)
 	r.ne.Trans = clean(r.ne.Trans)
 	r.ne.Roma = clean(r.ne.Roma)
 	r.ne.YRC = clean(r.ne.YRC)

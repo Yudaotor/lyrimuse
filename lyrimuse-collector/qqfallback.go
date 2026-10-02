@@ -9,6 +9,9 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,9 +34,10 @@ import (
 //   - 单曲详情:fcg_play_single_song(qqWebHosts)→ 网关 get_song_detail_yqq
 //   - 整行歌词:fcg_query_lyric_new(qqWebHosts)→ 网关 GetPlayLyricInfo(不加密)
 //   - 专辑曲目表:网关 GetAlbumSongList → fcg_v8_album_info_cp(qqWebHosts)
-//   - 逐字歌词 / 译文 / 罗马音、匿名会话:只有网关这一套,换 qqMusicuHosts 的主机
+//   - 逐字歌词 / 译文 / 罗马音:网关 GetPlayLyricInfo(要匿名会话)→ lyric_download.fcg(qqWebHosts,见 qqLyricDownload)
+//   - 匿名会话:只有网关这一套,换 qqMusicuHosts 的主机
 //
-// 主机和字段都逐个实测过,响应结构各主机一致,实测记录见 docs/features/09 第 87 条。
+// 主机和字段都逐个实测过,响应结构各主机一致,实测记录见 docs/features/09 第 87 条,lyric_download 见第 144 条。
 
 var (
 	qqWebHosts    = []string{"c.y.qq.com", "shc.y.qq.com", "i.y.qq.com"}
@@ -144,7 +148,7 @@ func qqMusicuLineLyric(ctx context.Context, mid string) qqLyricResult {
 	if isTimedLRC(lyric) {
 		return qqLyricResult{lrc: lyric}
 	}
-	return qqLyricResult{}
+	return qqLyricResult{plain: untimedLyricsText(lyric)}
 }
 
 // qqAlbumSongsWeb 是网页版专辑接口(fcg_v8_album_info_cp),给 qqAlbumSongs 的网关那条当备用。
@@ -339,4 +343,83 @@ func qqSongDetailWebAt(ctx context.Context, host, mid string) (qqSongDetailRow, 
 		return qqSongDetailRow{}, false, nil
 	}
 	return out.Data[0], true, nil
+}
+
+// lyric_download.fcg 的应答是包在注释里的类 XML(有 `<miniversion="1" />` 这种写法,不是合法 XML),只按标签名抠 CDATA。
+var (
+	qqLyricDownloadResultRe  = regexp.MustCompile(`<result>(-?\d+)</result>`)
+	qqLyricDownloadContentRe = regexp.MustCompile(`(?s)<content(?:\s[^>]*)?><!\[CDATA\[(.*?)\]\]></content>`)
+	qqLyricDownloadTransRe   = regexp.MustCompile(`(?s)<contentts(?:\s[^>]*)?><!\[CDATA\[(.*?)\]\]></contentts>`)
+	qqLyricDownloadRomaRe    = regexp.MustCompile(`(?s)<contentroma(?:\s[^>]*)?><!\[CDATA\[(.*?)\]\]></contentroma>`)
+)
+
+// qqLyricDownload 是逐字 / 译文 / 罗马音的第二条路:网页接口 lyric_download.fcg(qqWebHosts 上同路径),按数字
+// songID 取,不要匿名会话。原文段是加密的 QRC(没有逐字的歌给的是明文纯文本,只给 plainOnly 用),译文段是明文 LRC,
+// 罗马音段是加密的;三段跟网关 GetPlayLyricInfo 那一份相同。拿不到返回零值。
+func qqLyricDownload(ctx context.Context, songID int64) qqQRCResult {
+	var res qqQRCResult
+	_ = qqTryHosts(ctx, qqWebHosts, func(host string) error {
+		r, err := qqLyricDownloadAt(ctx, host, songID)
+		if err == nil {
+			res = r
+		}
+		return err
+	})
+	return res
+}
+
+// qqLyricDownloadAt:<result> 是 0(有)或 -1(查无此曲)算答了,别的值算拒绝;没有这个标签算没问成。
+func qqLyricDownloadAt(ctx context.Context, host string, songID int64) (qqQRCResult, error) {
+	form := neturl.Values{"version": {"15"}, "miniversion": {"82"}, "lrctype": {"4"}, "musicid": {strconv.FormatInt(songID, 10)}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+host+"/qqmusic/fcgi-bin/lyric_download.fcg", strings.NewReader(form.Encode()))
+	if err != nil {
+		return qqQRCResult{}, errQQNotReached
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "https://y.qq.com/")
+	req.Header.Set("User-Agent", qqUA)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
+	if err != nil {
+		return qqQRCResult{}, errQQNotReached
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return qqQRCResult{}, errQQNotReached
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, qqResponseMaxBytes))
+	if err != nil {
+		return qqQRCResult{}, errQQNotReached
+	}
+	body := string(raw)
+	m := qqLyricDownloadResultRe.FindStringSubmatch(body)
+	if m == nil {
+		return qqQRCResult{}, errQQNotReached
+	}
+	if m[1] != "0" && m[1] != "-1" {
+		reportEndpointRejected(req.URL)
+		return qqQRCResult{}, errQQNotReached
+	}
+	reportEndpointAccepted(req.URL)
+	field := func(re *regexp.Regexp) string {
+		if f := re.FindStringSubmatch(body); f != nil {
+			return strings.TrimSpace(f[1])
+		}
+		return ""
+	}
+	res := qqQRCResult{tr: qqLyricDownloadTrack(field(qqLyricDownloadTransRe)), roma: qqLyricDownloadTrack(field(qqLyricDownloadRomaRe))}
+	content := field(qqLyricDownloadContentRe)
+	if dec := decryptQRC(content); dec != "" {
+		return qqApplyDecrypted(res, dec), nil
+	}
+	// 解不开的是明文:没有逐字的歌原文段直接给不带时间戳的歌词。
+	res.plain = untimedLyricsText(content)
+	return res, nil
+}
+
+// qqLyricDownloadTrack 把译文 / 罗马音段变成逐行 LRC:先按密文解(罗马音段是加密的),解不开再按明文洗(译文段是明文)。
+func qqLyricDownloadTrack(s string) string {
+	if lrc := qqAuxiliaryLRC(s); lrc != "" {
+		return lrc
+	}
+	return qqAuxiliaryPlainToLRC(s)
 }

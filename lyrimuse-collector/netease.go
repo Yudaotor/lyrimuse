@@ -69,6 +69,9 @@ type neteaseInfo struct {
 	// 这首歌"一模一样的那句话 —— 匹配明明是对的,用户却完全看不出来,也无从判断该等还是
 	// 该自己贴。见 enrich.go 的 noLyricsMarkers。
 	TrackFoundNoLyrics bool
+	// PlainLyrics:只有不带时间戳的歌词时理好的正文(untimedLyricsText),只给 plainOnly 用;有带时间戳的(Lyrics 非空)
+	// 或判成纯音乐时为空。
+	PlainLyrics string
 }
 
 // neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
@@ -431,6 +434,7 @@ func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) netease
 	// 库自己说了算:仿冒条目的 id 在人工提交的 amll 库里查不到,直接 404。
 	return neteaseInfo{
 		Lyrics:       info.Lyrics,
+		PlainLyrics:  info.PlainLyrics,
 		Trans:        info.Trans,
 		Roma:         info.Roma,
 		YRC:          info.YRC,
@@ -1094,6 +1098,8 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			info.Roma = roma
 		}
 		info.YRC = yrc // 逐字，无则空串，前端退回行级
+	} else if !info.PureMusic {
+		info.PlainLyrics = untimedLyricsText(lrc)
 	}
 	return info
 }

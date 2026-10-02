@@ -31,6 +31,12 @@ func (f *qqFake) count(key string) int {
 // withQQFake 的 handle 收到 target:网页接口是 "host/path",网关是 "host/musicu:<method>"。
 func withQQFake(t *testing.T, handle func(target string) (int, string)) *qqFake {
 	t.Helper()
+	return withQQFakeReq(t, func(_ *http.Request, target string) (int, string) { return handle(target) })
+}
+
+// withQQFakeReq 同 withQQFake,handle 另外拿到请求本身(要按查询词给不同结果时用)。
+func withQQFakeReq(t *testing.T, handle func(r *http.Request, target string) (int, string)) *qqFake {
+	t.Helper()
 	savedGuard, savedBreaker, savedTransport := sharedHostGuard(), sharedLyricSourceBreaker(), sharedLyricSourceTransport()
 	setSharedHostGuard(newHostGuard(time.Now))
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
@@ -81,7 +87,7 @@ func withQQFake(t *testing.T, handle func(target string) (int, string)) *qqFake 
 		f.mu.Lock()
 		f.hits[target]++
 		f.mu.Unlock()
-		status, body := handle(target)
+		status, body := handle(r, target)
 		w.WriteHeader(status)
 		_, _ = io.WriteString(w, body)
 	}))
