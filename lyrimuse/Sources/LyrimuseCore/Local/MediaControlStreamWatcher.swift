@@ -240,6 +240,7 @@ public final class MediaControlStreamWatcher {
             buffer.removeSubrange(buffer.startIndex...newline)
             guard !line.isEmpty else { continue }
             fired = true
+            let previous = mergedPayload
             let digest = Self.digest(line: Data(line), merged: mergedPayload, arrivedAt: arrivedAt)
             mergedPayload = digest.merged
             if digest.resumedAtArrival { resumeSignal = true }
@@ -255,6 +256,9 @@ public final class MediaControlStreamWatcher {
             }
             if let changed = digest.trackChangeKey, let at = digest.trackChangeAt {
                 MediaControlClient.noteTrackChangeObserved(key: changed, at: at)
+                MediaControlClient.noteTitleChangeObserved(
+                    bundleID: digest.merged["bundleIdentifier"] as? String, fromTitle: previous["title"] as? String,
+                    toTitle: digest.merged["title"] as? String, at: at)
             }
             if let key = digest.anchorKey {
                 MediaControlClient.noteStreamAnchorSighting(anchorKey: key, at: arrivedAt, tight: digest.tight)

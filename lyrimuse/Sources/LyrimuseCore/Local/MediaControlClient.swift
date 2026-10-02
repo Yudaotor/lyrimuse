@@ -250,6 +250,42 @@ public enum MediaControlClient {
         return decoded
     }
 
+    /// 媒体流刚看到 Apple Music 的曲名换了、这一拍 AppleScript 读回来的还是换走的那个曲名,就隔一会儿再读,最多读几次。
+    /// 切歌那一下 Music.app 的 AppleScript 要晚一会儿才整份换过来,中间那份是拼起来的:位置已经归零,曲名还是上一首
+    /// (歌手有时也是上一首的,有时已经是下一首的)。照收的话这一拍不算换歌、上一首被当成从头重放,要等下一轮轮询才换过去。
+    /// 读满几次还是旧曲名就照旧用这一份。判据见 `appleMusicReadLagsTitleChange`,数据见 02 章决策 78。
+    private static func settledAppleMusicSnapshot() -> MediaControlSnapshot? {
+        guard var snapshot = fetchAppleMusicSnapshot() else { return nil }
+        let change = currentTitleChange()
+        var rereads = 0
+        while rereads < appleMusicSettleRereads,
+              appleMusicReadLagsTitleChange(readTitle: snapshot.title, change: change, now: Date()) {
+            Thread.sleep(forTimeInterval: appleMusicSettleDelay)
+            rereads += 1
+            guard let fresh = fetchAppleMusicSnapshot() else { break }
+            snapshot = fresh
+        }
+        if rereads > 0 {
+            let caughtUp = snapshot.title != change?.fromTitle
+            logger.notice("apple music: AppleScript lagged the stream's title change, re-read \(rereads, privacy: .public)x, \(caughtUp ? "caught up" : "still on the previous title", privacy: .public)")
+        }
+        return snapshot
+    }
+
+    /// 媒体流看到曲名换了之后多久之内,AppleScript 还读到旧曲名才算还没换过来。
+    public static let appleMusicSettleWindow: TimeInterval = 3
+    static let appleMusicSettleDelay: TimeInterval = 0.3
+    static let appleMusicSettleRereads = 3
+
+    /// 这一拍 AppleScript 读到的曲名是不是还停在媒体流刚看到 Apple Music 换走的那一首。只比曲名:平时两边的写法
+    /// 即使对不上,读到的也不会恰好是换走的那个旧曲名。纯函数,selftest 覆盖。
+    public static func appleMusicReadLagsTitleChange(readTitle: String?, change: StreamTitleChange?, now: Date) -> Bool {
+        guard let change, change.bundleID == PlaybackPlayer.appleMusic.bundleIdentifier,
+              let readTitle, readTitle == change.fromTitle else { return false }
+        let age = now.timeIntervalSince(change.at)
+        return age >= -1 && age <= appleMusicSettleWindow
+    }
+
     /// Spotify 自己的 JXA 快照 —— Spotify 这条路上曲目与位置的**唯一**来源,跟 Apple Music 对称。
     /// 两个消费点:`adaptedSnapshot`(media-control 认出在播的是 Spotify 之后整份顶替)和
     /// `snapshotAfterFocusLost`(焦点被别的 App 占走、media-control 这一拍什么都拿不到)。
@@ -343,7 +379,7 @@ public enum MediaControlClient {
     /// 口白坐实)、沿用上一首的 key,判据也确实还成立。所以按 key 探一次把结果记下来 ——
     /// 换歌才多一次 fork(实测电台上 230~310 秒一次),而不是 2 秒一次。
     private static func radioAwareAppleMusicSnapshot() -> MediaControlSnapshot? {
-        guard let snapshot = fetchAppleMusicSnapshot() else { return nil }
+        guard let snapshot = settledAppleMusicSnapshot() else { return nil }
         guard let hash = probedRadioStationHash(forTrack: snapshot.trackKey) else {
             setRadioStationHash(nil)
             return snapshot
@@ -1105,7 +1141,7 @@ public enum MediaControlClient {
             // 暂停态不问:Apple Music 暂停时会重新发布一次 elapsedTime,那个值**就是**暂停位置
             // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
             guard mediaControl.playing == true else { return mediaControl }
-            guard let apple = fetchAppleMusicSnapshot() else { return mediaControl }
+            guard let apple = settledAppleMusicSnapshot() else { return mediaControl }
             return perTrackRadio ? apple.markedRadio() : apple
         case PlaybackPlayer.spotify.bundleIdentifier:
             // 这里跟 Apple Music **不一样**:暂停态也问。Spotify 的两个钟不重合 ——
@@ -1525,6 +1561,39 @@ public enum MediaControlClient {
         defer { playingPositionLock.unlock() }
         guard trackChangeKey == key else { return nil }
         return trackChangeAt
+    }
+
+    /// stream watcher 最近一次看到曲名变了:哪个播放器、从哪个曲名换走、发生在哪一刻。只给
+    /// `settledAppleMusicSnapshot` 判 AppleScript 是不是还没换过来。
+    public struct StreamTitleChange: Equatable, Sendable {
+        public let bundleID: String
+        public let fromTitle: String
+        public let at: Date
+
+        public init(bundleID: String, fromTitle: String, at: Date) {
+            self.bundleID = bundleID
+            self.fromTitle = fromTitle
+            self.at = at
+        }
+    }
+
+    nonisolated(unsafe) private static var titleChange: StreamTitleChange?
+
+    /// 只换了歌手、曲名没变的那次换曲把上一条作废(这时没有「旧曲名」可比);从空标题换过来的(watcher 刚起来整份吐一遍)不记。
+    nonisolated static func noteTitleChangeObserved(bundleID: String?, fromTitle: String?, toTitle: String?, at: Date) {
+        var change: StreamTitleChange?
+        if let bundleID, let fromTitle, !fromTitle.isEmpty, let toTitle, toTitle != fromTitle {
+            change = StreamTitleChange(bundleID: bundleID, fromTitle: fromTitle, at: at)
+        }
+        playingPositionLock.lock()
+        titleChange = change
+        playingPositionLock.unlock()
+    }
+
+    private nonisolated static func currentTitleChange() -> StreamTitleChange? {
+        playingPositionLock.lock()
+        defer { playingPositionLock.unlock() }
+        return titleChange
     }
 
     private nonisolated static func rememberedPlayingSampledAt(forTrack track: String) -> Date? {

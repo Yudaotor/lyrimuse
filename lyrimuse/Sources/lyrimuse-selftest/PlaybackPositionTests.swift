@@ -2047,6 +2047,27 @@ func runPlaybackPositionTests() {
                     ts.addingTimeInterval(3), "换歌时刻: 没有可解析的时间戳就用到达时刻")
     }
 
+    // ---- Apple Music 切歌那一下:媒体流看到曲名换了、AppleScript 读回来还是旧曲名,就再读一次 ----
+    do {
+        typealias M = MediaControlClient
+        let t0 = Date(timeIntervalSince1970: 1_790_948_724)
+        let change = M.StreamTitleChange(bundleID: "com.apple.Music", fromTitle: "那天下雨了", at: t0)
+        expectEqual(M.appleMusicReadLagsTitleChange(readTitle: "那天下雨了", change: change, now: t0.addingTimeInterval(0.4)),
+                    true, "Apple Music 切歌: 媒体流刚看到曲名换走、AppleScript 还读到旧曲名 → 再读")
+        expectEqual(M.appleMusicReadLagsTitleChange(readTitle: "让你知道", change: change, now: t0.addingTimeInterval(0.4)),
+                    false, "Apple Music 切歌: 已经读到新曲名就用")
+        expectEqual(M.appleMusicReadLagsTitleChange(readTitle: "那天下雨了", change: change,
+                                                    now: t0.addingTimeInterval(M.appleMusicSettleWindow + 0.5)),
+                    false, "Apple Music 切歌: 换歌过去几秒还是这个曲名,那就是真的(单曲循环、同名的歌),不再追")
+        expectEqual(M.appleMusicReadLagsTitleChange(
+                        readTitle: "那天下雨了",
+                        change: M.StreamTitleChange(bundleID: "com.google.Chrome", fromTitle: "那天下雨了", at: t0),
+                        now: t0.addingTimeInterval(0.4)),
+                    false, "Apple Music 切歌: 媒体流看到的是别的播放器换歌(焦点被网页视频占着)不算")
+        expectEqual(M.appleMusicReadLagsTitleChange(readTitle: "那天下雨了", change: nil, now: t0), false,
+                    "Apple Music 切歌: 媒体流没看到曲名变化就照收")
+    }
+
     // ---- 主持人说话那一段:越过真曲长就把歌词收掉----
     // 实测这个台两首歌之间多出 66~110 秒非歌曲内容,那段时间元数据还停在上一首。
     do {

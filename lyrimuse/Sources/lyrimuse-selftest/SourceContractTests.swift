@@ -394,6 +394,15 @@ func runSourceContractTests() {
                             "Spotify 回退: adaptedSnapshot 问不到 Spotify 时要经 spotifyFallbackCaughtUp 补上等掉的时间")
                 expectEqual(mcc.contains("if let fromNotice = spotifyNoticeReading(mediaControl, notice: currentSpotifyNotice(),"), true,
                             "Spotify 回退: 问不到 AppleScript 时先试 Spotify 通知里的位置")
+                // 只勾 Apple Music 那条路也要先过切歌那一下的重读(自动识别 / 多选那条见「适配优先」)。
+                expectEqual(mcc.contains("guard let snapshot = settledAppleMusicSnapshot() else { return nil }"), true,
+                            "Apple Music 切歌: radioAwareAppleMusicSnapshot 要经 settledAppleMusicSnapshot 读")
+            }
+            if let watcher = code(core.appendingPathComponent("MediaControlStreamWatcher.swift")) {
+                expectEqual(watcher.contains("MediaControlClient.noteTitleChangeObserved("), true,
+                            "Apple Music 切歌: watcher 看到换歌要把换走的曲名记下来,否则重读那道判据永远不成立")
+            } else {
+                expectEqual(true, false, "Apple Music 切歌: 读不到 LyrimuseCore/Local/MediaControlStreamWatcher.swift(路径挪了?)")
             }
             if lps.contains("if let hint { MediaControlClient.noteSpotifyNotice(hint) }") == false {
                 expectEqual(true, false, "Spotify 回退: 收到 Spotify 那条通知要记进 MediaControlClient.noteSpotifyNotice")
@@ -909,8 +918,8 @@ func runSourceContractTests() {
                             "适配优先: 自动识别与多选的信任分支都要交给 adaptedSnapshot(现在 \(probed) 处)")
                 // 整份顶替,不是只借一个字段 —— 只借字段就得配一道"差多少以内才肯借"的闸,
                 // 而那道闸恰好会在锚点偏得最狠的时候把真值挡在门外。
-                expectEqual(mcc.contains("guard let apple = fetchAppleMusicSnapshot() else { return mediaControl }"), true,
-                            "适配优先: Apple Music 那档要整份用 AppleScript 快照,拿不到才退回 media-control")
+                expectEqual(mcc.contains("guard let apple = settledAppleMusicSnapshot() else { return mediaControl }"), true,
+                            "适配优先: Apple Music 那档要整份用 AppleScript 快照(切歌那一下先过重读),拿不到才退回 media-control")
                 // 必须留的例外(电台那条钉在上面「电台」那一段里,不重复)。
                 expectEqual(mcc.contains("guard mediaControl.playing == true else { return mediaControl }"), true,
                             "适配优先: 暂停态不问 AppleScript(冻结的 elapsedTime 本来就是精确值)")
