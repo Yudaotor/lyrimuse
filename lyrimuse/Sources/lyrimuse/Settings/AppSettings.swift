@@ -307,6 +307,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniGlassIntensity = "np:lyricsWindowMiniGlassIntensity"
         static let lyricsWindowMiniFontSize = "np:lyricsWindowMiniFontSize"
         static let lyricsWindowMiniHeaderWidthPercent = "np:lyricsWindowMiniHeaderWidthPercent"
+        static let lyricsWindowMiniHeaderHeightPercent = "np:lyricsWindowMiniHeaderHeightPercent"
         static let notchCollapsesWhenPaused = "np:notchCollapsesWhenPaused"
         static let notchShowsEqualizer = "np:notchShowsEqualizer"
         static let notchEqualizerEar = "np:notchEqualizerEar"
@@ -1155,6 +1156,10 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniHeaderWidthPercent: Double {
         didSet { defaults.set(lyricsWindowMiniHeaderWidthPercent, forKey: Keys.lyricsWindowMiniHeaderWidthPercent) }
     }
+    /// 迷你顶部信息那一组占窗口高度的百分之几(字号和封面跟着缩放),范围与默认见 `LyricsWindowMiniHeaderSize`。
+    @Published var lyricsWindowMiniHeaderHeightPercent: Double {
+        didSet { defaults.set(lyricsWindowMiniHeaderHeightPercent, forKey: Keys.lyricsWindowMiniHeaderHeightPercent) }
+    }
     /// 迷你顶部信息那一组左边要不要摆一枚封面小图。
     ///
     /// 只有迷你有这一项 —— 完整尺寸的封面是左栏那张大的,跟进度条、播控排在一起,是另一套排版。
@@ -1893,6 +1898,9 @@ final class AppSettings: ObservableObject {
         lyricsWindowMiniHeaderWidthPercent =
             (defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)
             ?? LyricsWindowMiniHeaderWidth.defaultPercent
+        lyricsWindowMiniHeaderHeightPercent =
+            (defaults.object(forKey: Keys.lyricsWindowMiniHeaderHeightPercent) as? Double)
+            ?? LyricsWindowMiniHeaderSize.defaultPercent
         lyricsWindowMiniShowsCover =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsCover) as? Bool) ?? true
         // 默认 .wrap:换行是迷你窗一直以来的排法,升级上来的人排版不变。

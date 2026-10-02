@@ -269,6 +269,28 @@ func runLyricsWindowTests() {
         expectEqual(W.width(windowWidth: -5, percent: 65), 0, "迷你顶部宽度: 量到负宽时给 0,不给负数 frame")
     }
 
+    // MARK: - 迷你顶部信息高度(窗口高度的百分比,内容等比缩放)
+    do {
+        typealias S = LyricsWindowMiniHeaderSize
+        func r3(_ v: CGFloat) -> Double { (Double(v) * 1000).rounded() / 1000 }
+        expectEqual(S.percentRange, 8...25, "迷你顶部高度: 范围 8%…25%")
+        expectEqual(S.percentStep, 1, "迷你顶部高度: 步长 1%")
+        expectEqual(S.percentRange.contains(S.defaultPercent), true, "迷你顶部高度: 默认值在范围里")
+        expectEqual(r3(S.referenceHeight), 44.9, "迷你顶部高度: 基准 = (12+11+10)×1.3 + 两道行距")
+        expectEqual(abs(S.scale(windowHeight: 320, percent: S.defaultPercent) - 1) < 0.01, true,
+                    "迷你顶部高度: 默认 14% 在默认 320 高的窗口里倍率约 1(跟没有这颗设置时一样大)")
+        expectEqual(r3(S.scale(windowHeight: 320, percent: 25)), r3(320 * 0.25 / S.referenceHeight),
+                    "迷你顶部高度: 倍率 = 窗口高度 × 百分比 ÷ 基准高度")
+        expectEqual(S.scale(windowHeight: 640, percent: 14) > S.scale(windowHeight: 320, percent: 14), true,
+                    "迷你顶部高度: 窗口拖高,顶部信息跟着变大")
+        expectEqual(S.scale(windowHeight: 110, percent: 8), 0.8, "迷你顶部高度: 窗口再矮也不小于 0.8 倍")
+        expectEqual(S.scale(windowHeight: 5000, percent: 25), 3, "迷你顶部高度: 窗口再高也不超过 3 倍")
+        expectEqual(S.scale(windowHeight: 320, percent: 1), S.scale(windowHeight: 320, percent: 8),
+                    "迷你顶部高度: 存坏的过小值按 8% 算")
+        expectEqual(S.scale(windowHeight: 320, percent: 90), S.scale(windowHeight: 320, percent: 25),
+                    "迷你顶部高度: 越界的过大值按 25% 算")
+    }
+
     // MARK: - 迷你顶部显示项
     do {
         typealias H = LyricsWindowMiniHeaderFields

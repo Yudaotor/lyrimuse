@@ -670,6 +670,57 @@
         }
       }
     },
+    "高度" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Height"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高度"
+          }
+        }
+      }
+    },
+    "顶部信息这一块占窗口高度的百分比（按歌名、歌手、时间三行都开着算），字号和封面跟着等比缩放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How much of the window's height the header takes up (counting all three lines), with the text and artwork scaled to match"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頂部資訊這一塊佔視窗高度的百分比（以歌名、歌手、時間三行都開著計算），字級和封面跟著等比縮放"
+          }
+        }
+      }
+    },
+    "迷你尺寸顶部信息占窗口高度的百分比，字号和封面跟着缩放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How much of the window's height the mini size's header takes up; the text and artwork scale with it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迷你尺寸頂部資訊佔視窗高度的百分比，字級和封面跟著縮放"
+          }
+        }
+      }
+    },
     "浅色" : {
       "extractionState" : "manual",
       "localizations" : {

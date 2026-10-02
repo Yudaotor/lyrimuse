@@ -1458,18 +1458,18 @@ func runSourceContractTests() {
                         "迷你封面: 广告期间让位成广告标识,别把广告物料的缩略图当专辑封面摆出来")
             // 顶部信息最多两行:第一样独占一行,其余合成第二行。三样全串一行,长歌名一挤歌手专辑
             // 就全被省略号切掉;拆成三行,歌词区又被压矮一截。
-            expectEqual(lwv.contains("VStack(spacing: Self.miniInfoLineSpacing)"), true,
+            expectEqual(lwv.contains("VStack(spacing: m.lineSpacing)"), true,
                         "迷你顶部信息: 竖排(别改回三样串一行)")
             expectEqual(lwv.contains("rest.isEmpty ? [[first]] : [[first], rest]")
                         && lwv.contains("if j > 0 { Text(verbatim: \" — \").foregroundStyle(color) }"), true,
                         "迷你顶部信息: 第一样之外的几样合成第二行(「歌手 — 专辑」),别再一样拆一行")
-            expectEqual(lwv.contains("private static let miniCoverMaxSide"), true,
+            expectEqual(lwv.contains("return min(m.coverMaxSide, max(m.coverMinSide, height.rounded()))"), true,
                         "迷你封面: 有上限,行多时不跟着文字块长成一块方图")
             // 顶部信息只让文字居中:「封面 | 文字 | 同宽透明占位」。overlay + alignmentGuide 挂出去
             // 那种写法真机上封面直接压在文字上,别换回去。
-            expectEqual(lwv.contains("Color.clear.frame(width: miniCoverSide, height: 1)"), true,
+            expectEqual(lwv.contains("Color.clear.frame(width: miniCoverSide(m), height: 1)"), true,
                         "迷你顶部信息: 文字右侧有跟封面同宽的透明占位,文字才在正中")
-            expectEqual(lwv.contains("d[.trailing] + Self.miniCoverGap"), false,
+            expectEqual(lwv.contains("d[.trailing] + Self.miniCoverGap") || lwv.contains("d[.trailing] + m.coverGap"), false,
                         "迷你顶部信息: 别用 alignmentGuide 把封面挂到文字外面(真机上会压在文字上)")
             // 迷你尺寸单独持久化:拖过的大小下次进迷你还是它,且绝不写进完整窗口那份 frame。
             expectEqual(lwv.contains("private static let miniSizeKey = \"np:lyricsWindowMiniSize\""), true,
@@ -1663,7 +1663,7 @@ func runSourceContractTests() {
                         "迷你窗: 退出迷你把置顶还原成进之前那样")
             // 封面边长必须是**算出来**的:它要先知道边长才能按像素预先重采样,跟着布局撑开
             // 就只剩运行期缩一条路,而那会把半调网点封面缩出摩尔纹黑斑。
-            expectEqual(lwv.contains("private var miniCoverSide: CGFloat"), true,
+            expectEqual(lwv.contains("private func miniCoverSide(_ m: MiniHeaderMetrics) -> CGFloat"), true,
                         "迷你封面: 边长按开着几行算出来,不靠 SwiftUI 撑开(撑开就没法预先重采样)")
             // 右上角窗口控件:迷你切换用画中画那对符号,三颗共用同一字号字重。
             expectEqual(lwv.contains("showsMiniLayout ? \"pip.exit\" : \"pip.enter\""), true,
@@ -1701,10 +1701,17 @@ func runSourceContractTests() {
             expectEqual(settings.contains(
                 "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderWidthPercent) as? Double)\n            ?? LyricsWindowMiniHeaderWidth.defaultPercent"),
                         true, "迷你顶部宽度: 没存过按 Core 里那个默认值读")
+            expectEqual(settings.contains(
+                "(defaults.object(forKey: Keys.lyricsWindowMiniHeaderHeightPercent) as? Double)\n            ?? LyricsWindowMiniHeaderSize.defaultPercent"),
+                        true, "迷你顶部高度: 没存过按 Core 里那个默认值读")
         }
         if let lwv = read("UI/LyricsWindowView.swift") {
-            expectEqual(lwv.contains("miniTopInfo(windowWidth: geo.size.width)"), true,
-                        "迷你顶部宽度: 按这扇窗此刻的宽度算")
+            expectEqual(lwv.contains("miniTopInfo(windowSize: geo.size)"), true,
+                        "迷你顶部宽度 / 高度: 按这扇窗此刻的尺寸算")
+            expectEqual(lwv.contains("windowHeight: windowSize.height, percent: playback.miniHeaderHeightPercent))"), true,
+                        "迷你顶部高度: 倍率按窗口高度和「高度」百分比算")
+            expectEqual(lwv.contains("private static let miniInfoFontSize"), false,
+                        "迷你顶部高度: 基准字号只在 Core 那一份(LyricsWindowMiniHeaderSize),视图里别再写死一份")
             expectEqual(lwv.contains(".frame(width: width)\n            // 预览里报出这一组的范围"), true,
                         "迷你顶部宽度: 先定宽再报范围,预览虚线框画的就是这块宽度")
             expectEqual(lwv.contains(".padding(.horizontal, 76)"), false,
@@ -1715,6 +1722,10 @@ func runSourceContractTests() {
                         "迷你顶部宽度: 「顶部信息」浮层里那根滑杆的范围和步长读 Core")
             expectEqual(settingsView.contains("s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent"), true,
                         "迷你顶部宽度: 迷你「重置」把宽度一起还原")
+            expectEqual(settingsView.contains("in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep)"), true,
+                        "迷你顶部高度: 「顶部信息」浮层里那根滑杆的范围和步长读 Core")
+            expectEqual(settingsView.contains("s.lyricsWindowMiniHeaderHeightPercent = LyricsWindowMiniHeaderSize.defaultPercent"), true,
+                        "迷你顶部高度: 迷你「重置」把高度一起还原")
             expectEqual(settingsView.contains("LyricsWindowPreviewStage(highlightsHeader: lyricsWindowPopover == .info)"), true,
                         "迷你顶部宽度: 工具栏「顶部信息」浮层开着时预览虚线框亮着")
         }

@@ -2707,6 +2707,27 @@ private struct AppearanceSettingsTab: View {
                     .frame(width: 38, alignment: .trailing)
             }
         }
+        CardDivider()
+        SettingsRow(
+            icon: "arrow.up.and.down",
+            title: L10n.t("高度"),
+            help: L10n.t("顶部信息这一块占窗口高度的百分比（按歌名、歌手、时间三行都开着算），字号和封面跟着等比缩放")
+        ) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { settings.lyricsWindowMiniHeaderHeightPercent },
+                    set: { v in
+                        guard v != settings.lyricsWindowMiniHeaderHeightPercent else { return }
+                        settings.lyricsWindowMiniHeaderHeightPercent = v
+                    }
+                ), in: LyricsWindowMiniHeaderSize.percentRange, step: LyricsWindowMiniHeaderSize.percentStep)
+                    .frame(width: 130)
+                Text(verbatim: "\(Int(settings.lyricsWindowMiniHeaderHeightPercent.rounded()))%")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            }
+        }
     }
 
     /// 完整尺寸「封面」那一行(工具栏浮层与抽屉同一份)。「动态封面」只有完整尺寸有 —— 迷你那枚
@@ -3550,6 +3571,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniShowsCover = true
             s.lyricsWindowMiniShowsTime = true
             s.lyricsWindowMiniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent
+            s.lyricsWindowMiniHeaderHeightPercent = LyricsWindowMiniHeaderSize.defaultPercent
         } else {
             s.lyricsWindowBackgroundMode = .artwork
             s.lyricsWindowBackgroundColorHex = AppSettings.defaultLyricsWindowBackgroundColorHex

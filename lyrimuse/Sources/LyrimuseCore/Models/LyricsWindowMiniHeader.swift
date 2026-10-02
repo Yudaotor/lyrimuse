@@ -77,3 +77,45 @@ public enum LyricsWindowMiniHeaderWidth {
         return max(0, windowWidth) * CGFloat(p / 100)
     }
 }
+
+/// 迷你顶部信息那一组的基准字号 / 封面尺寸,以及它占窗口高度的百分之几(「顶部信息 › 高度」那根滑杆)。
+///
+/// 百分比按**三行都开着**(歌名 / 歌手那行 / 时间)时那叠文字的高度算:窗口高度 × 百分比 ÷ 基准高度
+/// 得到一个倍率,字号、行距、封面边长、封面与文字的间距都乘它。关掉几行这一组跟着变矮,倍率不变 ——
+/// 开关某一行时字不该忽大忽小。
+public enum LyricsWindowMiniHeaderSize {
+    public static let percentRange: ClosedRange<Double> = 8...25
+    public static let percentStep: Double = 1
+    /// 默认 14%:默认 320 高的迷你窗里倍率约 1,即下面这组基准尺寸。
+    public static let defaultPercent: Double = 14
+
+    /// 第一行(主角,一般是歌名)。
+    public static let titleFontSize: CGFloat = 12
+    /// 第二行(其余几样合成一行,一般是「歌手 — 专辑」)。
+    public static let subtitleFontSize: CGFloat = 11
+    public static let timeFontSize: CGFloat = 10
+    public static let lineSpacing: CGFloat = 1
+    /// 封面小图的边长区间。上限让它始终是"文字旁边的一枚小标记",不跟着三行文字长成一块方图;
+    /// 下限是只剩一行时还认得出是什么图。
+    public static let coverMinSide: CGFloat = 24
+    public static let coverMaxSide: CGFloat = 32
+    /// 封面小图和文字块之间的空。
+    public static let coverGap: CGFloat = 8
+    /// 行高按字号 × 1.3 估(SwiftUI 系统字的默认行高比例)。
+    public static let lineHeightFactor: CGFloat = 1.3
+
+    /// 三行都开着时那叠文字按基准尺寸估出来的高度,百分比拿它去比。
+    public static var referenceHeight: CGFloat {
+        (titleFontSize + subtitleFontSize + timeFontSize) * lineHeightFactor + 2 * lineSpacing
+    }
+
+    /// 倍率的范围:窗口拖得再矮,字也不小于基准的 0.8 倍;拖得再高,也不放到 3 倍以上。
+    public static let scaleRange: ClosedRange<CGFloat> = 0.8...3
+
+    /// 按窗口高度和百分比算倍率。百分比先夹进范围,存坏的值、别的版本写进来的越界值都按边界算。
+    public static func scale(windowHeight: CGFloat, percent: Double) -> CGFloat {
+        let p = min(max(percent, percentRange.lowerBound), percentRange.upperBound)
+        let raw = max(0, windowHeight) * CGFloat(p / 100) / referenceHeight
+        return min(max(raw, scaleRange.lowerBound), scaleRange.upperBound)
+    }
+}

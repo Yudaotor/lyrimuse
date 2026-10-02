@@ -100,6 +100,7 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var miniGlassIntensity: OverlayGlassIntensity = .default
     @Published private(set) var miniFontSizeCap = AppSettings.defaultLyricsWindowMiniFontSize
     @Published private(set) var miniHeaderWidthPercent = LyricsWindowMiniHeaderWidth.defaultPercent
+    @Published private(set) var miniHeaderHeightPercent = LyricsWindowMiniHeaderSize.defaultPercent
     private(set) var miniBackgroundColor = AppSettings.defaultLyricsWindowBackgroundColorFallback
     private(set) var miniBackgroundColorEnd = AppSettings.defaultLyricsWindowBackgroundColorEndFallback
     private(set) var backgroundColor = AppSettings.defaultLyricsWindowBackgroundColorFallback
@@ -185,6 +186,8 @@ private final class WindowPlayback: ObservableObject {
             s.$lyricsWindowMiniFontSize.removeDuplicates().sink { [weak self] in self?.miniFontSizeCap = $0 },
             s.$lyricsWindowMiniHeaderWidthPercent.removeDuplicates()
                 .sink { [weak self] in self?.miniHeaderWidthPercent = $0 },
+            s.$lyricsWindowMiniHeaderHeightPercent.removeDuplicates()
+                .sink { [weak self] in self?.miniHeaderHeightPercent = $0 },
             // Color 同样必须从**参数** hex 现算,不能回读 AppSettings 的缓存(@Published 是 willSet
             // 语义,那时 didSet 还没跑)—— 理由见上面完整那套同款注释。
             s.$lyricsWindowMiniBackgroundColorHex.removeDuplicates().sink { [weak self] hex in
@@ -1385,7 +1388,7 @@ struct LyricsWindowView: View {
                     miniIdleView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                miniTopInfo(windowWidth: geo.size.width)
+                miniTopInfo(windowSize: geo.size)
                 if miniUsesLyricsList {
                     // 「多行」:完整布局那份整页列表原样搬进来(行、间奏点、自动滚动、点行跳转都是
                     // 同一份),字号由这块视口自己推(`lyricFontSize`,迷你档再夹一道字号上限)。
@@ -1490,29 +1493,31 @@ struct LyricsWindowView: View {
     ///
     /// 这一组定宽 = 窗口宽度 × 「顶部信息 › 宽度」那个百分比(`LyricsWindowMiniHeaderWidth`),
     /// 在窗口里居中,内容再在这块里居中。有封面时标题可用宽度还要再减两个封面位,长标题会早一点
-    /// 被省略号截断。
+    /// 被省略号截断。字号、行距、封面都按「顶部信息 › 高度」算出的倍率缩放(`LyricsWindowMiniHeaderSize`)。
     ///
     /// 三样全关(或选了的那几样这首歌恰好都没有值)就整组不摆 —— 空容器仍会吃掉 padding,
     /// 留一条莫名的空白。
     @ViewBuilder
-    private func miniTopInfo(windowWidth: CGFloat) -> some View {
-        let width = LyricsWindowMiniHeaderWidth.width(windowWidth: windowWidth,
+    private func miniTopInfo(windowSize: CGSize) -> some View {
+        let width = LyricsWindowMiniHeaderWidth.width(windowWidth: windowSize.width,
                                                       percent: playback.miniHeaderWidthPercent)
+        let m = MiniHeaderMetrics(scale: LyricsWindowMiniHeaderSize.scale(
+            windowHeight: windowSize.height, percent: playback.miniHeaderHeightPercent))
         let hasText = !miniHeaderParts.isEmpty || miniShowsTimeRow
         // 广告那一档没有图也要占位(画广告标识),所以不能只判 miniCoverImage。
         let hasCover = playback.miniShowsCover
             && (playback.isCurrentTrackAdBreak || miniCoverImage != nil)
         if hasText {
-            HStack(spacing: Self.miniCoverGap) {
-                if hasCover { miniCover }
+            HStack(spacing: m.coverGap) {
+                if hasCover { miniCover(m) }
                 // 贴得紧一点才读成"一组",松开就成了几条互不相干的信息。
-                VStack(spacing: Self.miniInfoLineSpacing) {
-                    miniHeader
-                    miniTimeRow
+                VStack(spacing: m.lineSpacing) {
+                    miniHeader(m)
+                    miniTimeRow(m)
                 }
                 // 跟封面同宽的透明占位:让文字两侧等宽,文字才在正中。
                 if hasCover {
-                    Color.clear.frame(width: miniCoverSide, height: 1)
+                    Color.clear.frame(width: miniCoverSide(m), height: 1)
                 }
             }
             .frame(width: width)
@@ -1524,7 +1529,7 @@ struct LyricsWindowView: View {
             .padding(.top, 12)
             .frame(maxWidth: .infinity)
         } else if hasCover {
-            miniCover
+            miniCover(m)
                 .frame(width: width)
                 .anchorPreference(key: LyricsWindowPreviewHeaderAnchorKey.self, value: .bounds) {
                     previewMode ? $0 : nil
@@ -1534,9 +1539,6 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 封面小图和文字块之间的空。
-    private static let miniCoverGap: CGFloat = 8
-
     /// 顶部信息那一组左边那枚封面小图。
     ///
     /// 按 `边长 × 显示倍率`**预先重采样成位图再贴**,不在运行期缩 —— 半调网点封面在小图上会缩成
@@ -1545,7 +1547,7 @@ struct LyricsWindowView: View {
     /// 拿不到封面就整个不画,不摆占位方块:迷你窗每一寸都是内容,一个灰方块既不提供信息、又把
     /// 旁边的文字往右推。
     @ViewBuilder
-    private var miniCover: some View {
+    private func miniCover(_ m: MiniHeaderMetrics) -> some View {
         if playback.miniShowsCover {
             if playback.isCurrentTrackAdBreak {
                 // 广告期间让位成广告标识:播放器这时给的是**广告物料**的缩略图,当成"正在听的这张
@@ -1553,23 +1555,24 @@ struct LyricsWindowView: View {
                 // 这是第五个;底和符号都照完整布局那张大卡,只是尺寸小一档。
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(hasArtworkBackground ? Color.white.opacity(0.1) : Color.primary.opacity(0.06))
-                    .frame(width: miniCoverSide, height: miniCoverSide)
+                    .frame(width: miniCoverSide(m), height: miniCoverSide(m))
                     .overlay {
                         Image(systemName: "megaphone.fill")
-                            .font(.system(size: 14))
+                            .font(.system(size: m.adIconSize))
                             .foregroundStyle(miniSecondaryColor)
                     }
             } else if let image = miniCoverImage {
                 let scale = max(1, displayScale)
+                let side = miniCoverSide(m)
                 Group {
                     if let bitmap = ArtworkThumbnailCache.bitmap(
-                        for: image, pixelSide: Int((miniCoverSide * scale).rounded())) {
+                        for: image, pixelSide: Int((side * scale).rounded())) {
                         Image(decorative: bitmap, scale: scale)
                     } else {
                         Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                     }
                 }
-                .frame(width: miniCoverSide, height: miniCoverSide)
+                .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             }
         }
@@ -1581,37 +1584,28 @@ struct LyricsWindowView: View {
         radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage
     }
 
-    /// 第一行(主角,一般是歌名)。
-    private static let miniInfoFontSize: CGFloat = 12
-    /// 第二行(其余几样合成一行,一般是「歌手 — 专辑」)。
-    private static let miniSubInfoFontSize: CGFloat = 11
-    private static let miniTimeFontSize: CGFloat = 10
-    private static let miniInfoLineSpacing: CGFloat = 1
-    /// 封面小图的边长区间。上限让它始终是"文字旁边的一枚小标记",不跟着三行文字长成一块方图;
-    /// 下限是只剩一行时还认得出是什么图。
-    private static let miniCoverMinSide: CGFloat = 24
-    private static let miniCoverMaxSide: CGFloat = 32
-
-    /// 封面小图的边长 = 右边那叠文字的高度,夹在 24...32 之间(行多时不再跟着长)。
+    /// 封面小图的边长 = 右边那叠文字的高度,夹在封面边长区间里(基准 24...32,随倍率缩放;
+    /// 行多时不再跟着长)。
     ///
     /// **按"哪几行开着"算出来,而不是让 SwiftUI 把它撑开**(`maxHeight: .infinity` 那种):这张图
     /// 要先知道边长才能**按像素预先重采样**(见 miniCover),跟着布局撑开就只剩运行期缩一条路,
     /// 而那正是要避开的那件事(半调网点封面会缩出摩尔纹黑斑)。
     ///
-    /// 行高按字号 × 1.3 估(SwiftUI 系统字的默认行高比例),差个一两 pt 只是封面比文字块高/矮
-    /// 一线,靠 HStack 居中吸收掉,看不出来。
-    private var miniCoverSide: CGFloat {
+    /// 行高按字号 × `LyricsWindowMiniHeaderSize.lineHeightFactor` 估(SwiftUI 系统字的默认行高比例),
+    /// 差个一两 pt 只是封面比文字块高/矮一线,靠 HStack 居中吸收掉,看不出来。
+    private func miniCoverSide(_ m: MiniHeaderMetrics) -> CGFloat {
         let lines = miniHeaderLines.count
         let mainLines: CGFloat = lines > 0 ? 1 : 0
         let subLines: CGFloat = lines > 1 ? 1 : 0
         let timeLines: CGFloat = miniShowsTimeRow ? 1 : 0
         let rows = mainLines + subLines + timeLines
-        guard rows > 0 else { return Self.miniCoverMinSide }
-        let height = mainLines * (Self.miniInfoFontSize * 1.3)
-            + subLines * (Self.miniSubInfoFontSize * 1.3)
-            + timeLines * (Self.miniTimeFontSize * 1.3)
-            + max(0, rows - 1) * Self.miniInfoLineSpacing
-        return min(Self.miniCoverMaxSide, max(Self.miniCoverMinSide, height.rounded()))
+        guard rows > 0 else { return m.coverMinSide }
+        let lineHeight = LyricsWindowMiniHeaderSize.lineHeightFactor
+        let height = mainLines * (m.title * lineHeight)
+            + subLines * (m.subtitle * lineHeight)
+            + timeLines * (m.time * lineHeight)
+            + max(0, rows - 1) * m.lineSpacing
+        return min(m.coverMaxSide, max(m.coverMinSide, height.rounded()))
     }
 
     /// 顶部信息里要显示的那几样(歌名 / 歌手 / 专辑,见 LyricsWindowMiniHeaderFields)。
@@ -1647,10 +1641,10 @@ struct LyricsWindowView: View {
     }
 
     @ViewBuilder
-    private var miniHeader: some View {
+    private func miniHeader(_ m: MiniHeaderMetrics) -> some View {
         let lines = miniHeaderLines
         if !lines.isEmpty {
-            VStack(spacing: Self.miniInfoLineSpacing) {
+            VStack(spacing: m.lineSpacing) {
                 ForEach(lines.indices, id: \.self) { i in
                     let color = i == 0 ? miniPrimaryColor : miniSecondaryColor
                     HStack(spacing: 0) {
@@ -1659,7 +1653,7 @@ struct LyricsWindowView: View {
                             miniHeaderPart(lines[i][j], color: color)
                         }
                     }
-                    .font(.system(size: i == 0 ? Self.miniInfoFontSize : Self.miniSubInfoFontSize,
+                    .font(.system(size: i == 0 ? m.title : m.subtitle,
                                   weight: i == 0 ? .semibold : .regular))
                 }
             }
@@ -1704,25 +1698,25 @@ struct LyricsWindowView: View {
     /// 拖进度条时显示**手指按住的位置**,跟条子本身同步 —— 条子跳到那儿而数字还报旧位置的话,
     /// 拖着找副歌根本没法用。
     @ViewBuilder
-    private var miniTimeRow: some View {
+    private func miniTimeRow(_ m: MiniHeaderMetrics) -> some View {
         if miniShowsTimeRow, let total = playback.currentDurationMs {
             // 只有在放、窗口看得见时才挂秒表;暂停时数字本来不动,看不见时走也是白走。
             // 两种情况都画一次当下的值,恢复播放 / 重新可见时 body 会重算、回到秒表这一支。
             if playback.anchor != nil, windowController.isSurfaceVisible {
                 TimelineView(miniClockSchedule) { ctx in
                     miniTimeText(posMs: miniScrubFraction.map { Int($0 * Double(total)) }
-                        ?? miniPositionMs(now: ctx.date), totalMs: total)
+                        ?? miniPositionMs(now: ctx.date), totalMs: total, fontSize: m.time)
                 }
             } else {
                 miniTimeText(posMs: miniScrubFraction.map { Int($0 * Double(total)) }
-                    ?? miniPositionMs(now: Date()), totalMs: total)
+                    ?? miniPositionMs(now: Date()), totalMs: total, fontSize: m.time)
             }
         }
     }
 
-    private func miniTimeText(posMs: Int, totalMs: Int) -> some View {
+    private func miniTimeText(posMs: Int, totalMs: Int, fontSize: CGFloat) -> some View {
         Text(NotchTimeFormat.mmss(ms: posMs) + " / " + NotchTimeFormat.mmss(ms: totalMs))
-            .font(.system(size: Self.miniTimeFontSize).monospacedDigit())
+            .font(.system(size: fontSize).monospacedDigit())
             .foregroundStyle(miniSecondaryColor)
     }
 
@@ -4797,6 +4791,31 @@ private struct LyricsLineRow: View, Equatable {
                 .foregroundStyle(base)
                 .lyricTypesetting(item.line.plainText)
         }
+    }
+}
+
+/// 迷你顶部信息那一组按「顶部信息 › 高度」缩放后的各项尺寸(基准与倍率见 `LyricsWindowMiniHeaderSize`)。
+private struct MiniHeaderMetrics {
+    let title: CGFloat
+    let subtitle: CGFloat
+    let time: CGFloat
+    let lineSpacing: CGFloat
+    let coverMinSide: CGFloat
+    let coverMaxSide: CGFloat
+    let coverGap: CGFloat
+    /// 广告期间封面位上那枚喇叭符号。
+    let adIconSize: CGFloat
+
+    init(scale: CGFloat) {
+        typealias S = LyricsWindowMiniHeaderSize
+        title = S.titleFontSize * scale
+        subtitle = S.subtitleFontSize * scale
+        time = S.timeFontSize * scale
+        lineSpacing = S.lineSpacing * scale
+        coverMinSide = S.coverMinSide * scale
+        coverMaxSide = S.coverMaxSide * scale
+        coverGap = S.coverGap * scale
+        adIconSize = 14 * scale
     }
 }
 
