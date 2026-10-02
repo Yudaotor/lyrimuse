@@ -1051,6 +1051,35 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- 发布包必备组件 ----
+    //
+    // package.sh 的架构闸和签名校验只看包里已有的文件,整件没打进包时都不会响;media-control 在 build.sh 里
+    // 找不到只警告、照常出包。必备组件清单是唯一拦得住的地方:钉住清单内容、每个变体都过闸、排在架构闸前面。
+    do {
+        let lyrimuseDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+        if let pkg = try? String(contentsOfFile: lyrimuseDir.appendingPathComponent("package.sh").path, encoding: .utf8) {
+            for rel in ["Resources/media-control/bin/media-control",
+                        "Resources/media-control/lib/media-control/mediaremote-adapter.pl",
+                        "Resources/media-control/Frameworks/MediaRemoteAdapter.framework",
+                        "Resources/lyrimuse-engine",
+                        "Resources/zh-hant.lproj/Localizable.strings"] {
+                expectEqual(sourceBytes(pkg, contain: "\"\(rel)\""), true, "发布包必备组件: 清单里有 \(rel)")
+            }
+            let gate = pkg.range(of: "missing=\"$(missing_contents \"$app\")\"")
+            let archGate = pkg.range(of: "done < <(find \"$app\" -type f)")
+            expectEqual(gate != nil, true, "发布包必备组件: 每个变体都过这道闸")
+            if let gate, let archGate {
+                expectEqual(gate.lowerBound < archGate.lowerBound, true,
+                            "发布包必备组件: 排在架构闸前面(缺整件时架构闸不会响)")
+            }
+        } else {
+            expectEqual(true, false, "发布包必备组件: 读不到 package.sh(路径挪了?)")
+        }
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

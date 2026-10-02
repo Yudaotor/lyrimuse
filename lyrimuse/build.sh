@@ -450,8 +450,8 @@ codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
 # 本地开发机上不要求提前手动 `brew install media-control`——下面检测到没装会自动装一次
 # (CI 见 release.yml,跑在 GitHub Actions 的 macOS runner 上,提前显式装过,这里的自动
 # 安装对 CI 是无操作的冗余检查,不影响什么)。`brew install` 失败(网络问题/没装 Homebrew
-# 本身等)不阻断整个构建,跳过这一步、打个警告——QQ 音乐支持是可选功能,不该让完全不需要
-# 它的人连 Apple Music 都构建不出来。
+# 本身等)不阻断本地构建,跳过这一步、打个警告:这样出来的包只剩 Apple Music 和 Spotify 读得到(走
+# AppleScript),其余播放器都靠 media-control。发布构建缺了它,package.sh 的必备组件闸拒绝打包。
 # LYRIMUSE_MEDIA_CONTROL_PREFIX(给 MacPorts 这类包管理器构建用):从指定
 # 前缀取 media-control、并且**不再**尝试 brew 自动安装——port 的构建沙箱里既没有 brew 也
 # 没有网。设了但路径下没有可执行文件时,按下面既有的"没装"警告路径走,不回落到 brew。
@@ -461,7 +461,7 @@ else
   MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
   if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
     echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
-    brew install media-control || echo "!! brew install media-control 失败——继续构建,QQ 音乐支持这次不可用,Apple Music 不受影响" >&2
+    brew install media-control || echo "!! brew install media-control 失败——继续构建,这次的包只剩 Apple Music / Spotify 读得到" >&2
     MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
   fi
 fi
@@ -589,7 +589,7 @@ else
     ditto "$FINAL_APP_DIR/Contents/Resources/media-control" "$APP_DIR/Contents/Resources/media-control"
     echo "    media-control 从现装包继承(brew 里没找到,保持已装版本不被降级)"
   fi
-  echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
+  echo "!! media-control not found (brew install media-control) — 这次的包只剩 Apple Music / Spotify 读得到" >&2
 fi
 
 # 检查更新改接 Sparkle(见 UpdateChecker.swift 的替代——那份手写的

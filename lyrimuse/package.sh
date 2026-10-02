@@ -48,6 +48,39 @@ VARIANTS=(
   "-intel|--universal --dest|arm64 x86_64"
 )
 
+# 发布包里必须有的组件,路径相对 Lyrimuse.app/Contents/。下面的架构闸和签名校验只看包里**已有**的文件,
+# 整件没打进包时一道都不会响;media-control 在 build.sh 里找不到只警告、照常出包(给本地构建用),缺了它
+# 只剩 Apple Music 和 Spotify 读得到。build.sh 往包里加新的必备组件时,这里一起加。
+REQUIRED_EXECUTABLES=(
+  "Resources/lyrimuse-engine"
+  "Resources/lyrics-translate"
+  "Resources/lyrics-romanize"
+  "Resources/media-control/bin/media-control"
+)
+REQUIRED_CONTENTS=(
+  "Resources/media-control/lib/media-control/mediaremote-adapter.pl"
+  "Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
+  "Resources/nowplaying-clients/libnowplaying-clients.dylib"
+  "Resources/nowplaying-clients/nowplaying-clients.pl"
+  "Resources/zh-hans.lproj/Localizable.strings"
+  "Resources/zh-hant.lproj/Localizable.strings"
+  "Resources/en.lproj/Localizable.strings"
+  "Resources/THIRD_PARTY_LICENSES"
+)
+# 跟 build.sh 同一个开关:设了就不嵌 Sparkle。
+[ -n "${LYRIMUSE_NO_SPARKLE:-}" ] || REQUIRED_CONTENTS+=("Frameworks/Sparkle.framework")
+
+# missing_contents <app>:一行一个打印缺的必备组件,齐全时什么都不打印。
+missing_contents() {
+  local app="$1" rel
+  for rel in "${REQUIRED_EXECUTABLES[@]}"; do
+    { [ -f "$app/Contents/$rel" ] && [ -x "$app/Contents/$rel" ]; } || echo "$rel(缺或不可执行)"
+  done
+  for rel in "${REQUIRED_CONTENTS[@]}"; do
+    [ -e "$app/Contents/$rel" ] || echo "$rel"
+  done
+}
+
 echo "==> building variants"
 VERSION=""
 for v in "${VARIANTS[@]}"; do
@@ -66,6 +99,15 @@ for v in "${VARIANTS[@]}"; do
   [ -n "$ver" ] || { echo "!! 读不出 CFBundleShortVersionString" >&2; exit 1; }
   if [ -z "$VERSION" ]; then VERSION="$ver"; elif [ "$VERSION" != "$ver" ]; then
     echo "!! 两个变体版本号不一致($VERSION vs $ver)" >&2; exit 1
+  fi
+
+  # 发布闸门:必备组件一件不少(清单见 REQUIRED_EXECUTABLES / REQUIRED_CONTENTS)。排在架构闸前面:缺了整件,
+  # 架构闸不会响。
+  missing="$(missing_contents "$app")"
+  if [ -n "$missing" ]; then
+    echo "!! $label 包里缺必备组件,拒绝打包:" >&2
+    sed 's/^/     /' <<< "$missing" >&2
+    exit 1
   fi
 
   # 发布闸门:架构不符是**硬失败**,不像 build.sh 那样只打警告 —— 发布不可撤回,唯一可靠的拦法
