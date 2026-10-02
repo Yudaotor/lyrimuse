@@ -1521,6 +1521,20 @@ func runLyricsManagerTests() {
         }
     }
 
+    // ---- 确认框的说明文字只在弹出时才算 ----
+    //
+    // confirmationDialog 的 message 闭包不管弹没弹,每次 body 求值都会执行;这两段要把整库过一遍。
+    do {
+        let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(view.contains("if confirmFullScan { Text(fullScanConfirmMessage) }"), true,
+                    "确认框说明: 全量扫库那段按 confirmFullScan 门住,不弹时不把整库过一遍")
+        expectEqual(view.contains("if showBatchDeleteConfirm { Text(batchDeleteMessage) }"), true,
+                    "确认框说明: 批量删除那段按 showBatchDeleteConfirm 门住")
+        expectEqual(view.contains("Text(fullScanConfirmMessage)\n"), false, "确认框说明: 全量扫库那段别改回不门住")
+    }
+
     // ---- 窗口开着时多久问一次磁盘(LyricsManagerRefresh)----
     do {
         typealias R = LyricsManagerRefresh

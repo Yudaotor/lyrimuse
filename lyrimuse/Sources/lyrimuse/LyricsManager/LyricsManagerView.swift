@@ -1474,7 +1474,8 @@ struct LyricsManagerView: View {
                         }
                         Button(L10n.t("取消"), role: .cancel) {}
                     } message: {
-                        Text(batchDeleteMessage)
+                        // 同「全量重新扫库」那处:只在确认框开着时算。
+                        if showBatchDeleteConfirm { Text(batchDeleteMessage) }
                     }
                     .onAppear {
                         // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
@@ -1813,7 +1814,8 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(fullScanConfirmMessage)
+            // message 闭包不管确认框弹没弹,每次 body 求值都会执行;按开关门住,不弹时一次都不算。
+            if confirmFullScan { Text(fullScanConfirmMessage) }
         }
         // 电台校准的清空确认。同样单独挂一层,理由见上面那条。
         .confirmationDialog(
@@ -2191,7 +2193,7 @@ struct LyricsManagerView: View {
         LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState)
     }
 
-    /// 「全量重新扫库？」确认框正文:只在确认框弹出时算一次,不进工具栏菜单的渲染路径。
+    /// 「全量重新扫库？」确认框正文,要把整库过一遍:只在确认框开着时取(调用处按 `confirmFullScan` 门住),不进工具栏菜单的渲染路径。
     private var fullScanConfirmMessage: String {
         guard let state = fullScanState else { return "" }
         let pending = LyricsLibraryStatsPanel.fullScanPendingCount(
