@@ -827,6 +827,48 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- 诊断导出:健康检查那一段 ----
+    do {
+        print("\n== 诊断导出:健康检查 ==")
+        typealias H = DiagnosticsHealthCheck
+        expectEqual(H.arguments, ["healthcheck", "-probe-timeout", "\(H.probeBudgetSeconds)s"],
+                    "健康检查: 联网探测的时限显式传给引擎")
+        // 引擎到点之后最多再等 2 秒收尾(healthProbeGrace),本地检查不到 1 秒。
+        expectEqual(TimeInterval(H.probeBudgetSeconds) + 2 + 1 < H.timeoutSeconds, true,
+                    "健康检查: 探测时限 + 收尾 + 本地检查要留在子进程超时以内")
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let engineSource = (try? String(contentsOfFile: repoRoot.appendingPathComponent(
+            "lyrimuse-collector/healthcheckcli.go").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(engineSource, contain: "fs.Duration(\"probe-timeout\""), true,
+                    "健康检查: 引擎认 -probe-timeout 这个参数")
+        expectEqual(sourceBytes(engineSource, contain: "healthProbeGrace  = 2 * time.Second"), true,
+                    "健康检查: 引擎的收尾时限还是上面按的 2 秒")
+
+        let killed = H.reportLines(stdout: "", stderr: "api call: GET kuwo.cn/x FAILED\n", status: 15, timedOut: true)
+        expectEqual(killed.first?.contains("did not finish within 15s"), true,
+                    "健康检查: 一行没吐就被超时终止时,如实写超时")
+        expectEqual(killed.contains("api call: GET kuwo.cn/x FAILED"), true,
+                    "健康检查: stdout 为空时 stderr 照样附上")
+        expectEqual(H.reportLines(stdout: "", stderr: "", status: 2, timedOut: false),
+                    ["(collector healthcheck produced no output, exit code 2)"],
+                    "健康检查: 没超时的空输出报退出码,stderr 为空不加附注")
+        let partial = H.reportLines(stdout: "  ok   配置文件  x\n", stderr: "", status: 15, timedOut: true)
+        expectEqual(partial.first, "  ok   配置文件  x", "健康检查: 有输出时原样保留")
+        expectEqual(partial.last?.contains("may be incomplete"), true, "健康检查: 有输出但被终止时标明可能不全")
+        expectEqual(H.reportLines(stdout: "a\nb", stderr: "", status: 0, timedOut: false), ["a", "b"],
+                    "健康检查: 正常跑完只有报告本体")
+
+        let repeated = (1...12).map { "api call: GET host/path elapsed_ms=\($0)" }
+        let folded = H.collapseRepeatedLines(repeated)
+        expectEqual(folded.count, 3, "重复行折叠: 满 12 条同类只留首尾,中间一行省略说明")
+        expectEqual(folded.first, repeated.first, "重复行折叠: 第一条原样")
+        expectEqual(folded.last, repeated.last, "重复行折叠: 最后一条原样")
+        expectEqual(folded.dropFirst().first?.contains("又重复了 10 次"), true, "重复行折叠: 省略说明写中间省了几条")
+        let eleven = Array(repeated.prefix(11))
+        expectEqual(H.collapseRepeatedLines(eleven), eleven, "重复行折叠: 不到 12 条原样保留")
+    }
+
     // ---- build.sh 用什么身份签----
     //
     // ad-hoc 签名的「指定要求」就是一条光秃秃的 cdhash,而 TCC(辅助功能 / 自动化授权)存的正是这条要求:

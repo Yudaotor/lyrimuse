@@ -52,7 +52,12 @@ func runHealthcheckCLI(args []string) {
 	fs := flag.NewFlagSet("healthcheck", flag.ExitOnError)
 	asJSON := fs.Bool("json", false, "output JSON instead of text")
 	skipNetwork := fs.Bool("local-only", false, "skip the lyric source probes (no network)")
+	probeTimeout := fs.Duration("probe-timeout", healthProbeBudget, "time limit for the lyric source probes")
 	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if *probeTimeout <= 0 {
+		fmt.Fprintf(os.Stderr, "healthcheck: -probe-timeout must be positive\n")
 		os.Exit(2)
 	}
 
@@ -183,7 +188,6 @@ func runHealthcheckCLI(args []string) {
 
 	// ---- 网络:拿真实搜索路径探两首 ----
 	if !*skipNetwork {
-		type probeTrack struct{ artist, title, album string }
 		// 中文探测曲从《晴天》(周杰伦)换成《少年》(梦然):酷我(kuwo)接入后
 		// 暴露出一个跟"能不能连通"无关的结构性问题——酷我搜索对**越红越被翻唱/改编到
 		// 泛滥**的歌命中率反而越低(前排全是 DJ 改编/伴奏/演唱会现场,原唱裸版本挤不进去),
@@ -195,49 +199,14 @@ func runHealthcheckCLI(args []string) {
 		// 保留了对中文库其它源(netease/qq/kugou/musixmatch/amll)一贯的高命中率,不会让
 		// 探测曲的目的从"测连通性"退化成"测某个源的曲库覆盖率"。英文探测曲(Yesterday)
 		// 未受影响、原样保留——kuwo 对英文曲库本来就没有覆盖,不指望这首帮它过关。
-		probes := []probeTrack{
+		probes := []healthProbeTrack{
 			{"梦然", "少年", ""},                      // 中文库
 			{"The Beatles", "Yesterday", "Help!"}, // 英文库
 		}
-		answered := map[string]int{}
-		start := time.Now()
-		for _, p := range probes {
-			qa, qt, qal := searchQueryFields(p.artist, p.title, p.album)
-			_, scored := scoredLyricCandidates(context.Background(), qa, qt, qal, 0)
-			for _, src := range distinctLyricSources(scored, false) {
-				answered[src]++
-			}
-		}
-		elapsed := time.Since(start).Round(time.Millisecond)
+		outcome := probeLyricSourcesWithin(probes, *probeTimeout, healthProbeGrace)
 		report.NetworkLooksDown = networkLooksDown()
-
-		if report.NetworkLooksDown {
-			add("网络", healthFail, "所有请求都发不出去(DNS/连接失败),歌词解析这一轮全部无效")
-		} else {
-			add("网络", healthOK, "探测 %d 首用时 %s", len(probes), elapsed)
-		}
-		// 单个源坏掉不等于"歌词出不来"——还有另外四个。所以单源只报 warn,只有**所有**
-		// 启用的源都哑了才是 fail。分级要对得上这个命令要回答的问题("歌词为什么不出来"),
-		// 否则一个长期失效的源会让 healthcheck 常年顶着 fail,那个信号就不值钱了。
-		dead := 0
-		for _, src := range enabled {
-			n := answered[src]
-			switch {
-			case n == len(probes):
-				add("源 "+src, healthOK, "%d/%d 首探测曲给出了候选", n, len(probes))
-			case n > 0:
-				// 一半命中是正常的：中文源查不到英文歌，反之亦然。
-				add("源 "+src, healthOK, "%d/%d 首(另一首不在它的曲库里属正常)", n, len(probes))
-			default:
-				dead++
-				add("源 "+src, healthWarn, "两首探测曲都没有候选,这个源目前可能不可用")
-			}
-		}
-		if dead > 0 && dead == len(enabled) {
-			add("歌词源整体", healthFail, "%d 个启用的源全部没有候选,歌词不会出现", dead)
-		} else if dead > 0 {
-			add("歌词源整体", healthOK, "%d/%d 个源可用,歌词功能正常", len(enabled)-dead, len(enabled))
-		}
+		report.Items = append(report.Items,
+			healthProbeItems(enabled, len(probes), outcome, *probeTimeout, report.NetworkLooksDown)...)
 	}
 
 	report.OK = true
@@ -272,6 +241,114 @@ func runHealthcheckCLI(args []string) {
 	if !report.OK {
 		os.Exit(1)
 	}
+}
+
+// 联网探测的时限:几首探测曲一共给 healthProbeBudget,到点取消、按已经回来的结果出报告;取消之后最多再等
+// healthProbeGrace 让搜索收尾,还没回来的不等了。诊断导出给整个子命令 15 秒并显式传 -probe-timeout
+// (Core DiagnosticsHealthCheck),本地检查不到 1 秒:时限 + 收尾 + 本地检查必须留在那 15 秒以内,两处一起改。
+const (
+	healthProbeBudget = 10 * time.Second
+	healthProbeGrace  = 2 * time.Second
+)
+
+type healthProbeTrack struct{ artist, title, album string }
+
+// healthProbeSearch 是联网探测实际发的那次搜索。单测换成假的。
+var healthProbeSearch = func(ctx context.Context, p healthProbeTrack) []scoredLyricCandidateResult {
+	qa, qt, qal := searchQueryFields(p.artist, p.title, p.album)
+	_, scored := scoredLyricCandidates(ctx, qa, qt, qal, 0)
+	return scored
+}
+
+type healthProbeOutcome struct {
+	answered  map[string]int // 源 → 给出过候选的探测曲数,不看分数(跟 test-lyric-sources 同一口径)
+	elapsed   time.Duration
+	truncated bool // 时限到了还没跑完
+}
+
+// probeLyricSourcesWithin 让几首探测曲并发跑、共用一个时限。到点用 cancel 收工,别换成 context.WithTimeout:
+// 到点的请求会报 DeadlineExceeded,被记成网络失败、喂进熔断,全部卡住时还会被 networkLooksDown 判成网络不通;
+// 主动取消(context.Canceled)这几处都不算(见 doHTTPTracked)。
+func probeLyricSourcesWithin(probes []healthProbeTrack, budget, grace time.Duration) healthProbeOutcome {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	start := time.Now()
+	search := healthProbeSearch
+	results := make(chan []scoredLyricCandidateResult, len(probes))
+	for _, p := range probes {
+		go func(p healthProbeTrack) { results <- search(ctx, p) }(p)
+	}
+	out := healthProbeOutcome{answered: map[string]int{}}
+	budgetTimer := time.NewTimer(budget)
+	defer budgetTimer.Stop()
+	var giveUp <-chan time.Time
+	for pending := len(probes); pending > 0; {
+		select {
+		case scored := <-results:
+			pending--
+			for _, src := range lyricSourcesResponded(scored) {
+				out.answered[src]++
+			}
+		case <-budgetTimer.C:
+			out.truncated = true
+			cancel()
+			giveUp = time.After(grace)
+		case <-giveUp:
+			pending = 0
+		}
+	}
+	out.elapsed = time.Since(start).Round(time.Millisecond)
+	return out
+}
+
+// healthProbeItems 把联网探测的结果写成报告项。
+//
+// 单个源坏掉不等于"歌词出不来"——还有别的源。所以单源只报 warn,只有**所有**启用的源都哑了才是 fail。
+// 分级要对得上这个命令要回答的问题("歌词为什么不出来"),否则一个长期失效的源会让 healthcheck 常年顶着
+// fail,那个信号就不值钱了。探测被时限截断时,没给出候选只说明这段时间里没回,不报"可能不可用",也不报 fail。
+func healthProbeItems(enabled []string, probes int, o healthProbeOutcome, budget time.Duration, networkDown bool) []healthCheckItem {
+	var items []healthCheckItem
+	add := func(name string, status healthStatus, format string, a ...any) {
+		items = append(items, healthCheckItem{Name: name, Status: status, Detail: fmt.Sprintf(format, a...)})
+	}
+	switch {
+	case networkDown:
+		add("网络", healthFail, "所有请求都发不出去(DNS/连接失败),歌词解析这一轮全部无效")
+	case o.truncated:
+		add("网络", healthWarn, "探测 %d 首超过 %s 没跑完,已截断:网络可能很慢,下面没给出候选的源不一定坏了", probes, budget)
+	default:
+		add("网络", healthOK, "探测 %d 首用时 %s", probes, o.elapsed)
+	}
+	dead := 0
+	for _, src := range enabled {
+		n := o.answered[src]
+		switch {
+		case n == probes:
+			add("源 "+src, healthOK, "%d/%d 首探测曲给出了候选", n, probes)
+		case n > 0 && o.truncated:
+			add("源 "+src, healthOK, "%d/%d 首(探测被截断,另一首可能没来得及)", n, probes)
+		case n > 0:
+			// 一半命中是正常的：中文源查不到英文歌，反之亦然。
+			add("源 "+src, healthOK, "%d/%d 首(另一首不在它的曲库里属正常)", n, probes)
+		case o.truncated:
+			dead++
+			add("源 "+src, healthWarn, "%s 内没给出候选(探测被截断,不一定坏了)", budget)
+		default:
+			dead++
+			add("源 "+src, healthWarn, "两首探测曲都没有候选,这个源目前可能不可用")
+		}
+	}
+	switch {
+	case dead > 0 && dead == len(enabled) && o.truncated:
+		add("歌词源整体", healthWarn, "%d 个启用的源在 %s 内都没给出候选,网络很慢时歌词会出得很慢", dead, budget)
+	case dead > 0 && dead == len(enabled):
+		add("歌词源整体", healthFail, "%d 个启用的源全部没有候选,歌词不会出现", dead)
+	case dead > 0 && o.truncated:
+		add("歌词源整体", healthOK, "%d/%d 个源在 %s 内给出了候选,歌词功能正常", len(enabled)-dead, len(enabled), budget)
+	case dead > 0:
+		add("歌词源整体", healthOK, "%d/%d 个源可用,歌词功能正常", len(enabled)-dead, len(enabled))
+	}
+	return items
 }
 
 // enabledLyricSourceNames 返回当前设置里启用的歌词源,顺序固定,便于比对输出。

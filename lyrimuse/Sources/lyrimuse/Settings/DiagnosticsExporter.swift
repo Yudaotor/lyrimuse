@@ -311,19 +311,8 @@ enum DiagnosticsExporter {
 
         // ---- collector healthcheck----
         //
-        // collector 早就有一个专门回答"歌词为什么不出来"的一次性子命令(healthcheckcli.go):
-        // 配置文件能不能解析、歌词来源开关、缓存文件是否可解析、歌词导出目录能不能写、
-        // ListenBrainz/Last.fm 是否配置好,以及**真拿两首探测曲实测**各歌词源现在给不给
-        // 候选、网络整体是否看起来通(networkLooksDown)。这些结论此前只有用户自己在终端
-        // 跑 `collector healthcheck` 才看得到,诊断导出完全没有引用——相当于放着一份现成的
-        // 网络层/逻辑层体检报告没用上。这里跟"联网搜索候选歌词"用同一个模式(Process 调用
-        // 打包进 .app 里的 collector 二进制),直接拿文本输出(不用 -json,省一层解析,
-        // 输出本身已经是给人看的格式)。
-        //
-        // 不传 -local-only:接受多等几秒换真实的网络探测结果——这一步本来就在后台线程跑,
-        // 用户此时已经看不到界面被卡住。加一道超时保护:两首探测曲理论上 collector 自己有
-        // 超时,但子进程整体卡死的可能性不能排除(比如某个源的 HTTP 客户端没设超时),
-        // 诊断导出本身不能被这个拖死。
+        // 引擎的 `healthcheck`(healthcheckcli.go):配置、歌词来源开关、缓存、导出目录、提交后端,再拿两首探测曲
+        // 实测各歌词源。取文本输出,不用 -json;不传 -local-only,联网探测有自己的时限(见 collectorHealthCheckLines)。
         lines.append("== Collector Health Check (`collector healthcheck`) ==")
         lines.append(contentsOf: collectorHealthCheckLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
@@ -504,106 +493,27 @@ enum DiagnosticsExporter {
             try? fm.moveItem(at: zipped, to: destination)
         }
     }
-    /// 把"内容几乎相同、只有时间戳/耗时/计数这类可变部分不同"的连续大量重复行折叠成一条
-    /// 摘要。网络审计的例行成功调用(比如同一个 host 被反复访问)、轮询失败这类天生噪音
-    /// 典型都长这样——实测一份真实导出里,这类重复行能占到 App Log 的六七成,把真正
-    /// 罕见、值得看的信号淹没掉。
-    ///
-    /// 判据:抹掉行内所有连续数字段(时间戳、耗时、计数)之后如果跟别的行长得一模一样,
-    /// 就算"同一类"。只在**同一类出现次数达到阈值**时才折叠,保留首尾两条(各自带真实
-    /// 时间戳)加一行"中间还有 N 条被省略"——低于阈值的重复(比如偶尔重试两三次)原样
-    /// 保留,那种量级的重复本身往往就是有意义的信号,不该被抹掉。
-    ///
-    /// 阈值选 12 是刻意的:高到不会把"设置面板开关了 30 次"这类还算有时间线索价值的
-    /// 中等频率事件折叠掉,低到能盖住实测坐实的几个真正病理性重复(921/1092/168 次的
-    /// 那几类)。折叠是**全局**的(不要求连续出现),因为像"image"这类网络审计行天然会
-    /// 跟别的日志穿插在一起,只按连续段折叠效果有限。
-    private static func collapseRepeatedLines(_ lines: [String], minRepeat: Int = 12) -> [String] {
-        func template(_ line: String) -> String {
-            var out = ""
-            out.reserveCapacity(line.count)
-            var lastWasDigit = false
-            for ch in line {
-                if ch.isASCII, ch.isNumber {
-                    if !lastWasDigit { out.append("#") }
-                    lastWasDigit = true
-                } else {
-                    out.append(ch)
-                    lastWasDigit = false
-                }
-            }
-            return out
-        }
-
-        var indicesByTemplate: [String: [Int]] = [:]
-        for (i, line) in lines.enumerated() {
-            indicesByTemplate[template(line), default: []].append(i)
-        }
-
-        var dropped = Set<Int>()
-        var insertAfter: [Int: String] = [:]
-        for indices in indicesByTemplate.values where indices.count >= minRepeat {
-            let middle = indices.dropFirst().dropLast()
-            for i in middle { dropped.insert(i) }
-            insertAfter[indices.first!] =
-                "    ⋯ 以上这类日志又重复了 \(middle.count) 次（已省略，下一行是最后一次出现）⋯"
-        }
-
-        var out: [String] = []
-        out.reserveCapacity(lines.count)
-        for (i, line) in lines.enumerated() {
-            if dropped.contains(i) { continue }
-            out.append(line)
-            if let note = insertAfter[i] { out.append(note) }
-        }
-        return out
-    }
-
-    /// 跑一次 `collector healthcheck`(不带 -json,输出本身就是给人看的格式;不带
-    /// -local-only,接受多等几秒换真实网络探测结果)。二进制取包里那份
-    /// (LyrimusePaths.bundledEnginePath)。
-    ///
-    /// 这个操作本身对"排查为什么坏了"这件事天然健壮很重要——用户导出诊断信息往往正是
-    /// 因为某处坏了,healthcheck 子进程本身启动失败/超时/空输出都必须体现成报告里的一行
-    /// 文字,不能让整个导出因此崩掉或者悄悄漏掉这一段。
+    /// 跑一次引擎的 `healthcheck`,写进报告的那几行。参数、超时和输出格式见 Core `DiagnosticsHealthCheck`;
+    /// 二进制取包里那份(LyrimusePaths.bundledEnginePath)。启动失败、超时、空输出都写成报告里的一行,
+    /// 不让导出因此失败。
     private static func collectorHealthCheckLines() -> [String] {
         let collectorPath = LyrimusePaths.bundledEnginePath
         guard FileManager.default.isExecutableFile(atPath: collectorPath) else {
             return ["(collector binary not found at \(collectorPath))"]
         }
 
-        // stdout / stderr 分两路,不合成一路:healthcheck 报告本身走 fmt.Println(stdout),但它触发的两首探测曲会经
-        // doHTTPTracked 打一堆 `api call: ...` 审计行到 log.Printf(stderr)。合成一路会让结构化报告跟这堆网络噪音交叉
-        // 穿插,可读性反而更差。分开之后 stdout 是主体,stderr 只在非空时作为附注折叠展示。
-        //
-        // 走 ProcessRunner:两根管子并发读空(某一路写满 64KB 管道缓冲时顺序读会死锁);15 秒超时先 SIGTERM、再不退就
-        // SIGKILL(原来只发 SIGTERM,collector 响应得慢时导出会卡在 15 秒以外);`timedOut` 由它如实报出「是不是我们杀的」,
-        // 不要事后用 terminationReason == .uncaughtSignal 去猜 —— 那个条件任何信号杀死的进程都会命中。
+        // stdout / stderr 分两路:报告本体走 stdout,探测曲触发的网络审计行走 stderr,合成一路会交叉穿插。
+        // ProcessRunner 并发读空两根管子、到点先 SIGTERM 再 SIGKILL;是不是被它杀的看 `timedOut`,
+        // 别用 terminationReason == .uncaughtSignal 去猜(任何信号杀死的进程都会命中)。
         // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
         guard let result = ProcessRunner.run(
-            collectorPath, ["healthcheck"], timeout: 15,
+            collectorPath, DiagnosticsHealthCheck.arguments, timeout: DiagnosticsHealthCheck.timeoutSeconds,
             environment: LyrimusePaths.collectorProcessEnvironment(), captureStderr: true)
         else {
             return ["(failed to launch collector healthcheck)"]
         }
-        let timedOut = result.timedOut
-        let stderrData = result.stderr
-
-        let stdoutText = result.stdoutText
-        guard !stdoutText.isEmpty else {
-            return ["(collector healthcheck produced no output, exit code \(result.status))"]
-        }
-        var resultLines = stdoutText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        if timedOut {
-            resultLines.append("(healthcheck timed out after 15s and was terminated — the report above may be incomplete)")
-        }
-        if let stderrText = String(data: stderrData, encoding: .utf8), !stderrText.isEmpty {
-            resultLines.append("")
-            resultLines.append("-- healthcheck 探测期间产生的原始日志(通常是探测曲触发的网络审计行,非结构化报告本体) --")
-            resultLines.append(contentsOf: collapseRepeatedLines(
-                stderrText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)))
-        }
-        return resultLines
+        return DiagnosticsHealthCheck.reportLines(
+            stdout: result.stdoutText, stderr: result.stderrText, status: result.status, timedOut: result.timedOut)
     }
 
     /// 当前播放曲目在本地 enrich 缓存里的解析状态——EnrichCacheReader 整个类型是

@@ -130,7 +130,7 @@ func main() {
 		runDeleteListenCLI(os.Args[2:])
 		return
 	}
-	// `collector healthcheck [-json] [-local-only]`:一次性诊断"歌词为什么不出来"
+	// `collector healthcheck [-json] [-local-only] [-probe-timeout 10s]`:一次性诊断"歌词为什么不出来"
 	// (见 healthcheckcli.go)。跟上面几个一样,不进入常驻循环。
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		runHealthcheckCLI(os.Args[2:])
