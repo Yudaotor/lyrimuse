@@ -13,6 +13,7 @@ func runPlaybackSourceHardeningTests() {
     libraryAndCacheTests()
     replayNoDurationFirstTick()
     wiringContracts()
+    spotifyConnectMirrorTests()
 }
 
 // ---- 轮询单飞 ----
@@ -411,4 +412,77 @@ private func wiringContracts() {
     let collectorService = code("lyrimuse/Settings/CollectorServiceManager.swift")
     expectEqual(collectorService.contains("\"ProcessType\": \"Interactive\","), true, "歌词引擎调度: launchd 任务按 Interactive 跑")
     expectEqual(collectorService.contains("\"ProcessType\": \"Background\""), false, "歌词引擎调度: 别退回后台档")
+
+    // 桌面版 Spotify 的 Connect 镜像:两条取快照的入口都先过它;先问 CoreAudio,不该问时一个子进程都不起。
+    let autoDetected = body("private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {", in: client)
+    let multiSelected = body("private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {", in: client)
+    expectEqual(autoDetected.contains("resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot())"), true,
+                "Spotify 镜像接线: 自动识别那条路先过镜像判定")
+    expectEqual(multiSelected.contains("resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot())"), true,
+                "Spotify 镜像接线: 多选那条路先过镜像判定")
+    let mirror = body("private static func resolvingSpotifyConnectMirror(", in: client)
+    expectEqual(before("ProcessAudioOutput.isRunningOutput(bundleID: bundleID)",
+                       "NowPlayingClientsProbe.snapshot(forBundleID: webSource)", in: mirror), true,
+                "Spotify 镜像接线: 先问 CoreAudio,再起子进程问网页版")
+    expectEqual(mirror.contains("let web = ask ? NowPlayingClientsProbe.snapshot(forBundleID: webSource) : nil"), true,
+                "Spotify 镜像接线: 不该问时不起子进程")
+    expectEqual(mirror.contains("if !useWeb { spotifyWebSource = nil }"), true,
+                "Spotify 镜像接线: 没换成网页版就清掉记录,之后不再问")
+    let noteAcceptedBody = body("private static func noteAccepted(bundleID: String) {", in: client)
+    expectEqual(noteAcceptedBody.contains("spotifyWebSource = webSource"), true, "Spotify 镜像接线: 每次接受快照都更新网页版来源")
+}
+
+// ---- 桌面版 Spotify 的 Connect 镜像 ----
+
+@MainActor
+private func spotifyConnectMirrorTests() {
+    typealias M = SpotifyConnectMirror
+    let spotify = PlaybackPlayer.spotify.bundleIdentifier
+    let webkit = "com.apple.WebKit.GPU"
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: spotify, webSourceBundleID: webkit, desktopOutputting: false), true,
+                "Spotify 镜像: 上一份来自网页版、焦点跳到没在出声的桌面版 → 问一次网页版")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: spotify, webSourceBundleID: webkit, desktopOutputting: true), false,
+                "Spotify 镜像: 桌面版自己在本机输出音频 → 是它在出声,不问")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: spotify, webSourceBundleID: nil, desktopOutputting: false), false,
+                "Spotify 镜像: 上一份不是网页版(遥控音箱、手机) → 不问,照旧用桌面版")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: webkit, webSourceBundleID: webkit, desktopOutputting: false), false,
+                "Spotify 镜像: 焦点上就是网页版 → 不问")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: PlaybackPlayer.appleMusic.bundleIdentifier, webSourceBundleID: webkit,
+                                     desktopOutputting: false), false,
+                "Spotify 镜像: 焦点上是别的播放器 → 不问")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: spotify, webSourceBundleID: spotify, desktopOutputting: false), false,
+                "Spotify 镜像: 记下的来源就是桌面版自己 → 不问")
+    expectEqual(M.shouldAskWebPlayer(focusBundleID: spotify, webSourceBundleID: "", desktopOutputting: false), false,
+                "Spotify 镜像: 空来源 → 不问")
+
+    func snap(_ title: String, artist: String, playing: Bool, bundle: String) -> MediaControlSnapshot {
+        .forReplay(title: title, artist: artist, album: "How Long Do You Think It's Gonna Last?", duration: 254, elapsedTime: 230,
+                   playing: playing, playbackRate: playing ? 1 : 0, bundleIdentifier: bundle, anchorElapsedTime: 230)
+    }
+    let desktop = snap("Renegade", artist: "Big Red Machine", playing: true, bundle: spotify)
+    expectEqual(M.webPlayerWins(desktop: desktop, web: snap("Renegade", artist: "Big Red Machine, Taylor Swift", playing: true,
+                                                             bundle: webkit)), true,
+                "Spotify 镜像: 网页版报的是同一首 → 用网页版(两边歌手写法不同不影响)")
+    expectEqual(M.webPlayerWins(desktop: desktop, web: snap("Renegade", artist: "Big Red Machine, Taylor Swift", playing: false,
+                                                             bundle: webkit)), true,
+                "Spotify 镜像: 网页版刚暂停、桌面版还报在播 → 仍用网页版")
+    expectEqual(M.webPlayerWins(desktop: desktop, web: snap("WHERE IS MY HUSBAND!", artist: "RAYE", playing: true, bundle: webkit)), false,
+                "Spotify 镜像: 网页版报的是另一首 → 用桌面版")
+    expectEqual(M.webPlayerWins(desktop: desktop, web: nil), false, "Spotify 镜像: 问不到网页版 → 用桌面版")
+    expectEqual(M.webPlayerWins(desktop: snap("", artist: "Big Red Machine", playing: true, bundle: spotify),
+                                web: snap("", artist: "Big Red Machine", playing: true, bundle: webkit)), false,
+                "Spotify 镜像: 曲名为空不算同一首")
+    expectEqual(M.webPlayerWins(desktop: desktop, web: snap("Renegade\u{200B} ", artist: "Big Red Machine", playing: true,
+                                                             bundle: webkit)), true,
+                "Spotify 镜像: 曲名按清洗后的比(零宽字符、首尾空白)")
+
+    expectEqual(M.nextWebSource(acceptedBundleID: webkit, acceptedIsSpotifyWebBrowser: true), webkit,
+                "Spotify 镜像: 接受了配对网页版的浏览器 → 记下它")
+    expectEqual(M.nextWebSource(acceptedBundleID: spotify, acceptedIsSpotifyWebBrowser: false), nil,
+                "Spotify 镜像: 接受了别的来源 → 清掉")
+    expectEqual(M.nextWebSource(acceptedBundleID: "", acceptedIsSpotifyWebBrowser: true), nil, "Spotify 镜像: 空 bundle id 不记")
+
+    expectEqual(ProcessAudioOutput.isRunningOutput(bundleID: ""), false, "进程音频输出: 空 bundle id 当没在输出")
+    expectEqual(ProcessAudioOutput.isRunningOutput(bundleID: "me.yudaotor.lyrimuse.no-such-app"), false,
+                "进程音频输出: 没有这个进程对象当没在输出")
 }

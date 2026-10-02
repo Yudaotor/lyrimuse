@@ -618,7 +618,7 @@ public enum MediaControlClient {
             guard let candidate, players.contains(candidate) else { return nil }
             return snapshotAfterFocusLost()
         }
-        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else {
+        guard let (snapshot, bundleID) = resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot()) else {
             return fallback() ?? snapshotWhileChannelBroken(players: players)
         }
         if !acceptedBundleIDs.contains(bundleID) {
@@ -768,9 +768,13 @@ public enum MediaControlClient {
 
     /// 正常路径拿到了被接受的快照 —— 记下它是谁报的。
     private static func noteAccepted(bundleID: String) {
+        let webSource = SpotifyConnectMirror.nextWebSource(
+            acceptedBundleID: bundleID,
+            acceptedIsSpotifyWebBrowser: directQueryPlayer(forBundleID: bundleID) == nil && isSpotifyWebBrowser(bundleID))
         appleMusicFocusLock.lock()
         lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer(
             current: lastAcceptedDirectQueryPlayer, acceptedBundleID: bundleID, fallbackSucceeded: nil)
+        spotifyWebSource = webSource
         fallbackTargetGone = false
         let wasFallingBack = fallbackActive
         fallbackActive = false
@@ -778,6 +782,54 @@ public enum MediaControlClient {
         if wasFallingBack {
             logger.notice("now playing focus regained; back on media-control")
         }
+    }
+
+    // MARK: - 桌面版 Spotify 的 Connect 镜像
+
+    /// 上一份被接受的快照来自配对了 Spotify 网页版的浏览器时,它报上来的 bundle id(Safari 是它的媒体进程);别的情况为 nil。
+    private static var spotifyWebSource: String?
+    /// 此刻是不是正把焦点上的桌面版 Spotify 当成镜像、改用网页版那份(只为让日志在状态翻转时各打一条)。
+    private static var spotifyMirrorActive = false
+
+    /// 焦点上的桌面版 Spotify 正在遥控网页版(Spotify Connect)时,换成网页版自己报的那份。判据见 `SpotifyConnectMirror`。
+    ///
+    /// 只在「上一份被接受的来自网页版、焦点跳到了桌面版」时才动:先问 CoreAudio 桌面版有没有在本机输出音频(不起子进程),
+    /// 没在输出才按 bundle id 问一次网页版(起一个子进程)。问不到、或者不是同一首,就照旧用桌面版那份,并清掉记录,
+    /// 之后不再问,直到又接受了一份网页版的快照。
+    private static func resolvingSpotifyConnectMirror(
+        _ raw: (MediaControlSnapshot, String)?
+    ) -> (MediaControlSnapshot, String)? {
+        guard let (snapshot, bundleID) = raw, bundleID == PlaybackPlayer.spotify.bundleIdentifier else { return raw }
+        appleMusicFocusLock.lock()
+        let webSource = spotifyWebSource
+        appleMusicFocusLock.unlock()
+        guard let webSource else { return raw }
+        let ask = SpotifyConnectMirror.shouldAskWebPlayer(
+            focusBundleID: bundleID, webSourceBundleID: webSource,
+            desktopOutputting: ProcessAudioOutput.isRunningOutput(bundleID: bundleID))
+        let web = ask ? NowPlayingClientsProbe.snapshot(forBundleID: webSource) : nil
+        let useWeb = ask && SpotifyConnectMirror.webPlayerWins(desktop: snapshot, web: web)
+        appleMusicFocusLock.lock()
+        let wasActive = spotifyMirrorActive
+        spotifyMirrorActive = useWeb
+        if !useWeb { spotifyWebSource = nil }
+        appleMusicFocusLock.unlock()
+        if useWeb, let web {
+            if !wasActive {
+                logger.notice("now playing: \(bundleID, privacy: .public) is mirroring the Spotify web player; staying on \(webSource, privacy: .public)")
+            }
+            return (web, webSource)
+        }
+        if wasActive {
+            logger.notice("now playing: \(bundleID, privacy: .public) no longer mirrors the Spotify web player; using it again")
+        }
+        return raw
+    }
+
+    /// 这个 bundle id 是不是配对了 Spotify 网页版的浏览器(Safari 报上来的是它的媒体进程,先换成宿主再查配对)。
+    private static func isSpotifyWebBrowser(_ bundleID: String) -> Bool {
+        BrowserPositionProbe.shared.isPaired(
+            bundleID: BrowserPositionProbe.probeTargetBundleID(forReported: bundleID), platformID: "spotifyWeb")
     }
 
     /// media-control 这一拍没给出可用快照(通道坏 / 没人在报 / 焦点在别的 App 上)时,
@@ -985,7 +1037,7 @@ public enum MediaControlClient {
         // 三条 nil 出口都先过一次 `appleMusicSnapshotAfterFocusLost`:
         // 「系统 Now Playing 焦点被别的 App 占走」跟「真的没人在放歌」在这里长得一模一样,
         // 而前者下 Music.app 往往还在放。理由与收敛性见那个函数的头注。
-        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else {
+        guard let (snapshot, bundleID) = resolvingSpotifyConnectMirror(fetchRawMediaControlSnapshot()) else {
             // 失败原因已由 fetchRawMediaControlSnapshot 记下,别在这里覆盖掉。
             return snapshotAfterFocusLost() ?? snapshotWhileChannelBroken(players: [.auto])
         }
