@@ -101,7 +101,7 @@ func cleanMediaTag(s string) string {
 		switch r {
 		case '\u00a0', '\u2007', '\u202f', '\u3000': // 各种不换行空格 / 全角空格
 			return ' '
-		case '\u200b', '\u200c', '\u200d', '\ufeff': // 零宽字符,没有宽度,直接删
+		case '\u200b', '\u200c', '\u200d', '\u2060', '\ufeff': // 零宽字符(含字连接符 U+2060),没有宽度,直接删
 			return -1
 		}
 		return r

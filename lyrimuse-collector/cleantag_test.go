@@ -16,6 +16,7 @@ func TestCleanMediaTag_StripsInvisibleWhitespace(t *testing.T) {
 		{"全角空格", "A\u3000B", "A B"},
 		{"窄不换行空格", "A\u202fB", "A B"},
 		{"零宽字符直接删", "A\u200bB", "AB"},
+		{"字连接符直接删", "\u2060千人操", "千人操"},
 		{"BOM 直接删", "\ufeffABC", "ABC"},
 		{"连续空白折成一个", "A   B", "A B"},
 		{"首尾空白去掉", "  ABC  ", "ABC"},

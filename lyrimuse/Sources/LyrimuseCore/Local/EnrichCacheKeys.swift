@@ -51,7 +51,7 @@ public enum EnrichCacheKeys {
         var pendingSpace = false
         for u in s.unicodeScalars {
             switch u {
-            case "\u{200b}", "\u{200c}", "\u{200d}", "\u{feff}": continue
+            case "\u{200b}", "\u{200c}", "\u{200d}", "\u{2060}", "\u{feff}": continue
             default: break
             }
             if GoStringSemantics.isSpace(u) {

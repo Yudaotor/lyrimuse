@@ -277,6 +277,7 @@ func runCacheKeyTests() {
             ("空串", "", ""),
             ("不换行空格", "Song\u{00a0}(I Miss You)", "Song"),
             ("零宽字符", "不散\u{200b}的筵席", "不散的筵席"),
+            ("字连接符", "\u{2060}千人操", "千人操"),
             ("全角空格", "不散的筵席\u{3000}（I Miss You）", "不散的筵席"),
         ]
         for (name, input, want) in cases {
