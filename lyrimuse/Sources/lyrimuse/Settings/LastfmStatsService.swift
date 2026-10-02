@@ -692,7 +692,19 @@ final class LastfmStatsService: ObservableObject {
     /// 榜单每一行、最近记录每一行能直接进 App 打开的目标(右键菜单用),键同 chartLocalCovers(最近记录按歌曲榜的键)。
     /// 从本机歌词缓存现算,不进快照,见 refreshChartAppLinks。
     @Published private(set) var chartAppLinks: [String: ChartAppLinks] = [:]
-    private var chartAppLinksInputs: (keys: [String], cacheVersion: Date?, pagesVersion: Date?)?
+    /// `artistAliases`:查不到时按歌手别名再查(见 EnrichCacheReader.chartAppLinks),别名表后台算完才灌进来,换了要重算。
+    private var chartAppLinksInputs: (keys: [String], cacheVersion: Date?, pagesVersion: Date?,
+                                      artistAliases: [String: String])?
+    /// 统计区此刻在不在屏上(挂着、且设置窗口看得见),由 LastfmStatsSection 报上来。右键菜单只在那里出现,
+    /// 不在屏上时 refreshChartAppLinks 不算:整份建链接索引要几百毫秒主线程,而本机缓存播放中几秒就变一次,
+    /// 设置是 `Settings {}` 场景、关窗不卸载视图,不拦的话关着窗也每变一次缓存重建一次。
+    private var chartAppLinksOnScreen = false
+
+    func setChartAppLinksOnScreen(_ onScreen: Bool) {
+        guard onScreen != chartAppLinksOnScreen else { return }
+        chartAppLinksOnScreen = onScreen
+        if onScreen { refreshChartAppLinks() }
+    }
     /// 统计页实时行那首歌(不一定在 recent 里:本机刚开播、Last.fm 还没确认时没有 nowplaying 条目)。
     /// refreshChartAppLinks 把它跟最近记录一起算进 chartAppLinks。
     private var liveLinksTrack: (artist: String, title: String)?
@@ -2410,6 +2422,8 @@ final class LastfmStatsService: ObservableObject {
                 start += 12
             }
         }
+        // 右键链接查不到时按歌手别名再查一次,别名表一变就重算(它自己按输入早退)。
+        refreshChartAppLinks()
         guard rebuildFamilies else { return }
         rebuildPrimaryCreditFamilies()
         flushLocalAliasStaleMarks()
@@ -3121,9 +3135,10 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// 给所有榜单行、当前这页最近记录和实时行那首算一遍能直接进 App 打开的目标(本机歌词缓存里存的链接、歌手的 MusicBrainz mbid、collector
-    /// 预取的平台主页,零网络)。行没变、两份缓存版本都没变就不重算;
+    /// 预取的平台主页,零网络)。统计区不在屏上时不算(见 chartAppLinksOnScreen);行没变、两份缓存版本都没变就不重算;
     /// 缓存还没加载好时这一轮什么都查不到,等缓存版本推进(refreshLocalCoversIfCacheChanged)再算。
     private func refreshChartAppLinks() {
+        guard chartAppLinksOnScreen else { return }
         var rows: [String: (kind: ChartKind, artist: String, name: String)] = [:]
         for (chartKey, entries) in charts {
             guard let kind = ChartKind(rawValue: String(chartKey.prefix { $0 != "|" })) else { continue }
@@ -3142,8 +3157,8 @@ final class LastfmStatsService: ObservableObject {
         let pagesURL = LyrimusePaths.configFile(PlatformPagesCache.fileName)
         let pagesVersion = (try? FileManager.default.attributesOfItem(atPath: pagesURL.path))?[.modificationDate] as? Date
         if let last = chartAppLinksInputs, last.keys == keys, last.cacheVersion == cacheVersion,
-           last.pagesVersion == pagesVersion { return }
-        chartAppLinksInputs = (keys, cacheVersion, pagesVersion)
+           last.pagesVersion == pagesVersion, last.artistAliases == localAliasTables.artists { return }
+        chartAppLinksInputs = (keys, cacheVersion, pagesVersion, localAliasTables.artists)
         let mbids = ArtistPlatformPages.loadMBIDs()
         let pages = PlatformPagesCache.load()
         var out: [String: ChartAppLinks] = [:]

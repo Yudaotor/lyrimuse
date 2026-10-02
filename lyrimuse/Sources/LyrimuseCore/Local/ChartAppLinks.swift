@@ -42,7 +42,8 @@ public enum ChartLinkKind: Sendable {
 
 /// 从歌词缓存条目建的查找表:歌曲按「歌手 + 歌名」(忽略专辑)、专辑按「歌手 + 专辑」、歌手按歌手名。
 /// 键的口径跟榜单本机封面兜底同一套(`EnrichCacheReader.artistTitleKey` / `albumCoverKey`),合唱署名另按主歌手
-/// 进一个别名键,只填精确键没占的位置。按缓存 key 排序遍历,同一份缓存每次给出同一个结果。纯数据,selftest 直接覆盖。
+/// 进一个别名键,只填精确键没占的位置。歌曲另有一张宽松键(繁简归一、去空格)的表,原样写法查不到时才用,见 `links`。
+/// 按缓存 key 排序遍历,同一份缓存每次给出同一个结果。纯数据,selftest 直接覆盖。
 public struct ChartLinkIndex: Sendable {
     public struct Row: Sendable {
         public let key: String
@@ -59,15 +60,19 @@ public struct ChartLinkIndex: Sendable {
     }
 
     var tracks: [String: ChartAppLinks] = [:]
+    /// 歌曲的宽松键表:`looseKey(歌手) + "|" + looseKey(normalizedTitle(歌名))`。榜单行是 Last.fm 上的写法(常是繁体),
+    /// 缓存键是 collector 写的(多是简体),原样对不上。不并进 `tracks`:同一首歌两种写法都在缓存里时,原样那条优先。
+    var looseTracks: [String: ChartAppLinks] = [:]
     var albums: [String: URL] = [:]
     var artists: [String: AlbumEditorialNotes.AlbumRef] = [:]
 
     /// `looseKey`:算宽松键的函数,默认就是 `EnrichCacheKeys.looseKey`。App 里传一个带记忆的版本进来:
-    /// 九千多条缓存每条要算四次(歌手、主歌手、专辑两次),每次一遍繁简转换,全量现算实测约 0.4 秒,
-    /// 而歌手 / 专辑名大量重复,记住之后只剩字典查找。
+    /// 九千多条缓存每条要算五次(歌手、主歌手、专辑两次、歌名一次),每次一遍繁简转换;歌手 / 专辑名大量重复,
+    /// 歌名基本不重复,但那份记忆跨缓存版本保留,重建时只算新出现的写法。
     public static func build(_ rows: [Row], looseKey: (String) -> String = EnrichCacheKeys.looseKey) -> ChartLinkIndex {
         var index = ChartLinkIndex()
         var trackAliases: [String: ChartAppLinks] = [:]
+        var looseTrackAliases: [String: ChartAppLinks] = [:]
         var albumAliases: [String: URL] = [:]
         var artistAliases: [String: AlbumEditorialNotes.AlbumRef] = [:]
         for row in rows.sorted(by: { $0.key < $1.key }) {
@@ -85,6 +90,11 @@ public struct ChartLinkIndex: Sendable {
                 if index.tracks[exact] == nil { index.tracks[exact] = track }
                 let alias = EnrichCacheReader.artistTitleKey(artist: merged, title: title)
                 if alias != exact, trackAliases[alias] == nil { trackAliases[alias] = track }
+                let looseTitle = "|" + looseKey(EnrichCacheKeys.normalizedTitle(title))
+                let looseExact = looseKey(artist) + looseTitle
+                if index.looseTracks[looseExact] == nil { index.looseTracks[looseExact] = track }
+                let looseAlias = looseKey(merged) + looseTitle
+                if looseAlias != looseExact, looseTrackAliases[looseAlias] == nil { looseTrackAliases[looseAlias] = track }
             }
 
             guard let ref = AlbumEditorialNotes.albumRef(fromAppleMusicURL: row.appleMusicURL) else { continue }
@@ -104,14 +114,18 @@ public struct ChartLinkIndex: Sendable {
             if aliasArtist != exactArtist, artistAliases[aliasArtist] == nil { artistAliases[aliasArtist] = ref }
         }
         for (k, v) in trackAliases where index.tracks[k] == nil { index.tracks[k] = v }
+        for (k, v) in looseTrackAliases where index.looseTracks[k] == nil { index.looseTracks[k] = v }
         for (k, v) in albumAliases where index.albums[k] == nil { index.albums[k] = v }
         for (k, v) in artistAliases where index.artists[k] == nil { index.artists[k] = v }
         return index
     }
 
-    /// 榜单一行(歌手行 `artist` 就是行名,`name` 不用)的进 App 目标。先按原样写法查,再按主歌手查;都没有返回 nil。
-    public func links(kind: ChartLinkKind, artist: String, name: String) -> ChartAppLinks? {
-        let candidates = [artist, ArtistCredit.mergeArtist(artist)]
+    /// 榜单一行(歌手行 `artist` 就是行名,`name` 不用)的进 App 目标。先按原样写法查,再按主歌手查;都没有时,
+    /// 歌曲再按宽松键查,最后用 `aliasArtist` 给的另一种歌手写法查(App 传本机推断的歌手别名,`Jason Chan → 陳柏宇`,
+    /// 见 `PlayCountFold.canonicalArtist`;给 nil 或给的就是上面查过的写法时跳过)。都没有返回 nil。
+    public func links(kind: ChartLinkKind, artist: String, name: String,
+                      aliasArtist: (String) -> String? = { _ in nil }) -> ChartAppLinks? {
+        var candidates = [artist, ArtistCredit.mergeArtist(artist)]
         for a in candidates {
             switch kind {
             case .track:
@@ -123,6 +137,22 @@ public struct ChartLinkIndex: Sendable {
             case .artist:
                 if let ref = artists[EnrichCacheKeys.looseKey(a)] { return ChartAppLinks(artistAlbum: ref) }
             }
+        }
+        let alias = aliasArtist(artist).map { $0.trimmingCharacters(in: .whitespaces) }
+            .flatMap { $0.isEmpty || candidates.contains($0) ? nil : $0 }
+        switch kind {
+        case .track:
+            if let alias { candidates.append(alias) }
+            let looseTitle = "|" + EnrichCacheKeys.looseKey(EnrichCacheKeys.normalizedTitle(name))
+            for a in candidates {
+                if let hit = looseTracks[EnrichCacheKeys.looseKey(a) + looseTitle] { return hit }
+            }
+        case .album:
+            if let alias, let url = albums[EnrichCacheReader.albumCoverKey(artist: alias, album: name)] {
+                return ChartAppLinks(appleMusic: url)
+            }
+        case .artist:
+            if let alias, let ref = artists[EnrichCacheKeys.looseKey(alias)] { return ChartAppLinks(artistAlbum: ref) }
         }
         return nil
     }

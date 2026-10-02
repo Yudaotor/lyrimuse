@@ -585,6 +585,43 @@ func runLastfmTests() {
                     "榜单进 App: 合唱署名按主歌手也能查到")
         expectEqual(idx.links(kind: .artist, artist: "陶喆", name: "") == nil, true, "榜单进 App: 缓存里没有的歌手不给")
 
+        // 榜单行是 Last.fm 上的写法(常是繁体),缓存键是 collector 写的(多是简体)。
+        let han = ChartLinkIndex.build([
+            .init(key: "方大同|因为你|15", appleMusicURL: "https://music.apple.com/cn/album/x/11?i=12",
+                  spotifyTrackID: nil, kkboxURL: nil),
+            .init(key: "陶喆|不爱|太美丽", appleMusicURL: "https://music.apple.com/cn/album/x/21?i=22",
+                  spotifyTrackID: nil, kkboxURL: nil),
+            .init(key: "陶喆|不愛|太美麗", appleMusicURL: "https://music.apple.com/tw/album/x/31?i=32",
+                  spotifyTrackID: nil, kkboxURL: nil),
+            .init(key: "陈柏宇|你瞒我瞒|Close Up - EP", appleMusicURL: "https://music.apple.com/cn/album/x/41?i=42",
+                  spotifyTrackID: nil, kkboxURL: nil),
+            .init(key: "方大同|JTW西游记|JTW西游记", appleMusicURL: "https://music.apple.com/cn/album/x/51?i=52",
+                  spotifyTrackID: nil, kkboxURL: nil),
+        ])
+        expectEqual(han.links(kind: .track, artist: "方大同", name: "因為你")?.appleMusic?.absoluteString,
+                    "music://music.apple.com/cn/album/x/11?i=12", "榜单进 App: 繁体写法查得到简体缓存那条")
+        expectEqual(han.links(kind: .track, artist: "陶喆", name: "不爱")?.appleMusic?.absoluteString,
+                    "music://music.apple.com/cn/album/x/21?i=22", "榜单进 App: 两种写法都在缓存里时简体行用简体那条")
+        expectEqual(han.links(kind: .track, artist: "陶喆", name: "不愛")?.appleMusic?.absoluteString,
+                    "music://music.apple.com/tw/album/x/31?i=32", "榜单进 App: 两种写法都在缓存里时繁体行用繁体那条")
+        expectEqual(han.links(kind: .track, artist: "方大同", name: "因為愛") == nil, true,
+                    "榜单进 App: 繁简归一不把别的歌认成这首")
+        expectEqual(han.links(kind: .track, artist: "王力宏", name: "因為你") == nil, true,
+                    "榜单进 App: 繁简归一不跨歌手")
+        let alias: (String) -> String? = { ["Jason Chan": "陳柏宇", "Khalil Fong": "方大同", "陳柏宇": "陳柏宇"][$0] }
+        expectEqual(han.links(kind: .track, artist: "Jason Chan", name: "你瞒我瞒") == nil, true,
+                    "榜单进 App: 英文名不给别名时查不到")
+        expectEqual(han.links(kind: .track, artist: "Jason Chan", name: "你瞒我瞒", aliasArtist: alias)?.appleMusic?.absoluteString,
+                    "music://music.apple.com/cn/album/x/41?i=42", "榜单进 App: 英文名按歌手别名换成中文名再查")
+        expectEqual(han.links(kind: .track, artist: "陳柏宇", name: "你瞞我瞞", aliasArtist: alias)?.appleMusic != nil, true,
+                    "榜单进 App: 别名跟行名相同时照常按繁简归一查")
+        expectEqual(han.links(kind: .album, artist: "Khalil Fong", name: "JTW西遊記", aliasArtist: alias)?.appleMusic?.absoluteString,
+                    "music://music.apple.com/cn/album/x/51", "榜单进 App: 专辑行也按歌手别名查")
+        expectEqual(han.links(kind: .artist, artist: "Khalil Fong", name: "", aliasArtist: alias)?.artistAlbum,
+                    AlbumEditorialNotes.AlbumRef(id: 51, storefront: "cn"), "榜单进 App: 歌手行也按歌手别名查")
+        expectEqual(han.links(kind: .album, artist: "Khalil Fong", name: "JTW西遊記") == nil, true,
+                    "榜单进 App: 专辑行不给别名时查不到")
+
         expectEqual(ChartSummary.topShare(counts: [50, 30, 20], total: 400), 25, "榜单概况: 前 N 名占比四舍五入")
         expectEqual(ChartSummary.topShare(counts: [10], total: nil), nil, "榜单概况: 总次数没取到不显示占比")
         expectEqual(ChartSummary.topShare(counts: [10], total: 0), nil, "榜单概况: 总次数为 0 不显示占比")
@@ -1789,5 +1826,22 @@ func runLastfmTests() {
                     "别名节流: 缓存变化走节流入口")
         expectEqual(src.contains("if titleFormsLoaded { refreshLocalAliases(rebuildFamilies: true) }"), false,
                     "别名节流: 没有绕过节流直接重算的缓存变化路径")
+    }
+
+    // ---- 右键链接只在统计区在屏上时算(契约) ----
+    // 整份建链接索引要几百毫秒主线程,而本机缓存播放中几秒就变一次;设置是 Settings {} 场景、关窗不卸载视图,
+    // 不拦的话关着窗也每变一次缓存重建一次。
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let service = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+                                   encoding: .utf8)) ?? ""
+        let section = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/LastfmStatsSection.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(service.contains("private func refreshChartAppLinks() {\n        guard chartAppLinksOnScreen else { return }"),
+                    true, "右键链接: 统计区不在屏上时不算")
+        expectEqual(section.contains(".onChange(of: windowVisible) { _, visible in stats.setChartAppLinksOnScreen(visible) }"),
+                    true, "右键链接: 设置窗口看不看得见报给服务")
+        expectEqual(section.contains(".onDisappear { stats.setChartAppLinksOnScreen(false) }"), true,
+                    "右键链接: 统计区卸载时报不在屏上")
     }
 }

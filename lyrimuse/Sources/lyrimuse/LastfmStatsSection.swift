@@ -37,6 +37,8 @@ struct LastfmStatsSection: View {
     var selected: Tab
 
     @ObservedObject private var stats = LastfmStatsService.shared
+    /// 设置窗口看不看得见。右键菜单的链接只在统计区挂着、且窗口看得见时才算(见 LastfmStatsService.chartAppLinksOnScreen)。
+    @Environment(\.previewHostVisible) private var windowVisible
     // 刻意**不**订阅 PlaybackCoordinator:它在放歌时每个歌词行边界都发布一次,整个
     // Section(三张卡、最多一百多行)跟着白白重算。所有跟播放状态相关的东西(正在记录行、
     // 换歌强刷、第 N 次听)都关进 LiveScrobbleRow 子视图,只有那一行随歌词节奏重渲染
@@ -120,7 +122,10 @@ struct LastfmStatsSection: View {
             if !chartCollapsed { stats.refreshChart(kind: kind, period: period) }
             stats.refreshOnThisDay()
             pageInput = "\(stats.recentPage)"
+            stats.setChartAppLinksOnScreen(windowVisible)
         }
+        .onDisappear { stats.setChartAppLinksOnScreen(false) }
+        .onChange(of: windowVisible) { _, visible in stats.setChartAppLinksOnScreen(visible) }
         .onChange(of: stats.recentPage) { _, page in pageInput = "\(page)" }
         // 切回 App 时补刷一次。此前**只有** onAppear 和那个 120 秒的轮询
         // 两条路:设置窗口一直开着、人去干别的事再切回来,最坏要干等 120 秒才看到新数据,

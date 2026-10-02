@@ -540,7 +540,7 @@ public enum EnrichCacheReader {
     /// 实测 0.1 秒,而宽松索引在每一版缓存(collector 每写一次盘)之后都要重建,全在主线程。
     private static var looseKeyMemo: [String: String] = [:]
 
-    /// 歌手 / 专辑名这类片段的 looseKey 记忆(榜单链接索引用,见 ChartLinkIndex.build)。跟整条 key 的那份分开:
+    /// 歌手 / 专辑名 / 歌名这类片段的 looseKey 记忆(榜单链接索引用,见 ChartLinkIndex.build)。跟整条 key 的那份分开:
     /// 那份按「缓存里还有没有这条 key」修剪,名字片段不是 key。只增不删,涨过上限整份清掉重来。
     private static var nameLooseKeyMemo: [String: String] = [:]
 
@@ -850,14 +850,15 @@ public enum EnrichCacheReader {
 
     /// 「听得最多」榜单一行能直接进 App 打开的目标(见 ChartAppLinks)。零网络;索引跟着已解码的缓存版本走,
     /// 版本变了下次调用时重建。歌曲在主缓存里查不到时再看比它新的单条快照(正在放、还没并进主缓存的那首)。
-    /// 都没有返回 nil。
+    /// 歌手写法对不上时按本机推断的歌手别名再查一次(`PlayCountFold.canonicalArtist`,别名表由 App 算好后灌进去,
+    /// 还没灌时它原样返回主歌手,等于不查)。都没有返回 nil。
     public static func chartAppLinks(kind: ChartLinkKind, artist: String, name: String) -> ChartAppLinks? {
         if let hit = indexedChartAppLinks(kind: kind, artist: artist, name: name) { return hit }
         guard kind == .track, let p = freshPlayingEntry() else { return nil }
         return ChartLinkIndex.build([
             ChartLinkIndex.Row(key: EnrichCacheKeys.strippingDurationVariant(p.key), appleMusicURL: p.entry.appleMusicURL,
                                spotifyTrackID: p.entry.spotifyTrackID, kkboxURL: p.entry.kkboxURL),
-        ]).links(kind: .track, artist: artist, name: name)
+        ]).links(kind: .track, artist: artist, name: name, aliasArtist: PlayCountFold.canonicalArtist)
     }
 
     private static func indexedChartAppLinks(kind: ChartLinkKind, artist: String, name: String) -> ChartAppLinks? {
@@ -872,7 +873,7 @@ public enum EnrichCacheReader {
             }, looseKey: memoizedNameLooseKey)
             cachedChartLinkIndex = (cachedMTime, cachedFromIndex, index)
         }
-        return index.links(kind: kind, artist: artist, name: name)
+        return index.links(kind: kind, artist: artist, name: name, aliasArtist: PlayCountFold.canonicalArtist)
     }
 
     private static var cachedChartLinkIndex: (mtime: Date?, fromIndex: Bool, index: ChartLinkIndex)?
