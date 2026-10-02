@@ -75,8 +75,8 @@ func ytmusicTranslatableBrowseID(lines []string) string {
 // ytmusicTranslationsFor 是机翻链第 0 级:lyrics 是 lyricfind 源取回过的那份(ytmusicRememberTranslatable 记过)时,
 // 问 YouTube Music 要它译成 target 的译文,返回「原文行 → 译文」,原文行是 parseLRCLines 给的正文。target 用
 // myMemoryLangCode 的写法,hl 认同一套。没记过这份歌词、YouTube Music 在这个地区用不了、没问成、条数对不上都返回
-// nil。译文本身还得再翻(lineNeedsTranslation)的行不收,交给后面几级:YouTube Music 当这行已经是目标语言时原样退回,
-// 中英混排的繁体行常常只转成简体、英文原样留着。同一句出现几次只收第一份能用的。
+// nil。不算译文的行(lineTranslated:原样退回的、外文原样没动只转了简体的)不收,交给后面几级。同一句出现几次只收
+// 第一份能用的。
 func ytmusicTranslationsFor(ctx context.Context, lyrics, target string) map[string]string {
 	if target == "" || ytmusicRegionBlockedNow(time.Now()) {
 		return nil
@@ -100,7 +100,7 @@ func ytmusicTranslationsFor(ctx context.Context, lyrics, target string) map[stri
 		if _, done := out[orig]; done {
 			continue
 		}
-		if t := cleanYTMusicTranslation(orig, got[i]); t != "" && !lineNeedsTranslation(t, target) {
+		if t := cleanYTMusicTranslation(orig, got[i]); lineTranslated(orig, t, target) {
 			out[orig] = t
 		}
 	}

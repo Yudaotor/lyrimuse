@@ -39,7 +39,7 @@ func setupSwapE2E(t *testing.T, googleDelay time.Duration) *int32 {
 		_ = r.ParseForm()
 		var out []string
 		for _, l := range strings.Split(r.PostForm.Get("q"), "\n") {
-			out = append(out, "谷:"+l)
+			out = append(out, fakeTranslated("谷:", l))
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
@@ -63,7 +63,7 @@ func runWatchingForGap(t *testing.T, key string, fn func()) (gap bool) {
 			enrichMu.Lock()
 			e := enrichCache[key]
 			enrichMu.Unlock()
-			if e.Lyrics == swapNewBody && !strings.Contains(e.LyricsTr, "谷:Brand new first line") {
+			if e.Lyrics == swapNewBody && !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) {
 				seen = true
 			}
 			select {
@@ -95,7 +95,7 @@ func assertSwappedWithTranslation(t *testing.T, key string, gap bool, googleCall
 	if e.Lyrics != swapNewBody || e.LyricsSource != "musixmatch" {
 		t.Fatalf("没换上新正文: source=%q lyrics=%q", e.LyricsSource, e.Lyrics)
 	}
-	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr, "谷:Brand new first line") || strings.Contains(e.LyricsTr, "旧") {
+	if e.LyricsTrSource != lyricsTrSourceMachine || !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) || strings.Contains(e.LyricsTr, "旧") {
 		t.Fatalf("换上正文的同时没带上新正文的译文: tr_source=%q tr=%q", e.LyricsTrSource, e.LyricsTr)
 	}
 	if e.LyricsTrLang != "zh-CN" || e.TranslationLang != "zh-CN" || e.TranslationTS != 0 || e.TranslationRetryCount != 0 {
@@ -103,7 +103,7 @@ func assertSwappedWithTranslation(t *testing.T, key string, gap bool, googleCall
 			e.LyricsTrLang, e.TranslationLang, e.TranslationTS, e.TranslationRetryCount)
 	}
 	b, err := os.ReadFile(playingEntryPath())
-	if err != nil || !strings.Contains(string(b), "谷:Brand new first line") {
+	if err != nil || !strings.Contains(string(b), fakeTranslated("谷:", "Brand new first line")) {
 		t.Fatalf("换上的正文和译文没一起写进单条快照: err=%v", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestSwapWithoutUsableTranslationStillTranslatesAfterwards(t *testing.T) {
 	enrichMu.Lock()
 	e := enrichCache[key]
 	enrichMu.Unlock()
-	if e.Lyrics != swapNewBody || !strings.Contains(e.LyricsTr, "谷:Brand new first line") {
+	if e.Lyrics != swapNewBody || !strings.Contains(e.LyricsTr, fakeTranslated("谷:", "Brand new first line")) {
 		t.Fatalf("换完之后没补上译文: lyrics=%q tr=%q", e.Lyrics, e.LyricsTr)
 	}
 }

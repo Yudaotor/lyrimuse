@@ -22,7 +22,7 @@ func setupTranslateStart(t *testing.T) *int {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
 		out := make([]string, len(lines))
 		for i := range lines {
-			out[i] = "译" + lines[i]
+			out[i] = fakeTranslated("译", lines[i])
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
@@ -207,7 +207,7 @@ func TestTranslateAfterLyricsSwapOnlyForPlayingKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("翻完没写单条快照: %v", err)
 	}
-	if !strings.Contains(string(b), `"key":"`+playing+`"`) || !strings.Contains(string(b), "译The painful youth") {
+	if !strings.Contains(string(b), `"key":"`+playing+`"`) || !strings.Contains(string(b), fakeTranslated("译", "The painful youth")) {
 		t.Fatalf("单条快照里没有这首的译文: %s", b)
 	}
 }

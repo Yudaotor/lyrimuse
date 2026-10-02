@@ -10,6 +10,20 @@ import (
 	"unicode"
 )
 
+// fakeTranslated:单测替身翻译器给的「译文」—— 前缀 + 原文,拉丁字母换成全角、平假名换成片假名。只加前缀、外文
+// 照抄的话,跟只转了简体、外文原样留着的假译文分不开,lineTranslated 会把它当成没翻。
+func fakeTranslated(prefix, line string) string {
+	return prefix + strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
+			return r + 0xFEE0
+		case r >= 'ぁ' && r <= 'ゖ':
+			return r + ('ァ' - 'ぁ')
+		}
+		return r
+	}, line)
+}
+
 func hasKana(s string) bool {
 	for _, r := range s {
 		if unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) {
@@ -35,7 +49,7 @@ func fakeOnDeviceJapaneseBatch(batches *[][]string, mu *sync.Mutex) func(context
 				out[i] = l
 				continue
 			}
-			out[i] = "端:" + l
+			out[i] = fakeTranslated("端:", l)
 		}
 		return out, nil
 	}
@@ -56,7 +70,7 @@ func TestMixedScriptSongTranslatesEveryScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"端:きみのことがすき", "端:Kick back", "端:I want it all"} {
+	for _, want := range []string{fakeTranslated("端:", "きみのことがすき"), fakeTranslated("端:", "Kick back"), fakeTranslated("端:", "I want it all")} {
 		if !strings.Contains(res.lrc, want) {
 			t.Errorf("缺 %q:\n%s", want, res.lrc)
 		}
@@ -78,7 +92,7 @@ func TestOnDeviceFailedGroupFilledByGoogle(t *testing.T) {
 		}
 		out := make([]string, len(lines))
 		for i, l := range lines {
-			out[i] = "端:" + l
+			out[i] = fakeTranslated("端:", l)
 		}
 		return out, nil
 	}
@@ -89,7 +103,7 @@ func TestOnDeviceFailedGroupFilledByGoogle(t *testing.T) {
 		var out []string
 		for _, l := range strings.Split(r.PostForm.Get("q"), "\n") {
 			sent = append(sent, l)
-			out = append(out, "谷:"+l)
+			out = append(out, fakeTranslated("谷:", l))
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
@@ -98,7 +112,7 @@ func TestOnDeviceFailedGroupFilledByGoogle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"端:あいたいよ", "谷:Kick back", "谷:I want it all"} {
+	for _, want := range []string{fakeTranslated("端:", "あいたいよ"), fakeTranslated("谷:", "Kick back"), fakeTranslated("谷:", "I want it all")} {
 		if !strings.Contains(res.lrc, want) {
 			t.Errorf("缺 %q:\n%s", want, res.lrc)
 		}
@@ -121,7 +135,7 @@ func TestMyMemoryOnlyFillsWhatIsStillMissing(t *testing.T) {
 		var out []string
 		for i, l := range strings.Split(r.PostForm.Get("q"), "\n") {
 			if i == 0 {
-				out = append(out, "谷:"+l)
+				out = append(out, fakeTranslated("谷:", l))
 			} else {
 				out = append(out, l) // 原样,没翻动
 			}
@@ -134,7 +148,7 @@ func TestMyMemoryOnlyFillsWhatIsStillMissing(t *testing.T) {
 		asked = append(asked, lines...)
 		out := make([]string, len(lines))
 		for i, l := range lines {
-			out[i] = "记:" + l
+			out[i] = fakeTranslated("记:", l)
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
@@ -144,7 +158,7 @@ func TestMyMemoryOnlyFillsWhatIsStillMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.lrc, "谷:one line") || !strings.Contains(res.lrc, "记:five line") {
+	if !strings.Contains(res.lrc, fakeTranslated("谷:", "one line")) || !strings.Contains(res.lrc, fakeTranslated("记:", "five line")) {
 		t.Fatalf("Google 那一行要保留、其余由 MyMemory 补:\n%s", res.lrc)
 	}
 	if len(asked) != 4 {

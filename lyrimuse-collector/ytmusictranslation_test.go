@@ -73,23 +73,23 @@ func TestCleanYTMusicTranslation(t *testing.T) {
 }
 
 const ytmTranslatableLRC = "[00:01.00]♪\n[00:02.00]Hello, it's me\n[00:03.00]\n[00:04.00]I was wondering\n" +
-	"[00:05.00]Hello, it's me\n[00:06.00]Ok\n[00:07.00]Lonely is the night 看著天花板\n"
+	"[00:05.00]Hello, it's me\n[00:06.00]Ok\n[00:07.00]Lonely is the night 看著天花板\n[00:08.00]S Jabberloop, let's go\n"
 
-// 译文按顺序对上正文非空、不是「♪」的行;跟原文一样的、只转了简体的不收;同一句出现两次收第一份。请求带 Android 身份、
-// hl 和续页 token。
+// 译文按顺序对上正文非空、不是「♪」的行;跟原文一样的、只转了简体的不收,留着人名的真译文照收;同一句出现两次收第一份。
+// 请求带 Android 身份、hl 和续页 token。
 func TestYtmusicTranslationsForAligns(t *testing.T) {
 	resetYtmusicRegionState(t)
 	resetYtmusicTranslatable(t)
 	reqs := withYtmusicFake(t, func(w http.ResponseWriter, req ytmusicFakeReq) {
 		if req.target == ytmBrowseURL {
-			_, _ = io.WriteString(w, ytmFakeTranslations("你好，是我。", "我在想", "你好，是我呀", "Ok", "Lonely is the night，看着天花板"))
+			_, _ = io.WriteString(w, ytmFakeTranslations("你好，是我。", "我在想", "你好，是我呀", "Ok", "Lonely is the night，看着天花板", "S Jabberloop，我们走吧"))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
 	ytmusicRememberTranslatable(ytmTranslatableLRC, "MPLYt_x1")
 	got := ytmusicTranslationsFor(qqRoundCtx(), ytmTranslatableLRC, "zh-CN")
-	want := map[string]string{"Hello, it's me": "你好，是我", "I was wondering": "我在想"}
+	want := map[string]string{"Hello, it's me": "你好，是我", "I was wondering": "我在想", "S Jabberloop, let's go": "S Jabberloop，我们走吧"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -123,7 +123,7 @@ func TestYtmusicTranslationsForSkips(t *testing.T) {
 	resetYtmusicRegionState(t)
 	resetYtmusicTranslatable(t)
 	reqs := withYtmusicFake(t, func(w http.ResponseWriter, req ytmusicFakeReq) {
-		_, _ = io.WriteString(w, ytmFakeTranslations("甲", "乙", "丙", "丁", "戊"))
+		_, _ = io.WriteString(w, ytmFakeTranslations("甲", "乙", "丙", "丁", "戊", "己"))
 	})
 	if got := ytmusicTranslationsFor(qqRoundCtx(), ytmTranslatableLRC, "zh-CN"); got != nil {
 		t.Errorf("没记过的歌词该是 nil: %q", got)
@@ -161,7 +161,7 @@ func TestYtmusicTranslationsForTimeout(t *testing.T) {
 		case <-release:
 		case <-time.After(2 * time.Second):
 		}
-		_, _ = io.WriteString(w, ytmFakeTranslations("甲", "乙", "丙", "丁", "戊"))
+		_, _ = io.WriteString(w, ytmFakeTranslations("甲", "乙", "丙", "丁", "戊", "己"))
 	})
 	t.Cleanup(func() { close(release) })
 	ytmusicRememberTranslatable(ytmTranslatableLRC, "MPLYt_x1")
@@ -208,7 +208,7 @@ func TestMachineTranslateUsesLyricsSourceFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[00:01.00]源:喜欢你", "[00:04.00]源:放松", "[00:05.00]端:I want it all"} {
+	for _, want := range []string{"[00:01.00]源:喜欢你", "[00:04.00]源:放松", "[00:05.00]" + fakeTranslated("端:", "I want it all")} {
 		if !strings.Contains(res.lrc, want) {
 			t.Errorf("缺 %q:\n%s", want, res.lrc)
 		}
@@ -238,7 +238,7 @@ func TestLyricsSourceThenGoogleGetsTheRest(t *testing.T) {
 		var out []string
 		for _, l := range strings.Split(r.PostForm.Get("q"), "\n") {
 			sent = append(sent, l)
-			out = append(out, "谷:"+l)
+			out = append(out, fakeTranslated("谷:", l))
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
@@ -250,7 +250,7 @@ func TestLyricsSourceThenGoogleGetsTheRest(t *testing.T) {
 	if !reflect.DeepEqual(sent, []string{"Kick back", "I want it all"}) {
 		t.Errorf("Google 只该收到还没译文的两行: %q", sent)
 	}
-	for _, want := range []string{"[00:02.00]源:想见你", "[00:04.00]谷:Kick back", "[00:05.00]谷:I want it all"} {
+	for _, want := range []string{"[00:02.00]源:想见你", "[00:04.00]" + fakeTranslated("谷:", "Kick back"), "[00:05.00]" + fakeTranslated("谷:", "I want it all")} {
 		if !strings.Contains(res.lrc, want) {
 			t.Errorf("缺 %q:\n%s", want, res.lrc)
 		}

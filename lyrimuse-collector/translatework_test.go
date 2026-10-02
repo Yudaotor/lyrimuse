@@ -46,7 +46,7 @@ func TestOnDeviceUntranslatedFallsBackToNetwork(t *testing.T) {
 		_ = r.ParseForm()
 		var out []string
 		for _, l := range strings.Split(r.PostForm.Get("q"), "\n") {
-			out = append(out, "译:"+l)
+			out = append(out, fakeTranslated("译:", l))
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
@@ -55,7 +55,7 @@ func TestOnDeviceUntranslatedFallsBackToNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.lrc, "译:one") {
+	if !strings.Contains(res.lrc, fakeTranslated("译:", "one")) {
 		t.Fatalf("端上翻空之后该用 Google 的结果, got %q", res.lrc)
 	}
 
@@ -63,12 +63,12 @@ func TestOnDeviceUntranslatedFallsBackToNetwork(t *testing.T) {
 	onDeviceTranslator = func(_ context.Context, _ string, lines []string) ([]string, error) {
 		out := make([]string, len(lines))
 		for i, l := range lines {
-			out[i] = "端:" + l
+			out[i] = fakeTranslated("端:", l)
 		}
 		return out, nil
 	}
 	res, err = machineTranslateLRCWithBase(context.Background(), http.DefaultClient, "http://127.0.0.1:1", lrc, "zh-CN", "", "")
-	if err != nil || !strings.Contains(res.lrc, "端:one") {
+	if err != nil || !strings.Contains(res.lrc, fakeTranslated("端:", "one")) {
 		t.Fatalf("端上翻成了就用端上的: %q %v", res.lrc, err)
 	}
 }

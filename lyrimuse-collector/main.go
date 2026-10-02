@@ -391,6 +391,8 @@ func main() {
 	startupStep("migrateLyricLineEndings", migrateLyricLineEndings)
 	// 存量译文里腾讯系塞的版权 / 译者声明行(见 translationnotice.go),同样夹在 import 与 export 之间。
 	startupStep("migrateTranslationNotices", migrateTranslationNotices)
+	// 存量机翻里外文原样没动的行(见 untranslatedmachine.go),同样夹在 import 与 export 之间。
+	startupStep("migrateUntranslatedMachineLines", migrateUntranslatedMachineLines)
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	startupStep("invalidateStaleTranslations", func() { invalidateStaleTranslations() })

@@ -309,7 +309,7 @@ func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
 		out := make([]string, len(lines))
 		for i := range lines {
-			out[i] = "译" + lines[i]
+			out[i] = fakeTranslated("译", lines[i])
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
@@ -319,7 +319,7 @@ func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[00:01.00]译one\n[00:02.50]译two\n[01:03.25]译three"
+	want := "[00:01.00]" + fakeTranslated("译", "one") + "\n[00:02.50]" + fakeTranslated("译", "two") + "\n[01:03.25]" + fakeTranslated("译", "three")
 	if res.lrc != want {
 		t.Errorf("译文 =\n%s\n期望 =\n%s", res.lrc, want)
 	}
@@ -399,7 +399,7 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
 		out := make([]string, len(lines))
 		for i := range lines {
-			out[i] = "译" + lines[i]
+			out[i] = fakeTranslated("译", lines[i])
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
@@ -535,7 +535,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
 		out := make([]string, len(lines))
 		for i := range lines {
-			out[i] = "译" + lines[i]
+			out[i] = fakeTranslated("译", lines[i])
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)

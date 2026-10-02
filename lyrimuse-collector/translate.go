@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -254,26 +255,34 @@ var scriptOrder = []lyricScript{
 	scriptKana, scriptHangul, scriptHan, scriptCyrillic, scriptArabic, scriptThai, scriptLatin,
 }
 
+// runeScript 一个字符属于哪套文字;不是字母(符号、数字、空白)时是 scriptNone。
+func runeScript(r rune) lyricScript {
+	switch {
+	case unicode.Is(unicode.Hiragana, r), unicode.Is(unicode.Katakana, r):
+		return scriptKana
+	case unicode.Is(unicode.Han, r):
+		return scriptHan
+	case unicode.Is(unicode.Hangul, r):
+		return scriptHangul
+	case unicode.Is(unicode.Cyrillic, r):
+		return scriptCyrillic
+	case unicode.Is(unicode.Arabic, r):
+		return scriptArabic
+	case unicode.Is(unicode.Thai, r):
+		return scriptThai
+	case unicode.IsLetter(r):
+		return scriptLatin
+	}
+	return scriptNone
+}
+
 // dominantScript 返回一行文本里占多数的文字系统;一个字母都没有(纯符号/数字/空)时是
 // scriptNone。假名优先于汉字:日文行里汉字常比假名多,但只要出现假名就一定是日文。
 func dominantScript(s string) lyricScript {
 	counts := map[lyricScript]int{}
 	for _, r := range s {
-		switch {
-		case unicode.Is(unicode.Hiragana, r), unicode.Is(unicode.Katakana, r):
-			counts[scriptKana]++
-		case unicode.Is(unicode.Han, r):
-			counts[scriptHan]++
-		case unicode.Is(unicode.Hangul, r):
-			counts[scriptHangul]++
-		case unicode.Is(unicode.Cyrillic, r):
-			counts[scriptCyrillic]++
-		case unicode.Is(unicode.Arabic, r):
-			counts[scriptArabic]++
-		case unicode.Is(unicode.Thai, r):
-			counts[scriptThai]++
-		case unicode.IsLetter(r):
-			counts[scriptLatin]++
+		if sc := runeScript(r); sc != scriptNone {
+			counts[sc]++
 		}
 	}
 	if counts[scriptKana] > 0 {
@@ -321,6 +330,40 @@ func lineNeedsTranslation(text, target string) bool {
 		}
 	}
 	return true
+}
+
+// foreignLetters:s 里文字系统不属于 target(targetScripts)的字母,转小写后依次拼起来。
+func foreignLetters(s, target string) string {
+	targets := targetScripts(target)
+	var b strings.Builder
+	for _, r := range s {
+		if sc := runeScript(r); sc != scriptNone && !slices.Contains(targets, sc) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// lineTranslated:got 算不算 orig 翻成 target 的译文。空的、跟原文一样的不算;外文那部分(foreignLetters)跟原文
+// 一字不差的也不算 —— 只换了中文的繁简写法、标点、空白或大小写,外文原样留着(中英混排的繁体行常被这样
+// 「翻」成简体)。原文里没有外文字母时只看前两条。
+func lineTranslated(orig, got, target string) bool {
+	t := strings.TrimSpace(got)
+	if t == "" || t == strings.TrimSpace(orig) {
+		return false
+	}
+	o := foreignLetters(orig, target)
+	return o == "" || o != foreignLetters(t, target)
+}
+
+// dropUntranslated 把 got 里不算译文的(lineTranslated 为假)清成空串,下标跟 texts 一致;多出来的不动。
+// 每一级翻译的结果进 out 之前都过一遍,后面的计数、交给下一级、拼译文就都按同一个口径。
+func dropUntranslated(texts, got []string, target string) {
+	for i := range got {
+		if i < len(texts) && !lineTranslated(texts[i], got[i], target) {
+			got[i] = ""
+		}
+	}
 }
 
 // hasTranslatableLines:这首歌有没有真会被送去翻的行。给 needsTranslationBackfill 用,
@@ -490,7 +533,9 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	used.add("on-device", done()-fromSource)
 	if len(pending) > 0 {
 		before := done()
-		if got, err := googleTranslateLines(ctx, hc, pickTranslationTexts(uniqueTexts, pending), target); err == nil {
+		texts := pickTranslationTexts(uniqueTexts, pending)
+		if got, err := googleTranslateLines(ctx, hc, texts, target); err == nil {
+			dropUntranslated(texts, got, target)
 			fillTranslations(out, pending, got)
 		} else if !errors.Is(err, errGoogleTranslateSkipped) {
 			infoFailf("translate: google failed, falling back to MyMemory: %v", err)
@@ -506,7 +551,8 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		return translationResult{quotaReached: true}, nil
 	}
 	rest := untranslatedIndexes(uniqueTexts, out)
-	chunks := chunkForTranslation(pickTranslationTexts(uniqueTexts, rest))
+	restTexts := pickTranslationTexts(uniqueTexts, rest)
+	chunks := chunkForTranslation(restTexts)
 	if len(chunks) > translateMaxChunks {
 		return translationResult{}, fmt.Errorf("lyrics too long: %d chunks", len(chunks))
 	}
@@ -527,6 +573,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		}
 		translated = append(translated, got...)
 	}
+	dropUntranslated(restTexts, translated, target)
 	before := done()
 	fillTranslations(out, rest, translated)
 	used.add("mymemory", done()-before)
@@ -591,6 +638,9 @@ func translateOnDeviceByScript(ctx context.Context, target string, texts []strin
 		// 到点的是这一组自己的时限、不是整首的:整首的额度还有,交给网络。
 		timedOut := err != nil && errors.Is(groupCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil
 		cancel()
+		if err == nil {
+			dropUntranslated(batch, got, target)
+		}
 		if err == nil && translatedEnough(batch, got) {
 			fillTranslations(out, group, got)
 			continue

@@ -64,7 +64,7 @@ func TestGoogleTranslateUsedBeforeMyMemory(t *testing.T) {
 		gotQ = r.PostForm.Get("q")
 		var out []string
 		for _, l := range strings.Split(gotQ, "\n") {
-			out = append(out, "译:"+l)
+			out = append(out, fakeTranslated("译:", l))
 		}
 		fmt.Fprint(w, googleReply(t, out))
 	})
@@ -79,7 +79,7 @@ func TestGoogleTranslateUsedBeforeMyMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[00:01.00]译:one\n[00:02.00]译:two\n[00:03.00]译:three"
+	want := "[00:01.00]" + fakeTranslated("译:", "one") + "\n[00:02.00]" + fakeTranslated("译:", "two") + "\n[00:03.00]" + fakeTranslated("译:", "three")
 	if res.lrc != want {
 		t.Errorf("译文不对:\n got %q\nwant %q", res.lrc, want)
 	}

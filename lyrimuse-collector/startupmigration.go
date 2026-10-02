@@ -91,6 +91,10 @@ const (
 	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据只在改写过的那几条上补扫一遍。
 	migrationLyricLineEndings        = "lyric_line_endings"
 	migrationLyricLineEndingsVersion = 1
+	// migrationUntranslatedMachineLines:存量机翻里外文原样没动的行(untranslatedmachine.go)。新翻出来的在各级出口
+	// 就不收,运行期不再产生。改了 lineTranslated 的判据就 +1。
+	migrationUntranslatedMachineLines        = "untranslated_machine_lines"
+	migrationUntranslatedMachineLinesVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——
