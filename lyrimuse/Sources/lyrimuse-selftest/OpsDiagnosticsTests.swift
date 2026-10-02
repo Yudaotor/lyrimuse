@@ -483,6 +483,45 @@ func runOpsDiagnosticsTests() {
         expectEqual(LaunchdJobState.unknown.isRunning, false, "Launchd: unknown 不算在跑")
     }
 
+    // ---- EngineDaemonProbe(要不要再问 launchd) ----
+    do {
+        print("\n== 引擎常驻进程探针 ==")
+        typealias P = EngineDaemonProbe
+        let running = LaunchdJobState.running(pid: 4242)
+        expectEqual(P.needsLaunchdQuery(last: nil, secondsSinceQuery: nil, daemonPID: 4242, maxAge: 60), true,
+                    "引擎探针: 还没问过 launchd 就问")
+        expectEqual(P.needsLaunchdQuery(last: running, secondsSinceQuery: 10, daemonPID: 4242, maxAge: 60), false,
+                    "引擎探针: 还是上次那个 pid,沿用")
+        expectEqual(P.needsLaunchdQuery(last: running, secondsSinceQuery: 10, daemonPID: 5151, maxAge: 60), true,
+                    "引擎探针: pid 变了(重启过)要再问")
+        expectEqual(P.needsLaunchdQuery(last: running, secondsSinceQuery: 10, daemonPID: nil, maxAge: 60), true,
+                    "引擎探针: 进程没了要再问")
+        expectEqual(P.needsLaunchdQuery(last: running, secondsSinceQuery: 60, daemonPID: 4242, maxAge: 60), true,
+                    "引擎探针: 满 maxAge 隔一阵重读")
+        expectEqual(P.needsLaunchdQuery(last: .registeredNotRunning(lastExitCode: 78), secondsSinceQuery: 10, daemonPID: nil,
+                                        maxAge: 60), false, "引擎探针: 照旧没有进程,沿用「注册了没跑」")
+        expectEqual(P.needsLaunchdQuery(last: .notRegistered, secondsSinceQuery: 10, daemonPID: nil, maxAge: 60), false,
+                    "引擎探针: 照旧没有进程,沿用「没注册」")
+        expectEqual(P.needsLaunchdQuery(last: .notRegistered, secondsSinceQuery: 10, daemonPID: 4242, maxAge: 60), true,
+                    "引擎探针: 进程冒出来了要再问")
+        expectEqual(P.needsLaunchdQuery(last: .unknown, secondsSinceQuery: 1, daemonPID: 4242, maxAge: 60), true,
+                    "引擎探针: 上次读不懂每次都问")
+        expectEqual(P.needsLaunchdQuery(last: running, secondsSinceQuery: -5, daemonPID: 4242, maxAge: 60), true,
+                    "引擎探针: 时间倒退当成过期")
+        expectEqual(P.daemonPID(names: ["lyrimuse-no-such-process"]) == nil, true, "引擎探针: 没有这个名字的进程返回 nil")
+        // selftest 自己的父进程不是 launchd;进程名比 15 个字符长,顺带钉住按完整进程名认。
+        let ownName = ProcessInfo.processInfo.processName
+        expectEqual(ownName.count > 15, true, "引擎探针: 用来对照的进程名要比 pbi_comm 的 15 个字符长")
+        expectEqual(P.processName(pid: getpid()), ownName, "引擎探针: 读到的是完整进程名、没截成 15 个字符")
+        expectEqual(P.daemonPID(names: [ownName]) == nil, true, "引擎探针: 父进程不是 launchd 的同名进程不算")
+        let engineNames = LyrimuseIdentity.engineProcessNames
+        expectEqual(P.isDaemon(ppid: 1, name: "lyrimuse-engine", names: engineNames), true, "引擎探针: launchd 起的引擎认得出")
+        expectEqual(P.isDaemon(ppid: 1, name: "collector", names: engineNames), true, "引擎探针: 旧名的引擎也认得出")
+        expectEqual(P.isDaemon(ppid: 4242, name: "lyrimuse-engine", names: engineNames), false,
+                    "引擎探针: App 起的一次性子命令不算")
+        expectEqual(P.isDaemon(ppid: 1, name: "lyrimuse", names: engineNames), false, "引擎探针: 名字不对不算")
+    }
+
     // ---- ProcessRunner ----
     //
     // 跑真实子进程（/bin/echo、/bin/sleep、/usr/bin/yes），不是合成数据 —— 这里要验证的

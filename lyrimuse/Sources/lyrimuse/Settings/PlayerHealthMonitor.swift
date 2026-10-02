@@ -16,8 +16,9 @@ import LyrimuseCore
 ///    真机 `sample` 抓栈,主线程在它底下的 `semaphore_wait_trap` 上等(跨进程问 tccd),
 ///    独立脚本量 10 次:min 3.25ms / 中位 4.2ms / 首次 47.5ms。每 2s 一次、任何分页都在跑,
 ///    正好撞上用户点击那一下就会掉一帧。
-///  - collector 状态要起一个 `launchctl print` 子进程。播放器页原来自己也每 2s 起一次、查的是同一件事;
-///    现在页面直接用这里发布的 `collectorState`,整个设置窗口只剩这一路。
+///  - collector 状态的权威来源是 `launchctl print`,要起一个子进程。每拍先用 `EngineDaemonProbe` 看一眼
+///    常驻进程(不起子进程):还是上次那个 pid、或者照旧没有进程,就沿用上次 launchd 的结论,最多沿用
+///    `launchdRecheckSeconds`;进程变了(启停服务、崩溃重启)才再问。页面直接用这里发布的 `collectorState`。
 ///
 /// 只在设置窗口**看得见**时跑:`SettingsView` 按窗口可见性启停(被挡住 / 最小化时 stop,重新看得见时
 /// start,start 会先补查一次)。计时器带误差,让系统合并唤醒。
@@ -42,6 +43,10 @@ final class PlayerHealthMonitor: ObservableObject {
     private var timer: AnyCancellable?
     private var activationObserver: AnyCancellable?
     private var refreshInFlight = false
+    /// 上一次真的问 launchd 的时刻(`systemUptime`);nil = 还没问过。
+    private var lastLaunchdQueryAt: TimeInterval?
+    /// 常驻进程看着没变时,launchd 的结论最多沿用这么久。
+    static let launchdRecheckSeconds: TimeInterval = 60
 
     func start() {
         guard timer == nil else { return }
@@ -59,7 +64,8 @@ final class PlayerHealthMonitor: ObservableObject {
         activationObserver = nil
     }
 
-    /// 立刻查一次(页面刚出现、刚启停过服务时调)。在飞时不重复起。
+    /// 立刻查一次(页面刚出现时调)。在飞时不重复起。collector 状态照样按 `EngineDaemonProbe` 的规则决定沿用还是再问 launchd;
+    /// 要权威结论的(启停服务的按钮)自己等 `CollectorServiceManager.waitForPendingOperations()`。
     func refresh() {
         guard !refreshInFlight else { return }
         refreshInFlight = true
@@ -83,9 +89,18 @@ final class PlayerHealthMonitor: ObservableObject {
         // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
         // Task { } 继承本类的 @MainActor 隔离,weak self 在这里解包不算"并发代码里引用捕获变量"
         // (原来整段包在 Task.detached 里、在 MainActor.run 闭包内解包,编译器会告警,Swift 6 是 error)。
+        let lastState = collectorState
+        let lastQueryAt = lastLaunchdQueryAt
+        let maxAge = Self.launchdRecheckSeconds
         Task { [weak self] in
-            let collector = await Task.detached(priority: .utility) {
-                CollectorServiceManager.state
+            let (collector, queriedAt) = await Task.detached(priority: .utility) { () -> (LaunchdJobState, TimeInterval?) in
+                let now = ProcessInfo.processInfo.systemUptime
+                if let lastState, !EngineDaemonProbe.needsLaunchdQuery(
+                    last: lastState, secondsSinceQuery: lastQueryAt.map { now - $0 },
+                    daemonPID: EngineDaemonProbe.daemonPID(), maxAge: maxAge) {
+                    return (lastState, nil)
+                }
+                return (CollectorServiceManager.state, now)
             }.value
             var denied: Set<PlaybackPlayer> = []
             for player in targets {
@@ -95,6 +110,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             guard let self else { return }
             self.refreshInFlight = false
+            if let queriedAt { self.lastLaunchdQueryAt = queriedAt }
             if collector != self.collectorState { self.collectorState = collector }
             let deniedPlayers = targets.filter { denied.contains($0) }
             if deniedPlayers != self.automationDeniedPlayers { self.automationDeniedPlayers = deniedPlayers }
