@@ -208,7 +208,12 @@ public enum CollectorServiceManager {
             "ProgramArguments": [bundledCollectorPath],
             "RunAtLoad": true,
             "KeepAlive": true,
-            "ProcessType": "Background",
+            // Interactive 而不是 Background:collector 干的是用户当下要的东西(正在放的这首的歌词、封面缓存、网页上的
+            // 正在播放),不是"用户没要求的后台活"。后台档调度优先级只有 4、磁盘读写也限流,机器一忙就被压住 —— 实测
+            // 切歌最长晚 40 秒才认到、写一次缓存要几十秒,端上翻译问一句「语言包装了没有」要 20~40 秒(终端里不到
+            // 1 秒)。Adaptive 靠 XPC 连接抬档,collector 没有 XPC,等于一直是后台;不写(= Standard)是轻度限流,
+            // 优先级 20,满载时照样排在后面。
+            "ProcessType": "Interactive",
             "StandardOutPath": logPath,
             "StandardErrorPath": logPath,
             // collector 的配置目录与日志文件跟本 App 的变体走(正式版传的就是它自己的默认值,Dev 传

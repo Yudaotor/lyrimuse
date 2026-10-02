@@ -391,4 +391,24 @@ private func wiringContracts() {
     expectEqual(mirrored, ["youtubeMusic": ["com.apple.Safari", "com.google.Chrome"]],
                 "网页探针配对: 镜像去掉空平台 / 空 id,浏览器按字母排(同一份配对每次写出来一样)")
     expectEqual(BrowserPositionProbe.mirroredPairs([:]), [:], "网页探针配对: 一个都没配写成空对象,不是缺键")
+
+    // 换歌后取图还在路上时不清旧封面:兜底期限按"一次取图最多能跑多久"定(子进程超时 + 宽限)。从换歌 / 每次重试前
+    // 起算 3 秒的话,机器满载时取图本身就能超过它,同一张专辑的下一首也会先把封面清掉、几秒后才回来。
+    let fetchArtwork = body("private func fetchArtworkForCurrentTrack(expectedKey: String) {", in: source)
+    expectEqual(source.contains("artworkInFlightBackstop: TimeInterval = MediaControlClient.artworkTimeout + artworkStaleTimeout"), true,
+                "封面兜底: 取图在路上时的期限 = 子进程超时 + 宽限")
+    expectEqual(source.contains("scheduleArtworkStaleTimeout(forKey: key, after: Self.artworkInFlightBackstop)"), true,
+                "封面兜底: 换歌那一刻排的兜底要盖住第一次取图")
+    expectEqual(fetchArtwork.contains("after: Self.artworkRetryDelays[round] + Self.artworkInFlightBackstop)"), true,
+                "封面兜底: 每次重试前排的兜底要盖住这次等待加下一次取图")
+    expectEqual(fetchArtwork.contains("self.scheduleArtworkStaleTimeout(forKey: expectedKey)\n"), false,
+                "封面兜底: 重试前别再排默认的 3 秒期限")
+    expectEqual(source.contains("artworkQueue = DispatchQueue(label: \"lyrimuse.playback.artwork\", qos: .userInitiated)"), true,
+                "封面兜底: 取封面跟轮询同一档 QoS")
+
+    // 歌词引擎的 launchd 任务按 Interactive 跑:后台档(调度优先级 4、磁盘读写限流)在机器忙时把切歌晚认好几秒、
+    // 写一次缓存拖到几十秒。
+    let collectorService = code("lyrimuse/Settings/CollectorServiceManager.swift")
+    expectEqual(collectorService.contains("\"ProcessType\": \"Interactive\","), true, "歌词引擎调度: launchd 任务按 Interactive 跑")
+    expectEqual(collectorService.contains("\"ProcessType\": \"Background\""), false, "歌词引擎调度: 别退回后台档")
 }

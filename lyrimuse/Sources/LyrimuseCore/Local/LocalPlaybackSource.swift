@@ -2683,7 +2683,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 只有 CPU 核数那么多线程,几次卡住的调用就能占满,取封面、算颜色、广告复核全跟着排队(探针实测十几秒)。
     /// 轮询单飞,一条串行队列就够;取封面另走一条,两边互不排队。
     private nonisolated static let pollQueue = DispatchQueue(label: "lyrimuse.playback.poll", qos: .userInitiated)
-    private nonisolated static let artworkQueue = DispatchQueue(label: "lyrimuse.playback.artwork", qos: .utility)
+    // 取封面跟轮询同一档:换歌那一刻就要看到,utility 档在机器满载时会被排到后面。
+    private nonisolated static let artworkQueue = DispatchQueue(label: "lyrimuse.playback.artwork", qos: .userInitiated)
 
     nonisolated static func runOffPool<T: Sendable>(_ queue: DispatchQueue, _ work: @escaping @Sendable () -> T) async -> T {
         await withCheckedContinuation { continuation in
@@ -3142,8 +3143,9 @@ public final class LocalPlaybackSource: ObservableObject {
             // "先白闪再回来"。
             //
             // 但完成回调不能是唯一出路:MediaControlClient.fetchArtwork() 一次最长要等满子进程超时(10 秒),
-            // 重试几轮加起来更久,这段时间里旧封面一直挂着。所以再加一道超时兜底,见 scheduleArtworkStaleTimeout。
-            scheduleArtworkStaleTimeout(forKey: key)
+            // 重试几轮加起来更久,这段时间里旧封面一直挂着。所以再加一道超时兜底,见 scheduleArtworkStaleTimeout;
+            // 第一次取图还在路上,期限按 artworkInFlightBackstop 排。
+            scheduleArtworkStaleTimeout(forKey: key, after: Self.artworkInFlightBackstop)
             fetchArtworkForCurrentTrack(expectedKey: key)
         }
 
@@ -3924,10 +3926,15 @@ public final class LocalPlaybackSource: ObservableObject {
     // 硬挂着——跟 title/artist/album 故意保留"最近一次播放信息"是两回事:那三个字段是
     // 文字,显示旧值不会误导人;封面是背景图,挂着上一首歌的图会让人以为"这就是当前
     // 这首歌的封面",必须清空。
-    // 换歌后"旧封面最多还能挂多久"的兜底期限。取 3 秒:封面取图正常在几百毫秒内回来(见
-    // fetchArtwork 的子进程往返),3 秒还没回来只可能是子进程卡死或那个二进制出了问题,
-    // 此时挂着上一首的封面已经不合理了,宁可回落到系统背景。
+    // 换歌后"旧封面最多还能挂多久"的兜底期限,从**一次取图结束**算起:取图回来了却还没定案(读空、载荷还是
+    // 上一首的),旧封面最多再挂 3 秒。取图还在路上时期限另算,见 artworkInFlightBackstop —— 那段时间没有任何
+    // 证据说明这首歌没有封面,只是子进程还没回来。
     private static let artworkStaleTimeout: TimeInterval = 3
+    // 一次取图还在路上时的兜底期限:子进程最多跑 MediaControlClient.artworkTimeout 就会被收掉,再加
+    // artworkStaleTimeout 的宽限。期限原来从换歌那一刻(以及每次重试之前)起算 3 秒,隐含的假设是「取图几百
+    // 毫秒就回来」;机器满载时起子进程、读几百 KB 的 base64 本身就可能超过 3 秒,兜底在取图还没返回时先开火,
+    // 同一张专辑的下一首也会先把封面清掉、几秒后才回来。这个期限只防子进程真卡死,正常取图远远用不到。
+    private static let artworkInFlightBackstop: TimeInterval = MediaControlClient.artworkTimeout + artworkStaleTimeout
     private var artworkStaleTimeoutTask: Task<Void, Never>?
 
     /// 换歌时安排一次"旧封面过期清理"。只在真的有旧封面可挂时才安排——本来就没有封面的
@@ -3940,7 +3947,7 @@ public final class LocalPlaybackSource: ObservableObject {
         artworkStaleTimeoutTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(deadline))
             guard !Task.isCancelled, let self, self.lastKey == key else { return }
-            logger.debug("artwork stale timeout: clearing previous cover after \(Self.artworkStaleTimeout)s")
+            logger.debug("artwork stale timeout: clearing previous cover after \(deadline)s")
             self.artworkData = nil
             self.artworkAverageHex = nil
             self.artworkStaleTimeoutTask = nil
@@ -3961,9 +3968,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // base64 封面读到 EOF、waitUntilExit 再解码,单次就是几百毫秒量级(见本文件取图那段
     // 注释)。只要平均往返超过 ~225ms,3s 的兜底就会在重试还没跑完时先开火,把旧封面清掉
     // ——正好重演它当初要消除的那次白屏(先闪成系统浅色背景,重试成功后再闪回来,两次跳变)。
-    // 修法是每次重试前把兜底任务重新排一遍(见 fetchArtworkForCurrentTrack 里的调用),
-    // 这样"3s"变成"距最后一次尝试 3s",既不会打断重试,也保留了"子进程真挂住就别无限期
-    // 挂着旧封面"这个原始目的。
+    // 修法是每次重试前把兜底任务重新排一遍(见 fetchArtworkForCurrentTrack 里的调用),期限盖住
+    // 这次等待加下一次取图(artworkInFlightBackstop),既不会打断重试,也保留了"子进程真挂住就别
+    // 无限期挂着旧封面"这个原始目的。
     private static let artworkRetryDelays: [TimeInterval] = [0.3, 0.6, 1.2]
 
     // 首轮定案后按这张表再确认几次(累计 3 / 8 / 16 / 31 秒)。两件事靠它收敛:
@@ -4037,8 +4044,9 @@ public final class LocalPlaybackSource: ObservableObject {
             var round = 0
             while !isFinal(data, payloadKey), round < Self.artworkRetryDelays.count {
                 guard expectedKey == self.lastKey else { return }
-                // 把兜底清理往后推一轮,理由见 artworkRetryDelays 上面那段注释。
-                self.scheduleArtworkStaleTimeout(forKey: expectedKey)
+                // 把兜底清理往后推一轮,盖住这次等待和下一次取图,理由见 artworkRetryDelays 上面那段注释。
+                self.scheduleArtworkStaleTimeout(
+                    forKey: expectedKey, after: Self.artworkRetryDelays[round] + Self.artworkInFlightBackstop)
                 try? await Task.sleep(for: .seconds(Self.artworkRetryDelays[round]))
                 guard expectedKey == self.lastKey else { return }
                 (data, payloadKey) = await attempt()
