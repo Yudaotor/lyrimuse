@@ -156,9 +156,11 @@ func runSyncEngineTests() {
         // 同上一块的时间轴(前奏 2s、句间静默两处各 3s),每句都配一条罗马音/译文,时间戳
         // 跟 YRC 对齐——验的是"line 为 nil 时那句该有的罗马音/译文,跟它变成当前行时
         // allLines 里的罗马音/译文逐字一致",不是另一套简化规则。
-        let yrc = "[2000,1000](2000,500,0)aa (2500,500,0)bb \n"
-            + "[6000,1000](6000,500,0)cc (6500,500,0)dd \n"
-            + "[10000,1000](10000,500,0)ee (10500,500,0)ff \n"
+        // 占位歌词用希腊字母:拉丁字母的行本来就不标罗马音(见 Romanizer.needsRomanization),写成
+        // aa / bb 的话这里验的就成了"没有罗马音"。
+        let yrc = "[2000,1000](2000,500,0)αα (2500,500,0)ββ \n"
+            + "[6000,1000](6000,500,0)γγ (6500,500,0)δδ \n"
+            + "[10000,1000](10000,500,0)εε (10500,500,0)ζζ \n"
         let roma = "[00:02.00]roma-aa-bb\n[00:06.00]roma-cc-dd\n[00:10.00]roma-ee-ff\n"
         let tr = "[00:02.00]tr-aa-bb\n[00:06.00]tr-cc-dd\n[00:10.00]tr-ee-ff\n"
         let engine = LyricsSyncEngine()
@@ -1154,12 +1156,13 @@ func runSyncEngineTests() {
         // 逐字数据把同一句词标在 3000ms(漂移 2000ms,远超 700ms 容差)。旧逻辑会因为超容差
         // 返回 nil(前面 engine5 那组已经钉死这个行为不能变),内容匹配不看时间,只要
         // plainText 对得上就能查到。
+        // 占位歌词用希腊字母,理由同上面「下一行罗马音」那块。
         let engineDrift = LyricsSyncEngine()
         engineDrift.load(
-            lyrics: "[00:01.00]drifted line",
+            lyrics: "[00:01.00]δριφτ λάιν",
             lyricsTr: "[00:01.00]漂移行的译文",
             lyricsRoma: "[00:01.00]piao yi hang de yi wen",
-            lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line")
+            lyricsYRC: "[3000,500](3000,300,0)δριφτ (3300,200,0)λάιν")
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.translation, "漂移行的译文",
                     "内容匹配: YRC/LRC 时间戳漂移超过容差时,按内容而不是时间找到译文")
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.romanization, "piao yi hang de yi wen",

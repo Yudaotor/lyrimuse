@@ -12,6 +12,12 @@ func runRomanizationTests() {
     expectEqual(Romanizer.romanize(""), nil, "Romanizer: 空输入返回 nil")
     expectEqual(Romanizer.romanize("hello"), nil, "Romanizer: 已经是拉丁字母,音译等于原文,不重复展示")
     expectEqual(Romanizer.romanize("你好") != nil, true, "Romanizer: 中文输入应该能现算出一份跟原文不同的音译")
+    for latin in ["All you gotta do is", "ROSÉ café naïve", "Đà Nẵng ơi", "Oh！ yeah～", "Ｈｅｌｌｏ", "123 ♪ — …"] {
+        expectEqual(Romanizer.needsRomanization(latin), false, "Romanizer.needsRomanization: 拉丁字母 / 标点不需要读音: \(latin)")
+    }
+    for other in ["아파트", "君の名は", "你好 hello", "Привет", "สวัสดี", "채영이가 random game"] {
+        expectEqual(Romanizer.needsRomanization(other), true, "Romanizer.needsRomanization: 非拉丁文字要读音: \(other)")
+    }
 
     // 实测排查坐实的真实 bug 的回归测试:汉字是中文/日文共用的文字系统,
     // Romanizer.romanize 单靠"输出是否等于输入"分不清这两种语言,必须靠假名(日文独有、
@@ -59,6 +65,23 @@ func runRomanizationTests() {
         let roma = "[00:20.00]别的行的罗马音\n"
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 10000)?.romanization, nil, "SyncEngine(罗马音兜底): 服务端提供了罗马音字段时,不在没匹配上的单行现算兜底")
+    }
+
+    do {
+        // 源自带的整首罗马音(Apple Music 给韩英混唱歌的音译)连英文行也配了一行:照抄原文,有的还带上
+        // 背景人声的括号。英文行底下不许再出一行几乎一样的英文;谚文行照旧给读音。
+        let engine = LyricsSyncEngine()
+        let lrc = "[00:06.67]아파트 아파트\n[00:42.11]All you gotta do is just meet me at the\n[00:46.00]I'm tryna kiss your lips for real\n"
+        let roma = "[00:06.67]a pa teu  a pa teu\n[00:42.11]All you gotta do is just meet me at the\n[00:46.00]I'm tryna kiss your lips for real (Uh-huh, uh-huh)\n"
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
+        expectEqual(engine.activeLine(atMs: 7_000)?.romanization, "a pa teu  a pa teu",
+                    "SyncEngine(源自带罗马音): 谚文行照旧给读音")
+        expectEqual(engine.activeLine(atMs: 43_000)?.romanization, nil,
+                    "SyncEngine(源自带罗马音): 英文行的读音只是原文再抄一遍,不显示")
+        expectEqual(engine.activeLine(atMs: 47_000)?.romanization, nil,
+                    "SyncEngine(源自带罗马音): 读音比原文多一段背景人声括号,同样不显示")
+        expectEqual(engine.allLines(idPrefix: "t").compactMap(\.line.romanization), ["a pa teu  a pa teu"],
+                    "SyncEngine(源自带罗马音): 歌词窗口的整首列表同一口径")
     }
 
     // 副歌重复句:两处出现的歌词文字完全相同(常见于"副歌"),activeLineIndex 必须靠时间戳
@@ -642,8 +665,10 @@ func runRomanizationTests() {
         // romanize 会因为"音译结果等于原文"返回 nil，不该因为开关而改变）。
         expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "", scripts: []), nil,
                     "开关: 拉丁原文本来就没有罗马音")
+        expectEqual(romanization(lyrics: "[00:01.00]Привет", roma: "[00:01.00]Privet", scripts: []),
+                    "Privet", "开关: other 文字不受三个语言开关管辖")
         expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "[00:01.00]Hello", scripts: []),
-                    "Hello", "开关: other 文字不受三个语言开关管辖")
+                    nil, "开关: 拉丁原文即使源自带罗马音也不标(只是原文再抄一遍)")
 
         // ---- 「整首歌 vs 一行」:中文歌引用日文词不该让整首歌都出日文注音 ----
         //

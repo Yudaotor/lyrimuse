@@ -1774,6 +1774,7 @@ public final class LyricsSyncEngine {
         romanizerFallbackCache.removeAll()
         wordGroupCache.removeAll()
         segmentsCache.removeAll()
+        needsRomanizationCache.removeAll()
         // 换歌词内容后,按下标记忆化的"当前行/下一行"缓存必须一并失效 —— 新歌的同一个
         // 下标对应的是完全不同的内容,忘了这一步会把上一首歌的行当成这一首的返回出去。
         cachedActiveIdx = Int.min
@@ -1976,6 +1977,17 @@ public final class LyricsSyncEngine {
     // 命中缓存,不再重复调用这个开销不小的字符串变换。
     private var romanizerFallbackCache: [String: String?] = [:]
 
+    /// 按行缓存「这一行要不要标读音」(见 Romanizer.needsRomanization)。romanizationText 以 20Hz
+    /// 被调用,ICU 音译不便宜,理由同 romanizerFallbackCache。
+    private var needsRomanizationCache: [String: Bool] = [:]
+
+    private func lineNeedsRomanization(_ line: String) -> Bool {
+        if let cached = needsRomanizationCache[line] { return cached }
+        let needs = Romanizer.needsRomanization(line)
+        needsRomanizationCache[line] = needs
+        return needs
+    }
+
     private func romanizationText(timeMs: Int, plainText: String) -> String? {
         // 这道闸必须在**服务端字段之前**。用户关掉某种语言的罗马音,意思是"别给我看",
         // 不是"别去现算" —— 只拦客户端兜底的话,服务端恰好给了 lyrics_roma 的那些歌照样
@@ -1984,6 +1996,11 @@ public final class LyricsSyncEngine {
         // 同一个"标签行抢近邻词条"的坑,见 isBareSpeakerTag 的注释——罗马音跟译文共用
         // 同一套 nearestText+700ms 容差,症状对称。
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
+        // 这一行本来就是拉丁字母(英文句子、已经是罗马字的行),读音只会是原文再抄一遍 —— 跟下面现算
+        // 兜底里 Romanizer.romanize「音译是无操作就不给」同一口径,这道闸把它提到源自带的罗马音前面:
+        // Apple Music 给韩英混唱歌的整首音译连英文行也配了一行(照抄原文,有的还带上背景人声的括号),
+        // 不拦的话英文句子底下会多出一行几乎一样的英文。
+        guard lineNeedsRomanization(plainText) else { return nil }
         // 混排行要把中文片段换回原文时,源自带/预生成那份整行罗马音用不了:它是**完整版**
         // (生成侧一律按拼音渲染中文片段、不看开关 —— 开关随时能改,按开关生成的话用户
         // 一打开拼音,存量几千首就得全部回补),而且是拼好的一整个字符串,事后切不出

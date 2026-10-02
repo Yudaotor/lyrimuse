@@ -98,6 +98,14 @@ public enum Romanizer {
         return transformed
     }
 
+    /// 这一行里有没有需要标读音的文字:音译成拉丁字母之后跟原文不一样。英文(带不带重音)、数字、
+    /// 标点、全角标点原样穿透,判假;谚文、假名、汉字、西里尔字母、泰文判真。跟 `romanize` 末尾
+    /// 那道「输出等于输入就不给」同一个判据。音译失败时判真,不替调用方拦掉什么。
+    public static func needsRomanization(_ text: String) -> Bool {
+        guard let transformed = text.applyingTransform(.toLatin, reverse: false) else { return true }
+        return transformed != text
+    }
+
     // 系统自带的日语形态分析:按词切开,每个词问它的拉丁转写。这是 Apple 平台上拿日文读音
     // 的标准做法,kanji 的读音由词典决定,而不是逐字音译。
     private static let japaneseLocale = CFLocaleCreate(
