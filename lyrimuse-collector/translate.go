@@ -538,16 +538,33 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 // 同一个口径。
 func translateOnDeviceByScript(ctx context.Context, target string, texts []string, out []string) []int {
 	var pending []int
+	lang := appleLangCode(target)
 	for _, group := range groupTextsByScript(texts) {
+		// 这一组最近走不通(语言包没装 / 限时内没答复):直接交给网络,见 onDeviceSkips。
+		script := dominantScript(texts[group[0]])
+		if onDeviceSkips.skipping(script, lang, time.Now()) {
+			pending = append(pending, group...)
+			continue
+		}
 		batch := pickTranslationTexts(texts, group)
-		got, err := onDeviceTranslator(ctx, appleLangCode(target), batch)
+		groupCtx, cancel := context.WithTimeout(ctx, onDeviceTranslateTimeout)
+		got, err := onDeviceTranslator(groupCtx, lang, batch)
+		// 到点的是这一组自己的时限、不是整首的:整首的额度还有,交给网络。
+		timedOut := err != nil && errors.Is(groupCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil
+		cancel()
 		if err == nil && translatedEnough(batch, got) {
 			fillTranslations(out, group, got)
 			continue
 		}
-		if err == nil {
+		switch {
+		case err == nil:
 			log.Printf("translate: on-device returned too few translated lines, falling back to network")
-		} else if !errors.Is(err, errOnDeviceUnavailable) {
+		case timedOut:
+			log.Printf("translate: on-device gave no answer within %s, using network fallback", onDeviceTranslateTimeout)
+			onDeviceSkips.note(script, lang, time.Now())
+		case errors.Is(err, errOnDevicePackMissing):
+			onDeviceSkips.note(script, lang, time.Now())
+		case !errors.Is(err, errOnDeviceUnavailable):
 			log.Printf("translate: on-device failed, falling back to network: %v", err)
 		}
 		pending = append(pending, group...)
@@ -1023,6 +1040,10 @@ const lyricsTrSourceMachine = "machine"
 // 不在),跟"该翻但翻失败了"区分开:前者是常态、不该刷日志,后者才值得记一笔。
 var errOnDeviceUnavailable = errors.New("on-device translation unavailable")
 
+// errOnDevicePackMissing 语言包没下载。也算 errOnDeviceUnavailable(照样退回网络),另外会被记住一段时间,
+// 见 onDeviceSkips。
+var errOnDevicePackMissing = fmt.Errorf("%w: language pack not installed", errOnDeviceUnavailable)
+
 // onDeviceTranslator 是 machineTranslateLRCWithBase 实际调用的端上翻译;测试换成假的,覆盖"端上翻空之后退到
 // 网络"那条路(真的 helper 在测试二进制旁边不存在,只会走 unavailable)。
 var onDeviceTranslator = onDeviceTranslate
@@ -1081,7 +1102,7 @@ func onDeviceTranslate(ctx context.Context, target string, lines []string) ([]st
 			// 但仍然算 unavailable(退回网络翻译),不当作错误刷屏。
 			log.Printf("translate: on-device pack for %s not installed (%s), using network fallback",
 				res.Source, res.Reason)
-			return nil, errOnDeviceUnavailable
+			return nil, errOnDevicePackMissing
 		default:
 			return nil, fmt.Errorf("lyrics-translate: %s", res.Reason)
 		}
