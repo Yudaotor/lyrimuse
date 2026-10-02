@@ -71,8 +71,8 @@ const (
 	// 拿到了响应,但全是 5xx。4xx 不算:那是服务器在正经说话(404 = 没这首、403 = 反爬),
 	// 各源自己判定,跟 sourcebreaker.go 的口径一致。
 	lyricFailureReasonServerError = "server_error"
-	// 上游没连上、这一轮根本没法查。目前只有 amll 会报:它不做搜索,只按网易云 / QQ 给出的
-	// 曲目 ID 去 raw.githubusercontent.com 取词(amllttml.go amllLyric),两个 ID 都拿不到时一个
+	// 上游没连上、这一轮根本没法查。目前只有 amll 会报:它不发搜索请求,按曲目 ID 去 raw.githubusercontent.com
+	// 取词、按 ISRC / 歌名只在本地索引里找(amllttml.go amllLyric),索引不在手、ID 又都拿不到时一个
 	// 请求都不发 —— 于是它在传输层表里没有条目、不是 dns_failed 也不是 connect_failed,却也
 	// 绝不是"查过了没有"。评审时抓到的漏洞:不给它归因,弹窗会把它算进「其余 N 个源」,而
 	// 「歌词源全都没连上」那一档在网易云 + QQ 一起死掉时永远触发不了(amll 默认开着)。

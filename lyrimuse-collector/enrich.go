@@ -3623,9 +3623,9 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // lyricSourcesWorthAliasRetry:这一轮**值得**拿别名再查一次的源 —— 启用、没给出可用候选、
 // 而且失败原因不是"换个名字也没用"的那几类:传输层连不上(DNS / 连接 / 5xx,sourcebreaker 的
 // transportFailureCodes,进程内累计)、lyricfind 的地区限制、Musixmatch 的限流 / 直连被堵
-// (各自的 xxxLastFailureReasonNow 旁路)。amll 不做搜索(按网易云 / QQ 的曲目 ID 直取),
-// 别名对它本身没意义,但它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
-// —— 网易云 / QQ 不在名单里时它拿到空 ID 立刻返回,不花时间。
+// (各自的 xxxLastFailureReasonNow 旁路)。amll 不发搜索请求(按曲目 ID 直取,按名字只在本地索引里找),
+// 它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
+// —— 网易云 / QQ 不在名单里时由 dropAMLLWithoutIDSource 剔掉。
 // soda 照常算进来:它有自己的搜索(本地队列缓存拿不到 id 时的兜底,见 soda.go),别名确实
 // 会影响命中 —— 本地那条路在别名轮里查空是预期的(署名换了就不再对应同一条录音),搜索
 // 那条路则正是别名要救的场景。
@@ -3633,6 +3633,12 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // 被跳过,为它去查别名只是白打别名解析那几次请求;这一轮会因此不追平打分版本,之后整首重来。
 // 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按 lyricSourceNames。
 func lyricSourcesWorthAliasRetry(ctx context.Context, scored []scoredLyricCandidateResult) []string {
+	return dropAMLLWithoutIDSource(lyricSourcesWorthRetry(ctx, scored))
+}
+
+// lyricSourcesWorthRetry:lyricSourcesWorthAliasRetry 剔 amll(dropAMLLWithoutIDSource)之前的名单。按 ISRC 补取那一轮用它
+// (isrcRetryPlan):那一轮 amll 按 ISRC 在本地索引里找,不靠网易云 / QQ 的 ID。
+func lyricSourcesWorthRetry(ctx context.Context, scored []scoredLyricCandidateResult) []string {
 	usable := map[string]bool{}
 	for _, c := range scored {
 		if c.Score >= 0 && !c.Instrumental {
@@ -3672,13 +3678,14 @@ func lyricSourcesWorthAliasRetry(ctx context.Context, scored []scoredLyricCandid
 		}
 		out = append(out, s)
 	}
-	return dropAMLLWithoutIDSource(out)
+	return out
 }
 
-// dropAMLLWithoutIDSource:别名轮名单里既没有网易云也没有 QQ 时剔掉 amll。amll 不按歌手名搜,按曲目 ID
+// dropAMLLWithoutIDSource:别名轮名单里既没有网易云也没有 QQ 时剔掉 amll。amll 不发搜索请求,按曲目 ID
 // 直取:Apple / Spotify 两个精确 ID 跟署名写法无关、首轮已经拿它们问过(别名轮按改写后的署名也查不到它们),
-// 网易云 / QQ 的 ID 只有这一轮也重查那两个源时才可能是新的。都不在的话 amll 这一轮一个 ID 都拿不到,
-// 留在名单里只会让"只缺 amll"的歌白跑一轮别名(MusicBrainz / iTunes 身份查询)。
+// 网易云 / QQ 的 ID 只有这一轮也重查那两个源时才可能是新的。都不在的话 amll 这一轮拿不到新 ID,只剩拿别名在
+// 本地索引里再找一次;留在名单里会让"只缺 amll"的歌(库里没有的歌占绝大多数)都跑一轮别名(MusicBrainz /
+// iTunes 身份查询)。
 func dropAMLLWithoutIDSource(sources []string) []string {
 	for _, s := range sources {
 		if s == "netease" || s == "qq" {
@@ -4175,11 +4182,16 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		})
 	}
 	if !amll.empty() {
-		// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
+		// 按 ID 取回的那份身份是确定的 —— 这份 TTML 是按曲目 ID 直接取回来的,不是搜出来的,
 		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
-		// 被扣分。它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
+		// 被扣分。按 ISRC / 歌名在索引里找到的(matchTitle 非空)报索引里的歌名 / 歌手 / 专辑,跟搜出来的源一样打分。
+		// 它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
 		// 它自己没有封面:按网易云 / QQ 的 ID 命中时,借那一家同一首歌的封面(ID 就是那一路递过来的);
-		// 按 Apple / Spotify 的 ID 命中时不借 —— 手上那两家的封面是搜出来的,未必是同一条录音。
+		// 按 Apple / Spotify 的 ID 命中、在索引里找到时不借 —— 手上那几家的封面是搜出来的,未必是同一条录音。
+		amllTitle, amllArtist, amllAlbum := title, artist, album
+		if amll.matchTitle != "" {
+			amllTitle, amllArtist, amllAlbum = amll.matchTitle, amll.matchArtist, amll.matchAlbum
+		}
 		amllCover := ""
 		switch amll.platform {
 		case "ncm-lyrics":
@@ -4187,13 +4199,14 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		case "qq-lyrics":
 			amllCover = qqCover
 		}
-		amllTr, amllRoma := usableValueAdd(amll.lrc, amll.tr, features().LyricsTranslationLanguage, amll.roma, features().LyricsTranslationLanguage)
+		target := features().LyricsTranslationLanguage
+		amllTr, amllRoma := usableValueAdd(amll.lrc, amll.tr, amll.translationLang(target), amll.roma, target)
 		candidates = append(candidates, lyricCandidate{
 			source: "amll", lyrics: amll.lrc,
 			wordTimingYRC: usableYRC(amll.lrc, amll.yrc), hasWordTiming: usableWordTiming(amll.lrc, amll.yrc),
 			hasUsableTranslation:  amllTr,
 			hasUsableRomanization: amllRoma,
-			title:                 title, artist: artist, album: album, cover: amllCover,
+			title:                 amllTitle, artist: amllArtist, album: amllAlbum, cover: amllCover,
 		})
 	}
 	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
@@ -4315,22 +4328,20 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			// 这份本来就有毛病的原文(逐词粘连,见 amllttml.go)反复重试、屡试屡败,表现成"这首歌
 			// 一直没有译文"。
 			//
-			// 语言标注沿用 usableValueAdd 那次调用同样的简化:amll-ttml-db 的 TTML 没有给译文标
-			// 语言的字段,判定"能不能用"时就是直接拿 targetLang 自比自(trLang 传的就是
-			// features().LyricsTranslationLanguage 本身,永远相等)—— 这里不重新发明一套更严格的
-			// 判定,原样沿用同一个假设,保持"能不能用"和"语言标什么"这两处判断口径一致。同上,
-			// c.hasUsableTranslation 一并把关"同语言不同文字不算翻译"这类情况。
+			// 语言标注跟 usableValueAdd 那次调用用同一个值(amllResult.translationLang:TTML 给译文标的语言,
+			// 没标时按目标语言),"能不能用"和"语言标什么"两处口径一致。c.hasUsableTranslation 一并把关
+			// "同语言不同文字不算翻译"这类情况。
 			if c.hasUsableTranslation {
 				r.LyricsTr = amll.tr
-				r.LyricsTrLang = features().LyricsTranslationLanguage
+				r.LyricsTrLang = amll.translationLang(features().LyricsTranslationLanguage)
 			}
 			if usableRomaForResult(c.lyrics, amll.roma) {
 				r.LyricsRoma = amll.roma
 			}
 			r.LyricsBG = amll.bg
 		case "applemusic":
-			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>),语言标注口径同
-			// amll:判定"能不能用"时 trLang 传的就是目标语言本身。
+			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>)。Apple 按请求的语言给译文
+			// (applemusicLyricsQuery),判定"能不能用"时 trLang 传的就是目标语言本身。
 			if c.hasUsableTranslation {
 				r.LyricsTr = amTr
 				r.LyricsTrLang = features().LyricsTranslationLanguage
@@ -4530,8 +4541,8 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	//   - 网易云那一次查询顺带供着第①级封面(e.CoverURL = ne.Cover)和「网易云」跳转链接
 	//     (e.NeteaseURL)。关掉网易云歌词源 = 这两样也不查:封面落到第②级 Apple Music、链接留空;
 	//     needsPeripheralBackfill 相应地不再把"没有网易云链接"算缺项,否则每条都白补 5 轮。
-	//   - amll-ttml-db 按网易云 / QQ 的曲目 ID 直取,两个都关掉时它拿不到 ID、只会得到空结果。
-	//     手动搜索的可用情况面板对这种情形只显示笼统的「未给出候选」:searchcli.go 的 amll 派生
+	//   - amll-ttml-db 要网易云 / QQ 搜出来的曲目 ID,两个都关掉时它只剩 Apple / Spotify 的 ID 和在索引里按 ISRC /
+	//     歌名找。手动搜索的可用情况面板对这种情形只显示笼统的「未给出候选」:searchcli.go 的 amll 派生
 	//     规则只在网易云和 QQ **都带传输层失败代码**时才报 upstream_unreachable,而关掉的源不发
 	//     请求、没有传输层记录,派生不了(要不要单加一个"上游已关闭"的代码另议)。
 	//   - 语种 / 罗马音这些顺带信号(QQ / 酷狗的粤语标记等)自然也只来自开着的源。
@@ -4646,7 +4657,8 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
 		// skipSource 那支也会往 channel 里送一个空串),所以这两个 channel 一定会收到值,
-		// 不会在这里挂死。网易云 / QQ 都关掉时这里拿到两个空串,amllLyric 直接空手而归。
+		// 不会在这里挂死。网易云 / QQ 都关掉时这里拿到两个空串,amllLyric 只剩 Apple / Spotify 的 ID
+		// 和在索引里按 ISRC / 歌名找。
 		neteaseID, qqID := <-neteaseIDCh, <-qqIDCh
 		if skipSource("amll") {
 			resultsCh <- lyricSourceResult{source: "amll"}
@@ -4655,7 +4667,11 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
 		// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
 		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(artist, title, album)
-		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID, appleCatalogID, spotifyTrackID)}
+		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, amllQuery{
+			neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
+			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: title, album: album,
+			durationSecs: durationSecs, translationLang: features().LyricsTranslationLanguage,
+		})}
 	}()
 	go func() {
 		// 酷狗这一路**不能直接用 skipSource**:它比别的源多一条完全不经网络的路 ——

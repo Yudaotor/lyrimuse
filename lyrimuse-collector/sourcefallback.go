@@ -19,7 +19,8 @@ import (
 //   - 汽水:搜索 api.qishui.com → beta-luna.douyin.com(同一个 /luna/search/track);歌词 beta-luna.douyin.com →
 //     api.qishui.com(同一个 /luna/h5/seo_track),两个都没问成或应答认不出形状时取曲目分享页(soda.go sodaFetchSharePage)
 //   - YouTube Music:music.youtube.com → youtubei.googleapis.com → www.youtube.com(同一套 InnerTube)
-//   - AMLL:raw.githubusercontent.com → jsDelivr 的两个镜像;404 是「库里没有这首」,不换镜像
+//   - AMLL:raw.githubusercontent.com → jsDelivr 的两个镜像 → AMLL 官方接口 api.amll.dev(请求和应答的形状不同,
+//     见 amllttml.go amllFetchAPI);404 是「库里没有这首」,不换。歌词索引只有前三个地址有(amllindex.go)
 //   - Apple Music:搜索 amp-api → api.music.apple.com,取词 amp-api → amp-api-edge(api.music 搜得到同样的结果、
 //     取词回 400;amp-api-edge 取词逐字节相同、搜索回 200 却是空结果,所以两个端点各有各的备用)。只在传输失败 / 5xx
 //     时换:401 / 403 / 404 / 429 是答了,令牌、这首没词、限流都跟主机无关

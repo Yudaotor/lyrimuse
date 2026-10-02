@@ -88,8 +88,8 @@ func TestAMLLTryOrderPutsExactIDsFirst(t *testing.T) {
 	if pos["ncm-lyrics"] > pos["qq-lyrics"] {
 		t.Error("ncm-lyrics 仍应排在 qq-lyrics 之前(那份索引更全)")
 	}
-	// 四个 ID 全空才算"没法查",少一个都不算 —— 否则 amll 会在还有路可走时就报跳过。
-	if !strings.Contains(s, `neteaseID == "" && qqID == "" && appleCatalogID == "" && spotifyTrackID == ""`) {
+	// 四个 ID 全空才算"没法查",少一个都不算 —— 否则 amll 会在还有路可走时就报跳过。行为见 TestAMLLLyricSkipFlag。
+	if !strings.Contains(s, `q.neteaseID == "" && q.qqID == "" && q.appleCatalogID == "" && q.spotifyTrackID == ""`) {
 		t.Error("amllLyric 的跳过判据没有覆盖全部四个 ID")
 	}
 }

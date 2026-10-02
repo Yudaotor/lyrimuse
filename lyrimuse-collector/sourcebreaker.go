@@ -142,8 +142,9 @@ func lyricSourceForHost(host string) string {
 		return "lrclib"
 	case h == "musixmatch.com" || strings.HasSuffix(h, ".musixmatch.com"):
 		return "musixmatch"
-	case h == "raw.githubusercontent.com" || h == "cdn.jsdelivr.net" || h == "fastly.jsdelivr.net":
-		// 后两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),全仓只有 amll 在用。
+	case h == "raw.githubusercontent.com" || h == "cdn.jsdelivr.net" || h == "fastly.jsdelivr.net" || h == "api.amll.dev":
+		// jsDelivr 两个是 amll-ttml-db 的镜像(sourcefallback.go 的 amllBases),api.amll.dev 是 AMLL 官方接口(amllttml.go 的
+		// amllAPIBase),全仓只有 amll 在用。
 		return "amll"
 	case h == "music.youtube.com" || h == "youtubei.googleapis.com" || h == "www.youtube.com":
 		// 后两个是同一套 InnerTube 的备用主机(sourcefallback.go 的 ytmusicAPIBases)。

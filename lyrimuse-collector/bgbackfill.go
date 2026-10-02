@@ -65,7 +65,9 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	var bg string
 	switch e.LyricsSource {
 	case "amll":
-		r := amllLyric(ctx, neteaseSongIDFromURL(e.NeteaseURL), qqMidFromURL(e.QQURL), appleID, spotifyID)
+		// 只按 ID 重取:要的是当初选中的那一份,在索引里按歌名另找的未必是它。
+		r := amllLyric(ctx, amllQuery{neteaseID: neteaseSongIDFromURL(e.NeteaseURL), qqID: qqMidFromURL(e.QQURL),
+			appleCatalogID: appleID, spotifyTrackID: spotifyID})
 		if r.empty() {
 			log.Printf("bg backfill: %s  amll returned nothing", key)
 			return

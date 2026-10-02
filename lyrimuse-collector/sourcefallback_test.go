@@ -214,6 +214,7 @@ func TestFallbackHostsMapToTheirLyricSource(t *testing.T) {
 		"www.youtube.com":          "lyricfind",
 		"cdn.jsdelivr.net":         "amll",
 		"fastly.jsdelivr.net":      "amll",
+		"api.amll.dev":             "amll",
 		"api.qishui.com":           "soda",
 		"www.kuwo.cn":              "kuwo",
 		"c.musicapp.migu.cn":       "migu",

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,7 +43,8 @@ import (
 // 接它的理由是**命中那些歌的歌词质量**(逐字 + 内嵌译文 + 人工校对),不是对唱兼容率 ——
 // 用户库里 15 首对唱歌它只有 3 首,而那 3 首现有解析已经能处理。
 //
-// 取用方式:不下载索引(ncm+qq 两份共 7.8MB),直接按音乐 ID 试取 raw 文件,404 即没有。
+// 取用方式:按音乐 ID 取 raw 文件,取之前先查库的歌词索引(amllindex.go),索引里没有的 ID 不取;手上的 ID 都不在
+// 索引里时,按 ISRC、按歌名歌手专辑在索引里找(见 amllLyric)。
 
 const (
 	amllRawBase     = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main"
@@ -59,14 +62,20 @@ const (
 
 type amllResult struct {
 	lrc, yrc, tr string
+	// trLang:tr 的语言(amllTrLangTag 的写法:中文是 zh / zh-Hant,别的是主语言子标签)。TTML 没给译文标语言时为空。
+	// 只有 parseAMLLTTMLFor 填。
+	trLang string
 	// roma:内嵌罗马音拼成的逐行 LRC,跟 lrc 同一套时间戳。
 	roma string
 	// bg:背景人声轨,YRC 语法。每行的行头是它所属主句的起止(跟 yrc 里那一行的行头相同,App 靠它把
 	// 背景人声挂到主句下面),词带背景人声自己的时间。一行主句里的几段背景人声并成一行。
 	bg string
-	// platform:命中的是哪个平台目录(am-lyrics / spotify-lyrics / ncm-lyrics / qq-lyrics)。候选借封面用,
-	// 见 enrich.go 组装 amll 候选那段。
+	// platform:按调用方给的 ID 取到时,是那个 ID 的平台目录(am-lyrics / spotify-lyrics / ncm-lyrics / qq-lyrics)。
+	// 候选借封面用,见 enrich.go 组装 amll 候选那段。按 ISRC / 歌名在索引里找到的为空。
 	platform string
+	// matchTitle / matchArtist / matchAlbum:按 ISRC / 歌名在索引里找到时,索引里这一份的歌名 / 歌手 / 专辑(候选拿它们
+	// 去打分);按 ID 取到的为空。
+	matchTitle, matchArtist, matchAlbum string
 	// hasDuet:这份 TTML 里出现了两个及以上的非 group 演唱者。只用于日志,选源不看它。
 	hasDuet bool
 	// spatialOffsetSecs:Apple TTML 给空间音频版的歌词偏移(秒),没有时为 0。只有 applemusicParseTTML 填,
@@ -76,15 +85,53 @@ type amllResult struct {
 
 func (r amllResult) empty() bool { return r.lrc == "" && r.yrc == "" }
 
+// translationLang:tr 的语言,TTML 没标时按 target。
+func (r amllResult) translationLang(target string) string {
+	if r.trLang != "" {
+		return r.trLang
+	}
+	return target
+}
+
 // ---- TTML 结构 ----
 //
 // 命名空间:ttm = http://www.w3.org/ns/ttml#metadata, xml = XML 内建。
 // Go 的 encoding/xml 用 "命名空间URI 局部名" 的形式指定带命名空间的属性。
 
 type ttmlDoc struct {
-	XMLName xml.Name    `xml:"tt"`
-	Agents  []ttmlAgent `xml:"head>metadata>agent"`
-	Divs    []ttmlDiv   `xml:"body>div"`
+	XMLName xml.Name           `xml:"tt"`
+	Agents  []ttmlAgent        `xml:"head>metadata>agent"`
+	ITunes  ttmlITunesMetadata `xml:"head>metadata>iTunesMetadata"`
+	Divs    []ttmlDiv          `xml:"body>div"`
+}
+
+// ttmlITunesMetadata:head 里 Apple 写法的译文与音译,每行一个 <text for="L1">,按 key 指回正文 <p itunes:key="L1">。
+type ttmlITunesMetadata struct {
+	Translations     []ttmlKeyedBlock `xml:"translations>translation"`
+	Transliterations []ttmlKeyedBlock `xml:"transliterations>transliteration"`
+}
+
+type ttmlKeyedBlock struct {
+	Type  string          `xml:"type,attr"`
+	Lang  string          `xml:"http://www.w3.org/XML/1998/namespace lang,attr"`
+	Texts []ttmlKeyedText `xml:"text"`
+}
+
+// ttmlKeyedText:孩子按文档顺序读,理由同 ttmlLine。
+type ttmlKeyedText struct {
+	For  string
+	Kids []ttmlNode
+}
+
+func (t *ttmlKeyedText) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, a := range start.Attr {
+		if a.Name.Space == "" && a.Name.Local == "for" {
+			t.For = a.Value
+		}
+	}
+	kids, err := decodeTTMLKids(d)
+	t.Kids = kids
+	return err
 }
 
 type ttmlAgent struct {
@@ -109,7 +156,19 @@ type ttmlDiv struct {
 // translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 → 用户看到的
 // 「没有翻译」。实测用户库 4 首 amll 来源的歌全中,每首 26~42 行粘连。
 // 中文那种逐字写法(<span>没</span><span>有</span>)span 之间本来就没有空白,不受影响。
-const ttmMetadataNS = "http://www.w3.org/ns/ttml#metadata"
+const (
+	ttmMetadataNS = "http://www.w3.org/ns/ttml#metadata"
+	ttmStylingNS  = "http://www.w3.org/ns/ttml#styling"
+	xmlNS         = "http://www.w3.org/XML/1998/namespace"
+	itunesTTMLNS  = "http://music.apple.com/lyric-ttml-internal"
+)
+
+// TTML 的注音(tts:ruby):container 里一个 base(正文的字)配一个 textContainer / text(注音,带逐字时间)。
+const (
+	ttmlRubyContainer = "container"
+	ttmlRubyBase      = "base"
+	ttmlRubyText      = "text"
+)
 
 // ttmlNode 是一个元素的一个孩子:Span == nil 表示这是一段字面文本(词之间的空白就在
 // 这儿),否则是一个子 span。
@@ -122,14 +181,20 @@ type ttmlLine struct {
 	Begin string
 	End   string
 	Agent string
-	Kids  []ttmlNode
+	// Key:itunes:key,head 里的译文 / 音译靠它对回这一行。
+	Key  string
+	Kids []ttmlNode
 }
 
 type ttmlSpan struct {
 	Begin string
 	End   string
 	Role  string
-	Kids  []ttmlNode
+	// Lang:xml:lang,译文 span 用它标语言。
+	Lang string
+	// Ruby:tts:ruby,注音结构里的位置(ttmlRubyContainer 等)。
+	Ruby string
+	Kids []ttmlNode
 }
 
 // decodeTTMLKids 按文档顺序读完当前元素的孩子(读到它的 EndElement 为止)。
@@ -177,6 +242,8 @@ func (l *ttmlLine) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			l.End = a.Value
 		case a.Name.Space == ttmMetadataNS && a.Name.Local == "agent":
 			l.Agent = a.Value
+		case a.Name.Space == itunesTTMLNS && a.Name.Local == "key":
+			l.Key = a.Value
 		}
 	}
 	kids, err := decodeTTMLKids(d)
@@ -193,6 +260,10 @@ func (s *ttmlSpan) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			s.End = a.Value
 		case a.Name.Space == ttmMetadataNS && a.Name.Local == "role":
 			s.Role = a.Value
+		case a.Name.Space == xmlNS && a.Name.Local == "lang":
+			s.Lang = a.Value
+		case a.Name.Space == ttmStylingNS && a.Name.Local == "ruby":
+			s.Ruby = a.Value
 		}
 	}
 	kids, err := decodeTTMLKids(d)
@@ -322,11 +393,45 @@ func amllSpeakerPrefixes(agents []ttmlAgent) map[string]string {
 	return out
 }
 
-// flattenTTMLLine 把一行的有序孩子拆成「逐字词」「译文」「罗马音」「背景人声词」四摊。
+// ttmlLineAux:一行的附属内容。translations 按文档顺序一段一条,一行可能有几种语言。
+type ttmlLineAux struct {
+	translations []ttmlLangText
+	roman        string
+}
+
+type ttmlLangText struct {
+	lang, text string
+}
+
+// first:这一行的第一段译文。
+func (a *ttmlLineAux) first() string {
+	if len(a.translations) == 0 {
+		return ""
+	}
+	return a.translations[0].text
+}
+
+// in:这一行 lang 那种语言的译文(标签不分大小写);这一行没有那种语言时取没标语言的那段,也没有就为空。
+func (a *ttmlLineAux) in(lang string) string {
+	untagged := ""
+	for _, t := range a.translations {
+		switch {
+		case t.lang == "":
+			if untagged == "" {
+				untagged = t.text
+			}
+		case strings.EqualFold(t.lang, lang):
+			return t.text
+		}
+	}
+	return untagged
+}
+
+// flattenTTMLLine 把一行的有序孩子拆成「逐字词」「附属内容(译文 / 罗马音)」「背景人声词」三摊。
 // span 之间的字面文本(词间空白)挂到**前一个词**的尾巴上,见 ttmlWord 的注释。带角色的 span
-// 一律不进逐字词:没认出的角色落进 default 会被当成一个词拼进正文。bg 为 nil 时背景人声整枝丢掉
-// (背景人声内部再套的背景人声、译文、罗马音就是这样处理的)。
-func flattenTTMLLine(kids []ttmlNode, words *[]ttmlWord, translation, roman *string, bg *[]ttmlWord) {
+// 一律不进逐字词:没认出的角色落进 default 会被当成一个词拼进正文。注音整组收成一个词(ttmlRubyWord)。
+// aux 为 nil 时译文、罗马音丢掉,bg 为 nil 时背景人声整枝丢掉(背景人声内部再套的这三样就是这样处理的)。
+func flattenTTMLLine(kids []ttmlNode, words *[]ttmlWord, aux *ttmlLineAux, bg *[]ttmlWord) {
 	for _, k := range kids {
 		if k.Span == nil {
 			appendTTMLGap(words, k.Text)
@@ -339,19 +444,69 @@ func flattenTTMLLine(kids []ttmlNode, words *[]ttmlWord, translation, roman *str
 				appendTTMLBackground(bg, sp)
 			}
 		case sp.Role == amllRoleTranslation:
-			if *translation == "" {
-				*translation = strings.TrimSpace(sp.text())
+			if t := strings.TrimSpace(sp.text()); aux != nil && t != "" {
+				aux.translations = append(aux.translations, ttmlLangText{lang: strings.TrimSpace(sp.Lang), text: t})
 			}
 		case sp.Role == amllRoleRoman:
-			if *roman == "" {
-				*roman = strings.TrimSpace(sp.text())
+			if aux != nil && aux.roman == "" {
+				aux.roman = strings.TrimSpace(sp.text())
 			}
 		case sp.Role != "":
 			continue
+		case sp.Ruby == ttmlRubyContainer:
+			if w, ok := ttmlRubyWord(sp); ok {
+				*words = append(*words, w)
+			}
 		case sp.hasSpanKid():
-			flattenTTMLLine(sp.Kids, words, translation, roman, bg)
+			flattenTTMLLine(sp.Kids, words, aux, bg)
 		default:
 			*words = append(*words, ttmlWord{begin: sp.Begin, end: sp.End, text: sp.text()})
+		}
+	}
+}
+
+// ttmlRubyWord 把一组注音收成一个词:字取 base 里的正文,注音不进正文;时间用 container 自己的,没有时取注音
+// 那几段的头尾(AMLL 把逐字时间写在注音上)。base 里没有字时不成词。
+func ttmlRubyWord(sp *ttmlSpan) (ttmlWord, bool) {
+	var base strings.Builder
+	var marks []*ttmlSpan
+	collectTTMLRuby(sp.Kids, &base, &marks)
+	w := ttmlWord{begin: sp.Begin, end: sp.End, text: base.String()}
+	if strings.TrimSpace(w.text) == "" {
+		return ttmlWord{}, false
+	}
+	if w.begin == "" && len(marks) > 0 {
+		w.begin, w.end = marks[0].Begin, marks[len(marks)-1].End
+	}
+	return w, true
+}
+
+// collectTTMLRuby:base 的字拼进 base,注音里带时间的 span 按文档顺序收进 marks。
+func collectTTMLRuby(kids []ttmlNode, base *strings.Builder, marks *[]*ttmlSpan) {
+	for _, k := range kids {
+		if k.Span == nil {
+			continue
+		}
+		switch k.Span.Ruby {
+		case ttmlRubyBase:
+			base.WriteString(k.Span.text())
+		case ttmlRubyText:
+			appendTimedTTMLSpans(k.Span, marks)
+		default:
+			collectTTMLRuby(k.Span.Kids, base, marks)
+		}
+	}
+}
+
+// appendTimedTTMLSpans:sp 自己带时间就收它,否则往下收带时间的子 span。
+func appendTimedTTMLSpans(sp *ttmlSpan, out *[]*ttmlSpan) {
+	if sp.Begin != "" {
+		*out = append(*out, sp)
+		return
+	}
+	for _, k := range sp.Kids {
+		if k.Span != nil {
+			appendTimedTTMLSpans(k.Span, out)
 		}
 	}
 }
@@ -360,9 +515,8 @@ func flattenTTMLLine(kids []ttmlNode, words *[]ttmlWord, translation, roman *str
 // 子 span 的整段按一个词收,用这段自己的起止。
 func appendTTMLBackground(bg *[]ttmlWord, sp *ttmlSpan) {
 	var ws []ttmlWord
-	var ignoredTr, ignoredRoman string
 	if sp.hasSpanKid() {
-		flattenTTMLLine(sp.Kids, &ws, &ignoredTr, &ignoredRoman, nil)
+		flattenTTMLLine(sp.Kids, &ws, nil, nil)
 	} else if t := strings.TrimSpace(sp.text()); t != "" {
 		ws = []ttmlWord{{begin: sp.Begin, end: sp.End, text: t}}
 	}
@@ -429,70 +583,277 @@ func trimTTMLWordEdges(words []ttmlWord) []ttmlWord {
 	return words
 }
 
-// parseAMLLTTML 把一份 TTML 转成整行 LRC / 逐字 YRC / 译文 LRC / 罗马音 LRC。
+// ttmlParsedLine:一行正文解析完的样子。
+type ttmlParsedLine struct {
+	start, end int
+	key        string
+	prefix     string
+	body       string
+	words, bg  []ttmlWord
+	aux        ttmlLineAux
+}
+
+// parseAMLLTTML 把一份 TTML 转成整行 LRC / 逐字 YRC / 译文 LRC / 罗马音 LRC。每行的译文取这一行的第一段。
 func parseAMLLTTML(raw string) (amllResult, bool) {
+	return parseTTMLLyrics(raw, "", false)
+}
+
+// parseAMLLTTMLFor 是 amll 取回的 TTML 用的版本,跟 parseAMLLTTML 有两处不同:行内译文整首挑一种语言
+// (amllPickTranslationLang,按 target),挑中的语言记进 trLang;行内一段译文 / 罗马音都没有时,用 head 里
+// <iTunesMetadata> 的译文 / 音译(amllHeadTranslation / amllHeadTransliteration)。
+func parseAMLLTTMLFor(raw, target string) (amllResult, bool) {
+	return parseTTMLLyrics(raw, target, true)
+}
+
+func parseTTMLLyrics(raw, target string, amll bool) (amllResult, bool) {
 	var doc ttmlDoc
 	if err := xml.Unmarshal([]byte(raw), &doc); err != nil {
 		return amllResult{}, false
 	}
 	prefixes := amllSpeakerPrefixes(doc.Agents)
-	var lrc, yrc, tr, roma, bg strings.Builder
-	lines, distinctPersons := 0, map[string]bool{}
+	var lines []ttmlParsedLine
+	distinctPersons := map[string]bool{}
 	for _, div := range doc.Divs {
 		for _, ln := range div.Lines {
 			start := parseTTMLTime(ln.Begin)
 			if start < 0 {
 				continue
 			}
-			var words, bgWords []ttmlWord
-			translation, roman := "", ""
-			flattenTTMLLine(ln.Kids, &words, &translation, &roman, &bgWords)
-			words = trimTTMLWordEdges(words)
+			l := ttmlParsedLine{start: start, end: parseTTMLTime(ln.End), key: ln.Key}
+			flattenTTMLLine(ln.Kids, &l.words, &l.aux, &l.bg)
+			l.words = trimTTMLWordEdges(l.words)
 
-			prefix := ""
 			if p, ok := prefixes[ln.Agent]; ok {
-				prefix = p + "："
-			}
-			if p, ok := prefixes[ln.Agent]; ok && p != "合" {
-				distinctPersons[p] = true
+				l.prefix = p + "："
+				if p != "合" {
+					distinctPersons[p] = true
+				}
 			}
 
 			// 整行文本:优先拼逐字词(**原样**拼接,分隔空白已经在词里了 —— 见 ttmlWord),
 			// 没有逐字数据时退回 <p> 自己的字面文本。
-			body := ttmlWordsText(words)
-			if body == "" {
-				body = strings.TrimSpace(ttmlLiteralText(ln.Kids))
+			l.body = ttmlWordsText(l.words)
+			if l.body == "" {
+				l.body = strings.TrimSpace(ttmlLiteralText(ln.Kids))
 			}
-			if body == "" {
+			if l.body == "" {
 				continue
 			}
-			lines++
-			lrc.WriteString(formatLRCTime(start) + prefix + body + "\n")
-			if translation != "" {
-				tr.WriteString(formatLRCTime(start) + translation + "\n")
-			}
-			if roman != "" {
-				roma.WriteString(formatLRCTime(start) + roman + "\n")
-			}
-			if w := buildYRCLine(start, parseTTMLTime(ln.End), prefix, words); w != "" {
-				yrc.WriteString(w + "\n")
-			}
-			if w := buildYRCLine(start, parseTTMLTime(ln.End), "", trimTTMLWordEdges(bgWords)); w != "" {
-				bg.WriteString(w + "\n")
-			}
+			lines = append(lines, l)
 		}
 	}
-	if lines == 0 {
+	if len(lines) == 0 {
 		return amllResult{}, false
 	}
-	return amllResult{
+	trLang := ""
+	pick := (*ttmlLineAux).first
+	if amll {
+		trLang = amllPickTranslationLang(lines, target)
+		pick = func(a *ttmlLineAux) string { return a.in(trLang) }
+	}
+	var lrc, yrc, tr, roma, bg strings.Builder
+	for i := range lines {
+		l := &lines[i]
+		lrc.WriteString(formatLRCTime(l.start) + l.prefix + l.body + "\n")
+		if t := pick(&l.aux); t != "" {
+			tr.WriteString(formatLRCTime(l.start) + t + "\n")
+		}
+		if l.aux.roman != "" {
+			roma.WriteString(formatLRCTime(l.start) + l.aux.roman + "\n")
+		}
+		if w := buildYRCLine(l.start, l.end, l.prefix, l.words); w != "" {
+			yrc.WriteString(w + "\n")
+		}
+		if w := buildYRCLine(l.start, l.end, "", trimTTMLWordEdges(l.bg)); w != "" {
+			bg.WriteString(w + "\n")
+		}
+	}
+	r := amllResult{
 		lrc:     lrc.String(),
 		yrc:     yrc.String(),
 		tr:      tr.String(),
 		roma:    roma.String(),
 		bg:      bg.String(),
 		hasDuet: len(distinctPersons) >= 2,
-	}, true
+	}
+	if !amll {
+		return r, true
+	}
+	if r.tr != "" {
+		r.trLang = amllTrLangTag(trLang)
+	} else if t, lang := amllHeadTranslation(doc.ITunes, lines, target); t != "" {
+		r.tr, r.trLang = t, amllTrLangTag(lang)
+	}
+	if r.roma == "" {
+		r.roma = amllHeadTransliteration(doc.ITunes, lines, romaScriptOf(r.lrc) == scriptHan)
+	}
+	return r, true
+}
+
+// amllPickTranslationLang:这份 TTML 的行内译文用哪种语言。各行出现过的语言标签里跟 target 最贴的那个
+// (amllTranslationLangRank),一样贴时取先出现的;一个标签都没有时为空。
+func amllPickTranslationLang(lines []ttmlParsedLine, target string) string {
+	best, bestRank := "", -1
+	for i := range lines {
+		for _, t := range lines[i].aux.translations {
+			if t.lang == "" {
+				continue
+			}
+			if r := amllTranslationLangRank(t.lang, target); r > bestRank {
+				best, bestRank = t.lang, r
+			}
+		}
+	}
+	return best
+}
+
+// amllTranslationLangRank:译文的语言标签跟目标语言有多贴。2 = 同一种语言(中文还要简繁一致),1 = 中文但简繁不同,
+// 0 = 别的语言。设置里的中文只有一个 zh,按简体算。
+func amllTranslationLangRank(tag, target string) int {
+	tb, gb := ttmlLangBase(tag), ttmlLangBase(target)
+	if tb == "" || tb != gb {
+		return 0
+	}
+	if tb == "zh" && ttmlLangTraditionalChinese(tag) != ttmlLangTraditionalChinese(target) {
+		return 1
+	}
+	return 2
+}
+
+// amllTrLangTag:记进 LyricsTrLang 的写法。中文简体记 zh、繁体记 zh-Hant,别的语言记主语言子标签;空标签为空。
+func amllTrLangTag(tag string) string {
+	base := ttmlLangBase(tag)
+	if base == "zh" && ttmlLangTraditionalChinese(tag) {
+		return "zh-Hant"
+	}
+	return base
+}
+
+// ttmlLangBase:语言标签的主语言子标签,小写。
+func ttmlLangBase(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if i := strings.IndexAny(tag, "-_"); i >= 0 {
+		tag = tag[:i]
+	}
+	return tag
+}
+
+// ttmlLangTraditionalChinese:标签写的是繁体中文(Hant 文字,或台湾、香港、澳门地区)。
+func ttmlLangTraditionalChinese(tag string) bool {
+	for _, part := range strings.FieldsFunc(strings.ToLower(tag), func(r rune) bool { return r == '-' || r == '_' }) {
+		switch part {
+		case "hant", "tw", "hk", "mo":
+			return true
+		}
+	}
+	return false
+}
+
+// amllHeadTranslation:head 里 <translations> 的译文。只认 type 是 subtitle 或者没写 type 的(replacement 是同一种语言
+// 换字形,不是译文);有几份时按 amllTranslationLangRank 挑,一样贴时取先出现的。返回译文 LRC 和它的语言标签。
+func amllHeadTranslation(meta ttmlITunesMetadata, lines []ttmlParsedLine, target string) (string, string) {
+	var picked *ttmlKeyedBlock
+	bestRank := -1
+	for i := range meta.Translations {
+		b := &meta.Translations[i]
+		if b.Type != "" && b.Type != "subtitle" {
+			continue
+		}
+		if r := amllTranslationLangRank(b.Lang, target); r > bestRank {
+			picked, bestRank = b, r
+		}
+	}
+	if picked == nil {
+		return "", ""
+	}
+	tr := ttmlKeyedLRC(picked.Texts, lines, func(t *ttmlKeyedText, _ *ttmlParsedLine) string {
+		return strings.Join(strings.Fields(ttmlLiteralText(t.Kids)), " ")
+	})
+	if tr == "" {
+		return "", ""
+	}
+	return tr, strings.TrimSpace(picked.Lang)
+}
+
+// amllHeadTransliteration:head 里 <transliterations> 的第一份音译,每行怎么拼见 amllRomanLine。perSyllable:正文是中文
+// (一个字一个音节)。
+func amllHeadTransliteration(meta ttmlITunesMetadata, lines []ttmlParsedLine, perSyllable bool) string {
+	if len(meta.Transliterations) == 0 {
+		return ""
+	}
+	return ttmlKeyedLRC(meta.Transliterations[0].Texts, lines, func(t *ttmlKeyedText, l *ttmlParsedLine) string {
+		return amllRomanLine(t.Kids, l.words, perSyllable)
+	})
+}
+
+// ttmlKeyedLRC 把 <text for="Lxxx"> 按 key 挂回正文那一行的行首时间,拼成 LRC;对不上正文的、拼出来是空的行丢掉。
+func ttmlKeyedLRC(texts []ttmlKeyedText, lines []ttmlParsedLine, line func(t *ttmlKeyedText, l *ttmlParsedLine) string) string {
+	byKey := map[string]*ttmlParsedLine{}
+	for i := range lines {
+		if k := lines[i].key; k != "" {
+			if _, dup := byKey[k]; !dup {
+				byKey[k] = &lines[i]
+			}
+		}
+	}
+	type out struct {
+		ms   int
+		text string
+	}
+	var got []out
+	for i := range texts {
+		l, ok := byKey[texts[i].For]
+		if !ok {
+			continue
+		}
+		if s := line(&texts[i], l); s != "" {
+			got = append(got, out{l.start, s})
+		}
+	}
+	sort.SliceStable(got, func(i, j int) bool { return got[i].ms < got[j].ms })
+	var b strings.Builder
+	for _, o := range got {
+		b.WriteString(formatLRCTime(o.ms) + o.text + "\n")
+	}
+	return b.String()
+}
+
+// amllRomanLine 把一行音译(一串 span)拼成整行。AMLL 的音译 span 跟正文的逐字 span 一一对应(起点相同),多数不写词间
+// 空白,词的分界要从正文里看:span 之间(或 span 首尾)原文有空白就留一个空格;没有空白时,正文里同一起点的那个词后面
+// 带空白(词的分界),或者正文是中文(perSyllable,一个字一个音节),也补一个空格。span 中间的空白隔开的是同一个字的
+// 几个音节,去掉。
+func amllRomanLine(kids []ttmlNode, words []ttmlWord, perSyllable bool) string {
+	gapAfter := map[int]bool{}
+	for _, w := range words {
+		if strings.HasSuffix(w.text, " ") {
+			gapAfter[parseTTMLTime(w.begin)] = true
+		}
+	}
+	const blank = " \t\r\n"
+	var b strings.Builder
+	space, prev := false, -1
+	for _, k := range kids {
+		raw := k.Text
+		if k.Span != nil {
+			raw = ttmlLiteralText(k.Span.Kids)
+		}
+		t := strings.Join(strings.Fields(raw), "")
+		if t == "" {
+			space = space || raw != ""
+			continue
+		}
+		lead := raw != strings.TrimLeft(raw, blank)
+		if b.Len() > 0 && (space || lead || perSyllable || (prev >= 0 && gapAfter[prev])) {
+			b.WriteByte(' ')
+		}
+		b.WriteString(t)
+		space = raw != strings.TrimRight(raw, blank)
+		prev = -1
+		if k.Span != nil {
+			prev = parseTTMLTime(k.Span.Begin)
+		}
+	}
+	return b.String()
 }
 
 // ttmlWordsText 把逐字词原样拼成整行文本。**必须**跟 buildYRCLine 写进 YRC 的那串词
@@ -506,7 +867,7 @@ func ttmlWordsText(words []ttmlWord) string {
 }
 
 // ttmlLiteralText 是一个元素里的正文字面文本(含子 span),给「这一行没有逐字数据」兜底。
-// 带角色的 span(背景人声 / 译文 / 罗马音)不算正文,跳过。
+// 带角色的 span(背景人声 / 译文 / 罗马音)不算正文,跳过;注音只取 base 里的字。
 func ttmlLiteralText(kids []ttmlNode) string {
 	var b strings.Builder
 	for _, k := range kids {
@@ -515,6 +876,9 @@ func ttmlLiteralText(kids []ttmlNode) string {
 			b.WriteString(k.Text)
 		case k.Span.Role != "":
 			continue
+		case k.Span.Ruby == ttmlRubyContainer:
+			var marks []*ttmlSpan
+			collectTTMLRuby(k.Span.Kids, &b, &marks)
 		default:
 			b.WriteString(ttmlLiteralText(k.Span.Kids))
 		}
@@ -557,21 +921,75 @@ func buildYRCLine(startMs, endMs int, prefix string, words []ttmlWord) string {
 }
 
 // amllFetch 按平台目录 + 音乐 ID 直取 TTML。404 = 这首歌不在库里,不是错误。按 amllBases 的顺序试,
-// 只有没问成(传输失败 / 5xx 等非 200、非 404)才换镜像;404 是答了,不换。
+// 只有没问成(传输失败 / 5xx 等非 200、非 404)才换镜像;404 是答了,不换。三个都没问成时再问官方接口
+// (amllFetchAPI)。
 func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) {
 	if platformDir == "" || musicID == "" {
 		return "", false
 	}
 	var ttml string
 	found := false
-	_ = tryEach(ctx, amllBases, func(base string) error {
+	err := tryEach(ctx, amllBases, func(base string) error {
 		body, ok, err := amllFetchAt(ctx, base, platformDir, musicID)
 		if err == nil {
 			ttml, found = body, ok
 		}
 		return err
 	})
+	if err != nil && ctx.Err() == nil {
+		if body, ok, err := amllFetchAPI(ctx, platformDir, musicID); err == nil {
+			ttml, found = body, ok
+		}
+	}
 	return ttml, found
+}
+
+// amllAPIBase:AMLL 官方的 HTTP 接口。词库跟 amll-ttml-db 同步,同一首的 TTML 逐字节相同,只是包在 JSON 里
+// (`{"data":{"lyrics":"<tt…>"}}`);没有整份索引的下载,所以只当取词的最后一个备用。
+const amllAPIBase = "https://api.amll.dev"
+
+// amllAPIIDParams:平台目录对应官方接口 /v1/lyrics/get 的哪个查询参数。几个平台的参数一起传是按交集匹配,所以一次只传一个。
+var amllAPIIDParams = map[string]string{
+	"am-lyrics":      "appleMusicId",
+	"spotify-lyrics": "spotifyId",
+	"ncm-lyrics":     "ncmMusicId",
+	"qq-lyrics":      "qqMusicId",
+}
+
+// amllFetchAPI 按平台 ID 问官方接口。返回约定同 amllFetchAt:err 非 nil 是没问成;ok=false、err=nil 是 404(库里没有)。
+func amllFetchAPI(ctx context.Context, platformDir, musicID string) (string, bool, error) {
+	param, ok := amllAPIIDParams[platformDir]
+	if !ok {
+		return "", false, nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		amllAPIBase+"/v1/lyrics/get?"+neturl.Values{param: {musicID}}.Encode(), nil)
+	if err != nil {
+		return "", false, err
+	}
+	resp, err := doHTTPTracked(lyricHTTPClient(amllHTTPTimeout), req)
+	if err != nil {
+		return "", false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", false, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var out struct {
+		Data struct {
+			Lyrics string `json:"lyrics"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&out); err != nil {
+		return "", false, err
+	}
+	if strings.TrimSpace(out.Data.Lyrics) == "" {
+		return "", false, nil
+	}
+	return out.Data.Lyrics, true, nil
 }
 
 // amllFetchAt:err 非 nil 是没问成;ok=false、err=nil 是 404(库里没有)。
@@ -600,16 +1018,28 @@ func amllFetchAt(ctx context.Context, base, platformDir, musicID string) (string
 	return string(body), true, nil
 }
 
-// amllSkippedForMissingIDs:本进程里 amll 是否有过"两个 ID 都为空、一个请求都没发"的一轮。
+// amllSkippedForMissingIDs:本进程里 amll 是否有过"索引不在手、四个 ID 也都为空、一个请求都没发"的一轮。
 // 给 searchcli.go 的 lyricSourceFailureReasons 派生 upstream_unreachable 用(见
 // lyricsourcefailure.go 该常量的注释):没有这个信号,弹窗分不清"amll 查过了没有"和"amll 根本
-// 没法查"。只置位不复位 —— search-lyrics 是一次性进程,读到的就是这次搜索的事实;常驻
-// collector 里没人读它。
+// 没法查"。索引在手时 ID 都为空也照样按 ISRC / 歌名查过,不算。只置位不复位 —— search-lyrics 是一次性进程,
+// 读到的就是这次搜索的事实;常驻 collector 里没人读它。
 var amllSkippedForMissingIDs atomic.Bool
 
 func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load() }
 
-// amllLyric 按各平台的曲目 ID 查 amll-ttml-db。挨个试,第一份解析得出来的就是结果。
+// amllQuery:amll 这一轮手上的线索。四个 ID 按 amllLyric 的顺序直取;isrc 与歌名 / 歌手 / 专辑 / 时长只用来在索引里找
+// (amllIndex.lookup)。translationLang:行内译文按它挑语言(parseAMLLTTMLFor)。
+type amllQuery struct {
+	neteaseID, qqID, appleCatalogID, spotifyTrackID string
+	isrc                                            string
+	artist, title, album                            string
+	durationSecs                                    float64
+	translationLang                                 string
+}
+
+// amllLyric 先按各平台的曲目 ID 查 amll-ttml-db,挨个试,第一份解析得出来的就是结果;都没有时按 ISRC、歌名在索引里找
+// (amllIndex.lookup),找到的那份还要过 amllLookupFits。索引在手、够新时,不在索引里的 ID 不发请求;没有索引时照旧
+// 按 ID 直取,不找。
 //
 // # 顺序按「这个 ID 有多可信」排,不按「哪份索引最全」排
 //
@@ -625,28 +1055,59 @@ func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load()
 // spotify」的仅 34 条(1%)。真正的收益是**解开一处耦合** —— 此前 amll 的 ID 全部
 // 来自网易云 / QQ 两个源,用户在「歌词来源」里把这两个一关,amll 就静默空手而归,
 // 哪怕库里有这首歌。
-func amllLyric(ctx context.Context, neteaseID, qqID, appleCatalogID, spotifyTrackID string) amllResult {
-	if neteaseID == "" && qqID == "" && appleCatalogID == "" && spotifyTrackID == "" {
+func amllLyric(ctx context.Context, q amllQuery) amllResult {
+	idx := sharedAMLLIndexStore().current()
+	if idx == nil && q.neteaseID == "" && q.qqID == "" && q.appleCatalogID == "" && q.spotifyTrackID == "" {
 		amllSkippedForMissingIDs.Store(true)
 		return amllResult{}
 	}
+	gate := idx != nil && idx.gates(time.Now())
+	tried := map[int]bool{}
 	for _, try := range []struct{ dir, id string }{
-		{"am-lyrics", appleCatalogID},
-		{"spotify-lyrics", spotifyTrackID},
-		{"ncm-lyrics", neteaseID},
-		{"qq-lyrics", qqID},
+		{"am-lyrics", q.appleCatalogID},
+		{"spotify-lyrics", q.spotifyTrackID},
+		{"ncm-lyrics", q.neteaseID},
+		{"qq-lyrics", q.qqID},
 	} {
 		if try.id == "" {
 			continue
+		}
+		if idx != nil {
+			i, listed := idx.entryFor(try.dir, try.id)
+			if !listed && gate {
+				continue
+			}
+			if listed {
+				tried[i] = true
+			}
 		}
 		raw, ok := amllFetch(ctx, try.dir, try.id)
 		if !ok {
 			continue
 		}
-		if r, ok := parseAMLLTTML(raw); ok {
+		if r, ok := parseAMLLTTMLFor(raw, q.translationLang); ok {
 			r.platform = try.dir
 			return r
 		}
+	}
+	if idx == nil {
+		return amllResult{}
+	}
+	for _, m := range idx.lookup(q) {
+		if tried[m.entry] {
+			continue
+		}
+		dir, id := idx.fetchTarget(m.entry)
+		raw, ok := amllFetch(ctx, dir, id)
+		if !ok {
+			continue
+		}
+		r, ok := parseAMLLTTMLFor(raw, q.translationLang)
+		if !ok || !amllLookupFits(m, r, q.durationSecs) {
+			continue
+		}
+		r.matchTitle, r.matchArtist, r.matchAlbum = m.title, m.artist, m.album
+		return r
 	}
 	return amllResult{}
 }

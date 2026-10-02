@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestMain 把"读其它 App 本地数据"的那几条路径统一指到一个不存在的位置。
@@ -51,5 +52,7 @@ func TestMain(m *testing.M) {
 	// 要测它们的用例自己换(stubCatalogNameSources)。
 	catalogAppleTitleAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }
 	catalogYTMusicAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }
+	// amll 的索引会读配置目录、在后台联网下载;单测一律当作没有索引,要测的用例自己换(setSharedAMLLIndexStore)。
+	setSharedAMLLIndexStore(newAMLLIndexStore("", time.Now))
 	os.Exit(m.Run())
 }

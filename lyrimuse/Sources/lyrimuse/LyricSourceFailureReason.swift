@@ -64,8 +64,8 @@ enum LyricSourceFailureReason {
         case "server_error":
             return L10n.t("服务器报错（HTTP 5xx），稍后重试通常会恢复")
         case "upstream_unreachable":
-            // 目前只有 AMLL 会报:它不做搜索,只按网易云 / QQ 给出的曲目 ID 取词,两者都连不上时它
-            // 一个请求都没发 —— 不是"查过了没有",是"没法查"。
+            // 目前只有 AMLL 会报:它不发搜索请求,按曲目 ID 取词、按 ISRC / 歌名只在本地索引里找;索引不在手、
+            // 网易云 / QQ 又都连不上时它一个请求都没发 —— 不是"查过了没有",是"没法查"。
             return L10n.t("依赖的上游源（网易云 / QQ 音乐）没连上，这一轮没法查")
         // 下面两个是 test-lyric-sources 自己的通用兜底,只有设置页那颗测试按钮会用到
         // (「联网搜索候选歌词」弹窗走的是 lyricSourceFailureReasons,只会吐上面那些代码,

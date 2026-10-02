@@ -528,8 +528,8 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 		}
 		reasons[source] = code
 	}
-	// amll 的派生归因(见 lyricsourcefailure.go 的 upstream_unreachable):它没有搜索接口,只按
-	// 网易云 / QQ 的曲目 ID 取词,两个 ID 都拿不到时一个请求都不发、传输层表里没有它。
+	// amll 的派生归因(见 lyricsourcefailure.go 的 upstream_unreachable):它没有搜索接口,按曲目 ID 取词,
+	// 按 ISRC / 歌名只在本地索引里找;索引不在手、ID 又都拿不到时一个请求都不发、传输层表里没有它。
 	// 判据故意要求**网易云和 QQ 都**带传输层代码:只有一边死、另一边正常答了却没匹配上,
 	// amll 缺 ID 是"上游没这首"的正常结果,不是连不上,那时如实留空("未给出候选")。
 	// 网易云 / QQ 被用户关掉时它们不发请求、没有传输层记录 → 也不派生:那时 amll 缺 ID 是
