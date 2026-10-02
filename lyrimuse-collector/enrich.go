@@ -1326,6 +1326,17 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	return 0, false
 }
 
+// lyricsUpgradeApplies 升级重试这一轮的胜者够不够格换掉现存那份(分数严格更高才换)。锁内正式判一次、
+// 锁外按快照预判一次(prepareSwapTranslation),两处必须调这一个函数。
+func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, durationSecs float64) bool {
+	baseline, comparable := lyricsUpgradeBaseline(e, scored)
+	// 这一轮按「时长未知」打分(MV),现存那份的分数却带着时长那一项:换成它在这一轮里的分再比。
+	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
+		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
+	}
+	return picked != nil && comparable && picked.Score > baseline
+}
+
 // durationMismatch:这条歌词当初按 resolved 秒校验,现在真播的版本是 actual 秒 ——
 // 差超过 12% 就当作"给另一个版本选的",值得按真实时长重选。这里只是"要不要重跑一轮"
 // 的闸门,重跑之后选谁仍由打分定;卡太紧会为几秒的标注差异白跑网络。两边都得知道时长
@@ -1538,6 +1549,10 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	if picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
 		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
 	}
+	// 换上去会让正在播的这首丢掉能用的译文时,先把新正文翻好,跟正文同一次换上。
+	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
+		return !e.ManualLyrics && lyricsUpgradeApplies(e, scored, picked, durationSecs)
+	})
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1603,12 +1618,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		e.LyricsSourcesResponded = responded
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
-	baseline, comparable := lyricsUpgradeBaseline(e, scored)
-	// 这一轮按「时长未知」打分(MV),现存那份的分数却带着时长那一项:换成它在这一轮里的分再比。
-	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
-		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
-	}
-	upgraded := picked != nil && comparable && picked.Score > baseline
+	upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	path := lyricsDecisionPathUpgrade
 	if firstFill {
 		path = lyricsDecisionPathRefill
@@ -1645,6 +1655,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+		preparedTr.applyLocked(&e)
 	}
 	// 纯音乐结论也要在这条路径上落地。first-resolve 那边一直有这段
 	// (见 resolveEnrichAsync 里读 c.Instrumental 的分支),而重搜/补空这条**从来没有**:
@@ -1844,6 +1855,10 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	if decidable && picked != nil && picked.LyricsRoma == "" && picked.Lyrics != startLyrics {
 		preparedRoma = generatedRomaFor(picked.Lyrics, "", entrySongLanguage(picked.Lyrics, scored))
 	}
+	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
+	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
+		return !e.ManualLyrics && decidable && picked != nil && !rescoreKeepsCurrent(e, scored, picked) && picked.Lyrics != e.Lyrics
+	})
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1966,6 +1981,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+			preparedTr.applyLocked(&e)
 		}
 		if picked.Lyrics == e.Lyrics && gainsWordTiming(e, picked) {
 			log.Printf("lyrics rescore: %s  %s gained word timing", key, picked.Source)

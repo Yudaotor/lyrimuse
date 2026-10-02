@@ -87,13 +87,23 @@ func TestMusicVideoLyricsWiring(t *testing.T) {
 	if !strings.Contains(s, "if musicVideoLyricsStaleLocked(hintKey, e) {\n\t\t\twrongDuration = true") {
 		t.Error("trackEnrichment 命中缓存时要问 musicVideoLyricsStaleLocked,并按 wrongDuration 重来")
 	}
-	i := strings.Index(s, "func retryLyricsUpgrade(")
-	body := s[i:]
-	if j := strings.Index(body[1:], "\nfunc "); j >= 0 {
-		body = body[:j+1]
+	funcBody := func(name string) string {
+		i := strings.Index(s, "func "+name+"(")
+		if i < 0 {
+			t.Fatalf("enrich.go 里找不到 %s", name)
+		}
+		body := s[i:]
+		if j := strings.Index(body[1:], "\nfunc "); j >= 0 {
+			body = body[:j+1]
+		}
+		return body
 	}
-	if !strings.Contains(body, "baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)") {
-		t.Error("retryLyricsUpgrade 按未知时长重打时要换基准,否则存着的高分永远翻不过")
+	// 「换不换」的判据在 lyricsUpgradeApplies(锁内正式判与锁外预判共用),retryLyricsUpgrade 调它。
+	if !strings.Contains(funcBody("lyricsUpgradeApplies"), "baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)") {
+		t.Error("升级重试按未知时长重打时要换基准,否则存着的高分永远翻不过")
+	}
+	if !strings.Contains(funcBody("retryLyricsUpgrade"), "upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)") {
+		t.Error("retryLyricsUpgrade 要用 lyricsUpgradeApplies 判换不换")
 	}
 	poller, err := os.ReadFile("poller.go")
 	if err != nil {
