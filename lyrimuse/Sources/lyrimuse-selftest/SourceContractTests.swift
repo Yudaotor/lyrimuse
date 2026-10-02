@@ -2034,6 +2034,13 @@ func runSourceContractTests() {
                         "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")
+            // 作用范围那句:工具栏那颗和抽屉那一行同一份,点名迷你 / 完整,别回到「当前预览的尺寸」
+            // (读起来像"把窗口大小恢复默认")。
+            expectEqual(settings.contains("Text(lyricsWindowResetScope)")
+                        && settings.contains("subtitle: lyricsWindowResetScope"), true,
+                        "歌词窗口设置: 「重置」的作用范围工具栏和抽屉共用 lyricsWindowResetScope")
+            expectEqual(settings.contains("只恢复当前预览的尺寸"), false,
+                        "歌词窗口设置: 作用范围别写成「只恢复当前预览的尺寸」")
             expectEqual(settings.contains("private func lyricsWindowAppearanceCard("), false,
                         "歌词窗口设置: 外观行只有 lyricsWindowAppearanceRowsImpl 一份,别再长回整张卡")
         }
@@ -2664,38 +2671,39 @@ func runSourceContractTests() {
         }
     }
 
-    // ---- 三个形态的「全部设置」抽屉都必须有「重置」兜底入口 ----
+    // ---- 「歌词显示」四段的「全部设置」抽屉都必须有「重置」兜底入口 ----
     //
     // 抽屉的定位是**键盘 / VoiceOver 的全量兜底通路**,而工具栏那颗「重置 ▾」是 SwiftUI `Menu`。
-    // 悬浮歌词一直在抽屉里放着一行 `resetRow`,灵动岛和菜单栏都漏了(三形态设置审计
-    // 发现,当天补齐)。这条闸钉住三个都在。
+    // 新加一段抽屉时把它补进下面这张表,漏了这一行既不报错、也不影响鼠标用户,只有键盘 /
+    // VoiceOver 用户会发现那一段没法恢复默认。
     do {
         let sourcesDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        // 抽屉分别住在这三个文件里(灵动岛那个内嵌在 SettingsView.swift)。
+        // 抽屉分别住在这几个文件里(灵动岛、歌词窗口那两个内嵌在 SettingsView.swift),各自那一行的名字。
         let drawers = [
-            ("悬浮歌词", "lyrimuse/UI/OverlayAllSettingsDrawer.swift"),
-            ("灵动岛", "lyrimuse/SettingsView.swift"),
-            ("菜单栏", "lyrimuse/UI/MenuBarEditorStage.swift"),
+            ("悬浮歌词", "lyrimuse/UI/OverlayAllSettingsDrawer.swift", "resetRow"),
+            ("灵动岛", "lyrimuse/SettingsView.swift", "resetRow"),
+            ("菜单栏", "lyrimuse/UI/MenuBarEditorStage.swift", "resetRow"),
+            ("歌词窗口", "lyrimuse/SettingsView.swift", "lyricsWindowResetRow"),
         ]
         var missing: [String] = []
         var unreadable: [String] = []
-        for (surface, rel) in drawers {
+        for (surface, rel, row) in drawers {
             let path = sourcesDir.appendingPathComponent(rel).path
             guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
                 unreadable.append(surface)
                 continue
             }
             // 要求同时有**定义**和**装配**:只定义不装配等于没有。
-            let defined = text.contains("private var resetRow: some View")
-            // 装配点:抽屉 body 里单独一行 `resetRow`(前面是缩进,后面直接换行)。
-            let mounted = text.contains("\n                resetRow\n")
+            let defined = text.contains("private var \(row): some View")
+            // 装配点:抽屉 body 里单独一行(前面是缩进,后面直接换行)。
+            let mounted = text.contains("\n                \(row)\n")
             if !(defined && mounted) { missing.append("\(surface)(定义=\(defined) 装配=\(mounted))") }
         }
-        expectEqual(unreadable, [], "抽屉重置闸: 三个抽屉的宿主文件都读得到(读不到 = 路径挪了)")
+        expectEqual(unreadable, [], "抽屉重置闸: 四个抽屉的宿主文件都读得到(读不到 = 路径挪了)")
         expectEqual(missing, [],
-                    "抽屉重置闸: 三个形态的「全部设置」抽屉都要有 resetRow —— 抽屉是键盘/VoiceOver 的全量兜底通路,工具栏那颗 Menu 不能算数")
+                    "抽屉重置闸: 「歌词显示」四段的「全部设置」抽屉都要有重置那一行 —— 抽屉是键盘/VoiceOver 的全量兜底通路,工具栏那颗 Menu 不能算数")
     }
 
     // ---- 三个编辑台工具栏第二行的对齐占位 ----

@@ -438,7 +438,8 @@
 "只对灵动岛生效" = "Applies to the notch only";
 "只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用" = "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing";
 "只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用" = "Only affects short lines that fit: where they sit in the lyric row. Automatic follows the duet part — each singer's lines sit on their side, choruses are centered, and lines without duet info stay left. Lines that don't fit scroll horizontally, so alignment has no effect on them";
-"只恢复当前预览的尺寸" = "Only the size shown in the preview";
+"只恢复完整尺寸这一套，迷你尺寸和窗口大小不动" = "Resets only the Full Size settings; the Mini Size and the window's dimensions stay as they are";
+"只恢复迷你尺寸这一套，完整尺寸和窗口大小不动" = "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are";
 "只接管文字颜色；背景色和描边色始终按下面设置的来" = "Only the text color follows the artwork; the background and outline colors always use what you set below";
 "只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的读音在播放时实时生成，不计入" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。" = "Only checked players scrobble to Last.fm; all checked by default.";

@@ -2487,6 +2487,33 @@ private struct AppearanceSettingsTab: View {
                     CardDivider()
                     lyricsWindowCoverRows
                 }
+                CardDivider()
+                lyricsWindowResetRow
+            }
+        }
+    }
+
+    /// 「重置」的作用范围声明,工具栏那颗和抽屉那一行共用这一句,两个入口必须一字不差。
+    ///
+    /// 直接点名「迷你尺寸 / 完整尺寸」(跟预览下面那个切换上的字一样),别写成「当前预览的尺寸」——
+    /// 那句读起来像"把窗口大小恢复默认"。窗口的大小和位置本来就不归这颗按钮管,也写明。
+    private var lyricsWindowResetScope: String {
+        lyricsWindowPreviewShowsMini
+            ? L10n.t("只恢复迷你尺寸这一套，完整尺寸和窗口大小不动")
+            : L10n.t("只恢复完整尺寸这一套，迷你尺寸和窗口大小不动")
+    }
+
+    /// 抽屉里的「恢复默认」:动作跟工具栏「重置 ▾」是同一个函数,标题 / 副标题也同一份。
+    /// 这一行不能省:抽屉是键盘 / VoiceOver 的全量兜底通路,而工具栏那颗是 SwiftUI `Menu`
+    /// (另外三段同款,见 `OverlayAllSettingsDrawer.resetRow`)。
+    private var lyricsWindowResetRow: some View {
+        SettingsRow(
+            icon: "arrow.uturn.backward",
+            title: L10n.t("恢复默认"),
+            subtitle: lyricsWindowResetScope
+        ) {
+            Button(L10n.t("恢复")) {
+                LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
             }
         }
     }
@@ -2496,7 +2523,8 @@ private struct AppearanceSettingsTab: View {
     /// 都跟着预览停在哪个尺寸走。
     ///
     /// 右边那格是「重置 ▾」,同另外三段:只恢复**当前预览的那个尺寸**(另一套不动,工具栏本来就
-    /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`。
+    /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`,作用范围那句
+    /// 见 `lyricsWindowResetScope`。
     ///
     /// 第二行迷你是「布局」「顶部信息」两颗、完整是「封面」一颗;隐藏占位 + `EditorToolbarResetReserve`
     /// 让它跟第一行的胶囊同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
@@ -2511,7 +2539,8 @@ private struct AppearanceSettingsTab: View {
                     Button(L10n.t("恢复默认")) {
                         LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
                     }
-                    Text(L10n.t("只恢复当前预览的尺寸"))
+                    // 作用范围写成一条不可点的说明项,写法与理由同悬浮歌词那颗(OverlayEditorStage)。
+                    Text(lyricsWindowResetScope)
                 } label: {
                     Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
                 }

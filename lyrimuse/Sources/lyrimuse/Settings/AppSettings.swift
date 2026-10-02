@@ -1906,7 +1906,7 @@ final class AppSettings: ObservableObject {
         // 默认 .wrap:换行是迷你窗一直以来的排法,升级上来的人排版不变。
         lyricsWindowMiniLineOverflow = defaults.string(forKey: Keys.lyricsWindowMiniLineOverflow)
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
-        // 默认 .compact:两行是迷你窗一直以来的样子,升级上来的人不变。
+        // 默认 .twoLines(存盘值 compact):两行是迷你窗一直以来的样子,升级上来的人不变。
         lyricsWindowMiniLyricsLayout = defaults.string(forKey: Keys.lyricsWindowMiniLyricsLayout)
             .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .twoLines
         lyricsWindowMiniShowsControls =

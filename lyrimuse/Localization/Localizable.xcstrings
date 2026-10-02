@@ -568,19 +568,36 @@
         }
       }
     },
-    "只恢复当前预览的尺寸" : {
+    "只恢复迷你尺寸这一套，完整尺寸和窗口大小不动" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only the size shown in the preview"
+            "value" : "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只恢復目前預覽的尺寸"
+            "value" : "只恢復迷你尺寸這一套，完整尺寸和視窗大小不動"
+          }
+        }
+      }
+    },
+    "只恢复完整尺寸这一套，迷你尺寸和窗口大小不动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resets only the Full Size settings; the Mini Size and the window's dimensions stay as they are"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只恢復完整尺寸這一套，迷你尺寸和視窗大小不動"
           }
         }
       }
