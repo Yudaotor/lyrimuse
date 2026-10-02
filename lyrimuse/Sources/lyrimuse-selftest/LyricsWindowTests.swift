@@ -94,6 +94,18 @@ func runLyricsWindowTests() {
         expectEqual(M.nextIndex(currentLineIndex: 9, lineCount: 10), nil, "迷你两行: 最后一句没有下一行")
         expectEqual(M.currentIndex(currentLineIndex: 12, lineCount: 10), nil, "迷你两行: 越界下标(换歌瞬间)不取")
         expectEqual(M.nextIndex(currentLineIndex: nil, lineCount: 0), nil, "迷你两行: 没有歌词时两行都空")
+        // 罗马音 / 译文:当前句挂;前奏 / 间奏里只剩下一句时它也挂,有当前句时下一句不挂。
+        expectEqual(M.showsSubLines(isCurrentRow: true, hasCurrentLine: true), true, "迷你副行: 当前句挂译文")
+        expectEqual(M.showsSubLines(isCurrentRow: false, hasCurrentLine: true), false, "迷你副行: 有当前句时下一句只是预告")
+        expectEqual(M.showsSubLines(isCurrentRow: false, hasCurrentLine: false), true,
+                    "迷你副行: 前奏 / 间奏里下一句是唯一的一句,同悬浮歌词带上译文")
+        let reelRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reelSource = (try? String(contentsOf: reelRoot.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                      encoding: .utf8)) ?? ""
+        expectEqual(reelSource.contains("MiniLyricsSelection.showsSubLines(isCurrentRow: row.role == .current,"), true,
+                    "迷你副行契约: reel 走 Core 的 showsSubLines")
+        expectEqual(reelSource.contains("if row.role == .current, showTranslation,"), false,
+                    "迷你副行契约: 不再只认当前句")
     }
 
     // MARK: - 迷你歌词布局:单行 / 双行 / 多行

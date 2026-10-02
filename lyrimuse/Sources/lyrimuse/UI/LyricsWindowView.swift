@@ -4971,14 +4971,16 @@ private struct MiniLyricsReel: View, Equatable {
     private func rowView(_ row: Row, isLast: Bool) -> some View {
         let scale: CGFloat = row.role == .next ? Self.nextScale : 1
         let opacity: Double = row.role == .current ? 1 : Self.nextOpacity
+        let subLines = MiniLyricsSelection.showsSubLines(isCurrentRow: row.role == .current,
+                                                         hasCurrentLine: current != nil)
         MiniReelRowBox(scale: scale, trailingSpace: isLast ? 0 : fontSize * 0.34) {
             VStack(spacing: fontSize * 0.16) {
                 lineText(row)
-                if row.role == .current, showRomanization,
+                if subLines, showRomanization,
                    let roma = row.line.line.romanization, !roma.isEmpty {
                     subLine(roma, size: fontSize * 0.54, weight: .medium)
                 }
-                if row.role == .current, showTranslation,
+                if subLines, showTranslation,
                    let tr = row.line.line.translation, !tr.isEmpty {
                     subLine(tr, size: fontSize * 0.61, weight: .semibold, translation: true)
                 }

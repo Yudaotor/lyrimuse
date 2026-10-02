@@ -162,6 +162,12 @@ public enum MiniLyricsSelection {
         case .twoLines, .list: return true
         }
     }
+
+    /// 这一行下面挂不挂罗马音 / 译文。当前句挂;下一句只在没有当前句陪着时挂 —— 前奏 / 间奏里那一格是三颗点,
+    /// 下一句是这一刻唯一的一句歌词,同悬浮歌词「•••」下方那句。有当前句时下一句只是预告,不挂。
+    public static func showsSubLines(isCurrentRow: Bool, hasCurrentLine: Bool) -> Bool {
+        isCurrentRow || !hasCurrentLine
+    }
 }
 
 /// Apple Music 式 vibrancy 的亮度档:次级文字用背景色相的亮化低饱和版,亮度按元素档位给,
