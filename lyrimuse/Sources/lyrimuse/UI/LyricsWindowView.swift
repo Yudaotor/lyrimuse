@@ -312,6 +312,8 @@ private final class LyricsWindowController: ObservableObject {
     private var occlusionVisible = true
     private var coveredByOthers = false
     private var coverageMonitor: WindowCoverageMonitor?
+    /// 空格 / ← / → 三个按键(`LyricsWindowTransportKeys`),attach 时装上。
+    private let transportKeys = LyricsWindowTransportKeys()
 
     private func refreshSurfaceVisible() {
         let visible = occlusionVisible && !coveredByOthers
@@ -721,6 +723,7 @@ private final class LyricsWindowController: ObservableObject {
             return
         }
         self.window = window
+        MainActor.assumeIsolated { transportKeys.install(on: window) }
         UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none

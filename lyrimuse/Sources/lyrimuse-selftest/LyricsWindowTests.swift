@@ -12,6 +12,44 @@ private func r3(_ x: CGFloat) -> Double { r3(Double(x)) }
 
 @MainActor
 func runLyricsWindowTests() {
+    // ---- 歌词窗口的空格 / ← / → ----
+    do {
+        print("\n== 歌词窗口按键 ==")
+        typealias K = LyricsWindowKeyCommand
+        func cmd(_ code: UInt16, mods: Bool = false, repeated: Bool = false, focus: Bool = false) -> K? {
+            K.command(keyCode: code, hasModifiers: mods, isRepeat: repeated, keyboardFocusElsewhere: focus)
+        }
+        expectEqual(cmd(K.spaceKeyCode), .togglePlayPause, "歌词窗口按键: 空格播放 / 暂停")
+        expectEqual(cmd(K.leftArrowKeyCode), .previousTrack, "歌词窗口按键: ← 上一首")
+        expectEqual(cmd(K.rightArrowKeyCode), .nextTrack, "歌词窗口按键: → 下一首")
+        expectEqual(K.spaceKeyCode, 49, "歌词窗口按键: 空格是 kVK_Space")
+        expectEqual(K.leftArrowKeyCode, 123, "歌词窗口按键: ← 是 kVK_LeftArrow")
+        expectEqual(K.rightArrowKeyCode, 124, "歌词窗口按键: → 是 kVK_RightArrow")
+        expectEqual(cmd(53), nil, "歌词窗口按键: Esc 不接(留给退出全屏)")
+        expectEqual(cmd(126), nil, "歌词窗口按键: ↑ 不接")
+        expectEqual(cmd(36), nil, "歌词窗口按键: 回车不接")
+        expectEqual(cmd(K.spaceKeyCode, mods: true), nil, "歌词窗口按键: 带修饰键的组合放行给菜单和系统")
+        expectEqual(cmd(K.rightArrowKeyCode, mods: true), nil, "歌词窗口按键: ⌘→ 这类组合放行")
+        expectEqual(cmd(K.spaceKeyCode, repeated: true), nil, "歌词窗口按键: 按住空格的自动重复不再来回切")
+        expectEqual(cmd(K.rightArrowKeyCode, repeated: true), nil, "歌词窗口按键: 按住 → 不连跳")
+        expectEqual(cmd(K.spaceKeyCode, focus: true), nil, "歌词窗口按键: 焦点在输入框或控件上时空格放行")
+        expectEqual(cmd(K.leftArrowKeyCode, focus: true), nil, "歌词窗口按键: 焦点在滑块上时方向键放行")
+        // 焦点:悬浮歌词 / 灵动岛 / 菜单栏点了之后 key window 仍是歌词窗口,但焦点已经不在它身上。
+        var focus = K.Focus()
+        expectEqual(focus.isFocused, false, "歌词窗口焦点: 起点不在")
+        focus.windowBecameKey()
+        expectEqual(focus.isFocused, true, "歌词窗口焦点: 窗口成为 key 时在")
+        focus.mouseDown(inLyricsWindow: false)
+        expectEqual(focus.isFocused, false, "歌词窗口焦点: 点了本 App 别的窗口(悬浮歌词 / 灵动岛)就不在")
+        focus.mouseDown(inLyricsWindow: true)
+        expectEqual(focus.isFocused, true, "歌词窗口焦点: 再点回歌词窗口又在")
+        focus.windowResignedKey()
+        expectEqual(focus.isFocused, false, "歌词窗口焦点: 窗口失去 key 就不在")
+        focus.windowBecameKey()
+        expectEqual(focus.isFocused, true, "歌词窗口焦点: 切回来窗口重新成为 key,不用再点一次")
+        expectEqual(K.Focus(isFocused: true).isFocused, true, "歌词窗口焦点: 装上时窗口已经是 key 就从「在」开始")
+    }
+
     // MARK: - 空状态:顺序就是优先级
     do {
         typealias E = LyricsWindowEmptyState
