@@ -49,6 +49,35 @@ public enum LRCParser {
     /// 少数确实偏得多的社区歌词一并否掉。
     public static let maxOffsetMs = 10_000
 
+    /// Apple 歌词给空间音频(杜比全景声)版的偏移。Apple 的时间轴按立体声母带打,全景声混音跟它对不齐时,
+    /// collector 把 TTML 里 `<audio lyricOffset role="spatial">` 的值连同立体声版时长写成正文里的一行
+    /// `[am-spatial:<偏移毫秒>/<立体声时长毫秒>]`(collector `applemusicspatial.go`)。
+    ///
+    /// `lyricOffsetMs` 按 Apple 的口径:**正数 = 放空间音频版时歌词要晚**,跟 `[offset:]` / 引擎的 `offsetMs`
+    /// 符号相反;用不用、怎么换算见 `LocalPlaybackSource.spatialAudioOffsetMs`。
+    public struct SpatialAudioCue: Equatable, Sendable {
+        public let lyricOffsetMs: Int
+        public let stereoDurationMs: Int
+        public init(lyricOffsetMs: Int, stereoDurationMs: Int) {
+            self.lyricOffsetMs = lyricOffsetMs
+            self.stereoDurationMs = stereoDurationMs
+        }
+    }
+
+    private static let spatialAudioRegex = try! NSRegularExpression(
+        pattern: #"\[am-spatial:\s*([+-]?\d+)\s*/\s*(\d+)\s*\]"#)
+
+    /// 解析 `[am-spatial:…]`。没有、偏移为 0 或超出 `maxOffsetMs`、时长不是正数时返回 nil。多个取第一个。
+    public static func parseSpatialAudioCue(_ text: String) -> SpatialAudioCue? {
+        let ns = text as NSString
+        guard let m = spatialAudioRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)),
+              let offset = Int(ns.substring(with: m.range(at: 1))),
+              let stereo = Int(ns.substring(with: m.range(at: 2))),
+              offset != 0, abs(offset) <= maxOffsetMs, stereo > 0
+        else { return nil }
+        return SpatialAudioCue(lyricOffsetMs: offset, stereoDurationMs: stereo)
+    }
+
     public static func parse(_ text: String) -> [LyricLine] {
         scan(text).filter { !$0.text.isEmpty }
     }

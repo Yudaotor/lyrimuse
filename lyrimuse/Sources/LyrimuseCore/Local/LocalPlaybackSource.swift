@@ -326,6 +326,8 @@ public final class LocalPlaybackSource: ObservableObject {
     private var musicVideoLookupKey: String?
     /// 此刻叠进引擎的 MV 偏移(≤ 0),由 20Hz tick 按播放位置刷新,见 refreshMusicVideoOffset。
     private var musicVideoOffsetMs = 0
+    /// 此刻叠进引擎的空间音频版歌词偏移,由 applyOffsets 按 spatialAudioOffsetMs 现算,见那个函数。
+    private var spatialAudioOffsetMs = 0
     /// 上一拍的播放器 bundle id —— 只为「按播放器偏移」那一层服务(见 apply() 里那处判断)。
     /// 不能靠 lastSnapshot 反推:apply() 第一行就把它换成新快照了,等走到判断处已经比不出来。
     private var lastAppliedBundleID: String?
@@ -1488,6 +1490,34 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 认成 MV 的那首歌的 trackKey(见 isMusicVideo)。
     private var musicVideoKey: String?
+
+    /// 歌词带的空间音频版偏移(`LRCParser.SpatialAudioCue`)此刻要叠进引擎多少,引擎口径(正数 = 歌词提前)。
+    ///
+    /// 只认 Apple Music:这是 Apple 给它自己的空间音频版的偏移。Music.app 报的这首时长跟歌词所属立体声版的时长差出
+    /// `spatialDurationToleranceSecs` 以上,说明它放的是另一份母带(空间音频版),才用;差出 `spatialDurationMaxSecs`
+    /// 以上的不是同一首的两版混音(电台报的整档节目时长、读错),不用。MV 走自己的时间轴,不用。
+    /// Apple 的偏移是「歌词要晚多少」,跟引擎口径相反,取反。纯函数,selftest 覆盖。见 09 章决策 149。
+    public nonisolated static func spatialAudioOffsetMs(cue: LRCParser.SpatialAudioCue?, bundleID: String?,
+                                                        playingDuration: Double?, isMusicVideo: Bool) -> Int {
+        guard let cue, bundleID == PlaybackPlayer.appleMusic.bundleIdentifier, !isMusicVideo,
+              let playing = playingDuration, playing > 0 else { return 0 }
+        let diff = abs(playing - Double(cue.stereoDurationMs) / 1000)
+        guard diff > spatialDurationToleranceSecs, diff <= spatialDurationMaxSecs else { return 0 }
+        return -cue.lyricOffsetMs
+    }
+
+    /// 同一份母带(立体声 / 无损)Music.app 报的时长跟目录时长只差几十毫秒,空间音频版差得多。
+    public nonisolated static let spatialDurationToleranceSecs: Double = 0.5
+    /// 同一首歌两版混音的时长差的上限,超过就不是这回事。
+    public nonisolated static let spatialDurationMaxSecs: Double = 15
+
+    /// 按此刻的快照与歌词算空间音频偏移(spatialAudioOffsetMs 的输入取自哪里,只在这一处)。
+    private func currentSpatialAudioOffsetMs() -> Int {
+        let snapshot = lastSnapshot
+        return Self.spatialAudioOffsetMs(
+            cue: syncEngine.spatialAudioCue, bundleID: snapshot?.bundleIdentifier, playingDuration: snapshot?.duration,
+            isMusicVideo: musicVideoKey != nil && musicVideoKey == snapshot?.trackKey)
+    }
 
     /// 挑同名不同录音变体(`~durN`)用的时长,口径跟 collector 的 `lyricsDurationSecs` 一致:电台(整档节目的时长)、
     /// MV(视频比录音室版长)都当未知。纯函数,selftest 覆盖。
@@ -3093,6 +3123,8 @@ public final class LocalPlaybackSource: ObservableObject {
             lastAppliedBundleID = bundleID
             if !trackChanged, syncEngine.hasContent { applyOffsets() }
         }
+        // 同一首歌 Music.app 晚一拍才报出实际在放那一版的时长,空间音频偏移跟着重算(换歌那一支已经算过)。
+        if !trackChanged, syncEngine.hasContent, currentSpatialAudioOffsetMs() != spatialAudioOffsetMs { applyOffsets() }
 
         if trackChanged {
             // 换歌时**不再**立即清空上一首歌的封面。
@@ -3648,8 +3680,15 @@ public final class LocalPlaybackSource: ObservableObject {
         let effective = LyricsOffsetStore.shared.effectiveOffset(
             forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier, radioKey: radioKey
         )
+        // 空间音频偏移是这份歌词对这一版母带的属性,跟 MV 偏移一样只进引擎与 currentLyricsOffsetMs。
+        let spatial = currentSpatialAudioOffsetMs()
+        if spatial != spatialAudioOffsetMs {
+            spatialAudioOffsetMs = spatial
+            let cue = syncEngine.spatialAudioCue
+            logger.notice("spatial audio lyrics offset: \(spatial, privacy: .public)ms (playing \(self.lastSnapshot?.duration ?? -1, format: .fixed(precision: 3))s, stereo \(cue?.stereoDurationMs ?? -1, privacy: .public)ms, cue \(cue?.lyricOffsetMs ?? 0, privacy: .public)ms)")
+        }
         // MV 偏移只进引擎与 currentLyricsOffsetMs(歌词对齐用),不进 trackLyricsOffsetMs(「你调了多少」)。
-        syncEngine.offsetMs = effective + musicVideoOffsetMs
+        syncEngine.offsetMs = effective + musicVideoOffsetMs + spatialAudioOffsetMs
         // 对外报的是**引擎真正在用的那个数**,含这份歌词自己带的 `[offset:]`
         // (`syncEngine.lrcOffsetMs`,见 LRCParser.parseOffsetMs)。
         //
@@ -3658,7 +3697,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 非零 offset 的歌点行会跳到隔壁行 —— 正是这个属性当初存在的理由(注释见上面)。
         // 用户可见的那两个数(设置页的基准、菜单里的单曲值)都不含它,那是对的:LRC offset
         // 不是用户调出来的,不该出现在"你调了多少"里。
-        let effectiveWithLRC = effective + musicVideoOffsetMs + syncEngine.lrcOffsetMs
+        let effectiveWithLRC = effective + musicVideoOffsetMs + spatialAudioOffsetMs + syncEngine.lrcOffsetMs
         // 只在真的变了时才赋值:这两个都是 @Published,每次赋值都会推着订阅者重渲染,
         // 而 reloadCurrentLyrics 在"歌词还没解析出来"时会被反复调用(见那边的注释)。
         if currentLyricsOffsetMs != effectiveWithLRC { currentLyricsOffsetMs = effectiveWithLRC }

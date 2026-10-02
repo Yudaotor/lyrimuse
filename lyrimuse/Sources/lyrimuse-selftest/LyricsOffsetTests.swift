@@ -390,6 +390,35 @@ func runLyricsOffsetTests() {
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
 
+    // ---- Apple Music 放空间音频版时用歌词带的偏移 ----
+    // 数据取自 Dean Lewis《Be Alright》:歌词按立体声版(196.373s)打轴,Music.app 放空间音频版时报 198.698s,
+    // TTML 写着空间音频版歌词晚 1.672s。引擎口径是「正数 = 提前」,所以叠进去的是 -1672。
+    do {
+        typealias L = LocalPlaybackSource
+        let cue = LRCParser.SpatialAudioCue(lyricOffsetMs: 1672, stereoDurationMs: 196373)
+        let am = PlaybackPlayer.appleMusic.bundleIdentifier
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: 198.698, isMusicVideo: false), -1672,
+                    "空间音频: 时长对不上立体声版 = 在放空间音频版,歌词晚 1.672s")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: 196.373, isMusicVideo: false), 0,
+                    "空间音频: 放的就是立体声版,不动")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: 196.42, isMusicVideo: false), 0,
+                    "空间音频: 同一份母带的几十毫秒误差不算换了版本")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: PlaybackPlayer.spotify.bundleIdentifier,
+                                           playingDuration: 198.698, isMusicVideo: false), 0,
+                    "空间音频: 只认 Apple Music")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: 198.698, isMusicVideo: true), 0,
+                    "空间音频: MV 走自己的时间轴")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: nil, isMusicVideo: false), 0,
+                    "空间音频: 不知道在放的时长,不动")
+        expectEqual(L.spatialAudioOffsetMs(cue: cue, bundleID: am, playingDuration: 3600, isMusicVideo: false), 0,
+                    "空间音频: 差得太多(电台报整档节目时长)不是两版混音")
+        expectEqual(L.spatialAudioOffsetMs(cue: nil, bundleID: am, playingDuration: 198.698, isMusicVideo: false), 0,
+                    "空间音频: 歌词没带偏移,不动")
+        let early = LRCParser.SpatialAudioCue(lyricOffsetMs: -131, stereoDurationMs: 178721)
+        expectEqual(L.spatialAudioOffsetMs(cue: early, bundleID: am, playingDuration: 177.6, isMusicVideo: false), 131,
+                    "空间音频: 负偏移(空间音频版歌词要早)换算成提前")
+    }
+
     // ---- 第四层:电台校正----
     // 只在放电台时生效,按「台标哈希 + 曲目」记。成因见 LyricsOffsetStore.radioOffsets 头注:
     // 电台元数据比声音晚,δ 每首不同但同一首可复现,系统里量不出来,只能靠耳朵校一次。

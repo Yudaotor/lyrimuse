@@ -69,6 +69,9 @@ type amllResult struct {
 	platform string
 	// hasDuet:这份 TTML 里出现了两个及以上的非 group 演唱者。只用于日志,选源不看它。
 	hasDuet bool
+	// spatialOffsetSecs:Apple TTML 给空间音频版的歌词偏移(秒),没有时为 0。只有 applemusicParseTTML 填,
+	// 见 applemusicspatial.go。
+	spatialOffsetSecs float64
 }
 
 func (r amllResult) empty() bool { return r.lrc == "" && r.yrc == "" }

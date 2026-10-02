@@ -87,6 +87,37 @@ func runLyricsParsingTests() {
         expectEqual(engine.lrcOffsetMs, 600, "引擎: 整行为空时从 YRC 取 offset")
     }
 
+    // --- Apple 歌词带的空间音频版偏移 [am-spatial:<偏移毫秒>/<立体声时长毫秒>] ---
+    //
+    // collector 从 TTML 的 <audio lyricOffset role="spatial"> 写进正文(数据取自 Dean Lewis《Be Alright》:
+    // 立体声版 196.373s、空间音频版歌词晚 1.672s)。要不要用由 LocalPlaybackSource 定,解析层只负责读出来。
+    let beAlrightCue = LRCParser.SpatialAudioCue(lyricOffsetMs: 1672, stereoDurationMs: 196373)
+    expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:1672/196373]\n[00:04.10]I look up\n"), beAlrightCue,
+                "空间音频: 读出偏移与立体声时长")
+    expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:-131/178721]\n"),
+                LRCParser.SpatialAudioCue(lyricOffsetMs: -131, stereoDurationMs: 178721), "空间音频: 负偏移")
+    expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:0/196373]\n") == nil, true, "空间音频: 偏移为 0 等于没有")
+    expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:1672/0]\n") == nil, true, "空间音频: 立体声时长未知不认")
+    expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:20000/196373]\n") == nil, true, "空间音频: 超出可信上限不认")
+    expectEqual(LRCParser.parseSpatialAudioCue("[offset:242]\n[00:01.00]x\n") == nil, true, "空间音频: 没有这行标签")
+    expectEqual(LRCParser.parse("[am-spatial:1672/196373]\n[00:04.10]I look up\n"),
+                [LyricLine(timeMs: 4100, text: "I look up")], "空间音频: 标签行不会被当成一句歌词")
+    expectEqual(YRCParser.parse("[am-spatial:1672/196373]\n[4107,3178](4107,267,0)I\n").count, 1,
+                "空间音频: 逐字解析同样跳过标签行")
+    expectEqual(LRCParser.parseOffsetMs("[am-spatial:1672/196373]\n"), 0, "空间音频: 不会被当成 [offset:]")
+    do {
+        let engine = LyricsSyncEngine()
+        _ = engine.load(lyrics: "[am-spatial:1672/196373]\n[00:04.10]a\n[00:07.28]b\n",
+                        lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.spatialAudioCue, beAlrightCue, "空间音频: 引擎从整行正文读出")
+        expectEqual(engine.effectiveOffsetMs, 0, "空间音频: 引擎自己不加,用不用由播放源定")
+        _ = engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                        lyricsYRC: "[am-spatial:1672/196373]\n[4107,3178](4107,267,0)a\n")
+        expectEqual(engine.spatialAudioCue, beAlrightCue, "空间音频: 整行为空时从逐字正文读出")
+        _ = engine.load(lyrics: "[00:04.10]a\n[00:07.28]b\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.spatialAudioCue == nil, true, "空间音频: 换成不带标签的歌词后清掉")
+    }
+
     expectEqual(
         LRCParser.parse("[ti:Test Song]\n[by:Someone]\n[00:00.00]actual line\n"),
         [LyricLine(timeMs: 0, text: "actual line")],

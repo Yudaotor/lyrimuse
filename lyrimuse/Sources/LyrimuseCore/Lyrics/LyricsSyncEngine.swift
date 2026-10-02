@@ -251,6 +251,10 @@ public final class LyricsSyncEngine {
     /// 实际用于定位的总偏移。**所有**查询入口都必须用它,不能再直接用 `offsetMs`。
     public var effectiveOffsetMs: Int { offsetMs + lrcOffsetMs }
 
+    /// 这份歌词带的空间音频版偏移(`LRCParser.SpatialAudioCue`),load() 时从内容里解析。引擎自己不加:
+    /// 要不要用取决于播放器此刻放的是哪一版,由 LocalPlaybackSource 判断后并进 `offsetMs`。
+    public private(set) var spatialAudioCue: LRCParser.SpatialAudioCue?
+
     // 署名/制作人员这类噪声行(作词/作曲/编曲/制作人等,常见于 LRC 开头几秒)在喂进
     // 同步引擎之前(而不是显示时)就剔除——这样歌曲刚开始播放、真歌词还没开始的那几秒
     // 会正确判定成"还没到第一句真歌词"(退回♪占位符,双行预览提前露出第一句真歌词),
@@ -1599,6 +1603,7 @@ public final class LyricsSyncEngine {
             let fromBase = LRCParser.parseOffsetMs(lyrics)
             return fromBase != 0 ? fromBase : LRCParser.parseOffsetMs(lyricsYRC)
         }()
+        spatialAudioCue = LRCParser.parseSpatialAudioCue(lyrics) ?? LRCParser.parseSpatialAudioCue(lyricsYRC)
         let parsedBase = LRCParser.parse(lyrics)
         // 演唱者标签要在署名过滤**之前**认出来,再回头当豁免喂给它 —— 顺序不能反:
         // 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是

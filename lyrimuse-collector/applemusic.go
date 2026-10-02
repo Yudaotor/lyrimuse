@@ -982,6 +982,7 @@ func applemusicParseTTML(ttml string) (amllResult, bool) {
 	if r.roma == "" {
 		r.roma = applemusicTransliteration(ttml)
 	}
+	r.spatialOffsetSecs = applemusicSpatialLyricOffset(ttml)
 	return r, true
 }
 
@@ -1289,8 +1290,15 @@ func applemusicRankCandidates(songs []applemusicSong, artist, title, album strin
 // 两条路进下游的字段形状必须一致(尤其 cover 的 {w}x{h} 替换和 durationSecs 的毫秒换算),
 // 否则其中一条会悄悄少给打分层证据。
 func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applemusicResult {
+	lyrics, yrc := p.lrc, p.yrc
+	if !plainOnly {
+		// 空间音频版的偏移跟着正文走,由 App 按实际在放的时长决定用不用(见 applemusicspatial.go)。
+		stereoSecs := float64(s.Attributes.DurationInMillis) / 1000
+		lyrics = withSpatialAudioTag(lyrics, p.spatialOffsetSecs, stereoSecs)
+		yrc = withSpatialAudioTag(yrc, p.spatialOffsetSecs, stereoSecs)
+	}
 	return applemusicResult{
-		lyrics: p.lrc, yrc: p.yrc, tr: p.tr, roma: p.roma, bg: p.bg,
+		lyrics: lyrics, yrc: yrc, tr: p.tr, roma: p.roma, bg: p.bg,
 		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
 		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
 		isrc: s.Attributes.Isrc, plainOnly: plainOnly,
