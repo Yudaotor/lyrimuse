@@ -16,7 +16,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/6c08e64f-c265-467d-8e9d-4e8673b36016
+https://github.com/user-attachments/assets/72c07224-c781-48e8-832a-c9fddcffa56e
 
 Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating always on top of your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, or in a full lyrics window. It works with eight players, including Apple Music, Spotify and Amazon Music, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
 
