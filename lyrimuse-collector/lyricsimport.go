@@ -2,11 +2,13 @@ package main
 
 import (
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 var (
@@ -46,8 +48,10 @@ func parseLyricsFile(path string) parsedLyricsFile {
 // parseLyricsBytes 是 parseLyricsFile 的解析部分(文件内容已经读进来了),规则见 parseLyricsFile。
 func parseLyricsBytes(data []byte) parsedLyricsFile {
 	var p parsedLyricsFile
+	// 不是合法 UTF-8 的文件先转码(decodeLyricBytes):非法字节进了缓存,正文小文件的校验值就再也对不上。
+	text, _ := decodeLyricBytes(data)
 	// 有的编辑器存盘时给文件开头加 UTF-8 BOM:不去掉的话第一行认不出歌手头,整份文件被当成坏的。
-	lines := strings.Split(strings.TrimPrefix(string(data), "\ufeff"), "\n")
+	lines := strings.Split(strings.TrimPrefix(text, "\ufeff"), "\n")
 	get := func(i int) (string, bool) {
 		if i < 0 || i >= len(lines) {
 			return "", false
@@ -285,6 +289,9 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) int {
 			data, err := os.ReadFile(path)
 			if err != nil {
 				continue
+			}
+			if !utf8.Valid(data) {
+				slog.Warn("lyrics import: file is not UTF-8, converting it", "file", filepath.Base(path))
 			}
 			bodies[suffix] = parseLyricsBytes(data)
 			if info, ok := g.infos[suffix]; ok {

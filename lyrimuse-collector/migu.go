@@ -268,13 +268,18 @@ func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error)
 
 // miguFetchLRC 拉一份 LRC 文件(lyricUrl / trcUrl 都是这个形状):纯文本,可能带 CRLF,
 // 顶着咪咕的元数据头——统一在这里归一化换行并剥头,调用方拿到的就是能直接过
-// isTimedLRC 的正文。
+// isTimedLRC 的正文。个别文件是 GBK 编码,先转成 UTF-8(decodeLyricBytes);转不了就当这份文件不可用,
+// 别把非法字节存进缓存。
 func miguFetchLRC(ctx context.Context, url string) (string, error) {
 	body, err := miguFetchFile(ctx, url, 512<<10)
 	if err != nil {
 		return "", err
 	}
-	return miguStripMetaLines(string(body)), nil
+	text, ok := decodeLyricBytes(body)
+	if !ok {
+		return "", fmt.Errorf("lyric file is neither UTF-8 nor GB18030")
+	}
+	return miguStripMetaLines(text), nil
 }
 
 // miguFetchFile 下载一份歌词文件(lrc / trc / mrc)。https 没问成(连接被重置、超时、非 200)按 http 再取一次:

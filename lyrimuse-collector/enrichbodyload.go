@@ -28,6 +28,7 @@ import (
 //     被打断(强杀 / 断电)时,小文件是新的那一份,主缓存还是旧的。
 //   - 文件缺失或不自洽 → 这一条只剩主缓存里的主歌词。常驻进程紧接着会从 lyrics/ 文件夹对账
 //     (`importLyricsFromFiles`),那里有主歌词 / 译文 / 罗马音 / 逐字四种文件,能补回来的都会补回来。
+//     这几首记进 enrichBodiesToRewrite,下一次保存不管正文变没变都重写正文小文件。
 //
 // 正文小文件并发读(8000 多个小文件串行读要一秒多,比读一份完整格式的主缓存还慢)。
 
@@ -135,6 +136,7 @@ func hydrateEnrichBodies(m map[string]enrichEntry, dir string) bodyHydrateStats 
 		}
 		m[k] = e
 	}
+	noteEnrichBodiesToRewrite(st.missingSet)
 	return st
 }
 

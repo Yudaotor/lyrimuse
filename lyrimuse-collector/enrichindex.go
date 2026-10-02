@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // 给 App 读的**精简索引** + **按 key 的歌词正文小文件**。
@@ -58,6 +59,41 @@ var enrichBodyCRCs map[string]uint32
 // (leanEnrichSnapshot),而这份记录就是那个「确认」:目录换了(测试 / 换了配置目录)还拿旧目录的记录,
 // 新目录里一个文件都没写,主缓存却会写成精简条目,正文就丢了。所以目录一变就重新种。
 var enrichBodyCRCsDir string
+
+// enrichBodySanitizedCRCs:写正文小文件时换过非法 UTF-8 字节的那几首,记「内存里原样内容的校验值 → 文件里的校验值」。
+// 内存里那份没变时按文件里的算,不每次保存都重写一遍。enrichSaveMu 保护。
+var enrichBodySanitizedCRCs map[string]sanitizedBodyCRC
+
+type sanitizedBodyCRC struct{ raw, file uint32 }
+
+// enrichBodiesToRewrite:加载时正文小文件缺失或损坏的那几首(hydrateEnrichBodies 记下),下一次保存不管正文变没变都
+// 重写。种回来的校验值只说明文件在,不说明它没坏;正文没变的话,坏掉的文件永远等不到重写。
+var (
+	enrichBodiesToRewriteMu sync.Mutex
+	enrichBodiesToRewrite   map[string]bool
+)
+
+func noteEnrichBodiesToRewrite(keys map[string]bool) {
+	if len(keys) == 0 {
+		return
+	}
+	enrichBodiesToRewriteMu.Lock()
+	defer enrichBodiesToRewriteMu.Unlock()
+	if enrichBodiesToRewrite == nil {
+		enrichBodiesToRewrite = map[string]bool{}
+	}
+	for k := range keys {
+		enrichBodiesToRewrite[k] = true
+	}
+}
+
+func takeEnrichBodiesToRewrite() map[string]bool {
+	enrichBodiesToRewriteMu.Lock()
+	defer enrichBodiesToRewriteMu.Unlock()
+	keys := enrichBodiesToRewrite
+	enrichBodiesToRewrite = nil
+	return keys
+}
 
 func enrichIndexPath() string {
 	if enrichPath == "" {
@@ -107,6 +143,23 @@ func enrichBodyCRC(e enrichEntry) uint32 {
 		return c
 	}
 	return 1 // 极小概率算出 0,跟「没有正文」区分开
+}
+
+// sanitizeEnrichBody 把正文里的非法 UTF-8 字节换成 U+FFFD(跟 json 落盘的结果一样),并按换过的内容重算校验值;
+// 没有非法字节时 changed=false。只查这次要写的那几首,别改成每次保存把全部正文都查一遍(那是每次多扫上百 MB)。
+func sanitizeEnrichBody(b enrichBody) (enrichBody, bool) {
+	changed := false
+	for _, f := range []*string{&b.Lyrics, &b.LyricsTr, &b.LyricsRoma, &b.LyricsYRC, &b.PlainLyrics, &b.LyricsBG} {
+		if !utf8.ValidString(*f) {
+			*f = jsonSafeString(*f)
+			changed = true
+		}
+	}
+	if changed {
+		b.CRC = enrichBodyCRC(enrichEntry{Lyrics: b.Lyrics, LyricsTr: b.LyricsTr, LyricsRoma: b.LyricsRoma,
+			LyricsYRC: b.LyricsYRC, PlainLyrics: b.PlainLyrics, LyricsBG: b.LyricsBG})
+	}
+	return b, changed
 }
 
 // enrichBodyCRCBufs:enrichBodyCRC 的拷贝缓冲区。加载时正文小文件是并发校验的,不能共用一块。
@@ -188,7 +241,11 @@ func seedEnrichBodyCRCs() {
 func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	crcs := make(map[string]uint32, len(snapshot))
 	for k, e := range snapshot {
-		crcs[k] = enrichBodyCRC(e)
+		crc := enrichBodyCRC(e)
+		if s, ok := enrichBodySanitizedCRCs[k]; ok && s.raw == crc {
+			crc = s.file
+		}
+		crcs[k] = crc
 	}
 	dir := enrichBodiesDir()
 	if dir == "" {
@@ -197,6 +254,9 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 	if enrichBodyCRCs == nil || enrichBodyCRCsDir != dir {
 		seedEnrichBodyCRCs()
 		enrichBodyCRCsDir = dir
+	}
+	for k := range takeEnrichBodiesToRewrite() {
+		delete(enrichBodyCRCs, k)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		slog.Error("lyrics bodies: mkdir", "err", err)
@@ -208,8 +268,20 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 			continue
 		}
 		e := snapshot[k]
-		b, err := json.Marshal(enrichBody{CRC: crc, Lyrics: e.Lyrics, LyricsTr: e.LyricsTr,
-			LyricsRoma: e.LyricsRoma, LyricsYRC: e.LyricsYRC, PlainLyrics: e.PlainLyrics, LyricsBG: e.LyricsBG})
+		body := enrichBody{CRC: crc, Lyrics: e.Lyrics, LyricsTr: e.LyricsTr,
+			LyricsRoma: e.LyricsRoma, LyricsYRC: e.LyricsYRC, PlainLyrics: e.PlainLyrics, LyricsBG: e.LyricsBG}
+		if fixed, changed := sanitizeEnrichBody(body); changed {
+			if enrichBodySanitizedCRCs == nil {
+				enrichBodySanitizedCRCs = map[string]sanitizedBodyCRC{}
+			}
+			enrichBodySanitizedCRCs[k] = sanitizedBodyCRC{raw: crc, file: fixed.CRC}
+			body, crc = fixed, fixed.CRC
+			crcs[k] = crc
+			if enrichBodyCRCs[k] == crc {
+				continue
+			}
+		}
+		b, err := json.Marshal(body)
 		if err == nil {
 			err = writeFileAtomic(filepath.Join(dir, decisionSidecarName(k)), b)
 		}
