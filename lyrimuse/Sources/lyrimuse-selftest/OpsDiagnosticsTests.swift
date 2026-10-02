@@ -682,6 +682,55 @@ func runOpsDiagnosticsTests() {
         expectEqual(LogFiles.collector.lastPathComponent, "lyrimuse.log", "日志文件: collector 日志路径不变")
     }
 
+    // ---- 歌词源近况(collector 统计的 summary 段) ----
+    do {
+        print("\n== 歌词源近况 ==")
+        typealias H = LyricSourceHealth
+        let json = #"""
+            {"updated_at":1000,"days":{"2026-10-02":{"rounds":3,"sources":{"kuwo":{"asked":3}}}},
+             "summary":[
+              {"source":"kuwo","enabled":true,"rounds":90,"responded":4,"won":1,"alert":"barely","peer_rate":0.05,"peer_rounds":60},
+              {"source":"deezer","enabled":true,"rounds":40,"responded":30,"won":10,"alert":"below_usual","peer_rate":0.25,"peer_rounds":120,"usual_rate":0.5},
+              {"source":"musixmatch","enabled":true,"rounds":40,"alert":"network","skip_rate":0.9,"network_peers":["lyricfind","deezer"]},
+              {"source":"qq","enabled":true,"rounds":80,"responded":70,"won":40},
+              {"source":"soda","enabled":true,"rounds":10,"alert":"some_future_kind"}
+             ]}
+            """#
+        let state = try? JSONDecoder().decode(H.State.self, from: Data(json.utf8))
+        let now = Date(timeIntervalSince1970: 1000 + 3600)
+        expectEqual(state?.summary.count, 5, "歌词源近况: 摘要整段解得出来,逐日计数不解也不报错")
+        expectEqual(H.attention(for: "kuwo", state: state, now: now)?.alert, .barely, "歌词源近况: 报了异常的源要提醒")
+        expectEqual(H.attention(for: "kuwo", state: state, now: now)?.peerRounds, 60, "歌词源近况: 带着说明文字要用的次数")
+        expectEqual(H.attention(for: "deezer", state: state, now: now)?.usualRate, 0.5, "歌词源近况: 比平时少那一档带着平时的比例")
+        expectEqual(H.attention(for: "musixmatch", state: state, now: now)?.networkPeers, ["lyricfind", "deezer"],
+                    "歌词源近况: 网络那一档带着一起连不上的源")
+        expectEqual(H.attention(for: "qq", state: state, now: now) == nil, true, "歌词源近况: 没有异常不提醒")
+        expectEqual(H.attention(for: "soda", state: state, now: now) == nil, true, "歌词源近况: 认不得的判定按没有异常处理")
+        expectEqual(H.attention(for: "lrclib", state: state, now: now) == nil, true, "歌词源近况: 摘要里没有这个源不提醒")
+        expectEqual(H.attention(for: "kuwo", state: nil, now: now) == nil, true, "歌词源近况: 没有统计文件不提醒")
+        expectEqual(H.attention(for: "kuwo", state: state, now: Date(timeIntervalSince1970: 1000 + H.staleAfter)) != nil, true,
+                    "歌词源近况: 刚好两天还提醒")
+        expectEqual(H.attention(for: "kuwo", state: state, now: Date(timeIntervalSince1970: 1000 + H.staleAfter + 1)) == nil, true,
+                    "歌词源近况: 统计停了两天以上不提醒")
+        expectEqual(H.percent(0.125), 13, "歌词源近况: 百分比逢半进位(同 collector 的 math.Round)")
+        expectEqual(H.percent(4, of: 90), 4, "歌词源近况: 次数换成百分比")
+        expectEqual(H.percent(1, of: 0), 0, "歌词源近况: 分母为 0 时是 0")
+
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let engine = (try? String(contentsOfFile: repoRoot.appendingPathComponent(
+            "lyrimuse-collector/lyricsourcestats.go").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(engine, contain: "lyricSourceStatsFileName = \"\(H.stateURL.lastPathComponent)\""), true,
+                    "歌词源近况: 两侧认的是同一个文件")
+        expectEqual(H.staleAfter, 48 * 3600, "歌词源近况: App 侧过期阈值是两天")
+        expectEqual(sourceBytes(engine, contain: "lyricSourceStatsStaleAfter = 48 * time.Hour"), true,
+                    "歌词源近况: collector 侧过期阈值也是两天")
+        for alert in [H.Alert.barely, .belowUsual, .cooling, .network] {
+            expectEqual(sourceBytes(engine, contain: "= \"\(alert.rawValue)\""), true,
+                        "歌词源近况: collector 写的判定取值里有 \(alert.rawValue)")
+        }
+    }
+
     // ---- CrashReportSummary(诊断导出的崩溃报告段)----
     //
     // .ips = 摘要行 JSON + 正文 JSON。三种样本照本机真实报告的形状写:启动期 DYLD 缺库(零帧,信息全在

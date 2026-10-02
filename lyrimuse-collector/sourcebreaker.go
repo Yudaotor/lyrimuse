@@ -254,6 +254,7 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 		st.reason = reason
 		log.Printf("lyrics: source %s cooling down %s (reason=%s trip=%d consecutive=%d host=%s)",
 			source, lyricSourceBreakerSchedule[idx], reason, st.trips, st.consecutive, host)
+		noteLyricSourceTrip(source, reason)
 	case status == http.StatusTooManyRequests:
 		if st == nil {
 			st = &lyricSourceBreakerState{}
@@ -266,6 +267,7 @@ func (b *lyricSourceBreaker) observeWith(host, endpoint string, err error, statu
 			st.until = until
 			st.reason = lyricSourceCooldownReasonRateLimited
 			log.Printf("lyrics: source %s cooling down %s (reason=%s host=%s)", source, d, st.reason, host)
+			noteLyricSourceTrip(source, st.reason)
 		}
 	default:
 		if endpoint != "" {

@@ -37844,6 +37844,193 @@
           }
         }
       }
+    },
+    "%@ 最近不太正常，点击看详情" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hasn't been working well lately — click for details"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 最近不太正常，按一下看詳情"
+          }
+        }
+      }
+    },
+    "%@ 最近几乎找不到歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has found almost no lyrics lately"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 最近幾乎找不到歌詞"
+          }
+        }
+      }
+    },
+    "%@ 最近找到的歌词比平时少很多" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is finding far fewer lyrics than usual"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 最近找到的歌詞比平時少很多"
+          }
+        }
+      }
+    },
+    "%@ 最近经常出错" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ keeps running into errors"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 最近經常發生錯誤"
+          }
+        }
+      }
+    },
+    "%@ 最近经常连不上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ often can't be reached"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 最近經常連不上"
+          }
+        }
+      }
+    },
+    "最近 3 天有 %1$d 次查询，同类曲库里至少两家都找到了歌词，%2$@ 只在其中 %3$d%% 给出了歌词。多半是它的接口变了，或者请求被拦了。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups, but %2$@ returned lyrics in only %3$d%% of them. Its API may have changed, or its requests are being blocked."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天有 %1$d 次查詢，同類曲庫裡至少兩家都找到了歌詞，%2$@ 只在其中 %3$d%% 給出了歌詞。很可能是它的 API 變了，或者請求被擋下了。"
+          }
+        }
+      }
+    },
+    "最近 3 天有 %1$d 次查询，同类曲库里至少两家都找到了歌词，%2$@ 在其中 %3$d%% 给出了歌词，平时是 %4$d%%。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them, compared with %4$d%% usually."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 3 天有 %1$d 次查詢，同類曲庫裡至少兩家都找到了歌詞，%2$@ 在其中 %3$d%% 給出了歌詞，平時是 %4$d%%。"
+          }
+        }
+      }
+    },
+    "最近 2 天有 %1$d%% 的查询没有问 %2$@：它接连出错，被暂时停用了一阵，过后会自动恢复。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the last 2 days, %2$@ was left out of %1$d%% of lookups: after repeated errors it was paused for a while. It resumes on its own."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 2 天有 %1$d%% 的查詢沒有問 %2$@：它接連發生錯誤，被暫時停用了一陣，之後會自動恢復。"
+          }
+        }
+      }
+    },
+    "最近 2 天有 %1$d%% 的查询因为连不上 %2$@ 被跳过，%3$@ 也是这样。几家同时连不上，多半是这台 Mac 到不了这些网站（比如要开代理），不是源本身坏了。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the last 2 days, %2$@ was skipped in %1$d%% of lookups because it couldn't be reached, and so were %3$@. When several sources fail at once, this Mac most likely can't reach those sites (for example, a proxy is needed), rather than the sources being broken."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近 2 天有 %1$d%% 的查詢因為連不上 %2$@ 而略過，%3$@ 也是這樣。幾家同時連不上，很可能是這台 Mac 連不到這些網站（例如需要透過代理伺服器），不是來源本身壞了。"
+          }
+        }
+      }
+    },
+    "近 7 天：查了 %1$d 次，给出歌词 %2$d%%，被选中 %3$d%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last 7 days: %1$d lookups, lyrics found %2$d%%, chosen %3$d%%"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近 7 天：查了 %1$d 次，給出歌詞 %2$d%%，被選中 %3$d%%"
+          }
+        }
+      }
+    },
+    "其它源照常在找，一首歌只要有别家找得到，歌词就不受影响。这些数字只在这台 Mac 上统计。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other sources keep searching — as long as one of them has a song, its lyrics aren't affected. These numbers are only counted on this Mac."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他來源照常在找，一首歌只要有別家找得到，歌詞就不受影響。這些數字只在這台 Mac 上統計。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

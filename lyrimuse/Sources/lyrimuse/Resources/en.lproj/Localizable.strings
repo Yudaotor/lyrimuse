@@ -39,6 +39,11 @@
 "%@ 张专辑" = "%@ albums";
 "%@ 把歌词缓存和播放队列放在受系统保护的目录里。授权后，本机已有的歌词可以直接用，还能提前解析接下来要播的歌；不授权歌词照样能联网找到。" = "The lyrics caches and play queues of %@ live in system-protected folders. With access, lyrics already on this Mac can be used directly and upcoming tracks can be resolved ahead of time; without it, lyrics are still found online.";
 "%@ 把歌词缓存放在受系统保护的目录里。授权「完全磁盘访问权限」之后，本机已经有的逐字歌词可以直接用，省去每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
+"%@ 最近不太正常，点击看详情" = "%@ hasn't been working well lately — click for details";
+"%@ 最近几乎找不到歌词" = "%@ has found almost no lyrics lately";
+"%@ 最近找到的歌词比平时少很多" = "%@ is finding far fewer lyrics than usual";
+"%@ 最近经常出错" = "%@ keeps running into errors";
+"%@ 最近经常连不上" = "%@ often can't be reached";
 "%@ 月" = "%@";
 "%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
@@ -322,6 +327,7 @@
 "其它" = "Other";
 "其它源仍在搜索中…" = "Still searching other sources…";
 "其它源印证了结束点" = "End time corroborated";
+"其它源照常在找，一首歌只要有别家找得到，歌词就不受影响。这些数字只在这台 Mac 上统计。" = "Other sources keep searching — as long as one of them has a song, its lyrics aren't affected. These numbers are only counted on this Mac.";
 "内容获印证" = "Content corroborated";
 "内部数据不是合法 JSON，已放弃保存" = "The data isn't valid JSON, so nothing was saved";
 "写入 config.json 失败：%@" = "Couldn't write config.json: %@";
@@ -953,6 +959,10 @@
 "最大音量" = "Full volume";
 "最安静 %@" = "Quietest %@";
 "最常听 %@" = "Busiest %@";
+"最近 2 天有 %1$d%% 的查询因为连不上 %2$@ 被跳过，%3$@ 也是这样。几家同时连不上，多半是这台 Mac 到不了这些网站（比如要开代理），不是源本身坏了。" = "In the last 2 days, %2$@ was skipped in %1$d%% of lookups because it couldn't be reached, and so were %3$@. When several sources fail at once, this Mac most likely can't reach those sites (for example, a proxy is needed), rather than the sources being broken.";
+"最近 2 天有 %1$d%% 的查询没有问 %2$@：它接连出错，被暂时停用了一阵，过后会自动恢复。" = "In the last 2 days, %2$@ was left out of %1$d%% of lookups: after repeated errors it was paused for a while. It resumes on its own.";
+"最近 3 天有 %1$d 次查询，同类曲库里至少两家都找到了歌词，%2$@ 只在其中 %3$d%% 给出了歌词。多半是它的接口变了，或者请求被拦了。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups, but %2$@ returned lyrics in only %3$d%% of them. Its API may have changed, or its requests are being blocked.";
+"最近 3 天有 %1$d 次查询，同类曲库里至少两家都找到了歌词，%2$@ 在其中 %3$d%% 给出了歌词，平时是 %4$d%%。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them, compared with %4$d%% usually.";
 "最近一次评估" = "Latest evaluation";
 "最近一轮解析时一个歌词源都没有应答（多半是那一刻网络不通），不是「这首歌没有词」。会自动重搜，也可以用工具栏「补搜歌词」立刻重来" = "Not one lyric source replied during the last resolve — most likely the network was down at that moment, not that this song has no lyrics. It will be retried automatically; you can also use “Find Missing Lyrics” in the toolbar to redo it now";
 "最近听过" = "Recently played";
@@ -1510,6 +1520,7 @@
 "近 12 周的收听热力（完整年历在设置的统计页）" = "Listening heatmap for the last 12 weeks (full calendar lives in Settings → stats)";
 "近 30 天" = "Past 30 days";
 "近 7 天" = "Past 7 days";
+"近 7 天：查了 %1$d 次，给出歌词 %2$d%%，被选中 %3$d%%" = "Last 7 days: %1$d lookups, lyrics found %2$d%%, chosen %3$d%%";
 "近一年" = "Past year";
 "返回" = "Back";
 "还剩 %@" = "%@ left";

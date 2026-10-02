@@ -791,6 +791,10 @@ private struct LyricsSettingsTab: View {
     @State private var localCacheAccess: LocalCacheAccess.State?
     /// 哪一格的「客户端缓存读不到」说明正开着(`LocalCacheAccessHelp`)。同时最多一个。
     @State private var localCacheHelpSource: LyricsSource?
+    /// collector 统计的各歌词源近况。只认它的判定,理由同 localCacheAccess(见 `LyricSourceHealth`)。
+    @State private var lyricSourceHealth: LyricSourceHealth.State?
+    /// 哪一格的「这个源最近不太正常」说明正开着(`LyricSourceHealthHelp`)。同时最多一个。
+    @State private var sourceHealthHelpSource: LyricsSource?
 
     // MARK: - 歌词来源可用性测试
 
@@ -998,6 +1002,7 @@ private struct LyricsSettingsTab: View {
                             sourceCheckbox(source)
                             Spacer(minLength: 0)
                             localCacheAccessory(source)
+                            sourceHealthAccessory(source)
                             appleMusicConnectionAccessory(source)
                             sourceTestAccessory(source)
                         }
@@ -1022,6 +1027,8 @@ private struct LyricsSettingsTab: View {
         .settingsPolling(every: 5, runsOnAppear: true) {
             let state = LocalCacheAccess.current
             if state != localCacheAccess { localCacheAccess = state }
+            let health = LyricSourceHealth.current
+            if health != lyricSourceHealth { lyricSourceHealth = health }
         }
     }
 
@@ -1069,6 +1076,35 @@ private struct LyricsSettingsTab: View {
                     // localCacheAccess —— 那等于替另一个进程宣布结果。
                     localCacheHelpSource = nil
                 }
+            }
+        }
+    }
+
+    /// 那一格右侧的「这个源最近不太正常」提示,点开是 `LyricSourceHealthHelp`。只在这个源开着、collector
+    /// 的统计报了异常时出现;命中区与 popover 的做法同 localCacheAccessory。
+    @ViewBuilder
+    private func sourceHealthAccessory(_ source: LyricsSource) -> some View {
+        if features.lyricsSources.contains(source),
+           let summary = LyricSourceHealth.attention(for: source.rawValue, state: lyricSourceHealth) {
+            Button {
+                sourceHealthHelpSource = source
+            } label: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(String(format: L10n.t("%@ 最近不太正常，点击看详情"), source.displayName))
+            .popover(
+                isPresented: Binding(
+                    get: { sourceHealthHelpSource == source },
+                    set: { if !$0, sourceHealthHelpSource == source { sourceHealthHelpSource = nil } }
+                ),
+                arrowEdge: .bottom
+            ) {
+                LyricSourceHealthHelp(source: source, summary: summary)
             }
         }
     }

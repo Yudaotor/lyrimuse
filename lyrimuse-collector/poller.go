@@ -1620,6 +1620,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 }
 
 func run(ctx context.Context, cfg *config, lb *lbClient) error {
+	startLyricSourceStats(ctx)
 	forwardedSet := persistedTTLSet{path: forwardedPath, ttl: forwardedTTL}
 	lfmMirroredSet := persistedTTLSet{path: lfmMirroredPath, ttl: lfmMirroredTTL}
 	forwarded, fwdSeeded := forwardedSet.load() // 已转发 uts 集合 + 是否已初始化(替代单调水位线,兼容迟到/乱序)

@@ -144,6 +144,7 @@ func runHealthcheckCLI(args []string) {
 		}
 		add("网页与本地文件解析", healthWarn, "上游可能改版,已退回备用路径:%s", strings.Join(parts, ";"))
 	}
+	report.Items = append(report.Items, lyricSourceStatsHealthItems(readLyricSourceStatsFile(), time.Now())...)
 
 	// 歌词导出目录:写不进去的话"歌词文件夹作为权威源"整条链路是坏的,而它不会有任何
 	// 显式报错 —— 只是每次导出都静默失败。
