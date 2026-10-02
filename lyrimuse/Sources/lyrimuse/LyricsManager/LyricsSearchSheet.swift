@@ -46,7 +46,8 @@ struct LyricsSearchSheet: View {
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
     @State private var applyingSource: String?
     /// 本次面板存活期间最后一次采纳成功的来源。「当前使用」徽标认 `appliedSource ?? currentSource`
-    /// —— `currentSource` 是打开面板那一刻的快照(let),采纳之后不会自己变。换歌时重置。
+    /// —— `currentSource` 由宿主给,宿主不跟着刷新时就是打开面板那一刻的快照。换歌时重置;宿主给的
+    /// 来源 / 指纹变了也重置,那份比这里记的新(后台重打分换了正文,或者宿主读到了刚采纳的那条)。
     @State private var appliedSource: String?
     /// 跟 appliedSource 配对:刚采纳那条的指纹,「当前使用」双判据的另一半。
     @State private var appliedFingerprint: String?
@@ -502,6 +503,14 @@ struct LyricsSearchSheet: View {
             appliedSource = nil
             appliedFingerprint = nil
             applyFeedback = nil
+        }
+        .onChange(of: currentSource) { _, _ in
+            appliedSource = nil
+            appliedFingerprint = nil
+        }
+        .onChange(of: currentFingerprint) { _, _ in
+            appliedSource = nil
+            appliedFingerprint = nil
         }
         .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话

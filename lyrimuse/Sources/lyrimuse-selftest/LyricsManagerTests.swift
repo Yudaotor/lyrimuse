@@ -788,6 +788,23 @@ func runLyricsManagerTests() {
                     "当前使用: 候选没有词时退回只比来源")
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: nil, currentFingerprint: "x"), false,
                     "当前使用: 没有当前来源就没有当前")
+        // 面板开着期间后台换了正文:快速搜索小窗跟着重算来源 / 指纹,面板以宿主给的新值为准。
+        do {
+            let managerDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("lyrimuse/LyricsManager")
+            let quick = (try? String(contentsOf: managerDir.appendingPathComponent("LyricsQuickSearchWindow.swift"),
+                                     encoding: .utf8)) ?? ""
+            let sheet = (try? String(contentsOf: managerDir.appendingPathComponent("LyricsSearchSheet.swift"),
+                                     encoding: .utf8)) ?? ""
+            expectEqual(quick.contains(".onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }"), true,
+                        "当前使用契约: 快速搜索小窗在当前这首歌词重载时重算")
+            expectEqual(quick.contains("guard key == old.key else { return }"), true,
+                        "当前使用契约: 只在还是面板里那首时重算,换了歌不动")
+            expectEqual(sheet.contains(".onChange(of: currentSource) { _, _ in\n            appliedSource = nil"), true,
+                        "当前使用契约: 宿主给的来源变了,面板记的采纳结果让位")
+            expectEqual(sheet.contains(".onChange(of: currentFingerprint) { _, _ in\n            appliedSource = nil"), true,
+                        "当前使用契约: 宿主给的指纹变了,面板记的采纳结果让位")
+        }
         // 指纹本身是 ManualPickLock 的既有口径:时间戳全变、CRLF、词不变 → 相同。
         let a = ManualPickLock.fingerprint(lyrics: "[00:01.00]你好\n[00:05.00]世界")
         let b = ManualPickLock.fingerprint(lyrics: "[00:02.50]你好\r\n[00:06.10]世界\n")

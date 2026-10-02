@@ -112,6 +112,27 @@ struct LyricsQuickSearchWindow: View {
         // 见 AppActions.quickSearchRefreshRequests 的注释,这里补上"每次点击都重新现查一次"
         // 这条路。
         .onReceive(AppActions.shared.quickSearchRefreshRequests) { loadContext() }
+        // 开着期间这首的正文可能被后台换掉(播到时升级、重打分),「当前使用」得跟着挪;
+        // 只重算来源和指纹,不重搜、不动查询词。
+        .onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }
+    }
+
+    /// 正在放的还是面板里这首时,按缓存现状重算「当前使用」要的来源和正文指纹。换了歌就不动:
+    /// 这扇窗口开着期间不跟着换歌(见文件头注),换歌由再点一次「搜索歌词…」那条路接手。
+    private func refreshCurrentMarker() {
+        guard let old = context else { return }
+        let p = PlaybackCoordinator.shared
+        let artist = p.artist, title = p.title, album = p.album
+        let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
+            ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard key == old.key else { return }
+        let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+        let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
+        guard source != old.currentSource || fingerprint != old.currentFingerprint else { return }
+        context = Context(
+            artist: old.artist, title: old.title, album: old.album, key: old.key,
+            currentSource: source, currentFingerprint: fingerprint, durationSecs: old.durationSecs)
     }
 
     private func loadContext() {
