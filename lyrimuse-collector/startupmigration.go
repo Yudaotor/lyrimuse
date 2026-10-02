@@ -28,12 +28,12 @@ import (
 //     启动都还能捞到十来条新的(源头 richsyncToYRC 的归并没盖全),它就**不能**加水位闸。
 //     好在它只要 0.5 秒,不加也无所谓 —— 把闸留给真正贵的那道。
 //
-// 引入外来数据的两个入口 —— adoptEnrichRestore(配置搬家,别的机器导出的决策数据)与
-// importLyricsFromFiles(用户手改 lyrics/ 里的文件)—— 会主动作废水位,让这一轮照常全量跑。
-// 两者在 main.go 里都排在这些迁移**之前**,顺序天然成立。
+// 引入外来数据的两个入口在 main.go 里都排在这些迁移**之前**,顺序天然成立。adoptEnrichRestore(配置搬家,
+// 别的机器导出的决策数据)进来的是一整批,作废全部水位,这一轮照常全量跑;importLyricsFromFiles(用户手改
+// lyrics/ 里的文件)只改写了那几条,已经跑过的迁移这一轮只补扫它们,见 recheckMigrationsFor。
 //
-// 路径没设时(各 CLI 子命令就不设)migrationDone 恒为 false、markMigrationDone 是空操作,
-// 行为与加这层之前逐字节一致 —— 水位是常驻进程的启动优化,不是语义的一部分。
+// 路径没设时(各 CLI 子命令就不设)migrationDone 恒为 false、markMigrationDone 与 recheckMigrationsFor
+// 是空操作,行为与加这层之前逐字节一致 —— 水位是常驻进程的启动优化,不是语义的一部分。
 //
 // 那么 CLI 子命令改完缓存、常驻进程带着旧水位重启,会不会漏掉该做的迁移?对现有这几个
 // 不会,逐个看过:backfill-roma 与 regenerate-jyutping 改的是 LyricsRoma 的**内容**,
@@ -46,6 +46,9 @@ var (
 	migrationStateMu   sync.Mutex
 	migrationStatePath string
 	migrationState     map[string]int
+	// 见 recheckMigrationsFor:补扫开始前的那份水位(磁盘上已经作废,内存里留着),和这一轮要补扫的条目。
+	migrationRecheck     map[string]int
+	migrationRecheckKeys []string
 )
 
 const (
@@ -81,7 +84,7 @@ const (
 	migrationLyricEntities        = "lyric_entities"
 	migrationLyricEntitiesVersion = 1
 	// migrationLyricLineEndings:存量歌词的换行统一成 LF、去掉开头的 BOM(lyriclineendings.go)。新抓取的在 rank
-	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据会作废水位、再跑一遍。
+	// 那道门口统一,运行期不再产生;lyrics/ 文件夹导入进来的外来数据只在改写过的那几条上补扫一遍。
 	migrationLyricLineEndings        = "lyric_line_endings"
 	migrationLyricLineEndingsVersion = 1
 )
@@ -93,6 +96,7 @@ func loadMigrationState(path string) {
 	defer migrationStateMu.Unlock()
 	migrationStatePath = path
 	migrationState = map[string]int{}
+	migrationRecheck, migrationRecheckKeys = nil, nil
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -115,6 +119,44 @@ func migrationDone(name string, version int) bool {
 	return migrationState[name] >= version
 }
 
+// migrationScope:一道带水位的迁移这一轮要扫多大范围。迁移用它代替直接问 migrationDone。
+type migrationScope struct {
+	all  bool     // 水位没到:全库
+	keys []string // 水位到了,但这几条这一轮被 lyrics/ 文件夹改写过:只补扫它们
+}
+
+// migrationScopeOf:水位到了、没有要补扫的 → 整道跳过;水位到了、有要补扫的 → 只扫那几条;
+// 水位没到(没跑过、改了算法升了版本号、整体作废了)→ 全库。
+func migrationScopeOf(name string, version int) migrationScope {
+	if migrationDone(name, version) {
+		return migrationScope{}
+	}
+	migrationStateMu.Lock()
+	defer migrationStateMu.Unlock()
+	if migrationStatePath != "" && migrationRecheck[name] >= version {
+		return migrationScope{keys: migrationRecheckKeys}
+	}
+	return migrationScope{all: true}
+}
+
+// skip:这一轮整道跳过。
+func (s migrationScope) skip() bool { return !s.all && len(s.keys) == 0 }
+
+// entries:要扫的条目。全库时就是 enrichCache 本身;补扫时是那几条的拷贝(已经不在缓存里的不算),改动照旧
+// 写回 enrichCache[k]。调用方持 enrichMu。
+func (s migrationScope) entries() map[string]enrichEntry {
+	if s.all {
+		return enrichCache
+	}
+	sub := make(map[string]enrichEntry, len(s.keys))
+	for _, k := range s.keys {
+		if e, ok := enrichCache[k]; ok {
+			sub[k] = e
+		}
+	}
+	return sub
+}
+
 // markMigrationDone 记下水位并立刻落盘 —— 落盘失败只记一行日志:代价是下次启动多跑一遍,
 // 不值得让它影响启动流程。
 func markMigrationDone(name string, version int) {
@@ -133,10 +175,37 @@ func markMigrationDone(name string, version int) {
 	saveMigrationStateLocked()
 }
 
+// recheckMigrationsFor:外来数据只进了这几条(lyrics/ 文件夹改写了它们)。已经跑过的迁移这一轮不全库重扫、
+// 只补扫这几条 —— 其余条目还是上次跑完时的形态。为一个手改的文件把全库再扫一遍,实测近一万条缓存要十几秒
+// (机器忙时三十多秒),而这一段跑完之前 collector 还没开始盯播放(见 main.go)。水位没到的迁移照常全量跑。
+//
+// 磁盘上的水位跟 invalidateMigrationState 一样当场作废,内存里那份挪进 migrationRecheck;每道迁移补扫完,
+// 由它自己的 markMigrationDone 写回去。补扫到一半进程被杀,下次启动读到的是作废的水位、全量跑 —— 这一层
+// 最坏的失效方式仍然只是多跑一遍。
+func recheckMigrationsFor(keys []string, why string) {
+	migrationStateMu.Lock()
+	defer migrationStateMu.Unlock()
+	if migrationStatePath == "" || len(keys) == 0 || len(migrationState)+len(migrationRecheck) == 0 {
+		return
+	}
+	log.Printf("migration state: %s — startup migrations that already ran re-check only those entries this round", why)
+	if migrationRecheck == nil {
+		migrationRecheck = map[string]int{}
+	}
+	for name, v := range migrationState {
+		migrationRecheck[name] = max(migrationRecheck[name], v)
+	}
+	migrationRecheckKeys = append(migrationRecheckKeys, keys...)
+	migrationState = map[string]int{}
+	saveMigrationStateLocked()
+}
+
 // invalidateMigrationState 作废全部水位:有外来数据进了缓存,这一轮的存量迁移必须照常跑。
 func invalidateMigrationState(why string) {
 	migrationStateMu.Lock()
 	defer migrationStateMu.Unlock()
+	// 补扫一并作废,全量跑已经包含那几条。要排在下面的早退之前:补扫期间内存里的水位是空的。
+	migrationRecheck, migrationRecheckKeys = nil, nil
 	if migrationStatePath == "" || len(migrationState) == 0 {
 		return
 	}

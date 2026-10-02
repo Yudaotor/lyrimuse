@@ -96,12 +96,13 @@ func yrcMergeWhitespaceTokens(yrc string) (string, bool) {
 // 每次启动都能捞到东西(日志实测跑了 39 次,最近两次只隔 22 分钟、分别修 14 条和 13 条)——
 // 那种状态下加闸等于让新数据永远没人管。现在源头已经归并,它才真正变成一次性的存量清洗。
 func migrateYRCWhitespaceTokens() {
-	if migrationDone(migrationYRCWhitespace, migrationYRCWhitespaceVersion) {
+	scope := migrationScopeOf(migrationYRCWhitespace, migrationYRCWhitespaceVersion)
+	if scope.skip() {
 		return
 	}
 	enrichMu.Lock()
 	fixed := 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		merged, ok := yrcMergeWhitespaceTokens(e.LyricsYRC)
 		if !ok {
 			continue

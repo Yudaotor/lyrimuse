@@ -111,12 +111,13 @@ func (e *enrichEntry) dropHokkienRoma() {
 // (entrySongLanguage / dropHokkienRoma / shouldGenerateHelperRoma),所以是一次性的,挂水位闸。
 // 位置(main.go):import 与 export 之间 —— 清掉的罗马音由 exportLyricsFiles 同步成删掉对应的 .roma.lrc。
 func migrateHokkienSongLanguage() {
-	if migrationDone(migrationHokkienSongLanguage, migrationHokkienSongLanguageVersion) {
+	scope := migrationScopeOf(migrationHokkienSongLanguage, migrationHokkienSongLanguageVersion)
+	if scope.skip() {
 		return
 	}
 	enrichMu.Lock()
 	marked, cleared := 0, 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		if e.Lyrics == "" || e.SongLanguage == songLanguageCantonese || e.SongLanguage == songLanguageHokkien ||
 			!lyricsLookHokkien(e.Lyrics) {
 			continue

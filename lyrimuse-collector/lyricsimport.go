@@ -175,35 +175,35 @@ var (
 	lyricsImportRestoreKeys map[string]bool
 )
 
-// 返回值 = 这一轮真正被文件改写的条目数。调用方(main.go)据此决定要不要作废启动期迁移
-// 水位:用户手改 lyrics/ 里的文件是**外来数据**入口,改过就得让后面那些存量迁移照常跑一遍
-// (见 startupmigration.go)。老调用点忽略返回值即可,行为不变。
-func importLyricsFromFiles() int { return importLyricsFromDir(lyricsDir()) }
+// 返回值 = 这一轮真正被文件改写的条目 key(只要条数的调用方取 len)。调用方(main.go)据此让启动期迁移
+// 补扫这几条:用户手改 lyrics/ 里的文件是**外来数据**入口,改过的条目得让后面那些存量迁移再过一遍
+// (见 startupmigration.go 的 recheckMigrationsFor)。老调用点忽略返回值即可,行为不变。
+func importLyricsFromFiles() []string { return importLyricsFromDir(lyricsDir()) }
 
 // importLyricsFromFilesReadOnly 同 importLyricsFromFiles,给常驻进程可能正在跑时的一次性命令预演用:只改内存,
 // 不落盘,也不清歌词临时文件(可能是常驻进程写到一半的)。
-func importLyricsFromFilesReadOnly() int { return importLyricsFrom(lyricsDir(), false) }
+func importLyricsFromFilesReadOnly() []string { return importLyricsFrom(lyricsDir(), false) }
 
 // importLyricsFromDir 同 importLyricsFromFiles,只是扫的是指定目录。热切换歌词文件夹时先导入
 // 新目录、再把 lyricsDir 指过去(见 lyricsdirswitch.go)。
-func importLyricsFromDir(dir string) int { return importLyricsFrom(dir, true) }
+func importLyricsFromDir(dir string) []string { return importLyricsFrom(dir, true) }
 
 // importLyricsFrom:persist=false 时不清临时文件、不保存缓存,其余与 importLyricsFromDir 相同。
-func importLyricsFrom(dir string, persist bool) int {
+func importLyricsFrom(dir string, persist bool) []string {
 	return importLyricsFromOpts(dir, persist, persist)
 }
 
 // importLyricsFromOpts:cleanTemps 决定清不清歌词临时文件 —— 只在还没有别的写入方的时候清(启动、刚切过去的新目录)。
 // 常驻进程运行中的导入(从快照恢复)要传 false:另一轮导出可能正写到一半。
-func importLyricsFromOpts(dir string, persist, cleanTemps bool) int {
+func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 	if dir == "" {
-		return 0
+		return nil
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0 // 目录还不存在(全新安装,还没导出过任何东西)是正常情况
+		return nil // 目录还不存在(全新安装,还没导出过任何东西)是正常情况
 	}
-	adopted := 0
+	var adopted []string
 	// 上次之后没人动过的文件不读(见 lyricsfilestate.go);整组都没动过就整组跳过。
 	useState := lyricsFileStateEnabled(dir)
 
@@ -376,7 +376,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) int {
 		if changed {
 			enrichCache[key] = e
 			enrichDirty = true
-			adopted++
+			adopted = append(adopted, key)
 		}
 	}
 	enrichMu.Unlock()

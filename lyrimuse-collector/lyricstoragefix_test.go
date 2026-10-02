@@ -9,10 +9,12 @@ func withTempMigrationState(t *testing.T) {
 	t.Helper()
 	migrationStateMu.Lock()
 	saved, savedPath := migrationState, migrationStatePath
+	savedRecheck, savedRecheckKeys := migrationRecheck, migrationRecheckKeys
 	migrationStateMu.Unlock()
 	t.Cleanup(func() {
 		migrationStateMu.Lock()
 		migrationState, migrationStatePath = saved, savedPath
+		migrationRecheck, migrationRecheckKeys = savedRecheck, savedRecheckKeys
 		migrationStateMu.Unlock()
 	})
 	loadMigrationState(filepath.Join(t.TempDir(), "migrations.json"))

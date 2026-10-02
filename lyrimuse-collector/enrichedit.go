@@ -351,7 +351,7 @@ func cancelInFlightEnrichLocked(key string) {
 func adoptRestoreEdit() enrichEditOutcome {
 	adopted := enrichRestorePath != "" && adoptEnrichRestore(enrichRestorePath)
 	// 常驻进程运行中:不清歌词临时文件,可能是另一轮导出正写到一半的(见 importLyricsFromOpts)。
-	imported := importLyricsFromOpts(lyricsDir(), true, false)
+	imported := len(importLyricsFromOpts(lyricsDir(), true, false))
 	if adopted || imported > 0 {
 		invalidateMigrationState("restored from a lyrics snapshot")
 	}

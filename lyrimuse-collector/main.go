@@ -375,10 +375,11 @@ func main() {
 	startupStep("migrateKnownPlaceholderCovers", migrateKnownPlaceholderCovers)
 	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
 	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)
-	// 用户手改 lyrics/ 里的文件同样是外来数据入口:改到了东西就作废水位,理由同上。
+	// 用户手改 lyrics/ 里的文件同样是外来数据入口,但只进了改过的那几条:跑过的迁移这一轮只补扫它们,
+	// 不为一个文件把全库重扫一遍(见 recheckMigrationsFor)。
 	startupStep("importLyricsFromFiles", func() {
-		if n := importLyricsFromFiles(); n > 0 {
-			invalidateMigrationState(fmt.Sprintf("%d entries rewritten by lyrics/ files", n))
+		if keys := importLyricsFromFiles(); len(keys) > 0 {
+			recheckMigrationsFor(keys, fmt.Sprintf("%d entries rewritten by lyrics/ files", len(keys)))
 		}
 	})
 	// 存量歌词正文里的 HTML / XML 字符实体(酷狗 `they&apos;re`,见 lyricentities.go)。

@@ -34,7 +34,7 @@ import (
 //
 // 只解**一层**:`&amp;apos;` 解成 `&apos;` 就停(正则匹配完 `&amp;` 之后从它后面继续扫,不回头)。
 // 幂等性靠调用方保证——每份文本只在一个门口解一次,见 decodeLyricSourceEntities / migrateLyricEntities
-// (后者带水位闸,只跑一遍;lyrics/ 文件夹导入改了东西时水位作废、再跑一遍,那是新进来的外来数据)。
+// (后者带水位闸,只跑一遍;lyrics/ 文件夹导入改写了哪几条,就在那几条上补扫一遍,那是新进来的外来数据)。
 var lyricEntityRe = regexp.MustCompile(`&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});`)
 
 // decodeLyricEntities 把一段歌词文本里的字符实体还原成字符。没有 `&` 的文本零分配直接返回
@@ -130,12 +130,13 @@ func decodeLyricSourceEntities(raw map[string]lyricSourceResult) map[string]lyri
 // 已知代价(接受,08 章早有结论):App 侧单曲时间轴校正值的 key 含 lyrics+yrc 的内容指纹,正文
 // 一变旧值就查不到——跟 rescore / 重挂时间轴 / 空白词条清洗改正文时一样,受影响的歌要重调一次。
 func migrateLyricEntities() {
-	if migrationDone(migrationLyricEntities, migrationLyricEntitiesVersion) {
+	scope := migrationScopeOf(migrationLyricEntities, migrationLyricEntitiesVersion)
+	if scope.skip() {
 		return
 	}
 	enrichMu.Lock()
 	fixed := 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		lyrics := decodeLyricEntities(e.Lyrics)
 		tr := decodeLyricEntities(e.LyricsTr)
 		roma := decodeLyricEntities(e.LyricsRoma)

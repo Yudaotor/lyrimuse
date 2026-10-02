@@ -1774,12 +1774,13 @@ func neteaseCoverUpgrade(u string) string {
 // migrateNeteaseCoverURLs:存量条目的网易云封面地址换成 neteaseCoverQuery(同一张图的另一档,不是换封面,
 // 不动 CoverSource / CoverAlbum / AccentColor)。纯字符串替换,不发请求;挂水位闸,只跑一次。
 func migrateNeteaseCoverURLs() {
-	if migrationDone(migrationNeteaseCoverURLs, migrationNeteaseCoverURLsVersion) {
+	scope := migrationScopeOf(migrationNeteaseCoverURLs, migrationNeteaseCoverURLsVersion)
+	if scope.skip() {
 		return
 	}
 	enrichMu.Lock()
 	n := 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		if u := neteaseCoverUpgrade(e.CoverURL); u != e.CoverURL {
 			e.CoverURL = u
 			enrichCache[k] = e

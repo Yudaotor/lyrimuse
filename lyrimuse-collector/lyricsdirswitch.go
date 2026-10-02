@@ -48,7 +48,7 @@ func switchLyricsDir(setting string) {
 		return
 	}
 	start := time.Now()
-	adopted := importLyricsFromDir(dir)
+	adopted := len(importLyricsFromDir(dir))
 	if adopted > 0 {
 		// 新目录里的文件是外来数据,可能停在更早的形态:下次启动让存量迁移照常全量跑一遍。
 		invalidateMigrationState("lyrics dir switched")

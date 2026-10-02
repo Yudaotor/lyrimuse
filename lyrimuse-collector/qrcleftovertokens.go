@@ -87,13 +87,14 @@ func repairQRCLeftoverTokens(yrc string) (string, bool) {
 // 位置(main.go):必须排在 migrateYRCWhitespaceTokens **之前** —— 残缺词条修好之后,原先被它
 // 粘住的空白词条才切得出来、才轮得到归并。
 func migrateQRCLeftoverTokens() {
-	if migrationDone(migrationQRCLeftoverTokens, migrationQRCLeftoverTokensVersion) {
+	scope := migrationScopeOf(migrationQRCLeftoverTokens, migrationQRCLeftoverTokensVersion)
+	if scope.skip() {
 		return
 	}
 	pins := lyricsPinnedKeys() // 读文件,不能压在 enrichMu 里(见 lyricsPinnedKeys 头注)
 	enrichMu.Lock()
 	fixed, dropped := 0, 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		repaired, ok := repairQRCLeftoverTokens(e.LyricsYRC)
 		if ok {
 			e.LyricsYRC = repaired

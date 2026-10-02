@@ -37,12 +37,13 @@ func normalizeLyricText(s string) string {
 // LyricsOffsetStore.carryOverOffset 在下次播放时挪到新指纹上(同一首只剩这一条旧值时),那条兜底就是为这类无损
 // 改写准备的。
 func migrateLyricLineEndings() {
-	if migrationDone(migrationLyricLineEndings, migrationLyricLineEndingsVersion) {
+	scope := migrationScopeOf(migrationLyricLineEndings, migrationLyricLineEndingsVersion)
+	if scope.skip() {
 		return
 	}
 	enrichMu.Lock()
 	fixed := 0
-	for k, e := range enrichCache {
+	for k, e := range scope.entries() {
 		lyrics := normalizeLyricText(e.Lyrics)
 		tr := normalizeLyricText(e.LyricsTr)
 		roma := normalizeLyricText(e.LyricsRoma)

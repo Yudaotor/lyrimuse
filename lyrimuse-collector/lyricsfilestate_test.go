@@ -76,8 +76,8 @@ func TestLyricsFileStateSkipsUnchangedFiles(t *testing.T) {
 	future := time.Now().Add(time.Minute)
 	_ = os.Chtimes(pathB, future, future)
 
-	if n := importLyricsFromFiles(); n != 1 {
-		t.Fatalf("只有改过的 B 该被采纳,采纳了 %d 条", n)
+	if keys := importLyricsFromFiles(); len(keys) != 1 || keys[0] != keyB {
+		t.Fatalf("只有改过的 B 该被采纳,采纳了 %q", keys)
 	}
 	enrichMu.Lock()
 	gotA, gotB := enrichCache[keyA].Lyrics, enrichCache[keyB].Lyrics
@@ -138,7 +138,7 @@ func TestLyricsFileStateIgnoredForOtherDir(t *testing.T) {
 	}
 	_ = os.Chtimes(copied, info.ModTime(), info.ModTime()) // 大小、修改时间都跟原文件夹的记录一样
 	resetLyricsFileStateForTest()
-	if n := importLyricsFromDir(other); n != 1 {
+	if n := len(importLyricsFromDir(other)); n != 1 {
 		t.Fatalf("另一个文件夹不该用这边的记录,应读进来并采纳,采纳了 %d 条", n)
 	}
 }
