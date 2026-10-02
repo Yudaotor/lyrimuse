@@ -274,7 +274,8 @@ func writeEnrichBodies(snapshot map[string]enrichEntry) map[string]uint32 {
 			if enrichBodySanitizedCRCs == nil {
 				enrichBodySanitizedCRCs = map[string]sanitizedBodyCRC{}
 			}
-			enrichBodySanitizedCRCs[k] = sanitizedBodyCRC{raw: crc, file: fixed.CRC}
+			// raw 按内存里的内容现算:crc 可能已经被上面换成了文件里的校验值(强制重写时会走到这里)。
+			enrichBodySanitizedCRCs[k] = sanitizedBodyCRC{raw: enrichBodyCRC(e), file: fixed.CRC}
 			body, crc = fixed, fixed.CRC
 			crcs[k] = crc
 			if enrichBodyCRCs[k] == crc {

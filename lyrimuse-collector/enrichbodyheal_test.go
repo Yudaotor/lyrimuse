@@ -76,6 +76,27 @@ func TestLeanSaveDoesNotRewriteSanitizedBodyEverySave(t *testing.T) {
 	}
 }
 
+// 换过非法字节的那一首又被要求强制重写(加载时判成损坏):记下的「原样内容的校验值」要按内存里的内容现算,
+// 不能拿已经换成文件校验值的那个数,不然之后每次保存都要多重写一遍。
+func TestSanitizedBodyRecordKeepsRawCRCWhenForcedRewrite(t *testing.T) {
+	withTempLeanCache(t)
+	resetBodyHealStateForTest(t)
+	key := "Justin Bieber|Trust|Purpose (Deluxe)"
+	entry := enrichEntry{Lyrics: "[00:01.00]Trust", LyricsTr: "[00:01.00]\xb8\xe8\xc7\xfa"}
+	raw := enrichBodyCRC(entry)
+	putEntriesForTest(map[string]enrichEntry{key: entry})
+	saveEnrichCache()
+	if got := enrichBodySanitizedCRCs[key].raw; got != raw {
+		t.Fatalf("第一次写之后 raw = %d, want %d", got, raw)
+	}
+	noteEnrichBodiesToRewrite(map[string]bool{key: true})
+	putEntriesForTest(map[string]enrichEntry{key: entry})
+	saveEnrichCache()
+	if got := enrichBodySanitizedCRCs[key].raw; got != raw {
+		t.Errorf("强制重写之后 raw = %d, want %d", got, raw)
+	}
+}
+
 // 正文小文件里的校验值字段是对的、内容却坏了:加载时判成损坏。正文从 lyrics/ 补回来跟原来一模一样时,下一次保存
 // 也要重写它,不然种回来的校验值说「写过了」,坏文件永远等不到重写,每次启动都报一遍。
 func TestDamagedSideFileIsRewrittenEvenIfBodyUnchanged(t *testing.T) {
