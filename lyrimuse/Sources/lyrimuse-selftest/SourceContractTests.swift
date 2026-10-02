@@ -1624,8 +1624,8 @@ func runSourceContractTests() {
                         "迷你多行: 行的 == 必须比 wordRise,否则切换后整表行不重画")
             expectEqual(lwv.contains("&& a.centered == b.centered"), true,
                         "迷你多行: 行的 == 必须比 centered,否则切换后整表行不重画")
-            expectEqual(lwv.components(separatedBy: "lyricsScrollReader {").count - 1, 2,
-                        "迷你多行: 完整布局和迷你多行共用同一个 lyricsScrollReader(自动滚动只有一份)")
+            expectEqual(lwv.components(separatedBy: "lyricsScrollReader {").count - 1, 3,
+                        "歌词列表: 完整布局、迷你多行和 PiP 共用 lyricsScrollReader(自动滚动只有一份)")
             expectEqual(lwv.contains("playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !playback.isRadioTalkBreak"), true,
                         "迷你多行: 没有同步歌词 / 电台口白时退回两行那套(列表的占位按大窗口尺寸画)")
             // 打开 / 关闭 / 进出迷你都不做动画(07 章决策 51)。
@@ -1729,13 +1729,13 @@ func runSourceContractTests() {
             // 就只剩运行期缩一条路,而那会把半调网点封面缩出摩尔纹黑斑。
             expectEqual(lwv.contains("private var miniCoverSide: CGFloat"), true,
                         "迷你封面: 边长按开着几行算出来,不靠 SwiftUI 撑开(撑开就没法预先重采样)")
-            // 右上角窗口控件:迷你切换用画中画那对符号,三颗共用同一字号字重。
-            expectEqual(lwv.contains("showsMiniLayout ? \"pip.exit\" : \"pip.enter\""), true,
-                        "窗口控件: 迷你切换用 pip.enter / pip.exit(Apple 播放器里「缩成小窗」的符号)")
-            expectEqual(lwv.contains("rectangle.compress.vertical"), false,
-                        "窗口控件: 别换回「横杠夹箭头」那颗,Apple 自家 App 里看不懂它管什么")
-            expectEqual(lwv.components(separatedBy: ".font(Self.windowActionIconFont)").count - 1, 4,
-                        "窗口控件: 四个图标位(置顶/全屏/控制条/迷你)都走同一个字号字重常量")
+            // PiP now opens an independent panel; mini size retains a distinct icon.
+            expectEqual(lwv.contains("showsMiniLayout ? \"pip.exit\" : \"pip.enter\""), false,
+                        "窗口控件: 迷你尺寸不再冒充画中画")
+            expectEqual(lwv.contains("pipController.show(replacing: windowController.window)"), true,
+                        "窗口控件: PiP 接替原歌词窗口")
+            expectEqual(lwv.components(separatedBy: ".font(Self.windowActionIconFont)").count - 1, 5,
+                        "窗口控件: 五个图标位(置顶/全屏/控制条/迷你/PiP)共用字号")
         } else {
             expectEqual(true, false, "文字颜色: 读不到 UI/LyricsWindowView.swift(路径挪了?)")
         }

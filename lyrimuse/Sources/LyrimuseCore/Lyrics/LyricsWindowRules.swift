@@ -1,6 +1,13 @@
 import CoreGraphics
 import Foundation
 
+/// The displayed lyric clock includes the user's offset; player seeks do not.
+public enum LyricsWindowSeek {
+    public static func position(timeMs: Int, offsetMs: Int) -> Int {
+        max(0, timeMs - offsetMs)
+    }
+}
+
 // 歌词窗口里不依赖视图的判定与公式。视图只负责把状态喂进来、把结果画出去;
 // 放在 Core 是为了 selftest 能直接调(App target 里的逻辑只能扫源码文本)。
 

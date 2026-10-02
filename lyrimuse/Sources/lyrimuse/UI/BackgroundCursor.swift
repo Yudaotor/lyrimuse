@@ -7,7 +7,8 @@ import AppKit
 /// 打开之后,本进程设的光标在后台也生效。符号运行时查找:哪天系统拿掉了,`setEnabled` 什么也不做,
 /// 只是光标不变,不影响别的。
 ///
-/// 只在确实要换光标的那段时间打开(悬浮歌词「调整宽度」模式下指针在可拖的边上),用完关掉。
+/// 只在确实要换光标的那段时间打开,用完关掉。各窗口独立持有请求,避免一个窗口退出时
+/// 撤销另一个窗口仍在使用的后台光标。
 @MainActor
 enum BackgroundCursor {
     private typealias MainConnectionID = @convention(c) () -> Int32
@@ -21,11 +22,21 @@ enum BackgroundCursor {
     }()
 
     private static var enabled = false
+    private static let defaultOwner = NSObject()
+    private static var owners: Set<ObjectIdentifier> = []
 
-    static func setEnabled(_ on: Bool) {
-        guard on != enabled, let (mainConnection, setProperty) = functions else { return }
-        enabled = on
+    /// Returns whether background cursor updates are enabled for this process.
+    @discardableResult
+    static func setEnabled(_ on: Bool, for owner: AnyObject? = nil) -> Bool {
+        let id = ObjectIdentifier(owner ?? defaultOwner)
+        if on { owners.insert(id) } else { owners.remove(id) }
+        let requested = !owners.isEmpty
+        guard requested != enabled, let (mainConnection, setProperty) = functions else { return enabled }
         let cid = mainConnection()
-        _ = setProperty(cid, cid, "SetsCursorInBackground" as CFString, on ? kCFBooleanTrue : kCFBooleanFalse)
+        if setProperty(cid, cid, "SetsCursorInBackground" as CFString,
+                       requested ? kCFBooleanTrue : kCFBooleanFalse) == 0 {
+            enabled = requested
+        }
+        return enabled
     }
 }

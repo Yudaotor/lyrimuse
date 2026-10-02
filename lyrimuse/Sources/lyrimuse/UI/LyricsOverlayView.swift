@@ -2202,6 +2202,9 @@ struct WrapLayout: Layout {
     /// 每个子视图前面能不能断行(见 `WrapLayoutMath.rows` 的 breakBefore)。nil = 处处能断。
     /// 由文本决定,文本已经在 contentKey 里,所以不另进缓存 key。
     var breakBefore: [Bool]? = nil
+    /// A small PiP viewport may be narrower than one timed token. Re-propose that
+    /// token at the available width; existing overlay layouts keep natural sizing.
+    var wrapsOversizedSubviews: Bool = false
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
@@ -2217,6 +2220,8 @@ struct WrapLayout: Layout {
     // (换行分组)也缓存住 —— 原来 sizeThatFits/placeSubviews 各自把 rows() 重算一遍。
     struct Cache {
         var sizes: [CGSize]
+        var naturalSizes: [CGSize]
+        var measuredWidth: CGFloat?
         var contentKey: AnyHashable?
         var subviewCount: Int
         // rows 缓存:随 sizes 重测**必须**同步失效(sizes 新 rows 旧会摆放越界/重叠),
@@ -2228,8 +2233,9 @@ struct WrapLayout: Layout {
     }
 
     func makeCache(subviews: Subviews) -> Cache {
-        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) },
-              contentKey: contentKey, subviewCount: subviews.count)
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return Cache(sizes: sizes, naturalSizes: sizes,
+                     contentKey: contentKey, subviewCount: subviews.count)
     }
 
     func updateCache(_ cache: inout Cache, subviews: Subviews) {
@@ -2237,6 +2243,8 @@ struct WrapLayout: Layout {
             return // 内容身份没变:字体/文本都没变,尺寸和 rows 缓存照用
         }
         cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        cache.naturalSizes = cache.sizes
+        cache.measuredWidth = nil
         cache.contentKey = contentKey
         cache.subviewCount = subviews.count
         cache.rows = nil
@@ -2244,7 +2252,16 @@ struct WrapLayout: Layout {
         cache.rowsSpacing = .nan
     }
 
-    private func cachedRows(_ cache: inout Cache, maxWidth: CGFloat) -> [WrapLayoutMath.Row] {
+    private func cachedRows(_ cache: inout Cache, maxWidth: CGFloat, subviews: Subviews) -> [WrapLayoutMath.Row] {
+        let width = wrapsOversizedSubviews ? max(1, maxWidth) : nil
+        if cache.measuredWidth != width {
+            cache.sizes = cache.naturalSizes.enumerated().map { index, size in
+                guard let width, size.width > width else { return size }
+                return subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+            }
+            cache.measuredWidth = width
+            cache.rows = nil
+        }
         if let rows = cache.rows, cache.rowsWidth == maxWidth, cache.rowsSpacing == horizontalSpacing {
             return rows
         }
@@ -2263,15 +2280,15 @@ struct WrapLayout: Layout {
             // `DuetStageInsetLayout` 正是拿这一支量自然宽、决定两侧留白让多少
             // (有限提案那一支恒等于提案宽,量不出内容自己有多宽)。
             return WrapLayoutMath.unconstrainedSize(
-                sizes: cache.sizes, horizontalSpacing: horizontalSpacing)
+                sizes: cache.naturalSizes, horizontalSpacing: horizontalSpacing)
         }
         return WrapLayoutMath.totalSize(
-            rows: cachedRows(&cache, maxWidth: maxWidth),
+            rows: cachedRows(&cache, maxWidth: maxWidth, subviews: subviews),
             maxWidth: maxWidth, verticalSpacing: verticalSpacing)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
-        let rows = cachedRows(&cache, maxWidth: bounds.width)
+        let rows = cachedRows(&cache, maxWidth: bounds.width, subviews: subviews)
         if let sink = contentRectSink {
             // 记的是**相对 bounds 原点**的矩形:bounds 的绝对位置取决于父容器,而调用方
             // (LyricsOverlayView)另有一条 GeometryReader 报 WrapLayout 自己在悬浮窗坐标

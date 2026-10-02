@@ -312,6 +312,7 @@
 "关闭时按住歌词就能拖；打开则要长按 0.35 秒" = "Off: hold the lyrics to drag. On: long-press for 0.35s";
 "关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透" = "Off: hold the lyrics to drag. On: long-press for 0.35s, and clicks pass through until then";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
+"关闭画中画" = "Close Picture in Picture";
 "关（默认）：只换这一次，以后自动重搜或打分变化仍可能换掉\n开：锁住这首歌的歌词，自动匹配不再碰它\n打开时，之前手动选过的歌一并锁定（已被自动换掉的除外）" = "Off (default): swaps in this version now — later auto re-searches or scoring changes can still replace it\nOn: locks this song’s lyrics; automatic matching won’t touch it again\nTurning it on also locks songs you picked earlier (except those already replaced automatically)";
 "其中 %@ 条是你手动修正过的，删掉之后找不回来。已导出到本地的歌词文件也会一并删除，且无法撤销。下次播放这些歌会重新走一遍匹配解析，不保证能找到一样的歌词" = "Manually edited lyrics for %@ of these songs can't be recovered. The exported .lrc files are deleted too, and this can't be undone. The next time you play these songs, Lyrimuse searches again and may not find the same lyrics";
 "其中含 %@ 个歌词文件，会一并恢复。" = "It contains %@ lyrics files, which will be restored too. ";
@@ -757,6 +758,7 @@
 "打开任意已知播放器时启动 Lyrimuse" = "Launch Lyrimuse when any known player opens";
 "打开备份文件夹" = "Open Backup Folder";
 "打开完全磁盘访问权限设置" = "Open Full Disk Access Settings";
+"打开歌词画中画" = "Open Lyrics Picture in Picture";
 "打开歌词窗口" = "Open Lyrics Window";
 "打开歌词管理" = "Open Lyrics Manager";
 "打开系统设置" = "Open System Settings";
@@ -1082,6 +1084,7 @@
 "歌词源全都没连上" = "None of the lyric sources could be reached";
 "歌词源可用情况" = "Lyrics Source Status";
 "歌词源没带译文时补充" = "Fills in where the lyrics source ships none";
+"歌词画中画" = "Lyrics Picture in Picture";
 "歌词窗口" = "Lyrics Window";
 "歌词窗口…" = "Lyrics Window…";
 "歌词窗口的文字颜色；「自动」会按背景亮度在浅色和深色之间切换" = "The lyrics window's text color. Auto switches between light and dark based on the background's brightness.";
@@ -1509,6 +1512,7 @@
 "近 7 天" = "Past 7 days";
 "近一年" = "Past year";
 "返回" = "Back";
+"返回歌词窗口" = "Return to Lyrics Window";
 "还剩 %@" = "%@ left";
 "还在查" = "Still looking up";
 "还差 %@ 首" = "%@ to go";

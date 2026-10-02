@@ -1,6 +1,22 @@
 import SwiftUI
 
 @main
+enum LyrimuseMain {
+    @MainActor
+    static func main() {
+        #if DEBUG
+        if CommandLine.arguments.contains("--verify-lyrics-pip")
+            || CommandLine.arguments.contains("--verify-lyrics-pip-layout")
+            || CommandLine.arguments.contains("--verify-lyrics-pip-handoff")
+            || Bundle.main.bundleIdentifier == "me.yudaotor.lyrimuse.pip-verification" {
+            LyricsPictureInPictureVerification.run()
+            return
+        }
+        #endif
+        LyrimuseApp.main()
+    }
+}
+
 struct LyrimuseApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // 只为了让"歌词管理"这个 Window 的标题在手动切换语言时跟着重新解析——App.body

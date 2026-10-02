@@ -99,6 +99,8 @@ enum ConfigPortability {
         // 它只是一个大小,换台机器照样是用户想要的样子。
         "np:lyricsWindowMiniOrigin",
         "np:lyricsWindowMiniScreenID",
+        "np:lyricsPictureInPictureFrame",
+        "np:lyricsPictureInPictureScreenID",
         "np:launchAtLoginEnabled",
         // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
         // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector
