@@ -370,6 +370,27 @@ func runSyncEngineTests() {
         let wideFirst = wideEngine.surfaceTick(.menuBar, atMs: 1000).line?.plainText ?? ""
         expectEqual(wideFirst.count <= 10 && !wideFirst.isEmpty, true, "按宽度断句: 比整行还宽的词按字切开")
 
+        // 整句只标成一个词又放不下(跟下一句真重叠的行在单行展示面上就是这样):按字切开以后句里的空格照常能断,
+        // 不把一个词拆到两段。
+        let oneWordText = "Every hero dreams of chivalry"
+        let oneWordLine = LyricsSegmenter.Line(
+            startMs: 1000, nextStartMs: 5000, text: oneWordText,
+            words: [SyncedLyricWord(text: oneWordText, startMs: 1000, durationMs: 3000)],
+            side: nil, sungEndMs: 4000, mergeable: true, gapAfter: false)
+        expectEqual(LyricsSegmenter.segments([oneWordLine], budget: budget(200)).compactMap { $0.part?.text },
+                    ["Every hero dreams", "of chivalry"], "按宽度断句: 整句一个词按字切开时只断在词与词之间")
+
+        // 主行放得下、只是译文放不下:能断的地方断不开就截断译文,不为了摊译文把一个词拆成几段。
+        let shortWord = LyricsSyncEngine()
+        shortWord.load(lyrics: "", lyricsTr: "[00:01.00]这是一句特别特别长的译文\n", lyricsRoma: "",
+                       lyricsYRC: "[1000,1000](1000,1000,0)Oh\n[5000,500](5000,500,0)x\n", lineBreaks: .all)
+        shortWord.setLayoutBudget(LineLayoutBudget(
+            key: "short", main: .init(maxWidth: 60, measure: measure),
+            translation: .init(maxWidth: 60, measure: measure)), for: .overlay)
+        let shortLine = shortWord.surfaceTick(.overlay, atMs: 1500).line
+        expectEqual(shortLine?.plainText, "Oh", "按宽度断句: 主行放得下时不为译文拆词")
+        expectEqual(shortLine?.translation, "这是一句特…", "按宽度断句: 断不开就截断译文")
+
         // 对唱行让出演唱者标记的宽:同一句,居中放得下,带声部就拆。
         let duetWords = [SyncedLyricWord(text: "abcdef ", startMs: 1000, durationMs: 1000),
                          SyncedLyricWord(text: "ghij", startMs: 2000, durationMs: 1000)]
@@ -471,6 +492,9 @@ func runSyncEngineTests() {
 
         expectEqual(LyricsSegmenter.displayWidth("Your peacock 你好"), 4, "按宽度断句: 字数按拉丁词和汉字计")
         expectEqual(LyricsSegmenter.cutPenalty(after: "你", before: "，"), nil, "按宽度断句: 标点不放到下一段开头")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "ooh-", before: "ooh"), 0.1, "按宽度断句: 连字符后面能断")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "가", before: "까"), nil, "按宽度断句: 谚文一个词的音节之间不断")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "무 ", before: "가"), 0.05, "按宽度断句: 谚文在空格处断")
     }
 
     // ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----
