@@ -984,7 +984,7 @@ func qqDashTailCandidates(items []qqSearchItem, title, album string, durationSec
 			continue
 		}
 		name := dashTailAsBracket(it.Name)
-		near := qqDurationWithin(it.Interval, durationSecs, qqFallbackDurationTolerance)
+		near := durationsWithin(it.Interval, durationSecs, qqFallbackDurationTolerance)
 		var ok bool
 		switch {
 		case viaAlias:
@@ -1023,21 +1023,6 @@ func qqAlbumDurationCandidates(items []qqSearchItem, artist, title, album string
 		return nil
 	}
 	return hit
-}
-
-// qqDurationWithin:两边时长都已知,且差值占较长那个的比例在 tol 以内。
-func qqDurationWithin(a, b, tol float64) bool {
-	if a <= 0 || b <= 0 {
-		return false
-	}
-	d, longer := a-b, a
-	if d < 0 {
-		d = -d
-	}
-	if b > longer {
-		longer = b
-	}
-	return d/longer <= tol
 }
 
 // qqMergeSearchItems 把 more 里没出现过的条目(按 mid)接在 items 后面。

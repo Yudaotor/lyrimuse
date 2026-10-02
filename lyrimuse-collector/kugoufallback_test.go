@@ -29,6 +29,12 @@ func (f *kgFake) count(key string) int {
 
 func withKugouFake(t *testing.T, handle func(target string) (int, string)) *kgFake {
 	t.Helper()
+	return withKugouFakeReq(t, func(_ *http.Request, target string) (int, string) { return handle(target) })
+}
+
+// withKugouFakeReq 同 withKugouFake,处理函数多拿到请求本身(要按查询参数分发时用)。
+func withKugouFakeReq(t *testing.T, handle func(r *http.Request, target string) (int, string)) *kgFake {
+	t.Helper()
 	savedGuard, savedBreaker, savedTransport := sharedHostGuard(), sharedLyricSourceBreaker(), sharedLyricSourceTransport()
 	setSharedHostGuard(newHostGuard(time.Now))
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
@@ -48,7 +54,7 @@ func withKugouFake(t *testing.T, handle func(target string) (int, string)) *kgFa
 			f.mu.Lock()
 			f.hits[target]++
 			f.mu.Unlock()
-			status, body := handle(target)
+			status, body := handle(r, target)
 			w.WriteHeader(status)
 			_, _ = io.WriteString(w, body)
 		}

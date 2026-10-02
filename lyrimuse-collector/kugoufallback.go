@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -99,7 +100,7 @@ func kugouSearchSongs(ctx context.Context, keyword string) ([]kugouSong, bool) {
 			Info []kugouSong `json:"info"`
 		} `json:"data"`
 	}
-	searchURL := "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword=" + kugouEscape(keyword) + "&page=1&pagesize=10&showtype=1"
+	searchURL := "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword=" + kugouEscape(keyword) + "&page=1&pagesize=" + strconv.Itoa(kugouSearchPageSize) + "&showtype=1"
 	if err := kugouGet(ctx, searchURL, &sr); err == nil {
 		u, _ := neturl.Parse(searchURL)
 		if !kugouSearchRejected(sr.Status, sr.Errcode) {
@@ -118,29 +119,46 @@ func kugouSearchSongs(ctx context.Context, keyword string) ([]kugouSong, bool) {
 
 const kugouSongSearchEndpoint = "https://songsearch.kugou.com/song_search_v2"
 
-// kugouSongSearch 走 songsearch 这套搜索后端,条目归一成 kugouSong。字段名跟 /api/v3 不同
-// (FileHash / SongName / SingerName / AlbumName / AlbumID / Duration,trans_param.language 同名);
-// FileHash 是大写,krcs 查候选大小写都认(实测),这里统一成小写跟 /api/v3 一致。查无结果时
+// kugouSongSearchItem 是 songsearch 一条结果。字段名跟 /api/v3 不同,同一首歌挂在别的专辑下的条目在 Grp 里。
+type kugouSongSearchItem struct {
+	FileHash   string  `json:"FileHash"`
+	SongName   string  `json:"SongName"`
+	SingerName string  `json:"SingerName"`
+	AlbumName  string  `json:"AlbumName"`
+	AlbumID    string  `json:"AlbumID"`
+	Duration   float64 `json:"Duration"`
+	TransParam struct {
+		Language   string `json:"language"`
+		UnionCover string `json:"union_cover"`
+	} `json:"trans_param"`
+	Grp []kugouSongSearchItem `json:"Grp"`
+}
+
+// kugouSong 把一条 songsearch 结果(连同 Grp)归一成 /api/v3 的形态。FileHash 是大写,krcs 查候选大小写都认(实测),
+// 这里统一成小写跟 /api/v3 一致。
+func (s kugouSongSearchItem) kugouSong() kugouSong {
+	var song kugouSong
+	song.Hash = strings.ToLower(s.FileHash)
+	song.SongName, song.SingerName, song.AlbumName, song.AlbumID = s.SongName, s.SingerName, s.AlbumName, s.AlbumID
+	song.Duration = s.Duration
+	song.TransParam.Language, song.TransParam.UnionCover = s.TransParam.Language, s.TransParam.UnionCover
+	for _, g := range s.Grp {
+		song.Group = append(song.Group, g.kugouSong())
+	}
+	return song
+}
+
+// kugouSongSearch 走 songsearch 这套搜索后端,条目归一成 kugouSong(trans_param.language 同名)。查无结果时
 // 同样回 status=1、error_code=0(实测)。
 func kugouSongSearch(ctx context.Context, keyword string) ([]kugouSong, error) {
 	var out struct {
 		Status    *int `json:"status"`
 		ErrorCode *int `json:"error_code"`
 		Data      struct {
-			Lists []struct {
-				FileHash   string  `json:"FileHash"`
-				SongName   string  `json:"SongName"`
-				SingerName string  `json:"SingerName"`
-				AlbumName  string  `json:"AlbumName"`
-				AlbumID    string  `json:"AlbumID"`
-				Duration   float64 `json:"Duration"`
-				TransParam struct {
-					Language string `json:"language"`
-				} `json:"trans_param"`
-			} `json:"lists"`
+			Lists []kugouSongSearchItem `json:"lists"`
 		} `json:"data"`
 	}
-	u := kugouSongSearchEndpoint + "?keyword=" + kugouEscape(keyword) + "&page=1&pagesize=10&platform=WebFilter"
+	u := kugouSongSearchEndpoint + "?keyword=" + kugouEscape(keyword) + "&page=1&pagesize=" + strconv.Itoa(kugouSearchPageSize) + "&platform=WebFilter"
 	if err := kugouGet(ctx, u, &out); err != nil {
 		return nil, err
 	}
@@ -152,12 +170,7 @@ func kugouSongSearch(ctx context.Context, keyword string) ([]kugouSong, error) {
 	reportEndpointAccepted(pu)
 	songs := make([]kugouSong, 0, len(out.Data.Lists))
 	for _, s := range out.Data.Lists {
-		var song kugouSong
-		song.Hash = strings.ToLower(s.FileHash)
-		song.SongName, song.SingerName, song.AlbumName, song.AlbumID = s.SongName, s.SingerName, s.AlbumName, s.AlbumID
-		song.Duration = s.Duration
-		song.TransParam.Language = s.TransParam.Language
-		songs = append(songs, song)
+		songs = append(songs, s.kugouSong())
 	}
 	return songs, nil
 }

@@ -132,9 +132,8 @@ func TestKugouLyricSkipsCacheWhenKRCDownloadFails(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // 别读到这台机器上酷狗客户端的本地缓存
 	lrc := "[00:01.00]第一句\n[00:02.00]第二句\n[00:03.00]第三句\n[00:04.00]第四句\n"
 	var mu sync.Mutex
-	downloads := 0
 	krcOK := false
-	f := withKugouFake(t, func(target string) (int, string) {
+	f := withKugouFakeReq(t, func(r *http.Request, target string) (int, string) {
 		switch target {
 		case "http://mobilecdn.kugou.com/api/v3/search/song":
 			return http.StatusOK, kgSearchHit
@@ -142,10 +141,9 @@ func TestKugouLyricSkipsCacheWhenKRCDownloadFails(t *testing.T) {
 			return http.StatusOK, `{"status":200,"candidates":[{"id":"1","accesskey":"k"}]}`
 		case "http://lyrics.kugou.com/download", "http://krcs.kugou.com/download":
 			mu.Lock()
-			downloads++
-			n := downloads
+			ok := krcOK
 			mu.Unlock()
-			if n == 1 || krcOK { // 第一次是整行,之后是逐字
+			if r.URL.Query().Get("fmt") == "lrc" || ok {
 				return http.StatusOK, `{"status":200,"content":"` + base64.StdEncoding.EncodeToString([]byte(lrc)) + `"}`
 			}
 			return http.StatusServiceUnavailable, ""
@@ -157,7 +155,7 @@ func TestKugouLyricSkipsCacheWhenKRCDownloadFails(t *testing.T) {
 	}
 	searches := f.count("http://mobilecdn.kugou.com/api/v3/search/song")
 	mu.Lock()
-	downloads, krcOK = 0, true
+	krcOK = true
 	mu.Unlock()
 	kugouLyric(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283)
 	if f.count("http://mobilecdn.kugou.com/api/v3/search/song") == searches {

@@ -127,7 +127,9 @@ const krcDecompressedMaxBytes = 8 << 20
 
 var (
 	krcLineRegex = regexp.MustCompile(`^(\[(\d+),\d+\])(.*)$`)
-	krcWordRegex = regexp.MustCompile(`<(\d+),(\d+),(\d+)>`)
+	// 词始偏移可能是负数(这个字比行首早一点开始,`<-11,116,0>`);只认非负数字的话,这种标记会原样留在逐字数据和
+	// 压出来的整行里。
+	krcWordRegex = regexp.MustCompile(`<(-?\d+),(\d+),(\d+)>`)
 )
 
 // krcToYRC 把解密后的酷狗 KRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。
@@ -163,8 +165,8 @@ func krcToYRC(krc string) string {
 		}
 		body := krcWordRegex.ReplaceAllStringFunc(m[3], func(match string) string {
 			wm := krcWordRegex.FindStringSubmatch(match)
-			wordStart, _ := strconv.Atoi(wm[1]) // 已经过 \d+ 校验,不会解析失败
-			return fmt.Sprintf("(%d,%s,%s)", lineStart+wordStart, wm[2], wm[3])
+			wordStart, _ := strconv.Atoi(wm[1]) // 已经过 -?\d+ 校验,不会解析失败
+			return fmt.Sprintf("(%d,%s,%s)", max(lineStart+wordStart, 0), wm[2], wm[3])
 		})
 		lines[i] = m[1] + body
 	}
@@ -301,8 +303,19 @@ type kugouSong struct {
 	// ("国语"/"粤语",如周杰伦《稻香》→"国语"、Beyond《海阔天空》→"粤语")。
 	TransParam struct {
 		Language string `json:"language"`
+		// UnionCover:这首歌的封面模板(带 {size}),多数是专辑封面;没有专辑封面的歌常给歌手头像,见 kugouSongCoverURL。
+		UnionCover string `json:"union_cover"`
 	} `json:"trans_param"`
+	// Group:同一首歌挂在别的专辑(合辑、单曲、原专辑)下的条目,不另占结果的名次。
+	Group []kugouSong `json:"group"`
 }
+
+// kugouSearchPageSize / kugouSearchPrimaryItems:搜歌一页取 kugouSearchPageSize 条(跟 10 条一样快,同一个请求),
+// 挑选先只看前 kugouSearchPrimaryItems 条;一条都收不下时,整页和每条的 Group 才交给 kugouFallbackSong。
+const (
+	kugouSearchPageSize     = 30
+	kugouSearchPrimaryItems = 10
+)
 
 // kugouCanonicalLanguage 把酷狗 trans_param.language 的人类可读字符串折算成
 // lyricCandidate.language 的取值,未识别的取值一律返回空串,不外推。
@@ -332,12 +345,12 @@ func kugouSearchRejected(status, errcode *int) bool {
 	return (status != nil && *status != 1) || (errcode != nil && *errcode != 0)
 }
 
-// resolveKugouLyric:①搜索拿 hash/时长(歌手名+歌名都要对上,同 netease/qq 的身份校验);
+// resolveKugouLyric:①搜索拿 hash/时长(歌手名+歌名都要对上,同 netease/qq 的身份校验;每个检索词的前
+// kugouSearchPrimaryItems 条都挑不出时,交给 kugouFallbackSong);
 // ②用 hash+时长 查 KRC 歌词库候选(krcs.kugou.com,官方推荐候选优先,取第一条);
-// ③用候选的 id+accesskey 下载两次(lyrics.kugou.com,分别 fmt=lrc 整行、fmt=krc 逐字,
-// 每一步的备用主机 / 备用后端见 kugoufallback.go;
-// 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃;krc 单独失败不影响 lrc
-// (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
+// ③用候选的 id+accesskey 先下载 fmt=krc 逐字,整行歌词从它压出来(krcToLRC;fmt=lrc 那份带时间戳的行跟它
+// 逐行相同,头部多几行酷狗自己的标签);KRC 没问成、解不开或压不出带时间戳的整行,才下载 fmt=lrc。
+// 每一步的备用主机 / 备用后端见 kugoufallback.go。整行拿不到则整体放弃。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
 func resolveKugouLyric(ctx context.Context, artist, title, album string, durationSecs float64) kugouResult {
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
@@ -346,77 +359,164 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测
 	// 同一个 hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
 	var chosen *kugouSong
+	var pool []kugouSong
+	searched := false
 	for _, q := range searchTitleVariants(title) {
 		songs, ok := kugouSearchSongs(ctx, artist+" "+q)
 		if !ok {
 			continue
 		}
+		searched = true
+		primary := songs[:min(len(songs), kugouSearchPrimaryItems)]
 		if lyricSearchItemsTap != nil {
-			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, songs)
+			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, primary)
 		}
-		chosen = pickKugouSearchCandidate(songs, artist, title, album, durationSecs)
+		chosen = pickKugouSearchCandidate(primary, artist, title, album, durationSecs)
 		if chosen != nil {
 			break
 		}
+		pool = kugouMergeSongs(pool, songs)
 	}
 	if chosen == nil {
-		return kugouResult{}
+		chosen = kugouFallbackSong(pool, artist, title, album, durationSecs)
+	}
+	if chosen == nil {
+		if !searched {
+			return kugouResult{}
+		}
+		return kugouKeywordLyric(ctx, artist, title, durationSecs, nil)
 	}
 	durMs := int64(chosen.Duration * 1000)
 	if durMs <= 0 && durationSecs > 0 {
 		durMs = int64(durationSecs * 1000)
 	}
 	var kr struct {
-		Candidates []struct {
-			ID        string `json:"id"`
-			AccessKey string `json:"accesskey"`
-		} `json:"candidates"`
+		Candidates []kugouLyricCandidate `json:"candidates"`
 	}
 	krcURL := fmt.Sprintf("http://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=%s&duration=%d&hash=%s",
 		kugouEscape(artist+" - "+title), durMs, chosen.Hash)
-	if err := kugouGet(ctx, krcURL, &kr); err != nil || len(kr.Candidates) == 0 {
+	if err := kugouGet(ctx, krcURL, &kr); err != nil {
 		return kugouResult{}
+	}
+	if len(kr.Candidates) == 0 {
+		return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
 	}
 	c := kr.Candidates[0]
 	if c.ID == "" || c.AccessKey == "" {
 		return kugouResult{}
 	}
-	var dl struct {
-		Content string `json:"content"`
-	}
-	dlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=lrc&charset=utf8", c.ID, c.AccessKey)
-	if err := kugouGet(ctx, dlURL, &dl); err != nil || dl.Content == "" {
+	// 第一条候选答了却没有能用的整行时,多半是酷狗给没词的歌挂的那条占位(「The Seasons Op. 37b: June - Barcarole」,
+	// 正文只有「纯音乐,请欣赏」),跟候选为空一样再不带 hash 查一次。
+	got, ok, answered := kugouFetchLyric(ctx, c.ID, c.AccessKey)
+	if !ok {
+		if answered {
+			return kugouKeywordLyric(ctx, artist, title, durationSecs, chosen)
+		}
 		return kugouResult{}
 	}
-	raw, err := base64.StdEncoding.DecodeString(dl.Content)
-	if err != nil {
-		return kugouResult{}
-	}
-	lrc := string(raw)
-	if !isTimedLRC(lrc) {
-		return kugouResult{}
-	}
+	return kugouResult{lrc: got.lrc, yrc: got.yrc, tr: got.tr, roma: got.roma, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouSongCoverURL(ctx, chosen)}
+}
 
-	var yrc, tr, roma string
+// kugouLyricCandidate 是歌词库的一条候选(krcs / lyrics 两个主机的 /search)。
+type kugouLyricCandidate struct {
+	ID        string `json:"id"`
+	AccessKey string `json:"accesskey"`
+	Song      string `json:"song"`
+	Singer    string `json:"singer"`
+	Duration  int    `json:"duration"` // 毫秒
+}
+
+// kugouFetched 是一次下载拿到的整行、逐字、译文、罗马音。
+type kugouFetched struct{ lrc, yrc, tr, roma string }
+
+// kugouFetchLyric 按歌词候选下载:先 fmt=krc,整行用 krcToLRC 从它压出来(fmt=lrc 那份带时间戳的行跟它逐行相同);
+// KRC 没问成、解不开或压不出带时间戳的整行,才下 fmt=lrc。整行拿不到 ok=false;answered 说的是 fmt=lrc 那次服务端
+// 答了(只是没有能用的整行),不是没问成。
+func kugouFetchLyric(ctx context.Context, id, accessKey string) (got kugouFetched, ok, answered bool) {
 	var krcDl struct {
 		Content string `json:"content"`
 	}
-	krcDlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8", c.ID, c.AccessKey)
-	err = kugouGet(ctx, krcDlURL, &krcDl)
-	if err != nil {
+	var lang, body string
+	krcDlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8", id, accessKey)
+	if err := kugouGet(ctx, krcDlURL, &krcDl); err != nil {
 		noteLyricSubFetchFailure(ctx)
-	}
-	if err == nil && krcDl.Content != "" {
+	} else if krcDl.Content != "" {
 		if decrypted := decryptKRC(krcDl.Content); decrypted != "" {
 			// `[language:<base64>]` 那一行先摘出来(它是译文/罗马音两轨的载体,8~12KB 的
 			// base64,原样留在逐字数据里只是一行 App 读不懂的垃圾、还会随 .yrc 导出),剩余
 			// 正文才进 krcToYRC;两轨按 KRC 行序号对齐行始时间戳,见 krcLanguageTracks。
-			lang, body := splitKRCLanguageLine(decrypted)
-			yrc = krcToYRC(body)
-			tr, roma = krcLanguageTracks(lang, body)
+			lang, body = splitKRCLanguageLine(decrypted)
 		}
 	}
-	return kugouResult{lrc: lrc, yrc: yrc, tr: tr, roma: roma, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouAlbumCoverURL(ctx, chosen.AlbumID)}
+	got.lrc = krcToLRC(body)
+	if !isTimedLRC(got.lrc) {
+		var dl struct {
+			Content string `json:"content"`
+		}
+		dlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=lrc&charset=utf8", id, accessKey)
+		if err := kugouGet(ctx, dlURL, &dl); err != nil {
+			return kugouFetched{}, false, false
+		}
+		raw, err := base64.StdEncoding.DecodeString(dl.Content)
+		if err != nil || !isTimedLRC(string(raw)) {
+			return kugouFetched{}, false, true
+		}
+		got.lrc = string(raw)
+	}
+	// KRC 里一条带逐字的计时行都没有(只剩头部标签)时不交逐字:这种壳转出来只有标签行,usableWordTiming 量不出
+	// 它的结束时刻,会当成有逐字放行。
+	if len(krcLineStarts(body)) > 0 {
+		got.yrc = krcToYRC(body)
+		got.tr, got.roma = krcLanguageTracks(lang, body)
+	}
+	return got, true, true
+}
+
+// kugouKeywordLyric:按 hash 查不到能用的歌词、或者搜歌挑不出曲目时,不带 hash、按「歌手 - 歌名」加本地时长再查一次
+// 歌词库(同一首歌别的上传常挂着词),候选过 kugouKeywordCandidate 才下载。本地时长未知不查(没有时长闸,这种查法
+// 会挑成片段或别的现场版)。主机先问 krcs(不带 hash 时 lyrics 那台有时回得少,按 hash 查两台一致)。挑中的曲目
+// (chosen)时长也跟本地差 kugouFallbackDurationTolerance 以内时,身份(歌名 / 专辑 / 封面)用它;否则用候选自己的
+// (挑中的是另一个版本,词却是这一版的)。见 09 章决策 148。
+func kugouKeywordLyric(ctx context.Context, artist, title string, durationSecs float64, chosen *kugouSong) kugouResult {
+	if durationSecs <= 0 {
+		return kugouResult{}
+	}
+	var kr struct {
+		Candidates []kugouLyricCandidate `json:"candidates"`
+	}
+	u := fmt.Sprintf("http://krcs.kugou.com/search?ver=1&man=yes&client=pc&keyword=%s&duration=%d&hash=",
+		kugouEscape(artist+" - "+title), int64(durationSecs*1000))
+	if err := kugouGet(ctx, u, &kr); err != nil {
+		return kugouResult{}
+	}
+	c, found := kugouKeywordCandidate(kr.Candidates, artist, title, durationSecs)
+	if !found {
+		return kugouResult{}
+	}
+	got, ok, _ := kugouFetchLyric(ctx, c.ID, c.AccessKey)
+	if !ok {
+		return kugouResult{}
+	}
+	r := kugouResult{lrc: got.lrc, yrc: got.yrc, tr: got.tr, roma: got.roma, title: c.Song, artist: c.Singer, durationSecs: float64(c.Duration) / 1000}
+	if chosen != nil && durationsWithin(chosen.Duration, durationSecs, kugouFallbackDurationTolerance) {
+		r.title, r.artist, r.album, r.durationSecs = chosen.SongName, chosen.SingerName, chosen.AlbumName, chosen.Duration
+		r.language = kugouCanonicalLanguage(chosen.TransParam.Language)
+		r.cover = kugouSongCoverURL(ctx, chosen)
+	}
+	return r
+}
+
+// kugouKeywordCandidate 在不带 hash 查回的歌词候选里按顺序挑第一条:歌名过闸、歌手过 lyricSourceArtistMatches、歌名的
+// 版本限定词一致(候选没有专辑名,只比歌名)、自报时长跟本地差 kugouFallbackDurationTolerance 以内。纯函数,便于单测。
+func kugouKeywordCandidate(cands []kugouLyricCandidate, artist, title string, durationSecs float64) (kugouLyricCandidate, bool) {
+	for _, c := range cands {
+		if c.ID == "" || c.AccessKey == "" || !lyricTitleAccepted(c.Song, title) || !lyricSourceArtistMatches(c.Singer, artist) ||
+			versionTagsMismatch(title, "", c.Song, "") || !durationsWithin(float64(c.Duration)/1000, durationSecs, kugouFallbackDurationTolerance) {
+			continue
+		}
+		return c, true
+	}
+	return kugouLyricCandidate{}, false
 }
 
 // pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。
@@ -440,6 +540,45 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 //
 // 只有一条过闸时四个键全部无事发生,跟旧行为逐位一致。
 func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, durationSecs float64) *kugouSong {
+	best, byTriangle := kugouRankSongs(songs, title, album, durationSecs, func(s *kugouSong) (ok, byTriangle bool) {
+		return kugouOriginalGate(s, artist, title, album, durationSecs)
+	})
+	// 日志只报**最终选中**的那条(改成全页排序之前,triangle 一接受就等于选中,日志语义
+	// 是一回事;现在 triangle 接受的候选也可能被排序比下去,不选中就不该说 accepted)。
+	if best != nil && byTriangle {
+		log.Printf("lyrics: kugou accepted %q by recording triangle (local artist %q vs source %q; album %q vs %q; dur %.3f vs %.3f)",
+			best.SongName, artist, best.SingerName, album, best.AlbumName, durationSecs, best.Duration)
+	}
+	return best
+}
+
+// kugouOriginalGate 是 pickKugouSearchCandidate 的闸门:歌名过闸,歌手过 lyricSourceArtistMatches,不过时看三角判据
+// (byTriangle=true)。
+func kugouOriginalGate(s *kugouSong, artist, title, album string, durationSecs float64) (ok, byTriangle bool) {
+	// 判定用的始终是**本地原样标题** title,不是搜索词——放宽的只是"拿什么去搜",
+	// 不是"什么算匹配"。
+	// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
+	// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
+	// 服务端明明召回成功的正主原地拒掉。
+	if !lyricTitleAccepted(s.SongName, title) {
+		return false, false
+	}
+	if lyricSourceArtistMatches(s.SingerName, artist) {
+		return true, false
+	}
+	// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
+	// = 同一次录音。修的是"艺名与本名 / 乐队名与成员名"这类连分隔符都没有、
+	// 段集交集档和别名轮都够不到的署名分歧(实测案例见
+	// lyricRecordingTriangleMatches 的注释)。
+	if lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration, title, album, durationSecs) {
+		return true, true
+	}
+	return false, false
+}
+
+// kugouRankSongs 在 accept 放行的条目里按 pickKugouSearchCandidate 头注的四个排序键挑一条;没有 hash 的跳过。
+// 返回选中那条的 byTriangle。
+func kugouRankSongs(songs []kugouSong, title, album string, durationSecs float64, accept func(s *kugouSong) (ok, byTriangle bool)) (*kugouSong, bool) {
 	const (
 		tierExact = iota
 		tierStripped
@@ -453,26 +592,12 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 	bestByTriangle, bestFits := false, false
 	for i := range songs {
 		s := &songs[i]
-		// 判定用的始终是**本地原样标题** title,不是搜索词——放宽的只是"拿什么去搜",
-		// 不是"什么算匹配"。
-		// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
-		// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
-		// 服务端明明召回成功的正主原地拒掉——酷狗没有 loose 兜底,这一闸拒完整源就空了。
-		if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) {
+		if s.Hash == "" {
 			continue
 		}
-		byTriangle := false
-		if !lyricSourceArtistMatches(s.SingerName, artist) {
-			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
-			// = 同一次录音。修的是"艺名与本名 / 乐队名与成员名"这类连分隔符都没有、
-			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
-			// lyricRecordingTriangleMatches 的注释)。酷狗是各源里唯一**已经把正主
-			// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
-			if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
-				title, album, durationSecs) {
-				continue
-			}
-			byTriangle = true
+		ok, byTriangle := accept(s)
+		if !ok {
+			continue
 		}
 		tier := tierAccepted
 		switch {
@@ -506,13 +631,119 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 			best, bestTier, bestAlbum, bestDur, bestByTriangle, bestFits = s, tier, asc, dd, byTriangle, fits
 		}
 	}
-	// 日志只报**最终选中**的那条(改成全页排序之前,triangle 一接受就等于选中,日志语义
-	// 是一回事;现在 triangle 接受的候选也可能被排序比下去,不选中就不该说 accepted)。
-	if best != nil && bestByTriangle {
-		log.Printf("lyrics: kugou accepted %q by recording triangle (local artist %q vs source %q; album %q vs %q; dur %.3f vs %.3f)",
-			best.SongName, artist, best.SingerName, album, best.AlbumName, durationSecs, best.Duration)
+	return best, bestByTriangle
+}
+
+// kugouFallbackDurationTolerance:后备闸里自报时长差多少以内才收(同 qqFallbackDurationTolerance)。
+const kugouFallbackDurationTolerance = 0.03
+
+// kugouAlbumDurationMaxDiffSecs:kugouFallbackSong ④ 歌名对不上时,自报时长跟本地差多少秒以内才收。
+const kugouAlbumDurationMaxDiffSecs = 1.0
+
+// kugouFallbackSong 是每个检索词的前 kugouSearchPrimaryItems 条都挑不出时的后备,在 pool(各次搜索的整页加每条的
+// Group,见 kugouMergeSongs)里按顺序试,前一档有结果就用它,每一档都过版本闸(versionTagsMismatch,按完整的本地
+// 歌名判):
+//
+//	① 原来的闸门(kugouOriginalGate):正主排在前 kugouSearchPrimaryItems 条以后,或者只挂在某条的 Group 里。
+//	② 歌手名一个包含另一个(looseContains:酷狗的「关浩德Walter」「雅MIYAVI」对本地的「关浩德」「MIYAVI」):歌名
+//	   过闸,自报时长差在 kugouFallbackDurationTolerance 以内;本地时长未知时改要求专辑对得上(albumScore ≥ 100)。
+//	③ 歌名的「 - 尾段」写法(dashTailAsBracket):酷狗一侧改成括号再过歌名闸,自报时长要在 sourceDurationFits
+//	   以内;本地一侧(「X - 电视剧《Y》主题曲」)也改成括号,自报时长差要在 kugouFallbackDurationTolerance 以内。
+//	   歌手过 lyricSourceArtistMatches 或 looseContains。
+//	④ 歌名对不上(另一种文字的原名、异体字):歌手(lyricSourceArtistMatches)和专辑(albumScore ≥ 100)对得上、
+//	   自报时长跟本地差 kugouAlbumDurationMaxDiffSecs 以内,而且 pool 里只有这一条。
+//
+// ①～③ 有几条放行时按 kugouRankSongs 排。见 09 章决策 148。
+func kugouFallbackSong(pool []kugouSong, artist, title, album string, durationSecs float64) *kugouSong {
+	versionOK := func(s *kugouSong) bool { return !versionTagsMismatch(title, album, s.SongName, s.AlbumName) }
+	near := func(s *kugouSong) bool {
+		return durationsWithin(s.Duration, durationSecs, kugouFallbackDurationTolerance)
 	}
-	return best
+	gates := []func(s *kugouSong) (bool, bool){
+		func(s *kugouSong) (bool, bool) {
+			ok, byTriangle := kugouOriginalGate(s, artist, title, album, durationSecs)
+			return ok && versionOK(s), byTriangle
+		},
+		func(s *kugouSong) (bool, bool) {
+			if !lyricTitleAccepted(s.SongName, title) || !looseContains(s.SingerName, artist) || !versionOK(s) {
+				return false, false
+			}
+			if durationSecs > 0 {
+				return near(s), false
+			}
+			return albumScore(s.AlbumName, album) >= 100, false
+		},
+		func(s *kugouSong) (bool, bool) {
+			if !(lyricSourceArtistMatches(s.SingerName, artist) || looseContains(s.SingerName, artist)) || !versionOK(s) {
+				return false, false
+			}
+			name, local := dashTailAsBracket(s.SongName), dashTailAsBracket(title)
+			switch {
+			case name != s.SongName && lyricTitleAccepted(name, title):
+				return sourceDurationFits(durationSecs, s.Duration), false
+			case local != title && lyricTitleAccepted(name, local):
+				return near(s), false
+			}
+			return false, false
+		},
+	}
+	for _, gate := range gates {
+		if best, _ := kugouRankSongs(pool, title, album, durationSecs, gate); best != nil {
+			return best
+		}
+	}
+	return kugouAlbumDurationSong(pool, artist, title, album, durationSecs)
+}
+
+// kugouAlbumDurationSong 是 kugouFallbackSong 的 ④。
+func kugouAlbumDurationSong(pool []kugouSong, artist, title, album string, durationSecs float64) *kugouSong {
+	if album == "" || durationSecs <= 0 {
+		return nil
+	}
+	var hit *kugouSong
+	for i := range pool {
+		s := &pool[i]
+		if s.Hash == "" || s.Duration <= 0 || math.Abs(s.Duration-durationSecs) > kugouAlbumDurationMaxDiffSecs ||
+			!lyricSourceArtistMatches(s.SingerName, artist) || albumScore(s.AlbumName, album) < 100 ||
+			versionTagsMismatch(title, album, s.SongName, s.AlbumName) {
+			continue
+		}
+		if hit != nil {
+			return nil
+		}
+		hit = s
+	}
+	return hit
+}
+
+// kugouMergeSongs 把 songs 和每条的 Group 里 pool 还没有的条目(按 hash)接在 pool 后面。
+func kugouMergeSongs(pool, songs []kugouSong) []kugouSong {
+	seen := make(map[string]bool, len(pool))
+	for _, s := range pool {
+		seen[s.Hash] = true
+	}
+	add := func(s kugouSong) {
+		if s.Hash != "" && !seen[s.Hash] {
+			seen[s.Hash] = true
+			pool = append(pool, s)
+		}
+	}
+	for _, s := range songs {
+		add(s)
+		for _, g := range s.Group {
+			add(g)
+		}
+	}
+	return pool
+}
+
+// kugouSongCoverURL:搜索结果自带的封面(trans_param.union_cover)在 stdmusic 路径下就是专辑封面,跟 album/info
+// 给的是同一张,直接用;别的(没有专辑封面的歌常给 singerimg 下的歌手头像)或者没有,才按专辑 ID 问 album/info。
+func kugouSongCoverURL(ctx context.Context, s *kugouSong) string {
+	if u := s.TransParam.UnionCover; strings.Contains(u, "/stdmusic/") {
+		return kugouCoverFromTemplate(u)
+	}
+	return kugouAlbumCoverURL(ctx, s.AlbumID)
 }
 
 // kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面。响应的
@@ -534,7 +765,12 @@ func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
 	if err := kugouGet(ctx, u, &out); err != nil || out.Data.ImgURL == "" {
 		return ""
 	}
-	cover := strings.ReplaceAll(out.Data.ImgURL, "{size}", "0")
+	return kugouCoverFromTemplate(out.Data.ImgURL)
+}
+
+// kugouCoverFromTemplate 把酷狗的封面模板换成能直接访问的地址:{size} 填 0 拿原图,http 换成 https。
+func kugouCoverFromTemplate(tmpl string) string {
+	cover := strings.ReplaceAll(tmpl, "{size}", "0")
 	// 现象是"酷狗的没有返回封面"(截图里酷狗那条候选是空白占位图,
 	// netease 那条却有缩略图):酷我/acg 的这个接口原样返回的是 "http://" 前缀,collector
 	// 这边发请求不受影响(没有 ATS 限制),但这个 URL 之后会原样进 lyricCandidate.cover、

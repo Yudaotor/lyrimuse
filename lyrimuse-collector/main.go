@@ -400,6 +400,8 @@ func main() {
 	// 必须排在空白词条归并**之前**:残缺的两数字词条(qrcToYRC 旧实现漏转的)会把相邻的
 	// 空白词条"粘住",归并器切不出来;先把词条修成标准三数字形态,下一步才轮得到它们。
 	startupStep("migrateQRCLeftoverTokens", migrateQRCLeftoverTokens)
+	// 酷狗逐字里漏转的负偏移标记(见 krcnegativeoffsets.go),同样排在空白词条归并之前。
+	startupStep("migrateKRCNegativeOffsets", migrateKRCNegativeOffsets)
 	startupStep("migrateYRCWhitespaceTokens", migrateYRCWhitespaceTokens)
 	// 行级时间轴与逐字轴打架时以逐字轴为准重挂(见 lyricstimeline.go)。
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会

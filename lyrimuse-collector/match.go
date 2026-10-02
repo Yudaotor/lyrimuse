@@ -446,6 +446,14 @@ func sourceDurationFits(localSecs, sourceSecs float64) bool {
 	return math.Abs(localSecs-sourceSecs)/larger <= sourceDurationMismatchTolerance
 }
 
+// durationsWithin:两边时长都已知,且差值占较长那个的比例在 tol 以内。跟 sourceDurationFits 不同,哪边未知都不算。
+func durationsWithin(a, b, tol float64) bool {
+	if a <= 0 || b <= 0 {
+		return false
+	}
+	return math.Abs(a-b)/math.Max(a, b) <= tol
+}
+
 // scoreLyricCandidate 给一份候选歌词打分,越高越可信;返回负数表示直接判定无效——不管
 // 别的候选分数多低,都不能选一份未通过基本校验的候选。三层基本校验(时间戳密度/语言/
 // 是否只有credit)都通过后,依次看:

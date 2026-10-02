@@ -63,6 +63,10 @@ const (
 	// v2:修不动的(还剩两数字词条的)清掉逐字、交给扫库 / 重评重新取,见 qrcleftovertokens.go。
 	migrationQRCLeftoverTokens        = "qrc_leftover_tokens"
 	migrationQRCLeftoverTokensVersion = 2
+	// migrationKRCNegativeOffsets:修 krcToYRC 旧实现漏转的负偏移逐字标记(krcnegativeoffsets.go)。源头已经认负号,
+	// 不会再产生,所以是一次性的。
+	migrationKRCNegativeOffsets        = "krc_negative_offsets"
+	migrationKRCNegativeOffsetsVersion = 1
 
 	// migrationYRCWhitespace:纯空白词条归并(yrcwhitespace.go)。
 	// 它是在 qrcToYRC / krcToYRC 两个出口都补上源头归并**之后**才够格加水位闸的 ——
