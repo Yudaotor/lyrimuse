@@ -297,145 +297,82 @@ func TestYtmusicExtractVisitorID(t *testing.T) {
 	}
 }
 
-// 现象是"批量解析时 musixmatch 交出候选的比例远低于单首查询"——根因是并发
-// goroutine 各自判定"没有可用凭据"就都去发一次网络请求,YouTube 首页有同样的隐患
-// (抓 visitor id 也是一次网络请求)。这里从一开始就按单飞锁写,这条测试直接照抄
-// musixmatch_test.go 的 TestMusixmatchEnsureTokenSingleFlight,验证同一个机制。
-func TestYtmusicEnsureVisitorIDSingleFlight(t *testing.T) {
+// resetYtmusicRegionState 清掉 visitor id、地区检查的结论和失败原因,测试结束时还原。
+func resetYtmusicRegionState(t *testing.T) {
+	t.Helper()
 	ytmusicVisitorMu.Lock()
-	ytmusicVisitorID = ""
-	ytmusicVisitorFailedAt = time.Time{}
+	savedVisitor, savedAt, savedBlocked := ytmusicVisitorID, ytmusicRegionCheckedAt, ytmusicRegionBlocked
+	ytmusicVisitorID, ytmusicRegionCheckedAt, ytmusicRegionBlocked = "", time.Time{}, false
 	ytmusicVisitorMu.Unlock()
+	savedReason, savedFetch := ytmusicLastFailureReasonNow(), ytmusicDoFetchVisitorID
+	ytmusicSetLastFailureReason("")
+	t.Cleanup(func() {
+		ytmusicVisitorMu.Lock()
+		ytmusicVisitorID, ytmusicRegionCheckedAt, ytmusicRegionBlocked = savedVisitor, savedAt, savedBlocked
+		ytmusicVisitorMu.Unlock()
+		ytmusicSetLastFailureReason(savedReason)
+		ytmusicDoFetchVisitorID = savedFetch
+	})
+}
 
-	orig := ytmusicDoFetchVisitorID
-	defer func() { ytmusicDoFetchVisitorID = orig }()
-
+// 查首页是单飞的:批量解析时同时搜不到的那几首只查一次。
+func TestYtmusicCheckRegionSingleFlight(t *testing.T) {
+	resetYtmusicRegionState(t)
 	var calls int32
 	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
 		atomic.AddInt32(&calls, 1)
 		time.Sleep(30 * time.Millisecond)
 		return "visitor-A"
 	}
-
 	const n = 16
-	var wg sync.WaitGroup
-	results := make([]string, n)
-	wg.Add(n)
-	for i := 0; i < n; i++ {
-		go func(i int) {
-			defer wg.Done()
-			results[i] = ytmusicEnsureVisitorID(context.Background())
-		}(i)
-	}
-	wg.Wait()
-
-	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("单飞失效: %d 个并发调用触发了 %d 次真实抓取(应为 1)", n, got)
-	}
-	for i, r := range results {
-		if r != "visitor-A" {
-			t.Errorf("goroutine %d 拿到的 visitor id 不对: 实际 %q", i, r)
-		}
-	}
-}
-
-func TestYtmusicEnsureVisitorIDSkipsFetchWhenCached(t *testing.T) {
-	ytmusicVisitorMu.Lock()
-	ytmusicVisitorID = "already-have-one"
-	ytmusicVisitorMu.Unlock()
-
-	orig := ytmusicDoFetchVisitorID
-	defer func() { ytmusicDoFetchVisitorID = orig }()
-	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
-		t.Error("已经有值了,不该去真的抓")
-		return "should-not-happen"
-	}
-
-	if got := ytmusicEnsureVisitorID(context.Background()); got != "already-have-one" {
-		t.Errorf("应该直接返回缓存值,实际 %q", got)
-	}
-}
-
-// 抓取失败(返回空串)不该"poison"住——过了 ytmusicVisitorRetryAfter 必须能重试,不能因为一次没抓到
-// 就让这一路永远死掉(进程是长驻的,一次瞬时网络问题不该拖垮整个运行周期)。窗口之内不重抓:
-// 首页卡在重定向循环时一次失败要 4～5 秒,每轮都重抓会把整轮检索拖到截止。
-func TestYtmusicEnsureVisitorIDRetriesAfterFailure(t *testing.T) {
-	ytmusicVisitorMu.Lock()
-	ytmusicVisitorID = ""
-	ytmusicVisitorFailedAt = time.Time{}
-	ytmusicVisitorMu.Unlock()
-
-	orig := ytmusicDoFetchVisitorID
-	defer func() { ytmusicDoFetchVisitorID = orig }()
-	var calls int32
-	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
-		n := atomic.AddInt32(&calls, 1)
-		if n == 1 {
-			return "" // 第一次抓失败
-		}
-		return "visitor-B"
-	}
-
-	if got := ytmusicEnsureVisitorID(context.Background()); got != "" {
-		t.Fatalf("第一次应该失败返回空串,实际 %q", got)
-	}
-	if got := ytmusicEnsureVisitorID(context.Background()); got != "" {
-		t.Fatalf("窗口之内不该重抓,实际 %q", got)
-	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("窗口之内只该抓一次,实际 %d", got)
-	}
-	ytmusicVisitorMu.Lock()
-	ytmusicVisitorFailedAt = time.Now().Add(-ytmusicVisitorRetryAfter - time.Second)
-	ytmusicVisitorMu.Unlock()
-	if got := ytmusicEnsureVisitorID(context.Background()); got != "visitor-B" {
-		t.Fatalf("过了窗口应该重试成功,实际 %q", got)
-	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
-		t.Fatalf("应该真的抓了两次,实际 %d", got)
-	}
-}
-
-// 首页失败时,在单飞锁上排队的那几个不跟着各抓一次:同时在跑的几首解析只该付一次失败的耗时。
-func TestYtmusicEnsureVisitorIDQueuedCallersSkipAfterFailure(t *testing.T) {
-	ytmusicVisitorMu.Lock()
-	ytmusicVisitorID = ""
-	ytmusicVisitorFailedAt = time.Time{}
-	ytmusicVisitorMu.Unlock()
-
-	orig := ytmusicDoFetchVisitorID
-	defer func() { ytmusicDoFetchVisitorID = orig }()
-	var calls int32
-	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
-		atomic.AddInt32(&calls, 1)
-		time.Sleep(30 * time.Millisecond)
-		return ""
-	}
-	const n = 8
 	var wg sync.WaitGroup
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func() {
 			defer wg.Done()
-			ytmusicEnsureVisitorID(context.Background())
+			ytmusicCheckRegion(context.Background())
 		}()
 	}
 	wg.Wait()
 	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("%d 个并发调用在首页失败时触发了 %d 次抓取(应为 1)", n, got)
+		t.Fatalf("单飞失效: %d 个并发调用查了 %d 次首页(应为 1)", n, got)
+	}
+	if got := ytmusicCachedVisitorID(); got != "visitor-A" {
+		t.Errorf("首页里的 visitor id 该存下: %q", got)
 	}
 }
 
-// 调用方自己取消(一轮检索截止 / 用户停止搜索)不算抓取失败,不能让后面的检索跟着放弃。
-func TestYtmusicEnsureVisitorIDCancelDoesNotBackOff(t *testing.T) {
-	ytmusicVisitorMu.Lock()
-	ytmusicVisitorID = ""
-	ytmusicVisitorFailedAt = time.Time{}
-	ytmusicVisitorMu.Unlock()
-
-	orig := ytmusicDoFetchVisitorID
-	defer func() { ytmusicDoFetchVisitorID = orig }()
+// 查过之后 ytmusicRegionRecheck 之内不再查(首页慢、常超时,没问成也算查过);过了窗口再查。
+func TestYtmusicCheckRegionRecheckWindow(t *testing.T) {
+	resetYtmusicRegionState(t)
+	var calls int32
 	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
+		atomic.AddInt32(&calls, 1)
+		return ""
+	}
+	ytmusicCheckRegion(context.Background())
+	ytmusicCheckRegion(context.Background())
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("窗口之内只该查一次,实际 %d", got)
+	}
+	if ytmusicRegionBlockedNow(time.Now()) {
+		t.Error("没问成、也没认出提示页,不该判成地区受限")
+	}
+	ytmusicVisitorMu.Lock()
+	ytmusicRegionCheckedAt = time.Now().Add(-ytmusicRegionRecheck - time.Second)
+	ytmusicVisitorMu.Unlock()
+	ytmusicCheckRegion(context.Background())
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("过了窗口该再查一次,实际 %d", got)
+	}
+}
+
+// 调用方自己取消(一轮检索截止 / 用户停止搜索)不算查过,下一首照常查。
+func TestYtmusicCheckRegionCancelDoesNotCount(t *testing.T) {
+	resetYtmusicRegionState(t)
+	var calls int32
+	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
+		atomic.AddInt32(&calls, 1)
 		if ctx.Err() != nil {
 			return ""
 		}
@@ -443,11 +380,56 @@ func TestYtmusicEnsureVisitorIDCancelDoesNotBackOff(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if got := ytmusicEnsureVisitorID(cancelled); got != "" {
-		t.Fatalf("已取消的这一轮拿不到,实际 %q", got)
+	ytmusicCheckRegion(cancelled)
+	ytmusicCheckRegion(context.Background())
+	if got := atomic.LoadInt32(&calls); got != 2 || ytmusicCachedVisitorID() != "visitor-C" {
+		t.Fatalf("取消不该挡住下一次: 查了 %d 次, visitor %q", got, ytmusicCachedVisitorID())
 	}
-	if got := ytmusicEnsureVisitorID(context.Background()); got != "visitor-C" {
-		t.Fatalf("取消不该挡住下一轮,实际 %q", got)
+}
+
+// 首页是地区限制提示页:记成受限(这段时间整源不发请求)、失败原因记 lyricfind_region_restricted;之后再查拿得到
+// visitor id 就撤掉。窗口过了不再算受限。
+func TestYtmusicCheckRegionBlocked(t *testing.T) {
+	resetYtmusicRegionState(t)
+	page := "<html>YouTube Music is not available in your area</html>"
+	ytmusicDoFetchVisitorID = func(ctx context.Context) string { return ytmusicVisitorFromHome(page) }
+	ytmusicCheckRegion(context.Background())
+	if !ytmusicRegionBlockedNow(time.Now()) || ytmusicLastFailureReasonNow() != lyricFailureReasonLyricFindRegionRestricted {
+		t.Fatalf("提示页该记成受限: blocked=%v reason=%q", ytmusicRegionBlockedNow(time.Now()), ytmusicLastFailureReasonNow())
+	}
+	if ytmusicRegionBlockedNow(time.Now().Add(ytmusicRegionRecheck + time.Minute)) {
+		t.Error("过了窗口不该再算受限")
+	}
+	page = `<script>ytcfg.set({"VISITOR_DATA":"abc123=="});</script>`
+	ytmusicVisitorMu.Lock()
+	ytmusicRegionCheckedAt = time.Time{}
+	ytmusicVisitorMu.Unlock()
+	ytmusicCheckRegion(context.Background())
+	if ytmusicRegionBlockedNow(time.Now()) || ytmusicLastFailureReasonNow() != "" || ytmusicCachedVisitorID() != "abc123==" {
+		t.Errorf("拿到 visitor id 该撤掉受限: blocked=%v reason=%q visitor=%q", ytmusicRegionBlockedNow(time.Now()), ytmusicLastFailureReasonNow(), ytmusicCachedVisitorID())
+	}
+}
+
+// 应答里的 responseContext.visitorData:还没有 visitor id 时存下第一处,有了不换。
+func TestYtmusicNoteVisitorData(t *testing.T) {
+	resetYtmusicRegionState(t)
+	ytmusicNoteVisitorData([]byte(`{"responseContext":{"visitorData":"Cgt2aXNpdG9y","serviceTrackingParams":[]},"x":{"visitorData":"second"}}`))
+	if got := ytmusicCachedVisitorID(); got != "Cgt2aXNpdG9y" {
+		t.Fatalf("该存下第一处: %q", got)
+	}
+	ytmusicNoteVisitorData([]byte(`{"responseContext":{"visitorData":"other"}}`))
+	if got := ytmusicCachedVisitorID(); got != "Cgt2aXNpdG9y" {
+		t.Errorf("有了不该换: %q", got)
+	}
+	resetYtmusicRegionState(t)
+	ytmusicNoteVisitorData([]byte("{\n  \"responseContext\": {\n    \"visitorData\": \"pretty==\"\n  }\n}"))
+	if got := ytmusicCachedVisitorID(); got != "pretty==" {
+		t.Errorf("缩进排版的应答(冒号后有空格)也要认: %q", got)
+	}
+	resetYtmusicRegionState(t)
+	ytmusicNoteVisitorData([]byte(`{"responseContext":{}}`))
+	if got := ytmusicCachedVisitorID(); got != "" {
+		t.Errorf("应答里没有就不存: %q", got)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	neturl "net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // 编目匹配扩展搜索的歌手名来源(除 MusicBrainz 别名之外的三路),给 extNames 用。每一路都只提供
@@ -175,14 +176,18 @@ func pickAppleLinkedNames(results []itunesResult, artist string) []string {
 
 // ytmusicOriginalArtistNames 用 YouTube Music 按本地名字的文字对应的界面语言(简体 zh-CN / 繁体 zh-TW / 假名 ja /
 // 谚文 ko)和英文界面各搜一次「歌手 曲名」,署名等于本地写法的那些结果按视频 id 对到英文那份,取英文署名。本地名字
-// 不含中日韩文字时不查(英文名 → 中文名那个方向智能档现有的别名已经接得住)。网络失败返回 error。
+// 不含中日韩文字时不查(英文名 → 中文名那个方向智能档现有的别名已经接得住)。网络失败、YouTube Music 在这个地区
+// 不可用(ytmusicRegionBlockedNow)时返回 error,不当成「查过了没有」缓存下来。
 func ytmusicOriginalArtistNames(ctx context.Context, artist, title string, _ float64) ([]string, error) {
 	hl := ytmusicLocalHL(artist)
 	if hl == "" || strings.TrimSpace(title) == "" {
 		return nil, nil
 	}
 	return catalogLinkedCached("ytm|"+normLoose(artist)+"|"+normLoose(title), func() ([]string, error) {
-		visitor := ytmusicEnsureVisitorID(ctx)
+		if ytmusicRegionBlockedNow(time.Now()) {
+			return nil, errSourceNotReached
+		}
+		visitor := ytmusicCachedVisitorID()
 		local, err := ytmusicSearchSongsHL(ctx, artist+" "+title, hl, visitor)
 		if err != nil {
 			return nil, err

@@ -51,11 +51,14 @@ import (
 // 格式:只有**逐行**歌词(下面 ytmusicLyricLine 的 startMs/endMs,毫秒精度),没有逐字/
 // 逐音节证据(读 sigma67/ytmusicapi 的 LyricLine 模型 + 实测多首歌词证实,
 // 一行就是一个整句字符串)。所以候选构造时不带 wordTimingYRC,跟 lrclib 同一个形状。
+// 没有带时间戳的、只有纯文本时交成 plainOnly(见 resolveYTMusicLyric)。
 type ytmusicResult struct {
 	lyrics, title, artist, album, cover string
 	// durationSecs:搜索阶段从匹配到的曲目自己解析出的时长(秒),来自 flexColumn 里的
 	// "m:ss" 文本(InnerTube 不直接给秒数,只给人类可读时长字符串,见 ytmusicParseDuration)。
 	durationSecs float64
+	// plainOnly:lyrics 是不带时间戳的纯文本(Android 身份拿不到带时间戳的、Web 身份那份有),语义同 lrclibResult.plainOnly。
+	plainOnly bool
 }
 
 const (
@@ -78,8 +81,8 @@ const (
 	// 不需要手动跟着 YouTube Music 网页版更新——这是 ytmusicapi 的做法,日期串永远"够新"。
 	ytmusicWebClientName = "WEB_REMIX"
 	// **带时间戳**的歌词只有切成 Android 客户端身份才拿得到(ytmusicapi 原话"mobile
-	// only":同一个 browseId,WEB_REMIX 身份下 browse 只会返回
-	// "Lyrics not available" 那条静态文案,换成 ANDROID_MUSIC 才会带 timedLyricsData)。
+	// only":同一个 browseId,WEB_REMIX 身份下 browse 只给同一份歌词的纯文本,
+	// 换成 ANDROID_MUSIC 才会带 timedLyricsData)。7.0 以下的版本号拿不到 timedLyricsData。
 	// 已知的过期风险,跟 web 客户端不一样:这个版本号是**硬编码**的,不会随时间自动
 	// "看起来永远最新"——真实 Android 客户端版本升级到足够新之后,这个值迟早会被服务端
 	// 拒绝。这一路一旦开始整体失效(搜索/next 都正常、browse timed 总是 404 或不再返回
@@ -92,27 +95,25 @@ var (
 	ytmusicMu    sync.Mutex
 	ytmusicCache = map[string]ytmusicResult{} // artist|title|album -> result
 
-	// ytmusicVisitorMu 只保护下面这一个值本身,不跨 I/O 持有。
+	// ytmusicVisitorMu 保护下面三个值,不跨 I/O 持有。
 	ytmusicVisitorMu sync.Mutex
+	// ytmusicVisitorID:请求里带的 X-Goog-Visitor-Id。三个端点不带它也照常应答,应答的 responseContext.visitorData
+	// 会发一个,拿到之后后面的请求都带上(ytmusicNoteVisitorData);查首页时顺带拿到的也存在这里。
 	ytmusicVisitorID string
-	// ytmusicVisitorFailedAt:上一次没抓到 visitor id 的时刻。ytmusicVisitorRetryAfter 之内不再重抓,
-	// 直接当这一轮拿不到。
-	ytmusicVisitorFailedAt time.Time
+	// ytmusicRegionCheckedAt / ytmusicRegionBlocked:上次查首页(ytmusicCheckRegion)的时间和结论 —— 首页是不是
+	// 「YouTube Music 在这个地区不可用」的提示页。没问成、调用方自己取消的不算查过。
+	ytmusicRegionCheckedAt time.Time
+	ytmusicRegionBlocked   bool
 
-	// ytmusicVisitorFetchMu 是单飞锁:同一时刻只允许一个 goroutine 真的去抓 visitor id
-	// (GET 首页 + 正则抠 JS 里的 VISITOR_DATA)。这个值理论上没有过期时间(ytmusicapi
-	// 拿到一次就一直复用到进程退出,不会主动刷新),但抓取本身仍然是一次网络请求——批量
-	// 解析(相册预取一次触发十几首歌并发)时如果每个 goroutine 各自判定"还没有就自己抓
-	// 一次",会同时打十几个请求到 YouTube 首页。这个坑刚在 musixmatch 的
-	// token 获取上踩过一次(见 musixmatch.go 的 musixmatchTokenFetchMu),这里从一开始
-	// 就按同一个模式写,不重蹈一遍。
-	ytmusicVisitorFetchMu sync.Mutex
+	// ytmusicRegionFetchMu 是查首页的单飞锁:批量解析(相册预取一次触发十几首歌并发)时同时搜不到的那几首只查一次,
+	// 跟 musixmatch.go 的 musixmatchTokenFetchMu 同一个模式。
+	ytmusicRegionFetchMu sync.Mutex
 
 	// ytmusicLastFailureMu/ytmusicLastFailureReason:诊断用的只读旁路
 	// (设置页"测试这个源"功能想知道 lyricfind 到底为什么没查到,不只是
 	// "没查到"这个事实),跟 networkobs.go 的 networkLooksDown() 同一个思路——不改
 	// ytmusicLyric 的返回值形状(自动解析路径从来不需要"为什么没查到"这个原因),只在
-	// 抓 visitor id 这一步识别出具体原因时顺手记一句,给需要更具体诊断信息的调用方
+	// 查首页这一步识别出具体原因时顺手记一句,给需要更具体诊断信息的调用方
 	// (test-lyric-sources)读。识别不出具体原因时留空,调用方退回通用文案,不编一个
 	// 没验证过的理由。
 	ytmusicLastFailureMu     sync.Mutex
@@ -133,17 +134,16 @@ func ytmusicLastFailureReasonNow() string {
 	return ytmusicLastFailureReason
 }
 
-// ytmusicDoFetchVisitorID 是"真的去抓 visitor id"这一步,ytmusicEnsureVisitorID 在
-// 单飞锁里调它。nil(默认)= 用真正的实现 ytmusicFetchVisitorID。声明成变量是给测试
+// ytmusicDoFetchVisitorID 是"真的去查首页"这一步(返回首页里的 visitor id,顺带记下 / 撤掉地区限制这个失败原因),
+// ytmusicCheckRegion 在单飞锁里调它。nil(默认)= 用真正的实现 ytmusicFetchVisitorID。声明成变量是给测试
 // 留的缝,原因与用法跟 musixmatch.go 的 musixmatchDoFetchToken 一致(那边的头注解释了
 // 为什么不能写成 `= func() string { return ytmusicFetchVisitorID() }` 这种直接初始化
 // 的形式——会形成初始化环)。
 var ytmusicDoFetchVisitorID func(ctx context.Context) string
 
-// ytmusicVisitorRetryAfter:没抓到 visitor id 之后多久内不再重抓。首页间歇性陷进重定向循环
-// (err "stopped after 10 redirects")时,一次抓取要 4～5 秒才失败;不记下失败,每一轮检索都重抓一次,
-// 同时在跑的几首解析还在单飞锁上排队各等一次,排在后面的直接拖到 20 秒截止。见 09 章决策 102。
-const ytmusicVisitorRetryAfter = time.Minute
+// ytmusicRegionRecheck:查过首页之后多久内不再查。首页慢(0.8～8 秒)、常超时,查一次的结论
+// 管这么久:是地区限制提示页时这么久里这一源一个请求都不发,不是时这么久里搜不到也不再查。
+const ytmusicRegionRecheck = 30 * time.Minute
 
 func ytmusicCachedVisitorID() string {
 	ytmusicVisitorMu.Lock()
@@ -151,25 +151,44 @@ func ytmusicCachedVisitorID() string {
 	return ytmusicVisitorID
 }
 
-// ytmusicVisitorFailedRecently:还没有 visitor id,且上一次抓取失败在 ytmusicVisitorRetryAfter 之内。
-func ytmusicVisitorFailedRecently(now time.Time) bool {
+// ytmusicVisitorDataFieldRe:应答里的 `"visitorData": "…"`(冒号两边可能有空白)。
+var ytmusicVisitorDataFieldRe = regexp.MustCompile(`"visitorData"\s*:\s*"([^"]{1,512})"`)
+
+// ytmusicNoteVisitorData:还没有 visitor id 时,从这份应答的 responseContext.visitorData 里取一个存下。只找第一处,
+// 不整份解析(应答在 responseContext 开头就带着它)。
+func ytmusicNoteVisitorData(raw []byte) {
+	if ytmusicCachedVisitorID() != "" {
+		return
+	}
+	m := ytmusicVisitorDataFieldRe.FindSubmatch(raw)
+	if m == nil {
+		return
+	}
 	ytmusicVisitorMu.Lock()
-	defer ytmusicVisitorMu.Unlock()
-	return ytmusicVisitorID == "" && !ytmusicVisitorFailedAt.IsZero() && now.Sub(ytmusicVisitorFailedAt) < ytmusicVisitorRetryAfter
+	if ytmusicVisitorID == "" {
+		ytmusicVisitorID = string(m[1])
+	}
+	ytmusicVisitorMu.Unlock()
 }
 
-func ytmusicEnsureVisitorID(ctx context.Context) string {
-	if v := ytmusicCachedVisitorID(); v != "" {
-		return v
-	}
-	ytmusicVisitorFetchMu.Lock()
-	defer ytmusicVisitorFetchMu.Unlock()
-	if v := ytmusicCachedVisitorID(); v != "" {
-		return v
-	}
-	// 刚失败过(含在单飞锁上排队等前一个抓完、结果前一个失败了):不再抓一次。
-	if ytmusicVisitorFailedRecently(time.Now()) {
-		return ""
+// ytmusicRegionBlockedNow:上次查首页看到的是地区限制提示页,而且还在 ytmusicRegionRecheck 之内。
+func ytmusicRegionBlockedNow(now time.Time) bool {
+	ytmusicVisitorMu.Lock()
+	defer ytmusicVisitorMu.Unlock()
+	return ytmusicRegionBlocked && now.Sub(ytmusicRegionCheckedAt) < ytmusicRegionRecheck
+}
+
+// ytmusicCheckRegion 查一次首页,看 YouTube Music 在这个网络所在的地区能不能用 —— 只在搜歌一条结果都没有时调
+// (地区受限时搜什么都是空的)。ytmusicRegionRecheck 之内查过就不再查,同一时刻只查一次。首页是提示页时记下地区
+// 限制(失败原因由 ytmusicVisitorFromHome 记),拿得到 visitor id 时撤掉;没问成的保留上一次的结论。
+func ytmusicCheckRegion(ctx context.Context) {
+	ytmusicRegionFetchMu.Lock()
+	defer ytmusicRegionFetchMu.Unlock()
+	ytmusicVisitorMu.Lock()
+	recent := !ytmusicRegionCheckedAt.IsZero() && time.Since(ytmusicRegionCheckedAt) < ytmusicRegionRecheck
+	ytmusicVisitorMu.Unlock()
+	if recent {
+		return
 	}
 	var v string
 	if ytmusicDoFetchVisitorID != nil {
@@ -177,15 +196,21 @@ func ytmusicEnsureVisitorID(ctx context.Context) string {
 	} else {
 		v = ytmusicFetchVisitorID(ctx)
 	}
-	ytmusicVisitorMu.Lock()
-	if v != "" {
-		ytmusicVisitorID = v
-	} else if ctx.Err() == nil {
-		// 调用方自己取消 / 超时不算抓取失败:那是这一轮不要了,不该让后面的检索跟着放弃。
-		ytmusicVisitorFailedAt = time.Now()
+	if ctx.Err() != nil {
+		// 调用方自己取消 / 超时不算查过:那是这一轮不要了,下一首照常查。
+		return
 	}
-	ytmusicVisitorMu.Unlock()
-	return v
+	ytmusicVisitorMu.Lock()
+	defer ytmusicVisitorMu.Unlock()
+	ytmusicRegionCheckedAt = time.Now()
+	if v != "" {
+		ytmusicRegionBlocked = false
+		if ytmusicVisitorID == "" {
+			ytmusicVisitorID = v
+		}
+		return
+	}
+	ytmusicRegionBlocked = ytmusicLastFailureReasonNow() == lyricFailureReasonLyricFindRegionRestricted
 }
 
 // ytmusicVisitorDataRe 抠 YouTube Music 首页内联的 `ytcfg.set({...})`,里面的
@@ -294,9 +319,10 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 }
 
 // ytmusicPostAt 发到一个 InnerTube 主机。Origin 始终是 music.youtube.com:三个主机同一套接口,
-// 按 Origin 认这是 YouTube Music 的请求。err 非 nil 是没问成(含非 200)。
+// 按 Origin 认这是 YouTube Music 的请求。err 非 nil 是没问成(含非 200)。prettyPrint=false 要带:不带时应答是缩进
+// 排版的 JSON,搜索那一次传输 41KB、解压后 682KB,带了是 13KB / 195KB。
 func ytmusicPostAt(ctx context.Context, base, endpoint string, raw []byte, visitorID string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/youtubei/v1/"+endpoint+"?alt=json", bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/youtubei/v1/"+endpoint+"?prettyPrint=false&alt=json", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +340,11 @@ func ytmusicPostAt(ctx context.Context, base, endpoint string, raw []byte, visit
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err == nil {
+		ytmusicNoteVisitorData(body)
+	}
+	return body, err
 }
 
 // ---- ① search:歌名+歌手 → videoId ----
@@ -503,25 +533,43 @@ func mathAbs(f float64) float64 {
 	return f
 }
 
-func ytmusicSearchSong(ctx context.Context, artist, title, album string, durationSecs float64, visitorID string) (ytmusicParsedSearchItem, bool) {
+// ytmusicSearchHL:搜歌词时带的界面语言。YouTube Music 按它给歌名和歌手名换写法:不带时中日韩歌手多半回英文名,
+// 歌手闸就对不上。按歌手名的文字取(ytmusicLocalHL);歌手只有汉字、歌名或专辑带假名时是日文歌,用 ja。歌手名是
+// 拉丁字母时不带 —— 带了反而会把它换成中文写法。
+func ytmusicSearchHL(artist, title, album string) string {
+	hl := ytmusicLocalHL(artist)
+	if (hl == "zh-CN" || hl == "zh-TW") && (containsKana(title) || containsKana(album)) {
+		return "ja"
+	}
+	return hl
+}
+
+// ytmusicSearchSong 搜「歌手 歌名」(只看歌曲,界面语言见 ytmusicSearchHL),挑一条(ytmusicPickSearchItem)。
+// noItems:问成了、但一条结果都没有(地区受限时搜什么都是这样,见 ytmusicCheckRegion);没问成时为 false。
+func ytmusicSearchSong(ctx context.Context, artist, title, album string, durationSecs float64) (item ytmusicParsedSearchItem, ok, noItems bool) {
 	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
+	if hl := ytmusicSearchHL(artist, title, album); hl != "" {
+		if c, ok := body["context"].(map[string]any)["client"].(map[string]any); ok {
+			c["hl"] = hl
+		}
+	}
 	body["query"] = strings.TrimSpace(artist + " " + title)
 	body["params"] = ytmusicSongsFilterParams
-	raw, err := ytmusicPost(ctx, "search", body, visitorID)
+	raw, err := ytmusicPost(ctx, "search", body, ytmusicCachedVisitorID())
 	if err != nil || len(raw) == 0 {
-		return ytmusicParsedSearchItem{}, false
-	}
-	items := ytmusicExtractSearchItems(raw)
-	if len(items) == 0 {
-		return ytmusicParsedSearchItem{}, false
+		return ytmusicParsedSearchItem{}, false, false
 	}
 	var parsed []ytmusicParsedSearchItem
-	for _, it := range items {
+	for _, it := range ytmusicExtractSearchItems(raw) {
 		if p, ok := ytmusicParseSearchItem(it); ok {
 			parsed = append(parsed, p)
 		}
 	}
-	return ytmusicPickSearchItem(parsed, artist, title, album, durationSecs)
+	if len(parsed) == 0 {
+		return ytmusicParsedSearchItem{}, false, true
+	}
+	item, ok = ytmusicPickSearchItem(parsed, artist, title, album, durationSecs)
+	return item, ok, false
 }
 
 // ytmusicExtractSearchItems 从整份 search 响应里摘出 musicResponsiveListItemRenderer
@@ -603,20 +651,13 @@ func ytmusicLyricsBrowseID(raw []byte) string {
 	return browseID
 }
 
-func ytmusicFetchLyricsBrowseID(ctx context.Context, videoID, visitorID string) string {
+// ytmusicFetchLyricsBrowseID 只带 videoId 问 next。别带 playlistId(`RDAMVM`+videoId 的自动电台)那一套:应答会
+// 多出整张电台列表,解压后 2MB、传输 117KB,只带 videoId 是 61KB / 6KB,歌词 tab 的 browseId 一样。
+func ytmusicFetchLyricsBrowseID(ctx context.Context, videoID string) string {
 	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
 	body["videoId"] = videoID
-	body["playlistId"] = "RDAMVM" + videoID
-	body["enablePersistentPlaylistPanel"] = true
 	body["isAudioOnly"] = true
-	body["tunerSettingValue"] = "AUTOMIX_SETTING_NORMAL"
-	body["watchEndpointMusicSupportedConfigs"] = map[string]any{
-		"watchEndpointMusicConfig": map[string]any{
-			"hasPersistentPlaylistPanel": true,
-			"musicVideoType":             "MUSIC_VIDEO_TYPE_ATV",
-		},
-	}
-	raw, err := ytmusicPost(ctx, "next", body, visitorID)
+	raw, err := ytmusicPost(ctx, "next", body, ytmusicCachedVisitorID())
 	if err != nil || len(raw) == 0 {
 		return ""
 	}
@@ -635,8 +676,7 @@ type ytmusicLyricLine struct {
 
 // ytmusicParseTimedLyrics 从 "browse"(ANDROID_MUSIC 身份)响应里摘出逐行歌词 +
 // 来源标注(形如 "Source: LyricFind"/"Source: Musixmatch")。这首歌没有带时间戳的
-// 歌词时(WEB_REMIX 身份下这个 tab 存在,但真正查询仍会回"Lyrics not available"—
-// 见文件头注)返回空切片。纯函数,便于单测。
+// 歌词时返回空切片(纯文本那份见 ytmusicParsePlainLyrics)。纯函数,便于单测。
 func ytmusicParseTimedLyrics(raw []byte) ([]ytmusicLyricLine, string) {
 	var tree any
 	if json.Unmarshal(raw, &tree) != nil {
@@ -694,10 +734,10 @@ func ytmusicBuildLRC(lines []ytmusicLyricLine) string {
 	return b.String()
 }
 
-func ytmusicFetchTimedLyrics(ctx context.Context, browseID, visitorID string) (string, string) {
+func ytmusicFetchTimedLyrics(ctx context.Context, browseID string) (string, string) {
 	body := ytmusicContext(ytmusicMobileClientName, ytmusicMobileClientVersion)
 	body["browseId"] = browseID
-	raw, err := ytmusicPost(ctx, "browse", body, visitorID)
+	raw, err := ytmusicPost(ctx, "browse", body, ytmusicCachedVisitorID())
 	if err != nil || len(raw) == 0 {
 		return "", ""
 	}
@@ -706,6 +746,50 @@ func ytmusicFetchTimedLyrics(ctx context.Context, browseID, visitorID string) (s
 		return "", ""
 	}
 	return ytmusicBuildLRC(lines), source
+}
+
+// ytmusicParsePlainLyrics 从 Web 身份的 browse 应答里取不带时间戳的歌词:musicDescriptionShelfRenderer 的
+// description 是正文、footer 是来源标注(形如 "Source: LyricFind")。没有歌词时那一页是一条「Lyrics not available」
+// 提示(messageRenderer),这里取不到东西,返回空。纯函数,便于单测。
+func ytmusicParsePlainLyrics(raw []byte) (string, string) {
+	var tree any
+	if json.Unmarshal(raw, &tree) != nil {
+		return "", ""
+	}
+	var text, source string
+	ytmusicWalkJSON(tree, func(node map[string]any) {
+		if text != "" {
+			return
+		}
+		shelf, ok := node["musicDescriptionShelfRenderer"].(map[string]any)
+		if !ok {
+			return
+		}
+		runs := func(key string) string {
+			obj, _ := shelf[key].(map[string]any)
+			list, _ := obj["runs"].([]any)
+			var b strings.Builder
+			for _, r := range list {
+				m, _ := r.(map[string]any)
+				s, _ := m["text"].(string)
+				b.WriteString(s)
+			}
+			return strings.TrimSpace(b.String())
+		}
+		text, source = runs("description"), runs("footer")
+	})
+	return text, source
+}
+
+// ytmusicFetchPlainLyrics:Android 身份拿不到带时间戳的歌词时,纯文本只在 Web 身份的应答里有(Android 那份里没有)。
+func ytmusicFetchPlainLyrics(ctx context.Context, browseID string) (string, string) {
+	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
+	body["browseId"] = browseID
+	raw, err := ytmusicPost(ctx, "browse", body, ytmusicCachedVisitorID())
+	if err != nil || len(raw) == 0 {
+		return "", ""
+	}
+	return ytmusicParsePlainLyrics(raw)
 }
 
 // ---- 对外入口 ----
@@ -731,55 +815,48 @@ func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs
 	return r
 }
 
-// resolveYTMusicLyric 三跳:① search 拿 videoId(带 songs 过滤器,见
-// ytmusicSongsFilterParams);② next 拿这首歌"歌词" tab 的 browseId(这首歌没有
-// 歌词 tab 就直接放弃,省一次请求);③ browse(切到 Android 客户端身份)拿带时间戳的
-// 逐行歌词,并且**只在 sourceMessage 标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,
-// 理由见文件头注)——查到的是 Musixmatch 换个管道重发时,当"这一源没查到"处理。
+// resolveYTMusicLyric 三跳:① search 拿 videoId(带 songs 过滤器,见 ytmusicSongsFilterParams),一条结果都没有时查一次
+// 地区限制(ytmusicCheckRegion),查出受限的那段时间里整源不发请求;② next 拿这首歌"歌词" tab 的 browseId(没有歌词
+// tab 就放弃);③ browse(切到 Android 客户端身份)拿带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次取纯文本,
+// 交成 plainOnly。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注):是 Musixmatch
+// 换个管道重发的,跟 musixmatch 源查到的是同一份数据,当成两个源会让跨源正文共识(contentConsensusPeers)虚高,当
+// "这一源没查到"。
 //
-// 刻意**不**另外调一次"不带时间戳"的 browse:这个项目的引擎只认真的带时间戳的
-// 逐行 LRC(isTimedLRC 要求至少 3 行、过半带 [mm:ss.xx]),纯文本歌词对它毫无用处,
-// 调这一路纯属浪费一次网络请求和这首歌 20 秒搜索预算里的时间。
-//
-// 超时预算:visitor id 首次冷启动 8s(全进程只发生一次,后续调用直接复用缓存值)+
-// search/next/browse 各 6s = 最坏 18~26s。跟 lrclib.go 同一个"串行三级、卡进 enrich
-// 20s 硬截止"的约束,但**只有第一次冷启动**会摸到上限——多数调用只有后三跳的 18s。
+// 超时预算:search / next / browse 各 6s,没有带时间戳的歌词时多一次 browse;查地区限制那一次首页 8s,只在搜不到时、
+// ytmusicRegionRecheck 一次。
 func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durationSecs float64) ytmusicResult {
-	visitorID := ytmusicEnsureVisitorID(ctx)
-	if visitorID == "" {
+	if ytmusicRegionBlockedNow(time.Now()) {
 		return ytmusicResult{}
 	}
-	item, ok := ytmusicSearchSong(ctx, artist, title, album, durationSecs, visitorID)
+	item, ok, noItems := ytmusicSearchSong(ctx, artist, title, album, durationSecs)
+	if noItems {
+		ytmusicCheckRegion(ctx)
+	}
 	if !ok {
 		return ytmusicResult{}
 	}
-	browseID := ytmusicFetchLyricsBrowseID(ctx, item.videoID, visitorID)
+	browseID := ytmusicFetchLyricsBrowseID(ctx, item.videoID)
 	if browseID == "" {
 		return ytmusicResult{}
 	}
-	lrc, source := ytmusicFetchTimedLyrics(ctx, browseID, visitorID)
-	if !isTimedLRC(lrc) {
+	out := ytmusicResult{title: item.title, artist: item.artist, album: item.album, durationSecs: item.durationSecs, cover: item.cover}
+	lrc, source := ytmusicFetchTimedLyrics(ctx, browseID)
+	if isTimedLRC(lrc) {
+		if !ytmusicIsLyricFindSource(source) {
+			return ytmusicResult{}
+		}
+		out.lyrics = lrc
+		return out
+	}
+	if source != "" && !ytmusicIsLyricFindSource(source) {
 		return ytmusicResult{}
 	}
-	// 用户追问坐实:只在真是 LyricFind 时才接受这份候选,是 Musixmatch
-	// 换个管道重发的一律当"这一源没查到"。理由是两件事的叠加:
-	//   ① 打分层的"跨源正文共识"(contentConsensusPeers)按**来源数**算独立印证——
-	//      如果这份其实是 Musixmatch 的内容,而现有 musixmatch 源也查到了同一首歌,
-	//      两条候选文本大概率高度相似,却不是两个独立信源,是同一份数据走了两条管道。
-	//      当成两个源互相印证会把置信度算高,是虚假的加分。
-	//   ② 6/9 的实测命中就是这种"重复重发"(见 ytmusicLyric 文档注释里的覆盖率数据),
-	//      这部分我们已经有更直接的 musixmatch 源在查,YouTube Music 那条链路(未公开
-	//      协议、三跳请求、会过期的硬编码客户端版本号)在这些歌上纯粹是多担风险、
-	//      零信息增量——接这个源的理由从一开始就只是"能拿到 Musixmatch 之外的真数据",
-	//      过滤掉之后这条理由才真正站得住,也是下面把 source 从 "ytmusic" 改成
-	//      "lyricfind" 的前提(过滤前这一路名不副实——不是每次查到的都是 LyricFind)。
-	if !ytmusicIsLyricFindSource(source) {
+	plain, plainSource := ytmusicFetchPlainLyrics(ctx, browseID)
+	if plain == "" || !ytmusicIsLyricFindSource(plainSource) {
 		return ytmusicResult{}
 	}
-	return ytmusicResult{
-		lyrics: lrc, title: item.title, artist: item.artist, album: item.album,
-		durationSecs: item.durationSecs, cover: item.cover,
-	}
+	out.lyrics, out.plainOnly = plain, true
+	return out
 }
 
 // ytmusicIsLyricFindSource 判断 timedLyricsData 的 sourceMessage 是不是标注了
