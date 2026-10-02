@@ -2028,29 +2028,6 @@
         }
       }
     },
-    "恢复默认布局、配色与字体" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset Layout, Color and Font"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "恢复默认布局、配色与字体"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回復預設佈局、配色與字體"
-          }
-        }
-      }
-    },
     "悬停显示播放控制" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2120,29 +2097,6 @@
         }
       }
     },
-    "平时用哪些就都勾上，不确定就交给「自动识别」，之后可以在设置里改" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tick every player you use, or leave it to Auto-Detect. You can change this in Settings later"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "平时用哪些就都勾上，不确定就交给「自动识别」，之后可以在设置里改"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "平時用哪些就都勾選，不確定就交給「自動識別」，之後可以在設定裡改"
-          }
-        }
-      }
-    },
     "YouTube Music 用哪个浏览器？" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2162,52 +2116,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YouTube Music 用哪個瀏覽器？"
-          }
-        }
-      }
-    },
-    "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选一个你平时用来听歌的浏览器——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YouTube Music plays in a browser, so Lyrimuse needs to know which one to read the playback position from. Pick the browser you listen in — macOS will ask you to authorise it, just allow. You can change this later under Web Players in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选一个你平时用来听歌的浏览器——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YouTube Music 是在瀏覽器裡播的，Lyrimuse 需要知道是哪一個才能讀到播放進度。選一個你平時用來聽歌的瀏覽器——之後系統會問你要不要授權，同意就行；隨時可以在設定的「網頁播放器」裡再改"
-          }
-        }
-      }
-    },
-    "这台电脑上没有找到 Lyrimuse 能读取的浏览器（Safari、Chrome、Edge、Arc 这类）。装好之后可以在设置的「网页播放器」里再配对" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No browser Lyrimuse can read was found on this Mac (Safari, Chrome, Edge, Arc and the like). Once you install one, you can pair it under Web Players in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台电脑上没有找到 Lyrimuse 能读取的浏览器（Safari、Chrome、Edge、Arc 这类）。装好之后可以在设置的「网页播放器」里再配对"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這台電腦上沒有找到 Lyrimuse 能讀取的瀏覽器（Safari、Chrome、Edge、Arc 這類）。裝好之後可以在設定的「網頁播放器」裡再配對"
           }
         }
       }
@@ -2879,29 +2787,6 @@
         }
       }
     },
-    "Apple Music 自动化权限（必需）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Music Automation Access (Required)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Music 自动化权限（必需）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Music 自動化權限（必要）"
-          }
-        }
-      }
-    },
     "GitHub Star 数" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3128,52 +3013,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lyrimuse"
-          }
-        }
-      }
-    },
-    "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 支援 Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，也可以交給「自動識別」——挑一個你平時用來聽歌的，隨時可以在設定裡重新選擇"
-          }
-        }
-      }
-    },
-    "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse reads what's playing in Apple Music through this permission — without it, the floating lyrics have nothing to show. Click Request Access, then choose “Allow” when macOS asks. You can come back to this step in Settings at any time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要這個權限來讀取 Apple Music 目前正在播放的歌曲資訊——沒有它，浮動歌詞完全無法顯示任何內容。按下面的按鈕會跳出系統授權對話框，選擇「允許」即可；隨時可以在設定裡重新開啟這一步"
           }
         }
       }
@@ -3437,29 +3276,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Token 無效，請重新拷貝一次"
-          }
-        }
-      }
-    },
-    "Top 歌手 + Top 歌曲各三条 + 总播放次数" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Top three artists and tracks, plus total play count"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Top 歌手 + Top 歌曲各三条 + 总播放次数"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Top 歌手 + Top 歌曲各三項 + 總播放次數"
           }
         }
       }
@@ -4669,29 +4485,6 @@
         }
       }
     },
-    "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Already created one? Find it here — click the application name and the page shows its API Key and Shared Secret"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "之前建立過就從這裡找回：在列表裡按一下應用程式名稱，頁面上就有 API Key 和 Shared Secret"
-          }
-        }
-      }
-    },
     "之前手动选定的 %@ 首已经都是锁定状态" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5858,75 +5651,6 @@
         }
       }
     },
-    "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开仍然可用（那是够到播放控制和进度条的唯一入口），只是展开区里那行「下一句」跟着一起不显示。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With this off, the notch keeps only the strip hugging the cutout and stops rendering the lyric row — handy when you want to see playback status without lyrics in the way.\n\nHovering to expand still works (it is the only way to reach the transport controls and the scrubber); the next-line row inside just goes away with it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开仍然可用（那是够到播放控制和进度条的唯一入口），只是展开区里那行「下一句」跟着一起不显示。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉之後動態島只保留貼著瀏海那一條的高度，歌詞行不再渲染——適合想看播放狀態、又不想被歌詞擋住視線的場合。\n\n指向展開仍然可用（那是碰到播放控制和進度列的唯一入口），只是展開區裡那行「下一句」也跟著不顯示。"
-          }
-        }
-      }
-    },
-    "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开的效果完全不受影响：播放控制、进度条、下一句歌词预览照常显示，跟开着「显示歌词」时一模一样。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turns off just this compact row and drops the card down to hugging the notch — good for people who want to see playback status without lyrics blocking their view.\n\nHovering to expand is completely unaffected: playback controls, the scrubber, and the next-line preview still show exactly as when \"Show Lyrics\" is on."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开的效果完全不受影响：播放控制、进度条、下一句歌词预览照常显示，跟开着「显示歌词」时一模一样。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉之後動態島只保留貼著瀏海那一條的高度，歌詞行不再渲染——適合想看播放狀態、又不想被歌詞擋住視線的場合。\n\n指向展開的效果完全不受影響：播放控制、進度列、下一句歌詞預覽照常顯示，跟開著「顯示歌詞」時一模一樣。"
-          }
-        }
-      }
-    },
-    "关掉则暂停时只收起歌词行，保留顶部那一条" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When off, pausing collapses just the lyric row and keeps the top bar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉则暂停时只收起歌词行，保留顶部那一条"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉則暫停時只收起歌詞行，保留頂部那一條"
-          }
-        }
-      }
-    },
     "关掉后稳态只保留刘海那条高度，不显示歌词；指向展开时播放控制、进度条、下一句预览仍照常显示。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5992,75 +5716,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關閉後只保留選單列圖像，不佔 Dock 位置"
-          }
-        }
-      }
-    },
-    "关闭后按在歌词文字上的那一次点击会被悬浮窗接住、不再穿到下层；歌词四周的空白处不受影响" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When off, a click on the lyrics text is caught by the overlay instead of passing through; the empty space around the lyrics is unaffected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭后按在歌词文字上的那一次点击会被悬浮窗接住、不再穿到下层；歌词四周的空白处不受影响"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關閉後，按在歌詞文字上的那一下點按會被浮動視窗接住、不再穿透到下層；歌詞四周的空白處不受影響"
-          }
-        }
-      }
-    },
-    "关闭时按住歌词就能拖；打开则要长按 0.35 秒" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off: hold the lyrics to drag. On: long-press for 0.35s"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭时按住歌词就能拖；打开则要长按 0.35 秒"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關閉時按住歌詞就能拖；開啟則要長按 0.35 秒"
-          }
-        }
-      }
-    },
-    "关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off: hold the lyrics to drag. On: long-press for 0.35s, and clicks pass through until then"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關閉時按住歌詞就能拖；開啟則要長按 0.35 秒，期間點按照舊穿透"
           }
         }
       }
@@ -6636,29 +6291,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刪除記錄"
-          }
-        }
-      }
-    },
-    "删除这个配色主题？" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete this theme?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这个配色主题？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除這個配色主題？"
           }
         }
       }
@@ -7418,45 +7050,6 @@
         }
       }
     },
-    "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to the row shown while playing, or while hovering to expand. When nothing is playing the notch shrinks to the cutout itself, showing artwork on the left and the playback indicator on the right — unaffected by these settings.\n\nThe playback indicator is pinned to the outer edge of the right ear and does not take a module slot."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用於播放中/指向展開時那一行。沒在播放時動態島縮成瀏海大小，那時左邊是封面、右邊是播放指示條，不受這裡影響。\n\n播放指示條固定在右耳外緣，不佔模組位置。"
-          }
-        }
-      }
-    },
-    "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条（音浪）贴哪只耳朵在上面单独配，跟下面的模块选择不互斥，可以同时选中。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies only to the row shown while playing, or while expanded on hover. When nothing is playing the notch collapses to its physical size, showing artwork on the left and the playback indicator on the right — unaffected by this setting.\n\nWhich ear the playback indicator (waveform) sits on is configured above; it is independent of the module choice below, so both can be set at once."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用於播放中/指向展開時那一行。沒在播放時動態島縮成瀏海大小，那時左邊是封面、右邊是播放指示條，不受這裡影響。\n\n播放指示條（音浪）貼哪一邊耳朵在上面單獨設定，跟下面的模組選擇不互斥，可以同時選取。"
-          }
-        }
-      }
-    },
     "只发第一位" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7522,29 +7115,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "短於 30 秒的曲目"
-          }
-        }
-      }
-    },
-    "只对判定为中文的歌词生效，例如 你好 → nǐ hǎo；默认关闭，中文歌词加拼音对中文读者通常是干扰" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies only to lyrics judged Chinese, e.g. 你好 → nǐ hǎo; off by default, since pinyin over Chinese lyrics is usually a distraction for Chinese readers"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只对判定为中文的歌词生效，例如 你好 → nǐ hǎo；默认关闭，中文歌词加拼音对中文读者通常是干扰"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只對判定為中文的歌詞生效，例如 你好 → nǐ hǎo；預設關閉，中文歌詞加上拼音對中文讀者通常是干擾"
           }
         }
       }
@@ -7618,29 +7188,6 @@
         }
       }
     },
-    "只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies only to lyrics detected as that language. Detection runs per song, using the kana / hangul / han characters that appear. Chinese is off by default — pinyin over Chinese lyrics is usually a distraction for readers of Chinese"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只對判定為該語言的歌詞生效；判定以整首歌為單位，混排的歌以出現的假名/諺文/漢字為準。中文預設關閉——中文歌詞加上拼音對中文讀者通常是干擾"
-          }
-        }
-      }
-    },
     "只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7683,98 +7230,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只影響裝得下的短句：它在固定寬度那一格裡靠哪邊。放不下的句子會橫向捲動，沒有多餘空間，對齊不起作用"
-          }
-        }
-      }
-    },
-    "只接管文字颜色；背景色和描边色始终按下面设置的来" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only the text color follows the artwork; the background and outline colors always use what you set below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只接管文字颜色；背景色和描边色始终按下面设置的来"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只接管文字顏色；背景色和描邊色始終按下面設定的來"
-          }
-        }
-      }
-    },
-    "可以滚动阅读的完整歌词列表" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A scrollable view of the full lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以滚动阅读的完整歌词列表"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以捲動閱讀的完整歌詞列表"
-          }
-        }
-      }
-    },
-    "可以随时在设置里调整这些选项" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You can always adjust these later in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以随时在设置里调整这些选项"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以隨時在設定裡調整這些選項"
-          }
-        }
-      }
-    },
-    "可选，不填不影响悬浮歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Optional — leaving it blank won't affect the floating lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可选，不填不影响悬浮歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可選，不填不影響浮動歌詞"
           }
         }
       }
@@ -8233,29 +7688,6 @@
         }
       }
     },
-    "在 Apple Music 播放任意歌曲，歌词会自动出现" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play something in Apple Music and lyrics will appear here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Apple Music 播放任意歌曲，歌词会自动出现"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Apple Music 播放任意歌曲，歌詞會自動出現"
-          }
-        }
-      }
-    },
     "在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。" : {
       "localizations" : {
         "en" : {
@@ -8273,22 +7705,6 @@
       }
     },
     "在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In Chrome’s menu bar: View → Developer → Allow JavaScript from Apple Events."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Chrome 的選單列依序打開「顯示方式 → 開發人員選項 → 允許 Apple 事件的 JavaScript」。"
-          }
-        }
-      }
-    },
-    "在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。（Chrome 自己的帮助里把这个菜单写成「查看」，是它的文案错了，菜单栏上实际叫「显示」。）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8412,29 +7828,6 @@
         }
       }
     },
-    "在 ListenBrainz 网站获取 Token →" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get a Token from the ListenBrainz website →"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 ListenBrainz 网站获取 Token →"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 ListenBrainz 網站取得 Token →"
-          }
-        }
-      }
-    },
     "在 iCloud 里发现一份 Lyrimuse 备份" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8527,29 +7920,6 @@
         }
       }
     },
-    "在播放器中打开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show in Player"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在播放器中打开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在播放器中打開"
-          }
-        }
-      }
-    },
     "在播放器里播放任意歌曲，歌词会自动出现" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8563,45 +7933,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在播放器裡播放任意歌曲，歌詞會自動出現"
-          }
-        }
-      }
-    },
-    "在浅色或杂乱的桌面背景上把字撑出来" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keeps text readable on light or busy desktop backgrounds"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在浅色或杂乱的桌面背景上把字撑出来"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在淺色或雜亂的桌面背景上把字撐出來"
-          }
-        }
-      }
-    },
-    "在浏览器里手动开启" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable in Browser"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在瀏覽器裡手動開啟"
           }
         }
       }
@@ -9158,29 +8489,6 @@
         }
       }
     },
-    "存到 iCloud 的这份包含账号登录凭证和密钥的原文，会同步到登录同一个 iCloud 账号的所有设备" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The copy saved to iCloud contains your account credentials and keys in clear text, and syncs to every device signed in to the same iCloud account."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "存到 iCloud 的这份包含账号登录凭证和密钥的原文，会同步到登录同一个 iCloud 账号的所有设备"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "存到 iCloud 的這份包含帳號登入憑證和金鑰的原文，會同步到登入同一個 iCloud 帳號的所有裝置"
-          }
-        }
-      }
-    },
     "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9315,29 +8623,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "寬度模式"
-          }
-        }
-      }
-    },
-    "对悬浮歌词和灵动岛生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to the floating lyrics and the notch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对悬浮歌词和灵动岛生效"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "對浮動歌詞和動態島生效"
           }
         }
       }
@@ -9832,29 +9117,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "展開狀態"
-          }
-        }
-      }
-    },
-    "展开时在头部显示一枚封面缩略图。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows a small artwork thumbnail in the header when expanded."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开时在头部显示一枚封面缩略图。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展開時在標題區顯示一枚封面縮圖。"
           }
         }
       }
@@ -10355,29 +9617,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已開啟"
-          }
-        }
-      }
-    },
-    "已开启，下次打开该浏览器后生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enabled — takes effect the next time you open this browser"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已开启，下次打开该浏览器后生效"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已開啟，下次打開該瀏覽器後生效"
           }
         }
       }
@@ -11952,29 +11191,6 @@
         }
       }
     },
-    "截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screenshots, screen recordings and video-call screen sharing won't capture the floating lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "截圖、螢幕錄製、視訊會議的螢幕分享都不會拍到浮動歌詞"
-          }
-        }
-      }
-    },
     "截屏时隐藏" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12136,29 +11352,6 @@
         }
       }
     },
-    "打开 Music" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Music"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Music"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打開 Music"
-          }
-        }
-      }
-    },
     "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12182,29 +11375,6 @@
         }
       }
     },
-    "打开任意已知播放器时启动 Lyrimuse" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Launch Lyrimuse when any known player opens"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开任意已知播放器时启动 Lyrimuse"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打開任意已知播放器時啟動 Lyrimuse"
-          }
-        }
-      }
-    },
     "打开备份文件夹" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12224,22 +11394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打開備份檔案夾"
-          }
-        }
-      }
-    },
-    "打开完全磁盘访问权限设置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Full Disk Access Settings"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打開「完整磁碟取用權限」設定"
           }
         }
       }
@@ -12555,29 +11709,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拷貝名稱"
-          }
-        }
-      }
-    },
-    "拷贝歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy Lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拷贝歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拷貝歌詞"
           }
         }
       }
@@ -13189,29 +12320,6 @@
         }
       }
     },
-    "播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A playback indicator that pulses with the audio. It coexists with whatever content that ear shows (it yields when that ear is set to \"Playback Controls\"). Turn it off and both ears render purely by their chosen module — the Dynamic Island can also be sized narrower."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放指示條，跟著音量起伏擺動，跟耳朵裡選的內容同時顯示（選了「播放控制」時讓位）。關掉之後兩邊耳朵純按你選的模組渲染，動態島也能設定得更窄。"
-          }
-        }
-      }
-    },
     "播放控制" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13419,29 +12527,6 @@
         }
       }
     },
-    "放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lines too long to fit scroll horizontally; hover to see the full line"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放不下的句子會橫向捲動，滑鼠指向時也能看到完整的這一行"
-          }
-        }
-      }
-    },
     "调整" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13511,29 +12596,6 @@
         }
       }
     },
-    "整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Everything lives here in plain text you can edit directly. It holds your account credentials, so don't send it to anyone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "整份設定都在這裡，純文字可直接編輯；裡面含帳號憑證，不要發給別人"
-          }
-        }
-      }
-    },
     "整行时间轴" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13553,29 +12615,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整行時間軸"
-          }
-        }
-      }
-    },
-    "文件里包含账号登录凭证和密钥，妥善保管，不要发给别人" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This file contains your account credentials and keys. Keep it safe and don't send it to anyone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文件里包含账号登录凭证和密钥，妥善保管，不要发给别人"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "檔案裡包含帳號登入憑證和金鑰，妥善保管，不要發給別人"
           }
         }
       }
@@ -13622,29 +12661,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文字描邊"
-          }
-        }
-      }
-    },
-    "文字跟随封面" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Text Follows Artwork"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文字跟随封面"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文字跟隨封面"
           }
         }
       }
@@ -13810,29 +12826,6 @@
         }
       }
     },
-    "无法确认状态（可能从未打开过这个浏览器）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Status unknown (you may have never opened this browser)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法确认状态（可能从未打开过这个浏览器）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法確認狀態（可能從未打開過這個瀏覽器）"
-          }
-        }
-      }
-    },
     "无法确认状态（读不到该浏览器的配置文件）" : {
       "localizations" : {
         "en" : {
@@ -13845,29 +12838,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法確認狀態（讀不到該瀏覽器的設定檔）"
-          }
-        }
-      }
-    },
-    "无法获取待播清单" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Queue Unavailable"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法获取待播清单"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法取得待播清單"
           }
         }
       }
@@ -13937,29 +12907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日文"
-          }
-        }
-      }
-    },
-    "日语、韩语标成罗马字，中文标成拼音" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanese and Korean get romaji, Chinese gets pinyin"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日语、韩语标成罗马字，中文标成拼音"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日文、韓文標成羅馬字，中文標成拼音"
           }
         }
       }
@@ -14465,29 +13412,6 @@
         }
       }
     },
-    "显示歌词窗口" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Lyrics Window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示歌词窗口"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示歌詞視窗"
-          }
-        }
-      }
-    },
     "显示灵动岛歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14668,29 +13592,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暫停時隱藏"
-          }
-        }
-      }
-    },
-    "暂停或广告插播时，灵动岛缩到贴着刘海的一小块，只剩左耳封面、右耳音浪——跟 iPhone 灵动岛的极简形态一样。关掉之后暂停时卡片保持原来的大小，歌名和歌词照常显示（位置停在暂停那一刻）。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "While paused or during an ad break, the Dynamic Island shrinks to a small block hugging the notch, showing only cover art on the left ear and an audio wave on the right — like the iPhone's minimal Dynamic Island. Turn this off to keep the card at its normal size while paused, with the title and lyrics still shown (frozen at the moment of pausing)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂停或广告插播时，灵动岛缩到贴着刘海的一小块，只剩左耳封面、右耳音浪——跟 iPhone 灵动岛的极简形态一样。关掉之后暂停时卡片保持原来的大小，歌名和歌词照常显示（位置停在暂停那一刻）。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暫停或廣告插播時，動態島縮到貼著瀏海的一小塊，只剩左耳封面、右耳音浪——跟 iPhone 動態島的極簡形態一樣。關掉之後暫停時卡片保持原來的大小，歌名和歌詞照常顯示（位置停在暫停那一刻）。"
           }
         }
       }
@@ -15034,29 +13935,6 @@
         }
       }
     },
-    "最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keeps up to 40,000 entries — roughly two and a half years at 40 tracks a day; past that, the oldest go first"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最多保留 4 萬筆記錄，按每天 40 首估算約兩年半；超出後從最舊的開始丟棄"
-          }
-        }
-      }
-    },
     "最大宽度" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15076,29 +13954,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最大寬度"
-          }
-        }
-      }
-    },
-    "最大音量" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Full volume"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最大音量"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最大音量"
           }
         }
       }
@@ -15494,29 +14349,6 @@
         }
       }
     },
-    "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pushed on the first check after 10 PM local time: today's play count, total listening time, and your most-played tracks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本機時間晚上 10 點之後當天第一次檢查時推播：當天播放次數、累計時長、聽得最多的幾首歌"
-          }
-        }
-      }
-    },
     "本地还没有待推送的收听" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15651,29 +14483,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "來源"
-          }
-        }
-      }
-    },
-    "来源可靠度" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Source"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来源可靠度"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "來源可靠度"
           }
         }
       }
@@ -16285,29 +15094,6 @@
         }
       }
     },
-    "歌词保存在这里" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrics are kept here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词保存在这里"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞儲存在這裡"
-          }
-        }
-      }
-    },
     "歌词偏移" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16761,29 +15547,6 @@
         }
       }
     },
-    "歌词行末尾那枚封面缩略图，稳态和展开都会显示，不受上面几项影响。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The artwork thumbnail at the end of the lyric row — shown in both steady and expanded states, unaffected by the rows above."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词行末尾那枚封面缩略图,稳态和展开都会显示,不受上面几项影响。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞行末尾那枚封面縮圖，穩態和展開都會顯示，不受上面幾項影響。"
-          }
-        }
-      }
-    },
     "歌词超出曲长" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16952,29 +15715,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在同步歷史（%@）"
-          }
-        }
-      }
-    },
-    "正在尝试开启…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enabling…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在尝试开启…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在嘗試開啟…"
           }
         }
       }
@@ -17393,75 +16133,6 @@
         }
       }
     },
-    "比下面的宽度更长时就截断，末尾加省略号，不滚动" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Longer than the width below gets cut off with an ellipsis, no scrolling"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的宽度更长时就截断，末尾加省略号，不滚动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的寬度更長時就截斷，末尾加刪節號，不捲動"
-          }
-        }
-      }
-    },
-    "比下面的宽度更长时截断成「前 N 个字…」，不滚动" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Truncates to the first N characters when it doesn't fit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的宽度更长时截断成「前 N 个字…」，不滚动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的寬度更長時截斷成「前 N 個字…」，不捲動"
-          }
-        }
-      }
-    },
-    "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "比下面的寬度更長時，在狀態列裡橫向捲動播完整句；開頭會先停一下再滾"
-          }
-        }
-      }
-    },
     "毛玻璃" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17481,29 +16152,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "毛玻璃"
-          }
-        }
-      }
-    },
-    "没在显示歌词时，菜单栏上的那个图标" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The icon shown in the menu bar when no lyrics are displayed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没在显示歌词时，菜单栏上的那个图标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒在顯示歌詞時，選單列上的那個圖像"
           }
         }
       }
@@ -17554,29 +16202,6 @@
         }
       }
     },
-    "没有可调整的项目" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing to adjust here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有可调整的项目"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有可調整的項目"
-          }
-        }
-      }
-    },
     "没有在播放" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17596,52 +16221,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "沒有在播放"
-          }
-        }
-      }
-    },
-    "没有它读不到播放状态" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Without it, Lyrimuse can't tell what's playing"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有它读不到播放状态"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有它讀不到播放狀態"
-          }
-        }
-      }
-    },
-    "没有封面数据时会使用下面选择的文字颜色作为备用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Falls back to the text color chosen below when there's no cover art"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有封面数据时会使用下面选择的文字颜色作为备用"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有封面資料時會使用下面選擇的文字顏色作為備用"
           }
         }
       }
@@ -17939,29 +16518,6 @@
         }
       }
     },
-    "测试这个来源现在是否可用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Test whether this source is available right now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "测试这个来源现在是否可用"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "測試這個來源現在是否可用"
-          }
-        }
-      }
-    },
     "浏览器歌词同步" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18165,29 +16721,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清空全部快取"
-          }
-        }
-      }
-    },
-    "清空没有完全生效，请稍后再试一次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clearing didn't fully take effect — try again in a moment"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清空没有完全生效，请稍后再试一次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清空沒有完全生效，請稍後再試一次"
           }
         }
       }
@@ -18468,29 +17001,6 @@
         }
       }
     },
-    "点击打开更新窗口" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Click to open the update window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击打开更新窗口"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按一下打開更新視窗"
-          }
-        }
-      }
-    },
     "版本 %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18537,29 +17047,6 @@
         }
       }
     },
-    "版本限定词不符" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version tag mismatch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "版本限定词不符"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "版本限定詞不符"
-          }
-        }
-      }
-    },
     "状态未知" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18579,29 +17066,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "狀態未知"
-          }
-        }
-      }
-    },
-    "状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The menu bar is narrow so the line may be truncated; hovering always shows it in full"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "狀態列寬度有限，歌詞可能被截斷；把滑鼠移到上面永遠能看到完整的這一行"
           }
         }
       }
@@ -18629,52 +17093,6 @@
         }
       }
     },
-    "用户名（听歌报告需要）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Username (needed for listening digests)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名（听歌报告需要）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱（聽歌報告需要）"
-          }
-        }
-      }
-    },
-    "用户名（选填，用于界面显示）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Username (optional, for display only)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名（选填，用于界面显示）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱（選填，用於介面顯示）"
-          }
-        }
-      }
-    },
     "用来把当前播放状态推送到网页小组件和状态徽章" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18694,29 +17112,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用來把目前播放狀態推播到網頁小工具和狀態徽章"
-          }
-        }
-      }
-    },
-    "用来接收「每周听歌小结」「每日听歌报告」推送" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Used to receive “Weekly Listening Digest” and “Daily Listening Report” notifications"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用来接收「每周听歌小结」「每日听歌报告」推送"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用來接收「每週聽歌小結」「每日聽歌報告」推播"
           }
         }
       }
@@ -19806,29 +18201,6 @@
         }
       }
     },
-    "网易云 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "NetEase 50 · QQ 30 · Kugou 20 · Musixmatch 15 · LRCLIB 10"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "网易云 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "網易雲 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10"
-          }
-        }
-      }
-    },
     "网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20285,29 +18657,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自動下載並安裝"
-          }
-        }
-      }
-    },
-    "自动开启失败，请到该浏览器「查看→开发者」菜单里手动打开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatic enable failed — please turn it on manually from this browser's View → Developer menu"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自动开启失败，请到该浏览器「查看→开发者」菜单里手动打开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動開啟失敗，請到該瀏覽器「檢視 → 開發人員」選單裡手動開啟"
           }
         }
       }
@@ -20929,52 +19278,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解析本機記錄檔案失敗"
-          }
-        }
-      }
-    },
-    "解锁后可点击穿透" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlocked: clicks pass through"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解锁后可点击穿透"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解鎖後點按可穿透"
-          }
-        }
-      }
-    },
-    "解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解鎖後滑鼠點按會穿到桌面上；拖移方式見下面「拖移前先長按」"
           }
         }
       }
@@ -21620,54 +19923,6 @@
         }
       }
     },
-    "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」。下面两条路二选一，效果一样：给权限后可以一键开启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access. Either option below works: grant access and use one-click enable, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讀不到該瀏覽器的設定檔——改這個開關需要「完整磁碟取用權限」。下面兩條路二選一，效果一樣：給權限後可以一鍵開啟；或者自己到該瀏覽器「檢視 → 開發人員」裡勾選「允許 Apple 事件中的 JavaScript」。"
-          }
-        }
-      }
-    },
-    "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」，而且给完权限后要重启 Lyrimuse 才生效。下面两条路二选一，效果一样：给权限并重启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」（这条不需要任何权限）。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access, and Lyrimuse must be restarted after you grant it. Either option below works: grant access and restart, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu (that one needs no permissions)."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讀不到該瀏覽器的設定檔——改這個開關需要「完整磁碟取用權限」，而且給完權限後要重新啟動 Lyrimuse 才會生效。下面兩條路二選一，效果一樣：給權限並重新啟動；或者自己到該瀏覽器「檢視 → 開發人員」裡勾選「允許 Apple 事件中的 JavaScript」（這條不需要任何權限）。"
-          }
-        }
-      }
-    },
-    "读不到该浏览器的配置文件。给 Lyrimuse 开「完全磁盘访问权限」后就能一键开启；不想开权限的话，到该浏览器「查看 → 开发者」菜单里手动打开也一样。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can’t read this browser’s preferences file. Grant Lyrimuse Full Disk Access and one-click enable will work; otherwise turn it on yourself from the browser’s View → Developer menu."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讀不到該瀏覽器的設定檔。給 Lyrimuse 開「完整磁碟取用權限」後就能一鍵開啟；不想開權限的話，到該瀏覽器「檢視 → 開發人員」選單裡手動開啟也一樣。"
-          }
-        }
-      }
-    },
     "读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21852,121 +20107,6 @@
         }
       }
     },
-    "贴在桌面上，支持逐字高亮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sits on your desktop, with word-by-word highlighting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "贴在桌面上，支持逐字高亮"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "貼在桌面上，支援逐字高亮"
-          }
-        }
-      }
-    },
-    "超出宽度时截断，不滚动" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Truncates when it doesn't fit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超出宽度时截断，不滚动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超出寬度時截斷，不捲動"
-          }
-        }
-      }
-    },
-    "超出宽度时横向滚动播完" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrolls when it doesn't fit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超出宽度时横向滚动播完"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超出寬度時橫向捲動播完"
-          }
-        }
-      }
-    },
-    "超宽时横向滚动" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scroll When Too Long"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超宽时横向滚动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超寬時橫向捲動"
-          }
-        }
-      }
-    },
-    "超过就截断" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Truncate If Too Long"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超过就截断"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超過就截斷"
-          }
-        }
-      }
-    },
     "跟着演唱进度把已唱到的部分染成系统强调色。只在这首歌有逐字时间轴时生效；打开菜单反白期间暂不染色" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22032,29 +20172,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟隨封面"
-          }
-        }
-      }
-    },
-    "跟随封面开着，这个颜色只在拿不到封面主色时才用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Following the artwork, so this is used only when no color can be read from it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跟随封面开着，这个颜色只在拿不到封面主色时才用"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跟隨封面開著，這個顏色只在拿不到封面主色時才用"
           }
         }
       }
@@ -22193,29 +20310,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "較上週 %@"
-          }
-        }
-      }
-    },
-    "过去三年的今天都没有收听记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No listens on this day in the past three years"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "过去三年的今天都没有收听记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "過去三年的今天都沒有聆聽記錄"
           }
         }
       }
@@ -22542,29 +20636,6 @@
         }
       }
     },
-    "还没有配对任何浏览器，点右上角「添加浏览器」选一个" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No browsers paired yet — tap \"Add Browser\" above to pick one"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有配对任何浏览器，点右上角「添加浏览器」选一个"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "還沒有配對任何瀏覽器，按右上角「新增瀏覽器」選一個"
-          }
-        }
-      }
-    },
     "还没生效：浏览器回绝了执行 JavaScript 的请求，按上面那条路径再确认一下开关勾上了没有" : {
       "localizations" : {
         "en" : {
@@ -22694,29 +20765,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個開關已經被關掉了——現在還能用，只是因為該瀏覽器還沒重新啟動；重新啟動後就會失效"
-          }
-        }
-      }
-    },
-    "这一格固定占这么宽，不会随歌词长短伸缩；放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This slot is always this wide and never resizes with the lyric; lines that don't fit scroll sideways, and hovering shows the line in full"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这一格固定占这么宽，不会随歌词长短伸缩；放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這一格固定佔這麼寬，不會隨歌詞長短伸縮；放不下的句子會橫向捲動，滑鼠指向時也能看到完整的這一行"
           }
         }
       }
@@ -22871,29 +20919,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個 App 無法使用"
-          }
-        }
-      }
-    },
-    "这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This setting only affects Desktop Floating Lyrics: it previews the next line beneath the current one. The Lyrics Window already shows the full lyrics, and Notch and Menu Bar Lyrics only have room for a single line"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個開關只影響「桌面浮動歌詞」：在目前句下方預覽下一句。歌詞視窗本來就顯示整份歌詞，動態島和選單列只有一行空間"
           }
         }
       }
@@ -23351,29 +21376,6 @@
         }
       }
     },
-    "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這台 Mac 上的播放記錄會同步到 ListenBrainz，建立完整的聽歌歷史；也是網頁展示、聽歌報告的可選資料來源"
-          }
-        }
-      }
-    },
     "这台 Mac 没有刘海，会显示在屏幕顶部正中" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23512,29 +21514,6 @@
         }
       }
     },
-    "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這裡的設定對桌面浮動歌詞和動態島生效，先開啟其中一種"
-          }
-        }
-      }
-    },
     "这首歌在你 Last.fm 上的第几次收听" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23600,29 +21579,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "進入全螢幕"
-          }
-        }
-      }
-    },
-    "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, every track you play is scrobbled to Last.fm automatically"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連上之後，你播放的每一首歌都會自動 scrobble 到 Last.fm"
           }
         }
       }
@@ -24839,29 +22795,6 @@
         }
       }
     },
-    "陆续支持中" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "More coming"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "陆续支持中"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "陸續支援中"
-          }
-        }
-      }
-    },
     "随播放律动" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24973,29 +22906,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隱藏譯文"
-          }
-        }
-      }
-    },
-    "需要先完全退出该浏览器，再点一次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Please fully quit this browser first, then try again"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要先完全退出该浏览器，再点一次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要先完全結束該瀏覽器，再按一次"
           }
         }
       }
@@ -25732,75 +23642,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黑膠唱片"
-          }
-        }
-      }
-    },
-    "鼠标悬停在灵动岛上时能看到什么" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What you see when hovering over the Dynamic Island"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼠标悬停在灵动岛上时能看到什么"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑鼠指向動態島時能看到什麼"
-          }
-        }
-      }
-    },
-    "鼠标移到悬浮歌词上时它会淡下去，移开恢复" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The floating lyrics fade out while the pointer is over them and come back when it leaves."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼠标移到悬浮歌词上时它会淡下去，移开恢复"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑鼠移到浮動歌詞上時它會淡下去，移開就恢復"
-          }
-        }
-      }
-    },
-    "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The floating lyrics fade out while the pointer is over them and come back when it leaves. Floating lyrics only."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑鼠移到浮動歌詞上時它會淡下去，移開就恢復；只對浮動歌詞生效"
           }
         }
       }
@@ -29936,23 +27777,6 @@
         }
       }
     },
-    "仅证据薄" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Thin evidence only"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅證據薄弱"
-          }
-        }
-      }
-    },
     "位置" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33149,23 +30973,6 @@
         }
       }
     },
-    "系统的媒体信息通道在这台机器上用不了，播放状态会读不到。绕开它的只有一种配置：只勾 Apple Music、不勾「自动识别」；其余配置都要经这条通道读。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: Apple Music ticked on its own with “Auto-detect” unticked. Every other setup reads through this channel."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "系統的媒體資訊通道在這台電腦上無法使用，播放狀態會讀不到。繞開它的只有一種設定：只勾 Apple Music、不勾「自動辨識」；其餘設定都要經這條通道讀取。"
-          }
-        }
-      }
-    },
     "这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33472,23 +31279,6 @@
         }
       }
     },
-    "背景偏亮时，歌词文字自动转为深色" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrics text turns dark automatically when the background is light"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "背景偏亮時，歌詞文字自動轉為深色"
-          }
-        }
-      }
-    },
     "仅作用于歌词；字号随窗口大小自动调整" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33604,40 +31394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "迷你尺寸"
-          }
-        }
-      }
-    },
-    "完整尺寸和迷你尺寸都生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to both the full and mini size"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完整尺寸與迷你尺寸都生效"
-          }
-        }
-      }
-    },
-    "仅完整尺寸；迷你尺寸不显示封面" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Full size only — the mini size has no artwork"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅完整尺寸；迷你尺寸不顯示封面"
           }
         }
       }
@@ -35049,29 +32805,6 @@
         }
       }
     },
-    "歌词引擎负责认歌、找歌词和封面，在后台常驻运行，必装。点下面的按钮启用，之后开机会自动运行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics engine recognizes songs and finds lyrics and artwork. It runs in the background and is required. Click Enable below; after that it starts automatically at login"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词引擎负责认歌、找歌词和封面，在后台常驻运行，必装。点下面的按钮启用，之后开机会自动运行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞引擎負責認歌、找歌詞和封面，在背景常駐執行，必裝。按下面的按鈕啟用，之後登入時會自動啟動"
-          }
-        }
-      }
-    },
     "上次保存：%@ · 歌词引擎已重启" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35183,29 +32916,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個版本打包時漏了同步歌詞引擎的版本號。不影響功能，歌詞引擎的實際程式碼跟 App 是同一個版本，不需要你做任何處理"
-          }
-        }
-      }
-    },
-    "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由歌词引擎读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This permission keeps the Apple Music playback position accurate and lets you control playback right from the lyrics (play/pause, skip, scrub, love, add to library). Lyrics still show without it — the basic playback info comes from the lyrics engine — the position is just less accurate and those buttons won't do anything. The button below brings up the system authorization dialog; choose “Allow”. You can come back to this in Settings any time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个权限用来把 Apple Music 的播放进度校得更准，以及让你直接在歌词上控制播放（播放/暂停、切歌、拖进度、喜欢、加资料库）。没有它歌词照样能显示——基本的播放信息由歌词引擎读取——只是进度会有偏差、那些按钮按不动。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個權限用來把 Apple Music 的播放進度校正得更準，以及讓你直接在歌詞上控制播放（播放/暫停、切歌、拖進度、喜歡、加入資料庫）。沒有它歌詞照樣能顯示——基本的播放資訊由歌詞引擎讀取——只是進度會有偏差、那些按鈕按不動。按下面的按鈕會跳出系統授權對話框，選擇「允許」即可；隨時可以在設定裡重新開啟這一步"
           }
         }
       }
