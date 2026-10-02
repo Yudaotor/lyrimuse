@@ -846,4 +846,24 @@
     d.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); trigger.focus(); } });
   });
   document.addEventListener('click', (e) => { if (!e.target.closest('.dl')) closeAll(); });
+
+  /* ---------- the 30-second video ---------- */
+  // Without this script the video keeps its native controls. With it, the cover carries a play button, the
+  // controls appear once it plays, and the cover comes back when it ends (preload is none, so nothing loads early).
+  document.querySelectorAll('.watch-frame').forEach((frame) => {
+    const video = frame.querySelector('video'), btn = frame.querySelector('.watch-play');
+    if (!video || !btn) return;
+    video.controls = false;
+    btn.addEventListener('click', () => {
+      frame.classList.add('playing');
+      video.controls = true;
+      const p = video.play();
+      if (p && p.catch) p.catch(() => { frame.classList.remove('playing'); });
+    });
+    video.addEventListener('ended', () => {
+      frame.classList.remove('playing');
+      video.controls = false;
+      video.load();
+    });
+  });
 })();

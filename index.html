@@ -28,7 +28,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="assets/lp.css?v=202610011816">
+<link rel="stylesheet" href="assets/lp.css?v=202610021352">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/">
 <meta property="og:locale" content="en_US">
@@ -136,6 +136,19 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       }
     }
   ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": "Lyrimuse in 30 seconds",
+  "description": "Lyrimuse in 30 seconds: a MacBook opens, lyrics light up under the notch and in the menu bar, then word-by-word readings for a Japanese song and a settings page with a live preview",
+  "inLanguage": "en",
+  "uploadDate": "2026-10-02",
+  "duration": "PT33S",
+  "thumbnailUrl": "https://yudaotor.github.io/lyrimuse/assets/video/lyrimuse-teaser-en.webp",
+  "contentUrl": "https://yudaotor.github.io/lyrimuse/assets/video/lyrimuse-teaser-en.mp4"
 }
 </script>
 <script>document.documentElement.classList.add('js');setTimeout(function(){if(!window.lpReady)document.documentElement.classList.remove('js')},4000)</script>
@@ -261,6 +274,20 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       <span class="pl"><img src="assets/img/players/SodaMusic.png" alt="">Soda Music</span>
       <span class="pl"><img src="assets/img/players/YouTubeMusic.png" alt="">YouTube Music</span>
     </div>
+  </div>
+</section>
+
+<section class="ch watch" id="video">
+  <header class="ch-head reveal">
+    <p class="k">Video</p>
+    <h2><span class="hm">Lyrimuse in 30 seconds.</span> <span class="fx">See it before you install it.</span></h2>
+    <p class="ch-lede">The notch, the menu bar, readings for foreign lyrics and the settings with their live preview, in half a minute.</p>
+  </header>
+  <div class="watch-frame reveal">
+    <video class="watch-video" controls preload="none" playsinline width="1920" height="1080" poster="assets/video/lyrimuse-teaser-en.webp" aria-label="Lyrimuse in 30 seconds: a MacBook opens, lyrics light up under the notch and in the menu bar, then word-by-word readings for a Japanese song and a settings page with a live preview">
+      <source src="assets/video/lyrimuse-teaser-en.mp4" type="video/mp4">
+    </video>
+    <button class="watch-play" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.6v10.8c0 .5.5.8.9.5l8.1-5.4a.6.6 0 0 0 0-1L5.4 2.1c-.4-.3-.9 0-.9.5z"/></svg><span>Play</span><em>0:32</em></button>
   </div>
 </section>
 
@@ -703,6 +730,6 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <script type="application/json" id="readData">
 [{"key": "ja", "label": "Japanese", "song": "Kenshi Yonezu · Lemon", "lang": "ja", "groups": [{"r": "ano", "t": "あの", "d": 336, "s": 0}, {"r": "hi", "t": "日", "d": 168, "s": 336}, {"s": 504, "t": "の", "d": 224, "r": "no"}, {"r": "kanashimi", "s": 728, "d": 1329, "t": "悲しみ"}, {"d": 463, "r": "sae", "t": "さえ", "s": 2057}], "tr": "Even the sadness of that day", "ms": 2520}, {"key": "ko", "label": "Korean", "song": "iKON · LOVE SCENARIO", "lang": "ko", "groups": [{"d": 305, "s": 0, "t": "나 ", "r": "na"}, {"r": "sal-agamyeonseo", "t": "살아가면서 ", "d": 2124, "s": 305}, {"s": 3088, "t": "가끔씩 ", "r": "gakkeumssig", "d": 1364}, {"t": "떠오를 ", "d": 1266, "r": "tteooleul", "s": 4452}, {"s": 5718, "r": "gieog", "d": 1112, "t": "기억"}], "tr": "Memories that come to mind from time to time in my life", "ms": 6830}, {"key": "yue", "label": "Cantonese", "song": "Eason Chan · 明年今日", "lang": "yue", "groups": [{"s": 0, "d": 240, "t": "若", "r": "joek6"}, {"t": "这", "d": 320, "r": "ze2", "s": 240}, {"s": 560, "t": "一", "d": 410, "r": "jat1"}, {"d": 530, "r": "hak1", "s": 970, "t": "刻"}, {"t": "我", "s": 1500, "r": "ngo5", "d": 460}, {"r": "ging2", "d": 540, "s": 1960, "t": "竟"}, {"r": "jim4", "d": 180, "s": 2500, "t": "严"}, {"d": 280, "s": 2680, "r": "zung6", "t": "重"}, {"r": "ci1", "s": 2960, "d": 330, "t": "痴"}, {"d": 500, "t": "呆", "r": "ngoi4", "s": 3290}], "tr": "", "ms": 3790}, {"key": "zh", "label": "Mandarin", "song": "Jay Chou · 晴天", "lang": "zh-Hans", "groups": [{"d": 176, "r": "wèi", "s": 0, "t": "为"}, {"t": "你", "s": 176, "d": 176, "r": "nǐ"}, {"t": "翘", "d": 195, "s": 352, "r": "qiào"}, {"t": "课", "r": "kè", "s": 547, "d": 197}, {"r": "de", "s": 744, "t": "的", "d": 256}, {"t": "那", "s": 1000, "d": 228, "r": "nà"}, {"t": "一", "d": 392, "r": "yī", "s": 1228}, {"s": 1620, "r": "tiān", "d": 292, "t": "天"}], "tr": "The day I skipped class for you", "ms": 2112}]
 </script>
-<script src="assets/lp.js?v=202610011816" defer></script>
+<script src="assets/lp.js?v=202610021352" defer></script>
 </body>
 </html>
