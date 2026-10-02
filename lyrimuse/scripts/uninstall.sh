@@ -34,6 +34,9 @@ COLLECTOR_PLIST="$PREFIX/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
 APP_PLIST="$PREFIX/Library/LaunchAgents/$APP_LABEL.plist"
 CONFIG_DIR="$PREFIX/.config/lyrimuse"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
+# 引擎日志的轮转归档:名字与份数同 lyrimuse-collector/logrotate.go(logArchiveName / logRotateKeepArchives),
+# 改那边的份数要一起改这里(uninstallarchives_test.go 对账)。
+LOG_ARCHIVES=("$LOG_FILE.old" "$LOG_FILE.old.1" "$LOG_FILE.old.2")
 # App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
 APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
 # App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
@@ -79,7 +82,7 @@ for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$COLLECTOR_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
+for p in "$COLLECTOR_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
   if [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
@@ -155,6 +158,9 @@ HAS_DEFAULTS=no
 has_defaults "$APP_LABEL" && HAS_DEFAULTS=yes
 [[ -e "$CONFIG_DIR" ]] && TO_DELETE+=("$CONFIG_DIR")
 [[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
+for p in "${LOG_ARCHIVES[@]}"; do
+  [[ -e "$p" ]] && TO_DELETE+=("$p")
+done
 [[ -e "$APP_LOG_FILE" ]] && TO_DELETE+=("$APP_LOG_FILE")
 [[ -e "$STALL_SAMPLE_FILE" ]] && TO_DELETE+=("$STALL_SAMPLE_FILE")
 if (( ${#TO_DELETE[@]} == 0 )); then

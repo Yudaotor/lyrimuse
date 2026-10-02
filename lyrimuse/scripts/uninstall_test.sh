@@ -50,6 +50,9 @@ setup_fake_home() {
   echo '{}' > "$FAKE_HOME/.config/lyrimuse/lyrimuse-enrich-cache.json"
   echo '[00:01.00]假歌词' > "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc"
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
+  for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
+    echo 'archived log line' > "$FAKE_HOME/Library/Logs/$a"
+  done
   echo 'Sampling process' > "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt"
   # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
   # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
@@ -103,6 +106,7 @@ run_uninstall --services >/dev/null 2>&1
 [[ -f "$FAKE_HOME/Library/LaunchAgents/$PROBE_A.plist" ]] && fail "plist 没删" || ok "plist 已删"
 [[ -f "$FAKE_HOME/.config/lyrimuse/config.json" ]] && ok "数据完好保留" || fail "--services 不该碰数据"
 [[ -f "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc" ]] && ok "歌词文件完好" || fail "--services 删了歌词"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log.old.2" ]] && ok "日志归档完好" || fail "--services 删了日志归档"
 
 echo
 echo "=== 5. --purge 输入 yes 才真的删 ==="
@@ -111,6 +115,9 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
+for a in lyrimuse.log.old lyrimuse.log.old.1 lyrimuse.log.old.2; do
+  [[ -f "$FAKE_HOME/Library/Logs/$a" ]] && fail "日志归档 $a 没删" || ok "日志归档 $a 已删"
+done
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && fail "job 没注销" || ok "job 已注销"
 # purge 必须连偏好设置项一起删 —— 不删的话重装会走进"引导不弹 + 服务没装"的死路
 # （见 uninstall.sh 里那段注释）。
