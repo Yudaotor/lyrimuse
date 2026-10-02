@@ -48,6 +48,8 @@ func TestMain(m *testing.M) {
 	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
 	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。
 	googleTranslateEndpoint = ""
+	// 机翻链第 0 级(歌词源自带的译文)会问 YouTube Music;单测一律当作没有,要测它的用例自己换回 ytmusicTranslationsFor。
+	lyricsSourceTranslations = func(context.Context, string, string) map[string]string { return nil }
 	// 编目匹配的名字来源(Apple 目录反查 / YouTube Music 英文署名)会联网;单测一律当作「查成了、没有」,
 	// 要测它们的用例自己换(stubCatalogNameSources)。
 	catalogAppleTitleAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }

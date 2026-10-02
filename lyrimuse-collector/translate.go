@@ -29,12 +29,14 @@ import (
 // 179 条有歌词的记录里带译文的 40 条(22%),而"歌词里没有中文"的外语歌 32 条里带译文的
 // 只有 1 条 —— 也就是听英文/日文歌时 97% 看不到翻译,恰恰是最需要翻译的场景。
 //
-// 三级降级链,按顺序试,前一级失败才走下一级:
+// 四级降级链,按顺序试,前一级失败才走下一级:
+//  0. 歌词源自带的译文(lyricsSourceTranslations):正文是 lyricfind 源从 YouTube Music 取回的那份时,问 YouTube Music
+//     要它配的译文(ytmusictranslation.go),只发歌词的 browseId、不发正文;
 //  1. 端上翻译(onDeviceTranslate,macOS 15+ 且语言包已装):不联网、歌词不出这台机器;
 //  2. Google(googleTranslateLines):无 key、无日配额,未公开端点,挂了自动冷却;
 //  3. MyMemory(translateChunk):公开 API,但有日配额。
 //
-// 取舍与端点实测见 docs/features/10-translation-romanization.md 决策 20。
+// 取舍与端点实测见 docs/features/10-translation-romanization.md 决策 20(1~3 级)、决策 30(第 0 级)。
 //
 // MyMemory 实测日译中/英译中的质量对"看个大意"这个用途够用:
 //
@@ -473,16 +475,19 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		}
 		return full
 	}
-	// out[k] 是 uniqueTexts[k] 的译文,空串 = 还没翻出来。三级按序补:
+	// out[k] 是 uniqueTexts[k] 的译文,空串 = 还没翻出来。四级按序补:
+	//  0. 歌词源自带的译文(lyricsSourceTranslations),它没给的行交给端上。
 	//  1. 端上翻译:不联网、无配额、歌词不出这台机器,没有 500 字符的分块限制。按文字系统分组各请求一次,
 	//     见 translateOnDeviceByScript。
 	//  2. 端上整组没翻成的行(系统太老 / 语言包没装 / 翻出来基本没动)交给 Google。
-	//  3. 前两级合起来还不够数(assembleTranslationLRC 那道 1/3 门槛),剩下没翻出来的行交给 MyMemory。
+	//  3. 前几级合起来还不够数(assembleTranslationLRC 那道 1/3 门槛),剩下没翻出来的行交给 MyMemory。
 	out := make([]string, len(uniqueTexts))
 	var used engineTally
 	done := func() int { return len(uniqueTexts) - len(untranslatedIndexes(uniqueTexts, out)) }
-	pending := translateOnDeviceByScript(ctx, target, uniqueTexts, out)
-	used.add("on-device", done())
+	used.add("ytmusic", fillLyricsSourceTranslations(ctx, lyrics, target, uniqueTexts, out))
+	fromSource := done()
+	pending := translateOnDeviceFor(ctx, target, uniqueTexts, untranslatedIndexes(uniqueTexts, out), out)
+	used.add("on-device", done()-fromSource)
 	if len(pending) > 0 {
 		before := done()
 		if got, err := googleTranslateLines(ctx, hc, pickTranslationTexts(uniqueTexts, pending), target); err == nil {
@@ -528,6 +533,40 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	res := assembleTranslationLRC(lines, scatter(out), totalAttempted)
 	res.engines = strings.Join(used, " ")
 	return res, nil
+}
+
+// lyricsSourceTranslations 是机翻链第 0 级:歌词源自带的译文,返回「原文行 → 译文」,没有返回 nil。单测在 TestMain 里
+// 换成什么都不给的桩,要测它的用例自己换回来。
+var lyricsSourceTranslations = ytmusicTranslationsFor
+
+// fillLyricsSourceTranslations 用 lyricsSourceTranslations 给的译文填 out(下标跟 texts 一致),返回填了几行。
+func fillLyricsSourceTranslations(ctx context.Context, lyrics, target string, texts, out []string) int {
+	got := lyricsSourceTranslations(ctx, lyrics, target)
+	n := 0
+	for k, s := range texts {
+		if t, ok := got[strings.TrimSpace(s)]; ok {
+			out[k] = t
+			n++
+		}
+	}
+	return n
+}
+
+// translateOnDeviceFor 只把 texts 里 idx 那几行(升序)送端上翻译,译文写回 out 的同一下标,返回整组没翻成的下标
+// (texts 的下标,升序)。
+func translateOnDeviceFor(ctx context.Context, target string, texts []string, idx []int, out []string) []int {
+	if len(idx) == 0 {
+		return nil
+	}
+	sub := pickTranslationTexts(texts, idx)
+	subOut := make([]string, len(sub))
+	subPending := translateOnDeviceByScript(ctx, target, sub, subOut)
+	fillTranslations(out, idx, subOut)
+	pending := make([]int, len(subPending))
+	for i, j := range subPending {
+		pending[i] = idx[j]
+	}
+	return pending
 }
 
 // translateOnDeviceByScript 按文字系统(dominantScript)把 texts 分组,每组单独送端上翻译;翻成的写进 out,

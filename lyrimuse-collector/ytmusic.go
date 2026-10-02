@@ -820,7 +820,7 @@ func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs
 // tab 就放弃);③ browse(切到 Android 客户端身份)拿带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次取纯文本,
 // 交成 plainOnly。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注):是 Musixmatch
 // 换个管道重发的,跟 musixmatch 源查到的是同一份数据,当成两个源会让跨源正文共识(contentConsensusPeers)虚高,当
-// "这一源没查到"。
+// "这一源没查到"。收下逐行歌词时连同 browseId 记一笔(ytmusicRememberTranslatable),机翻链第 0 级凭它取译文。
 //
 // 超时预算:search / next / browse 各 6s,没有带时间戳的歌词时多一次 browse;查地区限制那一次首页 8s,只在搜不到时、
 // ytmusicRegionRecheck 一次。
@@ -845,6 +845,7 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 		if !ytmusicIsLyricFindSource(source) {
 			return ytmusicResult{}
 		}
+		ytmusicRememberTranslatable(lrc, browseID)
 		out.lyrics = lrc
 		return out
 	}
