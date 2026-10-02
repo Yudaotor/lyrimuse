@@ -1304,8 +1304,8 @@ func runNotchTests() {
         expectEqual(window.contains("editorialSegment(playback.displayArtist, kind: .artist)")
                     && window.contains("editorialSegment(playback.displayAlbum, kind: .album)"), true,
                     "简介契约: 歌词窗口点歌手看歌手简介、点专辑看专辑简介")
-        expectEqual(window.contains(".onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }")
-                    && window.contains(".onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }"), true,
+        expectEqual(window.contains(".onAppear { if !previewMode && !isVerification { EditorialNotesStore.shared.retain() } }")
+                    && window.contains(".onDisappear { if !previewMode && !isVerification { EditorialNotesStore.shared.release() } }"), true,
                     "专辑简介契约: 歌词窗口开着才预取,设置页预览不算")
         expectEqual(store.components(separatedBy: "AlbumEditorialNotes.fetchAlbumPage(").count - 1, 1,
                     "简介契约: 专辑页只有一处发请求")

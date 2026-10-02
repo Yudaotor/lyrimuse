@@ -12,6 +12,14 @@ private func r3(_ x: CGFloat) -> Double { r3(Double(x)) }
 
 @MainActor
 func runLyricsWindowTests() {
+    // Clicking a lyric must seek the player clock, including in the PiP list.
+    do {
+        expectEqual(LyricsWindowSeek.position(timeMs: 60_000, offsetMs: 0), 60_000, "歌词点击: 无偏移")
+        expectEqual(LyricsWindowSeek.position(timeMs: 60_000, offsetMs: 1_500), 58_500, "歌词点击: 减去正偏移")
+        expectEqual(LyricsWindowSeek.position(timeMs: 60_000, offsetMs: -1_500), 61_500, "歌词点击: 保留负偏移")
+        expectEqual(LyricsWindowSeek.position(timeMs: 500, offsetMs: 1_500), 0, "歌词点击: 不跳到负时间")
+        expectEqual(LyricsWindowSeek.position(timeMs: 0, offsetMs: 0), 0, "歌词点击: 第一行零时间")
+    }
     // MARK: - 空状态:顺序就是优先级
     do {
         typealias E = LyricsWindowEmptyState

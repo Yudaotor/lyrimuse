@@ -105,6 +105,90 @@ private final class WindowPlayback: ObservableObject {
     private(set) var backgroundColorEnd = AppSettings.defaultLyricsWindowBackgroundColorEndFallback
     private var subs: [AnyCancellable] = []
 
+    #if DEBUG
+    /// A deterministic player boundary for the interactive PiP verification app.
+    /// It never subscribes to the real player or starts the collector.
+    init(verification: Bool) { setVerificationTrack(1) }
+
+    func setVerificationTrack(_ number: Int) {
+        title = "PiP verification track \(number)"
+        artist = "Local fixture"
+        displayArtist = artist
+        album = "Interactive lyrics"
+        displayAlbum = album
+        isCurrentTrackAdBreak = false
+        backgroundMode = .solid
+        backgroundColorHex = "#122139"
+        backgroundColor = Color(red: 0.07, green: 0.13, blue: 0.22)
+        textColorMode = .light
+        artworkImage = number == 7 ? LyricsPictureInPictureVerification.artworkFixture : nil
+        artworkData = artworkImage?.tiffRepresentation
+        if number == 7 { backgroundMode = .artwork }
+        showTranslation = true
+        showRomanization = number >= 3
+        miniLyricsLayout = .compact
+        currentDurationMs = 90_000
+        hasLyricsContent = number != 0
+        if number == 0 {
+            allLines = []
+            currentLineIndex = nil
+            scrollLineIndex = nil
+            currentTrackHasNoLyrics = true
+            return
+        }
+        currentTrackHasNoLyrics = false
+        let engine = LyricsSyncEngine()
+        let longText: String?
+        switch number {
+        case 3: longText = "起点。" + String(repeating: "沿着夜色慢慢走过长街，听见远方传来的歌声。", count: 7) + "终点。"
+        case 4: longText = "Beginning. " + String(repeating: "Follow the melody through the quiet streets and carry every word home. ", count: 5) + "The end."
+        case 5: longText = "起点" + String(repeating: "星空の下で歌い続ける", count: 8) + "終点"
+        case 6: longText = "Beginning" + String(repeating: "Supercalifragilisticexpialidocious", count: 5) + "End"
+        default: longText = nil
+        }
+        var lyricLines: [String] = [], translations: [String] = []
+        for i in 0..<18 {
+            let timestamp = String(format: "[%02d:%02d.00]", i * 5 / 60, i * 5 % 60)
+            let text = i == 6 ? (longText ?? "Track \(number), lyric \(i + 1)") : "Track \(number), lyric \(i + 1)"
+            lyricLines.append(timestamp + text)
+            let tr = i == 6 && longText != nil ? String(repeating: "长译文也应完整换行，保留最后一句。", count: 5)
+                : "第 \(number) 首，第 \(i + 1) 句"
+            translations.append(timestamp + tr)
+        }
+        let lyrics = lyricLines.joined(separator: "\n")
+        let translation = translations.joined(separator: "\n")
+        let roma = longText == nil ? "" : "[00:30.00]" + String(repeating: "hoshizora no shita de utai tsuzukeru ", count: 5)
+        let yrc: String
+        if let longText, number == 5 || number == 6 {
+            yrc = (0..<18).map { i in
+                let tokens = i == 6 ? (number == 5 ? longText.map(String.init) : [longText]) : ["Track \(number), lyric \(i + 1)"]
+                let duration = max(1, 5_000 / tokens.count)
+                return "[\(i * 5_000),5000]" + tokens.enumerated().map { j, token in
+                    "(\(i * 5_000 + j * duration),\(duration),0)\(token)"
+                }.joined()
+            }.joined(separator: "\n")
+        } else { yrc = "" }
+        _ = engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: roma, lyricsYRC: yrc)
+        allLines = engine.allLines(idPrefix: "verification-\(number)")
+        currentLineIndex = 6
+        scrollLineIndex = 6
+        pausedPositionMs = 28_500
+    }
+
+    func verificationSeek(_ ms: Int) {
+        pausedPositionMs = ms
+        currentLineIndex = allLines.lastIndex(where: { $0.timeMs <= ms + 1_500 })
+        scrollLineIndex = currentLineIndex
+    }
+
+    func setVerificationMetadata(artist: String, album: String, adBreak: Bool) {
+        // Keep the raw fields unchanged to catch accidentally displaying uncorrected metadata.
+        displayArtist = artist
+        displayAlbum = album
+        isCurrentTrackAdBreak = adBreak
+    }
+    #endif
+
     init() {
         let p = PlaybackCoordinator.shared
         let s = AppSettings.shared
@@ -269,6 +353,7 @@ private final class LyricsWindowController: ObservableObject {
     /// 最小化、orderOut 都是 false;部分露出算可见。逐字两级时钟 / 间奏三点 / 换行滚动动画的
     /// 门控用(见已知坑 #17)。默认 true——宁可多跑也不能把看得见的窗口停表。
     @Published private(set) var isSurfaceVisible = true
+    @Published private(set) var isPictureInPictureHovered = false
     /// `isSurfaceVisible` 的两个输入:系统的 occlusionState,以及「是不是几乎被别的窗口整扇盖住」
     /// (`WindowCoverageMonitor`)。后者补 occlusionState 的盲区 —— 露一条 16pt 的缝它也报可见,
     /// 实测盖住 98.4% 时逐字填色照样整窗每秒 60 次重绘(29.3% 对最小化时 13.7%)。
@@ -341,7 +426,7 @@ private final class LyricsWindowController: ObservableObject {
     /// 再补一次(见 applyWindowOpacity 的两个调用点)。
     private var wantsTransparentBackground = false
 
-    private weak var window: NSWindow?
+    private(set) weak var window: NSWindow?
     /// 窗口此刻在不在屏幕上 —— App 激活刷新的可见性守卫用(Window 场景关闭后视图树
     /// 保活,onReceive 还会进来)。
     var isWindowVisible: Bool { window?.isVisible ?? false }
@@ -539,6 +624,8 @@ private final class LyricsWindowController: ObservableObject {
 
     private func applyWindowOpacity() {
         guard let window else { return }
+        // PiP's rounded SwiftUI content needs a transparent window behind its corners.
+        guard !(window is LyricsPictureInPictureWindow) else { return }
         window.isOpaque = !wantsTransparentBackground
         // 透明时必须把窗口底色一并换掉 —— isOpaque=false 只是允许透,底色还铺着就照样挡着。
         window.backgroundColor = wantsTransparentBackground ? .clear : .windowBackgroundColor
@@ -663,6 +750,10 @@ private final class LyricsWindowController: ObservableObject {
             return
         }
         self.window = window
+        if window is LyricsPictureInPictureWindow {
+            attachPictureInPicture(window)
+            return
+        }
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
         // 原生全屏:.windowFullScreenBehavior(.enabled) 在这版 SwiftUI 上
@@ -861,6 +952,31 @@ private final class LyricsWindowController: ObservableObject {
         }
     }
 
+    /// PiP shares visibility and resize tracking, but none of the normal window's
+    /// fullscreen, titlebar, Window-menu or frame-persistence machinery.
+    private func attachPictureInPicture(_ window: NSWindow) {
+        (window as? LyricsPictureInPictureWindow)?.onPointerPresenceChange = { [weak self] inside in
+            guard let self, self.isPictureInPictureHovered != inside else { return }
+            self.isPictureInPictureHovered = inside
+        }
+        startCoverageMonitor(window)
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] note in
+            guard let win = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated {
+                self?.occlusionVisible = win.occlusionState.contains(.visible)
+                self?.refreshSurfaceVisible()
+            }
+        }
+        liveResizeStartObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willStartLiveResizeNotification, object: window, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.isLiveResizing = true } }
+        liveResizeEndObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didEndLiveResizeNotification, object: window, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.isLiveResizing = false } }
+    }
+
     func toggleAlwaysOnTop() {
         setAlwaysOnTop(!isAlwaysOnTop)
     }
@@ -1054,6 +1170,70 @@ struct LyricsWindowView: View {
     /// 且要有真实 NSWindow 才动得了 —— 预览没有窗口,够不着它。所以另开一个只读入参,
     /// 两者取或(见 showsMiniLayout)。
     var previewMini = false
+    /// A separate interactive floating panel, independent of the mini-size setting.
+    var pictureInPicture = false
+    var pipController = LyricsPictureInPictureController.shared
+    private var isVerification = false
+    private var seekPosition: (Int) -> Void = { PlaybackCoordinator.shared.seek(toMs: $0) }
+    private var lyricsOffset: () -> Int = { PlaybackCoordinator.shared.currentLyricsOffsetMs }
+
+    @MainActor
+    init(previewMode: Bool = false, previewMini: Bool = false, pictureInPicture: Bool = false,
+         pipController: LyricsPictureInPictureController? = nil) {
+        self.previewMode = previewMode
+        self.previewMini = previewMini
+        self.pictureInPicture = pictureInPicture
+        self.pipController = pipController ?? .shared
+    }
+
+    #if DEBUG
+    private static let verificationPlayback = WindowPlayback(verification: true)
+
+    static func verificationView(pictureInPicture: Bool, controller: LyricsPictureInPictureController,
+                                 onSeek: @escaping (Int) -> Void) -> LyricsWindowView {
+        var view = LyricsWindowView(pictureInPicture: pictureInPicture, pipController: controller)
+        view._playback = StateObject(wrappedValue: verificationPlayback)
+        view.isVerification = true
+        view.lyricsOffset = { 1_500 }
+        view.seekPosition = { ms in
+            verificationPlayback.verificationSeek(ms)
+            onSeek(ms)
+        }
+        return view
+    }
+
+    static func setVerificationTrack(_ number: Int) { verificationPlayback.setVerificationTrack(number) }
+
+    static func setVerificationMetadata(artist: String, album: String, adBreak: Bool = false) {
+        verificationPlayback.setVerificationMetadata(artist: artist, album: album, adBreak: adBreak)
+    }
+
+    static func verifyPictureInPictureTypography() -> Bool {
+        var passed = true
+        let text = "Beginning" + String(repeating: "Supercalifragilisticexpialidocious", count: 5) + "End"
+        let word = SyncedLyricWord(text: text, startMs: 0, durationMs: 5_000)
+        for active in [false, true] {
+            for grouped in [false, true] {
+                let groups = grouped ? [SyncedLyricWordGroup(id: 0, words: [word], romanization: text)] : nil
+                let line = KaraokeLineText(words: [word], groups: groups, base: .white,
+                    isActive: active, isPlaying: false, fillSettled: true,
+                    fontSize: 24, romaFontSize: 14, fontFamily: "", reduceMotion: true,
+                    displayScale: 2, wrapsOversizedTokens: true)
+                let host = NSHostingView(rootView: line.frame(width: 280))
+                let narrow = host.fittingSize
+                host.rootView = line.frame(width: 520)
+                let wide = host.fittingSize
+                host.rootView = line.frame(width: 280)
+                let restored = host.fittingSize
+                let ok = narrow.width <= 280 && narrow.height > 72
+                    && narrow.height > wide.height && restored == narrow
+                passed = passed && ok
+                LyricsPictureInPictureVerification.record("\(ok ? "PASS" : "FAIL"): long token layout active=\(active) grouped=\(grouped) narrow=\(narrow) wide=\(wide) restored=\(restored)")
+            }
+        }
+        return passed
+    }
+    #endif
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 WindowPlayback 的注释。
     @StateObject private var playback = WindowPlayback()
     @StateObject private var windowController = LyricsWindowController()
@@ -1186,7 +1366,9 @@ struct LyricsWindowView: View {
         // 刷新时机)—— 它们管的是这扇窗本身,跟里面画什么无关。布局本身分两支:
         // 迷你是为小尺寸**重新排的**一版(见 miniBody),不是把完整布局挤窄。
         return Group {
-            if showsMiniLayout {
+            if pictureInPicture {
+                pictureInPictureBody
+            } else if showsMiniLayout {
                 miniBody
             } else {
                 fullBody
@@ -1197,10 +1379,12 @@ struct LyricsWindowView: View {
         // 判断退化成单列),手动拖宽一次之后就会记住新比例。
         // 迷你模式要突破正常的尺寸下限(520×480)才缩得下去 —— 这两个数直接决定 NSWindow 的
         // contentMinSize,不放开的话 setFrame 会被钳住。见 LyricsWindowController.toggleMini。
-        .frame(minWidth: showsMiniLayout ? LyricsWindowController.miniMinSize.width : 520,
-               idealWidth: 1020,
-               minHeight: showsMiniLayout ? LyricsWindowController.miniMinSize.height : 480,
-               idealHeight: 660)
+        .frame(minWidth: pictureInPicture ? LyricsPictureInPictureWindow.minimumSize.width
+                   : (showsMiniLayout ? LyricsWindowController.miniMinSize.width : 520),
+               idealWidth: pictureInPicture ? LyricsPictureInPictureWindow.defaultSize.width : 1020,
+               minHeight: pictureInPicture ? LyricsPictureInPictureWindow.minimumSize.height
+                   : (showsMiniLayout ? LyricsWindowController.miniMinSize.height : 480),
+               idealHeight: pictureInPicture ? LyricsPictureInPictureWindow.defaultSize.height : 660)
         // 预览模式下**不能**挂:它会把宿主(设置)窗口当成歌词窗口接管,见 previewMode 的注释。
         .background {
             if !previewMode {
@@ -1218,16 +1402,16 @@ struct LyricsWindowView: View {
             windowController.setBackgroundTransparent(transparent)
         }
         // 预览不是"这扇窗打开了",不参与记账(记了会让 Dock 图标跟着设置页开关闪)。
-        .onAppear { if !previewMode { AuxiliaryWindowActivation.windowDidAppear("lyrics-window") } }
+        .onAppear { if !previewMode && !pictureInPicture { AuxiliaryWindowActivation.windowDidAppear("lyrics-window") } }
         // 预览的 controller 不 attach 窗口,自己的可见性永远是 true;改用设置窗口的可见性,
         // 逐字时钟 / 间奏三点 / 进度条 / 滚动动画就跟真窗口被遮住时一样停下来。
         .onChange(of: previewHostVisible, initial: true) { _, visible in
             if previewMode { windowController.setPreviewHostVisible(visible) }
         }
-        .onDisappear { if !previewMode { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
+        .onDisappear { if !previewMode && !pictureInPicture { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
         // 专辑简介:这扇窗开着时每次换歌预取,入口才能按「有没有简介」决定可不可点。预览不登记。
-        .onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }
-        .onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }
+        .onAppear { if !previewMode && !isVerification { EditorialNotesStore.shared.retain() } }
+        .onDisappear { if !previewMode && !isVerification { EditorialNotesStore.shared.release() } }
         .onChange(of: editorialPanel.map { editorial.card($0) == nil } ?? false) { _, missing in
             if missing { editorialPanel = nil }
         }
@@ -1245,7 +1429,7 @@ struct LyricsWindowView: View {
             // PlaybackCoordinator 的共享状态,换歌时协调器自己会刷,真窗口/悬浮窗打开时也会刷,
             // 预览跟着读现成的值就够了。为"用户瞄一眼设置页"白起三个子进程,跟下面那条
             // 「App 每次激活都在关着的窗口背后白起 3 个 osascript」守卫是同一笔账。
-            guard !previewMode else { return }
+            guard !previewMode && !isVerification else { return }
             PlaybackCoordinator.shared.refreshFavorited()
             PlaybackCoordinator.shared.refreshPlaybackMode()
             PlaybackCoordinator.shared.refreshVolume()
@@ -1256,10 +1440,128 @@ struct LyricsWindowView: View {
             // 可见性守卫:Window 场景关闭后视图树/订阅仍保活,
             // 原来每次 App 激活(Cmd-Tab/点状态栏)都在关着的窗口背后白起最多 3 个
             // osascript 子进程。重开窗口时上面 onAppear 的全量刷新本来就会跑一遍。
-            guard windowController.isWindowVisible else { return }
+            guard windowController.isWindowVisible && !isVerification else { return }
             PlaybackCoordinator.shared.refreshFavorited()
             PlaybackCoordinator.shared.refreshPlaybackMode()
             PlaybackCoordinator.shared.refreshVolume()
+        }
+    }
+
+    // MARK: - Picture in Picture
+
+    private var pictureInPictureBody: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Button { pipController.close() } label: {
+                    Image(systemName: "xmark")
+                }
+                .accessibilityLabel(L10n.t("关闭画中画"))
+                .accessibilityIdentifier("lyrics-pip-close")
+                .help(L10n.t("关闭画中画"))
+                VStack(spacing: 2) {
+                    Text(displayTitle.isEmpty ? L10n.t("歌词画中画") : displayTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                    if !displayArtistAlbum.isEmpty {
+                        // Truncate each field independently so a long artist cannot hide the album.
+                        HStack(spacing: 0) {
+                            if !playback.displayArtist.isEmpty { Text(verbatim: playback.displayArtist) }
+                            if !playback.displayArtist.isEmpty && !playback.displayAlbum.isEmpty {
+                                Text(verbatim: " — ").fixedSize()
+                            }
+                            if !playback.displayAlbum.isEmpty { Text(verbatim: playback.displayAlbum) }
+                        }
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(lyricTextColor.opacity(0.72))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isStaticText)
+                        .accessibilityLabel(displayArtistAlbum)
+                        .accessibilityIdentifier("lyrics-pip-metadata")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .overlay { LyricsPictureInPictureDragHandle() }
+                .help(displayArtistAlbum.isEmpty ? displayTitle : "\(displayTitle)\n\(displayArtistAlbum)")
+                Button { pipController.returnToLyricsWindow() } label: {
+                    Image(systemName: "pip.exit")
+                }
+                .accessibilityLabel(L10n.t("返回歌词窗口"))
+                .accessibilityIdentifier("lyrics-pip-return")
+                .help(L10n.t("返回歌词窗口"))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(lyricTextColor)
+            .padding(.horizontal, 16)
+            .frame(height: displayArtistAlbum.isEmpty ? 38 : 52)
+
+            // Always use the complete list, including untimed lyrics and empty states.
+            // This is the same renderer, highlighting and seek path as Lyrics Window.
+            lyricsScrollReader { _ in
+                rightPane(leading: 20, trailing: 20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        }
+        .overlay(alignment: .bottom) {
+            if !playback.title.isEmpty {
+                VStack(spacing: 0) {
+                    ViewThatFits(in: .horizontal) {
+                        miniDeck.fixedSize()
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) { miniTransportPill; miniVolumeCapsule }
+                            miniOffsetPill
+                        }
+                        .fixedSize()
+                    }
+                    .padding(.vertical, 8)
+                    miniProgressBar
+                }
+                // Leave the native resize border clear, including the scrub hit area.
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+                .opacity(miniControlsVisible ? 1 : 0)
+                .allowsHitTesting(miniControlsVisible)
+                .accessibilityHidden(!miniControlsVisible)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: miniControlsVisible)
+            }
+        }
+        .onChange(of: miniControlsVisible, initial: true) { _, visible in
+            #if DEBUG
+            if isVerification { LyricsPictureInPictureVerification.record("CONTROLS visible=\(visible)") }
+            #endif
+        }
+        .background {
+            if activeBackgroundMode == .artwork {
+                Color(nsColor: .windowBackgroundColor)
+            }
+            pictureInPictureBackground.ignoresSafeArea()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    @ViewBuilder
+    private var pictureInPictureBackground: some View {
+        if activeBackgroundMode == .artwork,
+           let image = playback.highResArtworkImage ?? playback.artworkImage {
+            // The full window's pre-baked 6×6 color field deliberately removes
+            // artwork detail. PiP keeps the original cover recognizable.
+            GeometryReader { geometry in
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .blur(radius: 4)
+                    .overlay {
+                        LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.35), .black.opacity(0.55)],
+                                       startPoint: .top, endPoint: .bottom)
+                    }
+                    .clipped()
+            }
+            .allowsHitTesting(false)
+        } else {
+            artworkBackground
         }
     }
 
@@ -1898,7 +2200,10 @@ struct LyricsWindowView: View {
     /// 预览里整个不摆,同左上角那两颗窗口控件的理由:预览是设置页里的一张画,按下去会真的
     /// 切歌/改音量,而看的人以为自己只是在看效果。
     private var miniControlsVisible: Bool {
-        playback.miniShowsControls && !previewMode && (miniHovered || miniScrubFraction != nil)
+        if pictureInPicture {
+            return !previewMode && (windowController.isPictureInPictureHovered || miniScrubFraction != nil)
+        }
+        return playback.miniShowsControls && !previewMode && (miniHovered || miniScrubFraction != nil)
     }
 
     /// 玻璃胶囊的描边。有封面背景时走白色 —— 那一圈亮边正是"玻璃光泽"的来源;纯色底下
@@ -1916,12 +2221,16 @@ struct LyricsWindowView: View {
     private var miniDeck: some View {
         HStack(spacing: 8) {
             miniTransportPill
-            WindowVolumeCapsule(onArtwork: hasArtworkBackground,
-                                showsOutputMenu: .constant(false),
-                                compact: true)
+            miniVolumeCapsule
             miniOffsetPill
         }
         .frame(height: Self.miniDeckHeight)
+    }
+
+    private var miniVolumeCapsule: some View {
+        WindowVolumeCapsule(onArtwork: hasArtworkBackground,
+                            showsOutputMenu: .constant(false), compact: true,
+                            previewVolume: isVerification ? 50 : nil)
     }
 
     private var miniTransportPill: some View {
@@ -2605,7 +2914,9 @@ struct LyricsWindowView: View {
         // 所以 intro 场景滚**第一句**(永远存在、永远有布局),锚点下移一行的量(0.52)。
         let target: (id: String, anchor: UnitPoint)?
         if let id = activeID {
-            target = (id, Self.activeLineAnchor)
+            // Centering a row taller than the viewport hides its opening words.
+            // PiP anchors the beginning of the row below the top fade instead.
+            target = pictureInPicture ? ("\(id)-pip-start", UnitPoint(x: 0.5, y: 0.22)) : (id, Self.activeLineAnchor)
         } else if gapMarker(-1) != nil, let first = playback.allLines.first {
             target = (first.id, UnitPoint(x: 0.5, y: 0.52))
         } else {
@@ -2734,6 +3045,7 @@ struct LyricsWindowView: View {
                             duetInsetUnit: duetInsetUnit,
                             centered: centered,
                             wordRise: wordRise,
+                            wrapsOversizedTokens: pictureInPicture,
                             onArtwork: rowOnArtwork,
                             // 行自己不再从 onArtwork 推文字色 —— 那等于把「文字颜色」那颗设置绕过去。
                             // 颜色在窗口层解析好再传进来(`.auto` 档解析出来的就是老的那两个值)。
@@ -2751,10 +3063,15 @@ struct LyricsWindowView: View {
                                 // 减去当前歌词偏移:引擎判定"现在是哪一行"时会把 offsetMs 加到
                                 // 播放位置上(见 activeLine),这里不减回去的话,跳过去之后落在
                                 // 的会是隔壁行。
-                                PlaybackCoordinator.shared.seek(toMs: max(0, item.timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
+                                seekPosition(LyricsWindowSeek.position(timeMs: item.timeMs, offsetMs: lyricsOffset()))
                             }
                         )
                         .equatable()
+                        .background(alignment: .top) {
+                            if pictureInPicture {
+                                Color.clear.frame(height: 1).id("\(item.id)-pip-start")
+                            }
+                        }
                         .id(item.id)
                         // 这一行之后有间奏 → 插「•••」(不活跃时零高度不占位,见 gapDotsRow)。
                         if let g = gapMarker(index) {
@@ -3423,6 +3740,10 @@ struct LyricsWindowView: View {
     /// WindowPlayback.init)——只隔一层转发更直接,跟 LyricsManagerView.refreshPlaceholder
     /// 已有的写法一致。
     private func openLyricsSearch() {
+        if pictureInPicture {
+            AppActions.shared.openLyricsQuickSearch?()
+            return
+        }
         let p = PlaybackCoordinator.shared
         let artist = p.artist, title = p.title, album = p.album
         let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
@@ -3957,18 +4278,27 @@ struct LyricsWindowView: View {
                 }
                 .help(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
             }
-            // 迷你尺寸用画中画那对符号:「缩成一扇小窗」在 Apple 的播放器语汇里就是 pip
-            // (Apple Music 全屏歌词页、QuickTime、Safari 视频控件同款),跟全屏那对斜箭头分得开。
+            // Mini size changes this window; PiP replaces it with a floating lyrics list.
             Button {
                 windowController.toggleMini()
             } label: {
-                Image(systemName: showsMiniLayout ? "pip.exit" : "pip.enter")
+                Image(systemName: showsMiniLayout ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
                     .font(Self.windowActionIconFont)
                     .frame(width: Self.windowActionIconWidth)
             }
             .help(L10n.t(showsMiniLayout ? "退出迷你尺寸" : "进入迷你尺寸"))
             // 全屏时不能切(见 toggleMini)。
             .disabled(windowController.isFullScreenActive)
+            Button {
+                pipController.show(replacing: windowController.window)
+            } label: {
+                Image(systemName: "pip.enter")
+                    .font(Self.windowActionIconFont)
+                    .frame(width: Self.windowActionIconWidth)
+            }
+            .accessibilityLabel(L10n.t("打开歌词画中画"))
+            .accessibilityIdentifier("lyrics-pip-open")
+            .help(L10n.t("打开歌词画中画"))
         }
         .buttonStyle(WindowActionButtonStyle(onArtwork: hasArtworkBackground))
         // 图标跟着背景走:.clear 玻璃是透明的,背后是深色的模糊封面时 .secondary 会暗到
@@ -4496,6 +4826,7 @@ private struct LyricsLineRow: View, Equatable {
     var centered: Bool = false
     /// 正在唱的字要不要上浮(迷你「多行」关、完整布局开)。
     var wordRise: Bool = true
+    var wrapsOversizedTokens: Bool = false
     let onArtwork: Bool
     /// 正文色 / 副行(译文·罗马音)色。由窗口层解析好传进来,这里**不再**自己从 `onArtwork` 推 ——
     /// 推的话就把「文字颜色」那颗设置绕过去了。`onArtwork` 留着管别的(阴影、vibrancy 那类跟
@@ -4530,6 +4861,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.duetInsetUnit == b.duetInsetUnit
             && a.centered == b.centered
             && a.wordRise == b.wordRise
+            && a.wrapsOversizedTokens == b.wrapsOversizedTokens
             && a.onArtwork == b.onArtwork
             // 漏掉这两个 = 改了「文字颜色」整表行不重画(全表行都挂着 Equatable 跳过重绘),
             // 表现同上面字体那条:"改了没反应,要滚一下或换首歌才生效"。
@@ -4647,7 +4979,8 @@ private struct LyricsLineRow: View, Equatable {
                     reduceMotion: reduceMotion,
                     displayScale: displayScale,
                     rowAlignment: rowAlignment,
-                    rises: false
+                    rises: false,
+                    wrapsOversizedTokens: wrapsOversizedTokens
                 )
                 .opacity(Self.backgroundVocalsOpacity)
             }
@@ -4711,6 +5044,12 @@ private struct LyricsLineRow: View, Equatable {
         .contentShape(Rectangle())
         .onHover(perform: onHover)
         .onTapGesture(perform: onTap)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([item.line.plainText, showTranslation ? item.line.translation : nil,
+                             showRomanization ? item.line.romanization : nil].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("lyrics-line-\(item.id)")
+        .accessibilityAction { onTap() }
     }
 
     @ViewBuilder
@@ -4746,7 +5085,8 @@ private struct LyricsLineRow: View, Equatable {
                 displayScale: displayScale,
                 rowAlignment: rowAlignment,
                 rises: wordRise,
-                pausedMs: pausedMs
+                pausedMs: pausedMs,
+                wrapsOversizedTokens: wrapsOversizedTokens
             )
         } else {
             Text(item.line.plainText ?? "")
@@ -5031,6 +5371,7 @@ private struct KaraokeLineText: View {
     var rises: Bool = true
     /// 暂停时的时间基准,原样交给每个字(见 KaraokeWordText.pausedMs)。
     var pausedMs: Int? = nil
+    var wrapsOversizedTokens: Bool = false
 
     /// WrapLayout 的内容身份:行文本/字号/字体族/罗马音形态都没变时,
     /// 布局回合跳过整行 CoreText 重新测宽(见 WrapLayout.Cache 守卫注释)。
@@ -5125,7 +5466,8 @@ private struct KaraokeLineText: View {
         // 按组排时一组就是一个词,处处能断;逐字排时英文按音节切,只在词边界断(见 WrapLayoutMath.rows)。
         WrapLayout(rowAlignment: rowAlignment, contentKey: lineLayoutKey,
                    breakBefore: groups?.isEmpty == false
-                       ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text))) {
+                       ? nil : WrapLayoutMath.breakOpportunities(texts: words.map(\.text)),
+                   wrapsOversizedSubviews: wrapsOversizedTokens) {
             if let groups, !groups.isEmpty {
                 // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
                 // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
@@ -5145,7 +5487,8 @@ private struct KaraokeLineText: View {
                                                 // 分支,见 LyricsLineRow.mainText)。
                                                 forceFilled: !isActive,
                                                 lineSettled: fillSettled,
-                                                pausedMs: pausedMs)
+                                                pausedMs: pausedMs,
+                                                wrapsText: wrapsOversizedTokens)
                             }
                         }
                         // 这一行已经在走逐词罗马音(外层 groups 非空),每一组都要占住这一行读音的高度,
@@ -5168,10 +5511,11 @@ private struct KaraokeLineText: View {
                             rises: false, // 读音不跟着抬,只有正文的字会浮起来
                             forceFilled: !isActive,
                             lineSettled: fillSettled,
-                            pausedMs: pausedMs
+                            pausedMs: pausedMs,
+                            wrapsText: wrapsOversizedTokens
                         )
-                        .lineLimit(1)
-                        .fixedSize()
+                        .lineLimit(wrapsOversizedTokens ? nil : 1)
+                        .fixedSize(horizontal: !wrapsOversizedTokens, vertical: true)
                         .padding(.horizontal, 2)
                         .opacity(g.romanization == nil ? 0 : 1)
                     }
@@ -5192,7 +5536,8 @@ private struct KaraokeLineText: View {
                                     lineSettled: fillSettled,
                                     emphasis: spans[i],
                                     emphasisAnchor: anchors[i],
-                                    pausedMs: pausedMs)
+                                    pausedMs: pausedMs,
+                                    wrapsText: wrapsOversizedTokens)
                 }
             }
         }
@@ -5250,6 +5595,7 @@ private struct KaraokeWordText: View {
     /// 它只是让这个字"输入变了":暂停时两级时钟都停着,暂停中拖进度 / 调偏移若不改任何输入,
     /// 这个字就不重算,填色停在拖之前的位置。
     var pausedMs: Int? = nil
+    var wrapsText: Bool = false
 
     /// 强调辉光的模糊半径,按字号取比例。
     private static let emphasisGlowRadiusEm: CGFloat = 0.12
@@ -5354,7 +5700,7 @@ private struct KaraokeWordText: View {
                     if t.animation != nil { t.animation = nil }
                 }
                 // 必须跟底下那层同尺寸同位置:同一段字、同一个字体,不裁、不折。
-                .fixedSize()
+                .fixedSize(horizontal: !wrapsText, vertical: true)
         }
         // 底下那层透明字已经被读屏读到了,这一层再进无障碍树就是同一个字读两遍。
         .accessibilityHidden(true)
@@ -5637,6 +5983,8 @@ private struct WindowVolumeCapsule: View {
     /// 460pt 宽里三颗胶囊并排,这颗按完整形态(总宽 ~143)会把另外两颗挤出去;而输出面板是
     /// 窗级 overlay、迷你窗根本没有它的位置。
     var compact = false
+    /// A fixed, non-interactive value for isolated UI verification.
+    var previewVolume: Int? = nil
     @StateObject private var model = Model()
     @State private var sliderHovered = false
 
@@ -5669,7 +6017,7 @@ private struct WindowVolumeCapsule: View {
 
     @ViewBuilder
     var body: some View {
-        if let volume = model.soundVolume {
+        if let volume = previewVolume ?? model.soundVolume {
             // 形态对照 AM 顶栏音量胶囊特写:**只有滑杆 + 右侧喇叭**,没有左侧静音键和分隔线,
             // 整体宽高比 ≈4:1(32pt 高 → 总宽 ~143)。静音功能收进右侧喇叭(点击切换,图标仍随
             // 档位变)。尺寸按"菜单栏 64px 作共同标尺"的同屏对拍定:滑块 12.5pt 高 / 轨道 3pt、
@@ -5722,6 +6070,7 @@ private struct WindowVolumeCapsule: View {
                 // 有封面背景时边缘走白色 —— 那一圈亮边正是"玻璃光泽"的来源;纯色底
                 // (没有封面)下白边会显得脏,退回中性描边。
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
+            .allowsHitTesting(previewVolume == nil)
         }
     }
 
