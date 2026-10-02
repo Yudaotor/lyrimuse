@@ -2789,7 +2789,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		coverAlbum = appleAlbumHintSync(ctx, coverArtist, coverTitle, coverDuration,
 			coverAlbumCorroboration(coverArtist, coverTitle, album, e.CanonicalArtist, pickLyricCandidate(scored)))
 	}
-	appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum)
+	appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum, coverDuration)
 	if e.CoverURL == "" && appleMatch.cover != "" {
 		e.CoverURL = appleMatch.cover
 		e.CoverSource = "apple"

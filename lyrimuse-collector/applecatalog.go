@@ -494,8 +494,9 @@ var (
 // appleStorefrontArtistCacheVersion:落盘格式版本。v1 是裸 map(~ 09-12),里面的署名**没有经过
 // 「这首歌确实在那张专辑里」的核对**(见 appleStorefrontTrackMatches),已实测装进过错人(back number《Happy End - EP》
 // → 韩国歌手 Rothy);v2 起整份换成 {"version":2,"entries":{…}},读到 v1 一律丢掉重查 —— 重查每张专辑只花一次,
-// 比逐条甄别哪条是错的划算,也比只删已知那一条彻底。
-const appleStorefrontArtistCacheVersion = 2
+// 比逐条甄别哪条是错的划算,也比只删已知那一条彻底。v2 的单曲 / EP 条目没核对署名(专辑名只是曲名时,别人的同名
+// 单曲也对得上),读到 v2 只丢这些(dropSingleOrEPStorefrontEntries),其余照用;见 03 章决策 26。
+const appleStorefrontArtistCacheVersion = 3
 
 type appleStorefrontArtistFile struct {
 	Version int                 `json:"version"`
@@ -516,10 +517,38 @@ func loadAppleStorefrontArtistCache(path string) {
 		noteCacheLoaded(path, fmt.Sprintf("%d Apple storefront artist entries", len(f.Entries)))
 		return
 	}
+	if err := json.Unmarshal(data, &f); err == nil && f.Version == 2 && f.Entries != nil {
+		kept, dropped := dropSingleOrEPStorefrontEntries(f.Entries)
+		appleStorefrontArtistMu.Lock()
+		appleStorefrontArtistCache = kept
+		appleStorefrontArtistDirty = dropped > 0
+		appleStorefrontArtistMu.Unlock()
+		log.Printf("cache: loaded %d v2 Apple storefront artist entries from %s, dropped %d single/EP entries (re-derived on demand)", len(kept), path, dropped)
+		return
+	}
 	var legacy map[string][]string
 	if err := json.Unmarshal(data, &legacy); err == nil && legacy != nil {
 		log.Printf("cache: discarding %d unverified v1 Apple storefront artist entries from %s (re-derived on demand with per-track verification)", len(legacy), path)
 	}
+}
+
+// dropSingleOrEPStorefrontEntries 去掉专辑那段(键是「艺人|专辑」,都经 normLoose)以 single / ep 结尾的条目。
+// 规整后分不出是不是「 - Single」后缀,宁可多丢几张专辑名恰好以这两个词结尾的,代价只是按需重查一次。纯函数。
+func dropSingleOrEPStorefrontEntries(entries map[string][]string) (map[string][]string, int) {
+	kept := make(map[string][]string, len(entries))
+	dropped := 0
+	for k, v := range entries {
+		album := k
+		if i := strings.LastIndex(k, "|"); i >= 0 {
+			album = k[i+1:]
+		}
+		if strings.HasSuffix(album, "single") || strings.HasSuffix(album, "ep") {
+			dropped++
+			continue
+		}
+		kept[k] = v
+	}
+	return kept, dropped
 }
 
 func saveAppleStorefrontArtistCache() {
@@ -695,6 +724,9 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 
 	q := neturl.QueryEscape(artist + " " + album)
 	seen := map[string]bool{normLoose(artist): true}
+	// 专辑名只是曲名的单曲:别人的同名单曲专辑名、曲名都对得上,时长也常在容差内。署名对不上本地的,只有认得出是
+	// 同一份录音换了文字写法(appleSameSingleByAnotherName)才收作别名。
+	genericSingle := appleAlbumIsJustTheTitle(album, title)
 	var out []string
 	probed := false  // 至少有一个商店真的定位到了专辑、取过它的曲目表
 	complete := true // 每个商店都问成了(搜索真的答了、定位到的专辑真的取到了曲目表)
@@ -734,6 +766,11 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		}
 		n := normLoose(hit.ArtistName)
 		if hit.ArtistName == "" || n == "" || seen[n] {
+			continue
+		}
+		if genericSingle && !lyricSourceArtistMatches(hit.ArtistName, artist) &&
+			!appleSameSingleByAnotherName(hit.ArtistName, artist, hit.TrackTimeMillis/1000, durationSecs) {
+			log.Printf("lyrics: storefront %s: single %q by %q has a same-title track by %q, not taken as an alias", country, album, artist, hit.ArtistName)
 			continue
 		}
 		seen[n] = true

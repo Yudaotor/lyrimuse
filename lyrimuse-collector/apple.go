@@ -8,11 +8,13 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
+	"math"
 	"net/http"
 	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 var (
@@ -110,7 +112,8 @@ func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
 	return appleURLCache[artist+"|"+title+"|"+album]
 }
 
-func appleMusicMatchCached(ctx context.Context, artist, title, album string) appleMusicMatch {
+// durationSecs:本地这首的时长,未知传 0。只在单曲专辑名只是曲名、署名对不上时用来认同一份录音(appleSameSingleByAnotherName)。
+func appleMusicMatchCached(ctx context.Context, artist, title, album string, durationSecs float64) appleMusicMatch {
 	if title == "" {
 		return appleMusicMatch{}
 	}
@@ -127,7 +130,7 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string) app
 		return appleMusicMatch{}
 	}
 
-	m, reached := resolveAppleMusicMatch(ctx, artist, title, album)
+	m, reached := resolveAppleMusicMatch(ctx, artist, title, album, durationSecs)
 	if m.url != "" {
 		appleURLMu.Lock()
 		appleURLCache[key] = m
@@ -148,8 +151,8 @@ func appleMusicMatchCached(ctx context.Context, artist, title, album string) app
 // 第二个返回值 reached 汇总两条路径("真的问到了 Apple 吗",见 itunesSearch 头注)。
 // 只要有一步没问成就是 false —— appleMusicMatchCached 靠它区分"Apple 确实没有这首歌"
 // 和"这次没问成",只有前者才配写进负缓存。
-func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (appleMusicMatch, bool) {
-	m, albumMatched, reached := searchAppleMusicMatch(ctx, artist, title, album)
+func resolveAppleMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
+	m, albumMatched, reached := searchAppleMusicMatch(ctx, artist, title, album, durationSecs)
 	if albumMatched {
 		return m, reached
 	}
@@ -163,7 +166,7 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (a
 	// 《橙月》——resolveAppleMusicMatchViaAlbum 内部还有一层"专辑对上但曲名对不上就退到
 	// 专辑封面"的兜底(那张专辑自己把这首歌收录成繁体曲名「三人遊」,跟本地报的英文
 	// 「Three Tour」对不上文字)。
-	viaAlbum, viaReached := resolveAppleMusicMatchViaAlbum(ctx, artist, title, album)
+	viaAlbum, viaReached := resolveAppleMusicMatchViaAlbum(ctx, artist, title, album, durationSecs)
 	reached = reached && viaReached
 	if viaAlbum.cover != "" || viaAlbum.url != "" {
 		return viaAlbum, reached
@@ -214,14 +217,61 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string) (a
 //
 // 两侧署名任一为空时放行:没有可比的署名就无从判定,拦下来只会把本来查得到的也一起丢掉
 // (iTunes 一直在回 artistName,这是防御性分支)。
-func appleResultIdentityOK(candidateArtist, candidateAlbum, localArtist, localAlbum string) bool {
+//
+// 本地专辑名只是曲名的单曲(appleAlbumIsJustTheTitle)不走上面那条专辑旁路:「<曲名> - Single」谁的同名单曲都
+// 逐字相等,证明不了是同一张发行,改用 appleSameSingleByAnotherName。title 为空时不做这层判断。见 03 章决策 26。
+func appleResultIdentityOK(candidateArtist, candidateAlbum, localArtist, localAlbum, title string, candidateSecs, localSecs float64) bool {
 	if strings.TrimSpace(localArtist) == "" || strings.TrimSpace(candidateArtist) == "" {
 		return true
 	}
 	if lyricSourceArtistMatches(candidateArtist, localArtist) {
 		return true
 	}
+	if appleAlbumIsJustTheTitle(localAlbum, title) {
+		return albumScore(candidateAlbum, localAlbum) >= 200 &&
+			appleSameSingleByAnotherName(candidateArtist, localArtist, candidateSecs, localSecs)
+	}
 	return albumScore(candidateAlbum, localAlbum) >= 200
+}
+
+// appleSingleSameRecordingSecs:换了文字写法的同一份录音,两边目录时长最多差多少(本地时长取自别的平台、或被取整时
+// 差得多些,实测到 0.97 秒)。appleSingleExactRecordingSecs:时长差到这个范围内,署名哪种写法都认(WHYNOT / Why Not、
+// 丢火车 / 丢火车乐队);伴奏带、八音盒版跟原曲最近的也差半秒以上。
+const (
+	appleSingleSameRecordingSecs  = 1.0
+	appleSingleExactRecordingSecs = 0.3
+)
+
+// appleSameSingleByAnotherName:单曲专辑名只是曲名、署名又对不上时,候选能不能算同一份录音。两边时长都要已知:差在
+// appleSingleExactRecordingSecs 内就认;差在 appleSingleSameRecordingSecs 内的,还要两边署名一边是拉丁字母、一边
+// 不是(同一个歌手在各商店换了文字写法:陈奕迅 / Eason Chan)。同一种文字下的另一个名字多是翻唱 / 伴奏带 /
+// 八音盒版,时长又常跟原曲只差一秒上下,只看时长分不开。纯函数。
+func appleSameSingleByAnotherName(candidateArtist, localArtist string, candidateSecs, localSecs float64) bool {
+	if candidateSecs <= 0 || localSecs <= 0 {
+		return false
+	}
+	d := math.Abs(candidateSecs - localSecs)
+	if d <= appleSingleExactRecordingSecs {
+		return true
+	}
+	return d <= appleSingleSameRecordingSecs && hasNonLatinLetter(candidateArtist) != hasNonLatinLetter(localArtist)
+}
+
+// hasNonLatinLetter:有没有拉丁字母以外的字母(汉字、假名、谚文、西里尔……)。数字和标点不算。
+func hasNonLatinLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// appleAlbumIsJustTheTitle:专辑名去掉「 - Single」「 - EP」后就是曲名。判据同 lyricRecordingTriangleMatchesGuarded。
+// title 为空时返回 false。纯函数。
+func appleAlbumIsJustTheTitle(album, title string) bool {
+	t := normLoose(title)
+	return t != "" && normLoose(trimSingleOrEPSuffix(album)) == t
 }
 
 // searchAppleMusicMatch 在 iTunes 全文搜索里找这首歌。第二个返回值标出这条结果是不是
@@ -230,7 +280,7 @@ func appleResultIdentityOK(candidateArtist, candidateAlbum, localArtist, localAl
 // 太弱,专辑名一旦跟本地对不上就可能是完全不相关的另一个发行版,不该被当成终局结果。
 //
 // 第三个返回值 reached 透传 itunesSearch 那道"真的问到了 Apple 吗"(见它的头注)。
-func searchAppleMusicMatch(ctx context.Context, artist, title, album string) (appleMusicMatch, bool, bool) {
+func searchAppleMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) (appleMusicMatch, bool, bool) {
 	q := neturl.QueryEscape(artist + " " + title)
 	var results []itunesResult
 	// reached 要求**每一个**商店都问成了。只要有一个没问成,"Apple 没有这首歌"就不成立
@@ -243,14 +293,14 @@ func searchAppleMusicMatch(ctx context.Context, artist, title, album string) (ap
 		}
 		results = append(results, rs...)
 	}
-	m, albumMatched := pickAppleMusicMatch(results, artist, title, album)
+	m, albumMatched := pickAppleMusicMatch(results, artist, title, album, durationSecs)
 	return m, albumMatched, reached
 }
 
 // pickAppleMusicMatch 是 searchAppleMusicMatch 的挑选逻辑,拆成纯函数好让上面那道身份闸
 // 能被回归测试锁住(同 pickAppleTitleSearchIdentities / pickMusixmatchTrackRow 的先例)。
 // results 按商店查询顺序拼接,所以"第一条标题匹配"仍然是 CN 优先,跟拆分之前一致。
-func pickAppleMusicMatch(results []itunesResult, artist, title, album string) (appleMusicMatch, bool) {
+func pickAppleMusicMatch(results []itunesResult, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
 	var titleFallback appleMusicMatch
 	bestScore := 0
 	var best appleMusicMatch
@@ -259,7 +309,7 @@ func pickAppleMusicMatch(results []itunesResult, artist, title, album string) (a
 			continue // skip unrelated results (song may not be in this catalog)
 		}
 		// 同名不同人的闸:iTunes 对本商店没有的歌会回模糊命中,见 appleResultIdentityOK。
-		if !appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album) {
+		if !appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album, title, r.TrackTimeMillis/1000, durationSecs) {
 			continue
 		}
 		if titleFallback.url == "" {
@@ -285,12 +335,13 @@ func pickAppleMusicMatch(results []itunesResult, artist, title, album string) (a
 // track that genuinely exists in the catalog the way full-text search can.
 // 第二个返回值 reached 同 searchAppleMusicMatch:每个商店都问成了才是 true。
 // album 为空时直接返回 true —— 那不是"没问成",是压根没有可问的。
-func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album string) (appleMusicMatch, bool) {
+func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album string, durationSecs float64) (appleMusicMatch, bool) {
 	if album == "" {
 		return appleMusicMatch{}, true
 	}
 	q := neturl.QueryEscape(artist + " " + album)
 	reached := true
+	generic := appleAlbumIsJustTheTitle(album, title)
 	for _, country := range appleStorefrontsFor(artist, title, album) {
 		bestID, bestScore := int64(0), 0
 		var bestAlbumCover appleMusicMatch
@@ -299,6 +350,10 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 			reached = false
 		}
 		for _, r := range rs {
+			// 本地专辑名只是曲名时,别人的同名单曲专辑名也逐字相等:认不出是同一份录音的那张不认(连它的封面也不借)。
+			if generic && !appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album, title, r.TrackTimeMillis/1000, durationSecs) {
+				continue
+			}
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
 				bestScore, bestID = sc, r.CollectionID
 				bestAlbumCover = appleMusicMatch{cover: hiResArtwork(r.ArtworkURL100), album: r.CollectionName}
@@ -312,7 +367,7 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// (专辑名逐字相等)时闸门里那条专辑旁路天然成立、等于不拦——专辑既已精确定位,
 		// 它的曲目表就是权威的,不该被署名写法的跨商店差异挡住。
 		for _, t := range itunesLookupTracks(ctx, bestID, country) {
-			if t.TrackViewURL != "" && looseContains(t.TrackName, title) && appleResultIdentityOK(t.ArtistName, t.CollectionName, artist, album) {
+			if t.TrackViewURL != "" && looseContains(t.TrackName, title) && appleResultIdentityOK(t.ArtistName, t.CollectionName, artist, album, title, t.TrackTimeMillis/1000, durationSecs) {
 				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100), title: t.TrackName, album: t.CollectionName, durationSecs: t.TrackTimeMillis / 1000}, reached
 			}
 		}

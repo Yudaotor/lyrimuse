@@ -147,7 +147,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	if dur <= 0 {
 		// 跟 search-lyrics 一样向 Apple 目录要一个真实时长兜底(那边的注释解释了 duration=0 会让
 		// 时长判据整套失效)。纯音乐条目没有歌词候选可打分,允许没有时长。
-		if m := appleMusicMatchCached(context.Background(), qArtist, qTitle, qAlbum); m.durationSecs > 0 {
+		if m := appleMusicMatchCached(context.Background(), qArtist, qTitle, qAlbum, 0); m.durationSecs > 0 {
 			t.Logf("缓存没有时长,用 Apple 目录的 %.3fs", m.durationSecs)
 			dur = m.durationSecs
 		} else if !entry.Instrumental {

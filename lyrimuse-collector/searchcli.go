@@ -145,7 +145,7 @@ func runSearchLyricsCLI(args []string) {
 	// trackTimeMillis),这里只是多读一个之前没读的字段,不多发请求。
 	effectiveDuration := *duration
 	if effectiveDuration <= 0 {
-		if m := appleMusicMatchCached(context.Background(), sArtist, sTitle, sAlbum); m.durationSecs > 0 {
+		if m := appleMusicMatchCached(context.Background(), sArtist, sTitle, sAlbum, 0); m.durationSecs > 0 {
 			log.Printf("search-lyrics: duration missing from caller, recovered %.3fs from Apple catalog", m.durationSecs)
 			effectiveDuration = m.durationSecs
 		}

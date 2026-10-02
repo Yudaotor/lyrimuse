@@ -485,6 +485,8 @@ func main() {
 	// 必须在 sweepDeviceArtwork 之前,也必须在 artworkRelayURL 定下来之后(换中继要作废旧记录)。
 	loadArtworkConfirmed()
 	startArtworkSweep(ctx)
+	// 存量单曲的 Apple 链接按新的单曲判据重核一遍(applelinkrecheck.go),要联网,同样放后台。
+	startAppleSingleLinkRecheck(ctx)
 	// 常驻进程里播放热路径的保存走 2 秒节流(见 enrichsave.go);退出前把排着的那次补写当场做掉。
 	enableEnrichSaveThrottle()
 	err = run(ctx, cfg, lb)

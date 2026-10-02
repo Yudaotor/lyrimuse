@@ -95,7 +95,7 @@ func TestVideoTitleWiredIntoLyricsAlbumAndCover(t *testing.T) {
 			"if splitArtist, splitTitle, durationUnknown, ok := titleSplitIdentity(artist, title); ok {",
 			"splitNe, splitResults := scoredLyricCandidatesStreaming(splitCtx, splitArtist, splitTitle, album, splitDuration, onUpdate)",
 			"if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {\n\t\tcoverArtist, coverTitle = v.Artist, v.Song\n\t\tif v.DurationUnknown {\n\t\t\tcoverDuration = 0",
-			"appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum)",
+			"appleMatch := appleMusicMatchCached(ctx, coverArtist, coverTitle, coverAlbum, coverDuration)",
 			"qqCover, _ := qqCoverFallback(ctx, coverArtist, coverTitle, coverAlbum)",
 		},
 		"albumhint.go": {

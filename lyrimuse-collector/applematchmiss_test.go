@@ -52,13 +52,13 @@ func TestAppleMatchMissCachedAfterRealMiss(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	appleMusicMatchCached(ctx, "查无此人", "查无此曲", "查无此辑")
+	appleMusicMatchCached(ctx, "查无此人", "查无此曲", "查无此辑", 0)
 	first := atomic.LoadInt32(hits)
 	if first == 0 {
 		t.Fatal("第一次该真的发请求")
 	}
 	for i := 0; i < 4; i++ {
-		if m := appleMusicMatchCached(ctx, "查无此人", "查无此曲", "查无此辑"); m.url != "" {
+		if m := appleMusicMatchCached(ctx, "查无此人", "查无此曲", "查无此辑", 0); m.url != "" {
 			t.Fatal("负缓存窗口内不该凭空给出匹配")
 		}
 	}
@@ -78,7 +78,7 @@ func TestAppleMatchRateLimitIsNotCachedAsMiss(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	appleMusicMatchCached(ctx, "某歌手", "某首歌", "某专辑")
+	appleMusicMatchCached(ctx, "某歌手", "某首歌", "某专辑", 0)
 
 	key := "某歌手|某首歌|某专辑"
 	if appleMatchInMissWindow(key, time.Now()) {
@@ -131,7 +131,7 @@ func TestAppleMatchHitClearsMiss(t *testing.T) {
 	appleURLMissUntil[key] = time.Now().Add(-time.Second)
 	appleURLMu.Unlock()
 
-	if m := appleMusicMatchCached(context.Background(), artist, title, album); m.url == "" {
+	if m := appleMusicMatchCached(context.Background(), artist, title, album, 0); m.url == "" {
 		t.Fatal("该查到匹配")
 	}
 	appleURLMu.Lock()
@@ -167,7 +167,7 @@ func TestAppleMatchPartialStorefrontFailureIsNotAMiss(t *testing.T) {
 	// 也算一遍 reached,会把 searchAppleMusicMatch 这一层的缺陷盖住 —— 变异测试实测,
 	// 带专辑名时"只要一个商店成功就算 reached"这个变异能存活。空 album 让 viaAlbum 直接
 	// 早退,这一层的判定才暴露出来。
-	appleMusicMatchCached(context.Background(), "某歌手", "某首歌", "")
+	appleMusicMatchCached(context.Background(), "某歌手", "某首歌", "", 0)
 	if atomic.LoadInt32(&n) < 2 {
 		t.Skipf("用例前提不成立:只问了 %d 个商店,拿不到部分失败的形态", n)
 	}

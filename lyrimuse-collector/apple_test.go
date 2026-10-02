@@ -9,6 +9,8 @@ func TestAppleResultIdentityOK(t *testing.T) {
 		name                                           string
 		candArtist, candAlbum, localArtist, localAlbum string
 		want                                           bool
+		title                                          string
+		candSecs, localSecs                            float64
 	}{
 		{
 			name:       "同名不同人:德区独占曲在 CN/US 搜到别人的同名单曲(本案)",
@@ -58,10 +60,76 @@ func TestAppleResultIdentityOK(t *testing.T) {
 			localArtist: "jolle", localAlbum: "sunny side up/:down",
 			want: true,
 		},
+		{
+			name:       "单曲专辑名只是曲名:别人的同名单曲专辑名也逐字相等,署名对不上就拦",
+			candArtist: "Parmalee", candAlbum: "Be Alright - Single",
+			localArtist: "Dean Lewis", localAlbum: "Be Alright - Single", title: "Be Alright",
+			candSecs: 201.027, localSecs: 196.373,
+			want: false,
+		},
+		{
+			name:       "单曲专辑名只是曲名、没有后缀,同样不走专辑旁路",
+			candArtist: "Parmalee", candAlbum: "Be Alright",
+			localArtist: "Dean Lewis", localAlbum: "Be Alright", title: "Be Alright",
+			want: false,
+		},
+		{
+			name:       "EP 同理",
+			candArtist: "Parmalee", candAlbum: "Be Alright - EP",
+			localArtist: "Dean Lewis", localAlbum: "Be Alright - EP", title: "Be Alright",
+			want: false,
+		},
+		{
+			name:       "单曲但署名对得上:照常放行",
+			candArtist: "Dean Lewis", candAlbum: "Be Alright - Single",
+			localArtist: "Dean Lewis", localAlbum: "Be Alright - Single", title: "Be Alright",
+			want: true,
+		},
+		{
+			name:       "单曲:同一份录音换了文字写法、时长对得上,放行",
+			candArtist: "Ian Chan", candAlbum: "无垢 - Single",
+			localArtist: "Ian 陈卓贤", localAlbum: "无垢 - Single", title: "无垢",
+			candSecs: 209.631, localSecs: 209.630,
+			want: true,
+		},
+		{
+			name:       "单曲:换了文字写法但本地时长未知,拦",
+			candArtist: "Ian Chan", candAlbum: "无垢 - Single",
+			localArtist: "Ian 陈卓贤", localAlbum: "无垢 - Single", title: "无垢",
+			candSecs: 209.631,
+			want:     false,
+		},
+		{
+			name:       "单曲:换了文字写法但时长差得远,拦",
+			candArtist: "Liphaye", candAlbum: "完美的一天",
+			localArtist: "孙燕姿", localAlbum: "完美的一天", title: "完美的一天",
+			candSecs: 206.934, localSecs: 245.133,
+			want: false,
+		},
+		{
+			name:       "单曲:同一种文字的另一个名字(伴奏带),时长只差 0.57s 也拦",
+			candArtist: "Uta-Cha-Oh", candAlbum: "KUSUSHIKI - Single",
+			localArtist: "Mrs. GREEN APPLE", localAlbum: "KUSUSHIKI - Single", title: "KUSUSHIKI",
+			candSecs: 187.776, localSecs: 188.348,
+			want: false,
+		},
+		{
+			name:       "单曲:同一种文字的另一种写法、时长几乎一样,放行",
+			candArtist: "Why Not", candAlbum: "無法度按捺",
+			localArtist: "WHYNOT", localAlbum: "無法度按捺", title: "無法度按捺",
+			candSecs: 347.5, localSecs: 347.48,
+			want: true,
+		},
+		{
+			name:       "专辑名不只是曲名:署名跨商店改写时专辑旁路照旧",
+			candArtist: "Khalil Fong", candAlbum: "橙月",
+			localArtist: "方大同", localAlbum: "橙月", title: "Three Tour",
+			want: true,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := appleResultIdentityOK(c.candArtist, c.candAlbum, c.localArtist, c.localAlbum); got != c.want {
+			if got := appleResultIdentityOK(c.candArtist, c.candAlbum, c.localArtist, c.localAlbum, c.title, c.candSecs, c.localSecs); got != c.want {
 				t.Errorf("appleResultIdentityOK(%q, %q, %q, %q) = %v, want %v",
 					c.candArtist, c.candAlbum, c.localArtist, c.localAlbum, got, c.want)
 			}
@@ -93,7 +161,7 @@ var jolleResult = itunesResult{
 // 所以这里除了断言没选中,还要断言 durationSecs 没被带出来。
 func TestPickAppleMusicMatchRejectsSameTitleDifferentArtist(t *testing.T) {
 	got, hasAlbumEvidence := pickAppleMusicMatch(
-		[]itunesResult{pieKeiResult}, "jolle", "danke für nichts", "sunny side up/:down")
+		[]itunesResult{pieKeiResult}, "jolle", "danke für nichts", "sunny side up/:down", 0)
 	if got.url != "" {
 		t.Errorf("不该选中同名不同人的结果，却返回了 url=%q title=%q album=%q", got.url, got.title, got.album)
 	}
@@ -108,7 +176,7 @@ func TestPickAppleMusicMatchRejectsSameTitleDifferentArtist(t *testing.T) {
 // TestPickAppleMusicMatchKeepsCorrectArtist 是反向守卫:这道闸不能把正主也拦掉。
 func TestPickAppleMusicMatchKeepsCorrectArtist(t *testing.T) {
 	got, hasAlbumEvidence := pickAppleMusicMatch(
-		[]itunesResult{pieKeiResult, jolleResult}, "jolle", "danke für nichts", "sunny side up/:down")
+		[]itunesResult{pieKeiResult, jolleResult}, "jolle", "danke für nichts", "sunny side up/:down", 0)
 	if got.url != jolleResult.TrackViewURL {
 		t.Errorf("应选中 jolle 那条，实得 url=%q artist 来源 album=%q", got.url, got.album)
 	}
@@ -152,7 +220,7 @@ func TestAppleResultIdentityOKKnownBoundary(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := appleResultIdentityOK(c.candArtist, c.candAlbum, c.localArtist, c.localAlbum); got != c.want {
+			if got := appleResultIdentityOK(c.candArtist, c.candAlbum, c.localArtist, c.localAlbum, "", 0, 0); got != c.want {
 				t.Errorf("appleResultIdentityOK(%q, %q, %q, %q) = %v, want %v",
 					c.candArtist, c.candAlbum, c.localArtist, c.localAlbum, got, c.want)
 			}
@@ -173,7 +241,7 @@ func TestPickAppleMusicMatchRejectsKaraokeImpersonator(t *testing.T) {
 		TrackViewURL:    "https://music.apple.com/us/album/x/1534525712?i=1534525713",
 		TrackTimeMillis: 319330,
 	}
-	got, _ := pickAppleMusicMatch([]itunesResult{karaoke}, "back number", "ハッピーエンド", "ハッピーエンド")
+	got, _ := pickAppleMusicMatch([]itunesResult{karaoke}, "back number", "ハッピーエンド", "ハッピーエンド", 0)
 	if got.url != "" {
 		t.Errorf("卡拉OK伴奏带不该被当成本曲匹配，却返回了 title=%q album=%q dur=%v", got.title, got.album, got.durationSecs)
 	}
