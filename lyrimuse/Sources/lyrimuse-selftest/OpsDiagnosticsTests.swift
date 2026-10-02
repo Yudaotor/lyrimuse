@@ -891,6 +891,27 @@ func runOpsDiagnosticsTests() {
         expectEqual(tracker.answered(now: 113), .recovered(seconds: 3), "卡顿探针: 卡满 3 秒算一次")
         expectEqual(tracker.shouldProbe(now: 120), true, "卡顿探针: 再下一轮")
         expectEqual(tracker.check(now: 126), .stillStalled(seconds: 6), "卡顿探针: 新的一次卡顿重新报")
+
+        // 接线:真的投探测、主线程执行到、报事件。间隔与阈值调短,事件交给回调(不记日志、不采样)。
+        final class EventBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var items: [MainThreadWatchdog.Tracker.Event] = []
+            func append(_ event: MainThreadWatchdog.Tracker.Event) { lock.lock(); items.append(event); lock.unlock() }
+            var events: [MainThreadWatchdog.Tracker.Event] { lock.lock(); defer { lock.unlock() }; return items }
+        }
+        let box = EventBox()
+        let probe = W(probeInterval: 0.02, stallThreshold: 0.1, sampleAfter: 0.2) { box.append($0) }
+        probe.start()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        expectEqual(box.events.isEmpty, true, "卡顿探针(接线): 主线程空闲时不报")
+        Thread.sleep(forTimeInterval: 0.6)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        probe.stop()
+        let got = box.events
+        expectEqual(got.contains { if case .stillStalled = $0 { return true } else { return false } }, true,
+                    "卡顿探针(接线): 主线程堵着的时候报一次还没恢复")
+        expectEqual(got.contains { if case .recovered(let seconds) = $0 { return seconds >= 0.5 } else { return false } }, true,
+                    "卡顿探针(接线): 恢复时报一共卡了多久")
     }
 
     // ---- build.sh 用什么身份签----

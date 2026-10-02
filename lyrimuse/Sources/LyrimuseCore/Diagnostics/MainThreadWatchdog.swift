@@ -28,10 +28,16 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             case recovered(seconds: TimeInterval)
         }
 
+        public let stallThreshold: TimeInterval
+        public let sampleAfter: TimeInterval
         public private(set) var pendingSince: TimeInterval?
         public private(set) var reportedStill = false
 
-        public init() {}
+        public init(stallThreshold: TimeInterval = MainThreadWatchdog.stallThreshold,
+                    sampleAfter: TimeInterval = MainThreadWatchdog.sampleAfter) {
+            self.stallThreshold = stallThreshold
+            self.sampleAfter = sampleAfter
+        }
 
         /// 该不该投一个新的探测任务:上一个还没被执行到就不投。投的话记下投出的时刻。
         public mutating func shouldProbe(now: TimeInterval) -> Bool {
@@ -46,14 +52,14 @@ public final class MainThreadWatchdog: @unchecked Sendable {
             guard let since = pendingSince else { return nil }
             pendingSince = nil
             let waited = now - since
-            return waited >= MainThreadWatchdog.stallThreshold ? .recovered(seconds: waited) : nil
+            return waited >= stallThreshold ? .recovered(seconds: waited) : nil
         }
 
         /// 定时器每次触发时看一眼:探测任务还没被执行到,而且等满了 `sampleAfter`。
         public mutating func check(now: TimeInterval) -> Event? {
             guard let since = pendingSince, !reportedStill else { return nil }
             let waited = now - since
-            guard waited >= MainThreadWatchdog.sampleAfter else { return nil }
+            guard waited >= sampleAfter else { return nil }
             reportedStill = true
             return .stillStalled(seconds: waited)
         }
@@ -62,22 +68,48 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-watchdog", qos: .utility)
     private let sampleQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-sample", qos: .utility)
     private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "main-thread")
-    private let enabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
+    private let enabled: Bool
+    private let interval: TimeInterval
+    /// 单测把事件交给它:不记日志、不采样。nil = 正常记日志。
+    private let onEvent: (@Sendable (Tracker.Event) -> Void)?
     private var timer: DispatchSourceTimer?
-    private var tracker = Tracker()
+    private var tracker: Tracker
     private var lastSampleAt: TimeInterval?
 
-    private init() {}
+    private init() {
+        enabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
+        interval = Self.probeInterval
+        onEvent = nil
+        tracker = Tracker()
+    }
+
+    /// 单测用:探测间隔与阈值自己定,事件交给 `onEvent`(不记日志、不采样),不看运行身份。
+    public init(probeInterval: TimeInterval, stallThreshold: TimeInterval, sampleAfter: TimeInterval,
+                onEvent: @escaping @Sendable (Tracker.Event) -> Void) {
+        enabled = true
+        interval = probeInterval
+        self.onEvent = onEvent
+        tracker = Tracker(stallThreshold: stallThreshold, sampleAfter: sampleAfter)
+    }
 
     public func start() {
         guard enabled else { return }
         queue.async { [self] in
             guard timer == nil else { return }
             let source = DispatchSource.makeTimerSource(queue: queue)
-            source.schedule(deadline: .now() + Self.probeInterval, repeating: Self.probeInterval, leeway: .milliseconds(200))
+            source.schedule(deadline: .now() + interval, repeating: interval,
+                            leeway: .milliseconds(max(Int(interval * 200), 1)))
             source.setEventHandler { [weak self] in self?.tick() }
             source.resume()
             timer = source
+        }
+    }
+
+    /// 停掉探测(单测收尾用)。
+    public func stop() {
+        queue.sync {
+            timer?.cancel()
+            timer = nil
         }
     }
 
@@ -95,6 +127,10 @@ public final class MainThreadWatchdog: @unchecked Sendable {
     }
 
     private func handle(_ event: Tracker.Event, at now: TimeInterval) {
+        if let onEvent {
+            onEvent(event)
+            return
+        }
         switch event {
         case .recovered(let seconds):
             logger.notice("main thread: stalled for \(String(format: "%.1f", seconds), privacy: .public)s")
