@@ -24,6 +24,8 @@ public enum LyrimuseIdentity {
         public let logFileName: String
         /// `~/Library/Logs/<这个>`:App 进程由 launchd 拉起时的 stdout / stderr。
         public let appLogFileName: String
+        /// `~/Library/Logs/<这个>`:App 主线程卡住时采的调用栈(MainThreadWatchdog,覆盖写)。
+        public let mainThreadStallFileName: String
         /// build.sh 默认装到哪(LoginItemManager 在拿不到运行中 bundle 路径时的兜底)。
         public let defaultAppBundlePath: String
         /// CFBundleURLSchemes 里那一个(Last.fm 授权回调 `<scheme>://lastfm-auth-callback` 用)。
@@ -41,6 +43,7 @@ public enum LyrimuseIdentity {
         engineExecutableName: "lyrimuse-engine",
         logFileName: "lyrimuse.log",
         appLogFileName: "lyrimuse-app.log",
+        mainThreadStallFileName: "lyrimuse-main-thread-stall.txt",
         defaultAppBundlePath: "/Applications/Lyrimuse.app",
         urlScheme: "lyrimuse"
     )
@@ -115,4 +118,9 @@ public enum LogFiles {
     /// 分不清是谁的)。正常情况下几乎是空的 —— App 的日志走 os.Logger;能落进来的只有 Swift
     /// 运行时的 fatal 信息、被子进程漏出的 stderr 这类"本不该有"的东西,正因为如此它排查崩溃时最有用。
     public static var appStderr: URL { logsDir.appendingPathComponent(LyrimuseIdentity.current.appLogFileName) }
+
+    /// App 主线程卡住时 MainThreadWatchdog 用 `/usr/bin/sample` 采的调用栈,只留最近一次。诊断导出带上 7 天内的那份。
+    public static var mainThreadStall: URL {
+        logsDir.appendingPathComponent(LyrimuseIdentity.current.mainThreadStallFileName)
+    }
 }

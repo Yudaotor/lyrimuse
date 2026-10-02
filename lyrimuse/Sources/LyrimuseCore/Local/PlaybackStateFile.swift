@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 
 /// App → collector 的播放状态文件:「此刻在放什么、放到哪」由 App 整份写出,collector 只读、从不删改。
 ///
@@ -336,14 +337,19 @@ public enum PlaybackStateFile {
 /// 播放状态文件的写方:内容变了就写,没变时每 `heartbeatInterval` 秒保活一次;退出时写 `exiting`。
 ///
 /// 保活计时器跑在主线程上:主线程卡住时保活也停,collector 据此判 App 不可用,而不是按一份冻住的「在播」继续计时。
+/// 保活离上一次写出晚到 `lateHeartbeatSeconds` 以上记一行 notice(collector 15 秒判过期);对照 MainThreadWatchdog
+/// 的记录,分得清是主线程卡住了还是计时器被系统推迟了。间隔按不含睡眠的系统运行时长算。
 ///
 /// 只在以 Lyrimuse.app 身份运行时落盘:selftest 与 `swift run` 起的进程共用同一个配置目录,
 /// 让它们写会盖掉正在运行的 App 那份,collector 就会读到测试数据。
 @MainActor
 public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
+    public static let lateHeartbeatSeconds: TimeInterval = 10
 
     private let writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
+    private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "playback-state")
+    private var lastWriteUptime: TimeInterval?
 
     private let appPID = getpid()
     private let appStartedAtMs = PlaybackStateFile.millis(Date())
@@ -416,6 +422,12 @@ public final class PlaybackStatePublisher {
         let timer = Timer(timeInterval: PlaybackStateFile.heartbeatInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.exiting, let content = self.lastContent else { return }
+                if let last = self.lastWriteUptime {
+                    let gap = ProcessInfo.processInfo.systemUptime - last
+                    if gap >= Self.lateHeartbeatSeconds {
+                        self.logger.notice("playback state: heartbeat \(String(format: "%.1f", gap), privacy: .public)s after the last write")
+                    }
+                }
                 self.write(content, now: Date())
             }
         }
@@ -425,6 +437,7 @@ public final class PlaybackStatePublisher {
 
     private func write(_ content: PlaybackStateFile.Content, now: Date) {
         guard writesEnabled else { return }
+        lastWriteUptime = ProcessInfo.processInfo.systemUptime
         seq += 1
         let record = PlaybackStateFile.Record(content: content, appPID: appPID, appStartedAtMs: appStartedAtMs,
                                               seq: seq, writtenAtMs: PlaybackStateFile.millis(now))

@@ -24,6 +24,8 @@ func runIdentityTests() {
         expectEqual(id.urlScheme, "lyrimuse", "身份: URL scheme(Last.fm 授权回调)")
         expectEqual(id.logFileName, id.configDirName + ".log", "身份: collector 日志名 = 目录名 + .log(uninstall.sh 靠这条规则拼)")
         expectEqual(id.appLogFileName, id.configDirName + "-app.log", "身份: App 日志名 = 目录名 + -app.log")
+        expectEqual(id.mainThreadStallFileName, id.configDirName + "-main-thread-stall.txt",
+                    "身份: 主线程卡顿采样文件名 = 目录名 + -main-thread-stall.txt")
         expectEqual(LyrimuseIdentity.displayName, id.displayName, "身份: 便捷静态属性与 current 一致")
         expectEqual(LyrimuseIdentity.collectorLaunchdLabel, id.collectorLaunchdLabel, "身份: 便捷静态属性与 current 一致(label)")
         expectEqual(LyrimuseIdentity.engineExecutableName, id.engineExecutableName, "身份: 便捷静态属性与 current 一致(引擎名)")

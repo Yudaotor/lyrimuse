@@ -36,6 +36,8 @@ CONFIG_DIR="$PREFIX/.config/lyrimuse"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
 # App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
 APP_LOG_FILE="$PREFIX/Library/Logs/lyrimuse-app.log"
+# App 主线程卡住时采的调用栈(见 LyrimuseCore LogFiles.mainThreadStall)。
+STALL_SAMPLE_FILE="$PREFIX/Library/Logs/lyrimuse-main-thread-stall.txt"
 
 MODE="report"
 case "${1:-}" in
@@ -77,7 +79,7 @@ for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$COLLECTOR_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "$APP_LOG_FILE"; do
+for p in "$COLLECTOR_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
   if [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
@@ -154,6 +156,7 @@ has_defaults "$APP_LABEL" && HAS_DEFAULTS=yes
 [[ -e "$CONFIG_DIR" ]] && TO_DELETE+=("$CONFIG_DIR")
 [[ -e "$LOG_FILE" ]] && TO_DELETE+=("$LOG_FILE")
 [[ -e "$APP_LOG_FILE" ]] && TO_DELETE+=("$APP_LOG_FILE")
+[[ -e "$STALL_SAMPLE_FILE" ]] && TO_DELETE+=("$STALL_SAMPLE_FILE")
 if (( ${#TO_DELETE[@]} == 0 )); then
   echo "  （没有数据文件）"
 else

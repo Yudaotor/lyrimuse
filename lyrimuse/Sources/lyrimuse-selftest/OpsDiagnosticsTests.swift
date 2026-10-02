@@ -851,7 +851,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(killed.contains("api call: GET kuwo.cn/x FAILED"), true,
                     "健康检查: stdout 为空时 stderr 照样附上")
         expectEqual(H.reportLines(stdout: "", stderr: "", status: 2, timedOut: false),
-                    ["(collector healthcheck produced no output, exit code 2)"],
+                    ["(engine healthcheck produced no output, exit code 2)"],
                     "健康检查: 没超时的空输出报退出码,stderr 为空不加附注")
         let partial = H.reportLines(stdout: "  ok   配置文件  x\n", stderr: "", status: 15, timedOut: true)
         expectEqual(partial.first, "  ok   配置文件  x", "健康检查: 有输出时原样保留")
@@ -867,6 +867,30 @@ func runOpsDiagnosticsTests() {
         expectEqual(folded.dropFirst().first?.contains("又重复了 10 次"), true, "重复行折叠: 省略说明写中间省了几条")
         let eleven = Array(repeated.prefix(11))
         expectEqual(H.collapseRepeatedLines(eleven), eleven, "重复行折叠: 不到 12 条原样保留")
+    }
+
+    // ---- 主线程卡顿探针 ----
+    do {
+        print("\n== 主线程卡顿探针 ==")
+        typealias W = MainThreadWatchdog
+        // collector 判 App 状态过期是 15 秒(appstate.go appStateFreshness):探针要在那之前留下记录。
+        expectEqual(W.stallThreshold < W.sampleAfter && W.sampleAfter < 15, true, "卡顿探针: 先记卡顿、再采样,都早于引擎判过期")
+        expectEqual(PlaybackStatePublisher.lateHeartbeatSeconds < 15, true, "卡顿探针: 保活晚到的记录早于引擎判过期")
+
+        var tracker = W.Tracker()
+        expectEqual(tracker.shouldProbe(now: 100), true, "卡顿探针: 没有在等的探测就投一个")
+        expectEqual(tracker.shouldProbe(now: 101), false, "卡顿探针: 上一个还没被执行到就不再投")
+        expectEqual(tracker.check(now: 104), nil, "卡顿探针: 等了 4 秒还不到采样的时候")
+        expectEqual(tracker.check(now: 105), .stillStalled(seconds: 5), "卡顿探针: 等满 5 秒报一次")
+        expectEqual(tracker.check(now: 106), nil, "卡顿探针: 同一次卡顿只报一次")
+        expectEqual(tracker.answered(now: 107.5), .recovered(seconds: 7.5), "卡顿探针: 恢复时报一共卡了多久")
+        expectEqual(tracker.answered(now: 108), nil, "卡顿探针: 没有在等的探测,迟到的回应不算")
+        expectEqual(tracker.shouldProbe(now: 108), true, "卡顿探针: 恢复之后接着投")
+        expectEqual(tracker.answered(now: 108.2), nil, "卡顿探针: 0.2 秒内执行到不算卡")
+        expectEqual(tracker.shouldProbe(now: 110), true, "卡顿探针: 下一轮")
+        expectEqual(tracker.answered(now: 113), .recovered(seconds: 3), "卡顿探针: 卡满 3 秒算一次")
+        expectEqual(tracker.shouldProbe(now: 120), true, "卡顿探针: 再下一轮")
+        expectEqual(tracker.check(now: 126), .stillStalled(seconds: 6), "卡顿探针: 新的一次卡顿重新报")
     }
 
     // ---- build.sh 用什么身份签----

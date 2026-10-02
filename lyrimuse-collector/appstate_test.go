@@ -130,6 +130,12 @@ func TestAppStateUsable(t *testing.T) {
 	if got := appStateUsable(rec, written.Add(16*time.Second), alwaysAlive); got != appStateStale {
 		t.Fatalf("16s old record: got %s", got)
 	}
+	if got := appStateUsable(rec, written.Add(-2*time.Second), alwaysAlive); got != appStateAvailable {
+		t.Fatalf("written 2s ahead of the reader's clock: got %s", got)
+	}
+	if got := appStateUsable(rec, written.Add(-16*time.Second), alwaysAlive); got != appStateStale {
+		t.Fatalf("written 16s in the future (clock set back): got %s", got)
+	}
 	if got := appStateUsable(rec, written, func(int) bool { return false }); got != appStateProcessGone {
 		t.Fatalf("dead writer: got %s", got)
 	}

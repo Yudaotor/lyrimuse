@@ -19,8 +19,9 @@ import (
 //   - 位置是播放器的真实播放时间(已含各播放器的修正),不含任何歌词偏移;读方按 secs + (now − at_ms) × rate 外推。
 //   - play_seq:每开始播一首加一,同一首重新起播也加一;从停播回到同一首不加。只在同一个 app_pid 内比较。
 //   - anchor_seq:位置每出现一次不连续(拖动、恢复、校准跳变)加一。
-//   - holding:App 读不到播放器、还在宽限期里按住上一份状态,内容是旧的。
-//   - App 平时每 5 秒重写一次;超过 appStateFreshness 没更新、进程不在、写着 exiting、契约版本不认识,都算不可用。
+//   - holding:App 读不到播放器、还在宽限期里按住上一份状态,内容是旧的;collector 不按它计收听时长。
+//   - App 平时每 5 秒重写一次;超过 appStateFreshness 没更新(写出时刻落在此刻之后同样多也算)、进程不在、
+//     写着 exiting、契约版本不认识,都算不可用。
 //
 // 两份 App 短暂并存(新实例请走旧实例的那几秒)时两边都会写,认启动时刻更晚、进程还在的那一份。
 type appStateTags struct {
@@ -113,7 +114,10 @@ const (
 )
 
 // appStateUsable 判一份已解出的记录此刻能不能用。纯函数,测试覆盖;alive 由调用方注入。
+// 写出时刻比此刻晚出 appStateFreshness 以上(系统时钟往回拨过)同样算过期:App 活着的话下一次保活就按新时钟写,
+// App 卡住了也不会一直被当成新鲜的。
 func appStateUsable(rec appStateRecord, now time.Time, alive func(pid int) bool) appStateAvailability {
+	age := now.Sub(time.UnixMilli(rec.WrittenAtMs))
 	switch {
 	case rec.Schema != appStateSchema:
 		return appStateUnsupported
@@ -121,7 +125,7 @@ func appStateUsable(rec appStateRecord, now time.Time, alive func(pid int) bool)
 		return appStateExiting
 	case rec.AppPID <= 0 || !alive(rec.AppPID):
 		return appStateProcessGone
-	case now.Sub(time.UnixMilli(rec.WrittenAtMs)) > appStateFreshness:
+	case age > appStateFreshness || age < -appStateFreshness:
 		return appStateStale
 	}
 	return appStateAvailable

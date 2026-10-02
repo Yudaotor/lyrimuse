@@ -209,6 +209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // collector 预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
         // collector 自己不发 AppleEvent(见 PlayerQueryServer)。
         PlayerQueryServer.shared.start()
+        // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。
+        MainThreadWatchdog.shared.start()
 
         // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。
         //

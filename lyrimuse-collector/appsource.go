@@ -91,10 +91,12 @@ type appPlaybackMarks struct {
 	key       string
 }
 
-// appPlaybackTick:一份可用的 App 状态换成的这一拍。tracked=false = App 此刻没认下歌。
+// appPlaybackTick:一份可用的 App 状态换成的这一拍。tracked=false = App 此刻没认下歌。holding = App 读不到播放器、
+// 按住着上一份(内容是旧的,不计收听时长)。
 type appPlaybackTick struct {
 	snap           snapshot
 	tracked        bool
+	holding        bool
 	ad             bool
 	spotifyTrackID string
 	amazonTrackID  string
@@ -148,7 +150,8 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 		anchorSeq = rec.Position.AnchorSeq
 	}
 	samePID := rec.AppPID == prev.pid
-	tick := appPlaybackTick{snap: s, tracked: true, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID, amazonTrackID: t.AmazonTrackID}
+	tick := appPlaybackTick{snap: s, tracked: true, holding: rec.Holding, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID,
+		amazonTrackID: t.AmazonTrackID}
 	tick.loopRestart = samePID && key == prev.key && t.PlaySeq > prev.playSeq
 	tick.reanchor = !samePID || tick.loopRestart || anchorSeq != prev.anchorSeq
 	marks.playSeq, marks.anchorSeq, marks.key = t.PlaySeq, anchorSeq, key

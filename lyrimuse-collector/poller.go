@@ -17,7 +17,14 @@ type playSession struct {
 	meta       snapshot
 	startedAt  time.Time
 	playedSecs float64
-	lastSeen   time.Time // zero while paused
+	// lastSeen / lastSeenPos / lastSeenHasPos:上一个计时起点(App 新读到、在播的那一拍)的时刻与位置,
+	// 收听时长从这里往后算(见 accrueListening)。lastSeen 为零 = 没在计时(暂停、还没开播)。
+	lastSeen       time.Time
+	lastSeenPos    float64
+	lastSeenHasPos bool
+	// gapHeld:上一个计时起点之后 App 按住过状态(holding)。按住解除那一次写出的是 App 新读到的位置,
+	// 这段空档可以按位置补,不受 maxAccrualGapSecs 限制。
+	gapHeld    bool
 	listenSent bool
 	lastPN     time.Time
 	// lastfmNPAt:上一次发 Last.fm now-playing 的时刻。跟 lastPN 分开记:lastPN 只在 LB 那条成功后才推进,
@@ -119,8 +126,8 @@ const (
 // Last.fm(这个设置按设计只作用于 Last.fm 这一路),ListenBrainz 不受影响。
 //
 // 曲长拿不到(≤0)时百分比无从算起、曲终也判不了,一律退回官方规则(当场发)——不把「没有时长」
-// 变成「永远不发」。百分比档纯按已播时长(playedSecs,墙钟累加、暂停不计、拖进度不灌水)算,
-// 不再套 4 分钟上限:"听了 75%" 就是字面意思。
+// 变成「永远不发」。百分比档纯按已播时长(playedSecs,口径见 accrueListening:暂停不计、拖进度不灌水、
+// App 没新读到的那几拍不计)算,不再套 4 分钟上限:"听了 75%" 就是字面意思。
 func lastfmScrobblePointReached(s *playSession) bool {
 	d := s.meta.Duration
 	switch features().LastfmScrobblePoint {
@@ -324,6 +331,10 @@ type poller struct {
 	// poll() 不只由 5 秒的 ticker 触发,预取的每一首解析完都会经 enrichNotify 再触发一轮,换歌那几秒里
 	// 三次读空能挤在一两秒内凑齐,「三拍 = 15 秒」的前提(见 trackEndMaxExtrapolateSecs)就不成立了。
 	nullSince time.Time
+	// curStale:这一拍 p.cur 不是 App 新读到的 —— App 按住着上一份(holding),或者 App 状态不可用 / 没在放、
+	// p.cur 是读空去抖期间留着的上一首。这几拍不计收听时长(见 noteListeningTick)。curHeld:是按住造成的。
+	curStale bool
+	curHeld  bool
 
 	// LB 提交(single/playing_now)改到后台 goroutine 跑，结果经这两个 channel 送回单一
 	// 的 poll 主循环处理——goroutine 本身只做网络 I/O,不直接碰 session/poller 字段，
@@ -1064,7 +1075,11 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// Player quit or another app took over: finalize and drop the session.
 	if !isMusic {
 		if p.sess != nil {
-			p.sess.lastSeen = time.Time{}
+			// 有位置可核的留着计时起点:短暂读空误判停播、同一首很快复现续接这个会话时,空档按 App 报的位置补
+			// (位置没走就补不上,见 listenAccrualSecs);没有位置的照旧不补。
+			if !p.sess.lastSeenHasPos {
+				p.sess.lastSeen = time.Time{}
+			}
 			p.finalize(now)
 		}
 		return
@@ -1082,9 +1097,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.ended = false     // 会话还没完;挂着的 Last.fm 收听(lastfmPending)继续跟着它等到点
 		} else {
 			p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing}
-			if p.cur.Playing {
-				p.sess.lastSeen = now
-			}
+			p.noteListeningTick(now)
 			p.sess.isAd = p.detectAdAtSessionStart()
 			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		}
@@ -1128,9 +1141,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.finalize(now)
 		p.recentFinalized = nil
 		p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing}
-		if p.cur.Playing {
-			p.sess.lastSeen = now
-		}
+		p.noteListeningTick(now)
 		p.sess.isAd = p.detectAdAtSessionStart()
 		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
@@ -1164,31 +1175,21 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		}
 		submitted = true
 	}
-	// 计时/播放态始终维护(即便挂起中):否则挂起窗口内的暂停不会清零 lastSeen,恢复时会把
-	// 暂停时长误计入 playedSecs。只把"状态切换的 playing_now 提交"挡在挂起之后。
+	// 计时始终维护(即便挂起中):否则挂起窗口内的暂停不会停表,恢复时会把暂停时长误计入 playedSecs。
+	// 只把"状态切换的 playing_now 提交"挡在挂起之后。
+	p.noteListeningTick(now)
 	if p.cur.Playing != p.sess.lastPlaying {
 		p.sess.lastPlaying = p.cur.Playing
-		if p.cur.Playing {
-			p.sess.lastSeen = now
-		} else {
-			p.sess.lastSeen = time.Time{} // stop accruing while paused
-		}
 		if !p.sess.pnPending {
 			p.announce(now, "state change")
 			submitted = true
 		}
 	}
 
-	if !p.cur.Playing {
+	// App 没新读到的拍(按住、读空去抖)到这里为止:不挪「曲终」书签、不刷新正在播放、不判阈值。
+	if !p.cur.Playing || p.curStale {
 		return
 	}
-
-	if !p.sess.lastSeen.IsZero() {
-		if d := now.Sub(p.sess.lastSeen).Seconds(); d > 0 && d <= maxAccrualGapSecs {
-			p.sess.playedSecs += d
-		}
-	}
-	p.sess.lastSeen = now
 	// 「曲终」档要用的位置书签(见 sessionEndedNaturally),只在播放中记;顺带看挂着的 Last.fm
 	// 收听是否到了 scrobble 时点(百分比档在这里过线)。
 	if at := p.cur.AnchorTS; at.IsZero() {
@@ -1207,6 +1208,56 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.submitting = true
 		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.startedAt.Unix())
 	}
+}
+
+// noteListeningTick 让会话的收听计时走一拍(handle 每拍调一次,p.sess 就是 p.cur 这首)。这一拍不是 App 新读到的
+// (p.curStale)就不计、不挪起点,只记下空档里 App 按住过;是新读到的交给 accrueListening。
+func (p *poller) noteListeningTick(now time.Time) {
+	if p.curStale {
+		if p.curHeld {
+			p.sess.gapHeld = true
+		}
+		return
+	}
+	p.sess.accrueListening(now, p.cur)
+}
+
+// accrueListening 把上一个计时起点到这一拍之间的收听计进 playedSecs,再按这一拍挪起点:在播就记下此刻与位置,
+// 暂停就停表。只拿 App 新读到的拍调用。
+func (s *playSession) accrueListening(now time.Time, cur snapshot) {
+	hasPos := !cur.AnchorTS.IsZero()
+	if !s.lastSeen.IsZero() {
+		s.playedSecs += listenAccrualSecs(now.Sub(s.lastSeen).Seconds(), s.lastSeenPos, cur.Position,
+			s.lastSeenHasPos && hasPos, s.gapHeld, cur.Playing)
+	}
+	s.gapHeld = false
+	if cur.Playing {
+		s.lastSeen, s.lastSeenPos, s.lastSeenHasPos = now, cur.Position, hasPos
+	} else {
+		s.lastSeen = time.Time{}
+	}
+}
+
+// listenAccrualSecs:两次读数之间计多少收听(秒)。纯函数,单测覆盖。
+//   - 两头都有 App 报的位置:不超过位置实际前进的量。暂停、短睡眠、按住期间播放器停了,位置不走就不算;
+//     往后拖进度不灌水,往回拖的那一拍不算。间隔超过 maxAccrualGapSecs 时,只有空档是 App 按住造成的
+//     (heldGap)才补:按住解除那一次写出的是 App 新读到的位置。别的长空档(睡眠唤醒后保活先于读数写出)
+//     里的位置可能是从旧锚点外推的,不算。
+//   - 没有位置可核:按墙钟,超过 maxAccrualGapSecs 的不算;这一拍已经暂停也不补(分不出暂停前放了多久)。
+func listenAccrualSecs(wall, fromPos, toPos float64, positions, heldGap, playingNow bool) float64 {
+	if wall <= 0 {
+		return 0
+	}
+	if !positions {
+		if !playingNow || wall > maxAccrualGapSecs {
+			return 0
+		}
+		return wall
+	}
+	if wall > maxAccrualGapSecs && !heldGap {
+		return 0
+	}
+	return max(min(wall, toPos-fromPos), 0)
 }
 
 // bridge kicks off a background fetch of Last.fm (iPhone via FastScrobbler→
@@ -1536,9 +1587,11 @@ func (p *poller) readAppPlayback() (now time.Time, reanchored, loopRestart bool)
 }
 
 // applyAppPlaybackTick 把 App 状态得出的这一拍落到 p.cur。App 没在放(或待机)时按停播确认处理
-// (nullStreakMeansStopped):连续够三拍、满 nullClearMinWait 才清空,之前 p.cur 原样保留。
+// (nullStreakMeansStopped):连续够三拍、满 nullClearMinWait 才清空,之前 p.cur 原样保留。留着的那几拍和
+// App 按住着的拍记成 curStale,不计收听时长。
 func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reanchored, loopRestart bool) {
 	if !t.tracked {
+		p.curStale, p.curHeld = true, false
 		noteAppReportedAd(snapshot{}, false)
 		p.appSpotifyTrackID = ""
 		if p.nullStreak == 0 {
@@ -1552,6 +1605,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	}
 	p.nullStreak = 0
 	p.cur = t.snap
+	p.curStale, p.curHeld = t.holding, t.holding
 	p.appSpotifyTrackID = t.spotifyTrackID
 	noteAppReportedAd(p.cur, t.ad)
 	noteAmazonCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.amazonTrackID)

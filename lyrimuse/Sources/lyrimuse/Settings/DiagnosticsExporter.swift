@@ -309,11 +309,11 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: recentCrashReportLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
-        // ---- collector healthcheck----
+        // ---- 引擎 healthcheck----
         //
         // 引擎的 `healthcheck`(healthcheckcli.go):配置、歌词来源开关、缓存、导出目录、提交后端,再拿两首探测曲
         // 实测各歌词源。取文本输出,不用 -json;不传 -local-only,联网探测有自己的时限(见 collectorHealthCheckLines)。
-        lines.append("== Collector Health Check (`collector healthcheck`) ==")
+        lines.append("== Engine Health Check (`\(LyrimuseIdentity.current.engineExecutableName) healthcheck`) ==")
         lines.append(contentsOf: collectorHealthCheckLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
@@ -446,6 +446,10 @@ enum DiagnosticsExporter {
         if let archived = archivedCollectorLogText(secrets: secrets) {
             files.append((LogFiles.collector.lastPathComponent + ".old", archived))
         }
+        // App 主线程最近一次卡住时采的调用栈(MainThreadWatchdog),7 天内的才带。
+        if let stall = recentMainThreadStallSample() {
+            files.append((LogFiles.mainThreadStall.lastPathComponent, stall))
+        }
         let home = fm.homeDirectoryForCurrentUser.path
         for (name, text) in files {
             try? LogRedactor.redactHomePath(text, home: home)
@@ -474,6 +478,16 @@ enum DiagnosticsExporter {
         return LogRedactor.redactAll(content, secrets: secrets)
     }
 
+    /// App 主线程最近一次卡住时采的调用栈(`LogFiles.mainThreadStall`,MainThreadWatchdog 覆盖写)。
+    /// 没有这个文件、或者 `days` 天内没写过,返回 nil。内容只有符号和库路径,家目录由调用方统一改写。
+    private static func recentMainThreadStallSample(days: Int = 7) -> String? {
+        let url = LogFiles.mainThreadStall
+        guard let modified = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date,
+              Date().timeIntervalSince(modified) <= TimeInterval(days) * 86_400
+        else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
     /// App 侧 24 小时的 os.Logger 记录,同样整份脱敏、不折叠。24 小时不是我们选的 ——
     /// OSLogStore 手里就只有这么多。
     private static func fullAppLogText(secrets: [String: String]) -> String {
@@ -499,7 +513,7 @@ enum DiagnosticsExporter {
     private static func collectorHealthCheckLines() -> [String] {
         let collectorPath = LyrimusePaths.bundledEnginePath
         guard FileManager.default.isExecutableFile(atPath: collectorPath) else {
-            return ["(collector binary not found at \(collectorPath))"]
+            return ["(engine binary not found at \(collectorPath))"]
         }
 
         // stdout / stderr 分两路:报告本体走 stdout,探测曲触发的网络审计行走 stderr,合成一路会交叉穿插。
@@ -510,7 +524,7 @@ enum DiagnosticsExporter {
             collectorPath, DiagnosticsHealthCheck.arguments, timeout: DiagnosticsHealthCheck.timeoutSeconds,
             environment: LyrimusePaths.collectorProcessEnvironment(), captureStderr: true)
         else {
-            return ["(failed to launch collector healthcheck)"]
+            return ["(failed to launch engine healthcheck)"]
         }
         return DiagnosticsHealthCheck.reportLines(
             stdout: result.stdoutText, stderr: result.stderrText, status: result.status, timedOut: result.timedOut)

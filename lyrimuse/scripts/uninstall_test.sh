@@ -50,6 +50,7 @@ setup_fake_home() {
   echo '{}' > "$FAKE_HOME/.config/lyrimuse/lyrimuse-enrich-cache.json"
   echo '[00:01.00]假歌词' > "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc"
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
+  echo 'Sampling process' > "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt"
   # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
   # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
   # defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
@@ -109,6 +110,7 @@ setup_fake_home
 echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
+[[ -f "$FAKE_HOME/Library/Logs/lyrimuse-main-thread-stall.txt" ]] && fail "主线程卡顿采样没删" || ok "主线程卡顿采样已删"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && fail "job 没注销" || ok "job 已注销"
 # purge 必须连偏好设置项一起删 —— 不删的话重装会走进"引导不弹 + 服务没装"的死路
 # （见 uninstall.sh 里那段注释）。

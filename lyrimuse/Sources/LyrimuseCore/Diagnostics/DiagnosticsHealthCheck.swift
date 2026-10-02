@@ -19,8 +19,8 @@ public enum DiagnosticsHealthCheck {
         var lines: [String]
         if stdout.isEmpty {
             lines = [timedOut
-                ? "(collector healthcheck did not finish within \(Int(timeoutSeconds))s and was terminated before printing anything)"
-                : "(collector healthcheck produced no output, exit code \(status))"]
+                ? "(engine healthcheck did not finish within \(Int(timeoutSeconds))s and was terminated before printing anything)"
+                : "(engine healthcheck produced no output, exit code \(status))"]
         } else {
             lines = stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             if timedOut {
