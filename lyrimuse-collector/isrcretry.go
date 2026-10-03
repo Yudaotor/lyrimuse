@@ -39,19 +39,12 @@ var isrcRetryableSources = []string{"deezer", "musixmatch"}
 
 // isrcRetryPlan:拿哪个 ISRC、去问哪几个源。源:能按 ISRC 直取、启用着、这一轮没给出可用候选、换个身份还
 // 值得再问(lyricSourcesWorthRetry 剔掉连不上的、地区受限的);amll 还要索引里有这个 ISRC(amllIndex.hasISRC)。
-// ISRC:分数最高的那条已被认可(Score >= 0)、带 ISRC、自报时长跟本地对得上的 applemusic 候选。任何一样没有就返回空。
+// ISRC 见 acceptedAppleMusicISRC。任何一样没有就返回空。
 func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, durationSecs float64) (string, []string) {
-	var picked []scoredLyricCandidateResult
-	for _, r := range results {
-		if r.Source == "applemusic" && r.ISRC != "" && r.Score >= 0 && sourceDurationFits(durationSecs, r.SourceReportedDurationSecs) {
-			picked = append(picked, r)
-		}
-	}
-	if len(picked) == 0 {
+	isrc := acceptedAppleMusicISRC(results, durationSecs)
+	if isrc == "" {
 		return "", nil
 	}
-	sort.SliceStable(picked, func(i, j int) bool { return picked[i].Score > picked[j].Score })
-	isrc := picked[0].ISRC
 	var sources []string
 	for _, s := range lyricSourcesWorthRetry(ctx, results) {
 		if slices.Contains(isrcRetryableSources, s) || (s == "amll" && sharedAMLLIndexStore().current().hasISRC(isrc)) {
@@ -63,4 +56,22 @@ func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, du
 	}
 	sort.Strings(sources)
 	return isrc, sources
+}
+
+// acceptedAppleMusicISRC:分数最高的那条已被认可(Score >= 0)、带 ISRC、自报时长跟本地对得上的 applemusic 候选报的
+// ISRC,同分取先出现的;没有返回空。
+func acceptedAppleMusicISRC(results []scoredLyricCandidateResult, durationSecs float64) string {
+	best := -1
+	for i, r := range results {
+		if r.Source != "applemusic" || r.ISRC == "" || r.Score < 0 || !sourceDurationFits(durationSecs, r.SourceReportedDurationSecs) {
+			continue
+		}
+		if best < 0 || r.Score > results[best].Score {
+			best = i
+		}
+	}
+	if best < 0 {
+		return ""
+	}
+	return results[best].ISRC
 }

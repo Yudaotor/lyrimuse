@@ -51,9 +51,9 @@ func TestTitleReverseSpecIsWired(t *testing.T) {
 	src := string(data)
 	for _, n := range []string{
 		"defer func() { titleSpec.stop() }()",
-		"if rescue {\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results))",
+		"if rescue {\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
 		"spec := titleSpec.take(samples)",
-		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples)",
+		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples,\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
 		"if spec != nil && spec.fetched {",
 	} {
 		if !strings.Contains(src, n) {

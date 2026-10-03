@@ -676,6 +676,18 @@ func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album s
 	return names
 }
 
+// appleStorefrontCachedTitle:区服遍历对这首歌已经下过的规范曲名结论,只读缓存、不打请求。ok = 有结论(可能是空串,
+// 含义同 appleStorefrontTitleCache)。
+func appleStorefrontCachedTitle(artist, album, title string) (string, bool) {
+	if album == "" {
+		return "", false
+	}
+	appleStorefrontTitleMu.Lock()
+	defer appleStorefrontTitleMu.Unlock()
+	t, ok := appleStorefrontTitleCache[normLoose(artist)+"|"+normLoose(album)+"|"+normLoose(title)]
+	return t, ok
+}
+
 // appleStorefrontCanonicalTitle:同一次商店遍历的**第二个产物** —— 这一条录音在原产地商店的曲名。
 // 空 = 本地写法就是规范写法(绝大多数歌),或者压根没定位到这张专辑。
 //
@@ -805,6 +817,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 // appleStorefrontTrackMatches:挑中的那张专辑里,这一条曲目是不是本地正在放的这首歌。有时长就以时长为主
 // (同名不同歌很难恰好一样长:Rothy 那首 232s 对 back number 314s),曲名要么归一相等、要么跨文字系统(同一录音
 // 在 JP 商店叫「ハッピーエンド」、在 US 商店叫「情勝策略」这类本地化写法);没有时长时只能要求曲名归一相等。
+// 跨文字系统按去掉括号部分之后比(crossScriptBase):只有括号里的客串者名单是假名的别的曲目不算。
 //
 // 两档的时长容差**故意不同**:
 //   - 同名那一档手里有曲名证据,时长只是除重用的,继续用 appleTitleSearchDurationTolerance
@@ -832,7 +845,7 @@ func appleStorefrontTrackMatches(localTitle string, durationSecs float64, t itun
 	if sameTitle {
 		return diff <= appleTitleSearchDurationTolerance(durationSecs)
 	}
-	return artistScriptDiffers(localTitle, t.TrackName) && diff <= appleStorefrontCrossScriptToleranceSecs
+	return crossScriptBase(localTitle, t.TrackName) && diff <= appleStorefrontCrossScriptToleranceSecs
 }
 
 // appleStorefrontCrossScriptToleranceSecs:跨文字系统那一档(曲名对不上、只能靠时长认人)的时长容差。

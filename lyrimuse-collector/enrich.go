@@ -3307,7 +3307,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			titleSearchIdentities,
 			retryIdentities)
 		if rescue {
-			titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results))
+			titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),
+				trustedRecordingISRC(artist, title, album, durationSecs, results))
 		}
 		if len(altIdentities) > 0 {
 			switch {
@@ -3534,7 +3535,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		if spec != nil {
 			correctedTitle, retryMethod, titleArtist = spec.corrected, spec.method, spec.artist
 		} else {
-			correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples)
+			correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples,
+				trustedRecordingISRC(artist, title, album, durationSecs, results))
 		}
 		if correctedTitle != "" && normLoose(correctedTitle) != normLoose(title) {
 			titleUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
@@ -3582,6 +3584,9 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				ne.SongURL = altNe.SongURL
 			}
 		}
+	} else {
+		// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。
+		ne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)
 	}
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
