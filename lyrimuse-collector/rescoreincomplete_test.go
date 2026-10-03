@@ -132,6 +132,43 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 	}
 }
 
+// 后台重评与补空发查询之前跟首次解析一样先繁转简(见 searchQueryFields):缓存 key 是原样标签,拿繁体去搜
+// 国内几家的简体索引整个查不到。
+func TestBackgroundRetriesSearchWithNormalizedQuery(t *testing.T) {
+	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	var asked []string
+	musixmatchResolve = func(ctx context.Context, artist, title string, durationSecs float64, trLang, isrc string) musixmatchResult {
+		asked = append(asked, title)
+		return musixmatchResult{lrc: rescoreTestNewBody, title: title, artist: artist, durationSecs: 180}
+	}
+	const artist, title, album = rescoreTestArtist, "愛情轉移", "認了吧"
+	key := enrichKey(artist, title, album)
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{key: {
+		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+		LyricsScoringVersion: lyricsScoringVersion - 1,
+	}}
+	enrichMu.Unlock()
+	rescoreLyrics(context.Background(), key, artist, title, album, 180)
+
+	const emptyTitle = "說愛你"
+	empty := enrichKey(artist, emptyTitle, "另一张")
+	enrichMu.Lock()
+	enrichCache[empty] = enrichEntry{}
+	enrichInflight[empty] = true
+	enrichMu.Unlock()
+	retryLyricsUpgrade(context.Background(), empty, artist, emptyTitle, "另一张", 180, true)
+
+	if !slices.Equal(asked, []string{"爱情转移", "说爱你"}) {
+		t.Fatalf("重评、补空的查询词都应先繁转简: %v", asked)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if _, ok := enrichCache[key]; !ok {
+		t.Fatal("缓存 key 照旧是原样标签")
+	}
+}
+
 // 不可判(当前歌词的来源 lrclib 正在熔断冷却、这一轮没应答):不改歌词、不写决策记录,三份名单保留上一轮的。
 func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch", "lrclib"}, nil)

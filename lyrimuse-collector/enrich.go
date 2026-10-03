@@ -1578,7 +1578,9 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
-	_, scored := scoredLyricCandidates(roundCtx, artist, title, album, durationSecs)
+	// 查询词跟首次解析一样先归一化(见 searchQueryFields);缓存 key、决策记录仍用原样标签。
+	qa, qt, qal := searchQueryFields(artist, title, album)
+	_, scored := scoredLyricCandidates(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs)
 	if ctx.Err() != nil {
 		return
 	}
@@ -1884,7 +1886,9 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
-	_, scored := scoredLyricCandidates(roundCtx, artist, title, album, durationSecs)
+	// 查询词同 retryLyricsUpgrade。
+	qa, qt, qal := searchQueryFields(artist, title, album)
+	_, scored := scoredLyricCandidates(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs)
 	if ctx.Err() != nil {
 		return false
 	}
