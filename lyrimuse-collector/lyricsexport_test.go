@@ -377,3 +377,12 @@ func TestSanitizeLyricsFilenameTruncationStillDisambiguates(t *testing.T) {
 		t.Fatalf("截断撞名后有内容丢失,磁盘上只找到 %v(共 %d 个文件)", found, len(ents))
 	}
 }
+
+// parseLyricsFile 读文件再交给 parseLyricsBytes。
+func parseLyricsFile(path string) parsedLyricsFile {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return parsedLyricsFile{}
+	}
+	return parseLyricsBytes(data)
+}

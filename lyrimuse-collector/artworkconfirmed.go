@@ -123,13 +123,9 @@ func loadArtworkConfirmed() {
 	}
 }
 
-// markArtworkConfirmed 记下"这个 sha 此刻确认在中继上"。只落到内存,攒够
+// markArtworkConfirmedGen 记下"这个 sha 此刻确认在中继上"。只落到内存,攒够
 // artworkConfirmFlushEvery 张才真写盘;扫描收尾处由 flushArtworkConfirmed 兜底。
-func markArtworkConfirmed(sha string) {
-	markArtworkConfirmedGen(sha, artworkRelayGenNow())
-}
-
-// markArtworkConfirmedGen 同 markArtworkConfirmed,只在中继代次仍是 gen 时才记(在 artworkConfirmMu 里核对,
+// 只在中继代次仍是 gen 时才记(在 artworkConfirmMu 里核对,
 // 跟 switchStateRelay 清记录互斥):确认的是哪个中继上有这张图,就只能记在那个中继名下。
 func markArtworkConfirmedGen(sha string, gen uint64) {
 	// 同上那道门。当前所有调用点都已经在"配了中继"的分支里,这里再判一次是为了让

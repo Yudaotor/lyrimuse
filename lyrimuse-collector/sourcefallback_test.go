@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -227,4 +228,9 @@ func TestFallbackHostsMapToTheirLyricSource(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", host, got, want)
 		}
 	}
+}
+
+// miguSearch:只用第一个搜索词问一次(生产路径按 miguSearchQueries 逐个试)。
+func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, error) {
+	return miguSearchQuery(ctx, miguSearchQueries(artist, title)[0])
 }

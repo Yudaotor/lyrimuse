@@ -75,24 +75,6 @@ func TestExportedFileNamesIncludeUntruncated(t *testing.T) {
 	}
 }
 
-// dedupe-entries:宽松 key 相同但时长差得远的不并。
-func TestDedupeKeepsDifferentDurationsApart(t *testing.T) {
-	cache := map[string]enrichEntry{
-		"Artist|Song|Album": {Lyrics: "x", DurationSecs: 200},
-		"artist|song|album": {Lyrics: "y", DurationSecs: 320},
-	}
-	if loosenEnrichKey("Artist|Song|Album") != loosenEnrichKey("artist|song|album") {
-		t.Skip("宽松 key 不折大小写,前提不成立")
-	}
-	if got := planDedupe(cache).groups; len(got) != 0 {
-		t.Fatalf("时长差 60%% 的两条不该并: %+v", got)
-	}
-	cache["artist|song|album"] = enrichEntry{Lyrics: "y", DurationSecs: 201}
-	if got := planDedupe(cache).groups; len(got) != 1 {
-		t.Fatalf("同一段录音应当并: %+v", got)
-	}
-}
-
 // 正文小文件:不存在不算错,读不出来要交回错误(常驻进程把它挪到旁边)。
 func TestReadEnrichBodyCheckedDistinguishesIOErrors(t *testing.T) {
 	dir := t.TempDir()
@@ -174,25 +156,6 @@ func TestLyricsDirOnlyTouchesOwnFiles(t *testing.T) {
 		if got := isLyricsTempFile(name); got != want {
 			t.Errorf("isLyricsTempFile(%q) = %v, want %v", name, got, want)
 		}
-	}
-}
-
-// 预演的子命令只读加载,不设落盘路径。
-func TestLoadEnrichCacheForCLIDryRunIsReadOnly(t *testing.T) {
-	dir := withTempDecisionCache(t)
-	enrichMu.Lock()
-	enrichPath = ""
-	enrichMu.Unlock()
-	p := filepath.Join(dir, "cache.json")
-	if err := os.WriteFile(p, []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	loadEnrichCacheForCLI(p, false)
-	if enrichPath != "" {
-		t.Fatal("预演不该设落盘路径")
-	}
-	if _, err := os.Stat(p); err != nil {
-		t.Fatal("预演不该把坏文件挪走")
 	}
 }
 

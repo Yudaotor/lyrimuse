@@ -201,3 +201,8 @@ func TestRotatingLogFile_StderrFollowsRotation(t *testing.T) {
 		t.Fatalf("fd 2 应跟到新文件: cur=%q old=%q", cur, old)
 	}
 }
+
+// openRotatingLogFile:打开时照常轮转(held 为 false)。
+func openRotatingLogFile(path string, maxBytes int64) *rotatingLogFile {
+	return openRotatingLogFileHeld(path, maxBytes, false)
+}

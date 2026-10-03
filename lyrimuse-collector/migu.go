@@ -210,12 +210,6 @@ func miguPickImg(items []miguImgItem) string {
 	return best
 }
 
-// miguSearch 请求搜索端点。searchSwitch 只开 song 一类,pageSize=10——身份闸淘汰后剩下
-// 的够挑;isCorrect=1 让咪咕自己纠一次错别字(实测不影响原版排第一)。
-func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, error) {
-	return miguSearchQuery(ctx, miguSearchQueries(artist, title)[0])
-}
-
 // miguSearchQueries:咪咕的搜索词,按顺序试,前一个挑不出候选才用下一个。「歌手 歌名」一起搜时咪咕优先排这位
 // 歌手的热门歌,歌名比较普通、又是新歌时,这首会被挤出前 20 条(Ariana Grande《oh well》:「Ariana Grande
 // oh well」20 条全是她的旧歌,单搜「oh well」第二条就是它),所以再补一次只用歌名。补搜的结果照样过
@@ -248,6 +242,8 @@ func miguSearchQuery(ctx context.Context, q string) ([]miguSearchItem, error) {
 	return items, err
 }
 
+// miguSearchAt 问一台主机的搜索端点。searchSwitch 只开 song 一类,pageSize=10——身份闸淘汰后剩下
+// 的够挑;isCorrect=1 让咪咕自己纠一次错别字(实测不影响原版排第一)。
 func miguSearchAt(ctx context.Context, host, q string) ([]miguSearchItem, error) {
 	u := "https://" + host + "/MIGUM2.0/v1.0/content/search_all.do?text=" + neturl.QueryEscape(q) +
 		"&pageNo=1&pageSize=10&searchSwitch=" + neturl.QueryEscape(`{"song":1}`) + "&isCorrect=1"

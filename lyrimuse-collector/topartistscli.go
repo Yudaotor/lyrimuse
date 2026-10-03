@@ -266,21 +266,3 @@ func previousBucketRanks(current []mergedArtist, curEntries []lastfmChartEntry, 
 	}
 	return out
 }
-
-// previousMergedRanks 给本期(已合并)每一条找它在上一期(已合并)榜里的名次,找不到为 0。
-// 两边都按合并用的名字键对齐,繁简 / 中英文艺名 / 合唱串跟合并本身同一把尺子;
-// 上一期同一个键出现多次时取靠前的那个。
-func previousMergedRanks(current, previous []lastfmChartEntry, nameKey func(string) string) []int {
-	prevRank := make(map[string]int, len(previous))
-	for i, e := range previous {
-		k := nameKey(e.Name)
-		if _, seen := prevRank[k]; k != "" && !seen {
-			prevRank[k] = i + 1
-		}
-	}
-	out := make([]int, len(current))
-	for i, e := range current {
-		out[i] = prevRank[nameKey(e.Name)]
-	}
-	return out
-}

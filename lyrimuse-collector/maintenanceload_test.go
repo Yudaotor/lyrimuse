@@ -1,3 +1,5 @@
+//go:build devtools
+
 package main
 
 import (

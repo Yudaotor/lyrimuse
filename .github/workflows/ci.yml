@@ -67,6 +67,11 @@ jobs:
       - name: go vet
         run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
 
+      # 开发者手动跑的维护子命令只在带 devtools 构建标签时编进来（见 lyrimuse-collector/devtools.go），
+      # 正式版不带。这里带上标签再查一遍，免得它们编不过也没人知道。
+      - name: go vet（devtools）
+        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet -tags devtools ./...
+
       # 挡住新长出来的死代码。不是"零死代码"——允许清单在
       # lyrimuse-collector/deadcode-baseline.txt，文件头写了往里加之前该问什么。
       # deadcode 的版本必须钉住：v0.50.0 起要求 go >= 1.26，装不上本仓的工具链。
@@ -89,8 +94,9 @@ jobs:
           fi
           echo "没有新增死代码。"
 
+      # 带 devtools 标签跑：正式版的测试一条不少，维护子命令的测试也在里面。
       - name: go test
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...
+        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test -tags devtools ./...
 
       - name: Localizable.strings 一致性
         # 两份手写 .strings 漏改一边不会编译报错,只会在运行时静默 fallback 到 key 本身

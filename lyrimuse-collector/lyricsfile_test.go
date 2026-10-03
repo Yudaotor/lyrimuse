@@ -427,3 +427,8 @@ func TestKanaAnnotationMirrorsSwift(t *testing.T) {
 		t.Errorf("kanaLRCTimeTag = %s,跟 Swift 的 lrcTimeTag 不一致", kanaLRCTimeTag)
 	}
 }
+
+// lyricsfileWordsToYRC 只取逐字 YRC。没有逐字、解析不了时返回空串。
+func lyricsfileWordsToYRC(doc string) string {
+	return lyricsfileExtrasFrom(doc, "").yrc
+}

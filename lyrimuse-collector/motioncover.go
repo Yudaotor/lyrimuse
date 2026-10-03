@@ -637,25 +637,6 @@ func motionCoverNeedsRecheckAgainstOwnCover(freshApplies bool, e enrichEntry) bo
 	return !freshApplies && e.MotionCoverURL == "" && !e.MotionCoverChecked
 }
 
-// motionCoverAlbumHasKnownVideo:这条记录所属的专辑,**本地缓存里已经确认**有动态封面。
-//
-// 跟 motionCoverWorthBackfill 的区别只有一处,但正是关键:专辑还没查过时它回 false
-// (那个回 true)。所以它**一个请求都不发**,纯查本地两份缓存,可以拿来在全量扫描里筛出
-// "值得为它发两次 HTTP"的那一小撮,而不必对整份缓存无差别重验。
-func motionCoverAlbumHasKnownVideo(e enrichEntry, artist, title, album string) bool {
-	albumID, ok := appleCatalogAlbumIDFor(artist, title, album)
-	if !ok {
-		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
-	}
-	if albumID <= 0 {
-		return false
-	}
-	motionCoverMu.Lock()
-	defer motionCoverMu.Unlock()
-	mc, cached := motionCoverCache[fmt.Sprint(albumID)]
-	return cached && mc.Master != ""
-}
-
 func motionCoverWorthBackfill(e enrichEntry, artist, title, album string) bool {
 	if e.MotionCoverURL != "" || e.MotionCoverChecked {
 		return false

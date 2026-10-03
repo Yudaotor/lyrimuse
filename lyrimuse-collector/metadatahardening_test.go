@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"hash/crc32"
 	"image"
@@ -580,67 +579,6 @@ func TestAppleCatalogSaveFailureKeepsDirty(t *testing.T) {
 }
 
 // ---- 跨专辑复用 ----
-
-// 分组跟子组第一条比时长,不链式合并:200 / 201.9 / 203.8 秒不会连成一组。
-func TestGroupCrossAlbumNoChaining(t *testing.T) {
-	cache := map[string]enrichEntry{
-		enrichKey("A", "歌", "一"): {Lyrics: "x", DurationSecs: 200},
-		enrichKey("A", "歌", "二"): {Lyrics: "y", DurationSecs: 201.9},
-		enrichKey("A", "歌", "三"): {Lyrics: "z", DurationSecs: 203.8},
-	}
-	groups := groupCrossAlbumCandidates(cache, 2)
-	if len(groups) != 1 || len(groups[0].members) != 2 {
-		t.Fatalf("应当只有 200 / 201.9 一组: %+v", groups)
-	}
-	for _, m := range groups[0].members {
-		if m.duration == 203.8 {
-			t.Error("203.8 秒那条跟 200 秒差了 3.8 秒,不该在组里")
-		}
-	}
-}
-
-// -apply:校准过时间轴的条目不动;组内最高分打平的整组不动;源没有决策记录时写一份最小记录。
-func TestApplyCrossAlbumReuseGuards(t *testing.T) {
-	kBest, kPinned, kPlain := enrichKey("A", "歌", "一"), enrichKey("A", "歌", "二"), enrichKey("A", "歌", "三")
-	tie1, tie2 := enrichKey("B", "曲", "一"), enrichKey("B", "曲", "二")
-	withEnrichCache(t, map[string]enrichEntry{
-		kBest:   {Lyrics: "最好", DurationSecs: 200, LyricsScore: 900, LyricsScoringVersion: 3},
-		kPinned: {Lyrics: "校准过", DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3},
-		kPlain: {Lyrics: "普通", DurationSecs: 200, LyricsScore: 100, LyricsScoringVersion: 3,
-			LyricsDecisionApplied: &lyricsDecision{Path: "old-path"}},
-		tie1: {Lyrics: "甲", DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
-		tie2: {Lyrics: "乙", DurationSecs: 180, LyricsScore: 500, LyricsScoringVersion: 3},
-	})
-	pins := filepath.Join(t.TempDir(), "pins.json")
-	data, _ := json.Marshal(lyricsPinsFile{Version: 1, Pins: map[string]int64{kPinned: 1}})
-	if err := os.WriteFile(pins, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	savedPins := lyricsPinsPath
-	lyricsPinsPath = pins
-	t.Cleanup(func() { lyricsPinsPath = savedPins })
-
-	enrichMu.Lock()
-	groups := groupCrossAlbumCandidates(enrichCache, crossAlbumReuseToleranceSecs)
-	enrichMu.Unlock()
-	applied, skipped := applyCrossAlbumReuse(groups)
-	if applied != 1 || skipped != 2 {
-		t.Fatalf("applied=%d skipped=%d, want 1 / 2", applied, skipped)
-	}
-	enrichMu.Lock()
-	defer enrichMu.Unlock()
-	if enrichCache[kPinned].Lyrics != "校准过" {
-		t.Error("校准过的不该被改")
-	}
-	plain := enrichCache[kPlain]
-	if plain.Lyrics != "最好" || plain.LyricsDecisionApplied == nil ||
-		plain.LyricsDecisionApplied.Path != lyricsDecisionPathCrossAlbumReuse || plain.LyricsDecisionApplied.ReusedFrom != kBest {
-		t.Errorf("普通那条应复用并换成最小决策记录: %+v", plain.LyricsDecisionApplied)
-	}
-	if enrichCache[tie1].Lyrics != "甲" || enrichCache[tie2].Lyrics != "乙" {
-		t.Error("打平的组不该动")
-	}
-}
 
 // ---- 平台页 ----
 

@@ -35,10 +35,7 @@ import (
 // 路径没设时(各 CLI 子命令就不设)migrationDone 恒为 false、markMigrationDone 与 recheckMigrationsFor
 // 是空操作,行为与加这层之前逐字节一致 —— 水位是常驻进程的启动优化,不是语义的一部分。
 //
-// 那么 CLI 子命令改完缓存、常驻进程带着旧水位重启,会不会漏掉该做的迁移?对现有这几个
-// 不会,逐个看过:backfill-roma 与 regenerate-jyutping 改的是 LyricsRoma 的**内容**,
-// 不动 Lyrics / LyricsYRC 的时间轴结构,而 migrateLyricTimelines 只在行级轴与逐字轴
-// 打架时才重挂(罗马音是被动跟着 remap 走的);search-lyrics 手动选定写的是
+// 那么 CLI 子命令改完缓存、常驻进程带着旧水位重启,会不会漏掉该做的迁移?search-lyrics 手动选定写的是
 // manual_lyrics,那类条目这道迁移本来就整条跳过。
 // 将来若有 CLI 会改 Lyrics / LyricsYRC 本身,它得自己调 invalidateMigrationState ——
 // 这条判断是**按当下这几个子命令的行为**下的,不是这套机制自带的保证。

@@ -43,11 +43,6 @@ func lyricsfileExtrasFrom(doc, synced string) lyricsfileExtras {
 	}
 }
 
-// lyricsfileWordsToYRC 只取逐字 YRC。没有逐字、解析不了时返回空串。
-func lyricsfileWordsToYRC(doc string) string {
-	return lyricsfileExtrasFrom(doc, "").yrc
-}
-
 // lyricsfileYRC 把 lines[].words[] 转成 YRC:词文本原样拼(自带尾随空格),词缺 end_ms 取下一个词的起点 / 行尾,
 // 词的起点倒退或结束早于开始的那一行整行不要。
 func lyricsfileYRC(lines []any) string {

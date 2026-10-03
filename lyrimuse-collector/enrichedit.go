@@ -527,7 +527,7 @@ func runApplyEnrichEditCLI(args []string) {
 		emit(enrichEditResult{ID: req.ID, Error: "cannot resolve the config directory"})
 		os.Exit(1)
 	}
-	if !ensureExclusiveForDedupe(cfgDir) {
+	if !ensureExclusiveForMaintenance(cfgDir) {
 		emit(enrichEditResult{ID: req.ID, Error: "collector is running"})
 		os.Exit(1)
 	}

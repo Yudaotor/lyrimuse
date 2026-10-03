@@ -222,12 +222,8 @@ type rotatingLogFile struct {
 // logFileRecheckEvery:多久核对一次日志路径上的文件还是不是手里这个。一次 Stat,对日志写入的频率来说可以忽略。
 const logFileRecheckEvery = 30 * time.Second
 
-// openRotatingLogFile:路径为空 / 打不开返回 nil,调用方退回 stderr。
-func openRotatingLogFile(path string, maxBytes int64) *rotatingLogFile {
-	return openRotatingLogFileHeld(path, maxBytes, false)
-}
-
-// openRotatingLogFileHeld:held 为 true 时打开时不轮转、之后也先不轮转,直到 releaseLogRotation。
+// openRotatingLogFileHeld:路径为空 / 打不开返回 nil,调用方退回 stderr。held 为 true 时打开时不轮转、
+// 之后也先不轮转,直到 releaseLogRotation。
 func openRotatingLogFileHeld(path string, maxBytes int64, held bool) *rotatingLogFile {
 	if path == "" {
 		return nil

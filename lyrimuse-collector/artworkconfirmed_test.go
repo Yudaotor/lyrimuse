@@ -271,3 +271,8 @@ func TestSweepInertWithoutRelay(t *testing.T) {
 		t.Errorf("没配中继时不该发任何请求, 实发 %d 次", hits)
 	}
 }
+
+// markArtworkConfirmed:按当前中继代次记一张。
+func markArtworkConfirmed(sha string) {
+	markArtworkConfirmedGen(sha, artworkRelayGenNow())
+}

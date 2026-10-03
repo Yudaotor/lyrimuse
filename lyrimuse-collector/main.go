@@ -153,64 +153,18 @@ func main() {
 		runArtistTracksCLI(os.Args[2:])
 		return
 	}
-	// `collector regenerate-jyutping [-apply]`:按当前算法+词典重算存量粤拼(见
-	// regeneratejyutpingcli.go)。maybeGenerateJyutpingRoma 只补空值、从不覆盖,所以
-	// 算法/词典改了之后要靠这个命令回头刷存量。跟 dedupe-entries 同形态:默认预演。
-	if len(os.Args) > 1 && os.Args[1] == "regenerate-jyutping" {
-		runRegenerateJyutpingCLI(os.Args[2:])
-		return
-	}
-	// `collector backfill-roma [-apply] [-limit N]`:给存量条目补罗马音(见
-	// backfillromacli.go)。maybeGenerateHelperRoma 只在解析/重评那一刻跑,所以这条特性
-	// 上线时存量一条都不会被补上;跟 regenerate-jyutping 同形态,默认预演。
-	if len(os.Args) > 1 && os.Args[1] == "backfill-roma" {
-		runBackfillRomaCLI(os.Args[2:])
-		return
-	}
 	// `collector apply-enrich-edit <请求文件>`:后台服务没在跑时,App 用它执行一份歌词缓存改动
 	// (见 enrichedit.go)。
 	if len(os.Args) > 1 && os.Args[1] == "apply-enrich-edit" {
 		runApplyEnrichEditCLI(os.Args[2:])
 		return
 	}
-	// `collector dedupe-entries [-apply]`:把 enrich 缓存里"其实是同一首歌"的重复条目
-	// 并成一条(见 dedupecli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "dedupe-entries" {
-		runDedupeEntriesCLI(os.Args[2:])
-		return
-	}
-	// `collector cross-album-reuse [-tolerance N] [-all] [-apply]`:列出同一首歌落在多张专辑下、
-	// 时长互相兼容、却各自选源拿到两份不同歌词的条目组(见 crossalbumcli.go)。默认预演,
-	// -apply 把组内评分最高那条的歌词复用给其余条目、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "cross-album-reuse" {
-		runCrossAlbumReuseCLI(os.Args[2:])
-		return
-	}
-	// `collector recheck-cover [-apply] "歌手|歌名|专辑" ...`:对指定条目重新解析一次封面
-	// (见 covercli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "recheck-cover" {
-		runRecheckCoverCLI(os.Args[2:])
-		return
-	}
-	// `collector recheck-instrumental [-apply] "歌手|歌名|专辑" ...`:给缺「纯音乐」标记的
-	// 条目补上这个结论(见 covercli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "recheck-instrumental" {
-		runRecheckInstrumentalCLI(os.Args[2:])
-		return
-	}
-	// `collector recheck-motion-cover [-apply]`:扫描整份缓存,把"已查过动态封面、结论是
-	// 没有"的记录用当前 cover_url 重新校验一次(见 motionrecheckcli.go)。默认预演,
-	// -apply 才真改、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "recheck-motion-cover" {
-		runRecheckMotionCoverCLI(os.Args[2:])
-		return
-	}
-	// `collector resync-lyrics [-apply] "歌手|歌名|专辑" ...`:对指定条目强制重新解析,
-	// 补上"歌词正文没变、但译文/罗马音其实有新内容"这种自动 rescore 不会碰的情况(见
-	// resynclyricscli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
-	if len(os.Args) > 1 && os.Args[1] == "resync-lyrics" {
-		runResyncLyricsCLI(os.Args[2:])
-		return
+	// 开发者手动跑的存量修数据子命令只在带 devtools 构建标签时才有(见 devtools.go)。
+	if len(os.Args) > 1 {
+		if run, ok := devSubcommands[os.Args[1]]; ok {
+			run(os.Args[2:])
+			return
+		}
 	}
 	// 配置目录默认 ~/.config/lyrimuse,环境变量 LYRIMUSE_CONFIG_DIR 优先(paths.go)。
 	defaultConfigDir := configDir()

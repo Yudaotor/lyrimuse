@@ -372,12 +372,6 @@ func (g *hostGuard) bucketLocked(host string, now time.Time) (*hostBucket, hostR
 	return b, rate
 }
 
-// tryTakeBackground 给后台请求取一个令牌,取完桶里至少还剩 reserve 个;取不到返回还要等多久
-// (等的是桶涨回 reserve+1,期间前台照样可以取)。
-func (g *hostGuard) tryTakeBackground(host string) (time.Duration, bool) {
-	return g.tryTakeAbove(host, func(r hostRate) float64 { return r.reserve })
-}
-
 // tryTakeAbove:桶里取完一个之后至少还剩 keep(rate) 个才取;取不到时返回大约还要等多久。
 func (g *hostGuard) tryTakeAbove(host string, keep func(hostRate) float64) (time.Duration, bool) {
 	g.mu.Lock()

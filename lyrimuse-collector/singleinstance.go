@@ -32,3 +32,20 @@ func acquireSingleInstanceLock(dir string) bool {
 	_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
 	return true
 }
+
+// ensureExclusiveForMaintenance:改写缓存的维护命令(-apply)动手前确认常驻实例没在跑。常驻实例在内存里持有整份
+// 缓存、按自己的节奏整份写回,它活着时改了磁盘上的缓存,下一次保存就会被盖回去。跟 acquireSingleInstanceLock
+// 拿同一把锁,语义相反:锁文件打不开、拿不到锁一律返回 false(fail-closed)。
+func ensureExclusiveForMaintenance(dir string) bool {
+	f, err := os.OpenFile(filepath.Join(dir, "collector.lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		slog.Warn("maintenance: cannot open lock file", "err", err)
+		return false
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return false
+	}
+	singleInstanceLockFile = f // 挂住防 GC,进程退出时内核自动释放
+	return true
+}

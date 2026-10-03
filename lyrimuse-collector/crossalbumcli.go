@@ -1,3 +1,5 @@
+//go:build devtools
+
 package main
 
 import (
@@ -83,7 +85,7 @@ func runCrossAlbumReuseCLI(args []string) {
 	//
 	// 不复用 acquireSingleInstanceLock:那个在锁文件打不开时 fail-open(让常驻实例照跑),
 	// 对常驻服务是对的取舍,对一个会改数据的一次性命令是错的。
-	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		log.Fatalf("cross-album-reuse: collector is running (or the exclusive lock is unavailable); stop it before -apply")
 	}
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
@@ -298,7 +300,7 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 				// key 是 artist|title|album,而这里按 artist|title 归组,所以组内 album
 				// 必然互不相同 —— 这道检查当下恒真。留着是因为归组口径一旦放宽(比如改用
 				// canonicalEnrichKey 折大小写),同 album 的两条就可能落进同一组,那时
-				// 它们属于 dedupe-entries 的职责,不该由跨专辑复用来动。
+				// 它们是同一首的重复条目,归 key 迁移(migrateEnrichKeys)合并,不该由跨专辑复用来动。
 				if len(albums) >= 2 {
 					artist, title, _ := splitEnrichKey(bucket[0].key)
 					out = append(out, crossAlbumGroup{artist: artist, title: title,
@@ -325,4 +327,10 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(r[:n-1]) + "…"
+}
+
+func init() {
+	// cross-album-reuse [-tolerance N] [-all] [-apply]:同一首歌落在多张专辑下、时长兼容却各自拿到两份不同歌词的,
+	// 把组内评分最高那条的歌词复用给其余条目。
+	devSubcommands["cross-album-reuse"] = runCrossAlbumReuseCLI
 }

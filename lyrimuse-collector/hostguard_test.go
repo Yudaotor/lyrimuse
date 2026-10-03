@@ -795,3 +795,9 @@ func TestHostGuardThrottlePauseFollowsRetryAfter(t *testing.T) {
 		t.Fatalf("Retry-After 很长时封顶在 %v,实际 %v", longest, got)
 	}
 }
+
+// tryTakeBackground 给后台请求取一个令牌,取完桶里至少还剩 reserve 个;取不到返回还要等多久
+// (等的是桶涨回 reserve+1,期间前台照样可以取)。生产路径走阻塞的 acquireBackground。
+func (g *hostGuard) tryTakeBackground(host string) (time.Duration, bool) {
+	return g.tryTakeAbove(host, func(r hostRate) float64 { return r.reserve })
+}

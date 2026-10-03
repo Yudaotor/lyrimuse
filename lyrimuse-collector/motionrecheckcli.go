@@ -1,3 +1,5 @@
+//go:build devtools
+
 package main
 
 import (
@@ -43,7 +45,7 @@ func runRecheckMotionCoverCLI(args []string) {
 	}
 	cfgDir := configDir()
 
-	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
 		os.Exit(1)
@@ -229,4 +231,28 @@ func recheckOneMotionCoverKey(ctx context.Context, apply bool, key string) strin
 	enrichMu.Unlock()
 	fmt.Println("   已写入")
 	return result
+}
+
+func init() {
+	// recheck-motion-cover [-apply]:把「查过动态封面、结论是没有」的记录用当前 cover_url 重新校验一次。
+	devSubcommands["recheck-motion-cover"] = runRecheckMotionCoverCLI
+}
+
+// motionCoverAlbumHasKnownVideo:这条记录所属的专辑,**本地缓存里已经确认**有动态封面。
+//
+// 跟 motionCoverWorthBackfill 的区别只有一处,但正是关键:专辑还没查过时它回 false
+// (那个回 true)。所以它**一个请求都不发**,纯查本地两份缓存,可以拿来在全量扫描里筛出
+// "值得为它发两次 HTTP"的那一小撮,而不必对整份缓存无差别重验。
+func motionCoverAlbumHasKnownVideo(e enrichEntry, artist, title, album string) bool {
+	albumID, ok := appleCatalogAlbumIDFor(artist, title, album)
+	if !ok {
+		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
+	}
+	if albumID <= 0 {
+		return false
+	}
+	motionCoverMu.Lock()
+	defer motionCoverMu.Unlock()
+	mc, cached := motionCoverCache[fmt.Sprint(albumID)]
+	return cached && mc.Master != ""
 }

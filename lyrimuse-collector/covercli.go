@@ -1,3 +1,5 @@
+//go:build devtools
+
 package main
 
 import (
@@ -15,7 +17,7 @@ import (
 // backfillPeripheralFields 复查一次(见 coverNeedsAlbumCheck)。发现某首歌封面选错时,
 // 除了等它下次被播放没有别的办法 —— 而"等它自己好"对一次已经看见的错误不是个交代。
 //
-// 三条跟 dedupe-entries 一致的约束:
+// 三条约束(另外几个改缓存的维护命令同样守着):
 //
 //  1. **dry-run 跑同一条代码路径**,只在落盘前停手:重新解析、按 coverSwapAllowed 判断,
 //     然后打印计划。不另写一份"预演版",省掉"验收 A 实现、真跑 B 实现"这种分叉。
@@ -47,7 +49,7 @@ func runRecheckCoverCLI(args []string) {
 		log.Fatalf("recheck-cover: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选),跟 dedupe-entries 同款。
+	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选)。
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	// 封面主色只在配了状态中继时才算(见 relay.go 的 webRelayURL 头注)。这条子命令在
 	// main() 的子命令分流阶段就返回了,跑不到常驻路径那句赋值 —— 不补这一句,给网页配了
@@ -61,7 +63,7 @@ func runRecheckCoverCLI(args []string) {
 	// 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
 	// path 留空就是"只用内存不持久化"(见 musicbrainz.go),否则这个进程会拿一份空 map
 	// 把常驻实例攒下来的整份歌手身份缓存盖掉。
-	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
 		os.Exit(1)
@@ -227,7 +229,7 @@ func runRecheckInstrumentalCLI(args []string) {
 	cfgDir := configDir()
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	// 跟 recheck-cover 同款:刻意不读歌手身份/别名缓存,免得拿空 map 盖掉常驻实例攒的那份。
-	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
 		os.Exit(1)
@@ -318,4 +320,11 @@ func runRecheckInstrumental(keys []string, apply bool) int {
 		return 1
 	}
 	return 0
+}
+
+func init() {
+	// recheck-cover [-apply] "歌手|歌名|专辑" ...:对指定条目重新解析一次封面。
+	devSubcommands["recheck-cover"] = runRecheckCoverCLI
+	// recheck-instrumental [-apply] "歌手|歌名|专辑" ...:给缺「纯音乐」标记的条目补上这个结论。
+	devSubcommands["recheck-instrumental"] = runRecheckInstrumentalCLI
 }

@@ -1,3 +1,5 @@
+//go:build devtools
+
 package main
 
 import (
@@ -58,7 +60,7 @@ func runResyncLyricsCLI(args []string) {
 	loadAppleStorefrontArtistCache(filepath.Join(cfgDir, clientName+"-apple-storefront-artist-cache.json"))
 	loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
 
-	if *apply && !ensureExclusiveForDedupe(cfgDir) {
+	if *apply && !ensureExclusiveForMaintenance(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
 		os.Exit(1)
@@ -200,7 +202,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 
 // resyncPlan 是 resync-lyrics 对一条的比较结论。
 //
-// 候选里的罗马音、译文只来自歌词源,缓存里却可能是本地生成的(helper / 粤拼 / backfill-roma 的罗马音,机翻的
+// 候选里的罗马音、译文只来自歌词源,缓存里却可能是本地生成的(helper / 粤拼的罗马音,机翻的
 // 译文)。正文没变、源没给这两样时,本地那份仍然对得上:不算「变了」,也不清掉(keepLocalRoma / keepMachineTr)。
 // 原来逐字比,这类条目每次都被报成改动,-apply 之后罗马音和机翻就没了。逐字同理:正文没变、这一轮的冠军没带
 // 逐字时留着缓存里那份(keepYRC)。
@@ -273,4 +275,9 @@ func changedMark(v bool) string {
 		return "✓变"
 	}
 	return "不变"
+}
+
+func init() {
+	// resync-lyrics [-apply] "歌手|歌名|专辑" ...:对指定条目强制重新解析,补上正文没变、译文 / 罗马音有新内容的情况。
+	devSubcommands["resync-lyrics"] = runResyncLyricsCLI
 }

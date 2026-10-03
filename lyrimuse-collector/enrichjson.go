@@ -11,17 +11,14 @@ import (
 
 // enrichEntry 的 JSON 编解码:**保留这个二进制不认识的键**。
 //
-// 为什么需要(真实事故):enrich 缓存是一份 map[string]enrichEntry 整体
+// 为什么需要:enrich 缓存是一份 map[string]enrichEntry 整体
 // json.Marshal/Unmarshal 的文件,而写它的不止常驻 collector 一个——search-lyrics -pick /
-// resync-lyrics / backfill-roma / recheck-cover 这些一次性子命令,以及 Swift 侧的"歌词管理",
+// resync-lyrics / recheck-cover 这些维护子命令,以及 Swift 侧的"歌词管理",
 // 都会整份读进来、改几条、整份写回。Go 这一侧只要跑的二进制比文件里的字段老(结构体里还
-// 没声明某个键),标准库 Unmarshal 就把那个键丢在地上,下一次 Marshal 自然没有它。
-// 09-03 10:15 一次 `backfill-roma -apply` 正是这样把 08-31 之后新加的 plain_lyrics /
-// plain_lyrics_source / song_language / manual_pick_sha 在 1082 条记录上静默抹掉(同 key
-// 同 ts,只是字段少了;对照 backup-pre-backfill-roma-20260903-101525 里的那份能一条条对上)。
-// 在此之前 PlainLyrics 字段本身的注释就记着同一类担心("不声明就会被 Go 冲掉"),当时的
-// 解法是追着把 Swift 写的键一个个声明进结构体——那只防"字段没声明",防不住"字段声明了但
-// 跑的是老构建"。这里改成通用的:未知键原样进 enrichEntry.Unknown,写回时原样带上。
+// 没声明某个键),标准库 Unmarshal 就把那个键丢在地上,下一次 Marshal 自然没有它,整份写回时
+// 那个字段在所有记录上静默消失(真实事故见 09 章)。把 Swift 写的键一个个声明进结构体只防
+// "字段没声明",防不住"字段声明了但跑的是老构建",所以改成通用的:未知键原样进
+// enrichEntry.Unknown,写回时原样带上。
 //
 // 两条实现取舍:
 //   - 解码走两档。先用 DisallowUnknownFields 严格解一次——二进制认识全部字段(日常

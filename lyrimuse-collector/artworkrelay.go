@@ -260,7 +260,7 @@ func scheduleArtworkUpload(sha, path string) {
 			artworkNextRetry[sha] = time.Now().Add(wait)
 		}
 		artworkMu.Unlock()
-		// 必须在 artworkMu 之外调:markArtworkConfirmed 要拿 artworkConfirmMu,而
+		// 必须在 artworkMu 之外调:markArtworkConfirmedGen 要拿 artworkConfirmMu,而
 		// loadArtworkConfirmed 是先 artworkConfirmMu 再 artworkMu —— 两处反着拿就是死锁。
 		// 现在靠"load 在 run() 之前跑完、那时还没有上传 goroutine"侥幸不撞上,但那是调用
 		// 顺序撑着的,不是锁本身保证的。统一成"这两把锁不嵌套"。
@@ -279,17 +279,11 @@ var errArtworkTooLarge = errors.New("artwork too large for the relay")
 // artworkTooLargeRetryAfter:超限的图多久再看一次(文件被换成小图的话会自然恢复)。
 const artworkTooLargeRetryAfter = 24 * time.Hour
 
-// ensureArtworkUploaded 确保这张图在中继上存在。先 HEAD 后 POST。
+// ensureArtworkUploadedTo 确保这张图在调用方给的那一份中继(地址与令牌)上存在。先 HEAD 后 POST。
 //
 // HEAD 这一步不是可有可无的优化:artworkUploaded 只活在内存里,重启后是空的,没有
 // 这一问的话每次 collector 重启都会把整个 artwork/ 目录重传一遍 —— 而 KV 免费版只有
 // 1000 写/天,读却有 100k/天。
-func ensureArtworkUploaded(ctx context.Context, sha, path string) error {
-	base, token := artworkRelayTarget()
-	return ensureArtworkUploadedTo(ctx, base, token, sha, path)
-}
-
-// ensureArtworkUploadedTo 同 ensureArtworkUploaded,对着调用方给的那一份中继地址与令牌。
 func ensureArtworkUploadedTo(ctx context.Context, base, token, sha, path string) error {
 	if base == "" {
 		return fmt.Errorf("artwork relay: 未配置中继地址")
@@ -364,7 +358,7 @@ func sweepDeviceArtwork(ctx context.Context) {
 	// 收尾落盘。用 defer 而不是写在函数末尾:扫一遍 700 张 × artworkSweepGap ≈ 3.5 分钟,
 	// 而 collector 重启很频繁(实测 17 次/天),下面那两条 ctx 取消的 return 才是
 	// 最常走到的出口 —— 只在末尾 flush 的话,已经确认过的那批最容易一条都存不下来。
-	// markArtworkConfirmed 每 artworkConfirmFlushEvery 张已经落一次盘,这里兜住尾巴上不足一批的。
+	// markArtworkConfirmedGen 每 artworkConfirmFlushEvery 张已经落一次盘,这里兜住尾巴上不足一批的。
 	defer flushArtworkConfirmed()
 	entries, err := os.ReadDir(deviceArtworkDir)
 	if err != nil {

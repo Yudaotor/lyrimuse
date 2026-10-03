@@ -13,18 +13,6 @@ import (
 // 榜单升降(-with-previous):上一期按同一套合并对齐名次。对不上的后果是整排误标「新」,
 // 或者把同一个人的名次差算错。
 
-func TestPreviousMergedRanks(t *testing.T) {
-	cur := []lastfmChartEntry{{Name: "Alpha"}, {Name: "beta"}, {Name: "Gamma"}}
-	prev := []lastfmChartEntry{{Name: "Beta"}, {Name: "Delta"}, {Name: "alpha"}, {Name: "ALPHA"}}
-	got := previousMergedRanks(cur, prev, strings.ToLower)
-	if want := []int{3, 1, 0}; got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
-		t.Errorf("got %v, want %v(按名字键对齐,重复键取靠前的,找不到为 0)", got, want)
-	}
-	if got := previousMergedRanks(cur, nil, strings.ToLower); got[0] != 0 || len(got) != 3 {
-		t.Errorf("上一期为空时全是 0: %v", got)
-	}
-}
-
 func TestTopArtistsCLIWithPrevious(t *testing.T) {
 	useCLIConfigDir(t, map[string]string{"lastfm_user": "someone", "lastfm_api_key": "read-key"})
 	savedCacheOnly, savedIdentity, savedAlias, savedQQ := artistCanonicalCacheOnly, artistIdentityPath, artistAliasPath, qqArtistNamePath

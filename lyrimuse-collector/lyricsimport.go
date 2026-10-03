@@ -28,7 +28,7 @@ type parsedLyricsFile struct {
 	ok                   bool // 头部按固定行号完整读到 ar/ti/al 三行、且 artist/title 内容都非空才算 true(album 内容允许是空字符串)
 }
 
-// parseLyricsFile 读一个 .lrc/.yrc 文件,拆出 lyricsFileHeader(见 lyricsexport.go)写的
+// parseLyricsBytes 解析一个 .lrc/.yrc 文件的内容,拆出 lyricsFileHeader(见 lyricsexport.go)写的
 // [ar:]/[ti:]/[al:]/[source:]/[manual:1] 头部标签。
 //
 // 按"固定行号"读头部,不能按"这行长得像不像标签"来扫描:有些歌词源原文第一行就是
@@ -37,15 +37,6 @@ type parsedLyricsFile struct {
 // 可选 [source:]/[manual:1]、之后必须紧跟一个空行分隔符,因此只按行号消费,不做"像不像
 // 标签"的判断。老版本(改动前导出、完全没有头)文件第 1 行就匹配不上 [ar:],直接判
 // ok=false,调用方(importLyricsFromFiles)据此跳过整组、沿用 JSON 里的旧值。
-func parseLyricsFile(path string) parsedLyricsFile {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return parsedLyricsFile{}
-	}
-	return parseLyricsBytes(data)
-}
-
-// parseLyricsBytes 是 parseLyricsFile 的解析部分(文件内容已经读进来了),规则见 parseLyricsFile。
 func parseLyricsBytes(data []byte) parsedLyricsFile {
 	var p parsedLyricsFile
 	// 不是合法 UTF-8 的文件先转码(decodeLyricBytes):非法字节进了缓存,正文小文件的校验值就再也对不上。
@@ -179,10 +170,6 @@ var (
 // 补扫这几条:用户手改 lyrics/ 里的文件是**外来数据**入口,改过的条目得让后面那些存量迁移再过一遍
 // (见 startupmigration.go 的 recheckMigrationsFor)。老调用点忽略返回值即可,行为不变。
 func importLyricsFromFiles() []string { return importLyricsFromDir(lyricsDir()) }
-
-// importLyricsFromFilesReadOnly 同 importLyricsFromFiles,给常驻进程可能正在跑时的一次性命令预演用:只改内存,
-// 不落盘,也不清歌词临时文件(可能是常驻进程写到一半的)。
-func importLyricsFromFilesReadOnly() []string { return importLyricsFrom(lyricsDir(), false) }
 
 // importLyricsFromDir 同 importLyricsFromFiles,只是扫的是指定目录。热切换歌词文件夹时先导入
 // 新目录、再把 lyricsDir 指过去(见 lyricsdirswitch.go)。

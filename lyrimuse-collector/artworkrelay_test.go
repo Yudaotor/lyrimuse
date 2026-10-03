@@ -431,3 +431,9 @@ func TestScheduleArtworkUploadBacksOffAfterFailure(t *testing.T) {
 		t.Errorf("冷却期内不该重试, attempts %d → %d", after1, attempts)
 	}
 }
+
+// ensureArtworkUploaded:对着当前配置的中继调 ensureArtworkUploadedTo。
+func ensureArtworkUploaded(ctx context.Context, sha, path string) error {
+	base, token := artworkRelayTarget()
+	return ensureArtworkUploadedTo(ctx, base, token, sha, path)
+}

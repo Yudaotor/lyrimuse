@@ -132,7 +132,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		if artist == "" || title == "" {
 			// 防御性跳过:避免"artist/title 是空的"这种残缺 key 混进 enrichCache 时,
 			// 被这里导出成头部同样残缺的文件,再被导入逻辑当成合法数据循环放大(见
-			// lyricsimport.go 的 parseLyricsFile 注释)。正常情况下 trackEnrichment 的
+			// lyricsimport.go 的 parseLyricsBytes 注释)。正常情况下 trackEnrichment 的
 			// title=="" 早退+key 本身的构造方式,不会产生这种记录,这里只是多一层保险。
 			continue
 		}
