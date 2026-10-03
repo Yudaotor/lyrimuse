@@ -528,6 +528,8 @@ enum NotchMetrics {
     static var trackInfoActionsHeight: CGFloat { NotchExpandedMetrics.trackInfoActionsHeight }
     /// 没有曲目时 hover 展开只长出的那一块(`idleExpandedPanel`)的高度,同样只转发 Core 那份定义。
     static var idleExpandedPanelHeight: CGFloat { NotchExpandedMetrics.idlePanelHeight }
+    /// 收听里程碑报喜面板(`NotchMilestonePanel`)的高度:报喜时卡片 = 顶行 + 这一块。窗口高度也按它兜底。
+    static let milestonePanelHeight: CGFloat = 76
 
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
@@ -622,6 +624,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 真窗口 = 控制器镜像的 `isAdBreakNow`(它同时也是 `isCollapsed` 的第三个输入);预览同源(`PlaybackCoordinator`
     /// 的 `isCurrentTrackAdBreak`),但不替门槛轮询登记需求(`NotchLyricsView.drivesAdSkipGate`)。
     var isAdBreakNow: Bool { get }
+    /// 此刻在报的收听里程碑(真窗口 = 控制器镜像 `ListenMilestoneCenter.current`;预览恒 nil)。非 nil 时卡片高度换成
+    /// 报喜面板那一档(`cardHeight`),顶行以下画报喜面板(`NotchMilestonePanel`)。
+    var milestone: ListenMilestone? { get }
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
     ///
@@ -765,6 +770,7 @@ extension NotchChromeSource {
     /// 或反过来把行裁掉半截"。加第四个入参那天正好把它收成一份。
     var cardHeight: CGFloat {
         if isCollapsed { return contentTopInset }
+        if milestone != nil { return contentTopInset + NotchMetrics.milestonePanelHeight }
         return cardHeight(expanded: isExpanded)
     }
 
@@ -919,7 +925,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if !controller.isCollapsed, controller.hasTrack {
                     cardBodyLayer
                         // 出场动画的内容淡入:值来自 NotchWindowRoot 的 keyframeAnimator,平时恒为 1。
-                        .opacity(revealContentOpacity)
+                        // 报收听里程碑时整块让给报喜面板(下面那个 overlay)。
+                        .opacity(controller.milestone == nil ? revealContentOpacity : 0)
                 } else if !controller.isCollapsed {
                     // 没有曲目:hover 展开只长出一块「空闲面板」(决策 #31),高度与
                     // `NotchChromeSource.cardHeight` 的 !hasTrack 分支读同一个值。跟 cardBodyLayer 里
@@ -933,6 +940,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .padding(.top, controller.contentTopInset)
                         .modifier(NotchCardLayerActive(active: controller.isExpanded))
                         .opacity(revealContentOpacity)
+                }
+            }
+            // 收听里程碑:报喜面板顶替顶行以下那一块;卡片高度那边换成同一个 milestonePanelHeight。
+            .overlay(alignment: .top) {
+                if let milestone = controller.milestone, !controller.isCollapsed {
+                    NotchMilestonePanel(milestone: milestone, tint: accentOrWhite, animated: !reduceMotion)
+                        .frame(width: controller.expandedCardWidth, height: NotchMetrics.milestonePanelHeight)
+                        .padding(.top, controller.contentTopInset)
+                        .opacity(revealContentOpacity)
+                        .transition(.opacity)
                 }
             }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层

@@ -183,6 +183,10 @@ struct NotchWindowRoot: View {
                     CubicKeyframe(1, duration: NotchReveal.contentDuration)
                 }
             }
+            // 收听里程碑的碎屑:挂在裁剪外面,从卡片下沿落进窗口下方那片透明区;不吃点击(见 NotchMilestoneConfetti)。
+            .overlay(alignment: .top) {
+                NotchMilestoneConfetti(milestone: controller.milestone, cardWidth: cardWidth, cardHeight: cardHeight)
+            }
             // 「暂停/无播放时隐藏」的退场态:整卡以顶边中点(=刘海中心)为锚缩到无、同时透明,
             // 看起来是被吸进刘海;不取 0 而取 0.001,避开退化变换。尺寸(frame)不参与——
             // isCollapsed 在这个开关开着时不算暂停,卡片保持稳态尺寸,只有这个缩放在动。

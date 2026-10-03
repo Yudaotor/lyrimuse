@@ -76,6 +76,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 迷你进度条这部分补充内容。稳态(false)本身已经是"歌名+控制+当前歌词"完整可用的
     // 一套,这个状态只影响"要不要在下面多展开一块",不影响稳态内容本身是否显示。
     @Published private(set) var isExpanded: Bool = false
+    /// 此刻在报的收听里程碑(`ListenMilestoneCenter.current` 的镜像,见 setMilestone);nil = 没有。
+    @Published private(set) var milestone: ListenMilestone?
     /// `isExpanded` 的两个输入(拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
     /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
     /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
@@ -83,6 +85,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 的机器上,提醒发生的那一刻窗口本来是隐藏的(没有曲目),得把它叫回来、到点再照常隐藏。
     private var hoverExpanded = false
     private var alertHold = false
+    /// 收听里程碑报喜时撑开,跟 alertHold 一样只是 isExpanded 的一个输入。不进 updateActualVisibility:
+    /// 灵动岛这会儿藏着(全屏、暂停隐藏)就看不到,不为它把窗口叫回来。
+    private var milestoneHold = false
+    /// 报喜结束时指针还停在卡片上:等它离开再收面板(refreshExpanded)。
+    private var milestoneClearPending = false
     /// 「全屏时隐藏」(`NotchVisibility.fullScreenHides`)的结论,由 `applyFullScreenCover` 写入,进
     /// updateActualVisibility 的判据。主实例和镜像副本各看自己那块屏,别的屏全屏不算。
     private var coveredByFullScreen = false
@@ -322,6 +329,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var leftEarObserver: AnyCancellable?
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
+    private var milestoneObserver: AnyCancellable?
     private var unknownPlayerAlertObserver: AnyCancellable?
     private var fullScreenObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
@@ -450,6 +458,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             if !present, !self.alertHold, NotchUnknownPlayerPrompt.shared.isAlerting {
                 self.setAlertHold(true)
             }
+        }
+
+        // 收听里程碑:报喜期间卡片自己撑开,面板换成报喜那一块。每个实例(含「所有屏幕」的副本)各自订阅同一个单例;
+        // 是控制器订阅它,它不碰 `.shared`。存 sink 参数值,理由同下。
+        milestoneObserver = ListenMilestoneCenter.shared.$current.removeDuplicates().sink { [weak self] next in
+            self?.setMilestone(next)
         }
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
@@ -742,10 +756,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             execute: work)
     }
 
-    /// `isExpanded` 的唯一写入点:hover 与提醒任一成立就展开。判等再写 —— 它是 @Published,白写一次就是
+    /// `isExpanded` 的唯一写入点:hover、提醒、收听里程碑任一成立就展开。判等再写 —— 它是 @Published,白写一次就是
     /// 整卡白重估一次。
     private func refreshExpanded() {
-        let next = hoverExpanded || alertHold
+        if !hoverExpanded, milestoneClearPending {
+            milestoneClearPending = false
+            milestone = nil
+        }
+        let next = hoverExpanded || alertHold || milestoneHold
         let opening = next && !isExpanded
         if next != isExpanded { isExpanded = next }
         // 展开区的随机 / 循环键(Apple Music 专属)跟 Music.app 对一次表:用户可能在那边自己改过模式,
@@ -759,6 +777,23 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         } else {
             NotchEditorialPanel.shared.close(ifOwner: window)
         }
+    }
+
+    /// 收听里程碑开始 / 结束(`ListenMilestoneCenter.current` 的 sink)。开:撑开卡片,顶行以下换成报喜面板;
+    /// 关:指针不在卡片上就收回,在的话等它离开(refreshExpanded 里收)。
+    private func setMilestone(_ next: ListenMilestone?) {
+        if let next {
+            milestoneClearPending = false
+            if milestone != next { milestone = next }
+        } else if hoverExpanded {
+            milestoneClearPending = true
+        } else if milestone != nil {
+            milestone = nil
+        }
+        let hold = next != nil
+        guard hold != milestoneHold else { return }
+        milestoneHold = hold
+        refreshExpanded()
     }
 
     /// 「发现新播放器」主动提醒的开 / 关(来自 NotchUnknownPlayerPrompt.isAlerting 的 sink)。
@@ -1124,6 +1159,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedShowsQuickActionsObserver = nil
         trackPresenceObserver?.cancel()
         trackPresenceObserver = nil
+        milestoneObserver?.cancel()
+        milestoneObserver = nil
         unknownPlayerAlertObserver?.cancel()
         unknownPlayerAlertObserver = nil
         fullScreenObserver?.cancel()
@@ -1210,16 +1247,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 留出余量确实修好了那个直角,但阴影完整画出来之后整个卡片外侧糊着一层灰,比原
         // 来更糟 —— 于是投影整个撤掉(见 NotchLyricsView 的 body 末尾),这圈余量也跟着
         // 撤回。**要加投影就得同时加回余量**,两件事绑在一起,别只做一半。
+        // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)在展开区很矮的配置下可能比展开态还高,取两者大的。
         let size = NSSize(
             width: expandedCardWidth,
-            height: geo.notchHeight + Self.contentHeight + self.expandedExtraHeight(
+            height: max(geo.notchHeight + Self.contentHeight + self.expandedExtraHeight(
                 expandedShowsNextLine: expandedShowsNextLine,
                 expandedShowsControls: expandedShowsControls,
                 expandedTrackInfoShowsArtwork: expandedTrackInfoShowsArtwork,
                 expandedTrackInfoShowsTitle: expandedTrackInfoShowsTitle,
                 expandedTrackInfoShowsArtist: expandedTrackInfoShowsArtist,
                 expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
-                expandedShowsQuickActions: expandedShowsQuickActions))
+                expandedShowsQuickActions: expandedShowsQuickActions),
+                        geo.notchHeight + NotchMetrics.milestonePanelHeight))
         // 必须先取成整点,规则跟 AppKit 自己对窗口 frame 做的一致(实测:原点向下取整、宽高
         // 向上取整)。刘海高度 `safeAreaInsets.top` 在部分机型 / 缩放档下带小数(如 33.5),
         // 不取整的话:① 下面的判等永远不等(window.frame 已被取整),每次调用都白做一次同步

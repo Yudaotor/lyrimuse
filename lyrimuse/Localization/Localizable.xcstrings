@@ -35982,6 +35982,98 @@
           }
         }
       }
+    },
+    "收听里程碑" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listening Milestones"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收听里程碑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聆聽里程碑"
+          }
+        }
+      }
+    },
+    "某首歌听到第 100、1,000 次，或者累计收听到了 1,000、5,000、之后每满 1 万次时，灵动岛会自己撑开报一下喜，几秒后收回。需要连接 Last.fm。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When a song reaches its 100th or 1,000th play, or your total plays reach 1,000, 5,000 and then every 10,000, the notch opens briefly to celebrate. Requires Last.fm."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某首歌听到第 100、1,000 次，或者累计收听到了 1,000、5,000、之后每满 1 万次时，灵动岛会自己撑开报一下喜，几秒后收回。需要连接 Last.fm。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某首歌聽到第 100、1,000 次，或者累計聆聽到了 1,000、5,000、之後每滿 1 萬次時，動態島會自己撐開報一下喜，幾秒後收回。需要連線至 Last.fm。"
+          }
+        }
+      }
+    },
+    "试一下" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try It"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "试一下"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "試一下"
+          }
+        }
+      }
+    },
+    "累计第 %@ 次收听" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play #%@ overall"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "累计第 %@ 次收听"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "累計第 %@ 次聆聽"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

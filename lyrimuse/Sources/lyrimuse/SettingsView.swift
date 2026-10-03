@@ -3138,6 +3138,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case collapseWhenPaused
     /// 灵动岛所在屏幕的当前 Space 是全屏 App 时收起歌词行,无刘海屏整卡隐藏(`AppSettings.notchHideInFullScreen`)。归「行为」。
     case hideInFullScreen
+    /// 收听里程碑(`AppSettings.notchListenMilestones`)。归「行为」。
+    case listenMilestones
     case lyricRowArtwork
     case expandedNextLine
     case expandedShowsControls
@@ -3157,6 +3159,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .karaoke: return "sparkles"
         case .collapseWhenPaused: return "arrow.down.right.and.arrow.up.left"
         case .hideInFullScreen: return "arrow.up.left.and.arrow.down.right"
+        case .listenMilestones: return "trophy"
         case .lyricRowArtwork: return "photo"
         case .expandedNextLine: return "text.bubble"
         case .expandedShowsControls: return "playpause.fill"
@@ -3175,6 +3178,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .karaoke: return L10n.t("卡拉OK效果")
         case .collapseWhenPaused: return L10n.t("暂停缩回")
         case .hideInFullScreen: return L10n.t("全屏时隐藏")
+        case .listenMilestones: return L10n.t("收听里程碑")
         case .lyricRowArtwork: return L10n.t("显示封面")
         // 标题里要把"只在展开时"说出来,否则跟上一行「副行 · 下一句」读起来像同一个开关的两种写法。
         case .expandedNextLine: return L10n.t("展开时预览下一句")
@@ -3197,6 +3201,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
         case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
         case .hideInFullScreen: return L10n.t("灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。")
+        case .listenMilestones:
+            return L10n.t("某首歌听到第 100、1,000 次，或者累计收听到了 1,000、5,000、之后每满 1 万次时，灵动岛会自己撑开报一下喜，几秒后收回。需要连接 Last.fm。")
         case .expandedShowsQuickActions:
             return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
         default: return nil
@@ -3217,6 +3223,9 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .hideInFullScreen:
             return Binding(get: { settings.notchHideInFullScreen },
                             set: { settings.notchHideInFullScreen = $0 })
+        case .listenMilestones:
+            return Binding(get: { settings.notchListenMilestones },
+                            set: { settings.notchListenMilestones = $0 })
         case .lyricRowArtwork:
             return Binding(get: { settings.notchLyricRowShowsArtwork },
                             set: { settings.notchLyricRowShowsArtwork = $0 })
@@ -3265,6 +3274,25 @@ private struct NotchBehaviorToggleRow: View {
     var body: some View {
         SettingsRow(icon: item.icon, title: item.title, help: item.help) {
             Toggle("", isOn: item.binding)
+        }
+    }
+}
+
+/// 「收听里程碑」那一行:开关旁边一颗「试一下」,在真灵动岛上摆一次报喜(`ListenMilestoneCenter.preview`)。
+/// 灵动岛关着、或这一项关着时按钮灰掉 —— 没有灵动岛可摆。`@ObservedObject` 必需,理由同 `NotchBehaviorToggleRow`。
+@MainActor
+private struct NotchListenMilestonesRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        let item = NotchBehaviorItem.listenMilestones
+        SettingsRow(icon: item.icon, title: item.title, help: item.help) {
+            HStack(spacing: 8) {
+                Button(L10n.t("试一下")) { ListenMilestoneCenter.shared.preview() }
+                    .controlSize(.small)
+                    .disabled(!settings.notchOverlayEnabled || !settings.notchListenMilestones)
+                Toggle("", isOn: item.binding)
+            }
         }
     }
 }
@@ -3530,6 +3558,8 @@ struct NotchBehaviorSettingsRows: View {
             AutoHideSettingsRows(surface: .notch)
             CardDivider()
             NotchBehaviorToggleRow(item: .hideInFullScreen)
+            CardDivider()
+            NotchListenMilestonesRow()
         }
     }
 }

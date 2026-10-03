@@ -98,6 +98,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 此刻在放的是不是广告:跟真窗口同源(`PlaybackCoordinator.isCurrentTrackAdBreak`),预览跟真窗口一样进广告态。
     /// 广告态的门槛轮询不归预览登记,见 `NotchLyricsView.drivesAdSkipGate`。
     @Published private(set) var isAdBreakNow = false
+    /// 预览不报收听里程碑:那是一次性的真事件,预览里凭空撑开只会让人以为设置把它弄坏了。
+    var milestone: ListenMilestone? { nil }
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
@@ -766,7 +768,9 @@ struct NotchEditorStage: View {
                     (title: $0.title, isOn: $0.binding(for: .notch).wrappedValue)
                 }
                 + [(title: NotchBehaviorItem.hideInFullScreen.title,
-                    isOn: NotchBehaviorItem.hideInFullScreen.binding.wrappedValue)])
+                    isOn: NotchBehaviorItem.hideInFullScreen.binding.wrappedValue),
+                   (title: NotchBehaviorItem.listenMilestones.title,
+                    isOn: NotchBehaviorItem.listenMilestones.binding.wrappedValue)])
     }
 
     /// 「展开态」浮层里的七项(「展开时预览下一句」归「歌词行」,不在这里算;同日加「快捷操作」)。曲目信息
@@ -1736,6 +1740,7 @@ enum NotchStyleDefaults {
         settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
+        settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         // 屏幕和两个自动隐藏开关,主实例不订阅(只有设置行 / 「屏幕」浮层那几处会调过去,镜像副本才订阅),
         // 只写设置的话主灵动岛停在旧屏、照旧按旧开关隐藏,副本却按新值变了。跟那几处同一个守卫:
         // 灵动岛关着就别碰 `.shared`(读一下就会建窗口),再打开时 setVisible 会按设置补齐。

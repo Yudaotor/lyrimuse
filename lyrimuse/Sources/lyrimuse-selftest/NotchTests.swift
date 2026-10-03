@@ -614,6 +614,47 @@ func runNotchTests() {
             expectEqual(O.proportionalRadius(height: h) <= O.cornerRadiusLimit(height: h, notchHeight: 32), true,
                         "圆角夹取: 默认那套(高 \(h))不会被新上限夹")
         }
+        // 收听里程碑:单曲 100 / 1,000 / 10,000……;累计不到 1 万时 1,000、5,000,之后每满 1 万。
+        typealias MR = ListenMilestoneRules
+        expectEqual([99, 100, 101, 500, 1_000, 5_000, 10_000, 100_000].map(MR.isTrackMilestone),
+                    [false, true, false, false, true, false, true, true], "里程碑: 单曲只认 100 起的 10 的整数次幂")
+        expectEqual([999, 1_000, 2_000, 5_000, 9_000, 10_000, 15_000, 20_000, 30_000].map(MR.isTotalMilestone),
+                    [false, true, false, true, false, true, false, true, true], "里程碑: 累计 1,000 / 5,000 / 每满 1 万")
+        expectEqual(MR.totalMilestoneCrossed(from: 29_117, to: 29_118), nil, "里程碑: 没跨档不报")
+        expectEqual(MR.totalMilestoneCrossed(from: 29_999, to: 30_000), 30_000, "里程碑: 正好到 3 万")
+        expectEqual(MR.totalMilestoneCrossed(from: 4_999, to: 5_001), 5_000, "里程碑: 不到 1 万时的 5,000 档")
+        expectEqual(MR.totalMilestoneCrossed(from: 900, to: 1_000), 1_000, "里程碑: 1,000 档")
+        expectEqual(MR.totalMilestoneCrossed(from: 0, to: 25_000), 20_000, "里程碑: 一次跨好几档只报最大的")
+        expectEqual(MR.totalMilestoneCrossed(from: 30_001, to: 30_000), nil, "里程碑: 累计数变小不报")
+        var totals = ListenMilestoneLedger()
+        expectEqual(totals.takeTotalMilestone(ordinal: 29_118), nil, "里程碑: 第一次看到累计数只记下,不补报之前的档")
+        expectEqual(totals.lastSeenTotal, 29_118, "里程碑: 第一次看到就记下基线")
+        expectEqual(totals.takeTotalMilestone(ordinal: 29_999), nil, "里程碑: 没到下一档")
+        expectEqual(totals.takeTotalMilestone(ordinal: 30_000), 30_000, "里程碑: 跨过 3 万那一首报")
+        expectEqual(totals.takeTotalMilestone(ordinal: 30_001), nil, "里程碑: 同一档不报第二次")
+        var late = ListenMilestoneLedger(lastSeenTotal: 29_990)
+        expectEqual(late.takeTotalMilestone(ordinal: 30_049), 30_000, "里程碑: 晚几十首看到也还报")
+        var stale = ListenMilestoneLedger(lastSeenTotal: 15_000)
+        expectEqual(stale.takeTotalMilestone(ordinal: 30_200), nil, "里程碑: 跨过太久的档不补")
+        expectEqual(stale.lastSeenTotal, 30_200, "里程碑: 不补报也把基线挪到现在")
+        var switched = ListenMilestoneLedger(lastSeenTotal: 29_000)
+        expectEqual(switched.takeTotalMilestone(ordinal: 900), nil, "里程碑: 累计数大幅变小(换了账号)不报")
+        expectEqual(switched.takeTotalMilestone(ordinal: 1_000), 1_000, "里程碑: 换账号后从新的数重新起算")
+        var dip = ListenMilestoneLedger(lastSeenTotal: 29_118)
+        expectEqual(dip.takeTotalMilestone(ordinal: 29_110), nil, "里程碑: 删了几条记录、累计数小幅变小时不报")
+        expectEqual(dip.lastSeenTotal, 29_118, "里程碑: 小幅变小时基线不往回退")
+        let k100 = ListenMilestoneLedger.trackKey(familyKey: "稻香|周杰伦", count: 100)
+        var tracks = ListenMilestoneLedger()
+        expectEqual(tracks.allowsTrack(k100, today: "2026-10-03"), true, "里程碑: 新的一档可以报")
+        tracks.recordTrack(k100, today: "2026-10-03")
+        expectEqual(tracks.allowsTrack(k100, today: "2026-10-09"), false, "里程碑: 同一首同一档一辈子只报一次")
+        tracks.recordTrack("b#100", today: "2026-10-03")
+        expectEqual(tracks.allowsTrack("c#100", today: "2026-10-03"), false, "里程碑: 单曲每天最多报两次")
+        expectEqual(tracks.allowsTrack("c#100", today: "2026-10-04"), true, "里程碑: 第二天名额重置")
+        tracks.recordTrack("c#100", today: "2026-10-04")
+        expectEqual(tracks.shownToday, 1, "里程碑: 换天时当天计数从零起")
+        let roundTrip = try? JSONDecoder().decode(ListenMilestoneLedger.self, from: JSONEncoder().encode(tracks))
+        expectEqual(roundTrip, tracks, "里程碑: 记账存取一来一回不丢东西")
         do {
             let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI")
@@ -704,6 +745,31 @@ func runNotchTests() {
             expectEqual(stageSrc.contains("NotchLyricsWindowController.trackPresent(title: title, artist: artist, isAdBreak: isAd)")
                         && ctrlSrc.contains("Self.trackPresent(title: title, artist: artist, isAdBreak: isAd)"), true,
                         "预览契约: 预览和真窗口按同一个判据、同一组输入判断有没有曲目")
+            // 收听里程碑:灵动岛自己撑开报喜的接线。
+            let centerSrc = src("ListenMilestoneCenter.swift")
+            expectEqual(ctrlSrc.contains("let next = hoverExpanded || alertHold || milestoneHold")
+                        && ctrlSrc.contains("ListenMilestoneCenter.shared.$current.removeDuplicates().sink")
+                        && ctrlSrc.contains("milestoneObserver?.cancel()"), true,
+                        "里程碑契约: 控制器镜像报喜、撑开卡片,收尾取消订阅")
+            expectEqual(ctrlSrc.contains("geo.notchHeight + NotchMetrics.milestonePanelHeight))"), true,
+                        "里程碑契约: 窗口高度兜得住报喜卡片")
+            expectEqual(v.contains("if milestone != nil { return contentTopInset + NotchMetrics.milestonePanelHeight }"), true,
+                        "里程碑契约: 报喜时卡片高度换成报喜面板那一档")
+            expectEqual(stageSrc.contains("var milestone: ListenMilestone? { nil }"), true, "里程碑契约: 预览不报里程碑")
+            expectEqual(centerSrc.contains("settings.notchOverlayEnabled && settings.notchListenMilestones")
+                        && centerSrc.contains("!playback.isCurrentTrackAdBreak")
+                        && centerSrc.contains("guard stats.isConnected else { return }"), true,
+                        "里程碑契约: 灵动岛开着、开关开着、连着 Last.fm、不在广告里才报")
+            expectEqual(centerSrc.contains("NotchLyricsWindowController.shared"), false,
+                        "里程碑契约: 里程碑中心不碰灵动岛控制器的 .shared(碰一下就会建窗口)")
+            let panelSrc = src("NotchMilestonePanel.swift")
+            expectEqual(panelSrc.contains(".allowsHitTesting(false)\n        .accessibilityHidden(true)")
+                        && rootSrc.contains("NotchMilestoneConfetti(milestone: controller.milestone"), true,
+                        "里程碑契约: 碎屑挂在裁剪外面、不吃点击")
+            let portabilitySrc = (try? String(contentsOf: uiDir.deletingLastPathComponent()
+                .appendingPathComponent("Settings/ConfigPortability.swift"), encoding: .utf8)) ?? ""
+            expectEqual(portabilitySrc.contains("\"np:listenMilestoneLedger\","), true,
+                        "里程碑契约: 报喜记账是机器本地状态,不随配置导出")
         }
 
         // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。

@@ -265,6 +265,8 @@ final class AppSettings: ObservableObject {
         static let notchHideDuringScreenCapture = "np:notchHideDuringScreenCapture"
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
         static let notchHideInFullScreen = "np:notchHideInFullScreen"
+        // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
+        static let notchListenMilestones = "np:notchListenMilestones"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         // 悬停时露不露出那排播放控制按钮。默认 true = 改动前的行为。
@@ -433,6 +435,8 @@ final class AppSettings: ObservableObject {
     static let defaultNotchHideWhenNotPlaying = false
     /// 默认开:全屏 App 期间整卡隐藏(有没有刘海一样),见 `NotchVisibility.fullScreenHides`。
     static let defaultNotchHideInFullScreen = true
+    /// 默认开:某首歌第 100 / 1,000…… 次、累计跨过一档时灵动岛报一次喜(连着 Last.fm 才有)。
+    static let defaultNotchListenMilestones = true
     static let defaultNotchShowLyrics = true
     /// 动态封面(Apple Music 的 motion artwork)默认**开**。
     ///
@@ -882,6 +886,11 @@ final class AppSettings: ObservableObject {
     /// 每个灵动岛实例(含镜像副本)自己订阅这个值(`NotchLyricsWindowController.fullScreenObserver`)。
     @Published var notchHideInFullScreen: Bool {
         didSet { defaults.set(notchHideInFullScreen, forKey: Keys.notchHideInFullScreen) }
+    }
+    /// 收听里程碑:某首歌第 100 / 1,000 / 10,000…… 次、或累计收听跨过一档时,灵动岛自己撑开报一次喜。
+    /// 怎么判、怎么防打扰见 `ListenMilestoneCenter`;那边判的时候现读,不经设置页调控制器。
+    @Published var notchListenMilestones: Bool {
+        didSet { defaults.set(notchListenMilestones, forKey: Keys.notchListenMilestones) }
     }
     // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
     // 上、hover 是它展开的手势,让开会互相打架)。
@@ -1848,6 +1857,8 @@ final class AppSettings: ObservableObject {
         }
         notchHideInFullScreen = (defaults.object(forKey: Keys.notchHideInFullScreen) as? Bool)
             ?? Self.defaultNotchHideInFullScreen
+        notchListenMilestones = (defaults.object(forKey: Keys.notchListenMilestones) as? Bool)
+            ?? Self.defaultNotchListenMilestones
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false

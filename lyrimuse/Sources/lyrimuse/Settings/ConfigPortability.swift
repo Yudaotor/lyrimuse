@@ -86,6 +86,9 @@ enum ConfigPortability {
         // 「这台机器曾经授权过哪几个播放器的自动化权限」—— TCC 授权是每台机器各自的,
         // 带到新机器会让那边从没授权过的播放器被当成「授权作废」来提示。
         "np:automationEverAuthorized",
+        // 收听里程碑报过哪几档、累计数上次看到多少(ListenMilestoneCenter)—— 跟上面
+        // np:unknownPlayerNotices 同一类「这台机器报过没有」。
+        "np:listenMilestoneLedger",
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
