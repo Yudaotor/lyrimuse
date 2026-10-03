@@ -68,6 +68,27 @@ func TestRescoreKeepsCurrent(t *testing.T) {
 	}
 }
 
+// 重评:冠军换的是另一份正文、没有逐字,而当前这份有逐字时留着当前这份(正文相同只会补逐字,不算)。
+func TestRescoreWouldLoseWordTiming(t *testing.T) {
+	cur := enrichEntry{Lyrics: "old", LyricsYRC: "[1000,500](1000,500,0)old"}
+	cases := []struct {
+		name   string
+		e      enrichEntry
+		picked scoredLyricCandidateResult
+		want   bool
+	}{
+		{"换成没有逐字的另一份", cur, scoredLyricCandidateResult{Lyrics: "new"}, true},
+		{"冠军也有逐字", cur, scoredLyricCandidateResult{Lyrics: "new", LyricsYRC: "[1000,500](1000,500,0)new"}, false},
+		{"正文相同", cur, scoredLyricCandidateResult{Lyrics: "old"}, false},
+		{"当前这份本来就没有逐字", enrichEntry{Lyrics: "old"}, scoredLyricCandidateResult{Lyrics: "new"}, false},
+	}
+	for _, c := range cases {
+		if got := rescoreWouldLoseWordTiming(c.e, &c.picked); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // 回填:确定没发出去 / 服务端明确没收的批次不隔离;排在重发队列里、已经交过的这边不发。
 func TestBackfillBatchClassificationAndRecheck(t *testing.T) {
 	notSent := errors.Join(errScrobbleBatchNotSent, errors.New("context deadline exceeded"))

@@ -101,6 +101,37 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 	}
 }
 
+// 当前这份有逐字、打分版本落后(rescoreKeepsCurrent 管不着),这一轮冠军是另一份没有逐字的:留着当前这份,
+// 决策记录照写、标成没采用,这一轮完整就照常追平打分版本。
+func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
+	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	const artist, title, album = rescoreTestArtist, "Timed Song", "Some Album"
+	key := enrichKey(artist, title, album)
+	const oldBody = "[00:05.00]Old line one\n[00:15.00]Old line two"
+	const oldYRC = "[5000,1000](5000,500,0)Old(5500,500,0)line"
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{key: {
+		Lyrics: oldBody, LyricsYRC: oldYRC, LyricsSource: "musixmatch", LyricsScore: 900,
+		LyricsScoringVersion: lyricsScoringVersion - 1,
+	}}
+	enrichMu.Unlock()
+
+	rescoreLyrics(context.Background(), key, artist, title, album, 180)
+
+	enrichMu.Lock()
+	e := enrichCache[key]
+	enrichMu.Unlock()
+	if e.Lyrics != oldBody || e.LyricsYRC != oldYRC || e.LyricsSource != "musixmatch" {
+		t.Fatalf("冠军没有逐字时不该换掉有逐字的这份: lyrics=%q yrc=%q", e.Lyrics, e.LyricsYRC)
+	}
+	if e.LyricsScoringVersion != lyricsScoringVersion {
+		t.Error("留着也算这一版规则评过,打分版本要追平")
+	}
+	if e.LyricsDecision == nil || e.LyricsDecision.Applied {
+		t.Errorf("决策记录照写、标成没采用: %+v", e.LyricsDecision)
+	}
+}
+
 // 不可判(当前歌词的来源 lrclib 正在熔断冷却、这一轮没应答):不改歌词、不写决策记录,三份名单保留上一轮的。
 func TestRescoreUndecidableKeepsSourceLists(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch", "lrclib"}, nil)

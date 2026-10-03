@@ -1902,7 +1902,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
-		return !e.ManualLyrics && decidable && picked != nil && !rescoreKeepsCurrent(e, scored, picked) && picked.Lyrics != e.Lyrics
+		return !e.ManualLyrics && decidable && picked != nil && !rescoreKeeps(e, scored, picked) && picked.Lyrics != e.Lyrics
 	})
 
 	enrichMu.Lock()
@@ -1979,8 +1979,8 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
 	complete := len(skipped) == 0
 	deferred = !decidable || !complete
-	// 冠军换词之前先看当前这份有没有真的参与比较,见 rescoreKeepsCurrent。
-	keep := decidable && picked != nil && rescoreKeepsCurrent(e, scored, picked)
+	// 冠军换词之前先看当前这份该不该留着,见 rescoreKeeps。
+	keep := decidable && picked != nil && rescoreKeeps(e, scored, picked)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
 			lyricsDecisionPathRescore, artist, title, album, durationSecs, scored, picked,
@@ -2008,13 +2008,18 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 		e.ResolvedDurationSecs = durationSecs
 		log.Printf("lyrics rescore: %s  no valid candidate under v%d, keeping %s", key, lyricsScoringVersion, e.LyricsSource)
 	case keep:
-		// 当前这份没进这一轮的比较,而它已经是这一版规则打的分、冠军又不比它高:留着,只记这一轮做过。
+		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。
 		if complete {
 			e.LyricsScoringVersion = lyricsScoringVersion
 		}
 		e.ResolvedDurationSecs = durationSecs
-		log.Printf("lyrics rescore: %s  keeping %s(%d), current lyrics not among candidates and %s(%d) is no better",
-			key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
+		if rescoreWouldLoseWordTiming(e, picked) {
+			log.Printf("lyrics rescore: %s  keeping %s(%d) with word timing, %s(%d) has none this round",
+				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
+		} else {
+			log.Printf("lyrics rescore: %s  keeping %s(%d), current lyrics not among candidates and %s(%d) is no better",
+				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
+		}
 	default:
 		if picked.Lyrics != e.Lyrics {
 			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
@@ -2108,6 +2113,19 @@ func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, pic
 		}
 	}
 	return picked.Score <= e.LyricsScore
+}
+
+// rescoreKeeps:重评可判、有冠军时,当前这份要不要留着 —— 它没参与比较而冠军不比它高(rescoreKeepsCurrent),
+// 或者换过去会丢掉逐字(rescoreWouldLoseWordTiming)。
+func rescoreKeeps(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
+	return rescoreKeepsCurrent(e, scored, picked) || rescoreWouldLoseWordTiming(e, picked)
+}
+
+// rescoreWouldLoseWordTiming:冠军是另一份正文、没有逐字,而当前这份有逐字。逐字取决于那个源这一轮有没有把逐字
+// 接口给全,同一首歌这一轮有、下一轮一个都没有很常见;换过去会把卡拉 OK 填色丢掉,而且不可逆。正文相同时不算
+// (那种情形只会补逐字,见 gainsWordTiming)。
+func rescoreWouldLoseWordTiming(e enrichEntry, picked *scoredLyricCandidateResult) bool {
+	return picked.Lyrics != e.Lyrics && e.LyricsYRC != "" && picked.LyricsYRC == ""
 }
 
 // gainsWordTiming:正文不变时唯一要补写的情况 —— 缓存里没有逐字、这一轮的胜者带了逐字。
