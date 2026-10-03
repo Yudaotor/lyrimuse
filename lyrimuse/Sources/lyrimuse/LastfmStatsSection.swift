@@ -551,8 +551,8 @@ struct LastfmStatsSection: View {
         .padding(.vertical, 5)
     }
 
-    /// 榜单行、最近记录行和实时行的右键菜单:只放能直接进 App 打开的(Apple Music / Spotify / KKBOX,链接来自本机歌词缓存,
-    /// 没装的播放器不列)。落到浏览器的平台页不放;一项都没有的行不弹菜单。`artistName` 只在歌手行取歌手页时用。
+    /// 榜单行、最近记录行和实时行的右键菜单:只放能直接进 App 的(Apple Music / Spotify / KKBOX 打开,Kaset / QQ 音乐播放;
+    /// 链接来自本机歌词缓存,没装的播放器不列)。落到浏览器的平台页不放;一项都没有的行不弹菜单。`artistName` 只在歌手行取歌手页时用。
     @ViewBuilder
     fileprivate static func appLinksMenu(_ links: ChartAppLinks?, artistName: String) -> some View {
         if let url = links?.appleMusic {
@@ -576,6 +576,10 @@ struct LastfmStatsSection: View {
         if let url = links?.kaset, Self.isInstalled(.kaset) {
             Button(String(format: L10n.t("在 %@ 中播放"), "Kaset")) { NSWorkspace.shared.open(url) }
         }
+        // QQ 音乐同样只有「播放这一首」一种外部入口,点击时才去查链接要的数字歌曲 ID。
+        if let mid = links?.qqSongMID, Self.isInstalled(.qqMusic) {
+            Button(String(format: L10n.t("在 %@ 中播放"), PlaybackPlayer.qqMusic.displayName)) { Self.playInQQMusic(mid: mid) }
+        }
     }
 
     fileprivate static func appLinksHaveMenu(_ links: ChartAppLinks?) -> Bool {
@@ -585,6 +589,7 @@ struct LastfmStatsSection: View {
             || ((links.spotify ?? links.artistPages?.spotify) != nil && Self.isInstalled(.spotify))
             || (links.kkbox != nil && Self.isInstalled(.kkbox))
             || (links.kaset != nil && Self.isInstalled(.kaset))
+            || (links.qqSongMID != nil && Self.isInstalled(.qqMusic))
     }
 
     /// 装没装这个播放器,按 bundle id 记 30 秒:榜单每一行渲染都要问(Top 50 时一次渲染最多上百次),而整张卡
@@ -630,6 +635,34 @@ struct LastfmStatsSection: View {
             await MusicAutomationPermission.ensureMusicAppRunning()
             await MainActor.run { _ = NSWorkspace.shared.open(url) }
         }
+    }
+
+    /// 在 QQ 音乐里放这首:按 songmid 查到数字歌曲 ID,拼成 `qqmusicmac://` 交给 QQ 音乐。查不到就响一声。
+    private static func playInQQMusic(mid: String) {
+        Task {
+            guard let song = await QQSongIDCache.song(mid: mid), let url = QQSongPlayLink.playURL(song) else {
+                NSSound.beep()
+                return
+            }
+            await launchQQMusicIfNeeded()
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// QQ 音乐没开着时先在后台启动它,等启动完成再过 2 秒才发链接。链接别跟着启动一起送进去:那样它报给系统的
+    /// 正在播放只有歌名、没有歌手和时长,见 12 章决策 21。
+    private static func launchQQMusicIfNeeded() async {
+        let id = PlaybackPlayer.qqMusic.bundleIdentifier
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty,
+              let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        guard let app = try? await NSWorkspace.shared.openApplication(at: appURL, configuration: config) else { return }
+        let deadline = Date().addingTimeInterval(10)
+        while !app.isFinishedLaunching, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
     }
 
     /// Spotify 歌手页:MusicBrainz 上登记的 Spotify 歌手 ID,经 SpotifyReveal.open 交给 Spotify 客户端。取不到就响一声。
@@ -2009,6 +2042,33 @@ private struct ChartRowContextMenu<Menu: View>: ViewModifier {
             content.contextMenu { menu() }
         } else {
             content
+        }
+    }
+}
+
+/// QQ 音乐 songmid 对应的数字歌曲 ID,按 mid 记在内存里:同一首在这次运行里只查一次。查询失败不记,下次点还会再查。
+@MainActor
+private enum QQSongIDCache {
+    private static var songs: [String: QQSongPlayLink.Song] = [:]
+
+    static func song(mid: String) async -> QQSongPlayLink.Song? {
+        if let hit = songs[mid] { return hit }
+        guard let url = QQSongPlayLink.lookupURL(mid: mid) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let start = Date()
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            NetworkAuditLog.record(service: "qq", operation: "song.detail", host: url.host ?? "c.y.qq.com",
+                                   statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+            guard status == 200, let song = QQSongPlayLink.parse(data) else { return nil }
+            songs[mid] = song
+            return song
+        } catch {
+            NetworkAuditLog.record(service: "qq", operation: "song.detail", host: url.host ?? "c.y.qq.com",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
+            return nil
         }
     }
 }

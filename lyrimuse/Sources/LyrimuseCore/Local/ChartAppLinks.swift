@@ -2,7 +2,8 @@ import Foundation
 
 /// 「听得最多」榜单一行右键菜单里能直接进 App 打开的目标。只收进 App 的:Apple Music(`music://`)、
 /// Spotify(`spotify:track:`)、KKBOX(`kkbox://song/…#view`)、Kaset(`kaset://play?v=`,打开就从这首开始放,菜单写成
-/// 「播放」);QQ 音乐 / 网易云 / Spotify 网页这类落到浏览器的不收。
+/// 「播放」)、QQ 音乐(同样只能播放,见 `QQSongPlayLink`);网易云(`orpheus://` 只在它开着时生效)、Spotify 网页这类不收,
+/// 见 12 章决策 21。
 /// 数据全来自本机歌词缓存(collector 解析歌词时存的链接),零网络。
 public struct ChartAppLinks: Sendable, Equatable {
     /// 歌曲:曲目链接(Music 打开专辑页并定位到这首);专辑:专辑页。
@@ -13,6 +14,8 @@ public struct ChartAppLinks: Sendable, Equatable {
     public var kkbox: URL?
     /// 歌曲:在 Kaset 里从这首开始放(换掉它当前的队列),见 `PlatformLinks.kasetPlayURL`。
     public var kaset: URL?
+    /// 歌曲:QQ 音乐 songmid。点击时换成数字歌曲 ID 再拼链接,见 `QQSongPlayLink`。
+    public var qqSongMID: String?
     /// 歌手:缓存里这位歌手的一张 Apple Music 专辑。歌手页没有现成链接,点击时取这张专辑的页面、从署名里
     /// 拿到歌手 ID 再打开歌手页(专辑简介取歌手 ID 走的是同一条路,只连 music.apple.com)。
     public var artistAlbum: AlbumEditorialNotes.AlbumRef?
@@ -22,21 +25,22 @@ public struct ChartAppLinks: Sendable, Equatable {
     /// 歌手:collector 后台预取好的平台主页(PlatformPagesCache)。有就直接打开;没有才在点击时按 mbid 现查。
     public var artistPages: ArtistPlatformPages.Pages?
 
-    public init(appleMusic: URL? = nil, spotify: URL? = nil, kkbox: URL? = nil, kaset: URL? = nil,
+    public init(appleMusic: URL? = nil, spotify: URL? = nil, kkbox: URL? = nil, kaset: URL? = nil, qqSongMID: String? = nil,
                 artistAlbum: AlbumEditorialNotes.AlbumRef? = nil, artistMBID: String? = nil,
                 artistPages: ArtistPlatformPages.Pages? = nil) {
         self.appleMusic = appleMusic
         self.spotify = spotify
         self.kkbox = kkbox
         self.kaset = kaset
+        self.qqSongMID = qqSongMID
         self.artistAlbum = artistAlbum
         self.artistMBID = artistMBID
         self.artistPages = artistPages
     }
 
     public var isEmpty: Bool {
-        appleMusic == nil && spotify == nil && kkbox == nil && kaset == nil && artistAlbum == nil && artistMBID == nil
-            && artistPages == nil
+        appleMusic == nil && spotify == nil && kkbox == nil && kaset == nil && qqSongMID == nil && artistAlbum == nil
+            && artistMBID == nil && artistPages == nil
     }
 }
 
@@ -55,14 +59,16 @@ public struct ChartLinkIndex: Sendable {
         public let spotifyTrackID: String?
         public let kkboxURL: String?
         public let youtubeMusicURL: String?
+        public let qqMusicURL: String?
 
         public init(key: String, appleMusicURL: String?, spotifyTrackID: String?, kkboxURL: String?,
-                    youtubeMusicURL: String? = nil) {
+                    youtubeMusicURL: String? = nil, qqMusicURL: String? = nil) {
             self.key = key
             self.appleMusicURL = appleMusicURL
             self.spotifyTrackID = spotifyTrackID
             self.kkboxURL = kkboxURL
             self.youtubeMusicURL = youtubeMusicURL
+            self.qqMusicURL = qqMusicURL
         }
     }
 
@@ -92,7 +98,8 @@ public struct ChartLinkIndex: Sendable {
                 appleMusic: MusicCatalogSearch.musicSchemeURL(row.appleMusicURL),
                 spotify: SpotifyURI.deepLink("spotify:track:" + (row.spotifyTrackID ?? "")),
                 kkbox: PlatformLinks.kkboxAppURL(songPage: row.kkboxURL ?? ""),
-                kaset: PlatformLinks.kasetPlayURL(watchURL: row.youtubeMusicURL ?? ""))
+                kaset: PlatformLinks.kasetPlayURL(watchURL: row.youtubeMusicURL ?? ""),
+                qqSongMID: PlatformLinks.qqSongMID(songPage: row.qqMusicURL ?? ""))
             if !track.isEmpty {
                 let exact = EnrichCacheReader.artistTitleKey(artist: artist, title: title)
                 if index.tracks[exact] == nil { index.tracks[exact] = track }
@@ -173,6 +180,44 @@ public enum ChartSummary {
         guard let total, total > 0 else { return nil }
         let top = counts.reduce(0, +)
         return min(100, Int((Double(top) / Double(total) * 100).rounded()))
+    }
+}
+
+/// 榜单右键「在 QQ 音乐中播放」的链接。QQ 音乐对外只有「播放这一首」一种入口:`qqmusicmac://` 的 playsong 命令,
+/// 拼法照 y.qq.com 网页「用客户端播放」,分隔符是 `==` 和 `&&`(写成普通 `=` / `&` 它不认),要的是数字歌曲 ID。
+/// 缓存里只有 songmid,点击时按 mid 查一次 `fcg_play_single_song`(collector 取 QQ 歌曲详情用的同一个接口)。
+/// 纯函数部分 selftest 直接覆盖。
+public enum QQSongPlayLink {
+    public struct Song: Sendable, Equatable {
+        public let id: Int
+        public let type: Int
+
+        public init(id: Int, type: Int) {
+            self.id = id
+            self.type = type
+        }
+    }
+
+    public static func lookupURL(mid: String) -> URL? {
+        guard PlatformLinks.isPlausibleQQMid(mid), mid.allSatisfy(\.isASCII) else { return nil }
+        return URL(string: "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq"
+            + "&inCharset=utf8&outCharset=utf-8&songmid=" + mid)
+    }
+
+    /// 接口回的 `{"code":0,"data":[{"id":…,"type":…}]}`。code 不是 0、没有条目、id 不是正数都返回 nil。
+    public static func parse(_ data: Data) -> Song? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              (root["code"] as? Int) == 0,
+              let first = (root["data"] as? [[String: Any]])?.first,
+              let id = first["id"] as? Int, id > 0 else { return nil }
+        let type = first["type"] as? Int ?? 0
+        return type >= 0 ? Song(id: id, type: type) : nil
+    }
+
+    public static func playURL(_ song: Song) -> URL? {
+        guard song.id > 0, song.type >= 0 else { return nil }
+        return URL(string: "qqmusicmac://QQMusic/?version==1173&&from==y.qq.com&&cmd_count==1&&cmd_0==playsong"
+            + "&&id_0==\(song.id)&&songtype_0==\(song.type)&&info_0==&&quality_0==quality")
     }
 }
 

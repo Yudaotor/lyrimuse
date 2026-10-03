@@ -155,6 +155,15 @@ public struct PlatformLinks: Sendable, Equatable {
         raw.hasPrefix("https://y.qq.com/n/ryqq/search?")
     }
 
+    /// `qq_music_url` 里的 songmid(`https://y.qq.com/n/ryqq/songDetail/<mid>`)。搜索兜底链接、别的路径、不像 mid 的
+    /// 片段都不认。
+    public static func qqSongMID(songPage raw: String) -> String? {
+        let prefix = "https://y.qq.com/n/ryqq/songDetail/"
+        guard raw.hasPrefix(prefix) else { return nil }
+        let mid = String(raw.dropFirst(prefix.count))
+        return isPlausibleQQMid(mid) && mid.allSatisfy(\.isASCII) ? mid : nil
+    }
+
     /// QQ 音乐专辑页。路由实测有效(302 到 /n/ryqq_v2/…,与代码在用的 songDetail 同族)。
     public static func qqAlbumURL(mid: String) -> URL? {
         guard isPlausibleQQMid(mid) else { return nil }

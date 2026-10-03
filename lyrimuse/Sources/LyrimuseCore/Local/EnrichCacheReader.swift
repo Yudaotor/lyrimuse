@@ -890,7 +890,7 @@ public enum EnrichCacheReader {
         return ChartLinkIndex.build([
             ChartLinkIndex.Row(key: EnrichCacheKeys.strippingDurationVariant(p.key), appleMusicURL: p.entry.appleMusicURL,
                                spotifyTrackID: p.entry.spotifyTrackID, kkboxURL: p.entry.kkboxURL,
-                               youtubeMusicURL: p.entry.youtubeMusicURL),
+                               youtubeMusicURL: p.entry.youtubeMusicURL, qqMusicURL: p.entry.qqMusicURL),
         ]).links(kind: .track, artist: artist, name: name, aliasArtist: PlayCountFold.canonicalArtist)
     }
 
@@ -903,7 +903,7 @@ public enum EnrichCacheReader {
             index = ChartLinkIndex.build(all.map { key, entry in
                 ChartLinkIndex.Row(key: key, appleMusicURL: entry.appleMusicURL,
                                    spotifyTrackID: entry.spotifyTrackID, kkboxURL: entry.kkboxURL,
-                                   youtubeMusicURL: entry.youtubeMusicURL)
+                                   youtubeMusicURL: entry.youtubeMusicURL, qqMusicURL: entry.qqMusicURL)
             }, looseKey: memoizedNameLooseKey)
             cachedChartLinkIndex = (cachedMTime, cachedFromIndex, index)
         }

@@ -622,6 +622,41 @@ func runLastfmTests() {
         expectEqual(han.links(kind: .album, artist: "Khalil Fong", name: "JTW西遊記") == nil, true,
                     "榜单进 App: 专辑行不给别名时查不到")
 
+        // QQ 音乐:缓存只存 songmid,点击时换数字 ID 拼 qqmusicmac:// playsong。
+        expectEqual(PlatformLinks.qqSongMID(songPage: "https://y.qq.com/n/ryqq/songDetail/003Jg0u947uwNr"), "003Jg0u947uwNr",
+                    "QQ 播放: 从歌曲页取 songmid")
+        expectEqual(PlatformLinks.qqSongMID(songPage: "https://y.qq.com/n/ryqq/search?w=%E5%A4%AA%E5%A4%9A"), nil,
+                    "QQ 播放: 搜索兜底链接不算")
+        expectEqual(PlatformLinks.qqSongMID(songPage: "https://y.qq.com/n/ryqq/songDetail/a/b"), nil, "QQ 播放: 多段路径不算")
+        expectEqual(PlatformLinks.qqSongMID(songPage: "https://y.qq.com/n/ryqq/songDetail/"), nil, "QQ 播放: 空 mid 不算")
+        expectEqual(PlatformLinks.qqSongMID(songPage: "https://example.com/n/ryqq/songDetail/003Jg0u947uwNr"), nil,
+                    "QQ 播放: 别的域名不算")
+        let qqIdx = ChartLinkIndex.build([
+            .init(key: "吴若希|越难越爱|", appleMusicURL: nil, spotifyTrackID: nil, kkboxURL: nil,
+                  qqMusicURL: "https://y.qq.com/n/ryqq/songDetail/003Jg0u947uwNr"),
+            .init(key: "群星|太多|烧的时尚", appleMusicURL: nil, spotifyTrackID: nil, kkboxURL: nil,
+                  qqMusicURL: "https://y.qq.com/n/ryqq/search?w=x"),
+        ])
+        expectEqual(qqIdx.links(kind: .track, artist: "吴若希", name: "越难越爱")?.qqSongMID, "003Jg0u947uwNr",
+                    "QQ 播放: 只有 QQ 歌曲页的歌也进右键表")
+        expectEqual(qqIdx.links(kind: .track, artist: "群星", name: "太多") == nil, true, "QQ 播放: 只有搜索兜底的歌不给菜单")
+        typealias QQ = QQSongPlayLink
+        expectEqual(QQ.lookupURL(mid: "003Jg0u947uwNr")?.absoluteString,
+                    "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=003Jg0u947uwNr",
+                    "QQ 播放: 查数字 ID 的接口")
+        expectEqual(QQ.lookupURL(mid: "a/b"), nil, "QQ 播放: 不像 mid 的不查")
+        expectEqual(QQ.parse(Data(#"{"code":0,"data":[{"id":613725928,"type":0,"mid":"003Jg0u947uwNr"}]}"#.utf8)),
+                    QQ.Song(id: 613725928, type: 0), "QQ 播放: 取 id 和 type")
+        expectEqual(QQ.parse(Data(#"{"code":0,"data":[{"id":5,"type":11}]}"#.utf8))?.type, 11, "QQ 播放: type 照接口给的")
+        expectEqual(QQ.parse(Data(#"{"code":-1,"data":[{"id":5,"type":0}]}"#.utf8)), nil, "QQ 播放: code 不是 0 不认")
+        expectEqual(QQ.parse(Data(#"{"code":0,"data":[]}"#.utf8)), nil, "QQ 播放: 没有条目不认")
+        expectEqual(QQ.parse(Data(#"{"code":0,"data":[{"id":0,"type":0}]}"#.utf8)), nil, "QQ 播放: id 为 0 不认")
+        expectEqual(QQ.parse(Data("not json".utf8)), nil, "QQ 播放: 不是 JSON 不认")
+        expectEqual(QQ.playURL(QQ.Song(id: 613725928, type: 0))?.absoluteString,
+                    "qqmusicmac://QQMusic/?version==1173&&from==y.qq.com&&cmd_count==1&&cmd_0==playsong&&id_0==613725928&&songtype_0==0&&info_0==&&quality_0==quality",
+                    "QQ 播放: playsong 链接用 == 和 && 分隔")
+        expectEqual(QQ.playURL(QQ.Song(id: 0, type: 0)), nil, "QQ 播放: id 不是正数不拼")
+
         expectEqual(ChartSummary.topShare(counts: [50, 30, 20], total: 400), 25, "榜单概况: 前 N 名占比四舍五入")
         expectEqual(ChartSummary.topShare(counts: [10], total: nil), nil, "榜单概况: 总次数没取到不显示占比")
         expectEqual(ChartSummary.topShare(counts: [10], total: 0), nil, "榜单概况: 总次数为 0 不显示占比")
@@ -1843,6 +1878,13 @@ func runLastfmTests() {
                     true, "右键链接: 设置窗口看不看得见报给服务")
         expectEqual(section.contains(".onDisappear { stats.setChartAppLinksOnScreen(false) }"), true,
                     "右键链接: 统计区卸载时报不在屏上")
+        expectEqual(section.contains("if let mid = links?.qqSongMID, Self.isInstalled(.qqMusic) {")
+                        && section.contains("|| (links.qqSongMID != nil && Self.isInstalled(.qqMusic))"), true,
+                    "右键链接: QQ 音乐那项只在装了 QQ 音乐时出,有它的行才挂菜单")
+        expectEqual(section.contains(#"NetworkAuditLog.record(service: "qq", operation: "song.detail""#), true,
+                    "右键链接: 查 QQ 数字歌曲 ID 记对外请求日志")
+        expectEqual(section.contains("await launchQQMusicIfNeeded()\n            NSWorkspace.shared.open(url)"), true,
+                    "右键链接: QQ 音乐没开着时先启动好再发链接")
     }
 
     // ---- Last.fm 账号连没连 Spotify(spotify_expiry_estimate,见 LastfmSpotifyLink)----
