@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"testing"
 )
 
@@ -51,29 +49,54 @@ func TestParseAppleMusicSystemQueueRejects(t *testing.T) {
 	}
 }
 
-// 找得到加载器就用它;跑失败返回 ok=false(由 appleMusicUpcoming 退回 AppleScript)。
+// 系统待播队列请 App 读:请求是 apple_music_queue、带首数,App 原样回的输出在这边解析。
 func TestAppleMusicUpcomingFromSystemQueue(t *testing.T) {
-	oldPaths, oldRun := nowPlayingClientsPathsOverride, appleMusicQueueRun
-	t.Cleanup(func() { nowPlayingClientsPathsOverride, appleMusicQueueRun = oldPaths, oldRun })
-	nowPlayingClientsPathsOverride = func() (string, string) { return "/x/loader.pl", "/x/lib.dylib" }
-	var gotN int
-	appleMusicQueueRun = func(_ context.Context, script, lib string, n int) ([]byte, error) {
-		gotN = n
-		return []byte(testAppleMusicQueueJSON), nil
+	reqPath, repPath := useAppQueryChannel(t, true)
+	seen := fakePlayerQueryApp(t, reqPath, repPath, func(r appQueryRequest) *appQueryReply {
+		return &appQueryReply{Schema: 1, ID: r.ID, OK: true, Output: testAppleMusicQueueJSON}
+	})
+	if got, ok := appleMusicUpcomingFromSystemQueue("Michael Jackson", "You Are Not Alone", 2); !ok || len(got) != 2 {
+		t.Fatalf("ok=%v 得到 %+v", ok, got)
 	}
-	if got, ok := appleMusicUpcomingFromSystemQueue("Michael Jackson", "You Are Not Alone", 2); !ok || len(got) != 2 || gotN != 2 {
-		t.Fatalf("ok=%v n=%d 得到 %+v", ok, gotN, got)
+	if req := <-seen; req.Kind != appQueryAppleMusicQueue || req.Count != 2 {
+		t.Fatalf("请求要是 %s、带首数 2: %+v", appQueryAppleMusicQueue, req)
 	}
-	appleMusicQueueRun = func(context.Context, string, string, int) ([]byte, error) { return nil, errors.New("boom") }
+
+	// App 答失败(加载器不在包里、跑失败)、或此刻不可用:ok=false。
+	reqPath, repPath = useAppQueryChannel(t, true)
+	fakePlayerQueryApp(t, reqPath, repPath, func(r appQueryRequest) *appQueryReply {
+		return &appQueryReply{Schema: 1, ID: r.ID, OK: false, Error: "queue unavailable"}
+	})
 	if _, ok := appleMusicUpcomingFromSystemQueue("Michael Jackson", "You Are Not Alone", 2); ok {
-		t.Error("加载器跑失败不该取到")
+		t.Error("App 答失败不该取到")
 	}
-	nowPlayingClientsPathsOverride = func() (string, string) { return "", "" }
-	appleMusicQueueRun = func(context.Context, string, string, int) ([]byte, error) {
-		t.Error("找不到加载器就不该去跑")
-		return nil, nil
-	}
+	useAppQueryChannel(t, false)
 	if _, ok := appleMusicUpcomingFromSystemQueue("Michael Jackson", "You Are Not Alone", 2); ok {
-		t.Error("找不到加载器不该取到")
+		t.Error("App 不可用不该取到")
+	}
+}
+
+// 系统队列读不到(加载器报 null)、或者它的当前这首对不上:再请 App 跑那段 AppleScript,两次请求按这个顺序。
+func TestAppleMusicUpcomingFallsBackToTheScript(t *testing.T) {
+	script := "You Are Not Alone\tMichael Jackson\nEarth Song\tMichael Jackson\tHIStory\t406.2\n"
+	for name, queueOut := range map[string]string{
+		"null":    "null\n",
+		"当前这首对不上": `{"items":[{"title":"Bad","artist":"Michael Jackson"},{"title":"Smooth Criminal","artist":"Michael Jackson"}]}`,
+	} {
+		reqPath, repPath := useAppQueryChannel(t, true)
+		seen := fakePlayerQueryApp(t, reqPath, repPath, func(r appQueryRequest) *appQueryReply {
+			out := script
+			if r.Kind == appQueryAppleMusicQueue {
+				out = queueOut
+			}
+			return &appQueryReply{Schema: 1, ID: r.ID, OK: true, Output: out}
+		})
+		got, ok := appleMusicUpcoming("Michael Jackson", "You Are Not Alone", 3)
+		if !ok || len(got) != 1 || got[0].title != "Earth Song" || got[0].duration != 406.2 {
+			t.Fatalf("%s: 应退回 AppleScript 那份: ok=%v %+v", name, ok, got)
+		}
+		if first, second := <-seen, <-seen; first.Kind != appQueryAppleMusicQueue || second.Kind != appQueryAppleMusicUpcoming {
+			t.Fatalf("%s: 先问系统队列、再问 AppleScript: %s, %s", name, first.Kind, second.Kind)
+		}
 	}
 }

@@ -296,7 +296,7 @@ func parseAppleScriptReal(s string) (float64, error) {
 
 // ---- 播放队列:接下来会播的几首(见 upcoming.go)----
 
-// appleMusicUpcoming 从 Music.app 取接下来会播的几首:先问系统待播队列,取不到再请 App 跑那段 AppleScript
+// appleMusicUpcoming 从 Music.app 取接下来会播的几首:先请 App 读系统待播队列,取不到再请它跑那段 AppleScript
 // (PlayerQueryServer.appleMusicUpcomingScript,三道守卫与云端内容读不到的原因写在那边)。
 //
 // 那段 AppleScript 不是真正的播放队列 —— Music.app 的脚本字典里**没有 Up Next**。它是拿
@@ -310,7 +310,7 @@ func parseAppleScriptReal(s string) (float64, error) {
 //	自然切歌后 index 也确实递增);到专辑最后一首会跨去同艺人的下一张专辑,而 Music.app
 //	实际多半是停止或转 Autoplay 推荐。猜错的代价只是白解析几首,不会出错,不为它再加判断。
 func appleMusicUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	// 先读系统待播队列(applemusicqueue.go):真实播放顺序,开着随机也对。读不到才请 App 跑那段 AppleScript。
+	// 先请 App 读系统待播队列(applemusicqueue.go):真实播放顺序,开着随机也对。读不到再请它跑那段 AppleScript。
 	if res, ok := appleMusicUpcomingFromSystemQueue(artist, title, n); ok {
 		return res, true
 	}

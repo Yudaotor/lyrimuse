@@ -16,7 +16,14 @@ func runPlayerQueryTests() {
     let quote = String(UnicodeScalar(UInt8(34)))
     let newline = String(UnicodeScalar(UInt8(10)))
 
-    // ---- 判请求:只认四种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    // ---- 判请求:只认五种,参数逐项校验;契约版本不认识、没有 id、过期的不答 ----
+    expectEqual(S.decide(request("apple_music_queue", count: 5), now: now), .run(.appleMusicQueue(count: 5)),
+                "查询: Music 系统待播队列 5 首")
+    for bad in [0, 21] {
+        expectEqual(S.decide(request("apple_music_queue", count: bad), now: now), .fail("invalid count"),
+                    "查询: 系统队列首数 \(bad) 超出 1...20")
+    }
+    expectEqual(S.decide(request("apple_music_queue"), now: now), .fail("invalid count"), "查询: 系统队列没给首数")
     expectEqual(S.decide(request("apple_music_upcoming", count: 5), now: now), .run(.appleMusicUpcoming(count: 5)),
                 "查询: Music 待播 5 首")
     for bad in [0, 21] {
@@ -70,6 +77,21 @@ func runPlayerQueryTests() {
     }
     expectEqual(S.spotifyShuffleScript.hasPrefix("if application " + quote + "Spotify" + quote + " is running then"), true,
                 "Spotify 随机: 先判 running,不把它拉起来")
+
+    // ---- 系统待播队列:App 跑加载器、问的是 Music.app,输出原样交给 collector(源码契约)----
+    do {
+        let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local")
+        let server = (try? String(contentsOf: local.appendingPathComponent("PlayerQueryServer.swift"), encoding: .utf8)) ?? ""
+        let probe = (try? String(contentsOf: local.appendingPathComponent("NowPlayingClientsProbe.swift"), encoding: .utf8)) ?? ""
+        expectEqual(server.contains("case .appleMusicQueue(let count):")
+                    && server.contains("NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier"), true,
+                    "系统待播队列(契约): 问的是 Music.app")
+        expectEqual(probe.contains("[paths.script, paths.library, bundleID, " + quote + "queue=\\(count)" + quote + "]")
+                    && probe.contains("return r.stdoutText"), true,
+                    "系统待播队列(契约): 加载器带 queue=N,输出原样返回")
+        expectEqual(S.Kind.allCases.count, 5, "查询: 五种,跟 collector 的 appQuery 常量一一对应")
+    }
 
     // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 collector 的解析对得上 ----
     for (platform, js) in [("youtubeMusic", S.youTubeMusicQueueJS), ("spotifyWeb", S.spotifyWebQueueJS)] {

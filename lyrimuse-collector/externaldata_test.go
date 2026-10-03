@@ -43,8 +43,6 @@ func TestMain(m *testing.M) {
 	ytmusicQueueScript = func(string) (string, bool) { return "", false }
 	spotifyWebQueueScript = func(string) (string, bool) { return "", false }
 	browserQueueRetryDelay = 0
-	// Apple Music 的系统待播队列要跑 App 包里的 perl 加载器,单测里一律当作找不到。
-	nowPlayingClientsPathsOverride = func() (string, string) { return "", "" }
 	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
 	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。
 	googleTranslateEndpoint = ""

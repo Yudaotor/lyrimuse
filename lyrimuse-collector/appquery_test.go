@@ -133,7 +133,9 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 	src := string(raw)
 	for _, want := range []string{
 		`"lyrimuse-player-query-request.json"`, `"lyrimuse-player-query-reply.json"`,
-		`"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
+		`"` + appQueryAppleMusicQueue + `"`, `"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
+		// 系统待播队列:App 原样回加载器的输出(parseAppleMusicSystemQueue 解),问的是 Music.app。
+		`NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier`,
 		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`,
 		`case bundleID = "bundle_id"`, `case writtenAtMs = "written_at_ms"`,
 		`case "` + browserPlatformYouTubeMusic + `"`, `case "` + browserPlatformSpotifyWeb + `"`,

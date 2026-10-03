@@ -5,10 +5,11 @@ import os
 /// Lyrimuse 一条,授权框也只可能来自 App。
 ///
 /// collector 写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
-/// 四段只读脚本,把原始输出写回 `lyrimuse-player-query-reply.json`。输出怎么解析留在 collector(`appquery.go` 与各家的
+/// 四段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把原始输出写回
+/// `lyrimuse-player-query-reply.json`。输出怎么解析留在 collector(`appquery.go` 与各家的
 /// parse 函数);契约两边各钉一份:selftest「player-query」组、Go `appquery_test.go`(读这个文件对账)。
 ///
-/// 只认这四种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
+/// 只认这五种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(collector 那边早不等了)。一次只处理一份请求,collector 那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
@@ -26,7 +27,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static let pollInterval: TimeInterval = 0.5
     /// 请求写出之后超过这么久才看到就不答。collector 那边最多等 8 秒(`appQueryScriptTimeout`)。
     public static let requestMaxAge: TimeInterval = 10
-    /// 跑 Music / 浏览器脚本的进程级超时。collector 那边的等待按它留了余量,两边一起改。
+    /// 跑 Music / 浏览器脚本、读系统待播队列的进程级超时。collector 那边的等待按它留了余量,两边一起改。
     public static let scriptTimeout: TimeInterval = 6
     /// 问 Spotify 随机状态的进程级超时(collector 那边等 4 秒)。
     public static let shuffleTimeout: TimeInterval = 2
@@ -36,6 +37,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static let maxAlbumLength = 512
 
     public enum Kind: String, Sendable, CaseIterable {
+        case appleMusicQueue = "apple_music_queue"
         case appleMusicUpcoming = "apple_music_upcoming"
         case appleMusicAlbumTracks = "apple_music_album_tracks"
         case spotifyShuffle = "spotify_shuffle"
@@ -97,6 +99,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     /// 校验过的一次查询。
     public enum Query: Equatable, Sendable {
+        /// Music.app 在系统媒体接口上发布的待播队列(真实播放顺序,开着随机也对)。
+        case appleMusicQueue(count: Int)
         case appleMusicUpcoming(count: Int)
         case appleMusicAlbumTracks(album: String)
         case spotifyShuffle
@@ -119,6 +123,9 @@ public final class PlayerQueryServer: @unchecked Sendable {
         guard abs(age) <= requestMaxAge else { return .ignore }
         guard let kind = Kind(rawValue: request.kind) else { return .fail("unsupported kind") }
         switch kind {
+        case .appleMusicQueue:
+            guard let count = request.count, (1...maxUpcomingCount).contains(count) else { return .fail("invalid count") }
+            return .run(.appleMusicQueue(count: count))
         case .appleMusicUpcoming:
             guard let count = request.count, (1...maxUpcomingCount).contains(count) else { return .fail("invalid count") }
             return .run(.appleMusicUpcoming(count: count))
@@ -188,7 +195,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
     }
 
     /// Music.app 当前列表里当前曲目往后 `count` 首。第一行是它认为正在播的那首(名、歌手),其余每行 名、歌手、专辑、
-    /// 时长(秒),用 tab 分隔。这不是真正的播放队列(脚本字典里没有 Up Next),collector 先读系统待播队列,这里是退路。
+    /// 时长(秒),用 tab 分隔。这不是真正的播放队列(脚本字典里没有 Up Next),collector 先问 `apple_music_queue`
+    /// (系统待播队列),读不到才问这一段。
     ///
     /// 三道守卫,少一道都会出事:
     /// - `is not running`:同 `appleMusicAlbumTracksScript`,不能把没开的 Music.app 拉起来。
@@ -344,6 +352,10 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     private func run(_ query: Query, id: String) -> Reply {
         switch query {
+        case .appleMusicQueue(let count):
+            return makeReply(id: id, output: NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
+                                                                          count: count, timeout: Self.scriptTimeout),
+                             error: "queue unavailable")
         case .appleMusicUpcoming(let count):
             return makeReply(id: id, output: Self.osascript(Self.appleMusicUpcomingScript(count: count), timeout: Self.scriptTimeout),
                              error: "script failed")
