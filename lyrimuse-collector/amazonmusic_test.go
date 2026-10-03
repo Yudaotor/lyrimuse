@@ -83,6 +83,14 @@ func TestNoteAmazonCurrentTrack(t *testing.T) {
 	if amazonTrackURLFor(amazonMusicBundleID, "Kane Brown", "Boots") == "" {
 		t.Fatal("Amazon Music 带曲目标识的要记下")
 	}
+	// 解析那一轮拿到的歌名剥过 ` [Explicit]`,App 报的是原样的。
+	noteAmazonCurrentTrack(amazonMusicBundleID, "Morgan Wallen", "Love Somebody [Explicit]", "asin://B0H9LD5H84")
+	if amazonTrackURLFor(amazonMusicBundleID, "Morgan Wallen", normEnrichTitle("Love Somebody [Explicit]")) == "" {
+		t.Error("歌名两边归一了再比,[Explicit] 不该让它挂不上曲目页")
+	}
+	if amazonTrackURLFor(amazonMusicBundleID, "Morgan Wallen", "Lies Lies Lies") != "" {
+		t.Error("别的歌不能挂上这首的曲目页")
+	}
 	noteAmazonCurrentTrack(amazonMusicBundleID, "Kane Brown", "Boots", "")
 	if amazonTrackURLFor(amazonMusicBundleID, "Kane Brown", "Boots") != "" {
 		t.Error("App 没从日志认出这首(标识为空)就清空")

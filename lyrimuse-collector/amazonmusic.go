@@ -178,14 +178,15 @@ func amazonTrackURL(trackID string) string {
 	return "https://music.amazon.com/tracks/" + asin
 }
 
-// amazonTrackURLFor:正用 Amazon Music 放、而且 App 从日志认出了这首,返回它的曲目页。
+// amazonTrackURLFor:正用 Amazon Music 放、而且 App 从日志认出了这首,返回它的曲目页。解析那一轮拿到的歌名已经剥过
+// ` [Explicit]` 这类尾巴,App 报的是原样的,按 amazonTrackIdentity 比(同 amazonASINFor)。
 func amazonTrackURLFor(bundleID, artist, title string) string {
 	if bundleID != amazonMusicBundleID {
 		return ""
 	}
 	amazonCurrentMu.Lock()
 	defer amazonCurrentMu.Unlock()
-	if amazonCurrentTrack.artist != artist || amazonCurrentTrack.title != title {
+	if amazonTrackIdentity(amazonCurrentTrack.artist, amazonCurrentTrack.title) != amazonTrackIdentity(artist, title) {
 		return ""
 	}
 	return amazonTrackURL(amazonCurrentTrack.trackID)
