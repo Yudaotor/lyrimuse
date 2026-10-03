@@ -1324,7 +1324,7 @@ func runRomanizationTests() {
         expectEqual(goPairs == HanCompatibility.pairs, true, "同形异码字表(契约): collector hancompat.go 与 App 逐字相同")
         let source = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
-        let normalizeAt = source.range(of: "let text = HanCompatibility.normalized(raw)")?.lowerBound
+        let normalizeAt = source.range(of: "let text = HanCompatibility.normalized(tagged.lyrics)")?.lowerBound
         let repairAt = source.range(of: "JapaneseKanjiRepair.repair(text, japaneseSong: japaneseSong)")?.lowerBound
         expectEqual(normalizeAt != nil && repairAt != nil && normalizeAt! < repairAt!, true,
                     "同形异码字(契约): 载入歌词时先换回标准字,再做日文汉字修复与简繁转换")

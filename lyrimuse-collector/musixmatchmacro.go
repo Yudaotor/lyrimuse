@@ -13,8 +13,8 @@ import (
 // ---- macro.subtitles.get:一次请求拿回匹配 + 逐行 + 逐字 + 纯文本 + 译文可用状态 ----
 //
 // 服务器在一次调用里依次跑 matcher.track.get、track.subtitles.get、track.lyrics.get,optional_calls
-// 带上 track.richsync 时连逐字一起给;part=track_lyrics_translation_status 让匹配到的曲目带上各语言
-// 译文的覆盖率。原来的 track.search → track.subtitle.get → track.richsync.get 要三个请求,这个源
+// 带上 track.richsync 时连逐字一起给;part 里的 track_lyrics_translation_status 让匹配到的曲目带上各语言
+// 译文的覆盖率,track_performer_tagging 带上演唱者标注(lyricspeakers.go)。原来的 track.search → track.subtitle.get → track.richsync.get 要三个请求,这个源
 // 被限流的首要诱因就是请求频率(见 musixmatchTokenFetchMu 头注)。
 //
 // 三种认曲目的方式,同一个接口:
@@ -40,6 +40,8 @@ type musixmatchMacro struct {
 	trTo []string
 	// subFailed:逐字这一块服务器说没问成(不是 404),整份结果不该缓存,见 lyricsubfetch.go。
 	subFailed bool
+	// performers:演唱者标注的片段(performer_tagging.content),没有标注时为空。
+	performers []musixmatchPerformerSpan
 }
 
 // musixmatchMacroGet 发一次 macro.subtitles.get。请求本身没成、matcher 没认出曲目都返回 ok=false。
@@ -47,13 +49,41 @@ func musixmatchMacroGet(ctx context.Context, params neturl.Values) (musixmatchMa
 	params.Set("namespace", "lyrics_richsynched")
 	params.Set("subtitle_format", "lrc")
 	params.Set("optional_calls", "track.richsync")
-	params.Set("part", "track_lyrics_translation_status")
+	params.Set("part", "track_lyrics_translation_status,track_performer_tagging")
 	params.Set("format", "json")
 	body, err := musixmatchDo(ctx, "macro.subtitles.get", params)
 	if err != nil {
 		return musixmatchMacro{}, false
 	}
 	return parseMusixmatchMacro(body)
+}
+
+// parseMusixmatchPerformerTagging:performer_tagging 里的片段,按给出的顺序。只收 type 为 artist、带歌手 ID 的演唱者;
+// 字段缺失或形状不对时返回空。单独解析:它坏了不该连累同一次应答里的匹配结果。
+func parseMusixmatchPerformerTagging(raw json.RawMessage) []musixmatchPerformerSpan {
+	var pt struct {
+		Content []struct {
+			Snippet    string `json:"snippet"`
+			Performers []struct {
+				Type string `json:"type"`
+				Fqid string `json:"fqid"`
+			} `json:"performers"`
+		} `json:"content"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &pt) != nil {
+		return nil
+	}
+	var out []musixmatchPerformerSpan
+	for _, c := range pt.Content {
+		sp := musixmatchPerformerSpan{text: c.Snippet}
+		for _, p := range c.Performers {
+			if p.Type == "artist" && p.Fqid != "" {
+				sp.performers = append(sp.performers, p.Fqid)
+			}
+		}
+		out = append(out, sp)
+	}
+	return out
 }
 
 // parseMusixmatchMacro 解析 macro.subtitles.get 的应答。纯函数,便于单测。
@@ -92,12 +122,14 @@ func parseMusixmatchMacro(body []byte) (musixmatchMacro, bool) {
 			TranslationStatus []struct {
 				To string `json:"to"`
 			} `json:"track_lyrics_translation_status"`
+			PerformerTagging json.RawMessage `json:"performer_tagging"`
 		} `json:"track"`
 	}
 	if call("matcher.track.get", &matched) != 200 || matched.Track.TrackID == 0 {
 		return musixmatchMacro{}, false
 	}
-	m := musixmatchMacro{match: musixmatchMatchFromRow(matched.Track.musixmatchTrackRow)}
+	m := musixmatchMacro{match: musixmatchMatchFromRow(matched.Track.musixmatchTrackRow),
+		performers: parseMusixmatchPerformerTagging(matched.Track.PerformerTagging)}
 	for _, s := range matched.Track.TranslationStatus {
 		if s.To != "" {
 			m.trTo = append(m.trTo, s.To)

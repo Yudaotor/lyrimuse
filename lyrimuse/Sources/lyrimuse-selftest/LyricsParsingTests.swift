@@ -462,4 +462,47 @@ func runLyricsParsingTests() {
             "查询词分宽: desired 全 0 退化成等分,不出 NaN"
         )
     }
+
+    // ---- 演唱者标注(collector lyrics_speakers,LyricSpeakerTags) ----
+    do {
+        let lrc = "[00:01.00]hello\n[00:05.00]world"
+        let yrc = "[1000,500](1000,500,0)hello"
+        expectEqual(LyricSpeakerTags.fingerprint(lyrics: lrc, lyricsYRC: yrc), "8bef5a361f6e",
+                    "演唱者标注: 指纹跟 collector lyricSpeakersFingerprint 同一组输入同一个输出")
+        expectEqual(LyricSpeakerTags.fingerprint(lyrics: "\u{FEFF}" + lrc, lyricsYRC: "\u{FEFF}\u{FEFF}" + yrc), "8bef5a361f6e",
+                    "演唱者标注: 开头的 BOM 不算内容")
+        expectEqual(LyricSpeakerTags.fingerprint(lyrics: lrc, lyricsYRC: ""), "aaf35c2bbdc7",
+                    "演唱者标注: 只有整行歌词")
+        expectEqual(LyricSpeakerTags.lines(of: "a\r\nb\rc\n\nd"), ["a", "b", "c", "", "d"],
+                    "演唱者标注: 切行跟 collector splitLyricLines 一致(CRLF 不当成一个字)")
+
+        let body = "[ti:Song]\n[00:01.00]one\n[00:02.00][00:09.00]two\n[00:03.00]three\n"
+        let words = "[1000,500](1000,500,0)one\n[2000,500](2000,500,0)two"
+        let tags = LyricSpeakerTags(forFingerprint: LyricSpeakerTags.fingerprint(lyrics: body, lyricsYRC: words),
+                                    lrc: ["", "v1", "v2", "合", ""], yrc: ["v1", "v2"])
+        let out = tags.applied(lyrics: body, lyricsYRC: words)
+        expectEqual(out.lyrics, "[ti:Song]\n[00:01.00]v1：one\n[00:02.00][00:09.00]v2：two\n[00:03.00]合：three\n",
+                    "演唱者标注: LRC 补在行首那几个时间戳之后")
+        expectEqual(out.lyricsYRC, "[1000,500](1000,0,0)v1：(1000,500,0)one\n[2000,500](2000,0,0)v2：(2000,500,0)two",
+                    "演唱者标注: YRC 在行头之后补一个零时长的词")
+        let stale = LyricSpeakerTags(forFingerprint: "000000000000", lrc: tags.lrc, yrc: tags.yrc)
+        expectEqual(stale.applied(lyrics: body, lyricsYRC: words).lyrics, body, "演唱者标注: 指纹对不上整份不用")
+        let short = LyricSpeakerTags(forFingerprint: tags.forFingerprint, lrc: ["v1"], yrc: [])
+        expectEqual(short.applied(lyrics: body, lyricsYRC: words).lyrics, body, "演唱者标注: 行数对不上不补")
+
+        let decoded = try? JSONDecoder().decode(LyricSpeakerTags.self, from: Data(#"{"for":"abc","lrc":["v1"]}"#.utf8))
+        expectEqual(decoded, LyricSpeakerTags(forFingerprint: "abc", lrc: ["v1"], yrc: []), "演唱者标注: 解码,yrc 缺省为空")
+        let broken = try? JSONDecoder().decode(LyricSpeakerTags.self, from: Data(#""oops""#.utf8))
+        expectEqual(broken?.applied(lyrics: body, lyricsYRC: words).lyrics, body, "演唱者标注: 形状不对当成对不上任何正文")
+        let entry = try? JSONDecoder().decode(EnrichCacheEntry.self,
+                                              from: Data(#"{"lyrics":"[00:01.00]a","lyrics_speakers":"oops"}"#.utf8))
+        expectEqual(entry != nil, true, "演唱者标注: 形状不对不连累整条缓存条目解码")
+
+        // 补上的标记交给引擎:先出现的靠左、第二位靠右、合唱居中。
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: out.lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual([1500, 2500, 3500].map { engine.activeLine(atMs: $0)?.side }, [.leading, .trailing, .center],
+                    "演唱者标注: 引擎按补上的标记分左右")
+        expectEqual(engine.activeLine(atMs: 1500)?.plainText, "one", "演唱者标注: 标记本身不显示")
+    }
 }

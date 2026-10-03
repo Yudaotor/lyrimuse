@@ -80,6 +80,8 @@ type musixmatchResult struct {
 	// instrumental:源明确说这首是纯音乐。只由 pickMusixmatchTrackRow
 	// 的第三趟置位,含义见那边。跟 lrc 互斥——置位时 lrc 一定是空的。
 	instrumental bool
+	// performers:演唱者标注(只有 macro.subtitles.get 那条路取得到,见 musixmatchMacro.performers)。
+	performers []musixmatchPerformerSpan
 }
 
 var (
@@ -387,7 +389,7 @@ func musixmatchFinishMacro(ctx context.Context, m musixmatchMacro, trLang string
 		dur = m.subLength
 	}
 	return musixmatchResult{lrc: m.lrc, yrc: m.yrc, tr: tr, roma: roma, title: m.match.title, artist: m.match.artist,
-		album: m.match.album, cover: m.match.cover, durationSecs: dur}
+		album: m.match.album, cover: m.match.cover, durationSecs: dur, performers: m.performers}
 }
 
 // musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且还在新鲜期(musixmatchTokenFreshFor)内直接复用,

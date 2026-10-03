@@ -3784,6 +3784,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let plainLyrics: String
         // Apple 名单可能比正文晚到(存量条目播放时才补),只变它也得重算。
         let songwriters: [String]
+        // 演唱者标注也可能比正文晚到(正文没变、后来一轮 Musixmatch 才给出),同上。
+        let speakers: LyricSpeakerTags?
     }
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
@@ -3831,7 +3833,8 @@ public final class LocalPlaybackSource: ObservableObject {
             isCantonese: found?.isCantonese ?? false,
             isHokkien: found?.isHokkien ?? false,
             plainLyrics: found?.plainLyrics ?? "",
-            songwriters: found?.songwriters ?? [])
+            songwriters: found?.songwriters ?? [],
+            speakers: found?.speakers)
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
             return
@@ -3846,8 +3849,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 译文是中文、罗马音是拉丁字母,都不进修回。
         // 同形异码字(康熙部首等)最先换回标准字,署名过滤、日文汉字修复、简繁转换、罗马音都按标准字认。
         // 只换送进引擎的文本;下面算校正值 key 的仍用缓存原文。
-        let text = HanCompatibility.normalized(raw)
-        let rawYRC = HanCompatibility.normalized(found?.lyricsYRC ?? "")
+        // Musixmatch 的演唱者标注(collector lyrics_speakers):指纹对得上才把 v1：/合： 补进正文,交给对唱分栏。
+        let tagged = found?.speakers?.applied(lyrics: raw, lyricsYRC: found?.lyricsYRC ?? "")
+            ?? (lyrics: raw, lyricsYRC: found?.lyricsYRC ?? "")
+        let text = HanCompatibility.normalized(tagged.lyrics)
+        let rawYRC = HanCompatibility.normalized(tagged.lyricsYRC)
         let japaneseSong = Romanizer.looksJapaneseSong(text.isEmpty ? rawYRC : text)
         // 排字语言要在引擎加载之前设好:加载时就会按各面宽度断句、量宽度,量宽度要跟画字同一口径。
         LyricTypesetting.setJapaneseSong(japaneseSong)

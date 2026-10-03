@@ -210,6 +210,9 @@ type enrichEntry struct {
 	// 完整歌词窗口末尾显示成「创作者：…」。它描述的是这首歌、不是哪一份歌词:取自这一轮全部候选、不跟着胜出源走,
 	// 换源、手改正文都不清它;一轮里没有哪个源给出名单时保留原值。
 	LyricsSongwriters []string `json:"lyrics_songwriters,omitempty"`
+	// LyricsSpeakers:当前正文每一行是谁唱的(Musixmatch 的演唱者标注换算过来,见 lyricspeakers.go),绑着正文指纹,
+	// App 核对过才补成对唱标记。正文自带演唱者标记的条目没有它。不在正文小文件里。
+	LyricsSpeakers *lyricSpeakers `json:"lyrics_speakers,omitempty"`
 	// SongLanguage 是这首歌的语种真值(songLanguageMandarin/songLanguageCantonese 之一,
 	// 见 lyricCandidate.language),取自**全部**候选里第一个给出这个信号的那个(见
 	// songLanguageFromScored),不是只看最终拿到歌词正文的那个候选——目前只有 QQ/酷狗
@@ -1747,6 +1750,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
+	e.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: true})
 	enrichCache[key] = e
 	enrichDirty = true
@@ -2086,6 +2090,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
+	e.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
 		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, picked)})
 	enrichCache[key] = e
@@ -3179,6 +3184,8 @@ type scoredLyricCandidateResult struct {
 	// Songwriters:词曲作者名单(amll / applemusic 的 TTML,deezer 的 Lyrics.writers)。不参与打分,
 	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
 	Songwriters []string `json:"songwriters,omitempty"`
+	// Performers:演唱者标注(只有 musixmatch 给)。不参与打分,只用来写条目的 lyrics_speakers(speakersFromScored)。
+	Performers []musixmatchPerformerSpan `json:"-"`
 	// Language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 透传,不参与打分,见 lyricCandidate.language。
 	Language string `json:"language,omitempty"`
@@ -4059,6 +4066,8 @@ type lyricSourceResult struct {
 	// songwriters:词曲作者名单(applemusicResult.songwriters / deezerResult.songwriters)。applemusic 与 deezer 走这里,
 	// amll 的在 amll.songwriters。
 	songwriters []string
+	// performers:演唱者标注(musixmatchResult.performers),只有 musixmatch 走这里。
+	performers []musixmatchPerformerSpan
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
 	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注)。跟 instrumental 是并列
@@ -4425,6 +4434,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			if usableRomaForResult(c.lyrics, mxRoma) {
 				r.LyricsRoma = mxRoma
 			}
+			r.Performers = mx.performers
 		case "amll":
 			// amll 这条 case 不能漏。amll.tr 早就在 candidates 构造那一步被读出来过(见上面
 			// usableValueAdd 调用,+50 分的打分信号靠它),但只要这个 switch 没有 amll 分支,分数
@@ -4833,7 +4843,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
 		r := musixmatchLyric(mxCtx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental}
+		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers}
 	}()
 	go func() {
 		if skipSource("lyricfind") {
