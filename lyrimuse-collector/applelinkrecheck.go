@@ -131,6 +131,7 @@ func itunesLookupTrackIDs(ctx context.Context, ids []string, country string) (ma
 			TrackID         int64   `json:"trackId"`
 			ArtistName      string  `json:"artistName"`
 			TrackTimeMillis float64 `json:"trackTimeMillis"`
+			TrackViewURL    string  `json:"trackViewUrl"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -139,7 +140,8 @@ func itunesLookupTrackIDs(ctx context.Context, ids []string, country string) (ma
 	found := make(map[string]itunesResult, len(out.Results))
 	for _, r := range out.Results {
 		if r.WrapperType == "track" && r.TrackID != 0 {
-			found[fmt.Sprint(r.TrackID)] = itunesResult{ArtistName: r.ArtistName, TrackTimeMillis: r.TrackTimeMillis}
+			found[fmt.Sprint(r.TrackID)] = itunesResult{ArtistName: r.ArtistName, TrackTimeMillis: r.TrackTimeMillis,
+				TrackViewURL: r.TrackViewURL}
 		}
 	}
 	return found, true

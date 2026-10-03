@@ -604,6 +604,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// Spotify 曲目 ID 提示按**原始** key 存(poller 那边也是拿原始 artist/title/album 算的,见 spotifytrack.go);
 	// 下面 key 可能被 canonical / 时长变体重定向,提示的查找键要留一份原样的。
 	hintKey := key
+	// Apple Music 页:有已校验的目录锚点就用它的(见 appleCatalogLinkFor)。锚点按播放器报的原标题核对,先按原标题查,
+	// 下面标题归一之后再补查一次。另一把锁(appleCatalogMu),在取 enrichMu 之前取。
+	anchorLink := appleCatalogLinkFor(artist, title, album, durationSecs)
 	// 归一化后的标题不只用来算 key,后面所有搜索调用(peripheral backfill/首次解析/升级
 	// 重试/重打分)也要用它。enrichKey 内部会把结尾这种非版本标记的括号剥掉(林潔心
 	// 《想逃避(22)》算出的 key 标题是"想逃避"),如果只拿它算 key、发去歌词源的搜索请求还用
@@ -611,6 +614,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 管理」手动搜索弹窗初始填的标题来自拆开缓存 key(已经剥过),换成"想逃避"酷狗立刻命中。
 	// 两条路径必须用同一份查询词。
 	title = normEnrichTitle(title)
+	if anchorLink == "" {
+		anchorLink = appleCatalogLinkFor(artist, title, album, durationSecs)
+	}
 	// 封面复查用的专辑名(albumhint.go 的 coverAlbumForTrack):播放器报了就是 album,没报就是 Apple 目录回填的
 	// 那个。 必须在取 enrichMu **之前**算 —— 它内部经 lyricResolvedArtists 取同一把锁(不可重入,09-07 那次
 	// poll 循环冻死 11 分钟就是持锁期间又加锁来的)。
@@ -665,6 +671,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		if amazonURL != "" && e.AmazonURL != amazonURL {
 			e.AmazonURL = amazonURL
+			spotifyHintDirty = true
+		}
+		// 目录锚点跟电台真曲长一样是异步到位的,条目常常先带着按歌名搜出来的链接写下,锚点到了换成它的页面。
+		if applyAppleCatalogLinkLocked(&e, anchorLink) {
 			spotifyHintDirty = true
 		}
 		if spotifyHintDirty {
@@ -2924,10 +2934,12 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		// 歌词源全部重查一遍。理由与前两次同类事故见那里的注释。
 		e.AccentColor = dominantColor(ctx, e.CoverURL)
 	}
-	// 各平台单曲跳转链接。Apple Music 中国区优先(iTunes Search)、QQ 经 smartbox、Spotify 搜索链接。
-	// 复用上面封面兜底那步已经算出来的 appleMatch(同一个 key 缓存,不是重新发请求),
-	// 不用再单独调一次 appleMusicURL。
+	// 各平台单曲跳转链接。Apple Music:有已校验的目录锚点就用它的页面(appleCatalogLinkFor),没有才用上面封面兜底那步
+	// 按歌名搜出来的 appleMatch(同一个 key 缓存,不是重新发请求);QQ 经 smartbox;Spotify 搜索链接。
 	e.AppleURL = appleMatch.url
+	if u := appleCatalogLinkFor(artist, title, album, durationSecs); u != "" {
+		e.AppleURL = u
+	}
 	e.QQURL = qqMusicURL(ctx, artist, title, album, durationSecs)
 	// 顺手把专辑/歌手 mid 一起拿到,不用等下一轮外围回填(首次解析本来就在打一堆请求,
 	// 多这一个不影响体感;拿不到就留空,菜单那两行自己会隐藏)。

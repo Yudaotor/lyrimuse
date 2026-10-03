@@ -79,6 +79,10 @@ func liveAppCatalog(bundle string, trackID int64, trackNumber int, artist, title
 	if !ok {
 		return 0, false
 	}
+	if anchor.TrackViewURL == "" {
+		// 较早落盘的锚点没有 Apple Music 页,补上之后缓存命中那条路(trackEnrichment)才能把链接换成它。
+		prefetchAppleCatalogTrackLink(trackID)
+	}
 	notePlayingAppleCatalogID(artist, title, album, trackID)
 	return anchor.DurationSecs, true
 }

@@ -491,6 +491,8 @@ func main() {
 	startArtworkSweep(ctx)
 	// 存量单曲的 Apple 链接按新的单曲判据重核一遍(applelinkrecheck.go),要联网,同样放后台。
 	startAppleSingleLinkRecheck(ctx)
+	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
+	startAppleCatalogLinkMigration(ctx)
 	// 常驻进程里播放热路径的保存走 2 秒节流(见 enrichsave.go);退出前把排着的那次补写当场做掉。
 	enableEnrichSaveThrottle()
 	err = run(ctx, cfg, lb)

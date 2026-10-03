@@ -235,7 +235,8 @@ func musixmatchTrackIDsFor(artist, title, album string) (appleCatalogID, spotify
 }
 
 // musixmatchCachedTrackIDs:缓存条目里存着的身份 —— SpotifyTrackID 是 Spotify 客户端放这首时记下的(录音级),
-// AppleURL 里的目录 ID 是按歌名在 iTunes 搜出来的(不是播放器给的,靠 musixmatchIDDurationFits 兜住)。
+// AppleURL 里的目录 ID 有已校验锚点时就是锚点那一条(appleCatalogLinkFor),否则是按歌名在 iTunes 搜出来的(不是播放器给的,
+// 靠 musixmatchIDDurationFits 兜住)。
 // 手动搜索那个一次性进程以只读方式加载了同一份缓存(searchcli.go)。
 // 精确 key 查不到再按宽松 key 找(canonicalEnrichKey):手动搜索把查询词统一成简体(searchQueryFields),
 // 缓存里的 key 却可能留着繁体专辑名。

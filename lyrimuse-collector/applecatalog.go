@@ -81,6 +81,11 @@ type appleCatalogTrack struct {
 	// TrackNumber:这条曲目在专辑里的序号。**只作自校验用** —— 同一张专辑上「去掉括号后
 	// 同名」的兄弟轨(甚至连括号都不用剥的完全同名轨)靠曲目名和专辑名分不开,序号能。
 	TrackNumber int `json:"track_number,omitempty"`
+	// TrackViewURL:答话那个商店里这条曲目的 Apple Music 页(lookup 的 trackViewUrl,形如
+	// https://music.apple.com/cn/album/<名>/<专辑 ID>?i=<曲目 ID>&uo=4)。歌词缓存的 apple_music_url 优先用它,
+	// 见 appleCatalogLinkFor。较早落盘的条目没有这个字段:播到时 prefetchAppleCatalogTrackLink 补,
+	// 存量由 applecataloglink.go 的迁移批量补。
+	TrackViewURL string `json:"track_view_url,omitempty"`
 }
 
 var (
@@ -126,6 +131,62 @@ func appleCatalogAlbumIDFor(artist, title, album string) (int64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// appleCatalogLinkFor:这首歌已校验锚点的 Apple Music 页,歌词缓存的 apple_music_url 有它就用它。没有锚点、署名或时长
+// 对不上、或锚点是较早落盘的还没有页面地址时返回空串,调用方退回按歌名搜出来的链接(appleMusicMatch.url)。
+//
+// 别把顺序倒过来:中国区 search 接口对任何歌都回 0 条,按歌名搜到的是别的商店的条目,版本和商店都可能跟实际放的
+// 不是同一条;锚点是播放器报的目录 ID 按 ID 查回来的(见 03 章决策 28)。查找跟 appleCatalogAlbumIDFor
+// 同一套:先播放路径填的索引,再按归一键扫落盘缓存,署名得对得上;没报专辑名的不查(索引本来就不收)。
+// 同一个键下的几条按时长挑,见 pickAppleCatalogAnchor。
+func appleCatalogLinkFor(artist, title, album string, durationSecs float64) string {
+	if strings.TrimSpace(album) == "" {
+		return ""
+	}
+	appleCatalogMu.Lock()
+	defer appleCatalogMu.Unlock()
+	want := appleCatalogIndexKey(title, album)
+	var fits []appleCatalogTrack
+	if t, ok := appleCatalogByTrack[want]; ok && appleCatalogArtistFits(artist, t) {
+		fits = append(fits, t)
+	} else {
+		for _, c := range appleCatalogCacheByKeyLocked(want) {
+			if appleCatalogArtistFits(artist, c) {
+				fits = append(fits, c)
+			}
+		}
+	}
+	if i := pickAppleCatalogAnchor(fits, durationSecs); i >= 0 {
+		return fits[i].TrackViewURL
+	}
+	return ""
+}
+
+// appleCatalogAnchorDurationTolerance:按时长挑锚点时,条目时长跟锚点权威时长差多少以内算同一条录音。同一张专辑上
+// 完全同名的几条靠它分开;别的播放器报的时长跟 Apple 的常差零点几秒到一秒多,不能再收紧。
+const appleCatalogAnchorDurationTolerance = 2.0
+
+// pickAppleCatalogAnchor:同一个「归一标题|归一专辑」下署名对得上的几条锚点里,挑这一条录音的,返回下标;挑不出返回 -1。
+// 时长已知时只认差 appleCatalogAnchorDurationTolerance 以内的、取最接近的;时长未知时只有一条才认(几条分不出是哪一版)。
+// 纯函数。
+func pickAppleCatalogAnchor(fits []appleCatalogTrack, durationSecs float64) int {
+	if durationSecs <= 0 {
+		if len(fits) == 1 {
+			return 0
+		}
+		return -1
+	}
+	best, bestDiff := -1, 0.0
+	for i, t := range fits {
+		if t.DurationSecs <= 0 {
+			continue
+		}
+		if d := math.Abs(t.DurationSecs - durationSecs); d <= appleCatalogAnchorDurationTolerance && (best < 0 || d < bestDiff) {
+			best, bestDiff = i, d
+		}
+	}
+	return best
 }
 
 // appleCatalogKeyIndex:appleCatalogCache 按"归一标题|归一专辑"分好的桶,给上面和 appleCatalogSearchIdentities
@@ -267,6 +328,7 @@ func appleCatalogLookupIn(trackID int64, storefront string) (t appleCatalogTrack
 			CollectionID         int64   `json:"collectionId"`
 			TrackNumber          int     `json:"trackNumber"`
 			TrackTimeMillis      float64 `json:"trackTimeMillis"`
+			TrackViewURL         string  `json:"trackViewUrl"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
@@ -286,6 +348,7 @@ func appleCatalogLookupIn(trackID int64, storefront string) (t appleCatalogTrack
 			AlbumID:      it.CollectionID,
 			TrackNumber:  it.TrackNumber,
 			DurationSecs: it.TrackTimeMillis / 1000,
+			TrackViewURL: it.TrackViewURL,
 		}
 		appleCatalogMu.Lock()
 		appleCatalogCache[fmt.Sprint(trackID)] = t
@@ -337,6 +400,45 @@ func prefetchAppleCatalogTrack(trackID int64) {
 		}
 		appleCatalogMu.Unlock()
 	}()
+}
+
+// appleCatalogLinkRefetched:这个进程里已经为补页面地址重查过、Apple 也答了的锚点 ID,不再查第二次。
+var appleCatalogLinkRefetched = map[int64]bool{}
+
+// prefetchAppleCatalogTrackLink:缓存里有这条锚点、但它是较早落盘的、没有 TrackViewURL 时,后台按 ID 重查一次补上
+// (appleCatalogLookup 把整条连同页面地址重新写进缓存;ID → 元数据是不变映射,覆盖无损)。同 prefetchAppleCatalogTrack
+// 异步、共用在飞去重;限流 / 超时没问成的不记,下次播到再试。
+func prefetchAppleCatalogTrackLink(trackID int64) {
+	if !appleCatalogLinkRefetchWanted(trackID) {
+		return
+	}
+	go refetchAppleCatalogTrackLink(trackID)
+}
+
+// appleCatalogLinkRefetchWanted:要不要为这条锚点补页面地址,要的话同时占住在飞位。
+func appleCatalogLinkRefetchWanted(trackID int64) bool {
+	if !appleCatalogPlausibleID(trackID) {
+		return false
+	}
+	appleCatalogMu.Lock()
+	defer appleCatalogMu.Unlock()
+	c, cached := appleCatalogCache[fmt.Sprint(trackID)]
+	if !cached || c.TrackViewURL != "" || appleCatalogInflight[trackID] || appleCatalogLinkRefetched[trackID] {
+		return false
+	}
+	appleCatalogInflight[trackID] = true
+	return true
+}
+
+// refetchAppleCatalogTrackLink:补页面地址那一次查询本体,释放在飞位。调用方先经 appleCatalogLinkRefetchWanted 占位。
+func refetchAppleCatalogTrackLink(trackID int64) {
+	_, _, answered := appleCatalogLookup(trackID)
+	appleCatalogMu.Lock()
+	delete(appleCatalogInflight, trackID)
+	if answered {
+		appleCatalogLinkRefetched[trackID] = true
+	}
+	appleCatalogMu.Unlock()
 }
 
 // appleCatalogAnchor 给出"这次播放的到底是 Apple 目录里哪一条"的**已校验**锚点。
