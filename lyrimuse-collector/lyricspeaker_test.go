@@ -17,9 +17,22 @@ func TestLyricSplitLabel(t *testing.T) {
 		{"周杰伦：", "周杰伦", "", true},   // 独占一行
 		{"词：方文山", "词", "方文山", true}, // 形状命中,是不是演唱者由上层判
 		{"情人节也落单", "", "", false},
-		{"Chris Tucker: Oh man", "", "", false}, // 含空格,刻意不认(与 Swift 侧一致)
-		{"Baby, I said: hello", "", "", false},  // 含标点
-		{"一二三四五六七八九十一：x", "", "", false},        // 超过 10 字
+		{"Chris Tucker: Oh man", "", "", false},   // 行内带空格的全名不认(与 Swift 侧一致)
+		{"Demi Lovato：", "Demi Lovato", "", true}, // 单独一行的全名
+		{"  Joe Jonas/Nick Jonas: ", "Joe Jonas/Nick Jonas", "", true},
+		{"Anderson .Paak：", "Anderson .Paak", "", true},
+		{"Lily-Rose Depp:", "Lily-Rose Depp", "", true},
+		{"Beyoncé Knowles：", "Beyoncé Knowles", "", true},
+		{"And my friend said:", "", "", false}, // 带冒号的歌词句子:有小写开头的词
+		{"Verse 1:", "", "", false},            // 段落名
+		{"Pre-Chorus:", "", "", false},
+		{"Background Vocals:", "", "", false}, // 署名角色
+		{"Produced by:", "", "", false},
+		{"One Two Three Four Five:", "", "", false}, // 一个名字超过 4 个词
+		{"Иван Петров：", "", "", false},
+		{"Aaaaaaaaaa Bbbbbbbbbb/Cccccccccc Dddddddddd:", "", "", false}, // 整个标签超过 40 个字             // 不是拉丁字母
+		{"Baby, I said: hello", "", "", false},                          // 含标点
+		{"一二三四五六七八九十一：x", "", "", false},                                // 超过 10 字
 		{"：只有冒号", "", "", false},
 	}
 	for _, c := range cases {
@@ -61,6 +74,21 @@ func TestLyricSpeakerLabels(t *testing.T) {
 	got = lyricSpeakerLabels("[00:01.00]我说：是的\n[00:02.00]然后她问我：好吗\n[00:03.00]我说：好\n")
 	if len(got) != 0 {
 		t.Errorf("叙事标签不是演唱者: got %v", got)
+	}
+	// 单独一行的拉丁字母全名(QQ / 酷狗 欧美对唱歌的写法):过整份闸,几个名字连写的那种也算
+	got = lyricSpeakerLabels("[00:01.00]Joe Jonas：\n[00:02.00]一\n[00:03.00]Nick Jonas：\n[00:04.00]二\n[00:05.00]Joe Jonas/Nick Jonas：\n[00:06.00]三\n[00:07.00]Nick Jonas：\n[00:08.00]四\n")
+	if !got["Joe Jonas"] || !got["Nick Jonas"] || !got["Joe Jonas/Nick Jonas"] || len(got) != 3 {
+		t.Errorf("单独一行的全名: got %v", got)
+	}
+	// 同一份里夹着的段落名、带冒号的句子不跟着收编
+	got = lyricSpeakerLabels("[00:01.00]Sam Smith：\n[00:02.00]一\n[00:03.00]Verse 2：\n[00:04.00]Burna Boy：\n[00:05.00]二\n[00:06.00]Sam Smith：\n[00:07.00]And then she said：\n")
+	if !got["Sam Smith"] || !got["Burna Boy"] || len(got) != 2 {
+		t.Errorf("段落名、句子不算演唱者: got %v", got)
+	}
+	// 行内带空格的全名照旧不认
+	got = lyricSpeakerLabels("[00:01.00]Chris Tucker: Oh man\n[00:02.00]Michael Jackson: yeah\n[00:03.00]Chris Tucker: ok\n")
+	if len(got) != 0 {
+		t.Errorf("行内全名不该算: got %v", got)
 	}
 	// CRLF 也要能切开(酷狗那一支是 CRLF)
 	got = lyricSpeakerLabels("[00:01.00]男：一\r\n[00:02.00]女：二\r\n")

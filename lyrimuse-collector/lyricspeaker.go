@@ -67,7 +67,19 @@ const lyricMaxLabelRunes = 10
 
 // lyricSplitLabel 剥出行首的「标签 + 冒号」。只认形状,不判断它是不是演唱者。
 // 第二个返回值是冒号后的正文(已 trim),第三个表示这一行到底有没有标签。
+// 短标签(lyricSplitShortLabel)认不出时,整行只有一个名字标签加冒号的单独一行另走 lyricStandaloneNameLabel。
 func lyricSplitLabel(text string) (label, rest string, ok bool) {
+	if label, rest, ok := lyricSplitShortLabel(text); ok {
+		return label, rest, true
+	}
+	if label, ok := lyricStandaloneNameLabel(text); ok {
+		return label, "", true
+	}
+	return "", "", false
+}
+
+// lyricSplitShortLabel:标签里不许有空白和标点、最多 lyricMaxLabelRunes 个字的那种「标签 + 冒号」。
+func lyricSplitShortLabel(text string) (label, rest string, ok bool) {
 	rs := []rune(strings.TrimLeft(text, " \t\u3000"))
 	// 标签与冒号之间允许有空白(`男 : 第一句` 跟 `男：第一句` 是同一种东西),但标签**内部**
 	// 不允许 —— 一旦空白后面又来了别的字,这行就是带冒号的歌词句子而不是标签。
@@ -241,7 +253,7 @@ func lyricAllHan(s string) bool {
 
 func lyricPlausibleSpeakerName(label string) bool {
 	rs := []rune(label)
-	if len(rs) == 0 || len(rs) > lyricMaxLabelRunes {
+	if len(rs) == 0 || (len(rs) > lyricMaxLabelRunes && !lyricNameShapedLabel(label)) {
 		return false
 	}
 	if lyricExactCreditLabels[label] || lyricExactCreditLabels[strings.ToLower(label)] {
@@ -289,6 +301,89 @@ const (
 	lyricMinUnknownSpeakerHits      = 3
 	lyricMinUnknownSpeakerRepeat    = 2
 )
+
+// 单独一行的拉丁字母名字标签:短标签不许空白和标点,带空格的全名(「Demi Lovato」)、「Anderson .Paak」「Lily-Rose Depp」
+// 这类认不出来;整行只有「名字 + 冒号」的单独一行另走 lyricStandaloneNameLabel。行内的「Name Surname: 歌词」照旧不认 ——
+// 它跟「Baby, I told you: …」这类带冒号的歌词句子分不开。跟 Swift 侧 LyricDuet.standaloneNameLabel 同一套口径,
+// 改一边必须改另一边。
+const (
+	lyricMaxNameLabelRunes = 40
+	lyricMaxNameLabelWords = 4
+)
+
+// lyricSectionWords:段落名。单独一行的「Verse 1:」「Pre-Chorus:」不是人。
+var lyricSectionWords = map[string]bool{
+	"verse": true, "chorus": true, "prechorus": true, "postchorus": true, "bridge": true, "hook": true,
+	"intro": true, "outro": true, "refrain": true, "interlude": true, "breakdown": true, "instrumental": true,
+	"spoken": true, "rap": true, "part": true, "skit": true, "coda": true, "drop": true,
+}
+
+// lyricNameShapedLabel:像一个或几个人名的拉丁字母标签 —— 几个名字之间用「/」「&」「,」连起来,每个名字 1~4 个词,
+// 每个词首字母大写或是数字(词前可以带「.」),词里只有拉丁字母(lyricLatinLetter)、数字和「.」「-」「'」;整个标签
+// 最多 lyricMaxNameLabelRunes 个字;不含段落名(lyricSectionWords),也不像署名角色(lyricEnglishRoleNounRe)。
+func lyricNameShapedLabel(label string) bool {
+	if label == "" || utf8.RuneCountInString(label) > lyricMaxNameLabelRunes || lyricEnglishRoleNounRe.MatchString(label) {
+		return false
+	}
+	for _, part := range lyricNameParts(label) {
+		words := strings.Fields(part)
+		if len(words) == 0 || len(words) > lyricMaxNameLabelWords {
+			return false
+		}
+		for _, w := range words {
+			w = strings.TrimLeft(w, ".")
+			first, _ := utf8.DecodeRuneInString(w)
+			if w == "" || !(unicode.IsUpper(first) || lyricASCIIDigit(first)) {
+				return false
+			}
+			for _, r := range w {
+				if !(lyricLatinLetter(r) || lyricASCIIDigit(r) || r == '.' || r == '-' || r == '\'' || r == '’') {
+					return false
+				}
+			}
+			if lyricSectionWords[strings.ToLower(strings.Trim(strings.ReplaceAll(w, "-", ""), ".'’0123456789"))] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// lyricNameParts:按「/」「&」「＆」「,」拆开的几个名字。
+func lyricNameParts(label string) []string {
+	return strings.FieldsFunc(label, func(r rune) bool { return r == '/' || r == '&' || r == '＆' || r == ',' })
+}
+
+// lyricLatinLetter:基本拉丁、Latin-1 增补、扩展 A / B、扩展附加区里的字母。跟 Swift 侧 LyricDuet.isLatinLetter 同一张范围表。
+func lyricLatinLetter(r rune) bool {
+	switch {
+	case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
+		return true
+	case r >= 0xC0 && r <= 0x24F:
+		return r != 0xD7 && r != 0xF7
+	case r >= 0x1E00 && r <= 0x1EFF:
+		return true
+	}
+	return false
+}
+
+func lyricASCIIDigit(r rune) bool { return r >= '0' && r <= '9' }
+
+// lyricStandaloneNameLabel:整行就是「名字标签 + 冒号」(标签见 lyricNameShapedLabel)时返回那个标签。
+func lyricStandaloneNameLabel(text string) (string, bool) {
+	t := strings.TrimSpace(text)
+	body, found := strings.CutSuffix(t, "：")
+	if !found {
+		if body, found = strings.CutSuffix(t, ":"); !found {
+			return "", false
+		}
+	}
+	body = strings.TrimSpace(body)
+	if strings.ContainsAny(body, ":：") || !lyricNameShapedLabel(body) {
+		return "", false
+	}
+	return body, true
+}
 
 // lyricSpeakerLabels 认出这一份 LRC 里的演唱者标签。传进来的是**原始 LRC 文本**。
 func lyricSpeakerLabels(lyrics string) map[string]bool {

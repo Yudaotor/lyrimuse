@@ -86,6 +86,41 @@ func runCreditLineTests() {
         expectEqual(LyricDuet.splitLabel("男：第一句")?.label, "男", "对唱标签: 原来的写法不受影响")
     }
 
+    // ---- 单独一行的拉丁字母名字标签(跟 collector TestLyricSplitLabel / TestLyricSpeakerLabels 同一批用例) ----
+    do {
+        for (text, label) in [("Demi Lovato：", "Demi Lovato"), ("  Joe Jonas/Nick Jonas: ", "Joe Jonas/Nick Jonas"),
+                              ("Anderson .Paak：", "Anderson .Paak"), ("Lily-Rose Depp:", "Lily-Rose Depp"),
+                              ("Beyoncé Knowles：", "Beyoncé Knowles")] {
+            expectEqual(LyricDuet.splitLabel(text)?.label, label, "名字标签: 单独一行认得出 \(text)")
+            expectEqual(LyricDuet.splitLabel(text)?.rest, "", "名字标签: 单独一行没有正文 \(text)")
+        }
+        for text in ["Chris Tucker: Oh man", "And my friend said:", "Verse 1:", "Pre-Chorus:", "Background Vocals:",
+                     "Produced by:", "One Two Three Four Five:", "Иван Петров：",
+                     "Aaaaaaaaaa Bbbbbbbbbb/Cccccccccc Dddddddddd:"] {
+            expectEqual(LyricDuet.splitLabel(text) == nil, true, "名字标签: 不认 \(text)")
+        }
+        let jonas = ["Joe Jonas：", "一", "Nick Jonas：", "二", "Joe Jonas/Nick Jonas：", "三", "Nick Jonas：", "四"]
+        expectEqual(LyricDuet.speakers(in: jonas), ["Joe Jonas", "Nick Jonas", "Joe Jonas/Nick Jonas"],
+                    "名字标签: 过整份闸,几个名字连写的也算")
+        let plan = LyricDuet.plan(lineTexts: jonas)
+        let kept = zip(plan.sides, plan.dropped).filter { !$0.1 }.map { $0.0 }
+        expectEqual(kept, [.leading, .trailing, .center, .trailing],
+                    "名字标签: 先出现的靠左、第二位靠右、两人连写的居中,标记行本身不显示")
+        let mixed = ["Sam Smith：", "一", "Verse 2：", "Burna Boy：", "二", "Sam Smith：", "And then she said："]
+        expectEqual(LyricDuet.speakers(in: mixed), ["Sam Smith", "Burna Boy"], "名字标签: 段落名、句子不跟着收编")
+        let inline = ["Chris Tucker: Oh man", "Michael Jackson: yeah", "Chris Tucker: ok"]
+        expectEqual(LyricDuet.speakers(in: inline), [], "名字标签: 行内带空格的全名照旧不认")
+
+        // 交给引擎:署名过滤不把名字行当署名删掉,对唱照常分出左右,名字行本身不显示。
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "[00:01.00]作词 : Someone\n[00:02.00]Joe Jonas：\n[00:03.00]Line one\n[00:06.00]Nick Jonas：\n"
+                        + "[00:07.00]Line two\n[00:10.00]Joe Jonas/Nick Jonas：\n[00:11.00]Line three\n[00:14.00]Nick Jonas：\n[00:15.00]Line four\n",
+                    lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual([3500, 7500, 11500, 15500].map { engine.activeLine(atMs: $0)?.side }, [.leading, .trailing, .center, .trailing],
+                    "名字标签(引擎): 左、右、两人居中、右")
+        expectEqual(engine.activeLine(atMs: 2500)?.plainText, nil, "名字标签(引擎): 名字行不当一句歌词显示")
+    }
+
     // ---- 长得像角色名的标签不许混进演唱者名单 ----
     //
     // 说话人豁免那道门排在署名过滤**所有规则最前面**,一进去就再也不看别的判据 —— 所以一个

@@ -1203,6 +1203,11 @@ public final class LyricsSyncEngine {
         creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
+    /// 文字里有没有英文的署名角色名(`englishRoleNounPattern`)。LyricDuet 判单独一行的名字标签时用。
+    static func matchesEnglishRoleNoun(_ text: String) -> Bool {
+        englishRoleNounPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
     /// 对唱/口白类歌词的**说话人标签**——这些跟职员表标签形状完全一样("短汉字 + 冒号"),
     /// 但冒号后面跟的是真歌词正文,绝对不能删。
     ///

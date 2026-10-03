@@ -77,7 +77,8 @@ public enum LyricDuet {
         "女声": "女", "女合": "女", "Female": "女", "F": "女",
     ]
 
-    private static func isGroup(_ marker: String) -> Bool { groupMarkerSet.contains(marker) }
+    /// 合唱类标记:已知的合唱词,以及「Joe Jonas/Nick Jonas」这种几个名字连写的标签(几个人一起唱)。
+    private static func isGroup(_ marker: String) -> Bool { groupMarkerSet.contains(marker) || isMultiNameLabel(marker) }
 
     /// 把标记归一成"身份键"。已知声部词走上面那张表;人名原样返回。
     public static func identity(of marker: String) -> String { canonicalMarker[marker] ?? marker }
@@ -105,12 +106,11 @@ public enum LyricDuet {
 
     // MARK: - 行首标签拆分
 
-    /// 标签里**不允许**出现的字符:空白和标点(标签跟冒号之间的空白例外,见 splitLabel)。
+    /// 短标签里**不允许**出现的字符:空白和标点(标签跟冒号之间的空白例外,见 splitShortLabel)。
     ///
-    /// 这道限制是"标签"和"带冒号的歌词句子"之间唯一的形状差别。代价是像
-    /// `Chris Tucker: Oh man!` 这种带空格的全名认不出来 —— 实测《You Rock My World》里
-    /// 全名只各出现 1 次、缩写 `CT:`/`MJ:` 各 5 次,认缩写已经覆盖主体;放开空格换来的是
-    /// 一整类英文歌词句子("Baby: I told you")被误判,不划算。
+    /// 这道限制是"标签"和"带冒号的歌词句子"之间的形状差别:行内的 `Chris Tucker: Oh man!` 这种
+    /// 带空格的全名因此认不出来,放开空格会把一整类英文歌词句子("Baby: I told you")误判成标签。
+    /// 整行只有一个名字加冒号的单独一行另走 standaloneNameLabel,那种形状跟歌词句子分得开。
     private static let labelBreakers: Set<Character> = [
         " ", "\t", "\u{3000}",
         "，", ",", "。", ".", "！", "!", "？", "?", "；", ";",
@@ -129,7 +129,17 @@ public enum LyricDuet {
     /// prefixCount 是标签连同冒号、以及冒号后紧跟的空白在**原串**里占掉的字符数 ——
     /// 逐字路径按这个数字从词序列前端剥(见 strippingPrefix),所以它必须以原串为准,
     /// 不能拿 trim 过的串去算。
+    ///
+    /// 短标签(splitShortLabel)认不出时,整行只有一个名字标签加冒号的单独一行另走 standaloneNameLabel,
+    /// 这时整行都是标签,prefixCount 是整行的字符数。跟 collector lyricSplitLabel 同一套口径。
     public static func splitLabel(_ text: String) -> (label: String, rest: String, prefixCount: Int)? {
+        if let short = splitShortLabel(text) { return short }
+        if let name = standaloneNameLabel(text) { return (name, "", text.count) }
+        return nil
+    }
+
+    /// 短标签:标签里不许有空白和标点(labelBreakers)、最多 maxLabelCount 个字。
+    private static func splitShortLabel(_ text: String) -> (label: String, rest: String, prefixCount: Int)? {
         var idx = text.startIndex
         // 跳过行首空白(有些源会在时间戳后面留一个空格)。
         while idx < text.endIndex, text[idx].isWhitespace { idx = text.index(after: idx) }
@@ -161,6 +171,75 @@ public enum LyricDuet {
         let prefixCount = text.distance(from: text.startIndex, to: after)
         return (label, String(text[after...]), prefixCount)
     }
+
+    // MARK: - 单独一行的名字标签
+
+    /// 单独一行的拉丁字母名字标签:短标签不许空白和标点,带空格的全名(「Demi Lovato」)、「Anderson .Paak」
+    /// 「Lily-Rose Depp」这类认不出来;整行只有「名字 + 冒号」的单独一行另走这一条。行内的「Name Surname: 歌词」
+    /// 照旧不认 —— 它跟「Baby, I told you: …」这类带冒号的歌词句子分不开。跟 collector lyricStandaloneNameLabel
+    /// 同一套口径,改一边必须改另一边。
+    static func standaloneNameLabel(_ text: String) -> String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = t.last, last == "：" || last == ":" else { return nil }
+        let body = String(t.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.contains(":"), !body.contains("："), nameShapedLabel(body) else { return nil }
+        return body
+    }
+
+    private static let maxNameLabelCount = 40
+    private static let maxNameLabelWords = 4
+
+    /// 段落名。单独一行的「Verse 1:」「Pre-Chorus:」不是人。
+    private static let sectionWords: Set<String> = [
+        "verse", "chorus", "prechorus", "postchorus", "bridge", "hook",
+        "intro", "outro", "refrain", "interlude", "breakdown", "instrumental",
+        "spoken", "rap", "part", "skit", "coda", "drop",
+    ]
+
+    /// 像一个或几个人名的拉丁字母标签 —— 几个名字之间用「/」「&」「,」连起来,每个名字 1~4 个词,每个词首字母大写
+    /// 或是数字(词前可以带「.」),词里只有拉丁字母(isLatinLetter)、数字和「.」「-」「'」;整个标签最多 40 个字;
+    /// 不含段落名,也不像署名角色(`LyricsSyncEngine.matchesEnglishRoleNoun`)。按 Unicode 标量数,跟 collector 一致。
+    static func nameShapedLabel(_ label: String) -> Bool {
+        guard !label.isEmpty, label.unicodeScalars.count <= maxNameLabelCount,
+              !LyricsSyncEngine.matchesEnglishRoleNoun(label) else { return false }
+        for part in nameParts(label) {
+            let words = part.split(whereSeparator: { $0.isWhitespace })
+            if words.isEmpty || words.count > maxNameLabelWords { return false }
+            for word in words {
+                let scalars = Array(word.unicodeScalars.drop(while: { $0 == "." }))
+                guard let first = scalars.first, first.properties.isUppercase || isASCIIDigit(first) else { return false }
+                for s in scalars where !(isLatinLetter(s) || isASCIIDigit(s) || s == "." || s == "-" || s == "'" || s == "’") {
+                    return false
+                }
+                let core = String(String.UnicodeScalarView(scalars)).replacingOccurrences(of: "-", with: "")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ".'’0123456789")).lowercased()
+                if sectionWords.contains(core) { return false }
+            }
+        }
+        return true
+    }
+
+    /// 按「/」「&」「＆」「,」拆开的几个名字。
+    private static func nameParts(_ label: String) -> [Substring] {
+        label.split(whereSeparator: { $0 == "/" || $0 == "&" || $0 == "＆" || $0 == "," })
+    }
+
+    /// 「Joe Jonas/Nick Jonas」这种几个名字连写的标签。
+    private static func isMultiNameLabel(_ label: String) -> Bool {
+        nameParts(label).count >= 2 && nameShapedLabel(label)
+    }
+
+    /// 基本拉丁、Latin-1 增补、扩展 A / B、扩展附加区里的字母。跟 collector lyricLatinLetter 同一张范围表。
+    private static func isLatinLetter(_ s: Unicode.Scalar) -> Bool {
+        switch s.value {
+        case 0x41...0x5A, 0x61...0x7A: return true
+        case 0xC0...0x24F: return s.value != 0xD7 && s.value != 0xF7
+        case 0x1E00...0x1EFF: return true
+        default: return false
+        }
+    }
+
+    private static func isASCIIDigit(_ s: Unicode.Scalar) -> Bool { s.value >= 0x30 && s.value <= 0x39 }
 
     // MARK: - 未知标签的形状闸
 
@@ -213,7 +292,7 @@ public enum LyricDuet {
     /// 于是「和声：某某」既不会被删、又被剥掉前缀,变成一行看起来像歌词的「某某」。
     /// 审查发现的活回归,靠这里的角色词否决堵住。
     private static func plausibleSpeakerName(_ label: String) -> Bool {
-        if label.isEmpty || label.count > maxLabelCount { return false }
+        if label.isEmpty || (label.count > maxLabelCount && !nameShapedLabel(label)) { return false }
         // 不分大小写(「op」「Op」「OP」都是署名),跟 collector 那边统一转小写再比同一口径。
         if exactCreditLabelsLowered.contains(label.lowercased()) { return false }
         // 复用署名过滤那张角色词表(和声/监制/母带/翻译…),不再自己重复枚举。
