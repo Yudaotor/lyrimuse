@@ -373,3 +373,45 @@ func TestManualRematchMissingOrBusy(t *testing.T) {
 		t.Errorf("正在别处搜索: %+v", got)
 	}
 }
+
+// 报结论之前已经落盘:常驻进程里保存有节流,没换词的一轮只排一次记账补写(最多晚一分钟),App 拿到结论就重读。
+func TestManualRematchSavesBeforeReporting(t *testing.T) {
+	setupRescoreTest(t, []string{"musixmatch"}, nil)
+	const artist, title, album = rescoreTestArtist, "Same Song", "Some Album"
+	key := enrichKey(artist, title, album)
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{key: {
+		Lyrics: rescoreTestNewBody, LyricsSource: "musixmatch", LyricsScoringVersion: lyricsScoringVersion - 1,
+	}}
+	enrichMu.Unlock()
+	saves := 0
+	savedNow := enrichSaveNow
+	enrichSaveNow = func() { saves++ }
+	enrichSaveThrottleMu.Lock()
+	savedThrottled := enrichSaveThrottled
+	enrichSaveThrottled, enrichLastSaveAt = true, time.Now()
+	enrichSaveThrottleMu.Unlock()
+	t.Cleanup(func() {
+		enrichSaveThrottleMu.Lock()
+		for _, timer := range []*time.Timer{enrichBookkeepingTimer, enrichSaveTimer} {
+			if timer != nil {
+				timer.Stop()
+			}
+		}
+		enrichBookkeepingTimer, enrichSaveTimer, enrichSaveThrottled = nil, nil, savedThrottled
+		enrichSaveThrottleMu.Unlock()
+		enrichSaveNow = savedNow
+	})
+
+	got := runLyricsRematchOne(context.Background(), key, nil)
+
+	if got.Outcome != lyricsRematchUnchanged {
+		t.Fatalf("前提:这一轮的冠军就是现在这一份: %+v", got)
+	}
+	enrichSaveThrottleMu.Lock()
+	pending := enrichBookkeepingTimer != nil || enrichSaveTimer != nil
+	enrichSaveThrottleMu.Unlock()
+	if saves == 0 || pending {
+		t.Errorf("报结论之前要当场落盘: saves=%d 还排着补写=%v", saves, pending)
+	}
+}

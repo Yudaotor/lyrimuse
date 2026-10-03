@@ -330,6 +330,8 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	} else {
 		rescoreLyricsWith(withManualLyricSearch(ctx), key, artist, title, album, duration, opts)
 	}
+	// 当场落盘再报结论:没换词时那两个函数只排了一次记账补写(常驻进程里最多晚一分钟),App 拿到结论就重读。
+	flushEnrichSave()
 	// 只有搜到一半被停时两个函数不写结论。
 	if result.Outcome == "" {
 		result.Outcome = lyricsRematchCancelled
