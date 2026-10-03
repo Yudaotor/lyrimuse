@@ -438,8 +438,9 @@ func musixmatchEnsureToken(ctx context.Context) string {
 	return t
 }
 
-// musixmatchStaleTokenMaxAge:要不到新 token 时,上一个 token 最多再用多久(按拿到的时刻算)。
-const musixmatchStaleTokenMaxAge = 24 * time.Hour
+// musixmatchStaleTokenMaxAge:要不到新 token 时,上一个 token 最多再用多久(按拿到的时刻算)。退得回去的只有比
+// musixmatchTokenFreshFor 长出来的那一段;退回去的 token 真失效了,数据接口的非 captcha 401 会当场丢掉它。
+const musixmatchStaleTokenMaxAge = 7 * 24 * time.Hour
 
 // musixmatchTokenFetchCooldown:token.get 没要到之后,隔多久再去要。反爬按请求频率收紧,被拒之后
 // 每首歌都再要一遍只会被拦得更久。
@@ -527,11 +528,11 @@ type musixmatchTokenFile struct {
 	FetchedAt int64 `json:"fetched_at,omitempty"`
 }
 
-// musixmatchTokenFreshFor:拿到的 token 按这么久算新鲜,过了才去 token.get 换新。匿名 usertoken 实际能用
-// 很久(实测一个 token 过了 13 小时照常 200;日志里旧 token 被重用 86 次、一次都没被拒),而 token.get
-// 是这个源最容易被按 IP 限流、最容易白等直连预算的一步,见 09 章决策 135。真失效了由数据接口的非 captcha
-// 401 触发 musixmatchRejectToken,当场丢掉重换。
-const musixmatchTokenFreshFor = 6 * time.Hour
+// musixmatchTokenFreshFor:拿到的 token 按这么久算新鲜,过了才去 token.get 换新。匿名 usertoken 实际能用一天以上,
+// 而 token.get 是这个源最容易被按 IP 限流、最容易白等直连预算的一步,见 09 章决策 135、154。真失效了由数据接口的
+// 非 captcha 401 触发 musixmatchRejectToken,当场丢掉重换。必须短于 musixmatchStaleTokenMaxAge,否则 token.get
+// 要不到时退不回上一个。
+const musixmatchTokenFreshFor = 24 * time.Hour
 
 // musixmatchLegacyTokenFreshFor:没有 fetched_at 字段的旧 token 文件当初是按 9 分钟新鲜期写的,反推拿到时刻用它。
 const musixmatchLegacyTokenFreshFor = 9 * time.Minute

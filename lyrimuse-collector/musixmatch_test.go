@@ -176,6 +176,14 @@ func TestMusixmatchEnsureTokenFallsBackToPreviousToken(t *testing.T) {
 		t.Fatalf("冷却期内不该再去要: got=%q calls=%d", got, atomic.LoadInt32(&calls))
 	}
 
+	// 已经过了新鲜期的照样退得回去:退路上限必须比新鲜期长。
+	musixmatchTokenMu.Lock()
+	musixmatchLastTokenAt = time.Now().Add(-musixmatchTokenFreshFor - time.Hour)
+	musixmatchTokenMu.Unlock()
+	if got := musixmatchEnsureToken(context.Background()); got != "tok-prev" {
+		t.Fatalf("过了新鲜期 %s 的上一个 token 也该退得回去,实际 %q", musixmatchTokenFreshFor, got)
+	}
+
 	// 太旧的不用。
 	musixmatchTokenMu.Lock()
 	musixmatchLastTokenAt = time.Now().Add(-musixmatchStaleTokenMaxAge - time.Minute)
