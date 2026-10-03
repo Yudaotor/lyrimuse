@@ -797,8 +797,12 @@ func runSourceContractTests() {
                 // 进度锚点会把位置夹在 [0, duration],从那边永远看不到"越过曲长"。
                 expectEqual(lps.contains("RadioTrackClock.passedTrackEnd("), true,
                             "电台: 越过真曲长要把歌词收掉(主持人说话那一两分钟)")
-                expectEqual(lps.contains("if radioTrackFinished {"), true,
-                            "电台: 收歌词的闸要挂在 20Hz 那条 tick 上,不然只有 2 秒轮询那一拍生效")
+                expectEqual(lps.contains("private var lyricLinesSuppressed: Bool { radioTrackFinished || isCurrentTrackAdBreak }")
+                            && lps.contains("if lyricLinesSuppressed {\n            clearLineDisplay()"), true,
+                            "电台 / 广告: 收歌词的闸要挂在 20Hz 那条 tick 上,不然只有 2 秒轮询那一拍生效")
+                expectEqual(lps.contains("syncEngine.hasContent, !lyricLinesSuppressed else {")
+                            && lps.contains("if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {"), true,
+                            "电台 / 广告: 暂停时那一次解析、展示面改宽度时那一次发布也要先看 lyricLinesSuppressed")
                 // 台卡:开台那一刻是唯一能拿到台名台标的时机,漏抓就永远没有。
                 expectEqual(lps.contains("RadioStationCardFile.stationName("), true,
                             "电台: 开台那一刻要把台名记下来(口白期间系统什么都不给)")
@@ -839,8 +843,9 @@ func runSourceContractTests() {
                         expectEqual(face_text.contains("LyricsWindowEmptyState.resolve(")
                                     && face_text.contains("case .radioTalk: text = L10n.t(\"口白\")"), true,
                                     "电台: 歌词窗口的空状态那一格也要认口白,不能只改元数据行")
-                        expectEqual(face_text.contains("if playback.isRadioTalkBreak {\n            // 口白期间不显示任何歌词"), true,
-                                    "电台: 歌词窗口的歌词列表那一栏要在口白期间整段挡掉(闸要排在 allLines.isEmpty 之前)")
+                        expectEqual(face_text.contains("private var lyricsOnHold: Bool { playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak }")
+                                    && face_text.contains("if lyricsOnHold {\n            // 口白、广告期间不显示任何歌词"), true,
+                                    "电台 / 广告: 歌词窗口的歌词列表那一栏要在口白、广告期间整段挡掉(闸要排在 allLines.isEmpty 之前)")
                     }
                 } else {
                     expectEqual(true, false, "电台: 读不到 \(rel)(路径挪了?)")
@@ -1558,10 +1563,10 @@ func runSourceContractTests() {
                         "迷你多行: 行的 == 必须比 centered,否则切换后整表行不重画")
             expectEqual(lwv.components(separatedBy: "lyricsScrollReader {").count - 1, 2,
                         "迷你多行: 完整布局和迷你多行共用同一个 lyricsScrollReader(自动滚动只有一份)")
-            expectEqual(lwv.contains("playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !playback.isRadioTalkBreak"), true,
-                        "迷你多行: 没有同步歌词 / 电台口白时退回两行那套(列表的占位按大窗口尺寸画)")
+            expectEqual(lwv.contains("playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !lyricsOnHold"), true,
+                        "迷你多行: 没有同步歌词 / 口白、广告期间退回两行那套(列表的占位按大窗口尺寸画)")
             // 迷你「单行」:下一句按布局筛过再交给 reel(判据在 MiniLyricsSelection.showsNextLine)。
-            expectEqual(lwv.contains("next: playback.isRadioTalkBreak ? nil : miniReelNextLine,"), true,
+            expectEqual(lwv.contains("next: lyricsOnHold ? nil : miniReelNextLine,"), true,
                         "迷你单行: reel 的下一句走 miniReelNextLine,不直接用 miniNextLine")
             expectEqual(lwv.contains("guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout,"), true,
                         "迷你单行: miniReelNextLine 按当前布局判要不要画下一句")

@@ -1521,11 +1521,15 @@ struct LyricsWindowView: View {
             onOpenPlayer: { openIdlePlayerApp(player) })
     }
 
-    /// 迷你「多行」这一刻走不走整页列表。没有同步歌词(空态 / 纯文本兜底)和电台口白时退回两行那套:
+    /// 迷你「多行」这一刻走不走整页列表。没有同步歌词(空态 / 纯文本兜底)和口白、广告期间退回两行那套:
     /// 列表那几种占位是按完整窗口的尺寸画的(大图标 + 大字),塞进迷你那块视口里会挤爆。
     private var miniUsesLyricsList: Bool {
-        playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !playback.isRadioTalkBreak
+        playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !lyricsOnHold
     }
+
+    /// 这一刻在放的不是这首歌本身,歌词一律不显示:电台口白(allLines 还是上一首的)、广告(前贴片广告跟正片共用
+    /// 身份的播放器,allLines 已经是正片的)。台名、「口白」这类口白专用的显示仍按 isRadioTalkBreak。
+    private var lyricsOnHold: Bool { playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak }
 
     /// 迷你「多行」列表左右留白。完整布局单列时是 44,迷你窄得多,收到 20(同两行那套的左右边距)。
     private static let miniListHorizontalInset: CGFloat = 20
@@ -1812,7 +1816,7 @@ struct LyricsWindowView: View {
     @ViewBuilder
     private func miniLyrics(fontSize: CGFloat) -> some View {
         VStack(spacing: fontSize * 0.34) {
-            if let gap = miniCurrentGap, !playback.isRadioTalkBreak {
+            if let gap = miniCurrentGap, !lyricsOnHold {
                 // 间奏:三颗呼吸点**顶替**当前行的位置(完整布局是把它插在滚动列表里对应那一行
                 // 之后,迷你只有"当前"这一格,所以是顶替不是插入)。点亮算法/呼吸曲线走跟悬浮歌词、
                 // 完整布局同一个 LyricsGapDotsView,比例也照完整那份(点 0.32 字号、间距 0.3)。
@@ -1830,7 +1834,7 @@ struct LyricsWindowView: View {
                         + PlaybackCoordinator.shared.currentLyricsOffsetMs
                 }
                 .frame(height: fontSize * 0.5)
-            } else if playback.isRadioTalkBreak || (miniCurrentLine == nil && !playback.hasLyricsContent) {
+            } else if lyricsOnHold || (miniCurrentLine == nil && !playback.hasLyricsContent) {
                 // 没歌词时不留一片空白:那会让人以为窗口坏了。
                 //
                 // 文案走完整布局那套 `emptyStateSpec`,别在这儿另写一句 —— 它分了「没有在播放 /
@@ -1846,10 +1850,10 @@ struct LyricsWindowView: View {
             // 当前行 + 下一行(「单行」只在当前那一格空着时才补下一句,见 miniReelNextLine)。
             // 控制条浮出来时下一行**照常显示**(它下面那格已经给控制条预留好了,
             // 见 miniDeckReserve);悬停进出不许摘掉或挪动它 —— 摘掉是一次真重排,当前行会上下弹。
-            // 口白期间 allLines 还是上一首的,当前行 / 下一行都不给(完整布局的同款闸见 rightPane)。
+            // 口白、广告期间当前行 / 下一行都不给(见 lyricsOnHold;完整布局的同款闸见 rightPane)。
             MiniLyricsReel(
-                current: miniCurrentGap == nil && !playback.isRadioTalkBreak ? miniCurrentLine : nil,
-                next: playback.isRadioTalkBreak ? nil : miniReelNextLine,
+                current: miniCurrentGap == nil && !lyricsOnHold ? miniCurrentLine : nil,
+                next: lyricsOnHold ? nil : miniReelNextLine,
                 fontSize: fontSize,
                 fontFamily: activeFontFamily,
                 color: miniPrimaryColor,
@@ -2749,18 +2753,17 @@ struct LyricsWindowView: View {
     /// `wordRise`:正在唱的字要不要上浮。迷你两档都不要(07 章决策 42),完整布局要。
     private func rightPane(leading: CGFloat, trailing: CGFloat, centered: Bool = false,
                            wordRise: Bool = true) -> some View {
-        if playback.isRadioTalkBreak {
-            // 口白期间不显示任何歌词(电台曲和曲之间穿插口白时,标题与封面都已经换成台名台标,
-            // 这一栏不挡的话还在滚上一首歌的词)。
+        if lyricsOnHold {
+            // 口白、广告期间不显示任何歌词(电台曲和曲之间穿插口白时,标题与封面都已经换成台名台标,
+            // 这一栏不挡的话还在滚上一首歌的词;跟正片共用身份的广告期间,这一栏已经是正片的词)。
             //
             // 这道闸必须排在 `allLines.isEmpty` **之前**。只改 emptyStateSpec 不够 —— 那是
-            // 「一行歌词都没有」时的占位,而口白期间上一首的 allLines 原封不动地留着,压根走不到
-            // 空状态。灵动岛 / 悬浮窗只显示"当前这一行",各自的 isRadioTalkBreak 分支天然盖住了;
+            // 「一行歌词都没有」时的占位,而这两种时候 allLines 都不是空的,压根走不到空状态。
+            // 灵动岛 / 悬浮窗 / 菜单栏只显示"当前这一行",由 LocalPlaybackSource.lyricLinesSuppressed 收掉;
             // 只有这里是整段列表,得单独挡。
             //
-            // 复用 emptyState:它的文案与图标本来就由 emptyStateSpec 按同一个判据给出「口白」+
-            // `dot.radiowaves.left.and.right`,不另写一套。纯文本兜底(plainLyricsFallback)一并挡掉
-            // —— 那同样是上一首的词。
+            // 复用 emptyState:它的文案与图标本来就由 emptyStateSpec 按同一个判据给出「广告中」/「口白」和
+            // 对应图标,不另写一套。纯文本兜底(plainLyricsFallback)一并挡掉 —— 那同样不是在放的这首的词。
             emptyState
         } else if playback.allLines.isEmpty {
             // 没有能同步显示的版本,但用户在「搜索候选歌词」里采纳过一条纯文本兜底

@@ -247,7 +247,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func setLineLayoutBudget(_ budget: LineLayoutBudget?, for surface: LyricsSurface) {
         guard syncEngine.setLayoutBudget(budget, for: surface) else { return }
         if surface == .menuBar { updateMenuBarSongRowWidth() }
-        if let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {
+        if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {
             publishSurfaceLyrics(atRawMs: pos)
         }
     }
@@ -2402,6 +2402,14 @@ public final class LocalPlaybackSource: ObservableObject {
         logger.notice("radio station card: artwork attached bytes=\(data.count)")
     }
 
+    /// 这一刻在放的不是这首歌本身,歌词行一律不显示,只留「口白」「广告中」这类状态:
+    ///   - 电台两首歌之间主持人说话:元数据还停在上一首、表也还在走,不收的话上一首的歌词会在说话声里继续滚
+    ///     (判定在 apply 里按真曲长算,见 radioTrackFinished);
+    ///   - 广告:前贴片广告跟正片共用身份的播放器(Kaset、YouTube Music 的音乐视频),广告期间载着的已经是正片的
+    ///     歌词,不收的话「广告中」下面会提前露出正片的第一句。
+    /// 20Hz 的 tick、暂停时那一次解析、展示面改宽度时那一次发布都先看它。
+    private var lyricLinesSuppressed: Bool { radioTrackFinished || isCurrentTrackAdBreak }
+
     /// 把"当前该显示哪一行"这一组发布状态清干净。**只清行,不碰曲目 / 封面 / 时长** ——
     /// 那是 clearIfWasPlaying() 的活(整个停播)。逐个先比再赋:这些都是 @Published,
     /// 无条件赋值会让订阅者每拍重渲染(理由同 apply() 里那段注释)。
@@ -2430,7 +2438,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func resolveLinesForPausedPosition() {
-        guard let frozen = pausedPositionMs, syncEngine.hasContent, !radioTrackFinished else {
+        guard let frozen = pausedPositionMs, syncEngine.hasContent, !lyricLinesSuppressed else {
             clearLineDisplay()
             return
         }
@@ -2458,10 +2466,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func fastTick() {
-        // 电台:两首歌之间还有一两分钟主持人说话(实测这个台多出 66~110 秒),那段时间
-        // 元数据还停在上一首、表也还在走,不收的话上一首的歌词会在说话声里继续滚(
-        // 收掉)。判定本身在 apply 里按真曲长算,见 radioTrackFinished。
-        if radioTrackFinished {
+        if lyricLinesSuppressed {
             clearLineDisplay()
             return
         }
