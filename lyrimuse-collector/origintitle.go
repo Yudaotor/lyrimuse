@@ -37,12 +37,16 @@ func originStorefronts(samples ...string) []string {
 }
 
 // trustedRecordingISRC:这一条录音的 ISRC。播放器给的(playbackISRC,就是正在播的这一条)优先,其次是已被认可的
-// Apple Music 候选报的(acceptedAppleMusicISRC)。都没有返回空。
+// Apple Music 候选报的(acceptedAppleMusicISRC),再次是已被认可的 Deezer 候选报的(Apple Music 这一轮没给出可用候选时)。
+// 都没有返回空。
 func trustedRecordingISRC(artist, title, album string, durationSecs float64, results []scoredLyricCandidateResult) string {
 	if code := playbackISRC(artist, title, album); code != "" {
 		return code
 	}
-	return acceptedAppleMusicISRC(results, durationSecs)
+	if code := acceptedAppleMusicISRC(results, durationSecs); code != "" {
+		return code
+	}
+	return acceptedSourceISRC(results, "deezer", durationSecs)
 }
 
 // originRecording:这一条录音在原产地商店里的曲名和署名。artist 为空 = 只知道曲名(区服遍历的结论不带署名)。
@@ -184,6 +188,29 @@ func originTitleRound(ctx context.Context, artist, title, album string, duration
 	if origin.artist != "" && normLoose(origin.artist) != normLoose(artist) {
 		queryArtists = append(queryArtists, origin.artist)
 	}
+	return originRecordingPasses(ctx, artist, title, album, durationSecs, origin.title, queryArtists, ne, results, onUpdate)
+}
+
+// titleReverseOriginArtistRound:标题反查拿原产地曲名(用本地署名)问完之后,这条录音在原产地商店的署名(按 ISRC 查,
+// originRecordingByISRC)跟本地写法不同、而且曲名就是这次反查用的那个时,还缺着的源再拿原产地署名问一轮(同
+// originTitleRound 的第二遍)。没有缺着的源、拿不到署名时原样返回。只在反查走的是原产地曲名那条路时调。
+func titleReverseOriginArtistRound(ctx context.Context, artist, title, album string, durationSecs float64, samples []string,
+	correctedTitle string, ne neteaseInfo, results []scoredLyricCandidateResult, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
+	if len(lyricSourcesWorthAliasRetry(ctx, results)) == 0 {
+		return ne, results
+	}
+	origins := originStorefronts(append([]string{artist, title, album}, samples...)...)
+	origin := originRecordingByISRC(ctx, title, trustedRecordingISRC(artist, title, album, durationSecs, results), origins, durationSecs)
+	if origin.artist == "" || normLoose(origin.artist) == normLoose(artist) || normLoose(origin.title) != normLoose(correctedTitle) {
+		return ne, results
+	}
+	return originRecordingPasses(ctx, artist, title, album, durationSecs, origin.title, []string{origin.artist}, ne, results, onUpdate)
+}
+
+// originRecordingPasses:拿原产地曲名依次用 queryArtists 里的署名只问还缺着的源(lyricSourcesWorthAliasRetry,每问一遍
+// 重算一次),候选带上改写记号,合并(mergeLyricCandidateRounds)照旧按本地署名、本地曲名统一重打分。
+func originRecordingPasses(ctx context.Context, artist, title, album string, durationSecs float64, originTitle string, queryArtists []string,
+	ne neteaseInfo, results []scoredLyricCandidateResult, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	for _, qa := range queryArtists {
 		only := lyricSourcesWorthAliasRetry(ctx, results)
 		if len(only) == 0 {
@@ -191,15 +218,15 @@ func originTitleRound(ctx context.Context, artist, title, album string, duration
 		}
 		originUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
 		originCtx := withLyricQueryReason(withLyricSourceOnly(ctx, only), lyricQueryReasonTitleStorefront)
-		originNe, originResults := fetchScoredLyricCandidatesStreaming(originCtx, qa, origin.title, album, durationSecs, originUpdate)
+		originNe, originResults := fetchScoredLyricCandidatesStreaming(originCtx, qa, originTitle, album, durationSecs, originUpdate)
 		for i := range originResults {
 			originResults[i].RetryMethod = lyricQueryReasonTitleStorefront
-			originResults[i].RetriedTitle = origin.title
+			originResults[i].RetriedTitle = originTitle
 		}
 		merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, originResults)
 		if usableLyricSourceCount(merged) > usableLyricSourceCount(results) {
 			log.Printf("lyrics: origin title %q by %q added candidates for %q - %q: usable_sources=%d->%d",
-				origin.title, qa, artist, title, usableLyricSourceCount(results), usableLyricSourceCount(merged))
+				originTitle, qa, artist, title, usableLyricSourceCount(results), usableLyricSourceCount(merged))
 		}
 		if ne.Cover == "" && originNe.Cover != "" {
 			ne.Cover, ne.Album, ne.AlbumID = originNe.Cover, originNe.Album, originNe.AlbumID

@@ -3202,7 +3202,8 @@ type scoredLyricCandidateResult struct {
 	// SourceReportedDurationSecs:源自己声明的曲长(秒),0=该源没给。只透传、不参与打分
 	// ——给下一轮维度评测攒"源报版本同一性"数据(见 lyricCandidate 同名字段)。
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
-	// ISRC:源报的这条录音的 ISRC(目前只有 applemusic 给),不参与打分。按 ISRC 补取未应答的源用,见 isrcretry.go。
+	// ISRC:源报的这条录音的 ISRC(applemusic 与 deezer 给),不参与打分。按 ISRC 补取未应答的源、取原产地曲名用,见 isrcretry.go、
+	// origintitle.go。
 	ISRC string `json:"isrc,omitempty"`
 	// Songwriters:词曲作者名单(amll / applemusic 的 TTML,deezer 的 Lyrics.writers)。不参与打分,
 	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
@@ -3708,6 +3709,10 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			if ne.SongURL == "" && altNe.SongURL != "" {
 				ne.SongURL = altNe.SongURL
 			}
+			if retryMethod == lyricQueryReasonTitleStorefront {
+				// 原产地曲名是按录音 ISRC 查出来的、那边的署名跟本地写法不同时,还缺着的源再拿原产地署名问一轮,见 titleReverseOriginArtistRound。
+				ne, results = titleReverseOriginArtistRound(ctx, artist, title, album, durationSecs, samples, correctedTitle, ne, results, onUpdate)
+			}
 		}
 	} else {
 		// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。
@@ -4082,7 +4087,7 @@ type lyricSourceResult struct {
 	matchTitle, matchArtist string
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
-	isrc                    string  // 源报的这条录音的 ISRC,目前只有 applemusic 填,见 isrcretry.go
+	isrc                    string  // 源报的这条录音的 ISRC,applemusic 与 deezer 填,见 isrcretry.go
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
@@ -4251,7 +4256,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// usableYRC / usableWordTiming,译文走 usableValueAdd,口径同别的源。plainOnly 直通打分层
 		// 那道恒 -1 的闸(match.go 的 scoreRejectPlainTextOnly),口径与 lrclib/musixmatch 的纯文本回退一致。
 		dzUsableTr, _ := usableValueAdd(dzLyr, dzTr, features().LyricsTranslationLanguage, "", features().LyricsTranslationLanguage)
-		candidates = append(candidates, lyricCandidate{source: "deezer", lyrics: dzLyr, wordTimingYRC: usableYRC(dzLyr, dzYRC), hasWordTiming: usableWordTiming(dzLyr, dzYRC), hasUsableTranslation: dzUsableTr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: dzCover, plainTextOnly: dzPlainOnly})
+		candidates = append(candidates, lyricCandidate{source: "deezer", lyrics: dzLyr, wordTimingYRC: usableYRC(dzLyr, dzYRC), hasWordTiming: usableWordTiming(dzLyr, dzYRC), hasUsableTranslation: dzUsableTr, sourceReportedDurationSecs: dzDur, title: dzTitle, artist: dzArtist, album: dzAlbum, cover: dzCover, plainTextOnly: dzPlainOnly, isrc: dz.isrc})
 	}
 	if amLyr != "" {
 		// 全部源里唯一的**官方逐字**来源:逐行 LRC + 逐字 YRC(itunes:timing="Word")+
@@ -4906,7 +4911,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
 		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
 		r := deezerLyric(ctx, artist, title, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("applemusic") {

@@ -88,6 +88,8 @@ type deezerResult struct {
 	plainOnly bool
 	// songwriters:歌词附带的词曲作者名单(Lyrics.writers,deezerSongwriters 拆开),没有时为空。
 	songwriters []string
+	// isrc:挑中那条录音的 ISRC(deezerTrack.ISRC),没有时为空。
+	isrc string
 }
 
 func (r deezerResult) empty() bool { return r.lyrics == "" }
@@ -212,7 +214,9 @@ type deezerTrack struct {
 	Title        string `json:"title"`
 	TitleVersion string `json:"title_version"` // "(Version acoustique)" 这类版本后缀,已含在 Title 里
 	Duration     int    `json:"duration"`      // 秒
-	Artist       struct {
+	// ISRC:这条录音的 ISRC。GraphQL 搜索与按 ISRC 直取都带,公开搜索不带。
+	ISRC   string `json:"isrc"`
+	Artist struct {
 		Name string `json:"name"`
 	} `json:"artist"`
 	Album struct {
@@ -530,6 +534,7 @@ const deezerSearchQuery = `query SearchTracks($query: String!, $first: Int!) {
             id
             title
             duration
+            isrc
             hasSynchronizedLyrics
             contributors(first: 1) { edges { node { ... on Artist { name } } } }
             album { displayTitle cover { urls(pictureRequest: {width: 1000, height: 1000}) } }
@@ -581,6 +586,7 @@ func deezerGraphQLSearch(ctx context.Context, artist, title string) ([]deezerSea
 							ID                    string `json:"id"`
 							Title                 string `json:"title"`
 							Duration              int    `json:"duration"`
+							ISRC                  string `json:"isrc"`
 							HasSynchronizedLyrics bool   `json:"hasSynchronizedLyrics"`
 							Contributors          struct {
 								Edges []struct {
@@ -613,7 +619,7 @@ func deezerGraphQLSearch(ctx context.Context, artist, title string) ([]deezerSea
 		n := e.Node
 		id, _ := strconv.ParseInt(n.ID, 10, 64)
 		var t deezerTrack
-		t.ID, t.Title, t.Duration = id, n.Title, n.Duration
+		t.ID, t.Title, t.Duration, t.ISRC = id, n.Title, n.Duration, n.ISRC
 		if len(n.Contributors.Edges) > 0 {
 			t.Artist.Name = n.Contributors.Edges[0].Node.Name
 		}
@@ -978,7 +984,7 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 		t := candidates[rank].track
 		return deezerResult{
 			lyrics: lyrics, title: t.Title, artist: t.Artist.Name, album: t.Album.Title,
-			cover: t.cover(), durationSecs: float64(t.Duration), plainOnly: plainOnly,
+			cover: t.cover(), durationSecs: float64(t.Duration), plainOnly: plainOnly, isrc: t.ISRC,
 		}
 	}
 	for rank, f := range got {

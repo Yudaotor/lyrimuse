@@ -58,12 +58,17 @@ func isrcRetryPlan(ctx context.Context, results []scoredLyricCandidateResult, du
 	return isrc, sources
 }
 
-// acceptedAppleMusicISRC:分数最高的那条已被认可(Score >= 0)、带 ISRC、自报时长跟本地对得上的 applemusic 候选报的
-// ISRC,同分取先出现的;没有返回空。
+// acceptedAppleMusicISRC:acceptedSourceISRC 的 applemusic 那份。
 func acceptedAppleMusicISRC(results []scoredLyricCandidateResult, durationSecs float64) string {
+	return acceptedSourceISRC(results, "applemusic", durationSecs)
+}
+
+// acceptedSourceISRC:source 这个源里分数最高的那条已被认可(Score >= 0)、带 ISRC、自报时长跟本地对得上的候选报的
+// ISRC,同分取先出现的;没有返回空。
+func acceptedSourceISRC(results []scoredLyricCandidateResult, source string, durationSecs float64) string {
 	best := -1
 	for i, r := range results {
-		if r.Source != "applemusic" || r.ISRC == "" || r.Score < 0 || !sourceDurationFits(durationSecs, r.SourceReportedDurationSecs) {
+		if r.Source != source || r.ISRC == "" || r.Score < 0 || !sourceDurationFits(durationSecs, r.SourceReportedDurationSecs) {
 			continue
 		}
 		if best < 0 || r.Score > results[best].Score {
