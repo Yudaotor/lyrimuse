@@ -114,8 +114,8 @@ public enum TrustedPlayers {
     /// 一条来自**信任的未知播放器**的播放,歌手名**或专辑名**是空的 → 判成"这不是一首歌",
     /// 整条丢掉(不解析歌词、不打卡)。
     ///
-    /// 判据跟 collector 的 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在
-    /// 作用域:那个只服务 Spotify 广告,这个服务信任列表。
+    /// 判据跟 Spotify 原生广告的字段启发式(`LocalPlaybackSource.adBreakByFields`)同源,都看
+    /// `album == "" || artist == ""`;区别只在作用域:那个只服务 Spotify 广告,这个服务信任列表。
     ///
     /// 全靠真实样本定的,四份实测:
     ///   - 酷狗音乐    artist=周杰伦     album=七里香              → 是歌

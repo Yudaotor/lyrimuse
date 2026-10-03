@@ -20,7 +20,7 @@ import (
 //   - 汽水试听段:照样查、照样发布;已经查到而 App 报的仍是试听段长度时,本地先换回整首口径。
 //   - Apple 目录锚点:按 App 带来的目录曲目 ID 核对并记下目录 ID;电台的曲长只认目录(没有就是 0),
 //     其余曲目有权威曲长就覆盖。
-//   - 广告:App 的结论经 appReportedAd 并进 isAdBreak;Spotify 曲目 ID 用 App 带来的那个。
+//   - 广告:只认 App 的结论(isAdBreak 只看 appReportedAd);Spotify 曲目 ID 用 App 带来的那个。
 // 起播与重新对齐看序号,只在同一个 App 进程里比:play_seq 增加且身份不变 = 重新起播(单曲循环);
 // anchor_seq 变了、或换了 App 进程 = 位置重新对齐,立即重推网页进度。
 
@@ -179,7 +179,7 @@ func noteAppReportedAd(s snapshot, ad bool) {
 	appAdMu.Unlock()
 }
 
-// appReportedAd:App 把这一首判成了广告。isAdBreak 与字段判据取或。
+// appReportedAd:App 把这一首判成了广告(isAdBreak 只认它)。
 func appReportedAd(bundleID, artist, title, album string) bool {
 	appAdMu.Lock()
 	defer appAdMu.Unlock()

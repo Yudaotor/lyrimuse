@@ -214,8 +214,8 @@ func runPlayerIdentityTests() {
 
     // ---- 「这不是一首歌」守卫:信任的 App 报空歌手/空专辑就丢掉 ----
     //
-    // 判据跟 collector 的 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在作用域:
-    // 那个只服务 Spotify 广告,这个服务信任列表。样本全是真抓的,四份:
+    // 判据跟 Spotify 原生广告的字段启发式(adBreakByFields)同源,都看 `album == "" || artist == ""`;
+    // 区别只在作用域:那个只服务 Spotify 广告,这个服务信任列表。样本全是真抓的,四份:
     //   酷狗 周杰伦/七里香、Spotify 方大同/Soulboy、Apple Music 卢广仲/100种生活 → 是歌
     //   Arc 放视频 两次:①artist/album 都空 ②artist=频道名「Dream in reality」、album 仍空
     // **album 是这四份里唯一 100% 分对的字段** —— ② 正是"只卡 artist 不够"的证据。
@@ -689,6 +689,12 @@ func runPlayerIdentityTests() {
         expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "Now Streaming on Hulu.", artist: "Spotify", album: "",
                                       youTubeMusicVerdict: nil, spotifyWebVerdict: nil), true,
                     "广告判据: 原生 Spotify album 空 → 广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "—", artist: "", album: "SomeBrand",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), true,
+                    "广告判据: 原生 Spotify 占位标题「—」、artist 空、album 非空 → 广告")
+        expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "—", artist: "Brand", album: "Brand",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil), true,
+                    "广告判据: 原生 Spotify 占位标题「—」、字段齐全 → 广告")
         expectEqual(S.adBreakByFields(isSpotifyNative: true, title: "七里香", artist: "周杰伦", album: "七里香",
                                       youTubeMusicVerdict: nil, spotifyWebVerdict: nil), false,
                     "广告判据: 原生 Spotify 字段齐全 → 不是广告")

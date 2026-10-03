@@ -50,7 +50,7 @@ func (s snapshot) key() string {
 
 // albumForUpload:对外呈现 / 上送用的专辑名 —— 播放器报了就用它,没报就用 Apple 目录反查的 AlbumHint。
 // 只在「呈现 / 上送」的出口用(relay 网页、Last.fm album、LB release_name、本地收听日志);歌词缓存 key
-// (trackEnrichment)、广告判据(isAdBreak 看 Spotify 原生 album 为空)、专辑预取、会话 key 都继续用 Album 本身 ——
+// (trackEnrichment)、广告判定(isAdBreak 按原始标签对 App 的结论)、专辑预取、会话 key 都继续用 Album 本身 ——
 // 否则 App 侧按播放器原始标签查歌词会对不上 key,或者一首歌中途回填出专辑就被当成换了歌。
 func (s snapshot) albumForUpload() string {
 	if s.Album != "" {

@@ -52,7 +52,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 //
 // ---- collector(Go)侧 ----
 //
-// collector 不读播放器,认的是 App 播放状态里的 ad 标记(appReportedAd 并进 isAdBreak),广告不打卡。
+// collector 不读播放器,只认 App 播放状态里的 ad 标记(isAdBreak 只看 appReportedAd),广告不打卡。
 public final class SpotifyWebAdProbe: @unchecked Sendable {
     public static let shared = SpotifyWebAdProbe()
 

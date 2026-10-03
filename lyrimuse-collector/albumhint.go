@@ -27,8 +27,8 @@ import (
 //
 // 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint → relay 网页、Last.fm album、LB release_name、
 // 本地收听日志),**绝不进 enrich 缓存 key**:App 侧 EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,
-// 这边若把 album 改掉,两边 key 对不上、App 拿不到词;广告判据 isAdBreak(Spotify 原生 album 为空即广告)、
-// 专辑预取、会话 key 也继续看 Album 本身。见 snapshot.albumForUpload。
+// 这边若把 album 改掉,两边 key 对不上、App 拿不到词;专辑预取、会话 key 也继续看 Album 本身。
+// 见 snapshot.albumForUpload。
 //
 // 两段式:**取候选**一次、**挑**每拍。
 //

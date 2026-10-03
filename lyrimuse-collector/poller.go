@@ -37,8 +37,8 @@ type playSession struct {
 	// 返回时(LB 慢时 single 类型最长可达约 24s)被下一轮 5s poll 重复触发一次提交。
 	submitting bool
 	announcing bool
-	// 会话级广告标记:开播时判一次(App 的广告结论与字段启发式取或,
-	// 见 detectAdAtSessionStart),同曲期间字段任一拍判中就往 true 棘轮、绝不回落。
+	// 会话级广告标记:开播时判一次(App 的广告结论,见 detectAdAtSessionStart),
+	// 同曲期间任一拍 App 判成广告就往 true 棘轮、绝不回落。
 	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 坐实漏成
 	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
 	isAd bool
@@ -958,13 +958,13 @@ func (p *poller) finalize(now time.Time) {
 // 歌词,未就绪时挂起等 enrich(见 handle)。同一个 session 在结果返回前重复调用会被
 // 去重(sess.announcing)；lastPN/pnPending 的变更挪到 applyAnnounceOutcome,调用方
 // 不再能同步拿到"是否成功"。
-// detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论与字段启发式取或)。不是广告的 Spotify
+// detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论)。不是广告的 Spotify
 // 原生播放顺带记下这次的曲目 ID(App 带来的那个),给歌词缓存的真曲目链接与 LB 上送用。
 func (p *poller) detectAdAtSessionStart() bool {
 	if isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return true
 	}
-	// 广告已经按 App 的结论并进 isAdBreak;Spotify 曲目 ID 用 App 带来的那个(它取自 Spotify 自己的播放通知)。
+	// Spotify 曲目 ID 用 App 带来的那个(它取自 Spotify 自己的播放通知)。
 	if p.cur.Bundle == spotifyBundleID && p.appSpotifyTrackID != "" {
 		noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, p.appSpotifyTrackID)
 	}
@@ -1153,7 +1153,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		return
 	}
 
-	// 广告标记棘轮:同曲期间任一拍字段判中就永久置位(字段会闪变,见 playSession.isAd)。
+	// 广告标记棘轮:同曲期间任一拍 App 判成广告就永久置位(字段会闪变,App 的结论跟着闪,见 playSession.isAd)。
 	if !p.sess.isAd && isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		p.sess.isAd = true
 		log.Printf("ad break detected mid-session: %q - %q", p.cur.Artist, p.cur.Title)

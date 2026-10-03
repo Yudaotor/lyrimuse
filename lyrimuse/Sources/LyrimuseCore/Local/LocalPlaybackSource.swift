@@ -1337,8 +1337,8 @@ public final class LocalPlaybackSource: ObservableObject {
     ///   - YouTube Music 探针判成广告 → 广告(`showsAdBadge`:只有 `.ad` 算,nil 不算);
     ///   - Spotify **网页版**:只认 `SpotifyWebAdProbe` 的正向证据 `.ad`,nil / `.song` 都不算 ——
     ///     配对关系不等于此刻在放 Spotify,不能按配对套下面那套启发式;
-    ///   - Spotify **原生**客户端:字段启发式(album 空 / artist 空 / 标题「—」,与 collector `isAdBreak`
-    ///     同款),另有 AppleScript `spotify url` 异步复核兜底;
+    ///   - Spotify **原生**客户端:字段启发式(album 空 / artist 空 / 标题「—」),另有 AppleScript `spotify url`
+    ///     异步复核兜底;引擎不另判,只认写进播放状态的结论;
     ///   - 其它播放器一律不是广告。
     public static func adBreakByFields(
         isSpotifyNative: Bool, title: String, artist: String, album: String,
@@ -2985,10 +2985,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // Spotify 广告插播判断(字段启发式 + 同曲棘轮 + AppleScript 权威)。
         // 不能每一拍都按"当下字段"重判 —— 广告字段会**闪变**(开播 album 空、几拍后
         // 补齐,Blinds.com 坐实),看走眼的那几拍 UI 会退回"歌名 + 搜索歌词中"。
-        // 换曲那一拍按加宽的启发式(album 空/artist 空/标题「—」,与 collector isAdBreak
-        // 同款)定初值,同曲期间只往 true 棘轮、不回落;是 Spotify 就再异步问一次本尊
+        // 换曲那一拍按加宽的启发式(album 空/artist 空/标题「—」)定初值,同曲期间只往 true
+        // 棘轮、不回落;是 Spotify 就再异步问一次本尊
         // (`spotify url` 前缀是权威分类,广告可以带全 artist/title/album 骗过启发式),
-        // 结果回来仍是这首才采纳。judge 与 collector 两侧口径一致,那边管上报,这边管 UI。
+        // 结果回来仍是这首才采纳。结论写进播放状态的 ad,collector 不另判、只认它(上报、搜歌词都按它挡)。
         //
         // **网页版 Spotify 也要认**(对拍坐实:Last.fm 那张卡的
         // "正在记录"行原样显示了一条"广告"——`!playback.isAdBreak` 那道闸没拦住,因为下面

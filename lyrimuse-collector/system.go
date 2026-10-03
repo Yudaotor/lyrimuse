@@ -7,18 +7,13 @@ import (
 	"strings"
 )
 
-// 播放器身份(内置的还是信任的、上报时显示成什么名字)、广告字段判据、标签清洗等工具。
+// 播放器身份(内置的还是信任的、上报时显示成什么名字)、广告判定、标签清洗等工具。
 // 「此刻在放什么」由 App 写的播放状态给出(见 appsource.go),collector 不再自己读播放器的实时状态。
 
+// isAdBreak:这一首是不是广告。只认 App 写进播放状态的结论(见 appsource.go 的 noteAppReportedAd):判定归 App,
+// Spotify 原生客户端的字段启发式(album 空 / artist 空 / 标题「—」)也在 App 那边(LocalPlaybackSource.adBreakByFields)。
 func isAdBreak(bundleID, artist, title, album string) bool {
-	// App 的广告结论与下面的字段判据取或(见 appsource.go)。
-	if appReportedAd(bundleID, artist, title, album) {
-		return true
-	}
-	if bundleID != spotifyBundleID {
-		return false
-	}
-	return album == "" || artist == "" || title == "—"
+	return appReportedAd(bundleID, artist, title, album)
 }
 
 // isKnownPlayerBundleID:这是不是内置播放器(players.json 里那几家)。信任播放器的署名纠正
