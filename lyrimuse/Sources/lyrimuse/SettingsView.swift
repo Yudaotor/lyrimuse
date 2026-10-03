@@ -2810,6 +2810,8 @@ private struct AppearanceSettingsTab: View {
         ) {
             Toggle("", isOn: $settings.motionCoverEnabled)
         }
+        CardDivider()
+        MotionCoverCacheRow()
     }
 
     /// 按预览停在哪个尺寸,把外观行绑到那一套字段上。
@@ -3605,6 +3607,40 @@ enum LyricsWindowAppearancePart {
     case font
     /// 迷你专有:歌词布局(单行 / 双行 / 多行)+ 长句处理。完整尺寸没有这一块。
     case layout
+}
+
+/// 「动态封面缓存」那一行:下载下来的动态封面占了多少磁盘,一键清掉。
+///
+/// 数字在这一行出现时现量、清完再量一次,不常驻刷新:下载在后台随播放发生,这里显示的是打开浮层
+/// 那一刻的量。字节数的写法走 `EnrichCacheStore.byteText`,跟「歌词库」那一行同一个口径。
+private struct MotionCoverCacheRow: View {
+    @State private var usage: Int64?
+    @State private var clearing = false
+
+    var body: some View {
+        SettingsRow(
+            icon: "internaldrive",
+            title: L10n.t("动态封面缓存"),
+            help: L10n.t("已下载的动态封面占用的磁盘空间；清除后再看到时会重新下载")
+        ) {
+            HStack(spacing: 10) {
+                Text(usage.map(EnrichCacheStore.byteText) ?? "—")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Button(L10n.t("清除")) {
+                    clearing = true
+                    Task {
+                        // 歌词窗口此刻正在播的那一份留着,见 MotionCoverStore.removeAllCached。
+                        usage = await MotionCoverStore.shared.removeAllCached(
+                            keeping: PlaybackCoordinator.shared.motionCoverFile)
+                        clearing = false
+                    }
+                }
+                .disabled(clearing || (usage ?? 0) == 0)
+            }
+        }
+        .task { usage = await MotionCoverStore.shared.diskUsage() }
+    }
 }
 
 /// 「歌词布局」三档的显示名(枚举本体在 Core、不带界面文案)。

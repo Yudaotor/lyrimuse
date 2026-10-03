@@ -93,25 +93,30 @@ public enum MotionCoverManifest {
         return out
     }
 
-    /// 选一档:**够用的最小那档**。
-    ///
-    /// - 先只看宽度 ≥ `minimumWidth` 的,取其中最小的一档 —— 再大只是白下字节,动态封面不做放大用途。
-    ///   一档都不够宽(小专辑可能只放到 486²)就退回最大的那档,宁可放大也别不动。
-    /// - 同尺寸时**优先 H.264**。理由是实测:取 HEVC 那档的 variant m3u8 连不上
-    ///   (`http=000`,同一时刻同一个 base 下的 H.264 档正常 200),H.264 那条是从头到尾走通过的。
-    ///   HEVC 省 ~25% 字节,但这条路的可靠性没核实过,不拿它当默认。
+    /// 选一档:`candidates` 排在第一的那条。
     public static func pick(_ variants: [Variant], minimumWidth: Int) -> Variant? {
-        guard !variants.isEmpty else { return nil }
+        candidates(variants, minimumWidth: minimumWidth).first
+    }
+
+    /// 该下哪几条、按什么顺序试:**同一个目标宽度上,码率低的在前**。前一条拿不到(清单连不上、
+    /// 文件不对、解不出帧)就试下一条。
+    ///
+    /// - 目标宽度是**够用的最小那档**:先只看宽度 ≥ `minimumWidth` 的,取其中最小的一档 —— 再大只是
+    ///   白下字节,动态封面不做放大用途。一档都不够宽(小专辑可能只放到 486²)就退回最大的那档,宁可
+    ///   放大也别不动。
+    /// - 同一宽度上 H.264 与 HEVC 各有一条(有的档位同编码还有好几条码率),按 `AVERAGE-BANDWIDTH`
+    ///   从低到高排:时长一样,码率低就是文件小,多数专辑排在前面的是 HEVC。码率相同时 H.264 在前。
+    /// - 别只认排在前面的那条:HEVC 那条的清单不保证每次都连得上,它后面总排着同宽度的 H.264,
+    ///   下载那边一条失败就接着试下一条(见 `MotionCoverStore.download`)。
+    public static func candidates(_ variants: [Variant], minimumWidth: Int) -> [Variant] {
+        guard !variants.isEmpty else { return [] }
         let fits = variants.filter { $0.width >= minimumWidth }
         let pool = fits.isEmpty ? variants : fits
-        // 目标宽度:够用的里挑最小,不够用时挑最大。
         let targetWidth = fits.isEmpty ? (pool.map(\.width).max() ?? 0) : (pool.map(\.width).min() ?? 0)
-        let sameSize = pool.filter { $0.width == targetWidth }
-        // 同尺寸里 H.264 优先;再同就取码率低的(同尺寸同编码 master 里确实有多条,实测 486² 有 3 条)。
-        return sameSize.sorted { a, b in
-            if a.isHEVC != b.isHEVC { return !a.isHEVC }
-            return a.bandwidth < b.bandwidth
-        }.first
+        return pool.filter { $0.width == targetWidth }.sorted { a, b in
+            if a.bandwidth != b.bandwidth { return a.bandwidth < b.bandwidth }
+            return !a.isHEVC && b.isHEVC
+        }
     }
 
     // MARK: - variant

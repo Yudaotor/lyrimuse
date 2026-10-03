@@ -372,6 +372,7 @@
 "加载更早的" = "Load older";
 "加进来的应用跟内置播放器同权：它在播什么就显示什么，也计入收听记录。加错了随时移除。" = "An app you add here counts the same as a built-in player: whatever it plays is shown, and it goes into your listening history. Remove it any time.";
 "动态封面" = "Animated Artwork";
+"动态封面缓存" = "Animated Artwork Cache";
 "勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时，等它们关掉再退" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. If Settings, Lyrics Manager or the lyrics window is open, it waits until they are closed";
 "匹配条目" = "Match";
@@ -576,6 +577,7 @@
 "差在：%@" = "Difference: %@";
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
+"已下载的动态封面占用的磁盘空间；清除后再看到时会重新下载" = "Disk space used by downloaded animated artwork; anything cleared downloads again the next time it's shown";
 "已下载，可以安装" = "Downloaded and ready to install";
 "已中断：%@" = "Stopped: %@";
 "已保存" = "Saved";
@@ -1148,6 +1150,7 @@
 "清空全部电台校正" = "Clear All Radio Calibrations";
 "清空全部缓存" = "Clear All Cache";
 "清空搜索" = "Clear Search";
+"清除" = "Clear";
 "清除…" = "Erase…";
 "清除全部设置" = "Erase All Settings";
 "清除并重启" = "Erase and Restart";

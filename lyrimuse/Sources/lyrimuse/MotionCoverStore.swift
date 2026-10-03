@@ -134,21 +134,51 @@ final class MotionCoverStore {
         case transient
     }
 
+    /// 一张专辑最多试几条候选(见 `MotionCoverManifest.candidates`):第一条多半是 HEVC,第二条多半是
+    /// 同宽度的 H.264;再往后只是同编码的别的码率,试多了只是白发请求。
+    private static let maxCandidateAttempts = 3
+
     private nonisolated func download(master: URL, reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        // ① master → 按顺序排好的候选档位。
+        let variants: [MotionCoverManifest.Variant]
         do {
-            // ① master → 选一档。
-            let masterText = try await text(from: master)
-            let variants = MotionCoverManifest.parseVariants(master: masterText)
-            guard let picked = MotionCoverManifest.pick(variants, minimumWidth: Self.targetPixelWidth),
-                  let variantURL = MotionCoverManifest.absolute(picked.uri, relativeTo: master) else {
-                logger.notice("motion cover: no usable variant in master playlist")
+            variants = MotionCoverManifest.parseVariants(master: try await text(from: master))
+        } catch {
+            logger.notice("motion cover: master fetch failed — \(error.localizedDescription, privacy: .public)")
+            return error is URLError ? .transient : .unavailable
+        }
+        let candidates = MotionCoverManifest.candidates(variants, minimumWidth: Self.targetPixelWidth)
+        guard !candidates.isEmpty else {
+            logger.notice("motion cover: no usable variant in master playlist")
+            return .unavailable
+        }
+        // 一条拿不到就试下一条。画面跟封面对不上就直接认:换个编码画的还是同一段动画。
+        // 中途有过一次网络层失败,就按 transient 报:那次没下成不代表这张专辑没有,下次还该再试。
+        var sawTransient = false
+        for variant in candidates.prefix(Self.maxCandidateAttempts) {
+            switch await fetch(variant, master: master, reference: reference) {
+            case .ready(let file): return .ready(file)
+            case .referenceMismatch: return .referenceMismatch
+            case .transient: sawTransient = true
+            case .unavailable: continue
+            }
+        }
+        return sawTransient ? .transient : .unavailable
+    }
+
+    /// 下一条候选:variant 清单 → 承载全部分片的单文件 → 临时文件 → 终审(或至少解得出帧)→ 落盘。
+    private nonisolated func fetch(_ picked: MotionCoverManifest.Variant, master: URL,
+                                   reference: CoverFingerprint.Reference?) async -> DownloadOutcome {
+        let codec = picked.isHEVC ? "hevc" : "h264"
+        do {
+            // ② variant → 那个承载全部分片的单文件。
+            guard let variantURL = MotionCoverManifest.absolute(picked.uri, relativeTo: master) else {
                 return .unavailable
             }
-            // ② variant → 那个承载全部分片的单文件。
             let variantText = try await text(from: variantURL)
             guard let name = MotionCoverManifest.mediaFileName(fromVariant: variantText),
                   let mediaURL = MotionCoverManifest.absolute(name, relativeTo: variantURL) else {
-                logger.notice("motion cover: variant has no EXT-X-MAP single file")
+                logger.notice("motion cover: \(codec, privacy: .public) variant has no EXT-X-MAP single file")
                 return .unavailable
             }
             // ③ 整份下下来,先落到临时文件——终审(④)要用 AVAsset 读它,得是个真实文件路径,
@@ -156,37 +186,47 @@ final class MotionCoverStore {
             // 通过了再原子改名搬进 `directory`(⑤ store)。
             let (data, response) = try await URLSession.shared.data(from: mediaURL)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                logger.notice("motion cover: media http \(http.statusCode, privacy: .public)")
+                logger.notice("motion cover: \(codec, privacy: .public) media http \(http.statusCode, privacy: .public)")
                 return http.statusCode == 429 || http.statusCode >= 500 ? .transient : .unavailable
             }
             guard Self.looksLikeMP4(data) else {
-                logger.notice("motion cover: payload is not an mp4 (\(data.count, privacy: .public) bytes)")
+                logger.notice("motion cover: \(codec, privacy: .public) payload is not an mp4 (\(data.count, privacy: .public) bytes)")
                 return .unavailable
             }
             let scratch = fm.temporaryDirectory.appendingPathComponent(
                 ProcessInfo.processInfo.globallyUniqueString + ".mp4")
             try data.write(to: scratch, options: .atomic)
             defer { try? fm.removeItem(at: scratch) }
-            // ④ 终审:视频中段的真实一帧跟当前封面像不像。
+            // ④ 终审:视频中段的真实一帧跟当前封面像不像。没有参照图(专辑身份已核验)时终审跳过,
+            // 也得确认这份文件真解得出画面 —— 解不出就接着试下一条候选,别把一份放不了的存下来。
             if let reference {
                 switch await Self.verifyMatchesReference(scratch, reference: reference) {
                 case .pass: break
                 case .mismatch: return .referenceMismatch
-                // 读不出时长/取不到帧 —— 是这份视频本身的问题,跟参照图无关,按资源不可用算。
+                // 读不出时长/取不到帧 —— 是这份视频本身的问题,跟参照图无关,按这条候选不可用算。
                 case .undecidable: return .unavailable
                 }
+            } else if !(await Self.decodesAFrame(scratch)) {
+                logger.notice("motion cover: \(codec, privacy: .public) file decodes no frame")
+                return .unavailable
             }
             // ⑤ 通过终审才落盘:把这份已经写好的临时文件挪进缓存目录(几 MB 的写入留在这条后台路径上,
             // 主线程只做一次改名)。
             let final = await MainActor.run { self.fileURL(for: master) }
             try Self.moveIntoPlace(scratch, final: final)
-            logger.info("motion cover: stored \(picked.width, privacy: .public)px \(data.count / 1024, privacy: .public)KB")
+            logger.info("motion cover: stored \(picked.width, privacy: .public)px \(codec, privacy: .public) \(data.count / 1024, privacy: .public)KB")
             await MainActor.run { self.pruneIfNeeded() }
             return .ready(final)
         } catch {
-            logger.notice("motion cover: fetch failed — \(error.localizedDescription, privacy: .public)")
+            logger.notice("motion cover: \(codec, privacy: .public) fetch failed — \(error.localizedDescription, privacy: .public)")
             return error is URLError ? .transient : .unavailable
         }
+    }
+
+    /// 第一帧解不解得出来。
+    private nonisolated static func decodesAFrame(_ file: URL) async -> Bool {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
+        return (try? await generator.image(at: .zero).image) != nil
     }
 
     /// **终审**:视频**中段**(时长过半)的真实一帧,跟当前显示的封面是不是同一张。
@@ -268,6 +308,40 @@ final class MotionCoverStore {
     /// 访问即续命 —— LRU 按 mtime 排,读一次就把它顶到最新。
     private func touch(_ url: URL) {
         try? fm.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+    }
+
+    /// 缓存目录里动态封面一共占多少字节(设置页「动态封面缓存」那一行)。在后台量,不占主线程。
+    func diskUsage() async -> Int64 {
+        let dir = directory
+        return await Task.detached(priority: .utility) { Self.measure(dir) }.value
+    }
+
+    /// 清掉已下载的动态封面,返回清完还剩多少字节。
+    ///
+    /// `keeping` 那一份(歌词窗口此刻正在播的)留着:删了它画面会断,下一次刷新又会把它原样下回来。
+    /// 正在下的那几份下完照常落盘,不拦。
+    func removeAllCached(keeping: URL?) async -> Int64 {
+        let dir = directory
+        let keep = keeping?.standardizedFileURL.path
+        return await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let items = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            var removed = 0
+            for url in items where ["mp4", "tmp"].contains(url.pathExtension) && url.standardizedFileURL.path != keep {
+                if (try? fm.removeItem(at: url)) != nil { removed += 1 }
+            }
+            logger.info("motion cover: cleared \(removed, privacy: .public) files")
+            return Self.measure(dir)
+        }.value
+    }
+
+    private nonisolated static func measure(_ dir: URL) -> Int64 {
+        let items = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        return items.reduce(0) { sum, url in
+            guard url.pathExtension == "mp4" else { return sum }
+            return sum + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
     }
 
     /// 超预算就按 mtime 从旧到新删,删到预算之下。

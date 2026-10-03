@@ -346,6 +346,8 @@ public enum SettingsSearchCatalog {
         lyricsWindow("底部颜色", kw: ["渐变", "颜色", "背景"], group: "外观"),
         lyricsWindow("动态封面", sub: "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停",
                      kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
+        lyricsWindow("动态封面缓存", sub: "已下载的动态封面占用的磁盘空间；清除后再看到时会重新下载",
+                     kw: ["缓存", "磁盘", "空间", "占用", "清除", "清理", "存储", "动态封面"], group: "封面"),
 
         // ---- 快捷键 ----
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),

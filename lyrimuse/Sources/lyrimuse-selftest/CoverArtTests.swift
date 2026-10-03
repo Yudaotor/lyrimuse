@@ -971,16 +971,45 @@ func runCoverArtTests() {
 
         // 选档:够用的最小那一档。歌词窗口封面卡是 460pt@2x = 920px → 该选 960²。
         expectEqual(M.pick(vs, minimumWidth: 920)?.width, 960, "动态封面: 920px 要求 → 选 960²")
-        expectEqual(M.pick(vs, minimumWidth: 920)?.isHEVC, false, "动态封面: 选中的档是 H.264")
+        expectEqual(M.pick(vs, minimumWidth: 920)?.isHEVC, false, "动态封面: 960² 只有 H.264 一条时就选它")
         // 灵动岛那 32pt@2x = 64px,最小档就够。
         expectEqual(M.pick(vs, minimumWidth: 64)?.width, 360, "动态封面: 小尺寸要求 → 选最小档,不白下字节")
         // 同尺寸多码率:取码率低的那条(486² 有 771k 与 1118k 两条)。
         expectEqual(M.pick(vs, minimumWidth: 400)?.bandwidth, 771275, "动态封面: 同尺寸取低码率")
-        // 同尺寸 H.264 与 HEVC 并存(768²)时优先 H.264 —— 实测 HEVC 那档的 variant 清单连不上。
-        expectEqual(M.pick(vs, minimumWidth: 500)?.isHEVC, false, "动态封面: 同尺寸优先 H.264")
+        // 同尺寸 H.264 与 HEVC 并存(768²)时码率低的先:这里 HEVC 1.58M 对 H.264 2.15M。
+        expectEqual(M.pick(vs, minimumWidth: 500)?.isHEVC, true, "动态封面: 同尺寸码率低的先(这档是 HEVC)")
+        // 候选按顺序试:前一条拿不到就退到下一条,HEVC 后面总有同宽度的 H.264。
+        expectEqual(M.candidates(vs, minimumWidth: 500).map(\.isHEVC), [true, false],
+                    "动态封面: 768² 先试 HEVC、再退 H.264")
+        expectEqual(M.candidates(vs, minimumWidth: 500).map(\.width), [768, 768], "动态封面: 候选都在同一个目标宽度上")
+        expectEqual(M.candidates(vs, minimumWidth: 400).map(\.bandwidth), [771275, 1118698],
+                    "动态封面: 同编码多条码率按从低到高排")
+        expectEqual(M.candidates(vs, minimumWidth: 920).count, 1, "动态封面: 960² 只有一条就只试一条")
+        let tie = [M.Variant(uri: "h", width: 960, height: 960, bandwidth: 2_000_000, isHEVC: true),
+                   M.Variant(uri: "a", width: 960, height: 960, bandwidth: 2_000_000, isHEVC: false)]
+        expectEqual(M.candidates(tie, minimumWidth: 920).map(\.uri), ["a", "h"], "动态封面: 码率一样时 H.264 在前")
+        expectEqual(M.candidates([], minimumWidth: 920).isEmpty, true, "动态封面: 空清单 → 没有候选")
         // 一档都不够宽 → 退回最大档,宁可放大也别不动。
         expectEqual(M.pick(vs, minimumWidth: 4096)?.width, 960, "动态封面: 都不够宽 → 退最大档")
         expectEqual(M.pick([], minimumWidth: 920) == nil, true, "动态封面: 空清单 → nil")
+
+        // 源码契约:下载按候选顺序试、一条失败退下一条;画面对不上直接认;没有参照图也要解得出帧;
+        // 设置页「动态封面缓存」清除时留下正在播的那一份。
+        let appRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let storeSource = (try? String(contentsOf: appRoot.appendingPathComponent("lyrimuse/MotionCoverStore.swift"), encoding: .utf8)) ?? ""
+        let settingsSource = (try? String(contentsOf: appRoot.appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(storeSource.contains("for variant in candidates.prefix(Self.maxCandidateAttempts) {"), true,
+                    "动态封面下载: 按 MotionCoverManifest.candidates 的顺序逐条试")
+        expectEqual(storeSource.contains("case .referenceMismatch: return .referenceMismatch"), true,
+                    "动态封面下载: 画面跟封面对不上就直接认,不换编码重试")
+        expectEqual(storeSource.contains("} else if !(await Self.decodesAFrame(scratch)) {"), true,
+                    "动态封面下载: 跳过终审时也要确认解得出帧,解不出就试下一条")
+        expectEqual(storeSource.contains("MotionCoverManifest.pick("), false,
+                    "动态封面下载: 别回到只挑一档、失败就放弃的写法")
+        expectEqual(settingsSource.contains("CardDivider()\n        MotionCoverCacheRow()"), true,
+                    "动态封面缓存: 完整尺寸「封面」那几行里有这一行(浮层和抽屉同一份)")
+        expectEqual(settingsSource.contains("keeping: PlaybackCoordinator.shared.motionCoverFile)"), true,
+                    "动态封面缓存: 清除时留下歌词窗口正在播的那一份")
 
         // variant 清单 → 承载全部分片的那个单文件(EXT-X-MAP 的 URI)。
         let variant = """
