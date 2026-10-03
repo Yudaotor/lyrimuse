@@ -552,6 +552,68 @@ func runRomanizationTests() {
         }
     }
 
+    // 简繁转换的纠正层(ChineseVariantConversion,08 章决策 35):ICU 写错的几类字要修对,
+    // 会跨词误配、有歧义的写法一个都不能动。
+    do {
+        let toTrad = ChineseVariant.traditional.converted
+        let toSimp = ChineseVariant.simplified.converted
+        expectEqual(toTrad("回到梦里"), "回到夢裡", "繁: 「里面」义的「里」转「裡」")
+        expectEqual(toTrad("走过千里路"), "走過千里路", "繁: 数字后的「里」是度量,不转")
+        expectEqual(toTrad("离家几公里"), "離家幾公里", "繁: 公里不转")
+        expectEqual(toTrad("荣归故里"), "榮歸故里", "繁: 固定词不转")
+        expectEqual(toTrad("歇斯底里"), "歇斯底里", "繁: 音译词不转")
+        expectEqual(toTrad("去佛罗里达"), "去佛羅里達", "繁: 地名音译不转")
+        expectEqual(toTrad("克里斯"), "克里斯", "繁: 「里」后接音译常用字不转")
+        expectEqual(toTrad("噼里啪啦"), "噼里啪啦", "繁: 拟声词不转")
+        expectEqual(toTrad("保持沉默"), "保持沉默", "繁: 「沉」不写成「沈」")
+        expectEqual(toTrad("无法挽回"), "無法挽回", "繁: 「挽」不写成「輓」")
+        expectEqual(toTrad("一曲挽歌"), "一曲輓歌", "繁: 丧葬义照写「輓」")
+        expectEqual(toTrad("无法想象"), "無法想像", "繁: 词组表")
+        expectEqual(toTrad("不断重复"), "不斷重複", "繁: 词组表")
+        expectEqual(toTrad("相信奇迹"), "相信奇蹟", "繁: 词组表")
+        expectEqual(toTrad("把手松开"), "把手鬆開", "繁: 词组表")
+        expectEqual(toTrad("明天刮风"), "明天颳風", "繁: 词组表")
+        expectEqual(toTrad("今日斗酒"), "今日斗酒", "繁: 「斗」不写成「鬥」")
+        expectEqual(toTrad("我钟意你"), "我鍾意你", "繁: 词组表")
+        expectEqual(toTrad("一碗牛肉面"), "一碗牛肉麵", "繁: 词组表")
+        expectEqual(toTrad("散发着光"), "散發著光", "繁: 「散发」是发出")
+        expectEqual(toTrad("披头散发"), "披頭散髮", "繁: 只有「披头散发」是头发")
+        // 跨词误配与有歧义的写法:纠正层一个字都不碰,结果跟 ICU 单独转一样。
+        for text in ["我们关系紧密", "一笔划算的买卖", "在塑胶布下", "惊艳后即逝", "悸动荡漾", "晃晃荡荡",
+                     "有一天后悔", "三天后见", "跳完舞后", "公转几周", "冷面杀手", "情绪冲垮"] {
+            expectEqual(toTrad(text), text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text,
+                        "繁: 不收的写法原样用 ICU 的结果: \(text)")
+        }
+        // 逐字歌词:时间标签原样保留,字隔着标签照样连成词来判。
+        expectEqual(toTrad("[1000,2000](1000,300,0)回(1300,300,0)到(1600,300,0)梦(1900,300,0)里"),
+                    "[1000,2000](1000,300,0)回(1300,300,0)到(1600,300,0)夢(1900,300,0)裡", "繁: 逐字里的「里」")
+        expectEqual(toTrad("[1000,2000](1000,300,0)千(1300,300,0)里"),
+                    "[1000,2000](1000,300,0)千(1300,300,0)里", "繁: 逐字里隔着标签也认得出前面的数字")
+        expectEqual(toTrad("[0,1000](0,300,0)短(300,300,0)头(600,300,0)发"),
+                    "[0,1000](0,300,0)短(300,300,0)頭(600,300,0)髮", "繁: 逐字里的词组交给 ICU 前先连成一句")
+        expectEqual(toTrad("[00:12.34]回忆里"), "[00:12.34]回憶裡", "繁: 整行歌词的时间戳原样")
+        expectEqual(toTrad("[56024,5529](57719,436,0)(梦(58155,437,0)里)"),
+                    "[56024,5529](57719,436,0)(夢(58155,437,0)裡)", "繁: 字面括号算正文,时间元组才跳过")
+
+        expectEqual(toSimp("俱樂部"), "俱乐部", "简: 「俱」不改成「具」")
+        expectEqual(toSimp("这个俱乐部"), "这个俱乐部", "简: 本来就是简体的「俱」也不能被改")
+        expectEqual(toSimp("萬念俱灰"), "万念俱灰", "简: 成语里的「俱」")
+        expectEqual(toSimp("給我慰藉"), "给我慰藉", "简: 慰藉不改成「借」")
+        expectEqual(toSimp("藉口"), "借口", "简: 别处的「藉」照常转")
+        expectEqual(toSimp("瞭望"), "瞭望", "简: 瞭望不改")
+        expectEqual(toSimp("瞭解"), "了解", "简: 瞭解照常转")
+        expectEqual(toSimp("乾隆"), "乾隆", "简: 乾隆不改")
+        expectEqual(toSimp("乾淨"), "干净", "简: 乾淨照常转")
+        expectEqual(toSimp("宮商角徵羽"), "宫商角徵羽", "简: 角徵羽不改")
+        expectEqual(toSimp("徵兆"), "征兆", "简: 徵兆照常转")
+        expectEqual(toSimp("摔了一跤"), "摔了一跤", "简: 「跤」不改成「交」")
+        expectEqual(toSimp("囍帖街"), "囍帖街", "简: 「囍」不改成「禧」")
+        expectEqual(toSimp("聆聽內裡"), "聆听内里", "简: ICU 留下的「內」换成「内」")
+        expectEqual(toSimp("留著你"), "留着你", "简: ICU 本来转对的照旧")
+        expectEqual(toSimp("[0,1000](0,300,0)甚(300,300,0)麼"), "[0,1000](0,300,0)什(300,300,0)么",
+                    "简: 逐字里的词组交给 ICU 前先连成一句")
+    }
+
     do {
         print("\n== 配置文件名识别(iCloud 换机链路) ==")
         typealias N = ConfigSnapshotName

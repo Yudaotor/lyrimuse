@@ -10,8 +10,9 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
     /// 那不是"转成繁体",是把日文写坏。判据用"这段文字里有没有假名"——有假名就是日文,
     /// 中文歌不会有假名。
     ///
-    /// 用 ICU 的 Simplified-Traditional。实测它不是无脑逐字:头发→頭髮、干净→乾淨、
-    /// 后来→後來 都对,「只有你」也没被误转成「隻」;日文/拉丁字符完全不动。
+    /// 转换本身交给 `ChineseVariantConversion`:按行抽出看得见的文字(跳过时间标签)交给 ICU 的
+    /// Simplified-Traditional / Traditional-Simplified,再修 ICU 写错的几类字(「梦里」的「里」、「沈默」、
+    /// 简体里的「具乐部」);日文/拉丁字符完全不动。见 08 章决策 35。
     ///
     /// 但 ICU(以及 OpenCC)只管**繁简**,不管**异体字**,转简体时必须再补一层
     /// `HanVariants` —— 现象是「开了简体还是看到繁体」,实例是《开不了口 (Live)》:
@@ -48,12 +49,9 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
 
     public func converted(_ text: String) -> String {
         guard self != .off, Self.affects(text) else { return text }
-        let transform: StringTransform =
-            self == .traditional
-            ? StringTransform("Simplified-Traditional")
-            : StringTransform("Traditional-Simplified")
-        let icu = text.applyingTransform(transform, reverse: false) ?? text
-        return self == .simplified ? HanVariants.normalizeToSimplified(icu) : icu
+        return self == .simplified
+            ? HanVariants.normalizeToSimplified(ChineseVariantConversion.toSimplified(text))
+            : ChineseVariantConversion.toTraditional(text)
     }
 }
 
