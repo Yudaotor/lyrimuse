@@ -342,7 +342,9 @@ func runSourceContractTests() {
                     }
                     readSites += 1
                     // 消费点必须自带高清替代优先(直接写 `?? `,或走已经包好的 displayArtworkImage)。
-                    if line.contains("highResArtworkImage ?? ") || line.contains("displayArtworkImage") {
+                    // 换歌翻牌那枚翻牌(`NotchEarArtworkFlip`)两张都要:换歌时两张都记成旧图;显示哪张它自己按高清替代优先取。
+                    if line.contains("highResArtworkImage ?? ") || line.contains("displayArtworkImage")
+                        || line.contains("highResImage: playback.highResArtworkImage") {
                         continue
                     }
                     offenders.append("\(rel):\(i + 1)")

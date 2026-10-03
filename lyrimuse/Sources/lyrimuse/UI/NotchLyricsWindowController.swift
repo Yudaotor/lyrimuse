@@ -78,6 +78,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var isExpanded: Bool = false
     /// 此刻在报的收听里程碑(`ListenMilestoneCenter.current` 的镜像,见 setMilestone);nil = 没有。
     @Published private(set) var milestone: ListenMilestone?
+    /// 换歌翻牌:此刻从刘海里掉出来的那条歌名(见 trackChanged);nil = 没有。
+    @Published private(set) var trackDrop: NotchTrackDrop?
     /// `isExpanded` 的两个输入(拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
     /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
     /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
@@ -330,6 +332,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
     private var milestoneObserver: AnyCancellable?
+    private var trackDropObserver: AnyCancellable?
+    /// 上一次看到的曲目(`NotchTrackDropRules.key`);nil = 这个实例还没看到过,第一首不掉。
+    private var lastTrackKey: String?
+    private var trackDropGeneration = 0
+    private var trackDropClearTask: Task<Void, Never>?
     private var unknownPlayerAlertObserver: AnyCancellable?
     private var fullScreenObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
@@ -464,6 +471,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 是控制器订阅它,它不碰 `.shared`。存 sink 参数值,理由同下。
         milestoneObserver = ListenMilestoneCenter.shared.$current.removeDuplicates().sink { [weak self] next in
             self?.setMilestone(next)
+        }
+
+        // 换歌翻牌的「掉歌名」:歌名 / 歌手去抖 300ms(两者常常一前一后到)再判。存 sink 参数值,理由同上。
+        trackDropObserver = Publishers.CombineLatest3(
+            PlaybackCoordinator.shared.$title,
+            PlaybackCoordinator.shared.$artist,
+            PlaybackCoordinator.shared.$isCurrentTrackAdBreak
+        )
+        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+        .sink { [weak self] title, artist, isAd in
+            self?.trackChanged(title: title, artist: artist, isAdBreak: isAd)
         }
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
@@ -772,6 +790,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             PlaybackCoordinator.shared.refreshPlaybackMode()
         }
         if next {
+            // 展开头部本来就有歌名,掉出来的那条收掉。
+            clearTrackDrop()
             // 展开是「要看了」的时刻:换歌时还没对上专辑的曲目,collector 补上之后靠这一下变可点。
             if holdsEditorialDemand { EditorialNotesStore.shared.refreshCurrent() }
         } else {
@@ -790,10 +810,43 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         } else if milestone != nil {
             milestone = nil
         }
+        if next != nil { clearTrackDrop() }
         let hold = next != nil
         guard hold != milestoneHold else { return }
         milestoneHold = hold
         refreshExpanded()
+    }
+
+    /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(不是这个实例看到的第一首、不是广告),开关开着,
+    /// 卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名掉出来停 `NotchTrackDropRules.holdDuration`;
+    /// 停的时候又换歌就原地换成新的、重新计时。封面那一翻在视图里(`NotchEarArtworkFlip`),不经这里。
+    private func trackChanged(title: String, artist: String, isAdBreak: Bool) {
+        let previous = lastTrackKey
+        let key = NotchTrackDropRules.key(title: title, artist: artist, isAdBreak: isAdBreak)
+        lastTrackKey = key
+        guard previous != key else { return }
+        let drops = NotchTrackDropRules.shouldDrop(previousKey: previous, title: title, artist: artist, isAdBreak: isAdBreak)
+            && AppSettings.shared.notchTrackChangeFlip
+            && lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
+            && !isCollapsed && !isExpanded && milestone == nil && !alertHold
+        guard drops else {
+            clearTrackDrop()
+            return
+        }
+        trackDropGeneration &+= 1
+        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: title, artist: PlaybackCoordinator.shared.displayArtist)
+        trackDropClearTask?.cancel()
+        trackDropClearTask = Task { [weak self] in
+            try? await Task.sleep(for: NotchTrackDropRules.holdDuration)
+            guard !Task.isCancelled else { return }
+            self?.clearTrackDrop()
+        }
+    }
+
+    private func clearTrackDrop() {
+        trackDropClearTask?.cancel()
+        trackDropClearTask = nil
+        if trackDrop != nil { trackDrop = nil }
     }
 
     /// 「发现新播放器」主动提醒的开 / 关(来自 NotchUnknownPlayerPrompt.isAlerting 的 sink)。
@@ -916,6 +969,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         pendingHoverWork = nil
         cardHovered = false
         editorialHovered = false
+        clearTrackDrop()
         guard hoverExpanded else { return }
         hoverExpanded = false
         refreshExpanded()
@@ -1161,6 +1215,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         trackPresenceObserver = nil
         milestoneObserver?.cancel()
         milestoneObserver = nil
+        trackDropObserver?.cancel()
+        trackDropObserver = nil
+        clearTrackDrop()
         unknownPlayerAlertObserver?.cancel()
         unknownPlayerAlertObserver = nil
         fullScreenObserver?.cancel()

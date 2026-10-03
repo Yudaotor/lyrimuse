@@ -103,6 +103,8 @@ private final class NotchPlayback: ObservableObject {
     /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
     @Published private(set) var leftEar: NotchEarModule = .title
     @Published private(set) var rightEar: NotchEarModule = .artist
+    /// 换歌翻牌开没开(`AppSettings.notchTrackChangeFlip`):开着时耳朵里的封面走 `NotchEarArtworkFlip`。只影响渲染,同上走这里现读。
+    @Published private(set) var trackChangeFlip: Bool = AppSettings.defaultNotchTrackChangeFlip
     /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边。走这里现读而不是
     /// `NotchChromeSource` 协议——它只影响 `lyricRowContent` 内部的 HStack 排列,不影响
     /// 卡片高度/宽度,理由同 `notchCardStyle`/`leftEar`/`rightEar`(那几个也只影响渲染)。
@@ -296,6 +298,7 @@ private final class NotchPlayback: ObservableObject {
             s.$notchCardStyle.removeDuplicates().sink { [weak self] in self?.notchCardStyle = $0 },
             s.$notchLeftEar.removeDuplicates().sink { [weak self] in self?.leftEar = $0 },
             s.$notchRightEar.removeDuplicates().sink { [weak self] in self?.rightEar = $0 },
+            s.$notchTrackChangeFlip.removeDuplicates().sink { [weak self] in self?.trackChangeFlip = $0 },
             s.$notchLyricRowShowsArtwork.removeDuplicates().sink { [weak self] in self?.lyricRowShowsArtwork = $0 },
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
@@ -530,6 +533,8 @@ enum NotchMetrics {
     static var idleExpandedPanelHeight: CGFloat { NotchExpandedMetrics.idlePanelHeight }
     /// 收听里程碑报喜面板(`NotchMilestonePanel`)的高度:报喜时卡片 = 顶行 + 这一块。窗口高度也按它兜底。
     static let milestonePanelHeight: CGFloat = 76
+    /// 换歌翻牌:关着歌词行时,卡片为掉出来的那条歌名多长的高度(`NotchTrackDropStrip`)。
+    static let trackDropHeight: CGFloat = 26
 
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
@@ -627,6 +632,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 此刻在报的收听里程碑(真窗口 = 控制器镜像 `ListenMilestoneCenter.current`;预览恒 nil)。非 nil 时卡片高度换成
     /// 报喜面板那一档(`cardHeight`),顶行以下画报喜面板(`NotchMilestonePanel`)。
     var milestone: ListenMilestone? { get }
+    /// 换歌翻牌里此刻掉出来的那条歌名(真窗口 = 控制器的 `trackDrop`;预览恒 nil)。关着歌词行时卡片为它多长
+    /// `NotchMetrics.trackDropHeight`(`cardHeight(expanded:)`),开着时盖在歌词行上。
+    var trackDrop: NotchTrackDrop? { get }
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
     ///
@@ -785,7 +793,9 @@ extension NotchChromeSource {
         }
         return contentTopInset
             // 稳态歌词行要不要留高度,同 showsLyricRow(展开时哪怕关着「显示歌词」也要留;这里已经有曲目)。
-            + ((showsLyrics || expanded) ? NotchMetrics.compactRowHeight : 0)
+            + ((showsLyrics || expanded) ? NotchMetrics.compactRowHeight
+               // 换歌翻牌:关着歌词行时为掉出来的歌名多长一截(开着时歌名盖在歌词行上,不用另长)。
+               : (trackDrop != nil ? NotchMetrics.trackDropHeight : 0))
             + (expanded
                ? NotchMetrics.expandedExtraHeight(
                    hasLyricPreview: showsExpandedLyricPreview,
@@ -952,6 +962,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .transition(.opacity)
                 }
             }
+            // 换歌翻牌:新歌名从刘海里掉出来。关着歌词行时卡片为它多长一截(`cardHeight(expanded:)`),开着时盖在
+            // 歌词行上(稳态那份歌词行这时让开,见 cardBodyLayer)。常驻:收回 / 换下一条的动画才演得出来。
+            .overlay(alignment: .top) {
+                NotchTrackDropStrip(
+                    drop: shownTrackDrop, tint: accentOrWhite, width: controller.steadyCardWidth,
+                    height: controller.showsLyrics ? NotchMetrics.compactRowHeight : NotchMetrics.trackDropHeight,
+                    animated: !reduceMotion)
+                    .padding(.top, controller.contentTopInset)
+                    .opacity(revealContentOpacity)
+            }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
             // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
             // 这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实外轮廓。
@@ -1072,6 +1092,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 必然漂,而漂的表现是"行不见了但高度还留着"或反过来把行裁掉半截。
     /// 跟菜单栏面板的同名属性是同一套语义(MenuBarPanel.isIdleNoTrack)。
     private var isIdleNoTrack: Bool { !controller.hasTrack }
+
+    /// 此刻画出来的那条掉下来的歌名:收起、展开、报喜时不画(控制器那边展开 / 报喜时也会把它收掉)。
+    private var shownTrackDrop: NotchTrackDrop? {
+        controller.isCollapsed || controller.isExpanded || controller.milestone != nil ? nil : controller.trackDrop
+    }
 
     /// 刘海空当(物理刘海遮挡处)里的品牌胶囊彩蛋。
     ///
@@ -1216,6 +1241,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if isIdleNoTrack {
                     // 经 idleEarIcon 再包一层:有「发现新播放器」的信任提议挂着时换成那个播放器的图标。
                     idleEarIcon(alignment: .leading)
+                } else if leftModule == .artwork, playback.trackChangeFlip {
+                    // 换歌翻牌:封面和广告时的喇叭画在同一枚翻牌里,广告结束、新封面到了,喇叭才能翻成封面。
+                    flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)
                 } else if controller.isAdBreakNow {
                     // 广告期间左耳那枚喇叭(用户圈图:「在左耳那边加上一个广告的标识
                     // 图标」)。**不看配置、也不看这一格原本有没有内容** —— 口径就是
@@ -1323,7 +1351,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 没有封面数据时**整块不画**(不摆占位方块)—— 跟歌词行末尾那枚同一个取舍,理由见那边。
     @ViewBuilder
     private func earArtwork(alignment: Alignment) -> some View {
-        if let image = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
+        if playback.trackChangeFlip {
+            flippingEarArtwork(alignment: alignment, showsAdIcon: false)
+        } else if let image = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
             artworkThumbnail(
                 image,
                 side: NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset))
@@ -1331,6 +1361,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         } else {
             Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
         }
+    }
+
+    /// 换歌翻牌开着时耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了翻一下。`showsAdIcon` 只有左耳会传 true ——
+    /// 喇叭也画在这枚翻牌里,广告结束才能翻成封面。尺寸、点击、没封面时不画占位都跟关着时那一格一样。
+    private func flippingEarArtwork(alignment: Alignment, showsAdIcon: Bool) -> some View {
+        let side = NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset)
+        return NotchEarArtworkFlip(
+            trackKey: NotchTrackDropRules.key(title: playback.title, artist: playback.artist,
+                                              isAdBreak: playback.isCurrentTrackAdBreak),
+            artworkImage: playback.artworkImage, highResImage: playback.highResArtworkImage,
+            overrideImage: radioTalkStation?.image, isAdBreak: showsAdIcon, alignment: alignment,
+            animated: !reduceMotion,
+            artwork: { artworkThumbnail($0, side: side) },
+            adIcon: { adBreakEarIconContent })
     }
 
     /// 广告期间左耳那枚喇叭。
@@ -1342,8 +1386,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 不接点击:它是个状态标记,不是按钮 —— 广告期间真正能点的那件事(「跳过广告」)有自己的键,
     /// 在展开卡的状态行右侧,见 `adStatusColumn`。读屏也不念(装饰元素):同一行的「广告中 · 还剩
     /// 0:20」已经把这件事说清楚了,再念一遍是重复。
-    @ViewBuilder
     private func adBreakEarIcon(alignment: Alignment) -> some View {
+        adBreakEarIconContent.frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    /// 喇叭本体(不含占满耳朵的那层 frame):换歌翻牌那枚翻牌里也画它。
+    @ViewBuilder
+    private var adBreakEarIconContent: some View {
         let side = NotchMetrics.earAdIconSize(contentTopInset: controller.contentTopInset)
         let hint = showsAdSkipHint
         HStack(spacing: side * 0.22) {
@@ -1362,7 +1411,6 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
         .foregroundStyle(accentOrWhite.opacity(0.7))
         .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
-        .frame(maxWidth: .infinity, alignment: alignment)
         // 喇叭本身是装饰(同一行的「广告中 · 还剩 0:20」已经说清楚了);带上提示之后这一组就有了
         // 独立信息 —— 稳态下它**是**读屏用户唯一能知道"这条能跳"的地方,所以这时候要念。
         .accessibilityHidden(!hint)
@@ -1686,7 +1734,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 lyricRow(reportsWidth: reportsLineLayout)
                     .frame(width: controller.steadyCardWidth, height: NotchMetrics.compactRowHeight)
                     .padding(.top, top)
-                    .modifier(NotchCardLayerActive(active: !expanded, staggered: staggered))
+                    // 换歌翻牌的歌名盖在这一行上时让开(见 body 里那条 NotchTrackDropStrip)。
+                    .modifier(NotchCardLayerActive(active: !expanded && shownTrackDrop == nil, staggered: staggered))
             }
             lyricRow(reportsWidth: reportsLineLayout && !controller.showsLyrics)
                 .frame(width: controller.expandedCardWidth, height: NotchMetrics.compactRowHeight)

@@ -1,5 +1,6 @@
 import LyrimuseCore
 import Foundation
+import CoreGraphics
 
 // 灵动岛:展开区 / 对齐接线 / 音浪包络 / 出场几何 / 稳态宽-展开宽不变量。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
@@ -614,6 +615,100 @@ func runNotchTests() {
             expectEqual(O.proportionalRadius(height: h) <= O.cornerRadiusLimit(height: h, notchHeight: 32), true,
                         "圆角夹取: 默认那套(高 \(h))不会被新上限夹")
         }
+        // 换歌翻牌:掉歌名只认真的换了一首。
+        typealias DR = NotchTrackDropRules
+        let songA = DR.key(title: "晴天", artist: "周杰伦", isAdBreak: false)
+        expectEqual(DR.shouldDrop(previousKey: nil, title: "晴天", artist: "周杰伦", isAdBreak: false), false,
+                    "换歌翻牌: 这个实例看到的第一首不掉")
+        expectEqual(DR.shouldDrop(previousKey: songA, title: "夜曲", artist: "周杰伦", isAdBreak: false), true,
+                    "换歌翻牌: 换了一首掉")
+        expectEqual(DR.shouldDrop(previousKey: songA, title: "晴天", artist: "周杰伦", isAdBreak: false), false,
+                    "换歌翻牌: 同一首(单曲循环从头放)不掉")
+        expectEqual(DR.shouldDrop(previousKey: DR.key(title: "", artist: "", isAdBreak: false), title: "夜曲",
+                                  artist: "周杰伦", isAdBreak: false), false, "换歌翻牌: 从没在放到开始放不掉")
+        expectEqual(DR.shouldDrop(previousKey: songA, title: "Advertisement", artist: "", isAdBreak: true), false,
+                    "换歌翻牌: 广告不掉")
+        expectEqual(DR.shouldDrop(previousKey: DR.key(title: "晴天", artist: "周杰伦", isAdBreak: true), title: "晴天",
+                                  artist: "周杰伦", isAdBreak: false), true,
+                    "换歌翻牌: 广告结束回到歌掉(哪怕跟广告同名)")
+        expectEqual(DR.shouldDrop(previousKey: songA, title: "", artist: "周杰伦", isAdBreak: false), false,
+                    "换歌翻牌: 没有歌名不掉")
+        // 换歌翻牌:封面等新图到了才翻,旧图(含退回来的上一首系统封面)不算;同一张画面不翻。
+        typealias FP = NotchArtworkFlipPlanner<Int>
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let samePicture: (Int, Int) -> Bool = { $0 / 10 == $1 / 10 }  // 十位相同 = 同一张画面
+        var flipper = FP(shown: .artwork(10))
+        flipper.trackChanged(staleArtwork: [10, 11], now: t0)
+        expectEqual(flipper.update(target: .artwork(11), now: t0, samePicture: samePicture), nil,
+                    "翻牌: 换歌后退回上一首的系统封面(旧图),先不换")
+        expectEqual(flipper.shown, .artwork(10), "翻牌: 等新封面期间接着显示原来那张")
+        expectEqual(flipper.recheckAt, t0.addingTimeInterval(FP.awaitWindow), "翻牌: 等不来就到点再看一眼")
+        expectEqual(flipper.update(target: .artwork(20), now: t0 + 0.5, samePicture: samePicture), .flip,
+                    "翻牌: 新封面到了翻")
+        expectEqual(flipper.update(target: .artwork(21), now: t0 + 1, samePicture: samePicture), .cut,
+                    "翻牌: 之后换上的高清版原地换,不再翻")
+        var sameAlbum = FP(shown: .artwork(30))
+        sameAlbum.trackChanged(staleArtwork: [30], now: t0)
+        expectEqual(sameAlbum.update(target: .artwork(31), now: t0 + 0.4, samePicture: samePicture), .cut,
+                    "翻牌: 同一张专辑的下一首(同一张画面)不翻")
+        var noArtwork = FP(shown: .artwork(40))
+        noArtwork.trackChanged(staleArtwork: [40], now: t0)
+        expectEqual(noArtwork.update(target: .empty, now: t0 + 1, samePicture: samePicture), nil,
+                    "翻牌: 刚换歌就没图了,先留几秒等新封面")
+        expectEqual(noArtwork.update(target: .empty, now: t0 + FP.shortHold, samePicture: samePicture), .fade,
+                    "翻牌: 等不来就淡出")
+        expectEqual(noArtwork.update(target: .artwork(50), now: t0 + 6, samePicture: samePicture), .fade,
+                    "翻牌: 从没图到有图淡入,不翻")
+        var adBreak = FP(shown: .artwork(60))
+        adBreak.trackChanged(staleArtwork: [60], now: t0)
+        expectEqual(adBreak.update(target: .adIcon, now: t0, samePicture: samePicture), .cut,
+                    "翻牌: 进广告直接换成喇叭")
+        adBreak.trackChanged(staleArtwork: [61], now: t0 + 30)
+        expectEqual(adBreak.update(target: .artwork(61), now: t0 + 30, samePicture: samePicture), nil,
+                    "翻牌: 广告刚结束、封面还是旧图,先留着喇叭")
+        expectEqual(adBreak.update(target: .artwork(70), now: t0 + 31, samePicture: samePicture), .flip,
+                    "翻牌: 新封面到了,喇叭翻成封面")
+        var adLate = FP(shown: .adIcon)
+        adLate.trackChanged(staleArtwork: [61], now: t0)
+        expectEqual(adLate.update(target: .artwork(61), now: t0 + FP.shortHold, samePicture: samePicture), .flip,
+                    "翻牌: 新封面迟迟不来,喇叭最多留几秒")
+        var expired = FP(shown: .artwork(80))
+        expired.trackChanged(staleArtwork: [80], now: t0)
+        expectEqual(expired.update(target: .artwork(90), now: t0 + FP.awaitWindow + 1, samePicture: samePicture), .cut,
+                    "翻牌: 换歌太久之后才来的图原地换")
+        var steady = FP(shown: .artwork(100))
+        expectEqual(steady.update(target: .artwork(110), now: t0, samePicture: samePicture), .cut,
+                    "翻牌: 没换歌时换图原地换")
+        // 换歌翻牌:同一张图的两种分辨率算同一张,不同封面不算。
+        func syntheticCover(side: Int, paint: (CGContext, CGFloat) -> Void) -> CGImage? {
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let ctx = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return nil }
+            paint(ctx, CGFloat(side))
+            return ctx.makeImage()
+        }
+        let gradient: (CGContext, CGFloat) -> Void = { ctx, s in
+            for x in 0..<Int(s) {
+                let f = CGFloat(x) / s
+                ctx.setFillColor(red: f, green: 0.35, blue: 1 - f, alpha: 1)
+                ctx.fill(CGRect(x: CGFloat(x), y: 0, width: 1, height: s))
+            }
+        }
+        let split: (CGContext, CGFloat) -> Void = { ctx, s in
+            ctx.setFillColor(red: 0.1, green: 0.8, blue: 0.3, alpha: 1)
+            ctx.fill(CGRect(x: 0, y: 0, width: s, height: s / 2))
+            ctx.setFillColor(red: 0.05, green: 0.05, blue: 0.08, alpha: 1)
+            ctx.fill(CGRect(x: 0, y: s / 2, width: s, height: s / 2))
+        }
+        if let big = syntheticCover(side: 600, paint: gradient).flatMap(ArtworkFingerprint.init(image:)),
+           let small = syntheticCover(side: 90, paint: gradient).flatMap(ArtworkFingerprint.init(image:)),
+           let other = syntheticCover(side: 600, paint: split).flatMap(ArtworkFingerprint.init(image:)) {
+            expectEqual(big.isSamePicture(as: small), true, "封面指纹: 同一张图的高清 / 低清两份算同一张")
+            expectEqual(big.isSamePicture(as: other), false, "封面指纹: 不同的封面不算同一张")
+        } else {
+            expectEqual(false, true, "封面指纹: 合成图建不出来")
+        }
         // 收听里程碑:单曲 100 / 1,000 / 10,000……;累计不到 1 万时 1,000、5,000,之后每满 1 万。
         typealias MR = ListenMilestoneRules
         expectEqual([99, 100, 101, 500, 1_000, 5_000, 10_000, 100_000].map(MR.isTrackMilestone),
@@ -770,6 +865,18 @@ func runNotchTests() {
                 .appendingPathComponent("Settings/ConfigPortability.swift"), encoding: .utf8)) ?? ""
             expectEqual(portabilitySrc.contains("\"np:listenMilestoneLedger\","), true,
                         "里程碑契约: 报喜记账是机器本地状态,不随配置导出")
+            // 换歌翻牌:掉歌名的接线与卡片高度;左耳的翻牌连广告时的喇叭一起画。
+            expectEqual(v.contains(": (trackDrop != nil ? NotchMetrics.trackDropHeight : 0))"), true,
+                        "换歌翻牌契约: 关着歌词行时卡片为掉出来的歌名多长一截")
+            expectEqual(stageSrc.contains("var trackDrop: NotchTrackDrop? { nil }"), true, "换歌翻牌契约: 预览不掉歌名")
+            expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchTrackChangeFlip")
+                        && ctrlSrc.contains("!isCollapsed && !isExpanded && milestone == nil && !alertHold")
+                        && ctrlSrc.contains("trackDropObserver?.cancel()"), true,
+                        "换歌翻牌契约: 开关开着、卡片看得见、不在收起 / 展开 / 报喜 / 提醒里才掉,收尾取消订阅")
+            expectEqual(v.contains("NotchCardLayerActive(active: !expanded && shownTrackDrop == nil"), true,
+                        "换歌翻牌契约: 开着歌词行时歌名盖上来,稳态那份歌词行让开")
+            expectEqual(v.contains("flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)"), true,
+                        "换歌翻牌契约: 左耳的翻牌连广告时的喇叭一起画(广告结束才能翻成封面)")
         }
 
         // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。

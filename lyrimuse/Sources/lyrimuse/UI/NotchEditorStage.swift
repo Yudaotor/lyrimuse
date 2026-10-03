@@ -100,6 +100,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     @Published private(set) var isAdBreakNow = false
     /// 预览不报收听里程碑:那是一次性的真事件,预览里凭空撑开只会让人以为设置把它弄坏了。
     var milestone: ListenMilestone? { nil }
+    var trackDrop: NotchTrackDrop? { nil }
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
@@ -769,6 +770,8 @@ struct NotchEditorStage: View {
                 }
                 + [(title: NotchBehaviorItem.hideInFullScreen.title,
                     isOn: NotchBehaviorItem.hideInFullScreen.binding.wrappedValue),
+                   (title: NotchBehaviorItem.trackChangeFlip.title,
+                    isOn: NotchBehaviorItem.trackChangeFlip.binding.wrappedValue),
                    (title: NotchBehaviorItem.listenMilestones.title,
                     isOn: NotchBehaviorItem.listenMilestones.binding.wrappedValue)])
     }
@@ -1741,6 +1744,7 @@ enum NotchStyleDefaults {
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
+        settings.notchTrackChangeFlip = AppSettings.defaultNotchTrackChangeFlip
         // 屏幕和两个自动隐藏开关,主实例不订阅(只有设置行 / 「屏幕」浮层那几处会调过去,镜像副本才订阅),
         // 只写设置的话主灵动岛停在旧屏、照旧按旧开关隐藏,副本却按新值变了。跟那几处同一个守卫:
         // 灵动岛关着就别碰 `.shared`(读一下就会建窗口),再打开时 setVisible 会按设置补齐。

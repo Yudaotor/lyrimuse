@@ -286,6 +286,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         surface(.notch, "全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "收起歌词", "fullscreen"], group: "行为"),
         surface(.notch, "收听里程碑", kw: ["里程碑", "第 100 次", "累计", "报喜", "纪念", "Last.fm"], group: "行为"),
+        surface(.notch, "换歌翻牌", kw: ["换歌", "切歌", "翻牌", "翻转", "封面", "歌名", "掉下来", "动画"], group: "行为"),
         surface(.notch, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
         // ---- 歌词显示 › 菜单栏 ----

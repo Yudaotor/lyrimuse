@@ -36120,6 +36120,52 @@
           }
         }
       }
+    },
+    "换歌翻牌" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track Change Flip"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换歌翻牌"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換歌翻牌"
+          }
+        }
+      }
+    },
+    "换歌时，耳朵里的封面翻一下，新歌名从刘海里掉出来停几秒；开着歌词行时歌名落在歌词行上。同一张专辑的下一首只掉歌名、不翻。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When the track changes, the cover in the ear flips over and the new title drops out of the notch for a few seconds; with the lyric row on, the title lands on the lyric row. The next track from the same album only drops the title, without the flip."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换歌时，耳朵里的封面翻一下，新歌名从刘海里掉出来停几秒；开着歌词行时歌名落在歌词行上。同一张专辑的下一首只掉歌名、不翻。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換歌時，耳朵裡的封面翻一下，新歌名從瀏海裡掉出來停幾秒；開著歌詞行時歌名落在歌詞行上。同一張專輯的下一首只掉歌名、不翻。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
