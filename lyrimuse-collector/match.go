@@ -1866,6 +1866,11 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 	// (如王子(=Prince)《1999 (Edit)》,答案就躺在同一个「王子」另外两首歌的候选署名
 	// "Prince" 里)。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注。
 	add(learnedSourceArtistAlias(artist))
+	// YouTube Music 登记的原名(ctx 上挂着这首的 videoId 时,Kaset 放的歌):界面是中文时一部分西方歌手报成本地化
+	// 译名(「菲尔·科林斯」),各源都按原名收录。署名里有非拉丁文字才问,见 ytmusiccredit.go。
+	if id := youTubeMusicVideoIDFrom(ctx); id != "" && hasNonLatinLetter(artist) {
+		add(ytmusicEnglishCredit(ctx, kasetAudioVideoIDFor(id)).artist)
+	}
 	add(canonicalArtistViaMusicBrainz(ctx, artist))
 	// 第二条:MB 上这位歌手的其它已登记写法(不只给一个主名)。第一条是"中文名"取向
 	// —— 只在中文圈艺人身上出结果 —— 而"本名 与 艺名"(Abel Tesfaye 与 The Weeknd)、

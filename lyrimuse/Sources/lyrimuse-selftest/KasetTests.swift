@@ -1,0 +1,351 @@
+import Foundation
+import LyrimuseCore
+
+/// Kaset:AppleScript `get player info` 的解读、在走 / 广告 / 加载 / 卡住的判定、署名清理、跟系统那份怎么取舍、
+/// 接线契约。读数样例照真实输出的形状造(署名带连接词、专辑一栏是歌单名、数字带长尾小数)。
+@MainActor
+func runKasetTests() {
+    typealias K = KasetPlayerInfo
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    let playingJSON = #"{"currentTrack":{"album":"1980年代西洋金曲精选","artist":"Eurythmics, 、, Annie Lennox, 和, Dave Stewart","artworkURL":"https:\/\/i.ytimg.com\/vi\/qeMFqkcPYcg\/hqdefault.jpg","duration":215,"name":"Sweet Dreams (Are Made Of This)","videoId":"qeMFqkcPYcg"},"duration":214.84100000000001,"isPaused":false,"isPlaying":true,"likeStatus":"none","muted":false,"position":18.478585754000001,"repeating":"off","shuffling":false,"volume":100}"#
+    func reading(pos: Double, playing: Bool = true, paused: Bool = false, vid: String? = "v1") -> K.Reading {
+        K.Reading(title: "T", artist: "A", videoID: vid, duration: 200, position: pos, isPlaying: playing, isPaused: paused)
+    }
+
+    // ---- 解析 ----
+    do {
+        let r = K.reading(fromJSON: Data(playingJSON.utf8))
+        expectEqual(r?.title, "Sweet Dreams (Are Made Of This)", "Kaset 读数: 曲名")
+        expectEqual(r?.videoID, "qeMFqkcPYcg", "Kaset 读数: videoId")
+        expectEqual(r?.duration, 214.84100000000001, "Kaset 读数: 时长取网页 video 的,不取元数据里的整数秒")
+        expectEqual(r?.position, 18.478585754000001, "Kaset 读数: 位置")
+        expectEqual(r?.isPlaying == true && r?.isPaused == false, true, "Kaset 读数: 播放状态")
+        let loading = #"{"currentTrack":{"artist":"Van Halen","duration":243,"name":"Jump (45 Version)","videoId":"SwYN7mTi6HM"},"duration":0,"isPaused":false,"isPlaying":false,"position":0}"#
+        expectEqual(K.reading(fromJSON: Data(loading.utf8))?.duration, 243, "Kaset 读数: 网页时长还是 0 时退回元数据里的")
+        expectEqual(K.reading(fromJSON: Data()) == nil, true, "Kaset 读数: 没在跑(脚本回空串)")
+        expectEqual(K.reading(fromJSON: Data(#"{"isPlaying":false,"position":0}"#.utf8)) == nil, true, "Kaset 读数: 没有当前曲目")
+        expectEqual(K.reading(fromJSON: Data(#"{"currentTrack":{"name":"  "},"isPlaying":true}"#.utf8)) == nil, true,
+                    "Kaset 读数: 曲名为空不算一首")
+
+        // 脚本输出:读数夹在 info 里,读到的时刻用脚本在读数调用返回时记的,不用子进程结束那一刻。
+        func output(readAtMs: Double) -> Data {
+            try! JSONSerialization.data(withJSONObject: ["readAtMs": readAtMs, "info": playingJSON])
+        }
+        let now = t0 + 0.2
+        let parsed = K.parseScriptOutput(output(readAtMs: t0.timeIntervalSince1970 * 1000), now: now)
+        expectEqual(parsed?.reading.videoID, "qeMFqkcPYcg", "Kaset 脚本输出: 读数原样解出")
+        expectEqual(parsed?.readAt, t0, "Kaset 脚本输出: 读到的时刻取脚本记的那一刻")
+        expectEqual(K.parseScriptOutput(output(readAtMs: (t0 - 60).timeIntervalSince1970 * 1000), now: now)?.readAt, now,
+                    "Kaset 脚本输出: 时刻离此刻太远(墙钟被调过)就按此刻算")
+        expectEqual(K.parseScriptOutput(Data(), now: now) == nil, true, "Kaset 脚本输出: 没在跑(空串)")
+    }
+
+    // ---- 在不在走:广告 / 加载 / 卡住都不算 ----
+    do {
+        expectEqual(K.isAdvancing(reading(pos: 12.5), lastMove: nil, now: t0), true, "Kaset 在走: 报在放、位置非 0")
+        expectEqual(K.isAdvancing(reading(pos: 12.5, playing: false, paused: true), lastMove: nil, now: t0), false, "Kaset 在走: 暂停")
+        expectEqual(K.isAdvancing(reading(pos: 0), lastMove: nil, now: t0), false, "Kaset 在走: 报在放、位置是 0 = 广告或开播缓冲")
+        expectEqual(K.isAdvancing(reading(pos: 0, playing: false), lastMove: nil, now: t0), false, "Kaset 在走: 加载中")
+        let seen = K.LastMove(videoID: "v1", position: 12.5, seenAt: t0)
+        expectEqual(K.isAdvancing(reading(pos: 12.5), lastMove: seen, now: t0 + 0.6), true,
+                    "Kaset 在走: 同一个值才读到 0.6 秒,还在网页两次推送之间")
+        expectEqual(K.isAdvancing(reading(pos: 12.5), lastMove: seen, now: t0 + 2), false, "Kaset 在走: 同一首位置 2 秒没动 = 卡住")
+        expectEqual(K.isAdvancing(reading(pos: 12.5, vid: "v2"), lastMove: seen, now: t0 + 2), true,
+                    "Kaset 在走: 换了一首、恰好同一个位置值,不算卡住")
+        expectEqual(K.isAdvancing(reading(pos: 13.0), lastMove: seen, now: t0 + 2), true, "Kaset 在走: 位置动了")
+        let first = K.nextMove(after: nil, reading: reading(pos: 12.5), at: t0)
+        expectEqual(first, seen, "Kaset 位置变化: 头一次读到就记下")
+        expectEqual(K.nextMove(after: first, reading: reading(pos: 12.5), at: t0 + 2), first, "Kaset 位置变化: 没动就留着第一次读到的时刻")
+        expectEqual(K.nextMove(after: first, reading: reading(pos: 13.0), at: t0 + 2).seenAt, t0 + 2, "Kaset 位置变化: 动了就换成这一次")
+        expectEqual(K.nextMove(after: first, reading: reading(pos: 12.5, vid: "v2"), at: t0 + 2).videoID, "v2",
+                    "Kaset 位置变化: 换了一首就换成这一次")
+    }
+
+    // ---- 广告:报在放、位置 0、时长还是元数据里的 ----
+    do {
+        let adJSON = #"{"currentTrack":{"artist":"Van Halen","duration":243,"name":"Jump (45 Version)","videoId":"SwYN7mTi6HM"},"duration":243,"isPaused":false,"isPlaying":true,"position":0}"#
+        let startJSON = #"{"currentTrack":{"artist":"Cyndi Lauper","duration":267,"name":"Girls Just Want To Have Fun","videoId":"PIb6AZdTr-A"},"duration":266.741,"isPaused":false,"isPlaying":true,"position":0}"#
+        let ad = K.reading(fromJSON: Data(adJSON.utf8))!
+        let start = K.reading(fromJSON: Data(startJSON.utf8))!
+        expectEqual(ad.playerDuration == 243 && ad.trackDuration == 243, true, "Kaset 广告: 两层时长都解出来")
+        expectEqual(K.isAd(ad), true, "Kaset 广告: 报在放 + 位置 0 + 时长等于元数据里的 = 广告")
+        expectEqual(K.isAd(start), false, "Kaset 广告: 开播缓冲那半秒时长已经是网页的,不算")
+        func r(pos: Double, playing: Bool, paused: Bool = false) -> K.Reading {
+            K.Reading(title: "T", artist: "A", videoID: "v", duration: 243, position: pos, isPlaying: playing, isPaused: paused,
+                      playerDuration: 243, trackDuration: 243)
+        }
+        expectEqual(K.isAd(r(pos: 0, playing: false)), false, "Kaset 广告: 加载中不算")
+        expectEqual(K.isAd(r(pos: 0, playing: false, paused: true)), false, "Kaset 广告: 暂停不算")
+        expectEqual(K.isAd(r(pos: 3, playing: true)), false, "Kaset 广告: 位置在走不算")
+        expectEqual(K.snapshot(ad, lastMove: nil, capturedAt: t0).isAd, true, "Kaset 广告: 快照标广告")
+        expectEqual(K.snapshot(ad, lastMove: nil, capturedAt: t0).isWaitingToPlay, true, "Kaset 广告: 广告期间位置不走")
+        expectEqual(K.snapshot(reading(pos: 12.5), lastMove: nil, capturedAt: t0).isAd, false, "Kaset 广告: 正片在走 = 明确不是广告")
+        expectEqual(K.snapshot(reading(pos: 0, playing: false), lastMove: nil, capturedAt: t0).isAd == nil, true,
+                    "Kaset 广告: 加载中说不上来")
+        typealias L = LocalPlaybackSource
+        expectEqual(L.adBreakByFields(isSpotifyNative: false, title: "Jump", artist: "Van Halen", album: "",
+                                      youTubeMusicVerdict: nil, spotifyWebVerdict: nil, playerSaysAd: true), true,
+                    "Kaset 广告: 播放器说是广告就亮「广告中」")
+        expectEqual(L.playerAdVerdict(false), .song, "Kaset 广告: 正片在走折成 .song")
+        expectEqual(L.nextAdBreakState(previous: true, isNewTrack: false, adByFields: false,
+                                       pageVerdict: L.playerAdVerdict(false)), false,
+                    "Kaset 广告: 前贴片过了、正片在走,「广告中」撤掉")
+        expectEqual(L.nextAdBreakState(previous: true, isNewTrack: false, adByFields: false,
+                                       pageVerdict: L.playerAdVerdict(nil)), true,
+                    "Kaset 广告: 说不上来(加载 / 卡住)时保持")
+        expectEqual(L.adSharesTrackIdentity(bundleID: PlaybackPlayer.kaset.bundleIdentifier), true,
+                    "Kaset 广告: 广告跟正片共用身份,不写进播放状态")
+        expectEqual(L.adSharesTrackIdentity(bundleID: PlaybackPlayer.spotify.bundleIdentifier), false,
+                    "Kaset 广告: 别的播放器的广告照旧写进播放状态")
+    }
+
+    // ---- 署名 ----
+    do {
+        expectEqual(K.cleanedArtist("Eurythmics, 、, Annie Lennox, 和, Dave Stewart"), "Eurythmics, Annie Lennox, Dave Stewart",
+                    "Kaset 署名: 中文界面混进来的连接词去掉")
+        expectEqual(K.cleanedArtist("Shakira, y, Bizarrap"), "Shakira, Bizarrap", "Kaset 署名: 别的语言的连接词同样去掉")
+        expectEqual(K.cleanedArtist("The Police"), "The Police", "Kaset 署名: 单个艺人原样")
+        expectEqual(K.cleanedArtist("Daryl Hall & John Oates"), "Daryl Hall & John Oates", "Kaset 署名: 名字里本来就有 & 的不拆")
+        expectEqual(K.cleanedArtist("A, B"), "A, B", "Kaset 署名: 两个艺人原样")
+        expectEqual(K.cleanedArtist("和, 周杰伦, 方文山"), "和, 周杰伦, 方文山", "Kaset 署名: 排在头上的不动(可能真叫这个名字)")
+
+        // 同一首歌网页加载好之后换了写法:沿用最先报的那份;时长对不上、歌名也换成别的照收新的。
+        func credit(_ title: String, _ artist: String, vid: String? = "mQLzR5V2Z9c",
+                    player: Double? = 152.4, track: Double? = 152) -> K.Reading {
+            K.Reading(title: title, artist: artist, videoID: vid, duration: player ?? track, position: 3, isPlaying: true,
+                      isPaused: false, playerDuration: player, trackDuration: track)
+        }
+        let opening = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko, 和, Ab-Soul"), first: nil)
+        expectEqual(opening.title == "Love Bomb" && opening.artist == "Jhené Aiko, 和, Ab-Soul", true, "Kaset 身份: 开播那份原样用")
+        let web = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul"), first: opening.first)
+        expectEqual(web.artist, "Jhené Aiko, 和, Ab-Soul", "Kaset 身份: 同一首中途换的署名写法不跟")
+        expectEqual(web.first, opening.first, "Kaset 身份: 记住的还是最先那份")
+        expectEqual(K.snapshot(credit("Love Bomb", "Jhené Aiko和Ab-Soul").withIdentity(title: web.title, artist: web.artist),
+                               lastMove: nil, capturedAt: t0).artist,
+                    "Jhené Aiko, Ab-Soul", "Kaset 身份: 沿用的那份照样清理,跟预解析的缓存键一致")
+        let uploaded = K.steadyIdentity(credit("Jhené Aiko - Love Bomb (Official Video)", "Jhené Aiko和Ab-Soul"), first: opening.first)
+        expectEqual(uploaded.title == "Love Bomb" && uploaded.artist == "Jhené Aiko, 和, Ab-Soul" && uploaded.first == opening.first, true,
+                    "Kaset 身份: 歌名换成视频标题(歌手前缀 + 括号)仍是同一首,沿用最先那份")
+        let queued = K.steadyIdentity(credit("黑白 [Timeless Live 2009]", "方大同", vid: "7VKSdwYke9o", player: nil, track: 246), first: nil)
+        let original = K.steadyIdentity(credit("Black And White [Timeless Live 2009]", "Khalil Fong", vid: "7VKSdwYke9o",
+                                               player: 245.3, track: 246), first: queued.first)
+        expectEqual(original.title == "黑白 [Timeless Live 2009]" && original.artist == "方大同" && original.first == queued.first, true,
+                    "Kaset 身份: 换成网页上的原文写法、时长对得上,是同一段录音,沿用队列那份")
+        let loading = K.steadyIdentity(credit("Jhené Aiko - Ark to Agartha", "Jhené Aiko", player: nil, track: 152), first: opening.first)
+        expectEqual(loading.title == "Love Bomb" && loading.first == opening.first, true, "Kaset 身份: 网页时长还没出来先按住")
+        let longVideo = K.steadyIdentity(credit("Jhené Aiko - Love Bomb (Official Video)", "Jhené Aiko和Ab-Soul", player: 201.5, track: 152),
+                                         first: opening.first)
+        expectEqual(longVideo.title, "Love Bomb", "Kaset 身份: 视频版更长、但歌名是同一首的写法,照样沿用")
+        let retitled = K.steadyIdentity(credit("Jhené Aiko - Ark to Agartha", "Jhené Aiko", player: 392.4, track: 196), first: opening.first)
+        expectEqual(retitled.title == "Jhené Aiko - Ark to Agartha" && retitled.artist == "Jhené Aiko", true,
+                    "Kaset 身份: 时长对不上、歌名也换成别的,照收新的")
+        expectEqual(retitled.first?.title, "Jhené Aiko - Ark to Agartha", "Kaset 身份: 换成别的改记新的那份")
+        expectEqual(K.sameRecording(credit("x", "y", player: 245.3, track: 246)), true, "Kaset 录音: 网页时长跟元数据整数秒对得上")
+        expectEqual(K.sameRecording(credit("x", "y", player: 392.4, track: 196)), false, "Kaset 录音: 差太多不是同一段")
+        expectEqual(K.sameRecording(credit("x", "y", player: nil, track: 196)) == nil, true, "Kaset 录音: 网页时长还没出来说不上来")
+        let next = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul", vid: "AJ--JpOmlog"), first: opening.first)
+        expectEqual(next.artist, "Jhené Aiko和Ab-Soul", "Kaset 身份: 换了 videoId 是另一首")
+        let blank = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul"),
+                                     first: K.steadyIdentity(credit("Love Bomb", ""), first: nil).first)
+        expectEqual(blank.artist, "Jhené Aiko和Ab-Soul", "Kaset 身份: 最先那份署名是空的不沿用")
+        let noID = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul", vid: nil), first: opening.first)
+        expectEqual(noID.artist == "Jhené Aiko和Ab-Soul" && noID.first == nil, true, "Kaset 身份: 没有 videoId 原样、不记")
+
+        // 同一首的两种歌名写法。
+        expectEqual(K.sameSongTitle("Jhené Aiko - I Don't Mind (Official Audio)", "I Don't Mind", artist: "Jhené Aiko"), true,
+                    "Kaset 歌名: 歌手前缀 + 结尾括号去掉后相同")
+        expectEqual(K.sameSongTitle("Like, Whatever（合作音乐人：Tyga）", "Jhené Aiko - Like, Whatever (feat. Tyga) [Official Video]",
+                                    artist: "Jhené Aiko"), true, "Kaset 歌名: 全角括号、多重括号一起去")
+        expectEqual(K.sameSongTitle("Nami\u{2019}s Haiku", "Nami's Haiku", artist: "Jhené Aiko"), true, "Kaset 歌名: 弯直引号不分")
+        expectEqual(K.sameSongTitle("Jhené Aiko & Ab-Soul - Love Bomb", "Love Bomb", artist: "Jhené Aiko, 和, Ab-Soul"), true,
+                    "Kaset 歌名: 前缀以第一位歌手开头就算歌手前缀")
+        expectEqual(K.sameSongTitle("Someone Else - Love Bomb", "Love Bomb", artist: "Jhené Aiko"), false,
+                    "Kaset 歌名: 破折号前不是这位歌手,不当前缀去")
+        expectEqual(K.sameSongTitle("Jhené Aiko - Ark to Agartha", "Break", artist: "Jhené Aiko"), false, "Kaset 歌名: 换了一首不算")
+        expectEqual(K.sameSongTitle("(Interlude)", "Interlude", artist: "A"), false, "Kaset 歌名: 整个歌名都在括号里的不去")
+    }
+
+    // ---- 快照 ----
+    do {
+        let r = K.reading(fromJSON: Data(playingJSON.utf8))!
+        let s = K.snapshot(r, lastMove: nil, capturedAt: t0)
+        expectEqual(s.album == nil, true, "Kaset 快照: 专辑一栏是歌单名,不用")
+        expectEqual(s.artist, "Eurythmics, Annie Lennox, Dave Stewart", "Kaset 快照: 署名清理过")
+        expectEqual(s.bundleIdentifier, PlaybackPlayer.kaset.bundleIdentifier, "Kaset 快照: 认作 Kaset")
+        expectEqual(s.playing == true && s.playbackRate == 1 && s.isWaitingToPlay == false, true, "Kaset 快照: 在走")
+        expectEqual(s.elapsedTime, 18.478585754000001, "Kaset 快照: 位置原样")
+        expectEqual(s.capturedAt, t0, "Kaset 快照: 读数时刻记下")
+        expectEqual(s.anchorElapsedTime == nil, true, "Kaset 快照: 读的是播放器自己的钟,没有系统锚点")
+        let ad = K.snapshot(reading(pos: 0), lastMove: nil, capturedAt: t0)
+        expectEqual(ad.playing == false && ad.playbackRate == 0 && ad.isWaitingToPlay == true, true,
+                    "Kaset 快照: 广告 / 开播缓冲 = 停着、等着开始")
+        let paused = K.snapshot(reading(pos: 30, playing: false, paused: true), lastMove: nil, capturedAt: t0)
+        expectEqual(paused.playing == false && paused.isWaitingToPlay == false, true, "Kaset 快照: 暂停不算等着开始")
+        let stalled = K.snapshot(reading(pos: 30), lastMove: K.LastMove(videoID: "v1", position: 30, seenAt: t0), capturedAt: t0 + 3)
+        expectEqual(stalled.playing == false && stalled.isWaitingToPlay == true, true, "Kaset 快照: 卡住 = 停着、等着恢复")
+    }
+
+    // ---- 待播队列:整理成 collector 那份(样例两侧共用)----
+    do {
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/kaset-queue")
+        let input = (try? Data(contentsOf: dir.appendingPathComponent("script-output.json"))) ?? Data()
+        let want = (try? Data(contentsOf: dir.appendingPathComponent("reply.json")))
+            .flatMap { try? JSONDecoder().decode(K.QueueReply.self, from: $0) }
+        let got = K.queueReply(fromScriptOutput: input)
+        expectEqual(want != nil && got == want, true, "Kaset 队列: 整理结果跟共用样例 reply.json 一致")
+        expectEqual(got?.currentIndex, 1, "Kaset 队列: 当前这首的下标换成从 0 起")
+        expectEqual(got?.tracks.map(\.artist).contains("Eurythmics, Annie Lennox, Dave Stewart"), true,
+                    "Kaset 队列: 署名跟快照同一套清理")
+        let reencoded = got.flatMap { PlayerQueryServer.encodedQueueReply($0) }.map { Data($0.utf8) }
+            .flatMap { try? JSONDecoder().decode(K.QueueReply.self, from: $0) }
+        expectEqual(reencoded == got, true, "Kaset 队列: 编码后再解回来不变")
+        let noCurrent = #"{"queue":"{\"currentIndex\":0,\"tracks\":[{\"name\":\"A\",\"artist\":\"B\"}]}","info":"{}"}"#
+        expectEqual(K.queueReply(fromScriptOutput: Data(noCurrent.utf8))?.currentIndex == nil, true, "Kaset 队列: 没有当前曲目")
+        expectEqual(K.queueReply(fromScriptOutput: Data(noCurrent.utf8))?.repeating, "off", "Kaset 队列: 读不到循环模式按关")
+        expectEqual(K.queueReply(fromScriptOutput: Data()) == nil, true, "Kaset 队列: 没在跑(空串)")
+        let paired = #"{"queue":"{\"currentIndex\":1,\"tracks\":[{\"name\":\"Break\",\"artist\":\"Jhené Aiko\",\"videoId\":\"AJ--JpOmlog\",\"audioVideoId\":\"ot0WzesOp6I\"}]}","info":"{}"}"#
+        expectEqual(K.queueReply(fromScriptOutput: Data(paired.utf8))?.tracks.first?.audioVideoID, "ot0WzesOp6I",
+                    "Kaset 队列: 音轨版本的 videoId 原样交出(专辑只登记在它上面)")
+        expectEqual(K.queueReply(fromScriptOutput: Data(#"{"queue":"{\"tracks\":[]}","info":"{}"}"#.utf8)) == nil, true,
+                    "Kaset 队列: 空队列")
+    }
+
+    // ---- 界面专辑位 ----
+    do {
+        typealias L = LocalPlaybackSource
+        expectEqual(L.displayAlbum(album: "Westside Whimsy", youtubeMusicAlbum: "Other", isMusicVideo: true, musicVideoLabel: "MV"),
+                    "Westside Whimsy", "专辑位: 播放器报了就照报")
+        expectEqual(L.displayAlbum(album: "", youtubeMusicAlbum: "Westside Whimsy", isMusicVideo: true, musicVideoLabel: "MV"),
+                    "Westside Whimsy", "专辑位: 没报时用 YouTube Music 登记的,先于「MV」")
+        expectEqual(L.displayAlbum(album: "", youtubeMusicAlbum: "", isMusicVideo: true, musicVideoLabel: "MV"), "MV",
+                    "专辑位: 都没有、是 MV 写「MV」")
+        expectEqual(L.displayAlbum(album: "", youtubeMusicAlbum: "", isMusicVideo: false, musicVideoLabel: "MV"), "",
+                    "专辑位: 都没有留空")
+    }
+
+    // ---- 歌曲页:YouTube Music 网页 ----
+    do {
+        let ok = PlatformLinks.youtubeMusicWatchURL("https://music.youtube.com/watch?v=OMOGaugKpzs")
+        expectEqual(ok?.absoluteString, "https://music.youtube.com/watch?v=OMOGaugKpzs", "Kaset 歌曲页: 11 位 videoId 认")
+        for bad in ["https://music.youtube.com/watch?v=OMOGaugKpz", "https://music.youtube.com/watch?v=OMOGaugKpzs&list=x",
+                    "https://www.youtube.com/watch?v=OMOGaugKpzs", "kaset://play?v=OMOGaugKpzs", ""] {
+            expectEqual(PlatformLinks.youtubeMusicWatchURL(bad) == nil, true, "Kaset 歌曲页: \(bad) 不认")
+        }
+        let links = PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil, qqArtist: nil, neteaseSong: nil, youtubeMusicSong: ok)
+        expectEqual(links.songLink(forPlayerBundleID: PlaybackPlayer.kaset.bundleIdentifier)?.platform, .youtubeMusic,
+                    "Kaset 歌曲页: 用 Kaset 放时简介面板给 YouTube Music 那条")
+        expectEqual(links.songLink(forPlayerBundleID: PlaybackPlayer.appleMusic.bundleIdentifier) == nil, true,
+                    "Kaset 歌曲页: 别的播放器不拿它顶上")
+        expectEqual(links.isEmpty, false, "Kaset 歌曲页: 只有它也算有链接")
+        expectEqual(MediaControlClient.kasetVideoID(forTrackKey: "nobody|nothing") == nil, true, "Kaset 歌曲页: 没读到过的那首没有 videoId")
+        expectEqual(PlatformLinks.kasetPlayURL(watchURL: "https://music.youtube.com/watch?v=OMOGaugKpzs")?.absoluteString,
+                    "kaset://play?v=OMOGaugKpzs", "Kaset 播放深链: 由歌曲页换算")
+        expectEqual(PlatformLinks.kasetPlayURL(watchURL: "https://music.youtube.com/watch?v=OMOGaugKpz") == nil, true,
+                    "Kaset 播放深链: 形状不对不给")
+        let chart = ChartLinkIndex.build([ChartLinkIndex.Row(
+            key: "The Police|Every Breath You Take|", appleMusicURL: nil, spotifyTrackID: nil, kkboxURL: nil,
+            youtubeMusicURL: "https://music.youtube.com/watch?v=OMOGaugKpzs")])
+            .links(kind: .track, artist: "The Police", name: "Every Breath You Take")
+        expectEqual(chart?.kaset?.absoluteString, "kaset://play?v=OMOGaugKpzs", "Kaset 播放深链: 榜单那一行带上")
+    }
+
+    // ---- 跟别的来源怎么取舍 ----
+    do {
+        let other = MediaControlSnapshot.forReplay(title: "X", artist: "Y", duration: 200, elapsedTime: 10, playing: false,
+                                                   bundleIdentifier: PlaybackPlayer.appleMusic.bundleIdentifier, anchorElapsedTime: nil)
+        let otherPlaying = MediaControlSnapshot.forReplay(title: "X", artist: "Y", duration: 200, elapsedTime: 10, playing: true,
+                                                          bundleIdentifier: PlaybackPlayer.appleMusic.bundleIdentifier, anchorElapsedTime: nil)
+        let kPlaying = K.snapshot(reading(pos: 12.5), lastMove: nil, capturedAt: t0)
+        let kPaused = K.snapshot(reading(pos: 12.5, playing: false, paused: true), lastMove: nil, capturedAt: t0)
+        let kWaiting = K.snapshot(reading(pos: 0), lastMove: nil, capturedAt: t0)
+        expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kPaused), true, "Kaset 取舍: 别的来源什么都没有,暂停着的也报")
+        expectEqual(MediaControlClient.kasetWins(over: other, kaset: kPaused), false, "Kaset 取舍: 别的播放器暂停着、它也暂停着,不换")
+        expectEqual(MediaControlClient.kasetWins(over: other, kaset: kPlaying), true, "Kaset 取舍: 别的暂停着、它在放,换过去")
+        expectEqual(MediaControlClient.kasetWins(over: other, kaset: kWaiting), true, "Kaset 取舍: 它正要放(加载 / 广告),换过去")
+        expectEqual(MediaControlClient.kasetWins(over: otherPlaying, kaset: kPlaying), false, "Kaset 取舍: 别的在放,听系统的")
+    }
+
+    // ---- 封面:系统那份恒为空,用缓存里匹配到的 ----
+    do {
+        typealias G = CoverArtReplacementGate
+        let id = PlaybackPlayer.kaset.bundleIdentifier
+        expectEqual(G.systemNeverHasArtwork(bundleID: id), true, "Kaset 封面: 系统会话里从来没有封面")
+        expectEqual(G.systemNeverHasArtwork(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier), false,
+                    "Kaset 封面: 别的播放器不算")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300, systemNeverHasArtwork: true), .playerHasNoArtwork,
+                    "Kaset 封面: 没有系统图时去找缓存里的")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300) == nil, true,
+                    "Kaset 封面: 别的播放器没有系统图照旧显示占位音符")
+        expectEqual(G.accepts(candidateWidth: 1200, candidateHeight: 1200, systemWidth: 0, reason: .playerHasNoArtwork), true,
+                    "Kaset 封面: 方形的替代图换上")
+        expectEqual(G.accepts(candidateWidth: 1280, candidateHeight: 720, systemWidth: 0, reason: .playerHasNoArtwork), false,
+                    "Kaset 封面: 不是封面形状的不换")
+    }
+
+    // ---- 登记与分派 ----
+    do {
+        let id = PlaybackPlayer.kaset.bundleIdentifier
+        expectEqual(LocalPlaybackSource.positionSourceTier(forBundleID: id), .noisyFloored,
+                    "Kaset 登记: 位置只会晚不会早,归 noisyFloored")
+        expectEqual(PlaybackPlayer.kaset.needsAutomationPermission, true, "Kaset 登记: 读数走 AppleScript,要自动化权限")
+        expectEqual(PlaybackPlayer.kaset.nativeLyricSource, "lyricfind", "Kaset 登记: 同源歌词是 YouTube Music 自己那份")
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: id), true, "Kaset 登记: media-control 的跳转它响应")
+        expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: .kaset), .kasetScript,
+                    "Kaset 分派: 焦点回退到它时播放控制发 AppleScript")
+        expectEqual(MediaControlClient.channelFallbackCandidates(selected: [.kaset]), [.kaset], "Kaset 分派: 通道坏了也直接问它")
+        expectEqual(MediaControlClient.directQueryPlayer(forBundleID: id), .kaset, "Kaset 分派: 焦点被占时能直接问到它")
+    }
+
+    // ---- 接线契约(扫源码)----
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let client = src("LyrimuseCore/Local/MediaControlClient.swift")
+        let adapted = ["        case PlaybackPlayer.kaset.bundleIdentifier:",
+                       "            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。",
+                       "            return fetchKasetSnapshot() ?? mediaControl"].joined(separator: "\n")
+        expectEqual(client.contains(adapted), true, "Kaset 契约: 认出是它之后整份换成 AppleScript 那份,暂停态也换")
+        expectEqual(client.contains("case .kaset: snapshot = fetchKasetSnapshot()"), true, "Kaset 契约: 焦点回退问它自己")
+        expectEqual(client.contains("let steady = KasetPlayerInfo.steadyIdentity(raw, first: kasetFirstReport)")
+                        && client.contains("let reading = raw.withIdentity(title: steady.title, artist: steady.artist)"), true,
+                    "Kaset 契约: 出快照之前先过 steadyIdentity")
+        let playback = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(playback.contains("? EnrichCacheReader.youtubeMusicAlbum(artist: newArtist, title: newTitle, album: newAlbum) ?? \"\" : \"\"")
+                        && playback.contains("if newListedAlbum != youtubeMusicAlbum { youtubeMusicAlbum = newListedAlbum }"),
+                    true, "Kaset 契约: 播放器没报专辑时每拍从缓存取 YouTube Music 登记的专辑")
+        expectEqual(playback.contains("if !youtubeMusicAlbum.isEmpty { youtubeMusicAlbum = \"\" }"), true,
+                    "Kaset 契约: 停播时一起清掉")
+        expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift").contains(#"case youtubeMusicAlbum = "youtube_music_album""#),
+                    true, "Kaset 契约: 缓存条目的键名跟 collector 一致")
+        expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains(
+            "LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo,"),
+                    true, "Kaset 契约: 界面专辑位按 displayAlbum 取")
+        expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
+                    "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
+        expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,
+                    "Kaset 契约: 自动识别时系统那边没在放就问它")
+        expectEqual(client.contains("return heldAcrossPlayerGap(players.contains(.kaset) ? preferringPlayingKaset(selected) : selected)"), true,
+                    "Kaset 契约: 勾了它的多选同样问,没勾的不问")
+        expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
+                    "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")
+        let control = client.range(of: "public static func focusControlTarget() -> PlaybackPlayer? {")
+            .map { String(client[$0.upperBound...].prefix(260)) } ?? ""
+        expectEqual(control.contains("if kasetPreferred { return .kaset }"), true, "Kaset 契约: 顶替系统那边时播放控制直接发给它")
+        expectEqual(src("lyrimuse/LastfmStatsSection.swift").contains(
+            #"if let url = links?.kaset, Self.isInstalled(.kaset) {"#), true, "Kaset 契约: 榜单右键「在 Kaset 中播放」只在装了 Kaset 时出")
+        expectEqual(src("lyrimuse/UI/LyricsWindowView.swift").contains(#"L10n.t("YouTube Music 歌曲页")"#), true,
+                    "Kaset 契约: 歌词窗口「⋯」给 YouTube Music 歌曲页")
+        let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(source.contains("if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }"), true,
+                    "Kaset 契约: 等着开始时轮询留在播放中的节拍")
+        expectEqual(source.contains("ad: isCurrentTrackAdBreak && !Self.adSharesTrackIdentity(bundleID: bundleID), positionSecs: positionSecs,"),
+                    true, "Kaset 契约: 前贴片广告不写进播放状态(collector 会把整首当广告)")
+        expectEqual(source.contains("playerSaysAd: snapshot.isAd)") && source.contains(
+            "pageVerdict: isSpotifyNative ? nil : Self.playerAdVerdict(snapshot.isAd) ?? youTubeMusicVerdict)"), true,
+                    "Kaset 契约: 广告结论接进「广告中」状态机,正片在走时能回落")
+    }
+}

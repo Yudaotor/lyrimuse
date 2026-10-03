@@ -20,6 +20,14 @@ public enum CoverArtReplacementGate {
         case lowRes
         /// 系统那份不是封面的形状:播放器上报的根本不是专辑图(YouTube Music MV 给的 16:9 视频缩略图)。
         case notCoverShaped
+        /// 这个播放器从不往系统里报封面(`systemNeverHasArtwork`),系统那份恒为空:缓存里匹配到的那张就是唯一能显示的。
+        case playerHasNoArtwork
+    }
+
+    /// 这个播放器的系统会话里从来没有封面。Kaset:播放中把会话交给 WebKit,那份不带图;它自己发的只有歌名歌手。
+    /// 对它们「没有图就显示占位音符」那条不成立 —— 等不到系统的图,整首都会是占位音符。
+    public static func systemNeverHasArtwork(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.kaset.bundleIdentifier
     }
 
     /// 长宽比偏离正方形的容差,跟 collector `deviceArtworkMaxAspectSkew`(deviceartwork.go)
@@ -34,10 +42,11 @@ public enum CoverArtReplacementGate {
     }
 
     /// 系统那份封面要不要找替代。nil = 不找:没有图(该显示占位音符,不该悄悄换成缓存匹配出来
-    /// 的另一张),或者系统那份本来就是一张够大的方形封面(Apple Music 之类,权威图不动)。
-    /// 形状先于尺寸判:一张 1280×720 的视频帧再大也不是封面。
-    public static func reason(width: Int, height: Int, lowResThreshold: Int) -> Reason? {
-        guard width > 0, height > 0 else { return nil }
+    /// 的另一张;从不报封面的播放器除外,见 `systemNeverHasArtwork`),或者系统那份本来就是一张够大的
+    /// 方形封面(Apple Music 之类,权威图不动)。形状先于尺寸判:一张 1280×720 的视频帧再大也不是封面。
+    public static func reason(width: Int, height: Int, lowResThreshold: Int,
+                              systemNeverHasArtwork: Bool = false) -> Reason? {
+        guard width > 0, height > 0 else { return systemNeverHasArtwork ? .playerHasNoArtwork : nil }
         if !isCoverShaped(width: width, height: height) { return .notCoverShaped }
         if width <= lowResThreshold { return .lowRes }
         return nil
@@ -47,12 +56,13 @@ public enum CoverArtReplacementGate {
     /// - `lowRes`:只有替代图确实比系统那份宽才换(缓存里可能存着一张同样小的图,白换)。
     /// - `notCoverShaped`:换的是**形状**不是分辨率,替代图自己是张方形封面就换 —— 不能再拿
     ///   「比系统那份宽」当门槛,否则 1280×720 的视频帧会把一张 600×600 的真封面挡在外面。
+    /// - `playerHasNoArtwork`:没有系统那份可比,替代图是张方形封面就换。
     public static func accepts(candidateWidth: Int, candidateHeight: Int,
                                systemWidth: Int, reason: Reason) -> Bool {
         switch reason {
         case .lowRes:
             return candidateWidth > systemWidth
-        case .notCoverShaped:
+        case .notCoverShaped, .playerHasNoArtwork:
             return isCoverShaped(width: candidateWidth, height: candidateHeight)
         }
     }

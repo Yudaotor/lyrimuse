@@ -22,6 +22,8 @@ import Foundation
 /// - KKBOX 那条是 `kkbox://song/<id>#view`,**在 KKBOX 里打开这首的页面**(不播放),所以写成「在 KKBOX 中显示」。
 /// - Amazon Music 那条是网页曲目页 `music.amazon.com/tracks/<ASIN>`(它的 URL scheme 没有公开的「打开这一首」写法),
 ///   跟 QQ / 网易云一样写成「歌曲页」。
+/// - Kaset 那条是 YouTube Music 网页歌曲页 `music.youtube.com/watch?v=<id>`:Kaset 的 `kaset://play?v=` 一打开就从这首
+///   开始放、换掉当前队列,不是「打开」的语义,所以同样只给网页。
 public struct PlatformLinks: Sendable, Equatable {
     /// Apple Music 曲目页(已是 `music://`,进 App)。
     public let appleMusic: URL?
@@ -41,14 +43,17 @@ public struct PlatformLinks: Sendable, Equatable {
     /// Amazon Music 曲目页 `https://music.amazon.com/tracks/<ASIN>`(浏览器)。collector 用它放这首时从日志里记下的 ASIN,
     /// 形状闸见 `amazonTrackURL`。
     public let amazonSong: URL?
+    /// YouTube Music 歌曲页 `https://music.youtube.com/watch?v=<id>`(浏览器)。collector 用 Kaset 放这首时按它报的 videoId
+    /// 拼的,形状闸见 `youtubeMusicWatchURL`。
+    public let youtubeMusicSong: URL?
 
     public var isEmpty: Bool {
         appleMusic == nil && qqSong == nil && qqAlbum == nil && qqArtist == nil && neteaseSong == nil && spotifySong == nil
-            && kkboxSong == nil && amazonSong == nil
+            && kkboxSong == nil && amazonSong == nil && youtubeMusicSong == nil
     }
 
     public init(appleMusic: URL?, qqSong: URL?, qqAlbum: URL?, qqArtist: URL?, neteaseSong: URL?, spotifySong: URL? = nil,
-                kkboxSong: URL? = nil, amazonSong: URL? = nil) {
+                kkboxSong: URL? = nil, amazonSong: URL? = nil, youtubeMusicSong: URL? = nil) {
         self.appleMusic = appleMusic
         self.qqSong = qqSong
         self.qqAlbum = qqAlbum
@@ -57,11 +62,12 @@ public struct PlatformLinks: Sendable, Equatable {
         self.spotifySong = spotifySong
         self.kkboxSong = kkboxSong
         self.amazonSong = amazonSong
+        self.youtubeMusicSong = youtubeMusicSong
     }
 
     /// 歌曲页所在的平台 —— 给「简介」面板那行选文案用(名字在 App 层本地化,这里只给身份)。
     public enum Platform: String, Sendable, Equatable {
-        case appleMusic, qqMusic, netease, spotify, kkbox, amazonMusic
+        case appleMusic, qqMusic, netease, spotify, kkbox, amazonMusic, youtubeMusic
     }
 
     /// **当前播放器自己那个平台**上这首歌的歌曲页(规则:简介面板的「网页」行
@@ -69,9 +75,10 @@ public struct PlatformLinks: Sendable, Equatable {
     ///
     /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →
     ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)→ Spotify 曲目页。
-    /// - 酷狗 / YouTube Music / 认不出来的播放器 → nil:collector 没存酷狗歌曲页(酷狗网页版能开的只有
-    ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),YouTube
-    ///   Music 压根没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
+    /// - Kaset → YouTube Music 歌曲页(用它放的时候 collector 才存)。
+    /// - 酷狗 / 浏览器里的 YouTube Music / 认不出来的播放器 → nil:collector 没存酷狗歌曲页(酷狗网页版能开的只有
+    ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),浏览器里放的
+    ///   YouTube Music 没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
     /// - 播放器认得出但这首歌在它那个平台上没链接(网易云版权下架的周杰伦、QQ 只有搜索兜底)→ 同样 nil。
     ///
     /// `webPlatformID` 是 `BrowserPositionProbe.playingPlatformID(forBundleID:)` 的结果(浏览器在放哪个
@@ -88,6 +95,7 @@ public struct PlatformLinks: Sendable, Equatable {
         case PlaybackPlayer.spotify.bundleIdentifier: return spotifySong.map { (.spotify, $0) }
         case PlaybackPlayer.kkbox.bundleIdentifier: return kkboxSong.map { (.kkbox, $0) }
         case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonSong.map { (.amazonMusic, $0) }
+        case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicSong.map { (.youtubeMusic, $0) }
         default: return nil
         }
     }
@@ -102,6 +110,23 @@ public struct PlatformLinks: Sendable, Equatable {
         let asin = raw.dropFirst(prefix.count)
         guard asin.count == 10, asin.allSatisfy({ ($0 >= "A" && $0 <= "Z") || ($0 >= "0" && $0 <= "9") }) else { return nil }
         return URL(string: raw)
+    }
+
+    /// collector 存的 YouTube Music 歌曲页。形状闸与 collector 的 `youtubeMusicWatchURL` 同源:videoId 是 11 位字母数字加
+    /// `-` `_`,别的一律不认。
+    public static func youtubeMusicWatchURL(_ raw: String) -> URL? {
+        let prefix = "https://music.youtube.com/watch?v="
+        guard raw.hasPrefix(prefix) else { return nil }
+        let id = raw.dropFirst(prefix.count)
+        guard id.count == 11, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return nil }
+        return URL(string: raw)
+    }
+
+    /// YouTube Music 歌曲页换成在 Kaset 里放这首的深链 `kaset://play?v=<id>`(打开就从这首开始放、换掉 Kaset 当前的队列,
+    /// 只给榜单右键那条明说「播放」的菜单用)。形状闸同 `youtubeMusicWatchURL`。
+    public static func kasetPlayURL(watchURL raw: String) -> URL? {
+        guard youtubeMusicWatchURL(raw) != nil else { return nil }
+        return URL(string: "kaset://play?v=" + raw.dropFirst("https://music.youtube.com/watch?v=".count))
     }
 
     /// collector 存的 KKBOX 歌曲页(`https://www.kkbox.com/<地区>/<语言>/song/<id>`)换成在 KKBOX 里打开这首的深链

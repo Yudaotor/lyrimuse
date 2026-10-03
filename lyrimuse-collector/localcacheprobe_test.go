@@ -29,7 +29,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		}
 	}()
 
-	// 播放器 → localCacheClientPaths 里的来源名。
+	// 播放器 → localCacheClientPaths 里的来源名;空串 = collector 不读它的任何客户端文件。
 	sourceOf := map[string]string{
 		playerAppleMusic:  "applemusic",
 		playerQQMusic:     "qq",
@@ -39,6 +39,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		playerSpotify:     "spotify",
 		playerKKBOX:       "kkbox",
 		playerAmazonMusic: "amazon",
+		playerKaset:       "",
 	}
 	paths := localCacheClientPaths()
 	for _, player := range allPlayerIDs {
@@ -48,6 +49,12 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		source, ok := sourceOf[player]
 		if !ok {
 			t.Errorf("%s 没登记读哪些客户端文件 —— 在 sourceOf 和 localCacheClientPaths 里补上", player)
+			continue
+		}
+		if source == "" {
+			if playerNeedsFullDiskAccess[player] {
+				t.Errorf("%s: collector 不读它的客户端文件,players.json 却要完全磁盘访问", player)
+			}
 			continue
 		}
 		list := paths[source]

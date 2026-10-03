@@ -1,0 +1,55 @@
+{
+ "current_index": 1,
+ "repeating": "off",
+ "tracks": [
+  {
+   "artist": "Michael Jackson",
+   "audio_video_id": "0JFbiCg-8n4",
+   "duration": 279,
+   "title": "Thriller 7\" (Special Edit)",
+   "video_id": "0JFbiCg-8n4"
+  },
+  {
+   "artist": "The Police",
+   "audio_video_id": "OMOGaugKpzs",
+   "duration": 229,
+   "title": "Every Breath You Take",
+   "video_id": "OMOGaugKpzs"
+  },
+  {
+   "artist": "Van Halen",
+   "audio_video_id": "SwYN7mTi6HM",
+   "duration": 243,
+   "title": "Jump (45 Version)",
+   "video_id": "SwYN7mTi6HM"
+  },
+  {
+   "artist": "a-ha",
+   "audio_video_id": "djV11Xbc914",
+   "duration": 244,
+   "title": "Take On Me",
+   "video_id": "djV11Xbc914"
+  },
+  {
+   "artist": "Eurythmics, Annie Lennox, Dave Stewart",
+   "audio_video_id": "qeMFqkcPYcg",
+   "duration": 215,
+   "title": "Sweet Dreams (Are Made Of This)",
+   "video_id": "qeMFqkcPYcg"
+  },
+  {
+   "artist": "Culture Club",
+   "audio_video_id": "JmcA9LIIXWw",
+   "duration": 239,
+   "title": "Karma Chameleon (Official Music Video)",
+   "video_id": "JmcA9LIIXWw"
+  },
+  {
+   "artist": "Cyndi Lauper",
+   "audio_video_id": "PIb6AZdTr-A",
+   "duration": 267,
+   "title": "Girls Just Want To Have Fun",
+   "video_id": "PIb6AZdTr-A"
+  }
+ ]
+}

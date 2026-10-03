@@ -57,6 +57,11 @@ func TestAppStateFixturesDecode(t *testing.T) {
 		t.Fatalf("amazon track id is only set for Amazon Music, got %q", playing.Track.AmazonTrackID)
 	}
 
+	kaset := loadAppStateFixture(t, "playing-kaset.json")
+	if kaset.Track.YouTubeMusicVideoID != "OMOGaugKpzs" || kaset.Player != kasetBundleID {
+		t.Fatalf("kaset video id should decode, got %q (%s)", kaset.Track.YouTubeMusicVideoID, kaset.Player)
+	}
+
 	amazon := loadAppStateFixture(t, "playing-amazon.json")
 	if amazon.Track.AmazonTrackID != "asin://B09GYHYMRR" || amazon.Player != amazonMusicBundleID {
 		t.Fatalf("amazon track id should decode, got %q (%s)", amazon.Track.AmazonTrackID, amazon.Player)

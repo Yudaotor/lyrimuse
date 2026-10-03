@@ -104,8 +104,10 @@ type appPlaybackTick struct {
 	ad             bool
 	spotifyTrackID string
 	amazonTrackID  string
-	loopRestart    bool
-	reanchor       bool
+	// youtubeMusicVideoID:Kaset 那首的 videoId(拼歌曲页用,见 kasetlink.go)。
+	youtubeMusicVideoID string
+	loopRestart         bool
+	reanchor            bool
 }
 
 // appPlaybackTickFor 把一份可用的 App 状态换成这一拍的快照与事件,同时给出下一拍要比的 marks。
@@ -155,7 +157,7 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 	}
 	samePID := rec.AppPID == prev.pid
 	tick := appPlaybackTick{snap: s, tracked: true, holding: rec.Holding, ad: t.Ad, spotifyTrackID: t.SpotifyTrackID,
-		amazonTrackID: t.AmazonTrackID}
+		amazonTrackID: t.AmazonTrackID, youtubeMusicVideoID: t.YouTubeMusicVideoID}
 	tick.loopRestart = samePID && key == prev.key && t.PlaySeq > prev.playSeq
 	tick.reanchor = !samePID || tick.loopRestart || anchorSeq != prev.anchorSeq
 	marks.playSeq, marks.anchorSeq, marks.key = t.PlaySeq, anchorSeq, key

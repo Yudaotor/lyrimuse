@@ -45,6 +45,15 @@ public struct MediaControlSnapshot: Decodable {
     /// media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。只用来显示,见
     /// `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台)都不经过 Apple Music 的 MV。
     public var isMusicVideo: Bool? = nil
+    /// 播放器说在放(或正要放),声音却还没走起来:加载、广告、缓冲卡住。这时 `playing` 是 false、位置停着,
+    /// `LocalPlaybackSource` 据此把轮询留在播放中的节拍,声音一走起来就接上(这几种时候播放器不一定发系统通知,
+    /// 按暂停档等 6 秒才看得到)。只有 Kaset 的快照填(`KasetPlayerInfo.snapshot`)。`with…` 系列副本不带它:
+    /// 那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)都不经过 Kaset。
+    public var isWaitingToPlay: Bool? = nil
+    /// 播放器自己给的广告结论:true = 在放广告,false = 在放正片,nil = 说不上来(或者这个播放器不给)。
+    /// 只有 Kaset 的快照填(`KasetPlayerInfo.snapshot`),喂给 `LocalPlaybackSource` 的「广告中」状态机。`with…` 系列副本不带它,
+    /// 理由同 `isWaitingToPlay`。
+    public var isAd: Bool? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 

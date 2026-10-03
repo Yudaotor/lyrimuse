@@ -398,6 +398,14 @@ type enrichEntry struct {
 	// (`https://music.amazon.com/tracks/<ASIN>`,见 amazonmusic.go amazonTrackURLFor)。App 和网页都原样用。
 	AmazonURL string `json:"amazon_url,omitempty"`
 
+	// YouTubeMusicURL:用 Kaset 放这首歌时,它报的 videoId 拼成的 YouTube Music 歌曲页
+	// (`https://music.youtube.com/watch?v=<id>`,见 kasetlink.go youtubeMusicTrackURLFor)。App 和网页都原样用。
+	YouTubeMusicURL string `json:"youtube_music_url,omitempty"`
+
+	// YouTubeMusicAlbum:用 Kaset 放这首歌时,YouTube Music 给它的音轨版本登记的专辑(见 kasetlink.go kasetListedAlbumFor)。
+	// 只给 App 界面的专辑位用(Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
+	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
+
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
 	//
@@ -426,6 +434,8 @@ func (e enrichEntry) fields() map[string]string {
 	put("spotify_track_id", e.SpotifyTrackID)
 	put("kkbox_url", e.KKBOXURL)
 	put("amazon_url", e.AmazonURL)
+	put("youtube_music_url", e.YouTubeMusicURL)
+	put("youtube_music_album", e.YouTubeMusicAlbum)
 	put("lyrics", e.Lyrics)
 	put("lyrics_tr", e.LyricsTr)
 	put("lyrics_roma", e.LyricsRoma)
@@ -648,6 +658,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
+	kasetVideoID := kasetVideoIDFor(bundleID, artist, title)
+	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
+	youtubeMusicAlbum := kasetListedAlbumFor(kasetVideoID)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
@@ -688,6 +701,14 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		if amazonURL != "" && e.AmazonURL != amazonURL {
 			e.AmazonURL = amazonURL
+			spotifyHintDirty = true
+		}
+		if youtubeMusicURL != "" && e.YouTubeMusicURL != youtubeMusicURL {
+			e.YouTubeMusicURL = youtubeMusicURL
+			spotifyHintDirty = true
+		}
+		if youtubeMusicAlbum != "" && e.YouTubeMusicAlbum != youtubeMusicAlbum {
+			e.YouTubeMusicAlbum = youtubeMusicAlbum
 			spotifyHintDirty = true
 		}
 		// 目录锚点跟电台真曲长一样是异步到位的,条目常常先带着按歌名搜出来的链接写下,锚点到了换成它的页面。
@@ -800,7 +821,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 不挂在 run() 的进程级 ctx 下面:进程整体退出时这些 goroutine 反正会跟着
 		// 主进程一起消失,不需要额外传导那层取消;这里只需要"能单独取消某一个 key"
 		// 这一件事。
-		cancelCtx, cancel := context.WithCancel(context.Background())
+		cancelCtx, cancel := context.WithCancel(withYouTubeMusicVideoID(context.Background(), kasetVideoID))
 		enrichCancelFuncs[key] = cancel
 		go resolveEnrichAsync(cancelCtx, key, artist, title, album, bundleID, durationSecs, isNewTrack)
 	}
@@ -1570,6 +1591,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
+	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
 
 	// 播放侧的后台重试没有"停止"入口(见 backfillPeripheralFields 同款注释);补空扫描 / 全量扫库
@@ -1892,6 +1914,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
+	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
 
 	// 播放侧的后台重试没有"停止"入口(见 backfillPeripheralFields 同款注释);补空扫描 / 全量扫库

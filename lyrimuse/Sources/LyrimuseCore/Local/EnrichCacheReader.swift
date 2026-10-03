@@ -67,6 +67,12 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     // Amazon Music 曲目页(collector 的 enrichEntry.AmazonURL,用 Amazon Music 放这首时从它日志里的 ASIN 拼的)。
     // 只喂 PlatformLinks.amazonSong。
     let amazonURL: String?
+    // YouTube Music 歌曲页(collector 的 enrichEntry.YouTubeMusicURL,用 Kaset 放这首时按它报的 videoId 拼的)。
+    // 只喂 PlatformLinks.youtubeMusicSong。
+    let youtubeMusicURL: String?
+    // YouTube Music 给这首的音轨版本登记的专辑(collector 的 enrichEntry.YouTubeMusicAlbum,用 Kaset 放这首时存的)。
+    // 只喂界面专辑位(LocalPlaybackSource.youtubeMusicAlbum)。
+    let youtubeMusicAlbum: String?
     // 这首歌的语种真值(collector/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
     // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。
@@ -123,6 +129,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case spotifyTrackID = "spotify_track_id"
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
+        case youtubeMusicURL = "youtube_music_url"
+        case youtubeMusicAlbum = "youtube_music_album"
         case songLanguage = "song_language"
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
@@ -338,8 +346,19 @@ public enum EnrichCacheReader {
             // 只认真曲目 ID;spotify_url 那个搜索页兜底不进来(理由见 PlatformLinks.spotifySong)。
             spotifySong: PlatformLinks.spotifyTrackURL(id: entry.spotifyTrackID ?? ""),
             kkboxSong: PlatformLinks.kkboxAppURL(songPage: entry.kkboxURL ?? ""),
-            amazonSong: PlatformLinks.amazonTrackURL(entry.amazonURL ?? ""))
+            amazonSong: PlatformLinks.amazonTrackURL(entry.amazonURL ?? ""),
+            youtubeMusicSong: PlatformLinks.youtubeMusicWatchURL(entry.youtubeMusicURL ?? ""))
         return links.isEmpty ? nil : links
+    }
+
+    /// 这首在 YouTube Music 上登记的专辑(用 Kaset 放时 collector 存的)。零网络,精确 key → 宽松 key 两级匹配;
+    /// 查不到或是空的返回 nil。只给界面专辑位用,播放器自己报了专辑时不看它。
+    public static func youtubeMusicAlbum(artist: String, title: String, album: String) -> String? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let listed = matchedEntry(key, in: all)?.youtubeMusicAlbum?.trimmingCharacters(in: .whitespaces),
+              !listed.isEmpty else { return nil }
+        return listed
     }
 
     /// 这首歌的**真实曲长**(秒),来自 collector 写进缓存的那份。零网络,沿用 lookup/sourceInfo
@@ -870,7 +889,8 @@ public enum EnrichCacheReader {
         guard kind == .track, let p = freshPlayingEntry() else { return nil }
         return ChartLinkIndex.build([
             ChartLinkIndex.Row(key: EnrichCacheKeys.strippingDurationVariant(p.key), appleMusicURL: p.entry.appleMusicURL,
-                               spotifyTrackID: p.entry.spotifyTrackID, kkboxURL: p.entry.kkboxURL),
+                               spotifyTrackID: p.entry.spotifyTrackID, kkboxURL: p.entry.kkboxURL,
+                               youtubeMusicURL: p.entry.youtubeMusicURL),
         ]).links(kind: .track, artist: artist, name: name, aliasArtist: PlayCountFold.canonicalArtist)
     }
 
@@ -882,7 +902,8 @@ public enum EnrichCacheReader {
         } else {
             index = ChartLinkIndex.build(all.map { key, entry in
                 ChartLinkIndex.Row(key: key, appleMusicURL: entry.appleMusicURL,
-                                   spotifyTrackID: entry.spotifyTrackID, kkboxURL: entry.kkboxURL)
+                                   spotifyTrackID: entry.spotifyTrackID, kkboxURL: entry.kkboxURL,
+                                   youtubeMusicURL: entry.youtubeMusicURL)
             }, looseKey: memoizedNameLooseKey)
             cachedChartLinkIndex = (cachedMTime, cachedFromIndex, index)
         }

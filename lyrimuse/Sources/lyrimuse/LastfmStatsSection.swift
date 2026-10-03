@@ -572,6 +572,10 @@ struct LastfmStatsSection: View {
         if let url = links?.kkbox, Self.isInstalled(.kkbox) {
             Button(String(format: L10n.t("在 %@ 中打开"), "KKBOX")) { NSWorkspace.shared.open(url) }
         }
+        // Kaset 只有「从这首开始放」一种外部入口(会换掉它当前的队列),所以写「播放」不写「打开」。
+        if let url = links?.kaset, Self.isInstalled(.kaset) {
+            Button(String(format: L10n.t("在 %@ 中播放"), "Kaset")) { NSWorkspace.shared.open(url) }
+        }
     }
 
     fileprivate static func appLinksHaveMenu(_ links: ChartAppLinks?) -> Bool {
@@ -580,6 +584,7 @@ struct LastfmStatsSection: View {
             || links.artistPages?.appleMusic != nil
             || ((links.spotify ?? links.artistPages?.spotify) != nil && Self.isInstalled(.spotify))
             || (links.kkbox != nil && Self.isInstalled(.kkbox))
+            || (links.kaset != nil && Self.isInstalled(.kaset))
     }
 
     /// 装没装这个播放器,按 bundle id 记 30 秒:榜单每一行渲染都要问(Top 50 时一次渲染最多上百次),而整张卡

@@ -20,6 +20,11 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-
 //   MediaRemote 独有的键),认出是 Spotify 之后由 `adaptedSnapshot` 整份换成 AppleScript 那份。
 //   它的 `duration` 是**毫秒**,Music.app 那份是秒。
 //
+// - Kaset(YouTube Music 的原生客户端):也有字典,`get player info` 一次给出曲目、时长、位置与播放状态。
+//   系统 Now Playing 里它那份维护得很差(播放中交给 WebKit、换歌后常停在上一首),同样由 `adaptedSnapshot`
+//   整份顶替;系统那边一拍都没有它、或者落回别的播放器暂停着的旧会话时,它开着就直接问
+//   (`preferringPlayingKaset`)。解读见 KasetPlayerInfo。
+//
 // - QQ 音乐/网易云音乐:用 `sdef`/PlistBuddy 核实过,两者都完全没有 AppleScript 支持
 //   (没有 .sdef 文件,也没开 NSAppleScriptEnabled)——AppleScript 这条路对它们都是死路,
 //   只能改走系统级 MediaRemote(经内置的 `media-control` 二进制读,build.sh 从 Homebrew
@@ -78,6 +83,9 @@ public enum MediaControlClient {
     ) -> (snapshot: MediaControlSnapshot?, provenance: SnapshotProvenance?) {
         // 这一拍的归因从零开始记(只影响日志,不影响行为)。见 SnapshotFailure。
         setSnapshotFailure(nil)
+        kasetLock.lock()
+        kasetAskedThisRound = false
+        kasetLock.unlock()
         let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
         // collector 那边已经换成真署名了 —— 两边不一致的话,歌词缓存的 key 就对不上。
@@ -102,10 +110,13 @@ public enum MediaControlClient {
     }
 
     private static func rawSnapshot(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
-        if players.contains(.auto) { return heldAcrossPlayerGap(fetchAutoDetectedSnapshot()) }
+        // 这份设置不认 Kaset(没开自动识别也没勾它)时,上一次顶替系统那边的记录作废,播放控制别再发给它。
+        if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }
+        if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
-        return heldAcrossPlayerGap(fetchMultiSelectedSnapshot(players))
+        let selected = fetchMultiSelectedSnapshot(players)
+        return heldAcrossPlayerGap(players.contains(.kaset) ? preferringPlayingKaset(selected) : selected)
     }
 
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
@@ -355,6 +366,137 @@ public enum MediaControlClient {
         // 位置是在脚本快结束时读的(实测慢调用的读数跟着调用结束时刻走,±0.05s),就按这一刻记。
         decoded.capturedAt = Date()
         return decoded
+    }
+
+    // MARK: - Kaset
+
+    /// Kaset 的 AppleScript 读数:原样的 JSON 串连同读数调用返回那一刻的墙钟一起回(解读在
+    /// `KasetPlayerInfo.parseScriptOutput`)。没在跑时回空串,不会把它拉起来。
+    private static let kasetScript = """
+    (() => {
+        const K = Application("Kaset");
+        try {
+            if (!K.running()) return "";
+        } catch (e) {
+            return "";
+        }
+        try {
+            const info = K.getPlayerInfo();
+            return JSON.stringify({ readAtMs: Date.now(), info: info });
+        } catch (e) {
+            return "";
+        }
+    })()
+    """
+
+    private static let kasetLock = NSLock()
+    /// 位置最近一次变化,认卡顿用(见 `KasetPlayerInfo.isAdvancing`)。
+    private static var kasetLastMove: KasetPlayerInfo.LastMove?
+    /// 这一拍已经问过 Kaset 了(`fetchSnapshotWithProvenance` 入口清零),同一拍不问第二次。
+    private static var kasetAskedThisRound = false
+    /// 最近一次读到的那首(曲目身份同快照的 `trackKey`)和它的 videoId,写播放状态用(`kasetVideoID`)。
+    private static var kasetLastVideo: (trackKey: String, videoID: String)?
+    /// 这首最先报的歌名与署名(`KasetPlayerInfo.steadyIdentity`)。
+    private static var kasetFirstReport: KasetPlayerInfo.FirstReport?
+    /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
+    /// 播放控制据此直接发给 Kaset(`focusControlTarget`),日志在它变化时打一条。
+    private static var kasetPreferredOver: String?
+
+    /// 问一次 Kaset。拿不到(没在跑、没有当前曲目、没授「自动化」权限、超时)返回 nil,不记失败原因:
+    /// 两个调用方各自决定这算不算这一拍的失败。
+    private static func readKasetSnapshot() -> MediaControlSnapshot? {
+        kasetLock.lock()
+        kasetAskedThisRound = true
+        kasetLock.unlock()
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", kasetScript],
+            timeout: MusicPlaybackController.appleScriptTimeout),
+            r.succeeded,
+            let (raw, readAt) = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date())
+        else { return nil }
+        kasetLock.lock()
+        let steady = KasetPlayerInfo.steadyIdentity(raw, first: kasetFirstReport)
+        kasetFirstReport = steady.first
+        kasetLock.unlock()
+        let reading = raw.withIdentity(title: steady.title, artist: steady.artist)
+        let snapshot = KasetPlayerInfo.snapshot(reading, lastMove: kasetLastMoveSnapshot(), capturedAt: readAt)
+        kasetLock.lock()
+        kasetLastMove = KasetPlayerInfo.nextMove(after: kasetLastMove, reading: reading, at: readAt)
+        kasetLastVideo = reading.videoID.map { (snapshot.trackKey, $0) }
+        kasetLock.unlock()
+        return snapshot
+    }
+
+    private static func kasetLastMoveSnapshot() -> KasetPlayerInfo.LastMove? {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        return kasetLastMove
+    }
+
+    /// Kaset 最近一次报的这首(按快照的 `trackKey` 认)的 videoId;不是这首、或者没读到过为 nil。
+    public static func kasetVideoID(forTrackKey key: String) -> String? {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        guard let last = kasetLastVideo, last.trackKey == key else { return nil }
+        return last.videoID
+    }
+
+    private static func fetchKasetSnapshot() -> MediaControlSnapshot? {
+        guard let snapshot = readKasetSnapshot() else {
+            setSnapshotFailure(.appleScriptUnavailable)
+            return nil
+        }
+        return snapshot
+    }
+
+    /// 这一拍别的来源没给出在放的歌、Kaset 又开着,就直接问它一次。
+    ///
+    /// Kaset 在放时系统里可能一拍都没有它:会话交给了 WebKit(歌名歌手是空的,bundle id 报成 WebKit 的媒体进程),
+    /// 换歌加载时它自己那份又整个撤掉。光等系统认出它,可能一整首都等不到,系统那边还会落回别的播放器暂停着的旧会话。
+    /// 别的来源什么都没有时,Kaset 暂停着的那首也照样报(跟 Music.app 暂停着同一个口径);别的来源有一首暂停着的,
+    /// 只在 Kaset 在放或正要放时才换过去。换过去之后记在 `kasetPreferredOver`:`focusControlTarget` 据此把播放控制
+    /// 直接发给它,不然 media-control 的指令会落在系统焦点上的那个 App 身上。别改成按焦点回退那套记账:系统那边每一拍
+    /// 照样认下别的播放器(`noteAccepted`),回退开关一拍一翻,两条日志每拍各打一遍。
+    ///
+    /// 只在 Kaset 开着时才发 Apple Event,不用它的人一次都碰不到,不会凭空多弹「自动化」权限框。
+    private static func preferringPlayingKaset(_ found: MediaControlSnapshot?) -> MediaControlSnapshot? {
+        let kaset = kasetToPrefer(over: found)
+        let other = kaset == nil ? nil : (found?.bundleIdentifier ?? "nothing")
+        kasetLock.lock()
+        let changed = kasetPreferredOver != other
+        kasetPreferredOver = other
+        kasetLock.unlock()
+        if changed, let other {
+            logger.notice("now playing: the system reports \(other, privacy: .public); reading Kaset via AppleScript")
+        }
+        return kaset ?? found
+    }
+
+    private static func forgetKasetPreference() {
+        kasetLock.lock()
+        kasetPreferredOver = nil
+        kasetLock.unlock()
+    }
+
+    private static func kasetToPrefer(over found: MediaControlSnapshot?) -> MediaControlSnapshot? {
+        if let found, found.playing == true || found.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier {
+            return nil
+        }
+        kasetLock.lock()
+        let asked = kasetAskedThisRound
+        kasetLock.unlock()
+        guard !asked,
+              !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier).isEmpty,
+              let kaset = readKasetSnapshot(),
+              Self.kasetWins(over: found, kaset: kaset)
+        else { return nil }
+        return kaset
+    }
+
+    /// 别的来源这一拍给出的(nil = 什么都没有)跟 Kaset 自己报的,用哪个。纯函数,selftest 覆盖。
+    public static func kasetWins(over found: MediaControlSnapshot?, kaset: MediaControlSnapshot) -> Bool {
+        if let found, found.playing == true { return false }
+        return found == nil || kaset.playing == true || kaset.isWaitingToPlay == true
     }
 
     // MARK: - 「只勾了 Apple Music」这条路上的电台判据
@@ -746,6 +888,10 @@ public enum MediaControlClient {
     /// 直接发给它。media-control 的控制指令作用于系统焦点,焦点被占时发出去落在占用者(网页视频)身上,通道坏了时
     /// 根本发不出去。经 per-client 探针回退的不算:那说明它的 AppleScript 这时就不通。
     public static func focusControlTarget() -> PlaybackPlayer? {
+        kasetLock.lock()
+        let kasetPreferred = kasetPreferredOver != nil
+        kasetLock.unlock()
+        if kasetPreferred { return .kaset }
         appleMusicFocusLock.lock()
         defer { appleMusicFocusLock.unlock() }
         if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }
@@ -877,7 +1023,7 @@ public enum MediaControlClient {
             if let failure = failureWithoutFallbackTarget(targetConfirmedGone: targetGone) { setSnapshotFailure(failure) }
             return nil
         }
-        // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify 有 AppleScript 字典)。
+        // 第一级:问播放器**自己的钟**(只有 Apple Music / Spotify / Kaset 有 AppleScript 字典)。
         //
         // 顺序是这样定的,别调过来:per-client 探针拿回来的是**同一份 MediaRemote 载荷**,
         // 因此原样继承了那条链的锚点缺陷 —— Spotify 的开播锚点实测晚 ~2s(决策 28:+1.91 /
@@ -889,13 +1035,15 @@ public enum MediaControlClient {
         switch player {
         case .appleMusic: snapshot = fetchAppleMusicSnapshot()
         case .spotify: snapshot = fetchSpotifySnapshot()
+        case .kaset: snapshot = fetchKasetSnapshot()
         default: break
         }
         let viaAppleScript = snapshot != nil
         // 第二级:按 bundle id 直接问系统。不受焦点影响,而且是**没有 AppleScript 字典的那几家**
-        // (QQ 音乐 / 网易云 / 酷狗 / 汽水音乐)唯一能问到真相的通路;对上面两家则是字典不可用
+        // (QQ 音乐 / 网易云 / 酷狗 / 汽水音乐)唯一能问到真相的通路;对 Apple Music / Spotify 则是字典不可用
         // (没装 helper 之外的情况:Music.app 没在跑、自动化权限被收回)时的兜底。
-        if snapshot == nil {
+        // Kaset 不走这一级:系统按 bundle id 存着的就是它自己发的那份,换歌后常停在上一首(见 KasetPlayerInfo 头注)。
+        if snapshot == nil, player != .kaset {
             snapshot = NowPlayingClientsProbe.snapshot(forBundleID: player.bundleIdentifier)
         }
         // 回退问到的这一份跟主路径过同一道闸:KKBOX / Amazon 在放播客单集、
@@ -975,16 +1123,16 @@ public enum MediaControlClient {
         execFailures >= channelExecFailThreshold || testFailed
     }
 
-    /// 通道坏了时按顺序问谁:勾了「自动识别」两家都问,否则只问勾了的。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX
+    /// 通道坏了时按顺序问谁:勾了「自动识别」三家都问,否则只问勾了的。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX
     /// 没有 AppleScript 字典,按 bundle id 直查系统的那条路(`NowPlayingClientsProbe`)也是 MediaRemote,跟着一起坏,
     /// 不在其列。纯函数,selftest 覆盖。
     public static func channelFallbackCandidates(selected: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
-        let order: [PlaybackPlayer] = [.appleMusic, .spotify]
+        let order: [PlaybackPlayer] = [.appleMusic, .spotify, .kaset]
         if selected.contains(.auto) { return order }
         return order.filter(selected.contains)
     }
 
-    /// media-control 通道坏了(`channelLooksBroken`)时,直接问还开着的 Apple Music / Spotify:在放的优先,都没在放取
+    /// media-control 通道坏了(`channelLooksBroken`)时,直接问还开着的 Apple Music / Spotify / Kaset:在放的优先,都没在放取
     /// 第一个暂停着的。没开着的不问(不 fork osascript,也不会对从不用它的人弹自动化授权)。
     ///
     /// `snapshotAfterFocusLost` 那条回退只在「上一份被接受的快照」存在时才走,通道一启动就坏的话开关永远点不亮,
@@ -1006,7 +1154,12 @@ public enum MediaControlClient {
         for player in channelFallbackCandidates(selected: players) {
             guard !NSRunningApplication.runningApplications(withBundleIdentifier: player.bundleIdentifier).isEmpty
             else { continue }
-            let snapshot = player == .appleMusic ? fetchAppleMusicSnapshot() : fetchSpotifySnapshot()
+            let snapshot: MediaControlSnapshot?
+            switch player {
+            case .appleMusic: snapshot = fetchAppleMusicSnapshot()
+            case .kaset: snapshot = fetchKasetSnapshot()
+            default: snapshot = fetchSpotifySnapshot()
+            }
             guard let snapshot else { continue }
             if snapshot.playing == true {
                 chosen = (player, snapshot)
@@ -1165,7 +1318,7 @@ public enum MediaControlClient {
     /// media-control 在这一层只回答一件事:**现在是谁在放**。识别出来的播放器如果有自己的
     /// 适配方式,就走那条;不因为用户勾没勾「自动识别」而退回通用通路。
     ///
-    /// 有自己 AppleScript 字典的两家 —— Apple Music 与 Spotify —— 各走各的直问路径。QQ 音乐 /
+    /// 有自己 AppleScript 字典的三家 —— Apple Music、Spotify 与 Kaset —— 各走各的直问路径。QQ 音乐 /
     /// 网易云 / 酷狗 / 汽水音乐都没有字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),继续走
     /// media-control,这里原样放行。
     ///
@@ -1208,6 +1361,9 @@ public enum MediaControlClient {
                 return fromNotice
             }
             return spotifyFallbackCaughtUp(mediaControl, waited: now.timeIntervalSince(asked), now: now)
+        case PlaybackPlayer.kaset.bundleIdentifier:
+            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。
+            return fetchKasetSnapshot() ?? mediaControl
         default:
             return mediaControl
         }

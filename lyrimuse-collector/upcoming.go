@@ -27,6 +27,8 @@ import (
 //   Spotify 网页版 —— 读网页播放器自己的队列接口(见 spotifyweb.go),名字跟 MediaSession 同源。
 //   KKBOX        —— 打乱后的队列不落盘;落盘的是播放上下文和那个歌单 / 专辑的接口缓存,拼出整份曲目表
 //                   (见 kkboxqueue.go)。开着随机时按 shuffleCandidates 交一批。
+//   Kaset        —— App 代问它的 AppleScript `get play queue`,队列就是播放顺序(开随机也是);曲目身份由 App
+//                   整理好(见 kasetqueue.go)。
 //
 // 所以队列路径拿不到时**退回同专辑预取**,而不是什么都不做:这些情况恰恰会从"有预取"
 // 退成"没有"。系统层面也没有兜底 —— MediaRemote 的导出符号里,队列相关的全是
@@ -50,6 +52,8 @@ type upcomingTrack struct {
 	artist, title, album string
 	// duration 是秒;0 表示这个来源没给,交给解析路径自己去问。
 	duration float64
+	// videoID:YouTube Music 的 videoId(Kaset 的队列给);别家为空。解析时挂到 ctx 上,换名重搜能问到原名(ytmusiccredit.go)。
+	videoID string
 }
 
 // upcomingFromQueue 取这个播放器接下来会播的几首。
@@ -80,6 +84,8 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return kkboxUpcoming(artist, title, n)
 	case amazonMusicBundleID:
 		return amazonUpcoming(artist, title, n)
+	case kasetBundleID:
+		return kasetUpcoming(artist, title, n)
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }
@@ -255,8 +261,9 @@ func queueUpcomingEnrich(tracks []upcomingTrack, gen uint64) {
 		// 不能拿来当这些曲目的封面(同 albumprefetch.go 的调用点)。
 		// 曲名先过 normEnrichTitle,跟 trackEnrichment 发起搜索用同一份查询词:key 里剥掉的尾括号
 		// (「（合作音乐人:X）」这类)原样发给歌词源会全部落空,落下的空条目正好占着播放时的 key。
-		// 解析完接着排机翻,播到时译文已经在缓存里(见 translatestart.go)。
-		go resolveEnrichAsync(withBackgroundOutbound(withTranslateAfterResolve(context.Background())), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
+		// 解析完接着排机翻,播到时译文已经在缓存里(见 translatestart.go)。videoId 只有 Kaset 的待播带,
+		// 换名重搜时用它问 YouTube Music 登记的原名(见 ytmusiccredit.go)。
+		go resolveEnrichAsync(withBackgroundOutbound(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID))), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
 	}
 	// 正常路径也打一行 —— 同专辑那条路当初只在"超上限被跳过"时打日志,于是"预取到底跑没跑"
 	// 完全不可观测,排查时卡在过这一点上。

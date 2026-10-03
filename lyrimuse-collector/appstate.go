@@ -56,6 +56,8 @@ type appStateTrack struct {
 	// AmazonTrackID:Amazon Music 这首在它日志里的曲目标识(`asin://<ASIN>`,播客是 `podcast://…`)。App 这一拍的位置
 	// 是从日志认出这首时才有;没有为空。
 	AmazonTrackID string `json:"amazon_track_id,omitempty"`
+	// YouTubeMusicVideoID:Kaset 放这首时它报的 YouTube Music videoId;别的播放器为空。
+	YouTubeMusicVideoID string `json:"youtube_music_video_id,omitempty"`
 }
 
 type appStatePosition struct {

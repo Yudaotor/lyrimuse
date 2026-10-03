@@ -769,6 +769,10 @@ func (p *poller) albumHintFor(s snapshot) string {
 	if s.Album != "" || s.Title == "" || s.Artist == "" || isAdBreak(s.Bundle, s.Artist, s.Title, s.Album) {
 		return ""
 	}
+	// 用 Kaset 放的歌先用 YouTube Music 给它登记的专辑:App 界面专辑位显示的就是它,上送跟界面一致。
+	if album := kasetListedAlbumFor(kasetVideoIDFor(s.Bundle, s.Artist, s.Title)); album != "" {
+		return album
+	}
 	return appleAlbumHint(p.ctx, s.Artist, s.Title, albumHintDurationSecs(s), lyricResolvedArtists(s.Artist, s.Title, s.Album))
 }
 
@@ -1609,6 +1613,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	p.appSpotifyTrackID = t.spotifyTrackID
 	noteAppReportedAd(p.cur, t.ad)
 	noteAmazonCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.amazonTrackID)
+	noteKasetCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.youtubeMusicVideoID)
 	if p.cur.Radio {
 		noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
 	}

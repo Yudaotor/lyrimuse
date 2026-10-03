@@ -5,11 +5,12 @@ import os
 /// Lyrimuse 一条,授权框也只可能来自 App。
 ///
 /// collector 写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
-/// 四段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把原始输出写回
+/// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把原始输出写回
 /// `lyrimuse-player-query-reply.json`。输出怎么解析留在 collector(`appquery.go` 与各家的
 /// parse 函数);契约两边各钉一份:selftest「player-query」组、Go `appquery_test.go`(读这个文件对账)。
+/// Kaset 的队列例外:曲目身份按 App 的口径整理好再回(`KasetPlayerInfo.queueReply`),collector 不另推一遍。
 ///
-/// 只认这五种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
+/// 只认这六种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(collector 那边早不等了)。一次只处理一份请求,collector 那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
@@ -42,6 +43,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case appleMusicAlbumTracks = "apple_music_album_tracks"
         case spotifyShuffle = "spotify_shuffle"
         case browserQueue = "browser_queue"
+        case kasetQueue = "kaset_queue"
     }
 
     public struct Request: Codable, Equatable, Sendable {
@@ -105,6 +107,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case appleMusicAlbumTracks(album: String)
         case spotifyShuffle
         case browserQueue(bundleID: String, platformID: String)
+        /// Kaset 的待播队列连同循环模式,整理成 `KasetPlayerInfo.QueueReply` 的 JSON。
+        case kasetQueue
     }
 
     public enum Decision: Equatable, Sendable {
@@ -142,6 +146,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
                 return .fail("unsupported platform")
             }
             return .run(.browserQueue(bundleID: bundleID, platformID: platform))
+        case .kasetQueue:
+            return .run(.kasetQueue)
         }
     }
 
@@ -232,6 +238,23 @@ public final class PlayerQueryServer: @unchecked Sendable {
         end tell
         """
     }
+
+    /// Kaset 的播放队列与播放状态一次取回(JXA,两段原样的 JSON 串);没在跑时回空串,不拉起它。
+    public static let kasetQueueScript = """
+    (() => {
+        const K = Application("Kaset");
+        try {
+            if (!K.running()) return "";
+        } catch (e) {
+            return "";
+        }
+        try {
+            return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });
+        } catch (e) {
+            return "";
+        }
+    })()
+    """
 
     /// Spotify 有没有开随机:输出 `true` / `false`;没在跑时输出空,不拉起它。
     public static let spotifyShuffleScript = #"if application "Spotify" is running then tell application "Spotify" to return shuffling"#
@@ -379,7 +402,18 @@ public final class PlayerQueryServer: @unchecked Sendable {
                 bundleID: bundleID, family: family, hostMarker: site.hostMarker, js: site.js,
                 eventTimeoutSeconds: Self.browserEventTimeoutSeconds, processTimeout: Self.scriptTimeout, label: "player-query")
             return makeReply(id: id, output: output, error: "script failed")
+        case .kasetQueue:
+            let reply = Self.osascript(Self.kasetQueueScript, timeout: Self.scriptTimeout, javaScript: true)
+                .flatMap { KasetPlayerInfo.queueReply(fromScriptOutput: Data($0.utf8)) }
+            return makeReply(id: id, output: reply.flatMap(Self.encodedQueueReply), error: "queue unavailable")
         }
+    }
+
+    /// `QueueReply` 的 JSON(键排好序,collector 那边按键名解)。
+    public static func encodedQueueReply(_ reply: KasetPlayerInfo.QueueReply) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return (try? encoder.encode(reply)).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     /// output 为 nil = 没跑成,答 ok=false 带上 error。
@@ -396,8 +430,9 @@ public final class PlayerQueryServer: @unchecked Sendable {
         }
     }
 
-    private static func osascript(_ source: String, timeout: TimeInterval) -> String? {
-        guard let result = ProcessRunner.run("/usr/bin/osascript", ["-e", source], timeout: timeout),
+    private static func osascript(_ source: String, timeout: TimeInterval, javaScript: Bool = false) -> String? {
+        let args = javaScript ? ["-l", "JavaScript", "-e", source] : ["-e", source]
+        guard let result = ProcessRunner.run("/usr/bin/osascript", args, timeout: timeout),
               result.succeeded
         else { return nil }
         return result.stdoutText

@@ -24,6 +24,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case spotify = "spotify"
     /// CEF 桌面客户端(x86_64,在 Apple 芯片上走 Rosetta),走 media-control,没有 AppleScript 字典、没有沙盒。系统 Now Playing 里**没有 elapsedTime**:时间戳是这首真正出声(缓冲完)的时刻,暂停只翻 playing、playbackRate 恒为 1、时间戳不动,拖动进度什么都不报,media-control 的 seek 命令它也不响应。所以位置不取系统值,由 AmazonMusicPlayhead 按它自己的日志(开播 / 暂停 / 恢复 / 拖动 / 缓冲卡顿)重放,读不到日志时退回按开播时刻加暂停记时;换上去的是干净锚点,归 cleanExtrapolated。切歌不撤会话,开播的 0 锚点不重发,歌手不晚到。刚开播时偶尔先发一帧上一次会话的旧曲目(旧时间戳、playing 为真),约 3 秒后才换成真的。播客歌手、专辑为空、时长大于 0。多个歌手用 ` & ` 连,专辑名常带 ` [Explicit]`。nativeLyricSource 填 amazon:不是歌词源,是用它放歌时读它自己缓存里的那份歌词(逐行、毫秒,按 ASIN 认身份,见 amazonlibrary.go),享受同源加权。processName 12 字节。
     case amazonMusic = "amazon_music"
+    /// YouTube Music 的原生客户端:Swift 外壳加一个隐藏的 WKWebView 跑 YouTube Music 网页版放歌,有 AppleScript 字典(`get player info` 回一段 JSON:曲目、时长、位置、播放状态、videoId),没有沙盒。系统 Now Playing 里它那份靠不住:播放中把会话交给 WebKit(那份只有时长和进度、歌名歌手是空的,bundle id 报成 com.apple.WebKit.GPU),自己只在暂停、加载的空档发一份只有歌名歌手的,所以连播换歌后常停在上一首,换歌加载时整个撤掉、放起来也不一定补回。曲目与位置因此整份换成 AppleScript 那份(KasetPlayerInfo),系统那边只用来认是不是它在放,一拍都没有它时它开着就直接问。位置是网页 video.currentTime 每 0.5 秒推一次的值,读到的只会比真值晚 0~0.5 秒、不会早,跟 QQ 音乐、网易云的整秒下取整同一类,归 noisyFloored。广告与开播缓冲时报在放、位置停在 0,曲尾偶尔卡住(报在放、位置不动),都按没在走算。署名是逐个艺人用 `, ` 连起来的,界面语言是中文时会把「、」「和」这类连接词也当成艺人;专辑一栏放歌单时填的是歌单名,不用。media-control 的播放、暂停、切歌、跳转它都响应,快进 15 秒不响应。nativeLyricSource 填 lyricfind:它放的是 YouTube Music 曲库,显示的是 YouTube Music 自己的歌词(这一源只收 LyricFind 那部分)。processName 5 字节。
+    case kaset = "kaset"
     /// 不是一个具体 App——把「谁在报 Now Playing」交给系统仲裁。bundleID 空字符串是刻意的,调用方据此 no-op 掉需要具体 App 的联动。
     case auto = "auto"
 
@@ -41,6 +43,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kkbox: return "com.kkbox.electron-app"
         case .spotify: return "com.spotify.client"
         case .amazonMusic: return "com.amazon.music"
+        case .kaset: return "com.sertacozercan.Kaset"
         case .auto: return ""
         }
     }
@@ -55,6 +58,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .soda: return "soda"
         case .kkbox: return "kkbox"
         case .amazonMusic: return "amazon"
+        case .kaset: return "lyricfind"
         default: return nil
         }
     }
@@ -72,6 +76,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kkbox: return "cleanExtrapolated"
         case .spotify: return "precise"
         case .amazonMusic: return "cleanExtrapolated"
+        case .kaset: return "noisyFloored"
         default: return nil
         }
     }
@@ -84,6 +89,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         switch self {
         case .appleMusic: return true
         case .spotify: return true
+        case .kaset: return true
         default: return false
         }
     }

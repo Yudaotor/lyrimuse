@@ -11,14 +11,14 @@ import (
 )
 
 // 预解析要的那几样播放器查询交给 App 代跑:Music.app 的系统待播队列与当前列表往后几首、Music.app 资料库里某张专辑的曲目、
-// Spotify 有没有开随机、浏览器里 YouTube Music / Spotify 网页版的待播队列。collector 自己不发 AppleEvent,
+// Spotify 有没有开随机、浏览器里 YouTube Music / Spotify 网页版的待播队列、Kaset 的待播队列。collector 自己不发 AppleEvent,
 // 系统设置「自动化」里只剩 Lyrimuse 一条,授权框也只可能来自 App。
 //
 // 通道是一对共享文件:collector 写一份带类型的请求(`lyrimuse-player-query-request.json`,种类 + 参数,不带脚本),
 // App 只跑自己内置的那几段只读脚本,把原始输出写回 `lyrimuse-player-query-reply.json`(App 侧 PlayerQueryServer)。
 // 一次只有一个请求在途,按 id 认应答。App 不可用(没在跑、退出中)时不发,直接当查不到,调用方照旧退回同专辑预取。
 // 输出怎么解析留在各自的调用方(parseAppleMusicSystemQueue / parseAppleMusicUpcoming / parseMusicAppAlbumTracks /
-// parseYTMusicQueue / parseSpotifyWebQueue)。
+// parseYTMusicQueue / parseSpotifyWebQueue / parseKasetQueue)。Kaset 那份 App 已经按自己的口径整理过曲目身份,见 kasetqueue.go。
 
 const (
 	appQueryAppleMusicQueue       = "apple_music_queue"
@@ -26,6 +26,7 @@ const (
 	appQueryAppleMusicAlbumTracks = "apple_music_album_tracks"
 	appQuerySpotifyShuffle        = "spotify_shuffle"
 	appQueryBrowserQueue          = "browser_queue"
+	appQueryKasetQueue            = "kaset_queue"
 
 	appQuerySchema = 1
 

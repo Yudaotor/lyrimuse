@@ -3178,6 +3178,29 @@
         }
       }
     },
+    "YouTube Music 歌曲页" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music song page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music 歌曲页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music 歌曲頁"
+          }
+        }
+      }
+    },
     "QQ 音乐歌曲页" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7661,6 +7684,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 %@ 中打開"
+          }
+        }
+      }
+    },
+    "在 %@ 中播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 %@ 中播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 %@ 中播放"
           }
         }
       }

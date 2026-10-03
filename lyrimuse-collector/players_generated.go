@@ -16,6 +16,7 @@ const (
 	playerKKBOX       = "kkbox"
 	playerSpotify     = "spotify"
 	playerAmazonMusic = "amazon_music"
+	playerKaset       = "kaset"
 	playerAuto        = "auto"
 )
 
@@ -29,6 +30,7 @@ const (
 	kkboxBundleID        = "com.kkbox.electron-app"
 	spotifyBundleID      = "com.spotify.client"
 	amazonMusicBundleID  = "com.amazon.music"
+	kasetBundleID        = "com.sertacozercan.Kaset"
 )
 
 // allPlayerIDs 是 "players" 字段的全部合法取值(含 auto),isValidPlayerValue 用。
@@ -41,6 +43,7 @@ var allPlayerIDs = []string{
 	playerKKBOX,
 	playerSpotify,
 	playerAmazonMusic,
+	playerKaset,
 	playerAuto,
 }
 
@@ -55,6 +58,7 @@ var playerBundleIDs = map[string]string{
 	playerKKBOX:       kkboxBundleID,
 	playerSpotify:     spotifyBundleID,
 	playerAmazonMusic: amazonMusicBundleID,
+	playerKaset:       kasetBundleID,
 }
 
 // builtinPlayerBundleIDs 是内置播放器的 bundle id 集合 —— isKnownPlayerBundleID
@@ -68,6 +72,7 @@ var builtinPlayerBundleIDs = map[string]bool{
 	kkboxBundleID:        true,
 	spotifyBundleID:      true,
 	amazonMusicBundleID:  true,
+	kasetBundleID:        true,
 }
 
 // playerProcessNames 是「播放器标识 → 可执行文件名」,companion-launch 的 pgrep -x 用。
@@ -81,10 +86,11 @@ var playerProcessNames = map[string]string{
 	playerKKBOX:       "KKBOX",
 	playerSpotify:     "Spotify",
 	playerAmazonMusic: "Amazon Music",
+	playerKaset:       "Kaset",
 }
 
 // knownPlayerProcessNames 是上表的全部取值 —— 选了「自动识别」时盯全部。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music"}
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "酷狗音乐", "汽水音乐", "KKBOX", "Spotify", "Amazon Music", "Kaset"}
 
 // playerScrobbleLabels 是「bundle id → ListenBrainz 的 media_player 标签」。
 var playerScrobbleLabels = map[string]string{
@@ -96,6 +102,7 @@ var playerScrobbleLabels = map[string]string{
 	kkboxBundleID:        "KKBOX (macOS)",
 	spotifyBundleID:      "Spotify (macOS)",
 	amazonMusicBundleID:  "Amazon Music (macOS)",
+	kasetBundleID:        "Kaset (macOS)",
 }
 
 // defaultScrobbleLabel:既不是内置播放器、也不在信任列表里时的兜底标签。
@@ -111,6 +118,7 @@ var playerNativeLyricSources = map[string]string{
 	playerSoda:        "soda",
 	playerKKBOX:       "kkbox",
 	playerAmazonMusic: "amazon",
+	playerKaset:       "lyricfind",
 }
 
 // playerNeedsFullDiskAccess 是「播放器标识 → collector 读它的客户端文件要不要

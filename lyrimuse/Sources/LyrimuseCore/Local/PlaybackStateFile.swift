@@ -85,6 +85,8 @@ public enum PlaybackStateFile {
         public var spotifyTrackID: String? = nil
         /// Amazon Music 时这首在它日志里的曲目标识(`asin://…`),位置是按日志算出来的那一拍才有。
         public var amazonTrackID: String? = nil
+        /// Kaset 放这首时它报的 YouTube Music videoId(collector 拼成歌曲页存进缓存);别的播放器为 nil。
+        public var youtubeMusicVideoID: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -98,6 +100,7 @@ public enum PlaybackStateFile {
             case radio, ad
             case spotifyTrackID = "spotify_track_id"
             case amazonTrackID = "amazon_track_id"
+            case youtubeMusicVideoID = "youtube_music_video_id"
         }
     }
 
@@ -208,12 +211,13 @@ public enum PlaybackStateFile {
         public var positionSecs: Double?
         public var spotifyTrackID: String?
         public var amazonTrackID: String?
+        public var youtubeMusicVideoID: String?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
                     musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
-                    spotifyTrackID: String? = nil, amazonTrackID: String? = nil) {
+                    spotifyTrackID: String? = nil, amazonTrackID: String? = nil, youtubeMusicVideoID: String? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -231,6 +235,7 @@ public enum PlaybackStateFile {
             self.positionSecs = positionSecs
             self.spotifyTrackID = spotifyTrackID
             self.amazonTrackID = amazonTrackID
+            self.youtubeMusicVideoID = youtubeMusicVideoID
         }
 
         public static func idle() -> Input {
@@ -288,7 +293,7 @@ public enum PlaybackStateFile {
                 appliedFixRev: input.appliedFixRev, durationSecs: input.durationSecs,
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
                 musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID,
-                amazonTrackID: input.amazonTrackID)
+                amazonTrackID: input.amazonTrackID, youtubeMusicVideoID: input.youtubeMusicVideoID)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }

@@ -117,6 +117,7 @@
 "Webhook 地址" = "Webhook URL";
 "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" = "YouTube Music is not available in this network's region (a regional restriction, not a network fault)";
 "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改" = "YouTube Music plays in a browser, so Lyrimuse needs to know which one to read the playback position from. Pick the ones you listen in (you can choose more than one) — macOS will ask you to authorise them, just allow. You can change this later under Web Players in Settings";
+"YouTube Music 歌曲页" = "YouTube Music song page";
 "YouTube Music 用哪个浏览器？" = "Which browser do you use for YouTube Music?";
 "YouTube Music 的浏览器" = "Browser for YouTube Music";
 "https://api.day.app/你的Key" = "https://api.day.app/YourKey";
@@ -469,6 +470,7 @@
 "固定：所有歌都用设定的宽度。\n自适应：每首歌按自己的歌词定一个宽度，不超过设定宽度。" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width.";
 "圆角" = "Corners";
 "在 %@ 中打开" = "Open in %@";
+"在 %@ 中播放" = "Play in %@";
 "在 %@ 中显示" = "Show in %@";
 "在 Apple Music 中打开" = "Open in Apple Music";
 "在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。" = "In Arc’s menu bar: View → Developer → Allow JavaScript from Apple Events.";

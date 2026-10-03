@@ -19,6 +19,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这首是 MV。Apple Music 看 JXA 快照的 `isMusicVideo`,网页播放器看探针交出的视频类型(`noteBrowserVideo`)。
     /// 只给界面在专辑位写「MV」用,不进任何缓存 key。判据见 `musicVideoTrackKey(...)`。
     @Published public private(set) var isMusicVideo: Bool = false
+    /// 播放器没报专辑时,这首在 YouTube Music 上登记的专辑(用 Kaset 放的歌,collector 存进缓存的,见
+    /// `EnrichCacheReader.youtubeMusicAlbum`)。只给界面专辑位用(`displayAlbum`),不进任何缓存 key。
+    @Published public private(set) var youtubeMusicAlbum: String = ""
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
@@ -450,7 +453,8 @@ public final class LocalPlaybackSource: ObservableObject {
         /// noisyFloored 处理会给它挂上前向棘轮,而棘轮的前提("reported ≤ 真实位置")
         /// 对一个纯外推源根本不成立。
         case cleanExtrapolated
-        /// QQ 音乐/网易云:整秒下取整 + ±1~1.5s 抖动,大门槛 + 前向棘轮。
+        /// QQ 音乐/网易云:整秒下取整 + ±1~1.5s 抖动,大门槛 + 前向棘轮。Kaset 的 AppleScript 位置同属一类:
+        /// 网页每 0.5 秒推一次,读到的只会晚、不会早(见 KasetPlayerInfo 头注)。
         case noisyFloored
     }
 
@@ -1339,11 +1343,14 @@ public final class LocalPlaybackSource: ObservableObject {
     ///     配对关系不等于此刻在放 Spotify,不能按配对套下面那套启发式;
     ///   - Spotify **原生**客户端:字段启发式(album 空 / artist 空 / 标题「—」),另有 AppleScript `spotify url`
     ///     异步复核兜底;引擎不另判,只认写进播放状态的结论;
+    ///   - 播放器自己给了广告结论的(Kaset,`MediaControlSnapshot.isAd`):说是广告就是;
     ///   - 其它播放器一律不是广告。
     public static func adBreakByFields(
         isSpotifyNative: Bool, title: String, artist: String, album: String,
-        youTubeMusicVerdict: YouTubeMusicAdProbe.Verdict?, spotifyWebVerdict: SpotifyWebAdProbe.Verdict?
+        youTubeMusicVerdict: YouTubeMusicAdProbe.Verdict?, spotifyWebVerdict: SpotifyWebAdProbe.Verdict?,
+        playerSaysAd: Bool? = nil
     ) -> Bool {
+        if playerSaysAd == true { return true }
         if YouTubeMusicAdProbe.showsAdBadge(verdict: youTubeMusicVerdict) { return true }
         if spotifyWebVerdict == .ad { return true }
         return isSpotifyNative && !title.isEmpty && (album.isEmpty || artist.isEmpty || title == "—")
@@ -1364,6 +1371,19 @@ public final class LocalPlaybackSource: ObservableObject {
         if adByFields { return true }
         if pageVerdict == .song { return false }
         return previous
+    }
+
+    /// 播放器自己给的广告结论换成状态机吃的判定:说是正片(false)就是 `.song` —— 前贴片广告跟正片共用同一首的身份,
+    /// 广告一过要靠它回落。纯函数,selftest 覆盖。
+    public nonisolated static func playerAdVerdict(_ isAd: Bool?) -> YouTubeMusicAdProbe.Verdict? {
+        isAd.map { $0 ? .ad : .song }
+    }
+
+    /// 这个播放器的广告跟正片共用同一首歌的身份(Kaset:前贴片广告期间报的就是接下来那首)。它的广告只在界面上亮
+    /// 「广告中」,不写进播放状态的 `ad`:collector 按身份认广告,开播时看到一次就整首不记收听、不搜歌词。纯函数,
+    /// selftest 覆盖。
+    public nonisolated static func adSharesTrackIdentity(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.kaset.bundleIdentifier
     }
 
     /// 换曲那一拍对 Spotify 原生客户端做广告分类:先看 Spotify 自己刚广播的通知
@@ -1527,6 +1547,16 @@ public final class LocalPlaybackSource: ObservableObject {
     /// MV(视频比录音室版长)都当未知。纯函数,selftest 覆盖。
     public nonisolated static func lyricsLookupDuration(isRadio: Bool, isMusicVideo: Bool, duration: Double?) -> Double? {
         isRadio || isMusicVideo ? nil : duration
+    }
+
+    /// 界面专辑位显示的字:播放器报的专辑;没报时 YouTube Music 上登记的那张(用 Kaset 放的歌);都没有、又是 MV 时写
+    /// `musicVideoLabel`(MV 不属于任何专辑,不留一块空白)。只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
+    /// 纯函数,selftest 覆盖。
+    public nonisolated static func displayAlbum(album: String, youtubeMusicAlbum: String, isMusicVideo: Bool,
+                                                musicVideoLabel: String) -> String {
+        if !album.isEmpty { return album }
+        if !youtubeMusicAlbum.isEmpty { return youtubeMusicAlbum }
+        return isMusicVideo ? musicVideoLabel : ""
     }
 
     /// 这一拍之后「认成 MV 的那首」是哪首。按曲目记住、换歌作废:Apple Music 暂停时不走 JXA
@@ -2266,8 +2296,10 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 3 拍 = 6 秒:真停播(Music.app 退出 / 播放列表放完)时多跑两次 poll 就降档,代价可忽略;
     /// 而任何"一两拍就自愈"的抖动全程留在 2s 档。
+    ///
+    /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、广告、卡住)也留在 2s 档。
     private var desiredPollInterval: TimeInterval {
-        if isPlayingNow { return PollInterval.playing }
+        if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }
         if consecutiveNilSnapshots > 0, consecutiveNilSnapshots <= PollInterval.nilGraceTicks {
             return PollInterval.playing
         }
@@ -2556,12 +2588,15 @@ public final class LocalPlaybackSource: ObservableObject {
             catalogTrackID: provenance?.identifiers?.catalogTrackID,
             trackNumber: provenance?.identifiers?.trackNumber,
             mediaType: provenance?.identifiers?.mediaType,
-            musicVideo: isMusicVideo, radio: radio, ad: isCurrentTrackAdBreak, positionSecs: positionSecs,
+            musicVideo: isMusicVideo, radio: radio,
+            ad: isCurrentTrackAdBreak && !Self.adSharesTrackIdentity(bundleID: bundleID), positionSecs: positionSecs,
             spotifyTrackID: spotifyTrackID,
             amazonTrackID: bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier
                 ? AmazonMusicLogWatcher.shared.logTrackID(
                     forTrackKey: MediaControlSnapshot.trackKey(artist: snapshot.artist, title: snapshot.title))
-                : nil)
+                : nil,
+            youtubeMusicVideoID: bundleID == PlaybackPlayer.kaset.bundleIdentifier
+                ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 
@@ -2625,6 +2660,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if !title.isEmpty { title = "" }
             if !artist.isEmpty { artist = "" }
             if !album.isEmpty { album = "" }
+            if !youtubeMusicAlbum.isEmpty { youtubeMusicAlbum = "" }
             musicVideoKey = nil
             if isMusicVideo { isMusicVideo = false }
             if hasLyricsContent { hasLyricsContent = false }
@@ -2910,6 +2946,9 @@ public final class LocalPlaybackSource: ObservableObject {
         if newArtist != artist { artist = newArtist }
         let newAlbum = snapshot.album ?? ""
         if newAlbum != album { album = newAlbum }
+        let newListedAlbum = newAlbum.isEmpty && !newTitle.isEmpty
+            ? EnrichCacheReader.youtubeMusicAlbum(artist: newArtist, title: newTitle, album: newAlbum) ?? "" : ""
+        if newListedAlbum != youtubeMusicAlbum { youtubeMusicAlbum = newListedAlbum }
         musicVideoKey = Self.musicVideoTrackKey(previous: musicVideoKey, currentKey: snapshot.trackKey,
                                                 markedMusicVideo: snapshot.isMusicVideo == true)
         let newIsMusicVideo = musicVideoKey == snapshot.trackKey
@@ -2960,7 +2999,8 @@ public final class LocalPlaybackSource: ObservableObject {
             : nil
         let adByFields = Self.adBreakByFields(
             isSpotifyNative: isSpotifyNative, title: newTitle, artist: newArtist, album: newAlbum,
-            youTubeMusicVerdict: youTubeMusicVerdict, spotifyWebVerdict: spotifyWebVerdict)
+            youTubeMusicVerdict: youTubeMusicVerdict, spotifyWebVerdict: spotifyWebVerdict,
+            playerSaysAd: snapshot.isAd)
         // 原生 Spotify 的广告常常伪装成正常歌曲字段,字段启发式认不出:Spotify 刚广播的通知(同步,换曲那一拍就在)
         // 说是广告就不写;通知没到、要等 AppleScript 复核的那条是异步的,确认之后由 revertLastTrackAfterAd 把写进去的撤回。
         // 同一首已经确认是广告的(isCurrentTrackAdBreak 同曲只往 true 棘轮),之后几拍也不写。
@@ -3029,7 +3069,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 两者恒不相等,每拍都算新曲,同曲期间只往「广告」方向棘轮的规则就失效了。
         let nextAd = Self.nextAdBreakState(
             previous: isCurrentTrackAdBreak, isNewTrack: snapshot.identityKey != lastKey,
-            adByFields: adByFields, pageVerdict: isSpotifyNative ? nil : youTubeMusicVerdict)
+            adByFields: adByFields,
+            pageVerdict: isSpotifyNative ? nil : Self.playerAdVerdict(snapshot.isAd) ?? youTubeMusicVerdict)
         if isCurrentTrackAdBreak != nextAd { isCurrentTrackAdBreak = nextAd }
         // 广告计数跟着广告态一起收:不在广告里就必须是 nil,否则下一首歌会挂着
         // 上一次插播的「1/2」。读的是**同一份缓存**(`cachedReading`),不额外踢探针 —— 它跟

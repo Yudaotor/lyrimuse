@@ -3323,6 +3323,9 @@ struct LyricsWindowView: View {
             if let u = links.kkboxSong { out.append(.init(id: "kkbox-song", title: L10n.t("在 KKBOX 中显示"), url: u)) }
         } else if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier {
             if let u = links.amazonSong { out.append(.init(id: "amazon-song", title: L10n.t("Amazon Music 歌曲页"), url: u)) }
+        } else if bundleID == PlaybackPlayer.kaset.bundleIdentifier {
+            // 落到浏览器的网页,不是 Kaset 自己的深链(那条一打开就开始放,见 PlatformLinks.youtubeMusicSong)。
+            if let u = links.youtubeMusicSong { out.append(.init(id: "ytm-song", title: L10n.t("YouTube Music 歌曲页"), url: u)) }
         }
         return out
     }
@@ -3843,6 +3846,7 @@ struct LyricsWindowView: View {
         case .spotify: return "Spotify"
         case .kkbox: return "KKBOX"
         case .amazonMusic: return "Amazon Music"
+        case .youtubeMusic: return "YouTube Music"
         }
     }
 

@@ -2238,8 +2238,8 @@ func runPlaybackPositionTests() {
         expectEqual(M.directQueryPlayer(forBundleID: nil), nil, "直查名单: 没有 bundle id 就没有通路")
 
         // media-control 通道坏了时直问谁、什么时候算坏了(snapshotWhileChannelBroken)。
-        expectEqual(M.channelFallbackCandidates(selected: [.auto]), [.appleMusic, .spotify],
-                    "通道坏了: 自动识别两家都问,Apple Music 在前")
+        expectEqual(M.channelFallbackCandidates(selected: [.auto]), [.appleMusic, .spotify, .kaset],
+                    "通道坏了: 自动识别三家都问,Apple Music 在前")
         expectEqual(M.channelFallbackCandidates(selected: [.spotify, .qqMusic]), [.spotify],
                     "通道坏了: 多选只问勾了的、有 AppleScript 字典的那几家")
         expectEqual(M.channelFallbackCandidates(selected: [.qqMusic, .netease, .kugou]), [],

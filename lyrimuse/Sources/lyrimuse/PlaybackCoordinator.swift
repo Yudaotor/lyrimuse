@@ -64,8 +64,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 纠正落地之前是空串。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
     @Published private(set) var displayArtist: String = ""
     @Published private(set) var album: String = ""
-    /// 界面上专辑位显示的字。MV 不属于任何专辑、播放器也不报,专辑为空时写「MV」,不留一块空白;
-    /// 播放器真报了专辑就照报。只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
+    /// 界面上专辑位显示的字,判据见 `LocalPlaybackSource.displayAlbum`(播放器报的 → YouTube Music 上登记的 →「MV」)。
+    /// 只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
     @Published private(set) var displayAlbum: String = ""
     @Published private(set) var isPlayingNow: Bool = false
     // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
@@ -854,8 +854,11 @@ final class PlaybackCoordinator: ObservableObject {
                 .removeDuplicates()
                 .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
-            s.$album.combineLatest(s.$isMusicVideo)
-                .map { album, isMusicVideo in album.isEmpty && isMusicVideo ? L10n.t("MV") : album }
+            s.$album.combineLatest(s.$youtubeMusicAlbum, s.$isMusicVideo)
+                .map { album, listed, isMusicVideo in
+                    LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo,
+                                                     musicVideoLabel: L10n.t("MV"))
+                }
                 .removeDuplicates()
                 .assign(to: \.displayAlbum, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
@@ -1579,11 +1582,13 @@ final class PlaybackCoordinator: ObservableObject {
         let systemSize = Self.pixelSize(of: s.artworkData)
         let systemPixels = systemSize.width
         // 系统那份够大且是方形(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
-        // 匹配到的另一张图)就不动。
+        // 匹配到的另一张图;从不往系统里报封面的播放器除外,见 CoverArtReplacementGate.systemNeverHasArtwork)就不动。
         // 「不是封面的形状」(YouTube Music MV 的 16:9 视频缩略图)跟「太小」一样要找替代,两条
         // 的后续接受判据不同,见 CoverArtReplacementGate.accepts。
+        let neverHasArtwork = CoverArtReplacementGate.systemNeverHasArtwork(bundleID: s.lastResolvedBundleID)
         guard let reason = CoverArtReplacementGate.reason(width: systemSize.width, height: systemSize.height,
-                                                          lowResThreshold: Self.lowResArtworkThreshold) else {
+                                                          lowResThreshold: Self.lowResArtworkThreshold,
+                                                          systemNeverHasArtwork: neverHasArtwork) else {
             clearHighRes()
             return
         }

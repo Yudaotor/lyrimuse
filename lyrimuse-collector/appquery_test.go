@@ -136,7 +136,9 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 		`"` + appQueryAppleMusicQueue + `"`, `"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
 		// 系统待播队列:App 原样回加载器的输出(parseAppleMusicSystemQueue 解),问的是 Music.app。
 		`NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier`,
-		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`,
+		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`,
+		// Kaset 队列:JXA 一次取回队列与播放状态,App 整理成 kasetQueueReply 那份(键名见下面 KasetPlayerInfo.swift 那段)。
+		`return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });`,
 		`case bundleID = "bundle_id"`, `case writtenAtMs = "written_at_ms"`,
 		`case "` + browserPlatformYouTubeMusic + `"`, `case "` + browserPlatformSpotifyWeb + `"`,
 		// Music 待播:三道守卫 + 云端内容读不到时的兜底;第一行是当前这首(parseAppleMusicUpcoming 靠它核对)。
@@ -155,6 +157,16 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("PlayerQueryServer.swift 里找不到 %q", want)
+		}
+	}
+	kaset, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/KasetPlayerInfo.swift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`case currentIndex = "current_index"`, `case videoID = "video_id"`, `case tracks, repeating`,
+		`case title, artist, duration`, `case audioVideoID = "audio_video_id"`} {
+		if !strings.Contains(string(kaset), want) {
+			t.Errorf("KasetPlayerInfo.swift 里找不到 %q(kasetQueueReply 的键名两边一起改)", want)
 		}
 	}
 	// App 跑脚本的超时要比这边等的短,否则 App 还在跑这边已经放弃。

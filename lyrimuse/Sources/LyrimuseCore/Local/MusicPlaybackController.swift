@@ -29,6 +29,7 @@ public enum MusicPlaybackController {
     public static func playPause() -> Bool {
         dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
+                 kasetScript: #"tell application "Kaset" to playpause"#,
                  mediaControlCommand: "toggle-play-pause")
     }
 
@@ -36,6 +37,7 @@ public enum MusicPlaybackController {
     public static func nextTrack() -> Bool {
         dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
+                 kasetScript: #"tell application "Kaset" to next track"#,
                  mediaControlCommand: "next-track")
     }
 
@@ -43,6 +45,7 @@ public enum MusicPlaybackController {
     public static func previousTrack() -> Bool {
         dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
+                 kasetScript: #"tell application "Kaset" to previous track"#,
                  mediaControlCommand: "previous-track")
     }
 
@@ -358,6 +361,14 @@ public enum MusicPlaybackController {
 
         """#
 
+    /// Kaset 的脚本前面垫这一句,理由同 `spotifyRunningGuard`。
+    private static let kasetRunningGuard = #"""
+        if application "Kaset" is not running then
+            return ""
+        end if
+
+        """#
+
     /// Spotify 的模式段脚本:`shuffling;shuffling enabled` 两截。后者是"这个账号 / 播放上下文
     /// 允不允许随机",解析见 spotifyPlaybackMode(fromModePart:)。两截各自包 try,`shuffling enabled` 读不出来
     /// 时默认 "true" —— 只在它**明确**说不允许时才隐藏随机键。extendedControlsState 的合并脚本里嵌的是同一段。
@@ -664,8 +675,9 @@ public enum MusicPlaybackController {
             runAppleScript(script)
             return true
         }
+        // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript)。
         return dispatch(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
-                        mediaControlCommand: "seek", mediaControlArguments: [value])
+                        kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value])
     }
 
     /// 把秒数格式化成两个后端都吃、且能安全拼进 AppleScript 源码的字符串。抽成独立的纯
@@ -691,6 +703,7 @@ public enum MusicPlaybackController {
     public enum ControlRoute: Equatable, Sendable {
         case appleMusicScript
         case spotifyScript
+        case kasetScript
         case mediaControl
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
@@ -708,11 +721,13 @@ public enum MusicPlaybackController {
         switch focusFallback {
         case .appleMusic: return .appleMusicScript
         case .spotify: return .spotifyScript
+        case .kaset: return .kasetScript
         default: return focusHeldElsewhere ? .withheld : .mediaControl
         }
     }
 
-    private static func dispatch(appleScript: String, spotifyScript: String,
+    /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
+    private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
                                  mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
         switch controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
                             focusFallback: MediaControlClient.focusControlTarget(),
@@ -721,6 +736,13 @@ public enum MusicPlaybackController {
             runAppleScript(appleScript)
         case .spotifyScript:
             runAppleScript(spotifyRunningGuard + spotifyScript)
+        case .kasetScript:
+            guard let kasetScript else {
+                logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): Kaset has no AppleScript command for it")
+                DispatchQueue.main.async { onControlWithheld?() }
+                return false
+            }
+            runAppleScript(kasetRunningGuard + kasetScript)
         case .mediaControl:
             runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
         case .withheld:

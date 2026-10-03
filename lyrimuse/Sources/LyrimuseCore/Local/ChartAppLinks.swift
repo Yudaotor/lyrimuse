@@ -1,7 +1,8 @@
 import Foundation
 
 /// 「听得最多」榜单一行右键菜单里能直接进 App 打开的目标。只收进 App 的:Apple Music(`music://`)、
-/// Spotify(`spotify:track:`)、KKBOX(`kkbox://song/…#view`);QQ 音乐 / 网易云 / Spotify 网页这类落到浏览器的不收。
+/// Spotify(`spotify:track:`)、KKBOX(`kkbox://song/…#view`)、Kaset(`kaset://play?v=`,打开就从这首开始放,菜单写成
+/// 「播放」);QQ 音乐 / 网易云 / Spotify 网页这类落到浏览器的不收。
 /// 数据全来自本机歌词缓存(collector 解析歌词时存的链接),零网络。
 public struct ChartAppLinks: Sendable, Equatable {
     /// 歌曲:曲目链接(Music 打开专辑页并定位到这首);专辑:专辑页。
@@ -10,6 +11,8 @@ public struct ChartAppLinks: Sendable, Equatable {
     public var spotify: URL?
     /// 歌曲:KKBOX 曲目页。
     public var kkbox: URL?
+    /// 歌曲:在 Kaset 里从这首开始放(换掉它当前的队列),见 `PlatformLinks.kasetPlayURL`。
+    public var kaset: URL?
     /// 歌手:缓存里这位歌手的一张 Apple Music 专辑。歌手页没有现成链接,点击时取这张专辑的页面、从署名里
     /// 拿到歌手 ID 再打开歌手页(专辑简介取歌手 ID 走的是同一条路,只连 music.apple.com)。
     public var artistAlbum: AlbumEditorialNotes.AlbumRef?
@@ -19,19 +22,20 @@ public struct ChartAppLinks: Sendable, Equatable {
     /// 歌手:collector 后台预取好的平台主页(PlatformPagesCache)。有就直接打开;没有才在点击时按 mbid 现查。
     public var artistPages: ArtistPlatformPages.Pages?
 
-    public init(appleMusic: URL? = nil, spotify: URL? = nil, kkbox: URL? = nil,
+    public init(appleMusic: URL? = nil, spotify: URL? = nil, kkbox: URL? = nil, kaset: URL? = nil,
                 artistAlbum: AlbumEditorialNotes.AlbumRef? = nil, artistMBID: String? = nil,
                 artistPages: ArtistPlatformPages.Pages? = nil) {
         self.appleMusic = appleMusic
         self.spotify = spotify
         self.kkbox = kkbox
+        self.kaset = kaset
         self.artistAlbum = artistAlbum
         self.artistMBID = artistMBID
         self.artistPages = artistPages
     }
 
     public var isEmpty: Bool {
-        appleMusic == nil && spotify == nil && kkbox == nil && artistAlbum == nil && artistMBID == nil
+        appleMusic == nil && spotify == nil && kkbox == nil && kaset == nil && artistAlbum == nil && artistMBID == nil
             && artistPages == nil
     }
 }
@@ -50,12 +54,15 @@ public struct ChartLinkIndex: Sendable {
         public let appleMusicURL: String?
         public let spotifyTrackID: String?
         public let kkboxURL: String?
+        public let youtubeMusicURL: String?
 
-        public init(key: String, appleMusicURL: String?, spotifyTrackID: String?, kkboxURL: String?) {
+        public init(key: String, appleMusicURL: String?, spotifyTrackID: String?, kkboxURL: String?,
+                    youtubeMusicURL: String? = nil) {
             self.key = key
             self.appleMusicURL = appleMusicURL
             self.spotifyTrackID = spotifyTrackID
             self.kkboxURL = kkboxURL
+            self.youtubeMusicURL = youtubeMusicURL
         }
     }
 
@@ -84,7 +91,8 @@ public struct ChartLinkIndex: Sendable {
             let track = ChartAppLinks(
                 appleMusic: MusicCatalogSearch.musicSchemeURL(row.appleMusicURL),
                 spotify: SpotifyURI.deepLink("spotify:track:" + (row.spotifyTrackID ?? "")),
-                kkbox: PlatformLinks.kkboxAppURL(songPage: row.kkboxURL ?? ""))
+                kkbox: PlatformLinks.kkboxAppURL(songPage: row.kkboxURL ?? ""),
+                kaset: PlatformLinks.kasetPlayURL(watchURL: row.youtubeMusicURL ?? ""))
             if !track.isEmpty {
                 let exact = EnrichCacheReader.artistTitleKey(artist: artist, title: title)
                 if index.tracks[exact] == nil { index.tracks[exact] = track }

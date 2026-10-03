@@ -38,6 +38,7 @@ func runPlayerQueryTests() {
                     "查询: 专辑名空 / 过长 / 带控制字符的不跑(长度 \(bad.count))")
     }
     expectEqual(S.decide(request("spotify_shuffle"), now: now), .run(.spotifyShuffle), "查询: Spotify 随机")
+    expectEqual(S.decide(request("kaset_queue"), now: now), .run(.kasetQueue), "查询: Kaset 待播队列")
     for platform in ["youtubeMusic", "spotifyWeb"] {
         expectEqual(S.decide(request("browser_queue", bundle: "com.apple.Safari", platform: platform), now: now),
                     .run(.browserQueue(bundleID: "com.apple.Safari", platformID: platform)), "查询: \(platform) 网页队列")
@@ -90,7 +91,7 @@ func runPlayerQueryTests() {
         expectEqual(probe.contains("[paths.script, paths.library, bundleID, " + quote + "queue=\\(count)" + quote + "]")
                     && probe.contains("return r.stdoutText"), true,
                     "系统待播队列(契约): 加载器带 queue=N,输出原样返回")
-        expectEqual(S.Kind.allCases.count, 5, "查询: 五种,跟 collector 的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟 collector 的 appQuery 常量一一对应")
     }
 
     // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 collector 的解析对得上 ----
