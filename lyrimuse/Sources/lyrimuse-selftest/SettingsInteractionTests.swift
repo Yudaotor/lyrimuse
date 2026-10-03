@@ -475,4 +475,52 @@ func runSettingsInteractionTests() {
         expectEqual(junk.exportedAt == nil && junk.deviceName == nil, true, "配置包信息: 不是 JSON 也不抛错")
         expectEqual(M.read(Data(#"["exportedAt"]"#.utf8)).deviceName, nil, "配置包信息: 顶层不是对象读成空")
     }
+
+    // ---- 系统语言(SystemLanguage):AppleLocale 取法与 collector 共用样例 / 退路 / 配置包进出 / 接线 ----
+    do {
+        typealias L = SystemLanguage
+        let samplesURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/system-language.json")
+        let samples = (try? Data(contentsOf: samplesURL))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: String]] } ?? []
+        expectEqual(samples.count >= 8, true, "系统语言: 读得到 shared/testdata/system-language.json")
+        for s in samples {
+            let raw = s["apple_locale"] ?? "", want = s["want"] ?? ""
+            expectEqual(L.appleLocaleLanguage(raw), want, "系统语言(与 collector 共用样例): \(raw.debugDescription) → \(want)")
+        }
+        expectEqual(L.featuresKey, "system_language", "系统语言: 键名与 collector features.go 的 json 标签一致")
+        expectEqual(L.code(appleLocale: "zh_CN", preferredLanguages: ["en-US"]), "zh", "系统语言: AppleLocale 优先于首选语言")
+        expectEqual(L.code(appleLocale: nil, preferredLanguages: ["ja-JP", "en"]), "ja", "系统语言: 没有 AppleLocale 退回首选语言第一项")
+        expectEqual(L.code(appleLocale: " ", preferredLanguages: ["zh-Hans-CN"]), "zh", "系统语言: AppleLocale 是空白同样退回首选语言")
+        expectEqual(L.code(appleLocale: nil, preferredLanguages: []), "en", "系统语言: 都没有兜底 en")
+        expectEqual(L.current().isEmpty, false, "系统语言: 本机读得出一个值")
+        let features: [String: Any] = ["lyrics_translation_language": "auto", L.featuresKey: "ja", "players": ["auto"]]
+        let exported = L.strippingForExport(features) as? [String: Any]
+        expectEqual(exported?[L.featuresKey] == nil && exported?["players"] != nil, true, "系统语言: 导出配置包时去掉,别的键留着")
+        expectEqual((L.localizingForImport(features, local: "de") as? [String: Any])?[L.featuresKey] as? String, "de",
+                    "系统语言: 导入时换成本机的值")
+        expectEqual((L.localizingForImport(["players": ["auto"]], local: "de") as? [String: Any])?[L.featuresKey] as? String, "de",
+                    "系统语言: 老配置包没有这个键,导入时补上本机的值")
+        expectEqual(L.strippingForExport("x") as? String, "x", "系统语言: features 段不是对象原样返回")
+
+        let settingsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings")
+        func source(_ name: String) -> String {
+            (try? String(contentsOf: settingsDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let store = source("FeatureSettingsStore.swift")
+        let portability = source("ConfigPortability.swift")
+        let packRow = source("LanguagePackRow.swift")
+        expectEqual(store.contains("case systemLanguage = \"\(L.featuresKey)\""), true,
+                    "系统语言(契约): features.json 的键名用 SystemLanguage.featuresKey")
+        expectEqual(store.contains("systemLanguage = SystemLanguage.current()")
+                    && store.contains("if f.systemLanguage != systemLanguage { writeSystemLanguage() }"), true,
+                    "系统语言(契约): 每次加载读本机,跟文件里的对不上就改写")
+        expectEqual(portability.contains("SystemLanguage.strippingForExport(")
+                    && portability.contains("SystemLanguage.localizingForImport("), true,
+                    "系统语言(契约): 配置包导出时去掉、导入时换成本机的值")
+        expectEqual(packRow.contains("raw = features.systemLanguage") && !packRow.contains("Locale.current.language"), true,
+                    "系统语言(契约): 语言包那一行按同一个系统语言算目标")
+    }
 }

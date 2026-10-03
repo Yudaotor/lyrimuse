@@ -46,10 +46,8 @@ public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable 
 // 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源能指定任意语言,rawValue 必须是
 // Musixmatch 认的 ISO 639-1 两位小写代码(已用真实接口核实过这个格式,见开发时的调研)。
 // .auto 的字面值原样写进共享 json,由 collector 侧 resolveLyricsTranslationLanguage
-// (features.go)解析成具体代码——那边用 `defaults read -g AppleLocale` 读 macOS 系统
-// 语言,不是 Swift 这边解析:collector 是长驻后台进程,读一次系统级偏好设置比 Swift
-// App 每次保存时读 Locale.current 更贴近"用户实际在用的系统语言此刻是什么",也让这个
-// 字段跟这个 store 里其它字段一样,原始 rawValue 直接对称读写、不需要额外的解析层。
+// (features.go)按同一份文件里的 system_language 解析成具体代码;system_language 是这个 store
+// 加载时读本机写进去的(`SystemLanguage`,见 FeatureFlagsFile.systemLanguage)。
 // 跟随的是 macOS 系统语言而不是 App 界面语言:App 界面本身只做了中英两版翻译,母语是
 // 西语/日语等的用户即使 App 界面只能显示英文,系统语言仍然如实反映其母语,能让这个
 // 功能真正惠及"母语非中非英"的用户,而不是被 App 界面语言的两个选项卡住。
@@ -312,6 +310,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
     // MusixmatchTranslationLanguage 注释,collector 侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
+    /// 本机系统语言(`SystemLanguage.current()`),collector 解析上面的 "auto" 用。描述的是这台机器而不是偏好:
+    /// 加载时跟本机对不上就单独改写这一个键(见 `writeSystemLanguage`),配置包导出时去掉、导入时换成本机的值。
+    var systemLanguage: String?
     // 打开 Apple Music 时顺带唤起 Lyrimuse——这个方向的联动由 collector(常驻后台,
     // 不依赖 Lyrimuse.app 主进程是否在运行)负责监测 Music.app 的启动状态,见
     // collector/companionlaunch.go。反方向("打开 Lyrimuse 时唤起 Music")不需要
@@ -371,6 +372,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
         case lyricsTranslationLanguage = "lyrics_translation_language"
+        case systemLanguage = "system_language"
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
         case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
         case trustedPlayers = "trusted_players"
@@ -537,6 +539,9 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsDir = ""
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
+    /// 本机系统语言,每次 load() 读一遍(见 FeatureFlagsFile.systemLanguage)。「翻译语言包」那一行按它算
+    /// 「跟随系统语言」的目标,跟 collector 认的是同一个值。
+    @Published public private(set) var systemLanguage = ""
     // 打开 Apple Music 时顺带唤起 Lyrimuse——默认关闭,理由跟
     // AppSettings.launchMusicOnLyrimuseOpen 一样:"自动启动另一个 App"不该是没问过
     // 用户就默认打开的行为。
@@ -653,6 +658,7 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
+            systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
             launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
@@ -767,6 +773,7 @@ public final class FeatureSettingsStore: ObservableObject {
     public func load() {
         document = JSONConfigDocument.load(url: Self.fileURL)
         loadFailure = nil
+        systemLanguage = SystemLanguage.current()
         var decoded: FeatureFlagsFile?
         switch document.state {
         case .missing:
@@ -939,7 +946,19 @@ public final class FeatureSettingsStore: ObservableObject {
             launchLyrimuseOnPlayers = PlayerLinkage.migratedLaunchSet(
                 legacyEnabled: f.launchLyrimuseOnMusicOpen ?? true, selectedPlayers: players, requiresSole: false)
         }
+        if f.systemLanguage != systemLanguage { writeSystemLanguage() }
         savedSnapshot = currentSnapshot
+    }
+
+    /// 只改写 system_language 这一个键,别的键原样留着:load() 里做的迁移(players、跟随播放器启动的列表……)
+    /// 照旧等下一次保存才落盘。
+    private func writeSystemLanguage() {
+        do {
+            try document.save(fields: [SystemLanguage.featuresKey: systemLanguage], secure: false)
+            logger.notice("features.json system_language set to \(self.systemLanguage, privacy: .public)")
+        } catch {
+            logger.error("writing system_language failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     // 只写盘,不重启。

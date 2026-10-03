@@ -264,7 +264,8 @@ enum ConfigPortability {
         }
         if let featuresData = try? Data(contentsOf: featuresURL),
            let featuresObj = try? JSONSerialization.jsonObject(with: featuresData) {
-            bundle["features"] = featuresObj
+            // 本机的系统语言是机器状态,不随包走(SystemLanguage)。
+            bundle["features"] = SystemLanguage.strippingForExport(featuresObj)
         } else {
             logger.notice("buildExportData: no features.json found/parseable at \(featuresURL.path, privacy: .public)")
         }
@@ -340,7 +341,9 @@ enum ConfigPortability {
         } else {
             logger.notice("importData: import bundle has no 'config' section")
         }
-        if let featuresObj = bundle["features"] {
+        if let importedFeatures = bundle["features"] {
+            // 系统语言换成本机的再写盘:collector 看到文件变了就热重读,读到别的机器的语言会按它清机翻。
+            let featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
             if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
                 do {
                     try featuresData.write(to: featuresURL, options: .atomic)

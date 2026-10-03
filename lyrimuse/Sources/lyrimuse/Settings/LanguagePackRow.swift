@@ -183,20 +183,15 @@ struct LanguagePackRow: View {
     /// 这类在 4 列的格宽下要截断。
     private static let columns = 3
 
-    /// 译文的目标语言。跟采集器侧 `appleLangCode` / `resolveLyricsTranslationLanguage`
-    /// 保持同一套语义:
+    /// 译文的目标语言,跟采集器交给本机翻译的一致(translate.go `appleLangCode` 套在
+    /// `resolveLyricsTranslationLanguage` 的结果上):
     ///   - 具体语言就用它;
-    ///   - `auto` 表示**跟随系统语言**(采集器那边是读 AppleLocale 取两位代码),这里用
-    ///     `Locale.current.language`,而不是想当然地写死成中文 —— 系统语言是英文的用户
-    ///     选了"跟随系统",目标就该是英文。
-    /// 中文另外映射成 zh-Hans/zh-Hant:Apple 认带地区的写法,而设置里存的是两位代码。
+    ///   - `auto` 用 features.json 里同一份系统语言(`features.systemLanguage`)。
+    /// 中文另外映射成 zh-Hans/zh-Hant:Apple 认带文字的写法,而设置里存的是两位代码。
     private var target: Locale.Language {
-        let raw = features.lyricsTranslationLanguage.rawValue.lowercased()
+        var raw = features.lyricsTranslationLanguage.rawValue.lowercased()
+        if raw == "auto" || raw.isEmpty { raw = features.systemLanguage }
         switch raw {
-        case "auto", "":
-            let system = Locale.current.language
-            return system.languageCode?.identifier == "zh"
-                ? Locale.Language(identifier: "zh-Hans") : system
         case "zh", "zh-cn", "zh-hans": return Locale.Language(identifier: "zh-Hans")
         case "zh-tw", "zh-hant": return Locale.Language(identifier: "zh-Hant")
         default: return Locale.Language(identifier: raw)

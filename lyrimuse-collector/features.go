@@ -226,6 +226,9 @@ type featureFlagsFile struct {
 	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
 	// resolveLyricsTranslationLanguage 负责把"auto"/空值解析成具体代码,见其注释。
 	LyricsTranslationLanguage string `json:"lyrics_translation_language,omitempty"`
+	// SystemLanguage:App 写进来的本机系统语言(AppleLocale 下划线前那段转小写,App 侧 SystemLanguage),
+	// LyricsTranslationLanguage 是 auto 时按它解析。
+	SystemLanguage string `json:"system_language,omitempty"`
 	// LyricsMachineTranslation:歌词源没带社区译文时,用机器翻译补一份(见 translate.go)。
 	// **默认关**,跟其它附加功能一致 —— 它会把歌词正文发给第三方翻译服务,而现有的五个
 	// 歌词源只发歌手/歌名,这是一条新的外发数据,该由用户显式同意。
@@ -458,7 +461,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
-		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
+		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
 		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
 		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
@@ -765,22 +768,23 @@ func resolveLyricsSourceOrder(order []string) []string {
 	return out
 }
 
-// resolveLyricsTranslationLanguage 把共享文件里的"auto"/空值解析成一个具体的 ISO
-// 639-1 代码——collector 是长驻后台进程(launchd gui/$(id -u) 用户级 agent,跟登录用户
-// 的 Aqua 会话同一身份运行),用 `defaults read -g AppleLocale` 能可靠读到这台 Mac 当前
-// 的系统语言,不依赖 launchd 环境变量(环境变量对用户级 agent 不一定完整继承登录 shell
-// 的 locale 设置)。读不到/查不到对应语言代码时兜底 "en"——总比整段不请求译文更有用。
-// 启动时解析一次,features.json 热重读时再解析一次(featuresreload.go)—— 系统语言本身不跟着
-// 实时生效,改了 features.json 才会重读。读到过的结果记在进程里(systemLanguageCode):热重读时
-// 那一次查询偶尔失败,不能让结果掉回兜底的 "en",那会被当成「译文语言换了」,整库机翻清一遍,
-// 下一次查成功又清一遍。
+// resolveLyricsTranslationLanguage 把共享文件里的"auto"/空值解析成一个具体的语言代码:用 App 写进同一份
+// 文件的 system_language(featureFlagsFile.SystemLanguage)。启动时解析一次,features.json 热重读时再解析
+// 一次(featuresreload.go);系统语言换了,App 下次加载设置时改写这个键,这边跟着热重读。
+//
+// 文件里还没有这个键(App 还没写过)时自己查一次本机(systemLanguageCode),取法跟 App 一致。这一步别直接
+// 兜底 "en":启动清理(invalidateStaleTranslations)按解析结果清掉别的语言的机翻,兜错一次就是整库重翻。
+// 查不到才兜底 "en"。
 //
 // 设置里的值只认 App 那份枚举(lyricsTranslationLanguageCodes):不认识的值(手改过文件、降级安装后
 // 留下新版才有的语言)当作 auto。App 读到不认识的值显示「跟随系统语言」,这边原样拿去用的话,界面
 // 写着跟随系统、后台却按一门没人选过的语言请求译文、清理机翻。
-func resolveLyricsTranslationLanguage(lang string) string {
+func resolveLyricsTranslationLanguage(lang, systemLang string) string {
 	if lang != "" && lang != "auto" && slices.Contains(lyricsTranslationLanguageCodes, lang) {
 		return lang
+	}
+	if code := strings.ToLower(strings.TrimSpace(systemLang)); code != "" {
+		return code
 	}
 	if code := systemLanguageCode(); code != "" {
 		return code
@@ -788,11 +792,12 @@ func resolveLyricsTranslationLanguage(lang string) string {
 	return "en"
 }
 
-// systemLanguageCode 读 macOS 当前系统语言,取 AppleLocale("zh_Hans_CN"/"en_US"/
-// "ja_JP"这类形式)下划线前的两位语言代码并转小写。查询失败(命令不存在/超时/返回值
-// 解析不出下划线分隔的语言段)一律返回空串,交给调用方兜底,不 panic、不重试。
+// systemLanguageCode 自己查一次本机系统语言(`defaults read -g AppleLocale`,取法见 appleLocaleLanguage),
+// 只在 features.json 里还没有 App 写的 system_language 时用(见 resolveLyricsTranslationLanguage)。
+// 查询失败(命令不存在 / 超时 / 输出为空)返回空串,交给调用方兜底,不 panic、不重试。
 //
-// 查成功的结果记在 systemLanguageLast 里,之后查询失败时沿用它(理由见 resolveLyricsTranslationLanguage)。
+// 查成功的结果记在 systemLanguageLast 里,之后查询失败时沿用它:热重读时那一次查询偶尔失败,结果掉回兜底的
+// "en" 会被当成「译文语言换了」,整库机翻清一遍,下一次查成功又清一遍。
 // 查询带超时:热重读跑在任意一个调用 features() 的 goroutine 上(可能正持着 enrichMu),不能被一个卡住的
 // 子进程拖住。
 func systemLanguageCode() string {
@@ -827,12 +832,16 @@ func querySystemLanguageCode() string {
 	if err != nil {
 		return ""
 	}
-	s := strings.TrimSpace(string(out))
+	return appleLocaleLanguage(string(out))
+}
+
+// appleLocaleLanguage:AppleLocale("zh_CN" / "en_US" / "zh-Hans_CN")下划线前那段转小写,文字子标签原样留着;
+// 取不到是空串。必须跟 App 的 SystemLanguage.appleLocaleLanguage 逐字一致(两侧共用样例
+// shared/testdata/system-language.json):两边对同一台机器得出不同语言,会被当成译文语言换了、整库机翻清一遍。
+func appleLocaleLanguage(s string) string {
+	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '_'); i > 0 {
 		s = s[:i]
-	}
-	if s == "" {
-		return ""
 	}
 	return strings.ToLower(s)
 }

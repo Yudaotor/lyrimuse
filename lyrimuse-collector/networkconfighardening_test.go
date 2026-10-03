@@ -593,7 +593,7 @@ func TestResolveLyricsTranslationLanguageUnknownIsAuto(t *testing.T) {
 	})
 	querySystemLanguageQuery = func(context.Context) ([]byte, error) { return []byte("ja_JP"), nil }
 	for in, want := range map[string]string{"fr": "fr", "zh": "zh", "auto": "ja", "": "ja", "xx": "ja", "zh-CN": "ja", "FR": "ja"} {
-		if got := resolveLyricsTranslationLanguage(in); got != want {
+		if got := resolveLyricsTranslationLanguage(in, ""); got != want {
 			t.Errorf("resolveLyricsTranslationLanguage(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -652,7 +652,59 @@ func TestSystemLanguageCodeKeepsLastGood(t *testing.T) {
 	if got := systemLanguageCode(); got != "zh" {
 		t.Fatalf("查询失败应当沿用上一次的 zh: %q", got)
 	}
-	if got := resolveLyricsTranslationLanguage("auto"); got != "zh" {
+	if got := resolveLyricsTranslationLanguage("auto", ""); got != "zh" {
 		t.Fatalf("auto 应当解析成上一次的系统语言: %q", got)
+	}
+}
+
+// 译文语言是 auto 时用 App 写进 features.json 的 system_language,不自己查系统偏好;文件里没有这个键才查。
+func TestTranslationLanguageFollowsAppSystemLanguage(t *testing.T) {
+	saved := querySystemLanguageQuery
+	savedLast := systemLanguageLast.Load()
+	t.Cleanup(func() {
+		querySystemLanguageQuery = saved
+		systemLanguageLast.Store(savedLast)
+	})
+	queries := 0
+	querySystemLanguageQuery = func(context.Context) ([]byte, error) { queries++; return []byte("ja_JP"), nil }
+	for _, c := range []struct{ lang, sys, want string }{
+		{"auto", "de", "de"}, {"", " KO\n", "ko"}, {"xx", "fr", "fr"}, {"es", "de", "es"},
+	} {
+		if got := resolveLyricsTranslationLanguage(c.lang, c.sys); got != c.want {
+			t.Errorf("resolveLyricsTranslationLanguage(%q, %q) = %q, want %q", c.lang, c.sys, got, c.want)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "lyrimuse-features.json")
+	if err := os.WriteFile(path, []byte(`{"lyrics_translation_language":"auto","system_language":"de"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadFeatureFlags(path).LyricsTranslationLanguage; got != "de" {
+		t.Fatalf("features.json 里 App 写的 system_language 没用上: %q", got)
+	}
+	if queries != 0 {
+		t.Fatalf("App 写了 system_language 还自己查了 %d 次系统偏好", queries)
+	}
+	if got := resolveLyricsTranslationLanguage("auto", ""); got != "ja" || queries != 1 {
+		t.Fatalf("文件里没有 system_language 时自己查一次: got %q, 查了 %d 次", got, queries)
+	}
+}
+
+// AppleLocale 的取法跟 App 的 SystemLanguage.appleLocaleLanguage 跑同一批样例。
+func TestAppleLocaleLanguageMatchesApp(t *testing.T) {
+	raw, err := os.ReadFile("../shared/testdata/system-language.json")
+	if err != nil {
+		t.Fatalf("读不到两侧共用的样例: %v", err)
+	}
+	var cases []struct {
+		AppleLocale string `json:"apple_locale"`
+		Want        string `json:"want"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil || len(cases) == 0 {
+		t.Fatalf("样例解不开: %v", err)
+	}
+	for _, c := range cases {
+		if got := appleLocaleLanguage(c.AppleLocale); got != c.Want {
+			t.Errorf("appleLocaleLanguage(%q) = %q, want %q", c.AppleLocale, got, c.Want)
+		}
 	}
 }

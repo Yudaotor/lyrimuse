@@ -1,0 +1,12 @@
+[
+  {"apple_locale": "zh_CN", "want": "zh"},
+  {"apple_locale": "en_US", "want": "en"},
+  {"apple_locale": "ja_JP\n", "want": "ja"},
+  {"apple_locale": "zh-Hans_CN", "want": "zh-hans"},
+  {"apple_locale": "zh_Hant_TW", "want": "zh"},
+  {"apple_locale": "pt_BR@calendar=gregorian", "want": "pt"},
+  {"apple_locale": "en", "want": "en"},
+  {"apple_locale": "  FR_fr  ", "want": "fr"},
+  {"apple_locale": "_US", "want": "_us"},
+  {"apple_locale": "", "want": ""}
+]
