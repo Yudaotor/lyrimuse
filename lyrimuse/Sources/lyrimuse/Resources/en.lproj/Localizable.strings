@@ -465,6 +465,7 @@
 "因网络不通已停下" = "Stopped: no connection";
 "固定" = "Fixed";
 "固定：所有歌都用设定的宽度。\n自适应：每首歌按自己的歌词定一个宽度，不超过设定宽度。" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width.";
+"圆角" = "Corners";
 "在 %@ 中打开" = "Open in %@";
 "在 %@ 中显示" = "Show in %@";
 "在 Apple Music 中打开" = "Open in Apple Music";
@@ -560,6 +561,7 @@
 "居中" = "Center";
 "屏幕" = "Display";
 "展开" = "Expand";
+"展开圆角" = "Expanded Corners";
 "展开宽度" = "Expanded Width";
 "展开态" = "Expanded State";
 "展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。" = "When expanded, shows four buttons to the right of the track info: search lyrics, show lyrics, settings, and turn off notch lyrics.";
@@ -1409,6 +1411,7 @@
 "跟进算法升级" = "Follow Algorithm Upgrades";
 "跟随 %@ 启动" = "Launch when %@ opens";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
+"跟随刘海" = "Match Notch";
 "跟随封面" = "Follow Cover Art";
 "跟随播放器启动" = "Launch when your player opens";
 "跟随播放器退出" = "Quit With Player";

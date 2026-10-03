@@ -25,12 +25,34 @@ struct NotchRevealShape: Shape {
     var widthFraction: CGFloat
     var heightFraction: CGFloat
     var notchHeight: CGFloat
+    /// 同 `NotchHangingShape.card` 的 `corner`(`NotchCardOutline.corner`)。
+    var corner: NotchCornerProfile?
 
     func path(in rect: CGRect) -> Path {
         let width = rect.width * min(1, max(0, widthFraction))
         let height = rect.height * min(1, max(0, heightFraction))
         let visible = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
-        return NotchHangingShape.card(notchHeight: notchHeight).path(in: visible)
+        return NotchHangingShape.card(notchHeight: notchHeight, corner: corner).path(in: visible)
+    }
+}
+
+/// 真窗口挂 `NotchRevealShape` 的那一层。圆角从 `NotchCornerLive` 取、由这一层自己观察:拖圆角滑杆时只重算这道裁剪,
+/// `NotchWindowRoot` 和整张卡片都不跟着重算。
+struct NotchRevealClip: ViewModifier {
+    var widthFraction: CGFloat
+    var heightFraction: CGFloat
+    var outline: NotchCardOutline
+    @ObservedObject private var live = NotchCornerLive.shared
+
+    init(widthFraction: CGFloat, heightFraction: CGFloat, outline: NotchCardOutline) {
+        self.widthFraction = widthFraction
+        self.heightFraction = heightFraction
+        self.outline = outline
+    }
+
+    func body(content: Content) -> some View {
+        content.clipShape(NotchRevealShape(widthFraction: widthFraction, heightFraction: heightFraction,
+                                           notchHeight: outline.notchHeight, corner: outline.corner(live)))
     }
 }
 

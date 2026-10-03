@@ -750,6 +750,12 @@ extension NotchChromeSource {
         return height > 0 ? height + NotchMetrics.trackInfoTopSpacing + NotchMetrics.trackInfoSpacing : 0
     }
 
+    /// 卡片外形要的几何(两个圆角设置另由 `NotchCornerLive` 给)。卡片自裁、纯色底、出场裁剪、编辑台虚线框四处都传这一个。
+    var cardOutline: NotchCardOutline {
+        NotchCardOutline(notchHeight: contentTopInset, collapsedHeight: cardHeight(expanded: false),
+                         expandedHeight: cardHeight(expanded: true), isExpanded: isExpanded)
+    }
+
     /// 卡片当前高度 —— **全仓唯一一份公式**,真窗口(NotchWindowRoot)和设置页编辑台
     /// (NotchEditorStage)都读它。
     ///
@@ -759,17 +765,22 @@ extension NotchChromeSource {
     /// 或反过来把行裁掉半截"。加第四个入参那天正好把它收成一份。
     var cardHeight: CGFloat {
         if isCollapsed { return contentTopInset }
+        return cardHeight(expanded: isExpanded)
+    }
+
+    /// 没展开 / 展开某一种形态下的卡片高度(不看收起态)。`cardHeight` 和圆角两态的高度(`cardOutline`)都走这里。
+    func cardHeight(expanded: Bool) -> CGFloat {
         // 没有曲目(决策 #31):展开只长出「空闲面板」那一块。此前走下面的通式 ——
         // 歌词行本来就被 hasTrack 守着不留,但展开区照常按"三键 + 进度条"留 59～76pt,而那块内容
         // (`cardBodyLayer`)整个被 hasTrack 挡掉,结果 hover 上去长出一大块什么都没有的黑;现象是
         // 「没有播放的展开状态不是很友好」。高度预留与实际渲染(`idleExpandedPanel` 的 frame)读同一个值。
         if !hasTrack {
-            return contentTopInset + (isExpanded ? NotchMetrics.idleExpandedPanelHeight : 0)
+            return contentTopInset + (expanded ? NotchMetrics.idleExpandedPanelHeight : 0)
         }
         return contentTopInset
-            // 稳态歌词行要不要留高度,见 showsLyricRow(展开时哪怕关着「显示歌词」也要留)。
-            + (showsLyricRow ? NotchMetrics.compactRowHeight : 0)
-            + (isExpanded
+            // 稳态歌词行要不要留高度,同 showsLyricRow(展开时哪怕关着「显示歌词」也要留;这里已经有曲目)。
+            + ((showsLyrics || expanded) ? NotchMetrics.compactRowHeight : 0)
+            + (expanded
                ? NotchMetrics.expandedExtraHeight(
                    hasLyricPreview: showsExpandedLyricPreview,
                    hasScrubber: expandedShowsScrubber,
@@ -930,7 +941,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot,那道 NotchRevealShape
             // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
             // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
-            .modifier(NotchCardClip(enabled: !hostClipsCard, notchHeight: controller.contentTopInset))
+            .modifier(NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline))
         }
         // 这扇灵动岛向 `YouTubeMusicAdSkipCenter` 登记「广告态、要门槛结果」,挂在这里。
         //
@@ -1033,8 +1044,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 NotchCrossfadeBackdrop(image: image, size: size)
             }
         } else {
-            NotchHangingShape.card(notchHeight: controller.contentTopInset)
-                .fill(playback.notchCardStyle.fill)
+            NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }
         }
     }
 
@@ -3279,12 +3289,19 @@ struct NotchCardLayerActive: ViewModifier {
 /// `enabled` 对某个宿主是常量;运行期切换会换分支、重建 content 子树。
 struct NotchCardClip: ViewModifier {
     var enabled: Bool
-    var notchHeight: CGFloat
+    var outline: NotchCardOutline
+    /// 圆角从这里取、由这一层自己观察,拖圆角滑杆时只重算这道裁剪(见 `NotchCornerLive`)。
+    @ObservedObject private var live = NotchCornerLive.shared
+
+    init(enabled: Bool, outline: NotchCardOutline) {
+        self.enabled = enabled
+        self.outline = outline
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
-            content.clipShape(NotchHangingShape.card(notchHeight: notchHeight))
+            content.clipShape(outline.shape(live))
         } else {
             content
         }
@@ -3294,30 +3311,42 @@ struct NotchCardClip: ViewModifier {
 /// 挂在屏幕上沿的卡片外形:顶边贴死屏幕顶、底部两角圆角。
 ///
 /// 两种用法:
-///  - `.card(notchHeight:)`:灵动岛卡片本身,尺寸照机器刘海走 —— 底部圆角随高度(`NotchOutline.bottomRadius`),
+///  - `.card(notchHeight:corner:)`:灵动岛卡片本身,尺寸照机器刘海走 —— 底部圆角默认随高度(`NotchOutline.bottomRadius`,
+///    用户设了「圆角 / 展开圆角」时按 `NotchCornerProfile`),
 ///    顶边两侧各一道内凹的「肩膀」(`NotchOutline.shoulder`,按刘海高度),轮廓不越出矩形。卡片、出场裁剪、编辑台里拖宽度时
 ///    那圈虚线**都用这一个**,三处各写一份迟早会对不上。
 ///  - `NotchHangingShape(bottomCornerRadius:)`:固定圆角、没有肩膀,给设置页里缩小画的示意图用。
 struct NotchHangingShape: Shape {
-    /// nil = 按高度自适应(`.card`)。
+    /// 固定圆角(示意图用);nil = 按 `corner` 或按高度自适应。
     var bottomCornerRadius: CGFloat?
     /// 肩膀按哪个刘海高度算;nil = 没有肩膀。
     var notchHeight: CGFloat?
+    /// 「圆角 / 展开圆角」的两态规则(`NotchCardOutline.corner`);nil = 默认,按高度自适应。
+    var corner: NotchCornerProfile?
 
-    static func card(notchHeight: CGFloat) -> NotchHangingShape {
-        NotchHangingShape(bottomCornerRadius: nil, notchHeight: notchHeight)
+    static func card(notchHeight: CGFloat, corner: NotchCornerProfile? = nil) -> NotchHangingShape {
+        NotchHangingShape(bottomCornerRadius: nil, notchHeight: notchHeight, corner: corner)
     }
 
-    init(bottomCornerRadius: CGFloat?, notchHeight: CGFloat? = nil) {
+    init(bottomCornerRadius: CGFloat?, notchHeight: CGFloat? = nil, corner: NotchCornerProfile? = nil) {
         self.bottomCornerRadius = bottomCornerRadius
         self.notchHeight = notchHeight
+        self.corner = corner
     }
 
     func path(in rect: CGRect) -> Path {
         let s = notchHeight.map { NotchOutline.shoulder(width: rect.width, height: rect.height, notchHeight: $0) } ?? 0
         let bodyWidth = rect.width - 2 * s
-        let r = bottomCornerRadius.map { min($0, bodyWidth / 2, rect.height / 2) }
-            ?? NotchOutline.bottomRadius(height: rect.height, bodyWidth: bodyWidth)
+        // 圆角只由这一帧的矩形决定(按高度挑 / 混合规则),尺寸动画里自然连续,不靠插值。
+        let r: CGFloat
+        if let fixed = bottomCornerRadius {
+            r = min(fixed, bodyWidth / 2, rect.height / 2)
+        } else if let corner {
+            r = NotchOutline.clampedCornerRadius(corner.radius(height: rect.height), height: rect.height,
+                                                 bodyWidth: bodyWidth, shoulder: s)
+        } else {
+            r = NotchOutline.bottomRadius(height: rect.height, bodyWidth: bodyWidth)
+        }
         let left = rect.minX + s
         let right = rect.maxX - s
         var path = Path()

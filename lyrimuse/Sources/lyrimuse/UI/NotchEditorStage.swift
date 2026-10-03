@@ -65,7 +65,12 @@ import SwiftUI
 ///  跟着一起搬,同 OverlayPreviewChrome 长在 OverlayEditorStage.swift 里。)
 @MainActor
 final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
-    @Published private(set) var isExpanded = false
+    /// 指针 / 浮层 / 宽度调整条给出的展开态(`setExpandedFromPreview`)。
+    @Published private var pointerExpanded = false
+    /// 正在调「圆角 / 展开圆角」哪一态(`NotchCornerLive.focusPublisher`:按着那根滑杆,或指针停在那一行上)。
+    /// 这时预览摆成那一态 —— 指针在设置行上、卡片没被 hover,不摆过去就看不见在调的那个圆角;移开交还给 `pointerExpanded`。
+    @Published private var cornerFocus: NotchCornerSlot?
+    var isExpanded: Bool { cornerFocus.map { $0 == .expanded } ?? pointerExpanded }
     @Published private(set) var notchWidth: CGFloat = 0
     @Published private(set) var contentTopInset: CGFloat = 0
     /// 卡片两种形态的真实宽,由舞台按真窗口同一套公式算好推进来(`NotchEditorStage.card` 的 onAppear /
@@ -138,9 +143,12 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
         screenSubscription = AppSettings.shared.$notchScreenID.removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshGeometry() }
+        cornerSubscription = NotchCornerLive.shared.focusPublisher
+            .sink { [weak self] slot in self?.cornerFocus = slot }
     }
 
     private var screenSubscription: AnyCancellable?
+    private var cornerSubscription: AnyCancellable?
 
     /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
     ///
@@ -159,8 +167,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
 
     /// 编辑台自己算出来的命中结果,这才是预览里真正生效的那条路。
     func setExpandedFromPreview(_ expanded: Bool) {
-        guard expanded != isExpanded else { return }
-        isExpanded = expanded
+        guard expanded != pointerExpanded else { return }
+        pointerExpanded = expanded
     }
 
     /// 跟真窗口 recomputeGeometry 取的是同一块屏、同一个公式,编辑台里的让位宽度/高度才
@@ -1290,8 +1298,9 @@ struct NotchEditorStage: View {
         // NotchHangingShape 是手写的普通 Shape(顶边带肩膀、底圆角,UnevenRoundedRectangle
         // 画不出肩膀)。代价是这条线**骑在**卡片边界上、各半个像素在内外,而不是完全
         // 描在里侧 —— 1pt 的虚线看不出区别,不值得为此给那个共用形状加一层 inset 实现。
-        NotchHangingShape.card(notchHeight: chrome.contentTopInset)
-            .stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        NotchCardOutlineReader(outline: chrome.cardOutline) {
+            $0.stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
             .shadow(color: .black.opacity(0.55), radius: 1)
             .frame(width: cardWidth, height: cardHeight)
             // 用透明度而不是 if 分支:轮廓始终在视图树里,按下/松开才淡得起来。
@@ -1466,24 +1475,20 @@ enum NotchScreenSummary {
 
 // MARK: - 「风格」浮层
 
-/// 「✦ 风格」浮层。四种卡片背景四选一。
+/// 「✦ 风格」浮层。四种卡片背景四选一,下面两行「圆角 / 展开圆角」。
 ///
 /// 用**单选列表**而不是原来那个 `.pickerStyle(.menu)` 下拉,有两个具体理由:
 ///   ① 菜单点一次只能试一个:选中即收起,想比较四种就得开合四次。列表在浮层里点完**不关**,
-///      而浮层只有 270pt 宽、舞台有 600pt —— 卡片右半边一直露着,四种风格可以点着看过去。
-///      这正是编辑台范式要的东西(改一项、当场看见)。
+///      浮层比舞台窄,四种风格可以点着看过去。这正是编辑台范式要的东西(改一项、当场看见)。
 ///   ② 下拉是"把一个 NSMenu 开在一个 transient NSPopover 里",两层的关闭时机得靠系统巧合
 ///      对齐;单选列表全在浮层自己这一层,没有这层不确定性。
-/// 代价是四行比一行下拉高,而这个浮层里就这一组,纵向有的是空间。
+/// 代价是四行比一行下拉高,纵向有的是空间。
 ///
-/// 宽度 270 是**量出来的**,不是外壳那个 380 的默认值(见 `SettingsPopoverShell.width`)。
-/// 离屏 `NSHostingView.fittingSize`:内容自然宽中文 221pt / 英文 242pt。270 给英文留
-/// 28pt 余量。「显示歌词」那行搬去下面单独一张卡之后,四行风格名成了这个浮层
-/// 唯一的内容,没有重新量过收窄的空间——留着 270 偏保守但不会截断,不去动它。
+/// 宽度 360 是给圆角那两行的(标题 + 100pt 滑杆 + 92pt 读数菜单)。
 @MainActor
 struct NotchStylePopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("风格"), width: 270) {
+        SettingsPopoverShell(title: L10n.t("风格"), width: 360) {
             NotchStyleSettingsRows()
         }
     }
@@ -1536,6 +1541,11 @@ struct NotchCollapsesWhenPausedRow: View {
 @MainActor
 struct NotchStyleSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 圆角两行读写的是这一份(拖动中的值在这里,松手才写回 AppSettings,见 `NotchCornerLive`)。
+    @ObservedObject private var corners = NotchCornerLive.shared
+    /// 只用来按编辑台预览那套口径算这块屏上两种形态的卡片高度(`cardHeight(expanded:)`,全仓唯一那份公式),
+    /// 给圆角滑杆定上限、给「默认」算读数。不碰 `NotchLyricsWindowController.shared`(理由见 NotchPreviewChrome)。
+    @StateObject private var card = NotchPreviewChrome()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1544,6 +1554,84 @@ struct NotchStyleSettingsRows: View {
             ForEach(Array(NotchCardStyle.allCases.enumerated()), id: \.element) { index, style in
                 if index > 0 { CardDivider() }
                 row(style)
+            }
+            CardDivider()
+            cornerRadiusRow(icon: "square.bottomhalf.filled", title: L10n.t("圆角"), slot: .collapsed,
+                            cardHeight: card.cardHeight(expanded: false))
+            CardDivider()
+            cornerRadiusRow(icon: "rectangle.bottomhalf.filled", title: L10n.t("展开圆角"), slot: .expanded,
+                            cardHeight: card.cardHeight(expanded: true))
+        }
+        // 拖到一半、或指针还停在行上时这一页没了(浮层被关、抽屉收起):值写回去,预览也别停在摆出来的那一态上。
+        .onDisappear {
+            corners.endDrag()
+            corners.clearHover()
+        }
+        // 插拔显示器时刘海高度会变,滑杆上限和读数跟着重算(同 NotchEditorStage 对自己那份 chrome 的处理)。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            card.refreshGeometry()
+        }
+    }
+
+    /// 一行圆角:滑杆拖动就变成固定值(读数写 pt);右边菜单选「默认」(按卡片高度算)或「跟随刘海」
+    /// (机器刘海本身的底角,两态同一个值),读数写模式名、滑杆停在那个模式此刻的值上。
+    ///
+    /// 滑杆上限是这一态的卡片画得出的最大圆角(`NotchOutline.customRadiusRange(cardHeight:notchHeight:)`),
+    /// 读数报实际画出来的值:存着的固定值超过它时(比如关掉了歌词行、卡片变矮)读数和滑杆都停在上限。
+    /// 拖动中只改 `NotchCornerLive`,松手(`onEditingChanged(false)`)才写回 AppSettings;菜单选模式是一次性的,直接写。
+    /// 指针停在这一行上(含按着滑杆)时编辑台预览摆成这一态,移开交还(`NotchCornerLive.hover`)。
+    private func cornerRadiusRow(icon: String, title: String, slot: NotchCornerSlot, cardHeight: CGFloat) -> some View {
+        let notchHeight = card.contentTopInset
+        let range = NotchOutline.customRadiusRange(cardHeight: cardHeight, notchHeight: notchHeight)
+        let stored: ReferenceWritableKeyPath<AppSettings, Double> =
+            slot == .collapsed ? \.notchCornerRadius : \.notchExpandedCornerRadius
+        let rule = NotchCornerRule(setting: corners.value(slot))
+        let shown: Double
+        let label: String
+        switch rule {
+        case .proportional:
+            shown = Double(NotchOutline.proportionalRadius(height: cardHeight)); label = L10n.t("默认")
+        case .notch:
+            shown = Double(NotchOutline.notchCornerRadius(notchHeight: notchHeight)); label = L10n.t("跟随刘海")
+        case .fixed(let r):
+            shown = min(Double(r), range.upperBound); label = String(format: L10n.t("%@pt"), "\(Int(shown))")
+        }
+        return SettingsRow(icon: icon, title: title) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { shown },
+                    set: { corners.drag(slot, to: $0) }
+                ), in: range, step: 1, onEditingChanged: { editing in
+                    if editing { corners.beginDrag(slot) } else { corners.endDrag() }
+                })
+                .frame(width: 100)
+                Menu {
+                    cornerModeButton(L10n.t("默认"), selected: rule == .proportional) {
+                        settings[keyPath: stored] = NotchOutline.defaultRadiusSetting
+                    }
+                    cornerModeButton(L10n.t("跟随刘海"), selected: rule == .notch) {
+                        settings[keyPath: stored] = NotchOutline.notchRadiusSetting
+                    }
+                } label: {
+                    Text(label)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .frame(width: 92, alignment: .trailing)
+            }
+        }
+        .onHover { inside in corners.hover(slot, inside: inside) }
+    }
+
+    private func cornerModeButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if selected {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
             }
         }
     }
@@ -1600,6 +1688,8 @@ enum NotchStyleDefaults {
     static func restoreDefaults() {
         let settings = AppSettings.shared
         settings.notchCardStyle = AppSettings.defaultNotchCardStyle
+        settings.notchCornerRadius = AppSettings.defaultNotchCornerRadius
+        settings.notchExpandedCornerRadius = AppSettings.defaultNotchExpandedCornerRadius
         settings.notchLeftEar = AppSettings.defaultNotchLeftEar
         settings.notchRightEar = AppSettings.defaultNotchRightEar
         settings.notchAllScreens = AppSettings.defaultNotchAllScreens

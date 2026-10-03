@@ -237,6 +237,9 @@ final class AppSettings: ObservableObject {
         static let notchContentWidth = "np:notchContentWidth"
         // 灵动岛 hover 展开后的宽度(上限;`notchContentWidth` 是下限)。np: 前缀同上。
         static let notchExpandedContentWidth = "np:notchExpandedContentWidth"
+        // 灵动岛卡片底部圆角:没展开时 / 展开时各一个。存盘值的含义见 NotchOutline.defaultRadiusSetting。
+        static let notchCornerRadius = "np:notchCornerRadius"
+        static let notchExpandedCornerRadius = "np:notchExpandedCornerRadius"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
         // 悬浮歌词背景毛玻璃。np: 前缀 = 随配置导出/搬家走(这是偏好,不是机器状态)。
@@ -409,6 +412,9 @@ final class AppSettings: ObservableObject {
     // "改一个漏一个"的那份担心由这两行紧挨着 + 05 章那张表兜住。
     static let defaultNotchContentWidth: Double = 252
     static let defaultNotchExpandedContentWidth: Double = 482
+    /// 「圆角 / 展开圆角」默认按卡片高度算(`NotchOutline.defaultRadiusSetting`)。
+    static let defaultNotchCornerRadius: Double = NotchOutline.defaultRadiusSetting
+    static let defaultNotchExpandedCornerRadius: Double = NotchOutline.defaultRadiusSetting
     static let defaultNotchAllScreens = false
     static let defaultNotchScreenID = ""
     /// 左右耳装什么(从 title / artist 改成 artwork / none —— 用户在用的就是"左耳一枚
@@ -1460,6 +1466,14 @@ final class AppSettings: ObservableObject {
     @Published var notchExpandedContentWidth: Double {
         didSet { defaults.set(notchExpandedContentWidth, forKey: Keys.notchExpandedContentWidth) }
     }
+    // 灵动岛卡片底部圆角(pt):`notchCornerRadius` 管所有没展开的状态,`notchExpandedCornerRadius` 管
+    // hover 展开。存盘值:默认 / 跟随刘海 / 固定 pt,见 NotchOutline.defaultRadiusSetting;怎么画、两态怎么过渡见 NotchCornerProfile。
+    @Published var notchCornerRadius: Double {
+        didSet { defaults.set(notchCornerRadius, forKey: Keys.notchCornerRadius) }
+    }
+    @Published var notchExpandedCornerRadius: Double {
+        didSet { defaults.set(notchExpandedCornerRadius, forKey: Keys.notchExpandedCornerRadius) }
+    }
     // #RRGGBBAA。默认值统一取 ColorTheme.defaultTheme,不在这里硬编码(也别在这里复述它是哪一套,
     // 以 ColorTheme.defaultTheme 的注释为准)。
     @Published var foregroundColorHex: String {
@@ -1992,6 +2006,8 @@ final class AppSettings: ObservableObject {
         // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。 无论如何**不读用户当前的
         // 稳态值**:那样老用户的展开宽会被钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个。
         notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
+        notchCornerRadius = (defaults.object(forKey: Keys.notchCornerRadius) as? Double) ?? Self.defaultNotchCornerRadius
+        notchExpandedCornerRadius = (defaults.object(forKey: Keys.notchExpandedCornerRadius) as? Double) ?? Self.defaultNotchExpandedCornerRadius
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt

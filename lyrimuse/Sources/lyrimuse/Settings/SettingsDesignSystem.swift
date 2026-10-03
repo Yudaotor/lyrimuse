@@ -998,11 +998,15 @@ struct SteppedSlider: View {
     private let value: Binding<Double>
     private let range: ClosedRange<Double>
     private let step: Double
+    /// 原样转给 `Slider`:按下 true、松手 false(VoiceOver 的一次增减也是完整的一对,见 `OverlayEditorStage.widthBinding`)。
+    private let onEditingChanged: (Bool) -> Void
 
-    init(value: Binding<Double>, in range: ClosedRange<Double>, step: Double) {
+    init(value: Binding<Double>, in range: ClosedRange<Double>, step: Double,
+         onEditingChanged: @escaping (Bool) -> Void = { _ in }) {
         self.value = value
         self.range = range
         self.step = step
+        self.onEditingChanged = onEditingChanged
     }
 
     var body: some View {
@@ -1016,7 +1020,7 @@ struct SteppedSlider: View {
         Slider(value: Binding(
             get: { value.wrappedValue },
             set: { value.wrappedValue = Self.snap($0, in: range, step: step) }
-        ), in: range)
+        ), in: range, onEditingChanged: onEditingChanged)
     }
 
     /// 夹进区间并量化到锚在下界的栅格。

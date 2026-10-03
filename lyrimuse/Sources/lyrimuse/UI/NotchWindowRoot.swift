@@ -162,9 +162,9 @@ struct NotchWindowRoot: View {
                               trigger: reduceMotion ? 0 : controller.revealGeneration) { card, state in
                 card
                     .environment(\.notchRevealContentOpacity, state.contentOpacity)
-                    .clipShape(NotchRevealShape(widthFraction: state.widthFraction,
-                                                heightFraction: state.heightFraction,
-                                                notchHeight: controller.contentTopInset))
+                    .modifier(NotchRevealClip(widthFraction: state.widthFraction,
+                                              heightFraction: state.heightFraction,
+                                              outline: controller.cardOutline))
             } keyframes: { _ in
                 KeyframeTrack(\.widthFraction) {
                     MoveKeyframe(revealStartWidth)

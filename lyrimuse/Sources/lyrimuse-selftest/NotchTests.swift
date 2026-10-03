@@ -556,21 +556,146 @@ func runNotchTests() {
         expectEqual(O.shoulder(width: 256, height: 4, notchHeight: 32), 2, "外轮廓: 太矮时肩膀收小")
         expectEqual(O.shoulder(width: 0, height: 0, notchHeight: 32), 0, "外轮廓: 零尺寸不出负数")
         expectEqual(O.shoulder(width: 256, height: 32, notchHeight: 0), 0, "外轮廓: 刘海高度未知(0)时没有肩膀")
+        // 「圆角 / 展开圆角」:三种规则(默认按高度 / 跟随刘海 / 固定),圆角只由这一帧的卡片高度决定。
+        typealias Rule = NotchCornerRule
+        expectEqual(Rule(setting: O.defaultRadiusSetting), .proportional, "圆角: 默认的存盘值 → 按高度算")
+        expectEqual(Rule(setting: O.notchRadiusSetting), .notch, "圆角: 跟随刘海的存盘值 → 刘海本身的底角")
+        expectEqual(Rule(setting: 12), .fixed(12), "圆角: 非负数 → 固定值")
+        expectEqual(Rule(setting: 0), .fixed(0), "圆角: 0 是合法的固定值(直角),不当成默认")
+        expectEqual(Rule(setting: 99), .fixed(CGFloat(O.customRadiusRange.upperBound)), "圆角: 超出范围夹回上限")
+        expectEqual(Rule(setting: -7), .proportional, "圆角: 认不出的负数按默认")
+        expectEqual(O.notchCornerRadius(notchHeight: 32), 8, "圆角: 跟随刘海 = 32pt 刘海的 8pt 底角")
+        expectEqual(O.notchCornerRadius(notchHeight: 38), 9.5, "圆角: 16 寸 38pt 刘海 9.5pt")
+        expectEqual(O.proportionalRadius(height: 76), 19, "圆角: 默认按高度,76pt 卡片 19pt")
+        expectEqual(O.cornerProfile(collapsedSetting: O.defaultRadiusSetting, expandedSetting: O.defaultRadiusSetting,
+                                    collapsedHeight: 76, expandedHeight: 190, notchHeight: 32, isExpanded: false) == nil, true,
+                    "圆角: 两个都是默认时交给形状按高度算,跟没有这两个设置时一样")
+        // 跟随刘海:没展开、展开、中间的尺寸动画,全程同一个值。
+        let notchBoth = O.cornerProfile(collapsedSetting: O.notchRadiusSetting, expandedSetting: O.notchRadiusSetting,
+                                        collapsedHeight: 76, expandedHeight: 190, notchHeight: 32, isExpanded: true)!
+        for h in [32, 76, 120, 190] as [CGFloat] {
+            expectEqual(notchBoth.radius(height: h), 8, "圆角: 两态都跟随刘海,高 \(h) 也是 8")
+        }
+        // 只改展开那一态:没展开的卡片(以及出场动画那几帧更矮的)一点不变 —— 拖「展开圆角」碰不到它。
+        let mixed = O.cornerProfile(collapsedSetting: O.defaultRadiusSetting, expandedSetting: 6,
+                                    collapsedHeight: 76, expandedHeight: 190, notchHeight: 32, isExpanded: false)!
+        for h in [32, 50, 76] as [CGFloat] {
+            expectEqual(mixed.radius(height: h), O.proportionalRadius(height: h), "圆角: 改展开那一态,高 \(h) 的没展开卡片照旧按默认")
+        }
+        expectEqual(mixed.radius(height: 190), 6, "圆角: 展开到底就是「展开圆角」的值")
+        expectEqual(mixed.radius(height: 133), (O.proportionalRadius(height: 133) + 6) / 2,
+                    "圆角: 尺寸动画走到一半,两条规则(都按这一帧的高度算)各占一半")
+        // 两态一样高(展开区什么都不显示):按形态挑。
+        let flat = O.cornerProfile(collapsedSetting: 4, expandedSetting: 10, collapsedHeight: 76, expandedHeight: 76,
+                                   notchHeight: 32, isExpanded: true)!
+        expectEqual(flat.radius(height: 76), 10, "圆角: 两态一样高时按当前形态挑规则")
+        // 设了圆角时画多大:上限是「卡片高 − 肩膀」(侧边整段是圆弧),不是半高 —— 32pt 卡片能到 28,不停在 16。
+        expectEqual(O.clampedCornerRadius(28, height: 32, bodyWidth: 244, shoulder: 4), 28, "圆角夹取: 32pt 卡片画得出 28")
+        expectEqual(O.clampedCornerRadius(30, height: 32, bodyWidth: 244, shoulder: 4), 28, "圆角夹取: 再大停在 高 − 肩膀")
+        expectEqual(O.clampedCornerRadius(20, height: 133, bodyWidth: 30, shoulder: 4), 15, "圆角夹取: 太窄时按主体半宽")
+        expectEqual(O.clampedCornerRadius(-3, height: 32, bodyWidth: 244, shoulder: 4), 0, "圆角夹取: 不出负数")
+        expectEqual(O.clampedCornerRadius(8, height: 3, bodyWidth: 244, shoulder: 1.5), 1.5, "圆角夹取: 出场动画只有一条缝时收小")
+        expectEqual(O.cornerRadiusLimit(height: 32, notchHeight: 32), 28, "圆角上限: 32pt 刘海、32pt 卡片 = 28")
+        expectEqual(O.cornerRadiusLimit(height: 38, notchHeight: 38), 33.25, "圆角上限: 16 寸 38pt = 38 − 4.75")
+        expectEqual(O.customRadiusRange(cardHeight: 32, notchHeight: 32), 0...28, "圆角滑杆: 关着歌词行(32pt)拖到 28 为止")
+        expectEqual(O.customRadiusRange(cardHeight: 50, notchHeight: 32), O.customRadiusRange, "圆角滑杆: 卡片够高时就是整段 0～32")
+        expectEqual(O.customRadiusRange(cardHeight: 38, notchHeight: 38), O.customRadiusRange, "圆角滑杆: 上限取整后再跟 32 取小")
+        expectEqual(O.customRadiusRange(cardHeight: 0, notchHeight: 0), 0...1, "圆角滑杆: 量不到屏幕时也是个能用的区间")
+        // 滑杆上每一格都真的会动(没有拖了不变的那一段):32pt 卡片从 0 到上限,画出来的圆角就是滑杆上的值。
+        let plateauRange = O.customRadiusRange(cardHeight: 32, notchHeight: 32)
+        let shoulder32 = O.shoulder(width: 252, height: 32, notchHeight: 32)
+        let drawn = stride(from: plateauRange.lowerBound, through: plateauRange.upperBound, by: 1).map {
+            O.clampedCornerRadius(CGFloat($0), height: 32, bodyWidth: 252 - 2 * shoulder32, shoulder: shoulder32)
+        }
+        expectEqual(drawn, stride(from: plateauRange.lowerBound, through: plateauRange.upperBound, by: 1).map { CGFloat($0) },
+                    "圆角滑杆: 32pt 卡片上滑杆每一格画出来都不一样")
+        // 默认那套本来就在这个上限以下,两项里有一项是默认、走到 clampedCornerRadius 时也不会被夹变。
+        for h in [2, 4, 8, 16, 32, 50, 76, 133, 190] as [CGFloat] {
+            expectEqual(O.proportionalRadius(height: h) <= O.cornerRadiusLimit(height: h, notchHeight: 32), true,
+                        "圆角夹取: 默认那套(高 \(h))不会被新上限夹")
+        }
         do {
             let uiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("lyrimuse/UI")
             func src(_ n: String) -> String { (try? String(contentsOf: uiDir.appendingPathComponent(n), encoding: .utf8)) ?? "" }
             let v = src("NotchLyricsView.swift"), reveal = src("NotchRevealShape.swift"), stageSrc = src("NotchEditorStage.swift")
-            let rootSrc = src("NotchWindowRoot.swift")
-            expectEqual(v.contains("content.clipShape(NotchHangingShape.card(notchHeight: notchHeight))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
-            expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, notchHeight: controller.contentTopInset)"), true,
-                        "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度")
-            expectEqual(v.contains("NotchHangingShape.card(notchHeight: controller.contentTopInset)\n                .fill(playback.notchCardStyle.fill)"), true, "外轮廓契约: 纯色底用 .card")
-            expectEqual(reveal.contains("return NotchHangingShape.card(notchHeight: notchHeight).path(in: visible)"), true,
+            let rootSrc = src("NotchWindowRoot.swift"), liveSrc = src("NotchCornerLive.swift")
+            // 四处外形都从 chrome 的 cardOutline + NotchCornerLive 拼同一个形状。
+            expectEqual(liveSrc.contains(".card(notchHeight: notchHeight, corner: corner(live))"), true, "外轮廓契约: 外形统一由 NotchCardOutline 拼成 .card")
+            expectEqual(v.contains("content.clipShape(outline.shape(live))"), true, "外轮廓契约: 卡片自己那道裁剪用 .card")
+            expectEqual(v.contains("NotchCardClip(enabled: !hostClipsCard, outline: controller.cardOutline)"), true,
+                        "外轮廓契约: 卡片裁剪的肩膀按这块屏的刘海高度、圆角按设置")
+            expectEqual(v.contains("NotchCardOutlineReader(outline: controller.cardOutline) { $0.fill(playback.notchCardStyle.fill) }"), true,
+                        "外轮廓契约: 纯色底用 .card")
+            expectEqual(reveal.contains("return NotchHangingShape.card(notchHeight: notchHeight, corner: corner).path(in: visible)"), true,
                         "外轮廓契约: 出场裁剪终态与卡片同形(真窗口里只留这一道)")
-            expectEqual(rootSrc.contains("notchHeight: controller.contentTopInset))"), true,
-                        "外轮廓契约: 出场裁剪传的是同一个刘海高度")
-            expectEqual(stageSrc.contains("NotchHangingShape.card(notchHeight: chrome.contentTopInset)\n            .stroke("), true, "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
+            expectEqual(reveal.contains("notchHeight: outline.notchHeight, corner: outline.corner(live))"), true,
+                        "外轮廓契约: 出场裁剪的圆角也从 NotchCornerLive 取")
+            expectEqual(rootSrc.contains(".modifier(NotchRevealClip(widthFraction: state.widthFraction,")
+                        && rootSrc.contains("outline: controller.cardOutline))"), true,
+                        "外轮廓契约: 出场裁剪传的是同一个刘海高度和圆角")
+            expectEqual(stageSrc.contains("NotchCardOutlineReader(outline: chrome.cardOutline) {\n            $0.stroke("), true,
+                        "外轮廓契约: 编辑台拖宽度那圈虚线跟卡片同形")
+            // 圆角按这一帧的高度算,不靠动画插值:两道形状都不该再声明 animatableData(插值的起点会把没展开那张卡片拉成直角再长回来)。
+            expectEqual(v.contains("r = NotchOutline.clampedCornerRadius(corner.radius(height: rect.height), height: rect.height,"), true,
+                        "圆角契约: 卡片形状按这一帧的高度取圆角、按 高 − 肩膀 夹")
+            let shapeDecl: String = {
+                guard let a = v.range(of: "struct NotchHangingShape: Shape {"),
+                      let b = v.range(of: "\n}\n", range: a.upperBound..<v.endIndex) else { return "" }
+                return String(v[a.lowerBound..<b.lowerBound])
+            }()
+            expectEqual(shapeDecl.isEmpty, false, "圆角契约: 切得出 NotchHangingShape")
+            expectEqual(shapeDecl.contains("animatableData") || reveal.contains("animatableData"), false,
+                        "圆角契约: 卡片形状与出场裁剪都不靠插值")
+            expectEqual(stageSrc.contains("slot: .collapsed,\n                            cardHeight: card.cardHeight(expanded: false))")
+                        && stageSrc.contains("slot: .expanded,\n                            cardHeight: card.cardHeight(expanded: true))")
+                        && stageSrc.contains("slot == .collapsed ? \\.notchCornerRadius : \\.notchExpandedCornerRadius"), true,
+                        "圆角契约: 「风格」里两行分别接两个设置,各按自己那一态的卡片高度")
+            // 拖动中不写 AppSettings(每一格都会打醒所有观察它的界面),松手才写回;滑杆上限跟着这一态的卡片高度走。
+            expectEqual(stageSrc.contains("set: { corners.drag(slot, to: $0) }")
+                        && stageSrc.contains("if editing { corners.beginDrag(slot) } else { corners.endDrag() }")
+                        && stageSrc.contains("let range = NotchOutline.customRadiusRange(cardHeight: cardHeight, notchHeight: notchHeight)")
+                        && stageSrc.contains("), in: range, step: 1, onEditingChanged: { editing in"), true,
+                        "圆角契约: 滑杆拖动只改 NotchCornerLive、松手提交,上限按卡片高度")
+            expectEqual(stageSrc.contains(".onDisappear {\n            corners.endDrag()\n            corners.clearHover()\n        }"), true,
+                        "圆角契约: 拖到一半、或指针还停在行上时页面没了,值写回去、预览放开")
+            let dragBody: String = {
+                guard let a = liveSrc.range(of: "func drag(_ slot: NotchCornerSlot, to value: Double) {"),
+                      let b = liveSrc.range(of: "\n    }\n", range: a.upperBound..<liveSrc.endIndex) else { return "" }
+                return String(liveSrc[a.lowerBound..<b.lowerBound])
+            }()
+            expectEqual(dragBody.isEmpty, false, "圆角契约: 切得出 NotchCornerLive.drag")
+            expectEqual(dragBody.contains("AppSettings") || dragBody.contains("settings."), false, "圆角契约: 拖动中的一格不碰 AppSettings")
+            expectEqual(liveSrc.contains("if settings.notchCornerRadius != collapsed { settings.notchCornerRadius = collapsed }")
+                        && liveSrc.contains("if settings.notchExpandedCornerRadius != expanded { settings.notchExpandedCornerRadius = expanded }"), true,
+                        "圆角契约: 松手按正在拖的那一态写回 AppSettings(带相等守卫)")
+            expectEqual(liveSrc.contains("settings.$notchCornerRadius.removeDuplicates().sink")
+                        && liveSrc.contains("settings.$notchExpandedCornerRadius.removeDuplicates().sink"), true,
+                        "圆角契约: NotchCornerLive 跟着 AppSettings 从别处来的改动走")
+            // 只有画外形的那几层观察 NotchCornerLive:拖动时不重算整张卡片。
+            let observesLive = "@ObservedObject private var live = NotchCornerLive.shared"
+            expectEqual(liveSrc.contains(observesLive) && v.contains(observesLive) && reveal.contains(observesLive), true,
+                        "圆角契约: 纯色底 / 虚线框、卡片自裁、出场裁剪三处各自观察 NotchCornerLive")
+            let ctrlSrc = src("NotchLyricsWindowController.swift")
+            expectEqual(ctrlSrc.contains("CornerRadius"), false, "圆角契约: 真窗口控制器不镜像圆角(镜像的话每一格都重算整张卡片)")
+            // 调「展开圆角」时(按着滑杆,或指针停在那一行上)预览摆成展开态,移开交还给指针 / 浮层。
+            expectEqual(stageSrc.contains("var isExpanded: Bool { cornerFocus.map { $0 == .expanded } ?? pointerExpanded }")
+                        && stageSrc.contains("NotchCornerLive.shared.focusPublisher")
+                        && liveSrc.contains("Publishers.CombineLatest($adjusting, $hovered).map { $0 ?? $1 }"), true,
+                        "圆角契约: 正拖着或指针停在哪一态那一行上,预览就摆成哪一态(拖着的优先)")
+            expectEqual(stageSrc.contains(".onHover { inside in corners.hover(slot, inside: inside) }"), true,
+                        "圆角契约: 圆角两行都报指针进出")
+            expectEqual(liveSrc.contains("} else if hovered == slot {"), true, "圆角契约: 指针离开一行只清自己,不清相邻那一行先报的「进」")
+            let designSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent().appendingPathComponent("Settings/SettingsDesignSystem.swift"),
+                                         encoding: .utf8)) ?? ""
+            expectEqual(designSrc.contains("), in: range, onEditingChanged: onEditingChanged)"), true,
+                        "圆角契约: SteppedSlider 把按下 / 松手转出来")
+            expectEqual(stageSrc.contains("settings[keyPath: stored] = NotchOutline.notchRadiusSetting")
+                        && stageSrc.contains("settings[keyPath: stored] = NotchOutline.defaultRadiusSetting"), true,
+                        "圆角契约: 菜单里能选回「默认」和「跟随刘海」")
+            expectEqual(stageSrc.contains("settings.notchCornerRadius = AppSettings.defaultNotchCornerRadius")
+                        && stageSrc.contains("settings.notchExpandedCornerRadius = AppSettings.defaultNotchExpandedCornerRadius"), true,
+                        "圆角契约: 「恢复默认」把两个圆角也恢复成默认")
             expectEqual(v.contains("NotchHangingShape(bottomCornerRadius: 20)") || reveal.contains("NotchHangingShape(bottomCornerRadius: 20)")
                         || stageSrc.contains("NotchHangingShape(bottomCornerRadius: 20)"), false,
                         "外轮廓契约: 卡片不再有写死 20pt 圆角的那一份")
