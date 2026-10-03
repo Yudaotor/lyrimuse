@@ -181,6 +181,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 由 CombineLatest3 一次给全三个值,不存在"回头读存储属性拿到旧值"那个坑。
     @Published private(set) var hasTrack: Bool = false
 
+    /// 有没有曲目的判据:歌名、歌手有一个不空,或正在放广告。设置页编辑台的预览(`NotchPreviewChrome`)用同一个。
+    static func trackPresent(title: String, artist: String, isAdBreak: Bool) -> Bool {
+        !title.isEmpty || !artist.isEmpty || isAdBreak
+    }
+
     /// 稳态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
     /// 之前展开态也用这个宽(hover 只长高不变宽);现在展开态另有 `expandedCardWidth`。
     @Published private(set) var steadyCardWidth: CGFloat = 360
@@ -438,7 +443,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             PlaybackCoordinator.shared.$isCurrentTrackAdBreak
         ).sink { [weak self] title, artist, isAd in
             guard let self else { return }
-            let present = !title.isEmpty || !artist.isEmpty || isAd
+            let present = Self.trackPresent(title: title, artist: artist, isAdBreak: isAd)
             self.hasTrack = present
             // 提醒开始那一刻正好有曲目,setAlertHold 把它跳过了(见那边的注释);提醒还没结束曲目就没了,这时补撑开 ——
             // isAlerting 做了去重、不会再推一次,不补的话这一轮提醒就整个被吞掉。

@@ -699,6 +699,11 @@ func runNotchTests() {
             expectEqual(v.contains("NotchHangingShape(bottomCornerRadius: 20)") || reveal.contains("NotchHangingShape(bottomCornerRadius: 20)")
                         || stageSrc.contains("NotchHangingShape(bottomCornerRadius: 20)"), false,
                         "外轮廓契约: 卡片不再有写死 20pt 圆角的那一份")
+            // 没放歌时预览跟真窗口画同一套(空闲面板):有没有曲目只有一个判据。
+            expectEqual(stageSrc.contains("var hasTrack: Bool { true }"), false, "预览契约: 有没有曲目不写死成 true")
+            expectEqual(stageSrc.contains("NotchLyricsWindowController.trackPresent(title: title, artist: artist, isAdBreak: isAd)")
+                        && ctrlSrc.contains("Self.trackPresent(title: title, artist: artist, isAdBreak: isAd)"), true,
+                        "预览契约: 预览和真窗口按同一个判据、同一组输入判断有没有曲目")
         }
 
         // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。
@@ -877,15 +882,18 @@ func runNotchTests() {
                     "广告态契约: 门槛走 Core 那份只读探测,不另拼一套")
         expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.$adSkipAvailable"), true,
                     "广告态契约: 灵动岛读 App 里唯一那份门槛结果(每块屏不再各跑一轮)")
-        // 门槛轮询**必须**挂 chrome 的 isAdBreakNow(预览恒 false),不准挂回 playback 那条订阅 ——
-        // 挂回去的后果是设置页开着时,编辑台预览跟着真广告每 5 秒对用户的浏览器发一次 AppleScript
+        // 门槛轮询**必须**挂 chrome 的 isAdBreakNow、且只有真窗口登记(drivesAdSkipGate),不准挂回 playback 那条订阅 ——
+        // 预览也会进广告态,让它登记的后果是设置页开着时,编辑台预览跟着真广告每 5 秒对用户的浏览器发一次 AppleScript
         // (真机日志坐实:每行打两遍)。这跟"预览不产生副作用"是同一条纪律。
-        expectEqual(view.contains(".onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }"), true,
-                    "广告态契约: 门槛轮询由 chrome 的 isAdBreakNow 驱动(广告开始起、结束停)")
+        expectEqual(view.contains(".onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: drivesAdSkipGate && on) }"), true,
+                    "广告态契约: 门槛轮询由 chrome 的 isAdBreakNow 驱动(广告开始起、结束停),只有真窗口登记")
         expectEqual(view.contains("self?.syncAdSkipGate"), false,
                     "广告态契约: 门槛轮询不准挂回 $isCurrentTrackAdBreak 订阅(预览会跟着对浏览器发 AppleScript)")
-        expectEqual(view.contains(".onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }"), true,
+        expectEqual(view.contains(".onAppear { playback.syncAdSkipGate(adBreak: drivesAdSkipGate && controller.isAdBreakNow) }"), true,
                     "广告态契约: 窗口出现时已经在放广告也要起轮询(onChange 只认变化)")
+        let root = (try? String(contentsOfFile: ui.appendingPathComponent("NotchWindowRoot.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(root.contains("reportsLineLayout: true, drivesAdSkipGate: true)") && !stage.contains("drivesAdSkipGate: true"), true,
+                    "广告态契约: 只有真窗口替门槛轮询登记,编辑台预览不传")
         expectEqual(view.contains(".onDisappear { playback.syncAdSkipGate(adBreak: false) }"), true,
                     "广告态契约: 窗口没了要撤掉需求,不然灵动岛关了轮询还在跑")
         expectEqual(view.contains("YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)"), true,
@@ -920,7 +928,9 @@ func runNotchTests() {
                     "广告态契约: 没有辅助功能权限时弹系统授权对话框")
         expectEqual(center.contains("case .tabNotFrontmost?:"), true, "广告态契约: 标签页不在前面有专门的提示")
         expectEqual(view.contains(".disabled(playback.skipAdInFlight)"), true, "广告态契约: 跑着的时候键不接第二下")
-        expectEqual(stage.contains("var isAdBreakNow: Bool { false }"), true, "广告态契约: 预览 chrome 的 isAdBreakNow 恒 false")
+        expectEqual(!stage.contains("var isAdBreakNow: Bool { false }")
+                    && stage.contains("if self.isAdBreakNow != isAd { self.isAdBreakNow = isAd }"), true,
+                    "广告态契约: 预览 chrome 的 isAdBreakNow 跟真窗口同源(预览也画广告态)")
         // 用户要的两件(圈图:「广告时候的灵动岛的配色帮我设置为和机器刘海一样的
         // 纯黑色」「在左耳那边加上一个广告的标识图标」)。都钉住,因为它们各自很容易被后来的
         // 改动无声抹掉:纯黑那条是一个 `||` 分支,左耳那条夹在两个 else if 之间。

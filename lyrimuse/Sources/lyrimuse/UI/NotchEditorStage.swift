@@ -91,11 +91,13 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 因为"此刻这首歌没歌词"而缩掉一截的样张没有意义。跟 isCollapsed 恒 false 同一个理由。
     var expandedShowsLyricPreview: Bool { true }
     var expandedShowsScrubber: Bool { true }
-    /// 预览恒按"有曲目"画,理由同 isCollapsed 恒 false:用户来这儿是看样式的。
-    var hasTrack: Bool { true }
-    /// 预览永远不进广告态:广告态会把展开头部整块藏掉、歌词行换成倒计时 —— 用户来编辑台是调
-    /// 头部那四项和歌词行样式的,给他一张看不见头部的样张没有意义。同 hasTrack 恒 true 的理由。
-    var isAdBreakNow: Bool { false }
+    /// 有没有曲目:跟真窗口同一个判据、同一组输入(`NotchLyricsWindowController.trackPresent`)。没放歌时预览跟
+    /// 真窗口一样画空闲那一套(左耳 App 图标、整卡纯黑、展开是空闲面板);别写死成 true,那样预览会画出一张
+    /// 真窗口从来不会出现的「有曲目但全空」的卡片(空歌词行、播放键)。
+    @Published private(set) var hasTrack = false
+    /// 此刻在放的是不是广告:跟真窗口同源(`PlaybackCoordinator.isCurrentTrackAdBreak`),预览跟真窗口一样进广告态。
+    /// 广告态的门槛轮询不归预览登记,见 `NotchLyricsView.drivesAdSkipGate`。
+    @Published private(set) var isAdBreakNow = false
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
@@ -145,10 +147,20 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
             .sink { [weak self] _ in self?.refreshGeometry() }
         cornerSubscription = NotchCornerLive.shared.focusPublisher
             .sink { [weak self] slot in self?.cornerFocus = slot }
+        // 同真窗口:三个输入一次给全,存 sink 参数值(@Published 在 willSet 发布)。
+        let playback = PlaybackCoordinator.shared
+        trackSubscription = Publishers.CombineLatest3(playback.$title, playback.$artist, playback.$isCurrentTrackAdBreak)
+            .sink { [weak self] title, artist, isAd in
+                guard let self else { return }
+                let present = NotchLyricsWindowController.trackPresent(title: title, artist: artist, isAdBreak: isAd)
+                if self.hasTrack != present { self.hasTrack = present }
+                if self.isAdBreakNow != isAd { self.isAdBreakNow = isAd }
+            }
     }
 
     private var screenSubscription: AnyCancellable?
     private var cornerSubscription: AnyCancellable?
+    private var trackSubscription: AnyCancellable?
 
     /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
     ///

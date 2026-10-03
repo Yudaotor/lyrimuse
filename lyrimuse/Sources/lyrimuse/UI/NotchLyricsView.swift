@@ -172,9 +172,8 @@ private final class NotchPlayback: ObservableObject {
 
     /// 这扇灵动岛在广告态时向 `YouTubeMusicAdSkipCenter` 登记要门槛结果,离开广告态撤销。
     ///
-    /// **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动,不挂在 `$isCurrentTrackAdBreak`
-    /// 订阅上**。两者对真窗口是同一件事,但**预览 chrome 的 `isAdBreakNow` 恒 false**
-    /// (`NotchEditorStage`),而 `NotchPlayback` 在预览里照样订阅真的 `PlaybackCoordinator` —— 挂在订阅上
+    /// **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动、只有真窗口登记(`drivesAdSkipGate`),不挂在
+    /// `$isCurrentTrackAdBreak` 订阅上**。`NotchPlayback` 在编辑台预览里照样订阅真的 `PlaybackCoordinator`,挂在订阅上
     /// 的话,设置页只要开着,那块编辑台预览就会替轮询登记需求、跟着真广告对用户的浏览器发 AppleScript。
     func syncAdSkipGate(adBreak: Bool) {
         YouTubeMusicAdSkipCenter.shared.setNotchDemand(ObjectIdentifier(self), active: adBreak)
@@ -620,7 +619,8 @@ protocol NotchChromeSource: ObservableObject {
     /// 此刻在放的是不是广告。决定展开态头部**只剩快捷操作那排键**(见 `trackInfoShowsTrackFields`):
     /// 广告期间歌名位只会写「广告中」、歌手/专辑一律留空(`metadataText` 的既有规矩),封面位是广告物料,
     /// 这四项一律不画;广告态的状态文字与倒计时由歌词行接管(`adStatusColumn`)。
-    /// 真窗口 = 控制器镜像的 `isAdBreakNow`(它同时也是 `isCollapsed` 的第三个输入);预览恒 false。
+    /// 真窗口 = 控制器镜像的 `isAdBreakNow`(它同时也是 `isCollapsed` 的第三个输入);预览同源(`PlaybackCoordinator`
+    /// 的 `isCurrentTrackAdBreak`),但不替门槛轮询登记需求(`NotchLyricsView.drivesAdSkipGate`)。
     var isAdBreakNow: Bool { get }
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
@@ -799,6 +799,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 把歌词行的宽度报给按宽度断句(LineLayoutWidthReporter)。只有真窗口传 true:编辑台里跑的也是这个视图,
     /// 它的宽度跟真窗口不一样,报上去会把真窗口的断句覆盖掉。
     var reportsLineLayout = false
+    /// 广告态时向 `YouTubeMusicAdSkipCenter` 登记要门槛结果。只有真窗口传 true:编辑台预览也会进广告态,但它一登记,
+    /// 设置页开着时就会跟着真广告对用户的浏览器发 AppleScript —— 预览不产生副作用。
+    var drivesAdSkipGate = false
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 NotchPlayback 的注释。
     // NotchTransientCenter 也不在这里订阅:banner 只被歌词行消费,订阅下沉到
     // NotchTransientHost 子视图,横幅出现/消失只失效那一行,不打醒整卡。
@@ -945,15 +948,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
         // 这扇灵动岛向 `YouTubeMusicAdSkipCenter` 登记「广告态、要门槛结果」,挂在这里。
         //
-        // 判据是 **chrome 的 `isAdBreakNow`**,不是 `playback.isCurrentTrackAdBreak` —— 两者对真窗口
-        // 是同一件事,但预览 chrome 的 `isAdBreakNow` 恒 false,而 `NotchPlayback` 在预览里照样订阅真的
-        // `PlaybackCoordinator`:挂在后者上的话,设置页只要开着,那块编辑台预览就会替轮询登记需求、
-        // 跟着真广告对用户的浏览器发 AppleScript。理由同 `controlsDidBecomeVisible` 在预览里是空实现:
-        // 预览不产生副作用。插播里换到下一条广告由 center 按标题自己认,不用在这里重调。
+        // 判据是 **chrome 的 `isAdBreakNow`**,而且只有 `drivesAdSkipGate`(真窗口)才登记 —— 编辑台预览也会进广告态、
+        // `NotchPlayback` 在预览里也照样订阅真的 `PlaybackCoordinator`,让预览也登记的话,设置页只要开着,那块
+        // 编辑台预览就会替轮询登记需求、跟着真广告对用户的浏览器发 AppleScript。理由同 `controlsDidBecomeVisible`
+        // 在预览里是空实现:预览不产生副作用。插播里换到下一条广告由 center 按标题自己认,不用在这里重调。
         //
         // `.onAppear` 那一下是为了"窗口刚出现时已经在放广告"这种情形 —— `onChange` 只在值变化时触发。
-        .onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }
-        .onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }
+        .onAppear { playback.syncAdSkipGate(adBreak: drivesAdSkipGate && controller.isAdBreakNow) }
+        .onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: drivesAdSkipGate && on) }
         .onDisappear { playback.syncAdSkipGate(adBreak: false) }
         // 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
         // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
@@ -1264,8 +1266,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     ///    和歌词窗口那条进度都是 `if let anchor` 才挂表)。暂停/没在播放时 `LocalPlaybackSource`
     ///    会把 anchor 置 nil,于是这一格退回 `pausedPositionMs` 的冻结读数、一次表都不排。
     /// 这条不是可选优化:设置页那块编辑台渲染的是**同一份**视图,而它的替身 chrome 把
-    ///    `hasTrack` 写死 true、`isCollapsed` 写死 false —— 没有这道门,只要有人把耳朵配成时间类,
-    ///    设置页开着就会每秒空转一次,哪怕根本没在放歌。
+    ///    `isCollapsed` 写死 false、暂停着也照样画耳朵 —— 没有这道门,只要有人把耳朵配成时间类,
+    ///    设置页开着就会每秒空转一次,哪怕歌是停着的。
     ///
     /// ③ **周期起点按锚点对齐到"曲目位置的整秒"**,步长按倍速取 `1/rate`(见
     ///    `NotchTimeFormat.clockSchedule`)。钉在**墙钟**整秒上是不行的:曲目位置的整秒边界跟
