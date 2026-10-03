@@ -1261,6 +1261,11 @@ func runLyricsManagerTests() {
         expectEqual(cacheStore.contains("fullScanTier") || cacheStore.contains("pollutedKeys")
                     || statsPanel.contains("fullScanPendingCount"), false,
                     "全量待跟进: App 不再按分层规则自己数")
+        // 决策面板的「旧版评分规则」按 collector 发布的打分版本号判,App 不写死一份(源码契约)。
+        let decisionSheet = appSource("LyricsManager/LyricsDecisionSheet.swift")
+        expectEqual(decisionSheet.contains("LyricsFullScan.current?.scoringVersion")
+                    && !decisionSheet.contains("currentLyricsScoringVersion"), true,
+                    "旧版评分规则: 按 collector 发布的打分版本号判,不写死")
 
         // 请求动词。collector 侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
         // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。
