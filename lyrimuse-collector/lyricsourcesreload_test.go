@@ -37,12 +37,8 @@ func rewrite(t *testing.T, path, body string) {
 	}
 }
 
-// 全部迁移标记都在的一份配置:严格按 lyrics_sources 来,没列出的源就是关的。
-const allFlagsOn = `,"amll_lyrics":true,"lyricfind_lyrics":true,"kuwo_lyrics":true,` +
-	`"migu_lyrics":true,"deezer_lyrics":true,"applemusic_lyrics":true`
-
 func TestLyricSourcesReloadWithoutRestart(t *testing.T) {
-	path := withFeaturesFile(t, `{"lyrics_sources":["netease","qq"]`+allFlagsOn+`}`)
+	path := withFeaturesFile(t, `{"lyrics_sources":["netease","qq"]}`)
 
 	if !lyricSourceEnabled("netease") || !lyricSourceEnabled("qq") {
 		t.Fatalf("列表里的源该是开着的")
@@ -52,7 +48,7 @@ func TestLyricSourcesReloadWithoutRestart(t *testing.T) {
 	}
 
 	// 用户在设置里勾上酷狗、取消 QQ —— 没有任何重启,下一次判定就该看到新集合。
-	rewrite(t, path, `{"lyrics_sources":["netease","kugou"]`+allFlagsOn+`}`)
+	rewrite(t, path, `{"lyrics_sources":["netease","kugou"]}`)
 
 	if !lyricSourceEnabled("kugou") {
 		t.Errorf("新勾上的源没生效:热重读没发生(这正是它存在的理由)")
@@ -80,7 +76,7 @@ func TestLyricSourcesFallBackToStartupSet(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			path := withFeaturesFile(t, `{"lyrics_sources":["netease"]`+allFlagsOn+`}`)
+			path := withFeaturesFile(t, `{"lyrics_sources":["netease"]}`)
 			featuresRef().LyricsSources = map[string]bool{"lrclib": true}
 			if lyricSourceEnabled("lrclib") {
 				t.Fatalf("前置条件:文件读得到时该按文件来")
@@ -106,26 +102,15 @@ func TestLyricSourcesFallBackToStartupSet(t *testing.T) {
 	})
 }
 
-func TestLyricSourcesHotReadHonorsMigrationFlags(t *testing.T) {
-	// 迁移标记齐全 = 已经保存过设置的配置,严格按列表来:取消勾选的源必须真的关掉。
-	// applemusic 这一条是实打实踩过的:App 侧只要不写 applemusic_lyrics,这里的
-	// appleMusicSeen 就恒为 nil,resolveLyricsSources 每次都把它补回启用集合,
-	// 界面上取消勾选对后台毫无作用。
-	withFeaturesFile(t, `{"lyrics_sources":["netease"]`+allFlagsOn+`}`)
-	for _, s := range []string{"amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic"} {
-		if lyricSourceEnabled(s) {
-			t.Errorf("%s 的迁移标记已落盘,取消勾选就该真的关掉", s)
-		}
-	}
-
-	// 标记缺失 = 那个源还不存在的年代写的老配置,按白名单办等于静默关掉,要补回来。
+func TestLyricSourcesHotReadIgnoresMigrationFlags(t *testing.T) {
+	// 只认 lyrics_sources:迁移标记缺失(老配置)也不补源 —— 补源是 App 加载设置时的事,补完写进列表。
 	withFeaturesFile(t, `{"lyrics_sources":["netease"]}`)
-	for _, s := range []string{"amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic"} {
-		if !lyricSourceEnabled(s) {
-			t.Errorf("%s 的迁移标记缺失(老配置),该补进启用集合而不是静默关掉", s)
+	for _, s := range []string{"amll", "lyricfind", "kuwo", "migu", "deezer", "applemusic", "soda"} {
+		if lyricSourceEnabled(s) {
+			t.Errorf("%s 没列在 lyrics_sources 里就是关的,不按迁移标记补", s)
 		}
 	}
-	if lyricSourceEnabled("kugou") {
-		t.Errorf("迁移只补新源,老配置里明确没列出的 kugou 不该被补回来")
+	if !lyricSourceEnabled("netease") {
+		t.Errorf("列出的源该是开着的")
 	}
 }

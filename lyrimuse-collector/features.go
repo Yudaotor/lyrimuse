@@ -15,18 +15,6 @@ import (
 	"time"
 )
 
-// featureFlagsFile is the on-disk shape written by desktop-lyrics's "设置" →
-// "功能开关" section and read once at collector startup — same "Swift 写共享
-// 文件 → launchctl kickstart 重启 collector → collector 下次启动读到新内容"
-// 约定,已经在 enrichCache/lyrics 文件夹这两处验证过(见 main.go 顶部注释),collector
-// 没有文件监听,状态只在启动时读一次。用 *bool 而不是 bool——文件不存在、或者文件里
-// 缺某个字段,都要解读成"沿用现有行为"(默认开启),而不是"关闭";bool 零值会把两者
-// 都错误地解读成"关闭",导致这个改动从"纯增量开关"变成"静默改变现有行为"。
-//
-// 这里的开关跟 config.go 里已有的凭据判断是 AND 关系,不是替代:没配凭据的功能,
-// 开关打开也没用;已经配了凭据的功能,现在才第一次有独立的"关"(尤其是
-// lastfm_bridge/weekly_digest/top_artists_digest 这三个,过去共用同一对
-// lastfm_user/lastfm_api_key 凭据当唯一开关,逻辑上是三个独立能力)。
 // 九个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
@@ -112,15 +100,15 @@ var lyricsSourceDefaultOrder = []string{
 	lyricSourceAppleMusic, lyricSourceSoda,
 }
 
+// featureFlagsFile 是 App「设置」写的共享文件 lyrimuse-features.json(FeatureSettingsStore)在这边的形状,collector
+// 只读,按 mtime 热重读(featuresreload.go)。App 每次加载设置都把整份写全:缺的项补上默认值、旧写法改成新写法
+// (FeatureSettingsStore.load),所以这里不做迁移,遗留键一律不认;各项的缺省只在 App 还没写过这份文件时用。
+// 用 *bool 是为了分得出"没写"和"写了 false"。
+//
+// 这里的开关跟 config.go 里已有的凭据判断是 AND 关系,不是替代:没配凭据的功能,开关打开也没用。
 type featureFlagsFile struct {
-	// Player：**遗留字段**(被下面的 Players 取代,只留着给一次性迁移用)。
-	// 旧版本只能选一个播放器时写的就是这个键;Players 缺失时 resolvePlayers 把它当成
-	// 迁移前的选择读一次,resolvePlayers 兜底成 playerAuto。这台机器往后只会写 Players,
-	// 不会再写这个键,但读老配置(iCloud 同步/降级）时不能让它凭空消失。
-	Player string `json:"player,omitempty"`
-	// Players：可多选的播放器集合(支持多选,取代上面的 Player)——跟
-	// lyrimuse 侧 FeatureSettingsStore.players(Set<PlaybackPlayer>)对应,rawValue 逐字
-	// 相同。resolvePlayers 负责校验/迁移/兜底,任何时候 features().Players 都保证非空。
+	// Players：可多选的播放器集合——跟 lyrimuse 侧 FeatureSettingsStore.players(Set<PlaybackPlayer>)对应,
+	// rawValue 逐字相同。resolvePlayers 负责校验/兜底,任何时候 features().Players 都保证非空。
 	Players       []string `json:"players,omitempty"`
 	AlbumPrefetch *bool    `json:"album_prefetch,omitempty"`
 	// LyricsAutoUpgrade:歌词定下来之后,还要不要跟着"匹配算法/打分规则升级"在后台自动
@@ -130,9 +118,8 @@ type featureFlagsFile struct {
 	// needsLyricsRescore / needsLyricsRetry),首次填充、封面/译文回填、用户手动重搜都不受它管。
 	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
-	// LastfmMatchMode：上送 Last.fm 前怎么对待播放器报的标签,三档
-	// lastfmMatchSmart / lastfmMatchCustom / lastfmMatchRaw。缺失/非法值时顺着下面两个
-	// 遗留字段做一次迁移,见 resolveLastfmMatch。语义与取舍见 lastfm.go 里
+	// LastfmMatchMode：上送 Last.fm 前怎么对待播放器报的标签,三档 lastfmMatchSmart / lastfmMatchCustom /
+	// lastfmMatchRaw,缺失 / 非法值按原始(见 resolveLastfmMatch)。语义与取舍见 lastfm.go 里
 	// resolveScrobbleTags 与 lastfmcatalog.go 的注释。
 	LastfmMatchMode string `json:"lastfm_match_mode,omitempty"`
 	// 下面三个只在 lastfmMatchCustom 下读(另两档的值由档位本身决定,见 resolveLastfmMatch)。
@@ -140,13 +127,6 @@ type featureFlagsFile struct {
 	LastfmMatchArtist          *bool `json:"lastfm_match_artist,omitempty"`
 	LastfmMatchTrack           *bool `json:"lastfm_match_track,omitempty"`
 	LastfmMatchFirstArtistOnly *bool `json:"lastfm_match_first_artist_only,omitempty"`
-	// LastfmScrobbleArtistMode：**遗留字段**(被上面的 LastfmMatchMode 取代,只留着给一次性
-	// 迁移用)。`smart` 与 智能、`all` 与 原始、`first` 与 自定义且只开「合唱只发第一位」。
-	// 这台机器往后只写 LastfmMatchMode,不再写它。
-	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
-	// LastfmScrobbleFirstArtistOnly：**更早的遗留字段**(二态开关,被 LastfmScrobbleArtistMode
-	// 取代)。true 与 旧的 `first`。迁移链因此是两级:这个 → ArtistMode → MatchMode。
-	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
 	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(加,
 	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
 	// 30 秒,主流 scrobbler 都在客户端照做。**只管 Last.fm**(含给 Last.fm 兜底的本地收听日志和
@@ -175,42 +155,9 @@ type featureFlagsFile struct {
 	YearlyDigest        *bool  `json:"yearly_digest,omitempty"`
 	MonthlyDigestSource string `json:"monthly_digest_source,omitempty"`
 	YearlyDigestSource  string `json:"yearly_digest_source,omitempty"`
-	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
-	// 启用,维持这个字段加之前的既有行为不变。
+	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil / 缺失 = 全部启用。
+	// 文件里另有一组 xxx_lyrics 迁移标记(老配置升级后补上新加的源),只 App 读,补完写进这个列表。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
-	// AMLLLyrics：**迁移标记,不是开关**。amll 的启用状态跟其余源一样记在 LyricsSources 里。
-	//
-	// 它只解决一件事:LyricsSources 是白名单,而老配置写的时候 amll 这个源还不存在,列表里
-	// 不可能有它 —— 按白名单办等于对所有老用户默认关闭,而"没列出"在这里的真实含义是
-	// "当时没这个选项"。缺失 到 老配置,补进启用集合(只补这一次);一旦 App 保存过设置,
-	// 这个字段就落盘,从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.amllLyrics
-	// 一一对应,改一边必须改另一边。
-	AMLLLyrics *bool `json:"amll_lyrics,omitempty"`
-	// LyricFindLyrics：跟 AMLLLyrics 同一个套路的迁移标记(加 lyricfind 时补)。
-	// lyricfind 没有 amll 那样"曾经有过独立开关"的历史——它从一开始就直接进
-	// LyricsSources 白名单——但这个字段要解决的是**同一个**问题:老配置(写的时候
-	// lyricfind 这个源还不存在)按白名单办会被静默关掉。缺失 到 老配置,把 lyricfind 补进
-	// 启用集合(只补这一次);一旦保存过,这个字段落盘,从此完全以 LyricsSources 为准。
-	// 与 Swift 侧 FeatureFlagsFile.lyricFindLyrics 一一对应。
-	LyricFindLyrics *bool `json:"lyricfind_lyrics,omitempty"`
-	// KuwoLyrics:跟 AMLLLyrics/LyricFindLyrics 同一个套路的迁移标记(加
-	// kuwo 时补)。老配置(写的时候 kuwo 这个源还不存在)按白名单办会被静默关掉。
-	// 缺失 到 老配置,把 kuwo 补进启用集合(只补这一次);一旦保存过,这个字段落盘,
-	// 从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.kuwoLyrics 一一对应。
-	KuwoLyrics *bool `json:"kuwo_lyrics,omitempty"`
-	// MiguLyrics:同上一套迁移标记(加 migu 时补)。缺失 到 老配置,把 migu 补进启用
-	// 集合(只补这一次)。与 Swift 侧 FeatureFlagsFile.miguLyrics 一一对应。
-	MiguLyrics *bool `json:"migu_lyrics,omitempty"`
-	// DeezerLyrics:同上一套迁移标记(加 deezer 时补)。缺失 到 老配置,把 deezer
-	// 补进启用集合一次;写盘时总是带上,此后用户自己的开关说了算。
-	DeezerLyrics *bool `json:"deezer_lyrics,omitempty"`
-	// AppleMusicLyrics:同上一套迁移标记(加 applemusic 时补)。缺失 到 老配置,
-	// 把 applemusic 补进去。提醒 "开着"不等于"能用":这一路还要用户连过 Apple Music 才有
-	// 输出(见 applemusic.go 的 applemusic_not_connected),没连时它只是安静返回空。
-	AppleMusicLyrics *bool `json:"applemusic_lyrics,omitempty"`
-	// SodaLyrics:同上一套迁移标记(加 soda 时补)。缺失 到 老配置,把 soda 补进启用集合;
-	// 非空 到 用户已表态,尊重它。
-	SodaLyrics *bool `json:"soda_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -233,14 +180,9 @@ type featureFlagsFile struct {
 	// **默认关**,跟其它附加功能一致 —— 它会把歌词正文发给第三方翻译服务,而现有的五个
 	// 歌词源只发歌手/歌名,这是一条新的外发数据,该由用户显式同意。
 	LyricsMachineTranslation *bool `json:"lyrics_machine_translation,omitempty"`
-	// LaunchLyrimuseOnMusicOpen：检测到 Music.app 从没运行变成运行时,顺带启动/唤起
-	// Lyrimuse.app(见 companionlaunch.go)。反方向("打开 Lyrimuse 时唤起 Music")
-	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
-	// 知道。
-	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
-	// LaunchLyrimuseOnPlayers:「跟随播放器启动」逐播放器勾选(Swift 侧 FeatureSettingsStore
-	// 的 launchLyrimuseOnPlayers)。键在就严格按它来(空列表 = 关),键缺失是布尔年代的老配置,退回
-	// 「盯整个选中集合 / auto 全量」。上面那个布尔 App 仍然写(= 列表非空),两者同时在时布尔只当总开关。
+	// LaunchLyrimuseOnPlayers:「跟随播放器启动」逐播放器勾选(Swift 侧 FeatureSettingsStore 的
+	// launchLyrimuseOnPlayers):打开勾了的播放器时顺带唤起 Lyrimuse.app(见 companionlaunch.go)。缺失 / 空 = 不跟随。
+	// 反方向("打开 Lyrimuse 时启动播放器")是 Swift 侧 AppSettings 自己的本地设置,不在这份文件里。
 	LaunchLyrimuseOnPlayers []string `json:"launch_lyrimuse_on_players,omitempty"`
 	// TrustedPlayers:用户显式信任的"未知播放器"—— bundle id → 界面显示名。
 	//
@@ -283,8 +225,7 @@ type featureFlagsFile struct {
 // bridge() 判断条件。
 type featureFlags struct {
 	// Players 是已经解析/校验过的播放器集合(键是 playerAppleMusic/playerQQMusic 等
-	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——从单选的 Player
-	// 改成可多选。poller.go 的 isTracked()、companionlaunch.go、match.go 的同源加权都读它。
+	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)。companionlaunch.go、match.go 的同源加权读它。
 	Players       map[string]bool
 	AlbumPrefetch bool
 	// 见 featureFlagsFile.LyricsAutoUpgrade。默认 true(现状)。
@@ -336,10 +277,7 @@ type featureFlags struct {
 	LyricsTranslationLanguage string
 	// 见上面同名字段的注释。只被 needsTranslationBackfill/backfillTranslation 读取。
 	LyricsMachineTranslation bool
-	// LaunchLyrimuseOnMusicOpen 只被 companionlaunch.go 读取。
-	LaunchLyrimuseOnMusicOpen bool
-	// LaunchLyrimuseOnPlayers 是逐播放器勾选的集合(键是 player* 常量);nil = 文件里没有这个键(老配置),
-	// 由 companionLaunchProcessNames 退回布尔年代语义。只被 companionlaunch.go 读取。
+	// LaunchLyrimuseOnPlayers 是逐播放器勾选的集合(键是 player* 常量),空 = 不跟随。只被 companionlaunch.go 读取。
 	LaunchLyrimuseOnPlayers map[string]bool
 	// LyricsDecisionTrace 只被 lyricstrace.go 读取,见那边注释。
 	LyricsDecisionTrace bool
@@ -361,16 +299,12 @@ type featureFlags struct {
 // 之所以保留 `features` 这个名字而不是另起一个访问器:`features().X` 这种旧写法会直接**编译失败**,
 // 183 个读点、53 个赋值点一个都漏不掉 —— 靠编译器兜底,不靠人眼。
 
-// resolveLaunchLyrimuseOnPlayers 把「跟随哪些播放器启动」的原始列表清洗成集合:键缺失(nil,布尔年代
-// 的老配置)原样返回 nil,由 companionLaunchProcessNames 退回旧语义;键在(哪怕是空列表)就严格按它来,
-// 不认识的值丢掉(auto 也丢 —— 它不是一个可以"启动"的进程)。
+// resolveLaunchLyrimuseOnPlayers 把「跟随哪些播放器启动」的原始列表清洗成集合(缺失 = 空集合),不认识的值丢掉
+// (auto 也丢 —— 它不是一个可以"启动"的进程)。
 //
 // 认得哪些按 playerBundleIDs(生成自 players.json,auto 不在里面),别写成手写清单:设置里每个播放器都勾得上,
 // 漏一个就是勾了不生效、也不报错。
 func resolveLaunchLyrimuseOnPlayers(raw []string) map[string]bool {
-	if raw == nil {
-		return nil
-	}
 	out := map[string]bool{}
 	for _, p := range raw {
 		if _, ok := playerBundleIDs[p]; ok {
@@ -424,19 +358,18 @@ func readFeatureFlags(path string) (featureFlags, error) {
 	return buildFeatureFlags(f), nil
 }
 
-// buildFeatureFlags 把解析好的文件结构变成运行期用的那份配置:默认值、清洗、老键迁移都在这里,
-// 两条读取路径(启动 / 热重读)共用它,免得默认值在两边各写一份、迟早漂移。
+// buildFeatureFlags 把解析好的文件结构变成运行期用的那份配置:缺省值和清洗都在这里(老写法的迁移只在 App 做),
+// 两条读取路径(启动 / 热重读)共用它,免得缺省值在两边各写一份、迟早漂移。
 func buildFeatureFlags(f featureFlagsFile) featureFlags {
 	match := resolveLastfmMatch(f)
 	return featureFlags{
-		Players:        promoteTrustedBuiltins(resolvePlayers(f.Players, f.Player), f.TrustedPlayers),
+		Players:        resolvePlayers(f.Players),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
 		// 缺失 / 空 = 全部上送:跟 TrustedPlayers 一样"少一个键不改变现有行为"。
 		LastfmExcludedBundles: resolveLastfmExcludedBundles(f.LastfmExcludedBundles),
 		BrowserPlatformPairs:  resolveBrowserPlatformPairs(f.BrowserPlatformPairs),
 		AlbumPrefetch:         boolOr(f.AlbumPrefetch, true),
-		// 默认 true = 保持这个能力上线以来的行为;Swift 侧 `lyricsAutoUpgrade` 的属性初值
-		// 必须跟这里一致(两侧默认值对齐那条老规矩,见上面 AlbumPrefetch 的注释)。
+		// 缺省 true = 保持这个能力上线以来的行为。
 		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
 		// 默认 lastfmMatchRaw:原样发。理由见 lastfm.go resolveScrobbleTags ——
@@ -457,13 +390,12 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		YearlyDigest:              boolOr(f.YearlyDigest, false),
 		MonthlyDigestSource:       f.MonthlyDigestSource,
 		YearlyDigestSource:        f.YearlyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
-		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
 		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 	}
@@ -480,13 +412,6 @@ const (
 	lastfmMatchRaw = "raw"
 )
 
-// 旧档位值(遗留键 lastfm_scrobble_artist_mode)。只在迁移时出现。
-const (
-	legacyScrobbleArtistAll   = "all"
-	legacyScrobbleArtistFirst = "first"
-	legacyScrobbleArtistSmart = "smart"
-)
-
 // lastfmMatchSettings 是档位摊平之后的四个值。判断行为一律读后三个布尔,别再去看 Mode ——
 // 智能档恒为 true/true/false,自定义档才按文件里的三个键。
 type lastfmMatchSettings struct {
@@ -496,29 +421,11 @@ type lastfmMatchSettings struct {
 	FirstArtistOnly bool
 }
 
-// resolveLastfmMatch 把文件里的档位校验成三个常量之一并摊平成布尔;缺失/非法时顺着
-// **两级遗留链**迁移:lastfm_match_mode → lastfm_scrobble_artist_mode →
-// lastfm_scrobble_first_artist_only,全都没有才兜底「原始」。
+// resolveLastfmMatch 把文件里的档位校验成三个常量之一并摊平成布尔;缺失 / 非法时按「原始」(不改上送内容)。
+// 非法值除了兜底还记一行日志 —— 拼错档位名的后果是"设置里选了智能、collector 一直在发整串",不报出来查不到。
 //
-// 迁移表(刻意做到**行为逐字不变**):
-//
-//	旧 smart → 智能
-//	旧 all   → 原始
-//	旧 first → 自定义,只开「合唱只发第一位」(改歌手/改曲名都关 到 照旧不打网络)
-//
-// 非法值除了兜底还记一行日志 —— 拼错档位名的后果是"设置里选了智能、collector 一直在
-// 发整串",不报出来查不到。
-//
-// 这里兜底「原始」**不能**跟着 App 改成「智能」(「全新装机默认智能」)。
-// 两个进程能拿到的信息不一样:那个默认值是按"这台机器是不是头一回用 lyrimuse"抬的,
-// 判据里有 UserDefaults(`np:hasCompletedOnboarding`)—— collector 是独立进程,读不到,
-// 自己判不了新老。分工因此是:**App 负责判、并把结论写实进 features.json**
-// (FeatureSettingsStore.isFreshInstall + load() 里那段 persistFile),collector 只管读。
-//
-// 所以对 collector 来说"文件不存在"只剩一个含义:**老用户、从没动过任何开关** → 原始。
-// 全新装机那一路在 App 首次 load() 时就已经把文件连同 "smart" 一起落了盘。
-// 反过来说,要是哪天把 App 那次写盘去掉,这里就会变成"新用户界面显示智能、collector 发整串"
-// —— 改那边之前先回来看这段。
+// 全新装机默认「智能」由 App 判(判据要看 UserDefaults,collector 读不到),加载设置时写进文件;老写法
+// (lastfm_scrobble_artist_mode / lastfm_scrobble_first_artist_only)也由 App 加载时改写成档位。这里只认档位。
 func resolveLastfmMatch(f featureFlagsFile) lastfmMatchSettings {
 	switch f.LastfmMatchMode {
 	case lastfmMatchSmart:
@@ -530,27 +437,9 @@ func resolveLastfmMatch(f featureFlagsFile) lastfmMatchSettings {
 			Track:           boolOr(f.LastfmMatchTrack, false),
 			FirstArtistOnly: boolOr(f.LastfmMatchFirstArtistOnly, false),
 		}
-	case lastfmMatchRaw:
-		return lastfmMatchSettings{Mode: lastfmMatchRaw}
-	case "":
+	case lastfmMatchRaw, "":
 	default:
 		log.Printf("feature flags: unknown lastfm_match_mode %q (falling back)", f.LastfmMatchMode)
-	}
-
-	switch f.LastfmScrobbleArtistMode {
-	case legacyScrobbleArtistSmart:
-		return lastfmMatchSettings{Mode: lastfmMatchSmart, Artist: true, Track: true}
-	case legacyScrobbleArtistFirst:
-		return lastfmMatchSettings{Mode: lastfmMatchCustom, FirstArtistOnly: true}
-	case legacyScrobbleArtistAll:
-		return lastfmMatchSettings{Mode: lastfmMatchRaw}
-	case "":
-	default:
-		log.Printf("feature flags: unknown lastfm_scrobble_artist_mode %q (falling back)", f.LastfmScrobbleArtistMode)
-	}
-
-	if f.LastfmScrobbleFirstArtistOnly != nil && *f.LastfmScrobbleFirstArtistOnly {
-		return lastfmMatchSettings{Mode: lastfmMatchCustom, FirstArtistOnly: true}
 	}
 	return lastfmMatchSettings{Mode: lastfmMatchRaw}
 }
@@ -569,7 +458,7 @@ const (
 )
 
 // resolveScrobblePoint 把文件里的时点字符串校验成四个常量之一;缺失兜底 scrobblePointHalf,
-// 非法值同样兜底但记一行日志(理由同 resolveScrobbleArtistMode:拼错了不报出来查不到)。
+// 非法值同样兜底但记一行日志(理由同 resolveLastfmMatch:拼错了不报出来查不到)。
 func resolveScrobblePoint(raw string) string {
 	switch raw {
 	case scrobblePointHalf, scrobblePoint75, scrobblePoint90, scrobblePointEnd:
@@ -581,26 +470,18 @@ func resolveScrobblePoint(raw string) string {
 	return scrobblePointHalf
 }
 
-// isValidPlayerValue 核对一个字符串是不是六个已知播放器 rawValue 之一——resolvePlayers
-// 校验列表条目、以及迁移路径校验 legacy 字段共用同一份判据。
+// isValidPlayerValue 核对一个字符串是不是已知播放器的 rawValue(resolvePlayers 校验列表条目用)。
 func isValidPlayerValue(p string) bool {
 	// 合法取值来自 allPlayerIDs(生成自 shared/players.json)——接一个播放器时
 	// 这里不用改,漏改也不可能发生。
 	return slices.Contains(allPlayerIDs, p)
 }
 
-// resolvePlayers 是从单选 resolvePlayer 改成多选后的替代——list 是新字段
-// featureFlagsFile.Players(可能为 nil,老配置/全新安装都会是这样),legacy 是旧字段
-// Player(单选年代写的值)。
-//
-// 优先级:list 里任何认得出的值都收进结果集,认不出的静默丢弃(比如未来某个版本删掉的
-// 播放器,不该让整份解析失败)；list 过滤后一个能收的都没有(nil/空/全认不出),才退回
-// legacy 做**一次性迁移**——老配置只选过一个,迁移后的结果集就是那一个;legacy 也认不出
-// 或本身是空值,才最终兜底成 playerAuto(定的默认,理由见 PlaybackPlayer.swift
-// 顶部注释:写死 Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的
-// 界面)。返回值保证非空、且键全部是六个已知值之一,调用方可以放心用 `m[playerXxx]` 判断
-// 成员,不需要再校验一遍。
-func resolvePlayers(list []string, legacy string) map[string]bool {
+// resolvePlayers 把文件里的播放器列表清洗成集合:认得出的值收进来,认不出的静默丢掉(比如以后某个版本删掉的
+// 播放器,不该让整份解析失败);一个能收的都没有(nil / 空 / 全认不出)兜底成 playerAuto(写死 Apple Music
+// 会让只用别的播放器的新用户对着一个永远空白的界面,见 PlaybackPlayer.swift 顶部注释)。返回值保证非空、
+// 且键全部是已知值,调用方可以放心用 `m[playerXxx]` 判断成员,不需要再校验一遍。
+func resolvePlayers(list []string) map[string]bool {
 	m := map[string]bool{}
 	for _, p := range list {
 		if isValidPlayerValue(p) {
@@ -610,28 +491,7 @@ func resolvePlayers(list []string, legacy string) map[string]bool {
 	if len(m) > 0 {
 		return m
 	}
-	if isValidPlayerValue(legacy) {
-		return map[string]bool{legacy: true}
-	}
 	return map[string]bool{playerAuto: true}
-}
-
-// promoteTrustedBuiltins:信任列表里有 App 后来成了内置播放器(KKBOX 就是先被加进信任列表、后来才内置的),
-// 没勾「自动识别」时把它补进选中集合 —— resolveTrustedPlayers 会把它剔出信任列表,不补的话「跟随播放器启动」就不再盯它。
-// 勾着自动识别的不用补,自动识别本来就认全部内置播放器。Swift 侧 TrustedPlayers.promotingBuiltins 同一条规则。
-func promoteTrustedBuiltins(players map[string]bool, trusted map[string]string) map[string]bool {
-	if players[playerAuto] {
-		return players
-	}
-	for id := range trusted {
-		id = strings.TrimSpace(id)
-		for player, bundleID := range playerBundleIDs {
-			if bundleID == id {
-				players[player] = true
-			}
-		}
-	}
-	return players
 }
 
 // resolveTrustedPlayers 清洗用户信任列表:去掉空 bundle id、去掉首尾空白、去掉五个
@@ -658,57 +518,20 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool, deezerSeen *bool, appleMusicSeen *bool, sodaSeen *bool) map[string]bool {
-	// 先去掉这个版本不认识的源名,跟 App 侧(FeatureSettingsStore 的 compactMap)同一口径:降级安装、
-	// 手改过文件时清单里可能全是不认识的名字,不去掉的话这边等于所有已知源都关了,App 那边却显示全开。
-	known := list[:0:0]
+// resolveLyricsSources:文件里的启用列表,先去掉这个版本不认识的源名(跟 App 侧 FeatureSettingsStore 的 compactMap
+// 同一口径:降级安装、手改过文件时清单里可能全是不认识的名字,不去掉的话这边等于所有已知源都关了,App 那边却显示
+// 全开);列表缺失 / 为空 = 全部启用。老配置升级后补上新加的源是 App 的事(xxx_lyrics 迁移标记),这里只认列表。
+func resolveLyricsSources(list []string) map[string]bool {
+	m := make(map[string]bool, len(lyricSourceNames))
 	for _, s := range list {
 		if slices.Contains(lyricSourceNames, s) {
-			known = append(known, s)
+			m[s] = true
 		}
 	}
-	list = known
-	if len(list) == 0 {
-		return map[string]bool{
-			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
-			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
-			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true, lyricSourceMigu: true,
-			lyricSourceDeezer: true, lyricSourceAppleMusic: true, lyricSourceSoda: true,
+	if len(m) == 0 {
+		for _, s := range lyricSourceNames {
+			m[s] = true
 		}
-	}
-	m := make(map[string]bool, len(list)+1)
-	for _, s := range list {
-		m[s] = true
-	}
-	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics/.LyricFindLyrics/.KuwoLyrics/.MiguLyrics。四个
-	// 标记各自独立判断——一份配置可能在 amll 时代之后、lyricfind 时代之前保存过(amllSeen
-	// 非空、lyricFindSeen 为空),这种配置只该补 lyricfind,不该把 amll 也重新补一遍(用户
-	// 可能已经手动关掉了它)。
-	//
-	// 迁移标记参数跟源数脱节会静默失效:lyrics_sources 只有旧的六个源、没有对应
-	// 迁移字段时,search-lyrics 的 sourcesTotal 会停在 6、候选列表里一条新源都没有——
-	// 「代码接好了但静默对现有用户不生效」不是假设的风险,加上这几个
-	// 迁移标记的**回归测试**就是防它复发。
-	if amllSeen == nil {
-		m[lyricSourceAMLL] = true
-	}
-	if lyricFindSeen == nil {
-		m[lyricSourceLyricFind] = true
-	}
-	if kuwoSeen == nil {
-		m[lyricSourceKuwo] = true
-	}
-	if miguSeen == nil {
-		m[lyricSourceMigu] = true
-	}
-	if deezerSeen == nil {
-		m[lyricSourceDeezer] = true
-	}
-	if appleMusicSeen == nil {
-		m[lyricSourceAppleMusic] = true
-	}
-	if sodaSeen == nil {
-		m[lyricSourceSoda] = true
 	}
 	return m
 }
@@ -864,12 +687,6 @@ func logFeatureSnapshot() {
 	if features().LyricsDir != "" {
 		lyricsDirMode = "custom"
 	}
-	// nil 和空集合含义不同:nil = 配置文件里压根没这个键(布尔年代的老配置,
-	// companionLaunchProcessNames 会退回旧语义),空集合 = 用户明确一个都不选。
-	launchOnPlayers := "legacy"
-	if features().LaunchLyrimuseOnPlayers != nil {
-		launchOnPlayers = sortedEnabledKeys(features().LaunchLyrimuseOnPlayers)
-	}
 	slog.Info("feature flags",
 		"players", sortedEnabledKeys(features().Players),
 		"album_prefetch", features().AlbumPrefetch,
@@ -900,8 +717,7 @@ func logFeatureSnapshot() {
 		"monthly_digest_source", orDash(features().MonthlyDigestSource),
 		"yearly_digest", features().YearlyDigest,
 		"yearly_digest_source", orDash(features().YearlyDigestSource),
-		"launch_on_music_open", features().LaunchLyrimuseOnMusicOpen,
-		"launch_on_players", launchOnPlayers,
+		"launch_on_players", sortedEnabledKeys(features().LaunchLyrimuseOnPlayers),
 		"trusted_players", orDash(sortedMapKeys(features().TrustedPlayers)),
 		"browser_platform_pairs", browserPlatformPairsSummary(features().BrowserPlatformPairs),
 	)

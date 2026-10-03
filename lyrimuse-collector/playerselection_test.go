@@ -2,43 +2,32 @@ package main
 
 import "testing"
 
-// 播放器多选——设置页"播放器"卡从单选改成多选,用户可以同时勾
-// 好几个具体播放器(高亮显示),也可以额外勾"自动识别"。这一串盯的是共享 JSON 的
-// 迁移路径,跟 Swift 侧 lyrimuse-selftest 的「播放器多选」块守的是同一份契约。这一拍算不算数只在 App 判,
+// 播放器多选——设置页"播放器"卡可以同时勾好几个具体播放器,也可以额外勾"自动识别"。这一串盯的是
+// 共享 JSON 里播放器列表的解析(老写法的迁移只在 App 做)。这一拍算不算数只在 App 判,
 // 见 TestIsTrackedTrustsTheAppsPlayer。
 
-func TestResolvePlayersMigratesLegacySingleValue(t *testing.T) {
-	// 老配置(升级前只写了 "player" 单值,从没写过 "players")：迁移成对应的单元素集合。
-	if got := resolvePlayers(nil, "qq_music"); len(got) != 1 || !got[playerQQMusic] {
-		t.Errorf("resolvePlayers(nil, qq_music) = %v，期望迁移成 {qq_music}", got)
+func TestResolvePlayersFallsBackToAuto(t *testing.T) {
+	// 一个能收的都没有(nil / 空 / 全认不出)→ 兜底 auto。空集不是合法状态。
+	for _, list := range [][]string{nil, {}, {"some_removed_player"}} {
+		if got := resolvePlayers(list); len(got) != 1 || !got[playerAuto] {
+			t.Errorf("resolvePlayers(%v) = %v，期望兜底 {auto}", list, got)
+		}
 	}
-	// "players" 是空 slice(不是 nil,但也没有可用值)同样该走迁移路径,不能被
-	// "非 nil 就信它"误判成"用户显式选了空集"——空集不是一个合法状态。
-	if got := resolvePlayers([]string{}, "spotify"); len(got) != 1 || !got[playerSpotify] {
-		t.Errorf("resolvePlayers([], spotify) = %v，期望迁移成 {spotify}", got)
-	}
-	// "players" 里全是认不出的值(比如以后下线了某个播放器,旧文件还留着字符串)
-	// 同样退回 legacy 迁移，而不是把认不出的原样收进结果集。
-	if got := resolvePlayers([]string{"some_removed_player"}, "netease_music"); len(got) != 1 || !got[playerNetease] {
-		t.Errorf("resolvePlayers([认不出的值], netease_music) = %v，期望迁移成 {netease_music}", got)
-	}
-	// legacy 也认不出(全新安装/文件损坏)→ 最终兜底 auto。
-	if got := resolvePlayers(nil, ""); len(got) != 1 || !got[playerAuto] {
-		t.Errorf("resolvePlayers(nil, \"\") = %v，期望兜底 {auto}", got)
+	// 遗留的单选键 "player" 不认:迁移只在 App 做(加载设置时改写成 players 整份写回)。
+	if got := loadFeatureFlagsFromJSON(t, `{"player":"qq_music"}`).Players; len(got) != 1 || !got[playerAuto] {
+		t.Errorf("遗留 player 键不该被引擎迁移, got %v", got)
 	}
 }
 
 func TestResolvePlayersAcceptsMultiSelect(t *testing.T) {
-	// 新格式:"players" 里有值就直接用,忽略 legacy——不是"两边取并集"。
-	got := resolvePlayers([]string{"qq_music", "kugou_music"}, "apple_music")
+	got := resolvePlayers([]string{"qq_music", "kugou_music"})
 	if len(got) != 2 || !got[playerQQMusic] || !got[playerKugou] {
-		t.Errorf("resolvePlayers([qq,kugou], apple) = %v，期望恰好 {qq, kugou}（legacy 不该混进来）", got)
+		t.Errorf("resolvePlayers([qq,kugou]) = %v，期望恰好 {qq, kugou}", got)
 	}
-	// 列表里混了认不出的值:能认的留下，认不出的丢掉,不因为其中一个有效就整体接受
-	// 也不因为其中一个无效就整体退回 legacy。
-	got = resolvePlayers([]string{"qq_music", "some_removed_player"}, "spotify")
+	// 列表里混了认不出的值:能认的留下，认不出的丢掉。
+	got = resolvePlayers([]string{"qq_music", "some_removed_player"})
 	if len(got) != 1 || !got[playerQQMusic] {
-		t.Errorf("resolvePlayers([qq,认不出], spotify) = %v，期望只留 {qq}", got)
+		t.Errorf("resolvePlayers([qq,认不出]) = %v，期望只留 {qq}", got)
 	}
 }
 

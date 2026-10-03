@@ -149,9 +149,8 @@ public enum AutomationRequestPlan {
 // 每次 2 秒轮询都会读一次,文件很小,不值得像 EnrichCacheReader 那样加 mtime 缓存。
 public enum PlaybackPlayerPreference {
     private struct MinimalFeatureFlags: Decodable {
-        // player 是遗留单选字段(前),players 缺失时当一次性迁移源读——
-        // 跟 collector 侧 featureFlagsFile.Player/resolvePlayers 是同一份迁移逻辑,
-        // 两侧必须同步维护。
+        // player 是遗留单选字段:FeatureSettingsStore.load() 读到会改写成 players 整份写回,
+        // 在那之前读到旧文件时这里照样认。
         let player: String?
         let players: [String]?
     }

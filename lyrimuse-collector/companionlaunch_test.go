@@ -53,8 +53,14 @@ func TestShouldCompanionLaunch(t *testing.T) {
 // 这条测试钉的是"每个受支持的播放器都必须有自己的进程名,而且不能悄悄退化成 Music" ——
 // 以后再加播放器时漏接同一处会当场失败。
 func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
-	saved := features().Players
-	t.Cleanup(func() { featuresRef().Players = saved })
+	saved, savedLaunch := features().Players, features().LaunchLyrimuseOnPlayers
+	t.Cleanup(func() { featuresRef().Players, featuresRef().LaunchLyrimuseOnPlayers = saved, savedLaunch })
+	// 跟随启动勾满全部播放器:下面看的是候选集合本身(选中集合 / auto 全量)盯哪些进程。
+	allPlayers := map[string]bool{}
+	for player := range playerBundleIDs {
+		allPlayers[player] = true
+	}
+	featuresRef().LaunchLyrimuseOnPlayers = allPlayers
 
 	cases := []struct{ player, want string }{
 		{playerAppleMusic, "Music"},
@@ -118,18 +124,18 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 	}
 }
 
-// 「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失退回旧语义。
+// 「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失 = 不跟随。
 func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 	defer func() {
 		featuresRef().Players = map[string]bool{playerAuto: true}
 		featuresRef().LaunchLyrimuseOnPlayers = nil
 	}()
 
-	// 键缺失(老配置):跟布尔年代一样盯整个选中集合。
+	// 键缺失 = 不跟随:只有布尔的老配置由 App 加载设置时迁移成列表,引擎不认那个布尔。
 	featuresRef().Players = map[string]bool{playerQQMusic: true, playerKugou: true}
-	featuresRef().LaunchLyrimuseOnPlayers = nil
-	if got := companionLaunchProcessNames(); len(got) != 2 {
-		t.Errorf("键缺失时应退回盯整个选中集合(2 个), got %v", got)
+	featuresRef().LaunchLyrimuseOnPlayers = loadFeatureFlagsFromJSON(t, `{"launch_lyrimuse_on_music_open":true}`).LaunchLyrimuseOnPlayers
+	if got := companionLaunchProcessNames(); len(got) != 0 {
+		t.Errorf("键缺失时一个都不盯, got %v", got)
 	}
 
 	// 只勾了 QQ 音乐:只盯 QQMusic。
@@ -157,7 +163,7 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 		t.Errorf("auto + 勾两个 应盯 2 个, got %v", got)
 	}
 
-	// 解析层:auto / 不认识的值被丢掉,nil 原样透传。
+	// 解析层:auto / 不认识的值被丢掉,缺失按空集合。
 	if got := resolveLaunchLyrimuseOnPlayers([]string{playerAuto, "bogus", playerNetease}); len(got) != 1 || !got[playerNetease] {
 		t.Errorf("resolveLaunchLyrimuseOnPlayers 应只留 netease, got %v", got)
 	}
@@ -167,8 +173,8 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 			t.Errorf("resolveLaunchLyrimuseOnPlayers 该认 %q, got %v", player, got)
 		}
 	}
-	if got := resolveLaunchLyrimuseOnPlayers(nil); got != nil {
-		t.Errorf("nil 应原样透传(表示键缺失), got %v", got)
+	if got := resolveLaunchLyrimuseOnPlayers(nil); got == nil || len(got) != 0 {
+		t.Errorf("缺失按空集合, got %v", got)
 	}
 }
 

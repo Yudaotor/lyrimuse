@@ -90,21 +90,13 @@ func readLyricSources(path string) map[string]bool {
 	if err != nil {
 		return nil
 	}
-	// 六个迁移标记必须跟着列表一起读、一起交给 resolveLyricsSources:少读一个,老配置(那个源
-	// 还不存在的年代写的)就会被白名单静默关掉 —— 这正是 resolveLyricsSources 里那段 讲的坑。
+	// 只认 lyrics_sources:老配置补新源的迁移标记(xxx_lyrics)只 App 读,补完写进这个列表。
 	var f struct {
-		LyricsSources    []string `json:"lyrics_sources"`
-		AMLLLyrics       *bool    `json:"amll_lyrics"`
-		LyricFindLyrics  *bool    `json:"lyricfind_lyrics"`
-		KuwoLyrics       *bool    `json:"kuwo_lyrics"`
-		MiguLyrics       *bool    `json:"migu_lyrics"`
-		DeezerLyrics     *bool    `json:"deezer_lyrics"`
-		AppleMusicLyrics *bool    `json:"applemusic_lyrics"`
-		SodaLyrics       *bool    `json:"soda_lyrics"`
+		LyricsSources []string `json:"lyrics_sources"`
 	}
 	if err := json.Unmarshal(data, &f); err != nil {
 		warnf("lyrics sources: cannot parse %s, keeping the set loaded at startup: %v", path, err)
 		return nil
 	}
-	return resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics, f.DeezerLyrics, f.AppleMusicLyrics, f.SodaLyrics)
+	return resolveLyricsSources(f.LyricsSources)
 }

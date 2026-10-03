@@ -54,105 +54,17 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ③ 全集兜底(lyrics_sources 缺失/为空 = 全开)。漏一个 = 那个源在全新安装上被禁用。
-	full := resolveLyricsSources(nil, nil, nil, nil, nil, nil, nil, nil)
+	full := resolveLyricsSources(nil)
 	for _, s := range all {
 		if !full[s] {
 			t.Errorf("源 %q 不在 resolveLyricsSources 的全集兜底里(全新安装会禁用它)", s)
 		}
 	}
 
-	// ④ 老配置的一次性迁移:amll/lyricfind/kuwo 各自的迁移标记缺失时补进去,已表态时
-	// 尊重用户选择。 迁移标记参数跟真实源数脱节时,lyrics_sources 里只有旧的六个源、
-	// 没有对应迁移字段的机器上,search-lyrics 的 sourcesTotal 会停在 6、候选列表里一条
-	// 新源都没有——这里钉死的正是这个场景(见 resolveLyricsSources 里对应的注释)。
-	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil, nil)
-	if !old[lyricSourceAMLL] {
-		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
-	}
-	if !old[lyricSourceLyricFind] {
-		t.Error("老配置(lyricfind_lyrics 缺失)应当把 lyricfind 补进启用集合——这正是 2026-08-25 实测复现过的那个 bug")
-	}
-	if !old[lyricSourceKuwo] {
-		t.Error("老配置(kuwo_lyrics 缺失)应当把 kuwo 补进启用集合")
-	}
-	if !old[lyricSourceMigu] {
-		t.Error("老配置(migu_lyrics 缺失)应当把 migu 补进启用集合")
-	}
-	if !old[lyricSourceDeezer] {
-		t.Error("老配置(deezer_lyrics 缺失)应当把 deezer 补进启用集合")
-	}
-	if !old[lyricSourceSoda] {
-		t.Error("老配置(soda_lyrics 缺失)应当把 soda 补进启用集合")
-	}
-	no := false
-	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil, nil, nil, nil)
-	if statedAMLL[lyricSourceAMLL] {
-		t.Error("用户已表态(amll_lyrics=false)时不该再把 amll 补回来")
-	}
-	if !statedAMLL[lyricSourceLyricFind] {
-		t.Error("amll 已表态不影响 lyricfind 的迁移——lyricfind_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedAMLL[lyricSourceKuwo] {
-		t.Error("amll 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
-	}
-	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil, nil, nil, nil)
-	if statedLF[lyricSourceLyricFind] {
-		t.Error("用户已表态(lyricfind_lyrics=false)时不该再把 lyricfind 补回来")
-	}
-	if !statedLF[lyricSourceAMLL] {
-		t.Error("lyricfind 已表态不影响 amll 的迁移——amll_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedLF[lyricSourceKuwo] {
-		t.Error("lyricfind 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
-	}
-	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil, nil, nil, nil)
-	if statedKuwo[lyricSourceKuwo] {
-		t.Error("用户已表态(kuwo_lyrics=false)时不该再把 kuwo 补回来")
-	}
-	if !statedKuwo[lyricSourceAMLL] {
-		t.Error("kuwo 已表态不影响 amll 的迁移——amll_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedKuwo[lyricSourceLyricFind] {
-		t.Error("kuwo 已表态不影响 lyricfind 的迁移——lyricfind_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedKuwo[lyricSourceMigu] {
-		t.Error("kuwo 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
-	}
-	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no, nil, nil, nil)
-	if statedMigu[lyricSourceMigu] {
-		t.Error("用户已表态(migu_lyrics=false)时不该再把 migu 补回来")
-	}
-	if !statedMigu[lyricSourceKuwo] {
-		t.Error("migu 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedMigu[lyricSourceDeezer] {
-		t.Error("migu 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
-	}
-	statedDeezer := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, &no, nil, nil)
-	if statedDeezer[lyricSourceDeezer] {
-		t.Error("用户已表态(deezer_lyrics=false)时不该再把 deezer 补回来")
-	}
-	if !statedDeezer[lyricSourceMigu] {
-		t.Error("deezer 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
-	}
-
-	statedAM := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, &no, nil)
-	if statedAM[lyricSourceAppleMusic] {
-		t.Error("用户已表态(applemusic_lyrics=false)时不该再把 applemusic 补回来")
-	}
-	if !statedAM[lyricSourceDeezer] {
-		t.Error("applemusic 已表态不影响 deezer 的迁移——deezer_lyrics 仍缺失时应该照常补它")
-	}
-	if !statedAM[lyricSourceSoda] {
-		t.Error("applemusic 已表态不影响 soda 的迁移——soda_lyrics 仍缺失时应该照常补它")
-	}
-
-	statedSoda := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil, nil, &no)
-	if statedSoda[lyricSourceSoda] {
-		t.Error("用户已表态(soda_lyrics=false)时不该再把 soda 补回来")
-	}
-	if !statedSoda[lyricSourceAppleMusic] {
-		t.Error("soda 已表态不影响 applemusic 的迁移——applemusic_lyrics 仍缺失时应该照常补它")
+	// ④ 引擎只认列表:老配置补新源的迁移标记(xxx_lyrics)只 App 读,补完写进 lyrics_sources。
+	listed := resolveLyricsSources([]string{"netease", "qq"})
+	if len(listed) != 2 || !listed[lyricSourceNetease] || !listed[lyricSourceQQ] {
+		t.Errorf("列了几个就开几个,不按迁移标记补源: %v", listed)
 	}
 }
 
@@ -216,47 +128,38 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	}
 }
 
-// 每个「迁移标记」(`xxx_lyrics`)在 Go 与 Swift 两侧必须**一一对应**,而且 Swift 侧的三处
-// (CodingKeys / 保存时写回 / 读取时补默认)一处都不能少。
+// 后来加的源(最早五个之外的)在老配置的 lyrics_sources 白名单里不可能出现,只靠 App 那份迁移标记(`xxx_lyrics`)
+// 补进启用集合;引擎只认 lyrics_sources。所以每个后来加的源在 Swift 侧都要有标记,三处一处都不能少:
+// CodingKeys 里有键、保存时按集合写回、读取时有 `f.xxx == nil` 补源那一支。少了写回,每次加载都把这个源补回来、
+// 再整份写回文件,用户取消勾选无效;少了补源那一支,老配置升级后这个源一直是关的。
 //
-// 这条关系是硬性的,少了任何一处的后果都是**静默的**:collector 那边 xxxSeen 恒为 nil、
-// 每次加载都把这个源补回启用集合,于是**用户在设置里取消勾选这个源对后台完全无效**——
-// 而界面自己按 lyrics_sources 显示成已取消,两边说法不一致,从界面上根本看不出来。
-// (接 soda 时就漏了 Swift 那三处,靠人问"新源默认是启用还是停用"才翻出来。)
-//
-// 判据从 Go 侧的 json tag 出发,不靠命名规则推 Swift 的驼峰名(AMLLLyrics / LyricFindLyrics
-// 这些反推不出来),而是先从 Swift 的 CodingKeys 行里把该源的 case 名读出来,再拿它去核
-// 另外两处。
-func TestLyricsMigrationFlagsMatchOnBothSides(t *testing.T) {
-	goSrc, err := os.ReadFile("features.go")
-	if err != nil {
-		t.Fatalf("读不到 features.go: %v", err)
-	}
+// 标记的键名是「源名 + _lyrics」;Swift 的 case 名反推不出来(amllLyrics / lyricFindLyrics),先从 CodingKeys
+// 行里按键名读出 case 名,再拿它去核另外两处。
+func TestLyricsMigrationFlagsCoverNewerSources(t *testing.T) {
 	const swiftPath = "../lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift"
 	swiftRaw, err := os.ReadFile(swiftPath)
 	if err != nil {
 		t.Skipf("读不到 %s: %v", swiftPath, err)
 	}
 	swift := string(swiftRaw)
-
-	tags := regexp.MustCompile(`json:"([a-z_]+_lyrics),omitempty"`).FindAllStringSubmatch(string(goSrc), -1)
-	if len(tags) == 0 {
-		t.Fatal("features.go 里一个 xxx_lyrics 迁移标记都没找到(字段被改写了?同步更新这个测试)")
-	}
-	for _, m := range tags {
-		tag := m[1]
-		caseRe := regexp.MustCompile(`case (\w+) = "` + regexp.QuoteMeta(tag) + `"`)
-		cm := caseRe.FindStringSubmatch(swift)
+	original := map[string]bool{lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
+		lyricSourceMusixmatch: true, lyricSourceLRCLIB: true}
+	for _, src := range lyricSourceNames {
+		if original[src] {
+			continue
+		}
+		tag := src + "_lyrics"
+		cm := regexp.MustCompile(`case (\w+) = "` + regexp.QuoteMeta(tag) + `"`).FindStringSubmatch(swift)
 		if cm == nil {
-			t.Errorf("Swift 侧 CodingKeys 缺 %q —— collector 会一直把这个源补回来,用户取消勾选无效", tag)
+			t.Errorf("Swift 侧 CodingKeys 缺 %q —— 老配置升级后 %s 一直是关的", tag, src)
 			continue
 		}
 		name := cm[1]
 		if !strings.Contains(swift, name+": lyricsSources.contains(.") {
-			t.Errorf("Swift 侧保存时没写回 %s(%s)—— 标记永远为 nil,迁移会每次都跑", name, tag)
+			t.Errorf("Swift 侧保存时没写回 %s(%s)—— 标记永远为 nil,每次加载都会把这个源补回来", name, tag)
 		}
 		if !strings.Contains(swift, "f."+name+" == nil") {
-			t.Errorf("Swift 侧读取时没有 f.%s == nil 那一支(%s)—— 界面与后台会得到两种启用集合", name, tag)
+			t.Errorf("Swift 侧读取时没有 f.%s == nil 那一支(%s)—— 老配置升级后这个源一直是关的", name, tag)
 		}
 	}
 }

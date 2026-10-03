@@ -51,9 +51,9 @@ type lastfmScrobbler struct {
 	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
-	// catalog 是「智能」档的编目匹配器(见 lastfmcatalog.go),只在
-	// features().LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleTags
-	// 调用;nil(没配只读 api_key)时该档整体退化成原样提交。
+	// catalog 是改写歌手 / 曲名用的编目匹配器(见 lastfmcatalog.go),只在
+	// features().LastfmMatchArtist / LastfmMatchTrack 开着时被 resolveScrobbleTags
+	// 调用;nil(没配只读 api_key)时整体退化成原样提交。
 	catalog *lastfmCatalogMatcher
 	// lastSentNP:最近一次 track.updateNowPlaying 实际发出去的歌手 / 曲名(编目匹配、合唱截断之后的那份)。
 	// bridge 判「Last.fm 上的正在播放是不是我们自己的回声」要拿它比:改写过的写法(`鶴` 发成 `The Crane`)

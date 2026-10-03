@@ -540,8 +540,23 @@ func runSettingsInteractionTests() {
         expectEqual(store.contains("case systemLanguage = \"\(L.featuresKey)\""), true,
                     "系统语言(契约): features.json 的键名用 SystemLanguage.featuresKey")
         expectEqual(store.contains("systemLanguage = SystemLanguage.current()")
-                    && store.contains("if f.systemLanguage != systemLanguage { writeSystemLanguage() }"), true,
-                    "系统语言(契约): 每次加载读本机,跟文件里的对不上就改写")
+                    && store.contains("systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage"), true,
+                    "系统语言(契约): 每次加载读本机,随整份快照写回")
+        // collector 只认文件、不再自己补默认值和跑迁移:加载完跟盘上不一样就当场整份写回,文件不存在也写。
+        expectEqual(store.contains("if currentSnapshot != f { writeBack("), true,
+                    "功能开关(契约): 加载时缺项 / 旧写法当场整份写回")
+        expectEqual(store.contains("if case .missing = document.state {")
+                    && store.contains("writeBack(reason: \"missing\")"), true,
+                    "功能开关(契约): 文件不存在时把默认值整份写出")
+        // 遗留键只读不写:整份写回时它们从文件里删掉。
+        if let r = store.range(of: "private var currentSnapshot: FeatureFlagsFile {"),
+           let e = store.range(of: "public func syncBrowserPlatformPairs", range: r.upperBound..<store.endIndex) {
+            let body = store[r.upperBound..<e.lowerBound]
+            expectEqual(["player:", "launchLyrimuseOnMusicOpen:", "lastfmScrobbleArtistMode:", "lastfmScrobbleFirstArtistOnly:"]
+                .filter { body.contains($0) }, [], "功能开关(契约): 遗留字段不再写回文件")
+        } else {
+            expectEqual(true, false, "功能开关(契约): 读不到 currentSnapshot(改名了?)")
+        }
         expectEqual(portability.contains("SystemLanguage.strippingForExport(")
                     && portability.contains("SystemLanguage.localizingForImport("), true,
                     "系统语言(契约): 配置包导出时去掉、导入时换成本机的值")

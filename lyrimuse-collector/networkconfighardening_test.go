@@ -571,13 +571,11 @@ func TestScrubSecretsParamNameBoundaries(t *testing.T) {
 
 // 清单里全是这个版本不认识的源名:跟 App 一样当作全开,不能等于把所有已知源都关了。
 func TestResolveLyricsSourcesDropsUnknownNames(t *testing.T) {
-	seen := true
-	s := &seen
-	got := resolveLyricsSources([]string{"future-source", "another"}, s, s, s, s, s, s, s)
+	got := resolveLyricsSources([]string{"future-source", "another"})
 	if len(got) != len(lyricSourceNames) {
 		t.Fatalf("全是不认识的名字应当退成全开: %v", got)
 	}
-	got = resolveLyricsSources([]string{"netease", "future-source"}, s, s, s, s, s, s, s)
+	got = resolveLyricsSources([]string{"netease", "future-source"})
 	if len(got) != 1 || !got["netease"] || got["future-source"] {
 		t.Fatalf("不认识的名字去掉、认识的照留: %v", got)
 	}

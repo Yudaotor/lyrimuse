@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -15,13 +14,9 @@ func TestAmazonMusicArtistlessNotEnriched(t *testing.T) {
 	}
 }
 
-// 信任列表里的 Amazon Music 升级后补进选中集合,并剔出信任列表。
-func TestPromoteTrustedAmazonMusic(t *testing.T) {
+// 信任列表里的 Amazon Music(内置之前加进去的)剔出信任列表;挪进选中集合是 App 加载设置时的迁移。
+func TestTrustedAmazonMusicIsDropped(t *testing.T) {
 	trusted := map[string]string{amazonMusicBundleID: "Amazon Music", "com.apple.Safari": "Safari"}
-	got := promoteTrustedBuiltins(map[string]bool{playerAppleMusic: true}, trusted)
-	if want := map[string]bool{playerAppleMusic: true, playerAmazonMusic: true}; !reflect.DeepEqual(got, want) {
-		t.Errorf("没勾自动识别: got %v want %v", got, want)
-	}
 	if tp := resolveTrustedPlayers(trusted); tp[amazonMusicBundleID] != "" || tp["com.apple.Safari"] != "Safari" {
 		t.Errorf("Amazon Music 内置之后剔出信任列表: %v", tp)
 	}

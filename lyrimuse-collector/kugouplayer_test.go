@@ -12,7 +12,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 	t.Cleanup(func() { setFeatures(saved) })
 
 	// "players" 字段里的值必须被接受,不能被 resolvePlayers 当成认不出的值兜底掉。
-	if got := resolvePlayers([]string{"kugou_music"}, ""); !got[playerKugou] {
+	if got := resolvePlayers([]string{"kugou_music"}); !got[playerKugou] {
 		t.Errorf("resolvePlayers([kugou_music]) = %v，期望包含 %q（认不出会静默退回自动识别）", got, playerKugou)
 	}
 

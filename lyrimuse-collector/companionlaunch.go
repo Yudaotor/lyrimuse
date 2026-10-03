@@ -75,7 +75,7 @@ func startCompanionLaunchWatcher(ctx context.Context, appAvailable func() bool) 
 // Lyrimuse.app 当前**没有**在跑时启动它。同一轮里有两个都刚启动(用户同时点开了两个播放器)只按
 // 第一个触发一次。
 func (w *companionWatch) check(now time.Time, appAvailable bool) {
-	enabled := features().LaunchLyrimuseOnMusicOpen
+	enabled := len(features().LaunchLyrimuseOnPlayers) > 0
 	names := companionLaunchProcessNames()
 	justStarted, procs := w.step(now, companionWatchNeeded(appAvailable, enabled, names), names, processSnapshot)
 	// alreadyRunning 只为了把"跳过"这一种否决单独记一条日志——这是唯一需要事后能核实的
@@ -239,12 +239,9 @@ func companionLaunchProcessNames() []string {
 			candidates = append(candidates, playerProcessNameFor(player))
 		}
 	}
-	// 「跟随播放器启动」按播放器逐个勾选(features().LaunchLyrimuseOnPlayers):键在就
-	// 只盯勾了的、且仍在候选(选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧
-	// PlayerLinkage.effective 同一条规则;键缺失是布尔年代的老配置,退回盯整个候选集合。
-	if features().LaunchLyrimuseOnPlayers == nil {
-		return candidates
-	}
+	// 「跟随播放器启动」按播放器逐个勾选(features().LaunchLyrimuseOnPlayers):只盯勾了的、且仍在候选
+	// (选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧 PlayerLinkage.effective
+	// 同一条规则。
 	names := make([]string, 0, len(features().LaunchLyrimuseOnPlayers))
 	for player := range features().LaunchLyrimuseOnPlayers {
 		name := playerProcessNameFor(player)

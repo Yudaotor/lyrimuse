@@ -18,7 +18,7 @@ import (
 )
 
 // 上送 Last.fm 之前,在它自己的编目里找这首歌对应的条目 —— 找到就按**那个条目的写法**
-// 提交(features().LastfmScrobbleArtistMode == scrobbleArtistSmart)。
+// 提交(features().LastfmMatchArtist / LastfmMatchTrack 开着时)。
 //
 // # 要解决的是什么
 //

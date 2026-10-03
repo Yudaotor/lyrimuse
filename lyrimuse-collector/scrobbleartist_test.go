@@ -48,13 +48,9 @@ func TestResolveScrobbleTags(t *testing.T) {
 }
 
 // features.json 的键名是两侧(Go / Swift)通过同一份文件交换的字符串,写错一个字母就是
-// "设置里改了、collector 永远读不到",而且**不报错**。这里把 Go 侧的 json tag、三个档位值
-// 和**两级遗留迁移链**一起钉住;Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和
-// LastfmMatchMode 的 rawValue(那边最容易漏)。
-//
-// 迁移表的承诺是**行为逐字不变**:旧 smart → 智能、旧 all → 原始、
-// 旧 first → 自定义且只开截断(到 照旧不打网络)。这几条错一条,就是在老用户不知情的
-// 情况下改了往 Last.fm 写的内容,而 scrobble 落进去基本删不掉。
+// "设置里改了、collector 永远读不到",而且**不报错**。这里把 Go 侧的 json tag 和三个档位值钉住;
+// Swift 侧对应的是 FeatureFlagsFile 的 CodingKeys 和 LastfmMatchMode 的 rawValue(那边最容易漏)。
+// 两个遗留键(lastfm_scrobble_artist_mode / lastfm_scrobble_first_artist_only)只 App 迁移,这边不认。
 func TestLastfmMatchModeFlagRoundTrip(t *testing.T) {
 	const key = "lastfm_match_mode"
 	const legacy = "lastfm_scrobble_artist_mode"
@@ -76,16 +72,11 @@ func TestLastfmMatchModeFlagRoundTrip(t *testing.T) {
 		{"自定义:只改曲名", `{"` + key + `":"custom","lastfm_match_track":true}`, want{lastfmMatchCustom, false, true, false}},
 		{"自定义:只改歌手 + 截断", `{"` + key + `":"custom","lastfm_match_artist":true,"lastfm_match_first_artist_only":true}`, want{lastfmMatchCustom, true, false, true}},
 		{"非法档位 → 退回默认原始", `{"` + key + `":"clever"}`, want{lastfmMatchRaw, false, false, false}},
-		// 一级遗留:lastfm_scrobble_artist_mode。
-		{"遗留 smart → 智能", `{"` + legacy + `":"smart"}`, want{lastfmMatchSmart, true, true, false}},
-		{"遗留 all → 原始", `{"` + legacy + `":"all"}`, want{lastfmMatchRaw, false, false, false}},
-		{"遗留 first → 自定义且只开截断(行为逐字不变)", `{"` + legacy + `":"first"}`, want{lastfmMatchCustom, false, false, true}},
-		{"新键优先于一级遗留", `{"` + key + `":"raw","` + legacy + `":"smart"}`, want{lastfmMatchRaw, false, false, false}},
-		{"非法新键 + 一级遗留 → 走遗留", `{"` + key + `":"clever","` + legacy + `":"first"}`, want{lastfmMatchCustom, false, false, true}},
-		// 二级遗留:更早的二态开关。
-		{"只有二级遗留 true → 自定义且只开截断", `{"` + legacy2 + `":true}`, want{lastfmMatchCustom, false, false, true}},
-		{"只有二级遗留 false → 原始", `{"` + legacy2 + `":false}`, want{lastfmMatchRaw, false, false, false}},
-		{"一级遗留优先于二级", `{"` + legacy + `":"all","` + legacy2 + `":true}`, want{lastfmMatchRaw, false, false, false}},
+		// 遗留键只 App 迁移(加载设置时改写成档位整份写回),引擎不认:只有遗留键的文件按缺省「原始」。
+		{"遗留 smart 不认", `{"` + legacy + `":"smart"}`, want{lastfmMatchRaw, false, false, false}},
+		{"遗留 first 不认", `{"` + legacy + `":"first"}`, want{lastfmMatchRaw, false, false, false}},
+		{"二级遗留不认", `{"` + legacy2 + `":true}`, want{lastfmMatchRaw, false, false, false}},
+		{"新键照常认,遗留键不掺和", `{"` + key + `":"custom","` + legacy + `":"smart"}`, want{lastfmMatchCustom, false, false, false}},
 	}
 	for _, c := range cases {
 		f := loadFeatureFlagsFromJSON(t, c.body)

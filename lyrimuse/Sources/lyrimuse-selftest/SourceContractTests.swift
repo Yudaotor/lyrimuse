@@ -2940,10 +2940,11 @@ func runSourceContractTests() {
 
     // ---- features.json 键两侧镜像----
     //
-    // Swift `FeatureFlagsFile.CodingKeys` 里的每个键,collector features.go 都得有同名 json tag —— App 写了、
-    // collector 不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
-    // 这种键,漏了 Go 侧就是"设置里勾了、collector 照旧盯全部")。反方向不查:collector 自己的诊断键
-    // (lyrics_decision_trace)App 不管,靠 unknownFileKeys 原样保留。
+    // Swift `FeatureFlagsFile.CodingKeys` 里 App 写给 collector 的每个键,collector features.go 都得有同名 json tag ——
+    // App 写了、collector 不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
+    // 这种键,漏了 Go 侧就是"设置里勾了、collector 照旧盯全部")。只 App 读的键反过来不许出现在 Go 侧:四个遗留键
+    // (加载时迁成新写法后删掉)和 xxx_lyrics 迁移标记,迁移只在 App 做,collector 只认文件(14 章决策 47)。
+    // collector 自己的诊断键(lyrics_decision_trace)App 不管,靠 unknownFileKeys 原样保留。
     do {
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -2968,8 +2969,14 @@ func runSourceContractTests() {
                 }
             }
             expectEqual(keys.count > 10, true, "features 键镜像: 解析到了 FeatureFlagsFile.CodingKeys(守卫自身没跑空)")
-            let missing = keys.filter { !go.contains("json:\"\($0),omitempty\"") && !go.contains("json:\"\($0)\"") }
+            let appOnlyLegacy: Set<String> = ["player", "lastfm_scrobble_artist_mode", "lastfm_scrobble_first_artist_only",
+                                              "launch_lyrimuse_on_music_open"]
+            expectEqual(appOnlyLegacy.subtracting(keys), [], "features 键镜像: 四个遗留键还在 CodingKeys 里(读老文件要用)")
+            let appOnly = keys.filter { appOnlyLegacy.contains($0) || $0.hasSuffix("_lyrics") }
+            let tagged = { (key: String) in go.contains("json:\"\(key),omitempty\"") || go.contains("json:\"\(key)\"") }
+            let missing = keys.filter { !appOnly.contains($0) && !tagged($0) }
             expectEqual(missing, [], "features 键镜像: collector features.go 缺这些键的 json tag,App 写了 collector 不认")
+            expectEqual(appOnly.filter(tagged), [], "features 键镜像: 只 App 读的键(遗留键 / 迁移标记)collector 不该再认")
         } else {
             expectEqual(true, false, "features 键镜像: 读不到 FeatureSettingsStore.swift 或 features.go(路径挪了?)")
         }

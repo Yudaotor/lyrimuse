@@ -33,6 +33,7 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		LyricsDecisionTrace:       true,
 		TrustedPlayers:            map[string]string{"com.google.Chrome": "Chrome"},
 		LastfmExcludedBundles:     map[string]bool{"com.apple.Safari": true},
+		LaunchLyrimuseOnPlayers:   map[string]bool{"qq_music": true},
 	})
 	logFeatureSnapshot()
 	out := buf.String()
@@ -57,8 +58,7 @@ func TestLogFeatureSnapshot(t *testing.T) {
 		"lyrics_decision_trace=true",
 		"trusted_players=com.google.Chrome",
 		"lastfm_excluded_bundles=1",
-		// nil 集合 = 布尔年代的老配置,跟"一个都不选"含义不同,不能都印成空。
-		"launch_on_players=legacy",
+		"launch_on_players=qq_music",
 		// 同理:没有配对键 = 所有浏览器都探,跟「一个都没配」不同。
 		"browser_platform_pairs=legacy",
 	} {

@@ -12,22 +12,14 @@ func TestKKBOXArtistlessNotEnriched(t *testing.T) {
 	}
 }
 
-// 信任列表里的 KKBOX 升级后补进选中集合;勾着自动识别的不用补。
-func TestPromoteTrustedBuiltins(t *testing.T) {
+// 信任列表里的 KKBOX(内置之前加进去的)剔出信任列表;挪进选中集合是 App 加载设置时的迁移,引擎不补。
+func TestTrustedKKBOXIsDroppedNotPromoted(t *testing.T) {
 	trusted := map[string]string{kkboxBundleID: "KKBOX", "com.apple.Safari": "Safari"}
-	got := promoteTrustedBuiltins(map[string]bool{playerQQMusic: true}, trusted)
-	if want := map[string]bool{playerQQMusic: true, playerKKBOX: true}; !reflect.DeepEqual(got, want) {
-		t.Errorf("没勾自动识别: got %v want %v", got, want)
-	}
-	got = promoteTrustedBuiltins(map[string]bool{playerAuto: true}, trusted)
-	if want := map[string]bool{playerAuto: true}; !reflect.DeepEqual(got, want) {
-		t.Errorf("勾着自动识别: got %v want %v", got, want)
-	}
-	got = promoteTrustedBuiltins(map[string]bool{playerSpotify: true}, map[string]string{"com.apple.Safari": "Safari"})
-	if want := map[string]bool{playerSpotify: true}; !reflect.DeepEqual(got, want) {
-		t.Errorf("没有内置播放器: got %v want %v", got, want)
-	}
 	if tp := resolveTrustedPlayers(trusted); tp[kkboxBundleID] != "" || tp["com.apple.Safari"] != "Safari" {
 		t.Errorf("KKBOX 内置之后剔出信任列表: %v", tp)
+	}
+	f := loadFeatureFlagsFromJSON(t, `{"players":["qq_music"],"trusted_players":{"`+kkboxBundleID+`":"KKBOX"}}`)
+	if want := map[string]bool{playerQQMusic: true}; !reflect.DeepEqual(f.Players, want) {
+		t.Errorf("引擎不替 App 迁移选中集合: got %v want %v", f.Players, want)
 	}
 }
