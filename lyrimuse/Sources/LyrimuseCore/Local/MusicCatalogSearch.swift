@@ -237,6 +237,14 @@ public enum MusicCatalogSearch {
         return URL(string: "music" + httpsURL.dropFirst("https".count))
     }
 
+    /// collector 存的曲目链接(`apple_music_url`,`…/album/<名>/<专辑 id>?i=<曲目 id>`,https 或 music:// 都认)
+    /// 所在专辑的页面,已改写成 `music://`,店面照链接。不是专辑形状(MV 等)返回 nil,调用方退回按歌名搜。
+    public static func albumPage(fromTrackURL raw: String?) -> URL? {
+        guard let ref = AlbumEditorialNotes.albumRef(fromAppleMusicURL: raw),
+              let page = AlbumEditorialNotes.pageURL(albumID: ref.id, storefront: ref.storefront ?? "") else { return nil }
+        return musicSchemeURL(page.absoluteString)
+    }
+
     /// 拉取并挑选(URLSession async,调用方自行放到非主线程上下文)。用户点一次发一次,
     /// 不看 `ITunesSearchGate` 的退避,但响应照样记进去。店面同 resolveArtwork,一条都搜不到才换下一个。
     public static func resolve(title: String, artist: String, storefront: String) async -> Item? {

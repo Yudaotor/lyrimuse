@@ -29,8 +29,8 @@ struct IdleStandbyView: View {
     /// LyricsWindowView(与原欢迎态同一份),这里只负责按钮。
     let onResume: () -> Void
     let onOpenPlayer: () -> Void
-    /// (歌名, 歌手) → 经 iTunes Search 解析后 music:// 打开那张专辑页。
-    let onOpenAlbum: (String, String) -> Void
+    /// (歌名, 歌手, 专辑) → music:// 打开那张专辑页(缓存里有这首的 Apple Music 链接就用它,没有才按歌名搜)。
+    let onOpenAlbum: (String, String, String) -> Void
     /// (歌名, 歌手) → 打开这首歌在 Apple Music 的曲目页。
     let onOpenTrack: (String, String) -> Void
 
@@ -476,7 +476,7 @@ private struct IdleLastTrackHero: View {
     let player: PlaybackPlayer
     let onResume: () -> Void
     let onOpenPlayer: () -> Void
-    let onOpenAlbum: (String, String) -> Void
+    let onOpenAlbum: (String, String, String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var coverURL: URL?
@@ -545,11 +545,11 @@ private struct IdleLastTrackHero: View {
                 // 没有「继续播放」可给的播放器(QQ/网易云/酷狗没有 AppleScript),
                 // 「前往专辑」升格为主按钮 —— 与原欢迎态里「打开 X」的同一条规则。
                 if canResume {
-                    Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist) }
+                    Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist, lastAlbum) }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                 } else {
-                    Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist) }
+                    Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist, lastAlbum) }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                     Button(String(format: L10n.t("打开 %@"), player.displayName), action: onOpenPlayer)

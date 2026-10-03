@@ -2219,8 +2219,8 @@ struct LyricsWindowView: View {
                             player: idlePlayer,
                             onResume: { resumeFromIdle(player: idlePlayer) },
                             onOpenPlayer: { openIdlePlayerApp(idlePlayer) },
-                            onOpenAlbum: { title, artist in
-                                openCatalogPage(title: title, artist: artist, target: .album)
+                            onOpenAlbum: { title, artist, album in
+                                openCatalogPage(title: title, artist: artist, album: album, target: .album)
                             },
                             onOpenTrack: { title, artist in
                                 openCatalogPage(title: title, artist: artist, target: .track)
@@ -3464,25 +3464,37 @@ struct LyricsWindowView: View {
     private enum CatalogTarget { case album, artist, track }
 
     private func openCatalogPage(album: Bool) {
-        openCatalogPage(title: playback.title, artist: playback.artist,
+        openCatalogPage(title: playback.title, artist: playback.artist, album: playback.album,
                         target: album ? .album : .artist)
     }
 
     /// 任意 (歌名, 歌手) 的目录页跳转 —— 停播页那几块要跳的不是「当前播放」而是历史行,
     /// 所以曲目字段必须由调用方传进来,不能像上面那样从 playback 现读(停播时它是空的)。
-    private func openCatalogPage(title: String, artist: String, target: CatalogTarget) {
+    ///
+    /// 专辑页先用缓存里这首的 Apple Music 链接(collector 按目录锚点 / 时长核对过的那一条)换算,不联网;
+    /// 缓存里没有(调用方没给专辑名、这首没解析出 Apple Music 链接)才按歌名搜。艺人页、曲目页照旧搜。
+    private func openCatalogPage(title: String, artist: String, album: String = "", target: CatalogTarget) {
         guard !title.isEmpty || !artist.isEmpty else { return }
+        // EnrichCacheReader 是 @MainActor 的,在起后台任务之前读。
+        let cachedAlbumPage = target == .album
+            ? MusicCatalogSearch.albumPage(
+                fromTrackURL: EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)?.appleMusic?.absoluteString)
+            : nil
         Task.detached(priority: .userInitiated) {
-            let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
-            guard let item = await MusicCatalogSearch.resolve(
-                title: title, artist: artist, storefront: storefront) else { return }
-            let https: String?
-            switch target {
-            case .album: https = item.collectionViewUrl ?? item.trackViewUrl
-            case .artist: https = item.artistViewUrl
-            case .track: https = item.trackViewUrl ?? item.collectionViewUrl
+            var url = cachedAlbumPage
+            if url == nil {
+                let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
+                guard let item = await MusicCatalogSearch.resolve(
+                    title: title, artist: artist, storefront: storefront) else { return }
+                let https: String?
+                switch target {
+                case .album: https = item.collectionViewUrl ?? item.trackViewUrl
+                case .artist: https = item.artistViewUrl
+                case .track: https = item.trackViewUrl ?? item.collectionViewUrl
+                }
+                url = MusicCatalogSearch.musicSchemeURL(https)
             }
-            guard let url = MusicCatalogSearch.musicSchemeURL(https) else { return }
+            guard let url else { return }
             // Music.app 没在跑时直接 open(music://…) 会被 LaunchServices 吞掉(冷启动走到
             // 能接 Apple Event 之前 URL 就丢了),表现成「App 打开了但停在上次退出的页面」。
             await MusicAutomationPermission.ensureMusicAppRunning()

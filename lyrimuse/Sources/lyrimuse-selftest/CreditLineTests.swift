@@ -1262,6 +1262,21 @@ func runCreditLineTests() {
                     "music://music.apple.com/cn/album/536108118", "musicSchemeURL 改写")
         expectEqual(S.musicSchemeURL("https://example.com/x") == nil, true, "musicSchemeURL 拒绝外域")
         expectEqual(S.musicSchemeURL(nil) == nil, true, "musicSchemeURL nil 输入")
+        // ④ 缓存里的曲目链接换成专辑页(歌词窗口「前往专辑」先用它,不联网搜)
+        expectEqual(S.albumPage(fromTrackURL: "https://music.apple.com/cn/album/abc/1440913613?i=1440913622&uo=4")?.absoluteString,
+                    "music://music.apple.com/cn/album/x/1440913613", "albumPage: 按专辑 id 拼专辑页、店面照链接、不带曲目")
+        expectEqual(S.albumPage(fromTrackURL: "music://music.apple.com/us/album/mark-on-me/6802917476?i=6802917479")?.absoluteString,
+                    "music://music.apple.com/us/album/x/6802917476", "albumPage: 已改写成 music:// 的链接也认")
+        expectEqual(S.albumPage(fromTrackURL: "https://music.apple.com/cn/music-video/bad-romance/1501704714?uo=4") == nil, true,
+                    "albumPage: MV 链接不是专辑形状,退回按歌名搜")
+        expectEqual(S.albumPage(fromTrackURL: nil) == nil, true, "albumPage: 没有链接")
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let windowView = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        let idleView = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/UI/IdleStandbyView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(windowView.contains("? MusicCatalogSearch.albumPage(") && windowView.contains("album: playback.album,"), true,
+                    "前往专辑: 先用缓存里的曲目链接,当前这首带上专辑名")
+        expectEqual(idleView.components(separatedBy: "onOpenAlbum(lastTitle, lastArtist, lastAlbum)").count - 1, 2,
+                    "前往专辑: 停播页上次那首的两颗按钮都带上专辑名")
     }
 
     // ---- 歌词末尾「创作者：…」的名单(LyricSongwriters) ----
