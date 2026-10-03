@@ -168,7 +168,6 @@ func runSearchLyricsCLI(args []string) {
 		for _, r := range results {
 			if r.Instrumental {
 				update.Instrumental = true
-				update.LegacyLrclibInstrumental = true // 过渡期,见字段注释
 			}
 		}
 		if err := enc.Encode(update); err != nil {
@@ -252,20 +251,9 @@ type searchLyricsUpdate struct {
 	// (从 SourceFailureReasons 改名——见 lyricsourcefailure.go 头注,人话交给
 	// Swift 侧的 LyricSourceFailureReason.text(forCode:) 按 App 界面语言翻译)。
 	SourceFailureReasonCodes map[string]string `json:"sourceFailureReasonCodes,omitempty"`
-	// Instrumental:有源明确断言"这首本来就没有词"。从 lrclibInstrumental 改名 ——
-	// 这个信号的来源早就不只 lrclib 了:加了网易云的 pureMusic/占位正文,
-	// 又加了 QQ 的占位断言(见第 09 章「纯音乐标记的三个来源」),字段名一直没跟上。
+	// Instrumental:有源明确断言"这首本来就没有词"(lrclib / 网易云 / QQ / Musixmatch 都可能给,
+	// 见第 09 章「纯音乐标记的三个来源」)。
 	Instrumental bool `json:"instrumental,omitempty"`
-	// LegacyLrclibInstrumental 是**过渡期**的同值别名,只为兜住一件事:collector 和 App 是
-	// 两个独立部署的二进制(lyrimuse-collector/build.sh 只换 collector、不重建 App),所以
-	// 换了 collector 之后跑的可能还是旧 App —— 旧 App 只认 lrclibInstrumental 这个 key,
-	// 单方面改名会让「有源明确说这首是纯音乐」这类文案在重建 App 之前静默退化成
-	// 「这一轮没有一个能用的候选」。
-	//
-	// **删除条件**:App 侧带着「优先读 instrumental、缺失才退回 lrclibInstrumental」那段
-	// 解码(LyricsSearchService.RawSearchUpdate)重新构建并安装之后,这个字段就可以删掉。
-	// 它是唯一的存在理由,别让它长住。
-	LegacyLrclibInstrumental bool `json:"lrclibInstrumental,omitempty"`
 	// TracksFoundNoLyrics:这一轮里"曲库里有这首歌、但平台上没有歌词文本"的那几个源
 	//。空 = 没有任何源给出这个结论。
 	//

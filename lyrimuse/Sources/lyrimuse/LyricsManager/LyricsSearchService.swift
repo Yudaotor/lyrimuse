@@ -493,11 +493,8 @@ final class LyricsSearchService {
                         sourcesTotal: raw.sourcesTotal ?? 0,
                         round: raw.round ?? 1, // 旧 collector 不发,按单轮兜底,见 SearchUpdate.round
                         sourceFailureReasonCodes: raw.sourceFailureReasonCodes ?? [:],
-                        // 优先新 key,缺失才退回旧 key —— 两个二进制各自独立部署,可能
-                        // 出现「新 App + 旧 collector」(只重建了 App 没换 collector)。
-                        instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
-                        // 旧 collector 不发这个字段(同上,两个二进制各自独立部署)——解码成空
-                        // 数组,界面退回原来那句笼统的"没找到候选",不会因此报错或崩。
+                        instrumental: raw.instrumental ?? false,
+                        // collector 带 omitempty,没有时不出现 —— 解码成空数组,界面退回那句笼统的"没找到候选"。
                         tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [])
                     // 走主队列而不是各起一个 MainActor Task:收尾的 continuation 也从主队列恢复(见 terminationHandler),
                     // 同一条串行队列先进先出,最后那行一定先于 search() 返回送到;各起 Task 的顺序语言层面不保证。
@@ -592,16 +589,9 @@ private struct RawSearchUpdate: Decodable {
     /// 第几轮全源检索,旧 collector 不发(解码方兜底成 1),见 SearchUpdate.round。
     let round: Int?
     let sourceFailureReasonCodes: [String: String]?
-    /// collector 一直在输出这个信号,Swift 侧才开始接:它把"一个候选都没有"
-    /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种,「重新自动匹配」的结果文案要区分。
-    ///
-    /// collector 输出的正名是 `instrumental` —— 这个信号的来源早就不只 lrclib
-    /// (网易云的 pureMusic、QQ 的占位断言),旧名字名不副实。两个 key 都读:
-    /// 新 App + 旧 collector 时只有旧 key,旧 App + 新 collector 时靠 collector 那边的
-    /// 同值别名兜住(见 searchcli.go 的 LegacyLrclibInstrumental,含删除条件)。
+    /// 有源明确说这首是纯音乐(collector 带 omitempty,不是时不出现)。搜索面板据此把"一个候选都没有"
+    /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种。
     let instrumental: Bool?
-    /// 旧名,只为兼容尚未重建的 collector。collector 那边的同值别名删掉之后,这个也可以删。
-    let lrclibInstrumental: Bool?
     /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源。旧 collector 不发,
     /// 可选 + 解码方兜底成空数组,见 SearchUpdate.tracksFoundNoLyrics。
     let tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics]?
