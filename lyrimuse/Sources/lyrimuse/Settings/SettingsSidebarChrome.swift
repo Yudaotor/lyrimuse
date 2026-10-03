@@ -11,6 +11,7 @@ import SwiftUI
 // 对照关系(系统设置 → 我们):
 //   Apple 账户块(头像 + 名字 + 「Apple 账户」)      → Last.fm 身份区(头像 + 用户名 + 「Last.fm 账户」)
 //   「有软件更新可用 ①」                            → Sparkle 查到新版本时的同名一行,点了进「软件更新」页
+//   「Apple 账户建议 ①」                             → Last.fm 账号有待处理的建议时的「Last.fm 账号建议」一行,点了进建议页
 //   分组之间只留空白、没有小标题                     → 「核心设置」「账号」两个 Section 标题撤掉
 //   行尾红色数字徽标                                 → 「播放器」健康警告从橙色三角改成红色计数
 //   彩色圆角方块图标带一点上亮下暗的渐变              → IconBadge 统一加渐变与高光(见 SettingsView.swift)
@@ -26,12 +27,10 @@ import SwiftUI
 ///  - 未连接:灰底白人像的占位圆 + 「连接 Last.fm」+ 「同步收听记录」。副标题必须够短:这一列只有
 ///    130pt 左右给文字:Last.fm 页头那句「把你播放的歌记录到 Last.fm」在这里尾巴会被截成省略号、
 ///    很难看;系统设置未登录时那行也是一句极短的话(「设置 iCloud、App Store 等」)。
-/// 授权失效 / 连接失败时头像右上角挂一枚红色「!」小徽标(系统设置在账户出问题时就是把红点
-/// 挂在头像上),悬停看原因;这一档判定沿用 destinationStatus,跟 Last.fm 页头同一份逻辑。
+/// 账户出问题(授权失效 / 连接失败)不在头像上挂标记,在身份区下面那一行「Last.fm 账号建议」里计数(仿系统设置
+/// 「Apple 账户建议」,见 `LastfmSuggestionsSidebarRow`)。
 struct LastfmIdentityRow: View {
     @ObservedObject private var config = ConfigStore.shared
-    @ObservedObject private var lastfmConnect = LastfmConnectController.shared
-    @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     @ObservedObject private var avatars = LastfmAvatarStore.shared
     // 手动切语言时让这一行重画(理由同 AccountSidebarRow)。
     @ObservedObject private var languageSettings = AppSettings.shared
@@ -41,22 +40,10 @@ struct LastfmIdentityRow: View {
     private var connected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }
     private var name: String { lastfmDisplayName(config: config) }
 
-    private var status: DestinationStatus {
-        destinationStatus(for: .lastfm, config: config, lastfmConnect: lastfmConnect, mirrorInfo: mirrorStatus.info)
-    }
-
     var body: some View {
         HStack(spacing: 10) {
             avatar
                 .frame(width: Self.avatarSize, height: Self.avatarSize)
-                .overlay(alignment: .topTrailing) {
-                    if case .error(let message) = status {
-                        SidebarAlertDot()
-                            .offset(x: 3, y: -3)
-                            .help(message)
-                            .accessibilityLabel(message)
-                    }
-                }
             VStack(alignment: .leading, spacing: 1) {
                 Text(connected && !name.isEmpty ? name : L10n.t("连接 Last.fm"))
                     .font(.system(size: 15, weight: .semibold))
@@ -103,21 +90,6 @@ struct LastfmIdentityRow: View {
     }
 }
 
-/// 头像右上角的红色「!」小圆点(账户出问题)。
-private struct SidebarAlertDot: View {
-    var body: some View {
-        ZStack {
-            Circle().fill(.red)
-            Text("!")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: 14, height: 14)
-        // 跟高亮底 / 侧栏底之间描一圈,不管底色是什么都不会跟头像粘在一起。
-        .overlay(Circle().strokeBorder(.background, lineWidth: 1.5))
-    }
-}
-
 // MARK: - 「有软件更新可用」
 
 /// Sparkle 查到新版本时在身份区下面多出的一行,右侧红色「1」。它是 List 里 tag 为 `.softwareUpdate` 的
@@ -133,6 +105,28 @@ struct SoftwareUpdateSidebarRow: View {
                 .lineLimit(1)
             Spacer(minLength: 4)
             SidebarCountBadge(count: 1)
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 「Last.fm 账号建议」
+
+/// 仿系统设置身份区下面那一行「Apple 账户建议 ①」:Last.fm 账号有待处理的建议时才有,右侧红色计数。它是 List 里 tag 为
+/// `.lastfmSuggestions` 的可选行,点了进「Last.fm 账号建议」页,这一行亮起来。有哪几种建议见 Core `LastfmAccountSuggestion`。
+struct LastfmSuggestionsSidebarRow: View {
+    let count: Int
+    @ObservedObject private var languageSettings = AppSettings.shared
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(L10n.t("Last.fm 账号建议"))
+                .font(.system(size: 13))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            SidebarCountBadge(count: count)
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())

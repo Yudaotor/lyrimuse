@@ -316,9 +316,10 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
             }
             return
         }
-        // Last.fm 授权失效的通知:点正文打开设置里的 Last.fm 账号页(重新连接在那里)。先 requestSettings 再
-        // openSettings,理由同下面「播放器」那一支。
-        if response.notification.request.content.categoryIdentifier == LastfmMirrorNotifier.categoryID {
+        // Last.fm 授权失效、Last.fm 跟 Spotify 的连接过期这两条通知:点正文打开设置里的 Last.fm 账号页(重新连接在页头那张卡里,
+        // Spotify 那条在卡下面的「建议」分组)。先 requestSettings 再 openSettings,理由同下面「播放器」那一支。
+        let category = response.notification.request.content.categoryIdentifier
+        if category == LastfmMirrorNotifier.categoryID || category == LastfmSpotifyLinkMonitor.categoryID {
             if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
                 await MainActor.run {
                     AppActions.shared.requestSettings(.account(.lastfm))

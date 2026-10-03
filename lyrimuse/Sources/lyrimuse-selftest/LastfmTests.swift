@@ -1844,4 +1844,120 @@ func runLastfmTests() {
         expectEqual(section.contains(".onDisappear { stats.setChartAppLinksOnScreen(false) }"), true,
                     "右键链接: 统计区卸载时报不在屏上")
     }
+
+    // ---- Last.fm 账号连没连 Spotify(spotify_expiry_estimate,见 LastfmSpotifyLink)----
+    do {
+        func user(_ json: String) -> [String: Any] {
+            ((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]) ?? [:]
+        }
+        let at = Date(timeIntervalSince1970: 1_767_225_600)
+        let expiry = LastfmSpotifyLink.expiry(user:)
+        expectEqual(expiry(user(##"{"name":"x","registered":{"unixtime":"1037793040","#text":1037793040}}"##)), nil,
+                    "Spotify 连接: 没有这个字段 → 没连")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"unixtime":"1767225600","#text":1767225600}}"##)), at,
+                    "Spotify 连接: unixtime 是字符串")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"unixtime":"1767225600"}}"##)), at,
+                    "Spotify 连接: 只有字符串 unixtime")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"unixtime":1767225600}}"##)), at,
+                    "Spotify 连接: unixtime 是数字")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"#text":1767225600}}"##)), at,
+                    "Spotify 连接: 只有 #text 也认")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":"1767225600"}"##)), at,
+                    "Spotify 连接: 直接给时间戳也认")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"unixtime":"0"}}"##)), nil, "Spotify 连接: 0 不算")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{"unixtime":""}}"##)), nil, "Spotify 连接: 空串不算")
+        expectEqual(expiry(user(##"{"spotify_expiry_estimate":{}}"##)), nil, "Spotify 连接: 空对象不算")
+
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let later = now.addingTimeInterval(86_400), earlier = now.addingTimeInterval(-86_400)
+        expectEqual(LastfmSpotifyLink(expiry: nil, now: now), .notLinked, "Spotify 连接: 没有到期时间 → 没连")
+        expectEqual(LastfmSpotifyLink(expiry: later, now: now), .linked(expires: later), "Spotify 连接: 到期在后 → 连着")
+        expectEqual(LastfmSpotifyLink(expiry: earlier, now: now), .expired(at: earlier), "Spotify 连接: 到期在前 → 过期")
+        expectEqual(LastfmSpotifyLink(expiry: now, now: now), .expired(at: now), "Spotify 连接: 正好到点算过期")
+
+        let linked = LastfmSpotifyLink.linked(expires: later), expired = LastfmSpotifyLink.expired(at: earlier)
+        expectEqual(linked.playersRowHint(spotifyExcluded: false), .doubleScrobble, "Spotify 提示: 连着又勾着 → 每首记两次")
+        expectEqual(linked.playersRowHint(spotifyExcluded: true), nil, "Spotify 提示: 连着、已排除 → 不提示")
+        expectEqual(expired.playersRowHint(spotifyExcluded: true), .expiredWhileExcluded(at: earlier),
+                    "Spotify 提示: 已排除、连接过期 → 两边都不记")
+        expectEqual(expired.playersRowHint(spotifyExcluded: false), nil, "Spotify 提示: 过期但勾着 → 这边在记,不提示")
+        expectEqual(LastfmSpotifyLink.notLinked.playersRowHint(spotifyExcluded: false), nil, "Spotify 提示: 没连、勾着 → 不提示")
+        expectEqual(LastfmSpotifyLink.notLinked.playersRowHint(spotifyExcluded: true), nil, "Spotify 提示: 没连、已排除 → 不提示")
+
+        let stamp = Int64(earlier.timeIntervalSince1970)
+        expectEqual(expired.expiryToAnnounce(spotifyExcluded: true, announced: nil), stamp, "Spotify 通知: 已排除、过期、没弹过 → 弹")
+        expectEqual(expired.expiryToAnnounce(spotifyExcluded: true, announced: stamp), nil, "Spotify 通知: 同一次过期只弹一次")
+        expectEqual(expired.expiryToAnnounce(spotifyExcluded: true, announced: stamp - 15_552_000), stamp,
+                    "Spotify 通知: 弹过的是上一次过期 → 这次再弹")
+        expectEqual(expired.expiryToAnnounce(spotifyExcluded: false, announced: nil), nil, "Spotify 通知: 勾着 Spotify → 不弹")
+        expectEqual(linked.expiryToAnnounce(spotifyExcluded: true, announced: nil), nil, "Spotify 通知: 还连着 → 不弹")
+
+        let due = LastfmSpotifyLink.checkDue
+        expectEqual(due(nil, now, 86_400, false), true, "Spotify 查询: 没查成过 → 查")
+        expectEqual(due(now.addingTimeInterval(-3_600), now, 86_400, false), false, "Spotify 查询: 一小时前查过 → 不查")
+        expectEqual(due(now.addingTimeInterval(-86_400), now, 86_400, false), true, "Spotify 查询: 满一天 → 查")
+        expectEqual(due(now.addingTimeInterval(-60), now, 86_400, true), true, "Spotify 查询: 要弹通知 → 先重查确认")
+        expectEqual(due(now.addingTimeInterval(60), now, 86_400, false), true, "Spotify 查询: 时钟倒退 → 查")
+    }
+
+    // ---- 「Last.fm 账号建议」排哪几条(见 LastfmAccountSuggestion)----
+    do {
+        let spotify = LastfmSpotifyLink.PlayersRowHint.doubleScrobble
+        let current = LastfmAccountSuggestion.current
+        expectEqual(current(nil, true, false, nil), [], "账号建议: 什么事都没有 → 没有建议")
+        expectEqual(current("超时", false, false, nil), [.connectFailed("超时")], "账号建议: 连接失败,还没连上也要出")
+        expectEqual(current("超时", true, true, nil), [.connectFailed("超时")], "账号建议: 连接失败和授权失效只出一条重新连接")
+        expectEqual(current(nil, true, true, nil), [.authRevoked], "账号建议: 授权失效")
+        expectEqual(current(nil, false, true, nil), [], "账号建议: 断开后留下的状态文件不算")
+        expectEqual(current(nil, true, false, spotify), [.spotify(spotify)], "账号建议: Spotify 那条")
+        expectEqual(current(nil, true, true, spotify), [.authRevoked, .spotify(spotify)], "账号建议: 要紧的在前")
+    }
+
+    // ---- Spotify 连接提示的接线(契约) ----
+    // 判据都在上面测了;这几处接线断了,提示和通知就静默不出。
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOf: base.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        expectEqual(src("lyrimuse/AppDelegate.swift").contains("LastfmSpotifyLinkMonitor.shared.start()"), true,
+                    "Spotify 连接(契约): 启动时开始盯")
+        expectEqual(src("lyrimuse/Settings/UnknownPlayerNotifier.swift")
+                        .contains("category == LastfmSpotifyLinkMonitor.categoryID"), true,
+                    "Spotify 连接(契约): 点通知分流到 Last.fm 账号页")
+        let tab = src("lyrimuse/AccountLinkingTab.swift")
+        let card = tab.range(of: "private var lastfmProfileCard: some View {")?.upperBound
+        let cardEnd = tab.range(of: "private var lastfmProfileStatusLine: some View {")?.lowerBound
+        let body = card.flatMap { start in cardEnd.map { String(tab[start..<$0]) } } ?? ""
+        let groupStart = tab.range(of: "private var lastfmSuggestionsGroup: some View {")?.upperBound
+        let group = groupStart.map { String(tab[$0...].prefix(700)) } ?? ""
+        expectEqual(group.contains("if let hint = spotifyLink.hint {") && group.contains("LastfmSpotifySuggestionRow(hint: hint)")
+                        && tab.contains("lastfmProfileCard\n                        lastfmSuggestionsGroup"), true,
+                    "Spotify 连接(契约): 建议在页头卡下面单独一组")
+        let settingsView = src("lyrimuse/SettingsView.swift")
+        expectEqual(settingsView.contains("if !suggestions.items.isEmpty {")
+                        && settingsView.contains("LastfmSuggestionsSidebarRow(count: suggestions.items.count)\n                    .tag(SettingsSidebarItem.lastfmSuggestions)"),
+                    true, "Spotify 连接(契约): 侧栏有建议时多一行「Last.fm 账号建议」")
+        expectEqual(src("lyrimuse/Settings/SettingsSidebarChrome.swift").contains("SidebarAlertDot"), false,
+                    "账号建议(契约): 头像上不再挂标记")
+        let suggestionsFile = src("lyrimuse/Settings/LastfmAccountSuggestions.swift")
+        let wizardAt = suggestionsFile.range(of: "AppActions.shared.requestLastfmWizard()")?.lowerBound
+        let jumpAt = suggestionsFile.range(of: "AppActions.shared.requestSettings(.account(.lastfm))")?.lowerBound
+        expectEqual(wizardAt != nil && jumpAt != nil && wizardAt! < jumpAt!, true, "账号建议(契约): 重新连接切到 Last.fm 页并请求打开向导")
+        expectEqual(tab.contains(".onReceive(AppActions.shared.lastfmWizardRequests)")
+                        && tab.contains("if AppActions.shared.pendingLastfmWizard {"), true,
+                    "账号建议(契约): Last.fm 页收到请求就打开向导(开着收广播、新建时读信箱)")
+        expectEqual(settingsView.contains("case .lastfmSuggestions: LastfmSuggestionsPage()"), true,
+                    "Spotify 连接(契约): 那一行点进建议页")
+        expectEqual(body.contains("LastfmSpotifyLinkMonitor.shared.refreshIfStale()"), true,
+                    "Spotify 连接(契约): 打开账号页时按需重查")
+        let row = src("lyrimuse/Settings/LastfmAccountSuggestions.swift")
+        expectEqual(row.contains("Button(L10n.t(\"只让 Lyrimuse 记…\")) { openLastfmApplications() }"), true,
+                    "Spotify 连接(契约): 重复记那一行能去 Last.fm 断开")
+        expectEqual(row.contains("LastfmSpotifyLinkMonitor.shared.recheckWhenBack()\n        NSWorkspace.shared.open("), true,
+                    "Spotify 连接(契约): 去网站之前登记回来重查")
+        expectEqual(src("lyrimuse/Settings/LastfmSpotifyLinkMonitor.swift")
+                        .contains(".publisher(for: NSApplication.didBecomeActiveNotification)"), true,
+                    "Spotify 连接(契约): 回到 App 时重查")
+    }
 }

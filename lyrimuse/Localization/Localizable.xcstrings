@@ -2925,29 +2925,6 @@
         }
       }
     },
-    "Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm counts tracks over 30s played halfway (or 4 min). Interludes often miss."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 規則：需長於 30 秒且播完一半（或滿 4 分鐘）。專輯的過場曲目常達不到。"
-          }
-        }
-      }
-    },
     "Last.fm 返回错误：%@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36029,6 +36006,397 @@
         }
       }
     },
+    "与 Spotify 的连接已过期，Spotify 上放的歌没有记到 Last.fm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection to Spotify has expired, so songs played on Spotify aren't being scrobbled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与 Spotify 的连接已过期，Spotify 上放的歌没有记到 Last.fm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "與 Spotify 的連線已過期，Spotify 上播放的歌沒有記錄到 Last.fm"
+          }
+        }
+      }
+    },
+    "点这里到设置里查看" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to view in Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点这里到设置里查看"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點這裡到設定裡查看"
+          }
+        }
+      }
+    },
+    "Spotify 每首会记两次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each Spotify song is scrobbled twice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify 每首会记两次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify 每首會記兩次"
+          }
+        }
+      }
+    },
+    "Spotify 上放的歌没有记到 Last.fm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs played on Spotify aren't being scrobbled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify 上放的歌没有记到 Last.fm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify 上播放的歌沒有記錄到 Last.fm"
+          }
+        }
+      }
+    },
+    "Last.fm 已经直接连着 Spotify，Lyrimuse 这边也在记，留一边就好。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm is connected to Spotify directly, and Lyrimuse is scrobbling Spotify too. Keep just one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 已经直接连着 Spotify，Lyrimuse 这边也在记，留一边就好。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 已經直接連線 Spotify，Lyrimuse 這邊也在記錄，留一邊就好。"
+          }
+        }
+      }
+    },
+    "只让 Last.fm 记" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Last.fm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只让 Last.fm 记"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只讓 Last.fm 記錄"
+          }
+        }
+      }
+    },
+    "只让 Lyrimuse 记…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Lyrimuse…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只让 Lyrimuse 记…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只讓 Lyrimuse 記錄…"
+          }
+        }
+      }
+    },
+    "在「Scrobble 的播放器」里取消 Spotify；手机等其它设备上听的 Spotify 也照常记上。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「Scrobble 的播放器」里取消 Spotify；手机等其它设备上听的 Spotify 也照常记上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「Scrobble 的播放器」裡取消勾選 Spotify；手機等其他裝置上聽的 Spotify 也照常記錄。"
+          }
+        }
+      }
+    },
+    "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点 Disconnect；之后只记这台 Mac 上放的 Spotify。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the Last.fm website: click Disconnect next to Spotify Scrobbling. After that, only Spotify played on this Mac is recorded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点 Disconnect；之后只记这台 Mac 上放的 Spotify。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開 Last.fm 網站，在「Spotify Scrobbling」一欄點 Disconnect；之後只記錄這台 Mac 上播放的 Spotify。"
+          }
+        }
+      }
+    },
+    "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 这边也没勾 Spotify。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm's connection to Spotify expired on %@, and Spotify isn't checked in Lyrimuse either."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 这边也没勾 Spotify。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 與 Spotify 的連線已於 %@ 過期，Lyrimuse 這邊也沒勾選 Spotify。"
+          }
+        }
+      }
+    },
+    "到 Last.fm 重新连接…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect on Last.fm…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到 Last.fm 重新连接…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到 Last.fm 重新連線…"
+          }
+        }
+      }
+    },
+    "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点 Connect。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the Last.fm website: click Connect next to Spotify Scrobbling."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点 Connect。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開 Last.fm 網站，在「Spotify Scrobbling」一欄點 Connect。"
+          }
+        }
+      }
+    },
+    "Last.fm 账号建议" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm Account Suggestions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 账号建议"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last.fm 帳號建議"
+          }
+        }
+      }
+    },
+    "没有待处理的建议" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Suggestions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有待处理的建议"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有待處理的建議"
+          }
+        }
+      }
+    },
+    "没能连接 Last.fm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Connect to Last.fm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能连接 Last.fm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法連線 Last.fm"
+          }
+        }
+      }
+    },
+    "授权可能已在 Last.fm 网站上被撤销，重新连接就能恢复。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The authorization may have been revoked on the Last.fm website. Reconnect to resume."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授权可能已在 Last.fm 网站上被撤销，重新连接就能恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權可能已在 Last.fm 網站上被撤銷，重新連線即可恢復。"
+          }
+        }
+      }
+    },
+    "重新连接…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新连接…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新連線…"
+          }
+        }
+      }
+    },
     "收听里程碑" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36117,6 +36485,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "累計第 %@ 次聆聽"
+          }
+        }
+      }
+    },
+    "断开…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断开…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中斷連線…"
+          }
+        }
+      }
+    },
+    "已暂停：授权失效，重新连接后恢复" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused: authorization revoked. Reconnect to resume."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已暂停：授权失效，重新连接后恢复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已暫停：授權失效，重新連線後恢復"
+          }
+        }
+      }
+    },
+    "建议" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggestions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建议"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建議"
           }
         }
       }

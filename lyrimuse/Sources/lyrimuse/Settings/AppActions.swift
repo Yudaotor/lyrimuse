@@ -61,6 +61,16 @@ final class AppActions {
         selectionRequests.send(item)
     }
 
+    /// 「Last.fm 账号建议」里点「重新连接…」:要 Last.fm 页把连接向导打开(向导是那一页的 sheet)。同 requestSettings 两条路
+    /// 一起走:信箱管那一页还没建出来(从建议页切过去),subject 管那一页已经开着。
+    var pendingLastfmWizard = false
+    let lastfmWizardRequests = PassthroughSubject<Void, Never>()
+
+    func requestLastfmWizard() {
+        pendingLastfmWizard = true
+        lastfmWizardRequests.send()
+    }
+
     /// 「这段时间内的 reopen 别开歌词窗口」—— 点系统通知时用。
     ///
     /// 点通知会连带弹出歌词窗口(applicationShouldHandleReopen 是为「点 Dock

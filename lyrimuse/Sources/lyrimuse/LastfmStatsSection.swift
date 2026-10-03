@@ -791,11 +791,7 @@ struct LastfmStatsSection: View {
 
     private var recentCard: some View {
         SettingsCard {
-            // 表头挂一条门槛说明。疑问是"刚才那首 Welcome 为什么没记" ——
-            // 那是《危险世界》里 7 秒的过场轨,被 minTrackSecs(30 秒)挡掉了。这类
-            // "东西没出现"的疑问在界面上完全没有线索可循,只能主动写出来。
             collapsibleHeader(icon: "clock", title: L10n.t("最近记录"),
-                              help: L10n.t("Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。"),
                               collapsed: $recentCollapsed) {
                 if let at = stats.recentUpdatedAt {
                     // 这一页的数据是轮询来的(远端会话 45 秒一轮、否则两分钟),标一下它

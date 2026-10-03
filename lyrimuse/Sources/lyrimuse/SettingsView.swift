@@ -206,6 +206,8 @@ enum SettingsSidebarItem: Hashable {
     /// 有新版本时有一行(「有软件更新可用」)指向它,平时从「关于 › 更新 › 软件更新」进,
     /// 任何「检查更新」动作也会把窗口翻到这一页。
     case softwareUpdate
+    /// 「Last.fm 账号建议」页(仿系统设置「Apple 账户建议」)。侧栏只在有待处理的建议时有一行指向它。
+    case lastfmSuggestions
 }
 
 /// 设置窗里的"一个位置" = 顶层面板 + 这一页当前停在哪个二级分段(没有分段的页是 nil)。
@@ -241,6 +243,8 @@ struct SettingsView: View {
     @StateObject private var windowSurface = SettingsWindowSurface()
     /// 「有软件更新可用」那一行出不出现。只订阅这一位,不订阅整个 SparkleUpdaterManager(见 SoftwareUpdateBadge)。
     @ObservedObject private var updateBadge = SoftwareUpdateBadge.shared
+    /// 「Last.fm 账号建议」那一行出不出现、计数几条。只订阅这一份列表(见 LastfmSuggestionsStore)。
+    @ObservedObject private var suggestions = LastfmSuggestionsStore.shared
     // 默认收起、点击 Section 头才展开,不持久化(每次打开设置窗口都从收起状态开始)。
     // 变量名跟 Section 标题「实验室功能」不一致是有意的:变量名是内部实现细节,不跟用户可见文案走。
     @State private var isAdditionalFeaturesExpanded = false
@@ -450,7 +454,7 @@ struct SettingsView: View {
 
     /// 平时(不在搜索)的侧栏内容,按系统「设置」的侧栏排布(对照表见
     /// Settings/SettingsSidebarChrome.swift 头注):
-    ///   ① 身份区(Last.fm 头像 + 用户名)+ 有新版本时的「有软件更新可用」行;
+    ///   ① 身份区(Last.fm 头像 + 用户名)+ 有待处理建议时的「Last.fm 账号建议」行 + 有新版本时的「有软件更新可用」行;
     ///   ② 六个分类,分组之间只留空白、不加小标题 —— 系统设置的侧栏没有这种标题;
     ///   ③ 「实验室功能」用原生 `Section(isExpanded:)` 折叠(Finder / 邮件侧栏那种悬停露出的
     ///      显示/隐藏),标题旁的「?」悬浮提示放在自定义 header 里。
@@ -458,6 +462,11 @@ struct SettingsView: View {
         Section {
             LastfmIdentityRow()
                 .tag(SettingsSidebarItem.account(.lastfm))
+            if !suggestions.items.isEmpty {
+                // 仿系统设置身份区下面的「Apple 账户建议 ①」:有待处理的建议才有这一行,点了进建议页、这一行亮起来。
+                LastfmSuggestionsSidebarRow(count: suggestions.items.count)
+                    .tag(SettingsSidebarItem.lastfmSuggestions)
+            }
             if updateBadge.isVisible {
                 // 点了就是选中「软件更新」页(tag),跟系统设置一样这一行会亮起来。
                 SoftwareUpdateSidebarRow()
@@ -533,6 +542,7 @@ struct SettingsView: View {
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
                 case .softwareUpdate: SoftwareUpdatePage()
+                case .lastfmSuggestions: LastfmSuggestionsPage()
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { target in
                         // 跳转目标如果落在"实验室功能"这个默认折叠的区域里(比如从 Last.fm 卡片跳去
@@ -685,6 +695,7 @@ struct SettingsView: View {
         case .tab(let tab): return tab.title
         case .account(let destination): return destination.title
         case .softwareUpdate: return L10n.t("软件更新")
+        case .lastfmSuggestions: return L10n.t("Last.fm 账号建议")
         case nil: return L10n.t("设置")
         }
     }

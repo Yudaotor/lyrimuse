@@ -107,6 +107,18 @@ final class LastfmStatsService: ObservableObject {
         return nil
     }
 
+    /// `user.getinfo` 应答里的 `user` 对象(头像、Spotify 连接的到期时间都在这一层),连同查的是哪个账号;没有可用凭据、
+    /// 或没问成时为 nil。后台优先级,不抢界面上正在等的请求。
+    func fetchUserInfo() async -> (user: String, info: [String: Any])? {
+        guard let cred = credentials,
+              let json = await request(method: "user.getinfo", cred: cred, priority: .background),
+              let info = json["user"] as? [String: Any] else { return nil }
+        return (cred.user, info)
+    }
+
+    /// 当前凭据对应的 Last.fm 用户名;没有可用凭据时为 nil。
+    var credentialUser: String? { credentials?.user }
+
     /// 简介兜底(`EditorialNotesStore`)的一次资料查询:`album.getInfo` / `artist.getInfo`,走同一条限速与退避通道。
     /// 没连 Last.fm 账号返回 nil。`notFound` = Last.fm 明确没有这个条目(error 6)。
     func fetchEditorialInfo(method: String, extra: [String: String]) async -> (json: [String: Any]?, notFound: Bool)? {
