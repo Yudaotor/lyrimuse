@@ -116,6 +116,10 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 一样以 EnrichCacheLyrics.resolved 为准。
     @Published public private(set) var currentTrackPlainLyrics: String = ""
 
+    /// 完整歌词窗口末尾「创作者：…」的名单(`LyricSongwriters.shown`):collector 存的 Apple 名单优先,没有时取
+    /// 歌词正文署名行里的作词 / 作曲者(`LyricsSyncEngine.creditSongwriters`)。没有能同步显示的歌词时为空。
+    @Published public private(set) var currentTrackSongwriters: [String] = []
+
     /// collector 报告"这一轮什么都没查到,是因为网络不通"(见 CollectorStatus)。
     ///
     /// 跟 currentTrackHasNoLyrics 是互补的两半:那个是"查过了,这首歌没有",这个是
@@ -3778,6 +3782,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // lyrics 一样得参与这道内容等值闸,不然采纳/更换一条纯文本候选之后,闸会因为
         // 其它字段(lyrics 本来就是空的,没变)误判"内容没变"而跳过重算,新内容显示不出来。
         let plainLyrics: String
+        // Apple 名单可能比正文晚到(存量条目播放时才补),只变它也得重算。
+        let songwriters: [String]
     }
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
@@ -3824,7 +3830,8 @@ public final class LocalPlaybackSource: ObservableObject {
             romanizationScripts: romanizationScripts,
             isCantonese: found?.isCantonese ?? false,
             isHokkien: found?.isHokkien ?? false,
-            plainLyrics: found?.plainLyrics ?? "")
+            plainLyrics: found?.plainLyrics ?? "",
+            songwriters: found?.songwriters ?? [])
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
             return
@@ -3906,6 +3913,13 @@ public final class LocalPlaybackSource: ObservableObject {
         // 避免"歌词窗口"同时收到两份内容不一定完全一致的候选、不知道信哪个。
         let newPlainLyrics = newHasContent ? "" : HanCompatibility.normalized(found?.plainLyrics ?? "")
         if newPlainLyrics != currentTrackPlainLyrics { currentTrackPlainLyrics = newPlainLyrics }
+        // Apple 名单跟正文一样过简繁转换;署名行取出的名单本来就是从转换后的正文里取的。
+        let newSongwriters = newHasContent
+            ? LyricSongwriters.shown(
+                apple: (found?.songwriters ?? []).map { variant.converted(HanCompatibility.normalized($0)) },
+                credits: syncEngine.creditSongwriters)
+            : []
+        if newSongwriters != currentTrackSongwriters { currentTrackSongwriters = newSongwriters }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
         // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体

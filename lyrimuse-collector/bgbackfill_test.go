@@ -16,6 +16,7 @@ func TestNeedsBackgroundVocalsBackfill(t *testing.T) {
 		{"amll 没取过", func(e *enrichEntry) {}, true},
 		{"applemusic 没取过", func(e *enrichEntry) { e.LyricsSource = "applemusic" }, true},
 		{"已取过", func(e *enrichEntry) { e.LyricsBGChecked = lyricsBGParserVersion }, false},
+		{"只按背景人声那一版取过,还要补词曲作者", func(e *enrichEntry) { e.LyricsBGChecked = 1 }, true},
 		{"别的源", func(e *enrichEntry) { e.LyricsSource = "netease" }, false},
 		{"手改过", func(e *enrichEntry) { e.ManualLyrics = true }, false},
 		{"没有词", func(e *enrichEntry) { e.Lyrics = "" }, false},

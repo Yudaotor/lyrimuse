@@ -340,6 +340,7 @@
 "刚刚" = "just now";
 "刚刚更新" = "Just updated";
 "刚才在听" = "Last played";
+"创作者：" = "Written by: ";
 "删除" = "Delete";
 "删除 %@ 条" = "Delete %@";
 "删除「%@」？删除后无法恢复" = "Delete “%@”? This can’t be undone.";

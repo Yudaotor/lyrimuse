@@ -220,6 +220,9 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 			dst.LyricsSource = src.LyricsSource
 			dst.LyricsScore = src.LyricsScore
 			dst.LyricsScoringVersion = src.LyricsScoringVersion
+			if len(dst.LyricsSongwriters) == 0 {
+				dst.LyricsSongwriters = src.LyricsSongwriters
+			}
 			// 当前歌词的出处现在确实是 src 那一轮的决策,整份搬过来再标明复用来源;
 			// lyrics_decision(最近一次评估)保持不动 —— 那记的是这条自己评估过什么,
 			// 是事实,不该被别人的记录盖掉。

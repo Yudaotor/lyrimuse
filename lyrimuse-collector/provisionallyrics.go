@@ -72,6 +72,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
 	e.LyricsSourcesResponded = lyricSourcesResponded(scored)
 	e.LyricsSourcesSkipped = skipped
+	e.LyricsSongwriters = songwritersFromScored(scored)
 	picked := pickLyricCandidate(scored)
 	e.LyricsDecision = newLyricsDecision(
 		decisionPath, artist, title, album, durationSecs, scored, picked, picked != nil)

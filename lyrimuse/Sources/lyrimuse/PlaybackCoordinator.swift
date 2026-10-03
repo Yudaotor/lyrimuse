@@ -114,6 +114,8 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var currentTrackHasNoLyrics: Bool = false
     // 没有时间戳的纯文本歌词兜底,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentTrackPlainLyrics: String = ""
+    // 完整歌词窗口末尾「创作者：…」的名单,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var currentTrackSongwriters: [String] = []
     /// collector 报"网络不通,这一轮查不了"(见 CollectorStatus)。只有本地源有这个信号
     /// —— relay 模式下歌词是别的机器解析好推过来的,本机通不通网跟它无关。
     @Published private(set) var collectorNetworkDown: Bool = false
@@ -872,6 +874,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
             s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
             s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
+            s.$currentTrackSongwriters.assign(to: \.currentTrackSongwriters, on: self),
             s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$isRadioTalkBreak.assign(to: \.isRadioTalkBreak, on: self),

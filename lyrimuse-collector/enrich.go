@@ -42,6 +42,20 @@ func songLanguageFromScored(scored []scoredLyricCandidateResult) string {
 	return ""
 }
 
+// songwritersFromScored:这一轮里 Apple 给的词曲作者名单。过了身份关(分数 >= 0)的 applemusic 候选优先,
+// 其次 amll(它的 TTML 多半就是 Apple 那份);都没有时为 nil。跟 songLanguageFromScored 一样从全部候选里取:
+// 名单描述的是这首歌,跟最后用了谁的歌词正文无关。
+func songwritersFromScored(scored []scoredLyricCandidateResult) []string {
+	for _, src := range []string{"applemusic", "amll"} {
+		for _, c := range scored {
+			if c.Source == src && c.Score >= 0 && len(c.Songwriters) > 0 {
+				return c.Songwriters
+			}
+		}
+	}
+	return nil
+}
+
 // needsRomanizationRetry 判断"要不要为了拿罗马音/语种信号,多试几个艺人名变体"。
 //
 // 存在的理由:本地标签往往是罗马化艺名(側田 → "Justin Lo"),用它搜时 musixmatch+lrclib
@@ -175,9 +189,13 @@ type enrichEntry struct {
 	// 胜出时才有。它跟 Lyrics / LyricsYRC 是一组:从新的解析结果成套写歌词字段的地方都要带上它,
 	// 正文或逐字被替换、它又没有跟着换的地方要清掉,漏一处就是把上一份歌词的和声挂在新歌词下面。
 	LyricsBG string `json:"lyrics_bg,omitempty"`
-	// LyricsBGChecked:这条的歌词已经按哪一版背景人声解析器取过(lyricsBGParserVersion)。0 = 还没有,
+	// LyricsBGChecked:这条的歌词已经按哪一版 TTML 附属内容解析器取过(lyricsBGParserVersion)。0 = 还没有,
 	// 胜出源是 amll / applemusic 时播放到会补一次(bgbackfill.go)。
 	LyricsBGChecked int `json:"lyrics_bg_checked,omitempty"`
+	// LyricsSongwriters:Apple 给这首歌的词曲作者名单(TTML 的 <songwriters>,见 songwritersFromScored),App 在
+	// 完整歌词窗口末尾显示成「创作者：…」。它描述的是这首歌、不是哪一份歌词:取自这一轮全部候选、不跟着胜出源走,
+	// 换源、手改正文都不清它;一轮里没有哪个源给出名单时保留原值。
+	LyricsSongwriters []string `json:"lyrics_songwriters,omitempty"`
 	// SongLanguage 是这首歌的语种真值(songLanguageMandarin/songLanguageCantonese 之一,
 	// 见 lyricCandidate.language),取自**全部**候选里第一个给出这个信号的那个(见
 	// songLanguageFromScored),不是只看最终拿到歌词正文的那个候选——目前只有 QQ/酷狗
@@ -1618,6 +1636,9 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		e.LyricsSourcesResponded = responded
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
+	if sw := songwritersFromScored(scored); len(sw) > 0 {
+		e.LyricsSongwriters = sw
+	}
 	upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	path := lyricsDecisionPathUpgrade
 	if firstFill {
@@ -1926,6 +1947,9 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			e.LyricsSourcesResponded = responded
 		}
 		e.LyricsSourcesSkipped = skipped
+		if sw := songwritersFromScored(scored); len(sw) > 0 {
+			e.LyricsSongwriters = sw
+		}
 	}
 	// 有源被跳过(熔断冷却 / 后台暂停)的一轮只算这一版规则下的阶段性结论:照常重选,但不把打分
 	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
@@ -3084,6 +3108,9 @@ type scoredLyricCandidateResult struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	// ISRC:源报的这条录音的 ISRC(目前只有 applemusic 给),不参与打分。按 ISRC 补取未应答的源用,见 isrcretry.go。
 	ISRC string `json:"isrc,omitempty"`
+	// Songwriters:TTML 里的词曲作者名单(amllResult.songwriters),只有 amll / applemusic 会给。不参与打分,
+	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
+	Songwriters []string `json:"songwriters,omitempty"`
 	// Language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 透传,不参与打分,见 lyricCandidate.language。
 	Language string `json:"language,omitempty"`
@@ -3961,6 +3988,8 @@ type lyricSourceResult struct {
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
+	// songwriters:词曲作者名单(applemusicResult.songwriters)。只有 applemusic 走这里,amll 的在 amll.songwriters。
+	songwriters []string
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
 	// qqLyricResult.trackFoundNoLyrics,判据和边界见那两处头注)。跟 instrumental 是并列
@@ -4345,6 +4374,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 				r.LyricsRoma = amll.roma
 			}
 			r.LyricsBG = amll.bg
+			r.Songwriters = amll.songwriters
 		case "applemusic":
 			// 官方译文(<translations type="subtitle">)与官方音译(<transliterations>)。Apple 按请求的语言给译文
 			// (applemusicLyricsQuery),判定"能不能用"时 trLang 传的就是目标语言本身。
@@ -4356,6 +4386,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 				r.LyricsRoma = amRoma
 			}
 			r.LyricsBG = amBG
+			r.Songwriters = am.songwriters
 		case "soda":
 			// 汽水 lyric.translations.cn 固定中文,口径同 migu。
 			if c.hasUsableTranslation {
@@ -4787,7 +4818,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
 		appleID, _ := playbackTrackIDsFor(artist, title, album)
 		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
+		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
 		if skipSource("soda") {

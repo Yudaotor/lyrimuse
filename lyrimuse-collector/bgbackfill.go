@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// 存量条目补背景人声。
+// 存量条目补背景人声与词曲作者名单。
 //
-// 解析器从 lyricsBGParserVersion 起才产出背景人声轨,之前选出 amll / applemusic 歌词的条目都没有它。
-// 这些条目播放到时只重取胜出的那一个源(不重新选源、不动正文),取回来的背景人声逐行核对能挂到现有
-// 主句上才写入;不管有没有写入都记下 LyricsBGChecked,之后不再来。没取到(网络失败、库里下架)不记,
+// 解析器从 lyricsBGParserVersion 1 起产出背景人声轨、2 起产出词曲作者名单,之前选出 amll / applemusic 歌词的
+// 条目都没有它们。这些条目播放到时只重取胜出的那一个源(不重新选源、不动正文),取回来的背景人声逐行核对能挂到
+// 现有主句上才写入,词曲作者名单取到就写;不管有没有写入都记下 LyricsBGChecked,之后不再来。没取到(网络失败、库里下架)不记,
 // 同一进程里每首只试一次,下次启动后播放再试。
 
 // bgBackfillTimeout:一次回填只问一个源,给足一次 Apple 搜索 + 取词的时间。
@@ -27,7 +27,7 @@ const bgBackfillAlignToleranceMs = 30
 // bgBackfillTried:这一进程里已经试过回填的 key。调用方持 enrichMu。
 var bgBackfillTried = map[string]bool{}
 
-// needsBackgroundVocalsBackfill:胜出源是 amll / applemusic、还没按当前背景人声解析器取过的有词条目。
+// needsBackgroundVocalsBackfill:胜出源是 amll / applemusic、还没按当前 TTML 附属内容解析器取过的有词条目。
 // 手改过的不动(背景人声对不上用户改过的正文)。
 func needsBackgroundVocalsBackfill(e enrichEntry) bool {
 	return e.LyricsBGChecked < lyricsBGParserVersion && e.Lyrics != "" && !e.ManualLyrics &&
@@ -63,6 +63,7 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 		spotifyID = e.SpotifyTrackID
 	}
 	var bg string
+	var songwriters []string
 	switch e.LyricsSource {
 	case "amll":
 		// 只按 ID 重取:要的是当初选中的那一份,在索引里按歌名另找的未必是它。
@@ -72,14 +73,14 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 			log.Printf("bg backfill: %s  amll returned nothing", key)
 			return
 		}
-		bg = r.bg
+		bg, songwriters = r.bg, r.songwriters
 	case "applemusic":
 		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		if r.lyrics == "" {
 			log.Printf("bg backfill: %s  applemusic returned nothing", key)
 			return
 		}
-		bg = r.bg
+		bg, songwriters = r.bg, r.songwriters
 	}
 
 	enrichMu.Lock()
@@ -98,6 +99,10 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	default:
 		cur.LyricsBG = bg
 		log.Printf("bg backfill: %s  %s +%d background lines", key, cur.LyricsSource, strings.Count(bg, "\n"))
+	}
+	if len(songwriters) > 0 {
+		cur.LyricsSongwriters = songwriters
+		log.Printf("bg backfill: %s  %s %d songwriters", key, cur.LyricsSource, len(songwriters))
 	}
 	cur.LyricsBGChecked = lyricsBGParserVersion
 	enrichCache[key] = cur

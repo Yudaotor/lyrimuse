@@ -60,6 +60,8 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var currentTrackHasNoLyrics = false
     // 没有时间戳的纯文本歌词兜底,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentTrackPlainLyrics = ""
+    // 列表末尾「创作者：…」的名单,见 LocalPlaybackSource.currentTrackSongwriters。
+    @Published private(set) var songwriters: [String] = []
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     // ---- 来自 AppSettings(只挑本窗口实读的几项) ----
@@ -152,6 +154,7 @@ private final class WindowPlayback: ObservableObject {
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$currentTrackPlainLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackPlainLyrics = $0 },
+            p.$currentTrackSongwriters.removeDuplicates().sink { [weak self] in self?.songwriters = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
@@ -2849,6 +2852,19 @@ struct LyricsWindowView: View {
                             gapDotsRow(g, id: "\(item.id)-gap", centered: centered)
                         }
                     }
+                    // 末尾「创作者：…」只在完整布局显示,景深按排在最后一句后面的那一行算。
+                    if !centered, !playback.songwriters.isEmpty {
+                        LyricsSongwritersFooter(
+                            names: playback.songwriters,
+                            distance: distance(for: playback.allLines.count),
+                            fontSize: lyricFontSize,
+                            fontFamily: activeFontFamily,
+                            textColor: rowTextColor,
+                            reduceMotion: reduceMotion,
+                            suspendsBlur: windowController.isLiveResizing
+                        )
+                        .equatable()
+                    }
                 }
                 // 间奏点的插入/移除(以及各行随之退暗一档)跟换行滚动同一条曲线。
                 // 用 value 限定形而不是 withAnimation:只在进出间奏那一刻生效,
@@ -4848,6 +4864,34 @@ private struct LyricsLineRow: View, Equatable {
                 .foregroundStyle(base)
                 .lyricTypesetting(item.line.plainText)
         }
+    }
+}
+
+/// 列表末尾的「创作者：…」(Apple Music 歌词页同款):标签加粗、名单常规字重,字号和颜色跟正文一样,
+/// 远近按 `LyricsWindowDepth` 跟正文行同一套。Equatable 的理由同 LyricsLineRow。
+private struct LyricsSongwritersFooter: View, Equatable {
+    let names: [String]
+    let distance: Int?
+    let fontSize: CGFloat
+    let fontFamily: String
+    let textColor: Color
+    let reduceMotion: Bool
+    let suspendsBlur: Bool
+
+    var body: some View {
+        let list = names.joined(separator: L10n.t("、"))
+        var label = AttributedString(L10n.t("创作者："))
+        label.font = Font.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold)
+        var value = AttributedString(list)
+        value.font = Font.overlayFont(familyName: fontFamily, size: fontSize, weight: .regular)
+        return Text(label + value)
+            .foregroundStyle(textColor)
+            .lyricTypesetting(list)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(LyricsWindowDepth.opacity(distance: distance))
+            .blur(radius: (reduceMotion || suspendsBlur)
+                ? 0 : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize))
+            .animation(LyricsWindowView.lineTransition, value: distance)
     }
 }
 

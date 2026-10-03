@@ -76,6 +76,8 @@ type applemusicResult struct {
 	roma string
 	// bg:背景人声轨(YRC 语法,形状见 amllResult.bg),没有时为空。
 	bg string
+	// songwriters:TTML 里的词曲作者名单(amllResult.songwriters),没有时为空。
+	songwriters []string
 	// cover:artwork.url 是个带 {w}x{h} 占位的模板,取词时替换成原图尺寸,见 applemusicSong.cover。
 	cover string
 	// durationSecs:Apple 自报的曲长(秒),透传给打分的 sourceReportedDurationSecs。
@@ -1298,7 +1300,7 @@ func applemusicResultFrom(s applemusicSong, p amllResult, plainOnly bool) applem
 		yrc = withSpatialAudioTag(yrc, p.spatialOffsetSecs, stereoSecs)
 	}
 	return applemusicResult{
-		lyrics: lyrics, yrc: yrc, tr: p.tr, roma: p.roma, bg: p.bg,
+		lyrics: lyrics, yrc: yrc, tr: p.tr, roma: p.roma, bg: p.bg, songwriters: p.songwriters,
 		title: s.Attributes.Name, artist: s.Attributes.ArtistName, album: s.Attributes.AlbumName,
 		cover: s.cover(), durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
 		isrc: s.Attributes.Isrc, plainOnly: plainOnly,

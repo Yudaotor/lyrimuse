@@ -12,6 +12,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     let lyricsYRC: String?
     /// 背景人声轨(collector enrichEntry.LyricsBG,YRC 语法,每行行头是所属主句的起止)。
     let lyricsBG: String?
+    /// Apple 给的词曲作者名单(collector enrichEntry.LyricsSongwriters),不在正文小文件里。
+    let lyricsSongwriters: [String]?
     let lyricsSource: String?
     let coverSource: String?
     // collector 解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
@@ -99,6 +101,7 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case lyricsRoma = "lyrics_roma"
         case lyricsYRC = "lyrics_yrc"
         case lyricsBG = "lyrics_bg"
+        case lyricsSongwriters = "lyrics_songwriters"
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
@@ -180,6 +183,8 @@ public struct EnrichCacheLyrics {
     public let lyricsYRC: String
     /// 背景人声轨(见 EnrichCacheEntry.lyricsBG),没有时为空串。
     public let lyricsBG: String
+    /// Apple 给的词曲作者名单(见 EnrichCacheEntry.lyricsSongwriters),没有时为空。
+    public let songwriters: [String]
     public let instrumental: Bool
     /// 这首歌已经被完整解析过一轮了吗(见 EnrichCacheEntry.ts)。
     /// 它为 true 而 lyrics 为空,就是"搜过了,确实没有"——UI 靠这个区别把
@@ -450,6 +455,7 @@ public enum EnrichCacheReader {
             lyricsRoma: roma,
             lyricsYRC: yrc,
             lyricsBG: bg,
+            songwriters: entry.lyricsSongwriters ?? [],
             instrumental: entry.instrumental ?? false,
             resolved: (entry.ts ?? 0) > 0,
             isCantonese: entry.songLanguage == songLanguageCantonese,

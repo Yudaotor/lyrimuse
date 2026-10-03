@@ -255,6 +255,10 @@ public final class LyricsSyncEngine {
     /// 要不要用取决于播放器此刻放的是哪一版,由 LocalPlaybackSource 判断后并进 `offsetMs`。
     public private(set) var spatialAudioCue: LRCParser.SpatialAudioCue?
 
+    /// 被署名过滤判掉的那些行里取出的作词 / 作曲者(`LyricSongwriters.names`),load() 时算好。完整歌词窗口
+    /// 末尾的「创作者：…」在 collector 没存 Apple 名单时用它。
+    public private(set) var creditSongwriters: [String] = []
+
     // 署名/制作人员这类噪声行(作词/作曲/编曲/制作人等,常见于 LRC 开头几秒)在喂进
     // 同步引擎之前(而不是显示时)就剔除——这样歌曲刚开始播放、真歌词还没开始的那几秒
     // 会正确判定成"还没到第一句真歌词"(退回♪占位符,双行预览提前露出第一句真歌词),
@@ -1618,6 +1622,7 @@ public final class LyricsSyncEngine {
         let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
         // 被判成署名的那些**时间戳**。译文/罗马音跟着它走,见下面 romaLines/trLines 的注释。
         var creditTimesMs = Set(zip(parsedBase, baseDrop).compactMap { $0.1 ? $0.0.timeMs : nil })
+        var creditTexts = zip(baseTexts, baseDrop).compactMap { $0.1 ? $0.0 : nil }
         var candidateWords: [LyricLineWords] = []
         if !yrc.isEmpty {
             // 逐字侧单独认一遍:同一首歌 .lrc 和 .yrc 的标记未必一致(实测《说好不哭》
@@ -1632,7 +1637,9 @@ public final class LyricsSyncEngine {
                 speakerExemptions: wordSpeakers)
             candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
             creditTimesMs.formUnion(zip(yrc, drop).compactMap { $0.1 ? $0.0.timeMs : nil })
+            creditTexts += zip(texts, drop).compactMap { $0.1 ? $0.0 : nil }
         }
+        creditSongwriters = LyricSongwriters.names(fromCreditLines: creditTexts)
         usingWords = !candidateWords.isEmpty
             && (filteredBase.isEmpty || candidateWords.count * 2 >= filteredBase.count)
         // 对唱标记的剥离(见 LyricDuet)。两条路径都会剥掉行首标记、给出每行摆哪一边,

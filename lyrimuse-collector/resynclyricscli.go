@@ -169,6 +169,9 @@ func runResyncLyrics(keys []string, apply bool) int {
 		if len(responded) > 0 {
 			cur.LyricsSourcesResponded = responded
 		}
+		if sw := songwritersFromScored(scored); len(sw) > 0 {
+			cur.LyricsSongwriters = sw
+		}
 		cur.LyricsDecision = buildLyricsDecision(
 			lyricsDecisionPathRescore, artist, title, album, duration, scored, picked, plan.changed())
 		traceLyricsDecision(key, cur.LyricsDecision)

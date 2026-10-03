@@ -55,9 +55,9 @@ const (
 	amllRoleTranslation = "x-translation"
 	// amllRoleRoman:内嵌罗马音。它跟译文一样是整行附属内容,不能当成一个词并进正文。
 	amllRoleRoman = "x-roman"
-	// lyricsBGParserVersion:解析器开始产出背景人声轨的版本。条目的 LyricsBGChecked 低于它、胜出源又是
-	// amll / applemusic 时,播放到这首会重取一次那个源补背景人声(见 bgbackfill.go)。
-	lyricsBGParserVersion = 1
+	// lyricsBGParserVersion:TTML 附属内容解析器的版本,1 起产出背景人声轨,2 起产出词曲作者名单。条目的
+	// LyricsBGChecked 低于它、胜出源又是 amll / applemusic 时,播放到这首会重取一次那个源补这两样(见 bgbackfill.go)。
+	lyricsBGParserVersion = 2
 )
 
 type amllResult struct {
@@ -81,6 +81,8 @@ type amllResult struct {
 	// spatialOffsetSecs:Apple TTML 给空间音频版的歌词偏移(秒),没有时为 0。只有 applemusicParseTTML 填,
 	// 见 applemusicspatial.go。
 	spatialOffsetSecs float64
+	// songwriters:head 里 <iTunesMetadata><songwriters> 的词曲作者名单(ttmlSongwriters 整理过),没有时为空。
+	songwriters []string
 }
 
 func (r amllResult) empty() bool { return r.lrc == "" && r.yrc == "" }
@@ -105,10 +107,27 @@ type ttmlDoc struct {
 	Divs    []ttmlDiv          `xml:"body>div"`
 }
 
-// ttmlITunesMetadata:head 里 Apple 写法的译文与音译,每行一个 <text for="L1">,按 key 指回正文 <p itunes:key="L1">。
+// ttmlITunesMetadata:head 里 Apple 写法的译文与音译,每行一个 <text for="L1">,按 key 指回正文 <p itunes:key="L1">;
+// 以及词曲作者名单(作词作曲不分开,文档顺序)。
 type ttmlITunesMetadata struct {
 	Translations     []ttmlKeyedBlock `xml:"translations>translation"`
 	Transliterations []ttmlKeyedBlock `xml:"transliterations>transliteration"`
+	Songwriters      []string         `xml:"songwriters>songwriter"`
+}
+
+// ttmlSongwriters:名单去掉首尾空白、空项与重复,保留文档顺序。一个都不剩时为 nil。
+func ttmlSongwriters(names []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 type ttmlKeyedBlock struct {
@@ -676,6 +695,7 @@ func parseTTMLLyrics(raw, target string, amll bool) (amllResult, bool) {
 		bg:      bg.String(),
 		hasDuet: len(distinctPersons) >= 2,
 	}
+	r.songwriters = ttmlSongwriters(doc.ITunes.Songwriters)
 	if !amll {
 		return r, true
 	}

@@ -1263,4 +1263,65 @@ func runCreditLineTests() {
         expectEqual(S.musicSchemeURL("https://example.com/x") == nil, true, "musicSchemeURL 拒绝外域")
         expectEqual(S.musicSchemeURL(nil) == nil, true, "musicSchemeURL nil 输入")
     }
+
+    // ---- 歌词末尾「创作者：…」的名单(LyricSongwriters) ----
+    do {
+        func names(_ lines: [String]) -> [String] { LyricSongwriters.names(fromCreditLines: lines) }
+        expectEqual(names(["作词 : 甲", "作曲：乙/丙", "编曲：丁", "制作人：戊"]), ["甲", "乙", "丙"],
+                    "创作者: 只取作词 / 作曲,编曲、制作人不算")
+        expectEqual(names(["词 Lyrics by：丁世光 Dean Ting/叶喜儿 Ashlee Yip", "作曲 Music by 丁世光 Dean Ting"]),
+                    ["丁世光 Dean Ting", "叶喜儿 Ashlee Yip"], "创作者: 双语标签与不带冒号的「Music by」,重名只留一次")
+        expectEqual(names(["词：关浩德Walter", "曲：关浩德 Walter"]), ["关浩德Walter"], "创作者: 重名比较不计空白")
+        expectEqual(names(["作词：方文山     作曲:林俊杰"]), ["方文山", "林俊杰"], "创作者: 一行里接着写的下一个标签按另一行算")
+        expectEqual(names(["作词：甲 编曲：乙"]), ["甲"], "创作者: 接着写的是编曲就丢掉")
+        expectEqual(names(["词：方大同/Rap：Ghost Style", "词：丙/作曲：丁"]), ["方大同", "丙", "丁"],
+                    "创作者: 名单里夹着的「标签：名字」按一行重新认")
+        expectEqual(names(["Written and Composed by Glen Ballard, Siedan Garrett and Michael Jackson"]),
+                    ["Glen Ballard", "Siedan Garrett", "Michael Jackson"], "创作者: 英文整句署名按逗号与 and 拆")
+        expectEqual(names(["Written by：Teddy Riley and Bernard Bell."]), ["Teddy Riley", "Bernard Bell"],
+                    "创作者: 句末的点去掉")
+        expectEqual(names(["作词：Kerry \"Krucial\" Brothers, Jr./Taneisha Smith"]),
+                    ["Kerry \"Krucial\" Brothers, Jr.", "Taneisha Smith"], "创作者: 「, Jr.」接回前一个名字")
+        expectEqual(names(["作曲：E&A.Schuman/蛋堡", "曲：Jon Bon Jovi & Richie Sambora"]),
+                    ["E&A.Schuman", "蛋堡", "Jon Bon Jovi", "Richie Sambora"], "创作者: 只有两边带空格的 & 才拆")
+        expectEqual(names(["词：清水依与吏", "曲：李念和"]), ["清水依与吏", "李念和"], "创作者: 名字里的与 / 和不拆")
+        expectEqual(names(["作曲：Justin Bieber+Jason Boyd", "作词：Dioguardi, Kierulf, Schwartz ..."]),
+                    ["Justin Bieber", "Jason Boyd", "Dioguardi", "Kierulf", "Schwartz"], "创作者: 加号分隔,末尾省略号去掉")
+        expectEqual(names(["词：Kenix Cheang@Zoo Music|Rocky Lee@myprivatezoo"]), ["Kenix Cheang", "Rocky Lee"],
+                    "创作者: 竖线分隔,「名字@厂牌」只留名字")
+        expectEqual(names(["作曲：X (Los Angeles, CA)"]), ["X (Los Angeles, CA)"], "创作者: 括号里的逗号不拆")
+        expectEqual(names(["Rap词：ØZI", "中文词：李焯雄", "词曲：方大同", "作詞・作曲：YONCE"]),
+                    ["ØZI", "李焯雄", "方大同", "YONCE"], "创作者: Rap词 / 语种前缀 / 词曲 / 日文写法")
+        expectEqual(names(["Composition published by：Riot Games", "Writers & Publishers：X", "Music Producer：Y",
+                           "Song：晴天", "原曲名：一夜未阖眼", "日语台词：残茶", "OP：华纳"]), [],
+                    "创作者: 发行、制作、歌名、台词这些标签不算")
+        expectEqual(LyricSongwriters.shown(apple: ["甲"], credits: ["乙"]), ["甲"], "创作者: 有 Apple 名单就用它")
+        expectEqual(LyricSongwriters.shown(apple: [], credits: ["乙"]), ["乙"], "创作者: 没有时用署名行取的")
+
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "[00:00.00]作词 : 甲\n[00:01.00]作曲：乙\n[00:26.74]la la la\n",
+                    lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.creditSongwriters, ["甲", "乙"], "创作者: 引擎从判掉的署名行里取")
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                    lyricsYRC: "[0,1000](0,500,0)作词 (500,500,0)：丙 \n[26740,1000](26740,500,0)la (27240,500,0)la \n")
+        expectEqual(engine.creditSongwriters, ["丙"], "创作者: 只有逐字时从逐字行里取")
+        engine.load(lyrics: "[00:01.00]周杰伦：一句词\n[00:26.74]la la la\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        expectEqual(engine.creditSongwriters, [], "创作者: 换一份没有署名的歌词清空")
+
+        // collector 写的键、App 解码的键、名单接到窗口那一路,三处对上(键没对上就恒为空、功能静默失效)。
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ path: String) -> String { (try? String(contentsOfFile: path, encoding: .utf8)) ?? "" }
+        let enrichGo = read(packageDir.deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/enrich.go").path)
+        let reader = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/EnrichCacheReader.swift").path)
+        let source = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/LocalPlaybackSource.swift").path)
+        let window = read(packageDir.appendingPathComponent("Sources/lyrimuse/UI/LyricsWindowView.swift").path)
+        expectEqual(sourceBytes(enrichGo, contain: "`json:\"lyrics_songwriters,omitempty\"`"), true,
+                    "创作者: collector 的 lyrics_songwriters struct tag")
+        expectEqual(sourceBytes(reader, contain: "case lyricsSongwriters = \"lyrics_songwriters\""), true,
+                    "创作者: App 解码 lyrics_songwriters")
+        expectEqual(sourceBytes(source, contain: "LyricSongwriters.shown("), true, "创作者: 播放源按 Apple 优先拼名单")
+        expectEqual(sourceBytes(window, contain: "if !centered, !playback.songwriters.isEmpty {"), true,
+                    "创作者: 只在完整布局显示,迷你「多行」不显示")
+    }
 }

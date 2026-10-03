@@ -108,6 +108,9 @@ func adoptCrossAlbumSiblingLyrics(key string, e *enrichEntry) bool {
 	e.LyricsRoma = src.LyricsRoma
 	e.LyricsSource = src.LyricsSource
 	e.LyricsScore = src.LyricsScore
+	if len(e.LyricsSongwriters) == 0 {
+		e.LyricsSongwriters = src.LyricsSongwriters
+	}
 	// 当前歌词的出处现在确实是兄弟那一轮的决策,整份搬过来再标明复用来源;
 	// lyrics_decision(最近一次评估)保持不动 —— 那记的是这条自己评估过什么,是事实。
 	if src.LyricsDecisionApplied != nil {
