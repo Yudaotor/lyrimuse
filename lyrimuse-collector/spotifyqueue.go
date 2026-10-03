@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -66,19 +67,20 @@ const spotifyStateMaxBytes = 16 << 20
 // spotifyMetaCacheCap 防无界增长。元数据按曲目 id 缓存(一首歌的名字不会变)。
 const spotifyMetaCacheCap = 4096
 
-// spotifyShuffling 问 Spotify 此刻开没开随机,由 App 代跑(askApp,脚本在 App 侧 PlayerQueryServer)。单测替换它。
+// spotifyShuffling 问 Spotify 此刻开没开随机,由 App 代跑(askApp,脚本在 App 侧 PlayerQueryServer,交回
+// {"shuffling":true|false},App 侧 PlayerQueryShuffle)。单测替换它。
 var spotifyShuffling = func() (on, ok bool) {
 	out, ok := askApp(appQueryRequest{Kind: appQuerySpotifyShuffle}, appQueryShuffleTimeout)
 	if !ok {
 		return false, false
 	}
-	switch strings.TrimSpace(out) {
-	case "true":
-		return true, true
-	case "false":
-		return false, true
+	var r struct {
+		Shuffling *bool `json:"shuffling"`
 	}
-	return false, false
+	if json.Unmarshal([]byte(out), &r) != nil || r.Shuffling == nil {
+		return false, false
+	}
+	return *r.Shuffling, true
 }
 
 // spotifyShuffleMemory:问不到随机状态(换歌那一拍 Spotify 偶尔 2 秒内回不来)时,最近一次问到的结果

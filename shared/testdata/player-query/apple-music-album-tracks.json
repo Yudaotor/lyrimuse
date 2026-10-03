@@ -1,0 +1,10 @@
+{
+ "script_output": "Bad\tMichael Jackson\t247,16\nThe Way You Make Me Feel\tMichael Jackson\t298.426\r\n\n坏行\nSpeed Demon\tMichael Jackson\tmissing value\n",
+ "reply": {
+  "tracks": [
+   {"artist": "Michael Jackson", "duration": 247.16, "title": "Bad"},
+   {"artist": "Michael Jackson", "duration": 298.426, "title": "The Way You Make Me Feel"},
+   {"artist": "Michael Jackson", "title": "Speed Demon"}
+  ]
+ }
+}

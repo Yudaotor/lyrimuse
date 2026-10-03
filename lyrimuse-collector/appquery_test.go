@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,11 +61,11 @@ func fakePlayerQueryApp(t *testing.T, reqPath, repPath string, answer func(appQu
 func TestAskAppRoundTrip(t *testing.T) {
 	reqPath, repPath := useAppQueryChannel(t, true)
 	seen := fakePlayerQueryApp(t, reqPath, repPath, func(r appQueryRequest) *appQueryReply {
-		return &appQueryReply{Schema: 1, ID: r.ID, OK: true, Output: "true\n"}
+		return &appQueryReply{Schema: appQuerySchema, ID: r.ID, OK: true, Output: `{"shuffling":true}`}
 	})
 	out, ok := askApp(appQueryRequest{Kind: appQuerySpotifyShuffle}, time.Second)
-	if !ok || out != "true\n" {
-		t.Fatalf("应拿到 App 的原始输出: ok=%v out=%q", ok, out)
+	if !ok || out != `{"shuffling":true}` {
+		t.Fatalf("应拿到 App 交回的 JSON: ok=%v out=%q", ok, out)
 	}
 	req := <-seen
 	if req.Schema != appQuerySchema || req.Kind != appQuerySpotifyShuffle || req.ID == "" || req.WrittenAtMs == 0 {
@@ -124,7 +125,8 @@ func TestAskAppWhenAppUnavailable(t *testing.T) {
 	}
 }
 
-// 几段脚本只在 App 里(PlayerQueryServer.swift),输出由这边解析:文件名、键名、种类、守卫与字段顺序两边一起改。
+// 几段脚本只在 App 里(PlayerQueryServer.swift),输出也由 App 整理成结构(PlayerQueryTracks.swift):文件名、键名、种类、
+// 契约版本两边一起改。整理出来的形状由共用样例钉(TestPlayerQuerySamples 与 selftest player-query 组)。
 func TestAppQueryContractMatchesTheApp(t *testing.T) {
 	raw, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/PlayerQueryServer.swift")
 	if err != nil {
@@ -133,30 +135,29 @@ func TestAppQueryContractMatchesTheApp(t *testing.T) {
 	src := string(raw)
 	for _, want := range []string{
 		`"lyrimuse-player-query-request.json"`, `"lyrimuse-player-query-reply.json"`,
+		fmt.Sprintf("public static let schema = %d", appQuerySchema),
 		`"` + appQueryAppleMusicQueue + `"`, `"` + appQueryAppleMusicUpcoming + `"`, `"` + appQueryAppleMusicAlbumTracks + `"`,
-		// 系统待播队列:App 原样回加载器的输出(parseAppleMusicSystemQueue 解),问的是 Music.app。
+		// 系统待播队列问的是 Music.app。
 		`NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier`,
 		`"` + appQuerySpotifyShuffle + `"`, `"` + appQueryBrowserQueue + `"`, `"` + appQueryKasetQueue + `"`,
 		// Kaset 队列:JXA 一次取回队列与播放状态,App 整理成 kasetQueueReply 那份(键名见下面 KasetPlayerInfo.swift 那段)。
 		`return JSON.stringify({ queue: K.getPlayQueue(), info: K.getPlayerInfo() });`,
 		`case bundleID = "bundle_id"`, `case writtenAtMs = "written_at_ms"`,
 		`case "` + browserPlatformYouTubeMusic + `"`, `case "` + browserPlatformSpotifyWeb + `"`,
-		// Music 待播:三道守卫 + 云端内容读不到时的兜底;第一行是当前这首(parseAppleMusicUpcoming 靠它核对)。
-		`if application "Music" is not running then`, `if player state is stopped then return ""`,
-		`if shuffle enabled then return ""`, `on error`,
-		`set output to (name of t) & tab & (artist of t) & linefeed`,
-		`(name of tk) & tab & (artist of tk) & tab & (album of tk) & tab & (duration of tk) & linefeed`,
-		// 专辑曲目:只收 song,每行 名 / 歌手 / 时长(parseMusicAppAlbumTracks)。
-		`and media kind is song`, `(name of t) & tab & (artist of t) & tab & (duration of t) & linefeed`,
-		`if application "Spotify" is running then tell application "Spotify" to return shuffling`,
-		// 网页队列:记录与字段的分隔符、每条记录的字段顺序(parseYTMusicQueue / parseSpotifyWebQueue)。
-		`String.fromCharCode(31), RS = String.fromCharCode(30);`,
-		`out.push([sel, text(d.title), artist.join(''), album, text(d.lengthText), String(d.videoId || ''), vt].join(US));`,
-		`return [String(t.name || ''), arts, String((t.album && t.album.name) || ''), String((t.duration && t.duration.milliseconds) || 0), String(t.uri || '')].join(US); };`,
-		`watchEndpointMusicConfig`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("PlayerQueryServer.swift 里找不到 %q", want)
+		}
+	}
+	tracks, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/PlayerQueryTracks.swift")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// appQueryTrack / appQueryTracks 与 Spotify 随机状态的键名。
+	for _, want := range []string{`case title, artist, album, duration, selected, uri`, `case videoID = "video_id"`,
+		`case musicVideo = "music_video"`, `public var current: Track?`, `public var tracks: [Track]`, `public var shuffling: Bool`} {
+		if !strings.Contains(string(tracks), want) {
+			t.Errorf("PlayerQueryTracks.swift 里找不到 %q(appQueryTrack 的键名两边一起改)", want)
 		}
 	}
 	kaset, err := os.ReadFile("../lyrimuse/Sources/LyrimuseCore/Local/KasetPlayerInfo.swift")

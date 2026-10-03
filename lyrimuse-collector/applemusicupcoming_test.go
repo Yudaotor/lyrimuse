@@ -1,118 +1,64 @@
 package main
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestParseAppleMusicUpcoming(t *testing.T) {
-	// 第一行是脚本报回来的"它认为正在播的那首",其余每行是 名\t歌手\t专辑\t时长(秒)。
-	out := "Earth Song\tMichael Jackson\n" +
-		"You Are Not Alone\tMichael Jackson\tHIStory Continues\t344.825988769531\n" +
-		"The Lost Children\tMichael Jackson\tInvincible\t240.533004760742\n"
-	got, ok := parseAppleMusicUpcoming(out, "Michael Jackson", "Earth Song", 5)
+// App 交来的 Music.app 队列(PlayerQueryTracks 整理好的):当前这首跟 poller 手上的对上了,取后面的。
+func TestPickAppleMusicUpcoming(t *testing.T) {
+	r := appQueryTracks{
+		Current: &appQueryTrack{Title: "Earth Song", Artist: "Michael Jackson"},
+		Tracks: []appQueryTrack{
+			{Title: "You Are Not Alone", Artist: "Michael Jackson", Album: "HIStory Continues", Duration: 344.825988769531},
+			{Title: "The Lost Children", Artist: "Michael Jackson", Album: "Invincible", Duration: 240.533004760742},
+		},
+	}
+	got, ok := pickAppleMusicUpcoming(r, "Michael Jackson", "Earth Song", 5)
 	if !ok || len(got) != 2 {
-		t.Fatalf("该解出 2 首,得到 ok=%v got=%+v", ok, got)
+		t.Fatalf("该取到 2 首,得到 ok=%v got=%+v", ok, got)
 	}
 	if got[0].title != "You Are Not Alone" || got[0].artist != "Michael Jackson" {
-		t.Errorf("第 1 首解错: %+v", got[0])
+		t.Errorf("第 1 首不对: %+v", got[0])
 	}
 	// 跨专辑是正常的 —— 从本地歌单播时队列里每首的专辑各不相同。
 	if got[0].album != "HIStory Continues" || got[1].album != "Invincible" {
-		t.Errorf("专辑名解错: %q / %q", got[0].album, got[1].album)
+		t.Errorf("专辑名不对: %q / %q", got[0].album, got[1].album)
 	}
 	if got[0].duration != 344.825988769531 {
 		t.Errorf("时长 %v —— Music.app 的 duration 本来就是秒,别再除一遍", got[0].duration)
 	}
 }
 
-func TestParseAppleMusicUpcomingRejectsMismatchedHead(t *testing.T) {
-	// 脚本看到的"正在播"跟 poller 手上的对不上 —— 说明两边看的不是同一个播放器,
-	// 照着它预取等于拿一批无关的歌去占解析带宽。
-	out := "别的歌\t别的歌手\nA\t甲\t专辑\t100\n"
-	if got, ok := parseAppleMusicUpcoming(out, "Michael Jackson", "Earth Song", 5); ok {
-		t.Errorf("首行对不上时该返回 false,却返回了 %+v", got)
+// 队列报的当前这首跟 poller 手上的对不上:两边看的不是同一个播放器,照着它预取等于拿一批无关的歌去占解析带宽。
+func TestPickAppleMusicUpcomingRejectsMismatchedCurrent(t *testing.T) {
+	r := appQueryTracks{
+		Current: &appQueryTrack{Title: "别的歌", Artist: "别的歌手"},
+		Tracks:  []appQueryTrack{{Title: "A", Artist: "甲", Album: "专辑", Duration: 100}},
+	}
+	if got, ok := pickAppleMusicUpcoming(r, "Michael Jackson", "Earth Song", 5); ok {
+		t.Errorf("当前这首对不上时该返回 false,却返回了 %+v", got)
 	}
 }
 
-func TestParseAppleMusicUpcomingEmptyMeansGuardTripped(t *testing.T) {
-	// 三道守卫任意一道拦下时脚本返回空串。这不是错误,是"这一刻不该用这条路"。
-	for _, out := range []string{"", "\n", "   \n"} {
-		if _, ok := parseAppleMusicUpcoming(out, "甲", "乙", 5); ok {
-			t.Errorf("空输出(守卫拦下)该返回 false,输入 %q", out)
+// 守卫拦下(停着、开着随机、云端内容)时 App 交来的是空的;只有当前这首、后面没有能取的,也不算。
+func TestPickAppleMusicUpcomingNothingToTake(t *testing.T) {
+	current := &appQueryTrack{Title: "乙", Artist: "甲"}
+	for name, r := range map[string]appQueryTracks{
+		"空的":        {},
+		"只有当前这首":    {Current: current},
+		"后面都缺歌名或歌手": {Current: current, Tracks: []appQueryTrack{{Title: "", Artist: "丙"}, {Title: "丁"}}},
+	} {
+		if got, ok := pickAppleMusicUpcoming(r, "甲", "乙", 5); ok {
+			t.Errorf("%s: 不该取到,得到 %+v", name, got)
 		}
 	}
 }
 
-func TestParseAppleMusicUpcomingHonorsLimit(t *testing.T) {
-	var b strings.Builder
-	b.WriteString("当前\t甲\n")
+func TestPickAppleMusicUpcomingHonorsLimit(t *testing.T) {
+	r := appQueryTracks{Current: &appQueryTrack{Title: "当前", Artist: "甲"}}
 	for _, n := range []string{"一", "二", "三", "四", "五", "六", "七"} {
-		b.WriteString(n + "\t歌手\t专辑\t100\n")
+		r.Tracks = append(r.Tracks, appQueryTrack{Title: n, Artist: "歌手", Album: "专辑", Duration: 100})
 	}
-	got, ok := parseAppleMusicUpcoming(b.String(), "甲", "当前", 3)
+	got, ok := pickAppleMusicUpcoming(r, "甲", "当前", 3)
 	if !ok || len(got) != 3 {
 		t.Fatalf("该截到 3 首,得到 ok=%v len=%d", ok, len(got))
-	}
-}
-
-// AppleScript 实数转文本跟随系统地区:德 / 法 / 俄等地区下小数点是逗号,≥10000 还会变科学计数。
-// 这些值都是 `osascript 脚本 -AppleLocale de_DE` 实测输出的形状。
-func TestParseAppleScriptRealAcceptsLocaleDecimalComma(t *testing.T) {
-	cases := []struct {
-		in   string
-		want float64
-	}{
-		{"243.826", 243.826},
-		{"243,826", 243.826},
-		{"3,25\n", 3.25},
-		{"25,0", 25},
-		{"1,23455E+4", 12345.5},
-		{"1.23455E+4", 12345.5},
-		{"208", 208},
-	}
-	for _, c := range cases {
-		got, err := parseAppleScriptReal(c.in)
-		if err != nil || got != c.want {
-			t.Errorf("parseAppleScriptReal(%q) = %v, %v;要 %v", c.in, got, err, c.want)
-		}
-	}
-	for _, bad := range []string{"", "x", "missing value"} {
-		if _, err := parseAppleScriptReal(bad); err == nil {
-			t.Errorf("parseAppleScriptReal(%q) 该报错", bad)
-		}
-	}
-}
-
-func TestParseAppleMusicUpcomingLocaleDecimalComma(t *testing.T) {
-	out := "Earth Song\tMichael Jackson\n" +
-		"You Are Not Alone\tMichael Jackson\tHIStory Continues\t344,825988769531\n"
-	got, ok := parseAppleMusicUpcoming(out, "Michael Jackson", "Earth Song", 5)
-	if !ok || len(got) != 1 {
-		t.Fatalf("该解出 1 首,得到 ok=%v got=%+v", ok, got)
-	}
-	if got[0].duration != 344.825988769531 {
-		t.Errorf("逗号小数点的时长解成了 %v —— 逗号地区下会静默变 0,预取选源少了时长这一票", got[0].duration)
-	}
-}
-
-func TestParseMusicAppAlbumTracks(t *testing.T) {
-	out := "Bad\tMichael Jackson\t247,16\n" +
-		"The Way You Make Me Feel\tMichael Jackson\t298.426\r\n" +
-		"\n" +
-		"坏行\n" +
-		"Speed Demon\tMichael Jackson\tmissing value\n"
-	got := parseMusicAppAlbumTracks(out)
-	if len(got) != 3 {
-		t.Fatalf("该解出 3 首(空行和缺列的行跳过),得到 %+v", got)
-	}
-	if got[0].duration != 247.16 || got[1].duration != 298.426 {
-		t.Errorf("时长解错: %v / %v", got[0].duration, got[1].duration)
-	}
-	if got[1].title != "The Way You Make Me Feel" {
-		t.Errorf("行尾 \\r 没剥掉: %q", got[1].title)
-	}
-	if got[2].duration != 0 {
-		t.Errorf("解不出的时长该按未知(0)处理,得到 %v", got[2].duration)
 	}
 }

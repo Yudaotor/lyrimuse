@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"math"
-	"strings"
 	"sync"
 )
 
@@ -15,7 +14,7 @@ import (
 // InnerTube 下发的 playlistPanelVideoRenderer:videoId、title、lengthText、`selected`(此刻在播的那首),
 // 以及 longBylineText「歌手 • 专辑 • 年份」—— 专辑那一段带 `MPREb_` 开头的 browseId,跟语言无关地认得出来。
 // 面板收着的时候这份 DOM 也在,实测 50 首的队列全部读得到。读页面这一步由 App 代跑(往标签页注入一段只读 JS,
-// 见 appquery.go 与 App 侧 PlayerQueryServer.youTubeMusicQueueJS)。
+// 见 appquery.go 与 App 侧 PlayerQueryServer.youTubeMusicQueueJS),读出来的记录也由 App 整理好(PlayerQueryTracks)。
 // 页面里开了随机,YouTube Music 是把这份列表**本身**打乱,所以按页面顺序往后取就是真实的下一首。
 //
 // 同一首歌有「歌曲版 / 视频版」两份时,替身那份包在 `#counterpart-renderer` 里、不在播放顺序上,跳过。
@@ -44,52 +43,17 @@ type ytmusicQueueItem struct {
 	selected                      bool
 	title, artist, album, videoID string
 	seconds                       float64
-	// musicVideo:这一首是 MV(OMV / UGC)。它的 lengthText 是视频长度,不是歌的长度。
+	// musicVideo:这一首是 MV(App 按 MusicVideoTimeline.isMusicVideoType 认:官方 MV、用户上传)。它的时长是视频长度,
+	// 不是歌的长度。
 	musicVideo bool
 }
 
-// ytmusicIsMusicVideoType:这个类型的时长算不算"视频的长度"而不是"歌的长度"。
-// 白名单:OMV = 官方 MV,UGC = 用户上传(现场、翻唱、带画面的搬运,时长同样不是录音室版的)。
-// ATV(歌曲版)、空串(读不到)和其余类型一律按歌处理 —— 认不准时保持现状,不误伤。
-func ytmusicIsMusicVideoType(vt string) bool {
-	switch vt {
-	case "MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC":
-		return true
-	}
-	return false
-}
-
-// parseYTMusicQueue 解那段队列 JS 的输出:每首一条记录,记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序
-// selected(0/1)、title、artist、album、lengthText、videoId、musicVideoType(读不到为空,认 MV 的白名单见
-// ytmusicIsMusicVideoType);找不到队列是 NOTFOUND。歌名、专辑名是任意文本,所以用控制字符分隔。
-// 字段数不对、没有歌名的记录跳过。纯函数,可单测。
-func parseYTMusicQueue(raw string) []ytmusicQueueItem {
-	s := unwrapBrowserScriptOutput(raw)
-	if s == "" || strings.Contains(s, "NOTFOUND") {
-		return nil
-	}
-	flat := strings.NewReplacer("\n", " ", "\r", " ")
-	var items []ytmusicQueueItem
-	for _, rec := range strings.Split(s, "\x1e") {
-		f := strings.Split(rec, "\x1f")
-		if len(f) != 6 && len(f) != 7 {
-			continue
-		}
-		it := ytmusicQueueItem{
-			selected: strings.TrimSpace(f[0]) == "1",
-			title:    strings.TrimSpace(flat.Replace(f[1])),
-			artist:   strings.TrimSpace(flat.Replace(f[2])),
-			album:    strings.TrimSpace(flat.Replace(f[3])),
-			seconds:  ytmusicParseDurationText(f[4]),
-			videoID:  strings.TrimSpace(f[5]),
-		}
-		if len(f) == 7 {
-			it.musicVideo = ytmusicIsMusicVideoType(strings.TrimSpace(f[6]))
-		}
-		if it.title == "" {
-			continue
-		}
-		items = append(items, it)
+// ytmusicQueueItems:App 交来的队列(PlayerQueryTracks.youTubeMusicQueue 整理好的)换成这边的形状。
+func ytmusicQueueItems(r appQueryTracks) []ytmusicQueueItem {
+	items := make([]ytmusicQueueItem, 0, len(r.Tracks))
+	for _, t := range r.Tracks {
+		items = append(items, ytmusicQueueItem{selected: t.Selected, title: t.Title, artist: t.Artist, album: t.Album,
+			videoID: t.VideoID, seconds: t.Duration, musicVideo: t.MusicVideo})
 	}
 	return items
 }
@@ -179,26 +143,12 @@ func pickYTMusicUpcoming(items []ytmusicQueueItem, artist, title string, duratio
 	return res, len(res) > 0
 }
 
-// unwrapBrowserScriptOutput 处理浏览器 JS 探针的原始输出(两个队列探针共用)。
-//
-// Chromium 系的 `execute … javascript` 有时把返回的字符串再包一层双引号、并把里面的双引号转义成真的反斜杠
-// (见 App 侧 BrowserTabProbeScript 头注);Safari 的 `do JavaScript` 原样返回。歌名、专辑名里带双引号很常见
-// (实测「I Knew It, I Knew You - From "Toy Story 5"」),所以**只在整段首尾都是双引号时**才当成被包了一层:
-// 去掉外层、把 `\"` 还原。不能无条件 Trim 掉首尾引号 —— 那会把以引号开头的歌名削掉一个字符。
-func unwrapBrowserScriptOutput(raw string) string {
-	s := strings.TrimSpace(raw)
-	if len(s) >= 2 && strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) {
-		s = strings.ReplaceAll(s[1:len(s)-1], `\"`, `"`)
-	}
-	return strings.TrimSpace(s)
-}
-
 var ytmusicQueueLogOnce sync.Once
 
-// ytmusicQueueScript 读这个浏览器里 YouTube Music 页面的队列,由 App 代跑(askApp):这个浏览器能不能驱动、用哪种
-// 脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
-var ytmusicQueueScript = func(bundleID string) (string, bool) {
-	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformYouTubeMusic}, appQueryScriptTimeout)
+// ytmusicQueueScript 读这个浏览器里 YouTube Music 页面的队列,由 App 代跑并整理好(askAppTracks):这个浏览器能不能驱动、
+// 用哪种脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
+var ytmusicQueueScript = func(bundleID string) (appQueryTracks, bool) {
+	return askAppTracks(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformYouTubeMusic}, appQueryScriptTimeout)
 }
 
 // ytmusicUpcoming 是 browserUpcoming 的一路:在这个浏览器里找 YouTube Music 标签页读队列。
@@ -211,12 +161,12 @@ func ytmusicUpcoming(artist, title, bundleID string, durationSecs float64, n int
 	if !browserPlatformPaired(browserPlatformYouTubeMusic, target) {
 		return browserQueueResult{}
 	}
-	out, ok := ytmusicQueueScript(target)
+	r, ok := ytmusicQueueScript(target)
 	if !ok {
 		log.Printf("ytmusic upcoming: browser script failed (%s)", target)
 		return browserQueueResult{}
 	}
-	items := parseYTMusicQueue(out)
+	items := ytmusicQueueItems(r)
 	if len(items) == 0 {
 		return browserQueueResult{} // 没有 YouTube Music 标签页是常态,不记
 	}

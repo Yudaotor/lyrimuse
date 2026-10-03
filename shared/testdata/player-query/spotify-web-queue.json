@@ -1,0 +1,17 @@
+{
+ "records": [
+  ["Boston", "STELLA LEFTY", "Boston", "170859", "spotify:track:36idurZmYRjJ56KQ8JD9bN"],
+  ["Been By Now", "Morgan Wallen", "Been By Now", "213805", "spotify:track:3xwMjQriBVW0OGEvNKo9c0"],
+  ["坏的"],
+  ["没有歌手", "", "专辑", "1000", "u2"],
+  ["I Remember Everything (feat. Kacey Musgraves)", "Zach Bryan, Kacey Musgraves", "Zach Bryan", "227195", "spotify:track:4KULAymBBJcPRpk1yO4dOG"]
+ ],
+ "reply": {
+  "current": {"album": "Boston", "artist": "STELLA LEFTY", "duration": 170.859, "title": "Boston", "uri": "spotify:track:36idurZmYRjJ56KQ8JD9bN"},
+  "tracks": [
+   {"album": "Been By Now", "artist": "Morgan Wallen", "duration": 213.805, "title": "Been By Now", "uri": "spotify:track:3xwMjQriBVW0OGEvNKo9c0"},
+   {"album": "专辑", "artist": "", "duration": 1, "title": "没有歌手", "uri": "u2"},
+   {"album": "Zach Bryan", "artist": "Zach Bryan, Kacey Musgraves", "duration": 227.195, "title": "I Remember Everything (feat. Kacey Musgraves)", "uri": "spotify:track:4KULAymBBJcPRpk1yO4dOG"}
+  ]
+ }
+}

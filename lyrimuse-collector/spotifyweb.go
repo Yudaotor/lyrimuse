@@ -2,8 +2,6 @@ package main
 
 import (
 	"log"
-	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -24,7 +22,8 @@ import (
 // `getQueue()` 的整份队列,不同就改用 `getState()` 的 item + nextItems。
 //
 // 只读:不点任何按钮、不改界面,读完即走。这是网页内部结构,改版了读不到就 ok=false,退回同专辑预取。
-// 读页面这一步由 App 代跑(往标签页注入一段只读 JS,见 appquery.go 与 App 侧 PlayerQueryServer.spotifyWebQueueJS)。
+// 读页面这一步由 App 代跑(往标签页注入一段只读 JS,见 appquery.go 与 App 侧 PlayerQueryServer.spotifyWebQueueJS),
+// 读出来的记录也由 App 整理好(PlayerQueryTracks)。
 //
 // ## 名字对得上
 //
@@ -38,40 +37,22 @@ type spotifyWebTrack struct {
 	seconds                   float64
 }
 
-// parseSpotifyWebQueue 解那段队列 JS 的输出:第一条记录是当前这首,之后按播放顺序(队列新鲜时是 queued、nextUp,
-// 快照过期时是 getState().nextItems,取舍见文件头注)。记录之间 RS(0x1e),字段之间 US(0x1f),字段顺序 title、
-// artist、album、毫秒、uri,只收曲目(uri 以 spotify:track: 开头);找不到播放器接口是 NOTFOUND。纯函数,可单测。
-func parseSpotifyWebQueue(raw string) (current spotifyWebTrack, next []spotifyWebTrack, ok bool) {
-	s := unwrapBrowserScriptOutput(raw)
-	if s == "" || strings.Contains(s, "NOTFOUND") {
+// spotifyWebQueueFrom:App 交来的队列(PlayerQueryTracks.spotifyWebQueue 整理好的:current 是当前这首,tracks 按播放顺序;
+// 队列新鲜时是 queued、nextUp,快照过期时是 getState().nextItems,取舍见文件头注)换成这边的形状,后面没有歌名或歌手的
+// 丢掉。没有当前这首就不认。纯函数,可单测。
+func spotifyWebQueueFrom(r appQueryTracks) (current spotifyWebTrack, next []spotifyWebTrack, ok bool) {
+	if r.Current == nil || r.Current.Title == "" {
 		return spotifyWebTrack{}, nil, false
 	}
-	flat := strings.NewReplacer("\n", " ", "\r", " ")
-	for i, rec := range strings.Split(s, "\x1e") {
-		f := strings.Split(rec, "\x1f")
-		if len(f) != 5 {
-			if i == 0 {
-				return spotifyWebTrack{}, nil, false // 当前这首都解不开,整份不信
-			}
-			continue
-		}
-		ms, _ := strconv.ParseFloat(strings.TrimSpace(f[3]), 64)
-		t := spotifyWebTrack{
-			title:   strings.TrimSpace(flat.Replace(f[0])),
-			artist:  strings.TrimSpace(flat.Replace(f[1])),
-			album:   strings.TrimSpace(flat.Replace(f[2])),
-			seconds: ms / 1000,
-			uri:     strings.TrimSpace(f[4]),
-		}
-		if i == 0 {
-			current = t
-			continue
-		}
-		if t.title != "" && t.artist != "" {
-			next = append(next, t)
+	convert := func(t appQueryTrack) spotifyWebTrack {
+		return spotifyWebTrack{title: t.Title, artist: t.Artist, album: t.Album, uri: t.URI, seconds: t.Duration}
+	}
+	for _, t := range r.Tracks {
+		if t.Title != "" && t.Artist != "" {
+			next = append(next, convert(t))
 		}
 	}
-	return current, next, current.title != ""
+	return convert(*r.Current), next, true
 }
 
 // pickSpotifyWebUpcoming:网页版的当前这首要对得上播放器报的(歌名,或歌手+歌名),否则不信它的队列 ——
@@ -98,10 +79,10 @@ func spotifyWebCurrentMatches(current spotifyWebTrack, artist, title string) boo
 
 var spotifyWebLogOnce sync.Once
 
-// spotifyWebQueueScript 读这个浏览器里 Spotify 网页播放器的队列,由 App 代跑(askApp):这个浏览器能不能驱动、用哪种
-// 脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
-var spotifyWebQueueScript = func(bundleID string) (string, bool) {
-	return askApp(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformSpotifyWeb}, appQueryScriptTimeout)
+// spotifyWebQueueScript 读这个浏览器里 Spotify 网页播放器的队列,由 App 代跑并整理好(askAppTracks):这个浏览器能不能
+// 驱动、用哪种脚本方言都由 App 判。单测换成假的(TestMain 默认"读不到")。
+var spotifyWebQueueScript = func(bundleID string) (appQueryTracks, bool) {
+	return askAppTracks(appQueryRequest{Kind: appQueryBrowserQueue, BundleID: bundleID, Platform: browserPlatformSpotifyWeb}, appQueryScriptTimeout)
 }
 
 // spotifyWebUpcoming 是 browserUpcoming 的一路,规则见文件头注。
@@ -113,12 +94,12 @@ func spotifyWebUpcoming(artist, title, bundleID string, n int) browserQueueResul
 	if !browserPlatformPaired(browserPlatformSpotifyWeb, target) {
 		return browserQueueResult{}
 	}
-	out, ok := spotifyWebQueueScript(target)
+	r, ok := spotifyWebQueueScript(target)
 	if !ok {
 		log.Printf("spotify web upcoming: browser script failed (%s)", target)
 		return browserQueueResult{}
 	}
-	current, next, ok := parseSpotifyWebQueue(out)
+	current, next, ok := spotifyWebQueueFrom(r)
 	if !ok {
 		return browserQueueResult{} // 没有 Spotify 标签页是常态(在放别的网站),不记
 	}

@@ -15,10 +15,11 @@ import (
 // 系统设置「自动化」里只剩 Lyrimuse 一条,授权框也只可能来自 App。
 //
 // 通道是一对共享文件:collector 写一份带类型的请求(`lyrimuse-player-query-request.json`,种类 + 参数,不带脚本),
-// App 只跑自己内置的那几段只读脚本,把原始输出写回 `lyrimuse-player-query-reply.json`(App 侧 PlayerQueryServer)。
+// App 只跑自己内置的那几段只读脚本,把输出整理成结构、以 JSON 写回 `lyrimuse-player-query-reply.json`(App 侧
+// PlayerQueryServer):一串曲目的那几种是 appQueryTracks(App 侧 PlayerQueryTracks),Spotify 随机状态是 {"shuffling":…},
+// Kaset 的队列是 kasetQueueReply(kasetqueue.go)。脚本、加载器、网页 JS 的原始输出怎么认全在 App;这边只解 JSON,
+// 做「当前这首对不对得上、往后取几首」。键名两边一起改,样例在 shared/testdata/player-query/。
 // 一次只有一个请求在途,按 id 认应答。App 不可用(没在跑、退出中)时不发,直接当查不到,调用方照旧退回同专辑预取。
-// 输出怎么解析留在各自的调用方(parseAppleMusicSystemQueue / parseAppleMusicUpcoming / parseMusicAppAlbumTracks /
-// parseYTMusicQueue / parseSpotifyWebQueue / parseKasetQueue)。Kaset 那份 App 已经按自己的口径整理过曲目身份,见 kasetqueue.go。
 
 const (
 	appQueryAppleMusicQueue       = "apple_music_queue"
@@ -28,7 +29,7 @@ const (
 	appQueryBrowserQueue          = "browser_queue"
 	appQueryKasetQueue            = "kaset_queue"
 
-	appQuerySchema = 1
+	appQuerySchema = 2
 
 	// appQueryScriptTimeout:等一次 Music / 浏览器脚本(系统待播队列同样)应答的上限。App 那边跑脚本的进程级超时是 6 秒,再加它看
 	// 请求文件的间隔(0.5 秒)与写回。
@@ -60,6 +61,41 @@ type appQueryReply struct {
 	WrittenAtMs int64  `json:"written_at_ms"`
 }
 
+// appQueryTrack / appQueryTracks:App 交回「一串曲目」时的形状(App 侧 PlayerQueryTracks)。没有的字段 App 不写。
+type appQueryTrack struct {
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+	Album  string `json:"album,omitempty"`
+	// Duration:秒,0 = 不知道。
+	Duration float64 `json:"duration,omitempty"`
+	// Selected:YouTube Music 队列里高亮的那一首(页面认为正在播的)。
+	Selected bool   `json:"selected,omitempty"`
+	VideoID  string `json:"video_id,omitempty"`
+	// MusicVideo:YouTube Music 的 MV(App 按 MusicVideoTimeline.isMusicVideoType 认),时长是视频的长度,不是歌的。
+	MusicVideo bool `json:"music_video,omitempty"`
+	// URI:Spotify 网页版的曲目 uri。
+	URI string `json:"uri,omitempty"`
+}
+
+type appQueryTracks struct {
+	// Current:播放器认为正在播的那首;这一种查询不报(专辑曲目表;YouTube Music 看 Selected)时是 nil。
+	Current *appQueryTrack  `json:"current,omitempty"`
+	Tracks  []appQueryTrack `json:"tracks"`
+}
+
+// askAppTracks:askApp 拿到的输出按 appQueryTracks 解,解不开当查不到。
+func askAppTracks(req appQueryRequest, timeout time.Duration) (appQueryTracks, bool) {
+	out, ok := askApp(req, timeout)
+	if !ok {
+		return appQueryTracks{}, false
+	}
+	var r appQueryTracks
+	if json.Unmarshal([]byte(out), &r) != nil {
+		return appQueryTracks{}, false
+	}
+	return r, true
+}
+
 var (
 	// appQueryMu:一次只有一个请求在途(请求文件只有一份)。
 	appQueryMu sync.Mutex
@@ -79,7 +115,7 @@ func setAppQueryChannel(requestPath, replyPath string, ready func() bool) {
 	appQueryReqPath, appQueryRepPath, appQueryReady = requestPath, replyPath, ready
 }
 
-// askApp 让 App 跑一次 req 这种查询,返回它的原始输出。ok=false = 没登记通道、App 此刻不可用、写不出请求、
+// askApp 让 App 跑一次 req 这种查询,返回它整理好的 JSON。ok=false = 没登记通道、App 此刻不可用、写不出请求、
 // 到 timeout 没等到这一份的应答,或者 App 回报没跑成(参数不对、浏览器没配对、脚本失败)。
 func askApp(req appQueryRequest, timeout time.Duration) (string, bool) {
 	appQueryCfgMu.Lock()

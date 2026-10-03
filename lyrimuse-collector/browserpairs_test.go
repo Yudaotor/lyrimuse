@@ -46,13 +46,13 @@ func TestBrowserPageProbesSkipUnpairedBrowsers(t *testing.T) {
 	calls := map[string]int{}
 	oldYT, oldSP := ytmusicQueueScript, spotifyWebQueueScript
 	t.Cleanup(func() { ytmusicQueueScript, spotifyWebQueueScript = oldYT, oldSP })
-	ytmusicQueueScript = func(bundleID string) (string, bool) {
+	ytmusicQueueScript = func(bundleID string) (appQueryTracks, bool) {
 		calls["ytqueue "+bundleID]++
-		return "", false
+		return appQueryTracks{}, false
 	}
-	spotifyWebQueueScript = func(bundleID string) (string, bool) {
+	spotifyWebQueueScript = func(bundleID string) (appQueryTracks, bool) {
 		calls["spqueue "+bundleID]++
-		return "", false
+		return appQueryTracks{}, false
 	}
 	probeAll := func(reported string) {
 		ytmusicUpcoming("A", "Song", reported, 200, 3)

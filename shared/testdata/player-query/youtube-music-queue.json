@@ -1,0 +1,22 @@
+{
+ "records": [
+  ["0", "Superwoman", "曹格", "gary/曹格首張創作專輯/格格blue", "5:14", "qj2_y35XApk", "MUSIC_VIDEO_TYPE_ATV"],
+  ["1", "Miree", "Suchmos", "THE BAY", "4:03", "qrVxEBIKwco", "MUSIC_VIDEO_TYPE_ATV"],
+  ["0", "Dynamite", "BTS", "", "3:44", "gdZLi9oWNZg", "MUSIC_VIDEO_TYPE_OMV"],
+  ["0", "Officially Missing You", "Harryan Yoonsoan", "Harryan Yoonsoan Covers", "3:42", "DIL8AvMVP24", "MUSIC_VIDEO_TYPE_UGC"],
+  ["0", "只有三段", "x"],
+  ["0", "", "无名", "专辑", "3:00", "v", ""],
+  ["0", "两行\n歌名", "甲", "专辑", "1:02:03", "w"],
+  ["0", "Okay, Goodbye", "Fujii Kaze", "Prema", "3:51", "EAtRDZQLsgk", ""]
+ ],
+ "reply": {
+  "tracks": [
+   {"album": "gary/曹格首張創作專輯/格格blue", "artist": "曹格", "duration": 314, "title": "Superwoman", "video_id": "qj2_y35XApk"},
+   {"album": "THE BAY", "artist": "Suchmos", "duration": 243, "selected": true, "title": "Miree", "video_id": "qrVxEBIKwco"},
+   {"artist": "BTS", "duration": 224, "music_video": true, "title": "Dynamite", "video_id": "gdZLi9oWNZg"},
+   {"album": "Harryan Yoonsoan Covers", "artist": "Harryan Yoonsoan", "duration": 222, "music_video": true, "title": "Officially Missing You", "video_id": "DIL8AvMVP24"},
+   {"album": "专辑", "artist": "甲", "duration": 3723, "title": "两行 歌名", "video_id": "w"},
+   {"album": "Prema", "artist": "Fujii Kaze", "duration": 231, "title": "Okay, Goodbye", "video_id": "EAtRDZQLsgk"}
+  ]
+ }
+}

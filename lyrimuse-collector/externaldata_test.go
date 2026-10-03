@@ -40,8 +40,8 @@ func TestMain(m *testing.M) {
 	kugouConfigPlistOverride = filepath.Join(missing, "KugouConfigPlist.plist")
 	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")
 	// 两家网页版的队列要请 App 去浏览器里读;测试里一律"读不到",要测的用例自己换。
-	ytmusicQueueScript = func(string) (string, bool) { return "", false }
-	spotifyWebQueueScript = func(string) (string, bool) { return "", false }
+	ytmusicQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
+	spotifyWebQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	browserQueueRetryDelay = 0
 	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
 	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。

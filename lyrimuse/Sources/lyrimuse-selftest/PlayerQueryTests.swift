@@ -1,8 +1,9 @@
 import Foundation
 import LyrimuseCore
 
-/// collector 预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、契约键名。
-/// 脚本的输出由 collector 解析,字段顺序与守卫两边一起钉(Go 侧 appquery_test.go 读源码对账)。
+/// collector 预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、输出怎么整理成
+/// 结构(`PlayerQueryTracks` / `PlayerQueryShuffle`)、契约键名。整理好的 JSON 交给 collector,键名两边一起钉
+/// (样例 shared/testdata/player-query/,Go 侧 appquery_test.go 读源码对账)。
 func runPlayerQueryTests() {
     typealias S = PlayerQueryServer
     let now = Date(timeIntervalSince1970: 1_790_000_000)
@@ -79,7 +80,7 @@ func runPlayerQueryTests() {
     expectEqual(S.spotifyShuffleScript.hasPrefix("if application " + quote + "Spotify" + quote + " is running then"), true,
                 "Spotify 随机: 先判 running,不把它拉起来")
 
-    // ---- 系统待播队列:App 跑加载器、问的是 Music.app,输出原样交给 collector(源码契约)----
+    // ---- 每种查询的输出都先整理成结构再交;系统待播队列问的是 Music.app(源码契约)----
     do {
         let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("LyrimuseCore/Local")
@@ -90,11 +91,16 @@ func runPlayerQueryTests() {
                     "系统待播队列(契约): 问的是 Music.app")
         expectEqual(probe.contains("[paths.script, paths.library, bundleID, " + quote + "queue=\\(count)" + quote + "]")
                     && probe.contains("return r.stdoutText"), true,
-                    "系统待播队列(契约): 加载器带 queue=N,输出原样返回")
+                    "系统待播队列(契约): 加载器带 queue=N,输出交回给 PlayerQueryTracks 整理")
+        for needle in ["output.map(PlayerQueryTracks.appleMusicSystemQueue)", "output.map(PlayerQueryTracks.appleMusicUpcoming)",
+                       "output.map(PlayerQueryTracks.appleMusicAlbumTracks)", "output.flatMap(PlayerQueryShuffle.parse)",
+                       "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
+            expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
+        }
         expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟 collector 的 appQuery 常量一一对应")
     }
 
-    // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 collector 的解析对得上 ----
+    // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 PlayerQueryTracks 的解析对得上 ----
     for (platform, js) in [("youtubeMusic", S.youTubeMusicQueueJS), ("spotifyWeb", S.spotifyWebQueueJS)] {
         expectEqual(js.contains(quote) || js.contains(backslash), false, "\(platform) 队列 JS: 不能有双引号或反斜杠")
         expectEqual(js.contains("String.fromCharCode(31)") && js.contains("String.fromCharCode(30)"), true,
@@ -106,10 +112,100 @@ func runPlayerQueryTests() {
     expectEqual(S.browserQueueSite(platformID: "youtubeMusic")?.hostMarker, YouTubeMusicAdProbe.hostMarker, "YouTube Music: 标签页域名")
     expectEqual(S.browserQueueSite(platformID: "spotifyWeb")?.hostMarker, SpotifyWebAdProbe.hostMarker, "Spotify 网页版: 标签页域名")
 
+    // ---- 输出整理成结构再交(PlayerQueryTracks / PlayerQueryShuffle):样例两侧共用,collector 只解 reply 那份 JSON ----
+    do {
+        typealias T = PlayerQueryTracks
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/player-query")
+        func sample(_ name: String) -> [String: Any] {
+            (try? Data(contentsOf: dir.appendingPathComponent(name + ".json")))
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        }
+        func records(_ sample: [String: Any]) -> String {
+            ((sample["records"] as? [[String]]) ?? []).map { $0.joined(separator: "\u{1f}") }.joined(separator: "\u{1e}") + "\n"
+        }
+        func loaderOutput(_ sample: [String: Any]) -> String {
+            sample["loader_output"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+                .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+        let parsers: [(String, ([String: Any]) -> T)] = [
+            ("apple-music-queue", { T.appleMusicSystemQueue(loaderOutput($0)) }),
+            ("apple-music-upcoming", { T.appleMusicUpcoming(($0["script_output"] as? String) ?? "") }),
+            ("apple-music-album-tracks", { T.appleMusicAlbumTracks(($0["script_output"] as? String) ?? "") }),
+            ("youtube-music-queue", { T.youTubeMusicQueue(records($0)) }),
+            ("spotify-web-queue", { T.spotifyWebQueue(records($0)) }),
+        ]
+        for (name, parse) in parsers {
+            let s = sample(name)
+            let want = s["reply"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+                .flatMap { try? JSONDecoder().decode(T.self, from: $0) }
+            let got = parse(s)
+            expectEqual(want != nil && got == want, true, "整理输出(\(name)): 跟共用样例的 reply 一致")
+            let roundTrip = S.encodedReply(got).flatMap { try? JSONDecoder().decode(T.self, from: Data($0.utf8)) }
+            expectEqual(roundTrip == got, true, "整理输出(\(name)): 编码后再解回来不变")
+        }
+        let ytRaw = records(sample("youtube-music-queue"))
+        expectEqual(S.browserQueueSite(platformID: "youtubeMusic")?.parse(ytRaw) == T.youTubeMusicQueue(ytRaw), true,
+                    "整理输出: YouTube Music 平台配的是它自己的解析")
+        let spRaw = records(sample("spotify-web-queue"))
+        expectEqual(S.browserQueueSite(platformID: "spotifyWeb")?.parse(spRaw) == T.spotifyWebQueue(spRaw), true,
+                    "整理输出: Spotify 网页版平台配的是它自己的解析")
+
+        // 键名:collector 按这些解(appquery.go 的 appQueryTrack / appQueryTracks)。
+        let full = T(current: T.Track(title: "a", artist: "b", album: "c", duration: 1, selected: true, videoID: "v",
+                                      musicVideo: true, uri: "u"))
+        let keys = S.encodedReply(full).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+        expectEqual((keys?["current"] as? [String: Any]).map { Set($0.keys) } ?? [],
+                    ["title", "artist", "album", "duration", "selected", "video_id", "music_video", "uri"], "整理输出: 曲目的键名")
+        expectEqual(keys.map { Set($0.keys) } ?? [], ["current", "tracks"], "整理输出: 外层的键名")
+
+        // 守卫拦下 / 没在跑 / 读不到:交一份空的,不算失败(脚本照常跑完了)。
+        for empty in ["", "\n", "   \n"] {
+            expectEqual(T.appleMusicUpcoming(empty), T(), "Music 待播: 空输出(守卫拦下)交空的")
+        }
+        expectEqual(T.appleMusicSystemQueue("null\n"), T(), "系统待播队列: 加载器报 null 交空的")
+        expectEqual(T.appleMusicSystemQueue("not json"), T(), "系统待播队列: 不是 JSON 交空的")
+        expectEqual(T.appleMusicAlbumTracks(""), T(), "专辑曲目: Music.app 没在跑交空表")
+        expectEqual(T.youTubeMusicQueue("NOTFOUND"), T(), "YouTube Music 队列: 没有这个网站的标签页")
+        expectEqual(T.spotifyWebQueue("NOTFOUND"), T(), "Spotify 网页版队列: 找不到播放器接口")
+        expectEqual(T.spotifyWebQueue("只有两段\u{1f}x"), T(), "Spotify 网页版队列: 当前这首解不开就整份不信")
+
+        // MV 跟歌词窗口用同一个判定(MusicVideoTimeline.isMusicVideoType):官方 MV、用户上传算,歌曲版、读不到不算。
+        let mv = T.youTubeMusicQueue(["0", "A", "x", "", "3:00", "v", "MUSIC_VIDEO_TYPE_OMV"].joined(separator: "\u{1f}")
+                                     + "\u{1e}" + ["0", "B", "x", "", "3:00", "w", "MUSIC_VIDEO_TYPE_ATV"].joined(separator: "\u{1f}"))
+        expectEqual(mv.tracks.map(\.musicVideo), [true, nil], "YouTube Music 队列: MV 按 isMusicVideoType 认")
+
+        // 浏览器输出的外层引号:Chromium 系整段包一层、里面的双引号转义过,剥掉并还原;Safari 原样,以引号开头的歌名不削。
+        let wrapped = quote + ["I Knew It - From " + backslash + quote + "Toy Story 5" + backslash + quote, "Taylor Swift", "x",
+                               "1000", "u"].joined(separator: "\u{1f}") + quote
+        expectEqual(T.spotifyWebQueue(wrapped).current?.title, "I Knew It - From " + quote + "Toy Story 5" + quote,
+                    "浏览器输出: 包了一层的剥掉并还原")
+        let heroes = [quote + "Heroes" + quote, "David Bowie", quote + "Heroes" + quote, "371000", "u"]
+            .joined(separator: "\u{1f}") + newline
+        expectEqual(T.spotifyWebQueue(heroes).current?.title, quote + "Heroes" + quote, "浏览器输出: 以引号开头的歌名不削")
+
+        // AppleScript 实数文本跟随系统地区:德 / 法 / 俄等地区下小数点是逗号,≥10000 还会变科学计数
+        // (osascript -AppleLocale de_DE 实测的形状)。
+        for (text, want) in [("243.826", 243.826), ("243,826", 243.826), ("3,25\n", 3.25), ("25,0", 25.0),
+                             ("1,23455E+4", 12345.5), ("1.23455E+4", 12345.5), ("208", 208.0)] {
+            expectEqual(T.appleScriptReal(text), want, "AppleScript 实数: \(text)")
+        }
+        for bad in ["", "x", "missing value"] {
+            expectEqual(T.appleScriptReal(bad), nil, "AppleScript 实数: \(bad) 解不出")
+        }
+
+        expectEqual(PlayerQueryShuffle.parse("true\n"), PlayerQueryShuffle(shuffling: true), "Spotify 随机: 开着")
+        expectEqual(PlayerQueryShuffle.parse("false"), PlayerQueryShuffle(shuffling: false), "Spotify 随机: 关着")
+        expectEqual(PlayerQueryShuffle.parse(""), nil, "Spotify 随机: 没在跑(空输出)问不到")
+        expectEqual(S.encodedReply(PlayerQueryShuffle(shuffling: true)), "{" + quote + "shuffling" + quote + ":true}",
+                    "Spotify 随机: 交给 collector 的 JSON")
+    }
+
     // ---- 契约:文件名与 JSON 键名跟 collector 的 json tag 一致 ----
     expectEqual(S.requestFileName, "lyrimuse-player-query-request.json", "契约: 请求文件名")
     expectEqual(S.replyFileName, "lyrimuse-player-query-reply.json", "契约: 应答文件名")
-    let collectorShaped: [String: Any] = ["schema": 1, "id": "123-1", "kind": "browser_queue", "bundle_id": "com.apple.Safari",
+    let collectorShaped: [String: Any] = ["schema": S.schema, "id": "123-1", "kind": "browser_queue", "bundle_id": "com.apple.Safari",
                                           "platform": "youtubeMusic", "written_at_ms": nowMs]
     let decoded = (try? JSONSerialization.data(withJSONObject: collectorShaped))
         .flatMap { try? JSONDecoder().decode(S.Request.self, from: $0) }

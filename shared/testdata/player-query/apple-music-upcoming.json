@@ -1,0 +1,11 @@
+{
+ "script_output": "Earth Song\tMichael Jackson\nYou Are Not Alone\tMichael Jackson\tHIStory Continues\t344.825988769531\nThe Lost Children\tMichael Jackson\tInvincible\t240,533004760742\r\n坏行\n\tMichael Jackson\tInvincible\t100\nSpeed Demon\tMichael Jackson\tBad\tmissing value\n",
+ "reply": {
+  "current": {"artist": "Michael Jackson", "title": "Earth Song"},
+  "tracks": [
+   {"album": "HIStory Continues", "artist": "Michael Jackson", "duration": 344.825988769531, "title": "You Are Not Alone"},
+   {"album": "Invincible", "artist": "Michael Jackson", "duration": 240.533004760742, "title": "The Lost Children"},
+   {"album": "Bad", "artist": "Michael Jackson", "title": "Speed Demon"}
+  ]
+ }
+}

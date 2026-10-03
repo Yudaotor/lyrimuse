@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -255,49 +253,25 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	return tracks, ok
 }
 
-// albumTracksFromMusicApp 问 Music.app 本地资料库里这张专辑都有哪些曲目(名字 / 歌手 / 时长)。由 App 代跑
-// (askApp;脚本与它的守卫在 App 侧 PlayerQueryServer.appleMusicAlbumTracksScript),不联网,Music.app 没在跑时
-// 那段脚本直接返回空。任何一步失败都返回 ok=false,调用方直接放弃这次预取,不影响正常播放 / 解析路径。
+// albumTracksFromMusicApp 问 Music.app 本地资料库里这张专辑都有哪些曲目(名字 / 歌手 / 时长)。由 App 代跑并整理好
+// (askAppTracks;脚本与它的守卫在 App 侧 PlayerQueryServer.appleMusicAlbumTracksScript),不联网,Music.app 没在跑时
+// 曲目表是空的。任何一步失败都返回 ok=false,调用方直接放弃这次预取,不影响正常播放 / 解析路径。
 func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
-	out, ok := askApp(appQueryRequest{Kind: appQueryAppleMusicAlbumTracks, Album: album}, appQueryScriptTimeout)
+	r, ok := askAppTracks(appQueryRequest{Kind: appQueryAppleMusicAlbumTracks, Album: album}, appQueryScriptTimeout)
 	if !ok {
 		return nil, false
 	}
-	return parseMusicAppAlbumTracks(out), true
-}
-
-// parseMusicAppAlbumTracks 解 albumTracksFromMusicApp 那段脚本的输出:每行 名\t歌手\t时长(秒)。
-// 时长解不出来记 0(按"未知"处理),不丢这一行。
-func parseMusicAppAlbumTracks(out string) []albumTrack {
 	var tracks []albumTrack
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		dur, _ := parseAppleScriptReal(parts[2])
-		tracks = append(tracks, albumTrack{title: parts[0], artist: parts[1], duration: dur})
+	for _, t := range r.Tracks {
+		tracks = append(tracks, albumTrack{title: t.Title, artist: t.Artist, duration: t.Duration})
 	}
-	return tracks
-}
-
-// parseAppleScriptReal 解析 AppleScript 里实数转成的文本(`x as text`、或拼进字符串)。
-// 这个转换跟随系统地区的小数分隔符:德 / 法 / 俄等地区下 243.826 输出 "243,826"、
-// 12345.5 输出 "1,23455E+4",直接交给 ParseFloat 会失败。实数文本不带千分位,
-// 所以出现的逗号只可能是小数点。凡是从 osascript 输出里取实数都走这里;
-// 要么就在脚本里先乘 1000 转成 integer(整数不受地区影响)。
-func parseAppleScriptReal(s string) (float64, error) {
-	return strconv.ParseFloat(strings.Replace(strings.TrimSpace(s), ",", ".", 1), 64)
+	return tracks, true
 }
 
 // ---- 播放队列:接下来会播的几首(见 upcoming.go)----
 
 // appleMusicUpcoming 从 Music.app 取接下来会播的几首:先请 App 读系统待播队列,取不到再请它跑那段 AppleScript
-// (PlayerQueryServer.appleMusicUpcomingScript,三道守卫与云端内容读不到的原因写在那边)。
+// (PlayerQueryServer.appleMusicUpcomingScript,三道守卫与云端内容读不到的原因写在那边),两条都由 App 整理好再交。
 //
 // 那段 AppleScript 不是真正的播放队列 —— Music.app 的脚本字典里**没有 Up Next**。它是拿
 // 「包含当前曲目的播放列表」+ 当前曲目的 index 往后数。两种情况都实测过:
@@ -314,41 +288,27 @@ func appleMusicUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	if res, ok := appleMusicUpcomingFromSystemQueue(artist, title, n); ok {
 		return res, true
 	}
-	out, ok := askApp(appQueryRequest{Kind: appQueryAppleMusicUpcoming, Count: n}, appQueryScriptTimeout)
+	r, ok := askAppTracks(appQueryRequest{Kind: appQueryAppleMusicUpcoming, Count: n}, appQueryScriptTimeout)
 	if !ok {
 		return nil, false
 	}
-	return parseAppleMusicUpcoming(out, artist, title, n)
+	return pickAppleMusicUpcoming(r, artist, title, n)
 }
 
-// parseAppleMusicUpcoming 解 App 回来的那段脚本输出:第一行是它认为正在播的那首(名\t歌手),其余每行
-// 名\t歌手\t专辑\t时长(秒)。纯字符串处理,单测直接覆盖。
-func parseAppleMusicUpcoming(out, artist, title string, n int) ([]upcomingTrack, bool) {
-	lines := strings.Split(strings.ReplaceAll(out, "\r", ""), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return nil, false // 三道守卫里任意一道拦下,或者 current playlist 读不到
-	}
-	// 第一行是脚本报回来的"它认为正在播的那首"。跟 poller 手上的那首核对上才算数 ——
-	// 同其余四家:这一步防的是脚本与 MediaRemote 看到的不是同一个播放器。
-	head := strings.SplitN(lines[0], "\t", 2)
-	if len(head) != 2 || loosenEnrichKey(head[1]+"|"+head[0]) != loosenEnrichKey(artist+"|"+title) {
+// pickAppleMusicUpcoming:App 交来的 Music.app 队列(系统待播队列,或当前列表往后几首)里,它报的当前这首要跟 poller
+// 手上那首对得上 —— 防的是两边看到的不是同一个播放器、或者队列停在别的歌上;对上了取后面有歌名有歌手的 n 首。
+// 守卫拦下(停着、开着随机、云端内容)时 App 交来的是空的,同样 ok=false。纯函数,单测直接覆盖。
+func pickAppleMusicUpcoming(r appQueryTracks, artist, title string, n int) ([]upcomingTrack, bool) {
+	if r.Current == nil || loosenEnrichKey(r.Current.Artist+"|"+r.Current.Title) != loosenEnrichKey(artist+"|"+title) {
 		return nil, false
 	}
 	res := make([]upcomingTrack, 0, n)
-	for _, line := range lines[1:] {
-		if line == "" {
+	for _, t := range r.Tracks {
+		if t.Title == "" || t.Artist == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 4)
-		if len(parts) != 4 || parts[0] == "" {
-			continue
-		}
-		dur, _ := parseAppleScriptReal(parts[3])
-		res = append(res, upcomingTrack{
-			artist: parts[1], title: parts[0], album: parts[2],
-			// Music.app 的 duration 本来就是秒。
-			duration: dur,
-		})
+		// Music.app 的 duration 本来就是秒。
+		res = append(res, upcomingTrack{artist: t.Artist, title: t.Title, album: t.Album, duration: t.Duration})
 		if len(res) == n {
 			break
 		}

@@ -5,10 +5,10 @@ import os
 /// Lyrimuse 一条,授权框也只可能来自 App。
 ///
 /// collector 写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
-/// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把原始输出写回
-/// `lyrimuse-player-query-reply.json`。输出怎么解析留在 collector(`appquery.go` 与各家的
-/// parse 函数);契约两边各钉一份:selftest「player-query」组、Go `appquery_test.go`(读这个文件对账)。
-/// Kaset 的队列例外:曲目身份按 App 的口径整理好再回(`KasetPlayerInfo.queueReply`),collector 不另推一遍。
+/// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把输出整理成结构、以 JSON 写回
+/// `lyrimuse-player-query-reply.json`:一串曲目的那几种是 `PlayerQueryTracks`,Spotify 随机状态是 `PlayerQueryShuffle`,
+/// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。collector 只解 JSON(`appquery.go`);契约两边各钉一份:selftest
+/// 「player-query」组、Go `appquery_test.go`(读这个文件对账),样例在 shared/testdata/player-query/。
 ///
 /// 只认这六种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
 /// 才看到就不答(collector 那边早不等了)。一次只处理一份请求,collector 那边也一次只发一份。
@@ -23,7 +23,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static var requestURL: URL { LyrimusePaths.configFile(requestFileName) }
     public static var replyURL: URL { LyrimusePaths.configFile(replyFileName) }
 
-    public static let schema = 1
+    public static let schema = 2
     /// 多久看一次请求文件(一次 stat,变了才读)。
     public static let pollInterval: TimeInterval = 0.5
     /// 请求写出之后超过这么久才看到就不答。collector 那边最多等 8 秒(`appQueryScriptTimeout`)。
@@ -159,11 +159,11 @@ public final class PlayerQueryServer: @unchecked Sendable {
         }
     }
 
-    /// 网页队列认的平台(与 features.json 的 `browser_platform_pairs` 同名):标签页域名与那段 JS。
-    public static func browserQueueSite(platformID: String) -> (hostMarker: String, js: String)? {
+    /// 网页队列认的平台(与 features.json 的 `browser_platform_pairs` 同名):标签页域名、那段 JS、把它的输出整理成结构的函数。
+    public static func browserQueueSite(platformID: String) -> (hostMarker: String, js: String, parse: (String) -> PlayerQueryTracks)? {
         switch platformID {
-        case "youtubeMusic": return (YouTubeMusicAdProbe.hostMarker, youTubeMusicQueueJS)
-        case "spotifyWeb": return (SpotifyWebAdProbe.hostMarker, spotifyWebQueueJS)
+        case "youtubeMusic": return (YouTubeMusicAdProbe.hostMarker, youTubeMusicQueueJS, PlayerQueryTracks.youTubeMusicQueue)
+        case "spotifyWeb": return (SpotifyWebAdProbe.hostMarker, spotifyWebQueueJS, PlayerQueryTracks.spotifyWebQueue)
         default: return nil
         }
     }
@@ -261,7 +261,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     /// YouTube Music 页面的待播队列:读 `ytmusic-player-queue-item` 的 `data`(InnerTube playlistPanelVideoRenderer)。
     /// 每首一条记录,记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序 selected(0/1)、title、artist、album、lengthText、
-    /// videoId、musicVideoType;找不到队列返回 NOTFOUND。解析在 collector(`parseYTMusicQueue`),字段顺序两边一起改。
+    /// videoId、musicVideoType;找不到队列返回 NOTFOUND。解析在 `PlayerQueryTracks.youTubeMusicQueue`,字段顺序跟它一起改。
     /// 不许有双引号和反斜杠(整段要嵌进 AppleScript 的双引号字符串),分隔符因此用 `String.fromCharCode` 现造。
     public static let youTubeMusicQueueJS = [
         "(function(){",
@@ -297,7 +297,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     /// Spotify 网页版的待播队列:网页播放器组件树上 `playerAPI` 的 `getState()` / `getQueue()`。第一条记录是当前这首,
     /// 之后按播放顺序;记录之间 RS(0x1e)、字段之间 US(0x1f),字段顺序 title、artist、album、毫秒、uri,只收曲目;
-    /// 找不到播放器接口返回 NOTFOUND。解析在 collector(`parseSpotifyWebQueue`),字段顺序两边一起改。纪律同上。
+    /// 找不到播放器接口返回 NOTFOUND。解析在 `PlayerQueryTracks.spotifyWebQueue`,字段顺序跟它一起改。纪律同上。
     public static let spotifyWebQueueJS = [
         "(function(){",
         "var US = String.fromCharCode(31), RS = String.fromCharCode(30);",
@@ -376,17 +376,21 @@ public final class PlayerQueryServer: @unchecked Sendable {
     private func run(_ query: Query, id: String) -> Reply {
         switch query {
         case .appleMusicQueue(let count):
-            return makeReply(id: id, output: NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
-                                                                          count: count, timeout: Self.scriptTimeout),
+            let output = NowPlayingClientsProbe.queue(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
+                                                      count: count, timeout: Self.scriptTimeout)
+            return makeReply(id: id, output: output.map(PlayerQueryTracks.appleMusicSystemQueue).flatMap { Self.encodedReply($0) },
                              error: "queue unavailable")
         case .appleMusicUpcoming(let count):
-            return makeReply(id: id, output: Self.osascript(Self.appleMusicUpcomingScript(count: count), timeout: Self.scriptTimeout),
+            let output = Self.osascript(Self.appleMusicUpcomingScript(count: count), timeout: Self.scriptTimeout)
+            return makeReply(id: id, output: output.map(PlayerQueryTracks.appleMusicUpcoming).flatMap { Self.encodedReply($0) },
                              error: "script failed")
         case .appleMusicAlbumTracks(let album):
-            return makeReply(id: id, output: Self.osascript(Self.appleMusicAlbumTracksScript(album: album), timeout: Self.scriptTimeout),
+            let output = Self.osascript(Self.appleMusicAlbumTracksScript(album: album), timeout: Self.scriptTimeout)
+            return makeReply(id: id, output: output.map(PlayerQueryTracks.appleMusicAlbumTracks).flatMap { Self.encodedReply($0) },
                              error: "script failed")
         case .spotifyShuffle:
-            return makeReply(id: id, output: Self.osascript(Self.spotifyShuffleScript, timeout: Self.shuffleTimeout),
+            let output = Self.osascript(Self.spotifyShuffleScript, timeout: Self.shuffleTimeout)
+            return makeReply(id: id, output: output.flatMap(PlayerQueryShuffle.parse).flatMap { Self.encodedReply($0) },
                              error: "script failed")
         case .browserQueue(let bundleID, let platformID):
             guard BrowserPositionProbe.shared.isPaired(bundleID: bundleID, platformID: platformID) else {
@@ -401,7 +405,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
             let output = BrowserTabProbeScript.run(
                 bundleID: bundleID, family: family, hostMarker: site.hostMarker, js: site.js,
                 eventTimeoutSeconds: Self.browserEventTimeoutSeconds, processTimeout: Self.scriptTimeout, label: "player-query")
-            return makeReply(id: id, output: output, error: "script failed")
+            return makeReply(id: id, output: output.map(site.parse).flatMap { Self.encodedReply($0) }, error: "script failed")
         case .kasetQueue:
             let reply = Self.osascript(Self.kasetQueueScript, timeout: Self.scriptTimeout, javaScript: true)
                 .flatMap { KasetPlayerInfo.queueReply(fromScriptOutput: Data($0.utf8)) }
@@ -411,9 +415,14 @@ public final class PlayerQueryServer: @unchecked Sendable {
 
     /// `QueueReply` 的 JSON(键排好序,collector 那边按键名解)。
     public static func encodedQueueReply(_ reply: KasetPlayerInfo.QueueReply) -> String? {
+        encodedReply(reply)
+    }
+
+    /// 应答 `output` 里的 JSON(键排好序,collector 那边按键名解)。
+    public static func encodedReply<T: Encodable>(_ value: T) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(reply)).flatMap { String(data: $0, encoding: .utf8) }
+        return (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     /// output 为 nil = 没跑成,答 ok=false 带上 error。
