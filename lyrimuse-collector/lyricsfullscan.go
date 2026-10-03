@@ -77,9 +77,8 @@ import (
 
 // lyricsFullScanStatePath 这份状态文件同时干两件事:
 //   - 记住"有一轮全量还没跑完"(Active),供启动时续跑;
-//   - 把 lyricsScoringVersion 这个常量公布给 App —— 界面要显示「N 首待跟进」就得知道
-//     当前版本号是几,而那个常量住在 Go 这边。App 不认识这个文件时只是显示不出这个数,
-//     不影响任何既有功能。
+//   - 把界面要显示的东西公布给 App:「N 首待跟进」(Pending,哪些条目会被扫只有这边的分层规则说了算)、
+//     每首的耗时估计、整场的进度。App 读不到这个文件时只是显示不出这几个数,不影响任何既有功能。
 var (
 	lyricsFullScanStatePath string
 	lyricsFullScanMu        sync.Mutex
@@ -113,6 +112,10 @@ type lyricsFullScanState struct {
 	// LyricsRescoreTS 已经晚于这一场的起点,续跑时 lyricsFullScanTier 不会再挑它们,重启一次就丢了。
 	// 在 Done 里已经算过一次,再试那一遍不再计 Done。
 	Deferred []string `json:"deferred,omitempty"`
+	// Pending:这一刻真会被全量扫库挑中的条数,界面上「N 首待跟进」就是它,App 不另按规则数。由
+	// publishLyricsFullScanPending 在缓存文件、校准名单、这一场的起点变了之后重数;nil = 这个进程还没数过,
+	// 界面据此不显示数字(0 是「已全部跟进」,两者要分得开)。
+	Pending *int `json:"pending,omitempty"`
 }
 
 // lyricsFullScanProgressBase 纯函数:给定盘上记着的那一场(可能是空的)和这一轮还剩多少条,
@@ -262,6 +265,7 @@ func setLyricsFullScanStatePath(path string) {
 				state.StartedAt = time.Now().Unix()
 			}
 			state.Deferred = nil
+			state.Pending = nil
 		}
 		state.ScoringVersion = lyricsScoringVersion
 		state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
@@ -380,6 +384,19 @@ func lyricsFullScanTier(e enrichEntry, pinned, inflight bool, passStart int64) i
 // lyricsFullScanCandidates 挑这一轮要过的 key:三层各自按字典序排好(确定、可复现),
 // 再按层拼接 —— 中途停掉时留下的是收益最高的那部分。
 func lyricsFullScanCandidates() []string {
+	var tiers [3][]string
+	lyricsFullScanEach(func(key string, tier int) { tiers[tier] = append(tiers[tier], key) })
+	keys := make([]string, 0, len(tiers[0])+len(tiers[1])+len(tiers[2]))
+	for i := range tiers {
+		sort.Strings(tiers[i])
+		keys = append(keys, tiers[i]...)
+	}
+	return keys
+}
+
+// lyricsFullScanEach 按分层规则把这一轮会过的条目逐条交给 visit(key, 层)。挑候选和界面上的「N 首待跟进」
+// (publishLyricsFullScanPending)走这同一份判定,别各写一份。visit 在 enrichMu 里调,不能再拿这把锁。
+func lyricsFullScanEach(visit func(key string, tier int)) {
 	// pin 快照必须在拿 enrichMu **之前**取:它要读文件,不能把几千条的循环连同一次 Stat
 	// 一起压在缓存锁里(见 lyricsPinnedKeys 头注)。
 	pins := lyricsPinnedKeys()
@@ -387,7 +404,6 @@ func lyricsFullScanCandidates() []string {
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	polluted := lyricsPollutedKeys(enrichCache)
-	var tiers [3][]string
 	for key, e := range enrichCache {
 		// 挑候选这一刻在途的照样挑:一场要跑一两天,这里排除的话不重启就再也轮不到它。轮到时 lyricsFullScanOne
 		// 会再核一遍(那时还在途就算跳过)。
@@ -399,14 +415,55 @@ func lyricsFullScanCandidates() []string {
 		if tier == 0 && (lyricsNoAnchorGaveUp(key, e) || polluted[key]) {
 			continue
 		}
-		tiers[tier] = append(tiers[tier], key)
+		visit(key, tier)
 	}
-	keys := make([]string, 0, len(tiers[0])+len(tiers[1])+len(tiers[2]))
-	for i := range tiers {
-		sort.Strings(tiers[i])
-		keys = append(keys, tiers[i]...)
+}
+
+// lyricsFullScanPendingInputs:「N 首待跟进」由哪几样决定 —— 缓存文件(界面列表读的也是它)、校准名单、
+// 这一场的起点。都没变就不重数。
+type lyricsFullScanPendingInputs struct {
+	cacheMod, cacheSize, pinsMod, pinsSize, passStart int64
+}
+
+var (
+	lyricsFullScanPendingMu sync.Mutex
+	// lyricsFullScanPendingSeen:上一次数的时候那几样输入;nil = 这个进程还没数过。
+	lyricsFullScanPendingSeen *lyricsFullScanPendingInputs
+)
+
+// publishLyricsFullScanPending 数一遍这一刻真会被全量扫库挑中的条数,写进状态文件(Pending)给界面显示。
+// 补空扫描的常驻循环每次看请求文件时调一次;输入没变只花两次 Stat。
+func publishLyricsFullScanPending() {
+	enrichMu.Lock()
+	cachePath := enrichPath
+	enrichMu.Unlock()
+	if cachePath == "" {
+		return
 	}
-	return keys
+	in := lyricsFullScanPendingInputs{passStart: readLyricsFullScanState().StartedAt}
+	if st, err := os.Stat(cachePath); err == nil {
+		in.cacheMod, in.cacheSize = st.ModTime().UnixNano(), st.Size()
+	}
+	if lyricsPinsPath != "" {
+		if st, err := os.Stat(lyricsPinsPath); err == nil {
+			in.pinsMod, in.pinsSize = st.ModTime().UnixNano(), st.Size()
+		}
+	}
+	lyricsFullScanPendingMu.Lock()
+	defer lyricsFullScanPendingMu.Unlock()
+	if seen := lyricsFullScanPendingSeen; seen != nil && *seen == in {
+		return
+	}
+	n := 0
+	lyricsFullScanEach(func(string, int) { n++ })
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		if state.Pending != nil && *state.Pending == n {
+			return false
+		}
+		state.Pending = &n
+		return true
+	})
+	lyricsFullScanPendingSeen = &in
 }
 
 // lyricsFullScanOne 对一条跑一次,返回内容有没有真的变过。

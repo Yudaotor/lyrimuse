@@ -159,7 +159,7 @@ struct LyricsLibrarySizeLabel: View {
 /// 免得为了传 counts 让外层再订阅一次。
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
-    /// body 里要把整库过一遍的三个数(统计、待补搜、全量待扫),见 `LibraryStatsMemo`。
+    /// body 里要把整库过一遍的两个数(统计、待补搜),见 `LibraryStatsMemo`。
     @State private var memo = LibraryStatsMemo()
     /// 设置窗口看不见时不轮询:补搜 / 全量扫库期间每写一首缓存就变,这一页会跟着反复解析整份缓存。
     @Environment(\.previewHostVisible) private var windowVisible
@@ -167,13 +167,12 @@ struct LyricsLibraryStatsPanel: View {
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
-    // collector 公布的「全量重新扫库」状态(当前打分版本号 + 有没有一轮没跑完),同一个
-    // .task 一起轮询。nil = collector 还没起来过、或版本老到不写这份文件 —— 那种情况下
-    // 「N 首待跟进」算不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
+    // collector 公布的「全量重新扫库」状态(待跟进的条数 + 有没有一轮没跑完),同一个
+    // .task 一起轮询。nil、或者 collector 还没数过待跟进的条数(`pending` 为 nil)时
+    // 「N 首待跟进」给不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
     // 不显示"的规矩,摆一个猜出来的数字比不摆更糟)。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
-    @ObservedObject private var pins = LyricsPinStore.shared
     /// 补空扫描"开始"按钮点击后、collector 接手前的过渡状态(显示 loading 动画)。
     /// 点击「开始」时置 true,轮询按 `LyricsFillSweep.isPending` 清掉 —— 那道判据也管「一条候选都
     /// 没有、一开工就收尾」和「collector 没在跑、等超时」两种情形,只认 running 的话两种都会一直转下去。
@@ -560,30 +559,8 @@ struct LyricsLibraryStatsPanel: View {
         return String(format: L10n.t("约 %@ 小时"), format(hours))
     }
 
-    /// 真会被这一轮扫到的条数。口径与 collector 侧 `lyricsFullScanCandidates` 同源
-    /// (`LyricsFullScan.tier`,selftest 覆盖),所以按钮上的数就是真会被扫的条数 ——
-    /// 跟隔壁「重新扫描（N 首）」那个数是**包含**关系:那 N 首正是这里的第 0 层。
-    private func fullScanPending(_ currentVersion: Int) -> Int {
-        memo.fullScanPending(store, pinnedKeys: Set(pins.pins.keys),
-                             currentVersion: currentVersion, passStart: fullScanState?.startedAt ?? 0)
-    }
-
-    /// 见 `fullScanPending`。静态版给「歌词管理」工具栏那个入口共用,两处的数必须是同一个口径。
-    static func fullScanPendingCount(_ summaries: [EnrichCacheStore.Summary], pinnedKeys: Set<String>,
-                                     currentVersion: Int, passStart: Int64) -> Int {
-        let polluted = EnrichCacheStore.pollutedKeys(summaries)
-        return summaries.reduce(into: 0) { total, summary in
-            if EnrichCacheStore.fullScanTier(
-                summary, currentScoringVersion: currentVersion, pinnedKeys: pinnedKeys,
-                passStart: passStart, pollutedKeys: polluted) != nil {
-                total += 1
-            }
-        }
-    }
-
     private var fullScanConfirmMessage: String {
-        let pending = fullScanState.map { fullScanPending($0.scoringVersion) } ?? 0
-        return Self.fullScanConfirmMessage(pending: pending, secondsPerTrack: secondsPerTrack)
+        Self.fullScanConfirmMessage(pending: fullScanState?.pending ?? 0, secondsPerTrack: secondsPerTrack)
     }
 
     /// 「全量重新扫库？」确认框的正文,两个入口共用。
@@ -593,20 +570,20 @@ struct LyricsLibraryStatsPanel: View {
             format(pending), hoursText(pending, secondsPerTrack: secondsPerTrack))
     }
 
-    /// 「全量重新扫库」这一行。collector 没公布过打分版本号(还没起来过 / 版本太老)时整行
-    /// 不出现 —— 那种情况下「N 首待跟进」是算不出来的,而摆一个猜出来的数字比不摆更糟。
+    /// 「全量重新扫库」这一行。collector 没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
+    /// 不出现 —— 摆一个猜出来的数字比不摆更糟。「N 首」是 collector 按它的分层规则数的,跟隔壁
+    /// 「补搜缺失歌词」的数是包含关系:全量的第 0 层是那一批的子集。
     ///
     /// 跟上面「补搜缺失歌词」**逐项对称**(前导图标 + 标题 + ⓘ + 待办数 + 「开始」):两者是同一条
     /// 通道的宽档和窄档,对象一个是整个库、一个只是其中"没词的"那一层,而这层包含关系正是靠
     /// 两行长得一样才读得出来。
     @ViewBuilder
     private func fullScanRow() -> some View {
-        if let state = fullScanState {
+        if let state = fullScanState, let pending = state.pending {
             CardDivider()
             let status = fillSweepStatus
             let running = status?.running == true
             let fullRunning = running && status?.isFullScan == true
-            let pending = fullScanPending(state.scoringVersion)
             SettingsRow(
                 icon: "arrow.clockwise",
                 title: L10n.t("全量重新扫库"),
@@ -700,9 +677,8 @@ struct LyricsLibraryStatsPanel: View {
     }
 }
 
-/// 统计面板 body 里三个要把整库几千条过一遍的数,按输入记住。扫描进行中 `.task` 每 2 秒更新一次进度、
-/// 整个 body 跟着重算,而这几个数只在缓存内容(`summariesGeneration`)或各自的其余输入变了才会变 ——
-/// 原来每次重算都在主线程上重新分类、过滤,全量待扫那个数还要按「歌手 + 专辑」分组找污染条目再逐条分层。
+/// 统计面板 body 里两个要把整库几千条过一遍的数,按缓存内容(`summariesGeneration`)记住。扫描进行中
+/// `.task` 每 2 秒更新一次进度、整个 body 跟着重算,而这两个数只在缓存内容变了才会变。
 /// 引用类型挂在 @State 里:实例跨重算保持不变,在 body 里更新它不会触发新的重算。
 @MainActor
 private final class LibraryStatsMemo {
@@ -710,8 +686,6 @@ private final class LibraryStatsMemo {
     private var countsValue = LyricsLibraryStats.Counts()
     private var retryableGeneration: Int?
     private var retryableValue = 0
-    private var pendingInputs: (generation: Int, version: Int, passStart: Int64, pinnedKeys: Set<String>)?
-    private var pendingValue = 0
 
     func counts(_ store: EnrichCacheStore) -> LyricsLibraryStats.Counts {
         if countsGeneration != store.summariesGeneration {
@@ -727,17 +701,5 @@ private final class LibraryStatsMemo {
             retryableGeneration = store.summariesGeneration
         }
         return retryableValue
-    }
-
-    func fullScanPending(_ store: EnrichCacheStore, pinnedKeys: Set<String>,
-                         currentVersion: Int, passStart: Int64) -> Int {
-        if let inputs = pendingInputs, inputs.generation == store.summariesGeneration,
-           inputs.version == currentVersion, inputs.passStart == passStart, inputs.pinnedKeys == pinnedKeys {
-            return pendingValue
-        }
-        pendingValue = LyricsLibraryStatsPanel.fullScanPendingCount(
-            store.summaries, pinnedKeys: pinnedKeys, currentVersion: currentVersion, passStart: passStart)
-        pendingInputs = (store.summariesGeneration, currentVersion, passStart, pinnedKeys)
-        return pendingValue
     }
 }

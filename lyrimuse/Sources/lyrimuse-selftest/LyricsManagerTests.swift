@@ -1207,91 +1207,12 @@ func runLyricsManagerTests() {
                     .fillDone(done: 0, filled: 0, missed: 0, skipped: 0), "收尾通知: 一首候选都没有也弹(说没有需要补搜的)")
     }
 
-    // ---- 全量重新扫库(LyricsFullScan)----
+    // ---- 全量重新扫库(LyricsFullScan)的状态文件 ----
     //
-    // 分层规则是这个功能唯一"改错了完全不报错、只是数字悄悄变形"的地方 —— 层分错了扫描照样
-    // 跑完,只是把该修的歌漏掉、或者把不该碰的歌重搜一遍。这份镜像跟 collector 侧
-    // lyricsFullScanTier 必须逐条对得上(那边有一份同构的 Go 单测),否则界面上「N 首待跟进」
-    // 说的就不是"真会被扫的条数"。
+    // 待跟进的条数由 collector 按它的分层规则数好发布(`pending`),App 只显示;这里钉状态文件里各个键
+    // 缺席时怎么读、两个入口确实只读这个数。
     do {
         typealias F = LyricsFullScan
-        func tier(
-            _ hasLyrics: Bool, _ hasWordTiming: Bool, _ version: Int,
-            manual: Bool = false, instrumental: Bool = false, pinned: Bool = false
-        ) -> F.Tier? {
-            F.tier(hasLyrics: hasLyrics, hasWordTiming: hasWordTiming, scoringVersion: version,
-                   currentScoringVersion: 19, isManual: manual, isInstrumental: instrumental,
-                   isPinned: pinned)
-        }
-        expectEqual(tier(false, false, 0), .empty, "全量分层: 一条歌词都没有 → 第 0 层")
-        expectEqual(tier(true, false, 19), .lineOnly,
-                    "全量分层: 有词没逐字 → 第 1 层(版本追平了也要,这是唯一可能升一档成色的一批)")
-        expectEqual(tier(true, true, 18), .staleVersion, "全量分层: 有逐字但版本落后 → 第 2 层")
-        expectEqual(tier(true, true, 0), .staleVersion,
-                    "全量分层: 老条目没写过版本号(读成 0)也是落后,不是「未知」")
-        expectEqual(tier(true, true, 19), nil,
-                    "全量分层: 逐字 + 版本追平 → 不碰。同一套规则重跑必然同一个结论,纯白烧网络")
-        expectEqual(tier(true, true, 20), nil, "全量分层: 版本比当前还高(降过级)也不碰")
-        expectEqual(tier(false, false, 0, manual: true), nil,
-                    "全量分层: 人工修正过 → 一票否决,连空条目也不碰")
-        expectEqual(tier(false, false, 0, instrumental: true), nil, "全量分层: 确证纯音乐 → 一票否决")
-        expectEqual(tier(true, true, 0, pinned: true), nil,
-                    "全量分层: 校准过时间轴 → 一票否决。这道闸补空扫描没有(它只碰没词的条目),"
-                    + "缺了它一轮扫描会把用户一句句听出来的几百毫秒集体作废")
-        // 层的序号就是扫描顺序,中途停掉时留下的必须是收益最高的那部分 —— 所以它是契约,不是实现细节。
-        expectEqual(F.Tier.empty.rawValue < F.Tier.lineOnly.rawValue, true, "全量分层: 没词的排最前")
-        expectEqual(F.Tier.lineOnly.rawValue < F.Tier.staleVersion.rawValue, true,
-                    "全量分层: 升逐字排在跟进旧版本之前")
-
-        // 续跑:这一场已经跑过的(尝试时刻不早于起点)不再挑 —— 第 0、1 层跑完条件照样成立,
-        // 不看这个的话每次续跑都从头再搜一遍。跟 collector lyricsFullScanTier 的 passStart 对齐。
-        func passTier(_ hasLyrics: Bool, _ hasWordTiming: Bool, _ version: Int,
-                      fill: Int64 = 0, rescore: Int64 = 0, start: Int64 = 1000) -> F.Tier? {
-            F.tier(hasLyrics: hasLyrics, hasWordTiming: hasWordTiming, scoringVersion: version,
-                   currentScoringVersion: 19, isManual: false, isInstrumental: false, isPinned: false,
-                   lastFillAt: fill, lastRescoreAt: rescore, passStart: start)
-        }
-        expectEqual(passTier(false, false, 0, fill: 1000), nil, "全量续跑: 空条目这一场补空过 → 不再挑")
-        expectEqual(passTier(false, false, 0, fill: 999), .empty, "全量续跑: 空条目上次补空早于这一场 → 照挑")
-        expectEqual(passTier(false, false, 0, rescore: 2000), .empty, "全量续跑: 空条目看补空时刻,不看重评时刻")
-        expectEqual(passTier(true, false, 19, rescore: 1500), nil, "全量续跑: 有词没逐字这一场重评过 → 不再挑")
-        expectEqual(passTier(true, true, 18, rescore: 1500), nil, "全量续跑: 版本落后这一场重评过 → 不再挑")
-        expectEqual(passTier(true, false, 19, rescore: 1500, start: 0), .lineOnly,
-                    "全量续跑: 没有在跑的一场(起点 0)→ 不按尝试时刻跳")
-        expectEqual(F.tier(hasLyrics: false, hasWordTiming: false, scoringVersion: 0, currentScoringVersion: 19,
-                           isManual: false, isInstrumental: false, isPinned: false, skipEmpty: true), nil,
-                    "全量分层: 再搜也不会有的空条目不进")
-        expectEqual(F.tier(hasLyrics: true, hasWordTiming: false, scoringVersion: 19, currentScoringVersion: 19,
-                           isManual: false, isInstrumental: false, isPinned: false, skipEmpty: true), .lineOnly,
-                    "全量分层: skipEmpty 只管第 0 层")
-
-        // 「再搜也不会有」的两类,跟 collector lyricsretryskip.go 同一组样本。
-        typealias R = LyricsRetrySkip
-        expectEqual(R.noAnchorGaveUp(artist: "", album: "", fillCount: R.noAnchorGiveUpCount), true,
-                    "无望跳过: 没歌手没专辑、补空失败够次数(播客单集那类)")
-        expectEqual(R.noAnchorGaveUp(artist: "", album: "", fillCount: 0), false,
-                    "无望跳过: 连歌手都缺也常能靠歌名搜到,次数不够不放弃")
-        expectEqual(R.noAnchorGaveUp(artist: "", album: "专辑", fillCount: 10), false, "无望跳过: 有专辑就不算")
-        func row(_ key: String, empty: Bool = true) -> R.Row {
-            let p = key.components(separatedBy: "|")
-            return R.Row(key: key, artist: p[0], title: p[1], album: p[2], isEmpty: empty)
-        }
-        let polluted = R.pollutedKeys([
-            row("作曲: 中岛美雪|漫步人生路 - 邓丽君|漫步人生路"), row("在你身边路虽远未疲倦|漫步人生路 - 邓丽君|漫步人生路"),
-            row("伴你漫步一段又一段|漫步人生路 - 邓丽君|漫步人生路"), row("有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路", empty: false),
-            row("陈慧琳 - 记事本|作曲: 周传雄|记事本"), row("陈慧琳 - 记事本|翻开随身携带的记事本|记事本"),
-            row("陈慧琳 - 记事本|再写下最后一行|记事本"),
-        ])
-        expectEqual(polluted.count, 6, "污染判据: 两种形态各 3 条空条目都认得出,有歌词的那条不标")
-        expectEqual(polluted.contains("有歌词的那一条|漫步人生路 - 邓丽君|漫步人生路"), false, "污染判据: 只标空歌词条目")
-        let normal = R.pollutedKeys([
-            row("周杰伦|晴天|叶惠美"), row("周杰伦|以父之名|叶惠美"), row("周杰伦|东风破|叶惠美"),
-            row("盧廣仲|魚仔 - 電視劇<花甲男孩轉大人>主題曲|魚仔"),
-            row("歌手甲|Intro - Live|现场"), row("歌手乙|Intro - Live|现场"),
-        ])
-        expectEqual(normal.isEmpty, true, "污染判据: 正常专辑、歌名自带破折号、只有两个不同值都不标")
-        expectEqual(R.hasSplit("Jay-Z"), false, "污染判据: 不带空格的破折号不算分隔符")
-
         // 状态文件:collector 用 omitempty,没有待续的一轮时 active/startedAt 整个键都不出现。
         // 声明成非可选会让这份文件整个解不开,连打分版本号也一起读不到 —— 那才是真正的故障。
         let idle = try? JSONDecoder().decode(F.State.self, from: Data("""
@@ -1315,6 +1236,31 @@ func runLyricsManagerTests() {
         // 老 collector 的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
         // 而不是让整份文件解不开 —— 那会连版本号一起丢掉,整行界面消失。
         expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老 collector 没这个键时读成 0,不是解码失败")
+        // 待跟进的条数:0 是「已全部跟进」,键不在是「还没数过」(界面不显示数字),两者要分得开。
+        let counted = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":19,"updatedAt":1789500000,"pending":5472}
+        """.utf8))
+        expectEqual(counted?.pending, 5472, "全量状态: collector 数好的待跟进条数解出来")
+        let caughtUp = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":19,"updatedAt":1789500000,"pending":0}
+        """.utf8))
+        expectEqual(caughtUp?.pending, 0, "全量状态: 0 = 已全部跟进")
+        expectEqual(idle != nil && idle?.pending == nil, true, "全量状态: 没有这个键读成 nil(还没数过),不是解码失败")
+        // 两个入口只显示 collector 发布的数,App 不再留分层规则的镜像(源码契约)。
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func appSource(_ path: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let statsPanel = appSource("Settings/LyricsLibraryStats.swift")
+        let managerView = appSource("LyricsManager/LyricsManagerView.swift")
+        let cacheStore = appSource("LyricsManager/EnrichCacheStore.swift")
+        expectEqual(statsPanel.contains("if let state = fullScanState, let pending = state.pending {")
+                    && managerView.contains("pending: state.pending ?? 0"), true,
+                    "全量待跟进: 设置页与歌词管理都读 collector 发布的数")
+        expectEqual(cacheStore.contains("fullScanTier") || cacheStore.contains("pollutedKeys")
+                    || statsPanel.contains("fullScanPendingCount"), false,
+                    "全量待跟进: App 不再按分层规则自己数")
 
         // 请求动词。collector 侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
         // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。

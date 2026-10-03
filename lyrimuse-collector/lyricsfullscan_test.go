@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -103,6 +104,109 @@ func TestLyricsFullScanCandidatesSkipsPinned(t *testing.T) {
 	}
 	if !lyricsPinned("a|pinned|") {
 		t.Error("lyricsPinned 和 lyricsPinnedKeys 对同一份文件给出了不同答案")
+	}
+}
+
+// 界面上「N 首待跟进」由这边数好写进状态文件(Pending),App 不另按规则数。缓存文件、校准名单、这一场的
+// 起点都没变就不重数;任一样变了,下一次调用跟上;打分版本换了,旧的数作废。
+func TestLyricsFullScanPendingPublished(t *testing.T) {
+	cur := lyricsScoringVersion
+	savedCache, savedInflight, savedPins := enrichCache, enrichInflight, lyricsPinsPath
+	enrichMu.Lock()
+	savedEnrichPath := enrichPath
+	enrichMu.Unlock()
+	lyricsFullScanMu.Lock()
+	savedState := lyricsFullScanStatePath
+	lyricsFullScanMu.Unlock()
+	resetSeen := func() {
+		lyricsFullScanPendingMu.Lock()
+		lyricsFullScanPendingSeen = nil
+		lyricsFullScanPendingMu.Unlock()
+	}
+	t.Cleanup(func() {
+		enrichCache, enrichInflight, lyricsPinsPath = savedCache, savedInflight, savedPins
+		lyricsPins, lyricsPinsRead = nil, false
+		enrichMu.Lock()
+		enrichPath = savedEnrichPath
+		enrichMu.Unlock()
+		lyricsFullScanMu.Lock()
+		lyricsFullScanStatePath = savedState
+		lyricsFullScanMu.Unlock()
+		resetSeen()
+	})
+	dir := t.TempDir()
+	write := func(path, text string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending := func() int {
+		t.Helper()
+		p := readLyricsFullScanState().Pending
+		if p == nil {
+			t.Fatal("状态文件里没有 pending")
+		}
+		return *p
+	}
+	enrichMu.Lock()
+	enrichPath = filepath.Join(dir, "cache.json")
+	enrichMu.Unlock()
+	lyricsPinsPath = filepath.Join(dir, "pins.json")
+	lyricsPins, lyricsPinsRead = nil, false
+	resetSeen()
+	statePath := filepath.Join(dir, "fullscan.json")
+	setLyricsFullScanStatePath(statePath)
+	if readLyricsFullScanState().Pending != nil {
+		t.Fatal("还没数过时不写 pending(App 据此不显示数字)")
+	}
+	enrichCache = map[string]enrichEntry{
+		"a|empty|":     {},
+		"b|line only|": {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur},
+		"c|stale|":     {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"d|caught up|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur},
+		"e|manual|":    {ManualLyrics: true},
+	}
+	enrichInflight = map[string]bool{}
+	write(enrichPath, "v1")
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("pending = %d, want 3(没词、只有逐行、版本落后各一条)", got)
+	}
+
+	// 输入都没变就不重数:内存里多了一条也不算,界面列表读的是缓存文件。
+	enrichCache["f|empty|"] = enrichEntry{}
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("输入没变不该重数: %d", got)
+	}
+	write(enrichPath, "v2 saved")
+	publishLyricsFullScanPending()
+	if got := pending(); got != 4 {
+		t.Fatalf("缓存文件变了要重数: %d, want 4", got)
+	}
+	write(lyricsPinsPath, `{"version":1,"pins":{"c|stale|":1787650854}}`)
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("校准名单变了要重数(校准过的不算): %d, want 3", got)
+	}
+	enrichCache["a|empty|"] = enrichEntry{LyricsFillTS: time.Now().Unix() + 3600}
+	setLyricsFullScanActive(true)
+	publishLyricsFullScanPending()
+	if got := pending(); got != 2 {
+		t.Fatalf("开了一场要重数(这一场补空过的不算): %d, want 2", got)
+	}
+
+	// 打分版本换了(新版本第一次启动):旧的数作废,等这个进程重新数。
+	nine := 9
+	data, err := json.Marshal(lyricsFullScanState{ScoringVersion: cur - 1, Pending: &nine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(statePath, string(data))
+	setLyricsFullScanStatePath(statePath)
+	if readLyricsFullScanState().Pending != nil {
+		t.Fatal("打分版本换了,旧的 pending 要清掉")
 	}
 }
 

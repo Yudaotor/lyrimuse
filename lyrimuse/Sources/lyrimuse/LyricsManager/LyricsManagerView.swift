@@ -2120,8 +2120,8 @@ struct LyricsManagerView: View {
                     }
                 }
                 // 宽档:连已有歌词的也重新选一遍(设置页「歌词库」那一行的同一个入口)。弹确认框,所以带「…」;
-                // 范围说明、待扫首数和预计时长都在确认框里 —— 首数在这里算的话,窗口每重渲染一次就要把整库过一遍分层。
-                if fullScanState != nil {
+                // 范围说明、待扫首数和预计时长都在确认框里。collector 还没数过待扫首数时不给这个入口(同设置页那一行)。
+                if fullScanState?.pending != nil {
                     Section {
                         Button {
                             confirmFullScan = true
@@ -2193,14 +2193,11 @@ struct LyricsManagerView: View {
         LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState)
     }
 
-    /// 「全量重新扫库？」确认框正文,要把整库过一遍:只在确认框开着时取(调用处按 `confirmFullScan` 门住),不进工具栏菜单的渲染路径。
+    /// 「全量重新扫库？」确认框正文。首数是 collector 数好发布的(`LyricsFullScan.State.pending`)。
     private var fullScanConfirmMessage: String {
         guard let state = fullScanState else { return "" }
-        let pending = LyricsLibraryStatsPanel.fullScanPendingCount(
-            store.summaries, pinnedKeys: Set(pins.pins.keys),
-            currentVersion: state.scoringVersion, passStart: state.startedAt)
         return LyricsLibraryStatsPanel.fullScanConfirmMessage(
-            pending: pending, secondsPerTrack: LyricsLibraryStatsPanel.fullScanSecondsPerTrack(state))
+            pending: state.pending ?? 0, secondsPerTrack: LyricsLibraryStatsPanel.fullScanSecondsPerTrack(state))
     }
 
     // 口径本体挪到 EnrichCacheStore.byteText —— 设置页「歌词库」那一行是第三处要显示同一个
@@ -2279,11 +2276,6 @@ struct LyricsManagerView: View {
             // (它正在搜,isSearching 那一档会先接住它)。
             lastRoundHadNoResponder: false,
             sourcesRespondedCount: 0,
-            // 还没有任何一轮打分,更谈不上"按哪一版规则选的"。
-            lyricsScoringVersion: 0,
-            lyricsFillCount: 0,
-            lyricsFillAt: 0,
-            lyricsRescoreAt: 0,
             isSearching: true,
             hasDecision: false,
             // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件,

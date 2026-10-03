@@ -8,10 +8,10 @@ import Foundation
 /// 多一个 `full` 字段。一次只允许一轮在跑,两边共用同一个取消入口。这里多出来的只有一份
 /// **状态文件**,因为全量扫库比补空多两件事要跨进程说清楚:
 ///
-///   1. **当前打分版本号**。界面要显示「N 首待跟进」,就得知道"跟上"是跟上哪个版本 ——
-///      而 `lyricsScoringVersion` 那个常量住在 collector 里。collector 每次启动把它写进这份
-///      文件,App 读。读不到(collector 还没起来过、或版本太老不认识这个文件)就是 `nil`,
-///      界面据此把整行藏掉,而不是拿一个猜来的版本号算出一个假数字。
+///   1. **待跟进的条数**。哪些条目会被扫由 collector 的分层规则决定(四道硬闸、三层、续跑时跳过这一场
+///      跑过的、「再搜也不会有」的空条目),条数也由它数好写进这份文件(`pending`),App 只显示。
+///      读不到(collector 还没起来过、还没数完第一遍)就是 `nil`,界面据此不显示数字,而不是拿一个
+///      猜来的数。
 ///   2. **有一轮没跑完**。全库几千首、每首之间隔 15 秒,一轮要跑一两天,期间 collector 必然
 ///      重启若干次。这个标记让它重启后接着跑;进度本身不需要存 —— 每条跑完打分版本号就被
 ///      推到当前值,重新算候选时它自然不在列表里了。
@@ -35,9 +35,12 @@ public enum LyricsFullScan {
         ///
         /// 0 = 这份文件是老 collector 写的(Go 那边带 omitempty),调用方退回自己的兜底值。
         public let secondsPerTrack: Int
+        /// 这一刻真会被全量扫库挑中的条数,collector 数好发布(`publishLyricsFullScanPending`),界面上
+        /// 「N 首待跟进」就是它。nil = 还没数过,界面不显示数字;0 = 已全部跟进。
+        public let pending: Int?
 
         enum CodingKeys: String, CodingKey {
-            case scoringVersion, active, startedAt, updatedAt, secondsPerTrack
+            case scoringVersion, active, startedAt, updatedAt, secondsPerTrack, pending
         }
 
         public init(from decoder: Decoder) throws {
@@ -50,15 +53,17 @@ public enum LyricsFullScan {
             updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
             // 同样带 omitempty:老 collector 的文件里没有这个键,读成 0 交给调用方兜底。
             secondsPerTrack = try c.decodeIfPresent(Int.self, forKey: .secondsPerTrack) ?? 0
+            pending = try c.decodeIfPresent(Int.self, forKey: .pending)
         }
 
         public init(scoringVersion: Int, active: Bool, startedAt: Int64 = 0, updatedAt: Int64 = 0,
-                    secondsPerTrack: Int = 0) {
+                    secondsPerTrack: Int = 0, pending: Int? = nil) {
             self.scoringVersion = scoringVersion
             self.active = active
             self.startedAt = startedAt
             self.updatedAt = updatedAt
             self.secondsPerTrack = secondsPerTrack
+            self.pending = pending
         }
     }
 
@@ -82,55 +87,5 @@ public enum LyricsFullScan {
         cachedMTime = mtime
         cached = (try? Data(contentsOf: stateURL)).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
         return cached
-    }
-
-    /// 一条条目会不会被全量扫库拿去重跑,以及它落在哪一层。
-    ///
-    /// 这是 collector 侧 `lyricsFullScanTier` 的**镜像**,两边必须逐条对得上 —— 界面上
-    /// 那个「N 首待跟进」说的就是"真会被扫的条数",分歧会直接表现为"点了扫描,数字对不上"。
-    /// 放在 LyrimuseCore 而不是 `EnrichCacheStore`(App target,selftest 引用不到)正是为了
-    /// 让这份镜像能被单测钉住:层分错了扫描照样跑完,只是把该修的歌漏掉,完全不报错。
-    ///
-    /// 层的含义(收益递减,扫描按这个顺序跑,好让中途停掉时留下的是最值钱的那部分):
-    ///   - 0 = 一条歌词都没有(只有纯文本兜底的也算);
-    ///   - 1 = 有词但没逐字 —— 唯一可能升一档成色的一批;
-    ///   - 2 = 有逐字、只是打分版本落后;
-    ///   - nil = 这一轮不碰它。
-    public enum Tier: Int, CaseIterable, Sendable {
-        case empty = 0
-        case lineOnly = 1
-        case staleVersion = 2
-    }
-
-    ///
-    /// 后几个参数跟 collector 的另外两道筛选对齐:
-    ///   - `passStart`:这一场的起点(状态文件 `startedAt`,0 = 没有在跑的一场)。补空 / 重评的尝试时刻
-    ///     (`lastFillAt` / `lastRescoreAt`,Unix 秒)不早于它的,这一场已经跑过,续跑时不再挑;
-    ///   - `skipEmpty`:这条空条目属于「再搜也不会有」(见 `LyricsRetrySkip`),只对第 0 层生效。
-    public static func tier(
-        hasLyrics: Bool, hasWordTiming: Bool, scoringVersion: Int, currentScoringVersion: Int,
-        isManual: Bool, isInstrumental: Bool, isPinned: Bool,
-        lastFillAt: Int64 = 0, lastRescoreAt: Int64 = 0, passStart: Int64 = 0, skipEmpty: Bool = false
-    ) -> Tier? {
-        // 四道硬闸,跟 collector 一字不差。手改过的、确证纯音乐的、校准过时间轴的一律不碰;
-        // 校准那道是全量扫库相对补空扫描**多出来**的一道(补空只碰没词的条目,没词就没有
-        // 校正值可作废),缺了它一轮扫描会把用户一句句听出来的几百毫秒集体作废。
-        if isManual || isInstrumental || isPinned { return nil }
-        let tier: Tier
-        var tried = lastRescoreAt
-        if !hasLyrics {
-            tier = .empty
-            tried = lastFillAt
-        } else if !hasWordTiming {
-            tier = .lineOnly
-        } else if scoringVersion < currentScoringVersion {
-            tier = .staleVersion
-        } else {
-            // 已经是逐字**且**版本追平:同一套规则重跑必然得出同一个结论,纯粹白烧网络。
-            return nil
-        }
-        if passStart > 0 && tried >= passStart { return nil }
-        if tier == .empty && skipEmpty { return nil }
-        return tier
     }
 }

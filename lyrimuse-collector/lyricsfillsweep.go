@@ -260,6 +260,7 @@ func startLyricsFillSweeper(ctx context.Context) {
 			}
 			next.Reset(d)
 		case <-poll.C:
+			publishLyricsFullScanPending()
 			req, ok := readLyricsFillRequest()
 			if !ok {
 				continue
