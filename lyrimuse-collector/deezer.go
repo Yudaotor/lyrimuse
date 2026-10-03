@@ -86,9 +86,16 @@ type deezerResult struct {
 	// plainOnly:只拿到整份纯文本、没有 synchronizedLines —— 语义与取舍完全等同
 	// lrclibResult.plainOnly,见那边的头注(分数钉死 -1,只有用户在弹窗里手点才会采用)。
 	plainOnly bool
+	// songwriters:歌词附带的词曲作者名单(Lyrics.writers,deezerSongwriters 拆开),没有时为空。
+	songwriters []string
 }
 
 func (r deezerResult) empty() bool { return r.lyrics == "" }
+
+// deezerSongwriters 把 Lyrics.writers(逗号隔开的一串人名)拆成名单,去掉首尾空白、空项与重复。
+func deezerSongwriters(writers string) []string {
+	return ttmlSongwriters(strings.Split(writers, ","))
+}
 
 // deezerAuthAPI:换匿名票的地址。是变量只为单测能指到本地服务器。
 var deezerAuthAPI = "https://auth.deezer.com/login/anonymous?jo=p&rto=c&i=c"
@@ -113,14 +120,15 @@ const (
 )
 
 // deezerLyricsQuery 是取词用的 GraphQL 查询。只要这一路真正用得上的字段:逐行与译文
-// (synchronizedLines)、逐字(synchronizedWordByWordLines)和整份纯文本(text)。不取 writers/copyright —— 那是署名信息,
-// 这个项目的下游不消费,多取一份只是白传。
+// (synchronizedLines)、逐字(synchronizedWordByWordLines)、整份纯文本(text)和词曲作者(writers,见 songwritersFromScored)。
+// copyright / licence 不取:下游不消费。
 const deezerLyricsQuery = `query SynchronizedTrackLyrics($trackId: String!) {
   track(trackId: $trackId) {
     id
     lyrics {
       id
       text
+      writers
       synchronizedLines {
         lrcTimestamp
         milliseconds
@@ -642,6 +650,7 @@ type deezerWord struct {
 // deezerLyricsPayload 是一次取词解析出来的全部内容,各项都可能为空。
 type deezerLyricsPayload struct {
 	lrc, plain, yrc, tr string
+	songwriters         []string
 }
 
 const (
@@ -848,6 +857,7 @@ func deezerFetchLyrics(ctx context.Context, trackID string) (deezerLyricsPayload
 		Track struct {
 			Lyrics struct {
 				Text                        string           `json:"text"`
+				Writers                     string           `json:"writers"`
 				SynchronizedLines           []deezerSyncLine `json:"synchronizedLines"`
 				SynchronizedWordByWordLines []deezerWordLine `json:"synchronizedWordByWordLines"`
 			} `json:"lyrics"`
@@ -866,6 +876,8 @@ func deezerFetchLyrics(ctx context.Context, trackID string) (deezerLyricsPayload
 		plain: strings.TrimSpace(ly.Text),
 		yrc:   deezerBuildYRC(words),
 		tr:    deezerBuildTranslation(ly.SynchronizedLines, words, features().LyricsTranslationLanguage),
+
+		songwriters: deezerSongwriters(ly.Writers),
 	}, nil
 }
 
@@ -937,7 +949,7 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 			return
 		}
 		if !isTimedLRC(p.lrc) {
-			p = deezerLyricsPayload{plain: p.plain}
+			p = deezerLyricsPayload{plain: p.plain, songwriters: p.songwriters}
 		}
 		got[rank] = p
 	}
@@ -972,13 +984,15 @@ func resolveDeezerLyric(ctx context.Context, artist, title, album string, durati
 	for rank, f := range got {
 		if f.lrc != "" {
 			r := build(rank, f.lrc, false)
-			r.yrc, r.tr = f.yrc, f.tr
+			r.yrc, r.tr, r.songwriters = f.yrc, f.tr, f.songwriters
 			return r
 		}
 	}
 	for rank, f := range got {
 		if f.plain != "" {
-			return build(rank, f.plain, true)
+			r := build(rank, f.plain, true)
+			r.songwriters = f.songwriters
+			return r
 		}
 	}
 	return deezerResult{}

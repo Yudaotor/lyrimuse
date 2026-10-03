@@ -42,18 +42,32 @@ func songLanguageFromScored(scored []scoredLyricCandidateResult) string {
 	return ""
 }
 
-// songwritersFromScored:这一轮里 Apple 给的词曲作者名单。过了身份关(分数 >= 0)的 applemusic 候选优先,
-// 其次 amll(它的 TTML 多半就是 Apple 那份);都没有时为 nil。跟 songLanguageFromScored 一样从全部候选里取:
-// 名单描述的是这首歌,跟最后用了谁的歌词正文无关。
+// songwritersFromScored:这一轮里各源给的词曲作者名单。过了身份关(分数 >= 0)的 applemusic 候选优先,
+// 其次 amll(它的 TTML 多半就是 Apple 那份),再次 deezer;都没有时为 nil。deezer 那份正文是中日韩文字时不用它的
+// 名单(writtenInCJKScript):这类歌它给的是拼音或罗马字、名在前姓在后。跟 songLanguageFromScored 一样从全部候选里取:
+// 名单描述的是这首歌,跟最后用了谁的歌词正文无关。见 09 章决策 155。
 func songwritersFromScored(scored []scoredLyricCandidateResult) []string {
-	for _, src := range []string{"applemusic", "amll"} {
+	for _, src := range []string{"applemusic", "amll", "deezer"} {
 		for _, c := range scored {
-			if c.Source == src && c.Score >= 0 && len(c.Songwriters) > 0 {
-				return c.Songwriters
+			if c.Source != src || c.Score < 0 || len(c.Songwriters) == 0 {
+				continue
 			}
+			if src == "deezer" && writtenInCJKScript(c.Lyrics) {
+				continue
+			}
+			return c.Songwriters
 		}
 	}
 	return nil
+}
+
+// writtenInCJKScript:正文(lyricConsensusBody)的主要文字是汉字、假名或谚文。
+func writtenInCJKScript(lyrics string) bool {
+	switch dominantScript(lyricConsensusBody(lyrics)) {
+	case scriptHan, scriptKana, scriptHangul:
+		return true
+	}
+	return false
 }
 
 // needsRomanizationRetry 判断"要不要为了拿罗马音/语种信号,多试几个艺人名变体"。
@@ -192,7 +206,7 @@ type enrichEntry struct {
 	// LyricsBGChecked:这条的歌词已经按哪一版 TTML 附属内容解析器取过(lyricsBGParserVersion)。0 = 还没有,
 	// 胜出源是 amll / applemusic 时播放到会补一次(bgbackfill.go)。
 	LyricsBGChecked int `json:"lyrics_bg_checked,omitempty"`
-	// LyricsSongwriters:Apple 给这首歌的词曲作者名单(TTML 的 <songwriters>,见 songwritersFromScored),App 在
+	// LyricsSongwriters:这首歌的词曲作者名单(Apple 的 TTML <songwriters>,没有时用 Deezer 的,见 songwritersFromScored),App 在
 	// 完整歌词窗口末尾显示成「创作者：…」。它描述的是这首歌、不是哪一份歌词:取自这一轮全部候选、不跟着胜出源走,
 	// 换源、手改正文都不清它;一轮里没有哪个源给出名单时保留原值。
 	LyricsSongwriters []string `json:"lyrics_songwriters,omitempty"`
@@ -3120,7 +3134,7 @@ type scoredLyricCandidateResult struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	// ISRC:源报的这条录音的 ISRC(目前只有 applemusic 给),不参与打分。按 ISRC 补取未应答的源用,见 isrcretry.go。
 	ISRC string `json:"isrc,omitempty"`
-	// Songwriters:TTML 里的词曲作者名单(amllResult.songwriters),只有 amll / applemusic 会给。不参与打分,
+	// Songwriters:词曲作者名单(amll / applemusic 的 TTML,deezer 的 Lyrics.writers)。不参与打分,
 	// 只用来写条目的 lyrics_songwriters(songwritersFromScored)。
 	Songwriters []string `json:"songwriters,omitempty"`
 	// Language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
@@ -4000,7 +4014,8 @@ type lyricSourceResult struct {
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
-	// songwriters:词曲作者名单(applemusicResult.songwriters)。只有 applemusic 走这里,amll 的在 amll.songwriters。
+	// songwriters:词曲作者名单(applemusicResult.songwriters / deezerResult.songwriters)。applemusic 与 deezer 走这里,
+	// amll 的在 amll.songwriters。
 	songwriters []string
 	// trackFoundNoLyrics:"这个源的曲库里有这首歌,但平台上没有歌词文本"这个**明确结论**
 	//。目前 netease/qq 两路会给(经各自的 neteaseInfo.TrackFoundNoLyrics /
@@ -4449,6 +4464,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 				r.LyricsTr = dzTr
 				r.LyricsTrLang = features().LyricsTranslationLanguage
 			}
+			r.Songwriters = dz.songwriters
 		}
 		// 正文时间轴被重挂过就把附属歌词一起搬过去。放在 switch **之后** —— 各源的
 		// r.LyricsTr/r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。
@@ -4815,7 +4831,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
 		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
 		r := deezerLyric(ctx, artist, title, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("applemusic") {
