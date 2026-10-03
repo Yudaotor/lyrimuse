@@ -4210,6 +4210,15 @@ func runSourceContractTests() {
         expectEqual(stats.contains("\"-limit\", String(ChartVisibleRows.fetchLimit)")
                     && stats.contains("\"limit\": String(ChartVisibleRows.fetchLimit)"), true,
                     "Last.fm 榜单: 合并榜与直连都取 fetchLimit 条")
+        // collector 给榜单右键菜单预取各平台页面(platformpages.go),要在 App 打开榜单之前就跑,「取几条、哪几档」两边
+        // 各写一份,在这里对账。
+        let platformPages = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/platformpages.go"), encoding: .utf8)) ?? ""
+        expectEqual(platformPages.contains("platformPagesChartLimit = \(ChartVisibleRows.fetchLimit)\n"), true,
+                    "Last.fm 榜单: collector 预取平台页面取的条数跟 App 榜单一样(ChartVisibleRows.fetchLimit)")
+        expectEqual(platformPages.contains("platformPagesPeriods = []string{\"7day\", \"1month\", \"12month\", \"overall\"}")
+                    && stats.contains("case week = \"7day\", month = \"1month\", year = \"12month\", overall = \"overall\""), true,
+                    "Last.fm 榜单: collector 预取的时段跟 App 榜单的四档一样")
         expectEqual(stats.contains("stride(from: 0, to: missing.count, by: 10)")
                     && stats.contains("for batch in batches { await Self.runAvatarLookup(batch, collectorPath: collectorPath) }"), true,
                     "Last.fm 榜单: 头像按 10 个名字一批、几批依次交给 collector")

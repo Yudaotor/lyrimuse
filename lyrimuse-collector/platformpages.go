@@ -28,7 +28,7 @@ const (
 	platformPagesCheckInterval = 6 * time.Hour
 	// platformPagesRequestBudget:每轮最多发多少个 MusicBrainz 请求(全局 1.1 s 限速,约一分钟跑完)。
 	platformPagesRequestBudget = 60
-	// platformPagesChartLimit:每个时段取榜单前多少名,跟 App 榜单一次取的条数一致(ChartVisibleRows.fetchLimit)。
+	// platformPagesChartLimit:每个时段取榜单前多少名,跟 App 榜单一次取的条数一致(ChartVisibleRows.fetchLimit,selftest 对账)。
 	platformPagesChartLimit = 50
 	// platformPagesRetryAfter:查过但没登记的条目,隔这么久才再查一次。
 	platformPagesRetryAfter = 30 * 24 * time.Hour
@@ -40,7 +40,7 @@ const (
 	platformPagesTrackAlbums = 2
 )
 
-// platformPagesPeriods:要预取的榜单时段,跟 App 榜单的四档一致。
+// platformPagesPeriods:要预取的榜单时段,跟 App 榜单的四档一致(LastfmStatsService.Period,selftest 对账)。
 var platformPagesPeriods = []string{"7day", "1month", "12month", "overall"}
 
 type platformArtistPages struct {
