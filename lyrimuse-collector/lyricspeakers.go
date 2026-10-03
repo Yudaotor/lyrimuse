@@ -107,6 +107,18 @@ func speakersFromScored(lyrics, yrc string, scored []scoredLyricCandidateResult)
 	return sp
 }
 
+// refreshSpeakers:一轮写完正文之后刷新条目的演唱者标注(规则见 refreshedSpeakers);这一轮 Musixmatch 给出了过身份关的
+// 候选时记下 LyricsSpeakersChecked —— 能问到的这一轮已经问过,存量补标注(speakersbackfill.go)不必再来。
+func refreshSpeakers(e *enrichEntry, scored []scoredLyricCandidateResult) {
+	e.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)
+	for _, c := range scored {
+		if c.Source == "musixmatch" && c.Score >= 0 {
+			e.LyricsSpeakersChecked = lyricsSpeakersVersion
+			return
+		}
+	}
+}
+
 // refreshedSpeakers:一轮写完正文之后条目该带的演唱者标注。这一轮算得出就用新的;算不出时,旧的还对得上当前正文
 // (指纹相同)就留着 —— 这一轮 Musixmatch 没应答不该把已有的抹掉;对不上就清掉。
 func refreshedSpeakers(old *lyricSpeakers, lyrics, yrc string, scored []scoredLyricCandidateResult) *lyricSpeakers {

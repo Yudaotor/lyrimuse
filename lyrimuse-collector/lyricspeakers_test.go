@@ -316,16 +316,18 @@ func TestLyricsEntryFromScoredSpeakers(t *testing.T) {
 func TestAdoptedLyricsCarrySpeakers(t *testing.T) {
 	sp := &lyricSpeakers{For: "x", LRC: []string{"v1"}}
 	var e enrichEntry
-	if !adoptBackfilledLyrics(&e, enrichEntry{Lyrics: "[00:01.00]a", LyricsSpeakers: sp}) || e.LyricsSpeakers != sp {
-		t.Errorf("补外围字段收下歌词时没带上标注: %+v", e.LyricsSpeakers)
+	if !adoptBackfilledLyrics(&e, enrichEntry{Lyrics: "[00:01.00]a", LyricsSpeakers: sp, LyricsSpeakersChecked: lyricsSpeakersVersion}) ||
+		e.LyricsSpeakers != sp || e.LyricsSpeakersChecked != lyricsSpeakersVersion {
+		t.Errorf("补外围字段收下歌词时没带上标注: %+v checked=%d", e.LyricsSpeakers, e.LyricsSpeakersChecked)
 	}
 	enrichCache = map[string]enrichEntry{
 		"A|Song|Original": {DurationSecs: 200.0, Lyrics: "[00:01.00]low", LyricsSource: "kugou", LyricsScore: 1100},
-		"A|Song|Deluxe":   {DurationSecs: 200.3, Lyrics: "[00:01.00]high", LyricsSource: "netease", LyricsScore: 1300, LyricsSpeakers: sp},
+		"A|Song|Deluxe": {DurationSecs: 200.3, Lyrics: "[00:01.00]high", LyricsSource: "netease", LyricsScore: 1300, LyricsSpeakers: sp,
+			LyricsSpeakersChecked: lyricsSpeakersVersion},
 	}
 	e = enrichCache["A|Song|Original"]
-	if !adoptCrossAlbumSiblingLyrics("A|Song|Original", &e) || e.LyricsSpeakers != sp {
-		t.Errorf("跨专辑复用没带上标注: %+v", e.LyricsSpeakers)
+	if !adoptCrossAlbumSiblingLyrics("A|Song|Original", &e) || e.LyricsSpeakers != sp || e.LyricsSpeakersChecked != lyricsSpeakersVersion {
+		t.Errorf("跨专辑复用没带上标注: %+v checked=%d", e.LyricsSpeakers, e.LyricsSpeakersChecked)
 	}
 }
 
@@ -349,7 +351,7 @@ func TestLyricSpeakersRefreshIsWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(b)
-	const refresh = "\te.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)\n"
+	const refresh = "\trefreshSpeakers(&e, scored)\n"
 	if n := strings.Count(src, refresh); n != 2 {
 		t.Errorf("enrich.go 里升级重试和重选两处该刷新标注,找到 %d 处", n)
 	}
@@ -364,7 +366,7 @@ func TestLyricSpeakersRefreshIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(r), "cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)\n\t\tcur.LyricsSpeakers = refreshedSpeakers(cur.LyricsSpeakers, cur.Lyrics, cur.LyricsYRC, scored)\n") {
+	if !strings.Contains(string(r), "cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)\n\t\trefreshSpeakers(&cur, scored)\n") {
 		t.Error("resynclyricscli.go 缺刷新标注")
 	}
 }

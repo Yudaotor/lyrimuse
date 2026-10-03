@@ -95,7 +95,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.ResolvedDurationSecs = durationSecs
 	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 	e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
-	e.LyricsSpeakers = speakersFromScored(e.Lyrics, e.LyricsYRC, scored)
+	refreshSpeakers(&e, scored)
 	e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 	e.dropHokkienRoma()
 	e.dropMandarinRomaForCantonese()

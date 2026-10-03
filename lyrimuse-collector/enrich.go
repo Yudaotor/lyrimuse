@@ -213,6 +213,9 @@ type enrichEntry struct {
 	// LyricsSpeakers:当前正文每一行是谁唱的(Musixmatch 的演唱者标注换算过来,见 lyricspeakers.go),绑着正文指纹,
 	// App 核对过才补成对唱标记。正文自带演唱者标记的条目没有它。不在正文小文件里。
 	LyricsSpeakers *lyricSpeakers `json:"lyrics_speakers,omitempty"`
+	// LyricsSpeakersChecked:这条按哪一版演唱者标注(lyricsSpeakersVersion)问过 Musixmatch。0 = 还没有,符合条件的
+	// 条目播放到时补问一次(speakersbackfill.go)。
+	LyricsSpeakersChecked int `json:"lyrics_speakers_checked,omitempty"`
 	// SongLanguage 是这首歌的语种真值(songLanguageMandarin/songLanguageCantonese 之一,
 	// 见 lyricCandidate.language),取自**全部**候选里第一个给出这个信号的那个(见
 	// songLanguageFromScored),不是只看最终拿到歌词正文的那个候选——目前只有 QQ/酷狗
@@ -788,6 +791,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 存量 amll / applemusic 条目补背景人声,只重取那一个源、不动正文(见 bgbackfill.go)。
 			enrichInflight[key] = true
 			go backfillBackgroundVocals(key, artist, title, album, durationSecs)
+		} else if needsLyricSpeakersBackfill(e, artist, title) && !enrichInflight[key] && speakersBackfillOnce(key) {
+			// 存量条目补演唱者标注,只问一次 Musixmatch、不动正文(见 speakersbackfill.go)。
+			enrichInflight[key] = true
+			go backfillLyricSpeakers(key, artist, title, album, durationSecs)
 		}
 		// 机翻不排上面这条链,跟哪一路都能同时跑,理由见 translatestart.go。
 		startTranslationBackfillLocked(key, e)
@@ -1772,7 +1779,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
-	e.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)
+	refreshSpeakers(&e, scored)
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: true})
 	enrichCache[key] = e
 	enrichDirty = true
@@ -2113,7 +2120,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
-	e.LyricsSpeakers = refreshedSpeakers(e.LyricsSpeakers, e.Lyrics, e.LyricsYRC, scored)
+	refreshSpeakers(&e, scored)
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
 		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, picked)})
 	enrichCache[key] = e

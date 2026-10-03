@@ -178,7 +178,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		traceLyricsDecision(key, cur.LyricsDecision)
 		cur.LyricsDecisionApplied = cur.LyricsDecision
 		cur = applyResync(cur, picked, plan, songLanguage, preparedRoma)
-		cur.LyricsSpeakers = refreshedSpeakers(cur.LyricsSpeakers, cur.Lyrics, cur.LyricsYRC, scored)
+		refreshSpeakers(&cur, scored)
 		cur.ResolvedDurationSecs = duration
 		enrichCache[key] = cur
 		enrichDirty = true
