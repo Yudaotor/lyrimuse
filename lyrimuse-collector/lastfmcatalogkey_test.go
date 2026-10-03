@@ -79,11 +79,15 @@ func TestStripCatalogNoiseSubtitleEdgeCases(t *testing.T) {
 	}
 }
 
-// 已知取舍:以 with 开头的**词组**副题会被当成署名剥掉。Swift 侧同款判据接受同一个
-// 残余风险(见 PlayCountFold.isCatalogNoiseSubtitle 头注),真撞上了加词组黑名单,
-// 别去动「前缀后必须跟点/空格」那道守卫 —— 那道是挡 "(Feathers)" 用的。
-func TestStripCatalogNoiseSubtitleKnownFalsePositive(t *testing.T) {
-	if got := stripCatalogNoiseSubtitle("I Still Haven't Found (With or Without You)"); got != "I Still Haven't Found" {
-		t.Errorf("stripCatalogNoiseSubtitle = %q; 取舍变了就更新这条断言和两侧头注", got)
+// 以 with 开头的**词组**副题:头词是冠词 / 连接词(or / the / a …)时不是署名,留着 —— 两边同一张头词表
+// (catalogNonCreditHeadWords)。别去动「前缀后必须跟点/空格」那道守卫 —— 那道是挡 "(Feathers)" 用的。
+func TestStripCatalogNoiseSubtitleKeepsWithPhrase(t *testing.T) {
+	for _, title := range []string{"I Still Haven't Found (With or Without You)", "Yesterday (with strings)", "Blinding (with The Weeknd)"} {
+		if got := stripCatalogNoiseSubtitle(title); got != title {
+			t.Errorf("stripCatalogNoiseSubtitle(%q) = %q; 词组副题不是署名,该留着", title, got)
+		}
+	}
+	if got := stripCatalogNoiseSubtitle("Toronto 2014 (with Mustafa)"); got != "Toronto 2014" {
+		t.Errorf("真署名照剥: %q", got)
 	}
 }

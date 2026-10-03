@@ -4,15 +4,12 @@ import SwiftUI
 
 /// 「足迹」段的「歌手来自哪里」卡内容:每个国家或地区一行横条(占比 + 次数),下面一行是这个地区播放最多的几位。
 ///
-/// 数据是 collector 后台汇总的 `LastfmStatsService.artistRegions`(歌手榜前 `topArtists` 位,按 MusicBrainz 登记的
+/// 数据是 collector 后台汇总的 `LastfmStatsService.artistRegions`(歌手榜前若干位,位数随文件给,按 MusicBrainz 登记的
 /// 所属国家或地区加权),这里只画。范围选择器在卡头,由宿主持有(理由同 LastfmListeningHoursView)。
 struct LastfmArtistRegionsView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme
     let span: ListeningHours.Span
-
-    /// collector artistRegionsTopArtists,卡底那句说明用。两处必须同步改。
-    static let topArtists = 200
 
     var body: some View {
         // 出现就读一次:统计页那条 2 分钟的定时刷新是先等再刷,只靠它的话页面打开后要空等两分钟。
@@ -52,8 +49,10 @@ struct LastfmArtistRegionsView: View {
                         }
                     }
                 }
-                Text(footnote(covered: p.covered))
-                    .font(.caption).foregroundStyle(.secondary)
+                if let note = footnote(p) {
+                    Text(note)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -100,15 +99,16 @@ struct LastfmArtistRegionsView: View {
         return r.formatted(.percent.precision(.fractionLength(r >= 0.1 ? 0 : 1)).locale(L10n.locale))
     }
 
-    /// 「按前 N 位歌手统计」;日桶同步好了再补「占这段时间 X% 的收听」(日桶按本地天算,跟 Last.fm 的滚动窗口
-    /// 差不到一天,只作说明用)。
-    private func footnote(covered: Int) -> String {
+    /// 「按前 N 位歌手统计」(N 是 collector 写进文件的位数,老文件没写就不显示这一句);日桶同步好了再补「占这段时间
+    /// X% 的收听」(日桶按本地天算,跟 Last.fm 的滚动窗口差不到一天,只作说明用)。
+    private func footnote(_ p: ArtistRegions.Period) -> String? {
+        guard p.topArtists > 0 else { return nil }
         let total = spanTotal()
         guard total > 0, !stats.dailyFullSyncing else {
-            return String(format: L10n.t("按听得最多的前 %@ 位歌手统计"), "\(Self.topArtists)")
+            return String(format: L10n.t("按听得最多的前 %@ 位歌手统计"), "\(p.topArtists)")
         }
         return String(format: L10n.t("按听得最多的前 %1$@ 位歌手统计，占这段时间 %2$@ 的收听"),
-                      "\(Self.topArtists)", Self.percent(min(covered, total), of: total))
+                      "\(p.topArtists)", Self.percent(min(p.covered, total), of: total))
     }
 
     private func spanTotal() -> Int {

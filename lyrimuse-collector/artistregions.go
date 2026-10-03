@@ -29,7 +29,7 @@ const (
 	artistRegionsRequestBudget = 60
 	// artistRegionsFetchLimit:每个时段从 Last.fm 取多少条原始记录。合并会把几条折成一行,取得比要统计的多。
 	artistRegionsFetchLimit = 300
-	// artistRegionsTopArtists:每个时段合并后统计前多少位。
+	// artistRegionsTopArtists:每个时段合并后统计前多少位,随汇总写进文件(top_artists),App 卡底那句说明照它写。
 	artistRegionsTopArtists = 200
 	// artistRegionsRetryAfter:查过但没登记国家的歌手,隔这么久才再查一次。
 	artistRegionsRetryAfter = 30 * 24 * time.Hour
@@ -56,6 +56,8 @@ type artistRegionsBucket struct {
 }
 
 type artistRegionsPeriod struct {
+	// TopArtists:按歌手榜前多少位统计(artistRegionsTopArtists)。App 照它写「按前 N 位歌手统计」,不另存一份。
+	TopArtists int `json:"top_artists"`
 	// Covered:统计到的这些歌手合计的播放次数(= 各地区合计 + Pending + Unresolved)。
 	Covered int `json:"covered"`
 	// Pending:有 mbid、还没查到结论的那部分(App「还在查」那一行);查完就归进某个地区或 Unresolved。
@@ -290,7 +292,7 @@ func summarizeArtistRegions(merged []mergedArtist, mbids []string, known map[str
 		names []string
 	}
 	byCode := map[string]*acc{}
-	var out artistRegionsPeriod
+	out := artistRegionsPeriod{TopArtists: artistRegionsTopArtists}
 	for i, m := range merged {
 		out.Covered += m.PlayCount
 		e, checked := known[mbids[i]]

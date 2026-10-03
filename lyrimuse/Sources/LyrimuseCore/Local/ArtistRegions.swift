@@ -23,6 +23,8 @@ public enum ArtistRegions {
     }
 
     public struct Period: Decodable, Equatable, Sendable {
+        /// 按歌手榜前多少位统计(collector artistRegionsTopArtists 写进文件的);老文件没写是 0。
+        public let topArtists: Int
         /// 统计到的歌手合计播放次数(各地区 + pending + unresolved)。
         public let covered: Int
         /// 有 mbid、collector 还没查到的(「还在查」);查完会归进某个地区或 unresolved。
@@ -35,12 +37,14 @@ public enum ArtistRegions {
 
         enum CodingKeys: String, CodingKey {
             case covered, pending, unresolved, regions
+            case topArtists = "top_artists"
             case pendingArtists = "pending_artists"
             case unresolvedArtists = "unresolved_artists"
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
+            topArtists = try c.decodeIfPresent(Int.self, forKey: .topArtists) ?? 0
             covered = try c.decodeIfPresent(Int.self, forKey: .covered) ?? 0
             pending = try c.decodeIfPresent(Int.self, forKey: .pending) ?? 0
             pendingArtists = try c.decodeIfPresent([String].self, forKey: .pendingArtists) ?? []

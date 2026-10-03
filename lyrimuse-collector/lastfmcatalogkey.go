@@ -3,6 +3,7 @@ package main
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // 「这两个写法指的是不是同一份录音」——上送前在 Last.fm 编目里找对应条目时的比对键。
@@ -52,6 +53,17 @@ var (
 // `(Feathers)` / `(Without You)` / `(Within Temptation)` 这类只是巧合同头的词组。
 var catalogCreditPrefixes = []string{"featuring", "feat", "ft", "with"}
 
+// catalogNonCreditHeadWords:`(with …)` 后面跟的不是人的头词 —— 乐队编制 / 音频内容(标的是另一份录音)、冠词与连接词
+// (副题是个词组,`(With or Without You)`)。跟 App 侧 PlayCountVariants.nonCreditHeadWords 同一张表,测试逐词对账。
+var catalogNonCreditHeadWords = map[string]bool{
+	"the": true, "a": true, "an": true, "no": true, "or": true, "out": true, "my": true, "your": true, "all": true,
+	"strings": true, "string": true, "orchestra": true, "orchestral": true, "choir": true, "chorus": true, "band": true,
+	"intro": true, "outro": true, "interlude": true, "dialogue": true, "commentary": true, "narration": true,
+	"vocal": true, "vocals": true, "backing": true, "drums": true, "beat": true, "beats": true, "rain": true, "lyrics": true,
+	"弦乐": true, "弦樂": true, "交响": true, "交響": true, "乐团": true, "樂團": true, "伴奏": true, "和声": true, "和聲": true,
+	"前奏": true,
+}
+
 // stripCatalogNoiseSubtitle 反复剥掉尾部括号里的「目录学噪音」副题:同一份录音在不同
 // 曲库间的写法差异,不是真版本。
 //
@@ -59,7 +71,8 @@ var catalogCreditPrefixes = []string{"featuring", "feat", "ft", "with"}
 // 混着别的词的副题(`(Live 2014 Remaster)`)也不动 —— 宁可漏合,也不能把两份不同的
 // 音频折成一首后把收听记到错的条目上(写进 Last.fm 的 scrobble 基本删不掉)。
 //
-// 口径与 App 侧 `PlayCountFold.isCatalogNoiseSubtitle` 同源,两侧一起改。刻意不收的
+// 口径与 App 侧 `PlayCountVariants.isCatalogNoiseSubtitle` 一致,共用样例 shared/testdata/catalog-noise-subtitles.json
+// 两边一起跑,两侧一起改。刻意不收的
 // (`(Clean)` / `(original version)` / `(single version)` / `(國)`/`(粵)`)见那边头注。
 func stripCatalogNoiseSubtitle(title string) string {
 	t := cleanMediaTag(title)
@@ -99,9 +112,18 @@ func isCatalogNoiseSubtitle(sub string) bool {
 		if b := rest[0]; b != '.' && b != ' ' {
 			continue
 		}
-		if strings.TrimSpace(rest[1:]) != "" {
-			return true
+		credit := strings.TrimSpace(rest[1:])
+		if credit == "" {
+			continue
 		}
+		// with 是介词:后面还可以跟乐队编制、音频内容,本身又能当歌名首词,所以多看一眼头词。feat / ft / featuring 后面
+		// 只能是表演者,不用。
+		if prefix == "with" && catalogNonCreditHeadWords[strings.TrimFunc(strings.Fields(credit)[0], func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
+		})] {
+			continue
+		}
+		return true
 	}
 	return false
 }

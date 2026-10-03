@@ -40,12 +40,6 @@ const logRotateMaxBytes int64 = 30 * 1024 * 1024
 // 根本查不了。三份 × 30MB 封顶 90MB,对 ~/Library/Logs 是可以接受的量。
 const logRotateKeepArchives = 3
 
-// logFilePath 是这个日志文件的唯一路径来源——跟 launchd plist 里 StandardOutPath/
-// StandardErrorPath、以及 App 侧 DiagnosticsExporter.swift 里各自硬编码的同一个路径
-// 保持一致(两侧语言不同没法共享一个常量,这是这三处唯一各自维护的地方,改动时记得
-// 一起改)。UserHomeDir 拿不到时返回空串,调用方据此放弃轮转,不阻塞启动。
-// logFilePath 挪到 paths.go(跟配置目录一起按环境变量派生)。
-
 // rotateLogIfNeeded 检查 path 处的文件是否超过 maxBytes——超过就归档成 `<path>.old`
 // (既有归档整体往后挪一格,共留 logRotateKeepArchives 份,超出的最老那份删掉)再开一份
 // 新文件。这几份是"最近发生了什么"的滚动快照,不是长期归档,用户真要长期保存会自己拷走。

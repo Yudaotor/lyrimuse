@@ -1254,7 +1254,7 @@ func runLastfmTests() {
     // MARK: - ArtistRegions(歌手来自哪里)
     do {
         let json = """
-        {"user":"KhalilChan3","periods":{"1month":{"covered":100,"pending":2,"pending_artists":["林宥嘉"],"unresolved":8,"unresolved_artists":["Valorant"],
+        {"user":"KhalilChan3","periods":{"1month":{"top_artists":200,"covered":100,"pending":2,"pending_artists":["林宥嘉"],"unresolved":8,"unresolved_artists":["Valorant"],
           "regions":[{"code":"US","plays":40,"artists":["Prince","Michael Jackson","Musiq"]},
                      {"code":"TW","plays":20,"artists":["陶喆"]},{"code":"HK","plays":10,"artists":["方大同"]},
                      {"code":"CN","plays":7,"artists":["丁世光"]},{"code":"JP","plays":5,"artists":["宇多田ヒカル"]},
@@ -1267,6 +1267,8 @@ func runLastfmTests() {
         expectEqual(ArtistRegions.parse(json, user: "someone").isEmpty, true, "歌手地区: 别的账号的文件不认")
         expectEqual(ArtistRegions.parse(Data("{}".utf8), user: "x").isEmpty, true, "歌手地区: 没记账号的文件不认")
         expectEqual(parsed["overall"]?.regions.isEmpty, true, "歌手地区: 缺字段按空")
+        expectEqual(parsed["1month"]?.topArtists, 200, "歌手地区: 按歌手榜前多少位统计,照 collector 写进文件的")
+        expectEqual(parsed["overall"]?.topArtists, 0, "歌手地区: 文件里没写位数按 0(卡底那句说明不显示)")
         let rows = ArtistRegions.rows(parsed["1month"]!)
         expectEqual(rows.map(\.kind), [.region("US"), .region("TW"), .region("HK"), .region("CN"), .region("JP"),
                                        .region("KR"), .other, .pending, .unresolved], "歌手地区: 前 6 个地区 + 其他 + 还在查 + 未查到")
@@ -1280,6 +1282,18 @@ func runLastfmTests() {
                     "歌手地区: 名字列表是 null 时这一行照样读出来")
         expectEqual(ArtistRegions.rows(ArtistRegions.parse(nullNames, user: "u")["1month"]!).map(\.kind), [.region("US")],
                     "歌手地区: 全部查完(没有 pending)就不出「还在查」")
+    }
+
+    // MARK: - 目录学噪音副题(共用样例:collector 按同一口径决定收听记到 Last.fm 的哪一条)
+    do {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/catalog-noise-subtitles.json")
+        let sample = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: [String]] } ?? [:]
+        let noise = sample["noise"] ?? [], notNoise = sample["not_noise"] ?? []
+        expectEqual(noise.count > 10 && notNoise.count > 10, true, "副题样例: 读到了共用样例")
+        expectEqual(noise.filter { !PlayCountVariants.isCatalogNoiseSubtitle($0) }, [], "副题样例: 这些是噪音(剥掉)")
+        expectEqual(notNoise.filter { PlayCountVariants.isCatalogNoiseSubtitle($0) }, [], "副题样例: 这些不是噪音(留着)")
     }
 
     // MARK: - OnThisDayPlanner / ListeningMilestones(那年今日计划 + 收听足迹)

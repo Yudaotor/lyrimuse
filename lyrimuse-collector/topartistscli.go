@@ -130,7 +130,7 @@ func loadTopArtistsCaches(mbBudget int) artistIdentityFn {
 // topArtistsPeriodSpan 是各时段的长度,上一期 = 紧挨着的前一段同样长的窗口。按这三个长度用
 // user.getWeekly*Chart 取出的本期榜跟 Last.fm 滚动榜(user.getTop* 的 7day / 1month / 12month)
 // 逐条一致,两期同口径。overall 没有上一期。App 侧 LyrimuseCore.ChartComparison 用同一组长度,
-// 两处必须同步改。
+// 两处必须同步改(selftest 对账)。
 var topArtistsPeriodSpan = map[string]time.Duration{
 	"7day":    7 * 24 * time.Hour,
 	"1month":  30 * 24 * time.Hour,

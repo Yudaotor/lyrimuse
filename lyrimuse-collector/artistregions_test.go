@@ -48,6 +48,9 @@ func TestSummarizeArtistRegions(t *testing.T) {
 	mbids := []string{"p", "t", "m", "v", "q", "", "s", "y"}
 	known := map[string]artistRegionEntry{"p": {Country: "US"}, "t": {Country: "TW"}, "m": {Country: "US"}, "v": {}, "q": {Country: "US"}, "s": {Country: "US"}}
 	got := summarizeArtistRegions(merged, mbids, known)
+	if got.TopArtists != artistRegionsTopArtists {
+		t.Fatalf("top artists = %d: 统计了前多少位要写进汇总,App 照它写说明", got.TopArtists)
+	}
 	if got.Covered != 162 || got.Unresolved != 25 || got.Pending != 3 {
 		t.Fatalf("covered/unresolved/pending = %d/%d/%d, want 162/25/3", got.Covered, got.Unresolved, got.Pending)
 	}

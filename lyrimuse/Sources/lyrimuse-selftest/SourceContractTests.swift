@@ -4241,6 +4241,20 @@ func runSourceContractTests() {
         expectEqual(platformPages.contains("platformPagesPeriods = []string{\"7day\", \"1month\", \"12month\", \"overall\"}")
                     && stats.contains("case week = \"7day\", month = \"1month\", year = \"12month\", overall = \"overall\""), true,
                     "Last.fm 榜单: collector 预取的时段跟 App 榜单的四档一样")
+        // 「听得最多」的环比:歌手榜的上一期由 collector 算(topartistscli.go 的 topArtistsPeriodSpan,要合并同一歌手的不同写法),
+        // 专辑 / 歌曲榜由 App 算(ChartComparison.span),窗口长度两边各写一份,在这里对账。
+        let topArtistsCLI = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/topartistscli.go"), encoding: .utf8)) ?? ""
+        let spanTable = topArtistsCLI.range(of: "var topArtistsPeriodSpan = map\\[string\\]time\\.Duration\\{[^}]*\\}",
+                                            options: .regularExpression).map { String(topArtistsCLI[$0]) } ?? ""
+        for period in ["7day", "1month", "12month"] {
+            let days = Int((ChartComparison.span(forPeriod: period) ?? 0) / 86_400)
+            expectEqual(spanTable.range(of: "\"\(period)\":\\s+\(days) \\* 24 \\* time\\.Hour,",
+                                        options: .regularExpression) != nil, true,
+                        "Last.fm 榜单: 环比的上一期窗口 \(period) 两边都是 \(days) 天")
+        }
+        expectEqual(ChartComparison.span(forPeriod: "overall") == nil && !spanTable.isEmpty && !spanTable.contains("overall"),
+                    true, "Last.fm 榜单: 全部时间没有上一期,两边都不算")
         expectEqual(stats.contains("stride(from: 0, to: missing.count, by: 10)")
                     && stats.contains("for batch in batches { await Self.runAvatarLookup(batch, collectorPath: collectorPath) }"), true,
                     "Last.fm 榜单: 头像按 10 个名字一批、几批依次交给 collector")

@@ -119,9 +119,8 @@ public enum PlayCountVariants {
     ///    (补;参考实现的 T1 一直把 with 与 feat 并列。用户索引里 19 条,
     ///    实测 7 例真碰撞:周杰倫《不該 (with aMEI)》、Daniel Caesar《Toronto 2014
     ///    (with Mustafa)》、MJ《The Girl Is Mine (with Paul McCartney)》…)。
-    /// 残余风险已知并接受:`(With or Without You)` 这种以 with 开头的**词组**副题
-    ///    会被当成署名剥掉(署名非空守卫拦不住它)。真出现了在这里加个词组黑名单,
-    ///    别去动「前缀后必须跟点/空格」那道守卫 —— 那道是挡 "(Feathers)" 用的。
+    /// 以 with 开头的**词组**副题(`(With or Without You)`)署名非空守卫拦不住,靠 `nonCreditHeadWords` 那道
+    ///    头词判断挡;别去动「前缀后必须跟点/空格」那道守卫 —— 那道是挡 "(Feathers)" 用的。
     ///  - **再版/发行标签家族**(同一份录音在不同版本专辑、不同分级下的收录标记):
     ///    `(Remastered 2014)` / `(2014 Remaster)` / `(Remastered Version)`
     ///    (实测:宇多田ヒカル「Automatic (Remastered 2014)」与「Automatic」
@@ -145,7 +144,10 @@ public enum PlayCountVariants {
     ///  - `(國)` / `(粵)`:参考实现只把《愛情轉移(國)》做成**手工对**而没有立通则 ——
     ///    《K歌之王》这类同名國/粵两版是真的两份录音,通则会错合。已知 7 条,
     ///    要合只能逐一手工核对。
-    static func isCatalogNoiseSubtitle(_ sub: String) -> Bool {
+    ///
+    /// collector `lastfmcatalogkey.go` 的 `isCatalogNoiseSubtitle` 按同一口径决定收听记到 Last.fm 的哪一条:两边漂开,
+    /// 这边数出来的「第 N 次听」就跟那边实际记的对不上。共用样例 shared/testdata/catalog-noise-subtitles.json 两边一起跑。
+    public static func isCatalogNoiseSubtitle(_ sub: String) -> Bool {
         let normalized = sub.precomposedStringWithCompatibilityMapping
             .lowercased().trimmingCharacters(in: .whitespaces)
         // 地区/渠道限定词:附加曲标记常带发行地或渠道前缀。刻意是白名单而不是 `\\w+`。
@@ -190,6 +192,7 @@ public enum PlayCountVariants {
     /// Horace Silver / Paul Desmond / Johnny Griffin / Nancy Wilson 这批爵士,
     /// 「with strings」正是该品类的标准写法,哪天进库就是错合。
     /// 代价:`with The Weeknd` 会被 `the` 漏掉 —— 符合本文件一贯的「宁可漏合,不错合」。
+    /// collector lastfmcatalogkey.go 的 catalogNonCreditHeadWords 是同一张表(Go 测试读这里逐词对账)。
     static let nonCreditHeadWords: Set<String> = [
         "the", "a", "an", "no", "or", "out", "my", "your", "all",
         "strings", "string", "orchestra", "orchestral", "choir", "chorus", "band",
