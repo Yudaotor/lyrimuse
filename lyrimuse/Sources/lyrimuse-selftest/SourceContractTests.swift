@@ -735,6 +735,14 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "封面沉降: 读不到 PlaybackCoordinator.swift(路径挪了?)")
             }
+            // 交给 collector 的设备封面像不像封面只在 App 判:发布当前封面先过 artworkForCollector,collector 拿到就用。
+            if let psf = text("lyrimuse/Sources/LyrimuseCore/Local/PlaybackStateFile.swift"),
+               let r = psf.range(of: "public func noteArtwork(_ data: Data?) {") {
+                expectEqual(psf[r.upperBound...].prefix(160).contains("guard let data = Self.artworkForCollector(data) else {"), true,
+                            "设备封面: 发布当前封面要先过 artworkForCollector")
+            } else {
+                expectEqual(true, false, "设备封面: 读不到 PlaybackStatePublisher.noteArtwork(改名了?)")
+            }
             // ---- 歌词缓存直读(EnrichCacheReader)的线程与卡顿 ----
             //
             // 它是 @MainActor,静态缓存(整份条目、宽松索引、正文小文件……)没有锁。Swift 5 模式下从

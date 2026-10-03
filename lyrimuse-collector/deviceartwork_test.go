@@ -2,13 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"image/color"
 	"image/jpeg"
-	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func makeTestJPEG(t *testing.T, w, h int) []byte {
@@ -26,77 +30,42 @@ func makeTestJPEG(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-func makeTestPNG(t *testing.T, w, h int) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatalf("encode test png: %v", err)
+// 像不像封面由 App 判(不像的不写进当前封面文件),这里拿到解得开的就用:一张 32×20 的小图照样落成设备封面;
+// 不是新曲目不取;解不开的不用。
+func TestDeviceCoverURLIfFreshTakesWhatTheAppPublished(t *testing.T) {
+	savedDir := deviceArtworkDir
+	t.Cleanup(func() { deviceArtworkDir = savedDir })
+	deviceArtworkDir = t.TempDir()
+	dir := t.TempDir()
+	statePath, artPath := filepath.Join(dir, "state.json"), filepath.Join(dir, "artwork")
+	setAppPlaybackArtworkSource(newAppStateReader(statePath), artPath)
+	t.Cleanup(func() { setAppPlaybackArtworkSource(nil, "") })
+	publish := func(seq int64, art []byte) {
+		t.Helper()
+		if err := os.WriteFile(artPath, art, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(art)
+		rec := appSourceRec(os.Getpid(), 4, 1, "Song", time.Now())
+		rec.Seq = seq
+		rec.Artwork = &appStateArtwork{SHA256: hex.EncodeToString(sum[:]), Mime: "image/jpeg", Bytes: len(art), PlaySeq: 4}
+		writeAppStateFile(t, statePath, rec)
 	}
-	return buf.Bytes()
-}
-
-// decodeDeviceArtwork 的质量门槛——见其头注(例如 Arc 播 Apple Music 网页版《Immortal》,
-// 媒体自己上送的封面是 140x140、方形,过这两条门槛完全没问题)。
-func TestDecodeDeviceArtworkQuality(t *testing.T) {
-	t.Run("正常尺寸方形_通过", func(t *testing.T) {
-		img, ok := decodeDeviceArtwork(makeTestJPEG(t, 300, 300))
-		if !ok || img == nil {
-			t.Fatalf("300x300 方形图应该通过质量检查, got ok=%v", ok)
-		}
-	})
-
-	t.Run("太小_不通过", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 16, 16)); ok {
-			t.Error("16x16(占位图典型尺寸,低于 deviceArtworkMinEdge)应该被拒绝")
-		}
-	})
-
-	t.Run("Web端常见小尺寸封面_通过", func(t *testing.T) {
-		// Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession
-		// API 实际上送的就是这个尺寸——不是占位图,是真封面,必须放行(这条用例就是当初
-		// deviceArtworkMinEdge 从 200 订正到 64 的直接依据,别再改回去)。
-		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 120, 120)); !ok {
-			t.Error("120x120 是真实观测到的 MediaSession 封面尺寸,不应该被拒绝")
-		}
-	})
-
-	t.Run("边长刚好等于下限_通过", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, deviceArtworkMinEdge, deviceArtworkMinEdge)); !ok {
-			t.Error("边长刚好等于 deviceArtworkMinEdge 应该通过(边界含)")
-		}
-	})
-
-	t.Run("明显不是正方形_不通过", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 600, 200)); ok {
-			t.Error("600x200(长宽比严重偏离正方形,像 banner 不像封面)应该被拒绝")
-		}
-	})
-
-	t.Run("长宽比在容差内_通过", func(t *testing.T) {
-		// 300 vs 280: (300-280)/300 = 6.7%,在 deviceArtworkMaxAspectSkew(15%)容差内。
-		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 300, 280)); !ok {
-			t.Error("6.7% 的长宽差应该在容差内,不该被拒绝")
-		}
-	})
-
-	t.Run("PNG格式也支持", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork(makeTestPNG(t, 300, 300)); !ok {
-			t.Error("PNG 格式的封面应该也能正常解码通过")
-		}
-	})
-
-	t.Run("损坏数据_不通过", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork([]byte("not an image")); ok {
-			t.Error("非图片数据应该解码失败")
-		}
-	})
-
-	t.Run("空数据_不通过", func(t *testing.T) {
-		if _, ok := decodeDeviceArtwork(nil); ok {
-			t.Error("空字节应该解码失败")
-		}
-	})
+	ctx := context.Background()
+	publish(1, makeTestJPEG(t, 32, 20))
+	if url := deviceCoverURLIfFresh(ctx, true, "com.apple.Music", "Singer", "Song"); !strings.HasPrefix(url, "file://") {
+		t.Fatalf("App 交过来的图解得开就用: %q", url)
+	}
+	if url := deviceCoverURLIfFresh(ctx, false, "com.apple.Music", "Singer", "Song"); url != "" {
+		t.Fatalf("不是新曲目不取: %q", url)
+	}
+	publish(2, []byte("not an image"))
+	if _, _, ok := appPlaybackArtwork("com.apple.Music", "Singer", "Song"); !ok {
+		t.Fatal("App 发的这份要读得到")
+	}
+	if url := deviceCoverURLIfFresh(ctx, true, "com.apple.Music", "Singer", "Song"); url != "" {
+		t.Fatalf("解不开的不用: %q", url)
+	}
 }
 
 // saveDeviceArtwork:按内容 sha256 命名,同一张图重复保存不重复写盘(用 mtime 间接验证——

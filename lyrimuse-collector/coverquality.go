@@ -23,9 +23,9 @@ import (
 // 歌词窗口那个槽位在 Retina 下要画到 ~560px,120px 放大约 4.7 倍,就是那个糊。
 //
 // 成因是两条刻意的设计叠在一起:
-//  1. `deviceArtworkMinEdge = 64` —— 下限故意压得很低,注释里写明了理由:「Arc/Edge 播
-//     Apple Music 网页版时 MediaSession 实际上送的封面就是 120x120,收紧到 200 就是在挡
-//     真实数据」。所以浏览器给的小缩略图会被照单收下。
+//  1. 设备封面的边长下限故意压得很低(App 侧 `CoverArtReplacementGate.deviceArtworkMinEdge = 64`):
+//     Arc/Edge 播 Apple Music 网页版时 MediaSession 实际上送的封面就是 120x120,收紧到 200 就是在挡
+//     真实数据。所以浏览器给的小缩略图会被照单收下。
 //  2. `resolveTrackEnrichment` 里设备封面**无条件顶掉**网易云/Apple/QQ/同专辑邻居那一整套
 //     结果,`coverSwapAllowed` 又规定 `cover_source == "device"` 一律不再换源 —— 于是这张
 //     120×120 **永远不会被自动替换**。
@@ -256,8 +256,11 @@ func trimUniformBorder(img image.Image) image.Image {
 	return croppedImage{img: img, rect: r}
 }
 
-// coverContentSkewed:裁掉四周纯色边之后,画面的长宽比是否偏离正方形超过封面形状门槛
-// (deviceArtworkMaxAspectSkew,跟入库时的形状判据同一个值)。
+// coverContentMaxAspectSkew:裁掉纯色边之后的画面偏离正方形超过这个比例,就不算方形封面。跟 App 判「像不像封面」
+// 的容差(CoverArtReplacementGate.maxAspectSkew)取同一个值:正经封面自带的小幅不规则落在 15% 之内。
+const coverContentMaxAspectSkew = 0.15
+
+// coverContentSkewed:裁掉四周纯色边之后,画面的长宽比是否偏离正方形超过 coverContentMaxAspectSkew。
 func coverContentSkewed(img image.Image) bool {
 	if img == nil {
 		return false
@@ -271,7 +274,7 @@ func coverContentSkewed(img image.Image) bool {
 	if h > w {
 		longer, diff = h, h-w
 	}
-	return diff/longer > deviceArtworkMaxAspectSkew
+	return diff/longer > coverContentMaxAspectSkew
 }
 
 // coverContentLetterboxed:裁掉纯色边之后不是正方形,**而且**形状是「补边」—— 一个轴两侧都被裁、另一个轴一点没裁
@@ -411,7 +414,7 @@ func deviceCoverDecision(
 	loadImage func(string) image.Image,
 ) (override bool, reason string) {
 	if deviceImg == nil {
-		// 解不出来的设备图压根不该走到这儿(saveDeviceArtwork 之前就过了质量检查),
+		// 解不出来的设备图压根不该走到这儿(deviceCoverURLIfFresh 落盘之前核过解得开),
 		// 真到了就别拿它换掉候选。
 		return false, "设备封面解不出来"
 	}

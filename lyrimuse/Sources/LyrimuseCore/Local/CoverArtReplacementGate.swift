@@ -1,18 +1,14 @@
 import Foundation
+import ImageIO
 
-/// 「系统 Now Playing 那份封面要不要换成 collector 缓存里的高清替代」的纯判定。
+/// 系统 Now Playing 那份封面「像不像一张封面」的判定,两处用它,判据只在这里:
+/// - 展示:要不要换成 collector 缓存里的高清替代(`reason` / `accepts`,`PlaybackCoordinator.refreshHighResCover`);
+/// - 交给 collector:能不能当这首歌的设备封面(`isUsableDeviceArtwork`,`PlaybackStatePublisher.artworkForCollector`)。
+///   collector 拿到就用、不再自己判。
 ///
-/// 从 `PlaybackCoordinator.refreshHighResCover` 里拆出来:原来那里只有一个判据
-/// (宽 ≤ 300px 就找替代),现象是 YouTube Music 的 MV 条目「封面是视频的第一帧」——Safari 经
-/// MediaSession 上报的 artwork 就是 **320×180 的视频缩略图**,宽 320 刚好越过 300 的门槛,
-/// 被当成「够大的正经封面」原样显示,再被展示面的 scaledToFill 裁成方块。collector 那头
-/// (`deviceartwork.go`)一直有 15% 的长宽比容差、把这张图拒收了,所以网页显示的是真封面,
-/// 只有本机 App 显示视频帧 —— 两端口径不一致才是根因。这里把形状判据补齐,容差跟 collector
-/// 逐字一致;放进 LyrimuseCore 是为了让 selftest 能直接断言(PlaybackCoordinator 在 App
-/// target 里,自测进程碰不到)。
-///
-/// 通用性:任何播放器上报「不是方形」的封面都走这条 —— 视频网站的 16:9 缩略图、竖屏短视频、
-/// 横幅 banner;正经封面自带的小幅不规则(带留白边框)落在 15% 容差之内不受影响。
+/// 形状判据针对播放器上报的根本不是专辑图的情形:YouTube Music 的 MV 经 MediaSession 上报的是 320×180 的
+/// 视频缩略图,竖屏短视频、横幅 banner 同理;正经封面自带的小幅不规则(带留白边框)落在 15% 容差之内。
+/// 放在 LyrimuseCore 是为了让 selftest 能直接断言(PlaybackCoordinator 在 App target 里,自测进程碰不到)。
 public enum CoverArtReplacementGate {
     /// 触发替代的理由。两条的后续接受判据不同,见 `accepts`。
     public enum Reason: Equatable, Sendable {
@@ -30,15 +26,35 @@ public enum CoverArtReplacementGate {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier
     }
 
-    /// 长宽比偏离正方形的容差,跟 collector `deviceArtworkMaxAspectSkew`(deviceartwork.go)
-    /// 逐字一致 —— 两端对「这像不像一张封面」的回答必须相同,否则又会出现网页对、App 错的分叉。
+    /// 长宽比偏离正方形的容差。
     public static let maxAspectSkew = 0.15
+
+    /// 交给 collector 当设备封面的最短边下限。64 挡的是没有封面时的 1×1 / 几像素占位图,放行浏览器
+    /// MediaSession 常见的 120×120(Arc / Edge 播 Apple Music 网页版实测就是这一档,是真封面)。
+    public static let deviceArtworkMinEdge = 64
 
     /// 这个尺寸像不像一张封面:`|宽-高| / 长边 ≤ 15%`。零尺寸不算。
     public static func isCoverShaped(width: Int, height: Int) -> Bool {
         guard width > 0, height > 0 else { return false }
         let longer = Double(max(width, height))
         return Double(abs(width - height)) / longer <= maxAspectSkew
+    }
+
+    /// 这份系统封面能不能交给 collector 当设备封面:最短边够 `deviceArtworkMinEdge`,且是封面的形状。
+    /// collector 拿到设备封面就用、之后不再换源,不像封面的图交过去会一直挂在那首歌上。
+    public static func isUsableDeviceArtwork(width: Int, height: Int) -> Bool {
+        min(width, height) >= deviceArtworkMinEdge && isCoverShaped(width: width, height: height)
+    }
+
+    /// 只读图头取像素宽高(CGImageSource,不解码整图);没有图 / 读不出来返回 (0, 0)。
+    public static func pixelSize(of data: Data?) -> (width: Int, height: Int) {
+        guard let data,
+              let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int
+        else { return (0, 0) }
+        return (w, h)
     }
 
     /// 系统那份封面要不要找替代。nil = 不找:没有图(该显示占位音符,不该悄悄换成缓存匹配出来

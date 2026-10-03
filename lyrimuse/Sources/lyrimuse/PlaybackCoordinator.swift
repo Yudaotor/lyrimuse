@@ -187,15 +187,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// QQ 提到 800、Apple 提到 1200),否则 QQ 源那张存的也只有 300、白替一趟。
     ///
     /// 只在系统那份 ≤ lowResArtworkThreshold、或者**不是方形**时才替(判定收在
-    /// `CoverArtReplacementGate`,形状容差跟 collector 逐字一致)。系统那份才是"正在播的这一项"的
+    /// `CoverArtReplacementGate`,交给 collector 的设备封面也按它判)。系统那份才是"正在播的这一项"的
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
     ///
     /// **第二个触发条件**(YouTube Music 的 MV 条目「封面是视频的第一帧」):
     /// Safari 经 MediaSession 上报的 artwork 是 **320×180 的视频缩略图**,宽 320 刚越过 300 的
-    /// 门槛被当成"够大的正经封面"原样显示,再被展示面的 scaledToFill 裁成方块。collector 那头
-    /// (deviceartwork.go)一直有 15% 的长宽比容差把这张图拒收了,所以网页显示的是真封面、只有
-    /// 本机 App 显示视频帧 —— 两端口径不一致才是根因,这里把形状判据补齐。
+    /// 门槛被当成"够大的正经封面"原样显示,再被展示面的 scaledToFill 裁成方块,所以形状也要判。
     @Published private(set) var highResArtworkImage: NSImage?
     /// 上面那张高清替代的**预缩小图**(≤256px),给菜单栏面板 44pt 那格小封面
     /// 用。`highResArtworkImage` 是 `NSImage(data:)` 懒解码的**原图档**(给歌词窗口 920pt@2x
@@ -1579,7 +1577,7 @@ final class PlaybackCoordinator: ObservableObject {
             clearHighRes()
             return
         }
-        let systemSize = Self.pixelSize(of: s.artworkData)
+        let systemSize = CoverArtReplacementGate.pixelSize(of: s.artworkData)
         let systemPixels = systemSize.width
         // 系统那份够大且是方形(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
         // 匹配到的另一张图;从不往系统里报封面的播放器除外,见 CoverArtReplacementGate.systemNeverHasArtwork)就不动。
@@ -1813,19 +1811,6 @@ final class PlaybackCoordinator: ObservableObject {
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: tw, height: th))
         guard let out = ctx.makeImage() else { return nil }
         return NSImage(cgImage: out, size: NSSize(width: tw, height: th))
-    }
-
-    /// 只读图头取系统封面的像素宽高(CGImageSource,不解码整图);没有图 / 读不出来返回 (0, 0)。
-    /// 连高一起取:高清替代的触发判据多了「不是方形」这一条(CoverArtReplacementGate),
-    /// 光有宽分不出 320×180 的视频缩略图和 320×320 的小封面。
-    private static func pixelSize(of data: Data?) -> (width: Int, height: Int) {
-        guard let data,
-              let src = CGImageSourceCreateWithData(data as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
-              let w = props[kCGImagePropertyPixelWidth] as? Int,
-              let h = props[kCGImagePropertyPixelHeight] as? Int
-        else { return (0, 0) }
-        return (w, h)
     }
 
     // 悬浮歌词实际显示用的前景色——"跟随封面"外观模式开着且这首歌已经算出动态高亮色

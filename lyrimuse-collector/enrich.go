@@ -2395,15 +2395,15 @@ func commitEnrichEntrySince(key string, e enrichEntry, stamp uint64) {
 	timer.mark("export")
 }
 
-// applyDeviceCoverUpgrade 把设备直送的封面(已经过质量检查、已经落盘,见
+// applyDeviceCoverUpgrade 把设备直送的封面(已经落盘,见
 // fetchNowPlayingArtwork/deviceartwork.go)写进一条**已存在**的条目,顶掉它原来的封面
 // (不管原来是网易云/Apple/QQ 哪个源)。
 //
 // 这是"封面来源是身份字段、解析出结果就不该被自愈路径悄悄改掉"这条一般原则(见
 // backfillPeripheralFields 头注)的一次刻意例外:设备直送的封面不是"又猜了一次、猜得
 // 可能更准",它的身份由"这一刻确实是设备自己在播这首歌"直接保证,不存在"猜错"的可能性
-// (内容对不对得上这首歌不需要验证,内容是不是一张像样的封面图由 deviceartwork.go 的
-// 质量门槛把关)——所以可以顶替,不需要跟旧封面比较谁更可信。
+// (内容对不对得上这首歌不需要验证,内容是不是一张像样的封面图由 App 把关,见 deviceartwork.go
+// 头注)——所以可以顶替,不需要跟旧封面比较谁更可信。
 //
 // 顶替**不是无条件的**:低分辨率的设备封面(浏览器 MediaSession 常给 120×120)不该
 // 盖掉"同一张图的高清版"。判据见 coverquality.go 头注。
@@ -2443,7 +2443,7 @@ func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bun
 // 网页中继和歌词管理里都会一直是那张唱片。「设备封面的身份由这一刻确实在播这首歌直接
 // 保证」这条前提仍然成立 —— 不成立的是「它已经是这首歌的最终封面」。
 //
-// 登记在案的占位图(knownplaceholder.go)在 deviceCoverURLIfFresh 里直接拦下,但那张表按字节
+// 登记在案的占位图 App 认得出、不会交过来(KnownPlaceholderArtwork.swift),但那张表按字节
 // 指纹认图、播放器换一版内置图就静默失效,所以不能替代这里:按时间多问几次是通用的 —— 没有这个
 // 行为的播放器只是多几次 sha256 比对,同一张图 saveDeviceArtwork 连盘都不会重写。
 var deviceCoverSettleDelays = []time.Duration{3 * time.Second, 5 * time.Second, 8 * time.Second}
@@ -2748,7 +2748,7 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 }
 
 // deviceCoverURL 非空时,是 poller.go 在"确认新曲目开始播放"那一刻现场用
-// fetchNowPlayingArtwork 拿到、过了质量检查、已经落盘的本地封面(file:// URL,
+// fetchNowPlayingArtwork 拿到、已经落盘的本地封面(file:// URL,
 // CoverSource 写 "device")——这份数据的身份由"读取时刻本身"保证,不需要再跟网易云/
 // Apple/QQ 三个源的猜测结果比较,直接用,不进下面那整套按专辑名文字匹配择优的级联。
 // 只有 resolveEnrichAsync(首次解析,唯一能保证这一刻确实对应"正在播放的这首歌"的
@@ -2992,8 +2992,8 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		// 谁的分更高",是这件事本身不需要再猜了。CoverAlbum 写本地这份 album(不是任何
 		// 源自己报的专辑名):这份封面从一开始就是照着**这次播放**给的,天然对版。
 		//
-		// 这一顶**不是无条件的**:浏览器 MediaSession 给的封面常常只有 120×120(见
-		// deviceArtworkMinEdge 那条注释,下限故意压到 64 就是为了不漏掉它们),而歌词窗口
+		// 这一顶**不是无条件的**:浏览器 MediaSession 给的封面常常只有 120×120(App 交设备封面的边长
+		// 下限故意压到 64 就是为了不漏掉它们,见 CoverArtReplacementGate.deviceArtworkMinEdge),而歌词窗口
 		// 那张大卡要画到 ~560px —— 同一张专辑其它曲目 800×800、只有标题曲拿到 120×120 时
 		// 就会明显糊。
 		//

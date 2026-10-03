@@ -4,9 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"image"
-	"log"
-	"math"
 	"os"
 	"path/filepath"
 )
@@ -26,55 +23,21 @@ import (
 //
 // 设备直送的这份不一样:它就是"正在播的这首歌,这一刻,这个 App 自己吐出来的封面",不需要
 // 靠任何文字匹配去猜是不是同一张专辑/同一次发行——身份从"什么时候读到的"直接保证,不是
-// 靠内容比对出来的。所以按只要这份数据本身质量过关,就直接用,不再跟网易云/
-// Apple/QQ 三个源的猜测结果比较。
-
-const (
-	// deviceArtworkMinEdge:实测订正过一次——最初拍脑袋定的 200(觉得"真实专辑
-	// 封面哪怕最小档位也有几百像素"),结果直接把这个功能真正要修的那个案例挡在外面:
-	// Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession API 实际上送的封面就是
-	// 120x120(Web 端 MediaSession artwork 常见的按需小尺寸档位之一,不是浏览器随便拿了个
-	// 图标应付)。收紧到这个地步就是在挡真实数据,不是在挡"通用图标/占位图"那类真正想挡的
-	// 东西——那类东西(没有封面时的占位)通常是 1x1 或几像素的透明图,64 这个下限已经能
-	// 稳稳把它们挡在外面,同时放行 120x120 这种真实但不大的 Web 封面。
-	deviceArtworkMinEdge = 64
-	// deviceArtworkMaxAspectSkew:长宽比偏离正方形超过这个比例,就不像是一张封面图。
-	// 阈值给得宽松(15%),只挡明显不是封面的情形(截图、长条 banner 之类),不误伤专辑
-	// 封面本身就有的小幅不规则(比如带留白边框的图)。
-	deviceArtworkMaxAspectSkew = 0.15
-)
+// 靠内容比对出来的。所以拿到就直接用,不再跟网易云/Apple/QQ 三个源的猜测结果比较。
+//
+// 这张图像不像封面(太小、不是方形、播放器的内置占位图)由 App 判,不像的 App 按没有封面发(LyrimuseCore 的
+// CoverArtReplacementGate.isUsableDeviceArtwork、KnownPlaceholderArtwork),这里不再判一遍。
 
 // deviceArtworkDir 是设备直送封面落盘的目录,main.go 里跟 enrichPath/lyricsDir() 同批设置,
 // 空串表示这条功能关闭(不落盘就不能生成 file:// URL,退回原有的网易云/Apple/QQ 检索链路)。
 var deviceArtworkDir string
 
-// decodeDeviceArtwork 解码 + 核质量,一次做完——deviceArtworkQuality 和取色(color.go 的
-// dominantColorFromImage)都要用到解出来的 image.Image,不值得为两处各解一遍。
-//
-// 质量门槛只核"这看起来像不像一张真的专辑封面"(尺寸/长宽比),核不出"封面内容对不对
-// 得上这首歌"——但这份数据是设备自己在播这首歌的当下吐出来的,身份不需要另外验证
-// (这正是它比网易云/Apple/QQ 那套要靠文字匹配去猜的机制更可信的地方,见本文件头注)。
-func decodeDeviceArtwork(data []byte) (image.Image, bool) {
-	img, err := decodeCoverImage(data)
-	if err != nil {
-		return nil, false
-	}
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w < deviceArtworkMinEdge || h < deviceArtworkMinEdge {
-		return nil, false
-	}
-	longer := math.Max(float64(w), float64(h))
-	if math.Abs(float64(w-h))/longer > deviceArtworkMaxAspectSkew {
-		return nil, false
-	}
-	return img, true
-}
-
 // deviceCoverURLIfFresh 是 resolveEnrichAsync/applyDeviceCoverUpgrade(enrich.go)共用的
 // 入口:只在 isNewTrack 时才去取封面(读 App 写的当前封面文件,理由见 trackEnrichment 参数注释),
-// 问到之后依次过质量检查、落盘,任何一步没通过都返回空串——调用方据此照常退回原有的
-// 封面检索链路(网易云/Apple/QQ),这不是错误,是"这一刻没能拿到设备封面"的正常结果。
+// 取到之后落盘,任何一步没成都返回空串——调用方据此照常退回原有的封面检索链路(网易云/Apple/QQ),
+// 这不是错误,是"这一刻没能拿到设备封面"的正常结果。
+//
+// 这里只核自己解不解得开(格式、像素上限,见 decodeCoverImage):取色和清晰度比较都要解码。
 func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artist, title string) string {
 	if !isNewTrack {
 		return ""
@@ -83,13 +46,7 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 	if !ok {
 		return ""
 	}
-	// 播放器的内置占位图不收:收下就是 device 封面、之后不再换源(见 knownplaceholder.go)。
-	// settleDeviceCover 后面几档会再问,真图到了照常换上。
-	if isKnownPlaceholderArtwork(data) {
-		log.Printf("device artwork: a player's built-in placeholder for %q - %q, not using it", artist, title)
-		return ""
-	}
-	if _, ok := decodeDeviceArtwork(data); !ok {
+	if _, err := decodeCoverImage(data); err != nil {
 		return ""
 	}
 	url, ok := saveDeviceArtwork(data, mimeType)
@@ -99,7 +56,7 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 	return url
 }
 
-// saveDeviceArtwork 把已经过质量检查的封面字节写到本地,返回 Swift 侧能直接加载的
+// saveDeviceArtwork 把设备封面字节写到本地,返回 Swift 侧能直接加载的
 // file:// URL。文件名按内容 sha256 的前 8 字节命名——同一张封面图(哪怕来自不同曲目、
 // 不同次播放)只落一份盘,而且天然幂等:同一张图重复保存不会重复写盘(先 Stat 一次)。
 func saveDeviceArtwork(data []byte, mimeType string) (string, bool) {

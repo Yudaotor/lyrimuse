@@ -378,10 +378,19 @@ public final class PlaybackStatePublisher {
         write(content, now: now)
     }
 
-    /// 这一首换上了新封面(nil = 确认没有封面)。图片落到 `lyrimuse-now-playing-artwork`,状态里记校验和。
+    /// 交给 collector 的设备封面:不像封面的图(太小、不是方形,见 `CoverArtReplacementGate.isUsableDeviceArtwork`)
+    /// 按没有封面发,collector 退回按歌名找封面。播放器的内置占位图走不到这里:`LocalPlaybackSource` 认出来就不采纳。
+    public nonisolated static func artworkForCollector(_ data: Data?) -> Data? {
+        guard let data, !data.isEmpty else { return nil }
+        let size = CoverArtReplacementGate.pixelSize(of: data)
+        return CoverArtReplacementGate.isUsableDeviceArtwork(width: size.width, height: size.height) ? data : nil
+    }
+
+    /// 这一首换上了新封面(nil = 确认没有封面)。交给 collector 的那份(`artworkForCollector`)落到
+    /// `lyrimuse-now-playing-artwork`,状态里记校验和。
     public func noteArtwork(_ data: Data?) {
         guard !exiting else { return }
-        guard let data, !data.isEmpty else {
+        guard let data = Self.artworkForCollector(data) else {
             tracker.noteArtwork(sha256: nil, mime: "", bytes: 0)
             republishArtwork()
             return

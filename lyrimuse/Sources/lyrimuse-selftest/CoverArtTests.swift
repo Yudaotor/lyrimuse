@@ -1,6 +1,7 @@
 import LyrimuseCore
 import Foundation
 import CoreGraphics
+import ImageIO
 
 // 封面取图 / 取色 / 高清替代。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
@@ -709,9 +710,8 @@ func runCoverArtTests() {
 
     // ---- 高清替代的触发判定:太小 / 不是封面形状 ----
     //
-    // 现象是 YouTube Music 的 MV「封面是视频的第一帧」:media-control 给的是 320×180 的视频缩略图
-    // (实测,TIFF),宽 320 越过 300 的门槛被当成够大的封面原样显示。collector 那头的
-    // deviceartwork.go 一直有 15% 的长宽比容差把它拒收,App 侧没有 —— 这里把两端口径对齐。
+    // YouTube Music 的 MV 给的封面是 320×180 的视频缩略图(media-control 实测,TIFF),宽 320 越过 300 的门槛,
+    // 只判宽会被当成够大的封面原样显示。
     do {
         typealias G = CoverArtReplacementGate
         let t = 300
@@ -734,10 +734,10 @@ func runCoverArtTests() {
                     "高清替代: 301×301 不替")
         // 没有图不替(该显示占位音符,不该悄悄换成缓存匹配出来的另一张)。
         expectEqual(G.reason(width: 0, height: 0, lowResThreshold: t), nil, "高清替代: 没有图不替")
-        // 容差跟 collector 的 deviceArtworkMaxAspectSkew 一致:正好 15% 算封面,再多一点不算。
+        // 容差 15%:正好 15% 算封面,再多一点不算。
         expectEqual(G.isCoverShaped(width: 1000, height: 850), true, "高清替代: 15% 偏差仍算封面形状")
         expectEqual(G.isCoverShaped(width: 1000, height: 849), false, "高清替代: 超过 15% 不算封面形状")
-        expectEqual(G.maxAspectSkew, 0.15, "高清替代: 形状容差与 collector 逐字一致")
+        expectEqual(G.maxAspectSkew, 0.15, "高清替代: 形状容差 15%")
         // 带留白边框那类小幅不规则的封面落在容差内、且够大 → 不替(权威图不动)。
         expectEqual(G.reason(width: 600, height: 520, lowResThreshold: t), nil,
                     "高清替代: 容差内的非严格方形大图不替")
@@ -752,6 +752,43 @@ func runCoverArtTests() {
                     "高清替代: 形状→替代图比视频帧窄也换")
         expectEqual(G.accepts(candidateWidth: 640, candidateHeight: 360, systemWidth: 320, reason: .notCoverShaped), false,
                     "高清替代: 形状→替代图自己也不是方形不换")
+    }
+
+    // ---- 交给 collector 的设备封面:像不像封面只在 App 判 ----
+    //
+    // collector 拿到当前封面文件里的图就用、之后不再换源。太小(没有封面时的几像素占位)、不是方形(视频缩略图)
+    // 的按没有封面发;下限 64 放行浏览器 MediaSession 常见的 120×120。
+    do {
+        typealias G = CoverArtReplacementGate
+        expectEqual(G.isUsableDeviceArtwork(width: 16, height: 16), false, "设备封面: 16×16 占位不交")
+        expectEqual(G.isUsableDeviceArtwork(width: 63, height: 63), false, "设备封面: 63×63 不交")
+        expectEqual(G.isUsableDeviceArtwork(width: 64, height: 64), true, "设备封面: 64×64 边界交")
+        expectEqual(G.isUsableDeviceArtwork(width: 120, height: 120), true, "设备封面: 浏览器 120×120 交")
+        expectEqual(G.isUsableDeviceArtwork(width: 300, height: 280), true, "设备封面: 容差内的非严格方形交")
+        expectEqual(G.isUsableDeviceArtwork(width: 600, height: 200), false, "设备封面: 横幅不交")
+        expectEqual(G.isUsableDeviceArtwork(width: 320, height: 180), false, "设备封面: 视频缩略图不交")
+        expectEqual(G.isUsableDeviceArtwork(width: 0, height: 0), false, "设备封面: 没有图不交")
+        // 发布时从图头读尺寸,再按上面的判据决定交不交。
+        func solidPNG(_ width: Int, _ height: Int) -> Data? {
+            guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+                  let image = ctx.makeImage() else { return nil }
+            let out = NSMutableData()
+            guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.png" as CFString, 1, nil)
+            else { return nil }
+            CGImageDestinationAddImage(dest, image, nil)
+            return CGImageDestinationFinalize(dest) ? out as Data : nil
+        }
+        let square = solidPNG(120, 120), small = solidPNG(16, 16), frame = solidPNG(320, 180)
+        expectNotEqual(square, nil, "设备封面: 造得出测试图")
+        expectEqual(G.pixelSize(of: frame).width, 320, "设备封面: 图头读宽")
+        expectEqual(G.pixelSize(of: frame).height, 180, "设备封面: 图头读高")
+        expectEqual(G.pixelSize(of: Data("not an image".utf8)).width, 0, "设备封面: 读不出来是 0")
+        expectEqual(PlaybackStatePublisher.artworkForCollector(square), square, "设备封面: 方形 120 原样交")
+        expectEqual(PlaybackStatePublisher.artworkForCollector(small), nil, "设备封面: 16×16 按没有封面发")
+        expectEqual(PlaybackStatePublisher.artworkForCollector(frame), nil, "设备封面: 视频缩略图按没有封面发")
+        expectEqual(PlaybackStatePublisher.artworkForCollector(nil), nil, "设备封面: 没有图还是没有")
     }
 
     // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑 ----
