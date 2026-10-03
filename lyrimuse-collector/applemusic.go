@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -160,15 +162,62 @@ func applemusicUserTokenPath() string {
 	return filepath.Join(configDir(), clientName+"-applemusic-token.json")
 }
 
-// applemusicUserTokenFile 与 App 侧 AppleMusicTokenFile(LyrimuseCore)读写同一个文件,字段两边同步改。
+// applemusicUserTokenFile:App 侧 AppleMusicTokenFile(LyrimuseCore)写的那份,这边只读用得到的字段,字段两边同步改。
+// 这边对令牌的观察(问到的店面、被拒)不写回这里,记在 applemusicStatusPath 那份。
 type applemusicUserTokenFile struct {
 	MediaUserToken string `json:"media_user_token"`
 	Storefront     string `json:"storefront"`
 	SavedAt        int64  `json:"saved_at"`
-	// ExpiresAt 是登录时 cookie 自带的过期时刻(Unix 秒),没有时 App 按 saved_at + 6 个月推算。
-	ExpiresAt int64 `json:"expires_at,omitempty"`
-	// RejectedAt:带着这份令牌被 Apple 拒(401/403)的时刻。App 的连接卡片据此显示「已失效」。
-	RejectedAt int64 `json:"rejected_at,omitempty"`
+}
+
+// applemusicStatusPath:这边对用户令牌的观察 —— 问 Apple 补到的店面、带着它被拒(401/403)的时刻。令牌文件只由
+// App 写;App 的连接卡片把两份合起来看(AppleMusicTokenFile.parse),字段两边同步改。
+func applemusicStatusPath() string {
+	if configDir() == "" {
+		return ""
+	}
+	return filepath.Join(configDir(), clientName+"-applemusic-status.json")
+}
+
+// applemusicStatus 的每一项只对指纹相同的那份令牌成立:用户重连换了令牌,旧的观察自然作废。
+type applemusicStatus struct {
+	TokenFP    string `json:"token_fp"`
+	Storefront string `json:"storefront,omitempty"`
+	RejectedAt int64  `json:"rejected_at,omitempty"`
+}
+
+// applemusicTokenFingerprint:令牌 SHA-256 的前 8 字节,16 位小写十六进制。只用来认「是不是同一份令牌」,
+// 推不回令牌本身。跟 App 的 AppleMusicTokenFile.fingerprint 逐字一致(两侧单测钉同一个值)。
+func applemusicTokenFingerprint(token string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	return hex.EncodeToString(sum[:8])
+}
+
+// applemusicReadTokenFile 读 App 写的令牌文件;没有令牌返回 false。
+func applemusicReadTokenFile() (applemusicUserTokenFile, bool) {
+	path := applemusicUserTokenPath()
+	if path == "" {
+		return applemusicUserTokenFile{}, false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return applemusicUserTokenFile{}, false
+	}
+	var f applemusicUserTokenFile
+	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) == "" {
+		return applemusicUserTokenFile{}, false
+	}
+	return f, true
+}
+
+func applemusicReadStatus() applemusicStatus {
+	var st applemusicStatus
+	if path := applemusicStatusPath(); path != "" {
+		if raw, err := os.ReadFile(path); err == nil {
+			_ = json.Unmarshal(raw, &st)
+		}
+	}
+	return st
 }
 
 // applemusicLoadUserToken 读用户令牌与 storefront。不发网络请求。
@@ -182,22 +231,22 @@ type applemusicUserTokenFile struct {
 // 都 404**;更糟的是 applemusicFetchTTML 把 404 当正常结果返回 ("", nil),不报错不记原因,
 // 表现出来就是"Apple 也没这首歌的词"。宁可判失败让用户看见,也不要猜一个区。
 func applemusicLoadUserToken() (string, string) {
-	path := applemusicUserTokenPath()
-	if path == "" {
+	f, ok := applemusicReadTokenFile()
+	if !ok {
 		return "", ""
 	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", ""
+	token := strings.TrimSpace(f.MediaUserToken)
+	storefront := strings.ToLower(strings.TrimSpace(f.Storefront))
+	if storefront == "" {
+		// 登录时没拿到店面的,用这边之前问到的;只认同一份令牌的。
+		if st := applemusicReadStatus(); st.TokenFP == applemusicTokenFingerprint(token) {
+			storefront = st.Storefront
+		}
 	}
-	var f applemusicUserTokenFile
-	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) == "" {
-		return "", ""
-	}
-	return strings.TrimSpace(f.MediaUserToken), strings.ToLower(strings.TrimSpace(f.Storefront))
+	return token, storefront
 }
 
-// applemusicEnsureStorefront:令牌文件里没记下 storefront 时,问 Apple 要权威答案并写回。
+// applemusicEnsureStorefront:令牌文件里没记下 storefront 时,问 Apple 要权威答案并记下(applemusicNoteStorefront)。
 //
 // 为什么需要这条路:登录窗口是从 itua cookie 取 storefront 的,而它跟 media-user-token
 // 由 Apple 的登录流程分别写入,未必同时就位;登录侧已经改成等一会儿,但等不到时宁可留空,
@@ -205,7 +254,7 @@ func applemusicLoadUserToken() (string, string) {
 // 两者(实测:只带 user token 回 401、只带 dev token 回 403),而这两样 collector 都有,
 // App 侧没有 developer token 的获取机制,所以这一步只能放在这边。
 //
-// 写回是为了下次不用再问。拿不到就返回空串,由调用方判失败,**绝不退回某个默认区**。
+// 记下是为了下次不用再问。拿不到就返回空串,由调用方判失败,**绝不退回某个默认区**。
 func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string) string {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, applemusicMeStorefrontURL, nil)
 	if err != nil {
@@ -246,55 +295,54 @@ func applemusicEnsureStorefront(ctx context.Context, userToken, devToken string)
 	if sf == "" {
 		return ""
 	}
-	applemusicSaveStorefront(sf)
+	applemusicNoteStorefront(userToken, sf)
 	return sf
 }
 
-// applemusicSaveStorefront 把问到的 storefront 补写回令牌文件,保留其余字段。
-// 失败不算错 —— 大不了下次再问一次,不该因此让这次取词失败。
-func applemusicSaveStorefront(storefront string) {
-	path := applemusicUserTokenPath()
-	if path == "" {
+// applemusicUpdateStatus 改这边的状态文件。只在 userToken 还是令牌文件里那一份时记:用户已经重连、换了新令牌,
+// 在飞的旧请求回来的结果不该记到新令牌名下。mutate 拿到令牌文件(看 saved_at 用),返回 false 表示不用写。
+func applemusicUpdateStatus(userToken string, mutate func(*applemusicStatus, applemusicUserTokenFile) bool) {
+	path := applemusicStatusPath()
+	f, ok := applemusicReadTokenFile()
+	if path == "" || !ok || strings.TrimSpace(f.MediaUserToken) != strings.TrimSpace(userToken) {
 		return
 	}
-	raw, err := os.ReadFile(path)
+	fp := applemusicTokenFingerprint(userToken)
+	st := applemusicReadStatus()
+	if st.TokenFP != fp {
+		st = applemusicStatus{TokenFP: fp}
+	}
+	if !mutate(&st, f) {
+		return
+	}
+	out, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return
 	}
-	var f applemusicUserTokenFile
-	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) == "" {
-		return
-	}
-	f.Storefront = storefront
-	out, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return
-	}
-	// writeFileAtomic 的临时文件是 0o600:文件里是用户的 Apple Music 访问凭据。
 	_ = writeFileAtomic(path, out)
 }
 
-// applemusicMarkTokenRejected 在令牌文件里记下「这份令牌被 Apple 拒了」。只在文件里还是**同一份**令牌时记:
-// 用户已经重连、换了新令牌,在飞的旧请求回来的 401 不能把新令牌标成失效。已经记过就不重写。
+// applemusicNoteStorefront 记下问到的店面。失败不算错 —— 大不了下次再问一次,不该因此让这次取词失败。
+func applemusicNoteStorefront(userToken, storefront string) {
+	applemusicUpdateStatus(userToken, func(st *applemusicStatus, _ applemusicUserTokenFile) bool {
+		if st.Storefront == storefront {
+			return false
+		}
+		st.Storefront = storefront
+		return true
+	})
+}
+
+// applemusicMarkTokenRejected 记下「这份令牌被 Apple 拒了」,App 的连接卡片据此显示「已失效」。这次登录之后
+// 已经记过就不重写;同一份令牌重新登录过(saved_at 晚于上次被拒)再被拒,重记。
 func applemusicMarkTokenRejected(userToken string) {
-	path := applemusicUserTokenPath()
-	if path == "" || strings.TrimSpace(userToken) == "" {
-		return
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var f applemusicUserTokenFile
-	if json.Unmarshal(raw, &f) != nil || strings.TrimSpace(f.MediaUserToken) != strings.TrimSpace(userToken) || f.RejectedAt != 0 {
-		return
-	}
-	f.RejectedAt = time.Now().Unix()
-	out, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return
-	}
-	_ = writeFileAtomic(path, out)
+	applemusicUpdateStatus(userToken, func(st *applemusicStatus, f applemusicUserTokenFile) bool {
+		if st.RejectedAt != 0 && st.RejectedAt >= f.SavedAt {
+			return false
+		}
+		st.RejectedAt = time.Now().Unix()
+		return true
+	})
 }
 
 // applemusicDevTokenPath:developer token 的磁盘缓存。它是**公开**的(从 Apple 自己的

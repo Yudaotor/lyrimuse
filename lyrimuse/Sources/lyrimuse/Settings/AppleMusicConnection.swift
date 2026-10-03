@@ -20,6 +20,8 @@ public final class AppleMusicConnection: ObservableObject {
 
     /// 跟 collector 侧 applemusicUserTokenPath() 指的是同一个文件,两边都写死这个名字。
     private static let tokenURL = LyrimusePaths.configFile("lyrimuse-applemusic-token.json")
+    /// collector 对这份令牌的观察(问到的店面、被拒),只读;见 AppleMusicTokenFile.parse。
+    private static let engineStatusURL = LyrimusePaths.configFile(AppleMusicTokenFile.engineStatusFileName)
 
     /// 剩这么多时间就开始提示"该重连了"。
     private static let renewNoticeWindow: TimeInterval = 14 * 24 * 3600
@@ -27,7 +29,7 @@ public final class AppleMusicConnection: ObservableObject {
     public enum State: Equatable {
         case disconnected
         /// savedAt 是拿到令牌的时刻。storefront 可能是空串 —— 登录时没等到 itua cookie。这**不是**未连接:
-        /// collector 首次取词时会问 /v1/me/storefront 拿权威值并写回。别在这里退 "us":猜一个区会让取词
+        /// collector 首次取词时会问 /v1/me/storefront 拿权威值,记在它的状态文件里,`refresh` 合起来读。别在这里退 "us":猜一个区会让取词
         /// 端点全线 404,见 applemusic.go 的注释。
         case connected(savedAt: Date, storefront: String)
     }
@@ -47,7 +49,8 @@ public final class AppleMusicConnection: ObservableObject {
     public func refresh() {
         let fileDate = (try? FileManager.default.attributesOfItem(atPath: Self.tokenURL.path))?[.modificationDate] as? Date
         guard let data = try? Data(contentsOf: Self.tokenURL),
-              let info = AppleMusicTokenFile.parse(data, fileDate: fileDate ?? Date())
+              let info = AppleMusicTokenFile.parse(data, fileDate: fileDate ?? Date(),
+                                                   engineStatus: try? Data(contentsOf: Self.engineStatusURL))
         else {
             tokenInfo = nil
             isRejected = false

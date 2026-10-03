@@ -194,11 +194,10 @@ func TestApplemusicNeverGuessesStorefront(t *testing.T) {
 	}
 }
 
-// TestApplemusicEnsureStorefrontWritesBack:问到 storefront 后要补写回令牌文件,
-// 且不能把别的字段(令牌本身、saved_at)弄丢 —— 丢了等于把用户登出。
-func TestApplemusicEnsureStorefrontWritesBack(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+// 问到的店面记在这边的状态文件里,App 写的令牌文件一个字节都不动;读的时候令牌文件没记店面才用它,
+// 而且只认同一份令牌的。
+func TestApplemusicStorefrontKeptOutOfTheTokenFile(t *testing.T) {
+	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
 	path := applemusicUserTokenPath()
 	if path == "" {
 		t.Fatal("empty token path")
@@ -208,28 +207,29 @@ func TestApplemusicEnsureStorefrontWritesBack(t *testing.T) {
 	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	applemusicSaveStorefront("cn")
-
-	gotTok, gotSF := applemusicLoadUserToken()
-	if gotTok != tok {
-		t.Errorf("token lost after storefront write-back: %q", gotTok)
+	applemusicNoteStorefront(tok, "cn")
+	if raw, _ := os.ReadFile(path); string(raw) != seed {
+		t.Fatalf("令牌文件只由 App 写,这边不该动它: %s", raw)
 	}
-	if gotSF != "cn" {
-		t.Errorf("storefront not written back: %q", gotSF)
+	if gotTok, gotSF := applemusicLoadUserToken(); gotTok != tok || gotSF != "cn" {
+		t.Fatalf("load = %q, %q; want the token and the noted storefront", gotTok, gotSF)
 	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
+	if info, err := os.Stat(applemusicStatusPath()); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("状态文件要在、权限 0600: %v", err)
+	}
+	// 令牌文件自己记了店面,以它为准。
+	if err := os.WriteFile(path, []byte(`{"media_user_token":"`+tok+`","storefront":"jp","saved_at":1700000000}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var f applemusicUserTokenFile
-	if err := json.Unmarshal(raw, &f); err != nil {
+	if _, gotSF := applemusicLoadUserToken(); gotSF != "jp" {
+		t.Fatalf("令牌文件里的店面优先: %q", gotSF)
+	}
+	// 用户重连换了令牌:旧令牌那份观察不算。
+	if err := os.WriteFile(path, []byte(`{"media_user_token":"another","storefront":"","saved_at":1700000500}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if f.SavedAt != 1700000000 {
-		t.Errorf("saved_at clobbered: %d", f.SavedAt)
-	}
-	if info, err := os.Stat(path); err == nil && info.Mode().Perm() != 0o600 {
-		t.Errorf("token file permissions widened to %o", info.Mode().Perm())
+	if _, gotSF := applemusicLoadUserToken(); gotSF != "" {
+		t.Fatalf("别的令牌问到的店面不该算: %q", gotSF)
 	}
 }
 
@@ -265,38 +265,46 @@ func TestApplemusicCoverReplacesAllPlaceholders(t *testing.T) {
 	}
 }
 
-// 令牌被拒:只标记文件里同一份令牌,已经记过不重写;回写店面保留新字段。
+// 令牌被拒:只在令牌文件里还是同一份令牌时记;这次登录之后记过就不重写,重新登录过再被拒要重记。令牌文件始终不动。
 func TestApplemusicMarkTokenRejected(t *testing.T) {
 	t.Setenv("LYRIMUSE_CONFIG_DIR", t.TempDir())
 	path := applemusicUserTokenPath()
-	write := func(f applemusicUserTokenFile) {
-		raw, _ := json.Marshal(f)
-		if err := os.WriteFile(path, raw, 0o600); err != nil {
-			t.Fatal(err)
-		}
+	const tokenFile = `{"media_user_token":"new","saved_at":100,"expires_at":200}`
+	if err := os.WriteFile(path, []byte(tokenFile), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	read := func() applemusicUserTokenFile {
-		raw, _ := os.ReadFile(path)
-		var f applemusicUserTokenFile
-		_ = json.Unmarshal(raw, &f)
-		return f
-	}
-	write(applemusicUserTokenFile{MediaUserToken: "new", SavedAt: 100, ExpiresAt: 200})
 	applemusicMarkTokenRejected("old")
-	if read().RejectedAt != 0 {
+	if st := applemusicReadStatus(); st.RejectedAt != 0 {
 		t.Fatal("已经换了新令牌,旧令牌的 401 不该把新令牌标成失效")
 	}
 	applemusicMarkTokenRejected("new")
-	first := read().RejectedAt
-	if first == 0 {
-		t.Fatal("同一份令牌被拒要记下")
+	first := applemusicReadStatus()
+	if first.RejectedAt == 0 || first.TokenFP != applemusicTokenFingerprint("new") {
+		t.Fatalf("同一份令牌被拒要记下: %+v", first)
 	}
-	applemusicSaveStorefront("cn")
-	if f := read(); f.Storefront != "cn" || f.RejectedAt != first || f.ExpiresAt != 200 || f.SavedAt != 100 {
-		t.Fatalf("回写店面要保留其余字段: %+v", f)
+	applemusicMarkTokenRejected("new")
+	applemusicNoteStorefront("new", "cn")
+	if st := applemusicReadStatus(); st.RejectedAt != first.RejectedAt || st.Storefront != "cn" {
+		t.Fatalf("记过不重写、补店面保留被拒时刻: %+v", st)
 	}
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("凭据文件权限要是 0600: %v %v", info.Mode().Perm(), err)
+	if raw, _ := os.ReadFile(path); string(raw) != tokenFile {
+		t.Fatalf("令牌文件只由 App 写,这边不该动它: %s", raw)
+	}
+	// 状态里那次被拒早于这次登录(saved_at=100):重新登录过,再被拒要重记。
+	stale, _ := json.Marshal(applemusicStatus{TokenFP: applemusicTokenFingerprint("new"), RejectedAt: 50})
+	if err := os.WriteFile(applemusicStatusPath(), stale, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	applemusicMarkTokenRejected("new")
+	if st := applemusicReadStatus(); st.RejectedAt < 100 {
+		t.Fatalf("重新登录之后再被拒要重记: %+v", st)
+	}
+}
+
+// 指纹跟 App 的 AppleMusicTokenFile.fingerprint 逐字一致:两侧钉同一个值。
+func TestApplemusicTokenFingerprint(t *testing.T) {
+	if got := applemusicTokenFingerprint(" test-token\n"); got != "4c5dc9b7708905f7" {
+		t.Fatalf("fingerprint = %q", got)
 	}
 }
 

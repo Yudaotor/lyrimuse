@@ -1,10 +1,21 @@
+import CryptoKit
 import Foundation
 
-/// Apple Music 用户令牌文件(`lyrimuse-applemusic-token.json`)的读取。App 侧的连接卡片读它;collector 侧
-/// `applemusicUserTokenFile`(applemusic.go)读写同一个文件,字段两边同步改。
+/// Apple Music 用户令牌文件(`lyrimuse-applemusic-token.json`):App 的登录窗口写、连接卡片读,collector 只读
+/// (`applemusicUserTokenFile`,applemusic.go)。collector 对这份令牌的观察(问到的店面、被 Apple 拒过)记在它自己的
+/// `lyrimuse-applemusic-status.json`,按令牌指纹认,`parse` 把两份合起来。字段两边同步改。
 public enum AppleMusicTokenFile {
     /// Apple 的硬上限:令牌 6 个月,没有续期接口。cookie 没带过期时刻时按保存时间推算。
     public static let tokenLifetime: TimeInterval = 180 * 24 * 3600
+    /// collector 的观察记在这份文件里(applemusic.go `applemusicStatusPath`)。
+    public static let engineStatusFileName = "lyrimuse-applemusic-status.json"
+
+    /// 令牌 SHA-256 的前 8 字节,16 位小写十六进制;只用来认「是不是同一份令牌」。跟 collector
+    /// `applemusicTokenFingerprint` 逐字一致(两侧单测钉同一个值)。
+    public static func fingerprint(_ token: String) -> String {
+        let digest = SHA256.hash(data: Data(token.trimmingCharacters(in: .whitespacesAndNewlines).utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
 
     public struct Info: Equatable, Sendable {
         public let savedAt: Date
@@ -23,8 +34,9 @@ public enum AppleMusicTokenFile {
     }
 
     /// 没有令牌 / 读不出返回 nil。`fileDate` 是文件修改时间:老格式没有 `saved_at` 时拿它兜底,
-    /// 不能按「现在」算 —— 那样每次读都重新起算,永远不会提示续期。
-    public static func parse(_ data: Data, fileDate: Date) -> Info? {
+    /// 不能按「现在」算 —— 那样每次读都重新起算,永远不会提示续期。`engineStatus` 是 collector 那份状态文件,
+    /// 指纹对得上才算:令牌文件没记店面时用它问到的店面;被拒时刻不早于这次保存,就是失效。
+    public static func parse(_ data: Data, fileDate: Date, engineStatus: Data? = nil) -> Info? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let token = obj["media_user_token"] as? String,
               !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -34,11 +46,21 @@ public enum AppleMusicTokenFile {
         let expires = seconds(obj["expires_at"]).map(Date.init(timeIntervalSince1970:))
             ?? saved.addingTimeInterval(tokenLifetime)
         let rejectedAt = seconds(obj["rejected_at"])
-        // 老格式(没有 saved_at)拿文件时间兜底,而 collector 标记被拒时会重写整个文件:rejected_at 取整秒,总是略早于
-        // 新的文件时间,按「被拒晚于保存」比就永远判不成失效。老格式里有 rejected_at 就是被拒了(重新登录会写新格式)。
-        let rejected = rejectedAt.map { at in savedAtField == nil || at >= saved.timeIntervalSince1970 } ?? false
+        // 令牌文件自己带的 rejected_at(老文件里会有)照旧认。没有 saved_at 的老文件拿文件时间兜底,而写进 rejected_at
+        // 那一下把文件时间推到了它之后,比不出先后:有 rejected_at 就算被拒(重新登录会写新格式)。
+        var rejected = rejectedAt.map { at in savedAtField == nil || at >= saved.timeIntervalSince1970 } ?? false
+        var storefront = (obj["storefront"] as? String) ?? ""
+        if let status = engineStatus.flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }),
+           status["token_fp"] as? String == fingerprint(token) {
+            if storefront.trimmingCharacters(in: .whitespaces).isEmpty, let noted = status["storefront"] as? String {
+                storefront = noted
+            }
+            if let at = seconds(status["rejected_at"]), at >= saved.timeIntervalSince1970 {
+                rejected = true
+            }
+        }
         return Info(savedAt: saved,
-                    storefront: (obj["storefront"] as? String) ?? "",
+                    storefront: storefront,
                     expiresAt: expires,
                     rejected: rejected)
     }

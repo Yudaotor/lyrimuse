@@ -425,6 +425,29 @@ func runSettingsInteractionTests() {
         expectEqual(parse(#"{"media_user_token":"t","saved_at":1800000000,"rejected_at":1799999000}"#)?.rejected, false,
                     "Apple Music 令牌: 被拒早于这次保存(重连之前的事)不算")
         expectEqual(parse(#"{"media_user_token":"  "}"#) == nil && parse("oops") == nil, true, "Apple Music 令牌: 没有令牌 = 未连接")
+        // collector 的观察记在它自己的状态文件里,按令牌指纹认;令牌文件只由 App 写。
+        expectEqual(T.fingerprint(" test-token\n"), "4c5dc9b7708905f7",
+                    "Apple Music 令牌: 指纹跟 collector applemusicTokenFingerprint 一致")
+        expectEqual(T.engineStatusFileName, "lyrimuse-applemusic-status.json", "Apple Music 令牌: 状态文件名跟 collector 一致")
+        let fp = T.fingerprint("t")
+        let noSF = #"{"media_user_token":"t","storefront":"","saved_at":1800000000}"#
+        func merged(_ token: String, _ status: String) -> T.Info? {
+            T.parse(Data(token.utf8), fileDate: fileDate, engineStatus: Data(status.utf8))
+        }
+        expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","storefront":"jp"}"#)?.storefront, "jp",
+                    "Apple Music 令牌: 令牌文件没记店面时用 collector 问到的")
+        expectEqual(merged(noSF, #"{"token_fp":"0000000000000000","storefront":"jp"}"#)?.storefront, "",
+                    "Apple Music 令牌: 别的令牌的观察不算")
+        expectEqual(merged(#"{"media_user_token":"t","storefront":"cn","saved_at":1800000000}"#,
+                           #"{"token_fp":"\#(fp)","storefront":"jp"}"#)?.storefront, "cn",
+                    "Apple Music 令牌: 令牌文件里有店面以它为准")
+        expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","rejected_at":1800000500}"#)?.rejected, true,
+                    "Apple Music 令牌: collector 在这次登录之后被拒 = 失效")
+        expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","rejected_at":1799999000}"#)?.rejected, false,
+                    "Apple Music 令牌: 被拒早于这次登录(同一份令牌重新登录过)不算")
+        expectEqual(merged(noSF, #"{"token_fp":"0000000000000000","rejected_at":1800000500}"#)?.rejected, false,
+                    "Apple Music 令牌: 别的令牌被拒不算")
+        expectEqual(merged(noSF, "oops")?.storefront, "", "Apple Music 令牌: 状态文件坏了当没有")
         let payload = T.payload(token: "t", storefront: "", savedAt: Date(timeIntervalSince1970: 10), expiresAt: nil)
         expectEqual(payload["expires_at"] == nil && payload["saved_at"] as? Int == 10, true, "Apple Music 令牌: cookie 没带过期时刻就不写 expires_at")
 
@@ -439,6 +462,8 @@ func runSettingsInteractionTests() {
         expectEqual(conn.contains("attributes: [.posixPermissions: 0o600]") && conn.contains("rename(tmp.path, url.path)"), true,
                     "Apple Music 连接(契约): 凭据文件从创建起就是 0600")
         expectEqual(conn.contains("expiresAt: tokenCookie.expiresDate"), true, "Apple Music 连接(契约): 记下 cookie 自带的过期时刻")
+        expectEqual(conn.contains("engineStatus: try? Data(contentsOf: Self.engineStatusURL)"), true,
+                    "Apple Music 连接(契约): 读令牌时把 collector 的状态文件一起读进来")
     }
 
     // ---- Last.fm 响应在后台线程解析(源码契约) ----
