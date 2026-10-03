@@ -1201,23 +1201,13 @@ func allEnabledLyricSourcesResponded(scored []scoredLyricCandidateResult) bool {
 // 兜底:老条目可能压根没记 lyrics_source,或者那个源后来被用户关掉了 —— 这种情况下无从
 // 判断"手上这份"参没参与,退回那条更严的"所有启用的源都回来了"。
 //
-// noCurrentLyrics:调用方明确知道"手上压根没有歌词"时传 true,这道闸直接放行。
-// **手上什么都没有时,这道闸保护的是虚空**,而退回"所有启用的源都回来了"的后果是:一首歌
-// 只要有任何一个源永远不收录它(几个源确实没有某些冷门/串烧曲目,那个源就永远不会出现在
-// responded 里),「重新自动匹配」就**永远**不可能成功 —— 用户看到的是「这一轮「」没应答」
-// 这种主语为空的话。(「枫+退后+搁浅 (Live)」:酷狗给出 799 分带逐字的正确候选、只有它
-// 一个源应答,Decidable 恒为 false,App 按约定什么都不改。)同一个洞见见
+// noCurrentLyrics:调用方明确知道"手上压根没有歌词"时传 true,这道闸直接放行 —— 手上什么都没有时这道闸保护的是
+// 虚空,而退回"所有启用的源都回来了"会让一首只要有一个源永远不收录的歌永远判不了。同一个道理见
 // lyricsUpgradeBaseline 对空歌词条目那一支:「没有旧分要保护,任何真候选都是改进」。
 //
-// **刻意做成参数而不是就地推断** `currentSource == ""`:同一个空串在两条调用路径上语义
-// 不同。自动 rescore 那条路(rescoreLyrics)的前置 needsLyricsRescore 第一行就要求
-// `e.Lyrics != ""`,所以那里的空串只可能是"老条目有歌词但没记来源",必须保持严格;而手动
-// `-pick` 那条路(searchcli.go)的空串就是"这条没有歌词"。做成参数,两条路各自说清自己
-// 的处境,不靠巧合。("有歌词但没记 lyrics_source"在现实数据里是 0 条,那条兜底分支已经
-// 是死路,但保留它不花钱。)
-//
-// 放行之后仍有两道下游闸挡着,不是无保护:冠军为空时 App 走 keptNoCandidate 什么都不写;
-// 现有这份有逐字而冠军没有时走 keptWouldLoseWordTiming(见 LyricsRematchDecision)。
+// 做成参数而不是就地推断 `currentSource == ""`:同一个空串在不同调用方那里意思不同。rescoreLyrics 只对有词的
+// 条目跑,那里的空串是"有词但没记来源"(歌词管理里手改保存会清掉来源),必须保持严格;devtools 的
+// resync-lyrics 按条目里有没有词传。
 func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string, noCurrentLyrics bool) bool {
 	if noCurrentLyrics {
 		return true
@@ -1563,13 +1553,18 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 // 用户按「停止」或进程退出时搜到一半就收工,这一轮什么都不写(半截结果不是结论)。
 // 播放侧传 context.Background(),不会被取消。
 func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, durationSecs float64, firstFill bool) {
+	retryLyricsUpgradeWith(ctx, key, artist, title, album, durationSecs, firstFill, lyricsRescoreOpts{})
+}
+
+// retryLyricsUpgradeWith 是带上手动重新匹配那几处差别的 retryLyricsUpgrade,见 lyricsRescoreOpts。
+func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album string, durationSecs float64, firstFill bool, opts lyricsRescoreOpts) {
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
 	enrichMu.Lock()
-	sourceChoice := enrichCache[key].LyricsSourceChoice
+	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
 	enrichMu.Unlock()
@@ -1580,7 +1575,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	roundCtx, queries := withLyricQueryLog(roundCtx)
 	// 查询词跟首次解析一样先归一化(见 searchQueryFields);缓存 key、决策记录仍用原样标签。
 	qa, qt, qal := searchQueryFields(artist, title, album)
-	_, scored := scoredLyricCandidates(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs)
+	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs, opts.onUpdate())
 	if ctx.Err() != nil {
 		return
 	}
@@ -1595,7 +1590,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	}
 	// 换上去会让正在播的这首丢掉能用的译文时,先把新正文翻好,跟正文同一次换上。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
-		return !e.ManualLyrics && lyricsUpgradeApplies(e, scored, picked, durationSecs)
+		return (opts.manual || !e.ManualLyrics) && lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	})
 
 	enrichMu.Lock()
@@ -1634,13 +1629,16 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	e, ok := enrichCache[key]
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		opts.report(lyricsRematchMissing)
 		return
 	}
-	if e.ManualLyrics || enrichEditedSinceLocked(key, stamp) {
+	if (e.ManualLyrics && !opts.manual) || enrichEditedSinceLocked(key, stamp) {
 		// 重搜这几秒里用户刚好在"歌词管理"里改了这条(手改、采纳候选、标纯音乐……)—— 进来时的
 		// 快照已经过期,以拿锁这一刻的实际状态为准(跟 rescoreLyrics 里同一道判断)。
+		opts.report(lyricsRematchEdited)
 		return
 	}
+	before := e
 	// 一个歌词源都没连上(断网、DNS 抽风、全被熔断)的这一轮不算一次尝试:计数只记时间戳。
 	// 算上的话,补空的指数退避、「有源被跳过就快点重来」那一次机会(只认计数 0)、没歌手没专辑
 	// 满 3 次就放弃(lyricsNoAnchorGaveUp)都会被一次断网白白用掉。时间戳照记,免得断网期间每拍重搜。
@@ -1670,6 +1668,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	if firstFill {
 		path = lyricsDecisionPathRefill
 	}
+	path = opts.decisionPath(path)
 	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
 	e.LyricsDecision = buildLyricsDecision(
 		path, artist, title, album, durationSecs, scored, picked, upgraded)
@@ -1703,6 +1702,9 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 		preparedTr.applyLocked(&e)
+		if opts.manual {
+			e.ManualLyrics, e.LyricsSourceChoice = false, ""
+		}
 	}
 	// 纯音乐结论也要在这条路径上落地。first-resolve 那边一直有这段
 	// (见 resolveEnrichAsync 里读 c.Instrumental 的分支),而重搜/补空这条**从来没有**:
@@ -1745,6 +1747,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
+	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: true})
 	enrichCache[key] = e
 	enrichDirty = true
 }
@@ -1870,6 +1873,11 @@ func needsLyricsRescore(e enrichEntry, pinned, autoUpgrade bool) bool {
 //
 // ctx 同 retryLyricsUpgrade。
 func rescoreLyrics(ctx context.Context, key, artist, title, album string, durationSecs float64) (deferred bool) {
+	return rescoreLyricsWith(ctx, key, artist, title, album, durationSecs, lyricsRescoreOpts{})
+}
+
+// rescoreLyricsWith 是带上手动重新匹配那几处差别的 rescoreLyrics,见 lyricsRescoreOpts。
+func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, durationSecs float64, opts lyricsRescoreOpts) (deferred bool) {
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -1877,7 +1885,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	}()
 	enrichMu.Lock()
 	currentSource := enrichCache[key].LyricsSource
-	sourceChoice := enrichCache[key].LyricsSourceChoice
+	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	stamp := enrichEditStampLocked()
 	enrichMu.Unlock()
@@ -1888,15 +1896,15 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	roundCtx, queries := withLyricQueryLog(roundCtx)
 	// 查询词同 retryLyricsUpgrade。
 	qa, qt, qal := searchQueryFields(artist, title, album)
-	_, scored := scoredLyricCandidates(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs)
+	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs, opts.onUpdate())
 	if ctx.Err() != nil {
 		return false
 	}
 	reached := round.reachedAny()
 	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
-	// 传 false:走到这里的前置是 needsLyricsRescore,它第一行就要求 e.Lyrics != "",
-	// 所以自动 rescore 永远不是"手上没歌词"的处境,这一支的口径一字不变。
+	// 传 false:这条路只对有词的条目跑(needsLyricsRescore 第一行就要求 e.Lyrics != "",全量扫库和手动重新匹配
+	// 都先把没词的分给补空那条路),手上总有一份要保护的词。
 	decidable := rescoreDecidable(scored, currentSource, false)
 	seen := lyricSourcesWithCandidates(scored)
 	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
@@ -1906,7 +1914,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
-		return !e.ManualLyrics && decidable && picked != nil && !rescoreKeeps(e, scored, picked) && picked.Lyrics != e.Lyrics
+		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil && !rescoreKeeps(e, scored, picked) && picked.Lyrics != e.Lyrics
 	})
 
 	enrichMu.Lock()
@@ -1945,14 +1953,17 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	e, ok := enrichCache[key]
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		opts.report(lyricsRematchMissing)
 		return false
 	}
 	// 期间用户可能刚好手改或采纳了这条(重搜是异步的,进来时的快照已经过期)。跟删除同理:
 	// 以拿锁这一刻的实际状态为准,不能用几秒前的判断结果去覆盖用户刚做的改动。采纳候选在开关
-	// 关着时不置 ManualLyrics,所以还要看改动序号。
-	if e.ManualLyrics || enrichEditedSinceLocked(key, stamp) {
+	// 关着时不置 ManualLyrics,所以还要看改动序号。手动重新匹配照跑人工修正过的条目(见 lyricsRescoreOpts)。
+	if (e.ManualLyrics && !opts.manual) || enrichEditedSinceLocked(key, stamp) {
+		opts.report(lyricsRematchEdited)
 		return false
 	}
+	before := e
 	// 换了打分版本后的第一次尝试:旧版本下的计数作废、从零开始(见 LyricsRescoreVersion 注释)。
 	if e.LyricsRescoreVersion != lyricsScoringVersion {
 		e.LyricsRescoreCount = 0
@@ -1987,7 +1998,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	keep := decidable && picked != nil && rescoreKeeps(e, scored, picked)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
-			lyricsDecisionPathRescore, artist, title, album, durationSecs, scored, picked,
+			opts.decisionPath(lyricsDecisionPathRescore), artist, title, album, durationSecs, scored, picked,
 			picked != nil && !keep && (picked.Lyrics != e.Lyrics || gainsWordTiming(e, picked)))
 		e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 		e.LyricsDecision.QueriesTried = queries.queries()
@@ -2056,6 +2067,13 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			// 静默改回旧值,rescore 的结论就被回滚了。
 			lyricsChanged = true
 		}
+		if opts.manual {
+			// [manual:1] 写在导出的歌词文件头里,清掉人工修正标记要重新导出。
+			if e.ManualLyrics {
+				lyricsChanged = true
+			}
+			e.ManualLyrics, e.LyricsSourceChoice = false, ""
+		}
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		if complete {
@@ -2068,6 +2086,8 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	if adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
+	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
+		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, picked)})
 	enrichCache[key] = e
 	enrichDirty = true
 	return deferred

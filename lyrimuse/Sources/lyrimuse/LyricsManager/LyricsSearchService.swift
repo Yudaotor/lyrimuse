@@ -272,59 +272,6 @@ final class LyricsSearchService {
     // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
     // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
     // 转发给调用方决定展示哪种空状态文案。
-    /// `-pick` 模式下 collector 给出的"按自动解析规则重选一次"的结论。只有最后那行 stdout 才有。
-    ///
-    /// 冠军**必须**由 collector 那边算,不能在这里取 max(score):`pickLyricCandidate` 带一个
-    /// 设置分支(「匹配算法」选「顺序优先」时取的是"配置顺序里第一个 Score>=0 的源",不是最高
-    /// 分),还要过启用源过滤、跳掉 Score<0 的废候选。在 Swift 侧复制一遍就是第二份会漂的决策
-    /// 规则,而漂的表现是"手动匹配完、下一拍自愈路径又给换回去"。
-    struct Pick: Decodable {
-        /// 空串 = 一个能用的候选都没有(全被判废/全没搜到)。调用方**不许**退回"取第一条"。
-        var winner: String = ""
-        var winnerScore: Int = 0
-        var scoringVersion: Int = 0
-        /// 复刻 collector 的 rescoreDecidable:当前生效的那个源这一轮没应答时为 false ——
-        /// 它可能本来就是最优的、只是这次超时了,此时下结论有降级风险。
-        var decidable: Bool = false
-        var sourcesSeen: [String] = []
-        var sourcesResponded: [String] = []
-        var resolvedDurationSecs: Double = 0
-        /// smart / priority —— 结果文案如实说明这轮按哪套规则选的。
-        var mode: String = ""
-        /// lyricsDecision 的 JSON 原文,原样写进 enrich-cache 的 lyrics_decision。走字符串是
-        /// 为了不在 Swift 侧再镜像一遍那个结构(镜像就会漂)。
-        var decisionJSON: String = ""
-
-        // 改成手写 init(from)——原来的合成 Decodable 表面上给每个属性都设了
-        // 默认值,但 Swift 的自动合成解码器**不会**在 key 缺失时退回属性默认值,缺 key 会
-        // 直接 throw(实测验证过,不是猜的)。而 searchLyricsPick 在 Go 那边几乎每个字段都
-        // 带 `omitempty`——winner 在"没有可用候选"时是空串会被省略、sourcesSeen/
-        // sourcesResponded 在"啥都没应答"时是空切片会被省略、resolvedDurationSecs 在
-        // "浏览历史缓存条目、没有可靠真实时长"时是 0 会被省略、decisionJSON 在
-        // **decidable==false 这个完全正常的分支**(当前源这轮没应答)时干脆整个不写。
-        // 于是"这一轮没拿到结论"这句本该保底的兜底文案,实际上吞掉了好几种明确该有专属
-        // 文案的正常结局("这轮没应答没有换""这轮没有能用的候选"等)——因为那一行 JSON
-        // 解码直接整行失败被跳过,调用方拿到的是上一条流式更新(pick 恒为 nil)。改成显式
-        // decodeIfPresent + ?? 默认值,跟 Go 的 omitempty 语义对齐。
-        private enum CodingKeys: String, CodingKey {
-            case winner, winnerScore, scoringVersion, decidable
-            case sourcesSeen, sourcesResponded, resolvedDurationSecs, mode, decisionJSON
-        }
-
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            winner = try c.decodeIfPresent(String.self, forKey: .winner) ?? ""
-            winnerScore = try c.decodeIfPresent(Int.self, forKey: .winnerScore) ?? 0
-            scoringVersion = try c.decodeIfPresent(Int.self, forKey: .scoringVersion) ?? 0
-            decidable = try c.decodeIfPresent(Bool.self, forKey: .decidable) ?? false
-            sourcesSeen = try c.decodeIfPresent([String].self, forKey: .sourcesSeen) ?? []
-            sourcesResponded = try c.decodeIfPresent([String].self, forKey: .sourcesResponded) ?? []
-            resolvedDurationSecs = try c.decodeIfPresent(Double.self, forKey: .resolvedDurationSecs) ?? 0
-            mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? ""
-            decisionJSON = try c.decodeIfPresent(String.self, forKey: .decisionJSON) ?? ""
-        }
-    }
-
     struct SearchUpdate {
         let candidates: [Candidate]
         let networkLooksDown: Bool
@@ -360,8 +307,6 @@ final class LyricsSearchService {
         /// 别跟 `sourceFailureReasonCodes` 混为一谈:那个是"源坏了",这个是**查成功了**
         /// 的结论,所以 collector 侧特意走了独立字段(见 searchcli.go 的 TracksFoundNoLyrics)。
         let tracksFoundNoLyrics: [TrackFoundNoLyrics]
-        /// 只有 pickWinner: true 且只有最后那行才非 nil,见 Pick。
-        let pick: Pick?
     }
 
     /// 一个源"我这儿有这首歌,但没有词"的完整说法。除了是哪个源,还带上它**实际匹配到的**
@@ -428,15 +373,10 @@ final class LyricsSearchService {
     // lyrics 的"搜索候选歌词"弹窗)因此能做到"谁先搜到就先展示谁,列表随后续源陆续
     // 刷新",不用等最慢的源(或者 20 秒兜底超时)才看到任何东西。回调固定在
     // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
-    /// - pickWinner: 传 true 时给 collector 加 `-pick`,让它顺便按自动解析那套规则选出冠军
-    ///   (见 Pick)。候选列表照常流式返回,冠军只在最后那行带回来。
-    /// - currentSource: 这首歌眼下生效的歌词源,只在 pickWinner 时有意义(喂给 collector 的
-    ///   decidable 判定)。
     /// - owner: 发起方,见 `Owner`。
     func search(
         owner: Owner,
         artist: String, title: String, album: String, durationSecs: Double = 0,
-        pickWinner: Bool = false, currentSource: String = "",
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
@@ -450,8 +390,7 @@ final class LyricsSearchService {
         defer { unregister(handle, for: owner) }
         try await withTaskCancellationHandler {
             try await performSearch(handle: handle, artist: artist, title: title, album: album,
-                                    durationSecs: durationSecs, pickWinner: pickWinner,
-                                    currentSource: currentSource, onUpdate: onUpdate)
+                                    durationSecs: durationSecs, onUpdate: onUpdate)
         } onCancel: {
             handle.cancel()
         }
@@ -473,7 +412,6 @@ final class LyricsSearchService {
     private func performSearch(
         handle: RunHandle,
         artist: String, title: String, album: String, durationSecs: Double,
-        pickWinner: Bool = false, currentSource: String = "",
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -504,12 +442,6 @@ final class LyricsSearchService {
                !playerBundleID.isEmpty
             {
                 process.arguments?.append(contentsOf: ["-player", playerBundleID])
-            }
-            if pickWinner {
-                process.arguments?.append("-pick")
-                if !currentSource.isEmpty {
-                    process.arguments?.append(contentsOf: ["-current-source", currentSource])
-                }
             }
             // 记到这一轮的句柄上,好让取消(同一发起方的下一轮、调用方 Task 取消)能杀掉我。
             guard handle.attach(process) else {
@@ -566,10 +498,9 @@ final class LyricsSearchService {
                         instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
                         // 旧 collector 不发这个字段(同上,两个二进制各自独立部署)——解码成空
                         // 数组,界面退回原来那句笼统的"没找到候选",不会因此报错或崩。
-                        tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [],
-                        pick: raw.pick)
+                        tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [])
                     // 走主队列而不是各起一个 MainActor Task:收尾的 continuation 也从主队列恢复(见 terminationHandler),
-                    // 同一条串行队列先进先出,最后那行(带 pick 的)一定先于 search() 返回送到;各起 Task 的顺序语言层面不保证。
+                    // 同一条串行队列先进先出,最后那行一定先于 search() 返回送到;各起 Task 的顺序语言层面不保证。
                     DispatchQueue.main.async { MainActor.assumeIsolated { onUpdate(update) } }
                 }
             }
@@ -674,8 +605,6 @@ private struct RawSearchUpdate: Decodable {
     /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源。旧 collector 不发,
     /// 可选 + 解码方兜底成空数组,见 SearchUpdate.tracksFoundNoLyrics。
     let tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics]?
-    /// 只有 -pick 且只有最后那行才有。
-    let pick: LyricsSearchService.Pick?
 }
 
 private struct RawCandidate: Decodable {

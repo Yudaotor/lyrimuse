@@ -1672,6 +1672,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startEnrichCancelWatcher(ctx)                  // 独立节奏,见 enrichcancel.go 顶部注释
 	go startEnrichEditWatcher(ctx)                    // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
 	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
+	go startLyricsRematchWatcher(ctx)                 // 「重新自动匹配」,见 lyricsrematch.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

@@ -128,7 +128,7 @@ func TestManualLyricSearchMark(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "withLyricQueryLog(withManualLyricSearch(context.Background()))") {
+	if !strings.Contains(string(data), "searchCtx := withManualLyricSearch(context.Background())") {
 		t.Error("search-lyrics 没挂手动搜索的标记")
 	}
 	for _, f := range []string{"enrich.go", "upcoming.go", "albumprefetch.go", "lyricsfillsweep.go", "lyricsfullscan.go"} {

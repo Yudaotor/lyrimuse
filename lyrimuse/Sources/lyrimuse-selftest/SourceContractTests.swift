@@ -3952,9 +3952,8 @@ func runSourceContractTests() {
     // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
     //
     // 两次事故,同一条 Go→Swift 边界:
-    //  ① searchLyricsPick → LyricsSearchService.Pick:decidable==false 这条完全
-    //     正常的分支里 collector 不写 decisionJSON,于是那一行解码失败、pick 恒为 nil,好几种
-    //     该有专属文案的正常结局被吞成兜底那一句;
+    //  ① 「重新自动匹配」的结论:decidable==false 这条完全正常的分支里 collector 不写 decisionJSON,
+    //     于是那一行解码失败、结论恒为 nil,好几种该有专属文案的正常结局被吞成兜底那一句;
     //  ② backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
     //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
     //     功能上线那天起就这样(两侧一个字没改过),只是 lastRunFailed 那天才把它从"一声不吭"
@@ -4009,7 +4008,8 @@ func runSourceContractTests() {
                 if line.hasPrefix("//") { continue }
                 // 收尾的右括号一起匹配,否则 `.winner` 会被 `.winnerScore` 那行顶掉。
                 if line.contains("decodeIfPresent("), line.contains("forKey: .\(key))") { return true }
-                if line.hasPrefix("var \(key):") || line.hasPrefix("let \(key):"), line.contains("?") { return true }
+                let decl = line.hasPrefix("public ") ? String(line.dropFirst("public ".count)) : line
+                if decl.hasPrefix("var \(key):") || decl.hasPrefix("let \(key):"), decl.contains("?") { return true }
             }
             return false
         }
@@ -4018,8 +4018,10 @@ func runSourceContractTests() {
              "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Outcome"),
             ("lyrimuse-collector/backfill.go", "backfillItem",
              "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Item"),
-            ("lyrimuse-collector/searchcli.go", "searchLyricsPick",
-             "lyrimuse/Sources/lyrimuse/LyricsManager/LyricsSearchService.swift", "Pick"),
+            ("lyrimuse-collector/lyricsrematch.go", "lyricsRematchStatus",
+             "lyrimuse/Sources/LyrimuseCore/Local/LyricsRematch.swift", "Status"),
+            ("lyrimuse-collector/lyricsrematch.go", "lyricsRematchResult",
+             "lyrimuse/Sources/LyrimuseCore/Local/LyricsRematch.swift", "Conclusion"),
         ]
         for b in boundaries {
             let go = read(b.go)

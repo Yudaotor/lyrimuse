@@ -51,7 +51,6 @@ func cacheEntry(t *testing.T, key string) (enrichEntry, bool) {
 }
 
 func strPtr(s string) *string { return &s }
-func intPtr(n int) *int       { return &n }
 
 var editKey = enrichKey("Edit Artist", "Edit Song", "Edit Album")
 
@@ -106,15 +105,13 @@ func TestSaveEditOptionalFields(t *testing.T) {
 		t.Errorf("source 空 = 清掉、非采纳清指纹、mark_manual 置上 got source=%q sha=%q manual=%v", e.LyricsSource, e.ManualPickSHA, e.ManualLyrics)
 	}
 
-	// 显式传:空 source_choice / 空 yrc = 清掉;打分成对写;采纳留指纹;判决两槽一起写。
+	// 显式传:空 source_choice / 空 yrc = 清掉;采纳留指纹。
 	applyEnrichEdit(enrichEditRequest{
 		Op: "save_edit", Key: editKey, Lyrics: "[00:01.00]picked", Source: "netease",
-		SourceChoice: strPtr(""), YRC: strPtr(""), Score: intPtr(9), ScoringVersion: intPtr(4),
-		FromManualPick: true, Decision: json.RawMessage(`{"path":"manual","winner":"netease"}`),
-		ResolvedDurationSecs: 201.5, SourcesSeen: []string{"netease"},
+		SourceChoice: strPtr(""), YRC: strPtr(""), FromManualPick: true,
 	})
 	e, _ = cacheEntry(t, editKey)
-	if e.LyricsSourceChoice != "" || e.LyricsYRC != "" || e.LyricsScore != 9 || e.LyricsScoringVersion != 4 {
+	if e.LyricsSourceChoice != "" || e.LyricsYRC != "" {
 		t.Errorf("显式传的字段没生效 got %+v", e)
 	}
 	if e.ManualPickSHA == "" || e.ManualPickSHA != manualPickFingerprint("[00:01.00]picked") {
@@ -122,12 +119,6 @@ func TestSaveEditOptionalFields(t *testing.T) {
 	}
 	if e.ManualLyrics {
 		t.Error("采纳候选(mark_manual=false)不该置 manual_lyrics")
-	}
-	if e.LyricsDecision == nil || e.LyricsDecision != e.LyricsDecisionApplied || e.LyricsDecision.Winner != "netease" {
-		t.Errorf("判决两槽应一起写成同一份 got %+v / %+v", e.LyricsDecision, e.LyricsDecisionApplied)
-	}
-	if e.ResolvedDurationSecs != 201.5 || len(e.LyricsSourcesSeen) != 1 {
-		t.Errorf("时长 / 看过的源没写 got %+v", e)
 	}
 }
 

@@ -81,20 +81,14 @@ type enrichEditRequest struct {
 	Keys []string `json:"keys,omitempty"`
 
 	// save_edit
-	Lyrics               string          `json:"lyrics,omitempty"`
-	Tr                   string          `json:"tr,omitempty"`
-	Roma                 string          `json:"roma,omitempty"`
-	YRC                  *string         `json:"yrc,omitempty"`
-	Source               string          `json:"source,omitempty"`
-	MarkManual           bool            `json:"mark_manual,omitempty"`
-	SourceChoice         *string         `json:"source_choice,omitempty"`
-	FromManualPick       bool            `json:"from_manual_pick,omitempty"`
-	Score                *int            `json:"score,omitempty"`
-	ScoringVersion       *int            `json:"scoring_version,omitempty"`
-	ResolvedDurationSecs float64         `json:"resolved_duration_secs,omitempty"`
-	SourcesSeen          []string        `json:"sources_seen,omitempty"`
-	SourcesResponded     []string        `json:"sources_responded,omitempty"`
-	Decision             json.RawMessage `json:"decision,omitempty"`
+	Lyrics         string  `json:"lyrics,omitempty"`
+	Tr             string  `json:"tr,omitempty"`
+	Roma           string  `json:"roma,omitempty"`
+	YRC            *string `json:"yrc,omitempty"`
+	Source         string  `json:"source,omitempty"`
+	MarkManual     bool    `json:"mark_manual,omitempty"`
+	SourceChoice   *string `json:"source_choice,omitempty"`
+	FromManualPick bool    `json:"from_manual_pick,omitempty"`
 
 	// save_plain_text
 	PlainLyrics       string `json:"plain_lyrics,omitempty"`
@@ -223,18 +217,6 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		e.Instrumental = req.Value
 		enrichCache[req.Key] = e
 		return enrichEditOutcome{changed: 1}
-	case "record_decision":
-		if req.Key == "" || len(req.Decision) == 0 {
-			return enrichEditOutcome{err: fmt.Errorf("record_decision: empty key or decision")}
-		}
-		var d lyricsDecision
-		if err := json.Unmarshal(req.Decision, &d); err != nil {
-			return enrichEditOutcome{err: fmt.Errorf("record_decision: %w", err)}
-		}
-		e := enrichCache[req.Key]
-		e.LyricsDecision, e.LyricsDecisionApplied = &d, &d
-		enrichCache[req.Key] = e
-		return enrichEditOutcome{changed: 1}
 	case "set_manual_lock":
 		var flipped []string
 		for k, e := range enrichCache {
@@ -276,13 +258,6 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 // applySaveEdit 是「保存编辑 / 采纳一条候选」对一条缓存记录的全部改动。规则逐条对应原先 App 侧的
 // EnrichCacheStore.saveEdit,各条的来由见 docs/features/11 章「编辑保存的字段规则」。
 func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
-	var decision *lyricsDecision
-	if len(req.Decision) > 0 {
-		decision = &lyricsDecision{}
-		if err := json.Unmarshal(req.Decision, decision); err != nil {
-			return fmt.Errorf("save_edit: decision: %w", err)
-		}
-	}
 	// 译文换了内容:描述旧译文的语言、来源、机翻节流与重试计数一起清掉,别拿旧译文的记录给新内容背书。
 	if req.Tr != e.LyricsTr {
 		e.LyricsTrLang, e.LyricsTrSource = "", ""
@@ -302,22 +277,6 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	// nil = 不动;空串 = 显式清掉(交回算法自由选源)。
 	if req.SourceChoice != nil {
 		e.LyricsSourceChoice = *req.SourceChoice
-	}
-	// 打分留痕成对写,缺一个就都不动。
-	if req.Score != nil && req.ScoringVersion != nil {
-		e.LyricsScore, e.LyricsScoringVersion = *req.Score, *req.ScoringVersion
-	}
-	if req.ResolvedDurationSecs > 0 {
-		e.ResolvedDurationSecs = req.ResolvedDurationSecs
-	}
-	if len(req.SourcesSeen) > 0 {
-		e.LyricsSourcesSeen = req.SourcesSeen
-	}
-	if len(req.SourcesResponded) > 0 {
-		e.LyricsSourcesResponded = req.SourcesResponded
-	}
-	if decision != nil {
-		e.LyricsDecision, e.LyricsDecisionApplied = decision, decision
 	}
 	// nil = 不动;空串 = 清掉逐字时间轴。
 	if req.YRC != nil {

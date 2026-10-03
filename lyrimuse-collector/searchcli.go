@@ -39,16 +39,6 @@ func runSearchLyricsCLI(args []string) {
 	title := fs.String("title", "", "track title")
 	album := fs.String("album", "", "track album")
 	duration := fs.Float64("duration", 0, "track duration in seconds (for duration-match scoring)")
-	// -pick:除了候选列表,再按**自动解析那一套规则**(pickLyricCandidate)选出冠军,附在最后
-	// 那行 stdout 的 pick 字段里。给「歌词管理」的「重新自动匹配」按钮用 —— 冠军必须由 Go
-	// 这边算:pickLyricCandidate 带一个设置分支(顺序优先模式取的是"配置顺序里第一个
-	// Score>=0",不是最高分),在 Swift 侧自己取 max(score) 会跟自动决策给出不同答案,于是
-	// 手动匹配的结果会被下一轮自愈路径换掉 —— 自己跟自己打架。
-	pick := fs.Bool("pick", false, "also decide a winner with the automatic resolve rules (pickLyricCandidate)")
-	// -current-source:这首歌眼下生效的歌词源。只给 -pick 用,复刻 rescoreDecidable 那道闸:
-	// 当前源这一轮没应答时不敢下结论(它可能本来就是最优的,只是这次超时了),避免一次偶发的
-	// 部分应答把用户降级到更差的一份。
-	currentSource := fs.String("current-source", "", "the lyric source in effect now (for the -pick decidability guard)")
 	// -player:**这一刻在放的播放器** bundle id(com.apple.Music / com.tencent.QQMusicMac …)。
 	// 只喂给同源加权那一项,见下面 setNativeLyricSourcesForPlayer 那处注释。缺省=不加分。
 	player := fs.String("player", "", "bundle id of the player currently playing (for the same-source scoring term)")
@@ -109,7 +99,6 @@ func runSearchLyricsCLI(args []string) {
 		// 后果不是"少一点分"而是排序口径不同:冠亚军分差中位只有 22 分、74% 的歌 ≤40 分,
 		// 250 分足以翻盘(qq 与 kugou 的分差常年只有 9 分)。所以在此之前,「联网搜索候选歌词」
 		// 展示的名次跟 collector 自动决策的名次对不上,用 QQ/网易云/酷狗 听歌的用户尤其明显。
-		// -pick 要拿这套规则选冠军,这个差异必须先补掉。
 		// 同源加权的判据:按调用方(Swift 侧「歌词管理」/「解析决策」)传进来的**当前
 		// 播放器 bundle id** 设。 不能像之前那样按 features().Players 设 ——
 		// 那是"用户勾了哪些播放器",不是"现在在放哪个",全勾的用户会让三个源同时拿到
@@ -152,9 +141,6 @@ func runSearchLyricsCLI(args []string) {
 	}
 	enc := json.NewEncoder(os.Stdout)
 	var appleTitle, appleAlbum string
-	// 只在最后那行带上(赋值发生在收尾的 emit 之前),流式的中间行不带 —— 冠军要等所有源
-	// 都到齐才有意义。
-	var finalPick *searchLyricsPick
 	// 轮次推导状态,语义见 searchLyricsUpdate.Round 的注释。emit 的调用是串行的
 	// (fetchScoredLyricCandidatesStreaming 里是单个收集 goroutine 在发,兜底轮之间
 	// 也是顺序执行),这两个变量不需要锁。
@@ -178,7 +164,6 @@ func runSearchLyricsCLI(args []string) {
 			AppleAlbum:               appleAlbum,
 			SourceFailureReasonCodes: lyricSourceFailureReasons(results),
 			TracksFoundNoLyrics:      tracksFoundNoLyrics(results),
-			Pick:                     finalPick,
 		}
 		for _, r := range results {
 			if r.Instrumental {
@@ -215,10 +200,7 @@ func runSearchLyricsCLI(args []string) {
 	go retryArtistIdentities(context.Background(), sArtist)
 
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
-	// 手动搜索这条路径也记查询词:「重新自动匹配」采纳后写进缓存的决策存档
-	// 就是下面这一份,不挂收集器的话它会是唯一一条没有 queries_tried 的路径。
-	// 这个一次性进程没有熔断态(见 sourcebreaker.go 头注),所以只挂 query log、不挂 round。
-	searchCtx, queries := withLyricQueryLog(withManualLyricSearch(context.Background()))
+	searchCtx := withManualLyricSearch(context.Background())
 	searchCtx = withSearchQueryOriginal(searchCtx, *artist, *title, *album)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
@@ -227,63 +209,6 @@ func runSearchLyricsCLI(args []string) {
 	// 这两个字段是给下一轮评测攒的数据,缺一次无妨,不值得让用户等。
 	appleMatch := appleMusicMatchCachedOnly(sArtist, sTitle, sAlbum)
 	appleTitle, appleAlbum = appleMatch.title, appleMatch.album
-	// 只在 -pick 时才去读缓存文件:另一颗按钮(纯搜索候选)用不到这个事实。
-	noCurrentLyrics := false
-	if *pick && configDir() != "" {
-		cachePath := filepath.Join(configDir(), clientName+"-enrich-cache.json")
-		if empty, known := lyricsEmptyInCacheFile(cachePath, *artist, *title, *album); known {
-			noCurrentLyrics = empty
-		}
-	}
-	if *pick {
-		// 跟 rescoreLyrics(enrich.go)逐行对齐:同一个 pickLyricCandidate、同一个
-		// rescoreDecidable、同一份 seen/responded、同一个 buildLyricsDecision。调用方按
-		// 这些字段写缓存,写出来的形状就跟自动 rescore 写的一模一样(那条路径是这个仓库
-		// 里唯一经受过考验的"重新选一次歌词"实现)。
-		picked := pickLyricCandidate(results)
-		p := &searchLyricsPick{
-			ScoringVersion: lyricsScoringVersion,
-			// 这里**必须去缓存里读真相**,不能用 `*currentSource == ""` 推断
-			// "这条没有歌词"。对抗性复核抓到的反例:
-			// EnrichCacheStore.saveEdit 的 source 参数默认 nil,而「歌词管理」里那颗
-			// 「保存修改」正是 `saveEdit(key:lyrics:tr:roma:)`(不传 source)——它会
-			// `removeValue(forKey: "lyrics_source")`,导出的 .lrc 也不带 [source:],
-			// 于是**每一条用户手改过的条目**都是「有歌词 + lyrics_source 为空」,
-			// summary.lyricsSource 传过来就是空串。照推断走的话,这道闸会对手改条目
-			// 一律放行,让冠军覆盖掉人工修正过的正文(那份内容删了找不回来)。
-			//
-			// 当初那个"294 条里 0 例外"的测量取样取错了:现役缓存里手改条目是 0 条 ——
-			// 因为老库那 33 条手改记录同一天早些时候刚被移走。在一个恰好没有反例的
-			// 数据集上做的测量,证明不了不变量。
-			//
-			// 读不出来(known=false)时按最保守的那一支走,行为等同改动之前。
-			Decidable:            rescoreDecidable(results, *currentSource, noCurrentLyrics),
-			SourcesSeen:          lyricSourcesWithCandidates(results),
-			SourcesResponded:     lyricSourcesResponded(results),
-			ResolvedDurationSecs: effectiveDuration,
-			Mode:                 features().LyricsSourceMode,
-		}
-		if picked != nil {
-			p.Winner = picked.Source
-			p.WinnerScore = picked.Score
-		}
-		// 决策存档:只在"可判"时写,理由跟 rescoreLyrics 里那段一样 —— 当前源没应答的那一轮
-		// 没有做出任何决定,拿它盖掉上一份完整评估的证据是纯损失。
-		//
-		// Applied 这里给的是**近似值**:CLI 看不到缓存里的正文,只能按"冠军是否换了源"判,
-		// 于是"同源但换了内容"会被算成 false。调用方(EnrichCacheStore 那条采纳路径)知道真相,
-		// **必须覆写它** —— 不覆写的话「解析决策」弹窗会把 false 渲染成「评估后未更换」,
-		// 跟结果行说的"已换成一份"直接打架(实测撞到过)。
-		if p.Decidable {
-			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, effectiveDuration,
-				results, picked, picked != nil && picked.Source != *currentSource)
-			d.QueriesTried = queries.queries()
-			if raw, err := json.Marshal(d); err == nil {
-				p.DecisionJSON = string(raw)
-			}
-		}
-		finalPick = p
-	}
 	// 保底再打印一次最终结果——通常这跟 emit 在最后一个源到达时已经打过的那一行内容
 	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
 	// 没回来时就已经触发(全部源异常缓慢),这种极端情况下循环里的 emit 一次都没
@@ -350,8 +275,6 @@ type searchLyricsUpdate struct {
 	// 早就把这条边界写死过一次:「"这首歌没有歌词"是正常结果,不往这里记,报上去会让用户
 	// 以为源坏了」。所以走独立字段,跟 Instrumental 同构。
 	TracksFoundNoLyrics []trackFoundNoLyrics `json:"tracksFoundNoLyrics,omitempty"`
-	// 只有 -pick 且只有最后那行才有(见 searchLyricsPick)。
-	Pick *searchLyricsPick `json:"pick,omitempty"`
 }
 
 // trackFoundNoLyrics 是一个源"我这儿有这首歌,但没有词"的完整说法:除了是哪个源,还带上
@@ -366,37 +289,6 @@ type trackFoundNoLyrics struct {
 	Artist       string  `json:"artist,omitempty"`
 	Album        string  `json:"album,omitempty"`
 	DurationSecs float64 `json:"durationSecs,omitempty"`
-}
-
-// searchLyricsPick 是 -pick 模式下"按自动解析规则重选一次"的结论,给「歌词管理」的
-// 「重新自动匹配」按钮用。字段是照 rescoreLyrics 实际写进 enrichEntry 的那一套挑的,
-// 调用方(EnrichCacheStore.rematchAdopt)按它写缓存,写出来的形状跟自动 rescore 一致。
-//
-// 为什么冠军非要 Go 这边算:pickLyricCandidate 有设置分支 —— 顺序优先模式取的是"用户
-// 配置顺序里第一个 Score>=0 的源",不是最高分;而且它还要过 features().LyricsSources 的
-// 启用过滤、跳掉 Score<0 的废候选(全源全废时自动路径一个字都不写)。这三条在 Swift 侧
-// 复制一遍就是第二份会漂的决策规则,而漂的表现是"手动匹配完,下一拍自愈路径又给换了"。
-type searchLyricsPick struct {
-	// 冠军的源;空串 = 一个能用的候选都没有(全被判废/全没搜到),调用方**不许**退回
-	// "取第一条",那会把一份明确不可用的歌词写进去。
-	Winner      string `json:"winner,omitempty"`
-	WinnerScore int    `json:"winnerScore"`
-	// 写进 lyrics_scoring_version:不写这个,下次播放时 needsLyricsRescore 会立刻再跑一遍
-	// (首次判定不受 1 小时节流约束)。必须跟 lyrics_score 成对写 —— 只写版本不写分数,
-	// retry 的比较基准会变成 0,"严格更高才替换"那道闸等于被拆掉。
-	ScoringVersion int `json:"scoringVersion"`
-	// 复刻 rescoreDecidable:当前源这一轮没应答时为 false,调用方应当**什么都不改**并如实
-	// 告诉"这轮 X 源没应答,没有换"。
-	Decidable            bool     `json:"decidable"`
-	SourcesSeen          []string `json:"sourcesSeen,omitempty"`
-	SourcesResponded     []string `json:"sourcesResponded,omitempty"`
-	ResolvedDurationSecs float64  `json:"resolvedDurationSecs,omitempty"`
-	// smart / priority —— 结果文案如实说明这轮按哪套规则选的(设置页那个「匹配算法」)。
-	Mode string `json:"mode,omitempty"`
-	// lyricsDecision 的 JSON 原文。传字符串而不是嵌套对象:调用方要把它原样塞进
-	// enrich-cache.json 的 lyrics_decision 字段,走字符串就不需要在 Swift 侧再镜像一遍
-	// 这个结构(镜像就会漂),解析成 [String: Any] 直接写回即可。
-	DecisionJSON string `json:"decisionJSON,omitempty"`
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via
@@ -543,33 +435,4 @@ func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transpo
 		return nil
 	}
 	return reasons
-}
-
-// lyricsEmptyInCacheFile 只读地回答一句:enrich 缓存里这首歌现在**有没有歌词**。
-//
-// 为什么不复用 loadEnrichCache:那个会设 enrichPath(等于给这个一次性进程开了写权限)、
-// 解析失败时还会把用户的缓存文件改名成 .corrupt。这条路径只想读一个字段,不该有任何
-// 副作用。
-//
-// 返回 known=false 表示"问不出来"(文件读不了/解析不动),调用方必须按**最保守**的那一支走。
-// key 不存在算 empty=true:那就是一首还没被解析过的新歌,本来就没有歌词。
-//
-// key 用**原样**标签算(enrichKey 内部只做 cleanMediaTag/normEnrichTitle,不做繁简转换),
-// 所以这里传的必须是命令行原参数,不是 toSimplified 之后那三个。
-func lyricsEmptyInCacheFile(path, artist, title, album string) (empty bool, known bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, false
-	}
-	var m map[string]struct {
-		Lyrics string `json:"lyrics"`
-	}
-	if err := json.Unmarshal(data, &m); err != nil || m == nil {
-		return false, false
-	}
-	e, ok := m[enrichKey(artist, title, album)]
-	if !ok {
-		return true, true
-	}
-	return e.Lyrics == "", true
 }

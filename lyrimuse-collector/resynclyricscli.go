@@ -110,8 +110,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		artist, title, album = searchQueryFields(artist, title, album)
 		_, scored := scoredLyricCandidates(queryCtx, artist, title, album, duration)
 		picked := pickLyricCandidatePreferring(scored, e.LyricsSourceChoice)
-		// 这条 CLI 手上就攥着 enrichCache 里的 e,不像 searchcli.go 那样要另开一次文件读来
-		// 猜"现在有没有歌词" —— 如果这里图省事硬编码 false,等于永远按"手上有一份好歌词"
+		// 这条 CLI 手上就攥着 enrichCache 里的 e,按它有没有词传 —— 如果这里图省事硬编码 false,等于永远按"手上有一份好歌词"
 		// 那套更严格的闸走(rescoreDecidable 见其头注:要求全部启用的源都应答)。0 条候选、
 		// 慢源(Musixmatch/YTMusic 这类)没能在 20 秒内应答时 decidable 恒为 false,即便
 		// 新一轮已经搜到可用源也会被当成"跳过"——保护的是一份根本不存在的"旧歌词"

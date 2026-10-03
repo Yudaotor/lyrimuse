@@ -65,11 +65,10 @@ final class ScrobbleBackfillService: ObservableObject {
         // 它悄悄活过了每一趟真跑(08-27 / 09-03 / 09-06 / 09-12),那天的「反馈」修复只是把
         // 它从"静默"变成"报一句失败"。
         //
-        // 同一个坑已经在 LyricsSearchService.Pick 上踩过一次并修过(那边注释写着
-        // 「实测验证过,不是猜的」)—— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
+        // 同一个坑在「重新自动匹配」的结论上踩过一次 —— 两处是同一条 Go→Swift 边界上的同一个语义错配。所以这里
         // **所有**字段一律 decodeIfPresent:今天只有 items 带 omitempty,但哪天谁给 eligible
         // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
-        // 反推这条要求,两个结构一起守。
+        // 反推这条要求。
         private enum CodingKeys: String, CodingKey {
             case items, eligible, accepted, ignored, skippedTooOld, quarantined, abortedReason
         }

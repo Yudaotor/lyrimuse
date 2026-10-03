@@ -220,7 +220,7 @@ func TestLyricsSwapPathsTranslateAndWritePlayingEntry(t *testing.T) {
 	}
 	enrich := string(b)
 	swap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\texportLyricsFilesFor(key)\n"
-	for _, fn := range []string{"func retryLyricsUpgrade(", "func rescoreLyrics("} {
+	for _, fn := range []string{"func retryLyricsUpgradeWith(", "func rescoreLyricsWith("} {
 		i := strings.Index(enrich, fn)
 		if i < 0 {
 			t.Fatalf("enrich.go 找不到 %s", fn)

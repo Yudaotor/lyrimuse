@@ -48,7 +48,7 @@ func TestRetryAndRescoreDoNotRomanizeUnderLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fn := range []string{"func retryLyricsUpgrade(", "func rescoreLyrics("} {
+	for _, fn := range []string{"func retryLyricsUpgradeWith(", "func rescoreLyricsWith("} {
 		body := string(src)
 		i := strings.Index(body, fn)
 		if i < 0 {

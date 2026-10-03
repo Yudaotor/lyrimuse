@@ -372,64 +372,89 @@ func runLyricsManagerTests() {
         expectEqual(DecisionSidecar.sameFingerprint(a, b), true, "判决旁路: 缺失的 winner 按空串比")
     }
 
-    // ---- 「重新自动匹配」的采纳判定(LyricsRematchDecision)----
+    // ---- 「重新自动匹配」的通道与结论(LyricsRematch)----
     //
-    // 五条分支里有两条是**不该动**的:当前源这一轮没应答(可能只是超时,换过去等于降级)、
-    // 这一轮的冠军没有逐字而现有的有(逐字是打分里最值钱的 +400,但取决于这一轮那个源有没有
-    // 把逐字接口给全 —— 实测同一首歌上一轮拿到 6887 字节 YRC、下一轮五个源一个逐字都没有)。
-    // 这两条失效时的表现不是报错,是"用户看得见的卡拉OK填色被悄悄弄没了",靠点按钮碰运气
-    // 验证不了,只能靠断言。
+    // 换不换、写什么都在 collector(lyricsrematch.go,Go 单测覆盖);这里钉 App 这一侧:请求的格式、等结论的
+    // 几个阶段、结论码到那一句的映射,以及两边的结论码对得上。
     do {
-        typealias D = LyricsRematchDecision
-        // 正常换源。
-        expectEqual(D.decide(decidable: true, winnerSource: "kugou", currentHasWordTiming: false,
-                             winnerHasWordTiming: false, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .adopt, "重新匹配: 正常情况采纳冠军")
+        typealias M = LyricsRematch
+        typealias C = LyricsRematch.Conclusion
+        // 请求:collector 的 parseLyricsRematchRequest 认 id / key / cancel 三个键。
+        let start = (try? JSONSerialization.jsonObject(with: M.requestBody(id: "r1", key: "周杰伦|晴天|叶惠美"))) as? [String: Any] ?? [:]
+        expectEqual(start["id"] as? String, "r1", "重新匹配: 请求带 id")
+        expectEqual(start["key"] as? String, "周杰伦|晴天|叶惠美", "重新匹配: 请求里的缓存 key 原样")
+        let stop = (try? JSONSerialization.jsonObject(with: M.cancelBody(id: "r1"))) as? [String: Any] ?? [:]
+        expectEqual(stop["cancel"] as? Bool, true, "重新匹配: 停止请求带 cancel")
+        expectEqual(stop["id"] as? String, "r1", "重新匹配: 停止请求只停那一轮")
 
-        // 当前源没应答 → 一步都不许动,而且要排在所有其它判定**之前**(哪怕冠军看起来很好)。
-        expectEqual(D.decide(decidable: false, winnerSource: "kugou", currentHasWordTiming: false,
-                             winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .keptNotDecidable, "重新匹配: 当前源没应答时不下结论")
+        // 等结论的几个阶段。
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        expectEqual(M.phase(id: "r1", status: nil, requestedAt: t0, now: t0.addingTimeInterval(3)), .waiting,
+                    "重新匹配: 还没有状态文件 = collector 还没接手")
+        expectEqual(M.phase(id: "r1", status: nil, requestedAt: t0, now: t0.addingTimeInterval(M.pickupTimeout + 1)), .lost,
+                    "重新匹配: 一直没接手就别干等")
+        let previousRound = M.Status(id: "r0", key: "k", running: false, startedAt: 900, updatedAt: 900, finishedAt: 900,
+                                     result: C(outcome: "changed"))
+        expectEqual(M.phase(id: "r1", status: previousRound, requestedAt: t0, now: t0.addingTimeInterval(1)), .waiting,
+                    "重新匹配: 状态文件里是上一轮的收据,不算这一轮的结论")
+        let running = M.Status(id: "r1", key: "k", running: true, done: 3, total: 9, startedAt: 1_001, updatedAt: 1_002)
+        expectEqual(M.phase(id: "r1", status: running, requestedAt: t0, now: t0.addingTimeInterval(5)),
+                    .running(done: 3, total: 9), "重新匹配: 跑着时报几个源回了话")
+        expectEqual(M.phase(id: "r1", status: running, requestedAt: t0,
+                            now: Date(timeIntervalSince1970: 1_002 + M.stallTimeout + 1)), .lost,
+                    "重新匹配: 跑着跑着没了动静(collector 退出)就别干等")
+        let unchanged = C(outcome: "unchanged", winner: "qq", winnerScore: 900)
+        let finished = M.Status(id: "r1", key: "k", running: false, startedAt: 1_001, updatedAt: 1_010, finishedAt: 1_010,
+                                result: unchanged)
+        expectEqual(M.phase(id: "r1", status: finished, requestedAt: t0, now: t0.addingTimeInterval(12)),
+                    .finished(unchanged), "重新匹配: 跑完带结论")
 
-        // 一个能用的候选都没有(空串)—— 绝不允许退回"取第一条"。
-        expectEqual(D.decide(decidable: true, winnerSource: "", currentHasWordTiming: false,
-                             winnerHasWordTiming: false, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .keptNoCandidate, "重新匹配: 没有冠军就什么都不动")
+        // collector 写状态带 omitempty:还没有源回话时没有 done / total,跑完前没有 result —— 照样解得开。
+        let bare = #"{"id":"r1","key":"k","running":true,"startedAt":1,"updatedAt":2}"#
+        expectEqual((try? JSONDecoder().decode(M.Status.self, from: Data(bare.utf8)))?.running, true,
+                    "重新匹配: 缺 omitempty 字段的状态照样解得开")
 
-        // 逐字保护:现有的有逐字、冠军没有 → 保留。
-        expectEqual(D.decide(decidable: true, winnerSource: "lrclib", currentHasWordTiming: true,
-                             winnerHasWordTiming: false, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .keptWouldLoseWordTiming, "重新匹配: 不许把逐字换成整行")
-        // 反向:现有的没逐字、冠军有 → 当然要换(这正是升级)。
-        expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
-                             winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .adopt, "重新匹配: 从整行升级到逐字要换")
-        // 两边都有逐字 → 正常比内容。
-        expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: true,
-                             winnerHasWordTiming: true, sameSource: false, sameLyrics: false,
-                             sameWordTiming: false),
-                    .adopt, "重新匹配: 两边都有逐字时照常换")
+        // 结论码 → 那一句。
+        expectEqual(M.line(for: C(outcome: "changed", winner: "qq", winnerScore: 980, textChanged: true)),
+                    .filled(source: "qq", score: 980), "重新匹配: 原来没词 → 补上了")
+        expectEqual(M.line(for: C(outcome: "changed", winner: "qq", winnerScore: 980, previous: "kugou", hadLyrics: true,
+                                  textChanged: true)),
+                    .switched(source: "qq", score: 980, previous: "kugou"), "重新匹配: 换了来源")
+        expectEqual(M.line(for: C(outcome: "changed", winner: "qq", winnerScore: 980, previous: "qq", hadLyrics: true,
+                                  timingChanged: true)),
+                    .refreshed(source: "qq", score: 980, text: false, timing: true), "重新匹配: 同一个源只换了逐字")
+        expectEqual(M.line(for: C(outcome: "changed", winner: "qq", winnerScore: 980, hadLyrics: true, textChanged: true)),
+                    .switched(source: "qq", score: 980, previous: ""), "重新匹配: 手改过的词(没记来源)换成冠军算换了来源")
+        expectEqual(M.line(for: unchanged), .unchanged(source: "qq", score: 900), "重新匹配: 没换")
+        expectEqual(M.line(for: C(outcome: "not_decidable", previous: "netease")), .notDecidable(previous: "netease"),
+                    "重新匹配: 当前来源没应答")
+        expectEqual(M.line(for: C(outcome: "not_decidable", hadLyrics: true)), .notDecidable(previous: ""),
+                    "重新匹配: 没记来源的词要全部源都应答")
+        expectEqual(M.line(for: C(outcome: "kept_word_timing", winner: "lrclib", winnerScore: 700, previous: "qq")),
+                    .keptWordTiming(previous: "qq"), "重新匹配: 保住逐字")
+        expectEqual(M.line(for: C(outcome: "plain_text")), .plainText, "重新匹配: 纯文本兜底")
+        expectEqual(M.line(for: C(outcome: "offline")).tone, .empty, "重新匹配: 断网归「没搜到」那一类")
+        expectEqual(M.line(for: C(outcome: "edited")).tone, .kept, "重新匹配: 期间被改过 = 这一轮没动")
+        expectEqual(M.line(for: C(outcome: "busy")).tone, .failed, "重新匹配: 没接 = 没拿到结论那一类")
+        expectEqual(M.line(for: C(outcome: "cancelled")), .failed, "重新匹配: 被停掉 = 没拿到结论")
+        expectEqual(M.line(for: C(outcome: "something_new")), .failed, "重新匹配: 认不出的结论码按没拿到结论说")
 
-        // 冠军跟现状逐项一致 → 一个字都不写(免得白白落盘 + 踢一次 collector 重启)。
-        expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: true,
-                             winnerHasWordTiming: true, sameSource: true, sameLyrics: true,
-                             sameWordTiming: true),
-                    .unchanged, "重新匹配: 完全没变化时不写盘")
-        // 同源但正文变了(那个源自己更新了歌词)→ 要换。
-        expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
-                             winnerHasWordTiming: false, sameSource: true, sameLyrics: false,
-                             sameWordTiming: true),
-                    .adopt, "重新匹配: 同源但正文更新了也要换")
-        // 同源同正文、但逐字变了(上一轮没拿到逐字、这轮拿到了)→ 要换。
-        expectEqual(D.decide(decidable: true, winnerSource: "qq", currentHasWordTiming: false,
-                             winnerHasWordTiming: true, sameSource: true, sameLyrics: true,
-                             sameWordTiming: false),
-                    .adopt, "重新匹配: 同源同正文但补上了逐字也要换")
+        // collector 能写出的每个结论码 App 都认得(lyricsrematch.go 里 lyricsRematch* = "..." 那一组)。
+        let goSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse-collector/lyricsrematch.go"), encoding: .utf8)) ?? ""
+        let codePattern = try? NSRegularExpression(pattern: #"\n\tlyricsRematch\w+\s*=\s*"([a-z_]+)""#)
+        let codes = (codePattern?.matches(in: goSource, range: NSRange(goSource.startIndex..., in: goSource)) ?? [])
+            .compactMap { Range($0.range(at: 1), in: goSource).map { String(goSource[$0]) } }
+        expectEqual(codes.count, 12, "重新匹配: 从 lyricsrematch.go 读出全部结论码(守卫自身没跑空)")
+        expectEqual(codes.filter { M.Outcome(rawValue: $0) == nil }, [], "重新匹配: collector 的结论码 App 都认得")
+
+        // 补搜 / 全量扫库跑着时按钮置灰:collector 那时不接。
+        let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(view.contains("disabled: rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending"), true,
+                    "重新匹配: 补搜 / 全量扫库跑着时按钮置灰")
     }
 
     // ---- 「手动选定歌词后锁定」开关的追溯判据(ManualPickLock) ----

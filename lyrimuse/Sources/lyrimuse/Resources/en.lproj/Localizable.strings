@@ -630,6 +630,7 @@
 "已缓存读音" = "Cached Romanization";
 "已自动跳过广告" = "Ad skipped automatically";
 "已补 %@ 条" = "%@ backfilled";
+"已补上「%1$@」的歌词（%2$@ 分）" = "Filled in lyrics from “%1$@” (%2$@ pts)";
 "已被手动停止" = "Stopped manually";
 "已解锁 %@ 首" = "Unlocked %@ songs";
 "已解锁位置" = "Position unlocked";
@@ -1121,7 +1122,6 @@
 "没有完全磁盘访问权限，读不到 %@ 本机的歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "没有找到匹配的设置" = "No matching settings";
 "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）" = "No timed version found — automatically adopted a plain-text fallback (viewable in the Lyrics Window)";
-"没有找到带时间戳的版本；找到了一份纯文本兜底，但没能存下来" = "No timed version found. A plain-text fallback was found, but it couldn't be saved.";
 "没有授权" = "Not granted";
 "没有符合条件的歌" = "No Matching Songs";
 "没有缺失" = "Nothing missing";
@@ -1468,10 +1468,13 @@
 "还缺用户名，听歌报告用不了" = "Username missing — listening digests can't run";
 "这一轮「%@」没应答，没有换（避免误降级），可以再点一次" = "“%@” did not answer this round, so nothing changed (avoids a downgrade) — try again";
 "这一轮有几个歌词源给出了候选，点击查看明细" = "How many lyrics sources returned a candidate this round — click for details";
+"这一轮有歌词源没应答，没有换（避免误降级），可以再点一次" = "Some lyrics sources did not answer this round, so nothing changed (avoids a downgrade) — try again";
 "这一轮没拿到结论，可以再点一次" = "This round returned no verdict — try again";
 "这一轮没搜到逐字歌词，保留现有的「%@」（逐字）——换过去会丢掉逐字时间轴" = "No word-by-word lyrics this round, so “%@” (word-by-word) is kept — switching would lose the word timing";
 "这一轮没有一个能用的候选，保留现有的" = "No usable candidate this round; keeping the current one";
 "这一轮没有源应答" = "No source replied this round";
+"这一首在搜的时候被改过，这一轮的结果没有采用" = "This song was edited while the search ran, so this round's result wasn't applied";
+"这一首已经不在歌词库里了" = "This song is no longer in the lyrics library";
 "这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
 "这个应用用不了" = "This app won’t work";
 "这个开关已经被关掉了——现在还能用，只是因为该浏览器还没重启；重启后就会失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";
@@ -1522,6 +1525,7 @@
 "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
 "这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
 "这首歌第一次播放，正在联网搜索歌词，完成后会自动显示，不需要手动刷新。" = "First time playing this track, so lyrics are being searched for online. They will appear on their own — no need to refresh.";
+"这首正在搜索，或者「补搜歌词」/「全量重新扫库」正在跑，稍后再试一次" = "This song is being searched right now, or “Find Missing Lyrics” / “Full library rescan” is running — try again later";
 "这首的歌词正文读不回来（歌词文件缺失或损坏），为免覆盖盘上的内容，这里暂时不能保存修改。可以用「联网搜索候选歌词」重新采纳一份" = "This song's lyrics can't be read back (the lyrics file is missing or damaged), so saving is disabled here to avoid overwriting what's on disk. You can adopt a new copy with “Search Candidate Lyrics Online”.";
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";

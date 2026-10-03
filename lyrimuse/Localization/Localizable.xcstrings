@@ -20861,6 +20861,121 @@
         }
       }
     },
+    "已补上「%1$@」的歌词（%2$@ 分）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filled in lyrics from “%1$@” (%2$@ pts)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已补上「%1$@」的歌词（%2$@ 分）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已補上「%1$@」的歌詞（%2$@ 分）"
+          }
+        }
+      }
+    },
+    "这一轮有歌词源没应答，没有换（避免误降级），可以再点一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some lyrics sources did not answer this round, so nothing changed (avoids a downgrade) — try again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一轮有歌词源没应答，没有换（避免误降级），可以再点一次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這一輪有歌詞來源沒回應，沒有換（避免誤降級），可以再按一次"
+          }
+        }
+      }
+    },
+    "这首正在搜索，或者「补搜歌词」/「全量重新扫库」正在跑，稍后再试一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song is being searched right now, or “Find Missing Lyrics” / “Full library rescan” is running — try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首正在搜索，或者「补搜歌词」/「全量重新扫库」正在跑，稍后再试一次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首正在搜尋，或者「補搜歌詞」/「全庫重新掃描」正在執行，稍後再試一次"
+          }
+        }
+      }
+    },
+    "这一首已经不在歌词库里了" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song is no longer in the lyrics library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一首已经不在歌词库里了"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這一首已經不在歌詞庫裡了"
+          }
+        }
+      }
+    },
+    "这一首在搜的时候被改过，这一轮的结果没有采用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song was edited while the search ran, so this round's result wasn't applied"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一首在搜的时候被改过，这一轮的结果没有采用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這一首在搜尋時被改過，這一輪的結果沒有採用"
+          }
+        }
+      }
+    },
     "这一轮没搜到逐字歌词，保留现有的「%@」（逐字）——换过去会丢掉逐字时间轴" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35186,23 +35301,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開始播放一首歌，再按「搜尋歌詞…」"
-          }
-        }
-      }
-    },
-    "没有找到带时间戳的版本；找到了一份纯文本兜底，但没能存下来" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No timed version found. A plain-text fallback was found, but it couldn't be saved."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有找到帶時間戳記的版本；找到了一份純文字備用版本，但沒能存下來"
           }
         }
       }

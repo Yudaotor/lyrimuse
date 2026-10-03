@@ -415,6 +415,8 @@ func main() {
 	setEnrichEditDir(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-requests"))
 	// 「歌词管理」的「重试无歌词条目」请求文件 + 进度状态文件(见 lyricsfillsweep.go)。
 	setLyricsFillPaths()
+	// 「歌词管理」的「重新自动匹配」请求文件 + 状态文件(见 lyricsrematch.go)。
+	setLyricsRematchPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
 	monthlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-monthly-digest.json")

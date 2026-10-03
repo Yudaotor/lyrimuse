@@ -919,20 +919,10 @@ public final class EnrichCacheStore: ObservableObject {
     // onApply),准确反映刚采纳的这份内容真实来自哪个平台;纯手改文本框(source 留 nil)
     // 则清空这个字段——手改之后已经不再是任何平台的原文,继续挂着旧的平台徽章比"无
     // 来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
-    /// - markManual: 默认 true(手动编辑/手动采纳候选都是人工修正)。**「重新自动匹配」传
-    ///   false** —— `manual_lyrics` 是 collector 侧所有自愈路径的一票否决闸(firstFill /
-    ///   rescore / retry 三条的第一行都看它),一个"按算法重算"的动作把它置真,等于点一下
-    ///   就把这首歌永久冻结、以后算法改进也再也不许碰它,而界面上还打「人工修正」徽章 ——
-    ///   那是假话。传 false 时**主动清掉**这个标记(连带导出的 .lrc 头里那行 `[manual:1]`,
+    /// - markManual: 默认 true(手动编辑是人工修正)。采纳候选按「手动选定歌词后锁定」开关传:`manual_lyrics` 是
+    ///   collector 侧所有自愈路径的一票否决闸(补空 / 重评 / 升级重试三条的第一行都看它),置真就等于把这首歌
+    ///   冻结在这一份上。传 false 时**主动清掉**这个标记(连带导出的 .lrc 头里那行 `[manual:1]`,
     ///   否则 collector 下次启动 importLyricsFromFiles 会拿文件头把它改回来)。
-    /// - score / scoringVersion: 必须**成对**传。只写版本不写分数,collector 那边
-    ///   `lyricsUpgradeBaseline` 会拿 0 当基准,"必须严格更高分才替换"那道闸等于被拆掉,
-    ///   一次运气差的后台重试就能把刚匹配好的结果换掉;只写分数不写版本,`needsLyricsRescore`
-    ///   会在下次播放时立刻再跑一轮(首次判定不受 1 小时节流约束)。
-    /// - sourcesSeen / sourcesResponded / resolvedDurationSecs / decision: 照 collector 的
-    ///   `rescoreLyrics` 实际写进 enrichEntry 的那一套。少写 sourcesSeen 会让 retry 的
-    ///   `nativeMissedOut` 拿上一轮的名单算;少写 resolvedDuration 会让 `wrongDuration`
-    ///   凭空为真;不写 decision,「解析决策」弹窗展示的就还是被替换掉那份歌词的存档。
     /// - Parameter sourceChoice: 「用户选定了哪个源」。传非空字符串 = 记下这个选择;传空
     ///   字符串 = **显式清掉**(交回算法自由选源);传 nil = 不动这个字段。
     ///   语义见 collector 侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
@@ -948,11 +938,7 @@ public final class EnrichCacheStore: ObservableObject {
     @discardableResult
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
-                         sourceChoice: String? = nil, fromManualPick: Bool = false,
-                         score: Int? = nil, scoringVersion: Int? = nil,
-                         resolvedDurationSecs: Double? = nil,
-                         sourcesSeen: [String]? = nil, sourcesResponded: [String]? = nil,
-                         decision: [String: Any]? = nil) async -> Bool {
+                         sourceChoice: String? = nil, fromManualPick: Bool = false) async -> Bool {
         // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在 collector 的
         // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = collector 那边不动这个字段。
         var fields: [String: Any] = [
@@ -962,14 +948,6 @@ public final class EnrichCacheStore: ObservableObject {
         if let yrc { fields["yrc"] = yrc }
         if let source, !source.isEmpty { fields["source"] = source }
         if let sourceChoice { fields["source_choice"] = sourceChoice }
-        if let score, let scoringVersion {
-            fields["score"] = score
-            fields["scoring_version"] = scoringVersion
-        }
-        if let resolvedDurationSecs, resolvedDurationSecs > 0 { fields["resolved_duration_secs"] = resolvedDurationSecs }
-        if let sourcesSeen, !sourcesSeen.isEmpty { fields["sources_seen"] = sourcesSeen }
-        if let sourcesResponded, !sourcesResponded.isEmpty { fields["sources_responded"] = sourcesResponded }
-        if let decision { fields["decision"] = decision }
         return await commit("save_edit", fields).ok
     }
 
@@ -1043,25 +1021,12 @@ public final class EnrichCacheStore: ObservableObject {
         await commit("save_plain_text", ["key": key, "plain_lyrics": plainLyrics, "plain_lyrics_source": source]).ok
     }
 
-    /// 「重新自动匹配」按钮查到"至少一个源明确说这首是纯音乐、没有可用候选"时调用
-    /// (加,蛋堡《收敛水》「关键字: Intro」案)——collector 侧 rescoreLyrics
-    /// 在同样的"picked == nil 但有源给出 Instrumental 标记"局面下早就会把这个结论写进
-    /// 缓存(见 enrich.go 那段"纯音乐结论也要在这条路径上落地"的注释),但这颗按钮走的是
-    /// 独立的手动 -pick 路径,finishRematch 只弹了句"有源明确说这首是纯音乐"的 toast 就
-    /// return——从没把这个结论写回缓存。表现:toast 说得清清楚楚,「歌词管理」列表却
-    /// 死死钉在刺眼的红色「无歌词」上,永远不会自己变成「纯音乐」,除非哪天这首歌被
-    /// 完整播放一遍触发后台首次解析重新走一遍(而这首歌八天前就是那条路径写的坏结论)。
-    /// 只置一个字段、不碰 lyrics/manual_lyrics/source 这些——跟 collector 侧的写法一样窄。
-    public func markInstrumental(key: String) async {
-        await setInstrumental(key: key, true)
-    }
-
     /// 用户在详情页手动标/撤「纯音乐」。起因:MJ《Off the Wall》的 Quincy Jones
     /// 访谈口白、《Raise!》26 秒的 Kalimba Tree 这类曲目,九个源里没有任何一个会给出
     /// instrumental 标记(lrclib 的 instrumental 字段和网易云的 pureMusic 都只覆盖它们自己
     /// 收录且标了的曲目),collector 永远拿不到"这首本来就没词"的结论,列表就永远红着「无歌词」、
     /// 补空扫描也会每隔一天(退避后翻倍)白搜一轮——这个结论只有人能下。
-    /// 只置一个字段、不碰 lyrics/manual_lyrics/source,跟 markInstrumental 同一口径;撤销时把键
+    /// 只置一个字段、不碰 lyrics/manual_lyrics/source;撤销时把键
     /// 整个删掉(collector 侧 omitempty,false 与缺失等价)。标上之后 collector 的
     /// needsLyricsFirstFill 会直接 return——这也是这个动作真正的效果:告诉自动逻辑"别再搜了"。
     public func setInstrumental(key: String, _ value: Bool) async {
@@ -1095,28 +1060,6 @@ public final class EnrichCacheStore: ObservableObject {
         return EnrichSourcePresence.lastRoundHadNoResponder(
             hasDecisionRecord: last != nil,
             respondedCount: (last?["sources_responded"] as? [Any])?.count ?? 0)
-    }
-
-    /// 「重新自动匹配」按钮命中 `LyricsRematchDecision.Outcome.unchanged`(可判、赢家跟现状
-    /// 逐项一致)时调用——这一轮已经完整评估过,collector 侧只要 `Decidable` 就把全量候选
-    /// 打分 build 进了 `pick.decisionJSON`(searchcli.go),只是没有新内容需要采纳。
-    ///
-    /// 呼应 collector 侧 rescoreLyrics 的既定规则:decision.go 定义 `lyrics_decision` =
-    /// "最近一次评估——可能维持原状"，enrich.go 那三个写入点也是"可判的两个分支都写"，跟
-    /// 这一轮赢家有没有变无关。之前这颗按钮在 `.unchanged` 直接 return,把已经算好的证据
-    /// 整段扔掉——「解析决策」弹窗只停在上一次真正换过内容的那一轮,查不出"这一轮其它源
-    /// 给了多少分、只是没赢"。
-    ///
-    /// 只置 lyrics_decision / lyrics_decision_applied 两个字段,不碰 lyrics/manual_lyrics/
-    /// source 这些——跟上面 markInstrumental 一样窄。槽2(lyrics_decision_applied)也跟着
-    /// 刷新:decision.go 定义槽2是"最近一次'胜者内容成为(或确认仍是)当前歌词'的评估",
-    /// `.unchanged` 恰好就是"确认仍是"那一支,不是"没有新出处"。
-    public func recordUnchangedRematchDecision(key: String, decisionJSON: String) async {
-        guard let data = decisionJSON.data(using: .utf8),
-              let decision = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return
-        }
-        await commit("record_decision", ["key": key, "decision": decision])
     }
 
     /// 「歌词管理」里删除(单条 / 多选批量)。删缓存条目的同时,collector 把这几首导出过的歌词文件挪进废纸篓、

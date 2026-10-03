@@ -98,11 +98,11 @@ func TestMusicVideoLyricsWiring(t *testing.T) {
 		}
 		return body
 	}
-	// 「换不换」的判据在 lyricsUpgradeApplies(锁内正式判与锁外预判共用),retryLyricsUpgrade 调它。
+	// 「换不换」的判据在 lyricsUpgradeApplies(锁内正式判与锁外预判共用),retryLyricsUpgradeWith 调它。
 	if !strings.Contains(funcBody("lyricsUpgradeApplies"), "baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)") {
 		t.Error("升级重试按未知时长重打时要换基准,否则存着的高分永远翻不过")
 	}
-	if !strings.Contains(funcBody("retryLyricsUpgrade"), "upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)") {
+	if !strings.Contains(funcBody("retryLyricsUpgradeWith"), "upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)") {
 		t.Error("retryLyricsUpgrade 要用 lyricsUpgradeApplies 判换不换")
 	}
 	poller, err := os.ReadFile("poller.go")
