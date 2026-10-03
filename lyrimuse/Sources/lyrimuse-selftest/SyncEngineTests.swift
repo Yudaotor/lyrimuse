@@ -491,6 +491,9 @@ func runSyncEngineTests() {
         if let dir = ProcessInfo.processInfo.environment["LYRIMUSE_RESEGMENT_LIBRARY"] {
             expectEqual(resegmentLibraryFailures(bodiesDir: dir), 0, "按宽度断句: 全库每一段每一行都放得下")
         }
+        if let out = ProcessInfo.processInfo.environment["LYRIMUSE_PAIRING_DUMP"] {
+            translationPairingDump(outPath: out)
+        }
 
         expectEqual(LyricsSegmenter.displayWidth("Your peacock 你好"), 4, "按宽度断句: 字数按拉丁词和汉字计")
         expectEqual(LyricsSegmenter.cutPenalty(after: "你", before: "，"), nil, "按宽度断句: 标点不放到下一段开头")
@@ -1243,6 +1246,60 @@ func runSyncEngineTests() {
             lyricsRoma: "", lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line")
         expectEqual(engineDriftNoMatch.allLines(idPrefix: "t").first?.line.translation, nil,
                     "内容匹配反例: 内容对不上时退回 nearestText,容差语义不受影响")
+
+        // ③.6e 内容键查不到时的就近兜底(SecondaryLineFallback):已经显示在原句下面的那条不再挂到不相干的行上;
+        // 改过几个字的同一句照挂;附近没有的从没显示过的整行里补。网易云形状:译文跟着整行走,逐字整体晚 1.2 秒。
+        func pairing(_ lrc: String, _ tr: String, _ yrc: String, roma: String = "") -> [(String, String?, String?)] {
+            let e = LyricsSyncEngine()
+            e.load(lyrics: lrc, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc)
+            return e.allLines(idPrefix: "p").map { ($0.line.plainText ?? "", $0.line.translation, $0.line.romanization) }
+        }
+        let adlib = pairing(
+            "[00:10.00]You gotta tell me what's your motive\n[00:14.00]No need to sugarcoat a lie",
+            "[00:10.00]告诉我你内心意图\n[00:14.00]无需将谎言包裹上糖衣",
+            "[11200,1500](11200,1500,0)You gotta tell me what's your motive\n[13500,300](13500,300,0)Yeah\n" +
+                "[15200,1500](15200,1500,0)No need to sugarcoat a lie")
+        expectEqual(adlib.map(\.1), ["告诉我你内心意图", nil, "无需将谎言包裹上糖衣"],
+                    "就近兜底: 语气词行不再挂上已经显示在原句下面的那条译文")
+        let variant = pairing(
+            "[00:10.00]And no message could have been any clearer\n[00:30.00]And no message could have been any clearer",
+            "[00:10.00]这讯息再清晰不过\n[00:30.00]这讯息再清晰不过",
+            "[10300,1500](10300,1500,0)No message could have been any clearer\n" +
+                "[31200,1500](31200,1500,0)And no message could have been any clearer")
+        expectEqual(variant.map(\.1), ["这讯息再清晰不过", "这讯息再清晰不过"],
+                    "就近兜底: 同一句改了几个字(另一次出现已按内容认领)照挂,不当成重复")
+        let kugou = pairing(
+            "[00:58.66]Woo\n[00:58.88]Balls hanging low",
+            "[00:58.881]我在游艇上打开香槟酒",
+            "[58664,217](58664,217,0)Woo\n[58881,1200](58881,400,0)Balls (59281,400,0)hanging (59681,400,0)low")
+        expectEqual(kugou.map(\.1), [nil, "我在游艇上打开香槟酒"],
+                    "就近兜底: 整行只精确到 10ms、译文精确到 1ms 时,离译文更近的那一行认领它,语气词行不挂")
+        let corrected = pairing(
+            "[00:18.00]So every girl that I meet yeah this is what I say",
+            "[00:18.00]我会对在这里遇到的每个女孩说",
+            "[20000,1500](20000,1500,0)To every girl that I meet here this is what I say")
+        expectEqual(corrected.first?.1, "我会对在这里遇到的每个女孩说",
+                    "就近兜底: 改了几个字、时间又差出容差的那一句,从没显示过的整行里补上译文")
+        let fragment = pairing(
+            "[00:18.00]I love it when we cruise together",
+            "[00:18.00]和你一起兜风真好",
+            "[20000,1500](20000,1500,0)I love it when we cruise")
+        expectEqual(fragment.first?.1, nil, "就近兜底: 比整行短太多的半句不补整句的译文")
+        let romaSameLength = pairing(
+            "[00:18.00]望着天 手牵手", "",
+            "[20000,1500](20000,750,0)望著天 (20750,750,0)手牵手", roma: "[00:18.00]wàng zhe tiān shǒu qiān shǒu")
+        expectEqual(romaSameLength.first?.2, "wàng zhe tiān shǒu qiān shǒu",
+                    "就近兜底: 罗马音在两行一样长(只差字形)时补上")
+        let romaLonger = pairing(
+            "[00:18.00]风盘旋烟雾弥漫", "",
+            "[20000,1500](20000,1500,0)盘旋烟雾弥漫", roma: "[00:18.00]fēng pán xuán yān wù mí màn")
+        expectEqual(romaLonger.first?.2 == "fēng pán xuán yān wù mí màn", false,
+                    "就近兜底: 罗马音逐字对应,整行多一个字就不补(否则多出一个音)")
+        expectEqual(SecondaryLineFallback.similarity("abc", "abc"), 1, "就近兜底: 相似度 同串为 1")
+        expectEqual(SecondaryLineFallback.unrelated("yeah", owner: "nonedtosugarcoatalie"), true,
+                    "就近兜底: 语气词跟原句不相干")
+        expectEqual(SecondaryLineFallback.unrelated("lookingforloveiamhopeless", owner: "lookingforlove"), false,
+                    "就近兜底: 原句整句出现在这一行里(多带一句和声)不算不相干")
 
         // ④ plainText 存储化后语义不变:两种形态、以及"引擎构造时预拼"与"默认推导"一口径。
         let wordLine = SyncedLyricLine(

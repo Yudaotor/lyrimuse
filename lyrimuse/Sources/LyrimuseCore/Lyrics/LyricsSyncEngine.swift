@@ -215,6 +215,9 @@ public final class LyricsSyncEngine {
     /// 容差导致查不到译文的问题。查找时按内容优先,查不到才退回 nearestText 时间最近邻。
     private var trTextByPlainText: [String: String] = [:]
     private var romaTextByPlainText: [String: String] = [:]
+    /// 内容键查不到的行怎么就近兜底(不挂重复的 / 补漏),load 时按整首算好,见 `SecondaryLineFallback`。
+    private var trFallback = SecondaryLineFallback()
+    private var romaFallback = SecondaryLineFallback()
 
     /// 内容匹配 key:去掉**全部**空白(不止两端),含 NBSP(U+00A0)等 Unicode 空白变体——
     /// 不是只用 `.trimmingCharacters(in: .whitespaces)`。各家源在词组之间垫的空白字符
@@ -1732,6 +1735,20 @@ public final class LyricsSyncEngine {
             // 拼接键,已有同名键的不覆盖(真实单句永远优先)。见决策 18。
             Self.addAdjacentPairKeys(into: &trTextByPlainText, lines: filteredBase, byTime: trByTime)
             Self.addAdjacentPairKeys(into: &romaTextByPlainText, lines: filteredBase, byTime: romaByTime)
+            // 显示行的键要跟 translationText / romanizationText 收到的原文同一口径(displayLineText)。
+            let displayKeys = (usingWords
+                ? wordLines.map { ($0.timeMs, $0.words.map(\.text).joined()) }
+                : baseLines.map { ($0.timeMs, $0.text) })
+                .filter { !Self.isBareSpeakerTag($0.1) }
+                .map { (timeMs: $0.0, key: Self.contentMatchKey($0.1)) }
+            let baseKeys = filteredBase.map { (timeMs: $0.timeMs, key: Self.contentMatchKey($0.text)) }
+            let trDict = trTextByPlainText, romaDict = romaTextByPlainText
+            trFallback = SecondaryLineFallback.plan(
+                display: displayKeys, base: baseKeys, secondary: trLines, matched: { trDict[$0] != nil },
+                adoptLengthRatio: 0.75...Double.infinity)
+            romaFallback = SecondaryLineFallback.plan(
+                display: displayKeys, base: baseKeys, secondary: romaLines, matched: { romaDict[$0] != nil },
+                adoptLengthRatio: 1...1)
         }
         // 罗马音该不该对这首歌生效、以及汉字按哪种语言读 —— 都按"整首歌"粒度判一次
         // (不逐行判:极少数纯汉字的日文行会被局部误判成中文,见 Romanizer.romanize 的注释)。
@@ -1931,13 +1948,22 @@ public final class LyricsSyncEngine {
 
     private func translationText(timeMs: Int, plainText: String) -> String? {
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
-        if let byContent = trTextByPlainText[Self.contentMatchKey(plainText)] {
+        let key = Self.contentMatchKey(plainText)
+        if let byContent = trTextByPlainText[key] {
             return byContent
         }
-        return nearestText(trLines, timeMs)
+        if trFallback.suppressed[timeMs] == key { return nil }
+        if let near = nearestText(trLines, timeMs) { return near }
+        if let adopted = trFallback.adopted[timeMs], adopted.key == key { return adopted.text }
+        return nil
     }
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {
+        Self.nearestLine(arr, t, tolerance: tolerance)?.text
+    }
+
+    /// 离 `t` 最近、不超过 `tolerance` 的那一行。`SecondaryLineFallback` 按它判「就近会挂上哪一条」,两边必须是同一个函数。
+    static func nearestLine(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> LyricLine? {
         // 数组按 timeMs 升序(LRCParser.parse 尾部 sorted),二分找插入点、只比较左右邻居——
         // 复杂度 O(log n),避免 allLines 构建时每行都线性扫一遍。
         // 语义:`d <= bestDiff` 是后见者胜 —— 同距并列取时间戳更晚的那条,同时间戳重复取
@@ -1950,12 +1976,12 @@ public final class LyricsSyncEngine {
             let mid = (lo + hi) / 2
             if arr[mid].timeMs > t { hi = mid } else { lo = mid + 1 }
         }
-        var best: String?
+        var best: LyricLine?
         var bestDiff = tolerance
         if lo > 0 {
             // arr[lo-1] 已是"timeMs <= t 里最后一条"——同时间戳重复天然取最后一条。
             let d = t - arr[lo - 1].timeMs
-            if d <= bestDiff { bestDiff = d; best = arr[lo - 1].text }
+            if d <= bestDiff { bestDiff = d; best = arr[lo - 1] }
         }
         if lo < arr.count {
             let d = arr[lo].timeMs - t
@@ -1963,7 +1989,7 @@ public final class LyricsSyncEngine {
                 // 右侧同时间戳的重复也要取最后一条(旧扫描后见者胜)。
                 var r = lo
                 while r + 1 < arr.count, arr[r + 1].timeMs == arr[lo].timeMs { r += 1 }
-                best = arr[r].text
+                best = arr[r]
             }
         }
         return best
@@ -2017,10 +2043,13 @@ public final class LyricsSyncEngine {
         if !masksHanRuns(in: plainText) {
             // 内容匹配优先,理由跟 translationText 那段一致(同一个 trTextByPlainText/
             // romaTextByPlainText 的建法,对称处理)。
-            if let byContent = romaTextByPlainText[Self.contentMatchKey(plainText)] {
+            let key = Self.contentMatchKey(plainText)
+            if let byContent = romaTextByPlainText[key] {
                 return byContent
             }
+            if romaFallback.suppressed[timeMs] == key { return nil }
             if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
+            if let adopted = romaFallback.adopted[timeMs], adopted.key == key { return adopted.text }
             guard romaLines.isEmpty else { return nil }
         }
         // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
