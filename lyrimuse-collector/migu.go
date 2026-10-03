@@ -69,7 +69,8 @@ func miguLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	if title == "" {
 		return miguResult{}
 	}
-	key := artist + "|" + title + "|" + album
+	// 时长进键:挑选按时长排序,按别名认还要求时长已知(miguAliasCandidate),同一首歌换一个时长结果可能不同。
+	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(durationSecs))
 	miguMu.Lock()
 	if v, ok := miguCache[key]; ok {
 		miguMu.Unlock()
@@ -107,8 +108,24 @@ type miguSearchItem struct {
 	// RateFormats / NewRateFormats:各档音质的文件信息,只用来估时长(durationSecs)。
 	RateFormats    []miguRateFormat `json:"rateFormats"`
 	NewRateFormats []miguRateFormat `json:"newRateFormats"`
+	// SongAliasName / TranslateName:这首歌的别名(多个用「、」隔开,常是英文名或拼音)与译名,只给 miguAliasCandidate 用。
+	SongAliasName string `json:"songAliasName"`
+	TranslateName string `json:"translateName"`
 	// duration:备用搜索(miguJadeiteSearch)那边直接给的时长(秒);search_all.do 的结果没有,为 0。
 	duration float64
+}
+
+// aliasNames:SongAliasName 与 TranslateName 按「、」拆开后的各个写法。
+func (it miguSearchItem) aliasNames() []string {
+	var out []string
+	for _, s := range []string{it.SongAliasName, it.TranslateName} {
+		for _, a := range strings.Split(s, "、") {
+			if a = strings.TrimSpace(a); a != "" {
+				out = append(out, a)
+			}
+		}
+	}
+	return out
 }
 
 type miguRateFormat struct {
@@ -358,11 +375,34 @@ func miguCandidateScore(item miguSearchItem, artist, title, album string) int {
 	return 100
 }
 
+// miguAliasDurationTolerance:按别名认的候选,估出的时长跟本地差多少以内才收。
+const miguAliasDurationTolerance = 0.03
+
+// miguAliasCandidate:歌名过不了闸、但别名或译名(aliasNames)有一个跟本地曲名归一相等的这一条能不能收 —— 本地是英文名
+// 或拼音、咪咕登记的是中文原名(「Love Love Love」对「爱爱爱」)。别名有时挂的是别的歌(现场版的别名写着另一首的名字),
+// 所以比 miguCandidateScore 严:本地时长已知、估出的时长差 miguAliasDurationTolerance 以内;歌手闸、版本闸照旧。见 09 章决策 155。
+func miguAliasCandidate(item miguSearchItem, artist, title, album string, durationSecs float64) bool {
+	want := normLoose(title)
+	if want == "" || strings.TrimSpace(item.LyricURL) == "" || !durationsWithin(item.durationSecs(), durationSecs, miguAliasDurationTolerance) {
+		return false
+	}
+	if !lyricSourceArtistMatches(item.artistName(), artist) || versionTagsMismatch(title, album, item.Name, item.albumName()) {
+		return false
+	}
+	for _, a := range item.aliasNames() {
+		if normLoose(a) == want {
+			return true
+		}
+	}
+	return false
+}
+
 // miguMaxCandidatesToFetch 是通过身份闸后最多并发拉歌词的候选数。咪咕排序可信、原版
 // 通常就是第一条,3 条足够覆盖"第一条恰好没词/不是同步歌词"的情况,不必像酷我拉 5 条。
 const miguMaxCandidatesToFetch = 3
 
-// resolveMiguLyric:①搜索(单次请求,10 条);②身份闸淘汰、保持原序;③取前几条**并发**拉
+// resolveMiguLyric:①搜索(单次请求,10 条;挑不出候选时只用歌名再搜一次,两次都挑不出时才用按别名认的,见 miguAliasCandidate);
+// ②身份闸淘汰、保持原序;③取前几条**并发**拉
 // LRC;④剥完头之后不是真同步的(isTimedLRC)先放一边;⑤按名次(不是"谁先拉完")挑第一份
 // 同步的;⑥选中那条有 trcUrl 就再拉译文(同样剥头、同样要求同步;拉不到只是没有译文,不影响
 // 正文);⑦一份同步的都没有时,按名次退回第一份纯文本(plainOnly),口径同 deezer 的纯文本回退。
@@ -371,21 +411,26 @@ func resolveMiguLyric(ctx context.Context, artist, title, album string, duration
 		item  miguSearchItem
 		score int
 	}
-	var candidates []scoredItem
+	var candidates, aliasCandidates []scoredItem
 	for _, q := range miguSearchQueries(artist, title) {
 		items, err := miguSearchQuery(ctx, q)
 		if err != nil {
 			// 请求没成(所有备用主机都失败)就别换搜索词再打一遍:换词救不了连不上。
-			return miguResult{}
+			break
 		}
 		for _, it := range items {
 			if s := miguCandidateScore(it, artist, title, album); s >= 0 {
 				candidates = append(candidates, scoredItem{it, s})
+			} else if miguAliasCandidate(it, artist, title, album, durationSecs) {
+				aliasCandidates = append(aliasCandidates, scoredItem{it, 0})
 			}
 		}
 		if len(candidates) > 0 {
 			break
 		}
+	}
+	if len(candidates) == 0 {
+		candidates = aliasCandidates
 	}
 	if len(candidates) == 0 {
 		return miguResult{}
