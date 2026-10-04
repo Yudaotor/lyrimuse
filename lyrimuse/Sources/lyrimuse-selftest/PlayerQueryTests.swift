@@ -100,6 +100,25 @@ func runPlayerQueryTests() {
         expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟引擎的 appQuery 常量一一对应")
     }
 
+    // ---- 盯配置目录:原子写(临时文件改名)触发回调;目录本身删掉报告失效(09 章决策 175)----
+    do {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyrimuse-dirwatch-\(ProcessInfo.processInfo.processIdentifier)-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let watchQueue = DispatchQueue(label: "selftest.directory-watch")
+        let changed = DispatchSemaphore(value: 0), gone = DispatchSemaphore(value: 0)
+        let watcher = DirectoryChangeWatcher(directory: dir, queue: watchQueue,
+                                             onChange: { changed.signal() }, onGone: { gone.signal() })
+        expectEqual(watcher != nil, true, "盯目录: 目录打得开")
+        try? Data("{}".utf8).write(to: dir.appendingPathComponent("request.json"), options: .atomic)
+        expectEqual(changed.wait(timeout: .now() + 2) == .success, true, "盯目录: 原子写触发回调")
+        try? FileManager.default.removeItem(at: dir)
+        expectEqual(gone.wait(timeout: .now() + 2) == .success, true, "盯目录: 目录删掉报告失效")
+        withExtendedLifetime(watcher) {}
+        expectEqual(DirectoryChangeWatcher(directory: dir, queue: watchQueue, onChange: {}, onGone: {}) == nil, true,
+                    "盯目录: 目录不存在时返回 nil(调用方退回轮询)")
+    }
+
     // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 PlayerQueryTracks 的解析对得上 ----
     for (platform, js) in [("youtubeMusic", S.youTubeMusicQueueJS), ("spotifyWeb", S.spotifyWebQueueJS)] {
         expectEqual(js.contains(quote) || js.contains(backslash), false, "\(platform) 队列 JS: 不能有双引号或反斜杠")

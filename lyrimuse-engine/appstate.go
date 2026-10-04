@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"reflect"
 	"sync"
 	"syscall"
 	"time"
@@ -149,6 +150,9 @@ type appStateReader struct {
 	rec     appStateRecord
 	decoded bool
 	broken  bool
+	// version:采纳的记录每变一次加一。只推进 seq 与 written_at_ms 的保活重写不算变(sameAppStateContent),
+	// 快速通道据此不为保活多跑一轮(02 章决策 89)。
+	version uint64
 }
 
 func newAppStateReader(path string) *appStateReader {
@@ -157,14 +161,20 @@ func newAppStateReader(path string) *appStateReader {
 
 // read 返回此刻的记录与它能不能用。文件没变就不重读;两份 App 并存时认启动更晚、进程还在的那一份。
 func (r *appStateReader) read(now time.Time) (appStateRecord, appStateAvailability) {
+	rec, avail, _ := r.readVersioned(now)
+	return rec, avail
+}
+
+// readVersioned 同 read,另给出采纳内容的版本(见 appStateReader.version)。
+func (r *appStateReader) readVersioned(now time.Time) (appStateRecord, appStateAvailability, uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	info, err := os.Stat(r.path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return appStateRecord{}, appStateMissing
+			return appStateRecord{}, appStateMissing, r.version
 		}
-		return appStateRecord{}, appStateUnreadable
+		return appStateRecord{}, appStateUnreadable, r.version
 	}
 	if !r.decoded || !info.ModTime().Equal(r.modTime) || info.Size() != r.size {
 		r.modTime, r.size = info.ModTime(), info.Size()
@@ -175,19 +185,29 @@ func (r *appStateReader) read(now time.Time) (appStateRecord, appStateAvailabili
 		} else {
 			r.broken = false
 			if !r.decoded || !appStateSuperseded(r.rec, next, r.alive) {
+				if !r.decoded || !sameAppStateContent(r.rec, next) {
+					r.version++
+				}
 				r.rec, r.decoded = next, true
 			}
 		}
 	}
 	if r.broken {
-		return appStateRecord{}, appStateUnreadable
+		return appStateRecord{}, appStateUnreadable, r.version
 	}
-	return r.rec, appStateUsable(r.rec, now, r.alive)
+	return r.rec, appStateUsable(r.rec, now, r.alive), r.version
 }
 
 // appStateSuperseded:next 是另一个更早启动、而更晚启动的那份还活着的 App 写的 —— 不采纳。纯函数,测试覆盖。
 func appStateSuperseded(held, next appStateRecord, alive func(pid int) bool) bool {
 	return next.AppPID != held.AppPID && next.AppStartedAtMs < held.AppStartedAtMs && held.AppPID > 0 && alive(held.AppPID)
+}
+
+// sameAppStateContent:两份记录除了 seq 与 written_at_ms 都一样 —— App 的保活重写就是这样。纯函数,测试覆盖。
+func sameAppStateContent(a, b appStateRecord) bool {
+	a.Seq, a.WrittenAtMs = 0, 0
+	b.Seq, b.WrittenAtMs = 0, 0
+	return reflect.DeepEqual(a, b)
 }
 
 // appStateSnapshot 把一份记录换成引擎的快照结构,位置外推到 now。没有曲目时是零值(= 没在放)。

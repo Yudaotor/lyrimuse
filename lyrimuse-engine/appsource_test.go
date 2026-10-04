@@ -251,6 +251,14 @@ func writeAppStateFile(t *testing.T, path string, rec appStateRecord) {
 	}
 }
 
+// touchAppStateFile 把状态文件的修改时间改成 at:读方按修改时间判要不要重读,两次写间隔太短时靠它分开。
+func touchAppStateFile(t *testing.T, path string, at time.Time) {
+	t.Helper()
+	if err := os.Chtimes(path, at, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 设备封面读 App 写的当前封面文件:属于这首、校验和对得上才给;不是这首 / 对不上 / 没登记读取器 → 没有。
 func TestAppPlaybackArtwork(t *testing.T) {
 	dir := t.TempDir()
@@ -295,7 +303,8 @@ func TestAppPlaybackArtwork(t *testing.T) {
 func TestReadAppPlaybackAndStandby(t *testing.T) {
 	t.Cleanup(func() { noteAppReportedAd(snapshot{}, false) })
 	path := filepath.Join(t.TempDir(), "state.json")
-	writeAppStateFile(t, path, appSourceRec(os.Getpid(), 1, 1, "Song", time.Now()))
+	first := appSourceRec(os.Getpid(), 1, 1, "Song", time.Now())
+	writeAppStateFile(t, path, first)
 	p := &poller{ctx: context.Background(), cfg: &config{}}
 	p.app = &appPlayback{reader: newAppStateReader(path), judge: plainAppJudge()}
 	if !p.app.changed(time.Now()) {
@@ -307,11 +316,20 @@ func TestReadAppPlaybackAndStandby(t *testing.T) {
 	if p.app.changed(time.Now()) {
 		t.Fatal("nothing new since the last tick")
 	}
-	rec := appSourceRec(os.Getpid(), 1, 1, "Song", time.Now())
-	rec.Seq = 2
-	writeAppStateFile(t, path, rec)
+	// 保活重写:只推进 seq 与 written_at_ms。改 mtime 保证读方真的重读了这一份。
+	heartbeat := first
+	heartbeat.Seq, heartbeat.WrittenAtMs = 2, first.WrittenAtMs+5000
+	writeAppStateFile(t, path, heartbeat)
+	touchAppStateFile(t, path, time.Now().Add(time.Second))
+	if p.app.changed(time.Now()) {
+		t.Fatal("a heartbeat rewrite is not new")
+	}
+	paused := heartbeat
+	paused.Seq, paused.State = 3, "paused"
+	writeAppStateFile(t, path, paused)
+	touchAppStateFile(t, path, time.Now().Add(2*time.Second))
 	if !p.app.changed(time.Now()) {
-		t.Fatal("a rewrite (heartbeat or change) is new")
+		t.Fatal("a content change is new")
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)

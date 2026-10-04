@@ -216,21 +216,22 @@ type appPlayback struct {
 	reader *appStateReader
 	judge  appPlaybackJudge
 	marks  appPlaybackMarks
-	// 上一拍用掉的那份(进程号 + 序号)与它的可用性,快速通道据此判有没有新东西。
-	usedPID   int
-	usedSeq   int64
-	usedAvail appStateAvailability
+	// 上一拍用掉的那份(进程号 + 内容版本)与它的可用性,快速通道据此判有没有新东西。只推进序号的保活重写
+	// 不算新东西,由主节拍照常读到。
+	usedPID     int
+	usedVersion uint64
+	usedAvail   appStateAvailability
 	// path:上一拍是在用 App 状态还是在待机,变了才记一行日志。
 	path string
 }
 
-// changed:状态文件自上一拍以来有没有新内容、可用性有没有变。快速通道用。
+// changed:状态文件自上一拍以来有没有新内容、可用性有没有变。快速通道用;保活重写不算新内容。
 func (a *appPlayback) changed(now time.Time) bool {
 	if a == nil {
 		return false
 	}
-	rec, avail := a.reader.read(now)
-	return rec.AppPID != a.usedPID || rec.Seq != a.usedSeq || avail != a.usedAvail
+	rec, avail, version := a.reader.readVersioned(now)
+	return rec.AppPID != a.usedPID || version != a.usedVersion || avail != a.usedAvail
 }
 
 // notePath 记下这一拍走的哪条路,跟上一拍不同就打一行。

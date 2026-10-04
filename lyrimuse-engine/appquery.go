@@ -31,8 +31,8 @@ const (
 
 	appQuerySchema = 2
 
-	// appQueryScriptTimeout:等一次 Music / 浏览器脚本(系统待播队列同样)应答的上限。App 那边跑脚本的进程级超时是 6 秒,再加它看
-	// 请求文件的间隔(0.5 秒)与写回。
+	// appQueryScriptTimeout:等一次 Music / 浏览器脚本(系统待播队列同样)应答的上限。App 那边跑脚本的进程级超时是 6 秒,再加它
+	// 收到请求(盯着配置目录,请求一落盘就看到,09 章决策 175)与写回。
 	appQueryScriptTimeout = 8 * time.Second
 	// appQueryShuffleTimeout:等 Spotify 随机状态的上限(App 那边脚本超时 2 秒)。
 	appQueryShuffleTimeout = 4 * time.Second

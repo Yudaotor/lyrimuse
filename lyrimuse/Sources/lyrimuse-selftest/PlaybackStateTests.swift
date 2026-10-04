@@ -164,6 +164,18 @@ func runPlaybackStateTests() {
     expectEqual(hold2.decide(current: cur, next: other, now: t0.addingTimeInterval(1)), .accept,
                 "撕裂快照: 形态解除立即放行")
 
+    // ---- 放歌时持有系统活动(防 App Nap 推迟保活),别的状态不持有(02 章决策 89)----
+    expectEqual(PlaybackStatePublisher.holdsActivity(for: .playing), true, "防节能: 放歌时持有活动")
+    for state in [F.State.paused, .idle, .exiting] {
+        expectEqual(PlaybackStatePublisher.holdsActivity(for: state), false, "防节能: \(state.rawValue) 不持有")
+    }
+    let publisherSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/PlaybackStateFile.swift"), encoding: .utf8)) ?? ""
+    expectEqual(publisherSource.contains("options: .userInitiatedAllowingIdleSystemSleep"), true,
+                "防节能: 活动只免 App Nap(.userInitiatedAllowingIdleSystemSleep)")
+    expectEqual(publisherSource.contains("options: .userInitiated,") || publisherSource.contains("idleSystemSleepDisabled"), false,
+                "防节能: 不拦系统空闲睡眠")
+
     // ---- 封面文件的类型与校验和 ----
     expectEqual(F.artworkMime(Data([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "image/jpeg", "封面类型: JPEG")
     expectEqual(F.artworkMime(Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A])), "image/png", "封面类型: PNG")

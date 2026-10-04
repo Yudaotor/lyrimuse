@@ -14,7 +14,10 @@ import os
 /// 才看到就不答(引擎那边早不等了)。一次只处理一份请求,引擎那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
-/// 状态(定时器、上次读到的请求)只在 `queue` 上读写。
+/// 请求一落盘就看到:盯着配置目录(引擎原子写请求,目录项会变),另有慢速兜底轮询;目录盯不了时退回每
+/// `pollInterval` 看一次。见 09 章决策 175。
+///
+/// 状态(定时器、目录监听、上次读到的请求)只在 `queue` 上读写。
 public final class PlayerQueryServer: @unchecked Sendable {
     public static let shared = PlayerQueryServer()
 
@@ -24,8 +27,10 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static var replyURL: URL { LyrimusePaths.configFile(replyFileName) }
 
     public static let schema = 2
-    /// 多久看一次请求文件(一次 stat,变了才读)。
+    /// 盯不了配置目录时多久看一次请求文件(一次 stat,变了才读)。
     public static let pollInterval: TimeInterval = 0.5
+    /// 盯着配置目录时的兜底轮询:目录事件漏掉的请求最晚这么久后被看到。
+    public static let fallbackPollInterval: TimeInterval = 5
     /// 请求写出之后超过这么久才看到就不答。引擎那边最多等 8 秒(`appQueryScriptTimeout`)。
     public static let requestMaxAge: TimeInterval = 10
     /// 跑 Music / 浏览器脚本、读系统待播队列的进程级超时。引擎那边的等待按它留了余量,两边一起改。
@@ -326,6 +331,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "player-query")
     private let writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
     private var timer: DispatchSourceTimer?
+    private var watcher: DirectoryChangeWatcher?
     private var lastSignature: (modified: Date, size: Int)?
     private var lastHandledID: String?
 
@@ -336,12 +342,28 @@ public final class PlayerQueryServer: @unchecked Sendable {
         guard writesEnabled else { return }
         queue.async { [self] in
             guard timer == nil else { return }
-            let source = DispatchSource.makeTimerSource(queue: queue)
-            source.schedule(deadline: .now() + Self.pollInterval, repeating: Self.pollInterval, leeway: .milliseconds(100))
-            source.setEventHandler { [weak self] in self?.tick() }
-            source.resume()
-            timer = source
+            watcher = DirectoryChangeWatcher(directory: Self.requestURL.deletingLastPathComponent(), queue: queue,
+                                             onChange: { [weak self] in self?.tick() },
+                                             onGone: { [weak self] in self?.watcherGone() })
+            startTimer(watcher == nil ? Self.pollInterval : Self.fallbackPollInterval)
+            tick()
         }
+    }
+
+    /// 配置目录本身被删或挪走:描述符盯不到新目录了,退回轮询。
+    private func watcherGone() {
+        watcher = nil
+        startTimer(Self.pollInterval)
+        tick()
+    }
+
+    private func startTimer(_ interval: TimeInterval) {
+        timer?.cancel()
+        let source = DispatchSource.makeTimerSource(queue: queue)
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(Int(interval * 200)))
+        source.setEventHandler { [weak self] in self?.tick() }
+        source.resume()
+        timer = source
     }
 
     private func tick() {

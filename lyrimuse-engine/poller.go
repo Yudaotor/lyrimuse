@@ -1579,8 +1579,8 @@ func (p *poller) readAppPlayback() (now time.Time, reanchored, loopRestart bool)
 	if a == nil {
 		return now, false, false
 	}
-	rec, avail := a.reader.read(now)
-	a.usedPID, a.usedSeq, a.usedAvail = rec.AppPID, rec.Seq, avail
+	rec, avail, version := a.reader.readVersioned(now)
+	a.usedPID, a.usedVersion, a.usedAvail = rec.AppPID, version, avail
 	if avail != appStateAvailable {
 		a.notePath("standby:"+string(avail), "App playback state "+string(avail)+", standing by")
 		reanchored, loopRestart = p.applyAppPlaybackTick(now, appPlaybackTick{})

@@ -347,6 +347,9 @@ public enum PlaybackStateFile {
 ///
 /// 只在以 Lyrimuse.app 身份运行时落盘:selftest 与 `swift run` 起的进程共用同一个配置目录,
 /// 让它们写会盖掉正在运行的 App 那份,引擎就会读到测试数据。
+///
+/// 放歌时向系统持有一个活动(`holdsActivity(for:)`):没有可见窗口时 App Nap 会推迟计时器,保活一旦晚过引擎的
+/// 15 秒就被当成不可用。见 02 章决策 89。
 @MainActor
 public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
@@ -366,6 +369,8 @@ public final class PlaybackStatePublisher {
     private let artworkQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.playback-state-artwork", qos: .utility)
     /// 最近一次写出的封面校验和,同一张图不重复落盘。
     private var writtenArtworkSHA: String?
+    /// 放歌期间持有的系统活动,不放歌时为 nil。
+    private var playbackActivity: NSObjectProtocol?
 
     private init() {}
 
@@ -373,6 +378,7 @@ public final class PlaybackStatePublisher {
         guard !exiting else { return }
         let content = tracker.advance(input, now: now)
         startHeartbeatIfNeeded()
+        updateActivity(for: content.state)
         guard content != lastContent else { return }
         lastContent = content
         write(content, now: now)
@@ -419,7 +425,26 @@ public final class PlaybackStatePublisher {
         exiting = true
         heartbeat?.invalidate()
         heartbeat = nil
+        updateActivity(for: .exiting)
         write(.exiting, now: Date())
+    }
+
+    /// 这个状态下要不要持有活动:只在放歌时。暂停、停播照常让系统节能。纯函数,selftest 覆盖。
+    public nonisolated static func holdsActivity(for state: PlaybackStateFile.State) -> Bool {
+        state == .playing
+    }
+
+    /// 选项只免 App Nap:别换成 `.userInitiated`,那个连系统空闲睡眠也拦。
+    private func updateActivity(for state: PlaybackStateFile.State) {
+        guard writesEnabled else { return }
+        if Self.holdsActivity(for: state) {
+            guard playbackActivity == nil else { return }
+            playbackActivity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "Publishing playback state to the lyrics engine")
+        } else if let activity = playbackActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            playbackActivity = nil
+        }
     }
 
     /// 封面在换歌之后异步到,落在两拍之间:只换封面、不推进序号与位置。

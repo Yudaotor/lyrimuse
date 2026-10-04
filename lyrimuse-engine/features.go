@@ -75,9 +75,9 @@ const (
 )
 
 // 播放器标识——跟 lyrimuse 侧 PlaybackPlayer(LyrimuseCore/Local/PlaybackPlayer.swift)的 rawValue
-// 逐字对应,共享文件里 "player" 字段的取值。各家怎么读由 App 决定;引擎只拿它判这一拍的播放器是不是
-// 选中的那几个(poller.isTracked)。playerAuto("自动识别")不对应固定的某个 App:任一内置播放器或信任列表里的
-// 播放器都算。playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
+// 逐字对应,共享文件里 "players" 列表的取值。认哪首歌、怎么读全由 App 决定(poller.isTracked 只看 App 状态里
+// 有没有曲目);引擎只在「跟随播放器启动」里用选中集合决定盯哪几个进程(companionLaunchProcessNames)。
+// playerAuto("自动识别")不对应固定的某个 App:任一内置播放器或信任列表里的播放器都算。playerXxx 常量本身由 scripts/gen-players.py 从 shared/players.json 生成,在
 // players_generated.go —— 接一个新播放器改那份 JSON,Swift 侧的 rawValue 跟着同一份走,两边不可能再漂。
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序。

@@ -196,6 +196,45 @@ func TestAppStateReaderPrefersNewerInstance(t *testing.T) {
 	}
 }
 
+// 保活重写只推进 seq 与 written_at_ms:内容版本不变;别的字段一变就加一。快速通道靠它不为保活多跑一轮。
+func TestAppStateReaderVersionIgnoresHeartbeat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	write := func(rec appStateRecord, mtime time.Time) {
+		t.Helper()
+		data, _ := json.Marshal(rec)
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, mtime, mtime); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := newAppStateReader(path)
+	r.alive = alwaysAlive
+	base := time.UnixMilli(1_790_000_000_000)
+	now := base.Add(time.Second)
+	rec := appStateRecord{Schema: 1, AppPID: 100, AppStartedAtMs: 1, Seq: 1, WrittenAtMs: base.UnixMilli(), State: "paused",
+		Player: "com.apple.Music", Track: &appStateTrack{PlaySeq: 1, Title: "Song", Artist: "Singer"},
+		Position: &appStatePosition{Secs: 10, AtMs: base.UnixMilli(), AnchorSeq: 1}}
+	write(rec, base)
+	_, _, first := r.readVersioned(now)
+	heartbeat := rec
+	heartbeat.Seq, heartbeat.WrittenAtMs = 2, base.Add(5*time.Second).UnixMilli()
+	write(heartbeat, base.Add(5*time.Second))
+	if rec, _, v := r.readVersioned(now); v != first || rec.Seq != 2 {
+		t.Fatalf("heartbeat rewrite: version %d -> %d (want unchanged), seq %d (want the new record read)", first, v, rec.Seq)
+	}
+	playing := heartbeat
+	playing.Seq, playing.State = 3, "playing"
+	write(playing, base.Add(6*time.Second))
+	if _, _, v := r.readVersioned(now); v == first {
+		t.Fatal("a content change must bump the version")
+	}
+	if !sameAppStateContent(rec, heartbeat) || sameAppStateContent(heartbeat, playing) {
+		t.Fatal("sameAppStateContent: only seq and written_at_ms may differ")
+	}
+}
+
 func TestAppStateSnapshotClampsToDuration(t *testing.T) {
 	d := 100.0
 	rec := appStateRecord{
