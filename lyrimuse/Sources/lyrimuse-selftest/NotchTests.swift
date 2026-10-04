@@ -726,6 +726,45 @@ func runNotchTests() {
         } else {
             expectEqual(false, true, "封面指纹: 合成图建不出来")
         }
+        // 换歌翻牌那枚音符:封面里最鲜艳的那种颜色,调亮到深底上读得清;封面里没有够鲜艳的颜色就是 nil(画白)。
+        let vividSide = ArtworkVividColor.side
+        let vividCount = vividSide * vividSide
+        func vividPixels(_ fill: (Int) -> (UInt8, UInt8, UInt8)) -> [UInt8] {
+            var out = [UInt8]()
+            out.reserveCapacity(vividCount * 4)
+            for i in 0..<vividCount {
+                let c = fill(i)
+                out += [c.0, c.1, c.2, 255]
+            }
+            return out
+        }
+        let redOnGray = vividPixels { $0 < vividCount / 10 ? (200, 30, 40) : (120, 118, 115) }
+        if let red = ArtworkVividColor.color(rgba: redOnGray) {
+            expectEqual(red.r > red.g && red.r > red.b, true, "音符色: 灰封面上一块红,取到的是红")
+            var sum = (r: 0.0, g: 0.0, b: 0.0)
+            for i in stride(from: 0, to: redOnGray.count, by: 4) {
+                sum.r += Double(redOnGray[i])
+                sum.g += Double(redOnGray[i + 1])
+                sum.b += Double(redOnGray[i + 2])
+            }
+            let dim = (1 - LocalPlaybackSource.notchCoverArtOverlayOpacity) / Double(vividCount) / 255
+            let backdrop = LocalPlaybackSource.relativeLuminance(r: sum.r * dim, g: sum.g * dim, b: sum.b * dim)
+            let own = LocalPlaybackSource.relativeLuminance(r: red.r, g: red.g, b: red.b)
+            expectEqual(LocalPlaybackSource.contrastRatio(backdrop, own) >= 4.5 - 1e-6, true,
+                        "音符色: 跟压暗后的封面底拉开 4.5:1")
+            expectEqual(own > 0.3, true, "音符色: 调成亮色,不是封面里原来那块暗红")
+        } else {
+            expectEqual(false, true, "音符色: 灰封面上一块红,应该取得到")
+        }
+        expectEqual(ArtworkVividColor.color(rgba: vividPixels { _ in (128, 128, 128) }) == nil, true,
+                    "音符色: 纯灰封面没有鲜艳色,画白")
+        expectEqual(ArtworkVividColor.color(rgba: vividPixels { $0 < vividCount / 100 ? (220, 20, 30) : (40, 40, 40) }) == nil,
+                    true, "音符色: 鲜艳的像素不到 2% 不算")
+        if let gold = ArtworkVividColor.color(rgba: vividPixels { _ in (200, 150, 40) }) {
+            expectEqual(gold.r >= gold.g && gold.g > gold.b, true, "音符色: 金色封面取到的还是金色")
+        } else {
+            expectEqual(false, true, "音符色: 金色封面应该取得到")
+        }
         // 收听里程碑:单曲 100 / 1,000 / 10,000……;累计不到 1 万时 1,000、5,000,之后每满 1 万。
         typealias MR = ListenMilestoneRules
         expectEqual([99, 100, 101, 500, 1_000, 5_000, 10_000, 100_000].map(MR.isTrackMilestone),
@@ -894,6 +933,13 @@ func runNotchTests() {
                         "换歌翻牌契约: 开着歌词行时歌名盖上来,稳态那份歌词行让开")
             expectEqual(v.contains("flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)"), true,
                         "换歌翻牌契约: 左耳的翻牌连广告时的喇叭一起画(广告结束才能翻成封面)")
+            let dropSrc = src("NotchTrackChangeViews.swift")
+            expectEqual(dropSrc.contains("Image(systemName: \"music.note\")")
+                        && dropSrc.contains(".foregroundStyle(.white.opacity(0.96))")
+                        && dropSrc.contains(".opacity(drop == nil ? 0 : 1)"), true,
+                        "换歌翻牌契约: 歌名白字、颜色只给音符,暗晕只在有歌名时出现")
+            expectEqual(v.contains("playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white"), true,
+                        "换歌翻牌契约: 音符只在「跟随封面」风格下取封面色,其余风格白")
             let coordinatorSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent()
                 .appendingPathComponent("PlaybackCoordinator.swift"), encoding: .utf8)) ?? ""
             let playbackSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent().deletingLastPathComponent()

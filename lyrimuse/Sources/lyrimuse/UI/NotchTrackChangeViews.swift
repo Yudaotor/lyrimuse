@@ -5,9 +5,12 @@ import SwiftUI
 /// 换歌翻牌:新歌名从刘海里掉出来的那一条。挂在顶行下面(`NotchLyricsView`):关着歌词行时占卡片多长出来的
 /// `NotchMetrics.trackDropHeight`,开着时盖在歌词行上。`drop` 换一条(`id` 变)= 旧的往上收回去、新的从上面掉下来;
 /// nil = 收回去。条子本身定宽定高、自己裁掉上沿以上,所以字是从刘海底边掉出来的。
+///
+/// 字一律白(歌名 96%、歌手 62%),颜色只给歌名前那枚音符;字底下垫一层淡淡的暗晕,封面有亮块时字不糊进底里。
 struct NotchTrackDropStrip: View {
     let drop: NotchTrackDrop?
-    let tint: Color
+    /// 音符的颜色(`NotchLyricsView.trackDropNoteTint`)。
+    let noteTint: Color
     let width: CGFloat
     let height: CGFloat
     /// false = 「减弱动态效果」开着:原地淡入淡出,不掉不弹。
@@ -15,6 +18,10 @@ struct NotchTrackDropStrip: View {
 
     var body: some View {
         ZStack {
+            // 暗晕原地淡入淡出,不跟着字掉。
+            scrim
+                .opacity(drop == nil ? 0 : 1)
+                .animation(.easeInOut(duration: 0.25), value: drop == nil)
             if let drop {
                 line(drop)
                     .id(drop.id)
@@ -31,20 +38,44 @@ struct NotchTrackDropStrip: View {
         .allowsHitTesting(false)
     }
 
-    /// 歌名、歌手各自按需截断:一个短一个长时短的那个整个留着,两个都长时各让一半。
+    /// 椭圆暗晕:横向半径是条子宽的 58%、纵向是条子高的 120%,中心略偏下。
+    private var scrim: some View {
+        EllipticalGradient(stops: [
+            .init(color: .black.opacity(0.42), location: 0),
+            .init(color: .black.opacity(0.18), location: 0.55),
+            .init(color: .clear, location: 1),
+        ])
+        .frame(width: width * 1.16, height: height * 2.4)
+        .offset(y: height * 0.05)
+        .accessibilityHidden(true)
+    }
+
+    /// 歌名、歌手各自按需截断:一个短一个长时短的那个整个留着,两个都长时各让一半;音符和圆点不截。
     private func line(_ drop: NotchTrackDrop) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
+            Image(systemName: "music.note")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(noteTint)
+                .animation(.easeInOut(duration: 0.35), value: noteTint)
+                .fixedSize()
+                .accessibilityHidden(true)
             Text(drop.title)
                 .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(tint.opacity(0.9))
+                .foregroundStyle(.white.opacity(0.96))
             if !drop.artist.isEmpty {
+                Text(verbatim: "·")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize()
+                    .accessibilityHidden(true)
                 Text(drop.artist)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tint.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.62))
             }
         }
         .lineLimit(1)
         .truncationMode(.tail)
+        .shadow(color: .black.opacity(0.35), radius: 1.5, y: 1)
         .padding(.horizontal, 14)
         .frame(width: width, height: height)
         .accessibilityElement(children: .combine)

@@ -109,6 +109,10 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var rightEar: NotchEarModule = .artist
     /// 换歌翻牌开没开(`AppSettings.notchTrackChangeFlip`):开着时耳朵里的封面走 `NotchEarArtworkFlip`。只影响渲染,同上走这里现读。
     @Published private(set) var trackChangeFlip: Bool = AppSettings.defaultNotchTrackChangeFlip
+    /// 换歌翻牌那条歌名前那枚音符的颜色:封面(高清替代优先)里最鲜艳的那种(`ArtworkVividColor`);没有封面、或封面里
+    /// 没有够鲜艳的颜色时为 nil(画白)。换图时在后台算,只认最后一次换图的结果。
+    @Published private(set) var vividAccent: Color?
+    private var vividGeneration = 0
     /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边。走这里现读而不是
     /// `NotchChromeSource` 协议——它只影响 `lyricRowContent` 内部的 HStack 排列,不影响
     /// 卡片高度/宽度,理由同 `notchCardStyle`/`leftEar`/`rightEar`(那几个也只影响渲染)。
@@ -191,6 +195,26 @@ private final class NotchPlayback: ObservableObject {
     /// 那一套里,没权限时 osascript 直接失败、走「没能跳过」那句。
     func skipAd() {
         YouTubeMusicAdSkipCenter.shared.skip(trigger: .manual)
+    }
+
+    /// 封面换了:后台缩图取色(要把整张图解一遍),回到主线程只认最后一次换图的结果。
+    private func refreshVividAccent(_ image: NSImage?) {
+        vividGeneration &+= 1
+        let generation = vividGeneration
+        guard let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            if vividAccent != nil { vividAccent = nil }
+            return
+        }
+        Task.detached(priority: .utility) { [weak self] in
+            let rgb = ArtworkVividColor.color(image: cgImage)
+            await self?.applyVividAccent(rgb, generation: generation)
+        }
+    }
+
+    private func applyVividAccent(_ rgb: (r: Double, g: Double, b: Double)?, generation: Int) {
+        guard generation == vividGeneration else { return }
+        let next = rgb.map { Color(.sRGB, red: $0.r, green: $0.g, blue: $0.b) }
+        if vividAccent != next { vividAccent = next }
     }
 
     deinit {
@@ -305,6 +329,10 @@ private final class NotchPlayback: ObservableObject {
             s.$notchLeftEar.removeDuplicates().sink { [weak self] in self?.leftEar = $0 },
             s.$notchRightEar.removeDuplicates().sink { [weak self] in self?.rightEar = $0 },
             s.$notchTrackChangeFlip.removeDuplicates().sink { [weak self] in self?.trackChangeFlip = $0 },
+            Publishers.CombineLatest(p.$highResArtworkImage, p.$artworkImage)
+                .map { highRes, system in highRes ?? system }
+                .removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.refreshVividAccent($0) },
             s.$notchLyricRowShowsArtwork.removeDuplicates().sink { [weak self] in self?.lyricRowShowsArtwork = $0 },
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
@@ -972,7 +1000,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 歌词行上(稳态那份歌词行这时让开,见 cardBodyLayer)。常驻:收回 / 换下一条的动画才演得出来。
             .overlay(alignment: .top) {
                 NotchTrackDropStrip(
-                    drop: shownTrackDrop, tint: accentOrWhite, width: controller.steadyCardWidth,
+                    drop: shownTrackDrop, noteTint: trackDropNoteTint, width: controller.steadyCardWidth,
                     height: controller.showsLyrics ? NotchMetrics.compactRowHeight : NotchMetrics.trackDropHeight,
                     animated: !reduceMotion)
                     .padding(.top, controller.contentTopInset)
@@ -1102,6 +1130,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 此刻画出来的那条掉下来的歌名:收起、展开、报喜时不画(控制器那边展开 / 报喜时也会把它收掉)。
     private var shownTrackDrop: NotchTrackDrop? {
         controller.isCollapsed || controller.isExpanded || controller.milestone != nil ? nil : controller.trackDrop
+    }
+
+    /// 掉下来那条歌名前那枚音符的颜色:「跟随封面」风格下用封面里最鲜艳的那种,其余风格跟别的前景一样白。
+    private var trackDropNoteTint: Color {
+        playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white
     }
 
     /// 刘海空当(物理刘海遮挡处)里的品牌胶囊彩蛋。
