@@ -508,6 +508,147 @@ func runLastfmTests() {
         expectEqual(M.new.stepText, nil, "榜单升降: 新没有数字")
     }
 
+    // ---- ChartMerge:歌曲榜把同一首歌、专辑榜把同一张专辑的不同写法并成一行 ----
+    do {
+        typealias T = ChartMerge
+        func r(_ artist: String, _ name: String, _ n: Int) -> ChartRow { ChartRow(artist: artist, name: name, playcount: n) }
+        // 键由测试给定,只测排名、显示写法、求和
+        let byName = { T.KeyMemo { $0.name.lowercased() } }
+        let m = T.merge([r("A", "Love Song", 112), r("A", "頌海", 92), r("B", "x", 90), r("Khalil", "頌海", 58),
+                         r("A", "love song", 3)], key: byName())
+        expectEqual(m.map(\.playcount), [150, 115, 90], "歌曲榜合并: 次数相加后按合计重新排名")
+        expectEqual(m.first.map { "\($0.artist)|\($0.name)" }, "A|頌海", "歌曲榜合并: 显示成员里次数最多的那种写法")
+        expectEqual(m.first?.variants, [r("Khalil", "頌海", 58)], "歌曲榜合并: 其余写法留在 variants")
+        expectEqual(m.last?.variants, [], "歌曲榜合并: 只有一种写法时 variants 为空")
+        let tie = T.merge([r("X", "同", 5), r("Y", "同", 5), r("Z", "另", 10)], key: byName())
+        expectEqual(tie.map(\.artist), ["X", "Z"], "歌曲榜合并: 成员平手显示先出现的;合计平手保持首次出现的先后")
+        var calls = 0
+        let counting = T.KeyMemo { calls += 1; return $0.name }
+        _ = T.merge([r("A", "x", 3), r("A", "x", 2)], key: counting)
+        _ = T.merge([r("A", "x", 1)], key: counting)
+        expectEqual(calls, 1, "歌曲榜合并: 同一种写法只算一次键(本期和上一期共用一张记忆表)")
+
+        expectEqual(T.merge([r("B", "x", 3), r("A", "x", 9)], key: byName()).first?.artist, "A",
+                    "歌曲榜合并: 输入没按次数排时也显示次数最多的写法")
+
+        // 一档榜单:取前 limit 行;上一期按同一把尺子合并之后再排名次(x 在上一期是 3 + 3 = 6 次,排第 1)
+        let ranked = T.chart(current: [r("A", "x", 10), r("B", "y", 8), r("C", "z", 1)],
+                             previous: [r("B", "y", 5), r("A", "X", 3), r("C", "x", 3)], limit: 2, key: byName())
+        expectEqual(ranked.map(\.row.name), ["x", "y"], "歌曲榜合并: 合并后取前 limit 行")
+        expectEqual(ranked.map(\.previousRank), [1, 2], "歌曲榜合并: 上一期合并后再对齐名次")
+        expectEqual(T.chart(current: [r("A", "x", 1)], previous: [], limit: 50, key: byName()).map(\.previousRank), [0],
+                    "歌曲榜合并: 上一期里没有 = 0")
+        expectEqual(T.chart(current: [r("A", "x", 1)], previous: nil, limit: 50, key: byName()).map(\.previousRank), [nil],
+                    "歌曲榜合并: 没有可比的上一期 = nil")
+
+        // 真的折叠键(「第 N 次听」那一把):繁简、合唱归首位、Remaster 尾巴并成一首;Live 版、别人唱的同名歌不并
+        PlayCountFold.setLocalArtistAliases([:])
+        PlayCountFold.setLocalTitleAliases([:])
+        PlayCountFold.setDiscoveredTitleAliases([:])
+        let real = T.merge([r("方大同", "曇花", 71), r("方大同", "昙花", 60), r("方大同", "流沙 - Live", 20), r("方大同", "流沙", 10),
+                            r("Michael Jackson", "Bad", 18), r("方大同", "Bad", 73),
+                            r("Prince & The Revolution", "Purple Rain", 67), r("Prince", "Purple Rain", 6),
+                            r("宇多田ヒカル", "First Love", 52), r("宇多田ヒカル", "First Love (Remastered 2014)", 39)], key: .songs())
+        expectEqual(real.map { "\($0.artist)|\($0.name)|\($0.playcount)" },
+                    ["方大同|曇花|131", "宇多田ヒカル|First Love|91", "方大同|Bad|73", "Prince & The Revolution|Purple Rain|73",
+                     "方大同|流沙 - Live|20", "Michael Jackson|Bad|18", "方大同|流沙|10"],
+                    "歌曲榜合并: 繁简 / 合唱归首位 / 再版尾巴并;Live 版和别人唱的同名歌各是一首")
+
+        // 专辑榜:歌手跟歌曲榜同一把尺子(合唱归首位、罗马字艺名折到中文名),专辑名的繁简、再版 / Explicit 尾巴、
+        // 中英双语拼接名并;现场专辑、Deluxe、方括号里的标记不并;歌名别名表不用在专辑名上
+        PlayCountFold.setLocalArtistAliases(["khalilfong": "方大同"])
+        PlayCountFold.setLocalTitleAliases([PlayCountFold.canonicalArtistKey("方大同"): [PlayCountFold.foldTitle("Love Love Love"): "爱爱爱"]])
+        let albums = T.merge([r("方大同", "15", 1061), r("方大同", "愛愛愛", 687), r("Michael Jackson", "Xscape (Deluxe)", 722),
+                              r("宇多田ヒカル", "First Love", 474), r("宇多田ヒカル", "First Love (Remastered 2014)", 186),
+                              r("丁世光", "實況電影 The Script of Destiny", 161), r("Prince & The Revolution", "Purple Rain", 133),
+                              r("丁世光", "实况电影", 79), r("方大同", "爱爱爱", 73), r("方大同", "15 (Live in Hong Kong 2011)", 48),
+                              r("Michael Jackson", "Xscape", 26), r("Michael Jackson & Justin Timberlake", "Xscape (Deluxe)", 15),
+                              r("Ariana Grande", "petal [Explicit]", 11), r("Prince", "Purple Rain (Explicit)", 9),
+                              r("Khalil Fong", "愛愛愛", 5), r("Ariana Grande", "petal", 5), r("方大同", "Love Love Love", 4)],
+                             key: .albums())
+        expectEqual(albums.map { "\($0.artist)|\($0.name)|\($0.playcount)" },
+                    ["方大同|15|1061", "方大同|愛愛愛|765", "Michael Jackson|Xscape (Deluxe)|737", "宇多田ヒカル|First Love|660",
+                     "丁世光|實況電影 The Script of Destiny|240", "Prince & The Revolution|Purple Rain|142",
+                     "方大同|15 (Live in Hong Kong 2011)|48", "Michael Jackson|Xscape|26", "Ariana Grande|petal [Explicit]|11",
+                     "Ariana Grande|petal|5", "方大同|Love Love Love|4"],
+                    "专辑榜合并: 繁简 / 罗马字艺名 / 合唱归首位 / 再版与 Explicit 尾巴 / 中英双语名并;现场专辑、Deluxe、方括号标记、歌名别名不并")
+        expectEqual(PlayCountFold.albumFamilyKey(artist: "Khalil Fong", album: "愛愛愛"),
+                    PlayCountFold.albumFamilyKey(artist: "方大同", album: "爱爱爱"), "专辑榜合并: 罗马字艺名与繁简写法是同一个键")
+        expectEqual(T.chart(current: [r("方大同", "愛愛愛", 7), r("方大同", "15", 6), r("Khalil Fong", "爱爱爱", 2)],
+                            previous: [r("方大同", "15", 9), r("Khalil Fong", "愛愛愛", 4), r("方大同", "爱爱爱", 3)],
+                            limit: 50, key: .albums()).map(\.previousRank), [2, 1],
+                    "专辑榜合并: 上一期按同一张专辑合并后再对齐名次")
+        PlayCountFold.setLocalArtistAliases([:])
+        PlayCountFold.setLocalTitleAliases([:])
+
+        // 周榜逐行:带次数,没有名称的行跳过、也不计入合计
+        let weekly: [String: Any] = ["weeklytrackchart": ["track": [
+            ["name": "曇花", "playcount": "7", "artist": ["#text": "方大同"]],
+            ["name": "", "playcount": "2", "artist": ["#text": "X"]],
+            ["name": "昙花", "playcount": "4", "artist": ["#text": "方大同"]],
+        ]]]
+        let rows = ChartComparison.parseWeeklyChartRows(weekly, container: "weeklytrackchart", item: "track")
+        expectEqual(rows?.rows, [r("方大同", "曇花", 7), r("方大同", "昙花", 4)], "周榜逐行: 按名次带出次数")
+        expectEqual(rows?.listens, 11, "周榜逐行: 合计次数")
+        expectEqual(ChartComparison.parseWeeklyChart(weekly, container: "weeklytrackchart", item: "track")?.keys,
+                    [ChartComparison.key(artist: "方大同", name: "曇花"), ChartComparison.key(artist: "方大同", name: "昙花")],
+                    "周榜逐行: 专辑榜那条对齐键照旧")
+
+        // 歌手展开行同样合并;引擎算的共几首、共几次不动
+        let line = #"{"rows":{"方大同":{"tracks":[{"name":"曇花","artist":"方大同","playCount":71},{"name":"Love Song","artist":"方大同","playCount":65},{"name":"昙花","artist":"方大同","playCount":60}],"trackCount":40,"playCount":900}},"complete":true}"#
+        let merged = ArtistTracksBatch.parse(Data(line.utf8))?.mergingSameSong().rows["方大同"]
+        expectEqual(merged?.tracks.map { "\($0.name)|\($0.playCount)" }, ["曇花|131", "Love Song|65"], "歌手展开: 同一首歌的写法并成一首")
+        expectEqual(merged?.trackCount, 40, "歌手展开: 共几首不动")
+        expectEqual(merged?.playCount, 900, "歌手展开: 共几次不动")
+    }
+
+    // ---- ChartAppLinks.filling / PlatformPagesWanted:合并行的右键链接、交给引擎的预取清单 ----
+    do {
+        var pages = ArtistPlatformPages.Pages()
+        pages.spotify = URL(string: "spotify:artist:4Gzm9CEWMcN2u3wTEU5FgC")
+        let full = ChartAppLinks(appleMusic: URL(string: "music://music.apple.com/us/album/x/1?i=2"),
+                                 spotify: URL(string: "spotify:track:6jYG3Ys8OUrB3S7m1LcPo6"),
+                                 kkbox: URL(string: "https://www.kkbox.com/tw/tc/song/x"), kaset: URL(string: "kaset://play?x"),
+                                 qqSongMID: "003OUlho2HcRHC", artistAlbum: .init(id: 1234, storefront: "us"),
+                                 artistMBID: "070d193a-845c-479f-980e-bef15710653e", artistPages: pages)
+        expectEqual(Mirror(reflecting: full).children.allSatisfy { Mirror(reflecting: $0.value).children.count == 1 }, true,
+                    "右键链接拼合: 样本每个字段都有值(加字段时样本和 filling 一起补)")
+        expectEqual(ChartAppLinks().filling(from: full) == full, true, "右键链接拼合: 缺的字段都从另一种写法补上")
+        let own = ChartAppLinks(appleMusic: URL(string: "music://own"))
+        expectEqual(own.filling(from: full).appleMusic, URL(string: "music://own"), "右键链接拼合: 已有的字段不被别的写法盖掉")
+        expectEqual(own.filling(from: full).spotify, full.spotify, "右键链接拼合: 显示的写法没有 Spotify 时用并进来的写法的")
+        // 显示的写法只查到 Apple Music,并进来的写法才有 Spotify:两项都要有;几种写法都查不到时没有菜单项
+        let bySpelling: [String: ChartAppLinks] = [
+            "曇花": ChartAppLinks(appleMusic: URL(string: "music://a")),
+            "昙花": ChartAppLinks(appleMusic: URL(string: "music://b"), spotify: URL(string: "spotify:track:3KgByVmDzMkOXwtbqbqjBn")),
+        ]
+        let combined = ChartAppLinks.merged(artist: "方大同", name: "曇花", variants: [ChartRow(artist: "方大同", name: "昙花", playcount: 1)]) {
+            _, name in bySpelling[name] ?? ChartAppLinks()
+        }
+        expectEqual(combined?.appleMusic, URL(string: "music://a"), "右键链接拼合: 同一项先用显示的写法查到的")
+        expectEqual(combined?.spotify, URL(string: "spotify:track:3KgByVmDzMkOXwtbqbqjBn"),
+                    "右键链接拼合: 显示的写法缺的那一项用并进来的写法查到的")
+        expectEqual(ChartAppLinks.merged(artist: "A", name: "B", variants: []) { _, _ in ChartAppLinks() } == nil, true,
+                    "右键链接拼合: 几种写法都查不到时没有菜单项")
+
+        let w = PlatformPagesWanted(albums: [.init(artist: "方大同", name: "愛愛愛"), .init(artist: " 方大同", name: "愛愛愛 "),
+                                             .init(artist: "Khalil Fong", name: "愛愛愛"), .init(artist: "X", name: " ")],
+                                    tracks: [.init(artist: "方大同", name: "曇花"), .init(artist: "方大同", name: "昙花")])
+        expectEqual(w.albums.map(\.artist), ["方大同", "Khalil Fong"], "预取清单: 按给出的先后,同一个键只留第一次,名称为空的不要")
+        expectEqual(w.tracks.map(\.name), ["曇花", "昙花"], "预取清单: 繁简不同是两个键,都交给引擎")
+        let sampleURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/platform-pages-wanted.json")
+        let sampleData = try? Data(contentsOf: sampleURL)
+        let sample = sampleData.flatMap { try? JSONDecoder().decode(PlatformPagesWanted.self, from: $0) }
+        expectEqual(sample?.schema, PlatformPagesWanted.currentSchema, "预取清单: 共用样例的版本就是现在写的版本")
+        expectEqual((sample?.albums.count ?? 0) > 0 && (sample?.tracks.count ?? 0) > 0, true, "预取清单: 读到了共用样例")
+        let rewritten = sample.flatMap { PlatformPagesWanted(albums: $0.albums, tracks: $0.tracks).encoded() }
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? NSDictionary }
+        expectEqual(rewritten, sampleData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? NSDictionary },
+                    "预取清单: 照样例的内容写出来跟样例一样(字段名、形状两边对得上)")
+    }
+
     // ---- EnrichCacheReader.deriveLocalAliasTables:歌名表按新推出的歌手表分桶,比对的是歌词正文 ----
     do {
         typealias E = EnrichTitleAliases.Entry

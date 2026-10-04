@@ -38,6 +38,10 @@ const (
 	platformPagesEmbedBudget = 20
 	// platformPagesTrackAlbums:一首歌在歌词缓存里记着几张专辑时,最多试几张。
 	platformPagesTrackAlbums = 2
+	// platformPagesWantedFileName:App 写的预取清单(Swift 侧 PlatformPagesWanted.fileName,selftest 对账)。
+	platformPagesWantedFileName = "lyrimuse-platform-pages-wanted.json"
+	// platformPagesWantedSchema:认得的清单版本(Swift 侧 PlatformPagesWanted.currentSchema),别的版本整份不用。
+	platformPagesWantedSchema = 1
 )
 
 // platformPagesPeriods:要预取的榜单时段,跟 App 榜单的四档一致(LastfmStatsService.Period,selftest 对账)。
@@ -121,6 +125,40 @@ func savePlatformPagesCache() {
 	}
 }
 
+// platformPagesWanted 是 App 写的预取清单(Swift 侧 PlatformPagesWanted 按同一个形状写,改字段两边一起改,样例
+// shared/testdata/platform-pages-wanted.json 两边测试各读一遍):App 榜单合并后露出的专辑、歌曲,连同并进来的其它写法,
+// 近期时段在前、名次在前。这边取的 Last.fm 原始榜只有前 platformPagesChartLimit 名,合并后才挤进前几十名的行、
+// 并进来的其它写法只能从这里知道。
+type platformPagesWanted struct {
+	Schema int                       `json:"schema"`
+	Albums []platformPagesWantedItem `json:"albums"`
+	Tracks []platformPagesWantedItem `json:"tracks"`
+}
+
+type platformPagesWantedItem struct {
+	Artist string `json:"artist"`
+	Name   string `json:"name"`
+}
+
+// readPlatformPagesWanted 读 App 的预取清单;文件不在、解不开、版本不认识都当作没有清单。
+func readPlatformPagesWanted(path string) (albums, tracks []lastfmChartEntry) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil
+	}
+	var w platformPagesWanted
+	if err := json.Unmarshal(data, &w); err != nil || w.Schema != platformPagesWantedSchema {
+		return nil, nil
+	}
+	for _, it := range w.Albums {
+		albums = append(albums, lastfmChartEntry{Name: it.Name, Artist: it.Artist})
+	}
+	for _, it := range w.Tracks {
+		tracks = append(tracks, lastfmChartEntry{Name: it.Name, Artist: it.Artist})
+	}
+	return albums, tracks
+}
+
 // platformPagesSource 是预取要用的联网动作和本机查询,单测换成假的。
 type platformPagesSource struct {
 	topArtists func(ctx context.Context, period string) ([]lastfmChartEntry, error)
@@ -136,6 +174,8 @@ type platformPagesSource struct {
 	trackAlbums func(artist, title string, n int) []string
 	// albumTracks 取一张 Spotify 专辑的曲目表(嵌入页)。
 	albumTracks func(ctx context.Context, albumID string) ([]spotifyAlbumTrack, error)
+	// wanted 读 App 的预取清单(readPlatformPagesWanted),排在 Last.fm 原始榜后面查;nil = 不读。
+	wanted func() (albums, tracks []lastfmChartEntry)
 }
 
 // platformPagesDigest 由后台任务(runDigests)调用:距上一轮不到 platformPagesCheckInterval 就跳过;没配 Last.fm 也跳过。
@@ -162,14 +202,18 @@ func (p *poller) platformPagesDigest(now time.Time, env digestEnv) {
 			id, _ := cachedArtistIdentity(strings.TrimSpace(firstCreditedArtist(name)))
 			return id.Mbid
 		},
+		wanted: func() ([]lastfmChartEntry, []lastfmChartEntry) {
+			return readPlatformPagesWanted(configFilePath(platformPagesWantedFileName))
+		},
 	}
 	if warmPlatformPages(env.ctx, now, platformPagesRequestBudget, src) {
 		savePlatformPagesCache()
 	}
 }
 
-// warmPlatformPages 跑一轮预取:距上一轮不到间隔就什么都不做、返回 false。否则取四个时段的歌手榜与专辑榜,
-// 按榜单顺序(近期时段在前、名次靠前的在前)给缺的或过期的条目查一次,用掉 budget 个 MusicBrainz 请求就停。
+// warmPlatformPages 跑一轮预取:距上一轮不到间隔就什么都不做、返回 false。否则取四个时段的歌手榜、专辑榜、歌曲榜,
+// 专辑和歌曲后面接上 App 的预取清单,按这个顺序(近期时段在前、名次靠前的在前,清单在原始榜之后)给缺的或过期的条目
+// 查一次,用掉 budget 个 MusicBrainz 请求就停。
 // 本轮时间戳:查完了记现在;额度用完没查完,记成 platformPagesPartialRetry 之后就到期;被取消(进程退出)不记,
 // 下次启动接着查。返回 true = 缓存有变化,调用方负责落盘。
 func warmPlatformPages(ctx context.Context, now time.Time, budget int, src platformPagesSource) bool {
@@ -202,6 +246,11 @@ func warmPlatformPages(ctx context.Context, now time.Time, budget int, src platf
 			platformPagesMu.Unlock()
 		}
 		return false
+	}
+	if src.wanted != nil {
+		wantedAlbums, wantedTracks := src.wanted()
+		albums = append(albums, wantedAlbums...)
+		tracks = append(tracks, wantedTracks...)
 	}
 	changed := false
 	stale := func(checked int64) bool {

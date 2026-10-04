@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -326,6 +328,82 @@ func TestWarmPlatformPagesTracks(t *testing.T) {
 	}
 	if got := platformPagesCache.Albums[platformAlbumKey("Prince", "Prince")].Spotify; got != "6k7RVZ7bSL9ryReb8RLYRI" {
 		t.Fatalf("顺带查到的专辑也落进缓存: %q", got)
+	}
+}
+
+func TestReadPlatformPagesWantedSample(t *testing.T) {
+	albums, tracks := readPlatformPagesWanted("../shared/testdata/platform-pages-wanted.json")
+	wantAlbums := []lastfmChartEntry{{Name: "愛愛愛", Artist: "方大同"}, {Name: "愛愛愛", Artist: "Khalil Fong"},
+		{Name: "爱爱爱", Artist: "方大同"}}
+	wantTracks := []lastfmChartEntry{{Name: "曇花", Artist: "方大同"}, {Name: "昙花", Artist: "方大同"},
+		{Name: "頌海 (feat. 王詩安)", Artist: "Khalil Fong"}}
+	if !reflect.DeepEqual(albums, wantAlbums) || !reflect.DeepEqual(tracks, wantTracks) {
+		t.Fatalf("albums = %+v\ntracks = %+v", albums, tracks)
+	}
+}
+
+func TestReadPlatformPagesWantedIgnoresUnusable(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"broken.json": `{"schema":1,"albums":[`,
+		"future.json": `{"schema":2,"albums":[{"artist":"方大同","name":"15"}],"tracks":[]}`,
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"broken.json", "future.json", "missing.json"} {
+		if albums, tracks := readPlatformPagesWanted(filepath.Join(dir, name)); albums != nil || tracks != nil {
+			t.Errorf("%s: 解不开、版本不认识、文件不在都当作没有清单,得到 %+v %+v", name, albums, tracks)
+		}
+	}
+}
+
+func TestWarmPlatformPagesQueriesWantedAfterLastfm(t *testing.T) {
+	resetPlatformPagesForTest(t)
+	var calls []string
+	src := fakePlatformSource(&calls)
+	src.topArtists = func(context.Context, string) ([]lastfmChartEntry, error) { return nil, nil }
+	src.topTracks = func(context.Context, string) ([]lastfmChartEntry, error) {
+		return []lastfmChartEntry{{Name: "I Wanna Be Your Lover", Artist: "Prince"}}, nil
+	}
+	src.wanted = func() ([]lastfmChartEntry, []lastfmChartEntry) {
+		return []lastfmChartEntry{{Name: "Dangerous", Artist: "Michael Jackson"}, {Name: "Xscape (Deluxe)", Artist: "Michael Jackson"}},
+			[]lastfmChartEntry{{Name: "I Wanna Be Your Lover", Artist: "Prince"}, {Name: "Sexy Dancer", Artist: "Prince"}}
+	}
+	src.trackAlbums = func(string, string, int) []string { return []string{"Prince"} }
+	src.albumTracks = func(_ context.Context, id string) ([]spotifyAlbumTrack, error) {
+		calls = append(calls, "embed:"+id)
+		return []spotifyAlbumTrack{{"I Wanna Be Your Lover", "4yrM5BVyJzy5Ed4GPO6e8j"}, {"Sexy Dancer", "3KgByVmDzMkOXwtbqbqjBn"}}, nil
+	}
+	if !warmPlatformPages(context.Background(), time.Unix(1_800_000_000, 0), 60, src) {
+		t.Fatal("应当有变化")
+	}
+	// 原始榜里已有的那张专辑、那首歌不重查;清单里多出来的排在原始榜后面查
+	want := []string{"album:mb-mj/Dangerous", "album:mb-mj/Xscape (Deluxe)", "album:mb-prince/Prince", "embed:al-Prince"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %q, want %q", calls, want)
+	}
+	if got := platformPagesCache.Albums[platformAlbumKey("Michael Jackson", "Xscape (Deluxe)")].Spotify; got != "al-Xscape (Deluxe)" {
+		t.Fatalf("清单里的专辑没查: %q", got)
+	}
+	if got := platformPagesCache.Tracks[platformAlbumKey("Prince", "Sexy Dancer")].Spotify; got != "3KgByVmDzMkOXwtbqbqjBn" {
+		t.Fatalf("清单里的歌没查: %q", got)
+	}
+}
+
+func TestWarmPlatformPagesWantedNeedsLastfm(t *testing.T) {
+	resetPlatformPagesForTest(t)
+	var calls []string
+	src := fakePlatformSource(&calls)
+	src.topArtists = func(context.Context, string) ([]lastfmChartEntry, error) { return nil, errors.New("down") }
+	src.topAlbums = func(context.Context, string) ([]lastfmChartEntry, error) { return nil, errors.New("down") }
+	src.wanted = func() ([]lastfmChartEntry, []lastfmChartEntry) {
+		return []lastfmChartEntry{{Name: "Xscape (Deluxe)", Artist: "Michael Jackson"}}, nil
+	}
+	if warmPlatformPages(context.Background(), time.Unix(1_800_000_000, 0), 60, src) || len(calls) != 0 {
+		t.Fatalf("Last.fm 一条都没取到时这轮不算数,清单也不查: calls = %q", calls)
 	}
 }
 

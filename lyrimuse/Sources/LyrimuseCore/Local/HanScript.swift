@@ -387,6 +387,14 @@ public enum PlayCountFold {
         return key(artist: canonArtist, title: canonTitle)
     }
 
+    /// 专辑榜判同一张专辑的键:歌手跟 familyKey 同一把尺子(合唱归首位、罗马字艺名折到中文本名),专辑名走 foldTitle
+    /// (繁简、全半角、空格与大小写、再版 / feat. 这类目录学噪音、中英双语拼接名取中文段)。不查歌名别名表:那张表的证据
+    /// (同一个歌曲 id、同一份歌词)说的是歌,不是专辑。Deluxe、周年纪念这类加料版本不并,跟歌名一样只折
+    /// isCatalogNoiseSubtitle 认的那几类。见 12 章决策 28。
+    public static func albumFamilyKey(artist: String, album: String) -> String {
+        key(artist: canonicalArtist(artist), title: album)
+    }
+
     /// `familyKey` 拼外层键那一步单独拎出来 —— App 侧的自动发现扫描
     /// (LastfmStatsService.discoverTitleAliasesIfNeeded)要按「同一个歌手」分组比较
     /// 候选写法,得用**跟 familyKey 完全同一把尺子**算歌手键,不能自己另写一遍归一逻辑

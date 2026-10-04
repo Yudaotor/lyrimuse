@@ -42,6 +42,23 @@ public struct ChartAppLinks: Sendable, Equatable {
         appleMusic == nil && spotify == nil && kkbox == nil && kaset == nil && qqSongMID == nil && artistAlbum == nil
             && artistMBID == nil && artistPages == nil
     }
+
+    /// 自己缺的字段用 `other` 的补上,已有的不动。榜单上并成一行的几种写法各查一遍,按显示的写法在前拼起来。
+    /// 加字段时这里也要加(selftest 逐个字段核对)。
+    public func filling(from other: ChartAppLinks) -> ChartAppLinks {
+        ChartAppLinks(appleMusic: appleMusic ?? other.appleMusic, spotify: spotify ?? other.spotify, kkbox: kkbox ?? other.kkbox,
+                      kaset: kaset ?? other.kaset, qqSongMID: qqSongMID ?? other.qqSongMID,
+                      artistAlbum: artistAlbum ?? other.artistAlbum, artistMBID: artistMBID ?? other.artistMBID,
+                      artistPages: artistPages ?? other.artistPages)
+    }
+
+    /// 并成一行的几种写法(显示的写法在前,`variants` 按原先后)各查一遍,缺的字段依次补上;一项都没有返回 nil。
+    public static func merged(artist: String, name: String, variants: [ChartRow],
+                              lookup: (_ artist: String, _ name: String) -> ChartAppLinks) -> ChartAppLinks? {
+        let links = ([(artist, name)] + variants.map { ($0.artist, $0.name) })
+            .reduce(ChartAppLinks()) { $0.filling(from: lookup($1.0, $1.1)) }
+        return links.isEmpty ? nil : links
+    }
 }
 
 public enum ChartLinkKind: Sendable {
@@ -348,5 +365,51 @@ public struct PlatformPagesCache: Sendable {
         guard let id = tracks[Self.albumKey(artist: artist, album: title)]?.spotify,
               SpotifyURI.isBase62ID(Substring(id)) else { return nil }
         return URL(string: "spotify:track:" + id)
+    }
+}
+
+/// App 写给引擎的预取清单(`lyrimuse-platform-pages-wanted.json`,引擎 platformpages.go 读):榜单上合并后露出的专辑、
+/// 歌曲,连同并进来的其它写法。引擎自己只取 Last.fm 原始榜的前几十名,合并后才进前几十名的行、并进来的其它写法
+/// 只能从这里知道。形状两边一起改,样例 shared/testdata/platform-pages-wanted.json 两边测试各读一遍。
+public struct PlatformPagesWanted: Codable, Equatable, Sendable {
+    public struct Item: Codable, Equatable, Sendable {
+        public let artist: String
+        public let name: String
+
+        public init(artist: String, name: String) {
+            self.artist = artist
+            self.name = name
+        }
+    }
+
+    public static let fileName = "lyrimuse-platform-pages-wanted.json"
+    /// 引擎只认这个版本(platformPagesWantedSchema),别的版本整份不用。
+    public static let currentSchema = 1
+
+    public let schema: Int
+    public let albums: [Item]
+    public let tracks: [Item]
+
+    /// 按给出的先后收下(引擎按这个先后查)。名称为空的不要;同一个键(`PlatformPagesCache.albumKey`,引擎按它存结论)
+    /// 只留第一次出现的。
+    public init(albums: [Item], tracks: [Item]) {
+        schema = Self.currentSchema
+        self.albums = Self.unique(albums)
+        self.tracks = Self.unique(tracks)
+    }
+
+    private static func unique(_ items: [Item]) -> [Item] {
+        var seen = Set<String>()
+        return items.filter {
+            !$0.name.trimmingCharacters(in: .whitespaces).isEmpty
+                && seen.insert(PlatformPagesCache.albumKey(artist: $0.artist, album: $0.name)).inserted
+        }
+    }
+
+    /// 落盘的字节:键排好序,内容不变时字节也不变。
+    public func encoded() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(self)
     }
 }

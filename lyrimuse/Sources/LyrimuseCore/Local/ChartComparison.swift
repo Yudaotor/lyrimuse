@@ -39,18 +39,27 @@ public enum ChartComparison {
     /// 列表只有一条时 Last.fm 可能给对象不给数组,两种都认;形状不对返回 nil(当作上一期取数失败)。
     public static func parseWeeklyChart(_ json: [String: Any], container: String, item: String)
         -> (keys: [String], listens: Int)? {
+        guard let parsed = parseWeeklyChartRows(json, container: container, item: item) else { return nil }
+        return (parsed.rows.map { key(artist: $0.artist, name: $0.name) }, parsed.listens)
+    }
+
+    /// 同 parseWeeklyChart,取出的是每一行(歌曲榜、专辑榜要合并之后再排名次,见 ChartMerge)。
+    /// 没有名称的行跳过,也不计入合计次数。
+    public static func parseWeeklyChartRows(_ json: [String: Any], container: String, item: String)
+        -> (rows: [ChartRow], listens: Int)? {
         guard let box = json[container] as? [String: Any] else { return nil }
-        var rows = (box[item] as? [[String: Any]]) ?? []
-        if rows.isEmpty, let single = box[item] as? [String: Any] { rows = [single] }
-        var keys: [String] = []
+        var raw = (box[item] as? [[String: Any]]) ?? []
+        if raw.isEmpty, let single = box[item] as? [String: Any] { raw = [single] }
+        var rows: [ChartRow] = []
         var listens = 0
-        for row in rows {
+        for row in raw {
             guard let name = row["name"] as? String, !name.isEmpty else { continue }
             let artist = (row["artist"] as? [String: Any])?["#text"] as? String ?? ""
-            keys.append(key(artist: artist, name: name))
-            listens += Int(row["playcount"] as? String ?? "") ?? 0
+            let count = Int(row["playcount"] as? String ?? "") ?? 0
+            rows.append(ChartRow(artist: artist, name: name, playcount: count))
+            listens += count
         }
-        return (keys, listens)
+        return (rows, listens)
     }
 }
 

@@ -676,18 +676,11 @@ struct LastfmStatsSection: View {
         }
     }
 
-    /// 卡底概况:这段时间共多少次、专辑 / 歌曲榜共多少条、前 N 名占多少。总次数还没取到时不显示。
-    /// 歌手榜不写条目数:Last.fm 的原始条目数把繁简 / 中英写法各算一位,跟合并过的榜单对不上。
+    /// 卡底概况:这段时间共多少次、前 N 名占多少。总次数还没取到时不显示。
+    /// 不写条目数:三种榜都是合并过的,Last.fm 的原始条目数把繁简 / 中英写法各算一条,跟榜单对不上。
     private func chartSummaryText(_ entries: [LastfmStatsService.ChartEntry]) -> String? {
         guard let total = stats.listens(period), total > 0 else { return nil }
         var parts = [String(format: L10n.t("%1$@ %2$@ 次"), period.displayName, total.formatted())]
-        if let n = stats.chartItemTotal(kind, period) {
-            switch kind {
-            case .albums: parts.append(String(format: L10n.t("%@ 张专辑"), n.formatted()))
-            case .tracks: parts.append(String(format: L10n.t("%@ 首歌"), n.formatted()))
-            case .artists: break
-            }
-        }
         let top = min(chartVisibleRows, entries.count)
         if let share = ChartSummary.topShare(counts: entries.prefix(top).map(\.playcount), total: total) {
             let format: String

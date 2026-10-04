@@ -317,7 +317,14 @@ final class LastfmStatsService: ObservableObject {
         let imageURL: URL?
         /// 上一期名次(升降箭头用):0 = 上一期榜里没有,nil = 这一档没有可比的上一期。
         var previousRank: Int? = nil
+        /// 歌曲榜、专辑榜:并进这一行的其它写法(见 ChartMerge)。老快照没有这个键,解码为 nil。
+        var variants: [ChartRow]? = nil
         var id: Int { rank }
+
+        /// 显示的写法在前、并进来的其它写法在后。封面、右键链接、引擎预取都按写法查,依次试。
+        var spellings: [(artist: String, name: String)] {
+            [(detail, name)] + (variants ?? []).map { ($0.artist, $0.name) }
+        }
     }
 
     /// 一档榜单对比的上一期窗口。listens 为 0 = 上一期一条收听都没有:不画箭头,只说明原因。
@@ -697,6 +704,27 @@ final class LastfmStatsService: ObservableObject {
     /// 时段(period)→ 歌手榜展开行要的「每位歌手听得最多的歌」,见 loadArtistTracks。只在内存里:
     /// 点开一行才用得到,不值得进快照。
     @Published private(set) var artistTracks: [String: ArtistTracksBatch] = [:]
+    /// 歌曲榜、专辑榜合并前的原始行(本期 + 上一期),别名表变了按它重新合并(remergeCharts)。只在内存里:
+    /// 快照里存的是合并好的榜。
+    private var chartPools: [String: ChartPool] = [:]
+    /// 每一档歌曲榜 / 专辑榜最近一次开始的合并。后台算完时已经不是它(又取了一次数、别名表又变了)就丢掉结果。
+    private var chartMergeTokens: [String: UUID] = [:]
+    /// 歌手展开行合并前的原始结果(引擎 artist-tracks 给的),同上。
+    private var artistTracksRaw: [String: ArtistTracksBatch] = [:]
+    private var artistTracksMergeTokens: [String: UUID] = [:]
+    /// 上一次写给引擎的预取清单(见 writePlatformPagesWanted),没变就不重写。
+    private var platformPagesWantedWritten: PlatformPagesWanted?
+
+    private struct ChartPool: Equatable, Sendable {
+        let kind: ChartKind
+        let current: [ChartRow]
+        /// nil = 这一档没有可比的上一期(全部、上一期取数失败或一条收听都没有)。
+        let previous: [ChartRow]?
+        /// 专辑榜各行 Last.fm 给的封面,键见 imageKey。歌曲的 image 是占位图,不收。
+        let images: [String: URL]
+
+        static func imageKey(artist: String, name: String) -> String { artist + "\u{1F}" + name }
+    }
     /// 歌曲榜 / 专辑榜的本机封面兜底,见 refreshChartLocalCovers。发布出去:缓存变了单独重算时没有别的字段一起变。
     @Published private(set) var chartLocalCovers: [String: URL] = [:]
     /// 上一次算 chartLocalCovers 用的输入(要查的行 + 本机缓存版本),没变就不重算。
@@ -722,9 +750,6 @@ final class LastfmStatsService: ObservableObject {
     private var liveLinksTrack: (artist: String, title: String)?
     /// 各时段的收听总次数(榜单卡底概况用),键是时段 rawValue。「全部」不在这里,直接用 overview.total。
     @Published private(set) var periodListens: [String: Int] = [:]
-    /// 专辑 / 歌曲榜在 Last.fm 那边的总条目数(榜单接口返回的 @attr.total),键同 charts。歌手榜不记:界面上的
-    /// 歌手榜是合并过的,Last.fm 的原始条目数会把繁简 / 中英写法各算一位,跟榜单对不上。
-    @Published private(set) var chartItemTotals: [String: Int] = [:]
     @Published private(set) var artistTracksLoading: Set<String> = []
     @Published private(set) var artistTracksFailed: Set<String> = []
     /// 每个时段上次取完的时间、当时传给引擎的名字(榜上换了人要重取)、是不是取了全部分页。
@@ -961,10 +986,6 @@ final class LastfmStatsService: ObservableObject {
         period == .overall ? overview?.total : periodListens[period.rawValue]
     }
 
-    func chartItemTotal(_ kind: ChartKind, _ period: Period) -> Int? {
-        chartItemTotals["\(kind.rawValue)|\(period.rawValue)"]
-    }
-
     private static func chartLocalCoverKey(kind: ChartKind, artist: String, name: String) -> String {
         "\(kind.rawValue)|\(artist)|\(name)"
     }
@@ -1036,9 +1057,12 @@ final class LastfmStatsService: ObservableObject {
         chartAppLinks = [:]
         chartAppLinksInputs = nil
         periodListens = [:]
-        chartItemTotals = [:]
         artistTracksGen += 1
         artistTracks = [:]
+        artistTracksRaw = [:]
+        artistTracksMergeTokens = [:]
+        chartPools = [:]
+        chartMergeTokens = [:]
         artistTracksLoading = []
         artistTracksFailed = []
         artistTracksFetched = [:]
@@ -2212,7 +2236,7 @@ final class LastfmStatsService: ObservableObject {
             trackPlayCounts = [:]
             scheduleTitleAliasDiscoverySave()
         }
-        PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)
+        installDiscoveredTitleAliases()
     }
 
     /// 防抖落盘,同 scheduleTitleFormsSave 的取舍(编码+写文件挪出主线程)。
@@ -2347,7 +2371,7 @@ final class LastfmStatsService: ObservableObject {
                     var forArtist = discoveredTitleAliases[artistKey] ?? [:]
                     forArtist.removeValue(forKey: claimedBy)
                     discoveredTitleAliases[artistKey] = forArtist
-                    PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)
+                    installDiscoveredTitleAliases()
                     rebuildPrimaryCreditFamilies()
                     logger.notice("title alias discovery: dropped both claims on one target (reverse collision)")
                     continue
@@ -2355,7 +2379,7 @@ final class LastfmStatsService: ObservableObject {
                 var forArtist = discoveredTitleAliases[artistKey] ?? [:]
                 forArtist[foldedTitle] = matched.title
                 discoveredTitleAliases[artistKey] = forArtist
-                PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)
+                installDiscoveredTitleAliases()
                 rebuildPrimaryCreditFamilies()
                 let newFamKey = PlayCountFold.familyKey(artist: candidate.artist, title: candidate.title)
                 for form in primaryCreditFamilies[newFamKey] ?? [] {
@@ -2434,6 +2458,7 @@ final class LastfmStatsService: ObservableObject {
                 start += 12
             }
         }
+        remergeCharts()
         // 右键链接查不到时按歌手别名再查一次,别名表一变就重算(它自己按输入早退)。
         refreshChartAppLinks()
         guard rebuildFamilies else { return }
@@ -2590,11 +2615,16 @@ final class LastfmStatsService: ObservableObject {
         /// 存盘时每档榜单取几条(ChartVisibleRows.fetchLimit)。跟现在的不一样(含老快照没有这个字段)时,
         /// 榜单照常端上桌,但不带回它们的新鲜戳:打开就按现在的条数重取,不然「显示更多」要等 15 分钟才出现。
         var chartLimit: Int?
-        /// 榜单卡底概况的两个数(老快照没有,解码为 nil)。
+        /// 榜单卡底概况的总次数(老快照没有,解码为 nil)。
         var periodListens: [String: Int]?
-        var chartItemTotals: [String: Int]?
+        /// 存盘时歌曲榜、专辑榜的合并口径(LastfmStatsService.mergedChartVersion)。跟现在的不一样(含老快照没有)时,
+        /// 这两种榜照常端上桌,但不带回它们的新鲜戳:打开就按现在的口径重取。
+        var mergedChartVersion: Int?
     }
 
+    /// 歌曲榜、专辑榜的合并口径版本:改 ChartMerge 的分组规则、两种榜的折叠键或取数深度时 +1
+    /// (见 StatsSnapshot.mergedChartVersion)。
+    private static let mergedChartVersion = 1
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
     private static let mergedCountsVersion = 16
 
@@ -2628,7 +2658,6 @@ final class LastfmStatsService: ObservableObject {
         charts = snap.charts
         chartWindows = snap.chartWindows ?? [:]
         periodListens = snap.periodListens ?? [:]
-        chartItemTotals = snap.chartItemTotals ?? [:]
         refreshChartLocalCovers()
         refreshChartAppLinks()
         artistAvatars = snap.artistAvatars
@@ -2663,6 +2692,8 @@ final class LastfmStatsService: ObservableObject {
                 case "baseline": if snap.recent.isEmpty && snap.overview == nil { continue }
                 default: // 榜单键
                     if snap.charts[k] == nil || snap.chartLimit != ChartVisibleRows.fetchLimit { continue }
+                    let merged = k.hasPrefix(ChartKind.tracks.rawValue + "|") || k.hasPrefix(ChartKind.albums.rawValue + "|")
+                    if merged, snap.mergedChartVersion != Self.mergedChartVersion { continue }
                 }
                 fetchedAt[k] = v
             }
@@ -2684,6 +2715,25 @@ final class LastfmStatsService: ObservableObject {
         // 其余 fetchedAt 键(翻页缓存等)留空:那些刷新照常发生,快照只是首屏的底
     }
 
+    /// 把榜单上合并后露出的专辑、歌曲连同并进来的其它写法交给引擎预取 Spotify 链接(PlatformPagesWanted)。
+    /// 近期时段在前、名次在前,跟引擎查的先后一致。内容没变不重写。
+    private func writePlatformPagesWanted() {
+        var albums: [PlatformPagesWanted.Item] = []
+        var tracks: [PlatformPagesWanted.Item] = []
+        for period in Period.allCases {
+            for e in chart(.albums, period) ?? [] { albums += e.spellings.map { .init(artist: $0.artist, name: $0.name) } }
+            for e in chart(.tracks, period) ?? [] { tracks += e.spellings.map { .init(artist: $0.artist, name: $0.name) } }
+        }
+        let wanted = PlatformPagesWanted(albums: albums, tracks: tracks)
+        guard wanted != platformPagesWantedWritten else { return }
+        platformPagesWantedWritten = wanted
+        let url = LyrimusePaths.configFile(PlatformPagesWanted.fileName)
+        Task.detached(priority: .utility) {
+            guard let data = wanted.encoded() else { return }
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
     /// 防抖落盘:一轮刷新会连着改好几个字段,攒 2 秒写一次;nowplaying 行是瞬时状态,
     /// 不落盘(重启后它十有八九已经不是真的)。
     private func scheduleSnapshotSave() {
@@ -2691,6 +2741,7 @@ final class LastfmStatsService: ObservableObject {
         snapshotSaveTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled, let cred = credentials else { return }
+            writePlatformPagesWanted()
             // 最近记录只快照第一页:快照是给"重开时先端上桌"用的,端一页历史上来没有意义。停在历史页时用
             // 第 1 页的缓存顶上(原来整份不写,连榜单、头像、那年今日、刷新时间戳一起丢,重启后全要重取);
             // 连第 1 页的缓存都没有才不写。
@@ -2749,7 +2800,7 @@ final class LastfmStatsService: ObservableObject {
                 chartWindows: chartWindows,
                 chartLimit: ChartVisibleRows.fetchLimit,
                 periodListens: periodListens,
-                chartItemTotals: chartItemTotals)
+                mergedChartVersion: Self.mergedChartVersion)
             // 编码 + 落盘挪出主线程:这个类是 @MainActor,Task{} 会继承它的隔离,原来
             // JSONEncoder 和同步的 atomic 写(临时文件 + rename)全压在主线程上。
             let url = Self.snapshotURL
@@ -3124,26 +3175,27 @@ final class LastfmStatsService: ObservableObject {
     /// 歌曲榜里 track.getInfo 还没补到封面的。每行一次 EnrichCacheReader 查询,所以按输入判重,行和缓存都没变
     /// 就不重算(同 localCoversInputs)。
     private func refreshChartLocalCovers() {
-        var wanted: [(key: String, kind: ChartKind, artist: String, name: String)] = []
+        var wanted: [(key: String, kind: ChartKind, spellings: [(artist: String, name: String)])] = []
         var seen = Set<String>()
         for (chartKey, entries) in charts {
             guard let kind = ChartKind(rawValue: String(chartKey.prefix { $0 != "|" })), kind != .artists else { continue }
             for e in entries {
                 let missing = kind == .albums ? e.imageURL == nil : trackCovers["\(e.detail)|\(e.name)"] == nil
                 let key = Self.chartLocalCoverKey(kind: kind, artist: e.detail, name: e.name)
-                if missing, seen.insert(key).inserted { wanted.append((key, kind, e.detail, e.name)) }
+                if missing, seen.insert(key).inserted { wanted.append((key, kind, e.spellings)) }
             }
         }
         wanted.sort { $0.key < $1.key }
-        let keys = wanted.map(\.key)
+        let keys = wanted.map { w in w.key + w.spellings.dropFirst().map { "\u{1}" + $0.artist + "\u{2}" + $0.name }.joined() }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
         if let last = chartLocalCoversInputs, last.keys == keys, last.cacheVersion == cacheVersion { return }
         chartLocalCoversInputs = (keys, cacheVersion)
         var out: [String: URL] = [:]
         for w in wanted {
-            let url = w.kind == .tracks
-                ? EnrichCacheReader.coverURL(artist: w.artist, title: w.name, album: "")
-                : EnrichCacheReader.albumCoverURL(artist: w.artist, album: w.name)
+            // 显示的写法查不到时按并进来的写法依次再查
+            let url: URL? = w.kind == .tracks
+                ? w.spellings.lazy.compactMap { EnrichCacheReader.coverURL(artist: $0.artist, title: $0.name, album: "") }.first
+                : w.spellings.lazy.compactMap { EnrichCacheReader.albumCoverURL(artist: $0.artist, album: $0.name) }.first
             if let url { out[w.key] = url }
         }
         if out != chartLocalCovers { chartLocalCovers = out }
@@ -3154,20 +3206,24 @@ final class LastfmStatsService: ObservableObject {
     /// 缓存还没加载好时这一轮什么都查不到,等缓存版本推进(refreshLocalCoversIfCacheChanged)再算。
     private func refreshChartAppLinks() {
         guard chartAppLinksOnScreen else { return }
-        var rows: [String: (kind: ChartKind, artist: String, name: String)] = [:]
+        var rows: [String: (kind: ChartKind, artist: String, name: String, variants: [ChartRow])] = [:]
         for (chartKey, entries) in charts {
             guard let kind = ChartKind(rawValue: String(chartKey.prefix { $0 != "|" })) else { continue }
             for e in entries {
-                rows[Self.chartLocalCoverKey(kind: kind, artist: e.detail, name: e.name)] = (kind, e.detail, e.name)
+                rows[Self.chartLocalCoverKey(kind: kind, artist: e.detail, name: e.name)] = (kind, e.detail, e.name, e.variants ?? [])
             }
         }
         for t in recent {
-            rows[Self.chartLocalCoverKey(kind: .tracks, artist: t.artist, name: t.title)] = (.tracks, t.artist, t.title)
+            let key = Self.chartLocalCoverKey(kind: .tracks, artist: t.artist, name: t.title)
+            if rows[key] == nil { rows[key] = (.tracks, t.artist, t.title, []) }
         }
         if let live = liveLinksTrack {
-            rows[Self.chartLocalCoverKey(kind: .tracks, artist: live.artist, name: live.title)] = (.tracks, live.artist, live.title)
+            let key = Self.chartLocalCoverKey(kind: .tracks, artist: live.artist, name: live.title)
+            if rows[key] == nil { rows[key] = (.tracks, live.artist, live.title, []) }
         }
-        let keys = rows.keys.sorted()
+        let keys = rows.keys.sorted().map { key in
+            key + (rows[key]?.variants.map { "\u{1}" + $0.artist + "\u{2}" + $0.name }.joined() ?? "")
+        }
         let cacheVersion = EnrichCacheReader.decodedContentVersion
         let pagesURL = LyrimusePaths.configFile(PlatformPagesCache.fileName)
         let pagesVersion = (try? FileManager.default.attributesOfItem(atPath: pagesURL.path))?[.modificationDate] as? Date
@@ -3177,7 +3233,7 @@ final class LastfmStatsService: ObservableObject {
         let mbids = ArtistPlatformPages.loadMBIDs()
         let pages = PlatformPagesCache.load()
         var out: [String: ChartAppLinks] = [:]
-        for key in keys {
+        for key in rows.keys.sorted() {
             guard let row = rows[key] else { continue }
             let links: ChartAppLinks?
             switch row.kind {
@@ -3187,13 +3243,17 @@ final class LastfmStatsService: ObservableObject {
                 artist.artistPages = artist.artistMBID.flatMap { pages.artistPages(mbid: $0) }
                 links = artist.isEmpty ? nil : artist
             case .albums:
-                var album = EnrichCacheReader.chartAppLinks(kind: .album, artist: row.artist, name: row.name) ?? ChartAppLinks()
-                album.spotify = pages.albumSpotify(artist: row.artist, album: row.name)
-                links = album.isEmpty ? nil : album
+                links = ChartAppLinks.merged(artist: row.artist, name: row.name, variants: row.variants) { artist, name in
+                    var album = EnrichCacheReader.chartAppLinks(kind: .album, artist: artist, name: name) ?? ChartAppLinks()
+                    album.spotify = pages.albumSpotify(artist: artist, album: name)
+                    return album
+                }
             case .tracks:
-                var track = EnrichCacheReader.chartAppLinks(kind: .track, artist: row.artist, name: row.name) ?? ChartAppLinks()
-                if track.spotify == nil { track.spotify = pages.trackSpotify(artist: row.artist, title: row.name) }
-                links = track.isEmpty ? nil : track
+                links = ChartAppLinks.merged(artist: row.artist, name: row.name, variants: row.variants) { artist, name in
+                    var track = EnrichCacheReader.chartAppLinks(kind: .track, artist: artist, name: name) ?? ChartAppLinks()
+                    if track.spotify == nil { track.spotify = pages.trackSpotify(artist: artist, title: name) }
+                    return track
+                }
             }
             if let links { out[key] = links }
         }
@@ -4024,7 +4084,8 @@ final class LastfmStatsService: ObservableObject {
         // "Dean Ting"/"丁世光"、繁简"周杰倫"/"周杰伦"、合唱 credit "Prince & The
         // Revolution"),走引擎的 top-artists 子命令拿**合并后**的榜 —— 那边复用
         // 网页版 Top 歌手已经在用的并查集(名字键+mbid,见 topartists.go),不在 Swift
-        // 里重抄繁简表/别名表。专辑/歌曲榜没有这个问题,照旧直连。
+        // 里重抄繁简表/别名表。专辑/歌曲榜照旧直连,同一张专辑 / 同一首歌的不同写法在 App 这边按「第 N 次听」那套
+        // 折叠键并(ChartMerge,见 fetchChartDirect)。
         if kind == .artists {
             refreshMergedArtistChart(cacheKey: key, period: period)
             return
@@ -4049,35 +4110,56 @@ final class LastfmStatsService: ObservableObject {
         let window = ChartComparison.span(forPeriod: period.rawValue)
             .map { ChartComparison.previousWindow(span: $0, now: Date()) }
         async let previousChart = fetchPreviousChart(kind: kind, window: window, cred: cred)
+        // 歌曲榜、专辑榜要先把同一首歌 / 同一张专辑的不同写法并起来再取前几十行,原始行取得多(ChartMerge.poolLimit)。
+        let limit = kind == .artists ? ChartVisibleRows.fetchLimit : ChartMerge.poolLimit
         guard let json = await request(method: kind.method, cred: cred,
-                                       extra: ["period": period.rawValue,
-                                               "limit": String(ChartVisibleRows.fetchLimit)])
+                                       extra: ["period": period.rawValue, "limit": String(limit)])
         else { return false }
         let previous = await previousChart
         let (outer, inner) = kind.listPath
         let items = (dig(json, outer, inner) as? [[String: Any]]) ?? []
-        var entries: [ChartEntry] = []
-        entries.reserveCapacity(items.count)
-        for (idx, item) in items.enumerated() {
-            let name = item["name"] as? String ?? ""
-            guard !name.isEmpty else { continue }
-            let detail = dig(item, "artist", "name") as? String ?? ""
-            let count = Int(item["playcount"] as? String ?? "") ?? 0
-            // 只有专辑封面是真的,歌手/歌曲的 image 是占位星,直接不取
-            let image = kind == .albums ? imageURL(item["image"]) : nil
-            entries.append(ChartEntry(rank: idx + 1, name: name, detail: detail,
-                                      playcount: count, imageURL: image))
+        if kind == .artists {
+            var entries: [ChartEntry] = []
+            entries.reserveCapacity(items.count)
+            for (idx, item) in items.enumerated() {
+                let name = item["name"] as? String ?? ""
+                guard !name.isEmpty else { continue }
+                let detail = dig(item, "artist", "name") as? String ?? ""
+                let count = Int(item["playcount"] as? String ?? "") ?? 0
+                // 歌手的 image 是占位星,直接不取
+                entries.append(ChartEntry(rank: idx + 1, name: name, detail: detail,
+                                          playcount: count, imageURL: nil))
+            }
+            if let previous, previous.listens > 0 {
+                let ranks = ChartComparison.previousRanks(
+                    current: entries.map { ChartComparison.key(artist: $0.detail, name: $0.name) },
+                    previous: previous.rows.map { ChartComparison.key(artist: $0.artist, name: $0.name) })
+                for i in entries.indices { entries[i].previousRank = ranks[i] }
+            }
+            charts[key] = entries
+        } else {
+            var rows: [ChartRow] = []
+            var images: [String: URL] = [:]
+            rows.reserveCapacity(items.count)
+            for item in items {
+                let name = item["name"] as? String ?? ""
+                guard !name.isEmpty else { continue }
+                let artist = dig(item, "artist", "name") as? String ?? ""
+                rows.append(ChartRow(artist: artist, name: name, playcount: Int(item["playcount"] as? String ?? "") ?? 0))
+                // 只有专辑封面是真的,歌曲的 image 是占位星,直接不取
+                if kind == .albums, let image = imageURL(item["image"]) {
+                    images[ChartPool.imageKey(artist: artist, name: name)] = image
+                }
+            }
+            let pool = ChartPool(kind: kind, current: rows, previous: previous.flatMap { $0.listens > 0 ? $0.rows : nil },
+                                 images: images)
+            chartPools[key] = pool
+            let token = beginChartMerge(key)
+            let merged = await Self.mergedEntriesInBackground(pool)
+            // 合并途中又开了一次更新的合并(别名表变了):榜单交给它,这里只落其余几样。
+            if chartMergeTokens[key] == token { charts[key] = merged }
         }
-        if let previous, previous.listens > 0 {
-            let ranks = ChartComparison.previousRanks(
-                current: entries.map { ChartComparison.key(artist: $0.detail, name: $0.name) },
-                previous: previous.keys)
-            for i in entries.indices { entries[i].previousRank = ranks[i] }
-        }
-        charts[key] = entries
-        if kind != .artists, let s = dig(json, outer, "@attr", "total") as? String, let n = Int(s) {
-            chartItemTotals[key] = n
-        }
+        let entries = charts[key] ?? []
         refreshChartLocalCovers()
         refreshChartAppLinks()
         if let window, let previous {
@@ -4098,14 +4180,70 @@ final class LastfmStatsService: ObservableObject {
 
     /// 取上一期周榜并解析成对齐键。window 为 nil(全部)或请求 / 解析失败时返回 nil。
     private func fetchPreviousChart(kind: ChartKind, window: (from: Date, to: Date)?,
-                                    cred: (user: String, key: String)) async -> (keys: [String], listens: Int)? {
+                                    cred: (user: String, key: String)) async -> (rows: [ChartRow], listens: Int)? {
         guard let window else { return nil }
         let chart = kind.weeklyChart
         guard let json = await request(method: chart.method, cred: cred,
                                        extra: ["from": String(Int(window.from.timeIntervalSince1970)),
                                                "to": String(Int(window.to.timeIntervalSince1970))])
         else { return nil }
-        return ChartComparison.parseWeeklyChart(json, container: chart.container, item: chart.item)
+        return ChartComparison.parseWeeklyChartRows(json, container: chart.container, item: chart.item)
+    }
+
+    /// 开始一档歌曲榜 / 专辑榜的合并,返回这次合并的凭据(见 chartMergeTokens)。
+    private func beginChartMerge(_ key: String) -> UUID {
+        let token = UUID()
+        chartMergeTokens[key] = token
+        return token
+    }
+
+    /// 歌曲榜按同一首歌、专辑榜按同一张专辑合并(ChartMerge)。一行的折叠键要一两百微秒,几百上千行放到后台算。
+    private nonisolated static func mergedEntriesInBackground(_ pool: ChartPool) async -> [ChartEntry] {
+        await Task.detached(priority: .userInitiated) { Self.mergedEntries(pool) }.value
+    }
+
+    /// 合并后取前 fetchLimit 行,带上一期名次(见 ChartMerge.chart)。专辑封面用显示的写法的,它没有就用并进来的写法的。
+    private nonisolated static func mergedEntries(_ pool: ChartPool) -> [ChartEntry] {
+        let key: ChartMerge.KeyMemo = pool.kind == .albums ? .albums() : .songs()
+        return ChartMerge.chart(current: pool.current, previous: pool.previous, limit: ChartVisibleRows.fetchLimit, key: key)
+            .enumerated().map { i, line in
+                let spellings = [(line.row.artist, line.row.name)] + line.row.variants.map { ($0.artist, $0.name) }
+                let image = spellings.lazy.compactMap { pool.images[ChartPool.imageKey(artist: $0.0, name: $0.1)] }.first
+                return ChartEntry(rank: i + 1, name: line.row.name, detail: line.row.artist, playcount: line.row.playcount,
+                                  imageURL: image, previousRank: line.previousRank,
+                                  variants: line.row.variants.isEmpty ? nil : line.row.variants)
+            }
+    }
+
+    /// 别名表 / 发现表变了:歌曲榜、专辑榜和歌手展开行按手上的原始行在后台重新合并。只有这次运行里取过的才有原始行,
+    /// 快照里端上来的榜单等下次取数。
+    private func remergeCharts() {
+        for (key, pool) in chartPools {
+            let token = beginChartMerge(key)
+            Task { [weak self] in
+                let entries = await Self.mergedEntriesInBackground(pool)
+                guard let self, self.chartMergeTokens[key] == token, self.charts[key] != entries else { return }
+                self.charts[key] = entries
+                self.refreshChartLocalCovers()
+                self.refreshChartAppLinks()
+                self.scheduleSnapshotSave()
+            }
+        }
+        for (period, raw) in artistTracksRaw {
+            let token = UUID()
+            artistTracksMergeTokens[period] = token
+            Task { [weak self] in
+                let merged = await Task.detached(priority: .utility) { raw.mergingSameSong() }.value
+                guard let self, self.artistTracksMergeTokens[period] == token, self.artistTracksRaw[period] == raw else { return }
+                self.artistTracks[period] = merged
+            }
+        }
+    }
+
+    /// 发现表灌进 PlayCountFold,歌曲榜按新表重新合并。灌发现表一律走这里(换账号清空那一处除外:榜单跟着一起清)。
+    private func installDiscoveredTitleAliases() {
+        PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)
+        remergeCharts()
     }
 
     /// 给一批歌曲榜条目补真封面。并发全放开也就 10 个轻量 JSON 请求,Last.fm 的
@@ -4298,7 +4436,8 @@ final class LastfmStatsService: ObservableObject {
             process.executableURL = URL(fileURLWithPath: enginePath)
             process.environment = LyrimusePaths.engineProcessEnvironment()
             // "--" 之后全是歌手名:名字以 "-" 开头时不会被当成参数。
-            process.arguments = ["artist-tracks", "-period", p, "-tracks", "10"]
+            // 每位歌手多要几首:同一首歌的几种写法合并之后,露出的 10 首仍是满的。
+            process.arguments = ["artist-tracks", "-period", p, "-tracks", "30"]
                 + (full ? ["-progress"] : ["-max-pages", "1"]) + ["--"] + names
             let pipe = Pipe()
             let errPipe = Pipe()
@@ -4321,12 +4460,15 @@ final class LastfmStatsService: ObservableObject {
                     let batch = full ? parsed
                         : ArtistTracksBatch(rows: parsed.rows, complete: parsed.complete,
                                             partial: parsed.partial || !parsed.complete)
+                    let merged = batch.mergingSameSong()
                     await MainActor.run {
                         let svc = LastfmStatsService.shared
                         guard svc.artistTracksGen == gen else { return }
                         // 第 1 页的结果不盖掉手上的完整结果(重取时旧结果仍可用)
                         if batch.partial, svc.artistTracks[p]?.partial == false { return }
-                        svc.artistTracks[p] = batch
+                        svc.artistTracksRaw[p] = batch
+                        svc.artistTracksMergeTokens[p] = nil
+                        svc.artistTracks[p] = merged
                     }
                 }
                 process.waitUntilExit()

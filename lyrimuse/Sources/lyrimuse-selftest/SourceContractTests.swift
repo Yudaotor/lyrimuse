@@ -4228,10 +4228,29 @@ func runSourceContractTests() {
         }
         expectEqual(stats.contains("!avatarRequested.contains($0)"), true,
                     "Last.fm 榜单: 同一次运行里问过的歌手名不再起引擎查头像")
-        // 显示更多:榜单一次取 50 条(合并榜和直连同一个数),头像一个进程最多查 10 个名字(看门狗按 10 个定的)。
+        // 显示更多:榜单露出 50 条(合并榜和直连同一个数);歌曲榜、专辑榜先取 ChartMerge.poolLimit 条合并,
+        // 再取前 fetchLimit 条。头像一个进程最多查 10 个名字(看门狗按 10 个定的)。
         expectEqual(stats.contains("\"-limit\", String(ChartVisibleRows.fetchLimit)")
-                    && stats.contains("\"limit\": String(ChartVisibleRows.fetchLimit)"), true,
-                    "Last.fm 榜单: 合并榜与直连都取 fetchLimit 条")
+                    && stats.contains("let limit = kind == .artists ? ChartVisibleRows.fetchLimit : ChartMerge.poolLimit")
+                    && stats.contains("\"limit\": String(limit)")
+                    && stats.contains("ChartMerge.chart(current: pool.current, previous: pool.previous, limit: ChartVisibleRows.fetchLimit, key: key)"), true,
+                    "Last.fm 榜单: 合并榜与直连都露出 fetchLimit 条,歌曲榜、专辑榜先取 poolLimit 条合并")
+        expectEqual(stats.contains("let key: ChartMerge.KeyMemo = pool.kind == .albums ? .albums() : .songs()"), true,
+                    "Last.fm 榜单: 专辑榜按同一张专辑、歌曲榜按同一首歌合并")
+        // 歌曲榜跟「第 N 次听」用同一套别名表合并:本机别名表、发现表一变就按原始行重新合并;灌发现表只走统一入口。
+        expectEqual(stats.components(separatedBy: "PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)").count - 1, 1,
+                    "Last.fm 榜单: 灌发现表只在 installDiscoveredTitleAliases 里")
+        if let fn = stats.range(of: "private func applyLocalAliases("),
+           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
+            expectEqual(stats[fn.lowerBound..<end.lowerBound].contains("remergeCharts()"), true,
+                        "Last.fm 榜单: 本机别名表变了重新合并歌曲榜、专辑榜")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 applyLocalAliases")
+        }
+        expectEqual(stats.contains("let merged = batch.mergingSameSong()"), true, "Last.fm 榜单: 歌手展开行按同一首歌合并")
+        expectEqual(code("LastfmStatsSection.swift").contains("L10n.t(\"%@ 首歌\")")
+                    || code("LastfmStatsSection.swift").contains("L10n.t(\"%@ 张专辑\")"), false,
+                    "Last.fm 榜单: 歌曲榜、专辑榜合并之后卡底不写 Last.fm 的原始条目数")
         // 引擎给榜单右键菜单预取各平台页面(platformpages.go),要在 App 打开榜单之前就跑,「取几条、哪几档」两边
         // 各写一份,在这里对账。
         let platformPages = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
@@ -4241,6 +4260,48 @@ func runSourceContractTests() {
         expectEqual(platformPages.contains("platformPagesPeriods = []string{\"7day\", \"1month\", \"12month\", \"overall\"}")
                     && stats.contains("case week = \"7day\", month = \"1month\", year = \"12month\", overall = \"overall\""), true,
                     "Last.fm 榜单: 引擎预取的时段跟 App 榜单的四档一样")
+        // 合并后才进前 50 的行、并进来的其它写法,由 App 写进预取清单交给引擎(PlatformPagesWanted)。
+        expectEqual(platformPages.contains("platformPagesWantedFileName = \"\(PlatformPagesWanted.fileName)\"\n")
+                    && platformPages.contains("platformPagesWantedSchema = \(PlatformPagesWanted.currentSchema)\n"), true,
+                    "Last.fm 榜单: 引擎读的预取清单文件名、版本跟 App 写的一样")
+        if let fn = stats.range(of: "private func scheduleSnapshotSave() {"),
+           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
+            expectEqual(stats[fn.lowerBound..<end.lowerBound].contains("writePlatformPagesWanted()"), true,
+                        "Last.fm 榜单: 榜单变了跟快照一起把合并后的行写给引擎预取")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 scheduleSnapshotSave")
+        }
+        expectEqual(platformPages.contains("return readPlatformPagesWanted(configFilePath(platformPagesWantedFileName))"), true,
+                    "Last.fm 榜单: 引擎每轮读 App 写的预取清单")
+        if let fn = stats.range(of: "private func writePlatformPagesWanted() {"),
+           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
+            let body = stats[fn.lowerBound..<end.lowerBound]
+            expectEqual(body.contains("for e in chart(.albums, period) ?? [] { albums += e.spellings.map")
+                        && body.contains("for e in chart(.tracks, period) ?? [] { tracks += e.spellings.map"), true,
+                        "Last.fm 榜单: 预取清单带上并进来的其它写法")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 writePlatformPagesWanted")
+        }
+        // 只有歌手榜在引擎子命令失败时走不合并的原始行;专辑榜、歌曲榜都进 ChartPool 合并
+        if let fn = stats.range(of: "private func fetchChartDirect("),
+           let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
+            let body = stats[fn.lowerBound..<end.lowerBound]
+            expectEqual(body.contains("        if kind == .artists {\n            var entries: [ChartEntry] = []")
+                        && body.contains("let pool = ChartPool(kind: kind,"), true,
+                        "Last.fm 榜单: 只有歌手榜兜底时走原始行,专辑榜、歌曲榜都合并")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 fetchChartDirect")
+        }
+        expectEqual(stats.contains("k.hasPrefix(ChartKind.tracks.rawValue + \"|\") || k.hasPrefix(ChartKind.albums.rawValue + \"|\")")
+                    && stats.contains("if merged, snap.mergedChartVersion != Self.mergedChartVersion { continue }"), true,
+                    "Last.fm 榜单: 歌曲榜、专辑榜的合并口径版本不对时不带回新鲜戳(打开就按新口径重取)")
+        expectEqual(stats.components(separatedBy: "links = ChartAppLinks.merged(artist: row.artist, name: row.name, variants: row.variants)")
+                        .count - 1, 2,
+                    "Last.fm 榜单: 专辑行、歌曲行的右键链接都按字段拼几种写法查到的(ChartAppLinks.merged)")
+        // 封面、右键链接、预取清单都靠 spellings 拿到并进来的写法
+        expectEqual(stats.contains("[(detail, name)] + (variants ?? []).map { ($0.artist, $0.name) }")
+                    && stats.contains("let image = spellings.lazy.compactMap { pool.images[ChartPool.imageKey(artist: $0.0, name: $0.1)] }.first"),
+                    true, "Last.fm 榜单: 并成一行的其它写法参与查封面(专辑封面显示的写法没有就用它们的)")
         // 「听得最多」的环比:歌手榜的上一期由引擎算(topartistscli.go 的 topArtistsPeriodSpan,要合并同一歌手的不同写法),
         // 专辑 / 歌曲榜由 App 算(ChartComparison.span),窗口长度两边各写一份,在这里对账。
         let topArtistsCLI = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()

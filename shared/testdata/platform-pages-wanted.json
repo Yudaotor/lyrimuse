@@ -1,0 +1,31 @@
+{
+  "albums" : [
+    {
+      "artist" : "方大同",
+      "name" : "愛愛愛"
+    },
+    {
+      "artist" : "Khalil Fong",
+      "name" : "愛愛愛"
+    },
+    {
+      "artist" : "方大同",
+      "name" : "爱爱爱"
+    }
+  ],
+  "schema" : 1,
+  "tracks" : [
+    {
+      "artist" : "方大同",
+      "name" : "曇花"
+    },
+    {
+      "artist" : "方大同",
+      "name" : "昙花"
+    },
+    {
+      "artist" : "Khalil Fong",
+      "name" : "頌海 (feat. 王詩安)"
+    }
+  ]
+}

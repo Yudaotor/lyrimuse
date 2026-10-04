@@ -38,6 +38,17 @@ public struct ArtistTopTracks: Equatable, Codable, Sendable {
     }
 }
 
+extension ArtistTopTracks {
+    /// 同一首歌的不同写法并成一首,规则同歌曲榜(ChartMerge):次数相加,显示次数最多的那种写法,按次数重排。
+    /// trackCount / playCount 是引擎按这位歌手全部的歌算的,不动。
+    public func mergingSameSong(key: ChartMerge.KeyMemo = .songs()) -> ArtistTopTracks {
+        let rows = tracks.map { ChartRow(artist: $0.artist, name: $0.name, playcount: $0.playCount) }
+        let merged = ChartMerge.merge(rows, key: key)
+        return ArtistTopTracks(tracks: merged.map { Track(name: $0.name, artist: $0.artist, playCount: $0.playcount) },
+                               trackCount: trackCount, playCount: playCount)
+    }
+}
+
 /// `artist-tracks -progress` 输出的一行。partial = 只含歌曲榜第 1 页:每位歌手的歌是完整结果的前几首
 /// (歌曲榜按次数降序,后面的页不会有次数更高的歌),但 trackCount / playCount 不能用。
 public struct ArtistTracksBatch: Equatable, Sendable {
@@ -116,5 +127,13 @@ public struct ArtistTracksQueue: Equatable, Sendable {
     public mutating func reset() {
         running = nil
         queued = nil
+    }
+}
+
+extension ArtistTracksBatch {
+    /// 每位歌手的歌各自按同一首歌合并(见 ArtistTopTracks.mergingSameSong)。
+    public func mergingSameSong() -> ArtistTracksBatch {
+        let key = ChartMerge.KeyMemo.songs()
+        return ArtistTracksBatch(rows: rows.mapValues { $0.mergingSameSong(key: key) }, complete: complete, partial: partial)
     }
 }
