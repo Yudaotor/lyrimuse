@@ -100,6 +100,28 @@ func runPositionReplayTests() {
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKasetFollowsWebClock()
+    replayKasetResumeTakesReading()
+}
+
+/// Kaset 的读数不会超前声音,恢复那一拍原样采信:换歌后先报加载(停在 0),走起来的第一拍已经是 2.67 秒;
+/// 曲中暂停在 41.67,恢复时读数已经是 44.5(比冻结值多出 2 秒以上)。别的播放器这两拍都会被削到冻结值 + 2 秒。
+@MainActor
+private func replayKasetResumeTakesReading() {
+    let rig = ReplayRig("kaset-resume")
+    defer { rig.tearDown() }
+    func kaset(_ title: String, _ elapsed: Double, playing: Bool, _ t: Double) -> MediaControlSnapshot {
+        .forReplay(title: title, artist: "周杰倫", duration: 212.6, elapsedTime: elapsed, playing: playing,
+                   playbackRate: playing ? 1 : 0, bundleIdentifier: kasetID, anchorElapsedTime: nil, capturedAt: at(t))
+    }
+    func shown(_ t: Double) -> String { rig.shown(at: at(t)).map { String(format: "%.3f", $0) } ?? "nil" }
+    rig.tick(kaset("甲", 190, playing: true, 0), at: at(0))
+    rig.tick(kaset("乙", 0, playing: false, 2), at: at(2))
+    rig.tick(kaset("乙", 2.67, playing: true, 5), at: at(5))
+    expectEqual(near(rig.shown(at: at(5)), 2.67), true, "回放·Kaset 开播: 走起来的第一拍原样采信(\(shown(5)))")
+    rig.tick(kaset("乙", 41.67, playing: true, 44), at: at(44))
+    rig.tick(kaset("乙", 41.67, playing: false, 46), at: at(46))
+    rig.tick(kaset("乙", 44.5, playing: true, 52), at: at(52))
+    expectEqual(near(rig.shown(at: at(52)), 44.5), true, "回放·Kaset 恢复: 恢复那一拍原样采信(\(shown(52)))")
 }
 
 private let kasetID = PlaybackPlayer.kaset.bundleIdentifier

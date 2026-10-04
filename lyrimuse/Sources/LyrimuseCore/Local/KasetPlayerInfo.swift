@@ -451,19 +451,55 @@ public enum KasetPlayerInfo {
         return duration < shortest / 2 ? true : nil
     }
 
-    /// 网页时钟比 Kaset 自己的读数超前多少算对得上(秒):Kaset 的读数是网页每 0.5 秒推一次的 `video.currentTime`,只会
-    /// 比真值晚 0~0.5 秒,再加一段消息往返;超出这个范围多半是那份锚点没跟上拖动 / 暂停,这一拍不用。
-    public static let webClockLeadRange: ClosedRange<Double> = -0.3...1.0
+    /// 网页时钟比 Kaset 自己的读数超前多少,这一拍才拿来对账(秒)。Kaset 的读数是网页每 0.5 秒推一次的
+    /// `video.currentTime`,时钟准的话只超前 0~0.5 秒;超前更多的那一拍不用、也不记进对账。
+    public static let webClockLeadRange: ClosedRange<Double> = -0.1...0.6
+    /// 落后过 `webClockLeadRange` 的下限、或者超前到这么多,这份锚点就不对了(拖动、暂停之后网页还没重发),丢掉重问。
+    public static let webClockStaleLeadSecs: Double = 2
+    /// 对账窗口里最小的超前量降到这么多以内,才算对上、开始用。时钟准的话,总有某一拍读数刚推过来、超前接近 0;锚点打早了
+    /// 的那种(媒体先报在放、声音后到,之后不重发),每一拍都超前一大截。
+    public static let webClockConfirmLeadSecs: Double = 0.15
+    /// 对账看最近这么多拍(落在 `webClockLeadRange` 里的):中途卡过一下、时钟从此跑到前面,一整窗过去就不再用。
+    public static let webClockCheckWindow = 10
 
-    /// 这一拍按内嵌网页那份会话的播放时钟算位置(连续、精确;Kaset 自己的读数每 0.5 秒才变一次):网页在放的就是这首
-    /// (`adByWebMedia` 判成正片)、速率大于 0、外推到 t 那一刻跟 Kaset 自己的读数对得上(`webClockLeadRange`)。
-    /// 用得上返回 t 那一刻的位置,否则 nil。纯函数,selftest 覆盖。
+    /// 内嵌网页那份会话的播放时钟外推到 t 那一刻的位置:网页在放的就是这首(`adByWebMedia` 判成正片)、有锚点、速率大于 0。
+    /// 用不上返回 nil。能不能拿来当位置,还要跟 Kaset 的读数对账(`webClockStep`)。纯函数,selftest 覆盖。
     public static func webClockPosition(_ reading: Reading, web: WebMedia?, at t: Date) -> Double? {
         guard let web, web.isPlaying, adByWebMedia(reading, web: web) == false,
               let anchor = web.anchorElapsed, let anchorAt = web.anchorAt, let rate = web.rate, rate > 0 else { return nil }
-        let position = anchor + t.timeIntervalSince(anchorAt) * rate
-        guard webClockLeadRange.contains(position - reading.position) else { return nil }
-        return position
+        return anchor + t.timeIntervalSince(anchorAt) * rate
+    }
+
+    /// 一份锚点跟 Kaset 读数对账的进度:是哪一份锚点,最近几拍时钟比读数超前多少。
+    public struct WebClockCheck: Equatable, Sendable {
+        public let anchorElapsed: Double
+        public let anchorAt: Date
+        /// 最近 `webClockCheckWindow` 拍落在 `webClockLeadRange` 里的超前量。
+        public let leads: [Double]
+        public var confirmed: Bool { (leads.min() ?? .infinity) <= KasetPlayerInfo.webClockConfirmLeadSecs }
+
+        public init(anchorElapsed: Double, anchorAt: Date, leads: [Double]) {
+            self.anchorElapsed = anchorElapsed
+            self.anchorAt = anchorAt
+            self.leads = leads
+        }
+    }
+
+    /// 这一拍网页时钟用不用。算出时钟位置,跟 Kaset 这一拍的读数比:落后过 `webClockLeadRange` 的下限或超前到
+    /// `webClockStaleLeadSecs`,锚点不对了,对账作废(返回的 check 为 nil,调用方丢掉这份锚点重问);落在 `webClockLeadRange`
+    /// 里的记进对账,对上了(`WebClockCheck.confirmed`)才返回位置;超前过 `webClockLeadRange` 上限的这一拍不用、不记。
+    /// 锚点换了一份就从头对账。纯函数,selftest 覆盖。
+    public static func webClockStep(_ reading: Reading, web: WebMedia?, at t: Date,
+                                    check: WebClockCheck?) -> (position: Double?, check: WebClockCheck?) {
+        guard let web, let position = webClockPosition(reading, web: web, at: t),
+              let anchor = web.anchorElapsed, let anchorAt = web.anchorAt else { return (nil, nil) }
+        let lead = position - reading.position
+        guard lead >= webClockLeadRange.lowerBound, lead < webClockStaleLeadSecs else { return (nil, nil) }
+        var leads = check.flatMap { $0.anchorElapsed == anchor && $0.anchorAt == anchorAt ? $0.leads : nil } ?? []
+        let usable = webClockLeadRange.contains(lead)
+        if usable { leads = Array((leads + [lead]).suffix(webClockCheckWindow)) }
+        let next = WebClockCheck(anchorElapsed: anchor, anchorAt: anchorAt, leads: leads)
+        return (usable && next.confirmed ? position : nil, next)
     }
 
     /// 封面地址换成这么大见方的那一档。

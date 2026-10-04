@@ -131,22 +131,54 @@ func runKasetTests() {
         expectEqual(K.webMedia(in: sessions, kasetPID: 692)?.elapsed, 3.3, "广告倒计时: 网页那份带着此刻的进度")
     }
 
-    // ---- 位置:在走时用内嵌网页那份会话的播放时钟 ----
+    // ---- 位置:在走时用内嵌网页那份会话的播放时钟,先跟 Kaset 读数对账 ----
     do {
-        // Kaset 读数 120.70(晚一点),网页那份会话的锚点 100.0 @ t0−20.9、速率 1。
-        let reading = K.Reading(title: "說了再見", artist: "周杰倫", videoID: "Wlwk9osZ9Mc", duration: 282.73, position: 120.70,
-                                isPlaying: true, isPaused: false, playerDuration: 282.7335, trackDuration: 283)
+        // 网页那份会话的锚点 100.0 @ t0−20.9、速率 1:t0 那一刻时钟在 120.9。
+        func at(_ position: Double) -> K.Reading {
+            K.Reading(title: "說了再見", artist: "周杰倫", videoID: "Wlwk9osZ9Mc", duration: 282.73, position: position,
+                      isPlaying: true, isPaused: false, playerDuration: 282.7335, trackDuration: 283)
+        }
+        let reading = at(120.70)
         func web(anchor: Double? = 100, ago: Double = 20.9, rate: Double? = 1, duration: Double = 282.7335, playing: Bool = true) -> K.WebMedia {
             K.WebMedia(duration: duration, isPlaying: playing, elapsed: nil, anchorElapsed: anchor, anchorAt: t0 - ago, rate: rate)
         }
         expectEqual(K.webClockPosition(reading, web: web(), at: t0).map { abs($0 - 120.9) < 0.0001 }, true,
-                    "Kaset 网页时钟: 锚点外推到这一拍,比 Kaset 的读数超前 0.2 秒,用它")
-        expectEqual(K.webClockPosition(reading, web: web(ago: 60), at: t0) == nil, true, "Kaset 网页时钟: 锚点没跟上(超前几十秒),不用")
-        expectEqual(K.webClockPosition(reading, web: web(ago: 20.2), at: t0) == nil, true, "Kaset 网页时钟: 落后读数半秒,不用")
+                    "Kaset 网页时钟: 锚点外推到这一拍")
         expectEqual(K.webClockPosition(reading, web: web(anchor: 120.8, ago: 3, rate: 0), at: t0) == nil, true, "Kaset 网页时钟: 速率 0(停着),不用")
         expectEqual(K.webClockPosition(reading, web: web(anchor: nil), at: t0) == nil, true, "Kaset 网页时钟: 没有锚点,不用")
         expectEqual(K.webClockPosition(reading, web: web(duration: 15.04), at: t0) == nil, true, "Kaset 网页时钟: 网页在放广告,不用")
         expectEqual(K.webClockPosition(reading, web: web(playing: false), at: t0) == nil, true, "Kaset 网页时钟: 网页没在放,不用")
+        // 对账:每拍给出时钟比读数超前多少,看这一拍用不用。
+        func run(_ leads: [Double], web w: K.WebMedia? = nil, from start: K.WebClockCheck? = nil) -> (used: [Bool], check: K.WebClockCheck?) {
+            var check = start
+            var used: [Bool] = []
+            for lead in leads {
+                let step = K.webClockStep(at(120.9 - lead), web: w ?? web(), at: t0, check: check)
+                used.append(step.position != nil)
+                check = step.check
+            }
+            return (used, check)
+        }
+        expectEqual(run([0.30, 0.45, 0.05, 0.40]).used, [false, false, true, true],
+                    "Kaset 网页时钟对账: 有一拍读数刚推过来、超前不到 0.15 秒,才开始用")
+        expectEqual(run([0.90, 0.95, 1.20, 0.92]).used, [false, false, false, false],
+                    "Kaset 网页时钟对账: 锚点打早了、每拍都超前近 1 秒,一直不用")
+        expectEqual(run([0.45, 0.55, 0.42, 0.50]).used, [false, false, false, false],
+                    "Kaset 网页时钟对账: 超前从没降到 0.15 秒以内,不用")
+        expectEqual(run([0.05, 0.75]).used, [true, false], "Kaset 网页时钟对账: 对上之后某一拍超前过 0.6 秒,这一拍不用")
+        expectEqual(K.webClockStep(at(121.4), web: web(), at: t0, check: nil).check == nil, true,
+                    "Kaset 网页时钟对账: 落后读数半秒,锚点不对,丢掉重问")
+        expectEqual(K.webClockStep(at(117.9), web: web(), at: t0, check: nil).check == nil, true,
+                    "Kaset 网页时钟对账: 超前 3 秒,锚点不对,丢掉重问")
+        let confirmed = run([0.05]).check
+        expectEqual(K.webClockStep(at(120.6), web: web(anchor: 110, ago: 10.9), at: t0, check: confirmed).position == nil, true,
+                    "Kaset 网页时钟对账: 锚点重发了一份,从头对账")
+        expectEqual(run(Array(repeating: 0.45, count: K.webClockCheckWindow), from: confirmed).used.last, false,
+                    "Kaset 网页时钟对账: 对上之后一整窗都超前 0.4 秒以上(中途卡过一下),不再用")
+        expectEqual(LocalPlaybackSource.resumeReadingNeverLeads(bundleID: PlaybackPlayer.kaset.bundleIdentifier)
+                        && !LocalPlaybackSource.resumeReadingNeverLeads(bundleID: PlaybackPlayer.spotify.bundleIdentifier)
+                        && !LocalPlaybackSource.resumeReadingNeverLeads(bundleID: PlaybackPlayer.qqMusic.bundleIdentifier), true,
+                    "Kaset 恢复播种: 只有 Kaset 的读数原样采信,别的播放器照旧削")
         let moving = K.LastMove(videoID: "Wlwk9osZ9Mc", position: 119.70, seenAt: t0 - 2)
         let precise = K.snapshot(reading, lastMove: moving, capturedAt: t0, clockPosition: 120.9)
         expectEqual(precise.elapsedTime == 120.9 && precise.positionIsPrecise == true, true, "Kaset 网页时钟: 在走时快照用它、标精确")
@@ -561,6 +593,10 @@ func runKasetTests() {
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
                             "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
                     "Kaset 契约: 在走时位置用网页时钟,播放源当精确真值采信")
+        expectEqual(client.contains("step = KasetPlayerInfo.webClockStep(reading, web: web, at: t, check: previous)")
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                            "trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier)"), true,
+                    "Kaset 契约: 网页时钟跟读数对上才用;恢复那一拍按播放器决定削不削")
         let playbackSource = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(playbackSource.contains("if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,")
                         && playbackSource.contains("noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)")

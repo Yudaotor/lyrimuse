@@ -634,6 +634,13 @@ public final class LocalPlaybackSource: ObservableObject {
         return reported > ceiling ? ceiling : reported
     }
 
+    /// 这个播放器恢复播放那一拍的读数会不会跑到声音前面。Kaset 的位置取自它网页里 video 的 `currentTime`(或对过账的
+    /// 网页时钟),暂停期间不空转,读到的只会晚、不会早:恢复(含换歌后从加载走起来)那一拍原样采信,不按
+    /// `resumeSeedSeconds` 削。别的播放器照旧削。纯函数,selftest 覆盖。
+    public nonisolated static func resumeReadingNeverLeads(bundleID: String?) -> Bool {
+        bundleID == PlaybackPlayer.kaset.bundleIdentifier
+    }
+
     /// 冻结检测:曲目/广告结尾 Spotify 会把 MediaRemote 锚点冻住 ——
     /// 实测广告结尾 elapsedTimeNow 卡死 6 秒,真声一路走到落后 8 秒。播放中墙钟走了
     /// gap、报告值却几乎没动,这份读数**必然**陈旧(音频在播,诚实的位置不可能不动)。
@@ -1751,12 +1758,15 @@ public final class LocalPlaybackSource: ObservableObject {
             } else {
                 // 刚从暂停恢复播放 / 首次观察(同曲)。这一笔读数在暂停期间被 elapsedTimeNow
                 // 空转污染过,不能原样采信 —— 削掉"不可能发生的前跳",见 resumeSeedSeconds。
+                // 读数不会超前声音的播放器原样采信(resumeReadingNeverLeads)。
                 let freshSignalAge = Self.freshResumeSignalAge(signalAt: posStateSignalAt, now: now)
                 let sinceSignal = freshSignalAge ?? Self.resumeMaxForwardCapSecs
-                trackPosSeconds = Self.resumeSeedSeconds(
-                    reported: reported,
-                    frozen: pausedPositionMs.map { Double($0) / 1000 },
-                    maxForwardSecs: sinceSignal)
+                trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier)
+                    ? reported
+                    : Self.resumeSeedSeconds(
+                        reported: reported,
+                        frozen: pausedPositionMs.map { Double($0) / 1000 },
+                        maxForwardSecs: sinceSignal)
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
                 if gaplessLeadBundleID != nil, anchorElapsedTime == nil, freshSignalAge != nil,
                    pausedPositionMs != nil,

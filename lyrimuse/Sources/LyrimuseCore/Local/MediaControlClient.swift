@@ -423,14 +423,17 @@ public enum MediaControlClient {
     private static var kasetLastArtwork: (trackKey: String, url: URL)?
     /// 最近下载的那张封面,同一个地址不重下(换歌后的取图会重试、复核好几次)。
     private static var kasetArtworkCache: (url: URL, data: Data)?
-    /// 记下的内嵌网页那份会话(这一首的 videoId、记下的时刻):在走的拍拿它的锚点推位置(`KasetPlayerInfo.webClockPosition`)。
-    /// 锚点只在播放 / 暂停 / 拖动时重发,对得上就不用每拍起一次子进程去问;对不上、换了一首、记下超过
+    /// 记下的内嵌网页那份会话(这一首的 videoId、记下的时刻)和它跟 Kaset 读数对账的进度(`KasetPlayerInfo.webClockStep`)。
+    /// 锚点只在播放 / 暂停 / 拖动时重发,对得上就不用每拍起一次子进程去问;锚点不对了、换了一首、记下超过
     /// `kasetWebClockMaxAge` 才再问。
-    private static var kasetWebClock: (videoID: String, web: KasetPlayerInfo.WebMedia, at: Date)?
-    /// 这一首最近一次问了却用不上(会话不在、对不上),到这个时刻之前不再问。
+    private static var kasetWebClock: (videoID: String, web: KasetPlayerInfo.WebMedia, at: Date,
+                                       check: KasetPlayerInfo.WebClockCheck)?
+    /// 这一首最近一次问了却用不上(会话不在、锚点不对),到这个时刻之前不再问。
     private static var kasetWebClockRetryAt: (videoID: String, at: Date)?
     /// 开始跟着网页时钟走时打过日志的那首,同一首只打一条。
     private static var kasetWebClockLoggedVideoID: String?
+    /// 对账满一整窗还对不上(时钟一直超前)时打过日志的那首,同一首只打一条。
+    private static var kasetWebClockDistrustLoggedVideoID: String?
     private static let kasetWebClockMaxAge: TimeInterval = 30
     private static let kasetWebClockRetryInterval: TimeInterval = 10
     /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
@@ -527,36 +530,51 @@ public enum MediaControlClient {
         return data
     }
 
-    /// 在走的这一拍按内嵌网页那份会话的播放时钟算位置(`KasetPlayerInfo.webClockPosition`)。先拿记下的那份推,对得上
-    /// 就不再问;对不上、换了一首、记下太久才问一次;问了用不上,隔 `kasetWebClockRetryInterval` 再试。
+    /// 在走的这一拍按内嵌网页那份会话的播放时钟算位置,跟 Kaset 读数对上了才用(`KasetPlayerInfo.webClockStep`)。先拿记下的
+    /// 那份推、接着对账;锚点不对了当场再问一次;换了一首、记下太久才问;问了用不上,隔 `kasetWebClockRetryInterval` 再试。
     private static func kasetWebClockPosition(_ reading: KasetPlayerInfo.Reading, at t: Date) -> Double? {
         guard let id = reading.videoID, !id.isEmpty else { return nil }
         kasetLock.lock()
         let cached = kasetWebClock
         let retry = kasetWebClockRetryAt
         kasetLock.unlock()
-        if let cached, cached.videoID == id, t.timeIntervalSince(cached.at) < kasetWebClockMaxAge,
-           let position = KasetPlayerInfo.webClockPosition(reading, web: cached.web, at: t) {
-            return position
+        let previous = cached?.videoID == id ? cached?.check : nil
+        var web: KasetPlayerInfo.WebMedia?
+        var queriedAt = t
+        var step: (position: Double?, check: KasetPlayerInfo.WebClockCheck?) = (nil, nil)
+        if let cached, cached.videoID == id, t.timeIntervalSince(cached.at) < kasetWebClockMaxAge {
+            web = cached.web
+            queriedAt = cached.at
+            step = KasetPlayerInfo.webClockStep(reading, web: web, at: t, check: previous)
         }
-        if let retry, retry.videoID == id, t < retry.at { return nil }
-        let fresh = kasetWebMedia()
-        let position = KasetPlayerInfo.webClockPosition(reading, web: fresh, at: t)
+        if step.check == nil {
+            if let retry, retry.videoID == id, t < retry.at { return nil }
+            web = kasetWebMedia()
+            queriedAt = t
+            step = KasetPlayerInfo.webClockStep(reading, web: web, at: t, check: previous)
+        }
         kasetLock.lock()
-        if let fresh, position != nil {
-            kasetWebClock = (id, fresh, t)
+        if let web, let check = step.check {
+            kasetWebClock = (id, web, queriedAt, check)
             kasetWebClockRetryAt = nil
         } else {
             kasetWebClock = nil
             kasetWebClockRetryAt = (id, t.addingTimeInterval(kasetWebClockRetryInterval))
         }
-        let firstForTrack = position != nil && kasetWebClockLoggedVideoID != id
+        let firstForTrack = step.position != nil && kasetWebClockLoggedVideoID != id
         if firstForTrack { kasetWebClockLoggedVideoID = id }
+        let distrusted = step.check.map { !$0.confirmed && $0.leads.count >= KasetPlayerInfo.webClockCheckWindow } ?? false
+            && kasetWebClockDistrustLoggedVideoID != id
+        if distrusted { kasetWebClockDistrustLoggedVideoID = id }
         kasetLock.unlock()
-        if firstForTrack, let position {
-            logger.notice("kaset: position follows the web view clock track=\(reading.title, privacy: .public) lead=\(position - reading.position, format: .fixed(precision: 3))")
+        let minLead = step.check?.leads.min() ?? -1
+        if firstForTrack, let position = step.position {
+            logger.notice("kaset: position follows the web view clock track=\(reading.title, privacy: .public) lead=\(position - reading.position, format: .fixed(precision: 3)) minLead=\(minLead, format: .fixed(precision: 3))")
         }
-        return position
+        if distrusted {
+            logger.notice("kaset: web view clock stays ahead of Kaset's readings, not used track=\(reading.title, privacy: .public) minLead=\(minLead, format: .fixed(precision: 3))")
+        }
+        return step.position
     }
 
     /// Kaset 内嵌网页此刻在放的那段媒体(`KasetPlayerInfo.webMedia`)。Kaset 没在跑、helper 不可用返回 nil。
