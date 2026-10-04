@@ -34,6 +34,37 @@ public enum NotchTrackDropRules {
     }
 }
 
+/// 换歌翻牌:去抖之后看到的每一拍喂进来(`observe`),判掉不掉歌名;记着上一首。卡片此刻看不看得见由控制器另外判。
+///
+/// 播放器说在放、声音还没走起来(`isWaitingToPlay`:加载、前贴片广告、卡住)时先不判,记着的上一首不动,等走起来那一拍
+/// 按那时的曲目和广告态判。前贴片广告报的是接下来那首的身份,「广告中」要等广告真放起来才亮,比歌名晚到:这时候就判,
+/// 会把广告当成新歌掉一次、广告结束回到歌再掉一次。
+public struct NotchTrackDropTracker: Sendable {
+    public enum Outcome: Equatable, Sendable {
+        /// 换了一首,掉新歌名。
+        case drop
+        /// 曲目变了、这一拍不掉(广告、第一首、没歌名、声音还没走起来);正停着的那条收掉。
+        case clear
+        /// 曲目没变。
+        case none
+    }
+
+    /// 上一次判过的曲目(`NotchTrackDropRules.key`);nil = 还没判过,第一首不掉。
+    public private(set) var lastKey: String?
+
+    public init() {}
+
+    public mutating func observe(title: String, artist: String, isAdBreak: Bool, isWaitingToPlay: Bool) -> Outcome {
+        let key = NotchTrackDropRules.key(title: title, artist: artist, isAdBreak: isAdBreak)
+        guard key != lastKey else { return .none }
+        if isWaitingToPlay { return .clear }
+        let previous = lastKey
+        lastKey = key
+        return NotchTrackDropRules.shouldDrop(previousKey: previous, title: title, artist: artist, isAdBreak: isAdBreak)
+            ? .drop : .clear
+    }
+}
+
 /// 换歌翻牌:耳朵里那枚封面(左耳在广告时是喇叭)换成另一面时怎么过渡。纯状态机:视图把「换歌了」和
 /// 「这一刻该显示哪一面」喂进来,拿回过渡方式;nil = 这一面先不换。
 ///

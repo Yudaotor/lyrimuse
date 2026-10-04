@@ -633,6 +633,23 @@ func runNotchTests() {
                     "换歌翻牌: 广告结束回到歌掉(哪怕跟广告同名)")
         expectEqual(DR.shouldDrop(previousKey: songA, title: "", artist: "周杰伦", isAdBreak: false), false,
                     "换歌翻牌: 没有歌名不掉")
+        // 换歌翻牌:声音还没走起来(加载、前贴片广告)时先不判,走起来那一拍按那时的曲目判。每拍是(歌名, 广告, 在等开播)。
+        func dropOutcomes(_ ticks: [(String, Bool, Bool)]) -> [NotchTrackDropTracker.Outcome] {
+            var tracker = NotchTrackDropTracker()
+            return ticks.map { tracker.observe(title: $0.0, artist: "周杰伦", isAdBreak: $0.1, isWaitingToPlay: $0.2) }
+        }
+        expectEqual(dropOutcomes([("夜曲", false, false), ("晴天", false, true), ("晴天", true, true), ("晴天", false, false)]),
+                    [.clear, .clear, .clear, .drop], "换歌翻牌: 前贴片广告(先加载、广告标记晚到)只在正片走起来时掉一次")
+        expectEqual(dropOutcomes([("夜曲", false, false), ("晴天", false, true), ("晴天", false, false)]),
+                    [.clear, .clear, .drop], "换歌翻牌: 没有广告时等加载完、声音走起来再掉")
+        expectEqual(dropOutcomes([("夜曲", false, false), ("晴天", false, true), ("七里香", false, true), ("七里香", false, false)]),
+                    [.clear, .clear, .clear, .drop], "换歌翻牌: 加载中又换了一首,只掉真放起来的那首")
+        expectEqual(dropOutcomes([("夜曲", false, false), ("晴天", false, false), ("晴天", false, true), ("晴天", false, false)]),
+                    [.clear, .drop, .none, .none], "换歌翻牌: 同一首中途卡住又接着走不再掉")
+        expectEqual(dropOutcomes([("晴天", false, true), ("晴天", false, false)]), [.clear, .clear],
+                    "换歌翻牌: 第一首等到走起来也不掉")
+        expectEqual(dropOutcomes([("夜曲", false, false), ("晴天", true, false), ("晴天", false, false)]),
+                    [.clear, .clear, .drop], "换歌翻牌: 广告期间暂停着(不算在等)也只在回到歌时掉")
         // 换歌翻牌:封面等新图到了才翻,旧图(含退回来的上一首系统封面)不算;同一张画面不翻。
         typealias FP = NotchArtworkFlipPlanner<Int>
         let t0 = Date(timeIntervalSince1970: 1_000)
@@ -877,6 +894,16 @@ func runNotchTests() {
                         "换歌翻牌契约: 开着歌词行时歌名盖上来,稳态那份歌词行让开")
             expectEqual(v.contains("flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)"), true,
                         "换歌翻牌契约: 左耳的翻牌连广告时的喇叭一起画(广告结束才能翻成封面)")
+            let coordinatorSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent()
+                .appendingPathComponent("PlaybackCoordinator.swift"), encoding: .utf8)) ?? ""
+            let playbackSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+            expectEqual(ctrlSrc.contains("PlaybackCoordinator.shared.$isWaitingToPlay")
+                        && ctrlSrc.contains("trackDropTracker.observe(title: title, artist: artist, isAdBreak: isAdBreak,")
+                        && coordinatorSrc.contains("s.$isWaitingToPlay.assign(to: \\.isWaitingToPlay, on: self),")
+                        && playbackSrc.contains("let newIsWaitingToPlay = snapshot.isWaitingToPlay == true")
+                        && playbackSrc.contains("if isWaitingToPlay { isWaitingToPlay = false }"), true,
+                        "换歌翻牌契约: 声音还没走起来时先不判(播放源发布、协调器转出、控制器接进判定),停播清掉")
         }
 
         // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。

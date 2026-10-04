@@ -70,6 +70,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
     @Published private(set) var displayAlbum: String = ""
     @Published private(set) var isPlayingNow: Bool = false
+    /// 播放器说在放、声音还没走起来,见 `LocalPlaybackSource.isWaitingToPlay`。
+    @Published private(set) var isWaitingToPlay: Bool = false
     // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
     //
     // 给"要不要把悬浮窗/灵动岛收起来"这类决策用,不给歌词显示用 —— 歌词该在暂停的一瞬间
@@ -864,6 +866,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .assign(to: \.displayAlbum, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
+            s.$isWaitingToPlay.assign(to: \.isWaitingToPlay, on: self),
             s.$currentLine.sink { [weak self] line in
                 logger.debug("coordinator currentLine updated: hasLine=\(line != nil) hasWords=\(line?.words != nil) hasMainText=\(line?.mainText != nil)")
                 self?.currentLine = line

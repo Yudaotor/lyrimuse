@@ -333,10 +333,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var trackPresenceObserver: AnyCancellable?
     private var milestoneObserver: AnyCancellable?
     private var trackDropObserver: AnyCancellable?
-    /// 上一次看到的曲目(`NotchTrackDropRules.key`);nil = 这个实例还没看到过,第一首不掉。
-    private var lastTrackKey: String?
+    /// 掉不掉歌名的判定,记着上一首(`NotchTrackDropTracker`);刚建出来时还没判过,第一首不掉。
+    private var trackDropTracker = NotchTrackDropTracker()
     private var trackDropGeneration = 0
     private var trackDropClearTask: Task<Void, Never>?
+    /// 掉歌名的判定日志:换了一首、判成要掉时写一行(掉了,或卡片此刻不显示没掉)。
+    private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
     private var unknownPlayerAlertObserver: AnyCancellable?
     private var fullScreenObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
@@ -473,15 +475,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.setMilestone(next)
         }
 
-        // 换歌翻牌的「掉歌名」:歌名 / 歌手去抖 300ms(两者常常一前一后到)再判。存 sink 参数值,理由同上。
-        trackDropObserver = Publishers.CombineLatest3(
+        // 换歌翻牌的「掉歌名」:歌名 / 歌手 / 广告 / 在不在等开播去抖 300ms(常常一前一后到)再判。存 sink 参数值,理由同上。
+        trackDropObserver = Publishers.CombineLatest4(
             PlaybackCoordinator.shared.$title,
             PlaybackCoordinator.shared.$artist,
-            PlaybackCoordinator.shared.$isCurrentTrackAdBreak
+            PlaybackCoordinator.shared.$isCurrentTrackAdBreak,
+            PlaybackCoordinator.shared.$isWaitingToPlay
         )
         .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-        .sink { [weak self] title, artist, isAd in
-            self?.trackChanged(title: title, artist: artist, isAdBreak: isAd)
+        .sink { [weak self] title, artist, isAd, isWaiting in
+            self?.trackChanged(title: title, artist: artist, isAdBreak: isAd, isWaitingToPlay: isWaiting)
         }
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
@@ -817,22 +820,26 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         refreshExpanded()
     }
 
-    /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(不是这个实例看到的第一首、不是广告),开关开着,
-    /// 卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名掉出来停 `NotchTrackDropRules.holdDuration`;
-    /// 停的时候又换歌就原地换成新的、重新计时。封面那一翻在视图里(`NotchEarArtworkFlip`),不经这里。
-    private func trackChanged(title: String, artist: String, isAdBreak: Bool) {
-        let previous = lastTrackKey
-        let key = NotchTrackDropRules.key(title: title, artist: artist, isAdBreak: isAdBreak)
-        lastTrackKey = key
-        guard previous != key else { return }
-        let drops = NotchTrackDropRules.shouldDrop(previousKey: previous, title: title, artist: artist, isAdBreak: isAdBreak)
+    /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
+    /// 第一首、不是广告,声音还没走起来时先不判),开关开着,卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名
+    /// 掉出来停 `NotchTrackDropRules.holdDuration`;停的时候又换歌就原地换成新的、重新计时。封面那一翻在视图里
+    /// (`NotchEarArtworkFlip`),不经这里。
+    private func trackChanged(title: String, artist: String, isAdBreak: Bool, isWaitingToPlay: Bool) {
+        let outcome = trackDropTracker.observe(title: title, artist: artist, isAdBreak: isAdBreak,
+                                               isWaitingToPlay: isWaitingToPlay)
+        guard outcome != .none else { return }
+        let drops = outcome == .drop
             && AppSettings.shared.notchTrackChangeFlip
             && lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
             && !isCollapsed && !isExpanded && milestone == nil && !alertHold
         guard drops else {
+            if outcome == .drop, AppSettings.shared.notchTrackChangeFlip {
+                Self.trackDropLog.notice("track drop: skipped, card not showing for \(artist, privacy: .public) - \(title, privacy: .public)")
+            }
             clearTrackDrop()
             return
         }
+        Self.trackDropLog.notice("track drop: shown for \(artist, privacy: .public) - \(title, privacy: .public)")
         trackDropGeneration &+= 1
         trackDrop = NotchTrackDrop(id: trackDropGeneration, title: title, artist: PlaybackCoordinator.shared.displayArtist)
         trackDropClearTask?.cancel()

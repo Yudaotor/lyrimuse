@@ -26,6 +26,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// `EnrichCacheReader.youtubeMusicIsMV`)。只给界面专辑位写「MV」,不碰 `isMusicVideo` 那一套(歌词时长、MV 时间轴)。
     @Published public private(set) var youtubeMusicIsMV: Bool = false
     @Published public private(set) var isPlayingNow: Bool = false
+    /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、前贴片广告、卡住;目前只有 Kaset 报)。
+    /// 灵动岛掉歌名据此等声音走起来再判(`NotchTrackDropTracker`)。
+    @Published public private(set) var isWaitingToPlay: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
     /// 下一行摆在哪一边(见 SyncedLyricLine.side)——**独立于 currentLine?.side**,不能假定
@@ -2641,6 +2644,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if Self.hasTrackStateToClear(isPlaying: isPlayingNow, title: title, lastKey: lastKey,
                                      pausedPositionMs: pausedPositionMs, hasAnchor: anchor != nil) {
             isPlayingNow = false
+            if isWaitingToPlay { isWaitingToPlay = false }
             anchor = nil
             currentLine = nil
             nextLineText = nil
@@ -2973,6 +2977,8 @@ public final class LocalPlaybackSource: ObservableObject {
         if newIsMusicVideo != isMusicVideo { isMusicVideo = newIsMusicVideo }
         let newIsPlayingNow = snapshot.playing == true
         if newIsPlayingNow != isPlayingNow { isPlayingNow = newIsPlayingNow }
+        let newIsWaitingToPlay = snapshot.isWaitingToPlay == true
+        if newIsWaitingToPlay != isWaitingToPlay { isWaitingToPlay = newIsWaitingToPlay }
         // 停播欢迎态的「继续播放/打开 XX」要知道停播前在用谁、放的什么 —— 停播时快照
         // 整个清空,这里是唯一还记得的地方(见 LyricsWindowView.idleWelcomeView)。落
         // UserDefaults,只在值变化时写,2 秒轮询不刷盘。
