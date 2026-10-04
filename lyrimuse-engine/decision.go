@@ -316,7 +316,9 @@ func logLyricsDecision(d *lyricsDecision, picked *scoredLyricCandidateResult, qu
 		winner, score = picked.Source, picked.Score
 	}
 	cur := enrichPlayingKey.Load()
-	playing := cur != nil && *cur == enrichKey(d.QueryArtist, d.QueryTitle, d.QueryAlbum)
+	// 播放器没报专辑、这一轮拿登记专辑搜的(lyricsSearchAlbum):在播那首的 key 里没有专辑。
+	playing := cur != nil && (*cur == enrichKey(d.QueryArtist, d.QueryTitle, d.QueryAlbum) ||
+		d.QueryAlbum != "" && *cur == enrichKey(d.QueryArtist, d.QueryTitle, ""))
 	attrs := []any{
 		"path", d.Path,
 		// playing:评估的是不是此刻在播的那首。预取、补空、全量扫库的决策都是 false。

@@ -28,7 +28,7 @@ func TestSearchQueryFields(t *testing.T) {
 // 接线守卫:发查询的几处都走 searchQueryFields,别再直接 toSimplified 三栏。
 func TestSearchQueryFieldsIsWired(t *testing.T) {
 	for file, needle := range map[string]string{
-		"enrich.go":              "artist, title, album = searchQueryFields(artist, title, album)",
+		"enrich.go":              "artist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)",
 		"searchcli.go":           "sArtist, sTitle, sAlbum := searchQueryFields(*artist, *title, *album)",
 		"resynclyricscli.go":     "artist, title, album = searchQueryFields(artist, title, album)",
 		"testlyricsourcescli.go": "searchQueryFields(artist, title, album)",

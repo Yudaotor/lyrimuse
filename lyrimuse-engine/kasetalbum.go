@@ -20,8 +20,8 @@ import (
 //  3. 没配音轨版本:按歌手 + 歌名 + 这一版的时长去曲库里找一样长的音轨版本,找到用它的专辑;找不到,放的是官方 MV 就是
 //     MV 版本,不是就没有专辑。
 //
-// 结论写进条目(youtube_music_album / youtube_music_mv,连同判的时候用的界面语言 youtube_music_album_lang),只给界面和
-// 上送用,不进缓存 key。
+// 结论写进条目(youtube_music_album / youtube_music_mv,连同判的时候用的界面语言 youtube_music_album_lang),给界面、
+// 上送,以及播放器没报专辑时搜歌词用(见 kasetlyricsalbum.go),不进缓存 key。
 
 // kasetSameLengthTolerance:两版时长差不超过这么多秒算同一段录音(元数据是整数秒)。
 const kasetSameLengthTolerance = 3

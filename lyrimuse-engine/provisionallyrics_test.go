@@ -76,7 +76,7 @@ func TestProvisionalLyricsIsWired(t *testing.T) {
 	src := string(data)
 	for _, needle := range []string{
 		"roundCtx = withProvisionalLyrics(roundCtx, func(ne neteaseInfo, scored []scoredLyricCandidateResult) {",
-		"e, picked := lyricsEntryFromScored(decisionPath, artist, title, album, durationSecs, ne, scored,",
+		"e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,",
 		"\tif rescue || romaRetry || len(missing) > 0 {\n\t\tnotifyProvisionalLyrics(ctx, ne, results)\n",
 		"primary != \"\" && usableLyricSourceCount(results) < targetSources {\n\t\tnotifyProvisionalLyrics(ctx, ne, results)\n",
 		"\n\tif usableLyricSourceCount(results) < targetSources {\n\t\tnotifyProvisionalLyrics(ctx, ne, results)\n",

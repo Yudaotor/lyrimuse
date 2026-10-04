@@ -259,6 +259,9 @@ type enrichEntry struct {
 	// 这一轮因源级熔断被跳过的源(sourcebreaker.go)。非空且歌词为空时 needsLyricsFirstFill
 	// 把补空间隔缩到 10 分钟——那不是"查过了没有",是"没问它"。每次写缓存都整体覆盖(含清空)。
 	LyricsSourcesSkipped []string `json:"lyrics_sources_skipped,omitempty"`
+	// 最近一轮歌词评估拿去当专辑搜索、打分的 YouTube Music 登记专辑(播放器没报专辑时才有,见 lyricsSearchAlbum)。
+	// 跟 YouTubeMusicAlbum 对不上就带着登记专辑重搜一次,见 listedAlbumLyricsWorthRecheck。
+	LyricsListedAlbum string `json:"lyrics_listed_album,omitempty"`
 	// 最近一次完整评估的决策记录(候选表+得分明细,只存元数据),见 decision.go。
 	// 只写不读:解析逻辑不许拿它当输入。
 	LyricsDecision *lyricsDecision `json:"lyrics_decision,omitempty"`
@@ -405,8 +408,8 @@ type enrichEntry struct {
 	// (`https://music.youtube.com/watch?v=<id>`,见 kasetlink.go youtubeMusicTrackURLFor)。App 和网页都原样用。
 	YouTubeMusicURL string `json:"youtube_music_url,omitempty"`
 
-	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。只给 App 界面和
-	// 上送用(Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
+	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。给 App 界面、上送,
+	// 以及播放器没报专辑时搜歌词用(见 lyricsSearchAlbum;Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
 	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
 	// YouTubeMusicMV:用 Kaset 放的这一版是 MV 版本(没有专辑,界面写「MV」),见 kasetalbum.go。
 	YouTubeMusicMV bool `json:"youtube_music_mv,omitempty"`
@@ -775,6 +778,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(context.Background(), key, artist, title, album, durationSecs)
+		} else if listedAlbumLyricsWorthRecheck(e, album, pinned, features().LyricsAutoUpgrade) &&
+			!enrichInflight[key] && listedAlbumLyricsRecheckOnce(key) {
+			// YouTube Music 登记的专辑判出来了,这份词最近一轮没带着它搜(见 listedAlbumLyricsWorthRecheck)。
+			enrichInflight[key] = true
+			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
 		} else if kkboxLyricsWorthRecheck(e, bundleID, pinned, features().LyricsAutoUpgrade, kkboxInfo.lyrics) &&
 			!enrichInflight[key] && kkboxLyricsRecheckOnce(key) {
 			// KKBOX 自己的词在这首被预解析之后才有(见 kkboxLyricsWorthRecheck),让它进一次打分。
@@ -1603,17 +1611,20 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	enrichMu.Lock()
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
+	listed := enrichCache[key].YouTubeMusicAlbum
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
+	// 播放器没报专辑时拿 YouTube Music 登记的专辑去搜、去打分,见 lyricsSearchAlbum。
+	searchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, listed, durationSecs, artist, title)
 
 	// 播放侧的后台重试没有"停止"入口(见 backfillPeripheralFields 同款注释);补空扫描 / 全量扫库
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
 	// 查询词跟首次解析一样先归一化(见 searchQueryFields);缓存 key、决策记录仍用原样标签。
-	qa, qt, qal := searchQueryFields(artist, title, album)
-	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs, opts.onUpdate())
+	qa, qt, qal := searchQueryFields(artist, title, searchAlbum)
+	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, searchAlbum), qa, qt, qal, durationSecs, opts.onUpdate())
 	if ctx.Err() != nil {
 		return
 	}
@@ -1698,6 +1709,9 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		e.LyricsSourcesResponded = responded
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
+	if reached {
+		e.LyricsListedAlbum = listedAlbum
+	}
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
 	}
@@ -1709,7 +1723,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	path = opts.decisionPath(path)
 	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
 	e.LyricsDecision = buildLyricsDecision(
-		path, artist, title, album, durationSecs, scored, picked, upgraded)
+		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded)
 	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
 	traceLyricsDecision(key, e.LyricsDecision)
@@ -1926,17 +1940,20 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	currentSource := enrichCache[key].LyricsSource
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
+	listed := enrichCache[key].YouTubeMusicAlbum
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
+	// 搜索用的专辑同 retryLyricsUpgrade。
+	searchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, listed, durationSecs, artist, title)
 
 	// 播放侧的后台重试没有"停止"入口(见 backfillPeripheralFields 同款注释);补空扫描 / 全量扫库
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
 	// 查询词同 retryLyricsUpgrade。
-	qa, qt, qal := searchQueryFields(artist, title, album)
-	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, album), qa, qt, qal, durationSecs, opts.onUpdate())
+	qa, qt, qal := searchQueryFields(artist, title, searchAlbum)
+	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, searchAlbum), qa, qt, qal, durationSecs, opts.onUpdate())
 	if ctx.Err() != nil {
 		return false
 	}
@@ -2015,10 +2032,11 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	}
 	e.LyricsRescoreTS = time.Now().Unix()
 	// 不可判(当前源这轮没应答)时这一轮没有做出任何决定:不写决策记录,出现过 / 应答 / 跳过三份
-	// 名单也不盖 —— 它们跟决策记录一起描述当前这份歌词是哪一轮选出来的,只盖名单会让两者对不上、
+	// 名单和搜索用的登记专辑也不盖 —— 它们跟决策记录一起描述当前这份歌词是哪一轮选出来的,只盖名单会让两者对不上、
 	// 应答源数被一轮残缺的搜索压低。可判的两个分支都写(见 decision.go 的 Applied 语义)。
 	skipped := round.skippedSources()
 	if decidable {
+		e.LyricsListedAlbum = listedAlbum
 		if len(seen) > 0 {
 			e.LyricsSourcesSeen = seen
 		}
@@ -2038,7 +2056,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	keep := decidable && picked != nil && rescoreKeeps(e, scored, picked)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
-			opts.decisionPath(lyricsDecisionPathRescore), artist, title, album, durationSecs, scored, picked,
+			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
 			picked != nil && !keep && (picked.Lyrics != e.Lyrics || gainsWordTiming(e, picked)))
 		e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 		e.LyricsDecision.QueriesTried = queries.queries()
@@ -2767,6 +2785,9 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 //
 // decisionPath 是这一轮决策存档与 trace 标的来路(lyricsDecisionPath*),由调用方按自己是哪条路径给。
 func resolveTrackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64, deviceCoverURL string, onLyrics func(enrichEntry), decisionPath string) enrichEntry {
+	// 播放器没报专辑时歌词拿 YouTube Music 登记的专辑去搜、去打分(见 lyricsSearchAlbum)。只进歌词这一段:封面那段照旧
+	// 按真实入参 album,登记专辑由 finishTrackEnrichment 自己取来挑封面,不写成 cover_album。
+	searchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, "", durationSecs, artist, title)
 	// 统一转成简体再往下传给 NetEase/QQ/酷狗/LRCLIB 的搜索接口——这几个平台的曲库/搜索
 	// 索引都是简体中文,本地 Apple Music 标签如果是繁体,拿繁体原文直接发起搜索请求会
 	// 完全查不到候选(不是匹配质量差,是搜索接口本身没命中)。match.go 的 normLoose 里
@@ -2775,8 +2796,12 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 本函数内部用来发起搜索请求的局部变量,不改 enrichCache 的 key(那个在更上层的
 	// trackEnrichment 里用原始、未转换的 artist/title/album 构造,必须跟 Apple Music
 	// 原始标签保持逐字节一致,否则同一首歌反复播放会对不上同一条缓存记录)。
-	ctx = withSearchQueryOriginal(ctx, artist, title, album)
-	artist, title, album = searchQueryFields(artist, title, album)
+	ctx = withSearchQueryOriginal(ctx, artist, title, searchAlbum)
+	artist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)
+	// 报了专辑时 searchAlbum 就是归一化过的它。
+	if album != "" {
+		album = searchAlbum
+	}
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
 	// 只要网易云在「歌词来源」里开着就查一次——封面/跳转链接搭它的车。
@@ -2807,8 +2832,9 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	if onLyrics != nil {
 		roundCtx = withProvisionalLyrics(roundCtx, func(ne neteaseInfo, scored []scoredLyricCandidateResult) {
 			timer := newStepTimer()
-			if p, picked := lyricsEntryFromScored(decisionPath, artist, title, album, durationSecs, ne, scored,
+			if p, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 				round.skippedSources(), queries.queries(), true, ""); picked != nil {
+				p.LyricsListedAlbum = listedAlbum
 				timer.mark("build")
 				shownMu.Lock()
 				shownFirst = picked.Source
@@ -2822,12 +2848,12 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	if peripheralOnly(ctx) {
 		// 周边补全、条目已有歌词:只单查网易云拿封面和链接,见 peripheralonly.go。
 		if lyricSourceEnabled("netease") {
-			ne = neteaseLookup(ctx, artist, title, album, durationSecs)
+			ne = neteaseLookup(ctx, artist, title, searchAlbum, durationSecs)
 		}
 		e = neteasePeripheralFields(ne, durationSecs)
 		return finishTrackEnrichment(ctx, e, nil, artist, title, album, durationSecs, deviceCoverURL)
 	}
-	ne, scored = scoredLyricCandidates(roundCtx, artist, title, album, durationSecs)
+	ne, scored = scoredLyricCandidates(roundCtx, artist, title, searchAlbum, durationSecs)
 	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行——
 	// 唯一的例外是上面说的:网易云作为歌词源被关掉时 ne 是空的,这里自然拿不到它的封面和链接。
 	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
@@ -2835,8 +2861,9 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	shownMu.Lock()
 	provisionalSource := shownFirst
 	shownMu.Unlock()
-	e, picked := lyricsEntryFromScored(decisionPath, artist, title, album, durationSecs, ne, scored,
+	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 		round.skippedSources(), queries.queries(), false, provisionalSource)
+	e.LyricsListedAlbum = listedAlbum
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
 	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。
 	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)

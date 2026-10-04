@@ -45,7 +45,7 @@ func TestSearchAuditWiring(t *testing.T) {
 		t.Error("resolveTrackEnrichment 要先 onLyrics(e) 出词、再 maybeGenerateRoma")
 	}
 	only := strings.Index(src, "\tif peripheralOnly(ctx) {")
-	search := strings.Index(src, "\tne, scored = scoredLyricCandidates(roundCtx, artist, title, album, durationSecs)")
+	search := strings.Index(src, "\tne, scored = scoredLyricCandidates(roundCtx, artist, title, searchAlbum, durationSecs)")
 	if only < 0 || search < 0 || only > search {
 		t.Error("peripheralOnly 那一支要排在整套歌词搜索之前")
 	}
