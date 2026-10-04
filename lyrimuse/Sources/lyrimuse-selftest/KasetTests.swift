@@ -552,6 +552,27 @@ func runKasetTests() {
         expectEqual(MediaControlClient.directQueryPlayer(forBundleID: id), .kaset, "Kaset 分派: 焦点被占时能直接问到它")
     }
 
+    // ---- 内嵌网页会话的常驻监听(KasetWebSessionWatcher)----
+    do {
+        typealias W = KasetWebSessionWatcher
+        func line(_ s: String) -> Data { Data(s.utf8) }
+        expectEqual(W.state(fromLine: line("null")), .absent, "Kaset 网页会话监听: null 是没有这份会话")
+        expectEqual(W.state(fromLine: line(#"{"anchorElapsedTime":12.5,"duration":215,"playbackRate":1,"playing":true,"timestamp":1791111994.9}"#)),
+                    .playing, "Kaset 网页会话监听: 在放")
+        expectEqual(W.state(fromLine: line(#"{"anchorElapsedTime":12.5,"duration":215,"playbackRate":0,"playing":false,"timestamp":1791111994.9}"#)),
+                    .paused, "Kaset 网页会话监听: 没在放")
+        expectEqual(W.state(fromLine: line("not json")) == nil, true, "Kaset 网页会话监听: 解析不出的一行不算")
+        expectEqual(W.signal(from: .playing, to: .paused), .paused, "Kaset 网页会话监听: 在放 → 没在放是暂停")
+        expectEqual(W.signal(from: .paused, to: .playing), .changed, "Kaset 网页会话监听: 恢复只提前 poll")
+        expectEqual(W.signal(from: .absent, to: .playing), .changed, "Kaset 网页会话监听: 会话重新出现、在放,提前 poll")
+        expectEqual(W.signal(from: .playing, to: .absent), .changed, "Kaset 网页会话监听: 在放的会话没了,提前 poll、不冻")
+        expectEqual(W.signal(from: nil, to: .paused) == nil && W.signal(from: nil, to: .playing) == nil, true,
+                    "Kaset 网页会话监听: helper 的头一行只记下,不交信号")
+        expectEqual(W.signal(from: .paused, to: .absent) == nil && W.signal(from: .absent, to: .paused) == nil
+                        && W.signal(from: .playing, to: .playing) == nil, true,
+                    "Kaset 网页会话监听: 没在放 ↔ 没有会话、状态没变,不交")
+    }
+
     // ---- 接线契约(扫源码)----
     do {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -653,6 +674,23 @@ func runKasetTests() {
         expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains(
             "LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo || listedMV,"),
                     true, "Kaset 契约: 界面专辑位按 displayAlbum 取")
+        let watcherSource = src("LyrimuseCore/Local/KasetWebSessionWatcher.swift")
+        let helper = src("../native/nowplaying-clients/nowplaying-clients.m")
+        expectEqual(playbackSource.contains("self?.handlePlayerInfoChanged(freezeExtrapolation: signal == .paused, stateSignal: true)")
+                        && playbackSource.contains("        syncKasetWebWatch()\n        if pollFlight.finish() { poll() }")
+                        && playbackSource.contains("let kaset = !title.isEmpty && lastSnapshot?.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier")
+                        && playbackSource.contains("kasetWebWatcher?.watch(bundleID: kaset ? PlaybackPlayer.kaset.bundleIdentifier : nil)")
+                        && playbackSource.contains("kasetWebWatcher?.watch(bundleID: nil)")
+                        && !playbackSource.contains("kasetProcessIdentifier"), true,
+                    "Kaset 契约: 是当前播放器时盯内嵌网页那份会话,暂停冻住外推再 poll,别的变化只提前 poll;停播源时一起停")
+        expectEqual(watcherSource.contains(#"proc.arguments = [paths.script, paths.library, "", "watch=\(bundleID)"]"#)
+                        && src("../native/nowplaying-clients/nowplaying-clients.pl").contains(
+                            #"$ENV{LYRIMUSE_NOWPLAYING_WATCH} = $1 if defined $mode && $mode =~ /^watch=(.+)$/;"#)
+                        && helper.contains("if ([bidObj isKindOfClass:NSString.class] && [bidObj isEqualToString:ownerBundleID]) owner = clientPID(c);")
+                        && helper.contains("    while (getppid() != 1) {")
+                        && helper.contains("if (![text isEqualToString:last]) {")
+                        && helper.contains("options:NSJSONWritingSortedKeys"), true,
+                    "Kaset 契约: helper 常驻按 bundle id 自己认进程号,变了才输出(键排好序),父进程没了自己退出")
         expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,

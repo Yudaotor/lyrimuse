@@ -5,13 +5,15 @@ use strict;
 use warnings;
 use DynaLoader;
 
-my $lib = shift @ARGV or die "usage: $0 /path/to/libnowplaying-clients.dylib [bundleID] [artwork|queue=N]\n";
+my $lib = shift @ARGV or die "usage: $0 /path/to/libnowplaying-clients.dylib [bundleID] [artwork|queue=N|watch=BUNDLE_ID]\n";
 my $bundle = shift @ARGV;
 my $mode = shift @ARGV;      # 传 "artwork" 才带封面 —— 常规状态查询不该每拍背一张图;
                             # 传 "queue=N" 改为输出这个播放器的待播队列(当前这首 + 之后 N 首)
 $ENV{LYRIMUSE_NOWPLAYING_BUNDLE} = $bundle if defined $bundle && length $bundle;
 $ENV{LYRIMUSE_NOWPLAYING_ARTWORK} = 1 if defined $mode && $mode eq "artwork";
 $ENV{LYRIMUSE_NOWPLAYING_QUEUE} = $1 if defined $mode && $mode =~ /^queue=(\d+)$/;
+# 传 "watch=BUNDLE_ID" 改为常驻:盯那个 App 内嵌网页的 WebKit 媒体会话,变了才输出一行(bundleID 那一格留空)
+$ENV{LYRIMUSE_NOWPLAYING_WATCH} = $1 if defined $mode && $mode =~ /^watch=(.+)$/;
 
 my $handle = DynaLoader::dl_load_file($lib, 0) or die "cannot load $lib\n";
 my $symbol = DynaLoader::dl_find_symbol($handle, "nowplaying_clients")

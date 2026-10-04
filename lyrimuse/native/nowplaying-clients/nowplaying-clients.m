@@ -40,6 +40,13 @@
 // x3 / x4 各被 retain / copy 一次(queue 与 block)。按 client 问就不受系统焦点被别的 App 抢走的影响。
 // 输出 `{"items":[{title, artist, album, duration, identifier}…]}`,第一项是当前这首,供调用方核对。
 // 实测只有 Apple Music 真的给队列(打乱之后的真实顺序,一次最多 40 首左右);Spotify / 酷狗只给当前这一首。
+//
+// ## 常驻盯一个 App 内嵌网页的会话(`LYRIMUSE_NOWPLAYING_WATCH=<bundle id>`)
+//
+// 不退出,每一轮先在客户端列表里按 bundle id 找到那个 App 自己那份、取它的进程号,再问负责进程是它的那份 WebKit 媒体
+// 会话(在放时每 0.25 秒、没在放时每 0.5 秒一轮),跟上一次输出的不一样才输出一行(在不在放、速率、锚点、时长;没有这份
+// 会话、那个 App 没在列表里都输出 `null`),见 `watchWebSession`。要连着盯的走这个模式,别隔一会儿起一次
+// helper(两种的开销见 02 章决策 88)。App 用它盯 Kaset 的暂停 / 恢复(`KasetWebSessionWatcher`)。
 
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
@@ -65,6 +72,11 @@ typedef CFStringRef (*ItemGetIdentifierFn)(void *);
 /// 引擎的 focusfallback.go)都在 2 秒整体超时后杀掉这个进程,原来每段 3 秒,MediaRemote 一慢这条路就永远拿不到
 /// 结果;两段加起来要留在 2 秒以内。正常一次约 120ms。
 static const int64_t kStateWaitMs = 900;
+/// watch 模式两次查询之间隔多久:在放时要尽快看到暂停;没在放时(暂停着可能一停几个小时)放慢。
+static const useconds_t kWatchIntervalUs = 250000;
+static const useconds_t kWatchIdleIntervalUs = 500000;
+/// App 内嵌网页的媒体由这个进程替它报(每个用到网页的 App 各有一个,按负责进程分)。
+static NSString *const kWebMediaBundleID = @"com.apple.WebKit.GPU";
 static const long kIncludeArtwork = 1;
 static const long kNoArtwork = 0;
 
@@ -110,17 +122,27 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
     return out;
 }
 
+/// 报这一份的进程号;拿不到为 0。
+static int clientPID(id client) {
+    SEL pidSel = sel_getUid("processIdentifier");
+    if (![client respondsToSelector:pidSel]) return 0;
+    return ((int (*)(id, SEL))objc_msgSend)(client, pidSel);
+}
+
+/// pid 替谁干活(见头注);拿不到为 0。
+static int responsiblePID(int pid) {
+    typedef int (*ResponsibleFn)(int);
+    ResponsibleFn responsible = (ResponsibleFn)dlsym(RTLD_DEFAULT, "responsibility_get_pid_responsible_for_pid");
+    return (responsible && pid > 0) ? responsible(pid) : 0;
+}
+
 /// 给整理好的一份带上进程号与负责进程(见头注)。拿不到就原样返回。
 static NSDictionary *withProcess(NSDictionary *one, id client) {
-    SEL pidSel = sel_getUid("processIdentifier");
-    if (![client respondsToSelector:pidSel]) return one;
-    int pid = ((int (*)(id, SEL))objc_msgSend)(client, pidSel);
+    int pid = clientPID(client);
     if (pid <= 0) return one;
     NSMutableDictionary *out = [one mutableCopy];
     out[@"processIdentifier"] = @(pid);
-    typedef int (*ResponsibleFn)(int);
-    ResponsibleFn responsible = (ResponsibleFn)dlsym(RTLD_DEFAULT, "responsibility_get_pid_responsible_for_pid");
-    int owner = responsible ? responsible(pid) : 0;
+    int owner = responsiblePID(pid);
     if (owner > 0) out[@"responsibleProcessIdentifier"] = @(owner);
     return out;
 }
@@ -174,6 +196,68 @@ static NSDictionary *playbackQueue(void *h, id client, long count) {
     return @{@"items": items};
 }
 
+/// watch 模式(见头注):进程号每一轮现找(那个 App 重启过也跟得上)。负责进程是它的 WebKit 媒体会话有好几份时在放的优先,
+/// 挑法同 App 的 `KasetPlayerInfo.webMedia`。
+/// 此刻进度(`elapsedTime`)每次都不一样,不输出。这一轮有哪一步没问到就不输出,别把没问到当成会话没了。父进程没了
+/// (被 launchd 收养)就退出。
+static void watchWebSession(GetClientsFn getClients, GetInfoForClientFn getInfo, NSString *ownerBundleID) {
+    NSString *last = nil;
+    BOOL playing = NO;
+    while (getppid() != 1) {
+        @autoreleasepool {
+            dispatch_semaphore_t s = dispatch_semaphore_create(0);
+            __block NSArray *clients = nil;
+            getClients(dispatch_get_global_queue(0, 0), ^(NSArray *cs) {
+                clients = cs;
+                dispatch_semaphore_signal(s);
+            });
+            BOOL answered = dispatch_semaphore_wait(s, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) == 0;
+            int owner = 0;
+            for (id c in (answered ? clients : nil)) {
+                id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
+                if ([bidObj isKindOfClass:NSString.class] && [bidObj isEqualToString:ownerBundleID]) owner = clientPID(c);
+            }
+            NSDictionary *pick = nil;
+            for (id c in ((answered && owner > 0) ? clients : nil)) {
+                id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
+                if (![bidObj isKindOfClass:NSString.class] || ![bidObj isEqualToString:kWebMediaBundleID]) continue;
+                if (responsiblePID(clientPID(c)) != owner) continue;
+                dispatch_semaphore_t s2 = dispatch_semaphore_create(0);
+                __block NSDictionary *info = nil;
+                getInfo((__bridge void *)c, NULL, kNoArtwork, dispatch_get_global_queue(0, 0), ^(CFDictionaryRef raw) {
+                    if (raw) info = (__bridge_transfer NSDictionary *)CFRetain(raw);
+                    dispatch_semaphore_signal(s2);
+                });
+                if (dispatch_semaphore_wait(s2, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) != 0) {
+                    answered = NO;
+                    break;
+                }
+                NSDictionary *one = normalize(info, bidObj);
+                if (one && (!pick || ([one[@"playing"] boolValue] && ![pick[@"playing"] boolValue]))) pick = one;
+            }
+            if (answered) {
+                playing = [pick[@"playing"] boolValue];
+                NSMutableDictionary *line = nil;
+                if (pick) {
+                    line = [NSMutableDictionary dictionary];
+                    for (NSString *key in @[@"playing", @"playbackRate", @"anchorElapsedTime", @"timestamp", @"duration"]) {
+                        if (pick[key]) line[key] = pick[key];
+                    }
+                }
+                NSData *d = line ? [NSJSONSerialization dataWithJSONObject:line options:NSJSONWritingSortedKeys error:NULL] : nil;
+                NSString *text = d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null";
+                if (![text isEqualToString:last]) {
+                    fputs(text.UTF8String, stdout);
+                    fputc('\n', stdout);
+                    fflush(stdout);
+                    last = text;
+                }
+            }
+        }
+        usleep(playing ? kWatchIntervalUs : kWatchIdleIntervalUs);
+    }
+}
+
 void nowplaying_clients(void *my_perl, void *cv) {
     @autoreleasepool {
         const char *want = getenv("LYRIMUSE_NOWPLAYING_BUNDLE");
@@ -181,11 +265,16 @@ void nowplaying_clients(void *my_perl, void *cv) {
         const long artFlag = (artEnv && artEnv[0] == '1') ? kIncludeArtwork : kNoArtwork;
         const char *queueEnv = getenv("LYRIMUSE_NOWPLAYING_QUEUE");
         const long queueCount = queueEnv ? atol(queueEnv) : 0;
+        const char *watchEnv = getenv("LYRIMUSE_NOWPLAYING_WATCH");
         void *h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
         if (!h) { emit(nil); return; }
         GetClientsFn getClients = (GetClientsFn)dlsym(h, "MRMediaRemoteGetNowPlayingClients");
         GetInfoForClientFn getInfo = (GetInfoForClientFn)dlsym(h, "MRMediaRemoteGetNowPlayingInfoForClient");
         if (!getClients || !getInfo) { emit(nil); return; }
+        if (watchEnv && watchEnv[0]) {
+            watchWebSession(getClients, getInfo, [NSString stringWithUTF8String:watchEnv]);
+            return;
+        }
 
         dispatch_semaphore_t s = dispatch_semaphore_create(0);
         __block NSArray *clients = nil;

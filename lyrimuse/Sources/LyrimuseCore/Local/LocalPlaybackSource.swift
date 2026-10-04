@@ -2012,6 +2012,8 @@ public final class LocalPlaybackSource: ObservableObject {
     // media-control 的事件流(QQ 音乐/网易云没有分布式通知,靠它)。见
     // MediaControlStreamWatcher —— 事件同样只当"提前 poll 一次"的信号。
     private var streamWatcher: MediaControlStreamWatcher?
+    /// Kaset 内嵌网页那份会话在不在放(见 KasetWebSessionWatcher),Kaset 是当前播放器时开着(`syncKasetWebWatch`)。
+    private var kasetWebWatcher: KasetWebSessionWatcher?
     // 通知去抖动:待触发的那次补查(收到新通知就取消重排)——见
     // handlePlayerInfoChanged() 的注释。
     private var pendingNotificationPoll: Task<Void, Never>?
@@ -2086,6 +2088,8 @@ public final class LocalPlaybackSource: ObservableObject {
         spotifyInfoObserver = nil
         streamWatcher?.stop()
         streamWatcher = nil
+        kasetWebWatcher?.watch(bundleID: nil)
+        kasetWebWatcher = nil
         AmazonMusicLogWatcher.onPlaybackEvent = nil
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = nil
@@ -2201,6 +2205,10 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         streamWatcher = watcher
         watcher.start()
+        // Kaset 不发通知,系统里它自己那份会话又常停在旧状态:盯它内嵌网页那份,暂停、恢复同样补查一次 poll()。
+        kasetWebWatcher = KasetWebSessionWatcher { [weak self] signal in
+            self?.handlePlayerInfoChanged(freezeExtrapolation: signal == .paused, stateSignal: true)
+        }
         // Amazon Music 拖动进度时系统 Now Playing 什么都不报,只有它的日志里有(见 AmazonMusicLogWatcher):日志里出了
         // 播放事件同样补查一次 poll()。
         AmazonMusicLogWatcher.onPlaybackEvent = { [weak self] pause in
@@ -2775,7 +2783,14 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 一轮 poll 收尾:放开单飞,期间有人要过就立刻补跑。
     private func finishPoll() {
+        syncKasetWebWatch()
         if pollFlight.finish() { poll() }
+    }
+
+    /// Kaset 是当前播放器(在放、暂停着都算)时盯着它内嵌网页那份会话,换了播放器、停了不盯。每拍轮询收尾调。
+    private func syncKasetWebWatch() {
+        let kaset = !title.isEmpty && lastSnapshot?.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier
+        kasetWebWatcher?.watch(bundleID: kaset ? PlaybackPlayer.kaset.bundleIdentifier : nil)
     }
 
     /// 最近一次被采用的那一轮的世代号。
