@@ -361,6 +361,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LastfmMirrorNotifier.shared.start()
         // Last.fm 账号跟 Spotify 的连接:设置里提示会不会重复记,排除了 Spotify 又过期时弹通知。
         LastfmSpotifyLinkMonitor.shared.start()
+        // 换歌时弹一条系统通知(默认关,设置 › 通用 › 通知)。点通知的分流在 UnknownPlayerNotifier 的 delegate。
+        NowPlayingNotifier.shared.start()
         // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口。原来这件事挂在
         // MenuBarExtra 的 label 上,随 MenuBarExtra 一起没了 —— 见该文件注释。
         MenuBarSceneActions.install()

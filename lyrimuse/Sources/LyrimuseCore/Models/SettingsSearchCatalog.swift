@@ -376,6 +376,7 @@ public enum SettingsSearchCatalog {
         general("在 Dock 中显示", kw: ["Dock", "程序坞", "图标"], group: "菜单栏与 Dock"),
         general("语言", kw: ["简体中文", "繁體中文", "English", "跟随系统", "界面语言"], group: "语言与启动"),
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
+        general("换歌时显示通知", kw: ["通知", "切歌", "换歌", "正在播放", "横幅", "系统通知"], group: "通知"),
         general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
         general("设置文件", sub: "含明文凭证；导入会覆盖全部设置并重启", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
         general("清除全部设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除", "清除所有设置"]),

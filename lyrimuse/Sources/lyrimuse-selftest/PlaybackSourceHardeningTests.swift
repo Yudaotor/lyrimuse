@@ -1,4 +1,6 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import LyrimuseCore
 
 // 播放源(LyrimuseCore/Local)审计之后的加固:轮询单飞、停播清理、焦点宽限的归类、最近记录的计次与拼页、
@@ -14,6 +16,7 @@ func runPlaybackSourceHardeningTests() {
     replayNoDurationFirstTick()
     wiringContracts()
     spotifyConnectMirrorTests()
+    nowPlayingNoticeTests()
 }
 
 // ---- 轮询单飞 ----
@@ -485,4 +488,91 @@ private func spotifyConnectMirrorTests() {
     expectEqual(ProcessAudioOutput.isRunningOutput(bundleID: ""), false, "进程音频输出: 空 bundle id 当没在输出")
     expectEqual(ProcessAudioOutput.isRunningOutput(bundleID: "me.yudaotor.lyrimuse.no-such-app"), false,
                 "进程音频输出: 没有这个进程对象当没在输出")
+}
+
+// ---- 换歌通知 ----
+
+@MainActor
+private func nowPlayingNoticeTests() {
+    typealias N = NowPlayingNotice
+    func announce(enabled: Bool = true, title: String = "晴天", isPlaying: Bool = true, isBreak: Bool = false,
+                  appIsActive: Bool = false, isFirstSighting: Bool = false, sinceStart: TimeInterval = 60) -> Bool {
+        N.shouldAnnounce(enabled: enabled, title: title, isPlaying: isPlaying, isBreak: isBreak,
+                         appIsActive: appIsActive, isFirstSighting: isFirstSighting, sinceStart: sinceStart)
+    }
+    expectEqual(announce(), true, "换歌通知: 开着、在放、换了一首 → 发")
+    expectEqual(announce(enabled: false), false, "换歌通知: 开关关着不发")
+    expectEqual(announce(title: ""), false, "换歌通知: 没有歌名不发")
+    expectEqual(announce(isPlaying: false), false, "换歌通知: 暂停着不发")
+    expectEqual(announce(isBreak: true), false, "换歌通知: 广告 / 电台口白不发")
+    expectEqual(announce(appIsActive: true), false, "换歌通知: Lyrimuse 自己在前台不发")
+    expectEqual(announce(isFirstSighting: true, sinceStart: 2), false, "换歌通知: 启动时已经在放的那首不算换歌")
+    expectEqual(announce(isFirstSighting: true, sinceStart: 120), true, "换歌通知: 启动一阵之后才放的第一首照发")
+    expectEqual(announce(isFirstSighting: false, sinceStart: 2), true, "换歌通知: 刚启动但已经换过一首了照发")
+
+    expectEqual(N.body(title: "晴天", artist: "周杰伦", album: "叶惠美"), "周杰伦 — 叶惠美", "换歌通知正文: 歌手 — 专辑")
+    expectEqual(N.body(title: "晴天", artist: "周杰伦", album: ""), "周杰伦", "换歌通知正文: 没有专辑只写歌手")
+    expectEqual(N.body(title: "Flowers", artist: "Miley Cyrus", album: "Flowers - Single"), "Miley Cyrus",
+                "换歌通知正文: 同名单曲不重复写专辑")
+    expectEqual(N.body(title: "Flowers", artist: "Miley Cyrus", album: "flowers"), "Miley Cyrus",
+                "换歌通知正文: 专辑就是歌名(不分大小写)不写")
+    expectEqual(N.body(title: "晴天", artist: "", album: "叶惠美"), "叶惠美", "换歌通知正文: 没有歌手只写专辑")
+    expectEqual(N.body(title: " 晴天 ", artist: " 周杰伦 ", album: " 叶惠美 "), "周杰伦 — 叶惠美", "换歌通知正文: 去掉首尾空白")
+
+    // 封面跟界面上显示的是同一张:高清替代优先;界面会换成高清替代时先等它,到时限手上有什么用什么。
+    func cover(highRes: Bool = false, settled: Bool = false, hasImage: Bool = false, seeks: Bool = false,
+               timedOut: Bool = false) -> N.CoverPick {
+        N.coverPick(highResArrived: highRes, systemSettled: settled, systemHasImage: hasImage, seeksHighRes: seeks,
+                    timedOut: timedOut)
+    }
+    expectEqual(cover(highRes: true, settled: true, hasImage: true), .highRes, "换歌通知封面: 高清替代到了就用它")
+    expectEqual(cover(highRes: true, seeks: true), .highRes, "换歌通知封面: 只有高清替代的播放器(Kaset),到了就用")
+    expectEqual(cover(settled: true, hasImage: true), .system, "换歌通知封面: 系统那份够用、不找替代,不等")
+    expectEqual(cover(settled: true), .noCover, "换歌通知封面: 系统判定这首没图、也不找替代,不等")
+    expectEqual(cover(), .wait, "换歌通知封面: 系统那份还没定案,等")
+    expectEqual(cover(seeks: true), .wait, "换歌通知封面: 要找高清替代、还没到,等")
+    expectEqual(cover(settled: true, hasImage: true, seeks: true), .wait, "换歌通知封面: 系统那份太小、高清替代还没到,等")
+    expectEqual(cover(settled: true, hasImage: true, seeks: true, timedOut: true), .system,
+                "换歌通知封面: 到时限高清替代没来,用系统那份")
+    expectEqual(cover(seeks: true, timedOut: true), .noCover, "换歌通知封面: 到时限什么都没有,不附图")
+    expectEqual(cover(hasImage: true, timedOut: true), .noCover, "换歌通知封面: 到时限系统那份还是上一首的,不附图")
+
+    // 封面文件:超过 600px 的等比缩到 600,小图不放大。
+    func written(width: Int, height: Int) -> (type: String, width: Int, height: Int)? {
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let image = ctx.makeImage() else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("np-cover-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard N.writeArtworkJPEG(image, to: url),
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let type = CGImageSourceGetType(source),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        return (type as String, w, h)
+    }
+    let large = written(width: 1800, height: 1200)
+    expectEqual(large?.type, "public.jpeg", "换歌通知封面文件: 写成 JPEG")
+    expectEqual(large.map { [$0.width, $0.height] }, [600, 400], "换歌通知封面文件: 大图等比缩到最长边 600")
+    expectEqual(written(width: 120, height: 120).map { [$0.width, $0.height] }, [120, 120],
+                "换歌通知封面文件: 小图不放大")
+
+    // 接线:启动时开始盯,点通知打开歌词窗口,封面跟界面同一口径。
+    let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    func code(_ path: String) -> String {
+        (try? String(contentsOfFile: sourcesRoot.appendingPathComponent(path).path, encoding: .utf8)) ?? ""
+    }
+    expectEqual(code("lyrimuse/AppDelegate.swift").contains("NowPlayingNotifier.shared.start()"), true,
+                "换歌通知: App 启动时开始盯")
+    let delegate = code("lyrimuse/Settings/UnknownPlayerNotifier.swift")
+    expectEqual(delegate.contains("== NowPlayingNotifier.categoryID") && delegate.contains("openLyricsWindow?()"), true,
+                "换歌通知: 点通知在 delegate 里分流到歌词窗口")
+    let notifier = code("lyrimuse/Settings/NowPlayingNotifier.swift")
+    expectEqual(notifier.contains("$highResArtworkImage") && notifier.contains("seeksHighResCover"), true,
+                "换歌通知: 封面盯着高清替代,跟界面同一口径")
+    let coordinator = code("lyrimuse/PlaybackCoordinator.swift")
+    expectEqual(coordinator.components(separatedBy: "CoverArtReplacementGate.reason(").count - 1, 1,
+                "换歌通知: 找不找高清替代只在一处判,界面和通知共用")
 }

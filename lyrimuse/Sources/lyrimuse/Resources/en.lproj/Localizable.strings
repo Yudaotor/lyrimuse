@@ -139,6 +139,7 @@
 "「%@」已经是内置播放器了，在上面那张「播放器」卡里勾选它就行。" = "“%@” is already a built-in player — just tick it in the Players card above.";
 "「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻" = "\"Play #N\" merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play";
 "「系统设置 › 通用 › 登录项」里关掉了 Lyrimuse，要开机启动得在那里重新打开" = "Lyrimuse is turned off in System Settings › General › Login Items. Turn it back on there to open at login";
+"「系统设置 › 通知」里关掉了 Lyrimuse 的通知，要在那里重新打开" = "Notifications for Lyrimuse are turned off in System Settings › Notifications. Turn them back on there";
 "「自动」选带刘海的那块；「全部屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」" = "“Automatic” picks the display with the notch; “All Displays” shows one on every display; if the chosen display is unplugged it falls back to Automatic";
 "「自动识别」开着时会认出所有已知和你信任过的播放器，上面的勾选暂不生效。想只认其中几个，取消勾选它。" = "“Auto-detect” recognizes every known and trusted player, so the checkboxes above have no effect right now. Untick it to recognize only the ones you pick";
 "一" = "M";
@@ -786,6 +787,8 @@
 "换一句" = "Another line";
 "换个筛选条件或关键词试试" = "Try different filters or search terms.";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
+"换歌时弹一条系统通知：封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
+"换歌时显示通知" = "Notify When the Song Changes";
 "换歌时，耳朵里的封面翻一下，新歌名从刘海里掉出来停几秒；开着歌词行时歌名落在歌词行上。同一张专辑的下一首只掉歌名、不翻。" = "When the track changes, the cover in the ear flips over and the new title drops out of the notch for a few seconds; with the lyric row on, the title lands on the lyric row. The next track from the same album only drops the title, without the flip.";
 "换歌翻牌" = "Track Change Flip";
 "换行" = "Wrap";
@@ -1602,6 +1605,7 @@
 "逐行歌词" = "Line-by-line";
 "逐首联网搜索，每首间隔约 5 秒；会跳过纯音乐和手动修正过的歌词" = "Searches one song at a time, about 5 seconds apart. Instrumentals and manually corrected lyrics are skipped.";
 "通用" = "General";
+"通知" = "Notifications";
 "通知平台" = "Notification Platform";
 "那天最后一次：%@" = "Last played that day: %@";
 "那年今日" = "On This Day";

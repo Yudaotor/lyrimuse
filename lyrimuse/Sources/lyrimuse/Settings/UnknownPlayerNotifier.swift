@@ -306,6 +306,13 @@ extension UnknownPlayerNotifier: UNUserNotificationCenterDelegate {
             Logger(subsystem: "me.yudaotor.lyrimuse", category: "notify")
                 .notice("suppress-lyrics flag set")
         }
+        // 换歌通知:点正文打开歌词窗口。
+        if response.notification.request.content.categoryIdentifier == NowPlayingNotifier.categoryID {
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                await MainActor.run { AppActions.shared.openLyricsWindow?() }
+            }
+            return
+        }
         // 补搜 / 全量扫库的收尾通知:点正文打开歌词管理,结果就在那里(系统只允许一个 delegate,在这里分流)。
         if response.notification.request.content.categoryIdentifier == LyricsSweepNotifier.categoryID {
             if response.actionIdentifier == UNNotificationDefaultActionIdentifier {

@@ -1539,6 +1539,22 @@ final class PlaybackCoordinator: ObservableObject {
     /// 也替,判定收在 `CoverArtReplacementGate`,来历见 highResArtworkImage 的注释。
     private static let lowResArtworkThreshold = 300
 
+    /// 系统这份封面要不要找高清替代(nil = 不找),判据见 `CoverArtReplacementGate.reason`。
+    /// `refreshHighResCover` 和 `seeksHighResCover` 共用这一处。
+    private static func highResReplacementReason(systemSize: (width: Int, height: Int),
+                                                 bundleID: String?) -> CoverArtReplacementGate.Reason? {
+        CoverArtReplacementGate.reason(
+            width: systemSize.width, height: systemSize.height, lowResThreshold: lowResArtworkThreshold,
+            systemNeverHasArtwork: CoverArtReplacementGate.systemNeverHasArtwork(bundleID: bundleID))
+    }
+
+    /// 界面上的封面会不会换成高清替代:系统那份太小、不是封面的形状,或播放器从不报封面。换歌通知按它决定
+    /// 要不要等高清替代到货。
+    var seeksHighResCover: Bool {
+        Self.highResReplacementReason(systemSize: CoverArtReplacementGate.pixelSize(of: artworkData),
+                                      bundleID: LocalPlaybackSource.shared.lastResolvedBundleID) != nil
+    }
+
     private var highResCoverTask: Task<Void, Never>?
     /// Spotify 原生客户端「同一张图的原图档」那条替代路(见 refreshSpotifyOriginalCover)。
     private var spotifyCoverTask: Task<Void, Never>?
@@ -1583,10 +1599,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 匹配到的另一张图;从不往系统里报封面的播放器除外,见 CoverArtReplacementGate.systemNeverHasArtwork)就不动。
         // 「不是封面的形状」(YouTube Music MV 的 16:9 视频缩略图)跟「太小」一样要找替代,两条
         // 的后续接受判据不同,见 CoverArtReplacementGate.accepts。
-        let neverHasArtwork = CoverArtReplacementGate.systemNeverHasArtwork(bundleID: s.lastResolvedBundleID)
-        guard let reason = CoverArtReplacementGate.reason(width: systemSize.width, height: systemSize.height,
-                                                          lowResThreshold: Self.lowResArtworkThreshold,
-                                                          systemNeverHasArtwork: neverHasArtwork) else {
+        guard let reason = Self.highResReplacementReason(systemSize: systemSize, bundleID: s.lastResolvedBundleID) else {
             clearHighRes()
             return
         }

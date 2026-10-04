@@ -204,6 +204,8 @@ final class AppSettings: ObservableObject {
         static let quitWithPlayers = "np:quitWithPlayers"
         static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
+        // 换歌时弹一条系统通知(NowPlayingNotifier)。
+        static let nowPlayingNotifications = "np:nowPlayingNotifications"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
@@ -441,6 +443,8 @@ final class AppSettings: ObservableObject {
     static let defaultNotchListenMilestones = true
     /// 默认开:换歌时耳朵里的封面翻一下,新歌名从刘海里掉出来停几秒。
     static let defaultNotchTrackChangeFlip = true
+    /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
+    static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
     /// 动态封面(Apple Music 的 motion artwork)默认**开**。
     ///
@@ -684,6 +688,10 @@ final class AppSettings: ObservableObject {
             defaults.set(showInDock, forKey: Keys.showInDock)
             NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         }
+    }
+    /// 换歌时弹一条系统通知(`NowPlayingNotifier`,投递时现读)。通知授权由设置页打开开关时请求。
+    @Published var nowPlayingNotifications: Bool {
+        didSet { defaults.set(nowPlayingNotifications, forKey: Keys.nowPlayingNotifications) }
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
@@ -1776,6 +1784,8 @@ final class AppSettings: ObservableObject {
             .compactMap(PlaybackPlayer.init(rawValue:)))
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
+        nowPlayingNotifications = (defaults.object(forKey: Keys.nowPlayingNotifications) as? Bool)
+            ?? Self.defaultNowPlayingNotifications
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)

@@ -36603,6 +36603,98 @@
           }
         }
       }
+    },
+    "通知" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
+          }
+        }
+      }
+    },
+    "换歌时显示通知" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notify When the Song Changes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换歌时显示通知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換歌時顯示通知"
+          }
+        }
+      }
+    },
+    "换歌时弹一条系统通知：封面、歌名、歌手和专辑" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show a system notification with the artwork, title, artist and album when a new song starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换歌时弹一条系统通知：封面、歌名、歌手和专辑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換歌時彈出一則系統通知：封面、歌名、歌手和專輯"
+          }
+        }
+      }
+    },
+    "「系统设置 › 通知」里关掉了 Lyrimuse 的通知，要在那里重新打开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications for Lyrimuse are turned off in System Settings › Notifications. Turn them back on there"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「系统设置 › 通知」里关掉了 Lyrimuse 的通知，要在那里重新打开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「系統設定 › 通知」裡關掉了 Lyrimuse 的通知，要在那裡重新打開"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

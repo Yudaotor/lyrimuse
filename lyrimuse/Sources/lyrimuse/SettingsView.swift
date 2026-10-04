@@ -5675,6 +5675,8 @@ private struct GeneralSettingsTab: View {
     @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
     /// 系统「登录项」里被用户关掉了(见 `LoginItemManager.needsApproval`)。
     @State private var loginItemNeedsApproval = false
+    /// 系统通知授权被拒(「换歌时显示通知」开着时在那一行下面说去哪打开)。
+    @State private var nowPlayingNotificationsDenied = false
     @State private var iCloudBusy = false
     @State private var iCloudMessage: String?
     /// 「设置文件」那一行的提示通道(导入失败 / 导出失败 / 清理结果)。
@@ -5798,6 +5800,39 @@ private struct GeneralSettingsTab: View {
             // 用户去系统设置里改完切回来,开关和提示当场跟上。
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 refreshLoginItemState()
+            }
+
+            SettingsCard {
+                SettingsCardHeader(title: L10n.t("通知"))
+                CardDivider()
+                SettingsRow(
+                    icon: "bell.badge",
+                    title: L10n.t("换歌时显示通知"),
+                    help: L10n.t("换歌时弹一条系统通知：封面、歌名、歌手和专辑")
+                ) {
+                    Toggle("", isOn: $settings.nowPlayingNotifications)
+                }
+                if settings.nowPlayingNotifications, nowPlayingNotificationsDenied {
+                    SettingsNote {
+                        Text(L10n.t("「系统设置 › 通知」里关掉了 Lyrimuse 的通知，要在那里重新打开"))
+                        Button(L10n.t("打开系统设置")) {
+                            if let url = URL(string:
+                                "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+            }
+            .onAppear { refreshNotificationState() }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                refreshNotificationState()
+            }
+            .onChange(of: settings.nowPlayingNotifications) { _, on in
+                Task {
+                    await NowPlayingNotifier.shared.enabledChanged(on)
+                    refreshNotificationState()
+                }
             }
 
             // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+ features.json +
@@ -6201,6 +6236,11 @@ private struct GeneralSettingsTab: View {
     private func refreshLoginItemState() {
         settings.syncLaunchAtLoginFromSystem()
         loginItemNeedsApproval = LoginItemManager.shared.needsApproval
+    }
+
+    /// 通知授权被拒了没有。系统不推这个变化,所以出现时、切回 App 时、打开开关之后各查一次。
+    private func refreshNotificationState() {
+        Task { nowPlayingNotificationsDenied = await UnknownPlayerNotifier.authorizationStatus() == .denied }
     }
 
     /// 「从文件导入…」:开面板选一个配置包。内容抽成函数而不是内联在按钮闭包里,那一行
