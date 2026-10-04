@@ -361,6 +361,9 @@ func main() {
 	// 酷狗逐字里漏转的负偏移标记(见 krcnegativeoffsets.go),同样排在空白词条归并之前。
 	startupStep("migrateKRCNegativeOffsets", migrateKRCNegativeOffsets)
 	startupStep("migrateYRCWhitespaceTokens", migrateYRCWhitespaceTokens)
+	// 重音字母旁多切的空格(见 accentsplit.go)。同样夹在 import 与 export 之间、排在 migrateManualPickMarks 之前;
+	// 必须排在空白词条归并之后。
+	startupStep("migrateAccentSplits", migrateAccentSplits)
 	// 行级时间轴与逐字轴打架时以逐字轴为准重挂(见 lyricstimeline.go)。
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。

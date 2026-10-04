@@ -94,6 +94,8 @@ func runSearchLyricsCLI(args []string) {
 		// 决策对不上。 这条 CLI **只读不写**这份缓存(整条搜索链路不碰 commitEnrichEntry),
 		// 不会跟常驻引擎抢写同一个文件。
 		loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))
+		// 重音字母旁多切空格的第二级证据,跟常驻引擎一样从这份缓存建(见 accentsplit.go)。
+		refreshAccentCacheWords()
 		// 补:main 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
 		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSources 一直是空集,
 		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。

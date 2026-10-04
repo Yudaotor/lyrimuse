@@ -4023,6 +4023,8 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	for _, s := range ordered {
 		cands = append(cands, lyricCandidateFromScored(chosen[s]))
 	}
+	// 重音字母旁多切的空格,同 rankLyricSourceResults(见 accentsplit.go)。修的是 cands,下面打分时写回结果。
+	repairCandidateAccentSplits(cands)
 	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
 	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
 	corroborated := corroboratedEndings(cands, durationSecs)
@@ -4035,6 +4037,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	hasRealFromMarkerSource := false
 	for i, s := range ordered {
 		r := chosen[s]
+		r.Lyrics, r.LyricsYRC = cands[i].lyrics, cands[i].wordTimingYRC
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, cands[i], corroborated[s], len(consensusPeers[s]))
 		r.ConsensusPeers = consensusPeers[s]
@@ -4400,6 +4403,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			title:                 amllTitle, artist: amllArtist, album: amllAlbum, cover: amllCover,
 		})
 	}
+	// 重音字母旁多切的空格,拿整批候选与缓存里见过的拼法证实之后删掉(见 accentsplit.go)。只删空格、不动时间轴。
+	repairCandidateAccentSplits(candidates)
 	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
 	// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
 	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
