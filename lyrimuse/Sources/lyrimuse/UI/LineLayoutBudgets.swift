@@ -25,15 +25,13 @@ final class LineLayoutBudgets {
         let s = AppSettings.shared
         // 闭包里只用参数,别回头读 AppSettings:@Published 在 willSet 时发布,那一刻存储属性还是旧值。
         subs = [
-            Publishers.CombineLatest4(s.$overlayWidth, s.$overlayNSFonts, s.$textStrokeEnabled,
-                                      s.$overlayDuetAlignmentOverride)
+            Publishers.CombineLatest3(s.$overlayWidth, s.$overlayNSFonts, s.$textStrokeEnabled)
                 .combineLatest(Publishers.CombineLatest3(s.$showTranslation, s.$showRomanization,
                                                          s.$showNextLinePreview))
                 .sink { a, b in
-                    let (width, fonts, stroke, duetOverride) = a
+                    let (width, fonts, stroke) = a
                     let (translation, romanization, preview) = b
-                    Self.reportOverlay(width: CGFloat(width), fonts: fonts, stroke: stroke,
-                                       sided: duetOverride == .automatic, translation: translation,
+                    Self.reportOverlay(width: CGFloat(width), fonts: fonts, stroke: stroke, translation: translation,
                                        romanization: romanization, preview: preview)
                 },
             Publishers.CombineLatest4(s.$menuBarLyricsWidth, s.$menuBarLyricsFontFamily,
@@ -64,9 +62,9 @@ final class LineLayoutBudgets {
 
     private static func fontKey(_ font: NSFont) -> [AnyHashable] { [font.fontName, font.pointSize] }
 
-    /// 悬浮歌词:每一行的宽 = 窗宽 − 卡片两侧内边距 − 描边两侧预留;对唱行再让出演唱者标记。下一句换人唱时
-    /// 用主行字号(nextLinePreviewFont),所以按主行和预览两种字号里宽的那个量。
-    private static func reportOverlay(width: CGFloat, fonts: OverlayNSFonts, stroke: Bool, sided: Bool,
+    /// 悬浮歌词:每一行的宽 = 窗宽 − 卡片两侧内边距 − 描边两侧预留。对唱行的声部指示条挂在内边距里,不占这份宽
+    /// (见 04 章决策 40)。下一句换人唱时用主行字号(nextLinePreviewFont),所以按主行和预览两种字号里宽的那个量。
+    private static func reportOverlay(width: CGFloat, fonts: OverlayNSFonts, stroke: Bool,
                                       translation: Bool, romanization: Bool, preview: Bool) {
         let strokeInset = stroke ? LyricsTextStrokeMetrics.inset : 0
         let rowWidth = width - OverlayMetrics.cardHorizontalPadding * 2 - strokeInset * 2 - safety
@@ -74,11 +72,10 @@ final class LineLayoutBudgets {
         let previewMeasure = measurer(fonts.preview)
         let key: [AnyHashable] = [LyricsSurface.overlay, (rowWidth * 2).rounded(), fontKey(fonts.main),
                                   fontKey(fonts.preview), fontKey(fonts.translation), fontKey(fonts.romanization),
-                                  stroke, sided, translation, romanization, preview]
+                                  stroke, translation, romanization, preview]
         report(.overlay, LineLayoutBudget(
             key: key,
             main: .init(maxWidth: rowWidth, measure: main),
-            sidedInset: sided ? OverlayMetrics.speakerIndicatorWidth : 0,
             preview: preview ? .init(maxWidth: rowWidth, measure: { max(main($0), previewMeasure($0)) }) : nil,
             translation: translation ? .init(maxWidth: rowWidth, measure: measurer(fonts.translation, translation: true)) : nil,
             romanization: romanization ? .init(maxWidth: rowWidth, measure: measurer(fonts.romanization)) : nil,

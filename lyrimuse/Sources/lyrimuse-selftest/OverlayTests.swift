@@ -357,8 +357,8 @@ func runOverlayTests() {
             expectEqual(O.trailing.effectiveAlignmentSide(realSide: real), .trailing,
                         "覆盖-右对齐: 对齐值恒为右(real=\(String(describing: real)))")
         }
-        // 核心安全约束:非自动时装饰值(两侧内缩+声部指示圆点用)必须恒为 nil——
-        // 否则"左对齐"这种覆盖会让完全没有对唱标记的普通歌也冒出内缩和圆点,那不是
+        // 核心安全约束:非自动时装饰值(两侧内缩+声部指示条用)必须恒为 nil——
+        // 否则"左对齐"这种覆盖会让完全没有对唱标记的普通歌也冒出内缩和指示条,那不是
         // issue 要的效果(见 OverlayDuetAlignmentOverride 声明处注释)。
         for override in [O.center, O.leading, O.trailing] {
             for real: LyricDuet.Side? in [nil, D.leading, D.trailing, D.center] {
@@ -382,10 +382,18 @@ func runOverlayTests() {
         // = OverlayPlayback.cardHorizontalPadding(那个常量在 App target 里,core 侧拿不到)。
         let pad: CGFloat = 20
 
-        // 卡片内缩:左右声部不留远侧空白 —— 贴着文字那一侧已经有圆点+竖线标出是哪一边,
+        // 声部指示条挂在卡片左右内边距里(见 04 章决策 40):外沿加描边那圈(1.2)小于内边距,舞台缩进为 0 时
+        // 也整根落在窗口里;高约字号一半,最矮 8。
+        let bar = G.SpeakerBar.self
+        expectEqual(bar.reach + 1.2 < pad, true, "声部指示条: 外沿加描边落在卡片内边距里")
+        expectEqual(bar.height(fontSize: 34), 16, "声部指示条: 34 号字高 16")
+        expectEqual(bar.height(fontSize: 14), 8, "声部指示条: 小字号最矮 8")
+        expectEqual(bar.height(fontSize: 64) > bar.height(fontSize: 34), true, "声部指示条: 字号越大竖条越高")
+
+        // 卡片内缩:左右声部不留远侧空白 —— 文字靠边那一侧的外面已经挂着指示条标出是哪一边,
         // 不需要再靠留白区分。nil = 没有对唱信息(普通歌的每一行、对唱歌第一个标记之前的
         // 前奏、非自动的「对齐方式」覆盖)——两侧恒为 0,普通歌排版逐像素不变。合唱没有
-        // 圆点标记,两侧仍留 unit。
+        // 指示条,两侧仍留 unit。
         expectEqual(G.cardInsets(for: nil, unit: unit).leading, 0, "卡片内缩: 无声部时左侧 0")
         expectEqual(G.cardInsets(for: nil, unit: unit).trailing, 0, "卡片内缩: 无声部时右侧 0")
         expectEqual(G.cardInsets(for: D.leading, unit: unit).leading, 0, "卡片内缩: 左声部近侧不留")
@@ -465,7 +473,7 @@ func runOverlayTests() {
         expectEqual(unit, 124, "对唱舞台: 合唱用的内缩是 4 字宽封顶的 124")
         let stage = G.duetStageInset(availableWidth: 1360, fontSize: 31)
 
-        // 舞台进 cardInsets:近侧 = 舞台让出的量,远侧不再留白(圆点标记已经够用);合唱
+        // 舞台进 cardInsets:近侧 = 舞台让出的量,远侧不再留白(指示条已经够用);合唱
         // 本来就居中、不需要舞台,两侧仍是 unit;nil(普通歌 / 前奏 / 覆盖生效)恒 0。
         expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).leading, stage, "对唱舞台: 左声部近侧缩进舞台让出的量")
         expectEqual(G.cardInsets(for: D.leading, unit: unit, stageInset: stage).trailing, 0, "对唱舞台: 左声部远侧不再留白")

@@ -14,7 +14,7 @@ func resegmentBenchmark(bodiesDir: String, stride step: Int) {
     let ro = NSFont.systemFont(ofSize: 34 * 0.65, weight: .medium)
     let budgets: [(LyricsSurface, LineLayoutBudget)] = [
         (.overlay, LineLayoutBudget(
-            key: "o", main: row(606, .systemFont(ofSize: 34, weight: .bold)), sidedInset: 22,
+            key: "o", main: row(606, .systemFont(ofSize: 34, weight: .bold)),
             preview: row(606, .systemFont(ofSize: 34 * 0.7, weight: .medium)),
             translation: row(606, .systemFont(ofSize: 34 * 0.7, weight: .regular)),
             romanization: row(606, ro),

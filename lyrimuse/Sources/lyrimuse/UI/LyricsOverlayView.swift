@@ -4,10 +4,9 @@ import LyrimuseCore
 
 /// 悬浮歌词卡片的尺寸常量。放在非泛型类型上,卡片外的代码(LineLayoutBudgets)也能引用。
 enum OverlayMetrics {
-    /// lyricsCard 的水平内边距。算可用宽度要减掉它。
+    /// lyricsCard 的水平内边距。算可用宽度要减掉它。对唱行的声部指示条挂在这里面
+    /// (`OverlayCardGeometry.SpeakerBar.reach` 加描边那圈要比它小)。
     static let cardHorizontalPadding: CGFloat = 20
-    /// 对唱行文字前(后)那截演唱者标记的宽:dot(6) + 间距(7) + 竖线(2) + 间距(7)。
-    static let speakerIndicatorWidth: CGFloat = 6 + 7 + 2 + 7
 }
 
 /// 悬浮歌词的**窄订阅代理**(性能审计落地,照「歌词管理」LiveRowPlayback 的
@@ -364,22 +363,6 @@ struct OverlayPreviewLine {
     var nextLineText: String?
 }
 
-/// 对唱声部指示(圆点 + 细竖线)的两个几何常量。
-///
-/// 单独抽成一个类型、而不是留在 `LyricsOverlayView` 里当 `private static let`:那个视图
-/// 泛型化之后(见 `OverlayChromeSource`),Swift 不允许泛型类型持有 static
-/// **存储**属性。数值和取舍一个字没变,只是换了个落脚点。
-private enum OverlaySpeakerIndicator {
-    /// 指示条的固定高度——若跟着这一行的完整高度撑满(`.frame(maxHeight: .infinity)`),
-    /// 主行字号越大越显眼、喧宾夺主;固定小尺寸只当一个不起眼的"这里有对唱"边角标记,
-    /// 不管主行还是更小号的下一句预览,视觉分量都一样克制。
-    static let barHeight: CGFloat = 12
-    /// dot(6) + 间距(7) + 竖线(2) + 间距(7) = 22pt —— `withSpeakerIndicator` 摆在文字
-    /// 前面那一截的固定宽度,`speakerIndicatorInset(side:)` 要拿同一份值给罗马音/译文
-    /// 补留白,两处必须**完全**一致(否则又是一次没对齐)。
-    static let width = OverlayMetrics.speakerIndicatorWidth
-}
-
 /// 控制排横向落点用的声部快照 —— 指针压在按钮上的那段时间里冻住不动。
 ///
 /// 为什么要冻(跟"控制排跟着歌词换边"同一次改动):对唱歌逐句换人唱时歌词
@@ -703,8 +686,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (nil = 没有演唱者标记的普通歌,兜底居中);非自动模式下**每一行**(不管有没有
     /// 真实声部信息)都固定成用户选的那个方向。
     ///
-    /// 不要把这个值传进 withSpeakerIndicator/speakerIndicatorInset/duetInsets——
-    /// 那三处要的是"要不要展示对唱装饰",跟"往哪边对齐"是两件事,非自动模式下前者必须
+    /// 不要把这个值传进 withSpeakerIndicator/duetInsets——
+    /// 那两处要的是"要不要展示对唱装饰",跟"往哪边对齐"是两件事,非自动模式下前者必须
     /// 保持关闭(见 duetDecorationSide)。
     private var duetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: line?.side)
@@ -719,9 +702,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
     }
 
-    /// 对唱装饰(两侧内缩 + 声部指示圆点)该用哪个声部——跟上面两个"对齐方向"用的值是
+    /// 对唱装饰(两侧内缩 + 声部指示条)该用哪个声部——跟上面两个"对齐方向"用的值是
     /// 两件事:自动模式下原样等价(nil 兜底成 .center,装饰照旧不出现);**非自动模式下
-    /// 强制视为没有对唱信息**,不管真实声部是什么,两侧内缩归零、指示圆点不显示。
+    /// 强制视为没有对唱信息**,不管真实声部是什么,两侧内缩归零、指示条不显示。
     ///
     /// 这是 issue 里"始终保持在同一个位置"真正需要的那一半:光把上面两个对齐值锁死,
     /// 留着这两处装饰继续按真实声部算,文字块还是会因为内缩量变化而轻微跳(见
@@ -755,14 +738,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `controlsInsets` 两处都读它,别只改一处。
     private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }
 
-    /// 这张卡里最宽的那一行**不换行的话要多宽**(含声部圆点占掉的那一截)。
+    /// 这张卡里最宽的那一行**不换行的话要多宽**。声部指示条挂在文字外面,不算在内。
     ///
     /// 直接量文字,不经过布局(见 `OverlayNaturalWidth` 头注:在自定义 `Layout` 里对整棵
     /// 卡片子树发无约束试探,会让主歌词行真的按"不换行"摆出来、冲出卡片被窗口裁掉)。
     /// 四行都要量:留白是加在整块上的,只顾主行的话译文/下一句会替它提前折行。
     private var cardNaturalWidth: CGFloat {
         let fonts = playback.overlayNSFonts
-        let indicator = speakerIndicatorInset(side: duetDecorationSide)
         let strokeInset = playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0
         var widest: CGFloat = 0
         // 主行跟断句判「放不放得下」同一个量法(`LyricsSegmenter.mainWidth`:逐词相加与整串取大,逐词读音按组量,
@@ -780,13 +762,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         widest = max(widest, OverlayNaturalWidth.width(translationRowText, font: fonts.translation, translation: true))
         if playback.showNextLinePreview {
             // 下一句预览换人唱时会放大到主字号(见 nextLinePreviewFont),量宽要跟着换。
-            let previewFont = nextLinePreviewFont == playback.mainFont ? fonts.main : fonts.preview
-            widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: previewFont))
+            widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: nextLinePreviewNSFont))
         }
         guard widest > 0 else { return 0 }
         // 每一行四周都留着描边那圈(开着时各 `LyricsTextStrokeMetrics.inset`),排版要占这么宽:漏算的话留白正好把这一截
         // 吃掉,贴满一行的句子末尾一个字折到下一行。
-        return widest + strokeInset * 2 + indicator.leading + indicator.trailing
+        return widest + strokeInset * 2
     }
 
     /// 两侧留白**这一行实际用上了多少**,0…1。判据与取舍见
@@ -843,6 +824,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return playback.mainFont
     }
 
+    /// `nextLinePreviewFont` 的 AppKit 孪生:量宽、定指示条的高和位置都用它,跟 `nextLinePreviewFont` 逐条一致。
+    private var nextLinePreviewNSFont: NSFont {
+        nextLinePreviewFont == playback.mainFont ? playback.overlayNSFonts.main : playback.overlayNSFonts.preview
+    }
+
     private func horizontalAlignment(for side: LyricDuet.Side) -> HorizontalAlignment {
         switch side {
         case .leading: return .leading
@@ -871,60 +857,33 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     private var duetTextAlignment: TextAlignment { textAlignment(for: duetSide) }
 
-    /// 给一段已经在正确一侧对齐好的对唱内容,在文字贴边的那一侧叠一枚圆点+细竖线,
-    /// 用**跟这段文字同一个颜色**——固定的蓝/粉两色跟"身份"绑定,会跟主题脱钩、跟用户
-    /// 自己的配色主题不搭。改用调用方传入的 `color`——调用方直接传这一行文字实际在用的
-    /// `displayForegroundColor`(含它自己的不透明度,下一句预览天生更淡,指示条跟着一起
-    /// 淡,不会比自己贴着的文字更抢眼)。识别"谁在唱"现在纯靠**位置**(先出现的贴左、
-    /// 第二位贴右,跟 LyricDuet.sides 的定边顺序一致),不再靠色相区分。
+    /// 对唱行在文字靠边那一侧的外面挂一根细竖条,标出这句是哪一边在唱(见 04 章决策 40)。竖条用 overlay 挂上去、
+    /// 往外偏 `SpeakerBar.reach`,落在卡片左右内边距里,不参与排版:文字、罗马音、译文能用的宽度跟没有对唱信息时
+    /// 一样,断句预算也不为它让宽。
     ///
-    /// side 为 `.center` 时(没有对唱信息,或者真的是合唱)原样返回 content,不包一层
-    /// 容器——普通歌的排版必须逐像素不变,这是这份文件里反复出现的纪律(两侧内缩/nil
-    /// 兜底都是同一条,见 duetInsets 的注释)。合唱不属于任何一侧,不该有边角标记。
+    /// 颜色跟这一行字同色(`displayForegroundColor`),`opacity` 给下一句预览那份更淡的;描边开着时竖条外面也套
+    /// 一圈描边色,跟字一样在什么桌面上都看得见。竖条对着第一行字的中线(`font` 是这一行用的字号),折成几行只标
+    /// 第一行。
     ///
-    /// 圆点+竖线摆在**文字所在的那一侧**(leading 摆左、trailing 摆右),不是固定摆
-    /// 左边——这样无论这一行贴哪一边,指示都紧挨着文字,跟着一起换边。
-    /// dot(6) + 间距(7) + 竖线(2) + 间距(7) = 22pt——withSpeakerIndicator 摆在文字前面
-    /// 那一截固定宽度,给 speakerIndicatorInset(side:) 用,geometry 必须跟下面那份完全
-    /// 一致(否则又是一次没对齐)。见 OverlaySpeakerIndicator。
-
-    /// 给罗马音/译文用:补上跟 withSpeakerIndicator 同一份几何值的留白,但不画圆点+竖线。
-    ///
-    /// 主歌词、罗马音、
-    /// 译文三行共享同一个 `VStack(alignment: duetAlignment)`,VStack 按每个子视图各自的
-    /// **frame** 左边缘对齐——主歌词那一支被 `withSpeakerIndicator` 包了一层 HStack(圆点+
-    /// 竖线+文字),这个 HStack 的左边缘是圆点,不是文字本身;罗马音/译文没有这层包装,
-    /// 左边缘就是文字本身。于是罗马音/译文的文字比主歌词的文字整体靠左了 22pt(圆点+竖线+
-    /// 两段间距的宽度)——普通歌(side 恒为 nil)不受影响,只有对唱歌才会看见。
-    ///
-    /// 不给罗马音/译文也画一个圆点(信息重复,一行歌词配三个圆点没有意义),而是照抄同一份
-    /// 几何值当 padding 补上,让三行文字的**文字本身**(不是容器)左边缘对齐。.center 两侧
-    /// 都是 0,跟 withSpeakerIndicator 对 .center 不包容器是同一条纪律——没有对唱信息时
-    /// 排版必须逐像素不变。参数跟 withSpeakerIndicator 一样收**已经把 nil 兜底过**的
-    /// `LyricDuet.Side`(调用点传 duetSide,不是原始的 currentLine?.side)。
-    private func speakerIndicatorInset(side: LyricDuet.Side) -> (leading: CGFloat, trailing: CGFloat) {
-        switch side {
-        case .leading: return (OverlaySpeakerIndicator.width, 0)
-        case .trailing: return (0, OverlaySpeakerIndicator.width)
-        case .center: return (0, 0)
-        }
-    }
-
+    /// side 为 `.center`(没有对唱信息,或者合唱)时原样返回 content:普通歌的排版必须逐像素不变,合唱不属于任何
+    /// 一边。调用点传**装饰声部**(`duetDecorationSide` / `nextLineDecorationSide`),不是对齐方向。
     @ViewBuilder
-    private func withSpeakerIndicator<V: View>(side: LyricDuet.Side, color: Color, @ViewBuilder content: () -> V) -> some View {
+    private func withSpeakerIndicator<V: View>(side: LyricDuet.Side, font: NSFont, opacity: Double,
+                                               @ViewBuilder content: () -> V) -> some View {
         if side != .center {
-            let dot = Circle().fill(color).frame(width: 6, height: 6)
-            let bar = Capsule().fill(color.opacity(0.55)).frame(width: 2, height: OverlaySpeakerIndicator.barHeight)
-            HStack(spacing: 7) {
-                if side == .leading {
-                    dot
-                    bar
-                    content()
-                } else {
-                    content()
-                    bar
-                    dot
-                }
+            let height = OverlayCardGeometry.SpeakerBar.height(fontSize: font.pointSize)
+            let reach = OverlayCardGeometry.SpeakerBar.reach
+            content().overlay(alignment: side == .leading ? .topLeading : .topTrailing) {
+                Capsule()
+                    .fill(playback.displayForegroundColor)
+                    .frame(width: OverlayCardGeometry.SpeakerBar.width, height: height)
+                    .background {
+                        if playback.textStrokeEnabled {
+                            Capsule().fill(playback.textStrokeColor).padding(-LyricsTextStrokeMetrics.inset)
+                        }
+                    }
+                    .opacity(opacity)
+                    .offset(x: side == .leading ? -reach : reach, y: (playback.scrollRowHeight(font) - height) / 2)
             }
         } else {
             content()
@@ -1240,7 +1199,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     private var lyricsCardContent: some View {
         VStack(alignment: duetAlignment, spacing: 4) {
-            withSpeakerIndicator(side: duetDecorationSide, color: playback.displayForegroundColor) {
+            withSpeakerIndicator(side: duetDecorationSide, font: playback.overlayNSFonts.main, opacity: 1) {
                 reportingMainLineRect(mainLine)
             }
             // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
@@ -1320,13 +1279,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                               color: playback.displayForegroundColor.opacity(0.6), alignment: duetSide,
                               height: playback.scrollRowHeight(playback.overlayNSFonts.romanization),
                               window: window))
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let roma = romanizationRowText, rowPlan.romanization?.motion == .still {
             reportingTextRect(stillUpcomingText(roma, font: playback.romanizationFont,
                                                 color: playback.displayForegroundColor.opacity(0.6)))
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let roma = romanizationRowText {
             reportingTextRect(
                 Text(roma)
@@ -1336,9 +1291,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .overlayScroll(playback.lineOverflow == .scroll, id: roma, alignment: marqueeRestingAlignment,
                                    height: playback.scrollRowHeight(playback.overlayNSFonts.romanization)))
-                // 补主歌词那边圆点+竖线占掉的宽度,理由见 speakerIndicatorInset 的注释。
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         }
     }
 
@@ -1350,14 +1302,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                               color: playback.displayForegroundColor.opacity(0.75), alignment: duetSide,
                               height: playback.scrollRowHeight(playback.overlayNSFonts.translation),
                               window: window, translation: true))
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let tr = translationRowText, rowPlan.translation?.motion == .still {
             reportingTextRect(stillUpcomingText(tr, font: playback.translationFont,
                                                 color: playback.displayForegroundColor.opacity(0.75),
                                                 translation: true))
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         } else if let tr = translationRowText {
             reportingTextRect(
                 Text(tr)
@@ -1368,9 +1316,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .overlayScroll(playback.lineOverflow == .scroll, id: tr, alignment: marqueeRestingAlignment,
                                    height: playback.scrollRowHeight(playback.overlayNSFonts.translation)))
-                // 同上。
-                .padding(.leading, speakerIndicatorInset(side: duetDecorationSide).leading)
-                .padding(.trailing, speakerIndicatorInset(side: duetDecorationSide).trailing)
         }
     }
 
@@ -1382,7 +1327,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // reportingTextRect(...) 的返回值上、而不是塞进它的参数里,是为了不
             // 打乱 reportingTextRect 量出来的文字矩形(它要量的是文字本身的紧凑
             // 边界,不是撑满整行之后的边界,见 reportingMainLineRect 同一处理由)。
-            withSpeakerIndicator(side: nextLineDecorationSide, color: playback.displayForegroundColor.opacity(0.4)) {
+            withSpeakerIndicator(side: nextLineDecorationSide, font: nextLinePreviewNSFont, opacity: 0.4) {
                 reportingTextRect(nextLinePreviewContent(next))
             }
             .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))

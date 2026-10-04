@@ -393,7 +393,7 @@ func runSyncEngineTests() {
         expectEqual(shortLine?.plainText, "Oh", "按宽度断句: 主行放得下时不为译文拆词")
         expectEqual(shortLine?.translation, "这是一句特…", "按宽度断句: 断不开就截断译文")
 
-        // 对唱行让出演唱者标记的宽:同一句,居中放得下,带声部就拆。
+        // 对唱行跟普通行同宽:声部指示条挂在文字外面,不占断句预算(见 04 章决策 40)。
         let duetWords = [SyncedLyricWord(text: "abcdef ", startMs: 1000, durationMs: 1000),
                          SyncedLyricWord(text: "ghij", startMs: 2000, durationMs: 1000)]
         func duetLine(_ side: LyricDuet.Side?) -> [LyricsSegmenter.Line] {
@@ -402,13 +402,11 @@ func runSyncEngineTests() {
              LyricsSegmenter.Line(startMs: 5000, text: "x", words: [SyncedLyricWord(text: "x", startMs: 5000, durationMs: 500)],
                                   side: side, sungEndMs: 5500, mergeable: true, gapAfter: false)]
         }
-        let sidedBudget = LineLayoutBudget(key: "duet", main: .init(maxWidth: 115, measure: measure), sidedInset: 20)
-        expectEqual(LyricsSegmenter.segments(duetLine(nil), budget: sidedBudget).count, 2,
-                    "按宽度断句: 不带声部的行按整行宽")
-        expectEqual(LyricsSegmenter.segments(duetLine(.leading), budget: sidedBudget).count, 3,
-                    "按宽度断句: 对唱行让出演唱者标记,放不下就拆")
-        expectEqual(LyricsSegmenter.segments(duetLine(.center), budget: sidedBudget).count, 2,
-                    "按宽度断句: 合唱行居中、不画标记")
+        let duetBudget = LineLayoutBudget(key: "duet", main: .init(maxWidth: 115, measure: measure))
+        for side: LyricDuet.Side? in [nil, .leading, .trailing, .center] {
+            expectEqual(LyricsSegmenter.segments(duetLine(side), budget: duetBudget).count, 2,
+                        "按宽度断句: 对唱行跟普通行同宽,放得下就不拆(side=\(String(describing: side)))")
+        }
 
         // 主行宽(断句判「放不放得下」和悬浮歌词算对唱留白共用):逐词相加与整串取大,逐词读音按组量。
         let kerned: (String) -> CGFloat = { CGFloat($0.count) * 10 - ($0.count >= 6 ? 6 : 0) }
@@ -444,8 +442,11 @@ func runSyncEngineTests() {
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"),
             encoding: .utf8)) ?? ""
         expectEqual(overlayViewSrc.contains("widest = max(widest, LyricsSegmenter.mainWidth(")
-                    && overlayViewSrc.contains("return widest + strokeInset * 2 + indicator.leading + indicator.trailing"),
+                    && overlayViewSrc.contains("return widest + strokeInset * 2\n"),
                     true, "对唱留白契约: 卡片「不换行要多宽」按断句同一个主行量法,并加上描边预留")
+        expectEqual(overlayViewSrc.contains("content().overlay(alignment: side == .leading ? .topLeading : .topTrailing)")
+                    && !overlayViewSrc.contains("HStack(spacing: 7)"), true,
+                    "对唱指示条契约: 竖条用 overlay 挂在文字外面,不跟文字排进同一个 HStack")
 
         // 主行一个字切不开、译文放不下:主行整句一段,译文截断到放得下。
         let oneChar = LyricsSyncEngine()

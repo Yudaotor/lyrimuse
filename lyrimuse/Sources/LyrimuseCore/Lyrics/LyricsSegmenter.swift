@@ -30,8 +30,6 @@ public struct LineLayoutBudget {
     public let key: AnyHashable
     /// 主行。
     public let main: Row
-    /// 带对唱声部(左 / 右)的行,每一行都再少这么多(演唱者标记)。
-    public let sidedInset: CGFloat
     /// 这一段排成「下一句」时那一行;nil = 这个面不显示下一句。
     public let preview: Row?
     /// 译文那一行;nil = 不显示。
@@ -41,12 +39,11 @@ public struct LineLayoutBudget {
     /// 逐词读音;nil = 这个面不画逐词读音。
     public let wordRomanization: WordRomanization?
 
-    public init(key: AnyHashable, main: Row, sidedInset: CGFloat = 0, preview: Row? = nil,
+    public init(key: AnyHashable, main: Row, preview: Row? = nil,
                 translation: Row? = nil, romanization: Row? = nil,
                 wordRomanization: WordRomanization? = nil) {
         self.key = key
         self.main = main
-        self.sidedInset = sidedInset
         self.preview = preview
         self.translation = translation
         self.romanization = romanization
@@ -71,7 +68,7 @@ public struct LineLayoutBudget {
         }
         func cachedRow(_ r: Row?) -> Row? { r.map { Row(maxWidth: $0.maxWidth, measure: cached($0.measure)) } }
         return LineLayoutBudget(
-            key: key, main: Row(maxWidth: main.maxWidth, measure: cached(main.measure)), sidedInset: sidedInset,
+            key: key, main: Row(maxWidth: main.maxWidth, measure: cached(main.measure)),
             preview: cachedRow(preview), translation: cachedRow(translation), romanization: cachedRow(romanization),
             wordRomanization: wordRomanization.map { WordRomanization(measure: cached($0.measure), sidePadding: $0.sidePadding) })
     }
@@ -247,12 +244,6 @@ public enum LyricsSegmenter {
 
     // MARK: - 放不放得下
 
-    private static func isSided(_ side: LyricDuet.Side?) -> Bool { side == .leading || side == .trailing }
-
-    private static func limit(_ row: LineLayoutBudget.Row, side: LyricDuet.Side?, budget: LineLayoutBudget) -> CGFloat {
-        row.maxWidth - (isSided(side) ? budget.sidedInset : 0)
-    }
-
     /// 主行宽:逐词相加(图层行这样排)和整串量(菜单栏、行级歌词这样排)取较大者;逐词读音按组量(组宽 = 词宽
     /// 与读音宽 + 两侧留白的较大者)。断句判「放不放得下」和悬浮歌词算对唱留白(`LyricsOverlayView.cardNaturalWidth`)
     /// 用的是这同一个量法,两处不一致的话,留白会把贴满一行的句子末尾挤到下一行。
@@ -303,7 +294,6 @@ public enum LyricsSegmenter {
     static func fits(_ line: LineProvider, _ range: ClosedRange<Int>, budget: LineLayoutBudget) -> Bool {
         let ls = range.compactMap(line)
         guard ls.count == range.count, let first = ls.first else { return false }
-        let side = first.side
         let words = joinedWords(ls)
         let text = mergedText(ls, words: words)
         var groups: [SyncedLyricWordGroup]?
@@ -314,17 +304,17 @@ public enum LyricsSegmenter {
                 groups = f(words, text)
             }
         }
-        let mainLimit = limit(budget.main, side: side, budget: budget) + fitTolerance
+        let mainLimit = budget.main.maxWidth + fitTolerance
         guard mainWidth(words: words, groups: groups, text: text, budget: budget) <= mainLimit else { return false }
-        if let row = budget.preview, row.measure(text) > limit(row, side: side, budget: budget) + fitTolerance {
+        if let row = budget.preview, row.measure(text) > row.maxWidth + fitTolerance {
             return false
         }
         if let row = budget.translation, let tr = joinedText(ls.map(\.translation)),
-           row.measure(tr) > limit(row, side: side, budget: budget) + fitTolerance {
+           row.measure(tr) > row.maxWidth + fitTolerance {
             return false
         }
         if let row = budget.romanization, groups == nil, let ro = joinedText(ls.map(\.romanization)),
-           row.measure(ro) > limit(row, side: side, budget: budget) + fitTolerance {
+           row.measure(ro) > row.maxWidth + fitTolerance {
             return false
         }
         return true
@@ -358,8 +348,7 @@ public enum LyricsSegmenter {
 
     /// 把一句拆成每行都放得下的最少段数。拆不出来(一个字都放不下)返回 nil。
     static func split(_ line: Line, budget: LineLayoutBudget) -> [Part]? {
-        let side = line.side
-        let mainLimit = limit(budget.main, side: side, budget: budget)
+        let mainLimit = budget.main.maxWidth
         guard mainLimit > 0 else { return nil }
         let estimated = line.words == nil
         let words = line.words ?? estimatedWords(line, measure: budget.main.measure)
@@ -386,8 +375,8 @@ public enum LyricsSegmenter {
                 units.append(Unit(words: [w], romanization: nil, width: width))
             }
         }
-        let translationLimit = budget.translation.map { limit($0, side: side, budget: budget) }
-        let romanizationLimit = budget.romanization.map { limit($0, side: side, budget: budget) }
+        let translationLimit = budget.translation.map(\.maxWidth)
+        let romanizationLimit = budget.romanization.map(\.maxWidth)
         let translationNeedsSplit = budget.translation.flatMap { row in
             line.translation.map { row.measure($0) > translationLimit! + fitTolerance }
         } ?? false
@@ -399,7 +388,7 @@ public enum LyricsSegmenter {
         // 把放不下的那一行截断(见末尾),不硬切词。
         let textFits = mainWidth(words: words, groups: shownGroups, text: line.text, budget: budget)
             <= mainLimit + fitTolerance
-            && (budget.preview.map { $0.measure(line.text) <= limit($0, side: side, budget: budget) + fitTolerance } ?? true)
+            && (budget.preview.map { $0.measure(line.text) <= $0.maxWidth + fitTolerance } ?? true)
 
         /// `grouped`:单位就是逐词读音的一组,段内沿用这些组;否则每段显示时重新分组(groupsFor),按那样量。
         /// `hard`:false 只断在能断的地方;true 硬切(各段仍求等宽),再不行逐行装满。
@@ -430,7 +419,7 @@ public enum LyricsSegmenter {
                         <= mainLimit + fitTolerance else { return nil }
                 }
                 if let row = budget.preview {
-                    let previewLimit = limit(row, side: side, budget: budget) + fitTolerance
+                    let previewLimit = row.maxWidth + fitTolerance
                     guard partTexts.allSatisfy({ row.measure($0) <= previewLimit }) else { return nil }
                 }
                 func companion(_ text: String, _ row: LineLayoutBudget.Row, _ maxWidth: CGFloat) -> [String]? {

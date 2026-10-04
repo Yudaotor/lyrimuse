@@ -19,7 +19,6 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
         let surface: LyricsSurface
         let main: NSFont
         let mainWidth: CGFloat
-        let sidedInset: CGFloat
         let preview: (font: NSFont, width: CGFloat)?
         let translation: (font: NSFont, width: CGFloat)?
         let romanization: (font: NSFont, width: CGFloat)?
@@ -38,7 +37,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
     func overlay(_ window: CGFloat) -> Config {
         let w = window - 40 - 2.4 * 2 - 1
         return Config(name: "overlay-\(Int(window))", surface: .overlay,
-                      main: .systemFont(ofSize: 34, weight: .bold), mainWidth: w, sidedInset: 22,
+                      main: .systemFont(ofSize: 34, weight: .bold), mainWidth: w,
                       preview: (.systemFont(ofSize: 34 * 0.7, weight: .medium), w),
                       translation: (.systemFont(ofSize: 34 * 0.7, weight: .regular), w),
                       romanization: (.systemFont(ofSize: 34 * 0.65, weight: .medium), w),
@@ -47,14 +46,14 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
     // 灵动岛:13pt semibold,副行 11pt 显示下一句;歌词列宽 200 与 280。
     func notch(_ column: CGFloat) -> Config {
         Config(name: "notch-\(Int(column))", surface: .notch,
-               main: .systemFont(ofSize: 13, weight: .semibold), mainWidth: column - 1, sidedInset: 0,
+               main: .systemFont(ofSize: 13, weight: .semibold), mainWidth: column - 1,
                preview: (.systemFont(ofSize: 11, weight: .medium), column - 1),
                translation: nil, romanization: nil, wordRomanizationPadding: nil)
     }
     // 菜单栏双排:主行 10pt、副行 9pt 显示下一句;最大宽度 160 与 300。
     func menuBar(_ w: CGFloat) -> Config {
         Config(name: "menubar-\(Int(w))", surface: .menuBar,
-               main: .menuBarFont(ofSize: 10), mainWidth: w, sidedInset: 0,
+               main: .menuBarFont(ofSize: 10), mainWidth: w,
                preview: (.menuBarFont(ofSize: 9), w),
                translation: nil, romanization: nil, wordRomanizationPadding: nil)
     }
@@ -81,7 +80,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
             engine.load(lyrics: lyrics, lyricsTr: body.lyricsTr ?? "", lyricsRoma: body.lyricsRoma ?? "",
                         lyricsYRC: yrc, lyricsBG: body.lyricsBG ?? "", lineBreaks: .all)
             engine.setLayoutBudget(LineLayoutBudget(
-                key: c.name, main: row(c.mainWidth, c.main), sidedInset: c.sidedInset,
+                key: c.name, main: row(c.mainWidth, c.main),
                 preview: c.preview.map { row($0.width, $0.font) },
                 translation: c.translation.map { row($0.width, $0.font, translation: true) },
                 romanization: c.romanization.map { row($0.width, $0.font) },
@@ -104,8 +103,6 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
             segmentCounts[c.name, default: 0] += lines.count
             lineCounts[c.name, default: 0] += engine.allLines(idPrefix: "x").count
             for line in lines {
-                let sided = line.side == .leading || line.side == .trailing
-                let inset = sided ? c.sidedInset : 0
                 let text = line.plainText ?? ""
                 var mainW = width(text, c.main)
                 if let words = line.words {
@@ -119,13 +116,13 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
                     mainW = max(mainW, sum)
                 }
                 var bad: [String] = []
-                if mainW > c.mainWidth - inset + 0.5 { bad.append("主行 \(Int(mainW))") }
-                if let p = c.preview, width(text, p.font) > p.width - inset + 0.5 { bad.append("下一句") }
-                if let t = c.translation, let tr = line.translation, width(tr, t.font, translation: true) > t.width - inset + 0.5 {
+                if mainW > c.mainWidth + 0.5 { bad.append("主行 \(Int(mainW))") }
+                if let p = c.preview, width(text, p.font) > p.width + 0.5 { bad.append("下一句") }
+                if let t = c.translation, let tr = line.translation, width(tr, t.font, translation: true) > t.width + 0.5 {
                     bad.append("译文「\(tr)」")
                 }
                 if let r = c.romanization, line.wordGroups == nil || c.wordRomanizationPadding == nil,
-                   let ro = line.romanization, width(ro, r.font) > r.width - inset + 0.5 {
+                   let ro = line.romanization, width(ro, r.font) > r.width + 0.5 {
                     bad.append("罗马音「\(ro)」")
                 }
                 if !bad.isEmpty {
