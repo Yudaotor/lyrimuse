@@ -486,5 +486,12 @@ func runLyricsWindowTests() {
         expectEqual(view.contains("if let anchor, isVisible {")
                     && view.contains("isVisible: windowController.isSurfaceVisible,"), true,
                     "进度条(契约): 窗口面看不见时停掉每秒一次的推进")
+        // 设置窗口(与「歌词管理」窗口)的可见性同样要过「几乎整扇被盖住」这一关,不能只看 occlusionState
+        let surface = (try? String(contentsOf: sourcesRoot.appendingPathComponent("lyrimuse/UI/PreviewHostVisibility.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(surface.contains("coverageMonitor = WindowCoverageMonitor(window: window)"), true,
+                    "设置窗口可见性(契约): 接上窗口时挂遮挡检测")
+        expectEqual(surface.contains("let visible = occlusionVisible && !coveredByOthers"), true,
+                    "设置窗口可见性(契约): 系统报可见、且没被整扇盖住才算看得见")
     }
 }

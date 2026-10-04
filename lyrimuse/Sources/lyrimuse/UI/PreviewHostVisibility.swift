@@ -22,12 +22,17 @@ extension EnvironmentValues {
     }
 }
 
-/// 一扇窗口的可见性,按 occlusionState 算(遮挡、最小化、切到别的桌面都会让它失去 .visible)。
+/// 一扇窗口的可见性:occlusionState(遮挡、最小化、切到别的桌面都会让它失去 .visible)与「是不是几乎被别的
+/// 窗口整扇盖住」取与。后一项补 occlusionState 的盲区:只要还露着一个像素它就报 .visible,窗口被别的窗口盖得
+/// 只剩一条缝时预览和轮询照跑。判据与歌词窗口同一个(`WindowCoverageMonitor`,见 07 章决策 56)。
 /// 设置窗口由 `SettingsWindowConfigurator` 接上,「歌词管理」窗口由 `LyricsManagerWindowCapture` 接上。
 @MainActor
 final class SettingsWindowSurface: ObservableObject {
     @Published private(set) var isVisible = true
+    private var occlusionVisible = true
+    private var coveredByOthers = false
     private var observer: NSObjectProtocol?
+    private var coverageMonitor: WindowCoverageMonitor?
     private weak var window: NSWindow?
 
     /// 同一扇窗口重复接是空操作(`updateNSView` 每次重新求值都会调)。
@@ -37,16 +42,28 @@ final class SettingsWindowSurface: ObservableObject {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         // 接上时窗口可能还没 orderFront(此时 occlusionState 也是"不可见"),先按可见算,
         // 首次显示后系统会补一次通知。同 LyricsWindowController.attach。
-        isVisible = window.isVisible ? window.occlusionState.contains(.visible) : true
+        occlusionVisible = window.isVisible ? window.occlusionState.contains(.visible) : true
+        coveredByOthers = false
         observer = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             MainActor.assumeIsolated {
-                let visible = win.occlusionState.contains(.visible)
-                if self?.isVisible != visible { self?.isVisible = visible }
+                self?.occlusionVisible = win.occlusionState.contains(.visible)
+                self?.refresh()
             }
         }
+        coverageMonitor?.stop()
+        coverageMonitor = WindowCoverageMonitor(window: window) { [weak self] covered in
+            self?.coveredByOthers = covered
+            self?.refresh()
+        }
+        refresh()
+    }
+
+    private func refresh() {
+        let visible = occlusionVisible && !coveredByOthers
+        if isVisible != visible { isVisible = visible }
     }
 
     deinit {
