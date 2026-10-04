@@ -3132,7 +3132,7 @@ private struct AppearanceSettingsTab: View {
 ///     → 行末封面(封面位置);
 ///   - 「展开态」= 只有 hover 展开才有的东西:控制区(播放控制 / 歌词校准)+ 快捷操作(头部右侧
 ///     四颗键)+ 曲目信息头部(封面 / 歌名 / 歌手 / 专辑,四项归在一个「曲目信息」标题行下面);
-///   - 「行为」= 什么时候缩、什么时候藏:暂停缩回 + 两项自动隐藏(`AutoHideSettingsRows`)。
+///   - 「行为」= 什么时候缩、什么时候藏:暂停时收起 + 两项自动隐藏(`AutoHideSettingsRows`)。
 ///
 /// 「展开时预览下一句」(`.expandedNextLine`)归「歌词行」不归「展开态」:它在用户眼里是
 /// "第二行歌词"(预览卡可点区域就是按这个划的,见 `NotchEditorStage.cardHotspots`),而且跟
@@ -3190,7 +3190,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         switch self {
         case .showLyrics: return L10n.t("显示歌词")
         case .karaoke: return L10n.t("卡拉OK效果")
-        case .collapseWhenPaused: return L10n.t("暂停缩回")
+        case .collapseWhenPaused: return L10n.t("暂停时收起")
         case .hideInFullScreen: return L10n.t("全屏时隐藏")
         case .listenMilestones: return L10n.t("收听里程碑")
         case .trackChangeFlip: return L10n.t("换歌翻牌")
@@ -3215,11 +3215,11 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         switch self {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
         case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
-        case .hideInFullScreen: return L10n.t("灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。")
+        case .hideInFullScreen: return L10n.t("灵动岛所在屏幕有 App 全屏时隐藏")
         case .listenMilestones:
-            return L10n.t("某首歌听到第 100、1,000 次，或者累计收听到了 1,000、5,000、之后每满 1 万次时，灵动岛会自己撑开报一下喜，几秒后收回。需要连接 Last.fm。")
+            return L10n.t("某首歌听满 100、1,000… 次，或累计听满 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm")
         case .trackChangeFlip:
-            return L10n.t("换歌时，耳朵里的封面翻一下，新歌名从刘海里掉出来停几秒；开着歌词行时歌名落在歌词行上。同一张专辑的下一首只掉歌名、不翻。")
+            return L10n.t("换歌时新歌名从刘海下方滑出，旁边的封面翻成新歌的")
         case .expandedShowsQuickActions:
             return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
         default: return nil
@@ -3563,7 +3563,7 @@ struct NotchExpandedSettingsRows: View {
 }
 
 /// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
-/// 「暂停缩回」+ 两行自动隐藏(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
+/// 「暂停时收起」+ 两行自动隐藏(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
 /// 分流到 `notchHide*`)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「换歌翻牌」+「收听里程碑」。
 ///
 /// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这里每一项都算进去 ——

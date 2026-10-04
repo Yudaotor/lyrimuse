@@ -635,7 +635,7 @@ struct NotchEditorStage: View {
     /// **按卡片解剖重新分组**(「很多都是混乱的…有些它不应该放在这一个框框里面…
     /// 不要出现这一个那一个的情况」):「歌词行」= 歌词行本身的一切(显不显示 / 对齐 / 副行 +
     /// 展开时预览下一句 / 卡拉OK / 行末封面);「展开态」= 只有 hover 展开才有的(控制区两颗 +
-    /// 「快捷操作」+「曲目信息」四项);「行为」= 什么时候缩、什么时候藏(暂停缩回 + 两项自动隐藏)。顺序也按
+    /// 「快捷操作」+「曲目信息」四项);「行为」= 什么时候缩、什么时候藏(暂停时收起 + 两项自动隐藏)。顺序也按
     /// 卡片从上到下走:歌词行 → 展开态 → 行为(改前是 歌词行 → 行为 → 展开态)。内容(图标 / 标题 /
     /// Binding)仍只有 `NotchBehaviorItem` 一份,三个浮层和「全部设置」抽屉的三个组各调**同一份**
     /// 分组视图(`NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` / `NotchBehaviorSettingsRows`,
@@ -758,7 +758,7 @@ struct NotchEditorStage: View {
     /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。
     ///
-    /// 三项都开时摘要会拼成一长串(「暂停缩回、截屏/录屏时隐藏、暂停/无播放时隐藏」),交给
+    /// 三项都开时摘要会拼成一长串(「暂停时收起、截屏时隐藏、暂停时隐藏」),交给
     /// `EditorToolbarButtonLabel` 里那 140pt 限宽 + 尾部省略处理,跟「屏幕」按钮遇到长显示器名是同一个
     /// 兜底,不为这里另写一套截断。
     private var behaviorSummary: String {
@@ -1548,7 +1548,7 @@ struct NotchCollapsesWhenPausedRow: View {
     var body: some View {
         SettingsRow(
             icon: "arrow.down.right.and.arrow.up.left",
-            title: L10n.t("暂停缩回")
+            title: L10n.t("暂停时收起")
         ) {
             Toggle("", isOn: $settings.notchCollapsesWhenPaused)
         }

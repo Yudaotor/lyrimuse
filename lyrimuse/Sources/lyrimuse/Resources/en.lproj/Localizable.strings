@@ -788,8 +788,8 @@
 "换个筛选条件或关键词试试" = "Try different filters or search terms.";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
 "换歌时弹一条系统通知：封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
+"换歌时新歌名从刘海下方滑出，旁边的封面翻成新歌的" = "On a song change, the new title slides out below the notch and the cover beside it flips to the new one";
 "换歌时显示通知" = "Notify When the Song Changes";
-"换歌时，耳朵里的封面翻一下，新歌名从刘海里掉出来停几秒；开着歌词行时歌名落在歌词行上。同一张专辑的下一首只掉歌名、不翻。" = "When the track changes, the cover in the ear flips over and the new title drops out of the notch for a few seconds; with the lyric row on, the title lands on the lyric row. The next track from the same album only drops the title, without the flip.";
 "换歌翻牌" = "Track Change Flip";
 "换行" = "Wrap";
 "换行（默认）：一行放不下就折到下一行。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。" = "Wrap (default): long lines fold onto the next line.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
@@ -908,9 +908,9 @@
 "普通话" = "Mandarin";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
+"暂停时收起" = "Shrink When Paused";
 "暂停时缩到最小" = "Shrink When Paused";
 "暂停时隐藏" = "Hide When Paused";
-"暂停缩回" = "Shrink When Paused";
 "暂无" = "None yet";
 "暂无数据" = "No data yet";
 "暂无歌词" = "No Lyrics Found";
@@ -990,7 +990,7 @@
 "来源 Z→A" = "Source Z→A";
 "来源已选定：%@" = "Source pinned: %@";
 "来自 Last.fm" = "From Last.fm";
-"某首歌听到第 100、1,000 次，或者累计收听到了 1,000、5,000、之后每满 1 万次时，灵动岛会自己撑开报一下喜，几秒后收回。需要连接 Last.fm。" = "When a song reaches its 100th or 1,000th play, or your total plays reach 1,000, 5,000 and then every 10,000, the notch opens briefly to celebrate. Requires Last.fm.";
+"某首歌听满 100、1,000… 次，或累计听满 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm" = "When a song reaches 100, 1,000… plays, or your total reaches 1,000, 5,000…, the notch opens to celebrate. Requires Last.fm";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看专辑简介" = "View Album Notes";
 "查看发布页面" = "View release page";
@@ -1192,7 +1192,7 @@
 "灵动岛" = "Notch";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
-"灵动岛所在的屏幕正在显示全屏 App 时，收起下面那行歌词，只留和刘海平齐的那一条；没有刘海的屏幕上整个灵动岛隐藏。切回桌面或退出全屏后恢复。" = "When the screen it is on is showing a full-screen app, the lyric row below folds away and only the strip level with the notch stays. On screens without a notch, the whole Dynamic Island hides. It comes back when you return to the desktop or exit full screen.";
+"灵动岛所在屏幕有 App 全屏时隐藏" = "Hides while an app is full screen on its display";
 "灵动岛歌词" = "Notch Lyrics";
 "点击下载" = "Click to download";
 "点击归零" = "Click to reset";

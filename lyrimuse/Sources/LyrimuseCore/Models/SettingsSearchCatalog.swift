@@ -281,7 +281,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "显示歌词校准", kw: ["偏移", "校准", "时间轴"], group: "展开态"),
         surface(.notch, "快捷操作", kw: ["搜索歌词", "设置", "关闭", "图标键"], group: "展开态"),
         surface(.notch, "曲目信息", kw: ["封面", "歌名", "歌手", "专辑", "头部"], group: "展开态"),
-        surface(.notch, "暂停缩回", kw: ["暂停", "收起", "缩回"], group: "行为"),
+        surface(.notch, "暂停时收起", kw: ["暂停", "收起", "缩回", "暂停缩回", "广告"], group: "行为"),
         surface(.notch, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
         surface(.notch, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         surface(.notch, "全屏时隐藏", kw: ["全屏", "隐藏", "自动隐藏", "遮挡", "看视频", "收起歌词", "fullscreen"], group: "行为"),
